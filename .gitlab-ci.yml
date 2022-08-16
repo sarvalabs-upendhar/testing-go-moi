@@ -34,7 +34,6 @@ deploy-testnet:
   image: alpine:latest
   stage: deploy
   script:
-    - echo "${CD_DEV_ID_RSA_149_102_155_207}"
     - chmod og= $CD_DEV_ID_RSA_149_102_155_207
     - chmod og= $CD_DEV_ID_RSA_66_94_122_24
     - chmod og= $CD_DEV_ID_RSA_86_48_23_194
