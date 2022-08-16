@@ -34,7 +34,8 @@ deploy-testnet:
   image: alpine:latest
   stage: deploy
   script:
-    # - chmod og= $CD_DEV_ID_RSA_149_102_155_207
+    - echo $CD_DEV_ID_RSA_149_102_155_207
+    - chmod og= $CD_DEV_ID_RSA_149_102_155_207
     - chmod og= $CD_DEV_ID_RSA_66_94_122_24
     - chmod og= $CD_DEV_ID_RSA_86_48_23_194
     - chmod og= $CD_DEV_ID_RSA_207_244_228_225
@@ -42,13 +43,13 @@ deploy-testnet:
 
     - apk update && apk add openssh-client
 
-    # - ssh -i $CD_DEV_ID_RSA_149_102_155_207 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_149_102_155_207 "rm -f ~/moichain && rm -rf ~/moichain_repo"
-    # - scp -i $CD_DEV_ID_RSA_149_102_155_207 -r . $CD_DEV_USER@$CD_DEV_IP_149_102_155_207:~/moichain_repo
-    # - ssh -i $CD_DEV_ID_RSA_149_102_155_207 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_149_102_155_207 "cd ~/moichain_repo && export CGO_CFLAGS='-O -D__BLST_PORTABLE__' && go build -o moichain"
-    # - ssh -i $CD_DEV_ID_RSA_149_102_155_207 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_149_102_155_207 "mv ~/moichain_repo/moichain ~/"
-    # - ssh -i $CD_DEV_ID_RSA_149_102_155_207 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_149_102_155_207 "pm2 delete all"
-    # - ssh -i $CD_DEV_ID_RSA_149_102_155_207 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_149_102_155_207 "cd ~/ && rm -rf test_* logs && mkdir logs"
-    # - ssh -i $CD_DEV_ID_RSA_149_102_155_207 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_149_102_155_207 "cd ~/ && bash moichain.sh $CD_DEV_PODS_COUNT"
+    - ssh -i $CD_DEV_ID_RSA_149_102_155_207 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_149_102_155_207 "rm -f ~/moichain && rm -rf ~/moichain_repo"
+    - scp -i $CD_DEV_ID_RSA_149_102_155_207 -r . $CD_DEV_USER@$CD_DEV_IP_149_102_155_207:~/moichain_repo
+    - ssh -i $CD_DEV_ID_RSA_149_102_155_207 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_149_102_155_207 "cd ~/moichain_repo && export CGO_CFLAGS='-O -D__BLST_PORTABLE__' && go build -o moichain"
+    - ssh -i $CD_DEV_ID_RSA_149_102_155_207 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_149_102_155_207 "mv ~/moichain_repo/moichain ~/"
+    - ssh -i $CD_DEV_ID_RSA_149_102_155_207 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_149_102_155_207 "pm2 delete all"
+    - ssh -i $CD_DEV_ID_RSA_149_102_155_207 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_149_102_155_207 "cd ~/ && rm -rf test_* logs && mkdir logs"
+    - ssh -i $CD_DEV_ID_RSA_149_102_155_207 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_149_102_155_207 "cd ~/ && bash moichain.sh $CD_DEV_PODS_COUNT"
 
 
     - ssh -i $CD_DEV_ID_RSA_66_94_122_24 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_66_94_122_24 "rm -f ~/moichain && rm -rf ~/moichain_repo"
