@@ -1,0 +1,27 @@
+package common
+
+import "errors"
+
+var (
+	ErrInDecryption         = errors.New("could not decrypt key with given password")
+	ErrUnsupportedNodeType  = errors.New("invalid node option")
+	ErrMOIIDBaseURLNotFound = errors.New(
+		"MOI_ID_BASE_URL NOT FOUND: MOI id Base URL not found in given environment")
+	ErrAuthFailed                      = errors.New("authentication failed with given credentials")
+	ErrInvalidKramaID                  = errors.New("invalid Krama id")
+	ErrInvalidKramaIDVersion           = errors.New("invalid Krama id Version")
+	ErrNoKeystore                      = errors.New("no keystore at given path")
+	ErrUnsupportedSigTypeForPrivateKey = errors.New("unsupported Signature type for given private key type")
+	ErrUnsupportedSigType              = errors.New("unsupported Signature type")
+	ErrInvalidUsername                 = errors.New("invalid username")
+	ErrZeroKey                         = errors.New("received secret key is zero")
+	ErrInvalidBLSPublicKeyLength       = errors.New("invalid length for BLS public key")
+	ErrEmpty                           = errors.New("given data is empty")
+	ErrInvalidBLSSignature             = errors.New("invalid BLS Signature")
+	ErrUnsupportedAggSignature         = errors.New("invalid signature type for aggregation")
+	ErrUnsupportedSig                  = errors.New("currently this Signature type is not supported")
+	ErrUnIntialized                    = errors.New("uninitialized")
+	ErrParsingKramaID                  = errors.New("error parsing kramaID")
+
+	ErrSigningFailed = errors.New("error in signing")
+)
