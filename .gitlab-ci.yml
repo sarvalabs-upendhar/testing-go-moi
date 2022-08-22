@@ -37,7 +37,7 @@ deploy-testnet:
     - chmod og= $CD_DEV_ID_RSA_149_102_155_207
     - chmod og= $CD_DEV_ID_RSA_66_94_122_24
     - chmod og= $CD_DEV_ID_RSA_86_48_23_194
-    # - chmod og= $CD_DEV_ID_RSA_207_244_228_225
+    - chmod og= $CD_DEV_ID_RSA_207_244_228_225
     - chmod og= $CD_DEV_ID_RSA_45_140_185_105
 
     - apk update && apk add openssh-client
@@ -66,13 +66,12 @@ deploy-testnet:
     - ssh -i $CD_DEV_ID_RSA_86_48_23_194 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_86_48_23_194 "pm2 restart all"
 
 
-    # - ssh -i $CD_DEV_ID_RSA_207_244_228_225 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_207_244_228_225 "rm -f ~/moichain && rm -rf ~/moichain_repo"
-    # - scp -i $CD_DEV_ID_RSA_207_244_228_225 -r . $CD_DEV_USER@$CD_DEV_IP_207_244_228_225:~/moichain_repo
-    # - ssh -i $CD_DEV_ID_RSA_207_244_228_225 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_207_244_228_225 "cd ~/moichain_repo && export CGO_CFLAGS='-O -D__BLST_PORTABLE__' && go build -o moichain"
-    # - ssh -i $CD_DEV_ID_RSA_207_244_228_225 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_207_244_228_225 "mv ~/moichain_repo/moichain ~/"
-    # - ssh -i $CD_DEV_ID_RSA_207_244_228_225 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_207_244_228_225 "pm2 delete all"
-    # - ssh -i $CD_DEV_ID_RSA_207_244_228_225 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_207_244_228_225 "cd ~/ && rm -rf test_* logs && mkdir logs"
-    # - ssh -i $CD_DEV_ID_RSA_207_244_228_225 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_207_244_228_225 "cd ~/ && bash moichain.sh $CD_DEV_PODS_COUNT"
+    - ssh -i $CD_DEV_ID_RSA_207_244_228_225 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_207_244_228_225 "if [ -d "~/moichain" ]; then rm -rf ~/moichain; fi"
+    - ssh -i $CD_DEV_ID_RSA_207_244_228_225 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_207_244_228_225 "if [ -d "~/moichain_repo" ]; then rm -rf ~/moichain_repo; fi"
+    - scp -i $CD_DEV_ID_RSA_207_244_228_225 -r . $CD_DEV_USER@$CD_DEV_IP_207_244_228_225:~/moichain_repo
+    - ssh -i $CD_DEV_ID_RSA_207_244_228_225 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_207_244_228_225 "cd ~/moichain_repo && export CGO_CFLAGS='-O -D__BLST_PORTABLE__' && go build -o moichain"
+    - ssh -i $CD_DEV_ID_RSA_207_244_228_225 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_207_244_228_225 "mv ~/moichain_repo/moichain ~/"
+    - ssh -i $CD_DEV_ID_RSA_207_244_228_225 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_207_244_228_225 "pm2 restart all"
 
     
     - ssh -i $CD_DEV_ID_RSA_45_140_185_105 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_45_140_185_105 "if [ -d "~/moichain" ]; then rm -rf ~/moichain; fi"
