@@ -18,15 +18,15 @@ stages:
       - .go/pkg/mod/
 
 golangci-lint:
-    image: registry.gitlab.com/gitlab-org/gitlab-build-images:golangci-lint-alpine
+    image: golangci/golangci-lint:v1.49.0-alpine
     stage: lint
     extends: .go-cache
-    allow_failure: true
+    before_script:
+      - go env -w GOPRIVATE="gitlab.com/sarvalabs/*"
+      - echo -e "machine gitlab.com\nlogin ${GO_MODULES_USER}\npassword ${GO_MODULES_PERSONAL_ACCESS_TOKEN}" > ~/.netrc
     script:
-      # Use default .golangci.yml file from the image if one is not present in the project root.
-      - '[ -e .golangci.yml ] || cp /golangci/.golangci.yml .'
       # remove `--issues-exit-code 0` or set to non-zero to fail the job if linting issues are detected
-      - golangci-lint run -E whitespace -E wsl -E wastedassign -E unconvert -E tparallel -E thelper -E stylecheck -E prealloc -E predeclared -E nlreturn -E misspell -E makezero -E lll -E importas -E ifshort -E gosec -E  gofmt -E goconst -E forcetypeassert -E dogsled -E dupl -E errname -E errorlint -E nolintlint --issues-exit-code 0 --out-format code-climate | jq -r '.[] | "\(.location.path):\(.location.lines.begin) \(.description)"'
+      - golangci-lint run -E whitespace -E wsl -E wastedassign -E unconvert -E tparallel -E thelper -E stylecheck -E prealloc -E predeclared -E nlreturn -E misspell -E makezero -E lll -E importas -E ifshort -E gosec -E  gofmt -E goconst -E forcetypeassert -E dogsled -E dupl -E errname -E errorlint -E nolintlint --issues-exit-code 0 --timeout 5m
 
 deploy-testnet:
   only:
