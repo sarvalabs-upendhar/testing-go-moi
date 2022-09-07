@@ -103,7 +103,7 @@ func DefaultConfig(path string) *Config {
 			TimeoutPrecommitDelta: 50000 * time.Millisecond,
 			TimeoutCommit:         10000 * time.Millisecond,
 			Precision:             1000 * time.Nanosecond,
-			MessageDelay:          1500 * time.Millisecond,
+			MessageDelay:          5500 * time.Millisecond,
 		},
 		DB: &DBConfig{
 			DBFolderPath:      path + "/db",

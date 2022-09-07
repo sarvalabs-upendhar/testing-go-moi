@@ -153,6 +153,26 @@ func (t *Tesseract) ContextDelta() ContextDelta {
 	return t.Body.ContextDelta
 }
 
+func (t *Tesseract) Address() Address {
+	return t.Header.Address
+}
+
+func (t *Tesseract) ContextHash() Hash {
+	return t.Body.ContextHash
+}
+
+func (t *Tesseract) PreviousHash() Hash {
+	return t.Header.PrevHash
+}
+
+func (t *Tesseract) StateHash() Hash {
+	return t.Body.StateHash
+}
+
+func (t *Tesseract) Height() uint64 {
+	return t.Header.Height
+}
+
 /*
 func (t *Tesseract) ToProto() *ktypes.Tesseract {
 	tproto := &ktypes.Tesseract{

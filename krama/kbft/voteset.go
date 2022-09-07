@@ -286,11 +286,11 @@ func (vs *VoteSet) addVerifiedVote(
 	// Get the voting powers of the validators
 	quorum := vs.valset.GetQuorum()
 
-	log.Println("###%%%%%% printing quorum", quorum, "gridID:", gridID.Hex())
 	// Get the sum set from the tesseract votes. Add the vote and then get the new sum
 	//prevotesum := tesseractVotes.sum
 	tesseractVotes.addVerifiedVote(sumIndex, vote, votePower)
 	postVoteSum := tesseractVotes.sum
+	log.Println("###%%%%%% printing quorum", quorum, "gridID:", gridID.Hex(), "sum", postVoteSum)
 
 	if vs.maj23 == nil {
 		// Check if the quorum threshold was just crossed. Only the first quorum reach is considered

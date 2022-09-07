@@ -69,7 +69,7 @@ type AssetID string
 // Hash represents the 32 byte hash of arbitrary data.
 type Hash [32]byte
 
-// Address represents the 20 byte address of an MOI account.
+// Address represents the 32 byte address of an MOI account.
 type Address [32]byte
 
 func (c ClusterID) String() string {

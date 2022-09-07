@@ -115,7 +115,6 @@ func (eh *SubHandler) newPeerLoop() {
 			go func(peer *KipPeer) {
 				// Defer the peer unregister from the handler working set
 				defer func() {
-
 					if err := eh.peers.Unregister(peer); err != nil {
 						eh.logger.Error("Error unregistering peer", "error", err)
 					}

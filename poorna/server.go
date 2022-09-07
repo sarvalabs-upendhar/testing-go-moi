@@ -175,10 +175,10 @@ func NewServer(
 			// Connect the node to peer using its peer address
 			if err := kn.host.Connect(kn.ctx, *peerInfo); err != nil {
 				// Log the error
-				kn.logger.Error("Bootstrap connection failed", err)
+				kn.logger.Error("Bootstrap connection failed", "error", err)
 			} else {
 				// Log the successful connection
-				kn.logger.Info("Connection established with bootstrap node:", *peerInfo)
+				kn.logger.Info("Connection established with bootstrap node:", "info", *peerInfo)
 			}
 		}()
 	}

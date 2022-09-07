@@ -54,11 +54,11 @@ func init() {
 	serverCmd.PersistentFlags().String("config", "config.json", "Config file name")
 	serverCmd.PersistentFlags().Uint64Var(&NetworkSize, "network-size", 12, "Network Size")
 	serverCmd.PersistentFlags().Float64Var(&MTQ, "mtq", 0.7, "Default MTQ")
-	serverCmd.PersistentFlags().String("data-dir", "test-chain", "Data directory location")
+	serverCmd.PersistentFlags().String("data-dir", "test-chain", "data directory location")
 	serverCmd.PersistentFlags().BoolVar(&SkipGenesis, "skip-genesis", false, "Set the genesis")
 
 	if err := cobra.MarkFlagRequired(serverCmd.PersistentFlags(), "data-dir"); err != nil {
-		log.Print("Data-dir is required")
+		log.Print("data-dir is required")
 	}
 }
 
@@ -174,7 +174,7 @@ func BuildConfig(dataDir string, cmdCfg *Config) (*common.Config, error) {
 
 func Err(err error) {
 	if err != nil {
-		log.Println("Error parsing the flags", err)
+		log.Println("Error starting MOIPOD", err)
 		os.Exit(1)
 	}
 }
