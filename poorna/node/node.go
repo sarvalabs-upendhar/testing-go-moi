@@ -102,10 +102,7 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 			Level: hclog.LevelFromString(logLevel),
 		})
 	}
-	//n.validator, err = kbft.NewTestPrivateValidator(cfg.Consensus.DirectoryPath)
-	//if err != nil {
-	//	return nil, errors.New("unable to parse private key")
-	//}
+
 	// setup p2p network server
 	n.network, err = poorna.NewServer(n.ctx, n.logger, n.vault.KramaID(), n.eventMux, cfg.Network, n.vault)
 	if err != nil {
@@ -128,8 +125,7 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 			return nil, err
 		}
 	}
-	// setup metrics
-	n.setupTelemetry()
+
 	// setup state manager
 	n.state = guna.NewStateManager(db, n.logger, n.cache, n.eventMux)
 	// setup execution engine
@@ -151,6 +147,8 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 	n.network.Senatus = n.senatus
 	// setup chain manager
 	n.chain = chain.NewChainManager(db, n.state, n.logger, n.eventMux, n.ixpool, n.cache, n.exec, n.senatus)
+	// setup flux
+	n.handlers.flux = flux.NewRandomizer(n.ctx, n.logger, n.network)
 	// setup krama engine
 	if n.kramaEngine, err = krama.NewKramaEngine(
 		n.ctx,
@@ -167,6 +165,9 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 	); err != nil {
 		return nil, err
 	}
+
+	// setup metrics
+	n.setupTelemetry()
 
 	// setup JSON-RPC
 	if err = n.SetupRPC(); err != nil {
@@ -189,7 +190,6 @@ func (n *Node) InitSubHandlers() (err error) {
 		n.ctx,
 		n.network,
 		n.eventMux,
-		n.datastore,
 		n.db,
 		"full",
 		n.chain,
@@ -208,8 +208,6 @@ func (n *Node) InitSubHandlers() (err error) {
 		n.ixpool,
 		n.chain,
 	)
-
-	n.handlers.flux = flux.NewRandomizer(n.ctx, n.logger, n.network)
 
 	return
 }

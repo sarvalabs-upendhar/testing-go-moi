@@ -25,11 +25,6 @@ const (
 
 var GenesisAddress = ktypes.BytesToAddress(ktypes.GetHash([]byte("sargaAccount")).Bytes())
 
-//type Res struct {
-//	respType int
-//	data     []string
-//}
-
 type StateManager struct {
 	logger           hclog.Logger
 	db               *dhruva.PersistenceManager
@@ -49,12 +44,12 @@ func NewStateManager(
 	mux *kutils.TypeMux,
 ) *StateManager {
 	sm := &StateManager{
-		cache:        cache,
-		db:           db,
-		mux:          mux,
-		client: &http.Client{Transport: &http.Transport{	
-			MaxIdleConns:    1024,	
-			MaxConnsPerHost: 1000,	
+		cache: cache,
+		db:    db,
+		mux:   mux,
+		client: &http.Client{Transport: &http.Transport{
+			MaxIdleConns:    1024,
+			MaxConnsPerHost: 1000,
 		}},
 		objects:      make(map[ktypes.Address]*StateObject),
 		dirtyObjects: make(map[ktypes.Address]*StateObject),
@@ -148,6 +143,7 @@ func (sm *StateManager) CreateDirtyObject(addr ktypes.Address, accType ktypes.Ac
 
 	return sm.dirtyObjects[addr]
 }
+
 func (sm *StateManager) GetDirtyObject(addr ktypes.Address) (*StateObject, error) {
 	sm.dirtyObjectsLock.Lock()
 	defer sm.dirtyObjectsLock.Unlock()
@@ -168,6 +164,7 @@ func (sm *StateManager) GetDirtyObject(addr ktypes.Address) (*StateObject, error
 
 	return sm.dirtyObjects[addr], nil
 }
+
 func (sm *StateManager) IsGenesis(addr ktypes.Address) (bool, error) {
 	if addr == ktypes.NilAddress {
 		return false, nil
@@ -185,6 +182,7 @@ func (sm *StateManager) IsGenesis(addr ktypes.Address) (bool, error) {
 
 	return false, nil
 }
+
 func (sm *StateManager) GetStateObjectByHash(addr ktypes.Address, hash ktypes.Hash) (*StateObject, error) {
 	// read the state
 	data, err := sm.db.ReadEntry(hash.Bytes())
@@ -216,6 +214,7 @@ func (sm *StateManager) GetStateObjectByHash(addr ktypes.Address, hash ktypes.Ha
 
 	return sObj, nil
 }
+
 func (sm *StateManager) GetLatestStateObject(addr ktypes.Address) (*StateObject, error) {
 	sm.objectsLock.Lock()
 	defer sm.objectsLock.Unlock()
@@ -308,7 +307,7 @@ func (sm *StateManager) GetBalances(addrs ktypes.Address) (*ktypes.BalanceObject
 	return stateObject.balance.Copy(), nil
 }
 
-func (sm *StateManager) GetAccountInfo(addr ktypes.Address) (*ktypes.AccountMetaInfo, error) {
+func (sm *StateManager) GetAccountMetaInfo(addr ktypes.Address) (*ktypes.AccountMetaInfo, error) {
 	return sm.db.GetAccountMetaInfo(addr.Bytes())
 }
 func (sm *StateManager) GetLatestContext(address ktypes.Address) (ktypes.Hash, []id.KramaID, []id.KramaID, error) {
@@ -341,7 +340,7 @@ func (sm *StateManager) GetContextByHash(hash ktypes.Hash) ([]id.KramaID, []id.K
 
 		msg := new(ktypes.MetaContextObject)
 
-		if err := polo.Depolorize(msg, rawData); err != nil {
+		if err = polo.Depolorize(msg, rawData); err != nil {
 			return nil, nil, errors.Wrap(err, "MetaContextObject deserialization failed")
 		}
 
@@ -367,6 +366,7 @@ func (sm *StateManager) GetContextByHash(hash ktypes.Hash) ([]id.KramaID, []id.K
 
 	return behaviourContext.Ids, randomContext.Ids, nil
 }
+
 func (sm *StateManager) cleanupDirtyObject(addr ktypes.Address) {
 	sm.dirtyObjectsLock.Lock()
 	defer sm.dirtyObjectsLock.Unlock()
@@ -418,7 +418,6 @@ func (sm *StateManager) GetPublicKeys(ids ...id.KramaID) (keys [][]byte, err err
 		return nil, err
 	}
 
-
 	req, err := http.NewRequest("POST", "http://45.140.185.105/api/fetchPublicKeys", bytes.NewBuffer(data))
 	if err != nil {
 		return nil, err
@@ -426,10 +425,11 @@ func (sm *StateManager) GetPublicKeys(ids ...id.KramaID) (keys [][]byte, err err
 
 	req.Header.Add("Content-Type", "application/json")
 
-	response, err := sm.client.Do(req)	
-	if err != nil {	
-		sm.logger.Error("Api fetch failed", "error", err, "kramaIDs", ids)	
-		return nil, err	
+	response, err := sm.client.Do(req)
+	if err != nil {
+		sm.logger.Error("Api fetch failed", "error", err, "kramaIDs", ids)
+
+		return nil, err
 	}
 
 	//res, err := http.Post("http://159.203.191.91/api/fetchPublicKeys", "application/json", bytes.NewBuffer(data))
@@ -443,6 +443,7 @@ func (sm *StateManager) GetPublicKeys(ids ...id.KramaID) (keys [][]byte, err err
 	}
 
 	defer response.Body.Close()
+
 	if response.StatusCode != 200 {
 		sm.logger.Error("Http request failed", response.StatusCode, string(body))
 	}
@@ -617,4 +618,19 @@ func (sm *StateManager) fetchLatestParticipantContext(addr ktypes.Address) (
 	}
 
 	return contextHash, behaviouralSet, randomSet, nil
+}
+
+func (sm *StateManager) GetAccountInfo(stateHash ktypes.Hash) (*ktypes.Account, error) {
+	rawData, err := sm.db.ReadEntry(stateHash.Bytes())
+	if err != nil {
+		return nil, err
+	}
+
+	accInfo := new(ktypes.Account)
+
+	if err := polo.Depolorize(accInfo, rawData); err != nil {
+		return nil, err
+	}
+
+	return accInfo, nil
 }

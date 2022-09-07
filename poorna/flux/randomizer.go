@@ -302,9 +302,11 @@ func (r *Randomizer) getRequestID(slot int) int64 {
 	if r.requestIDs[slot] != -1 {
 		return r.requestIDs[slot]
 	}
+
 	s1 := rand.NewSource(time.Now().UnixNano())
 	reg := rand.New(s1) //nolint
 	reqID := reg.Int63()
+
 	r.requestIDs[slot] = reqID
 
 	return reqID
@@ -345,6 +347,7 @@ func (r *Randomizer) GetRandomNodes(
 			if requiredNo <= 0 {
 				return
 			}
+
 			s1 := rand.NewSource(time.Now().UnixNano())
 			reg := rand.New(s1) //nolint
 			slotNo := reg.Intn(SLOTCOUNT)

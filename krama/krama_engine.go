@@ -42,8 +42,8 @@ const (
 
 	ObserverNodesDelta float64 = 0.2
 
-	ICSTimeOutDuration time.Duration = 3000 * time.Millisecond
-	MaxSlots           int           = 2
+	ICSTimeOutDuration time.Duration = 4000 * time.Millisecond
+	MaxSlots           int           = 1
 
 	BehaviouralContextSize = 1
 	RandomContextSize      = 1
@@ -71,7 +71,7 @@ type network interface {
 type state interface {
 	FetchInteractionContext(ix *ktypes.Interaction) (map[ktypes.Address]ktypes.Hash, []*ktypes.NodeSet, error)
 	GetPublicKeys(ids ...id.KramaID) (keys [][]byte, err error)
-	GetAccountInfo(addr ktypes.Address) (*ktypes.AccountMetaInfo, error)
+	GetAccountMetaInfo(addr ktypes.Address) (*ktypes.AccountMetaInfo, error)
 	IsGenesis(addr ktypes.Address) (bool, error)
 	GetLatestStateObject(addr ktypes.Address) (*guna.StateObject, error)
 	GetLatestNonce(addr ktypes.Address) (uint64, error)
@@ -411,12 +411,14 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID ktypes.Cluste
 
 	observerNodes, err = k.getObserverNodes(observerNodesQueryCount, exemptedNodes)
 	if err != nil {
-		return errors.New("unable to retrieve  observer nodes ")
+		k.logger.Error("error fetching observer nodes", "error", err)
+
+		return errors.New("unable to retrieve observer nodes")
 	}
 
 	finalWaitGroup.Add(2)
 
-	observerKeys, err := k.state.GetPublicKeys(operatorRandomNodes...)
+	observerKeys, err := k.state.GetPublicKeys(observerNodes...)
 	if err != nil {
 		return ktypes.ErrKramaIDNotFound
 	}
@@ -524,7 +526,7 @@ func (k *Engine) joinCluster(ctx context.Context, req Request) error {
 	reqTime := kutils.Canonical(time.Unix(0, req.msg.Timestamp))
 
 	if !k.isTimely(reqTime, kutils.Now()) {
-		return errors.New("invalid times stamp")
+		return errors.New("invalid time stamp")
 	}
 
 	// Create a slot and try adding it
@@ -733,7 +735,7 @@ func (k *Engine) fetchIxAccounts(ix *ktypes.Interaction) (ics.AccountInfos, erro
 	accounts := make(ics.AccountInfos)
 
 	if ix.FromAddress() != ktypes.NilAddress {
-		accInfo, err := k.state.GetAccountInfo(ix.FromAddress())
+		accInfo, err := k.state.GetAccountMetaInfo(ix.FromAddress())
 		if err != nil {
 			return nil, err
 		}
@@ -748,7 +750,7 @@ func (k *Engine) fetchIxAccounts(ix *ktypes.Interaction) (ics.AccountInfos, erro
 		}
 
 		if isGenesisAccount {
-			genesisAccInfo, err := k.state.GetAccountInfo(guna.GenesisAddress)
+			genesisAccInfo, err := k.state.GetAccountMetaInfo(guna.GenesisAddress)
 			if err != nil {
 				return nil, err
 			}
@@ -765,7 +767,7 @@ func (k *Engine) fetchIxAccounts(ix *ktypes.Interaction) (ics.AccountInfos, erro
 			accounts[guna.GenesisAddress] = genesisAccInfo
 			accounts[ix.ToAddress()] = acc
 		} else {
-			accInfo, err := k.state.GetAccountInfo(ix.FromAddress())
+			accInfo, err := k.state.GetAccountMetaInfo(ix.FromAddress())
 			if err != nil {
 				return nil, err
 			}
@@ -816,12 +818,14 @@ func (k *Engine) sendICSRequestWithBound(
 		// Retrieve the peerID from the node's Krama id
 		networkID, err := kipID.PeerID()
 		if err != nil {
-			k.logger.Error("Error decoding peerID", err)
+			k.logger.Error("Error decoding network id from krama id", "error", err)
+			wg.Done()
+
+			continue
 		}
 
 		peerID, err := peer.Decode(networkID)
 		if err != nil {
-			log.Println("networkId", networkID, "he")
 			k.logger.Error("Unable to decode peer id", "error", err)
 			wg.Done()
 
@@ -912,7 +916,10 @@ func (k *Engine) sendICSRequest(
 
 		networkID, err := kipID.PeerID()
 		if err != nil {
-			k.logger.Error("Error decoding peerID", err)
+			k.logger.Error("Error decoding network id from krama id", "error", err)
+			wg.Done()
+
+			continue
 		}
 
 		peerID, err := peer.Decode(networkID)
@@ -1083,20 +1090,25 @@ func (k *Engine) minter() {
 			interactionQueue := k.pool.Executables()
 
 			for interactionQueue.Len() > 0 {
-				ix := interactionQueue.Pop().(*ktypes.Interaction)
+				ix, ok := interactionQueue.Pop().(*ktypes.Interaction)
+				if !ok {
+					k.logger.Error("Error interaction type assertion failed", "hash", ix.GetIxHash())
+
+					continue
+				}
+
 				ixs := ktypes.Interactions{ix}
 
-				k.logger.Info("Sending request krama engine")
+				k.logger.Info("Forwarding request to krama engine")
 
 				k.requests <- Request{reqType: 0, ixs: ixs, msg: nil, responseChan: respChan}
 				//Wait for response from krama engine handler
 				resp := <-respChan
 				if resp.err != nil {
-					switch resp.err {
-					case ktypes.ErrInvalidInteractions:
+					if errors.Is(resp.err, ktypes.ErrInvalidInteractions) {
 						k.pool.ResetWithInteractions(ixs)
-					default:
-						if resp.err != ktypes.ErrSlotsFull {
+					} else {
+						if !errors.Is(resp.err, ktypes.ErrSlotsFull) {
 							if err := k.pool.IncrementWaitTime(ix.FromAddress()); err != nil {
 								k.logger.Error("Error incrementing wait time")
 							}

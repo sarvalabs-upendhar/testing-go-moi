@@ -71,7 +71,7 @@ func testMusigForNnodes(nodesInICS int) error {
 	wg.Wait()
 
 	//fmt.Println("\nDone with Pre vote round")
-	//fmt.Println("Now all sessions have all the public nonce from other nodes in ICS")
+	//fmt.Println("Now all session have all the public nonce from other nodes in ICS")
 
 	msg := "I'm the tesseract data"
 

@@ -139,6 +139,7 @@ func (r *rpcService) GetTDU(req *http.Request, args *GetTesseract, resp *Respons
 	}
 
 	data, _ := object.TDU()
+
 	resp.Data = data
 
 	return nil

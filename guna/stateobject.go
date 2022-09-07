@@ -592,7 +592,7 @@ func getStorage(hash ktypes.Hash, db *dhruva.PersistenceManager) (map[ktypes.Has
 
 	storageEntries := make(map[ktypes.Hash][]byte)
 
-	if err = polo.Depolorize(storageEntries, data); err != nil {
+	if err = polo.Depolorize(&storageEntries, data); err != nil {
 		return nil, err
 	}
 

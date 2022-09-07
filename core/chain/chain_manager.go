@@ -49,8 +49,8 @@ type stateManager interface {
 	GetPublicKeys(id ...id.KramaID) (keys [][]byte, err error)
 	Broadcast(addrs ktypes.Address)
 	IsGenesis(addr ktypes.Address) (bool, error)
-	FetchInteractionContext(ix *ktypes.Interaction) (map[ktypes.Address]ktypes.Hash, []*ktypes.NodeSet, error)
 	FetchContextLock(ts *ktypes.Tesseract) ([]*ktypes.NodeSet, error)
+	GetContextByHash(hash ktypes.Hash) ([]id.KramaID, []id.KramaID, error)
 }
 type ixpool interface {
 	ResetWithHeaders(ts *ktypes.Tesseract)
@@ -369,9 +369,17 @@ func (c *ChainManager) AddTesseractWithOutState(
 		log.Panic(err)
 	}
 
-	c.sm.DeleteStateObject(ts.Header.Address)
+	// clean up any existing state objects
+	c.sm.DeleteStateObject(ts.Address())
 
-	event := kutils.TesseractSyncEvent{Tesseract: ts}
+	// fetch context info for agora
+
+	context, err := c.fetchContextForAgora(ts)
+	if err != nil {
+		c.logger.Error("Error fetching context for agora", "error", err)
+	}
+
+	event := kutils.TesseractSyncEvent{Tesseract: ts, Context: context}
 	if err := c.mux.Post(event); err != nil {
 		log.Panic(err)
 	}
@@ -384,6 +392,43 @@ func (c *ChainManager) AddTesseractWithOutState(
 
 	return nil
 }
+
+func (c *ChainManager) fetchContextForAgora(t *ktypes.Tesseract) ([]id.KramaID, error) {
+	tesseractHash := t.Hash()
+	address := t.Address()
+	peers := make([]id.KramaID, 0)
+
+	for tesseractHash != ktypes.NilHash {
+		if len(peers) >= 10 {
+			break
+		}
+
+		ts, err := c.GetTesseract(tesseractHash)
+		if err != nil {
+			return nil, errors.Wrap(err, "error fetching tesseract")
+		}
+		// fetch the context delta
+		deltaGroup := ts.Body.ContextDelta[address]
+		// add the delta peers to list
+		peers = append(peers, deltaGroup.BehaviouralNodes...)
+		peers = append(peers, deltaGroup.RandomNodes...)
+
+		behaviour, random, err := c.sm.GetContextByHash(ts.Header.ContextLock[address].ContextHash)
+		if err != nil {
+			tesseractHash = ts.Header.PrevHash
+
+			continue
+		}
+
+		peers = append(peers, behaviour...)
+		peers = append(peers, random...)
+
+		break
+	}
+
+	return peers, nil
+}
+
 func (c *ChainManager) AppendTesseracts(
 	groupHash ktypes.Hash,
 	ts map[ktypes.Address]*ktypes.Tesseract,

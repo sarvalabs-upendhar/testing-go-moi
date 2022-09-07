@@ -51,4 +51,5 @@ var (
 	ErrInvalidHeight               = errors.New("invalid height")
 	ErrInterfaceConversion         = errors.New("type assertion failed")
 	ErrInvalidAPI                  = errors.New("invalid api")
+	ErrPeerNotAvailable            = errors.New("peer not available")
 )

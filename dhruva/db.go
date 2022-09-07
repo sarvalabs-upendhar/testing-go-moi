@@ -277,8 +277,13 @@ func (p *PersistenceManager) CreateEntry(key []byte, value []byte) error {
 	return errors.Wrap(ktypes.ErrDBCallFailed, err.Error())
 }
 
-func (p *PersistenceManager) SetTesseractStatus(addr []byte, height uint64, hash ktypes.Hash, stateExists bool) error {
-	key, _ := BucketIDFromAddress(addr)
+func (p *PersistenceManager) SetTesseractStatus(
+	addr ktypes.Address,
+	height uint64,
+	hash ktypes.Hash,
+	status bool,
+) error {
+	key, _ := BucketIDFromAddress(addr.Bytes())
 
 	data, err := p.ReadEntry(key)
 	if err != nil {
@@ -297,7 +302,7 @@ func (p *PersistenceManager) SetTesseractStatus(addr []byte, height uint64, hash
 	}
 
 	if hash == msg.TesseractHash {
-		msg.StateExists = stateExists
+		msg.StateExists = status
 	} else {
 		return ktypes.ErrHashMismatch
 	}

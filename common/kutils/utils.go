@@ -6,6 +6,7 @@ This file has all the utility function required for KIP
 import (
 	"encoding/hex"
 	"fmt"
+	"github.com/libp2p/go-libp2p-core/peer"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"log"
 	"math"
@@ -149,4 +150,18 @@ func ContainsKramaID(set []id.KramaID, id id.KramaID) bool {
 	}
 
 	return false
+}
+
+func GetNetworkID(id id.KramaID) (peer.ID, error) {
+	networkID, err := id.PeerID()
+	if err != nil {
+		return "", nil
+	}
+
+	peerID, err := peer.Decode(networkID)
+	if err != nil {
+		return "", nil
+	}
+
+	return peerID, nil
 }
