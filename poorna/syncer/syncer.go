@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"github.com/dgraph-io/badger/v3"
 	"github.com/pkg/errors"
+	"gitlab.com/sarvalabs/moichain/guna"
+
 	"gitlab.com/sarvalabs/moichain/poorna"
 	"gitlab.com/sarvalabs/moichain/poorna/agora"
 	"gitlab.com/sarvalabs/moichain/poorna/agora/session"
-	"gitlab.com/sarvalabs/moichain/poorna/senatus"
 	"log"
 	"math/big"
 	"math/rand"
@@ -112,7 +113,7 @@ type Syncer struct {
 	rpcClient        *lrpc.Client
 	lattice          lattice
 	logger           hclog.Logger
-	ReputationEngine *senatus.ReputationEngine
+	ReputationEngine *guna.ReputationEngine
 	ntqtablesynconce sync.Once
 }
 
@@ -775,7 +776,7 @@ func (s *Syncer) Start() {
 				for k, v := range bestPeer.con.GetStreams() {
 					log.Println(k, v.Protocol(), v.ID(), bestPeer.id, bestPeer.id)
 
-					if v.Protocol() == protocol.ID(SyncStreamProtocol) {
+					if v.Protocol() == SyncStreamProtocol {
 						msg := &ktypes.AccountSyncRequest{
 							BulkSync: true,
 						}

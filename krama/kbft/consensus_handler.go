@@ -128,6 +128,7 @@ func (m *MessageRouter) CollectMessages() {
 }
 
 func (m *MessageRouter) HandleMessages() {
+
 	for {
 		select {
 		// Broadcast read routine
@@ -150,11 +151,7 @@ func (m *MessageRouter) HandleMessages() {
 }
 
 func (m *MessageRouter) Close() {
-	//close(m.outboundMsgChan)
-	//close(m.inboundMsgChan)
-	if m.setType != ktypes.ObserverSet {
-		close(m.bftOutboundChan)
-	}
+	close(m.outboundMsgChan)
 }
 
 func (m *MessageRouter) Msgs() []*ktypes.ICSMSG {

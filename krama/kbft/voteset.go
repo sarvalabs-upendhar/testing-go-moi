@@ -292,6 +292,8 @@ func (vs *VoteSet) addVerifiedVote(
 	postVoteSum := tesseractVotes.sum
 	log.Println("###%%%%%% printing quorum", quorum, "gridID:", gridID.Hex(), "sum", postVoteSum)
 
+	log.Println("###%%%%%% printing quorum", quorum, "gridID:", gridID.Hex(), "sum", postVoteSum)
+
 	if vs.maj23 == nil {
 		// Check if the quorum threshold was just crossed. Only the first quorum reach is considered
 		if areGreater(postVoteSum, quorum) {

@@ -42,8 +42,8 @@ const (
 
 	ObserverNodesDelta float64 = 0.2
 
-	ICSTimeOutDuration time.Duration = 4000 * time.Millisecond
-	MaxSlots           int           = 1
+	ICSTimeOutDuration time.Duration = 4500 * time.Millisecond
+	MaxSlots           int           = 2
 
 	BehaviouralContextSize = 1
 	RandomContextSize      = 1
@@ -400,7 +400,7 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID ktypes.Cluste
 
 	operatorRandomNodes, err = k.getRandomNodes(operatorRandomNodesQueryCount, respondedEligibleSet)
 	if err != nil {
-		return errors.New("unable to retrieve random and observer nodes from context")
+		return errors.Wrap(err, "unable to retrieve random and observer nodes")
 	}
 
 	if !newSlot.clusterState.IsOperatorIncluded() {
@@ -682,6 +682,7 @@ func (k *Engine) handleReq(req Request) {
 
 		slot.clusterState.SetGrid(execResp.grid)
 		k.lattice.AddKnownHashes(execResp.grid)
+
 		consensusChan := make(chan ktypes.ConsensusMessage)
 		exitChan := make(chan error)
 
@@ -710,8 +711,8 @@ func (k *Engine) handleReq(req Request) {
 
 		go slot.bft.Start()
 		go consensusHandler.Start()
-		err = <-exitChan
-		if err != nil {
+
+		if err = <-exitChan; err != nil {
 			k.logger.Error("Error consensus failed", "error", err, "cluster-id", slot.clusterState.ID)
 			if err := k.exec.Revert(slot.clusterState.ID); err != nil {
 				log.Fatal(err)
@@ -826,6 +827,7 @@ func (k *Engine) sendICSRequestWithBound(
 
 		peerID, err := peer.Decode(networkID)
 		if err != nil {
+			log.Println("networkId", networkID, "he")
 			k.logger.Error("Unable to decode peer id", "error", err)
 			wg.Done()
 
@@ -1064,7 +1066,10 @@ func (k *Engine) initClusterCommunication(ctx context.Context, clusterID ktypes.
 				k.logger.Info("Closing PoXt message handler")
 
 				return
-			case msg := <-slot.outboundMsg:
+			case msg, ok := <-slot.outboundMsg:
+				if !ok {
+					return
+				}
 				if err := k.server.Broadcast(string(clusterID), polo.Polorize(msg)); err != nil {
 					k.logger.Error("Error broadcasting PoXt Message")
 					panic(err)
@@ -1086,7 +1091,7 @@ func (k *Engine) minter() {
 	respChan := make(chan Response)
 
 	for {
-		if k.slots.areSlotsAvailable() {
+		if k.slots.AreSlotsAvailable() {
 			interactionQueue := k.pool.Executables()
 
 			for interactionQueue.Len() > 0 {
@@ -1105,10 +1110,11 @@ func (k *Engine) minter() {
 				//Wait for response from krama engine handler
 				resp := <-respChan
 				if resp.err != nil {
-					if errors.Is(resp.err, ktypes.ErrInvalidInteractions) {
+					switch resp.err {
+					case ktypes.ErrInvalidInteractions:
 						k.pool.ResetWithInteractions(ixs)
-					} else {
-						if !errors.Is(resp.err, ktypes.ErrSlotsFull) {
+					default:
+						if resp.err != ktypes.ErrSlotsFull {
 							if err := k.pool.IncrementWaitTime(ix.FromAddress()); err != nil {
 								k.logger.Error("Error incrementing wait time")
 							}
@@ -1167,6 +1173,9 @@ func (k *Engine) updateContextDelta(clusterID ktypes.ClusterID) error {
 
 			if senderBehaviourDelta != "" {
 				senderDeltaGroup.BehaviouralNodes = append(senderDeltaGroup.BehaviouralNodes, senderBehaviourDelta)
+			}
+
+			if replacedNodes != "" {
 				senderDeltaGroup.ReplacedNodes = append(senderDeltaGroup.ReplacedNodes, replacedNodes)
 			}
 
@@ -1213,6 +1222,9 @@ func (k *Engine) updateContextDelta(clusterID ktypes.ClusterID) error {
 
 				if genesisBehaviourDelta != "" {
 					genesisDeltaGroup.BehaviouralNodes = append(genesisDeltaGroup.BehaviouralNodes, genesisBehaviourDelta)
+				}
+
+				if replacedNodes != "" {
 					genesisDeltaGroup.ReplacedNodes = append(genesisDeltaGroup.ReplacedNodes, replacedNodes)
 				}
 
@@ -1232,6 +1244,8 @@ func (k *Engine) updateContextDelta(clusterID ktypes.ClusterID) error {
 					)
 					if receiverBehaviourDelta != "" {
 						receiverDeltaGroup.BehaviouralNodes = append(receiverDeltaGroup.BehaviouralNodes, receiverBehaviourDelta)
+					}
+					if replacedNodes != "" {
 						receiverDeltaGroup.ReplacedNodes = append(receiverDeltaGroup.ReplacedNodes, replacedNodes)
 					}
 					receiverRandomDelta, replacedRandomDelta := slot.clusterState.GetRandomContextDelta(

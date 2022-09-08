@@ -40,7 +40,7 @@ type reputationEngine interface {
 }
 type stateManager interface {
 	GetStateObjectByHash(addr ktypes.Address, hash ktypes.Hash) (*guna.StateObject, error)
-	CreateStateObject(addr ktypes.Address, accType ktypes.AccType) *guna.StateObject
+	CreateDirtyObject(addr ktypes.Address, accType ktypes.AccType) *guna.StateObject
 	GetLatestStateObject(addr ktypes.Address) (*guna.StateObject, error)
 	GetDirtyObject(addr ktypes.Address) (*guna.StateObject, error)
 	GetLatestTesseract(addr ktypes.Address) (*ktypes.Tesseract, error)
@@ -106,7 +106,8 @@ func (c *ChainManager) GetTesseract(hash ktypes.Hash) (*ktypes.Tesseract, error)
 		}
 
 		if err = polo.Depolorize(tesseract, buf); err != nil {
-			log.Fatal("Un marshalling error")
+
+			return nil, errors.Wrap(err, "depolarization failed")
 		}
 
 		c.tesseracts.Add(hash, tesseract)
@@ -519,12 +520,14 @@ func (c *ChainManager) addTesseract(
 		for k, v := range stateObject.GetDirtyStorage() {
 			if err := c.db.CreateEntry(k.Bytes(), v); err != nil {
 				c.logger.Error("Error writing key to db", "key", k.Hex())
+
+				return err
 			}
 		}
 	}
 
 	if err := c.db.CreateEntry(tesseractHash.Bytes(), polo.Polorize(t)); err != nil {
-		return err
+		return errors.Wrap(err, "error writing tesseract to db")
 	}
 
 	bucketNo, updateCount, err := c.db.UpdateAccMetaInfo(
@@ -536,12 +539,12 @@ func (c *ChainManager) addTesseract(
 		tesseractExists,
 	)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "account meta info update failed")
 	}
 
 	// update peer occupancy metrics
 	if err := c.UpdateNodeInclusivity(t.ContextDelta()); err != nil {
-		return errors.Wrap(ktypes.ErrUpdatingInclusivity, err.Error())
+		return errors.Wrap(err, ktypes.ErrUpdatingInclusivity.Error())
 	}
 
 	if updateCount != -1 && bucketNo != -1 {
@@ -589,7 +592,7 @@ func (c *ChainManager) SetupGenesis(path string) error {
 		}
 
 		// Update the context
-		stateObject := c.sm.CreateStateObject(addr, v.AccType)
+		stateObject := c.sm.CreateDirtyObject(addr, v.AccType)
 		bContext := ktypes.ToKIPPeerID(v.BehaviourContext)
 		rContext := ktypes.ToKIPPeerID(v.RandomContext)
 
@@ -649,6 +652,7 @@ func (c *ChainManager) AddKnownHashes(tesseracts []*ktypes.Tesseract) {
 
 func (c *ChainManager) UpdateNodeInclusivity(delta ktypes.ContextDelta) error {
 	for _, deltaGroup := range delta {
+
 		for _, kramaID := range deltaGroup.BehaviouralNodes {
 			if err := c.senatus.UpdateInclusivity(kramaID, 1); err != nil {
 				return err
@@ -674,7 +678,7 @@ func (c *ChainManager) UpdateNodeInclusivity(delta ktypes.ContextDelta) error {
 func (c *ChainManager) setupSargaAccount(accounts []AccountInfo) error {
 	var contextDelta ktypes.ContextDelta
 
-	stateObject := c.sm.CreateStateObject(guna.GenesisAddress, ktypes.SargaAccount)
+	stateObject := c.sm.CreateDirtyObject(guna.GenesisAddress, ktypes.SargaAccount)
 
 	for _, info := range accounts {
 		addr := ktypes.HexToAddress(info.Address)

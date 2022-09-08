@@ -1,4 +1,4 @@
-package senatus
+package guna
 
 import (
 	"bytes"
@@ -21,32 +21,32 @@ import (
 
 const KeyPrefix = "PEER_INFO"
 
-type PersistenceManager interface {
+type store interface {
 	CreateEntry(key []byte, value []byte) error
 	ReadEntry(key []byte) ([]byte, error)
-	Contains([]byte) (bool, error)
+	Contains(key []byte) (bool, error)
 	UpdateEntry(key []byte, newValue []byte) error
 	NewBatchWriter() *badger.WriteBatch
 	GetEntries(prefix []byte) chan ktypes.DBEntry
 }
-type State interface {
-	GetPublicKeys(ids ...id.KramaID) (keys [][]byte, err error)
+type state interface {
+	GetPublicKeyFromContract(ctx context.Context, ids ...id.KramaID) (keys [][]byte, err error)
 }
 
 type ReputationInfo struct {
-	Addrs  []string
-	NTQ    int32
-	Degree int64
+	Addrs      []string
+	NTQ        int32
+	Degree     int64
+	PublickKey []byte
 }
 type ReputationEngine struct {
 	kramaID  id.KramaID
 	ctx      context.Context
-	addrs    []multiaddr.Multiaddr
 	logger   hclog.Logger
-	db       PersistenceManager
+	db       store
 	cache    *lru.Cache
 	locks    *locker.Locker
-	state    State
+	state    state
 	messages []*ktypes.HelloMsg
 }
 
@@ -62,10 +62,8 @@ func CacheKey(key id.KramaID) string {
 func NewReputationEngine(
 	ctx context.Context,
 	logger hclog.Logger,
-	id id.KramaID,
-	ntq int32,
-	state State,
-	db PersistenceManager,
+	state state,
+	db store,
 ) (*ReputationEngine, error) {
 	cache, err := lru.New(100)
 	if err != nil {
@@ -79,25 +77,13 @@ func NewReputationEngine(
 		cache:    cache,
 		locks:    locker.New(),
 		state:    state,
-		kramaID:  id,
 		messages: make([]*ktypes.HelloMsg, 0, 200), //Max message queue limit is 200
-	}
-
-	// Add self reputation info to DB
-	info := &ReputationInfo{
-		Addrs: kutils.MultiAddrToString(r.addrs...),
-		NTQ:   ntq,
-	}
-
-	if err := r.AddNewPeer(r.kramaID, info); err != nil {
-		r.logger.Error("Error starting reputation engine", "error", err)
-		panic(err)
 	}
 
 	return r, nil
 }
 func (r *ReputationEngine) AddNewPeer(key id.KramaID, data *ReputationInfo) error {
-	r.logger.Debug("Added peer to NTQ table")
+	r.logger.Debug("Added peer to NTQ table", "id")
 
 	contains, err := r.db.Contains(DBKey(key))
 	if err != nil {
@@ -122,6 +108,10 @@ func (r *ReputationEngine) AddNewPeer(key id.KramaID, data *ReputationInfo) erro
 		return err
 	}
 
+	if err := r.UpdatePublicKey(key, data.PublickKey); err != nil {
+		return err
+	}
+
 	return nil
 }
 func (r *ReputationEngine) UpdateAddress(key id.KramaID, addrs []string) error {
@@ -141,6 +131,29 @@ func (r *ReputationEngine) UpdateAddress(key id.KramaID, addrs []string) error {
 	info = &ReputationInfo{
 		Addrs: addrs,
 		NTQ:   0,
+	}
+	r.cache.Add(CacheKey(key), info)
+
+	return r.db.CreateEntry(DBKey(key), polo.Polorize(info))
+}
+
+func (r *ReputationEngine) UpdatePublicKey(key id.KramaID, pk []byte) error {
+	info, err := r.getInfo(key)
+	if err != nil && !errors.Is(err, ktypes.ErrKramaIDNotFound) {
+		return err
+	}
+
+	if info != nil {
+		info.PublickKey = pk
+
+		r.cache.Add(CacheKey(key), info)
+
+		return r.db.UpdateEntry(DBKey(key), polo.Polorize(info))
+	}
+
+	info = &ReputationInfo{
+		PublickKey: pk,
+		NTQ:        0,
 	}
 	r.cache.Add(CacheKey(key), info)
 
@@ -201,6 +214,7 @@ func (r *ReputationEngine) UpdateInclusivity(key id.KramaID, delta int64) error 
 
 	return r.db.CreateEntry(DBKey(key), polo.Polorize(info))
 }
+
 func (r *ReputationEngine) GetAddress(key id.KramaID) (multiAddrs []multiaddr.Multiaddr, err error) {
 	info, err := r.getInfo(key)
 	if err != nil {
@@ -230,28 +244,47 @@ func (r *ReputationEngine) GetNTQ(id id.KramaID) (int32, error) {
 	return info.NTQ, nil
 }
 
-func (r *ReputationEngine) getInfo(id id.KramaID) (*ReputationInfo, error) {
-	dbKey := DBKey(id)
-	info := new(ReputationInfo)
-
-	data, exists := r.cache.Get(CacheKey(id))
-	if !exists {
-		rawData, err := r.db.ReadEntry(dbKey)
-		if err == nil {
-			if err = polo.Depolorize(info, rawData); err != nil {
-				return nil, err
-			}
-		} else if errors.Is(err, ktypes.ErrKeyNotFound) {
-			return nil, ktypes.ErrKramaIDNotFound
-		}
-
+func (r *ReputationEngine) GetPublicKey(ctx context.Context, id id.KramaID) ([]byte, error) {
+	info, err := r.getInfo(id)
+	if err != nil {
 		return nil, err
 	}
 
-	info, ok := data.(*ReputationInfo)
-	if !ok {
-		return nil, errors.New("error type assert failed")
+	if info.PublickKey == nil {
+		return nil, errors.New("public key not found")
 	}
+
+	return info.PublickKey, nil
+}
+
+func (r *ReputationEngine) getInfo(id id.KramaID) (*ReputationInfo, error) {
+	if id == "" {
+		return nil, ktypes.ErrInvalidKramaID
+	}
+
+	data, exists := r.cache.Get(CacheKey(id))
+	if exists {
+		reputationInfo, ok := data.(*ReputationInfo)
+		if !ok {
+			return nil, ktypes.ErrInterfaceConversion
+		}
+
+		return reputationInfo, nil
+	}
+
+	rawData, err := r.db.ReadEntry(DBKey(id))
+	if errors.Is(err, ktypes.ErrKeyNotFound) {
+		return nil, ktypes.ErrKramaIDNotFound
+	} else if err != nil {
+		return nil, err
+	}
+
+	info := new(ReputationInfo)
+	if err = polo.Depolorize(info, rawData); err != nil {
+		return nil, errors.Wrap(err, "reputation-info depolarization failed")
+	}
+
+	r.cache.Add(CacheKey(id), info)
 
 	return info, nil
 }
@@ -349,7 +382,7 @@ func (r *ReputationEngine) HandleHelloMessages(msgs []*ktypes.HelloMsg) (int, er
 		kramaIDs[index] = msg.Info.ID
 	}
 
-	publicKeys, err := r.state.GetPublicKeys(kramaIDs...)
+	publicKeys, err := r.state.GetPublicKeyFromContract(context.Background(), kramaIDs...)
 	if err != nil {
 		r.logger.Error("Error fetching public key", "error", err)
 
@@ -371,8 +404,9 @@ func (r *ReputationEngine) HandleHelloMessages(msgs []*ktypes.HelloMsg) (int, er
 		}
 
 		if err := r.AddNewPeer(msg.Info.ID, &ReputationInfo{
-			Addrs: msg.Info.Address,
-			NTQ:   msg.Info.Ntq,
+			Addrs:      msg.Info.Address,
+			NTQ:        msg.Info.Ntq,
+			PublickKey: publicKey,
 		}); err != nil {
 			return index, err
 		}
@@ -381,11 +415,11 @@ func (r *ReputationEngine) HandleHelloMessages(msgs []*ktypes.HelloMsg) (int, er
 	return 0, nil
 }
 
-func (r *ReputationEngine) startWorkers(ctx context.Context) {
+func (r *ReputationEngine) startWorkers() {
 	for {
 		select {
 		case <-time.After(5 * time.Second):
-		case <-ctx.Done():
+		case <-r.ctx.Done():
 			r.logger.Info("Closing reputation worker")
 		}
 
@@ -423,6 +457,22 @@ func (r *ReputationEngine) startWorkers(ctx context.Context) {
 	}
 }
 
-func (r *ReputationEngine) Start() {
-	go r.startWorkers(r.ctx)
+func (r *ReputationEngine) Start(id id.KramaID, ntq int32, publicKey []byte, address []multiaddr.Multiaddr) error {
+	r.kramaID = id
+	// Add self reputation info to DB
+	info := &ReputationInfo{
+		Addrs:      kutils.MultiAddrToString(address...),
+		NTQ:        ntq,
+		PublickKey: publicKey,
+	}
+
+	if err := r.AddNewPeer(r.kramaID, info); err != nil {
+		r.logger.Error("Error starting reputation engine", "error", err)
+
+		return err
+	}
+
+	go r.startWorkers()
+
+	return nil
 }
