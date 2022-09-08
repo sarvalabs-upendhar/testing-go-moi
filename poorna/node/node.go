@@ -24,7 +24,6 @@ import (
 	"gitlab.com/sarvalabs/moichain/poorna/api"
 	"gitlab.com/sarvalabs/moichain/poorna/flux"
 	krpc "gitlab.com/sarvalabs/moichain/poorna/rpc"
-	"gitlab.com/sarvalabs/moichain/poorna/senatus"
 	"gitlab.com/sarvalabs/moichain/poorna/syncer"
 	"log"
 	"net"
@@ -62,7 +61,6 @@ type Node struct {
 	nodeMetrics      *nodeMetrics
 	prometheusServer *http.Server
 	vault            *kcrypto.KramaVault
-	senatus          *senatus.ReputationEngine
 }
 
 func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
@@ -127,28 +125,29 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 	}
 
 	// setup state manager
-	n.state = guna.NewStateManager(db, n.logger, n.cache, n.eventMux)
+	n.state, err = guna.NewStateManager(n.ctx, db, n.logger, n.cache, n.eventMux)
+	if err != nil {
+		return nil, err
+	}
 	// setup execution engine
 	n.exec = jug.NewExec(n.state)
 	// setup ixpool
 	n.ixpool = ixpool.NewIxPool(n.ctx, n.logger, n.eventMux, n.state, cfg.IxPool)
 
-	if n.senatus, err = senatus.NewReputationEngine(
-		n.ctx,
-		n.logger,
-		n.network.GetKramaID(),
-		5,
-		n.state,
-		n.db,
-	); err != nil {
-		return nil, err
-	}
+	n.network.Senatus = n.state.SenatusInstance()
 
-	n.network.Senatus = n.senatus
-	// setup chain manager
-	n.chain = chain.NewChainManager(db, n.state, n.logger, n.eventMux, n.ixpool, n.cache, n.exec, n.senatus)
-	// setup flux
 	n.handlers.flux = flux.NewRandomizer(n.ctx, n.logger, n.network)
+	// setup chain manager
+	n.chain = chain.NewChainManager(
+		db,
+		n.state,
+		n.logger,
+		n.eventMux,
+		n.ixpool,
+		n.cache,
+		n.exec,
+		n.state.SenatusInstance(),
+	)
 	// setup krama engine
 	if n.kramaEngine, err = krama.NewKramaEngine(
 		n.ctx,
@@ -242,7 +241,12 @@ func (n *Node) Start() {
 	n.startSubHandlers()
 	n.ixpool.Start()
 	n.kramaEngine.Start()
-	n.senatus.Start()
+	if err := n.state.Start(
+		n.network.GetKramaID(),
+		1,
+		n.vault.GetConsensusPrivateKey().GetPublicKeyInBytes(),
+		n.network.GetAddrs()); err != nil {
+	}
 
 	go n.rpc.Start()
 	go n.chain.Start()

@@ -24,13 +24,23 @@ type Slots struct {
 
 func (s *Slots) areAccountsActive(addrs ...ktypes.Address) bool {
 	for _, v := range addrs {
-		if _, ok := s.activeAccounts[v]; ok {
-			return true
+		if v != ktypes.NilAddress {
+			if _, ok := s.activeAccounts[v]; ok {
+				return true
+			}
 		}
 	}
 
 	return false
 }
+
+func (s *Slots) AreAccountsActive(addrs ...ktypes.Address) bool {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+
+	return s.areAccountsActive(addrs...)
+}
+
 func (s *Slots) addSlot(id ktypes.ClusterID, slot *slotInfo) bool {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
@@ -38,7 +48,7 @@ func (s *Slots) addSlot(id ktypes.ClusterID, slot *slotInfo) bool {
 	fromAddr := slot.clusterState.Ixs[0].FromAddress()
 	toAddr := slot.clusterState.Ixs[0].ToAddress()
 
-	if !s.areAccountsActive(fromAddr, toAddr) && s.availableSlots > 0 {
+	if !s.areAccountsActive(fromAddr, toAddr) && s.areSlotsAvailable() {
 		s.slots[id] = slot
 		s.availableSlots = s.availableSlots - 1
 		s.activeAccounts[slot.clusterState.Ixs[0].FromAddress()] = slot.clusterState.ID
@@ -56,10 +66,14 @@ func (s *Slots) getSlot(id ktypes.ClusterID) *slotInfo {
 
 	return s.slots[id]
 }
-func (s *Slots) areSlotsAvailable() bool {
+func (s *Slots) AreSlotsAvailable() bool {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 
+	return s.areSlotsAvailable()
+}
+
+func (s *Slots) areSlotsAvailable() bool {
 	return s.availableSlots > 0
 }
 
@@ -71,6 +85,7 @@ func (s *Slots) cleanupSlot(id ktypes.ClusterID) {
 		delete(s.activeAccounts, slot.clusterState.Ixs[0].FromAddress())
 		delete(s.activeAccounts, slot.clusterState.Ixs[0].ToAddress())
 		delete(s.slots, id)
+		close(slot.inboundMsg)
 		s.availableSlots++
 	}
 }

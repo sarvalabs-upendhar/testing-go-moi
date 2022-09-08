@@ -11,7 +11,6 @@ type state interface {
 	Revert(snap *guna.StateObject) error
 	GetDirtyObject(addr ktypes.Address) (*guna.StateObject, error)
 	CreateDirtyObject(addr ktypes.Address, accType ktypes.AccType) *guna.StateObject
-	CreateStateObject(addr ktypes.Address, accType ktypes.AccType) *guna.StateObject
 	IsGenesis(addr ktypes.Address) (bool, error)
 }
 type Executor struct {

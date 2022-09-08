@@ -173,50 +173,6 @@ func (t *Tesseract) Height() uint64 {
 	return t.Header.Height
 }
 
-/*
-func (t *Tesseract) ToProto() *ktypes.Tesseract {
-	tproto := &ktypes.Tesseract{
-		Header: &ktypes.TesseractHeader{
-			Address:       t.Header.Address.Bytes(),
-			PrevHash:      t.Header.PrevHash.Bytes(),
-			Height:        t.Header.Height,
-			AnuUsed:       t.Header.AnuUsed,
-			AnuLimit:      t.Header.AnuLimit,
-			TesseractHash: t.Header.TesseractHash.Bytes(),
-			GroupHash:     t.Header.GroupHash.Bytes(),
-			Operator:      t.Header.Operator,
-			Timestamp:     t.Header.Timestamp,
-			ClusterID:     t.Header.ClusterID,
-			Extra: &ktypes.CommitData{
-				Round:   t.Header.Extra.Round,
-				Seal:    t.Header.Extra.Seal,
-				Commits: t.Header.Extra.Commits,
-				Voteset: t.Header.Extra.VoteSet,
-				Evidence: t.Header.Extra.EvidenceHash.Bytes(),
-			},
-		},
-		Body: &ktypes.TesseractBody{
-			StateHash:       t.Body.StateHash.Bytes(),
-			ContextHash:     t.Body.ContextHash.Bytes(),
-			InteractionHash: t.Body.InteractionHash.Bytes(),
-			ReceiptHash:     t.Body.ReceiptHash.Bytes(),
-			Interactions: &ktypes.InteractionsData{
-				Ixns: t.Body.Interactions,
-			},
-			ContextDelta: t.ContextDeltaToProto(),
-			ConsensusProof: &ktypes.PoXCData{
-				BinaryHash:   t.Body.ConsensusProof.BinaryHash.Bytes(),
-				IdentityHash: t.Body.ConsensusProof.IdentityHash.Bytes(),
-				IcsHash:      t.Body.ConsensusProof.ICSHash.Bytes(),
-			},
-		},
-		Signature: t.Signature,
-	}
-
-	return tproto
-}
-
-*/
 func (t *Tesseract) Bytes() []byte {
 	c := t.Canonical()
 

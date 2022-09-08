@@ -40,23 +40,23 @@ type lattice interface {
 // KBFT is a struct that represents the runner for the Krama Byzantine Fault Tolerant consensus engine
 type KBFT struct {
 	RoundState
-	logger       hclog.Logger
-	id           id.KramaID
-	config       *common.ConsensusConfig
-	mx           sync.Mutex
-	chain        lattice
-	peerMsgs     chan ktypes.ConsensusMessage
-	internalMsgs chan ktypes.ConsensusMessage
-	externalMsgs chan ktypes.ConsensusMessage
-	toTicker     *Ticker
-	ics          *ics.ClusterInfo
-	nSteps       int
-	exit         chan error
-	ctx          context.Context
-	ctxCancel    context.CancelFunc
-	evidence     *Evidence
-	vault        vault
-	wal          WAL
+	logger          hclog.Logger
+	id              id.KramaID
+	config          *common.ConsensusConfig
+	mx              sync.Mutex
+	chain           lattice
+	inboundMsgChan  chan ktypes.ConsensusMessage
+	selfMsgChan     chan ktypes.ConsensusMessage
+	outboundMsgChan chan ktypes.ConsensusMessage
+	toTicker        *Ticker
+	ics             *ics.ClusterInfo
+	nSteps          int
+	exit            chan error
+	ctx             context.Context
+	ctxCancel       context.CancelFunc
+	evidence        *Evidence
+	vault           vault
+	wal             WAL
 }
 
 // NewKBFTService is constructor function that generates a new KBFT engine.
@@ -76,19 +76,19 @@ func NewKBFTService(
 	outboundChan chan ktypes.ConsensusMessage,
 ) *KBFT {
 	k := &KBFT{
-		id:           kid,
-		config:       config,
-		chain:        chain,
-		wal:          wal,
-		logger:       logger.Named("KBFT"),
-		externalMsgs: outboundChan,
-		peerMsgs:     make(chan ktypes.ConsensusMessage, 1000),
-		internalMsgs: make(chan ktypes.ConsensusMessage, 1000),
-		toTicker:     NewTicker(),
-		vault:        vault,
-		evidence:     evidence,
-		exit:         exit,
-		ics:          ics,
+		id:              kid,
+		config:          config,
+		chain:           chain,
+		wal:             wal,
+		logger:          logger.Named("KBFT"),
+		outboundMsgChan: outboundChan,
+		inboundMsgChan:  make(chan ktypes.ConsensusMessage, 1000),
+		selfMsgChan:     make(chan ktypes.ConsensusMessage, 1000),
+		toTicker:        NewTicker(),
+		vault:           vault,
+		evidence:        evidence,
+		exit:            exit,
+		ics:             ics,
 	}
 
 	k.ctx, k.ctxCancel = context.WithTimeout(ctx, MaxBFTimeout)
@@ -157,15 +157,21 @@ func (kbft *KBFT) Close(err error) {
 
 func (kbft *KBFT) HandlePeerMsg(m ktypes.ConsensusMessage) {
 	select {
-	case kbft.peerMsgs <- m:
+	case kbft.inboundMsgChan <- m:
 	default:
 		go func() {
-			kbft.peerMsgs <- m
+			kbft.inboundMsgChan <- m
 		}()
 	}
 }
 
 func (kbft *KBFT) handler(maxSteps int) {
+
+	defer func() {
+		close(kbft.outboundMsgChan)
+		close(kbft.selfMsgChan)
+	}()
+
 	for {
 		if maxSteps > 0 {
 			if kbft.nSteps >= maxSteps {
@@ -180,14 +186,21 @@ func (kbft *KBFT) handler(maxSteps int) {
 		roundState := kbft.RoundState
 
 		select {
-		case msg := <-kbft.peerMsgs:
+
+		case <-kbft.ctx.Done():
+			kbft.logger.Info("KBFT Timeout occurred")
+			kbft.exit <- ktypes.ErrTimeOut
+
+			return
+
+		case msg := <-kbft.inboundMsgChan:
 			kbft.logger.Trace("Handling external Msg", "sender", msg.PeerID)
 
 			if err := kbft.handleMsg(msg); err != nil {
 				kbft.logger.Error("Error handling external message", "sender", msg.PeerID)
 			}
 
-		case msg := <-kbft.internalMsgs:
+		case msg := <-kbft.selfMsgChan:
 			kbft.logger.Debug("Handling internal Msg", msg.Message)
 
 			if err := kbft.wal.WriteSync(msg, kbft.ics.ID); err != nil {
@@ -201,12 +214,6 @@ func (kbft *KBFT) handler(maxSteps int) {
 		case t := <-kbft.toTicker.TimeOutChan():
 			kbft.logger.Trace("Handling Timeout")
 			kbft.handleTimeout(t, roundState)
-
-		case <-kbft.ctx.Done():
-			kbft.logger.Info("KBFT Timeout occurred")
-			kbft.exit <- ktypes.ErrTimeOut
-
-			return
 		}
 	}
 }
@@ -262,7 +269,7 @@ func (kbft *KBFT) handleMsg(msg ktypes.ConsensusMessage) error {
 		if added && peerID == kbft.id {
 			msg.PeerID = kbft.id
 			kbft.logger.Trace("Sending vote message", peerID, m.Vote.GridID.Hash)
-			kbft.externalMsgs <- msg
+			kbft.outboundMsgChan <- msg
 		}
 	}
 
@@ -314,9 +321,9 @@ func (kbft *KBFT) setProposal(p *ktypes.Proposal) error {
 
 func (kbft *KBFT) SetProposal(p *ktypes.Proposal, peerID id.KramaID) error {
 	if peerID == "" {
-		kbft.internalMsgs <- ktypes.ConsensusMessage{PeerID: "", Message: &ktypes.ProposalMessage{Proposal: p}}
+		kbft.selfMsgChan <- ktypes.ConsensusMessage{PeerID: "", Message: &ktypes.ProposalMessage{Proposal: p}}
 	} else {
-		kbft.peerMsgs <- ktypes.ConsensusMessage{PeerID: peerID, Message: &ktypes.ProposalMessage{Proposal: p}}
+		kbft.inboundMsgChan <- ktypes.ConsensusMessage{PeerID: peerID, Message: &ktypes.ProposalMessage{Proposal: p}}
 	}
 
 	return nil
@@ -422,7 +429,7 @@ func (kbft *KBFT) finalizeCommit(h []uint64) {
 		return
 	}
 
-	if !kbft.Proposal.Grid.CompareHash(gridID.Hash) {
+	if kbft.Proposal == nil || !kbft.Proposal.Grid.CompareHash(gridID.Hash) {
 		kbft.logger.Trace("Proposal grid doesn't match with the majority")
 
 		return
@@ -494,7 +501,7 @@ func (kbft *KBFT) ScheduleRound0(r *RoundState) {
 }
 
 func (kbft *KBFT) enterCommit(heights []uint64, round int32) {
-	log.Println("Entering Commit")
+	kbft.logger.Trace("Entering Commit", "step", kbft.Step)
 
 	if !areHeightsEqual(kbft.Height, heights) || RoundStepCommit <= kbft.Step {
 		return
@@ -659,7 +666,7 @@ func (kbft *KBFT) createProposal(heights []uint64, round int32) error {
 }
 
 func (kbft *KBFT) sendInternalMessage(msg ktypes.Cmessage) {
-	kbft.internalMsgs <- ktypes.ConsensusMessage{PeerID: kbft.id, Message: msg}
+	kbft.selfMsgChan <- ktypes.ConsensusMessage{PeerID: kbft.id, Message: msg}
 }
 
 func (kbft *KBFT) prevoteTimeout(round int32) time.Duration {
@@ -734,7 +741,7 @@ func (kbft *KBFT) addProposalGridTesseract(msg *GridTesseractMessage, peerId id.
 }
 */
 func (kbft *KBFT) enterPreCommit(heights []uint64, round int32) {
-	kbft.logger.Trace("Entered PreCommit")
+	kbft.logger.Trace("Entered PreCommit", "round", round)
 
 	if !areHeightsEqual(kbft.Height, heights) ||
 		kbft.Round > round ||
@@ -835,7 +842,7 @@ func (kbft *KBFT) enterPrevote(h []uint64, r int32) {
 
 // sendVote will send a signed vote message for the given vote-type and tesseractGrid
 func (kbft *KBFT) sendVote(msgType ktypes.ConsensusMsgType, tesseractGridID *ktypes.TesseractGridID) *ktypes.Vote {
-	kbft.logger.Debug("Sending vote", "vote-type", msgType, "grid-id", tesseractGridID.Hash.Hex())
+	kbft.logger.Debug("Sending vote", "vote-type", msgType, "grid-id", tesseractGridID)
 
 	if kbft.vault == nil {
 		kbft.logger.Error("Vault service unavailable [sendVote]")

@@ -522,27 +522,29 @@ func (s *StateObject) GetDirtyStorage() Storage {
 
 func (s *StateObject) getMetaContextObjectCopy() (*ktypes.MetaContextObject, error) {
 	data, isAvailable := s.cache.Get(s.contextHash)
-	if !isAvailable {
-		rawData, err := s.db.ReadEntry(s.contextHash.Bytes())
-		if err != nil {
-			return nil, errors.Wrap(ktypes.ErrUpdatingContextObject, err.Error())
+	if isAvailable {
+		metaContextObject, ok := data.(*ktypes.MetaContextObject)
+		if !ok {
+			return nil, ktypes.ErrInterfaceConversion
 		}
 
-		obj := new(ktypes.MetaContextObject)
-
-		if err := polo.Depolorize(obj, rawData); err != nil {
-			return nil, err
-		}
-
-		data = obj
+		return metaContextObject.Copy(), nil
 	}
 
-	metaContextObject, ok := data.(*ktypes.MetaContextObject)
-	if !ok {
-		return nil, ktypes.ErrInterfaceConversion
+	rawData, err := s.db.ReadEntry(s.contextHash.Bytes())
+	if err != nil {
+		return nil, errors.Wrap(ktypes.ErrUpdatingContextObject, err.Error())
 	}
 
-	return metaContextObject.Copy(), nil
+	obj := new(ktypes.MetaContextObject)
+
+	if err := polo.Depolorize(obj, rawData); err != nil {
+		return nil, err
+	}
+
+	s.cache.Add(s.contextHash, obj)
+
+	return obj.Copy(), nil
 }
 func (s *StateObject) getContextObjectCopy(hash ktypes.Hash) (*ktypes.ContextObject, error) {
 	data, isAvailable := s.cache.Get(hash)
@@ -560,7 +562,7 @@ func (s *StateObject) getContextObjectCopy(hash ktypes.Hash) (*ktypes.ContextObj
 
 		s.cache.Add(hash, obj)
 
-		data = obj
+		return obj.Copy(), nil
 	}
 
 	contextObject, ok := data.(*ktypes.ContextObject)

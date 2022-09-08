@@ -68,6 +68,14 @@ func (tid *TesseractGridID) IsNil() bool {
 	return tid.Hash == NilHash && len(tid.Parts.Hashes) == 0
 }
 
+func (tid *TesseractGridID) String() string {
+	if !tid.IsNil() {
+		return tid.Hash.Hex()
+	}
+
+	return "Nil"
+}
+
 type TesseractParts struct {
 	Total   int32
 	Hashes  []Hash
