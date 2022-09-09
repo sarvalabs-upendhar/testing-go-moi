@@ -27,6 +27,7 @@ var (
 var NetworkSize uint64
 var MTQ float64
 var SkipGenesis bool
+var Bootnode string
 
 var serverCmd = &cobra.Command{
 	Use:   "server",
@@ -56,6 +57,7 @@ func init() {
 	serverCmd.PersistentFlags().Float64Var(&MTQ, "mtq", 0.7, "Default MTQ")
 	serverCmd.PersistentFlags().String("data-dir", "test-chain", "data directory location")
 	serverCmd.PersistentFlags().BoolVar(&SkipGenesis, "skip-genesis", false, "Set the genesis")
+	serverCmd.PersistentFlags().StringVar(&Bootnode, "bootnode", "", "Bootnode MultiAddr")
 
 	if err := cobra.MarkFlagRequired(serverCmd.PersistentFlags(), "data-dir"); err != nil {
 		log.Print("data-dir is required")
@@ -100,18 +102,28 @@ func BuildConfig(dataDir string, cmdCfg *Config) (*common.Config, error) {
 	if MTQ != 0 {
 		nodeCfg.Network.MTQ = MTQ
 	}
-	// validate bootnode address
-	if len(cmdCfg.Network.BootStrapPeers) == 0 {
-		return nil, errors.New(" minimum one bootnode is required")
-	}
 
-	for _, v := range cmdCfg.Network.BootStrapPeers {
-		addr, err := maddr.NewMultiaddr(v)
+	if Bootnode != "" {
+		addr, err := maddr.NewMultiaddr(Bootnode)
 		if err != nil {
-			return nil, errors.New(" invalid bootnode address")
+			return nil, errors.New("invalid bootnode address")
 		}
 
 		nodeCfg.Network.BootstrapPeers = append(nodeCfg.Network.BootstrapPeers, addr)
+	} else {
+		// validate bootnode address
+		if len(cmdCfg.Network.BootStrapPeers) == 0 {
+			return nil, errors.New("minimum one bootnode is required")
+		}
+
+		for _, v := range cmdCfg.Network.BootStrapPeers {
+			addr, err := maddr.NewMultiaddr(v)
+			if err != nil {
+				return nil, errors.New("invalid bootnode address")
+			}
+
+			nodeCfg.Network.BootstrapPeers = append(nodeCfg.Network.BootstrapPeers, addr)
+		}
 	}
 
 	// validate listener address
@@ -122,7 +134,7 @@ func BuildConfig(dataDir string, cmdCfg *Config) (*common.Config, error) {
 	for _, v := range cmdCfg.Network.Libp2pAddr {
 		addr, err := maddr.NewMultiaddr(v)
 		if err != nil {
-			return nil, errors.New(" invalid libp2p  address")
+			return nil, errors.New("invalid libp2p address")
 		}
 
 		nodeCfg.Network.ListenAddresses = append(nodeCfg.Network.BootstrapPeers, addr)
@@ -130,12 +142,12 @@ func BuildConfig(dataDir string, cmdCfg *Config) (*common.Config, error) {
 
 	// validate json-rpc address
 	if cmdCfg.Network.JSONRPCAddr == "" {
-		return nil, errors.New(" empty json address")
+		return nil, errors.New("empty json address")
 	}
 
 	nodeCfg.Network.JSONRPCAddr, err = common.ResolveAddr(cmdCfg.Network.JSONRPCAddr)
 	if err != nil {
-		return nil, errors.New(" invalid json-rpc  address")
+		return nil, errors.New("invalid json-rpc address")
 	}
 
 	if cmdCfg.Network.ProtocolID != "" {
@@ -157,7 +169,7 @@ func BuildConfig(dataDir string, cmdCfg *Config) (*common.Config, error) {
 	if cmdCfg.Telemetry.PrometheusAddr != "" {
 		nodeCfg.Metrics.PrometheusAddr, err = common.ResolveAddr(cmdCfg.Telemetry.PrometheusAddr)
 		if err != nil {
-			return nil, errors.New(" invalid prometheus  address")
+			return nil, errors.New("invalid prometheus address")
 		}
 	}
 
