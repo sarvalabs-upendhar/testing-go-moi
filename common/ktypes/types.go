@@ -76,6 +76,13 @@ func (c ClusterID) String() string {
 	return string(c)
 }
 
+func (a Address) String() string {
+	if a == NilAddress {
+		return "nil address"
+	}
+
+	return a.Hex()
+}
 func (a Address) Bytes() []byte { return a[:] }
 
 // SetBytes sets the address to the value of b.
@@ -139,23 +146,7 @@ func (acc *Accounts) Bytes() []byte {
 
 // Hex return the Hex representation of the Address
 func (a Address) Hex() string {
-	//unchecksummed :=
-	//sha := sha3.NewLegacyKeccak256()
-	//sha.Write([]byte(unchecksummed))
-	//hash := sha.Sum(nil)
-	//
-	//result := []byte(unchecksummed)
-	//for i := 0; i < len(result); i++ {
-	//	hashByte := hash[i/2]
-	//	if i%2 == 0 {
-	//		hashByte = hashByte >> 4
-	//	} else {
-	//		hashByte &= 0xf
-	//	}
-	//	if result[i] > '9' && hashByte > 7 {
-	//		result[i] -= 32
-	//	}
-	//}
+
 	return "0x" + hex.EncodeToString(a[:])
 }
 
@@ -174,6 +165,15 @@ func BytesToHash(b []byte) Hash {
 
 	return h
 }
+
+func (h *Hash) String() string {
+	if *h == NilHash {
+		return "nil hash"
+	}
+
+	return h.Hex()
+}
+
 func (h *Hash) SetBytes(b []byte) {
 	if len(b) > len(h) {
 		b = b[len(b)-32:]
@@ -501,7 +501,7 @@ func (b *ArrayOfBits) setIndex(index int, v bool) bool {
 	}
 
 	if v {
-		b.Elements[index/64] |= (uint64(1) << uint(index%64))
+		b.Elements[index/64] |= uint64(1) << uint(index%64)
 	} else {
 		b.Elements[index/64] &= ^(uint64(1) << uint(index%64))
 	}

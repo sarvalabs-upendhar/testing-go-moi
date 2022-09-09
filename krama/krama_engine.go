@@ -42,8 +42,8 @@ const (
 
 	ObserverNodesDelta float64 = 0.2
 
-	ICSTimeOutDuration time.Duration = 4500 * time.Millisecond
-	MaxSlots           int           = 2
+	ICSTimeOutDuration     = 4500 * time.Millisecond
+	MaxSlots           int = 2
 
 	BehaviouralContextSize = 1
 	RandomContextSize      = 1
@@ -63,7 +63,7 @@ type persistence interface {
 type network interface {
 	Unsubscribe(topic string) error
 	Broadcast(topic string, data []byte) error
-	Subscribe(topic string, handler func(ctx context.Context, msg *pubsub.Message) error) error
+	Subscribe(ctx context.Context, topic string, handler func(msg *pubsub.Message) error) error
 	InitNewRPCServer(protocol protocol.ID) *rpc.Client
 	RegisterNewRPCService(protocol protocol.ID, serviceName string, service interface{}) error
 	GetKramaID() id.KramaID
@@ -183,7 +183,7 @@ func NewKramaEngine(ctx context.Context,
 	return k, k.RegisterRPCService()
 }
 
-func (k *Engine) pubSubHandler(ctx context.Context, msg *pubsub.Message) error {
+func (k *Engine) pubSubHandler(msg *pubsub.Message) error {
 	// Unmarshal the pub sub message into an ClusterInfo message
 	icsMsg := new(ktypes.ICSMSG)
 	if err := polo.Depolorize(icsMsg, msg.GetData()); err != nil {
@@ -1070,6 +1070,7 @@ func (k *Engine) initClusterCommunication(ctx context.Context, clusterID ktypes.
 				if !ok {
 					return
 				}
+
 				if err := k.server.Broadcast(string(clusterID), polo.Polorize(msg)); err != nil {
 					k.logger.Error("Error broadcasting PoXt Message")
 					panic(err)
@@ -1078,7 +1079,7 @@ func (k *Engine) initClusterCommunication(ctx context.Context, clusterID ktypes.
 		}
 	}()
 
-	return k.server.Subscribe(string(clusterID), k.pubSubHandler)
+	return k.server.Subscribe(ctx, string(clusterID), k.pubSubHandler)
 }
 
 func (k *Engine) RegisterRPCService() error {

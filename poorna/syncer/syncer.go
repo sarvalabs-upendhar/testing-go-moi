@@ -130,6 +130,7 @@ func NewSyncer(
 	if err != nil {
 		return nil, errors.Wrap(err, "error initiating agora")
 	}
+
 	s := &Syncer{
 		ctx:        ctx,
 		node:       node,
@@ -196,6 +197,7 @@ func (s *Syncer) StreamHandler(stream network.Stream) {
 	if _, ok := s.peers.Load(remotePeer); !ok {
 		s.peers.Store(remotePeer, sp)
 		atomic.AddUint32(&s.peerCount, 1)
+
 		go s.handleSyncPeer(sp)
 
 		s.logger.Info("[StreamHandler]", "Current Peer Count", atomic.LoadUint32(&s.peerCount))
@@ -229,6 +231,7 @@ func (s *Syncer) sendAccSyncRequest(peer *SyncPeer) error { //nolint
 	msg := &ktypes.AccountSyncRequest{
 		BulkSync: true,
 	}
+
 	log.Println("Sending account sync request to peer:", peer.id)
 
 	return peer.Send(s.node.GetKramaID(), ktypes.ACCSYNCREQ, msg)
@@ -541,7 +544,7 @@ func (s *Syncer) fetchTesseractState(tesseract *ktypes.Tesseract, fetchContext [
 		return err
 	}
 
-	if ok, err := s.fetchData(ctx, newSession, acc.Balance, acc.StorageRoot, acc.AssetApprovals); !ok || err != nil {
+	if ok, err := s.fetchData(ctx, newSession, acc.Balance, acc.StorageRoot, acc.AssetApprovals, tesseract.Body.ReceiptHash); !ok || err != nil {
 		s.logger.Error("Error fetching balance data", "error", err)
 
 		return err
@@ -635,7 +638,6 @@ func (s *Syncer) startWorkers() {
 		go s.latticeWorker(i, s.reqQueue)
 		go s.tesseractWorker(i, s.reqQueue1)
 	}
-
 }
 
 // handleSyncEvents handles the TesseractSyncJob created by the lattice manager
@@ -658,7 +660,6 @@ func (s *Syncer) handleStatusEvents() {
 			x, y := s.status.bucketSizes.Load(t.BucketID)
 			log.Println("after updating the status", "Bucket No", x, "Count", y)
 		}
-
 	}
 }
 

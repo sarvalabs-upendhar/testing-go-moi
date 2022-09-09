@@ -20,7 +20,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/routing"
 
 	"github.com/libp2p/go-libp2p"
-	crypto "github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -37,8 +37,6 @@ import (
 const (
 	SenatusTopic = "MOI_PUBSUB_SENATUS"
 
-	TesseractTopic = "MOI_PUBSUB_TESSERACT"
-
 	MinimumPeerCount = 3
 )
 
@@ -47,7 +45,7 @@ type Vault interface {
 	Sign(data []byte, sigType mcommon.SigType) ([]byte, error)
 }
 type Senatus interface {
-	SenatusHandler(ctx context.Context, msg *pubsub.Message) error
+	SenatusHandler(msg *pubsub.Message) error
 	GetNTQ(id id.KramaID) (int32, error)
 }
 
@@ -628,7 +626,7 @@ func (s *Server) Unsubscribe(topic string) error {
 // Creates topic and subscription handles for the topic, wraps it in a TopicSet
 // and adds it to the node's pubsub topicset. Creates an handler pipeline with the
 // given handler function and starts a subscription loop that invokes the pipeline.
-func (s *Server) Subscribe(topic string, handler func(ctx context.Context, msg *pubsub.Message) error) error {
+func (s *Server) Subscribe(ctx context.Context, topic string, handler func(msg *pubsub.Message) error) error {
 	// Join pubsub topic and get a topic handle
 	tophandle, err := s.PSrouter.Join(topic)
 	if err != nil {
@@ -650,15 +648,10 @@ func (s *Server) Subscribe(topic string, handler func(ctx context.Context, msg *
 	// TODO: Cleanup pipeline invocation structure
 	// Define a subscription pipeline closure
 	pipeline := func(msg *pubsub.Message) {
-		// Create context that times out after 10 seconds
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		// Defer the cancellation of the context
-		defer cancel()
 
 		// Call the given subscription handler
-		// TODO: Modify handler signature. It does not need to return
 		// an error because it is being invoked as a goroutine
-		if err := handler(ctx, msg); err != nil {
+		if err := handler(msg); err != nil {
 			return
 		}
 	}
@@ -668,9 +661,9 @@ func (s *Server) Subscribe(topic string, handler func(ctx context.Context, msg *
 		// Start an infinite loop
 		for {
 			// Retrieve the next message from the subscription
-			msg, err := subhandle.Next(s.ctx)
+			msg, err := subhandle.Next(ctx)
 			if err != nil {
-				s.logger.Error("Subscription failed")
+				s.logger.Error("Topic subscription closed")
 
 				return
 			}
@@ -692,37 +685,6 @@ func (s *Server) Subscribe(topic string, handler func(ctx context.Context, msg *
 
 	// Return a nil message
 	return nil
-}
-
-func (s *Server) tesseractHandler(ctx context.Context, msg *pubsub.Message) error {
-	tesseractMsg := new(ktypes.TesseractMessage)
-	//	v1msg := proto.MessageV1(tesseractMsg)
-	if err := polo.Depolorize(tesseractMsg, msg.GetData()); err != nil {
-		log.Panic(err)
-	}
-
-	//TODO:Add logic to avoid posting event if validator is part of the tesseract already
-
-	if tesseractMsg.Tesseract.Header.Operator == string(s.id) {
-		return nil
-	}
-
-	clusterInfo := new(ktypes.ICSClusterInfo)
-	if err := polo.Depolorize(clusterInfo, tesseractMsg.Delta[tesseractMsg.Tesseract.GetICSHash()]); err != nil {
-		s.logger.Error("Error depolarising cluster info", "err", err)
-	}
-
-	s.logger.Trace("Tesseract Received from", tesseractMsg.Sender,
-		"Hash", tesseractMsg.Tesseract.Hash().Hex(),
-		"Address", tesseractMsg.Tesseract.Header.Address.Hex())
-
-	event := kutils.TesseractReceivedEvent{
-		Tesseract:   tesseractMsg.Tesseract,
-		Sender:      tesseractMsg.Sender,
-		ClusterInfo: clusterInfo,
-	}
-
-	return s.mux.Post(event)
 }
 
 func (s *Server) GetRandomNode() peer.ID {
@@ -782,14 +744,6 @@ func (s *Server) NewStream(ctx context.Context, protocol protocol.ID, id peer.ID
 func (s *Server) Start() error {
 	// Set the KIP stream handler to the host
 	s.host.SetStreamHandler(s.cfg.ProtocolID, s.streamHandlerFunc)
-
-	if err := s.Subscribe(TesseractTopic, s.tesseractHandler); err != nil {
-		return err
-	}
-
-	if err := s.Subscribe(SenatusTopic, s.Senatus.SenatusHandler); err != nil {
-		return err
-	}
 
 	go s.Discover()
 

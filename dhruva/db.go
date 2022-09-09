@@ -82,12 +82,12 @@ func NewPersistenceManager(
 
 	ctx, ctxCancel := context.WithCancel(ctx)
 	p := &PersistenceManager{
+		ctx:                ctx,
+		ctxCancel:          ctxCancel,
 		batchAnnounceChan:  make(chan []ktypes.Hash, 100),
 		singleAnnounceChan: make(chan ktypes.Hash, 10),
 		Config:             config,
 		logger:             logger.Named("Dhruva"),
-		ctx:                ctx,
-		ctxCancel:          ctxCancel,
 		db:                 db,
 		BsExchange:         bitswap.New(context.Background(), bsNetwork, dataStore),
 	}

@@ -10,7 +10,7 @@ import (
 	"log"
 	"sync"
 
-	ktypes "gitlab.com/sarvalabs/moichain/common/ktypes"
+	"gitlab.com/sarvalabs/moichain/common/ktypes"
 )
 
 // VoteSet is a struct that represents a set of consensus Votes

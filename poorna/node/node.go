@@ -125,7 +125,7 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 	}
 
 	// setup state manager
-	n.state, err = guna.NewStateManager(n.ctx, db, n.logger, n.cache, n.eventMux)
+	n.state, err = guna.NewStateManager(n.ctx, db, n.logger, n.cache, n.network)
 	if err != nil {
 		return nil, err
 	}
@@ -139,10 +139,12 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 	n.handlers.flux = flux.NewRandomizer(n.ctx, n.logger, n.network)
 	// setup chain manager
 	n.chain = chain.NewChainManager(
+		n.ctx,
 		db,
 		n.state,
 		n.logger,
 		n.eventMux,
+		n.network,
 		n.ixpool,
 		n.cache,
 		n.exec,

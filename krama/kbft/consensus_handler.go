@@ -128,7 +128,6 @@ func (m *MessageRouter) CollectMessages() {
 }
 
 func (m *MessageRouter) HandleMessages() {
-
 	for {
 		select {
 		// Broadcast read routine
