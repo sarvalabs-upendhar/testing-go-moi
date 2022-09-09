@@ -19,14 +19,17 @@ import (
 
 	lru "github.com/hashicorp/golang-lru"
 	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	"gitlab.com/sarvalabs/moichain/common/kutils"
 	"gitlab.com/sarvalabs/moichain/dhruva"
 )
 
 const (
+	SenatusTopic       = "MOI_PUBSUB_SENATUS"
 	minimumContextSize = 1
 )
 
+type server interface {
+	Subscribe(ctx context.Context, topic string, handler func(msg *pubsub.Message) error) error
+}
 type Senatus interface {
 	AddNewPeer(key id.KramaID, data *ReputationInfo) error
 	UpdateAddress(key id.KramaID, addrs []string) error
@@ -39,28 +42,24 @@ type Senatus interface {
 	AddEntries(msg ktypes.SyncReputationInfo) error
 	GetInclusivity(id id.KramaID) (int64, error)
 	GetAllEntries() (chan *ktypes.SyncReputationInfo, error)
-	SenatusHandler(ctx context.Context, msg *pubsub.Message) error
+	SenatusHandler(msg *pubsub.Message) error
 	HandleHelloMessages(msgs []*ktypes.HelloMsg) (int, error)
 	Start(id id.KramaID, ntq int32, publicKey []byte, address []multiaddr.Multiaddr) error
 }
 
 var GenesisAddress = ktypes.BytesToAddress(ktypes.GetHash([]byte("sargaAccount")).Bytes())
 
-//type Res struct {
-//	respType int
-//	data     []string
-//}
-
 type StateManager struct {
+	ctx              context.Context
 	logger           hclog.Logger
 	db               *dhruva.PersistenceManager
 	cache            *lru.Cache
 	senatus          Senatus
+	network          server
 	objects          map[ktypes.Address]*StateObject
 	dirtyObjects     map[ktypes.Address]*StateObject
 	dirtyObjectsLock sync.Mutex
 	objectsLock      sync.Mutex
-	mux              *kutils.TypeMux
 	client           *http.Client
 }
 
@@ -69,12 +68,13 @@ func NewStateManager(
 	db *dhruva.PersistenceManager,
 	logger hclog.Logger,
 	cache *lru.Cache,
-	mux *kutils.TypeMux,
+	network server,
 ) (*StateManager, error) {
 	sm := &StateManager{
-		cache: cache,
-		db:    db,
-		mux:   mux,
+		ctx:     ctx,
+		cache:   cache,
+		db:      db,
+		network: network,
 		client: &http.Client{Transport: &http.Transport{
 			MaxIdleConns:    1024,
 			MaxConnsPerHost: 1000,
@@ -97,6 +97,7 @@ func NewStateManager(
 func (sm *StateManager) createStateObject(addr ktypes.Address, accType ktypes.AccType) *StateObject {
 	journal := new(journal)
 	stateObject := NewStateObject(addr, sm.cache, journal, sm.db, accType)
+
 	sm.dirtyObjects[addr] = stateObject
 
 	return stateObject
@@ -114,6 +115,7 @@ func (sm *StateManager) CreateDirtyObject(addr ktypes.Address, accType ktypes.Ac
 	defer sm.dirtyObjectsLock.Unlock()
 
 	obj := sm.createStateObject(addr, accType)
+
 	sm.dirtyObjects[addr] = obj.Copy()
 
 	return sm.dirtyObjects[addr]
@@ -422,6 +424,15 @@ func (sm *StateManager) fetchLatestParticipantContext(addr ktypes.Address) (
 	return contextHash, behaviouralSet, randomSet, nil
 }
 
+func (sm *StateManager) GetCommittedContextHash(add ktypes.Address) (ktypes.Hash, error) {
+	tesseract, err := sm.GetLatestTesseract(add)
+	if err != nil {
+		return ktypes.NilHash, err
+	}
+
+	return tesseract.Body.ContextHash, nil
+}
+
 func (sm *StateManager) GetContextByHash(hash ktypes.Hash) ([]id.KramaID, []id.KramaID, error) {
 	metaContextObject, err := sm.getMetaContextObject(hash)
 	if err != nil {
@@ -546,15 +557,6 @@ func (sm *StateManager) FetchInteractionContext(ix *ktypes.Interaction) (
 	return contextHashes, nodeSet, err
 }
 
-func (sm *StateManager) GetBalances(addrs ktypes.Address) (*ktypes.BalanceObject, error) {
-	stateObject, err := sm.GetLatestStateObject(addrs)
-	if err != nil {
-		return nil, err
-	}
-
-	return stateObject.balance.Copy(), nil
-}
-
 func (sm *StateManager) IsGenesis(addr ktypes.Address) (bool, error) {
 	if addr == ktypes.NilAddress {
 		return false, nil
@@ -586,13 +588,13 @@ func (sm *StateManager) GetLatestNonce(addr ktypes.Address) (uint64, error) {
 	return object.data.Nonce, nil
 }
 
-func (sm *StateManager) GetCommittedContextHash(add ktypes.Address) (ktypes.Hash, error) {
-	tesseract, err := sm.GetLatestTesseract(add)
+func (sm *StateManager) GetBalances(addrs ktypes.Address) (*ktypes.BalanceObject, error) {
+	stateObject, err := sm.GetLatestStateObject(addrs)
 	if err != nil {
-		return ktypes.NilHash, err
+		return nil, err
 	}
 
-	return tesseract.Body.ContextHash, nil
+	return stateObject.balance.Copy(), nil
 }
 
 func (sm *StateManager) GetAccountMetaInfo(addr ktypes.Address) (*ktypes.AccountMetaInfo, error) {
@@ -722,5 +724,9 @@ func (sm *StateManager) GetPublicKeyFromContract(ctx context.Context, ids ...id.
 }
 
 func (sm *StateManager) Start(id id.KramaID, ntq int32, publicKey []byte, addrs []multiaddr.Multiaddr) error {
+	if err := sm.network.Subscribe(sm.ctx, SenatusTopic, sm.senatus.SenatusHandler); err != nil {
+		return errors.Wrap(err, "failed to subscribe senatus topic")
+	}
+
 	return sm.senatus.Start(id, ntq, publicKey, addrs)
 }

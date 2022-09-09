@@ -5,7 +5,7 @@ import (
 	"crypto/ed25519"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 
-	ktypes "gitlab.com/sarvalabs/moichain/common/ktypes"
+	"gitlab.com/sarvalabs/moichain/common/ktypes"
 )
 
 type Validator struct {

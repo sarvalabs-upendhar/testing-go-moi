@@ -2,7 +2,7 @@ package kbft
 
 import (
 	"bytes"
-	ktypes "gitlab.com/sarvalabs/moichain/common/ktypes"
+	"gitlab.com/sarvalabs/moichain/common/ktypes"
 )
 
 type ValidatorSet struct {

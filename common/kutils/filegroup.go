@@ -415,7 +415,7 @@ func (g *Group) readGroupInfo() GroupInfo {
 	headBase := filepath.Base(g.Head.Path)
 
 	var (
-		minIndex, maxIndex int = -1, -1
+		minIndex, maxIndex = -1, -1
 
 		totalSize, headSize int64 = 0, 0
 	)

@@ -13,6 +13,7 @@ type Tesseract struct {
 }
 
 type ContextDelta map[Address]*DeltaGroup
+
 type DeltaGroup struct {
 	Role             ParticipantRole
 	BehaviouralNodes []id.KramaID
@@ -108,6 +109,10 @@ func TesseractFromProto(t *ktypes.Tesseract) *Tesseract {
 	return tnew
 }
 */
+
+func (t *Tesseract) Operator() string {
+	return t.Header.Operator
+}
 
 func (t *Tesseract) GetICSHash() Hash {
 	return t.Body.ConsensusProof.ICSHash

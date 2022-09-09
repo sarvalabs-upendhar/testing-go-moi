@@ -139,6 +139,7 @@ func (s *Session) getBlocks(ctx context.Context, peerID id.KramaID, out chan *ty
 			//s.wants.RemoveCid(block.GetID())
 			idSet.Remove(block.GetID())
 			s.im.RemoveSessionInterest(s.id, block.GetID())
+
 			out <- &block
 
 			if idSet.Len() == 0 {

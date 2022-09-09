@@ -150,7 +150,7 @@ func (r *Randomizer) updatePeerListStatus(slot int) {
 }
 func (r *Randomizer) Start() {
 	r.topic = kutils.RandString(64)
-	if err := r.server.Subscribe(r.topic, r.pubSubHandler); err != nil {
+	if err := r.server.Subscribe(r.ctx, r.topic, r.pubSubHandler); err != nil {
 		r.logger.Error("Error subscribing to flux topic", err)
 
 		log.Panic(err)
@@ -268,7 +268,7 @@ func (r *Randomizer) HandleReqMsg(reqMsg *ktypes.RandomWalkReq) error {
 		return nil
 	}
 }
-func (r *Randomizer) pubSubHandler(ctx context.Context, msg *pubsub.Message) error {
+func (r *Randomizer) pubSubHandler(msg *pubsub.Message) error {
 	data := msg.GetData()
 	randomPeerMsg := new(ktypes.RandomWalkResp)
 	//log.Println("Here",msg.ReceivedFrom,randomPeerMsg,data)

@@ -21,7 +21,7 @@ import (
 )
 
 var (
-	ErrReadingConfig error = errors.New("error reading config file")
+	ErrReadingConfig = errors.New("error reading config file")
 )
 
 var NetworkSize uint64

@@ -11,7 +11,7 @@ import (
 	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	"gitlab.com/sarvalabs/moichain/common/kutils"
 	"gitlab.com/sarvalabs/moichain/core/chain"
-	ixpool "gitlab.com/sarvalabs/moichain/core/ixpool"
+	"gitlab.com/sarvalabs/moichain/core/ixpool"
 	"log"
 )
 
@@ -87,14 +87,12 @@ func (eh *SubHandler) Start() {
 	// Subscribe the TypeMux to NewIxsEvent and NewPeerEvent events
 	eh.ixSub = eh.mux.Subscribe(kutils.NewIxsEvent{})
 	eh.newPeerSub = eh.mux.Subscribe(kutils.NewPeerEvent{})
-	eh.minedTesseractSub = eh.mux.Subscribe(kutils.NewMinedTesseractEvent{})
 
 	// Start the handler loops for new peers, broadcasting
 	// interactions and handling ICS events
 
 	go eh.newPeerLoop()
 	go eh.ixBroadcastLoop()
-	go eh.minedTesseractLoop()
 }
 
 // newPeerLoop is a method of SubHandler that handles NewPeerEvents.
@@ -201,22 +199,6 @@ func (eh *SubHandler) ixBroadcastLoop() {
 	}
 }
 
-func (eh *SubHandler) minedTesseractLoop() {
-	for obj := range eh.minedTesseractSub.Chan() {
-		if event, ok := obj.Data.(kutils.NewMinedTesseractEvent); ok {
-			msg := ktypes.TesseractMessage{
-				Tesseract: event.Tesseract,
-				Sender:    eh.id,
-				Delta:     event.Delta,
-			}
-
-			if err := eh.server.Broadcast(TesseractTopic, polo.Polorize(msg)); err != nil {
-				log.Println("Tesseract broadcast failed")
-			}
-		}
-	}
-}
-
 // broadcastIXs is a method of SubHandler that broadcasts a given slice of Interactions.
 // Only emits it from peers that are not already aware of the interaction.
 func (eh *SubHandler) broadcastIXs(ixs []*ktypes.Interaction) {
@@ -250,6 +232,5 @@ func (eh *SubHandler) broadcastIXs(ixs []*ktypes.Interaction) {
 func (eh *SubHandler) Close() {
 	eh.ixSub.Unsubscribe()
 	eh.newPeerSub.Unsubscribe()
-	eh.minedTesseractSub.Unsubscribe()
 	eh.ctxCancel()
 }

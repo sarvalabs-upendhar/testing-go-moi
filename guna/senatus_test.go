@@ -117,6 +117,5 @@ func NewMockState() *mockState {
 }
 
 func (state *mockState) GetPublicKeyFromContract(ctx context.Context, ids ...id.KramaID) (keys [][]byte, err error) {
-
 	return nil, nil
 }

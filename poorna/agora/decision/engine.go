@@ -167,6 +167,8 @@ func (e *Engine) HandleRequest(req *Request) {
 
 	if !e.db.DoesStateExists(stateHash) {
 		e.sendResponse(req.PeerID, address, stateHash, false, nil)
+
+		return
 	}
 
 	if !e.requests.Contains(req.PeerID) {

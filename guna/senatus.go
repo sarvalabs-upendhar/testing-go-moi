@@ -353,7 +353,7 @@ func (r *ReputationEngine) GetAllEntries() (chan *ktypes.SyncReputationInfo, err
 	return ch, nil
 }
 
-func (r *ReputationEngine) SenatusHandler(ctx context.Context, msg *pubsub.Message) error {
+func (r *ReputationEngine) SenatusHandler(msg *pubsub.Message) error {
 	helloMsg := new(ktypes.HelloMsg)
 
 	if err := polo.Depolorize(helloMsg, msg.Data); err != nil {

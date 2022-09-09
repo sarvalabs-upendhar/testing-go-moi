@@ -1,7 +1,7 @@
 package api
 
 import (
-	ktypes "gitlab.com/sarvalabs/moichain/common/ktypes"
+	"gitlab.com/sarvalabs/moichain/common/ktypes"
 )
 
 // PublicIXPoolAPI is a struct that represents a wrapper for the interaction pool public APIs

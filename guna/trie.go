@@ -6,7 +6,7 @@ import (
 
 	smt "github.com/aergoio/aergo/pkg/trie"
 	"github.com/ipfs/go-cid"
-	dhruva "gitlab.com/sarvalabs/moichain/dhruva"
+	"gitlab.com/sarvalabs/moichain/dhruva"
 )
 
 type Trie interface {
