@@ -266,21 +266,17 @@ func (sm *StateManager) GetLatestTesseract(addr ktypes.Address) (*ktypes.Tessera
 	return sm.fetchTesseractByHash(tesseractHash)
 }
 
-// Broadcast publishes the CID's associated with the given address using bitswap
-func (sm *StateManager) Broadcast(address ktypes.Address) {
+func (sm *StateManager) Cleanup(address ktypes.Address) {
 	object, err := sm.GetDirtyObject(address)
 	if err != nil {
-		sm.logger.Error("Error fetching dirty entries for", "addr", address.Hex(), "err", err)
+		sm.logger.Error("Error fetching dirty object for", "addr", address.Hex(), "err", err)
+
+		panic(err)
 	}
 
 	object.mtx.Lock()
-	cIDs := object.journal.GetIDs()
 	object.journal = nil
 	object.mtx.Unlock()
-
-	sm.logger.Info("Announcing CID's for address", "addr", address.Hex(), "count", len(cIDs))
-	sm.db.AnnounceBatchCIDEntries(cIDs)
-	//log.Printf("CID's announced for address %s", kutils.BytesToHex(address[:]))
 
 	sm.objectsLock.Lock()
 	sm.objects[address] = object

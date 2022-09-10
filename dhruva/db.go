@@ -6,12 +6,7 @@ import (
 	"fmt"
 	"github.com/dgraph-io/badger/v3"
 	"github.com/hashicorp/go-hclog"
-	"github.com/ipfs/go-bitswap"
-	bsnet "github.com/ipfs/go-bitswap/network"
-	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
-	blockstore "github.com/ipfs/go-ipfs-blockstore"
-	exchange "github.com/ipfs/go-ipfs-exchange-interface"
 	"github.com/pkg/errors"
 	"gitlab.com/sarvalabs/moichain/common"
 	"gitlab.com/sarvalabs/moichain/common/ktypes"
@@ -21,7 +16,6 @@ import (
 	"google.golang.org/grpc/status"
 	"log"
 	"math/big"
-	"time"
 )
 
 const (
@@ -32,8 +26,6 @@ const (
 type PersistenceService interface {
 	CreateEntry([]byte, []byte, bool) error
 	CreateCidEntry([]byte, bool) ([]byte, error)
-	AnnounceCIDEntry(hash ktypes.Hash) error
-	AnnounceBatchCIDEntries(hash ktypes.Hash) error
 	UpdateEntry([]byte, []byte) error
 	ReadEntry([]byte) ([]byte, error)
 	Contains([]byte) (bool, error)
@@ -43,14 +35,11 @@ type PersistenceService interface {
 
 // PersistenceManager manages all the critical information to perform content-addressed persistence services
 type PersistenceManager struct {
-	ctx                context.Context
-	ctxCancel          context.CancelFunc
-	Config             *common.DBConfig
-	db                 *badger.DB
-	BsExchange         exchange.Interface
-	singleAnnounceChan chan ktypes.Hash
-	batchAnnounceChan  chan []ktypes.Hash
-	logger             hclog.Logger
+	ctx       context.Context
+	ctxCancel context.CancelFunc
+	Config    *common.DBConfig
+	db        *badger.DB
+	logger    hclog.Logger
 }
 
 // initBadgerInstance initiates BadgerDB at give path
@@ -72,8 +61,6 @@ func NewPersistenceManager(
 	ctx context.Context,
 	logger hclog.Logger,
 	config *common.DBConfig,
-	bsNetwork bsnet.BitSwapNetwork,
-	dataStore blockstore.Blockstore,
 ) (*PersistenceManager, error) {
 	db, err := initBadgerInstance(config.DBFolderPath)
 	if err != nil {
@@ -82,23 +69,14 @@ func NewPersistenceManager(
 
 	ctx, ctxCancel := context.WithCancel(ctx)
 	p := &PersistenceManager{
-		ctx:                ctx,
-		ctxCancel:          ctxCancel,
-		batchAnnounceChan:  make(chan []ktypes.Hash, 100),
-		singleAnnounceChan: make(chan ktypes.Hash, 10),
-		Config:             config,
-		logger:             logger.Named("Dhruva"),
-		db:                 db,
-		BsExchange:         bitswap.New(context.Background(), bsNetwork, dataStore),
+		ctx:       ctx,
+		ctxCancel: ctxCancel,
+		Config:    config,
+		logger:    logger.Named("Dhruva"),
+		db:        db,
 	}
 
 	return p, nil
-}
-
-// Start is used to initiate a few go routines specific to PersistenceManager
-func (p *PersistenceManager) Start() {
-	go p.singleCIDBroadcaster()
-	go p.batchCIDBroadcaster()
 }
 
 func (p *PersistenceManager) GetBucketSizes() (map[int32]*big.Int, error) {
@@ -241,15 +219,9 @@ func (p *PersistenceManager) Close() {
 	p.logger.Info("BadgerDB is shut down down gracefully.")
 	defer p.ctxCancel()
 	// close the channels
-	close(p.singleAnnounceChan)
-	close(p.batchAnnounceChan)
 
 	if err := p.db.Close(); err != nil {
 		p.logger.Error("Error closing the local BadgerDB instance", "error", err)
-	}
-
-	if err := p.BsExchange.Close(); err != nil {
-		p.logger.Error("Error closing the BitSwap Exchange:", "error", err)
 	}
 }
 
@@ -337,16 +309,6 @@ func (p *PersistenceManager) CreateCidEntry(value []byte) ([]byte, error) {
 	return newCid.Bytes(), nil
 }
 
-// AnnounceCIDEntry is used to announce individual CIDs
-func (p *PersistenceManager) AnnounceCIDEntry(hash ktypes.Hash) {
-	p.singleAnnounceChan <- hash
-}
-
-// AnnounceBatchCIDEntries is used to announce a batch of session-specific CIDs
-func (p *PersistenceManager) AnnounceBatchCIDEntries(hashes []ktypes.Hash) {
-	p.batchAnnounceChan <- hashes
-}
-
 // UpdateEntry function is used to update the value for a given key
 func (p *PersistenceManager) UpdateEntry(key []byte, newValue []byte) error {
 	// 1. Read the current value stored under the key
@@ -430,36 +392,6 @@ func (p *PersistenceManager) ReadEntry(key []byte) ([]byte, error) {
 	return value, nil
 }
 
-func (p *PersistenceManager) FetchCIDEntries(keys [][]byte) error {
-	cIDs := make([]cid.Cid, 0, len(keys))
-
-	for _, key := range keys {
-		// 1. Parse the key into a proper CID
-		_, c, err := cid.CidFromBytes(key)
-		if err != nil {
-			return errors.Wrap(ktypes.ErrParsingCID, err.Error())
-		}
-
-		cIDs = append(cIDs, c)
-	}
-	// 2. Fetch the data from neighboring remote data nodes
-	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second) // TODO: Timeout duration to be optimized
-	defer cancel()
-
-	getBlocksResChan, err := p.BsExchange.GetBlocks(ctx, cIDs)
-	if err != nil {
-		return errors.Wrap(ktypes.ErrNetworkFetchFailed, err.Error())
-	}
-	// 3. Cache the data locally
-	for block := range getBlocksResChan {
-		if _, err = p.CreateCidEntry(block.RawData()); err != nil {
-			return errors.Wrap(ktypes.ErrNetworkFetchFailed, err.Error())
-		}
-	}
-
-	return nil
-}
-
 // Contains is a light-weight function called to check for the presence of a k-v entry in the local Badgerdb instance
 func (p *PersistenceManager) Contains(key []byte) (bool, error) {
 	//1. Assume by default that key does not exist
@@ -507,54 +439,6 @@ func (p *PersistenceManager) NewBatchWriter() *badger.WriteBatch {
 
 func (p *PersistenceManager) Cleanup() error {
 	return p.db.DropAll()
-}
-
-func (p *PersistenceManager) batchCIDBroadcaster() {
-	for keys := range p.batchAnnounceChan {
-		for _, c := range keys {
-			p.announceCID(c)
-		}
-	}
-}
-
-func (p *PersistenceManager) singleCIDBroadcaster() {
-	for hash := range p.singleAnnounceChan {
-		p.announceCID(hash) //TODO:Change this to batch announce
-	}
-}
-
-func (p *PersistenceManager) announceCID(hash ktypes.Hash) {
-	// 1. Extract the CID from channel
-	key, err := ktypes.HashToCid(hash)
-	if err != nil {
-		p.logger.Error("Error reconstructing the CID")
-	}
-	// 2. Create fresh blocks from the CID
-	value, err := p.ReadEntry(hash.Bytes())
-	if err != nil {
-		log.Panic(err)
-	}
-
-	blk, err := blocks.NewBlockWithCid(value, key)
-	if err != nil {
-		p.logger.Error("Error reconstructing the CID")
-	}
-	// 3. Announce the block
-	ctx := context.Background()
-	if err = p.BsExchange.HasBlock(ctx, blk); err != nil {
-		p.logger.Error("Failed to announce HAS signal for new block")
-	}
-
-	p.logger.Debug("Successfully sent a HAS signal for the new block: ")
-}
-func (p *PersistenceManager) CreateAndPublishEntry(id ktypes.Hash, value []byte) error {
-	if err := p.CreateEntry(id.Bytes(), value); err != nil {
-		return err
-	}
-
-	p.AnnounceCIDEntry(id)
-
-	return nil
 }
 
 func (p *PersistenceManager) GetEntries(prefix []byte) chan ktypes.DBEntry {

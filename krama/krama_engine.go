@@ -58,7 +58,7 @@ type lattice interface {
 	) error
 }
 type persistence interface {
-	CreateAndPublishEntry(key ktypes.Hash, value []byte) error
+	CreateEntry(key []byte, value []byte) error
 }
 type network interface {
 	Unsubscribe(topic string) error
@@ -300,7 +300,7 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID ktypes.Cluste
 	newSlot.clusterState.ContextLock = lockInfo
 	// Initiate the cluster communication by subscribing to clusterID
 	if err = k.initClusterCommunication(ctx, clusterID); err != nil {
-		return err
+		return errors.Wrap(err, "failed to initiate cluster communication")
 	}
 	// Start routine to capture the random nodes provided by the context nodes
 	randomNodesReceiverChan := make(chan []id.KramaID)
@@ -723,7 +723,7 @@ func (k *Engine) handleReq(req Request) {
 	}
 
 	for key, value := range slot.clusterState.GetDirty() {
-		if err := k.db.CreateAndPublishEntry(key, value); err != nil {
+		if err := k.db.CreateEntry(key.Bytes(), value); err != nil {
 			k.logger.Error("Error writing keys to db")
 			log.Panic(err) //We panic here, this should not occur at all.
 		}
@@ -1053,8 +1053,13 @@ func (k *Engine) sendICSSuccess(id ktypes.ClusterID) error {
 	return nil
 }
 func (k *Engine) initClusterCommunication(ctx context.Context, clusterID ktypes.ClusterID) error {
-	go func() {
-		slot := k.slots.getSlot(clusterID)
+	if err := k.server.Subscribe(ctx, string(clusterID), k.pubSubHandler); err != nil {
+		return err
+	}
+
+	slot := k.slots.getSlot(clusterID)
+
+	go func(outboundChan chan *ktypes.ICSMSG) {
 
 		for {
 			select {
@@ -1066,7 +1071,7 @@ func (k *Engine) initClusterCommunication(ctx context.Context, clusterID ktypes.
 				k.logger.Info("Closing PoXt message handler")
 
 				return
-			case msg, ok := <-slot.outboundMsg:
+			case msg, ok := <-outboundChan:
 				if !ok {
 					return
 				}
@@ -1077,9 +1082,9 @@ func (k *Engine) initClusterCommunication(ctx context.Context, clusterID ktypes.
 				}
 			}
 		}
-	}()
+	}(slot.outboundMsg)
 
-	return k.server.Subscribe(ctx, string(clusterID), k.pubSubHandler)
+	return nil
 }
 
 func (k *Engine) RegisterRPCService() error {

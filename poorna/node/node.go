@@ -4,8 +4,6 @@ import (
 	"context"
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/ipfs/go-datastore"
-	"github.com/ipfs/go-datastore/sync"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
@@ -109,9 +107,9 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 
 	// create block store for Bitswap
 	// this will be replaced with a wrapper around dhruva
-	n.datastore = blockstore.NewBlockstore(sync.MutexWrap(datastore.NewMapDatastore()))
+	//n.datastore = blockstore.NewBlockstore(sync.MutexWrap(datastore.NewMapDatastore()))
 	// setup persistence manager
-	db, err := dhruva.NewPersistenceManager(n.ctx, n.logger, cfg.DB, n.network.BsNetwork, n.datastore)
+	db, err := dhruva.NewPersistenceManager(n.ctx, n.logger, cfg.DB)
 	if err != nil {
 		return nil, err
 	}
@@ -252,7 +250,6 @@ func (n *Node) Start() {
 
 	go n.rpc.Start()
 	go n.chain.Start()
-	go n.db.Start()
 }
 func (n *Node) startSubHandlers() {
 	n.logger.Info("Starting Sub-Handlers")
