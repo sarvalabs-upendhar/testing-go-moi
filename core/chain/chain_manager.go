@@ -29,7 +29,6 @@ type db interface {
 	ReadEntry(key []byte) ([]byte, error)
 	Contains(key []byte) (bool, error)
 	CreateEntry(key []byte, value []byte) error
-	CreateAndPublishEntry(key ktypes.Hash, value []byte) error
 	UpdateAccMetaInfo(
 		id ktypes.Address,
 		height *big.Int,
@@ -52,7 +51,7 @@ type stateManager interface {
 	DeleteStateObject(addr ktypes.Address)
 	GetLatestContext(addr ktypes.Address) (ktypes.Hash, []id.KramaID, []id.KramaID, error)
 	GetPublicKeys(id ...id.KramaID) (keys [][]byte, err error)
-	Broadcast(addrs ktypes.Address)
+	Cleanup(addrs ktypes.Address)
 	IsGenesis(addr ktypes.Address) (bool, error)
 	FetchContextLock(ts *ktypes.Tesseract) ([]*ktypes.NodeSet, error)
 	GetContextByHash(hash ktypes.Hash) ([]id.KramaID, []id.KramaID, error)
@@ -486,7 +485,8 @@ func (c *ChainManager) append(groupHash ktypes.Hash, tesseracts map[ktypes.Addre
 				return err
 			}
 
-			c.sm.Broadcast(ts.Header.Address)
+			c.sm.Cleanup(ts.Header.Address)
+
 			c.ixpool.ResetWithHeaders(ts)
 
 			msg := ktypes.TesseractMessage{
@@ -583,7 +583,7 @@ func (c *ChainManager) AppendTesseracts(
 	dirtyStorage map[ktypes.Hash][]byte,
 ) error {
 	for key, value := range dirtyStorage {
-		if err := c.db.CreateAndPublishEntry(key, value); err != nil {
+		if err := c.db.CreateEntry(key.Bytes(), value); err != nil {
 			c.logger.Error("Error writing keys to db")
 			log.Panic(err) //We panic here, this should not occur at all.
 		}

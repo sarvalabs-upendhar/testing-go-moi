@@ -16,7 +16,6 @@ import (
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/polo/go-polo"
 
-	bsnet "github.com/ipfs/go-bitswap/network"
 	"github.com/libp2p/go-libp2p-core/routing"
 
 	"github.com/libp2p/go-libp2p"
@@ -97,8 +96,6 @@ type Server struct {
 
 	Peers *peerSet
 
-	BsNetwork bsnet.BitSwapNetwork
-
 	logger hclog.Logger
 
 	// vault interface to access network keys and sign messages
@@ -144,7 +141,6 @@ func NewServer(
 		return nil, fmt.Errorf("host setup error: %w", err)
 	}
 
-	kn.BsNetwork = bsnet.NewFromIpfsHost(kn.host, kn.KadDHT)
 	// Set up the node's PubSub router
 	if err := kn.setupPubSub(); err != nil {
 		// Return the error
@@ -663,7 +659,7 @@ func (s *Server) Subscribe(ctx context.Context, topic string, handler func(msg *
 			// Retrieve the next message from the subscription
 			msg, err := subhandle.Next(ctx)
 			if err != nil {
-				s.logger.Error("Topic subscription closed")
+				s.logger.Error("Topic subscription closed", "topic", topic)
 
 				return
 			}

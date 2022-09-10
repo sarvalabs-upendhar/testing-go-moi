@@ -68,8 +68,6 @@ type lattice interface {
 type db interface {
 	NewBatchWriter() *badger.WriteBatch
 	CreateEntry([]byte, []byte) error
-	AnnounceCIDEntry(hash ktypes.Hash)
-	AnnounceBatchCIDEntries(hash []ktypes.Hash)
 	UpdateEntry([]byte, []byte) error
 	ReadEntry([]byte) ([]byte, error)
 	Contains([]byte) (bool, error)
