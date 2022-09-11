@@ -126,19 +126,18 @@ func (i *ClusterInfo) RespondedEligibleSet() (count int, nodes []id.KramaID) {
 }
 
 func (i *ClusterInfo) GetBehaviouralContextDelta(setType ktypes.IcsSetType) (addedPeer, replacedPeer id.KramaID) {
+	for _, peerID := range i.ICS.Nodes[setType].Ids {
+		if i.Operator == peerID { //i.ICS.Nodes[setType].Responses.GetIndex(index)
+
+			return
+		}
+	}
+
 	if len(i.ICS.Nodes[setType].Ids) >= ktypes.MaxBehaviourContextSize {
 		replacedPeer = i.ICS.Nodes[setType].Ids[0]
 	}
 
-	for _, peerID := range i.ICS.Nodes[setType].Ids {
-		if i.Operator != peerID { //i.ICS.Nodes[setType].Responses.GetIndex(index)
-			addedPeer = i.Operator
-
-			break
-		}
-	}
-
-	return
+	return i.Operator, replacedPeer
 }
 
 func (i *ClusterInfo) GetRandomContextDelta(
