@@ -2,11 +2,13 @@ package krama
 
 import (
 	"context"
+	"fmt"
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	rpc "github.com/libp2p/go-libp2p-gorpc"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/moby/locker"
 	"github.com/mr-tron/base58/base58"
 	"github.com/pkg/errors"
 	"gitlab.com/sarvalabs/moichain/common"
@@ -136,6 +138,7 @@ type Engine struct {
 	wal          kbft.WAL
 	db           persistence
 	vault        *mudra.KramaVault
+	clusterLocks *locker.Locker
 }
 
 func NewKramaEngine(ctx context.Context,
@@ -178,6 +181,7 @@ func NewKramaEngine(ctx context.Context,
 		wal:          wal,
 		db:           db,
 		vault:        val,
+		clusterLocks: locker.New(),
 	}
 
 	return k, k.RegisterRPCService()
@@ -581,6 +585,13 @@ func (k *Engine) handleReq(req Request) {
 
 		return
 	}
+
+	k.clusterLocks.Lock(clusterID.String())
+	defer func() {
+		if err := k.clusterLocks.Unlock(clusterID.String()); err != nil {
+			k.logger.Error(fmt.Sprintf("Failed to release cluster lock id-%s", clusterID.String()))
+		}
+	}()
 
 	if slot := k.slots.getSlot(clusterID); slot != nil || !k.slots.areSlotsAvailable() {
 		k.logger.Debug("Slots not available")
