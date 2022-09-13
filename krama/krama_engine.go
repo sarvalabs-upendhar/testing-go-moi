@@ -45,7 +45,7 @@ const (
 	ObserverNodesDelta float64 = 0.2
 
 	ICSTimeOutDuration     = 4500 * time.Millisecond
-	MaxSlots           int = 2
+	MaxSlots           int = 5
 
 	BehaviouralContextSize = 1
 	RandomContextSize      = 1
@@ -255,8 +255,10 @@ func (k *Engine) pubSubHandler(msg *pubsub.Message) error {
 		slot.icsSuccess <- true
 
 	default:
+
 		// Forward all other messages to the PoXc InboundMsg  channel
-		slot.inboundMsg <- icsMsg
+		slot.forwardMsg(icsMsg)
+
 	}
 
 	return nil
@@ -273,6 +275,7 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID ktypes.Cluste
 		outboundMsg:   make(chan *ktypes.ICSMSG),
 		inboundMsg:    make(chan *ktypes.ICSMSG),
 		executionResp: make(chan ExecutionResponse),
+		closeCh:       make(chan struct{}),
 	}
 
 	if !k.slots.addSlot(clusterID, newSlot) {
@@ -545,6 +548,7 @@ func (k *Engine) joinCluster(ctx context.Context, req Request) error {
 		outboundMsg:   make(chan *ktypes.ICSMSG),
 		inboundMsg:    make(chan *ktypes.ICSMSG),
 		executionResp: make(chan ExecutionResponse),
+		closeCh:       make(chan struct{}),
 	}
 	newSlot.clusterState.ContextLock = req.msg.ContextLock
 
@@ -665,6 +669,7 @@ func (k *Engine) handleReq(req Request) {
 	slot := k.slots.getSlot(clusterID)
 
 	if slot.clusterState.CurrentRole == ktypes.ObserverSet {
+		log.Println("Observer Set", slot.clusterState.ID)
 		messageRouter := kbft.NewMessageRouter(
 			ctx,
 			slot.inboundMsg,
@@ -710,7 +715,7 @@ func (k *Engine) handleReq(req Request) {
 			exitChan,
 			consensusChan,
 		)
-		consensusHandler := kbft.NewMessageRouter(
+		messageRouter := kbft.NewMessageRouter(
 			ctx,
 			slot.inboundMsg,
 			slot.outboundMsg,
@@ -721,7 +726,7 @@ func (k *Engine) handleReq(req Request) {
 		)
 
 		go slot.bft.Start()
-		go consensusHandler.Start()
+		go messageRouter.Start()
 
 		if err = <-exitChan; err != nil {
 			k.logger.Error("Error consensus failed", "error", err, "cluster-id", slot.clusterState.ID)
@@ -937,6 +942,7 @@ func (k *Engine) sendICSRequest(
 
 		peerID, err := peer.Decode(networkID)
 		if err != nil {
+			log.Println("Network id", networkID)
 			k.logger.Error("Unable to decode peer id", "error", err)
 			wg.Done()
 
@@ -1063,6 +1069,7 @@ func (k *Engine) sendICSSuccess(id ktypes.ClusterID) error {
 
 	return nil
 }
+
 func (k *Engine) initClusterCommunication(ctx context.Context, clusterID ktypes.ClusterID) error {
 	if err := k.server.Subscribe(ctx, string(clusterID), k.pubSubHandler); err != nil {
 		return err
@@ -1312,6 +1319,7 @@ func (k *Engine) GetNodes(
 
 	return
 }
+
 func GenerateTesseracts(state *ics.ClusterInfo) ([]*ktypes.Tesseract, error) {
 	ix := state.Ixs[0] //TODO: Improve this
 	gasUsed := state.GetGasUsed()
@@ -1486,7 +1494,7 @@ func (k *Engine) IsIxValid(ix *ktypes.Interaction) (bool, error) {
 			int64(assetData.TotalSupply),
 			logicID,
 		)
-
+		log.Println("$$$")
 		if _, err = stateObject.BalanceOf(assetID); !errors.Is(err, ktypes.ErrAssetNotFound) {
 			return false, err
 		}

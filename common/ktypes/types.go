@@ -947,6 +947,7 @@ type AccountGenesisInfo struct {
 	MoiID  string
 	IxHash Hash
 }
+
 type Receipt struct {
 	IxType        int
 	IxHash        Hash
@@ -957,7 +958,7 @@ type Receipt struct {
 }
 
 type AssetCreationReceipt struct {
-	AssetID string
+	AssetID string `json:"asset_id"`
 }
 
 func (r *Receipt) SetExtraData(data interface{}) error {

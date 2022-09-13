@@ -482,37 +482,6 @@ func (s *StateObject) GetStorageEntry(key ktypes.Hash) ([]byte, error) {
 	return value, nil
 }
 
-/*
-func (s *StateObject) AddRContextNodes(nodes []id.KramaID) (ktypes.Hash, error) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-	var err error
-	if len(nodes) <= 0 {
-		return s.contextHash, nil
-	}
-	fmt.Println("!!!!...Adding Random context...!!!", nodes, s.contextHash)
-
-	metaObj, err := s.getMetaContextObjectCopy()
-	if err != nil {
-		return ktypes.NilHash, err
-	}
-
-	metaObj.RandomContext = hash
-	hash, err = s.commitContextObject(metaObj)
-	if err != nil {
-		return ktypes.NilHash, err
-	}
-	s.contextHash = hash
-	s.data.ContextHash = hash
-	return hash, nil
-
-}
-*/
-
-//func(s *StateObject)AppendReceipts(rs *common.Receipt){
-//s.receipts=append(s.receipts,rs)
-//}
-
 func (s *StateObject) GetDirtyStorage() Storage {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
