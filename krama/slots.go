@@ -14,7 +14,21 @@ type slotInfo struct {
 	icsSuccess              chan bool
 	outboundMsg, inboundMsg chan *ktypes.ICSMSG
 	executionResp           chan ExecutionResponse
+	closeCh                 chan struct{}
 }
+
+func (info *slotInfo) forwardMsg(msg *ktypes.ICSMSG) {
+	if info == nil {
+		return
+	}
+
+	select {
+	case <-info.closeCh:
+		return
+	case info.inboundMsg <- msg:
+	}
+}
+
 type Slots struct {
 	slots          map[ktypes.ClusterID]*slotInfo
 	availableSlots int
@@ -84,8 +98,8 @@ func (s *Slots) cleanupSlot(id ktypes.ClusterID) {
 	if slot, ok := s.slots[id]; ok {
 		delete(s.activeAccounts, slot.clusterState.Ixs[0].FromAddress())
 		delete(s.activeAccounts, slot.clusterState.Ixs[0].ToAddress())
+		close(slot.closeCh)
 		delete(s.slots, id)
-		close(slot.inboundMsg)
 		s.availableSlots++
 	}
 }

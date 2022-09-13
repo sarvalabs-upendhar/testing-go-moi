@@ -462,7 +462,7 @@ func (c *ChainManager) append(groupHash ktypes.Hash, tesseracts map[ktypes.Addre
 	}
 
 	for addr, ts := range tesseracts {
-		return func(addr ktypes.Address, ts *ktypes.Tesseract) error {
+		if err := func(addr ktypes.Address, ts *ktypes.Tesseract) error {
 			c.latticeLocks.Lock(ts.Hash().Hex())
 			defer func() {
 				if err := c.latticeLocks.Unlock(ts.Hash().Hex()); err != nil {
@@ -500,7 +500,9 @@ func (c *ChainManager) append(groupHash ktypes.Hash, tesseracts map[ktypes.Addre
 			}
 
 			return nil
-		}(addr, ts)
+		}(addr, ts); err != nil {
+			return err
+		}
 	}
 
 	return nil

@@ -40,7 +40,8 @@ func NewMessageRouter(
 	bchan chan ktypes.ConsensusMessage,
 	kbft *KBFT,
 	clusterID ktypes.ClusterID,
-	setType ktypes.IcsSetType) *MessageRouter {
+	setType ktypes.IcsSetType,
+) *MessageRouter {
 	m := &MessageRouter{
 		inboundMsgChan:  inboundChan,
 		outboundMsgChan: outboundChan,
@@ -57,7 +58,7 @@ func NewMessageRouter(
 // Start is a method of ConsensusHandler that starts the event handler loops for reading messages.
 func (m *MessageRouter) Start() {
 	// Start the read loop routine
-	defer log.Println("Closing message router")
+	defer log.Println("Closing message router", m.clusterID)
 
 	if m.setType == ktypes.ObserverSet {
 		go m.CollectMessages()
@@ -66,7 +67,7 @@ func (m *MessageRouter) Start() {
 	}
 
 	<-m.ctx.Done()
-	m.Close()
+
 }
 
 // handleICSMessage is a method of ConsensusHandler that handles an ClusterInfo message
@@ -128,6 +129,7 @@ func (m *MessageRouter) CollectMessages() {
 }
 
 func (m *MessageRouter) HandleMessages() {
+	defer close(m.outboundMsgChan)
 	for {
 		select {
 		// Broadcast read routine
@@ -147,10 +149,6 @@ func (m *MessageRouter) HandleMessages() {
 			go m.handleICSMessage(msg)
 		}
 	}
-}
-
-func (m *MessageRouter) Close() {
-	close(m.outboundMsgChan)
 }
 
 func (m *MessageRouter) Msgs() []*ktypes.ICSMSG {
