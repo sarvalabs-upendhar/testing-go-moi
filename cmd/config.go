@@ -1,15 +1,16 @@
 package cmd
 
 type Config struct {
-	Genesis        string        `json:"genesis"`
-	NodeType       int           `json:"node_type"`
-	KramaIDVersion int           `json:"ḭd_version"`
-	Vault          VaultConfig   `json:"vault"`
-	Network        NetworkConfig `json:"network"`
-	Ixpool         IxPoolConfig  `json:"ixpool"`
-	DB             DBConfig      `json:"database"`
-	Telemetry      Telemetry     `json:"telemetry"`
-	LogFilePath    string        `json:"logfile"`
+	Genesis        string          `json:"genesis"`
+	NodeType       int             `json:"node_type"`
+	KramaIDVersion int             `json:"ḭd_version"`
+	Vault          VaultConfig     `json:"vault"`
+	Network        NetworkConfig   `json:"network"`
+	Ixpool         IxPoolConfig    `json:"ixpool"`
+	Consensus      ConsensusConfig `json:"consensus"`
+	DB             DBConfig        `json:"database"`
+	Telemetry      Telemetry       `json:"telemetry"`
+	LogFilePath    string          `json:"logfile"`
 }
 
 type NetworkConfig struct {
@@ -40,6 +41,7 @@ type ConsensusConfig struct {
 	TimeoutPrecommitDelta int64 `json:"timeout_precommit_delta"`
 	TimeoutCommit         int64 `json:"timeout_commit"`
 	SkipTimeoutCommit     bool  `json:"skip_timeout_commit"`
+	MaxSlots              int   `json:"max_slots"`
 }
 
 type VaultConfig struct {
