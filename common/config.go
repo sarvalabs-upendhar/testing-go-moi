@@ -74,6 +74,7 @@ type ConsensusConfig struct {
 	SkipTimeoutCommit     bool
 	MessageDelay          time.Duration
 	Precision             time.Duration
+	MaxSlots              int
 }
 
 func DefaultConfig(path string) *Config {
@@ -104,6 +105,7 @@ func DefaultConfig(path string) *Config {
 			TimeoutCommit:         10000 * time.Millisecond,
 			Precision:             1000 * time.Nanosecond,
 			MessageDelay:          5500 * time.Millisecond,
+			MaxSlots:              2,
 		},
 		DB: &DBConfig{
 			DBFolderPath:      path + "/db",

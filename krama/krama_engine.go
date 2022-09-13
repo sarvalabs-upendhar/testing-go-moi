@@ -45,7 +45,6 @@ const (
 	ObserverNodesDelta float64 = 0.2
 
 	ICSTimeOutDuration     = 4500 * time.Millisecond
-	MaxSlots           int = 5
 
 	BehaviouralContextSize = 1
 	RandomContextSize      = 1
@@ -168,8 +167,8 @@ func NewKramaEngine(ctx context.Context,
 		state:     state,
 		slots: &Slots{
 			slots:          make(map[ktypes.ClusterID]*slotInfo),
-			availableSlots: MaxSlots,
-			activeAccounts: make(map[ktypes.Address]ktypes.ClusterID, MaxSlots*2),
+			availableSlots: cfg.MaxSlots,
+			activeAccounts: make(map[ktypes.Address]ktypes.ClusterID, cfg.MaxSlots*2),
 		},
 		requests:     make(chan Request),
 		randomizer:   randomizer,

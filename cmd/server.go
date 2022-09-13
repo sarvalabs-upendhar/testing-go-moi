@@ -24,6 +24,7 @@ var (
 	ErrReadingConfig = errors.New("error reading config file")
 )
 
+var MaxSlots int
 var NetworkSize uint64
 var MTQ float64
 var SkipGenesis bool
@@ -53,6 +54,7 @@ func init() {
 	rootCmd.AddCommand(serverCmd)
 
 	serverCmd.PersistentFlags().String("config", "config.json", "Config file name")
+	serverCmd.PersistentFlags().IntVar(&MaxSlots, "max-slots", 0, "Maximum number of krama engine slots")
 	serverCmd.PersistentFlags().Uint64Var(&NetworkSize, "network-size", 12, "Network Size")
 	serverCmd.PersistentFlags().Float64Var(&MTQ, "mtq", 0.7, "Default MTQ")
 	serverCmd.PersistentFlags().String("data-dir", "test-chain", "data directory location")
@@ -101,6 +103,12 @@ func BuildConfig(dataDir string, cmdCfg *Config) (*common.Config, error) {
 
 	if MTQ != 0 {
 		nodeCfg.Network.MTQ = MTQ
+	}
+
+	if MaxSlots != 0 {
+		nodeCfg.Consensus.MaxSlots = MaxSlots
+	} else if cmdCfg.Consensus.MaxSlots != 0 {
+		nodeCfg.Consensus.MaxSlots = cmdCfg.Consensus.MaxSlots
 	}
 
 	if Bootnode != "" {
