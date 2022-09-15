@@ -1,4 +1,4 @@
-package ics
+package types
 
 import (
 	"gitlab.com/sarvalabs/moichain/common/ktypes"
@@ -128,7 +128,6 @@ func (i *ClusterInfo) RespondedEligibleSet() (count int, nodes []id.KramaID) {
 func (i *ClusterInfo) GetBehaviouralContextDelta(setType ktypes.IcsSetType) (addedPeer, replacedPeer id.KramaID) {
 	for _, peerID := range i.ICS.Nodes[setType].Ids {
 		if i.Operator == peerID { //i.ICS.Nodes[setType].Responses.GetIndex(index)
-
 			return
 		}
 	}
@@ -316,11 +315,11 @@ func (i *ClusterInfo) ComputeICSHash() (hash ktypes.Hash) {
 
 	return
 }
-func (i *ClusterInfo) CreateICSSuccessMsg() *ktypes.ICSSuccess {
+func (i *ClusterInfo) CreateICSSuccessMsg() *ktypes.ICSSuccessMsg {
 	i.mtx.Lock()
 	defer i.mtx.Unlock()
 
-	msg := &ktypes.ICSSuccess{
+	msg := &ktypes.ICSSuccessMsg{
 		ClusterID:   string(i.ID),
 		RandomSet:   i.ICS.Nodes[ktypes.RandomSet].Ids,
 		ObserverSet: i.ICS.Nodes[ktypes.ObserverSet].Ids,

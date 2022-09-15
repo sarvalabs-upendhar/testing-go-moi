@@ -133,6 +133,28 @@ type ConsensusMessage struct {
 	Message Cmessage
 }
 
+func (c *ConsensusMessage) ICSMsg(clusterID ClusterID) *ICSMSG {
+	var (
+		msgType MsgType
+		rawData []byte
+	)
+
+	switch msg := c.Message.(type) {
+	case *VoteMessage:
+		rawData = msg.Vote.Bytes()
+		msgType = VOTEMSG
+	default:
+		return nil
+	}
+
+	return &ICSMSG{
+		msgType,
+		rawData,
+		c.PeerID,
+		string(clusterID),
+	}
+}
+
 // Validate is a method of ConsensusMessage to implement the Cmessage interface.
 // Returns an error if message is not valid or could not be validated.
 func (c *ConsensusMessage) Validate() error {
@@ -259,7 +281,7 @@ func (i *ICSNodes) GetKramaID(index int32) (slotID int, slotIndex int, kramaID i
 	return -1, -1, "", nil
 }
 
-func (i *ICSNodes) GetIndex(kramaID id.KramaID) (int32, bool) {
+func (i *ICSNodes) GetIndex(peerID id.KramaID) (int32, bool) {
 	offset := 0
 
 	for index, set := range i.Nodes {
@@ -271,8 +293,8 @@ func (i *ICSNodes) GetIndex(kramaID id.KramaID) (int32, bool) {
 			continue
 		}
 
-		for j, id := range set.Ids {
-			if id == kramaID {
+		for j, kramaID := range set.Ids {
+			if kramaID == peerID {
 				return int32(offset + j), set.Responses.GetIndex(j)
 			}
 		}
