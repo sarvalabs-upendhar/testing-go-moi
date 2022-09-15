@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"gitlab.com/sarvalabs/moichain/krama/ics"
+	"gitlab.com/sarvalabs/moichain/krama/types"
 	"gitlab.com/sarvalabs/moichain/mudra"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"log"
@@ -26,7 +26,7 @@ type VoteSet struct {
 	votetype ktypes.ConsensusMsgType
 
 	// Represents a set of validators
-	valset *ics.ClusterInfo
+	valset *types.ClusterInfo
 
 	// Represents an access lock on the vote-set
 	mtx sync.Mutex
@@ -60,7 +60,7 @@ func NewVoteSet(
 	heights []uint64,
 	round int32,
 	voteType ktypes.ConsensusMsgType,
-	validatorSet *ics.ClusterInfo,
+	validatorSet *types.ClusterInfo,
 ) *VoteSet {
 	// Log the creation and the set of validators
 	log.Printf("creating new vote set with %v validators\n", validatorSet.Size())

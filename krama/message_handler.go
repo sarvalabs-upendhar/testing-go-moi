@@ -1,0 +1,148 @@
+package krama
+
+import (
+	"context"
+	"fmt"
+	"github.com/pkg/errors"
+	"gitlab.com/sarvalabs/moichain/common/ktypes"
+	"gitlab.com/sarvalabs/moichain/krama/types"
+	"gitlab.com/sarvalabs/polo/go-polo"
+)
+
+func (k *Engine) startMessageHandlers(ctx context.Context, slot *types.Slot) {
+	go k.icsInboundMessageHandler(ctx, slot)
+	go k.icsOutboundMessageHandler(ctx, slot)
+}
+
+func (k *Engine) icsInboundMessageHandler(ctx context.Context, slot *types.Slot) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case inboundMsg, ok := <-slot.InboundChan:
+			if !ok {
+				k.logger.Debug("inbound msg channel close")
+
+				return
+			}
+
+			if err := k.handleInboundMsg(slot, inboundMsg); err != nil {
+				k.logger.Error("Error handling inbound message", "cluster-id", slot.InboundChan)
+			}
+		}
+	}
+}
+
+func (k *Engine) icsOutboundMessageHandler(ctx context.Context, slot *types.Slot) {
+	defer close(slot.OutboundChan)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case outboundMsg, ok := <-slot.BftOutboundChan:
+			if !ok {
+				k.logger.Debug("outbound msg channel close")
+
+				return
+			}
+
+			if err := k.handleOutboundMsg(slot, outboundMsg); err != nil {
+				k.logger.Error("Error handling outbound message", "cluster-id", slot.InboundChan)
+			}
+		}
+	}
+}
+
+func (k *Engine) handleOutboundMsg(slot *types.Slot, msg ktypes.ConsensusMessage) error {
+	peerID, data := msg.PeerID, msg.Message
+
+	switch consensusMsg := data.(type) {
+	// Vote Message
+	case *ktypes.VoteMessage:
+		// Marshal proto message into an ClusterInfo message and push into the send queue
+		rawData := consensusMsg.Vote.Bytes()
+		slot.OutboundChan <- &ktypes.ICSMSG{
+			MsgType:   ktypes.VOTEMSG,
+			Msg:       rawData,
+			Sender:    peerID,
+			ClusterID: string(slot.ClusterID()),
+		}
+
+	// Unsupported Message
+	default:
+		return errors.New("invalid message type")
+	}
+
+	return nil
+}
+
+func (k *Engine) handleInboundMsg(slot *types.Slot, msg *ktypes.ICSMSG) error {
+	if slot == nil {
+		return errors.New("nil slot")
+	}
+
+	clusterState := slot.CLusterInfo()
+
+	sender, data, msgType := msg.Sender, msg.Msg, msg.MsgType
+	switch msgType {
+	case ktypes.VOTEMSG:
+		vote := new(ktypes.Vote)
+
+		// Unmarshal message
+		if err := polo.Depolorize(vote, data); err != nil {
+			return errors.Wrap(err, fmt.Sprintf("failed to depolarise vote message from %s", sender))
+		}
+		// Create a consensus message for the Vote
+		consensusMsg := ktypes.ConsensusMessage{
+			PeerID:  sender,
+			Message: &ktypes.VoteMessage{Vote: vote},
+		}
+
+		slot.ForwardMsg(consensusMsg)
+
+	case ktypes.ICSSUCCESS:
+		// Unmarshal into an ICS success message
+		successMsg := new(ktypes.ICSSuccessMsg)
+
+		if err := polo.Depolorize(successMsg, data); err != nil {
+			return errors.Wrap(err, fmt.Sprintf("failed to depolarise ics_success message from %s", sender))
+		}
+
+		observerPublicKeys, err := k.state.GetPublicKeys(successMsg.ObserverSet...)
+		if err != nil {
+			return errors.New("failed to retrieve public keys")
+		}
+
+		randomPublicKeys, err := k.state.GetPublicKeys(successMsg.RandomSet...)
+		if err != nil {
+			return errors.New("failed to retrieve public keys")
+		}
+		// update the cluster state with the latest node set's
+		clusterState.ICS.Nodes[ktypes.ObserverSet] = ktypes.NewNodeSet(successMsg.ObserverSet, observerPublicKeys)
+		clusterState.ICS.Nodes[ktypes.ObserverSet].QuorumSize = successMsg.QuorumSizes[ktypes.ObserverSet]
+		clusterState.ICS.Nodes[ktypes.RandomSet] = ktypes.NewNodeSet(successMsg.RandomSet, randomPublicKeys)
+		clusterState.ICS.Nodes[ktypes.RandomSet].QuorumSize = successMsg.QuorumSizes[ktypes.RandomSet]
+
+		clusterState.UpdateClusterSize()
+
+		for j := 0; j < len(clusterState.ICS.Nodes); j++ {
+			if successMsg.Responses[j] != nil && successMsg.Responses[j].Size > 0 {
+				clusterState.ICS.Nodes[j].Responses = successMsg.Responses[j]
+				clusterState.ICS.Nodes[j].Count = clusterState.ICS.Nodes[j].Responses.TrueIndicesSize()
+			}
+		}
+
+		k.logger.Info(
+			"Received ics_success msg",
+			"Cluster id", successMsg.ClusterID,
+		)
+
+		clusterState.SuccessMsg = msg
+		slot.ICSSuccessChan <- true
+	default:
+		return errors.New("invalid message type")
+	}
+
+	return nil
+}

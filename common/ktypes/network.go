@@ -23,7 +23,7 @@ type ICSResponse struct {
 	RandomNodes []string
 }
 
-type ICSSuccess struct {
+type ICSSuccessMsg struct {
 	ClusterID   string
 	RandomSet   []kramaid.KramaID
 	ObserverSet []kramaid.KramaID
@@ -36,7 +36,7 @@ type MsgType int64
 const (
 	REQUESTMSG MsgType = iota
 	RESPONSEMSG
-	SUCCESSMSG
+	ICSSUCCESS
 	NEWIXSMSG
 	//NEWPEER
 	RANDOMWALKREQ
@@ -52,7 +52,7 @@ const (
 )
 
 type ICSMSG struct {
-	ReqType   MsgType
+	MsgType   MsgType
 	Msg       []byte
 	Sender    kramaid.KramaID
 	ClusterID string

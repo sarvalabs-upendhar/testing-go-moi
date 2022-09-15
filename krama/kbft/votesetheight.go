@@ -2,7 +2,7 @@ package kbft
 
 import (
 	"errors"
-	"gitlab.com/sarvalabs/moichain/krama/ics"
+	"gitlab.com/sarvalabs/moichain/krama/types"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"log"
 	"sync"
@@ -28,7 +28,7 @@ type HeightVoteSet struct {
 	heights []uint64
 
 	// Represents the set of validators for the voteset
-	valset *ics.ClusterInfo
+	valset *types.ClusterInfo
 
 	// Represents the highest tracking round of the voteset
 	round int32
@@ -46,7 +46,7 @@ type HeightVoteSet struct {
 
 // NewHeightVoteSet is a constructor function that generates and returns a new HeightVoteSet.
 // Accepts a slice of chainIDs, heights and the set of validators.
-func NewHeightVoteSet(chainIDs []string, heights []uint64, valset *ics.ClusterInfo) *HeightVoteSet {
+func NewHeightVoteSet(chainIDs []string, heights []uint64, valset *types.ClusterInfo) *HeightVoteSet {
 	// Create a new HeightVoteSet with the chain IDs
 	hvs := &HeightVoteSet{
 		chainIDs:          chainIDs,
@@ -61,7 +61,7 @@ func NewHeightVoteSet(chainIDs []string, heights []uint64, valset *ics.ClusterIn
 
 // Reset is a method of HeightVoteSet that resets the vote set.
 // Accepts a slice of heights and a set of validators to assign to the height vote set.
-func (hvs *HeightVoteSet) Reset(heights []uint64, valset *ics.ClusterInfo) {
+func (hvs *HeightVoteSet) Reset(heights []uint64, valset *types.ClusterInfo) {
 	// Acquire lock
 	hvs.mtx.Lock()
 	defer hvs.mtx.Unlock()

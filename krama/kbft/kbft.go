@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/hashicorp/go-hclog"
 	"gitlab.com/sarvalabs/moichain/guna"
-	"gitlab.com/sarvalabs/moichain/krama/ics"
+	"gitlab.com/sarvalabs/moichain/krama/types"
 	"gitlab.com/sarvalabs/moichain/mudra"
 	common2 "gitlab.com/sarvalabs/moichain/mudra/common"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
@@ -49,7 +49,7 @@ type KBFT struct {
 	selfMsgChan     chan ktypes.ConsensusMessage
 	outboundMsgChan chan ktypes.ConsensusMessage
 	toTicker        *Ticker
-	ics             *ics.ClusterInfo
+	ics             *types.ClusterInfo
 	nSteps          int
 	exit            chan error
 	ctx             context.Context
@@ -67,13 +67,13 @@ func NewKBFTService(
 	kid id.KramaID,
 	logger hclog.Logger,
 	config *common.ConsensusConfig,
+	outboundChan, inboundChan chan ktypes.ConsensusMessage,
 	vault *mudra.KramaVault,
 	chain lattice,
 	evidence *Evidence,
-	ics *ics.ClusterInfo,
+	ics *types.ClusterInfo,
 	wal WAL,
 	exit chan error,
-	outboundChan chan ktypes.ConsensusMessage,
 ) *KBFT {
 	k := &KBFT{
 		id:              kid,
@@ -82,7 +82,7 @@ func NewKBFTService(
 		wal:             wal,
 		logger:          logger.Named("KBFT"),
 		outboundMsgChan: outboundChan,
-		inboundMsgChan:  make(chan ktypes.ConsensusMessage, 1000),
+		inboundMsgChan:  inboundChan,
 		selfMsgChan:     make(chan ktypes.ConsensusMessage, 1000),
 		toTicker:        NewTicker(),
 		vault:           vault,
@@ -97,7 +97,7 @@ func NewKBFTService(
 	return k
 }
 
-func (kbft *KBFT) updateToState(ics *ics.ClusterInfo) {
+func (kbft *KBFT) updateToState(ics *types.ClusterInfo) {
 	log.Println("updating the state", ics.ICS.Nodes)
 
 	var chainIDs []string
@@ -166,7 +166,6 @@ func (kbft *KBFT) HandlePeerMsg(m ktypes.ConsensusMessage) {
 }
 
 func (kbft *KBFT) handler(maxSteps int) {
-
 	defer func() {
 		close(kbft.outboundMsgChan)
 		close(kbft.selfMsgChan)
@@ -186,7 +185,6 @@ func (kbft *KBFT) handler(maxSteps int) {
 		roundState := kbft.RoundState
 
 		select {
-
 		case <-kbft.ctx.Done():
 			kbft.logger.Info("KBFT Timeout occurred")
 			kbft.exit <- ktypes.ErrTimeOut
@@ -688,58 +686,6 @@ func (kbft *KBFT) proposeTimeout(round int32) time.Duration {
 	return time.Duration(proposeTimeout+proposeTimeoutDelta*int64(round)) * time.Nanosecond
 }
 
-/*
-func (kbft *KBFT) addProposalGridTesseract(msg *GridTesseractMessage, peerId id.KramaID) (added bool, err error) {
-	index, height, round, part := msg.Index, msg.Height, msg.Round, msg.Tesseract
-
-	if kbft.Height[index] != height {
-		return false, nil
-	}
-
-	if kbft.ProposalGrid == nil {
-		return false, nil
-	}
-
-	//added, err = kbft.ProposalTesseracts.AddPart(index, part)
-	//if err != nil {
-	//	fmt.Println("Unable to add part", err)
-	//	return added, err
-	//}
-
-	if added && kbft.ProposalTesseracts.IsComplete() {
-		log.Println("Proposal Complete")
-		kbft.ProposalGrid = &TesseractGrid{
-			Hash:       kbft.ProposalTesseracts.hash,
-			Total:      int32(kbft.ProposalTesseracts.total),
-			Tesseracts: kbft.ProposalTesseracts.parts,
-		}
-
-		//preVotes := kbft.Votes.getPrevotes(kbft.Round)
-		//gridId, majority := preVotes.TwoThirdMajority()
-		//if majority && gridId != nil && (round > kbft.ValidRound) {
-		//	if kbft.ProposalGrid.CompareHash(gridId.Hash) {
-		//		kbft.ValidGrid = kbft.ProposalGrid
-		//		kbft.ValidRound = kbft.Round
-		//		//kbft.ValidTesseracts = kbft.ProposalTesseracts
-		//	}
-		//}
-		//
-		//if kbft.Step <= RoundStepPropose && kbft.isProposalReceived() {
-		//	kbft.enterPrevote(kbft.Height, kbft.Round)
-		//	if majority {
-		//		kbft.enterPrecommit(kbft.Height, kbft.Round)
-		//	}
-		//
-		//} else if kbft.Step == RoundStepCommit {
-		//	kbft.finalizeCommit(kbft.Height)
-		//}
-
-		return added, nil
-	}
-
-	return added, nil
-}
-*/
 func (kbft *KBFT) enterPreCommit(heights []uint64, round int32) {
 	kbft.logger.Trace("Entered PreCommit", "round", round)
 

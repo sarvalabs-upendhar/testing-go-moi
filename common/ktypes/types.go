@@ -11,6 +11,7 @@ import (
 	"fmt"
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ipfs/go-cid"
+	"github.com/mr-tron/base58"
 	"github.com/multiformats/go-multihash"
 	"github.com/pkg/errors"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
@@ -76,6 +77,14 @@ func (c ClusterID) String() string {
 	return string(c)
 }
 
+func (c ClusterID) Hash() Hash {
+	rawHash, err := base58.Decode(c.String())
+	if err != nil {
+		return NilHash
+	}
+
+	return BytesToHash(rawHash)
+}
 func (a Address) String() string {
 	if a == NilAddress {
 		return "nil address"
@@ -875,6 +884,7 @@ func HashToCid(hash Hash) (cid.Cid, error) {
 		return cid.Undef, fmt.Errorf("invalid cid version")
 	}
 }
+
 func GetHash(data []byte) Hash {
 	return blake2b.Sum256(data)
 }
