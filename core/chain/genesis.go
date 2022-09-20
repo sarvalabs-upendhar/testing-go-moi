@@ -49,7 +49,7 @@ func CreateGenesisTesseract(
 			AnuUsed:       0,
 			AnuLimit:      0,
 			TesseractHash: ktypes.NilHash,
-			GroupHash:     ktypes.NilHash,
+			GridHash:      ktypes.NilHash,
 			ClusterID:     "genesis",
 			Operator:      "genesis",
 			Extra: ktypes.CommitData{

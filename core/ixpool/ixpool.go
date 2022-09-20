@@ -168,7 +168,11 @@ func (i *IxPool) createAccountOnce(newAddr ktypes.Address, nonce uint64) *accoun
 }
 
 func (i *IxPool) ResetWithHeaders(ts *ktypes.Tesseract) {
-	i.ResetWithInteractions(ts.Interactions())
+	log.Println("Reset interactions", len(ts.Interactions()))
+
+	if ts != nil && len(ts.Interactions()) > 0 {
+		i.ResetWithInteractions(ts.Interactions())
+	}
 }
 func (i *IxPool) ResetWithInteractions(ixs ktypes.Interactions) {
 	updatedNonces := make(map[ktypes.Address]uint64)

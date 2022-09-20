@@ -82,7 +82,7 @@ func (s *Session) ChooseBestPeer(ctx context.Context, avoid map[id.KramaID]inter
 	return s.pm.chooseBestPeer(ctx, avoid)
 }
 
-func (s *Session) sendWantReq(peerID id.KramaID, cid *kutils.Set) error {
+func (s *Session) sendWantReq(peerID id.KramaID, cid *kutils.HashSet) error {
 	req := &types.AgoraRequestMsg{
 		SessionID: s.id,
 		StateHash: s.stateHash,
@@ -101,10 +101,15 @@ func (s *Session) GetBlock(ctx context.Context, cid ktypes.Hash) (*types.Block, 
 
 	return data, nil
 }
-func (s *Session) getBlocks(ctx context.Context, peerID id.KramaID, out chan *types.Block, idSet *kutils.Set) error {
+func (s *Session) getBlocks(
+	ctx context.Context,
+	peerID id.KramaID,
+	out chan *types.Block,
+	idSet *kutils.HashSet,
+) error {
 	s.logger.Debug("Fetching data from ", "peer", peerID, "count", idSet.Len())
 
-	requestCtx, cancelFn := context.WithTimeout(ctx, 10*time.Second)
+	requestCtx, cancelFn := context.WithTimeout(ctx, 3*time.Second)
 
 	defer func() {
 		cancelFn()
@@ -166,7 +171,7 @@ func (s *Session) getBlocks(ctx context.Context, peerID id.KramaID, out chan *ty
 func (s *Session) GetBlocks(ctx context.Context, cids []ktypes.Hash) chan *types.Block {
 	out := make(chan *types.Block)
 
-	idSet := kutils.NewSet()
+	idSet := kutils.NewHashSet()
 
 	for _, cid := range cids {
 		idSet.Add(cid)

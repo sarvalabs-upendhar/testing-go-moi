@@ -99,7 +99,7 @@ func (p *KipPeer) InitHandshake(id id.KramaID, ntq int32, addrs []multiaddr.Mult
 	if msg.Error != "" {
 		return errors.New(msg.Error)
 	}
-	// Set the KIP id of the peer based on the message
+	// HashSet the KIP id of the peer based on the message
 	p.setID(message.Sender)
 
 	return nil

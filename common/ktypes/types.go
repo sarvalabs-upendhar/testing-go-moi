@@ -155,7 +155,6 @@ func (acc *Accounts) Bytes() []byte {
 
 // Hex return the Hex representation of the Address
 func (a Address) Hex() string {
-
 	return "0x" + hex.EncodeToString(a[:])
 }
 
@@ -175,8 +174,8 @@ func BytesToHash(b []byte) Hash {
 	return h
 }
 
-func (h *Hash) String() string {
-	if *h == NilHash {
+func (h Hash) String() string {
+	if h == NilHash {
 		return "nil hash"
 	}
 
@@ -904,19 +903,19 @@ func NewKnownCache(max int) *KnownCache {
 }
 
 // Add adds a list of elements to the set.
-func (k *KnownCache) Add(hashes ...Hash) {
-	for k.hashes.Cardinality() > max(0, k.max-len(hashes)) {
+func (k *KnownCache) Add(data ...interface{}) {
+	for k.hashes.Cardinality() > max(0, k.max-len(data)) {
 		k.hashes.Pop()
 	}
 
-	for _, hash := range hashes {
+	for _, hash := range data {
 		k.hashes.Add(hash)
 	}
 }
 
 // Contains returns whether the given item is in the set.
-func (k *KnownCache) Contains(hash Hash) bool {
-	return k.hashes.Contains(hash)
+func (k *KnownCache) Contains(data interface{}) bool {
+	return k.hashes.Contains(data)
 }
 
 // Cardinality returns the number of elements in the set.

@@ -91,7 +91,7 @@ tesseractExsits bool) (int32, int64, error) {
 }
 func CreateMockGenesisFile(t *testing.T) string {
 	genesis := new(Genesis)
-	genesis.Accounts = append(genesis.Accounts, AccountInfo{
+	genesis.Accounts = addTesseractsWithState(genesis.Accounts, AccountInfo{
 		Address:          "0xrahul",
 		MOIId:            "rahul_moi_id",
 		BehaviourContext: []string{"Node1", "Node2"},

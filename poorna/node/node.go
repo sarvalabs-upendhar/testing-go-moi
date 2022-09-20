@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
-	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -54,7 +53,6 @@ type Node struct {
 	ixpool           *ixpool.IxPool
 	handlers         *SubHandlers
 	cache            *lru.Cache
-	datastore        blockstore.Blockstore
 	rpc              *krpc.Server
 	nodeMetrics      *nodeMetrics
 	prometheusServer *http.Server
@@ -136,8 +134,9 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 
 	n.handlers.flux = flux.NewRandomizer(n.ctx, n.logger, n.network)
 	// setup chain manager
-	n.chain = chain.NewChainManager(
+	if n.chain, err = chain.NewChainManager(
 		n.ctx,
+		n.cfg.Chain,
 		db,
 		n.state,
 		n.logger,
@@ -147,7 +146,9 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 		n.cache,
 		n.exec,
 		n.state.SenatusInstance(),
-	)
+	); err != nil {
+		return nil, err
+	}
 	// setup krama engine
 	if n.kramaEngine, err = krama.NewKramaEngine(
 		n.ctx,
@@ -159,7 +160,6 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 		n.ixpool,
 		n.vault,
 		n.chain,
-		n.db,
 		n.handlers.flux,
 	); err != nil {
 		return nil, err

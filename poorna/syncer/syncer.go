@@ -443,9 +443,10 @@ func (s *Syncer) syncLattice(addr []byte, mode string) error {
 }
 */
 
-// fetchData fetches the complete state information associated with the given state CID,this uses agora to fetch the hashes.
+// fetchData fetches the complete state information associated with the given state CID
+//this uses agora to fetch the hashes.
 func (s *Syncer) fetchData(ctx context.Context, session *session.Session, ids ...ktypes.Hash) (bool, error) {
-	keySet := kutils.NewSet()
+	keySet := kutils.NewHashSet()
 	for _, hash := range ids {
 		if hash != ktypes.NilHash {
 			if ok, err := s.db.Contains(hash.Bytes()); !ok && err == nil {
@@ -661,7 +662,7 @@ func (s *Syncer) handleStatusEvents() {
 	}
 }
 
-// handleNewPeer opens a new stream for the sync sub protocol and makes a  status update call to the newly discovered peer
+// handleNewPeer opens a new stream for the sync sub protocol and makes status update call to the newly discovered peer
 func (s *Syncer) handleNewPeer() {
 	// Read events from a newpeer channel
 	for obj := range s.newpeerSub.Chan() {
@@ -799,7 +800,6 @@ func (s *Syncer) Start() {
 							log.Panic(err)
 						}
 					}
-
 				}
 
 				stop = false
@@ -832,12 +832,10 @@ func (s *Syncer) Start() {
 						mode:    s.mode,
 					}
 				}
-
 			} else {
 				log.Println("sync not required ")
 			}
 		}
-
 	}()
 }
 
@@ -957,7 +955,11 @@ func (s *Syncer) statusInit() error {
 }
 
 // getTesseract makes an RPC call to fetch the tesseract from best peer
-func (s *Syncer) getTesseract(bestPeer *SyncPeer, hash ktypes.Hash, number *big.Int) (*ktypes.Tesseract, map[ktypes.Hash][]byte, error) {
+func (s *Syncer) getTesseract(
+	bestPeer *SyncPeer,
+	hash ktypes.Hash,
+	number *big.Int,
+) (*ktypes.Tesseract, map[ktypes.Hash][]byte, error) {
 	req := new(ktypes.TesseractReq)
 
 	log.Println("get tesseract call", hash)
