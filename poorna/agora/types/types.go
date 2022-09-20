@@ -223,7 +223,7 @@ func NewWantTracker() *WantTracker {
 		liveWants: make(map[ktypes.Hash]time.Time),
 	}
 }
-func (wt *WantTracker) UpdateLiveWants(keys *kutils.Set) {
+func (wt *WantTracker) UpdateLiveWants(keys *kutils.HashSet) {
 	wt.mtx.Lock()
 	defer wt.mtx.Unlock()
 
@@ -238,7 +238,7 @@ func (wt *WantTracker) UpdateLiveWants(keys *kutils.Set) {
 		log.Print("error removing redundant keys")
 	}
 }
-func (wt *WantTracker) RemoveRedundantKeys(cids *kutils.Set) {
+func (wt *WantTracker) RemoveRedundantKeys(cids *kutils.HashSet) {
 	wt.mtx.Lock()
 	defer wt.mtx.Unlock()
 

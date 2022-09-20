@@ -92,7 +92,7 @@ func NewTesseractArg(t *ktypes.Tesseract) TesseractArg {
 		AnuUsed:       t.Header.AnuUsed,
 		AnuLimit:      t.Header.AnuLimit,
 		TesseractHash: t.Header.TesseractHash.Hex(),
-		GroupHash:     t.Header.GroupHash.Hex(),
+		GroupHash:     t.Header.GridHash.Hex(),
 		Operator:      t.Header.Operator,
 		IcsID:         t.Header.ClusterID,
 		Extra: CommitData{

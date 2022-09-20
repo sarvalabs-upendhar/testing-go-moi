@@ -63,7 +63,7 @@ func (an *AgoraNetwork) streamHandler(stream network.Stream) {
 func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 	defer func() {
 		if err := peer.stream.Reset(); err != nil {
-			an.logger.Error("Error closing stream", "peer", peer.id)
+			an.logger.Info("Closed stream", "peer", peer.id)
 		}
 
 		an.peers.Delete(peer.id)

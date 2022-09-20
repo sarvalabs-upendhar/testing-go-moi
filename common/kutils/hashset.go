@@ -4,39 +4,39 @@ import (
 	"gitlab.com/sarvalabs/moichain/common/ktypes"
 )
 
-type Set struct {
+type HashSet struct {
 	set map[ktypes.Hash]struct{}
 }
 
-// NewSet initializes and returns a new Set.
-func NewSet() *Set {
-	return &Set{set: make(map[ktypes.Hash]struct{})}
+// NewHashSet initializes and returns a new HashSet.
+func NewHashSet() *HashSet {
+	return &HashSet{set: make(map[ktypes.Hash]struct{})}
 }
 
-// Add puts a Cid in the Set.
-func (s *Set) Add(c ktypes.Hash) {
+// Add puts a Cid in the HashSet.
+func (s *HashSet) Add(c ktypes.Hash) {
 	s.set[c] = struct{}{}
 }
 
-// Has returns if the Set contains a given Cid.
-func (s *Set) Has(c ktypes.Hash) bool {
+// Has returns if the HashSet contains a given Cid.
+func (s *HashSet) Has(c ktypes.Hash) bool {
 	_, ok := s.set[c]
 
 	return ok
 }
 
-// Remove deletes a hash from the Set.
-func (s *Set) Remove(c ktypes.Hash) {
+// Remove deletes a hash from the HashSet.
+func (s *HashSet) Remove(c ktypes.Hash) {
 	delete(s.set, c)
 }
 
-// Len returns how many elements the Set has.
-func (s *Set) Len() int {
+// Len returns how many elements the HashSet has.
+func (s *HashSet) Len() int {
 	return len(s.set)
 }
 
 // Keys returns the Hashes in the set.
-func (s *Set) Keys() []ktypes.Hash {
+func (s *HashSet) Keys() []ktypes.Hash {
 	out := make([]ktypes.Hash, 0, len(s.set))
 	for k := range s.set {
 		out = append(out, k)
@@ -47,7 +47,7 @@ func (s *Set) Keys() []ktypes.Hash {
 
 // Visit adds a Hash to the set only if it is
 // not in it already.
-func (s *Set) Visit(c ktypes.Hash) bool {
+func (s *HashSet) Visit(c ktypes.Hash) bool {
 	if !s.Has(c) {
 		s.Add(c)
 
@@ -59,7 +59,7 @@ func (s *Set) Visit(c ktypes.Hash) bool {
 
 // ForEach allows to run a custom function on each
 // Cid in the set.
-func (s *Set) ForEach(f func(c ktypes.Hash) error) error {
+func (s *HashSet) ForEach(f func(c ktypes.Hash) error) error {
 	for c := range s.set {
 		err := f(c)
 		if err != nil {
@@ -72,11 +72,11 @@ func (s *Set) ForEach(f func(c ktypes.Hash) error) error {
 
 type Queue struct {
 	elems []ktypes.Hash
-	set   *Set
+	set   *HashSet
 }
 
 func NewCidQueue() *Queue {
-	return &Queue{set: NewSet()}
+	return &Queue{set: NewHashSet()}
 }
 
 func (cq *Queue) Pop() ktypes.Hash {

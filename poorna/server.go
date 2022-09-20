@@ -135,13 +135,13 @@ func NewServer(
 		vault:      vault,
 	}
 
-	// Set up the node's Host
+	// HashSet up the node's Host
 	if err := kn.setupHost(); err != nil {
 		// Return the error
 		return nil, fmt.Errorf("host setup error: %w", err)
 	}
 
-	// Set up the node's PubSub router
+	// HashSet up the node's PubSub router
 	if err := kn.setupPubSub(); err != nil {
 		// Return the error
 		return nil, fmt.Errorf("pubsub setup error: %w", err)
@@ -362,7 +362,7 @@ func (s *Server) streamHandlerFunc(stream network.Stream) {
 		return
 	}
 
-	// Set the KIP id of the peer based on the message
+	// HashSet the KIP id of the peer based on the message
 	kpeer.setID(message.Sender)
 
 	// Register the peer to the handler working set
@@ -641,7 +641,7 @@ func (s *Server) Subscribe(ctx context.Context, topic string, handler func(msg *
 	// Create a TopicSet and assign it to the node's topicset map
 	s.pstopics[topic] = &TopicSet{tophandle, subhandle}
 	s.topicSetLock.Unlock()
-	// TODO: Cleanup pipeline invocation structure
+
 	// Define a subscription pipeline closure
 	pipeline := func(msg *pubsub.Message) {
 
@@ -738,7 +738,7 @@ func (s *Server) NewStream(ctx context.Context, protocol protocol.ID, id peer.ID
 }
 
 func (s *Server) Start() error {
-	// Set the KIP stream handler to the host
+	// HashSet the KIP stream handler to the host
 	s.host.SetStreamHandler(s.cfg.ProtocolID, s.streamHandlerFunc)
 
 	go s.Discover()

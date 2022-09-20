@@ -23,11 +23,14 @@ type Config struct {
 	Metrics        Telemetry
 	LogFilePath    string
 }
+
 type Telemetry struct {
 	PrometheusAddr *net.TCPAddr
 }
+
 type ChainConfig struct {
-	Genesis string
+	Genesis       string
+	ShouldExecute bool
 }
 
 type DBConfig struct {
@@ -92,7 +95,8 @@ func DefaultConfig(path string) *Config {
 			ProtocolID:      protocol.ID("MOI"),
 		},
 		Chain: &ChainConfig{
-			Genesis: path + "/genesis.json",
+			Genesis:       path + "/genesis.json",
+			ShouldExecute: true,
 		},
 		Consensus: &ConsensusConfig{
 			DirectoryPath:         path + "/consensus",
@@ -105,7 +109,7 @@ func DefaultConfig(path string) *Config {
 			TimeoutCommit:         10000 * time.Millisecond,
 			Precision:             1000 * time.Nanosecond,
 			MessageDelay:          5500 * time.Millisecond,
-			MaxSlots:              2,
+			MaxSlots:              5,
 		},
 		DB: &DBConfig{
 			DBFolderPath:      path + "/db",

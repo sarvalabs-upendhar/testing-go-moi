@@ -288,10 +288,10 @@ func WaitForPeerResponse(t *testing.T, ctx context.Context, peerRespChan <-chan 
 	}()
 }
 
-func GetDummyBlocks(t *testing.T, count int) (*kutils.Set, map[ktypes.Hash]types.Block) {
+func GetDummyBlocks(t *testing.T, count int) (*kutils.HashSet, map[ktypes.Hash]types.Block) {
 	t.Helper()
 
-	set := kutils.NewSet()
+	set := kutils.NewHashSet()
 	blocks := make(map[ktypes.Hash]types.Block, count)
 
 	for i := 0; i < count; i++ {
@@ -366,7 +366,7 @@ func AreSessionInterestRemoved(
 	return keysRemoved
 }
 
-func WaitForBlocks(ctx context.Context, blocks chan *types.Block, ids *kutils.Set) (receivedCount int) {
+func WaitForBlocks(ctx context.Context, blocks chan *types.Block, ids *kutils.HashSet) (receivedCount int) {
 	for {
 		select {
 		case <-ctx.Done():

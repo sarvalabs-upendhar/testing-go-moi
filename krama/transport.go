@@ -15,6 +15,10 @@ import (
 	"log"
 )
 
+const (
+	TesseractTopic = "MOI_PUBSUB_TESSERACT"
+)
+
 type network interface {
 	Unsubscribe(topic string) error
 	Broadcast(topic string, data []byte) error
@@ -92,10 +96,14 @@ func (t *Transport) InitClusterCommunication(ctx context.Context, slot *types.Sl
 	return nil
 }
 
-func (t *Transport) Call(peerId peer.ID, svcName, svcMethod string, args, response interface{}) error {
+func (t *Transport) Call(peerID peer.ID, svcName, svcMethod string, args, response interface{}) error {
 	if t.rpcClient == nil {
 		return errors.New("rpc client not initiated")
 	}
 
-	return t.rpcClient.Call(peerId, svcName, svcMethod, args, response)
+	return t.rpcClient.Call(peerID, svcName, svcMethod, args, response)
+}
+
+func (t *Transport) BroadcastTesseract(msg *ktypes.TesseractMessage) error {
+	return t.network.Broadcast(TesseractTopic, polo.Polorize(msg))
 }

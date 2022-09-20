@@ -279,7 +279,7 @@ func (sm *StateManager) Cleanup(address ktypes.Address) {
 	object.mtx.Unlock()
 
 	sm.objectsLock.Lock()
-	sm.objects[address] = object
+	delete(sm.objects, address)
 	sm.objectsLock.Unlock()
 
 	sm.cleanupDirtyObject(address)
@@ -468,9 +468,9 @@ func (sm *StateManager) GetLatestContext(address ktypes.Address) (ktypes.Hash, [
 	return ts.Body.ContextHash, behaviourSet, randomSet, nil
 }
 
-func (sm *StateManager) FetchContextLock(ts *ktypes.Tesseract) ([]*ktypes.NodeSet, error) {
+func (sm *StateManager) FetchContextLock(ts *ktypes.Tesseract) (*ktypes.ICSNodes, error) {
 	ix := ts.Body.Interactions[0]
-	nodeSet := make([]*ktypes.NodeSet, 6)
+	ics := ktypes.NewICSNodes(6)
 
 	for address, info := range ts.Header.ContextLock {
 		if address == ix.FromAddress() {
@@ -479,23 +479,24 @@ func (sm *StateManager) FetchContextLock(ts *ktypes.Tesseract) ([]*ktypes.NodeSe
 				return nil, err
 			}
 
-			nodeSet[ktypes.SenderBehaviourSet] = behaviourSet
-			nodeSet[ktypes.SenderRandomSet] = randomSet
+			ics.UpdateNodeSet(ktypes.SenderBehaviourSet, behaviourSet)
+			ics.UpdateNodeSet(ktypes.SenderRandomSet, randomSet)
 		} else if address == ix.ToAddress() || address == GenesisAddress {
 			if info.ContextHash == ktypes.NilHash {
 				continue
 			}
+
 			behaviourSet, randomSet, err := sm.fetchParticipantContextByHash(info.ContextHash)
 			if err != nil {
 				return nil, err
 			}
 
-			nodeSet[ktypes.ReceiverBehaviourSet] = behaviourSet
-			nodeSet[ktypes.ReceiverRandomSet] = randomSet
+			ics.UpdateNodeSet(ktypes.ReceiverBehaviourSet, behaviourSet)
+			ics.UpdateNodeSet(ktypes.ReceiverRandomSet, randomSet)
 		}
 	}
 
-	return nodeSet, nil
+	return ics, nil
 }
 
 // FetchInteractionContext returns a nodeSet which holds the latest context info of the interaction participants

@@ -2,9 +2,9 @@ package kbft
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/hashicorp/go-hclog"
+	"github.com/pkg/errors"
 	"gitlab.com/sarvalabs/moichain/guna"
 	"gitlab.com/sarvalabs/moichain/krama/types"
 	"gitlab.com/sarvalabs/moichain/mudra"
@@ -29,34 +29,26 @@ type vault interface {
 	KramaID() id.KramaID
 }
 
-type lattice interface {
-	AppendTesseracts(
-		groupHash ktypes.Hash,
-		ts map[ktypes.Address]*ktypes.Tesseract,
-		dirtyStorage map[ktypes.Hash][]byte,
-	) error
-}
-
 // KBFT is a struct that represents the runner for the Krama Byzantine Fault Tolerant consensus engine
 type KBFT struct {
 	RoundState
-	logger          hclog.Logger
-	id              id.KramaID
-	config          *common.ConsensusConfig
-	mx              sync.Mutex
-	chain           lattice
-	inboundMsgChan  chan ktypes.ConsensusMessage
-	selfMsgChan     chan ktypes.ConsensusMessage
-	outboundMsgChan chan ktypes.ConsensusMessage
-	toTicker        *Ticker
-	ics             *types.ClusterInfo
-	nSteps          int
-	exit            chan error
-	ctx             context.Context
-	ctxCancel       context.CancelFunc
-	evidence        *Evidence
-	vault           vault
-	wal             WAL
+	logger                    hclog.Logger
+	id                        id.KramaID
+	config                    *common.ConsensusConfig
+	mx                        sync.Mutex
+	inboundMsgChan            chan ktypes.ConsensusMessage
+	selfMsgChan               chan ktypes.ConsensusMessage
+	outboundMsgChan           chan ktypes.ConsensusMessage
+	toTicker                  *Ticker
+	ics                       *types.ClusterInfo
+	nSteps                    int
+	exit                      chan error
+	ctx                       context.Context
+	ctxCancel                 context.CancelFunc
+	evidence                  *Evidence
+	vault                     vault
+	wal                       WAL
+	finalizedTesseractHandler func(tesseracts []*ktypes.Tesseract) error
 }
 
 // NewKBFTService is constructor function that generates a new KBFT engine.
@@ -69,26 +61,26 @@ func NewKBFTService(
 	config *common.ConsensusConfig,
 	outboundChan, inboundChan chan ktypes.ConsensusMessage,
 	vault *mudra.KramaVault,
-	chain lattice,
 	evidence *Evidence,
 	ics *types.ClusterInfo,
 	wal WAL,
 	exit chan error,
+	tesseractHandler func(tesseracts []*ktypes.Tesseract) error,
 ) *KBFT {
 	k := &KBFT{
-		id:              kid,
-		config:          config,
-		chain:           chain,
-		wal:             wal,
-		logger:          logger.Named("KBFT"),
-		outboundMsgChan: outboundChan,
-		inboundMsgChan:  inboundChan,
-		selfMsgChan:     make(chan ktypes.ConsensusMessage, 1000),
-		toTicker:        NewTicker(),
-		vault:           vault,
-		evidence:        evidence,
-		exit:            exit,
-		ics:             ics,
+		id:                        kid,
+		config:                    config,
+		wal:                       wal,
+		logger:                    logger.Named("KBFT"),
+		outboundMsgChan:           outboundChan,
+		inboundMsgChan:            inboundChan,
+		selfMsgChan:               make(chan ktypes.ConsensusMessage, 1000),
+		toTicker:                  NewTicker(),
+		vault:                     vault,
+		evidence:                  evidence,
+		exit:                      exit,
+		ics:                       ics,
+		finalizedTesseractHandler: tesseractHandler,
 	}
 
 	k.ctx, k.ctxCancel = context.WithTimeout(ctx, MaxBFTimeout)
@@ -448,39 +440,17 @@ func (kbft *KBFT) finalizeCommit(h []uint64) {
 		panic(err)
 	}
 
-	var gHash ktypes.Hash
+	if err = kbft.updateConsensusInfoInTesseracts(gridID, tesseractPreCommits, aggregatedSignature); err != nil {
+		kbft.Close(err)
+	}
 
-	tesseracts := make(map[ktypes.Address]*ktypes.Tesseract)
-	evidenceHash, data := kbft.evidence.FlushEvidence()
-	// Add evidence data to dirty list
-	kbft.ics.AddDirty(evidenceHash, data)
-	//Add Receipts to dirty list
-	//This will be modified once smt is integrated
-	kbft.ics.AddDirty(kbft.ics.Receipts.Hash(), polo.Polorize(kbft.ics.Receipts))
+	if err := kbft.finalizedTesseractHandler(kbft.ProposalGrid.Tesseracts); err != nil {
+		kbft.Close(err)
+	}
 
 	kbft.logger.Trace("Adding Receipts to dirty storage", "receipt-hash", kbft.ics.Receipts.Hash().Hex())
 
-	for _, tesseract := range kbft.ProposalGrid.Tesseracts {
-		tesseract.Header.Extra.Round = kbft.Round
-		tesseract.Header.Extra.VoteSet = tesseractPreCommits.bitarray
-		tesseract.Header.Extra.EvidenceHash = evidenceHash
-		tesseract.Header.Extra.GridID = gridID
-		tesseract.Header.Extra.CommitSignature = aggregatedSignature
-		gHash = tesseract.Header.GroupHash
-
-		if tesseract.Seal, err = kbft.vault.Sign(tesseract.Bytes(), common2.BlsBLST); err != nil {
-			kbft.logger.Error("Error signing tesseract", err)
-			panic(err)
-		}
-
-		tesseracts[tesseract.Header.Address] = tesseract
-	}
-
 	//TODO: validate the block
-
-	if err = kbft.chain.AppendTesseracts(gHash, tesseracts, kbft.ics.GetDirty()); err != nil {
-		log.Panic(err)
-	}
 
 	//TODO: Execute the interactions
 	//	var s AccountState
@@ -491,6 +461,33 @@ func (kbft *KBFT) finalizeCommit(h []uint64) {
 	fmt.Println("Before done in BFT")
 	kbft.Close(nil)
 	fmt.Println("After done in BFT")
+}
+
+func (kbft *KBFT) updateConsensusInfoInTesseracts(
+	gridID *ktypes.TesseractGridID,
+	preCommits *tesseractVoteSet,
+	signature []byte,
+) (err error) {
+	evidenceHash, data := kbft.evidence.FlushEvidence()
+	// Add evidence data to dirty list
+	kbft.ics.AddDirty(evidenceHash, data)
+	//Add Receipts to dirty list
+	//This will be modified once smt is integrated
+	kbft.ics.AddDirty(kbft.ics.Receipts.Hash(), polo.Polorize(kbft.ics.Receipts))
+
+	for _, tesseract := range kbft.ProposalGrid.Tesseracts {
+		tesseract.Header.Extra.Round = kbft.Round
+		tesseract.Header.Extra.VoteSet = preCommits.bitarray
+		tesseract.Header.Extra.EvidenceHash = evidenceHash
+		tesseract.Header.Extra.GridID = gridID
+		tesseract.Header.Extra.CommitSignature = signature
+
+		if tesseract.Seal, err = kbft.vault.Sign(tesseract.Bytes(), common2.BlsBLST); err != nil {
+			return errors.Wrap(err, "failed to sign the tesseract")
+		}
+	}
+
+	return nil
 }
 
 func (kbft *KBFT) ScheduleRound0(r *RoundState) {
@@ -930,42 +927,3 @@ func areGreater(oldValues, newValues []int32) bool {
 	// All heights are greater, return true
 	return true
 }
-
-/*
-
-Unused utilities
-
-
-
-
-A function that checks if the second set of heights is lesser than the first.
- Accepts a two sets of heights (int64 slice) and compares them. Returns a bool.
- Every index in the second set must be lesser than the first set for a true result.
-func areHeightsLesser(systemheight []int64, newheight []int64) bool {
-	// Iterate over system heights
-	for idx, value := range systemheight {
-		if value > newheight[idx] {
-			// Height larger, return false
-			return false
-		}
-	}
-
-	// All heights are lesser, return true
-	return true
-}
-
-func areLesser(oldValues, newValues []int32) bool {
-	// Iterate over system heights
-	for idx, value := range oldValues {
-		if value > newValues[idx] {
-			// Height larger, return false
-			return false
-		}
-	}
-
-	// All heights are lesser, return true
-	return true
-}
-
-
-*/

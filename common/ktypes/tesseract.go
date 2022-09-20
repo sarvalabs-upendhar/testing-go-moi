@@ -28,7 +28,7 @@ type TesseractHeader struct {
 	AnuUsed       uint64
 	AnuLimit      uint64
 	TesseractHash Hash
-	GroupHash     Hash
+	GridHash      Hash
 	Operator      string
 	ClusterID     string
 	Timestamp     int64
@@ -75,7 +75,7 @@ func TesseractFromProto(t *ktypes.Tesseract) *Tesseract {
 			AnuLimit:      t.Header.AnuLimit,
 			Timestamp:     t.Header.Timestamp,
 			TesseractHash: ktypes.BytesToHash(t.Header.TesseractHash),
-			GroupHash:     ktypes.BytesToHash(t.Header.GroupHash),
+			GridHash:     ktypes.BytesToHash(t.Header.GridHash),
 			Operator:      t.Header.Operator,
 			ClusterID:     t.Header.ClusterID,
 			Extra: CommitData{
@@ -110,6 +110,10 @@ func TesseractFromProto(t *ktypes.Tesseract) *Tesseract {
 }
 */
 
+func (t *Tesseract) GridLength() int32 {
+	return t.Header.Extra.GridID.Parts.Total
+}
+
 func (t *Tesseract) Operator() string {
 	return t.Header.Operator
 }
@@ -136,7 +140,7 @@ func (t *Tesseract) Hash() Hash {
 	protoHeader.AnuUsed = t.Header.AnuUsed
 	protoHeader.AnuLimit = t.Header.AnuLimit
 	protoHeader.TesseractHash = t.Header.TesseractHash
-	protoHeader.GroupHash = t.Header.GroupHash
+	protoHeader.GridHash = t.Header.GridHash
 	protoHeader.Operator = t.Header.Operator
 	protoHeader.ClusterID = t.Header.ClusterID
 	protoHeader.Timestamp = t.Header.Timestamp
@@ -168,6 +172,17 @@ func (t *Tesseract) ContextHash() Hash {
 
 func (t *Tesseract) PreviousHash() Hash {
 	return t.Header.PrevHash
+}
+
+func (t *Tesseract) ReceiptHash() Hash {
+	return t.Body.ReceiptHash
+}
+func (t *Tesseract) GridHash() Hash {
+	return t.Header.GridHash
+}
+
+func (t *Tesseract) ClusterID() ClusterID {
+	return ClusterID(t.Header.ClusterID)
 }
 
 func (t *Tesseract) StateHash() Hash {

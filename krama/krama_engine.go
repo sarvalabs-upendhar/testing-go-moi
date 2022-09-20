@@ -51,21 +51,16 @@ const (
 
 type lattice interface {
 	AddKnownHashes(tesseracts []*ktypes.Tesseract)
-	AppendTesseracts(
-		groupHash ktypes.Hash,
-		ts map[ktypes.Address]*ktypes.Tesseract,
-		dirtyStorage map[ktypes.Hash][]byte,
-	) error
-}
-type store interface {
-	CreateEntry(key []byte, value []byte) error
+	AddTesseracts(tesseracts []*ktypes.Tesseract, dirtyStorage map[ktypes.Hash][]byte) error
 }
 
 type transport interface {
 	InitClusterCommunication(ctx context.Context, slot *types.Slot) error
 	RegisterRPCService(serviceID protocol.ID, serviceName string, service interface{}) error
-	Call(peerId peer.ID, svcName, svcMethod string, args, response interface{}) error
+	Call(peerID peer.ID, svcName, svcMethod string, args, response interface{}) error
+	BroadcastTesseract(msg *ktypes.TesseractMessage) error
 }
+
 type state interface {
 	FetchInteractionContext(ix *ktypes.Interaction) (map[ktypes.Address]ktypes.Hash, []*ktypes.NodeSet, error)
 	GetPublicKeys(ids ...id.KramaID) (keys [][]byte, err error)
@@ -74,11 +69,13 @@ type state interface {
 	GetLatestStateObject(addr ktypes.Address) (*guna.StateObject, error)
 	GetLatestNonce(addr ktypes.Address) (uint64, error)
 }
+
 type ixPool interface {
 	IncrementWaitTime(addr ktypes.Address) error
 	Executables() ixpool.InteractionQueue
 	ResetWithInteractions(ixs ktypes.Interactions)
 }
+
 type execution interface {
 	CleanupExecutorInstances(id ktypes.ClusterID)
 	ExecuteInteractions(
@@ -128,7 +125,6 @@ type Engine struct {
 	executionReq chan ktypes.ClusterID
 	lattice      lattice
 	wal          kbft.WAL
-	db           store
 	vault        *mudra.KramaVault
 	clusterLocks *locker.Locker
 }
@@ -142,7 +138,6 @@ func NewKramaEngine(ctx context.Context,
 	ixPool ixPool,
 	val *mudra.KramaVault,
 	lattice lattice,
-	db store,
 	randomizer *flux.Randomizer,
 ) (*Engine, error) {
 	wal, err := kbft.NewWAL(ctx, logger, cfg.DirectoryPath)
@@ -167,7 +162,6 @@ func NewKramaEngine(ctx context.Context,
 		lattice:      lattice,
 		executionReq: make(chan ktypes.ClusterID),
 		wal:          wal,
-		db:           db,
 		vault:        val,
 		clusterLocks: locker.New(),
 	}
@@ -580,7 +574,7 @@ func (k *Engine) handleReq(req Request) {
 	clusterState := slot.CLusterInfo()
 
 	if clusterState.CurrentRole == ktypes.ObserverSet {
-		log.Println("Observer Set", clusterState.ID)
+		log.Println("Observer HashSet", clusterState.ID)
 
 		wg := observer.NewWatchDog(ctx, slot)
 
@@ -612,16 +606,16 @@ func (k *Engine) handleReq(req Request) {
 		bft := kbft.NewKBFTService(
 			ctx,
 			k.operator,
-			k.logger.With("Cluster-ID", clusterID),
+			k.logger.With("cluster-id", clusterID),
 			k.cfg,
 			slot.BftOutboundChan,
 			slot.BftInboundChan,
 			k.vault,
-			k.lattice,
 			icsEvidence,
 			clusterState,
 			k.wal,
 			exitChan,
+			k.finalizedTesseractHandler,
 		)
 
 		go bft.Start()
@@ -633,13 +627,6 @@ func (k *Engine) handleReq(req Request) {
 			}
 
 			return
-		}
-	}
-
-	for key, value := range clusterState.GetDirty() {
-		if err := k.db.CreateEntry(key.Bytes(), value); err != nil {
-			k.logger.Error("Error writing keys to db")
-			log.Panic(err) //We panic here, this should not occur at all.
 		}
 	}
 
@@ -1156,6 +1143,39 @@ func (k *Engine) GetNodes(
 	return
 }
 
+func (k *Engine) finalizedTesseractHandler(tesseracts []*ktypes.Tesseract) error {
+
+	clusterID := tesseracts[0].ClusterID()
+
+	slot := k.slots.GetSlot(clusterID)
+
+	if slot == nil {
+		return errors.New("nil slot")
+	}
+
+	clusterInfo := slot.CLusterInfo()
+
+	if err := k.lattice.AddTesseracts(tesseracts, clusterInfo.GetDirty()); err != nil {
+		return err
+	}
+
+	for _, ts := range tesseracts {
+		msg := &ktypes.TesseractMessage{
+			Tesseract: ts,
+			Sender:    k.operator,
+			Delta: map[ktypes.Hash][]byte{
+				ts.Body.ConsensusProof.ICSHash: clusterInfo.GetDirty()[ts.Body.ConsensusProof.ICSHash],
+			},
+		}
+
+		if err := k.transport.BroadcastTesseract(msg); err != nil {
+			k.logger.Error("Failed to broadcast tesseract", "error", err, "cluster-id", clusterID)
+		}
+	}
+
+	return nil
+}
+
 func GenerateTesseracts(state *types.ClusterInfo) ([]*ktypes.Tesseract, error) {
 	ix := state.Ixs[0] //TODO: Improve this
 	gasUsed := state.GetGasUsed()
@@ -1182,7 +1202,7 @@ func GenerateTesseracts(state *types.ClusterInfo) ([]*ktypes.Tesseract, error) {
 
 	groupHash := blake2b.Sum256(groupBuffer)
 	for _, v := range tesseractGroup {
-		v.Header.GroupHash = groupHash
+		v.Header.GridHash = groupHash
 	}
 
 	return tesseractGroup, nil

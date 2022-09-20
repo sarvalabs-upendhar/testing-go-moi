@@ -45,9 +45,6 @@ type SubHandler struct {
 	// Represents the newpeer event subscription
 	newPeerSub *kutils.Subscription
 
-	// Represents the new mined tesseract subscription
-	minedTesseractSub *kutils.Subscription
-
 	server *Server
 
 	logger hclog.Logger
@@ -171,7 +168,7 @@ func (eh *SubHandler) handlePeerMessage(p *KipPeer) error {
 		errs := eh.ixpool.AddInteractions(ixns.Ixs)
 		for index, err := range errs {
 			if err != nil {
-				eh.logger.Trace("Unable to add Interaction ", ixns.Ixs[index].GetIxHash(), "error", err)
+				eh.logger.Trace("Unable to add Interaction ", "hash", ixns.Ixs[index].GetIxHash(), "error", err)
 
 				return nil
 			}
