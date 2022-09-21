@@ -644,7 +644,6 @@ func (s *Server) Subscribe(ctx context.Context, topic string, handler func(msg *
 
 	// Define a subscription pipeline closure
 	pipeline := func(msg *pubsub.Message) {
-
 		// Call the given subscription handler
 		// an error because it is being invoked as a goroutine
 		if err := handler(msg); err != nil {

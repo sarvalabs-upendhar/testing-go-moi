@@ -19,6 +19,7 @@ import (
 	"log"
 	"math/big"
 	"os"
+	"sync"
 )
 
 const (
@@ -78,21 +79,22 @@ type executor interface {
 }
 
 type ChainManager struct {
-	ctx              context.Context
-	cfg              *common.ChainConfig
-	db               db
-	mux              *kutils.TypeMux
-	ixpool           ixpool
-	tesseracts       *lru.Cache
-	orphanTesseracts *lru.Cache
-	gridsCache       *GridCache
-	sm               stateManager
-	latticeLocks     *locker.Locker
-	logger           hclog.Logger
-	knownTesseracts  *ktypes.KnownCache
-	senatus          reputationEngine
-	network          server
-	exec             executor
+	ctx                 context.Context
+	cfg                 *common.ChainConfig
+	db                  db
+	mux                 *kutils.TypeMux
+	ixpool              ixpool
+	tesseracts          *lru.Cache
+	orphanTesseracts    *lru.Cache
+	gridsCache          *GridCache
+	sm                  stateManager
+	validatedTesseracts sync.Map
+	latticeLocks        *locker.Locker
+	logger              hclog.Logger
+	knownTesseracts     *ktypes.KnownCache
+	senatus             reputationEngine
+	network             server
+	exec                executor
 }
 
 func NewChainManager(
@@ -355,7 +357,7 @@ func (c *ChainManager) verifySignatures(ts *ktypes.Tesseract, ics *ktypes.ICSNod
 	return verified, nil
 }
 
-func (c *ChainManager) VerifyHeaders(ts *ktypes.Tesseract) error {
+func (c *ChainManager) verifyHeaders(ts *ktypes.Tesseract) error {
 	var (
 		isGenesis bool
 		err       error
@@ -485,6 +487,8 @@ func (c *ChainManager) addTesseractsWithState(
 				if err := c.latticeLocks.Unlock(ts.Hash().Hex()); err != nil {
 					c.logger.Error("failed to unlock lattice", "error", err, "addr", addr)
 				}
+
+				c.validatedTesseracts.Delete(ts.Hash())
 			}()
 
 			if c.hasTesseract(ts.Hash()) {
@@ -495,22 +499,25 @@ func (c *ChainManager) addTesseractsWithState(
 				return err
 			}
 
-			// Add cluster info to db
-			if clusterInfo != nil {
-				if err := c.db.CreateEntry(ts.Body.ConsensusProof.ICSHash.Bytes(), polo.Polorize(clusterInfo)); err != nil {
-					return errors.Wrap(err, "failed to write cluster info to db")
-				}
-			}
-
-			for key, value := range dirtyStorage {
-				if err := c.db.CreateEntry(key.Bytes(), value); err != nil {
-					return errors.Wrap(err, "failed to write dirty keys")
-				}
-			}
-
 			return nil
 		}(ts.Address(), ts); err != nil {
 			return err
+		}
+	}
+
+	// Add cluster info to db
+	if clusterInfo != nil && len(tesseracts) > 0 {
+		if err := c.db.CreateEntry(
+			tesseracts[0].Body.ConsensusProof.ICSHash.Bytes(),
+			polo.Polorize(clusterInfo),
+		); err != nil {
+			return errors.Wrap(err, "failed to write cluster info to db")
+		}
+	}
+
+	for key, value := range dirtyStorage {
+		if err := c.db.CreateEntry(key.Bytes(), value); err != nil {
+			return errors.Wrap(err, "failed to write dirty keys")
 		}
 	}
 
@@ -528,6 +535,8 @@ func (c *ChainManager) addTesseractsWithOutState(
 				if err := c.latticeLocks.Unlock(ts.Hash().Hex()); err != nil {
 					c.logger.Error("failed to unlock lattice", "error", err, "addr", addr)
 				}
+
+				c.validatedTesseracts.Delete(ts.Hash())
 			}()
 
 			if c.hasTesseract(ts.Hash()) {
@@ -538,17 +547,56 @@ func (c *ChainManager) addTesseractsWithOutState(
 				return err
 			}
 
-			// Add cluster info to db
-			if clusterInfo != nil {
-				if err := c.db.CreateEntry(ts.Body.ConsensusProof.ICSHash.Bytes(), polo.Polorize(clusterInfo)); err != nil {
-					return errors.Wrap(err, "error adding cluster info to db")
-				}
-			}
-
 			return nil
 		}(ts.Address(), ts); err != nil {
 			return err
 		}
+	}
+
+	// Add cluster info to db
+	if clusterInfo != nil && len(tesseracts) > 0 {
+		if err := c.db.CreateEntry(
+			tesseracts[0].Body.ConsensusProof.ICSHash.Bytes(),
+			polo.Polorize(clusterInfo),
+		); err != nil {
+			return errors.Wrap(err, "failed to write cluster info to db")
+		}
+	}
+
+	return nil
+}
+
+func (c *ChainManager) validateTesseract(sender id.KramaID, ts *ktypes.Tesseract, ics *ktypes.ICSNodes) error {
+	c.latticeLocks.Lock(ts.Hash().Hex())
+	defer func() {
+		if err := c.latticeLocks.Unlock(ts.Hash().Hex()); err != nil {
+			c.logger.Error("failed to unlock lattice", "error", err, "addr", ts.Address())
+		}
+	}()
+
+	_, ok := c.validatedTesseracts.Load(ts.Hash())
+	if ok || c.hasTesseract(ts.Hash()) {
+		return ktypes.ErrAlreadyKnown
+	}
+
+	validSeal, err := c.isSealValid(ts, sender)
+	if !validSeal {
+		c.logger.Error("Error validating tesseract seal ", "err", err)
+
+		return ktypes.ErrInvalidSeal
+	}
+
+	if err = c.verifyHeaders(ts); err != nil {
+		if errors.Is(err, ktypes.ErrFetchingTesseract) {
+			c.orphanTesseracts.Add(ts.Hash(), ts)
+		}
+
+		return err
+	}
+
+	verified, err := c.verifySignatures(ts, ics)
+	if !verified || err != nil {
+		return errors.Wrap(err, "failed to verify signatures")
 	}
 
 	return nil
@@ -565,35 +613,18 @@ func (c *ChainManager) AddTesseractWithOutState(
 		return nil
 	}
 
-	validSeal, err := c.isSealValid(ts, sender)
-	if !validSeal {
-		c.logger.Error("Error validating tesseract seal ", "err", err)
-
-		return ktypes.ErrInvalidSeal
-	}
-
-	if err = c.VerifyHeaders(ts); err != nil {
-		if errors.Is(err, ktypes.ErrFetchingTesseract) {
-			c.orphanTesseracts.Add(ts.Hash(), ts)
-		}
-
-		return err
-	}
-
 	ics, err := c.fetchICSNodeSet(ts, clusterInfo)
 	if err != nil {
 		return errors.Wrap(err, "failed to fetch ICSNodeSet")
 	}
 
-	verified, err := c.verifySignatures(ts, ics)
-	if !verified || err != nil {
-		return errors.Wrap(err, "failed to verify signatures")
+	if err := c.validateTesseract(sender, ts, ics); err != nil {
+		return err
 	}
 
 	index, _ := ics.GetIndex(c.network.GetKramaID())
 
 	if c.cfg.ShouldExecute && index == -1 { //TODO: Should execute if validator responded false to operator request
-
 		if isGridComplete := c.gridsCache.AddTesseract(ts); !isGridComplete {
 			return nil
 		}
@@ -610,12 +641,10 @@ func (c *ChainManager) AddTesseractWithOutState(
 			return errors.New("nil grid")
 		}
 
-		dirtyStorage, areValid, err := c.executeAndValidate(tesseractGrid)
-		if !areValid || err != nil {
+		dirtyStorage, err := c.executeAndValidate(tesseractGrid)
+		if err != nil {
 			return err
 		}
-
-		//log.Println("Adding gossiped tesseract")
 
 		return c.addTesseractsWithState(clusterInfo, dirtyStorage, tesseractGrid...)
 	}
@@ -840,7 +869,7 @@ func (c *ChainManager) tesseractHandler(pubSubMsg *pubsub.Message) error {
 		c.knownTesseracts.Add(ts.Hash())
 
 		if err := c.AddTesseractWithOutState(ts, msg.Sender, clusterInfo); err != nil {
-			log.Panic("Error adding tesseract ", "error", err, "addr", ts.Address(), "hash", ts.Hash())
+			c.logger.Error("Error adding tesseract ", "error", err, "addr", ts.Address(), "hash", ts.Hash())
 		}
 	}
 
@@ -859,8 +888,7 @@ func (c *ChainManager) Close() {
 	log.Println("Closing Chain manager")
 }
 
-func (c *ChainManager) executeAndValidate(ts []*ktypes.Tesseract) (map[ktypes.Hash][]byte, bool, error) {
-
+func (c *ChainManager) executeAndValidate(ts []*ktypes.Tesseract) (map[ktypes.Hash][]byte, error) {
 	clusterID := ts[0].ClusterID()
 	contextDelta := ts[0].ContextDelta()
 	ixs := ts[0].Interactions()
@@ -868,7 +896,7 @@ func (c *ChainManager) executeAndValidate(ts []*ktypes.Tesseract) (map[ktypes.Ha
 
 	receipts, err := c.exec.ExecuteInteractions(clusterID, ixs, contextDelta)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
 	if !isReceiptAndGroupHashValid(ts, receipts) || !areStateHashesValid(ts, receipts) {
@@ -876,16 +904,15 @@ func (c *ChainManager) executeAndValidate(ts []*ktypes.Tesseract) (map[ktypes.Ha
 			c.logger.Error("Failed to revert the execution changes", "cluster-id", clusterID)
 		}
 
-		return nil, false, errors.New("failed to validate the tesseract")
+		return nil, errors.New("failed to validate the tesseract")
 	}
 
 	dirtyStorage[receipts.Hash()] = polo.Polorize(receipts)
 
-	return dirtyStorage, true, nil
+	return dirtyStorage, nil
 }
 
 func areStateHashesValid(tesseracts []*ktypes.Tesseract, receipts ktypes.Receipts) bool {
-
 	for _, ix := range tesseracts[0].Interactions() {
 		receipt, err := receipts.GetReceipt(ix.GetIxHash())
 		if err != nil {

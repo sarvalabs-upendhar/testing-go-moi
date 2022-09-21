@@ -543,7 +543,14 @@ func (s *Syncer) fetchTesseractState(tesseract *ktypes.Tesseract, fetchContext [
 		return err
 	}
 
-	if ok, err := s.fetchData(ctx, newSession, acc.Balance, acc.StorageRoot, acc.AssetApprovals, tesseract.Body.ReceiptHash); !ok || err != nil {
+	if ok, err := s.fetchData(
+		ctx,
+		newSession,
+		acc.Balance,
+		acc.StorageRoot,
+		acc.AssetApprovals,
+		tesseract.Body.ReceiptHash,
+	); !ok || err != nil {
 		s.logger.Error("Error fetching balance data", "error", err)
 
 		return err
@@ -607,7 +614,9 @@ func (s *Syncer) tesseractWorker(id int, reqQueue chan *TesseractSyncJob) {
 			//TODO:Check whether tesseract data exsist
 
 			ts := job.tesseract
-			log.Printf("Got a new tesseract info sync JOB for address %s,Height %d \n", job.tesseract.Header.Address.Hex(), job.tesseract.Header.Height)
+
+			s.logger.Debug("Got a new tesseract info sync JOB", "address", job.tesseract.Header.Address, "height", job.tesseract.Header.Height)
+
 			if err := s.fetchTesseractState(ts, job.fetchContext); err != nil {
 				s.logger.Error("Error fetching tesseract state", "err", err)
 
