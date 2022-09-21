@@ -24,7 +24,8 @@ var (
 	ErrReadingConfig = errors.New("error reading config file")
 )
 
-var MaxSlots int
+var OperatorSlots int
+var ValidatorSlots int
 var NetworkSize uint64
 var MTQ float64
 var SkipGenesis bool
@@ -54,7 +55,8 @@ func init() {
 	rootCmd.AddCommand(serverCmd)
 
 	serverCmd.PersistentFlags().String("config", "config.json", "Config file name")
-	serverCmd.PersistentFlags().IntVar(&MaxSlots, "max-slots", 0, "Maximum number of krama engine slots")
+	serverCmd.PersistentFlags().IntVar(&OperatorSlots, "operator-slots", 0, "Maximum number of operator slots")
+	serverCmd.PersistentFlags().IntVar(&ValidatorSlots, "validator-slots", 0, "Maximum number of validator slots")
 	serverCmd.PersistentFlags().Uint64Var(&NetworkSize, "network-size", 12, "Network Size")
 	serverCmd.PersistentFlags().Float64Var(&MTQ, "mtq", 0.7, "Default MTQ")
 	serverCmd.PersistentFlags().String("data-dir", "test-chain", "data directory location")
@@ -105,10 +107,16 @@ func BuildConfig(dataDir string, cmdCfg *Config) (*common.Config, error) {
 		nodeCfg.Network.MTQ = MTQ
 	}
 
-	if MaxSlots != 0 {
-		nodeCfg.Consensus.MaxSlots = MaxSlots
-	} else if cmdCfg.Consensus.MaxSlots != 0 {
-		nodeCfg.Consensus.MaxSlots = cmdCfg.Consensus.MaxSlots
+	if OperatorSlots != 0 {
+		nodeCfg.Consensus.OperatorSlotCount = OperatorSlots
+	} else if cmdCfg.Consensus.OperatorSlots != 0 {
+		nodeCfg.Consensus.OperatorSlotCount = cmdCfg.Consensus.OperatorSlots
+	}
+
+	if ValidatorSlots != 0 {
+		nodeCfg.Consensus.ValidatorSlotCount = ValidatorSlots
+	} else if cmdCfg.Consensus.ValidatorSlots != 0 {
+		nodeCfg.Consensus.ValidatorSlotCount = cmdCfg.Consensus.ValidatorSlots
 	}
 
 	if Bootnode != "" {
