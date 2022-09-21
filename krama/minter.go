@@ -2,6 +2,7 @@ package krama
 
 import (
 	"gitlab.com/sarvalabs/moichain/common/ktypes"
+	"gitlab.com/sarvalabs/moichain/krama/types"
 	"time"
 )
 
@@ -9,7 +10,7 @@ func (k *Engine) minter() {
 	respChan := make(chan Response)
 
 	for {
-		if k.slots.AreSlotsAvailable() {
+		if k.slots.AreSlotsAvailable(types.OperatorSlot) {
 			interactionQueue := k.pool.Executables()
 
 			for interactionQueue.Len() > 0 {
