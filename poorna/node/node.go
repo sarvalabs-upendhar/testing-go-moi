@@ -249,7 +249,9 @@ func (n *Node) Start() {
 	}
 
 	go n.rpc.Start()
-	go n.chain.Start()
+	if err := n.chain.Start(); err != nil {
+		log.Panic(err)
+	}
 }
 func (n *Node) startSubHandlers() {
 	n.logger.Info("Starting Sub-Handlers")
