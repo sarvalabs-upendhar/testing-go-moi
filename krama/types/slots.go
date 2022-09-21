@@ -10,8 +10,16 @@ type ExecutionResponse struct {
 	Grid []*ktypes.Tesseract
 }
 
+const (
+	OperatorSlot SlotType = iota
+	ValidatorSlot
+)
+
+type SlotType int
+
 type Slot struct {
 	//TODO: explore using sync pool for slots
+	slotType                        SlotType
 	clusterState                    *ClusterInfo
 	ICSSuccessChan                  chan bool
 	OutboundChan, InboundChan       chan *ktypes.ICSMSG
@@ -20,8 +28,9 @@ type Slot struct {
 	CloseCh                         chan struct{}
 }
 
-func NewSlot(clusterState *ClusterInfo) *Slot {
+func NewSlot(slotType SlotType, clusterState *ClusterInfo) *Slot {
 	return &Slot{
+		slotType:        slotType,
 		clusterState:    clusterState,
 		ICSSuccessChan:  make(chan bool),
 		OutboundChan:    make(chan *ktypes.ICSMSG),
@@ -68,17 +77,19 @@ func (info *Slot) CLusterInfo() *ClusterInfo {
 }
 
 type Slots struct {
-	slots          map[ktypes.ClusterID]*Slot
-	availableSlots int
-	activeAccounts map[ktypes.Address]ktypes.ClusterID
-	mtx            sync.RWMutex
+	slots                   map[ktypes.ClusterID]*Slot
+	availableOperatorSlots  int
+	availableValidatorSlots int
+	activeAccounts          map[ktypes.Address]ktypes.ClusterID
+	mtx                     sync.RWMutex
 }
 
-func NewSlots(size int) *Slots {
+func NewSlots(operatorSlots, validatorSlots int) *Slots {
 	return &Slots{
-		slots:          make(map[ktypes.ClusterID]*Slot),
-		availableSlots: size,
-		activeAccounts: make(map[ktypes.Address]ktypes.ClusterID, size*2),
+		slots:                   make(map[ktypes.ClusterID]*Slot),
+		availableOperatorSlots:  operatorSlots,
+		availableValidatorSlots: validatorSlots,
+		activeAccounts:          make(map[ktypes.Address]ktypes.ClusterID, (operatorSlots+validatorSlots)*2),
 	}
 }
 
@@ -108,9 +119,9 @@ func (s *Slots) AddSlot(id ktypes.ClusterID, slot *Slot) bool {
 	fromAddr := slot.clusterState.Ixs[0].FromAddress()
 	toAddr := slot.clusterState.Ixs[0].ToAddress()
 
-	if !s.areAccountsActive(fromAddr, toAddr) && s.areSlotsAvailable() {
+	if !s.areAccountsActive(fromAddr, toAddr) && s.areSlotsAvailable(slot.slotType) {
 		s.slots[id] = slot
-		s.availableSlots = s.availableSlots - 1
+		s.decrementSlots(slot.slotType)
 		s.activeAccounts[slot.clusterState.Ixs[0].FromAddress()] = slot.clusterState.ID
 		s.activeAccounts[slot.clusterState.Ixs[0].ToAddress()] = slot.clusterState.ID
 
@@ -126,15 +137,20 @@ func (s *Slots) GetSlot(id ktypes.ClusterID) *Slot {
 
 	return s.slots[id]
 }
-func (s *Slots) AreSlotsAvailable() bool {
+func (s *Slots) AreSlotsAvailable(slotType SlotType) bool {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 
-	return s.areSlotsAvailable()
+	return s.areSlotsAvailable(slotType)
 }
 
-func (s *Slots) areSlotsAvailable() bool {
-	return s.availableSlots > 0
+func (s *Slots) areSlotsAvailable(slotType SlotType) bool {
+	if slotType == OperatorSlot {
+
+		return s.availableOperatorSlots > 0
+	}
+
+	return s.availableValidatorSlots > 0
 }
 
 func (s *Slots) CleanupSlot(id ktypes.ClusterID) {
@@ -146,6 +162,28 @@ func (s *Slots) CleanupSlot(id ktypes.ClusterID) {
 		delete(s.activeAccounts, slot.clusterState.Ixs[0].ToAddress())
 		close(slot.CloseCh)
 		delete(s.slots, id)
-		s.availableSlots++
+		s.incrementSlots(slot.slotType)
 	}
+}
+
+func (s *Slots) decrementSlots(slotType SlotType) {
+	if slotType == OperatorSlot {
+
+		s.availableOperatorSlots--
+
+		return
+	}
+
+	s.availableValidatorSlots--
+}
+
+func (s *Slots) incrementSlots(slotType SlotType) {
+	if slotType == OperatorSlot {
+
+		s.availableOperatorSlots++
+
+		return
+	}
+
+	s.availableValidatorSlots++
 }

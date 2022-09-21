@@ -153,7 +153,7 @@ func NewKramaEngine(ctx context.Context,
 		logger:       logger.Named("Krama-Engine"),
 		operator:     network.GetKramaID(),
 		state:        state,
-		slots:        types.NewSlots(cfg.MaxSlots),
+		slots:        types.NewSlots(cfg.OperatorSlotCount, cfg.ValidatorSlotCount),
 		requests:     make(chan Request),
 		randomizer:   randomizer,
 		transport:    NewKramaTransport(logger, network),
@@ -176,7 +176,7 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID ktypes.Cluste
 	clusterState := types.NewICS(6, request.ixs, clusterID, k.operator, time.Now())
 
 	// create a slot and try adding it
-	newSlot := types.NewSlot(clusterState)
+	newSlot := types.NewSlot(types.OperatorSlot, clusterState)
 
 	if !k.slots.AddSlot(clusterID, newSlot) {
 		return ktypes.ErrSlotsFull
@@ -443,7 +443,7 @@ func (k *Engine) joinCluster(ctx context.Context, req Request) error {
 		id.KramaID(req.msg.Operator),
 		reqTime)
 
-	newSlot := types.NewSlot(clusterState)
+	newSlot := types.NewSlot(types.ValidatorSlot, clusterState)
 	// Create a slot and try adding it
 
 	clusterState.ContextLock = req.msg.ContextLock
@@ -493,7 +493,7 @@ func (k *Engine) handleReq(req Request) {
 		}
 	}()
 
-	if slot := k.slots.GetSlot(clusterID); slot != nil || !k.slots.AreSlotsAvailable() {
+	if slot := k.slots.GetSlot(clusterID); slot != nil || !k.slots.AreSlotsAvailable(types.SlotType(req.reqType)) {
 		k.logger.Debug("Slots not available")
 		req.responseChan <- Response{requestType: req.reqType, err: ktypes.ErrSlotsFull}
 
@@ -810,6 +810,8 @@ func (k *Engine) sendICSRequest(
 	currentSlot := k.slots.GetSlot(cID)
 	clusterState := currentSlot.CLusterInfo()
 
+	msg.ContextType = int32(setType)
+
 	for index, kipID := range nodesSet.Ids {
 		if kipID == clusterState.Operator {
 			nodeResponses[index] = true
@@ -837,8 +839,6 @@ func (k *Engine) sendICSRequest(
 
 			continue
 		}
-
-		msg.ContextType = int32(setType)
 
 		go func(index int, peerID peer.ID) {
 			icsResponse := new(ktypes.ICSResponse)
