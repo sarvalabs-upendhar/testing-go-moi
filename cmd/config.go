@@ -42,6 +42,8 @@ type ConsensusConfig struct {
 	TimeoutCommit         int64 `json:"timeout_commit"`
 	SkipTimeoutCommit     bool  `json:"skip_timeout_commit"`
 	MaxSlots              int   `json:"max_slots"`
+	OperatorSlots         int   `json:"operator_slots"`
+	ValidatorSlots        int   `json:"validator_slots"`
 }
 
 type VaultConfig struct {
