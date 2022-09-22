@@ -120,6 +120,9 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 		}
 	}
 
+	// setup metrics
+	n.setupTelemetry()
+
 	// setup state manager
 	n.state, err = guna.NewStateManager(n.ctx, db, n.logger, n.cache, n.network)
 	if err != nil {
@@ -164,9 +167,6 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 	); err != nil {
 		return nil, err
 	}
-
-	// setup metrics
-	n.setupTelemetry()
 
 	// setup JSON-RPC
 	if err = n.SetupRPC(); err != nil {
