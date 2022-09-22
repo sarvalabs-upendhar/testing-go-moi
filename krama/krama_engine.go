@@ -71,7 +71,7 @@ type state interface {
 }
 
 type ixPool interface {
-	IncrementWaitTime(addr ktypes.Address) error
+	IncrementWaitTime(addr ktypes.Address, baseTime time.Duration) error
 	Executables() ixpool.InteractionQueue
 	ResetWithInteractions(ixs ktypes.Interactions)
 }
@@ -127,6 +127,7 @@ type Engine struct {
 	wal          kbft.WAL
 	vault        *mudra.KramaVault
 	clusterLocks *locker.Locker
+	avgICSTime   time.Duration
 }
 
 func NewKramaEngine(ctx context.Context,
@@ -164,6 +165,7 @@ func NewKramaEngine(ctx context.Context,
 		wal:          wal,
 		vault:        val,
 		clusterLocks: locker.New(),
+		avgICSTime:   cfg.AccountWaitTime,
 	}
 
 	return k, k.transport.RegisterRPCService(ICSRPCProtocol, "ICSRPC", NewICSRPCService(k))
@@ -1029,7 +1031,7 @@ func (k *Engine) updateContextDelta(clusterID ktypes.ClusterID) error {
 			senderRandomDelta, replacedRandomDelta := clusterState.GetRandomContextDelta(
 				ktypes.SenderRandomSet,
 				1,
-				nil,
+				k.operator,
 			)
 			senderDeltaGroup.RandomNodes = append(senderDeltaGroup.RandomNodes, senderRandomDelta...)
 			senderDeltaGroup.ReplacedNodes = append(senderDeltaGroup.ReplacedNodes, replacedRandomDelta...)
@@ -1078,7 +1080,6 @@ func (k *Engine) updateContextDelta(clusterID ktypes.ClusterID) error {
 				genesisRandomDelta, replacedRandomDelta := clusterState.GetRandomContextDelta(
 					ktypes.ReceiverRandomSet,
 					1,
-					nil,
 				)
 				genesisDeltaGroup.RandomNodes = append(genesisDeltaGroup.RandomNodes, genesisRandomDelta...)
 				genesisDeltaGroup.ReplacedNodes = append(genesisDeltaGroup.ReplacedNodes, replacedRandomDelta...)
@@ -1098,7 +1099,7 @@ func (k *Engine) updateContextDelta(clusterID ktypes.ClusterID) error {
 					receiverRandomDelta, replacedRandomDelta := clusterState.GetRandomContextDelta(
 						ktypes.ReceiverRandomSet,
 						1,
-						nil,
+						k.operator,
 					)
 					receiverDeltaGroup.RandomNodes = append(receiverDeltaGroup.RandomNodes, receiverRandomDelta...)
 					receiverDeltaGroup.ReplacedNodes = append(receiverDeltaGroup.ReplacedNodes, replacedRandomDelta...)

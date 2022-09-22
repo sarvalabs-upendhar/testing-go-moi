@@ -75,6 +75,7 @@ type ConsensusConfig struct {
 	TimeoutPrecommitDelta time.Duration
 	TimeoutCommit         time.Duration
 	SkipTimeoutCommit     bool
+	AccountWaitTime       time.Duration
 	MessageDelay          time.Duration
 	Precision             time.Duration
 	ValidatorSlotCount    int
@@ -110,6 +111,7 @@ func DefaultConfig(path string) *Config {
 			TimeoutCommit:         10000 * time.Millisecond,
 			Precision:             1000 * time.Nanosecond,
 			MessageDelay:          5500 * time.Millisecond,
+			AccountWaitTime:       1500 * time.Millisecond,
 			OperatorSlotCount:     2,
 			ValidatorSlotCount:    3,
 		},

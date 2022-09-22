@@ -39,7 +39,7 @@ func TestIxPool_IncrementWaitTime_InvalidAccount(t *testing.T) {
 		c.PriceLimit = 100
 	})
 
-	err := ixPool.IncrementWaitTime(ktypes.Address{0x0})
+	err := ixPool.IncrementWaitTime(ktypes.Address{0x0}, 2)
 	assert.Error(t, err)
 }
 
@@ -83,14 +83,14 @@ func TestIxPool_IncrementWaitTime(t *testing.T) {
 			acc := ixPool.createAccountOnce(test.addr, 0)
 			var initTime time.Time
 			for i := 0; i < test.delta; i++ {
-				assert.NoError(t, ixPool.IncrementWaitTime(test.addr))
+				assert.NoError(t, ixPool.IncrementWaitTime(test.addr, 2), 2)
 				initTime = time.Now()
 			}
 			assert.Equal(t, acc.delayCounter, test.expectedCounter)
 			if !test.shouldReset {
-				assert.InDelta(t, kutils.ExponentialTimeout(acc.delayCounter), acc.waitTime.Sub(initTime), 400000)
+				assert.InDelta(t, kutils.ExponentialTimeout(2, acc.delayCounter), acc.waitTime.Sub(initTime), 400000)
 			} else {
-				assert.InDelta(t, kutils.ExponentialTimeout(acc.delayCounter), initTime.Sub(acc.waitTime), 400000)
+				assert.InDelta(t, kutils.ExponentialTimeout(2, acc.delayCounter), initTime.Sub(acc.waitTime), 400000)
 			}
 		})
 	}
@@ -112,7 +112,7 @@ func TestIxPool_ResetWaitTime_WithTesseract(t *testing.T) {
 		c.PriceLimit = 100
 	})
 	acc := ixPool.createAccountOnce(ktypes.Address{0x00}, 0)
-	acc.incrementCounter()
+	acc.incrementCounter(2)
 	assert.Equal(t, int32(1), acc.delayCounter)
 	ixPool.ResetWithHeaders(ts)
 	assert.Equal(t, int32(0), acc.delayCounter)

@@ -34,7 +34,7 @@ func (k *Engine) minter() {
 						k.pool.ResetWithInteractions(ixs)
 					default:
 						if resp.err != ktypes.ErrSlotsFull {
-							if err := k.pool.IncrementWaitTime(ix.FromAddress()); err != nil {
+							if err := k.pool.IncrementWaitTime(ix.FromAddress(), k.avgICSTime); err != nil {
 								k.logger.Error("Error incrementing wait time")
 							}
 						} else {
