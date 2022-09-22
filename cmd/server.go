@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/libp2p/go-libp2p-core/protocol"
 	maddr "github.com/multiformats/go-multiaddr"
@@ -23,7 +24,7 @@ import (
 var (
 	ErrReadingConfig = errors.New("error reading config file")
 )
-
+var AccountWaitTime int
 var OperatorSlots int
 var ValidatorSlots int
 var NetworkSize uint64
@@ -55,6 +56,7 @@ func init() {
 	rootCmd.AddCommand(serverCmd)
 
 	serverCmd.PersistentFlags().String("config", "config.json", "Config file name")
+	serverCmd.PersistentFlags().IntVar(&AccountWaitTime, "wait-time", 0, "WaitTime per account")
 	serverCmd.PersistentFlags().IntVar(&OperatorSlots, "operator-slots", 0, "Maximum number of operator slots")
 	serverCmd.PersistentFlags().IntVar(&ValidatorSlots, "validator-slots", 0, "Maximum number of validator slots")
 	serverCmd.PersistentFlags().Uint64Var(&NetworkSize, "network-size", 12, "Network Size")
@@ -85,14 +87,14 @@ func ReadConfig(path string) (*Config, error) {
 	return cfg, nil
 }
 
-func BuildConfig(dataDir string, cmdCfg *Config) (*common.Config, error) {
+func BuildConfig(dataDir string, fileCfg *Config) (*common.Config, error) {
 	var err error
 
 	nodeCfg := common.DefaultConfig(dataDir)
-	nodeCfg.LogFilePath = cmdCfg.LogFilePath
+	nodeCfg.LogFilePath = fileCfg.LogFilePath
 	//TODO:Check node type and krama version
-	if cmdCfg.Genesis != "" {
-		nodeCfg.Chain.Genesis = cmdCfg.Genesis
+	if fileCfg.Genesis != "" {
+		nodeCfg.Chain.Genesis = fileCfg.Genesis
 	}
 
 	if SkipGenesis {
@@ -109,14 +111,20 @@ func BuildConfig(dataDir string, cmdCfg *Config) (*common.Config, error) {
 
 	if OperatorSlots != 0 {
 		nodeCfg.Consensus.OperatorSlotCount = OperatorSlots
-	} else if cmdCfg.Consensus.OperatorSlots != 0 {
-		nodeCfg.Consensus.OperatorSlotCount = cmdCfg.Consensus.OperatorSlots
+	} else if fileCfg.Consensus.OperatorSlots != 0 {
+		nodeCfg.Consensus.OperatorSlotCount = fileCfg.Consensus.OperatorSlots
 	}
 
 	if ValidatorSlots != 0 {
 		nodeCfg.Consensus.ValidatorSlotCount = ValidatorSlots
-	} else if cmdCfg.Consensus.ValidatorSlots != 0 {
-		nodeCfg.Consensus.ValidatorSlotCount = cmdCfg.Consensus.ValidatorSlots
+	} else if fileCfg.Consensus.ValidatorSlots != 0 {
+		nodeCfg.Consensus.ValidatorSlotCount = fileCfg.Consensus.ValidatorSlots
+	}
+
+	if AccountWaitTime != 0 {
+		nodeCfg.Consensus.AccountWaitTime = time.Duration(AccountWaitTime) * time.Millisecond
+	} else if fileCfg.Consensus.AccountWaitTime != 0 {
+		nodeCfg.Consensus.AccountWaitTime = time.Duration(fileCfg.Consensus.AccountWaitTime) * time.Millisecond
 	}
 
 	if Bootnode != "" {
@@ -128,11 +136,11 @@ func BuildConfig(dataDir string, cmdCfg *Config) (*common.Config, error) {
 		nodeCfg.Network.BootstrapPeers = append(nodeCfg.Network.BootstrapPeers, addr)
 	} else {
 		// validate bootnode address
-		if len(cmdCfg.Network.BootStrapPeers) == 0 {
+		if len(fileCfg.Network.BootStrapPeers) == 0 {
 			return nil, errors.New("minimum one bootnode is required")
 		}
 
-		for _, v := range cmdCfg.Network.BootStrapPeers {
+		for _, v := range fileCfg.Network.BootStrapPeers {
 			addr, err := maddr.NewMultiaddr(v)
 			if err != nil {
 				return nil, errors.New("invalid bootnode address")
@@ -143,11 +151,11 @@ func BuildConfig(dataDir string, cmdCfg *Config) (*common.Config, error) {
 	}
 
 	// validate listener address
-	if len(cmdCfg.Network.Libp2pAddr) == 0 {
+	if len(fileCfg.Network.Libp2pAddr) == 0 {
 		return nil, errors.New("lip2p address not specified")
 	}
 
-	for _, v := range cmdCfg.Network.Libp2pAddr {
+	for _, v := range fileCfg.Network.Libp2pAddr {
 		addr, err := maddr.NewMultiaddr(v)
 		if err != nil {
 			return nil, errors.New("invalid libp2p address")
@@ -157,44 +165,44 @@ func BuildConfig(dataDir string, cmdCfg *Config) (*common.Config, error) {
 	}
 
 	// validate json-rpc address
-	if cmdCfg.Network.JSONRPCAddr == "" {
+	if fileCfg.Network.JSONRPCAddr == "" {
 		return nil, errors.New("empty json address")
 	}
 
-	nodeCfg.Network.JSONRPCAddr, err = common.ResolveAddr(cmdCfg.Network.JSONRPCAddr)
+	nodeCfg.Network.JSONRPCAddr, err = common.ResolveAddr(fileCfg.Network.JSONRPCAddr)
 	if err != nil {
 		return nil, errors.New("invalid json-rpc address")
 	}
 
-	if cmdCfg.Network.ProtocolID != "" {
-		nodeCfg.Network.ProtocolID = protocol.ID(cmdCfg.Network.ProtocolID)
+	if fileCfg.Network.ProtocolID != "" {
+		nodeCfg.Network.ProtocolID = protocol.ID(fileCfg.Network.ProtocolID)
 	}
 
-	if cmdCfg.Ixpool.PriceLimit > 0 {
-		nodeCfg.IxPool.PriceLimit = cmdCfg.Ixpool.PriceLimit
+	if fileCfg.Ixpool.PriceLimit > 0 {
+		nodeCfg.IxPool.PriceLimit = fileCfg.Ixpool.PriceLimit
 	}
 
-	if cmdCfg.Ixpool.Mode != 0 {
-		nodeCfg.IxPool.Mode = cmdCfg.Ixpool.Mode
+	if fileCfg.Ixpool.Mode != 0 {
+		nodeCfg.IxPool.Mode = fileCfg.Ixpool.Mode
 	}
 
-	if cmdCfg.DB.DBFolder != "" {
-		nodeCfg.DB.DBFolderPath = cmdCfg.DB.DBFolder
+	if fileCfg.DB.DBFolder != "" {
+		nodeCfg.DB.DBFolderPath = fileCfg.DB.DBFolder
 	}
 
-	if cmdCfg.Telemetry.PrometheusAddr != "" {
-		nodeCfg.Metrics.PrometheusAddr, err = common.ResolveAddr(cmdCfg.Telemetry.PrometheusAddr)
+	if fileCfg.Telemetry.PrometheusAddr != "" {
+		nodeCfg.Metrics.PrometheusAddr, err = common.ResolveAddr(fileCfg.Telemetry.PrometheusAddr)
 		if err != nil {
 			return nil, errors.New("invalid prometheus address")
 		}
 	}
 
-	if cmdCfg.Vault.NodePassword != "" {
-		nodeCfg.Vault.NodePassword = cmdCfg.Vault.NodePassword
+	if fileCfg.Vault.NodePassword != "" {
+		nodeCfg.Vault.NodePassword = fileCfg.Vault.NodePassword
 	}
 
-	if cmdCfg.Vault.DataDir != "" {
-		nodeCfg.Vault.DataDir = cmdCfg.Vault.DataDir
+	if fileCfg.Vault.DataDir != "" {
+		nodeCfg.Vault.DataDir = fileCfg.Vault.DataDir
 	}
 
 	return nodeCfg, nil

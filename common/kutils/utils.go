@@ -73,14 +73,14 @@ func HexToByte(str string) []byte {
 
 	return nil
 }
-func ExponentialTimeout(exponent int32) time.Duration {
+func ExponentialTimeout(baseTime time.Duration, exponent int32) time.Duration {
 	var timeout time.Duration
 
 	if exponent > 0 {
 		s1 := rand.NewSource(time.Now().UnixNano())
 		reg := rand.New(s1) //nolint
 		r := 1 + reg.Float64()*(2-1)
-		x := r * 500 * math.Pow(2, float64(exponent))
+		x := r * float64(baseTime.Milliseconds()) * math.Pow(2, float64(exponent))
 		timeout = time.Duration(x) * time.Millisecond
 	}
 
