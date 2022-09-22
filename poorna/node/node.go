@@ -132,7 +132,7 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 
 	n.network.Senatus = n.state.SenatusInstance()
 
-	n.handlers.flux = flux.NewRandomizer(n.ctx, n.logger, n.network)
+	n.handlers.flux = flux.NewRandomizer(n.ctx, n.logger, n.network, n.nodeMetrics.flux)
 	// setup chain manager
 	if n.chain, err = chain.NewChainManager(
 		n.ctx,
