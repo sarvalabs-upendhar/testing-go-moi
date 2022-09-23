@@ -47,6 +47,7 @@ func (m *accountsMap) initOnce(addr ktypes.Address, nonce uint64) *account {
 
 		// set the waitTime to current time
 		newAccount.waitTime = time.Now()
+		newAccount.requestTime = time.Now()
 
 		// update global count
 		atomic.AddUint64(&m.count, 1)
@@ -204,10 +205,11 @@ func (m *accountsMap) allTxs(includeEnqueued bool) ( // nolint
 type account struct {
 	init               sync.Once
 	enqueued, promoted *accountQueue
+	requestTime        time.Time
 	waitTime           time.Time
 	delayCounter       int32
 	nextNonce          uint64
-	waitLock           sync.RWMutex //waitLock facilitates safe access to waitTime and delayCounter
+	waitLock           sync.RWMutex //waitLock facilitates safe access to requestTime, waitTime and delayCounter
 }
 
 func (a *account) incrementCounter(baseTime time.Duration) {
@@ -266,6 +268,7 @@ func (a *account) enqueue(tx *ktypes.Interaction) error {
 	if a.getDelayCounter() >= MaxWaitCounter && time.Now().After(a.getWaitTime()) {
 		a.resetWaitTimeAndCounter()
 	}
+
 	// enqueue tx
 	a.enqueued.push(tx)
 

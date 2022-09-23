@@ -1,0 +1,72 @@
+package ixpool
+
+import (
+	"github.com/go-kit/kit/metrics"
+	"github.com/go-kit/kit/metrics/discard"
+	prometheus "github.com/go-kit/kit/metrics/prometheus"
+	stdprometheus "github.com/prometheus/client_golang/prometheus"
+	"time"
+)
+
+type Metrics struct {
+	PendingTxs      metrics.Gauge
+	IxPoolSize      metrics.Gauge
+	AccountWaitTime metrics.Histogram
+}
+
+func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics {
+	labels := make([]string, 0)
+
+	for i := 0; i < len(labelsWithValues); i += 2 {
+		labels = append(labels, labelsWithValues[i])
+	}
+
+	return &Metrics{
+		PendingTxs: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: "ixpool",
+			Name:      "pending_transactions",
+			Help:      "Pending transactions in the pool",
+		}, labels).With(labelsWithValues...),
+		IxPoolSize: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: "ixpool",
+			Name:      "interaction_pool_size",
+			Help:      "Sum of all the transaction sizes in the pool",
+		}, labels).With(labelsWithValues...),
+		AccountWaitTime: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: "ixpool",
+			Name:      "account_wait_time",
+			Help:      "Time taken by a transaction associated with an account to process and complete",
+		}, labels).With(labelsWithValues...),
+	}
+}
+
+func NilMetrics() *Metrics {
+	return &Metrics{
+		PendingTxs:      discard.NewGauge(),
+		IxPoolSize:      discard.NewGauge(),
+		AccountWaitTime: discard.NewHistogram(),
+	}
+}
+
+// methods to capture telemetry metrics
+func (metrics *Metrics) initMetrics() {
+	// set default value of ixpool pending transactions gauge
+	metrics.PendingTxs.Set(0)
+	// set default value of ixpool size gauge
+	metrics.IxPoolSize.Set(0)
+}
+
+func (metrics *Metrics) capturePendingTxs(delta float64) {
+	metrics.PendingTxs.Add(delta)
+}
+
+func (metrics *Metrics) captureIxPoolSize(delta float64) {
+	metrics.IxPoolSize.Add(delta)
+}
+
+func (metrics *Metrics) captureAccountWaitTime(requestTime time.Time, waitTime time.Time) {
+	metrics.AccountWaitTime.Observe(waitTime.Sub(requestTime).Seconds())
+}

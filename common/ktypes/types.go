@@ -350,7 +350,7 @@ func (is Interactions) Hash() Hash {
 
 func (ix *Interaction) GetSize() int64 {
 	//FIXME: size should calculated after signature integration
-	return ix.Size
+	return int64(len(polo.Polorize(ix)))
 }
 func (ix *Interaction) GetAssetCreationPayload() *AssetDataInput {
 	return &ix.Data.Input.Payload.AssetData

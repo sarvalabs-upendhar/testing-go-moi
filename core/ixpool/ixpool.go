@@ -2,13 +2,14 @@ package ixpool
 
 import (
 	"context"
-	"github.com/hashicorp/go-hclog"
 	"log"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
 	"gitlab.com/sarvalabs/moichain/common"
 	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	"gitlab.com/sarvalabs/moichain/common/kutils"
+	"gitlab.com/sarvalabs/polo/go-polo"
 )
 
 const (
@@ -39,6 +40,7 @@ type IxPool struct {
 	sealing      bool
 	mux          *kutils.TypeMux
 	accounts     *accountsMap
+	metrics      *Metrics
 	enqueueReqCh chan enqueueRequest
 	promoteReqCh chan promoteRequest
 }
@@ -49,6 +51,7 @@ func NewIxPool(
 	mux *kutils.TypeMux,
 	sm stateManager,
 	cfg *common.IxPoolConfig,
+	metrics *Metrics,
 ) *IxPool {
 	ctx, ctxCancel := context.WithCancel(ctx)
 	i := &IxPool{
@@ -61,6 +64,7 @@ func NewIxPool(
 		close:        make(chan struct{}),
 		sealing:      false,
 		accounts:     new(accountsMap),
+		metrics:      metrics,
 		logger:       logger.Named("Ix-Pool"),
 		enqueueReqCh: make(chan enqueueRequest),
 		promoteReqCh: make(chan promoteRequest),
@@ -135,6 +139,8 @@ func (i *IxPool) handleEnqueueRequest(req enqueueRequest) {
 
 		i.allIxs.add(v)
 
+		i.metrics.IxPoolSize.Add(float64(v.GetSize()))
+
 		if v.Nonce() > senderAcc.getNonce() {
 			return
 		}
@@ -150,6 +156,7 @@ func (i *IxPool) handlePromoteRequest(req promoteRequest) {
 
 		// promote enqueued txs
 		promoted, _ := account.promote()
+		i.metrics.capturePendingTxs(float64(promoted))
 		log.Println("promote request", "promoted", promoted, "addr", addr)
 	}
 }
@@ -220,14 +227,23 @@ func (i *IxPool) resetAccount(addr ktypes.Address, nonce uint64) {
 	account.promoted.lock(true)
 	defer account.promoted.unlock()
 
-	// update the account waitTime and counter
-	account.resetWaitTimeAndCounter()
-
 	// prune promoted
 	pruned := account.promoted.prune(nonce)
 
+	if len(pruned) > 0 {
+		account.waitLock.Lock()
+		i.metrics.captureAccountWaitTime(account.requestTime, account.waitTime)
+		account.requestTime = time.Now()
+		account.waitLock.Unlock()
+		// update the account waitTime and counter
+		account.resetWaitTimeAndCounter()
+	}
+
 	// update pool state
 	i.allIxs.remove(pruned)
+
+	i.metrics.capturePendingTxs(float64(-1 * len(pruned)))
+	i.metrics.captureIxPoolSize(float64(-1 * GetIxsSize(pruned)))
 
 	if nonce <= account.getNonce() {
 		// only the promoted queue needed pruning
@@ -245,6 +261,8 @@ func (i *IxPool) resetAccount(addr ktypes.Address, nonce uint64) {
 	// update pool state
 	i.allIxs.remove(pruned)
 	//p.gauge.decrease(slotsRequired(pruned))
+
+	i.metrics.captureIxPoolSize(float64(-1 * GetIxsSize(pruned)))
 
 	// update next nonce
 	account.setNonce(nonce)
@@ -359,5 +377,19 @@ func (i *IxPool) Close() {
 	log.Println("Closing IxPool")
 }
 func (i *IxPool) Start() {
+	i.metrics.initMetrics()
+
 	go i.handleRequests()
+}
+
+// helper functions
+
+func GetIxsSize(ixs ktypes.Interactions) int64 {
+	var sumOfIxsSize int64 = 0
+
+	for _, ix := range ixs {
+		sumOfIxsSize += int64(len(polo.Polorize(ix)))
+	}
+
+	return sumOfIxsSize
 }
