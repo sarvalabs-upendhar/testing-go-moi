@@ -76,20 +76,15 @@ func NewRandomizer(
 		r.requestIDs[i] = -1
 	}
 
-	r.initMetrics()
+	r.metrics.initMetrics(SLOTCOUNT)
 	r.server.SetupStreamHandler(FluxProtocol, r.messageHandler)
 
 	return r
 }
 
-func (r *Randomizer) initMetrics() {
-	// Initialize gauge metrics with the default value
-	r.metrics.PendingSlots.Set(SLOTCOUNT)
-}
-
 func (r *Randomizer) messageHandler(stream network.Stream) {
 	//r.logger.Debug("Got a new flux Stream", stream.Protocol(), stream.Conn().RemotePeer())
-	r.metrics.NumOfRequests.Add(1)
+	r.metrics.captureNumOfRequests(1)
 
 	defer func() {
 		if err := stream.Close(); err != nil {
@@ -160,10 +155,10 @@ func (r *Randomizer) updatePeerListStatus(slot int) {
 	//log.Println("In update slot status", slot, r.peers[slot].pendingCount, int(math.Ceil(0.6*PEERSCOUNT)))
 	if !r.peers[slot].updatePending && r.peers[slot].pendingCount >= int(math.Ceil(0.4*PEERSCOUNT)) {
 		r.peers[slot].updatePending = true
-		r.metrics.PendingSlots.Add(1)
+		r.metrics.capturePendingSlots(1)
 	} else if r.peers[slot].updatePending && r.peers[slot].pendingCount < int(math.Ceil(0.4*PEERSCOUNT)) {
 		r.peers[slot].updatePending = false
-		r.metrics.PendingSlots.Add(-1)
+		r.metrics.capturePendingSlots(-1)
 	}
 }
 func (r *Randomizer) Start() {
