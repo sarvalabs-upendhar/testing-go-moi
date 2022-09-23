@@ -127,6 +127,7 @@ type Engine struct {
 	wal          kbft.WAL
 	vault        *mudra.KramaVault
 	clusterLocks *locker.Locker
+	metrics      *Metrics
 	avgICSTime   time.Duration
 }
 
@@ -140,6 +141,7 @@ func NewKramaEngine(ctx context.Context,
 	val *mudra.KramaVault,
 	lattice lattice,
 	randomizer *flux.Randomizer,
+	metrics *Metrics,
 ) (*Engine, error) {
 	wal, err := kbft.NewWAL(ctx, logger, cfg.DirectoryPath)
 	if err != nil {
@@ -165,8 +167,11 @@ func NewKramaEngine(ctx context.Context,
 		wal:          wal,
 		vault:        val,
 		clusterLocks: locker.New(),
+		metrics:      metrics,
 		avgICSTime:   cfg.AccountWaitTime,
 	}
+
+	k.metrics.initMetrics(float64(cfg.OperatorSlotCount), float64(cfg.ValidatorSlotCount))
 
 	return k, k.transport.RegisterRPCService(ICSRPCProtocol, "ICSRPC", NewICSRPCService(k))
 }
@@ -183,6 +188,8 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID ktypes.Cluste
 	if !k.slots.AddSlot(clusterID, newSlot) {
 		return ktypes.ErrSlotsFull
 	}
+
+	k.metrics.captureAvailableOperatorSlots(-1)
 
 	finalWaitGroup := new(sync.WaitGroup)
 
@@ -367,6 +374,8 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID ktypes.Cluste
 		return err
 	}
 
+	k.metrics.captureICSCreationTime(clusterState.ICSReqTime)
+
 	return
 }
 
@@ -454,6 +463,8 @@ func (k *Engine) joinCluster(ctx context.Context, req Request) error {
 		return ktypes.ErrSlotsFull
 	}
 
+	k.metrics.captureAvailableValidatorSlots(-1)
+
 	clusterState.CurrentRole = ktypes.IcsSetType(req.msg.ContextType)
 
 	contextHashes, nodeSets, err := k.state.FetchInteractionContext(req.ixs[0])
@@ -513,7 +524,19 @@ func (k *Engine) handleReq(req Request) {
 	defer func() {
 		// delete the slot from the slots queue
 		cancelFn()
+
+		slot := k.slots.GetSlot(clusterID)
+
 		k.slots.CleanupSlot(clusterID)
+
+		if slot != nil {
+			if slot.SlotType == types.OperatorSlot {
+				k.metrics.captureAvailableOperatorSlots(1)
+			} else {
+				k.metrics.captureAvailableValidatorSlots(1)
+			}
+		}
+
 		k.exec.CleanupExecutorInstances(clusterID)
 	}()
 
@@ -525,6 +548,7 @@ func (k *Engine) handleReq(req Request) {
 
 		if err != nil {
 			k.logger.Debug("Error acquiring context lock ", "error", err, "cluster-id", clusterID)
+			k.metrics.captureICSCreationFailureCount(1)
 
 			return
 		}
@@ -532,11 +556,13 @@ func (k *Engine) handleReq(req Request) {
 		k.logger.Info("Cluster creation successful", clusterID)
 
 	case 1:
+		requestTime := time.Now()
 		err = k.joinCluster(ctx, req)
 		req.responseChan <- Response{requestType: 1, err: err}
 
 		if err != nil {
 			k.logger.Info("Error joining cluster", "error", err, "cluster-id", clusterID)
+			k.metrics.captureICSParticipationFailureCount(1)
 
 			return
 		}
@@ -553,12 +579,16 @@ func (k *Engine) handleReq(req Request) {
 		select {
 		case success := <-slot.ICSSuccessChan:
 			if !success {
+				k.metrics.captureICSParticipationFailureCount(1)
 				//	k.logger.Info("@@@@@@@@@@@ ClusterInfo Creation successful", clusterID)
 				return
+			} else {
+				k.metrics.captureICSJoiningTime(requestTime)
 			}
 
 		case <-timeout:
 			k.logger.Info("ICS success timeout", "cluster-id", req.msg.ClusterID)
+			k.metrics.captureICSParticipationFailureCount(1)
 
 			return
 		}
@@ -588,22 +618,26 @@ func (k *Engine) handleReq(req Request) {
 			k.logger.Error("Failed to store watchdog proofs")
 		}
 	} else {
+		executionReqTS := time.Now()
 		k.executionReq <- clusterID
+
 		// Wait for execution response
 		execResp := <-slot.ExecutionResp
 		if execResp.Err != nil {
 			k.logger.Info("Error executing interactions ", "error", execResp.Err, "cluster-id", clusterID)
+			k.metrics.captureAgreementFailureCount(1)
 
 			return
 		}
 
 		k.logger.Trace("Execution finished")
-
+		k.metrics.captureGridGenerationTime(executionReqTS)
 		clusterState.SetGrid(execResp.Grid)
 		k.lattice.AddKnownHashes(execResp.Grid)
 
 		exitChan := make(chan error)
-
+		consensusInitTS := time.Now()
+		k.metrics.captureClusterSize(float64(clusterState.Size()))
 		icsEvidence := kbft.NewEvidence(clusterState.Ixs.Hash(), clusterState.Operator, clusterState.Size())
 		bft := kbft.NewKBFTService(
 			ctx,
@@ -624,12 +658,15 @@ func (k *Engine) handleReq(req Request) {
 
 		if err = <-exitChan; err != nil {
 			k.logger.Error("Error consensus failed", "error", err, "cluster-id", clusterState.ID)
+			k.metrics.captureAgreementFailureCount(1)
 			if err := k.exec.Revert(clusterState.ID); err != nil {
 				log.Fatal(err)
 			}
 
 			return
 		}
+
+		k.metrics.captureAgreementTime(consensusInitTS)
 	}
 
 	k.logger.Info("Interaction finalized", "cluster-id", clusterState.ID)
@@ -742,7 +779,8 @@ func (k *Engine) sendICSRequestWithBound(
 
 		go func(index int, peerID peer.ID) {
 			icsResponse := new(ktypes.ICSResponse)
-			//	reqTimeStamp := time.Now()
+			requestTS := time.Now()
+
 			if err := k.transport.Call(
 				peerID,
 				"ICSRPC",
@@ -763,8 +801,9 @@ func (k *Engine) sendICSRequestWithBound(
 					)
 				}
 			}
-			//	clusterState.updateResponseTimeMetric(reqTimeStamp)
 
+			//	clusterState.updateResponseTimeMetric(reqTimeStamp)
+			k.metrics.captureRequestTurnaroundTime(requestTS)
 			// Decrement the wait group
 			wg.Done()
 		}(index, peerID)
@@ -844,7 +883,8 @@ func (k *Engine) sendICSRequest(
 
 		go func(index int, peerID peer.ID) {
 			icsResponse := new(ktypes.ICSResponse)
-			//reqTimeStamp := time.Now()
+			requestTS := time.Now()
+
 			if err := k.transport.Call(
 				peerID,
 				"ICSRPC",
@@ -864,6 +904,7 @@ func (k *Engine) sendICSRequest(
 			}
 
 			//	clusterState.updateResponseTimeMetric(reqTimeStamp)
+			k.metrics.captureRequestTurnaroundTime(requestTS)
 
 			// Decrement the wait group
 			wg.Done()
@@ -900,6 +941,7 @@ func (k *Engine) getICSReqMsg(
 }
 func (k *Engine) getRandomNodes(count int, exemptedNodes []id.KramaID) ([]id.KramaID, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	queryInitTime := time.Now()
 
 	defer cancel()
 
@@ -907,6 +949,8 @@ func (k *Engine) getRandomNodes(count int, exemptedNodes []id.KramaID) ([]id.Kra
 	if err != nil {
 		return nil, err
 	}
+
+	k.metrics.captureRandomNodesQueryTime(queryInitTime)
 
 	return peers, nil
 }
