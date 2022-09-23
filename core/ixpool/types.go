@@ -210,11 +210,11 @@ type account struct {
 	waitLock           sync.RWMutex //waitLock facilitates safe access to waitTime and delayCounter
 }
 
-func (a *account) incrementCounter() {
+func (a *account) incrementCounter(baseTime time.Duration) {
 	a.waitLock.Lock()
 	defer a.waitLock.Unlock()
 	a.delayCounter++
-	a.waitTime = time.Now().Add(kutils.ExponentialTimeout(a.delayCounter))
+	a.waitTime = time.Now().Add(kutils.ExponentialTimeout(baseTime, a.delayCounter))
 }
 
 // getWaitTime returns the wait time associated with the account

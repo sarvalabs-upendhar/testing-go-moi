@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/hashicorp/go-hclog"
 	"log"
+	"time"
 
 	"gitlab.com/sarvalabs/moichain/common"
 	"gitlab.com/sarvalabs/moichain/common/ktypes"
@@ -291,14 +292,14 @@ func (i *IxPool) Pop(ix *ktypes.Interaction) {
 }
 
 //IncrementWaitTime updates the waitTime for the given account
-func (i *IxPool) IncrementWaitTime(addr ktypes.Address) error {
+func (i *IxPool) IncrementWaitTime(addr ktypes.Address, baseTime time.Duration) error {
 	acc := i.accounts.get(addr)
 	if acc == nil {
 		return ktypes.ErrAccountNotFound
 	}
 
 	if acc.getDelayCounter()+1 <= MaxWaitCounter {
-		acc.incrementCounter()
+		acc.incrementCounter(baseTime)
 	} else {
 		acc.resetWaitTimeAndCounter()
 	}

@@ -37,6 +37,7 @@ type Randomizer struct {
 	topic      string
 	server     *poorna.Server
 	logger     hclog.Logger
+	metrics    *Metrics
 }
 
 type PeerList struct {
@@ -47,7 +48,12 @@ type PeerList struct {
 	pendingCount  int
 }
 
-func NewRandomizer(ctx context.Context, logger hclog.Logger, p2pServer *poorna.Server) *Randomizer {
+func NewRandomizer(
+	ctx context.Context,
+	logger hclog.Logger,
+	p2pServer *poorna.Server,
+	metrics *Metrics,
+) *Randomizer {
 	ctx, ctxCancel := context.WithCancel(ctx)
 	r := &Randomizer{
 		ctx:        ctx,
@@ -56,6 +62,7 @@ func NewRandomizer(ctx context.Context, logger hclog.Logger, p2pServer *poorna.S
 		requestIDs: make([]int64, SLOTCOUNT),
 		server:     p2pServer,
 		logger:     logger.Named("Flux-Engine"),
+		metrics:    metrics,
 	}
 
 	for i := 0; i < SLOTCOUNT; i++ {
@@ -69,12 +76,21 @@ func NewRandomizer(ctx context.Context, logger hclog.Logger, p2pServer *poorna.S
 		r.requestIDs[i] = -1
 	}
 
+	r.initMetrics()
 	r.server.SetupStreamHandler(FluxProtocol, r.messageHandler)
 
 	return r
 }
+
+func (r *Randomizer) initMetrics() {
+	// Initialize gauge metrics with the default value
+	r.metrics.PendingSlots.Set(SLOTCOUNT)
+}
+
 func (r *Randomizer) messageHandler(stream network.Stream) {
 	//r.logger.Debug("Got a new flux Stream", stream.Protocol(), stream.Conn().RemotePeer())
+	r.metrics.NumOfRequests.Add(1)
+
 	defer func() {
 		if err := stream.Close(); err != nil {
 			r.logger.Error("Error closing flux stream", "error", err)
@@ -142,10 +158,12 @@ func (r *Randomizer) addPeer(slot int, id id.KramaID) error {
 
 func (r *Randomizer) updatePeerListStatus(slot int) {
 	//log.Println("In update slot status", slot, r.peers[slot].pendingCount, int(math.Ceil(0.6*PEERSCOUNT)))
-	if r.peers[slot].pendingCount >= int(math.Ceil(0.4*PEERSCOUNT)) {
+	if !r.peers[slot].updatePending && r.peers[slot].pendingCount >= int(math.Ceil(0.4*PEERSCOUNT)) {
 		r.peers[slot].updatePending = true
-	} else {
+		r.metrics.PendingSlots.Add(1)
+	} else if r.peers[slot].updatePending && r.peers[slot].pendingCount < int(math.Ceil(0.4*PEERSCOUNT)) {
 		r.peers[slot].updatePending = false
+		r.metrics.PendingSlots.Add(-1)
 	}
 }
 func (r *Randomizer) Start() {

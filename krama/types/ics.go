@@ -142,7 +142,7 @@ func (i *ClusterInfo) GetBehaviouralContextDelta(setType ktypes.IcsSetType) (add
 func (i *ClusterInfo) GetRandomContextDelta(
 	setType ktypes.IcsSetType,
 	requiredCount int,
-	skipPeers []id.KramaID) (addedPeers, replacedPeers []id.KramaID) {
+	skipPeers ...id.KramaID) (addedPeers, replacedPeers []id.KramaID) {
 	addedPeers = make([]id.KramaID, 0, requiredCount)
 
 	if i.ICS.Nodes[setType] == nil {

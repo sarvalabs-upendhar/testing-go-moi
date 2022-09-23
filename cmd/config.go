@@ -44,6 +44,7 @@ type ConsensusConfig struct {
 	MaxSlots              int   `json:"max_slots"`
 	OperatorSlots         int   `json:"operator_slots"`
 	ValidatorSlots        int   `json:"validator_slots"`
+	AccountWaitTime       int   `json:"wait_time"`
 }
 
 type VaultConfig struct {

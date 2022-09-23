@@ -267,16 +267,18 @@ func (sm *StateManager) GetLatestTesseract(addr ktypes.Address) (*ktypes.Tessera
 }
 
 func (sm *StateManager) Cleanup(address ktypes.Address) {
-	object, err := sm.GetDirtyObject(address)
-	if err != nil {
-		sm.logger.Error("Error fetching dirty object for", "addr", address.Hex(), "err", err)
+	/*
+		object, err := sm.GetDirtyObject(address)
+		if err != nil {
+			sm.logger.Error("Error fetching dirty object for", "addr", address.Hex(), "err", err)
 
-		panic(err)
-	}
+			panic(err)
+		}
 
-	object.mtx.Lock()
-	object.journal = nil
-	object.mtx.Unlock()
+		object.mtx.Lock()
+		object.journal = nil
+		object.mtx.Unlock()
+	*/
 
 	sm.objectsLock.Lock()
 	delete(sm.objects, address)
