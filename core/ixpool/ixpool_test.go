@@ -21,12 +21,13 @@ func CreateIxpool(cfgCallback func(cfg *common.IxPoolConfig)) *IxPool {
 	eventMux := new(kutils.TypeMux)
 	mockChain := new(MockStateManager)
 	cfg := new(common.IxPoolConfig)
+	metrics := NilMetrics()
 
 	if cfgCallback != nil {
 		cfgCallback(cfg)
 	}
 
-	return NewIxPool(ctx, hclog.NewNullLogger(), eventMux, mockChain, cfg)
+	return NewIxPool(ctx, hclog.NewNullLogger(), eventMux, mockChain, cfg, metrics)
 }
 
 func (mc *MockStateManager) GetLatestNonce(addr ktypes.Address) (uint64, error) {
