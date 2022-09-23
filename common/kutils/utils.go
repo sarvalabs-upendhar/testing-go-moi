@@ -4,6 +4,7 @@ package kutils
 This file has all the utility function required for KIP
 */
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -14,7 +15,11 @@ import (
 	"net"
 	"os"
 	"reflect"
+	"regexp"
+	"strings"
 	"time"
+
+	"gitlab.com/sarvalabs/moichain/common/ktypes"
 
 	"github.com/multiformats/go-multiaddr"
 )
@@ -164,4 +169,71 @@ func GetNetworkID(id id.KramaID) (peer.ID, error) {
 	}
 
 	return peerID, nil
+}
+
+func ValidateAddress(address string) (string, error) {
+	address = strings.TrimPrefix(address, "0x")
+	if len(address) != 64 {
+		return address, ktypes.ErrInvalidAddress
+	}
+
+	r, err := regexp.Compile(`[^a-fA-F\d]`)
+	if err != nil {
+		return address, err
+	}
+
+	if invalid := r.MatchString(address); invalid {
+		return address, ktypes.ErrInvalidAddress
+	}
+
+	return address, nil
+}
+
+func ValidateHash(hash string) (string, error) {
+	hash = strings.TrimPrefix(hash, "0x")
+	if len(hash) != 64 {
+		return hash, ktypes.ErrInvalidHash
+	}
+
+	r, err := regexp.Compile(`[^a-fA-F\d]`)
+	if err != nil {
+		return hash, err
+	}
+
+	if invalid := r.MatchString(hash); invalid {
+		return hash, ktypes.ErrInvalidHash
+	}
+
+	return hash, nil
+}
+
+func ValidateAssetID(aID string) (string, error) {
+	aID = strings.TrimPrefix(aID, "0x")
+	if len(aID) != 68 {
+		return aID, ktypes.ErrInvalidAssetID
+	}
+
+	r, err := regexp.Compile(`[^a-fA-F\d]`)
+	if err != nil {
+		return aID, err
+	}
+
+	if invalid := r.MatchString(aID); invalid {
+		return aID, ktypes.ErrInvalidAssetID
+	}
+
+	return aID, nil
+}
+
+func GetAddressHeightKey(addr ktypes.Address, height uint64) []byte {
+	prefix := "h"
+	prefixByte := []byte(prefix)
+	heightBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(heightBytes, height)
+
+	addressBytes := addr.Bytes()
+	result := append(prefixByte, addressBytes...)
+	result = append(result, heightBytes...)
+
+	return result
 }

@@ -157,3 +157,12 @@ type HelloMsg struct {
 	Info      PeerInfo
 	Signature []byte
 }
+
+type AssetInfo struct {
+	Owner       string
+	Dimension   uint8
+	TotalSupply uint64
+	Symbol      string
+	IsFungible  bool
+	IsMintable  bool
+}
