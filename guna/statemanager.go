@@ -61,6 +61,7 @@ type StateManager struct {
 	dirtyObjectsLock sync.Mutex
 	objectsLock      sync.Mutex
 	client           *http.Client
+	metrics          *Metrics
 }
 
 func NewStateManager(
@@ -69,6 +70,7 @@ func NewStateManager(
 	logger hclog.Logger,
 	cache *lru.Cache,
 	network server,
+	metrics *Metrics,
 ) (*StateManager, error) {
 	sm := &StateManager{
 		ctx:     ctx,
@@ -82,6 +84,7 @@ func NewStateManager(
 		objects:      make(map[ktypes.Address]*StateObject),
 		dirtyObjects: make(map[ktypes.Address]*StateObject),
 		logger:       logger.Named("State-Manager"),
+		metrics:      metrics,
 	}
 
 	senatus, err := NewReputationEngine(ctx, logger, sm, db)
@@ -90,6 +93,8 @@ func NewStateManager(
 	}
 
 	sm.senatus = senatus
+
+	sm.metrics.initMetrics()
 
 	return sm, nil
 }
@@ -108,6 +113,7 @@ func (sm *StateManager) cleanupDirtyObject(addr ktypes.Address) {
 	defer sm.dirtyObjectsLock.Unlock()
 
 	delete(sm.dirtyObjects, addr)
+	sm.metrics.captureActiveStateObjects(-1)
 }
 
 func (sm *StateManager) CreateDirtyObject(addr ktypes.Address, accType ktypes.AccType) *StateObject {
@@ -117,6 +123,7 @@ func (sm *StateManager) CreateDirtyObject(addr ktypes.Address, accType ktypes.Ac
 	obj := sm.createStateObject(addr, accType)
 
 	sm.dirtyObjects[addr] = obj.Copy()
+	sm.metrics.captureActiveStateObjects(1)
 
 	return sm.dirtyObjects[addr]
 }
@@ -294,6 +301,7 @@ func (sm *StateManager) Revert(snap *StateObject) error {
 	if snap != nil {
 		sm.logger.Info("Reverting back the state object", "addr", snap.Address.Hex())
 		sm.dirtyObjects[snap.Address] = snap
+		sm.metrics.captureNumOfReverts(1)
 	}
 
 	return nil
