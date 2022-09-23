@@ -19,7 +19,7 @@ type SlotType int
 
 type Slot struct {
 	//TODO: explore using sync pool for slots
-	slotType                        SlotType
+	SlotType                        SlotType
 	clusterState                    *ClusterInfo
 	ICSSuccessChan                  chan bool
 	OutboundChan, InboundChan       chan *ktypes.ICSMSG
@@ -30,7 +30,7 @@ type Slot struct {
 
 func NewSlot(slotType SlotType, clusterState *ClusterInfo) *Slot {
 	return &Slot{
-		slotType:        slotType,
+		SlotType:        slotType,
 		clusterState:    clusterState,
 		ICSSuccessChan:  make(chan bool),
 		OutboundChan:    make(chan *ktypes.ICSMSG),
@@ -119,9 +119,9 @@ func (s *Slots) AddSlot(id ktypes.ClusterID, slot *Slot) bool {
 	fromAddr := slot.clusterState.Ixs[0].FromAddress()
 	toAddr := slot.clusterState.Ixs[0].ToAddress()
 
-	if !s.areAccountsActive(fromAddr, toAddr) && s.areSlotsAvailable(slot.slotType) {
+	if !s.areAccountsActive(fromAddr, toAddr) && s.areSlotsAvailable(slot.SlotType) {
 		s.slots[id] = slot
-		s.decrementSlots(slot.slotType)
+		s.decrementSlots(slot.SlotType)
 		s.activeAccounts[slot.clusterState.Ixs[0].FromAddress()] = slot.clusterState.ID
 		s.activeAccounts[slot.clusterState.Ixs[0].ToAddress()] = slot.clusterState.ID
 
@@ -162,7 +162,7 @@ func (s *Slots) CleanupSlot(id ktypes.ClusterID) {
 		delete(s.activeAccounts, slot.clusterState.Ixs[0].ToAddress())
 		close(slot.CloseCh)
 		delete(s.slots, id)
-		s.incrementSlots(slot.slotType)
+		s.incrementSlots(slot.SlotType)
 	}
 }
 

@@ -163,6 +163,7 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 		n.vault,
 		n.chain,
 		n.handlers.flux,
+		n.nodeMetrics.krama,
 	); err != nil {
 		return nil, err
 	}
