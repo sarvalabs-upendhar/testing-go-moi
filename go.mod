@@ -22,7 +22,6 @@ require (
 	github.com/gorilla/rpc v1.2.0
 	github.com/hashicorp/go-hclog v1.0.0
 	github.com/ipfs/go-cid v0.1.0
-	github.com/ipfs/go-ipfs-blockstore v1.2.0
 	github.com/libp2p/go-libp2p v0.18.0-rc2
 	github.com/libp2p/go-libp2p-core v0.14.0
 	github.com/libp2p/go-libp2p-discovery v0.6.0

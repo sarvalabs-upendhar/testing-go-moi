@@ -289,6 +289,16 @@ func (s *Server) setupKadDht(host host.Host) (err error) {
 	return nil
 }
 
+// creates a custom gossipsub parameter set.
+func pubsubGossipParam() pubsub.GossipSubParams {
+	gParams := pubsub.DefaultGossipSubParams()
+	gParams.Dlo = 6
+	gParams.D = 8
+	gParams.Dhi = 16
+	gParams.HeartbeatInterval = 500 * time.Millisecond
+	return gParams
+}
+
 // setupPubSub is a method of Server that sets up the PubSub router for the node.
 // Expects the node to already be configured with a libp2p host.
 // Returns any error that occurs during the setup.
@@ -301,16 +311,14 @@ func (s *Server) setupPubSub() (err error) {
 	}
 
 	// Chain the PubSub options
-	psoptions := []pubsub.Option{
-		pubsub.WithMessageSigning(false),
-		pubsub.WithStrictSignatureVerification(false),
-		//pubsub.WithMessageIdFn(msgIDFunction),
+	options := []pubsub.Option{
+		pubsub.WithGossipSubParams(pubsubGossipParam()),
 	}
 
 	// Initialize an empty map of topic sets
 	s.pstopics = make(map[string]*TopicSet)
 	// Create a PubSub router for the Server with the pubsub options
-	s.PSrouter, err = pubsub.NewGossipSub(s.ctx, s.host, psoptions...)
+	s.PSrouter, err = pubsub.NewGossipSub(s.ctx, s.host, options...)
 	if err != nil {
 		// Return the error
 		return
@@ -504,23 +512,23 @@ func (s *Server) handleDiscovery() error {
 // Ideally this method can be unified with connection routine within the Discover method
 // and expose the kip id functionality as separate function.
 func (s *Server) ConnectPeer(kramaID id.KramaID) error {
-	// Retrieve the peer id from the KipID
-	id, err := kramaID.PeerID()
+	// Retrieve the libp2pID libp2pID from the KipID
+	libp2pID, err := kramaID.PeerID()
 	if err != nil {
-		s.logger.Error("Error parsing krama id", err)
+		s.logger.Error("Error parsing krama libp2pID", err)
 
 		return err
 	}
 
-	peerID, err := peer.IDFromString(id)
+	peerID, err := peer.IDFromString(libp2pID)
 	if err != nil {
 		// Return error
 		return err
 	}
 
-	// Check if the host is already connected to the peer
+	// Check if the host is already connected to the libp2pID
 	if s.host.Network().Connectedness(peerID) != network.Connected {
-		// Setup a new stream to the peer over the KIP protocol
+		// Setup a new stream to the libp2pID over the KIP protocol
 		stream, err := s.host.NewStream(s.ctx, peerID, s.cfg.ProtocolID)
 		if err != nil {
 			// Return error if stream setup fails
@@ -535,7 +543,7 @@ func (s *Server) ConnectPeer(kramaID id.KramaID) error {
 		// Fetch NTQ
 		ntq, err := s.Senatus.GetNTQ(s.GetKramaID())
 		if err != nil {
-			s.logger.Error("Error fetching ntq", "error", err, "peer", s.GetKramaID())
+			s.logger.Error("Error fetching ntq", "error", err, "libp2pID", s.GetKramaID())
 
 			return err
 		}
@@ -544,7 +552,7 @@ func (s *Server) ConnectPeer(kramaID id.KramaID) error {
 			s.logger.Error("Handshake Failed", "error", err)
 		}
 
-		// Register the peer to the handler working set
+		// Register the libp2pID to the handler working set
 		if err := s.Peers.Register(kpeer); err != nil {
 			log.Println(err)
 		}
@@ -555,7 +563,7 @@ func (s *Server) ConnectPeer(kramaID id.KramaID) error {
 			log.Fatal(err)
 		}
 
-		// Log the successful connection to the peer
+		// Log the successful connection to the libp2pID
 		log.Println("Connected", peerEvent)
 	}
 
