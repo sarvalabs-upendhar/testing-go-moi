@@ -1031,7 +1031,7 @@ func (k *Engine) updateContextDelta(clusterID ktypes.ClusterID) error {
 			senderRandomDelta, replacedRandomDelta := clusterState.GetRandomContextDelta(
 				ktypes.SenderRandomSet,
 				1,
-				k.operator,
+				clusterState.Operator,
 			)
 			senderDeltaGroup.RandomNodes = append(senderDeltaGroup.RandomNodes, senderRandomDelta...)
 			senderDeltaGroup.ReplacedNodes = append(senderDeltaGroup.ReplacedNodes, replacedRandomDelta...)
@@ -1099,7 +1099,7 @@ func (k *Engine) updateContextDelta(clusterID ktypes.ClusterID) error {
 					receiverRandomDelta, replacedRandomDelta := clusterState.GetRandomContextDelta(
 						ktypes.ReceiverRandomSet,
 						1,
-						k.operator,
+						clusterState.Operator,
 					)
 					receiverDeltaGroup.RandomNodes = append(receiverDeltaGroup.RandomNodes, receiverRandomDelta...)
 					receiverDeltaGroup.ReplacedNodes = append(receiverDeltaGroup.ReplacedNodes, replacedRandomDelta...)
