@@ -41,3 +41,17 @@ func NilMetrics() *Metrics {
 		NumOfRequests: discard.NewCounter(),
 	}
 }
+
+// methods to capture telemetry metrics
+func (metrics *Metrics) initMetrics(delta float64) {
+	// Initialize gauge metrics with the default value
+	metrics.PendingSlots.Set(delta)
+}
+
+func (metrics *Metrics) capturePendingSlots(delta float64) {
+	metrics.PendingSlots.Add(delta)
+}
+
+func (metrics *Metrics) captureNumOfRequests(delta float64) {
+	metrics.NumOfRequests.Add(delta)
+}
