@@ -19,7 +19,7 @@ type TesseractHeader struct {
 	// Represents the hash of the previous Tesseract
 	PrevHash string
 	// Represents the context lock hashes
-	ContextLock map[ktypes.Address]ktypes.Hash
+	ContextLock map[ktypes.Address]ktypes.ContextLockInfo
 	// Represents the height of the Tesseract in the chain
 	Height uint64
 	// Represents the timestamp of Tesseract generation
@@ -83,11 +83,12 @@ type CommitData struct {
 }
 
 // NewTesseractArg is a constructor function that generates and returns a new TesseractArg for a given Tesseract
-func NewTesseractArg(t *ktypes.Tesseract) TesseractArg {
+func TesseractResponse(t *ktypes.Tesseract) TesseractArg {
 	header := TesseractHeader{
 		Address:       t.Header.Address.Hex(),
 		PrevHash:      t.Header.PrevHash.Hex(),
 		Height:        t.Header.Height,
+		ContextLock:   make(map[ktypes.Address]ktypes.ContextLockInfo),
 		Timestamp:     t.Header.Timestamp,
 		AnuUsed:       t.Header.AnuUsed,
 		AnuLimit:      t.Header.AnuLimit,
@@ -119,6 +120,10 @@ func NewTesseractArg(t *ktypes.Tesseract) TesseractArg {
 
 	// Create the TesseractArg from the header and body generated using the Tesseract object
 	tesseract := TesseractArg{header, body}
+
+	for k, v := range t.Header.ContextLock {
+		tesseract.Header.ContextLock[k] = v
+	}
 	// Accumulate the Tesseract context delta into the TesseractArg
 	for k, v := range t.Body.ContextDelta {
 		tesseract.Body.ContextDelta[k.Hex()] = v

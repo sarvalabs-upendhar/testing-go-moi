@@ -48,13 +48,61 @@ func (r *rpcService) GetLatestTesseract(req *http.Request, args *GetTesseract, r
 	}
 
 	// Wrap the TesseractArg in a Response
-	resp.Data = NewTesseractArg(tesseract)
+	resp.Data = TesseractResponse(tesseract)
+
+	return nil
+}
+
+func (r *rpcService) GetTesseractByHash(req *http.Request, args *GetTesseractByHashArgs, resp *Response) error {
+	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
+	if !ok {
+		return ktypes.ErrInvalidAPI
+	}
+
+	tesseract, err := coreAPI.GetTesseractByHash(args.Hash)
+	if err != nil {
+		return err
+	}
+
+	resp.Data = TesseractResponse(tesseract)
+
+	return nil
+}
+
+func (r *rpcService) GetTesseractByHeight(req *http.Request, args *GetTesseractByHeightArgs, resp *Response) error {
+	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
+	if !ok {
+		return ktypes.ErrInvalidAPI
+	}
+
+	tesseract, err := coreAPI.GetTesseractByHeight(args.From, args.Height)
+	if err != nil {
+		return err
+	}
+
+	resp.Data = TesseractResponse(tesseract)
+
+	return nil
+}
+
+func (r *rpcService) GetAssetInfoByAssetID(req *http.Request, args *GetAssetInfoArgs, resp *Response) error {
+	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
+	if !ok {
+		return ktypes.ErrInvalidAPI
+	}
+
+	assetInfo, err := coreAPI.GetAssetInfoByAssetID(args.AssetID)
+	if err != nil {
+		return err
+	}
+
+	resp.Data = assetInfo
 
 	return nil
 }
 
 // GetBalance is a method of rpcService that retrieves the balance.
-// Expects a GetBalArgs argument and returns a uint64 wrapped in a Response.
+// Expects a GetBalArgs argument and returns an uint64 wrapped in a Response.
 func (r *rpcService) GetBalance(req *http.Request, args *GetBalArgs, resp *Response) error {
 	// Retrieve the public core API and call the method to get the balance for the asset
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
@@ -180,6 +228,23 @@ func (r *rpcService) GetInteractionReceipt(req *http.Request, args *GetReceiptAr
 	}
 
 	resp.Data = receipt
+
+	return nil
+}
+
+func (r *rpcService) GetTransactionCountByAddress(req *http.Request,
+	args *GetTransactionCountByAddressArgs, resp *Response) error {
+	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
+	if !ok {
+		return ktypes.ErrInvalidAPI
+	}
+
+	transactionCount, err := coreAPI.GetTransactionCountByAddress(args.From, args.Status)
+	if err != nil {
+		return err
+	}
+
+	resp.Data = transactionCount
 
 	return nil
 }

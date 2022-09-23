@@ -3,6 +3,12 @@ package chain
 import (
 	"context"
 	"encoding/json"
+	"log"
+	"math/big"
+	"os"
+
+	"sync"
+
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -16,10 +22,6 @@ import (
 	"gitlab.com/sarvalabs/moichain/mudra"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/polo/go-polo"
-	"log"
-	"math/big"
-	"os"
-	"sync"
 )
 
 const (
@@ -259,6 +261,32 @@ func (c *ChainManager) GetTesseract(hash ktypes.Hash) (*ktypes.Tesseract, error)
 	return tesseract, nil
 }
 
+func (c *ChainManager) GetTesseractByHeight(address string, height uint64) (*ktypes.Tesseract, error) {
+	addressHeightKey := kutils.GetAddressHeightKey(ktypes.HexToAddress(address), height)
+	tesseractHash, err := c.db.ReadEntry(addressHeightKey)
+
+	if err != nil {
+		return nil, ktypes.ErrFetchingTesseractHash
+	}
+
+	return c.GetTesseract(ktypes.BytesToHash(tesseractHash))
+}
+
+func (c *ChainManager) GetAssetDataByAssetHash(assetHash []byte) (*ktypes.AssetData, error) {
+	rawData, err := c.db.ReadEntry(assetHash)
+	if err != nil {
+		return nil, err
+	}
+
+	assetData := new(ktypes.AssetData)
+
+	if err := polo.Depolorize(assetData, rawData); err != nil {
+		return nil, err
+	}
+
+	return assetData, nil
+}
+
 func (c *ChainManager) GetLatestTesseract(addr ktypes.Address) (*ktypes.Tesseract, error) {
 	if addr == ktypes.NilAddress {
 		return nil, ktypes.ErrInvalidAddress
@@ -436,6 +464,11 @@ func (c *ChainManager) addTesseract(
 
 	if err := c.db.CreateEntry(tesseractHash.Bytes(), polo.Polorize(t)); err != nil {
 		return errors.Wrap(err, "error writing tesseract to db")
+	}
+
+	addressHeightKey := kutils.GetAddressHeightKey(addr, t.Height())
+	if err := c.db.CreateEntry(addressHeightKey, tesseractHash.Bytes()); err != nil {
+		return errors.Wrap(err, "error writing addressHeightKey to db")
 	}
 
 	bucketNo, updateCount, err := c.db.UpdateAccMetaInfo(

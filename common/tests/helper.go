@@ -10,6 +10,7 @@ import (
 	"gitlab.com/sarvalabs/btcd-musig/chaincfg"
 	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	randmath "math/rand"
 	"testing"
 	"time"
 )
@@ -191,4 +192,44 @@ func getPrivKeysForTest(seed []byte) ([]byte, []byte, error) {
 	aggPrivKey = append(aggPrivKey[:], ntwPrivKeyInBytes[:]...)
 
 	return aggPrivKey, moiIDPubBytes, nil
+}
+
+func GetTestTesseract(t *testing.T, height uint64) *ktypes.Tesseract {
+	t.Helper()
+
+	header := ktypes.TesseractHeader{
+		Address:  RandomAddress(t),
+		PrevHash: RandomHash(t),
+		Height:   height,
+	}
+	body := ktypes.TesseractBody{}
+	tesseract := ktypes.Tesseract{
+		Header: header,
+		Body:   body,
+		Seal:   []byte{1},
+	}
+
+	return &tesseract
+}
+
+func GetInvalidHash(t *testing.T) string {
+	t.Helper()
+	randomHash := RandomHash(t).String()
+
+	randmath.Seed(time.Now().UnixNano())
+	randomNum := randmath.Intn(62)
+	randAlphabet := 'g' + randmath.Intn(17)
+
+	return randomHash[:randomNum] + string(rune(randAlphabet)) + randomHash[randomNum+1:]
+}
+
+func GetInvalidAddress(t *testing.T) string {
+	t.Helper()
+	randomHash := RandomHash(t).String()
+
+	randmath.Seed(time.Now().UnixNano())
+	randomNum := randmath.Intn(62)
+	randAlphabet := 'g' + randmath.Intn(17)
+
+	return randomHash[:randomNum] + string(rune(randAlphabet)) + randomHash[randomNum+1:]
 }

@@ -17,6 +17,24 @@ type GetTesseract struct {
 	From string `json:"from"`
 }
 
+type GetTesseractByHashArgs struct {
+	Hash string `json:"hash"`
+}
+
+type GetTesseractByHeightArgs struct {
+	From   string `json:"from"`
+	Height uint64 `json:"height"`
+}
+
+type GetAssetInfoArgs struct {
+	AssetID string `json:"asset_id"`
+}
+
+type GetTransactionCountByAddressArgs struct {
+	From   string `json:"from"`
+	Status bool   `json:"status"`
+}
+
 // SendIXArgs is a struct that represents an argument wrapper for sending Interactions to the pool
 type SendIXArgs struct {
 	IxType        ktypes.IxType `json:"type"`
