@@ -613,7 +613,7 @@ func (s *Server) Broadcast(topic string, data []byte) error {
 func (s *Server) Unsubscribe(topic string) error {
 	// Cancel the subscription to the topic
 	s.topicSetLock.Lock()
-	defer s.topicSetLock.Unlock()
+	s.topicSetLock.Unlock()
 	// Check if topic exists
 	if s.pstopics[topic] == nil {
 		return nil
@@ -621,7 +621,13 @@ func (s *Server) Unsubscribe(topic string) error {
 
 	s.pstopics[topic].subHandle.Cancel()
 	// Attempt to close the topic handler for the topic
-	return s.pstopics[topic].topicHandle.Close()
+	if err := s.pstopics[topic].topicHandle.Close(); err != nil {
+		return err
+	}
+
+	delete(s.pstopics, topic)
+
+	return nil
 }
 
 // Subscribe is a method of Server that subscribes the node to a given PubSub topic.
