@@ -143,7 +143,7 @@ func ResolveAddr(raw string) (*net.TCPAddr, error) {
 	}
 
 	if addr.IP == nil {
-		addr.IP = net.ParseIP("127.0.0.1")
+		addr.IP = net.ParseIP("0.0.0.0")
 	}
 
 	return addr, nil
