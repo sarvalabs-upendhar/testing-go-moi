@@ -42,7 +42,7 @@ type KBFT struct {
 	toTicker                  *Ticker
 	ics                       *types.ClusterInfo
 	nSteps                    int
-	exit                      chan error
+	closeChan                 chan error
 	ctx                       context.Context
 	ctxCancel                 context.CancelFunc
 	evidence                  *Evidence
@@ -64,7 +64,6 @@ func NewKBFTService(
 	evidence *Evidence,
 	ics *types.ClusterInfo,
 	wal WAL,
-	exit chan error,
 	tesseractHandler func(tesseracts []*ktypes.Tesseract) error,
 ) *KBFT {
 	k := &KBFT{
@@ -78,9 +77,9 @@ func NewKBFTService(
 		toTicker:                  NewTicker(),
 		vault:                     vault,
 		evidence:                  evidence,
-		exit:                      exit,
 		ics:                       ics,
 		finalizedTesseractHandler: tesseractHandler,
+		closeChan:                 make(chan error),
 	}
 
 	k.ctx, k.ctxCancel = context.WithTimeout(ctx, MaxBFTimeout)
@@ -128,23 +127,30 @@ func (kbft *KBFT) updateToState(ics *types.ClusterInfo) {
 	kbft.stepChange()
 }
 
-func (kbft *KBFT) Start() {
+func (kbft *KBFT) Start() error {
 	// Start the ticker
 	if err := kbft.toTicker.Start(); err != nil {
 		kbft.logger.Error("Unable to start ticker", "error", err)
 	}
 
-	go kbft.handler(0)
+	go kbft.ScheduleRound0(&kbft.RoundState)
 
-	kbft.ScheduleRound0(&kbft.RoundState)
+	return kbft.handler(0)
 }
 
 func (kbft *KBFT) Close(err error) {
 	kbft.logger.Info("Closing KBFT", "error", err)
 	kbft.toTicker.Close()
 	kbft.toTicker.Stop()
-	kbft.ctxCancel()
-	kbft.exit <- err
+
+	select {
+	case kbft.closeChan <- err:
+	default:
+		go func() {
+			kbft.closeChan <- err
+		}()
+	}
+
 }
 
 func (kbft *KBFT) HandlePeerMsg(m ktypes.ConsensusMessage) {
@@ -157,10 +163,12 @@ func (kbft *KBFT) HandlePeerMsg(m ktypes.ConsensusMessage) {
 	}
 }
 
-func (kbft *KBFT) handler(maxSteps int) {
+func (kbft *KBFT) handler(maxSteps int) error {
 	defer func() {
 		close(kbft.outboundMsgChan)
 		close(kbft.selfMsgChan)
+		kbft.PrintMetrics()
+		kbft.ctxCancel()
 	}()
 
 	for {
@@ -170,18 +178,22 @@ func (kbft *KBFT) handler(maxSteps int) {
 
 				kbft.nSteps = 0
 
-				return
+				return errors.New("max steps reached")
 			}
 		}
 
 		roundState := kbft.RoundState
 
 		select {
+
+		case err := <-kbft.closeChan:
+
+			return err
+
 		case <-kbft.ctx.Done():
 			kbft.logger.Info("KBFT Timeout occurred")
-			kbft.exit <- ktypes.ErrTimeOut
 
-			return
+			return kbft.ctx.Err()
 
 		case msg := <-kbft.inboundMsgChan:
 			kbft.logger.Trace("Handling external Msg", "sender", msg.PeerID)
@@ -206,6 +218,7 @@ func (kbft *KBFT) handler(maxSteps int) {
 			kbft.handleTimeout(t, roundState)
 		}
 	}
+
 }
 
 func (kbft *KBFT) handleTimeout(ti timeoutInfo, r RoundState) {
@@ -245,7 +258,7 @@ func (kbft *KBFT) handleMsg(msg ktypes.ConsensusMessage) error {
 		kbft.logger.Trace("Proposal Message Received")
 
 		if err := kbft.setProposal(m.Proposal); err != nil {
-			kbft.logger.Trace("Unable to set proposal", err)
+			kbft.logger.Trace("Failed to set proposal", err)
 		}
 
 	case *ktypes.VoteMessage:
@@ -253,12 +266,12 @@ func (kbft *KBFT) handleMsg(msg ktypes.ConsensusMessage) error {
 
 		added, err := kbft.addVote(m.Vote, peerID)
 		if err != nil {
-			kbft.logger.Error("Error adding the vote", "Error", err)
+			kbft.logger.Error("Failed to add vote", "error", err)
 		}
 
 		if added && peerID == kbft.id {
 			msg.PeerID = kbft.id
-			kbft.logger.Trace("Sending vote message", peerID, m.Vote.GridID.Hash)
+			kbft.logger.Trace("Sending vote message for", "grid-id", m.Vote.GridID.Hash)
 			kbft.outboundMsgChan <- msg
 		}
 	}
@@ -382,7 +395,7 @@ func (kbft *KBFT) addVote(v *ktypes.Vote, peerID id.KramaID) (added bool, err er
 			}
 
 		default:
-			log.Println(" !!!! #### $$$$ Doesn't have a proposal")
+			kbft.logger.Debug("Proposal not available")
 		}
 
 	case ktypes.PRECOMMIT:
@@ -458,9 +471,7 @@ func (kbft *KBFT) finalizeCommit(h []uint64) {
 	//  b.ScheduleRound0(&b.RoundState)
 
 	//Stop the ClusterInfo and other process
-	fmt.Println("Before done in BFT")
 	kbft.Close(nil)
-	fmt.Println("After done in BFT")
 }
 
 func (kbft *KBFT) updateConsensusInfoInTesseracts(
@@ -603,8 +614,6 @@ func (kbft *KBFT) enterPropose(heights []uint64, round int32) {
 
 		return
 	}
-
-	log.Println("entered propose")
 
 	if err := kbft.createProposal(heights, round); err != nil {
 		kbft.Close(err)
@@ -881,6 +890,21 @@ func (kbft *KBFT) scheduleTimeout(d time.Duration, heights []uint64, r int32, st
 func (kbft *KBFT) stepChange() {
 	//Write to the log
 	kbft.nSteps++
+}
+
+func (kbft *KBFT) PrintMetrics() {
+	prevotes := kbft.Votes.getPrevotes(0)
+	precommits := kbft.Votes.getPrecommits(0)
+	kbft.logger.Debug("Printing metrics")
+
+	if kbft.Proposal != nil {
+		prevoteSet := prevotes.votesByTesseract[string(kbft.Proposal.GridID.Hash.Bytes())]
+		precommitSet := precommits.votesByTesseract[string(kbft.ProposalGrid.Hash.Bytes())]
+		kbft.logger.Debug("Validators", "list", fmt.Sprintf("%s", prevotes.valset.ICS))
+		kbft.logger.Debug("Prevote Received", prevoteSet.bitarray)
+		kbft.logger.Debug("Precommit Received", precommitSet.bitarray)
+
+	}
 }
 
 // A function that checks if two sets of heights are equal.
