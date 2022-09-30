@@ -2,6 +2,7 @@ package ktypes
 
 import (
 	"bytes"
+	"encoding/json"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/polo/go-polo"
 	"log"
@@ -404,4 +405,13 @@ func (i *ICSNodes) ReceiverQuorumSize() int {
 }
 func (i *ICSNodes) RandomQuorumSize() int {
 	return i.Nodes[RandomSet].QuorumSize*2/3 + 1
+}
+
+func (i *ICSNodes) String() string {
+	rawBytes, err := json.Marshal(i)
+	if err != nil {
+		return "failed to print ics nodes"
+	}
+
+	return string(rawBytes)
 }

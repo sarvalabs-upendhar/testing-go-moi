@@ -603,17 +603,17 @@ func (k *Engine) handleReq(req Request) {
 		return
 	}
 
-	clusterState := slot.CLusterInfo()
+	clusterInfo := slot.CLusterInfo()
 
-	if clusterState.CurrentRole == ktypes.ObserverSet {
-		log.Println("Observer HashSet", clusterState.ID)
+	if clusterInfo.CurrentRole == ktypes.ObserverSet {
+		log.Println("Observer HashSet", clusterInfo.ID)
 
 		wg := observer.NewWatchDog(ctx, slot)
 
 		wg.StartWatchDog()
 
-		if hash := clusterState.ID.Hash(); hash != ktypes.NilHash {
-			clusterState.AddDirty(hash, wg.GenerateProofs())
+		if hash := clusterInfo.ID.Hash(); hash != ktypes.NilHash {
+			clusterInfo.AddDirty(hash, wg.GenerateProofs())
 		} else {
 			k.logger.Error("Failed to store watchdog proofs")
 		}
@@ -632,13 +632,12 @@ func (k *Engine) handleReq(req Request) {
 
 		k.logger.Trace("Execution finished")
 		k.metrics.captureGridGenerationTime(executionReqTS)
-		clusterState.SetGrid(execResp.Grid)
+		clusterInfo.SetGrid(execResp.Grid)
 		k.lattice.AddKnownHashes(execResp.Grid)
 
-		exitChan := make(chan error)
 		consensusInitTS := time.Now()
-		k.metrics.captureClusterSize(float64(clusterState.Size()))
-		icsEvidence := kbft.NewEvidence(clusterState.Ixs.Hash(), clusterState.Operator, clusterState.Size())
+		k.metrics.captureClusterSize(float64(clusterInfo.Size()))
+		icsEvidence := kbft.NewEvidence(clusterInfo.Ixs.Hash(), clusterInfo.Operator, clusterInfo.Size())
 		bft := kbft.NewKBFTService(
 			ctx,
 			k.operator,
@@ -648,18 +647,15 @@ func (k *Engine) handleReq(req Request) {
 			slot.BftInboundChan,
 			k.vault,
 			icsEvidence,
-			clusterState,
+			clusterInfo,
 			k.wal,
-			exitChan,
 			k.finalizedTesseractHandler,
 		)
 
-		go bft.Start()
-
-		if err = <-exitChan; err != nil {
-			k.logger.Error("Error consensus failed", "error", err, "cluster-id", clusterState.ID)
+		if err = bft.Start(); err != nil {
+			k.logger.Error("Error consensus failed", "error", err, "cluster-id", clusterInfo.ID)
 			k.metrics.captureAgreementFailureCount(1)
-			if err := k.exec.Revert(clusterState.ID); err != nil {
+			if err := k.exec.Revert(clusterInfo.ID); err != nil {
 				log.Fatal(err)
 			}
 
@@ -669,7 +665,7 @@ func (k *Engine) handleReq(req Request) {
 		k.metrics.captureAgreementTime(consensusInitTS)
 	}
 
-	k.logger.Info("Interaction finalized", "cluster-id", clusterState.ID)
+	k.logger.Info("Interaction finalized", "cluster-id", clusterInfo.ID)
 }
 
 func (k *Engine) fetchIxAccounts(ix *ktypes.Interaction) (types.AccountInfos, error) {
