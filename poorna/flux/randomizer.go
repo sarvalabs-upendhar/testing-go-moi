@@ -3,18 +3,20 @@ package flux
 import (
 	"bufio"
 	"context"
+	"log"
+	"math"
+	"math/rand"
+	"sync"
+	"time"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"gitlab.com/sarvalabs/moichain/common/kutils"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/moichain/poorna"
+	"gitlab.com/sarvalabs/moichain/telemetry/tracing"
 	"gitlab.com/sarvalabs/polo/go-polo"
-	"log"
-	"math"
-	"math/rand"
-	"sync"
-	"time"
 
 	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -350,6 +352,8 @@ func (r *Randomizer) GetRandomNodes(
 	count int,
 	avoidPeers []id.KramaID,
 ) (randomPeers []id.KramaID, err error) {
+	_, span := tracing.Span(ctx, "Flux.Randomizer", "GetRandomNodes")
+	defer span.End()
 	requiredNo := count
 
 	for {

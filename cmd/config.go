@@ -30,6 +30,7 @@ type DBConfig struct {
 }
 type Telemetry struct {
 	PrometheusAddr string `json:"prometheus_addr"`
+	JaegerAddr     string `json:"jaeger_addr"`
 }
 
 type ConsensusConfig struct {

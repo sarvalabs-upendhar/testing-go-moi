@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -14,6 +16,8 @@ import (
 	"github.com/pkg/profile"
 	"gitlab.com/sarvalabs/moichain/common"
 	"gitlab.com/sarvalabs/moichain/poorna/node"
+	"gitlab.com/sarvalabs/moichain/telemetry/tracing"
+	"go.opentelemetry.io/otel"
 
 	//"os/signal"
 	//"syscall"
@@ -24,13 +28,17 @@ import (
 var (
 	ErrReadingConfig = errors.New("error reading config file")
 )
-var AccountWaitTime int
-var OperatorSlots int
-var ValidatorSlots int
-var NetworkSize uint64
-var MTQ float64
-var SkipGenesis bool
-var Bootnode string
+var (
+	AccountWaitTime int
+	OperatorSlots   int
+	ValidatorSlots  int
+	NetworkSize     uint64
+	MTQ             float64
+	SkipGenesis     bool
+	EnableTracing   bool
+	Bootnode        string
+	JaegerAddress   string
+)
 
 var serverCmd = &cobra.Command{
 	Use:   "server",
@@ -61,9 +69,11 @@ func init() {
 	serverCmd.PersistentFlags().IntVar(&ValidatorSlots, "validator-slots", 0, "Maximum number of validator slots")
 	serverCmd.PersistentFlags().Uint64Var(&NetworkSize, "network-size", 12, "Network Size")
 	serverCmd.PersistentFlags().Float64Var(&MTQ, "mtq", 0.7, "Default MTQ")
-	serverCmd.PersistentFlags().String("data-dir", "test-chain", "data directory location")
+	serverCmd.PersistentFlags().String("data-dir", "test-chain", "Data directory location")
 	serverCmd.PersistentFlags().BoolVar(&SkipGenesis, "skip-genesis", false, "Set the genesis")
-	serverCmd.PersistentFlags().StringVar(&Bootnode, "bootnode", "", "Bootnode MultiAddr")
+	serverCmd.PersistentFlags().BoolVar(&EnableTracing, "enable-tracing", false, "Enable Tracing")
+	serverCmd.PersistentFlags().StringVar(&JaegerAddress, "jaeger-address", "", "Jeager Collector Address")
+	serverCmd.PersistentFlags().StringVar(&Bootnode, "bootnode", "", "Boot-node MultiAddr")
 
 	if err := cobra.MarkFlagRequired(serverCmd.PersistentFlags(), "data-dir"); err != nil {
 		log.Print("data-dir is required")
@@ -197,6 +207,20 @@ func BuildConfig(dataDir string, fileCfg *Config) (*common.Config, error) {
 		}
 	}
 
+	if fileCfg.Telemetry.JaegerAddr != "" {
+		nodeCfg.Metrics.JaegerAddr = fileCfg.Telemetry.JaegerAddr
+	}
+
+	if EnableTracing {
+		if JaegerAddress != "" {
+			nodeCfg.Metrics.JaegerAddr = JaegerAddress
+		} else if fileCfg.Telemetry.JaegerAddr != "" {
+			nodeCfg.Metrics.JaegerAddr = fileCfg.Telemetry.JaegerAddr
+		} else {
+			return nil, errors.New("tracing is enabled but a valid JaegerCollector address is not passed")
+		}
+	}
+
 	if fileCfg.Vault.NodePassword != "" {
 		nodeCfg.Vault.NodePassword = fileCfg.Vault.NodePassword
 	}
@@ -226,6 +250,21 @@ func SetupNode(datadir string, cfgPath string) {
 	if err != nil {
 		Err(err)
 	}
+
+	// init trace provider
+	ctx := context.Background()
+	tp, err := tracing.NewTracerProvider(ctx, EnableTracing, cfg.Metrics.JaegerAddr)
+	if err != nil {
+		fmt.Println("error starting tp")
+	}
+
+	defer func() {
+		fmt.Println("Shutting down trace provider")
+		if err := tp.Shutdown(ctx); err != nil {
+			fmt.Println("error shutting down trace provider")
+		}
+	}()
+	otel.SetTracerProvider(tp)
 
 	n, err := node.NewNode("TRACE", cfg)
 	if err != nil {
