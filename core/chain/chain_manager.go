@@ -6,8 +6,8 @@ import (
 	"log"
 	"math/big"
 	"os"
-
 	"sync"
+	"time"
 
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
@@ -97,6 +97,7 @@ type ChainManager struct {
 	senatus             reputationEngine
 	network             server
 	exec                executor
+	metrics             *Metrics
 }
 
 func NewChainManager(
@@ -111,6 +112,7 @@ func NewChainManager(
 	cache *lru.Cache,
 	exec *jug.Exec,
 	senatus reputationEngine,
+	metrics *Metrics,
 ) (*ChainManager, error) {
 	orphansCache, err := lru.New(25)
 	if err != nil {
@@ -133,6 +135,7 @@ func NewChainManager(
 		latticeLocks:     locker.New(),
 		logger:           logger.Named("Chain-Manager"),
 		senatus:          senatus,
+		metrics:          metrics,
 	}
 
 	return c, nil
@@ -348,6 +351,7 @@ func (c *ChainManager) isSealValid(ts *ktypes.Tesseract, id id.KramaID) (bool, e
 }
 
 func (c *ChainManager) verifySignatures(ts *ktypes.Tesseract, ics *ktypes.ICSNodes) (bool, error) {
+	verificationInitTime := time.Now()
 	publicKeys := make([][]byte, 0, ts.Header.Extra.VoteSet.TrueIndicesSize())
 	votesCounter := make([]int, 5) //Only 5 because we don't consider observer nodes vote
 
@@ -381,6 +385,8 @@ func (c *ChainManager) verifySignatures(ts *ktypes.Tesseract, ics *ktypes.ICSNod
 	if err != nil {
 		return false, err
 	}
+
+	c.metrics.captureSignatureVerificationTime(verificationInitTime)
 
 	return verified, nil
 }
@@ -513,6 +519,8 @@ func (c *ChainManager) addTesseractsWithState(
 	dirtyStorage map[ktypes.Hash][]byte,
 	tesseracts ...*ktypes.Tesseract,
 ) error {
+	tsAdditionInitTime := time.Now()
+
 	for _, ts := range tesseracts {
 		if err := func(addr ktypes.Address, ts *ktypes.Tesseract) error {
 			c.latticeLocks.Lock(ts.Hash().Hex())
@@ -553,6 +561,9 @@ func (c *ChainManager) addTesseractsWithState(
 			return errors.Wrap(err, "failed to write dirty keys")
 		}
 	}
+
+	c.metrics.captureStatefulTesseractCounter(1)
+	c.metrics.captureStatefulTesseractAdditionTime(tsAdditionInitTime)
 
 	return nil
 }
@@ -687,7 +698,6 @@ func (c *ChainManager) AddTesseractWithOutState(
 	}
 
 	c.logger.Info("Added tesseract without state", "Addr", ts.Header.Address.Hex(), "Hash", ts.Hash().Hex())
-
 	c.sendTesseractSyncRequest(ts, clusterInfo)
 
 	return nil
@@ -871,6 +881,7 @@ func (c *ChainManager) sendTesseractSyncRequest(ts *ktypes.Tesseract, clusterInf
 
 func (c *ChainManager) tesseractHandler(pubSubMsg *pubsub.Message) error {
 	msg := new(ktypes.TesseractMessage)
+	tsAdditionInitTime := time.Now()
 	//	v1msg := proto.MessageV1(msg)
 	if err := polo.Depolorize(msg, pubSubMsg.GetData()); err != nil {
 		log.Panic(err)
@@ -903,6 +914,9 @@ func (c *ChainManager) tesseractHandler(pubSubMsg *pubsub.Message) error {
 
 		if err := c.AddTesseractWithOutState(ts, msg.Sender, clusterInfo); err != nil {
 			c.logger.Error("Error adding tesseract ", "error", err, "addr", ts.Address(), "hash", ts.Hash())
+		} else {
+			c.metrics.captureStatelessTesseractCounter(1)
+			c.metrics.captureStatelessTesseractAdditionTime(tsAdditionInitTime)
 		}
 	}
 
