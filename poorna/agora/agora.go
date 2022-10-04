@@ -35,6 +35,7 @@ func NewAgora(
 	logger hclog.Logger,
 	store db.PersistenceManager,
 	server *poorna.Server,
+	metrics *Metrics,
 ) (*Agora, error) {
 	interestManager := session.NewInterestManager()
 
@@ -47,7 +48,7 @@ func NewAgora(
 
 	notifier := types.NewNotifier()
 
-	agoraNetwork := network.NewAgoraNetwork(ctx, logger, server)
+	agoraNetwork := network.NewAgoraNetwork(ctx, logger, server, metrics.Network)
 
 	engine := decision.NewEngine(
 		ctx,
@@ -57,6 +58,7 @@ func NewAgora(
 		dataStore,
 		ledger,
 		agoraNetwork,
+		metrics.Engine,
 	)
 
 	sessionManager := session.NewSessionManager(logger, interestManager, notifier, engine)

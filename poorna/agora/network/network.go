@@ -4,6 +4,9 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"sync"
+	"time"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -14,8 +17,6 @@ import (
 	"gitlab.com/sarvalabs/moichain/poorna"
 	"gitlab.com/sarvalabs/moichain/poorna/agora/types"
 	"gitlab.com/sarvalabs/polo/go-polo"
-	"sync"
-	"time"
 )
 
 const (
@@ -28,18 +29,20 @@ type SessionManager interface {
 }
 
 type AgoraNetwork struct {
-	ctx    context.Context
-	logger hclog.Logger
-	peers  sync.Map
-	server *poorna.Server
-	sm     SessionManager
+	ctx     context.Context
+	logger  hclog.Logger
+	peers   sync.Map
+	server  *poorna.Server
+	sm      SessionManager
+	metrics *Metrics
 }
 
-func NewAgoraNetwork(ctx context.Context, logger hclog.Logger, server *poorna.Server) *AgoraNetwork {
+func NewAgoraNetwork(ctx context.Context, logger hclog.Logger, server *poorna.Server, metrics *Metrics) *AgoraNetwork {
 	an := &AgoraNetwork{
-		ctx:    ctx,
-		logger: logger.Named("Network"),
-		server: server,
+		ctx:     ctx,
+		logger:  logger.Named("Network"),
+		server:  server,
+		metrics: metrics,
 	}
 
 	server.SetupStreamHandler(AgoraStreamProtocol, an.streamHandler)
@@ -101,6 +104,7 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 				continue
 			}
 
+			an.metrics.captureInboundDataSize(float64(len(polo.Polorize(reqMsg))))
 			an.sm.HandlePeerMessage(message.Sender, reqMsg)
 
 		case ktypes.AGORARESP:
@@ -111,6 +115,7 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 				continue
 			}
 
+			an.metrics.captureOutboundDataSize(float64(len(polo.Polorize(respMsg))))
 			an.sm.HandlePeerMessage(message.Sender, respMsg)
 		}
 	}
@@ -159,6 +164,7 @@ func (an *AgoraNetwork) SendAgoraMessage(id id.KramaID, msgType ktypes.MsgType, 
 
 	agoraPeer.addActiveSession(msg.GetSessionID())
 	agoraPeer.updateLastActiveTime()
+	an.metrics.captureActiveConnections(1)
 
 	return nil
 }
@@ -212,12 +218,15 @@ func (an *AgoraNetwork) ClosePeerSession(kramaID id.KramaID, sessionID ktypes.Ad
 	}
 
 	agoraPeer.removeActiveSession(sessionID)
+	an.metrics.captureActiveConnections(-1)
 
 	return nil
 }
 
 func (an *AgoraNetwork) Start(sm SessionManager) {
 	an.sm = sm
+
+	an.metrics.initMetrics()
 
 	go an.pruneInactivePeers()
 }

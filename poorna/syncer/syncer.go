@@ -123,8 +123,9 @@ func NewSyncer(
 	mode string,
 	lattice lattice,
 	logger hclog.Logger,
+	metrics *agora.Metrics,
 ) (*Syncer, error) {
-	agoraInstance, err := agora.NewAgora(ctx, logger, db, node)
+	agoraInstance, err := agora.NewAgora(ctx, logger, db, node, metrics)
 	if err != nil {
 		return nil, errors.Wrap(err, "error initiating agora")
 	}
