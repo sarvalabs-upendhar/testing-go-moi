@@ -3,6 +3,11 @@ package krama
 import (
 	"context"
 	"fmt"
+	"log"
+	"math"
+	"math/big"
+	"time"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
@@ -20,12 +25,11 @@ import (
 	"gitlab.com/sarvalabs/moichain/mudra"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/moichain/poorna/flux"
+	"gitlab.com/sarvalabs/moichain/telemetry/tracing"
 	"gitlab.com/sarvalabs/polo/go-polo"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/crypto/blake2b"
-	"log"
-	"math"
-	"math/big"
-	"time"
 
 	"sync"
 )
@@ -62,7 +66,14 @@ type transport interface {
 }
 
 type state interface {
-	FetchInteractionContext(ix *ktypes.Interaction) (map[ktypes.Address]ktypes.Hash, []*ktypes.NodeSet, error)
+	FetchInteractionContext(
+		ctx context.Context,
+		ix *ktypes.Interaction,
+	) (
+		map[ktypes.Address]ktypes.Hash,
+		[]*ktypes.NodeSet,
+		error,
+	)
 	GetPublicKeys(ids ...id.KramaID) (keys [][]byte, err error)
 	GetAccountMetaInfo(addr ktypes.Address) (*ktypes.AccountMetaInfo, error)
 	IsGenesis(addr ktypes.Address) (bool, error)
@@ -177,6 +188,8 @@ func NewKramaEngine(ctx context.Context,
 }
 
 func (k *Engine) AcquireContextLock(ctx context.Context, clusterID ktypes.ClusterID, request Request) (err error) {
+	ctx, span := tracing.Span(ctx, "Krama.KramaEngine", "AcquireContextLock")
+	defer span.End()
 	// Create cluster id using operatorID and IxHash
 	k.logger.Info("Creating cluster", "Cluster id", clusterID)
 
@@ -202,12 +215,12 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID ktypes.Cluste
 	)
 
 	// Fetch the context nodes of interaction participants
-	contextHashes, nodeSets, err := k.state.FetchInteractionContext(request.ixs[0])
+	contextHashes, nodeSets, err := k.state.FetchInteractionContext(ctx, request.ixs[0])
 	if err != nil {
 		return err
 	}
 	// Fetch the committed account info of interaction participants
-	clusterState.AccountInfos, err = k.fetchIxAccounts(request.ixs[0])
+	clusterState.AccountInfos, err = k.fetchIxAccounts(ctx, request.ixs[0])
 	if err != nil {
 		return err
 	}
@@ -238,6 +251,7 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID ktypes.Cluste
 
 	// Send ClusterInfo Request to context nodes of both participants
 	go k.sendICSRequest(
+		ctx,
 		ktypes.SenderBehaviourSet,
 		finalWaitGroup,
 		clusterID,
@@ -246,6 +260,7 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID ktypes.Cluste
 		randomNodesReceiverChan,
 	)
 	go k.sendICSRequest(
+		ctx,
 		ktypes.SenderRandomSet,
 		finalWaitGroup,
 		clusterID,
@@ -258,6 +273,7 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID ktypes.Cluste
 		finalWaitGroup.Add(2)
 
 		go k.sendICSRequest(
+			ctx,
 			ktypes.ReceiverBehaviourSet,
 			finalWaitGroup,
 			clusterID,
@@ -267,6 +283,7 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID ktypes.Cluste
 		)
 
 		go k.sendICSRequest(
+			ctx,
 			ktypes.ReceiverRandomSet,
 			finalWaitGroup,
 			clusterID,
@@ -314,7 +331,7 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID ktypes.Cluste
 
 	//exemptedNodes := append(respondedEligibleSet, contextRandomNodes...)
 
-	operatorRandomNodes, err = k.getRandomNodes(operatorRandomNodesQueryCount, respondedEligibleSet)
+	operatorRandomNodes, err = k.getRandomNodes(ctx, operatorRandomNodesQueryCount, respondedEligibleSet)
 	if err != nil {
 		return errors.Wrap(err, "unable to retrieve random and observer nodes")
 	}
@@ -325,7 +342,7 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID ktypes.Cluste
 
 	exemptedNodes := append(respondedEligibleSet, operatorRandomNodes...)
 
-	observerNodes, err = k.getObserverNodes(observerNodesQueryCount, exemptedNodes)
+	observerNodes, err = k.getObserverNodes(ctx, observerNodesQueryCount, exemptedNodes)
 	if err != nil {
 		k.logger.Error("error fetching observer nodes", "error", err)
 
@@ -345,6 +362,7 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID ktypes.Cluste
 	}
 
 	go k.sendICSRequestWithBound(
+		ctx,
 		ktypes.RandomSet,
 		operatorRandomNodesCount,
 		finalWaitGroup,
@@ -355,6 +373,7 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID ktypes.Cluste
 	)
 
 	go k.sendICSRequestWithBound(
+		ctx,
 		ktypes.ObserverSet,
 		requiredObserverNodes,
 		finalWaitGroup,
@@ -433,6 +452,9 @@ func (k *Engine) isTimely(reqTime time.Time, currentTime time.Time) bool {
 	return true
 }
 func (k *Engine) joinCluster(ctx context.Context, req Request) error {
+	ctx, span := tracing.Span(ctx, "Krama.KramaEngine", "joinCluster")
+	defer span.End()
+
 	k.logger.Debug(
 		"Received an ICS join request",
 		"from", req.msg.Operator,
@@ -467,12 +489,12 @@ func (k *Engine) joinCluster(ctx context.Context, req Request) error {
 
 	clusterState.CurrentRole = ktypes.IcsSetType(req.msg.ContextType)
 
-	contextHashes, nodeSets, err := k.state.FetchInteractionContext(req.ixs[0])
+	contextHashes, nodeSets, err := k.state.FetchInteractionContext(ctx, req.ixs[0])
 	if err != nil {
 		return err
 	}
 
-	clusterState.AccountInfos, err = k.fetchIxAccounts(req.ixs[0])
+	clusterState.AccountInfos, err = k.fetchIxAccounts(ctx, req.ixs[0])
 	if err != nil {
 		return err
 	}
@@ -499,6 +521,15 @@ func (k *Engine) handleReq(req Request) {
 		return
 	}
 
+	ctx, span := tracing.Span(
+		k.ctx,
+		"Krama.KramaEngine",
+		"handleReq",
+		trace.WithAttributes(attribute.String("clusterID", clusterID.String())),
+		trace.WithAttributes(attribute.String("KramaID", string(k.vault.KramaID()))),
+	)
+	defer span.End()
+
 	k.clusterLocks.Lock(clusterID.String())
 	defer func() {
 		if err := k.clusterLocks.Unlock(clusterID.String()); err != nil {
@@ -520,7 +551,7 @@ func (k *Engine) handleReq(req Request) {
 		return
 	}
 
-	ctx, cancelFn := context.WithCancel(k.ctx)
+	ctx, cancelFn := context.WithCancel(ctx)
 	defer func() {
 		// delete the slot from the slots queue
 		cancelFn()
@@ -668,7 +699,9 @@ func (k *Engine) handleReq(req Request) {
 	k.logger.Info("Interaction finalized", "cluster-id", clusterInfo.ID)
 }
 
-func (k *Engine) fetchIxAccounts(ix *ktypes.Interaction) (types.AccountInfos, error) {
+func (k *Engine) fetchIxAccounts(ctx context.Context, ix *ktypes.Interaction) (types.AccountInfos, error) {
+	_, span := tracing.Span(ctx, "Krama.KramaEngine", "fetchIxAccounts")
+	defer span.End()
 	accounts := make(types.AccountInfos)
 
 	if ix.FromAddress() != ktypes.NilAddress {
@@ -717,6 +750,7 @@ func (k *Engine) fetchIxAccounts(ix *ktypes.Interaction) (types.AccountInfos, er
 }
 
 func (k *Engine) sendICSRequestWithBound(
+	ctx context.Context,
 	setType ktypes.IcsSetType,
 	requiredCount int,
 	finalWaitGroup *sync.WaitGroup,
@@ -725,6 +759,9 @@ func (k *Engine) sendICSRequestWithBound(
 	keys [][]byte,
 	msg ktypes.ICSRequest,
 ) {
+	_, span := tracing.Span(ctx, "Krama.KramaEngine", "sendICSRequestWithBound")
+	defer span.End()
+
 	var wg sync.WaitGroup
 
 	wg.Add(len(nodes))
@@ -824,6 +861,7 @@ func (k *Engine) sendICSRequestWithBound(
 }
 
 func (k *Engine) sendICSRequest(
+	ctx context.Context,
 	setType ktypes.IcsSetType,
 	finalWaitGroup *sync.WaitGroup,
 	cID ktypes.ClusterID,
@@ -831,6 +869,9 @@ func (k *Engine) sendICSRequest(
 	msg ktypes.ICSRequest,
 	randomNodes chan []id.KramaID,
 ) {
+	_, span := tracing.Span(ctx, "Krama.KramaEngine", "sendICSRequest")
+	defer span.End()
+
 	var wg sync.WaitGroup
 
 	defer finalWaitGroup.Done()
@@ -935,8 +976,11 @@ func (k *Engine) getICSReqMsg(
 
 	return *icsReqMsg
 }
-func (k *Engine) getRandomNodes(count int, exemptedNodes []id.KramaID) ([]id.KramaID, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+func (k *Engine) getRandomNodes(ctx context.Context, count int, exemptedNodes []id.KramaID) ([]id.KramaID, error) {
+	_, span := tracing.Span(ctx, "Krama.KramaEngine", "getRandomNodes")
+	defer span.End()
+
+	ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 	queryInitTime := time.Now()
 
 	defer cancel()
@@ -951,9 +995,11 @@ func (k *Engine) getRandomNodes(count int, exemptedNodes []id.KramaID) ([]id.Kra
 	return peers, nil
 }
 
-func (k *Engine) getObserverNodes(count int, exemptedNodes []id.KramaID) ([]id.KramaID, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+func (k *Engine) getObserverNodes(ctx context.Context, count int, exemptedNodes []id.KramaID) ([]id.KramaID, error) {
+	_, span := tracing.Span(ctx, "Krama.KramaEngine", "getObserverNodes")
+	defer span.End()
 
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
 	peers, err := k.randomizer.GetRandomNodes(ctx, count, exemptedNodes)
@@ -1006,6 +1052,9 @@ func (k *Engine) sendICSSuccess(id ktypes.ClusterID) error {
 }
 
 func (k *Engine) initClusterCommunication(ctx context.Context, slot *types.Slot) error {
+	ctx, span := tracing.Span(ctx, "Krama.KramaEngine", "initClusterCommunication")
+	defer span.End()
+
 	if err := k.transport.InitClusterCommunication(ctx, slot); err != nil {
 		return err
 	}

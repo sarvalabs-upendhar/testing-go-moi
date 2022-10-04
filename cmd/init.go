@@ -25,6 +25,7 @@ import (
 var directoryIndex int
 var count int
 var bootnode string
+var jaegerAddress string
 var password string
 var logFilePath string
 var port int
@@ -103,6 +104,10 @@ func init() {
 		"/ip4/139.59.73.20/tcp/4001/p2p/16Uiu2HAmVFp1xtDsokTWuCTkThQSDetjqTx7W9EwcCSxrXqH33Dm",
 		"Bootnode MultiAddr",
 	)
+	testCmd.PersistentFlags().StringVar(&jaegerAddress, "jaegerAddress",
+		"",
+		"Jeager Address",
+	)
 	testCmd.PersistentFlags().StringVar(&password,
 		"password",
 		"test123",
@@ -137,6 +142,7 @@ func CreateConfigFile(datadir string, index int) []byte {
 		},
 		Telemetry: Telemetry{
 			PrometheusAddr: ":" + strconv.Itoa(30000+index),
+			JaegerAddr:     jaegerAddress,
 		},
 		Vault: VaultConfig{
 			DataDir:      datadir,

@@ -3,6 +3,7 @@ package krama
 import (
 	"context"
 	"errors"
+
 	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	"gitlab.com/sarvalabs/polo/go-polo"
 )
@@ -64,7 +65,7 @@ func (icsrpc *ICSRPCService) ICSRequest(
 		}
 	} else {
 		response.Response = 1
-		randomNodes, err := icsrpc.engine.getRandomNodes(1, nil)
+		randomNodes, err := icsrpc.engine.getRandomNodes(ctx, 1, nil)
 		if err != nil {
 			return errors.New("unable to fetch random nodes")
 		}

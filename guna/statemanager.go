@@ -10,6 +10,7 @@ import (
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	"gitlab.com/sarvalabs/moichain/telemetry/tracing"
 	"gitlab.com/sarvalabs/polo/go-polo"
 	"golang.org/x/sync/errgroup"
 	"io/ioutil"
@@ -510,11 +511,14 @@ func (sm *StateManager) FetchContextLock(ts *ktypes.Tesseract) (*ktypes.ICSNodes
 }
 
 // FetchInteractionContext returns a nodeSet which holds the latest context info of the interaction participants
-func (sm *StateManager) FetchInteractionContext(ix *ktypes.Interaction) (
+func (sm *StateManager) FetchInteractionContext(ctx context.Context, ix *ktypes.Interaction) (
 	map[ktypes.Address]ktypes.Hash,
 	[]*ktypes.NodeSet,
 	error,
 ) {
+	ctx, span := tracing.Span(ctx, "guna.StateManger", "FetchInteractionContext")
+	defer span.End()
+
 	var (
 		nodeSet       = make([]*ktypes.NodeSet, 6)
 		behaviourSet  *ktypes.NodeSet

@@ -613,7 +613,7 @@ func (s *Server) Broadcast(topic string, data []byte) error {
 func (s *Server) Unsubscribe(topic string) error {
 	// Cancel the subscription to the topic
 	s.topicSetLock.Lock()
-	s.topicSetLock.Unlock()
+	defer s.topicSetLock.Unlock()
 	// Check if topic exists
 	if s.pstopics[topic] == nil {
 		return nil

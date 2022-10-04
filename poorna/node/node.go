@@ -2,6 +2,11 @@ package node
 
 import (
 	"context"
+	"log"
+	"net"
+	"net/http"
+	"os"
+
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
@@ -22,10 +27,6 @@ import (
 	"gitlab.com/sarvalabs/moichain/poorna/flux"
 	krpc "gitlab.com/sarvalabs/moichain/poorna/rpc"
 	"gitlab.com/sarvalabs/moichain/poorna/syncer"
-	"log"
-	"net"
-	"net/http"
-	"os"
 )
 
 const (

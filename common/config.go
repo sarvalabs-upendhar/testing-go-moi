@@ -26,6 +26,7 @@ type Config struct {
 
 type Telemetry struct {
 	PrometheusAddr *net.TCPAddr
+	JaegerAddr     string
 }
 
 type ChainConfig struct {

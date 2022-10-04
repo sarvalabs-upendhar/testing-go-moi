@@ -3,6 +3,8 @@ package kbft
 import (
 	"context"
 	"fmt"
+	"log"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 	"gitlab.com/sarvalabs/moichain/guna"
@@ -10,8 +12,8 @@ import (
 	"gitlab.com/sarvalabs/moichain/mudra"
 	common2 "gitlab.com/sarvalabs/moichain/mudra/common"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	"gitlab.com/sarvalabs/moichain/telemetry/tracing"
 	"gitlab.com/sarvalabs/polo/go-polo"
-	"log"
 
 	"sync"
 	"time"
@@ -128,12 +130,14 @@ func (kbft *KBFT) updateToState(ics *types.ClusterInfo) {
 }
 
 func (kbft *KBFT) Start() error {
+	_, span := tracing.Span(kbft.ctx, "Krama.KBFT", "Start")
+	defer span.End()
 	// Start the ticker
 	if err := kbft.toTicker.Start(); err != nil {
 		kbft.logger.Error("Unable to start ticker", "error", err)
 	}
 
-	go kbft.ScheduleRound0(&kbft.RoundState)
+	go kbft.ScheduleRound0()
 
 	return kbft.handler(0)
 }
@@ -150,7 +154,6 @@ func (kbft *KBFT) Close(err error) {
 			kbft.closeChan <- err
 		}()
 	}
-
 }
 
 func (kbft *KBFT) HandlePeerMsg(m ktypes.ConsensusMessage) {
@@ -187,7 +190,6 @@ func (kbft *KBFT) handler(maxSteps int) error {
 		select {
 
 		case err := <-kbft.closeChan:
-
 			return err
 
 		case <-kbft.ctx.Done():
@@ -218,7 +220,6 @@ func (kbft *KBFT) handler(maxSteps int) error {
 			kbft.handleTimeout(t, roundState)
 		}
 	}
-
 }
 
 func (kbft *KBFT) handleTimeout(ti timeoutInfo, r RoundState) {
@@ -501,7 +502,7 @@ func (kbft *KBFT) updateConsensusInfoInTesseracts(
 	return nil
 }
 
-func (kbft *KBFT) ScheduleRound0(r *RoundState) {
+func (kbft *KBFT) ScheduleRound0() {
 	kbft.logger.Info("Scheduling Round 0. TO:")
 	kbft.scheduleTimeout(100*time.Millisecond, kbft.Height, 0, RoundStepNewHeight)
 }
@@ -903,7 +904,6 @@ func (kbft *KBFT) PrintMetrics() {
 		kbft.logger.Debug("Validators", "list", fmt.Sprintf("%s", prevotes.valset.ICS))
 		kbft.logger.Debug("Prevote Received", prevoteSet.bitarray)
 		kbft.logger.Debug("Precommit Received", precommitSet.bitarray)
-
 	}
 }
 
