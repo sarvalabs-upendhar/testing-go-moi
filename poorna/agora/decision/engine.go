@@ -2,19 +2,20 @@ package decision
 
 import (
 	"context"
+	"sync"
+	"time"
+
 	"github.com/hashicorp/go-hclog"
 	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/moichain/poorna/agora/db"
 	"gitlab.com/sarvalabs/moichain/poorna/agora/types"
-	"sync"
-	"time"
 )
 
 /*
 Metrics to be collected
 
-ActiveRequests
+PendingRequests
 Timed out requests
 Request process time
 Avg cid count per request
@@ -52,6 +53,7 @@ type Engine struct {
 	db                  store
 	ledger              ledger
 	network             network
+	metrics             *Metrics
 }
 
 func NewEngine(
@@ -62,6 +64,7 @@ func NewEngine(
 	db store,
 	ledger ledger,
 	network network,
+	metrics *Metrics,
 ) *Engine {
 	e := &Engine{
 		ctx:                 ctx,
@@ -74,12 +77,15 @@ func NewEngine(
 		db:                  db,
 		ledger:              ledger,
 		network:             network,
+		metrics:             metrics,
 	}
 
 	return e
 }
 
 func (e *Engine) Start() {
+	e.metrics.initMetrics()
+
 	e.workerLock.Lock()
 	defer e.workerLock.Unlock()
 
@@ -106,11 +112,16 @@ func (e *Engine) nextTask() (*types.Response, error) {
 
 		if time.Since(req.ReqTime) > 1000*time.Millisecond {
 			e.logger.Info("Skipping request")
+			e.metrics.captureTimedOutRequests(1)
 
 			continue
 		}
 
 		ids := req.WantList
+		numOfIds := len(ids)
+
+		e.metrics.capturePendingRequests(-1)
+		e.metrics.captureCidsPerRequest(float64(numOfIds))
 
 		if len(ids) == 0 {
 			ids = append(ids, req.StateHash)
@@ -135,6 +146,8 @@ func (e *Engine) nextTask() (*types.Response, error) {
 		for _, v := range blocks {
 			resp.HaveList.AddBlock(types.NewBlock(v))
 		}
+
+		e.metrics.captureRequestProcessTime(req.ReqTime)
 
 		return resp, nil
 	}
@@ -162,29 +175,34 @@ func (e *Engine) worker() {
 }
 
 func (e *Engine) HandleRequest(req *Request) {
-	stateHash := req.StateHash
-	address := req.SessionID
+	if req != nil {
+		stateHash := req.StateHash
+		address := req.SessionID
 
-	if !e.db.DoesStateExists(stateHash) {
-		e.sendResponse(req.PeerID, address, stateHash, false, nil)
-
-		return
-	}
-
-	if !e.requests.Contains(req.PeerID) {
-		if err := e.requests.Push(req); err == nil {
-			e.workSignal <- struct{}{}
+		if !e.db.DoesStateExists(stateHash) {
+			e.sendResponse(req.PeerID, address, stateHash, false, nil)
+			e.metrics.captureRejectedRequests(1)
 
 			return
 		}
-	}
 
-	peerSet, err := e.ledger.GetAssociatedPeers(req.SessionID, req.StateHash)
-	if err != nil {
-		e.logger.Error("Error fetching associated peers")
-	}
+		if !e.requests.Contains(req.PeerID) {
+			if err := e.requests.Push(req); err == nil {
+				e.metrics.capturePendingRequests(1)
+				e.workSignal <- struct{}{}
 
-	e.sendResponse(req.PeerID, address, stateHash, false, peerSet)
+				return
+			}
+		}
+
+		peerSet, err := e.ledger.GetAssociatedPeers(req.SessionID, req.StateHash)
+		if err != nil {
+			e.logger.Error("Error fetching associated peers")
+		}
+
+		e.sendResponse(req.PeerID, address, stateHash, false, peerSet)
+		e.metrics.captureRejectedRequests(1)
+	}
 }
 
 func (e *Engine) sendResponse(
