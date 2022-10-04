@@ -149,6 +149,7 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 		n.cache,
 		n.exec,
 		n.state.SenatusInstance(),
+		n.nodeMetrics.chain,
 	); err != nil {
 		return nil, err
 	}
