@@ -10,7 +10,8 @@ import (
 	"gitlab.com/sarvalabs/btcd-musig/chaincfg"
 	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	randmath "math/rand"
+	"log"
+	"math/big"
 	"testing"
 	"time"
 )
@@ -194,42 +195,103 @@ func getPrivKeysForTest(seed []byte) ([]byte, []byte, error) {
 	return aggPrivKey, moiIDPubBytes, nil
 }
 
-func GetTestTesseract(t *testing.T, height uint64) *ktypes.Tesseract {
+func GetRandomUpperCaseString(t *testing.T, length int) (string, error) {
 	t.Helper()
 
-	header := ktypes.TesseractHeader{
-		Address:  RandomAddress(t),
-		PrevHash: RandomHash(t),
-		Height:   height,
+	const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+	randomString := make([]byte, length)
+
+	for i := 0; i < length; i++ {
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(characters))))
+		if err != nil {
+			return "", err
+		}
+
+		randomString[i] = characters[num.Int64()]
 	}
-	body := ktypes.TesseractBody{}
-	tesseract := ktypes.Tesseract{
-		Header: header,
-		Body:   body,
-		Seal:   []byte{1},
+
+	return string(randomString), nil
+}
+
+func GetAsset(t *testing.T) (*ktypes.AssetInfo, error) {
+	t.Helper()
+
+	symbol, err := GetRandomUpperCaseString(t, 5)
+	if err != nil {
+		return nil, err
 	}
 
-	return &tesseract
+	asset := &ktypes.AssetInfo{
+		Dimension:   1,
+		TotalSupply: 1000,
+		Symbol:      symbol,
+		IsFungible:  true,
+		IsMintable:  false,
+	}
+
+	return asset, nil
 }
 
-func GetInvalidHash(t *testing.T) string {
+func RandomAssetID(t *testing.T, address ktypes.Address) string {
 	t.Helper()
-	randomHash := RandomHash(t).String()
 
-	randmath.Seed(time.Now().UnixNano())
-	randomNum := randmath.Intn(62)
-	randAlphabet := 'g' + randmath.Intn(17)
+	randomHash := RandomHash(t)
+	asset, err := GetAsset(t)
 
-	return randomHash[:randomNum] + string(rune(randAlphabet)) + randomHash[randomNum+1:]
+	if err != nil {
+		log.Panic("Failed to create asset")
+	}
+
+	assetID, _, _ := ktypes.GetAssetID(
+		address,
+		asset.Dimension,
+		asset.IsFungible,
+		asset.IsMintable,
+		asset.Symbol,
+		int64(asset.TotalSupply),
+		randomHash)
+
+	return string(assetID)
 }
 
-func GetInvalidAddress(t *testing.T) string {
-	t.Helper()
-	randomHash := RandomHash(t).String()
+// Unused functions
+//func GetTestTesseract(t *testing.T, height uint64) *ktypes.Tesseract {
+//	t.Helper()
+//
+//	header := ktypes.TesseractHeader{
+//		Address:  RandomAddress(t),
+//		PrevHash: RandomHash(t),
+//		Height:   height,
+//	}
+//	body := ktypes.TesseractBody{}
+//	tesseract := ktypes.Tesseract{
+//		Header: header,
+//		Body:   body,
+//		Seal:   []byte{1},
+//	}
+//
+//	return &tesseract
+//}
 
-	randmath.Seed(time.Now().UnixNano())
-	randomNum := randmath.Intn(62)
-	randAlphabet := 'g' + randmath.Intn(17)
-
-	return randomHash[:randomNum] + string(rune(randAlphabet)) + randomHash[randomNum+1:]
-}
+//func GetInvalidHash(t *testing.T) string {
+//	t.Helper()
+//	randomHash := RandomHash(t).String()
+//
+//	randmath.Seed(time.Now().UnixNano())
+//	randomNum := randmath.Intn(62)
+//	randAlphabet := 'g' + randmath.Intn(17)
+//
+//	return randomHash[:randomNum] + string(rune(randAlphabet)) + randomHash[randomNum+1:]
+//}
+//
+//func GetInvalidAddress(t *testing.T) string {
+//	t.Helper()
+//	randomHash := RandomHash(t).String()
+//
+//	randmath.Seed(time.Now().UnixNano())
+//	randomNum := randmath.Intn(62)
+//	randAlphabet := 'g' + randmath.Intn(17)
+//
+//	return randomHash[:randomNum] + string(rune(randAlphabet)) + randomHash[randomNum+1:]
+//}

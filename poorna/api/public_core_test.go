@@ -2,325 +2,821 @@ package api
 
 import (
 	"errors"
+	"github.com/stretchr/testify/require"
+	"log"
 	"math/big"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-	"gitlab.com/sarvalabs/moichain/guna"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-
 	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	"gitlab.com/sarvalabs/moichain/common/tests"
+	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 )
 
-type asset struct {
-	Dimension   uint8
-	TotalSupply int64
-	Symbol      string
-	IsFungible  bool
-	IsMintable  bool
+type AssetInfo struct {
+	AssetID    ktypes.AssetID
+	Asset      *ktypes.AssetInfo
+	Hash       ktypes.Hash
+	RandomHash ktypes.Hash
 }
 
-type mockChainManager struct {
-	mockStorage  map[ktypes.Hash]*ktypes.Tesseract
-	assetStorage map[ktypes.Hash]*ktypes.AssetData
-	nonceStorage map[ktypes.Address]uint64
+type Context struct {
+	behaviourNodes []id.KramaID
+	randomNodes    []id.KramaID
 }
 
-func NewMockChainManager(t *testing.T) *mockChainManager {
+type MockChainManager struct {
+	tesseracts          map[ktypes.Address]map[ktypes.Hash]*ktypes.Tesseract
+	latestTesseractHash map[ktypes.Address]ktypes.Hash
+	receipts            map[ktypes.Address]map[ktypes.Hash]*ktypes.Receipt
+	storage             map[ktypes.Hash]*ktypes.Tesseract
+	assets              map[ktypes.Hash]*ktypes.AssetData
+}
+
+type MockStateManager struct {
+	storage           map[ktypes.Hash][]byte
+	balances          map[ktypes.Address]*ktypes.BalanceObject
+	accounts          map[ktypes.Address]*ktypes.Account
+	context           map[ktypes.Hash]*Context
+	latestContextHash map[ktypes.Address]ktypes.Hash
+}
+
+var (
+	ErrTesseractNotFound = errors.New("tesseract not found")
+)
+
+func NewMockChainManager(t *testing.T) *MockChainManager {
 	t.Helper()
 
-	m := new(mockChainManager)
-	m.mockStorage = make(map[ktypes.Hash]*ktypes.Tesseract, 0)
-	m.assetStorage = make(map[ktypes.Hash]*ktypes.AssetData, 0)
-	m.nonceStorage = make(map[ktypes.Address]uint64)
+	var mockChain = new(MockChainManager)
 
-	return m
+	mockChain.tesseracts = make(map[ktypes.Address]map[ktypes.Hash]*ktypes.Tesseract, 0)
+	mockChain.latestTesseractHash = make(map[ktypes.Address]ktypes.Hash)
+	mockChain.receipts = make(map[ktypes.Address]map[ktypes.Hash]*ktypes.Receipt, 0)
+	mockChain.assets = make(map[ktypes.Hash]*ktypes.AssetData, 0)
+	mockChain.storage = make(map[ktypes.Hash]*ktypes.Tesseract, 0)
+
+	return mockChain
 }
 
-func NewPublicCoreAPITest(t *testing.T, m *mockChainManager) *PublicCoreAPI {
+func NewMockStateManager(t *testing.T) *MockStateManager {
 	t.Helper()
 
-	p := &PublicCoreAPI{
-		backend: &Backend{
-			chain: m,
-			sm:    m,
-		},
+	var mockState = new(MockStateManager)
+
+	mockState.balances = make(map[ktypes.Address]*ktypes.BalanceObject)
+	mockState.latestContextHash = make(map[ktypes.Address]ktypes.Hash)
+	mockState.storage = make(map[ktypes.Hash][]byte)
+	mockState.accounts = make(map[ktypes.Address]*ktypes.Account)
+	mockState.context = make(map[ktypes.Hash]*Context)
+
+	return mockState
+}
+
+// Chain manager mock functions
+func (mc *MockChainManager) GetLatestTesseract(addr ktypes.Address) (*ktypes.Tesseract, error) {
+	if _, ok := mc.tesseracts[addr]; ok {
+		return mc.tesseracts[addr][mc.latestTesseractHash[addr]], nil
 	}
 
-	return p
+	return nil, ktypes.ErrAccountNotFound
 }
 
-func (m *mockChainManager) GetTesseract(hash ktypes.Hash) (*ktypes.Tesseract, error) {
-	if val, ok := m.mockStorage[hash]; ok {
-		return val, nil
-	}
-
-	return nil, errors.New("hash not found")
-}
-
-func (m *mockChainManager) GetLatestTesseract(addr ktypes.Address) (*ktypes.Tesseract, error) {
-	return nil, nil
-}
-
-func (m *mockChainManager) GetReceipt(addr ktypes.Address, ixHash ktypes.Hash) (*ktypes.Receipt, error) {
-	return nil, nil
-}
-
-func (m *mockChainManager) GetTesseractByHeight(address string, height uint64) (*ktypes.Tesseract, error) {
-	for k, v := range m.mockStorage {
-		if v.Address() == ktypes.HexToAddress(address) && v.Height() == height {
-			return m.GetTesseract(k)
+func (mc *MockChainManager) GetTesseract(hash ktypes.Hash) (*ktypes.Tesseract, error) {
+	for _, tesseracts := range mc.tesseracts {
+		for tsHash, tesseract := range tesseracts {
+			if tsHash == hash {
+				return tesseract, nil
+			}
 		}
 	}
 
-	return nil, errors.New("addressheightkey not found")
+	return nil, ErrTesseractNotFound
 }
 
-func (m *mockChainManager) GetLatestStateObject(addr ktypes.Address) (*guna.StateObject, error) {
-	return nil, nil
-}
-
-func (m *mockChainManager) GetLatestContext(address ktypes.Address) (ktypes.Hash, []id.KramaID, []id.KramaID, error) {
-	return ktypes.HexToHash(""), nil, nil, nil
-}
-
-func (m *mockChainManager) GetBalances(addrs ktypes.Address) (*ktypes.BalanceObject, error) {
-	return nil, nil
-}
-
-func (m *mockChainManager) GetLatestNonce(addr ktypes.Address) (uint64, error) {
-	if val, ok := m.nonceStorage[addr]; ok {
-		return val, nil
+func (mc *MockChainManager) GetReceipt(addr ktypes.Address, ixHash ktypes.Hash) (*ktypes.Receipt, error) {
+	if receipt := mc.receipts[addr][ixHash]; receipt != nil {
+		return receipt, nil
 	}
 
-	return 0, errors.New("nonce not found")
+	return nil, ktypes.ErrReceiptNotFound
 }
 
-func TestGetTesseractByHash(t *testing.T) {
-	m := NewMockChainManager(t)
+func (mc *MockChainManager) GetAssetDataByAssetHash(assetHash []byte) (*ktypes.AssetData, error) {
+	if result, ok := mc.assets[ktypes.BytesToHash(assetHash)]; ok {
+		return result, nil
+	}
 
-	//generate dynamic tesseract and store it
-	tesseract1 := tests.GetTestTesseract(t, 1)
-	m.mockStorage[tesseract1.Hash()] = tesseract1
+	return nil, ktypes.ErrFetchingAssetDataInfo
+}
 
-	p := NewPublicCoreAPITest(t, m)
+func (mc *MockChainManager) GetTesseractByHeight(address string, height uint64) (*ktypes.Tesseract, error) {
+	for _, tesseract := range mc.storage {
+		if tesseract.Address() == ktypes.HexToAddress(address) && tesseract.Height() == height {
+			return tesseract, nil
+		}
+	}
 
-	// allTests holds all types of hashes
-	allTests := []struct {
-		name            string
-		testHash        string
-		isErrorExpected bool
+	return nil, errors.New("address height key not found")
+}
+
+func (mc *MockChainManager) setTesseracts(
+	addr ktypes.Address,
+	latestTesseractHash ktypes.Hash,
+	tesseracts map[ktypes.Hash]*ktypes.Tesseract) {
+	mc.latestTesseractHash[addr] = latestTesseractHash
+	mc.tesseracts[addr] = tesseracts
+}
+
+func (mc *MockChainManager) setReceipt(addr ktypes.Address, receipts map[ktypes.Hash]*ktypes.Receipt) {
+	mc.receipts[addr] = receipts
+}
+
+func (mc *MockChainManager) setStorage(hash ktypes.Hash, tesseract *ktypes.Tesseract) {
+	mc.storage[hash] = tesseract
+}
+
+func (mc *MockChainManager) setAssets(addr ktypes.Address, assetInfo *AssetInfo) {
+	assetInfo.Asset.Owner = addr.String()
+	mc.assets[assetInfo.Hash] = &ktypes.AssetData{
+		LogicID: assetInfo.RandomHash,
+		Symbol:  assetInfo.Asset.Symbol,
+		Owner:   addr,
+		Extra:   big.NewInt(int64(assetInfo.Asset.TotalSupply)).Bytes(),
+	}
+}
+
+// State Manager mock functions
+
+func (ms *MockStateManager) GetLatestContext(address ktypes.Address) (ktypes.Hash, []id.KramaID, []id.KramaID, error) {
+	if hash, ok := ms.latestContextHash[address]; ok {
+		return hash, ms.context[hash].behaviourNodes, ms.context[hash].randomNodes, nil
+	}
+
+	return ktypes.NilHash, nil, nil, ktypes.ErrAccountNotFound
+}
+
+func (ms *MockStateManager) GetBalances(addr ktypes.Address) (*ktypes.BalanceObject, error) {
+	if _, ok := ms.balances[addr]; ok {
+		return ms.balances[addr].Copy(), nil
+	}
+
+	return nil, ktypes.ErrAccountNotFound
+}
+
+func (ms *MockStateManager) GetBalance(addr ktypes.Address, assetID ktypes.AssetID) (*big.Int, error) {
+	if _, ok := ms.balances[addr]; ok {
+		if _, ok := ms.balances[addr].Bal[assetID]; ok {
+			return ms.balances[addr].Bal[assetID], nil
+		}
+
+		return nil, ktypes.ErrAssetNotFound
+	}
+
+	return nil, ktypes.ErrAccountNotFound
+}
+
+func (ms *MockStateManager) GetLatestNonce(addr ktypes.Address) (uint64, error) {
+	if _, ok := ms.accounts[addr]; ok {
+		return ms.accounts[addr].Nonce, nil
+	}
+
+	return 0, ktypes.ErrAccountNotFound
+}
+
+func (ms *MockStateManager) IsGenesis(addr ktypes.Address) (bool, error) {
+	if _, ok := ms.storage[ktypes.GetHash(addr.Bytes())]; ok {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func (ms *MockStateManager) setBalance(addr ktypes.Address, assetID ktypes.AssetID, balance *big.Int) {
+	ms.balances[addr] = &ktypes.BalanceObject{
+		Bal: make(ktypes.AssetMap),
+	}
+	ms.balances[addr].Bal[assetID] = balance
+}
+
+func (ms *MockStateManager) setContext(t *testing.T, hash ktypes.Hash) {
+	t.Helper()
+
+	ms.context[hash] = &Context{
+		tests.GetTestKramaIDs(t, 10),
+		tests.GetTestKramaIDs(t, 10),
+	}
+}
+
+func (ms *MockStateManager) getContextNodes(hash ktypes.Hash) []string {
+	return append(
+		ktypes.KIPPeerIDToString(ms.context[hash].behaviourNodes),
+		ktypes.KIPPeerIDToString(ms.context[hash].randomNodes)...,
+	)
+}
+
+func (ms *MockStateManager) setAccounts(addr ktypes.Address, latestNonce uint64) {
+	ms.accounts[addr] = &ktypes.Account{
+		Nonce: latestNonce,
+	}
+}
+
+func (ms *MockStateManager) setStorage(hash ktypes.Hash, data []byte) {
+	ms.storage[hash] = data
+}
+
+func (ms *MockStateManager) getTDU(addr ktypes.Address) ktypes.AssetMap {
+	data, _ := ms.balances[addr].TDU()
+
+	return data
+}
+
+func (ms *MockStateManager) setLatestContextHash(addr ktypes.Address, hash ktypes.Hash) {
+	ms.latestContextHash[addr] = hash
+}
+
+// Core Api Testcases
+func TestPublicCoreAPI_GetBalance(t *testing.T) {
+	address := tests.RandomAddress(t)
+	chainManager := NewMockChainManager(t)
+	stateManager := NewMockStateManager(t)
+	assetInfo := getAssetInfo(t, address)
+
+	stateManager.setBalance(address, assetInfo.AssetID, big.NewInt(300))
+
+	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
+
+	testcases := []struct {
+		name        string
+		args        BalArgs
+		expected    *big.Int
+		expectedErr error
 	}{
 		{
-			"valid hash",
-			tesseract1.Hash().String(),
-			false,
+			name: "Invalid address",
+			args: BalArgs{
+				From:    "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+				AssetID: tests.RandomAssetID(t, address),
+			},
+			expectedErr: ktypes.ErrInvalidAddress,
 		},
 		{
-			"valid hash without state",
-			tests.RandomHash(t).String(),
-			true,
+			name: "Account without state",
+			args: BalArgs{
+				From:    tests.RandomAddress(t).String(),
+				AssetID: string(assetInfo.AssetID),
+			},
+			expectedErr: ktypes.ErrAccountNotFound,
 		},
 		{
-			"invalid hash",
-			"68510188a88ff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
-			true,
+			name: "Invalid asset Id",
+			args: BalArgs{
+				From:    address.String(),
+				AssetID: "01801995a34ceda4db744a5b1363bega0f2019e7481699c861ad7d1263c95473a2d9",
+			},
+			expectedErr: ktypes.ErrInvalidAssetID,
+		},
+		{
+			name: "Valid asset id without state",
+			args: BalArgs{
+				From:    address.String(),
+				AssetID: tests.RandomAssetID(t, address),
+			},
+			expectedErr: ktypes.ErrAssetNotFound,
+		},
+		{
+			name: "Valid address and asset id",
+			args: BalArgs{
+				From:    address.String(),
+				AssetID: string(assetInfo.AssetID),
+			},
+			expected: big.NewInt(300),
 		},
 	}
 
-	for _, test := range allTests {
-		t.Run(test.name, func(t *testing.T) {
-			fetchedTesseract, err := p.GetTesseractByHash(test.testHash)
-
-			if test.isErrorExpected {
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(testing *testing.T) {
+			balance, err := coreAPI.GetBalance(&testcase.args)
+			if testcase.expectedErr != nil {
 				require.Error(t, err)
+				require.Equal(t, testcase.expectedErr, err)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, fetchedTesseract.Hash().String(), test.testHash)
+				require.Equal(t, testcase.expected, balance)
 			}
 		})
 	}
 }
 
-func TestGetTesseractByHeight(t *testing.T) {
-	m := NewMockChainManager(t)
+func TestPublicCoreAPI_GetLatestTesseract(t *testing.T) {
+	address := tests.RandomAddress(t)
+	chainManager := NewMockChainManager(t)
+	stateManager := new(MockStateManager)
+	_, latestTesseractHash, tesseracts := getTesseracts(t, address)
 
-	//generate dynamic tesseract and store it
-	tesseract1 := tests.GetTestTesseract(t, 1)
-	m.mockStorage[tesseract1.Hash()] = tesseract1
+	chainManager.setTesseracts(address, latestTesseractHash, tesseracts)
 
-	p := NewPublicCoreAPITest(t, m)
+	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
 
-	// allTests holds all types of hashes
-	allTests := []struct {
-		name            string
-		address         string
-		height          uint64
-		expectedHash    string
-		isErrorExpected bool
+	testcases := []struct {
+		name        string
+		args        TesseractArgs
+		expected    *ktypes.Tesseract
+		expectedErr error
 	}{
 		{
-			"valid address",
-			tesseract1.Address().String(),
-			tesseract1.Height(),
-			tesseract1.Hash().String(),
-			false,
+			name: "Invalid address",
+			args: TesseractArgs{
+				From: "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+			},
+			expectedErr: ktypes.ErrInvalidAddress,
 		},
 		{
-			"valid address without state",
-			tests.RandomAddress(t).String(),
-			22,
-			"",
-			true,
+			name: "Account without state",
+			args: TesseractArgs{
+				From: tests.RandomAddress(t).String(),
+			},
+			expectedErr: ktypes.ErrAccountNotFound,
 		},
 		{
-			"invalid address",
-			"68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
-			8,
-			"",
-			true,
+			name: "Valid address",
+			args: TesseractArgs{
+				From: address.String(),
+			},
+			expected: tesseracts[latestTesseractHash],
 		},
 	}
 
-	for _, test := range allTests {
-		t.Run(test.name, func(t *testing.T) {
-			fetchedTesseract, err := p.GetTesseractByHeight(test.address, test.height)
-			if test.isErrorExpected {
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(testing *testing.T) {
+			tesseract, err := coreAPI.GetLatestTesseract(&testcase.args)
+			if testcase.expectedErr != nil {
 				require.Error(t, err)
+				require.Equal(t, testcase.expectedErr, err)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, fetchedTesseract.Hash().String(), test.expectedHash)
+				require.Equal(t, testcase.expected, tesseract)
 			}
 		})
 	}
 }
 
-func (m *mockChainManager) GetAssetDataByAssetHash(assetHash []byte) (*ktypes.AssetData, error) {
-	result, ok := m.assetStorage[ktypes.BytesToHash(assetHash)]
-	if !ok {
-		return nil, ktypes.ErrFetchingAssetDataInfo
-	}
+func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
+	address := tests.RandomAddress(t)
+	chainManager := NewMockChainManager(t)
+	stateManager := NewMockStateManager(t)
+	latestContextHash, _, _ := getTesseracts(t, address)
 
-	return result, nil
-}
-func TestGetAssetInfoByAssetID(t *testing.T) {
-	m := NewMockChainManager(t)
+	stateManager.setLatestContextHash(address, latestContextHash)
+	stateManager.setContext(t, latestContextHash)
 
-	assetInput := []asset{
-		{1, 100000, "MOI", true, false},
-	}
+	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
 
-	randomHash := tests.RandomHash(t)
-	owner := tests.RandomAddress(t)
-	aID, hash, _ := ktypes.GetAssetID(owner, assetInput[0].Dimension, assetInput[0].IsFungible,
-		assetInput[0].IsMintable, assetInput[0].Symbol, assetInput[0].TotalSupply, randomHash)
-
-	m.assetStorage[hash] = &ktypes.AssetData{
-		LogicID: randomHash,
-		Symbol:  assetInput[0].Symbol,
-		Owner:   owner,
-		Extra:   big.NewInt(assetInput[0].TotalSupply).Bytes(),
-	}
-
-	p := NewPublicCoreAPITest(t, m)
-
-	allTests := []struct {
-		name              string
-		assetID           string
-		expectedAssetInfo *ktypes.AssetInfo
-		isErrorExpected   bool
+	testcases := []struct {
+		name        string
+		args        TesseractArgs
+		expected    []string
+		expectedErr error
 	}{
 		{
-			"valid assetID",
-			string(aID),
-			&ktypes.AssetInfo{
-				Owner:       owner.String(),
-				Dimension:   assetInput[0].Dimension,
-				TotalSupply: uint64(assetInput[0].TotalSupply),
-				Symbol:      assetInput[0].Symbol,
-				IsFungible:  assetInput[0].IsFungible,
-				IsMintable:  assetInput[0].IsMintable,
+			name: "Invalid address",
+			args: TesseractArgs{
+				From: "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+			},
+			expectedErr: ktypes.ErrInvalidAddress,
+		},
+		{
+			name: "Account without state",
+			args: TesseractArgs{
+				From: tests.RandomAddress(t).String(),
+			},
+			expectedErr: ktypes.ErrAccountNotFound,
+		},
+		{
+			name: "Valid address",
+			args: TesseractArgs{
+				From: address.String(),
+			},
+			expected: stateManager.getContextNodes(latestContextHash),
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(testing *testing.T) {
+			behaviour, observer, err := coreAPI.GetContextInfo(&testcase.args)
+			if testcase.expectedErr != nil {
+				require.Error(t, err)
+				require.Equal(t, testcase.expectedErr, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, append(behaviour, observer...), testcase.expected)
+			}
+		})
+	}
+}
+
+func TestPublicCoreAPI_GetTDU(t *testing.T) {
+	address := tests.RandomAddress(t)
+	chainManager := NewMockChainManager(t)
+	stateManager := NewMockStateManager(t)
+	assetInfo := getAssetInfo(t, address)
+
+	stateManager.setBalance(address, assetInfo.AssetID, big.NewInt(300))
+
+	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
+
+	testcases := []struct {
+		name        string
+		args        TesseractArgs
+		expected    ktypes.AssetMap
+		expectedErr error
+	}{
+		{
+			name: "Invalid address",
+			args: TesseractArgs{
+				From: "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+			},
+			expectedErr: ktypes.ErrInvalidAddress,
+		},
+		{
+			name: "Account without state",
+			args: TesseractArgs{
+				From: tests.RandomAddress(t).String(),
+			},
+			expectedErr: ktypes.ErrAccountNotFound,
+		},
+		{
+			name: "Valid address",
+			args: TesseractArgs{
+				From: address.String(),
+			},
+			expected: stateManager.getTDU(address),
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(testing *testing.T) {
+			data, err := coreAPI.GetTDU(&testcase.args)
+			if testcase.expectedErr != nil {
+				require.Error(t, err)
+				require.Equal(t, testcase.expectedErr, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, testcase.expected, data)
+			}
+		})
+	}
+}
+
+func TestPublicCoreAPI_GetInteractionReceipt(t *testing.T) {
+	address := tests.RandomAddress(t)
+	chainManager := NewMockChainManager(t)
+	stateManager := new(MockStateManager)
+	validReceiptHash, receipts := getReceipts(t)
+
+	chainManager.setReceipt(address, receipts)
+
+	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
+
+	testcases := []struct {
+		name        string
+		args        ReceiptArgs
+		expected    *ktypes.Receipt
+		expectedErr error
+	}{
+		{
+			name: "Invalid address",
+			args: ReceiptArgs{
+				Address: "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+				Hash:    tests.RandomHash(t).String(),
+			},
+			expectedErr: ktypes.ErrInvalidAddress,
+		},
+		{
+			name: "Invalid hash",
+			args: ReceiptArgs{
+				Address: address.String(),
+				Hash:    tests.RandomHash(t).String(),
+			},
+			expectedErr: ktypes.ErrReceiptNotFound,
+		},
+		{
+			name: "Valid account and hash",
+			args: ReceiptArgs{
+				Address: address.String(),
+				Hash:    validReceiptHash.String(),
+			},
+			expected: receipts[validReceiptHash],
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(testing *testing.T) {
+			receipt, err := coreAPI.GetInteractionReceipt(&testcase.args)
+			if testcase.expectedErr != nil {
+				require.Error(t, err)
+				require.Equal(t, testcase.expectedErr, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, receipt, testcase.expected)
+			}
+		})
+	}
+}
+
+func TestPublicCoreAPI_GetTesseractByHash(t *testing.T) {
+	address := tests.RandomAddress(t)
+	chainManager := NewMockChainManager(t)
+	stateManager := new(MockStateManager)
+	_, latestTesseractHash, tesseracts := getTesseracts(t, address)
+
+	chainManager.setTesseracts(address, latestTesseractHash, tesseracts)
+
+	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
+
+	testcases := []struct {
+		name            string
+		args            *TesseractByHashArgs
+		isErrorExpected bool
+	}{
+		{
+			"Valid hash",
+			&TesseractByHashArgs{
+				Hash: tesseracts[latestTesseractHash].Hash().String(),
 			},
 			false,
 		},
 		{
-			"valid asset id without state",
-			"01801995a34ceda4db744a5b1363be9a0f2019e7481699c861ad7d1263c95473a2d9",
-			&ktypes.AssetInfo{},
+			"Valid hash without state",
+			&TesseractByHashArgs{
+				Hash: tests.RandomHash(t).String(),
+			},
 			true,
 		},
 		{
-			"invalid asset id",
-			"01801995a34ceda4db744a5b1363bega0f2019e7481699c861ad7d1263c95473a2d9",
-			&ktypes.AssetInfo{},
+			"Invalid hash",
+			&TesseractByHashArgs{
+				Hash: "68510188a88ff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+			},
 			true,
 		},
 	}
 
-	for _, test := range allTests {
-		t.Run(test.name, func(t *testing.T) {
-			fetchedAssetInfo, err := p.GetAssetInfoByAssetID(test.assetID)
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			fetchedTesseract, err := coreAPI.GetTesseractByHash(testcase.args)
 
-			if test.isErrorExpected {
+			if testcase.isErrorExpected {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, fetchedAssetInfo, test.expectedAssetInfo)
+				require.Equal(t, fetchedTesseract.Hash().String(), testcase.args.Hash)
 			}
 		})
 	}
 }
 
-func TestGetTransactionCountByAddress(t *testing.T) {
-	m := NewMockChainManager(t)
-
+func TestPublicCoreAPI_GetTesseractByHeight(t *testing.T) {
 	address := tests.RandomAddress(t)
-	m.nonceStorage[address] = 0
+	chainManager := NewMockChainManager(t)
+	stateManager := NewMockStateManager(t)
+	_, latestTesseractHash, tesseracts := getTesseracts(t, address)
 
-	p := NewPublicCoreAPITest(t, m)
+	chainManager.setStorage(latestTesseractHash, tesseracts[latestTesseractHash])
 
-	// allTests holds all types of hashes
-	allTests := []struct {
+	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
+
+	testcases := []struct {
 		name            string
-		address         string
-		status          bool
-		expectedNonce   uint64
+		args            *TesseractByHeightArgs
+		expected        string
 		isErrorExpected bool
 	}{
 		{
-			"valid address",
-			address.Hex(),
-			false,
-			0,
+			"Valid address",
+			&TesseractByHeightArgs{
+				tesseracts[latestTesseractHash].Address().String(),
+				tesseracts[latestTesseractHash].Height(),
+			},
+			tesseracts[latestTesseractHash].Hash().String(),
 			false,
 		},
 		{
-			"valid address without state",
-			tests.RandomAddress(t).String(),
+			"Valid address without state",
+			&TesseractByHeightArgs{
+				tests.RandomAddress(t).String(),
+				22,
+			},
+			"",
+			true,
+		},
+		{
+			"Invalid address",
+			&TesseractByHeightArgs{
+				"68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+				8,
+			},
+			"",
+			true,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			fetchedTesseract, err := coreAPI.GetTesseractByHeight(testcase.args)
+			if testcase.isErrorExpected {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, fetchedTesseract.Hash().String(), testcase.expected)
+			}
+		})
+	}
+}
+
+func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
+	address := tests.RandomAddress(t)
+	chainManager := NewMockChainManager(t)
+	stateManager := new(MockStateManager)
+	assetInfo := getAssetInfo(t, address)
+
+	chainManager.setAssets(address, assetInfo)
+
+	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
+
+	testcases := []struct {
+		name            string
+		args            *AssetInfoArgs
+		expected        *ktypes.AssetInfo
+		isErrorExpected bool
+	}{
+		{
+			"Valid asset id",
+			&AssetInfoArgs{
+				AssetID: string(assetInfo.AssetID),
+			},
+			assetInfo.Asset,
 			false,
+		},
+		{
+			"Valid asset id without state",
+			&AssetInfoArgs{
+				"01801995a34ceda4db744a5b1363be9a0f2019e7481699c861ad7d1263c95473a2d9",
+			},
+			&ktypes.AssetInfo{},
+			true,
+		},
+		{
+			"Invalid asset id",
+			&AssetInfoArgs{
+				"01801995a34ceda4db744a5b1363bega0f2019e7481699c861ad7d1263c95473a2d9",
+			},
+			&ktypes.AssetInfo{},
+			true,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			fetchedAssetInfo, err := coreAPI.GetAssetInfoByAssetID(testcase.args.AssetID)
+			if testcase.isErrorExpected {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, fetchedAssetInfo, testcase.expected)
+			}
+		})
+	}
+}
+
+func TestPublicCoreAPI_GetInteractionCountByAddress(t *testing.T) {
+	address := tests.RandomAddress(t)
+	latestNonce := uint64(5)
+	chainManager := NewMockChainManager(t)
+	stateManager := NewMockStateManager(t)
+
+	stateManager.setAccounts(address, latestNonce)
+
+	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
+
+	testcases := []struct {
+		name            string
+		args            *InteractionCountArgs
+		expected        uint64
+		isErrorExpected bool
+	}{
+		{
+			"Valid address",
+			&InteractionCountArgs{
+				address.String(),
+				false,
+			},
+			latestNonce,
+			false,
+		},
+		{
+			"Valid address without state",
+			&InteractionCountArgs{
+				tests.RandomAddress(t).String(),
+				false,
+			},
 			0,
 			true,
 		},
 		{
-			"invalid address",
-			"68510188a88ff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
-			false,
+			"Invalid address",
+			&InteractionCountArgs{
+				"68510188a88ff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+				false,
+			},
 			0,
 			true,
 		},
 	}
 
-	for _, test := range allTests {
-		t.Run(test.name, func(t *testing.T) {
-			fetchedNonce, err := p.GetTransactionCountByAddress(test.address, true)
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			fetchedNonce, err := coreAPI.GetInteractionCountByAddress(testcase.args)
 
-			if test.isErrorExpected {
+			if testcase.isErrorExpected {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, fetchedNonce, test.expectedNonce)
+				require.Equal(t, fetchedNonce, testcase.expected)
 			}
 		})
+	}
+}
+
+// helper function
+func newTesseract(t *testing.T, height int, address ktypes.Address) *ktypes.Tesseract {
+	t.Helper()
+
+	return &ktypes.Tesseract{
+		Header: ktypes.TesseractHeader{
+			Address:  address,
+			PrevHash: tests.RandomHash(t),
+			Height:   uint64(height),
+		},
+		Body: ktypes.TesseractBody{
+			StateHash:       tests.RandomHash(t),
+			ContextHash:     tests.RandomHash(t),
+			InteractionHash: tests.RandomHash(t),
+		},
+	}
+}
+
+func newReceipt(interactionHash ktypes.Hash) *ktypes.Receipt {
+	return &ktypes.Receipt{
+		IxType: 1,
+		IxHash: interactionHash,
+	}
+}
+
+func getTesseracts(t *testing.T, address ktypes.Address) (ktypes.Hash, ktypes.Hash, map[ktypes.Hash]*ktypes.Tesseract) {
+	t.Helper()
+
+	tesseracts := make(map[ktypes.Hash]*ktypes.Tesseract)
+	tesseract := newTesseract(t, 1, address)
+	contextHash := tesseract.ContextHash()
+	tesseractHash := tesseract.Hash()
+	tesseracts[tesseractHash] = tesseract
+
+	return contextHash, tesseractHash, tesseracts
+}
+
+func getReceipts(t *testing.T) (ktypes.Hash, map[ktypes.Hash]*ktypes.Receipt) {
+	t.Helper()
+
+	receipts := make(map[ktypes.Hash]*ktypes.Receipt)
+	interactionHash := tests.RandomHash(t)
+	receipts[interactionHash] = newReceipt(interactionHash)
+
+	return interactionHash, receipts
+}
+
+func getAssetInfo(t *testing.T, address ktypes.Address) *AssetInfo {
+	t.Helper()
+
+	randomHash := tests.RandomHash(t)
+	asset, err := tests.GetAsset(t)
+
+	if err != nil {
+		log.Panic("Failed to create asset")
+	}
+
+	assetID, hash, _ := ktypes.GetAssetID(
+		address,
+		asset.Dimension,
+		asset.IsFungible,
+		asset.IsMintable,
+		asset.Symbol,
+		int64(asset.TotalSupply),
+		randomHash)
+
+	return &AssetInfo{
+		assetID,
+		asset,
+		hash,
+		randomHash,
 	}
 }

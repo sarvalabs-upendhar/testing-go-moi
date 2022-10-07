@@ -6,7 +6,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	gorpc "github.com/libp2p/go-libp2p-gorpc"
 	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	"gitlab.com/sarvalabs/moichain/poorna/rpc"
+	"gitlab.com/sarvalabs/moichain/poorna/api"
 )
 
 // SYNCRPCService is a struct that represents an SYNC RPC Service
@@ -22,7 +22,7 @@ func NewSyncRPCService(syncer *Syncer) *SYNCRPCService {
 func (syncRPC *SYNCRPCService) StatusUpdate(
 	ctx context.Context,
 	req *ktypes.AccountsStatusMsg,
-	resp *rpc.Response,
+	resp *api.Response,
 ) error {
 	return syncRPC.syncer.StatusUpdate(ctx.Value(gorpc.ContextKeyRequestSender).(peer.ID), req)
 }

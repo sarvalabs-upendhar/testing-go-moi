@@ -218,15 +218,10 @@ func (n *Node) SetupRPC() error {
 	n.rpc = krpc.NewRPCServer("/", n.logger, n.cfg.Network.JSONRPCAddr)
 
 	rpcService := krpc.NewRPCService()
-	backend := api.NewBackend(n.ixpool, n.chain, n.state)
-	ixpoolAPI := api.NewPublicIXPoolAPI(backend)
-	coreAPI := api.NewPublicCoreAPI(backend)
+	backend := api.NewBackend(n.ixpool, n.chain, n.state, n.cfg.IxPool)
+	publicApis := api.GetPublicAPIs(backend)
 
-	if err := rpcService.RegisterAPI("core", coreAPI); err != nil {
-		return err
-	}
-
-	if err := rpcService.RegisterAPI("ixpool", ixpoolAPI); err != nil {
+	if err := rpcService.RegisterAPIs(publicApis); err != nil {
 		return err
 	}
 

@@ -27,7 +27,7 @@ func (s Storage) Copy() Storage {
 type StateObject struct {
 	Address        ktypes.Address
 	accType        ktypes.AccType
-	journal        *journal
+	journal        *Journal
 	mtx            sync.RWMutex
 	cache          *lru.Cache
 	db             *dhruva.PersistenceManager
@@ -44,14 +44,14 @@ type StateObject struct {
 	receipts     ktypes.Receipts
 
 	logics  map[ktypes.Hash]*ktypes.LogicData
-	storage map[ktypes.Hash][]byte
+	Storage map[ktypes.Hash][]byte
 	files   map[ktypes.Hash][]byte
 }
 
 func NewStateObject(
 	id ktypes.Address,
 	cache *lru.Cache,
-	j *journal,
+	j *Journal,
 	db *dhruva.PersistenceManager,
 	accType ktypes.AccType,
 ) *StateObject {
@@ -71,7 +71,7 @@ func NewStateObject(
 			PrvHash:   ktypes.NilHash,
 		},
 		logics:       make(map[ktypes.Hash]*ktypes.LogicData),
-		storage:      make(map[ktypes.Hash][]byte),
+		Storage:      make(map[ktypes.Hash][]byte),
 		files:        make(map[ktypes.Hash][]byte),
 		dirtyEntries: make(Storage),
 		receipts:     make(ktypes.Receipts),
@@ -153,7 +153,7 @@ func (s *StateObject) Copy() *StateObject {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	j := new(journal)
+	j := new(Journal)
 	sObj := NewStateObject(s.Address, s.cache, j, s.db, s.data.AccType)
 
 	sObj.balance = s.balance.Copy()
@@ -173,8 +173,8 @@ func (s *StateObject) Copy() *StateObject {
 		sObj.files[k] = v
 	}
 
-	for k, v := range sObj.storage {
-		sObj.storage[k] = v
+	for k, v := range sObj.Storage {
+		sObj.Storage[k] = v
 	}
 
 	return sObj
@@ -211,7 +211,7 @@ func (s *StateObject) commitAccount() (ktypes.Hash, error) {
 }
 
 func (s *StateObject) commitStorage() (ktypes.Hash, error) {
-	data := polo.Polorize(s.storage)
+	data := polo.Polorize(s.Storage)
 	cID := ktypes.GetHash(data)
 
 	s.journal.append(StorageUpdation{
@@ -336,7 +336,7 @@ func (s *StateObject) AddAccountGenesisInfo(address ktypes.Address, ixHash ktype
 	}
 	rawData := polo.Polorize(&accInfo)
 
-	s.storage[ktypes.GetHash(address.Bytes())] = rawData
+	s.Storage[ktypes.GetHash(address.Bytes())] = rawData
 }
 
 func (s *StateObject) commitContextObject(obj interface{}) (ktypes.Hash, error) {
@@ -470,11 +470,11 @@ func (s *StateObject) GetContextHash() ktypes.Hash {
 }
 
 func (s *StateObject) SetStorageEntry(key ktypes.Hash, value []byte) {
-	s.storage[key] = value
+	s.Storage[key] = value
 }
 
 func (s *StateObject) GetStorageEntry(key ktypes.Hash) ([]byte, error) {
-	value, ok := s.storage[key]
+	value, ok := s.Storage[key]
 	if !ok {
 		return nil, ktypes.ErrStorageEntryNotFound
 	}

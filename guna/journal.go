@@ -10,12 +10,12 @@ type changeEntry interface {
 	cID() ktypes.Hash
 }
 
-type journal struct {
+type Journal struct {
 	entries []changeEntry
 	count   int
 }
 
-func (j *journal) GetIDs() []ktypes.Hash {
+func (j *Journal) GetIDs() []ktypes.Hash {
 	cids := make([]ktypes.Hash, 0)
 	for _, v := range j.entries {
 		cids = append(cids, v.cID())
@@ -24,7 +24,7 @@ func (j *journal) GetIDs() []ktypes.Hash {
 	return cids
 }
 
-func (j *journal) append(c changeEntry) {
+func (j *Journal) append(c changeEntry) {
 	j.entries = append(j.entries, c)
 
 	j.count++
