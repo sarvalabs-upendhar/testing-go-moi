@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	"gitlab.com/sarvalabs/moichain/common/kutils"
 	"gitlab.com/sarvalabs/moichain/poorna/api"
 )
 
@@ -21,71 +20,79 @@ func NewRPCService() *rpcService {
 }
 
 // RegisterAPI is a method of rpcService that registers a new API to it
-func (r *rpcService) RegisterAPI(name string, api interface{}) error {
-	// Return an error if the API is already registered
-	if _, exists := r.apis[name]; exists {
-		return errors.New("api already registered")
-	}
+func (r *rpcService) RegisterAPIs(apis map[string]interface{}) error {
+	for name, api := range apis {
+		// Return an error if the API is already registered
+		if _, exists := r.apis[name]; exists {
+			return errors.New("api already registered")
+		}
 
-	// Add the API method to the mapping
-	r.apis[name] = api
+		// Add the API method to the mapping
+		r.apis[name] = api
+	}
 
 	return nil
 }
 
 // GetLatestTesseract is a method of rpcService that retrieves the latest Tesseract.
 // Expects a GetTesseract argument and returns TesseractArg wrapped in a Response.
-func (r *rpcService) GetLatestTesseract(req *http.Request, args *GetTesseract, resp *Response) error {
+func (r *rpcService) GetLatestTesseract(req *http.Request, args *api.TesseractArgs, resp *api.Response) error {
 	// Retrieve the public core API and call the method to get the latest Tesseract
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
 		return ktypes.ErrInvalidAPI
 	}
 
-	tesseract, err := coreAPI.GetLatestTesseract(ktypes.BytesToAddress(kutils.HexToByte(args.From)))
+	// Retrieve the latest Tesseract for the address from the backend chain manager
+	tesseract, err := coreAPI.GetLatestTesseract(args)
 	if err != nil {
 		return err
 	}
-
 	// Wrap the TesseractArg in a Response
-	resp.Data = TesseractResponse(tesseract)
+	resp.Data = api.NewTesseractArg(tesseract)
 
 	return nil
 }
 
-func (r *rpcService) GetTesseractByHash(req *http.Request, args *GetTesseractByHashArgs, resp *Response) error {
+func (r *rpcService) GetTesseractByHash(req *http.Request, args *api.TesseractByHashArgs, resp *api.Response) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
 		return ktypes.ErrInvalidAPI
 	}
 
-	tesseract, err := coreAPI.GetTesseractByHash(args.Hash)
+	tesseract, err := coreAPI.GetTesseractByHash(args)
+
 	if err != nil {
 		return err
 	}
 
-	resp.Data = TesseractResponse(tesseract)
+	resp.Data = api.NewTesseractArg(tesseract)
 
 	return nil
 }
 
-func (r *rpcService) GetTesseractByHeight(req *http.Request, args *GetTesseractByHeightArgs, resp *Response) error {
+func (r *rpcService) GetTesseractByHeight(
+	req *http.Request,
+	args *api.TesseractByHeightArgs,
+	resp *api.Response,
+) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
 		return ktypes.ErrInvalidAPI
 	}
 
-	tesseract, err := coreAPI.GetTesseractByHeight(args.From, args.Height)
+	tesseract, err := coreAPI.GetTesseractByHeight(args)
+
 	if err != nil {
 		return err
 	}
 
-	resp.Data = TesseractResponse(tesseract)
+	resp.Data = api.NewTesseractArg(tesseract)
 
 	return nil
 }
 
-func (r *rpcService) GetAssetInfoByAssetID(req *http.Request, args *GetAssetInfoArgs, resp *Response) error {
+func (r *rpcService) GetAssetInfoByAssetID(req *http.Request, args *api.AssetInfoArgs, resp *api.Response) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
 		return ktypes.ErrInvalidAPI
@@ -103,14 +110,14 @@ func (r *rpcService) GetAssetInfoByAssetID(req *http.Request, args *GetAssetInfo
 
 // GetBalance is a method of rpcService that retrieves the balance.
 // Expects a GetBalArgs argument and returns an uint64 wrapped in a Response.
-func (r *rpcService) GetBalance(req *http.Request, args *GetBalArgs, resp *Response) error {
+func (r *rpcService) GetBalance(req *http.Request, args *api.BalArgs, resp *api.Response) error {
 	// Retrieve the public core API and call the method to get the balance for the asset
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
 		return ktypes.ErrInvalidAPI
 	}
 
-	bal, err := coreAPI.GetBalance(ktypes.BytesToAddress(kutils.HexToByte(args.From)), args.AssetID)
+	bal, err := coreAPI.GetBalance(args)
 	if err != nil {
 		return err
 	}
@@ -122,71 +129,35 @@ func (r *rpcService) GetBalance(req *http.Request, args *GetBalArgs, resp *Respo
 }
 
 // SendInteractions is a method of rpcService that sends Interactions
-func (r *rpcService) SendInteractions(req *http.Request, args *SendIXArgs, resp *Response) error {
-	// Retrieve the public ixpool API
-	ixPoolAPI, ok := r.apis["ixpool"].(*api.PublicIXPoolAPI)
+func (r *rpcService) SendInteractions(req *http.Request, args *api.SendIXArgs, resp *api.Response) error {
+	// Retrieve the public ix API
+	ixAPI, ok := r.apis["ix"].(*api.PublicIXAPI)
 	if !ok {
 		return ktypes.ErrInvalidAPI
 	}
-	// Construct the interactions data
-	ixns := make(ktypes.Interactions, 1)
-	ixns[0] = new(ktypes.Interaction)
 
-	nonce, err := ixPoolAPI.GetLatestNonce(ktypes.HexToAddress(args.From))
+	ixn, err := ixAPI.SendInteraction(args)
+
 	if err != nil {
-		resp.Status = err.Error()
-
 		return err
 	}
 
-	ixns[0].Data = ktypes.IxData{
-		Input: ktypes.InteractionInput{
-			Type:     args.IxType,
-			Nonce:    nonce,
-			From:     ktypes.HexToAddress(args.From),
-			To:       ktypes.HexToAddress(args.To),
-			AnuPrice: args.AnuPrice,
-		},
-	}
+	resp.Data = ixn[0].GetIxHash().Hex()
 
-	switch args.IxType {
-	case 0:
-		ixns[0].Data.Input.TransferValue = map[ktypes.AssetID]uint64{ktypes.AssetID(args.AssetID): uint64(args.Value)}
-
-	case 1:
-		ixns[0].Data.Input.Payload = ktypes.InteractionInputPayload{
-			AssetData: ktypes.AssetDataInput{
-				Dimension:   args.AssetCreation.Dimension,
-				TotalSupply: args.AssetCreation.TotalSupply,
-				Symbol:      args.AssetCreation.Symbol,
-				IsFungible:  args.AssetCreation.IsFungible,
-				IsMintable:  args.AssetCreation.IsMintable,
-				Code:        args.AssetCreation.Code,
-			},
-		}
-	default:
-		return errors.New("invalid interaction type")
-	}
-
-	resp.Data = ixns[0].GetIxHash().Hex()
-
-	// Call the API method to add interactions to pool
-	return ixPoolAPI.AddIXs(ixns)[0]
+	return nil
 }
 
 // GetTDU is an RPC method that returns the TDU of the queried address
-func (r *rpcService) GetTDU(req *http.Request, args *GetTesseract, resp *Response) error {
+func (r *rpcService) GetTDU(req *http.Request, args *api.TesseractArgs, resp *api.Response) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
 		return ktypes.ErrInvalidAPI
 	}
 
-	object, err := coreAPI.TDU(ktypes.BytesToAddress(kutils.HexToByte(args.From)))
+	data, err := coreAPI.GetTDU(args)
 	if err != nil {
 		return err
 	}
-
-	data, _ := object.TDU()
 
 	resp.Data = data
 
@@ -194,18 +165,18 @@ func (r *rpcService) GetTDU(req *http.Request, args *GetTesseract, resp *Respons
 }
 
 // GetContextInfo is an RPC method that returns the context Info of the queried address
-func (r *rpcService) GetContextInfo(req *http.Request, args *GetTesseract, resp *Response) error {
+func (r *rpcService) GetContextInfo(req *http.Request, args *api.TesseractArgs, resp *api.Response) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
 		return ktypes.ErrInvalidAPI
 	}
 
-	behaviour, observer, err := coreAPI.GetContextInfo(ktypes.BytesToAddress(kutils.HexToByte(args.From)))
+	behaviour, observer, err := coreAPI.GetContextInfo(args)
 	if err != nil {
 		return err
 	}
 
-	var response ContextResponse
+	var response api.ContextResponse
 
 	response.BehaviourNodes = behaviour
 	response.RandomNodes = observer
@@ -216,13 +187,13 @@ func (r *rpcService) GetContextInfo(req *http.Request, args *GetTesseract, resp 
 }
 
 // GetInteractionReceipt returns the receipt of the interaction
-func (r *rpcService) GetInteractionReceipt(req *http.Request, args *GetReceiptArgs, resp *Response) error {
+func (r *rpcService) GetInteractionReceipt(req *http.Request, args *api.ReceiptArgs, resp *api.Response) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
 		return ktypes.ErrInvalidAPI
 	}
 
-	receipt, err := coreAPI.GetInteractionReceipt(ktypes.HexToAddress(args.Address), ktypes.HexToHash(args.Hash))
+	receipt, err := coreAPI.GetInteractionReceipt(args)
 	if err != nil {
 		return err
 	}
@@ -232,19 +203,22 @@ func (r *rpcService) GetInteractionReceipt(req *http.Request, args *GetReceiptAr
 	return nil
 }
 
-func (r *rpcService) GetTransactionCountByAddress(req *http.Request,
-	args *GetTransactionCountByAddressArgs, resp *Response) error {
+func (r *rpcService) GetInteractionCountByAddress(
+	req *http.Request,
+	args *api.InteractionCountArgs,
+	resp *api.Response,
+) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
 		return ktypes.ErrInvalidAPI
 	}
 
-	transactionCount, err := coreAPI.GetTransactionCountByAddress(args.From, args.Status)
+	interactionCount, err := coreAPI.GetInteractionCountByAddress(args)
 	if err != nil {
 		return err
 	}
 
-	resp.Data = transactionCount
+	resp.Data = interactionCount
 
 	return nil
 }

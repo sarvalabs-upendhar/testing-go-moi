@@ -1,4 +1,4 @@
-package rpc
+package api
 
 import (
 	"gitlab.com/sarvalabs/moichain/common/ktypes"
@@ -83,7 +83,7 @@ type CommitData struct {
 }
 
 // NewTesseractArg is a constructor function that generates and returns a new TesseractArg for a given Tesseract
-func TesseractResponse(t *ktypes.Tesseract) TesseractArg {
+func NewTesseractArg(t *ktypes.Tesseract) TesseractArg {
 	header := TesseractHeader{
 		Address:       t.Header.Address.Hex(),
 		PrevHash:      t.Header.PrevHash.Hex(),

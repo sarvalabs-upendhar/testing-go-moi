@@ -15,6 +15,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"io/ioutil"
 	"log"
+	"math/big"
 	"net/http"
 	"sync"
 
@@ -101,7 +102,7 @@ func NewStateManager(
 }
 
 func (sm *StateManager) createStateObject(addr ktypes.Address, accType ktypes.AccType) *StateObject {
-	journal := new(journal)
+	journal := new(Journal)
 	stateObject := NewStateObject(addr, sm.cache, journal, sm.db, accType)
 
 	sm.dirtyObjects[addr] = stateObject
@@ -157,7 +158,7 @@ func (sm *StateManager) GetLatestStateObject(addr ktypes.Address) (*StateObject,
 	object, ok := sm.objects[addr]
 	if ok {
 		if object.journal == nil {
-			object.journal = new(journal)
+			object.journal = new(Journal)
 		}
 
 		return object, nil
@@ -183,7 +184,7 @@ func (sm *StateManager) GetStateObjectByHash(addr ktypes.Address, hash ktypes.Ha
 		log.Fatal(err)
 	}
 
-	newJournal := new(journal)
+	newJournal := new(Journal)
 	sObj := NewStateObject(addr, sm.cache, newJournal, sm.db, acc.AccType)
 	sObj.data = *acc
 	sObj.contextHash = acc.ContextHash
@@ -193,7 +194,7 @@ func (sm *StateManager) GetStateObjectByHash(addr ktypes.Address, hash ktypes.Ha
 		return nil, errors.Wrap(ktypes.ErrFetchingBalanceObject, err.Error())
 	}
 
-	sObj.storage, err = getStorage(acc.StorageRoot, sm.db)
+	sObj.Storage, err = getStorage(acc.StorageRoot, sm.db)
 	if err != nil {
 		return nil, errors.Wrap(ktypes.ErrFetchingStorageObject, err.Error())
 	}
@@ -606,6 +607,14 @@ func (sm *StateManager) GetBalances(addrs ktypes.Address) (*ktypes.BalanceObject
 	}
 
 	return stateObject.balance.Copy(), nil
+}
+
+func (sm *StateManager) GetBalance(addr ktypes.Address, assetID ktypes.AssetID) (*big.Int, error) {
+	if _, ok := sm.objects[addr]; ok {
+		return sm.objects[addr].balance.Bal[assetID], nil
+	}
+
+	return nil, errors.New("invalid asset id")
 }
 
 func (sm *StateManager) GetAccountMetaInfo(addr ktypes.Address) (*ktypes.AccountMetaInfo, error) {
