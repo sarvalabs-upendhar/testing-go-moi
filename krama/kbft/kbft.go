@@ -170,7 +170,7 @@ func (kbft *KBFT) handler(maxSteps int) error {
 	defer func() {
 		close(kbft.outboundMsgChan)
 		close(kbft.selfMsgChan)
-		kbft.PrintMetrics()
+		//kbft.PrintMetrics()
 		kbft.ctxCancel()
 	}()
 
