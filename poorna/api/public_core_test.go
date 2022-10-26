@@ -2,10 +2,13 @@ package api
 
 import (
 	"errors"
-	"github.com/stretchr/testify/require"
 	"log"
 	"math/big"
 	"testing"
+
+	"gitlab.com/sarvalabs/moichain/guna"
+
+	"github.com/stretchr/testify/require"
 
 	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	"gitlab.com/sarvalabs/moichain/common/tests"
@@ -38,6 +41,11 @@ type MockStateManager struct {
 	accounts          map[ktypes.Address]*ktypes.Account
 	context           map[ktypes.Hash]*Context
 	latestContextHash map[ktypes.Address]ktypes.Hash
+}
+
+func (ms *MockStateManager) GetLatestStateObject(addr ktypes.Address) (*guna.StateObject, error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 var (
@@ -147,12 +155,17 @@ func (mc *MockChainManager) setAssets(addr ktypes.Address, assetInfo *AssetInfo)
 
 // State Manager mock functions
 
-func (ms *MockStateManager) GetLatestContext(address ktypes.Address) (ktypes.Hash, []id.KramaID, []id.KramaID, error) {
-	if hash, ok := ms.latestContextHash[address]; ok {
-		return hash, ms.context[hash].behaviourNodes, ms.context[hash].randomNodes, nil
+func (ms *MockStateManager) GetContextByHash(address ktypes.Address,
+	hash ktypes.Hash) (ktypes.Hash, []id.KramaID, []id.KramaID, error) {
+	if hash == ktypes.NilHash {
+		if hash, ok := ms.latestContextHash[address]; ok {
+			return hash, ms.context[hash].behaviourNodes, ms.context[hash].randomNodes, nil
+		} else {
+			return ktypes.NilHash, nil, nil, ktypes.ErrAccountNotFound
+		}
 	}
 
-	return ktypes.NilHash, nil, nil, ktypes.ErrAccountNotFound
+	return hash, ms.context[hash].behaviourNodes, ms.context[hash].randomNodes, nil
 }
 
 func (ms *MockStateManager) GetBalances(addr ktypes.Address) (*ktypes.BalanceObject, error) {
@@ -373,28 +386,47 @@ func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
 
 	testcases := []struct {
 		name        string
-		args        TesseractArgs
+		args        ContextInfoByHashArgs
 		expected    []string
 		expectedErr error
 	}{
 		{
 			name: "Invalid address",
-			args: TesseractArgs{
+			args: ContextInfoByHashArgs{
 				From: "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+				Hash: "68510188a8Bff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
 			},
 			expectedErr: ktypes.ErrInvalidAddress,
 		},
 		{
-			name: "Account without state",
-			args: TesseractArgs{
-				From: tests.RandomAddress(t).String(),
+			name: "Invalid hash",
+			args: ContextInfoByHashArgs{
+				From: address.Hex(),
+				Hash: "68510188Z8Bff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+			},
+			expectedErr: ktypes.ErrInvalidHash,
+		},
+		{
+			name: "Address without state",
+			args: ContextInfoByHashArgs{
+				From: tests.RandomAddress(t).Hex(),
+				Hash: "",
 			},
 			expectedErr: ktypes.ErrAccountNotFound,
 		},
 		{
-			name: "Valid address",
-			args: TesseractArgs{
-				From: address.String(),
+			name: "Valid Address and valid hash",
+			args: ContextInfoByHashArgs{
+				From: address.Hex(),
+				Hash: latestContextHash.Hex(),
+			},
+			expected: stateManager.getContextNodes(latestContextHash),
+		},
+		{
+			name: "Valid Address and empty hash",
+			args: ContextInfoByHashArgs{
+				From: address.Hex(),
+				Hash: "",
 			},
 			expected: stateManager.getContextNodes(latestContextHash),
 		},
@@ -402,7 +434,7 @@ func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(testing *testing.T) {
-			behaviour, observer, err := coreAPI.GetContextInfo(&testcase.args)
+			behaviour, observer, err := coreAPI.GetContextInfoByHash(&testcase.args)
 			if testcase.expectedErr != nil {
 				require.Error(t, err)
 				require.Equal(t, testcase.expectedErr, err)

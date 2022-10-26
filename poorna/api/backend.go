@@ -1,10 +1,12 @@
 package api
 
 import (
+	"math/big"
+
 	"gitlab.com/sarvalabs/moichain/common"
 	"gitlab.com/sarvalabs/moichain/common/ktypes"
+	"gitlab.com/sarvalabs/moichain/guna"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"math/big"
 )
 
 type IxPool interface {
@@ -21,7 +23,8 @@ type ChainManager interface {
 }
 
 type StateManager interface {
-	GetLatestContext(address ktypes.Address) (ktypes.Hash, []id.KramaID, []id.KramaID, error)
+	GetLatestStateObject(addr ktypes.Address) (*guna.StateObject, error)
+	GetContextByHash(address ktypes.Address, hash ktypes.Hash) (ktypes.Hash, []id.KramaID, []id.KramaID, error)
 	GetBalances(addrs ktypes.Address) (*ktypes.BalanceObject, error)
 	GetBalance(addr ktypes.Address, assetID ktypes.AssetID) (*big.Int, error)
 	GetLatestNonce(addr ktypes.Address) (uint64, error)

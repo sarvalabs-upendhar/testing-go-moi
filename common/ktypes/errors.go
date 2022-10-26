@@ -54,4 +54,5 @@ var (
 	ErrAlreadyKnown                = errors.New("already known")
 	ErrFetchingAssetDataInfo       = errors.New("error fetching asset data info")
 	ErrInvalidAssetID              = errors.New("invalid asset id")
+	ErrEmptyHashAndAddress         = errors.New("empty hash and address")
 )

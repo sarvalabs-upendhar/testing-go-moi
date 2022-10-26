@@ -6,6 +6,13 @@ import "gitlab.com/sarvalabs/moichain/common/ktypes"
 type TesseractArgs struct {
 	// Represents the address for which to retrieve the latest Tesseract
 	From string `json:"from"`
+	Hash string `json:"hash"`
+}
+
+type ContextInfoByHashArgs struct {
+	// Represents the address for which to retrieve the latest Tesseract
+	From string `json:"from"`
+	Hash string `json:"hash"`
 }
 
 type TesseractByHashArgs struct {
