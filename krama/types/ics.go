@@ -210,6 +210,13 @@ func (i *ClusterInfo) GetByIndex(index int32) (id.KramaID, []byte) {
 	return kramaID, publicKey
 }
 
+func (i *ClusterInfo) GetICSNodes() []id.KramaID {
+	i.mtx.Lock()
+	defer i.mtx.Unlock()
+
+	return i.ICS.GetNodes()
+}
+
 func (i *ClusterInfo) GetObservers() []string {
 	i.mtx.Lock()
 	defer i.mtx.Unlock()

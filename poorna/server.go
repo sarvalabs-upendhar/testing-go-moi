@@ -506,13 +506,9 @@ func (s *Server) handleDiscovery() error {
 	return nil
 }
 
-// ConnectPeer is a method of Server that connects to peer associated with a given KipID.
-//
-// Note: Implemenation seems incomplete/incosistent. Need to verify with design.
-// Ideally this method can be unified with connection routine within the Discover method
-// and expose the kip id functionality as separate function.
+// ConnectPeer is a method of Server that connects to peer associated with a given KramaID.
 func (s *Server) ConnectPeer(kramaID id.KramaID) error {
-	// Retrieve the libp2pID libp2pID from the KipID
+	// Retrieve the libp2pID from the KramaID
 	libp2pID, err := kramaID.PeerID()
 	if err != nil {
 		s.logger.Error("Error parsing krama libp2pID", err)
@@ -520,54 +516,58 @@ func (s *Server) ConnectPeer(kramaID id.KramaID) error {
 		return err
 	}
 
-	peerID, err := peer.IDFromString(libp2pID)
+	// Decode the encoded PeerID
+	peerID, err := peer.Decode(libp2pID)
 	if err != nil {
-		// Return error
+		s.logger.Error("Error decoding peerID", err)
+
 		return err
 	}
 
-	// Check if the host is already connected to the libp2pID
-	if s.host.Network().Connectedness(peerID) != network.Connected {
-		// Setup a new stream to the libp2pID over the KIP protocol
-		stream, err := s.host.NewStream(s.ctx, peerID, s.cfg.ProtocolID)
-		if err != nil {
-			// Return error if stream setup fails
+	// Get peer info from the peer store
+	peerInfo := s.host.Peerstore().PeerInfo(peerID)
+
+	// Check if the host is already connected to the peer
+	if s.host.Network().Connectedness(peerInfo.ID) != network.Connected {
+		// Attempt to connect the node host to the peer
+		if err := s.host.Connect(s.ctx, peerInfo); err != nil {
 			return err
 		}
-
-		// Create a new read/write buffer
-		rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
-		// Create a NewPeerEvent
-		kpeer := NewKIPPeer(stream.Conn().RemotePeer(), *rw)
-
-		// Fetch NTQ
-		ntq, err := s.Senatus.GetNTQ(s.GetKramaID())
-		if err != nil {
-			s.logger.Error("Error fetching ntq", "error", err, "libp2pID", s.GetKramaID())
-
-			return err
-		}
-
-		if err := kpeer.SendID(s.GetKramaID(), ntq, s.host.Addrs()); err != nil {
-			s.logger.Error("Handshake Failed", "error", err)
-		}
-
-		// Register the libp2pID to the handler working set
-		if err := s.Peers.Register(kpeer); err != nil {
-			log.Println(err)
-		}
-
-		// Post the event to the registered receivers for NewPeerEvents
-		peerEvent := kutils.NewPeerEvent{PeerID: kpeer.networkID}
-		if err := s.mux.Post(peerEvent); err != nil {
-			log.Fatal(err)
-		}
-
-		// Log the successful connection to the libp2pID
-		log.Println("Connected", peerEvent)
+		// Log the successful connection to the peer
+		log.Println("Connected", peerInfo.ID)
 	}
 
 	// Return a nil error
+	return ktypes.ErrConnectionExists
+}
+
+// DisconnectPeer is a method of Server that disconnects a peer associated with a given KramaID from the network.
+func (s *Server) DisconnectPeer(kramaID id.KramaID) error {
+	// Retrieve the libp2pID from the KramaID
+	libp2pID, err := kramaID.PeerID()
+	if err != nil {
+		s.logger.Error("Error parsing krama libp2pID", err)
+
+		return err
+	}
+
+	// Decode the encoded PeerID
+	peerID, err := peer.Decode(libp2pID)
+	if err != nil {
+		s.logger.Error("Error decoding peerID", err)
+
+		return err
+	}
+
+	// Check if the host is already connected to the peer
+	if s.host.Network().Connectedness(peerID) == network.Connected {
+		if err := s.host.Network().ClosePeer(peerID); err != nil {
+			return err
+		}
+		// Log the successful connection closure to the peer
+		log.Println("Disconnected", peerID)
+	}
+
 	return nil
 }
 
