@@ -13,10 +13,13 @@ import (
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/polo/go-polo"
 	"log"
+	"math/rand"
+	"time"
 )
 
 const (
-	TesseractTopic = "MOI_PUBSUB_TESSERACT"
+	MinimumConnectionCount = 3
+	TesseractTopic         = "MOI_PUBSUB_TESSERACT"
 )
 
 type network interface {
@@ -24,6 +27,8 @@ type network interface {
 	Broadcast(topic string, data []byte) error
 	Subscribe(ctx context.Context, topic string, handler func(msg *pubsub.Message) error) error
 	InitNewRPCServer(protocol protocol.ID) *rpc.Client
+	ConnectPeer(kramaID id.KramaID) error
+	DisconnectPeer(kramaID id.KramaID) error
 	RegisterNewRPCService(protocol protocol.ID, serviceName string, service interface{}) error
 	GetKramaID() id.KramaID
 }
@@ -48,6 +53,8 @@ func (t *Transport) RegisterRPCService(serviceID protocol.ID, serviceName string
 }
 
 func (t *Transport) InitClusterCommunication(ctx context.Context, slot *types.Slot) error {
+	var randomICSNodes []id.KramaID
+
 	handler := func(msg *pubsub.Message) error {
 		icsMsg := new(ktypes.ICSMSG)
 		if err := polo.Depolorize(icsMsg, msg.GetData()); err != nil {
@@ -69,12 +76,22 @@ func (t *Transport) InitClusterCommunication(ctx context.Context, slot *types.Sl
 		return errors.Wrap(err, "failed to subscribe")
 	}
 
+	// Check whether the slot is a validator slot
+	if slot.SlotType == types.ValidatorSlot {
+		randomICSNodes = t.connectRandomPeers(slot)
+	}
+
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
 				if err := t.network.Unsubscribe(string(slot.ClusterID())); err != nil {
 					log.Panicln(err)
+				}
+
+				// Check whether the slot is a validator slot and the randomICSNodes is not empty
+				if slot.SlotType == types.ValidatorSlot && len(randomICSNodes) != 0 {
+					t.disconnectRandomPeers(randomICSNodes)
 				}
 
 				t.logger.Info("Closing cluster communication channels", "cluster-id", slot.ClusterID())
@@ -106,4 +123,56 @@ func (t *Transport) Call(peerID peer.ID, svcName, svcMethod string, args, respon
 
 func (t *Transport) BroadcastTesseract(msg *ktypes.TesseractMessage) error {
 	return t.network.Broadcast(TesseractTopic, polo.Polorize(msg))
+}
+
+func (t *Transport) connectRandomPeers(slot *types.Slot) []id.KramaID {
+	var randomICSNodes []id.KramaID
+
+	clusterInfo := slot.CLusterInfo()
+
+	icsNodes := clusterInfo.ICS.GetNodes()
+	visitedNodes := make(map[int]interface{})
+
+	/* If the icsNodes slice is not empty, then connect to the random ics nodes. Break the loop
+	either on successfully establishing a connection with three random ics nodes or on failure to
+	connect three random ics nodes even after looping through the entire icsNodes slice. In case
+	if the size of the icsNodes is less than three, then connect to the available nodes. */
+	counter := 0
+	for len(visitedNodes) < len(icsNodes) && counter < MinimumConnectionCount {
+		source := rand.NewSource(time.Now().UnixNano())
+		reg := rand.New(source) //nolint
+		index := reg.Intn(len(icsNodes))
+		node := icsNodes[index]
+
+		if _, ok := visitedNodes[index]; ok {
+			continue
+		}
+
+		visitedNodes[index] = nil
+
+		if err := t.network.ConnectPeer(node); err != nil {
+			// If the node is already connected increment the counter
+			if errors.Is(err, ktypes.ErrConnectionExists) {
+				counter++
+			}
+
+			continue
+		}
+
+		// As the connection is successful, increment the counter and append the node to randomICSNodes slice.
+		counter++
+
+		randomICSNodes = append(randomICSNodes, node)
+	}
+
+	return randomICSNodes
+}
+
+func (t *Transport) disconnectRandomPeers(randomICSNodes []id.KramaID) {
+	// Disconnect the random peers which got connected while subscribing to the network
+	for _, node := range randomICSNodes {
+		if err := t.network.DisconnectPeer(node); err != nil {
+			log.Panicln(err)
+		}
+	}
 }

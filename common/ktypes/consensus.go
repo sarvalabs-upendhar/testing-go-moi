@@ -315,6 +315,18 @@ func (i *ICSNodes) UpdateNodeSet(setType IcsSetType, data *NodeSet) {
 	i.Size += len(data.Ids)
 }
 
+func (i *ICSNodes) GetNodes() []id.KramaID {
+	var nodes []id.KramaID
+
+	for _, nodeSet := range i.Nodes {
+		if nodeSet != nil {
+			nodes = append(nodes, nodeSet.Ids...)
+		}
+	}
+
+	return nodes
+}
+
 func (i *ICSNodes) IsContextQuorum() bool {
 	for j := 0; j < 4; j += 2 {
 		count := 0
