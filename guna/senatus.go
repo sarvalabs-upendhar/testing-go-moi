@@ -171,7 +171,7 @@ func (r *ReputationEngine) UpdateNTQ(key id.KramaID, ntq int32) error {
 
 		r.cache.Add(CacheKey(key), info)
 
-		return r.db.UpdateEntry(DBKey(key), polo.Polorize(info))
+		return r.db.UpdateEntry(append([]byte{ktypes.NtqGID.Byte()}, []byte(key)...), polo.Polorize(info))
 	}
 
 	info = &ReputationInfo{
@@ -181,7 +181,7 @@ func (r *ReputationEngine) UpdateNTQ(key id.KramaID, ntq int32) error {
 
 	r.cache.Add(CacheKey(key), info)
 
-	return r.db.CreateEntry(DBKey(key), polo.Polorize(info))
+	return r.db.CreateEntry(append([]byte{ktypes.NtqGID.Byte()}, []byte(key)...), polo.Polorize(info))
 }
 
 func (r *ReputationEngine) UpdateInclusivity(key id.KramaID, delta int64) error {
@@ -272,7 +272,7 @@ func (r *ReputationEngine) getInfo(id id.KramaID) (*ReputationInfo, error) {
 		return reputationInfo, nil
 	}
 
-	rawData, err := r.db.ReadEntry(DBKey(id))
+	rawData, err := r.db.ReadEntry(append([]byte{ktypes.NtqGID.Byte()}, []byte(id)...))
 	if errors.Is(err, ktypes.ErrKeyNotFound) {
 		return nil, ktypes.ErrKramaIDNotFound
 	} else if err != nil {

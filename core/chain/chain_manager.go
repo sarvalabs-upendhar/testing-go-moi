@@ -58,7 +58,7 @@ type stateManager interface {
 	Cleanup(addrs ktypes.Address)
 	IsGenesis(addr ktypes.Address) (bool, error)
 	FetchContextLock(ts *ktypes.Tesseract) (*ktypes.ICSNodes, error)
-	GetContextByHash(hash ktypes.Hash) ([]id.KramaID, []id.KramaID, error)
+	GetContextByHash(addr ktypes.Address, hash ktypes.Hash) ([]id.KramaID, []id.KramaID, error)
 }
 
 type server interface {
@@ -173,7 +173,7 @@ func (c *ChainManager) fetchContextForAgora(t *ktypes.Tesseract) ([]id.KramaID, 
 		peers = append(peers, deltaGroup.BehaviouralNodes...)
 		peers = append(peers, deltaGroup.RandomNodes...)
 
-		behaviour, random, err := c.sm.GetContextByHash(ts.Header.ContextLock[address].ContextHash)
+		behaviour, random, err := c.sm.GetContextByHash(address, ts.Header.ContextLock[address].ContextHash)
 		if err != nil {
 			tesseractHash = ts.Header.PrevHash
 
@@ -243,7 +243,9 @@ func (c *ChainManager) GetTesseract(hash ktypes.Hash) (*ktypes.Tesseract, error)
 	if !isCached {
 		tesseract := new(ktypes.Tesseract)
 
-		buf, err := c.db.ReadEntry(hash.Bytes())
+		key := ktypes.GetDBKey(ktypes.NilAddress, ktypes.TesseractGID, hash)
+
+		buf, err := c.db.ReadEntry(key)
 		if err != nil {
 			return nil, errors.Wrap(err, ktypes.ErrFetchingTesseract.Error())
 		}
@@ -461,15 +463,16 @@ func (c *ChainManager) addTesseract(
 		accType = stateObject.GetAccountType()
 
 		for k, v := range stateObject.GetDirtyStorage() {
-			if err := c.db.CreateEntry(k.Bytes(), v); err != nil {
-				c.logger.Error("Error writing key to db", "key", k.Hex())
+			if err := c.db.CreateEntry(ktypes.Hex2Bytes(k), v); err != nil {
+				c.logger.Error("Error writing key to db", "key", k)
 
 				return err
 			}
 		}
 	}
 
-	if err := c.db.CreateEntry(tesseractHash.Bytes(), polo.Polorize(t)); err != nil {
+	key := ktypes.GetDBKey(ktypes.NilAddress, ktypes.TesseractGID, tesseractHash)
+	if err := c.db.CreateEntry(key, polo.Polorize(t)); err != nil {
 		return errors.Wrap(err, "error writing tesseract to db")
 	}
 

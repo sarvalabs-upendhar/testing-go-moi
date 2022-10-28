@@ -174,7 +174,9 @@ func (sm *StateManager) GetLatestStateObject(addr ktypes.Address) (*StateObject,
 
 func (sm *StateManager) GetStateObjectByHash(addr ktypes.Address, hash ktypes.Hash) (*StateObject, error) {
 	// read the state
-	data, err := sm.db.ReadEntry(hash.Bytes())
+	key := ktypes.GetDBKey(addr, ktypes.AccountGID, hash)
+
+	data, err := sm.db.ReadEntry(key)
 	if err != nil {
 		return nil, errors.Wrap(ktypes.ErrStateNotFound, err.Error())
 	}
@@ -189,12 +191,12 @@ func (sm *StateManager) GetStateObjectByHash(addr ktypes.Address, hash ktypes.Ha
 	sObj.data = *acc
 	sObj.contextHash = acc.ContextHash
 
-	sObj.balance, err = getBalanceObject(acc.Balance, sm.db)
+	sObj.balance, err = getBalanceObject(addr, acc.Balance, sm.db)
 	if err != nil {
 		return nil, errors.Wrap(ktypes.ErrFetchingBalanceObject, err.Error())
 	}
 
-	sObj.Storage, err = getStorage(acc.StorageRoot, sm.db)
+	sObj.Storage, err = getStorage(addr, acc.StorageRoot, sm.db)
 	if err != nil {
 		return nil, errors.Wrap(ktypes.ErrFetchingStorageObject, err.Error())
 	}
@@ -240,7 +242,9 @@ func (sm *StateManager) getLatestTesseractHash(addr ktypes.Address) (ktypes.Hash
 func (sm *StateManager) fetchTesseractByHash(hash ktypes.Hash) (*ktypes.Tesseract, error) {
 	object, isCached := sm.cache.Get(hash)
 	if !isCached {
-		buf, err := sm.db.ReadEntry(hash.Bytes())
+		key := ktypes.GetDBKey(ktypes.NilAddress, ktypes.TesseractGID, hash)
+
+		buf, err := sm.db.ReadEntry(key)
 		if err != nil {
 			return nil, err
 		}
@@ -309,7 +313,7 @@ func (sm *StateManager) Revert(snap *StateObject) error {
 	return nil
 }
 
-func (sm *StateManager) getContextObject(hash ktypes.Hash) (*ktypes.ContextObject, error) {
+func (sm *StateManager) getContextObject(addr ktypes.Address, hash ktypes.Hash) (*ktypes.ContextObject, error) {
 	contextData, isAvailable := sm.cache.Get(hash)
 	if isAvailable {
 		contextObject, ok := contextData.(*ktypes.ContextObject)
@@ -320,7 +324,9 @@ func (sm *StateManager) getContextObject(hash ktypes.Hash) (*ktypes.ContextObjec
 		return contextObject, nil
 	}
 
-	rawData, err := sm.db.ReadEntry(hash.Bytes())
+	key := ktypes.GetDBKey(addr, ktypes.ContextGID, hash)
+
+	rawData, err := sm.db.ReadEntry(key)
 	if err != nil {
 		return nil, ktypes.ErrContextStateNotFound
 	}
@@ -365,10 +371,10 @@ func (sm *StateManager) getMetaContextObject(key ktypes.Hash) (*ktypes.MetaConte
 
 // fetchParticipantContextByHash fetches the context info based on the give hash
 // and returns a NodeSet which holds the kramaIDs and public keys
-func (sm *StateManager) fetchParticipantContextByHash(hash ktypes.Hash) (
+func (sm *StateManager) fetchParticipantContextByHash(addr ktypes.Address, hash ktypes.Hash) (
 	behaviouralSet, randomSet *ktypes.NodeSet,
 	err error) {
-	behaviouralContext, randomContext, err := sm.GetContextByHash(hash)
+	behaviouralContext, randomContext, err := sm.GetContextByHash(addr, hash)
 	if err != nil {
 		sm.logger.Error("failed to retrieve sender context nodes", "error", err)
 
@@ -441,18 +447,18 @@ func (sm *StateManager) GetCommittedContextHash(add ktypes.Address) (ktypes.Hash
 	return tesseract.Body.ContextHash, nil
 }
 
-func (sm *StateManager) GetContextByHash(hash ktypes.Hash) ([]id.KramaID, []id.KramaID, error) {
+func (sm *StateManager) GetContextByHash(addr ktypes.Address, hash ktypes.Hash) ([]id.KramaID, []id.KramaID, error) {
 	metaContextObject, err := sm.getMetaContextObject(hash)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "metaContextObject fetch failed")
 	}
 
-	behaviourContext, err := sm.getContextObject(metaContextObject.BehaviouralContext)
+	behaviourContext, err := sm.getContextObject(addr, metaContextObject.BehaviouralContext)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "behaviouralContextObject fetch failed")
 	}
 
-	randomContext, err := sm.getContextObject(metaContextObject.RandomContext)
+	randomContext, err := sm.getContextObject(addr, metaContextObject.RandomContext)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "randomContextObject fetch failed")
 	}
@@ -472,7 +478,7 @@ func (sm *StateManager) GetLatestContext(address ktypes.Address) (ktypes.Hash, [
 
 	sm.logger.Debug("Fetching context info", "addr", address.Hex(), ts.Body.ContextHash.Hex())
 
-	behaviourSet, randomSet, err := sm.GetContextByHash(ts.Body.ContextHash)
+	behaviourSet, randomSet, err := sm.GetContextByHash(address, ts.Body.ContextHash)
 	if err != nil {
 		return ktypes.NilHash, nil, nil, err
 	}
@@ -486,7 +492,7 @@ func (sm *StateManager) FetchContextLock(ts *ktypes.Tesseract) (*ktypes.ICSNodes
 
 	for address, info := range ts.Header.ContextLock {
 		if address == ix.FromAddress() {
-			behaviourSet, randomSet, err := sm.fetchParticipantContextByHash(info.ContextHash)
+			behaviourSet, randomSet, err := sm.fetchParticipantContextByHash(address, info.ContextHash)
 			if err != nil {
 				return nil, err
 			}
@@ -498,7 +504,7 @@ func (sm *StateManager) FetchContextLock(ts *ktypes.Tesseract) (*ktypes.ICSNodes
 				continue
 			}
 
-			behaviourSet, randomSet, err := sm.fetchParticipantContextByHash(info.ContextHash)
+			behaviourSet, randomSet, err := sm.fetchParticipantContextByHash(address, info.ContextHash)
 			if err != nil {
 				return nil, err
 			}
@@ -621,8 +627,10 @@ func (sm *StateManager) GetAccountMetaInfo(addr ktypes.Address) (*ktypes.Account
 	return sm.db.GetAccountMetaInfo(addr.Bytes())
 }
 
-func (sm *StateManager) GetAccountInfo(stateHash ktypes.Hash) (*ktypes.Account, error) {
-	rawData, err := sm.db.ReadEntry(stateHash.Bytes())
+func (sm *StateManager) GetAccountInfo(addr ktypes.Address, stateHash ktypes.Hash) (*ktypes.Account, error) {
+	key := ktypes.GetDBKey(addr, ktypes.AccountGID, stateHash)
+
+	rawData, err := sm.db.ReadEntry(key)
 	if err != nil {
 		return nil, err
 	}

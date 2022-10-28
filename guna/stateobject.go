@@ -13,7 +13,7 @@ import (
 	"gitlab.com/sarvalabs/moichain/dhruva"
 )
 
-type Storage map[ktypes.Hash][]byte
+type Storage map[string][]byte
 
 func (s Storage) Copy() Storage {
 	cpy := make(Storage)
@@ -188,7 +188,8 @@ func (s *StateObject) commitBalanceObject() ([]byte, error) {
 		id:   cID,
 	})
 
-	s.dirtyEntries[cID] = data
+	key := ktypes.BytesToHex(ktypes.GetDBKey(s.Address, ktypes.BalanceGID, cID))
+	s.dirtyEntries[key] = data
 	s.data.Balance = cID
 
 	return cID.Bytes(), nil
@@ -205,7 +206,8 @@ func (s *StateObject) commitAccount() (ktypes.Hash, error) {
 		id:   cID,
 	})
 
-	s.dirtyEntries[cID] = data
+	key := ktypes.BytesToHex(ktypes.GetDBKey(s.Address, ktypes.AccountGID, cID))
+	s.dirtyEntries[key] = data
 
 	return cID, nil
 }
@@ -219,7 +221,8 @@ func (s *StateObject) commitStorage() (ktypes.Hash, error) {
 		id:   cID,
 	})
 
-	s.dirtyEntries[cID] = data
+	key := ktypes.BytesToHex(ktypes.GetDBKey(s.Address, ktypes.StorageGID, cID))
+	s.dirtyEntries[key] = data
 	s.data.StorageRoot = cID
 
 	return cID, nil
@@ -306,7 +309,8 @@ func (s *StateObject) CreateAsset(
 		id:   assetHash,
 	})
 
-	s.dirtyEntries[assetHash] = data
+	key := assetHash.String()
+	s.dirtyEntries[key] = data
 
 	// Update the balance
 	if _, ok := s.balance.Bal[assetID]; !ok {
@@ -349,7 +353,8 @@ func (s *StateObject) commitContextObject(obj interface{}) (ktypes.Hash, error) 
 		id:   hash,
 	})
 
-	s.dirtyEntries[hash] = data
+	key := ktypes.BytesToHex(ktypes.GetDBKey(s.Address, ktypes.ContextGID, hash))
+	s.dirtyEntries[key] = data
 	//s.cache.Add(hash, obj)
 
 	return hash, nil
@@ -518,7 +523,9 @@ func (s *StateObject) getMetaContextObjectCopy() (*ktypes.MetaContextObject, err
 func (s *StateObject) getContextObjectCopy(hash ktypes.Hash) (*ktypes.ContextObject, error) {
 	data, isAvailable := s.cache.Get(hash)
 	if !isAvailable {
-		rawData, err := s.db.ReadEntry(hash.Bytes())
+		key := ktypes.GetDBKey(s.Address, ktypes.ContextGID, hash)
+
+		rawData, err := s.db.ReadEntry(key)
 		if err != nil {
 			return nil, errors.Wrap(ktypes.ErrUpdatingContextObject, err.Error())
 		}
@@ -541,8 +548,14 @@ func (s *StateObject) getContextObjectCopy(hash ktypes.Hash) (*ktypes.ContextObj
 
 	return contextObject.Copy(), nil
 }
-func getBalanceObject(hash ktypes.Hash, db *dhruva.PersistenceManager) (*ktypes.BalanceObject, error) {
-	data, err := db.ReadEntry(hash.Bytes())
+func getBalanceObject(
+	addr ktypes.Address,
+	hash ktypes.Hash,
+	db *dhruva.PersistenceManager,
+) (*ktypes.BalanceObject, error) {
+	key := ktypes.GetDBKey(addr, ktypes.BalanceGID, hash)
+
+	data, err := db.ReadEntry(key)
 	if err != nil {
 		return nil, err
 	}
@@ -555,8 +568,10 @@ func getBalanceObject(hash ktypes.Hash, db *dhruva.PersistenceManager) (*ktypes.
 
 	return balObject, nil
 }
-func getStorage(hash ktypes.Hash, db *dhruva.PersistenceManager) (map[ktypes.Hash][]byte, error) {
-	data, err := db.ReadEntry(hash.Bytes())
+func getStorage(addr ktypes.Address, hash ktypes.Hash, db *dhruva.PersistenceManager) (map[ktypes.Hash][]byte, error) {
+	key := ktypes.GetDBKey(addr, ktypes.StorageGID, hash)
+
+	data, err := db.ReadEntry(key)
 	if err != nil {
 		return nil, err
 	}
