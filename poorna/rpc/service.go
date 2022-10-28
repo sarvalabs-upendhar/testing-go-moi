@@ -164,14 +164,14 @@ func (r *rpcService) GetTDU(req *http.Request, args *api.TesseractArgs, resp *ap
 	return nil
 }
 
-// GetContextInfo is an RPC method that returns the context Info of the queried address
-func (r *rpcService) GetContextInfo(req *http.Request, args *api.TesseractArgs, resp *api.Response) error {
+// GetContextInfoByHash is an RPC method that returns the context Info of the queried address
+func (r *rpcService) GetContextInfoByHash(req *http.Request, args *api.ContextInfoByHashArgs, resp *api.Response) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
 		return ktypes.ErrInvalidAPI
 	}
 
-	behaviour, observer, err := coreAPI.GetContextInfo(args)
+	behaviour, observer, err := coreAPI.GetContextInfoByHash(args)
 	if err != nil {
 		return err
 	}

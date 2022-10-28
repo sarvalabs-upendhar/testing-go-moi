@@ -54,4 +54,6 @@ var (
 	ErrAlreadyKnown                = errors.New("already known")
 	ErrFetchingAssetDataInfo       = errors.New("error fetching asset data info")
 	ErrInvalidAssetID              = errors.New("invalid asset id")
+	ErrConnectionExists            = errors.New("peer already connected")
+	ErrEmptyHashAndAddress         = errors.New("empty hash and address")
 )

@@ -374,7 +374,7 @@ func (sm *StateManager) getMetaContextObject(key ktypes.Hash) (*ktypes.MetaConte
 func (sm *StateManager) fetchParticipantContextByHash(addr ktypes.Address, hash ktypes.Hash) (
 	behaviouralSet, randomSet *ktypes.NodeSet,
 	err error) {
-	behaviouralContext, randomContext, err := sm.GetContextByHash(addr, hash)
+	behaviouralContext, randomContext, err := sm.getContextByHash(addr, hash)
 	if err != nil {
 		sm.logger.Error("failed to retrieve sender context nodes", "error", err)
 
@@ -408,7 +408,7 @@ func (sm *StateManager) fetchLatestParticipantContext(addr ktypes.Address) (
 	contextHash ktypes.Hash,
 	behaviouralSet, randomSet *ktypes.NodeSet,
 	err error) {
-	contextHash, behaviouralContext, randomContext, err := sm.GetLatestContext(addr)
+	contextHash, behaviouralContext, randomContext, err := sm.GetContextByHash(addr, ktypes.NilHash)
 	if err != nil {
 		sm.logger.Error("failed to retrieve sender context nodes", "error", err)
 
@@ -447,7 +447,7 @@ func (sm *StateManager) GetCommittedContextHash(add ktypes.Address) (ktypes.Hash
 	return tesseract.Body.ContextHash, nil
 }
 
-func (sm *StateManager) GetContextByHash(addr ktypes.Address, hash ktypes.Hash) ([]id.KramaID, []id.KramaID, error) {
+func (sm *StateManager) getContextByHash(addr ktypes.Address, hash ktypes.Hash) ([]id.KramaID, []id.KramaID, error) {
 	metaContextObject, err := sm.getMetaContextObject(hash)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "metaContextObject fetch failed")
@@ -466,24 +466,30 @@ func (sm *StateManager) GetContextByHash(addr ktypes.Address, hash ktypes.Hash) 
 	return behaviourContext.Ids, randomContext.Ids, nil
 }
 
-func (sm *StateManager) GetLatestContext(address ktypes.Address) (ktypes.Hash, []id.KramaID, []id.KramaID, error) {
-	if address == ktypes.NilAddress {
-		return ktypes.NilHash, nil, nil, nil
+/*GetContextByHash fetches context using hash if both address and hash are given,
+fetches latest context of address if only address given*/
+func (sm *StateManager) GetContextByHash(address ktypes.Address,
+	hash ktypes.Hash) (ktypes.Hash, []id.KramaID, []id.KramaID, error) {
+	if address == ktypes.NilAddress && hash == ktypes.NilHash {
+		return ktypes.NilHash, nil, nil, ktypes.ErrEmptyHashAndAddress
+	}
+	if hash == ktypes.NilHash {
+		ts, err := sm.GetLatestTesseract(address)
+		if err != nil {
+			return ktypes.NilHash, nil, nil, errors.Wrap(err, "tesseract fetch failed")
+		}
+
+		sm.logger.Debug("Fetching context info", "addr", address.Hex(), ts.Body.ContextHash.Hex())
+
+		hash = ts.Body.ContextHash
 	}
 
-	ts, err := sm.GetLatestTesseract(address)
-	if err != nil {
-		return ktypes.NilHash, nil, nil, errors.Wrap(err, "tesseract fetch failed")
-	}
-
-	sm.logger.Debug("Fetching context info", "addr", address.Hex(), ts.Body.ContextHash.Hex())
-
-	behaviourSet, randomSet, err := sm.GetContextByHash(address, ts.Body.ContextHash)
+	behaviourSet, randomSet, err := sm.getContextByHash(address, hash)
 	if err != nil {
 		return ktypes.NilHash, nil, nil, err
 	}
 
-	return ts.Body.ContextHash, behaviourSet, randomSet, nil
+	return hash, behaviourSet, randomSet, nil
 }
 
 func (sm *StateManager) FetchContextLock(ts *ktypes.Tesseract) (*ktypes.ICSNodes, error) {

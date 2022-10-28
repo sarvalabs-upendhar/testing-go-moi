@@ -1,12 +1,13 @@
 package api
 
 import (
-	"github.com/stretchr/testify/require"
-	"gitlab.com/sarvalabs/moichain/common"
-	"gitlab.com/sarvalabs/moichain/common/tests"
 	"log"
 	"sync/atomic"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	"gitlab.com/sarvalabs/moichain/common"
+	"gitlab.com/sarvalabs/moichain/common/tests"
 
 	"gitlab.com/sarvalabs/moichain/common/ktypes"
 )

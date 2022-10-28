@@ -53,12 +53,11 @@ type stateManager interface {
 	GetDirtyObject(addr ktypes.Address) (*guna.StateObject, error)
 	GetLatestTesseract(addr ktypes.Address) (*ktypes.Tesseract, error)
 	DeleteStateObject(addr ktypes.Address)
-	GetLatestContext(addr ktypes.Address) (ktypes.Hash, []id.KramaID, []id.KramaID, error)
+	GetContextByHash(addr ktypes.Address, hash ktypes.Hash) (ktypes.Hash, []id.KramaID, []id.KramaID, error)
 	GetPublicKeys(id ...id.KramaID) (keys [][]byte, err error)
 	Cleanup(addrs ktypes.Address)
 	IsGenesis(addr ktypes.Address) (bool, error)
 	FetchContextLock(ts *ktypes.Tesseract) (*ktypes.ICSNodes, error)
-	GetContextByHash(addr ktypes.Address, hash ktypes.Hash) ([]id.KramaID, []id.KramaID, error)
 }
 
 type server interface {
@@ -173,7 +172,7 @@ func (c *ChainManager) fetchContextForAgora(t *ktypes.Tesseract) ([]id.KramaID, 
 		peers = append(peers, deltaGroup.BehaviouralNodes...)
 		peers = append(peers, deltaGroup.RandomNodes...)
 
-		behaviour, random, err := c.sm.GetContextByHash(address, ts.Header.ContextLock[address].ContextHash)
+		_, behaviour, random, err := c.sm.GetContextByHash(address, ts.Header.ContextLock[address].ContextHash)
 		if err != nil {
 			tesseractHash = ts.Header.PrevHash
 

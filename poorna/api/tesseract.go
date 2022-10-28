@@ -32,8 +32,6 @@ type TesseractHeader struct {
 	TesseractHash string
 	// Represent the group hash of all Tesseracts in the ICS
 	GroupHash string
-	// Represents the address of the Tesseract generator
-	Generator string
 	// Represents the address of the Tesseract operator
 	Operator string
 	// Represents the id of the Tesseract ICS

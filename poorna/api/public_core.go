@@ -113,15 +113,20 @@ func (p *PublicCoreAPI) GetAssetInfoByAssetID(assetID string) (*ktypes.AssetInfo
 	return assetInfo, nil
 }
 
-// GetContextInfo will fetch the context associated with the given address
-func (p *PublicCoreAPI) GetContextInfo(args *TesseractArgs) ([]string, []string, error) {
+// GetContextInfoByHash will fetch the context associated with the given address
+func (p *PublicCoreAPI) GetContextInfoByHash(args *ContextInfoByHashArgs) ([]string, []string, error) {
 	address, err := kutils.ValidateAddress(args.From)
 
 	if err != nil {
 		return nil, nil, ktypes.ErrInvalidAddress
 	}
 
-	_, behaviourSet, RandomSet, err := p.sm.GetLatestContext(ktypes.HexToAddress(address))
+	hash, err := kutils.ValidateHash(args.Hash)
+	if err != nil && args.Hash != "" {
+		return nil, nil, ktypes.ErrInvalidHash
+	}
+
+	_, behaviourSet, RandomSet, err := p.sm.GetContextByHash(ktypes.HexToAddress(address), ktypes.HexToHash(hash))
 
 	if err != nil {
 		return nil, nil, err
