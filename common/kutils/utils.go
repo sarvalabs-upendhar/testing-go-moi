@@ -4,7 +4,6 @@ package kutils
 This file has all the utility function required for KIP
 */
 import (
-	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -223,17 +222,4 @@ func ValidateAssetID(aID string) (string, error) {
 	}
 
 	return aID, nil
-}
-
-func GetAddressHeightKey(addr ktypes.Address, height uint64) []byte {
-	prefix := "h"
-	prefixByte := []byte(prefix)
-	heightBytes := make([]byte, 8)
-	binary.LittleEndian.PutUint64(heightBytes, height)
-
-	addressBytes := addr.Bytes()
-	result := append(prefixByte, addressBytes...)
-	result = append(result, heightBytes...)
-
-	return result
 }

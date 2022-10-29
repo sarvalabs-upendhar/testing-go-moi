@@ -19,8 +19,6 @@ import (
 	// "go/build"
 )
 
-const KeyPrefix = "PEER_INFO"
-
 type store interface {
 	CreateEntry(key []byte, value []byte) error
 	ReadEntry(key []byte) ([]byte, error)
@@ -50,15 +48,6 @@ type ReputationEngine struct {
 	messages []*ktypes.HelloMsg
 }
 
-func DBKey(key id.KramaID) []byte {
-	key = KeyPrefix + key
-
-	return []byte(key)
-}
-func CacheKey(key id.KramaID) string {
-	return KeyPrefix + string(key)
-}
-
 func NewReputationEngine(
 	ctx context.Context,
 	logger hclog.Logger,
@@ -85,17 +74,17 @@ func NewReputationEngine(
 func (r *ReputationEngine) AddNewPeer(key id.KramaID, data *ReputationInfo) error {
 	r.logger.Debug("Added peer to NTQ table", "id")
 
-	contains, err := r.db.Contains(DBKey(key))
+	contains, err := r.db.Contains(ktypes.NtqDBKey(key))
 	if err != nil {
 		return err
 	}
 
 	if !contains {
-		if err := r.db.CreateEntry(DBKey(key), polo.Polorize(data)); err != nil {
+		if err := r.db.CreateEntry(ktypes.NtqDBKey(key), polo.Polorize(data)); err != nil {
 			return err
 		}
 
-		r.cache.Add(CacheKey(key), data)
+		r.cache.Add(ktypes.NtqCacheKey(key), data)
 
 		return nil
 	}
@@ -123,18 +112,18 @@ func (r *ReputationEngine) UpdateAddress(key id.KramaID, addrs []string) error {
 	if info != nil {
 		info.Addrs = addrs
 
-		r.cache.Add(CacheKey(key), info)
+		r.cache.Add(ktypes.NtqCacheKey(key), info)
 
-		return r.db.UpdateEntry(DBKey(key), polo.Polorize(info))
+		return r.db.UpdateEntry(ktypes.NtqDBKey(key), polo.Polorize(info))
 	}
 
 	info = &ReputationInfo{
 		Addrs: addrs,
 		NTQ:   0,
 	}
-	r.cache.Add(CacheKey(key), info)
+	r.cache.Add(ktypes.NtqCacheKey(key), info)
 
-	return r.db.CreateEntry(DBKey(key), polo.Polorize(info))
+	return r.db.CreateEntry(ktypes.NtqDBKey(key), polo.Polorize(info))
 }
 
 func (r *ReputationEngine) UpdatePublicKey(key id.KramaID, pk []byte) error {
@@ -146,18 +135,18 @@ func (r *ReputationEngine) UpdatePublicKey(key id.KramaID, pk []byte) error {
 	if info != nil {
 		info.PublickKey = pk
 
-		r.cache.Add(CacheKey(key), info)
+		r.cache.Add(ktypes.NtqCacheKey(key), info)
 
-		return r.db.UpdateEntry(DBKey(key), polo.Polorize(info))
+		return r.db.UpdateEntry(ktypes.NtqDBKey(key), polo.Polorize(info))
 	}
 
 	info = &ReputationInfo{
 		PublickKey: pk,
 		NTQ:        0,
 	}
-	r.cache.Add(CacheKey(key), info)
+	r.cache.Add(ktypes.NtqCacheKey(key), info)
 
-	return r.db.CreateEntry(DBKey(key), polo.Polorize(info))
+	return r.db.CreateEntry(ktypes.NtqDBKey(key), polo.Polorize(info))
 }
 
 func (r *ReputationEngine) UpdateNTQ(key id.KramaID, ntq int32) error {
@@ -169,9 +158,9 @@ func (r *ReputationEngine) UpdateNTQ(key id.KramaID, ntq int32) error {
 	if info != nil {
 		info.NTQ = ntq
 
-		r.cache.Add(CacheKey(key), info)
+		r.cache.Add(ktypes.NtqCacheKey(key), info)
 
-		return r.db.UpdateEntry(append([]byte{ktypes.NtqGID.Byte()}, []byte(key)...), polo.Polorize(info))
+		return r.db.UpdateEntry(ktypes.NtqDBKey(key), polo.Polorize(info))
 	}
 
 	info = &ReputationInfo{
@@ -179,9 +168,9 @@ func (r *ReputationEngine) UpdateNTQ(key id.KramaID, ntq int32) error {
 		NTQ:   ntq,
 	}
 
-	r.cache.Add(CacheKey(key), info)
+	r.cache.Add(ktypes.NtqCacheKey(key), info)
 
-	return r.db.CreateEntry(append([]byte{ktypes.NtqGID.Byte()}, []byte(key)...), polo.Polorize(info))
+	return r.db.CreateEntry(ktypes.NtqDBKey(key), polo.Polorize(info))
 }
 
 func (r *ReputationEngine) UpdateInclusivity(key id.KramaID, delta int64) error {
@@ -200,9 +189,9 @@ func (r *ReputationEngine) UpdateInclusivity(key id.KramaID, delta int64) error 
 	if info != nil {
 		info.Degree += delta
 
-		r.cache.Add(CacheKey(key), info)
+		r.cache.Add(ktypes.NtqCacheKey(key), info)
 
-		return r.db.UpdateEntry(DBKey(key), polo.Polorize(info))
+		return r.db.UpdateEntry(ktypes.NtqDBKey(key), polo.Polorize(info))
 	}
 
 	info = &ReputationInfo{
@@ -210,9 +199,9 @@ func (r *ReputationEngine) UpdateInclusivity(key id.KramaID, delta int64) error 
 		Degree: delta,
 	}
 
-	r.cache.Add(CacheKey(key), info)
+	r.cache.Add(ktypes.NtqCacheKey(key), info)
 
-	return r.db.CreateEntry(DBKey(key), polo.Polorize(info))
+	return r.db.CreateEntry(ktypes.NtqDBKey(key), polo.Polorize(info))
 }
 
 func (r *ReputationEngine) GetAddress(key id.KramaID) (multiAddrs []multiaddr.Multiaddr, err error) {
@@ -262,7 +251,7 @@ func (r *ReputationEngine) getInfo(id id.KramaID) (*ReputationInfo, error) {
 		return nil, ktypes.ErrInvalidKramaID
 	}
 
-	data, exists := r.cache.Get(CacheKey(id))
+	data, exists := r.cache.Get(ktypes.NtqCacheKey(id))
 	if exists {
 		reputationInfo, ok := data.(*ReputationInfo)
 		if !ok {
@@ -272,7 +261,7 @@ func (r *ReputationEngine) getInfo(id id.KramaID) (*ReputationInfo, error) {
 		return reputationInfo, nil
 	}
 
-	rawData, err := r.db.ReadEntry(append([]byte{ktypes.NtqGID.Byte()}, []byte(id)...))
+	rawData, err := r.db.ReadEntry(ktypes.NtqDBKey(id))
 	if errors.Is(err, ktypes.ErrKeyNotFound) {
 		return nil, ktypes.ErrKramaIDNotFound
 	} else if err != nil {
@@ -284,7 +273,7 @@ func (r *ReputationEngine) getInfo(id id.KramaID) (*ReputationInfo, error) {
 		return nil, errors.Wrap(err, "reputation-info depolarization failed")
 	}
 
-	r.cache.Add(CacheKey(id), info)
+	r.cache.Add(ktypes.NtqCacheKey(id), info)
 
 	return info, nil
 }
@@ -293,7 +282,7 @@ func (r *ReputationEngine) AddEntries(msg ktypes.SyncReputationInfo) error {
 	writer := r.db.NewBatchWriter()
 
 	for _, v := range msg.Msg {
-		err := writer.Set(DBKey(v.ID), polo.Polorize(
+		err := writer.Set(ktypes.NtqDBKey(v.ID), polo.Polorize(
 			ReputationInfo{
 				NTQ:    v.Ntq,
 				Addrs:  v.Address,
@@ -327,11 +316,11 @@ func (r *ReputationEngine) GetAllEntries() (chan *ktypes.SyncReputationInfo, err
 
 	go func() {
 		msg := new(ktypes.SyncReputationInfo)
-		entriesChan := r.db.GetEntries([]byte(KeyPrefix))
+		entriesChan := r.db.GetEntries([]byte{ktypes.NtqGID.Byte()})
 		count := 0
 
 		for entry := range entriesChan {
-			kramaID := id.KramaID(bytes.TrimPrefix(entry.Key, []byte(KeyPrefix)))
+			kramaID := id.KramaID(bytes.TrimPrefix(entry.Key, []byte{ktypes.NtqGID.Byte()}))
 			info := new(ReputationInfo)
 
 			if err := polo.Depolorize(info, entry.Value); err != nil {

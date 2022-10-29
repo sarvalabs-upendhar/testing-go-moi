@@ -1,12 +1,13 @@
 package guna
 
 import (
-	"github.com/pkg/errors"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/polo/go-polo"
 	"log"
 	"math/big"
 	"sync"
+
+	"github.com/pkg/errors"
+	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	"gitlab.com/sarvalabs/polo/go-polo"
 
 	lru "github.com/hashicorp/golang-lru"
 	"gitlab.com/sarvalabs/moichain/common/ktypes"
@@ -188,7 +189,7 @@ func (s *StateObject) commitBalanceObject() ([]byte, error) {
 		id:   cID,
 	})
 
-	key := ktypes.BytesToHex(ktypes.GetDBKey(s.Address, ktypes.BalanceGID, cID))
+	key := ktypes.BytesToHex(ktypes.DBKey(s.Address, ktypes.BalanceGID, cID))
 	s.dirtyEntries[key] = data
 	s.data.Balance = cID
 
@@ -206,7 +207,7 @@ func (s *StateObject) commitAccount() (ktypes.Hash, error) {
 		id:   cID,
 	})
 
-	key := ktypes.BytesToHex(ktypes.GetDBKey(s.Address, ktypes.AccountGID, cID))
+	key := ktypes.BytesToHex(ktypes.DBKey(s.Address, ktypes.AccountGID, cID))
 	s.dirtyEntries[key] = data
 
 	return cID, nil
@@ -221,7 +222,7 @@ func (s *StateObject) commitStorage() (ktypes.Hash, error) {
 		id:   cID,
 	})
 
-	key := ktypes.BytesToHex(ktypes.GetDBKey(s.Address, ktypes.StorageGID, cID))
+	key := ktypes.BytesToHex(ktypes.DBKey(s.Address, ktypes.StorageGID, cID))
 	s.dirtyEntries[key] = data
 	s.data.StorageRoot = cID
 
@@ -353,7 +354,7 @@ func (s *StateObject) commitContextObject(obj interface{}) (ktypes.Hash, error) 
 		id:   hash,
 	})
 
-	key := ktypes.BytesToHex(ktypes.GetDBKey(s.Address, ktypes.ContextGID, hash))
+	key := ktypes.BytesToHex(ktypes.DBKey(s.Address, ktypes.ContextGID, hash))
 	s.dirtyEntries[key] = data
 	//s.cache.Add(hash, obj)
 
@@ -523,7 +524,7 @@ func (s *StateObject) getMetaContextObjectCopy() (*ktypes.MetaContextObject, err
 func (s *StateObject) getContextObjectCopy(hash ktypes.Hash) (*ktypes.ContextObject, error) {
 	data, isAvailable := s.cache.Get(hash)
 	if !isAvailable {
-		key := ktypes.GetDBKey(s.Address, ktypes.ContextGID, hash)
+		key := ktypes.DBKey(s.Address, ktypes.ContextGID, hash)
 
 		rawData, err := s.db.ReadEntry(key)
 		if err != nil {
@@ -553,7 +554,7 @@ func getBalanceObject(
 	hash ktypes.Hash,
 	db *dhruva.PersistenceManager,
 ) (*ktypes.BalanceObject, error) {
-	key := ktypes.GetDBKey(addr, ktypes.BalanceGID, hash)
+	key := ktypes.DBKey(addr, ktypes.BalanceGID, hash)
 
 	data, err := db.ReadEntry(key)
 	if err != nil {
@@ -569,7 +570,7 @@ func getBalanceObject(
 	return balObject, nil
 }
 func getStorage(addr ktypes.Address, hash ktypes.Hash, db *dhruva.PersistenceManager) (map[ktypes.Hash][]byte, error) {
-	key := ktypes.GetDBKey(addr, ktypes.StorageGID, hash)
+	key := ktypes.DBKey(addr, ktypes.StorageGID, hash)
 
 	data, err := db.ReadEntry(key)
 	if err != nil {

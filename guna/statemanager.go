@@ -5,6 +5,12 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"io/ioutil"
+	"log"
+	"math/big"
+	"net/http"
+	"sync"
+
 	"github.com/hashicorp/go-hclog"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/multiformats/go-multiaddr"
@@ -13,11 +19,6 @@ import (
 	"gitlab.com/sarvalabs/moichain/telemetry/tracing"
 	"gitlab.com/sarvalabs/polo/go-polo"
 	"golang.org/x/sync/errgroup"
-	"io/ioutil"
-	"log"
-	"math/big"
-	"net/http"
-	"sync"
 
 	lru "github.com/hashicorp/golang-lru"
 	"gitlab.com/sarvalabs/moichain/common/ktypes"
@@ -174,7 +175,7 @@ func (sm *StateManager) GetLatestStateObject(addr ktypes.Address) (*StateObject,
 
 func (sm *StateManager) GetStateObjectByHash(addr ktypes.Address, hash ktypes.Hash) (*StateObject, error) {
 	// read the state
-	key := ktypes.GetDBKey(addr, ktypes.AccountGID, hash)
+	key := ktypes.DBKey(addr, ktypes.AccountGID, hash)
 
 	data, err := sm.db.ReadEntry(key)
 	if err != nil {
@@ -242,7 +243,7 @@ func (sm *StateManager) getLatestTesseractHash(addr ktypes.Address) (ktypes.Hash
 func (sm *StateManager) fetchTesseractByHash(hash ktypes.Hash) (*ktypes.Tesseract, error) {
 	object, isCached := sm.cache.Get(hash)
 	if !isCached {
-		key := ktypes.GetDBKey(ktypes.NilAddress, ktypes.TesseractGID, hash)
+		key := ktypes.DBKey(ktypes.NilAddress, ktypes.TesseractGID, hash)
 
 		buf, err := sm.db.ReadEntry(key)
 		if err != nil {
@@ -324,7 +325,7 @@ func (sm *StateManager) getContextObject(addr ktypes.Address, hash ktypes.Hash) 
 		return contextObject, nil
 	}
 
-	key := ktypes.GetDBKey(addr, ktypes.ContextGID, hash)
+	key := ktypes.DBKey(addr, ktypes.ContextGID, hash)
 
 	rawData, err := sm.db.ReadEntry(key)
 	if err != nil {
@@ -342,8 +343,8 @@ func (sm *StateManager) getContextObject(addr ktypes.Address, hash ktypes.Hash) 
 	return object, nil
 }
 
-func (sm *StateManager) getMetaContextObject(key ktypes.Hash) (*ktypes.MetaContextObject, error) {
-	metaData, isAvailable := sm.cache.Get(key)
+func (sm *StateManager) getMetaContextObject(addr ktypes.Address, hash ktypes.Hash) (*ktypes.MetaContextObject, error) {
+	metaData, isAvailable := sm.cache.Get(hash)
 	if isAvailable {
 		metaContextObject, ok := metaData.(*ktypes.MetaContextObject)
 		if !ok {
@@ -353,7 +354,9 @@ func (sm *StateManager) getMetaContextObject(key ktypes.Hash) (*ktypes.MetaConte
 		return metaContextObject, nil
 	}
 
-	rawData, err := sm.db.ReadEntry(key.Bytes())
+	key := ktypes.DBKey(addr, ktypes.ContextGID, hash)
+
+	rawData, err := sm.db.ReadEntry(key)
 	if err != nil {
 		return nil, ktypes.ErrContextStateNotFound
 	}
@@ -364,7 +367,7 @@ func (sm *StateManager) getMetaContextObject(key ktypes.Hash) (*ktypes.MetaConte
 		return nil, errors.Wrap(err, "MetaContextObject deserialization failed")
 	}
 
-	sm.cache.Add(key, object)
+	sm.cache.Add(hash, object)
 
 	return object, nil
 }
@@ -448,7 +451,7 @@ func (sm *StateManager) GetCommittedContextHash(add ktypes.Address) (ktypes.Hash
 }
 
 func (sm *StateManager) getContextByHash(addr ktypes.Address, hash ktypes.Hash) ([]id.KramaID, []id.KramaID, error) {
-	metaContextObject, err := sm.getMetaContextObject(hash)
+	metaContextObject, err := sm.getMetaContextObject(addr, hash)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "metaContextObject fetch failed")
 	}
@@ -634,7 +637,7 @@ func (sm *StateManager) GetAccountMetaInfo(addr ktypes.Address) (*ktypes.Account
 }
 
 func (sm *StateManager) GetAccountInfo(addr ktypes.Address, stateHash ktypes.Hash) (*ktypes.Account, error) {
-	key := ktypes.GetDBKey(addr, ktypes.AccountGID, stateHash)
+	key := ktypes.DBKey(addr, ktypes.AccountGID, stateHash)
 
 	rawData, err := sm.db.ReadEntry(key)
 	if err != nil {

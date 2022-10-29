@@ -242,7 +242,7 @@ func (c *ChainManager) GetTesseract(hash ktypes.Hash) (*ktypes.Tesseract, error)
 	if !isCached {
 		tesseract := new(ktypes.Tesseract)
 
-		key := ktypes.GetDBKey(ktypes.NilAddress, ktypes.TesseractGID, hash)
+		key := ktypes.DBKey(ktypes.NilAddress, ktypes.TesseractGID, hash)
 
 		buf, err := c.db.ReadEntry(key)
 		if err != nil {
@@ -267,7 +267,7 @@ func (c *ChainManager) GetTesseract(hash ktypes.Hash) (*ktypes.Tesseract, error)
 }
 
 func (c *ChainManager) GetTesseractByHeight(address string, height uint64) (*ktypes.Tesseract, error) {
-	addressHeightKey := kutils.GetAddressHeightKey(ktypes.HexToAddress(address), height)
+	addressHeightKey := ktypes.GetAddressHeightKey(ktypes.HexToAddress(address), height)
 	tesseractHash, err := c.db.ReadEntry(addressHeightKey)
 
 	if err != nil {
@@ -470,12 +470,12 @@ func (c *ChainManager) addTesseract(
 		}
 	}
 
-	key := ktypes.GetDBKey(ktypes.NilAddress, ktypes.TesseractGID, tesseractHash)
+	key := ktypes.DBKey(ktypes.NilAddress, ktypes.TesseractGID, tesseractHash)
 	if err := c.db.CreateEntry(key, polo.Polorize(t)); err != nil {
 		return errors.Wrap(err, "error writing tesseract to db")
 	}
 
-	addressHeightKey := kutils.GetAddressHeightKey(addr, t.Height())
+	addressHeightKey := ktypes.GetAddressHeightKey(addr, t.Height())
 	if err := c.db.CreateEntry(addressHeightKey, tesseractHash.Bytes()); err != nil {
 		return errors.Wrap(err, "error writing addressHeightKey to db")
 	}
