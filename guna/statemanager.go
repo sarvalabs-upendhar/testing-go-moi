@@ -175,9 +175,7 @@ func (sm *StateManager) GetLatestStateObject(addr ktypes.Address) (*StateObject,
 
 func (sm *StateManager) GetStateObjectByHash(addr ktypes.Address, hash ktypes.Hash) (*StateObject, error) {
 	// read the state
-	key := ktypes.DBKey(addr, ktypes.AccountGID, hash)
-
-	data, err := sm.db.ReadEntry(key)
+	data, err := sm.db.GetAccount(addr, hash)
 	if err != nil {
 		return nil, errors.Wrap(ktypes.ErrStateNotFound, err.Error())
 	}
@@ -243,9 +241,7 @@ func (sm *StateManager) getLatestTesseractHash(addr ktypes.Address) (ktypes.Hash
 func (sm *StateManager) fetchTesseractByHash(hash ktypes.Hash) (*ktypes.Tesseract, error) {
 	object, isCached := sm.cache.Get(hash)
 	if !isCached {
-		key := ktypes.DBKey(ktypes.NilAddress, ktypes.TesseractGID, hash)
-
-		buf, err := sm.db.ReadEntry(key)
+		buf, err := sm.db.GetTesseract(hash)
 		if err != nil {
 			return nil, err
 		}
@@ -325,9 +321,7 @@ func (sm *StateManager) getContextObject(addr ktypes.Address, hash ktypes.Hash) 
 		return contextObject, nil
 	}
 
-	key := ktypes.DBKey(addr, ktypes.ContextGID, hash)
-
-	rawData, err := sm.db.ReadEntry(key)
+	rawData, err := sm.db.GetContext(addr, hash)
 	if err != nil {
 		return nil, ktypes.ErrContextStateNotFound
 	}
@@ -354,9 +348,7 @@ func (sm *StateManager) getMetaContextObject(addr ktypes.Address, hash ktypes.Ha
 		return metaContextObject, nil
 	}
 
-	key := ktypes.DBKey(addr, ktypes.ContextGID, hash)
-
-	rawData, err := sm.db.ReadEntry(key)
+	rawData, err := sm.db.GetContext(addr, hash)
 	if err != nil {
 		return nil, ktypes.ErrContextStateNotFound
 	}
@@ -637,9 +629,7 @@ func (sm *StateManager) GetAccountMetaInfo(addr ktypes.Address) (*ktypes.Account
 }
 
 func (sm *StateManager) GetAccountInfo(addr ktypes.Address, stateHash ktypes.Hash) (*ktypes.Account, error) {
-	key := ktypes.DBKey(addr, ktypes.AccountGID, stateHash)
-
-	rawData, err := sm.db.ReadEntry(key)
+	rawData, err := sm.db.GetAccount(addr, stateHash)
 	if err != nil {
 		return nil, err
 	}

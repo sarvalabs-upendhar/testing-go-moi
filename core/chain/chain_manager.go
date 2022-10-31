@@ -41,6 +41,7 @@ type db interface {
 		latticeExists bool,
 		tesseractExists bool,
 	) (int32, int64, error)
+	GetTesseract(hash ktypes.Hash) ([]byte, error)
 }
 
 type reputationEngine interface {
@@ -242,9 +243,7 @@ func (c *ChainManager) GetTesseract(hash ktypes.Hash) (*ktypes.Tesseract, error)
 	if !isCached {
 		tesseract := new(ktypes.Tesseract)
 
-		key := ktypes.DBKey(ktypes.NilAddress, ktypes.TesseractGID, hash)
-
-		buf, err := c.db.ReadEntry(key)
+		buf, err := c.db.GetTesseract(hash)
 		if err != nil {
 			return nil, errors.Wrap(err, ktypes.ErrFetchingTesseract.Error())
 		}

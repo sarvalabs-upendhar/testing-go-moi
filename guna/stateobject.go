@@ -506,7 +506,7 @@ func (s *StateObject) getMetaContextObjectCopy() (*ktypes.MetaContextObject, err
 		return metaContextObject.Copy(), nil
 	}
 
-	rawData, err := s.db.ReadEntry(s.contextHash.Bytes())
+	rawData, err := s.db.GetContext(s.Address, s.contextHash)
 	if err != nil {
 		return nil, errors.Wrap(ktypes.ErrUpdatingContextObject, err.Error())
 	}
@@ -524,9 +524,7 @@ func (s *StateObject) getMetaContextObjectCopy() (*ktypes.MetaContextObject, err
 func (s *StateObject) getContextObjectCopy(hash ktypes.Hash) (*ktypes.ContextObject, error) {
 	data, isAvailable := s.cache.Get(hash)
 	if !isAvailable {
-		key := ktypes.DBKey(s.Address, ktypes.ContextGID, hash)
-
-		rawData, err := s.db.ReadEntry(key)
+		rawData, err := s.db.GetContext(s.Address, hash)
 		if err != nil {
 			return nil, errors.Wrap(ktypes.ErrUpdatingContextObject, err.Error())
 		}
@@ -554,9 +552,7 @@ func getBalanceObject(
 	hash ktypes.Hash,
 	db *dhruva.PersistenceManager,
 ) (*ktypes.BalanceObject, error) {
-	key := ktypes.DBKey(addr, ktypes.BalanceGID, hash)
-
-	data, err := db.ReadEntry(key)
+	data, err := db.GetBalance(addr, hash)
 	if err != nil {
 		return nil, err
 	}
@@ -570,9 +566,7 @@ func getBalanceObject(
 	return balObject, nil
 }
 func getStorage(addr ktypes.Address, hash ktypes.Hash, db *dhruva.PersistenceManager) (map[ktypes.Hash][]byte, error) {
-	key := ktypes.DBKey(addr, ktypes.StorageGID, hash)
-
-	data, err := db.ReadEntry(key)
+	data, err := db.GetStorage(addr, hash)
 	if err != nil {
 		return nil, err
 	}
