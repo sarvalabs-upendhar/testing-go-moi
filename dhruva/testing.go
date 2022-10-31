@@ -1,0 +1,322 @@
+package dhruva
+
+import (
+	"github.com/hashicorp/go-hclog"
+	"github.com/stretchr/testify/require"
+	"gitlab.com/sarvalabs/moichain/common/ktypes"
+	"gitlab.com/sarvalabs/moichain/common/tests"
+	dbInterfaces "gitlab.com/sarvalabs/moichain/dhruva/db"
+	"gitlab.com/sarvalabs/polo/go-polo"
+	"golang.org/x/net/context"
+	"math/big"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+// mockDB is an in-memory key-value database used for testing purposes
+type mockDB struct {
+	dbStorage map[string][]byte
+}
+
+type mockIterator struct {
+	data      map[string][]byte
+	keys      []string
+	prefixKey string
+}
+
+func (m *mockDB) NewBatchWriter() dbInterfaces.BatchWriter {
+	//TODO implement me
+	panic("implement me")
+}
+
+func NewMockDB(t *testing.T) *mockDB {
+	t.Helper()
+
+	db := new(mockDB)
+	db.dbStorage = make(map[string][]byte, 0)
+
+	return db
+}
+
+func NewTestPersistenceManager(t *testing.T) *PersistenceManager {
+	t.Helper()
+	db := NewMockDB(t)
+
+	ctx, ctxCancel := context.WithCancel(context.Background())
+
+	return &PersistenceManager{
+		ctx:       ctx,
+		ctxCancel: ctxCancel,
+		Config:    nil,
+		logger:    hclog.Default(),
+		db:        db,
+	}
+}
+
+func (m *mockDB) Insert(key []byte, value []byte) error {
+	m.dbStorage[ktypes.BytesToHex(key)] = value
+
+	return nil
+}
+
+func (m *mockDB) Update(key []byte, value []byte) error {
+	if exists, _ := m.Has(key); exists {
+		m.dbStorage[ktypes.BytesToHex(key)] = value
+
+		return nil
+	}
+
+	return ktypes.ErrKeyNotFound
+}
+
+func (m *mockDB) Delete(key []byte) error {
+	if exists, _ := m.Has(key); exists {
+		delete(m.dbStorage, ktypes.BytesToHex(key))
+
+		return nil
+	}
+
+	return ktypes.ErrKeyNotFound
+}
+
+func (m *mockDB) Get(key []byte) ([]byte, error) {
+	if exists, _ := m.Has(key); exists {
+		val := m.dbStorage[ktypes.BytesToHex(key)]
+
+		return val, nil
+	}
+
+	return nil, ktypes.ErrKeyNotFound
+}
+
+func (m *mockDB) Has(key []byte) (bool, error) {
+	_, ok := m.dbStorage[ktypes.BytesToHex(key)]
+
+	return ok, nil
+}
+
+func (m *mockDB) CleanUp() error {
+	return nil
+}
+
+func (m *mockDB) Close() error {
+	return nil
+}
+
+func (m *mockDB) NewIterator() (dbInterfaces.Iterator, error) {
+	it := &mockIterator{
+		data:      make(map[string][]byte, len(m.dbStorage)),
+		keys:      make([]string, len(m.dbStorage)),
+		prefixKey: "",
+	}
+	i := 0
+
+	for k, v := range m.dbStorage {
+		it.keys[i] = k
+		it.data[k] = v
+		i++
+	}
+
+	return it, nil
+}
+
+func (it *mockIterator) Close() {
+}
+
+// Seek move's forward till matching prefix key
+func (it *mockIterator) Seek(key []byte) {
+	it.prefixKey = ktypes.BytesToHex(key)
+
+	for {
+		if len(it.keys) == 0 {
+			break
+		}
+
+		if strings.HasPrefix(it.keys[0], ktypes.BytesToHex(key)) {
+			break
+		}
+
+		it.keys = it.keys[1:]
+	}
+}
+
+// Next is used to move to matching prefix after first iteration onwards
+func (it *mockIterator) Next() {
+	it.keys = it.keys[1:]
+
+	for {
+		if len(it.keys) == 0 {
+			break
+		}
+
+		if strings.HasPrefix(it.keys[0], it.prefixKey) {
+			break
+		}
+
+		it.keys = it.keys[1:]
+	}
+}
+
+func (it *mockIterator) ValidForPrefix(prefix []byte) bool {
+	return len(it.keys) != 0
+}
+
+func (it *mockIterator) GetNext() (*ktypes.DBEntry, error) {
+	return &ktypes.DBEntry{
+		Key:   ktypes.Hex2Bytes(it.keys[0]),
+		Value: it.data[it.keys[0]],
+	}, nil
+}
+
+func getAccMetaInfo(t *testing.T, height int64) *ktypes.AccountMetaInfo {
+	t.Helper()
+
+	return &ktypes.AccountMetaInfo{
+		Address:       tests.RandomAddress(t),
+		Type:          ktypes.AccType(1),
+		Height:        big.NewInt(height),
+		TesseractHash: tests.RandomHash(t),
+		LatticeExists: true,
+		StateExists:   true,
+	}
+}
+
+func insertTestAccMetaInfo(t *testing.T, pm *PersistenceManager) map[int64]ktypes.Accounts {
+	t.Helper()
+
+	insertedAccounts := make(map[int64]ktypes.Accounts, 0)
+
+	accountCount := 10000
+	for i := 0; i < accountCount; i++ {
+		// test data
+		AccMetaInfo := getAccMetaInfo(t, 1)
+		// insert test data in to db
+		_, _, err := pm.UpdateAccMetaInfo(
+			AccMetaInfo.Address,
+			AccMetaInfo.Height,
+			AccMetaInfo.TesseractHash,
+			AccMetaInfo.Type,
+			AccMetaInfo.LatticeExists,
+			AccMetaInfo.StateExists,
+		)
+		require.NoError(t, err)
+
+		// store the data we inserted into db with key as bucket number and  value as account meta info
+		accID := new(big.Int).SetBytes(AccMetaInfo.Address.Bytes())
+		bucketNo := accID.Mod(accID, big.NewInt(BucketCount))
+		insertedAccounts[bucketNo.Int64()] = append(insertedAccounts[bucketNo.Int64()], AccMetaInfo)
+	}
+
+	return insertedAccounts
+}
+
+// incrementBuckets takes 10000 random addresses and increment each one by incrementNumber
+func incrementBuckets(t *testing.T, pm *PersistenceManager) map[int32]int64 {
+	t.Helper()
+
+	incrementBucketSizes := make(map[int32]int64, 0)
+
+	incrementNumber := int64(3)
+
+	for i := 0; i < 10000; i++ {
+		_, bucket := BucketIDFromAddress(tests.RandomAddress(t).Bytes())
+		err := pm.incrementBucketCount(bucket.getIDBytes(), incrementNumber)
+
+		require.NoError(t, err)
+
+		incrementBucketSizes[int32(new(big.Int).SetBytes(bucket.getIDBytes()).Int64())] += incrementNumber
+	}
+
+	return incrementBucketSizes
+}
+
+func checkIfAccountExists(account *ktypes.AccountMetaInfo, accounts ktypes.Accounts) bool {
+	for _, acc := range accounts {
+		if reflect.DeepEqual(account, acc) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func insertTestEntries(t *testing.T, pm *PersistenceManager) (map[string]string, []string) {
+	t.Helper()
+
+	var prefixes []string
+
+	insertedEntries := make(map[string]string)
+
+	entryCount := 1000
+	prefixLength := 10
+	keyLength := 20
+	valueLength := 30
+
+	for i := 0; i < entryCount; i++ {
+		prefix, err := tests.GetRandomUpperCaseString(t, prefixLength)
+		require.NoError(t, err)
+
+		prefixes = append(prefixes, prefix)
+		// no of entries for each prefix
+		for j := 0; j < 10; j++ {
+			key, err := tests.GetRandomUpperCaseString(t, keyLength)
+
+			require.NoError(t, err)
+
+			prefixedKey := prefix + key
+			prefixedKeyBytes := []byte(prefixedKey)
+
+			val, err := tests.GetRandomUpperCaseString(t, valueLength)
+
+			require.NoError(t, err)
+
+			valBytes := []byte(val)
+
+			err = pm.CreateEntry(prefixedKeyBytes, valBytes)
+			require.NoError(t, err)
+
+			insertedEntries[prefixedKey] = val
+		}
+	}
+
+	return insertedEntries, prefixes
+}
+
+func getAddresses(t *testing.T, count int) []ktypes.Address {
+	t.Helper()
+
+	var addresses []ktypes.Address
+
+	for i := 0; i < count; i++ {
+		addresses = append(addresses, tests.RandomAddress(t))
+	}
+
+	return addresses
+}
+
+func getHashes(t *testing.T, count int) []ktypes.Hash {
+	t.Helper()
+
+	var addresses []ktypes.Hash
+
+	for i := 0; i < count; i++ {
+		addresses = append(addresses, tests.RandomHash(t))
+	}
+
+	return addresses
+}
+
+func insertAccMetaInfo(t *testing.T, pm *PersistenceManager, accMetaInfo ktypes.AccountMetaInfo) {
+	t.Helper()
+
+	key, bucket := BucketIDFromAddress(accMetaInfo.Address.Bytes())
+
+	if err := pm.CreateEntry(key, polo.Polorize(accMetaInfo)); err != nil {
+		require.NoError(t, err)
+	}
+
+	if err := pm.incrementBucketCount(bucket.getIDBytes(), 1); err != nil {
+		require.NoError(t, err)
+	}
+}
