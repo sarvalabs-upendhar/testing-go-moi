@@ -40,7 +40,7 @@ type db interface {
 		accType ktypes.AccType,
 		latticeExists bool,
 		tesseractExists bool,
-	) (int32, int64, error)
+	) (int32, bool, error)
 }
 
 type reputationEngine interface {
@@ -146,7 +146,7 @@ func (c *ChainManager) hasTesseract(hash ktypes.Hash) bool {
 	if err != nil {
 		c.logger.Error("Failed to fetch hash from db", "error", err)
 
-		return true
+		return exists
 	}
 
 	return exists
@@ -477,7 +477,7 @@ func (c *ChainManager) addTesseract(
 		return errors.Wrap(err, "error writing addressHeightKey to db")
 	}
 
-	bucketNo, updateCount, err := c.db.UpdateAccMetaInfo(
+	bucketNo, isBucketCountIncremented, err := c.db.UpdateAccMetaInfo(
 		addr,
 		new(big.Int).SetUint64(t.Header.Height),
 		tesseractHash,
@@ -494,8 +494,8 @@ func (c *ChainManager) addTesseract(
 		return errors.Wrap(err, ktypes.ErrUpdatingInclusivity.Error())
 	}
 
-	if updateCount != -1 && bucketNo != -1 {
-		if err := c.mux.Post(kutils.SyncStatusUpdate{BucketID: bucketNo, Count: updateCount}); err != nil {
+	if isBucketCountIncremented && bucketNo != -1 {
+		if err := c.mux.Post(kutils.SyncStatusUpdate{BucketID: bucketNo, Count: 1}); err != nil {
 			log.Panicln(err)
 		}
 	}

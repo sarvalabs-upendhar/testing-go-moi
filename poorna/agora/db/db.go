@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dgraph-io/badger/v3"
 	"github.com/hashicorp/go-hclog"
 	"gitlab.com/sarvalabs/moichain/common/ktypes"
+	dhruva "gitlab.com/sarvalabs/moichain/dhruva/db"
 	"sync"
 )
 
@@ -20,7 +20,7 @@ type BatchWriter interface {
 }
 
 type PersistenceManager interface {
-	NewBatchWriter() *badger.WriteBatch
+	NewBatchWriter() dhruva.BatchWriter
 	Contains(key []byte) (bool, error)
 	ReadEntry([]byte) ([]byte, error)
 }
