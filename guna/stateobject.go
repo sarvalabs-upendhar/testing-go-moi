@@ -81,11 +81,7 @@ func NewStateObject(
 }
 
 func (s *StateObject) getLogicTrie(db *dhruva.PersistenceManager, root []byte) Trie {
-	if s.logicTrie == nil {
-		return NewSmtTrie(root, db)
-	}
-
-	return s.logicTrie
+	return nil
 }
 
 func (s *StateObject) BalanceOf(id ktypes.AssetID) (*big.Int, error) {
