@@ -3,7 +3,6 @@ package guna
 import (
 	"bytes"
 	"context"
-	"github.com/dgraph-io/badger/v3"
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -12,6 +11,7 @@ import (
 	"github.com/pkg/errors"
 	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	"gitlab.com/sarvalabs/moichain/common/kutils"
+	"gitlab.com/sarvalabs/moichain/dhruva/db"
 	"gitlab.com/sarvalabs/moichain/mudra"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/polo/go-polo"
@@ -24,7 +24,7 @@ type store interface {
 	ReadEntry(key []byte) ([]byte, error)
 	Contains(key []byte) (bool, error)
 	UpdateEntry(key []byte, newValue []byte) error
-	NewBatchWriter() *badger.WriteBatch
+	NewBatchWriter() db.BatchWriter
 	GetEntries(prefix []byte) chan ktypes.DBEntry
 }
 type state interface {

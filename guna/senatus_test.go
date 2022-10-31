@@ -3,11 +3,11 @@ package guna
 import (
 	"context"
 	"encoding/hex"
-	"github.com/dgraph-io/badger/v3"
 	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/require"
 	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	"gitlab.com/sarvalabs/moichain/common/tests"
+	"gitlab.com/sarvalabs/moichain/dhruva/db"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/polo/go-polo"
 	"testing"
@@ -99,7 +99,7 @@ func (store *mockStore) UpdateEntry(key, value []byte) error {
 	return nil
 }
 
-func (store *mockStore) NewBatchWriter() *badger.WriteBatch {
+func (store *mockStore) NewBatchWriter() db.BatchWriter {
 	return nil
 }
 func (store *mockStore) GetEntries(prefix []byte) chan ktypes.DBEntry {

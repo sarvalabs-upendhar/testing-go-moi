@@ -4,16 +4,17 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"github.com/dgraph-io/badger/v3"
-	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/moichain/guna"
 
-	"gitlab.com/sarvalabs/moichain/poorna"
-	"gitlab.com/sarvalabs/moichain/poorna/agora"
-	"gitlab.com/sarvalabs/moichain/poorna/agora/session"
 	"log"
 	"math/big"
 	"math/rand"
+
+	"github.com/pkg/errors"
+	dhruva "gitlab.com/sarvalabs/moichain/dhruva/db"
+	"gitlab.com/sarvalabs/moichain/guna"
+	"gitlab.com/sarvalabs/moichain/poorna"
+	"gitlab.com/sarvalabs/moichain/poorna/agora"
+	"gitlab.com/sarvalabs/moichain/poorna/agora/session"
 
 	"github.com/hashicorp/go-hclog"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
@@ -66,7 +67,7 @@ type lattice interface {
 	GetTesseract(hash ktypes.Hash) (*ktypes.Tesseract, error)
 }
 type db interface {
-	NewBatchWriter() *badger.WriteBatch
+	NewBatchWriter() dhruva.BatchWriter
 	CreateEntry([]byte, []byte) error
 	UpdateEntry([]byte, []byte) error
 	ReadEntry([]byte) ([]byte, error)
@@ -74,9 +75,8 @@ type db interface {
 	DeleteEntry([]byte) error
 	GetAccountMetaInfo(id []byte) (*ktypes.AccountMetaInfo, error)
 	GetAccounts(bucketID int32) (ktypes.Accounts, error)
-	UpdateAccounts(acc ktypes.Accounts) (int32, int64)
 	GetBucketSizes() (map[int32]*big.Int, error)
-	SetTesseractStatus(addr ktypes.Address, height uint64, hash ktypes.Hash, status bool) error
+	UpdateTesseractStatus(addr ktypes.Address, height uint64, hash ktypes.Hash, status bool) error
 }
 
 type SyncPeer struct {
@@ -445,7 +445,7 @@ func (s *Syncer) syncLattice(addr []byte, mode string) error {
 */
 
 // fetchData fetches the complete state information associated with the given state CID
-//this uses agora to fetch the hashes.
+// this uses agora to fetch the hashes.
 func (s *Syncer) fetchData(ctx context.Context, session *session.Session, ids ...ktypes.Hash) (bool, error) {
 	keySet := kutils.NewHashSet()
 	for _, hash := range ids {
@@ -623,7 +623,7 @@ func (s *Syncer) tesseractWorker(id int, reqQueue chan *TesseractSyncJob) {
 
 				continue
 			} else {
-				if err = s.db.SetTesseractStatus(
+				if err = s.db.UpdateTesseractStatus(
 					ts.Address(),
 					ts.Height(),
 					ts.Hash(),
