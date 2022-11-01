@@ -311,3 +311,33 @@ func (p *PersistenceManager) GetEntries(prefix []byte) chan ktypes.DBEntry {
 
 	return ch
 }
+
+func (p *PersistenceManager) GetAccount(addr ktypes.Address, hash ktypes.Hash) ([]byte, error) {
+	key := ktypes.DBKey(addr, ktypes.AccountGID, hash)
+
+	return p.ReadEntry(key)
+}
+
+func (p *PersistenceManager) GetBalance(addr ktypes.Address, hash ktypes.Hash) ([]byte, error) {
+	key := ktypes.DBKey(addr, ktypes.BalanceGID, hash)
+
+	return p.ReadEntry(key)
+}
+
+func (p *PersistenceManager) GetContext(addr ktypes.Address, hash ktypes.Hash) ([]byte, error) {
+	key := ktypes.DBKey(addr, ktypes.ContextGID, hash)
+
+	return p.ReadEntry(key)
+}
+
+func (p *PersistenceManager) GetStorage(addr ktypes.Address, hash ktypes.Hash) ([]byte, error) {
+	key := ktypes.DBKey(addr, ktypes.StorageGID, hash)
+
+	return p.ReadEntry(key)
+}
+
+func (p *PersistenceManager) GetTesseract(hash ktypes.Hash) ([]byte, error) {
+	key := ktypes.DBKey(ktypes.NilAddress, ktypes.TesseractGID, hash)
+
+	return p.ReadEntry(key)
+}

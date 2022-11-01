@@ -41,6 +41,7 @@ type db interface {
 		latticeExists bool,
 		tesseractExists bool,
 	) (int32, bool, error)
+	GetTesseract(hash ktypes.Hash) ([]byte, error)
 }
 
 type reputationEngine interface {
@@ -172,7 +173,7 @@ func (c *ChainManager) fetchContextForAgora(t *ktypes.Tesseract) ([]id.KramaID, 
 		peers = append(peers, deltaGroup.BehaviouralNodes...)
 		peers = append(peers, deltaGroup.RandomNodes...)
 
-		_, behaviour, random, err := c.sm.GetContextByHash(ktypes.NilAddress, ts.Header.ContextLock[address].ContextHash)
+		_, behaviour, random, err := c.sm.GetContextByHash(address, ts.Header.ContextLock[address].ContextHash)
 		if err != nil {
 			tesseractHash = ts.Header.PrevHash
 
@@ -242,7 +243,7 @@ func (c *ChainManager) GetTesseract(hash ktypes.Hash) (*ktypes.Tesseract, error)
 	if !isCached {
 		tesseract := new(ktypes.Tesseract)
 
-		buf, err := c.db.ReadEntry(hash.Bytes())
+		buf, err := c.db.GetTesseract(hash)
 		if err != nil {
 			return nil, errors.Wrap(err, ktypes.ErrFetchingTesseract.Error())
 		}
@@ -265,7 +266,7 @@ func (c *ChainManager) GetTesseract(hash ktypes.Hash) (*ktypes.Tesseract, error)
 }
 
 func (c *ChainManager) GetTesseractByHeight(address string, height uint64) (*ktypes.Tesseract, error) {
-	addressHeightKey := kutils.GetAddressHeightKey(ktypes.HexToAddress(address), height)
+	addressHeightKey := ktypes.GetAddressHeightKey(ktypes.HexToAddress(address), height)
 	tesseractHash, err := c.db.ReadEntry(addressHeightKey)
 
 	if err != nil {
@@ -460,19 +461,20 @@ func (c *ChainManager) addTesseract(
 		accType = stateObject.GetAccountType()
 
 		for k, v := range stateObject.GetDirtyStorage() {
-			if err := c.db.CreateEntry(k.Bytes(), v); err != nil {
-				c.logger.Error("Error writing key to db", "key", k.Hex())
+			if err := c.db.CreateEntry(ktypes.Hex2Bytes(k), v); err != nil {
+				c.logger.Error("Error writing key to db", "key", k)
 
 				return err
 			}
 		}
 	}
 
-	if err := c.db.CreateEntry(tesseractHash.Bytes(), polo.Polorize(t)); err != nil {
+	key := ktypes.DBKey(ktypes.NilAddress, ktypes.TesseractGID, tesseractHash)
+	if err := c.db.CreateEntry(key, polo.Polorize(t)); err != nil {
 		return errors.Wrap(err, "error writing tesseract to db")
 	}
 
-	addressHeightKey := kutils.GetAddressHeightKey(addr, t.Height())
+	addressHeightKey := ktypes.GetAddressHeightKey(addr, t.Height())
 	if err := c.db.CreateEntry(addressHeightKey, tesseractHash.Bytes()); err != nil {
 		return errors.Wrap(err, "error writing addressHeightKey to db")
 	}

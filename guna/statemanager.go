@@ -5,6 +5,12 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"io/ioutil"
+	"log"
+	"math/big"
+	"net/http"
+	"sync"
+
 	"github.com/hashicorp/go-hclog"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/multiformats/go-multiaddr"
@@ -13,11 +19,6 @@ import (
 	"gitlab.com/sarvalabs/moichain/telemetry/tracing"
 	"gitlab.com/sarvalabs/polo/go-polo"
 	"golang.org/x/sync/errgroup"
-	"io/ioutil"
-	"log"
-	"math/big"
-	"net/http"
-	"sync"
 
 	lru "github.com/hashicorp/golang-lru"
 	"gitlab.com/sarvalabs/moichain/common/ktypes"
@@ -174,7 +175,7 @@ func (sm *StateManager) GetLatestStateObject(addr ktypes.Address) (*StateObject,
 
 func (sm *StateManager) GetStateObjectByHash(addr ktypes.Address, hash ktypes.Hash) (*StateObject, error) {
 	// read the state
-	data, err := sm.db.ReadEntry(hash.Bytes())
+	data, err := sm.db.GetAccount(addr, hash)
 	if err != nil {
 		return nil, errors.Wrap(ktypes.ErrStateNotFound, err.Error())
 	}
@@ -189,12 +190,12 @@ func (sm *StateManager) GetStateObjectByHash(addr ktypes.Address, hash ktypes.Ha
 	sObj.data = *acc
 	sObj.contextHash = acc.ContextHash
 
-	sObj.balance, err = getBalanceObject(acc.Balance, sm.db)
+	sObj.balance, err = getBalanceObject(addr, acc.Balance, sm.db)
 	if err != nil {
 		return nil, errors.Wrap(ktypes.ErrFetchingBalanceObject, err.Error())
 	}
 
-	sObj.Storage, err = getStorage(acc.StorageRoot, sm.db)
+	sObj.Storage, err = getStorage(addr, acc.StorageRoot, sm.db)
 	if err != nil {
 		return nil, errors.Wrap(ktypes.ErrFetchingStorageObject, err.Error())
 	}
@@ -240,7 +241,7 @@ func (sm *StateManager) getLatestTesseractHash(addr ktypes.Address) (ktypes.Hash
 func (sm *StateManager) fetchTesseractByHash(hash ktypes.Hash) (*ktypes.Tesseract, error) {
 	object, isCached := sm.cache.Get(hash)
 	if !isCached {
-		buf, err := sm.db.ReadEntry(hash.Bytes())
+		buf, err := sm.db.GetTesseract(hash)
 		if err != nil {
 			return nil, err
 		}
@@ -309,7 +310,7 @@ func (sm *StateManager) Revert(snap *StateObject) error {
 	return nil
 }
 
-func (sm *StateManager) getContextObject(hash ktypes.Hash) (*ktypes.ContextObject, error) {
+func (sm *StateManager) getContextObject(addr ktypes.Address, hash ktypes.Hash) (*ktypes.ContextObject, error) {
 	contextData, isAvailable := sm.cache.Get(hash)
 	if isAvailable {
 		contextObject, ok := contextData.(*ktypes.ContextObject)
@@ -320,7 +321,7 @@ func (sm *StateManager) getContextObject(hash ktypes.Hash) (*ktypes.ContextObjec
 		return contextObject, nil
 	}
 
-	rawData, err := sm.db.ReadEntry(hash.Bytes())
+	rawData, err := sm.db.GetContext(addr, hash)
 	if err != nil {
 		return nil, ktypes.ErrContextStateNotFound
 	}
@@ -336,8 +337,8 @@ func (sm *StateManager) getContextObject(hash ktypes.Hash) (*ktypes.ContextObjec
 	return object, nil
 }
 
-func (sm *StateManager) getMetaContextObject(key ktypes.Hash) (*ktypes.MetaContextObject, error) {
-	metaData, isAvailable := sm.cache.Get(key)
+func (sm *StateManager) getMetaContextObject(addr ktypes.Address, hash ktypes.Hash) (*ktypes.MetaContextObject, error) {
+	metaData, isAvailable := sm.cache.Get(hash)
 	if isAvailable {
 		metaContextObject, ok := metaData.(*ktypes.MetaContextObject)
 		if !ok {
@@ -347,7 +348,7 @@ func (sm *StateManager) getMetaContextObject(key ktypes.Hash) (*ktypes.MetaConte
 		return metaContextObject, nil
 	}
 
-	rawData, err := sm.db.ReadEntry(key.Bytes())
+	rawData, err := sm.db.GetContext(addr, hash)
 	if err != nil {
 		return nil, ktypes.ErrContextStateNotFound
 	}
@@ -358,17 +359,17 @@ func (sm *StateManager) getMetaContextObject(key ktypes.Hash) (*ktypes.MetaConte
 		return nil, errors.Wrap(err, "MetaContextObject deserialization failed")
 	}
 
-	sm.cache.Add(key, object)
+	sm.cache.Add(hash, object)
 
 	return object, nil
 }
 
 // fetchParticipantContextByHash fetches the context info based on the give hash
 // and returns a NodeSet which holds the kramaIDs and public keys
-func (sm *StateManager) fetchParticipantContextByHash(hash ktypes.Hash) (
+func (sm *StateManager) fetchParticipantContextByHash(addr ktypes.Address, hash ktypes.Hash) (
 	behaviouralSet, randomSet *ktypes.NodeSet,
 	err error) {
-	behaviouralContext, randomContext, err := sm.getContextByHash(hash)
+	behaviouralContext, randomContext, err := sm.getContextByHash(addr, hash)
 	if err != nil {
 		sm.logger.Error("failed to retrieve sender context nodes", "error", err)
 
@@ -441,18 +442,18 @@ func (sm *StateManager) GetCommittedContextHash(add ktypes.Address) (ktypes.Hash
 	return tesseract.Body.ContextHash, nil
 }
 
-func (sm *StateManager) getContextByHash(hash ktypes.Hash) ([]id.KramaID, []id.KramaID, error) {
-	metaContextObject, err := sm.getMetaContextObject(hash)
+func (sm *StateManager) getContextByHash(addr ktypes.Address, hash ktypes.Hash) ([]id.KramaID, []id.KramaID, error) {
+	metaContextObject, err := sm.getMetaContextObject(addr, hash)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "metaContextObject fetch failed")
 	}
 
-	behaviourContext, err := sm.getContextObject(metaContextObject.BehaviouralContext)
+	behaviourContext, err := sm.getContextObject(addr, metaContextObject.BehaviouralContext)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "behaviouralContextObject fetch failed")
 	}
 
-	randomContext, err := sm.getContextObject(metaContextObject.RandomContext)
+	randomContext, err := sm.getContextObject(addr, metaContextObject.RandomContext)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "randomContextObject fetch failed")
 	}
@@ -478,7 +479,7 @@ func (sm *StateManager) GetContextByHash(address ktypes.Address,
 		hash = ts.Body.ContextHash
 	}
 
-	behaviourSet, randomSet, err := sm.getContextByHash(hash)
+	behaviourSet, randomSet, err := sm.getContextByHash(address, hash)
 	if err != nil {
 		return ktypes.NilHash, nil, nil, err
 	}
@@ -492,7 +493,7 @@ func (sm *StateManager) FetchContextLock(ts *ktypes.Tesseract) (*ktypes.ICSNodes
 
 	for address, info := range ts.Header.ContextLock {
 		if address == ix.FromAddress() {
-			behaviourSet, randomSet, err := sm.fetchParticipantContextByHash(info.ContextHash)
+			behaviourSet, randomSet, err := sm.fetchParticipantContextByHash(address, info.ContextHash)
 			if err != nil {
 				return nil, err
 			}
@@ -504,7 +505,7 @@ func (sm *StateManager) FetchContextLock(ts *ktypes.Tesseract) (*ktypes.ICSNodes
 				continue
 			}
 
-			behaviourSet, randomSet, err := sm.fetchParticipantContextByHash(info.ContextHash)
+			behaviourSet, randomSet, err := sm.fetchParticipantContextByHash(address, info.ContextHash)
 			if err != nil {
 				return nil, err
 			}
@@ -627,8 +628,8 @@ func (sm *StateManager) GetAccountMetaInfo(addr ktypes.Address) (*ktypes.Account
 	return sm.db.GetAccountMetaInfo(addr.Bytes())
 }
 
-func (sm *StateManager) GetAccountInfo(stateHash ktypes.Hash) (*ktypes.Account, error) {
-	rawData, err := sm.db.ReadEntry(stateHash.Bytes())
+func (sm *StateManager) GetAccountInfo(addr ktypes.Address, stateHash ktypes.Hash) (*ktypes.Account, error) {
+	rawData, err := sm.db.GetAccount(addr, stateHash)
 	if err != nil {
 		return nil, err
 	}
