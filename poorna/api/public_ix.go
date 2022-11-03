@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"gitlab.com/sarvalabs/moichain/guna"
 
 	"gitlab.com/sarvalabs/moichain/common"
 	"gitlab.com/sarvalabs/moichain/common/ktypes"
@@ -103,7 +104,7 @@ func validateArguments(args *SendIXArgs, p *PublicIXAPI) error {
 	}
 
 	// Reject genesis account interaction
-	if isGenesisAccount, _ := p.sm.IsGenesis(ktypes.HexToAddress(senderAddress)); isGenesisAccount {
+	if ktypes.HexToAddress(senderAddress) == guna.GenesisAddress {
 		return ErrGenesisAccount
 	}
 
@@ -114,7 +115,7 @@ func validateArguments(args *SendIXArgs, p *PublicIXAPI) error {
 		}
 
 		// Reject genesis account interaction
-		if isGenesisAccount, _ := p.sm.IsGenesis(ktypes.HexToAddress(receiverAddress)); isGenesisAccount {
+		if ktypes.HexToAddress(receiverAddress) == guna.GenesisAddress {
 			return ErrGenesisAccount
 		}
 	}
