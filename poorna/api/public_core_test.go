@@ -36,7 +36,6 @@ type MockChainManager struct {
 }
 
 type MockStateManager struct {
-	storage           map[ktypes.Hash][]byte
 	balances          map[ktypes.Address]*ktypes.BalanceObject
 	accounts          map[ktypes.Address]*ktypes.Account
 	context           map[ktypes.Hash]*Context
@@ -73,7 +72,6 @@ func NewMockStateManager(t *testing.T) *MockStateManager {
 
 	mockState.balances = make(map[ktypes.Address]*ktypes.BalanceObject)
 	mockState.latestContextHash = make(map[ktypes.Address]ktypes.Hash)
-	mockState.storage = make(map[ktypes.Hash][]byte)
 	mockState.accounts = make(map[ktypes.Address]*ktypes.Account)
 	mockState.context = make(map[ktypes.Hash]*Context)
 
@@ -196,14 +194,6 @@ func (ms *MockStateManager) GetLatestNonce(addr ktypes.Address) (uint64, error) 
 	return 0, ktypes.ErrAccountNotFound
 }
 
-func (ms *MockStateManager) IsGenesis(addr ktypes.Address) (bool, error) {
-	if _, ok := ms.storage[ktypes.GetHash(addr.Bytes())]; ok {
-		return true, nil
-	}
-
-	return false, nil
-}
-
 func (ms *MockStateManager) setBalance(addr ktypes.Address, assetID ktypes.AssetID, balance *big.Int) {
 	ms.balances[addr] = &ktypes.BalanceObject{
 		Bal: make(ktypes.AssetMap),
@@ -231,10 +221,6 @@ func (ms *MockStateManager) setAccounts(addr ktypes.Address, latestNonce uint64)
 	ms.accounts[addr] = &ktypes.Account{
 		Nonce: latestNonce,
 	}
-}
-
-func (ms *MockStateManager) setStorage(hash ktypes.Hash, data []byte) {
-	ms.storage[hash] = data
 }
 
 func (ms *MockStateManager) getTDU(addr ktypes.Address) ktypes.AssetMap {

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"gitlab.com/sarvalabs/moichain/guna"
 	"log"
 	"sync/atomic"
 	"testing"
@@ -50,7 +51,7 @@ func TestIx_SendInteraction(t *testing.T) {
 	t.Helper()
 
 	address := tests.RandomAddress(t)
-	genesisAddress := tests.RandomAddress(t)
+	genesisAddress := guna.GenesisAddress
 	ixpool := NewIxPool()
 	stateManager := NewMockStateManager(t)
 	cfg := new(common.IxPoolConfig)
@@ -59,9 +60,6 @@ func TestIx_SendInteraction(t *testing.T) {
 
 	ixpool.setNonce(address, 5)
 	stateManager.setAccounts(address, 5)
-	// Create an entry in storage with the genesis address hash and value.
-	// So that the IsGenesis method will return true.
-	stateManager.setStorage(ktypes.GetHash(genesisAddress.Bytes()), tests.RandomHash(t).Bytes())
 
 	ixAPI := NewPublicIXAPI(ixpool, stateManager, cfg)
 

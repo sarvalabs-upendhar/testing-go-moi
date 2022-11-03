@@ -28,7 +28,6 @@ type StateManager interface {
 	GetBalances(addrs ktypes.Address) (*ktypes.BalanceObject, error)
 	GetBalance(addr ktypes.Address, assetID ktypes.AssetID) (*big.Int, error)
 	GetLatestNonce(addr ktypes.Address) (uint64, error)
-	IsGenesis(addr ktypes.Address) (bool, error)
 }
 
 // Backend is a struct that represents the API backend
