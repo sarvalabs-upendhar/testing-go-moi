@@ -14,8 +14,8 @@ import (
 	"gitlab.com/sarvalabs/moichain/utils"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/moby/locker"
 	"github.com/mr-tron/base58/base58"
 	"github.com/pkg/errors"

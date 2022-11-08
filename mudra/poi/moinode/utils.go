@@ -7,10 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strings"
 
-	"github.com/sirupsen/logrus"
 	"gitlab.com/sarvalabs/moichain/mudra/kramaid"
 )
 
@@ -75,7 +75,7 @@ func (mnR *MoiNodeRegistry) GetNodes(optArgs map[string]interface{}) ([]MoiNode,
 		requestURL = strings.Join([]string{mnR.String(), "/moi-id/moinode/list?userID=", targetedUserID}, "")
 	}
 
-	logrus.Info(" request URL : ", requestURL)
+	log.Println("Request URL : ", requestURL)
 
 	allNodesResponse, err := http.Get(requestURL) //nolint
 	if err != nil {

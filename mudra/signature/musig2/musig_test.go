@@ -2,10 +2,10 @@ package musig2
 
 import (
 	"errors"
+	"log"
 	"sync"
 	"testing"
 
-	log "github.com/sirupsen/logrus"
 	"gitlab.com/sarvalabs/btcd-musig/btcec/schnorr/musig2"
 	"gitlab.com/sarvalabs/moichain/mudra/common"
 )
@@ -58,11 +58,11 @@ func testMusigForNnodes(nodesInICS int) error {
 				// TODO: Verify the signature with corresponding public key before registering the nonce to session
 				haveAll, err := sessionAtOneNode.RegisterPubNonce(nonce)
 				if err != nil {
-					log.Fatal("unable to add public nonce")
+					log.Fatal("Unable to add public nonce")
 				}
 
 				if j == len(signerSessions)-1 && !haveAll {
-					log.Fatal("all public nonces should have been detected")
+					log.Fatal("All public nonces should have been detected")
 				}
 			}
 		}(i, signCtx)

@@ -19,18 +19,18 @@ import (
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/polo/go-polo"
 
-	"github.com/libp2p/go-libp2p-core/routing"
+	"github.com/libp2p/go-libp2p/core/routing"
 
 	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
-	discovery "github.com/libp2p/go-libp2p-discovery"
 	lrpc "github.com/libp2p/go-libp2p-gorpc"
 	kdht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
+	discovery "github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	"gitlab.com/sarvalabs/moichain/common"
 	"gitlab.com/sarvalabs/moichain/types"
 )
@@ -419,7 +419,11 @@ func (s *Server) Discover() {
 
 	// Advertise the rendezvous string to the discovery service
 	log.Println("Announcing ourselves...")
-	discovery.Advertise(s.ctx, s.discovery, string(s.cfg.ProtocolID))
+
+	_, err := s.discovery.Advertise(s.ctx, string(s.cfg.ProtocolID))
+	if err != nil {
+		s.logger.Error("Failed to advertise the rendezvous string to the discovery service", "error", err)
+	}
 
 	// Discover other peers that are advertising themselves
 	log.Println("Discovering Peers...")

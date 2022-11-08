@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
 	rpc "github.com/libp2p/go-libp2p-gorpc"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/pkg/errors"
 	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"

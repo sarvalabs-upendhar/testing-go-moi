@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/protocol"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	maddr "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/profile"
 	"gitlab.com/sarvalabs/moichain/common"

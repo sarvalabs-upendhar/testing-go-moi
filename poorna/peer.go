@@ -12,8 +12,7 @@ import (
 	"gitlab.com/sarvalabs/polo/go-polo"
 
 	mapset "github.com/deckarep/golang-set"
-	ggio "github.com/gogo/protobuf/io"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"gitlab.com/sarvalabs/moichain/types"
 )
@@ -31,8 +30,6 @@ type KipPeer struct {
 	mtxLock sync.RWMutex
 	// Represents the peer's read/write buffer
 	rw bufio.ReadWriter
-	wc ggio.WriteCloser
-	rc ggio.ReadCloser
 
 	// Represents the set of interactions known to the peer
 	knownIXs mapset.Set
@@ -41,14 +38,9 @@ type KipPeer struct {
 // NewKIPPeer is a constructor function that generates and returns a KipPeer
 // for a given libp2p peerid, multiaddr and a read/write io buffer.
 func NewKIPPeer(networkID peer.ID, rw bufio.ReadWriter) *KipPeer {
-	// Create a new buffered writer and a KipPeer object with it and return it
-	bufw := bufio.NewWriter(rw.Writer)
-
 	return &KipPeer{
 		networkID: networkID,
 		rw:        rw,
-		rc:        ggio.NewFullReader(rw.Reader, 1<<20),
-		wc:        ggio.NewFullWriter(bufw),
 		knownIXs:  mapset.NewSet(),
 	}
 }

@@ -5,16 +5,13 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/hashicorp/go-hclog"
 	"gitlab.com/sarvalabs/moichain/chain"
 	"gitlab.com/sarvalabs/moichain/ixpool"
-	"gitlab.com/sarvalabs/moichain/utils"
-
-	"github.com/fatih/color"
-	"github.com/hashicorp/go-hclog"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/polo/go-polo"
-
 	"gitlab.com/sarvalabs/moichain/types"
+	"gitlab.com/sarvalabs/moichain/utils"
+	"gitlab.com/sarvalabs/polo/go-polo"
 )
 
 // SubHandler is a struct that represents the network event handler
@@ -152,7 +149,7 @@ func (eh *SubHandler) handlePeerMessage(p *KipPeer) error {
 	// NEWIXTS
 	case types.NEWIXSMSG:
 		// Print the KipID of the interactions sender
-		color.New(color.BgRed).Add(color.Underline).Println("Received Interactions from", p.id)
+		eh.logger.Info("Received Interactions from", "id", p.id)
 
 		// Unmarshal message proto into an InteractionsData message
 		var ixns types.InteractionMsg

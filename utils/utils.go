@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 
 	"gitlab.com/sarvalabs/moichain/types"

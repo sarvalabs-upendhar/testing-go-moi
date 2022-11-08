@@ -10,10 +10,10 @@ import (
 	"path/filepath"
 
 	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/routing"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
+	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/routing"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/spf13/cobra"
 )
@@ -73,7 +73,7 @@ var bootnodeCmd = &cobra.Command{
 			panic(err)
 		}
 		fmt.Println("")
-		fmt.Printf("[*] Your Bootstrap ID Is: /ip4/%s/tcp/%v/p2p/%s\n", ipAddress, portNumber, host.ID().Pretty())
+		fmt.Printf("[*] Your Bootstrap ID Is: /ip4/%s/tcp/%v/p2p/%s\n", ipAddress, portNumber, host.ID().String())
 		fmt.Println("")
 		var input string
 		for {

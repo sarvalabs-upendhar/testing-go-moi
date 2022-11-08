@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/libp2p/go-libp2p-core/peer"
 	gorpc "github.com/libp2p/go-libp2p-gorpc"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"gitlab.com/sarvalabs/moichain/poorna/api"
 	"gitlab.com/sarvalabs/moichain/types"
 )
