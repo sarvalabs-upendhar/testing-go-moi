@@ -55,8 +55,8 @@ func stringInV0(metaInfoInV0 MetaInfoV0, p2pID string) (string, error) {
 // unMarshalV0Meta returns KramaID in version 0 from the string
 func unMarshalV0Meta(kramaIDMetaBytes []byte) (MetaInfoV0, error) {
 	metaInfoVar := new(MetaInfoV0)
-	err := json.Unmarshal(kramaIDMetaBytes, &metaInfoVar)
 
+	err := json.Unmarshal(kramaIDMetaBytes, &metaInfoVar)
 	if err != nil {
 		return *metaInfoVar, err
 	}

@@ -3,10 +3,11 @@ package syncer
 import (
 	"context"
 	"errors"
+
 	"github.com/libp2p/go-libp2p-core/peer"
 	gorpc "github.com/libp2p/go-libp2p-gorpc"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	"gitlab.com/sarvalabs/moichain/poorna/api"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 // SYNCRPCService is a struct that represents an SYNC RPC Service
@@ -21,17 +22,21 @@ func NewSyncRPCService(syncer *Syncer) *SYNCRPCService {
 // StatusUpdate is an RPC call to update the status of the remote peer
 func (syncRPC *SYNCRPCService) StatusUpdate(
 	ctx context.Context,
-	req *ktypes.AccountsStatusMsg,
+	req *types.AccountsStatusMsg,
 	resp *api.Response,
 ) error {
-	return syncRPC.syncer.StatusUpdate(ctx.Value(gorpc.ContextKeyRequestSender).(peer.ID), req)
+	if peerID, ok := ctx.Value(gorpc.ContextKeyRequestSender).(peer.ID); ok {
+		return syncRPC.syncer.StatusUpdate(peerID, req)
+	}
+
+	return errors.New("failed to retrieve the peer ID of current request sender")
 }
 
 // GetTesseract is an RPC call to fetch the tesseract based on hash or height
 func (syncRPC *SYNCRPCService) GetTesseract(
 	ctx context.Context,
-	req *ktypes.TesseractReq,
-	resp *ktypes.TesseractResponse,
+	req *types.TesseractReq,
+	resp *types.TesseractResponse,
 ) error {
 	tesseract, err := syncRPC.syncer.GetTesseract(req.Hash)
 	if err != nil {
@@ -45,7 +50,7 @@ func (syncRPC *SYNCRPCService) GetTesseract(
 
 	rawData := tesseract.Bytes()
 	resp.Data = rawData
-	resp.Delta = map[ktypes.Hash][]byte{tesseract.Body.ConsensusProof.ICSHash: icsData}
+	resp.Delta = map[types.Hash][]byte{tesseract.Body.ConsensusProof.ICSHash: icsData}
 
 	return nil
 }

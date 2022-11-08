@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
+	"gitlab.com/sarvalabs/moichain/types"
 	"gitlab.com/sarvalabs/polo/go-polo"
 )
 
@@ -29,12 +29,12 @@ func NewICSRPCService(k *Engine) *ICSRPCService {
 // ICSRequest is a method of ICSRPCService that sends an ICS join request
 func (icsrpc *ICSRPCService) ICSRequest(
 	ctx context.Context,
-	req *ktypes.ICSRequest,
-	response *ktypes.ICSResponse,
+	req *types.ICSRequest,
+	response *types.ICSResponse,
 ) error {
 	respChan := make(chan Response)
 
-	interactions := new(ktypes.Interactions)
+	interactions := new(types.Interactions)
 
 	if err := polo.Depolorize(interactions, req.IxData); err != nil {
 		return errors.New("ixs decode error")
@@ -52,15 +52,14 @@ func (icsrpc *ICSRPCService) ICSRequest(
 	response.ClusterID = req.ClusterID
 	// TODO: check for context
 	if resp := <-respChan; resp.err != nil {
-		switch resp.err {
-		case ktypes.ErrSlotsFull:
-			response.Response = 0
+		response.Response = 0
+
+		switch resp.err.Error() {
+		case types.ErrSlotsFull.Error():
 			response.StatusCode = SLOTSFULL
-		case ktypes.ErrHashMismatch:
-			response.Response = 0
+		case types.ErrHashMismatch.Error():
 			response.StatusCode = HASHMISMATCH
 		default:
-			response.Response = 0
 			response.StatusCode = INTERNALERROR
 		}
 	} else {
@@ -69,7 +68,7 @@ func (icsrpc *ICSRPCService) ICSRequest(
 		if err != nil {
 			return errors.New("unable to fetch random nodes")
 		}
-		response.RandomNodes = ktypes.KIPPeerIDToString(randomNodes)
+		response.RandomNodes = types.KIPPeerIDToString(randomNodes)
 	}
 
 	return nil

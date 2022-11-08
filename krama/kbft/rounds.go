@@ -1,8 +1,9 @@
 package kbft
 
 import (
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	"time"
+
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 // A type alias that represents a type of consensus round step
@@ -83,21 +84,21 @@ type RoundState struct {
 	CommitRound int32 `json:"commit_round"`
 
 	// Represents the round proposal
-	Proposal *ktypes.Proposal `json:"proposal"`
+	Proposal *types.Proposal `json:"proposal"`
 
 	// Represents the proposed tesseract grid for the round
-	ProposalGrid *ktypes.TesseractGrid `json:"proposal_tesseract"`
+	ProposalGrid *types.TesseractGrid `json:"proposal_tesseract"`
 
 	// TODO: Add docs
 	LockedRound int32 `json:"locked_round"`
 
-	LockedGrid *ktypes.TesseractGrid `json:"locked_tesseract"`
+	LockedGrid *types.TesseractGrid `json:"locked_tesseract"`
 
 	// Represents the last known round with proof of lock for a non-nil valid block
 	ValidRound int32 `json:"valid_round"`
 
 	// Represents the tesseract grid (block) for the last known round with proof of lock for a non-nil valid block
-	ValidGrid *ktypes.TesseractGrid `json:"valid_tesseract"`
+	ValidGrid *types.TesseractGrid `json:"valid_tesseract"`
 
 	// Represents the last precommit at height-1
 	LastCommit *VoteSet `json:"last_commit"`

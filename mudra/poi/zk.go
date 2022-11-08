@@ -44,8 +44,8 @@ func deleteAuthTempFile() error {
 func Authenticate(defAddr, passPhrase, moiIDBaseURL string) (bool, *zkAuthProof, error) {
 	// Finding node installation path
 	nodePathShell := exec.Command("npm", "config", "get", "prefix")
-	nodePath, err := nodePathShell.Output()
 
+	nodePath, err := nodePathShell.Output()
 	if err != nil {
 		return false, nil, err
 	}
@@ -55,7 +55,6 @@ func Authenticate(defAddr, passPhrase, moiIDBaseURL string) (bool, *zkAuthProof,
 		"defAddr":     defAddr,
 		"typeOfProof": "zk",
 	})
-
 	if err != nil {
 		return false, nil, err
 	}
@@ -104,8 +103,8 @@ func Authenticate(defAddr, passPhrase, moiIDBaseURL string) (bool, *zkAuthProof,
 	packagePath = packagePath + "/lib/node_modules/@nuid/zk"
 
 	authCmd := exec.Command(command, fileToBeExecuted, packagePath, zkChallenge, passPhrase)
-	authResponse, err := authCmd.Output()
 
+	authResponse, err := authCmd.Output()
 	if err != nil {
 		er2 := deleteAuthTempFile()
 		if er2 != nil {

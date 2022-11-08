@@ -4,28 +4,27 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
-	"github.com/hashicorp/go-hclog"
-	lru "github.com/hashicorp/golang-lru"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/poorna/agora/db"
-	"gitlab.com/sarvalabs/moichain/poorna/agora/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
 	"sync"
 	"time"
+
+	"github.com/hashicorp/go-hclog"
+	lru "github.com/hashicorp/golang-lru"
+	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	"gitlab.com/sarvalabs/moichain/poorna/agora/db"
+	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
+	"gitlab.com/sarvalabs/moichain/types"
+	"gitlab.com/sarvalabs/polo/go-polo"
 )
 
-var (
-	AgoraPrefix = []byte("agora")
-)
+var AgoraPrefix = []byte("agora")
 
-func GetAgoraKey(hash ktypes.Hash) string {
+func GetAgoraKey(hash types.Hash) string {
 	out := append(AgoraPrefix, hash.Bytes()...)
 
 	return hex.EncodeToString(out)
 }
 
-func GetAgoraDBKey(address ktypes.Address, hash ktypes.Hash) []byte {
+func GetAgoraDBKey(address types.Address, hash types.Hash) []byte {
 	out := append(AgoraPrefix, address.Bytes()[0:20]...)
 	out = append(out, hash.Bytes()...)
 
@@ -39,7 +38,7 @@ type ledgerStore interface {
 
 type job struct {
 	key   []byte
-	value *types.CanonicalPeerList
+	value *atypes.CanonicalPeerList
 }
 
 type Ledger struct {
@@ -71,7 +70,7 @@ func NewLedger(ctx context.Context, logger hclog.Logger, workersCount int, db le
 	return l, err
 }
 
-func (l *Ledger) GetAssociatedPeers(addr ktypes.Address, stateHash ktypes.Hash) ([]id.KramaID, error) {
+func (l *Ledger) GetAssociatedPeers(addr types.Address, stateHash types.Hash) ([]id.KramaID, error) {
 	key := GetAgoraKey(stateHash)
 
 	peerList, cacheErr := l.fetchFromCache(key)
@@ -91,31 +90,31 @@ func (l *Ledger) GetAssociatedPeers(addr ktypes.Address, stateHash ktypes.Hash) 
 	return peerList.Peers(), nil
 }
 
-func (l *Ledger) addToCache(key string, list *types.PeerList) {
+func (l *Ledger) addToCache(key string, list *atypes.PeerList) {
 	l.cache.Add(key, list)
 }
 
-func (l *Ledger) fetchFromCache(key string) (*types.PeerList, error) {
+func (l *Ledger) fetchFromCache(key string) (*atypes.PeerList, error) {
 	data, ok := l.cache.Get(key)
 	if !ok {
-		return nil, ktypes.ErrKeyNotFound
+		return nil, types.ErrKeyNotFound
 	}
 
-	peerList, ok := data.(*types.PeerList)
+	peerList, ok := data.(*atypes.PeerList)
 	if !ok {
-		return nil, ktypes.ErrInterfaceConversion
+		return nil, types.ErrInterfaceConversion
 	}
 
 	return peerList, nil
 }
 
-func (l *Ledger) fetchFromDB(address ktypes.Address, stateHash ktypes.Hash) (*types.PeerList, error) {
+func (l *Ledger) fetchFromDB(address types.Address, stateHash types.Hash) (*atypes.PeerList, error) {
 	rawData, err := l.db.Get(GetAgoraDBKey(address, stateHash))
 	if err != nil {
-		return nil, ktypes.ErrKeyNotFound
+		return nil, types.ErrKeyNotFound
 	}
 
-	plist := new(types.CanonicalPeerList)
+	plist := new(atypes.CanonicalPeerList)
 	if err := polo.Depolorize(plist, rawData); err != nil {
 		return nil, err
 	}
@@ -123,13 +122,13 @@ func (l *Ledger) fetchFromDB(address ktypes.Address, stateHash ktypes.Hash) (*ty
 	return plist.PeerList(), nil
 }
 
-func (l *Ledger) UpdateAssociatedPeers(address ktypes.Address, stateHash ktypes.Hash, peerID id.KramaID) (err error) {
+func (l *Ledger) UpdateAssociatedPeers(address types.Address, stateHash types.Hash, peerID id.KramaID) (err error) {
 	peerList, cacheErr := l.fetchFromCache(GetAgoraKey(stateHash))
-	if errors.Is(cacheErr, ktypes.ErrKeyNotFound) {
+	if errors.Is(cacheErr, types.ErrKeyNotFound) {
 		peerList, err = l.fetchFromDB(address, stateHash)
 
-		if errors.Is(err, ktypes.ErrKeyNotFound) {
-			peerList = types.NewPeerList()
+		if errors.Is(err, types.ErrKeyNotFound) {
+			peerList = atypes.NewPeerList()
 		} else if err != nil {
 			return err
 		}

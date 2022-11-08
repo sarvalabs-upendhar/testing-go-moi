@@ -2,14 +2,15 @@ package network
 
 import (
 	"bufio"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/polo/go-polo"
 	"log"
 	"sync"
 	"time"
+
+	"github.com/libp2p/go-libp2p-core/network"
+	"github.com/libp2p/go-libp2p-core/peer"
+	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	"gitlab.com/sarvalabs/moichain/types"
+	"gitlab.com/sarvalabs/polo/go-polo"
 )
 
 type AgoraPeer struct {
@@ -18,14 +19,14 @@ type AgoraPeer struct {
 	stream         network.Stream
 	connected      bool
 	lastActiveTime time.Time
-	activeSessions map[ktypes.Address]struct{}
+	activeSessions map[types.Address]struct{}
 }
 
-func (a *AgoraPeer) getActiveSessions() []ktypes.Address {
+func (a *AgoraPeer) getActiveSessions() []types.Address {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
-	sessions := make([]ktypes.Address, 0, len(a.activeSessions))
+	sessions := make([]types.Address, 0, len(a.activeSessions))
 
 	for sessionID := range a.activeSessions {
 		sessions = append(sessions, sessionID)
@@ -34,14 +35,14 @@ func (a *AgoraPeer) getActiveSessions() []ktypes.Address {
 	return sessions
 }
 
-func (a *AgoraPeer) addActiveSession(sessionID ktypes.Address) {
+func (a *AgoraPeer) addActiveSession(sessionID types.Address) {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
 	a.activeSessions[sessionID] = struct{}{}
 }
 
-func (a *AgoraPeer) removeActiveSession(sessionID ktypes.Address) {
+func (a *AgoraPeer) removeActiveSession(sessionID types.Address) {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
@@ -55,14 +56,14 @@ func (a *AgoraPeer) updateLastActiveTime() {
 	a.lastActiveTime = time.Now()
 }
 
-func (a *AgoraPeer) sendMessage(senderID id.KramaID, msgType ktypes.MsgType, msg interface{}) error {
+func (a *AgoraPeer) sendMessage(senderID id.KramaID, msgType types.MsgType, msg interface{}) error {
 	rw := bufio.NewReadWriter(bufio.NewReader(a.stream), bufio.NewWriter(a.stream))
 	// Marshal the proto message into slice of bytes and log and return if an error occurs
 	bytes := polo.Polorize(msg)
 
 	// Create a network message proto with the bytes payload of the message to send
 	// and convert into a proto message and marshal it  into a slice of bytes
-	m := ktypes.Message{
+	m := types.Message{
 		MsgType: msgType,
 		Payload: bytes,
 		Sender:  senderID,

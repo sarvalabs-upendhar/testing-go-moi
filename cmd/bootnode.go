@@ -18,9 +18,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var portNumber int
-var ipAddress string
-var keyFile string
+var (
+	portNumber int
+	ipAddress  string
+	keyFile    string
+)
 
 // bootnodeCmd represents the bootnode init command
 var bootnodeCmd = &cobra.Command{
@@ -28,7 +30,7 @@ var bootnodeCmd = &cobra.Command{
 	Short: "A command to initialize bootnode",
 	Long: `This command is used to initialize bootnode for kad-dht application using libp2p
 
-	Usage: Run 'moichain bootnode -port [port number] -ip-addr [listener address] --key [key filename]'`,
+	Usage: Run 'moichain bootnode --port [port number] --ip-addr [listener address] --key [key filename]'`,
 	Run: func(cmd *cobra.Command, args []string) {
 		var KadDHT *dht.IpfsDHT
 
@@ -60,7 +62,6 @@ var bootnodeCmd = &cobra.Command{
 		// libp2p.New constructs a new libp2p Host.
 		// Other options can be added here.
 		host, err := libp2p.New(
-			// ctx,
 			libp2p.ListenAddrs(sourceMultiAddr),
 			libp2p.NATPortMap(),
 			libp2p.ForceReachabilityPublic(),
@@ -68,7 +69,6 @@ var bootnodeCmd = &cobra.Command{
 			libp2p.Identity(privateKey),
 			selfRouting,
 		)
-
 		if err != nil {
 			panic(err)
 		}
@@ -91,7 +91,6 @@ var bootnodeCmd = &cobra.Command{
 					fmt.Println("Peer ID", v, "Supported-Protocols", protocols)
 					fmt.Println("Peer Info", host.Peerstore().PeerInfo(v))
 				}
-
 			} else if input == "2" {
 				return
 			}
@@ -147,7 +146,7 @@ func getPrivateKey(keyfile string) (crypto.PrivKey, error) {
 		}
 
 		// Write the private key data to keyfile and check for errors
-		if err := ioutil.WriteFile(keyfile, data, 0600); err != nil {
+		if err := ioutil.WriteFile(keyfile, data, 0o600); err != nil {
 			// Return the error
 			return nil, err
 		}

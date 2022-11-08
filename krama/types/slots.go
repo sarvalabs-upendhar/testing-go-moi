@@ -1,13 +1,14 @@
 package types
 
 import (
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	"sync"
+
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 type ExecutionResponse struct {
 	Err  error
-	Grid []*ktypes.Tesseract
+	Grid []*types.Tesseract
 }
 
 const (
@@ -18,12 +19,12 @@ const (
 type SlotType int
 
 type Slot struct {
-	//TODO: explore using sync pool for slots
+	// TODO: explore using sync pool for slots
 	SlotType                        SlotType
 	clusterState                    *ClusterInfo
 	ICSSuccessChan                  chan bool
-	OutboundChan, InboundChan       chan *ktypes.ICSMSG
-	BftOutboundChan, BftInboundChan chan ktypes.ConsensusMessage
+	OutboundChan, InboundChan       chan *types.ICSMSG
+	BftOutboundChan, BftInboundChan chan types.ConsensusMessage
 	ExecutionResp                   chan ExecutionResponse
 	CloseCh                         chan struct{}
 }
@@ -33,16 +34,16 @@ func NewSlot(slotType SlotType, clusterState *ClusterInfo) *Slot {
 		SlotType:        slotType,
 		clusterState:    clusterState,
 		ICSSuccessChan:  make(chan bool),
-		OutboundChan:    make(chan *ktypes.ICSMSG),
-		InboundChan:     make(chan *ktypes.ICSMSG),
+		OutboundChan:    make(chan *types.ICSMSG),
+		InboundChan:     make(chan *types.ICSMSG),
 		ExecutionResp:   make(chan ExecutionResponse),
-		BftOutboundChan: make(chan ktypes.ConsensusMessage, 1000),
-		BftInboundChan:  make(chan ktypes.ConsensusMessage, 1000),
+		BftOutboundChan: make(chan types.ConsensusMessage, 1000),
+		BftInboundChan:  make(chan types.ConsensusMessage, 1000),
 		CloseCh:         make(chan struct{}),
 	}
 }
 
-func (info *Slot) ForwardMsg(msg ktypes.ConsensusMessage) {
+func (info *Slot) ForwardMsg(msg types.ConsensusMessage) {
 	if info == nil {
 		return
 	}
@@ -56,7 +57,7 @@ func (info *Slot) ForwardMsg(msg ktypes.ConsensusMessage) {
 	}
 }
 
-func (info *Slot) ForwardInboundMsg(msg *ktypes.ICSMSG) {
+func (info *Slot) ForwardInboundMsg(msg *types.ICSMSG) {
 	if info == nil {
 		return
 	}
@@ -68,7 +69,7 @@ func (info *Slot) ForwardInboundMsg(msg *ktypes.ICSMSG) {
 	}
 }
 
-func (info *Slot) ClusterID() ktypes.ClusterID {
+func (info *Slot) ClusterID() types.ClusterID {
 	return info.clusterState.ID
 }
 
@@ -77,25 +78,25 @@ func (info *Slot) CLusterInfo() *ClusterInfo {
 }
 
 type Slots struct {
-	slots                   map[ktypes.ClusterID]*Slot
+	slots                   map[types.ClusterID]*Slot
 	availableOperatorSlots  int
 	availableValidatorSlots int
-	activeAccounts          map[ktypes.Address]ktypes.ClusterID
+	activeAccounts          map[types.Address]types.ClusterID
 	mtx                     sync.RWMutex
 }
 
 func NewSlots(operatorSlots, validatorSlots int) *Slots {
 	return &Slots{
-		slots:                   make(map[ktypes.ClusterID]*Slot),
+		slots:                   make(map[types.ClusterID]*Slot),
 		availableOperatorSlots:  operatorSlots,
 		availableValidatorSlots: validatorSlots,
-		activeAccounts:          make(map[ktypes.Address]ktypes.ClusterID, (operatorSlots+validatorSlots)*2),
+		activeAccounts:          make(map[types.Address]types.ClusterID, (operatorSlots+validatorSlots)*2),
 	}
 }
 
-func (s *Slots) areAccountsActive(addrs ...ktypes.Address) bool {
+func (s *Slots) areAccountsActive(addrs ...types.Address) bool {
 	for _, v := range addrs {
-		if v != ktypes.NilAddress {
+		if v != types.NilAddress {
 			if _, ok := s.activeAccounts[v]; ok {
 				return true
 			}
@@ -105,14 +106,14 @@ func (s *Slots) areAccountsActive(addrs ...ktypes.Address) bool {
 	return false
 }
 
-func (s *Slots) AreAccountsActive(addrs ...ktypes.Address) bool {
+func (s *Slots) AreAccountsActive(addrs ...types.Address) bool {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 
 	return s.areAccountsActive(addrs...)
 }
 
-func (s *Slots) AddSlot(id ktypes.ClusterID, slot *Slot) bool {
+func (s *Slots) AddSlot(id types.ClusterID, slot *Slot) bool {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
@@ -131,12 +132,13 @@ func (s *Slots) AddSlot(id ktypes.ClusterID, slot *Slot) bool {
 	return false
 }
 
-func (s *Slots) GetSlot(id ktypes.ClusterID) *Slot {
+func (s *Slots) GetSlot(id types.ClusterID) *Slot {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 
 	return s.slots[id]
 }
+
 func (s *Slots) AreSlotsAvailable(slotType SlotType) bool {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
@@ -146,14 +148,13 @@ func (s *Slots) AreSlotsAvailable(slotType SlotType) bool {
 
 func (s *Slots) areSlotsAvailable(slotType SlotType) bool {
 	if slotType == OperatorSlot {
-
 		return s.availableOperatorSlots > 0
 	}
 
 	return s.availableValidatorSlots > 0
 }
 
-func (s *Slots) CleanupSlot(id ktypes.ClusterID) {
+func (s *Slots) CleanupSlot(id types.ClusterID) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
@@ -168,7 +169,6 @@ func (s *Slots) CleanupSlot(id ktypes.ClusterID) {
 
 func (s *Slots) decrementSlots(slotType SlotType) {
 	if slotType == OperatorSlot {
-
 		s.availableOperatorSlots--
 
 		return
@@ -179,7 +179,6 @@ func (s *Slots) decrementSlots(slotType SlotType) {
 
 func (s *Slots) incrementSlots(slotType SlotType) {
 	if slotType == OperatorSlot {
-
 		s.availableOperatorSlots++
 
 		return

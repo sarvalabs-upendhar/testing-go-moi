@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	"gitlab.com/sarvalabs/moichain/poorna/api"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 // rpcService is a struct that represents a mapping of RPC service APIs
@@ -40,7 +40,7 @@ func (r *rpcService) GetLatestTesseract(req *http.Request, args *api.TesseractAr
 	// Retrieve the public core API and call the method to get the latest Tesseract
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
-		return ktypes.ErrInvalidAPI
+		return types.ErrInvalidAPI
 	}
 
 	// Retrieve the latest Tesseract for the address from the backend chain manager
@@ -57,11 +57,10 @@ func (r *rpcService) GetLatestTesseract(req *http.Request, args *api.TesseractAr
 func (r *rpcService) GetTesseractByHash(req *http.Request, args *api.TesseractByHashArgs, resp *api.Response) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
-		return ktypes.ErrInvalidAPI
+		return types.ErrInvalidAPI
 	}
 
 	tesseract, err := coreAPI.GetTesseractByHash(args)
-
 	if err != nil {
 		return err
 	}
@@ -78,11 +77,10 @@ func (r *rpcService) GetTesseractByHeight(
 ) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
-		return ktypes.ErrInvalidAPI
+		return types.ErrInvalidAPI
 	}
 
 	tesseract, err := coreAPI.GetTesseractByHeight(args)
-
 	if err != nil {
 		return err
 	}
@@ -95,7 +93,7 @@ func (r *rpcService) GetTesseractByHeight(
 func (r *rpcService) GetAssetInfoByAssetID(req *http.Request, args *api.AssetInfoArgs, resp *api.Response) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
-		return ktypes.ErrInvalidAPI
+		return types.ErrInvalidAPI
 	}
 
 	assetInfo, err := coreAPI.GetAssetInfoByAssetID(args.AssetID)
@@ -114,7 +112,7 @@ func (r *rpcService) GetBalance(req *http.Request, args *api.BalArgs, resp *api.
 	// Retrieve the public core API and call the method to get the balance for the asset
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
-		return ktypes.ErrInvalidAPI
+		return types.ErrInvalidAPI
 	}
 
 	bal, err := coreAPI.GetBalance(args)
@@ -133,11 +131,10 @@ func (r *rpcService) SendInteractions(req *http.Request, args *api.SendIXArgs, r
 	// Retrieve the public ix API
 	ixAPI, ok := r.apis["ix"].(*api.PublicIXAPI)
 	if !ok {
-		return ktypes.ErrInvalidAPI
+		return types.ErrInvalidAPI
 	}
 
 	ixn, err := ixAPI.SendInteraction(args)
-
 	if err != nil {
 		return err
 	}
@@ -151,7 +148,7 @@ func (r *rpcService) SendInteractions(req *http.Request, args *api.SendIXArgs, r
 func (r *rpcService) GetTDU(req *http.Request, args *api.TesseractArgs, resp *api.Response) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
-		return ktypes.ErrInvalidAPI
+		return types.ErrInvalidAPI
 	}
 
 	data, err := coreAPI.GetTDU(args)
@@ -165,10 +162,14 @@ func (r *rpcService) GetTDU(req *http.Request, args *api.TesseractArgs, resp *ap
 }
 
 // GetContextInfoByHash is an RPC method that returns the context Info of the queried address
-func (r *rpcService) GetContextInfoByHash(req *http.Request, args *api.ContextInfoByHashArgs, resp *api.Response) error {
+func (r *rpcService) GetContextInfoByHash(
+	req *http.Request,
+	args *api.ContextInfoByHashArgs,
+	resp *api.Response,
+) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
-		return ktypes.ErrInvalidAPI
+		return types.ErrInvalidAPI
 	}
 
 	behaviour, observer, err := coreAPI.GetContextInfoByHash(args)
@@ -190,7 +191,7 @@ func (r *rpcService) GetContextInfoByHash(req *http.Request, args *api.ContextIn
 func (r *rpcService) GetInteractionReceipt(req *http.Request, args *api.ReceiptArgs, resp *api.Response) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
-		return ktypes.ErrInvalidAPI
+		return types.ErrInvalidAPI
 	}
 
 	receipt, err := coreAPI.GetInteractionReceipt(args)
@@ -210,7 +211,7 @@ func (r *rpcService) GetInteractionCountByAddress(
 ) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
-		return ktypes.ErrInvalidAPI
+		return types.ErrInvalidAPI
 	}
 
 	interactionCount, err := coreAPI.GetInteractionCountByAddress(args)

@@ -4,8 +4,9 @@ import (
 	"encoding/hex"
 	"math/big"
 
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	"gitlab.com/sarvalabs/moichain/common/kutils"
+	"gitlab.com/sarvalabs/moichain/utils"
+
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 // PublicCoreAPI is a struct that represents a wrapper for the core public APIs
@@ -26,21 +27,19 @@ func NewPublicCoreAPI(chain ChainManager, sm StateManager) *PublicCoreAPI {
 // Accepts the address and asset for which to retrieve the balance.
 // Returns the balance as a big Integer and any error that occurs.
 func (p *PublicCoreAPI) GetBalance(args *BalArgs) (*big.Int, error) {
-	address, err := kutils.ValidateAddress(args.From)
-
+	address, err := utils.ValidateAddress(args.From)
 	if err != nil {
-		return nil, ktypes.ErrInvalidAddress
+		return nil, types.ErrInvalidAddress
 	}
 
-	assetID, err := kutils.ValidateAssetID(args.AssetID)
-
+	assetID, err := utils.ValidateAssetID(args.AssetID)
 	if err != nil {
-		return nil, ktypes.ErrInvalidAssetID
+		return nil, types.ErrInvalidAssetID
 	}
 
 	// Retrieve the state object for the address from the backend state manager and return if an error occurs
 	// Get the balance of the asset from the state object and return if an error occurs
-	bal, err := p.sm.GetBalance(ktypes.HexToAddress(address), ktypes.AssetID(assetID))
+	bal, err := p.sm.GetBalance(types.HexToAddress(address), types.AssetID(assetID))
 	if err != nil {
 		return nil, err
 	}
@@ -50,25 +49,26 @@ func (p *PublicCoreAPI) GetBalance(args *BalArgs) (*big.Int, error) {
 }
 
 // GetLatestTesseract is a method of PublicCoreAPI for retrieving the latest Tesseract of an address
-func (p *PublicCoreAPI) GetLatestTesseract(args *TesseractArgs) (*ktypes.Tesseract, error) {
-	address, err := kutils.ValidateAddress(args.From)
+func (p *PublicCoreAPI) GetLatestTesseract(args *TesseractArgs) (*types.Tesseract, error) {
+	address, err := utils.ValidateAddress(args.From)
 	if err != nil {
-		return nil, ktypes.ErrInvalidAddress
+		return nil, types.ErrInvalidAddress
 	}
 
-	return p.chain.GetLatestTesseract(ktypes.HexToAddress(address))
+	return p.chain.GetLatestTesseract(types.HexToAddress(address))
 }
-func (p *PublicCoreAPI) GetTesseractByHash(args *TesseractByHashArgs) (*ktypes.Tesseract, error) {
-	hash, err := kutils.ValidateHash(args.Hash)
+
+func (p *PublicCoreAPI) GetTesseractByHash(args *TesseractByHashArgs) (*types.Tesseract, error) {
+	hash, err := utils.ValidateHash(args.Hash)
 	if err != nil {
 		return nil, err
 	}
 
-	return p.chain.GetTesseract(ktypes.BytesToHash(ktypes.Hex2Bytes(hash)))
+	return p.chain.GetTesseract(types.BytesToHash(types.Hex2Bytes(hash)))
 }
 
-func (p *PublicCoreAPI) GetTesseractByHeight(args *TesseractByHeightArgs) (*ktypes.Tesseract, error) {
-	from, err := kutils.ValidateAddress(args.From)
+func (p *PublicCoreAPI) GetTesseractByHeight(args *TesseractByHeightArgs) (*types.Tesseract, error) {
+	from, err := utils.ValidateAddress(args.From)
 	if err != nil {
 		return nil, err
 	}
@@ -81,8 +81,8 @@ func (p *PublicCoreAPI) GetTesseractByHeight(args *TesseractByHeightArgs) (*ktyp
 	return tesseract, nil
 }
 
-func (p *PublicCoreAPI) GetAssetInfoByAssetID(assetID string) (*ktypes.AssetInfo, error) {
-	assetID, err := kutils.ValidateAssetID(assetID)
+func (p *PublicCoreAPI) GetAssetInfoByAssetID(assetID string) (*types.AssetInfo, error) {
+	assetID, err := utils.ValidateAssetID(assetID)
 	if err != nil {
 		return nil, err
 	}
@@ -94,8 +94,8 @@ func (p *PublicCoreAPI) GetAssetInfoByAssetID(assetID string) (*ktypes.AssetInfo
 
 	assetHash := aID[2:]
 	assetInfo := createAsset(aID)
-	assetData, err := p.chain.GetAssetDataByAssetHash(assetHash)
 
+	assetData, err := p.chain.GetAssetDataByAssetHash(assetHash)
 	if err != nil {
 		return nil, err
 	}
@@ -115,35 +115,32 @@ func (p *PublicCoreAPI) GetAssetInfoByAssetID(assetID string) (*ktypes.AssetInfo
 
 // GetContextInfoByHash will fetch the context associated with the given address
 func (p *PublicCoreAPI) GetContextInfoByHash(args *ContextInfoByHashArgs) ([]string, []string, error) {
-	address, err := kutils.ValidateAddress(args.From)
-
+	address, err := utils.ValidateAddress(args.From)
 	if err != nil {
-		return nil, nil, ktypes.ErrInvalidAddress
+		return nil, nil, types.ErrInvalidAddress
 	}
 
-	hash, err := kutils.ValidateHash(args.Hash)
+	hash, err := utils.ValidateHash(args.Hash)
 	if err != nil && args.Hash != "" {
-		return nil, nil, ktypes.ErrInvalidHash
+		return nil, nil, types.ErrInvalidHash
 	}
 
-	_, behaviourSet, RandomSet, err := p.sm.GetContextByHash(ktypes.HexToAddress(address), ktypes.HexToHash(hash))
-
+	_, behaviourSet, RandomSet, err := p.sm.GetContextByHash(types.HexToAddress(address), types.HexToHash(hash))
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return ktypes.KIPPeerIDToString(behaviourSet), ktypes.KIPPeerIDToString(RandomSet), nil
+	return types.KIPPeerIDToString(behaviourSet), types.KIPPeerIDToString(RandomSet), nil
 }
 
 // GetTDU will return the total digital utility associated with address
-func (p *PublicCoreAPI) GetTDU(args *TesseractArgs) (ktypes.AssetMap, error) {
-	address, err := kutils.ValidateAddress(args.From)
-
+func (p *PublicCoreAPI) GetTDU(args *TesseractArgs) (types.AssetMap, error) {
+	address, err := utils.ValidateAddress(args.From)
 	if err != nil {
-		return nil, ktypes.ErrInvalidAddress
+		return nil, types.ErrInvalidAddress
 	}
 
-	object, err := p.sm.GetBalances(ktypes.HexToAddress(address))
+	object, err := p.sm.GetBalances(types.HexToAddress(address))
 	if err != nil {
 		return nil, err
 	}
@@ -153,29 +150,27 @@ func (p *PublicCoreAPI) GetTDU(args *TesseractArgs) (ktypes.AssetMap, error) {
 	return data, nil
 }
 
-func (p *PublicCoreAPI) GetInteractionReceipt(args *ReceiptArgs) (*ktypes.Receipt, error) {
-	address, err := kutils.ValidateAddress(args.Address)
-
+func (p *PublicCoreAPI) GetInteractionReceipt(args *ReceiptArgs) (*types.Receipt, error) {
+	address, err := utils.ValidateAddress(args.Address)
 	if err != nil {
-		return nil, ktypes.ErrInvalidAddress
+		return nil, types.ErrInvalidAddress
 	}
 
-	hash, err := kutils.ValidateHash(args.Hash)
-
+	hash, err := utils.ValidateHash(args.Hash)
 	if err != nil {
-		return nil, ktypes.ErrInvalidHash
+		return nil, types.ErrInvalidHash
 	}
 
-	return p.chain.GetReceipt(ktypes.HexToAddress(address), ktypes.HexToHash(hash))
+	return p.chain.GetReceipt(types.HexToAddress(address), types.HexToHash(hash))
 }
 
 func (p *PublicCoreAPI) GetInteractionCountByAddress(args *InteractionCountArgs) (uint64, error) {
-	addr, err := kutils.ValidateAddress(args.From)
+	addr, err := utils.ValidateAddress(args.From)
 	if err != nil {
 		return 0, err
 	}
 
-	interactionCount, err := p.sm.GetLatestNonce(ktypes.HexToAddress(addr))
+	interactionCount, err := p.sm.GetLatestNonce(types.HexToAddress(addr))
 	if err != nil {
 		return 0, err
 	}
@@ -184,21 +179,21 @@ func (p *PublicCoreAPI) GetInteractionCountByAddress(args *InteractionCountArgs)
 }
 
 // helper functions
-func createAsset(aID []byte) *ktypes.AssetInfo {
+func createAsset(aID []byte) *types.AssetInfo {
 	var dimension, info uint8
 
-	assetInfo := new(ktypes.AssetInfo)
+	assetInfo := new(types.AssetInfo)
 
 	dimension = uint8(big.NewInt(0).SetBytes(aID[:1]).Uint64())
 
 	info = uint8(big.NewInt(0).SetBytes(aID[1:2]).Uint64())
-	//extract most significant bit
+	// extract most significant bit
 	if 0x80&info == 0x80 {
 		assetInfo.IsFungible = true
 	} else {
 		assetInfo.IsFungible = false
 	}
-	//extract least significant bit
+	// extract least significant bit
 	if 0x01&info == 1 {
 		assetInfo.IsMintable = true
 	} else {

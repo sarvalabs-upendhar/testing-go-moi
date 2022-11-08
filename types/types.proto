@@ -1,0 +1,90 @@
+syntax="proto3";
+package ktypes;
+option go_package="/types";
+
+
+message Student {
+
+}
+
+
+
+
+
+message Account {
+    uint64 nonce=1;
+    uint32  acctype=2;
+    bytes balance=3;
+    bytes assetapprovals=4;
+    bytes contexthash=5;
+    bytes storage=6;
+    bytes logicroot=7;
+    bytes  fileroot=8;
+  
+}
+
+message BehaviouralContextObject {
+
+    repeated string List=1;
+    bytes Next=2;  
+}
+
+message RandomContextObject {
+    repeated string List=1;
+    bytes Next=2;
+}
+
+message BootstrapContextObject {
+    repeated string List=1;
+    bytes Next=2;
+}
+
+message Peers {
+    repeated string list=1;
+}
+/*
+message assetdata {
+    bytes logicID=1;
+    string symbol=2;
+    bytes owner=3;
+    bytes exta=4;
+}
+
+message logicdata {
+    bytes code=1;
+    bool isupgradable=2;  
+}
+
+message assetBalance {
+    string dimensionID=1;
+    string assetID=2;
+    uint64 balance=3;
+}
+message balanceobject {
+ repeated assetBalance bal =1;
+  bytes prvHash=2;
+}
+message approvals {
+    bytes address=1;
+    uint64 amount=2;
+}
+message approvalobject {
+    repeated approvals data=1;
+    bytes prvHash=2;
+  }
+*/
+//message Receipt{
+//  int32 IxType=1;
+//  bytes IxHash =2;
+//uint64 GasUsed=3;
+//bytes SenderStateHash=4;
+//bytes ReceiverStateHash=5;
+//bytes SenderContextHash=6;
+//bytes ReceiverContextHash=7;
+//bytes GeneratorContextHash=8;
+// bytes ExtraData=9;
+//}
+//  message Receipts {
+//   repeated  Receipt rs=1;
+//  }
+

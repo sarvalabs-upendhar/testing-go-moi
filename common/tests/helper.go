@@ -13,11 +13,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"gitlab.com/sarvalabs/btcd-musig/btcutil/hdkeychain"
 	"gitlab.com/sarvalabs/btcd-musig/chaincfg"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
-func RandomAddress(t *testing.T) ktypes.Address {
+func RandomAddress(t *testing.T) types.Address {
 	t.Helper()
 
 	address := make([]byte, 32)
@@ -26,10 +26,10 @@ func RandomAddress(t *testing.T) ktypes.Address {
 		t.Fatal(err)
 	}
 
-	return ktypes.BytesToAddress(address)
+	return types.BytesToAddress(address)
 }
 
-func RandomHash(t *testing.T) ktypes.Hash {
+func RandomHash(t *testing.T) types.Hash {
 	t.Helper()
 
 	hash := make([]byte, 32)
@@ -38,7 +38,7 @@ func RandomHash(t *testing.T) ktypes.Hash {
 		t.Fatal(err)
 	}
 
-	return ktypes.BytesToHash(hash)
+	return types.BytesToHash(hash)
 }
 
 func GetTestKramaIDs(t *testing.T, count int) []id.KramaID {
@@ -215,7 +215,7 @@ func GetRandomUpperCaseString(t *testing.T, length int) (string, error) {
 	return string(randomString), nil
 }
 
-func GetAsset(t *testing.T) (*ktypes.AssetInfo, error) {
+func GetAsset(t *testing.T) (*types.AssetInfo, error) {
 	t.Helper()
 
 	symbol, err := GetRandomUpperCaseString(t, 5)
@@ -223,7 +223,7 @@ func GetAsset(t *testing.T) (*ktypes.AssetInfo, error) {
 		return nil, err
 	}
 
-	asset := &ktypes.AssetInfo{
+	asset := &types.AssetInfo{
 		Dimension:   1,
 		TotalSupply: 1000,
 		Symbol:      symbol,
@@ -234,17 +234,17 @@ func GetAsset(t *testing.T) (*ktypes.AssetInfo, error) {
 	return asset, nil
 }
 
-func RandomAssetID(t *testing.T, address ktypes.Address) string {
+func RandomAssetID(t *testing.T, address types.Address) string {
 	t.Helper()
 
 	randomHash := RandomHash(t)
-	asset, err := GetAsset(t)
 
+	asset, err := GetAsset(t)
 	if err != nil {
 		log.Panic("Failed to create asset")
 	}
 
-	assetID, _, _ := ktypes.GetAssetID(
+	assetID, _, _ := types.GetAssetID(
 		address,
 		asset.Dimension,
 		asset.IsFungible,
@@ -257,16 +257,16 @@ func RandomAssetID(t *testing.T, address ktypes.Address) string {
 }
 
 // Unused functions
-//func GetTestTesseract(t *testing.T, height uint64) *ktypes.Tesseract {
+//func GetTestTesseract(t *testing.T, height uint64) *types.Tesseract {
 //	t.Helper()
 //
-//	header := ktypes.TesseractHeader{
+//	header := types.TesseractHeader{
 //		Address:  RandomAddress(t),
 //		PrevHash: RandomHash(t),
 //		Height:   height,
 //	}
-//	body := ktypes.TesseractBody{}
-//	tesseract := ktypes.Tesseract{
+//	body := types.TesseractBody{}
+//	tesseract := types.Tesseract{
 //		Header: header,
 //		Body:   body,
 //		Seal:   []byte{1},

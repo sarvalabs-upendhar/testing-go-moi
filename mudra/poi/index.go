@@ -24,8 +24,8 @@ import (
 // GetKeystore returns keystore of node that persists private key required for consensus and p2p network communication
 func GetKeystore(dataDir string) ([]byte, error) {
 	ksFilePath := strings.Join([]string{dataDir, "keystore.json"}, "/")
-	ksContent, err := ioutil.ReadFile(ksFilePath)
 
+	ksContent, err := ioutil.ReadFile(ksFilePath)
 	if err != nil {
 		if strings.Contains(err.Error(), "no such file or directory") {
 			return nil, common.ErrNoKeystore
@@ -39,8 +39,8 @@ func GetKeystore(dataDir string) ([]byte, error) {
 
 func DecryptKeystore(ksInBytes []byte, nodePassPhrase string) ([]byte, string, uint32, error) {
 	var nKs nodeKeystore
-	err := json.Unmarshal(ksInBytes, &nKs)
 
+	err := json.Unmarshal(ksInBytes, &nKs)
 	if err != nil {
 		return nil, "", 0, err
 	}
@@ -91,15 +91,14 @@ func GenerateKeysForVault(userName, pAsSw0rd, environment string) ([]byte, strin
 			"typeOfProof": "keystore",
 			"authToken":   zkProof,
 		}
-		ksPayloadInJSON, err := json.Marshal(ksPayload)
 
+		ksPayloadInJSON, err := json.Marshal(ksPayload)
 		if err != nil {
 			return nil, "", 0, err
 		}
 
 		keystoreResponse, err := http.Post(moiIDBaseURL+"/moi-id/auth/getmks",
 			"application/json", bytes.NewBuffer(ksPayloadInJSON))
-
 		if err != nil {
 			return nil, "", 0, err
 		}
@@ -161,7 +160,8 @@ func RegisterNode(bothSignAndCommPrivBytes []byte,
 	moiIDAddress, dataDir, localNodePass string,
 	myKID kramaid.KramaID,
 	nodeType moinode.MoiNodeType,
-	env string) error {
+	env string,
+) error {
 	defautlAddress := moiIDAddress
 	nodeSpecificPublicBytes := kramaid.GetPublicKeyFromPrivateBytes(bothSignAndCommPrivBytes[0:32], true)
 	nodeSpecificPublicAddr := kramaid.GetAddressFromPublicBytes(nodeSpecificPublicBytes)
@@ -218,8 +218,8 @@ func storeKeystore(privKeyBytesOfValidator []byte, nodePassPhrase, dataDir strin
 	}
 
 	path := filepath.Join(dataDir + "/keystore.json")
-	f, err := os.Create(path)
 
+	f, err := os.Create(path)
 	if err != nil {
 		return err
 	}
@@ -341,8 +341,8 @@ func RandGenKeystore(dataDir, localNodePass string) ([]byte, kramaid.KramaID, er
 	source := mrand.NewSource(randInt64)
 
 	var signKey [32]byte
-	_, err := mrand.New(source).Read(signKey[:]) //nolint
 
+	_, err := mrand.New(source).Read(signKey[:])
 	if err != nil {
 		return nil, "", err
 	}

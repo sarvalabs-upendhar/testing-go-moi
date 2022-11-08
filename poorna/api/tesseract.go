@@ -1,7 +1,7 @@
 package api
 
 import (
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 // TesseractArg is a struct that represents a Tesseract
@@ -19,7 +19,7 @@ type TesseractHeader struct {
 	// Represents the hash of the previous Tesseract
 	PrevHash string
 	// Represents the context lock hashes
-	ContextLock map[ktypes.Address]ktypes.ContextLockInfo
+	ContextLock map[types.Address]types.ContextLockInfo
 	// Represents the height of the Tesseract in the chain
 	Height uint64
 	// Represents the timestamp of Tesseract generation
@@ -51,9 +51,9 @@ type TesseractBody struct {
 	// Represents the hash of the Tesseract receipt
 	ReceiptHash string
 	// Represents the Interactions in the Tesseract
-	Interactions ktypes.Interactions
+	Interactions types.Interactions
 	// Represents the context delta of the Tesseract
-	ContextDelta map[string]*ktypes.DeltaGroup
+	ContextDelta map[string]*types.DeltaGroup
 	// Represents the consensus proof of the Tesseract
 	ConsensusProof PoXCData
 }
@@ -77,16 +77,16 @@ type CommitData struct {
 	// Represents the hash of the evidence collected by the observer
 	EvidenceHash string
 	// Represents the pre commit vote set
-	VoteSet *ktypes.ArrayOfBits
+	VoteSet *types.ArrayOfBits
 }
 
 // NewTesseractArg is a constructor function that generates and returns a new TesseractArg for a given Tesseract
-func NewTesseractArg(t *ktypes.Tesseract) TesseractArg {
+func NewTesseractArg(t *types.Tesseract) TesseractArg {
 	header := TesseractHeader{
 		Address:       t.Header.Address.Hex(),
 		PrevHash:      t.Header.PrevHash.Hex(),
 		Height:        t.Header.Height,
-		ContextLock:   make(map[ktypes.Address]ktypes.ContextLockInfo),
+		ContextLock:   make(map[types.Address]types.ContextLockInfo),
 		Timestamp:     t.Header.Timestamp,
 		AnuUsed:       t.Header.AnuUsed,
 		AnuLimit:      t.Header.AnuLimit,
@@ -108,7 +108,7 @@ func NewTesseractArg(t *ktypes.Tesseract) TesseractArg {
 		InteractionHash: t.Body.InteractionHash.Hex(),
 		ReceiptHash:     t.Body.ReceiptHash.Hex(),
 		Interactions:    t.Body.Interactions,
-		ContextDelta:    make(map[string]*ktypes.DeltaGroup),
+		ContextDelta:    make(map[string]*types.DeltaGroup),
 		ConsensusProof: PoXCData{
 			BinaryHash:   t.Body.ConsensusProof.BinaryHash.Hex(),
 			IdentityHash: t.Body.ConsensusProof.IdentityHash.Hex(),

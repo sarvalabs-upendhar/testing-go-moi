@@ -3,7 +3,7 @@ package kbft
 //type Tesseracts struct {
 //	total uint32
 //	mtx   sync.Mutex
-//	hash  ktypes.Hash
+//	hash  types.Hash
 //	parts []*common.Tesseract
 //	size  int64
 //}
@@ -20,12 +20,12 @@ package kbft
 //func (ts *Tesseracts) getTesseractParts() TesseractParts {
 //	ps := TesseractParts{
 //		Total:  int32(ts.total),
-//		Hashes: make([]ktypes.Hash, len(ts.parts)),
+//		Hashes: make([]types.Hash, len(ts.parts)),
 //	}
 //
 //	i := 0
 //	for _, v := range ts.parts {
-//		ps.Hashes[i] = ktypes.BytesToHash(v.Bytes())
+//		ps.Hashes[i] = types.BytesToHash(v.Bytes())
 //		i++
 //	}
 //

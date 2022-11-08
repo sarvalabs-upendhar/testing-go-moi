@@ -2,11 +2,12 @@ package krama
 
 import (
 	"context"
+
 	"github.com/libp2p/go-libp2p-core/protocol"
 	rpc "github.com/libp2p/go-libp2p-gorpc"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 type MockServer struct {
@@ -21,7 +22,7 @@ func (m *MockServer) Unsubscribe(topic string) error {
 }
 
 func (m *MockServer) Broadcast(topic string, data []byte) error {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -32,14 +33,14 @@ func (m *MockServer) Subscribe(ctx context.Context, topic string, handler func(m
 }
 
 func (m *MockServer) InitNewRPCServer(protocol protocol.ID) *rpc.Client {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (m *MockServer) ConnectPeer(kramaID id.KramaID) error {
 	for _, peer := range m.peers {
 		if peer == kramaID {
-			return ktypes.ErrConnectionExists
+			return types.ErrConnectionExists
 		}
 	}
 
@@ -67,12 +68,12 @@ func (m *MockServer) DisconnectPeer(kramaID id.KramaID) error {
 }
 
 func (m *MockServer) RegisterNewRPCService(protocol protocol.ID, serviceName string, service interface{}) error {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (m *MockServer) GetKramaID() id.KramaID {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 

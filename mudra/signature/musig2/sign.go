@@ -3,6 +3,7 @@ package musig2
 import (
 	"bytes"
 	"errors"
+
 	"gitlab.com/sarvalabs/btcd-musig/btcec"
 	"gitlab.com/sarvalabs/btcd-musig/btcec/schnorr"
 	"gitlab.com/sarvalabs/btcd-musig/btcec/schnorr/musig2"
@@ -15,8 +16,8 @@ func GetSortedKeySet(pubKeys []*btcec.PublicKey) ([]*btcec.PublicKey, error) {
 	for i, pub := range pubKeys {
 		pBytes := pub.SerializeCompressed()
 		pBytes[0] = 0x02 // always even
-		currentParsedPubkey, err := btcec.ParsePubKey(pBytes)
 
+		currentParsedPubkey, err := btcec.ParsePubKey(pBytes)
 		if err != nil {
 			return nil, err
 		}
@@ -49,8 +50,8 @@ func GetAggregatedPublicKey(sortedPublicKeys []*btcec.PublicKey) *btcec.PublicKe
 // InitMusigSession used to generate session from Node Private key and sorted Public keys
 func InitMusigSession(signerKey []byte, sortedPubKeySet []*btcec.PublicKey) (*musig2.Session, error) {
 	privKey, _ := btcec.PrivKeyFromBytes(signerKey)
-	signCtx, err := musig2.NewContext(privKey, sortedPubKeySet, false)
 
+	signCtx, err := musig2.NewContext(privKey, sortedPubKeySet, false)
 	if err != nil {
 		return nil, err
 	}
@@ -68,16 +69,16 @@ func UnmarshalPartialSig(partialSignature *musig2.PartialSignature) []byte {
 	partialSignatureInBytes := make([]byte, 65)
 
 	sComponentInBytes := partialSignature.S.Bytes()
-	//fmt.Println("S Component:", sComponentInBytes)
+	// fmt.Println("S Component:", sComponentInBytes)
 	for i := 0; i < 32; i++ {
 		partialSignatureInBytes[i] = sComponentInBytes[i]
 	}
 
 	rComponentInBytes := partialSignature.R.SerializeCompressed()
-	//fmt.Println("R Component: ", rComponentInBytes)
+	// fmt.Println("R Component: ", rComponentInBytes)
 
 	copy(partialSignatureInBytes[32:], rComponentInBytes)
-	//fmt.Println("Partial Sig in Bytes: ", partialSignatureInBytes)
+	// fmt.Println("Partial Sig in Bytes: ", partialSignatureInBytes)
 	return partialSignatureInBytes
 }
 

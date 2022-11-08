@@ -3,23 +3,25 @@ package session
 import (
 	"context"
 	"crypto/rand"
-	"github.com/hashicorp/go-hclog"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	"gitlab.com/sarvalabs/moichain/common/kutils"
-	"gitlab.com/sarvalabs/moichain/common/tests"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/poorna/agora/types"
 	"log"
 	"testing"
 	"time"
+
+	"gitlab.com/sarvalabs/moichain/utils"
+
+	"github.com/hashicorp/go-hclog"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"gitlab.com/sarvalabs/moichain/common/tests"
+	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 func TestHandleMessage_UpdatePeerStatus(t *testing.T) {
 	network := NewMockNetwork()
 	mockSessionManager := NewMockSessionManager()
-	notifier := types.NewNotifier()
+	notifier := atypes.NewNotifier()
 	mockInterestManager := NewInterestManager()
 
 	sessionID := tests.RandomAddress(t)
@@ -44,7 +46,7 @@ func TestHandleMessage_UpdatePeerStatus(t *testing.T) {
 	success := session.pm.UpdatePeerStatus(peerID, true)
 	require.True(t, success)
 
-	resp := &types.AgoraResponseMsg{
+	resp := &atypes.AgoraResponseMsg{
 		SessionID: sessionID,
 		Status:    false,
 		HaveList:  nil,
@@ -71,7 +73,7 @@ func TestHandleMessage_UpdatePeerStatus(t *testing.T) {
 func TestHandleMessage_UpdatePeerSet(t *testing.T) {
 	network := NewMockNetwork()
 	sessionManager := NewMockSessionManager()
-	notifier := types.NewNotifier()
+	notifier := atypes.NewNotifier()
 	interestManager := NewInterestManager()
 
 	sessionID := tests.RandomAddress(t)
@@ -101,7 +103,7 @@ func TestHandleMessage_UpdatePeerSet(t *testing.T) {
 	// create kramaIds for peerSet
 	peerSet := tests.GetTestKramaIDs(t, 1)
 
-	resp := &types.AgoraResponseMsg{
+	resp := &atypes.AgoraResponseMsg{
 		SessionID: sessionID,
 		Status:    false,
 		HaveList:  nil,
@@ -129,7 +131,7 @@ func TestHandleMessage_UpdatePeerSet(t *testing.T) {
 func TestGetBlocks_RecordSessionInterest(t *testing.T) {
 	network := NewMockNetwork()
 	sessionManager := NewMockSessionManager()
-	notifier := types.NewNotifier()
+	notifier := atypes.NewNotifier()
 	interestManager := NewInterestManager()
 
 	sessionID := tests.RandomAddress(t)
@@ -154,7 +156,7 @@ func TestGetBlocks_RecordSessionInterest(t *testing.T) {
 
 	idSet, blocks := GetDummyBlocks(t, 3)
 
-	outChan := make(chan *types.Block, 3) // Create a buffered channel to avoid blocking
+	outChan := make(chan *atypes.Block, 3) // Create a buffered channel to avoid blocking
 
 	timedCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -181,7 +183,7 @@ func TestGetBlocks_RecordSessionInterest(t *testing.T) {
 func TestGetBlock(t *testing.T) {
 	network := NewMockNetwork()
 	sessionManager := NewMockSessionManager()
-	notifier := types.NewNotifier()
+	notifier := atypes.NewNotifier()
 	interestManager := NewInterestManager()
 
 	sessionID := tests.RandomAddress(t)
@@ -225,11 +227,11 @@ func TestGetBlock(t *testing.T) {
 
 func NewTestSession(
 	ctx context.Context,
-	addr ktypes.Address,
+	addr types.Address,
 	logger hclog.Logger,
-	stateHash ktypes.Hash,
+	stateHash types.Hash,
 	network sessionNetwork,
-	notifier types.PubSub,
+	notifier atypes.PubSub,
 	im sessionInterestManager,
 	sm sessionManager,
 	contextPeers ...id.KramaID,
@@ -238,36 +240,36 @@ func NewTestSession(
 }
 
 type mockSessionManager struct {
-	sessions map[ktypes.Address]interface{}
+	sessions map[types.Address]interface{}
 }
 
 func NewMockSessionManager() *mockSessionManager {
 	return &mockSessionManager{
-		sessions: make(map[ktypes.Address]interface{}),
+		sessions: make(map[types.Address]interface{}),
 	}
 }
 
-func (msm *mockSessionManager) CloseSession(id ktypes.Address) {
+func (msm *mockSessionManager) CloseSession(id types.Address) {
 	delete(msm.sessions, id)
 }
 
 type mockNetwork struct {
-	msg map[id.KramaID]types.Message
+	msg map[id.KramaID]atypes.Message
 }
 
 func NewMockNetwork() *mockNetwork {
 	return &mockNetwork{
-		msg: make(map[id.KramaID]types.Message),
+		msg: make(map[id.KramaID]atypes.Message),
 	}
 }
 
-func (mn *mockNetwork) SendAgoraMessage(id id.KramaID, msgType ktypes.MsgType, msg types.Message) error {
+func (mn *mockNetwork) SendAgoraMessage(id id.KramaID, msgType types.MsgType, msg atypes.Message) error {
 	mn.msg[id] = msg
 
 	return nil
 }
 
-func (mn *mockNetwork) ClosePeerSession(id id.KramaID, sessionID ktypes.Address) error {
+func (mn *mockNetwork) ClosePeerSession(id id.KramaID, sessionID types.Address) error {
 	return nil
 }
 
@@ -288,18 +290,18 @@ func WaitForPeerResponse(t *testing.T, ctx context.Context, peerRespChan <-chan 
 	}()
 }
 
-func GetDummyBlocks(t *testing.T, count int) (*kutils.HashSet, map[ktypes.Hash]types.Block) {
+func GetDummyBlocks(t *testing.T, count int) (*utils.HashSet, map[types.Hash]atypes.Block) {
 	t.Helper()
 
-	set := kutils.NewHashSet()
-	blocks := make(map[ktypes.Hash]types.Block, count)
+	set := utils.NewHashSet()
+	blocks := make(map[types.Hash]atypes.Block, count)
 
 	for i := 0; i < count; i++ {
 		rawBytes := make([]byte, 64)
 		_, err := rand.Read(rawBytes)
 		require.NoError(t, err)
 
-		block := types.NewBlock(rawBytes)
+		block := atypes.NewBlock(rawBytes)
 		set.Add(block.GetID())
 		blocks[block.GetID()] = block
 	}
@@ -310,8 +312,8 @@ func GetDummyBlocks(t *testing.T, count int) (*kutils.HashSet, map[ktypes.Hash]t
 func AreSessionInterestRecorded(
 	ctx context.Context,
 	im *InterestManager,
-	sessionID ktypes.Address,
-	keys []ktypes.Hash,
+	sessionID types.Address,
+	keys []types.Hash,
 ) bool {
 	status, err := tests.RetryUntilTimeout(ctx, func() (interface{}, bool) {
 		for _, hash := range keys {
@@ -324,7 +326,6 @@ func AreSessionInterestRecorded(
 
 		return true, false
 	})
-
 	if err != nil {
 		return false
 	}
@@ -340,8 +341,8 @@ func AreSessionInterestRecorded(
 func AreSessionInterestRemoved(
 	ctx context.Context,
 	im *InterestManager,
-	sessionID ktypes.Address,
-	keys []ktypes.Hash,
+	sessionID types.Address,
+	keys []types.Hash,
 ) bool {
 	status, err := tests.RetryUntilTimeout(ctx, func() (interface{}, bool) {
 		for _, hash := range keys {
@@ -353,7 +354,6 @@ func AreSessionInterestRemoved(
 
 		return true, false
 	})
-
 	if err != nil {
 		return false
 	}
@@ -366,7 +366,7 @@ func AreSessionInterestRemoved(
 	return keysRemoved
 }
 
-func WaitForBlocks(ctx context.Context, blocks chan *types.Block, ids *kutils.HashSet) (receivedCount int) {
+func WaitForBlocks(ctx context.Context, blocks chan *atypes.Block, ids *utils.HashSet) (receivedCount int) {
 	for {
 		select {
 		case <-ctx.Done():

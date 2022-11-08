@@ -21,8 +21,8 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	lru "github.com/hashicorp/golang-lru"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	"gitlab.com/sarvalabs/moichain/dhruva"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 const (
@@ -42,15 +42,15 @@ type Senatus interface {
 	GetNTQ(id id.KramaID) (int32, error)
 	UpdatePublicKey(key id.KramaID, pk []byte) error
 	GetPublicKey(ctx context.Context, id id.KramaID) ([]byte, error)
-	AddEntries(msg ktypes.SyncReputationInfo) error
+	AddEntries(msg types.SyncReputationInfo) error
 	GetInclusivity(id id.KramaID) (int64, error)
-	GetAllEntries() (chan *ktypes.SyncReputationInfo, error)
+	GetAllEntries() (chan *types.SyncReputationInfo, error)
 	SenatusHandler(msg *pubsub.Message) error
-	HandleHelloMessages(msgs []*ktypes.HelloMsg) (int, error)
+	HandleHelloMessages(msgs []*types.HelloMsg) (int, error)
 	Start(id id.KramaID, ntq int32, publicKey []byte, address []multiaddr.Multiaddr) error
 }
 
-var GenesisAddress = ktypes.BytesToAddress(ktypes.GetHash([]byte("sargaAccount")).Bytes())
+var GenesisAddress = types.BytesToAddress(types.GetHash([]byte("sargaAccount")).Bytes())
 
 type StateManager struct {
 	ctx              context.Context
@@ -59,8 +59,8 @@ type StateManager struct {
 	cache            *lru.Cache
 	senatus          Senatus
 	network          server
-	objects          map[ktypes.Address]*StateObject
-	dirtyObjects     map[ktypes.Address]*StateObject
+	objects          map[types.Address]*StateObject
+	dirtyObjects     map[types.Address]*StateObject
 	dirtyObjectsLock sync.Mutex
 	objectsLock      sync.Mutex
 	client           *http.Client
@@ -84,8 +84,8 @@ func NewStateManager(
 			MaxIdleConns:    1024,
 			MaxConnsPerHost: 1000,
 		}},
-		objects:      make(map[ktypes.Address]*StateObject),
-		dirtyObjects: make(map[ktypes.Address]*StateObject),
+		objects:      make(map[types.Address]*StateObject),
+		dirtyObjects: make(map[types.Address]*StateObject),
 		logger:       logger.Named("State-Manager"),
 		metrics:      metrics,
 	}
@@ -102,7 +102,7 @@ func NewStateManager(
 	return sm, nil
 }
 
-func (sm *StateManager) createStateObject(addr ktypes.Address, accType ktypes.AccType) *StateObject {
+func (sm *StateManager) createStateObject(addr types.Address, accType types.AccType) *StateObject {
 	journal := new(Journal)
 	stateObject := NewStateObject(addr, sm.cache, journal, sm.db, accType)
 
@@ -111,7 +111,7 @@ func (sm *StateManager) createStateObject(addr ktypes.Address, accType ktypes.Ac
 	return stateObject
 }
 
-func (sm *StateManager) cleanupDirtyObject(addr ktypes.Address) {
+func (sm *StateManager) cleanupDirtyObject(addr types.Address) {
 	sm.dirtyObjectsLock.Lock()
 	defer sm.dirtyObjectsLock.Unlock()
 
@@ -119,7 +119,7 @@ func (sm *StateManager) cleanupDirtyObject(addr ktypes.Address) {
 	sm.metrics.captureActiveStateObjects(-1)
 }
 
-func (sm *StateManager) CreateDirtyObject(addr ktypes.Address, accType ktypes.AccType) *StateObject {
+func (sm *StateManager) CreateDirtyObject(addr types.Address, accType types.AccType) *StateObject {
 	sm.dirtyObjectsLock.Lock()
 	defer sm.dirtyObjectsLock.Unlock()
 
@@ -131,7 +131,7 @@ func (sm *StateManager) CreateDirtyObject(addr ktypes.Address, accType ktypes.Ac
 	return sm.dirtyObjects[addr]
 }
 
-func (sm *StateManager) GetDirtyObject(addr ktypes.Address) (*StateObject, error) {
+func (sm *StateManager) GetDirtyObject(addr types.Address) (*StateObject, error) {
 	sm.dirtyObjectsLock.Lock()
 	defer sm.dirtyObjectsLock.Unlock()
 
@@ -152,7 +152,7 @@ func (sm *StateManager) GetDirtyObject(addr ktypes.Address) (*StateObject, error
 	return sm.dirtyObjects[addr], nil
 }
 
-func (sm *StateManager) GetLatestStateObject(addr ktypes.Address) (*StateObject, error) {
+func (sm *StateManager) GetLatestStateObject(addr types.Address) (*StateObject, error) {
 	sm.objectsLock.Lock()
 	defer sm.objectsLock.Unlock()
 
@@ -173,14 +173,14 @@ func (sm *StateManager) GetLatestStateObject(addr ktypes.Address) (*StateObject,
 	return sm.GetStateObjectByHash(addr, t.Body.StateHash)
 }
 
-func (sm *StateManager) GetStateObjectByHash(addr ktypes.Address, hash ktypes.Hash) (*StateObject, error) {
+func (sm *StateManager) GetStateObjectByHash(addr types.Address, hash types.Hash) (*StateObject, error) {
 	// read the state
 	data, err := sm.db.GetAccount(addr, hash)
 	if err != nil {
-		return nil, errors.Wrap(ktypes.ErrStateNotFound, err.Error())
+		return nil, errors.Wrap(types.ErrStateNotFound, err.Error())
 	}
 
-	acc := new(ktypes.Account)
+	acc := new(types.Account)
 	if err = polo.Depolorize(acc, data); err != nil {
 		log.Fatal(err)
 	}
@@ -192,12 +192,12 @@ func (sm *StateManager) GetStateObjectByHash(addr ktypes.Address, hash ktypes.Ha
 
 	sObj.balance, err = getBalanceObject(addr, acc.Balance, sm.db)
 	if err != nil {
-		return nil, errors.Wrap(ktypes.ErrFetchingBalanceObject, err.Error())
+		return nil, errors.Wrap(types.ErrFetchingBalanceObject, err.Error())
 	}
 
 	sObj.Storage, err = getStorage(addr, acc.StorageRoot, sm.db)
 	if err != nil {
-		return nil, errors.Wrap(ktypes.ErrFetchingStorageObject, err.Error())
+		return nil, errors.Wrap(types.ErrFetchingStorageObject, err.Error())
 	}
 	//  add the new object to map
 	sm.objects[addr] = sObj
@@ -205,7 +205,7 @@ func (sm *StateManager) GetStateObjectByHash(addr ktypes.Address, hash ktypes.Ha
 	return sObj, nil
 }
 
-func (sm *StateManager) DeleteStateObject(addr ktypes.Address) {
+func (sm *StateManager) DeleteStateObject(addr types.Address) {
 	sm.objectsLock.Lock()
 	defer sm.objectsLock.Unlock()
 
@@ -213,16 +213,16 @@ func (sm *StateManager) DeleteStateObject(addr ktypes.Address) {
 	sm.cleanupDirtyObject(addr)
 }
 
-func (sm *StateManager) getLatestTesseractHash(addr ktypes.Address) (ktypes.Hash, error) {
-	if addr == ktypes.NilAddress {
-		return ktypes.NilHash, ktypes.ErrInvalidAddress
+func (sm *StateManager) getLatestTesseractHash(addr types.Address) (types.Hash, error) {
+	if addr == types.NilAddress {
+		return types.NilHash, types.ErrInvalidAddress
 	}
 
 	hash, isCached := sm.cache.Get(addr)
 	if isCached {
-		tesseractID, ok := hash.(ktypes.Hash)
+		tesseractID, ok := hash.(types.Hash)
 		if !ok {
-			return ktypes.NilHash, ktypes.ErrInterfaceConversion
+			return types.NilHash, types.ErrInterfaceConversion
 		}
 
 		return tesseractID, nil
@@ -230,7 +230,7 @@ func (sm *StateManager) getLatestTesseractHash(addr ktypes.Address) (ktypes.Hash
 
 	accMetaInfo, err := sm.db.GetAccountMetaInfo(addr.Bytes())
 	if err != nil {
-		return ktypes.NilHash, errors.Wrap(err, "account meta info fetch failed")
+		return types.NilHash, errors.Wrap(err, "account meta info fetch failed")
 	}
 
 	sm.cache.Add(addr, accMetaInfo.TesseractHash)
@@ -238,7 +238,7 @@ func (sm *StateManager) getLatestTesseractHash(addr ktypes.Address) (ktypes.Hash
 	return accMetaInfo.TesseractHash, nil
 }
 
-func (sm *StateManager) fetchTesseractByHash(hash ktypes.Hash) (*ktypes.Tesseract, error) {
+func (sm *StateManager) fetchTesseractByHash(hash types.Hash) (*types.Tesseract, error) {
 	object, isCached := sm.cache.Get(hash)
 	if !isCached {
 		buf, err := sm.db.GetTesseract(hash)
@@ -246,7 +246,7 @@ func (sm *StateManager) fetchTesseractByHash(hash ktypes.Hash) (*ktypes.Tesserac
 			return nil, err
 		}
 
-		ts := new(ktypes.Tesseract)
+		ts := new(types.Tesseract)
 
 		if err = polo.Depolorize(ts, buf); err != nil {
 			return nil, errors.Wrap(err, "tesseract depolarization failed")
@@ -257,15 +257,15 @@ func (sm *StateManager) fetchTesseractByHash(hash ktypes.Hash) (*ktypes.Tesserac
 		return ts, nil
 	}
 
-	ts, ok := object.(*ktypes.Tesseract)
+	ts, ok := object.(*types.Tesseract)
 	if !ok {
-		return nil, ktypes.ErrInterfaceConversion
+		return nil, types.ErrInterfaceConversion
 	}
 
 	return ts, nil
 }
 
-func (sm *StateManager) GetLatestTesseract(addr ktypes.Address) (*ktypes.Tesseract, error) {
+func (sm *StateManager) GetLatestTesseract(addr types.Address) (*types.Tesseract, error) {
 	sm.logger.Debug("Fetching  latest tesseract", addr.Hex())
 
 	tesseractHash, err := sm.getLatestTesseractHash(addr)
@@ -276,20 +276,7 @@ func (sm *StateManager) GetLatestTesseract(addr ktypes.Address) (*ktypes.Tessera
 	return sm.fetchTesseractByHash(tesseractHash)
 }
 
-func (sm *StateManager) Cleanup(address ktypes.Address) {
-	/*
-		object, err := sm.GetDirtyObject(address)
-		if err != nil {
-			sm.logger.Error("Error fetching dirty object for", "addr", address.Hex(), "err", err)
-
-			panic(err)
-		}
-
-		object.mtx.Lock()
-		object.journal = nil
-		object.mtx.Unlock()
-	*/
-
+func (sm *StateManager) Cleanup(address types.Address) {
 	sm.objectsLock.Lock()
 	delete(sm.objects, address)
 	sm.objectsLock.Unlock()
@@ -310,12 +297,12 @@ func (sm *StateManager) Revert(snap *StateObject) error {
 	return nil
 }
 
-func (sm *StateManager) getContextObject(addr ktypes.Address, hash ktypes.Hash) (*ktypes.ContextObject, error) {
+func (sm *StateManager) getContextObject(addr types.Address, hash types.Hash) (*types.ContextObject, error) {
 	contextData, isAvailable := sm.cache.Get(hash)
 	if isAvailable {
-		contextObject, ok := contextData.(*ktypes.ContextObject)
+		contextObject, ok := contextData.(*types.ContextObject)
 		if !ok {
-			return nil, ktypes.ErrInterfaceConversion
+			return nil, types.ErrInterfaceConversion
 		}
 
 		return contextObject, nil
@@ -323,10 +310,10 @@ func (sm *StateManager) getContextObject(addr ktypes.Address, hash ktypes.Hash) 
 
 	rawData, err := sm.db.GetContext(addr, hash)
 	if err != nil {
-		return nil, ktypes.ErrContextStateNotFound
+		return nil, types.ErrContextStateNotFound
 	}
 
-	object := new(ktypes.ContextObject)
+	object := new(types.ContextObject)
 
 	if err := polo.Depolorize(object, rawData); err != nil {
 		return nil, errors.Wrap(err, "contextObject deserialization failed")
@@ -337,12 +324,12 @@ func (sm *StateManager) getContextObject(addr ktypes.Address, hash ktypes.Hash) 
 	return object, nil
 }
 
-func (sm *StateManager) getMetaContextObject(addr ktypes.Address, hash ktypes.Hash) (*ktypes.MetaContextObject, error) {
+func (sm *StateManager) getMetaContextObject(addr types.Address, hash types.Hash) (*types.MetaContextObject, error) {
 	metaData, isAvailable := sm.cache.Get(hash)
 	if isAvailable {
-		metaContextObject, ok := metaData.(*ktypes.MetaContextObject)
+		metaContextObject, ok := metaData.(*types.MetaContextObject)
 		if !ok {
-			return nil, ktypes.ErrInterfaceConversion
+			return nil, types.ErrInterfaceConversion
 		}
 
 		return metaContextObject, nil
@@ -350,10 +337,10 @@ func (sm *StateManager) getMetaContextObject(addr ktypes.Address, hash ktypes.Ha
 
 	rawData, err := sm.db.GetContext(addr, hash)
 	if err != nil {
-		return nil, ktypes.ErrContextStateNotFound
+		return nil, types.ErrContextStateNotFound
 	}
 
-	object := new(ktypes.MetaContextObject)
+	object := new(types.MetaContextObject)
 
 	if err = polo.Depolorize(object, rawData); err != nil {
 		return nil, errors.Wrap(err, "MetaContextObject deserialization failed")
@@ -366,83 +353,85 @@ func (sm *StateManager) getMetaContextObject(addr ktypes.Address, hash ktypes.Ha
 
 // fetchParticipantContextByHash fetches the context info based on the give hash
 // and returns a NodeSet which holds the kramaIDs and public keys
-func (sm *StateManager) fetchParticipantContextByHash(addr ktypes.Address, hash ktypes.Hash) (
-	behaviouralSet, randomSet *ktypes.NodeSet,
-	err error) {
+func (sm *StateManager) fetchParticipantContextByHash(addr types.Address, hash types.Hash) (
+	behaviouralSet, randomSet *types.NodeSet,
+	err error,
+) {
 	behaviouralContext, randomContext, err := sm.getContextByHash(addr, hash)
 	if err != nil {
 		sm.logger.Error("failed to retrieve sender context nodes", "error", err)
 
-		return nil, nil, ktypes.ErrAccountNotFound
+		return nil, nil, types.ErrAccountNotFound
 	}
 
 	if len(behaviouralContext) > 0 {
-		behaviouralSet = ktypes.NewNodeSet(behaviouralContext, nil)
+		behaviouralSet = types.NewNodeSet(behaviouralContext, nil)
 
 		if behaviouralSet.PublicKeys, err = sm.GetPublicKeys(behaviouralContext...); err != nil {
 			sm.logger.Error("failed to retrieve public Key", "error", err)
 
-			return nil, nil, ktypes.ErrPublicKeyNotFound
+			return nil, nil, types.ErrPublicKeyNotFound
 		}
 	}
 
 	if len(randomContext) > 0 {
-		randomSet = ktypes.NewNodeSet(randomContext, nil)
+		randomSet = types.NewNodeSet(randomContext, nil)
 
 		if randomSet.PublicKeys, err = sm.GetPublicKeys(randomContext...); err != nil {
 			sm.logger.Error("failed to retrieve public Key", "error", err)
 
-			return nil, nil, ktypes.ErrPublicKeyNotFound
+			return nil, nil, types.ErrPublicKeyNotFound
 		}
 	}
 
 	return behaviouralSet, randomSet, nil
 }
 
-func (sm *StateManager) fetchLatestParticipantContext(addr ktypes.Address) (
-	contextHash ktypes.Hash,
-	behaviouralSet, randomSet *ktypes.NodeSet,
-	err error) {
-	contextHash, behaviouralContext, randomContext, err := sm.GetContextByHash(addr, ktypes.NilHash)
+func (sm *StateManager) fetchLatestParticipantContext(addr types.Address) (
+	contextHash types.Hash,
+	behaviouralSet, randomSet *types.NodeSet,
+	err error,
+) {
+	contextHash, behaviouralContext, randomContext, err := sm.GetContextByHash(addr, types.NilHash)
 	if err != nil {
 		sm.logger.Error("failed to retrieve sender context nodes", "error", err)
 
-		return ktypes.NilHash, nil, nil, ktypes.ErrAccountNotFound
+		return types.NilHash, nil, nil, types.ErrAccountNotFound
 	}
 
 	if len(behaviouralContext) > 0 {
-		behaviouralSet = ktypes.NewNodeSet(behaviouralContext, nil)
+		behaviouralSet = types.NewNodeSet(behaviouralContext, nil)
 
 		if behaviouralSet.PublicKeys, err = sm.GetPublicKeys(behaviouralContext...); err != nil {
 			sm.logger.Error("failed to retrieve public Key", "error", err)
 
-			return ktypes.NilHash, nil, nil, ktypes.ErrPublicKeyNotFound
+			return types.NilHash, nil, nil, types.ErrPublicKeyNotFound
 		}
 	}
 
 	if len(randomContext) > 0 {
-		randomSet = ktypes.NewNodeSet(randomContext, nil)
+		randomSet = types.NewNodeSet(randomContext, nil)
 
 		if randomSet.PublicKeys, err = sm.GetPublicKeys(randomContext...); err != nil {
 			sm.logger.Error("failed to retrieve public Key", "error", err)
 
-			return ktypes.NilHash, nil, nil, ktypes.ErrPublicKeyNotFound
+			return types.NilHash, nil, nil, types.ErrPublicKeyNotFound
 		}
 	}
 
 	return contextHash, behaviouralSet, randomSet, nil
 }
 
-func (sm *StateManager) GetCommittedContextHash(add ktypes.Address) (ktypes.Hash, error) {
+func (sm *StateManager) GetCommittedContextHash(add types.Address) (types.Hash, error) {
 	tesseract, err := sm.GetLatestTesseract(add)
 	if err != nil {
-		return ktypes.NilHash, err
+		return types.NilHash, err
 	}
 
 	return tesseract.Body.ContextHash, nil
 }
 
-func (sm *StateManager) getContextByHash(addr ktypes.Address, hash ktypes.Hash) ([]id.KramaID, []id.KramaID, error) {
+func (sm *StateManager) getContextByHash(addr types.Address, hash types.Hash) ([]id.KramaID, []id.KramaID, error) {
 	metaContextObject, err := sm.getMetaContextObject(addr, hash)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "metaContextObject fetch failed")
@@ -461,17 +450,21 @@ func (sm *StateManager) getContextByHash(addr ktypes.Address, hash ktypes.Hash) 
 	return behaviourContext.Ids, randomContext.Ids, nil
 }
 
-/*GetContextByHash fetches context using hash if both address and hash are given,
-fetches latest context of address if only address given*/
-func (sm *StateManager) GetContextByHash(address ktypes.Address,
-	hash ktypes.Hash) (ktypes.Hash, []id.KramaID, []id.KramaID, error) {
-	if address == ktypes.NilAddress && hash == ktypes.NilHash {
-		return ktypes.NilHash, nil, nil, ktypes.ErrEmptyHashAndAddress
+/*
+GetContextByHash fetches context using hash if both address and hash are given,
+fetches latest context of address if only address given
+*/
+func (sm *StateManager) GetContextByHash(address types.Address,
+	hash types.Hash,
+) (types.Hash, []id.KramaID, []id.KramaID, error) {
+	if address == types.NilAddress && hash == types.NilHash {
+		return types.NilHash, nil, nil, types.ErrEmptyHashAndAddress
 	}
-	if hash == ktypes.NilHash {
+
+	if hash == types.NilHash {
 		ts, err := sm.GetLatestTesseract(address)
 		if err != nil {
-			return ktypes.NilHash, nil, nil, errors.Wrap(err, "tesseract fetch failed")
+			return types.NilHash, nil, nil, errors.Wrap(err, "tesseract fetch failed")
 		}
 
 		sm.logger.Debug("Fetching context info", "addr", address.Hex(), ts.Body.ContextHash.Hex())
@@ -481,15 +474,15 @@ func (sm *StateManager) GetContextByHash(address ktypes.Address,
 
 	behaviourSet, randomSet, err := sm.getContextByHash(address, hash)
 	if err != nil {
-		return ktypes.NilHash, nil, nil, err
+		return types.NilHash, nil, nil, err
 	}
 
 	return hash, behaviourSet, randomSet, nil
 }
 
-func (sm *StateManager) FetchContextLock(ts *ktypes.Tesseract) (*ktypes.ICSNodes, error) {
+func (sm *StateManager) FetchContextLock(ts *types.Tesseract) (*types.ICSNodes, error) {
 	ix := ts.Body.Interactions[0]
-	ics := ktypes.NewICSNodes(6)
+	ics := types.NewICSNodes(6)
 
 	for address, info := range ts.Header.ContextLock {
 		if address == ix.FromAddress() {
@@ -498,10 +491,10 @@ func (sm *StateManager) FetchContextLock(ts *ktypes.Tesseract) (*ktypes.ICSNodes
 				return nil, err
 			}
 
-			ics.UpdateNodeSet(ktypes.SenderBehaviourSet, behaviourSet)
-			ics.UpdateNodeSet(ktypes.SenderRandomSet, randomSet)
+			ics.UpdateNodeSet(types.SenderBehaviourSet, behaviourSet)
+			ics.UpdateNodeSet(types.SenderRandomSet, randomSet)
 		} else if address == ix.ToAddress() || address == GenesisAddress {
-			if info.ContextHash == ktypes.NilHash {
+			if info.ContextHash == types.NilHash {
 				continue
 			}
 
@@ -510,8 +503,8 @@ func (sm *StateManager) FetchContextLock(ts *ktypes.Tesseract) (*ktypes.ICSNodes
 				return nil, err
 			}
 
-			ics.UpdateNodeSet(ktypes.ReceiverBehaviourSet, behaviourSet)
-			ics.UpdateNodeSet(ktypes.ReceiverRandomSet, randomSet)
+			ics.UpdateNodeSet(types.ReceiverBehaviourSet, behaviourSet)
+			ics.UpdateNodeSet(types.ReceiverRandomSet, randomSet)
 		}
 	}
 
@@ -519,35 +512,35 @@ func (sm *StateManager) FetchContextLock(ts *ktypes.Tesseract) (*ktypes.ICSNodes
 }
 
 // FetchInteractionContext returns a nodeSet which holds the latest context info of the interaction participants
-func (sm *StateManager) FetchInteractionContext(ctx context.Context, ix *ktypes.Interaction) (
-	map[ktypes.Address]ktypes.Hash,
-	[]*ktypes.NodeSet,
+func (sm *StateManager) FetchInteractionContext(ctx context.Context, ix *types.Interaction) (
+	map[types.Address]types.Hash,
+	[]*types.NodeSet,
 	error,
 ) {
-	ctx, span := tracing.Span(ctx, "guna.StateManger", "FetchInteractionContext")
+	_, span := tracing.Span(ctx, "guna.StateManger", "FetchInteractionContext")
 	defer span.End()
 
 	var (
-		nodeSet       = make([]*ktypes.NodeSet, 6)
-		behaviourSet  *ktypes.NodeSet
-		randomSet     *ktypes.NodeSet
-		contextHash   ktypes.Hash
+		nodeSet       = make([]*types.NodeSet, 6)
+		behaviourSet  *types.NodeSet
+		randomSet     *types.NodeSet
+		contextHash   types.Hash
 		err           error
-		contextHashes = make(map[ktypes.Address]ktypes.Hash)
+		contextHashes = make(map[types.Address]types.Hash)
 	)
 
-	if ix.FromAddress() != ktypes.NilAddress {
+	if ix.FromAddress() != types.NilAddress {
 		contextHash, behaviourSet, randomSet, err = sm.fetchLatestParticipantContext(ix.FromAddress())
 		if err != nil {
 			return nil, nil, err
 		}
 
 		contextHashes[ix.FromAddress()] = contextHash
-		nodeSet[ktypes.SenderBehaviourSet] = behaviourSet
-		nodeSet[ktypes.SenderRandomSet] = randomSet
+		nodeSet[types.SenderBehaviourSet] = behaviourSet
+		nodeSet[types.SenderRandomSet] = randomSet
 	}
 
-	if ix.ToAddress() != ktypes.NilAddress {
+	if ix.ToAddress() != types.NilAddress {
 		isGenesisAccount, err := sm.IsGenesis(ix.ToAddress())
 		if err != nil {
 			return nil, nil, err
@@ -569,24 +562,24 @@ func (sm *StateManager) FetchInteractionContext(ctx context.Context, ix *ktypes.
 			contextHashes[ix.ToAddress()] = contextHash
 		}
 
-		nodeSet[ktypes.ReceiverBehaviourSet] = behaviourSet
-		nodeSet[ktypes.ReceiverRandomSet] = randomSet
+		nodeSet[types.ReceiverBehaviourSet] = behaviourSet
+		nodeSet[types.ReceiverRandomSet] = randomSet
 	}
 
 	return contextHashes, nodeSet, err
 }
 
-func (sm *StateManager) IsGenesis(addr ktypes.Address) (bool, error) {
-	if addr == ktypes.NilAddress {
+func (sm *StateManager) IsGenesis(addr types.Address) (bool, error) {
+	if addr == types.NilAddress {
 		return false, nil
 	}
 
 	genesisObject, err := sm.GetLatestStateObject(GenesisAddress)
 	if err != nil {
-		return false, errors.Wrap(ktypes.ErrObjectNotFound, err.Error())
+		return false, errors.Wrap(types.ErrObjectNotFound, err.Error())
 	}
 	// Fetch the account info from genesis state
-	_, err = genesisObject.GetStorageEntry(ktypes.GetHash(addr.Bytes()))
+	_, err = genesisObject.GetStorageEntry(types.GetHash(addr.Bytes()))
 	if err != nil {
 		return true, nil
 	}
@@ -594,9 +587,9 @@ func (sm *StateManager) IsGenesis(addr ktypes.Address) (bool, error) {
 	return false, nil
 }
 
-func (sm *StateManager) GetLatestNonce(addr ktypes.Address) (uint64, error) {
-	if addr == ktypes.NilAddress {
-		return 0, ktypes.ErrInvalidNonce
+func (sm *StateManager) GetLatestNonce(addr types.Address) (uint64, error) {
+	if addr == types.NilAddress {
+		return 0, types.ErrInvalidNonce
 	}
 
 	object, err := sm.GetLatestStateObject(addr)
@@ -607,7 +600,7 @@ func (sm *StateManager) GetLatestNonce(addr ktypes.Address) (uint64, error) {
 	return object.data.Nonce, nil
 }
 
-func (sm *StateManager) GetBalances(addrs ktypes.Address) (*ktypes.BalanceObject, error) {
+func (sm *StateManager) GetBalances(addrs types.Address) (*types.BalanceObject, error) {
 	stateObject, err := sm.GetLatestStateObject(addrs)
 	if err != nil {
 		return nil, err
@@ -616,7 +609,7 @@ func (sm *StateManager) GetBalances(addrs ktypes.Address) (*ktypes.BalanceObject
 	return stateObject.balance.Copy(), nil
 }
 
-func (sm *StateManager) GetBalance(addr ktypes.Address, assetID ktypes.AssetID) (*big.Int, error) {
+func (sm *StateManager) GetBalance(addr types.Address, assetID types.AssetID) (*big.Int, error) {
 	if _, ok := sm.objects[addr]; ok {
 		return sm.objects[addr].balance.Bal[assetID], nil
 	}
@@ -624,17 +617,17 @@ func (sm *StateManager) GetBalance(addr ktypes.Address, assetID ktypes.AssetID) 
 	return nil, errors.New("invalid asset id")
 }
 
-func (sm *StateManager) GetAccountMetaInfo(addr ktypes.Address) (*ktypes.AccountMetaInfo, error) {
+func (sm *StateManager) GetAccountMetaInfo(addr types.Address) (*types.AccountMetaInfo, error) {
 	return sm.db.GetAccountMetaInfo(addr.Bytes())
 }
 
-func (sm *StateManager) GetAccountInfo(addr ktypes.Address, stateHash ktypes.Hash) (*ktypes.Account, error) {
+func (sm *StateManager) GetAccountInfo(addr types.Address, stateHash types.Hash) (*types.Account, error) {
 	rawData, err := sm.db.GetAccount(addr, stateHash)
 	if err != nil {
 		return nil, err
 	}
 
-	accInfo := new(ktypes.Account)
+	accInfo := new(types.Account)
 
 	if err := polo.Depolorize(accInfo, rawData); err != nil {
 		return nil, err
@@ -702,7 +695,7 @@ func (sm *StateManager) GetPublicKeys(ids ...id.KramaID) ([][]byte, error) {
 }
 
 func (sm *StateManager) GetPublicKeyFromContract(ctx context.Context, ids ...id.KramaID) (keys [][]byte, err error) {
-	data, err := json.Marshal(Request{ktypes.KIPPeerIDToString(ids)})
+	data, err := json.Marshal(Request{types.KIPPeerIDToString(ids)})
 	if err != nil {
 		return nil, err
 	}

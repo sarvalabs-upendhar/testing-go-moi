@@ -1,6 +1,6 @@
 package api
 
-import "gitlab.com/sarvalabs/moichain/common/ktypes"
+import "gitlab.com/sarvalabs/moichain/types"
 
 // TesseractArgs is a struct that represents an argument wrapper for retrieving the latest Tesseract
 type TesseractArgs struct {
@@ -44,7 +44,7 @@ type BalArgs struct {
 
 // SendIXArgs is a struct that represents an argument wrapper for sending Interactions to the pool
 type SendIXArgs struct {
-	IxType        ktypes.IxType `json:"type"`
+	IxType        types.IxType  `json:"type"`
 	From          string        `json:"from"`
 	To            string        `json:"to"`
 	Value         int           `json:"value"`
@@ -83,5 +83,5 @@ type ReceiptArgs struct {
 
 // ReceiptResponse is a response wrapper for receipts
 type ReceiptResponse struct {
-	Receipt ktypes.Receipt
+	Receipt types.Receipt
 }

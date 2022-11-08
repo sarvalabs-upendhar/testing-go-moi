@@ -11,8 +11,10 @@ import (
 )
 
 var (
-	samplePrivateKey = []byte{223, 251, 80, 42, 148, 23, 80, 3, 41, 56, 67, 29, 6, 222, 100,
-		235, 198, 118, 247, 22, 36, 154, 171, 94, 29, 237, 207, 78, 250, 162, 67, 14}
+	samplePrivateKey = []byte{
+		223, 251, 80, 42, 148, 23, 80, 3, 41, 56, 67, 29, 6, 222, 100,
+		235, 198, 118, 247, 22, 36, 154, 171, 94, 29, 237, 207, 78, 250, 162, 67, 14,
+	}
 	sampleMessage = []byte("Hello MOI user, this is test string being signed")
 )
 
@@ -21,8 +23,8 @@ func TestECDSASignWithSecp256k1(t *testing.T) {
 
 	kid := kramaid.KramaID("bvby3pBVU5BEL2jBHJrH23GTb9qe8nL4XHqqKzZVbth7gBZ5c3." +
 		"16Uiu2HAmGZr9gyQ7fDdmdBsRL29EjxR81Y74TEPbemBkyKuk2Ufj")
-	err := s256.Sign(sampleMessage, samplePrivateKey, kid)
 
+	err := s256.Sign(sampleMessage, samplePrivateKey, kid)
 	if err != nil {
 		t.Error("signing with secp256k1 key failed")
 	}

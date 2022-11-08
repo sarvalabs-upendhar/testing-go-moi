@@ -1,11 +1,12 @@
 package session
 
 import (
-	"github.com/stretchr/testify/require"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	"gitlab.com/sarvalabs/moichain/common/tests"
-	"gitlab.com/sarvalabs/moichain/poorna/agora/types"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	"gitlab.com/sarvalabs/moichain/common/tests"
+	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 func TestRecordSessionInterest_MultipleAddress(t *testing.T) {
@@ -19,7 +20,7 @@ func TestRecordSessionInterest_MultipleAddress(t *testing.T) {
 	// record hashes with address1
 	im.RecordSessionInterest(address1, keys...)
 
-	//record same hashes with address2
+	// record same hashes with address2
 	im.RecordSessionInterest(address2, keys...)
 
 	for _, hash := range keys {
@@ -108,8 +109,8 @@ func TestInterestedSessions(t *testing.T) {
 	}
 }
 
-func appendBlocks(set1, set2 map[ktypes.Hash]types.Block) []types.Block {
-	blocks := make([]types.Block, 0, len(set1)+len(set2))
+func appendBlocks(set1, set2 map[types.Hash]atypes.Block) []atypes.Block {
+	blocks := make([]atypes.Block, 0, len(set1)+len(set2))
 
 	for _, v := range set1 {
 		blocks = append(blocks, v)

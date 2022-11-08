@@ -1,17 +1,18 @@
 package dhruva
 
 import (
-	"github.com/hashicorp/go-hclog"
-	"github.com/stretchr/testify/require"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	"gitlab.com/sarvalabs/moichain/common/tests"
-	dbInterfaces "gitlab.com/sarvalabs/moichain/dhruva/db"
-	"gitlab.com/sarvalabs/polo/go-polo"
-	"golang.org/x/net/context"
 	"math/big"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/hashicorp/go-hclog"
+	"github.com/stretchr/testify/require"
+	"gitlab.com/sarvalabs/moichain/common/tests"
+	dbInterfaces "gitlab.com/sarvalabs/moichain/dhruva/db"
+	"gitlab.com/sarvalabs/moichain/types"
+	"gitlab.com/sarvalabs/polo/go-polo"
+	"golang.org/x/net/context"
 )
 
 // mockDB is an in-memory key-value database used for testing purposes
@@ -26,7 +27,7 @@ type mockIterator struct {
 }
 
 func (m *mockDB) NewBatchWriter() dbInterfaces.BatchWriter {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -55,43 +56,43 @@ func NewTestPersistenceManager(t *testing.T) *PersistenceManager {
 }
 
 func (m *mockDB) Insert(key []byte, value []byte) error {
-	m.dbStorage[ktypes.BytesToHex(key)] = value
+	m.dbStorage[types.BytesToHex(key)] = value
 
 	return nil
 }
 
 func (m *mockDB) Update(key []byte, value []byte) error {
 	if exists, _ := m.Has(key); exists {
-		m.dbStorage[ktypes.BytesToHex(key)] = value
+		m.dbStorage[types.BytesToHex(key)] = value
 
 		return nil
 	}
 
-	return ktypes.ErrKeyNotFound
+	return types.ErrKeyNotFound
 }
 
 func (m *mockDB) Delete(key []byte) error {
 	if exists, _ := m.Has(key); exists {
-		delete(m.dbStorage, ktypes.BytesToHex(key))
+		delete(m.dbStorage, types.BytesToHex(key))
 
 		return nil
 	}
 
-	return ktypes.ErrKeyNotFound
+	return types.ErrKeyNotFound
 }
 
 func (m *mockDB) Get(key []byte) ([]byte, error) {
 	if exists, _ := m.Has(key); exists {
-		val := m.dbStorage[ktypes.BytesToHex(key)]
+		val := m.dbStorage[types.BytesToHex(key)]
 
 		return val, nil
 	}
 
-	return nil, ktypes.ErrKeyNotFound
+	return nil, types.ErrKeyNotFound
 }
 
 func (m *mockDB) Has(key []byte) (bool, error) {
-	_, ok := m.dbStorage[ktypes.BytesToHex(key)]
+	_, ok := m.dbStorage[types.BytesToHex(key)]
 
 	return ok, nil
 }
@@ -126,14 +127,14 @@ func (it *mockIterator) Close() {
 
 // Seek move's forward till matching prefix key
 func (it *mockIterator) Seek(key []byte) {
-	it.prefixKey = ktypes.BytesToHex(key)
+	it.prefixKey = types.BytesToHex(key)
 
 	for {
 		if len(it.keys) == 0 {
 			break
 		}
 
-		if strings.HasPrefix(it.keys[0], ktypes.BytesToHex(key)) {
+		if strings.HasPrefix(it.keys[0], types.BytesToHex(key)) {
 			break
 		}
 
@@ -162,19 +163,19 @@ func (it *mockIterator) ValidForPrefix(prefix []byte) bool {
 	return len(it.keys) != 0
 }
 
-func (it *mockIterator) GetNext() (*ktypes.DBEntry, error) {
-	return &ktypes.DBEntry{
-		Key:   ktypes.Hex2Bytes(it.keys[0]),
+func (it *mockIterator) GetNext() (*types.DBEntry, error) {
+	return &types.DBEntry{
+		Key:   types.Hex2Bytes(it.keys[0]),
 		Value: it.data[it.keys[0]],
 	}, nil
 }
 
-func getAccMetaInfo(t *testing.T, height int64) *ktypes.AccountMetaInfo {
+func getAccMetaInfo(t *testing.T, height int64) *types.AccountMetaInfo {
 	t.Helper()
 
-	return &ktypes.AccountMetaInfo{
+	return &types.AccountMetaInfo{
 		Address:       tests.RandomAddress(t),
-		Type:          ktypes.AccType(1),
+		Type:          types.AccType(1),
 		Height:        big.NewInt(height),
 		TesseractHash: tests.RandomHash(t),
 		LatticeExists: true,
@@ -182,10 +183,10 @@ func getAccMetaInfo(t *testing.T, height int64) *ktypes.AccountMetaInfo {
 	}
 }
 
-func insertTestAccMetaInfo(t *testing.T, pm *PersistenceManager) map[int64]ktypes.Accounts {
+func insertTestAccMetaInfo(t *testing.T, pm *PersistenceManager) map[int64]types.Accounts {
 	t.Helper()
 
-	insertedAccounts := make(map[int64]ktypes.Accounts, 0)
+	insertedAccounts := make(map[int64]types.Accounts, 0)
 
 	accountCount := 10000
 	for i := 0; i < accountCount; i++ {
@@ -231,7 +232,7 @@ func incrementBuckets(t *testing.T, pm *PersistenceManager) map[int32]int64 {
 	return incrementBucketSizes
 }
 
-func checkIfAccountExists(account *ktypes.AccountMetaInfo, accounts ktypes.Accounts) bool {
+func checkIfAccountExists(account *types.AccountMetaInfo, accounts types.Accounts) bool {
 	for _, acc := range accounts {
 		if reflect.DeepEqual(account, acc) {
 			return true
@@ -283,10 +284,10 @@ func insertTestEntries(t *testing.T, pm *PersistenceManager) (map[string]string,
 	return insertedEntries, prefixes
 }
 
-func getAddresses(t *testing.T, count int) []ktypes.Address {
+func getAddresses(t *testing.T, count int) []types.Address {
 	t.Helper()
 
-	var addresses []ktypes.Address
+	var addresses []types.Address
 
 	for i := 0; i < count; i++ {
 		addresses = append(addresses, tests.RandomAddress(t))
@@ -295,10 +296,10 @@ func getAddresses(t *testing.T, count int) []ktypes.Address {
 	return addresses
 }
 
-func getHashes(t *testing.T, count int) []ktypes.Hash {
+func getHashes(t *testing.T, count int) []types.Hash {
 	t.Helper()
 
-	var addresses []ktypes.Hash
+	var addresses []types.Hash
 
 	for i := 0; i < count; i++ {
 		addresses = append(addresses, tests.RandomHash(t))
@@ -307,7 +308,7 @@ func getHashes(t *testing.T, count int) []ktypes.Hash {
 	return addresses
 }
 
-func insertAccMetaInfo(t *testing.T, pm *PersistenceManager, accMetaInfo ktypes.AccountMetaInfo) {
+func insertAccMetaInfo(t *testing.T, pm *PersistenceManager, accMetaInfo types.AccountMetaInfo) {
 	t.Helper()
 
 	key, bucket := BucketIDFromAddress(accMetaInfo.Address.Bytes())

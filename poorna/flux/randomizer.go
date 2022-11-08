@@ -9,10 +9,11 @@ import (
 	"sync"
 	"time"
 
+	"gitlab.com/sarvalabs/moichain/utils"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/protocol"
-	"gitlab.com/sarvalabs/moichain/common/kutils"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/moichain/poorna"
 	"gitlab.com/sarvalabs/moichain/telemetry/tracing"
@@ -20,13 +21,14 @@ import (
 
 	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 const (
 	SLOTCOUNT  = 20
 	PEERSCOUNT = 6
 )
+
 const (
 	FluxProtocol = protocol.ID("moi/stream/flux")
 )
@@ -85,7 +87,7 @@ func NewRandomizer(
 }
 
 func (r *Randomizer) messageHandler(stream network.Stream) {
-	//r.logger.Debug("Got a new flux Stream", stream.Protocol(), stream.Conn().RemotePeer())
+	// r.logger.Debug("Got a new flux Stream", stream.Protocol(), stream.Conn().RemotePeer())
 	r.metrics.captureNumOfRequests(1)
 
 	defer func() {
@@ -104,7 +106,7 @@ func (r *Randomizer) messageHandler(stream network.Stream) {
 		return
 	}
 
-	message := new(ktypes.Message)
+	message := new(types.Message)
 
 	err = polo.Depolorize(message, buffer[0:count])
 	if err != nil {
@@ -113,7 +115,7 @@ func (r *Randomizer) messageHandler(stream network.Stream) {
 		return
 	}
 
-	msg := new(ktypes.RandomWalkReq)
+	msg := new(types.RandomWalkReq)
 
 	if err = polo.Depolorize(msg, message.Payload); err != nil {
 		r.logger.Error("Error reading message", "err", err)
@@ -132,7 +134,7 @@ func (r *Randomizer) messageHandler(stream network.Stream) {
 func (r *Randomizer) addPeer(slot int, id id.KramaID) error {
 	r.peers[slot].mtx.Lock()
 	defer r.peers[slot].mtx.Unlock()
-	//log.Println("Add peer", slot, id)
+	// log.Println("Add peer", slot, id)
 	if v, ok := r.peers[slot].nonUtilized[id]; !ok || v != 1 {
 		r.peers[slot].pendingCount--
 
@@ -154,7 +156,7 @@ func (r *Randomizer) addPeer(slot int, id id.KramaID) error {
 }
 
 func (r *Randomizer) updatePeerListStatus(slot int) {
-	//log.Println("In update slot status", slot, r.peers[slot].pendingCount, int(math.Ceil(0.6*PEERSCOUNT)))
+	// log.Println("In update slot status", slot, r.peers[slot].pendingCount, int(math.Ceil(0.6*PEERSCOUNT)))
 	if !r.peers[slot].updatePending && r.peers[slot].pendingCount >= int(math.Ceil(0.4*PEERSCOUNT)) {
 		r.peers[slot].updatePending = true
 		r.metrics.capturePendingSlots(1)
@@ -163,8 +165,9 @@ func (r *Randomizer) updatePeerListStatus(slot int) {
 		r.metrics.capturePendingSlots(-1)
 	}
 }
+
 func (r *Randomizer) Start() {
-	r.topic = kutils.RandString(64)
+	r.topic = utils.RandString(64)
 	if err := r.server.Subscribe(r.ctx, r.topic, r.pubSubHandler); err != nil {
 		r.logger.Error("Error subscribing to flux topic", err)
 
@@ -200,7 +203,7 @@ func (r *Randomizer) Start() {
 }
 
 func (r *Randomizer) getPeers(slotNo int, count int, avoidPeers []id.KramaID) (list []id.KramaID) {
-	//log.Println("Querying for random peers", slotNo, count)
+	// log.Println("Querying for random peers", slotNo, count)
 	//	log.Println("Avoid peers", avoidPeers)
 	counter := 0
 
@@ -238,7 +241,7 @@ func (r *Randomizer) getPeers(slotNo int, count int, avoidPeers []id.KramaID) (l
 	return
 }
 
-func (r *Randomizer) HandleReqMsg(reqMsg *ktypes.RandomWalkReq) error {
+func (r *Randomizer) HandleReqMsg(reqMsg *types.RandomWalkReq) error {
 	requesterID := reqMsg.PeerID
 
 	for {
@@ -253,7 +256,7 @@ func (r *Randomizer) HandleReqMsg(reqMsg *ktypes.RandomWalkReq) error {
 
 		if randomPeer != peer.ID(peerID) {
 			if reqMsg.Count-1 > 0 {
-				msg := &ktypes.RandomWalkReq{
+				msg := &types.RandomWalkReq{
 					ReqID:  reqMsg.ReqID,
 					Count:  reqMsg.Count - 1,
 					PeerID: requesterID,
@@ -261,20 +264,20 @@ func (r *Randomizer) HandleReqMsg(reqMsg *ktypes.RandomWalkReq) error {
 				}
 
 				// forward the request
-				if err := r.SendFluxMessage(randomPeer, ktypes.RANDOMWALKREQ, msg); err != nil {
-					//log.Println("Unable to forward the random walk request", err, randomPeer.String())
+				if err := r.SendFluxMessage(randomPeer, types.RANDOMWALKREQ, msg); err != nil {
+					// log.Println("Unable to forward the random walk request", err, randomPeer.String())
 					continue
 				}
 			}
 		}
 
-		responseMsg := ktypes.RandomWalkResp{
+		responseMsg := types.RandomWalkResp{
 			ReqID:    reqMsg.ReqID,
-			PeerAddr: kutils.MultiAddrToString(r.server.GetAddrs()...),
+			PeerAddr: utils.MultiAddrToString(r.server.GetAddrs()...),
 			ID:       r.server.GetKramaID(),
 		}
 
-		//log.Println("Address",responseMsg,polo.Polorize(responseMsg),polo.Polorize(&responseMsg))
+		// log.Println("Address",responseMsg,polo.Polorize(responseMsg),polo.Polorize(&responseMsg))
 		err = r.server.Broadcast(reqMsg.Topic, polo.Polorize(responseMsg))
 		if err != nil {
 			log.Panicln(err)
@@ -283,10 +286,11 @@ func (r *Randomizer) HandleReqMsg(reqMsg *ktypes.RandomWalkReq) error {
 		return nil
 	}
 }
+
 func (r *Randomizer) pubSubHandler(msg *pubsub.Message) error {
 	data := msg.GetData()
-	randomPeerMsg := new(ktypes.RandomWalkResp)
-	//log.Println("Here",msg.ReceivedFrom,randomPeerMsg,data)
+	randomPeerMsg := new(types.RandomWalkResp)
+	// log.Println("Here",msg.ReceivedFrom,randomPeerMsg,data)
 	err := polo.Depolorize(randomPeerMsg, data)
 	if err != nil {
 		r.logger.Error("Error depolarising randomWalk Request", "error", err)
@@ -304,6 +308,7 @@ func (r *Randomizer) pubSubHandler(msg *pubsub.Message) error {
 
 	return nil
 }
+
 func (r *Randomizer) isValidRequestID(reqID int64) (int, bool) {
 	for slot, v := range r.requestIDs {
 		if reqID != -1 && reqID == v {
@@ -313,6 +318,7 @@ func (r *Randomizer) isValidRequestID(reqID int64) (int, bool) {
 
 	return -1, false
 }
+
 func (r *Randomizer) getRequestID(slot int) int64 {
 	if r.requestIDs[slot] != -1 {
 		return r.requestIDs[slot]
@@ -332,14 +338,14 @@ func (r *Randomizer) PopulatePool(slotID int) {
 	for {
 		randomPeer := r.server.GetRandomNode()
 		// Step 2:
-		msg := &ktypes.RandomWalkReq{
+		msg := &types.RandomWalkReq{
 			ReqID:  r.getRequestID(slotID),
 			Count:  PEERSCOUNT,
 			Topic:  r.topic,
 			PeerID: r.server.GetKramaID(),
 		}
-		//log.Println("Sending random request", r.getRequestID(slotID), slotID)
-		if err := r.SendFluxMessage(randomPeer, ktypes.RANDOMWALKREQ, msg); err != nil {
+		// log.Println("Sending random request", r.getRequestID(slotID), slotID)
+		if err := r.SendFluxMessage(randomPeer, types.RANDOMWALKREQ, msg); err != nil {
 			continue
 		}
 
@@ -354,12 +360,13 @@ func (r *Randomizer) GetRandomNodes(
 ) (randomPeers []id.KramaID, err error) {
 	_, span := tracing.Span(ctx, "Flux.Randomizer", "GetRandomNodes")
 	defer span.End()
+
 	requiredNo := count
 
 	for {
 		select {
 		case <-ctx.Done():
-			return nil, ktypes.ErrTimeOut
+			return nil, types.ErrTimeOut
 		default:
 			if requiredNo <= 0 {
 				return
@@ -389,7 +396,7 @@ func (r *Randomizer) Close() {
 	defer r.ctxCancel()
 }
 
-func (r *Randomizer) SendFluxMessage(peerID peer.ID, msgType ktypes.MsgType, msg interface{}) error {
+func (r *Randomizer) SendFluxMessage(peerID peer.ID, msgType types.MsgType, msg interface{}) error {
 	//if s.Peers.ContainsPeer(peerID) {
 	//	p := s.Peers.Peer(peerID)
 	//	return p.(s.id, msgType, msg)
@@ -397,7 +404,7 @@ func (r *Randomizer) SendFluxMessage(peerID peer.ID, msgType ktypes.MsgType, msg
 	bytes := polo.Polorize(msg)
 	// Create a network message proto with the bytes payload of the message to send
 	// and convert into a proto message and marshal it into a slice of bytes
-	m := ktypes.Message{
+	m := types.Message{
 		MsgType: msgType,
 		Payload: bytes,
 		Sender:  r.server.GetKramaID(),

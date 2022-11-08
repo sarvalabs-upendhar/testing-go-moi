@@ -1,10 +1,11 @@
 package jug
 
 import (
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	"gitlab.com/sarvalabs/moichain/guna"
 	"log"
 	"sync"
+
+	"gitlab.com/sarvalabs/moichain/guna"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 type Exec struct {
@@ -21,10 +22,10 @@ func NewExec(state *guna.StateManager) *Exec {
 }
 
 func (e *Exec) ExecuteInteractions(
-	clusterID ktypes.ClusterID,
-	ixs []*ktypes.Interaction,
-	contextDelta ktypes.ContextDelta,
-) (ktypes.Receipts, error) {
+	clusterID types.ClusterID,
+	ixs []*types.Interaction,
+	contextDelta types.ContextDelta,
+) (types.Receipts, error) {
 	executor := NewExecutor(ixs, 1000, contextDelta, e.state)
 	if err := executor.Execute(); err != nil {
 		if err := executor.Revert(); err != nil {
@@ -39,7 +40,7 @@ func (e *Exec) ExecuteInteractions(
 	return executor.Receipts(), nil
 }
 
-func (e *Exec) Revert(clusterID ktypes.ClusterID) error {
+func (e *Exec) Revert(clusterID types.ClusterID) error {
 	rawExecutor, ok := e.executorInstances.Load(clusterID)
 	if !ok {
 		return nil
@@ -47,12 +48,12 @@ func (e *Exec) Revert(clusterID ktypes.ClusterID) error {
 
 	executor, ok := rawExecutor.(*Executor)
 	if !ok {
-		return ktypes.ErrInterfaceConversion
+		return types.ErrInterfaceConversion
 	}
 
 	return executor.Revert()
 }
 
-func (e *Exec) CleanupExecutorInstances(id ktypes.ClusterID) {
+func (e *Exec) CleanupExecutorInstances(id types.ClusterID) {
 	e.executorInstances.Delete(id)
 }

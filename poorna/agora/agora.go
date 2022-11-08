@@ -2,15 +2,16 @@ package agora
 
 import (
 	"context"
+
 	"github.com/hashicorp/go-hclog"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/moichain/poorna"
 	"gitlab.com/sarvalabs/moichain/poorna/agora/db"
 	"gitlab.com/sarvalabs/moichain/poorna/agora/decision"
 	"gitlab.com/sarvalabs/moichain/poorna/agora/network"
 	"gitlab.com/sarvalabs/moichain/poorna/agora/session"
-	"gitlab.com/sarvalabs/moichain/poorna/agora/types"
+	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 const (
@@ -27,7 +28,7 @@ type Agora struct {
 	network  *network.AgoraNetwork
 	im       *session.InterestManager
 	sm       *session.SessionManager
-	notifier types.PubSub
+	notifier atypes.PubSub
 }
 
 func NewAgora(
@@ -46,7 +47,7 @@ func NewAgora(
 		return nil, err
 	}
 
-	notifier := types.NewNotifier()
+	notifier := atypes.NewNotifier()
 
 	agoraNetwork := network.NewAgoraNetwork(ctx, logger, server, metrics.Network)
 
@@ -80,8 +81,8 @@ func NewAgora(
 func (ag *Agora) NewSession(
 	ctx context.Context,
 	contextPeers []id.KramaID,
-	address ktypes.Address,
-	stateHash ktypes.Hash,
+	address types.Address,
+	stateHash types.Hash,
 ) (*session.Session, error) {
 	return ag.sm.NewSession(ctx, address, stateHash, ag.network, contextPeers)
 }

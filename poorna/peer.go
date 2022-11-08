@@ -3,17 +3,19 @@ package poorna
 import (
 	"bufio"
 	"errors"
-	"gitlab.com/sarvalabs/moichain/common/kutils"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/polo/go-polo"
 	"log"
 	"sync"
+
+	"gitlab.com/sarvalabs/moichain/utils"
+
+	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	"gitlab.com/sarvalabs/polo/go-polo"
 
 	mapset "github.com/deckarep/golang-set"
 	ggio "github.com/gogo/protobuf/io"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/multiformats/go-multiaddr"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 // KipPeer is a struct that represents a peer on the KIP network
@@ -54,13 +56,13 @@ func NewKIPPeer(networkID peer.ID, rw bufio.ReadWriter) *KipPeer {
 // SendID is a method of KipPeer that emits the peer's id to the network
 func (p *KipPeer) SendID(id id.KramaID, ntq int32, addrs []multiaddr.Multiaddr) error {
 	// Create a NewPeer proto message
-	msg := ktypes.HandshakeMSG{
+	msg := types.HandshakeMSG{
 		NTQ:     ntq,
-		Address: kutils.MultiAddrToString(addrs...),
+		Address: utils.MultiAddrToString(addrs...),
 	}
 	// Convert to a proto message and send it to the network
 
-	return p.Send(id, ktypes.HANDSHAKEMSG, msg)
+	return p.Send(id, types.HANDSHAKEMSG, msg)
 }
 
 // SetID is a method of KipPeer that sets the KipID of the KipPeer.
@@ -86,12 +88,12 @@ func (p *KipPeer) InitHandshake(id id.KramaID, ntq int32, addrs []multiaddr.Mult
 		return err
 	}
 
-	message := new(ktypes.Message)
+	message := new(types.Message)
 	if err = polo.Depolorize(message, buffer[0:byteCount]); err != nil {
 		return err
 	}
 	// Unmarshal message proto into a NewPeer message
-	var msg ktypes.HandshakeMSG
+	var msg types.HandshakeMSG
 	if err := polo.Depolorize(&msg, message.Payload); err != nil {
 		return err
 	}
@@ -104,30 +106,31 @@ func (p *KipPeer) InitHandshake(id id.KramaID, ntq int32, addrs []multiaddr.Mult
 
 	return nil
 }
+
 func (p *KipPeer) sendHandshakeErrorResp(id id.KramaID, err error) error {
-	msg := ktypes.HandshakeMSG{
+	msg := types.HandshakeMSG{
 		Error: err.Error(),
 	}
 
-	return p.Send(id, ktypes.HANDSHAKEMSG, msg)
+	return p.Send(id, types.HANDSHAKEMSG, msg)
 }
 
 // SendIXs is a method of KipPeer that emits interactions to the network.
 // Accepts a slice of Interactions to emit.
-func (p *KipPeer) SendIXs(id id.KramaID, ixs ktypes.Interactions) error {
+func (p *KipPeer) SendIXs(id id.KramaID, ixs types.Interactions) error {
 	// Mark the given Interactions as 'known'
 	for _, j := range ixs {
 		p.markInteraction(j.GetIxHash())
 	}
 
-	msg := ktypes.InteractionMsg{Ixs: ixs}
+	msg := types.InteractionMsg{Ixs: ixs}
 
-	return p.Send(id, ktypes.NEWIXSMSG, msg)
+	return p.Send(id, types.NEWIXSMSG, msg)
 }
 
 // Send is a method of KipPeer that emits an arbitrary proto message to the network
 // Accepts the sender id, the message type and message itself.
-func (p *KipPeer) Send(id id.KramaID, code ktypes.MsgType, msg interface{}) error {
+func (p *KipPeer) Send(id id.KramaID, code types.MsgType, msg interface{}) error {
 	p.mtxLock.Lock()
 	defer p.mtxLock.Unlock()
 
@@ -136,7 +139,7 @@ func (p *KipPeer) Send(id id.KramaID, code ktypes.MsgType, msg interface{}) erro
 
 	// Create a network message proto with the bytes payload of the message to send
 	// and convert into a proto message and marshal it  into a slice of bytes
-	m := ktypes.Message{
+	m := types.Message{
 		MsgType: code,
 		Payload: bytes,
 		Sender:  id,
@@ -158,7 +161,7 @@ func (p *KipPeer) Send(id id.KramaID, code ktypes.MsgType, msg interface{}) erro
 // Accepts the Hash of an Interaction and adds it to set of known interaction hashes.
 //
 // Maintains 150 known interactions in the set at any point.
-func (p *KipPeer) markInteraction(hash ktypes.Hash) {
+func (p *KipPeer) markInteraction(hash types.Hash) {
 	p.mtxLock.Lock()
 	defer p.mtxLock.Unlock()
 	// Drop a previously known interaction hash if the cardinality (count)

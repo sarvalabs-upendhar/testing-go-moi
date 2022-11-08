@@ -2,7 +2,6 @@ package mudra
 
 import (
 	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	"gitlab.com/sarvalabs/moichain/mudra/common"
 	"gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/moichain/mudra/poi"
@@ -10,13 +9,14 @@ import (
 	"gitlab.com/sarvalabs/moichain/mudra/signature/bls"
 	"gitlab.com/sarvalabs/moichain/mudra/signature/ecdsa"
 	"gitlab.com/sarvalabs/moichain/mudra/signature/schnorr"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 type KramaVault struct {
 	consensusPriv PrivateKey      // Private Key used in consensus for signing etc
 	networkPriv   PrivateKey      // Private key used in p2p communication
 	kramaID       kramaid.KramaID // KramaID of the user
-	Address       ktypes.Address
+	Address       types.Address
 }
 type VaultConfig struct {
 	DataDir       string

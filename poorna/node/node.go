@@ -7,16 +7,16 @@ import (
 	"net/http"
 	"os"
 
+	"gitlab.com/sarvalabs/moichain/chain"
+	"gitlab.com/sarvalabs/moichain/ixpool"
+	"gitlab.com/sarvalabs/moichain/utils"
+
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gitlab.com/sarvalabs/moichain/common"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	"gitlab.com/sarvalabs/moichain/common/kutils"
-	"gitlab.com/sarvalabs/moichain/core/chain"
-	"gitlab.com/sarvalabs/moichain/core/ixpool"
 	"gitlab.com/sarvalabs/moichain/dhruva"
 	"gitlab.com/sarvalabs/moichain/guna"
 	"gitlab.com/sarvalabs/moichain/jug"
@@ -27,6 +27,7 @@ import (
 	"gitlab.com/sarvalabs/moichain/poorna/flux"
 	krpc "gitlab.com/sarvalabs/moichain/poorna/rpc"
 	"gitlab.com/sarvalabs/moichain/poorna/syncer"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 const (
@@ -44,7 +45,7 @@ type Node struct {
 	ctxCancel        context.CancelFunc
 	logger           hclog.Logger
 	cfg              *common.Config
-	eventMux         *kutils.TypeMux
+	eventMux         *utils.TypeMux
 	network          *poorna.Server
 	state            *guna.StateManager
 	chain            *chain.ChainManager
@@ -64,7 +65,7 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 	n = new(Node)
 
 	n.cfg = cfg
-	n.eventMux = new(kutils.TypeMux)
+	n.eventMux = new(utils.TypeMux)
 	n.ctx, n.ctxCancel = context.WithCancel(context.Background())
 	n.handlers = new(SubHandlers)
 
@@ -75,13 +76,13 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 
 	n.vault, err = kcrypto.NewVault(cfg.Vault, 1, 1)
 	if err != nil {
-		return nil, errors.Wrap(ktypes.ErrVaultInit, err.Error())
+		return nil, errors.Wrap(types.ErrVaultInit, err.Error())
 	}
 
 	if cfg.LogFilePath != "" {
 		logFileName := cfg.LogFilePath + string(n.vault.KramaID())
 
-		f, err := os.OpenFile(logFileName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+		f, err := os.OpenFile(logFileName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
 		if err != nil {
 			return nil, err
 		}
@@ -106,7 +107,7 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 
 	// create block store for Bitswap
 	// this will be replaced with a wrapper around dhruva
-	//n.datastore = blockstore.NewBlockstore(sync.MutexWrap(datastore.NewMapDatastore()))
+	// n.datastore = blockstore.NewBlockstore(sync.MutexWrap(datastore.NewMapDatastore()))
 	// setup persistence manager
 	db, err := dhruva.NewPersistenceManager(n.ctx, n.logger, cfg.DB)
 	if err != nil {
@@ -172,11 +173,11 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 
 	// setup JSON-RPC
 	if err = n.SetupRPC(); err != nil {
-		return nil, ktypes.ErrRPCFailed
+		return nil, types.ErrRPCFailed
 	}
 
 	if err = n.InitSubHandlers(); err != nil {
-		return nil, ktypes.ErrHandlersFailed
+		return nil, types.ErrHandlersFailed
 	}
 
 	if err = n.chain.SetupGenesis(cfg.Chain.Genesis); err != nil {
@@ -231,6 +232,7 @@ func (n *Node) SetupRPC() error {
 
 	return nil
 }
+
 func (n *Node) Start() {
 	if err := n.network.Start(); err != nil {
 		log.Panic(err)
@@ -239,32 +241,38 @@ func (n *Node) Start() {
 	n.startSubHandlers()
 	n.ixpool.Start()
 	n.kramaEngine.Start()
+
 	if err := n.state.Start(
 		n.network.GetKramaID(),
 		1,
 		n.vault.GetConsensusPrivateKey().GetPublicKeyInBytes(),
 		n.network.GetAddrs()); err != nil {
+		log.Panic(err)
 	}
 
 	go n.rpc.Start()
+
 	if err := n.chain.Start(); err != nil {
 		log.Panic(err)
 	}
 }
+
 func (n *Node) startSubHandlers() {
 	n.logger.Info("Starting Sub-Handlers")
 
 	go n.handlers.core.Start()
-	//go n.handlers.consensusHandler.Start()
+	// go n.handlers.consensusHandler.Start()
 	go n.handlers.syncer.Start()
 
 	go n.handlers.flux.Start()
 }
+
 func (n *Node) stopSubHandlers() {
 	n.handlers.core.Close()
 	n.handlers.syncer.Close()
 	n.handlers.flux.Close()
 }
+
 func (n *Node) Stop() {
 	n.logger.Info("Gracefully shutting down...!!!!")
 	n.network.Stop()
@@ -284,6 +292,7 @@ func (n *Node) setupTelemetry() {
 		n.nodeMetrics = metricProvider("MOI", "test-net", false)
 	}
 }
+
 func (n *Node) stopTelemetry() {
 	if n.prometheusServer != nil {
 		if err := n.prometheusServer.Shutdown(context.Background()); err != nil {
@@ -291,6 +300,7 @@ func (n *Node) stopTelemetry() {
 		}
 	}
 }
+
 func (n *Node) startPrometheusServer(listenAddr *net.TCPAddr) *http.Server {
 	srv := &http.Server{ //nolint
 		Addr: listenAddr.String(),
@@ -301,7 +311,7 @@ func (n *Node) startPrometheusServer(listenAddr *net.TCPAddr) *http.Server {
 			),
 		),
 	}
-	//TODO: Slowloris attack fix
+	// TODO: Slowloris attack fix
 	go func() {
 		n.logger.Info("Prometheus server started", "addr=", listenAddr.String())
 

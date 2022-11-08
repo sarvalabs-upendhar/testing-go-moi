@@ -2,13 +2,15 @@ package session
 
 import (
 	"context"
+	"testing"
+
+	"gitlab.com/sarvalabs/moichain/utils"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/require"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	"gitlab.com/sarvalabs/moichain/common/kutils"
 	"gitlab.com/sarvalabs/moichain/common/tests"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"testing"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 func TestPeerDisconnected(t *testing.T) {
@@ -23,7 +25,7 @@ func TestPeerDisconnected(t *testing.T) {
 
 	require.Contains(t, pm.connectedPeers, peerID)
 
-	p2pID, err := kutils.GetNetworkID(peerID)
+	p2pID, err := utils.GetNetworkID(peerID)
 	require.NoError(t, err)
 	// disconnect the peer
 	pm.PeerDisconnected(p2pID)
@@ -180,7 +182,7 @@ func TestChooseBestPeer_FromConnectedPeers(t *testing.T) {
 					failedAttempts: 0,
 				},
 			},
-			err:        ktypes.ErrPeerNotAvailable,
+			err:        types.ErrPeerNotAvailable,
 			avoidPeers: nil,
 			result:     "",
 		},
@@ -268,6 +270,6 @@ func TestChooseBestPeer_FromConnectedPeers(t *testing.T) {
 	}
 }
 
-func NewTestPeerManager(sessionID ktypes.Address, network sessionNetwork) *SessionPeerManager {
+func NewTestPeerManager(sessionID types.Address, network sessionNetwork) *SessionPeerManager {
 	return NewSessionPeerManager(sessionID, hclog.NewNullLogger(), network)
 }

@@ -1,23 +1,24 @@
 package session
 
 import (
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	"gitlab.com/sarvalabs/moichain/poorna/agora/types"
 	"sync"
+
+	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 type InterestManager struct {
 	mutex sync.RWMutex
-	wants map[ktypes.Hash]map[ktypes.Address]bool
+	wants map[types.Hash]map[types.Address]bool
 }
 
 func NewInterestManager() *InterestManager {
 	return &InterestManager{
-		wants: make(map[ktypes.Hash]map[ktypes.Address]bool),
+		wants: make(map[types.Hash]map[types.Address]bool),
 	}
 }
 
-func (im *InterestManager) RecordSessionInterest(addr ktypes.Address, ids ...ktypes.Hash) {
+func (im *InterestManager) RecordSessionInterest(addr types.Address, ids ...types.Hash) {
 	im.mutex.Lock()
 	defer im.mutex.Unlock()
 
@@ -27,17 +28,17 @@ func (im *InterestManager) RecordSessionInterest(addr ktypes.Address, ids ...kty
 		if want, ok := im.wants[c]; ok {
 			want[addr] = true
 		} else {
-			im.wants[c] = map[ktypes.Address]bool{addr: true}
+			im.wants[c] = map[types.Address]bool{addr: true}
 		}
 	}
 }
 
-func (im *InterestManager) RemoveSession(addr ktypes.Address) []ktypes.Hash {
+func (im *InterestManager) RemoveSession(addr types.Address) []types.Hash {
 	im.mutex.Lock()
 	defer im.mutex.Unlock()
 
 	// The keys that no session is interested in
-	deletedKeys := make([]ktypes.Hash, 0)
+	deletedKeys := make([]types.Hash, 0)
 
 	// For each known key
 	for c := range im.wants {
@@ -56,12 +57,12 @@ func (im *InterestManager) RemoveSession(addr ktypes.Address) []ktypes.Hash {
 	return deletedKeys
 }
 
-func (im *InterestManager) RemoveSessionInterest(addr ktypes.Address, ids ...ktypes.Hash) []ktypes.Hash {
+func (im *InterestManager) RemoveSessionInterest(addr types.Address, ids ...types.Hash) []types.Hash {
 	im.mutex.Lock()
 	defer im.mutex.Unlock()
 
 	// The keys that no session is interested in
-	deletedKs := make([]ktypes.Hash, 0, len(ids))
+	deletedKs := make([]types.Hash, 0, len(ids))
 
 	// For each key
 	for _, c := range ids {
@@ -83,12 +84,14 @@ func (im *InterestManager) RemoveSessionInterest(addr ktypes.Address, ids ...kty
 	return deletedKs
 }
 
-func (im *InterestManager) InterestedSessions(blocks []types.Block) (map[ktypes.Address][]types.Block, []types.Block) {
+func (im *InterestManager) InterestedSessions(
+	blocks []atypes.Block,
+) (map[types.Address][]atypes.Block, []atypes.Block) {
 	im.mutex.Lock()
 	defer im.mutex.Unlock()
 
-	sessions := make(map[ktypes.Address][]types.Block)
-	orphans := make([]types.Block, 0)
+	sessions := make(map[types.Address][]atypes.Block)
+	orphans := make([]atypes.Block, 0)
 
 	for _, block := range blocks {
 		interestedSessions, ok := im.wants[block.GetID()]

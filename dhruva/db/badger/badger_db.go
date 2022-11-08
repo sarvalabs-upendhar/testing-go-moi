@@ -2,13 +2,14 @@ package badger
 
 import (
 	"bytes"
+
 	"github.com/dgraph-io/badger/v3"
 	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	"gitlab.com/sarvalabs/moichain/dhruva/db"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
-//BadgerDB is a LSM based key-value store, It implements db.DB interface
+// BadgerDB is a LSM based key-value store, It implements db.DB interface
 type BadgerDB struct {
 	db *badger.DB
 }
@@ -25,7 +26,7 @@ func initBadgerInstance(path string) (*badger.DB, error) {
 func NewBadgerDB(path string) (db.DB, error) {
 	database, err := initBadgerInstance(path)
 	if err != nil {
-		return nil, errors.Wrap(ktypes.ErrDBInit, err.Error())
+		return nil, errors.Wrap(types.ErrDBInit, err.Error())
 	}
 
 	return &BadgerDB{db: database}, nil
@@ -59,19 +60,19 @@ func (b *BadgerDB) Insert(key []byte, value []byte) error {
 			return nil
 		}
 
-		return ktypes.ErrKeyExists
-	} else if errors.Is(err, ktypes.ErrKeyNotFound) {
+		return types.ErrKeyExists
+	} else if errors.Is(err, types.ErrKeyNotFound) {
 		// Create a new entry in Badger DB and store the k-v data
 		if err = b.db.Update(func(txn *badger.Txn) error {
 			return txn.Set(key, value)
 		}); err != nil { // Handle any errors while creating a new entry
-			return errors.Wrap(ktypes.ErrDBCallFailed, err.Error())
+			return errors.Wrap(types.ErrDBCallFailed, err.Error())
 		}
 
 		return nil
 	}
 
-	return errors.Wrap(ktypes.ErrDBCallFailed, err.Error())
+	return errors.Wrap(types.ErrDBCallFailed, err.Error())
 }
 
 // Has check's for the given key in the database
@@ -111,7 +112,7 @@ func (b *BadgerDB) Update(key []byte, value []byte) error {
 			return txn.Set(key, value)
 		})
 		if err != nil { // Handle errors if failed to update entry in db
-			return errors.Wrap(ktypes.ErrDBCallFailed, err.Error())
+			return errors.Wrap(types.ErrDBCallFailed, err.Error())
 		}
 	}
 
@@ -124,7 +125,7 @@ func (b *BadgerDB) Delete(key []byte) error {
 		return txn.Delete(key)
 	})
 	if err != nil {
-		return errors.Wrap(ktypes.ErrDBCallFailed, err.Error())
+		return errors.Wrap(types.ErrDBCallFailed, err.Error())
 	}
 
 	return nil
@@ -145,10 +146,10 @@ func (b *BadgerDB) Get(key []byte) ([]byte, error) {
 				return nil
 			})
 		} else if errors.Is(err, badger.ErrKeyNotFound) {
-			return ktypes.ErrKeyNotFound
+			return types.ErrKeyNotFound
 		}
 
-		return errors.Wrap(ktypes.ErrDBCallFailed, err.Error())
+		return errors.Wrap(types.ErrDBCallFailed, err.Error())
 	})
 	if err != nil {
 		return nil, err

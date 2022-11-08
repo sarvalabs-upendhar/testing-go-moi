@@ -3,21 +3,22 @@ package poorna
 import (
 	"context"
 	"fmt"
+	"log"
+
+	"gitlab.com/sarvalabs/moichain/chain"
+	"gitlab.com/sarvalabs/moichain/ixpool"
+	"gitlab.com/sarvalabs/moichain/utils"
+
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/polo/go-polo"
 
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	"gitlab.com/sarvalabs/moichain/common/kutils"
-	"gitlab.com/sarvalabs/moichain/core/chain"
-	"gitlab.com/sarvalabs/moichain/core/ixpool"
-	"log"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 // SubHandler is a struct that represents the network event handler
 type SubHandler struct {
-
 	// Context for handler life cycle
 	ctx context.Context
 
@@ -37,13 +38,13 @@ type SubHandler struct {
 	chain *chain.ChainManager
 
 	// Represents the event type mux of the handler
-	mux *kutils.TypeMux
+	mux *utils.TypeMux
 
 	// Represents the interactions event subscription
-	ixSub *kutils.Subscription
+	ixSub *utils.Subscription
 
 	// Represents the newpeer event subscription
-	newPeerSub *kutils.Subscription
+	newPeerSub *utils.Subscription
 
 	server *Server
 
@@ -58,7 +59,7 @@ func NewSubHandler(
 	logger hclog.Logger,
 	server *Server,
 	peerSet *peerSet,
-	mux *kutils.TypeMux,
+	mux *utils.TypeMux,
 	pool *ixpool.IxPool,
 	chain *chain.ChainManager,
 ) *SubHandler {
@@ -82,8 +83,8 @@ func NewSubHandler(
 func (eh *SubHandler) Start() {
 	log.Println("Handler started")
 	// Subscribe the TypeMux to NewIxsEvent and NewPeerEvent events
-	eh.ixSub = eh.mux.Subscribe(kutils.NewIxsEvent{})
-	eh.newPeerSub = eh.mux.Subscribe(kutils.NewPeerEvent{})
+	eh.ixSub = eh.mux.Subscribe(utils.NewIxsEvent{})
+	eh.newPeerSub = eh.mux.Subscribe(utils.NewPeerEvent{})
 
 	// Start the handler loops for new peers, broadcasting
 	// interactions and handling ICS events
@@ -99,7 +100,7 @@ func (eh *SubHandler) newPeerLoop() {
 	// Read events from a newpeer channel
 	for obj := range eh.newPeerSub.Chan() {
 		// Assert event as a NewPeerEvent
-		if p, ok := obj.Data.(kutils.NewPeerEvent); ok {
+		if p, ok := obj.Data.(utils.NewPeerEvent); ok {
 			// If minimum peer count is met, send a hello message
 			if eh.peers.Len() > 3 {
 				eh.server.SendHelloMessage()
@@ -131,8 +132,8 @@ func (eh *SubHandler) newPeerLoop() {
 // handlePeerMessage is a method of SubHandler that handles a message from a KipPeer
 func (eh *SubHandler) handlePeerMessage(p *KipPeer) error {
 	// Read the peer's io read/writer into a buffer
-	//p.mtxLock.Lock()
-	//defer p.mtxLock.Unlock()
+	// p.mtxLock.Lock()
+	// defer p.mtxLock.Unlock()
 	buffer := make([]byte, 4096)
 
 	bytecount, err := p.rw.Reader.Read(buffer)
@@ -141,20 +142,20 @@ func (eh *SubHandler) handlePeerMessage(p *KipPeer) error {
 	}
 
 	// Unmarshal the buffer into a proto message
-	message := new(ktypes.Message)
+	message := new(types.Message)
 	if err = polo.Depolorize(message, buffer[0:bytecount]); err != nil {
 		return err
 	}
 
-	//log.Println("Got new Message", message.GetType())
+	// log.Println("Got new Message", message.GetType())
 	switch message.MsgType {
 	// NEWIXTS
-	case ktypes.NEWIXSMSG:
+	case types.NEWIXSMSG:
 		// Print the KipID of the interactions sender
 		color.New(color.BgRed).Add(color.Underline).Println("Received Interactions from", p.id)
 
 		// Unmarshal message proto into an InteractionsData message
-		var ixns ktypes.InteractionMsg
+		var ixns types.InteractionMsg
 		if err = polo.Depolorize(&ixns, message.Payload); err != nil {
 			return err
 		}
@@ -176,7 +177,7 @@ func (eh *SubHandler) handlePeerMessage(p *KipPeer) error {
 
 		eh.broadcastIXs(ixns.Ixs)
 
-	case ktypes.RANDOMWALKREQ:
+	case types.RANDOMWALKREQ:
 		log.Println("Got an random request", message.Sender)
 	}
 
@@ -190,7 +191,7 @@ func (eh *SubHandler) ixBroadcastLoop() {
 	// Read events from an ix channel
 	for obj := range eh.ixSub.Chan() {
 		// Assert event as a NewIxsEvent
-		if event, ok := obj.Data.(kutils.NewIxsEvent); ok {
+		if event, ok := obj.Data.(utils.NewIxsEvent); ok {
 			eh.broadcastIXs(event.Ixs)
 		}
 	}
@@ -198,9 +199,9 @@ func (eh *SubHandler) ixBroadcastLoop() {
 
 // broadcastIXs is a method of SubHandler that broadcasts a given slice of Interactions.
 // Only emits it from peers that are not already aware of the interaction.
-func (eh *SubHandler) broadcastIXs(ixs []*ktypes.Interaction) {
+func (eh *SubHandler) broadcastIXs(ixs []*types.Interaction) {
 	// Accumulate a mapping of peers to the the Interaction they do not know about
-	var peerIxSet = make(map[*KipPeer][]*ktypes.Interaction)
+	peerIxSet := make(map[*KipPeer][]*types.Interaction)
 
 	for _, ix := range ixs {
 		// Identify the peers in the handler's working set that do not know of the interaction
@@ -218,7 +219,7 @@ func (eh *SubHandler) broadcastIXs(ixs []*ktypes.Interaction) {
 
 	// Emit the Interaction
 	for peer, ixs := range peerIxSet {
-		go func(peer *KipPeer, ixs []*ktypes.Interaction) {
+		go func(peer *KipPeer, ixs []*types.Interaction) {
 			if err := peer.SendIXs(eh.id, ixs); err != nil {
 				eh.logger.Error("Error sending interaction", "error", err)
 			}

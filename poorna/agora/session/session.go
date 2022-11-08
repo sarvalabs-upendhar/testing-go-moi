@@ -3,48 +3,50 @@ package session
 import (
 	"context"
 	"errors"
+	"time"
+
+	"gitlab.com/sarvalabs/moichain/utils"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p-core/peer"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	"gitlab.com/sarvalabs/moichain/common/kutils"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/poorna/agora/types"
-	"time"
+	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 type sessionInterestManager interface {
-	RecordSessionInterest(addr ktypes.Address, ids ...ktypes.Hash)
-	RemoveSessionInterest(addr ktypes.Address, ids ...ktypes.Hash) []ktypes.Hash
+	RecordSessionInterest(addr types.Address, ids ...types.Hash)
+	RemoveSessionInterest(addr types.Address, ids ...types.Hash) []types.Hash
 }
 
 type sessionManager interface {
-	CloseSession(id ktypes.Address)
+	CloseSession(id types.Address)
 }
 
 type sessionNetwork interface {
-	SendAgoraMessage(id id.KramaID, msgType ktypes.MsgType, msg types.Message) error
-	ClosePeerSession(kramaID id.KramaID, sessionID ktypes.Address) error
+	SendAgoraMessage(id id.KramaID, msgType types.MsgType, msg atypes.Message) error
+	ClosePeerSession(kramaID id.KramaID, sessionID types.Address) error
 }
 
 type Session struct {
-	id        ktypes.Address
+	id        types.Address
 	ctx       context.Context
 	logger    hclog.Logger
-	stateHash ktypes.Hash
+	stateHash types.Hash
 	im        sessionInterestManager
-	wants     *types.WantTracker
+	wants     *atypes.WantTracker
 	pm        *SessionPeerManager
-	notifier  types.PubSub
+	notifier  atypes.PubSub
 	sm        sessionManager
 }
 
 func NewSession(
 	ctx context.Context,
-	addr ktypes.Address,
+	addr types.Address,
 	logger hclog.Logger,
-	stateHash ktypes.Hash,
+	stateHash types.Hash,
 	network sessionNetwork,
-	notifier types.PubSub,
+	notifier atypes.PubSub,
 	im sessionInterestManager,
 	sm sessionManager,
 	contextPeers []id.KramaID,
@@ -56,7 +58,7 @@ func NewSession(
 		logger:    taggedLogger,
 		stateHash: stateHash,
 		im:        im,
-		wants:     types.NewWantTracker(),
+		wants:     atypes.NewWantTracker(),
 		pm:        NewSessionPeerManager(addr, logger, network),
 		notifier:  notifier,
 		sm:        sm,
@@ -67,7 +69,7 @@ func NewSession(
 	return s
 }
 
-func (s *Session) HandleMessage(id id.KramaID, msg *types.AgoraResponseMsg) {
+func (s *Session) HandleMessage(id id.KramaID, msg *atypes.AgoraResponseMsg) {
 	if !msg.Status {
 		s.pm.UpdatePeerStatus(id, false)
 		s.pm.AddPeers(msg.PeerSet...)
@@ -82,8 +84,8 @@ func (s *Session) ChooseBestPeer(ctx context.Context, avoid map[id.KramaID]inter
 	return s.pm.chooseBestPeer(ctx, avoid)
 }
 
-func (s *Session) sendWantReq(peerID id.KramaID, cid *kutils.HashSet) error {
-	req := &types.AgoraRequestMsg{
+func (s *Session) sendWantReq(peerID id.KramaID, cid *utils.HashSet) error {
+	req := &atypes.AgoraRequestMsg{
 		SessionID: s.id,
 		StateHash: s.stateHash,
 		WantList:  cid.Keys(),
@@ -91,21 +93,23 @@ func (s *Session) sendWantReq(peerID id.KramaID, cid *kutils.HashSet) error {
 
 	return s.pm.SendWantReq(peerID, req)
 }
-func (s *Session) GetBlock(ctx context.Context, cid ktypes.Hash) (*types.Block, error) {
-	out := s.GetBlocks(ctx, []ktypes.Hash{cid})
+
+func (s *Session) GetBlock(ctx context.Context, cid types.Hash) (*atypes.Block, error) {
+	out := s.GetBlocks(ctx, []types.Hash{cid})
 
 	data, ok := <-out
 	if !ok {
-		return nil, ktypes.ErrTimeOut
+		return nil, types.ErrTimeOut
 	}
 
 	return data, nil
 }
+
 func (s *Session) getBlocks(
 	ctx context.Context,
 	peerID id.KramaID,
-	out chan *types.Block,
-	idSet *kutils.HashSet,
+	out chan *atypes.Block,
+	idSet *utils.HashSet,
 ) error {
 	s.logger.Debug("Fetching data from ", "peer", peerID, "count", idSet.Len())
 
@@ -141,7 +145,7 @@ func (s *Session) getBlocks(
 			if !ok {
 				return nil
 			}
-			//s.wants.RemoveCid(block.GetID())
+			// s.wants.RemoveCid(block.GetID())
 			idSet.Remove(block.GetID())
 			s.im.RemoveSessionInterest(s.id, block.GetID())
 
@@ -168,10 +172,10 @@ func (s *Session) getBlocks(
 	}
 }
 
-func (s *Session) GetBlocks(ctx context.Context, cids []ktypes.Hash) chan *types.Block {
-	out := make(chan *types.Block)
+func (s *Session) GetBlocks(ctx context.Context, cids []types.Hash) chan *atypes.Block {
+	out := make(chan *atypes.Block)
 
-	idSet := kutils.NewHashSet()
+	idSet := utils.NewHashSet()
 
 	for _, cid := range cids {
 		idSet.Add(cid)
@@ -227,6 +231,7 @@ func (s *Session) GetBlocks(ctx context.Context, cids []ktypes.Hash) chan *types
 func (s *Session) PeerDisconnected(id peer.ID) {
 	s.pm.PeerDisconnected(id)
 }
+
 func (s *Session) Close() {
 	s.pm.Close()
 	s.sm.CloseSession(s.id)

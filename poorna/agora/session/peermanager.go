@@ -3,18 +3,20 @@ package session
 import (
 	"context"
 	"errors"
-	"github.com/hashicorp/go-hclog"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	"gitlab.com/sarvalabs/moichain/common/kutils"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/poorna/agora/types"
 	"math/rand"
 	"sync"
+
+	"gitlab.com/sarvalabs/moichain/utils"
+
+	"github.com/hashicorp/go-hclog"
+	"github.com/libp2p/go-libp2p-core/peer"
+	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 type SessionPeerManager struct {
-	sessionID      ktypes.Address
+	sessionID      types.Address
 	logger         hclog.Logger
 	mtx            sync.Mutex
 	peers          map[id.KramaID]*PeerInfo
@@ -28,7 +30,7 @@ type PeerInfo struct {
 	resp           chan bool
 }
 
-func NewSessionPeerManager(addr ktypes.Address, logger hclog.Logger, network sessionNetwork) *SessionPeerManager {
+func NewSessionPeerManager(addr types.Address, logger hclog.Logger, network sessionNetwork) *SessionPeerManager {
 	return &SessionPeerManager{
 		sessionID:      addr,
 		logger:         logger,
@@ -62,7 +64,7 @@ func (spm *SessionPeerManager) PeerDisconnected(id peer.ID) {
 	defer spm.mtx.Unlock()
 
 	for kramaID := range spm.connectedPeers {
-		peerID, err := kutils.GetNetworkID(kramaID)
+		peerID, err := utils.GetNetworkID(kramaID)
 		if err != nil {
 			continue
 		}
@@ -203,11 +205,11 @@ func (spm *SessionPeerManager) chooseBestPeer(
 		}
 	}
 
-	return "", ktypes.ErrPeerNotAvailable
+	return "", types.ErrPeerNotAvailable
 }
 
-func (spm *SessionPeerManager) SendWantReq(peer id.KramaID, msg *types.AgoraRequestMsg) error {
-	if err := spm.network.SendAgoraMessage(peer, ktypes.AGORAREQ, msg); err != nil {
+func (spm *SessionPeerManager) SendWantReq(peer id.KramaID, msg *atypes.AgoraRequestMsg) error {
+	if err := spm.network.SendAgoraMessage(peer, types.AGORAREQ, msg); err != nil {
 		return err
 	}
 

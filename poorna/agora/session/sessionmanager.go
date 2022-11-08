@@ -3,15 +3,16 @@ package session
 import (
 	"context"
 	"errors"
+	"sync"
+	"time"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p-core/peer"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/moichain/poorna/agora/decision"
 	"gitlab.com/sarvalabs/moichain/poorna/agora/network"
-	"gitlab.com/sarvalabs/moichain/poorna/agora/types"
-	"sync"
-	"time"
+	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 const MaxRounds = 3
@@ -21,20 +22,20 @@ type engine interface {
 }
 
 type interestManager interface {
-	InterestedSessions(blocks []types.Block) (map[ktypes.Address][]types.Block, []types.Block)
-	RecordSessionInterest(addr ktypes.Address, ids ...ktypes.Hash)
-	RemoveSessionInterest(addr ktypes.Address, ids ...ktypes.Hash) []ktypes.Hash
+	InterestedSessions(blocks []atypes.Block) (map[types.Address][]atypes.Block, []atypes.Block)
+	RecordSessionInterest(addr types.Address, ids ...types.Hash)
+	RemoveSessionInterest(addr types.Address, ids ...types.Hash) []types.Hash
 }
 
 type SessionManager struct {
 	logger         hclog.Logger
 	activeSessions sync.Map
 	im             interestManager
-	notifier       types.PubSub
+	notifier       atypes.PubSub
 	engine         engine
 }
 
-func NewSessionManager(logger hclog.Logger, im interestManager, notifier types.PubSub, engine engine) *SessionManager {
+func NewSessionManager(logger hclog.Logger, im interestManager, notifier atypes.PubSub, engine engine) *SessionManager {
 	return &SessionManager{
 		logger:   logger,
 		im:       im,
@@ -43,7 +44,7 @@ func NewSessionManager(logger hclog.Logger, im interestManager, notifier types.P
 	}
 }
 
-func (s *SessionManager) GetSession(addrs ktypes.Address) (*Session, error) {
+func (s *SessionManager) GetSession(addrs types.Address) (*Session, error) {
 	session, ok := s.activeSessions.Load(addrs)
 	if !ok {
 		return nil, errors.New("session not found")
@@ -51,7 +52,7 @@ func (s *SessionManager) GetSession(addrs ktypes.Address) (*Session, error) {
 
 	agoraSession, ok := session.(*Session)
 	if !ok {
-		return nil, ktypes.ErrInterfaceConversion
+		return nil, types.ErrInterfaceConversion
 	}
 
 	return agoraSession, nil
@@ -59,8 +60,8 @@ func (s *SessionManager) GetSession(addrs ktypes.Address) (*Session, error) {
 
 func (s *SessionManager) NewSession(
 	ctx context.Context,
-	addrs ktypes.Address,
-	stateHash ktypes.Hash,
+	addrs types.Address,
+	stateHash types.Hash,
 	network *network.AgoraNetwork,
 	contextPeers []id.KramaID,
 ) (*Session, error) {
@@ -77,16 +78,16 @@ func (s *SessionManager) NewSession(
 
 func (s *SessionManager) HandlePeerMessage(id id.KramaID, msg interface{}) {
 	switch msg := msg.(type) {
-	case *types.AgoraRequestMsg:
+	case *atypes.AgoraRequestMsg:
 		s.handleAgoraRequestMsg(id, msg)
-	case *types.AgoraResponseMsg:
+	case *atypes.AgoraResponseMsg:
 		s.handleAgoraResponseMsg(id, msg)
 	default:
 		s.logger.Error("invalid message type")
 	}
 }
 
-func (s *SessionManager) handleAgoraRequestMsg(id id.KramaID, msg *types.AgoraRequestMsg) {
+func (s *SessionManager) handleAgoraRequestMsg(id id.KramaID, msg *atypes.AgoraRequestMsg) {
 	s.engine.HandleRequest(&decision.Request{
 		PeerID:    id,
 		ReqTime:   time.Now(),
@@ -96,7 +97,7 @@ func (s *SessionManager) handleAgoraRequestMsg(id id.KramaID, msg *types.AgoraRe
 	})
 }
 
-func (s *SessionManager) handleAgoraResponseMsg(id id.KramaID, msg *types.AgoraResponseMsg) {
+func (s *SessionManager) handleAgoraResponseMsg(id id.KramaID, msg *atypes.AgoraResponseMsg) {
 	if !msg.Status {
 		session, err := s.GetSession(msg.SessionID)
 		if err != nil {
@@ -108,7 +109,7 @@ func (s *SessionManager) handleAgoraResponseMsg(id id.KramaID, msg *types.AgoraR
 		return
 	}
 
-	sessions, _ := s.im.InterestedSessions(msg.GetBlocks()) //TODO: Add orphans to cache
+	sessions, _ := s.im.InterestedSessions(msg.GetBlocks()) // TODO: Add orphans to cache
 
 	for addr, blocks := range sessions {
 		session, err := s.GetSession(addr)
@@ -124,7 +125,7 @@ func (s *SessionManager) handleAgoraResponseMsg(id id.KramaID, msg *types.AgoraR
 	}
 }
 
-func (s *SessionManager) PeerDisconnected(Sessions []ktypes.Address, peerID peer.ID) {
+func (s *SessionManager) PeerDisconnected(Sessions []types.Address, peerID peer.ID) {
 	for _, sessionID := range Sessions {
 		if session, ok := s.activeSessions.Load(sessionID); ok {
 			session, ok := session.(*Session)
@@ -135,6 +136,6 @@ func (s *SessionManager) PeerDisconnected(Sessions []ktypes.Address, peerID peer
 	}
 }
 
-func (s *SessionManager) CloseSession(sessionID ktypes.Address) {
+func (s *SessionManager) CloseSession(sessionID types.Address) {
 	s.activeSessions.Delete(sessionID)
 }

@@ -2,8 +2,9 @@ package common
 
 import (
 	"crypto/subtle"
-	"golang.org/x/crypto/sha3"
 	"hash"
+
+	"golang.org/x/crypto/sha3"
 )
 
 // GetKeccak256Hash calculates and returns the Keccak256 hash of the input data.

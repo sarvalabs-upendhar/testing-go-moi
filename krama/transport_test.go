@@ -3,20 +3,21 @@ package krama
 import (
 	"context"
 	"fmt"
-	"github.com/hashicorp/go-hclog"
-	"github.com/stretchr/testify/require"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	"gitlab.com/sarvalabs/moichain/common/tests"
-	"gitlab.com/sarvalabs/moichain/krama/types"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"testing"
 	"time"
+
+	"github.com/hashicorp/go-hclog"
+	"github.com/stretchr/testify/require"
+	"gitlab.com/sarvalabs/moichain/common/tests"
+	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
+	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 // testcase args
 type InitClusterCommArgs struct {
-	nodeSet  []*ktypes.NodeSet
-	slotType types.SlotType
+	nodeSet  []*types.NodeSet
+	slotType ktypes.SlotType
 }
 
 func CreateTransport() (*Transport, *MockServer) {
@@ -30,21 +31,21 @@ func CreateTransport() (*Transport, *MockServer) {
 	return transport, network
 }
 
-func CreateInteractions(t *testing.T, sender ktypes.Address) *ktypes.Interactions {
+func CreateInteractions(t *testing.T, sender types.Address) *types.Interactions {
 	t.Helper()
 
 	// Construct the interactions data
-	ixns := make(ktypes.Interactions, 1)
+	ixns := make(types.Interactions, 1)
 
-	ixns[0] = &ktypes.Interaction{
-		Data: ktypes.IxData{
-			Input: ktypes.InteractionInput{
+	ixns[0] = &types.Interaction{
+		Data: types.IxData{
+			Input: types.InteractionInput{
 				Type:     1,
 				Nonce:    0,
 				From:     sender,
 				AnuPrice: 1000,
-				Payload: ktypes.InteractionInputPayload{
-					AssetData: ktypes.AssetDataInput{
+				Payload: types.InteractionInputPayload{
+					AssetData: types.AssetDataInput{
 						Symbol:      "GR",
 						TotalSupply: 100,
 						IsFungible:  true,
@@ -59,7 +60,7 @@ func CreateInteractions(t *testing.T, sender ktypes.Address) *ktypes.Interaction
 	return &ixns
 }
 
-func CreateSlot(t *testing.T, nodeset []*ktypes.NodeSet, slotType types.SlotType) *types.Slot {
+func CreateSlot(t *testing.T, nodeset []*types.NodeSet, slotType ktypes.SlotType) *ktypes.Slot {
 	t.Helper()
 
 	kramaIDs := tests.GetTestKramaIDs(t, 1)
@@ -68,16 +69,16 @@ func CreateSlot(t *testing.T, nodeset []*ktypes.NodeSet, slotType types.SlotType
 	address, err := operator.MoiID()
 	require.NoError(t, err)
 
-	ixs := CreateInteractions(t, ktypes.HexToAddress(address))
+	ixs := CreateInteractions(t, types.HexToAddress(address))
 
 	clusterID, err := generateClusterID(operator, ixs.Hash())
 	require.NoError(t, err)
 
-	clusterInfo := types.NewICS(6, *ixs, clusterID, operator, time.Now())
+	clusterInfo := ktypes.NewICS(6, *ixs, clusterID, operator, time.Now())
 
 	clusterInfo.ICS.Nodes = nodeset
 
-	slot := types.NewSlot(slotType, clusterInfo)
+	slot := ktypes.NewSlot(slotType, clusterInfo)
 
 	return slot
 }
@@ -96,7 +97,7 @@ func Test_InitClusterCommunication_Connect(t *testing.T) {
 				MinimumConnectionCount,
 			),
 			args: InitClusterCommArgs{
-				nodeSet: []*ktypes.NodeSet{
+				nodeSet: []*types.NodeSet{
 					{
 						Ids: tests.GetTestKramaIDs(t, 3),
 					},
@@ -104,7 +105,7 @@ func Test_InitClusterCommunication_Connect(t *testing.T) {
 						Ids: tests.GetTestKramaIDs(t, 3),
 					},
 				},
-				slotType: types.ValidatorSlot,
+				slotType: ktypes.ValidatorSlot,
 			},
 			expected:    3,
 			expectedErr: nil,
@@ -116,12 +117,12 @@ func Test_InitClusterCommunication_Connect(t *testing.T) {
 				MinimumConnectionCount-2,
 			),
 			args: InitClusterCommArgs{
-				nodeSet: []*ktypes.NodeSet{
+				nodeSet: []*types.NodeSet{
 					{
 						Ids: tests.GetTestKramaIDs(t, 3),
 					},
 				},
-				slotType: types.ValidatorSlot,
+				slotType: ktypes.ValidatorSlot,
 			},
 			beforeTest: func(network *MockServer, peers []id.KramaID) {
 				for _, peer := range peers {
@@ -135,12 +136,12 @@ func Test_InitClusterCommunication_Connect(t *testing.T) {
 		{
 			name: "Operator shouldn't connect with any ics node",
 			args: InitClusterCommArgs{
-				nodeSet: []*ktypes.NodeSet{
+				nodeSet: []*types.NodeSet{
 					{
 						Ids: tests.GetTestKramaIDs(t, 5),
 					},
 				},
-				slotType: types.OperatorSlot,
+				slotType: ktypes.OperatorSlot,
 			},
 			expected:    0,
 			expectedErr: nil,
@@ -180,7 +181,7 @@ func Test_InitClusterCommunication_Disconnect(t *testing.T) {
 		{
 			name: "Validator should disconnect from all the ics nodes",
 			args: InitClusterCommArgs{
-				nodeSet: []*ktypes.NodeSet{
+				nodeSet: []*types.NodeSet{
 					{
 						Ids: tests.GetTestKramaIDs(t, 3),
 					},
@@ -188,7 +189,7 @@ func Test_InitClusterCommunication_Disconnect(t *testing.T) {
 						Ids: tests.GetTestKramaIDs(t, 3),
 					},
 				},
-				slotType: types.ValidatorSlot,
+				slotType: ktypes.ValidatorSlot,
 			},
 			expected:     0,
 			expectedConn: 3,

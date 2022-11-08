@@ -1,56 +1,58 @@
 package types
 
 import (
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	"gitlab.com/sarvalabs/moichain/common/kutils"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/polo/go-polo"
-	"golang.org/x/crypto/blake2b"
 	"sync"
 	"time"
+
+	"gitlab.com/sarvalabs/moichain/utils"
+
+	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	"gitlab.com/sarvalabs/moichain/types"
+	"gitlab.com/sarvalabs/polo/go-polo"
+	"golang.org/x/crypto/blake2b"
 )
 
 type ClusterInfo struct {
 	mtx                      sync.Mutex
-	ICS                      *ktypes.ICSNodes
-	Ixs                      ktypes.Interactions
-	ID                       ktypes.ClusterID
+	ICS                      *types.ICSNodes
+	Ixs                      types.Interactions
+	ID                       types.ClusterID
 	Operator                 id.KramaID
 	AccountInfos             AccountInfos
-	contextDelta             ktypes.ContextDelta
-	Receipts                 ktypes.Receipts
-	BinaryHash, IdentityHash ktypes.Hash
-	ICSHash                  ktypes.Hash
-	dirty                    map[ktypes.Hash][]byte
-	Grid                     []*ktypes.Tesseract
+	contextDelta             types.ContextDelta
+	Receipts                 types.Receipts
+	BinaryHash, IdentityHash types.Hash
+	ICSHash                  types.Hash
+	dirty                    map[types.Hash][]byte
+	Grid                     []*types.Tesseract
 	ICSReqTime               time.Time
 	operatorIncluded         bool
-	CurrentRole              ktypes.IcsSetType
-	SuccessMsg               *ktypes.ICSMSG
-	ContextLock              map[ktypes.Address]ktypes.ContextLockInfo
+	CurrentRole              types.IcsSetType
+	SuccessMsg               *types.ICSMSG
+	ContextLock              map[types.Address]types.ContextLockInfo
 }
 
-//TODO: Check on locks
+// TODO: Check on locks
 
 func NewICS(
 	size int,
-	ixs ktypes.Interactions,
-	clusterID ktypes.ClusterID,
+	ixs types.Interactions,
+	clusterID types.ClusterID,
 	operator id.KramaID,
 	reqTime time.Time,
 ) *ClusterInfo {
 	return &ClusterInfo{
-		ICS:              ktypes.NewICSNodes(size),
+		ICS:              types.NewICSNodes(size),
 		Ixs:              ixs,
 		ID:               clusterID,
 		Operator:         operator,
 		operatorIncluded: false,
 		AccountInfos:     make(AccountInfos, 0),
-		contextDelta:     make(ktypes.ContextDelta),
-		Receipts:         make(ktypes.Receipts, 1), //This should be changed base on the transactions
-		dirty:            make(map[ktypes.Hash][]byte),
+		contextDelta:     make(types.ContextDelta),
+		Receipts:         make(types.Receipts, 1), // This should be changed base on the transactions
+		dirty:            make(map[types.Hash][]byte),
 		ICSReqTime:       reqTime,
-		ContextLock:      make(map[ktypes.Address]ktypes.ContextLockInfo),
+		ContextLock:      make(map[types.Address]types.ContextLockInfo),
 	}
 }
 
@@ -61,13 +63,14 @@ func (i *ClusterInfo) Size() int {
 	return i.ICS.Size
 }
 
-func (i *ClusterInfo) UpdateNodeSet(setType ktypes.IcsSetType, data *ktypes.NodeSet) {
+func (i *ClusterInfo) UpdateNodeSet(setType types.IcsSetType, data *types.NodeSet) {
 	i.mtx.Lock()
 	defer i.mtx.Unlock()
 
 	i.ICS.UpdateNodeSet(setType, data)
 }
-func (i *ClusterInfo) GetContextDelta() ktypes.ContextDelta {
+
+func (i *ClusterInfo) GetContextDelta() types.ContextDelta {
 	i.mtx.Lock()
 	defer i.mtx.Unlock()
 
@@ -89,10 +92,10 @@ func (i *ClusterInfo) IsOperatorIncluded() bool {
 }
 
 // GetMetaData returns the ClusterInfo metadata including the given ClusterInfo messages
-func (i *ClusterInfo) GetMetaData(msgs []*ktypes.ICSMSG) *ktypes.ICSMetaInfo {
-	m := &ktypes.ICSMetaInfo{
+func (i *ClusterInfo) GetMetaData(msgs []*types.ICSMSG) *types.ICSMetaInfo {
+	m := &types.ICSMetaInfo{
 		ClusterID:    string(i.ID),
-		IxHash:       i.Ixs[0].Hash, //Need to be improved
+		IxHash:       i.Ixs[0].Hash, // Need to be improved
 		Operator:     string(i.Operator),
 		ClusterSize:  i.ICS.Size,
 		BinaryHash:   i.BinaryHash,
@@ -114,6 +117,7 @@ func (i *ClusterInfo) IncrementClusterSize(delta int) {
 	defer i.mtx.Unlock()
 	i.ICS.Size += delta
 }
+
 func (i *ClusterInfo) RespondedEligibleSet() (count int, nodes []id.KramaID) {
 	for j := 0; j < 4; j++ {
 		if i.ICS.Nodes[j] != nil {
@@ -125,14 +129,14 @@ func (i *ClusterInfo) RespondedEligibleSet() (count int, nodes []id.KramaID) {
 	return
 }
 
-func (i *ClusterInfo) GetBehaviouralContextDelta(setType ktypes.IcsSetType) (addedPeer, replacedPeer id.KramaID) {
+func (i *ClusterInfo) GetBehaviouralContextDelta(setType types.IcsSetType) (addedPeer, replacedPeer id.KramaID) {
 	for _, peerID := range i.ICS.Nodes[setType].Ids {
-		if i.Operator == peerID { //i.ICS.Nodes[setType].Responses.GetIndex(index)
+		if i.Operator == peerID { // i.ICS.Nodes[setType].Responses.GetIndex(index)
 			return
 		}
 	}
 
-	if len(i.ICS.Nodes[setType].Ids) >= ktypes.MaxBehaviourContextSize {
+	if len(i.ICS.Nodes[setType].Ids) >= types.MaxBehaviourContextSize {
 		replacedPeer = i.ICS.Nodes[setType].Ids[0]
 	}
 
@@ -140,9 +144,10 @@ func (i *ClusterInfo) GetBehaviouralContextDelta(setType ktypes.IcsSetType) (add
 }
 
 func (i *ClusterInfo) GetRandomContextDelta(
-	setType ktypes.IcsSetType,
+	setType types.IcsSetType,
 	requiredCount int,
-	skipPeers ...id.KramaID) (addedPeers, replacedPeers []id.KramaID) {
+	skipPeers ...id.KramaID,
+) (addedPeers, replacedPeers []id.KramaID) {
 	addedPeers = make([]id.KramaID, 0, requiredCount)
 
 	if i.ICS.Nodes[setType] == nil {
@@ -150,14 +155,14 @@ func (i *ClusterInfo) GetRandomContextDelta(
 	}
 
 	if i.ICS.Nodes[setType] != nil {
-		if x := len(i.ICS.Nodes[setType].Ids) + requiredCount - ktypes.MaxRandomContextSize; x > 0 {
+		if x := len(i.ICS.Nodes[setType].Ids) + requiredCount - types.MaxRandomContextSize; x > 0 {
 			replacedPeers = i.ICS.Nodes[setType].Ids[0:x]
 		}
 	}
 
-	set := i.ICS.Nodes[ktypes.RandomSet]
+	set := i.ICS.Nodes[types.RandomSet]
 	for index, v := range set.Ids {
-		if set.Responses.GetIndex(index) && !kutils.ContainsKramaID(skipPeers, v) {
+		if set.Responses.GetIndex(index) && !utils.ContainsKramaID(skipPeers, v) {
 			addedPeers = append(addedPeers, v)
 		}
 
@@ -169,7 +174,7 @@ func (i *ClusterInfo) GetRandomContextDelta(
 	return
 }
 
-func (i *ClusterInfo) UpdateContextDelta(delta ktypes.ContextDelta) {
+func (i *ClusterInfo) UpdateContextDelta(delta types.ContextDelta) {
 	i.mtx.Lock()
 	defer i.mtx.Unlock()
 	i.contextDelta = delta
@@ -186,8 +191,8 @@ func (i *ClusterInfo) IsRandomQuorum(requiredRandomNodes, requiredObserverNodes 
 	i.mtx.Lock()
 	defer i.mtx.Unlock()
 
-	return i.ICS.Nodes[ktypes.RandomSet].Count >= requiredRandomNodes &&
-		i.ICS.Nodes[ktypes.ObserverSet].Count >= requiredObserverNodes
+	return i.ICS.Nodes[types.RandomSet].Count >= requiredRandomNodes &&
+		i.ICS.Nodes[types.ObserverSet].Count >= requiredObserverNodes
 }
 
 func (i *ClusterInfo) HasKramaID(kramaID id.KramaID) (int32, bool) {
@@ -221,14 +226,16 @@ func (i *ClusterInfo) GetObservers() []string {
 	i.mtx.Lock()
 	defer i.mtx.Unlock()
 
-	return ktypes.KIPPeerIDToString(i.ICS.Nodes[ktypes.ObserverSet].Ids)
+	return types.KIPPeerIDToString(i.ICS.Nodes[types.ObserverSet].Ids)
 }
+
 func (i *ClusterInfo) GetRandomNodes() []string {
 	i.mtx.Lock()
 	defer i.mtx.Unlock()
 
-	return ktypes.KIPPeerIDToString(i.ICS.Nodes[ktypes.RandomSet].Ids)
+	return types.KIPPeerIDToString(i.ICS.Nodes[types.RandomSet].Ids)
 }
+
 func (i *ClusterInfo) GetTotalVotingPower() []int32 {
 	i.mtx.Lock()
 	defer i.mtx.Unlock()
@@ -253,18 +260,19 @@ func (i *ClusterInfo) GetQuorum() []int32 {
 	return quorum
 }
 
-func (i *ClusterInfo) GetContextHash(ixHash ktypes.Hash, addr ktypes.Address) ktypes.Hash {
+func (i *ClusterInfo) GetContextHash(ixHash types.Hash, addr types.Address) types.Hash {
 	receipt, err := i.Receipts.GetReceipt(ixHash)
 	if err != nil {
-		return ktypes.NilHash
+		return types.NilHash
 	}
 
 	return receipt.ContextHashes[addr]
 }
-func (i *ClusterInfo) GetStateHash(ixHash ktypes.Hash, addr ktypes.Address) ktypes.Hash {
+
+func (i *ClusterInfo) GetStateHash(ixHash types.Hash, addr types.Address) types.Hash {
 	receipt, err := i.Receipts.GetReceipt(ixHash)
 	if err != nil {
-		return ktypes.NilHash
+		return types.NilHash
 	}
 
 	return receipt.StateHashes[addr]
@@ -278,33 +286,34 @@ func (i *ClusterInfo) GetGasUsed() (gasUsed uint64) {
 	return
 }
 
-func (i *ClusterInfo) SetReceipts(r ktypes.Receipts) {
+func (i *ClusterInfo) SetReceipts(r types.Receipts) {
 	i.Receipts = r
 }
 
-func (i *ClusterInfo) SetGrid(grid []*ktypes.Tesseract) {
+func (i *ClusterInfo) SetGrid(grid []*types.Tesseract) {
 	i.mtx.Lock()
 	defer i.mtx.Unlock()
 	i.Grid = grid
 }
-func (i *ClusterInfo) GetTesseractGrid() []*ktypes.Tesseract {
+
+func (i *ClusterInfo) GetTesseractGrid() []*types.Tesseract {
 	i.mtx.Lock()
 	defer i.mtx.Unlock()
 
 	return i.Grid
 }
 
-func (i *ClusterInfo) AddDirty(key ktypes.Hash, data []byte) {
+func (i *ClusterInfo) AddDirty(key types.Hash, data []byte) {
 	i.mtx.Lock()
 	defer i.mtx.Unlock()
 	i.dirty[key] = data
 }
 
-func (i *ClusterInfo) ComputeICSHash() (hash ktypes.Hash) {
-	msg := &ktypes.ICSClusterInfo{
+func (i *ClusterInfo) ComputeICSHash() (hash types.Hash) {
+	msg := &types.ICSClusterInfo{
 		RandomSet:   i.GetRandomNodes(),
 		ObserverSet: i.GetObservers(),
-		Responses:   make([]*ktypes.ArrayOfBits, 6),
+		Responses:   make([]*types.ArrayOfBits, 6),
 	}
 
 	for j := 0; j < len(i.ICS.Nodes); j++ {
@@ -322,15 +331,16 @@ func (i *ClusterInfo) ComputeICSHash() (hash ktypes.Hash) {
 
 	return
 }
-func (i *ClusterInfo) CreateICSSuccessMsg() *ktypes.ICSSuccessMsg {
+
+func (i *ClusterInfo) CreateICSSuccessMsg() *types.ICSSuccessMsg {
 	i.mtx.Lock()
 	defer i.mtx.Unlock()
 
-	msg := &ktypes.ICSSuccessMsg{
+	msg := &types.ICSSuccessMsg{
 		ClusterID:   string(i.ID),
-		RandomSet:   i.ICS.Nodes[ktypes.RandomSet].Ids,
-		ObserverSet: i.ICS.Nodes[ktypes.ObserverSet].Ids,
-		Responses:   make([]*ktypes.ArrayOfBits, 6),
+		RandomSet:   i.ICS.Nodes[types.RandomSet].Ids,
+		ObserverSet: i.ICS.Nodes[types.ObserverSet].Ids,
+		Responses:   make([]*types.ArrayOfBits, 6),
 		Signature:   make([]byte, 0),
 		QuorumSizes: make([]int, 6),
 	}
@@ -342,20 +352,20 @@ func (i *ClusterInfo) CreateICSSuccessMsg() *ktypes.ICSSuccessMsg {
 		}
 	}
 
-	//i.Nodes[SenderBehaviourSet].Responses
-	//msg.Responses[SenderBehaviourSet] = i.Nodes[SenderBehaviourSet].Responses.ToProto()
-	//msg.Responses[SenderRandomSet] = i.Nodes[SenderRandomSet].Responses.ToProto()
-	//msg.Responses[ReceiverBehaviourSet] = i.Nodes[ReceiverBehaviourSet].Responses.ToProto()
-	//msg.Responses[ReceiverRandomSet] = i.Nodes[ReceiverRandomSet].Responses.ToProto()
-	//msg.Responses[RandomSet] = i.Nodes[RandomSet].Responses.ToProto()
-	//msg.Responses[ObserverSet] = i.Nodes[ObserverSet].Responses.ToProto()
+	// i.Nodes[SenderBehaviourSet].Responses
+	// msg.Responses[SenderBehaviourSet] = i.Nodes[SenderBehaviourSet].Responses.ToProto()
+	// msg.Responses[SenderRandomSet] = i.Nodes[SenderRandomSet].Responses.ToProto()
+	// msg.Responses[ReceiverBehaviourSet] = i.Nodes[ReceiverBehaviourSet].Responses.ToProto()
+	// msg.Responses[ReceiverRandomSet] = i.Nodes[ReceiverRandomSet].Responses.ToProto()
+	// msg.Responses[RandomSet] = i.Nodes[RandomSet].Responses.ToProto()
+	// msg.Responses[ObserverSet] = i.Nodes[ObserverSet].Responses.ToProto()
 
 	return msg
 }
 
 func (i *ClusterInfo) GetRandomDelta(requiredCount int) []id.KramaID {
 	nodes := make([]id.KramaID, 0, requiredCount)
-	set := i.ICS.Nodes[ktypes.RandomSet]
+	set := i.ICS.Nodes[types.RandomSet]
 
 	for index, v := range set.Ids {
 		if set.Responses.GetIndex(index) {
@@ -383,30 +393,31 @@ func (i *ClusterInfo) UpdateClusterSize() {
 	}
 }
 
-func (i *ClusterInfo) GetDirty() map[ktypes.Hash][]byte {
+func (i *ClusterInfo) GetDirty() map[types.Hash][]byte {
 	i.mtx.Lock()
 	defer i.mtx.Unlock()
 
 	return i.dirty
 }
 
-type AccountInfos map[ktypes.Address]*ktypes.AccountMetaInfo
+type AccountInfos map[types.Address]*types.AccountMetaInfo
 
-func (a AccountInfos) GetLatestHash(addr ktypes.Address) ktypes.Hash {
+func (a AccountInfos) GetLatestHash(addr types.Address) types.Hash {
 	if v, ok := a[addr]; ok {
 		return v.TesseractHash
 	}
 
-	return ktypes.NilHash
+	return types.NilHash
 }
 
-func (a AccountInfos) GetHeight(addr ktypes.Address) int64 {
+func (a AccountInfos) GetHeight(addr types.Address) int64 {
 	if v, ok := a[addr]; ok {
 		return v.Height.Int64()
 	}
 
 	return 0
 }
-func (a AccountInfos) IsGenesis(addr ktypes.Address) bool {
+
+func (a AccountInfos) IsGenesis(addr types.Address) bool {
 	return a[addr].Height.Int64() == -1
 }

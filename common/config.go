@@ -47,7 +47,7 @@ type IxPoolConfig struct {
 	PriceLimit uint64
 }
 
-//NetworkConfig is the p2p configuration of the node
+// NetworkConfig is the p2p configuration of the node
 type NetworkConfig struct {
 	BootstrapPeers []maddr.Multiaddr
 
@@ -62,7 +62,7 @@ type NetworkConfig struct {
 	JSONRPCAddr *net.TCPAddr
 
 	MTQ float64
-	//this will be removed
+	// this will be removed
 	NetworkSize uint64
 }
 
@@ -94,7 +94,7 @@ func DefaultConfig(path string) *Config {
 		Network: &NetworkConfig{
 			ListenAddresses: make([]maddr.Multiaddr, 0),
 			BootstrapPeers:  make([]maddr.Multiaddr, 0),
-			MaxPeers:        0, //current we don't limit the no.of peers
+			MaxPeers:        0, // current we don't limit the no.of peers
 			ProtocolID:      protocol.ID("MOI"),
 		},
 		Chain: &ChainConfig{
@@ -138,7 +138,6 @@ func DefaultConfig(path string) *Config {
 // ResolveAddr resolves the passed in TCP address
 func ResolveAddr(raw string) (*net.TCPAddr, error) {
 	addr, err := net.ResolveTCPAddr("tcp", raw)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse addr '%s': %w", raw, err)
 	}
