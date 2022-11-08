@@ -2,10 +2,11 @@ package poorna
 
 import (
 	"errors"
-	"github.com/libp2p/go-libp2p-core/peer"
 	"sync"
 
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
+	"github.com/libp2p/go-libp2p-core/peer"
+
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 var (
@@ -119,7 +120,7 @@ func (ps *peerSet) Unregister(p *KipPeer) error {
 
 // PeersWithoutIX is a method of peerSet that returns a slice of KipPeers that do not
 // contain a given Interaction hash in its set know Interactions
-func (ps *peerSet) PeersWithoutIX(hash ktypes.Hash) []*KipPeer {
+func (ps *peerSet) PeersWithoutIX(hash types.Hash) []*KipPeer {
 	// Read Lock the peerSet
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()

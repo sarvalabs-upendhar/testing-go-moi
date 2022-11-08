@@ -1,33 +1,34 @@
 package api
 
 import (
-	"gitlab.com/sarvalabs/moichain/guna"
 	"log"
 	"sync/atomic"
 	"testing"
+
+	"gitlab.com/sarvalabs/moichain/guna"
 
 	"github.com/stretchr/testify/require"
 	"gitlab.com/sarvalabs/moichain/common"
 	"gitlab.com/sarvalabs/moichain/common/tests"
 
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 type MockIxPool struct {
-	interactions map[ktypes.Hash]*ktypes.Interaction
-	nextNonce    map[ktypes.Address]uint64
+	interactions map[types.Hash]*types.Interaction
+	nextNonce    map[types.Address]uint64
 }
 
 func NewIxPool() *MockIxPool {
-	var ixpool = new(MockIxPool)
-	ixpool.interactions = make(map[ktypes.Hash]*ktypes.Interaction)
-	ixpool.nextNonce = make(map[ktypes.Address]uint64)
+	ixpool := new(MockIxPool)
+	ixpool.interactions = make(map[types.Hash]*types.Interaction)
+	ixpool.nextNonce = make(map[types.Address]uint64)
 
 	return ixpool
 }
 
 // Interaction pool mock functions
-func (mc *MockIxPool) AddInteractions(ixs ktypes.Interactions) []error {
+func (mc *MockIxPool) AddInteractions(ixs types.Interactions) []error {
 	errs := make([]error, len(ixs))
 
 	mc.interactions[ixs[0].Hash] = ixs[0]
@@ -36,13 +37,13 @@ func (mc *MockIxPool) AddInteractions(ixs ktypes.Interactions) []error {
 	return errs
 }
 
-func (mc *MockIxPool) GetNonce(addr ktypes.Address) (uint64, error) {
+func (mc *MockIxPool) GetNonce(addr types.Address) (uint64, error) {
 	nextNonce := mc.nextNonce[addr]
 
 	return atomic.LoadUint64(&nextNonce), nil
 }
 
-func (mc *MockIxPool) setNonce(addr ktypes.Address, nonce uint64) {
+func (mc *MockIxPool) setNonce(addr types.Address, nonce uint64) {
 	mc.nextNonce[addr] = nonce
 }
 
@@ -77,7 +78,6 @@ func TestIx_SendInteraction(t *testing.T) {
 	}
 
 	expectedIxns, err := constructInteraction(&expectedIxnArgs, 5)
-
 	if err != nil {
 		log.Panic(err)
 	}
@@ -85,7 +85,7 @@ func TestIx_SendInteraction(t *testing.T) {
 	testcases := []struct {
 		name        string
 		args        SendIXArgs
-		expected    ktypes.Interactions
+		expected    types.Interactions
 		expectedErr error
 	}{
 		{
@@ -102,7 +102,7 @@ func TestIx_SendInteraction(t *testing.T) {
 					Dimension:   1,
 				},
 			},
-			expectedErr: ktypes.ErrInvalidAddress,
+			expectedErr: types.ErrInvalidAddress,
 		},
 		{
 			name: "Genesis account",

@@ -2,23 +2,24 @@ package observer
 
 import (
 	"context"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	"gitlab.com/sarvalabs/moichain/krama/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
 	"time"
+
+	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
+	"gitlab.com/sarvalabs/moichain/types"
+	"gitlab.com/sarvalabs/polo/go-polo"
 )
 
 type WatchDog struct {
 	ctx  context.Context
-	slot *types.Slot
-	msgs []*ktypes.ICSMSG
+	slot *ktypes.Slot
+	msgs []*types.ICSMSG
 }
 
-func NewWatchDog(ctx context.Context, slot *types.Slot) *WatchDog {
+func NewWatchDog(ctx context.Context, slot *ktypes.Slot) *WatchDog {
 	return &WatchDog{
 		ctx:  ctx,
 		slot: slot,
-		msgs: make([]*ktypes.ICSMSG, 0, slot.CLusterInfo().ICS.Size*2),
+		msgs: make([]*types.ICSMSG, 0, slot.CLusterInfo().ICS.Size*2),
 	}
 }
 
@@ -43,9 +44,9 @@ func (wg *WatchDog) StartWatchDog() {
 func (wg *WatchDog) GenerateProofs() []byte {
 	metaData := wg.slot.CLusterInfo().GetMetaData(wg.msgs)
 
-	watchDogProofs := types.WatchDogProofs{
+	watchDogProofs := ktypes.WatchDogProofs{
 		MetaData: metaData,
-		Extra:    nil, //TODO: Capture signature
+		Extra:    nil, // TODO: Capture signature
 	}
 
 	return polo.Polorize(watchDogProofs)

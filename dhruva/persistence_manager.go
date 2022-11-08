@@ -8,9 +8,9 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 	"gitlab.com/sarvalabs/moichain/common"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	db "gitlab.com/sarvalabs/moichain/dhruva/db"
 	"gitlab.com/sarvalabs/moichain/dhruva/db/badger"
+	"gitlab.com/sarvalabs/moichain/types"
 	"gitlab.com/sarvalabs/polo/go-polo"
 )
 
@@ -31,7 +31,7 @@ func NewPersistenceManager(
 ) (*PersistenceManager, error) {
 	badgerDB, err := badger.NewBadgerDB(config.DBFolderPath)
 	if err != nil {
-		return nil, errors.Wrap(ktypes.ErrDBInit, err.Error())
+		return nil, errors.Wrap(types.ErrDBInit, err.Error())
 	}
 
 	ctx, ctxCancel := context.WithCancel(ctx)
@@ -67,7 +67,7 @@ func (p *PersistenceManager) GetBucketSizes() (map[int32]*big.Int, error) {
 
 		if count, err := p.getBucketCountByBucketNumber(bucket); err == nil {
 			buckets[int32(i)] = count
-		} else if !errors.Is(err, ktypes.ErrKeyNotFound) {
+		} else if !errors.Is(err, types.ErrKeyNotFound) {
 			return nil, err
 		}
 	}
@@ -76,15 +76,15 @@ func (p *PersistenceManager) GetBucketSizes() (map[int32]*big.Int, error) {
 }
 
 // GetAccountMetaInfo fetches the account meta info for a given address
-func (p *PersistenceManager) GetAccountMetaInfo(id []byte) (*ktypes.AccountMetaInfo, error) {
+func (p *PersistenceManager) GetAccountMetaInfo(id []byte) (*types.AccountMetaInfo, error) {
 	key, _ := BucketIDFromAddress(id)
 
 	data, err := p.ReadEntry(key)
 	if err != nil {
-		return nil, errors.Wrap(ktypes.ErrAccountNotFound, err.Error())
+		return nil, errors.Wrap(types.ErrAccountNotFound, err.Error())
 	}
 
-	msg := new(ktypes.AccountMetaInfo)
+	msg := new(types.AccountMetaInfo)
 	if err = polo.Depolorize(msg, data); err != nil {
 		return nil, err
 	}
@@ -99,7 +99,7 @@ func (p *PersistenceManager) incrementBucketCount(id []byte, count int64) error 
 		updatedCount := new(big.Int).Add(big.NewInt(count), new(big.Int).SetBytes(data))
 
 		return p.UpdateEntry(id, updatedCount.Bytes())
-	} else if errors.Is(err, ktypes.ErrKeyNotFound) {
+	} else if errors.Is(err, types.ErrKeyNotFound) {
 		return p.CreateEntry(id, big.NewInt(count).Bytes())
 	}
 
@@ -111,31 +111,31 @@ func (p *PersistenceManager) incrementBucketCount(id []byte, count int64) error 
 // StateExists - Does the latest state of account exists
 // LatticeExists - Does complete lattice exists
 func (p *PersistenceManager) UpdateAccMetaInfo(
-	id ktypes.Address,
+	id types.Address,
 	height *big.Int,
-	tesseractHash ktypes.Hash,
-	accType ktypes.AccType,
+	tesseractHash types.Hash,
+	accType types.AccType,
 	latticeExists, stateExists bool,
 ) (int32, bool, error) {
-	if id == ktypes.NilAddress {
-		return 0, false, ktypes.ErrInvalidAddress
+	if id == types.NilAddress {
+		return 0, false, types.ErrInvalidAddress
 	}
 
-	if tesseractHash == ktypes.NilHash {
-		return 0, false, ktypes.ErrEmptyHash
+	if tesseractHash == types.NilHash {
+		return 0, false, types.ErrEmptyHash
 	}
 
 	key, bucket := BucketIDFromAddress(id.Bytes())
 
 	data, err := p.ReadEntry(key)
 	if err == nil {
-		msg := new(ktypes.AccountMetaInfo)
+		msg := new(types.AccountMetaInfo)
 		if err := polo.Depolorize(msg, data); err != nil {
 			return -1, false, err
 		}
 
 		if height.Cmp(msg.Height) == 0 && tesseractHash != msg.TesseractHash {
-			return -1, false, ktypes.ErrHashMismatch
+			return -1, false, types.ErrHashMismatch
 		}
 
 		if height.Cmp(msg.Height) >= 0 {
@@ -150,8 +150,8 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 		}
 
 		return int32(bucket.getID()), false, p.UpdateEntry(key, polo.Polorize(msg))
-	} else if errors.Is(err, ktypes.ErrKeyNotFound) {
-		msg := ktypes.AccountMetaInfo{
+	} else if errors.Is(err, types.ErrKeyNotFound) {
+		msg := types.AccountMetaInfo{
 			StateExists:   stateExists,
 			LatticeExists: latticeExists,
 			TesseractHash: tesseractHash,
@@ -194,9 +194,9 @@ func (p *PersistenceManager) CreateEntry(key []byte, value []byte) error {
 
 // UpdateTesseractStatus is used to update the tesseract state after syncing
 func (p *PersistenceManager) UpdateTesseractStatus(
-	addr ktypes.Address,
+	addr types.Address,
 	height uint64,
-	hash ktypes.Hash,
+	hash types.Hash,
 	status bool,
 ) error {
 	key, _ := BucketIDFromAddress(addr.Bytes())
@@ -206,7 +206,7 @@ func (p *PersistenceManager) UpdateTesseractStatus(
 		return err
 	}
 
-	msg := new(ktypes.AccountMetaInfo)
+	msg := new(types.AccountMetaInfo)
 	if err := polo.Depolorize(msg, data); err != nil {
 		return err
 	}
@@ -220,7 +220,7 @@ func (p *PersistenceManager) UpdateTesseractStatus(
 	if hash == msg.TesseractHash {
 		msg.StateExists = status
 	} else {
-		return ktypes.ErrHashMismatch
+		return types.ErrHashMismatch
 	}
 
 	return p.UpdateEntry(key, polo.Polorize(msg))
@@ -232,8 +232,8 @@ func (p *PersistenceManager) UpdateEntry(key []byte, newValue []byte) error {
 }
 
 // GetAccounts fetches meta info of all the accounts for a given bucket number
-func (p *PersistenceManager) GetAccounts(bucketNumber int32) (ktypes.Accounts, error) {
-	var acc ktypes.Accounts
+func (p *PersistenceManager) GetAccounts(bucketNumber int32) (types.Accounts, error) {
+	var acc types.Accounts
 
 	it, err := p.db.NewIterator()
 	if err != nil {
@@ -249,7 +249,7 @@ func (p *PersistenceManager) GetAccounts(bucketNumber int32) (ktypes.Accounts, e
 			return nil, err
 		}
 
-		msg := new(ktypes.AccountMetaInfo)
+		msg := new(types.AccountMetaInfo)
 
 		if err := polo.Depolorize(msg, dbEntry.Value); err != nil {
 			return nil, err
@@ -285,8 +285,8 @@ func (p *PersistenceManager) Cleanup() error {
 }
 
 // GetEntries fetches array of k,v pair given a prefix key
-func (p *PersistenceManager) GetEntries(prefix []byte) chan ktypes.DBEntry {
-	ch := make(chan ktypes.DBEntry)
+func (p *PersistenceManager) GetEntries(prefix []byte) chan types.DBEntry {
+	ch := make(chan types.DBEntry)
 
 	go func() {
 		it, err := p.db.NewIterator()
@@ -312,32 +312,32 @@ func (p *PersistenceManager) GetEntries(prefix []byte) chan ktypes.DBEntry {
 	return ch
 }
 
-func (p *PersistenceManager) GetAccount(addr ktypes.Address, hash ktypes.Hash) ([]byte, error) {
-	key := ktypes.DBKey(addr, ktypes.AccountGID, hash)
+func (p *PersistenceManager) GetAccount(addr types.Address, hash types.Hash) ([]byte, error) {
+	key := types.DBKey(addr, types.AccountGID, hash)
 
 	return p.ReadEntry(key)
 }
 
-func (p *PersistenceManager) GetBalance(addr ktypes.Address, hash ktypes.Hash) ([]byte, error) {
-	key := ktypes.DBKey(addr, ktypes.BalanceGID, hash)
+func (p *PersistenceManager) GetBalance(addr types.Address, hash types.Hash) ([]byte, error) {
+	key := types.DBKey(addr, types.BalanceGID, hash)
 
 	return p.ReadEntry(key)
 }
 
-func (p *PersistenceManager) GetContext(addr ktypes.Address, hash ktypes.Hash) ([]byte, error) {
-	key := ktypes.DBKey(addr, ktypes.ContextGID, hash)
+func (p *PersistenceManager) GetContext(addr types.Address, hash types.Hash) ([]byte, error) {
+	key := types.DBKey(addr, types.ContextGID, hash)
 
 	return p.ReadEntry(key)
 }
 
-func (p *PersistenceManager) GetStorage(addr ktypes.Address, hash ktypes.Hash) ([]byte, error) {
-	key := ktypes.DBKey(addr, ktypes.StorageGID, hash)
+func (p *PersistenceManager) GetStorage(addr types.Address, hash types.Hash) ([]byte, error) {
+	key := types.DBKey(addr, types.StorageGID, hash)
 
 	return p.ReadEntry(key)
 }
 
-func (p *PersistenceManager) GetTesseract(hash ktypes.Hash) ([]byte, error) {
-	key := ktypes.DBKey(ktypes.NilAddress, ktypes.TesseractGID, hash)
+func (p *PersistenceManager) GetTesseract(hash types.Hash) ([]byte, error) {
+	key := types.DBKey(types.NilAddress, types.TesseractGID, hash)
 
 	return p.ReadEntry(key)
 }

@@ -1,13 +1,13 @@
 package guna
 
 import (
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 type changeEntry interface {
 	revert(*StateManager)
-	modifiedAddress() *ktypes.Address
-	cID() ktypes.Hash
+	modifiedAddress() *types.Address
+	cID() types.Hash
 }
 
 type Journal struct {
@@ -15,8 +15,8 @@ type Journal struct {
 	count   int
 }
 
-func (j *Journal) GetIDs() []ktypes.Hash {
-	cids := make([]ktypes.Hash, 0)
+func (j *Journal) GetIDs() []types.Hash {
+	cids := make([]types.Hash, 0)
 	for _, v := range j.entries {
 		cids = append(cids, v.cID())
 	}
@@ -39,11 +39,11 @@ func (j *journal) revert(sm *StateManager) {
 */
 
 type AssetCreation struct {
-	addr *ktypes.Address
-	id   ktypes.Hash
+	addr *types.Address
+	id   types.Hash
 }
 
-func (a AssetCreation) modifiedAddress() *ktypes.Address {
+func (a AssetCreation) modifiedAddress() *types.Address {
 	return a.addr
 }
 
@@ -52,74 +52,77 @@ func (a AssetCreation) revert(sm *StateManager) {
 	// if err != nil {
 	// 	log.Fatal(err)
 	// }
-	sm.db.DeleteEntry(a.id.Bytes()) // nolint
+	sm.db.DeleteEntry(a.id.Bytes()) //nolint
 }
-func (a AssetCreation) cID() ktypes.Hash {
+
+func (a AssetCreation) cID() types.Hash {
 	return a.id
 }
 
 type ContextUpdation struct {
-	addr *ktypes.Address
-	id   ktypes.Hash
+	addr *types.Address
+	id   types.Hash
 }
 
-func (c ContextUpdation) modifiedAddress() *ktypes.Address {
+func (c ContextUpdation) modifiedAddress() *types.Address {
 	return c.addr
 }
 
-func (c ContextUpdation) cID() ktypes.Hash {
+func (c ContextUpdation) cID() types.Hash {
 	return c.id
 }
+
 func (c ContextUpdation) revert(sm *StateManager) {
-	sm.db.DeleteEntry(c.id.Bytes()) // nolint
+	sm.db.DeleteEntry(c.id.Bytes()) //nolint
 }
 
 type BalanceUpdation struct {
-	addr *ktypes.Address
-	id   ktypes.Hash
+	addr *types.Address
+	id   types.Hash
 }
 
-func (b BalanceUpdation) modifiedAddress() *ktypes.Address {
+func (b BalanceUpdation) modifiedAddress() *types.Address {
 	return b.addr
 }
 
 func (b BalanceUpdation) revert(sm *StateManager) {
-	sm.db.DeleteEntry(b.id.Bytes()) // nolint
+	sm.db.DeleteEntry(b.id.Bytes()) //nolint
 }
-func (b BalanceUpdation) cID() ktypes.Hash {
+
+func (b BalanceUpdation) cID() types.Hash {
 	return b.id
 }
 
 type AccountUpdation struct {
-	addr *ktypes.Address
-	id   ktypes.Hash
+	addr *types.Address
+	id   types.Hash
 }
 
-func (acc AccountUpdation) modifiedAddress() *ktypes.Address {
+func (acc AccountUpdation) modifiedAddress() *types.Address {
 	return acc.addr
 }
 
 func (acc AccountUpdation) revert(sm *StateManager) {
-	sm.db.DeleteEntry(acc.id.Bytes()) // nolint
+	sm.db.DeleteEntry(acc.id.Bytes()) //nolint
 }
 
-func (acc AccountUpdation) cID() ktypes.Hash {
+func (acc AccountUpdation) cID() types.Hash {
 	return acc.id
 }
 
 type StorageUpdation struct {
-	addr *ktypes.Address
-	id   ktypes.Hash
+	addr *types.Address
+	id   types.Hash
 }
 
-func (s StorageUpdation) modifiedAddress() *ktypes.Address {
+func (s StorageUpdation) modifiedAddress() *types.Address {
 	return s.addr
 }
 
 func (s StorageUpdation) revert(sm *StateManager) {
-	sm.db.DeleteEntry(s.id.Bytes()) // nolint
+	sm.db.DeleteEntry(s.id.Bytes()) //nolint
 }
 
-func (s StorageUpdation) cID() ktypes.Hash {
+func (s StorageUpdation) cID() types.Hash {
 	return s.id
 }

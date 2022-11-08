@@ -10,16 +10,16 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	"gitlab.com/sarvalabs/moichain/common/tests"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 type AssetInfo struct {
-	AssetID    ktypes.AssetID
-	Asset      *ktypes.AssetInfo
-	Hash       ktypes.Hash
-	RandomHash ktypes.Hash
+	AssetID    types.AssetID
+	Asset      *types.AssetInfo
+	Hash       types.Hash
+	RandomHash types.Hash
 }
 
 type Context struct {
@@ -28,39 +28,37 @@ type Context struct {
 }
 
 type MockChainManager struct {
-	tesseracts          map[ktypes.Address]map[ktypes.Hash]*ktypes.Tesseract
-	latestTesseractHash map[ktypes.Address]ktypes.Hash
-	receipts            map[ktypes.Address]map[ktypes.Hash]*ktypes.Receipt
-	storage             map[ktypes.Hash]*ktypes.Tesseract
-	assets              map[ktypes.Hash]*ktypes.AssetData
+	tesseracts          map[types.Address]map[types.Hash]*types.Tesseract
+	latestTesseractHash map[types.Address]types.Hash
+	receipts            map[types.Address]map[types.Hash]*types.Receipt
+	storage             map[types.Hash]*types.Tesseract
+	assets              map[types.Hash]*types.AssetData
 }
 
 type MockStateManager struct {
-	balances          map[ktypes.Address]*ktypes.BalanceObject
-	accounts          map[ktypes.Address]*ktypes.Account
-	context           map[ktypes.Hash]*Context
-	latestContextHash map[ktypes.Address]ktypes.Hash
+	balances          map[types.Address]*types.BalanceObject
+	accounts          map[types.Address]*types.Account
+	context           map[types.Hash]*Context
+	latestContextHash map[types.Address]types.Hash
 }
 
-func (ms *MockStateManager) GetLatestStateObject(addr ktypes.Address) (*guna.StateObject, error) {
-	//TODO implement me
+func (ms *MockStateManager) GetLatestStateObject(addr types.Address) (*guna.StateObject, error) {
+	// TODO implement me
 	panic("implement me")
 }
 
-var (
-	ErrTesseractNotFound = errors.New("tesseract not found")
-)
+var ErrTesseractNotFound = errors.New("tesseract not found")
 
 func NewMockChainManager(t *testing.T) *MockChainManager {
 	t.Helper()
 
-	var mockChain = new(MockChainManager)
+	mockChain := new(MockChainManager)
 
-	mockChain.tesseracts = make(map[ktypes.Address]map[ktypes.Hash]*ktypes.Tesseract, 0)
-	mockChain.latestTesseractHash = make(map[ktypes.Address]ktypes.Hash)
-	mockChain.receipts = make(map[ktypes.Address]map[ktypes.Hash]*ktypes.Receipt, 0)
-	mockChain.assets = make(map[ktypes.Hash]*ktypes.AssetData, 0)
-	mockChain.storage = make(map[ktypes.Hash]*ktypes.Tesseract, 0)
+	mockChain.tesseracts = make(map[types.Address]map[types.Hash]*types.Tesseract, 0)
+	mockChain.latestTesseractHash = make(map[types.Address]types.Hash)
+	mockChain.receipts = make(map[types.Address]map[types.Hash]*types.Receipt, 0)
+	mockChain.assets = make(map[types.Hash]*types.AssetData, 0)
+	mockChain.storage = make(map[types.Hash]*types.Tesseract, 0)
 
 	return mockChain
 }
@@ -68,26 +66,26 @@ func NewMockChainManager(t *testing.T) *MockChainManager {
 func NewMockStateManager(t *testing.T) *MockStateManager {
 	t.Helper()
 
-	var mockState = new(MockStateManager)
+	mockState := new(MockStateManager)
 
-	mockState.balances = make(map[ktypes.Address]*ktypes.BalanceObject)
-	mockState.latestContextHash = make(map[ktypes.Address]ktypes.Hash)
-	mockState.accounts = make(map[ktypes.Address]*ktypes.Account)
-	mockState.context = make(map[ktypes.Hash]*Context)
+	mockState.balances = make(map[types.Address]*types.BalanceObject)
+	mockState.latestContextHash = make(map[types.Address]types.Hash)
+	mockState.accounts = make(map[types.Address]*types.Account)
+	mockState.context = make(map[types.Hash]*Context)
 
 	return mockState
 }
 
 // Chain manager mock functions
-func (mc *MockChainManager) GetLatestTesseract(addr ktypes.Address) (*ktypes.Tesseract, error) {
+func (mc *MockChainManager) GetLatestTesseract(addr types.Address) (*types.Tesseract, error) {
 	if _, ok := mc.tesseracts[addr]; ok {
 		return mc.tesseracts[addr][mc.latestTesseractHash[addr]], nil
 	}
 
-	return nil, ktypes.ErrAccountNotFound
+	return nil, types.ErrAccountNotFound
 }
 
-func (mc *MockChainManager) GetTesseract(hash ktypes.Hash) (*ktypes.Tesseract, error) {
+func (mc *MockChainManager) GetTesseract(hash types.Hash) (*types.Tesseract, error) {
 	for _, tesseracts := range mc.tesseracts {
 		for tsHash, tesseract := range tesseracts {
 			if tsHash == hash {
@@ -99,25 +97,25 @@ func (mc *MockChainManager) GetTesseract(hash ktypes.Hash) (*ktypes.Tesseract, e
 	return nil, ErrTesseractNotFound
 }
 
-func (mc *MockChainManager) GetReceipt(addr ktypes.Address, ixHash ktypes.Hash) (*ktypes.Receipt, error) {
+func (mc *MockChainManager) GetReceipt(addr types.Address, ixHash types.Hash) (*types.Receipt, error) {
 	if receipt := mc.receipts[addr][ixHash]; receipt != nil {
 		return receipt, nil
 	}
 
-	return nil, ktypes.ErrReceiptNotFound
+	return nil, types.ErrReceiptNotFound
 }
 
-func (mc *MockChainManager) GetAssetDataByAssetHash(assetHash []byte) (*ktypes.AssetData, error) {
-	if result, ok := mc.assets[ktypes.BytesToHash(assetHash)]; ok {
+func (mc *MockChainManager) GetAssetDataByAssetHash(assetHash []byte) (*types.AssetData, error) {
+	if result, ok := mc.assets[types.BytesToHash(assetHash)]; ok {
 		return result, nil
 	}
 
-	return nil, ktypes.ErrFetchingAssetDataInfo
+	return nil, types.ErrFetchingAssetDataInfo
 }
 
-func (mc *MockChainManager) GetTesseractByHeight(address string, height uint64) (*ktypes.Tesseract, error) {
+func (mc *MockChainManager) GetTesseractByHeight(address string, height uint64) (*types.Tesseract, error) {
 	for _, tesseract := range mc.storage {
-		if tesseract.Address() == ktypes.HexToAddress(address) && tesseract.Height() == height {
+		if tesseract.Address() == types.HexToAddress(address) && tesseract.Height() == height {
 			return tesseract, nil
 		}
 	}
@@ -126,24 +124,25 @@ func (mc *MockChainManager) GetTesseractByHeight(address string, height uint64) 
 }
 
 func (mc *MockChainManager) setTesseracts(
-	addr ktypes.Address,
-	latestTesseractHash ktypes.Hash,
-	tesseracts map[ktypes.Hash]*ktypes.Tesseract) {
+	addr types.Address,
+	latestTesseractHash types.Hash,
+	tesseracts map[types.Hash]*types.Tesseract,
+) {
 	mc.latestTesseractHash[addr] = latestTesseractHash
 	mc.tesseracts[addr] = tesseracts
 }
 
-func (mc *MockChainManager) setReceipt(addr ktypes.Address, receipts map[ktypes.Hash]*ktypes.Receipt) {
+func (mc *MockChainManager) setReceipt(addr types.Address, receipts map[types.Hash]*types.Receipt) {
 	mc.receipts[addr] = receipts
 }
 
-func (mc *MockChainManager) setStorage(hash ktypes.Hash, tesseract *ktypes.Tesseract) {
+func (mc *MockChainManager) setStorage(hash types.Hash, tesseract *types.Tesseract) {
 	mc.storage[hash] = tesseract
 }
 
-func (mc *MockChainManager) setAssets(addr ktypes.Address, assetInfo *AssetInfo) {
+func (mc *MockChainManager) setAssets(addr types.Address, assetInfo *AssetInfo) {
 	assetInfo.Asset.Owner = addr.String()
-	mc.assets[assetInfo.Hash] = &ktypes.AssetData{
+	mc.assets[assetInfo.Hash] = &types.AssetData{
 		LogicID: assetInfo.RandomHash,
 		Symbol:  assetInfo.Asset.Symbol,
 		Owner:   addr,
@@ -153,55 +152,56 @@ func (mc *MockChainManager) setAssets(addr ktypes.Address, assetInfo *AssetInfo)
 
 // State Manager mock functions
 
-func (ms *MockStateManager) GetContextByHash(address ktypes.Address,
-	hash ktypes.Hash) (ktypes.Hash, []id.KramaID, []id.KramaID, error) {
-	if hash == ktypes.NilHash {
+func (ms *MockStateManager) GetContextByHash(address types.Address,
+	hash types.Hash,
+) (types.Hash, []id.KramaID, []id.KramaID, error) {
+	if hash == types.NilHash {
 		if hash, ok := ms.latestContextHash[address]; ok {
 			return hash, ms.context[hash].behaviourNodes, ms.context[hash].randomNodes, nil
 		} else {
-			return ktypes.NilHash, nil, nil, ktypes.ErrAccountNotFound
+			return types.NilHash, nil, nil, types.ErrAccountNotFound
 		}
 	}
 
 	return hash, ms.context[hash].behaviourNodes, ms.context[hash].randomNodes, nil
 }
 
-func (ms *MockStateManager) GetBalances(addr ktypes.Address) (*ktypes.BalanceObject, error) {
+func (ms *MockStateManager) GetBalances(addr types.Address) (*types.BalanceObject, error) {
 	if _, ok := ms.balances[addr]; ok {
 		return ms.balances[addr].Copy(), nil
 	}
 
-	return nil, ktypes.ErrAccountNotFound
+	return nil, types.ErrAccountNotFound
 }
 
-func (ms *MockStateManager) GetBalance(addr ktypes.Address, assetID ktypes.AssetID) (*big.Int, error) {
+func (ms *MockStateManager) GetBalance(addr types.Address, assetID types.AssetID) (*big.Int, error) {
 	if _, ok := ms.balances[addr]; ok {
 		if _, ok := ms.balances[addr].Bal[assetID]; ok {
 			return ms.balances[addr].Bal[assetID], nil
 		}
 
-		return nil, ktypes.ErrAssetNotFound
+		return nil, types.ErrAssetNotFound
 	}
 
-	return nil, ktypes.ErrAccountNotFound
+	return nil, types.ErrAccountNotFound
 }
 
-func (ms *MockStateManager) GetLatestNonce(addr ktypes.Address) (uint64, error) {
+func (ms *MockStateManager) GetLatestNonce(addr types.Address) (uint64, error) {
 	if _, ok := ms.accounts[addr]; ok {
 		return ms.accounts[addr].Nonce, nil
 	}
 
-	return 0, ktypes.ErrAccountNotFound
+	return 0, types.ErrAccountNotFound
 }
 
-func (ms *MockStateManager) setBalance(addr ktypes.Address, assetID ktypes.AssetID, balance *big.Int) {
-	ms.balances[addr] = &ktypes.BalanceObject{
-		Bal: make(ktypes.AssetMap),
+func (ms *MockStateManager) setBalance(addr types.Address, assetID types.AssetID, balance *big.Int) {
+	ms.balances[addr] = &types.BalanceObject{
+		Bal: make(types.AssetMap),
 	}
 	ms.balances[addr].Bal[assetID] = balance
 }
 
-func (ms *MockStateManager) setContext(t *testing.T, hash ktypes.Hash) {
+func (ms *MockStateManager) setContext(t *testing.T, hash types.Hash) {
 	t.Helper()
 
 	ms.context[hash] = &Context{
@@ -210,26 +210,26 @@ func (ms *MockStateManager) setContext(t *testing.T, hash ktypes.Hash) {
 	}
 }
 
-func (ms *MockStateManager) getContextNodes(hash ktypes.Hash) []string {
+func (ms *MockStateManager) getContextNodes(hash types.Hash) []string {
 	return append(
-		ktypes.KIPPeerIDToString(ms.context[hash].behaviourNodes),
-		ktypes.KIPPeerIDToString(ms.context[hash].randomNodes)...,
+		types.KIPPeerIDToString(ms.context[hash].behaviourNodes),
+		types.KIPPeerIDToString(ms.context[hash].randomNodes)...,
 	)
 }
 
-func (ms *MockStateManager) setAccounts(addr ktypes.Address, latestNonce uint64) {
-	ms.accounts[addr] = &ktypes.Account{
+func (ms *MockStateManager) setAccounts(addr types.Address, latestNonce uint64) {
+	ms.accounts[addr] = &types.Account{
 		Nonce: latestNonce,
 	}
 }
 
-func (ms *MockStateManager) getTDU(addr ktypes.Address) ktypes.AssetMap {
+func (ms *MockStateManager) getTDU(addr types.Address) types.AssetMap {
 	data, _ := ms.balances[addr].TDU()
 
 	return data
 }
 
-func (ms *MockStateManager) setLatestContextHash(addr ktypes.Address, hash ktypes.Hash) {
+func (ms *MockStateManager) setLatestContextHash(addr types.Address, hash types.Hash) {
 	ms.latestContextHash[addr] = hash
 }
 
@@ -256,7 +256,7 @@ func TestPublicCoreAPI_GetBalance(t *testing.T) {
 				From:    "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
 				AssetID: tests.RandomAssetID(t, address),
 			},
-			expectedErr: ktypes.ErrInvalidAddress,
+			expectedErr: types.ErrInvalidAddress,
 		},
 		{
 			name: "Account without state",
@@ -264,7 +264,7 @@ func TestPublicCoreAPI_GetBalance(t *testing.T) {
 				From:    tests.RandomAddress(t).String(),
 				AssetID: string(assetInfo.AssetID),
 			},
-			expectedErr: ktypes.ErrAccountNotFound,
+			expectedErr: types.ErrAccountNotFound,
 		},
 		{
 			name: "Invalid asset Id",
@@ -272,7 +272,7 @@ func TestPublicCoreAPI_GetBalance(t *testing.T) {
 				From:    address.String(),
 				AssetID: "01801995a34ceda4db744a5b1363bega0f2019e7481699c861ad7d1263c95473a2d9",
 			},
-			expectedErr: ktypes.ErrInvalidAssetID,
+			expectedErr: types.ErrInvalidAssetID,
 		},
 		{
 			name: "Valid asset id without state",
@@ -280,7 +280,7 @@ func TestPublicCoreAPI_GetBalance(t *testing.T) {
 				From:    address.String(),
 				AssetID: tests.RandomAssetID(t, address),
 			},
-			expectedErr: ktypes.ErrAssetNotFound,
+			expectedErr: types.ErrAssetNotFound,
 		},
 		{
 			name: "Valid address and asset id",
@@ -319,7 +319,7 @@ func TestPublicCoreAPI_GetLatestTesseract(t *testing.T) {
 	testcases := []struct {
 		name        string
 		args        TesseractArgs
-		expected    *ktypes.Tesseract
+		expected    *types.Tesseract
 		expectedErr error
 	}{
 		{
@@ -327,14 +327,14 @@ func TestPublicCoreAPI_GetLatestTesseract(t *testing.T) {
 			args: TesseractArgs{
 				From: "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
 			},
-			expectedErr: ktypes.ErrInvalidAddress,
+			expectedErr: types.ErrInvalidAddress,
 		},
 		{
 			name: "Account without state",
 			args: TesseractArgs{
 				From: tests.RandomAddress(t).String(),
 			},
-			expectedErr: ktypes.ErrAccountNotFound,
+			expectedErr: types.ErrAccountNotFound,
 		},
 		{
 			name: "Valid address",
@@ -382,7 +382,7 @@ func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
 				From: "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
 				Hash: "68510188a8Bff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
 			},
-			expectedErr: ktypes.ErrInvalidAddress,
+			expectedErr: types.ErrInvalidAddress,
 		},
 		{
 			name: "Invalid hash",
@@ -390,7 +390,7 @@ func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
 				From: address.Hex(),
 				Hash: "68510188Z8Bff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
 			},
-			expectedErr: ktypes.ErrInvalidHash,
+			expectedErr: types.ErrInvalidHash,
 		},
 		{
 			name: "Address without state",
@@ -398,7 +398,7 @@ func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
 				From: tests.RandomAddress(t).Hex(),
 				Hash: "",
 			},
-			expectedErr: ktypes.ErrAccountNotFound,
+			expectedErr: types.ErrAccountNotFound,
 		},
 		{
 			name: "Valid Address and valid hash",
@@ -445,7 +445,7 @@ func TestPublicCoreAPI_GetTDU(t *testing.T) {
 	testcases := []struct {
 		name        string
 		args        TesseractArgs
-		expected    ktypes.AssetMap
+		expected    types.AssetMap
 		expectedErr error
 	}{
 		{
@@ -453,14 +453,14 @@ func TestPublicCoreAPI_GetTDU(t *testing.T) {
 			args: TesseractArgs{
 				From: "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
 			},
-			expectedErr: ktypes.ErrInvalidAddress,
+			expectedErr: types.ErrInvalidAddress,
 		},
 		{
 			name: "Account without state",
 			args: TesseractArgs{
 				From: tests.RandomAddress(t).String(),
 			},
-			expectedErr: ktypes.ErrAccountNotFound,
+			expectedErr: types.ErrAccountNotFound,
 		},
 		{
 			name: "Valid address",
@@ -498,7 +498,7 @@ func TestPublicCoreAPI_GetInteractionReceipt(t *testing.T) {
 	testcases := []struct {
 		name        string
 		args        ReceiptArgs
-		expected    *ktypes.Receipt
+		expected    *types.Receipt
 		expectedErr error
 	}{
 		{
@@ -507,7 +507,7 @@ func TestPublicCoreAPI_GetInteractionReceipt(t *testing.T) {
 				Address: "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
 				Hash:    tests.RandomHash(t).String(),
 			},
-			expectedErr: ktypes.ErrInvalidAddress,
+			expectedErr: types.ErrInvalidAddress,
 		},
 		{
 			name: "Invalid hash",
@@ -515,7 +515,7 @@ func TestPublicCoreAPI_GetInteractionReceipt(t *testing.T) {
 				Address: address.String(),
 				Hash:    tests.RandomHash(t).String(),
 			},
-			expectedErr: ktypes.ErrReceiptNotFound,
+			expectedErr: types.ErrReceiptNotFound,
 		},
 		{
 			name: "Valid account and hash",
@@ -664,7 +664,7 @@ func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
 	testcases := []struct {
 		name            string
 		args            *AssetInfoArgs
-		expected        *ktypes.AssetInfo
+		expected        *types.AssetInfo
 		isErrorExpected bool
 	}{
 		{
@@ -680,7 +680,7 @@ func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
 			&AssetInfoArgs{
 				"01801995a34ceda4db744a5b1363be9a0f2019e7481699c861ad7d1263c95473a2d9",
 			},
-			&ktypes.AssetInfo{},
+			&types.AssetInfo{},
 			true,
 		},
 		{
@@ -688,7 +688,7 @@ func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
 			&AssetInfoArgs{
 				"01801995a34ceda4db744a5b1363bega0f2019e7481699c861ad7d1263c95473a2d9",
 			},
-			&ktypes.AssetInfo{},
+			&types.AssetInfo{},
 			true,
 		},
 	}
@@ -766,16 +766,16 @@ func TestPublicCoreAPI_GetInteractionCountByAddress(t *testing.T) {
 }
 
 // helper function
-func newTesseract(t *testing.T, height int, address ktypes.Address) *ktypes.Tesseract {
+func newTesseract(t *testing.T, height int, address types.Address) *types.Tesseract {
 	t.Helper()
 
-	return &ktypes.Tesseract{
-		Header: ktypes.TesseractHeader{
+	return &types.Tesseract{
+		Header: types.TesseractHeader{
 			Address:  address,
 			PrevHash: tests.RandomHash(t),
 			Height:   uint64(height),
 		},
-		Body: ktypes.TesseractBody{
+		Body: types.TesseractBody{
 			StateHash:       tests.RandomHash(t),
 			ContextHash:     tests.RandomHash(t),
 			InteractionHash: tests.RandomHash(t),
@@ -783,17 +783,17 @@ func newTesseract(t *testing.T, height int, address ktypes.Address) *ktypes.Tess
 	}
 }
 
-func newReceipt(interactionHash ktypes.Hash) *ktypes.Receipt {
-	return &ktypes.Receipt{
+func newReceipt(interactionHash types.Hash) *types.Receipt {
+	return &types.Receipt{
 		IxType: 1,
 		IxHash: interactionHash,
 	}
 }
 
-func getTesseracts(t *testing.T, address ktypes.Address) (ktypes.Hash, ktypes.Hash, map[ktypes.Hash]*ktypes.Tesseract) {
+func getTesseracts(t *testing.T, address types.Address) (types.Hash, types.Hash, map[types.Hash]*types.Tesseract) {
 	t.Helper()
 
-	tesseracts := make(map[ktypes.Hash]*ktypes.Tesseract)
+	tesseracts := make(map[types.Hash]*types.Tesseract)
 	tesseract := newTesseract(t, 1, address)
 	contextHash := tesseract.ContextHash()
 	tesseractHash := tesseract.Hash()
@@ -802,27 +802,27 @@ func getTesseracts(t *testing.T, address ktypes.Address) (ktypes.Hash, ktypes.Ha
 	return contextHash, tesseractHash, tesseracts
 }
 
-func getReceipts(t *testing.T) (ktypes.Hash, map[ktypes.Hash]*ktypes.Receipt) {
+func getReceipts(t *testing.T) (types.Hash, map[types.Hash]*types.Receipt) {
 	t.Helper()
 
-	receipts := make(map[ktypes.Hash]*ktypes.Receipt)
+	receipts := make(map[types.Hash]*types.Receipt)
 	interactionHash := tests.RandomHash(t)
 	receipts[interactionHash] = newReceipt(interactionHash)
 
 	return interactionHash, receipts
 }
 
-func getAssetInfo(t *testing.T, address ktypes.Address) *AssetInfo {
+func getAssetInfo(t *testing.T, address types.Address) *AssetInfo {
 	t.Helper()
 
 	randomHash := tests.RandomHash(t)
-	asset, err := tests.GetAsset(t)
 
+	asset, err := tests.GetAsset(t)
 	if err != nil {
 		log.Panic("Failed to create asset")
 	}
 
-	assetID, hash, _ := ktypes.GetAssetID(
+	assetID, hash, _ := types.GetAssetID(
 		address,
 		asset.Dimension,
 		asset.IsFungible,

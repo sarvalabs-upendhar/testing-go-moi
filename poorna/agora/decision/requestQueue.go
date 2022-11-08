@@ -2,17 +2,18 @@ package decision
 
 import (
 	"errors"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"sync"
 	"time"
+
+	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 type Request struct {
 	PeerID    id.KramaID
-	SessionID ktypes.Address
-	StateHash ktypes.Hash
-	WantList  []ktypes.Hash
+	SessionID types.Address
+	StateHash types.Hash
+	WantList  []types.Hash
 	ReqTime   time.Time
 }
 type RequestQueue struct {

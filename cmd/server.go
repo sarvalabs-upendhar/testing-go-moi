@@ -25,9 +25,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	ErrReadingConfig = errors.New("error reading config file")
-)
+var ErrReadingConfig = errors.New("error reading config file")
+
 var (
 	AccountWaitTime int
 	OperatorSlots   int
@@ -102,7 +101,7 @@ func BuildConfig(dataDir string, fileCfg *Config) (*common.Config, error) {
 
 	nodeCfg := common.DefaultConfig(dataDir)
 	nodeCfg.LogFilePath = fileCfg.LogFilePath
-	//TODO:Check node type and krama version
+	// TODO:Check node type and krama version
 	if fileCfg.Genesis != "" {
 		nodeCfg.Chain.Genesis = fileCfg.Genesis
 	}
@@ -253,6 +252,7 @@ func SetupNode(datadir string, cfgPath string) {
 
 	// init trace provider
 	ctx := context.Background()
+
 	tp, err := tracing.NewTracerProvider(ctx, EnableTracing, cfg.Metrics.JaegerAddr)
 	if err != nil {
 		fmt.Println("error starting tp")
@@ -260,6 +260,7 @@ func SetupNode(datadir string, cfgPath string) {
 
 	defer func() {
 		fmt.Println("Shutting down trace provider")
+
 		if err := tp.Shutdown(ctx); err != nil {
 			fmt.Println("error shutting down trace provider")
 		}

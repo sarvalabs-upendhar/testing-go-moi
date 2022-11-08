@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/hashicorp/go-hclog"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	dhruva "gitlab.com/sarvalabs/moichain/dhruva/db"
 	"sync"
+
+	"github.com/hashicorp/go-hclog"
+	dhruva "gitlab.com/sarvalabs/moichain/dhruva/db"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 const (
@@ -59,7 +60,8 @@ func (ds *DataStore) worker() {
 		}
 	}
 }
-func (ds *DataStore) GetData(ctx context.Context, keys []ktypes.Hash) ([][]byte, error) {
+
+func (ds *DataStore) GetData(ctx context.Context, keys []types.Hash) ([][]byte, error) {
 	res := make([][]byte, 0, len(keys))
 	if len(keys) == 0 {
 		return res, nil
@@ -67,10 +69,10 @@ func (ds *DataStore) GetData(ctx context.Context, keys []ktypes.Hash) ([][]byte,
 
 	var lk sync.Mutex
 
-	return res, ds.jobPerKey(ctx, keys, func(c ktypes.Hash) {
+	return res, ds.jobPerKey(ctx, keys, func(c types.Hash) {
 		blk, err := ds.db.ReadEntry(c.Bytes())
 		if err != nil {
-			if errors.Is(err, ktypes.ErrKeyNotFound) {
+			if errors.Is(err, types.ErrKeyNotFound) {
 				ds.logger.Error("Key not found", "id", c.Hex())
 			}
 		} else {
@@ -81,7 +83,7 @@ func (ds *DataStore) GetData(ctx context.Context, keys []ktypes.Hash) ([][]byte,
 	})
 }
 
-func (ds *DataStore) DoesStateExists(stateHash ktypes.Hash) bool {
+func (ds *DataStore) DoesStateExists(stateHash types.Hash) bool {
 	keyExists, err := ds.db.Contains(stateHash.Bytes())
 	if err != nil {
 		ds.logger.Error("Error fetching state info from db", "error", err)
@@ -109,7 +111,7 @@ func (ds *DataStore) addJob(ctx context.Context, job func()) error {
 	}
 }
 
-func (ds *DataStore) jobPerKey(ctx context.Context, keys []ktypes.Hash, jobFn func(key ktypes.Hash)) error {
+func (ds *DataStore) jobPerKey(ctx context.Context, keys []types.Hash, jobFn func(key types.Hash)) error {
 	var err error
 
 	wg := sync.WaitGroup{}

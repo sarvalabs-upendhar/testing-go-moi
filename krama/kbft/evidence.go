@@ -1,43 +1,43 @@
 package kbft
 
 import (
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	"gitlab.com/sarvalabs/moichain/types"
 	"gitlab.com/sarvalabs/polo/go-polo"
 )
 
 type EvidenceEngine struct {
-	//mtx sync.Mutex
+	// mtx sync.Mutex
 
-	evidences map[ktypes.ClusterID]*Evidence
+	evidences map[types.ClusterID]*Evidence
 }
 
 func NewEvidenceEngine() *EvidenceEngine {
 	e := &EvidenceEngine{
-		evidences: make(map[ktypes.ClusterID]*Evidence),
+		evidences: make(map[types.ClusterID]*Evidence),
 	}
 
 	return e
 }
 
 type Evidence struct {
-	IxHash   ktypes.Hash
+	IxHash   types.Hash
 	Operator id.KramaID
-	Votes    []*ktypes.Vote
-	VoteSet  *ktypes.ArrayOfBits
+	Votes    []*types.Vote
+	VoteSet  *types.ArrayOfBits
 }
 
-func NewEvidence(IxHash ktypes.Hash, Operator id.KramaID, size int) *Evidence {
+func NewEvidence(IxHash types.Hash, Operator id.KramaID, size int) *Evidence {
 	evidenceInstance := &Evidence{
 		IxHash:   IxHash,
 		Operator: Operator,
-		Votes:    make([]*ktypes.Vote, size),
+		Votes:    make([]*types.Vote, size),
 	}
 
 	return evidenceInstance
 }
 
-func (e *Evidence) AddVote(v *ktypes.Vote) {
+func (e *Evidence) AddVote(v *types.Vote) {
 	e.Votes = append(e.Votes, v)
 }
 
@@ -45,12 +45,12 @@ func (e *Evidence) Bytes() []byte {
 	return polo.Polorize(e)
 }
 
-func (e *Evidence) FlushEvidence() (ktypes.Hash, []byte) {
+func (e *Evidence) FlushEvidence() (types.Hash, []byte) {
 	rawData := e.Bytes()
 
-	return ktypes.GetHash(rawData), rawData
+	return types.GetHash(rawData), rawData
 }
 
-func (e *Evidence) AddVoteSet(bitArray *ktypes.ArrayOfBits) {
+func (e *Evidence) AddVoteSet(bitArray *types.ArrayOfBits) {
 	e.VoteSet = bitArray
 }

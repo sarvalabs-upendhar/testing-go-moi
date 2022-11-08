@@ -2,11 +2,13 @@ package rpc
 
 import (
 	"fmt"
-	"github.com/gorilla/rpc/v2/json2"
-	"github.com/hashicorp/go-hclog"
 	"log"
 	"net"
 	"net/http"
+	"time"
+
+	"github.com/gorilla/rpc/v2/json2"
+	"github.com/hashicorp/go-hclog"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2"
@@ -51,7 +53,12 @@ func (s *Server) Start() {
 	// Print the server start message
 	s.logger.Info(fmt.Sprintf("RPC Server started on %s:%s", s.url, s.addr))
 	// Start the RPC server
-	if err := http.ListenAndServe(s.addr.String(), s.router); err != nil {
+	server := &http.Server{
+		Addr:              s.addr.String(),
+		Handler:           s.router,
+		ReadHeaderTimeout: 3 * time.Second,
+	}
+	if err := server.ListenAndServe(); err != nil {
 		log.Panic(err)
 	}
 }

@@ -4,15 +4,17 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/hashicorp/go-hclog"
-	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	"gitlab.com/sarvalabs/moichain/common/kutils"
-	"gitlab.com/sarvalabs/polo/go-polo"
 	"hash/crc32"
 	"io"
 	"path/filepath"
 	"time"
+
+	"gitlab.com/sarvalabs/moichain/utils"
+
+	"github.com/hashicorp/go-hclog"
+	"github.com/pkg/errors"
+	"gitlab.com/sarvalabs/moichain/types"
+	"gitlab.com/sarvalabs/polo/go-polo"
 )
 
 const (
@@ -26,7 +28,7 @@ type WALMessage interface{}
 
 // TimedWALMessage captures the WAL message with timestamp
 type TimedWALMessage struct {
-	ClusterID ktypes.ClusterID
+	ClusterID types.ClusterID
 	Time      time.Time
 	Msg       WALMessage
 }
@@ -40,15 +42,15 @@ type ICSInitCheckpoint struct {
 
 // WAL is an interface for any write-ahead logger.
 type WAL interface {
-	Write(ktypes.ConsensusMessage, ktypes.ClusterID) error
-	WriteSync(ktypes.ConsensusMessage, ktypes.ClusterID) error
+	Write(types.ConsensusMessage, types.ClusterID) error
+	WriteSync(types.ConsensusMessage, types.ClusterID) error
 	FlushAndSync() error
 
 	SearchForClusterID(clusterID string, options *WALSearchOptions) (rd io.ReadCloser, found bool, err error)
 
 	Start() error
 	Close()
-	//Wait()
+	// Wait()
 }
 
 // Write ahead logger writes msgs to disk before they are processed.
@@ -59,7 +61,7 @@ type BaseWAL struct {
 	ctxCancel context.CancelFunc
 	logger    hclog.Logger
 
-	group *kutils.Group
+	group *utils.Group
 
 	enc *WALEncoder
 
@@ -73,14 +75,14 @@ func NewWAL(
 	ctx context.Context,
 	logger hclog.Logger,
 	walFile string,
-	groupOptions ...func(*kutils.Group),
+	groupOptions ...func(*utils.Group),
 ) (*BaseWAL, error) {
-	err := kutils.EnsureDir(filepath.Dir(walFile+"/wal"), 0700)
+	err := utils.EnsureDir(filepath.Dir(walFile+"/wal"), 0o700)
 	if err != nil {
 		return nil, fmt.Errorf("failed to ensure WAL directory is in place: %w", err)
 	}
 
-	group, err := kutils.OpenGroup(ctx, logger, walFile+"/wal", groupOptions...)
+	group, err := utils.OpenGroup(ctx, logger, walFile+"/wal", groupOptions...)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +105,7 @@ func (wal *BaseWAL) SetFlushInterval(i time.Duration) {
 	wal.flushInterval = i
 }
 
-func (wal *BaseWAL) Group() *kutils.Group {
+func (wal *BaseWAL) Group() *utils.Group {
 	return wal.group
 }
 
@@ -112,7 +114,7 @@ func (wal *BaseWAL) Start() error {
 	if err != nil {
 		return err
 	} else if size == 0 {
-		err = wal.WriteSync(ktypes.ConsensusMessage{PeerID: "init", Message: nil}, "init")
+		err = wal.WriteSync(types.ConsensusMessage{PeerID: "init", Message: nil}, "init")
 		if err != nil {
 			return err
 		}
@@ -175,12 +177,12 @@ func (wal *BaseWAL) Close() {
 // Write is called in newStep and for each receive on the
 // peerMsgQueue and the timeoutTicker.
 // NOTE: does not call fsync()
-func (wal *BaseWAL) Write(msg ktypes.ConsensusMessage, clusterID ktypes.ClusterID) error {
+func (wal *BaseWAL) Write(msg types.ConsensusMessage, clusterID types.ClusterID) error {
 	if wal == nil {
 		return nil
 	}
 
-	if err := wal.enc.Encode(&ktypes.TimedWALMessage{
+	if err := wal.enc.Encode(&types.TimedWALMessage{
 		ClusterID: clusterID,
 		Timestamp: time.Now().UnixNano(),
 		Message:   msg,
@@ -201,7 +203,7 @@ func (wal *BaseWAL) Write(msg ktypes.ConsensusMessage, clusterID ktypes.ClusterI
 // WriteSync is called when we receive a msg from ourselves
 // so that we write to disk before sending signed messages.
 // NOTE: calls fsync()
-func (wal *BaseWAL) WriteSync(msg ktypes.ConsensusMessage, clusterID ktypes.ClusterID) error {
+func (wal *BaseWAL) WriteSync(msg types.ConsensusMessage, clusterID types.ClusterID) error {
 	if wal == nil {
 		return nil
 	}
@@ -234,10 +236,11 @@ type WALSearchOptions struct {
 // CONTRACT: caller must close group reader.
 func (wal *BaseWAL) SearchForClusterID(
 	clusterID string,
-	options *WALSearchOptions) (rd io.ReadCloser, found bool, err error) {
+	options *WALSearchOptions,
+) (rd io.ReadCloser, found bool, err error) {
 	var (
-		msg *ktypes.TimedWALMessage
-		gr  *kutils.GroupReader
+		msg *types.TimedWALMessage
+		gr  *utils.GroupReader
 	)
 
 	// NOTE: starting from the last file in the group because we're usually
@@ -270,7 +273,10 @@ func (wal *BaseWAL) SearchForClusterID(
 				// do nothing
 				continue
 			} else if err != nil {
-				gr.Close() //nolint
+				grErr := gr.Close()
+				if grErr != nil {
+					wal.logger.Error("Failed to close group reader", "err", grErr)
+				}
 
 				return nil, false, err
 			}
@@ -282,7 +288,10 @@ func (wal *BaseWAL) SearchForClusterID(
 			}
 		}
 
-		gr.Close() //nolint
+		err := gr.Close()
+		if err != nil {
+			wal.logger.Error("Failed to close group reader", "err", err)
+		}
 	}
 
 	return nil, false, nil
@@ -303,7 +312,7 @@ func NewWALEncoder(wr io.Writer) *WALEncoder {
 // Encode writes the custom encoding of v to the stream. It returns an error if
 // the encoded size of v is greater than 1MB. Any error encountered
 // during the write is also returned.
-func (enc *WALEncoder) Encode(v *ktypes.TimedWALMessage) error {
+func (enc *WALEncoder) Encode(v *types.TimedWALMessage) error {
 	data := polo.Polorize(v)
 	crc := crc32.Checksum(data, crc32c)
 
@@ -326,9 +335,9 @@ func (enc *WALEncoder) Encode(v *ktypes.TimedWALMessage) error {
 
 // IsDataCorruptionError returns true if data has been corrupted inside WAL.
 func IsDataCorruptionError(err error) bool {
-	_, ok := err.(DataCorruptionError)
+	var dataCorruptionError *DataCorruptionError
 
-	return ok
+	return errors.As(err, &dataCorruptionError)
 }
 
 // DataCorruptionError is an error that occures if data on disk was corrupted.
@@ -359,7 +368,7 @@ func NewWALDecoder(rd io.Reader) *WALDecoder {
 }
 
 // Decode reads the next custom-encoded value from its reader and returns it.
-func (dec *WALDecoder) Decode() (*ktypes.TimedWALMessage, error) {
+func (dec *WALDecoder) Decode() (*types.TimedWALMessage, error) {
 	b := make([]byte, 4)
 
 	_, err := dec.rd.Read(b)
@@ -400,7 +409,7 @@ func (dec *WALDecoder) Decode() (*ktypes.TimedWALMessage, error) {
 		return nil, DataCorruptionError{fmt.Errorf("checksums do not match: read: %v, actual: %v", crc, actualCRC)}
 	}
 
-	res := new(ktypes.TimedWALMessage)
+	res := new(types.TimedWALMessage)
 
 	err = polo.Depolorize(res, data)
 	if err != nil {

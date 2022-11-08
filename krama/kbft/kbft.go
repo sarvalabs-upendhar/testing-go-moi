@@ -4,22 +4,21 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
+	"time"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 	"gitlab.com/sarvalabs/moichain/guna"
-	"gitlab.com/sarvalabs/moichain/krama/types"
+	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
 	"gitlab.com/sarvalabs/moichain/mudra"
 	common2 "gitlab.com/sarvalabs/moichain/mudra/common"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/moichain/telemetry/tracing"
 	"gitlab.com/sarvalabs/polo/go-polo"
 
-	"sync"
-	"time"
-
 	"gitlab.com/sarvalabs/moichain/common"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 const (
@@ -38,11 +37,11 @@ type KBFT struct {
 	id                        id.KramaID
 	config                    *common.ConsensusConfig
 	mx                        sync.Mutex
-	inboundMsgChan            chan ktypes.ConsensusMessage
-	selfMsgChan               chan ktypes.ConsensusMessage
-	outboundMsgChan           chan ktypes.ConsensusMessage
+	inboundMsgChan            chan types.ConsensusMessage
+	selfMsgChan               chan types.ConsensusMessage
+	outboundMsgChan           chan types.ConsensusMessage
 	toTicker                  *Ticker
-	ics                       *types.ClusterInfo
+	ics                       *ktypes.ClusterInfo
 	nSteps                    int
 	closeChan                 chan error
 	ctx                       context.Context
@@ -50,7 +49,7 @@ type KBFT struct {
 	evidence                  *Evidence
 	vault                     vault
 	wal                       WAL
-	finalizedTesseractHandler func(tesseracts []*ktypes.Tesseract) error
+	finalizedTesseractHandler func(tesseracts []*types.Tesseract) error
 }
 
 // NewKBFTService is constructor function that generates a new KBFT engine.
@@ -61,12 +60,12 @@ func NewKBFTService(
 	kid id.KramaID,
 	logger hclog.Logger,
 	config *common.ConsensusConfig,
-	outboundChan, inboundChan chan ktypes.ConsensusMessage,
+	outboundChan, inboundChan chan types.ConsensusMessage,
 	vault *mudra.KramaVault,
 	evidence *Evidence,
-	ics *types.ClusterInfo,
+	ics *ktypes.ClusterInfo,
 	wal WAL,
-	tesseractHandler func(tesseracts []*ktypes.Tesseract) error,
+	tesseractHandler func(tesseracts []*types.Tesseract) error,
 ) *KBFT {
 	k := &KBFT{
 		id:                        kid,
@@ -75,7 +74,7 @@ func NewKBFTService(
 		logger:                    logger.Named("KBFT"),
 		outboundMsgChan:           outboundChan,
 		inboundMsgChan:            inboundChan,
-		selfMsgChan:               make(chan ktypes.ConsensusMessage, 1000),
+		selfMsgChan:               make(chan types.ConsensusMessage, 1000),
 		toTicker:                  NewTicker(),
 		vault:                     vault,
 		evidence:                  evidence,
@@ -90,18 +89,18 @@ func NewKBFTService(
 	return k
 }
 
-func (kbft *KBFT) updateToState(ics *types.ClusterInfo) {
+func (kbft *KBFT) updateToState(ics *ktypes.ClusterInfo) {
 	log.Println("updating the state", ics.ICS.Nodes)
 
 	var chainIDs []string
 
 	heights := make([]uint64, len(ics.AccountInfos))
 
-	if senderAddr := ics.Ixs[0].FromAddress(); senderAddr != ktypes.NilAddress {
+	if senderAddr := ics.Ixs[0].FromAddress(); senderAddr != types.NilAddress {
 		heights[0] = ics.AccountInfos[ics.Ixs[0].FromAddress()].Height.Uint64() + 1
 	}
 
-	if receiverAddr := ics.Ixs[0].ToAddress(); receiverAddr != ktypes.NilAddress {
+	if receiverAddr := ics.Ixs[0].ToAddress(); receiverAddr != types.NilAddress {
 		height := ics.AccountInfos[ics.Ixs[0].ToAddress()].Height.Int64()
 		if height == -1 {
 			heights[2] = ics.AccountInfos[guna.GenesisAddress].Height.Uint64() + 1
@@ -156,7 +155,7 @@ func (kbft *KBFT) Close(err error) {
 	}
 }
 
-func (kbft *KBFT) HandlePeerMsg(m ktypes.ConsensusMessage) {
+func (kbft *KBFT) HandlePeerMsg(m types.ConsensusMessage) {
 	select {
 	case kbft.inboundMsgChan <- m:
 	default:
@@ -170,7 +169,7 @@ func (kbft *KBFT) handler(maxSteps int) error {
 	defer func() {
 		close(kbft.outboundMsgChan)
 		close(kbft.selfMsgChan)
-		//kbft.PrintMetrics()
+		// kbft.PrintMetrics()
 		kbft.ctxCancel()
 	}()
 
@@ -188,7 +187,6 @@ func (kbft *KBFT) handler(maxSteps int) error {
 		roundState := kbft.RoundState
 
 		select {
-
 		case err := <-kbft.closeChan:
 			return err
 
@@ -248,21 +246,21 @@ func (kbft *KBFT) handleTimeout(ti timeoutInfo, r RoundState) {
 	}
 }
 
-func (kbft *KBFT) handleMsg(msg ktypes.ConsensusMessage) error {
+func (kbft *KBFT) handleMsg(msg types.ConsensusMessage) error {
 	kbft.mx.Lock()
 	defer kbft.mx.Unlock()
 
 	m, peerID := msg.Message, msg.PeerID
 
 	switch m := m.(type) {
-	case *ktypes.ProposalMessage:
+	case *types.ProposalMessage:
 		kbft.logger.Trace("Proposal Message Received")
 
 		if err := kbft.setProposal(m.Proposal); err != nil {
 			kbft.logger.Trace("Failed to set proposal", err)
 		}
 
-	case *ktypes.VoteMessage:
+	case *types.VoteMessage:
 		kbft.logger.Trace("Vote Message Received from ", peerID, m.Vote.Type)
 
 		added, err := kbft.addVote(m.Vote, peerID)
@@ -280,7 +278,7 @@ func (kbft *KBFT) handleMsg(msg ktypes.ConsensusMessage) error {
 	return nil
 }
 
-func (kbft *KBFT) setProposal(p *ktypes.Proposal) error {
+func (kbft *KBFT) setProposal(p *types.Proposal) error {
 	if kbft.Proposal != nil {
 		return nil
 	}
@@ -297,7 +295,7 @@ func (kbft *KBFT) setProposal(p *ktypes.Proposal) error {
 
 	kbft.Proposal = p
 
-	//set the proposal grid
+	// set the proposal grid
 	kbft.ProposalGrid = p.Grid
 
 	preVotes := kbft.Votes.getPrevotes(kbft.Round)
@@ -323,17 +321,17 @@ func (kbft *KBFT) setProposal(p *ktypes.Proposal) error {
 	return nil
 }
 
-func (kbft *KBFT) SetProposal(p *ktypes.Proposal, peerID id.KramaID) error {
+func (kbft *KBFT) SetProposal(p *types.Proposal, peerID id.KramaID) error {
 	if peerID == "" {
-		kbft.selfMsgChan <- ktypes.ConsensusMessage{PeerID: "", Message: &ktypes.ProposalMessage{Proposal: p}}
+		kbft.selfMsgChan <- types.ConsensusMessage{PeerID: "", Message: &types.ProposalMessage{Proposal: p}}
 	} else {
-		kbft.inboundMsgChan <- ktypes.ConsensusMessage{PeerID: peerID, Message: &ktypes.ProposalMessage{Proposal: p}}
+		kbft.inboundMsgChan <- types.ConsensusMessage{PeerID: peerID, Message: &types.ProposalMessage{Proposal: p}}
 	}
 
 	return nil
 }
 
-func (kbft *KBFT) addVote(v *ktypes.Vote, peerID id.KramaID) (added bool, err error) {
+func (kbft *KBFT) addVote(v *types.Vote, peerID id.KramaID) (added bool, err error) {
 	if !areHeightsEqual(v.GridID.Parts.Heights, kbft.Height) {
 		kbft.logger.Trace("Invalid vote BFT Height", kbft.Height, v.GridID.Parts.Heights)
 
@@ -353,17 +351,17 @@ func (kbft *KBFT) addVote(v *ktypes.Vote, peerID id.KramaID) (added bool, err er
 		return
 	}
 
-	//TODO: fireevent
+	// TODO: fireevent
 
 	switch v.Type {
-	case ktypes.PREVOTE:
+	case types.PREVOTE:
 		preVotes := kbft.Votes.getPrevotes(v.Round)
 		if tesseractGridID, ok := preVotes.TwoThirdMajority(); ok {
 			if kbft.LockedGrid != nil &&
 				kbft.LockedRound < v.Round &&
 				v.Round <= kbft.Round &&
 				!kbft.LockedGrid.CompareHash(tesseractGridID.Hash) {
-				//Update the locks
+				// Update the locks
 				kbft.LockedGrid = nil
 				kbft.LockedRound = -1
 			}
@@ -384,7 +382,7 @@ func (kbft *KBFT) addVote(v *ktypes.Vote, peerID id.KramaID) (added bool, err er
 
 		case kbft.Round == v.Round && kbft.Step >= RoundStepPrevote:
 			tesseractGroupID, ok := preVotes.TwoThirdMajority()
-			if ok && (kbft.isProposalReceived() || tesseractGroupID.Hash != ktypes.NilHash) {
+			if ok && (kbft.isProposalReceived() || tesseractGroupID.Hash != types.NilHash) {
 				kbft.enterPreCommit(height, v.Round)
 			} else if preVotes.HasMajorityAny() {
 				kbft.enterPrevoteWait(height, v.Round)
@@ -399,7 +397,7 @@ func (kbft *KBFT) addVote(v *ktypes.Vote, peerID id.KramaID) (added bool, err er
 			kbft.logger.Debug("Proposal not available")
 		}
 
-	case ktypes.PRECOMMIT:
+	case types.PRECOMMIT:
 		preCommits := kbft.Votes.getPrecommits(v.Round)
 
 		gridID, ok := preCommits.TwoThirdMajority()
@@ -464,27 +462,27 @@ func (kbft *KBFT) finalizeCommit(h []uint64) {
 
 	kbft.logger.Trace("Adding Receipts to dirty storage", "receipt-hash", kbft.ics.Receipts.Hash().Hex())
 
-	//TODO: validate the block
+	// TODO: validate the block
 
-	//TODO: Execute the interactions
+	// TODO: Execute the interactions
 	//	var s AccountState
 	//	b.updateToState(s)
 	//  b.ScheduleRound0(&b.RoundState)
 
-	//Stop the ClusterInfo and other process
+	// Stop the ClusterInfo and other process
 	kbft.Close(nil)
 }
 
 func (kbft *KBFT) updateConsensusInfoInTesseracts(
-	gridID *ktypes.TesseractGridID,
+	gridID *types.TesseractGridID,
 	preCommits *tesseractVoteSet,
 	signature []byte,
 ) (err error) {
 	evidenceHash, data := kbft.evidence.FlushEvidence()
 	// Add evidence data to dirty list
 	kbft.ics.AddDirty(evidenceHash, data)
-	//Add Receipts to dirty list
-	//This will be modified once smt is integrated
+	// Add Receipts to dirty list
+	// This will be modified once smt is integrated
 	kbft.ics.AddDirty(kbft.ics.Receipts.Hash(), polo.Polorize(kbft.ics.Receipts))
 
 	for _, tesseract := range kbft.ProposalGrid.Tesseracts {
@@ -528,8 +526,8 @@ func (kbft *KBFT) enterCommit(heights []uint64, round int32) {
 		panic("expecting precommits")
 	}
 
-	//log.Printf(" lockedgrid %s,groupId %s", b.LockedGrid.Hash, groupID.Hash)
-	//log.Println("In enter commit proposal tesseract", b.ProposalTesseracts, b.LockedTesseracts)
+	// log.Printf(" lockedgrid %s,groupId %s", b.LockedGrid.Hash, groupID.Hash)
+	// log.Println("In enter commit proposal tesseract", b.ProposalTesseracts, b.LockedTesseracts)
 	if kbft.LockedGrid.CompareHash(gridID.Hash) {
 		kbft.ProposalGrid = kbft.LockedGrid
 	}
@@ -584,7 +582,7 @@ func (kbft *KBFT) enterNewRound(heights []uint64, round int32) {
 	kbft.Votes.SetRound(round + 1)
 	kbft.TriggeredTimeoutPrecommit = false
 
-	//Now ready to enter propose
+	// Now ready to enter propose
 	kbft.enterPropose(heights, round)
 }
 
@@ -611,7 +609,16 @@ func (kbft *KBFT) enterPropose(heights []uint64, round int32) {
 	}
 
 	if _, exists := kbft.ics.HasKramaID(kbft.vault.KramaID()); !exists {
-		log.Panic("Validator id missing", kbft.vault.KramaID(), kbft.ics.ICS.Nodes[0].Ids, kbft.ics.ICS.Nodes[1].Ids, kbft.ics.ICS.Nodes[1].Ids, kbft.ics.ICS.Nodes[3].Ids, kbft.ics.ICS.Nodes[4].Ids, kbft.ics.ICS.Nodes[5].Ids)
+		log.Panic(
+			"Validator id missing",
+			kbft.vault.KramaID(),
+			kbft.ics.ICS.Nodes[0].Ids,
+			kbft.ics.ICS.Nodes[1].Ids,
+			kbft.ics.ICS.Nodes[1].Ids,
+			kbft.ics.ICS.Nodes[3].Ids,
+			kbft.ics.ICS.Nodes[4].Ids,
+			kbft.ics.ICS.Nodes[5].Ids,
+		)
 
 		return
 	}
@@ -621,7 +628,7 @@ func (kbft *KBFT) enterPropose(heights []uint64, round int32) {
 	}
 }
 
-func (kbft *KBFT) createProposalGrid() (*ktypes.TesseractGrid, error) {
+func (kbft *KBFT) createProposalGrid() (*types.TesseractGrid, error) {
 	grid := kbft.ics.GetTesseractGrid()
 	if grid == nil {
 		return nil, errors.New("invalid tesseract grid")
@@ -633,8 +640,8 @@ func (kbft *KBFT) createProposalGrid() (*ktypes.TesseractGrid, error) {
 		rawHashes = append(rawHashes, v.Hash().Bytes()...)
 	}
 
-	tesseractGrid := &ktypes.TesseractGrid{
-		Hash:       ktypes.GetHash(rawHashes),
+	tesseractGrid := &types.TesseractGrid{
+		Hash:       types.GetHash(rawHashes),
 		Total:      int32(len(grid)),
 		Tesseracts: grid,
 	}
@@ -647,7 +654,7 @@ func (kbft *KBFT) createProposal(heights []uint64, round int32) error {
 	kbft.logger.Info("Creating proposal", "Heights", heights, "Round", round)
 
 	var (
-		grid *ktypes.TesseractGrid
+		grid *types.TesseractGrid
 		err  error
 	)
 
@@ -662,16 +669,16 @@ func (kbft *KBFT) createProposal(heights []uint64, round int32) error {
 
 	// Create a proposal for tesseract gridID
 	proposalGridID := grid.GetTesseractGridID()
-	proposal := ktypes.NewProposal(heights, round, kbft.ValidRound, grid, proposalGridID)
+	proposal := types.NewProposal(heights, round, kbft.ValidRound, grid, proposalGridID)
 
 	// Send an internal message
-	kbft.sendInternalMessage(&ktypes.ProposalMessage{Proposal: proposal})
+	kbft.sendInternalMessage(&types.ProposalMessage{Proposal: proposal})
 
 	return nil
 }
 
-func (kbft *KBFT) sendInternalMessage(msg ktypes.Cmessage) {
-	kbft.selfMsgChan <- ktypes.ConsensusMessage{PeerID: kbft.id, Message: msg}
+func (kbft *KBFT) sendInternalMessage(msg types.Cmessage) {
+	kbft.selfMsgChan <- types.ConsensusMessage{PeerID: kbft.id, Message: msg}
 }
 
 func (kbft *KBFT) prevoteTimeout(round int32) time.Duration {
@@ -680,12 +687,14 @@ func (kbft *KBFT) prevoteTimeout(round int32) time.Duration {
 
 	return time.Duration(preVoteTimeout+preVoteTimeoutDelta*int64(round)) * time.Nanosecond
 }
+
 func (kbft *KBFT) preCommitTimeout(round int32) time.Duration {
 	preCommitTimeout := kbft.config.TimeoutPrecommit.Nanoseconds()
 	preCommitTimeoutDelta := kbft.config.TimeoutPrecommitDelta.Nanoseconds()
 
 	return time.Duration(preCommitTimeout+preCommitTimeoutDelta*int64(round)) * time.Nanosecond
 }
+
 func (kbft *KBFT) proposeTimeout(round int32) time.Duration {
 	proposeTimeout := kbft.config.TimeoutPropose.Nanoseconds()
 	proposeTimeoutDelta := kbft.config.TimeoutProposeDelta.Nanoseconds()
@@ -714,7 +723,7 @@ func (kbft *KBFT) enterPreCommit(heights []uint64, round int32) {
 			log.Println("PreCommit nil due to lock")
 		}
 
-		kbft.sendVote(ktypes.PRECOMMIT, nil)
+		kbft.sendVote(types.PRECOMMIT, nil)
 
 		return
 	}
@@ -730,31 +739,31 @@ func (kbft *KBFT) enterPreCommit(heights []uint64, round int32) {
 			kbft.LockedGrid = nil
 		}
 
-		kbft.sendVote(ktypes.PRECOMMIT, nil)
+		kbft.sendVote(types.PRECOMMIT, nil)
 
 		return
 	}
 
 	if kbft.LockedGrid.CompareHash(gridID.Hash) {
 		kbft.LockedRound = round
-		kbft.sendVote(ktypes.PRECOMMIT, gridID)
+		kbft.sendVote(types.PRECOMMIT, gridID)
 
 		return
 	}
 
 	if kbft.ProposalGrid.CompareHash(gridID.Hash) {
-		//TODO: Validate the tesseractGrid
+		// TODO: Validate the tesseractGrid
 		kbft.LockedRound = round
 		kbft.LockedGrid = kbft.ProposalGrid
-		kbft.sendVote(ktypes.PRECOMMIT, gridID)
+		kbft.sendVote(types.PRECOMMIT, gridID)
 
 		return
 	}
 
 	kbft.LockedRound = -1
 	kbft.LockedGrid = nil
-	//kbft.ProposalGrid = nil
-	kbft.sendVote(ktypes.PRECOMMIT, nil)
+	// kbft.ProposalGrid = nil
+	kbft.sendVote(types.PRECOMMIT, nil)
 }
 
 // updateRoundStep
@@ -777,24 +786,24 @@ func (kbft *KBFT) enterPrevote(h []uint64, r int32) {
 
 	if kbft.LockedGrid != nil {
 		kbft.logger.Trace("Voting on locked grid", "grid-id", kbft.LockedGrid.Hash.Hex())
-		kbft.sendVote(ktypes.PREVOTE, kbft.LockedGrid.GetTesseractGridID())
+		kbft.sendVote(types.PREVOTE, kbft.LockedGrid.GetTesseractGridID())
 
 		return
 	}
 
 	if kbft.ProposalGrid == nil {
 		kbft.logger.Trace("Proposal grid is nil")
-		kbft.sendVote(ktypes.PREVOTE, nil)
+		kbft.sendVote(types.PREVOTE, nil)
 
 		return
 	}
 
-	//TODO: Validate the block and vote
-	kbft.sendVote(ktypes.PREVOTE, kbft.ProposalGrid.GetTesseractGridID())
+	// TODO: Validate the block and vote
+	kbft.sendVote(types.PREVOTE, kbft.ProposalGrid.GetTesseractGridID())
 }
 
 // sendVote will send a signed vote message for the given vote-type and tesseractGrid
-func (kbft *KBFT) sendVote(msgType ktypes.ConsensusMsgType, tesseractGridID *ktypes.TesseractGridID) *ktypes.Vote {
+func (kbft *KBFT) sendVote(msgType types.ConsensusMsgType, tesseractGridID *types.TesseractGridID) *types.Vote {
 	kbft.logger.Debug("Sending vote", "vote-type", msgType, "grid-id", tesseractGridID)
 
 	if kbft.vault == nil {
@@ -814,26 +823,26 @@ func (kbft *KBFT) sendVote(msgType ktypes.ConsensusMsgType, tesseractGridID *kty
 		return nil
 	}
 
-	kbft.sendInternalMessage(&ktypes.VoteMessage{Vote: vote})
+	kbft.sendInternalMessage(&types.VoteMessage{Vote: vote})
 
 	return vote
 }
 
 // signVote will create a vote message and sign it using the validator consensus key
-func (kbft *KBFT) signVote(msgType ktypes.ConsensusMsgType, id *ktypes.TesseractGridID) (*ktypes.Vote, error) {
+func (kbft *KBFT) signVote(msgType types.ConsensusMsgType, id *types.TesseractGridID) (*types.Vote, error) {
 	valIndex, _ := kbft.ics.HasKramaID(kbft.id)
 
 	if valIndex == -1 {
-		return nil, ktypes.ErrKramaIDNotFound
+		return nil, types.ErrKramaIDNotFound
 	}
 
-	v := &ktypes.Vote{
+	v := &types.Vote{
 		ValidatorIndex: valIndex,
-		GridID: &ktypes.TesseractGridID{
-			Hash: ktypes.NilHash,
-			Parts: &ktypes.TesseractParts{
+		GridID: &types.TesseractGridID{
+			Hash: types.NilHash,
+			Parts: &types.TesseractParts{
 				Total:   0,
-				Hashes:  make([]ktypes.Hash, 0),
+				Hashes:  make([]types.Hash, 0),
 				Heights: make([]uint64, 0),
 			},
 		},
@@ -889,7 +898,7 @@ func (kbft *KBFT) scheduleTimeout(d time.Duration, heights []uint64, r int32, st
 }
 
 func (kbft *KBFT) stepChange() {
-	//Write to the log
+	// Write to the log
 	kbft.nSteps++
 }
 
@@ -901,7 +910,7 @@ func (kbft *KBFT) PrintMetrics() {
 	if kbft.Proposal != nil {
 		prevoteSet := prevotes.votesByTesseract[string(kbft.Proposal.GridID.Hash.Bytes())]
 		precommitSet := precommits.votesByTesseract[string(kbft.ProposalGrid.Hash.Bytes())]
-		kbft.logger.Debug("Validators", "list", fmt.Sprintf("%s", prevotes.valset.ICS))
+		kbft.logger.Debug("Validators", "list", prevotes.valset.ICS.String())
 		kbft.logger.Debug("Prevote Received", prevoteSet.bitarray)
 		kbft.logger.Debug("Precommit Received", precommitSet.bitarray)
 	}

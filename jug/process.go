@@ -1,8 +1,8 @@
 package jug
 
-//func ProcessTesseract(exec *Exec, ts map[ktypes.Address]*ktypes.Tesseract,
-//ix ktypes.Interactions, contextDelta map[ktypes.Address]*ktypes.ContextDelta) (ktypes.Receipts, error) {
-//	reciepts := make(ktypes.Receipts, 0, len(ix))
+//func ProcessTesseract(exec *Exec, ts map[types.Address]*types.Tesseract,
+//ix types.Interactions, contextDelta map[types.Address]*types.ContextDelta) (types.Receipts, error) {
+//	reciepts := make(types.Receipts, 0, len(ix))
 //
 //for k, v := range ix {
 //	if k == 0 {

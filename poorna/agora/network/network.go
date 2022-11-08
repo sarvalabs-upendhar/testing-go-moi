@@ -7,15 +7,16 @@ import (
 	"sync"
 	"time"
 
+	"gitlab.com/sarvalabs/moichain/utils"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	"gitlab.com/sarvalabs/moichain/common/kutils"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/moichain/poorna"
-	"gitlab.com/sarvalabs/moichain/poorna/agora/types"
+	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
+	"gitlab.com/sarvalabs/moichain/types"
 	"gitlab.com/sarvalabs/polo/go-polo"
 )
 
@@ -25,7 +26,7 @@ const (
 
 type SessionManager interface {
 	HandlePeerMessage(id id.KramaID, msg interface{})
-	PeerDisconnected(sessions []ktypes.Address, id peer.ID)
+	PeerDisconnected(sessions []types.Address, id peer.ID)
 }
 
 type AgoraNetwork struct {
@@ -55,7 +56,7 @@ func (an *AgoraNetwork) streamHandler(stream network.Stream) {
 		id:             stream.Conn().RemotePeer(),
 		stream:         stream,
 		connected:      true,
-		activeSessions: make(map[ktypes.Address]struct{}),
+		activeSessions: make(map[types.Address]struct{}),
 	}
 
 	an.peers.Store(agoraPeer.id, agoraPeer)
@@ -86,7 +87,7 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 		}
 
 		// Unmarshal the buffer into a proto message
-		message := new(ktypes.Message)
+		message := new(types.Message)
 		if err = polo.Depolorize(message, buffer[0:byteCount]); err != nil {
 			an.logger.Error("Error reading data from stream", "error", err)
 
@@ -96,8 +97,8 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 		peer.updateLastActiveTime() // check if remote peer can spam with invalid messages
 
 		switch message.MsgType {
-		case ktypes.AGORAREQ:
-			reqMsg := new(types.AgoraRequestMsg)
+		case types.AGORAREQ:
+			reqMsg := new(atypes.AgoraRequestMsg)
 			if err := polo.Depolorize(reqMsg, message.Payload); err != nil {
 				an.logger.Error("Error depolarising agora message")
 
@@ -107,8 +108,8 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 			an.metrics.captureInboundDataSize(float64(len(polo.Polorize(reqMsg))))
 			an.sm.HandlePeerMessage(message.Sender, reqMsg)
 
-		case ktypes.AGORARESP:
-			respMsg := new(types.AgoraResponseMsg)
+		case types.AGORARESP:
+			respMsg := new(atypes.AgoraResponseMsg)
 			if err := polo.Depolorize(respMsg, message.Payload); err != nil {
 				an.logger.Error("Error depolarising agora message")
 
@@ -121,8 +122,8 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 	}
 }
 
-func (an *AgoraNetwork) SendAgoraMessage(id id.KramaID, msgType ktypes.MsgType, msg types.Message) error {
-	peerID, err := kutils.GetNetworkID(id)
+func (an *AgoraNetwork) SendAgoraMessage(id id.KramaID, msgType types.MsgType, msg atypes.Message) error {
+	peerID, err := utils.GetNetworkID(id)
 	if err != nil {
 		an.logger.Error("Unable to decode peer id", "error", err)
 
@@ -137,7 +138,7 @@ func (an *AgoraNetwork) SendAgoraMessage(id id.KramaID, msgType ktypes.MsgType, 
 		}
 
 		peer = &AgoraPeer{
-			activeSessions: map[ktypes.Address]struct{}{msg.GetSessionID(): {}},
+			activeSessions: map[types.Address]struct{}{msg.GetSessionID(): {}},
 			id:             peerID,
 			stream:         stream,
 			connected:      true,
@@ -147,7 +148,7 @@ func (an *AgoraNetwork) SendAgoraMessage(id id.KramaID, msgType ktypes.MsgType, 
 
 		agoraPeer, ok := peer.(*AgoraPeer)
 		if !ok {
-			return ktypes.ErrInterfaceConversion
+			return types.ErrInterfaceConversion
 		}
 
 		go an.handlePeerMessages(agoraPeer)
@@ -155,7 +156,7 @@ func (an *AgoraNetwork) SendAgoraMessage(id id.KramaID, msgType ktypes.MsgType, 
 
 	agoraPeer, ok := peer.(*AgoraPeer)
 	if !ok {
-		return ktypes.ErrInterfaceConversion
+		return types.ErrInterfaceConversion
 	}
 
 	if err := agoraPeer.sendMessage(an.server.GetKramaID(), msgType, msg); err != nil {
@@ -199,8 +200,8 @@ func (an *AgoraNetwork) pruneInactivePeers() {
 	}
 }
 
-func (an *AgoraNetwork) ClosePeerSession(kramaID id.KramaID, sessionID ktypes.Address) error {
-	peerID, err := kutils.GetNetworkID(kramaID)
+func (an *AgoraNetwork) ClosePeerSession(kramaID id.KramaID, sessionID types.Address) error {
+	peerID, err := utils.GetNetworkID(kramaID)
 	if err != nil {
 		an.logger.Error("Error parsing krama id", kramaID)
 
@@ -214,7 +215,7 @@ func (an *AgoraNetwork) ClosePeerSession(kramaID id.KramaID, sessionID ktypes.Ad
 
 	agoraPeer, ok := p.(*AgoraPeer)
 	if !ok {
-		return ktypes.ErrInterfaceConversion
+		return types.ErrInterfaceConversion
 	}
 
 	agoraPeer.removeActiveSession(sessionID)

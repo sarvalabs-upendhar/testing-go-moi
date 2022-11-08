@@ -1,8 +1,8 @@
 package db
 
-import "gitlab.com/sarvalabs/moichain/common/ktypes"
+import "gitlab.com/sarvalabs/moichain/types"
 
-//DB defines a common interface implemented by all key-value database
+// DB defines a common interface implemented by all key-value database
 type DB interface {
 	Insert(key []byte, value []byte) error
 	Update(key []byte, value []byte) error
@@ -27,5 +27,5 @@ type Iterator interface {
 	Seek(key []byte)
 	Next()
 	ValidForPrefix(prefix []byte) bool
-	GetNext() (*ktypes.DBEntry, error)
+	GetNext() (*types.DBEntry, error)
 }

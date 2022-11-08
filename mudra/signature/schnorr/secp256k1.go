@@ -20,8 +20,8 @@ func (sch *SchnorrSignature) Type() common.SigType {
 func (sch *SchnorrSignature) Sign(data []byte, signingKey []byte, kid kramaid.KramaID) error {
 	privKey, pubKey := btcec.PrivKeyFromBytes(signingKey)
 	keccakOfMessage := common.GetKeccak256Hash(data)
-	sigInSchnorr, err := schnorr.Sign(privKey, keccakOfMessage)
 
+	sigInSchnorr, err := schnorr.Sign(privKey, keccakOfMessage)
 	if err != nil {
 		return err
 	}

@@ -3,14 +3,15 @@ package guna
 import (
 	"context"
 	"encoding/hex"
+	"testing"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/require"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	"gitlab.com/sarvalabs/moichain/common/tests"
 	"gitlab.com/sarvalabs/moichain/dhruva/db"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	"gitlab.com/sarvalabs/moichain/types"
 	"gitlab.com/sarvalabs/polo/go-polo"
-	"testing"
 )
 
 func TestReputationEngine_GetInfo_FetchFromDB(t *testing.T) {
@@ -27,7 +28,7 @@ func TestReputationEngine_GetInfo_FetchFromDB(t *testing.T) {
 		PublickKey: []byte{0x02, 0x03},
 	}
 	// add entry to DB
-	err := mstore.CreateEntry(ktypes.NtqDBKey(kramaIDs[0]), polo.Polorize(info))
+	err := mstore.CreateEntry(types.NtqDBKey(kramaIDs[0]), polo.Polorize(info))
 	require.NoError(t, err, "error adding reputation info to db")
 
 	storedInfo, err := engine.getInfo(kramaIDs[0])
@@ -61,7 +62,7 @@ func (store *mockStore) ReadEntry(key []byte) ([]byte, error) {
 
 	data, ok := store.data[hexKey]
 	if !ok {
-		return nil, ktypes.ErrKeyNotFound
+		return nil, types.ErrKeyNotFound
 	}
 
 	return data, nil
@@ -70,7 +71,7 @@ func (store *mockStore) ReadEntry(key []byte) ([]byte, error) {
 func (store *mockStore) CreateEntry(key, value []byte) error {
 	hexKey := hex.EncodeToString(key)
 	if _, ok := store.data[hexKey]; ok {
-		return ktypes.ErrKeyExists
+		return types.ErrKeyExists
 	}
 
 	store.data[hexKey] = value
@@ -91,7 +92,7 @@ func (store *mockStore) UpdateEntry(key, value []byte) error {
 	hexKey := hex.EncodeToString(key)
 
 	if _, ok := store.data[hexKey]; !ok {
-		return ktypes.ErrKeyNotFound
+		return types.ErrKeyNotFound
 	}
 
 	store.data[hexKey] = value
@@ -102,7 +103,8 @@ func (store *mockStore) UpdateEntry(key, value []byte) error {
 func (store *mockStore) NewBatchWriter() db.BatchWriter {
 	return nil
 }
-func (store *mockStore) GetEntries(prefix []byte) chan ktypes.DBEntry {
+
+func (store *mockStore) GetEntries(prefix []byte) chan types.DBEntry {
 	return nil
 }
 

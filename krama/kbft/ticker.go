@@ -105,7 +105,7 @@ func (t *Ticker) timeoutRoutine() {
 					continue
 				} else if newTimeoutInfo.Round == info.Round {
 					// For same rounds, skip scheduling if current timeout has a running round
-					//AND new timeout step is less than current
+					// AND new timeout step is less than current
 					if info.Step > 0 && newTimeoutInfo.Step <= info.Step {
 						continue
 					}

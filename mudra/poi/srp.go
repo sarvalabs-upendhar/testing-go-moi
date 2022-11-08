@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"gitlab.com/sarvalabs/moichain/mudra/common"
 	"log"
+
+	"gitlab.com/sarvalabs/moichain/mudra/common"
 
 	"github.com/tyler-smith/go-bip39"
 	"golang.org/x/crypto/scrypt"
@@ -36,8 +37,8 @@ func getKDFKey(cryptoJSON cryptoParams, auth string) (SRPPrivateBytes, error) {
 	var srb SRPPrivateBytes
 
 	authArray := []byte(auth)
-	salt, err := hex.DecodeString(cryptoJSON.KDFParams["salt"].(string))
 
+	salt, err := hex.DecodeString(cryptoJSON.KDFParams["salt"].(string))
 	if err != nil {
 		return srb, err
 	}
@@ -68,7 +69,6 @@ func getKDFKey(cryptoJSON cryptoParams, auth string) (SRPPrivateBytes, error) {
 // from wallet keystore. This is our own implementation.
 func getSRPFromEncryptedJSON(walletKeystore WalletKeystoreJSON, auth string) (*string, error) {
 	srpPrivateBytes, err := getKDFKey(walletKeystore.Crypto, auth)
-
 	if err != nil {
 		return nil, err
 	}
@@ -88,8 +88,8 @@ func getSRPFromEncryptedJSON(walletKeystore WalletKeystoreJSON, auth string) (*s
 	}
 
 	mnemomicPrivateBytes := srpPrivateBytes.getMnemonicKey()
-	srpEntropy, err := aesCTRXOR(mnemomicPrivateBytes, srpCipherText, srpIV)
 
+	srpEntropy, err := aesCTRXOR(mnemomicPrivateBytes, srpCipherText, srpIV)
 	if err != nil {
 		return nil, err
 	}

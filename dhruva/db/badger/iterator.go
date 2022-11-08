@@ -2,7 +2,7 @@ package badger
 
 import (
 	"github.com/dgraph-io/badger/v3"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 // Iterator is a prefix enable badger key-value iterator
@@ -33,13 +33,13 @@ func (b *Iterator) ValidForPrefix(prefix []byte) bool {
 }
 
 // GetNext returns the next entry
-func (b *Iterator) GetNext() (*ktypes.DBEntry, error) {
-	var entry *ktypes.DBEntry
+func (b *Iterator) GetNext() (*types.DBEntry, error) {
+	var entry *types.DBEntry
 
 	item := b.it.Item()
 	err := item.Value(func(v []byte) error {
 		if v != nil {
-			entry = &ktypes.DBEntry{Key: item.Key(), Value: v}
+			entry = &types.DBEntry{Key: item.Key(), Value: v}
 		}
 
 		return nil

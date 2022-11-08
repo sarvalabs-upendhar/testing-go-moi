@@ -2,9 +2,10 @@ package musig2
 
 import (
 	"bytes"
+	"sort"
+
 	"gitlab.com/sarvalabs/btcd-musig/btcec"
 	"gitlab.com/sarvalabs/btcd-musig/btcec/schnorr"
-	"sort"
 )
 
 // sortableKeys defines a type of slice of public keys that implements the sort

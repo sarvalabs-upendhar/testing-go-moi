@@ -1,25 +1,27 @@
 package types
 
 import (
-	"github.com/rs/zerolog/log"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	"gitlab.com/sarvalabs/moichain/common/kutils"
-	"gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"golang.org/x/crypto/blake2b"
 	"sync"
 	"time"
+
+	"gitlab.com/sarvalabs/moichain/utils"
+
+	"github.com/rs/zerolog/log"
+	"gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	"gitlab.com/sarvalabs/moichain/types"
+	"golang.org/x/crypto/blake2b"
 )
 
 const MaxPeerListSize = 5
 
 type Message interface {
-	GetSessionID() ktypes.Address
+	GetSessionID() types.Address
 }
 
 type Response struct {
 	PeerID    kramaid.KramaID
-	SessionID ktypes.Address
-	StateHash ktypes.Hash
+	SessionID types.Address
+	StateHash types.Hash
 	Status    bool
 	HaveList  HaveList
 	PeerSet   []kramaid.KramaID
@@ -35,7 +37,7 @@ func (r *Response) GetAgoraMsg() *AgoraResponseMsg {
 }
 
 type AgoraResponseMsg struct {
-	SessionID ktypes.Address
+	SessionID types.Address
 	Status    bool
 	HaveList  [][]byte
 	PeerSet   []kramaid.KramaID
@@ -52,21 +54,21 @@ func (resp *AgoraResponseMsg) GetBlocks() []Block {
 }
 
 type AgoraRequestMsg struct {
-	SessionID ktypes.Address
-	StateHash ktypes.Hash
-	WantList  []ktypes.Hash
+	SessionID types.Address
+	StateHash types.Hash
+	WantList  []types.Hash
 }
 
-func (req *AgoraRequestMsg) GetSessionID() ktypes.Address {
+func (req *AgoraRequestMsg) GetSessionID() types.Address {
 	return req.SessionID
 }
 
-func (resp *AgoraResponseMsg) GetSessionID() ktypes.Address {
+func (resp *AgoraResponseMsg) GetSessionID() types.Address {
 	return resp.SessionID
 }
 
 type Block struct {
-	id   ktypes.Hash
+	id   types.Hash
 	data []byte
 }
 
@@ -83,7 +85,7 @@ func (b *Block) GetData() []byte {
 	return b.data
 }
 
-func (b *Block) GetID() ktypes.Hash {
+func (b *Block) GetID() types.Hash {
 	return b.id
 }
 
@@ -101,8 +103,8 @@ func (h *HaveList) Size() int {
 	return len(h.blocks)
 }
 
-func (h *HaveList) GetKeys() []ktypes.Hash {
-	hashes := make([]ktypes.Hash, len(h.blocks))
+func (h *HaveList) GetKeys() []types.Hash {
+	hashes := make([]types.Hash, len(h.blocks))
 
 	for k, v := range h.blocks {
 		hashes[k] = v.id
@@ -110,6 +112,7 @@ func (h *HaveList) GetKeys() []ktypes.Hash {
 
 	return hashes
 }
+
 func (h *HaveList) GetBlocks() []Block {
 	return h.blocks
 }
@@ -213,21 +216,22 @@ func (plist *PeerList) CanonicalPeerList() *CanonicalPeerList {
 
 type WantTracker struct {
 	mtx       sync.RWMutex
-	fetched   *kutils.Queue
-	liveWants map[ktypes.Hash]time.Time
+	fetched   *utils.Queue
+	liveWants map[types.Hash]time.Time
 }
 
 func NewWantTracker() *WantTracker {
 	return &WantTracker{
-		fetched:   kutils.NewCidQueue(),
-		liveWants: make(map[ktypes.Hash]time.Time),
+		fetched:   utils.NewCidQueue(),
+		liveWants: make(map[types.Hash]time.Time),
 	}
 }
-func (wt *WantTracker) UpdateLiveWants(keys *kutils.HashSet) {
+
+func (wt *WantTracker) UpdateLiveWants(keys *utils.HashSet) {
 	wt.mtx.Lock()
 	defer wt.mtx.Unlock()
 
-	if err := keys.ForEach(func(c ktypes.Hash) error {
+	if err := keys.ForEach(func(c types.Hash) error {
 		reqTime, ok := wt.liveWants[c]
 		if !ok || time.Since(reqTime) > 200*time.Millisecond {
 			wt.liveWants[c] = time.Now()
@@ -238,13 +242,14 @@ func (wt *WantTracker) UpdateLiveWants(keys *kutils.HashSet) {
 		log.Print("error removing redundant keys")
 	}
 }
-func (wt *WantTracker) RemoveRedundantKeys(cids *kutils.HashSet) {
+
+func (wt *WantTracker) RemoveRedundantKeys(cids *utils.HashSet) {
 	wt.mtx.Lock()
 	defer wt.mtx.Unlock()
 
-	redundantKeys := make([]ktypes.Hash, 0)
+	redundantKeys := make([]types.Hash, 0)
 
-	if err := cids.ForEach(func(c ktypes.Hash) error {
+	if err := cids.ForEach(func(c types.Hash) error {
 		reqTime, ok := wt.liveWants[c]
 
 		if ok && time.Since(reqTime) < 200*time.Millisecond {
@@ -261,7 +266,7 @@ func (wt *WantTracker) RemoveRedundantKeys(cids *kutils.HashSet) {
 	}
 }
 
-func (wt *WantTracker) RemoveCid(cid ktypes.Hash) {
+func (wt *WantTracker) RemoveCid(cid types.Hash) {
 	wt.mtx.Lock()
 	defer wt.mtx.Unlock()
 

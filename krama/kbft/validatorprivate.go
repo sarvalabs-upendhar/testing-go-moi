@@ -4,21 +4,23 @@ import (
 	"crypto"
 	"crypto/ed25519"
 	crand "crypto/rand"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
+	"errors"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
+
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 type PrivateValidator interface {
 	GetPubKey() PublicKey
-	SignVote(v *ktypes.Vote) error
+	SignVote(v *types.Vote) error
 }
 
 type TestPrivateValidator struct {
 	PrivateKey crypto.PrivateKey
-	//PublicKey  signature.PublicKey
+	// PublicKey  signature.PublicKey
 }
 
 func NewTestPrivateValidator(path string) (*TestPrivateValidator, error) {
@@ -33,17 +35,24 @@ func NewTestPrivateValidator(path string) (*TestPrivateValidator, error) {
 }
 
 func (pv *TestPrivateValidator) GetPubKey() PublicKey {
-	pk := pv.PrivateKey.(ed25519.PrivateKey)
-	pb := &MOIPublicKey{pk.Public()}
+	if privKey, ok := pv.PrivateKey.(ed25519.PrivateKey); ok {
+		pb := &MOIPublicKey{privKey.Public()}
 
-	return pb
-}
-
-func (pv *TestPrivateValidator) SignVote(v *ktypes.Vote) error {
-	rawBytes := v.Bytes()
-	v.Signature = ed25519.Sign(pv.PrivateKey.(ed25519.PrivateKey), rawBytes)
+		return pb
+	}
 
 	return nil
+}
+
+func (pv *TestPrivateValidator) SignVote(v *types.Vote) error {
+	if privKey, ok := pv.PrivateKey.(ed25519.PrivateKey); ok {
+		rawBytes := v.Bytes()
+		v.Signature = ed25519.Sign(privKey, rawBytes)
+
+		return nil
+	}
+
+	return errors.New("private key not of type ed25519.PrivateKey")
 }
 
 func (pv *TestPrivateValidator) acquireSeed(keyfile string) error {
@@ -73,7 +82,7 @@ func (pv *TestPrivateValidator) acquireSeed(keyfile string) error {
 		}
 
 		// Write the private key data to keyfile and check for errors
-		if err := ioutil.WriteFile(keyfile, key.Seed(), 0600); err != nil {
+		if err := ioutil.WriteFile(keyfile, key.Seed(), 0o600); err != nil {
 			// Return the error
 			return err
 		}

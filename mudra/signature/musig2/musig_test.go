@@ -70,8 +70,8 @@ func testMusigForNnodes(nodesInICS int) error {
 
 	wg.Wait()
 
-	//fmt.Println("\nDone with Pre vote round")
-	//fmt.Println("Now all session have all the public nonce from other nodes in ICS")
+	// fmt.Println("\nDone with Pre vote round")
+	// fmt.Println("Now all session have all the public nonce from other nodes in ICS")
 
 	msg := "I'm the tesseract data"
 
@@ -90,13 +90,13 @@ func testMusigForNnodes(nodesInICS int) error {
 
 		preCommitSignatures[i] = UnmarshalPartialSig(partialSig)
 	}
-	//fmt.Println("\nDone with Pre Commit round")
-	//fmt.Println("Now every node have other's partial signature")
+	// fmt.Println("\nDone with Pre Commit round")
+	// fmt.Println("Now every node have other's partial signature")
 
 	// After Pre-commit round, check for aggregated signature
 	// Here we are doing for first node as example
 
-	//fmt.Println("\nVerifying each partial signatures and Aggregating them at NODE 1")
+	// fmt.Println("\nVerifying each partial signatures and Aggregating them at NODE 1")
 	// Verify Partial Signature
 	sessionOfNode1 := signerSessions[0]
 
@@ -128,7 +128,7 @@ func testMusigForNnodes(nodesInICS int) error {
 		}
 	}
 
-	//fmt.Println("\nVerifying Aggregated signature")
+	// fmt.Println("\nVerifying Aggregated signature")
 	finalSig := sessionOfNode1.FinalSig()
 	if !finalSig.Verify(bytes32Message[:], aggPubKey) {
 		return errors.New("final sig is invalid")

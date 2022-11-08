@@ -58,7 +58,6 @@ func NewTracerProvider(ctx context.Context, enableTracing bool, jaegerAddress st
 	}
 
 	exporters, err := buildExporters(ctx, jaegerAddress)
-
 	if err != nil {
 		return nil, err
 	}

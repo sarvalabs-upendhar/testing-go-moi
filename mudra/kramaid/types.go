@@ -46,7 +46,8 @@ func NewKramaID(commPrivBytes []byte,
 	nthValidator uint32,
 	moiIDAddress string,
 	version int,
-	isNode bool) (KramaID, error) {
+	isNode bool,
+) (KramaID, error) {
 	switch version {
 	case 1:
 		return generateKramaIDV1(nthValidator, moiIDAddress, commPrivBytes, isNode)

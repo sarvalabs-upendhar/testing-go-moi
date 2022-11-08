@@ -30,8 +30,8 @@ const (
 // Know more about this basex encoding here: https://awesomeopensource.com/project/cryptocoinjs/base-x
 func BaseXEncode(username string) (*string, error) {
 	convertedHexstring := fmt.Sprintf("%x", username)
-	decodedHexString, err := hex.DecodeString(convertedHexstring)
 
+	decodedHexString, err := hex.DecodeString(convertedHexstring)
 	if err != nil {
 		return nil, errors.New("error in decoding the string to hex")
 	}
@@ -164,8 +164,8 @@ func mParseInt(m interface{}) int {
 
 func getKDFKeyForKeystore(cryptoJSON cryptoParams, auth string) ([]byte, error) {
 	authArray := []byte(auth)
-	salt, err := hex.DecodeString(cryptoJSON.KDFParams["salt"].(string))
 
+	salt, err := hex.DecodeString(cryptoJSON.KDFParams["salt"].(string))
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +213,6 @@ func encryptAndGetKeystore(data, auth []byte) (cryptoParams, error) {
 	}
 
 	cipherText, err := aesCTRXOR(encryptKey, data, iv)
-
 	if err != nil {
 		return cryptoParams{}, err
 	}
@@ -249,7 +248,6 @@ func CheckForKYC(userDefAddr, moiIDBaseURL string) (bool, error) {
 		"defAddr":   userDefAddr,
 		"nameSpace": "validator",
 	})
-
 	if err != nil {
 		return false, err
 	}

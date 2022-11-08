@@ -32,10 +32,10 @@ func (st SigType) Byte() byte {
 
 // Signature represents the multihash construction of signature (<SIG_ALGO>,<SIG_LENGTH>,<SIG_DIGEST>,<SIG_EXTRA>)
 type Signature struct {
-	//SigPrefix have bytes of length 2, where [0]: signature algorithm and [1]: signature length
+	// SigPrefix have bytes of length 2, where [0]: signature algorithm and [1]: signature length
 	SigPrefix [2]byte
-	//Digest represents digest generated after signing the actual payload
+	// Digest represents digest generated after signing the actual payload
 	Digest []byte
-	//Extra represents additional information that will be needed at the time of verification
+	// Extra represents additional information that will be needed at the time of verification
 	Extra []byte
 }

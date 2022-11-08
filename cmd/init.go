@@ -1,7 +1,3 @@
-/*
-Copyright © 2022 NAME HERE <EMAIL ADDRESS>
-
-*/
 package cmd
 
 import (
@@ -22,13 +18,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var directoryIndex int
-var count int
-var bootnode string
-var jaegerAddress string
-var password string
-var logFilePath string
-var port int
+var (
+	directoryIndex int
+	count          int
+	bootnode       string
+	jaegerAddress  string
+	password       string
+	logFilePath    string
+	port           int
+)
 
 // initCmd represents the init command
 var initCmd = &cobra.Command{
@@ -63,7 +61,7 @@ to quickly create a Cobra application.`,
 
 			configData := CreateConfigFile(fmt.Sprintf("test_%d", directoryIndex+i), directoryIndex+i)
 
-			if err := ioutil.WriteFile(fmt.Sprintf("test_%d/config.json", directoryIndex+i), configData, 0600); err != nil {
+			if err := ioutil.WriteFile(fmt.Sprintf("test_%d/config.json", directoryIndex+i), configData, 0o600); err != nil {
 				Err(err)
 			}
 		}
@@ -73,15 +71,6 @@ to quickly create a Cobra application.`,
 func init() {
 	testCmd.AddCommand(initCmd)
 
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// initCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// initCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	testCmd.PersistentFlags().IntVar(
 		&port,
 		"port",

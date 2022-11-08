@@ -4,12 +4,15 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"gitlab.com/sarvalabs/moichain/mudra"
-	mcommon "gitlab.com/sarvalabs/moichain/mudra/common"
 	"log"
 	"math/rand"
 	"sync"
 	"time"
+
+	"gitlab.com/sarvalabs/moichain/utils"
+
+	"gitlab.com/sarvalabs/moichain/mudra"
+	mcommon "gitlab.com/sarvalabs/moichain/mudra/common"
 
 	"github.com/hashicorp/go-hclog"
 	maddr "github.com/multiformats/go-multiaddr"
@@ -29,8 +32,7 @@ import (
 	kdht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"gitlab.com/sarvalabs/moichain/common"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	"gitlab.com/sarvalabs/moichain/common/kutils"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 const (
@@ -88,7 +90,7 @@ type Server struct {
 	topicSetLock sync.RWMutex
 
 	// Represents the KIP typemux of the node
-	mux *kutils.TypeMux
+	mux *utils.TypeMux
 
 	rpcServers map[protocol.ID]*lrpc.Server
 
@@ -117,7 +119,7 @@ func NewServer(
 	parentCtx context.Context,
 	logger hclog.Logger,
 	id id.KramaID,
-	mux *kutils.TypeMux,
+	mux *utils.TypeMux,
 	config *common.NetworkConfig,
 	vault Vault,
 ) (*Server, error) {
@@ -248,6 +250,7 @@ func (s *Server) setupHost() (err error) {
 
 	return nil
 }
+
 func (s *Server) GetKramaID() id.KramaID {
 	return s.id
 }
@@ -296,6 +299,7 @@ func pubsubGossipParam() pubsub.GossipSubParams {
 	gParams.D = 8
 	gParams.Dhi = 16
 	gParams.HeartbeatInterval = 500 * time.Millisecond
+
 	return gParams
 }
 
@@ -350,7 +354,7 @@ func (s *Server) streamHandlerFunc(stream network.Stream) {
 		return
 	}
 
-	message := new(ktypes.Message)
+	message := new(types.Message)
 
 	err = polo.Depolorize(message, buffer[0:byteCount])
 	if err != nil {
@@ -361,7 +365,7 @@ func (s *Server) streamHandlerFunc(stream network.Stream) {
 		return
 	}
 	// Unmarshal message proto into a NewPeer message
-	var msg ktypes.HandshakeMSG
+	var msg types.HandshakeMSG
 	if err := polo.Depolorize(&msg, message.Payload); err != nil {
 		if err := kpeer.sendHandshakeErrorResp(s.id, err); err != nil {
 			s.logger.Error("Hand shake failed", "error", err)
@@ -394,7 +398,7 @@ func (s *Server) streamHandlerFunc(stream network.Stream) {
 	}
 
 	// Post the event to the registered receivers for NewPeerEvents
-	peerEvent := kutils.NewPeerEvent{PeerID: kpeer.networkID}
+	peerEvent := utils.NewPeerEvent{PeerID: kpeer.networkID}
 	// Post the event to the registered receivers for NewPeerEvents
 	if err := s.mux.Post(peerEvent); err != nil {
 		// Log any error that occurs
@@ -443,7 +447,7 @@ func (s *Server) handleDiscovery() error {
 
 	// Iterate over the channel of peer addresses
 	for p := range peerChan {
-		//log.Println("In peer", p)
+		// log.Println("In peer", p)
 		// Skip iteration if the peer addresses points to self
 		if p.ID == s.host.ID() {
 			continue
@@ -452,7 +456,7 @@ func (s *Server) handleDiscovery() error {
 		// Check if the host is already connected to the peer.
 		if !s.Peers.ContainsPeer(p.ID) {
 			// Attempt to connect the node host to the peer
-			//log.Println("Connecting to peer", p.id)
+			// log.Println("Connecting to peer", p.id)
 			if err := s.host.Connect(s.ctx, p); err != nil {
 				// Skip iteration if connection fails
 				continue
@@ -490,12 +494,12 @@ func (s *Server) handleDiscovery() error {
 			}
 
 			// Post the event to the registered receivers for NewPeerEvents
-			peerEvent := kutils.NewPeerEvent{PeerID: kPeer.networkID}
+			peerEvent := utils.NewPeerEvent{PeerID: kPeer.networkID}
 			if err := s.mux.Post(peerEvent); err != nil {
 				log.Fatal(err)
 			}
 			// // Post the event to the registered receivers for Syncer
-			if err := s.mux.Post(kutils.PeerDiscoveredEvent{ID: p.ID}); err != nil {
+			if err := s.mux.Post(utils.PeerDiscoveredEvent{ID: p.ID}); err != nil {
 				log.Fatal(err)
 			}
 			// Log the successful connection to the peer
@@ -538,7 +542,7 @@ func (s *Server) ConnectPeer(kramaID id.KramaID) error {
 	}
 
 	// Return a nil error
-	return ktypes.ErrConnectionExists
+	return types.ErrConnectionExists
 }
 
 // DisconnectPeer is a method of Server that disconnects a peer associated with a given KramaID from the network.
@@ -583,10 +587,10 @@ func (s *Server) Broadcast(topic string, data []byte) error {
 	defer s.topicSetLock.Unlock()
 
 	// Retrieve the topic handler from the node's pubsub topicsets
-	//s.topicSetLock.RLock()
+	// s.topicSetLock.RLock()
 	topicSet := s.pstopics[topic]
-	//s.topicSetLock.RUnlock()
-	//log.Println("Printing the topic", topicSet)
+	// s.topicSetLock.RUnlock()
+	// log.Println("Printing the topic", topicSet)
 	if topicSet == nil {
 		tophandle, err := s.PSrouter.Join(topic)
 		if err != nil {
@@ -613,7 +617,7 @@ func (s *Server) Broadcast(topic string, data []byte) error {
 func (s *Server) Unsubscribe(topic string) error {
 	// Cancel the subscription to the topic
 	s.topicSetLock.Lock()
-	s.topicSetLock.Unlock()
+	defer s.topicSetLock.Unlock()
 	// Check if topic exists
 	if s.pstopics[topic] == nil {
 		return nil
@@ -708,7 +712,7 @@ func (s *Server) GetRandomNode() peer.ID {
 	return peers[index]
 }
 
-func (s *Server) SendMessage(peerID peer.ID, msgType ktypes.MsgType, msg interface{}) error {
+func (s *Server) SendMessage(peerID peer.ID, msgType types.MsgType, msg interface{}) error {
 	if s.Peers.ContainsPeer(peerID) {
 		p := s.Peers.Peer(peerID)
 
@@ -718,7 +722,7 @@ func (s *Server) SendMessage(peerID peer.ID, msgType ktypes.MsgType, msg interfa
 	bytes := polo.Polorize(msg)
 	// Create a network message proto with the bytes payload of the message to send
 	// and convert into a proto message and marshal it into a slice of bytes
-	m := ktypes.Message{
+	m := types.Message{
 		MsgType: msgType,
 		Payload: bytes,
 		Sender:  s.id,
@@ -758,6 +762,7 @@ func (s *Server) Start() error {
 
 	return nil
 }
+
 func (s *Server) Stop() {
 	defer s.ctxCancel()
 }
@@ -775,10 +780,10 @@ func (s *Server) SendHelloMessage() {
 			panic(err)
 		}
 
-		peerInfo := ktypes.PeerInfo{
+		peerInfo := types.PeerInfo{
 			ID:      s.id,
 			Ntq:     ntq,
-			Address: kutils.MultiAddrToString(s.GetAddrs()...),
+			Address: utils.MultiAddrToString(s.GetAddrs()...),
 		}
 
 		signature, err := s.vault.Sign(polo.Polorize(peerInfo), mcommon.BlsBLST)
@@ -787,7 +792,7 @@ func (s *Server) SendHelloMessage() {
 			panic(err)
 		}
 
-		msg := ktypes.HelloMsg{
+		msg := types.HelloMsg{
 			Info:      peerInfo,
 			Signature: signature,
 		}

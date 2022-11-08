@@ -13,9 +13,9 @@ func NewPublicAPI(backend *Backend) *PublicAPI {
 }
 
 func GetPublicAPIs(backend *Backend) map[string]interface{} {
-	var publicAPI = NewPublicAPI(backend)
+	publicAPI := NewPublicAPI(backend)
 
-	var apis = make(map[string]interface{})
+	apis := make(map[string]interface{})
 
 	apis["ix"] = publicAPI.IxAPI
 	apis["core"] = publicAPI.CoreAPI

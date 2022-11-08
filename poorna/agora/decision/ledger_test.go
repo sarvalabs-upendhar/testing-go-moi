@@ -2,13 +2,14 @@ package decision
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/require"
 	"gitlab.com/sarvalabs/moichain/common/tests"
-	"gitlab.com/sarvalabs/moichain/poorna/agora/types"
+	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
 	"gitlab.com/sarvalabs/polo/go-polo"
-	"testing"
-	"time"
 )
 
 func TestGetAssociatedPeers_FetchFromCache(t *testing.T) {
@@ -22,7 +23,7 @@ func TestGetAssociatedPeers_FetchFromCache(t *testing.T) {
 	stateHash := tests.RandomHash(t)
 	ids := tests.GetTestKramaIDs(t, 1)
 
-	pList := types.NewPeerList()
+	pList := atypes.NewPeerList()
 	pList.AddPeer(ids[0])
 
 	ledger.cache.Add(GetAgoraKey(stateHash), pList)
@@ -43,7 +44,7 @@ func TestGetAssociatedPeers_FetchFromDB(t *testing.T) {
 	stateHash := tests.RandomHash(t)
 	ids := tests.GetTestKramaIDs(t, 1)
 
-	pList := types.NewPeerList()
+	pList := atypes.NewPeerList()
 	pList.AddPeer(ids[0])
 
 	// Write the list to db
@@ -68,7 +69,7 @@ func TestUpdateAssociatedPeers_EntryAlreadyExists(t *testing.T) {
 	ids := tests.GetTestKramaIDs(t, 2)
 
 	// Create an entry and add it to db
-	pList := types.NewPeerList()
+	pList := atypes.NewPeerList()
 	pList.AddPeer(ids[0])
 
 	// Write the list to db

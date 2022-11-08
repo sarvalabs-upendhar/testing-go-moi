@@ -22,7 +22,7 @@ type Vote struct {
 	Signature []byte `json:"signature"`
 }
 
-// VoteFromProto is a constructor function that generates a new Vote from a ktypes.Vote proto
+// VoteFromProto is a constructor function that generates a new Vote from a types.Vote proto
 func VoteFromProto(protomsg *consensusProtos.Vote) (*Vote, error) {
 	// Generate a new Vote and assign fields from the proto
 	vote := &Vote{
@@ -44,7 +44,7 @@ func VoteFromProto(protomsg *consensusProtos.Vote) (*Vote, error) {
 	return vote, nil
 }
 
-// ToProto is a method of Vote that marshals it into a ktypes.Vote proto message
+// ToProto is a method of Vote that marshals it into a types.Vote proto message
 func (vote *Vote) ToProto() *consensusProtos.Vote {
 	return &consensusProtos.Vote{
 		Height:         vote.Height,

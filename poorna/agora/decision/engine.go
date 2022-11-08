@@ -6,39 +6,30 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/moichain/poorna/agora/db"
-	"gitlab.com/sarvalabs/moichain/poorna/agora/types"
+	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
-/*
-Metrics to be collected
-
-PendingRequests
-Timed out requests
-Request process time
-Avg cid count per request
-
-*/
 const (
 	MaxQueueSize = 1000
 )
 
 type ledger interface {
-	GetAssociatedPeers(addr ktypes.Address, stateHash ktypes.Hash) ([]id.KramaID, error)
-	UpdateAssociatedPeers(addr ktypes.Address, stateHash ktypes.Hash, peers id.KramaID) error
+	GetAssociatedPeers(addr types.Address, stateHash types.Hash) ([]id.KramaID, error)
+	UpdateAssociatedPeers(addr types.Address, stateHash types.Hash, peers id.KramaID) error
 }
 
 type store interface {
-	GetData(ctx context.Context, keys []ktypes.Hash) ([][]byte, error)
-	DoesStateExists(stateHash ktypes.Hash) bool
+	GetData(ctx context.Context, keys []types.Hash) ([][]byte, error)
+	DoesStateExists(stateHash types.Hash) bool
 	Get(key []byte) ([]byte, error)
 	GetBatchWriter() db.BatchWriter
 }
 
 type network interface {
-	SendAgoraMessage(id id.KramaID, msgType ktypes.MsgType, msg types.Message) error
+	SendAgoraMessage(id id.KramaID, msgType types.MsgType, msg atypes.Message) error
 }
 
 type Engine struct {
@@ -48,7 +39,7 @@ type Engine struct {
 	workerLock          sync.Mutex
 	requestWorkerCount  int
 	responseWorkerCount int
-	responses           chan *types.Response
+	responses           chan *atypes.Response
 	workSignal          chan struct{}
 	db                  store
 	ledger              ledger
@@ -72,7 +63,7 @@ func NewEngine(
 		requests:            NewRequestQueue(MaxQueueSize),
 		requestWorkerCount:  requestWorkerCount,
 		responseWorkerCount: responseWorkerCount,
-		responses:           make(chan *types.Response),
+		responses:           make(chan *atypes.Response),
 		workSignal:          make(chan struct{}),
 		db:                  db,
 		ledger:              ledger,
@@ -98,7 +89,7 @@ func (e *Engine) Start() {
 	}
 }
 
-func (e *Engine) nextTask() (*types.Response, error) {
+func (e *Engine) nextTask() (*atypes.Response, error) {
 	for {
 		req := e.requests.Pop()
 		for req == nil {
@@ -134,17 +125,17 @@ func (e *Engine) nextTask() (*types.Response, error) {
 			continue
 		}
 
-		resp := &types.Response{
+		resp := &atypes.Response{
 			PeerID:    req.PeerID,
 			SessionID: req.SessionID,
 			StateHash: req.StateHash,
 			Status:    true,
-			HaveList:  types.NewHaveList(),
+			HaveList:  atypes.NewHaveList(),
 			PeerSet:   nil,
 		}
 
 		for _, v := range blocks {
-			resp.HaveList.AddBlock(types.NewBlock(v))
+			resp.HaveList.AddBlock(atypes.NewBlock(v))
 		}
 
 		e.metrics.captureRequestProcessTime(req.ReqTime)
@@ -207,13 +198,13 @@ func (e *Engine) HandleRequest(req *Request) {
 
 func (e *Engine) sendResponse(
 	id id.KramaID,
-	sessionID ktypes.Address,
-	stateHash ktypes.Hash,
+	sessionID types.Address,
+	stateHash types.Hash,
 	responseStatus bool,
 	peerList []id.KramaID,
 ) {
 	select {
-	case e.responses <- &types.Response{
+	case e.responses <- &atypes.Response{
 		PeerID:    id,
 		StateHash: stateHash,
 		SessionID: sessionID,
@@ -222,7 +213,7 @@ func (e *Engine) sendResponse(
 	}:
 	default:
 		go func() {
-			e.responses <- &types.Response{
+			e.responses <- &atypes.Response{
 				PeerID:    id,
 				StateHash: stateHash,
 				SessionID: sessionID,
@@ -251,7 +242,7 @@ func (e *Engine) responseWorker() {
 				return
 			}
 
-			if err := e.network.SendAgoraMessage(resp.PeerID, ktypes.AGORARESP, resp.GetAgoraMsg()); err != nil {
+			if err := e.network.SendAgoraMessage(resp.PeerID, types.AGORARESP, resp.GetAgoraMsg()); err != nil {
 				e.logger.Error("Error sending response message", "peer", resp.PeerID)
 
 				continue

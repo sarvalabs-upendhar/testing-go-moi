@@ -2,16 +2,17 @@ package decision
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	"gitlab.com/sarvalabs/moichain/common/tests"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/moichain/poorna/agora/db"
-	"gitlab.com/sarvalabs/moichain/poorna/agora/types"
-	"testing"
-	"time"
+	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 func TestHandleRequest_StateNotAvailable(t *testing.T) {
@@ -290,7 +291,7 @@ func TestEngine_TimeOutRequest(t *testing.T) {
 
 	// No response is received since the request time has crossed the limit i.e. 1 sec
 	_, err = WaitForResponse(waitCtx, engine.responses)
-	require.ErrorIs(t, err, ktypes.ErrTimeOut)
+	require.ErrorIs(t, err, types.ErrTimeOut)
 }
 
 func TestEngine_RequestWithEmptyWantList(t *testing.T) {
@@ -358,7 +359,7 @@ func NewTestEngine(
 		requests:            NewRequestQueue(queueSize),
 		requestWorkerCount:  requestWorkerCount,
 		responseWorkerCount: responseWorkerCount,
-		responses:           make(chan *types.Response),
+		responses:           make(chan *atypes.Response),
 		workSignal:          make(chan struct{}),
 		db:                  db,
 		ledger:              ledger,
@@ -376,7 +377,7 @@ func NewMockDB() *mockDB {
 	}
 }
 
-func (db *mockDB) DoesStateExists(stateHash ktypes.Hash) bool {
+func (db *mockDB) DoesStateExists(stateHash types.Hash) bool {
 	_, ok := db.data[string(stateHash.Bytes())]
 
 	return ok
@@ -385,7 +386,7 @@ func (db *mockDB) DoesStateExists(stateHash ktypes.Hash) bool {
 func (db *mockDB) Get(key []byte) ([]byte, error) {
 	data, ok := db.data[string(key)]
 	if !ok {
-		return nil, ktypes.ErrKeyNotFound
+		return nil, types.ErrKeyNotFound
 	}
 
 	return data, nil
@@ -399,7 +400,7 @@ func (db *mockDB) GetBatchWriter() db.BatchWriter {
 	return &mockBatchWriter{db: db}
 }
 
-func (db *mockDB) GetData(ctx context.Context, keys []ktypes.Hash) ([][]byte, error) {
+func (db *mockDB) GetData(ctx context.Context, keys []types.Hash) ([][]byte, error) {
 	resp := make([][]byte, 0, len(keys))
 
 	for _, key := range keys {
@@ -425,28 +426,28 @@ func (bw *mockBatchWriter) Flush() error {
 }
 
 type mockLedger struct {
-	peers map[ktypes.Hash][]id.KramaID
+	peers map[types.Hash][]id.KramaID
 }
 
 func NewMockLedger() *mockLedger {
 	return &mockLedger{
-		peers: make(map[ktypes.Hash][]id.KramaID),
+		peers: make(map[types.Hash][]id.KramaID),
 	}
 }
 
-func (mc *mockLedger) GetAssociatedPeers(addr ktypes.Address, stateHash ktypes.Hash) ([]id.KramaID, error) {
+func (mc *mockLedger) GetAssociatedPeers(addr types.Address, stateHash types.Hash) ([]id.KramaID, error) {
 	peers, ok := mc.peers[stateHash]
 	if !ok {
-		return nil, ktypes.ErrKeyNotFound
+		return nil, types.ErrKeyNotFound
 	}
 
 	return peers, nil
 }
 
-func (mc *mockLedger) UpdateAssociatedPeers(addr ktypes.Address, stateHash ktypes.Hash, peerID id.KramaID) error {
+func (mc *mockLedger) UpdateAssociatedPeers(addr types.Address, stateHash types.Hash, peerID id.KramaID) error {
 	peers, ok := mc.peers[stateHash]
 	if ok {
-		return ktypes.ErrKeyNotFound
+		return types.ErrKeyNotFound
 	}
 
 	peers = append(peers, peerID)
@@ -457,25 +458,25 @@ func (mc *mockLedger) UpdateAssociatedPeers(addr ktypes.Address, stateHash ktype
 }
 
 type mockNetwork struct {
-	msg map[id.KramaID]types.Message
+	msg map[id.KramaID]atypes.Message
 }
 
 func NewMockNetwork() *mockNetwork {
 	return &mockNetwork{
-		msg: make(map[id.KramaID]types.Message),
+		msg: make(map[id.KramaID]atypes.Message),
 	}
 }
 
-func (mn *mockNetwork) SendAgoraMessage(id id.KramaID, msgType ktypes.MsgType, msg types.Message) error {
+func (mn *mockNetwork) SendAgoraMessage(id id.KramaID, msgType types.MsgType, msg atypes.Message) error {
 	mn.msg[id] = msg
 
 	return nil
 }
 
-func WaitForResponse(ctx context.Context, respChan chan *types.Response) (*types.Response, error) {
+func WaitForResponse(ctx context.Context, respChan chan *atypes.Response) (*atypes.Response, error) {
 	select {
 	case <-ctx.Done():
-		return nil, ktypes.ErrTimeOut
+		return nil, types.ErrTimeOut
 	case resp := <-respChan:
 		return resp, nil
 	}
@@ -485,7 +486,7 @@ func WaitForResponseMsg(
 	ctx context.Context,
 	from id.KramaID,
 	network *mockNetwork,
-) (*types.AgoraResponseMsg, error) {
+) (*atypes.AgoraResponseMsg, error) {
 	resp, err := tests.RetryUntilTimeout(ctx, func() (interface{}, bool) {
 		msg, ok := network.msg[from]
 		if !ok {
@@ -498,9 +499,9 @@ func WaitForResponseMsg(
 		return nil, err
 	}
 
-	msg, ok := resp.(*types.AgoraResponseMsg)
+	msg, ok := resp.(*atypes.AgoraResponseMsg)
 	if !ok {
-		return nil, ktypes.ErrInterfaceConversion
+		return nil, types.ErrInterfaceConversion
 	}
 
 	return msg, nil

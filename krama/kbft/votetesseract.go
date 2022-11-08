@@ -1,8 +1,8 @@
 package kbft
 
 import (
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	"gitlab.com/sarvalabs/moichain/mudra"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 // tesseractVoteSet is a struct that represents a set of votes for a Tesseract
@@ -11,9 +11,9 @@ type tesseractVoteSet struct {
 	peermaj23 bool
 	// Represents an array of bits. Each index of the array corresponds to a validator and
 	// the value at that index represents whether a vote for the validator exists in the set
-	bitarray *ktypes.ArrayOfBits
+	bitarray *types.ArrayOfBits
 	// Represents the tesseract votes of each validator by index
-	votes []*ktypes.Vote
+	votes []*types.Vote
 	// Represents the sum of voting powers
 	sum []int32
 
@@ -25,15 +25,15 @@ type tesseractVoteSet struct {
 func newTesseractVoteSet(size int, peermaj23 bool, valcount int) *tesseractVoteSet {
 	return &tesseractVoteSet{
 		peermaj23:      peermaj23,
-		bitarray:       ktypes.NewArrayOfBits(valcount),
-		votes:          make([]*ktypes.Vote, valcount),
+		bitarray:       types.NewArrayOfBits(valcount),
+		votes:          make([]*types.Vote, valcount),
 		sum:            make([]int32, size),
 		votingPowerSum: make([]int32, size),
 	}
 }
 
 // getByIndex is a method of tesseractVoteSet that retrieves a vote from the set for a given index.
-func (tv *tesseractVoteSet) getByIndex(index int32) *ktypes.Vote {
+func (tv *tesseractVoteSet) getByIndex(index int32) *types.Vote {
 	// Return nil if voteset is empty
 	if tv == nil {
 		return nil
@@ -45,7 +45,7 @@ func (tv *tesseractVoteSet) getByIndex(index int32) *ktypes.Vote {
 
 // addVerifiedVote is a method of tesseractVoteSet that adds a verified vote to the set.
 // Accepts the sum index, the vote and the voting power of the validator placing the vote.
-func (tv *tesseractVoteSet) addVerifiedVote(sindex int32, vote *ktypes.Vote, votingpower int32) {
+func (tv *tesseractVoteSet) addVerifiedVote(sindex int32, vote *types.Vote, votingpower int32) {
 	// Fetch the index of the validator placing the vote
 	valindex := vote.ValidatorIndex
 
@@ -60,6 +60,7 @@ func (tv *tesseractVoteSet) addVerifiedVote(sindex int32, vote *ktypes.Vote, vot
 		tv.votingPowerSum[sindex] += votingpower
 	}
 }
+
 func (tv *tesseractVoteSet) AggregateSignatures() ([]byte, error) {
 	sigs := make([][]byte, 0, tv.bitarray.TrueIndicesSize())
 

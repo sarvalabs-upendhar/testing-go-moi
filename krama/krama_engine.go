@@ -6,7 +6,12 @@ import (
 	"log"
 	"math"
 	"math/big"
+	"sync"
 	"time"
+
+	"gitlab.com/sarvalabs/moichain/ixpool"
+
+	"gitlab.com/sarvalabs/moichain/utils"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -15,23 +20,19 @@ import (
 	"github.com/mr-tron/base58/base58"
 	"github.com/pkg/errors"
 	"gitlab.com/sarvalabs/moichain/common"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	"gitlab.com/sarvalabs/moichain/common/kutils"
-	"gitlab.com/sarvalabs/moichain/core/ixpool"
 	"gitlab.com/sarvalabs/moichain/guna"
 	"gitlab.com/sarvalabs/moichain/krama/kbft"
 	"gitlab.com/sarvalabs/moichain/krama/observer"
-	"gitlab.com/sarvalabs/moichain/krama/types"
+	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
 	"gitlab.com/sarvalabs/moichain/mudra"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/moichain/poorna/flux"
 	"gitlab.com/sarvalabs/moichain/telemetry/tracing"
+	"gitlab.com/sarvalabs/moichain/types"
 	"gitlab.com/sarvalabs/polo/go-polo"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/crypto/blake2b"
-
-	"sync"
 )
 
 const (
@@ -54,47 +55,47 @@ const (
 )
 
 type lattice interface {
-	AddKnownHashes(tesseracts []*ktypes.Tesseract)
-	AddTesseracts(tesseracts []*ktypes.Tesseract, dirtyStorage map[ktypes.Hash][]byte) error
+	AddKnownHashes(tesseracts []*types.Tesseract)
+	AddTesseracts(tesseracts []*types.Tesseract, dirtyStorage map[types.Hash][]byte) error
 }
 
 type transport interface {
-	InitClusterCommunication(ctx context.Context, slot *types.Slot) error
+	InitClusterCommunication(ctx context.Context, slot *ktypes.Slot) error
 	RegisterRPCService(serviceID protocol.ID, serviceName string, service interface{}) error
 	Call(peerID peer.ID, svcName, svcMethod string, args, response interface{}) error
-	BroadcastTesseract(msg *ktypes.TesseractMessage) error
+	BroadcastTesseract(msg *types.TesseractMessage) error
 }
 
 type state interface {
 	FetchInteractionContext(
 		ctx context.Context,
-		ix *ktypes.Interaction,
+		ix *types.Interaction,
 	) (
-		map[ktypes.Address]ktypes.Hash,
-		[]*ktypes.NodeSet,
+		map[types.Address]types.Hash,
+		[]*types.NodeSet,
 		error,
 	)
 	GetPublicKeys(ids ...id.KramaID) (keys [][]byte, err error)
-	GetAccountMetaInfo(addr ktypes.Address) (*ktypes.AccountMetaInfo, error)
-	IsGenesis(addr ktypes.Address) (bool, error)
-	GetLatestStateObject(addr ktypes.Address) (*guna.StateObject, error)
-	GetLatestNonce(addr ktypes.Address) (uint64, error)
+	GetAccountMetaInfo(addr types.Address) (*types.AccountMetaInfo, error)
+	IsGenesis(addr types.Address) (bool, error)
+	GetLatestStateObject(addr types.Address) (*guna.StateObject, error)
+	GetLatestNonce(addr types.Address) (uint64, error)
 }
 
 type ixPool interface {
-	IncrementWaitTime(addr ktypes.Address, baseTime time.Duration) error
+	IncrementWaitTime(addr types.Address, baseTime time.Duration) error
 	Executables() ixpool.InteractionQueue
-	ResetWithInteractions(ixs ktypes.Interactions)
+	ResetWithInteractions(ixs types.Interactions)
 }
 
 type execution interface {
-	CleanupExecutorInstances(id ktypes.ClusterID)
+	CleanupExecutorInstances(id types.ClusterID)
 	ExecuteInteractions(
-		clusterID ktypes.ClusterID,
-		ixs []*ktypes.Interaction,
-		contextDelta ktypes.ContextDelta,
-	) (ktypes.Receipts, error)
-	Revert(clusterID ktypes.ClusterID) error
+		clusterID types.ClusterID,
+		ixs []*types.Interaction,
+		contextDelta types.ContextDelta,
+	) (types.Receipts, error)
+	Revert(clusterID types.ClusterID) error
 }
 
 type Response struct {
@@ -104,17 +105,17 @@ type Response struct {
 
 type Request struct {
 	reqType      int
-	ixs          ktypes.Interactions
-	msg          *ktypes.ICSRequest
+	ixs          types.Interactions
+	msg          *types.ICSRequest
 	responseChan chan Response
 }
 
-func (r *Request) getClusterID(operator id.KramaID) (ktypes.ClusterID, error) {
+func (r *Request) getClusterID(operator id.KramaID) (types.ClusterID, error) {
 	switch r.reqType {
 	case 0:
 		return generateClusterID(operator, r.ixs[0].GetIxHash())
 	case 1:
-		return ktypes.ClusterID(r.msg.ClusterID), nil
+		return types.ClusterID(r.msg.ClusterID), nil
 	default:
 		return "", errors.New("invalid request type")
 	}
@@ -126,14 +127,14 @@ type Engine struct {
 	cfg          *common.ConsensusConfig
 	logger       hclog.Logger
 	operator     id.KramaID
-	slots        *types.Slots
+	slots        *ktypes.Slots
 	requests     chan Request
 	randomizer   *flux.Randomizer
 	transport    transport
 	exec         execution
 	pool         ixPool
 	state        state
-	executionReq chan ktypes.ClusterID
+	executionReq chan types.ClusterID
 	lattice      lattice
 	wal          kbft.WAL
 	vault        *mudra.KramaVault
@@ -167,14 +168,14 @@ func NewKramaEngine(ctx context.Context,
 		logger:       logger.Named("Krama-Engine"),
 		operator:     network.GetKramaID(),
 		state:        state,
-		slots:        types.NewSlots(cfg.OperatorSlotCount, cfg.ValidatorSlotCount),
+		slots:        ktypes.NewSlots(cfg.OperatorSlotCount, cfg.ValidatorSlotCount),
 		requests:     make(chan Request),
 		randomizer:   randomizer,
 		transport:    NewKramaTransport(logger, network),
 		exec:         exec,
 		pool:         ixPool,
 		lattice:      lattice,
-		executionReq: make(chan ktypes.ClusterID),
+		executionReq: make(chan types.ClusterID),
 		wal:          wal,
 		vault:        val,
 		clusterLocks: locker.New(),
@@ -187,19 +188,19 @@ func NewKramaEngine(ctx context.Context,
 	return k, k.transport.RegisterRPCService(ICSRPCProtocol, "ICSRPC", NewICSRPCService(k))
 }
 
-func (k *Engine) AcquireContextLock(ctx context.Context, clusterID ktypes.ClusterID, request Request) (err error) {
+func (k *Engine) AcquireContextLock(ctx context.Context, clusterID types.ClusterID, request Request) (err error) {
 	ctx, span := tracing.Span(ctx, "Krama.KramaEngine", "AcquireContextLock")
 	defer span.End()
 	// Create cluster id using operatorID and IxHash
 	k.logger.Info("Creating cluster", "Cluster id", clusterID)
 
-	clusterState := types.NewICS(6, request.ixs, clusterID, k.operator, time.Now())
+	clusterState := ktypes.NewICS(6, request.ixs, clusterID, k.operator, time.Now())
 
 	// create a slot and try adding it
-	newSlot := types.NewSlot(types.OperatorSlot, clusterState)
+	newSlot := ktypes.NewSlot(ktypes.OperatorSlot, clusterState)
 
 	if !k.slots.AddSlot(clusterID, newSlot) {
-		return ktypes.ErrSlotsFull
+		return types.ErrSlotsFull
 	}
 
 	k.metrics.captureAvailableOperatorSlots(-1)
@@ -245,49 +246,49 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID ktypes.Cluste
 		}
 	}(ctx)
 
-	clusterState.ICSReqTime = kutils.Now()
+	clusterState.ICSReqTime = utils.Now()
 	// Construct ICS_Request
 	reqMsg := k.getICSReqMsg(request.ixs[0], lockInfo, clusterID, clusterState.ICSReqTime)
 
 	// Send ClusterInfo Request to context nodes of both participants
 	go k.sendICSRequest(
 		ctx,
-		ktypes.SenderBehaviourSet,
+		types.SenderBehaviourSet,
 		finalWaitGroup,
 		clusterID,
-		nodeSets[ktypes.SenderBehaviourSet],
+		nodeSets[types.SenderBehaviourSet],
 		reqMsg,
 		randomNodesReceiverChan,
 	)
 	go k.sendICSRequest(
 		ctx,
-		ktypes.SenderRandomSet,
+		types.SenderRandomSet,
 		finalWaitGroup,
 		clusterID,
-		nodeSets[ktypes.SenderRandomSet],
+		nodeSets[types.SenderRandomSet],
 		reqMsg,
 		randomNodesReceiverChan,
 	)
 
-	if request.ixs[0].ToAddress() != ktypes.NilAddress {
+	if request.ixs[0].ToAddress() != types.NilAddress {
 		finalWaitGroup.Add(2)
 
 		go k.sendICSRequest(
 			ctx,
-			ktypes.ReceiverBehaviourSet,
+			types.ReceiverBehaviourSet,
 			finalWaitGroup,
 			clusterID,
-			nodeSets[ktypes.ReceiverBehaviourSet],
+			nodeSets[types.ReceiverBehaviourSet],
 			reqMsg,
 			randomNodesReceiverChan,
 		)
 
 		go k.sendICSRequest(
 			ctx,
-			ktypes.ReceiverRandomSet,
+			types.ReceiverRandomSet,
 			finalWaitGroup,
 			clusterID,
-			nodeSets[ktypes.ReceiverRandomSet],
+			nodeSets[types.ReceiverRandomSet],
 			reqMsg,
 			randomNodesReceiverChan,
 		)
@@ -324,12 +325,12 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID ktypes.Cluste
 
 	totalRandomNodes := 2*respondedEligibleSetSize + additionalRandomNodes
 
-	//contextRandomNodes = getExclusivePeers(respondedEligibleSet, contextRandomNodes)
+	// contextRandomNodes = getExclusivePeers(respondedEligibleSet, contextRandomNodes)
 
 	operatorRandomNodesCount := totalRandomNodes // - len(contextRandomNodes)
 	operatorRandomNodesQueryCount := operatorRandomNodesCount + k.randomNodeDelta(totalRandomNodes)
 
-	//exemptedNodes := append(respondedEligibleSet, contextRandomNodes...)
+	// exemptedNodes := append(respondedEligibleSet, contextRandomNodes...)
 
 	operatorRandomNodes, err = k.getRandomNodes(ctx, operatorRandomNodesQueryCount, respondedEligibleSet)
 	if err != nil {
@@ -353,17 +354,17 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID ktypes.Cluste
 
 	observerKeys, err := k.state.GetPublicKeys(observerNodes...)
 	if err != nil {
-		return ktypes.ErrKramaIDNotFound
+		return types.ErrKramaIDNotFound
 	}
 
 	randomKeys, err := k.state.GetPublicKeys(operatorRandomNodes...)
 	if err != nil {
-		return ktypes.ErrKramaIDNotFound
+		return types.ErrKramaIDNotFound
 	}
 
 	go k.sendICSRequestWithBound(
 		ctx,
-		ktypes.RandomSet,
+		types.RandomSet,
 		operatorRandomNodesCount,
 		finalWaitGroup,
 		clusterID,
@@ -374,7 +375,7 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID ktypes.Cluste
 
 	go k.sendICSRequestWithBound(
 		ctx,
-		ktypes.ObserverSet,
+		types.ObserverSet,
 		requiredObserverNodes,
 		finalWaitGroup,
 		clusterID,
@@ -401,28 +402,30 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID ktypes.Cluste
 func (k *Engine) randomNodeDelta(setSize int) int {
 	return (setSize / 2) + 1
 }
+
 func (k *Engine) observerNodeDelta(setSize int) int {
 	return int(math.Ceil(ObserverNodesDelta * float64(setSize)))
 }
 
-func generateClusterID(operator id.KramaID, ixHash ktypes.Hash) (ktypes.ClusterID, error) {
+func generateClusterID(operator id.KramaID, ixHash types.Hash) (types.ClusterID, error) {
 	buffer := ixHash.Bytes()
 
 	peerID, err := operator.PeerID()
 	if err != nil {
-		return "", ktypes.ErrInvalidKramaID
+		return "", types.ErrInvalidKramaID
 	}
 
 	rawBytes, err := base58.Decode(peerID)
 	if err != nil {
-		return "", ktypes.ErrInvalidKramaID
+		return "", types.ErrInvalidKramaID
 	}
 
 	buffer = append(buffer, rawBytes...)
 	clusterHash := blake2b.Sum256(buffer)
 
-	return ktypes.ClusterID(base58.Encode(clusterHash[:])), nil
+	return types.ClusterID(base58.Encode(clusterHash[:])), nil
 }
+
 func (k *Engine) Start() {
 	go k.minter()
 
@@ -441,6 +444,7 @@ func (k *Engine) Start() {
 		}
 	}()
 }
+
 func (k *Engine) isTimely(reqTime time.Time, currentTime time.Time) bool {
 	lowerBound := reqTime.Add(-k.cfg.Precision)
 	upperBound := reqTime.Add(k.cfg.MessageDelay).Add(k.cfg.Precision)
@@ -451,6 +455,7 @@ func (k *Engine) isTimely(reqTime time.Time, currentTime time.Time) bool {
 
 	return true
 }
+
 func (k *Engine) joinCluster(ctx context.Context, req Request) error {
 	ctx, span := tracing.Span(ctx, "Krama.KramaEngine", "joinCluster")
 	defer span.End()
@@ -463,31 +468,31 @@ func (k *Engine) joinCluster(ctx context.Context, req Request) error {
 		req.ixs[0].GetIxHash().Hex(),
 	)
 
-	reqTime := kutils.Canonical(time.Unix(0, req.msg.Timestamp))
+	reqTime := utils.Canonical(time.Unix(0, req.msg.Timestamp))
 
-	if !k.isTimely(reqTime, kutils.Now()) {
+	if !k.isTimely(reqTime, utils.Now()) {
 		return errors.New("invalid time stamp")
 	}
 
-	clusterState := types.NewICS(
+	clusterState := ktypes.NewICS(
 		6,
 		req.ixs,
-		ktypes.ClusterID(req.msg.ClusterID),
+		types.ClusterID(req.msg.ClusterID),
 		id.KramaID(req.msg.Operator),
 		reqTime)
 
-	newSlot := types.NewSlot(types.ValidatorSlot, clusterState)
+	newSlot := ktypes.NewSlot(ktypes.ValidatorSlot, clusterState)
 	// Create a slot and try adding it
 
 	clusterState.ContextLock = req.msg.ContextLock
 
-	if !k.slots.AddSlot(ktypes.ClusterID(req.msg.ClusterID), newSlot) {
-		return ktypes.ErrSlotsFull
+	if !k.slots.AddSlot(types.ClusterID(req.msg.ClusterID), newSlot) {
+		return types.ErrSlotsFull
 	}
 
 	k.metrics.captureAvailableValidatorSlots(-1)
 
-	clusterState.CurrentRole = ktypes.IcsSetType(req.msg.ContextType)
+	clusterState.CurrentRole = types.IcsSetType(req.msg.ContextType)
 
 	contextHashes, nodeSets, err := k.state.FetchInteractionContext(ctx, req.ixs[0])
 	if err != nil {
@@ -501,7 +506,7 @@ func (k *Engine) joinCluster(ctx context.Context, req Request) error {
 	// Check whether the context hashes matches
 	for addr, info := range req.msg.ContextLock {
 		if contextHashes[addr] != info.ContextHash {
-			return ktypes.ErrHashMismatch
+			return types.ErrHashMismatch
 		}
 	}
 
@@ -537,16 +542,16 @@ func (k *Engine) handleReq(req Request) {
 		}
 	}()
 
-	if slot := k.slots.GetSlot(clusterID); slot != nil || !k.slots.AreSlotsAvailable(types.SlotType(req.reqType)) {
+	if slot := k.slots.GetSlot(clusterID); slot != nil || !k.slots.AreSlotsAvailable(ktypes.SlotType(req.reqType)) {
 		k.logger.Debug("Slots not available")
-		req.responseChan <- Response{requestType: req.reqType, err: ktypes.ErrSlotsFull}
+		req.responseChan <- Response{requestType: req.reqType, err: types.ErrSlotsFull}
 
 		return
 	}
 
 	if areValid, err := k.validateInteractions(req.ixs); err != nil || !areValid {
 		k.logger.Error("Invalid Interaction", "err", err, req)
-		req.responseChan <- Response{requestType: req.reqType, err: ktypes.ErrInvalidInteractions}
+		req.responseChan <- Response{requestType: req.reqType, err: types.ErrInvalidInteractions}
 
 		return
 	}
@@ -561,7 +566,7 @@ func (k *Engine) handleReq(req Request) {
 		k.slots.CleanupSlot(clusterID)
 
 		if slot != nil {
-			if slot.SlotType == types.OperatorSlot {
+			if slot.SlotType == ktypes.OperatorSlot {
 				k.metrics.captureAvailableOperatorSlots(1)
 			} else {
 				k.metrics.captureAvailableValidatorSlots(1)
@@ -636,14 +641,14 @@ func (k *Engine) handleReq(req Request) {
 
 	clusterInfo := slot.CLusterInfo()
 
-	if clusterInfo.CurrentRole == ktypes.ObserverSet {
+	if clusterInfo.CurrentRole == types.ObserverSet {
 		log.Println("Observer HashSet", clusterInfo.ID)
 
 		wg := observer.NewWatchDog(ctx, slot)
 
 		wg.StartWatchDog()
 
-		if hash := clusterInfo.ID.Hash(); hash != ktypes.NilHash {
+		if hash := clusterInfo.ID.Hash(); hash != types.NilHash {
 			clusterInfo.AddDirty(hash, wg.GenerateProofs())
 		} else {
 			k.logger.Error("Failed to store watchdog proofs")
@@ -699,12 +704,13 @@ func (k *Engine) handleReq(req Request) {
 	k.logger.Info("Interaction finalized", "cluster-id", clusterInfo.ID)
 }
 
-func (k *Engine) fetchIxAccounts(ctx context.Context, ix *ktypes.Interaction) (types.AccountInfos, error) {
+func (k *Engine) fetchIxAccounts(ctx context.Context, ix *types.Interaction) (ktypes.AccountInfos, error) {
 	_, span := tracing.Span(ctx, "Krama.KramaEngine", "fetchIxAccounts")
 	defer span.End()
-	accounts := make(types.AccountInfos)
 
-	if ix.FromAddress() != ktypes.NilAddress {
+	accounts := make(ktypes.AccountInfos)
+
+	if ix.FromAddress() != types.NilAddress {
 		accInfo, err := k.state.GetAccountMetaInfo(ix.FromAddress())
 		if err != nil {
 			return nil, err
@@ -713,7 +719,7 @@ func (k *Engine) fetchIxAccounts(ctx context.Context, ix *ktypes.Interaction) (t
 		accounts[ix.FromAddress()] = accInfo
 	}
 
-	if ix.ToAddress() != ktypes.NilAddress {
+	if ix.ToAddress() != types.NilAddress {
 		isGenesisAccount, err := k.state.IsGenesis(ix.ToAddress())
 		if err != nil {
 			return nil, err
@@ -725,10 +731,10 @@ func (k *Engine) fetchIxAccounts(ctx context.Context, ix *ktypes.Interaction) (t
 				return nil, err
 			}
 
-			acc := &ktypes.AccountMetaInfo{
+			acc := &types.AccountMetaInfo{
 				Address:       ix.FromAddress(),
-				Type:          ktypes.RegularAccount,
-				TesseractHash: ktypes.NilHash,
+				Type:          types.RegularAccount,
+				TesseractHash: types.NilHash,
 				LatticeExists: true,
 				StateExists:   true,
 				Height:        big.NewInt(-1),
@@ -751,13 +757,13 @@ func (k *Engine) fetchIxAccounts(ctx context.Context, ix *ktypes.Interaction) (t
 
 func (k *Engine) sendICSRequestWithBound(
 	ctx context.Context,
-	setType ktypes.IcsSetType,
+	setType types.IcsSetType,
 	requiredCount int,
 	finalWaitGroup *sync.WaitGroup,
-	cID ktypes.ClusterID,
+	cID types.ClusterID,
 	nodes []id.KramaID,
 	keys [][]byte,
-	msg ktypes.ICSRequest,
+	msg types.ICSRequest,
 ) {
 	_, span := tracing.Span(ctx, "Krama.KramaEngine", "sendICSRequestWithBound")
 	defer span.End()
@@ -811,7 +817,7 @@ func (k *Engine) sendICSRequestWithBound(
 		}
 
 		go func(index int, peerID peer.ID) {
-			icsResponse := new(ktypes.ICSResponse)
+			icsResponse := new(types.ICSResponse)
 			requestTS := time.Now()
 
 			if err := k.transport.Call(
@@ -844,7 +850,7 @@ func (k *Engine) sendICSRequestWithBound(
 
 	wg.Wait()
 
-	idSet := ktypes.NewNodeSet(nodes, keys)
+	idSet := types.NewNodeSet(nodes, keys)
 
 	for index, isAvailable := range nodeResponses {
 		if isAvailable {
@@ -862,11 +868,11 @@ func (k *Engine) sendICSRequestWithBound(
 
 func (k *Engine) sendICSRequest(
 	ctx context.Context,
-	setType ktypes.IcsSetType,
+	setType types.IcsSetType,
 	finalWaitGroup *sync.WaitGroup,
-	cID ktypes.ClusterID,
-	nodesSet *ktypes.NodeSet,
-	msg ktypes.ICSRequest,
+	cID types.ClusterID,
+	nodesSet *types.NodeSet,
+	msg types.ICSRequest,
 	randomNodes chan []id.KramaID,
 ) {
 	_, span := tracing.Span(ctx, "Krama.KramaEngine", "sendICSRequest")
@@ -919,7 +925,7 @@ func (k *Engine) sendICSRequest(
 		}
 
 		go func(index int, peerID peer.ID) {
-			icsResponse := new(ktypes.ICSResponse)
+			icsResponse := new(types.ICSResponse)
 			requestTS := time.Now()
 
 			if err := k.transport.Call(
@@ -931,7 +937,7 @@ func (k *Engine) sendICSRequest(
 			); err == nil && icsResponse.Response == 1 {
 				// Update the nodeResponses array to capture the success response
 				nodeResponses[index] = true
-				randomNodes <- ktypes.ToKIPPeerID(icsResponse.RandomNodes)
+				randomNodes <- types.ToKIPPeerID(icsResponse.RandomNodes)
 			} else {
 				k.logger.Info(
 					"ICSRequest failed",
@@ -949,7 +955,7 @@ func (k *Engine) sendICSRequest(
 	}
 
 	wg.Wait()
-	//idSet := ktypes.NewNodeSet(nodes, keys)
+	// idSet := types.NewNodeSet(nodes, keys)
 
 	for index, isAvailable := range nodeResponses {
 		if isAvailable {
@@ -957,17 +963,18 @@ func (k *Engine) sendICSRequest(
 			nodesSet.Count++
 		}
 	}
-	//currentSlot.clusterState.IncrementClusterSize(len(nodes))
+	// currentSlot.clusterState.IncrementClusterSize(len(nodes))
 	clusterState.UpdateNodeSet(setType, nodesSet)
 }
+
 func (k *Engine) getICSReqMsg(
-	ix *ktypes.Interaction,
-	lockInfo map[ktypes.Address]ktypes.ContextLockInfo,
-	clusterID ktypes.ClusterID,
+	ix *types.Interaction,
+	lockInfo map[types.Address]types.ContextLockInfo,
+	clusterID types.ClusterID,
 	timestamp time.Time,
-) ktypes.ICSRequest {
-	icsReqMsg := new(ktypes.ICSRequest)
-	Ixs := ktypes.Interactions{ix}
+) types.ICSRequest {
+	icsReqMsg := new(types.ICSRequest)
+	Ixs := types.Interactions{ix}
 	icsReqMsg.IxData = polo.Polorize(Ixs)
 	icsReqMsg.ClusterID = string(clusterID)
 	icsReqMsg.Operator = string(k.operator)
@@ -976,6 +983,7 @@ func (k *Engine) getICSReqMsg(
 
 	return *icsReqMsg
 }
+
 func (k *Engine) getRandomNodes(ctx context.Context, count int, exemptedNodes []id.KramaID) ([]id.KramaID, error) {
 	_, span := tracing.Span(ctx, "Krama.KramaEngine", "getRandomNodes")
 	defer span.End()
@@ -1027,7 +1035,7 @@ func getExclusivePeers(actualSet []id.KramaID, newSet []id.KramaID) []id.KramaID
 }
 */
 
-func (k *Engine) sendICSSuccess(id ktypes.ClusterID) error {
+func (k *Engine) sendICSSuccess(id types.ClusterID) error {
 	slot := k.slots.GetSlot(id)
 	if slot == nil {
 		return errors.New("nil slot")
@@ -1037,9 +1045,9 @@ func (k *Engine) sendICSSuccess(id ktypes.ClusterID) error {
 
 	msg := clusterState.CreateICSSuccessMsg()
 
-	icsMsg := new(ktypes.ICSMSG)
+	icsMsg := new(types.ICSMSG)
 	icsMsg.Msg = polo.Polorize(msg)
-	icsMsg.MsgType = ktypes.ICSSUCCESS
+	icsMsg.MsgType = types.ICSSUCCESS
 	icsMsg.ClusterID = string(id)
 
 	k.logger.Trace("Sending clusterState success message", "cluster id", id)
@@ -1051,7 +1059,7 @@ func (k *Engine) sendICSSuccess(id ktypes.ClusterID) error {
 	return nil
 }
 
-func (k *Engine) initClusterCommunication(ctx context.Context, slot *types.Slot) error {
+func (k *Engine) initClusterCommunication(ctx context.Context, slot *ktypes.Slot) error {
 	ctx, span := tracing.Span(ctx, "Krama.KramaEngine", "initClusterCommunication")
 	defer span.End()
 
@@ -1064,7 +1072,7 @@ func (k *Engine) initClusterCommunication(ctx context.Context, slot *types.Slot)
 	return nil
 }
 
-func (k *Engine) createProposalGrid(slot *types.Slot) ([]*ktypes.Tesseract, error) {
+func (k *Engine) createProposalGrid(slot *ktypes.Slot) ([]*types.Tesseract, error) {
 	if err := k.updateContextDelta(slot.ClusterID()); err != nil {
 		return nil, err
 	}
@@ -1087,7 +1095,7 @@ func (k *Engine) createProposalGrid(slot *types.Slot) ([]*ktypes.Tesseract, erro
 	return GenerateTesseracts(clusterState)
 }
 
-func (k *Engine) updateContextDelta(clusterID ktypes.ClusterID) error {
+func (k *Engine) updateContextDelta(clusterID types.ClusterID) error {
 	slot := k.slots.GetSlot(clusterID)
 
 	if slot == nil {
@@ -1095,18 +1103,18 @@ func (k *Engine) updateContextDelta(clusterID ktypes.ClusterID) error {
 	}
 
 	clusterState := slot.CLusterInfo()
-	seenAccounts := make(map[ktypes.Address]bool)
-	deltaMap := make(ktypes.ContextDelta)
+	seenAccounts := make(map[types.Address]bool)
+	deltaMap := make(types.ContextDelta)
 
 	for _, ix := range clusterState.Ixs {
 		senderAddr := ix.FromAddress()
 		receiverAddr := ix.ToAddress()
 
-		if senderAddr != ktypes.NilAddress && !seenAccounts[senderAddr] {
-			senderDeltaGroup := new(ktypes.DeltaGroup)
-			senderDeltaGroup.Role = ktypes.Sender
+		if senderAddr != types.NilAddress && !seenAccounts[senderAddr] {
+			senderDeltaGroup := new(types.DeltaGroup)
+			senderDeltaGroup.Role = types.Sender
 			senderBehaviourDelta, replacedNodes := clusterState.GetBehaviouralContextDelta(
-				ktypes.SenderBehaviourSet,
+				types.SenderBehaviourSet,
 			)
 
 			if senderBehaviourDelta != "" {
@@ -1118,7 +1126,7 @@ func (k *Engine) updateContextDelta(clusterID ktypes.ClusterID) error {
 			}
 
 			senderRandomDelta, replacedRandomDelta := clusterState.GetRandomContextDelta(
-				ktypes.SenderRandomSet,
+				types.SenderRandomSet,
 				1,
 				clusterState.Operator,
 			)
@@ -1128,9 +1136,9 @@ func (k *Engine) updateContextDelta(clusterID ktypes.ClusterID) error {
 			deltaMap[senderAddr] = senderDeltaGroup
 		}
 
-		if receiverAddr != ktypes.NilAddress && !seenAccounts[receiverAddr] {
-			receiverDeltaGroup := new(ktypes.DeltaGroup)
-			receiverDeltaGroup.Role = ktypes.Receiver
+		if receiverAddr != types.NilAddress && !seenAccounts[receiverAddr] {
+			receiverDeltaGroup := new(types.DeltaGroup)
+			receiverDeltaGroup.Role = types.Receiver
 
 			isGenesisAccount, err := k.state.IsGenesis(receiverAddr)
 			if err != nil {
@@ -1152,10 +1160,10 @@ func (k *Engine) updateContextDelta(clusterID ktypes.ClusterID) error {
 				receiverDeltaGroup.BehaviouralNodes = append(receiverDeltaGroup.BehaviouralNodes, behaviouralNodes...)
 
 				// Fetch sarga account context delta
-				genesisDeltaGroup := new(ktypes.DeltaGroup)
-				genesisDeltaGroup.Role = ktypes.Genesis
+				genesisDeltaGroup := new(types.DeltaGroup)
+				genesisDeltaGroup.Role = types.Genesis
 				genesisBehaviourDelta, replacedNodes := clusterState.GetBehaviouralContextDelta(
-					ktypes.ReceiverBehaviourSet,
+					types.ReceiverBehaviourSet,
 				)
 
 				if genesisBehaviourDelta != "" {
@@ -1167,7 +1175,7 @@ func (k *Engine) updateContextDelta(clusterID ktypes.ClusterID) error {
 				}
 
 				genesisRandomDelta, replacedRandomDelta := clusterState.GetRandomContextDelta(
-					ktypes.ReceiverRandomSet,
+					types.ReceiverRandomSet,
 					1,
 				)
 				genesisDeltaGroup.RandomNodes = append(genesisDeltaGroup.RandomNodes, genesisRandomDelta...)
@@ -1177,7 +1185,7 @@ func (k *Engine) updateContextDelta(clusterID ktypes.ClusterID) error {
 			} else {
 				if clusterState.AccountInfos[receiverAddr].Type == 2 {
 					receiverBehaviourDelta, replacedNodes := clusterState.GetBehaviouralContextDelta(
-						ktypes.ReceiverBehaviourSet,
+						types.ReceiverBehaviourSet,
 					)
 					if receiverBehaviourDelta != "" {
 						receiverDeltaGroup.BehaviouralNodes = append(receiverDeltaGroup.BehaviouralNodes, receiverBehaviourDelta)
@@ -1186,7 +1194,7 @@ func (k *Engine) updateContextDelta(clusterID ktypes.ClusterID) error {
 						receiverDeltaGroup.ReplacedNodes = append(receiverDeltaGroup.ReplacedNodes, replacedNodes)
 					}
 					receiverRandomDelta, replacedRandomDelta := clusterState.GetRandomContextDelta(
-						ktypes.ReceiverRandomSet,
+						types.ReceiverRandomSet,
 						1,
 						clusterState.Operator,
 					)
@@ -1206,12 +1214,12 @@ func (k *Engine) updateContextDelta(clusterID ktypes.ClusterID) error {
 }
 
 func (k *Engine) GetNodes(
-	clusterInfo *types.ClusterInfo,
+	clusterInfo *ktypes.ClusterInfo,
 	requiredRandomNodes,
 	requiredBehaviouralNodes int,
 ) (behaviouralNodes []id.KramaID, randomNodes []id.KramaID, err error) {
-	//TODO: Need to improve this function
-	set := clusterInfo.ICS.Nodes[ktypes.RandomSet]
+	// TODO: Need to improve this function
+	set := clusterInfo.ICS.Nodes[types.RandomSet]
 	count := 0
 
 	for index, kramaID := range set.Ids {
@@ -1233,8 +1241,7 @@ func (k *Engine) GetNodes(
 	return
 }
 
-func (k *Engine) finalizedTesseractHandler(tesseracts []*ktypes.Tesseract) error {
-
+func (k *Engine) finalizedTesseractHandler(tesseracts []*types.Tesseract) error {
 	clusterID := tesseracts[0].ClusterID()
 
 	slot := k.slots.GetSlot(clusterID)
@@ -1250,10 +1257,10 @@ func (k *Engine) finalizedTesseractHandler(tesseracts []*ktypes.Tesseract) error
 	}
 
 	for _, ts := range tesseracts {
-		msg := &ktypes.TesseractMessage{
+		msg := &types.TesseractMessage{
 			Tesseract: ts,
 			Sender:    k.operator,
-			Delta: map[ktypes.Hash][]byte{
+			Delta: map[types.Hash][]byte{
 				ts.Body.ConsensusProof.ICSHash: clusterInfo.GetDirty()[ts.Body.ConsensusProof.ICSHash],
 			},
 		}
@@ -1266,19 +1273,19 @@ func (k *Engine) finalizedTesseractHandler(tesseracts []*ktypes.Tesseract) error
 	return nil
 }
 
-func GenerateTesseracts(state *types.ClusterInfo) ([]*ktypes.Tesseract, error) {
-	ix := state.Ixs[0] //TODO: Improve this
+func GenerateTesseracts(state *ktypes.ClusterInfo) ([]*types.Tesseract, error) {
+	ix := state.Ixs[0] // TODO: Improve this
 	gasUsed := state.GetGasUsed()
 	groupBuffer := make([]byte, 0)
-	tesseractGroup := make([]*ktypes.Tesseract, 0)
+	tesseractGroup := make([]*types.Tesseract, 0)
 
-	if ix.FromAddress() != ktypes.NilAddress {
+	if ix.FromAddress() != types.NilAddress {
 		senderTesseract := generateTesseract(ix.Hash, ix.FromAddress(), state, gasUsed, 1000)
 		tesseractGroup = append(tesseractGroup, senderTesseract)
 		groupBuffer = append(groupBuffer, senderTesseract.Header.TesseractHash.Bytes()...)
 	}
 
-	if ix.ToAddress() != ktypes.NilAddress {
+	if ix.ToAddress() != types.NilAddress {
 		receiverTesseract := generateTesseract(ix.Hash, ix.ToAddress(), state, gasUsed, 1000)
 		tesseractGroup = append(tesseractGroup, receiverTesseract)
 		groupBuffer = append(groupBuffer, receiverTesseract.Header.TesseractHash.Bytes()...)
@@ -1299,14 +1306,14 @@ func GenerateTesseracts(state *types.ClusterInfo) ([]*ktypes.Tesseract, error) {
 }
 
 func generateTesseract(
-	ixHash ktypes.Hash,
-	addr ktypes.Address,
-	state *types.ClusterInfo,
+	ixHash types.Hash,
+	addr types.Address,
+	state *ktypes.ClusterInfo,
 	gasUsed,
 	gasLimit uint64,
-) *ktypes.Tesseract {
-	ts := &ktypes.Tesseract{
-		Header: ktypes.TesseractHeader{
+) *types.Tesseract {
+	ts := &types.Tesseract{
+		Header: types.TesseractHeader{
 			Address:     addr,
 			ContextLock: state.ContextLock,
 			PrevHash:    state.AccountInfos.GetLatestHash(addr),
@@ -1315,19 +1322,19 @@ func generateTesseract(
 			AnuLimit:    gasLimit,
 			ClusterID:   string(state.ID),
 			Operator:    string(state.Operator),
-			Extra: ktypes.CommitData{
+			Extra: types.CommitData{
 				VoteSet:         nil,
 				CommitSignature: nil,
 			},
 		},
-		Body: ktypes.TesseractBody{
+		Body: types.TesseractBody{
 			StateHash:       state.GetStateHash(ixHash, addr),
 			ContextHash:     state.GetContextHash(ixHash, addr),
 			ContextDelta:    state.GetContextDelta(),
 			Interactions:    state.Ixs,
 			InteractionHash: state.Ixs.Hash(),
 			ReceiptHash:     state.Receipts.Hash(),
-			ConsensusProof: ktypes.PoXCData{
+			ConsensusProof: types.PoXCData{
 				BinaryHash:   state.BinaryHash,
 				IdentityHash: state.IdentityHash,
 				ICSHash:      state.ICSHash,
@@ -1343,10 +1350,10 @@ func (k *Engine) executionRoutine() {
 	for clusterID := range k.executionReq {
 		k.logger.Trace("Processing an execution request")
 
-		go func(id ktypes.ClusterID) {
+		go func(id types.ClusterID) {
 			slotInfo := k.slots.GetSlot(id)
 			grid, err := k.createProposalGrid(slotInfo)
-			slotInfo.ExecutionResp <- types.ExecutionResponse{Grid: grid, Err: err}
+			slotInfo.ExecutionResp <- ktypes.ExecutionResponse{Grid: grid, Err: err}
 		}(clusterID)
 	}
 }
@@ -1355,7 +1362,7 @@ func (k *Engine) Close() {
 	defer k.ctxCancel()
 }
 
-func (k *Engine) validateInteractions(ixs ktypes.Interactions) (bool, error) {
+func (k *Engine) validateInteractions(ixs types.Interactions) (bool, error) {
 	for _, ix := range ixs {
 		k.logger.Debug(
 			"Validating Interaction",
@@ -1376,7 +1383,7 @@ func (k *Engine) validateInteractions(ixs ktypes.Interactions) (bool, error) {
 
 		// validate nonce
 		if ix.Nonce() < latestNonce {
-			return false, ktypes.ErrInvalidNonce
+			return false, types.ErrInvalidNonce
 		}
 
 		if isValid, err := k.IsIxValid(ix); err != nil {
@@ -1390,9 +1397,9 @@ func (k *Engine) validateInteractions(ixs ktypes.Interactions) (bool, error) {
 }
 
 // IsIxValid performs validity checks based on the type of interaction
-func (k *Engine) IsIxValid(ix *ktypes.Interaction) (bool, error) {
-	if ix.FromAddress() == ktypes.NilAddress {
-		return false, ktypes.ErrInvalidAddress
+func (k *Engine) IsIxValid(ix *types.Interaction) (bool, error) {
+	if ix.FromAddress() == types.NilAddress {
+		return false, types.ErrInvalidAddress
 	}
 
 	if isGenesis, err := k.state.IsGenesis(ix.FromAddress()); err != nil || isGenesis {
@@ -1400,7 +1407,7 @@ func (k *Engine) IsIxValid(ix *ktypes.Interaction) (bool, error) {
 	}
 
 	switch ix.Data.Input.Type {
-	case ktypes.ValueTransfer:
+	case types.ValueTransfer:
 		stateObject, err := k.state.GetLatestStateObject(ix.FromAddress())
 		if err != nil {
 			k.logger.Error("Error fetching stateObject", "addr", ix.FromAddress().Hex())
@@ -1413,7 +1420,7 @@ func (k *Engine) IsIxValid(ix *ktypes.Interaction) (bool, error) {
 				return false, err
 			}
 		}
-	case ktypes.AssetCreation:
+	case types.AssetCreation:
 		assetData := ix.Data.Input.Payload.AssetData
 
 		stateObject, err := k.state.GetLatestStateObject(ix.FromAddress())
@@ -1423,8 +1430,8 @@ func (k *Engine) IsIxValid(ix *ktypes.Interaction) (bool, error) {
 			return false, err
 		}
 
-		logicID, _ := ktypes.GetLogicID(assetData.Code, false)
-		assetID, _, _ := ktypes.GetAssetID(
+		logicID, _ := types.GetLogicID(assetData.Code, false)
+		assetID, _, _ := types.GetAssetID(
 			ix.FromAddress(),
 			uint8(assetData.Dimension),
 			assetData.IsFungible,
@@ -1434,25 +1441,25 @@ func (k *Engine) IsIxValid(ix *ktypes.Interaction) (bool, error) {
 			logicID,
 		)
 
-		if _, err = stateObject.BalanceOf(assetID); !errors.Is(err, ktypes.ErrAssetNotFound) {
+		if _, err = stateObject.BalanceOf(assetID); !errors.Is(err, types.ErrAssetNotFound) {
 			return false, err
 		}
 
 	default:
-		return false, ktypes.ErrInvalidInteractionType
+		return false, types.ErrInvalidInteractionType
 	}
 
 	return true, nil
 }
 
 func GetContextLockInfo(
-	accounts types.AccountInfos,
-	hashes map[ktypes.Address]ktypes.Hash,
-) map[ktypes.Address]ktypes.ContextLockInfo {
-	lockInfo := make(map[ktypes.Address]ktypes.ContextLockInfo)
+	accounts ktypes.AccountInfos,
+	hashes map[types.Address]types.Hash,
+) map[types.Address]types.ContextLockInfo {
+	lockInfo := make(map[types.Address]types.ContextLockInfo)
 
 	for addr, accInfo := range accounts {
-		lockInfo[addr] = ktypes.ContextLockInfo{
+		lockInfo[addr] = types.ContextLockInfo{
 			ContextHash:   hashes[addr],
 			Height:        accInfo.Height.Uint64(),
 			TesseractHash: accInfo.TesseractHash,

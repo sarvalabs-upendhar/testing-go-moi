@@ -2,7 +2,8 @@ package kbft
 
 import (
 	"bytes"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
+
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 type ValidatorSet struct {
@@ -24,7 +25,7 @@ func NewValidatorSet(v []*Validator, operatorIndex int32, vp []int64, i []int32,
 	return vs
 }
 
-func (valSet *ValidatorSet) HasAddress(addrs ktypes.Address) bool {
+func (valSet *ValidatorSet) HasAddress(addrs types.Address) bool {
 	for _, val := range valSet.Validators {
 		if bytes.Equal(val.Address.Bytes(), addrs.Bytes()) {
 			return true
@@ -34,9 +35,9 @@ func (valSet *ValidatorSet) HasAddress(addrs ktypes.Address) bool {
 	return false
 }
 
-func (valSet *ValidatorSet) GetByIndex(index int32) (addrs ktypes.Address, val *Validator) {
+func (valSet *ValidatorSet) GetByIndex(index int32) (addrs types.Address, val *Validator) {
 	if index < 0 || int(index) >= len(valSet.Validators) {
-		return ktypes.Address{}, nil
+		return types.Address{}, nil
 	}
 
 	val = valSet.Validators[index]
@@ -44,7 +45,7 @@ func (valSet *ValidatorSet) GetByIndex(index int32) (addrs ktypes.Address, val *
 	return val.Address, val
 }
 
-func (valSet *ValidatorSet) GetByAddress(add ktypes.Address) (index int32, val *Validator) {
+func (valSet *ValidatorSet) GetByAddress(add types.Address) (index int32, val *Validator) {
 	for idx, val := range valSet.Validators {
 		if bytes.Equal(val.Address.Bytes(), add.Bytes()) {
 			return int32(idx), val.Copy()

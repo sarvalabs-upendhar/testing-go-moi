@@ -107,11 +107,11 @@ func GetPrivateKeysForSigningAndNetwork(mnemonic string, nthValidator uint32) ([
 	return aggPrivKey, nil
 }
 
-//GeneratePeerID takes privateKey in bytes and generate peerID for communication
+// GeneratePeerID takes privateKey in bytes and generate peerID for communication
 func GeneratePeerID(prvKey []byte) (peer.ID, error) {
 	var genPeerID peer.ID
 
-	//Casting secp256k1 private key to signature.PrivKey
+	// Casting secp256k1 private key to signature.PrivKey
 	key, err := crypto.UnmarshalSecp256k1PrivateKey(prvKey)
 	if err != nil {
 		return genPeerID, errors.New("error while un marshalling secp256k1 key:" + err.Error())
@@ -155,6 +155,7 @@ func itob(val uint32) []byte {
 
 	return r
 }
+
 func btoi(val []byte) uint32 {
 	r := uint32(0)
 	for i := uint32(0); i < 4; i++ {

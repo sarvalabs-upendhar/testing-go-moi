@@ -17,24 +17,28 @@ import (
 // MoiNodeRegistry Holds the baseURL of the RPC/HTTP host
 type MoiNodeRegistry string
 
-//String converts MoiNodeRegistry to string
+// String converts MoiNodeRegistry to string
 func (mnR MoiNodeRegistry) String() string {
 	return string(mnR)
 }
 
 // Init makes the health check for  MoiNodeRegistry and ready to accept/do requests
 func Init(moiIDHost string) MoiNodeRegistry {
-	var currentBaseURL = MoiNodeRegistry(moiIDHost)
+	currentBaseURL := MoiNodeRegistry(moiIDHost)
 
 	return currentBaseURL
 }
 
-// GetNodes used to fetch nodes in MoiNet
-// options:
-// 		userID: <user_moi_id_address>
-//		nodeType: NodeType
-//
-// returns a list of nodes in MOINET with given options
+/*
+GetNodes used to fetch nodes in MoiNet
+
+options:
+
+	userID: <user_moi_id_address>
+	nodeType: NodeType
+
+returns a list of nodes in MOINET with given options
+*/
 func (mnR *MoiNodeRegistry) GetNodes(optArgs map[string]interface{}) ([]MoiNode, uint32, error) {
 	var targetedUserID string
 
@@ -63,8 +67,10 @@ func (mnR *MoiNodeRegistry) GetNodes(optArgs map[string]interface{}) ([]MoiNode,
 	}
 
 	if isCountOnlyRequest {
-		requestURL = strings.Join([]string{mnR.String(),
-			"/moi-id/moinode/list?userID=", targetedUserID, "&countOnly=true"}, "")
+		requestURL = strings.Join([]string{
+			mnR.String(),
+			"/moi-id/moinode/list?userID=", targetedUserID, "&countOnly=true",
+		}, "")
 	} else {
 		requestURL = strings.Join([]string{mnR.String(), "/moi-id/moinode/list?userID=", targetedUserID}, "")
 	}
@@ -122,7 +128,8 @@ func (mnR *MoiNodeRegistry) GetNodes(optArgs map[string]interface{}) ([]MoiNode,
 func (mnR *MoiNodeRegistry) UpdateNode(upgradeBool bool,
 	nodeSpecificPublicBytes []byte,
 	userID, requestedNodeType,
-	kramaID string) (bool, error) {
+	kramaID string,
+) (bool, error) {
 	/* Getting the Node co-ordinates */
 	ipInfo, err := http.Get("https://ipinfo.io")
 	if err != nil {
@@ -161,7 +168,6 @@ func (mnR *MoiNodeRegistry) UpdateNode(upgradeBool bool,
 		"coOrdinates":      coords,
 		"extraData":        "0x",
 	})
-
 	if err != nil {
 		return false, err
 	}
@@ -169,15 +175,14 @@ func (mnR *MoiNodeRegistry) UpdateNode(upgradeBool bool,
 	requestBody := bytes.NewBuffer(payload)
 	updateNodeReqURL := strings.Join([]string{mnR.String(), "/moi-id/moinode/update"}, "")
 
-	//Making a call to register/upgrade the node
+	// Making a call to register/upgrade the node
 	resp, err := http.Post(updateNodeReqURL, "application/json", requestBody) //nolint
-
 	if err != nil {
 		return false, err
 	}
 	defer resp.Body.Close()
 
-	//Read the response body
+	// Read the response body
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return false, err
@@ -209,7 +214,6 @@ func (mnR *MoiNodeRegistry) GetNodePublicKey(nodeKramaID kramaid.KramaID) ([]byt
 		"uid":       "0x" + userMoiID,
 		"nodeIndex": nodeIndex,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -217,15 +221,14 @@ func (mnR *MoiNodeRegistry) GetNodePublicKey(nodeKramaID kramaid.KramaID) ([]byt
 	requestBody := bytes.NewBuffer(getNodeInfoPayload)
 	updateNodeReqURL := strings.Join([]string{mnR.String(), "/moi-id/moinode/getnodeinfo"}, "")
 
-	//Making a call to register/upgrade the node
+	// Making a call to register/upgrade the node
 	resp, err := http.Post(updateNodeReqURL, "application/json", requestBody) //nolint
-
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	//Read the response body
+	// Read the response body
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err

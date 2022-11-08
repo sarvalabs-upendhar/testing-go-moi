@@ -4,30 +4,30 @@ import (
 	"math/big"
 
 	"gitlab.com/sarvalabs/moichain/common"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	"gitlab.com/sarvalabs/moichain/guna"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 type IxPool interface {
-	AddInteractions(ixs ktypes.Interactions) []error
-	GetNonce(addr ktypes.Address) (uint64, error)
+	AddInteractions(ixs types.Interactions) []error
+	GetNonce(addr types.Address) (uint64, error)
 }
 
 type ChainManager interface {
-	GetLatestTesseract(addr ktypes.Address) (*ktypes.Tesseract, error)
-	GetTesseract(hash ktypes.Hash) (*ktypes.Tesseract, error)
-	GetReceipt(addr ktypes.Address, ixHash ktypes.Hash) (*ktypes.Receipt, error)
-	GetTesseractByHeight(address string, height uint64) (*ktypes.Tesseract, error)
-	GetAssetDataByAssetHash(assetHash []byte) (*ktypes.AssetData, error)
+	GetLatestTesseract(addr types.Address) (*types.Tesseract, error)
+	GetTesseract(hash types.Hash) (*types.Tesseract, error)
+	GetReceipt(addr types.Address, ixHash types.Hash) (*types.Receipt, error)
+	GetTesseractByHeight(address string, height uint64) (*types.Tesseract, error)
+	GetAssetDataByAssetHash(assetHash []byte) (*types.AssetData, error)
 }
 
 type StateManager interface {
-	GetLatestStateObject(addr ktypes.Address) (*guna.StateObject, error)
-	GetContextByHash(address ktypes.Address, hash ktypes.Hash) (ktypes.Hash, []id.KramaID, []id.KramaID, error)
-	GetBalances(addrs ktypes.Address) (*ktypes.BalanceObject, error)
-	GetBalance(addr ktypes.Address, assetID ktypes.AssetID) (*big.Int, error)
-	GetLatestNonce(addr ktypes.Address) (uint64, error)
+	GetLatestStateObject(addr types.Address) (*guna.StateObject, error)
+	GetContextByHash(address types.Address, hash types.Hash) (types.Hash, []id.KramaID, []id.KramaID, error)
+	GetBalances(addrs types.Address) (*types.BalanceObject, error)
+	GetBalance(addr types.Address, assetID types.AssetID) (*big.Int, error)
+	GetLatestNonce(addr types.Address) (uint64, error)
 }
 
 // Backend is a struct that represents the API backend

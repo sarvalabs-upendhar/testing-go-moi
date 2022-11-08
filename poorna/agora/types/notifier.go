@@ -2,16 +2,17 @@ package types
 
 import (
 	"context"
-	"github.com/cskr/pubsub"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
 	"sync"
+
+	"github.com/cskr/pubsub"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 const BufferSize = 16
 
 type PubSub interface {
 	Publish(block Block)
-	Subscribe(ctx context.Context, keys ...ktypes.Hash) <-chan Block
+	Subscribe(ctx context.Context, keys ...types.Hash) <-chan Block
 	Shutdown()
 }
 
@@ -57,7 +58,7 @@ func (ps *impl) Shutdown() {
 // Subscribe returns a channel of blocks for the given |keys|. |blockChannel|
 // is closed if the |ctx| times out or is cancelled, or after receiving the blocks
 // corresponding to |keys|.
-func (ps *impl) Subscribe(ctx context.Context, keys ...ktypes.Hash) <-chan Block {
+func (ps *impl) Subscribe(ctx context.Context, keys ...types.Hash) <-chan Block {
 	blocksCh := make(chan Block, len(keys))
 	valuesCh := make(chan interface{}, len(keys)) // provide our own channel to control buffer, prevent blocking
 
@@ -128,7 +129,7 @@ func (ps *impl) Subscribe(ctx context.Context, keys ...ktypes.Hash) <-chan Block
 	return blocksCh
 }
 
-func toStrings(hashes []ktypes.Hash) []string {
+func toStrings(hashes []types.Hash) []string {
 	keys := make([]string, 0, len(hashes))
 	for _, v := range hashes {
 		keys = append(keys, v.Hex())

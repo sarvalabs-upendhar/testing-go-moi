@@ -2,19 +2,20 @@ package krama
 
 import (
 	"context"
+	"log"
+	"math/rand"
+	"time"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	rpc "github.com/libp2p/go-libp2p-gorpc"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	"gitlab.com/sarvalabs/moichain/krama/types"
+	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	"gitlab.com/sarvalabs/moichain/types"
 	"gitlab.com/sarvalabs/polo/go-polo"
-	"log"
-	"math/rand"
-	"time"
 )
 
 const (
@@ -52,11 +53,11 @@ func (t *Transport) RegisterRPCService(serviceID protocol.ID, serviceName string
 	return t.network.RegisterNewRPCService(serviceID, serviceName, service)
 }
 
-func (t *Transport) InitClusterCommunication(ctx context.Context, slot *types.Slot) error {
+func (t *Transport) InitClusterCommunication(ctx context.Context, slot *ktypes.Slot) error {
 	var randomICSNodes []id.KramaID
 
 	handler := func(msg *pubsub.Message) error {
-		icsMsg := new(ktypes.ICSMSG)
+		icsMsg := new(types.ICSMSG)
 		if err := polo.Depolorize(icsMsg, msg.GetData()); err != nil {
 			return err
 		}
@@ -77,7 +78,7 @@ func (t *Transport) InitClusterCommunication(ctx context.Context, slot *types.Sl
 	}
 
 	// Check whether the slot is a validator slot
-	if slot.SlotType == types.ValidatorSlot {
+	if slot.SlotType == ktypes.ValidatorSlot {
 		randomICSNodes = t.connectRandomPeers(slot)
 	}
 
@@ -90,7 +91,7 @@ func (t *Transport) InitClusterCommunication(ctx context.Context, slot *types.Sl
 				}
 
 				// Check whether the slot is a validator slot and the randomICSNodes is not empty
-				if slot.SlotType == types.ValidatorSlot && len(randomICSNodes) != 0 {
+				if slot.SlotType == ktypes.ValidatorSlot && len(randomICSNodes) != 0 {
 					t.disconnectRandomPeers(randomICSNodes)
 				}
 
@@ -121,11 +122,11 @@ func (t *Transport) Call(peerID peer.ID, svcName, svcMethod string, args, respon
 	return t.rpcClient.Call(peerID, svcName, svcMethod, args, response)
 }
 
-func (t *Transport) BroadcastTesseract(msg *ktypes.TesseractMessage) error {
+func (t *Transport) BroadcastTesseract(msg *types.TesseractMessage) error {
 	return t.network.Broadcast(TesseractTopic, polo.Polorize(msg))
 }
 
-func (t *Transport) connectRandomPeers(slot *types.Slot) []id.KramaID {
+func (t *Transport) connectRandomPeers(slot *ktypes.Slot) []id.KramaID {
 	var randomICSNodes []id.KramaID
 
 	clusterInfo := slot.CLusterInfo()
@@ -152,7 +153,7 @@ func (t *Transport) connectRandomPeers(slot *types.Slot) []id.KramaID {
 
 		if err := t.network.ConnectPeer(node); err != nil {
 			// If the node is already connected increment the counter
-			if errors.Is(err, ktypes.ErrConnectionExists) {
+			if errors.Is(err, types.ErrConnectionExists) {
 				counter++
 			}
 

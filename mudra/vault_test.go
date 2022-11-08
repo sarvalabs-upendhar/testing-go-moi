@@ -2,11 +2,12 @@ package mudra
 
 import (
 	"fmt"
+	"log"
+	"testing"
+
 	"gitlab.com/sarvalabs/moichain/mudra/common"
 	"gitlab.com/sarvalabs/moichain/mudra/poi"
 	"gitlab.com/sarvalabs/moichain/mudra/poi/moinode"
-	"log"
-	"testing"
 )
 
 /*
@@ -46,6 +47,7 @@ func TestBLSSignAndVerify(t *testing.T) {
 	t.Log("Verification Successful? : ", verificationSuccess)
 }
 */
+
 func TestBLSSignAgg(t *testing.T) {
 	// Validator 1
 	_, _, err := poi.RandGenKeystore(fmt.Sprintf("hoola_%d", 1), "vmvm1234")

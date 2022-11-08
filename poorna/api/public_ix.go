@@ -2,15 +2,17 @@ package api
 
 import (
 	"errors"
+
+	"gitlab.com/sarvalabs/moichain/utils"
+
 	"gitlab.com/sarvalabs/moichain/guna"
 
 	"gitlab.com/sarvalabs/moichain/common"
-	"gitlab.com/sarvalabs/moichain/common/ktypes"
-	"gitlab.com/sarvalabs/moichain/common/kutils"
+	"gitlab.com/sarvalabs/moichain/types"
 )
 
 const (
-	txMaxSize = 128 * 1024 //128Kb
+	txMaxSize = 128 * 1024 // 128Kb
 )
 
 var (
@@ -33,13 +35,13 @@ func NewPublicIXAPI(ixpool IxPool, sm StateManager, cfg *common.IxPoolConfig) *P
 }
 
 // SendInteraction is a method of PublicIXAPI that stores the interaction
-func (p *PublicIXAPI) SendInteraction(args *SendIXArgs) (ktypes.Interactions, error) {
+func (p *PublicIXAPI) SendInteraction(args *SendIXArgs) (types.Interactions, error) {
 	err := validateArguments(args, p)
 	if err != nil {
 		return nil, err
 	}
 
-	nonce, err := p.ixpool.GetNonce(ktypes.HexToAddress(args.From))
+	nonce, err := p.ixpool.GetNonce(types.HexToAddress(args.From))
 	if err != nil {
 		return nil, err
 	}
@@ -59,28 +61,28 @@ func (p *PublicIXAPI) SendInteraction(args *SendIXArgs) (ktypes.Interactions, er
 }
 
 // helper function
-func constructInteraction(args *SendIXArgs, nonce uint64) (ktypes.Interactions, error) {
+func constructInteraction(args *SendIXArgs, nonce uint64) (types.Interactions, error) {
 	// Construct the interactions data
-	ixns := make(ktypes.Interactions, 1)
-	ixns[0] = new(ktypes.Interaction)
+	ixns := make(types.Interactions, 1)
+	ixns[0] = new(types.Interaction)
 
-	ixns[0].Data = ktypes.IxData{
-		Input: ktypes.InteractionInput{
+	ixns[0].Data = types.IxData{
+		Input: types.InteractionInput{
 			Type:     args.IxType,
 			Nonce:    nonce,
-			From:     ktypes.HexToAddress(args.From),
-			To:       ktypes.HexToAddress(args.To),
+			From:     types.HexToAddress(args.From),
+			To:       types.HexToAddress(args.To),
 			AnuPrice: args.AnuPrice,
 		},
 	}
 
 	switch args.IxType {
 	case 0:
-		ixns[0].Data.Input.TransferValue = map[ktypes.AssetID]uint64{ktypes.AssetID(args.AssetID): uint64(args.Value)}
+		ixns[0].Data.Input.TransferValue = map[types.AssetID]uint64{types.AssetID(args.AssetID): uint64(args.Value)}
 
 	case 1:
-		ixns[0].Data.Input.Payload = ktypes.InteractionInputPayload{
-			AssetData: ktypes.AssetDataInput{
+		ixns[0].Data.Input.Payload = types.InteractionInputPayload{
+			AssetData: types.AssetDataInput{
 				Dimension:   args.AssetCreation.Dimension,
 				TotalSupply: args.AssetCreation.TotalSupply,
 				Symbol:      args.AssetCreation.Symbol,
@@ -98,24 +100,24 @@ func constructInteraction(args *SendIXArgs, nonce uint64) (ktypes.Interactions, 
 
 func validateArguments(args *SendIXArgs, p *PublicIXAPI) error {
 	// Reject interaction if sender address is invalid
-	senderAddress, err := kutils.ValidateAddress(args.From)
+	senderAddress, err := utils.ValidateAddress(args.From)
 	if err != nil {
-		return ktypes.ErrInvalidAddress
+		return types.ErrInvalidAddress
 	}
 
 	// Reject genesis account interaction
-	if ktypes.HexToAddress(senderAddress) == guna.GenesisAddress {
+	if types.HexToAddress(senderAddress) == guna.GenesisAddress {
 		return ErrGenesisAccount
 	}
 
 	if args.To != "" {
-		receiverAddress, err := kutils.ValidateAddress(args.To)
+		receiverAddress, err := utils.ValidateAddress(args.To)
 		if err != nil {
-			return ktypes.ErrInvalidAddress
+			return types.ErrInvalidAddress
 		}
 
 		// Reject genesis account interaction
-		if ktypes.HexToAddress(receiverAddress) == guna.GenesisAddress {
+		if types.HexToAddress(receiverAddress) == guna.GenesisAddress {
 			return ErrGenesisAccount
 		}
 	}
@@ -123,7 +125,7 @@ func validateArguments(args *SendIXArgs, p *PublicIXAPI) error {
 	return nil
 }
 
-func validateInteraction(ix *ktypes.Interaction, p *PublicIXAPI) error {
+func validateInteraction(ix *types.Interaction, p *PublicIXAPI) error {
 	// Check the interaction size to overcome DOS Attacks
 	if uint64(ix.GetSize()) > txMaxSize {
 		return ErrOversizedData
@@ -131,7 +133,7 @@ func validateInteraction(ix *ktypes.Interaction, p *PublicIXAPI) error {
 
 	// Reject underpriced transactions
 	if ix.IsUnderpriced(p.cfg.PriceLimit) {
-		return ktypes.ErrUnderpriced
+		return types.ErrUnderpriced
 	}
 
 	// Check nonce ordering

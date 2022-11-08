@@ -12,7 +12,8 @@ import (
 func generateKramaIDV1(nthValidator uint32,
 	moiIDAddress string,
 	privKeyBytesOfValidator []byte,
-	isNode bool) (KramaID, error) {
+	isNode bool,
+) (KramaID, error) {
 	if nthValidator >= HardenedStartIndex {
 		return "", errors.New("invalid node index, max value: 2147483648")
 	}
@@ -31,15 +32,12 @@ func generateKramaIDV1(nthValidator uint32,
 	metaInV1.moiID = finalMOIidString
 	metaInV1.nodeIndex = nthValidator
 
-	var err error
 	p2pID, err := GeneratePeerID(privKeyBytesOfValidator)
-
 	if err != nil {
 		return "", err
 	}
 
 	kidString, err := stringV1(metaInV1, p2pID.String(), isNode)
-
 	if err != nil {
 		return "", err
 	}
@@ -52,8 +50,8 @@ func generateKramaIDV1(nthValidator uint32,
 // stringV1 stringifies all parameters of KramaID in version 1 and returns base58 encoded multi-hash
 func stringV1(metaInV1 MetaInfoV1, p2pID string, isNode bool) (string, error) {
 	moiIDIn32Bytes := make([]byte, 32)
-	moiIDInBytes, err := hexutil.DecodeString(metaInV1.moiID)
 
+	moiIDInBytes, err := hexutil.DecodeString(metaInV1.moiID)
 	if err != nil {
 		return "", err
 	}

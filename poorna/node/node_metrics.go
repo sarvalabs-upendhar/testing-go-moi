@@ -1,9 +1,9 @@
 package node
 
 import (
-	"gitlab.com/sarvalabs/moichain/core/chain"
-	"gitlab.com/sarvalabs/moichain/core/ixpool"
+	"gitlab.com/sarvalabs/moichain/chain"
 	"gitlab.com/sarvalabs/moichain/guna"
+	"gitlab.com/sarvalabs/moichain/ixpool"
 	"gitlab.com/sarvalabs/moichain/krama"
 	"gitlab.com/sarvalabs/moichain/poorna/agora"
 	"gitlab.com/sarvalabs/moichain/poorna/flux"

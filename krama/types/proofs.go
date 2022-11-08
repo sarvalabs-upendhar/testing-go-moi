@@ -1,8 +1,8 @@
 package types
 
-import "gitlab.com/sarvalabs/moichain/common/ktypes"
+import "gitlab.com/sarvalabs/moichain/types"
 
 type WatchDogProofs struct {
-	MetaData *ktypes.ICSMetaInfo
+	MetaData *types.ICSMetaInfo
 	Extra    []byte
 }
