@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/moichain/poorna/agora/decision"
 	"gitlab.com/sarvalabs/moichain/poorna/agora/network"

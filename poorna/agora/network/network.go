@@ -10,9 +10,9 @@ import (
 	"gitlab.com/sarvalabs/moichain/utils"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/moichain/poorna"
 	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"

@@ -249,7 +249,7 @@ func Hex2Bytes(str string) []byte {
 type Interaction struct {
 	Data IxData
 	Hash Hash
-	Size int64 `polo_skip:"true"`
+	Size int64 `polo:"-"`
 }
 
 type InteractionInput struct {
@@ -459,7 +459,7 @@ func KIPPeerIDToString(peers []id.KramaID) []string {
 
 // BitArray is a thread-safe implementation of a bit array.
 type ArrayOfBits struct {
-	mtx      sync.Mutex `polo_skip:"true"`
+	mtx      sync.Mutex `polo:"-"`
 	Size     int        `json:"size"`
 	Elements []uint64   `json:"elements"`
 }

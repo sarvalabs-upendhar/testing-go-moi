@@ -1,7 +1,7 @@
 package ecdsa
 
 import (
-	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p/core/crypto"
 	"gitlab.com/sarvalabs/moichain/mudra/common"
 	"gitlab.com/sarvalabs/moichain/mudra/kramaid"
 )

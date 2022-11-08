@@ -8,10 +8,9 @@ import (
 	"sync"
 	"time"
 
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
+	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/moichain/types"
 )
 

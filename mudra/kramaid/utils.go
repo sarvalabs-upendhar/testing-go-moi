@@ -6,8 +6,8 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/tyler-smith/go-bip39"
 	"gitlab.com/sarvalabs/btcd-musig/btcec"
 	"gitlab.com/sarvalabs/btcd-musig/btcutil/hdkeychain"
