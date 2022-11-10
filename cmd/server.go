@@ -19,8 +19,8 @@ import (
 	"gitlab.com/sarvalabs/moichain/telemetry/tracing"
 	"go.opentelemetry.io/otel"
 
-	//"os/signal"
-	//"syscall"
+	// "os/signal"
+	// "syscall"
 
 	"github.com/spf13/cobra"
 )
@@ -170,7 +170,8 @@ func BuildConfig(dataDir string, fileCfg *Config) (*common.Config, error) {
 			return nil, errors.New("invalid libp2p address")
 		}
 
-		nodeCfg.Network.ListenAddresses = append(nodeCfg.Network.BootstrapPeers, addr)
+		nodeCfg.Network.ListenAddresses = nodeCfg.Network.BootstrapPeers
+		nodeCfg.Network.ListenAddresses = append(nodeCfg.Network.ListenAddresses, addr)
 	}
 
 	// validate json-rpc address
@@ -211,11 +212,12 @@ func BuildConfig(dataDir string, fileCfg *Config) (*common.Config, error) {
 	}
 
 	if EnableTracing {
-		if JaegerAddress != "" {
+		switch {
+		case JaegerAddress != "":
 			nodeCfg.Metrics.JaegerAddr = JaegerAddress
-		} else if fileCfg.Telemetry.JaegerAddr != "" {
+		case fileCfg.Telemetry.JaegerAddr != "":
 			nodeCfg.Metrics.JaegerAddr = fileCfg.Telemetry.JaegerAddr
-		} else {
+		default:
 			return nil, errors.New("tracing is enabled but a valid JaegerCollector address is not passed")
 		}
 	}

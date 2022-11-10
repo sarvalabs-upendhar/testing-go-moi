@@ -27,7 +27,7 @@ import (
 const charset = "abcdefghijklmnopqrstuvwxyz" +
 	"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
-var seededRand = rand.New( //nolint
+var seededRand = rand.New(
 	rand.NewSource(time.Now().UnixNano()))
 
 // stringWithCharset returns a random string from tha charset supplied
@@ -84,7 +84,7 @@ func ExponentialTimeout(baseTime time.Duration, exponent int32) time.Duration {
 
 	if exponent > 0 {
 		s1 := rand.NewSource(time.Now().UnixNano())
-		reg := rand.New(s1) //nolint
+		reg := rand.New(s1)
 		r := 1 + reg.Float64()*(2-1)
 		x := r * float64(baseTime.Milliseconds()) * math.Pow(2, float64(exponent))
 		timeout = time.Duration(x) * time.Millisecond
@@ -178,11 +178,7 @@ func ValidateAddress(address string) (string, error) {
 		return address, types.ErrInvalidAddress
 	}
 
-	r, err := regexp.Compile(`[^a-fA-F\d]`)
-	if err != nil {
-		return address, err
-	}
-
+	r := regexp.MustCompile(`[^a-fA-F\d]`)
 	if invalid := r.MatchString(address); invalid {
 		return address, types.ErrInvalidAddress
 	}
@@ -196,11 +192,7 @@ func ValidateHash(hash string) (string, error) {
 		return hash, types.ErrInvalidHash
 	}
 
-	r, err := regexp.Compile(`[^a-fA-F\d]`)
-	if err != nil {
-		return hash, err
-	}
-
+	r := regexp.MustCompile(`[^a-fA-F\d]`)
 	if invalid := r.MatchString(hash); invalid {
 		return hash, types.ErrInvalidHash
 	}
@@ -214,11 +206,7 @@ func ValidateAssetID(aID string) (string, error) {
 		return aID, types.ErrInvalidAssetID
 	}
 
-	r, err := regexp.Compile(`[^a-fA-F\d]`)
-	if err != nil {
-		return aID, err
-	}
-
+	r := regexp.MustCompile(`[^a-fA-F\d]`)
 	if invalid := r.MatchString(aID); invalid {
 		return aID, types.ErrInvalidAssetID
 	}

@@ -75,7 +75,7 @@ func GetPrivateKeysForSigningAndNetwork(mnemonic string, nthValidator uint32) ([
 	privKeyInECDSA := privKeyInEC.ToECDSA()
 	signingPrivKeyInBytes := serializePrivateKey(privKeyInECDSA)
 
-	aggPrivKey = append(aggPrivKey[:], signingPrivKeyInBytes[:]...)
+	aggPrivKey = append(aggPrivKey, signingPrivKeyInBytes...)
 
 	// Let's derive PrivateKey for communication, so load keyPair at path: m/44'/6174'/6020'/0/n
 	ntwPrivKey := tempKey
@@ -102,7 +102,7 @@ func GetPrivateKeysForSigningAndNetwork(mnemonic string, nthValidator uint32) ([
 	nPrivKeyInECDSA := nPrivKeyInEC.ToECDSA()
 	ntwPrivKeyInBytes := serializePrivateKey(nPrivKeyInECDSA)
 
-	aggPrivKey = append(aggPrivKey[:], ntwPrivKeyInBytes[:]...)
+	aggPrivKey = append(aggPrivKey, ntwPrivKeyInBytes...)
 
 	return aggPrivKey, nil
 }

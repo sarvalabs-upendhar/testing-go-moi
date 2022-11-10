@@ -125,8 +125,8 @@ func (s *SessionManager) handleAgoraResponseMsg(id id.KramaID, msg *atypes.Agora
 	}
 }
 
-func (s *SessionManager) PeerDisconnected(Sessions []types.Address, peerID peer.ID) {
-	for _, sessionID := range Sessions {
+func (s *SessionManager) PeerDisconnected(sessions []types.Address, peerID peer.ID) {
+	for _, sessionID := range sessions {
 		if session, ok := s.activeSessions.Load(sessionID); ok {
 			session, ok := session.(*Session)
 			if ok {

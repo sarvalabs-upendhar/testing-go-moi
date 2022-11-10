@@ -204,14 +204,14 @@ func (s *Server) setupHost() (err error) {
 	}
 
 	//// Construct path to the> key file
-	//keyfile := filepath.Join(s.cfg.KeyDirectory, "/file.key")
+	// keyfile := filepath.Join(s.cfg.KeyDirectory, "/file.key")
 	//
 	//// Acquire a private key from the key file or generate a new one
-	//key, err := acquirekey(keyfile)
-	//if err != nil {
-	//	// Check for errors and log it
-	//	log.Fatal(err)
-	//}
+	// key, err := acquirekey(keyfile)
+	// if err != nil {
+	//	 // Check for errors and log it
+	//	 log.Fatal(err)
+	// }
 
 	selfRouting := libp2p.Routing(func(h host.Host) (routing.PeerRouting, error) {
 		if err := s.setupKadDht(h); err != nil {
@@ -710,7 +710,7 @@ func (s *Server) GetRandomNode() peer.ID {
 
 	// TODO: Improve the seed
 	s1 := rand.NewSource(time.Now().UnixNano())
-	reg := rand.New(s1) //nolint
+	reg := rand.New(s1)
 	index := reg.Intn(len(peers))
 
 	return peers[index]

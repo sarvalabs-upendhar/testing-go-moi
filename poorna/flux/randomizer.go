@@ -201,10 +201,11 @@ func (r *Randomizer) Start() {
 	}()
 }
 
-func (r *Randomizer) getPeers(slotNo int, count int, avoidPeers []id.KramaID) (list []id.KramaID) {
+func (r *Randomizer) getPeers(slotNo int, count int, avoidPeers []id.KramaID) []id.KramaID {
 	// log.Println("Querying for random peers", slotNo, count)
 	//	log.Println("Avoid peers", avoidPeers)
 	counter := 0
+	list := make([]id.KramaID, 0)
 
 	r.peers[slotNo].mtx.Lock()
 	defer r.peers[slotNo].mtx.Unlock()
@@ -237,7 +238,7 @@ func (r *Randomizer) getPeers(slotNo int, count int, avoidPeers []id.KramaID) (l
 
 	r.updatePeerListStatus(slotNo)
 
-	return
+	return list
 }
 
 func (r *Randomizer) HandleReqMsg(reqMsg *types.RandomWalkReq) error {
@@ -324,7 +325,7 @@ func (r *Randomizer) getRequestID(slot int) int64 {
 	}
 
 	s1 := rand.NewSource(time.Now().UnixNano())
-	reg := rand.New(s1) //nolint
+	reg := rand.New(s1)
 	reqID := reg.Int63()
 
 	r.requestIDs[slot] = reqID
@@ -372,11 +373,11 @@ func (r *Randomizer) GetRandomNodes(
 			}
 
 			s1 := rand.NewSource(time.Now().UnixNano())
-			reg := rand.New(s1) //nolint
+			reg := rand.New(s1)
 			slotNo := reg.Intn(SLOTCOUNT)
 
 			peers := r.getPeers(slotNo, requiredNo, avoidPeers)
-			if len(peers) <= 0 {
+			if len(peers) == 0 {
 				continue
 			}
 
@@ -386,7 +387,7 @@ func (r *Randomizer) GetRandomNodes(
 			}
 
 			avoidPeers = append(avoidPeers, randomPeers...)
-			requiredNo = requiredNo - len(randomPeers)
+			requiredNo -= len(randomPeers)
 		}
 	}
 }
@@ -396,10 +397,10 @@ func (r *Randomizer) Close() {
 }
 
 func (r *Randomizer) SendFluxMessage(peerID peer.ID, msgType types.MsgType, msg interface{}) error {
-	//if s.Peers.ContainsPeer(peerID) {
-	//	p := s.Peers.Peer(peerID)
-	//	return p.(s.id, msgType, msg)
-	//}
+	// if s.Peers.ContainsPeer(peerID) {
+	//	 p := s.Peers.Peer(peerID)
+	//	 return p.(s.id, msgType, msg)
+	// }
 	bytes := polo.Polorize(msg)
 	// Create a network message proto with the bytes payload of the message to send
 	// and convert into a proto message and marshal it into a slice of bytes

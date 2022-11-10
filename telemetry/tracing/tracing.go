@@ -25,7 +25,7 @@ func (n *noopShutdownTracerProvider) Shutdown(ctx context.Context) error { retur
 
 func buildExporters(ctx context.Context, jaegerAddress string) ([]trace.SpanExporter, error) {
 	var exporters []trace.SpanExporter
-	//*** File Exporter
+	// *** File Exporter
 	// filePath := ""
 	// if filePath == "" {
 	// 	cwd, err := os.Getwd()
@@ -40,7 +40,7 @@ func buildExporters(ctx context.Context, jaegerAddress string) ([]trace.SpanExpo
 	// }
 	// exporters = append(exporters, exporter)
 
-	//** Jaeger Exporter
+	// ** Jaeger Exporter
 	jaegerExporter, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(jaegerAddress)))
 	if err != nil {
 		return nil, fmt.Errorf("building Jaeger exporter: %w", err)

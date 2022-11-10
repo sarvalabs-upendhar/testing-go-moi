@@ -19,13 +19,15 @@ import (
 var AgoraPrefix = []byte("agora")
 
 func GetAgoraKey(hash types.Hash) string {
-	out := append(AgoraPrefix, hash.Bytes()...)
+	out := AgoraPrefix
+	out = append(out, hash.Bytes()...)
 
 	return hex.EncodeToString(out)
 }
 
 func GetAgoraDBKey(address types.Address, hash types.Hash) []byte {
-	out := append(AgoraPrefix, address.Bytes()[0:20]...)
+	out := AgoraPrefix
+	out = append(out, address.Bytes()[0:20]...)
 	out = append(out, hash.Bytes()...)
 
 	return out
@@ -177,7 +179,7 @@ func (l *Ledger) worker() {
 		}
 
 		l.dbJobsLock.Lock()
-		jobs := l.dbJobs[:]
+		jobs := l.dbJobs
 		l.dbJobs = l.dbJobs[len(jobs):]
 		l.dbJobsLock.Unlock()
 

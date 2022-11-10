@@ -141,7 +141,7 @@ func (t *Transport) connectRandomPeers(slot *ktypes.Slot) []id.KramaID {
 	counter := 0
 	for len(visitedNodes) < len(icsNodes) && counter < MinimumConnectionCount {
 		source := rand.NewSource(time.Now().UnixNano())
-		reg := rand.New(source) //nolint
+		reg := rand.New(source)
 		index := reg.Intn(len(icsNodes))
 		node := icsNodes[index]
 

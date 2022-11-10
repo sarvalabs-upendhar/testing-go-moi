@@ -156,7 +156,7 @@ func (spm *SessionPeerManager) chooseBestPeer(
 			case <-ctx.Done():
 				return "", ctx.Err()
 			default:
-				r := rand.Intn(count) //nolint
+				r := rand.Intn(count)
 
 				for peerID := range spm.connectedPeers {
 					if _, ok := avoidPeers[peerID]; !ok && !rejectedPeer[peerID] {
@@ -184,7 +184,7 @@ func (spm *SessionPeerManager) chooseBestPeer(
 			case <-ctx.Done():
 				return "", ctx.Err()
 			default:
-				r := rand.Intn(count) //nolint
+				r := rand.Intn(count)
 
 				for peerID, info := range spm.peers {
 					if _, ok := avoidPeers[peerID]; !ok && !rejectedPeer[peerID] {

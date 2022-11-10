@@ -275,7 +275,7 @@ func (i *ICSNodes) GetKramaID(index int32) (slotID int, slotIndex int, kramaID i
 		}
 
 		if int(index) >= len(set.Ids) {
-			index = index - int32(len(set.Ids))
+			index -= int32(len(set.Ids))
 
 			continue
 		}
@@ -305,7 +305,7 @@ func (i *ICSNodes) GetIndex(peerID id.KramaID) (int32, bool) {
 			}
 		}
 
-		offset = offset + len(set.Ids)
+		offset += len(set.Ids)
 	}
 
 	return -1, false

@@ -59,7 +59,7 @@ func (blsPk BLSPrivKey) KeyType() KeyType {
 }
 
 func (blsPk *BLSPrivKey) UnMarshal(secBytes []byte) {
-	pairingFriendlyPrivKey := blst.KeyGen(secBytes[:])
+	pairingFriendlyPrivKey := blst.KeyGen(secBytes)
 	blsPk.p = *pairingFriendlyPrivKey
 }
 

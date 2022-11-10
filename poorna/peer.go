@@ -59,11 +59,11 @@ func (p *KipPeer) SendID(id id.KramaID, ntq int32, addrs []multiaddr.Multiaddr) 
 
 // SetID is a method of KipPeer that sets the KipID of the KipPeer.
 // Accepts NewPeer proto from which the KipID is generated.
-func (p *KipPeer) setID(ID id.KramaID) {
+func (p *KipPeer) setID(id id.KramaID) {
 	p.mtxLock.Lock()
 	defer p.mtxLock.Unlock()
 	// Generate the KipID for the peer and assign it to the field
-	p.id = ID
+	p.id = id
 }
 
 func (p *KipPeer) InitHandshake(id id.KramaID, ntq int32, addrs []multiaddr.Multiaddr) error {

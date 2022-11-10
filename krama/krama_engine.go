@@ -188,7 +188,7 @@ func NewKramaEngine(ctx context.Context,
 	return k, k.transport.RegisterRPCService(ICSRPCProtocol, "ICSRPC", NewICSRPCService(k))
 }
 
-func (k *Engine) AcquireContextLock(ctx context.Context, clusterID types.ClusterID, request Request) (err error) {
+func (k *Engine) AcquireContextLock(ctx context.Context, clusterID types.ClusterID, request Request) error {
 	ctx, span := tracing.Span(ctx, "Krama.KramaEngine", "AcquireContextLock")
 	defer span.End()
 	// Create cluster id using operatorID and IxHash
@@ -341,7 +341,8 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID types.Cluster
 		operatorRandomNodes = append([]id.KramaID{k.operator}, operatorRandomNodes...) // TODO:Improve this
 	}
 
-	exemptedNodes := append(respondedEligibleSet, operatorRandomNodes...)
+	exemptedNodes := respondedEligibleSet
+	exemptedNodes = append(exemptedNodes, operatorRandomNodes...)
 
 	observerNodes, err = k.getObserverNodes(ctx, observerNodesQueryCount, exemptedNodes)
 	if err != nil {
@@ -396,7 +397,7 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID types.Cluster
 
 	k.metrics.captureICSCreationTime(clusterState.ICSReqTime)
 
-	return
+	return nil
 }
 
 func (k *Engine) randomNodeDelta(setSize int) int {
@@ -692,7 +693,7 @@ func (k *Engine) handleReq(req Request) {
 			k.logger.Error("Error consensus failed", "error", err, "cluster-id", clusterInfo.ID)
 			k.metrics.captureAgreementFailureCount(1)
 			if err := k.exec.Revert(clusterInfo.ID); err != nil {
-				log.Fatal(err)
+				log.Panicln(err)
 			}
 
 			return
@@ -1182,25 +1183,23 @@ func (k *Engine) updateContextDelta(clusterID types.ClusterID) error {
 				genesisDeltaGroup.ReplacedNodes = append(genesisDeltaGroup.ReplacedNodes, replacedRandomDelta...)
 				seenAccounts[guna.GenesisAddress] = true
 				deltaMap[guna.GenesisAddress] = genesisDeltaGroup
-			} else {
-				if clusterState.AccountInfos[receiverAddr].Type == 2 {
-					receiverBehaviourDelta, replacedNodes := clusterState.GetBehaviouralContextDelta(
-						types.ReceiverBehaviourSet,
-					)
-					if receiverBehaviourDelta != "" {
-						receiverDeltaGroup.BehaviouralNodes = append(receiverDeltaGroup.BehaviouralNodes, receiverBehaviourDelta)
-					}
-					if replacedNodes != "" {
-						receiverDeltaGroup.ReplacedNodes = append(receiverDeltaGroup.ReplacedNodes, replacedNodes)
-					}
-					receiverRandomDelta, replacedRandomDelta := clusterState.GetRandomContextDelta(
-						types.ReceiverRandomSet,
-						1,
-						clusterState.Operator,
-					)
-					receiverDeltaGroup.RandomNodes = append(receiverDeltaGroup.RandomNodes, receiverRandomDelta...)
-					receiverDeltaGroup.ReplacedNodes = append(receiverDeltaGroup.ReplacedNodes, replacedRandomDelta...)
+			} else if clusterState.AccountInfos[receiverAddr].Type == 2 {
+				receiverBehaviourDelta, replacedNodes := clusterState.GetBehaviouralContextDelta(
+					types.ReceiverBehaviourSet,
+				)
+				if receiverBehaviourDelta != "" {
+					receiverDeltaGroup.BehaviouralNodes = append(receiverDeltaGroup.BehaviouralNodes, receiverBehaviourDelta)
 				}
+				if replacedNodes != "" {
+					receiverDeltaGroup.ReplacedNodes = append(receiverDeltaGroup.ReplacedNodes, replacedNodes)
+				}
+				receiverRandomDelta, replacedRandomDelta := clusterState.GetRandomContextDelta(
+					types.ReceiverRandomSet,
+					1,
+					clusterState.Operator,
+				)
+				receiverDeltaGroup.RandomNodes = append(receiverDeltaGroup.RandomNodes, receiverRandomDelta...)
+				receiverDeltaGroup.ReplacedNodes = append(receiverDeltaGroup.ReplacedNodes, replacedRandomDelta...)
 			}
 
 			seenAccounts[receiverAddr] = true

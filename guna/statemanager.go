@@ -648,7 +648,7 @@ type Request struct {
 }
 
 func (sm *StateManager) GetPublicKeys(ids ...id.KramaID) ([][]byte, error) {
-	if len(ids) <= 0 {
+	if len(ids) == 0 {
 		return nil, errors.New("Empty Ids")
 	}
 

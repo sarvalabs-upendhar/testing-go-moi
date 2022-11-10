@@ -154,8 +154,8 @@ func (metrics *Metrics) captureRandomNodesQueryTime(queryInitTime time.Time) {
 	metrics.RandomNodesQueryTime.Observe(float64(time.Since(queryInitTime).Milliseconds()))
 }
 
-func (metrics *Metrics) captureICSCreationTime(ICSReqTime time.Time) {
-	metrics.ICSCreationTime.Observe(float64(time.Since(ICSReqTime).Milliseconds()))
+func (metrics *Metrics) captureICSCreationTime(icsReqTime time.Time) {
+	metrics.ICSCreationTime.Observe(float64(time.Since(icsReqTime).Milliseconds()))
 }
 
 func (metrics *Metrics) captureICSCreationFailureCount(delta float64) {

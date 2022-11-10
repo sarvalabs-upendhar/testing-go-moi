@@ -165,14 +165,16 @@ func (wal *BaseWAL) Close() {
 
 // Wait for the underlying autofile group to finish shutting down
 // so it's safe to cleanup files.
-//func (wal *BaseWAL) Wait() {
-//	if wal.IsRunning() {
-//		wal.BaseService.Wait()
-//	}
-//	if wal.group.IsRunning() {
-//		wal.group.Wait()
-//	}
-//}
+/*
+func (wal *BaseWAL) Wait() {
+	if wal.IsRunning() {
+		wal.BaseService.Wait()
+	}
+	if wal.group.IsRunning() {
+		wal.group.Wait()
+	}
+}
+*/
 
 // Write is called in newStep and for each receive on the
 // peerMsgQueue and the timeoutTicker.
@@ -260,10 +262,10 @@ func (wal *BaseWAL) SearchForClusterID(
 			msg, err = dec.Decode()
 			if errors.Is(err, io.EOF) {
 				//// OPTIMISATION: no need to look for height in older files if we've seen h < height
-				//if lastHeightFound > 0 && lastHeightFound < height {
-				//	gr.Close()
-				//	return nil, false, nil
-				//}
+				// if lastHeightFound > 0 && lastHeightFound < height {
+				//	 gr.Close()
+				//	 return nil, false, nil
+				// }
 				// check next file
 				break
 			}

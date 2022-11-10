@@ -220,13 +220,13 @@ func GetAssetID(
 	}
 
 	if isMintable {
-		info = info | 0x01
+		info |= 0x01
 	} else {
 		assetData.Extra = big.NewInt(totalSupply).Bytes()
 	}
 
 	if isFungible {
-		info = info | 0x80
+		info |= 0x80
 	}
 
 	buf = append(buf, dimension)

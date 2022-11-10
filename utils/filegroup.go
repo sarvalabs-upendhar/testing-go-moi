@@ -537,8 +537,7 @@ func (gr *GroupReader) Close() error {
 // Read implements io.Reader, reading bytes from the current Reader
 // incrementing index until enough bytes are read.
 func (gr *GroupReader) Read(p []byte) (n int, err error) {
-	lenP := len(p) //nolint
-	if lenP == 0 {
+	if len(p) == 0 {
 		return 0, errors.New("given empty slice")
 	}
 
@@ -561,7 +560,7 @@ func (gr *GroupReader) Read(p []byte) (n int, err error) {
 
 		switch {
 		case err == io.EOF: //nolint
-			if n >= lenP {
+			if n >= len(p) {
 				return n, nil
 			}
 			// Open the next file

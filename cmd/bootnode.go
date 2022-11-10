@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"path/filepath"
 
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -34,9 +33,7 @@ var bootnodeCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		var KadDHT *dht.IpfsDHT
 
-		path := filepath.Join(keyFile)
-
-		privateKey, err := getPrivateKey(path)
+		privateKey, err := getPrivateKey(keyFile)
 		if err != nil {
 			log.Panic("Failed to get private keys : ", err)
 		}

@@ -25,7 +25,7 @@ type TestPrivateValidator struct {
 
 func NewTestPrivateValidator(path string) (*TestPrivateValidator, error) {
 	v := new(TestPrivateValidator)
-	keyFile := filepath.Join(path + "/seed.key")
+	keyFile := filepath.Join(path, "/seed.key")
 
 	if err := v.acquireSeed(keyFile); err != nil {
 		return nil, err

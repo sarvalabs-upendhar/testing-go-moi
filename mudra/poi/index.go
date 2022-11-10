@@ -217,7 +217,7 @@ func storeKeystore(privKeyBytesOfValidator []byte, nodePassPhrase, dataDir strin
 		return err
 	}
 
-	path := filepath.Join(dataDir + "/keystore.json")
+	path := filepath.Join(dataDir, "/keystore.json")
 
 	f, err := os.Create(path)
 	if err != nil {
@@ -305,7 +305,7 @@ func getPrivKeysForTest(seed []byte) ([]byte, []byte, error) {
 
 	signingPrivKeyInBytes := privKeyInEC.Serialize()
 
-	aggPrivKey = append(aggPrivKey[:], signingPrivKeyInBytes[:]...)
+	aggPrivKey = append(aggPrivKey, signingPrivKeyInBytes...)
 
 	// Let's derive PrivateKey for communication, so load keyPair at path: m/44'/6174'/6020'/0/n
 	ntwPrivKey := tempKey
@@ -331,7 +331,7 @@ func getPrivKeysForTest(seed []byte) ([]byte, []byte, error) {
 
 	ntwPrivKeyInBytes := nPrivKeyInEC.Serialize()
 
-	aggPrivKey = append(aggPrivKey[:], ntwPrivKeyInBytes[:]...)
+	aggPrivKey = append(aggPrivKey, ntwPrivKeyInBytes...)
 
 	return aggPrivKey, moiIDPubBytes, nil
 }
