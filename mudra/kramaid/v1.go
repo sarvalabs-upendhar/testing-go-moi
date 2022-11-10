@@ -65,10 +65,10 @@ func stringV1(metaInV1 MetaInfoV1, p2pID string, isNode bool) (string, error) {
 		targetedTypeVersionPrefix = UserTypeVersion1
 	}
 
-	var kramaIDInBytes []byte                                                  // of length 37
-	kramaIDInBytes = append(kramaIDInBytes[:], targetedTypeVersionPrefix)      // [0]
-	kramaIDInBytes = append(kramaIDInBytes[:], moiIDIn32Bytes[:]...)           // [1:33]
-	kramaIDInBytes = append(kramaIDInBytes[:], itob(metaInV1.nodeIndex)[:]...) // [33:37] 4 bytes for uint32
+	var kramaIDInBytes []byte                                            // of length 37
+	kramaIDInBytes = append(kramaIDInBytes, targetedTypeVersionPrefix)   // [0]
+	kramaIDInBytes = append(kramaIDInBytes, moiIDIn32Bytes...)           // [1:33]
+	kramaIDInBytes = append(kramaIDInBytes, itob(metaInV1.nodeIndex)...) // [33:37] 4 bytes for uint32
 
 	kramaIDString := base58.Encode(kramaIDInBytes)
 

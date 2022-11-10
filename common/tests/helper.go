@@ -165,7 +165,7 @@ func getPrivKeysForTest(seed []byte) ([]byte, []byte, error) {
 
 	signingPrivKeyInBytes := privKeyInEC.Serialize()
 
-	aggPrivKey = append(aggPrivKey[:], signingPrivKeyInBytes[:]...)
+	aggPrivKey = append(aggPrivKey, signingPrivKeyInBytes...)
 
 	// Let's derive PrivateKey for communication, so load keyPair at path: m/44'/6174'/6020'/0/n
 	ntwPrivKey := tempKey
@@ -191,7 +191,7 @@ func getPrivKeysForTest(seed []byte) ([]byte, []byte, error) {
 
 	ntwPrivKeyInBytes := nPrivKeyInEC.Serialize()
 
-	aggPrivKey = append(aggPrivKey[:], ntwPrivKeyInBytes[:]...)
+	aggPrivKey = append(aggPrivKey, ntwPrivKeyInBytes...)
 
 	return aggPrivKey, moiIDPubBytes, nil
 }
@@ -256,43 +256,46 @@ func RandomAssetID(t *testing.T, address types.Address) string {
 	return string(assetID)
 }
 
+/*
 // Unused functions
-//func GetTestTesseract(t *testing.T, height uint64) *types.Tesseract {
-//	t.Helper()
-//
-//	header := types.TesseractHeader{
-//		Address:  RandomAddress(t),
-//		PrevHash: RandomHash(t),
-//		Height:   height,
-//	}
-//	body := types.TesseractBody{}
-//	tesseract := types.Tesseract{
-//		Header: header,
-//		Body:   body,
-//		Seal:   []byte{1},
-//	}
-//
-//	return &tesseract
-//}
 
-//func GetInvalidHash(t *testing.T) string {
-//	t.Helper()
-//	randomHash := RandomHash(t).String()
-//
-//	randmath.Seed(time.Now().UnixNano())
-//	randomNum := randmath.Intn(62)
-//	randAlphabet := 'g' + randmath.Intn(17)
-//
-//	return randomHash[:randomNum] + string(rune(randAlphabet)) + randomHash[randomNum+1:]
-//}
-//
-//func GetInvalidAddress(t *testing.T) string {
-//	t.Helper()
-//	randomHash := RandomHash(t).String()
-//
-//	randmath.Seed(time.Now().UnixNano())
-//	randomNum := randmath.Intn(62)
-//	randAlphabet := 'g' + randmath.Intn(17)
-//
-//	return randomHash[:randomNum] + string(rune(randAlphabet)) + randomHash[randomNum+1:]
-//}
+func GetTestTesseract(t *testing.T, height uint64) *types.Tesseract {
+	t.Helper()
+
+	header := types.TesseractHeader{
+		Address:  RandomAddress(t),
+		PrevHash: RandomHash(t),
+		Height:   height,
+	}
+	body := types.TesseractBody{}
+	tesseract := types.Tesseract{
+		Header: header,
+		Body:   body,
+		Seal:   []byte{1},
+	}
+
+	return &tesseract
+}
+
+func GetInvalidHash(t *testing.T) string {
+	t.Helper()
+	randomHash := RandomHash(t).String()
+
+	randmath.Seed(time.Now().UnixNano())
+	randomNum := randmath.Intn(62)
+	randAlphabet := 'g' + randmath.Intn(17)
+
+	return randomHash[:randomNum] + string(rune(randAlphabet)) + randomHash[randomNum+1:]
+}
+
+func GetInvalidAddress(t *testing.T) string {
+	t.Helper()
+	randomHash := RandomHash(t).String()
+
+	randmath.Seed(time.Now().UnixNano())
+	randomNum := randmath.Intn(62)
+	randAlphabet := 'g' + randmath.Intn(17)
+
+	return randomHash[:randomNum] + string(rune(randAlphabet)) + randomHash[randomNum+1:]
+}
+*/

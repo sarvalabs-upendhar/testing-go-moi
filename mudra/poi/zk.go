@@ -100,7 +100,7 @@ func Authenticate(defAddr, passPhrase, moiIDBaseURL string) (bool, *zkAuthProof,
 	fileToBeExecuted := "auth.js"
 	zkChallenge := string(zkChallengeRespInBytes)
 	packagePath := strings.Trim(string(nodePath), "\n")
-	packagePath = packagePath + "/lib/node_modules/@nuid/zk"
+	packagePath += "/lib/node_modules/@nuid/zk"
 
 	authCmd := exec.Command(command, fileToBeExecuted, packagePath, zkChallenge, passPhrase)
 

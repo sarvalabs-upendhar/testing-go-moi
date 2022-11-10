@@ -735,7 +735,7 @@ func (s *Syncer) handleNewPeer() {
 
 			atomic.AddUint32(&s.peerCount, 1)
 
-			r := rand.Intn(500) //nolint
+			r := rand.Intn(500)
 			time.Sleep(time.Duration(r) * time.Millisecond)
 
 			msg := &types.AccountsStatusMsg{

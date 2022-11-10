@@ -52,7 +52,7 @@ func (a AssetCreation) revert(sm *StateManager) {
 	// if err != nil {
 	// 	log.Fatal(err)
 	// }
-	sm.db.DeleteEntry(a.id.Bytes()) //nolint
+	sm.db.DeleteEntry(a.id.Bytes())
 }
 
 func (a AssetCreation) cID() types.Hash {
@@ -73,7 +73,7 @@ func (c ContextUpdation) cID() types.Hash {
 }
 
 func (c ContextUpdation) revert(sm *StateManager) {
-	sm.db.DeleteEntry(c.id.Bytes()) //nolint
+	sm.db.DeleteEntry(c.id.Bytes())
 }
 
 type BalanceUpdation struct {
@@ -86,7 +86,7 @@ func (b BalanceUpdation) modifiedAddress() *types.Address {
 }
 
 func (b BalanceUpdation) revert(sm *StateManager) {
-	sm.db.DeleteEntry(b.id.Bytes()) //nolint
+	sm.db.DeleteEntry(b.id.Bytes())
 }
 
 func (b BalanceUpdation) cID() types.Hash {
@@ -103,7 +103,7 @@ func (acc AccountUpdation) modifiedAddress() *types.Address {
 }
 
 func (acc AccountUpdation) revert(sm *StateManager) {
-	sm.db.DeleteEntry(acc.id.Bytes()) //nolint
+	sm.db.DeleteEntry(acc.id.Bytes())
 }
 
 func (acc AccountUpdation) cID() types.Hash {
@@ -120,7 +120,7 @@ func (s StorageUpdation) modifiedAddress() *types.Address {
 }
 
 func (s StorageUpdation) revert(sm *StateManager) {
-	sm.db.DeleteEntry(s.id.Bytes()) //nolint
+	sm.db.DeleteEntry(s.id.Bytes())
 }
 
 func (s StorageUpdation) cID() types.Hash {

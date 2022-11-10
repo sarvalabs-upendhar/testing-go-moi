@@ -34,8 +34,9 @@ const (
 )
 
 const (
-	SargaAccount AccType = iota
-	RegularAccount
+	RegularAccount AccType = iota
+	SargaAccount
+	ContractAccount
 )
 
 const (
@@ -723,7 +724,7 @@ func (b *ArrayOfBits) PickRandom() (int, bool) {
 		return 0, false
 	}
 
-	return trueIndices[rand.Intn(len(trueIndices))], true //nolint
+	return trueIndices[rand.Intn(len(trueIndices))], true
 }
 
 func (b *ArrayOfBits) TrueIndicesSize() int {
@@ -1027,6 +1028,8 @@ func ComputeReceiptsHash(rs []*Receipt) Hash {
 
 func AccTypeFromIxType(ixType IxType) AccType {
 	switch ixType {
+	case 2:
+		return ContractAccount
 	default:
 		return RegularAccount
 	}

@@ -27,10 +27,10 @@ type Evidence struct {
 	VoteSet  *types.ArrayOfBits
 }
 
-func NewEvidence(IxHash types.Hash, Operator id.KramaID, size int) *Evidence {
+func NewEvidence(ixHash types.Hash, operator id.KramaID, size int) *Evidence {
 	evidenceInstance := &Evidence{
-		IxHash:   IxHash,
-		Operator: Operator,
+		IxHash:   ixHash,
+		Operator: operator,
 		Votes:    make([]*types.Vote, size),
 	}
 

@@ -18,7 +18,7 @@ func (blsBlst *BlsWithBlstSignature) Type() common.SigType {
 
 func (blsBlst *BlsWithBlstSignature) Sign(data, signingKey []byte, kid kramaid.KramaID) error {
 	// casting into BLST Secret key
-	pairingFriendlyPrivKey := new(blst.SecretKey).Deserialize(signingKey[:])
+	pairingFriendlyPrivKey := new(blst.SecretKey).Deserialize(signingKey)
 
 	if common.IsZeroBytes(pairingFriendlyPrivKey.Serialize()) {
 		return common.ErrZeroKey
@@ -63,7 +63,7 @@ func (blsBlst *BlsWithBlstSignature) Verify(message []byte, nodeBLSPublicKey []b
 }
 
 func AggregateSignatures(multipleSignatures []BlsWithBlstSignature) ([]byte, error) {
-	if len(multipleSignatures) <= 0 {
+	if len(multipleSignatures) == 0 {
 		return nil, common.ErrEmpty
 	}
 
@@ -81,7 +81,7 @@ func AggregateSignatures(multipleSignatures []BlsWithBlstSignature) ([]byte, err
 }
 
 func VerifyAggregateSignature(data []byte, aggSignature []byte, multiplePubKeys [][]byte) (bool, error) {
-	if len(multiplePubKeys) <= 0 {
+	if len(multiplePubKeys) == 0 {
 		return false, common.ErrEmpty
 	}
 

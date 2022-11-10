@@ -43,12 +43,12 @@ func NtqCacheKey(key id.KramaID) string {
 
 func GetAddressHeightKey(addr Address, height uint64) []byte {
 	prefix := "h"
-	prefixByte := []byte(prefix)
 	heightBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(heightBytes, height)
 
 	addressBytes := addr.Bytes()
-	result := append(prefixByte, addressBytes...)
+	result := []byte(prefix)
+	result = append(result, addressBytes...)
 	result = append(result, heightBytes...)
 
 	return result

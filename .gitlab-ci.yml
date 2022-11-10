@@ -28,8 +28,7 @@ golangci-lint:
       - go env -w GOPRIVATE="gitlab.com/sarvalabs/*"
       - echo -e "machine gitlab.com\nlogin ${GO_MODULES_USER}\npassword ${GO_MODULES_PERSONAL_ACCESS_TOKEN}" > ~/.netrc
     script:
-      # remove `--issues-exit-code 0` or set to non-zero to fail the job if linting issues are detected
-      - golangci-lint run -E whitespace -E wsl -E wastedassign -E unconvert -E tparallel -E thelper -E stylecheck -E prealloc -E predeclared -E nlreturn -E misspell -E makezero -E lll -E importas -E ifshort -E gosec -E  gofmt -E gofumpt -E goconst -E forcetypeassert -E dogsled -E dupl -E errname -E errorlint --issues-exit-code 1 --timeout 5m
+      - golangci-lint run ./...
 
 deploy-testnet:
   only:

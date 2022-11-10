@@ -83,16 +83,16 @@ func NewVoteSet(
 // getVote is a method of Vote that retrieves a particular vote from the set.
 // Accepts a validator index as an int32 and a tesseract grid id as a types.Hash.
 // Returns the Vote and a bool indicating the success status of the fetch.
-func (vs *VoteSet) getVote(valIndex int32, GridID types.Hash) (vote *types.Vote, ok bool) {
+func (vs *VoteSet) getVote(valIndex int32, gridID types.Hash) (vote *types.Vote, ok bool) {
 	// Attempt to retrieve the vote from the slice of votes
 	// Return the vote if its gridID hash matches the given hash.
-	if existingVote := vs.votes[valIndex]; existingVote != nil && existingVote.GridID.Hash == GridID {
+	if existingVote := vs.votes[valIndex]; existingVote != nil && existingVote.GridID.Hash == gridID {
 		return existingVote, true
 	}
 
 	// Attempt to retrieve the vote from the tesseractVote map using the gridID as
 	// the key and then the index from that with the index and return it if found.
-	if existingVote := vs.votesByTesseract[string(GridID.Bytes())].getByIndex(valIndex); existingVote != nil {
+	if existingVote := vs.votesByTesseract[string(gridID.Bytes())].getByIndex(valIndex); existingVote != nil {
 		return existingVote, true
 	}
 
@@ -317,7 +317,7 @@ func (vs *VoteSet) getSumIndex(valIndex int32) (int32, error) {
 	var offset int32
 
 	for i, v := range vs.valset.GetTotalVotingPower() {
-		offset = offset + v
+		offset += v
 		if valIndex < offset {
 			return int32(i), nil
 		}

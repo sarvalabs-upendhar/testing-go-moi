@@ -196,7 +196,7 @@ func Verify(data, signature, pubBytes []byte) (bool, error) {
 }
 
 func AggregateSignatures(multipleSignatures [][]byte) ([]byte, error) {
-	if len(multipleSignatures) <= 0 {
+	if len(multipleSignatures) == 0 {
 		return nil, common.ErrEmpty
 	}
 
@@ -219,7 +219,7 @@ func AggregateSignatures(multipleSignatures [][]byte) ([]byte, error) {
 }
 
 func VerifyAggregateSignature(data []byte, aggSignature []byte, multiplePubKeys [][]byte) (bool, error) {
-	if len(multiplePubKeys) <= 0 {
+	if len(multiplePubKeys) == 0 {
 		return false, common.ErrEmpty
 	}
 

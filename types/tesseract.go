@@ -148,11 +148,11 @@ func (t *Tesseract) Hash() Hash {
 	protoHeader.ClusterID = t.Header.ClusterID
 	protoHeader.Timestamp = t.Header.Timestamp
 
-	//protoHeader.Extra = &types.CommitData{
-	//	Round:   t.Header.Extra.Round,
-	//	Seal:    t.Header.Extra.Seal,
-	//	Commits: nil,
-	//}
+	// protoHeader.Extra = &types.CommitData{
+	//	 Round:   t.Header.Extra.Round,
+	//	 Seal:    t.Header.Extra.Seal,
+	//	 Commits: nil,
+	// }
 
 	data := polo.Polorize(protoHeader)
 

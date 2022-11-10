@@ -114,7 +114,7 @@ func (s *StateObject) SubBalance(aid types.AssetID, amount *big.Int) {
 	if bal, ok := s.balance.Bal[aid]; ok && bal != nil {
 		s.setBalance(aid, new(big.Int).Sub(bal, amount))
 	} else {
-		log.Fatal("asset not found")
+		log.Panicln("asset not found")
 	}
 }
 
@@ -262,11 +262,11 @@ func (s *StateObject) Commit() (types.Hash, error) {
 
 func (s *StateObject) CreateLogic(logicID types.Hash, data *types.LogicData) error {
 	if _, ok := s.logics[logicID]; !ok {
-		//data, err := s.getLogicTrie(s.db, s.data.LogicRoot.Bytes()).TryGet(logicID.Bytes())
-		//if err != nil {
-		//	return err
-		//}
-		//TODO:journal this
+		// data, err := s.getLogicTrie(s.db, s.data.LogicRoot.Bytes()).TryGet(logicID.Bytes())
+		// if err != nil {
+		//	 return err
+		// }
+		// TODO:journal this
 		s.logics[logicID] = data
 	} else {
 		return errors.New("duplicate logic")
@@ -439,7 +439,7 @@ func (s *StateObject) UpdateContext(behaviouralNodes []id.KramaID, randomNodes [
 	}
 
 	if len(randomNodes) > 0 {
-		//.Println("!!!!...Adding random context...!!!", randomNodes, s.contextHash)
+		// log.Println("!!!!...Adding random context...!!!", randomNodes, s.contextHash)
 		randomObj, err := s.getContextObjectCopy(metaObj.RandomContext)
 		if err != nil {
 			return types.NilHash, err

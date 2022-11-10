@@ -189,7 +189,7 @@ func trimHexString(hexString string) string {
 	if string(strInBytes[:2]) == "0x" {
 		return string(strInBytes[2:])
 	} else {
-		return string(strInBytes[:])
+		return string(strInBytes)
 	}
 }
 

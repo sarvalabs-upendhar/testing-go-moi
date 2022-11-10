@@ -116,38 +116,40 @@ func TestBLSSignAgg(t *testing.T) {
 	fmt.Println(VerifyAggregateSignature(msg, aggSig, [][]byte{pub1, pub2}))
 }
 
-//func TestKramaVault_New(t *testing.T) {
-//	vault := KramaVault{}
-//	datadir := "/Users/sarvatechdeveloper1/.moi/moinode-new-4"
-//	err := vault.New(datadir, "vmvm1234", "dev-050122", "Test@123", "dev", moinode.MOI_FULL_NODE, 1)
-//	if err != nil {
-//		t.Fatalf("%v", err)
-//	}
-//
-//	t.Log("Private Key for consensus: ", vault.consensusPriv.Bytes())
-//	t.Log("Private Key for network: ", vault.networkPriv.Bytes())
-//	t.Log("KramaID: ", vault.KramaID())
-//}
-//
-//func TestBLSSignAndVerify(t *testing.T) {
-//	vault := KramaVault{}
-//	datadir := "/Users/sarvatechdeveloper1/.moi/moinode-new-4"
-//	err := vault.New(datadir, "vmvm1234", "dev-050122", "Test@123", "dev", moinode.MOI_FULL_NODE, 1)
-//	if err != nil {
-//		t.Fatalf("%v", err)
-//	}
-//
-//	msg := []byte("I'm getting signed")
-//	sigBytes, err := vault.Sign(msg, common.BLS_BLST)
-//	if err != nil {
-//		t.Fatalf("%v", err)
-//	}
-//	t.Log("Signature: ", sigBytes)
-//
-//	pubKey := vault.consensusPriv.GetPublicKeyInBytes()
-//	verificationSuccess, err := vault.Verify(msg, sigBytes, pubKey)
-//	if err != nil {
-//		t.Fatalf("%v", err)
-//	}
-//	t.Log("Verification Successful? : ", verificationSuccess)
-//}
+/*
+func TestKramaVault_New(t *testing.T) {
+	vault := KramaVault{}
+	datadir := "/Users/sarvatechdeveloper1/.moi/moinode-new-4"
+	err := vault.New(datadir, "vmvm1234", "dev-050122", "Test@123", "dev", moinode.MOI_FULL_NODE, 1)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	t.Log("Private Key for consensus: ", vault.consensusPriv.Bytes())
+	t.Log("Private Key for network: ", vault.networkPriv.Bytes())
+	t.Log("KramaID: ", vault.KramaID())
+}
+
+func TestBLSSignAndVerify(t *testing.T) {
+	vault := KramaVault{}
+	datadir := "/Users/sarvatechdeveloper1/.moi/moinode-new-4"
+	err := vault.New(datadir, "vmvm1234", "dev-050122", "Test@123", "dev", moinode.MOI_FULL_NODE, 1)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	msg := []byte("I'm getting signed")
+	sigBytes, err := vault.Sign(msg, common.BLS_BLST)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	t.Log("Signature: ", sigBytes)
+
+	pubKey := vault.consensusPriv.GetPublicKeyInBytes()
+	verificationSuccess, err := vault.Verify(msg, sigBytes, pubKey)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	t.Log("Verification Successful? : ", verificationSuccess)
+}
+*/
