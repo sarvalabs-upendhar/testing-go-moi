@@ -27,6 +27,7 @@ golangci-lint:
       - cp ./bin/golangci-lint /usr/bin/
       - go env -w GOPRIVATE="gitlab.com/sarvalabs/*"
       - echo -e "machine gitlab.com\nlogin ${GO_MODULES_USER}\npassword ${GO_MODULES_PERSONAL_ACCESS_TOKEN}" > ~/.netrc
+      - echo $GO_MODULES_USER
     script:
       - golangci-lint run ./...
 
