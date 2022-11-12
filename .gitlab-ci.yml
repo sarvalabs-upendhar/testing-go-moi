@@ -20,14 +20,13 @@ stages:
 golangci-lint:
     image: golang:1.18.6-alpine
     stage: lint
-    extends: .go-cache
+    # extends: .go-cache
     before_script:
       - apk add build-base
       - wget -O- -nv https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.49.0
       - cp ./bin/golangci-lint /usr/bin/
       - go env -w GOPRIVATE="gitlab.com/sarvalabs/*"
       - echo -e "machine gitlab.com\nlogin ${GO_MODULES_USER}\npassword ${GO_MODULES_PERSONAL_ACCESS_TOKEN}" > ~/.netrc
-      - echo $GO_MODULES_USER
     script:
       - golangci-lint run ./...
 
