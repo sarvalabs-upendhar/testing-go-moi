@@ -18,7 +18,7 @@ stages:
       - .go/pkg/mod/
 
 golangci-lint:
-    image: golang:1.18.6-alpine
+    image: amd64/golang:1.18-alpine
     stage: lint
     extends: .go-cache
     before_script:
