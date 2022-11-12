@@ -18,11 +18,10 @@ stages:
       - .go/pkg/mod/
 
 golangci-lint:
-    image: amd64/golang:1.18-alpine
+    image: golang:1.18.6-alpine
     stage: lint
     extends: .go-cache
     before_script:
-      - apk add git
       - apk add build-base
       - wget -O- -nv https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.49.0
       - cp ./bin/golangci-lint /usr/bin/
