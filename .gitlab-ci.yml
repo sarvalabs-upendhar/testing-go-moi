@@ -39,14 +39,15 @@ build-binary:
     - go env -w GOPRIVATE="gitlab.com/sarvalabs/*"
     - echo -e "machine gitlab.com\nlogin ${GO_MODULES_USER}\npassword ${GO_MODULES_PERSONAL_ACCESS_TOKEN}" > ~/.netrc
   script:
-    - export CGO_CFLAGS='-O -D__BLST_PORTABLE__' && go build -o moichain
+    - export CGO_CFLAGS='-O -D__BLST_PORTABLE__' && go build -o moichain.build
   artifacts:
     paths:
-      - moichain
+      - moichain.build
 
 deploy-testnet:
   only:
     - develop
+    - feature/ci-build-stage
   image: alpine:latest
   stage: deploy
   script:
@@ -58,31 +59,31 @@ deploy-testnet:
 
     - apk update && apk add openssh-client
 
-    - ssh -i $CD_DEV_ID_RSA_149_102_155_207 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_149_102_155_207 "if [ -d "~/moichain" ]; then rm -rf ~/moichain; fi"
-    - scp -i $CD_DEV_ID_RSA_149_102_155_207 moichain $CD_DEV_USER@$CD_DEV_IP_149_102_155_207:~/
+    - ssh -i $CD_DEV_ID_RSA_149_102_155_207 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_149_102_155_207 "if [ -d "~/moichain.build" ]; then rm -rf ~/moichain.build; fi"
+    - scp -i $CD_DEV_ID_RSA_149_102_155_207 moichain.build $CD_DEV_USER@$CD_DEV_IP_149_102_155_207:~/
     - ssh -i $CD_DEV_ID_RSA_149_102_155_207 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_149_102_155_207 "pm2 stop all && pm2 delete all"
     - ssh -i $CD_DEV_ID_RSA_149_102_155_207 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_149_102_155_207 "bash moichain.sh $CD_DEV_OPERATOR_SLOTS $CD_DEV_VALIDATOR_SLOTS $CD_DEV_ENABLE_TRACING $CD_DEV_JAEGER_ADDRESS"
 
 
-    - ssh -i $CD_DEV_ID_RSA_66_94_122_24 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_66_94_122_24 "if [ -d "~/moichain" ]; then rm -rf ~/moichain; fi"
-    - scp -i $CD_DEV_ID_RSA_66_94_122_24 moichain $CD_DEV_USER@$CD_DEV_IP_66_94_122_24:~/
+    - ssh -i $CD_DEV_ID_RSA_66_94_122_24 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_66_94_122_24 "if [ -d "~/moichain.build" ]; then rm -rf ~/moichain.build; fi"
+    - scp -i $CD_DEV_ID_RSA_66_94_122_24 moichain.build $CD_DEV_USER@$CD_DEV_IP_66_94_122_24:~/
     - ssh -i $CD_DEV_ID_RSA_66_94_122_24 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_66_94_122_24 "pm2 stop all && pm2 delete all"
     - ssh -i $CD_DEV_ID_RSA_66_94_122_24 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_66_94_122_24 "bash moichain.sh  $CD_DEV_OPERATOR_SLOTS $CD_DEV_VALIDATOR_SLOTS $CD_DEV_ENABLE_TRACING $CD_DEV_JAEGER_ADDRESS"
 
 
-    - ssh -i $CD_DEV_ID_RSA_86_48_23_194 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_86_48_23_194 "if [ -d "~/moichain" ]; then rm -rf ~/moichain; fi"
-    - scp -i $CD_DEV_ID_RSA_86_48_23_194 moichain $CD_DEV_USER@$CD_DEV_IP_86_48_23_194:~/
+    - ssh -i $CD_DEV_ID_RSA_86_48_23_194 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_86_48_23_194 "if [ -d "~/moichain.build" ]; then rm -rf ~/moichain.build; fi"
+    - scp -i $CD_DEV_ID_RSA_86_48_23_194 moichain.build $CD_DEV_USER@$CD_DEV_IP_86_48_23_194:~/
     - ssh -i $CD_DEV_ID_RSA_86_48_23_194 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_86_48_23_194 "pm2 stop all && pm2 delete all"
     - ssh -i $CD_DEV_ID_RSA_86_48_23_194 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_86_48_23_194 "bash moichain.sh  $CD_DEV_OPERATOR_SLOTS $CD_DEV_VALIDATOR_SLOTS $CD_DEV_ENABLE_TRACING $CD_DEV_JAEGER_ADDRESS"
 
 
-    - ssh -i $CD_DEV_ID_RSA_207_244_228_225 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_207_244_228_225 "if [ -d "~/moichain" ]; then rm -rf ~/moichain; fi"
-    - scp -i $CD_DEV_ID_RSA_207_244_228_225 moichain $CD_DEV_USER@$CD_DEV_IP_207_244_228_225:~/
+    - ssh -i $CD_DEV_ID_RSA_207_244_228_225 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_207_244_228_225 "if [ -d "~/moichain.build" ]; then rm -rf ~/moichain.build; fi"
+    - scp -i $CD_DEV_ID_RSA_207_244_228_225 moichain.build $CD_DEV_USER@$CD_DEV_IP_207_244_228_225:~/
     - ssh -i $CD_DEV_ID_RSA_207_244_228_225 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_207_244_228_225 "pm2 stop all && pm2 delete all"
     - ssh -i $CD_DEV_ID_RSA_207_244_228_225 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_207_244_228_225 "bash moichain.sh  $CD_DEV_OPERATOR_SLOTS $CD_DEV_VALIDATOR_SLOTS $CD_DEV_ENABLE_TRACING $CD_DEV_JAEGER_ADDRESS"
 
     
-    - ssh -i $CD_DEV_ID_RSA_45_140_185_105 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_45_140_185_105 "if [ -d "~/moichain" ]; then rm -rf ~/moichain; fi"
-    - scp -i $CD_DEV_ID_RSA_45_140_185_105 moichain $CD_DEV_USER@$CD_DEV_IP_45_140_185_105:~/
+    - ssh -i $CD_DEV_ID_RSA_45_140_185_105 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_45_140_185_105 "if [ -d "~/moichain.build" ]; then rm -rf ~/moichain.build; fi"
+    - scp -i $CD_DEV_ID_RSA_45_140_185_105 moichain.build $CD_DEV_USER@$CD_DEV_IP_45_140_185_105:~/
     - ssh -i $CD_DEV_ID_RSA_45_140_185_105 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_45_140_185_105 "pm2 stop all && pm2 delete all"
     - ssh -i $CD_DEV_ID_RSA_45_140_185_105 -o StrictHostKeyChecking=no $CD_DEV_USER@$CD_DEV_IP_45_140_185_105 "bash moichain.sh  $CD_DEV_OPERATOR_SLOTS $CD_DEV_VALIDATOR_SLOTS $CD_DEV_ENABLE_TRACING $CD_DEV_JAEGER_ADDRESS"
