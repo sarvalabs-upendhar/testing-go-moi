@@ -47,7 +47,6 @@ build-binary:
 deploy-testnet:
   only:
     - develop
-    - feature/ci-build-stage
   image: alpine:latest
   stage: deploy
   script:
