@@ -5,16 +5,19 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/pkg/errors"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/polo/go-polo"
-
+	"github.com/decred/dcrd/crypto/blake256"
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/pkg/errors"
 	"gitlab.com/sarvalabs/moichain/dhruva"
+	"gitlab.com/sarvalabs/moichain/guna/tree"
+	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/moichain/types"
+	"gitlab.com/sarvalabs/polo/go-polo"
 )
 
 type Storage map[string][]byte
+
+var blakeHasher = blake256.New()
 
 func (s Storage) Copy() Storage {
 	cpy := make(Storage)
@@ -26,26 +29,27 @@ func (s Storage) Copy() Storage {
 }
 
 type StateObject struct {
-	Address        types.Address
+	address        types.Address
 	accType        types.AccType
 	journal        *Journal
 	mtx            sync.RWMutex
 	cache          *lru.Cache
 	db             *dhruva.PersistenceManager
 	data           types.Account
-	contextHash    types.Hash
 	balance        *types.BalanceObject
 	assetApprovals *types.ApprovalObject
 
-	storageTrie Trie //nolint
-	fileTrie    Trie //nolint
+	logicTrie   tree.MerkleTree //nolint
+	storageTrie tree.MerkleTree //nolint
+	fileTrie    tree.MerkleTree //nolint
 
 	dirtyEntries Storage
 	receipts     types.Receipts
 
-	logics  map[types.Hash]*types.LogicData
-	Storage map[types.Hash][]byte
-	files   map[types.Hash][]byte
+	activeStorageTrees map[types.LogicID]tree.MerkleTree
+
+	logics map[types.Hash]*types.LogicData
+	files  map[types.Hash][]byte
 }
 
 func NewStateObject(
@@ -53,15 +57,16 @@ func NewStateObject(
 	cache *lru.Cache,
 	j *Journal,
 	db *dhruva.PersistenceManager,
+	account types.Account,
 	accType types.AccType,
 ) *StateObject {
 	s := &StateObject{
-		journal:     j,
-		accType:     accType,
-		cache:       cache,
-		db:          db,
-		Address:     id,
-		contextHash: types.NilHash,
+		journal: j,
+		accType: accType,
+		cache:   cache,
+		db:      db,
+		data:    account,
+		address: id,
 		balance: &types.BalanceObject{
 			Bal:     make(types.AssetMap),
 			PrvHash: types.NilHash,
@@ -70,18 +75,18 @@ func NewStateObject(
 			Approvals: make(map[types.Address]types.AssetMap),
 			PrvHash:   types.NilHash,
 		},
-		logics:       make(map[types.Hash]*types.LogicData),
-		Storage:      make(map[types.Hash][]byte),
-		files:        make(map[types.Hash][]byte),
-		dirtyEntries: make(Storage),
-		receipts:     make(types.Receipts),
+		logics:             make(map[types.Hash]*types.LogicData),
+		files:              make(map[types.Hash][]byte),
+		dirtyEntries:       make(Storage),
+		receipts:           make(types.Receipts),
+		activeStorageTrees: make(map[types.LogicID]tree.MerkleTree, 4),
 	}
 
 	return s
 }
 
-func (s *StateObject) getLogicTrie(db *dhruva.PersistenceManager, root []byte) Trie {
-	return nil
+func (s *StateObject) AccountState() types.Account {
+	return s.data
 }
 
 func (s *StateObject) BalanceOf(id types.AssetID) (*big.Int, error) {
@@ -90,9 +95,9 @@ func (s *StateObject) BalanceOf(id types.AssetID) (*big.Int, error) {
 
 	if v, ok := s.balance.Bal[id]; ok {
 		return v, nil
-	} else {
-		return nil, types.ErrAssetNotFound
 	}
+
+	return nil, types.ErrAssetNotFound
 }
 
 func (s *StateObject) AddBalance(aid types.AssetID, amount *big.Int) {
@@ -129,7 +134,7 @@ func (s *StateObject) GetLogic(logicID types.Hash) (data *types.LogicData, err e
 
 	ld, ok := s.logics[logicID]
 	if !ok {
-		data, err := s.getLogicTrie(s.db, s.data.LogicRoot.Bytes()).TryGet(logicID.Bytes())
+		data, err := s.getLogicTrie(s.db, s.data.LogicRoot.Bytes()).Get(logicID.Bytes())
 		if err != nil {
 			return nil, err
 		}
@@ -156,13 +161,16 @@ func (s *StateObject) Copy() *StateObject {
 	defer s.mtx.Unlock()
 
 	j := new(Journal)
-	sObj := NewStateObject(s.Address, s.cache, j, s.db, s.data.AccType)
+	sObj := NewStateObject(s.address, s.cache, j, s.db, s.data, s.data.AccType)
 
 	sObj.balance = s.balance.Copy()
 	sObj.assetApprovals = s.assetApprovals.Copy()
 	sObj.dirtyEntries = s.dirtyEntries.Copy()
 	sObj.data = s.data
-	sObj.contextHash = s.contextHash
+
+	if s.storageTrie != nil {
+		sObj.storageTrie = s.storageTrie.Copy() // TODO: Check if we require deep copy
+	}
 	// sObj.storageTrie = s.storageTrie.Copy()
 	// sObj.logicTrie = s.logicTrie.Copy()
 	// sObj.fileTrie = s.fileTrie.Copy()
@@ -175,97 +183,155 @@ func (s *StateObject) Copy() *StateObject {
 		sObj.files[k] = v
 	}
 
-	for k, v := range sObj.Storage {
-		sObj.Storage[k] = v
-	}
-
 	return sObj
 }
 
 func (s *StateObject) commitBalanceObject() ([]byte, error) {
 	data := polo.Polorize(s.balance)
-	cID := types.GetHash(data)
+	hash := types.GetHash(data)
 
 	s.journal.append(BalanceUpdation{
-		addr: &s.Address,
-		id:   cID,
+		addr: &s.address,
+		id:   hash,
 	})
 
-	key := types.BytesToHex(types.DBKey(s.Address, types.BalanceGID, cID))
+	key := types.BytesToHex(dhruva.BalanceObjectKey(s.address, hash))
 	s.dirtyEntries[key] = data
-	s.data.Balance = cID
+	s.data.Balance = hash
 
-	return cID.Bytes(), nil
+	return hash.Bytes(), nil
 }
 
 func (s *StateObject) commitAccount() (types.Hash, error) {
 	s.data.Nonce++
-	s.data.ContextHash = s.contextHash // this is redundant
 
 	data := polo.Polorize(s.data)
-	cID := types.GetHash(data)
+	hash := types.GetHash(data)
 
 	s.journal.append(AccountUpdation{
-		addr: &s.Address,
-		id:   cID,
+		addr: &s.address,
+		id:   hash,
 	})
 
-	key := types.BytesToHex(types.DBKey(s.Address, types.AccountGID, cID))
+	key := types.BytesToHex(dhruva.AccountKey(s.address, hash))
 	s.dirtyEntries[key] = data
 
-	return cID, nil
+	return hash, nil
+}
+
+func (s *StateObject) commitContextObject(obj interface{}) (types.Hash, error) {
+	// Add type checks here
+	data := polo.Polorize(obj)
+	hash := types.GetHash(data)
+
+	s.journal.append(ContextUpdation{
+		addr: &s.address,
+		id:   hash,
+	})
+
+	key := types.BytesToHex(dhruva.ContextObjectKey(s.address, hash))
+	s.dirtyEntries[key] = data
+
+	return hash, nil
 }
 
 func (s *StateObject) commitStorage() (types.Hash, error) {
-	data := polo.Polorize(s.Storage)
-	cID := types.GetHash(data)
+	if s.storageTrie == nil {
+		return s.data.StorageRoot, nil
+	}
+	// Add the updated logic-id <=> storage-root in master storage merkleTree
+	for logicID, merkleTree := range s.activeStorageTrees {
+		if !merkleTree.IsDirty() {
+			continue
+		}
+
+		if err := merkleTree.Commit(); err != nil {
+			return types.NilHash, errors.Wrap(err, "failed to commit storage tree")
+		}
+
+		if err := s.storageTrie.Set(logicID.Bytes(), merkleTree.Root().Bytes()); err != nil {
+			return types.NilHash, err
+		}
+	}
+
+	if !s.storageTrie.IsDirty() {
+		return s.data.StorageRoot, nil
+	}
+
+	if err := s.storageTrie.Commit(); err != nil {
+		return types.NilHash, err
+	}
+
+	rootHash := s.storageTrie.Root()
 
 	s.journal.append(StorageUpdation{
-		addr: &s.Address,
-		id:   cID,
+		addr: &s.address,
+		id:   rootHash,
 	})
 
-	key := types.BytesToHex(types.DBKey(s.Address, types.StorageGID, cID))
-	s.dirtyEntries[key] = data
-	s.data.StorageRoot = cID
+	s.data.StorageRoot = rootHash
 
-	return cID, nil
+	return rootHash, nil
+}
+
+func (s *StateObject) CommitActiveStorageTreesToDB() error {
+	if s.storageTrie == nil {
+		return nil
+	}
+
+	// commit active storage trees
+	for _, storageTree := range s.activeStorageTrees {
+		if err := storageTree.Flush(); err != nil {
+			return errors.Wrap(err, "failed to commit modified storage tree entries to db")
+		}
+	}
+
+	// commit master storage trees
+	return s.storageTrie.Flush()
 }
 
 func (s *StateObject) Commit() (types.Hash, error) {
-	// for k, v := range s.logics {
-	// 	protoData := v.Proto()
-	// 	data, err := proto.Marshal(protoData)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	s.logicTrie.Put(k.Bytes(), data)
-	// }
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
 	if _, err := s.commitBalanceObject(); err != nil {
-		return types.NilHash, errors.Wrap(types.ErrCommitFailed, err.Error())
+		return types.NilHash, errors.Wrap(err, "failed to commit balance object")
 	}
 
 	if _, err := s.commitStorage(); err != nil {
-		return types.NilHash, errors.Wrap(types.ErrCommitFailed, err.Error())
+		return types.NilHash, errors.Wrap(err, "failed to commit storage tree")
 	}
 
 	accCid, err := s.commitAccount()
 	if err != nil {
-		return types.NilHash, errors.Wrap(types.ErrCommitFailed, err.Error())
+		return types.NilHash, errors.Wrap(err, "failed to commit account")
 	}
 
 	return accCid, nil
 }
 
+func (s *StateObject) CreateStorageTreeForLogic(logicID types.LogicID) (tree.MerkleTree, error) {
+	if s.storageTrie == nil {
+		merkleTree, err := tree.NewKramaHashTree(s.address, s.data.StorageRoot, s.db, blake256.New())
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to initiate storage tree")
+		}
+
+		s.storageTrie = merkleTree
+	}
+
+	newStorageTree, err := tree.NewKramaHashTree(s.address, types.NilHash, s.db, blakeHasher)
+	if err != nil {
+		return nil, err
+	}
+
+	s.activeStorageTrees[logicID] = newStorageTree
+
+	return newStorageTree, s.storageTrie.Set(logicID.Bytes(), types.NilHash.Bytes())
+}
+
 func (s *StateObject) CreateLogic(logicID types.Hash, data *types.LogicData) error {
 	if _, ok := s.logics[logicID]; !ok {
-		// data, err := s.getLogicTrie(s.db, s.data.LogicRoot.Bytes()).TryGet(logicID.Bytes())
-		// if err != nil {
-		//	 return err
-		// }
 		// TODO:journal this
 		s.logics[logicID] = data
 	} else {
@@ -300,7 +366,7 @@ func (s *StateObject) CreateAsset(
 	}
 
 	assetID, assetHash, data := types.GetAssetID(
-		s.Address,
+		s.address,
 		dimension,
 		isFungible,
 		isMintable,
@@ -310,7 +376,7 @@ func (s *StateObject) CreateAsset(
 	)
 
 	s.journal.append(AssetCreation{
-		addr: &s.Address,
+		addr: &s.address,
 		id:   assetHash,
 	})
 
@@ -327,42 +393,13 @@ func (s *StateObject) CreateAsset(
 	return "", errors.Wrap(types.ErrAssetCreation, "asset already exists")
 }
 
-func CopyBytes(b []byte) (copiedBytes []byte) {
-	if b == nil {
-		return nil
-	}
-
-	copiedBytes = make([]byte, len(b))
-
-	copy(copiedBytes, b)
-
-	return
-}
-
-func (s *StateObject) AddAccountGenesisInfo(address types.Address, ixHash types.Hash) {
+func (s *StateObject) AddAccountGenesisInfo(address types.Address, ixHash types.Hash) error {
 	accInfo := types.AccountGenesisInfo{
 		IxHash: ixHash,
 	}
 	rawData := polo.Polorize(&accInfo)
 
-	s.Storage[types.GetHash(address.Bytes())] = rawData
-}
-
-func (s *StateObject) commitContextObject(obj interface{}) (types.Hash, error) {
-	// Add type checks here
-	data := polo.Polorize(obj)
-	hash := types.GetHash(data)
-
-	s.journal.append(ContextUpdation{
-		addr: &s.Address,
-		id:   hash,
-	})
-
-	key := types.BytesToHex(types.DBKey(s.Address, types.ContextGID, hash))
-	s.dirtyEntries[key] = data
-	// s.cache.Add(hash, obj)
-
-	return hash, nil
+	return s.SetStorageEntry(GenesisLogicID, address.Bytes(), rawData)
 }
 
 func (s *StateObject) CreateContext(behaviouralNodes, randomNodes []id.KramaID) (types.Hash, error) {
@@ -401,7 +438,7 @@ func (s *StateObject) CreateContext(behaviouralNodes, randomNodes []id.KramaID) 
 	s.cache.Add(mHash, metaContextObject)
 	s.cache.Add(rHash, randomContextObject)
 
-	s.contextHash = mHash
+	s.data.ContextHash = mHash
 
 	return mHash, nil
 }
@@ -421,10 +458,9 @@ func (s *StateObject) UpdateContext(behaviouralNodes []id.KramaID, randomNodes [
 		return types.NilHash, err
 	}
 	// Set the previous Hash
-	metaObj.PreviousHash = s.contextHash
+	metaObj.PreviousHash = s.ContextHash()
 
 	if len(behaviouralNodes) > 0 {
-		// log.Println("!!!!...Adding behaviour context...!!!", behaviouralNodes, s.contextHash)
 		behaviouralObj, err := s.getContextObjectCopy(metaObj.BehaviouralContext)
 		if err != nil {
 			return types.NilHash, err
@@ -439,7 +475,6 @@ func (s *StateObject) UpdateContext(behaviouralNodes []id.KramaID, randomNodes [
 	}
 
 	if len(randomNodes) > 0 {
-		// log.Println("!!!!...Adding random context...!!!", randomNodes, s.contextHash)
 		randomObj, err := s.getContextObjectCopy(metaObj.RandomContext)
 		if err != nil {
 			return types.NilHash, err
@@ -470,38 +505,17 @@ func (s *StateObject) UpdateContext(behaviouralNodes []id.KramaID, randomNodes [
 		return types.NilHash, err
 	}
 
-	s.contextHash = contextHash
 	s.data.ContextHash = contextHash
 
 	return contextHash, nil
 }
 
-func (s *StateObject) GetContextHash() types.Hash {
-	return s.contextHash
-}
-
-func (s *StateObject) SetStorageEntry(key types.Hash, value []byte) {
-	s.Storage[key] = value
-}
-
-func (s *StateObject) GetStorageEntry(key types.Hash) ([]byte, error) {
-	value, ok := s.Storage[key]
-	if !ok {
-		return nil, types.ErrStorageEntryNotFound
-	}
-
-	return value, nil
-}
-
-func (s *StateObject) GetDirtyStorage() Storage {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-
-	return s.dirtyEntries
+func (s *StateObject) ContextHash() types.Hash {
+	return s.data.ContextHash
 }
 
 func (s *StateObject) getMetaContextObjectCopy() (*types.MetaContextObject, error) {
-	data, isAvailable := s.cache.Get(s.contextHash)
+	data, isAvailable := s.cache.Get(s.ContextHash())
 	if isAvailable {
 		metaContextObject, ok := data.(*types.MetaContextObject)
 		if !ok {
@@ -511,9 +525,9 @@ func (s *StateObject) getMetaContextObjectCopy() (*types.MetaContextObject, erro
 		return metaContextObject.Copy(), nil
 	}
 
-	rawData, err := s.db.GetContext(s.Address, s.contextHash)
+	rawData, err := s.db.GetContext(s.address, s.ContextHash())
 	if err != nil {
-		return nil, errors.Wrap(types.ErrUpdatingContextObject, err.Error())
+		return nil, errors.Wrap(err, "failed to fetch meta context object")
 	}
 
 	obj := new(types.MetaContextObject)
@@ -522,7 +536,7 @@ func (s *StateObject) getMetaContextObjectCopy() (*types.MetaContextObject, erro
 		return nil, err
 	}
 
-	s.cache.Add(s.contextHash, obj)
+	s.cache.Add(s.ContextHash(), obj)
 
 	return obj.Copy(), nil
 }
@@ -530,7 +544,7 @@ func (s *StateObject) getMetaContextObjectCopy() (*types.MetaContextObject, erro
 func (s *StateObject) getContextObjectCopy(hash types.Hash) (*types.ContextObject, error) {
 	data, isAvailable := s.cache.Get(hash)
 	if !isAvailable {
-		rawData, err := s.db.GetContext(s.Address, hash)
+		rawData, err := s.db.GetContext(s.address, hash)
 		if err != nil {
 			return nil, errors.Wrap(types.ErrUpdatingContextObject, err.Error())
 		}
@@ -573,17 +587,76 @@ func getBalanceObject(
 	return balObject, nil
 }
 
-func getStorage(addr types.Address, hash types.Hash, db *dhruva.PersistenceManager) (map[types.Hash][]byte, error) {
-	data, err := db.GetStorage(addr, hash)
+func (s *StateObject) getLogicTrie(db *dhruva.PersistenceManager, root []byte) tree.MerkleTree {
+	return nil
+}
+
+func (s *StateObject) GetStorageTree(logicID types.LogicID) (tree.MerkleTree, error) {
+	storageTree, ok := s.activeStorageTrees[logicID]
+	if ok {
+		return storageTree, nil
+	}
+
+	rawID := logicID.Bytes()
+	if rawID == nil {
+		return nil, types.ErrInvalidLogicID
+	}
+
+	if s.storageTrie == nil {
+		merkleTree, err := tree.NewKramaHashTree(s.address, s.data.StorageRoot, s.db, blake256.New())
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to initiate storage tree")
+		}
+
+		s.storageTrie = merkleTree
+	}
+
+	root, err := s.storageTrie.Get(rawID)
+	if err != nil {
+		return nil, types.ErrLogicStorageTreeNotFound
+	}
+
+	storageTree, err = tree.NewKramaHashTree(s.address, types.BytesToHash(root), s.db, blakeHasher)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to initiate logic storage tree")
+	}
+
+	s.activeStorageTrees[logicID] = storageTree
+
+	return storageTree, nil
+}
+
+func (s *StateObject) SetStorageEntry(logicID types.LogicID, key, value []byte) (err error) {
+	merkleTree, ok := s.activeStorageTrees[logicID]
+	if ok {
+		return merkleTree.Set(key, value)
+	}
+
+	merkleTree, err = s.GetStorageTree(logicID)
+	if err != nil {
+		return err
+	}
+
+	return merkleTree.Set(key, value)
+}
+
+func (s *StateObject) GetStorageEntry(logicID types.LogicID, key []byte) (value []byte, err error) {
+	merkleTree, ok := s.activeStorageTrees[logicID]
+	if ok {
+		return merkleTree.Get(key)
+	}
+
+	merkleTree, err = s.GetStorageTree(logicID)
 	if err != nil {
 		return nil, err
 	}
 
-	storageEntries := make(map[types.Hash][]byte)
+	return merkleTree.Get(key)
+}
 
-	if err = polo.Depolorize(&storageEntries, data); err != nil {
-		return nil, err
-	}
+func (s *StateObject) GetDirtyStorage() Storage {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
 
-	return storageEntries, nil
+	return s.dirtyEntries
 }

@@ -364,6 +364,7 @@ func NewTestEngine(
 		db:                  db,
 		ledger:              ledger,
 		network:             network,
+		metrics:             NilMetrics(),
 	}
 }
 

@@ -212,8 +212,6 @@ func (p *PersistenceManager) UpdateTesseractStatus(
 	}
 
 	if height < msg.Height.Uint64() {
-		p.logger.Info("Skipping tesseract status update with less height")
-
 		return nil
 	}
 
@@ -313,31 +311,116 @@ func (p *PersistenceManager) GetEntries(prefix []byte) chan types.DBEntry {
 }
 
 func (p *PersistenceManager) GetAccount(addr types.Address, hash types.Hash) ([]byte, error) {
-	key := types.DBKey(addr, types.AccountGID, hash)
+	key := dbKey(addr, Account, hash.Bytes())
 
 	return p.ReadEntry(key)
 }
 
 func (p *PersistenceManager) GetBalance(addr types.Address, hash types.Hash) ([]byte, error) {
-	key := types.DBKey(addr, types.BalanceGID, hash)
+	key := dbKey(addr, Balance, hash.Bytes())
 
 	return p.ReadEntry(key)
 }
 
 func (p *PersistenceManager) GetContext(addr types.Address, hash types.Hash) ([]byte, error) {
-	key := types.DBKey(addr, types.ContextGID, hash)
+	key := dbKey(addr, Context, hash.Bytes())
 
 	return p.ReadEntry(key)
 }
 
 func (p *PersistenceManager) GetStorage(addr types.Address, hash types.Hash) ([]byte, error) {
-	key := types.DBKey(addr, types.StorageGID, hash)
+	key := dbKey(addr, Storage, hash.Bytes())
 
 	return p.ReadEntry(key)
 }
 
 func (p *PersistenceManager) GetTesseract(hash types.Hash) ([]byte, error) {
-	key := types.DBKey(types.NilAddress, types.TesseractGID, hash)
+	key := append([]byte{Tesseract.Byte()}, hash.Bytes()...)
+
+	return p.ReadEntry(key)
+}
+
+func (p *PersistenceManager) SetTesseract(hash types.Hash, data []byte) error {
+	key := append([]byte{Tesseract.Byte()}, hash.Bytes()...)
+
+	return p.CreateEntry(key, data)
+}
+
+func (p *PersistenceManager) HasTesseract(hash types.Hash) (bool, error) {
+	key := append([]byte{Tesseract.Byte()}, hash.Bytes()...)
+
+	return p.db.Has(key)
+}
+
+func (p *PersistenceManager) GetTesseractHeightEntry(addr types.Address, height uint64) ([]byte, error) {
+	return p.ReadEntry(tesseractHeightKey(addr, height))
+}
+
+func (p *PersistenceManager) SetTesseractHeightEntry(addr types.Address, height uint64, hash types.Hash) error {
+	return p.CreateEntry(tesseractHeightKey(addr, height), hash.Bytes())
+}
+
+func (p *PersistenceManager) GetMerkleTreeEntry(
+	address types.Address,
+	prefix Prefix,
+	actualKey []byte,
+) ([]byte, error) {
+	key := dbKey(address, prefix, actualKey)
+
+	return p.ReadEntry(key)
+}
+
+func (p *PersistenceManager) SetMerkleTreeEntry(
+	address types.Address,
+	prefix Prefix,
+	actualKey, value []byte,
+) error {
+	key := dbKey(address, prefix, actualKey)
+
+	return p.CreateEntry(key, value)
+}
+
+func (p *PersistenceManager) SetMerkleTreeEntries(
+	address types.Address,
+	prefix Prefix,
+	entries map[string][]byte,
+) error {
+	// Create a batch writer
+	batchWriter := p.NewBatchWriter()
+
+	for k, v := range entries {
+		key := dbKey(address, prefix, []byte(k))
+		// Add to batch writer
+		if err := batchWriter.Set(key, v); err != nil {
+			return err
+		}
+	}
+
+	return batchWriter.Flush()
+}
+
+func (p *PersistenceManager) WritePreImages(
+	address types.Address,
+	entries map[types.Hash][]byte,
+) error {
+	batchWriter := p.NewBatchWriter()
+
+	for k, v := range entries {
+		key := PreImageKey(address, k)
+		// Add to batch writer
+		if err := batchWriter.Set(key, v); err != nil {
+			return err
+		}
+	}
+
+	return batchWriter.Flush()
+}
+
+func (p *PersistenceManager) GetPreImage(
+	address types.Address,
+	hash types.Hash,
+) ([]byte, error) {
+	key := PreImageKey(address, hash)
 
 	return p.ReadEntry(key)
 }

@@ -15,9 +15,7 @@ import (
 	"sync"
 
 	mapset "github.com/deckarep/golang-set"
-	"github.com/ipfs/go-cid"
 	"github.com/mr-tron/base58"
-	"github.com/multiformats/go-multihash"
 	"github.com/pkg/errors"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/polo/go-polo"
@@ -72,6 +70,9 @@ type ClusterID string
 // AssetID ...
 type AssetID string
 
+// LogicID ...
+type LogicID string
+
 // Hash represents the 32 byte hash of arbitrary data.
 type Hash [32]byte
 
@@ -89,6 +90,15 @@ func (c ClusterID) Hash() Hash {
 	}
 
 	return BytesToHash(rawHash)
+}
+
+func (l LogicID) Bytes() []byte {
+	rawID, err := hex.DecodeString(string(l))
+	if err != nil {
+		return nil
+	}
+
+	return rawID
 }
 
 func (a Address) String() string {
@@ -887,22 +897,6 @@ type TesseractResponse struct {
 	Delta map[Hash][]byte
 }
 
-func HashToCid(hash Hash) (cid.Cid, error) {
-	multiHash, err := multihash.Encode(hash.Bytes(), CIDPrefixMhType)
-	if err != nil {
-		return cid.Undef, err
-	}
-
-	switch CIDPrefixVersion {
-	case 0:
-		return cid.NewCidV0(multiHash), nil
-	case 1:
-		return cid.NewCidV1(CIDPrefixCodec, multiHash), nil
-	default:
-		return cid.Undef, fmt.Errorf("invalid cid version")
-	}
-}
-
 func GetHash(data []byte) Hash {
 	return blake2b.Sum256(data)
 }
@@ -1013,18 +1007,6 @@ func (rs Receipts) GetReceipt(ixHash Hash) (*Receipt, error) {
 
 	return nil, ErrReceiptNotFound
 }
-
-/*
-func ComputeReceiptsHash(rs []*Receipt) Hash {
-
-	var receipts Receipts
-	for _, v := range rs {
-		receipts = append(receipts, v)
-	}
-
-	return PoloHash(receipts)
-}
-*/
 
 func AccTypeFromIxType(ixType IxType) AccType {
 	switch ixType {

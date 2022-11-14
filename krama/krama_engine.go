@@ -1368,6 +1368,7 @@ func (k *Engine) validateInteractions(ixs types.Interactions) (bool, error) {
 			"Hash", ix.GetIxHash().Hex(),
 			"Nonce", ix.Nonce(),
 			"From", ix.FromAddress().Hex(),
+			"Type", ix.IxType(),
 		)
 		/*
 			Checks to perform
@@ -1385,9 +1386,7 @@ func (k *Engine) validateInteractions(ixs types.Interactions) (bool, error) {
 			return false, types.ErrInvalidNonce
 		}
 
-		if isValid, err := k.IsIxValid(ix); err != nil {
-			k.logger.Error("Invalid Interaction", "error", err)
-
+		if isValid, err := k.IsIxValid(ix); err != nil || !isValid {
 			return isValid, err
 		}
 	}

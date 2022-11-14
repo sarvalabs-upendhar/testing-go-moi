@@ -72,7 +72,7 @@ func TestIxPool_IncrementWaitTime(t *testing.T) {
 		{
 			name:            "wait counter greater than max value ",
 			addr:            types.Address{0x03},
-			delta:           11,
+			delta:           MaxWaitCounter + 1,
 			shouldReset:     true,
 			expectedCounter: 0,
 		},
@@ -91,7 +91,8 @@ func TestIxPool_IncrementWaitTime(t *testing.T) {
 				assert.NoError(t, ixPool.IncrementWaitTime(test.addr, 2), 2)
 				initTime = time.Now()
 			}
-			assert.Equal(t, acc.delayCounter, test.expectedCounter)
+
+			assert.Equal(t, test.expectedCounter, acc.delayCounter)
 			if !test.shouldReset {
 				assert.InDelta(t, utils.ExponentialTimeout(2, acc.delayCounter), acc.waitTime.Sub(initTime), 400000)
 			} else {

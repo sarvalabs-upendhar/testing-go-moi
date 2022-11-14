@@ -170,7 +170,6 @@ func BuildConfig(dataDir string, fileCfg *Config) (*common.Config, error) {
 			return nil, errors.New("invalid libp2p address")
 		}
 
-		nodeCfg.Network.ListenAddresses = nodeCfg.Network.BootstrapPeers
 		nodeCfg.Network.ListenAddresses = append(nodeCfg.Network.ListenAddresses, addr)
 	}
 
@@ -267,6 +266,7 @@ func SetupNode(datadir string, cfgPath string) {
 			fmt.Println("error shutting down trace provider")
 		}
 	}()
+
 	otel.SetTracerProvider(tp)
 
 	n, err := node.NewNode("TRACE", cfg)

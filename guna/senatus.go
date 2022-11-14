@@ -13,6 +13,7 @@ import (
 	"github.com/moby/locker"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
+	"gitlab.com/sarvalabs/moichain/dhruva"
 	"gitlab.com/sarvalabs/moichain/dhruva/db"
 	"gitlab.com/sarvalabs/moichain/mudra"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
@@ -77,17 +78,17 @@ func NewReputationEngine(
 func (r *ReputationEngine) AddNewPeer(key id.KramaID, data *ReputationInfo) error {
 	r.logger.Debug("Added peer to NTQ table", "id")
 
-	contains, err := r.db.Contains(types.NtqDBKey(key))
+	contains, err := r.db.Contains(dhruva.NtqDBKey(key))
 	if err != nil {
 		return err
 	}
 
 	if !contains {
-		if err := r.db.CreateEntry(types.NtqDBKey(key), polo.Polorize(data)); err != nil {
+		if err := r.db.CreateEntry(dhruva.NtqDBKey(key), polo.Polorize(data)); err != nil {
 			return err
 		}
 
-		r.cache.Add(types.NtqCacheKey(key), data)
+		r.cache.Add(dhruva.NtqCacheKey(key), data)
 
 		return nil
 	}
@@ -116,18 +117,18 @@ func (r *ReputationEngine) UpdateAddress(key id.KramaID, addrs []string) error {
 	if info != nil {
 		info.Addrs = addrs
 
-		r.cache.Add(types.NtqCacheKey(key), info)
+		r.cache.Add(dhruva.NtqCacheKey(key), info)
 
-		return r.db.UpdateEntry(types.NtqDBKey(key), polo.Polorize(info))
+		return r.db.UpdateEntry(dhruva.NtqDBKey(key), polo.Polorize(info))
 	}
 
 	info = &ReputationInfo{
 		Addrs: addrs,
 		NTQ:   0,
 	}
-	r.cache.Add(types.NtqCacheKey(key), info)
+	r.cache.Add(dhruva.NtqCacheKey(key), info)
 
-	return r.db.CreateEntry(types.NtqDBKey(key), polo.Polorize(info))
+	return r.db.CreateEntry(dhruva.NtqDBKey(key), polo.Polorize(info))
 }
 
 func (r *ReputationEngine) UpdatePublicKey(key id.KramaID, pk []byte) error {
@@ -139,18 +140,18 @@ func (r *ReputationEngine) UpdatePublicKey(key id.KramaID, pk []byte) error {
 	if info != nil {
 		info.PublickKey = pk
 
-		r.cache.Add(types.NtqCacheKey(key), info)
+		r.cache.Add(dhruva.NtqCacheKey(key), info)
 
-		return r.db.UpdateEntry(types.NtqDBKey(key), polo.Polorize(info))
+		return r.db.UpdateEntry(dhruva.NtqDBKey(key), polo.Polorize(info))
 	}
 
 	info = &ReputationInfo{
 		PublickKey: pk,
 		NTQ:        0,
 	}
-	r.cache.Add(types.NtqCacheKey(key), info)
+	r.cache.Add(dhruva.NtqCacheKey(key), info)
 
-	return r.db.CreateEntry(types.NtqDBKey(key), polo.Polorize(info))
+	return r.db.CreateEntry(dhruva.NtqDBKey(key), polo.Polorize(info))
 }
 
 func (r *ReputationEngine) UpdateNTQ(key id.KramaID, ntq int32) error {
@@ -162,9 +163,9 @@ func (r *ReputationEngine) UpdateNTQ(key id.KramaID, ntq int32) error {
 	if info != nil {
 		info.NTQ = ntq
 
-		r.cache.Add(types.NtqCacheKey(key), info)
+		r.cache.Add(dhruva.NtqCacheKey(key), info)
 
-		return r.db.UpdateEntry(types.NtqDBKey(key), polo.Polorize(info))
+		return r.db.UpdateEntry(dhruva.NtqDBKey(key), polo.Polorize(info))
 	}
 
 	info = &ReputationInfo{
@@ -172,9 +173,9 @@ func (r *ReputationEngine) UpdateNTQ(key id.KramaID, ntq int32) error {
 		NTQ:   ntq,
 	}
 
-	r.cache.Add(types.NtqCacheKey(key), info)
+	r.cache.Add(dhruva.NtqCacheKey(key), info)
 
-	return r.db.CreateEntry(types.NtqDBKey(key), polo.Polorize(info))
+	return r.db.CreateEntry(dhruva.NtqDBKey(key), polo.Polorize(info))
 }
 
 func (r *ReputationEngine) UpdateInclusivity(key id.KramaID, delta int64) error {
@@ -193,9 +194,9 @@ func (r *ReputationEngine) UpdateInclusivity(key id.KramaID, delta int64) error 
 	if info != nil {
 		info.Degree += delta
 
-		r.cache.Add(types.NtqCacheKey(key), info)
+		r.cache.Add(dhruva.NtqCacheKey(key), info)
 
-		return r.db.UpdateEntry(types.NtqDBKey(key), polo.Polorize(info))
+		return r.db.UpdateEntry(dhruva.NtqDBKey(key), polo.Polorize(info))
 	}
 
 	info = &ReputationInfo{
@@ -203,9 +204,9 @@ func (r *ReputationEngine) UpdateInclusivity(key id.KramaID, delta int64) error 
 		Degree: delta,
 	}
 
-	r.cache.Add(types.NtqCacheKey(key), info)
+	r.cache.Add(dhruva.NtqCacheKey(key), info)
 
-	return r.db.CreateEntry(types.NtqDBKey(key), polo.Polorize(info))
+	return r.db.CreateEntry(dhruva.NtqDBKey(key), polo.Polorize(info))
 }
 
 func (r *ReputationEngine) GetAddress(key id.KramaID) (multiAddrs []multiaddr.Multiaddr, err error) {
@@ -255,7 +256,7 @@ func (r *ReputationEngine) getInfo(id id.KramaID) (*ReputationInfo, error) {
 		return nil, types.ErrInvalidKramaID
 	}
 
-	data, exists := r.cache.Get(types.NtqCacheKey(id))
+	data, exists := r.cache.Get(dhruva.NtqCacheKey(id))
 	if exists {
 		reputationInfo, ok := data.(*ReputationInfo)
 		if !ok {
@@ -265,19 +266,17 @@ func (r *ReputationEngine) getInfo(id id.KramaID) (*ReputationInfo, error) {
 		return reputationInfo, nil
 	}
 
-	rawData, err := r.db.ReadEntry(types.NtqDBKey(id))
-	if errors.Is(err, types.ErrKeyNotFound) {
+	rawData, err := r.db.ReadEntry(dhruva.NtqDBKey(id))
+	if err != nil {
 		return nil, types.ErrKramaIDNotFound
-	} else if err != nil {
-		return nil, err
 	}
 
 	info := new(ReputationInfo)
 	if err = polo.Depolorize(info, rawData); err != nil {
-		return nil, errors.Wrap(err, "reputation-info depolarization failed")
+		return nil, errors.Wrap(err, "failed to unmarshall reputation info")
 	}
 
-	r.cache.Add(types.NtqCacheKey(id), info)
+	r.cache.Add(dhruva.NtqCacheKey(id), info)
 
 	return info, nil
 }
@@ -286,7 +285,7 @@ func (r *ReputationEngine) AddEntries(msg types.SyncReputationInfo) error {
 	writer := r.db.NewBatchWriter()
 
 	for _, v := range msg.Msg {
-		err := writer.Set(types.NtqDBKey(v.ID), polo.Polorize(
+		err := writer.Set(dhruva.NtqDBKey(v.ID), polo.Polorize(
 			ReputationInfo{
 				NTQ:    v.Ntq,
 				Addrs:  v.Address,
@@ -321,11 +320,11 @@ func (r *ReputationEngine) GetAllEntries() (chan *types.SyncReputationInfo, erro
 
 	go func() {
 		msg := new(types.SyncReputationInfo)
-		entriesChan := r.db.GetEntries([]byte{types.NtqGID.Byte()})
+		entriesChan := r.db.GetEntries([]byte{dhruva.NTQ.Byte()})
 		count := 0
 
 		for entry := range entriesChan {
-			kramaID := id.KramaID(bytes.TrimPrefix(entry.Key, []byte{types.NtqGID.Byte()}))
+			kramaID := id.KramaID(bytes.TrimPrefix(entry.Key, []byte{dhruva.NTQ.Byte()}))
 			info := new(ReputationInfo)
 
 			if err := polo.Depolorize(info, entry.Value); err != nil {
@@ -428,7 +427,6 @@ func (r *ReputationEngine) startWorkers() {
 
 			return
 		}
-		// currentLength := len(r.messages)
 
 		if currentLength < 1 {
 			continue

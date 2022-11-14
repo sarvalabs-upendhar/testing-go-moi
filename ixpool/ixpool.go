@@ -134,6 +134,9 @@ func (i *IxPool) handleEnqueueRequest(req enqueueRequest) {
 
 	for _, v := range req.ix {
 		senderAcc := i.accounts.get(v.FromAddress())
+		if senderAcc == nil {
+			log.Panicln("Account not found") // FIXME: Added this to identify runtime panic
+		}
 
 		if err := senderAcc.enqueue(v); err != nil {
 			continue

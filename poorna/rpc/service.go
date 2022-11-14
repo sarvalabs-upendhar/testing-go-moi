@@ -19,7 +19,7 @@ func NewRPCService() *rpcService {
 	return &rpcService{apis: make(map[string]interface{})}
 }
 
-// RegisterAPI is a method of rpcService that registers a new API to it
+// RegisterAPIs is a method of rpcService that registers a new API to it
 func (r *rpcService) RegisterAPIs(apis map[string]interface{}) error {
 	for name, api := range apis {
 		// Return an error if the API is already registered
