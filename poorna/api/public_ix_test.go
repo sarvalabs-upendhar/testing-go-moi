@@ -2,7 +2,6 @@ package api
 
 import (
 	"log"
-	"sync/atomic"
 	"testing"
 
 	"gitlab.com/sarvalabs/moichain/guna"
@@ -13,39 +12,6 @@ import (
 
 	"gitlab.com/sarvalabs/moichain/types"
 )
-
-type MockIxPool struct {
-	interactions map[types.Hash]*types.Interaction
-	nextNonce    map[types.Address]uint64
-}
-
-func NewIxPool() *MockIxPool {
-	ixpool := new(MockIxPool)
-	ixpool.interactions = make(map[types.Hash]*types.Interaction)
-	ixpool.nextNonce = make(map[types.Address]uint64)
-
-	return ixpool
-}
-
-// Interaction pool mock functions
-func (mc *MockIxPool) AddInteractions(ixs types.Interactions) []error {
-	errs := make([]error, len(ixs))
-
-	mc.interactions[ixs[0].Hash] = ixs[0]
-	mc.nextNonce[ixs[0].FromAddress()]++
-
-	return errs
-}
-
-func (mc *MockIxPool) GetNonce(addr types.Address) (uint64, error) {
-	nextNonce := mc.nextNonce[addr]
-
-	return atomic.LoadUint64(&nextNonce), nil
-}
-
-func (mc *MockIxPool) setNonce(addr types.Address, nonce uint64) {
-	mc.nextNonce[addr] = nonce
-}
 
 // Interaction Api Testcases
 func TestIx_SendInteraction(t *testing.T) {

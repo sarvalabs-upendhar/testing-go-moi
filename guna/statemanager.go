@@ -50,7 +50,10 @@ type Senatus interface {
 	Start(id id.KramaID, ntq int32, publicKey []byte, address []multiaddr.Multiaddr) error
 }
 
-var GenesisAddress = types.BytesToAddress(types.GetHash([]byte("sargaAccount")).Bytes())
+var (
+	GenesisAddress = types.BytesToAddress(types.GetHash([]byte("sargaAccount")).Bytes())
+	GenesisLogicID = types.LogicID(types.BytesToHex(types.GetHash([]byte("sargaContract")).Bytes()))
+)
 
 type StateManager struct {
 	ctx              context.Context
@@ -104,7 +107,7 @@ func NewStateManager(
 
 func (sm *StateManager) createStateObject(addr types.Address, accType types.AccType) *StateObject {
 	journal := new(Journal)
-	stateObject := NewStateObject(addr, sm.cache, journal, sm.db, accType)
+	stateObject := NewStateObject(addr, sm.cache, journal, sm.db, types.Account{}, accType)
 
 	sm.dirtyObjects[addr] = stateObject
 
@@ -167,7 +170,7 @@ func (sm *StateManager) GetLatestStateObject(addr types.Address) (*StateObject, 
 	// get the latest tesseract
 	t, err := sm.GetLatestTesseract(addr)
 	if err != nil {
-		return nil, errors.Wrap(err, err.Error())
+		return nil, err
 	}
 
 	return sm.GetStateObjectByHash(addr, t.Body.StateHash)
@@ -186,19 +189,13 @@ func (sm *StateManager) GetStateObjectByHash(addr types.Address, hash types.Hash
 	}
 
 	newJournal := new(Journal)
-	sObj := NewStateObject(addr, sm.cache, newJournal, sm.db, acc.AccType)
-	sObj.data = *acc
-	sObj.contextHash = acc.ContextHash
+	sObj := NewStateObject(addr, sm.cache, newJournal, sm.db, *acc, acc.AccType)
 
 	sObj.balance, err = getBalanceObject(addr, acc.Balance, sm.db)
 	if err != nil {
-		return nil, errors.Wrap(types.ErrFetchingBalanceObject, err.Error())
+		return nil, errors.Wrap(err, "failed to fetch balance object")
 	}
 
-	sObj.Storage, err = getStorage(addr, acc.StorageRoot, sm.db)
-	if err != nil {
-		return nil, errors.Wrap(types.ErrFetchingStorageObject, err.Error())
-	}
 	//  add the new object to map
 	sm.objects[addr] = sObj
 
@@ -289,8 +286,8 @@ func (sm *StateManager) Revert(snap *StateObject) error {
 	defer sm.dirtyObjectsLock.Unlock()
 
 	if snap != nil {
-		sm.logger.Info("Reverting back the state object", "addr", snap.Address.Hex())
-		sm.dirtyObjects[snap.Address] = snap
+		sm.logger.Info("Reverting back the state object", "addr", snap.address.Hex())
+		sm.dirtyObjects[snap.address] = snap
 		sm.metrics.captureNumOfReverts(1)
 	}
 
@@ -454,7 +451,8 @@ func (sm *StateManager) getContextByHash(addr types.Address, hash types.Hash) ([
 GetContextByHash fetches context using hash if both address and hash are given,
 fetches latest context of address if only address given
 */
-func (sm *StateManager) GetContextByHash(address types.Address,
+func (sm *StateManager) GetContextByHash(
+	address types.Address,
 	hash types.Hash,
 ) (types.Hash, []id.KramaID, []id.KramaID, error) {
 	if address == types.NilAddress && hash == types.NilHash {
@@ -579,17 +577,17 @@ func (sm *StateManager) IsGenesis(addr types.Address) (bool, error) {
 		return false, errors.Wrap(types.ErrObjectNotFound, err.Error())
 	}
 	// Fetch the account info from genesis state
-	_, err = genesisObject.GetStorageEntry(types.GetHash(addr.Bytes()))
-	if err != nil {
+	_, err = genesisObject.GetStorageEntry(GenesisLogicID, addr.Bytes())
+	if errors.Is(err, types.ErrKeyNotFound) {
 		return true, nil
 	}
 
-	return false, nil
+	return false, err
 }
 
 func (sm *StateManager) GetLatestNonce(addr types.Address) (uint64, error) {
 	if addr == types.NilAddress {
-		return 0, types.ErrInvalidNonce
+		return 0, types.ErrInvalidAddress
 	}
 
 	object, err := sm.GetLatestStateObject(addr)

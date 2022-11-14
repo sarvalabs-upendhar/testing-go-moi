@@ -9,8 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"gitlab.com/sarvalabs/moichain/utils"
-
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -22,6 +20,7 @@ import (
 	"gitlab.com/sarvalabs/moichain/mudra"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/moichain/types"
+	"gitlab.com/sarvalabs/moichain/utils"
 	"gitlab.com/sarvalabs/polo/go-polo"
 )
 
@@ -42,6 +41,10 @@ type db interface {
 		tesseractExists bool,
 	) (int32, bool, error)
 	GetTesseract(hash types.Hash) ([]byte, error)
+	SetTesseract(hash types.Hash, data []byte) error
+	HasTesseract(hash types.Hash) (bool, error)
+	GetTesseractHeightEntry(addr types.Address, height uint64) ([]byte, error)
+	SetTesseractHeightEntry(addr types.Address, height uint64, hash types.Hash) error
 }
 
 type reputationEngine interface {
@@ -143,7 +146,7 @@ func NewChainManager(
 }
 
 func (c *ChainManager) hasTesseract(hash types.Hash) bool {
-	exists, err := c.db.Contains(hash.Bytes())
+	exists, err := c.db.HasTesseract(hash)
 	if err != nil {
 		c.logger.Error("Failed to fetch hash from db", "error", err)
 
@@ -245,11 +248,11 @@ func (c *ChainManager) GetTesseract(hash types.Hash) (*types.Tesseract, error) {
 
 		buf, err := c.db.GetTesseract(hash)
 		if err != nil {
-			return nil, errors.Wrap(err, types.ErrFetchingTesseract.Error())
+			return nil, errors.Wrap(err, "failed to get tesseract from db")
 		}
 
 		if err = polo.Depolorize(tesseract, buf); err != nil {
-			return nil, errors.Wrap(err, "failed to depolarize tesseract")
+			return nil, errors.Wrap(err, "failed to unmarshall tesseract")
 		}
 
 		c.tesseracts.Add(hash, tesseract)
@@ -265,12 +268,10 @@ func (c *ChainManager) GetTesseract(hash types.Hash) (*types.Tesseract, error) {
 	return tesseract, nil
 }
 
-func (c *ChainManager) GetTesseractByHeight(address string, height uint64) (*types.Tesseract, error) {
-	addressHeightKey := types.GetAddressHeightKey(types.HexToAddress(address), height)
-
-	tesseractHash, err := c.db.ReadEntry(addressHeightKey)
+func (c *ChainManager) GetTesseractByHeight(address types.Address, height uint64) (*types.Tesseract, error) {
+	tesseractHash, err := c.db.GetTesseractHeightEntry(address, height)
 	if err != nil {
-		return nil, types.ErrFetchingTesseractHash
+		return nil, errors.Wrap(err, "failed to fetch tesseract height entry")
 	}
 
 	return c.GetTesseract(types.BytesToHash(tesseractHash))
@@ -458,6 +459,10 @@ func (c *ChainManager) addTesseract(
 			return err
 		}
 
+		if err := stateObject.CommitActiveStorageTreesToDB(); err != nil {
+			return err
+		}
+
 		accType = stateObject.GetAccountType()
 
 		for k, v := range stateObject.GetDirtyStorage() {
@@ -469,14 +474,12 @@ func (c *ChainManager) addTesseract(
 		}
 	}
 
-	key := types.DBKey(types.NilAddress, types.TesseractGID, tesseractHash)
-	if err := c.db.CreateEntry(key, polo.Polorize(t)); err != nil {
+	if err := c.db.SetTesseract(tesseractHash, polo.Polorize(t)); err != nil {
 		return errors.Wrap(err, "error writing tesseract to db")
 	}
 
-	addressHeightKey := types.GetAddressHeightKey(addr, t.Height())
-	if err := c.db.CreateEntry(addressHeightKey, tesseractHash.Bytes()); err != nil {
-		return errors.Wrap(err, "error writing addressHeightKey to db")
+	if err := c.db.SetTesseractHeightEntry(addr, t.Height(), tesseractHash); err != nil {
+		return errors.Wrap(err, "failed to write tesseract height entry")
 	}
 
 	bucketNo, isBucketCountIncremented, err := c.db.UpdateAccMetaInfo(
@@ -740,8 +743,26 @@ func (c *ChainManager) setupSargaAccount(accounts []AccountInfo) error {
 			if _, err := stateObject.CreateContext(bContext, rContext); err != nil {
 				return errors.New("context initiation failed in genesis")
 			}
-		} else {
-			stateObject.AddAccountGenesisInfo(addr, GenesisIxHash)
+
+			if _, err := stateObject.CreateStorageTreeForLogic(guna.GenesisLogicID); err != nil {
+				return errors.Wrap(err, "failed to create storage tree")
+			}
+
+			break
+		}
+	}
+
+	for _, info := range accounts {
+		addr := types.HexToAddress(info.Address)
+		if addr != guna.GenesisAddress {
+			// Add account to sarga storage tree
+			if err := stateObject.SetStorageEntry(
+				guna.GenesisLogicID,
+				addr.Bytes(),
+				GenesisIxHash.Bytes(),
+			); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -750,12 +771,12 @@ func (c *ChainManager) setupSargaAccount(accounts []AccountInfo) error {
 		return err
 	}
 
-	tesseract := CreateGenesisTesseract(guna.GenesisAddress, stateHash, stateObject.GetContextHash(), contextDelta)
+	tesseract := CreateGenesisTesseract(guna.GenesisAddress, stateHash, stateObject.ContextHash(), contextDelta)
 
 	if err := c.AddGenesis(guna.GenesisAddress, tesseract); err != nil {
 		c.logger.Error("Error adding genesis", "err", err)
 
-		return errors.New("error adding genesis tesseract ")
+		return errors.New("error adding genesis tesseract")
 	}
 
 	return nil
@@ -772,7 +793,7 @@ func (c *ChainManager) IsGenesisAt(address types.Address, hash types.Hash) (bool
 		return false, err
 	}
 
-	_, err = object.GetStorageEntry(types.GetHash(address.Bytes()))
+	_, err = object.GetStorageEntry(guna.GenesisLogicID, address.Bytes())
 	if err != nil {
 		return true, nil
 	}
@@ -795,7 +816,7 @@ func (c *ChainManager) SetupGenesis(path string) error {
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return types.ErrGenesisSetupFailed
+		return errors.Wrap(types.ErrGenesisSetupFailed, "failed to open genesis file")
 	}
 
 	if err = json.Unmarshal(data, genesisAccounts); err != nil {
@@ -803,7 +824,7 @@ func (c *ChainManager) SetupGenesis(path string) error {
 	}
 
 	if err = c.setupSargaAccount(genesisAccounts.Accounts); err != nil {
-		return types.ErrGenesisSetupFailed
+		return errors.Wrap(types.ErrGenesisSetupFailed, "failed to setup sarga account")
 	}
 
 	for _, v := range genesisAccounts.Accounts {
@@ -855,7 +876,7 @@ func (c *ChainManager) SetupGenesis(path string) error {
 			},
 		}
 
-		tesseract := CreateGenesisTesseract(addr, stateHash, stateObject.GetContextHash(), contextDelta)
+		tesseract := CreateGenesisTesseract(addr, stateHash, stateObject.ContextHash(), contextDelta)
 
 		if err := c.AddGenesis(addr, tesseract); err != nil {
 			return errors.New("error adding genesis tesseract ")

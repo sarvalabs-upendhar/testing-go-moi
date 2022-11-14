@@ -9,23 +9,24 @@ import (
 	"sync"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/crypto"
+
+	"github.com/libp2p/go-libp2p"
+
 	"gitlab.com/sarvalabs/moichain/utils"
 
+	"github.com/hashicorp/go-hclog"
+	"github.com/libp2p/go-libp2p/core/routing"
+	maddr "github.com/multiformats/go-multiaddr"
 	"gitlab.com/sarvalabs/moichain/mudra"
 	mcommon "gitlab.com/sarvalabs/moichain/mudra/common"
-
-	"github.com/hashicorp/go-hclog"
-	maddr "github.com/multiformats/go-multiaddr"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/polo/go-polo"
 
-	"github.com/libp2p/go-libp2p/core/routing"
-
-	"github.com/libp2p/go-libp2p"
 	lrpc "github.com/libp2p/go-libp2p-gorpc"
 	kdht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/libp2p/go-libp2p/core/crypto"
+
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -202,16 +203,6 @@ func (s *Server) setupHost() (err error) {
 	if s.ctx == nil {
 		return fmt.Errorf("lifecycle context for node not configured")
 	}
-
-	//// Construct path to the> key file
-	// keyfile := filepath.Join(s.cfg.KeyDirectory, "/file.key")
-	//
-	//// Acquire a private key from the key file or generate a new one
-	// key, err := acquirekey(keyfile)
-	// if err != nil {
-	//	 // Check for errors and log it
-	//	 log.Fatal(err)
-	// }
 
 	selfRouting := libp2p.Routing(func(h host.Host) (routing.PeerRouting, error) {
 		if err := s.setupKadDht(h); err != nil {
@@ -759,7 +750,6 @@ func (s *Server) NewStream(ctx context.Context, protocol protocol.ID, id peer.ID
 }
 
 func (s *Server) Start() error {
-	// HashSet the KIP stream handler to the host
 	s.host.SetStreamHandler(s.cfg.ProtocolID, s.streamHandlerFunc)
 
 	go s.Discover()

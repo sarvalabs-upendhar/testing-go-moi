@@ -124,12 +124,13 @@ func (e *Executor) updateSargaState(ix *types.Interaction) error {
 		return err
 	}
 
-	if isGenesis {
-		genesisObject := e.getObject(guna.GenesisAddress)
-		genesisObject.AddAccountGenesisInfo(ix.ToAddress(), ix.Hash)
+	if !isGenesis {
+		return nil
 	}
 
-	return nil
+	genesisObject := e.getObject(guna.GenesisAddress)
+
+	return genesisObject.AddAccountGenesisInfo(ix.ToAddress(), ix.Hash)
 }
 
 func (e *Executor) fetchStateObjects(ix *types.Interaction) error {

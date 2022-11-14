@@ -18,7 +18,7 @@ type ChainManager interface {
 	GetLatestTesseract(addr types.Address) (*types.Tesseract, error)
 	GetTesseract(hash types.Hash) (*types.Tesseract, error)
 	GetReceipt(addr types.Address, ixHash types.Hash) (*types.Receipt, error)
-	GetTesseractByHeight(address string, height uint64) (*types.Tesseract, error)
+	GetTesseractByHeight(address types.Address, height uint64) (*types.Tesseract, error)
 	GetAssetDataByAssetHash(assetHash []byte) (*types.AssetData, error)
 }
 

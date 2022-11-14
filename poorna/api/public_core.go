@@ -73,7 +73,7 @@ func (p *PublicCoreAPI) GetTesseractByHeight(args *TesseractByHeightArgs) (*type
 		return nil, err
 	}
 
-	tesseract, err := p.chain.GetTesseractByHeight(from, args.Height)
+	tesseract, err := p.chain.GetTesseractByHeight(types.HexToAddress(from), args.Height)
 	if err != nil {
 		return nil, err
 	}

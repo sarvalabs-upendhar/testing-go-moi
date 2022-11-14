@@ -9,7 +9,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/require"
 	"gitlab.com/sarvalabs/moichain/common/tests"
-	dbInterfaces "gitlab.com/sarvalabs/moichain/dhruva/db"
+	"gitlab.com/sarvalabs/moichain/dhruva/db"
 	"gitlab.com/sarvalabs/moichain/types"
 	"gitlab.com/sarvalabs/polo/go-polo"
 	"golang.org/x/net/context"
@@ -26,23 +26,30 @@ type mockIterator struct {
 	prefixKey string
 }
 
-func (m *mockDB) NewBatchWriter() dbInterfaces.BatchWriter {
-	// TODO implement me
-	panic("implement me")
+type mockBatchWriter struct {
+	db *mockDB
+}
+
+func (bw *mockBatchWriter) Set(key []byte, value []byte) error {
+	bw.db.dbStorage[string(key)] = value
+
+	return nil
+}
+
+func (bw *mockBatchWriter) Flush() error {
+	return nil
 }
 
 func NewMockDB(t *testing.T) *mockDB {
 	t.Helper()
 
-	db := new(mockDB)
-	db.dbStorage = make(map[string][]byte, 0)
-
-	return db
+	return &mockDB{
+		dbStorage: make(map[string][]byte),
+	}
 }
 
 func NewTestPersistenceManager(t *testing.T) *PersistenceManager {
 	t.Helper()
-	db := NewMockDB(t)
 
 	ctx, ctxCancel := context.WithCancel(context.Background())
 
@@ -51,19 +58,23 @@ func NewTestPersistenceManager(t *testing.T) *PersistenceManager {
 		ctxCancel: ctxCancel,
 		Config:    nil,
 		logger:    hclog.Default(),
-		db:        db,
+		db:        NewMockDB(t),
 	}
 }
 
+func (m *mockDB) NewBatchWriter() db.BatchWriter {
+	return &mockBatchWriter{db: m}
+}
+
 func (m *mockDB) Insert(key []byte, value []byte) error {
-	m.dbStorage[types.BytesToHex(key)] = value
+	m.dbStorage[string(key)] = value
 
 	return nil
 }
 
 func (m *mockDB) Update(key []byte, value []byte) error {
 	if exists, _ := m.Has(key); exists {
-		m.dbStorage[types.BytesToHex(key)] = value
+		m.dbStorage[string(key)] = value
 
 		return nil
 	}
@@ -73,7 +84,7 @@ func (m *mockDB) Update(key []byte, value []byte) error {
 
 func (m *mockDB) Delete(key []byte) error {
 	if exists, _ := m.Has(key); exists {
-		delete(m.dbStorage, types.BytesToHex(key))
+		delete(m.dbStorage, string(key))
 
 		return nil
 	}
@@ -83,7 +94,7 @@ func (m *mockDB) Delete(key []byte) error {
 
 func (m *mockDB) Get(key []byte) ([]byte, error) {
 	if exists, _ := m.Has(key); exists {
-		val := m.dbStorage[types.BytesToHex(key)]
+		val := m.dbStorage[string(key)]
 
 		return val, nil
 	}
@@ -92,7 +103,7 @@ func (m *mockDB) Get(key []byte) ([]byte, error) {
 }
 
 func (m *mockDB) Has(key []byte) (bool, error) {
-	_, ok := m.dbStorage[types.BytesToHex(key)]
+	_, ok := m.dbStorage[string(key)]
 
 	return ok, nil
 }
@@ -105,7 +116,7 @@ func (m *mockDB) Close() error {
 	return nil
 }
 
-func (m *mockDB) NewIterator() (dbInterfaces.Iterator, error) {
+func (m *mockDB) NewIterator() (db.Iterator, error) {
 	it := &mockIterator{
 		data:      make(map[string][]byte, len(m.dbStorage)),
 		keys:      make([]string, len(m.dbStorage)),
@@ -127,14 +138,14 @@ func (it *mockIterator) Close() {
 
 // Seek move's forward till matching prefix key
 func (it *mockIterator) Seek(key []byte) {
-	it.prefixKey = types.BytesToHex(key)
+	it.prefixKey = string(key)
 
 	for {
 		if len(it.keys) == 0 {
 			break
 		}
 
-		if strings.HasPrefix(it.keys[0], types.BytesToHex(key)) {
+		if strings.HasPrefix(it.keys[0], string(key)) {
 			break
 		}
 
@@ -165,7 +176,7 @@ func (it *mockIterator) ValidForPrefix(prefix []byte) bool {
 
 func (it *mockIterator) GetNext() (*types.DBEntry, error) {
 	return &types.DBEntry{
-		Key:   types.Hex2Bytes(it.keys[0]),
+		Key:   []byte(it.keys[0]),
 		Value: it.data[it.keys[0]],
 	}, nil
 }
@@ -320,4 +331,15 @@ func insertAccMetaInfo(t *testing.T, pm *PersistenceManager, accMetaInfo types.A
 	if err := pm.incrementBucketCount(bucket.getIDBytes(), 1); err != nil {
 		require.NoError(t, err)
 	}
+}
+
+func getRandomPreImageEntries(t *testing.T, count int) map[types.Hash][]byte {
+	t.Helper()
+
+	testPreImageEntries := make(map[types.Hash][]byte, count)
+	for i := 0; i < count; i++ {
+		testPreImageEntries[tests.RandomHash(t)] = []byte{byte(i)}
+	}
+
+	return testPreImageEntries
 }

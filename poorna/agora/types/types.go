@@ -53,6 +53,10 @@ func (resp *AgoraResponseMsg) GetBlocks() []Block {
 	return blocks
 }
 
+func (resp *AgoraResponseMsg) GetSessionID() types.Address {
+	return resp.SessionID
+}
+
 type AgoraRequestMsg struct {
 	SessionID types.Address
 	StateHash types.Hash
@@ -61,10 +65,6 @@ type AgoraRequestMsg struct {
 
 func (req *AgoraRequestMsg) GetSessionID() types.Address {
 	return req.SessionID
-}
-
-func (resp *AgoraResponseMsg) GetSessionID() types.Address {
-	return resp.SessionID
 }
 
 type Block struct {

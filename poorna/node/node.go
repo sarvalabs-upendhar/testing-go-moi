@@ -105,9 +105,6 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 		return nil, err
 	}
 
-	// create block store for Bitswap
-	// this will be replaced with a wrapper around dhruva
-	// n.datastore = blockstore.NewBlockstore(sync.MutexWrap(datastore.NewMapDatastore()))
 	// setup persistence manager
 	db, err := dhruva.NewPersistenceManager(n.ctx, n.logger, cfg.DB)
 	if err != nil {
@@ -261,7 +258,7 @@ func (n *Node) startSubHandlers() {
 	n.logger.Info("Starting Sub-Handlers")
 
 	go n.handlers.core.Start()
-	// go n.handlers.consensusHandler.Start()
+
 	go n.handlers.syncer.Start()
 
 	go n.handlers.flux.Start()

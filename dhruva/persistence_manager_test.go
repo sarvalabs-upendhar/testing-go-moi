@@ -544,13 +544,13 @@ func TestGetAccounts(t *testing.T) {
 
 		insertedAccounts := insertedAccounts[int64(i)]
 		require.Equal(t, len(insertedAccounts), len(actualAccounts),
-			"no of accounts in inserted and actual are different")
+			"inserted account count doesn't match")
 
 		// traverse inserted accounts and check if it is present in actual accounts
 		for _, insertedAccount := range insertedAccounts {
 			isExists := checkIfAccountExists(insertedAccount, actualAccounts)
 
-			require.True(t, isExists, "inserted account is not present in actual account")
+			require.True(t, isExists, "inserted account not found")
 		}
 	}
 }
@@ -578,4 +578,20 @@ func TestGetEntries(t *testing.T) {
 	}
 
 	require.Equal(t, len(insertedEntries), actualEntryCount)
+}
+
+func TestWritePreImages(t *testing.T) {
+	pm := NewTestPersistenceManager(t)
+	// create random entries
+	address := tests.RandomAddress(t)
+	testEntries := getRandomPreImageEntries(t, 10)
+	// write preimages
+	err := pm.WritePreImages(address, testEntries)
+	require.NoError(t, err)
+
+	for k, v := range testEntries {
+		dbValue, err := pm.ReadEntry(PreImageKey(address, k))
+		require.NoError(t, err)
+		require.Equal(t, v, dbValue)
+	}
 }

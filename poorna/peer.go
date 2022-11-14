@@ -52,8 +52,8 @@ func (p *KipPeer) SendID(id id.KramaID, ntq int32, addrs []multiaddr.Multiaddr) 
 		NTQ:     ntq,
 		Address: utils.MultiAddrToString(addrs...),
 	}
-	// Convert to a proto message and send it to the network
 
+	// Convert to a polo message and send it to the network
 	return p.Send(id, types.HANDSHAKEMSG, msg)
 }
 

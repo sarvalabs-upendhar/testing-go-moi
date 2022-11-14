@@ -65,52 +65,6 @@ type CanonicalTesseract struct {
 	Body   TesseractBody
 }
 
-/*
-func TesseractFromProto(t *types.Tesseract) *Tesseract {
-	tnew := &Tesseract{
-		Header: TesseractHeader{
-			Address:       types.BytesToAddress(t.Header.Address),
-			PrevHash:      types.BytesToHash(t.Header.PrevHash),
-			Height:        t.Header.Height,
-			AnuUsed:       t.Header.AnuUsed,
-			AnuLimit:      t.Header.AnuLimit,
-			Timestamp:     t.Header.Timestamp,
-			TesseractHash: types.BytesToHash(t.Header.TesseractHash),
-			GridHash:     types.BytesToHash(t.Header.GridHash),
-			Operator:      t.Header.Operator,
-			ClusterID:     t.Header.ClusterID,
-			Extra: CommitData{
-				Round:   t.Header.Extra.Round,
-				Commits: t.Header.Extra.Commits,
-				Seal:    t.Header.Extra.Seal,
-				VoteSet: t.Header.Extra.Voteset,
-				EvidenceHash:  types.BytesToHash(t.Header.Extra.Evidence),
-			},
-		},
-		Body: TesseractBody{
-			StateHash:       types.BytesToHash(t.Body.StateHash),
-			ContextHash:     types.BytesToHash(t.Body.ContextHash),
-			InteractionHash: types.BytesToHash(t.Body.InteractionHash),
-			ReceiptHash:     types.BytesToHash(t.Body.ReceiptHash),
-			Interactions:    t.Body.Interactions,
-			ContextDelta:    make(map[types.Address][]id.KramaID),
-
-			ConsensusProof: PoXCData{
-				IdentityHash: types.BytesToHash(t.Body.ConsensusProof.IdentityHash),
-				BinaryHash:   types.BytesToHash(t.Body.ConsensusProof.BinaryHash),
-				ICSHash:      types.BytesToHash(t.Body.ConsensusProof.IcsHash),
-			},
-		},
-		Signature: t.Signature,
-	}
-	for k, v := range t.Body.ContextDelta {
-		tnew.Body.ContextDelta[types.HexToAddress(k)] = types.ToKIPPeerID(v.List)
-	}
-
-	return tnew
-}
-*/
-
 func (t *Tesseract) GridLength() int32 {
 	return t.Header.Extra.GridID.Parts.Total
 }
@@ -147,12 +101,6 @@ func (t *Tesseract) Hash() Hash {
 	protoHeader.Operator = t.Header.Operator
 	protoHeader.ClusterID = t.Header.ClusterID
 	protoHeader.Timestamp = t.Header.Timestamp
-
-	// protoHeader.Extra = &types.CommitData{
-	//	 Round:   t.Header.Extra.Round,
-	//	 Seal:    t.Header.Extra.Seal,
-	//	 Commits: nil,
-	// }
 
 	data := polo.Polorize(protoHeader)
 
