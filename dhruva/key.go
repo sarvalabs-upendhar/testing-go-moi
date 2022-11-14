@@ -8,25 +8,30 @@ import (
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 )
 
-type Prefix uint8
+type Prefix byte
 
 const (
-	Interaction Prefix = iota
-	NTQ
-	Tesseract
-	TesseractHeight
-	Account
-	Context
-	Logic
-	File
-	Storage
-	Balance
-	Approvals
-	PreImage
+	// Prefix MSB is set for non account based keys
+
+	Interaction     Prefix = 0x80
+	NTQ             Prefix = 0x81
+	Tesseract       Prefix = 0x82
+	TesseractHeight Prefix = 0x83
+
+	// Prefix MSB is unset for account based keys
+
+	Account   Prefix = 0x00
+	Context   Prefix = 0x01
+	Logic     Prefix = 0x02
+	File      Prefix = 0x03
+	Storage   Prefix = 0x04
+	Balance   Prefix = 0x05
+	Approvals Prefix = 0x06
+	PreImage  Prefix = 0x07
 )
 
-func (groupID Prefix) Byte() byte {
-	return []byte{0x01, 0x02, 0x3, 0x04, 0x01, 0x02, 0x3, 0x04, 0x05, 0x06, 0x07, 0x08}[groupID]
+func (p Prefix) Byte() byte {
+	return byte(p)
 }
 
 func dbKey(address types.Address, groupID Prefix, key []byte) []byte {
