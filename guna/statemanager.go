@@ -211,7 +211,7 @@ func (sm *StateManager) DeleteStateObject(addr types.Address) {
 }
 
 func (sm *StateManager) getLatestTesseractHash(addr types.Address) (types.Hash, error) {
-	if addr == types.NilAddress {
+	if addr.IsNil() {
 		return types.NilHash, types.ErrInvalidAddress
 	}
 
@@ -447,19 +447,16 @@ func (sm *StateManager) getContextByHash(addr types.Address, hash types.Hash) ([
 	return behaviourContext.Ids, randomContext.Ids, nil
 }
 
-/*
-GetContextByHash fetches context using hash if both address and hash are given,
-fetches latest context of address if only address given
-*/
+// GetContextByHash fetches context using hash, if hash is nil, it returns the latest context info
 func (sm *StateManager) GetContextByHash(
 	address types.Address,
 	hash types.Hash,
 ) (types.Hash, []id.KramaID, []id.KramaID, error) {
-	if address == types.NilAddress && hash == types.NilHash {
+	if address.IsNil() && hash.IsNil() {
 		return types.NilHash, nil, nil, types.ErrEmptyHashAndAddress
 	}
 
-	if hash == types.NilHash {
+	if hash.IsNil() {
 		ts, err := sm.GetLatestTesseract(address)
 		if err != nil {
 			return types.NilHash, nil, nil, errors.Wrap(err, "tesseract fetch failed")
@@ -492,7 +489,7 @@ func (sm *StateManager) FetchContextLock(ts *types.Tesseract) (*types.ICSNodes, 
 			ics.UpdateNodeSet(types.SenderBehaviourSet, behaviourSet)
 			ics.UpdateNodeSet(types.SenderRandomSet, randomSet)
 		} else if address == ix.ToAddress() || address == GenesisAddress {
-			if info.ContextHash == types.NilHash {
+			if info.ContextHash.IsNil() {
 				continue
 			}
 
@@ -527,7 +524,7 @@ func (sm *StateManager) FetchInteractionContext(ctx context.Context, ix *types.I
 		contextHashes = make(map[types.Address]types.Hash)
 	)
 
-	if ix.FromAddress() != types.NilAddress {
+	if !ix.FromAddress().IsNil() {
 		contextHash, behaviourSet, randomSet, err = sm.fetchLatestParticipantContext(ix.FromAddress())
 		if err != nil {
 			return nil, nil, err
@@ -538,7 +535,7 @@ func (sm *StateManager) FetchInteractionContext(ctx context.Context, ix *types.I
 		nodeSet[types.SenderRandomSet] = randomSet
 	}
 
-	if ix.ToAddress() != types.NilAddress {
+	if !ix.ToAddress().IsNil() {
 		isGenesisAccount, err := sm.IsGenesis(ix.ToAddress())
 		if err != nil {
 			return nil, nil, err
@@ -568,7 +565,7 @@ func (sm *StateManager) FetchInteractionContext(ctx context.Context, ix *types.I
 }
 
 func (sm *StateManager) IsGenesis(addr types.Address) (bool, error) {
-	if addr == types.NilAddress {
+	if addr.IsNil() {
 		return false, nil
 	}
 
@@ -586,7 +583,7 @@ func (sm *StateManager) IsGenesis(addr types.Address) (bool, error) {
 }
 
 func (sm *StateManager) GetLatestNonce(addr types.Address) (uint64, error) {
-	if addr == types.NilAddress {
+	if addr.IsNil() {
 		return 0, types.ErrInvalidAddress
 	}
 

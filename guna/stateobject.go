@@ -492,11 +492,11 @@ func (s *StateObject) UpdateContext(behaviouralNodes []id.KramaID, randomNodes [
 
 	// TODO:Sort based on the stake of the nodes
 
-	if behaviourObjectHash != types.NilHash {
+	if !behaviourObjectHash.IsNil() {
 		metaObj.BehaviouralContext = behaviourObjectHash
 	}
 
-	if randomObjectHash != types.NilHash {
+	if !randomObjectHash.IsNil() {
 		metaObj.RandomContext = randomObjectHash
 	}
 

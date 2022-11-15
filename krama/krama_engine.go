@@ -270,7 +270,7 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID types.Cluster
 		randomNodesReceiverChan,
 	)
 
-	if request.ixs[0].ToAddress() != types.NilAddress {
+	if !request.ixs[0].ToAddress().IsNil() {
 		finalWaitGroup.Add(2)
 
 		go k.sendICSRequest(
@@ -649,7 +649,7 @@ func (k *Engine) handleReq(req Request) {
 
 		wg.StartWatchDog()
 
-		if hash := clusterInfo.ID.Hash(); hash != types.NilHash {
+		if hash := clusterInfo.ID.Hash(); !hash.IsNil() {
 			clusterInfo.AddDirty(hash, wg.GenerateProofs())
 		} else {
 			k.logger.Error("Failed to store watchdog proofs")
@@ -711,7 +711,7 @@ func (k *Engine) fetchIxAccounts(ctx context.Context, ix *types.Interaction) (kt
 
 	accounts := make(ktypes.AccountInfos)
 
-	if ix.FromAddress() != types.NilAddress {
+	if !ix.FromAddress().IsNil() {
 		accInfo, err := k.state.GetAccountMetaInfo(ix.FromAddress())
 		if err != nil {
 			return nil, err
@@ -720,7 +720,7 @@ func (k *Engine) fetchIxAccounts(ctx context.Context, ix *types.Interaction) (kt
 		accounts[ix.FromAddress()] = accInfo
 	}
 
-	if ix.ToAddress() != types.NilAddress {
+	if !ix.ToAddress().IsNil() {
 		isGenesisAccount, err := k.state.IsGenesis(ix.ToAddress())
 		if err != nil {
 			return nil, err
@@ -1111,7 +1111,7 @@ func (k *Engine) updateContextDelta(clusterID types.ClusterID) error {
 		senderAddr := ix.FromAddress()
 		receiverAddr := ix.ToAddress()
 
-		if senderAddr != types.NilAddress && !seenAccounts[senderAddr] {
+		if !senderAddr.IsNil() && !seenAccounts[senderAddr] {
 			senderDeltaGroup := new(types.DeltaGroup)
 			senderDeltaGroup.Role = types.Sender
 			senderBehaviourDelta, replacedNodes := clusterState.GetBehaviouralContextDelta(
@@ -1137,7 +1137,7 @@ func (k *Engine) updateContextDelta(clusterID types.ClusterID) error {
 			deltaMap[senderAddr] = senderDeltaGroup
 		}
 
-		if receiverAddr != types.NilAddress && !seenAccounts[receiverAddr] {
+		if !receiverAddr.IsNil() && !seenAccounts[receiverAddr] {
 			receiverDeltaGroup := new(types.DeltaGroup)
 			receiverDeltaGroup.Role = types.Receiver
 
@@ -1278,13 +1278,13 @@ func GenerateTesseracts(state *ktypes.ClusterInfo) ([]*types.Tesseract, error) {
 	groupBuffer := make([]byte, 0)
 	tesseractGroup := make([]*types.Tesseract, 0)
 
-	if ix.FromAddress() != types.NilAddress {
+	if !ix.FromAddress().IsNil() {
 		senderTesseract := generateTesseract(ix.Hash, ix.FromAddress(), state, gasUsed, 1000)
 		tesseractGroup = append(tesseractGroup, senderTesseract)
 		groupBuffer = append(groupBuffer, senderTesseract.Header.TesseractHash.Bytes()...)
 	}
 
-	if ix.ToAddress() != types.NilAddress {
+	if !ix.ToAddress().IsNil() {
 		receiverTesseract := generateTesseract(ix.Hash, ix.ToAddress(), state, gasUsed, 1000)
 		tesseractGroup = append(tesseractGroup, receiverTesseract)
 		groupBuffer = append(groupBuffer, receiverTesseract.Header.TesseractHash.Bytes()...)
@@ -1396,7 +1396,7 @@ func (k *Engine) validateInteractions(ixs types.Interactions) (bool, error) {
 
 // IsIxValid performs validity checks based on the type of interaction
 func (k *Engine) IsIxValid(ix *types.Interaction) (bool, error) {
-	if ix.FromAddress() == types.NilAddress {
+	if ix.FromAddress().IsNil() {
 		return false, types.ErrInvalidAddress
 	}
 

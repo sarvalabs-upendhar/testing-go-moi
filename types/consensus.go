@@ -70,7 +70,7 @@ type TesseractGridID struct {
 }
 
 func (tid *TesseractGridID) IsNil() bool {
-	return tid.Hash == NilHash && len(tid.Parts.Hashes) == 0
+	return tid.Hash.IsNil() && len(tid.Parts.Hashes) == 0
 }
 
 func (tid *TesseractGridID) String() string {

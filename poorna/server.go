@@ -682,7 +682,7 @@ func (s *Server) Subscribe(ctx context.Context, topic string, handler func(msg *
 				s.logger.Error("Error parsing krama peerID", err)
 			}
 
-			if msg.ReceivedFrom.Pretty() == peerID {
+			if msg.ReceivedFrom.String() == peerID {
 				continue
 			}
 

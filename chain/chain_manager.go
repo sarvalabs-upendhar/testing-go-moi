@@ -161,7 +161,7 @@ func (c *ChainManager) fetchContextForAgora(t *types.Tesseract) ([]id.KramaID, e
 	address := t.Address()
 	peers := make([]id.KramaID, 0)
 
-	for tesseractHash != types.NilHash {
+	for !tesseractHash.IsNil() {
 		if len(peers) >= 10 {
 			break
 		}
@@ -293,7 +293,7 @@ func (c *ChainManager) GetAssetDataByAssetHash(assetHash []byte) (*types.AssetDa
 }
 
 func (c *ChainManager) GetLatestTesseract(addr types.Address) (*types.Tesseract, error) {
-	if addr == types.NilAddress {
+	if addr.IsNil() {
 		return nil, types.ErrInvalidAddress
 	}
 
@@ -323,7 +323,7 @@ func (c *ChainManager) GetReceipt(addr types.Address, ixHash types.Hash) (*types
 		return nil, errors.Wrap(types.ErrReceiptNotFound, err.Error())
 	}
 
-	for ts.Header.PrevHash != types.NilHash {
+	for !ts.Header.PrevHash.IsNil() {
 		for _, ix := range ts.Interactions() {
 			if ix.GetIxHash() == ixHash {
 				return c.getReceipt(ix.GetIxHash(), ts.Body.ReceiptHash)

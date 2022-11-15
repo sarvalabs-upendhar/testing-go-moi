@@ -463,7 +463,7 @@ func (s *Syncer) fetchData(ctx context.Context, session *session.Session, ids ..
 	keySet := utils.NewHashSet()
 
 	for _, hash := range ids {
-		if hash != types.NilHash {
+		if !hash.IsNil() {
 			if ok, err := s.db.Contains(hash.Bytes()); !ok && err == nil {
 				keySet.Add(hash)
 			}
@@ -904,7 +904,7 @@ func (s *Syncer) latticeWorker(id int, job <-chan *SyncJob) {
 						tesseractStack.Push(&types.Item{Tesseract: t, Delta: delta, Sender: "job.peer"}) // FIXME:
 					}
 
-					if t.Header.PrevHash != types.NilHash {
+					if !t.Header.PrevHash.IsNil() {
 						exists, err = s.db.Contains(t.Header.PrevHash.Bytes())
 						if err != nil {
 							s.logger.Error("Unable to fetch previous tesseract", "hash", hash)
@@ -997,7 +997,7 @@ func (s *Syncer) getTesseract(
 
 	log.Println("get tesseract call", hash)
 
-	if hash != types.NilHash {
+	if !hash.IsNil() {
 		req.Hash = hash
 	}
 

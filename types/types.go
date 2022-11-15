@@ -24,11 +24,7 @@ import (
 
 const (
 	// AddressLength is the length of account address
-	AddressLength            = 32
-	CIDPrefixVersion  uint64 = 1
-	CIDPrefixCodec    uint64 = 0x50
-	CIDPrefixMhType   uint64 = 0xb220
-	CIDPrefixMhLength int    = -1
+	AddressLength = 32
 )
 
 const (
@@ -79,6 +75,10 @@ type Hash [32]byte
 // Address represents the 32 byte address of an MOI account.
 type Address [32]byte
 
+func (a Address) IsNil() bool {
+	return a == NilAddress
+}
+
 func (c ClusterID) String() string {
 	return string(c)
 }
@@ -103,7 +103,7 @@ func (l LogicID) Bytes() []byte {
 
 func (a Address) String() string {
 	if a == NilAddress {
-		return "nil address"
+		return ""
 	}
 
 	return a.Hex()
@@ -192,8 +192,8 @@ func BytesToHash(b []byte) Hash {
 }
 
 func (h Hash) String() string {
-	if h == NilHash {
-		return "nil hash"
+	if h.IsNil() {
+		return ""
 	}
 
 	return h.Hex()
@@ -206,8 +206,15 @@ func (h *Hash) SetBytes(b []byte) {
 
 	copy(h[32-len(b):], b)
 }
+
+func (h Hash) IsNil() bool {
+	return h == NilHash
+}
+
 func (h Hash) Bytes() []byte { return h[:] }
-func (h Hash) Hex() string   { return BytesToHex(h.Bytes()) }
+
+func (h Hash) Hex() string { return BytesToHex(h.Bytes()) }
+
 func (h Hash) MarshalText() ([]byte, error) {
 	result := make([]byte, len(h)*2)
 	hex.Encode(result, h.Bytes())
@@ -380,7 +387,7 @@ func (ix *Interaction) IxType() IxType {
 }
 
 func (ix *Interaction) GetIxHash() Hash {
-	if ix.Hash == NilHash {
+	if ix.Hash.IsNil() {
 		h := PoloHash(ix)
 		ix.Hash = h
 

@@ -339,7 +339,7 @@ func (i *IxPool) validateIx(ix *types.Interaction) error {
 		return ErrOversizedData
 	}
 
-	if ix.FromAddress() == types.NilAddress {
+	if ix.FromAddress().IsNil() {
 		return types.ErrInvalidAddress
 	}
 
