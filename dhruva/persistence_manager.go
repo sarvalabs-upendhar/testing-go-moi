@@ -117,11 +117,11 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 	accType types.AccType,
 	latticeExists, stateExists bool,
 ) (int32, bool, error) {
-	if id == types.NilAddress {
+	if id.IsNil() {
 		return 0, false, types.ErrInvalidAddress
 	}
 
-	if tesseractHash == types.NilHash {
+	if tesseractHash.IsNil() {
 		return 0, false, types.ErrEmptyHash
 	}
 

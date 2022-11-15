@@ -96,11 +96,11 @@ func (kbft *KBFT) updateToState(ics *ktypes.ClusterInfo) {
 
 	heights := make([]uint64, len(ics.AccountInfos))
 
-	if senderAddr := ics.Ixs[0].FromAddress(); senderAddr != types.NilAddress {
+	if senderAddr := ics.Ixs[0].FromAddress(); !senderAddr.IsNil() {
 		heights[0] = ics.AccountInfos[ics.Ixs[0].FromAddress()].Height.Uint64() + 1
 	}
 
-	if receiverAddr := ics.Ixs[0].ToAddress(); receiverAddr != types.NilAddress {
+	if receiverAddr := ics.Ixs[0].ToAddress(); !receiverAddr.IsNil() {
 		height := ics.AccountInfos[ics.Ixs[0].ToAddress()].Height.Int64()
 		if height == -1 {
 			heights[2] = ics.AccountInfos[guna.GenesisAddress].Height.Uint64() + 1
@@ -382,7 +382,7 @@ func (kbft *KBFT) addVote(v *types.Vote, peerID id.KramaID) (added bool, err err
 
 		case kbft.Round == v.Round && kbft.Step >= RoundStepPrevote:
 			tesseractGroupID, ok := preVotes.TwoThirdMajority()
-			if ok && (kbft.isProposalReceived() || tesseractGroupID.Hash != types.NilHash) {
+			if ok && (kbft.isProposalReceived() || !tesseractGroupID.Hash.IsNil()) {
 				kbft.enterPreCommit(height, v.Round)
 			} else if preVotes.HasMajorityAny() {
 				kbft.enterPrevoteWait(height, v.Round)
