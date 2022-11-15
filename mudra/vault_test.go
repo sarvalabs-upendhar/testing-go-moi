@@ -2,65 +2,46 @@ package mudra
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
+	"os"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"gitlab.com/sarvalabs/moichain/mudra/common"
 	"gitlab.com/sarvalabs/moichain/mudra/poi"
 	"gitlab.com/sarvalabs/moichain/mudra/poi/moinode"
 )
 
-/*
-func TestKramaVault_New(t *testing.T) {
-	vault := KramaVault{}
-	datadir := "/Users/sarvatechdeveloper1/.moi/moinode-new-4"
-	err := vault.New(datadir, "vmvm1234", "dev-050122", "Test@123", "dev", moinode.MOI_FULL_NODE, 1)
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-
-	t.Log("Private Key for consensus: ", vault.consensusPriv.Bytes())
-	t.Log("Private Key for network: ", vault.networkPriv.Bytes())
-	t.Log("KramaID: ", vault.KramaID())
-}
-
-func TestBLSSignAndVerify(t *testing.T) {
-	vault := KramaVault{}
-	datadir := "/Users/sarvatechdeveloper1/.moi/moinode-new-4"
-	err := vault.New(datadir, "vmvm1234", "dev-050122", "Test@123", "dev", moinode.MOI_FULL_NODE, 1)
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-
-	msg := []byte("I'm getting signed")
-	sigBytes, err := vault.Sign(msg, common.BLS_BLST)
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-	t.Log("Signature: ", sigBytes)
-
-	pubKey := vault.consensusPriv.GetPublicKeyInBytes()
-	verificationSuccess, err := vault.Verify(msg, sigBytes, pubKey)
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-	t.Log("Verification Successful? : ", verificationSuccess)
-}
-*/
-
 func TestBLSSignAgg(t *testing.T) {
-	// Validator 1
-	_, _, err := poi.RandGenKeystore(fmt.Sprintf("hoola_%d", 1), "vmvm1234")
+	// Validator 1 DataDir
+	datadir1, err := ioutil.TempDir("", "testDataDir")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Validator 2 DataDir
+	datadir2, err := ioutil.TempDir("", "testDataDir")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("DataDir 1: ", datadir1)
+	fmt.Println("DataDir 2: ", datadir2)
+
+	defer os.RemoveAll(datadir1)
+	defer os.RemoveAll(datadir2)
+
+	// Validator 1 Init
+	_, _, err = poi.RandGenKeystore(datadir1, "nodepass1")
 	if err != nil {
 		log.Panicln(err)
 	}
 
-	datadir1 := "./hoola_1"
-
 	config := &VaultConfig{
 		DataDir:       datadir1,
-		NodePassword:  "vmvm1234",
-		MoiIDUsername: "dev-050122z",
+		NodePassword:  "nodepass1",
+		MoiIDUsername: "raman",
 		MoiIDPassword: "Test@123",
 		MoiIDURL:      "dev",
 	}
@@ -72,15 +53,14 @@ func TestBLSSignAgg(t *testing.T) {
 	// Public Key of Validator 1
 	pub1 := vault1.GetConsensusPrivateKey().GetPublicKeyInBytes()
 
-	// Validator 2
-	_, _, err = poi.RandGenKeystore(fmt.Sprintf("hoola_%d", 2), "yiyi")
+	// Validator 2 Init
+	_, _, err = poi.RandGenKeystore(datadir2, "nodepass2")
 	if err != nil {
 		log.Panicln(err)
 	}
 
-	datadir2 := "./hoola_2"
 	config.DataDir = datadir2
-	config.NodePassword = "yiyi"
+	config.NodePassword = "nodepass2"
 
 	vault2, err := NewVault(config, moinode.MoiFullNode, 1)
 	if err != nil {
@@ -113,43 +93,10 @@ func TestBLSSignAgg(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 
-	fmt.Println(VerifyAggregateSignature(msg, aggSig, [][]byte{pub1, pub2}))
+	validationStatus, err := VerifyAggregateSignature(msg, aggSig, [][]byte{pub1, pub2})
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	require.Equal(t, true, validationStatus)
 }
-
-/*
-func TestKramaVault_New(t *testing.T) {
-	vault := KramaVault{}
-	datadir := "/Users/sarvatechdeveloper1/.moi/moinode-new-4"
-	err := vault.New(datadir, "vmvm1234", "dev-050122", "Test@123", "dev", moinode.MOI_FULL_NODE, 1)
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-
-	t.Log("Private Key for consensus: ", vault.consensusPriv.Bytes())
-	t.Log("Private Key for network: ", vault.networkPriv.Bytes())
-	t.Log("KramaID: ", vault.KramaID())
-}
-
-func TestBLSSignAndVerify(t *testing.T) {
-	vault := KramaVault{}
-	datadir := "/Users/sarvatechdeveloper1/.moi/moinode-new-4"
-	err := vault.New(datadir, "vmvm1234", "dev-050122", "Test@123", "dev", moinode.MOI_FULL_NODE, 1)
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-
-	msg := []byte("I'm getting signed")
-	sigBytes, err := vault.Sign(msg, common.BLS_BLST)
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-	t.Log("Signature: ", sigBytes)
-
-	pubKey := vault.consensusPriv.GetPublicKeyInBytes()
-	verificationSuccess, err := vault.Verify(msg, sigBytes, pubKey)
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-	t.Log("Verification Successful? : ", verificationSuccess)
-}
-*/

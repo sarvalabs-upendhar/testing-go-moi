@@ -17,8 +17,21 @@ func (blsBlst *BlsWithBlstSignature) Type() common.SigType {
 }
 
 func (blsBlst *BlsWithBlstSignature) Sign(data, signingKey []byte, kid kramaid.KramaID) error {
+	// fmt.Println("Secret key: ", signingKey)
+
 	// casting into BLST Secret key
+	if len(signingKey) != 32 {
+		return common.ErrInvalidPrivKeyLength
+	}
+
 	pairingFriendlyPrivKey := new(blst.SecretKey).Deserialize(signingKey)
+
+	// pubKey := new(blst.P1Affine).From(pairingFriendlyPrivKey)
+	// fmt.Println("Pub key gotten:", pubKey.Compress())
+
+	if pairingFriendlyPrivKey == nil {
+		return common.ErrNotPairingFriendlyKey
+	}
 
 	if common.IsZeroBytes(pairingFriendlyPrivKey.Serialize()) {
 		return common.ErrZeroKey

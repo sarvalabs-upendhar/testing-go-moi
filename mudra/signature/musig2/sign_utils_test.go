@@ -2,10 +2,9 @@ package musig2
 
 import (
 	"encoding/hex"
-	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gitlab.com/sarvalabs/btcd-musig/btcec"
 	"gitlab.com/sarvalabs/moichain/mudra/kramaid"
 )
@@ -34,12 +33,11 @@ func TestGetAggregatedPublicKey(t *testing.T) {
 	aggPubKey := GetAggregatedPublicKey(sortedPubKeys)
 
 	aggPubKeyInHex := hex.EncodeToString(aggPubKey.SerializeCompressed())
-	assert.EqualValues(
+	require.Equal(
 		t,
-		"025ac08078751ff2b3dbb33cd3d36ece442c59d559be09e63188ff3a7fba504009",
+		"02ddb5a9d04f95b446b1c64a25d94d64aa572ba457bd970fb2f591e6d295c973d1",
 		aggPubKeyInHex,
-		fmt.Sprintf("> Expected 025ac08078751ff2b3dbb33cd3d36ece442c59d559be09e63188ff3a7fba504009 "+
-			"for Aggregated public key, but got: %v", aggPubKeyInHex))
+	)
 }
 
 func BenchmarkGetAggregatedPublicKey(b *testing.B) {

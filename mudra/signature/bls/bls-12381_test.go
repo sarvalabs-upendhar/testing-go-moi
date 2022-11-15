@@ -2,35 +2,34 @@ package bls
 
 import (
 	"encoding/hex"
-	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
+	"github.com/stretchr/testify/require"
 	"gitlab.com/sarvalabs/moichain/mudra/common"
 	"gitlab.com/sarvalabs/moichain/mudra/kramaid"
 )
 
 const (
-	expectedSig1 = "0460a78a813eefc41edd71e794b2576e40dfa05c1cf24f4dde70ebc07493ee1984ae227ff4348" +
-		"f94b033dff5144b0756207d109a27972892d384f56a16a4c20f322234813c35cf3e22a48c6e4f6edb85ae1" +
-		"ee5c1db697c81bf109e6ecdddf52e14fd"
+	expectedSig1 = "0460b776cf0407a74559f4e696fedf5990294794915be00e14e81cab41a2ea49bd4d4d5d0f45" +
+		"0aaae872232e38019320f7ad19954814cb53b13b17be262ddf99251af7d4509af52f6f1dcc27b732" +
+		"c0d0216e93f4e057c47fc058f4aa201f80d40b6a"
 )
 
 var (
 	samplePrivateKey = []byte{
-		223, 251, 80, 42, 148, 23, 80, 3, 41, 56, 67, 29, 6, 222, 100, 235,
-		198, 118, 247, 22, 36, 154, 171, 94, 29, 237, 207, 78, 250, 162, 67, 14,
+		74, 29, 73, 110, 113, 40, 77, 200, 240, 44, 78, 5, 215, 168, 91, 122, 196, 105, 7, 34, 164, 40, 206, 94, 38, 170, 172, 254, 241, 46, 229, 78,
 	}
+
 	sampleMessage = []byte("Hello MOI user, this is test string being signed")
+
 	blsPublicKey1 = []byte{
-		135, 190, 156, 133, 44, 143, 38, 33, 213, 138, 22, 115, 131, 203, 65,
-		129, 205, 190, 223, 234, 85, 40, 136, 133, 77, 193, 165, 213, 155, 170, 237, 41, 169, 255, 56, 50,
-		118, 178, 5, 118, 176, 243, 174, 159, 95, 151, 60, 19,
+		176, 19, 70, 163, 32, 1, 85, 50, 125, 112, 18, 148, 16, 147, 111, 212,
+		99, 190, 29, 171, 191, 60, 170, 30, 13, 211, 180, 43, 185, 16, 118, 95, 164, 26,
+		243, 196, 224, 45, 103, 74, 183, 34, 109, 233, 182, 191, 42, 37,
 	}
 )
 
-func TestBLSActual(t *testing.T) {
+func TestBLSSign(t *testing.T) {
 	var bsig BlsWithBlstSignature
 
 	kid := kramaid.KramaID("bvby3pBVU5BEL2jBHJrH23GTb9qe8nL4XHqqKzZVbth7gBZ5c3.16Uiu2HAmGZr9gyQ7fD" +
@@ -42,10 +41,10 @@ func TestBLSActual(t *testing.T) {
 	}
 
 	sigInHex := hex.EncodeToString(common.MarshalSignature(common.Signature(bsig)))
-	assert.EqualValues(t,
+	require.Equal(t,
 		expectedSig1,
 		sigInHex,
-		fmt.Sprintf("> Expected %vfor BLS Signature but got %v", expectedSig1, sigInHex))
+	)
 }
 
 func TestBLSVerify(t *testing.T) {
@@ -61,10 +60,10 @@ func TestBLSVerify(t *testing.T) {
 
 	bsig := BlsWithBlstSignature(bsigGeneral)
 
-	boolean, err := bsig.Verify(sampleMessage, blsPublicKey1)
+	verificationBool, err := bsig.Verify(sampleMessage, blsPublicKey1)
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
 
-	t.Log(boolean)
+	require.Equal(t, true, verificationBool)
 }

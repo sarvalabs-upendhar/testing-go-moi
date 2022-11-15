@@ -37,6 +37,7 @@ func testMusigForNnodes(nodesInICS int) error {
 	var wg sync.WaitGroup
 
 	for i, signCtx := range signerSessions {
+
 		signCtx := signCtx
 
 		wg.Add(1)
@@ -100,36 +101,25 @@ func testMusigForNnodes(nodesInICS int) error {
 	// Verify Partial Signature
 	sessionOfNode1 := signerSessions[0]
 
-	partialSigOfNode1, err := MarshalToPartialSig(preCommitSignatures[0])
-	if err != nil {
-		return errors.New("error in verifying partial signature")
-	}
+	preCommitSigExceptNode1 := preCommitSignatures[1:]
+	for i := range preCommitSigExceptNode1 {
+		partialSigOfOtherNode, err := MarshalToPartialSig(preCommitSigExceptNode1[i])
+		if err != nil {
+			return errors.New("error in verifying partial signature")
+		}
 
-	combinedNonce, err := musig2.AggregateNonces(allPublicNonces)
-	if err != nil {
-		return errors.New("unable to aggregate public nonces")
-	}
-
-	isValid := partialSigOfNode1.Verify(allPublicNonces[0],
-		combinedNonce, sortedPubKeySet, sortedPubKeySet[0], bytes32Message)
-
-	if isValid {
-		preCommitSigExceptNode1 := preCommitSignatures[1:]
-		for i := range preCommitSigExceptNode1 {
-			partialSigOfOtherNode, err := MarshalToPartialSig(preCommitSigExceptNode1[i])
-			if err != nil {
-				return errors.New("error in verifying partial signature")
-			}
-
-			_, err = sessionOfNode1.CombineSig(partialSigOfOtherNode)
-			if err != nil {
-				return errors.New("unable to combine partial sig:" + err.Error())
-			}
+		// fmt.Println("Partial: ", partialSigOfOtherNode)
+		_, err = sessionOfNode1.CombineSig(partialSigOfOtherNode)
+		if err != nil {
+			return errors.New("unable to combine partial sig:" + err.Error())
 		}
 	}
 
 	// fmt.Println("\nVerifying Aggregated signature")
 	finalSig := sessionOfNode1.FinalSig()
+	// fmt.Println("SIgnature to verify: ", finalSig)
+	// fmt.Println(bytes32Message[:])
+	// fmt.Println(aggPubKey)
 	if !finalSig.Verify(bytes32Message[:], aggPubKey) {
 		return errors.New("final sig is invalid")
 	}

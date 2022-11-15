@@ -10,7 +10,7 @@ var (
 	ErrAuthFailed                      = errors.New("authentication failed with given credentials")
 	ErrInvalidKramaID                  = errors.New("invalid Krama id")
 	ErrInvalidKramaIDVersion           = errors.New("invalid Krama id Version")
-	ErrNoKeystore                      = errors.New("no keystore at given path")
+	ErrNoKeystore                      = errors.New("no keystore at given datadir")
 	ErrUnsupportedSigTypeForPrivateKey = errors.New("unsupported Signature type for given private key type")
 	ErrUnsupportedSigType              = errors.New("unsupported Signature type")
 	ErrInvalidUsername                 = errors.New("invalid username")
@@ -22,6 +22,8 @@ var (
 	ErrUnsupportedSig                  = errors.New("currently this Signature type is not supported")
 	ErrUnIntialized                    = errors.New("uninitialized")
 	ErrParsingKramaID                  = errors.New("error parsing kramaID")
+	ErrNotPairingFriendlyKey           = errors.New("not a pairing friendly private bytes")
+	ErrInvalidPrivKeyLength            = errors.New("secret key must be 32 bytes")
 
 	ErrSigningFailed = errors.New("error in signing")
 )
