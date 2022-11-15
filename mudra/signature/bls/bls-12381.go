@@ -17,8 +17,6 @@ func (blsBlst *BlsWithBlstSignature) Type() common.SigType {
 }
 
 func (blsBlst *BlsWithBlstSignature) Sign(data, signingKey []byte, kid kramaid.KramaID) error {
-	// fmt.Println("Secret key: ", signingKey)
-
 	// casting into BLST Secret key
 	if len(signingKey) != 32 {
 		return common.ErrInvalidPrivKeyLength

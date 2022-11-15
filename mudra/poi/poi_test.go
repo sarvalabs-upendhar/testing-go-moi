@@ -10,7 +10,6 @@ import (
 )
 
 func TestGetKeystore(t *testing.T) {
-
 	// Temp folder
 	datadir1, err := ioutil.TempDir("", "testDataDir")
 	if err != nil {
@@ -32,10 +31,11 @@ func TestGetKeystore(t *testing.T) {
 		log.Fatal(err)
 	}
 
-	defer os.RemoveAll(datadir1)
-	defer os.RemoveAll(datadir2)
+	t.Cleanup(func() {
+		defer os.RemoveAll(datadir1)
+		defer os.RemoveAll(datadir2)
+	})
 
 	_, err = GetKeystore(datadir2)
 	require.Equal(t, err.Error(), "no keystore at given datadir")
-
 }

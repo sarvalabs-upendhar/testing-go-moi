@@ -37,7 +37,6 @@ func testMusigForNnodes(nodesInICS int) error {
 	var wg sync.WaitGroup
 
 	for i, signCtx := range signerSessions {
-
 		signCtx := signCtx
 
 		wg.Add(1)

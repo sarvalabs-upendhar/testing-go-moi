@@ -29,8 +29,10 @@ func TestBLSSignAgg(t *testing.T) {
 	fmt.Println("DataDir 1: ", datadir1)
 	fmt.Println("DataDir 2: ", datadir2)
 
-	defer os.RemoveAll(datadir1)
-	defer os.RemoveAll(datadir2)
+	t.Cleanup(func() {
+		os.RemoveAll(datadir1)
+		os.RemoveAll(datadir2)
+	})
 
 	// Validator 1 Init
 	_, _, err = poi.RandGenKeystore(datadir1, "nodepass1")
