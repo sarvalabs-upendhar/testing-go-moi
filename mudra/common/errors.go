@@ -22,8 +22,7 @@ var (
 	ErrUnsupportedSig                  = errors.New("currently this Signature type is not supported")
 	ErrUnIntialized                    = errors.New("uninitialized")
 	ErrParsingKramaID                  = errors.New("error parsing kramaID")
-	ErrNotPairingFriendlyKey           = errors.New("not a pairing friendly private bytes")
+	ErrNotPairingFriendlyKey           = errors.New("not a pairing friendly private key")
 	ErrInvalidPrivKeyLength            = errors.New("secret key must be 32 bytes")
-
-	ErrSigningFailed = errors.New("error in signing")
+	ErrSigningFailed                   = errors.New("error in signing")
 )

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"gitlab.com/sarvalabs/moichain/mudra/common"
 )
 
 func TestGetKeystore(t *testing.T) {
@@ -32,10 +33,10 @@ func TestGetKeystore(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		defer os.RemoveAll(datadir1)
-		defer os.RemoveAll(datadir2)
+		os.RemoveAll(datadir1)
+		os.RemoveAll(datadir2)
 	})
 
 	_, err = GetKeystore(datadir2)
-	require.Equal(t, err.Error(), "no keystore at given datadir")
+	require.Equal(t, err, common.ErrNoKeystore)
 }

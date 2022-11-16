@@ -53,9 +53,9 @@ func testMusigForNnodes(nodesInICS int) error {
 
 				// Getting public nonce from another nodes
 				nonce := otherNodesSession.PublicNonce()
-				// TODO: Sign the tesseract along with above public nonce and sent to other node
+				// Sign the tesseract along with above public nonce and sent to other node
 
-				// TODO: Verify the signature with corresponding public key before registering the nonce to session
+				// Verify the signature with corresponding public key before registering the nonce to session
 				haveAll, err := sessionAtOneNode.RegisterPubNonce(nonce)
 				if err != nil {
 					log.Fatal("Unable to add public nonce")
@@ -70,8 +70,8 @@ func testMusigForNnodes(nodesInICS int) error {
 
 	wg.Wait()
 
-	// fmt.Println("\nDone with Pre vote round")
-	// fmt.Println("Now all session have all the public nonce from other nodes in ICS")
+	// Done with Pre vote round
+	// Now all session have all the public nonce from other nodes in ICS
 
 	msg := "I'm the tesseract data"
 
@@ -90,14 +90,13 @@ func testMusigForNnodes(nodesInICS int) error {
 
 		preCommitSignatures[i] = UnmarshalPartialSig(partialSig)
 	}
-	// fmt.Println("\nDone with Pre Commit round")
-	// fmt.Println("Now every node have other's partial signature")
+	// Done with Pre Commit round
+	// Now every node have other's partial signature
 
 	// After Pre-commit round, check for aggregated signature
 	// Here we are doing for first node as example
 
-	// fmt.Println("\nVerifying each partial signatures and Aggregating them at NODE 1")
-	// Verify Partial Signature
+	// Verifying each partial signatures and Aggregating them at NODE 1
 	sessionOfNode1 := signerSessions[0]
 
 	preCommitSigExceptNode1 := preCommitSignatures[1:]
@@ -107,18 +106,15 @@ func testMusigForNnodes(nodesInICS int) error {
 			return errors.New("error in verifying partial signature")
 		}
 
-		// fmt.Println("Partial: ", partialSigOfOtherNode)
 		_, err = sessionOfNode1.CombineSig(partialSigOfOtherNode)
 		if err != nil {
 			return errors.New("unable to combine partial sig:" + err.Error())
 		}
 	}
 
-	// fmt.Println("\nVerifying Aggregated signature")
+	// Verifying Aggregated signature
 	finalSig := sessionOfNode1.FinalSig()
-	// fmt.Println("SIgnature to verify: ", finalSig)
-	// fmt.Println(bytes32Message[:])
-	// fmt.Println(aggPubKey)
+
 	if !finalSig.Verify(bytes32Message[:], aggPubKey) {
 		return errors.New("final sig is invalid")
 	}

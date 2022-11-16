@@ -26,7 +26,7 @@ func checkAuthenticity(cipherString, macString string, macCipher []byte) (bool, 
 
 	calculatedMAC := common.GetKeccak256Hash(macCipher, cipherText)
 	if !bytes.Equal(calculatedMAC, mac) {
-		return false, ErrInDecryption
+		return false, common.ErrInDecryption
 	}
 
 	return true, nil

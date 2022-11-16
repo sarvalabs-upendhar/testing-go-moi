@@ -24,9 +24,6 @@ func (blsBlst *BlsWithBlstSignature) Sign(data, signingKey []byte, kid kramaid.K
 
 	pairingFriendlyPrivKey := new(blst.SecretKey).Deserialize(signingKey)
 
-	// pubKey := new(blst.P1Affine).From(pairingFriendlyPrivKey)
-	// fmt.Println("Pub key gotten:", pubKey.Compress())
-
 	if pairingFriendlyPrivKey == nil {
 		return common.ErrNotPairingFriendlyKey
 	}
