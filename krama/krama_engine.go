@@ -62,7 +62,7 @@ type lattice interface {
 type transport interface {
 	InitClusterCommunication(ctx context.Context, slot *ktypes.Slot) error
 	RegisterRPCService(serviceID protocol.ID, serviceName string, service interface{}) error
-	Call(peerID peer.ID, svcName, svcMethod string, args, response interface{}) error
+	Call(kramaID id.KramaID, svcName, svcMethod string, args, response interface{}) error
 	BroadcastTesseract(msg *types.TesseractMessage) error
 }
 
@@ -781,7 +781,7 @@ func (k *Engine) sendICSRequestWithBound(
 	rcount := 0
 	msg.ContextType = int32(setType)
 
-	for index, kipID := range nodes {
+	for index, kramaID := range nodes {
 		// Check if the counter has reached the min number of required random nodes
 		if rcount == requiredCount {
 			// Determine the number of un queried nodes and decrement the wait group by that count
@@ -791,7 +791,7 @@ func (k *Engine) sendICSRequestWithBound(
 			break
 		}
 
-		if kipID == clusterState.Operator {
+		if kramaID == clusterState.Operator {
 			nodeResponses[index] = true
 			rcount++
 
@@ -800,7 +800,7 @@ func (k *Engine) sendICSRequestWithBound(
 			continue
 		}
 		// Retrieve the peerID from the node's Krama id
-		networkID, err := kipID.PeerID()
+		networkID, err := kramaID.PeerID()
 		if err != nil {
 			k.logger.Error("Error decoding network id from krama id", "error", err)
 			wg.Done()
@@ -817,12 +817,12 @@ func (k *Engine) sendICSRequestWithBound(
 			continue
 		}
 
-		go func(index int, peerID peer.ID) {
+		go func(index int, kramaID id.KramaID) {
 			icsResponse := new(types.ICSResponse)
 			requestTS := time.Now()
 
 			if err := k.transport.Call(
-				peerID,
+				kramaID,
 				"ICSRPC",
 				"ICSRequest",
 				msg,
@@ -846,7 +846,7 @@ func (k *Engine) sendICSRequestWithBound(
 			k.metrics.captureRequestTurnaroundTime(requestTS)
 			// Decrement the wait group
 			wg.Done()
-		}(index, peerID)
+		}(index, kramaID)
 	}
 
 	wg.Wait()
@@ -897,8 +897,8 @@ func (k *Engine) sendICSRequest(
 
 	msg.ContextType = int32(setType)
 
-	for index, kipID := range nodesSet.Ids {
-		if kipID == clusterState.Operator {
+	for index, kramaID := range nodesSet.Ids {
+		if kramaID == clusterState.Operator {
 			nodeResponses[index] = true
 
 			clusterState.IncludeOperator()
@@ -908,7 +908,7 @@ func (k *Engine) sendICSRequest(
 			continue
 		}
 
-		networkID, err := kipID.PeerID()
+		networkID, err := kramaID.PeerID()
 		if err != nil {
 			k.logger.Error("Error decoding network id from krama id", "error", err)
 			wg.Done()
@@ -925,12 +925,12 @@ func (k *Engine) sendICSRequest(
 			continue
 		}
 
-		go func(index int, peerID peer.ID) {
+		go func(index int, kramaID id.KramaID) {
 			icsResponse := new(types.ICSResponse)
 			requestTS := time.Now()
 
 			if err := k.transport.Call(
-				peerID,
+				kramaID,
 				"ICSRPC",
 				"ICSRequest",
 				msg,
@@ -952,7 +952,7 @@ func (k *Engine) sendICSRequest(
 
 			// Decrement the wait group
 			wg.Done()
-		}(index, peerID)
+		}(index, kramaID)
 	}
 
 	wg.Wait()

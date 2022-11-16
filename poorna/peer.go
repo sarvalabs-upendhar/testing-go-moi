@@ -6,10 +6,10 @@ import (
 	"log"
 	"sync"
 
-	"gitlab.com/sarvalabs/moichain/utils"
-
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/polo/go-polo"
+
+	"gitlab.com/sarvalabs/moichain/utils"
 
 	mapset "github.com/deckarep/golang-set"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -64,6 +64,13 @@ func (p *KipPeer) setID(id id.KramaID) {
 	defer p.mtxLock.Unlock()
 	// Generate the KipID for the peer and assign it to the field
 	p.id = id
+}
+
+func (p *KipPeer) GetKramaID() id.KramaID {
+	p.mtxLock.Lock()
+	defer p.mtxLock.Unlock()
+
+	return p.id
 }
 
 func (p *KipPeer) InitHandshake(id id.KramaID, ntq int32, addrs []multiaddr.Multiaddr) error {
