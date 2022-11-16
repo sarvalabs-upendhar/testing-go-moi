@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
-	gorpc "github.com/libp2p/go-libp2p-gorpc"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"gitlab.com/sarvalabs/moichain/poorna/api"
+	"gitlab.com/sarvalabs/moichain/poorna/moirpc"
 	"gitlab.com/sarvalabs/moichain/types"
 )
 
@@ -25,11 +25,14 @@ func (syncRPC *SYNCRPCService) StatusUpdate(
 	req *types.AccountsStatusMsg,
 	resp *api.Response,
 ) error {
-	if peerID, ok := ctx.Value(gorpc.ContextKeyRequestSender).(peer.ID); ok {
-		return syncRPC.syncer.StatusUpdate(peerID, req)
+	peerID, ok := ctx.Value(moirpc.ContextKeyRequestSender).(peer.ID)
+	if !ok {
+		syncRPC.syncer.logger.Error("type assertion failed")
+
+		return types.ErrInterfaceConversion
 	}
 
-	return errors.New("failed to retrieve the peer ID of current request sender")
+	return syncRPC.syncer.StatusUpdate(peerID, req)
 }
 
 // GetTesseract is an RPC call to fetch the tesseract based on hash or height

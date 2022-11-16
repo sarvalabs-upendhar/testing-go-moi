@@ -55,4 +55,6 @@ var (
 	ErrLogicStorageTreeNotFound    = errors.New("logic storage tree not found")
 	ErrInvalidKey                  = errors.New("invalid key")
 	ErrInvalidValue                = errors.New("invalid value")
+	ErrKeyAlreadyExist             = errors.New("key already exist")
+	ErrKeyDoNotExist               = errors.New("key do not exist")
 )

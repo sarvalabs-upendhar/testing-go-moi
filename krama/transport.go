@@ -7,13 +7,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
-	rpc "github.com/libp2p/go-libp2p-gorpc"
+
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/pkg/errors"
 	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	"gitlab.com/sarvalabs/moichain/poorna/moirpc"
 	"gitlab.com/sarvalabs/moichain/types"
 	"gitlab.com/sarvalabs/polo/go-polo"
 )
@@ -23,20 +23,22 @@ const (
 	TesseractTopic         = "MOI_PUBSUB_TESSERACT"
 )
 
+const kramaMoirpcStreamTTL = time.Duration(2) * time.Minute
+
 type network interface {
 	Unsubscribe(topic string) error
 	Broadcast(topic string, data []byte) error
 	Subscribe(ctx context.Context, topic string, handler func(msg *pubsub.Message) error) error
-	InitNewRPCServer(protocol protocol.ID) *rpc.Client
 	ConnectPeer(kramaID id.KramaID) error
 	DisconnectPeer(kramaID id.KramaID) error
+	InitNewRPCServer(protocol protocol.ID) *moirpc.Client
 	RegisterNewRPCService(protocol protocol.ID, serviceName string, service interface{}) error
 	GetKramaID() id.KramaID
 }
 
 type Transport struct {
 	logger    hclog.Logger
-	rpcClient *rpc.Client
+	rpcClient *moirpc.Client
 	network   network
 }
 
@@ -114,12 +116,12 @@ func (t *Transport) InitClusterCommunication(ctx context.Context, slot *ktypes.S
 	return nil
 }
 
-func (t *Transport) Call(peerID peer.ID, svcName, svcMethod string, args, response interface{}) error {
+func (t *Transport) Call(kramaID id.KramaID, svcName, svcMethod string, args, response interface{}) error {
 	if t.rpcClient == nil {
 		return errors.New("rpc client not initiated")
 	}
 
-	return t.rpcClient.Call(peerID, svcName, svcMethod, args, response)
+	return t.rpcClient.MoiCall(kramaID, svcName, svcMethod, args, response, kramaMoirpcStreamTTL)
 }
 
 func (t *Transport) BroadcastTesseract(msg *types.TesseractMessage) error {

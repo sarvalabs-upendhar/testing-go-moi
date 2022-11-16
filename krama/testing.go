@@ -3,10 +3,10 @@ package krama
 import (
 	"context"
 
-	rpc "github.com/libp2p/go-libp2p-gorpc"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	"gitlab.com/sarvalabs/moichain/poorna/moirpc"
 	"gitlab.com/sarvalabs/moichain/types"
 )
 
@@ -32,7 +32,7 @@ func (m *MockServer) Subscribe(ctx context.Context, topic string, handler func(m
 	return nil
 }
 
-func (m *MockServer) InitNewRPCServer(protocol protocol.ID) *rpc.Client {
+func (m *MockServer) InitNewRPCServer(protocol protocol.ID) *moirpc.Client {
 	// TODO implement me
 	panic("implement me")
 }
