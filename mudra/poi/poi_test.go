@@ -2,7 +2,6 @@ package poi
 
 import (
 	"io/ioutil"
-	"log"
 	"os"
 	"testing"
 
@@ -13,24 +12,18 @@ import (
 func TestGetKeystore(t *testing.T) {
 	// Temp folder
 	datadir1, err := ioutil.TempDir("", "testDataDir")
-	if err != nil {
-		log.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// Validator 1 Init
 	_, _, err = RandGenKeystore(datadir1, "nodepass1")
-	if err != nil {
-		log.Panicln(err)
-	}
+	require.NoError(t, err)
 
 	_, err = GetKeystore(datadir1)
 	require.Equal(t, nil, err)
 
 	// Temp folder
 	datadir2, err := ioutil.TempDir("", "testDataDir")
-	if err != nil {
-		log.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	t.Cleanup(func() {
 		os.RemoveAll(datadir1)

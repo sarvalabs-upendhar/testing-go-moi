@@ -37,34 +37,23 @@ func TestBLSSign(t *testing.T) {
 		"dmdBsRL29EjxR81Y74TEPbemBkyKuk2Ufj")
 
 	err := bsig.Sign(sampleMessage, samplePrivateKey, kid)
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
+	require.NoError(t, err)
 
 	sigInHex := hex.EncodeToString(common.MarshalSignature(common.Signature(bsig)))
-	require.Equal(t,
-		expectedSig,
-		sigInHex,
-	)
+	require.Equal(t, expectedSig, sigInHex)
 }
 
 func TestBLSVerify(t *testing.T) {
 	sigInHexBytes, err := hex.DecodeString(expectedSig)
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
+	require.NoError(t, err)
 
 	bsigGeneral, err := common.UnmarshalSignature(sigInHexBytes)
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
+	require.NoError(t, err)
 
 	bsig := BlsWithBlstSignature(bsigGeneral)
 
 	verificationBool, err := bsig.Verify(sampleMessage, blsPublicKey)
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
+	require.NoError(t, err)
 
 	require.Equal(t, true, verificationBool)
 }

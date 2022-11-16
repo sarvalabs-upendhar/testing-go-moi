@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"log"
 
 	"gitlab.com/sarvalabs/moichain/mudra/common"
 
@@ -50,7 +49,7 @@ func getKDFKey(cryptoJSON cryptoParams, auth string) (SRPPrivateBytes, error) {
 
 		derivedKey, err := scrypt.Key(authArray, salt, n, r, p, SrpdkLen)
 		if err != nil {
-			log.Fatal("error deriving the private bytes of SRP")
+			return srb, common.ErrDerivingPrivKeyFromSRP
 		}
 
 		if err = srb.FromBytes(derivedKey); err != nil {
