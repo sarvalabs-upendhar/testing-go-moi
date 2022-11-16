@@ -59,7 +59,6 @@ func CreateGenesisTesseract(
 		Body: types.TesseractBody{
 			StateHash:       stateHash,
 			ContextHash:     contextHash,
-			Interactions:    nil,
 			ContextDelta:    contextDelta,
 			ReceiptHash:     types.Hash{},
 			InteractionHash: GenesisIxHash,
@@ -68,6 +67,7 @@ func CreateGenesisTesseract(
 				BinaryHash:   types.NilHash,
 			},
 		},
+		Ixns: nil,
 	}
 	Tesseract.Header.TesseractHash = Tesseract.BodyHash()
 

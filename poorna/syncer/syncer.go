@@ -63,7 +63,7 @@ type lattice interface {
 		sender id.KramaID,
 		ics *types.ICSClusterInfo,
 	) error
-	GetTesseract(hash types.Hash) (*types.Tesseract, error)
+	GetTesseract(hash types.Hash, withInteractions bool) (*types.Tesseract, error)
 }
 type db interface {
 	NewBatchWriter() dhruva.BatchWriter
@@ -895,7 +895,7 @@ func (s *Syncer) latticeWorker(id int, job <-chan *SyncJob) {
 				for !exists {
 					log.Println(" Lattice Sync Job Received of address ", job.address.Hex(), "Hash", hash)
 
-					t, delta, err := s.getTesseract(job.peer, hash, nil)
+					t, delta, err := s.getTesseract(job.peer, hash, nil, true)
 					if err != nil {
 						s.logger.Error("Unable to fetch tesseract", "hash", hash.Hex(), "from", job.peer.id)
 
@@ -933,7 +933,7 @@ func (s *Syncer) latticeWorker(id int, job <-chan *SyncJob) {
 					}
 				}
 			} else {
-				if t, delta, err := s.getTesseract(job.peer, job.hash, nil); err != nil {
+				if t, delta, err := s.getTesseract(job.peer, job.hash, nil, true); err != nil {
 					log.Printf("Unable to get tesseract %s from %s Error %s", job.peer.id, job.hash.Hex(), err)
 				} else {
 					icsClusterInfo := new(types.ICSClusterInfo)
@@ -992,6 +992,7 @@ func (s *Syncer) getTesseract(
 	bestPeer *SyncPeer,
 	hash types.Hash,
 	number *big.Int,
+	withInteractions bool,
 ) (*types.Tesseract, map[types.Hash][]byte, error) {
 	req := new(types.TesseractReq)
 
@@ -1004,6 +1005,8 @@ func (s *Syncer) getTesseract(
 	if number != nil {
 		req.Number = number.Uint64()
 	}
+
+	req.WithInteractions = withInteractions
 
 	resp := new(types.TesseractResponse)
 	if err := s.rpcClient.Call(bestPeer.id, "SYNCRPC", "GetTesseract", req, resp); err != nil {
@@ -1020,8 +1023,8 @@ func (s *Syncer) getTesseract(
 	return msg, resp.Delta, nil
 }
 
-func (s *Syncer) GetTesseract(hash types.Hash) (*types.Tesseract, error) {
-	ts, err := s.lattice.GetTesseract(hash)
+func (s *Syncer) GetTesseract(hash types.Hash, withInteractions bool) (*types.Tesseract, error) {
+	ts, err := s.lattice.GetTesseract(hash, withInteractions)
 	if err != nil {
 		return nil, err
 	}

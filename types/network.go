@@ -134,8 +134,9 @@ type AccountMetaInfo struct {
 }
 
 type TesseractReq struct {
-	Hash   Hash
-	Number uint64
+	Hash             Hash
+	Number           uint64
+	WithInteractions bool
 }
 type PeerInfo struct {
 	ID      kramaid.KramaID

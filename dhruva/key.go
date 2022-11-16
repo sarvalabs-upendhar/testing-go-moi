@@ -34,12 +34,12 @@ func (p Prefix) Byte() byte {
 	return byte(p)
 }
 
-func dbKey(address types.Address, groupID Prefix, key []byte) []byte {
-	if address != types.NilAddress {
-		return append(address.Bytes(), append([]byte{groupID.Byte()}, key...)...)
+func dbKey(address types.Address, prefix Prefix, key []byte) []byte {
+	if address.IsNil() {
+		return append([]byte{prefix.Byte()}, key...)
 	}
 
-	return append([]byte{groupID.Byte()}, key...)
+	return append(address.Bytes(), append([]byte{prefix.Byte()}, key...)...)
 }
 
 func NtqDBKey(kramaID id.KramaID) []byte {

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"errors"
 	"math/big"
 	"sync/atomic"
 	"testing"
@@ -28,6 +27,7 @@ type Context struct {
 type MockChainManager struct {
 	tesseracts          map[types.Address]map[types.Hash]*types.Tesseract
 	latestTesseractHash map[types.Address]types.Hash
+	interactions        map[types.Address]map[types.Hash]types.Interactions
 	receipts            map[types.Address]map[types.Hash]*types.Receipt
 	storage             map[types.Hash]*types.Tesseract
 	assets              map[types.Hash]*types.AssetData
@@ -53,6 +53,7 @@ func NewMockChainManager(t *testing.T) *MockChainManager {
 
 	mockChain.tesseracts = make(map[types.Address]map[types.Hash]*types.Tesseract, 0)
 	mockChain.latestTesseractHash = make(map[types.Address]types.Hash)
+	mockChain.interactions = make(map[types.Address]map[types.Hash]types.Interactions, 0)
 	mockChain.receipts = make(map[types.Address]map[types.Hash]*types.Receipt, 0)
 	mockChain.assets = make(map[types.Hash]*types.AssetData, 0)
 	mockChain.storage = make(map[types.Hash]*types.Tesseract, 0)
@@ -75,24 +76,34 @@ func NewMockStateManager(t *testing.T) *MockStateManager {
 }
 
 // Chain manager mock functions
-func (mc *MockChainManager) GetLatestTesseract(addr types.Address) (*types.Tesseract, error) {
+func (mc *MockChainManager) GetLatestTesseract(addr types.Address, withInteractions bool) (*types.Tesseract, error) {
 	if _, ok := mc.tesseracts[addr]; ok {
-		return mc.tesseracts[addr][mc.latestTesseractHash[addr]], nil
+		tesseract := mc.tesseracts[addr][mc.latestTesseractHash[addr]]
+
+		if withInteractions {
+			tesseract.Ixns = mc.interactions[addr][tesseract.InteractionHash()]
+		}
+
+		return tesseract, nil
 	}
 
 	return nil, types.ErrAccountNotFound
 }
 
-func (mc *MockChainManager) GetTesseract(hash types.Hash) (*types.Tesseract, error) {
+func (mc *MockChainManager) GetTesseract(hash types.Hash, withInteractions bool) (*types.Tesseract, error) {
 	for _, tesseracts := range mc.tesseracts {
 		for tsHash, tesseract := range tesseracts {
 			if tsHash == hash {
+				if withInteractions {
+					tesseract.Ixns = mc.interactions[tesseract.Address()][tesseract.InteractionHash()]
+				}
+
 				return tesseract, nil
 			}
 		}
 	}
 
-	return nil, errors.New("tesseract not found")
+	return nil, types.ErrKeyNotFound
 }
 
 func (mc *MockChainManager) GetReceipt(addr types.Address, ixHash types.Hash) (*types.Receipt, error) {
@@ -111,14 +122,22 @@ func (mc *MockChainManager) GetAssetDataByAssetHash(assetHash []byte) (*types.As
 	return nil, types.ErrFetchingAssetDataInfo
 }
 
-func (mc *MockChainManager) GetTesseractByHeight(address types.Address, height uint64) (*types.Tesseract, error) {
+func (mc *MockChainManager) GetTesseractByHeight(
+	address types.Address,
+	height uint64,
+	withInteractions bool,
+) (*types.Tesseract, error) {
 	for _, tesseract := range mc.storage {
 		if tesseract.Address() == address && tesseract.Height() == height {
+			if withInteractions {
+				tesseract.Ixns = mc.interactions[address][tesseract.InteractionHash()]
+			}
+
 			return tesseract, nil
 		}
 	}
 
-	return nil, errors.New("address height key not found")
+	return nil, types.ErrKeyNotFound
 }
 
 func (mc *MockChainManager) setTesseracts(
@@ -128,6 +147,10 @@ func (mc *MockChainManager) setTesseracts(
 ) {
 	mc.latestTesseractHash[addr] = latestTesseractHash
 	mc.tesseracts[addr] = tesseracts
+}
+
+func (mc *MockChainManager) setInteractions(addr types.Address, interactions map[types.Hash]types.Interactions) {
+	mc.interactions[addr] = interactions
 }
 
 func (mc *MockChainManager) setReceipt(addr types.Address, receipts map[types.Hash]*types.Receipt) {

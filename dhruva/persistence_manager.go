@@ -335,19 +335,19 @@ func (p *PersistenceManager) GetStorage(addr types.Address, hash types.Hash) ([]
 }
 
 func (p *PersistenceManager) GetTesseract(hash types.Hash) ([]byte, error) {
-	key := append([]byte{Tesseract.Byte()}, hash.Bytes()...)
+	key := dbKey(types.NilAddress, Tesseract, hash.Bytes())
 
 	return p.ReadEntry(key)
 }
 
 func (p *PersistenceManager) SetTesseract(hash types.Hash, data []byte) error {
-	key := append([]byte{Tesseract.Byte()}, hash.Bytes()...)
+	key := dbKey(types.NilAddress, Tesseract, hash.Bytes())
 
 	return p.CreateEntry(key, data)
 }
 
 func (p *PersistenceManager) HasTesseract(hash types.Hash) (bool, error) {
-	key := append([]byte{Tesseract.Byte()}, hash.Bytes()...)
+	key := dbKey(types.NilAddress, Tesseract, hash.Bytes())
 
 	return p.db.Has(key)
 }
@@ -358,6 +358,18 @@ func (p *PersistenceManager) GetTesseractHeightEntry(addr types.Address, height 
 
 func (p *PersistenceManager) SetTesseractHeightEntry(addr types.Address, height uint64, hash types.Hash) error {
 	return p.CreateEntry(tesseractHeightKey(addr, height), hash.Bytes())
+}
+
+func (p *PersistenceManager) GetInteractions(hash types.Hash) ([]byte, error) {
+	key := dbKey(types.NilAddress, Interaction, hash.Bytes())
+
+	return p.ReadEntry(key)
+}
+
+func (p *PersistenceManager) SetInteractions(hash types.Hash, data []byte) error {
+	key := dbKey(types.NilAddress, Interaction, hash.Bytes())
+
+	return p.CreateEntry(key, data)
 }
 
 func (p *PersistenceManager) GetMerkleTreeEntry(
