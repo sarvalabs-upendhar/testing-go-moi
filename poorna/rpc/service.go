@@ -49,7 +49,7 @@ func (r *rpcService) GetLatestTesseract(req *http.Request, args *api.TesseractAr
 		return err
 	}
 	// Wrap the TesseractArg in a Response
-	resp.Data = api.NewTesseractArg(tesseract)
+	resp.Data = api.NewTesseractArg(tesseract, args.WithInteractions)
 
 	return nil
 }
@@ -65,7 +65,7 @@ func (r *rpcService) GetTesseractByHash(req *http.Request, args *api.TesseractBy
 		return err
 	}
 
-	resp.Data = api.NewTesseractArg(tesseract)
+	resp.Data = api.NewTesseractArg(tesseract, args.WithInteractions)
 
 	return nil
 }
@@ -85,7 +85,7 @@ func (r *rpcService) GetTesseractByHeight(
 		return err
 	}
 
-	resp.Data = api.NewTesseractArg(tesseract)
+	resp.Data = api.NewTesseractArg(tesseract, args.WithInteractions)
 
 	return nil
 }

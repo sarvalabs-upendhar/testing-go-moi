@@ -168,7 +168,7 @@ func (sm *StateManager) GetLatestStateObject(addr types.Address) (*StateObject, 
 		return object, nil
 	}
 	// get the latest tesseract
-	t, err := sm.GetLatestTesseract(addr)
+	t, err := sm.GetLatestTesseract(addr, false)
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +211,7 @@ func (sm *StateManager) DeleteStateObject(addr types.Address) {
 }
 
 func (sm *StateManager) getLatestTesseractHash(addr types.Address) (types.Hash, error) {
-	if addr == types.NilAddress {
+	if addr.IsNil() {
 		return types.NilHash, types.ErrInvalidAddress
 	}
 
@@ -235,18 +235,12 @@ func (sm *StateManager) getLatestTesseractHash(addr types.Address) (types.Hash, 
 	return accMetaInfo.TesseractHash, nil
 }
 
-func (sm *StateManager) fetchTesseractByHash(hash types.Hash) (*types.Tesseract, error) {
+func (sm *StateManager) fetchTesseractByHash(hash types.Hash, withInteractions bool) (*types.Tesseract, error) {
 	object, isCached := sm.cache.Get(hash)
 	if !isCached {
-		buf, err := sm.db.GetTesseract(hash)
+		ts, err := sm.FetchTesseractFromDB(hash, withInteractions)
 		if err != nil {
 			return nil, err
-		}
-
-		ts := new(types.Tesseract)
-
-		if err = polo.Depolorize(ts, buf); err != nil {
-			return nil, errors.Wrap(err, "tesseract depolarization failed")
 		}
 
 		sm.cache.Add(hash, ts)
@@ -262,7 +256,7 @@ func (sm *StateManager) fetchTesseractByHash(hash types.Hash) (*types.Tesseract,
 	return ts, nil
 }
 
-func (sm *StateManager) GetLatestTesseract(addr types.Address) (*types.Tesseract, error) {
+func (sm *StateManager) GetLatestTesseract(addr types.Address, withInteractions bool) (*types.Tesseract, error) {
 	sm.logger.Debug("Fetching  latest tesseract", addr.Hex())
 
 	tesseractHash, err := sm.getLatestTesseractHash(addr)
@@ -270,7 +264,44 @@ func (sm *StateManager) GetLatestTesseract(addr types.Address) (*types.Tesseract
 		return nil, errors.Wrap(err, "latest tesseract hash fetch failed")
 	}
 
-	return sm.fetchTesseractByHash(tesseractHash)
+	return sm.fetchTesseractByHash(tesseractHash, withInteractions)
+}
+
+func (sm *StateManager) FetchTesseractFromDB(hash types.Hash, withInteractions bool) (*types.Tesseract, error) {
+	var interactions types.Interactions
+	// Fetch Tesseract from DB
+	buf, err := sm.db.GetTesseract(hash)
+	if err != nil {
+		return nil, err
+	}
+
+	// canonicalTesseract is a clone of the tesseract. The only difference is that it won't have the interactions field.
+	canonicalTesseract := new(types.CanonicalTesseract)
+
+	if err = polo.Depolorize(canonicalTesseract, buf); err != nil {
+		return nil, errors.Wrap(err, "failed to depolarize tesseract")
+	}
+
+	if withInteractions {
+		// Fetch interactions from DB
+		buf, err = sm.db.GetInteractions(canonicalTesseract.Body.InteractionHash)
+		if err != nil {
+			return nil, errors.Wrap(err, types.ErrFetchingInteractions.Error())
+		}
+
+		if err = polo.Depolorize(interactions, buf); err != nil {
+			return nil, errors.Wrap(err, "failed to depolarize interactions")
+		}
+	}
+
+	tesseract := &types.Tesseract{
+		Header: canonicalTesseract.Header,
+		Body:   canonicalTesseract.Body,
+		Ixns:   interactions,
+		Seal:   canonicalTesseract.Seal,
+	}
+
+	return tesseract, nil
 }
 
 func (sm *StateManager) Cleanup(address types.Address) {
@@ -420,7 +451,7 @@ func (sm *StateManager) fetchLatestParticipantContext(addr types.Address) (
 }
 
 func (sm *StateManager) GetCommittedContextHash(add types.Address) (types.Hash, error) {
-	tesseract, err := sm.GetLatestTesseract(add)
+	tesseract, err := sm.GetLatestTesseract(add, false)
 	if err != nil {
 		return types.NilHash, err
 	}
@@ -447,20 +478,17 @@ func (sm *StateManager) getContextByHash(addr types.Address, hash types.Hash) ([
 	return behaviourContext.Ids, randomContext.Ids, nil
 }
 
-/*
-GetContextByHash fetches context using hash if both address and hash are given,
-fetches latest context of address if only address given
-*/
+// GetContextByHash fetches context using hash, if hash is nil, it returns the latest context info
 func (sm *StateManager) GetContextByHash(
 	address types.Address,
 	hash types.Hash,
 ) (types.Hash, []id.KramaID, []id.KramaID, error) {
-	if address == types.NilAddress && hash == types.NilHash {
+	if address.IsNil() && hash.IsNil() {
 		return types.NilHash, nil, nil, types.ErrEmptyHashAndAddress
 	}
 
-	if hash == types.NilHash {
-		ts, err := sm.GetLatestTesseract(address)
+	if hash.IsNil() {
+		ts, err := sm.GetLatestTesseract(address, false)
 		if err != nil {
 			return types.NilHash, nil, nil, errors.Wrap(err, "tesseract fetch failed")
 		}
@@ -479,7 +507,7 @@ func (sm *StateManager) GetContextByHash(
 }
 
 func (sm *StateManager) FetchContextLock(ts *types.Tesseract) (*types.ICSNodes, error) {
-	ix := ts.Body.Interactions[0]
+	ix := ts.Interactions()[0]
 	ics := types.NewICSNodes(6)
 
 	for address, info := range ts.Header.ContextLock {
@@ -492,7 +520,7 @@ func (sm *StateManager) FetchContextLock(ts *types.Tesseract) (*types.ICSNodes, 
 			ics.UpdateNodeSet(types.SenderBehaviourSet, behaviourSet)
 			ics.UpdateNodeSet(types.SenderRandomSet, randomSet)
 		} else if address == ix.ToAddress() || address == GenesisAddress {
-			if info.ContextHash == types.NilHash {
+			if info.ContextHash.IsNil() {
 				continue
 			}
 
@@ -527,7 +555,7 @@ func (sm *StateManager) FetchInteractionContext(ctx context.Context, ix *types.I
 		contextHashes = make(map[types.Address]types.Hash)
 	)
 
-	if ix.FromAddress() != types.NilAddress {
+	if !ix.FromAddress().IsNil() {
 		contextHash, behaviourSet, randomSet, err = sm.fetchLatestParticipantContext(ix.FromAddress())
 		if err != nil {
 			return nil, nil, err
@@ -538,7 +566,7 @@ func (sm *StateManager) FetchInteractionContext(ctx context.Context, ix *types.I
 		nodeSet[types.SenderRandomSet] = randomSet
 	}
 
-	if ix.ToAddress() != types.NilAddress {
+	if !ix.ToAddress().IsNil() {
 		isGenesisAccount, err := sm.IsGenesis(ix.ToAddress())
 		if err != nil {
 			return nil, nil, err
@@ -568,7 +596,7 @@ func (sm *StateManager) FetchInteractionContext(ctx context.Context, ix *types.I
 }
 
 func (sm *StateManager) IsGenesis(addr types.Address) (bool, error) {
-	if addr == types.NilAddress {
+	if addr.IsNil() {
 		return false, nil
 	}
 
@@ -586,7 +614,7 @@ func (sm *StateManager) IsGenesis(addr types.Address) (bool, error) {
 }
 
 func (sm *StateManager) GetLatestNonce(addr types.Address) (uint64, error) {
-	if addr == types.NilAddress {
+	if addr.IsNil() {
 		return 0, types.ErrInvalidAddress
 	}
 

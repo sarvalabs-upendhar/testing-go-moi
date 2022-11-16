@@ -96,7 +96,7 @@ func NewSlots(operatorSlots, validatorSlots int) *Slots {
 
 func (s *Slots) areAccountsActive(addrs ...types.Address) bool {
 	for _, v := range addrs {
-		if v != types.NilAddress {
+		if !v.IsNil() {
 			if _, ok := s.activeAccounts[v]; ok {
 				return true
 			}

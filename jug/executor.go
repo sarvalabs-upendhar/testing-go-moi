@@ -134,7 +134,7 @@ func (e *Executor) updateSargaState(ix *types.Interaction) error {
 }
 
 func (e *Executor) fetchStateObjects(ix *types.Interaction) error {
-	if senderAddr := ix.FromAddress(); senderAddr != types.NilAddress && e.objects[senderAddr] == nil {
+	if senderAddr := ix.FromAddress(); !senderAddr.IsNil() && e.objects[senderAddr] == nil {
 		senderObject, err := e.stateManager.GetDirtyObject(senderAddr)
 		if err != nil {
 			return errors.Wrap(types.ErrExecutionFailed, err.Error())
@@ -144,7 +144,7 @@ func (e *Executor) fetchStateObjects(ix *types.Interaction) error {
 		e.snaps[senderAddr] = senderObject.Copy()
 	}
 
-	if receiverAddr := ix.ToAddress(); receiverAddr != types.NilAddress {
+	if receiverAddr := ix.ToAddress(); !receiverAddr.IsNil() {
 		var (
 			receiverObject *guna.StateObject
 			err            error
@@ -274,7 +274,7 @@ func (e *Executor) UpdateContext(ix *types.Interaction, contextInfo types.Contex
 func (e *Executor) CommitObjects(ix *types.Interaction) error {
 	receipt := e.getReceipt(ix.Hash)
 
-	if ix.FromAddress() != types.NilAddress {
+	if !ix.FromAddress().IsNil() {
 		senderObject := e.getObject(ix.FromAddress())
 
 		senderHash, err := senderObject.Commit()
@@ -285,7 +285,7 @@ func (e *Executor) CommitObjects(ix *types.Interaction) error {
 		receipt.StateHashes[ix.FromAddress()] = senderHash
 	}
 
-	if ix.ToAddress() != types.NilAddress {
+	if !ix.ToAddress().IsNil() {
 		receiverObject := e.getObject(ix.ToAddress())
 
 		receiverHash, err := receiverObject.Commit()
@@ -317,13 +317,13 @@ func (e *Executor) CommitObjects(ix *types.Interaction) error {
 
 func (e *Executor) Revert() error {
 	for _, ix := range e.Ixs {
-		if ix.FromAddress() != types.NilAddress {
+		if !ix.FromAddress().IsNil() {
 			if err := e.stateManager.Revert(e.snaps[ix.FromAddress()]); err != nil {
 				return err // This should not happen
 			}
 		}
 
-		if ix.ToAddress() != types.NilAddress {
+		if !ix.ToAddress().IsNil() {
 			if err := e.stateManager.Revert(e.snaps[ix.ToAddress()]); err != nil {
 				return err // This should not happen
 			}

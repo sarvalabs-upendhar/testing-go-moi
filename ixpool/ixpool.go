@@ -181,9 +181,8 @@ func (i *IxPool) createAccountOnce(newAddr types.Address, nonce uint64) *account
 }
 
 func (i *IxPool) ResetWithHeaders(ts *types.Tesseract) {
-	log.Println("Reset interactions", len(ts.Interactions()))
-
 	if ts != nil && len(ts.Interactions()) > 0 {
+		i.logger.Info("Reset interactions", "size", len(ts.Interactions()))
 		i.ResetWithInteractions(ts.Interactions())
 	}
 }
@@ -339,7 +338,7 @@ func (i *IxPool) validateIx(ix *types.Interaction) error {
 		return ErrOversizedData
 	}
 
-	if ix.FromAddress() == types.NilAddress {
+	if ix.FromAddress().IsNil() {
 		return types.ErrInvalidAddress
 	}
 

@@ -38,7 +38,7 @@ func (syncRPC *SYNCRPCService) GetTesseract(
 	req *types.TesseractReq,
 	resp *types.TesseractResponse,
 ) error {
-	tesseract, err := syncRPC.syncer.GetTesseract(req.Hash)
+	tesseract, err := syncRPC.syncer.GetTesseract(req.Hash, req.WithInteractions)
 	if err != nil {
 		return err
 	}

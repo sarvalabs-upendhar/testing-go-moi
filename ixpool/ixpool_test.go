@@ -104,11 +104,9 @@ func TestIxPool_IncrementWaitTime(t *testing.T) {
 
 func TestIxPool_ResetWaitTime_WithTesseract(t *testing.T) {
 	ts := &types.Tesseract{
-		Body: types.TesseractBody{
-			Interactions: types.Interactions{
-				&types.Interaction{
-					// From: []byte{0x00},
-				},
+		Ixns: types.Interactions{
+			&types.Interaction{
+				// From: []byte{0x00},
 			},
 		},
 	}

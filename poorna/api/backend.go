@@ -15,10 +15,10 @@ type IxPool interface {
 }
 
 type ChainManager interface {
-	GetLatestTesseract(addr types.Address) (*types.Tesseract, error)
-	GetTesseract(hash types.Hash) (*types.Tesseract, error)
+	GetLatestTesseract(addr types.Address, withInteractions bool) (*types.Tesseract, error)
+	GetTesseract(hash types.Hash, withInteractions bool) (*types.Tesseract, error)
 	GetReceipt(addr types.Address, ixHash types.Hash) (*types.Receipt, error)
-	GetTesseractByHeight(address types.Address, height uint64) (*types.Tesseract, error)
+	GetTesseractByHeight(address types.Address, height uint64, withInteractions bool) (*types.Tesseract, error)
 	GetAssetDataByAssetHash(assetHash []byte) (*types.AssetData, error)
 }
 
