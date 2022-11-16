@@ -55,7 +55,7 @@ func (p *PublicCoreAPI) GetLatestTesseract(args *TesseractArgs) (*types.Tesserac
 		return nil, types.ErrInvalidAddress
 	}
 
-	return p.chain.GetLatestTesseract(types.HexToAddress(address))
+	return p.chain.GetLatestTesseract(types.HexToAddress(address), args.WithInteractions)
 }
 
 func (p *PublicCoreAPI) GetTesseractByHash(args *TesseractByHashArgs) (*types.Tesseract, error) {
@@ -64,7 +64,7 @@ func (p *PublicCoreAPI) GetTesseractByHash(args *TesseractByHashArgs) (*types.Te
 		return nil, err
 	}
 
-	return p.chain.GetTesseract(types.BytesToHash(types.Hex2Bytes(hash)))
+	return p.chain.GetTesseract(types.BytesToHash(types.Hex2Bytes(hash)), args.WithInteractions)
 }
 
 func (p *PublicCoreAPI) GetTesseractByHeight(args *TesseractByHeightArgs) (*types.Tesseract, error) {
@@ -73,7 +73,7 @@ func (p *PublicCoreAPI) GetTesseractByHeight(args *TesseractByHeightArgs) (*type
 		return nil, err
 	}
 
-	tesseract, err := p.chain.GetTesseractByHeight(types.HexToAddress(from), args.Height)
+	tesseract, err := p.chain.GetTesseractByHeight(types.HexToAddress(from), args.Height, args.WithInteractions)
 	if err != nil {
 		return nil, err
 	}

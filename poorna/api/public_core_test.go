@@ -89,8 +89,16 @@ func TestPublicCoreAPI_GetLatestTesseract(t *testing.T) {
 	chainManager := NewMockChainManager(t)
 	stateManager := new(MockStateManager)
 	_, latestTesseractHash, tesseracts := getTesseracts(t, address)
+	interactions := getInteractions(t, tesseracts)
+	latestTesseract := tesseracts[latestTesseractHash]
+	latestTesseractWithIxns := &types.Tesseract{
+		Header: latestTesseract.Header,
+		Body:   latestTesseract.Body,
+		Ixns:   interactions[latestTesseract.InteractionHash()],
+	}
 
 	chainManager.setTesseracts(address, latestTesseractHash, tesseracts)
+	chainManager.setInteractions(address, interactions)
 
 	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
 
@@ -103,23 +111,42 @@ func TestPublicCoreAPI_GetLatestTesseract(t *testing.T) {
 		{
 			name: "Invalid address",
 			args: TesseractArgs{
-				From: "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+				From:             "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+				WithInteractions: false,
 			},
 			expectedErr: types.ErrInvalidAddress,
 		},
 		{
 			name: "Account without state",
 			args: TesseractArgs{
-				From: tests.RandomAddress(t).String(),
+				From:             tests.RandomAddress(t).String(),
+				WithInteractions: false,
 			},
 			expectedErr: types.ErrAccountNotFound,
 		},
 		{
 			name: "Valid address",
 			args: TesseractArgs{
-				From: address.String(),
+				From:             address.String(),
+				WithInteractions: false,
 			},
-			expected: tesseracts[latestTesseractHash],
+			expected: latestTesseract,
+		},
+		{
+			name: "Tesseract with interactions",
+			args: TesseractArgs{
+				From:             address.String(),
+				WithInteractions: true,
+			},
+			expected: latestTesseractWithIxns,
+		},
+		{
+			name: "Tesseract without interactions",
+			args: TesseractArgs{
+				From:             address.String(),
+				WithInteractions: false,
+			},
+			expected: latestTesseract,
 		},
 	}
 
@@ -324,36 +351,64 @@ func TestPublicCoreAPI_GetTesseractByHash(t *testing.T) {
 	chainManager := NewMockChainManager(t)
 	stateManager := new(MockStateManager)
 	_, latestTesseractHash, tesseracts := getTesseracts(t, address)
+	interactions := getInteractions(t, tesseracts)
+	latestTesseract := tesseracts[latestTesseractHash]
+	latestTesseractWithIxns := &types.Tesseract{
+		Header: latestTesseract.Header,
+		Body:   latestTesseract.Body,
+		Ixns:   interactions[latestTesseract.InteractionHash()],
+	}
 
 	chainManager.setTesseracts(address, latestTesseractHash, tesseracts)
+	chainManager.setInteractions(address, interactions)
 
 	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
 
 	testcases := []struct {
-		name            string
-		args            *TesseractByHashArgs
-		isErrorExpected bool
+		name        string
+		args        *TesseractByHashArgs
+		expected    *types.Tesseract
+		expectedErr error
 	}{
 		{
-			"Valid hash",
-			&TesseractByHashArgs{
-				Hash: tesseracts[latestTesseractHash].Hash().String(),
+			name: "Valid hash",
+			args: &TesseractByHashArgs{
+				Hash:             latestTesseract.Hash().String(),
+				WithInteractions: false,
 			},
-			false,
+			expected: latestTesseract,
 		},
 		{
-			"Valid hash without state",
-			&TesseractByHashArgs{
-				Hash: tests.RandomHash(t).String(),
+			name: "Valid hash without state",
+			args: &TesseractByHashArgs{
+				Hash:             tests.RandomHash(t).String(),
+				WithInteractions: false,
 			},
-			true,
+			expectedErr: types.ErrKeyNotFound,
 		},
 		{
-			"Invalid hash",
-			&TesseractByHashArgs{
-				Hash: "68510188a88ff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+			name: "Invalid hash",
+			args: &TesseractByHashArgs{
+				Hash:             "68510188a88ff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+				WithInteractions: false,
 			},
-			true,
+			expectedErr: types.ErrInvalidHash,
+		},
+		{
+			name: "Tesseract with interactions",
+			args: &TesseractByHashArgs{
+				Hash:             latestTesseractWithIxns.Hash().String(),
+				WithInteractions: true,
+			},
+			expected: latestTesseractWithIxns,
+		},
+		{
+			name: "Tesseract without interactions",
+			args: &TesseractByHashArgs{
+				Hash:             latestTesseract.Hash().String(),
+				WithInteractions: false,
+			},
+			expected: latestTesseract,
 		},
 	}
 
@@ -361,11 +416,12 @@ func TestPublicCoreAPI_GetTesseractByHash(t *testing.T) {
 		t.Run(testcase.name, func(t *testing.T) {
 			fetchedTesseract, err := coreAPI.GetTesseractByHash(testcase.args)
 
-			if testcase.isErrorExpected {
+			if testcase.expectedErr != nil {
 				require.Error(t, err)
+				require.Equal(t, testcase.expectedErr, err)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, fetchedTesseract.Hash().String(), testcase.args.Hash)
+				require.Equal(t, testcase.expected, fetchedTesseract)
 			}
 		})
 	}
@@ -376,54 +432,81 @@ func TestPublicCoreAPI_GetTesseractByHeight(t *testing.T) {
 	chainManager := NewMockChainManager(t)
 	stateManager := NewMockStateManager(t)
 	_, latestTesseractHash, tesseracts := getTesseracts(t, address)
+	interactions := getInteractions(t, tesseracts)
+	latestTesseract := tesseracts[latestTesseractHash]
+	latestTesseractWithIxns := &types.Tesseract{
+		Header: latestTesseract.Header,
+		Body:   latestTesseract.Body,
+		Ixns:   interactions[latestTesseract.InteractionHash()],
+	}
 
 	chainManager.setStorage(latestTesseractHash, tesseracts[latestTesseractHash])
+	chainManager.setInteractions(address, interactions)
 
 	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
 
 	testcases := []struct {
-		name            string
-		args            *TesseractByHeightArgs
-		expected        string
-		isErrorExpected bool
+		name        string
+		args        *TesseractByHeightArgs
+		expected    *types.Tesseract
+		expectedErr error
 	}{
 		{
-			"Valid address",
-			&TesseractByHeightArgs{
-				tesseracts[latestTesseractHash].Address().String(),
-				tesseracts[latestTesseractHash].Height(),
+			name: "Valid address",
+			args: &TesseractByHeightArgs{
+				From:             latestTesseract.Address().String(),
+				Height:           latestTesseract.Height(),
+				WithInteractions: false,
 			},
-			tesseracts[latestTesseractHash].Hash().String(),
-			false,
+			expected: latestTesseract,
 		},
 		{
-			"Valid address without state",
-			&TesseractByHeightArgs{
-				tests.RandomAddress(t).String(),
-				22,
+			name: "Valid address without state",
+			args: &TesseractByHeightArgs{
+				From:             tests.RandomAddress(t).String(),
+				Height:           22,
+				WithInteractions: false,
 			},
-			"",
-			true,
+			expectedErr: types.ErrKeyNotFound,
 		},
 		{
-			"Invalid address",
-			&TesseractByHeightArgs{
-				"68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
-				8,
+			name: "Invalid address",
+			args: &TesseractByHeightArgs{
+				From:             "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+				Height:           8,
+				WithInteractions: false,
 			},
-			"",
-			true,
+			expectedErr: types.ErrInvalidAddress,
+		},
+		{
+			name: "Tesseract with interactions",
+			args: &TesseractByHeightArgs{
+				From:             latestTesseract.Address().String(),
+				Height:           latestTesseract.Height(),
+				WithInteractions: true,
+			},
+			expected: latestTesseractWithIxns,
+		},
+		{
+			name: "Tesseract without interactions",
+			args: &TesseractByHeightArgs{
+				From:             latestTesseract.Address().String(),
+				Height:           latestTesseract.Height(),
+				WithInteractions: false,
+			},
+			expected: latestTesseract,
 		},
 	}
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
 			fetchedTesseract, err := coreAPI.GetTesseractByHeight(testcase.args)
-			if testcase.isErrorExpected {
+			if testcase.expectedErr != nil {
 				require.Error(t, err)
+				require.Equal(t, testcase.expectedErr, err)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, fetchedTesseract.Hash().String(), testcase.expected)
+				require.Equal(t, testcase.expected, fetchedTesseract)
 			}
 		})
 	}
@@ -561,6 +644,16 @@ func newTesseract(t *testing.T, height int, address types.Address) *types.Tesser
 	}
 }
 
+func newInteraction(t *testing.T) types.Interactions {
+	t.Helper()
+
+	return types.Interactions{
+		&types.Interaction{
+			Hash: tests.RandomHash(t),
+		},
+	}
+}
+
 func newReceipt(interactionHash types.Hash) *types.Receipt {
 	return &types.Receipt{
 		IxType: 1,
@@ -578,6 +671,18 @@ func getTesseracts(t *testing.T, address types.Address) (types.Hash, types.Hash,
 	tesseracts[tesseractHash] = tesseract
 
 	return contextHash, tesseractHash, tesseracts
+}
+
+func getInteractions(t *testing.T, tesseracts map[types.Hash]*types.Tesseract) map[types.Hash]types.Interactions {
+	t.Helper()
+
+	interactions := make(map[types.Hash]types.Interactions)
+
+	for _, tesseract := range tesseracts {
+		interactions[tesseract.InteractionHash()] = newInteraction(t)
+	}
+
+	return interactions
 }
 
 func getReceipts(t *testing.T) (types.Hash, map[types.Hash]*types.Receipt) {

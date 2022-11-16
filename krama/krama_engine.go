@@ -1330,7 +1330,6 @@ func generateTesseract(
 			StateHash:       state.GetStateHash(ixHash, addr),
 			ContextHash:     state.GetContextHash(ixHash, addr),
 			ContextDelta:    state.GetContextDelta(),
-			Interactions:    state.Ixs,
 			InteractionHash: state.Ixs.Hash(),
 			ReceiptHash:     state.Receipts.Hash(),
 			ConsensusProof: types.PoXCData{
@@ -1339,6 +1338,7 @@ func generateTesseract(
 				ICSHash:      state.ICSHash,
 			},
 		},
+		Ixns: state.Ixs,
 	}
 	ts.Header.TesseractHash = ts.BodyHash()
 

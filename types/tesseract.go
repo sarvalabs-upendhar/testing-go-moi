@@ -10,6 +10,7 @@ import (
 type Tesseract struct {
 	Header TesseractHeader
 	Body   TesseractBody
+	Ixns   Interactions
 	Seal   []byte
 }
 
@@ -42,7 +43,6 @@ type TesseractBody struct {
 	ContextHash     Hash
 	InteractionHash Hash
 	ReceiptHash     Hash
-	Interactions    Interactions
 	ContextDelta    ContextDelta // Some Problem here
 	ConsensusProof  PoXCData
 }
@@ -60,11 +60,6 @@ type CommitData struct {
 	GridID          *TesseractGridID
 }
 
-type CanonicalTesseract struct {
-	Header TesseractHeader
-	Body   TesseractBody
-}
-
 func (t *Tesseract) GridLength() int32 {
 	return t.Header.Extra.GridID.Parts.Total
 }
@@ -75,13 +70,6 @@ func (t *Tesseract) Operator() string {
 
 func (t *Tesseract) GetICSHash() Hash {
 	return t.Body.ConsensusProof.ICSHash
-}
-
-func (t *Tesseract) Canonical() *CanonicalTesseract {
-	return &CanonicalTesseract{
-		Header: t.Header,
-		Body:   t.Body,
-	}
 }
 
 func (t *Tesseract) BodyHash() Hash {
@@ -108,7 +96,7 @@ func (t *Tesseract) Hash() Hash {
 }
 
 func (t *Tesseract) Interactions() Interactions {
-	return t.Body.Interactions
+	return t.Ixns
 }
 
 func (t *Tesseract) ContextDelta() ContextDelta {
@@ -125,6 +113,10 @@ func (t *Tesseract) ContextHash() Hash {
 
 func (t *Tesseract) PreviousHash() Hash {
 	return t.Header.PrevHash
+}
+
+func (t *Tesseract) InteractionHash() Hash {
+	return t.Body.InteractionHash
 }
 
 func (t *Tesseract) ReceiptHash() Hash {
@@ -148,9 +140,42 @@ func (t *Tesseract) Height() uint64 {
 }
 
 func (t *Tesseract) Bytes() []byte {
-	c := t.Canonical()
+	c := t.CanonicalWithoutSeal()
 
 	return polo.Polorize(c)
+}
+
+type CanonicalTesseract struct {
+	Header TesseractHeader
+	Body   TesseractBody
+	Seal   []byte
+}
+
+// Canonical method returns a copy of the tesseract without interactions
+func (t *Tesseract) Canonical() *CanonicalTesseract {
+	return &CanonicalTesseract{
+		Header: t.Header,
+		Body:   t.Body,
+		Seal:   t.Seal,
+	}
+}
+
+// Bytes method serializes and returns the canonical tesseract in bytes
+func (c *CanonicalTesseract) Bytes() []byte {
+	return polo.Polorize(c)
+}
+
+type CanonicalTesseractWithoutSeal struct {
+	Header TesseractHeader
+	Body   TesseractBody
+}
+
+// CanonicalWithoutSeal method returns a copy of the tesseract without seal and interactions
+func (t *Tesseract) CanonicalWithoutSeal() *CanonicalTesseractWithoutSeal {
+	return &CanonicalTesseractWithoutSeal{
+		Header: t.Header,
+		Body:   t.Body,
+	}
 }
 
 type Item struct {
