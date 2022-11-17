@@ -23,7 +23,6 @@ import (
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/polo/go-polo"
 
-	lrpc "github.com/libp2p/go-libp2p-gorpc"
 	kdht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 
@@ -33,6 +32,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	discovery "github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	"gitlab.com/sarvalabs/moichain/common"
+	moirpc "gitlab.com/sarvalabs/moichain/poorna/moirpc"
 	"gitlab.com/sarvalabs/moichain/types"
 )
 
@@ -49,6 +49,7 @@ type Vault interface {
 type Senatus interface {
 	SenatusHandler(msg *pubsub.Message) error
 	GetNTQ(id id.KramaID) (int32, error)
+	GetAddress(key id.KramaID) (multiAddrs []maddr.Multiaddr, err error)
 }
 
 // TopicSet is a struct that represents a wrapper for  topic handlers which
@@ -93,7 +94,7 @@ type Server struct {
 	// Represents the KIP typemux of the node
 	mux *utils.TypeMux
 
-	rpcServers map[protocol.ID]*lrpc.Server
+	rpcServers map[protocol.ID]*moirpc.Server
 
 	discovery *discovery.RoutingDiscovery
 
@@ -134,7 +135,7 @@ func NewServer(
 		cfg:        config,
 		mux:        mux,
 		Peers:      newPeerSet(),
-		rpcServers: make(map[protocol.ID]*lrpc.Server),
+		rpcServers: make(map[protocol.ID]*moirpc.Server),
 		vault:      vault,
 	}
 
@@ -186,10 +187,11 @@ func NewServer(
 	return kn, nil
 }
 
-func (s *Server) InitNewRPCServer(protocol protocol.ID) *lrpc.Client {
-	s.rpcServers[protocol] = lrpc.NewServer(s.host, protocol)
+func (s *Server) InitNewRPCServer(protocol protocol.ID) *moirpc.Client {
+	s.logger.Debug("starting new moirpc server", "protocol", protocol)
+	s.rpcServers[protocol] = moirpc.NewServer(s.logger, s.host, protocol)
 
-	return lrpc.NewClient(s.host, protocol)
+	return moirpc.NewClient(s.logger, s.host, protocol, s.Senatus)
 }
 
 // setupHost is a method of Server that sets up the libp2p host for the node.

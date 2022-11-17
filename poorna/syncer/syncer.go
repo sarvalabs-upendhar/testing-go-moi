@@ -11,20 +11,22 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/pkg/errors"
+	"gitlab.com/sarvalabs/moichain/guna"
+
 	"gitlab.com/sarvalabs/moichain/utils"
 
-	"github.com/pkg/errors"
 	dhruva "gitlab.com/sarvalabs/moichain/dhruva/db"
-	"gitlab.com/sarvalabs/moichain/guna"
 	"gitlab.com/sarvalabs/moichain/poorna"
 	"gitlab.com/sarvalabs/moichain/poorna/agora"
 	"gitlab.com/sarvalabs/moichain/poorna/agora/session"
+
+	"gitlab.com/sarvalabs/moichain/poorna/moirpc"
 
 	"github.com/hashicorp/go-hclog"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/polo/go-polo"
 
-	lrpc "github.com/libp2p/go-libp2p-gorpc"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
@@ -40,6 +42,8 @@ const (
 	slotSize   int   = 40
 	bucketSize int32 = 1024
 )
+
+const syncerMoirpcStreamTTL = time.Duration(10) * time.Minute
 
 type Response struct {
 	Status string      `json:"status,omitempty"`
@@ -107,7 +111,7 @@ type Syncer struct {
 	statusSub        *utils.Subscription
 	newpeerSub       *utils.Subscription
 	mode             string
-	rpcClient        *lrpc.Client
+	rpcClient        *moirpc.Client
 	lattice          lattice
 	logger           hclog.Logger
 	ReputationEngine *guna.ReputationEngine
@@ -224,8 +228,16 @@ func (s *Syncer) StreamHandler(stream network.Stream) {
 		msg.BucketSizes[k] = v.Bytes()
 	}
 
+	kipPeer := s.node.Peers.Peer(remotePeer)
+	peerKramaID := kipPeer.GetKramaID()
 	resp := new(Response)
-	if err := s.rpcClient.Call(remotePeer, "SYNCRPC", "StatusUpdate", msg, resp); err != nil {
+
+	if err := s.rpcClient.MoiCall(peerKramaID,
+		"SYNCRPC",
+		"StatusUpdate",
+		msg,
+		resp,
+		syncerMoirpcStreamTTL); err != nil {
 		log.Println("RPC Call panic", err)
 
 		return
@@ -754,7 +766,14 @@ func (s *Syncer) handleNewPeer() {
 			}
 
 			resp := new(Response)
-			if err := s.rpcClient.Call(p.ID, "SYNCRPC", "StatusUpdate", msg, resp); err != nil {
+			kipPeer := s.node.Peers.Peer(p.ID)
+			peerKramaID := kipPeer.GetKramaID()
+
+			if err := s.rpcClient.MoiCall(peerKramaID,
+				"SYNCRPC",
+				"StatusUpdate",
+				msg, resp,
+				time.Duration(10)*time.Minute); err != nil {
 				log.Println("RPC Call panic", err)
 			}
 		}
@@ -1009,7 +1028,16 @@ func (s *Syncer) getTesseract(
 	req.WithInteractions = withInteractions
 
 	resp := new(types.TesseractResponse)
-	if err := s.rpcClient.Call(bestPeer.id, "SYNCRPC", "GetTesseract", req, resp); err != nil {
+	kipPeer := s.node.Peers.Peer(bestPeer.id)
+	kramaPeerID := kipPeer.GetKramaID()
+
+	if err := s.rpcClient.MoiCall(
+		kramaPeerID,
+		"SYNCRPC",
+		"GetTesseract",
+		req,
+		resp,
+		time.Duration(10)*time.Minute); err != nil {
 		return nil, nil, err
 	}
 

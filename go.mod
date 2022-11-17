@@ -9,6 +9,7 @@ require (
 )
 
 require (
+	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce
 	github.com/cskr/pubsub v1.0.2
 	github.com/deckarep/golang-set v1.8.0
 	github.com/decred/dcrd/crypto/blake256 v1.0.0
@@ -20,7 +21,6 @@ require (
 	github.com/gorilla/rpc v1.2.0
 	github.com/hashicorp/go-hclog v1.3.1
 	github.com/libp2p/go-libp2p v0.22.0
-	github.com/libp2p/go-libp2p-core v0.20.0
 	github.com/libp2p/go-libp2p-kad-dht v0.18.0
 	github.com/libp2p/go-libp2p-pubsub v0.8.1
 	github.com/moby/locker v1.0.1
@@ -35,6 +35,7 @@ require (
 	github.com/stretchr/testify v1.8.1
 	github.com/supranational/blst v0.3.7
 	github.com/tyler-smith/go-bip39 v1.1.0
+	github.com/ugorji/go/codec v1.2.6
 	gitlab.com/sarvalabs/btcd-musig v0.0.1
 	gitlab.com/sarvalabs/polo/go-polo v0.2.0
 	go.opentelemetry.io/otel v1.11.0
@@ -98,6 +99,7 @@ require (
 	github.com/libp2p/go-cidranger v1.1.0 // indirect
 	github.com/libp2p/go-flow-metrics v0.1.0 // indirect
 	github.com/libp2p/go-libp2p-asn-util v0.2.0 // indirect
+	github.com/libp2p/go-libp2p-core v0.20.0 // indirect
 	github.com/libp2p/go-libp2p-kbucket v0.4.7 // indirect
 	github.com/libp2p/go-libp2p-record v0.2.0 // indirect
 	github.com/libp2p/go-msgio v0.2.0 // indirect
@@ -143,7 +145,6 @@ require (
 	github.com/spacemonkeygo/spacelog v0.0.0-20180420211403-2296661a0572 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/ugorji/go/codec v1.2.6 // indirect
 	github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1 // indirect
 	github.com/whyrusleeping/timecache v0.0.0-20160911033111-cfcb2f1abfee // indirect
 	go.opencensus.io v0.23.0 // indirect
