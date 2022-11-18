@@ -1,0 +1,169 @@
+package types
+
+import (
+	"encoding/hex"
+	"math/big"
+
+	"golang.org/x/crypto/blake2b"
+
+	"gitlab.com/sarvalabs/moichain/types"
+
+	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	"gitlab.com/sarvalabs/polo/go-polo"
+)
+
+const (
+	MaxBehaviourContextSize = 8
+	MaxRandomContextSize    = 7
+)
+
+type AssetMap map[types.AssetID]*big.Int
+
+type BalanceObject struct {
+	Bal      AssetMap
+	LogicBal map[types.Hash]AssetMap
+	PrvHash  types.Hash
+}
+
+func (b *BalanceObject) TDU() (AssetMap, types.Hash) {
+	return b.Bal, b.PrvHash
+}
+
+func (b *BalanceObject) Copy() *BalanceObject {
+	newObject := new(BalanceObject)
+	newObject.Bal = make(AssetMap)
+
+	for k, v := range b.Bal {
+		newObject.Bal[k] = v
+	}
+
+	return newObject
+}
+
+type ApprovalObject struct {
+	Approvals map[types.Address]AssetMap
+	PrvHash   types.Hash
+}
+
+func (a *ApprovalObject) Copy() *ApprovalObject {
+	newObject := new(ApprovalObject)
+	newObject.PrvHash = a.PrvHash
+	newObject.Approvals = make(map[types.Address]AssetMap)
+
+	for k, v := range a.Approvals {
+		newObject.Approvals[k] = v
+	}
+
+	return newObject
+}
+
+type AssetData struct {
+	LogicID types.LogicID
+	Symbol  string
+	Owner   types.Address
+	Extra   []byte
+}
+
+func GetAssetID(
+	addr types.Address,
+	dimension uint8,
+	isFungible bool,
+	isMintable bool,
+	symbol string,
+	totalSupply int64,
+	logicID types.LogicID,
+) (types.AssetID, types.Hash, []byte) {
+	var (
+		buf  []byte
+		info uint8 = 0x00
+	)
+
+	assetData := AssetData{
+		Owner:   addr,
+		Symbol:  symbol,
+		LogicID: logicID,
+	}
+
+	if isMintable {
+		info |= 0x01
+	} else {
+		assetData.Extra = big.NewInt(totalSupply).Bytes()
+	}
+
+	if isFungible {
+		info |= 0x80
+	}
+
+	buf = append(buf, dimension)
+	buf = append(buf, info)
+
+	data := polo.Polorize(assetData)
+	assetCID := types.GetHash(data)
+
+	buf = append(buf, assetCID.Bytes()...)
+	aID := types.AssetID(hex.EncodeToString(buf))
+
+	return aID, assetCID, data
+}
+
+type MetaContextObject struct {
+	BehaviouralContext types.Hash
+	RandomContext      types.Hash
+	StorageContext     types.Hash
+	ComputeContext     types.Hash
+	DefaultMTQ         int32
+	PreviousHash       types.Hash
+}
+
+func (m *MetaContextObject) Copy() *MetaContextObject {
+	newObject := new(MetaContextObject)
+	newObject.BehaviouralContext = m.BehaviouralContext
+	newObject.RandomContext = m.RandomContext
+	newObject.ComputeContext = m.ComputeContext
+	newObject.DefaultMTQ = m.DefaultMTQ
+
+	return newObject
+}
+
+type ContextObject struct {
+	Ids []id.KramaID
+}
+
+func (c *ContextObject) AddNodes(nodes []id.KramaID, maxSize int) {
+	c.Ids = append(c.Ids, nodes...)
+	if diff := len(c.Ids) - maxSize; diff > 0 {
+		c.Ids = c.Ids[diff:]
+	}
+}
+
+func (c *ContextObject) Copy() *ContextObject {
+	newSlice := make([]id.KramaID, len(c.Ids))
+
+	copy(newSlice, c.Ids)
+
+	newObject := new(ContextObject)
+	newObject.Ids = newSlice
+
+	return newObject
+}
+
+func (c *ContextObject) Hash() types.Hash {
+	return types.PoloHash(c)
+}
+
+type LogicData struct {
+	Code       []byte
+	Upgradable bool
+}
+
+func GetLogicID(code []byte, isUpgradable bool) (types.LogicID, *LogicData) {
+	ld := &LogicData{
+		Code:       code,
+		Upgradable: isUpgradable,
+	}
+
+	x := blake2b.Sum256(polo.Polorize(ld))
+	logicID := types.BytesToHash(x[:])
+
+	return types.LogicID(logicID.String()), ld
+}

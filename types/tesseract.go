@@ -3,16 +3,17 @@ package types
 import (
 	"sync"
 
+	"github.com/mr-tron/base58"
+
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/polo/go-polo"
 )
 
-type Tesseract struct {
-	Header TesseractHeader
-	Body   TesseractBody
-	Ixns   Interactions
-	Seal   []byte
-}
+const (
+	Sender ParticipantRole = iota
+	Receiver
+	Genesis
+)
 
 type ContextDelta map[Address]*DeltaGroup
 
@@ -21,6 +22,19 @@ type DeltaGroup struct {
 	BehaviouralNodes []id.KramaID
 	RandomNodes      []id.KramaID
 	ReplacedNodes    []id.KramaID
+}
+
+type ContextLockInfo struct {
+	ContextHash   Hash
+	Height        uint64
+	TesseractHash Hash
+}
+
+type Tesseract struct {
+	Header TesseractHeader
+	Body   TesseractBody
+	Ixns   Interactions
+	Seal   []byte
 }
 
 type TesseractHeader struct {
@@ -52,6 +66,7 @@ type PoXCData struct {
 	IdentityHash Hash
 	ICSHash      Hash
 }
+
 type CommitData struct {
 	Round           int32
 	CommitSignature []byte
@@ -145,10 +160,12 @@ func (t *Tesseract) Bytes() []byte {
 	return polo.Polorize(c)
 }
 
-type CanonicalTesseract struct {
-	Header TesseractHeader
-	Body   TesseractBody
-	Seal   []byte
+// CanonicalWithoutSeal method returns a copy of the tesseract without seal and interactions
+func (t *Tesseract) CanonicalWithoutSeal() *CanonicalTesseractWithoutSeal {
+	return &CanonicalTesseractWithoutSeal{
+		Header: t.Header,
+		Body:   t.Body,
+	}
 }
 
 // Canonical method returns a copy of the tesseract without interactions
@@ -160,6 +177,12 @@ func (t *Tesseract) Canonical() *CanonicalTesseract {
 	}
 }
 
+type CanonicalTesseract struct {
+	Header TesseractHeader
+	Body   TesseractBody
+	Seal   []byte
+}
+
 // Bytes method serializes and returns the canonical tesseract in bytes
 func (c *CanonicalTesseract) Bytes() []byte {
 	return polo.Polorize(c)
@@ -168,14 +191,6 @@ func (c *CanonicalTesseract) Bytes() []byte {
 type CanonicalTesseractWithoutSeal struct {
 	Header TesseractHeader
 	Body   TesseractBody
-}
-
-// CanonicalWithoutSeal method returns a copy of the tesseract without seal and interactions
-func (t *Tesseract) CanonicalWithoutSeal() *CanonicalTesseractWithoutSeal {
-	return &CanonicalTesseractWithoutSeal{
-		Header: t.Header,
-		Body:   t.Body,
-	}
 }
 
 type Item struct {
@@ -214,4 +229,43 @@ func (s *TesseractStack) Len() int32 {
 	defer s.lock.Unlock()
 
 	return int32(len(s.Items))
+}
+
+type TesseractParts struct {
+	Total   int32
+	Hashes  []Hash
+	Heights []uint64
+}
+
+type TesseractGridID struct {
+	Hash  Hash
+	Parts *TesseractParts
+}
+
+func (tid *TesseractGridID) IsNil() bool {
+	return tid.Hash.IsNil() && len(tid.Parts.Hashes) == 0
+}
+
+func (tid *TesseractGridID) String() string {
+	if !tid.IsNil() {
+		return tid.Hash.Hex()
+	}
+
+	return "Nil"
+}
+
+// ClusterID ...
+type ClusterID string
+
+func (c ClusterID) String() string {
+	return string(c)
+}
+
+func (c ClusterID) Hash() Hash {
+	rawHash, err := base58.Decode(c.String())
+	if err != nil {
+		return NilHash
+	}
+
+	return BytesToHash(rawHash)
 }

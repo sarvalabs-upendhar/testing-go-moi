@@ -9,6 +9,10 @@ import (
 	"sync"
 	"time"
 
+	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+
+	gtypes "gitlab.com/sarvalabs/moichain/guna/types"
+
 	"gitlab.com/sarvalabs/moichain/ixpool"
 
 	"gitlab.com/sarvalabs/moichain/utils"
@@ -63,7 +67,7 @@ type transport interface {
 	InitClusterCommunication(ctx context.Context, slot *ktypes.Slot) error
 	RegisterRPCService(serviceID protocol.ID, serviceName string, service interface{}) error
 	Call(kramaID id.KramaID, svcName, svcMethod string, args, response interface{}) error
-	BroadcastTesseract(msg *types.TesseractMessage) error
+	BroadcastTesseract(msg *ptypes.TesseractMessage) error
 }
 
 type state interface {
@@ -72,7 +76,7 @@ type state interface {
 		ix *types.Interaction,
 	) (
 		map[types.Address]types.Hash,
-		[]*types.NodeSet,
+		[]*ktypes.NodeSet,
 		error,
 	)
 	GetPublicKeys(ids ...id.KramaID) (keys [][]byte, err error)
@@ -106,7 +110,7 @@ type Response struct {
 type Request struct {
 	reqType      int
 	ixs          types.Interactions
-	msg          *types.ICSRequest
+	msg          *ptypes.ICSRequest
 	responseChan chan Response
 }
 
@@ -253,19 +257,19 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID types.Cluster
 	// Send ClusterInfo Request to context nodes of both participants
 	go k.sendICSRequest(
 		ctx,
-		types.SenderBehaviourSet,
+		ktypes.SenderBehaviourSet,
 		finalWaitGroup,
 		clusterID,
-		nodeSets[types.SenderBehaviourSet],
+		nodeSets[ktypes.SenderBehaviourSet],
 		reqMsg,
 		randomNodesReceiverChan,
 	)
 	go k.sendICSRequest(
 		ctx,
-		types.SenderRandomSet,
+		ktypes.SenderRandomSet,
 		finalWaitGroup,
 		clusterID,
-		nodeSets[types.SenderRandomSet],
+		nodeSets[ktypes.SenderRandomSet],
 		reqMsg,
 		randomNodesReceiverChan,
 	)
@@ -275,20 +279,20 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID types.Cluster
 
 		go k.sendICSRequest(
 			ctx,
-			types.ReceiverBehaviourSet,
+			ktypes.ReceiverBehaviourSet,
 			finalWaitGroup,
 			clusterID,
-			nodeSets[types.ReceiverBehaviourSet],
+			nodeSets[ktypes.ReceiverBehaviourSet],
 			reqMsg,
 			randomNodesReceiverChan,
 		)
 
 		go k.sendICSRequest(
 			ctx,
-			types.ReceiverRandomSet,
+			ktypes.ReceiverRandomSet,
 			finalWaitGroup,
 			clusterID,
-			nodeSets[types.ReceiverRandomSet],
+			nodeSets[ktypes.ReceiverRandomSet],
 			reqMsg,
 			randomNodesReceiverChan,
 		)
@@ -365,7 +369,7 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID types.Cluster
 
 	go k.sendICSRequestWithBound(
 		ctx,
-		types.RandomSet,
+		ktypes.RandomSet,
 		operatorRandomNodesCount,
 		finalWaitGroup,
 		clusterID,
@@ -376,7 +380,7 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID types.Cluster
 
 	go k.sendICSRequestWithBound(
 		ctx,
-		types.ObserverSet,
+		ktypes.ObserverSet,
 		requiredObserverNodes,
 		finalWaitGroup,
 		clusterID,
@@ -493,7 +497,7 @@ func (k *Engine) joinCluster(ctx context.Context, req Request) error {
 
 	k.metrics.captureAvailableValidatorSlots(-1)
 
-	clusterState.CurrentRole = types.IcsSetType(req.msg.ContextType)
+	clusterState.CurrentRole = ktypes.IcsSetType(req.msg.ContextType)
 
 	contextHashes, nodeSets, err := k.state.FetchInteractionContext(ctx, req.ixs[0])
 	if err != nil {
@@ -642,7 +646,7 @@ func (k *Engine) handleReq(req Request) {
 
 	clusterInfo := slot.CLusterInfo()
 
-	if clusterInfo.CurrentRole == types.ObserverSet {
+	if clusterInfo.CurrentRole == ktypes.ObserverSet {
 		log.Println("Observer HashSet", clusterInfo.ID)
 
 		wg := observer.NewWatchDog(ctx, slot)
@@ -758,13 +762,13 @@ func (k *Engine) fetchIxAccounts(ctx context.Context, ix *types.Interaction) (kt
 
 func (k *Engine) sendICSRequestWithBound(
 	ctx context.Context,
-	setType types.IcsSetType,
+	setType ktypes.IcsSetType,
 	requiredCount int,
 	finalWaitGroup *sync.WaitGroup,
 	cID types.ClusterID,
 	nodes []id.KramaID,
 	keys [][]byte,
-	msg types.ICSRequest,
+	msg ptypes.ICSRequest,
 ) {
 	_, span := tracing.Span(ctx, "Krama.KramaEngine", "sendICSRequestWithBound")
 	defer span.End()
@@ -818,7 +822,7 @@ func (k *Engine) sendICSRequestWithBound(
 		}
 
 		go func(index int, kramaID id.KramaID) {
-			icsResponse := new(types.ICSResponse)
+			icsResponse := new(ptypes.ICSResponse)
 			requestTS := time.Now()
 
 			if err := k.transport.Call(
@@ -851,7 +855,7 @@ func (k *Engine) sendICSRequestWithBound(
 
 	wg.Wait()
 
-	idSet := types.NewNodeSet(nodes, keys)
+	idSet := ktypes.NewNodeSet(nodes, keys)
 
 	for index, isAvailable := range nodeResponses {
 		if isAvailable {
@@ -869,11 +873,11 @@ func (k *Engine) sendICSRequestWithBound(
 
 func (k *Engine) sendICSRequest(
 	ctx context.Context,
-	setType types.IcsSetType,
+	setType ktypes.IcsSetType,
 	finalWaitGroup *sync.WaitGroup,
 	cID types.ClusterID,
-	nodesSet *types.NodeSet,
-	msg types.ICSRequest,
+	nodesSet *ktypes.NodeSet,
+	msg ptypes.ICSRequest,
 	randomNodes chan []id.KramaID,
 ) {
 	_, span := tracing.Span(ctx, "Krama.KramaEngine", "sendICSRequest")
@@ -926,7 +930,7 @@ func (k *Engine) sendICSRequest(
 		}
 
 		go func(index int, kramaID id.KramaID) {
-			icsResponse := new(types.ICSResponse)
+			icsResponse := new(ptypes.ICSResponse)
 			requestTS := time.Now()
 
 			if err := k.transport.Call(
@@ -973,8 +977,8 @@ func (k *Engine) getICSReqMsg(
 	lockInfo map[types.Address]types.ContextLockInfo,
 	clusterID types.ClusterID,
 	timestamp time.Time,
-) types.ICSRequest {
-	icsReqMsg := new(types.ICSRequest)
+) ptypes.ICSRequest {
+	icsReqMsg := new(ptypes.ICSRequest)
 	Ixs := types.Interactions{ix}
 	icsReqMsg.IxData = polo.Polorize(Ixs)
 	icsReqMsg.ClusterID = string(clusterID)
@@ -1046,9 +1050,9 @@ func (k *Engine) sendICSSuccess(id types.ClusterID) error {
 
 	msg := clusterState.CreateICSSuccessMsg()
 
-	icsMsg := new(types.ICSMSG)
+	icsMsg := new(ktypes.ICSMSG)
 	icsMsg.Msg = polo.Polorize(msg)
-	icsMsg.MsgType = types.ICSSUCCESS
+	icsMsg.MsgType = ptypes.ICSSUCCESS
 	icsMsg.ClusterID = string(id)
 
 	k.logger.Trace("Sending clusterState success message", "cluster id", id)
@@ -1115,7 +1119,7 @@ func (k *Engine) updateContextDelta(clusterID types.ClusterID) error {
 			senderDeltaGroup := new(types.DeltaGroup)
 			senderDeltaGroup.Role = types.Sender
 			senderBehaviourDelta, replacedNodes := clusterState.GetBehaviouralContextDelta(
-				types.SenderBehaviourSet,
+				ktypes.SenderBehaviourSet,
 			)
 
 			if senderBehaviourDelta != "" {
@@ -1127,7 +1131,7 @@ func (k *Engine) updateContextDelta(clusterID types.ClusterID) error {
 			}
 
 			senderRandomDelta, replacedRandomDelta := clusterState.GetRandomContextDelta(
-				types.SenderRandomSet,
+				ktypes.SenderRandomSet,
 				1,
 				clusterState.Operator,
 			)
@@ -1164,7 +1168,7 @@ func (k *Engine) updateContextDelta(clusterID types.ClusterID) error {
 				genesisDeltaGroup := new(types.DeltaGroup)
 				genesisDeltaGroup.Role = types.Genesis
 				genesisBehaviourDelta, replacedNodes := clusterState.GetBehaviouralContextDelta(
-					types.ReceiverBehaviourSet,
+					ktypes.ReceiverBehaviourSet,
 				)
 
 				if genesisBehaviourDelta != "" {
@@ -1176,7 +1180,7 @@ func (k *Engine) updateContextDelta(clusterID types.ClusterID) error {
 				}
 
 				genesisRandomDelta, replacedRandomDelta := clusterState.GetRandomContextDelta(
-					types.ReceiverRandomSet,
+					ktypes.ReceiverRandomSet,
 					1,
 				)
 				genesisDeltaGroup.RandomNodes = append(genesisDeltaGroup.RandomNodes, genesisRandomDelta...)
@@ -1185,7 +1189,7 @@ func (k *Engine) updateContextDelta(clusterID types.ClusterID) error {
 				deltaMap[guna.GenesisAddress] = genesisDeltaGroup
 			} else if clusterState.AccountInfos[receiverAddr].Type == 2 {
 				receiverBehaviourDelta, replacedNodes := clusterState.GetBehaviouralContextDelta(
-					types.ReceiverBehaviourSet,
+					ktypes.ReceiverBehaviourSet,
 				)
 				if receiverBehaviourDelta != "" {
 					receiverDeltaGroup.BehaviouralNodes = append(receiverDeltaGroup.BehaviouralNodes, receiverBehaviourDelta)
@@ -1194,7 +1198,7 @@ func (k *Engine) updateContextDelta(clusterID types.ClusterID) error {
 					receiverDeltaGroup.ReplacedNodes = append(receiverDeltaGroup.ReplacedNodes, replacedNodes)
 				}
 				receiverRandomDelta, replacedRandomDelta := clusterState.GetRandomContextDelta(
-					types.ReceiverRandomSet,
+					ktypes.ReceiverRandomSet,
 					1,
 					clusterState.Operator,
 				)
@@ -1218,7 +1222,7 @@ func (k *Engine) GetNodes(
 	requiredBehaviouralNodes int,
 ) (behaviouralNodes []id.KramaID, randomNodes []id.KramaID, err error) {
 	// TODO: Need to improve this function
-	set := clusterInfo.ICS.Nodes[types.RandomSet]
+	set := clusterInfo.ICS.Nodes[ktypes.RandomSet]
 	count := 0
 
 	for index, kramaID := range set.Ids {
@@ -1256,7 +1260,7 @@ func (k *Engine) finalizedTesseractHandler(tesseracts []*types.Tesseract) error 
 	}
 
 	for _, ts := range tesseracts {
-		msg := &types.TesseractMessage{
+		msg := &ptypes.TesseractMessage{
 			Tesseract: ts,
 			Sender:    k.operator,
 			Delta: map[types.Hash][]byte{
@@ -1428,8 +1432,8 @@ func (k *Engine) IsIxValid(ix *types.Interaction) (bool, error) {
 			return false, err
 		}
 
-		logicID, _ := types.GetLogicID(assetData.Code, false)
-		assetID, _, _ := types.GetAssetID(
+		logicID, _ := gtypes.GetLogicID(assetData.Code, false)
+		assetID, _, _ := gtypes.GetAssetID(
 			ix.FromAddress(),
 			uint8(assetData.Dimension),
 			assetData.IsFungible,

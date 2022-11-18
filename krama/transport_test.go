@@ -16,7 +16,7 @@ import (
 
 // testcase args
 type InitClusterCommArgs struct {
-	nodeSet  []*types.NodeSet
+	nodeSet  []*ktypes.NodeSet
 	slotType ktypes.SlotType
 }
 
@@ -60,7 +60,7 @@ func CreateInteractions(t *testing.T, sender types.Address) *types.Interactions 
 	return &ixns
 }
 
-func CreateSlot(t *testing.T, nodeset []*types.NodeSet, slotType ktypes.SlotType) *ktypes.Slot {
+func CreateSlot(t *testing.T, nodeset []*ktypes.NodeSet, slotType ktypes.SlotType) *ktypes.Slot {
 	t.Helper()
 
 	kramaIDs := tests.GetTestKramaIDs(t, 1)
@@ -97,7 +97,7 @@ func Test_InitClusterCommunication_Connect(t *testing.T) {
 				MinimumConnectionCount,
 			),
 			args: InitClusterCommArgs{
-				nodeSet: []*types.NodeSet{
+				nodeSet: []*ktypes.NodeSet{
 					{
 						Ids: tests.GetTestKramaIDs(t, 3),
 					},
@@ -117,7 +117,7 @@ func Test_InitClusterCommunication_Connect(t *testing.T) {
 				MinimumConnectionCount-2,
 			),
 			args: InitClusterCommArgs{
-				nodeSet: []*types.NodeSet{
+				nodeSet: []*ktypes.NodeSet{
 					{
 						Ids: tests.GetTestKramaIDs(t, 3),
 					},
@@ -136,7 +136,7 @@ func Test_InitClusterCommunication_Connect(t *testing.T) {
 		{
 			name: "Operator shouldn't connect with any ics node",
 			args: InitClusterCommArgs{
-				nodeSet: []*types.NodeSet{
+				nodeSet: []*ktypes.NodeSet{
 					{
 						Ids: tests.GetTestKramaIDs(t, 5),
 					},
@@ -181,7 +181,7 @@ func Test_InitClusterCommunication_Disconnect(t *testing.T) {
 		{
 			name: "Validator should disconnect from all the ics nodes",
 			args: InitClusterCommArgs{
-				nodeSet: []*types.NodeSet{
+				nodeSet: []*ktypes.NodeSet{
 					{
 						Ids: tests.GetTestKramaIDs(t, 3),
 					},

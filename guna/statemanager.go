@@ -11,10 +11,15 @@ import (
 	"net/http"
 	"sync"
 
+	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+
+	gtypes "gitlab.com/sarvalabs/moichain/guna/types"
+
 	"github.com/hashicorp/go-hclog"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
+	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/moichain/telemetry/tracing"
 	"gitlab.com/sarvalabs/polo/go-polo"
@@ -42,11 +47,11 @@ type Senatus interface {
 	GetNTQ(id id.KramaID) (int32, error)
 	UpdatePublicKey(key id.KramaID, pk []byte) error
 	GetPublicKey(ctx context.Context, id id.KramaID) ([]byte, error)
-	AddEntries(msg types.SyncReputationInfo) error
+	AddEntries(msg ptypes.SyncReputationInfo) error
 	GetInclusivity(id id.KramaID) (int64, error)
-	GetAllEntries() (chan *types.SyncReputationInfo, error)
+	GetAllEntries() (chan *ptypes.SyncReputationInfo, error)
 	SenatusHandler(msg *pubsub.Message) error
-	HandleHelloMessages(msgs []*types.HelloMsg) (int, error)
+	HandleHelloMessages(msgs []*ptypes.HelloMsg) (int, error)
 	Start(id id.KramaID, ntq int32, publicKey []byte, address []multiaddr.Multiaddr) error
 }
 
@@ -325,10 +330,10 @@ func (sm *StateManager) Revert(snap *StateObject) error {
 	return nil
 }
 
-func (sm *StateManager) getContextObject(addr types.Address, hash types.Hash) (*types.ContextObject, error) {
+func (sm *StateManager) getContextObject(addr types.Address, hash types.Hash) (*gtypes.ContextObject, error) {
 	contextData, isAvailable := sm.cache.Get(hash)
 	if isAvailable {
-		contextObject, ok := contextData.(*types.ContextObject)
+		contextObject, ok := contextData.(*gtypes.ContextObject)
 		if !ok {
 			return nil, types.ErrInterfaceConversion
 		}
@@ -341,7 +346,7 @@ func (sm *StateManager) getContextObject(addr types.Address, hash types.Hash) (*
 		return nil, types.ErrContextStateNotFound
 	}
 
-	object := new(types.ContextObject)
+	object := new(gtypes.ContextObject)
 
 	if err := polo.Depolorize(object, rawData); err != nil {
 		return nil, errors.Wrap(err, "contextObject deserialization failed")
@@ -352,10 +357,10 @@ func (sm *StateManager) getContextObject(addr types.Address, hash types.Hash) (*
 	return object, nil
 }
 
-func (sm *StateManager) getMetaContextObject(addr types.Address, hash types.Hash) (*types.MetaContextObject, error) {
+func (sm *StateManager) getMetaContextObject(addr types.Address, hash types.Hash) (*gtypes.MetaContextObject, error) {
 	metaData, isAvailable := sm.cache.Get(hash)
 	if isAvailable {
-		metaContextObject, ok := metaData.(*types.MetaContextObject)
+		metaContextObject, ok := metaData.(*gtypes.MetaContextObject)
 		if !ok {
 			return nil, types.ErrInterfaceConversion
 		}
@@ -368,7 +373,7 @@ func (sm *StateManager) getMetaContextObject(addr types.Address, hash types.Hash
 		return nil, types.ErrContextStateNotFound
 	}
 
-	object := new(types.MetaContextObject)
+	object := new(gtypes.MetaContextObject)
 
 	if err = polo.Depolorize(object, rawData); err != nil {
 		return nil, errors.Wrap(err, "MetaContextObject deserialization failed")
@@ -382,7 +387,7 @@ func (sm *StateManager) getMetaContextObject(addr types.Address, hash types.Hash
 // fetchParticipantContextByHash fetches the context info based on the give hash
 // and returns a NodeSet which holds the kramaIDs and public keys
 func (sm *StateManager) fetchParticipantContextByHash(addr types.Address, hash types.Hash) (
-	behaviouralSet, randomSet *types.NodeSet,
+	behaviouralSet, randomSet *ktypes.NodeSet,
 	err error,
 ) {
 	behaviouralContext, randomContext, err := sm.getContextByHash(addr, hash)
@@ -393,7 +398,7 @@ func (sm *StateManager) fetchParticipantContextByHash(addr types.Address, hash t
 	}
 
 	if len(behaviouralContext) > 0 {
-		behaviouralSet = types.NewNodeSet(behaviouralContext, nil)
+		behaviouralSet = ktypes.NewNodeSet(behaviouralContext, nil)
 
 		if behaviouralSet.PublicKeys, err = sm.GetPublicKeys(behaviouralContext...); err != nil {
 			sm.logger.Error("failed to retrieve public Key", "error", err)
@@ -403,7 +408,7 @@ func (sm *StateManager) fetchParticipantContextByHash(addr types.Address, hash t
 	}
 
 	if len(randomContext) > 0 {
-		randomSet = types.NewNodeSet(randomContext, nil)
+		randomSet = ktypes.NewNodeSet(randomContext, nil)
 
 		if randomSet.PublicKeys, err = sm.GetPublicKeys(randomContext...); err != nil {
 			sm.logger.Error("failed to retrieve public Key", "error", err)
@@ -417,7 +422,7 @@ func (sm *StateManager) fetchParticipantContextByHash(addr types.Address, hash t
 
 func (sm *StateManager) fetchLatestParticipantContext(addr types.Address) (
 	contextHash types.Hash,
-	behaviouralSet, randomSet *types.NodeSet,
+	behaviouralSet, randomSet *ktypes.NodeSet,
 	err error,
 ) {
 	contextHash, behaviouralContext, randomContext, err := sm.GetContextByHash(addr, types.NilHash)
@@ -428,7 +433,7 @@ func (sm *StateManager) fetchLatestParticipantContext(addr types.Address) (
 	}
 
 	if len(behaviouralContext) > 0 {
-		behaviouralSet = types.NewNodeSet(behaviouralContext, nil)
+		behaviouralSet = ktypes.NewNodeSet(behaviouralContext, nil)
 
 		if behaviouralSet.PublicKeys, err = sm.GetPublicKeys(behaviouralContext...); err != nil {
 			sm.logger.Error("failed to retrieve public Key", "error", err)
@@ -438,7 +443,7 @@ func (sm *StateManager) fetchLatestParticipantContext(addr types.Address) (
 	}
 
 	if len(randomContext) > 0 {
-		randomSet = types.NewNodeSet(randomContext, nil)
+		randomSet = ktypes.NewNodeSet(randomContext, nil)
 
 		if randomSet.PublicKeys, err = sm.GetPublicKeys(randomContext...); err != nil {
 			sm.logger.Error("failed to retrieve public Key", "error", err)
@@ -506,9 +511,9 @@ func (sm *StateManager) GetContextByHash(
 	return hash, behaviourSet, randomSet, nil
 }
 
-func (sm *StateManager) FetchContextLock(ts *types.Tesseract) (*types.ICSNodes, error) {
+func (sm *StateManager) FetchContextLock(ts *types.Tesseract) (*ktypes.ICSNodes, error) {
 	ix := ts.Interactions()[0]
-	ics := types.NewICSNodes(6)
+	ics := ktypes.NewICSNodes(6)
 
 	for address, info := range ts.Header.ContextLock {
 		if address == ix.FromAddress() {
@@ -517,8 +522,8 @@ func (sm *StateManager) FetchContextLock(ts *types.Tesseract) (*types.ICSNodes, 
 				return nil, err
 			}
 
-			ics.UpdateNodeSet(types.SenderBehaviourSet, behaviourSet)
-			ics.UpdateNodeSet(types.SenderRandomSet, randomSet)
+			ics.UpdateNodeSet(ktypes.SenderBehaviourSet, behaviourSet)
+			ics.UpdateNodeSet(ktypes.SenderRandomSet, randomSet)
 		} else if address == ix.ToAddress() || address == GenesisAddress {
 			if info.ContextHash.IsNil() {
 				continue
@@ -529,8 +534,8 @@ func (sm *StateManager) FetchContextLock(ts *types.Tesseract) (*types.ICSNodes, 
 				return nil, err
 			}
 
-			ics.UpdateNodeSet(types.ReceiverBehaviourSet, behaviourSet)
-			ics.UpdateNodeSet(types.ReceiverRandomSet, randomSet)
+			ics.UpdateNodeSet(ktypes.ReceiverBehaviourSet, behaviourSet)
+			ics.UpdateNodeSet(ktypes.ReceiverRandomSet, randomSet)
 		}
 	}
 
@@ -540,16 +545,16 @@ func (sm *StateManager) FetchContextLock(ts *types.Tesseract) (*types.ICSNodes, 
 // FetchInteractionContext returns a nodeSet which holds the latest context info of the interaction participants
 func (sm *StateManager) FetchInteractionContext(ctx context.Context, ix *types.Interaction) (
 	map[types.Address]types.Hash,
-	[]*types.NodeSet,
+	[]*ktypes.NodeSet,
 	error,
 ) {
 	_, span := tracing.Span(ctx, "guna.StateManger", "FetchInteractionContext")
 	defer span.End()
 
 	var (
-		nodeSet       = make([]*types.NodeSet, 6)
-		behaviourSet  *types.NodeSet
-		randomSet     *types.NodeSet
+		nodeSet       = make([]*ktypes.NodeSet, 6)
+		behaviourSet  *ktypes.NodeSet
+		randomSet     *ktypes.NodeSet
 		contextHash   types.Hash
 		err           error
 		contextHashes = make(map[types.Address]types.Hash)
@@ -562,8 +567,8 @@ func (sm *StateManager) FetchInteractionContext(ctx context.Context, ix *types.I
 		}
 
 		contextHashes[ix.FromAddress()] = contextHash
-		nodeSet[types.SenderBehaviourSet] = behaviourSet
-		nodeSet[types.SenderRandomSet] = randomSet
+		nodeSet[ktypes.SenderBehaviourSet] = behaviourSet
+		nodeSet[ktypes.SenderRandomSet] = randomSet
 	}
 
 	if !ix.ToAddress().IsNil() {
@@ -588,8 +593,8 @@ func (sm *StateManager) FetchInteractionContext(ctx context.Context, ix *types.I
 			contextHashes[ix.ToAddress()] = contextHash
 		}
 
-		nodeSet[types.ReceiverBehaviourSet] = behaviourSet
-		nodeSet[types.ReceiverRandomSet] = randomSet
+		nodeSet[ktypes.ReceiverBehaviourSet] = behaviourSet
+		nodeSet[ktypes.ReceiverRandomSet] = randomSet
 	}
 
 	return contextHashes, nodeSet, err
@@ -626,7 +631,7 @@ func (sm *StateManager) GetLatestNonce(addr types.Address) (uint64, error) {
 	return object.data.Nonce, nil
 }
 
-func (sm *StateManager) GetBalances(addrs types.Address) (*types.BalanceObject, error) {
+func (sm *StateManager) GetBalances(addrs types.Address) (*gtypes.BalanceObject, error) {
 	stateObject, err := sm.GetLatestStateObject(addrs)
 	if err != nil {
 		return nil, err

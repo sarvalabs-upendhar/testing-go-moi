@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"gitlab.com/sarvalabs/moichain/utils"
+	types2 "gitlab.com/sarvalabs/moichain/poorna/types"
 
 	"github.com/rs/zerolog/log"
 	"gitlab.com/sarvalabs/moichain/mudra/kramaid"
@@ -216,18 +216,18 @@ func (plist *PeerList) CanonicalPeerList() *CanonicalPeerList {
 
 type WantTracker struct {
 	mtx       sync.RWMutex
-	fetched   *utils.Queue
+	fetched   *types2.Queue
 	liveWants map[types.Hash]time.Time
 }
 
 func NewWantTracker() *WantTracker {
 	return &WantTracker{
-		fetched:   utils.NewCidQueue(),
+		fetched:   types2.NewCidQueue(),
 		liveWants: make(map[types.Hash]time.Time),
 	}
 }
 
-func (wt *WantTracker) UpdateLiveWants(keys *utils.HashSet) {
+func (wt *WantTracker) UpdateLiveWants(keys *types2.HashSet) {
 	wt.mtx.Lock()
 	defer wt.mtx.Unlock()
 
@@ -243,7 +243,7 @@ func (wt *WantTracker) UpdateLiveWants(keys *utils.HashSet) {
 	}
 }
 
-func (wt *WantTracker) RemoveRedundantKeys(cids *utils.HashSet) {
+func (wt *WantTracker) RemoveRedundantKeys(cids *types2.HashSet) {
 	wt.mtx.Lock()
 	defer wt.mtx.Unlock()
 

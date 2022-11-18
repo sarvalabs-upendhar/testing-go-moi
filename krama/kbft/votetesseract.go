@@ -1,6 +1,7 @@
 package kbft
 
 import (
+	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
 	"gitlab.com/sarvalabs/moichain/mudra"
 	"gitlab.com/sarvalabs/moichain/types"
 )
@@ -13,7 +14,7 @@ type tesseractVoteSet struct {
 	// the value at that index represents whether a vote for the validator exists in the set
 	bitarray *types.ArrayOfBits
 	// Represents the tesseract votes of each validator by index
-	votes []*types.Vote
+	votes []*ktypes.Vote
 	// Represents the sum of voting powers
 	sum []int32
 
@@ -26,14 +27,14 @@ func newTesseractVoteSet(size int, peermaj23 bool, valcount int) *tesseractVoteS
 	return &tesseractVoteSet{
 		peermaj23:      peermaj23,
 		bitarray:       types.NewArrayOfBits(valcount),
-		votes:          make([]*types.Vote, valcount),
+		votes:          make([]*ktypes.Vote, valcount),
 		sum:            make([]int32, size),
 		votingPowerSum: make([]int32, size),
 	}
 }
 
 // getByIndex is a method of tesseractVoteSet that retrieves a vote from the set for a given index.
-func (tv *tesseractVoteSet) getByIndex(index int32) *types.Vote {
+func (tv *tesseractVoteSet) getByIndex(index int32) *ktypes.Vote {
 	// Return nil if voteset is empty
 	if tv == nil {
 		return nil
@@ -45,7 +46,7 @@ func (tv *tesseractVoteSet) getByIndex(index int32) *types.Vote {
 
 // addVerifiedVote is a method of tesseractVoteSet that adds a verified vote to the set.
 // Accepts the sum index, the vote and the voting power of the validator placing the vote.
-func (tv *tesseractVoteSet) addVerifiedVote(sindex int32, vote *types.Vote, votingpower int32) {
+func (tv *tesseractVoteSet) addVerifiedVote(sindex int32, vote *ktypes.Vote, votingpower int32) {
 	// Fetch the index of the validator placing the vote
 	valindex := vote.ValidatorIndex
 

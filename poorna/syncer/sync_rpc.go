@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+
 	"github.com/libp2p/go-libp2p/core/peer"
 	"gitlab.com/sarvalabs/moichain/poorna/api"
 	"gitlab.com/sarvalabs/moichain/poorna/moirpc"
@@ -22,7 +24,7 @@ func NewSyncRPCService(syncer *Syncer) *SYNCRPCService {
 // StatusUpdate is an RPC call to update the status of the remote peer
 func (syncRPC *SYNCRPCService) StatusUpdate(
 	ctx context.Context,
-	req *types.AccountsStatusMsg,
+	req *ptypes.AccountsStatusMsg,
 	resp *api.Response,
 ) error {
 	peerID, ok := ctx.Value(moirpc.ContextKeyRequestSender).(peer.ID)
@@ -38,8 +40,8 @@ func (syncRPC *SYNCRPCService) StatusUpdate(
 // GetTesseract is an RPC call to fetch the tesseract based on hash or height
 func (syncRPC *SYNCRPCService) GetTesseract(
 	ctx context.Context,
-	req *types.TesseractReq,
-	resp *types.TesseractResponse,
+	req *ptypes.TesseractReq,
+	resp *TesseractResponse,
 ) error {
 	tesseract, err := syncRPC.syncer.GetTesseract(req.Hash, req.WithInteractions)
 	if err != nil {

@@ -3,6 +3,8 @@ package api
 import (
 	"math/big"
 
+	gtypes "gitlab.com/sarvalabs/moichain/guna/types"
+
 	"gitlab.com/sarvalabs/moichain/common"
 	"gitlab.com/sarvalabs/moichain/guna"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
@@ -19,13 +21,13 @@ type ChainManager interface {
 	GetTesseract(hash types.Hash, withInteractions bool) (*types.Tesseract, error)
 	GetReceipt(addr types.Address, ixHash types.Hash) (*types.Receipt, error)
 	GetTesseractByHeight(address types.Address, height uint64, withInteractions bool) (*types.Tesseract, error)
-	GetAssetDataByAssetHash(assetHash []byte) (*types.AssetData, error)
+	GetAssetDataByAssetHash(assetHash []byte) (*gtypes.AssetData, error)
 }
 
 type StateManager interface {
 	GetLatestStateObject(addr types.Address) (*guna.StateObject, error)
 	GetContextByHash(address types.Address, hash types.Hash) (types.Hash, []id.KramaID, []id.KramaID, error)
-	GetBalances(addrs types.Address) (*types.BalanceObject, error)
+	GetBalances(addrs types.Address) (*gtypes.BalanceObject, error)
 	GetBalance(addr types.Address, assetID types.AssetID) (*big.Int, error)
 	GetLatestNonce(addr types.Address) (uint64, error)
 }

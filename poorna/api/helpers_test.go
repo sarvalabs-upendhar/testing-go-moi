@@ -5,19 +5,14 @@ import (
 	"sync/atomic"
 	"testing"
 
+	gtypes "gitlab.com/sarvalabs/moichain/guna/types"
+
 	"gitlab.com/sarvalabs/moichain/types"
 
 	"gitlab.com/sarvalabs/moichain/common/tests"
 	"gitlab.com/sarvalabs/moichain/guna"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 )
-
-type AssetInfo struct {
-	AssetID    types.AssetID
-	Asset      *types.AssetInfo
-	Hash       types.Hash
-	RandomHash types.Hash
-}
 
 type Context struct {
 	behaviourNodes []id.KramaID
@@ -30,12 +25,12 @@ type MockChainManager struct {
 	interactions        map[types.Address]map[types.Hash]types.Interactions
 	receipts            map[types.Address]map[types.Hash]*types.Receipt
 	storage             map[types.Hash]*types.Tesseract
-	assets              map[types.Hash]*types.AssetData
+	assets              map[types.Hash]*gtypes.AssetData
 }
 
 type MockStateManager struct {
 	storage           map[types.Hash][]byte
-	balances          map[types.Address]*types.BalanceObject
+	balances          map[types.Address]*gtypes.BalanceObject
 	accounts          map[types.Address]*types.Account
 	context           map[types.Hash]*Context
 	latestContextHash map[types.Address]types.Hash
@@ -55,7 +50,7 @@ func NewMockChainManager(t *testing.T) *MockChainManager {
 	mockChain.latestTesseractHash = make(map[types.Address]types.Hash)
 	mockChain.interactions = make(map[types.Address]map[types.Hash]types.Interactions, 0)
 	mockChain.receipts = make(map[types.Address]map[types.Hash]*types.Receipt, 0)
-	mockChain.assets = make(map[types.Hash]*types.AssetData, 0)
+	mockChain.assets = make(map[types.Hash]*gtypes.AssetData, 0)
 	mockChain.storage = make(map[types.Hash]*types.Tesseract, 0)
 
 	return mockChain
@@ -66,7 +61,7 @@ func NewMockStateManager(t *testing.T) *MockStateManager {
 
 	mockState := new(MockStateManager)
 
-	mockState.balances = make(map[types.Address]*types.BalanceObject)
+	mockState.balances = make(map[types.Address]*gtypes.BalanceObject)
 	mockState.latestContextHash = make(map[types.Address]types.Hash)
 	mockState.storage = make(map[types.Hash][]byte)
 	mockState.accounts = make(map[types.Address]*types.Account)
@@ -114,7 +109,7 @@ func (mc *MockChainManager) GetReceipt(addr types.Address, ixHash types.Hash) (*
 	return nil, types.ErrReceiptNotFound
 }
 
-func (mc *MockChainManager) GetAssetDataByAssetHash(assetHash []byte) (*types.AssetData, error) {
+func (mc *MockChainManager) GetAssetDataByAssetHash(assetHash []byte) (*gtypes.AssetData, error) {
 	if result, ok := mc.assets[types.BytesToHash(assetHash)]; ok {
 		return result, nil
 	}
@@ -161,13 +156,12 @@ func (mc *MockChainManager) setStorage(hash types.Hash, tesseract *types.Tessera
 	mc.storage[hash] = tesseract
 }
 
-func (mc *MockChainManager) setAssets(addr types.Address, assetInfo *AssetInfo) {
-	assetInfo.Asset.Owner = addr.String()
-	mc.assets[assetInfo.Hash] = &types.AssetData{
-		LogicID: assetInfo.RandomHash,
-		Symbol:  assetInfo.Asset.Symbol,
-		Owner:   addr,
-		Extra:   big.NewInt(int64(assetInfo.Asset.TotalSupply)).Bytes(),
+func (mc *MockChainManager) setAssets(id types.AssetID, info *types.AssetInfo) {
+	mc.assets[types.BytesToHash(id.GetCID())] = &gtypes.AssetData{
+		LogicID: info.LogicID,
+		Symbol:  info.Symbol,
+		Owner:   types.HexToAddress(info.Owner),
+		Extra:   big.NewInt(int64(info.TotalSupply)).Bytes(),
 	}
 }
 
@@ -187,7 +181,7 @@ func (ms *MockStateManager) GetContextByHash(address types.Address,
 	return hash, ms.context[hash].behaviourNodes, ms.context[hash].randomNodes, nil
 }
 
-func (ms *MockStateManager) GetBalances(addr types.Address) (*types.BalanceObject, error) {
+func (ms *MockStateManager) GetBalances(addr types.Address) (*gtypes.BalanceObject, error) {
 	if _, ok := ms.balances[addr]; ok {
 		return ms.balances[addr].Copy(), nil
 	}
@@ -224,8 +218,8 @@ func (ms *MockStateManager) IsGenesis(addr types.Address) (bool, error) {
 }
 
 func (ms *MockStateManager) setBalance(addr types.Address, assetID types.AssetID, balance *big.Int) {
-	ms.balances[addr] = &types.BalanceObject{
-		Bal: make(types.AssetMap),
+	ms.balances[addr] = &gtypes.BalanceObject{
+		Bal: make(gtypes.AssetMap),
 	}
 	ms.balances[addr].Bal[assetID] = balance
 }
@@ -252,7 +246,7 @@ func (ms *MockStateManager) setAccounts(addr types.Address, latestNonce uint64) 
 	}
 }
 
-func (ms *MockStateManager) getTDU(addr types.Address) types.AssetMap {
+func (ms *MockStateManager) getTDU(addr types.Address) gtypes.AssetMap {
 	data, _ := ms.balances[addr].TDU()
 
 	return data

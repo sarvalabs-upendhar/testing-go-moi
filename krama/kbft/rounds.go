@@ -3,7 +3,7 @@ package kbft
 import (
 	"time"
 
-	"gitlab.com/sarvalabs/moichain/types"
+	"gitlab.com/sarvalabs/moichain/krama/types"
 )
 
 // A type alias that represents a type of consensus round step

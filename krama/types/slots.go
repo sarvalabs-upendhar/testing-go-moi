@@ -23,8 +23,8 @@ type Slot struct {
 	SlotType                        SlotType
 	clusterState                    *ClusterInfo
 	ICSSuccessChan                  chan bool
-	OutboundChan, InboundChan       chan *types.ICSMSG
-	BftOutboundChan, BftInboundChan chan types.ConsensusMessage
+	OutboundChan, InboundChan       chan *ICSMSG
+	BftOutboundChan, BftInboundChan chan ConsensusMessage
 	ExecutionResp                   chan ExecutionResponse
 	CloseCh                         chan struct{}
 }
@@ -34,16 +34,16 @@ func NewSlot(slotType SlotType, clusterState *ClusterInfo) *Slot {
 		SlotType:        slotType,
 		clusterState:    clusterState,
 		ICSSuccessChan:  make(chan bool),
-		OutboundChan:    make(chan *types.ICSMSG),
-		InboundChan:     make(chan *types.ICSMSG),
+		OutboundChan:    make(chan *ICSMSG),
+		InboundChan:     make(chan *ICSMSG),
 		ExecutionResp:   make(chan ExecutionResponse),
-		BftOutboundChan: make(chan types.ConsensusMessage, 1000),
-		BftInboundChan:  make(chan types.ConsensusMessage, 1000),
+		BftOutboundChan: make(chan ConsensusMessage, 1000),
+		BftInboundChan:  make(chan ConsensusMessage, 1000),
 		CloseCh:         make(chan struct{}),
 	}
 }
 
-func (info *Slot) ForwardMsg(msg types.ConsensusMessage) {
+func (info *Slot) ForwardMsg(msg ConsensusMessage) {
 	if info == nil {
 		return
 	}
@@ -57,7 +57,7 @@ func (info *Slot) ForwardMsg(msg types.ConsensusMessage) {
 	}
 }
 
-func (info *Slot) ForwardInboundMsg(msg *types.ICSMSG) {
+func (info *Slot) ForwardInboundMsg(msg *ICSMSG) {
 	if info == nil {
 		return
 	}

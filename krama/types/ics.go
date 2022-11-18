@@ -4,6 +4,10 @@ import (
 	"sync"
 	"time"
 
+	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+
+	gtypes "gitlab.com/sarvalabs/moichain/guna/types"
+
 	"gitlab.com/sarvalabs/moichain/utils"
 
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
@@ -14,7 +18,7 @@ import (
 
 type ClusterInfo struct {
 	mtx                      sync.Mutex
-	ICS                      *types.ICSNodes
+	ICS                      *ICSNodes
 	Ixs                      types.Interactions
 	ID                       types.ClusterID
 	Operator                 id.KramaID
@@ -27,8 +31,8 @@ type ClusterInfo struct {
 	Grid                     []*types.Tesseract
 	ICSReqTime               time.Time
 	operatorIncluded         bool
-	CurrentRole              types.IcsSetType
-	SuccessMsg               *types.ICSMSG
+	CurrentRole              IcsSetType
+	SuccessMsg               *ICSMSG
 	ContextLock              map[types.Address]types.ContextLockInfo
 }
 
@@ -42,7 +46,7 @@ func NewICS(
 	reqTime time.Time,
 ) *ClusterInfo {
 	return &ClusterInfo{
-		ICS:              types.NewICSNodes(size),
+		ICS:              NewICSNodes(size),
 		Ixs:              ixs,
 		ID:               clusterID,
 		Operator:         operator,
@@ -63,7 +67,7 @@ func (i *ClusterInfo) Size() int {
 	return i.ICS.Size
 }
 
-func (i *ClusterInfo) UpdateNodeSet(setType types.IcsSetType, data *types.NodeSet) {
+func (i *ClusterInfo) UpdateNodeSet(setType IcsSetType, data *NodeSet) {
 	i.mtx.Lock()
 	defer i.mtx.Unlock()
 
@@ -92,8 +96,8 @@ func (i *ClusterInfo) IsOperatorIncluded() bool {
 }
 
 // GetMetaData returns the ClusterInfo metadata including the given ClusterInfo messages
-func (i *ClusterInfo) GetMetaData(msgs []*types.ICSMSG) *types.ICSMetaInfo {
-	m := &types.ICSMetaInfo{
+func (i *ClusterInfo) GetMetaData(msgs []*ICSMSG) *ICSMetaInfo {
+	m := &ICSMetaInfo{
 		ClusterID:    string(i.ID),
 		IxHash:       i.Ixs[0].Hash, // Need to be improved
 		Operator:     string(i.Operator),
@@ -129,14 +133,14 @@ func (i *ClusterInfo) RespondedEligibleSet() (count int, nodes []id.KramaID) {
 	return
 }
 
-func (i *ClusterInfo) GetBehaviouralContextDelta(setType types.IcsSetType) (addedPeer, replacedPeer id.KramaID) {
+func (i *ClusterInfo) GetBehaviouralContextDelta(setType IcsSetType) (addedPeer, replacedPeer id.KramaID) {
 	for _, peerID := range i.ICS.Nodes[setType].Ids {
 		if i.Operator == peerID { // i.ICS.Nodes[setType].Responses.GetIndex(index)
 			return
 		}
 	}
 
-	if len(i.ICS.Nodes[setType].Ids) >= types.MaxBehaviourContextSize {
+	if len(i.ICS.Nodes[setType].Ids) >= gtypes.MaxBehaviourContextSize {
 		replacedPeer = i.ICS.Nodes[setType].Ids[0]
 	}
 
@@ -144,7 +148,7 @@ func (i *ClusterInfo) GetBehaviouralContextDelta(setType types.IcsSetType) (adde
 }
 
 func (i *ClusterInfo) GetRandomContextDelta(
-	setType types.IcsSetType,
+	setType IcsSetType,
 	requiredCount int,
 	skipPeers ...id.KramaID,
 ) (addedPeers, replacedPeers []id.KramaID) {
@@ -155,12 +159,12 @@ func (i *ClusterInfo) GetRandomContextDelta(
 	}
 
 	if i.ICS.Nodes[setType] != nil {
-		if x := len(i.ICS.Nodes[setType].Ids) + requiredCount - types.MaxRandomContextSize; x > 0 {
+		if x := len(i.ICS.Nodes[setType].Ids) + requiredCount - gtypes.MaxRandomContextSize; x > 0 {
 			replacedPeers = i.ICS.Nodes[setType].Ids[0:x]
 		}
 	}
 
-	set := i.ICS.Nodes[types.RandomSet]
+	set := i.ICS.Nodes[RandomSet]
 	for index, v := range set.Ids {
 		if set.Responses.GetIndex(index) && !utils.ContainsKramaID(skipPeers, v) {
 			addedPeers = append(addedPeers, v)
@@ -191,8 +195,8 @@ func (i *ClusterInfo) IsRandomQuorum(requiredRandomNodes, requiredObserverNodes 
 	i.mtx.Lock()
 	defer i.mtx.Unlock()
 
-	return i.ICS.Nodes[types.RandomSet].Count >= requiredRandomNodes &&
-		i.ICS.Nodes[types.ObserverSet].Count >= requiredObserverNodes
+	return i.ICS.Nodes[RandomSet].Count >= requiredRandomNodes &&
+		i.ICS.Nodes[ObserverSet].Count >= requiredObserverNodes
 }
 
 func (i *ClusterInfo) HasKramaID(kramaID id.KramaID) (int32, bool) {
@@ -226,14 +230,14 @@ func (i *ClusterInfo) GetObservers() []string {
 	i.mtx.Lock()
 	defer i.mtx.Unlock()
 
-	return types.KIPPeerIDToString(i.ICS.Nodes[types.ObserverSet].Ids)
+	return types.KIPPeerIDToString(i.ICS.Nodes[ObserverSet].Ids)
 }
 
 func (i *ClusterInfo) GetRandomNodes() []string {
 	i.mtx.Lock()
 	defer i.mtx.Unlock()
 
-	return types.KIPPeerIDToString(i.ICS.Nodes[types.RandomSet].Ids)
+	return types.KIPPeerIDToString(i.ICS.Nodes[RandomSet].Ids)
 }
 
 func (i *ClusterInfo) GetTotalVotingPower() []int32 {
@@ -310,7 +314,7 @@ func (i *ClusterInfo) AddDirty(key types.Hash, data []byte) {
 }
 
 func (i *ClusterInfo) ComputeICSHash() (hash types.Hash) {
-	msg := &types.ICSClusterInfo{
+	msg := &ptypes.ICSClusterInfo{
 		RandomSet:   i.GetRandomNodes(),
 		ObserverSet: i.GetObservers(),
 		Responses:   make([]*types.ArrayOfBits, 6),
@@ -332,14 +336,14 @@ func (i *ClusterInfo) ComputeICSHash() (hash types.Hash) {
 	return
 }
 
-func (i *ClusterInfo) CreateICSSuccessMsg() *types.ICSSuccessMsg {
+func (i *ClusterInfo) CreateICSSuccessMsg() *ptypes.ICSSuccessMsg {
 	i.mtx.Lock()
 	defer i.mtx.Unlock()
 
-	msg := &types.ICSSuccessMsg{
+	msg := &ptypes.ICSSuccessMsg{
 		ClusterID:   string(i.ID),
-		RandomSet:   i.ICS.Nodes[types.RandomSet].Ids,
-		ObserverSet: i.ICS.Nodes[types.ObserverSet].Ids,
+		RandomSet:   i.ICS.Nodes[RandomSet].Ids,
+		ObserverSet: i.ICS.Nodes[ObserverSet].Ids,
 		Responses:   make([]*types.ArrayOfBits, 6),
 		Signature:   make([]byte, 0),
 		QuorumSizes: make([]int, 6),
@@ -365,7 +369,7 @@ func (i *ClusterInfo) CreateICSSuccessMsg() *types.ICSSuccessMsg {
 
 func (i *ClusterInfo) GetRandomDelta(requiredCount int) []id.KramaID {
 	nodes := make([]id.KramaID, 0, requiredCount)
-	set := i.ICS.Nodes[types.RandomSet]
+	set := i.ICS.Nodes[RandomSet]
 
 	for index, v := range set.Ids {
 		if set.Responses.GetIndex(index) {
@@ -420,4 +424,11 @@ func (a AccountInfos) GetHeight(addr types.Address) int64 {
 
 func (a AccountInfos) IsGenesis(addr types.Address) bool {
 	return a[addr].Height.Int64() == -1
+}
+
+type ICSMSG struct {
+	MsgType   ptypes.MsgType
+	Msg       []byte
+	Sender    id.KramaID
+	ClusterID string
 }

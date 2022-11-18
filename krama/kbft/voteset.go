@@ -23,7 +23,7 @@ type VoteSet struct {
 	round int32
 
 	// Represents the type consensus vote for the vote-set
-	votetype types.ConsensusMsgType
+	votetype ktypes.ConsensusMsgType
 
 	// Represents a set of validators
 	valset *ktypes.ClusterInfo
@@ -38,7 +38,7 @@ type VoteSet struct {
 	votingPowerSum []int32
 
 	// Represents the votes in the vote-set
-	votes []*types.Vote
+	votes []*ktypes.Vote
 
 	// Represents an array of bits. Each index of the array corresponds to a validator and
 	// the value at that index represents whether a vote for the validator exists in the set
@@ -59,7 +59,7 @@ type VoteSet struct {
 func NewVoteSet(
 	heights []uint64,
 	round int32,
-	voteType types.ConsensusMsgType,
+	voteType ktypes.ConsensusMsgType,
 	validatorSet *ktypes.ClusterInfo,
 ) *VoteSet {
 	// Log the creation and the set of validators
@@ -71,7 +71,7 @@ func NewVoteSet(
 		votetype:         voteType,
 		valset:           validatorSet,
 		mtx:              sync.Mutex{},
-		votes:            make([]*types.Vote, validatorSet.Size()),
+		votes:            make([]*ktypes.Vote, validatorSet.Size()),
 		votingPowerSum:   make([]int32, 3),
 		votesBitArray:    types.NewArrayOfBits(validatorSet.Size()),
 		votesByTesseract: make(map[string]*tesseractVoteSet, validatorSet.Size()),
@@ -83,7 +83,7 @@ func NewVoteSet(
 // getVote is a method of Vote that retrieves a particular vote from the set.
 // Accepts a validator index as an int32 and a tesseract grid id as a types.Hash.
 // Returns the Vote and a bool indicating the success status of the fetch.
-func (vs *VoteSet) getVote(valIndex int32, gridID types.Hash) (vote *types.Vote, ok bool) {
+func (vs *VoteSet) getVote(valIndex int32, gridID types.Hash) (vote *ktypes.Vote, ok bool) {
 	// Attempt to retrieve the vote from the slice of votes
 	// Return the vote if its gridID hash matches the given hash.
 	if existingVote := vs.votes[valIndex]; existingVote != nil && existingVote.GridID.Hash == gridID {
@@ -162,7 +162,7 @@ func (vs *VoteSet) TwoThirdMajority() (tesseractGroupID *types.TesseractGridID, 
 // AddVote is a method of VoteSet that adds a vote to the set.
 // The vote and the validator who placed the vote are verified by checking the vote specs,
 // signatures and addresses and then added to the set using the addVerifiedVote method.
-func (vs *VoteSet) AddVote(v *types.Vote, peerID id.KramaID) (added bool, err error) {
+func (vs *VoteSet) AddVote(v *ktypes.Vote, peerID id.KramaID) (added bool, err error) {
 	// Acquire lock
 	vs.mtx.Lock()
 	defer vs.mtx.Unlock()
@@ -228,10 +228,10 @@ func (vs *VoteSet) AddVote(v *types.Vote, peerID id.KramaID) (added bool, err er
 }
 
 func (vs *VoteSet) addVerifiedVote(
-	vote *types.Vote,
+	vote *ktypes.Vote,
 	gridID types.Hash,
 	votePower int32,
-) (added bool, conflicting *types.Vote) {
+) (added bool, conflicting *ktypes.Vote) {
 	// Fetch the index of the validator placing the vote and the sum index for that validator
 	valIndex := vote.ValidatorIndex
 

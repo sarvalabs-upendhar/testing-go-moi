@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"sync"
 
+	gtypes "gitlab.com/sarvalabs/moichain/guna/types"
+
 	"github.com/decred/dcrd/crypto/blake256"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
@@ -36,8 +38,8 @@ type StateObject struct {
 	cache          *lru.Cache
 	db             *dhruva.PersistenceManager
 	data           types.Account
-	balance        *types.BalanceObject
-	assetApprovals *types.ApprovalObject
+	balance        *gtypes.BalanceObject
+	assetApprovals *gtypes.ApprovalObject
 
 	logicTrie   tree.MerkleTree //nolint
 	storageTrie tree.MerkleTree //nolint
@@ -48,7 +50,7 @@ type StateObject struct {
 
 	activeStorageTrees map[types.LogicID]tree.MerkleTree
 
-	logics map[types.Hash]*types.LogicData
+	logics map[types.LogicID]*gtypes.LogicData
 	files  map[types.Hash][]byte
 }
 
@@ -67,15 +69,15 @@ func NewStateObject(
 		db:      db,
 		data:    account,
 		address: id,
-		balance: &types.BalanceObject{
-			Bal:     make(types.AssetMap),
+		balance: &gtypes.BalanceObject{
+			Bal:     make(gtypes.AssetMap),
 			PrvHash: types.NilHash,
 		},
-		assetApprovals: &types.ApprovalObject{
-			Approvals: make(map[types.Address]types.AssetMap),
+		assetApprovals: &gtypes.ApprovalObject{
+			Approvals: make(map[types.Address]gtypes.AssetMap),
 			PrvHash:   types.NilHash,
 		},
-		logics:             make(map[types.Hash]*types.LogicData),
+		logics:             make(map[types.LogicID]*gtypes.LogicData),
 		files:              make(map[types.Hash][]byte),
 		dirtyEntries:       make(Storage),
 		receipts:           make(types.Receipts),
@@ -127,11 +129,7 @@ func (s *StateObject) setBalance(aid types.AssetID, amount *big.Int) {
 	s.balance.Bal[aid] = amount
 }
 
-func (s *StateObject) GetLogic(logicID types.Hash) (data *types.LogicData, err error) {
-	if (logicID == types.Hash{}) {
-		return nil, errors.New("invalid logicID")
-	}
-
+func (s *StateObject) GetLogic(logicID types.LogicID) (data *gtypes.LogicData, err error) {
 	ld, ok := s.logics[logicID]
 	if !ok {
 		data, err := s.getLogicTrie(s.db, s.data.LogicRoot.Bytes()).Get(logicID.Bytes())
@@ -140,7 +138,7 @@ func (s *StateObject) GetLogic(logicID types.Hash) (data *types.LogicData, err e
 		}
 
 		if data != nil {
-			msg := new(types.LogicData)
+			msg := new(gtypes.LogicData)
 			if err := polo.Depolorize(msg, data); err != nil {
 				log.Fatal(err)
 			}
@@ -330,7 +328,7 @@ func (s *StateObject) CreateStorageTreeForLogic(logicID types.LogicID) (tree.Mer
 	return newStorageTree, s.storageTrie.Set(logicID.Bytes(), types.NilHash.Bytes())
 }
 
-func (s *StateObject) CreateLogic(logicID types.Hash, data *types.LogicData) error {
+func (s *StateObject) CreateLogic(logicID types.LogicID, data *gtypes.LogicData) error {
 	if _, ok := s.logics[logicID]; !ok {
 		// TODO:journal this
 		s.logics[logicID] = data
@@ -353,19 +351,20 @@ func (s *StateObject) CreateAsset(
 	defer s.mtx.Unlock()
 
 	var (
-		logicID types.Hash
-		err     error
+		logicID   types.LogicID
+		logicData *gtypes.LogicData
+		err       error
 	)
 
 	if code != nil {
-		logicID, data := types.GetLogicID(code, false)
+		logicID, logicData = gtypes.GetLogicID(code, false)
 
-		if err = s.CreateLogic(logicID, data); err != nil {
+		if err = s.CreateLogic(logicID, logicData); err != nil {
 			return "", err
 		}
 	}
 
-	assetID, assetHash, data := types.GetAssetID(
+	assetID, assetHash, data := gtypes.GetAssetID(
 		s.address,
 		dimension,
 		isFungible,
@@ -407,9 +406,9 @@ func (s *StateObject) CreateContext(behaviouralNodes, randomNodes []id.KramaID) 
 		return types.NilHash, errors.New("livness size not met")
 	}
 
-	behaviouralContextObject := new(types.ContextObject)
-	randomContextObject := new(types.ContextObject)
-	metaContextObject := new(types.MetaContextObject)
+	behaviouralContextObject := new(gtypes.ContextObject)
+	randomContextObject := new(gtypes.ContextObject)
+	metaContextObject := new(gtypes.MetaContextObject)
 
 	behaviouralContextObject.Ids = append(behaviouralContextObject.Ids, behaviouralNodes...)
 	randomContextObject.Ids = append(randomContextObject.Ids, randomNodes...)
@@ -466,7 +465,7 @@ func (s *StateObject) UpdateContext(behaviouralNodes []id.KramaID, randomNodes [
 			return types.NilHash, err
 		}
 
-		behaviouralObj.AddNodes(behaviouralNodes, types.MaxBehaviourContextSize)
+		behaviouralObj.AddNodes(behaviouralNodes, gtypes.MaxBehaviourContextSize)
 
 		behaviourObjectHash, err = s.commitContextObject(behaviouralObj)
 		if err != nil {
@@ -480,7 +479,7 @@ func (s *StateObject) UpdateContext(behaviouralNodes []id.KramaID, randomNodes [
 			return types.NilHash, err
 		}
 
-		randomObj.AddNodes(randomNodes, types.MaxRandomContextSize)
+		randomObj.AddNodes(randomNodes, gtypes.MaxRandomContextSize)
 
 		// TODO:Sort based on the stake of the nodes
 
@@ -514,10 +513,10 @@ func (s *StateObject) ContextHash() types.Hash {
 	return s.data.ContextHash
 }
 
-func (s *StateObject) getMetaContextObjectCopy() (*types.MetaContextObject, error) {
+func (s *StateObject) getMetaContextObjectCopy() (*gtypes.MetaContextObject, error) {
 	data, isAvailable := s.cache.Get(s.ContextHash())
 	if isAvailable {
-		metaContextObject, ok := data.(*types.MetaContextObject)
+		metaContextObject, ok := data.(*gtypes.MetaContextObject)
 		if !ok {
 			return nil, types.ErrInterfaceConversion
 		}
@@ -530,7 +529,7 @@ func (s *StateObject) getMetaContextObjectCopy() (*types.MetaContextObject, erro
 		return nil, errors.Wrap(err, "failed to fetch meta context object")
 	}
 
-	obj := new(types.MetaContextObject)
+	obj := new(gtypes.MetaContextObject)
 
 	if err := polo.Depolorize(obj, rawData); err != nil {
 		return nil, err
@@ -541,7 +540,7 @@ func (s *StateObject) getMetaContextObjectCopy() (*types.MetaContextObject, erro
 	return obj.Copy(), nil
 }
 
-func (s *StateObject) getContextObjectCopy(hash types.Hash) (*types.ContextObject, error) {
+func (s *StateObject) getContextObjectCopy(hash types.Hash) (*gtypes.ContextObject, error) {
 	data, isAvailable := s.cache.Get(hash)
 	if !isAvailable {
 		rawData, err := s.db.GetContext(s.address, hash)
@@ -549,7 +548,7 @@ func (s *StateObject) getContextObjectCopy(hash types.Hash) (*types.ContextObjec
 			return nil, errors.Wrap(types.ErrUpdatingContextObject, err.Error())
 		}
 
-		obj := new(types.ContextObject)
+		obj := new(gtypes.ContextObject)
 
 		if err := polo.Depolorize(obj, rawData); err != nil {
 			return nil, err
@@ -560,7 +559,7 @@ func (s *StateObject) getContextObjectCopy(hash types.Hash) (*types.ContextObjec
 		return obj.Copy(), nil
 	}
 
-	contextObject, ok := data.(*types.ContextObject)
+	contextObject, ok := data.(*gtypes.ContextObject)
 	if !ok {
 		return nil, types.ErrInterfaceConversion
 	}
@@ -572,13 +571,13 @@ func getBalanceObject(
 	addr types.Address,
 	hash types.Hash,
 	db *dhruva.PersistenceManager,
-) (*types.BalanceObject, error) {
+) (*gtypes.BalanceObject, error) {
 	data, err := db.GetBalance(addr, hash)
 	if err != nil {
 		return nil, err
 	}
 
-	balObject := new(types.BalanceObject)
+	balObject := new(gtypes.BalanceObject)
 
 	if err = polo.Depolorize(balObject, data); err != nil {
 		return nil, err

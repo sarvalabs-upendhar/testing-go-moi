@@ -4,14 +4,16 @@ import (
 	"context"
 	"errors"
 
+	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+
 	"gitlab.com/sarvalabs/moichain/types"
 	"gitlab.com/sarvalabs/polo/go-polo"
 )
 
 const (
-	SLOTSFULL int64 = iota
-	HASHMISMATCH
-	INTERNALERROR
+	Slotsfull int64 = iota
+	Hashmismatch
+	Internalerror
 )
 
 // ICSRPCService is a struct that represents an ICS RPC Service
@@ -29,8 +31,8 @@ func NewICSRPCService(k *Engine) *ICSRPCService {
 // ICSRequest is a method of ICSRPCService that sends an ICS join request
 func (icsrpc *ICSRPCService) ICSRequest(
 	ctx context.Context,
-	req *types.ICSRequest,
-	response *types.ICSResponse,
+	req *ptypes.ICSRequest,
+	response *ptypes.ICSResponse,
 ) error {
 	respChan := make(chan Response)
 
@@ -56,11 +58,11 @@ func (icsrpc *ICSRPCService) ICSRequest(
 
 		switch resp.err.Error() {
 		case types.ErrSlotsFull.Error():
-			response.StatusCode = SLOTSFULL
+			response.StatusCode = Slotsfull
 		case types.ErrHashMismatch.Error():
-			response.StatusCode = HASHMISMATCH
+			response.StatusCode = Hashmismatch
 		default:
-			response.StatusCode = INTERNALERROR
+			response.StatusCode = Internalerror
 		}
 	} else {
 		response.Response = 1

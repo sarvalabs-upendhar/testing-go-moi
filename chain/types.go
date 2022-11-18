@@ -3,6 +3,8 @@ package chain
 import (
 	"sync"
 
+	"github.com/deckarep/golang-set"
+
 	"gitlab.com/sarvalabs/moichain/types"
 )
 
@@ -52,4 +54,47 @@ func (g *GridCache) CleanupGrid(gridID types.Hash) []*types.Tesseract {
 	}
 
 	return tesseracts
+}
+
+// KnownCache is a cache for known hashes.
+type KnownCache struct {
+	hashes mapset.Set
+	max    int
+}
+
+// NewKnownCache creates a new knownCache with a max capacity.
+func NewKnownCache(max int) *KnownCache {
+	return &KnownCache{
+		max:    max,
+		hashes: mapset.NewSet(),
+	}
+}
+
+// Add adds a list of elements to the set.
+func (k *KnownCache) Add(data ...interface{}) {
+	for k.hashes.Cardinality() > max(0, k.max-len(data)) {
+		k.hashes.Pop()
+	}
+
+	for _, hash := range data {
+		k.hashes.Add(hash)
+	}
+}
+
+// Contains returns whether the given item is in the set.
+func (k *KnownCache) Contains(data interface{}) bool {
+	return k.hashes.Contains(data)
+}
+
+// Cardinality returns the number of elements in the set.
+func (k *KnownCache) Cardinality() int {
+	return k.hashes.Cardinality()
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+
+	return b
 }

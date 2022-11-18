@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+
 	"gitlab.com/sarvalabs/moichain/utils"
 
 	"github.com/hashicorp/go-hclog"
@@ -87,7 +89,7 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 		}
 
 		// Unmarshal the buffer into a proto message
-		message := new(types.Message)
+		message := new(ptypes.Message)
 		if err = polo.Depolorize(message, buffer[0:byteCount]); err != nil {
 			an.logger.Error("Error reading data from stream", "error", err)
 
@@ -97,7 +99,7 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 		peer.updateLastActiveTime() // check if remote peer can spam with invalid messages
 
 		switch message.MsgType {
-		case types.AGORAREQ:
+		case ptypes.AGORAREQ:
 			reqMsg := new(atypes.AgoraRequestMsg)
 			if err := polo.Depolorize(reqMsg, message.Payload); err != nil {
 				an.logger.Error("Error depolarising agora message")
@@ -108,7 +110,7 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 			an.metrics.captureInboundDataSize(float64(len(polo.Polorize(reqMsg))))
 			an.sm.HandlePeerMessage(message.Sender, reqMsg)
 
-		case types.AGORARESP:
+		case ptypes.AGORARESP:
 			respMsg := new(atypes.AgoraResponseMsg)
 			if err := polo.Depolorize(respMsg, message.Payload); err != nil {
 				an.logger.Error("Error depolarising agora message")
@@ -122,7 +124,7 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 	}
 }
 
-func (an *AgoraNetwork) SendAgoraMessage(id id.KramaID, msgType types.MsgType, msg atypes.Message) error {
+func (an *AgoraNetwork) SendAgoraMessage(id id.KramaID, msgType ptypes.MsgType, msg atypes.Message) error {
 	peerID, err := utils.GetNetworkID(id)
 	if err != nil {
 		an.logger.Error("Unable to decode peer id", "error", err)

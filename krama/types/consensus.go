@@ -5,6 +5,10 @@ import (
 	"encoding/json"
 	"log"
 
+	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+
+	"gitlab.com/sarvalabs/moichain/types"
+
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/polo/go-polo"
 )
@@ -15,8 +19,7 @@ type (
 )
 
 const (
-	PROPOSAL ConsensusMsgType = iota
-	PREVOTE
+	PREVOTE ConsensusMsgType = iota
 	PRECOMMIT
 )
 
@@ -34,15 +37,16 @@ const (
 type Vote struct {
 	Type           ConsensusMsgType
 	Round          int32
-	GridID         *TesseractGridID
+	GridID         *types.TesseractGridID
 	Timestamp      int64
 	ValidatorIndex int32
 	Signature      []byte
 }
+
 type CanonicalVote struct {
 	Type   ConsensusMsgType
 	Round  int32
-	GridID *TesseractGridID
+	GridID *types.TesseractGridID
 }
 
 func (v *Vote) SignBytes() []byte {
@@ -64,31 +68,8 @@ func (v *Vote) Validate() error {
 	return nil
 }
 
-type TesseractGridID struct {
-	Hash  Hash
-	Parts *TesseractParts
-}
-
-func (tid *TesseractGridID) IsNil() bool {
-	return tid.Hash.IsNil() && len(tid.Parts.Hashes) == 0
-}
-
-func (tid *TesseractGridID) String() string {
-	if !tid.IsNil() {
-		return tid.Hash.Hex()
-	}
-
-	return "Nil"
-}
-
-type TesseractParts struct {
-	Total   int32
-	Hashes  []Hash
-	Heights []uint64
-}
-
 type TimedWALMessage struct {
-	ClusterID ClusterID
+	ClusterID types.ClusterID
 	Timestamp int64
 	Message   ConsensusMessage
 }
@@ -98,7 +79,7 @@ type Proposal struct {
 	Round     int32
 	POLRound  int32
 	Grid      *TesseractGrid
-	GridID    *TesseractGridID
+	GridID    *types.TesseractGridID
 	Timestamp int64
 	Signature []byte
 }
@@ -111,7 +92,7 @@ func NewProposal(
 	round int32,
 	polround int32,
 	grid *TesseractGrid,
-	gridID *TesseractGridID,
+	gridID *types.TesseractGridID,
 ) *Proposal {
 	return &Proposal{
 		Height:   heights,
@@ -138,16 +119,16 @@ type ConsensusMessage struct {
 	Message Cmessage
 }
 
-func (c *ConsensusMessage) ICSMsg(clusterID ClusterID) *ICSMSG {
+func (c *ConsensusMessage) ICSMsg(clusterID types.ClusterID) *ICSMSG {
 	var (
-		msgType MsgType
+		msgType ptypes.MsgType
 		rawData []byte
 	)
 
 	switch msg := c.Message.(type) {
 	case *VoteMessage:
 		rawData = msg.Vote.Bytes()
-		msgType = VOTEMSG
+		msgType = ptypes.VOTEMSG
 	default:
 		return nil
 	}
@@ -192,17 +173,17 @@ func (m *VoteMessage) Validate() error {
 }
 
 type TesseractGrid struct {
-	Hash       Hash
+	Hash       types.Hash
 	Total      int32
-	Tesseracts []*Tesseract
+	Tesseracts []*types.Tesseract
 }
 
-func (t *TesseractGrid) GetTesseractGridID() *TesseractGridID {
-	gridID := &TesseractGridID{
+func (t *TesseractGrid) GetTesseractGridID() *types.TesseractGridID {
+	gridID := &types.TesseractGridID{
 		Hash: t.Hash,
-		Parts: &TesseractParts{
+		Parts: &types.TesseractParts{
 			Total:   t.Total,
-			Hashes:  make([]Hash, 0, len(t.Tesseracts)),
+			Hashes:  make([]types.Hash, 0, len(t.Tesseracts)),
 			Heights: make([]uint64, 0, len(t.Tesseracts)),
 		},
 	}
@@ -215,7 +196,7 @@ func (t *TesseractGrid) GetTesseractGridID() *TesseractGridID {
 	return gridID
 }
 
-func (t *TesseractGrid) CompareHash(h Hash) bool {
+func (t *TesseractGrid) CompareHash(h types.Hash) bool {
 	if len(h.Bytes()) == 0 {
 		return false
 	}
@@ -230,7 +211,7 @@ func (t *TesseractGrid) CompareHash(h Hash) bool {
 type NodeSet struct {
 	Ids         []id.KramaID
 	PublicKeys  [][]byte
-	Responses   *ArrayOfBits
+	Responses   *types.ArrayOfBits
 	VotingPower []int64
 	Count       int
 	QuorumSize  int
@@ -240,7 +221,7 @@ func NewNodeSet(ids []id.KramaID, keys [][]byte) *NodeSet {
 	return &NodeSet{
 		Ids:         ids,
 		PublicKeys:  keys,
-		Responses:   NewArrayOfBits(len(ids)),
+		Responses:   types.NewArrayOfBits(len(ids)),
 		VotingPower: make([]int64, len(ids)),
 		Count:       0,
 	}

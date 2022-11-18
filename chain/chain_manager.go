@@ -9,6 +9,12 @@ import (
 	"sync"
 	"time"
 
+	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+
+	gtypes "gitlab.com/sarvalabs/moichain/guna/types"
+
+	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
+
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -63,7 +69,7 @@ type stateManager interface {
 	GetPublicKeys(id ...id.KramaID) (keys [][]byte, err error)
 	Cleanup(addrs types.Address)
 	IsGenesis(addr types.Address) (bool, error)
-	FetchContextLock(ts *types.Tesseract) (*types.ICSNodes, error)
+	FetchContextLock(ts *types.Tesseract) (*ktypes.ICSNodes, error)
 	FetchTesseractFromDB(hash types.Hash, withInteractions bool) (*types.Tesseract, error)
 }
 
@@ -100,7 +106,7 @@ type ChainManager struct {
 	validatedTesseracts sync.Map
 	latticeLocks        *locker.Locker
 	logger              hclog.Logger
-	knownTesseracts     *types.KnownCache
+	knownTesseracts     *KnownCache
 	senatus             reputationEngine
 	network             server
 	exec                executor
@@ -138,7 +144,7 @@ func NewChainManager(
 		network:          network,
 		orphanTesseracts: orphansCache,
 		gridsCache:       NewGridCache(),
-		knownTesseracts:  types.NewKnownCache(150),
+		knownTesseracts:  NewKnownCache(150),
 		latticeLocks:     locker.New(),
 		logger:           logger.Named("Chain-Manager"),
 		senatus:          senatus,
@@ -197,8 +203,8 @@ func (c *ChainManager) fetchContextForAgora(t *types.Tesseract) ([]id.KramaID, e
 
 func (c *ChainManager) fetchICSNodeSet(
 	ts *types.Tesseract,
-	info *types.ICSClusterInfo,
-) (*types.ICSNodes, error) {
+	info *ptypes.ICSClusterInfo,
+) (*ktypes.ICSNodes, error) {
 	nodeSets, err := c.sm.FetchContextLock(ts)
 	if err != nil {
 		return nil, err
@@ -209,7 +215,7 @@ func (c *ChainManager) fetchICSNodeSet(
 		return nil, err
 	}
 
-	nodeSets.UpdateNodeSet(types.RandomSet, types.NewNodeSet(types.ToKIPPeerID(info.RandomSet), randomKeys))
+	nodeSets.UpdateNodeSet(ktypes.RandomSet, ktypes.NewNodeSet(types.ToKIPPeerID(info.RandomSet), randomKeys))
 
 	return nodeSets, nil
 }
@@ -278,13 +284,13 @@ func (c *ChainManager) GetTesseractByHeight(
 	return c.GetTesseract(types.BytesToHash(tesseractHash), withInteractions)
 }
 
-func (c *ChainManager) GetAssetDataByAssetHash(assetHash []byte) (*types.AssetData, error) {
+func (c *ChainManager) GetAssetDataByAssetHash(assetHash []byte) (*gtypes.AssetData, error) {
 	rawData, err := c.db.ReadEntry(assetHash)
 	if err != nil {
 		return nil, err
 	}
 
-	assetData := new(types.AssetData)
+	assetData := new(gtypes.AssetData)
 
 	if err := polo.Depolorize(assetData, rawData); err != nil {
 		return nil, err
@@ -353,7 +359,7 @@ func (c *ChainManager) isSealValid(ts *types.Tesseract, id id.KramaID) (bool, er
 	return mudra.Verify(ts.Bytes(), ts.Seal, publicKey[0])
 }
 
-func (c *ChainManager) verifySignatures(ts *types.Tesseract, ics *types.ICSNodes) (bool, error) {
+func (c *ChainManager) verifySignatures(ts *types.Tesseract, ics *ktypes.ICSNodes) (bool, error) {
 	verificationInitTime := time.Now()
 	publicKeys := make([][]byte, 0, ts.Header.Extra.VoteSet.TrueIndicesSize())
 	votesCounter := make([]int, 5) // Only 5 because we don't consider observer nodes vote
@@ -378,8 +384,8 @@ func (c *ChainManager) verifySignatures(ts *types.Tesseract, ics *types.ICSNodes
 		return false, types.ErrQuorumFailed
 	}
 
-	vote := types.CanonicalVote{
-		Type:   types.PRECOMMIT,
+	vote := ktypes.CanonicalVote{
+		Type:   ktypes.PRECOMMIT,
 		Round:  ts.Header.Extra.Round,
 		GridID: ts.Header.Extra.GridID,
 	}
@@ -525,7 +531,7 @@ func (c *ChainManager) addTesseract(
 }
 
 func (c *ChainManager) addTesseractsWithState(
-	clusterInfo *types.ICSClusterInfo,
+	clusterInfo *ptypes.ICSClusterInfo,
 	dirtyStorage map[types.Hash][]byte,
 	tesseracts ...*types.Tesseract,
 ) error {
@@ -579,7 +585,7 @@ func (c *ChainManager) addTesseractsWithState(
 }
 
 func (c *ChainManager) addTesseractsWithOutState(
-	clusterInfo *types.ICSClusterInfo,
+	clusterInfo *ptypes.ICSClusterInfo,
 	tesseracts ...*types.Tesseract,
 ) error {
 	for _, ts := range tesseracts {
@@ -620,7 +626,7 @@ func (c *ChainManager) addTesseractsWithOutState(
 	return nil
 }
 
-func (c *ChainManager) validateTesseract(sender id.KramaID, ts *types.Tesseract, ics *types.ICSNodes) error {
+func (c *ChainManager) validateTesseract(sender id.KramaID, ts *types.Tesseract, ics *ktypes.ICSNodes) error {
 	c.latticeLocks.Lock(ts.Hash().Hex())
 	defer func() {
 		if err := c.latticeLocks.Unlock(ts.Hash().Hex()); err != nil {
@@ -659,7 +665,7 @@ func (c *ChainManager) validateTesseract(sender id.KramaID, ts *types.Tesseract,
 func (c *ChainManager) AddTesseractWithOutState(
 	ts *types.Tesseract,
 	sender id.KramaID,
-	clusterInfo *types.ICSClusterInfo,
+	clusterInfo *ptypes.ICSClusterInfo,
 ) error {
 	log.Println("Adding gossiped tesseract", ts.Hash(), ts.Address())
 
@@ -891,7 +897,7 @@ func (c *ChainManager) SetupGenesis(path string) error {
 	return nil
 }
 
-func (c *ChainManager) sendTesseractSyncRequest(ts *types.Tesseract, clusterInfo *types.ICSClusterInfo) {
+func (c *ChainManager) sendTesseractSyncRequest(ts *types.Tesseract, clusterInfo *ptypes.ICSClusterInfo) {
 	// fetch context info for agora
 	fetchContext, err := c.fetchContextForAgora(ts)
 	if err != nil {
@@ -908,7 +914,7 @@ func (c *ChainManager) sendTesseractSyncRequest(ts *types.Tesseract, clusterInfo
 }
 
 func (c *ChainManager) tesseractHandler(pubSubMsg *pubsub.Message) error {
-	msg := new(types.TesseractMessage)
+	msg := new(ptypes.TesseractMessage)
 	tsAdditionInitTime := time.Now()
 	//	v1msg := proto.MessageV1(msg)
 	if err := polo.Depolorize(msg, pubSubMsg.GetData()); err != nil {
@@ -928,7 +934,7 @@ func (c *ChainManager) tesseractHandler(pubSubMsg *pubsub.Message) error {
 		return nil
 	}
 
-	clusterInfo := new(types.ICSClusterInfo)
+	clusterInfo := new(ptypes.ICSClusterInfo)
 	if err := polo.Depolorize(clusterInfo, msg.Delta[msg.Tesseract.GetICSHash()]); err != nil {
 		c.logger.Error("Error depolarising cluster info", "err", err)
 	}

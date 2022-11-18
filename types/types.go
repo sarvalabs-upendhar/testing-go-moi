@@ -4,18 +4,14 @@ package types
 Most of the types in this file are yet to be finalized.All the below structs are temporary type definitions
 */
 import (
-	"crypto/ecdsa"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"math/big"
 	"math/rand"
 	"strings"
 	"sync"
 
-	mapset "github.com/deckarep/golang-set"
-	"github.com/mr-tron/base58"
 	"github.com/pkg/errors"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/polo/go-polo"
@@ -33,17 +29,6 @@ const (
 	ContractAccount
 )
 
-const (
-	Sender ParticipantRole = iota
-	Receiver
-	Genesis
-)
-
-const (
-	ValueTransfer IxType = iota
-	AssetCreation
-)
-
 var (
 	NilAddress Address
 	NilHash    Hash
@@ -51,23 +36,11 @@ var (
 
 type ParticipantRole int
 
-// IxType ...
-type IxType int
-
 // AccType ...
 type AccType int
 
 // Accounts ...
 type Accounts []*AccountMetaInfo
-
-// ClusterID ...
-type ClusterID string
-
-// AssetID ...
-type AssetID string
-
-// LogicID ...
-type LogicID string
 
 // Hash represents the 32 byte hash of arbitrary data.
 type Hash [32]byte
@@ -77,28 +50,6 @@ type Address [32]byte
 
 func (a Address) IsNil() bool {
 	return a == NilAddress
-}
-
-func (c ClusterID) String() string {
-	return string(c)
-}
-
-func (c ClusterID) Hash() Hash {
-	rawHash, err := base58.Decode(c.String())
-	if err != nil {
-		return NilHash
-	}
-
-	return BytesToHash(rawHash)
-}
-
-func (l LogicID) Bytes() []byte {
-	rawID, err := hex.DecodeString(string(l))
-	if err != nil {
-		return nil
-	}
-
-	return rawID
 }
 
 func (a Address) String() string {
@@ -124,49 +75,6 @@ func (a Address) MarshalText() ([]byte, error) {
 	hex.Encode(result, a.Bytes())
 
 	return result, nil
-}
-
-type ContextLockInfo struct {
-	ContextHash   Hash
-	Height        uint64
-	TesseractHash Hash
-}
-
-type AccDetailsQueue struct {
-	queue []*AccountMetaInfo
-	lock  sync.RWMutex
-}
-
-func (a *AccDetailsQueue) Push(data []*AccountMetaInfo) {
-	a.lock.Lock()
-	defer a.lock.Unlock()
-
-	a.queue = append(a.queue, data...)
-}
-
-func (a *AccDetailsQueue) Pop() (*AccountMetaInfo, error) {
-	if len(a.queue) > 0 {
-		a.lock.Lock()
-		defer a.lock.Unlock()
-
-		data := a.queue[0]
-		a.queue = a.queue[1:]
-
-		return data, nil
-	}
-
-	return nil, errors.New("Queue is empty")
-}
-
-func (a *AccDetailsQueue) Len() int {
-	a.lock.Lock()
-	defer a.lock.Unlock()
-
-	return len(a.queue)
-}
-
-func (acc *Accounts) Bytes() []byte {
-	return polo.Polorize(acc)
 }
 
 // Hex return the Hex representation of the Address
@@ -262,198 +170,6 @@ func Hex2Bytes(str string) []byte {
 
 	return h
 }
-
-// Interaction ...
-type Interaction struct {
-	Data IxData
-	Hash Hash
-	Size int64 `polo:"-"`
-}
-
-type InteractionInput struct {
-	Type IxType
-
-	Nonce uint64
-
-	From Address
-
-	To Address
-
-	Payer Address
-
-	TransferValue map[AssetID]uint64
-
-	PerceivedValue map[AssetID]uint64
-
-	AnuLimit uint64
-
-	AnuPrice uint64 `json:"interaction_data_input_anu_price"`
-
-	Proof ProofData `json:"interaction_data_input_proof"`
-
-	Payload InteractionInputPayload `json:"interaction_data_input_payload"`
-}
-type ProofData struct {
-	ProtocolID int `json:"interaction_data_input_proof_protocolid"`
-
-	ProofType int `json:"interaction_data_input_proof_type"`
-
-	ProofData []byte `json:"interaction_data_input_proof_data"`
-}
-
-type InteractionInputPayload struct {
-	Init []byte `json:"init"`
-
-	Data []byte `json:"data"`
-
-	LogicAddress Address
-
-	File FileDataInput
-
-	AssetData AssetDataInput
-
-	ApprovalData ApprovalDataInput
-}
-type AssetDataInput struct {
-	Dimension int `json:"asset_data_input_total_dimension"`
-
-	TotalSupply uint64 `json:"asset_data_input_total_supply"`
-
-	Symbol string `json:"asset_data_input_symbol"`
-
-	Code []byte
-
-	IsFungible bool
-	IsMintable bool
-}
-type ApprovalDataInput struct {
-	Operator Address
-
-	Approvals map[AssetID]uint64
-}
-
-type FileDataInput struct {
-	Name string `json:"file_data_name"`
-
-	Hash string `json:"file_data_hash"`
-
-	Nodes []string `json:"file_data_nodes"`
-
-	File []byte `json:"file_data_file"`
-}
-type InteractionCompute struct {
-	ComputeMode int `json:"interaction_data_compute_mode"`
-
-	ComputationalNodes []id.KramaID `json:"interaction_data_compute_value_nodes"`
-
-	ComputationalHash []byte `json:"interaction_data_compute_value_hash"`
-}
-type InteractionTrust struct {
-	ConsensusNodes []id.KramaID `json:"interaction_data_compute_value_consensus_nodes"`
-
-	MTQ uint `json:"interaction_data_compute_value_mtq"`
-}
-
-// IxData has the complete information of a interaction which is signed by user
-type IxData struct {
-	Input     InteractionInput
-	Compute   InteractionCompute
-	Trust     InteractionTrust
-	Signature []byte
-}
-
-// Interactions are array of Transactions
-type Interactions []*Interaction
-
-func (is Interactions) Bytes() []byte {
-	return polo.Polorize(is)
-}
-
-func (is Interactions) Hash() Hash {
-	return PoloHash(is)
-}
-
-func (ix *Interaction) GetSize() int64 {
-	// FIXME: size should calculated after signature integration
-	return int64(len(polo.Polorize(ix)))
-}
-
-func (ix *Interaction) GetAssetCreationPayload() *AssetDataInput {
-	return &ix.Data.Input.Payload.AssetData
-}
-
-func (ix *Interaction) IxType() IxType {
-	return ix.Data.Input.Type
-}
-
-func (ix *Interaction) GetIxHash() Hash {
-	if ix.Hash.IsNil() {
-		h := PoloHash(ix)
-		ix.Hash = h
-
-		return h
-	}
-
-	return ix.Hash
-}
-
-func (ix *Interaction) Sign(prv *ecdsa.PrivateKey) error {
-	// h := ix.GetIxHash()
-	// sig, err := kcrypto.Sign(h[:], prv)
-	sig, err := make([]byte, 0), errors.New("nil")
-	if err != nil {
-		return err
-	}
-
-	return ix.SetSignatureValues(sig)
-}
-
-func (ix *Interaction) SetSignatureValues(sig []byte) error {
-	ix.Data.Signature = sig
-
-	return nil
-}
-
-func (ix *Interaction) FromAddress() Address {
-	return ix.Data.Input.From
-}
-
-func (ix *Interaction) ToAddress() Address {
-	return ix.Data.Input.To
-}
-
-// Nonce returns the account nonce of the transaction
-func (ix *Interaction) Nonce() uint64 { return ix.Data.Input.Nonce }
-
-func (ix *Interaction) GasPrice() *big.Int { return new(big.Int).SetUint64(ix.Data.Input.AnuPrice) }
-
-func (ix *Interaction) GasPriceCmp(other *Interaction) int {
-	return new(big.Int).SetUint64(ix.Data.Input.AnuPrice).Cmp(new(big.Int).SetUint64(other.Data.Input.AnuPrice))
-}
-func (ix *Interaction) Gas() uint64 { return ix.Data.Input.AnuLimit }
-
-func (ix *Interaction) GasPriceIntCmp(other *big.Int) int {
-	return new(big.Int).SetUint64(ix.Data.Input.AnuPrice).Cmp(other)
-}
-
-func (ix *Interaction) Cost() *big.Int {
-	total := new(big.Int).Mul(
-		new(big.Int).SetUint64(ix.Data.Input.AnuPrice),
-		new(big.Int).SetUint64(ix.Data.Input.AnuLimit),
-	)
-
-	return total
-}
-
-func (ix *Interaction) IsUnderpriced(priceLimit uint64) bool {
-	return ix.GasPrice().Cmp(big.NewInt(0).SetUint64(priceLimit)) < 0
-}
-
-type IxByNonce Interactions
-
-func (s IxByNonce) Len() int           { return len(s) }
-func (s IxByNonce) Less(i, j int) bool { return s[i].Data.Input.Nonce < s[j].Data.Input.Nonce }
-func (s IxByNonce) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
 func ToKIPPeerID(nodes []string) []id.KramaID {
 	ids := make([]id.KramaID, 0, len(nodes))
@@ -899,61 +615,8 @@ func PoloHash(x interface{}) Hash {
 	return h
 }
 
-type TesseractResponse struct {
-	Data  []byte
-	Delta map[Hash][]byte
-}
-
 func GetHash(data []byte) Hash {
 	return blake2b.Sum256(data)
-}
-
-// KnownCache is a cache for known hashes.
-type KnownCache struct {
-	hashes mapset.Set
-	max    int
-}
-
-// NewKnownCache creates a new knownCache with a max capacity.
-func NewKnownCache(max int) *KnownCache {
-	return &KnownCache{
-		max:    max,
-		hashes: mapset.NewSet(),
-	}
-}
-
-// Add adds a list of elements to the set.
-func (k *KnownCache) Add(data ...interface{}) {
-	for k.hashes.Cardinality() > max(0, k.max-len(data)) {
-		k.hashes.Pop()
-	}
-
-	for _, hash := range data {
-		k.hashes.Add(hash)
-	}
-}
-
-// Contains returns whether the given item is in the set.
-func (k *KnownCache) Contains(data interface{}) bool {
-	return k.hashes.Contains(data)
-}
-
-// Cardinality returns the number of elements in the set.
-func (k *KnownCache) Cardinality() int {
-	return k.hashes.Cardinality()
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-
-	return b
-}
-
-type BitSet struct {
-	Size     int
-	Elements []uint64
 }
 
 type Account struct {
@@ -1022,4 +685,8 @@ func AccTypeFromIxType(ixType IxType) AccType {
 	default:
 		return RegularAccount
 	}
+}
+
+func (acc *Accounts) Bytes() []byte {
+	return polo.Polorize(acc)
 }
