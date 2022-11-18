@@ -1,15 +1,35 @@
 package poi
 
 import (
-	"fmt"
-	"strings"
+	"io/ioutil"
+	"os"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	"gitlab.com/sarvalabs/moichain/mudra/common"
 )
 
 func TestGetKeystore(t *testing.T) {
-	_, err := GetKeystore("/Users/sarvatechdeveloper1/.moi/moinode111")
-	if err != nil {
-		fmt.Println(strings.Contains(err.Error(), "no such file or directory"))
-		t.Fatalf("%v", err)
-	}
+	// Temp folder
+	datadir1, err := ioutil.TempDir("", "testDataDir")
+	require.NoError(t, err)
+
+	// Validator 1 Init
+	_, _, err = RandGenKeystore(datadir1, "nodepass1")
+	require.NoError(t, err)
+
+	_, err = GetKeystore(datadir1)
+	require.Equal(t, nil, err)
+
+	// Temp folder
+	datadir2, err := ioutil.TempDir("", "testDataDir")
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		os.RemoveAll(datadir1)
+		os.RemoveAll(datadir2)
+	})
+
+	_, err = GetKeystore(datadir2)
+	require.Equal(t, err, common.ErrNoKeystore)
 }

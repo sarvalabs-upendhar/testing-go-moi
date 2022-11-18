@@ -14,14 +14,6 @@ const (
 
 var NodeIGCPath = [3]uint32{6174, 5020, 0}
 
-// DifferentNodeTypes = []string{"MOI Full Node", "MOI Provenance node"}
-
-var ErrInDecryption = errors.New("could not decrypt key with given password")
-
-// ErrorUnsupportedNodeType  = errors.New("invalid node option")
-// ErrorMOIIDBaseURLNotFound = errors.New("\n MOI_ID_BASE_URL NOT FOUND")
-// ErrorAuthFailed           = errors.New("authentication failed! Make sure credentials are correct")
-
 // SRPPrivateBytes Secret Recovery Phrase(SRP) with decryptionKey of privateKey and Mnemonic
 type SRPPrivateBytes [64]byte
 
