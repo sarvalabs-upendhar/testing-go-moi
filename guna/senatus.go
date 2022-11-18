@@ -5,6 +5,8 @@ import (
 	"context"
 	"time"
 
+	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+
 	"gitlab.com/sarvalabs/moichain/utils"
 
 	"github.com/hashicorp/go-hclog"
@@ -48,7 +50,7 @@ type ReputationEngine struct {
 	cache    *lru.Cache
 	locks    *locker.Locker
 	state    state
-	messages []*types.HelloMsg
+	messages []*ptypes.HelloMsg
 }
 
 func NewReputationEngine(
@@ -69,7 +71,7 @@ func NewReputationEngine(
 		cache:    cache,
 		locks:    locker.New(),
 		state:    state,
-		messages: make([]*types.HelloMsg, 0, 200), // Max message queue limit is 200
+		messages: make([]*ptypes.HelloMsg, 0, 200), // Max message queue limit is 200
 	}
 
 	return r, nil
@@ -281,7 +283,7 @@ func (r *ReputationEngine) getInfo(id id.KramaID) (*ReputationInfo, error) {
 	return info, nil
 }
 
-func (r *ReputationEngine) AddEntries(msg types.SyncReputationInfo) error {
+func (r *ReputationEngine) AddEntries(msg ptypes.SyncReputationInfo) error {
 	writer := r.db.NewBatchWriter()
 
 	for _, v := range msg.Msg {
@@ -315,11 +317,11 @@ func (r *ReputationEngine) GetInclusivity(id id.KramaID) (int64, error) {
 	return info.Degree, nil
 }
 
-func (r *ReputationEngine) GetAllEntries() (chan *types.SyncReputationInfo, error) {
-	ch := make(chan *types.SyncReputationInfo)
+func (r *ReputationEngine) GetAllEntries() (chan *ptypes.SyncReputationInfo, error) {
+	ch := make(chan *ptypes.SyncReputationInfo)
 
 	go func() {
-		msg := new(types.SyncReputationInfo)
+		msg := new(ptypes.SyncReputationInfo)
 		entriesChan := r.db.GetEntries([]byte{dhruva.NTQ.Byte()})
 		count := 0
 
@@ -331,13 +333,13 @@ func (r *ReputationEngine) GetAllEntries() (chan *types.SyncReputationInfo, erro
 				r.logger.Error("Error decoding peer info", err)
 			}
 
-			msg.Msg = append(msg.Msg, types.PeerInfo{ID: kramaID, Ntq: info.NTQ, Address: info.Addrs, Degree: info.Degree})
+			msg.Msg = append(msg.Msg, ptypes.PeerInfo{ID: kramaID, Ntq: info.NTQ, Address: info.Addrs, Degree: info.Degree})
 
 			count++
 
 			if count == 40 {
 				ch <- msg
-				msg = new(types.SyncReputationInfo)
+				msg = new(ptypes.SyncReputationInfo)
 				count = 0
 			}
 		}
@@ -347,7 +349,7 @@ func (r *ReputationEngine) GetAllEntries() (chan *types.SyncReputationInfo, erro
 }
 
 func (r *ReputationEngine) SenatusHandler(msg *pubsub.Message) error {
-	helloMsg := new(types.HelloMsg)
+	helloMsg := new(ptypes.HelloMsg)
 
 	if err := polo.Depolorize(helloMsg, msg.Data); err != nil {
 		return err
@@ -368,7 +370,7 @@ func (r *ReputationEngine) SenatusHandler(msg *pubsub.Message) error {
 	return nil
 }
 
-func (r *ReputationEngine) HandleHelloMessages(msgs []*types.HelloMsg) (int, error) {
+func (r *ReputationEngine) HandleHelloMessages(msgs []*ptypes.HelloMsg) (int, error) {
 	kramaIDs := make([]id.KramaID, len(msgs))
 
 	for index, msg := range msgs {

@@ -6,6 +6,8 @@ import (
 	"math/rand"
 	"time"
 
+	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+
 	"github.com/hashicorp/go-hclog"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -59,7 +61,7 @@ func (t *Transport) InitClusterCommunication(ctx context.Context, slot *ktypes.S
 	var randomICSNodes []id.KramaID
 
 	handler := func(msg *pubsub.Message) error {
-		icsMsg := new(types.ICSMSG)
+		icsMsg := new(ktypes.ICSMSG)
 		if err := polo.Depolorize(icsMsg, msg.GetData()); err != nil {
 			return err
 		}
@@ -124,7 +126,7 @@ func (t *Transport) Call(kramaID id.KramaID, svcName, svcMethod string, args, re
 	return t.rpcClient.MoiCall(kramaID, svcName, svcMethod, args, response, kramaMoirpcStreamTTL)
 }
 
-func (t *Transport) BroadcastTesseract(msg *types.TesseractMessage) error {
+func (t *Transport) BroadcastTesseract(msg *ptypes.TesseractMessage) error {
 	return t.network.Broadcast(TesseractTopic, polo.Polorize(msg))
 }
 

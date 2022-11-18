@@ -9,11 +9,14 @@ import (
 	"path/filepath"
 	"time"
 
+	"gitlab.com/sarvalabs/moichain/types"
+
+	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
+
 	"gitlab.com/sarvalabs/moichain/utils"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/moichain/types"
 	"gitlab.com/sarvalabs/polo/go-polo"
 )
 
@@ -42,8 +45,8 @@ type ICSInitCheckpoint struct {
 
 // WAL is an interface for any write-ahead logger.
 type WAL interface {
-	Write(types.ConsensusMessage, types.ClusterID) error
-	WriteSync(types.ConsensusMessage, types.ClusterID) error
+	Write(ktypes.ConsensusMessage, types.ClusterID) error
+	WriteSync(ktypes.ConsensusMessage, types.ClusterID) error
 	FlushAndSync() error
 
 	SearchForClusterID(clusterID string, options *WALSearchOptions) (rd io.ReadCloser, found bool, err error)
@@ -114,7 +117,7 @@ func (wal *BaseWAL) Start() error {
 	if err != nil {
 		return err
 	} else if size == 0 {
-		err = wal.WriteSync(types.ConsensusMessage{PeerID: "init", Message: nil}, "init")
+		err = wal.WriteSync(ktypes.ConsensusMessage{PeerID: "init", Message: nil}, "init")
 		if err != nil {
 			return err
 		}
@@ -179,12 +182,12 @@ func (wal *BaseWAL) Wait() {
 // Write is called in newStep and for each receive on the
 // peerMsgQueue and the timeoutTicker.
 // NOTE: does not call fsync()
-func (wal *BaseWAL) Write(msg types.ConsensusMessage, clusterID types.ClusterID) error {
+func (wal *BaseWAL) Write(msg ktypes.ConsensusMessage, clusterID types.ClusterID) error {
 	if wal == nil {
 		return nil
 	}
 
-	if err := wal.enc.Encode(&types.TimedWALMessage{
+	if err := wal.enc.Encode(&ktypes.TimedWALMessage{
 		ClusterID: clusterID,
 		Timestamp: time.Now().UnixNano(),
 		Message:   msg,
@@ -205,7 +208,7 @@ func (wal *BaseWAL) Write(msg types.ConsensusMessage, clusterID types.ClusterID)
 // WriteSync is called when we receive a msg from ourselves
 // so that we write to disk before sending signed messages.
 // NOTE: calls fsync()
-func (wal *BaseWAL) WriteSync(msg types.ConsensusMessage, clusterID types.ClusterID) error {
+func (wal *BaseWAL) WriteSync(msg ktypes.ConsensusMessage, clusterID types.ClusterID) error {
 	if wal == nil {
 		return nil
 	}
@@ -241,7 +244,7 @@ func (wal *BaseWAL) SearchForClusterID(
 	options *WALSearchOptions,
 ) (rd io.ReadCloser, found bool, err error) {
 	var (
-		msg *types.TimedWALMessage
+		msg *ktypes.TimedWALMessage
 		gr  *utils.GroupReader
 	)
 
@@ -314,7 +317,7 @@ func NewWALEncoder(wr io.Writer) *WALEncoder {
 // Encode writes the custom encoding of v to the stream. It returns an error if
 // the encoded size of v is greater than 1MB. Any error encountered
 // during the write is also returned.
-func (enc *WALEncoder) Encode(v *types.TimedWALMessage) error {
+func (enc *WALEncoder) Encode(v *ktypes.TimedWALMessage) error {
 	data := polo.Polorize(v)
 	crc := crc32.Checksum(data, crc32c)
 
@@ -370,7 +373,7 @@ func NewWALDecoder(rd io.Reader) *WALDecoder {
 }
 
 // Decode reads the next custom-encoded value from its reader and returns it.
-func (dec *WALDecoder) Decode() (*types.TimedWALMessage, error) {
+func (dec *WALDecoder) Decode() (*ktypes.TimedWALMessage, error) {
 	b := make([]byte, 4)
 
 	_, err := dec.rd.Read(b)
@@ -411,7 +414,7 @@ func (dec *WALDecoder) Decode() (*types.TimedWALMessage, error) {
 		return nil, DataCorruptionError{fmt.Errorf("checksums do not match: read: %v, actual: %v", crc, actualCRC)}
 	}
 
-	res := new(types.TimedWALMessage)
+	res := new(ktypes.TimedWALMessage)
 
 	err = polo.Depolorize(res, data)
 	if err != nil {

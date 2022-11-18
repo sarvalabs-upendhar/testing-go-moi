@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+
 	"github.com/hashicorp/go-hclog"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/moichain/poorna/agora/db"
@@ -29,7 +31,7 @@ type store interface {
 }
 
 type network interface {
-	SendAgoraMessage(id id.KramaID, msgType types.MsgType, msg atypes.Message) error
+	SendAgoraMessage(id id.KramaID, msgType ptypes.MsgType, msg atypes.Message) error
 }
 
 type Engine struct {
@@ -242,7 +244,7 @@ func (e *Engine) responseWorker() {
 				return
 			}
 
-			if err := e.network.SendAgoraMessage(resp.PeerID, types.AGORARESP, resp.GetAgoraMsg()); err != nil {
+			if err := e.network.SendAgoraMessage(resp.PeerID, ptypes.AGORARESP, resp.GetAgoraMsg()); err != nil {
 				e.logger.Error("Error sending response message", "peer", resp.PeerID)
 
 				continue

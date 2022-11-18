@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"gitlab.com/sarvalabs/moichain/utils"
+	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -24,7 +24,7 @@ type sessionManager interface {
 }
 
 type sessionNetwork interface {
-	SendAgoraMessage(id id.KramaID, msgType types.MsgType, msg atypes.Message) error
+	SendAgoraMessage(id id.KramaID, msgType ptypes.MsgType, msg atypes.Message) error
 	ClosePeerSession(kramaID id.KramaID, sessionID types.Address) error
 }
 
@@ -84,7 +84,7 @@ func (s *Session) ChooseBestPeer(ctx context.Context, avoid map[id.KramaID]inter
 	return s.pm.chooseBestPeer(ctx, avoid)
 }
 
-func (s *Session) sendWantReq(peerID id.KramaID, cid *utils.HashSet) error {
+func (s *Session) sendWantReq(peerID id.KramaID, cid *ptypes.HashSet) error {
 	req := &atypes.AgoraRequestMsg{
 		SessionID: s.id,
 		StateHash: s.stateHash,
@@ -109,7 +109,7 @@ func (s *Session) getBlocks(
 	ctx context.Context,
 	peerID id.KramaID,
 	out chan *atypes.Block,
-	idSet *utils.HashSet,
+	idSet *ptypes.HashSet,
 ) error {
 	s.logger.Debug("Fetching data from ", "peer", peerID, "count", idSet.Len())
 
@@ -175,7 +175,7 @@ func (s *Session) getBlocks(
 func (s *Session) GetBlocks(ctx context.Context, cids []types.Hash) chan *atypes.Block {
 	out := make(chan *atypes.Block)
 
-	idSet := utils.NewHashSet()
+	idSet := ptypes.NewHashSet()
 
 	for _, cid := range cids {
 		idSet.Add(cid)

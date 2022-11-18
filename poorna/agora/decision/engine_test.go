@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -468,7 +470,7 @@ func NewMockNetwork() *mockNetwork {
 	}
 }
 
-func (mn *mockNetwork) SendAgoraMessage(id id.KramaID, msgType types.MsgType, msg atypes.Message) error {
+func (mn *mockNetwork) SendAgoraMessage(id id.KramaID, msgType ptypes.MsgType, msg atypes.Message) error {
 	mn.msg[id] = msg
 
 	return nil

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 
+	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+
 	"github.com/hashicorp/go-hclog"
 	"gitlab.com/sarvalabs/moichain/chain"
 	"gitlab.com/sarvalabs/moichain/ixpool"
@@ -139,7 +141,7 @@ func (eh *SubHandler) handlePeerMessage(p *KipPeer) error {
 	}
 
 	// Unmarshal the buffer into a proto message
-	message := new(types.Message)
+	message := new(ptypes.Message)
 	if err = polo.Depolorize(message, buffer[0:bytecount]); err != nil {
 		return err
 	}
@@ -147,12 +149,12 @@ func (eh *SubHandler) handlePeerMessage(p *KipPeer) error {
 	// log.Println("Got new Message", message.GetType())
 	switch message.MsgType {
 	// NEWIXTS
-	case types.NEWIXSMSG:
+	case ptypes.NEWIXSMSG:
 		// Print the KipID of the interactions sender
 		eh.logger.Info("Received Interactions from", "id", p.id)
 
 		// Unmarshal message proto into an InteractionsData message
-		var ixns types.InteractionMsg
+		var ixns ptypes.InteractionMsg
 		if err = polo.Depolorize(&ixns, message.Payload); err != nil {
 			return err
 		}
@@ -174,7 +176,7 @@ func (eh *SubHandler) handlePeerMessage(p *KipPeer) error {
 
 		eh.broadcastIXs(ixns.Ixs)
 
-	case types.RANDOMWALKREQ:
+	case ptypes.RANDOMWALKREQ:
 		log.Println("Got an random request", message.Sender)
 	}
 

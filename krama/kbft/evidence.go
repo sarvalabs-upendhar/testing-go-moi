@@ -1,6 +1,7 @@
 package kbft
 
 import (
+	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/moichain/types"
 	"gitlab.com/sarvalabs/polo/go-polo"
@@ -23,7 +24,7 @@ func NewEvidenceEngine() *EvidenceEngine {
 type Evidence struct {
 	IxHash   types.Hash
 	Operator id.KramaID
-	Votes    []*types.Vote
+	Votes    []*ktypes.Vote
 	VoteSet  *types.ArrayOfBits
 }
 
@@ -31,13 +32,13 @@ func NewEvidence(ixHash types.Hash, operator id.KramaID, size int) *Evidence {
 	evidenceInstance := &Evidence{
 		IxHash:   ixHash,
 		Operator: operator,
-		Votes:    make([]*types.Vote, size),
+		Votes:    make([]*ktypes.Vote, size),
 	}
 
 	return evidenceInstance
 }
 
-func (e *Evidence) AddVote(v *types.Vote) {
+func (e *Evidence) AddVote(v *ktypes.Vote) {
 	e.Votes = append(e.Votes, v)
 }
 

@@ -11,6 +11,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+
+	gtypes "gitlab.com/sarvalabs/moichain/guna/types"
+
 	"github.com/pkg/errors"
 	"gitlab.com/sarvalabs/moichain/guna"
 
@@ -65,7 +69,7 @@ type lattice interface {
 	AddTesseractWithOutState(
 		ts *types.Tesseract,
 		sender id.KramaID,
-		ics *types.ICSClusterInfo,
+		ics *ptypes.ICSClusterInfo,
 	) error
 	GetTesseract(hash types.Hash, withInteractions bool) (*types.Tesseract, error)
 }
@@ -106,7 +110,7 @@ type Syncer struct {
 	reqQueue         chan *SyncJob
 	reqQueue1        chan *TesseractSyncJob
 	wrkResults       chan interface{}
-	accDetails       *types.AccDetailsQueue
+	accDetails       *AccDetailsQueue
 	tesseractSub     *utils.Subscription
 	statusSub        *utils.Subscription
 	newpeerSub       *utils.Subscription
@@ -146,7 +150,7 @@ func NewSyncer(
 		reqQueue:   make(chan *SyncJob),
 		reqQueue1:  make(chan *TesseractSyncJob),
 		wrkResults: make(chan interface{}),
-		accDetails: new(types.AccDetailsQueue),
+		accDetails: new(AccDetailsQueue),
 		status: &Status{
 			Accounts: big.NewInt(0),
 		},
@@ -213,7 +217,7 @@ func (s *Syncer) StreamHandler(stream network.Stream) {
 		s.logger.Info("[StreamHandler]", "Current Peer Count", atomic.LoadUint32(&s.peerCount))
 	}
 
-	msg := &types.AccountsStatusMsg{
+	msg := &ptypes.AccountsStatusMsg{
 		TotalAccounts: s.status.Accounts.Bytes(), // FIXME: Race at status
 		BucketSizes:   make(map[int32][]byte),
 		NTQ:           s.status.Ntq,
@@ -246,17 +250,17 @@ func (s *Syncer) StreamHandler(stream network.Stream) {
 
 // sendAccSyncRequest sends an account sync request to the remote peer
 func (s *Syncer) sendAccSyncRequest(peer *SyncPeer) error { //nolint
-	msg := &types.AccountSyncRequest{
+	msg := &ptypes.AccountSyncRequest{
 		BulkSync: true,
 	}
 
 	log.Println("Sending account sync request to peer:", peer.id)
 
-	return peer.Send(s.node.GetKramaID(), types.ACCSYNCREQ, msg)
+	return peer.Send(s.node.GetKramaID(), ptypes.ACCSYNCREQ, msg)
 }
 
 // StatusUpdate is an rpc handler method used to update the status of a sync peer
-func (s *Syncer) StatusUpdate(peerID peer.ID, msg *types.AccountsStatusMsg) error {
+func (s *Syncer) StatusUpdate(peerID peer.ID, msg *ptypes.AccountsStatusMsg) error {
 	syncPeer, ok := s.peers.Load(peerID)
 	if !ok {
 		return errors.New("peer Not Found")
@@ -293,8 +297,8 @@ func (s *Syncer) syncBucket(bucket int32, peer *SyncPeer) error {
 		return err
 	}
 
-	msgs := make([]*types.AccountSyncResponse, 0)
-	msg := new(types.AccountSyncResponse)
+	msgs := make([]*ptypes.AccountSyncResponse, 0)
+	msg := new(ptypes.AccountSyncResponse)
 	slot := int32(0)
 
 	for len(accountMetaInfos) > slotSize {
@@ -315,7 +319,7 @@ func (s *Syncer) syncBucket(bucket int32, peer *SyncPeer) error {
 	msgs = append(msgs, msg)
 
 	for _, v := range msgs {
-		if err := peer.Send(s.node.GetKramaID(), types.ACCSYNCRRESP, v); err != nil {
+		if err := peer.Send(s.node.GetKramaID(), ptypes.ACCSYNCRRESP, v); err != nil {
 			return err
 		}
 	}
@@ -347,12 +351,12 @@ func (s *Syncer) accSync(peerID peer.ID) error {
 
 // Send is a method of KipPeer that emits an arbitrary proto message to the network
 // Accepts the sender id, the message type and message itself.
-func (p *SyncPeer) Send(id id.KramaID, code types.MsgType, msg interface{}) error {
+func (p *SyncPeer) Send(id id.KramaID, code ptypes.MsgType, msg interface{}) error {
 	// Marshal the proto message into slice of bytes and log and return if an error occurs
 	bytes := polo.Polorize(msg)
 	// Create a network message proto with the bytes payload of the message to send
 	// and convert into a proto message and marshal it into into a slice of bytes
-	m := types.Message{
+	m := ptypes.Message{
 		MsgType: code,
 		Payload: bytes,
 		Sender:  id,
@@ -388,19 +392,19 @@ func (s *Syncer) handleSyncPeer(p *SyncPeer) {
 			continue
 		}
 
-		message := new(types.Message)
+		message := new(ptypes.Message)
 		if err = polo.Depolorize(message, buffer[0:bytecount]); err != nil {
 			log.Panicln("unmarshalling error", err, bytecount)
 		}
 
 		switch message.MsgType {
-		case types.NTQTABLESYNCREQ:
+		case ptypes.NTQTABLESYNCREQ:
 
-		case types.NTQTABLESYNCRESP:
-		case types.ACCSYNCREQ:
+		case ptypes.NTQTABLESYNCRESP:
+		case ptypes.ACCSYNCREQ:
 			s.logger.Debug("Async message received from ", message.Sender)
 
-			msg := new(types.AccountSyncRequest)
+			msg := new(ptypes.AccountSyncRequest)
 
 			err = polo.Depolorize(msg, message.Payload)
 			if err != nil {
@@ -421,8 +425,8 @@ func (s *Syncer) handleSyncPeer(p *SyncPeer) {
 				}()
 			}
 
-		case types.ACCSYNCRRESP:
-			msg := new(types.AccountSyncResponse)
+		case ptypes.ACCSYNCRRESP:
+			msg := new(ptypes.AccountSyncResponse)
 
 			err = polo.Depolorize(msg, message.Payload)
 			if err != nil {
@@ -472,7 +476,7 @@ func (s *Syncer) syncLattice(addr []byte, mode string) error {
 // fetchData fetches the complete state information associated with the given state CID
 // this uses agora to fetch the hashes.
 func (s *Syncer) fetchData(ctx context.Context, session *session.Session, ids ...types.Hash) (bool, error) {
-	keySet := utils.NewHashSet()
+	keySet := ptypes.NewHashSet()
 
 	for _, hash := range ids {
 		if !hash.IsNil() {
@@ -525,7 +529,7 @@ func (s *Syncer) getContextData(ctx context.Context, session *session.Session, h
 		return false, err
 	}
 
-	metaContextObject := new(types.MetaContextObject)
+	metaContextObject := new(gtypes.MetaContextObject)
 	if err := polo.Depolorize(metaContextObject, block.GetData()); err != nil {
 		return false, err
 	}
@@ -750,7 +754,7 @@ func (s *Syncer) handleNewPeer() {
 			r := rand.Intn(500)
 			time.Sleep(time.Duration(r) * time.Millisecond)
 
-			msg := &types.AccountsStatusMsg{
+			msg := &ptypes.AccountsStatusMsg{
 				TotalAccounts: s.status.Accounts.Bytes(),
 				BucketSizes:   make(map[int32][]byte),
 				NTQ:           s.status.Ntq,
@@ -815,7 +819,7 @@ func (s *Syncer) Start() {
 			time.Sleep(1 * time.Second)
 
 			s.ntqtablesynconce.Do(func() {
-				if err := bestPeer.Send(s.node.GetKramaID(), types.NTQTABLESYNCREQ, nil); err != nil {
+				if err := bestPeer.Send(s.node.GetKramaID(), ptypes.NTQTABLESYNCREQ, nil); err != nil {
 					s.logger.Error("Error sending NTQ sync request", "error", err)
 				}
 			})
@@ -826,14 +830,14 @@ func (s *Syncer) Start() {
 					log.Println(k, v.Protocol(), v.ID(), bestPeer.id, bestPeer.id)
 
 					if v.Protocol() == SyncStreamProtocol {
-						msg := &types.AccountSyncRequest{
+						msg := &ptypes.AccountSyncRequest{
 							BulkSync: true,
 						}
 
 						bytes := polo.Polorize(msg)
 
-						finalMsg := types.Message{
-							MsgType: types.ACCSYNCREQ,
+						finalMsg := ptypes.Message{
+							MsgType: ptypes.ACCSYNCREQ,
 							Sender:  s.node.GetKramaID(),
 							Payload: bytes,
 						}
@@ -942,7 +946,7 @@ func (s *Syncer) latticeWorker(id int, job <-chan *SyncJob) {
 					item := tesseractStack.Pop()
 					log.Printf("Adding %s tesseract to lattice %v", item.Tesseract.Header.Address.Hex(), item.Tesseract.Hash())
 
-					icsClusterInfo := new(types.ICSClusterInfo)
+					icsClusterInfo := new(ptypes.ICSClusterInfo)
 					if err := polo.Depolorize(icsClusterInfo, item.Delta[item.Tesseract.Body.ConsensusProof.ICSHash]); err != nil {
 						s.logger.Error("Error depolarising ics cluster Info", "err", err)
 					}
@@ -955,7 +959,7 @@ func (s *Syncer) latticeWorker(id int, job <-chan *SyncJob) {
 				if t, delta, err := s.getTesseract(job.peer, job.hash, nil, true); err != nil {
 					log.Printf("Unable to get tesseract %s from %s Error %s", job.peer.id, job.hash.Hex(), err)
 				} else {
-					icsClusterInfo := new(types.ICSClusterInfo)
+					icsClusterInfo := new(ptypes.ICSClusterInfo)
 					if err := polo.Depolorize(icsClusterInfo, delta[t.Body.ConsensusProof.ICSHash]); err != nil {
 						s.logger.Error("Error depolarising ics cluster Info", "err", err)
 					}
@@ -1013,7 +1017,7 @@ func (s *Syncer) getTesseract(
 	number *big.Int,
 	withInteractions bool,
 ) (*types.Tesseract, map[types.Hash][]byte, error) {
-	req := new(types.TesseractReq)
+	req := new(ptypes.TesseractReq)
 
 	log.Println("get tesseract call", hash)
 
@@ -1027,7 +1031,7 @@ func (s *Syncer) getTesseract(
 
 	req.WithInteractions = withInteractions
 
-	resp := new(types.TesseractResponse)
+	resp := new(TesseractResponse)
 	kipPeer := s.node.Peers.Peer(bestPeer.id)
 	kramaPeerID := kipPeer.GetKramaID()
 

@@ -4,6 +4,8 @@ import (
 	"encoding/hex"
 	"math/big"
 
+	gtypes "gitlab.com/sarvalabs/moichain/guna/types"
+
 	"gitlab.com/sarvalabs/moichain/utils"
 
 	"gitlab.com/sarvalabs/moichain/types"
@@ -92,10 +94,9 @@ func (p *PublicCoreAPI) GetAssetInfoByAssetID(assetID string) (*types.AssetInfo,
 		return nil, err
 	}
 
-	assetHash := aID[2:]
-	assetInfo := createAsset(aID)
+	assetInfo := parseAssetMetaInfo(aID)
 
-	assetData, err := p.chain.GetAssetDataByAssetHash(assetHash)
+	assetData, err := p.chain.GetAssetDataByAssetHash(aID[2:])
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +135,7 @@ func (p *PublicCoreAPI) GetContextInfoByHash(args *ContextInfoByHashArgs) ([]str
 }
 
 // GetTDU will return the total digital utility associated with address
-func (p *PublicCoreAPI) GetTDU(args *TesseractArgs) (types.AssetMap, error) {
+func (p *PublicCoreAPI) GetTDU(args *TesseractArgs) (gtypes.AssetMap, error) {
 	address, err := utils.ValidateAddress(args.From)
 	if err != nil {
 		return nil, types.ErrInvalidAddress
@@ -179,7 +180,7 @@ func (p *PublicCoreAPI) GetInteractionCountByAddress(args *InteractionCountArgs)
 }
 
 // helper functions
-func createAsset(aID []byte) *types.AssetInfo {
+func parseAssetMetaInfo(aID []byte) *types.AssetInfo {
 	var dimension, info uint8
 
 	assetInfo := new(types.AssetInfo)

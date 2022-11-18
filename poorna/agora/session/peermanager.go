@@ -6,6 +6,8 @@ import (
 	"math/rand"
 	"sync"
 
+	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+
 	"gitlab.com/sarvalabs/moichain/utils"
 
 	"github.com/hashicorp/go-hclog"
@@ -209,7 +211,7 @@ func (spm *SessionPeerManager) chooseBestPeer(
 }
 
 func (spm *SessionPeerManager) SendWantReq(peer id.KramaID, msg *atypes.AgoraRequestMsg) error {
-	if err := spm.network.SendAgoraMessage(peer, types.AGORAREQ, msg); err != nil {
+	if err := spm.network.SendAgoraMessage(peer, ptypes.AGORAREQ, msg); err != nil {
 		return err
 	}
 

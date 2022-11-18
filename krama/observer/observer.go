@@ -4,18 +4,17 @@ import (
 	"context"
 	"time"
 
-	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
-	"gitlab.com/sarvalabs/moichain/types"
+	types "gitlab.com/sarvalabs/moichain/krama/types"
 	"gitlab.com/sarvalabs/polo/go-polo"
 )
 
 type WatchDog struct {
 	ctx  context.Context
-	slot *ktypes.Slot
+	slot *types.Slot
 	msgs []*types.ICSMSG
 }
 
-func NewWatchDog(ctx context.Context, slot *ktypes.Slot) *WatchDog {
+func NewWatchDog(ctx context.Context, slot *types.Slot) *WatchDog {
 	return &WatchDog{
 		ctx:  ctx,
 		slot: slot,
@@ -44,7 +43,7 @@ func (wg *WatchDog) StartWatchDog() {
 func (wg *WatchDog) GenerateProofs() []byte {
 	metaData := wg.slot.CLusterInfo().GetMetaData(wg.msgs)
 
-	watchDogProofs := ktypes.WatchDogProofs{
+	watchDogProofs := types.WatchDogProofs{
 		MetaData: metaData,
 		Extra:    nil, // TODO: Capture signature
 	}

@@ -1,9 +1,10 @@
 package api
 
 import (
-	"log"
 	"math/big"
 	"testing"
+
+	gtypes "gitlab.com/sarvalabs/moichain/guna/types"
 
 	"github.com/stretchr/testify/require"
 
@@ -16,9 +17,9 @@ func TestPublicCoreAPI_GetBalance(t *testing.T) {
 	address := tests.RandomAddress(t)
 	chainManager := NewMockChainManager(t)
 	stateManager := NewMockStateManager(t)
-	assetInfo := getAssetInfo(t, address)
+	assetID, _ := tests.CreateTestAsset(t, address)
 
-	stateManager.setBalance(address, assetInfo.AssetID, big.NewInt(300))
+	stateManager.setBalance(address, assetID, big.NewInt(300))
 
 	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
 
@@ -32,7 +33,7 @@ func TestPublicCoreAPI_GetBalance(t *testing.T) {
 			name: "Invalid address",
 			args: BalArgs{
 				From:    "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
-				AssetID: tests.RandomAssetID(t, address),
+				AssetID: "",
 			},
 			expectedErr: types.ErrInvalidAddress,
 		},
@@ -40,7 +41,7 @@ func TestPublicCoreAPI_GetBalance(t *testing.T) {
 			name: "Account without state",
 			args: BalArgs{
 				From:    tests.RandomAddress(t).String(),
-				AssetID: string(assetInfo.AssetID),
+				AssetID: string(assetID),
 			},
 			expectedErr: types.ErrAccountNotFound,
 		},
@@ -56,7 +57,7 @@ func TestPublicCoreAPI_GetBalance(t *testing.T) {
 			name: "Valid asset id without state",
 			args: BalArgs{
 				From:    address.String(),
-				AssetID: tests.RandomAssetID(t, address),
+				AssetID: string(tests.GetRandomAssetID(t, address)),
 			},
 			expectedErr: types.ErrAssetNotFound,
 		},
@@ -64,7 +65,7 @@ func TestPublicCoreAPI_GetBalance(t *testing.T) {
 			name: "Valid address and asset id",
 			args: BalArgs{
 				From:    address.String(),
-				AssetID: string(assetInfo.AssetID),
+				AssetID: string(assetID),
 			},
 			expected: big.NewInt(300),
 		},
@@ -241,16 +242,16 @@ func TestPublicCoreAPI_GetTDU(t *testing.T) {
 	address := tests.RandomAddress(t)
 	chainManager := NewMockChainManager(t)
 	stateManager := NewMockStateManager(t)
-	assetInfo := getAssetInfo(t, address)
+	assetID, _ := tests.CreateTestAsset(t, address)
 
-	stateManager.setBalance(address, assetInfo.AssetID, big.NewInt(300))
+	stateManager.setBalance(address, assetID, big.NewInt(300))
 
 	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
 
 	testcases := []struct {
 		name        string
 		args        TesseractArgs
-		expected    types.AssetMap
+		expected    gtypes.AssetMap
 		expectedErr error
 	}{
 		{
@@ -516,9 +517,9 @@ func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
 	address := tests.RandomAddress(t)
 	chainManager := NewMockChainManager(t)
 	stateManager := new(MockStateManager)
-	assetInfo := getAssetInfo(t, address)
+	assetID, assetInfo := tests.CreateTestAsset(t, address)
 
-	chainManager.setAssets(address, assetInfo)
+	chainManager.setAssets(assetID, assetInfo)
 
 	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
 
@@ -531,9 +532,9 @@ func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
 		{
 			"Valid asset id",
 			&AssetInfoArgs{
-				AssetID: string(assetInfo.AssetID),
+				AssetID: string(assetID),
 			},
-			assetInfo.Asset,
+			assetInfo,
 			false,
 		},
 		{
@@ -541,7 +542,7 @@ func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
 			&AssetInfoArgs{
 				"01801995a34ceda4db744a5b1363be9a0f2019e7481699c861ad7d1263c95473a2d9",
 			},
-			&types.AssetInfo{},
+			nil,
 			true,
 		},
 		{
@@ -549,7 +550,7 @@ func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
 			&AssetInfoArgs{
 				"01801995a34ceda4db744a5b1363bega0f2019e7481699c861ad7d1263c95473a2d9",
 			},
-			&types.AssetInfo{},
+			nil,
 			true,
 		},
 	}
@@ -693,31 +694,4 @@ func getReceipts(t *testing.T) (types.Hash, map[types.Hash]*types.Receipt) {
 	receipts[interactionHash] = newReceipt(interactionHash)
 
 	return interactionHash, receipts
-}
-
-func getAssetInfo(t *testing.T, address types.Address) *AssetInfo {
-	t.Helper()
-
-	randomHash := tests.RandomHash(t)
-
-	asset, err := tests.GetAsset(t)
-	if err != nil {
-		log.Panic("Failed to create asset")
-	}
-
-	assetID, hash, _ := types.GetAssetID(
-		address,
-		asset.Dimension,
-		asset.IsFungible,
-		asset.IsMintable,
-		asset.Symbol,
-		int64(asset.TotalSupply),
-		randomHash)
-
-	return &AssetInfo{
-		assetID,
-		asset,
-		hash,
-		randomHash,
-	}
 }

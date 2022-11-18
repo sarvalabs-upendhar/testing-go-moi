@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"gitlab.com/sarvalabs/moichain/utils"
+	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/assert"
@@ -263,7 +263,7 @@ func NewMockNetwork() *mockNetwork {
 	}
 }
 
-func (mn *mockNetwork) SendAgoraMessage(id id.KramaID, msgType types.MsgType, msg atypes.Message) error {
+func (mn *mockNetwork) SendAgoraMessage(id id.KramaID, msgType ptypes.MsgType, msg atypes.Message) error {
 	mn.msg[id] = msg
 
 	return nil
@@ -290,10 +290,10 @@ func WaitForPeerResponse(t *testing.T, ctx context.Context, peerRespChan <-chan 
 	}()
 }
 
-func GetDummyBlocks(t *testing.T, count int) (*utils.HashSet, map[types.Hash]atypes.Block) {
+func GetDummyBlocks(t *testing.T, count int) (*ptypes.HashSet, map[types.Hash]atypes.Block) {
 	t.Helper()
 
-	set := utils.NewHashSet()
+	set := ptypes.NewHashSet()
 	blocks := make(map[types.Hash]atypes.Block, count)
 
 	for i := 0; i < count; i++ {
@@ -366,7 +366,7 @@ func AreSessionInterestRemoved(
 	return keysRemoved
 }
 
-func WaitForBlocks(ctx context.Context, blocks chan *atypes.Block, ids *utils.HashSet) (receivedCount int) {
+func WaitForBlocks(ctx context.Context, blocks chan *atypes.Block, ids *ptypes.HashSet) (receivedCount int) {
 	for {
 		select {
 		case <-ctx.Done():

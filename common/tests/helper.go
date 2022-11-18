@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	gtypes "gitlab.com/sarvalabs/moichain/guna/types"
+
 	"github.com/stretchr/testify/require"
 	"gitlab.com/sarvalabs/btcd-musig/btcutil/hdkeychain"
 	"gitlab.com/sarvalabs/btcd-musig/chaincfg"
@@ -215,7 +217,7 @@ func GetRandomUpperCaseString(t *testing.T, length int) (string, error) {
 	return string(randomString), nil
 }
 
-func GetAsset(t *testing.T) (*types.AssetInfo, error) {
+func getRandomAssetInfo(t *testing.T) (*types.AssetInfo, error) {
 	t.Helper()
 
 	symbol, err := GetRandomUpperCaseString(t, 5)
@@ -229,31 +231,52 @@ func GetAsset(t *testing.T) (*types.AssetInfo, error) {
 		Symbol:      symbol,
 		IsFungible:  true,
 		IsMintable:  false,
+		LogicID:     types.LogicID(RandomHash(t).String()),
 	}
 
 	return asset, nil
 }
 
-func RandomAssetID(t *testing.T, address types.Address) string {
+func CreateTestAsset(t *testing.T, address types.Address) (types.AssetID, *types.AssetInfo) {
 	t.Helper()
 
-	randomHash := RandomHash(t)
-
-	asset, err := GetAsset(t)
+	asset, err := getRandomAssetInfo(t)
 	if err != nil {
 		log.Panic("Failed to create asset")
 	}
 
-	assetID, _, _ := types.GetAssetID(
+	assetID, _, _ := gtypes.GetAssetID(
 		address,
 		asset.Dimension,
 		asset.IsFungible,
 		asset.IsMintable,
 		asset.Symbol,
 		int64(asset.TotalSupply),
-		randomHash)
+		asset.LogicID,
+	)
 
-	return string(assetID)
+	return assetID, asset
+}
+
+func GetRandomAssetID(t *testing.T, address types.Address) types.AssetID {
+	t.Helper()
+
+	asset, err := getRandomAssetInfo(t)
+	if err != nil {
+		log.Panic("Failed to create asset")
+	}
+
+	assetID, _, _ := gtypes.GetAssetID(
+		address,
+		asset.Dimension,
+		asset.IsFungible,
+		asset.IsMintable,
+		asset.Symbol,
+		int64(asset.TotalSupply),
+		asset.LogicID,
+	)
+
+	return assetID
 }
 
 /*

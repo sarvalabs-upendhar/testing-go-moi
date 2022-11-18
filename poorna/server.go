@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+
 	"github.com/libp2p/go-libp2p/core/crypto"
 
 	"github.com/libp2p/go-libp2p"
@@ -347,7 +349,7 @@ func (s *Server) streamHandlerFunc(stream network.Stream) {
 		return
 	}
 
-	message := new(types.Message)
+	message := new(ptypes.Message)
 
 	err = polo.Depolorize(message, buffer[0:byteCount])
 	if err != nil {
@@ -358,7 +360,7 @@ func (s *Server) streamHandlerFunc(stream network.Stream) {
 		return
 	}
 	// Unmarshal message proto into a NewPeer message
-	var msg types.HandshakeMSG
+	var msg ptypes.HandshakeMSG
 	if err := polo.Depolorize(&msg, message.Payload); err != nil {
 		if err := kpeer.sendHandshakeErrorResp(s.id, err); err != nil {
 			s.logger.Error("Hand shake failed", "error", err)
@@ -709,7 +711,7 @@ func (s *Server) GetRandomNode() peer.ID {
 	return peers[index]
 }
 
-func (s *Server) SendMessage(peerID peer.ID, msgType types.MsgType, msg interface{}) error {
+func (s *Server) SendMessage(peerID peer.ID, msgType ptypes.MsgType, msg interface{}) error {
 	if s.Peers.ContainsPeer(peerID) {
 		p := s.Peers.Peer(peerID)
 
@@ -719,7 +721,7 @@ func (s *Server) SendMessage(peerID peer.ID, msgType types.MsgType, msg interfac
 	bytes := polo.Polorize(msg)
 	// Create a network message proto with the bytes payload of the message to send
 	// and convert into a proto message and marshal it into a slice of bytes
-	m := types.Message{
+	m := ptypes.Message{
 		MsgType: msgType,
 		Payload: bytes,
 		Sender:  s.id,
@@ -776,7 +778,7 @@ func (s *Server) SendHelloMessage() {
 			panic(err)
 		}
 
-		peerInfo := types.PeerInfo{
+		peerInfo := ptypes.PeerInfo{
 			ID:      s.id,
 			Ntq:     ntq,
 			Address: utils.MultiAddrToString(s.GetAddrs()...),
@@ -788,7 +790,7 @@ func (s *Server) SendHelloMessage() {
 			panic(err)
 		}
 
-		msg := types.HelloMsg{
+		msg := ptypes.HelloMsg{
 			Info:      peerInfo,
 			Signature: signature,
 		}
