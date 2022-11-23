@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/btcsuite/btcd/btcutil/hdkeychain"
+	"github.com/btcsuite/btcd/chaincfg"
 	blst "github.com/supranational/blst/bindings/go"
-	"gitlab.com/sarvalabs/btcd-musig/btcutil/hdkeychain"
-	"gitlab.com/sarvalabs/btcd-musig/chaincfg"
 	"gitlab.com/sarvalabs/moichain/mudra/common"
 	"gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/moichain/mudra/poi/moinode"

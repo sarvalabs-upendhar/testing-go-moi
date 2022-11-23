@@ -10,11 +10,10 @@ import (
 	"testing"
 	"time"
 
-	gtypes "gitlab.com/sarvalabs/moichain/guna/types"
-
+	"github.com/btcsuite/btcd/btcutil/hdkeychain"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/stretchr/testify/require"
-	"gitlab.com/sarvalabs/btcd-musig/btcutil/hdkeychain"
-	"gitlab.com/sarvalabs/btcd-musig/chaincfg"
+	gtypes "gitlab.com/sarvalabs/moichain/guna/types"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/moichain/types"
 )

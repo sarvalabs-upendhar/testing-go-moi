@@ -6,12 +6,12 @@ import (
 	"errors"
 	"math/big"
 
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcutil/hdkeychain"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/tyler-smith/go-bip39"
-	"gitlab.com/sarvalabs/btcd-musig/btcec"
-	"gitlab.com/sarvalabs/btcd-musig/btcutil/hdkeychain"
-	"gitlab.com/sarvalabs/btcd-musig/chaincfg"
 	"gitlab.com/sarvalabs/moichain/mudra/common"
 )
 
