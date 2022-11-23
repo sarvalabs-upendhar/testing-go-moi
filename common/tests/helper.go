@@ -279,10 +279,7 @@ func GetRandomAssetID(t *testing.T, address types.Address) types.AssetID {
 	return assetID
 }
 
-/*
-// Unused functions
-
-func GetTestTesseract(t *testing.T, height uint64) *types.Tesseract {
+func GetTesseract(t *testing.T, height uint64) *types.Tesseract {
 	t.Helper()
 
 	header := types.TesseractHeader{
@@ -299,6 +296,9 @@ func GetTestTesseract(t *testing.T, height uint64) *types.Tesseract {
 
 	return &tesseract
 }
+
+/*
+// Unused functions
 
 func GetInvalidHash(t *testing.T) string {
 	t.Helper()

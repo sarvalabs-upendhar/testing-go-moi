@@ -9,6 +9,8 @@ import (
 
 	"github.com/gorilla/rpc/v2/json2"
 	"github.com/hashicorp/go-hclog"
+	"gitlab.com/sarvalabs/moichain/poorna/websocket"
+	"gitlab.com/sarvalabs/moichain/utils"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2"
@@ -30,18 +32,22 @@ type Server struct {
 
 	// Represent the logger instance for RPC service
 	logger hclog.Logger
+
+	// Represents the handler module for websocket service
+	wsHandler *websocket.Handler
 }
 
 // NewRPCServer is a constructor function that generates and returns
 // a new RPC Server for a given URL and addr.
-func NewRPCServer(path string, logger hclog.Logger, addr *net.TCPAddr) *Server {
+func NewRPCServer(path string, logger hclog.Logger, addr *net.TCPAddr, eventMux *utils.TypeMux) *Server {
 	// Create a new Server object and return it
 	return &Server{
-		logger: logger.Named("json-rpc"),
-		router: mux.NewRouter(),
-		server: rpc.NewServer(),
-		url:    path,
-		addr:   addr,
+		logger:    logger.Named("json-rpc"),
+		router:    mux.NewRouter(),
+		server:    rpc.NewServer(),
+		url:       path,
+		addr:      addr,
+		wsHandler: websocket.NewHandler(logger, eventMux),
 	}
 }
 
@@ -49,6 +55,8 @@ func NewRPCServer(path string, logger hclog.Logger, addr *net.TCPAddr) *Server {
 func (s *Server) Start() {
 	s.server.RegisterCodec(json2.NewCodec(), "application/json")
 	s.router.Handle(s.url, s.server)
+	// Web socket route
+	s.router.HandleFunc("/ws", s.wsHandler.HandleWsRequests)
 
 	// Print the server start message
 	s.logger.Info(fmt.Sprintf("RPC Server started on %s:%s", s.url, s.addr))

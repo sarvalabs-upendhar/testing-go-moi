@@ -505,6 +505,10 @@ func (c *ChainManager) addTesseract(
 		return errors.Wrap(err, "account meta info update failed")
 	}
 
+	if err := c.mux.Post(utils.TesseractAddedEvent{Tesseract: t}); err != nil {
+		c.logger.Error("error sending tesseract added event", "err", err)
+	}
+
 	// update peer occupancy metrics
 	if err := c.UpdateNodeInclusivity(t.ContextDelta()); err != nil {
 		return errors.Wrap(err, types.ErrUpdatingInclusivity.Error())

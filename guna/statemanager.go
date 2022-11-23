@@ -290,6 +290,7 @@ func (sm *StateManager) FetchTesseractFromDB(hash types.Hash, withInteractions b
 	if withInteractions {
 		// Fetch interactions from DB
 		buf, err = sm.db.GetInteractions(canonicalTesseract.Body.InteractionHash)
+
 		if err != nil {
 			return nil, errors.Wrap(err, types.ErrFetchingInteractions.Error())
 		}
