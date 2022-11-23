@@ -35,6 +35,11 @@ type TesseractReceivedEvent struct {
 	Sender      id.KramaID
 }
 
+// TesseractAddedEvent occurs when a new block is added to the chain
+type TesseractAddedEvent struct {
+	Tesseract *types.Tesseract
+}
+
 // TesseractSyncEvent is fired when a new tesseract received and needs to be synced up.
 type TesseractSyncEvent struct {
 	Tesseract *types.Tesseract

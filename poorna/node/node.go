@@ -213,7 +213,7 @@ func (n *Node) InitSubHandlers() (err error) {
 }
 
 func (n *Node) SetupRPC() error {
-	n.rpc = krpc.NewRPCServer("/", n.logger, n.cfg.Network.JSONRPCAddr)
+	n.rpc = krpc.NewRPCServer("/", n.logger, n.cfg.Network.JSONRPCAddr, n.eventMux)
 
 	rpcService := krpc.NewRPCService()
 	backend := api.NewBackend(n.ixpool, n.chain, n.state, n.cfg.IxPool)
