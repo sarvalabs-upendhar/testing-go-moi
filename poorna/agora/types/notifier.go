@@ -5,14 +5,13 @@ import (
 	"sync"
 
 	"github.com/cskr/pubsub"
-	"gitlab.com/sarvalabs/moichain/types"
 )
 
 const BufferSize = 16
 
 type PubSub interface {
 	Publish(block Block)
-	Subscribe(ctx context.Context, keys ...types.Hash) <-chan Block
+	Subscribe(ctx context.Context, keys ...CID) <-chan Block
 	Shutdown()
 }
 
@@ -40,7 +39,7 @@ func (ps *impl) Publish(block Block) {
 	default:
 	}
 
-	ps.wrapped.Pub(block, block.GetID().Hex())
+	ps.wrapped.Pub(block, block.GetCid().String())
 }
 
 func (ps *impl) Shutdown() {
@@ -58,7 +57,7 @@ func (ps *impl) Shutdown() {
 // Subscribe returns a channel of blocks for the given |keys|. |blockChannel|
 // is closed if the |ctx| times out or is cancelled, or after receiving the blocks
 // corresponding to |keys|.
-func (ps *impl) Subscribe(ctx context.Context, keys ...types.Hash) <-chan Block {
+func (ps *impl) Subscribe(ctx context.Context, keys ...CID) <-chan Block {
 	blocksCh := make(chan Block, len(keys))
 	valuesCh := make(chan interface{}, len(keys)) // provide our own channel to control buffer, prevent blocking
 
@@ -129,10 +128,10 @@ func (ps *impl) Subscribe(ctx context.Context, keys ...types.Hash) <-chan Block 
 	return blocksCh
 }
 
-func toStrings(hashes []types.Hash) []string {
+func toStrings(hashes []CID) []string {
 	keys := make([]string, 0, len(hashes))
 	for _, v := range hashes {
-		keys = append(keys, v.Hex())
+		keys = append(keys, v.String())
 	}
 
 	return keys

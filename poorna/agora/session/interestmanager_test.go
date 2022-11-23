@@ -5,8 +5,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"gitlab.com/sarvalabs/moichain/common/tests"
-	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
-	"gitlab.com/sarvalabs/moichain/types"
 )
 
 func TestRecordSessionInterest_MultipleAddress(t *testing.T) {
@@ -97,7 +95,7 @@ func TestInterestedSessions(t *testing.T) {
 
 	// All set2 blocks are orphans
 	for _, block := range orphanBlocks {
-		require.True(t, set2.Has(block.GetID()), "invalid orphan block")
+		require.True(t, set2.Has(block.GetCid()), "invalid orphan block")
 	}
 
 	// Verify that all set1 blocks are returned
@@ -105,20 +103,6 @@ func TestInterestedSessions(t *testing.T) {
 	require.True(t, ok, "set1 blocks missing")
 
 	for _, block := range blocks {
-		require.True(t, set1.Has(block.GetID()), "few blocks missing")
+		require.True(t, set1.Has(block.GetCid()), "few blocks missing")
 	}
-}
-
-func appendBlocks(set1, set2 map[types.Hash]atypes.Block) []atypes.Block {
-	blocks := make([]atypes.Block, 0, len(set1)+len(set2))
-
-	for _, v := range set1 {
-		blocks = append(blocks, v)
-	}
-
-	for _, v := range set2 {
-		blocks = append(blocks, v)
-	}
-
-	return blocks
 }

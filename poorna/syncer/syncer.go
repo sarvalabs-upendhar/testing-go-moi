@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
+
 	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
 
 	gtypes "gitlab.com/sarvalabs/moichain/guna/types"
@@ -20,7 +22,7 @@ import (
 
 	"gitlab.com/sarvalabs/moichain/utils"
 
-	dhruva "gitlab.com/sarvalabs/moichain/dhruva/db"
+	db "gitlab.com/sarvalabs/moichain/dhruva/db"
 	"gitlab.com/sarvalabs/moichain/poorna"
 	"gitlab.com/sarvalabs/moichain/poorna/agora"
 	"gitlab.com/sarvalabs/moichain/poorna/agora/session"
@@ -73,8 +75,9 @@ type lattice interface {
 	) error
 	GetTesseract(hash types.Hash, withInteractions bool) (*types.Tesseract, error)
 }
-type db interface {
-	NewBatchWriter() dhruva.BatchWriter
+
+type store interface {
+	NewBatchWriter() db.BatchWriter
 	CreateEntry([]byte, []byte) error
 	UpdateEntry([]byte, []byte) error
 	ReadEntry([]byte) ([]byte, error)
@@ -106,7 +109,7 @@ type Syncer struct {
 	peers            sync.Map
 	peerCount        uint32
 	agora            *agora.Agora
-	db               db
+	db               store
 	reqQueue         chan *SyncJob
 	reqQueue1        chan *TesseractSyncJob
 	wrkResults       chan interface{}
@@ -126,7 +129,7 @@ func NewSyncer(
 	ctx context.Context,
 	node *poorna.Server,
 	mux *utils.TypeMux,
-	db db,
+	db store,
 	mode string,
 	lattice lattice,
 	logger hclog.Logger,
@@ -443,7 +446,7 @@ func (s *Syncer) handleSyncPeer(p *SyncPeer) {
 /*
 // syncLattice will fetch the latest info of an account from the bestPeer and creates a lattice sync job
 func (s *Syncer) syncLattice(addr []byte, mode string) error {
-	accDetails, err := s.db.GetAccountDetails(addr)
+	accDetails, err := s.store.GetAccountDetails(addr)
 	bestPeer := s.BestPeer()
 	if err != nil && grpcStatus.Code(err) != codes.NotFound {
 		return err
@@ -458,7 +461,7 @@ func (s *Syncer) syncLattice(addr []byte, mode string) error {
 			return err
 		}
 		acc := types.ProtoToAccDetails(resp)
-		bucketNo, count := s.db.AddAddress(types.Accounts{acc})
+		bucketNo, count := s.store.AddAddress(types.Accounts{acc})
 		s.status.incrementBucketCount(bucketNo, count)
 		s.status.Accounts = new(big.Int).Add(s.status.Accounts, big.NewInt(count))
 		accDetails = &acc
@@ -475,13 +478,13 @@ func (s *Syncer) syncLattice(addr []byte, mode string) error {
 
 // fetchData fetches the complete state information associated with the given state CID
 // this uses agora to fetch the hashes.
-func (s *Syncer) fetchData(ctx context.Context, session *session.Session, ids ...types.Hash) (bool, error) {
-	keySet := ptypes.NewHashSet()
+func (s *Syncer) fetchData(ctx context.Context, session *session.Session, ids ...atypes.CID) error {
+	keySet := atypes.NewHashSet()
 
-	for _, hash := range ids {
-		if !hash.IsNil() {
-			if ok, err := s.db.Contains(hash.Bytes()); !ok && err == nil {
-				keySet.Add(hash)
+	for _, cid := range ids {
+		if !cid.IsNil() {
+			if ok, err := s.db.Contains(dbKeyFromCID(session.ID(), cid)); !ok && err == nil {
+				keySet.Add(cid)
 			}
 		}
 	}
@@ -489,7 +492,7 @@ func (s *Syncer) fetchData(ctx context.Context, session *session.Session, ids ..
 	if keySet.Len() <= 0 {
 		s.logger.Debug("Returning from get blocks : keySet is empty")
 
-		return true, nil
+		return nil
 	}
 
 	var (
@@ -500,8 +503,9 @@ func (s *Syncer) fetchData(ctx context.Context, session *session.Session, ids ..
 	blocksChan := session.GetBlocks(ctx, keySet.Keys())
 
 	for block := range blocksChan {
-		if err := s.db.CreateEntry(block.GetID().Bytes(), block.GetData()); err != nil {
+		if err := s.db.CreateEntry(dbKeyFromCID(session.ID(), block.GetCid()), block.GetData()); err != nil {
 			s.logger.Error("Error writing to db", "error", err)
+
 			returnErr = err
 
 			continue
@@ -511,43 +515,43 @@ func (s *Syncer) fetchData(ctx context.Context, session *session.Session, ids ..
 	}
 
 	if receivedBlocksCount == keySet.Len() {
-		return true, nil
+		return nil
 	}
 
-	return false, returnErr
+	return returnErr
 }
 
 // getContextData fetches the behavioural context and random context associated with the given hash using agora
-func (s *Syncer) getContextData(ctx context.Context, session *session.Session, hash types.Hash) (bool, error) {
-	ok, err := s.db.Contains(hash.Bytes())
+func (s *Syncer) getContextData(ctx context.Context, session *session.Session, cid atypes.CID) error {
+	ok, err := s.db.Contains(dbKeyFromCID(session.ID(), cid))
 	if ok || err != nil {
-		return ok, err
+		return err
 	}
 
-	block, err := session.GetBlock(ctx, hash)
+	block, err := session.GetBlock(ctx, cid)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	metaContextObject := new(gtypes.MetaContextObject)
 	if err := polo.Depolorize(metaContextObject, block.GetData()); err != nil {
-		return false, err
+		return err
 	}
 
-	if ok, err = s.fetchData(
+	if err = s.fetchData(
 		ctx,
 		session,
-		metaContextObject.RandomContext,
-		metaContextObject.BehaviouralContext,
-	); !ok || err != nil {
-		return ok, err
+		contextCID(metaContextObject.RandomContext),
+		contextCID(metaContextObject.BehaviouralContext),
+	); err != nil {
+		return err
 	}
 
-	if err := s.db.CreateEntry(hash.Bytes(), block.GetData()); err != nil {
-		return false, err
+	if err := s.db.CreateEntry(dbKeyFromCID(session.ID(), cid), block.GetData()); err != nil {
+		return err
 	}
 
-	return true, nil
+	return nil
 }
 
 // fetchTesseractState fetches the complete state(balance,context,approvals) of the given tesseract using bitswap
@@ -555,12 +559,12 @@ func (s *Syncer) fetchTesseractState(tesseract *types.Tesseract, fetchContext []
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second) // TODO: Timeout duration to be optimized
 	defer cancel()
 
-	newSession, err := s.agora.NewSession(ctx, fetchContext, tesseract.Address(), tesseract.Body.StateHash)
+	newSession, err := s.agora.NewSession(ctx, fetchContext, tesseract.Address(), accountCID(tesseract.StateHash()))
 	if err != nil {
 		return err
 	}
 
-	block, err := newSession.GetBlock(ctx, tesseract.StateHash())
+	block, err := newSession.GetBlock(ctx, accountCID(tesseract.StateHash()))
 	if err != nil {
 		return err
 	}
@@ -571,20 +575,20 @@ func (s *Syncer) fetchTesseractState(tesseract *types.Tesseract, fetchContext []
 		return err
 	}
 
-	if ok, err := s.fetchData(
+	if err := s.fetchData(
 		ctx,
 		newSession,
-		acc.Balance,
-		acc.StorageRoot,
-		acc.AssetApprovals,
-		tesseract.Body.ReceiptHash,
-	); !ok || err != nil {
+		balanceCID(acc.Balance),
+		//	acc.StorageRoot,
+		approvalsCID(acc.AssetApprovals),
+		//	tesseract.Body.ReceiptHash,
+	); err != nil {
 		s.logger.Error("Error fetching balance data", "error", err)
 
 		return err
 	}
 
-	if ok, err := s.getContextData(ctx, newSession, acc.ContextHash); !ok || err != nil {
+	if err := s.getContextData(ctx, newSession, contextCID(acc.ContextHash)); err != nil {
 		s.logger.Error("Error fetching context data", "error", err)
 
 		return err
@@ -628,7 +632,7 @@ func (s *Syncer) isSyncRequired(bestPeer *SyncPeer) bool {
 }
 
 /*
-tesseractWorker handles the tesseract Sync Jobs, it fetches the tesseract state using bitswap
+tesseractWorker handles the tesseract Sync Jobs, it fetches the tesseract state using agora
 and updates the state in the db accordingly
 */
 func (s *Syncer) tesseractWorker(id int, reqQueue chan *TesseractSyncJob) {
@@ -805,7 +809,7 @@ func (s *Syncer) Start() {
 	go s.handleSyncEvents()
 	go s.handleNewPeer()
 	go s.startWorkers()
-	// update the status from db
+	// update the status from store
 	if err := s.statusInit(); err != nil {
 		log.Panicln(err)
 	}

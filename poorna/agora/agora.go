@@ -27,7 +27,7 @@ type Agora struct {
 	db       *db.DataStore
 	network  *network.AgoraNetwork
 	im       *session.InterestManager
-	sm       *session.SessionManager
+	sm       *session.Manager
 	notifier atypes.PubSub
 }
 
@@ -60,6 +60,7 @@ func NewAgora(
 		ledger,
 		agoraNetwork,
 		metrics.Engine,
+		decision.MaxQueueSize,
 	)
 
 	sessionManager := session.NewSessionManager(logger, interestManager, notifier, engine)
@@ -82,7 +83,7 @@ func (ag *Agora) NewSession(
 	ctx context.Context,
 	contextPeers []id.KramaID,
 	address types.Address,
-	stateHash types.Hash,
+	stateHash atypes.CID,
 ) (*session.Session, error) {
 	return ag.sm.NewSession(ctx, address, stateHash, ag.network, contextPeers)
 }

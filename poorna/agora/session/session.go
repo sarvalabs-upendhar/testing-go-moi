@@ -15,8 +15,8 @@ import (
 )
 
 type sessionInterestManager interface {
-	RecordSessionInterest(addr types.Address, ids ...types.Hash)
-	RemoveSessionInterest(addr types.Address, ids ...types.Hash) []types.Hash
+	RecordSessionInterest(addr types.Address, ids ...atypes.CID)
+	RemoveSessionInterest(addr types.Address, ids ...atypes.CID) []atypes.CID
 }
 
 type sessionManager interface {
@@ -32,10 +32,10 @@ type Session struct {
 	id        types.Address
 	ctx       context.Context
 	logger    hclog.Logger
-	stateHash types.Hash
+	stateHash atypes.CID
 	im        sessionInterestManager
 	wants     *atypes.WantTracker
-	pm        *SessionPeerManager
+	pm        *PeerManager
 	notifier  atypes.PubSub
 	sm        sessionManager
 }
@@ -44,7 +44,7 @@ func NewSession(
 	ctx context.Context,
 	addr types.Address,
 	logger hclog.Logger,
-	stateHash types.Hash,
+	stateHash atypes.CID,
 	network sessionNetwork,
 	notifier atypes.PubSub,
 	im sessionInterestManager,
@@ -69,6 +69,10 @@ func NewSession(
 	return s
 }
 
+func (s *Session) ID() types.Address {
+	return s.id
+}
+
 func (s *Session) HandleMessage(id id.KramaID, msg *atypes.AgoraResponseMsg) {
 	if !msg.Status {
 		s.pm.UpdatePeerStatus(id, false)
@@ -84,7 +88,7 @@ func (s *Session) ChooseBestPeer(ctx context.Context, avoid map[id.KramaID]inter
 	return s.pm.chooseBestPeer(ctx, avoid)
 }
 
-func (s *Session) sendWantReq(peerID id.KramaID, cid *ptypes.HashSet) error {
+func (s *Session) sendWantReq(peerID id.KramaID, cid *atypes.CIDSet) error {
 	req := &atypes.AgoraRequestMsg{
 		SessionID: s.id,
 		StateHash: s.stateHash,
@@ -94,8 +98,8 @@ func (s *Session) sendWantReq(peerID id.KramaID, cid *ptypes.HashSet) error {
 	return s.pm.SendWantReq(peerID, req)
 }
 
-func (s *Session) GetBlock(ctx context.Context, cid types.Hash) (*atypes.Block, error) {
-	out := s.GetBlocks(ctx, []types.Hash{cid})
+func (s *Session) GetBlock(ctx context.Context, cid atypes.CID) (*atypes.Block, error) {
+	out := s.GetBlocks(ctx, []atypes.CID{cid})
 
 	data, ok := <-out
 	if !ok {
@@ -109,7 +113,7 @@ func (s *Session) getBlocks(
 	ctx context.Context,
 	peerID id.KramaID,
 	out chan *atypes.Block,
-	idSet *ptypes.HashSet,
+	idSet *atypes.CIDSet,
 ) error {
 	s.logger.Debug("Fetching data from ", "peer", peerID, "count", idSet.Len())
 
@@ -145,9 +149,9 @@ func (s *Session) getBlocks(
 			if !ok {
 				return nil
 			}
-			// s.wants.RemoveCid(block.GetID())
-			idSet.Remove(block.GetID())
-			s.im.RemoveSessionInterest(s.id, block.GetID())
+			// s.wants.RemoveCid(block.GetCid())
+			idSet.Remove(block.GetCid())
+			s.im.RemoveSessionInterest(s.id, block.GetCid())
 
 			out <- &block
 
@@ -156,10 +160,12 @@ func (s *Session) getBlocks(
 
 				return nil
 			}
+
 		case status := <-statusChan:
 			if !status {
 				return errors.New("peer not available")
 			}
+
 		case <-s.ctx.Done():
 			s.logger.Error("Request context expired")
 
@@ -172,10 +178,10 @@ func (s *Session) getBlocks(
 	}
 }
 
-func (s *Session) GetBlocks(ctx context.Context, cids []types.Hash) chan *atypes.Block {
+func (s *Session) GetBlocks(ctx context.Context, cids []atypes.CID) chan *atypes.Block {
 	out := make(chan *atypes.Block)
 
-	idSet := ptypes.NewHashSet()
+	idSet := atypes.NewHashSet()
 
 	for _, cid := range cids {
 		idSet.Add(cid)
@@ -215,6 +221,7 @@ func (s *Session) GetBlocks(ctx context.Context, cids []types.Hash) chan *atypes
 
 			if err := s.getBlocks(ctx, peerID, out, idSet); err != nil {
 				s.logger.Error("Error fetching blocks", "error", err)
+
 				s.pm.UpdateFailedAttempts(peerID, 1)
 				attempt++
 

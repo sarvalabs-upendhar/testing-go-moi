@@ -4,8 +4,6 @@ import (
 	"sync"
 	"time"
 
-	types2 "gitlab.com/sarvalabs/moichain/poorna/types"
-
 	"github.com/rs/zerolog/log"
 	"gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/moichain/types"
@@ -21,7 +19,7 @@ type Message interface {
 type Response struct {
 	PeerID    kramaid.KramaID
 	SessionID types.Address
-	StateHash types.Hash
+	StateHash CID
 	Status    bool
 	HaveList  HaveList
 	PeerSet   []kramaid.KramaID
@@ -47,7 +45,7 @@ func (resp *AgoraResponseMsg) GetBlocks() []Block {
 	blocks := make([]Block, 0, len(resp.HaveList))
 
 	for _, data := range resp.HaveList {
-		blocks = append(blocks, NewBlock(data))
+		blocks = append(blocks, NewBlockFromMessage(data))
 	}
 
 	return blocks
@@ -59,8 +57,8 @@ func (resp *AgoraResponseMsg) GetSessionID() types.Address {
 
 type AgoraRequestMsg struct {
 	SessionID types.Address
-	StateHash types.Hash
-	WantList  []types.Hash
+	StateHash CID
+	WantList  []CID
 }
 
 func (req *AgoraRequestMsg) GetSessionID() types.Address {
@@ -68,25 +66,43 @@ func (req *AgoraRequestMsg) GetSessionID() types.Address {
 }
 
 type Block struct {
-	id   types.Hash
+	cid  CID
 	data []byte
 }
 
-func NewBlock(data []byte) Block {
+func NewBlockFromMessage(data []byte) Block {
+	hash := blake2b.Sum256(data[1:])
+
+	return Block{
+		cid:  ContentID(data[0], hash),
+		data: data[1:],
+	}
+}
+
+func NewBlockFromRawData(contentType byte, data []byte) Block {
 	hash := blake2b.Sum256(data)
 
 	return Block{
-		id:   hash,
+		cid:  ContentID(contentType, hash),
 		data: data,
 	}
 }
 
-func (b *Block) GetData() []byte {
+func (b Block) GetData() []byte {
 	return b.data
 }
 
-func (b *Block) GetID() types.Hash {
-	return b.id
+func (b Block) GetCid() CID {
+	return b.cid
+}
+
+func (b Block) BytesForMessage() []byte {
+	rawBytes := make([]byte, 0, len(b.data)+1)
+
+	rawBytes = append(rawBytes, b.cid.ContentType())
+	rawBytes = append(rawBytes, b.data...)
+
+	return rawBytes
 }
 
 type HaveList struct {
@@ -103,14 +119,14 @@ func (h *HaveList) Size() int {
 	return len(h.blocks)
 }
 
-func (h *HaveList) GetKeys() []types.Hash {
-	hashes := make([]types.Hash, len(h.blocks))
+func (h *HaveList) GetKeys() []CID {
+	cIDs := make([]CID, len(h.blocks))
 
 	for k, v := range h.blocks {
-		hashes[k] = v.id
+		cIDs[k] = v.cid
 	}
 
-	return hashes
+	return cIDs
 }
 
 func (h *HaveList) GetBlocks() []Block {
@@ -125,7 +141,7 @@ func (h *HaveList) GetRawBlocks() [][]byte {
 	rawBlocks := make([][]byte, 0, len(h.blocks))
 
 	for _, block := range h.blocks {
-		rawBlocks = append(rawBlocks, block.data)
+		rawBlocks = append(rawBlocks, block.BytesForMessage())
 	}
 
 	return rawBlocks
@@ -216,22 +232,22 @@ func (plist *PeerList) CanonicalPeerList() *CanonicalPeerList {
 
 type WantTracker struct {
 	mtx       sync.RWMutex
-	fetched   *types2.Queue
-	liveWants map[types.Hash]time.Time
+	fetched   *Queue
+	liveWants map[CID]time.Time
 }
 
 func NewWantTracker() *WantTracker {
 	return &WantTracker{
-		fetched:   types2.NewCidQueue(),
-		liveWants: make(map[types.Hash]time.Time),
+		fetched:   NewCidQueue(),
+		liveWants: make(map[CID]time.Time),
 	}
 }
 
-func (wt *WantTracker) UpdateLiveWants(keys *types2.HashSet) {
+func (wt *WantTracker) UpdateLiveWants(keys *CIDSet) {
 	wt.mtx.Lock()
 	defer wt.mtx.Unlock()
 
-	if err := keys.ForEach(func(c types.Hash) error {
+	if err := keys.ForEach(func(c CID) error {
 		reqTime, ok := wt.liveWants[c]
 		if !ok || time.Since(reqTime) > 200*time.Millisecond {
 			wt.liveWants[c] = time.Now()
@@ -243,13 +259,13 @@ func (wt *WantTracker) UpdateLiveWants(keys *types2.HashSet) {
 	}
 }
 
-func (wt *WantTracker) RemoveRedundantKeys(cids *types2.HashSet) {
+func (wt *WantTracker) RemoveRedundantKeys(cids *CIDSet) {
 	wt.mtx.Lock()
 	defer wt.mtx.Unlock()
 
-	redundantKeys := make([]types.Hash, 0)
+	redundantKeys := make([]CID, 0)
 
-	if err := cids.ForEach(func(c types.Hash) error {
+	if err := cids.ForEach(func(c CID) error {
 		reqTime, ok := wt.liveWants[c]
 
 		if ok && time.Since(reqTime) < 200*time.Millisecond {
@@ -266,7 +282,7 @@ func (wt *WantTracker) RemoveRedundantKeys(cids *types2.HashSet) {
 	}
 }
 
-func (wt *WantTracker) RemoveCid(cid types.Hash) {
+func (wt *WantTracker) RemoveCid(cid CID) {
 	wt.mtx.Lock()
 	defer wt.mtx.Unlock()
 

@@ -6,7 +6,6 @@ import (
 
 	"gitlab.com/sarvalabs/moichain/utils"
 
-	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/require"
 	"gitlab.com/sarvalabs/moichain/common/tests"
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
@@ -268,8 +267,4 @@ func TestChooseBestPeer_FromConnectedPeers(t *testing.T) {
 			}
 		})
 	}
-}
-
-func NewTestPeerManager(sessionID types.Address, network sessionNetwork) *SessionPeerManager {
-	return NewSessionPeerManager(sessionID, hclog.NewNullLogger(), network)
 }

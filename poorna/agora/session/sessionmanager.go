@@ -23,11 +23,11 @@ type engine interface {
 
 type interestManager interface {
 	InterestedSessions(blocks []atypes.Block) (map[types.Address][]atypes.Block, []atypes.Block)
-	RecordSessionInterest(addr types.Address, ids ...types.Hash)
-	RemoveSessionInterest(addr types.Address, ids ...types.Hash) []types.Hash
+	RecordSessionInterest(addr types.Address, ids ...atypes.CID)
+	RemoveSessionInterest(addr types.Address, ids ...atypes.CID) []atypes.CID
 }
 
-type SessionManager struct {
+type Manager struct {
 	logger         hclog.Logger
 	activeSessions sync.Map
 	im             interestManager
@@ -35,8 +35,8 @@ type SessionManager struct {
 	engine         engine
 }
 
-func NewSessionManager(logger hclog.Logger, im interestManager, notifier atypes.PubSub, engine engine) *SessionManager {
-	return &SessionManager{
+func NewSessionManager(logger hclog.Logger, im interestManager, notifier atypes.PubSub, engine engine) *Manager {
+	return &Manager{
 		logger:   logger,
 		im:       im,
 		notifier: notifier,
@@ -44,7 +44,7 @@ func NewSessionManager(logger hclog.Logger, im interestManager, notifier atypes.
 	}
 }
 
-func (s *SessionManager) GetSession(addrs types.Address) (*Session, error) {
+func (s *Manager) GetSession(addrs types.Address) (*Session, error) {
 	session, ok := s.activeSessions.Load(addrs)
 	if !ok {
 		return nil, errors.New("session not found")
@@ -58,10 +58,10 @@ func (s *SessionManager) GetSession(addrs types.Address) (*Session, error) {
 	return agoraSession, nil
 }
 
-func (s *SessionManager) NewSession(
+func (s *Manager) NewSession(
 	ctx context.Context,
 	addrs types.Address,
-	stateHash types.Hash,
+	stateHash atypes.CID,
 	network *network.AgoraNetwork,
 	contextPeers []id.KramaID,
 ) (*Session, error) {
@@ -76,7 +76,7 @@ func (s *SessionManager) NewSession(
 	return nil, errors.New("session already exists")
 }
 
-func (s *SessionManager) HandlePeerMessage(id id.KramaID, msg interface{}) {
+func (s *Manager) HandlePeerMessage(id id.KramaID, msg interface{}) {
 	switch msg := msg.(type) {
 	case *atypes.AgoraRequestMsg:
 		s.handleAgoraRequestMsg(id, msg)
@@ -87,7 +87,7 @@ func (s *SessionManager) HandlePeerMessage(id id.KramaID, msg interface{}) {
 	}
 }
 
-func (s *SessionManager) handleAgoraRequestMsg(id id.KramaID, msg *atypes.AgoraRequestMsg) {
+func (s *Manager) handleAgoraRequestMsg(id id.KramaID, msg *atypes.AgoraRequestMsg) {
 	s.engine.HandleRequest(&decision.Request{
 		PeerID:    id,
 		ReqTime:   time.Now(),
@@ -97,7 +97,7 @@ func (s *SessionManager) handleAgoraRequestMsg(id id.KramaID, msg *atypes.AgoraR
 	})
 }
 
-func (s *SessionManager) handleAgoraResponseMsg(id id.KramaID, msg *atypes.AgoraResponseMsg) {
+func (s *Manager) handleAgoraResponseMsg(id id.KramaID, msg *atypes.AgoraResponseMsg) {
 	if !msg.Status {
 		session, err := s.GetSession(msg.SessionID)
 		if err != nil {
@@ -125,7 +125,7 @@ func (s *SessionManager) handleAgoraResponseMsg(id id.KramaID, msg *atypes.Agora
 	}
 }
 
-func (s *SessionManager) PeerDisconnected(sessions []types.Address, peerID peer.ID) {
+func (s *Manager) PeerDisconnected(sessions []types.Address, peerID peer.ID) {
 	for _, sessionID := range sessions {
 		if session, ok := s.activeSessions.Load(sessionID); ok {
 			session, ok := session.(*Session)
@@ -136,6 +136,6 @@ func (s *SessionManager) PeerDisconnected(sessions []types.Address, peerID peer.
 	}
 }
 
-func (s *SessionManager) CloseSession(sessionID types.Address) {
+func (s *Manager) CloseSession(sessionID types.Address) {
 	s.activeSessions.Delete(sessionID)
 }

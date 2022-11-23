@@ -17,7 +17,7 @@ import (
 	"gitlab.com/sarvalabs/moichain/types"
 )
 
-type SessionPeerManager struct {
+type PeerManager struct {
 	sessionID      types.Address
 	logger         hclog.Logger
 	mtx            sync.Mutex
@@ -32,8 +32,8 @@ type PeerInfo struct {
 	resp           chan bool
 }
 
-func NewSessionPeerManager(addr types.Address, logger hclog.Logger, network sessionNetwork) *SessionPeerManager {
-	return &SessionPeerManager{
+func NewSessionPeerManager(addr types.Address, logger hclog.Logger, network sessionNetwork) *PeerManager {
+	return &PeerManager{
 		sessionID:      addr,
 		logger:         logger,
 		peers:          make(map[id.KramaID]*PeerInfo),
@@ -42,7 +42,7 @@ func NewSessionPeerManager(addr types.Address, logger hclog.Logger, network sess
 	}
 }
 
-func (spm *SessionPeerManager) PeerRespChan(peerID id.KramaID) <-chan bool {
+func (spm *PeerManager) PeerRespChan(peerID id.KramaID) <-chan bool {
 	spm.mtx.Lock()
 	defer spm.mtx.Unlock()
 
@@ -54,14 +54,14 @@ func (spm *SessionPeerManager) PeerRespChan(peerID id.KramaID) <-chan bool {
 	return peerInfo.resp
 }
 
-func (spm *SessionPeerManager) peerConnected(peer id.KramaID) {
+func (spm *PeerManager) peerConnected(peer id.KramaID) {
 	spm.mtx.Lock()
 	defer spm.mtx.Unlock()
 
 	spm.connectedPeers[peer] = true
 }
 
-func (spm *SessionPeerManager) PeerDisconnected(id peer.ID) {
+func (spm *PeerManager) PeerDisconnected(id peer.ID) {
 	spm.mtx.Lock()
 	defer spm.mtx.Unlock()
 
@@ -77,7 +77,7 @@ func (spm *SessionPeerManager) PeerDisconnected(id peer.ID) {
 	}
 }
 
-func (spm *SessionPeerManager) AddPeers(peers ...id.KramaID) {
+func (spm *PeerManager) AddPeers(peers ...id.KramaID) {
 	spm.mtx.Lock()
 	defer spm.mtx.Unlock()
 
@@ -90,7 +90,7 @@ func (spm *SessionPeerManager) AddPeers(peers ...id.KramaID) {
 	}
 }
 
-func (spm *SessionPeerManager) Signal(peerID id.KramaID, status bool) error {
+func (spm *PeerManager) Signal(peerID id.KramaID, status bool) error {
 	spm.mtx.Lock()
 	defer spm.mtx.Unlock()
 
@@ -104,7 +104,7 @@ func (spm *SessionPeerManager) Signal(peerID id.KramaID, status bool) error {
 	return nil
 }
 
-func (spm *SessionPeerManager) PeerStatus(id id.KramaID) bool {
+func (spm *PeerManager) PeerStatus(id id.KramaID) bool {
 	spm.mtx.Lock()
 	defer spm.mtx.Unlock()
 
@@ -116,7 +116,7 @@ func (spm *SessionPeerManager) PeerStatus(id id.KramaID) bool {
 	return info.isActive
 }
 
-func (spm *SessionPeerManager) UpdatePeerStatus(id id.KramaID, status bool) bool {
+func (spm *PeerManager) UpdatePeerStatus(id id.KramaID, status bool) bool {
 	spm.mtx.Lock()
 	defer spm.mtx.Unlock()
 
@@ -130,7 +130,7 @@ func (spm *SessionPeerManager) UpdatePeerStatus(id id.KramaID, status bool) bool
 	return true
 }
 
-func (spm *SessionPeerManager) UpdateFailedAttempts(peer id.KramaID, delta int) bool {
+func (spm *PeerManager) UpdateFailedAttempts(peer id.KramaID, delta int) bool {
 	spm.mtx.Lock()
 	defer spm.mtx.Unlock()
 
@@ -144,7 +144,7 @@ func (spm *SessionPeerManager) UpdateFailedAttempts(peer id.KramaID, delta int) 
 	return true
 }
 
-func (spm *SessionPeerManager) chooseBestPeer(
+func (spm *PeerManager) chooseBestPeer(
 	ctx context.Context,
 	avoidPeers map[id.KramaID]interface{},
 ) (id.KramaID, error) {
@@ -210,7 +210,7 @@ func (spm *SessionPeerManager) chooseBestPeer(
 	return "", types.ErrPeerNotAvailable
 }
 
-func (spm *SessionPeerManager) SendWantReq(peer id.KramaID, msg *atypes.AgoraRequestMsg) error {
+func (spm *PeerManager) SendWantReq(peer id.KramaID, msg *atypes.AgoraRequestMsg) error {
 	if err := spm.network.SendAgoraMessage(peer, ptypes.AGORAREQ, msg); err != nil {
 		return err
 	}
@@ -220,7 +220,7 @@ func (spm *SessionPeerManager) SendWantReq(peer id.KramaID, msg *atypes.AgoraReq
 	return nil
 }
 
-func (spm *SessionPeerManager) Close() {
+func (spm *PeerManager) Close() {
 	for kramaID := range spm.connectedPeers {
 		if err := spm.network.ClosePeerSession(kramaID, spm.sessionID); err != nil {
 			spm.logger.Error("Error closing peer session")

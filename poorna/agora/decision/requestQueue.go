@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
+
 	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
 	"gitlab.com/sarvalabs/moichain/types"
 )
@@ -12,10 +14,26 @@ import (
 type Request struct {
 	PeerID    id.KramaID
 	SessionID types.Address
-	StateHash types.Hash
-	WantList  []types.Hash
+	StateHash atypes.CID
+	WantList  []atypes.CID
 	ReqTime   time.Time
 }
+
+func NewRequest(peerID id.KramaID,
+	sessionID types.Address,
+	stateHash atypes.CID,
+	wantList []atypes.CID,
+	reqTime time.Time,
+) *Request {
+	return &Request{
+		PeerID:    peerID,
+		SessionID: sessionID,
+		StateHash: stateHash,
+		WantList:  wantList,
+		ReqTime:   reqTime,
+	}
+}
+
 type RequestQueue struct {
 	mtx       sync.RWMutex
 	elems     []*Request

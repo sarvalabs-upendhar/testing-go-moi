@@ -292,7 +292,7 @@ func (r *Randomizer) HandleReqMsg(reqMsg *ptypes.RandomWalkReq) error {
 func (r *Randomizer) pubSubHandler(msg *pubsub.Message) error {
 	data := msg.GetData()
 	randomPeerMsg := new(ptypes.RandomWalkResp)
-	// log.Println("Here",msg.ReceivedFrom,randomPeerMsg,data)
+
 	err := polo.Depolorize(randomPeerMsg, data)
 	if err != nil {
 		r.logger.Error("Error depolarising randomWalk Request", "error", err)

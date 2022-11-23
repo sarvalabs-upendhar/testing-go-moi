@@ -3,6 +3,10 @@ package syncer
 import (
 	"sync"
 
+	"gitlab.com/sarvalabs/moichain/dhruva"
+
+	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
+
 	"github.com/pkg/errors"
 	"gitlab.com/sarvalabs/moichain/types"
 )
@@ -43,4 +47,24 @@ func (a *AccDetailsQueue) Len() int {
 type TesseractResponse struct {
 	Data  []byte
 	Delta map[types.Hash][]byte
+}
+
+func approvalsCID(hash types.Hash) atypes.CID {
+	return atypes.ContentID(dhruva.Approvals.Byte(), hash)
+}
+
+func accountCID(hash types.Hash) atypes.CID {
+	return atypes.ContentID(dhruva.Account.Byte(), hash)
+}
+
+func contextCID(hash types.Hash) atypes.CID {
+	return atypes.ContentID(dhruva.Context.Byte(), hash)
+}
+
+func balanceCID(hash types.Hash) atypes.CID {
+	return atypes.ContentID(dhruva.Balance.Byte(), hash)
+}
+
+func dbKeyFromCID(address types.Address, cid atypes.CID) []byte {
+	return dhruva.DBKey(address, dhruva.Prefix(cid.ContentType()), cid.Key())
 }
