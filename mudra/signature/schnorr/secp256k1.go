@@ -1,8 +1,8 @@
 package schnorr
 
 import (
-	"gitlab.com/sarvalabs/btcd-musig/btcec"
-	"gitlab.com/sarvalabs/btcd-musig/btcec/schnorr"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"gitlab.com/sarvalabs/moichain/mudra/common"
 	"gitlab.com/sarvalabs/moichain/mudra/kramaid"
 )
