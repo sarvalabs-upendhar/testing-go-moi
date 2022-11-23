@@ -19,14 +19,13 @@ const (
 )
 
 type ledger interface {
-	GetAssociatedPeers(addr types.Address, stateHash types.Hash) ([]id.KramaID, error)
-	UpdateAssociatedPeers(addr types.Address, stateHash types.Hash, peers id.KramaID) error
+	GetAssociatedPeers(addr types.Address, stateHash atypes.CID) ([]id.KramaID, error)
+	UpdateAssociatedPeers(addr types.Address, stateHash atypes.CID, peers id.KramaID) error
 }
 
 type store interface {
-	GetData(ctx context.Context, keys []types.Hash) ([][]byte, error)
-	DoesStateExists(stateHash types.Hash) bool
-	Get(key []byte) ([]byte, error)
+	GetData(ctx context.Context, address types.Address, keys []atypes.CID) (map[atypes.CID][]byte, error)
+	DoesStateExists(address types.Address, stateHash atypes.CID) bool
 	GetBatchWriter() db.BatchWriter
 }
 
@@ -58,11 +57,12 @@ func NewEngine(
 	ledger ledger,
 	network network,
 	metrics *Metrics,
+	requestQueueSize int,
 ) *Engine {
 	e := &Engine{
 		ctx:                 ctx,
 		logger:              logger.Named("Engine"),
-		requests:            NewRequestQueue(MaxQueueSize),
+		requests:            NewRequestQueue(requestQueueSize),
 		requestWorkerCount:  requestWorkerCount,
 		responseWorkerCount: responseWorkerCount,
 		responses:           make(chan *atypes.Response),
@@ -120,7 +120,7 @@ func (e *Engine) nextTask() (*atypes.Response, error) {
 			ids = append(ids, req.StateHash)
 		}
 
-		blocks, err := e.db.GetData(context.Background(), ids)
+		blocks, err := e.db.GetData(context.Background(), req.SessionID, ids)
 		if err != nil {
 			e.logger.Error("Error fetching blocks from db", "error", err)
 
@@ -136,8 +136,8 @@ func (e *Engine) nextTask() (*atypes.Response, error) {
 			PeerSet:   nil,
 		}
 
-		for _, v := range blocks {
-			resp.HaveList.AddBlock(atypes.NewBlock(v))
+		for cid, v := range blocks {
+			resp.HaveList.AddBlock(atypes.NewBlockFromRawData(cid.ContentType(), v))
 		}
 
 		e.metrics.captureRequestProcessTime(req.ReqTime)
@@ -172,7 +172,7 @@ func (e *Engine) HandleRequest(req *Request) {
 		stateHash := req.StateHash
 		address := req.SessionID
 
-		if !e.db.DoesStateExists(stateHash) {
+		if !e.db.DoesStateExists(req.SessionID, stateHash) {
 			e.sendResponse(req.PeerID, address, stateHash, false, nil)
 			e.metrics.captureRejectedRequests(1)
 
@@ -182,7 +182,7 @@ func (e *Engine) HandleRequest(req *Request) {
 		if !e.requests.Contains(req.PeerID) {
 			if err := e.requests.Push(req); err == nil {
 				e.metrics.capturePendingRequests(1)
-				e.workSignal <- struct{}{}
+				e.signalNewWork()
 
 				return
 			}
@@ -201,7 +201,7 @@ func (e *Engine) HandleRequest(req *Request) {
 func (e *Engine) sendResponse(
 	id id.KramaID,
 	sessionID types.Address,
-	stateHash types.Hash,
+	stateHash atypes.CID,
 	responseStatus bool,
 	peerList []id.KramaID,
 ) {
@@ -254,5 +254,12 @@ func (e *Engine) responseWorker() {
 				e.logger.Error("Error updating associated peers info", "error", err)
 			}
 		}
+	}
+}
+
+func (e *Engine) signalNewWork() {
+	select {
+	case e.workSignal <- struct{}{}:
+	default:
 	}
 }

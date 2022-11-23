@@ -34,6 +34,10 @@ func (p Prefix) Byte() byte {
 	return byte(p)
 }
 
+func DBKey(address types.Address, prefix Prefix, key []byte) []byte {
+	return dbKey(address, prefix, key)
+}
+
 func dbKey(address types.Address, prefix Prefix, key []byte) []byte {
 	if address.IsNil() {
 		return append([]byte{prefix.Byte()}, key...)

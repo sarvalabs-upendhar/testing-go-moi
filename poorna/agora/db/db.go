@@ -6,6 +6,10 @@ import (
 	"fmt"
 	"sync"
 
+	db "gitlab.com/sarvalabs/moichain/dhruva"
+
+	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
+
 	"github.com/hashicorp/go-hclog"
 	dhruva "gitlab.com/sarvalabs/moichain/dhruva/db"
 	"gitlab.com/sarvalabs/moichain/types"
@@ -61,30 +65,35 @@ func (ds *DataStore) worker() {
 	}
 }
 
-func (ds *DataStore) GetData(ctx context.Context, keys []types.Hash) ([][]byte, error) {
-	res := make([][]byte, 0, len(keys))
+func (ds *DataStore) GetData(
+	ctx context.Context,
+	address types.Address,
+	keys []atypes.CID,
+) (map[atypes.CID][]byte, error) {
+	res := make(map[atypes.CID][]byte, len(keys))
+
 	if len(keys) == 0 {
 		return res, nil
 	}
 
 	var lk sync.Mutex
 
-	return res, ds.jobPerKey(ctx, keys, func(c types.Hash) {
-		blk, err := ds.db.ReadEntry(c.Bytes())
+	return res, ds.jobPerKey(ctx, keys, func(c atypes.CID) {
+		blk, err := ds.db.ReadEntry(db.DBKey(address, db.Prefix(c.ContentType()), c.Key()))
 		if err != nil {
 			if errors.Is(err, types.ErrKeyNotFound) {
-				ds.logger.Error("Key not found", "id", c.Hex())
+				ds.logger.Error("Key not found", "id", c)
 			}
 		} else {
 			lk.Lock()
-			res = append(res, blk)
+			res[c] = blk
 			lk.Unlock()
 		}
 	})
 }
 
-func (ds *DataStore) DoesStateExists(stateHash types.Hash) bool {
-	keyExists, err := ds.db.Contains(stateHash.Bytes())
+func (ds *DataStore) DoesStateExists(address types.Address, stateHash atypes.CID) bool {
+	keyExists, err := ds.db.Contains(db.AccountKey(address, types.BytesToHash(stateHash.Key())))
 	if err != nil {
 		ds.logger.Error("Error fetching state info from db", "error", err)
 	}
@@ -111,7 +120,7 @@ func (ds *DataStore) addJob(ctx context.Context, job func()) error {
 	}
 }
 
-func (ds *DataStore) jobPerKey(ctx context.Context, keys []types.Hash, jobFn func(key types.Hash)) error {
+func (ds *DataStore) jobPerKey(ctx context.Context, keys []atypes.CID, jobFn func(key atypes.CID)) error {
 	var err error
 
 	wg := sync.WaitGroup{}

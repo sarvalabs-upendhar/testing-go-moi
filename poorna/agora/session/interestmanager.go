@@ -9,16 +9,16 @@ import (
 
 type InterestManager struct {
 	mutex sync.RWMutex
-	wants map[types.Hash]map[types.Address]bool
+	wants map[atypes.CID]map[types.Address]bool
 }
 
 func NewInterestManager() *InterestManager {
 	return &InterestManager{
-		wants: make(map[types.Hash]map[types.Address]bool),
+		wants: make(map[atypes.CID]map[types.Address]bool),
 	}
 }
 
-func (im *InterestManager) RecordSessionInterest(addr types.Address, ids ...types.Hash) {
+func (im *InterestManager) RecordSessionInterest(addr types.Address, ids ...atypes.CID) {
 	im.mutex.Lock()
 	defer im.mutex.Unlock()
 
@@ -33,12 +33,12 @@ func (im *InterestManager) RecordSessionInterest(addr types.Address, ids ...type
 	}
 }
 
-func (im *InterestManager) RemoveSession(addr types.Address) []types.Hash {
+func (im *InterestManager) RemoveSession(addr types.Address) []atypes.CID {
 	im.mutex.Lock()
 	defer im.mutex.Unlock()
 
 	// The keys that no session is interested in
-	deletedKeys := make([]types.Hash, 0)
+	deletedKeys := make([]atypes.CID, 0)
 
 	// For each known key
 	for c := range im.wants {
@@ -57,12 +57,12 @@ func (im *InterestManager) RemoveSession(addr types.Address) []types.Hash {
 	return deletedKeys
 }
 
-func (im *InterestManager) RemoveSessionInterest(addr types.Address, ids ...types.Hash) []types.Hash {
+func (im *InterestManager) RemoveSessionInterest(addr types.Address, ids ...atypes.CID) []atypes.CID {
 	im.mutex.Lock()
 	defer im.mutex.Unlock()
 
 	// The keys that no session is interested in
-	deletedKs := make([]types.Hash, 0, len(ids))
+	deletedKs := make([]atypes.CID, 0, len(ids))
 
 	// For each key
 	for _, c := range ids {
@@ -94,7 +94,7 @@ func (im *InterestManager) InterestedSessions(
 	orphans := make([]atypes.Block, 0)
 
 	for _, block := range blocks {
-		interestedSessions, ok := im.wants[block.GetID()]
+		interestedSessions, ok := im.wants[block.GetCid()]
 		if ok {
 			for addr := range interestedSessions {
 				sessions[addr] = append(sessions[addr], block)

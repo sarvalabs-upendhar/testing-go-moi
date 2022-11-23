@@ -21,6 +21,8 @@ import (
 const (
 	// AddressLength is the length of account address
 	AddressLength = 32
+
+	HashLength = 32
 )
 
 const (
@@ -43,10 +45,10 @@ type AccType int
 type Accounts []*AccountMetaInfo
 
 // Hash represents the 32 byte hash of arbitrary data.
-type Hash [32]byte
+type Hash [HashLength]byte
 
 // Address represents the 32 byte address of an MOI account.
-type Address [32]byte
+type Address [AddressLength]byte
 
 func (a Address) IsNil() bool {
 	return a == NilAddress
