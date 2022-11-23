@@ -111,6 +111,8 @@ func (p *PublicCoreAPI) GetAssetInfoByAssetID(assetID string) (*types.AssetInfo,
 
 	assetInfo.Owner = assetData.Owner.Hex()
 
+	assetInfo.LogicID = assetData.LogicID
+
 	return assetInfo, nil
 }
 

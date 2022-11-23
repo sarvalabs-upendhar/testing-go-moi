@@ -562,7 +562,7 @@ func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, fetchedAssetInfo, testcase.expected)
+				require.Equal(t, testcase.expected, fetchedAssetInfo)
 			}
 		})
 	}

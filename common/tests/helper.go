@@ -225,6 +225,7 @@ func getRandomAssetInfo(t *testing.T) (*types.AssetInfo, error) {
 	}
 
 	asset := &types.AssetInfo{
+		Owner:       RandomAddress(t).String(),
 		Dimension:   1,
 		TotalSupply: 1000,
 		Symbol:      symbol,

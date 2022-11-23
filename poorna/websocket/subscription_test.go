@@ -78,7 +78,7 @@ func TestTesseractSubscription(t *testing.T) {
 
 	// Check whether the sent tesseract and received tesseract address and height matches
 	require.Equal(t, tesseract.Address(), types.HexToAddress(response.Params.Result.Header.Address))
-	require.Equal(t, tesseract.Height(), types.HexToAddress(response.Params.Result.Header.Address))
+	require.Equal(t, tesseract.Height(), uint64(response.Params.Result.Header.Height))
 }
 
 func TestSubscriptionTimeout(t *testing.T) {
