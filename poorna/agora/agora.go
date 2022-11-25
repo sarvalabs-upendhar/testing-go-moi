@@ -4,14 +4,14 @@ import (
 	"context"
 
 	"github.com/hashicorp/go-hclog"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/poorna"
-	"gitlab.com/sarvalabs/moichain/poorna/agora/db"
-	"gitlab.com/sarvalabs/moichain/poorna/agora/decision"
-	"gitlab.com/sarvalabs/moichain/poorna/agora/network"
-	"gitlab.com/sarvalabs/moichain/poorna/agora/session"
-	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
-	"gitlab.com/sarvalabs/moichain/types"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/poorna"
+	"github.com/sarvalabs/moichain/poorna/agora/db"
+	"github.com/sarvalabs/moichain/poorna/agora/decision"
+	"github.com/sarvalabs/moichain/poorna/agora/network"
+	"github.com/sarvalabs/moichain/poorna/agora/session"
+	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 const (

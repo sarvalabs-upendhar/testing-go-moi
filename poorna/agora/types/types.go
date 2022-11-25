@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
-	"gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/types"
 	"golang.org/x/crypto/blake2b"
 )
 

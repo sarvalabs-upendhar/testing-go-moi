@@ -5,13 +5,13 @@ import (
 	"sync"
 	"time"
 
-	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
 	"github.com/hashicorp/go-hclog"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/poorna/agora/db"
-	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
-	"gitlab.com/sarvalabs/moichain/types"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/poorna/agora/db"
+	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 const (

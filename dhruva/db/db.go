@@ -1,6 +1,6 @@
 package db
 
-import "gitlab.com/sarvalabs/moichain/types"
+import "github.com/sarvalabs/moichain/types"
 
 // DB defines a common interface implemented by all key-value database
 type DB interface {

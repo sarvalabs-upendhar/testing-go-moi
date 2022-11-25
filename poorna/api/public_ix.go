@@ -3,12 +3,12 @@ package api
 import (
 	"errors"
 
-	"gitlab.com/sarvalabs/moichain/utils"
+	"github.com/sarvalabs/moichain/utils"
 
-	"gitlab.com/sarvalabs/moichain/guna"
+	"github.com/sarvalabs/moichain/guna"
 
-	"gitlab.com/sarvalabs/moichain/common"
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/types"
 )
 
 const (

@@ -6,15 +6,15 @@ import (
 	"log"
 	"testing"
 
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/sarvalabs/moichain/common/tests"
+	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
+	"github.com/sarvalabs/moichain/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gitlab.com/sarvalabs/moichain/common/tests"
-	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
-	"gitlab.com/sarvalabs/moichain/types"
 )
 
 func NewTestPeerManager(sessionID types.Address, network sessionNetwork) *PeerManager {

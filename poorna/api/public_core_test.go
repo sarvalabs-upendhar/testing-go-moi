@@ -4,12 +4,12 @@ import (
 	"math/big"
 	"testing"
 
-	gtypes "gitlab.com/sarvalabs/moichain/guna/types"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
 
 	"github.com/stretchr/testify/require"
 
-	"gitlab.com/sarvalabs/moichain/common/tests"
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/moichain/types"
 )
 
 // Core Api Testcases

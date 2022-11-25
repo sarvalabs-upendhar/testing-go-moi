@@ -1,8 +1,8 @@
 package tree
 
 import (
-	db "gitlab.com/sarvalabs/moichain/dhruva"
-	"gitlab.com/sarvalabs/moichain/types"
+	db "github.com/sarvalabs/moichain/dhruva"
+	"github.com/sarvalabs/moichain/types"
 )
 
 type mockDB struct {

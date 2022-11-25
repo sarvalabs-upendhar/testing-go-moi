@@ -5,7 +5,7 @@ import (
 
 	"github.com/deckarep/golang-set"
 
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 type GridCache struct {

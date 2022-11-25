@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 
-	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	"gitlab.com/sarvalabs/moichain/poorna/api"
-	"gitlab.com/sarvalabs/moichain/poorna/moirpc"
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/poorna/api"
+	"github.com/sarvalabs/moichain/poorna/moirpc"
+	"github.com/sarvalabs/moichain/types"
 )
 
 // SYNCRPCService is a struct that represents an SYNC RPC Service

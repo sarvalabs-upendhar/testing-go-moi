@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"gitlab.com/sarvalabs/moichain/cmd"
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/cmd"
+	"github.com/sarvalabs/moichain/types"
 )
 
 func main() {

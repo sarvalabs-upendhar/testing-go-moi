@@ -1,9 +1,9 @@
 package types
 
 import (
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 
-	"gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/mudra/kramaid"
 )
 
 type MsgType int64

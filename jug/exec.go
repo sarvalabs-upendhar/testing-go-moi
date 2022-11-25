@@ -4,8 +4,8 @@ import (
 	"log"
 	"sync"
 
-	"gitlab.com/sarvalabs/moichain/guna"
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/guna"
+	"github.com/sarvalabs/moichain/types"
 )
 
 type Exec struct {

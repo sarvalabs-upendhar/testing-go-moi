@@ -11,32 +11,32 @@ import (
 	"sync/atomic"
 	"time"
 
-	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
+	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
 
-	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
-	gtypes "gitlab.com/sarvalabs/moichain/guna/types"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
 
 	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/moichain/guna"
+	"github.com/sarvalabs/moichain/guna"
 
-	"gitlab.com/sarvalabs/moichain/utils"
+	"github.com/sarvalabs/moichain/utils"
 
-	db "gitlab.com/sarvalabs/moichain/dhruva/db"
-	"gitlab.com/sarvalabs/moichain/poorna"
-	"gitlab.com/sarvalabs/moichain/poorna/agora"
-	"gitlab.com/sarvalabs/moichain/poorna/agora/session"
+	db "github.com/sarvalabs/moichain/dhruva/db"
+	"github.com/sarvalabs/moichain/poorna"
+	"github.com/sarvalabs/moichain/poorna/agora"
+	"github.com/sarvalabs/moichain/poorna/agora/session"
 
-	"gitlab.com/sarvalabs/moichain/poorna/moirpc"
+	"github.com/sarvalabs/moichain/poorna/moirpc"
 
 	"github.com/hashicorp/go-hclog"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
 
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 const (
@@ -252,7 +252,7 @@ func (s *Syncer) StreamHandler(stream network.Stream) {
 }
 
 // sendAccSyncRequest sends an account sync request to the remote peer
-func (s *Syncer) sendAccSyncRequest(peer *SyncPeer) error { //nolint
+func (s *Syncer) sendAccSyncRequest(peer *SyncPeer) error { // nolint
 	msg := &ptypes.AccountSyncRequest{
 		BulkSync: true,
 	}

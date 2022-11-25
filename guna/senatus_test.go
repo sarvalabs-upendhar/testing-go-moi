@@ -6,13 +6,13 @@ import (
 	"testing"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/sarvalabs/go-polo"
+	"github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/moichain/dhruva"
+	"github.com/sarvalabs/moichain/dhruva/db"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/types"
 	"github.com/stretchr/testify/require"
-	"gitlab.com/sarvalabs/moichain/common/tests"
-	"gitlab.com/sarvalabs/moichain/dhruva"
-	"gitlab.com/sarvalabs/moichain/dhruva/db"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
 )
 
 func TestReputationEngine_GetInfo_FetchFromDB(t *testing.T) {

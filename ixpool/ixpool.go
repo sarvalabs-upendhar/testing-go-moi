@@ -5,12 +5,12 @@ import (
 	"log"
 	"time"
 
-	"gitlab.com/sarvalabs/moichain/utils"
+	"github.com/sarvalabs/moichain/utils"
 
 	"github.com/hashicorp/go-hclog"
-	"gitlab.com/sarvalabs/moichain/common"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/types"
 )
 
 const (
@@ -334,7 +334,7 @@ func (i *IxPool) IncrementWaitTime(addr types.Address, baseTime time.Duration) e
 
 func (i *IxPool) validateIx(ix *types.Interaction) error {
 	// Check the interaction size to overcome DOS Attacks
-	if uint64(ix.GetSize()) > txMaxSize {
+	if uint64(ix.Size) > txMaxSize {
 		return ErrOversizedData
 	}
 
@@ -394,12 +394,16 @@ func (i *IxPool) Start() {
 
 // helper functions
 
-func GetIxsSize(ixs types.Interactions) int64 {
+func GetIxsSize(ixs types.Interactions) (int64, error) {
 	var sumOfIxsSize int64 = 0
 
 	for _, ix := range ixs {
-		sumOfIxsSize += int64(len(polo.Polorize(ix)))
+		bz, err := polo.Polorize(ix)
+		if err != nil {
+			return 0, err
+		}
+		sumOfIxsSize += int64(len(bz))
 	}
 
-	return sumOfIxsSize
+	return sumOfIxsSize, nil
 }

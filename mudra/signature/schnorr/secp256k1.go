@@ -3,8 +3,8 @@ package schnorr
 import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
-	"gitlab.com/sarvalabs/moichain/mudra/common"
-	"gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/mudra/common"
+	"github.com/sarvalabs/moichain/mudra/kramaid"
 )
 
 // SchnorrSignature is a custom type of Signature that uses Secp256k1 Curve and Schnorr algorithm

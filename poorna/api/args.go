@@ -1,6 +1,6 @@
 package api
 
-import "gitlab.com/sarvalabs/moichain/types"
+import "github.com/sarvalabs/moichain/types"
 
 // TesseractArgs is a struct that represents an argument wrapper for retrieving the latest Tesseract
 type TesseractArgs struct {

@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 
-	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	"github.com/sarvalabs/moichain/types"
 )
 
 const (

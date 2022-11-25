@@ -5,16 +5,16 @@ import (
 	"math/big"
 	"sync"
 
-	gtypes "gitlab.com/sarvalabs/moichain/guna/types"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
 
 	"github.com/decred/dcrd/crypto/blake256"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/moichain/dhruva"
-	"gitlab.com/sarvalabs/moichain/guna/tree"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	"github.com/sarvalabs/moichain/dhruva"
+	"github.com/sarvalabs/moichain/guna/tree"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/types"
 )
 
 type Storage map[string][]byte
@@ -41,9 +41,9 @@ type StateObject struct {
 	balance        *gtypes.BalanceObject
 	assetApprovals *gtypes.ApprovalObject
 
-	logicTrie   tree.MerkleTree //nolint
-	storageTrie tree.MerkleTree //nolint
-	fileTrie    tree.MerkleTree //nolint
+	logicTrie   tree.MerkleTree // nolint
+	storageTrie tree.MerkleTree // nolint
+	fileTrie    tree.MerkleTree // nolint
 
 	dirtyEntries Storage
 	receipts     types.Receipts

@@ -9,15 +9,15 @@ import (
 	"path/filepath"
 	"time"
 
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 
-	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
 
-	"gitlab.com/sarvalabs/moichain/utils"
+	"github.com/sarvalabs/moichain/utils"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
 )
 
 const (
@@ -264,7 +264,7 @@ func (wal *BaseWAL) SearchForClusterID(
 		for {
 			msg, err = dec.Decode()
 			if errors.Is(err, io.EOF) {
-				//// OPTIMISATION: no need to look for height in older files if we've seen h < height
+				// // OPTIMISATION: no need to look for height in older files if we've seen h < height
 				// if lastHeightFound > 0 && lastHeightFound < height {
 				//	 gr.Close()
 				//	 return nil, false, nil

@@ -7,8 +7,8 @@ import (
 	"math"
 
 	"github.com/hashicorp/go-hclog"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/moichain/utils"
+	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/utils"
 )
 
 type ConnManager interface {

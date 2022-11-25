@@ -12,8 +12,8 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/moichain/utils"
+	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/utils"
 )
 
 const (
@@ -274,7 +274,7 @@ func (t Timeouts) Swap(i, j int) {
 
 func (t *Timeouts) Push(x interface{}) {
 	n := len(*t)
-	item := x.(*subscriptionBase) //nolint: forcetypeassert
+	item := x.(*subscriptionBase) // nolint: forcetypeassert
 	item.heapIndex = n
 	*t = append(*t, item)
 }

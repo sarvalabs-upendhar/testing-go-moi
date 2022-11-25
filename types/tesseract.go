@@ -5,8 +5,8 @@ import (
 
 	"github.com/mr-tron/base58"
 
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
 )
 
 const (
@@ -87,11 +87,11 @@ func (t *Tesseract) GetICSHash() Hash {
 	return t.Body.ConsensusProof.ICSHash
 }
 
-func (t *Tesseract) BodyHash() Hash {
+func (t *Tesseract) BodyHash() (Hash, error) {
 	return PoloHash(t.Body)
 }
 
-func (t *Tesseract) Hash() Hash {
+func (t *Tesseract) Hash() (Hash, error) {
 	protoHeader := new(TesseractHeader)
 	protoHeader.ContextLock = t.Header.ContextLock
 	protoHeader.Address = t.Header.Address
@@ -105,9 +105,12 @@ func (t *Tesseract) Hash() Hash {
 	protoHeader.ClusterID = t.Header.ClusterID
 	protoHeader.Timestamp = t.Header.Timestamp
 
-	data := polo.Polorize(protoHeader)
+	data, err := polo.Polorize(protoHeader)
+	if err != nil {
+		return Hash{}, err
+	}
 
-	return GetHash(data)
+	return GetHash(data), nil
 }
 
 func (t *Tesseract) Interactions() Interactions {
@@ -154,7 +157,7 @@ func (t *Tesseract) Height() uint64 {
 	return t.Header.Height
 }
 
-func (t *Tesseract) Bytes() []byte {
+func (t *Tesseract) Bytes() ([]byte, error) {
 	c := t.CanonicalWithoutSeal()
 
 	return polo.Polorize(c)
@@ -184,7 +187,7 @@ type CanonicalTesseract struct {
 }
 
 // Bytes method serializes and returns the canonical tesseract in bytes
-func (c *CanonicalTesseract) Bytes() []byte {
+func (c *CanonicalTesseract) Bytes() ([]byte, error) {
 	return polo.Polorize(c)
 }
 

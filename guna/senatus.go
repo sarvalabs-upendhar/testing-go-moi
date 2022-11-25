@@ -5,9 +5,9 @@ import (
 	"context"
 	"time"
 
-	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
-	"gitlab.com/sarvalabs/moichain/utils"
+	"github.com/sarvalabs/moichain/utils"
 
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
@@ -15,12 +15,12 @@ import (
 	"github.com/moby/locker"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/moichain/dhruva"
-	"gitlab.com/sarvalabs/moichain/dhruva/db"
-	"gitlab.com/sarvalabs/moichain/mudra"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	"github.com/sarvalabs/moichain/dhruva"
+	"github.com/sarvalabs/moichain/dhruva/db"
+	"github.com/sarvalabs/moichain/mudra"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/types"
 	// "go/build"
 )
 

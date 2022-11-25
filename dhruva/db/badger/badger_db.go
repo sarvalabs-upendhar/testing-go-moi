@@ -5,8 +5,8 @@ import (
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/moichain/dhruva/db"
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/dhruva/db"
+	"github.com/sarvalabs/moichain/types"
 )
 
 // BadgerDB is a LSM based key-value store, It implements db.DB interface

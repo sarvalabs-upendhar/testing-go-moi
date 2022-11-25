@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"gitlab.com/sarvalabs/moichain/poorna/types"
+	"github.com/sarvalabs/moichain/poorna/types"
 
 	"github.com/pkg/errors"
-	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
 )
 
 func (k *Engine) startMessageHandlers(ctx context.Context, slot *ktypes.Slot) {

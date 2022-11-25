@@ -5,15 +5,15 @@ import (
 	"fmt"
 	"log"
 
-	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
 	"github.com/hashicorp/go-hclog"
-	"gitlab.com/sarvalabs/moichain/chain"
-	"gitlab.com/sarvalabs/moichain/ixpool"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/moichain/utils"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	"github.com/sarvalabs/moichain/chain"
+	"github.com/sarvalabs/moichain/ixpool"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/utils"
 )
 
 // SubHandler is a struct that represents the network event handler

@@ -2,7 +2,7 @@ package badger
 
 import (
 	"github.com/dgraph-io/badger/v3"
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 // Iterator is a prefix enable badger key-value iterator

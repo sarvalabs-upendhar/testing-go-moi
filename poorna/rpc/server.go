@@ -9,8 +9,8 @@ import (
 
 	"github.com/gorilla/rpc/v2/json2"
 	"github.com/hashicorp/go-hclog"
-	"gitlab.com/sarvalabs/moichain/poorna/websocket"
-	"gitlab.com/sarvalabs/moichain/utils"
+	"github.com/sarvalabs/moichain/poorna/websocket"
+	"github.com/sarvalabs/moichain/utils"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2"

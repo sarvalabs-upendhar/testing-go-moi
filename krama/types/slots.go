@@ -3,7 +3,7 @@ package types
 import (
 	"sync"
 
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 type ExecutionResponse struct {

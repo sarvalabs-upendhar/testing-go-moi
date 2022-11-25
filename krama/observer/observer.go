@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	types "gitlab.com/sarvalabs/moichain/krama/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	types "github.com/sarvalabs/moichain/krama/types"
 )
 
 type WatchDog struct {

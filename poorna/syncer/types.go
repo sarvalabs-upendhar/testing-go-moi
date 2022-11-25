@@ -3,12 +3,12 @@ package syncer
 import (
 	"sync"
 
-	"gitlab.com/sarvalabs/moichain/dhruva"
+	"github.com/sarvalabs/moichain/dhruva"
 
-	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
+	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
 
 	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 type AccDetailsQueue struct {

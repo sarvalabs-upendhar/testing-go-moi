@@ -1,10 +1,10 @@
 package kbft
 
 import (
-	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/types"
 )
 
 type EvidenceEngine struct {

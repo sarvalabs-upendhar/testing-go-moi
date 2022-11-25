@@ -9,21 +9,21 @@ import (
 	"sync"
 	"time"
 
-	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
 	"github.com/libp2p/go-libp2p/core/crypto"
 
 	"github.com/libp2p/go-libp2p"
 
-	"gitlab.com/sarvalabs/moichain/utils"
+	"github.com/sarvalabs/moichain/utils"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/routing"
 	maddr "github.com/multiformats/go-multiaddr"
-	"gitlab.com/sarvalabs/moichain/mudra"
-	mcommon "gitlab.com/sarvalabs/moichain/mudra/common"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	"github.com/sarvalabs/moichain/mudra"
+	mcommon "github.com/sarvalabs/moichain/mudra/common"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
 
 	kdht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -33,9 +33,9 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	discovery "github.com/libp2p/go-libp2p/p2p/discovery/routing"
-	"gitlab.com/sarvalabs/moichain/common"
-	moirpc "gitlab.com/sarvalabs/moichain/poorna/moirpc"
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/common"
+	moirpc "github.com/sarvalabs/moichain/poorna/moirpc"
+	"github.com/sarvalabs/moichain/types"
 )
 
 const (

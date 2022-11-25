@@ -9,25 +9,25 @@ import (
 	"sync"
 	"time"
 
-	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
-	gtypes "gitlab.com/sarvalabs/moichain/guna/types"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
 
-	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
 
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/moby/locker"
 	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/moichain/common"
-	"gitlab.com/sarvalabs/moichain/guna"
-	"gitlab.com/sarvalabs/moichain/jug"
-	"gitlab.com/sarvalabs/moichain/mudra"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/moichain/utils"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/guna"
+	"github.com/sarvalabs/moichain/jug"
+	"github.com/sarvalabs/moichain/mudra"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/utils"
 )
 
 const (

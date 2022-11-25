@@ -1,7 +1,7 @@
 package types
 
 import (
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 type ICSMetaInfo struct {

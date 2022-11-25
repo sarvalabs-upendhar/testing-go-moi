@@ -1,7 +1,7 @@
 package guna
 
 import (
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 type changeEntry interface {

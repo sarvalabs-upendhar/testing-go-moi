@@ -6,18 +6,18 @@ import (
 	"math/rand"
 	"time"
 
-	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
 	"github.com/hashicorp/go-hclog"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/pkg/errors"
-	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/poorna/moirpc"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/poorna/moirpc"
+	"github.com/sarvalabs/moichain/types"
 )
 
 const (

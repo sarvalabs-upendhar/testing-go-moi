@@ -14,9 +14,9 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	maddr "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/profile"
-	"gitlab.com/sarvalabs/moichain/common"
-	"gitlab.com/sarvalabs/moichain/poorna/node"
-	"gitlab.com/sarvalabs/moichain/telemetry/tracing"
+	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/poorna/node"
+	"github.com/sarvalabs/moichain/telemetry/tracing"
 	"go.opentelemetry.io/otel"
 
 	// "os/signal"

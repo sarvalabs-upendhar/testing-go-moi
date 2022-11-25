@@ -2,14 +2,14 @@ package mudra
 
 import (
 	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/moichain/mudra/common"
-	"gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/mudra/poi"
-	"gitlab.com/sarvalabs/moichain/mudra/poi/moinode"
-	"gitlab.com/sarvalabs/moichain/mudra/signature/bls"
-	"gitlab.com/sarvalabs/moichain/mudra/signature/ecdsa"
-	"gitlab.com/sarvalabs/moichain/mudra/signature/schnorr"
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/mudra/common"
+	"github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/mudra/poi"
+	"github.com/sarvalabs/moichain/mudra/poi/moinode"
+	"github.com/sarvalabs/moichain/mudra/signature/bls"
+	"github.com/sarvalabs/moichain/mudra/signature/ecdsa"
+	"github.com/sarvalabs/moichain/mudra/signature/schnorr"
+	"github.com/sarvalabs/moichain/types"
 )
 
 type KramaVault struct {

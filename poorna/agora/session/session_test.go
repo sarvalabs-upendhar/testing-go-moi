@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"gitlab.com/sarvalabs/moichain/dhruva"
+	"github.com/sarvalabs/moichain/dhruva"
 
+	"github.com/sarvalabs/moichain/common/tests"
+	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
 	"github.com/stretchr/testify/require"
-	"gitlab.com/sarvalabs/moichain/common/tests"
-	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
 )
 
 func TestHandleMessage_UpdatePeerStatus(t *testing.T) {

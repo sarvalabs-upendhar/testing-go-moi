@@ -7,11 +7,11 @@ import (
 	"testing"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/sarvalabs/go-polo"
+	"github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/moichain/dhruva/db"
+	"github.com/sarvalabs/moichain/types"
 	"github.com/stretchr/testify/require"
-	"gitlab.com/sarvalabs/moichain/common/tests"
-	"gitlab.com/sarvalabs/moichain/dhruva/db"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
 	"golang.org/x/net/context"
 )
 

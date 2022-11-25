@@ -1,8 +1,8 @@
 package agora
 
 import (
-	"gitlab.com/sarvalabs/moichain/poorna/agora/decision"
-	"gitlab.com/sarvalabs/moichain/poorna/agora/network"
+	"github.com/sarvalabs/moichain/poorna/agora/decision"
+	"github.com/sarvalabs/moichain/poorna/agora/network"
 )
 
 type Metrics struct {

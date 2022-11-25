@@ -3,7 +3,7 @@ package ixpool
 import (
 	"sync"
 
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 // Lookup map used to find transactions present in the pool

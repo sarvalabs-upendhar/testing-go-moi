@@ -6,9 +6,9 @@ import (
 
 	"github.com/munna0908/smt"
 	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/moichain/dhruva"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	"github.com/sarvalabs/moichain/dhruva"
+	"github.com/sarvalabs/moichain/types"
 )
 
 // DB wraps access to trie data

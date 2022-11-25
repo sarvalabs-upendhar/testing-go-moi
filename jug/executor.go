@@ -4,8 +4,8 @@ import (
 	"math/big"
 
 	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/moichain/guna"
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/guna"
+	"github.com/sarvalabs/moichain/types"
 )
 
 type state interface {

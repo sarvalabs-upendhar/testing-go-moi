@@ -7,11 +7,11 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/moichain/common"
-	db "gitlab.com/sarvalabs/moichain/dhruva/db"
-	"gitlab.com/sarvalabs/moichain/dhruva/db/badger"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/dhruva/db"
+	"github.com/sarvalabs/moichain/dhruva/db/badger"
+	"github.com/sarvalabs/moichain/types"
 )
 
 // PersistenceManager manages all the critical information to perform content-addressed persistence services
@@ -149,7 +149,12 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 			msg.LatticeExists = latticeExists
 		}
 
-		return int32(bucket.getID()), false, p.UpdateEntry(key, polo.Polorize(msg))
+		bz, err := polo.Polorize(msg)
+		if err != nil {
+			return -1, false, err
+		}
+
+		return int32(bucket.getID()), false, p.UpdateEntry(key, bz)
 	} else if errors.Is(err, types.ErrKeyNotFound) {
 		msg := types.AccountMetaInfo{
 			StateExists:   stateExists,
@@ -160,7 +165,12 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 			Height:        height,
 		}
 
-		if err = p.CreateEntry(key, polo.Polorize(msg)); err != nil {
+		bz, err := polo.Polorize(msg)
+		if err != nil {
+			return -1, false, err
+		}
+
+		if err = p.CreateEntry(key, bz); err != nil {
 			return -1, false, err
 		}
 
@@ -221,7 +231,12 @@ func (p *PersistenceManager) UpdateTesseractStatus(
 		return types.ErrHashMismatch
 	}
 
-	return p.UpdateEntry(key, polo.Polorize(msg))
+	bz, err := polo.Polorize(msg)
+	if err != nil {
+		return err
+	}
+
+	return p.UpdateEntry(key, bz)
 }
 
 // UpdateEntry updates the value associated with the given key

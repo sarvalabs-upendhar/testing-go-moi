@@ -9,16 +9,16 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/moichain/guna"
-	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
-	"gitlab.com/sarvalabs/moichain/mudra"
-	common2 "gitlab.com/sarvalabs/moichain/mudra/common"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/telemetry/tracing"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	"github.com/sarvalabs/moichain/guna"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
+	"github.com/sarvalabs/moichain/mudra"
+	common2 "github.com/sarvalabs/moichain/mudra/common"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/telemetry/tracing"
 
-	"gitlab.com/sarvalabs/moichain/common"
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/types"
 )
 
 const (

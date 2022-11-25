@@ -1,8 +1,8 @@
 package tree
 
 import (
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	"github.com/sarvalabs/moichain/types"
 )
 
 type rootNode struct {

@@ -13,8 +13,8 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"golang.org/x/crypto/blake2b"
 )
 
@@ -608,13 +608,16 @@ func MinInteger(a, b int) int {
 	return b
 }
 
-func PoloHash(x interface{}) Hash {
-	bytes := polo.Polorize(x)
+func PoloHash(x interface{}) (Hash, error) {
+	bytes, err := polo.Polorize(x)
+	if err != nil {
+		return Hash{}, err
+	}
 	sum := blake2b.Sum256(bytes)
 	h := BytesToHash(sum[:])
 	// h := sha256.Sum256(bytes)
 
-	return h
+	return h, nil
 }
 
 func GetHash(data []byte) Hash {
@@ -668,7 +671,7 @@ func (r *Receipt) SetExtraData(data interface{}) error {
 
 type Receipts map[Hash]*Receipt
 
-func (rs Receipts) Hash() Hash {
+func (rs Receipts) Hash() (Hash, error) {
 	return PoloHash(rs)
 }
 
@@ -689,6 +692,6 @@ func AccTypeFromIxType(ixType IxType) AccType {
 	}
 }
 
-func (acc *Accounts) Bytes() []byte {
+func (acc *Accounts) Bytes() ([]byte, error) {
 	return polo.Polorize(acc)
 }

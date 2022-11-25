@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/sarvalabs/moichain/common/tests"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/types"
 	"github.com/stretchr/testify/require"
-	"gitlab.com/sarvalabs/moichain/common/tests"
-	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/types"
 )
 
 // testcase args

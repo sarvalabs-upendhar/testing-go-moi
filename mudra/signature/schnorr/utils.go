@@ -6,7 +6,7 @@ import (
 	"errors"
 
 	sr25519In "github.com/oasisprotocol/curve25519-voi/primitives/sr25519"
-	"gitlab.com/sarvalabs/moichain/mudra/common"
+	"github.com/sarvalabs/moichain/mudra/common"
 )
 
 type Sr25519PrivKey struct {

@@ -9,11 +9,11 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/poorna/agora/db"
-	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/poorna/agora/db"
+	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 var AgoraPrefix = []byte("agora")

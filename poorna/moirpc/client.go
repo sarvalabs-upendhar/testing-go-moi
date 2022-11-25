@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -19,8 +19,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-multiaddr"
 
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/poorna/moirpc/ttlmap"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/poorna/moirpc/ttlmap"
 
 	stats "github.com/libp2p/go-libp2p-gorpc/stats"
 )

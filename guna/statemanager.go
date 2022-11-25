@@ -11,23 +11,23 @@ import (
 	"net/http"
 	"sync"
 
-	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
-	gtypes "gitlab.com/sarvalabs/moichain/guna/types"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
 
 	"github.com/hashicorp/go-hclog"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
-	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/telemetry/tracing"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/telemetry/tracing"
 	"golang.org/x/sync/errgroup"
 
 	lru "github.com/hashicorp/golang-lru"
-	"gitlab.com/sarvalabs/moichain/dhruva"
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/dhruva"
+	"github.com/sarvalabs/moichain/types"
 )
 
 const (

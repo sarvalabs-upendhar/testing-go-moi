@@ -7,19 +7,19 @@ import (
 	"sync"
 	"time"
 
-	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
-	"gitlab.com/sarvalabs/moichain/utils"
+	"github.com/sarvalabs/moichain/utils"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/poorna"
-	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/poorna"
+	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 const (
@@ -107,7 +107,7 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 				continue
 			}
 
-			an.metrics.captureInboundDataSize(float64(len(polo.Polorize(reqMsg))))
+			an.metrics.captureInboundDataSize(float64(len(message.Payload)))
 			an.sm.HandlePeerMessage(message.Sender, reqMsg)
 
 		case ptypes.AGORARESP:
@@ -118,7 +118,7 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 				continue
 			}
 
-			an.metrics.captureOutboundDataSize(float64(len(polo.Polorize(respMsg))))
+			an.metrics.captureOutboundDataSize(float64(len(message.Payload)))
 			an.sm.HandlePeerMessage(message.Sender, respMsg)
 		}
 	}

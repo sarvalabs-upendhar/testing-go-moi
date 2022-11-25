@@ -17,9 +17,9 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
 
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 
 	"github.com/multiformats/go-multiaddr"
 )

@@ -1,7 +1,7 @@
 package chain
 
 import (
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 var GenesisIxHash = types.GetHash([]byte("Genesis Interaction"))

@@ -5,8 +5,8 @@ import (
 	"math/big"
 
 	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	"github.com/sarvalabs/moichain/mudra/kramaid"
 )
 
 const (
@@ -124,17 +124,21 @@ type IxData struct {
 // Interactions are array of Transactions
 type Interactions []*Interaction
 
-func (is Interactions) Bytes() []byte {
+func (is Interactions) Bytes() ([]byte, error) {
 	return polo.Polorize(is)
 }
 
-func (is Interactions) Hash() Hash {
+func (is Interactions) Hash() (Hash, error) {
 	return PoloHash(is)
 }
 
-func (ix *Interaction) GetSize() int64 {
+func (ix *Interaction) GetSize() (int64, error) {
 	// FIXME: size should calculated after signature integration
-	return int64(len(polo.Polorize(ix)))
+	bz, err := polo.Polorize(ix)
+	if err != nil {
+		return 0, err
+	}
+	return int64(len(bz)), nil
 }
 
 func (ix *Interaction) GetAssetCreationPayload() *AssetDataInput {
@@ -145,15 +149,18 @@ func (ix *Interaction) IxType() IxType {
 	return ix.Data.Input.Type
 }
 
-func (ix *Interaction) GetIxHash() Hash {
+func (ix *Interaction) GetIxHash() (Hash, error) {
 	if ix.Hash.IsNil() {
-		h := PoloHash(ix)
+		h, err := PoloHash(ix)
+		if err != nil {
+			return Hash{}, err
+		}
 		ix.Hash = h
 
-		return h
+		return h, nil
 	}
 
-	return ix.Hash
+	return ix.Hash, nil
 }
 
 func (ix *Interaction) Sign(prv *ecdsa.PrivateKey) error {

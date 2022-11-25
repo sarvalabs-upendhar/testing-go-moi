@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 
 	"github.com/stretchr/testify/require"
 )

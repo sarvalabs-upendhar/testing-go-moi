@@ -4,8 +4,8 @@ import (
 	"errors"
 	"time"
 
-	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
-	"gitlab.com/sarvalabs/moichain/types"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 func (k *Engine) minter() {

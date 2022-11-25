@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
-	"gitlab.com/sarvalabs/moichain/poorna/api"
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/poorna/api"
+	"github.com/sarvalabs/moichain/types"
 )
 
 // rpcService is a struct that represents a mapping of RPC service APIs

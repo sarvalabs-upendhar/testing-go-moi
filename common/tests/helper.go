@@ -12,10 +12,10 @@ import (
 
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/chaincfg"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/types"
 	"github.com/stretchr/testify/require"
-	gtypes "gitlab.com/sarvalabs/moichain/guna/types"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/types"
 )
 
 func RandomAddress(t *testing.T) types.Address {
