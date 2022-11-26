@@ -18,7 +18,14 @@ func (k *Engine) minter() {
 			for interactionQueue.Len() > 0 {
 				ix, ok := interactionQueue.Pop().(*types.Interaction)
 				if !ok {
-					k.logger.Error("Error interaction type assertion failed", "hash", ix.GetIxHash())
+					ixHash, err := ix.GetIxHash()
+					if err != nil {
+						k.logger.Error("Error fetching interaction hash", "error", err)
+
+						continue
+					}
+
+					k.logger.Error("Error interaction type assertion failed", "hash", ixHash)
 
 					continue
 				}

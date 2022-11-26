@@ -127,7 +127,12 @@ func validateArguments(args *SendIXArgs, p *PublicIXAPI) error {
 
 func validateInteraction(ix *types.Interaction, p *PublicIXAPI) error {
 	// Check the interaction size to overcome DOS Attacks
-	if uint64(ix.GetSize()) > txMaxSize {
+	ixSize, err := ix.GetSize()
+	if err != nil {
+		return err
+	}
+
+	if uint64(ixSize) > txMaxSize {
 		return ErrOversizedData
 	}
 

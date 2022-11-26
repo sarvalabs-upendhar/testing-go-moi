@@ -53,7 +53,11 @@ func (syncRPC *SYNCRPCService) GetTesseract(
 		return errors.New("error fetching ICS Info")
 	}
 
-	rawData := tesseract.Bytes()
+	rawData, err := tesseract.Bytes()
+	if err != nil {
+		return err
+	}
+
 	resp.Data = rawData
 	resp.Delta = map[types.Hash][]byte{tesseract.Body.ConsensusProof.ICSHash: icsData}
 

@@ -1,6 +1,7 @@
 package types
 
 import (
+	"github.com/pkg/errors"
 	"sync"
 
 	"github.com/mr-tron/base58"
@@ -88,7 +89,12 @@ func (t *Tesseract) GetICSHash() Hash {
 }
 
 func (t *Tesseract) BodyHash() (Hash, error) {
-	return PoloHash(t.Body)
+	hash, err := PoloHash(t.Body)
+	if err != nil {
+		return NilHash, errors.Wrap(err, "failed to polorize tesseract body")
+	}
+
+	return hash, nil
 }
 
 func (t *Tesseract) Hash() (Hash, error) {
@@ -107,7 +113,7 @@ func (t *Tesseract) Hash() (Hash, error) {
 
 	data, err := polo.Polorize(protoHeader)
 	if err != nil {
-		return Hash{}, err
+		return Hash{}, errors.Wrap(err, "failed to polorize tesseract header")
 	}
 
 	return GetHash(data), nil
@@ -160,7 +166,12 @@ func (t *Tesseract) Height() uint64 {
 func (t *Tesseract) Bytes() ([]byte, error) {
 	c := t.CanonicalWithoutSeal()
 
-	return polo.Polorize(c)
+	rawData, err := polo.Polorize(c)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize tesseract")
+	}
+
+	return rawData, nil
 }
 
 // CanonicalWithoutSeal method returns a copy of the tesseract without seal and interactions
@@ -186,7 +197,7 @@ type CanonicalTesseract struct {
 	Seal   []byte
 }
 
-// Bytes method serializes and returns the canonical tesseract in bytes
+// Bytes method polorizes and returns the canonical tesseract in bytes
 func (c *CanonicalTesseract) Bytes() ([]byte, error) {
 	return polo.Polorize(c)
 }

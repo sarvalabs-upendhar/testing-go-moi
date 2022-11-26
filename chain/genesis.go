@@ -37,7 +37,7 @@ func CreateGenesisTesseract(
 	addr types.Address,
 	stateHash, contextHash types.Hash,
 	contextDelta types.ContextDelta,
-) *types.Tesseract {
+) (*types.Tesseract, error) {
 	Tesseract := &types.Tesseract{
 		Header: types.TesseractHeader{
 			Address:  addr,
@@ -69,7 +69,13 @@ func CreateGenesisTesseract(
 		},
 		Ixns: nil,
 	}
-	Tesseract.Header.TesseractHash = Tesseract.BodyHash()
 
-	return Tesseract
+	tsBodyHash, err := Tesseract.BodyHash()
+	if err != nil {
+		return nil, err
+	}
+
+	Tesseract.Header.TesseractHash = tsBodyHash
+
+	return Tesseract, nil
 }

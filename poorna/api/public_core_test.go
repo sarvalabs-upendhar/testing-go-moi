@@ -374,7 +374,7 @@ func TestPublicCoreAPI_GetTesseractByHash(t *testing.T) {
 		{
 			name: "Valid hash",
 			args: &TesseractByHashArgs{
-				Hash:             latestTesseract.Hash().String(),
+				Hash:             getTesseractHash(t, latestTesseract).String(),
 				WithInteractions: false,
 			},
 			expected: latestTesseract,
@@ -398,7 +398,7 @@ func TestPublicCoreAPI_GetTesseractByHash(t *testing.T) {
 		{
 			name: "Tesseract with interactions",
 			args: &TesseractByHashArgs{
-				Hash:             latestTesseractWithIxns.Hash().String(),
+				Hash:             getTesseractHash(t, latestTesseractWithIxns).String(),
 				WithInteractions: true,
 			},
 			expected: latestTesseractWithIxns,
@@ -406,7 +406,7 @@ func TestPublicCoreAPI_GetTesseractByHash(t *testing.T) {
 		{
 			name: "Tesseract without interactions",
 			args: &TesseractByHashArgs{
-				Hash:             latestTesseract.Hash().String(),
+				Hash:             getTesseractHash(t, latestTesseract).String(),
 				WithInteractions: false,
 			},
 			expected: latestTesseract,
@@ -668,7 +668,7 @@ func getTesseracts(t *testing.T, address types.Address) (types.Hash, types.Hash,
 	tesseracts := make(map[types.Hash]*types.Tesseract)
 	tesseract := newTesseract(t, 1, address)
 	contextHash := tesseract.ContextHash()
-	tesseractHash := tesseract.Hash()
+	tesseractHash := getTesseractHash(t, tesseract)
 	tesseracts[tesseractHash] = tesseract
 
 	return contextHash, tesseractHash, tesseracts
@@ -694,4 +694,13 @@ func getReceipts(t *testing.T) (types.Hash, map[types.Hash]*types.Receipt) {
 	receipts[interactionHash] = newReceipt(interactionHash)
 
 	return interactionHash, receipts
+}
+
+func getTesseractHash(t *testing.T, tesseract *types.Tesseract) types.Hash {
+	t.Helper()
+
+	tsHash, err := tesseract.Hash()
+	require.NoError(t, err)
+
+	return tsHash
 }

@@ -672,7 +672,12 @@ func (r *Receipt) SetExtraData(data interface{}) error {
 type Receipts map[Hash]*Receipt
 
 func (rs Receipts) Hash() (Hash, error) {
-	return PoloHash(rs)
+	rawData, err := PoloHash(rs)
+	if err != nil {
+		return NilHash, errors.Wrap(err, "failed to polorize receipts")
+	}
+
+	return rawData, nil
 }
 
 func (rs Receipts) GetReceipt(ixHash Hash) (*Receipt, error) {

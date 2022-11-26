@@ -2,7 +2,7 @@ package poorna
 
 import (
 	"bufio"
-	"errors"
+	"github.com/pkg/errors"
 	"log"
 	"sync"
 
@@ -121,7 +121,12 @@ func (p *KipPeer) sendHandshakeErrorResp(id id.KramaID, err error) error {
 func (p *KipPeer) SendIXs(id id.KramaID, ixs types.Interactions) error {
 	// Mark the given Interactions as 'known'
 	for _, j := range ixs {
-		p.markInteraction(j.GetIxHash())
+		ixHash, err := j.GetIxHash()
+		if err != nil {
+			return err
+		}
+
+		p.markInteraction(ixHash)
 	}
 
 	msg := ptypes.InteractionMsg{Ixs: ixs}
@@ -136,20 +141,26 @@ func (p *KipPeer) Send(id id.KramaID, code ptypes.MsgType, msg interface{}) erro
 	defer p.mtxLock.Unlock()
 
 	// Marshal the proto message into slice of bytes and log and return if an error occurs
-	bytes := polo.Polorize(msg)
+	rawData, err := polo.Polorize(msg)
+	if err != nil {
+		return errors.Wrap(err, "failed to polorize message payload")
+	}
 
 	// Create a network message proto with the bytes payload of the message to send
 	// and convert into a proto message and marshal it  into a slice of bytes
 	m := ptypes.Message{
 		MsgType: code,
-		Payload: bytes,
+		Payload: rawData,
 		Sender:  id,
 	}
 
-	bytes = polo.Polorize(&m)
+	rawData, err = polo.Polorize(&m)
+	if err != nil {
+		return err
+	}
 
 	// Write the message bytes into the peer's iobuffer
-	if _, err := p.rw.Writer.Write(bytes); err != nil {
+	if _, err := p.rw.Writer.Write(rawData); err != nil {
 		return err
 	}
 

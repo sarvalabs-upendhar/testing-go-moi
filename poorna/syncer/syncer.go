@@ -356,19 +356,25 @@ func (s *Syncer) accSync(peerID peer.ID) error {
 // Accepts the sender id, the message type and message itself.
 func (p *SyncPeer) Send(id id.KramaID, code ptypes.MsgType, msg interface{}) error {
 	// Marshal the proto message into slice of bytes and log and return if an error occurs
-	bytes := polo.Polorize(msg)
+	rawData, err := polo.Polorize(msg)
+	if err != nil {
+		return errors.Wrap(err, "failed to polorize message payload")
+	}
 	// Create a network message proto with the bytes payload of the message to send
 	// and convert into a proto message and marshal it into into a slice of bytes
 	m := ptypes.Message{
 		MsgType: code,
-		Payload: bytes,
+		Payload: rawData,
 		Sender:  id,
 	}
 
-	bytes = polo.Polorize(&m)
+	rawData, err = polo.Polorize(&m)
+	if err != nil {
+		return err
+	}
 
 	// Write the message bytes into the peer's iobuffer
-	_, err := p.rw.Writer.Write(bytes)
+	_, err = p.rw.Writer.Write(rawData)
 	if err != nil {
 		return err
 	}
@@ -664,10 +670,17 @@ func (s *Syncer) tesseractWorker(id int, reqQueue chan *TesseractSyncJob) {
 
 				continue
 			} else {
+				tsHash, err := ts.Hash()
+				if err != nil {
+					s.logger.Error("Error creating tesseract hash", "err", err)
+
+					continue
+				}
+
 				if err = s.db.UpdateTesseractStatus(
 					ts.Address(),
 					ts.Height(),
-					ts.Hash(),
+					tsHash,
 					true,
 				); err != nil {
 					s.logger.Error("Error updating the lattice status")
@@ -838,18 +851,25 @@ func (s *Syncer) Start() {
 							BulkSync: true,
 						}
 
-						bytes := polo.Polorize(msg)
+						rawData, err := polo.Polorize(msg)
+						if err != nil {
+							log.Panic(errors.Wrap(err, "failed to polorize message payload"))
+						}
 
 						finalMsg := ptypes.Message{
 							MsgType: ptypes.ACCSYNCREQ,
 							Sender:  s.node.GetKramaID(),
-							Payload: bytes,
+							Payload: rawData,
 						}
-						rawBytes := polo.Polorize(&finalMsg)
+
+						rawData, err = polo.Polorize(&finalMsg)
+						if err != nil {
+							log.Panic(err)
+						}
 
 						rw := bufio.NewReadWriter(bufio.NewReader(v), bufio.NewWriter(v))
 
-						_, err := rw.Writer.Write(rawBytes)
+						_, err = rw.Writer.Write(rawData)
 						if err != nil {
 							log.Panic(err)
 						}
@@ -948,7 +968,12 @@ func (s *Syncer) latticeWorker(id int, job <-chan *SyncJob) {
 				stackSize := tesseractStack.Len()
 				for i := 0; i < int(stackSize); i++ {
 					item := tesseractStack.Pop()
-					log.Printf("Adding %s tesseract to lattice %v", item.Tesseract.Header.Address.Hex(), item.Tesseract.Hash())
+					tsHash, err := item.Tesseract.Hash()
+					if err != nil {
+						log.Fatal("Error creating tesseract hash", err)
+					}
+
+					log.Printf("Adding %s tesseract to lattice %v", item.Tesseract.Header.Address.Hex(), tsHash)
 
 					icsClusterInfo := new(ptypes.ICSClusterInfo)
 					if err := polo.Depolorize(icsClusterInfo, item.Delta[item.Tesseract.Body.ConsensusProof.ICSHash]); err != nil {

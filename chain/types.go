@@ -27,13 +27,18 @@ func (g *GridCache) AddTesseract(ts *types.Tesseract) bool {
 		return true
 	}
 
+	tsHash, err := ts.Hash()
+	if err != nil {
+		return false
+	}
+
 	grid, ok := g.grids[ts.Header.GridHash]
 	if !ok {
-		grid = map[types.Hash]*types.Tesseract{ts.Hash(): ts}
+		grid = map[types.Hash]*types.Tesseract{tsHash: ts}
 		g.grids[ts.Header.GridHash] = grid
 	}
 
-	grid[ts.Hash()] = ts
+	grid[tsHash] = ts
 
 	return int32(len(grid)) == ts.GridLength()
 }

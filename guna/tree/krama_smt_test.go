@@ -214,12 +214,13 @@ func TestKramaHashTree_Commit(t *testing.T) {
 		nil,
 	)
 
-	initialRoot := hashTree.Root()
+	initialRoot, err := hashTree.Root()
+	require.NoError(t, err)
 
 	key := []byte("Test-Key")
 	value := []byte("Test-Value")
 
-	err := hashTree.Set(key, value)
+	err = hashTree.Set(key, value)
 	require.NoError(t, err)
 
 	// commit the tree so that root gets updated
@@ -227,7 +228,8 @@ func TestKramaHashTree_Commit(t *testing.T) {
 	require.NoError(t, err)
 
 	// verify that root has changed
-	updatedRoot := hashTree.Root()
+	updatedRoot, err := hashTree.Root()
+	require.NoError(t, err)
 	require.NotEqual(t, updatedRoot, initialRoot)
 
 	_, deltaNodes := fetchRootNodeAndDelta(t, hashTree)
@@ -332,7 +334,10 @@ func createTestHashTreeWithEntries(
 func fetchRootNodeAndDelta(t *testing.T, hashTree *KramaHashTree) (*rootNode, map[string][]byte) {
 	t.Helper()
 
-	rawData, err := hashTree.db.Get(hashTree.Root().Bytes())
+	rootHash, err := hashTree.Root()
+	require.NoError(t, err)
+
+	rawData, err := hashTree.db.Get(rootHash.Bytes())
 	require.NoError(t, err)
 
 	root := new(rootNode)

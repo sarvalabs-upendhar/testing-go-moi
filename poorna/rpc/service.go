@@ -139,7 +139,12 @@ func (r *rpcService) SendInteractions(req *http.Request, args *api.SendIXArgs, r
 		return err
 	}
 
-	resp.Data = ixn[0].GetIxHash().Hex()
+	ixHash, err := ixn[0].GetIxHash()
+	if err != nil {
+		return err
+	}
+
+	resp.Data = ixHash.Hex()
 
 	return nil
 }

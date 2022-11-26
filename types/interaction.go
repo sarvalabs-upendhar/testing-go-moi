@@ -136,7 +136,7 @@ func (ix *Interaction) GetSize() (int64, error) {
 	// FIXME: size should calculated after signature integration
 	bz, err := polo.Polorize(ix)
 	if err != nil {
-		return 0, err
+		return 0, errors.Wrap(err, "failed to polorize interaction")
 	}
 	return int64(len(bz)), nil
 }
@@ -153,7 +153,7 @@ func (ix *Interaction) GetIxHash() (Hash, error) {
 	if ix.Hash.IsNil() {
 		h, err := PoloHash(ix)
 		if err != nil {
-			return Hash{}, err
+			return Hash{}, errors.Wrap(err, "failed to polorize interaction")
 		}
 		ix.Hash = h
 

@@ -144,7 +144,9 @@ func (i *IxPool) handleEnqueueRequest(req enqueueRequest) {
 
 		i.allIxs.add(v)
 
-		i.metrics.IxPoolSize.Add(float64(v.GetSize()))
+		if ixSize, err := v.GetSize(); err == nil {
+			i.metrics.captureIxPoolSize(float64(ixSize))
+		}
 
 		if v.Nonce() > senderAcc.getNonce() {
 			return
@@ -250,7 +252,10 @@ func (i *IxPool) resetAccount(addr types.Address, nonce uint64) {
 	i.allIxs.remove(pruned)
 
 	i.metrics.capturePendingTxs(float64(-1 * len(pruned)))
-	i.metrics.captureIxPoolSize(float64(-1 * GetIxsSize(pruned)))
+
+	if ixSize, err := GetIxsSize(pruned); err == nil {
+		i.metrics.captureIxPoolSize(float64(-1 * ixSize))
+	}
 
 	if nonce <= account.getNonce() {
 		// only the promoted queue needed pruning
@@ -269,7 +274,9 @@ func (i *IxPool) resetAccount(addr types.Address, nonce uint64) {
 	i.allIxs.remove(pruned)
 	// p.gauge.decrease(slotsRequired(pruned))
 
-	i.metrics.captureIxPoolSize(float64(-1 * GetIxsSize(pruned)))
+	if ixSize, err := GetIxsSize(pruned); err == nil {
+		i.metrics.captureIxPoolSize(float64(-1 * ixSize))
+	}
 
 	// update next nonce
 	account.setNonce(nonce)

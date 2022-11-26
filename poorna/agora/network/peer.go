@@ -2,6 +2,7 @@ package network
 
 import (
 	"bufio"
+	"github.com/pkg/errors"
 	"log"
 	"sync"
 	"time"
@@ -61,20 +62,26 @@ func (a *AgoraPeer) updateLastActiveTime() {
 func (a *AgoraPeer) sendMessage(senderID id.KramaID, msgType ptypes.MsgType, msg interface{}) error {
 	rw := bufio.NewReadWriter(bufio.NewReader(a.stream), bufio.NewWriter(a.stream))
 	// Marshal the proto message into slice of bytes and log and return if an error occurs
-	bytes := polo.Polorize(msg)
+	rawData, err := polo.Polorize(msg)
+	if err != nil {
+		return errors.Wrap(err, "failed to polorize message payload")
+	}
 
 	// Create a network message proto with the bytes payload of the message to send
 	// and convert into a proto message and marshal it  into a slice of bytes
 	m := ptypes.Message{
 		MsgType: msgType,
-		Payload: bytes,
+		Payload: rawData,
 		Sender:  senderID,
 	}
 
-	bytes = polo.Polorize(&m)
+	rawData, err = polo.Polorize(&m)
+	if err != nil {
+		return err
+	}
 
 	// Write the message bytes into the peer's io buffer
-	if _, err := rw.Writer.Write(bytes); err != nil {
+	if _, err := rw.Writer.Write(rawData); err != nil {
 		return err
 	}
 

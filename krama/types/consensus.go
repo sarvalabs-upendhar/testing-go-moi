@@ -3,6 +3,7 @@ package types
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/pkg/errors"
 	"log"
 
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
@@ -49,18 +50,28 @@ type CanonicalVote struct {
 	GridID *types.TesseractGridID
 }
 
-func (v *Vote) SignBytes() []byte {
+func (v *Vote) SignBytes() ([]byte, error) {
 	canonicalVote := CanonicalVote{
 		Type:   v.Type,
 		Round:  v.Round,
 		GridID: v.GridID,
 	}
 
-	return polo.Polorize(canonicalVote)
+	rawData, err := polo.Polorize(canonicalVote)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize vote")
+	}
+
+	return rawData, nil
 }
 
-func (v *Vote) Bytes() []byte {
-	return polo.Polorize(v)
+func (v *Vote) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(v)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize vote")
+	}
+
+	return rawData, nil
 }
 
 func (v *Vote) Validate() error {
@@ -119,18 +130,23 @@ type ConsensusMessage struct {
 	Message Cmessage
 }
 
-func (c *ConsensusMessage) ICSMsg(clusterID types.ClusterID) *ICSMSG {
+func (c *ConsensusMessage) ICSMsg(clusterID types.ClusterID) (*ICSMSG, error) {
 	var (
 		msgType ptypes.MsgType
 		rawData []byte
+		err     error
 	)
 
 	switch msg := c.Message.(type) {
 	case *VoteMessage:
-		rawData = msg.Vote.Bytes()
+		rawData, err = msg.Vote.Bytes()
+		if err != nil {
+			return nil, err
+		}
+
 		msgType = ptypes.VOTEMSG
 	default:
-		return nil
+		return nil, errors.New("invalid message type")
 	}
 
 	return &ICSMSG{
@@ -138,7 +154,7 @@ func (c *ConsensusMessage) ICSMsg(clusterID types.ClusterID) *ICSMSG {
 		rawData,
 		c.PeerID,
 		string(clusterID),
-	}
+	}, nil
 }
 
 // Validate is a method of ConsensusMessage to implement the Cmessage interface.
@@ -178,7 +194,7 @@ type TesseractGrid struct {
 	Tesseracts []*types.Tesseract
 }
 
-func (t *TesseractGrid) GetTesseractGridID() *types.TesseractGridID {
+func (t *TesseractGrid) GetTesseractGridID() (*types.TesseractGridID, error) {
 	gridID := &types.TesseractGridID{
 		Hash: t.Hash,
 		Parts: &types.TesseractParts{
@@ -189,11 +205,16 @@ func (t *TesseractGrid) GetTesseractGridID() *types.TesseractGridID {
 	}
 
 	for _, tesseract := range t.Tesseracts {
-		gridID.Parts.Hashes = append(gridID.Parts.Hashes, tesseract.Hash())
+		tsHash, err := tesseract.Hash()
+		if err != nil {
+			return nil, err
+		}
+
+		gridID.Parts.Hashes = append(gridID.Parts.Hashes, tsHash)
 		gridID.Parts.Heights = append(gridID.Parts.Heights, tesseract.Header.Height)
 	}
 
-	return gridID
+	return gridID, nil
 }
 
 func (t *TesseractGrid) CompareHash(h types.Hash) bool {

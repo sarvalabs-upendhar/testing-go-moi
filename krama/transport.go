@@ -107,7 +107,13 @@ func (t *Transport) InitClusterCommunication(ctx context.Context, slot *ktypes.S
 					return
 				}
 
-				if err := t.network.Broadcast(string(slot.ClusterID()), polo.Polorize(msg)); err != nil {
+				rawData, err := polo.Polorize(msg)
+				if err != nil {
+					t.logger.Error("Failed to polorize cluster message", "cluster-id", slot.ClusterID())
+					panic(err)
+				}
+
+				if err := t.network.Broadcast(string(slot.ClusterID()), rawData); err != nil {
 					t.logger.Error("Failed to broadcast cluster message", "cluster-id", slot.ClusterID())
 					panic(err)
 				}
@@ -127,7 +133,12 @@ func (t *Transport) Call(kramaID id.KramaID, svcName, svcMethod string, args, re
 }
 
 func (t *Transport) BroadcastTesseract(msg *ptypes.TesseractMessage) error {
-	return t.network.Broadcast(TesseractTopic, polo.Polorize(msg))
+	rawData, err := polo.Polorize(msg)
+	if err != nil {
+		return err
+	}
+
+	return t.network.Broadcast(TesseractTopic, rawData)
 }
 
 func (t *Transport) connectRandomPeers(slot *ktypes.Slot) []id.KramaID {

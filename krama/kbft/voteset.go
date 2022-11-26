@@ -205,7 +205,12 @@ func (vs *VoteSet) AddVote(v *ktypes.Vote, peerID id.KramaID) (added bool, err e
 		return false, errors.New("vote for validator with different signature already exists")
 	}
 
-	verified, err := mudra.Verify(v.SignBytes(), v.Signature, publicKey)
+	rawData, err := v.SignBytes()
+	if err != nil {
+		return false, err
+	}
+
+	verified, err := mudra.Verify(rawData, v.Signature, publicKey)
 	if err != nil {
 		return false, err
 	}

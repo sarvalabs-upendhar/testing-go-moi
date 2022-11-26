@@ -318,10 +318,14 @@ func NewWALEncoder(wr io.Writer) *WALEncoder {
 // the encoded size of v is greater than 1MB. Any error encountered
 // during the write is also returned.
 func (enc *WALEncoder) Encode(v *ktypes.TimedWALMessage) error {
-	data := polo.Polorize(v)
-	crc := crc32.Checksum(data, crc32c)
+	rawData, err := polo.Polorize(v)
+	if err != nil {
+		return err
+	}
 
-	length := uint32(len(data))
+	crc := crc32.Checksum(rawData, crc32c)
+
+	length := uint32(len(rawData))
 	if length > maxMsgSizeBytes {
 		return fmt.Errorf("msg is too big: %d bytes, max: %d bytes", length, maxMsgSizeBytes)
 	}
@@ -331,9 +335,9 @@ func (enc *WALEncoder) Encode(v *ktypes.TimedWALMessage) error {
 
 	binary.BigEndian.PutUint32(msg[0:4], crc)
 	binary.BigEndian.PutUint32(msg[4:8], length)
-	copy(msg[8:], data)
+	copy(msg[8:], rawData)
 
-	_, err := enc.wr.Write(msg)
+	_, err = enc.wr.Write(msg)
 
 	return err
 }

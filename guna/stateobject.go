@@ -185,7 +185,11 @@ func (s *StateObject) Copy() *StateObject {
 }
 
 func (s *StateObject) commitBalanceObject() ([]byte, error) {
-	data := polo.Polorize(s.balance)
+	data, err := polo.Polorize(s.balance)
+	if err != nil {
+		return nil, err
+	}
+
 	hash := types.GetHash(data)
 
 	s.journal.append(BalanceUpdation{
@@ -203,7 +207,11 @@ func (s *StateObject) commitBalanceObject() ([]byte, error) {
 func (s *StateObject) commitAccount() (types.Hash, error) {
 	s.data.Nonce++
 
-	data := polo.Polorize(s.data)
+	data, err := polo.Polorize(s.data)
+	if err != nil {
+		return types.NilHash, err
+	}
+
 	hash := types.GetHash(data)
 
 	s.journal.append(AccountUpdation{
@@ -219,7 +227,11 @@ func (s *StateObject) commitAccount() (types.Hash, error) {
 
 func (s *StateObject) commitContextObject(obj interface{}) (types.Hash, error) {
 	// Add type checks here
-	data := polo.Polorize(obj)
+	data, err := polo.Polorize(obj)
+	if err != nil {
+		return types.NilHash, errors.Wrap(err, "failed to polorize context object")
+	}
+
 	hash := types.GetHash(data)
 
 	s.journal.append(ContextUpdation{
@@ -247,7 +259,12 @@ func (s *StateObject) commitStorage() (types.Hash, error) {
 			return types.NilHash, errors.Wrap(err, "failed to commit storage tree")
 		}
 
-		if err := s.storageTrie.Set(logicID.Bytes(), merkleTree.Root().Bytes()); err != nil {
+		rootHash, err := merkleTree.Root()
+		if err != nil {
+			return types.NilHash, err
+		}
+
+		if err := s.storageTrie.Set(logicID.Bytes(), rootHash.Bytes()); err != nil {
 			return types.NilHash, err
 		}
 	}
@@ -260,7 +277,10 @@ func (s *StateObject) commitStorage() (types.Hash, error) {
 		return types.NilHash, err
 	}
 
-	rootHash := s.storageTrie.Root()
+	rootHash, err := s.storageTrie.Root()
+	if err != nil {
+		return types.NilHash, err
+	}
 
 	s.journal.append(StorageUpdation{
 		addr: &s.address,
@@ -357,14 +377,17 @@ func (s *StateObject) CreateAsset(
 	)
 
 	if code != nil {
-		logicID, logicData = gtypes.GetLogicID(code, false)
+		logicID, logicData, err = gtypes.GetLogicID(code, false)
+		if err != nil {
+			return "", err
+		}
 
 		if err = s.CreateLogic(logicID, logicData); err != nil {
 			return "", err
 		}
 	}
 
-	assetID, assetHash, data := gtypes.GetAssetID(
+	assetID, assetHash, data, err := gtypes.GetAssetID(
 		s.address,
 		dimension,
 		isFungible,
@@ -373,6 +396,9 @@ func (s *StateObject) CreateAsset(
 		totalSupply,
 		logicID,
 	)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to polorize asset data")
+	}
 
 	s.journal.append(AssetCreation{
 		addr: &s.address,
@@ -396,7 +422,10 @@ func (s *StateObject) AddAccountGenesisInfo(address types.Address, ixHash types.
 	accInfo := types.AccountGenesisInfo{
 		IxHash: ixHash,
 	}
-	rawData := polo.Polorize(&accInfo)
+	rawData, err := polo.Polorize(&accInfo)
+	if err != nil {
+		return err
+	}
 
 	return s.SetStorageEntry(GenesisLogicID, address.Bytes(), rawData)
 }
@@ -406,9 +435,11 @@ func (s *StateObject) CreateContext(behaviouralNodes, randomNodes []id.KramaID) 
 		return types.NilHash, errors.New("livness size not met")
 	}
 
-	behaviouralContextObject := new(gtypes.ContextObject)
-	randomContextObject := new(gtypes.ContextObject)
-	metaContextObject := new(gtypes.MetaContextObject)
+	var (
+		behaviouralContextObject = new(gtypes.ContextObject)
+		randomContextObject      = new(gtypes.ContextObject)
+		metaContextObject        = new(gtypes.MetaContextObject)
+	)
 
 	behaviouralContextObject.Ids = append(behaviouralContextObject.Ids, behaviouralNodes...)
 	randomContextObject.Ids = append(randomContextObject.Ids, randomNodes...)

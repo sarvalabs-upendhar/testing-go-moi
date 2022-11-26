@@ -3,6 +3,7 @@ package flux
 import (
 	"bufio"
 	"context"
+	"github.com/pkg/errors"
 	"log"
 	"math"
 	"math/rand"
@@ -280,7 +281,12 @@ func (r *Randomizer) HandleReqMsg(reqMsg *ptypes.RandomWalkReq) error {
 		}
 
 		// log.Println("Address",responseMsg,polo.Polorize(responseMsg),polo.Polorize(&responseMsg))
-		err = r.server.Broadcast(reqMsg.Topic, polo.Polorize(responseMsg))
+		rawData, err := polo.Polorize(responseMsg)
+		if err != nil {
+			return err
+		}
+
+		err = r.server.Broadcast(reqMsg.Topic, rawData)
 		if err != nil {
 			log.Panicln(err)
 		}
@@ -403,12 +409,15 @@ func (r *Randomizer) SendFluxMessage(peerID peer.ID, msgType ptypes.MsgType, msg
 	//	 p := s.Peers.Peer(peerID)
 	//	 return p.(s.id, msgType, msg)
 	// }
-	bytes := polo.Polorize(msg)
+	rawData, err := polo.Polorize(msg)
+	if err != nil {
+		return errors.Wrap(err, "failed to polorize message payload")
+	}
 	// Create a network message proto with the bytes payload of the message to send
 	// and convert into a proto message and marshal it into a slice of bytes
 	m := ptypes.Message{
 		MsgType: msgType,
-		Payload: bytes,
+		Payload: rawData,
 		Sender:  r.server.GetKramaID(),
 	}
 
@@ -428,8 +437,10 @@ func (r *Randomizer) SendFluxMessage(peerID peer.ID, msgType ptypes.MsgType, msg
 	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
 	// Create a NewPeerEvent
 
-	rawData := polo.Polorize(m)
-
+	rawData, err = polo.Polorize(m)
+	if err != nil {
+		return err
+	}
 	// Write the message bytes into the peer's io buffer
 	_, err = rw.Writer.Write(rawData)
 	if err != nil {

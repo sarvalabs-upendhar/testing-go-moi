@@ -86,7 +86,12 @@ func (r *ReputationEngine) AddNewPeer(key id.KramaID, data *ReputationInfo) erro
 	}
 
 	if !contains {
-		if err := r.db.CreateEntry(dhruva.NtqDBKey(key), polo.Polorize(data)); err != nil {
+		rawData, err := polo.Polorize(data)
+		if err != nil {
+			return err
+		}
+
+		if err := r.db.CreateEntry(dhruva.NtqDBKey(key), rawData); err != nil {
 			return err
 		}
 
@@ -121,7 +126,12 @@ func (r *ReputationEngine) UpdateAddress(key id.KramaID, addrs []string) error {
 
 		r.cache.Add(dhruva.NtqCacheKey(key), info)
 
-		return r.db.UpdateEntry(dhruva.NtqDBKey(key), polo.Polorize(info))
+		rawData, err := polo.Polorize(info)
+		if err != nil {
+			return err
+		}
+
+		return r.db.UpdateEntry(dhruva.NtqDBKey(key), rawData)
 	}
 
 	info = &ReputationInfo{
@@ -130,7 +140,12 @@ func (r *ReputationEngine) UpdateAddress(key id.KramaID, addrs []string) error {
 	}
 	r.cache.Add(dhruva.NtqCacheKey(key), info)
 
-	return r.db.CreateEntry(dhruva.NtqDBKey(key), polo.Polorize(info))
+	rawData, err := polo.Polorize(info)
+	if err != nil {
+		return err
+	}
+
+	return r.db.CreateEntry(dhruva.NtqDBKey(key), rawData)
 }
 
 func (r *ReputationEngine) UpdatePublicKey(key id.KramaID, pk []byte) error {
@@ -144,7 +159,12 @@ func (r *ReputationEngine) UpdatePublicKey(key id.KramaID, pk []byte) error {
 
 		r.cache.Add(dhruva.NtqCacheKey(key), info)
 
-		return r.db.UpdateEntry(dhruva.NtqDBKey(key), polo.Polorize(info))
+		rawData, err := polo.Polorize(info)
+		if err != nil {
+			return err
+		}
+
+		return r.db.UpdateEntry(dhruva.NtqDBKey(key), rawData)
 	}
 
 	info = &ReputationInfo{
@@ -153,7 +173,12 @@ func (r *ReputationEngine) UpdatePublicKey(key id.KramaID, pk []byte) error {
 	}
 	r.cache.Add(dhruva.NtqCacheKey(key), info)
 
-	return r.db.CreateEntry(dhruva.NtqDBKey(key), polo.Polorize(info))
+	rawData, err := polo.Polorize(info)
+	if err != nil {
+		return err
+	}
+
+	return r.db.CreateEntry(dhruva.NtqDBKey(key), rawData)
 }
 
 func (r *ReputationEngine) UpdateNTQ(key id.KramaID, ntq int32) error {
@@ -167,7 +192,12 @@ func (r *ReputationEngine) UpdateNTQ(key id.KramaID, ntq int32) error {
 
 		r.cache.Add(dhruva.NtqCacheKey(key), info)
 
-		return r.db.UpdateEntry(dhruva.NtqDBKey(key), polo.Polorize(info))
+		rawData, err := polo.Polorize(info)
+		if err != nil {
+			return err
+		}
+
+		return r.db.UpdateEntry(dhruva.NtqDBKey(key), rawData)
 	}
 
 	info = &ReputationInfo{
@@ -177,7 +207,12 @@ func (r *ReputationEngine) UpdateNTQ(key id.KramaID, ntq int32) error {
 
 	r.cache.Add(dhruva.NtqCacheKey(key), info)
 
-	return r.db.CreateEntry(dhruva.NtqDBKey(key), polo.Polorize(info))
+	rawData, err := polo.Polorize(info)
+	if err != nil {
+		return err
+	}
+
+	return r.db.CreateEntry(dhruva.NtqDBKey(key), rawData)
 }
 
 func (r *ReputationEngine) UpdateInclusivity(key id.KramaID, delta int64) error {
@@ -198,7 +233,12 @@ func (r *ReputationEngine) UpdateInclusivity(key id.KramaID, delta int64) error 
 
 		r.cache.Add(dhruva.NtqCacheKey(key), info)
 
-		return r.db.UpdateEntry(dhruva.NtqDBKey(key), polo.Polorize(info))
+		rawData, err := polo.Polorize(info)
+		if err != nil {
+			return err
+		}
+
+		return r.db.UpdateEntry(dhruva.NtqDBKey(key), rawData)
 	}
 
 	info = &ReputationInfo{
@@ -208,7 +248,12 @@ func (r *ReputationEngine) UpdateInclusivity(key id.KramaID, delta int64) error 
 
 	r.cache.Add(dhruva.NtqCacheKey(key), info)
 
-	return r.db.CreateEntry(dhruva.NtqDBKey(key), polo.Polorize(info))
+	rawData, err := polo.Polorize(info)
+	if err != nil {
+		return err
+	}
+
+	return r.db.CreateEntry(dhruva.NtqDBKey(key), rawData)
 }
 
 func (r *ReputationEngine) GetAddress(key id.KramaID) (multiAddrs []multiaddr.Multiaddr, err error) {
@@ -287,12 +332,18 @@ func (r *ReputationEngine) AddEntries(msg ptypes.SyncReputationInfo) error {
 	writer := r.db.NewBatchWriter()
 
 	for _, v := range msg.Msg {
-		err := writer.Set(dhruva.NtqDBKey(v.ID), polo.Polorize(
+		rawData, err := polo.Polorize(
 			ReputationInfo{
 				NTQ:    v.Ntq,
 				Addrs:  v.Address,
 				Degree: v.Degree,
-			}))
+			},
+		)
+		if err != nil {
+			return err
+		}
+
+		err = writer.Set(dhruva.NtqDBKey(v.ID), rawData)
 		if err != nil {
 			return err
 		}
@@ -387,7 +438,12 @@ func (r *ReputationEngine) HandleHelloMessages(msgs []*ptypes.HelloMsg) (int, er
 	for index, publicKey := range publicKeys {
 		msg := msgs[index]
 
-		verified, err := mudra.Verify(polo.Polorize(msg.Info), msg.Signature, publicKey)
+		rawData, err := polo.Polorize(msg.Info)
+		if err != nil {
+			return index, err
+		}
+
+		verified, err := mudra.Verify(rawData, msg.Signature, publicKey)
 		if err != nil {
 			return index, err
 		}

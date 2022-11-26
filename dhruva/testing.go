@@ -324,7 +324,10 @@ func insertAccMetaInfo(t *testing.T, pm *PersistenceManager, accMetaInfo types.A
 
 	key, bucket := BucketIDFromAddress(accMetaInfo.Address.Bytes())
 
-	if err := pm.CreateEntry(key, polo.Polorize(accMetaInfo)); err != nil {
+	rawData, err := polo.Polorize(accMetaInfo)
+	require.NoError(t, err)
+
+	if err := pm.CreateEntry(key, rawData); err != nil {
 		require.NoError(t, err)
 	}
 

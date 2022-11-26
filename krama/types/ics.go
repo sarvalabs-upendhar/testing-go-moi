@@ -96,7 +96,12 @@ func (i *ClusterInfo) IsOperatorIncluded() bool {
 }
 
 // GetMetaData returns the ClusterInfo metadata including the given ClusterInfo messages
-func (i *ClusterInfo) GetMetaData(msgs []*ICSMSG) *ICSMetaInfo {
+func (i *ClusterInfo) GetMetaData(msgs []*ICSMSG) (*ICSMetaInfo, error) {
+	receiptHash, err := i.Receipts.Hash()
+	if err != nil {
+		return nil, err
+	}
+
 	m := &ICSMetaInfo{
 		ClusterID:    string(i.ID),
 		IxHash:       i.Ixs[0].Hash, // Need to be improved
@@ -105,15 +110,25 @@ func (i *ClusterInfo) GetMetaData(msgs []*ICSMSG) *ICSMetaInfo {
 		BinaryHash:   i.BinaryHash,
 		IdentityHash: i.IdentityHash,
 		IcsHash:      i.ICSHash,
-		ReceiptHash:  i.Receipts.Hash(),
+		ReceiptHash:  receiptHash,
 	}
 
-	m.Msgs = append(m.Msgs, polo.Polorize(i.SuccessMsg))
+	rawData, err := polo.Polorize(i.SuccessMsg)
+	if err != nil {
+		return nil, err
+	}
+
+	m.Msgs = append(m.Msgs, rawData)
 	for _, v := range msgs {
-		m.Msgs = append(m.Msgs, polo.Polorize(v))
+		rawData, err := polo.Polorize(v)
+		if err != nil {
+			return nil, err
+		}
+
+		m.Msgs = append(m.Msgs, rawData)
 	}
 
-	return m
+	return m, nil
 }
 
 func (i *ClusterInfo) IncrementClusterSize(delta int) {
@@ -313,7 +328,7 @@ func (i *ClusterInfo) AddDirty(key types.Hash, data []byte) {
 	i.dirty[key] = data
 }
 
-func (i *ClusterInfo) ComputeICSHash() (hash types.Hash) {
+func (i *ClusterInfo) ComputeICSHash() (types.Hash, error) {
 	msg := &ptypes.ICSClusterInfo{
 		RandomSet:   i.GetRandomNodes(),
 		ObserverSet: i.GetObservers(),
@@ -328,12 +343,16 @@ func (i *ClusterInfo) ComputeICSHash() (hash types.Hash) {
 		}
 	}
 
-	rawData := polo.Polorize(msg)
-	hash = blake2b.Sum256(rawData)
+	rawData, err := polo.Polorize(msg)
+	if err != nil {
+		return types.NilHash, err
+	}
+
+	hash := blake2b.Sum256(rawData)
 	i.AddDirty(hash, rawData)
 	i.ICSHash = hash
 
-	return
+	return hash, nil
 }
 
 func (i *ClusterInfo) CreateICSSuccessMsg() *ptypes.ICSSuccessMsg {

@@ -47,11 +47,11 @@ func TestGetAssociatedPeers_FetchFromDB(t *testing.T) {
 	pList := atypes.NewPeerList()
 	pList.AddPeer(ids[0])
 
+	rawData, err := polo.Polorize(pList.CanonicalPeerList())
+	require.NoError(t, err)
+
 	// Write the list to db
-	err := ledger.db.GetBatchWriter().Set(
-		GetAgoraDBKey(address, stateHash.Key()),
-		polo.Polorize(pList.CanonicalPeerList()),
-	)
+	err = ledger.db.GetBatchWriter().Set(GetAgoraDBKey(address, stateHash.Key()), rawData)
 	require.NoError(t, err)
 
 	peers, err := ledger.GetAssociatedPeers(address, stateHash)
@@ -74,11 +74,11 @@ func TestUpdateAssociatedPeers_EntryAlreadyExists(t *testing.T) {
 	pList := atypes.NewPeerList()
 	pList.AddPeer(ids[0])
 
+	rawData, err := polo.Polorize(pList.CanonicalPeerList())
+	require.NoError(t, err)
+
 	// Write the list to db
-	err := ledger.db.GetBatchWriter().Set(
-		GetAgoraDBKey(address, stateHash.Key()),
-		polo.Polorize(pList.CanonicalPeerList()),
-	)
+	err = ledger.db.GetBatchWriter().Set(GetAgoraDBKey(address, stateHash.Key()), rawData)
 	require.NoError(t, err)
 
 	err = ledger.UpdateAssociatedPeers(address, stateHash, ids[1])

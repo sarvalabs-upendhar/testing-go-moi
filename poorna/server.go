@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"github.com/pkg/errors"
 	"log"
 	"math/rand"
 	"sync"
@@ -718,12 +719,15 @@ func (s *Server) SendMessage(peerID peer.ID, msgType ptypes.MsgType, msg interfa
 		return p.Send(s.id, msgType, msg)
 	}
 
-	bytes := polo.Polorize(msg)
+	rawData, err := polo.Polorize(msg)
+	if err != nil {
+		return errors.Wrap(err, "failed to polorize message payload")
+	}
 	// Create a network message proto with the bytes payload of the message to send
 	// and convert into a proto message and marshal it into a slice of bytes
 	m := ptypes.Message{
 		MsgType: msgType,
-		Payload: bytes,
+		Payload: rawData,
 		Sender:  s.id,
 	}
 
@@ -737,7 +741,10 @@ func (s *Server) SendMessage(peerID peer.ID, msgType ptypes.MsgType, msg interfa
 	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
 	// Create a NewPeerEvent
 
-	rawData := polo.Polorize(m)
+	rawData, err = polo.Polorize(m)
+	if err != nil {
+		return err
+	}
 
 	// Write the message bytes into the peer's io buffer
 	_, err = rw.Writer.Write(rawData)
@@ -784,7 +791,13 @@ func (s *Server) SendHelloMessage() {
 			Address: utils.MultiAddrToString(s.GetAddrs()...),
 		}
 
-		signature, err := s.vault.Sign(polo.Polorize(peerInfo), mcommon.BlsBLST)
+		rawData, err := polo.Polorize(peerInfo)
+		if err != nil {
+			s.logger.Error("Error serializing peer info", "error", err)
+			panic(err)
+		}
+
+		signature, err := s.vault.Sign(rawData, mcommon.BlsBLST)
 		if err != nil {
 			s.logger.Error("Error signing message", "error", err)
 			panic(err)
@@ -795,7 +808,13 @@ func (s *Server) SendHelloMessage() {
 			Signature: signature,
 		}
 
-		if err := s.Broadcast(SenatusTopic, polo.Polorize(msg)); err != nil {
+		rawData, err = polo.Polorize(msg)
+		if err != nil {
+			s.logger.Error("Error serializing hello message", "error", err)
+			panic(err)
+		}
+
+		if err := s.Broadcast(SenatusTopic, rawData); err != nil {
 			s.logger.Error("Error broadcasting hello message", "error", err)
 			panic(err)
 		}

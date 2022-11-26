@@ -187,7 +187,14 @@ func (l *Ledger) worker() {
 			dbWriter := l.db.GetBatchWriter()
 
 			for _, job := range jobs {
-				if err := dbWriter.Set(job.key, polo.Polorize(job.value)); err != nil {
+				rawData, err := polo.Polorize(job.value)
+				if err != nil {
+					l.logger.Error("Failed to polorize peer list")
+
+					continue
+				}
+
+				if err := dbWriter.Set(job.key, rawData); err != nil {
 					l.logger.Error("Error adding associated peer list to db")
 
 					continue

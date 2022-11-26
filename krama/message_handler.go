@@ -63,7 +63,11 @@ func (k *Engine) handleOutboundMsg(slot *ktypes.Slot, msg ktypes.ConsensusMessag
 	// Vote Message
 	case *ktypes.VoteMessage:
 		// Marshal proto message into an ClusterInfo message and push into the send queue
-		rawData := consensusMsg.Vote.Bytes()
+		rawData, err := consensusMsg.Vote.Bytes()
+		if err != nil {
+			return err
+		}
+
 		slot.OutboundChan <- &ktypes.ICSMSG{
 			MsgType:   types.VOTEMSG,
 			Msg:       rawData,

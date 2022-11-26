@@ -161,20 +161,34 @@ func (eh *SubHandler) handlePeerMessage(p *KipPeer) error {
 
 		// Mark the interactions in the message as 'known' by the peer
 		for _, v := range ixns.Ixs {
-			p.markInteraction(v.GetIxHash())
+			ixHash, err := v.GetIxHash()
+			if err != nil {
+				return err
+			}
+
+			p.markInteraction(ixHash)
 		}
 
 		// Add the interactions to the handler's interaction pool
 		errs := eh.ixpool.AddInteractions(ixns.Ixs)
 		for index, err := range errs {
 			if err != nil {
-				eh.logger.Trace("Unable to add Interaction ", "hash", ixns.Ixs[index].GetIxHash(), "error", err)
+				ixHash, ixHashErr := ixns.Ixs[index].GetIxHash()
+				if ixHashErr != nil {
+					eh.logger.Error("Unable to create interaction hash", "hash", ixHash, "error", ixHashErr)
+
+					return nil
+				}
+
+				eh.logger.Trace("Unable to add Interaction ", "hash", ixHash, "error", err)
 
 				return nil
 			}
 		}
 
-		eh.broadcastIXs(ixns.Ixs)
+		if err := eh.broadcastIXs(ixns.Ixs); err != nil {
+			eh.logger.Error("Failed to broadcast interactions", "error", err)
+		}
 
 	case ptypes.RANDOMWALKREQ:
 		log.Println("Got an random request", message.Sender)
@@ -191,26 +205,33 @@ func (eh *SubHandler) ixBroadcastLoop() {
 	for obj := range eh.ixSub.Chan() {
 		// Assert event as a NewIxsEvent
 		if event, ok := obj.Data.(utils.NewIxsEvent); ok {
-			eh.broadcastIXs(event.Ixs)
+			if err := eh.broadcastIXs(event.Ixs); err != nil {
+				eh.logger.Error("Failed to broadcast interactions", "error", err)
+			}
 		}
 	}
 }
 
 // broadcastIXs is a method of SubHandler that broadcasts a given slice of Interactions.
 // Only emits it from peers that are not already aware of the interaction.
-func (eh *SubHandler) broadcastIXs(ixs []*types.Interaction) {
+func (eh *SubHandler) broadcastIXs(ixs []*types.Interaction) error {
 	// Accumulate a mapping of peers to the the Interaction they do not know about
 	peerIxSet := make(map[*KipPeer][]*types.Interaction)
 
 	for _, ix := range ixs {
 		// Identify the peers in the handler's working set that do not know of the interaction
-		peers := eh.peers.PeersWithoutIX(ix.GetIxHash())
+		ixHash, err := ix.GetIxHash()
+		if err != nil {
+			return err
+		}
+
+		peers := eh.peers.PeersWithoutIX(ixHash)
 		for _, peer := range peers {
 			// Add the peer and the interaction it does not know about to the peerIxSet
 			peerIxSet[peer] = append(peerIxSet[peer], ix)
 		}
 		// Log the Interaction broadcast
-		fmt.Printf("Broadcasting Interaction %s ", ix.GetIxHash().Hex())
+		fmt.Printf("Broadcasting Interaction %s ", ixHash.Hex())
 	}
 
 	// FIXME: Include the following line of code
@@ -224,6 +245,8 @@ func (eh *SubHandler) broadcastIXs(ixs []*types.Interaction) {
 			}
 		}(peer, ixs)
 	}
+
+	return nil
 }
 
 func (eh *SubHandler) Close() {

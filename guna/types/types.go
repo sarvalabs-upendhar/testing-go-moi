@@ -2,6 +2,7 @@ package types
 
 import (
 	"encoding/hex"
+	"github.com/pkg/errors"
 	"math/big"
 
 	"golang.org/x/crypto/blake2b"
@@ -72,7 +73,7 @@ func GetAssetID(
 	symbol string,
 	totalSupply int64,
 	logicID types.LogicID,
-) (types.AssetID, types.Hash, []byte) {
+) (types.AssetID, types.Hash, []byte, error) {
 	var (
 		buf  []byte
 		info uint8 = 0x00
@@ -97,13 +98,17 @@ func GetAssetID(
 	buf = append(buf, dimension)
 	buf = append(buf, info)
 
-	data := polo.Polorize(assetData)
+	data, err := polo.Polorize(assetData)
+	if err != nil {
+		return "", types.NilHash, nil, err
+	}
+
 	assetCID := types.GetHash(data)
 
 	buf = append(buf, assetCID.Bytes()...)
 	aID := types.AssetID(hex.EncodeToString(buf))
 
-	return aID, assetCID, data
+	return aID, assetCID, data, nil
 }
 
 type MetaContextObject struct {
@@ -147,8 +152,13 @@ func (c *ContextObject) Copy() *ContextObject {
 	return newObject
 }
 
-func (c *ContextObject) Hash() types.Hash {
-	return types.PoloHash(c)
+func (c *ContextObject) Hash() (types.Hash, error) {
+	rawData, err := types.PoloHash(c)
+	if err != nil {
+		return types.NilHash, errors.Wrap(err, "failed to polorize context object")
+	}
+
+	return rawData, nil
 }
 
 type LogicData struct {
@@ -156,14 +166,19 @@ type LogicData struct {
 	Upgradable bool
 }
 
-func GetLogicID(code []byte, isUpgradable bool) (types.LogicID, *LogicData) {
+func GetLogicID(code []byte, isUpgradable bool) (types.LogicID, *LogicData, error) {
 	ld := &LogicData{
 		Code:       code,
 		Upgradable: isUpgradable,
 	}
 
-	x := blake2b.Sum256(polo.Polorize(ld))
+	rawData, err := polo.Polorize(ld)
+	if err != nil {
+		return "", nil, err
+	}
+
+	x := blake2b.Sum256(rawData)
 	logicID := types.BytesToHash(x[:])
 
-	return types.LogicID(logicID.String()), ld
+	return types.LogicID(logicID.String()), ld, nil
 }
