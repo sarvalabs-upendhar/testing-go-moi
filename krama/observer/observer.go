@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/sarvalabs/go-polo"
 	types "github.com/sarvalabs/moichain/krama/types"
 )
 
@@ -56,7 +55,7 @@ func (wg *WatchDog) GenerateProofs() ([]byte, error) {
 		Extra:    nil, // TODO: Capture signature
 	}
 
-	rawData, err := polo.Polorize(watchDogProofs)
+	rawData, err := watchDogProofs.Bytes()
 	if err != nil {
 		return nil, err
 	}

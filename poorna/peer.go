@@ -91,12 +91,12 @@ func (p *KipPeer) InitHandshake(id id.KramaID, ntq int32, addrs []multiaddr.Mult
 	}
 
 	message := new(ptypes.Message)
-	if err = polo.Depolorize(message, buffer[0:byteCount]); err != nil {
+	if err = message.FromBytes(buffer[0:byteCount]); err != nil {
 		return err
 	}
 	// Unmarshal message proto into a NewPeer message
 	var msg ptypes.HandshakeMSG
-	if err := polo.Depolorize(&msg, message.Payload); err != nil {
+	if err := msg.FromBytes(message.Payload); err != nil {
 		return err
 	}
 
@@ -155,7 +155,7 @@ func (p *KipPeer) Send(id id.KramaID, code ptypes.MsgType, msg interface{}) erro
 		Sender:  id,
 	}
 
-	rawData, err = polo.Polorize(&m)
+	rawData, err = m.Bytes()
 	if err != nil {
 		return err
 	}

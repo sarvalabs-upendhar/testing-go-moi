@@ -4,6 +4,9 @@ import (
 	"encoding/hex"
 	"log"
 	"math/big"
+
+	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-polo"
 )
 
 type AssetInfo struct {
@@ -24,6 +27,24 @@ type AccountMetaInfo struct {
 	TesseractHash Hash
 	LatticeExists bool
 	StateExists   bool
+}
+
+func (ami *AccountMetaInfo) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(ami)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize account meta info")
+	}
+
+	return rawData, nil
+}
+
+func (ami *AccountMetaInfo) FromBytes(bytes []byte) error {
+	err := polo.Depolorize(ami, bytes)
+	if err != nil {
+		return errors.Wrap(err, "failed to depolorize account meta info")
+	}
+
+	return nil
 }
 
 // AssetID ...

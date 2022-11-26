@@ -76,7 +76,7 @@ func (a *AgoraPeer) sendMessage(senderID id.KramaID, msgType ptypes.MsgType, msg
 		Sender:  senderID,
 	}
 
-	rawData, err = polo.Polorize(&m)
+	rawData, err = m.Bytes()
 	if err != nil {
 		return err
 	}

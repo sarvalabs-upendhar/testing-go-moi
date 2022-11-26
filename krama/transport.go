@@ -13,7 +13,6 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-polo"
 	ktypes "github.com/sarvalabs/moichain/krama/types"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/poorna/moirpc"
@@ -62,7 +61,7 @@ func (t *Transport) InitClusterCommunication(ctx context.Context, slot *ktypes.S
 
 	handler := func(msg *pubsub.Message) error {
 		icsMsg := new(ktypes.ICSMSG)
-		if err := polo.Depolorize(icsMsg, msg.GetData()); err != nil {
+		if err := icsMsg.FromBytes(msg.GetData()); err != nil {
 			return err
 		}
 
@@ -107,7 +106,7 @@ func (t *Transport) InitClusterCommunication(ctx context.Context, slot *ktypes.S
 					return
 				}
 
-				rawData, err := polo.Polorize(msg)
+				rawData, err := msg.Bytes()
 				if err != nil {
 					t.logger.Error("Failed to polorize cluster message", "cluster-id", slot.ClusterID())
 					panic(err)
@@ -133,7 +132,7 @@ func (t *Transport) Call(kramaID id.KramaID, svcName, svcMethod string, args, re
 }
 
 func (t *Transport) BroadcastTesseract(msg *ptypes.TesseractMessage) error {
-	rawData, err := polo.Polorize(msg)
+	rawData, err := msg.Bytes()
 	if err != nil {
 		return err
 	}

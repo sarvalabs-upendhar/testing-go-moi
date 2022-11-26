@@ -124,12 +124,31 @@ type IxData struct {
 // Interactions are array of Transactions
 type Interactions []*Interaction
 
-func (is Interactions) Bytes() ([]byte, error) {
-	return polo.Polorize(is)
+func (is Interactions) Hash() (Hash, error) {
+	hash, err := PoloHash(is)
+	if err != nil {
+		return NilHash, errors.Wrap(err, "failed to polorize interactions")
+	}
+
+	return hash, nil
 }
 
-func (is Interactions) Hash() (Hash, error) {
-	return PoloHash(is)
+func (is Interactions) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(is)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize interactions")
+	}
+
+	return rawData, nil
+}
+
+func (is Interactions) FromBytes(bytes []byte) error {
+	err := polo.Depolorize(is, bytes)
+	if err != nil {
+		return errors.Wrap(err, "failed to depolorize interactions")
+	}
+
+	return nil
 }
 
 func (ix *Interaction) GetSize() (int64, error) {
@@ -216,6 +235,15 @@ func (ix *Interaction) Cost() *big.Int {
 
 func (ix *Interaction) IsUnderpriced(priceLimit uint64) bool {
 	return ix.GasPrice().Cmp(big.NewInt(0).SetUint64(priceLimit)) < 0
+}
+
+func (ix *Interaction) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(ix)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize interaction")
+	}
+
+	return rawData, nil
 }
 
 type IxByNonce Interactions

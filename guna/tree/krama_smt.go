@@ -61,7 +61,7 @@ func NewKramaHashTree(
 			return nil, errors.Wrap(err, "failed to fetch root node from db")
 		}
 
-		if err := polo.Depolorize(kht.root, rawData); err != nil {
+		if err := kht.root.FromBytes(rawData); err != nil {
 			return nil, errors.Wrap(err, "failed to depolarise root node")
 		}
 	}

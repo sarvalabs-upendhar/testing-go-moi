@@ -15,7 +15,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	"github.com/sarvalabs/go-polo"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/poorna"
 	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
@@ -90,7 +89,7 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 
 		// Unmarshal the buffer into a proto message
 		message := new(ptypes.Message)
-		if err = polo.Depolorize(message, buffer[0:byteCount]); err != nil {
+		if err = message.FromBytes(buffer[0:byteCount]); err != nil {
 			an.logger.Error("Error reading data from stream", "error", err)
 
 			return
@@ -101,7 +100,7 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 		switch message.MsgType {
 		case ptypes.AGORAREQ:
 			reqMsg := new(atypes.AgoraRequestMsg)
-			if err := polo.Depolorize(reqMsg, message.Payload); err != nil {
+			if err := reqMsg.FromBytes(message.Payload); err != nil {
 				an.logger.Error("Error depolarising agora message")
 
 				continue
@@ -112,7 +111,7 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 
 		case ptypes.AGORARESP:
 			respMsg := new(atypes.AgoraResponseMsg)
-			if err := polo.Depolorize(respMsg, message.Payload); err != nil {
+			if err := respMsg.FromBytes(message.Payload); err != nil {
 				an.logger.Error("Error depolarising agora message")
 
 				continue

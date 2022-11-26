@@ -368,7 +368,7 @@ func (p *SyncPeer) Send(id id.KramaID, code ptypes.MsgType, msg interface{}) err
 		Sender:  id,
 	}
 
-	rawData, err = polo.Polorize(&m)
+	rawData, err = m.Bytes()
 	if err != nil {
 		return err
 	}
@@ -402,7 +402,7 @@ func (s *Syncer) handleSyncPeer(p *SyncPeer) {
 		}
 
 		message := new(ptypes.Message)
-		if err = polo.Depolorize(message, buffer[0:bytecount]); err != nil {
+		if err = message.FromBytes(buffer[0:bytecount]); err != nil {
 			log.Panicln("unmarshalling error", err, bytecount)
 		}
 
@@ -415,7 +415,7 @@ func (s *Syncer) handleSyncPeer(p *SyncPeer) {
 
 			msg := new(ptypes.AccountSyncRequest)
 
-			err = polo.Depolorize(msg, message.Payload)
+			err = msg.FromBytes(message.Payload)
 			if err != nil {
 				s.logger.Error("Error depolarizing account sync request", "error", err)
 			}
@@ -437,7 +437,7 @@ func (s *Syncer) handleSyncPeer(p *SyncPeer) {
 		case ptypes.ACCSYNCRRESP:
 			msg := new(ptypes.AccountSyncResponse)
 
-			err = polo.Depolorize(msg, message.Payload)
+			err = msg.FromBytes(message.Payload)
 			if err != nil {
 				s.logger.Error("Error depolarising AccountSycResp message", "error", err)
 			}
@@ -540,7 +540,7 @@ func (s *Syncer) getContextData(ctx context.Context, session *session.Session, c
 	}
 
 	metaContextObject := new(gtypes.MetaContextObject)
-	if err := polo.Depolorize(metaContextObject, block.GetData()); err != nil {
+	if err := metaContextObject.FromBytes(block.GetData()); err != nil {
 		return err
 	}
 
@@ -577,7 +577,7 @@ func (s *Syncer) fetchTesseractState(tesseract *types.Tesseract, fetchContext []
 	defer newSession.Close()
 
 	acc := new(types.Account)
-	if err := polo.Depolorize(acc, block.GetData()); err != nil {
+	if err := acc.FromBytes(block.GetData()); err != nil {
 		return err
 	}
 
@@ -851,7 +851,7 @@ func (s *Syncer) Start() {
 							BulkSync: true,
 						}
 
-						rawData, err := polo.Polorize(msg)
+						rawData, err := msg.Bytes()
 						if err != nil {
 							log.Panic(errors.Wrap(err, "failed to polorize message payload"))
 						}
@@ -862,7 +862,7 @@ func (s *Syncer) Start() {
 							Payload: rawData,
 						}
 
-						rawData, err = polo.Polorize(&finalMsg)
+						rawData, err = finalMsg.Bytes()
 						if err != nil {
 							log.Panic(err)
 						}
@@ -977,11 +977,17 @@ func (s *Syncer) latticeWorker(id int, job <-chan *SyncJob) {
 					log.Printf("Adding %s tesseract to lattice %v", item.Tesseract.Header.Address.Hex(), tsHash)
 
 					icsClusterInfo := new(ptypes.ICSClusterInfo)
-					if err := polo.Depolorize(icsClusterInfo, item.Delta[item.Tesseract.Body.ConsensusProof.ICSHash]); err != nil {
+					if err := icsClusterInfo.FromBytes(
+						item.Delta[item.Tesseract.Body.ConsensusProof.ICSHash],
+					); err != nil {
 						s.logger.Error("Error depolarising ics cluster Info", "err", err)
 					}
 
-					if err := s.lattice.AddTesseractWithOutState(item.Tesseract, item.Sender, icsClusterInfo); err != nil {
+					if err := s.lattice.AddTesseractWithOutState(
+						item.Tesseract,
+						item.Sender,
+						icsClusterInfo,
+					); err != nil {
 						log.Fatal("Unable to add tesseract", err)
 					}
 				}
@@ -990,7 +996,7 @@ func (s *Syncer) latticeWorker(id int, job <-chan *SyncJob) {
 					log.Printf("Unable to get tesseract %s from %s Error %s", job.peer.id, job.hash.Hex(), err)
 				} else {
 					icsClusterInfo := new(ptypes.ICSClusterInfo)
-					if err := polo.Depolorize(icsClusterInfo, delta[t.Body.ConsensusProof.ICSHash]); err != nil {
+					if err := icsClusterInfo.FromBytes(delta[t.Body.ConsensusProof.ICSHash]); err != nil {
 						s.logger.Error("Error depolarising ics cluster Info", "err", err)
 					}
 
@@ -1077,7 +1083,7 @@ func (s *Syncer) getTesseract(
 
 	msg := new(types.Tesseract)
 
-	err := polo.Depolorize(msg, resp.Data)
+	err := msg.FromBytes(resp.Data)
 	if err != nil {
 		return nil, nil, err
 	}

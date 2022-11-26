@@ -139,7 +139,7 @@ func (s *StateObject) GetLogic(logicID types.LogicID) (data *gtypes.LogicData, e
 
 		if data != nil {
 			msg := new(gtypes.LogicData)
-			if err := polo.Depolorize(msg, data); err != nil {
+			if err := msg.FromBytes(data); err != nil {
 				log.Fatal(err)
 			}
 
@@ -185,7 +185,7 @@ func (s *StateObject) Copy() *StateObject {
 }
 
 func (s *StateObject) commitBalanceObject() ([]byte, error) {
-	data, err := polo.Polorize(s.balance)
+	data, err := s.balance.Bytes()
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +207,7 @@ func (s *StateObject) commitBalanceObject() ([]byte, error) {
 func (s *StateObject) commitAccount() (types.Hash, error) {
 	s.data.Nonce++
 
-	data, err := polo.Polorize(s.data)
+	data, err := s.data.Bytes()
 	if err != nil {
 		return types.NilHash, err
 	}
@@ -423,7 +423,7 @@ func (s *StateObject) AddAccountGenesisInfo(address types.Address, ixHash types.
 		IxHash: ixHash,
 	}
 
-	rawData, err := polo.Polorize(&accInfo)
+	rawData, err := accInfo.Bytes()
 	if err != nil {
 		return err
 	}
@@ -563,7 +563,7 @@ func (s *StateObject) getMetaContextObjectCopy() (*gtypes.MetaContextObject, err
 
 	obj := new(gtypes.MetaContextObject)
 
-	if err := polo.Depolorize(obj, rawData); err != nil {
+	if err := obj.FromBytes(rawData); err != nil {
 		return nil, err
 	}
 
@@ -582,7 +582,7 @@ func (s *StateObject) getContextObjectCopy(hash types.Hash) (*gtypes.ContextObje
 
 		obj := new(gtypes.ContextObject)
 
-		if err := polo.Depolorize(obj, rawData); err != nil {
+		if err := obj.FromBytes(rawData); err != nil {
 			return nil, err
 		}
 
@@ -611,7 +611,7 @@ func getBalanceObject(
 
 	balObject := new(gtypes.BalanceObject)
 
-	if err = polo.Depolorize(balObject, data); err != nil {
+	if err = balObject.FromBytes(data); err != nil {
 		return nil, err
 	}
 

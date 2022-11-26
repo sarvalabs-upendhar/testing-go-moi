@@ -4,6 +4,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-polo"
+
 	"github.com/rs/zerolog/log"
 	"github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/types"
@@ -55,6 +58,15 @@ func (resp *AgoraResponseMsg) GetSessionID() types.Address {
 	return resp.SessionID
 }
 
+func (resp *AgoraResponseMsg) FromBytes(bytes []byte) error {
+	err := polo.Depolorize(resp, bytes)
+	if err != nil {
+		return errors.Wrap(err, "failed to depolorize agora response message")
+	}
+
+	return nil
+}
+
 type AgoraRequestMsg struct {
 	SessionID types.Address
 	StateHash CID
@@ -63,6 +75,15 @@ type AgoraRequestMsg struct {
 
 func (req *AgoraRequestMsg) GetSessionID() types.Address {
 	return req.SessionID
+}
+
+func (req *AgoraRequestMsg) FromBytes(bytes []byte) error {
+	err := polo.Depolorize(req, bytes)
+	if err != nil {
+		return errors.Wrap(err, "failed to depolorize agora request message")
+	}
+
+	return nil
 }
 
 type Block struct {
@@ -165,6 +186,24 @@ func (clist *CanonicalPeerList) PeerList() *PeerList {
 	}
 
 	return peerList
+}
+
+func (clist *CanonicalPeerList) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(clist)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize canonical peer list")
+	}
+
+	return rawData, nil
+}
+
+func (clist *CanonicalPeerList) FromBytes(bytes []byte) error {
+	err := polo.Depolorize(clist, bytes)
+	if err != nil {
+		return errors.Wrap(err, "failed to depolorize canonical peer list")
+	}
+
+	return nil
 }
 
 func NewPeerList() *PeerList {

@@ -353,7 +353,7 @@ func (s *Server) streamHandlerFunc(stream network.Stream) {
 
 	message := new(ptypes.Message)
 
-	err = polo.Depolorize(message, buffer[0:byteCount])
+	err = message.FromBytes(buffer[0:byteCount])
 	if err != nil {
 		if err := kpeer.sendHandshakeErrorResp(s.id, err); err != nil {
 			s.logger.Error("Hand shake failed", "error", err)
@@ -363,7 +363,7 @@ func (s *Server) streamHandlerFunc(stream network.Stream) {
 	}
 	// Unmarshal message proto into a NewPeer message
 	var msg ptypes.HandshakeMSG
-	if err := polo.Depolorize(&msg, message.Payload); err != nil {
+	if err := msg.FromBytes(message.Payload); err != nil {
 		if err := kpeer.sendHandshakeErrorResp(s.id, err); err != nil {
 			s.logger.Error("Hand shake failed", "error", err)
 		}
@@ -742,7 +742,7 @@ func (s *Server) SendMessage(peerID peer.ID, msgType ptypes.MsgType, msg interfa
 	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
 	// Create a NewPeerEvent
 
-	rawData, err = polo.Polorize(m)
+	rawData, err = m.Bytes()
 	if err != nil {
 		return err
 	}
@@ -792,9 +792,9 @@ func (s *Server) SendHelloMessage() {
 			Address: utils.MultiAddrToString(s.GetAddrs()...),
 		}
 
-		rawData, err := polo.Polorize(peerInfo)
+		rawData, err := peerInfo.Bytes()
 		if err != nil {
-			s.logger.Error("Error serializing peer info", "error", err)
+			s.logger.Error("Error polorizing peer info", "error", err)
 			panic(err)
 		}
 
@@ -809,7 +809,7 @@ func (s *Server) SendHelloMessage() {
 			Signature: signature,
 		}
 
-		rawData, err = polo.Polorize(msg)
+		rawData, err = msg.Bytes()
 		if err != nil {
 			s.logger.Error("Error serializing hello message", "error", err)
 			panic(err)

@@ -42,6 +42,24 @@ func (b *BalanceObject) Copy() *BalanceObject {
 	return newObject
 }
 
+func (b *BalanceObject) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(b)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize balance object")
+	}
+
+	return rawData, nil
+}
+
+func (b *BalanceObject) FromBytes(bytes []byte) error {
+	err := polo.Depolorize(b, bytes)
+	if err != nil {
+		return errors.Wrap(err, "failed to depolorize balance object")
+	}
+
+	return nil
+}
+
 type ApprovalObject struct {
 	Approvals map[types.Address]AssetMap
 	PrvHash   types.Hash
@@ -64,6 +82,15 @@ type AssetData struct {
 	Symbol  string
 	Owner   types.Address
 	Extra   []byte
+}
+
+func (ad *AssetData) FromBytes(bytes []byte) error {
+	err := polo.Depolorize(ad, bytes)
+	if err != nil {
+		return errors.Wrap(err, "failed to depolorize asset data")
+	}
+
+	return nil
 }
 
 func GetAssetID(
@@ -131,6 +158,15 @@ func (m *MetaContextObject) Copy() *MetaContextObject {
 	return newObject
 }
 
+func (m *MetaContextObject) FromBytes(bytes []byte) error {
+	err := polo.Depolorize(m, bytes)
+	if err != nil {
+		return errors.Wrap(err, "failed to depolorize meta context object")
+	}
+
+	return nil
+}
+
 type ContextObject struct {
 	Ids []id.KramaID
 }
@@ -154,17 +190,35 @@ func (c *ContextObject) Copy() *ContextObject {
 }
 
 func (c *ContextObject) Hash() (types.Hash, error) {
-	rawData, err := types.PoloHash(c)
+	hash, err := types.PoloHash(c)
 	if err != nil {
 		return types.NilHash, errors.Wrap(err, "failed to polorize context object")
 	}
 
-	return rawData, nil
+	return hash, nil
+}
+
+func (c *ContextObject) FromBytes(bytes []byte) error {
+	err := polo.Depolorize(c, bytes)
+	if err != nil {
+		return errors.Wrap(err, "failed to depolorize context object")
+	}
+
+	return nil
 }
 
 type LogicData struct {
 	Code       []byte
 	Upgradable bool
+}
+
+func (ld *LogicData) FromBytes(bytes []byte) error {
+	err := polo.Depolorize(ld, bytes)
+	if err != nil {
+		return errors.Wrap(err, "failed to depolorize logic data")
+	}
+
+	return nil
 }
 
 func GetLogicID(code []byte, isUpgradable bool) (types.LogicID, *LogicData, error) {

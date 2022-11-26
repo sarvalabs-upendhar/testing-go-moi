@@ -111,7 +111,7 @@ func (r *Randomizer) messageHandler(stream network.Stream) {
 
 	message := new(ptypes.Message)
 
-	err = polo.Depolorize(message, buffer[0:count])
+	err = message.FromBytes(buffer[0:count])
 	if err != nil {
 		r.logger.Error("Error reading message", "err", err)
 
@@ -120,7 +120,7 @@ func (r *Randomizer) messageHandler(stream network.Stream) {
 
 	msg := new(ptypes.RandomWalkReq)
 
-	if err = polo.Depolorize(msg, message.Payload); err != nil {
+	if err = msg.FromBytes(message.Payload); err != nil {
 		r.logger.Error("Error reading message", "err", err)
 
 		return
@@ -282,7 +282,7 @@ func (r *Randomizer) HandleReqMsg(reqMsg *ptypes.RandomWalkReq) error {
 		}
 
 		// log.Println("Address",responseMsg,polo.Polorize(responseMsg),polo.Polorize(&responseMsg))
-		rawData, err := polo.Polorize(responseMsg)
+		rawData, err := responseMsg.Bytes()
 		if err != nil {
 			return err
 		}
@@ -300,7 +300,7 @@ func (r *Randomizer) pubSubHandler(msg *pubsub.Message) error {
 	data := msg.GetData()
 	randomPeerMsg := new(ptypes.RandomWalkResp)
 
-	err := polo.Depolorize(randomPeerMsg, data)
+	err := randomPeerMsg.FromBytes(data)
 	if err != nil {
 		r.logger.Error("Error depolarising randomWalk Request", "error", err)
 
@@ -438,7 +438,7 @@ func (r *Randomizer) SendFluxMessage(peerID peer.ID, msgType ptypes.MsgType, msg
 	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
 	// Create a NewPeerEvent
 
-	rawData, err = polo.Polorize(m)
+	rawData, err = m.Bytes()
 	if err != nil {
 		return err
 	}

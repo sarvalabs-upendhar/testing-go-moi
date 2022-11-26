@@ -51,6 +51,15 @@ type CanonicalVote struct {
 	GridID *types.TesseractGridID
 }
 
+func (cv *CanonicalVote) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(cv)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize canonical vote")
+	}
+
+	return rawData, nil
+}
+
 func (v *Vote) SignBytes() ([]byte, error) {
 	canonicalVote := CanonicalVote{
 		Type:   v.Type,
@@ -75,6 +84,15 @@ func (v *Vote) Bytes() ([]byte, error) {
 	return rawData, nil
 }
 
+func (v *Vote) FromBytes(bytes []byte) error {
+	err := polo.Depolorize(v, bytes)
+	if err != nil {
+		return errors.Wrap(err, "failed to depolorize vote")
+	}
+
+	return nil
+}
+
 func (v *Vote) Validate() error {
 	// TODO: Validate the vote
 	return nil
@@ -84,6 +102,24 @@ type TimedWALMessage struct {
 	ClusterID types.ClusterID
 	Timestamp int64
 	Message   ConsensusMessage
+}
+
+func (twm *TimedWALMessage) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(twm)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize timed wal message")
+	}
+
+	return rawData, nil
+}
+
+func (twm *TimedWALMessage) FromBytes(bytes []byte) error {
+	err := polo.Depolorize(twm, bytes)
+	if err != nil {
+		return errors.Wrap(err, "failed to depolorize timed wal message")
+	}
+
+	return nil
 }
 
 type Proposal struct {

@@ -9,7 +9,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/sarvalabs/go-polo"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/poorna/agora/db"
 	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
@@ -117,7 +116,7 @@ func (l *Ledger) fetchFromDB(address types.Address, stateHash atypes.CID) (*atyp
 	}
 
 	plist := new(atypes.CanonicalPeerList)
-	if err := polo.Depolorize(plist, rawData); err != nil {
+	if err := plist.FromBytes(rawData); err != nil {
 		return nil, err
 	}
 
@@ -187,7 +186,7 @@ func (l *Ledger) worker() {
 			dbWriter := l.db.GetBatchWriter()
 
 			for _, job := range jobs {
-				rawData, err := polo.Polorize(job.value)
+				rawData, err := job.value.Bytes()
 				if err != nil {
 					l.logger.Error("Failed to polorize peer list")
 

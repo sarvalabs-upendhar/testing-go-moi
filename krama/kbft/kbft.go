@@ -9,7 +9,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-polo"
 	"github.com/sarvalabs/moichain/guna"
 	ktypes "github.com/sarvalabs/moichain/krama/types"
 	"github.com/sarvalabs/moichain/mudra"
@@ -497,7 +496,7 @@ func (kbft *KBFT) updateConsensusInfoInTesseracts(
 		return err
 	}
 
-	rawData, err := polo.Polorize(kbft.ics.Receipts)
+	rawData, err := kbft.ics.Receipts.Bytes()
 	if err != nil {
 		return err
 	}

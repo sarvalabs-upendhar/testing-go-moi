@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/sarvalabs/go-polo"
 	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/dhruva/db"
 	"github.com/sarvalabs/moichain/types"
@@ -324,7 +323,7 @@ func insertAccMetaInfo(t *testing.T, pm *PersistenceManager, accMetaInfo types.A
 
 	key, bucket := BucketIDFromAddress(accMetaInfo.Address.Bytes())
 
-	rawData, err := polo.Polorize(accMetaInfo)
+	rawData, err := accMetaInfo.Bytes()
 	require.NoError(t, err)
 
 	if err := pm.CreateEntry(key, rawData); err != nil {

@@ -8,7 +8,6 @@ import (
 	"github.com/sarvalabs/moichain/utils"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/sarvalabs/go-polo"
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/types"
 )
@@ -405,12 +404,12 @@ func GetIxsSize(ixs types.Interactions) (int64, error) {
 	var sumOfIxsSize int64 = 0
 
 	for _, ix := range ixs {
-		bz, err := polo.Polorize(ix)
+		rawData, err := ix.Bytes()
 		if err != nil {
 			return 0, err
 		}
 
-		sumOfIxsSize += int64(len(bz))
+		sumOfIxsSize += int64(len(rawData))
 	}
 
 	return sumOfIxsSize, nil

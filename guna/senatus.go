@@ -42,6 +42,25 @@ type ReputationInfo struct {
 	Degree     int64
 	PublickKey []byte
 }
+
+func (ri *ReputationInfo) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(ri)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize reputation info")
+	}
+
+	return rawData, nil
+}
+
+func (ri *ReputationInfo) FromBytes(bytes []byte) error {
+	err := polo.Depolorize(ri, bytes)
+	if err != nil {
+		return errors.Wrap(err, "failed to depolorize reputation info")
+	}
+
+	return nil
+}
+
 type ReputationEngine struct {
 	kramaID  id.KramaID
 	ctx      context.Context
@@ -86,7 +105,7 @@ func (r *ReputationEngine) AddNewPeer(key id.KramaID, data *ReputationInfo) erro
 	}
 
 	if !contains {
-		rawData, err := polo.Polorize(data)
+		rawData, err := data.Bytes()
 		if err != nil {
 			return err
 		}
@@ -126,7 +145,7 @@ func (r *ReputationEngine) UpdateAddress(key id.KramaID, addrs []string) error {
 
 		r.cache.Add(dhruva.NtqCacheKey(key), info)
 
-		rawData, err := polo.Polorize(info)
+		rawData, err := info.Bytes()
 		if err != nil {
 			return err
 		}
@@ -140,7 +159,7 @@ func (r *ReputationEngine) UpdateAddress(key id.KramaID, addrs []string) error {
 	}
 	r.cache.Add(dhruva.NtqCacheKey(key), info)
 
-	rawData, err := polo.Polorize(info)
+	rawData, err := info.Bytes()
 	if err != nil {
 		return err
 	}
@@ -159,7 +178,7 @@ func (r *ReputationEngine) UpdatePublicKey(key id.KramaID, pk []byte) error {
 
 		r.cache.Add(dhruva.NtqCacheKey(key), info)
 
-		rawData, err := polo.Polorize(info)
+		rawData, err := info.Bytes()
 		if err != nil {
 			return err
 		}
@@ -173,7 +192,7 @@ func (r *ReputationEngine) UpdatePublicKey(key id.KramaID, pk []byte) error {
 	}
 	r.cache.Add(dhruva.NtqCacheKey(key), info)
 
-	rawData, err := polo.Polorize(info)
+	rawData, err := info.Bytes()
 	if err != nil {
 		return err
 	}
@@ -192,7 +211,7 @@ func (r *ReputationEngine) UpdateNTQ(key id.KramaID, ntq int32) error {
 
 		r.cache.Add(dhruva.NtqCacheKey(key), info)
 
-		rawData, err := polo.Polorize(info)
+		rawData, err := info.Bytes()
 		if err != nil {
 			return err
 		}
@@ -207,7 +226,7 @@ func (r *ReputationEngine) UpdateNTQ(key id.KramaID, ntq int32) error {
 
 	r.cache.Add(dhruva.NtqCacheKey(key), info)
 
-	rawData, err := polo.Polorize(info)
+	rawData, err := info.Bytes()
 	if err != nil {
 		return err
 	}
@@ -233,7 +252,7 @@ func (r *ReputationEngine) UpdateInclusivity(key id.KramaID, delta int64) error 
 
 		r.cache.Add(dhruva.NtqCacheKey(key), info)
 
-		rawData, err := polo.Polorize(info)
+		rawData, err := info.Bytes()
 		if err != nil {
 			return err
 		}
@@ -248,7 +267,7 @@ func (r *ReputationEngine) UpdateInclusivity(key id.KramaID, delta int64) error 
 
 	r.cache.Add(dhruva.NtqCacheKey(key), info)
 
-	rawData, err := polo.Polorize(info)
+	rawData, err := info.Bytes()
 	if err != nil {
 		return err
 	}
@@ -319,8 +338,8 @@ func (r *ReputationEngine) getInfo(id id.KramaID) (*ReputationInfo, error) {
 	}
 
 	info := new(ReputationInfo)
-	if err = polo.Depolorize(info, rawData); err != nil {
-		return nil, errors.Wrap(err, "failed to unmarshall reputation info")
+	if err = info.FromBytes(rawData); err != nil {
+		return nil, err
 	}
 
 	r.cache.Add(dhruva.NtqCacheKey(id), info)
@@ -332,13 +351,13 @@ func (r *ReputationEngine) AddEntries(msg ptypes.SyncReputationInfo) error {
 	writer := r.db.NewBatchWriter()
 
 	for _, v := range msg.Msg {
-		rawData, err := polo.Polorize(
-			ReputationInfo{
-				NTQ:    v.Ntq,
-				Addrs:  v.Address,
-				Degree: v.Degree,
-			},
-		)
+		reputationInfo := ReputationInfo{
+			NTQ:    v.Ntq,
+			Addrs:  v.Address,
+			Degree: v.Degree,
+		}
+
+		rawData, err := reputationInfo.Bytes()
 		if err != nil {
 			return err
 		}
@@ -380,7 +399,7 @@ func (r *ReputationEngine) GetAllEntries() (chan *ptypes.SyncReputationInfo, err
 			kramaID := id.KramaID(bytes.TrimPrefix(entry.Key, []byte{dhruva.NTQ.Byte()}))
 			info := new(ReputationInfo)
 
-			if err := polo.Depolorize(info, entry.Value); err != nil {
+			if err := info.FromBytes(entry.Value); err != nil {
 				r.logger.Error("Error decoding peer info", err)
 			}
 
@@ -402,7 +421,7 @@ func (r *ReputationEngine) GetAllEntries() (chan *ptypes.SyncReputationInfo, err
 func (r *ReputationEngine) SenatusHandler(msg *pubsub.Message) error {
 	helloMsg := new(ptypes.HelloMsg)
 
-	if err := polo.Depolorize(helloMsg, msg.Data); err != nil {
+	if err := helloMsg.FromBytes(msg.Data); err != nil {
 		return err
 	}
 
@@ -438,7 +457,7 @@ func (r *ReputationEngine) HandleHelloMessages(msgs []*ptypes.HelloMsg) (int, er
 	for index, publicKey := range publicKeys {
 		msg := msgs[index]
 
-		rawData, err := polo.Polorize(msg.Info)
+		rawData, err := msg.Info.Bytes()
 		if err != nil {
 			return index, err
 		}

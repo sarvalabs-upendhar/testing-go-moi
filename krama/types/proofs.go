@@ -1,6 +1,8 @@
 package types
 
 import (
+	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-polo"
 	"github.com/sarvalabs/moichain/types"
 )
 
@@ -21,4 +23,13 @@ type ICSMetaInfo struct {
 type WatchDogProofs struct {
 	MetaData *ICSMetaInfo
 	Extra    []byte
+}
+
+func (wdp *WatchDogProofs) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(wdp)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize watch dog proofs")
+	}
+
+	return rawData, nil
 }

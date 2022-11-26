@@ -7,7 +7,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-polo"
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/dhruva/db"
 	"github.com/sarvalabs/moichain/dhruva/db/badger"
@@ -85,7 +84,7 @@ func (p *PersistenceManager) GetAccountMetaInfo(id []byte) (*types.AccountMetaIn
 	}
 
 	msg := new(types.AccountMetaInfo)
-	if err = polo.Depolorize(msg, data); err != nil {
+	if err = msg.FromBytes(data); err != nil {
 		return nil, err
 	}
 
@@ -130,7 +129,7 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 	data, err := p.ReadEntry(key)
 	if err == nil {
 		msg := new(types.AccountMetaInfo)
-		if err := polo.Depolorize(msg, data); err != nil {
+		if err := msg.FromBytes(data); err != nil {
 			return -1, false, err
 		}
 
@@ -149,12 +148,12 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 			msg.LatticeExists = latticeExists
 		}
 
-		bz, err := polo.Polorize(msg)
+		rawData, err := msg.Bytes()
 		if err != nil {
 			return -1, false, err
 		}
 
-		return int32(bucket.getID()), false, p.UpdateEntry(key, bz)
+		return int32(bucket.getID()), false, p.UpdateEntry(key, rawData)
 	} else if errors.Is(err, types.ErrKeyNotFound) {
 		msg := types.AccountMetaInfo{
 			StateExists:   stateExists,
@@ -165,12 +164,12 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 			Height:        height,
 		}
 
-		bz, err := polo.Polorize(msg)
+		rawData, err := msg.Bytes()
 		if err != nil {
 			return -1, false, err
 		}
 
-		if err = p.CreateEntry(key, bz); err != nil {
+		if err = p.CreateEntry(key, rawData); err != nil {
 			return -1, false, err
 		}
 
@@ -217,7 +216,7 @@ func (p *PersistenceManager) UpdateTesseractStatus(
 	}
 
 	msg := new(types.AccountMetaInfo)
-	if err := polo.Depolorize(msg, data); err != nil {
+	if err := msg.FromBytes(data); err != nil {
 		return err
 	}
 
@@ -231,12 +230,12 @@ func (p *PersistenceManager) UpdateTesseractStatus(
 		return types.ErrHashMismatch
 	}
 
-	bz, err := polo.Polorize(msg)
+	rawData, err := msg.Bytes()
 	if err != nil {
 		return err
 	}
 
-	return p.UpdateEntry(key, bz)
+	return p.UpdateEntry(key, rawData)
 }
 
 // UpdateEntry updates the value associated with the given key
@@ -264,7 +263,7 @@ func (p *PersistenceManager) GetAccounts(bucketNumber int32) (types.Accounts, er
 
 		msg := new(types.AccountMetaInfo)
 
-		if err := polo.Depolorize(msg, dbEntry.Value); err != nil {
+		if err := msg.FromBytes(dbEntry.Value); err != nil {
 			return nil, err
 		}
 

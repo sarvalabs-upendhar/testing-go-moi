@@ -636,6 +636,24 @@ type Account struct {
 	FileRoot       Hash
 }
 
+func (a *Account) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(a)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize account")
+	}
+
+	return rawData, nil
+}
+
+func (a *Account) FromBytes(bytes []byte) error {
+	err := polo.Depolorize(a, bytes)
+	if err != nil {
+		return errors.Wrap(err, "failed to depolorize account")
+	}
+
+	return nil
+}
+
 type DBEntry struct {
 	Key   []byte
 	Value []byte
@@ -644,6 +662,24 @@ type DBEntry struct {
 type AccountGenesisInfo struct {
 	MoiID  string
 	IxHash Hash
+}
+
+func (agi *AccountGenesisInfo) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(agi)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize genesis account info")
+	}
+
+	return rawData, nil
+}
+
+func (agi *AccountGenesisInfo) FromBytes(bytes []byte) error {
+	err := polo.Depolorize(agi, bytes)
+	if err != nil {
+		return errors.Wrap(err, "failed to depolorize genesis account info")
+	}
+
+	return nil
 }
 
 type Receipt struct {
@@ -673,12 +709,12 @@ func (r *Receipt) SetExtraData(data interface{}) error {
 type Receipts map[Hash]*Receipt
 
 func (rs Receipts) Hash() (Hash, error) {
-	rawData, err := PoloHash(rs)
+	hash, err := PoloHash(rs)
 	if err != nil {
 		return NilHash, errors.Wrap(err, "failed to polorize receipts")
 	}
 
-	return rawData, nil
+	return hash, nil
 }
 
 func (rs Receipts) GetReceipt(ixHash Hash) (*Receipt, error) {
@@ -687,6 +723,24 @@ func (rs Receipts) GetReceipt(ixHash Hash) (*Receipt, error) {
 	}
 
 	return nil, ErrReceiptNotFound
+}
+
+func (rs Receipts) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(rs)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize receipts")
+	}
+
+	return rawData, nil
+}
+
+func (rs Receipts) FromBytes(bytes []byte) error {
+	err := polo.Depolorize(rs, bytes)
+	if err != nil {
+		return errors.Wrap(err, "failed to depolorize receipts")
+	}
+
+	return nil
 }
 
 func AccTypeFromIxType(ixType IxType) AccType {

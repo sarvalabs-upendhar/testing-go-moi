@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/sarvalabs/go-polo"
 	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/dhruva"
 	"github.com/sarvalabs/moichain/dhruva/db"
@@ -29,7 +28,7 @@ func TestReputationEngine_GetInfo_FetchFromDB(t *testing.T) {
 		PublickKey: []byte{0x02, 0x03},
 	}
 
-	rawData, err := polo.Polorize(info)
+	rawData, err := info.Bytes()
 	require.NoError(t, err)
 
 	// add entry to DB

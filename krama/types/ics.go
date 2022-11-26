@@ -4,6 +4,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pkg/errors"
+
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
 	gtypes "github.com/sarvalabs/moichain/guna/types"
@@ -451,4 +453,22 @@ type ICSMSG struct {
 	Msg       []byte
 	Sender    id.KramaID
 	ClusterID string
+}
+
+func (im *ICSMSG) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(im)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize ics message")
+	}
+
+	return rawData, nil
+}
+
+func (im *ICSMSG) FromBytes(bytes []byte) error {
+	err := polo.Depolorize(im, bytes)
+	if err != nil {
+		return errors.Wrap(err, "failed to depolorize ics message")
+	}
+
+	return nil
 }

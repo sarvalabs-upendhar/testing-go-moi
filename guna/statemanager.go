@@ -19,7 +19,6 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-polo"
 	ktypes "github.com/sarvalabs/moichain/krama/types"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/telemetry/tracing"
@@ -189,7 +188,7 @@ func (sm *StateManager) GetStateObjectByHash(addr types.Address, hash types.Hash
 	}
 
 	acc := new(types.Account)
-	if err = polo.Depolorize(acc, data); err != nil {
+	if err = acc.FromBytes(data); err != nil {
 		log.Fatal(err)
 	}
 
@@ -283,7 +282,7 @@ func (sm *StateManager) FetchTesseractFromDB(hash types.Hash, withInteractions b
 	// canonicalTesseract is a clone of the tesseract. The only difference is that it won't have the interactions field.
 	canonicalTesseract := new(types.CanonicalTesseract)
 
-	if err = polo.Depolorize(canonicalTesseract, buf); err != nil {
+	if err = canonicalTesseract.FromBytes(buf); err != nil {
 		return nil, errors.Wrap(err, "failed to depolarize tesseract")
 	}
 
@@ -295,7 +294,7 @@ func (sm *StateManager) FetchTesseractFromDB(hash types.Hash, withInteractions b
 			return nil, errors.Wrap(err, types.ErrFetchingInteractions.Error())
 		}
 
-		if err = polo.Depolorize(interactions, buf); err != nil {
+		if err = interactions.FromBytes(buf); err != nil {
 			return nil, errors.Wrap(err, "failed to depolarize interactions")
 		}
 	}
@@ -349,7 +348,7 @@ func (sm *StateManager) getContextObject(addr types.Address, hash types.Hash) (*
 
 	object := new(gtypes.ContextObject)
 
-	if err := polo.Depolorize(object, rawData); err != nil {
+	if err := object.FromBytes(rawData); err != nil {
 		return nil, errors.Wrap(err, "contextObject deserialization failed")
 	}
 
@@ -376,7 +375,7 @@ func (sm *StateManager) getMetaContextObject(addr types.Address, hash types.Hash
 
 	object := new(gtypes.MetaContextObject)
 
-	if err = polo.Depolorize(object, rawData); err != nil {
+	if err = object.FromBytes(rawData); err != nil {
 		return nil, errors.Wrap(err, "MetaContextObject deserialization failed")
 	}
 
@@ -661,7 +660,7 @@ func (sm *StateManager) GetAccountInfo(addr types.Address, stateHash types.Hash)
 
 	accInfo := new(types.Account)
 
-	if err := polo.Depolorize(accInfo, rawData); err != nil {
+	if err := accInfo.FromBytes(rawData); err != nil {
 		return nil, err
 	}
 

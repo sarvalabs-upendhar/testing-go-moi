@@ -175,6 +175,15 @@ func (t *Tesseract) Bytes() ([]byte, error) {
 	return rawData, nil
 }
 
+func (t *Tesseract) FromBytes(bytes []byte) error {
+	err := polo.Depolorize(t, bytes)
+	if err != nil {
+		return errors.Wrap(err, "failed to depolorize tesseract")
+	}
+
+	return nil
+}
+
 // CanonicalWithoutSeal method returns a copy of the tesseract without seal and interactions
 func (t *Tesseract) CanonicalWithoutSeal() *CanonicalTesseractWithoutSeal {
 	return &CanonicalTesseractWithoutSeal{
@@ -200,7 +209,21 @@ type CanonicalTesseract struct {
 
 // Bytes method polorizes and returns the canonical tesseract in bytes
 func (c *CanonicalTesseract) Bytes() ([]byte, error) {
-	return polo.Polorize(c)
+	rawData, err := polo.Polorize(c)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize canonical tesseract")
+	}
+
+	return rawData, nil
+}
+
+func (c *CanonicalTesseract) FromBytes(bytes []byte) error {
+	err := polo.Depolorize(c, bytes)
+	if err != nil {
+		return errors.Wrap(err, "failed to depolorize canonical tesseract")
+	}
+
+	return nil
 }
 
 type CanonicalTesseractWithoutSeal struct {

@@ -8,7 +8,6 @@ import (
 	"github.com/sarvalabs/moichain/dhruva"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/sarvalabs/go-polo"
 	"github.com/sarvalabs/moichain/common/tests"
 	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
 	"github.com/stretchr/testify/require"
@@ -47,7 +46,7 @@ func TestGetAssociatedPeers_FetchFromDB(t *testing.T) {
 	pList := atypes.NewPeerList()
 	pList.AddPeer(ids[0])
 
-	rawData, err := polo.Polorize(pList.CanonicalPeerList())
+	rawData, err := pList.CanonicalPeerList().Bytes()
 	require.NoError(t, err)
 
 	// Write the list to db
@@ -74,7 +73,7 @@ func TestUpdateAssociatedPeers_EntryAlreadyExists(t *testing.T) {
 	pList := atypes.NewPeerList()
 	pList.AddPeer(ids[0])
 
-	rawData, err := polo.Polorize(pList.CanonicalPeerList())
+	rawData, err := pList.CanonicalPeerList().Bytes()
 	require.NoError(t, err)
 
 	// Write the list to db

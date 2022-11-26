@@ -33,8 +33,21 @@ func (r *rootNode) Bytes() ([]byte, error) {
 
 	rawData, err := polo.Polorize(r)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to polorize root node")
 	}
 
 	return rawData, nil
+}
+
+func (r *rootNode) FromBytes(bytes []byte) error {
+	if r == nil {
+		return errors.New("invalid root node")
+	}
+
+	err := polo.Depolorize(r, bytes)
+	if err != nil {
+		return errors.Wrap(err, "failed to depolorize root node")
+	}
+
+	return nil
 }

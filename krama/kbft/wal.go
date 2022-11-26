@@ -17,7 +17,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-polo"
 )
 
 const (
@@ -318,7 +317,7 @@ func NewWALEncoder(wr io.Writer) *WALEncoder {
 // the encoded size of v is greater than 1MB. Any error encountered
 // during the write is also returned.
 func (enc *WALEncoder) Encode(v *ktypes.TimedWALMessage) error {
-	rawData, err := polo.Polorize(v)
+	rawData, err := v.Bytes()
 	if err != nil {
 		return err
 	}
@@ -420,7 +419,7 @@ func (dec *WALDecoder) Decode() (*ktypes.TimedWALMessage, error) {
 
 	res := new(ktypes.TimedWALMessage)
 
-	err = polo.Depolorize(res, data)
+	err = res.FromBytes(data)
 	if err != nil {
 		return nil, DataCorruptionError{fmt.Errorf("failed to decode data: %w", err)}
 	}

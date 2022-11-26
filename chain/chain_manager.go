@@ -20,7 +20,6 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/moby/locker"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-polo"
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/guna"
 	"github.com/sarvalabs/moichain/jug"
@@ -296,7 +295,7 @@ func (c *ChainManager) GetAssetDataByAssetHash(assetHash []byte) (*gtypes.AssetD
 
 	assetData := new(gtypes.AssetData)
 
-	if err := polo.Depolorize(assetData, rawData); err != nil {
+	if err := assetData.FromBytes(rawData); err != nil {
 		return nil, err
 	}
 
@@ -321,7 +320,7 @@ func (c *ChainManager) getReceipt(ixHash, receiptRoot types.Hash) (*types.Receip
 
 	receipts := new(types.Receipts)
 
-	if err := polo.Depolorize(receipts, rawData); err != nil {
+	if err := receipts.FromBytes(rawData); err != nil {
 		return nil, err
 	}
 
@@ -404,7 +403,7 @@ func (c *ChainManager) verifySignatures(ts *types.Tesseract, ics *ktypes.ICSNode
 		GridID: ts.Header.Extra.GridID,
 	}
 
-	rawData, err := polo.Polorize(vote)
+	rawData, err := vote.Bytes()
 	if err != nil {
 		return false, err
 	}
@@ -606,7 +605,7 @@ func (c *ChainManager) addTesseractsWithState(
 
 	// Add cluster info to db
 	if clusterInfo != nil && len(tesseracts) > 0 {
-		rawData, err := polo.Polorize(clusterInfo)
+		rawData, err := clusterInfo.Bytes()
 		if err != nil {
 			return err
 		}
@@ -671,7 +670,7 @@ func (c *ChainManager) addTesseractsWithOutState(
 
 	// Add cluster info to db
 	if clusterInfo != nil && len(tesseracts) > 0 {
-		rawData, err := polo.Polorize(clusterInfo)
+		rawData, err := clusterInfo.Bytes()
 		if err != nil {
 			return err
 		}
@@ -991,7 +990,7 @@ func (c *ChainManager) tesseractHandler(pubSubMsg *pubsub.Message) error {
 	msg := new(ptypes.TesseractMessage)
 	tsAdditionInitTime := time.Now()
 	//	v1msg := proto.MessageV1(msg)
-	if err := polo.Depolorize(msg, pubSubMsg.GetData()); err != nil {
+	if err := msg.FromBytes(pubSubMsg.GetData()); err != nil {
 		log.Panic(err)
 	}
 
@@ -1014,7 +1013,7 @@ func (c *ChainManager) tesseractHandler(pubSubMsg *pubsub.Message) error {
 	}
 
 	clusterInfo := new(ptypes.ICSClusterInfo)
-	if err := polo.Depolorize(clusterInfo, msg.Delta[msg.Tesseract.GetICSHash()]); err != nil {
+	if err := clusterInfo.FromBytes(msg.Delta[msg.Tesseract.GetICSHash()]); err != nil {
 		c.logger.Error("Error depolarising cluster info", "err", err)
 	}
 
@@ -1069,7 +1068,7 @@ func (c *ChainManager) executeAndValidate(ts []*types.Tesseract) (map[types.Hash
 		return nil, err
 	}
 
-	dirtyStorage[receiptHash], err = polo.Polorize(receipts)
+	dirtyStorage[receiptHash], err = receipts.Bytes()
 	if err != nil {
 		return nil, err
 	}

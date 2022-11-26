@@ -23,7 +23,6 @@ import (
 	"github.com/moby/locker"
 	"github.com/mr-tron/base58/base58"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-polo"
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/guna"
 	"github.com/sarvalabs/moichain/krama/kbft"
@@ -1005,7 +1004,7 @@ func (k *Engine) getICSReqMsg(
 	icsReqMsg := new(ptypes.ICSRequest)
 	Ixs := types.Interactions{ix}
 
-	rawData, err := polo.Polorize(Ixs)
+	rawData, err := Ixs.Bytes()
 	if err != nil {
 		return *icsReqMsg, err
 	}
@@ -1082,7 +1081,7 @@ func (k *Engine) sendICSSuccess(id types.ClusterID) error {
 
 	icsMsg := new(ktypes.ICSMSG)
 
-	rawData, err := polo.Polorize(msg)
+	rawData, err := msg.Bytes()
 	if err != nil {
 		return err
 	}

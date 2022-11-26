@@ -8,7 +8,6 @@ import (
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/sarvalabs/go-polo"
 	"github.com/sarvalabs/moichain/chain"
 	"github.com/sarvalabs/moichain/ixpool"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
@@ -142,7 +141,7 @@ func (eh *SubHandler) handlePeerMessage(p *KipPeer) error {
 
 	// Unmarshal the buffer into a proto message
 	message := new(ptypes.Message)
-	if err = polo.Depolorize(message, buffer[0:bytecount]); err != nil {
+	if err = message.FromBytes(buffer[0:bytecount]); err != nil {
 		return err
 	}
 
@@ -155,7 +154,7 @@ func (eh *SubHandler) handlePeerMessage(p *KipPeer) error {
 
 		// Unmarshal message proto into an InteractionsData message
 		var ixns ptypes.InteractionMsg
-		if err = polo.Depolorize(&ixns, message.Payload); err != nil {
+		if err = ixns.FromBytes(message.Payload); err != nil {
 			return err
 		}
 
