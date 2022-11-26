@@ -1101,6 +1101,7 @@ func areStateHashesValid(tesseracts []*types.Tesseract, receipts types.Receipts)
 
 func isReceiptAndGroupHashValid(tesseracts []*types.Tesseract, receipts types.Receipts) bool {
 	groupHash := tesseracts[0].Header.GridHash
+
 	receiptsHash, err := receipts.Hash()
 	if err != nil {
 		return false

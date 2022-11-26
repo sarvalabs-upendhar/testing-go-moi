@@ -41,9 +41,9 @@ type StateObject struct {
 	balance        *gtypes.BalanceObject
 	assetApprovals *gtypes.ApprovalObject
 
-	logicTrie   tree.MerkleTree // nolint
-	storageTrie tree.MerkleTree // nolint
-	fileTrie    tree.MerkleTree // nolint
+	logicTrie   tree.MerkleTree //nolint
+	storageTrie tree.MerkleTree //nolint
+	fileTrie    tree.MerkleTree //nolint
 
 	dirtyEntries Storage
 	receipts     types.Receipts
@@ -422,6 +422,7 @@ func (s *StateObject) AddAccountGenesisInfo(address types.Address, ixHash types.
 	accInfo := types.AccountGenesisInfo{
 		IxHash: ixHash,
 	}
+
 	rawData, err := polo.Polorize(&accInfo)
 	if err != nil {
 		return err

@@ -3,8 +3,9 @@ package types
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/pkg/errors"
 	"log"
+
+	"github.com/pkg/errors"
 
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 

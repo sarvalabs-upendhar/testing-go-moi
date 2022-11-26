@@ -4,11 +4,12 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"github.com/pkg/errors"
 	"log"
 	"math/rand"
 	"sync"
 	"time"
+
+	"github.com/pkg/errors"
 
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 

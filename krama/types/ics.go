@@ -119,6 +119,7 @@ func (i *ClusterInfo) GetMetaData(msgs []*ICSMSG) (*ICSMetaInfo, error) {
 	}
 
 	m.Msgs = append(m.Msgs, rawData)
+
 	for _, v := range msgs {
 		rawData, err := polo.Polorize(v)
 		if err != nil {

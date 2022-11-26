@@ -1004,6 +1004,7 @@ func (k *Engine) getICSReqMsg(
 ) (ptypes.ICSRequest, error) {
 	icsReqMsg := new(ptypes.ICSRequest)
 	Ixs := types.Interactions{ix}
+
 	rawData, err := polo.Polorize(Ixs)
 	if err != nil {
 		return *icsReqMsg, err

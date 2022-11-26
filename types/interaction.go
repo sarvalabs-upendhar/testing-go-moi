@@ -138,6 +138,7 @@ func (ix *Interaction) GetSize() (int64, error) {
 	if err != nil {
 		return 0, errors.Wrap(err, "failed to polorize interaction")
 	}
+
 	return int64(len(bz)), nil
 }
 
@@ -155,6 +156,7 @@ func (ix *Interaction) GetIxHash() (Hash, error) {
 		if err != nil {
 			return Hash{}, errors.Wrap(err, "failed to polorize interaction")
 		}
+
 		ix.Hash = h
 
 		return h, nil

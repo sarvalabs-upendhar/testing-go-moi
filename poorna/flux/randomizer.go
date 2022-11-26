@@ -3,12 +3,13 @@ package flux
 import (
 	"bufio"
 	"context"
-	"github.com/pkg/errors"
 	"log"
 	"math"
 	"math/rand"
 	"sync"
 	"time"
+
+	"github.com/pkg/errors"
 
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 

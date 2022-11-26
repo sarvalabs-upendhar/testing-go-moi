@@ -2,9 +2,10 @@ package poorna
 
 import (
 	"bufio"
-	"github.com/pkg/errors"
 	"log"
 	"sync"
+
+	"github.com/pkg/errors"
 
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 

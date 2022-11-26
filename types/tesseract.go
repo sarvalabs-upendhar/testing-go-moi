@@ -1,8 +1,9 @@
 package types
 
 import (
-	"github.com/pkg/errors"
 	"sync"
+
+	"github.com/pkg/errors"
 
 	"github.com/mr-tron/base58"
 

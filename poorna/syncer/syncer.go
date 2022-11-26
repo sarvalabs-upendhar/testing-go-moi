@@ -252,7 +252,7 @@ func (s *Syncer) StreamHandler(stream network.Stream) {
 }
 
 // sendAccSyncRequest sends an account sync request to the remote peer
-func (s *Syncer) sendAccSyncRequest(peer *SyncPeer) error { // nolint
+func (s *Syncer) sendAccSyncRequest(peer *SyncPeer) error { //nolint
 	msg := &ptypes.AccountSyncRequest{
 		BulkSync: true,
 	}
@@ -968,6 +968,7 @@ func (s *Syncer) latticeWorker(id int, job <-chan *SyncJob) {
 				stackSize := tesseractStack.Len()
 				for i := 0; i < int(stackSize); i++ {
 					item := tesseractStack.Pop()
+
 					tsHash, err := item.Tesseract.Hash()
 					if err != nil {
 						log.Fatal("Error creating tesseract hash", err)

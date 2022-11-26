@@ -299,7 +299,7 @@ func (n *Node) stopTelemetry() {
 }
 
 func (n *Node) startPrometheusServer(listenAddr *net.TCPAddr) *http.Server {
-	srv := &http.Server{ // nolint
+	srv := &http.Server{ //nolint
 		Addr: listenAddr.String(),
 		Handler: promhttp.InstrumentMetricHandler(
 			prometheus.DefaultRegisterer, promhttp.HandlerFor(

@@ -93,7 +93,7 @@ func (q *accountQueue) pop() *types.Interaction {
 		return nil
 	}
 
-	return heap.Pop(&q.queue).(*types.Interaction) // nolint
+	return heap.Pop(&q.queue).(*types.Interaction) //nolint
 }
 
 // length returns the number of Interactions in the queue.
@@ -216,7 +216,7 @@ func (q *maxPriceQueue) Less(i, j int) bool {
 }
 
 func (q *maxPriceQueue) Push(x interface{}) {
-	*q = append(*q, x.(*types.Interaction)) // nolint
+	*q = append(*q, x.(*types.Interaction)) //nolint
 }
 
 func (q *maxPriceQueue) Pop() interface{} {

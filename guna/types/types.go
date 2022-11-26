@@ -2,8 +2,9 @@ package types
 
 import (
 	"encoding/hex"
-	"github.com/pkg/errors"
 	"math/big"
+
+	"github.com/pkg/errors"
 
 	"golang.org/x/crypto/blake2b"
 

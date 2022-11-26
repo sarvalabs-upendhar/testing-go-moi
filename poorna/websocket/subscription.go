@@ -274,7 +274,7 @@ func (t Timeouts) Swap(i, j int) {
 
 func (t *Timeouts) Push(x interface{}) {
 	n := len(*t)
-	item := x.(*subscriptionBase) // nolint: forcetypeassert
+	item := x.(*subscriptionBase) //nolint: forcetypeassert
 	item.heapIndex = n
 	*t = append(*t, item)
 }

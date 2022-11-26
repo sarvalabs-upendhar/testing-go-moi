@@ -613,6 +613,7 @@ func PoloHash(x interface{}) (Hash, error) {
 	if err != nil {
 		return Hash{}, err
 	}
+
 	sum := blake2b.Sum256(bytes)
 	h := BytesToHash(sum[:])
 	// h := sha256.Sum256(bytes)

@@ -409,6 +409,7 @@ func GetIxsSize(ixs types.Interactions) (int64, error) {
 		if err != nil {
 			return 0, err
 		}
+
 		sumOfIxsSize += int64(len(bz))
 	}
 
