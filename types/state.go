@@ -39,8 +39,7 @@ func (ami *AccountMetaInfo) Bytes() ([]byte, error) {
 }
 
 func (ami *AccountMetaInfo) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(ami, bytes)
-	if err != nil {
+	if err := polo.Depolorize(ami, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize account meta info")
 	}
 

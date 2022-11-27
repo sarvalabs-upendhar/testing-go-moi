@@ -362,8 +362,8 @@ func (s *Server) streamHandlerFunc(stream network.Stream) {
 		return
 	}
 	// Unmarshal message proto into a NewPeer message
-	var msg ptypes.HandshakeMSG
-	if err := msg.FromBytes(message.Payload); err != nil {
+	handshakeMsg := new(ptypes.HandshakeMSG)
+	if err := handshakeMsg.FromBytes(message.Payload); err != nil {
 		if err := kpeer.sendHandshakeErrorResp(s.id, err); err != nil {
 			s.logger.Error("Hand shake failed", "error", err)
 		}

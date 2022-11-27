@@ -44,8 +44,7 @@ func (r *rootNode) FromBytes(bytes []byte) error {
 		return errors.New("invalid root node")
 	}
 
-	err := polo.Depolorize(r, bytes)
-	if err != nil {
+	if err := polo.Depolorize(r, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize root node")
 	}
 

@@ -118,15 +118,15 @@ func (r *Randomizer) messageHandler(stream network.Stream) {
 		return
 	}
 
-	msg := new(ptypes.RandomWalkReq)
+	randomWalkReqMsg := new(ptypes.RandomWalkReq)
 
-	if err = msg.FromBytes(message.Payload); err != nil {
+	if err = randomWalkReqMsg.FromBytes(message.Payload); err != nil {
 		r.logger.Error("Error reading message", "err", err)
 
 		return
 	}
 
-	if err = r.HandleReqMsg(msg); err != nil {
+	if err = r.HandleReqMsg(randomWalkReqMsg); err != nil {
 		r.logger.Error("Unable to handle random walk request", "err", err)
 
 		return

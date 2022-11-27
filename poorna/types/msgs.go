@@ -44,8 +44,7 @@ func (m *Message) Bytes() ([]byte, error) {
 }
 
 func (m *Message) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(m, bytes)
-	if err != nil {
+	if err := polo.Depolorize(m, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize message")
 	}
 
@@ -89,8 +88,7 @@ func (ism *ICSSuccessMsg) Bytes() ([]byte, error) {
 }
 
 func (ism *ICSSuccessMsg) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(ism, bytes)
-	if err != nil {
+	if err := polo.Depolorize(ism, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize ics success message")
 	}
 
@@ -105,8 +103,7 @@ type HandshakeMSG struct {
 }
 
 func (hs *HandshakeMSG) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(hs, bytes)
-	if err != nil {
+	if err := polo.Depolorize(hs, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize handshake message")
 	}
 
@@ -129,8 +126,7 @@ func (ci *ICSClusterInfo) Bytes() ([]byte, error) {
 }
 
 func (ci *ICSClusterInfo) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(ci, bytes)
-	if err != nil {
+	if err := polo.Depolorize(ci, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize ics cluster info")
 	}
 
@@ -145,8 +141,7 @@ type RandomWalkReq struct {
 }
 
 func (rwr *RandomWalkReq) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(rwr, bytes)
-	if err != nil {
+	if err := polo.Depolorize(rwr, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize random walk request")
 	}
 
@@ -169,8 +164,7 @@ func (rwr *RandomWalkResp) Bytes() ([]byte, error) {
 }
 
 func (rwr *RandomWalkResp) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(rwr, bytes)
-	if err != nil {
+	if err := polo.Depolorize(rwr, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize random walk response")
 	}
 
@@ -199,8 +193,7 @@ func (asr *AccountSyncRequest) Bytes() ([]byte, error) {
 }
 
 func (asr *AccountSyncRequest) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(asr, bytes)
-	if err != nil {
+	if err := polo.Depolorize(asr, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize account sync request")
 	}
 
@@ -212,8 +205,7 @@ type InteractionMsg struct {
 }
 
 func (im *InteractionMsg) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(im, bytes)
-	if err != nil {
+	if err := polo.Depolorize(im, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize interaction message")
 	}
 
@@ -227,8 +219,7 @@ type AccountSyncResponse struct {
 }
 
 func (asr *AccountSyncResponse) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(asr, bytes)
-	if err != nil {
+	if err := polo.Depolorize(asr, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize account sync request")
 	}
 
@@ -277,8 +268,7 @@ func (tm *TesseractMessage) Bytes() ([]byte, error) {
 }
 
 func (tm *TesseractMessage) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(tm, bytes)
-	if err != nil {
+	if err := polo.Depolorize(tm, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize tesseract message")
 	}
 
@@ -300,8 +290,7 @@ func (hm *HelloMsg) Bytes() ([]byte, error) {
 }
 
 func (hm *HelloMsg) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(hm, bytes)
-	if err != nil {
+	if err := polo.Depolorize(hm, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize hello message")
 	}
 

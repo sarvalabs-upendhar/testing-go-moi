@@ -615,10 +615,9 @@ func PoloHash(x interface{}) (Hash, error) {
 	}
 
 	sum := blake2b.Sum256(bytes)
-	h := BytesToHash(sum[:])
 	// h := sha256.Sum256(bytes)
 
-	return h, nil
+	return BytesToHash(sum[:]), nil
 }
 
 func GetHash(data []byte) Hash {
@@ -646,8 +645,7 @@ func (a *Account) Bytes() ([]byte, error) {
 }
 
 func (a *Account) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(a, bytes)
-	if err != nil {
+	if err := polo.Depolorize(a, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize account")
 	}
 
@@ -674,8 +672,7 @@ func (agi *AccountGenesisInfo) Bytes() ([]byte, error) {
 }
 
 func (agi *AccountGenesisInfo) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(agi, bytes)
-	if err != nil {
+	if err := polo.Depolorize(agi, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize genesis account info")
 	}
 
@@ -734,9 +731,8 @@ func (rs Receipts) Bytes() ([]byte, error) {
 	return rawData, nil
 }
 
-func (rs Receipts) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(rs, bytes)
-	if err != nil {
+func (rs *Receipts) FromBytes(bytes []byte) error {
+	if err := polo.Depolorize(rs, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize receipts")
 	}
 

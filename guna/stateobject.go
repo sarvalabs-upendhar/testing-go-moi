@@ -10,7 +10,6 @@ import (
 	"github.com/decred/dcrd/crypto/blake256"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-polo"
 	"github.com/sarvalabs/moichain/dhruva"
 	"github.com/sarvalabs/moichain/guna/tree"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
@@ -225,14 +224,14 @@ func (s *StateObject) commitAccount() (types.Hash, error) {
 	return hash, nil
 }
 
-func (s *StateObject) commitContextObject(obj interface{}) (types.Hash, error) {
+func (s *StateObject) commitContextObject(obj gtypes.Context) (types.Hash, error) {
 	// Add type checks here
-	data, err := polo.Polorize(obj)
+	rawData, err := obj.Bytes()
 	if err != nil {
-		return types.NilHash, errors.Wrap(err, "failed to polorize context object")
+		return types.NilHash, err
 	}
 
-	hash := types.GetHash(data)
+	hash := types.GetHash(rawData)
 
 	s.journal.append(ContextUpdation{
 		addr: &s.address,
@@ -240,7 +239,7 @@ func (s *StateObject) commitContextObject(obj interface{}) (types.Hash, error) {
 	})
 
 	key := types.BytesToHex(dhruva.ContextObjectKey(s.address, hash))
-	s.dirtyEntries[key] = data
+	s.dirtyEntries[key] = rawData
 
 	return hash, nil
 }

@@ -153,7 +153,7 @@ func (eh *SubHandler) handlePeerMessage(p *KipPeer) error {
 		eh.logger.Info("Received Interactions from", "id", p.id)
 
 		// Unmarshal message proto into an InteractionsData message
-		var ixns ptypes.InteractionMsg
+		ixns := new(ptypes.InteractionMsg)
 		if err = ixns.FromBytes(message.Payload); err != nil {
 			return err
 		}

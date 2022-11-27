@@ -142,9 +142,8 @@ func (is Interactions) Bytes() ([]byte, error) {
 	return rawData, nil
 }
 
-func (is Interactions) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(is, bytes)
-	if err != nil {
+func (is *Interactions) FromBytes(bytes []byte) error {
+	if err := polo.Depolorize(is, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize interactions")
 	}
 

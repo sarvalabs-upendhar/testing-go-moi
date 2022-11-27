@@ -176,8 +176,7 @@ func (t *Tesseract) Bytes() ([]byte, error) {
 }
 
 func (t *Tesseract) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(t, bytes)
-	if err != nil {
+	if err := polo.Depolorize(t, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize tesseract")
 	}
 
@@ -218,8 +217,7 @@ func (c *CanonicalTesseract) Bytes() ([]byte, error) {
 }
 
 func (c *CanonicalTesseract) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(c, bytes)
-	if err != nil {
+	if err := polo.Depolorize(c, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize canonical tesseract")
 	}
 

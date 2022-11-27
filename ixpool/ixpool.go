@@ -340,7 +340,12 @@ func (i *IxPool) IncrementWaitTime(addr types.Address, baseTime time.Duration) e
 
 func (i *IxPool) validateIx(ix *types.Interaction) error {
 	// Check the interaction size to overcome DOS Attacks
-	if uint64(ix.Size) > txMaxSize {
+	ixSize, err := ix.GetSize()
+	if err != nil {
+		return err
+	}
+
+	if uint64(ixSize) > txMaxSize {
 		return ErrOversizedData
 	}
 

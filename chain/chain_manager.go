@@ -610,7 +610,7 @@ func (c *ChainManager) addTesseractsWithState(
 			return err
 		}
 
-		if err := c.db.CreateEntry(tesseracts[0].Body.ConsensusProof.ICSHash.Bytes(), rawData); err != nil {
+		if err := c.db.CreateEntry(tesseracts[0].GetICSHash().Bytes(), rawData); err != nil {
 			return errors.Wrap(err, "failed to write cluster info to db")
 		}
 	}
@@ -640,13 +640,6 @@ func (c *ChainManager) addTesseractsWithOutState(
 
 			c.latticeLocks.Lock(tsHash.Hex())
 			defer func() {
-				tsHash, err := ts.Hash()
-				if err != nil {
-					c.logger.Error("failed to create tesseract hash", "error", err, "addr", addr)
-
-					return
-				}
-
 				if err := c.latticeLocks.Unlock(tsHash.Hex()); err != nil {
 					c.logger.Error("failed to unlock lattice", "error", err, "addr", addr)
 				}
@@ -752,7 +745,11 @@ func (c *ChainManager) AddTesseractWithOutState(
 	index, _ := ics.GetIndex(c.network.GetKramaID())
 
 	if c.cfg.ShouldExecute && index == -1 { // TODO: Should execute if validator responded false to operator request
-		if isGridComplete := c.gridsCache.AddTesseract(ts); !isGridComplete {
+		if isGridComplete, err := c.gridsCache.AddTesseract(ts); !isGridComplete {
+			if err != nil {
+				c.logger.Error("Failed to add the tesseract to grids cache", "error", err)
+			}
+
 			return nil
 		}
 
@@ -780,7 +777,7 @@ func (c *ChainManager) AddTesseractWithOutState(
 		return err
 	}
 
-	c.logger.Info("Added tesseract without state", "Addr", ts.Header.Address.Hex(), "Hash", tsHash.Hex())
+	c.logger.Info("Added tesseract without state", "Addr", ts.Header.Address.Hex(), "Hash", tsHash)
 	c.sendTesseractSyncRequest(ts, clusterInfo)
 
 	return nil

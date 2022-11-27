@@ -12,7 +12,7 @@ import (
 	"github.com/sarvalabs/moichain/guna"
 	ktypes "github.com/sarvalabs/moichain/krama/types"
 	"github.com/sarvalabs/moichain/mudra"
-	common2 "github.com/sarvalabs/moichain/mudra/common"
+	mtypes "github.com/sarvalabs/moichain/mudra/common"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/telemetry/tracing"
 
@@ -25,7 +25,7 @@ const (
 )
 
 type vault interface {
-	Sign(data []byte, sigType common2.SigType) ([]byte, error)
+	Sign(data []byte, sigType mtypes.SigType) ([]byte, error)
 	KramaID() id.KramaID
 }
 
@@ -489,19 +489,15 @@ func (kbft *KBFT) updateConsensusInfoInTesseracts(
 	}
 	// Add evidence data to dirty list
 	kbft.ics.AddDirty(evidenceHash, data)
+
 	// Add Receipts to dirty list
 	// This will be modified once smt is integrated
-	receiptHash, err := kbft.ics.Receipts.Hash()
-	if err != nil {
-		return err
-	}
-
 	rawData, err := kbft.ics.Receipts.Bytes()
 	if err != nil {
 		return err
 	}
 
-	kbft.ics.AddDirty(receiptHash, rawData)
+	kbft.ics.AddDirty(types.BytesToHash(rawData), rawData)
 
 	for _, tesseract := range kbft.ProposalGrid.Tesseracts {
 		tesseract.Header.Extra.Round = kbft.Round
@@ -515,7 +511,7 @@ func (kbft *KBFT) updateConsensusInfoInTesseracts(
 			return err
 		}
 
-		if tesseract.Seal, err = kbft.vault.Sign(rawData, common2.BlsBLST); err != nil {
+		if tesseract.Seal, err = kbft.vault.Sign(rawData, mtypes.BlsBLST); err != nil {
 			return errors.Wrap(err, "failed to sign the tesseract")
 		}
 	}
@@ -909,7 +905,7 @@ func (kbft *KBFT) signVote(msgType ktypes.ConsensusMsgType, id *types.TesseractG
 		return nil, err
 	}
 
-	sign, err := kbft.vault.Sign(rawData, common2.BlsBLST)
+	sign, err := kbft.vault.Sign(rawData, mtypes.BlsBLST)
 	if err != nil {
 		return nil, err
 	}

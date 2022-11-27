@@ -95,13 +95,13 @@ func (p *KipPeer) InitHandshake(id id.KramaID, ntq int32, addrs []multiaddr.Mult
 		return err
 	}
 	// Unmarshal message proto into a NewPeer message
-	var msg ptypes.HandshakeMSG
-	if err := msg.FromBytes(message.Payload); err != nil {
+	handshakeMsg := new(ptypes.HandshakeMSG)
+	if err := handshakeMsg.FromBytes(message.Payload); err != nil {
 		return err
 	}
 
-	if msg.Error != "" {
-		return errors.New(msg.Error)
+	if handshakeMsg.Error != "" {
+		return errors.New(handshakeMsg.Error)
 	}
 	// HashSet the KIP id of the peer based on the message
 	p.setID(message.Sender)

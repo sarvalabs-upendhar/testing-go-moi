@@ -189,7 +189,7 @@ func (sm *StateManager) GetStateObjectByHash(addr types.Address, hash types.Hash
 
 	acc := new(types.Account)
 	if err = acc.FromBytes(data); err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	newJournal := new(Journal)
@@ -272,7 +272,6 @@ func (sm *StateManager) GetLatestTesseract(addr types.Address, withInteractions 
 }
 
 func (sm *StateManager) FetchTesseractFromDB(hash types.Hash, withInteractions bool) (*types.Tesseract, error) {
-	var interactions types.Interactions
 	// Fetch Tesseract from DB
 	buf, err := sm.db.GetTesseract(hash)
 	if err != nil {
@@ -285,6 +284,8 @@ func (sm *StateManager) FetchTesseractFromDB(hash types.Hash, withInteractions b
 	if err = canonicalTesseract.FromBytes(buf); err != nil {
 		return nil, errors.Wrap(err, "failed to depolarize tesseract")
 	}
+
+	interactions := new(types.Interactions)
 
 	if withInteractions {
 		// Fetch interactions from DB
@@ -302,7 +303,7 @@ func (sm *StateManager) FetchTesseractFromDB(hash types.Hash, withInteractions b
 	tesseract := &types.Tesseract{
 		Header: canonicalTesseract.Header,
 		Body:   canonicalTesseract.Body,
-		Ixns:   interactions,
+		Ixns:   *interactions,
 		Seal:   canonicalTesseract.Seal,
 	}
 

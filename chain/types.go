@@ -19,17 +19,17 @@ func NewGridCache() *GridCache {
 	}
 }
 
-func (g *GridCache) AddTesseract(ts *types.Tesseract) bool {
+func (g *GridCache) AddTesseract(ts *types.Tesseract) (bool, error) {
 	g.mtx.Lock()
 	defer g.mtx.Unlock()
 
 	if ts.GridLength() == 1 {
-		return true
+		return true, nil
 	}
 
 	tsHash, err := ts.Hash()
 	if err != nil {
-		return false
+		return false, err
 	}
 
 	grid, ok := g.grids[ts.Header.GridHash]
@@ -40,7 +40,7 @@ func (g *GridCache) AddTesseract(ts *types.Tesseract) bool {
 
 	grid[tsHash] = ts
 
-	return int32(len(grid)) == ts.GridLength()
+	return int32(len(grid)) == ts.GridLength(), nil
 }
 
 func (g *GridCache) CleanupGrid(gridID types.Hash) []*types.Tesseract {

@@ -85,8 +85,7 @@ func (v *Vote) Bytes() ([]byte, error) {
 }
 
 func (v *Vote) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(v, bytes)
-	if err != nil {
+	if err := polo.Depolorize(v, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize vote")
 	}
 
@@ -114,8 +113,7 @@ func (twm *TimedWALMessage) Bytes() ([]byte, error) {
 }
 
 func (twm *TimedWALMessage) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(twm, bytes)
-	if err != nil {
+	if err := polo.Depolorize(twm, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize timed wal message")
 	}
 

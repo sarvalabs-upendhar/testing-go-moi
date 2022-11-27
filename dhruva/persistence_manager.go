@@ -83,12 +83,12 @@ func (p *PersistenceManager) GetAccountMetaInfo(id []byte) (*types.AccountMetaIn
 		return nil, errors.Wrap(types.ErrAccountNotFound, err.Error())
 	}
 
-	msg := new(types.AccountMetaInfo)
-	if err = msg.FromBytes(data); err != nil {
+	accMetaInfo := new(types.AccountMetaInfo)
+	if err = accMetaInfo.FromBytes(data); err != nil {
 		return nil, err
 	}
 
-	return msg, nil
+	return accMetaInfo, nil
 }
 
 // incrementBucketCount is used to increment bucket count when new address is added to chain
@@ -128,27 +128,27 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 
 	data, err := p.ReadEntry(key)
 	if err == nil {
-		msg := new(types.AccountMetaInfo)
-		if err := msg.FromBytes(data); err != nil {
+		accMetaInfo := new(types.AccountMetaInfo)
+		if err := accMetaInfo.FromBytes(data); err != nil {
 			return -1, false, err
 		}
 
-		if height.Cmp(msg.Height) == 0 && tesseractHash != msg.TesseractHash {
+		if height.Cmp(accMetaInfo.Height) == 0 && tesseractHash != accMetaInfo.TesseractHash {
 			return -1, false, types.ErrHashMismatch
 		}
 
-		if height.Cmp(msg.Height) >= 0 {
-			msg.StateExists = stateExists
-			msg.TesseractHash = tesseractHash
-			msg.Address = id
-			msg.Height = height
+		if height.Cmp(accMetaInfo.Height) >= 0 {
+			accMetaInfo.StateExists = stateExists
+			accMetaInfo.TesseractHash = tesseractHash
+			accMetaInfo.Address = id
+			accMetaInfo.Height = height
 		}
 
-		if msg.LatticeExists {
-			msg.LatticeExists = latticeExists
+		if accMetaInfo.LatticeExists {
+			accMetaInfo.LatticeExists = latticeExists
 		}
 
-		rawData, err := msg.Bytes()
+		rawData, err := accMetaInfo.Bytes()
 		if err != nil {
 			return -1, false, err
 		}
@@ -215,22 +215,22 @@ func (p *PersistenceManager) UpdateTesseractStatus(
 		return err
 	}
 
-	msg := new(types.AccountMetaInfo)
-	if err := msg.FromBytes(data); err != nil {
+	accMetaInfo := new(types.AccountMetaInfo)
+	if err := accMetaInfo.FromBytes(data); err != nil {
 		return err
 	}
 
-	if height < msg.Height.Uint64() {
+	if height < accMetaInfo.Height.Uint64() {
 		return nil
 	}
 
-	if hash == msg.TesseractHash {
-		msg.StateExists = status
+	if hash == accMetaInfo.TesseractHash {
+		accMetaInfo.StateExists = status
 	} else {
 		return types.ErrHashMismatch
 	}
 
-	rawData, err := msg.Bytes()
+	rawData, err := accMetaInfo.Bytes()
 	if err != nil {
 		return err
 	}
@@ -261,13 +261,13 @@ func (p *PersistenceManager) GetAccounts(bucketNumber int32) (types.Accounts, er
 			return nil, err
 		}
 
-		msg := new(types.AccountMetaInfo)
+		accMetaInfo := new(types.AccountMetaInfo)
 
-		if err := msg.FromBytes(dbEntry.Value); err != nil {
+		if err := accMetaInfo.FromBytes(dbEntry.Value); err != nil {
 			return nil, err
 		}
 
-		acc = append(acc, msg)
+		acc = append(acc, accMetaInfo)
 	}
 
 	return acc, nil

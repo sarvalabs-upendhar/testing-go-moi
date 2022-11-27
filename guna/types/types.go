@@ -52,8 +52,7 @@ func (b *BalanceObject) Bytes() ([]byte, error) {
 }
 
 func (b *BalanceObject) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(b, bytes)
-	if err != nil {
+	if err := polo.Depolorize(b, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize balance object")
 	}
 
@@ -85,8 +84,7 @@ type AssetData struct {
 }
 
 func (ad *AssetData) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(ad, bytes)
-	if err != nil {
+	if err := polo.Depolorize(ad, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize asset data")
 	}
 
@@ -139,6 +137,11 @@ func GetAssetID(
 	return aID, assetCID, data, nil
 }
 
+type Context interface {
+	Bytes() ([]byte, error)
+	FromBytes(bytes []byte) error
+}
+
 type MetaContextObject struct {
 	BehaviouralContext types.Hash
 	RandomContext      types.Hash
@@ -158,9 +161,17 @@ func (m *MetaContextObject) Copy() *MetaContextObject {
 	return newObject
 }
 
-func (m *MetaContextObject) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(m, bytes)
+func (m *MetaContextObject) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(m)
 	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize meta context object")
+	}
+
+	return rawData, nil
+}
+
+func (m *MetaContextObject) FromBytes(bytes []byte) error {
+	if err := polo.Depolorize(m, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize meta context object")
 	}
 
@@ -198,9 +209,17 @@ func (c *ContextObject) Hash() (types.Hash, error) {
 	return hash, nil
 }
 
-func (c *ContextObject) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(c, bytes)
+func (c *ContextObject) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(c)
 	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize context object")
+	}
+
+	return rawData, nil
+}
+
+func (c *ContextObject) FromBytes(bytes []byte) error {
+	if err := polo.Depolorize(c, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize context object")
 	}
 
@@ -213,8 +232,7 @@ type LogicData struct {
 }
 
 func (ld *LogicData) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(ld, bytes)
-	if err != nil {
+	if err := polo.Depolorize(ld, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize logic data")
 	}
 

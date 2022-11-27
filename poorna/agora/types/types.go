@@ -59,8 +59,7 @@ func (resp *AgoraResponseMsg) GetSessionID() types.Address {
 }
 
 func (resp *AgoraResponseMsg) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(resp, bytes)
-	if err != nil {
+	if err := polo.Depolorize(resp, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize agora response message")
 	}
 
@@ -78,8 +77,7 @@ func (req *AgoraRequestMsg) GetSessionID() types.Address {
 }
 
 func (req *AgoraRequestMsg) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(req, bytes)
-	if err != nil {
+	if err := polo.Depolorize(req, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize agora request message")
 	}
 
@@ -198,8 +196,7 @@ func (clist *CanonicalPeerList) Bytes() ([]byte, error) {
 }
 
 func (clist *CanonicalPeerList) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(clist, bytes)
-	if err != nil {
+	if err := polo.Depolorize(clist, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize canonical peer list")
 	}
 

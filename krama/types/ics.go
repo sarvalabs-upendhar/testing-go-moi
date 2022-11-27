@@ -465,8 +465,7 @@ func (im *ICSMSG) Bytes() ([]byte, error) {
 }
 
 func (im *ICSMSG) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(im, bytes)
-	if err != nil {
+	if err := polo.Depolorize(im, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize ics message")
 	}
 

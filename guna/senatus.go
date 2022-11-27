@@ -53,8 +53,7 @@ func (ri *ReputationInfo) Bytes() ([]byte, error) {
 }
 
 func (ri *ReputationInfo) FromBytes(bytes []byte) error {
-	err := polo.Depolorize(ri, bytes)
-	if err != nil {
+	if err := polo.Depolorize(ri, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize reputation info")
 	}
 

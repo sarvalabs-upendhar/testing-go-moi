@@ -413,14 +413,14 @@ func (s *Syncer) handleSyncPeer(p *SyncPeer) {
 		case ptypes.ACCSYNCREQ:
 			s.logger.Debug("Async message received from ", message.Sender)
 
-			msg := new(ptypes.AccountSyncRequest)
+			accSyncReq := new(ptypes.AccountSyncRequest)
 
-			err = msg.FromBytes(message.Payload)
+			err = accSyncReq.FromBytes(message.Payload)
 			if err != nil {
 				s.logger.Error("Error depolarizing account sync request", "error", err)
 			}
 
-			if msg.BulkSync {
+			if accSyncReq.BulkSync {
 				go func() {
 					if err := s.accSync(p.id); err != nil {
 						s.logger.Error("Error syncing address space", "error", err)
@@ -428,23 +428,23 @@ func (s *Syncer) handleSyncPeer(p *SyncPeer) {
 				}()
 			} else {
 				go func() {
-					if err := s.syncBucket(msg.Bucket, p); err != nil {
+					if err := s.syncBucket(accSyncReq.Bucket, p); err != nil {
 						s.logger.Error("Error syncing the bucket", "error", err)
 					}
 				}()
 			}
 
 		case ptypes.ACCSYNCRRESP:
-			msg := new(ptypes.AccountSyncResponse)
+			accSyncRes := new(ptypes.AccountSyncResponse)
 
-			err = msg.FromBytes(message.Payload)
+			err = accSyncRes.FromBytes(message.Payload)
 			if err != nil {
 				s.logger.Error("Error depolarising AccountSycResp message", "error", err)
 			}
 
 			s.logger.Debug("Address space messaged received from peer", message.Sender)
 
-			s.accDetails.Push(msg.Accounts)
+			s.accDetails.Push(accSyncRes.Accounts)
 		}
 	}
 }
