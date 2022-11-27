@@ -89,7 +89,11 @@ func (t *Tesseract) GetICSHash() Hash {
 	return t.Body.ConsensusProof.ICSHash
 }
 
-func (t *Tesseract) BodyHash() (Hash, error) {
+func (t *Tesseract) BodyHash() Hash {
+	return t.Header.BodyHash
+}
+
+func (t *Tesseract) ComputeBodyHash() (Hash, error) {
 	hash, err := PoloHash(t.Body)
 	if err != nil {
 		return NilHash, errors.Wrap(err, "failed to polorize tesseract body")

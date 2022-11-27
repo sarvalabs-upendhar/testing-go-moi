@@ -419,8 +419,7 @@ func (dec *WALDecoder) Decode() (*ktypes.TimedWALMessage, error) {
 
 	res := new(ktypes.TimedWALMessage)
 
-	err = res.FromBytes(data)
-	if err != nil {
+	if err := res.FromBytes(data); err != nil {
 		return nil, DataCorruptionError{fmt.Errorf("failed to decode data: %w", err)}
 	}
 

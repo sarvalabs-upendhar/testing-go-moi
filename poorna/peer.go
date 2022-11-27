@@ -91,7 +91,7 @@ func (p *KipPeer) InitHandshake(id id.KramaID, ntq int32, addrs []multiaddr.Mult
 	}
 
 	message := new(ptypes.Message)
-	if err = message.FromBytes(buffer[0:byteCount]); err != nil {
+	if err := message.FromBytes(buffer[0:byteCount]); err != nil {
 		return err
 	}
 	// Unmarshal message proto into a NewPeer message

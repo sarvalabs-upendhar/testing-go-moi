@@ -482,7 +482,7 @@ func (k *Engine) joinCluster(ctx context.Context, req Request) error {
 		"from", req.msg.Operator,
 		"cluster-id", req.msg.ClusterID,
 		"timestamp", req.msg.Timestamp,
-		ixHash.Hex(),
+		ixHash,
 	)
 
 	reqTime := utils.Canonical(time.Unix(0, req.msg.Timestamp))
@@ -1076,19 +1076,14 @@ func (k *Engine) sendICSSuccess(id types.ClusterID) error {
 	}
 
 	clusterState := slot.CLusterInfo()
-
 	msg := clusterState.CreateICSSuccessMsg()
-
-	icsMsg := new(ktypes.ICSMSG)
 
 	rawData, err := msg.Bytes()
 	if err != nil {
 		return err
 	}
 
-	icsMsg.Msg = rawData
-	icsMsg.MsgType = ptypes.ICSSUCCESS
-	icsMsg.ClusterID = string(id)
+	icsMsg := ktypes.NewICSMsg(ptypes.ICSSUCCESS, string(id), rawData)
 
 	k.logger.Trace("Sending clusterState success message", "cluster id", id)
 
@@ -1324,7 +1319,7 @@ func GenerateTesseracts(state *ktypes.ClusterInfo) ([]*types.Tesseract, error) {
 		}
 
 		tesseractGroup = append(tesseractGroup, senderTesseract)
-		groupBuffer = append(groupBuffer, senderTesseract.Header.BodyHash.Bytes()...)
+		groupBuffer = append(groupBuffer, senderTesseract.BodyHash().Bytes()...)
 	}
 
 	if !ix.ToAddress().IsNil() {
@@ -1334,7 +1329,7 @@ func GenerateTesseracts(state *ktypes.ClusterInfo) ([]*types.Tesseract, error) {
 		}
 
 		tesseractGroup = append(tesseractGroup, receiverTesseract)
-		groupBuffer = append(groupBuffer, receiverTesseract.Header.BodyHash.Bytes()...)
+		groupBuffer = append(groupBuffer, receiverTesseract.BodyHash().Bytes()...)
 
 		if state.AccountInfos.IsGenesis(ix.ToAddress()) {
 			genesisTesseract, err := generateTesseract(ix.Hash, guna.GenesisAddress, state, gasUsed, 1000)
@@ -1343,7 +1338,7 @@ func GenerateTesseracts(state *ktypes.ClusterInfo) ([]*types.Tesseract, error) {
 			}
 
 			tesseractGroup = append(tesseractGroup, genesisTesseract)
-			groupBuffer = append(groupBuffer, genesisTesseract.Header.BodyHash.Bytes()...)
+			groupBuffer = append(groupBuffer, genesisTesseract.BodyHash().Bytes()...)
 		}
 	}
 
@@ -1402,7 +1397,7 @@ func generateTesseract(
 		Ixns: state.Ixs,
 	}
 
-	tsBodyHash, err := ts.BodyHash()
+	tsBodyHash, err := ts.ComputeBodyHash()
 	if err != nil {
 		return nil, err
 	}
@@ -1437,7 +1432,7 @@ func (k *Engine) validateInteractions(ixs types.Interactions) (bool, error) {
 
 		k.logger.Debug(
 			"Validating Interaction",
-			"Hash", ixHash.Hex(),
+			"Hash", ixHash,
 			"Nonce", ix.Nonce(),
 			"From", ix.FromAddress().Hex(),
 			"Type", ix.IxType(),

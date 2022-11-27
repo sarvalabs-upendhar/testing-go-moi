@@ -84,7 +84,7 @@ func (p *PersistenceManager) GetAccountMetaInfo(id []byte) (*types.AccountMetaIn
 	}
 
 	accMetaInfo := new(types.AccountMetaInfo)
-	if err = accMetaInfo.FromBytes(data); err != nil {
+	if err := accMetaInfo.FromBytes(data); err != nil {
 		return nil, err
 	}
 

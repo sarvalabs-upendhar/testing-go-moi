@@ -353,8 +353,7 @@ func (s *Server) streamHandlerFunc(stream network.Stream) {
 
 	message := new(ptypes.Message)
 
-	err = message.FromBytes(buffer[0:byteCount])
-	if err != nil {
+	if err := message.FromBytes(buffer[0:byteCount]); err != nil {
 		if err := kpeer.sendHandshakeErrorResp(s.id, err); err != nil {
 			s.logger.Error("Hand shake failed", "error", err)
 		}

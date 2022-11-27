@@ -465,7 +465,7 @@ func (kbft *KBFT) finalizeCommit(h []uint64) {
 		panic(err)
 	}
 
-	kbft.logger.Trace("Adding Receipts to dirty storage", "receipt-hash", receiptHash.Hex())
+	kbft.logger.Trace("Adding Receipts to dirty storage", "receipt-hash", receiptHash)
 
 	// TODO: validate the block
 
@@ -813,7 +813,7 @@ func (kbft *KBFT) enterPrevote(h []uint64, r int32) {
 	}()
 
 	if kbft.LockedGrid != nil {
-		kbft.logger.Trace("Voting on locked grid", "grid-id", kbft.LockedGrid.Hash.Hex())
+		kbft.logger.Trace("Voting on locked grid", "grid-id", kbft.LockedGrid.Hash)
 
 		gridID, err := kbft.LockedGrid.GetTesseractGridID()
 		if err != nil {

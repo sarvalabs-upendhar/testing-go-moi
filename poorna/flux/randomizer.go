@@ -111,8 +111,7 @@ func (r *Randomizer) messageHandler(stream network.Stream) {
 
 	message := new(ptypes.Message)
 
-	err = message.FromBytes(buffer[0:count])
-	if err != nil {
+	if err := message.FromBytes(buffer[0:count]); err != nil {
 		r.logger.Error("Error reading message", "err", err)
 
 		return
@@ -120,7 +119,7 @@ func (r *Randomizer) messageHandler(stream network.Stream) {
 
 	randomWalkReqMsg := new(ptypes.RandomWalkReq)
 
-	if err = randomWalkReqMsg.FromBytes(message.Payload); err != nil {
+	if err := randomWalkReqMsg.FromBytes(message.Payload); err != nil {
 		r.logger.Error("Error reading message", "err", err)
 
 		return
@@ -300,8 +299,7 @@ func (r *Randomizer) pubSubHandler(msg *pubsub.Message) error {
 	data := msg.GetData()
 	randomPeerMsg := new(ptypes.RandomWalkResp)
 
-	err := randomPeerMsg.FromBytes(data)
-	if err != nil {
+	if err := randomPeerMsg.FromBytes(data); err != nil {
 		r.logger.Error("Error depolarising randomWalk Request", "error", err)
 
 		return err

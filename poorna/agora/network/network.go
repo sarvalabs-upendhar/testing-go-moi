@@ -89,7 +89,7 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 
 		// Unmarshal the buffer into a proto message
 		message := new(ptypes.Message)
-		if err = message.FromBytes(buffer[0:byteCount]); err != nil {
+		if err := message.FromBytes(buffer[0:byteCount]); err != nil {
 			an.logger.Error("Error reading data from stream", "error", err)
 
 			return

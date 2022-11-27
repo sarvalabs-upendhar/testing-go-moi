@@ -455,6 +455,14 @@ type ICSMSG struct {
 	ClusterID string
 }
 
+func NewICSMsg(msgType ptypes.MsgType, clusterID string, msg []byte) *ICSMSG {
+	return &ICSMSG{
+		MsgType:   msgType,
+		Msg:       msg,
+		ClusterID: clusterID,
+	}
+}
+
 func (im *ICSMSG) Bytes() ([]byte, error) {
 	rawData, err := polo.Polorize(im)
 	if err != nil {

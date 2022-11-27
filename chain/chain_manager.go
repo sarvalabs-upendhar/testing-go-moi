@@ -313,7 +313,7 @@ func (c *ChainManager) GetLatestTesseract(addr types.Address, withInteractions b
 func (c *ChainManager) getReceipt(ixHash, receiptRoot types.Hash) (*types.Receipt, error) {
 	rawData, err := c.db.ReadEntry(receiptRoot.Bytes())
 	if err != nil {
-		c.logger.Error("Error fetching receipt root", "error", err.Error(), receiptRoot.Hex(), ixHash.Hex())
+		c.logger.Error("Error fetching receipt root", "error", err.Error(), receiptRoot.Hex(), ixHash)
 
 		return nil, err
 	}
@@ -557,7 +557,7 @@ func (c *ChainManager) addTesseract(
 		c.tesseracts.Add(tesseractHash, t)
 	}
 
-	c.logger.Info("!!!!!.... tesseract  added ....!!!!!", addr.Hex(), tesseractHash.Hex())
+	c.logger.Info("!!!!!.... tesseract  added ....!!!!!", addr.Hex(), tesseractHash)
 
 	c.sm.Cleanup(t.Header.Address)
 
@@ -986,9 +986,9 @@ func (c *ChainManager) sendTesseractSyncRequest(ts *types.Tesseract, clusterInfo
 func (c *ChainManager) tesseractHandler(pubSubMsg *pubsub.Message) error {
 	msg := new(ptypes.TesseractMessage)
 	tsAdditionInitTime := time.Now()
-	//	v1msg := proto.MessageV1(msg)
+
 	if err := msg.FromBytes(pubSubMsg.GetData()); err != nil {
-		log.Panic(err)
+		return err
 	}
 
 	ts := msg.Tesseract
@@ -1015,7 +1015,7 @@ func (c *ChainManager) tesseractHandler(pubSubMsg *pubsub.Message) error {
 	}
 
 	c.logger.Trace("Tesseract Received from", "Sender", msg.Sender,
-		"Hash", tsHash.Hex(),
+		"Hash", tsHash,
 		"Address", msg.Tesseract.Header.Address.Hex())
 
 	if !c.knownTesseracts.Contains(tsHash) {

@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sarvalabs/go-polo"
+
 	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
 
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
@@ -30,7 +32,6 @@ import (
 	"github.com/sarvalabs/moichain/poorna/moirpc"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/sarvalabs/go-polo"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 
 	"github.com/libp2p/go-libp2p/core/network"
@@ -355,10 +356,17 @@ func (s *Syncer) accSync(peerID peer.ID) error {
 // Send is a method of KipPeer that emits an arbitrary proto message to the network
 // Accepts the sender id, the message type and message itself.
 func (p *SyncPeer) Send(id id.KramaID, code ptypes.MsgType, msg interface{}) error {
-	// Marshal the proto message into slice of bytes and log and return if an error occurs
-	rawData, err := polo.Polorize(msg)
-	if err != nil {
-		return errors.Wrap(err, "failed to polorize message payload")
+	var (
+		rawData []byte
+		err     error
+	)
+
+	if msg != nil {
+		// Marshal the proto message into slice of bytes and return if an error occurs
+		rawData, err = polo.Polorize(msg)
+		if err != nil {
+			return errors.Wrap(err, "failed to polorize message payload")
+		}
 	}
 	// Create a network message proto with the bytes payload of the message to send
 	// and convert into a proto message and marshal it into into a slice of bytes
@@ -402,8 +410,10 @@ func (s *Syncer) handleSyncPeer(p *SyncPeer) {
 		}
 
 		message := new(ptypes.Message)
-		if err = message.FromBytes(buffer[0:bytecount]); err != nil {
-			log.Panicln("unmarshalling error", err, bytecount)
+		if err := message.FromBytes(buffer[0:bytecount]); err != nil {
+			s.logger.Error("unmarshalling error", "error", err, "byte-count", bytecount)
+
+			return
 		}
 
 		switch message.MsgType {
@@ -415,9 +425,10 @@ func (s *Syncer) handleSyncPeer(p *SyncPeer) {
 
 			accSyncReq := new(ptypes.AccountSyncRequest)
 
-			err = accSyncReq.FromBytes(message.Payload)
-			if err != nil {
+			if err := accSyncReq.FromBytes(message.Payload); err != nil {
 				s.logger.Error("Error depolarizing account sync request", "error", err)
+
+				continue
 			}
 
 			if accSyncReq.BulkSync {
@@ -437,9 +448,10 @@ func (s *Syncer) handleSyncPeer(p *SyncPeer) {
 		case ptypes.ACCSYNCRRESP:
 			accSyncRes := new(ptypes.AccountSyncResponse)
 
-			err = accSyncRes.FromBytes(message.Payload)
-			if err != nil {
+			if err := accSyncRes.FromBytes(message.Payload); err != nil {
 				s.logger.Error("Error depolarising AccountSycResp message", "error", err)
+
+				continue
 			}
 
 			s.logger.Debug("Address space messaged received from peer", message.Sender)
@@ -944,7 +956,7 @@ func (s *Syncer) latticeWorker(id int, job <-chan *SyncJob) {
 
 					t, delta, err := s.getTesseract(job.peer, hash, nil, true)
 					if err != nil {
-						s.logger.Error("Unable to fetch tesseract", "hash", hash.Hex(), "from", job.peer.id)
+						s.logger.Error("Unable to fetch tesseract", "hash", hash, "from", job.peer.id)
 
 						return
 					} else {
@@ -981,6 +993,8 @@ func (s *Syncer) latticeWorker(id int, job <-chan *SyncJob) {
 						item.Delta[item.Tesseract.Body.ConsensusProof.ICSHash],
 					); err != nil {
 						s.logger.Error("Error depolarising ics cluster Info", "err", err)
+
+						continue
 					}
 
 					if err := s.lattice.AddTesseractWithOutState(
@@ -993,11 +1007,13 @@ func (s *Syncer) latticeWorker(id int, job <-chan *SyncJob) {
 				}
 			} else {
 				if t, delta, err := s.getTesseract(job.peer, job.hash, nil, true); err != nil {
-					log.Printf("Unable to get tesseract %s from %s Error %s", job.peer.id, job.hash.Hex(), err)
+					log.Printf("Unable to get tesseract %s from %s Error %s", job.peer.id, job.hash, err)
 				} else {
 					icsClusterInfo := new(ptypes.ICSClusterInfo)
 					if err := icsClusterInfo.FromBytes(delta[t.Body.ConsensusProof.ICSHash]); err != nil {
 						s.logger.Error("Error depolarising ics cluster Info", "err", err)
+
+						continue
 					}
 
 					// FIXME: Fix the peer id
@@ -1083,8 +1099,7 @@ func (s *Syncer) getTesseract(
 
 	msg := new(types.Tesseract)
 
-	err := msg.FromBytes(resp.Data)
-	if err != nil {
+	if err := msg.FromBytes(resp.Data); err != nil {
 		return nil, nil, err
 	}
 

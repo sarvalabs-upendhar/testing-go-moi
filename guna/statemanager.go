@@ -188,7 +188,7 @@ func (sm *StateManager) GetStateObjectByHash(addr types.Address, hash types.Hash
 	}
 
 	acc := new(types.Account)
-	if err = acc.FromBytes(data); err != nil {
+	if err := acc.FromBytes(data); err != nil {
 		return nil, err
 	}
 
@@ -281,7 +281,7 @@ func (sm *StateManager) FetchTesseractFromDB(hash types.Hash, withInteractions b
 	// canonicalTesseract is a clone of the tesseract. The only difference is that it won't have the interactions field.
 	canonicalTesseract := new(types.CanonicalTesseract)
 
-	if err = canonicalTesseract.FromBytes(buf); err != nil {
+	if err := canonicalTesseract.FromBytes(buf); err != nil {
 		return nil, errors.Wrap(err, "failed to depolarize tesseract")
 	}
 
@@ -295,7 +295,7 @@ func (sm *StateManager) FetchTesseractFromDB(hash types.Hash, withInteractions b
 			return nil, errors.Wrap(err, types.ErrFetchingInteractions.Error())
 		}
 
-		if err = interactions.FromBytes(buf); err != nil {
+		if err := interactions.FromBytes(buf); err != nil {
 			return nil, errors.Wrap(err, "failed to depolarize interactions")
 		}
 	}
@@ -499,7 +499,7 @@ func (sm *StateManager) GetContextByHash(
 			return types.NilHash, nil, nil, errors.Wrap(err, "tesseract fetch failed")
 		}
 
-		sm.logger.Debug("Fetching context info", "addr", address.Hex(), ts.Body.ContextHash.Hex())
+		sm.logger.Debug("Fetching context info", "addr", address.Hex(), ts.Body.ContextHash)
 
 		hash = ts.Body.ContextHash
 	}

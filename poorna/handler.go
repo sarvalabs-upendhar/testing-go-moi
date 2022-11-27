@@ -141,7 +141,7 @@ func (eh *SubHandler) handlePeerMessage(p *KipPeer) error {
 
 	// Unmarshal the buffer into a proto message
 	message := new(ptypes.Message)
-	if err = message.FromBytes(buffer[0:bytecount]); err != nil {
+	if err := message.FromBytes(buffer[0:bytecount]); err != nil {
 		return err
 	}
 
@@ -154,7 +154,7 @@ func (eh *SubHandler) handlePeerMessage(p *KipPeer) error {
 
 		// Unmarshal message proto into an InteractionsData message
 		ixns := new(ptypes.InteractionMsg)
-		if err = ixns.FromBytes(message.Payload); err != nil {
+		if err := ixns.FromBytes(message.Payload); err != nil {
 			return err
 		}
 
@@ -230,7 +230,7 @@ func (eh *SubHandler) broadcastIXs(ixs []*types.Interaction) error {
 			peerIxSet[peer] = append(peerIxSet[peer], ix)
 		}
 		// Log the Interaction broadcast
-		fmt.Printf("Broadcasting Interaction %s ", ixHash.Hex())
+		fmt.Printf("Broadcasting Interaction %s ", ixHash)
 	}
 
 	// FIXME: Include the following line of code

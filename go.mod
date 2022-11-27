@@ -36,7 +36,7 @@ require (
 	github.com/pkg/profile v1.6.0
 	github.com/prometheus/client_golang v1.13.0
 	github.com/rs/zerolog v1.27.0
-	github.com/sarvalabs/go-polo v0.1.0
+	github.com/sarvalabs/go-polo v0.1.1
 	github.com/spf13/cobra v1.5.0
 	github.com/stretchr/testify v1.8.1
 	github.com/supranational/blst v0.3.7

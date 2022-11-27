@@ -139,7 +139,7 @@ func (s *StateObject) GetLogic(logicID types.LogicID) (data *gtypes.LogicData, e
 		if data != nil {
 			msg := new(gtypes.LogicData)
 			if err := msg.FromBytes(data); err != nil {
-				log.Fatal(err)
+				return nil, err
 			}
 
 			return msg, nil
@@ -610,7 +610,7 @@ func getBalanceObject(
 
 	balObject := new(gtypes.BalanceObject)
 
-	if err = balObject.FromBytes(data); err != nil {
+	if err := balObject.FromBytes(data); err != nil {
 		return nil, err
 	}
 

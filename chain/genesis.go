@@ -70,7 +70,7 @@ func CreateGenesisTesseract(
 		Ixns: nil,
 	}
 
-	tsBodyHash, err := Tesseract.BodyHash()
+	tsBodyHash, err := Tesseract.ComputeBodyHash()
 	if err != nil {
 		return nil, err
 	}
