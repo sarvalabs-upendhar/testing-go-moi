@@ -40,18 +40,18 @@ type Tesseract struct {
 }
 
 type TesseractHeader struct {
-	Address       Address
-	PrevHash      Hash
-	Height        uint64
-	AnuUsed       uint64
-	AnuLimit      uint64
-	TesseractHash Hash
-	GridHash      Hash
-	Operator      string
-	ClusterID     string
-	Timestamp     int64
-	ContextLock   map[Address]ContextLockInfo
-	Extra         CommitData
+	Address     Address
+	PrevHash    Hash
+	Height      uint64
+	AnuUsed     uint64
+	AnuLimit    uint64
+	BodyHash    Hash
+	GridHash    Hash
+	Operator    string
+	ClusterID   string
+	Timestamp   int64
+	ContextLock map[Address]ContextLockInfo
+	Extra       CommitData
 }
 
 type TesseractBody struct {
@@ -106,7 +106,7 @@ func (t *Tesseract) Hash() (Hash, error) {
 	protoHeader.Height = t.Header.Height
 	protoHeader.AnuUsed = t.Header.AnuUsed
 	protoHeader.AnuLimit = t.Header.AnuLimit
-	protoHeader.TesseractHash = t.Header.TesseractHash
+	protoHeader.BodyHash = t.Header.BodyHash
 	protoHeader.GridHash = t.Header.GridHash
 	protoHeader.Operator = t.Header.Operator
 	protoHeader.ClusterID = t.Header.ClusterID

@@ -1324,7 +1324,7 @@ func GenerateTesseracts(state *ktypes.ClusterInfo) ([]*types.Tesseract, error) {
 		}
 
 		tesseractGroup = append(tesseractGroup, senderTesseract)
-		groupBuffer = append(groupBuffer, senderTesseract.Header.TesseractHash.Bytes()...)
+		groupBuffer = append(groupBuffer, senderTesseract.Header.BodyHash.Bytes()...)
 	}
 
 	if !ix.ToAddress().IsNil() {
@@ -1334,7 +1334,7 @@ func GenerateTesseracts(state *ktypes.ClusterInfo) ([]*types.Tesseract, error) {
 		}
 
 		tesseractGroup = append(tesseractGroup, receiverTesseract)
-		groupBuffer = append(groupBuffer, receiverTesseract.Header.TesseractHash.Bytes()...)
+		groupBuffer = append(groupBuffer, receiverTesseract.Header.BodyHash.Bytes()...)
 
 		if state.AccountInfos.IsGenesis(ix.ToAddress()) {
 			genesisTesseract, err := generateTesseract(ix.Hash, guna.GenesisAddress, state, gasUsed, 1000)
@@ -1343,7 +1343,7 @@ func GenerateTesseracts(state *ktypes.ClusterInfo) ([]*types.Tesseract, error) {
 			}
 
 			tesseractGroup = append(tesseractGroup, genesisTesseract)
-			groupBuffer = append(groupBuffer, genesisTesseract.Header.TesseractHash.Bytes()...)
+			groupBuffer = append(groupBuffer, genesisTesseract.Header.BodyHash.Bytes()...)
 		}
 	}
 
@@ -1407,7 +1407,7 @@ func generateTesseract(
 		return nil, err
 	}
 
-	ts.Header.TesseractHash = tsBodyHash
+	ts.Header.BodyHash = tsBodyHash
 
 	return ts, nil
 }

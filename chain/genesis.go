@@ -44,12 +44,12 @@ func CreateGenesisTesseract(
 			PrevHash: types.NilHash,
 			Height:   0,
 			// Timestamp:     time.Now().UnixNano(),
-			AnuUsed:       0,
-			AnuLimit:      0,
-			TesseractHash: types.NilHash,
-			GridHash:      types.NilHash,
-			ClusterID:     "genesis",
-			Operator:      "genesis",
+			AnuUsed:   0,
+			AnuLimit:  0,
+			BodyHash:  types.NilHash,
+			GridHash:  types.NilHash,
+			ClusterID: "genesis",
+			Operator:  "genesis",
 			Extra: types.CommitData{
 				CommitSignature: nil,
 				Round:           0,
@@ -75,7 +75,7 @@ func CreateGenesisTesseract(
 		return nil, err
 	}
 
-	Tesseract.Header.TesseractHash = tsBodyHash
+	Tesseract.Header.BodyHash = tsBodyHash
 
 	return Tesseract, nil
 }
