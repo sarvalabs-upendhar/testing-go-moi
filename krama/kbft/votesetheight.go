@@ -5,10 +5,10 @@ import (
 	"log"
 	"sync"
 
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 
-	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
 )
 
 // RoundVoteSet is a struct that represents a set for a votes for a single round.

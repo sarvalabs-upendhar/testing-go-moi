@@ -5,12 +5,11 @@ import (
 	"log"
 	"time"
 
-	"gitlab.com/sarvalabs/moichain/utils"
+	"github.com/sarvalabs/moichain/utils"
 
 	"github.com/hashicorp/go-hclog"
-	"gitlab.com/sarvalabs/moichain/common"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/types"
 )
 
 const (
@@ -144,7 +143,9 @@ func (i *IxPool) handleEnqueueRequest(req enqueueRequest) {
 
 		i.allIxs.add(v)
 
-		i.metrics.IxPoolSize.Add(float64(v.GetSize()))
+		if ixSize, err := v.GetSize(); err == nil {
+			i.metrics.captureIxPoolSize(float64(ixSize))
+		}
 
 		if v.Nonce() > senderAcc.getNonce() {
 			return
@@ -250,7 +251,10 @@ func (i *IxPool) resetAccount(addr types.Address, nonce uint64) {
 	i.allIxs.remove(pruned)
 
 	i.metrics.capturePendingTxs(float64(-1 * len(pruned)))
-	i.metrics.captureIxPoolSize(float64(-1 * GetIxsSize(pruned)))
+
+	if ixSize, err := GetIxsSize(pruned); err == nil {
+		i.metrics.captureIxPoolSize(float64(-1 * ixSize))
+	}
 
 	if nonce <= account.getNonce() {
 		// only the promoted queue needed pruning
@@ -269,7 +273,9 @@ func (i *IxPool) resetAccount(addr types.Address, nonce uint64) {
 	i.allIxs.remove(pruned)
 	// p.gauge.decrease(slotsRequired(pruned))
 
-	i.metrics.captureIxPoolSize(float64(-1 * GetIxsSize(pruned)))
+	if ixSize, err := GetIxsSize(pruned); err == nil {
+		i.metrics.captureIxPoolSize(float64(-1 * ixSize))
+	}
 
 	// update next nonce
 	account.setNonce(nonce)
@@ -334,7 +340,12 @@ func (i *IxPool) IncrementWaitTime(addr types.Address, baseTime time.Duration) e
 
 func (i *IxPool) validateIx(ix *types.Interaction) error {
 	// Check the interaction size to overcome DOS Attacks
-	if uint64(ix.GetSize()) > txMaxSize {
+	ixSize, err := ix.GetSize()
+	if err != nil {
+		return err
+	}
+
+	if uint64(ixSize) > txMaxSize {
 		return ErrOversizedData
 	}
 
@@ -394,12 +405,17 @@ func (i *IxPool) Start() {
 
 // helper functions
 
-func GetIxsSize(ixs types.Interactions) int64 {
+func GetIxsSize(ixs types.Interactions) (int64, error) {
 	var sumOfIxsSize int64 = 0
 
 	for _, ix := range ixs {
-		sumOfIxsSize += int64(len(polo.Polorize(ix)))
+		rawData, err := ix.Bytes()
+		if err != nil {
+			return 0, err
+		}
+
+		sumOfIxsSize += int64(len(rawData))
 	}
 
-	return sumOfIxsSize
+	return sumOfIxsSize, nil
 }

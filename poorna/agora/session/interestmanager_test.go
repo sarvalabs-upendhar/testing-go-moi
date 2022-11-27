@@ -3,8 +3,8 @@ package session
 import (
 	"testing"
 
+	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/stretchr/testify/require"
-	"gitlab.com/sarvalabs/moichain/common/tests"
 )
 
 func TestRecordSessionInterest_MultipleAddress(t *testing.T) {

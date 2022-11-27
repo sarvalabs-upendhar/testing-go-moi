@@ -5,9 +5,9 @@ import (
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/poorna/moirpc"
-	"gitlab.com/sarvalabs/moichain/types"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/poorna/moirpc"
+	"github.com/sarvalabs/moichain/types"
 )
 
 type MockServer struct {

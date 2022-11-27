@@ -12,10 +12,10 @@ import (
 
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/chaincfg"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/types"
 	"github.com/stretchr/testify/require"
-	gtypes "gitlab.com/sarvalabs/moichain/guna/types"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/types"
 )
 
 func RandomAddress(t *testing.T) types.Address {
@@ -245,7 +245,7 @@ func CreateTestAsset(t *testing.T, address types.Address) (types.AssetID, *types
 		log.Panic("Failed to create asset")
 	}
 
-	assetID, _, _ := gtypes.GetAssetID(
+	assetID, _, _, err := gtypes.GetAssetID(
 		address,
 		asset.Dimension,
 		asset.IsFungible,
@@ -254,6 +254,7 @@ func CreateTestAsset(t *testing.T, address types.Address) (types.AssetID, *types
 		int64(asset.TotalSupply),
 		asset.LogicID,
 	)
+	require.NoError(t, err)
 
 	return assetID, asset
 }
@@ -266,7 +267,7 @@ func GetRandomAssetID(t *testing.T, address types.Address) types.AssetID {
 		log.Panic("Failed to create asset")
 	}
 
-	assetID, _, _ := gtypes.GetAssetID(
+	assetID, _, _, err := gtypes.GetAssetID(
 		address,
 		asset.Dimension,
 		asset.IsFungible,
@@ -275,6 +276,7 @@ func GetRandomAssetID(t *testing.T, address types.Address) types.AssetID {
 		int64(asset.TotalSupply),
 		asset.LogicID,
 	)
+	require.NoError(t, err)
 
 	return assetID
 }

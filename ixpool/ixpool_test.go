@@ -5,13 +5,13 @@ import (
 	"testing"
 	"time"
 
-	"gitlab.com/sarvalabs/moichain/utils"
+	"github.com/sarvalabs/moichain/utils"
 
 	"github.com/hashicorp/go-hclog"
 
+	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/types"
 	"github.com/stretchr/testify/assert"
-	"gitlab.com/sarvalabs/moichain/common"
-	"gitlab.com/sarvalabs/moichain/types"
 )
 
 type MockStateManager struct {

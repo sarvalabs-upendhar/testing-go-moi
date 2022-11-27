@@ -5,7 +5,7 @@ import (
 
 	"github.com/deckarep/golang-set"
 
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 type GridCache struct {
@@ -19,23 +19,28 @@ func NewGridCache() *GridCache {
 	}
 }
 
-func (g *GridCache) AddTesseract(ts *types.Tesseract) bool {
+func (g *GridCache) AddTesseract(ts *types.Tesseract) (bool, error) {
 	g.mtx.Lock()
 	defer g.mtx.Unlock()
 
 	if ts.GridLength() == 1 {
-		return true
+		return true, nil
+	}
+
+	tsHash, err := ts.Hash()
+	if err != nil {
+		return false, err
 	}
 
 	grid, ok := g.grids[ts.Header.GridHash]
 	if !ok {
-		grid = map[types.Hash]*types.Tesseract{ts.Hash(): ts}
+		grid = map[types.Hash]*types.Tesseract{tsHash: ts}
 		g.grids[ts.Header.GridHash] = grid
 	}
 
-	grid[ts.Hash()] = ts
+	grid[tsHash] = ts
 
-	return int32(len(grid)) == ts.GridLength()
+	return int32(len(grid)) == ts.GridLength(), nil
 }
 
 func (g *GridCache) CleanupGrid(gridID types.Hash) []*types.Tesseract {

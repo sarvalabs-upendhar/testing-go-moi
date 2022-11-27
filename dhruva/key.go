@@ -3,9 +3,9 @@ package dhruva
 import (
 	"encoding/binary"
 
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
 )
 
 type Prefix byte

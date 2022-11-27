@@ -1,9 +1,9 @@
 package kbft
 
 import (
-	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
-	"gitlab.com/sarvalabs/moichain/mudra"
-	"gitlab.com/sarvalabs/moichain/types"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
+	"github.com/sarvalabs/moichain/mudra"
+	"github.com/sarvalabs/moichain/types"
 )
 
 // tesseractVoteSet is a struct that represents a set of votes for a Tesseract

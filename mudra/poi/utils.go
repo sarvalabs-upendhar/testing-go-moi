@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/eknkc/basex"
-	"gitlab.com/sarvalabs/moichain/mudra/common"
+	"github.com/sarvalabs/moichain/mudra/common"
 	"golang.org/x/crypto/scrypt"
 )
 

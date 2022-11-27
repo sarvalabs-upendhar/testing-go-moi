@@ -7,19 +7,18 @@ import (
 	"sync"
 	"time"
 
-	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
-	"gitlab.com/sarvalabs/moichain/utils"
+	"github.com/sarvalabs/moichain/utils"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/poorna"
-	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/poorna"
+	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 const (
@@ -90,7 +89,7 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 
 		// Unmarshal the buffer into a proto message
 		message := new(ptypes.Message)
-		if err = polo.Depolorize(message, buffer[0:byteCount]); err != nil {
+		if err := message.FromBytes(buffer[0:byteCount]); err != nil {
 			an.logger.Error("Error reading data from stream", "error", err)
 
 			return
@@ -101,24 +100,24 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 		switch message.MsgType {
 		case ptypes.AGORAREQ:
 			reqMsg := new(atypes.AgoraRequestMsg)
-			if err := polo.Depolorize(reqMsg, message.Payload); err != nil {
+			if err := reqMsg.FromBytes(message.Payload); err != nil {
 				an.logger.Error("Error depolarising agora message")
 
 				continue
 			}
 
-			an.metrics.captureInboundDataSize(float64(len(polo.Polorize(reqMsg))))
+			an.metrics.captureInboundDataSize(float64(len(message.Payload)))
 			an.sm.HandlePeerMessage(message.Sender, reqMsg)
 
 		case ptypes.AGORARESP:
 			respMsg := new(atypes.AgoraResponseMsg)
-			if err := polo.Depolorize(respMsg, message.Payload); err != nil {
+			if err := respMsg.FromBytes(message.Payload); err != nil {
 				an.logger.Error("Error depolarising agora message")
 
 				continue
 			}
 
-			an.metrics.captureOutboundDataSize(float64(len(polo.Polorize(respMsg))))
+			an.metrics.captureOutboundDataSize(float64(len(message.Payload)))
 			an.sm.HandlePeerMessage(message.Sender, respMsg)
 		}
 	}

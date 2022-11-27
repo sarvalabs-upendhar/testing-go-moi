@@ -4,13 +4,13 @@ import (
 	"log"
 	"testing"
 
-	"gitlab.com/sarvalabs/moichain/guna"
+	"github.com/sarvalabs/moichain/guna"
 
+	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/stretchr/testify/require"
-	"gitlab.com/sarvalabs/moichain/common"
-	"gitlab.com/sarvalabs/moichain/common/tests"
 
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 // Interaction Api Testcases

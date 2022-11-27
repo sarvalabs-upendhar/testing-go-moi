@@ -3,7 +3,7 @@ package ixpool
 import (
 	"sync"
 
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 // Lookup map used to find transactions present in the pool
@@ -26,7 +26,12 @@ func (m *lookupMap) add(txs ...*types.Interaction) {
 	defer m.Unlock()
 
 	for _, ix := range txs {
-		m.all[ix.GetIxHash()] = ix
+		hash, err := ix.GetIxHash()
+		if err != nil {
+			continue
+		}
+
+		m.all[hash] = ix
 	}
 }
 
@@ -36,7 +41,12 @@ func (m *lookupMap) remove(ixs types.Interactions) {
 	defer m.Unlock()
 
 	for _, ix := range ixs {
-		delete(m.all, ix.GetIxHash())
+		hash, err := ix.GetIxHash()
+		if err != nil {
+			continue
+		}
+
+		delete(m.all, hash)
 	}
 }
 

@@ -9,21 +9,23 @@ import (
 	"sync"
 	"time"
 
-	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+	"github.com/pkg/errors"
+
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
 	"github.com/libp2p/go-libp2p/core/crypto"
 
 	"github.com/libp2p/go-libp2p"
 
-	"gitlab.com/sarvalabs/moichain/utils"
+	"github.com/sarvalabs/moichain/utils"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/routing"
 	maddr "github.com/multiformats/go-multiaddr"
-	"gitlab.com/sarvalabs/moichain/mudra"
-	mcommon "gitlab.com/sarvalabs/moichain/mudra/common"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	"github.com/sarvalabs/moichain/mudra"
+	mcommon "github.com/sarvalabs/moichain/mudra/common"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
 
 	kdht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -33,9 +35,9 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	discovery "github.com/libp2p/go-libp2p/p2p/discovery/routing"
-	"gitlab.com/sarvalabs/moichain/common"
-	moirpc "gitlab.com/sarvalabs/moichain/poorna/moirpc"
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/common"
+	moirpc "github.com/sarvalabs/moichain/poorna/moirpc"
+	"github.com/sarvalabs/moichain/types"
 )
 
 const (
@@ -351,8 +353,7 @@ func (s *Server) streamHandlerFunc(stream network.Stream) {
 
 	message := new(ptypes.Message)
 
-	err = polo.Depolorize(message, buffer[0:byteCount])
-	if err != nil {
+	if err := message.FromBytes(buffer[0:byteCount]); err != nil {
 		if err := kpeer.sendHandshakeErrorResp(s.id, err); err != nil {
 			s.logger.Error("Hand shake failed", "error", err)
 		}
@@ -360,8 +361,8 @@ func (s *Server) streamHandlerFunc(stream network.Stream) {
 		return
 	}
 	// Unmarshal message proto into a NewPeer message
-	var msg ptypes.HandshakeMSG
-	if err := polo.Depolorize(&msg, message.Payload); err != nil {
+	handshakeMsg := new(ptypes.HandshakeMSG)
+	if err := handshakeMsg.FromBytes(message.Payload); err != nil {
 		if err := kpeer.sendHandshakeErrorResp(s.id, err); err != nil {
 			s.logger.Error("Hand shake failed", "error", err)
 		}
@@ -718,12 +719,15 @@ func (s *Server) SendMessage(peerID peer.ID, msgType ptypes.MsgType, msg interfa
 		return p.Send(s.id, msgType, msg)
 	}
 
-	bytes := polo.Polorize(msg)
+	rawData, err := polo.Polorize(msg)
+	if err != nil {
+		return errors.Wrap(err, "failed to polorize message payload")
+	}
 	// Create a network message proto with the bytes payload of the message to send
 	// and convert into a proto message and marshal it into a slice of bytes
 	m := ptypes.Message{
 		MsgType: msgType,
-		Payload: bytes,
+		Payload: rawData,
 		Sender:  s.id,
 	}
 
@@ -737,7 +741,10 @@ func (s *Server) SendMessage(peerID peer.ID, msgType ptypes.MsgType, msg interfa
 	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
 	// Create a NewPeerEvent
 
-	rawData := polo.Polorize(m)
+	rawData, err = m.Bytes()
+	if err != nil {
+		return err
+	}
 
 	// Write the message bytes into the peer's io buffer
 	_, err = rw.Writer.Write(rawData)
@@ -784,7 +791,13 @@ func (s *Server) SendHelloMessage() {
 			Address: utils.MultiAddrToString(s.GetAddrs()...),
 		}
 
-		signature, err := s.vault.Sign(polo.Polorize(peerInfo), mcommon.BlsBLST)
+		rawData, err := peerInfo.Bytes()
+		if err != nil {
+			s.logger.Error("Error polorizing peer info", "error", err)
+			panic(err)
+		}
+
+		signature, err := s.vault.Sign(rawData, mcommon.BlsBLST)
 		if err != nil {
 			s.logger.Error("Error signing message", "error", err)
 			panic(err)
@@ -795,7 +808,13 @@ func (s *Server) SendHelloMessage() {
 			Signature: signature,
 		}
 
-		if err := s.Broadcast(SenatusTopic, polo.Polorize(msg)); err != nil {
+		rawData, err = msg.Bytes()
+		if err != nil {
+			s.logger.Error("Error serializing hello message", "error", err)
+			panic(err)
+		}
+
+		if err := s.Broadcast(SenatusTopic, rawData); err != nil {
 			s.logger.Error("Error broadcasting hello message", "error", err)
 			panic(err)
 		}

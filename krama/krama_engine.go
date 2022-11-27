@@ -9,13 +9,13 @@ import (
 	"sync"
 	"time"
 
-	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
-	gtypes "gitlab.com/sarvalabs/moichain/guna/types"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
 
-	"gitlab.com/sarvalabs/moichain/ixpool"
+	"github.com/sarvalabs/moichain/ixpool"
 
-	"gitlab.com/sarvalabs/moichain/utils"
+	"github.com/sarvalabs/moichain/utils"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -23,17 +23,16 @@ import (
 	"github.com/moby/locker"
 	"github.com/mr-tron/base58/base58"
 	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/moichain/common"
-	"gitlab.com/sarvalabs/moichain/guna"
-	"gitlab.com/sarvalabs/moichain/krama/kbft"
-	"gitlab.com/sarvalabs/moichain/krama/observer"
-	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
-	"gitlab.com/sarvalabs/moichain/mudra"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/poorna/flux"
-	"gitlab.com/sarvalabs/moichain/telemetry/tracing"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/guna"
+	"github.com/sarvalabs/moichain/krama/kbft"
+	"github.com/sarvalabs/moichain/krama/observer"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
+	"github.com/sarvalabs/moichain/mudra"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/poorna/flux"
+	"github.com/sarvalabs/moichain/telemetry/tracing"
+	"github.com/sarvalabs/moichain/types"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/crypto/blake2b"
@@ -117,7 +116,12 @@ type Request struct {
 func (r *Request) getClusterID(operator id.KramaID) (types.ClusterID, error) {
 	switch r.reqType {
 	case 0:
-		return generateClusterID(operator, r.ixs[0].GetIxHash())
+		ixHash, err := r.ixs[0].GetIxHash()
+		if err != nil {
+			return "", err
+		}
+
+		return generateClusterID(operator, ixHash)
 	case 1:
 		return types.ClusterID(r.msg.ClusterID), nil
 	default:
@@ -252,7 +256,10 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID types.Cluster
 
 	clusterState.ICSReqTime = utils.Now()
 	// Construct ICS_Request
-	reqMsg := k.getICSReqMsg(request.ixs[0], lockInfo, clusterID, clusterState.ICSReqTime)
+	reqMsg, err := k.getICSReqMsg(request.ixs[0], lockInfo, clusterID, clusterState.ICSReqTime)
+	if err != nil {
+		return err
+	}
 
 	// Send ClusterInfo Request to context nodes of both participants
 	go k.sendICSRequest(
@@ -465,12 +472,17 @@ func (k *Engine) joinCluster(ctx context.Context, req Request) error {
 	ctx, span := tracing.Span(ctx, "Krama.KramaEngine", "joinCluster")
 	defer span.End()
 
+	ixHash, err := req.ixs[0].GetIxHash()
+	if err != nil {
+		return err
+	}
+
 	k.logger.Debug(
 		"Received an ICS join request",
 		"from", req.msg.Operator,
 		"cluster-id", req.msg.ClusterID,
 		"timestamp", req.msg.Timestamp,
-		req.ixs[0].GetIxHash().Hex(),
+		ixHash,
 	)
 
 	reqTime := utils.Canonical(time.Unix(0, req.msg.Timestamp))
@@ -654,7 +666,12 @@ func (k *Engine) handleReq(req Request) {
 		wg.StartWatchDog()
 
 		if hash := clusterInfo.ID.Hash(); !hash.IsNil() {
-			clusterInfo.AddDirty(hash, wg.GenerateProofs())
+			proofs, err := wg.GenerateProofs()
+			if err != nil {
+				return
+			}
+
+			clusterInfo.AddDirty(hash, proofs)
 		} else {
 			k.logger.Error("Failed to store watchdog proofs")
 		}
@@ -678,7 +695,13 @@ func (k *Engine) handleReq(req Request) {
 
 		consensusInitTS := time.Now()
 		k.metrics.captureClusterSize(float64(clusterInfo.Size()))
-		icsEvidence := kbft.NewEvidence(clusterInfo.Ixs.Hash(), clusterInfo.Operator, clusterInfo.Size())
+
+		ixHash, err := clusterInfo.Ixs.Hash()
+		if err != nil {
+			return
+		}
+
+		icsEvidence := kbft.NewEvidence(ixHash, clusterInfo.Operator, clusterInfo.Size())
 		bft := kbft.NewKBFTService(
 			ctx,
 			k.operator,
@@ -977,16 +1000,22 @@ func (k *Engine) getICSReqMsg(
 	lockInfo map[types.Address]types.ContextLockInfo,
 	clusterID types.ClusterID,
 	timestamp time.Time,
-) ptypes.ICSRequest {
+) (ptypes.ICSRequest, error) {
 	icsReqMsg := new(ptypes.ICSRequest)
 	Ixs := types.Interactions{ix}
-	icsReqMsg.IxData = polo.Polorize(Ixs)
+
+	rawData, err := Ixs.Bytes()
+	if err != nil {
+		return *icsReqMsg, err
+	}
+
+	icsReqMsg.IxData = rawData
 	icsReqMsg.ClusterID = string(clusterID)
 	icsReqMsg.Operator = string(k.operator)
 	icsReqMsg.ContextLock = lockInfo
 	icsReqMsg.Timestamp = timestamp.UnixNano()
 
-	return *icsReqMsg
+	return *icsReqMsg, nil
 }
 
 func (k *Engine) getRandomNodes(ctx context.Context, count int, exemptedNodes []id.KramaID) ([]id.KramaID, error) {
@@ -1047,13 +1076,14 @@ func (k *Engine) sendICSSuccess(id types.ClusterID) error {
 	}
 
 	clusterState := slot.CLusterInfo()
-
 	msg := clusterState.CreateICSSuccessMsg()
 
-	icsMsg := new(ktypes.ICSMSG)
-	icsMsg.Msg = polo.Polorize(msg)
-	icsMsg.MsgType = ptypes.ICSSUCCESS
-	icsMsg.ClusterID = string(id)
+	rawData, err := msg.Bytes()
+	if err != nil {
+		return err
+	}
+
+	icsMsg := ktypes.NewICSMsg(ptypes.ICSSUCCESS, string(id), rawData)
 
 	k.logger.Trace("Sending clusterState success message", "cluster id", id)
 
@@ -1283,20 +1313,32 @@ func GenerateTesseracts(state *ktypes.ClusterInfo) ([]*types.Tesseract, error) {
 	tesseractGroup := make([]*types.Tesseract, 0)
 
 	if !ix.FromAddress().IsNil() {
-		senderTesseract := generateTesseract(ix.Hash, ix.FromAddress(), state, gasUsed, 1000)
+		senderTesseract, err := generateTesseract(ix.Hash, ix.FromAddress(), state, gasUsed, 1000)
+		if err != nil {
+			return nil, err
+		}
+
 		tesseractGroup = append(tesseractGroup, senderTesseract)
-		groupBuffer = append(groupBuffer, senderTesseract.Header.TesseractHash.Bytes()...)
+		groupBuffer = append(groupBuffer, senderTesseract.BodyHash().Bytes()...)
 	}
 
 	if !ix.ToAddress().IsNil() {
-		receiverTesseract := generateTesseract(ix.Hash, ix.ToAddress(), state, gasUsed, 1000)
+		receiverTesseract, err := generateTesseract(ix.Hash, ix.ToAddress(), state, gasUsed, 1000)
+		if err != nil {
+			return nil, err
+		}
+
 		tesseractGroup = append(tesseractGroup, receiverTesseract)
-		groupBuffer = append(groupBuffer, receiverTesseract.Header.TesseractHash.Bytes()...)
+		groupBuffer = append(groupBuffer, receiverTesseract.BodyHash().Bytes()...)
 
 		if state.AccountInfos.IsGenesis(ix.ToAddress()) {
-			genesisTesseract := generateTesseract(ix.Hash, guna.GenesisAddress, state, gasUsed, 1000)
+			genesisTesseract, err := generateTesseract(ix.Hash, guna.GenesisAddress, state, gasUsed, 1000)
+			if err != nil {
+				return nil, err
+			}
+
 			tesseractGroup = append(tesseractGroup, genesisTesseract)
-			groupBuffer = append(groupBuffer, genesisTesseract.Header.TesseractHash.Bytes()...)
+			groupBuffer = append(groupBuffer, genesisTesseract.BodyHash().Bytes()...)
 		}
 	}
 
@@ -1314,7 +1356,17 @@ func generateTesseract(
 	state *ktypes.ClusterInfo,
 	gasUsed,
 	gasLimit uint64,
-) *types.Tesseract {
+) (*types.Tesseract, error) {
+	ixsHash, err := state.Ixs.Hash()
+	if err != nil {
+		return nil, err
+	}
+
+	receiptHash, err := state.Receipts.Hash()
+	if err != nil {
+		return nil, err
+	}
+
 	ts := &types.Tesseract{
 		Header: types.TesseractHeader{
 			Address:     addr,
@@ -1334,8 +1386,8 @@ func generateTesseract(
 			StateHash:       state.GetStateHash(ixHash, addr),
 			ContextHash:     state.GetContextHash(ixHash, addr),
 			ContextDelta:    state.GetContextDelta(),
-			InteractionHash: state.Ixs.Hash(),
-			ReceiptHash:     state.Receipts.Hash(),
+			InteractionHash: ixsHash,
+			ReceiptHash:     receiptHash,
 			ConsensusProof: types.PoXCData{
 				BinaryHash:   state.BinaryHash,
 				IdentityHash: state.IdentityHash,
@@ -1344,9 +1396,15 @@ func generateTesseract(
 		},
 		Ixns: state.Ixs,
 	}
-	ts.Header.TesseractHash = ts.BodyHash()
 
-	return ts
+	tsBodyHash, err := ts.ComputeBodyHash()
+	if err != nil {
+		return nil, err
+	}
+
+	ts.Header.BodyHash = tsBodyHash
+
+	return ts, nil
 }
 
 func (k *Engine) executionRoutine() {
@@ -1367,9 +1425,14 @@ func (k *Engine) Close() {
 
 func (k *Engine) validateInteractions(ixs types.Interactions) (bool, error) {
 	for _, ix := range ixs {
+		ixHash, err := ix.GetIxHash()
+		if err != nil {
+			return false, err
+		}
+
 		k.logger.Debug(
 			"Validating Interaction",
-			"Hash", ix.GetIxHash().Hex(),
+			"Hash", ixHash,
 			"Nonce", ix.Nonce(),
 			"From", ix.FromAddress().Hex(),
 			"Type", ix.IxType(),
@@ -1432,8 +1495,12 @@ func (k *Engine) IsIxValid(ix *types.Interaction) (bool, error) {
 			return false, err
 		}
 
-		logicID, _ := gtypes.GetLogicID(assetData.Code, false)
-		assetID, _, _ := gtypes.GetAssetID(
+		logicID, _, err := gtypes.GetLogicID(assetData.Code, false)
+		if err != nil {
+			return false, err
+		}
+
+		assetID, _, _, err := gtypes.GetAssetID(
 			ix.FromAddress(),
 			uint8(assetData.Dimension),
 			assetData.IsFungible,
@@ -1442,6 +1509,9 @@ func (k *Engine) IsIxValid(ix *types.Interaction) (bool, error) {
 			int64(assetData.TotalSupply),
 			logicID,
 		)
+		if err != nil {
+			return false, err
+		}
 
 		if _, err = stateObject.BalanceOf(assetID); !errors.Is(err, types.ErrAssetNotFound) {
 			return false, err

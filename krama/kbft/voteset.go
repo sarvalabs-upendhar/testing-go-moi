@@ -7,11 +7,11 @@ import (
 	"log"
 	"sync"
 
-	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
-	"gitlab.com/sarvalabs/moichain/mudra"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
+	"github.com/sarvalabs/moichain/mudra"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
 
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 // VoteSet is a struct that represents a set of consensus Votes
@@ -205,7 +205,12 @@ func (vs *VoteSet) AddVote(v *ktypes.Vote, peerID id.KramaID) (added bool, err e
 		return false, errors.New("vote for validator with different signature already exists")
 	}
 
-	verified, err := mudra.Verify(v.SignBytes(), v.Signature, publicKey)
+	rawData, err := v.SignBytes()
+	if err != nil {
+		return false, err
+	}
+
+	verified, err := mudra.Verify(rawData, v.Signature, publicKey)
 	if err != nil {
 		return false, err
 	}

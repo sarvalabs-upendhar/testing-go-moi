@@ -6,13 +6,12 @@ import (
 	"testing"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/moichain/dhruva"
+	"github.com/sarvalabs/moichain/dhruva/db"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/types"
 	"github.com/stretchr/testify/require"
-	"gitlab.com/sarvalabs/moichain/common/tests"
-	"gitlab.com/sarvalabs/moichain/dhruva"
-	"gitlab.com/sarvalabs/moichain/dhruva/db"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
 )
 
 func TestReputationEngine_GetInfo_FetchFromDB(t *testing.T) {
@@ -28,8 +27,12 @@ func TestReputationEngine_GetInfo_FetchFromDB(t *testing.T) {
 	info := ReputationInfo{
 		PublickKey: []byte{0x02, 0x03},
 	}
+
+	rawData, err := info.Bytes()
+	require.NoError(t, err)
+
 	// add entry to DB
-	err := mstore.CreateEntry(dhruva.NtqDBKey(kramaIDs[0]), polo.Polorize(info))
+	err = mstore.CreateEntry(dhruva.NtqDBKey(kramaIDs[0]), rawData)
 	require.NoError(t, err, "error adding reputation info to db")
 
 	storedInfo, err := engine.getInfo(kramaIDs[0])

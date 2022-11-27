@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"strings"
 
-	"gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/mudra/kramaid"
 )
 
 // MoiNodeRegistry Holds the baseURL of the RPC/HTTP host

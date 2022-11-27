@@ -9,20 +9,22 @@ import (
 	"sync"
 	"time"
 
-	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+	"github.com/pkg/errors"
 
-	"gitlab.com/sarvalabs/moichain/utils"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
+
+	"github.com/sarvalabs/moichain/utils"
 
 	"github.com/hashicorp/go-hclog"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/poorna"
-	"gitlab.com/sarvalabs/moichain/telemetry/tracing"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/poorna"
+	"github.com/sarvalabs/moichain/telemetry/tracing"
+	"github.com/sarvalabs/moichain/types"
 )
 
 const (
@@ -109,22 +111,21 @@ func (r *Randomizer) messageHandler(stream network.Stream) {
 
 	message := new(ptypes.Message)
 
-	err = polo.Depolorize(message, buffer[0:count])
-	if err != nil {
+	if err := message.FromBytes(buffer[0:count]); err != nil {
 		r.logger.Error("Error reading message", "err", err)
 
 		return
 	}
 
-	msg := new(ptypes.RandomWalkReq)
+	randomWalkReqMsg := new(ptypes.RandomWalkReq)
 
-	if err = polo.Depolorize(msg, message.Payload); err != nil {
+	if err := randomWalkReqMsg.FromBytes(message.Payload); err != nil {
 		r.logger.Error("Error reading message", "err", err)
 
 		return
 	}
 
-	if err = r.HandleReqMsg(msg); err != nil {
+	if err = r.HandleReqMsg(randomWalkReqMsg); err != nil {
 		r.logger.Error("Unable to handle random walk request", "err", err)
 
 		return
@@ -280,7 +281,12 @@ func (r *Randomizer) HandleReqMsg(reqMsg *ptypes.RandomWalkReq) error {
 		}
 
 		// log.Println("Address",responseMsg,polo.Polorize(responseMsg),polo.Polorize(&responseMsg))
-		err = r.server.Broadcast(reqMsg.Topic, polo.Polorize(responseMsg))
+		rawData, err := responseMsg.Bytes()
+		if err != nil {
+			return err
+		}
+
+		err = r.server.Broadcast(reqMsg.Topic, rawData)
 		if err != nil {
 			log.Panicln(err)
 		}
@@ -293,8 +299,7 @@ func (r *Randomizer) pubSubHandler(msg *pubsub.Message) error {
 	data := msg.GetData()
 	randomPeerMsg := new(ptypes.RandomWalkResp)
 
-	err := polo.Depolorize(randomPeerMsg, data)
-	if err != nil {
+	if err := randomPeerMsg.FromBytes(data); err != nil {
 		r.logger.Error("Error depolarising randomWalk Request", "error", err)
 
 		return err
@@ -403,12 +408,15 @@ func (r *Randomizer) SendFluxMessage(peerID peer.ID, msgType ptypes.MsgType, msg
 	//	 p := s.Peers.Peer(peerID)
 	//	 return p.(s.id, msgType, msg)
 	// }
-	bytes := polo.Polorize(msg)
+	rawData, err := polo.Polorize(msg)
+	if err != nil {
+		return errors.Wrap(err, "failed to polorize message payload")
+	}
 	// Create a network message proto with the bytes payload of the message to send
 	// and convert into a proto message and marshal it into a slice of bytes
 	m := ptypes.Message{
 		MsgType: msgType,
-		Payload: bytes,
+		Payload: rawData,
 		Sender:  r.server.GetKramaID(),
 	}
 
@@ -428,8 +436,10 @@ func (r *Randomizer) SendFluxMessage(peerID peer.ID, msgType ptypes.MsgType, msg
 	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
 	// Create a NewPeerEvent
 
-	rawData := polo.Polorize(m)
-
+	rawData, err = m.Bytes()
+	if err != nil {
+		return err
+	}
 	// Write the message bytes into the peer's io buffer
 	_, err = rw.Writer.Write(rawData)
 	if err != nil {

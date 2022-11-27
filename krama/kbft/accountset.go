@@ -3,7 +3,7 @@ package kbft
 import (
 	"bytes"
 
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 // AccountSet is a struct that represents a set of Account addresses

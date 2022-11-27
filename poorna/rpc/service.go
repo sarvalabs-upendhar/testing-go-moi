@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
-	"gitlab.com/sarvalabs/moichain/poorna/api"
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/poorna/api"
+	"github.com/sarvalabs/moichain/types"
 )
 
 // rpcService is a struct that represents a mapping of RPC service APIs
@@ -139,7 +139,12 @@ func (r *rpcService) SendInteractions(req *http.Request, args *api.SendIXArgs, r
 		return err
 	}
 
-	resp.Data = ixn[0].GetIxHash().Hex()
+	ixHash, err := ixn[0].GetIxHash()
+	if err != nil {
+		return err
+	}
+
+	resp.Data = ixHash.Hex()
 
 	return nil
 }

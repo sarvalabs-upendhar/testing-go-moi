@@ -2,8 +2,8 @@ package ecdsa
 
 import (
 	"github.com/libp2p/go-libp2p/core/crypto"
-	"gitlab.com/sarvalabs/moichain/mudra/common"
-	"gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/mudra/common"
+	"github.com/sarvalabs/moichain/mudra/kramaid"
 )
 
 // EcdsaSecp256k1Signature is a custom type of Signature that uses Secp256k1 Curve and ECDSA signing

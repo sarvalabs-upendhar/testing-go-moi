@@ -4,8 +4,7 @@ import (
 	"context"
 	"time"
 
-	types "gitlab.com/sarvalabs/moichain/krama/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	types "github.com/sarvalabs/moichain/krama/types"
 )
 
 type WatchDog struct {
@@ -35,18 +34,31 @@ func (wg *WatchDog) StartWatchDog() {
 				return
 			}
 
-			wg.msgs = append(wg.msgs, msg.ICSMsg(wg.slot.ClusterID()))
+			icsMsg, err := msg.ICSMsg(wg.slot.ClusterID())
+			if err != nil {
+				return
+			}
+
+			wg.msgs = append(wg.msgs, icsMsg)
 		}
 	}
 }
 
-func (wg *WatchDog) GenerateProofs() []byte {
-	metaData := wg.slot.CLusterInfo().GetMetaData(wg.msgs)
+func (wg *WatchDog) GenerateProofs() ([]byte, error) {
+	metaData, err := wg.slot.CLusterInfo().GetMetaData(wg.msgs)
+	if err != nil {
+		return nil, err
+	}
 
 	watchDogProofs := types.WatchDogProofs{
 		MetaData: metaData,
 		Extra:    nil, // TODO: Capture signature
 	}
 
-	return polo.Polorize(watchDogProofs)
+	rawData, err := watchDogProofs.Bytes()
+	if err != nil {
+		return nil, err
+	}
+
+	return rawData, nil
 }

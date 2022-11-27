@@ -9,16 +9,15 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/moichain/guna"
-	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
-	"gitlab.com/sarvalabs/moichain/mudra"
-	common2 "gitlab.com/sarvalabs/moichain/mudra/common"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/telemetry/tracing"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/moichain/guna"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
+	"github.com/sarvalabs/moichain/mudra"
+	mtypes "github.com/sarvalabs/moichain/mudra/common"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/telemetry/tracing"
 
-	"gitlab.com/sarvalabs/moichain/common"
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/types"
 )
 
 const (
@@ -26,7 +25,7 @@ const (
 )
 
 type vault interface {
-	Sign(data []byte, sigType common2.SigType) ([]byte, error)
+	Sign(data []byte, sigType mtypes.SigType) ([]byte, error)
 	KramaID() id.KramaID
 }
 
@@ -460,7 +459,13 @@ func (kbft *KBFT) finalizeCommit(h []uint64) {
 		kbft.Close(err)
 	}
 
-	kbft.logger.Trace("Adding Receipts to dirty storage", "receipt-hash", kbft.ics.Receipts.Hash().Hex())
+	receiptHash, err := kbft.ics.Receipts.Hash()
+	if err != nil {
+		kbft.logger.Error("Error creating receipts hash", err)
+		panic(err)
+	}
+
+	kbft.logger.Trace("Adding Receipts to dirty storage", "receipt-hash", receiptHash)
 
 	// TODO: validate the block
 
@@ -478,12 +483,21 @@ func (kbft *KBFT) updateConsensusInfoInTesseracts(
 	preCommits *tesseractVoteSet,
 	signature []byte,
 ) (err error) {
-	evidenceHash, data := kbft.evidence.FlushEvidence()
+	evidenceHash, data, err := kbft.evidence.FlushEvidence()
+	if err != nil {
+		return err
+	}
 	// Add evidence data to dirty list
 	kbft.ics.AddDirty(evidenceHash, data)
+
 	// Add Receipts to dirty list
 	// This will be modified once smt is integrated
-	kbft.ics.AddDirty(kbft.ics.Receipts.Hash(), polo.Polorize(kbft.ics.Receipts))
+	rawData, err := kbft.ics.Receipts.Bytes()
+	if err != nil {
+		return err
+	}
+
+	kbft.ics.AddDirty(types.BytesToHash(rawData), rawData)
 
 	for _, tesseract := range kbft.ProposalGrid.Tesseracts {
 		tesseract.Header.Extra.Round = kbft.Round
@@ -492,7 +506,12 @@ func (kbft *KBFT) updateConsensusInfoInTesseracts(
 		tesseract.Header.Extra.GridID = gridID
 		tesseract.Header.Extra.CommitSignature = signature
 
-		if tesseract.Seal, err = kbft.vault.Sign(tesseract.Bytes(), common2.BlsBLST); err != nil {
+		rawData, err := tesseract.Bytes()
+		if err != nil {
+			return err
+		}
+
+		if tesseract.Seal, err = kbft.vault.Sign(rawData, mtypes.BlsBLST); err != nil {
 			return errors.Wrap(err, "failed to sign the tesseract")
 		}
 	}
@@ -637,7 +656,12 @@ func (kbft *KBFT) createProposalGrid() (*ktypes.TesseractGrid, error) {
 	rawHashes := make([]byte, 0)
 
 	for _, v := range grid {
-		rawHashes = append(rawHashes, v.Hash().Bytes()...)
+		tsHash, err := v.Hash()
+		if err != nil {
+			return nil, err
+		}
+
+		rawHashes = append(rawHashes, tsHash.Bytes()...)
 	}
 
 	tesseractGrid := &ktypes.TesseractGrid{
@@ -668,7 +692,11 @@ func (kbft *KBFT) createProposal(heights []uint64, round int32) error {
 	}
 
 	// Create a proposal for tesseract gridID
-	proposalGridID := grid.GetTesseractGridID()
+	proposalGridID, err := grid.GetTesseractGridID()
+	if err != nil {
+		return err
+	}
+
 	proposal := ktypes.NewProposal(heights, round, kbft.ValidRound, grid, proposalGridID)
 
 	// Send an internal message
@@ -785,8 +813,16 @@ func (kbft *KBFT) enterPrevote(h []uint64, r int32) {
 	}()
 
 	if kbft.LockedGrid != nil {
-		kbft.logger.Trace("Voting on locked grid", "grid-id", kbft.LockedGrid.Hash.Hex())
-		kbft.sendVote(ktypes.PREVOTE, kbft.LockedGrid.GetTesseractGridID())
+		kbft.logger.Trace("Voting on locked grid", "grid-id", kbft.LockedGrid.Hash)
+
+		gridID, err := kbft.LockedGrid.GetTesseractGridID()
+		if err != nil {
+			kbft.logger.Error("Failed to get tesseract grid id", "err", err)
+
+			return
+		}
+
+		kbft.sendVote(ktypes.PREVOTE, gridID)
 
 		return
 	}
@@ -799,7 +835,14 @@ func (kbft *KBFT) enterPrevote(h []uint64, r int32) {
 	}
 
 	// TODO: Validate the block and vote
-	kbft.sendVote(ktypes.PREVOTE, kbft.ProposalGrid.GetTesseractGridID())
+	gridID, err := kbft.ProposalGrid.GetTesseractGridID()
+	if err != nil {
+		kbft.logger.Error("Failed to get tesseract grid id", "err", err)
+
+		return
+	}
+
+	kbft.sendVote(ktypes.PREVOTE, gridID)
 }
 
 // sendVote will send a signed vote message for the given vote-type and tesseractGrid
@@ -857,7 +900,12 @@ func (kbft *KBFT) signVote(msgType ktypes.ConsensusMsgType, id *types.TesseractG
 		v.GridID.Parts.Heights = id.Parts.Heights
 	}
 
-	sign, err := kbft.vault.Sign(v.SignBytes(), common2.BlsBLST)
+	rawData, err := v.SignBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	sign, err := kbft.vault.Sign(rawData, mtypes.BlsBLST)
 	if err != nil {
 		return nil, err
 	}

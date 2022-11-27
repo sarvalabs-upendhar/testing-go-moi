@@ -6,18 +6,17 @@ import (
 	"math/rand"
 	"time"
 
-	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
 	"github.com/hashicorp/go-hclog"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/pkg/errors"
-	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/poorna/moirpc"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/poorna/moirpc"
+	"github.com/sarvalabs/moichain/types"
 )
 
 const (
@@ -62,7 +61,7 @@ func (t *Transport) InitClusterCommunication(ctx context.Context, slot *ktypes.S
 
 	handler := func(msg *pubsub.Message) error {
 		icsMsg := new(ktypes.ICSMSG)
-		if err := polo.Depolorize(icsMsg, msg.GetData()); err != nil {
+		if err := icsMsg.FromBytes(msg.GetData()); err != nil {
 			return err
 		}
 
@@ -107,7 +106,13 @@ func (t *Transport) InitClusterCommunication(ctx context.Context, slot *ktypes.S
 					return
 				}
 
-				if err := t.network.Broadcast(string(slot.ClusterID()), polo.Polorize(msg)); err != nil {
+				rawData, err := msg.Bytes()
+				if err != nil {
+					t.logger.Error("Failed to polorize cluster message", "cluster-id", slot.ClusterID())
+					panic(err)
+				}
+
+				if err := t.network.Broadcast(string(slot.ClusterID()), rawData); err != nil {
 					t.logger.Error("Failed to broadcast cluster message", "cluster-id", slot.ClusterID())
 					panic(err)
 				}
@@ -127,7 +132,12 @@ func (t *Transport) Call(kramaID id.KramaID, svcName, svcMethod string, args, re
 }
 
 func (t *Transport) BroadcastTesseract(msg *ptypes.TesseractMessage) error {
-	return t.network.Broadcast(TesseractTopic, polo.Polorize(msg))
+	rawData, err := msg.Bytes()
+	if err != nil {
+		return err
+	}
+
+	return t.network.Broadcast(TesseractTopic, rawData)
 }
 
 func (t *Transport) connectRandomPeers(slot *ktypes.Slot) []id.KramaID {

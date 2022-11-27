@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/sarvalabs/moichain/mudra/common"
+	"github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/stretchr/testify/assert"
-	"gitlab.com/sarvalabs/moichain/mudra/common"
-	"gitlab.com/sarvalabs/moichain/mudra/kramaid"
 )
 
 var (

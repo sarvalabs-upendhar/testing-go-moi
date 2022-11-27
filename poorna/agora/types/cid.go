@@ -3,7 +3,7 @@ package types
 import (
 	"encoding/hex"
 
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 var nilCID CID

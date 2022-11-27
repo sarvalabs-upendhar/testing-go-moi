@@ -5,13 +5,13 @@ import (
 	"sync/atomic"
 	"testing"
 
-	gtypes "gitlab.com/sarvalabs/moichain/guna/types"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
 
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 
-	"gitlab.com/sarvalabs/moichain/common/tests"
-	"gitlab.com/sarvalabs/moichain/guna"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/moichain/guna"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
 )
 
 type Context struct {

@@ -4,15 +4,17 @@ import (
 	"sync"
 	"time"
 
-	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+	"github.com/pkg/errors"
 
-	gtypes "gitlab.com/sarvalabs/moichain/guna/types"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
-	"gitlab.com/sarvalabs/moichain/utils"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
 
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/moichain/utils"
+
+	"github.com/sarvalabs/go-polo"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/types"
 	"golang.org/x/crypto/blake2b"
 )
 
@@ -96,7 +98,12 @@ func (i *ClusterInfo) IsOperatorIncluded() bool {
 }
 
 // GetMetaData returns the ClusterInfo metadata including the given ClusterInfo messages
-func (i *ClusterInfo) GetMetaData(msgs []*ICSMSG) *ICSMetaInfo {
+func (i *ClusterInfo) GetMetaData(msgs []*ICSMSG) (*ICSMetaInfo, error) {
+	receiptHash, err := i.Receipts.Hash()
+	if err != nil {
+		return nil, err
+	}
+
 	m := &ICSMetaInfo{
 		ClusterID:    string(i.ID),
 		IxHash:       i.Ixs[0].Hash, // Need to be improved
@@ -105,15 +112,26 @@ func (i *ClusterInfo) GetMetaData(msgs []*ICSMSG) *ICSMetaInfo {
 		BinaryHash:   i.BinaryHash,
 		IdentityHash: i.IdentityHash,
 		IcsHash:      i.ICSHash,
-		ReceiptHash:  i.Receipts.Hash(),
+		ReceiptHash:  receiptHash,
 	}
 
-	m.Msgs = append(m.Msgs, polo.Polorize(i.SuccessMsg))
+	rawData, err := polo.Polorize(i.SuccessMsg)
+	if err != nil {
+		return nil, err
+	}
+
+	m.Msgs = append(m.Msgs, rawData)
+
 	for _, v := range msgs {
-		m.Msgs = append(m.Msgs, polo.Polorize(v))
+		rawData, err := polo.Polorize(v)
+		if err != nil {
+			return nil, err
+		}
+
+		m.Msgs = append(m.Msgs, rawData)
 	}
 
-	return m
+	return m, nil
 }
 
 func (i *ClusterInfo) IncrementClusterSize(delta int) {
@@ -313,7 +331,7 @@ func (i *ClusterInfo) AddDirty(key types.Hash, data []byte) {
 	i.dirty[key] = data
 }
 
-func (i *ClusterInfo) ComputeICSHash() (hash types.Hash) {
+func (i *ClusterInfo) ComputeICSHash() (types.Hash, error) {
 	msg := &ptypes.ICSClusterInfo{
 		RandomSet:   i.GetRandomNodes(),
 		ObserverSet: i.GetObservers(),
@@ -328,12 +346,16 @@ func (i *ClusterInfo) ComputeICSHash() (hash types.Hash) {
 		}
 	}
 
-	rawData := polo.Polorize(msg)
-	hash = blake2b.Sum256(rawData)
+	rawData, err := polo.Polorize(msg)
+	if err != nil {
+		return types.NilHash, err
+	}
+
+	hash := blake2b.Sum256(rawData)
 	i.AddDirty(hash, rawData)
 	i.ICSHash = hash
 
-	return
+	return hash, nil
 }
 
 func (i *ClusterInfo) CreateICSSuccessMsg() *ptypes.ICSSuccessMsg {
@@ -431,4 +453,29 @@ type ICSMSG struct {
 	Msg       []byte
 	Sender    id.KramaID
 	ClusterID string
+}
+
+func NewICSMsg(msgType ptypes.MsgType, clusterID string, msg []byte) *ICSMSG {
+	return &ICSMSG{
+		MsgType:   msgType,
+		Msg:       msg,
+		ClusterID: clusterID,
+	}
+}
+
+func (im *ICSMSG) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(im)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize ics message")
+	}
+
+	return rawData, nil
+}
+
+func (im *ICSMSG) FromBytes(bytes []byte) error {
+	if err := polo.Depolorize(im, bytes); err != nil {
+		return errors.Wrap(err, "failed to depolorize ics message")
+	}
+
+	return nil
 }

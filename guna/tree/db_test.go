@@ -3,9 +3,9 @@ package tree
 import (
 	"testing"
 
+	"github.com/sarvalabs/moichain/common/tests"
+	db "github.com/sarvalabs/moichain/dhruva"
 	"github.com/stretchr/testify/require"
-	"gitlab.com/sarvalabs/moichain/common/tests"
-	db "gitlab.com/sarvalabs/moichain/dhruva"
 )
 
 func TestTreeDB_Get_CommittedEntry(t *testing.T) {

@@ -1,12 +1,12 @@
 package node
 
 import (
-	"gitlab.com/sarvalabs/moichain/chain"
-	"gitlab.com/sarvalabs/moichain/guna"
-	"gitlab.com/sarvalabs/moichain/ixpool"
-	"gitlab.com/sarvalabs/moichain/krama"
-	"gitlab.com/sarvalabs/moichain/poorna/agora"
-	"gitlab.com/sarvalabs/moichain/poorna/flux"
+	"github.com/sarvalabs/moichain/chain"
+	"github.com/sarvalabs/moichain/guna"
+	"github.com/sarvalabs/moichain/ixpool"
+	"github.com/sarvalabs/moichain/krama"
+	"github.com/sarvalabs/moichain/poorna/agora"
+	"github.com/sarvalabs/moichain/poorna/flux"
 )
 
 type nodeMetrics struct {

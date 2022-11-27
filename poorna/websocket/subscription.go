@@ -12,8 +12,8 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/moichain/utils"
+	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/utils"
 )
 
 const (

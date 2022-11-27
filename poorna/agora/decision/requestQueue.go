@@ -5,10 +5,10 @@ import (
 	"sync"
 	"time"
 
-	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
+	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
 
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/types"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/types"
 )
 
 type Request struct {

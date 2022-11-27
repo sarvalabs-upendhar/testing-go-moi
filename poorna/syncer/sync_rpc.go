@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 
-	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	"gitlab.com/sarvalabs/moichain/poorna/api"
-	"gitlab.com/sarvalabs/moichain/poorna/moirpc"
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/poorna/api"
+	"github.com/sarvalabs/moichain/poorna/moirpc"
+	"github.com/sarvalabs/moichain/types"
 )
 
 // SYNCRPCService is a struct that represents an SYNC RPC Service
@@ -53,7 +53,11 @@ func (syncRPC *SYNCRPCService) GetTesseract(
 		return errors.New("error fetching ICS Info")
 	}
 
-	rawData := tesseract.Bytes()
+	rawData, err := tesseract.Bytes()
+	if err != nil {
+		return err
+	}
+
 	resp.Data = rawData
 	resp.Delta = map[types.Hash][]byte{tesseract.Body.ConsensusProof.ICSHash: icsData}
 

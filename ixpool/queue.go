@@ -5,7 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 type InteractionQueue interface {

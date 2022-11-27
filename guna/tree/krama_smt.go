@@ -6,9 +6,9 @@ import (
 
 	"github.com/munna0908/smt"
 	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/moichain/dhruva"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	"github.com/sarvalabs/moichain/dhruva"
+	"github.com/sarvalabs/moichain/types"
 )
 
 // DB wraps access to trie data
@@ -61,7 +61,7 @@ func NewKramaHashTree(
 			return nil, errors.Wrap(err, "failed to fetch root node from db")
 		}
 
-		if err := polo.Depolorize(kht.root, rawData); err != nil {
+		if err := kht.root.FromBytes(rawData); err != nil {
 			return nil, errors.Wrap(err, "failed to depolarise root node")
 		}
 	}
@@ -76,7 +76,7 @@ func NewKramaHashTree(
 }
 
 // Root returns the hash of root node
-func (kht *KramaHashTree) Root() types.Hash {
+func (kht *KramaHashTree) Root() (types.Hash, error) {
 	return kht.root.Hash()
 }
 
@@ -142,7 +142,10 @@ func (kht *KramaHashTree) Commit() error {
 		return nil
 	}
 
-	deltaInfo := polo.Polorize(kht.deltaNodes)
+	deltaInfo, err := polo.Polorize(kht.deltaNodes)
+	if err != nil {
+		return errors.Wrap(err, "failed to polorize delta nodes")
+	}
 
 	kht.mtx.Lock()
 	defer kht.mtx.Unlock()
@@ -158,7 +161,17 @@ func (kht *KramaHashTree) Commit() error {
 		}
 	}
 
-	return kht.db.Set(kht.root.Hash().Bytes(), kht.root.Bytes())
+	rootHash, err := kht.root.Hash()
+	if err != nil {
+		return err
+	}
+
+	rawData, err := kht.root.Bytes()
+	if err != nil {
+		return err
+	}
+
+	return kht.db.Set(rootHash.Bytes(), rawData)
 }
 
 // Flush commits the merkle tree changes and writes the preimages to db

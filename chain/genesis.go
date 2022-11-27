@@ -1,7 +1,7 @@
 package chain
 
 import (
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 var GenesisIxHash = types.GetHash([]byte("Genesis Interaction"))
@@ -37,19 +37,19 @@ func CreateGenesisTesseract(
 	addr types.Address,
 	stateHash, contextHash types.Hash,
 	contextDelta types.ContextDelta,
-) *types.Tesseract {
+) (*types.Tesseract, error) {
 	Tesseract := &types.Tesseract{
 		Header: types.TesseractHeader{
 			Address:  addr,
 			PrevHash: types.NilHash,
 			Height:   0,
 			// Timestamp:     time.Now().UnixNano(),
-			AnuUsed:       0,
-			AnuLimit:      0,
-			TesseractHash: types.NilHash,
-			GridHash:      types.NilHash,
-			ClusterID:     "genesis",
-			Operator:      "genesis",
+			AnuUsed:   0,
+			AnuLimit:  0,
+			BodyHash:  types.NilHash,
+			GridHash:  types.NilHash,
+			ClusterID: "genesis",
+			Operator:  "genesis",
 			Extra: types.CommitData{
 				CommitSignature: nil,
 				Round:           0,
@@ -69,7 +69,13 @@ func CreateGenesisTesseract(
 		},
 		Ixns: nil,
 	}
-	Tesseract.Header.TesseractHash = Tesseract.BodyHash()
 
-	return Tesseract
+	tsBodyHash, err := Tesseract.ComputeBodyHash()
+	if err != nil {
+		return nil, err
+	}
+
+	Tesseract.Header.BodyHash = tsBodyHash
+
+	return Tesseract, nil
 }

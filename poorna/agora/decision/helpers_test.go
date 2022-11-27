@@ -4,15 +4,15 @@ import (
 	"context"
 	"testing"
 
-	"gitlab.com/sarvalabs/moichain/poorna/agora/db"
+	"github.com/sarvalabs/moichain/poorna/agora/db"
 
 	"github.com/hashicorp/go-hclog"
 
-	"gitlab.com/sarvalabs/moichain/common/tests"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
-	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/common/tests"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 type (

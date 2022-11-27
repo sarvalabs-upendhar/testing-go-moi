@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"gitlab.com/sarvalabs/moichain/mudra/common"
+	"github.com/sarvalabs/moichain/mudra/common"
 
 	"github.com/tyler-smith/go-bip39"
 	"golang.org/x/crypto/scrypt"

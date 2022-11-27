@@ -4,11 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"gitlab.com/sarvalabs/moichain/poorna/types"
+	"github.com/sarvalabs/moichain/poorna/types"
 
 	"github.com/pkg/errors"
-	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
 )
 
 func (k *Engine) startMessageHandlers(ctx context.Context, slot *ktypes.Slot) {
@@ -63,7 +62,11 @@ func (k *Engine) handleOutboundMsg(slot *ktypes.Slot, msg ktypes.ConsensusMessag
 	// Vote Message
 	case *ktypes.VoteMessage:
 		// Marshal proto message into an ClusterInfo message and push into the send queue
-		rawData := consensusMsg.Vote.Bytes()
+		rawData, err := consensusMsg.Vote.Bytes()
+		if err != nil {
+			return err
+		}
+
 		slot.OutboundChan <- &ktypes.ICSMSG{
 			MsgType:   types.VOTEMSG,
 			Msg:       rawData,
@@ -92,7 +95,7 @@ func (k *Engine) handleInboundMsg(slot *ktypes.Slot, msg *ktypes.ICSMSG) error {
 		vote := new(ktypes.Vote)
 
 		// Unmarshal message
-		if err := polo.Depolorize(vote, data); err != nil {
+		if err := vote.FromBytes(data); err != nil {
 			return errors.Wrap(err, fmt.Sprintf("failed to depolarise vote message from %s", sender))
 		}
 		// Create a consensus message for the Vote
@@ -107,7 +110,7 @@ func (k *Engine) handleInboundMsg(slot *ktypes.Slot, msg *ktypes.ICSMSG) error {
 		// Unmarshal into an ICS success message
 		successMsg := new(types.ICSSuccessMsg)
 
-		if err := polo.Depolorize(successMsg, data); err != nil {
+		if err := successMsg.FromBytes(data); err != nil {
 			return errors.Wrap(err, fmt.Sprintf("failed to depolarise ics_success message from %s", sender))
 		}
 

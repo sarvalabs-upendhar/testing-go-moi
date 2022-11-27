@@ -4,10 +4,9 @@ import (
 	"context"
 	"errors"
 
-	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/moichain/types"
 )
 
 const (
@@ -38,7 +37,7 @@ func (icsrpc *ICSRPCService) ICSRequest(
 
 	interactions := new(types.Interactions)
 
-	if err := polo.Depolorize(interactions, req.IxData); err != nil {
+	if err := interactions.FromBytes(req.IxData); err != nil {
 		return errors.New("ixs decode error")
 	}
 

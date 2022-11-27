@@ -4,9 +4,9 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/moichain/types"
 	"github.com/stretchr/testify/require"
-	"gitlab.com/sarvalabs/moichain/common/tests"
-	"gitlab.com/sarvalabs/moichain/types"
 )
 
 func TestUpdateAccMetaInfo_CheckErrors(t *testing.T) {

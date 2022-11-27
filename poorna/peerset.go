@@ -6,7 +6,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/peer"
 
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 var (

@@ -6,9 +6,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"gitlab.com/sarvalabs/moichain/utils"
+	"github.com/sarvalabs/moichain/utils"
 
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 const MaxWaitCounter = 20

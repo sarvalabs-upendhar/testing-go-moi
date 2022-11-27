@@ -1,8 +1,8 @@
 package schnorr
 
 import (
-	"gitlab.com/sarvalabs/moichain/mudra/common"
-	"gitlab.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/mudra/common"
+	"github.com/sarvalabs/moichain/mudra/kramaid"
 )
 
 // SchnorrSR25519Sig is a custom type of Signature that uses sr25519 Curve and Schnorr signing algorithm for signing

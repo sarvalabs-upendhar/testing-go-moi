@@ -9,11 +9,10 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/poorna/agora/db"
-	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/poorna/agora/db"
+	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 var AgoraPrefix = []byte("agora")
@@ -117,7 +116,7 @@ func (l *Ledger) fetchFromDB(address types.Address, stateHash atypes.CID) (*atyp
 	}
 
 	plist := new(atypes.CanonicalPeerList)
-	if err := polo.Depolorize(plist, rawData); err != nil {
+	if err := plist.FromBytes(rawData); err != nil {
 		return nil, err
 	}
 
@@ -187,7 +186,14 @@ func (l *Ledger) worker() {
 			dbWriter := l.db.GetBatchWriter()
 
 			for _, job := range jobs {
-				if err := dbWriter.Set(job.key, polo.Polorize(job.value)); err != nil {
+				rawData, err := job.value.Bytes()
+				if err != nil {
+					l.logger.Error("Failed to polorize peer list")
+
+					continue
+				}
+
+				if err := dbWriter.Set(job.key, rawData); err != nil {
 					l.logger.Error("Error adding associated peer list to db")
 
 					continue

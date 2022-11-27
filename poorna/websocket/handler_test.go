@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"testing"
 
-	"gitlab.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/moichain/common/tests"
 
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"

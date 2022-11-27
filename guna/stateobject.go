@@ -5,16 +5,15 @@ import (
 	"math/big"
 	"sync"
 
-	gtypes "gitlab.com/sarvalabs/moichain/guna/types"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
 
 	"github.com/decred/dcrd/crypto/blake256"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/moichain/dhruva"
-	"gitlab.com/sarvalabs/moichain/guna/tree"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/moichain/dhruva"
+	"github.com/sarvalabs/moichain/guna/tree"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/types"
 )
 
 type Storage map[string][]byte
@@ -139,8 +138,8 @@ func (s *StateObject) GetLogic(logicID types.LogicID) (data *gtypes.LogicData, e
 
 		if data != nil {
 			msg := new(gtypes.LogicData)
-			if err := polo.Depolorize(msg, data); err != nil {
-				log.Fatal(err)
+			if err := msg.FromBytes(data); err != nil {
+				return nil, err
 			}
 
 			return msg, nil
@@ -185,7 +184,11 @@ func (s *StateObject) Copy() *StateObject {
 }
 
 func (s *StateObject) commitBalanceObject() ([]byte, error) {
-	data := polo.Polorize(s.balance)
+	data, err := s.balance.Bytes()
+	if err != nil {
+		return nil, err
+	}
+
 	hash := types.GetHash(data)
 
 	s.journal.append(BalanceUpdation{
@@ -203,7 +206,11 @@ func (s *StateObject) commitBalanceObject() ([]byte, error) {
 func (s *StateObject) commitAccount() (types.Hash, error) {
 	s.data.Nonce++
 
-	data := polo.Polorize(s.data)
+	data, err := s.data.Bytes()
+	if err != nil {
+		return types.NilHash, err
+	}
+
 	hash := types.GetHash(data)
 
 	s.journal.append(AccountUpdation{
@@ -217,10 +224,14 @@ func (s *StateObject) commitAccount() (types.Hash, error) {
 	return hash, nil
 }
 
-func (s *StateObject) commitContextObject(obj interface{}) (types.Hash, error) {
+func (s *StateObject) commitContextObject(obj gtypes.Context) (types.Hash, error) {
 	// Add type checks here
-	data := polo.Polorize(obj)
-	hash := types.GetHash(data)
+	rawData, err := obj.Bytes()
+	if err != nil {
+		return types.NilHash, err
+	}
+
+	hash := types.GetHash(rawData)
 
 	s.journal.append(ContextUpdation{
 		addr: &s.address,
@@ -228,7 +239,7 @@ func (s *StateObject) commitContextObject(obj interface{}) (types.Hash, error) {
 	})
 
 	key := types.BytesToHex(dhruva.ContextObjectKey(s.address, hash))
-	s.dirtyEntries[key] = data
+	s.dirtyEntries[key] = rawData
 
 	return hash, nil
 }
@@ -247,7 +258,12 @@ func (s *StateObject) commitStorage() (types.Hash, error) {
 			return types.NilHash, errors.Wrap(err, "failed to commit storage tree")
 		}
 
-		if err := s.storageTrie.Set(logicID.Bytes(), merkleTree.Root().Bytes()); err != nil {
+		rootHash, err := merkleTree.Root()
+		if err != nil {
+			return types.NilHash, err
+		}
+
+		if err := s.storageTrie.Set(logicID.Bytes(), rootHash.Bytes()); err != nil {
 			return types.NilHash, err
 		}
 	}
@@ -260,7 +276,10 @@ func (s *StateObject) commitStorage() (types.Hash, error) {
 		return types.NilHash, err
 	}
 
-	rootHash := s.storageTrie.Root()
+	rootHash, err := s.storageTrie.Root()
+	if err != nil {
+		return types.NilHash, err
+	}
 
 	s.journal.append(StorageUpdation{
 		addr: &s.address,
@@ -357,14 +376,17 @@ func (s *StateObject) CreateAsset(
 	)
 
 	if code != nil {
-		logicID, logicData = gtypes.GetLogicID(code, false)
+		logicID, logicData, err = gtypes.GetLogicID(code, false)
+		if err != nil {
+			return "", err
+		}
 
 		if err = s.CreateLogic(logicID, logicData); err != nil {
 			return "", err
 		}
 	}
 
-	assetID, assetHash, data := gtypes.GetAssetID(
+	assetID, assetHash, data, err := gtypes.GetAssetID(
 		s.address,
 		dimension,
 		isFungible,
@@ -373,6 +395,9 @@ func (s *StateObject) CreateAsset(
 		totalSupply,
 		logicID,
 	)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to polorize asset data")
+	}
 
 	s.journal.append(AssetCreation{
 		addr: &s.address,
@@ -396,7 +421,11 @@ func (s *StateObject) AddAccountGenesisInfo(address types.Address, ixHash types.
 	accInfo := types.AccountGenesisInfo{
 		IxHash: ixHash,
 	}
-	rawData := polo.Polorize(&accInfo)
+
+	rawData, err := accInfo.Bytes()
+	if err != nil {
+		return err
+	}
 
 	return s.SetStorageEntry(GenesisLogicID, address.Bytes(), rawData)
 }
@@ -406,9 +435,11 @@ func (s *StateObject) CreateContext(behaviouralNodes, randomNodes []id.KramaID) 
 		return types.NilHash, errors.New("livness size not met")
 	}
 
-	behaviouralContextObject := new(gtypes.ContextObject)
-	randomContextObject := new(gtypes.ContextObject)
-	metaContextObject := new(gtypes.MetaContextObject)
+	var (
+		behaviouralContextObject = new(gtypes.ContextObject)
+		randomContextObject      = new(gtypes.ContextObject)
+		metaContextObject        = new(gtypes.MetaContextObject)
+	)
 
 	behaviouralContextObject.Ids = append(behaviouralContextObject.Ids, behaviouralNodes...)
 	randomContextObject.Ids = append(randomContextObject.Ids, randomNodes...)
@@ -531,7 +562,7 @@ func (s *StateObject) getMetaContextObjectCopy() (*gtypes.MetaContextObject, err
 
 	obj := new(gtypes.MetaContextObject)
 
-	if err := polo.Depolorize(obj, rawData); err != nil {
+	if err := obj.FromBytes(rawData); err != nil {
 		return nil, err
 	}
 
@@ -550,7 +581,7 @@ func (s *StateObject) getContextObjectCopy(hash types.Hash) (*gtypes.ContextObje
 
 		obj := new(gtypes.ContextObject)
 
-		if err := polo.Depolorize(obj, rawData); err != nil {
+		if err := obj.FromBytes(rawData); err != nil {
 			return nil, err
 		}
 
@@ -579,7 +610,7 @@ func getBalanceObject(
 
 	balObject := new(gtypes.BalanceObject)
 
-	if err = polo.Depolorize(balObject, data); err != nil {
+	if err := balObject.FromBytes(data); err != nil {
 		return nil, err
 	}
 

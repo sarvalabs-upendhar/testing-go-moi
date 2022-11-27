@@ -1,4 +1,4 @@
-module gitlab.com/sarvalabs/moichain
+module github.com/sarvalabs/moichain
 
 go 1.18
 
@@ -36,12 +36,12 @@ require (
 	github.com/pkg/profile v1.6.0
 	github.com/prometheus/client_golang v1.13.0
 	github.com/rs/zerolog v1.27.0
+	github.com/sarvalabs/go-polo v0.1.1
 	github.com/spf13/cobra v1.5.0
 	github.com/stretchr/testify v1.8.1
 	github.com/supranational/blst v0.3.7
 	github.com/tyler-smith/go-bip39 v1.1.0
 	github.com/ugorji/go/codec v1.2.6
-	gitlab.com/sarvalabs/polo/go-polo v0.2.0
 	go.opentelemetry.io/otel v1.11.0
 	go.opentelemetry.io/otel/exporters/jaeger v1.11.0
 	go.opentelemetry.io/otel/sdk v1.11.0

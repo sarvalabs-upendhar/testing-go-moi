@@ -3,10 +3,12 @@ package types
 import (
 	"sync"
 
+	"github.com/pkg/errors"
+
 	"github.com/mr-tron/base58"
 
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
 )
 
 const (
@@ -38,18 +40,18 @@ type Tesseract struct {
 }
 
 type TesseractHeader struct {
-	Address       Address
-	PrevHash      Hash
-	Height        uint64
-	AnuUsed       uint64
-	AnuLimit      uint64
-	TesseractHash Hash
-	GridHash      Hash
-	Operator      string
-	ClusterID     string
-	Timestamp     int64
-	ContextLock   map[Address]ContextLockInfo
-	Extra         CommitData
+	Address     Address
+	PrevHash    Hash
+	Height      uint64
+	AnuUsed     uint64
+	AnuLimit    uint64
+	BodyHash    Hash
+	GridHash    Hash
+	Operator    string
+	ClusterID   string
+	Timestamp   int64
+	ContextLock map[Address]ContextLockInfo
+	Extra       CommitData
 }
 
 type TesseractBody struct {
@@ -88,10 +90,19 @@ func (t *Tesseract) GetICSHash() Hash {
 }
 
 func (t *Tesseract) BodyHash() Hash {
-	return PoloHash(t.Body)
+	return t.Header.BodyHash
 }
 
-func (t *Tesseract) Hash() Hash {
+func (t *Tesseract) ComputeBodyHash() (Hash, error) {
+	hash, err := PoloHash(t.Body)
+	if err != nil {
+		return NilHash, errors.Wrap(err, "failed to polorize tesseract body")
+	}
+
+	return hash, nil
+}
+
+func (t *Tesseract) Hash() (Hash, error) {
 	protoHeader := new(TesseractHeader)
 	protoHeader.ContextLock = t.Header.ContextLock
 	protoHeader.Address = t.Header.Address
@@ -99,15 +110,18 @@ func (t *Tesseract) Hash() Hash {
 	protoHeader.Height = t.Header.Height
 	protoHeader.AnuUsed = t.Header.AnuUsed
 	protoHeader.AnuLimit = t.Header.AnuLimit
-	protoHeader.TesseractHash = t.Header.TesseractHash
+	protoHeader.BodyHash = t.Header.BodyHash
 	protoHeader.GridHash = t.Header.GridHash
 	protoHeader.Operator = t.Header.Operator
 	protoHeader.ClusterID = t.Header.ClusterID
 	protoHeader.Timestamp = t.Header.Timestamp
 
-	data := polo.Polorize(protoHeader)
+	data, err := polo.Polorize(protoHeader)
+	if err != nil {
+		return Hash{}, errors.Wrap(err, "failed to polorize tesseract header")
+	}
 
-	return GetHash(data)
+	return GetHash(data), nil
 }
 
 func (t *Tesseract) Interactions() Interactions {
@@ -154,10 +168,23 @@ func (t *Tesseract) Height() uint64 {
 	return t.Header.Height
 }
 
-func (t *Tesseract) Bytes() []byte {
+func (t *Tesseract) Bytes() ([]byte, error) {
 	c := t.CanonicalWithoutSeal()
 
-	return polo.Polorize(c)
+	rawData, err := polo.Polorize(c)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize tesseract")
+	}
+
+	return rawData, nil
+}
+
+func (t *Tesseract) FromBytes(bytes []byte) error {
+	if err := polo.Depolorize(t, bytes); err != nil {
+		return errors.Wrap(err, "failed to depolorize tesseract")
+	}
+
+	return nil
 }
 
 // CanonicalWithoutSeal method returns a copy of the tesseract without seal and interactions
@@ -183,9 +210,22 @@ type CanonicalTesseract struct {
 	Seal   []byte
 }
 
-// Bytes method serializes and returns the canonical tesseract in bytes
-func (c *CanonicalTesseract) Bytes() []byte {
-	return polo.Polorize(c)
+// Bytes method polorizes and returns the canonical tesseract in bytes
+func (c *CanonicalTesseract) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(c)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize canonical tesseract")
+	}
+
+	return rawData, nil
+}
+
+func (c *CanonicalTesseract) FromBytes(bytes []byte) error {
+	if err := polo.Depolorize(c, bytes); err != nil {
+		return errors.Wrap(err, "failed to depolorize canonical tesseract")
+	}
+
+	return nil
 }
 
 type CanonicalTesseractWithoutSeal struct {

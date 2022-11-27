@@ -4,12 +4,14 @@ import (
 	"encoding/hex"
 	"math/big"
 
+	"github.com/pkg/errors"
+
 	"golang.org/x/crypto/blake2b"
 
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
 )
 
 const (
@@ -40,6 +42,23 @@ func (b *BalanceObject) Copy() *BalanceObject {
 	return newObject
 }
 
+func (b *BalanceObject) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(b)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize balance object")
+	}
+
+	return rawData, nil
+}
+
+func (b *BalanceObject) FromBytes(bytes []byte) error {
+	if err := polo.Depolorize(b, bytes); err != nil {
+		return errors.Wrap(err, "failed to depolorize balance object")
+	}
+
+	return nil
+}
+
 type ApprovalObject struct {
 	Approvals map[types.Address]AssetMap
 	PrvHash   types.Hash
@@ -64,6 +83,14 @@ type AssetData struct {
 	Extra   []byte
 }
 
+func (ad *AssetData) FromBytes(bytes []byte) error {
+	if err := polo.Depolorize(ad, bytes); err != nil {
+		return errors.Wrap(err, "failed to depolorize asset data")
+	}
+
+	return nil
+}
+
 func GetAssetID(
 	addr types.Address,
 	dimension uint8,
@@ -72,7 +99,7 @@ func GetAssetID(
 	symbol string,
 	totalSupply int64,
 	logicID types.LogicID,
-) (types.AssetID, types.Hash, []byte) {
+) (types.AssetID, types.Hash, []byte, error) {
 	var (
 		buf  []byte
 		info uint8 = 0x00
@@ -97,13 +124,22 @@ func GetAssetID(
 	buf = append(buf, dimension)
 	buf = append(buf, info)
 
-	data := polo.Polorize(assetData)
+	data, err := polo.Polorize(assetData)
+	if err != nil {
+		return "", types.NilHash, nil, err
+	}
+
 	assetCID := types.GetHash(data)
 
 	buf = append(buf, assetCID.Bytes()...)
 	aID := types.AssetID(hex.EncodeToString(buf))
 
-	return aID, assetCID, data
+	return aID, assetCID, data, nil
+}
+
+type Context interface {
+	Bytes() ([]byte, error)
+	FromBytes(bytes []byte) error
 }
 
 type MetaContextObject struct {
@@ -123,6 +159,23 @@ func (m *MetaContextObject) Copy() *MetaContextObject {
 	newObject.DefaultMTQ = m.DefaultMTQ
 
 	return newObject
+}
+
+func (m *MetaContextObject) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(m)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize meta context object")
+	}
+
+	return rawData, nil
+}
+
+func (m *MetaContextObject) FromBytes(bytes []byte) error {
+	if err := polo.Depolorize(m, bytes); err != nil {
+		return errors.Wrap(err, "failed to depolorize meta context object")
+	}
+
+	return nil
 }
 
 type ContextObject struct {
@@ -147,8 +200,30 @@ func (c *ContextObject) Copy() *ContextObject {
 	return newObject
 }
 
-func (c *ContextObject) Hash() types.Hash {
-	return types.PoloHash(c)
+func (c *ContextObject) Hash() (types.Hash, error) {
+	hash, err := types.PoloHash(c)
+	if err != nil {
+		return types.NilHash, errors.Wrap(err, "failed to polorize context object")
+	}
+
+	return hash, nil
+}
+
+func (c *ContextObject) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(c)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize context object")
+	}
+
+	return rawData, nil
+}
+
+func (c *ContextObject) FromBytes(bytes []byte) error {
+	if err := polo.Depolorize(c, bytes); err != nil {
+		return errors.Wrap(err, "failed to depolorize context object")
+	}
+
+	return nil
 }
 
 type LogicData struct {
@@ -156,14 +231,27 @@ type LogicData struct {
 	Upgradable bool
 }
 
-func GetLogicID(code []byte, isUpgradable bool) (types.LogicID, *LogicData) {
+func (ld *LogicData) FromBytes(bytes []byte) error {
+	if err := polo.Depolorize(ld, bytes); err != nil {
+		return errors.Wrap(err, "failed to depolorize logic data")
+	}
+
+	return nil
+}
+
+func GetLogicID(code []byte, isUpgradable bool) (types.LogicID, *LogicData, error) {
 	ld := &LogicData{
 		Code:       code,
 		Upgradable: isUpgradable,
 	}
 
-	x := blake2b.Sum256(polo.Polorize(ld))
+	rawData, err := polo.Polorize(ld)
+	if err != nil {
+		return "", nil, err
+	}
+
+	x := blake2b.Sum256(rawData)
 	logicID := types.BytesToHash(x[:])
 
-	return types.LogicID(logicID.String()), ld
+	return types.LogicID(logicID.String()), ld, nil
 }

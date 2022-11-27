@@ -5,13 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"gitlab.com/sarvalabs/moichain/dhruva"
+	"github.com/sarvalabs/moichain/dhruva"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/sarvalabs/moichain/common/tests"
+	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
 	"github.com/stretchr/testify/require"
-	"gitlab.com/sarvalabs/moichain/common/tests"
-	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
 )
 
 func TestGetAssociatedPeers_FetchFromCache(t *testing.T) {
@@ -47,11 +46,11 @@ func TestGetAssociatedPeers_FetchFromDB(t *testing.T) {
 	pList := atypes.NewPeerList()
 	pList.AddPeer(ids[0])
 
+	rawData, err := pList.CanonicalPeerList().Bytes()
+	require.NoError(t, err)
+
 	// Write the list to db
-	err := ledger.db.GetBatchWriter().Set(
-		GetAgoraDBKey(address, stateHash.Key()),
-		polo.Polorize(pList.CanonicalPeerList()),
-	)
+	err = ledger.db.GetBatchWriter().Set(GetAgoraDBKey(address, stateHash.Key()), rawData)
 	require.NoError(t, err)
 
 	peers, err := ledger.GetAssociatedPeers(address, stateHash)
@@ -74,11 +73,11 @@ func TestUpdateAssociatedPeers_EntryAlreadyExists(t *testing.T) {
 	pList := atypes.NewPeerList()
 	pList.AddPeer(ids[0])
 
+	rawData, err := pList.CanonicalPeerList().Bytes()
+	require.NoError(t, err)
+
 	// Write the list to db
-	err := ledger.db.GetBatchWriter().Set(
-		GetAgoraDBKey(address, stateHash.Key()),
-		polo.Polorize(pList.CanonicalPeerList()),
-	)
+	err = ledger.db.GetBatchWriter().Set(GetAgoraDBKey(address, stateHash.Key()), rawData)
 	require.NoError(t, err)
 
 	err = ledger.UpdateAssociatedPeers(address, stateHash, ids[1])

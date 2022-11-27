@@ -1,10 +1,11 @@
 package kbft
 
 import (
-	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/types"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-polo"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/types"
 )
 
 type EvidenceEngine struct {
@@ -42,14 +43,22 @@ func (e *Evidence) AddVote(v *ktypes.Vote) {
 	e.Votes = append(e.Votes, v)
 }
 
-func (e *Evidence) Bytes() []byte {
-	return polo.Polorize(e)
+func (e *Evidence) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(e)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize evidence")
+	}
+
+	return rawData, nil
 }
 
-func (e *Evidence) FlushEvidence() (types.Hash, []byte) {
-	rawData := e.Bytes()
+func (e *Evidence) FlushEvidence() (types.Hash, []byte, error) {
+	rawData, err := e.Bytes()
+	if err != nil {
+		return types.NilHash, nil, err
+	}
 
-	return types.GetHash(rawData), rawData
+	return types.GetHash(rawData), rawData, nil
 }
 
 func (e *Evidence) AddVoteSet(bitArray *types.ArrayOfBits) {

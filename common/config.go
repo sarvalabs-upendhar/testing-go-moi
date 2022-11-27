@@ -5,7 +5,7 @@ import (
 	"net"
 	"time"
 
-	kcrypto "gitlab.com/sarvalabs/moichain/mudra"
+	kcrypto "github.com/sarvalabs/moichain/mudra"
 
 	"github.com/libp2p/go-libp2p/core/protocol"
 	maddr "github.com/multiformats/go-multiaddr"

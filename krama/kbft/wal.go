@@ -9,15 +9,14 @@ import (
 	"path/filepath"
 	"time"
 
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 
-	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
 
-	"gitlab.com/sarvalabs/moichain/utils"
+	"github.com/sarvalabs/moichain/utils"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/polo/go-polo"
 )
 
 const (
@@ -264,7 +263,7 @@ func (wal *BaseWAL) SearchForClusterID(
 		for {
 			msg, err = dec.Decode()
 			if errors.Is(err, io.EOF) {
-				//// OPTIMISATION: no need to look for height in older files if we've seen h < height
+				// // OPTIMISATION: no need to look for height in older files if we've seen h < height
 				// if lastHeightFound > 0 && lastHeightFound < height {
 				//	 gr.Close()
 				//	 return nil, false, nil
@@ -318,10 +317,14 @@ func NewWALEncoder(wr io.Writer) *WALEncoder {
 // the encoded size of v is greater than 1MB. Any error encountered
 // during the write is also returned.
 func (enc *WALEncoder) Encode(v *ktypes.TimedWALMessage) error {
-	data := polo.Polorize(v)
-	crc := crc32.Checksum(data, crc32c)
+	rawData, err := v.Bytes()
+	if err != nil {
+		return err
+	}
 
-	length := uint32(len(data))
+	crc := crc32.Checksum(rawData, crc32c)
+
+	length := uint32(len(rawData))
 	if length > maxMsgSizeBytes {
 		return fmt.Errorf("msg is too big: %d bytes, max: %d bytes", length, maxMsgSizeBytes)
 	}
@@ -331,9 +334,9 @@ func (enc *WALEncoder) Encode(v *ktypes.TimedWALMessage) error {
 
 	binary.BigEndian.PutUint32(msg[0:4], crc)
 	binary.BigEndian.PutUint32(msg[4:8], length)
-	copy(msg[8:], data)
+	copy(msg[8:], rawData)
 
-	_, err := enc.wr.Write(msg)
+	_, err = enc.wr.Write(msg)
 
 	return err
 }
@@ -416,8 +419,7 @@ func (dec *WALDecoder) Decode() (*ktypes.TimedWALMessage, error) {
 
 	res := new(ktypes.TimedWALMessage)
 
-	err = polo.Depolorize(res, data)
-	if err != nil {
+	if err := res.FromBytes(data); err != nil {
 		return nil, DataCorruptionError{fmt.Errorf("failed to decode data: %w", err)}
 	}
 

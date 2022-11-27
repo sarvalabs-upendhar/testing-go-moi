@@ -2,21 +2,22 @@ package poorna
 
 import (
 	"bufio"
-	"errors"
 	"log"
 	"sync"
 
-	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+	"github.com/pkg/errors"
 
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
-	"gitlab.com/sarvalabs/moichain/utils"
+	"github.com/sarvalabs/go-polo"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+
+	"github.com/sarvalabs/moichain/utils"
 
 	mapset "github.com/deckarep/golang-set"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 // KipPeer is a struct that represents a peer on the KIP network
@@ -90,17 +91,17 @@ func (p *KipPeer) InitHandshake(id id.KramaID, ntq int32, addrs []multiaddr.Mult
 	}
 
 	message := new(ptypes.Message)
-	if err = polo.Depolorize(message, buffer[0:byteCount]); err != nil {
+	if err := message.FromBytes(buffer[0:byteCount]); err != nil {
 		return err
 	}
 	// Unmarshal message proto into a NewPeer message
-	var msg ptypes.HandshakeMSG
-	if err := polo.Depolorize(&msg, message.Payload); err != nil {
+	handshakeMsg := new(ptypes.HandshakeMSG)
+	if err := handshakeMsg.FromBytes(message.Payload); err != nil {
 		return err
 	}
 
-	if msg.Error != "" {
-		return errors.New(msg.Error)
+	if handshakeMsg.Error != "" {
+		return errors.New(handshakeMsg.Error)
 	}
 	// HashSet the KIP id of the peer based on the message
 	p.setID(message.Sender)
@@ -121,7 +122,12 @@ func (p *KipPeer) sendHandshakeErrorResp(id id.KramaID, err error) error {
 func (p *KipPeer) SendIXs(id id.KramaID, ixs types.Interactions) error {
 	// Mark the given Interactions as 'known'
 	for _, j := range ixs {
-		p.markInteraction(j.GetIxHash())
+		ixHash, err := j.GetIxHash()
+		if err != nil {
+			return err
+		}
+
+		p.markInteraction(ixHash)
 	}
 
 	msg := ptypes.InteractionMsg{Ixs: ixs}
@@ -136,20 +142,26 @@ func (p *KipPeer) Send(id id.KramaID, code ptypes.MsgType, msg interface{}) erro
 	defer p.mtxLock.Unlock()
 
 	// Marshal the proto message into slice of bytes and log and return if an error occurs
-	bytes := polo.Polorize(msg)
+	rawData, err := polo.Polorize(msg)
+	if err != nil {
+		return errors.Wrap(err, "failed to polorize message payload")
+	}
 
 	// Create a network message proto with the bytes payload of the message to send
 	// and convert into a proto message and marshal it  into a slice of bytes
 	m := ptypes.Message{
 		MsgType: code,
-		Payload: bytes,
+		Payload: rawData,
 		Sender:  id,
 	}
 
-	bytes = polo.Polorize(&m)
+	rawData, err = m.Bytes()
+	if err != nil {
+		return err
+	}
 
 	// Write the message bytes into the peer's iobuffer
-	if _, err := p.rw.Writer.Write(bytes); err != nil {
+	if _, err := p.rw.Writer.Write(rawData); err != nil {
 		return err
 	}
 

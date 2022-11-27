@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"sync"
 
-	db "gitlab.com/sarvalabs/moichain/dhruva"
+	db "github.com/sarvalabs/moichain/dhruva"
 
-	atypes "gitlab.com/sarvalabs/moichain/poorna/agora/types"
+	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
 
 	"github.com/hashicorp/go-hclog"
-	dhruva "gitlab.com/sarvalabs/moichain/dhruva/db"
-	"gitlab.com/sarvalabs/moichain/types"
+	dhruva "github.com/sarvalabs/moichain/dhruva/db"
+	"github.com/sarvalabs/moichain/types"
 )
 
 const (

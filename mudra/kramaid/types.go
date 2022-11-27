@@ -7,7 +7,7 @@ import (
 
 	"github.com/mr-tron/base58"
 	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/moichain/mudra/common"
+	"github.com/sarvalabs/moichain/mudra/common"
 )
 
 const (

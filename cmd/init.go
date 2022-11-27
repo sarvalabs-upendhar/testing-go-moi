@@ -12,8 +12,8 @@ import (
 	"os"
 	"strconv"
 
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/mudra/poi"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/mudra/poi"
 
 	"github.com/spf13/cobra"
 )

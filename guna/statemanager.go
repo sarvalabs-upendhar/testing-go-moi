@@ -11,23 +11,22 @@ import (
 	"net/http"
 	"sync"
 
-	ptypes "gitlab.com/sarvalabs/moichain/poorna/types"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
-	gtypes "gitlab.com/sarvalabs/moichain/guna/types"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
 
 	"github.com/hashicorp/go-hclog"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
-	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/telemetry/tracing"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/telemetry/tracing"
 	"golang.org/x/sync/errgroup"
 
 	lru "github.com/hashicorp/golang-lru"
-	"gitlab.com/sarvalabs/moichain/dhruva"
-	"gitlab.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/dhruva"
+	"github.com/sarvalabs/moichain/types"
 )
 
 const (
@@ -189,8 +188,8 @@ func (sm *StateManager) GetStateObjectByHash(addr types.Address, hash types.Hash
 	}
 
 	acc := new(types.Account)
-	if err = polo.Depolorize(acc, data); err != nil {
-		log.Fatal(err)
+	if err := acc.FromBytes(data); err != nil {
+		return nil, err
 	}
 
 	newJournal := new(Journal)
@@ -273,7 +272,6 @@ func (sm *StateManager) GetLatestTesseract(addr types.Address, withInteractions 
 }
 
 func (sm *StateManager) FetchTesseractFromDB(hash types.Hash, withInteractions bool) (*types.Tesseract, error) {
-	var interactions types.Interactions
 	// Fetch Tesseract from DB
 	buf, err := sm.db.GetTesseract(hash)
 	if err != nil {
@@ -283,9 +281,11 @@ func (sm *StateManager) FetchTesseractFromDB(hash types.Hash, withInteractions b
 	// canonicalTesseract is a clone of the tesseract. The only difference is that it won't have the interactions field.
 	canonicalTesseract := new(types.CanonicalTesseract)
 
-	if err = polo.Depolorize(canonicalTesseract, buf); err != nil {
+	if err := canonicalTesseract.FromBytes(buf); err != nil {
 		return nil, errors.Wrap(err, "failed to depolarize tesseract")
 	}
+
+	interactions := new(types.Interactions)
 
 	if withInteractions {
 		// Fetch interactions from DB
@@ -295,7 +295,7 @@ func (sm *StateManager) FetchTesseractFromDB(hash types.Hash, withInteractions b
 			return nil, errors.Wrap(err, types.ErrFetchingInteractions.Error())
 		}
 
-		if err = polo.Depolorize(interactions, buf); err != nil {
+		if err := interactions.FromBytes(buf); err != nil {
 			return nil, errors.Wrap(err, "failed to depolarize interactions")
 		}
 	}
@@ -303,7 +303,7 @@ func (sm *StateManager) FetchTesseractFromDB(hash types.Hash, withInteractions b
 	tesseract := &types.Tesseract{
 		Header: canonicalTesseract.Header,
 		Body:   canonicalTesseract.Body,
-		Ixns:   interactions,
+		Ixns:   *interactions,
 		Seal:   canonicalTesseract.Seal,
 	}
 
@@ -349,7 +349,7 @@ func (sm *StateManager) getContextObject(addr types.Address, hash types.Hash) (*
 
 	object := new(gtypes.ContextObject)
 
-	if err := polo.Depolorize(object, rawData); err != nil {
+	if err := object.FromBytes(rawData); err != nil {
 		return nil, errors.Wrap(err, "contextObject deserialization failed")
 	}
 
@@ -376,7 +376,7 @@ func (sm *StateManager) getMetaContextObject(addr types.Address, hash types.Hash
 
 	object := new(gtypes.MetaContextObject)
 
-	if err = polo.Depolorize(object, rawData); err != nil {
+	if err = object.FromBytes(rawData); err != nil {
 		return nil, errors.Wrap(err, "MetaContextObject deserialization failed")
 	}
 
@@ -499,7 +499,7 @@ func (sm *StateManager) GetContextByHash(
 			return types.NilHash, nil, nil, errors.Wrap(err, "tesseract fetch failed")
 		}
 
-		sm.logger.Debug("Fetching context info", "addr", address.Hex(), ts.Body.ContextHash.Hex())
+		sm.logger.Debug("Fetching context info", "addr", address.Hex(), ts.Body.ContextHash)
 
 		hash = ts.Body.ContextHash
 	}
@@ -661,7 +661,7 @@ func (sm *StateManager) GetAccountInfo(addr types.Address, stateHash types.Hash)
 
 	accInfo := new(types.Account)
 
-	if err := polo.Depolorize(accInfo, rawData); err != nil {
+	if err := accInfo.FromBytes(rawData); err != nil {
 		return nil, err
 	}
 

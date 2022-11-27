@@ -5,8 +5,8 @@ import (
 	"math/big"
 
 	"github.com/pkg/errors"
-	"gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/polo/go-polo"
+	"github.com/sarvalabs/go-polo"
+	"github.com/sarvalabs/moichain/mudra/kramaid"
 )
 
 const (
@@ -124,17 +124,40 @@ type IxData struct {
 // Interactions are array of Transactions
 type Interactions []*Interaction
 
-func (is Interactions) Bytes() []byte {
-	return polo.Polorize(is)
+func (is Interactions) Hash() (Hash, error) {
+	hash, err := PoloHash(is)
+	if err != nil {
+		return NilHash, errors.Wrap(err, "failed to polorize interactions")
+	}
+
+	return hash, nil
 }
 
-func (is Interactions) Hash() Hash {
-	return PoloHash(is)
+func (is Interactions) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(is)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize interactions")
+	}
+
+	return rawData, nil
 }
 
-func (ix *Interaction) GetSize() int64 {
+func (is *Interactions) FromBytes(bytes []byte) error {
+	if err := polo.Depolorize(is, bytes); err != nil {
+		return errors.Wrap(err, "failed to depolorize interactions")
+	}
+
+	return nil
+}
+
+func (ix *Interaction) GetSize() (int64, error) {
 	// FIXME: size should calculated after signature integration
-	return int64(len(polo.Polorize(ix)))
+	bz, err := polo.Polorize(ix)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to polorize interaction")
+	}
+
+	return int64(len(bz)), nil
 }
 
 func (ix *Interaction) GetAssetCreationPayload() *AssetDataInput {
@@ -145,15 +168,19 @@ func (ix *Interaction) IxType() IxType {
 	return ix.Data.Input.Type
 }
 
-func (ix *Interaction) GetIxHash() Hash {
+func (ix *Interaction) GetIxHash() (Hash, error) {
 	if ix.Hash.IsNil() {
-		h := PoloHash(ix)
+		h, err := PoloHash(ix)
+		if err != nil {
+			return Hash{}, errors.Wrap(err, "failed to polorize interaction")
+		}
+
 		ix.Hash = h
 
-		return h
+		return h, nil
 	}
 
-	return ix.Hash
+	return ix.Hash, nil
 }
 
 func (ix *Interaction) Sign(prv *ecdsa.PrivateKey) error {
@@ -207,6 +234,15 @@ func (ix *Interaction) Cost() *big.Int {
 
 func (ix *Interaction) IsUnderpriced(priceLimit uint64) bool {
 	return ix.GasPrice().Cmp(big.NewInt(0).SetUint64(priceLimit)) < 0
+}
+
+func (ix *Interaction) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(ix)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize interaction")
+	}
+
+	return rawData, nil
 }
 
 type IxByNonce Interactions

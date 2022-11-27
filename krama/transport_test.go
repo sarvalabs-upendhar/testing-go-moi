@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/sarvalabs/moichain/common/tests"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/types"
 	"github.com/stretchr/testify/require"
-	"gitlab.com/sarvalabs/moichain/common/tests"
-	ktypes "gitlab.com/sarvalabs/moichain/krama/types"
-	id "gitlab.com/sarvalabs/moichain/mudra/kramaid"
-	"gitlab.com/sarvalabs/moichain/types"
 )
 
 // testcase args
@@ -71,7 +71,10 @@ func CreateSlot(t *testing.T, nodeset []*ktypes.NodeSet, slotType ktypes.SlotTyp
 
 	ixs := CreateInteractions(t, types.HexToAddress(address))
 
-	clusterID, err := generateClusterID(operator, ixs.Hash())
+	ixsHash, err := ixs.Hash()
+	require.NoError(t, err)
+
+	clusterID, err := generateClusterID(operator, ixsHash)
 	require.NoError(t, err)
 
 	clusterInfo := ktypes.NewICS(6, *ixs, clusterID, operator, time.Now())

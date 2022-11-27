@@ -1,6 +1,6 @@
 package api
 
-import "gitlab.com/sarvalabs/moichain/types"
+import "github.com/sarvalabs/moichain/types"
 
 // TesseractArgs is a struct that represents an argument wrapper for retrieving the latest Tesseract
 type TesseractArgs struct {
@@ -126,8 +126,8 @@ type TesseractHeader struct {
 	AnuUsed uint64
 	// Represents the ANU limit of the Tesseract
 	AnuLimit uint64
-	// Represents the hash of the Tesseract
-	TesseractHash string
+	// Represents the hash of the Tesseract body
+	BodyHash string
 	// Represent the group hash of all Tesseracts in the ICS
 	GroupHash string
 	// Represents the address of the Tesseract operator
@@ -169,17 +169,17 @@ func NewTesseractArg(t *types.Tesseract, withInteractions bool) TesseractArg {
 	var tesseract TesseractArg
 
 	tesseract.Header = TesseractHeader{
-		Address:       t.Header.Address.Hex(),
-		PrevHash:      t.Header.PrevHash.Hex(),
-		Height:        t.Header.Height,
-		ContextLock:   make(map[types.Address]types.ContextLockInfo),
-		Timestamp:     t.Header.Timestamp,
-		AnuUsed:       t.Header.AnuUsed,
-		AnuLimit:      t.Header.AnuLimit,
-		TesseractHash: t.Header.TesseractHash.Hex(),
-		GroupHash:     t.Header.GridHash.Hex(),
-		Operator:      t.Header.Operator,
-		IcsID:         t.Header.ClusterID,
+		Address:     t.Header.Address.Hex(),
+		PrevHash:    t.Header.PrevHash.Hex(),
+		Height:      t.Header.Height,
+		ContextLock: make(map[types.Address]types.ContextLockInfo),
+		Timestamp:   t.Header.Timestamp,
+		AnuUsed:     t.Header.AnuUsed,
+		AnuLimit:    t.Header.AnuLimit,
+		BodyHash:    t.Header.BodyHash.Hex(),
+		GroupHash:   t.Header.GridHash.Hex(),
+		Operator:    t.Header.Operator,
+		IcsID:       t.Header.ClusterID,
 		Extra: CommitData{
 			Round:           t.Header.Extra.Round,
 			CommitSignature: t.Header.Extra.CommitSignature,
