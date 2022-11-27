@@ -193,9 +193,9 @@ func NewServer(
 
 func (s *Server) InitNewRPCServer(protocol protocol.ID) *moirpc.Client {
 	s.logger.Debug("starting new moirpc server", "protocol", protocol)
-	s.rpcServers[protocol] = moirpc.NewServer(s.logger, s.host, protocol)
+	s.rpcServers[protocol] = moirpc.NewServer(hclog.NewNullLogger(), s.host, protocol)
 
-	return moirpc.NewClient(s.logger, s.host, protocol, s.Senatus)
+	return moirpc.NewClient(hclog.NewNullLogger(), s.host, protocol, s.Senatus)
 }
 
 // setupHost is a method of Server that sets up the libp2p host for the node.

@@ -248,14 +248,14 @@ func (i *ClusterInfo) GetObservers() []string {
 	i.mtx.Lock()
 	defer i.mtx.Unlock()
 
-	return types.KIPPeerIDToString(i.ICS.Nodes[ObserverSet].Ids)
+	return utils.KramaIDToString(i.ICS.Nodes[ObserverSet].Ids)
 }
 
 func (i *ClusterInfo) GetRandomNodes() []string {
 	i.mtx.Lock()
 	defer i.mtx.Unlock()
 
-	return types.KIPPeerIDToString(i.ICS.Nodes[RandomSet].Ids)
+	return utils.KramaIDToString(i.ICS.Nodes[RandomSet].Ids)
 }
 
 func (i *ClusterInfo) GetTotalVotingPower() []int32 {

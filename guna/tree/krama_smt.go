@@ -19,7 +19,7 @@ type DB interface {
 	Set(key, value []byte) error    // Set updates the value for a key.
 	Delete(key []byte) error        // Delete deletes a key.
 	IsDirty() bool
-	Commit() error
+	Flush() error
 	Copy() DB
 }
 
@@ -181,7 +181,7 @@ func (kht *KramaHashTree) Flush() error {
 	}
 
 	// flush the tree nodes
-	if err := kht.db.Commit(); err != nil {
+	if err := kht.db.Flush(); err != nil {
 		return err
 	}
 

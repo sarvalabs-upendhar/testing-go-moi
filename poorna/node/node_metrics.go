@@ -1,17 +1,17 @@
 package node
 
 import (
-	"github.com/sarvalabs/moichain/chain"
 	"github.com/sarvalabs/moichain/guna"
 	"github.com/sarvalabs/moichain/ixpool"
 	"github.com/sarvalabs/moichain/krama"
+	"github.com/sarvalabs/moichain/lattice"
 	"github.com/sarvalabs/moichain/poorna/agora"
 	"github.com/sarvalabs/moichain/poorna/flux"
 )
 
 type nodeMetrics struct {
 	agora  *agora.Metrics
-	chain  *chain.Metrics
+	chain  *lattice.Metrics
 	flux   *flux.Metrics
 	guna   *guna.Metrics
 	ixpool *ixpool.Metrics
@@ -22,7 +22,7 @@ func metricProvider(nameSpace string, chainID string, metricsRequired bool) *nod
 	if metricsRequired {
 		return &nodeMetrics{
 			agora:  agora.GetPrometheusMetrics(nameSpace, "chain_id", chainID),
-			chain:  chain.GetPrometheusMetrics(nameSpace, "chain_id", chainID),
+			chain:  lattice.GetPrometheusMetrics(nameSpace, "chain_id", chainID),
 			flux:   flux.GetPrometheusMetrics(nameSpace, "chain_id", chainID),
 			guna:   guna.GetPrometheusMetrics(nameSpace, "chain_id", chainID),
 			ixpool: ixpool.GetPrometheusMetrics(nameSpace, "chain_id", chainID),
@@ -32,7 +32,7 @@ func metricProvider(nameSpace string, chainID string, metricsRequired bool) *nod
 
 	return &nodeMetrics{
 		agora:  agora.NilMetrics(),
-		chain:  chain.NilMetrics(),
+		chain:  lattice.NilMetrics(),
 		flux:   flux.NilMetrics(),
 		guna:   guna.NilMetrics(),
 		ixpool: ixpool.NilMetrics(),

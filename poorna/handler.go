@@ -8,8 +8,8 @@ import (
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/sarvalabs/moichain/chain"
 	"github.com/sarvalabs/moichain/ixpool"
+	"github.com/sarvalabs/moichain/lattice"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/types"
 	"github.com/sarvalabs/moichain/utils"
@@ -33,7 +33,7 @@ type SubHandler struct {
 	ixpool *ixpool.IxPool
 
 	// Represents the chain manager of the handler
-	chain *chain.ChainManager
+	chain *lattice.ChainManager
 
 	// Represents the event type mux of the handler
 	mux *utils.TypeMux
@@ -59,7 +59,7 @@ func NewSubHandler(
 	peerSet *peerSet,
 	mux *utils.TypeMux,
 	pool *ixpool.IxPool,
-	chain *chain.ChainManager,
+	chain *lattice.ChainManager,
 ) *SubHandler {
 	ctx, ctxCancel := context.WithCancel(ctx)
 

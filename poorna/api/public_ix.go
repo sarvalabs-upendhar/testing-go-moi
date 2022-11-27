@@ -106,7 +106,7 @@ func validateArguments(args *SendIXArgs, p *PublicIXAPI) error {
 	}
 
 	// Reject genesis account interaction
-	if types.HexToAddress(senderAddress) == guna.GenesisAddress {
+	if senderAddress == guna.SargaAddress {
 		return ErrGenesisAccount
 	}
 
@@ -117,7 +117,7 @@ func validateArguments(args *SendIXArgs, p *PublicIXAPI) error {
 		}
 
 		// Reject genesis account interaction
-		if types.HexToAddress(receiverAddress) == guna.GenesisAddress {
+		if receiverAddress == guna.SargaAddress {
 			return ErrGenesisAccount
 		}
 	}

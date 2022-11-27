@@ -14,7 +14,6 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
-	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"golang.org/x/crypto/blake2b"
 )
 
@@ -171,26 +170,6 @@ func Hex2Bytes(str string) []byte {
 	}
 
 	return h
-}
-
-func ToKIPPeerID(nodes []string) []id.KramaID {
-	ids := make([]id.KramaID, 0, len(nodes))
-
-	for _, v := range nodes {
-		ids = append(ids, id.KramaID(v))
-	}
-
-	return ids
-}
-
-func KIPPeerIDToString(peers []id.KramaID) []string {
-	ids := make([]string, 0, len(peers))
-
-	for _, v := range peers {
-		ids = append(ids, string(v))
-	}
-
-	return ids
 }
 
 // BitArray is a thread-safe implementation of a bit array.
@@ -615,9 +594,8 @@ func PoloHash(x interface{}) (Hash, error) {
 	}
 
 	sum := blake2b.Sum256(bytes)
-	// h := sha256.Sum256(bytes)
 
-	return BytesToHash(sum[:]), nil
+	return sum, nil
 }
 
 func GetHash(data []byte) Hash {

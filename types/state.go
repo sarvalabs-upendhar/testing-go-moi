@@ -10,13 +10,13 @@ import (
 )
 
 type AssetInfo struct {
-	Owner       string
-	Dimension   uint8
-	TotalSupply uint64
-	Symbol      string
-	IsFungible  bool
-	IsMintable  bool
-	LogicID     LogicID
+	Owner       string  `json:"owner"`
+	Dimension   uint8   `json:"dimension"`
+	TotalSupply uint64  `json:"total_supply"`
+	Symbol      string  `json:"symbol"`
+	IsFungible  bool    `json:"isFungible"`
+	IsMintable  bool    `json:"isMintable"`
+	LogicID     LogicID `json:"logic_id"`
 }
 
 type AccountMetaInfo struct {

@@ -92,11 +92,11 @@ func NewClient(logger hclog.Logger, h host.Host, p protocol.ID, senatus senatus,
 		},
 		// key is removed from the map
 		OnWillEvict: func(key string, item ttlmap.Item) {
-			fmt.Printf("evicted: [%s=%v]\n", key, item.Value())
 			s, ok := (item.Value()).(network.Stream)
 			if !ok {
 				c.logger.Error("type assertion failed")
 			}
+			fmt.Println("evicted:", key, s, s.Protocol())
 			// closing the stream
 			logger.Warn("[NewClient]", "closing stream ID", s.ID())
 			s.Close()

@@ -291,19 +291,19 @@ func (s *StateObject) commitStorage() (types.Hash, error) {
 	return rootHash, nil
 }
 
-func (s *StateObject) CommitActiveStorageTreesToDB() error {
+func (s *StateObject) flushActiveStorageTreesToDB() error {
 	if s.storageTrie == nil {
 		return nil
 	}
 
-	// commit active storage trees
+	// flush active storage trees
 	for _, storageTree := range s.activeStorageTrees {
 		if err := storageTree.Flush(); err != nil {
 			return errors.Wrap(err, "failed to commit modified storage tree entries to db")
 		}
 	}
 
-	// commit master storage trees
+	// flush master storage trees
 	return s.storageTrie.Flush()
 }
 
@@ -363,7 +363,7 @@ func (s *StateObject) CreateAsset(
 	isFungible bool,
 	isMintable bool,
 	symbol string,
-	totalSupply int64,
+	totalSupply uint64,
 	code []byte,
 ) (types.AssetID, error) {
 	s.mtx.Lock()
@@ -409,7 +409,7 @@ func (s *StateObject) CreateAsset(
 
 	// Update the balance
 	if _, ok := s.balance.Bal[assetID]; !ok {
-		s.balance.Bal[assetID] = big.NewInt(totalSupply)
+		s.balance.Bal[assetID] = new(big.Int).SetUint64(totalSupply)
 
 		return assetID, nil
 	}
@@ -427,7 +427,7 @@ func (s *StateObject) AddAccountGenesisInfo(address types.Address, ixHash types.
 		return err
 	}
 
-	return s.SetStorageEntry(GenesisLogicID, address.Bytes(), rawData)
+	return s.SetStorageEntry(SargaLogicID, address.Bytes(), rawData)
 }
 
 func (s *StateObject) CreateContext(behaviouralNodes, randomNodes []id.KramaID) (types.Hash, error) {

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"math/big"
 
@@ -41,7 +42,7 @@ func (p *PublicCoreAPI) GetBalance(args *BalArgs) (*big.Int, error) {
 
 	// Retrieve the state object for the address from the backend state manager and return if an error occurs
 	// Get the balance of the asset from the state object and return if an error occurs
-	bal, err := p.sm.GetBalance(types.HexToAddress(address), types.AssetID(assetID))
+	bal, err := p.sm.GetBalance(address, assetID)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +58,7 @@ func (p *PublicCoreAPI) GetLatestTesseract(args *TesseractArgs) (*types.Tesserac
 		return nil, types.ErrInvalidAddress
 	}
 
-	return p.chain.GetLatestTesseract(types.HexToAddress(address), args.WithInteractions)
+	return p.chain.GetLatestTesseract(address, args.WithInteractions)
 }
 
 func (p *PublicCoreAPI) GetTesseractByHash(args *TesseractByHashArgs) (*types.Tesseract, error) {
@@ -75,7 +76,7 @@ func (p *PublicCoreAPI) GetTesseractByHeight(args *TesseractByHeightArgs) (*type
 		return nil, err
 	}
 
-	tesseract, err := p.chain.GetTesseractByHeight(types.HexToAddress(from), args.Height, args.WithInteractions)
+	tesseract, err := p.chain.GetTesseractByHeight(from, args.Height, args.WithInteractions)
 	if err != nil {
 		return nil, err
 	}
@@ -83,13 +84,13 @@ func (p *PublicCoreAPI) GetTesseractByHeight(args *TesseractByHeightArgs) (*type
 	return tesseract, nil
 }
 
-func (p *PublicCoreAPI) GetAssetInfoByAssetID(assetID string) (*types.AssetInfo, error) {
-	assetID, err := utils.ValidateAssetID(assetID)
+func (p *PublicCoreAPI) GetAssetInfoByAssetID(id string) (*types.AssetInfo, error) {
+	_, err := utils.ValidateAssetID(id)
 	if err != nil {
 		return nil, err
 	}
 
-	aID, err := hex.DecodeString(assetID)
+	aID, err := hex.DecodeString(id)
 	if err != nil {
 		return nil, err
 	}
@@ -103,11 +104,7 @@ func (p *PublicCoreAPI) GetAssetInfoByAssetID(assetID string) (*types.AssetInfo,
 
 	assetInfo.Symbol = assetData.Symbol
 
-	assetInfo.TotalSupply = big.NewInt(0).SetBytes(assetData.Extra).Uint64()
-
-	if err != nil {
-		return nil, err
-	}
+	assetInfo.TotalSupply = binary.BigEndian.Uint64(assetData.Extra)
 
 	assetInfo.Owner = assetData.Owner.Hex()
 
@@ -128,12 +125,12 @@ func (p *PublicCoreAPI) GetContextInfoByHash(args *ContextInfoByHashArgs) ([]str
 		return nil, nil, types.ErrInvalidHash
 	}
 
-	_, behaviourSet, RandomSet, err := p.sm.GetContextByHash(types.HexToAddress(address), types.HexToHash(hash))
+	_, behaviourSet, RandomSet, err := p.sm.GetContextByHash(address, types.HexToHash(hash))
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return types.KIPPeerIDToString(behaviourSet), types.KIPPeerIDToString(RandomSet), nil
+	return utils.KramaIDToString(behaviourSet), utils.KramaIDToString(RandomSet), nil
 }
 
 // GetTDU will return the total digital utility associated with address
@@ -143,7 +140,7 @@ func (p *PublicCoreAPI) GetTDU(args *TesseractArgs) (gtypes.AssetMap, error) {
 		return nil, types.ErrInvalidAddress
 	}
 
-	object, err := p.sm.GetBalances(types.HexToAddress(address))
+	object, err := p.sm.GetBalances(address)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +161,7 @@ func (p *PublicCoreAPI) GetInteractionReceipt(args *ReceiptArgs) (*types.Receipt
 		return nil, types.ErrInvalidHash
 	}
 
-	return p.chain.GetReceipt(types.HexToAddress(address), types.HexToHash(hash))
+	return p.chain.GetReceipt(address, types.HexToHash(hash))
 }
 
 func (p *PublicCoreAPI) GetInteractionCountByAddress(args *InteractionCountArgs) (uint64, error) {
@@ -173,7 +170,7 @@ func (p *PublicCoreAPI) GetInteractionCountByAddress(args *InteractionCountArgs)
 		return 0, err
 	}
 
-	interactionCount, err := p.sm.GetLatestNonce(types.HexToAddress(addr))
+	interactionCount, err := p.sm.GetLatestNonce(addr)
 	if err != nil {
 		return 0, err
 	}

@@ -71,7 +71,7 @@ func NewTracerProvider(ctx context.Context, enableTracing bool, jaegerAddress st
 	r, err := resource.Merge(
 		resource.Default(),
 		resource.NewSchemaless(
-			semconv.ServiceNameKey.String("moi-chain"),
+			semconv.ServiceNameKey.String("moi-lattice"),
 			semconv.ServiceVersionKey.String("0.0.1"),
 		),
 	)
@@ -89,5 +89,5 @@ func Span(ctx context.Context,
 	spanName string,
 	opts ...traceapi.SpanStartOption,
 ) (context.Context, traceapi.Span) {
-	return otel.Tracer("moi-chain").Start(ctx, fmt.Sprintf("%s.%s", componentName, spanName), opts...)
+	return otel.Tracer("moi-lattice").Start(ctx, fmt.Sprintf("%s.%s", componentName, spanName), opts...)
 }

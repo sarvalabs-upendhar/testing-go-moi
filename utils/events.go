@@ -35,7 +35,7 @@ type TesseractReceivedEvent struct {
 	Sender      id.KramaID
 }
 
-// TesseractAddedEvent occurs when a new block is added to the chain
+// TesseractAddedEvent occurs when a new block is added to the lattice
 type TesseractAddedEvent struct {
 	Tesseract *types.Tesseract
 }

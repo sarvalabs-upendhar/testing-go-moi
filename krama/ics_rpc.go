@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/sarvalabs/moichain/utils"
+
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
 	"github.com/sarvalabs/moichain/types"
@@ -33,9 +35,10 @@ func (icsrpc *ICSRPCService) ICSRequest(
 	req *ptypes.ICSRequest,
 	response *ptypes.ICSResponse,
 ) error {
-	respChan := make(chan Response)
-
-	interactions := new(types.Interactions)
+	var (
+		respChan     = make(chan Response)
+		interactions = new(types.Interactions)
+	)
 
 	if err := interactions.FromBytes(req.IxData); err != nil {
 		return errors.New("ixs decode error")
@@ -63,14 +66,18 @@ func (icsrpc *ICSRPCService) ICSRequest(
 		default:
 			response.StatusCode = Internalerror
 		}
-	} else {
-		response.Response = 1
-		randomNodes, err := icsrpc.engine.getRandomNodes(ctx, 1, nil)
-		if err != nil {
-			return errors.New("unable to fetch random nodes")
-		}
-		response.RandomNodes = types.KIPPeerIDToString(randomNodes)
+
+		return nil
 	}
+
+	response.Response = 1
+
+	randomNodes, err := icsrpc.engine.getRandomNodes(ctx, 1, nil)
+	if err != nil {
+		return errors.New("unable to fetch random nodes")
+	}
+
+	response.RandomNodes = utils.KramaIDToString(randomNodes)
 
 	return nil
 }

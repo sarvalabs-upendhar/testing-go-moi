@@ -91,7 +91,7 @@ func (p *PersistenceManager) GetAccountMetaInfo(id []byte) (*types.AccountMetaIn
 	return accMetaInfo, nil
 }
 
-// incrementBucketCount is used to increment bucket count when new address is added to chain
+// incrementBucketCount is used to increment bucket count when new address is added to lattice
 func (p *PersistenceManager) incrementBucketCount(id []byte, count int64) error {
 	data, err := p.ReadEntry(id)
 	if err == nil {
@@ -322,6 +322,12 @@ func (p *PersistenceManager) GetEntries(prefix []byte) chan types.DBEntry {
 	}()
 
 	return ch
+}
+
+func (p *PersistenceManager) SetAccount(addr types.Address, hash types.Hash, data []byte) error {
+	key := dbKey(addr, Account, hash.Bytes())
+
+	return p.CreateEntry(key, data)
 }
 
 func (p *PersistenceManager) GetAccount(addr types.Address, hash types.Hash) ([]byte, error) {

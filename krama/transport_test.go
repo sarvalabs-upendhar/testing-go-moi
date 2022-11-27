@@ -71,10 +71,7 @@ func CreateSlot(t *testing.T, nodeset []*ktypes.NodeSet, slotType ktypes.SlotTyp
 
 	ixs := CreateInteractions(t, types.HexToAddress(address))
 
-	ixsHash, err := ixs.Hash()
-	require.NoError(t, err)
-
-	clusterID, err := generateClusterID(operator, ixsHash)
+	clusterID, err := generateClusterID(operator, *ixs)
 	require.NoError(t, err)
 
 	clusterInfo := ktypes.NewICS(6, *ixs, clusterID, operator, time.Now())

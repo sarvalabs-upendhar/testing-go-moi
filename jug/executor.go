@@ -12,7 +12,7 @@ type state interface {
 	Revert(snap *guna.StateObject) error
 	GetDirtyObject(addr types.Address) (*guna.StateObject, error)
 	CreateDirtyObject(addr types.Address, accType types.AccType) *guna.StateObject
-	IsGenesis(addr types.Address) (bool, error)
+	IsAccountRegistered(addr types.Address) (bool, error)
 }
 type Executor struct {
 	Ixs          types.Interactions
@@ -119,18 +119,21 @@ func (e *Executor) Execute() error {
 }
 
 func (e *Executor) updateSargaState(ix *types.Interaction) error {
-	isGenesis, err := e.stateManager.IsGenesis(ix.ToAddress())
+	accountRegistered, err := e.stateManager.IsAccountRegistered(ix.ToAddress())
 	if err != nil {
 		return err
 	}
 
-	if !isGenesis {
+	if accountRegistered {
 		return nil
 	}
 
-	genesisObject := e.getObject(guna.GenesisAddress)
+	sargaObject := e.getObject(guna.SargaAddress)
+	if sargaObject == nil {
+		return errors.New("sarga object not found")
+	}
 
-	return genesisObject.AddAccountGenesisInfo(ix.ToAddress(), ix.Hash)
+	return sargaObject.AddAccountGenesisInfo(ix.ToAddress(), ix.Hash)
 }
 
 func (e *Executor) fetchStateObjects(ix *types.Interaction) error {
@@ -150,20 +153,20 @@ func (e *Executor) fetchStateObjects(ix *types.Interaction) error {
 			err            error
 		)
 
-		isGenesis, err := e.stateManager.IsGenesis(ix.ToAddress())
+		accountRegistered, err := e.stateManager.IsAccountRegistered(ix.ToAddress())
 		if err != nil {
 			return err
 		}
 
-		if isGenesis {
+		if !accountRegistered {
 			// Get Genesis Object
-			genesisObject, err := e.stateManager.GetDirtyObject(guna.GenesisAddress)
+			genesisObject, err := e.stateManager.GetDirtyObject(guna.SargaAddress)
 			if err != nil {
 				return err
 			}
 
-			e.objects[guna.GenesisAddress] = genesisObject
-			e.snaps[guna.GenesisAddress] = genesisObject.Copy()
+			e.objects[guna.SargaAddress] = genesisObject
+			e.snaps[guna.SargaAddress] = genesisObject.Copy()
 			// Create a dirty state object for new account
 			receiverObject = e.stateManager.CreateDirtyObject(receiverAddr, types.AccTypeFromIxType(ix.IxType()))
 		} else {
@@ -205,7 +208,7 @@ func CreateAsset(creator *guna.StateObject, assetDetails *types.AssetDataInput) 
 		assetDetails.IsFungible,
 		assetDetails.IsMintable,
 		assetDetails.Symbol,
-		int64(assetDetails.TotalSupply),
+		assetDetails.TotalSupply,
 		assetDetails.Code,
 	)
 	if err != nil {
@@ -237,12 +240,12 @@ func (e *Executor) UpdateContext(ix *types.Interaction, contextInfo types.Contex
 				err  error
 			)
 			// Create context if it is new account
-			isGenesis, err := e.stateManager.IsGenesis(ix.ToAddress())
+			accountRegistered, err := e.stateManager.IsAccountRegistered(ix.ToAddress())
 			if err != nil {
 				return err
 			}
 
-			if isGenesis {
+			if !accountRegistered {
 				if hash, err = e.getObject(ix.ToAddress()).CreateContext(
 					delta.BehaviouralNodes,
 					delta.RandomNodes,
@@ -258,13 +261,13 @@ func (e *Executor) UpdateContext(ix *types.Interaction, contextInfo types.Contex
 			}
 
 			receipt.ContextHashes[ix.ToAddress()] = hash
-		case guna.GenesisAddress:
-			hash, err := e.getObject(guna.GenesisAddress).UpdateContext(delta.BehaviouralNodes, delta.RandomNodes)
+		case guna.SargaAddress:
+			hash, err := e.getObject(guna.SargaAddress).UpdateContext(delta.BehaviouralNodes, delta.RandomNodes)
 			if err != nil {
 				return errors.Wrap(types.ErrUpdatingContext, err.Error())
 			}
 
-			receipt.ContextHashes[guna.GenesisAddress] = hash
+			receipt.ContextHashes[guna.SargaAddress] = hash
 		}
 	}
 
@@ -296,20 +299,20 @@ func (e *Executor) CommitObjects(ix *types.Interaction) error {
 		receipt.StateHashes[ix.ToAddress()] = receiverHash
 	}
 
-	isGenesis, err := e.stateManager.IsGenesis(ix.ToAddress())
+	accountRegistered, err := e.stateManager.IsAccountRegistered(ix.ToAddress())
 	if err != nil {
 		return err
 	}
 
-	if isGenesis {
-		genesisObject := e.getObject(guna.GenesisAddress)
+	if !accountRegistered {
+		genesisObject := e.getObject(guna.SargaAddress)
 
 		hash, err := genesisObject.Commit()
 		if err != nil {
 			return err
 		}
 
-		receipt.StateHashes[guna.GenesisAddress] = hash
+		receipt.StateHashes[guna.SargaAddress] = hash
 	}
 
 	return nil
@@ -329,13 +332,13 @@ func (e *Executor) Revert() error {
 			}
 		}
 
-		isGenesis, err := e.stateManager.IsGenesis(ix.ToAddress())
+		accountRegistered, err := e.stateManager.IsAccountRegistered(ix.ToAddress())
 		if err != nil {
 			return err
 		}
 
-		if isGenesis {
-			if err := e.stateManager.Revert(e.snaps[guna.GenesisAddress]); err != nil {
+		if !accountRegistered {
+			if err := e.stateManager.Revert(e.snaps[guna.SargaAddress]); err != nil {
 				return err // This should not happen
 			}
 		}

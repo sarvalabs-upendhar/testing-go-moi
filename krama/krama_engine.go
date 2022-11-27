@@ -80,7 +80,7 @@ type state interface {
 	)
 	GetPublicKeys(ids ...id.KramaID) (keys [][]byte, err error)
 	GetAccountMetaInfo(addr types.Address) (*types.AccountMetaInfo, error)
-	IsGenesis(addr types.Address) (bool, error)
+	IsAccountRegistered(addr types.Address) (bool, error)
 	GetLatestStateObject(addr types.Address) (*guna.StateObject, error)
 	GetLatestNonce(addr types.Address) (uint64, error)
 }
@@ -116,12 +116,7 @@ type Request struct {
 func (r *Request) getClusterID(operator id.KramaID) (types.ClusterID, error) {
 	switch r.reqType {
 	case 0:
-		ixHash, err := r.ixs[0].GetIxHash()
-		if err != nil {
-			return "", err
-		}
-
-		return generateClusterID(operator, ixHash)
+		return generateClusterID(operator, r.ixs)
 	case 1:
 		return types.ClusterID(r.msg.ClusterID), nil
 	default:
@@ -419,7 +414,12 @@ func (k *Engine) observerNodeDelta(setSize int) int {
 	return int(math.Ceil(ObserverNodesDelta * float64(setSize)))
 }
 
-func generateClusterID(operator id.KramaID, ixHash types.Hash) (types.ClusterID, error) {
+func generateClusterID(operator id.KramaID, ixns types.Interactions) (types.ClusterID, error) {
+	ixHash, err := ixns[0].GetIxHash()
+	if err != nil {
+		return "", err
+	}
+
 	buffer := ixHash.Bytes()
 
 	peerID, err := operator.PeerID()
@@ -566,8 +566,9 @@ func (k *Engine) handleReq(req Request) {
 		return
 	}
 
-	if areValid, err := k.validateInteractions(req.ixs); err != nil || !areValid {
-		k.logger.Error("Invalid Interaction", "err", err, req)
+	if err := k.validateInteractions(req.ixs); err != nil {
+		k.logger.Error("Invalid Interaction", "err", err)
+
 		req.responseChan <- Response{requestType: req.reqType, err: types.ErrInvalidInteractions}
 
 		return
@@ -748,13 +749,13 @@ func (k *Engine) fetchIxAccounts(ctx context.Context, ix *types.Interaction) (kt
 	}
 
 	if !ix.ToAddress().IsNil() {
-		isGenesisAccount, err := k.state.IsGenesis(ix.ToAddress())
+		accountRegistered, err := k.state.IsAccountRegistered(ix.ToAddress())
 		if err != nil {
 			return nil, err
 		}
 
-		if isGenesisAccount {
-			genesisAccInfo, err := k.state.GetAccountMetaInfo(guna.GenesisAddress)
+		if !accountRegistered {
+			genesisAccInfo, err := k.state.GetAccountMetaInfo(guna.SargaAddress)
 			if err != nil {
 				return nil, err
 			}
@@ -768,16 +769,18 @@ func (k *Engine) fetchIxAccounts(ctx context.Context, ix *types.Interaction) (kt
 				Height:        big.NewInt(-1),
 			}
 
-			accounts[guna.GenesisAddress] = genesisAccInfo
+			accounts[guna.SargaAddress] = genesisAccInfo
 			accounts[ix.ToAddress()] = acc
-		} else {
-			accInfo, err := k.state.GetAccountMetaInfo(ix.FromAddress())
-			if err != nil {
-				return nil, err
-			}
 
-			accounts[ix.ToAddress()] = accInfo
+			return accounts, nil
 		}
+
+		accInfo, err := k.state.GetAccountMetaInfo(ix.FromAddress())
+		if err != nil {
+			return nil, err
+		}
+
+		accounts[ix.ToAddress()] = accInfo
 	}
 
 	return accounts, nil
@@ -965,7 +968,7 @@ func (k *Engine) sendICSRequest(
 			); err == nil && icsResponse.Response == 1 {
 				// Update the nodeResponses array to capture the success response
 				nodeResponses[index] = true
-				randomNodes <- types.ToKIPPeerID(icsResponse.RandomNodes)
+				randomNodes <- utils.KramaIDFromString(icsResponse.RandomNodes)
 			} else {
 				k.logger.Info(
 					"ICSRequest failed",
@@ -1052,31 +1055,17 @@ func (k *Engine) getObserverNodes(ctx context.Context, count int, exemptedNodes 
 	return peers, nil
 }
 
-/*
-func getExclusivePeers(actualSet []id.KramaID, newSet []id.KramaID) []id.KramaID {
-	tempMap := make(map[id.KramaID]interface{}, len(actualSet))
-	exclusivePeers := make([]id.KramaID, 0)
-	for _, id := range actualSet {
-		tempMap[id] = nil
-	}
-	for _, id := range newSet {
-		if _, ok := tempMap[id]; !ok {
-			exclusivePeers = append(exclusivePeers, id)
-		}
-	}
-
-	return exclusivePeers
-}
-*/
-
 func (k *Engine) sendICSSuccess(id types.ClusterID) error {
 	slot := k.slots.GetSlot(id)
+
 	if slot == nil {
 		return errors.New("nil slot")
 	}
 
-	clusterState := slot.CLusterInfo()
-	msg := clusterState.CreateICSSuccessMsg()
+	var (
+		clusterState = slot.CLusterInfo()
+		msg          = clusterState.CreateICSSuccessMsg()
+	)
 
 	rawData, err := msg.Bytes()
 	if err != nil {
@@ -1175,12 +1164,12 @@ func (k *Engine) updateContextDelta(clusterID types.ClusterID) error {
 			receiverDeltaGroup := new(types.DeltaGroup)
 			receiverDeltaGroup.Role = types.Receiver
 
-			isGenesisAccount, err := k.state.IsGenesis(receiverAddr)
+			accountRegistered, err := k.state.IsAccountRegistered(receiverAddr)
 			if err != nil {
 				return err
 			}
 
-			if isGenesisAccount {
+			if !accountRegistered {
 				// Fetch new nodes for receiver account
 				behaviouralNodes, randomNodes, err := k.GetNodes(
 					clusterState,
@@ -1215,8 +1204,8 @@ func (k *Engine) updateContextDelta(clusterID types.ClusterID) error {
 				)
 				genesisDeltaGroup.RandomNodes = append(genesisDeltaGroup.RandomNodes, genesisRandomDelta...)
 				genesisDeltaGroup.ReplacedNodes = append(genesisDeltaGroup.ReplacedNodes, replacedRandomDelta...)
-				seenAccounts[guna.GenesisAddress] = true
-				deltaMap[guna.GenesisAddress] = genesisDeltaGroup
+				seenAccounts[guna.SargaAddress] = true
+				deltaMap[guna.SargaAddress] = genesisDeltaGroup
 			} else if clusterState.AccountInfos[receiverAddr].Type == 2 {
 				receiverBehaviourDelta, replacedNodes := clusterState.GetBehaviouralContextDelta(
 					ktypes.ReceiverBehaviourSet,
@@ -1332,7 +1321,7 @@ func GenerateTesseracts(state *ktypes.ClusterInfo) ([]*types.Tesseract, error) {
 		groupBuffer = append(groupBuffer, receiverTesseract.BodyHash().Bytes()...)
 
 		if state.AccountInfos.IsGenesis(ix.ToAddress()) {
-			genesisTesseract, err := generateTesseract(ix.Hash, guna.GenesisAddress, state, gasUsed, 1000)
+			genesisTesseract, err := generateTesseract(ix.Hash, guna.SargaAddress, state, gasUsed, 1000)
 			if err != nil {
 				return nil, err
 			}
@@ -1423,11 +1412,11 @@ func (k *Engine) Close() {
 	defer k.ctxCancel()
 }
 
-func (k *Engine) validateInteractions(ixs types.Interactions) (bool, error) {
+func (k *Engine) validateInteractions(ixs types.Interactions) error {
 	for _, ix := range ixs {
 		ixHash, err := ix.GetIxHash()
 		if err != nil {
-			return false, err
+			return err
 		}
 
 		k.logger.Debug(
@@ -1445,30 +1434,30 @@ func (k *Engine) validateInteractions(ixs types.Interactions) (bool, error) {
 		*/
 		latestNonce, err := k.state.GetLatestNonce(ix.FromAddress())
 		if err != nil {
-			return false, err
+			return err
 		}
 
 		// validate nonce
 		if ix.Nonce() < latestNonce {
-			return false, types.ErrInvalidNonce
+			return types.ErrInvalidNonce
 		}
 
-		if isValid, err := k.IsIxValid(ix); err != nil || !isValid {
-			return isValid, err
+		if err = k.IsIxValid(ix); err != nil {
+			return err
 		}
 	}
 
-	return true, nil
+	return nil
 }
 
 // IsIxValid performs validity checks based on the type of interaction
-func (k *Engine) IsIxValid(ix *types.Interaction) (bool, error) {
+func (k *Engine) IsIxValid(ix *types.Interaction) error {
 	if ix.FromAddress().IsNil() {
-		return false, types.ErrInvalidAddress
+		return types.ErrInvalidAddress
 	}
 
-	if isGenesis, err := k.state.IsGenesis(ix.FromAddress()); err != nil || isGenesis {
-		return false, err
+	if accountRegistered, err := k.state.IsAccountRegistered(ix.FromAddress()); err != nil || !accountRegistered {
+		return errors.New("account not found")
 	}
 
 	switch ix.Data.Input.Type {
@@ -1477,12 +1466,12 @@ func (k *Engine) IsIxValid(ix *types.Interaction) (bool, error) {
 		if err != nil {
 			k.logger.Error("Error fetching stateObject", "addr", ix.FromAddress().Hex())
 
-			return false, err
+			return err
 		}
 
 		for assetID, value := range ix.Data.Input.TransferValue {
 			if bal, err := stateObject.BalanceOf(assetID); err != nil || bal.Uint64() < value {
-				return false, err
+				return errors.New("invalid balance")
 			}
 		}
 	case types.AssetCreation:
@@ -1492,12 +1481,12 @@ func (k *Engine) IsIxValid(ix *types.Interaction) (bool, error) {
 		if err != nil {
 			k.logger.Error("Error fetching stateObject", "addr", ix.FromAddress().Hex())
 
-			return false, err
+			return err
 		}
 
 		logicID, _, err := gtypes.GetLogicID(assetData.Code, false)
 		if err != nil {
-			return false, err
+			return err
 		}
 
 		assetID, _, _, err := gtypes.GetAssetID(
@@ -1506,22 +1495,22 @@ func (k *Engine) IsIxValid(ix *types.Interaction) (bool, error) {
 			assetData.IsFungible,
 			assetData.IsMintable,
 			assetData.Symbol,
-			int64(assetData.TotalSupply),
+			assetData.TotalSupply,
 			logicID,
 		)
 		if err != nil {
-			return false, err
+			return err
 		}
 
 		if _, err = stateObject.BalanceOf(assetID); !errors.Is(err, types.ErrAssetNotFound) {
-			return false, err
+			return errors.New("asset already found")
 		}
 
 	default:
-		return false, types.ErrInvalidInteractionType
+		return types.ErrInvalidInteractionType
 	}
 
-	return true, nil
+	return nil
 }
 
 func GetContextLockInfo(

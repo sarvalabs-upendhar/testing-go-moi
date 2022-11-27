@@ -30,6 +30,7 @@ type Telemetry struct {
 }
 
 type ChainConfig struct {
+	SkipGenesis   bool
 	Genesis       string
 	ShouldExecute bool
 }

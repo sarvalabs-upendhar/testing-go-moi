@@ -72,8 +72,8 @@ func (tdb *TreeDB) Delete(key []byte) error {
 	return nil
 }
 
-// Commit writes all the modified entries to persistent storage
-func (tdb *TreeDB) Commit() error {
+// Flush writes all the modified entries to persistent storage
+func (tdb *TreeDB) Flush() error {
 	tdb.mtx.Lock()
 	defer func() {
 		tdb.mtx.Unlock()

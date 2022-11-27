@@ -53,7 +53,7 @@ type KBFT struct {
 
 // NewKBFTService is constructor function that generates a new KBFT engine.
 // Accepts a Krama id for the node running the engine, a consensus configuration object, a channel to
-// receive consensus messages, a PrivateValidator object, an execution engine and a chain manager.
+// receive consensus messages, a PrivateValidator object, an execution engine and a lattice manager.
 func NewKBFTService(
 	ctx context.Context,
 	kid id.KramaID,
@@ -102,7 +102,7 @@ func (kbft *KBFT) updateToState(ics *ktypes.ClusterInfo) {
 	if receiverAddr := ics.Ixs[0].ToAddress(); !receiverAddr.IsNil() {
 		height := ics.AccountInfos[ics.Ixs[0].ToAddress()].Height.Int64()
 		if height == -1 {
-			heights[2] = ics.AccountInfos[guna.GenesisAddress].Height.Uint64() + 1
+			heights[2] = ics.AccountInfos[guna.SargaAddress].Height.Uint64() + 1
 		}
 
 		heights[1] = uint64(height + 1)
@@ -447,16 +447,21 @@ func (kbft *KBFT) finalizeCommit(h []uint64) {
 
 	aggregatedSignature, err := tesseractPreCommits.AggregateSignatures()
 	if err != nil {
-		kbft.logger.Error("Error aggregating signatures", err)
-		panic(err)
+		kbft.Close(errors.Wrap(err, "failed to aggregate signatures"))
+
+		return
 	}
 
 	if err = kbft.updateConsensusInfoInTesseracts(gridID, tesseractPreCommits, aggregatedSignature); err != nil {
 		kbft.Close(err)
+
+		return
 	}
 
 	if err := kbft.finalizedTesseractHandler(kbft.ProposalGrid.Tesseracts); err != nil {
 		kbft.Close(err)
+
+		return
 	}
 
 	receiptHash, err := kbft.ics.Receipts.Hash()
@@ -466,13 +471,6 @@ func (kbft *KBFT) finalizeCommit(h []uint64) {
 	}
 
 	kbft.logger.Trace("Adding Receipts to dirty storage", "receipt-hash", receiptHash)
-
-	// TODO: validate the block
-
-	// TODO: Execute the interactions
-	//	var s AccountState
-	//	b.updateToState(s)
-	//  b.ScheduleRound0(&b.RoundState)
 
 	// Stop the ClusterInfo and other process
 	kbft.Close(nil)
@@ -497,7 +495,7 @@ func (kbft *KBFT) updateConsensusInfoInTesseracts(
 		return err
 	}
 
-	kbft.ics.AddDirty(types.BytesToHash(rawData), rawData)
+	kbft.ics.AddDirty(types.GetHash(rawData), rawData)
 
 	for _, tesseract := range kbft.ProposalGrid.Tesseracts {
 		tesseract.Header.Extra.Round = kbft.Round
@@ -506,7 +504,7 @@ func (kbft *KBFT) updateConsensusInfoInTesseracts(
 		tesseract.Header.Extra.GridID = gridID
 		tesseract.Header.Extra.CommitSignature = signature
 
-		rawData, err := tesseract.Bytes()
+		rawData, err = tesseract.Bytes()
 		if err != nil {
 			return err
 		}
@@ -525,8 +523,6 @@ func (kbft *KBFT) ScheduleRound0() {
 }
 
 func (kbft *KBFT) enterCommit(heights []uint64, round int32) {
-	kbft.logger.Trace("Entering Commit", "step", kbft.Step)
-
 	if !areHeightsEqual(kbft.Height, heights) || RoundStepCommit <= kbft.Step {
 		return
 	}

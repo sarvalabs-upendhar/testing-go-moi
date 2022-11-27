@@ -1,4 +1,4 @@
-package chain
+package lattice
 
 import (
 	"github.com/sarvalabs/moichain/types"
@@ -7,17 +7,18 @@ import (
 var GenesisIxHash = types.GetHash([]byte("Genesis Interaction"))
 
 type Genesis struct {
-	Accounts []AccountInfo `json:"accounts"`
+	SargaAccount AccountInfo   `json:"sarga_account"`
+	Accounts     []AccountInfo `json:"accounts"`
 }
 
 type AccountInfo struct {
-	Address          string         `json:"address"`
-	MOIId            string         `json:"moi_id"`
-	BehaviourContext []string       `json:"behaviour_context"`
-	RandomContext    []string       `json:"random_context"`
-	AccType          types.AccType  `json:"type"`
-	AssetDetails     []*AssetInfo   `json:"assets"`
-	Balances         []*BalanceInfo `json:"balance"`
+	Address          string             `json:"address"`
+	AccType          types.AccType      `json:"type"`
+	MOIId            string             `json:"moi_id"`
+	BehaviourContext []string           `json:"behaviour_context"`
+	RandomContext    []string           `json:"random_context"`
+	AssetDetails     []*types.AssetInfo `json:"assets"`
+	Balances         []*BalanceInfo     `json:"balance"`
 }
 
 type AssetInfo struct {
@@ -33,7 +34,7 @@ type BalanceInfo struct {
 	Amount  int64  `json:"balance"`
 }
 
-func CreateGenesisTesseract(
+func createGenesisTesseract(
 	addr types.Address,
 	stateHash, contextHash types.Hash,
 	contextDelta types.ContextDelta,

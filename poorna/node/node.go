@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/sarvalabs/moichain/chain"
 	"github.com/sarvalabs/moichain/ixpool"
+	"github.com/sarvalabs/moichain/lattice"
 	"github.com/sarvalabs/moichain/utils"
 
 	"github.com/hashicorp/go-hclog"
@@ -48,7 +48,7 @@ type Node struct {
 	eventMux         *utils.TypeMux
 	network          *poorna.Server
 	state            *guna.StateManager
-	chain            *chain.ChainManager
+	chain            *lattice.ChainManager
 	exec             *jug.Exec
 	kramaEngine      *krama.Engine
 	db               *dhruva.PersistenceManager
@@ -134,8 +134,8 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 	n.network.Senatus = n.state.SenatusInstance()
 
 	n.handlers.flux = flux.NewRandomizer(n.ctx, n.logger, n.network, n.nodeMetrics.flux)
-	// setup chain manager
-	if n.chain, err = chain.NewChainManager(
+	// setup lattice manager
+	if n.chain, err = lattice.NewChainManager(
 		n.ctx,
 		n.cfg.Chain,
 		db,
@@ -177,8 +177,10 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 		return nil, types.ErrHandlersFailed
 	}
 
-	if err = n.chain.SetupGenesis(cfg.Chain.Genesis); err != nil {
-		return nil, err
+	if !cfg.Chain.SkipGenesis {
+		if err = n.chain.SetupGenesis(cfg.Chain.Genesis); err != nil {
+			return nil, err
+		}
 	}
 
 	return n, nil

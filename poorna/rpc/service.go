@@ -43,7 +43,7 @@ func (r *rpcService) GetLatestTesseract(req *http.Request, args *api.TesseractAr
 		return types.ErrInvalidAPI
 	}
 
-	// Retrieve the latest Tesseract for the address from the backend chain manager
+	// Retrieve the latest Tesseract for the address from the backend lattice manager
 	tesseract, err := coreAPI.GetLatestTesseract(args)
 	if err != nil {
 		return err

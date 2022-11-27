@@ -251,7 +251,7 @@ func CreateTestAsset(t *testing.T, address types.Address) (types.AssetID, *types
 		asset.IsFungible,
 		asset.IsMintable,
 		asset.Symbol,
-		int64(asset.TotalSupply),
+		asset.TotalSupply,
 		asset.LogicID,
 	)
 	require.NoError(t, err)
@@ -273,7 +273,7 @@ func GetRandomAssetID(t *testing.T, address types.Address) types.AssetID {
 		asset.IsFungible,
 		asset.IsMintable,
 		asset.Symbol,
-		int64(asset.TotalSupply),
+		asset.TotalSupply,
 		asset.LogicID,
 	)
 	require.NoError(t, err)

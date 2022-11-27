@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
+	"github.com/sarvalabs/moichain/utils"
 
 	gtypes "github.com/sarvalabs/moichain/guna/types"
 
@@ -55,8 +56,9 @@ type Senatus interface {
 }
 
 var (
-	GenesisAddress = types.BytesToAddress(types.GetHash([]byte("sargaAccount")).Bytes())
-	GenesisLogicID = types.LogicID(types.BytesToHex(types.GetHash([]byte("sargaContract")).Bytes()))
+	SargaAddress  = types.BytesToAddress(types.GetHash([]byte("sargaAccount")).Bytes())
+	SargaLogicID  = types.LogicID(types.BytesToHex(types.GetHash([]byte("sargaContract")).Bytes()))
+	GenesisIxHash = types.GetHash([]byte("Genesis Interaction"))
 )
 
 type StateManager struct {
@@ -138,23 +140,40 @@ func (sm *StateManager) CreateDirtyObject(addr types.Address, accType types.AccT
 	return sm.dirtyObjects[addr]
 }
 
+func (sm *StateManager) FlushDirtyObject(addrs types.Address) error {
+	so, err := sm.GetDirtyObject(addrs)
+	if err != nil {
+		return err
+	}
+
+	if err := so.flushActiveStorageTreesToDB(); err != nil {
+		return errors.Wrap(err, "failed to flush active storage trees")
+	}
+
+	for k, v := range so.GetDirtyStorage() {
+		if err = sm.db.CreateEntry(types.Hex2Bytes(k), v); err != nil {
+			return errors.Wrap(err, "failed to write dirty entries")
+		}
+	}
+
+	return nil
+}
+
 func (sm *StateManager) GetDirtyObject(addr types.Address) (*StateObject, error) {
 	sm.dirtyObjectsLock.Lock()
 	defer sm.dirtyObjectsLock.Unlock()
 
-	if _, ok := sm.dirtyObjects[addr]; !ok {
-		var (
-			object *StateObject
-			err    error
-		)
-
-		object, err = sm.GetLatestStateObject(addr)
-		if err != nil {
-			return nil, err
-		}
-
-		sm.dirtyObjects[addr] = object.Copy()
+	object, ok := sm.dirtyObjects[addr]
+	if ok {
+		return object, nil
 	}
+
+	dirtyObject, err := sm.GetLatestStateObject(addr)
+	if err != nil {
+		return nil, err
+	}
+
+	sm.dirtyObjects[addr] = dirtyObject.Copy()
 
 	return sm.dirtyObjects[addr], nil
 }
@@ -188,7 +207,7 @@ func (sm *StateManager) GetStateObjectByHash(addr types.Address, hash types.Hash
 	}
 
 	acc := new(types.Account)
-	if err := acc.FromBytes(data); err != nil {
+	if err = acc.FromBytes(data); err != nil {
 		return nil, err
 	}
 
@@ -239,7 +258,7 @@ func (sm *StateManager) getLatestTesseractHash(addr types.Address) (types.Hash, 
 	return accMetaInfo.TesseractHash, nil
 }
 
-func (sm *StateManager) fetchTesseractByHash(hash types.Hash, withInteractions bool) (*types.Tesseract, error) {
+func (sm *StateManager) getTesseractByHash(hash types.Hash, withInteractions bool) (*types.Tesseract, error) {
 	object, isCached := sm.cache.Get(hash)
 	if !isCached {
 		ts, err := sm.FetchTesseractFromDB(hash, withInteractions)
@@ -268,7 +287,7 @@ func (sm *StateManager) GetLatestTesseract(addr types.Address, withInteractions 
 		return nil, errors.Wrap(err, "latest tesseract hash fetch failed")
 	}
 
-	return sm.fetchTesseractByHash(tesseractHash, withInteractions)
+	return sm.getTesseractByHash(tesseractHash, withInteractions)
 }
 
 func (sm *StateManager) FetchTesseractFromDB(hash types.Hash, withInteractions bool) (*types.Tesseract, error) {
@@ -281,7 +300,7 @@ func (sm *StateManager) FetchTesseractFromDB(hash types.Hash, withInteractions b
 	// canonicalTesseract is a clone of the tesseract. The only difference is that it won't have the interactions field.
 	canonicalTesseract := new(types.CanonicalTesseract)
 
-	if err := canonicalTesseract.FromBytes(buf); err != nil {
+	if err = canonicalTesseract.FromBytes(buf); err != nil {
 		return nil, errors.Wrap(err, "failed to depolarize tesseract")
 	}
 
@@ -525,7 +544,7 @@ func (sm *StateManager) FetchContextLock(ts *types.Tesseract) (*ktypes.ICSNodes,
 
 			ics.UpdateNodeSet(ktypes.SenderBehaviourSet, behaviourSet)
 			ics.UpdateNodeSet(ktypes.SenderRandomSet, randomSet)
-		} else if address == ix.ToAddress() || address == GenesisAddress {
+		} else if address == ix.ToAddress() || address == SargaAddress {
 			if info.ContextHash.IsNil() {
 				continue
 			}
@@ -553,12 +572,12 @@ func (sm *StateManager) FetchInteractionContext(ctx context.Context, ix *types.I
 	defer span.End()
 
 	var (
-		nodeSet       = make([]*ktypes.NodeSet, 6)
 		behaviourSet  *ktypes.NodeSet
 		randomSet     *ktypes.NodeSet
 		contextHash   types.Hash
 		err           error
 		contextHashes = make(map[types.Address]types.Hash)
+		nodeSet       = make([]*ktypes.NodeSet, 6)
 	)
 
 	if !ix.FromAddress().IsNil() {
@@ -573,18 +592,18 @@ func (sm *StateManager) FetchInteractionContext(ctx context.Context, ix *types.I
 	}
 
 	if !ix.ToAddress().IsNil() {
-		isGenesisAccount, err := sm.IsGenesis(ix.ToAddress())
+		accountRegistered, err := sm.IsAccountRegistered(ix.ToAddress())
 		if err != nil {
 			return nil, nil, err
 		}
 
-		if isGenesisAccount {
-			contextHash, behaviourSet, randomSet, err = sm.fetchLatestParticipantContext(GenesisAddress)
+		if !accountRegistered {
+			contextHash, behaviourSet, randomSet, err = sm.fetchLatestParticipantContext(SargaAddress)
 			if err != nil {
 				return nil, nil, err
 			}
 
-			contextHashes[GenesisAddress] = contextHash
+			contextHashes[SargaAddress] = contextHash
 		} else {
 			contextHash, behaviourSet, randomSet, err = sm.fetchLatestParticipantContext(ix.ToAddress())
 			if err != nil {
@@ -601,22 +620,41 @@ func (sm *StateManager) FetchInteractionContext(ctx context.Context, ix *types.I
 	return contextHashes, nodeSet, err
 }
 
-func (sm *StateManager) IsGenesis(addr types.Address) (bool, error) {
+func (sm *StateManager) IsAccountRegistered(addr types.Address) (bool, error) {
 	if addr.IsNil() {
-		return false, nil
-	}
-
-	genesisObject, err := sm.GetLatestStateObject(GenesisAddress)
-	if err != nil {
-		return false, errors.Wrap(types.ErrObjectNotFound, err.Error())
-	}
-	// Fetch the account info from genesis state
-	_, err = genesisObject.GetStorageEntry(GenesisLogicID, addr.Bytes())
-	if errors.Is(err, types.ErrKeyNotFound) {
 		return true, nil
 	}
 
-	return false, err
+	sargaObject, err := sm.GetLatestStateObject(SargaAddress)
+	if err != nil {
+		return true, errors.Wrap(types.ErrObjectNotFound, err.Error())
+	}
+	// Fetch the account info from genesis state
+	_, err = sargaObject.GetStorageEntry(SargaLogicID, addr.Bytes())
+	if errors.Is(err, types.ErrKeyNotFound) {
+		return false, nil
+	}
+
+	return true, err
+}
+
+func (sm *StateManager) IsAccountRegisteredAt(addr types.Address, tesseractHash types.Hash) (bool, error) {
+	ts, err := sm.getTesseractByHash(tesseractHash, false)
+	if err != nil {
+		return false, err
+	}
+
+	sargaObject, err := sm.GetStateObjectByHash(ts.Header.Address, ts.Body.StateHash)
+	if err != nil {
+		return false, err
+	}
+
+	_, err = sargaObject.GetStorageEntry(SargaLogicID, addr.Bytes())
+	if errors.Is(err, types.ErrKeyNotFound) {
+		return false, nil
+	}
+
+	return true, err
 }
 
 func (sm *StateManager) GetLatestNonce(addr types.Address) (uint64, error) {
@@ -641,12 +679,22 @@ func (sm *StateManager) GetBalances(addrs types.Address) (*gtypes.BalanceObject,
 	return stateObject.balance.Copy(), nil
 }
 
-func (sm *StateManager) GetBalance(addr types.Address, assetID types.AssetID) (*big.Int, error) {
-	if _, ok := sm.objects[addr]; ok {
-		return sm.objects[addr].balance.Bal[assetID], nil
+func (sm *StateManager) GetBalance(addrs types.Address, assetID types.AssetID) (*big.Int, error) {
+	stateObject, err := sm.GetLatestStateObject(addrs)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil, errors.New("invalid asset id")
+	return stateObject.BalanceOf(assetID)
+}
+
+func (sm *StateManager) GetAccTypeUsingStateObject(address types.Address) (types.AccType, error) {
+	so, err := sm.GetDirtyObject(address)
+	if err != nil {
+		return 0, err
+	}
+
+	return so.accType, nil
 }
 
 func (sm *StateManager) GetAccountMetaInfo(addr types.Address) (*types.AccountMetaInfo, error) {
@@ -661,11 +709,87 @@ func (sm *StateManager) GetAccountInfo(addr types.Address, stateHash types.Hash)
 
 	accInfo := new(types.Account)
 
-	if err := accInfo.FromBytes(rawData); err != nil {
+	if err = accInfo.FromBytes(rawData); err != nil {
 		return nil, err
 	}
 
 	return accInfo, nil
+}
+
+func (sm *StateManager) SetupSargaAccount(
+	sargaAcc *gtypes.AccountSetupArgs,
+	otherAccounts []*gtypes.AccountSetupArgs,
+) (types.Hash, types.Hash, error) {
+	if sargaAcc.Address != SargaAddress {
+		return types.NilHash, types.NilHash, errors.New("invalid sarga account address")
+	}
+
+	stateObject := sm.CreateDirtyObject(SargaAddress, types.SargaAccount)
+
+	if _, err := stateObject.CreateContext(sargaAcc.BehaviouralContext, sargaAcc.RandomContext); err != nil {
+		return types.NilHash, types.NilHash, errors.Wrap(err, "context initiation failed in genesis")
+	}
+
+	if _, err := stateObject.CreateStorageTreeForLogic(SargaLogicID); err != nil {
+		return types.NilHash, types.NilHash, errors.Wrap(err, "failed to create storage tree")
+	}
+
+	for _, info := range otherAccounts {
+		if info.Address != SargaAddress {
+			// Add account to sarga storage tree
+			if err := stateObject.SetStorageEntry(
+				SargaLogicID,
+				info.Address.Bytes(),
+				GenesisIxHash.Bytes(),
+			); err != nil {
+				return types.NilHash, types.NilHash, err
+			}
+		}
+	}
+
+	stateHash, err := stateObject.Commit()
+	if err != nil {
+		return types.NilHash, types.NilHash, err
+	}
+
+	return stateHash, stateObject.data.ContextHash, nil
+}
+
+func (sm *StateManager) SetupNewAccount(info *gtypes.AccountSetupArgs) (types.Hash, types.Hash, error) {
+	stateObject := sm.CreateDirtyObject(info.Address, info.AccType)
+
+	if _, err := stateObject.CreateContext(info.BehaviouralContext, info.RandomContext); err != nil {
+		return types.NilHash, types.NilHash, errors.Wrap(err, "context initiation failed in genesis")
+	}
+
+	if len(info.Assets) > 0 {
+		for _, asset := range info.Assets {
+			_, err := stateObject.CreateAsset(
+				asset.Dimension,
+				asset.IsFungible,
+				asset.IsMintable,
+				asset.Symbol,
+				asset.TotalSupply,
+				nil,
+			)
+			if err != nil {
+				return types.NilHash, types.NilHash, errors.Wrap(err, "failed to create an asset")
+			}
+		}
+	}
+
+	if len(info.Balances) > 0 {
+		for assetID, balance := range info.Balances {
+			stateObject.AddBalance(assetID, balance)
+		}
+	}
+
+	stateHash, err := stateObject.Commit()
+	if err != nil {
+		return types.NilHash, types.NilHash, err
+	}
+
+	return stateHash, stateObject.data.ContextHash, nil
 }
 
 func (sm *StateManager) SenatusInstance() Senatus {
@@ -727,7 +851,7 @@ func (sm *StateManager) GetPublicKeys(ids ...id.KramaID) ([][]byte, error) {
 }
 
 func (sm *StateManager) GetPublicKeyFromContract(ctx context.Context, ids ...id.KramaID) (keys [][]byte, err error) {
-	data, err := json.Marshal(Request{types.KIPPeerIDToString(ids)})
+	data, err := json.Marshal(Request{utils.KramaIDToString(ids)})
 	if err != nil {
 		return nil, err
 	}

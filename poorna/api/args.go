@@ -118,7 +118,7 @@ type TesseractHeader struct {
 	PrevHash string
 	// Represents the context lock hashes
 	ContextLock map[types.Address]types.ContextLockInfo
-	// Represents the height of the Tesseract in the chain
+	// Represents the height of the Tesseract in the lattice
 	Height uint64
 	// Represents the timestamp of Tesseract generation
 	Timestamp int64

@@ -5,6 +5,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/sarvalabs/moichain/utils"
+
 	gtypes "github.com/sarvalabs/moichain/guna/types"
 
 	"github.com/sarvalabs/moichain/types"
@@ -235,8 +237,8 @@ func (ms *MockStateManager) setContext(t *testing.T, hash types.Hash) {
 
 func (ms *MockStateManager) getContextNodes(hash types.Hash) []string {
 	return append(
-		types.KIPPeerIDToString(ms.context[hash].behaviourNodes),
-		types.KIPPeerIDToString(ms.context[hash].randomNodes)...,
+		utils.KramaIDToString(ms.context[hash].behaviourNodes),
+		utils.KramaIDToString(ms.context[hash].randomNodes)...,
 	)
 }
 

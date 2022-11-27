@@ -365,7 +365,7 @@ func (i *IxPool) validateIx(ix *types.Interaction) error {
 		return ErrNonceTooLow
 	}
 	/*
-		accountBalance, balanceErr := i.chain.GetBalance(stateRoot, tx.From)
+		accountBalance, balanceErr := i.lattice.GetBalance(stateRoot, tx.From)
 		if balanceErr != nil {
 			return ErrInvalidAccountState
 		}

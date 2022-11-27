@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"math/big"
 
@@ -97,7 +98,7 @@ func GetAssetID(
 	isFungible bool,
 	isMintable bool,
 	symbol string,
-	totalSupply int64,
+	totalSupply uint64,
 	logicID types.LogicID,
 ) (types.AssetID, types.Hash, []byte, error) {
 	var (
@@ -109,12 +110,13 @@ func GetAssetID(
 		Owner:   addr,
 		Symbol:  symbol,
 		LogicID: logicID,
+		Extra:   make([]byte, 8),
 	}
 
 	if isMintable {
 		info |= 0x01
 	} else {
-		assetData.Extra = big.NewInt(totalSupply).Bytes()
+		binary.BigEndian.PutUint64(assetData.Extra, totalSupply)
 	}
 
 	if isFungible {
@@ -254,4 +256,23 @@ func GetLogicID(code []byte, isUpgradable bool) (types.LogicID, *LogicData, erro
 	logicID := types.BytesToHash(x[:])
 
 	return types.LogicID(logicID.String()), ld, nil
+}
+
+type AccountSetupArgs struct {
+	Address            types.Address
+	AccType            types.AccType
+	MoiID              string
+	BehaviouralContext []id.KramaID
+	RandomContext      []id.KramaID
+	Assets             []*types.AssetInfo
+	Balances           map[types.AssetID]*big.Int
+}
+
+func (as *AccountSetupArgs) ContextDelta() types.ContextDelta {
+	return map[types.Address]*types.DeltaGroup{
+		as.Address: {
+			BehaviouralNodes: as.BehaviouralContext,
+			RandomNodes:      as.RandomContext,
+		},
+	}
 }

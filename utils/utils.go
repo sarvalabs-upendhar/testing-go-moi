@@ -172,18 +172,27 @@ func GetNetworkID(id id.KramaID) (peer.ID, error) {
 	return peerID, nil
 }
 
-func ValidateAddress(address string) (string, error) {
+func ValidateAccountType(acc types.AccType) (types.AccType, error) {
+	switch acc {
+	case types.SargaAccount, types.RegularAccount, types.ContractAccount:
+		return acc, nil
+	default:
+		return acc, types.ErrInvalidAccountType
+	}
+}
+
+func ValidateAddress(address string) (types.Address, error) {
 	address = strings.TrimPrefix(address, "0x")
 	if len(address) != 64 {
-		return address, types.ErrInvalidAddress
+		return types.NilAddress, types.ErrInvalidAddress
 	}
 
 	r := regexp.MustCompile(`[^a-fA-F\d]`)
 	if invalid := r.MatchString(address); invalid {
-		return address, types.ErrInvalidAddress
+		return types.NilAddress, types.ErrInvalidAddress
 	}
 
-	return address, nil
+	return types.HexToAddress(address), nil
 }
 
 func ValidateHash(hash string) (string, error) {
@@ -200,16 +209,36 @@ func ValidateHash(hash string) (string, error) {
 	return hash, nil
 }
 
-func ValidateAssetID(aID string) (string, error) {
+func ValidateAssetID(aID string) (types.AssetID, error) {
 	aID = strings.TrimPrefix(aID, "0x")
 	if len(aID) != 68 {
-		return aID, types.ErrInvalidAssetID
+		return "nil", types.ErrInvalidAssetID
 	}
 
 	r := regexp.MustCompile(`[^a-fA-F\d]`)
 	if invalid := r.MatchString(aID); invalid {
-		return aID, types.ErrInvalidAssetID
+		return "nil", types.ErrInvalidAssetID
 	}
 
-	return aID, nil
+	return types.AssetID(aID), nil
+}
+
+func KramaIDFromString(nodes []string) []id.KramaID {
+	ids := make([]id.KramaID, 0, len(nodes))
+
+	for _, v := range nodes {
+		ids = append(ids, id.KramaID(v))
+	}
+
+	return ids
+}
+
+func KramaIDToString(peers []id.KramaID) []string {
+	ids := make([]string, 0, len(peers))
+
+	for _, v := range peers {
+		ids = append(ids, string(v))
+	}
+
+	return ids
 }

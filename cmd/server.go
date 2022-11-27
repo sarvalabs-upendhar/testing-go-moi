@@ -19,9 +19,6 @@ import (
 	"github.com/sarvalabs/moichain/telemetry/tracing"
 	"go.opentelemetry.io/otel"
 
-	// "os/signal"
-	// "syscall"
-
 	"github.com/spf13/cobra"
 )
 
@@ -107,7 +104,7 @@ func BuildConfig(dataDir string, fileCfg *Config) (*common.Config, error) {
 	}
 
 	if SkipGenesis {
-		nodeCfg.Chain.Genesis = "nil"
+		nodeCfg.Chain.SkipGenesis = SkipGenesis
 	}
 
 	if NetworkSize != 0 {

@@ -16,13 +16,13 @@ func TestValidateAddress(t *testing.T) {
 		{
 			"address with 0x should pass",
 			"0xa6ba9853f131679e00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
-			"a6ba9853f131679e00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
+			"0xa6ba9853f131679e00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
 			false,
 		},
 		{
 			"address with out 0x should pass",
 			"a6ba9853f131679e00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
-			"a6ba9853f131679e00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
+			"0xa6ba9853f131679e00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
 			false,
 		},
 		{
@@ -40,7 +40,7 @@ func TestValidateAddress(t *testing.T) {
 		{
 			"address with capitals should pass",
 			"0xA6Ba9853f131679d00da0f033416a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
-			"A6Ba9853f131679d00da0f033416a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
+			"0xa6ba9853f131679d00da0f033416a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
 			false,
 		},
 		{
@@ -64,7 +64,7 @@ func TestValidateAddress(t *testing.T) {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, test.expectedAddress, result)
+				require.Equal(t, test.expectedAddress, result.Hex())
 			}
 		})
 	}
@@ -193,7 +193,7 @@ func TestValidateAssetID(t *testing.T) {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, test.expectedAssetID, result)
+				require.Equal(t, test.expectedAssetID, string(result))
 			}
 		})
 	}

@@ -22,7 +22,7 @@ type RoundVoteSet struct {
 
 // HeightVoteSet is a struct that represents a set of votes across multiple heights and votes
 type HeightVoteSet struct {
-	// Represents the slice of chain IDs for the voteset
+	// Represents the slice of lattice IDs for the voteset
 	chainIDs []string
 
 	// Represents the slice of heights tracked by the voteset
@@ -48,7 +48,7 @@ type HeightVoteSet struct {
 // NewHeightVoteSet is a constructor function that generates and returns a new HeightVoteSet.
 // Accepts a slice of chainIDs, heights and the set of validators.
 func NewHeightVoteSet(chainIDs []string, heights []uint64, valset *ktypes.ClusterInfo) *HeightVoteSet {
-	// Create a new HeightVoteSet with the chain IDs
+	// Create a new HeightVoteSet with the lattice IDs
 	hvs := &HeightVoteSet{
 		chainIDs:          chainIDs,
 		mtx:               sync.Mutex{},

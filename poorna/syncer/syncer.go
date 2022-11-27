@@ -84,6 +84,7 @@ type store interface {
 	ReadEntry([]byte) ([]byte, error)
 	Contains([]byte) (bool, error)
 	DeleteEntry([]byte) error
+	SetAccount(addr types.Address, hash types.Hash, data []byte) error
 	GetAccountMetaInfo(id []byte) (*types.AccountMetaInfo, error)
 	GetAccounts(bucketID int32) (types.Accounts, error)
 	GetBucketSizes() (map[int32]*big.Int, error)
@@ -599,20 +600,20 @@ func (s *Syncer) fetchTesseractState(tesseract *types.Tesseract, fetchContext []
 		balanceCID(acc.Balance),
 		//	acc.StorageRoot,
 		approvalsCID(acc.AssetApprovals),
-		//	tesseract.Body.ReceiptHash,
+		// tesseract.Body.ReceiptHash,
 	); err != nil {
 		s.logger.Error("Error fetching balance data", "error", err)
 
 		return err
 	}
 
-	if err := s.getContextData(ctx, newSession, contextCID(acc.ContextHash)); err != nil {
+	if err = s.getContextData(ctx, newSession, contextCID(acc.ContextHash)); err != nil {
 		s.logger.Error("Error fetching context data", "error", err)
 
 		return err
 	}
 
-	if err := s.db.CreateEntry(tesseract.Body.StateHash.Bytes(), block.GetData()); err != nil {
+	if err = s.db.SetAccount(tesseract.Address(), tesseract.StateHash(), block.GetData()); err != nil {
 		return err
 	}
 
