@@ -1,7 +1,6 @@
 
 # Description
-
-Brief description  about the this PR. Also specify the Gitlab task numbers.
+Brief description  about this PR. Also specify the issue number.
 
 # Changes include
 
@@ -15,10 +14,8 @@ Brief description  about the this PR. Also specify the Gitlab task numbers.
 - [ ] I have added at least 1 reviewer
 - [ ] I have tested this code
 - [ ] I have updated the README and other relevant documents (guides...)
-- [ ] I have added sufficient documentation both in code, as well as in the READMEs
 
 # Additional Comments
-
 Specify the additional comments if any.
 
 # Docs PR
