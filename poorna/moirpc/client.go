@@ -3,7 +3,6 @@ package moirpc
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"reflect"
 	"sync"
@@ -88,7 +87,7 @@ func NewClient(logger hclog.Logger, h host.Host, p protocol.ID, senatus senatus,
 		InitialCapacity: 1024,
 		// TTL of a value expired in map
 		OnWillExpire: func(key string, item ttlmap.Item) {
-			fmt.Printf("expired: [%s=%v]\n", key, item.Value())
+			c.logger.Debug("expired", "key", key, "value", item.Value())
 		},
 		// key is removed from the map
 		OnWillEvict: func(key string, item ttlmap.Item) {
@@ -96,7 +95,7 @@ func NewClient(logger hclog.Logger, h host.Host, p protocol.ID, senatus senatus,
 			if !ok {
 				c.logger.Error("type assertion failed")
 			}
-			fmt.Println("evicted:", key, s, s.Protocol())
+			c.logger.Debug("evicted:", "key", key, "stream", s, "protocol", s.Protocol())
 			// closing the stream
 			logger.Warn("[NewClient]", "closing stream ID", s.ID())
 			s.Close()
@@ -181,7 +180,11 @@ func (c *Client) MoiCall(
 	}
 
 	p, _ := peer.Decode(destPeerID)
-	addrsInPeerStore := c.host.Peerstore().Addrs(p)
+
+	var addrsInPeerStore []multiaddr.Multiaddr
+	if !peerIsNil(p) {
+		addrsInPeerStore = c.host.Peerstore().Addrs(p)
+	}
 
 	if len(addrsInPeerStore) == 0 {
 		c.logger.Warn(" entry not present in peer store , checking senatus...")
@@ -202,6 +205,12 @@ func (c *Client) MoiCall(
 	ctx := context.Background()
 
 	return c.CallContext(ctx, p, svcName, svcMethod, args, reply, ttl)
+}
+
+func peerIsNil(p peer.ID) bool {
+	var nilPeerID peer.ID
+
+	return p == nilPeerID
 }
 
 // CallContext performs an RPC call to a registered Server service and blocks

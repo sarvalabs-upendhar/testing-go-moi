@@ -24,10 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var testLogger = hclog.New(&hclog.LoggerOptions{
-	Name:  "MOIRPC-TEST",
-	Level: hclog.LevelFromString("debug"),
-})
+var testLogger = hclog.NewNullLogger()
 
 type Args struct {
 	A, B int
