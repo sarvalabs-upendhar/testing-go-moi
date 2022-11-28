@@ -1,20 +1,11 @@
 name: Go Test
 on:
-  push:
-    branches:
-      - develop
-    paths:
-      - '**.go'
+  workflow_call:
+    secrets:
+      ACCESS_TOKEN:
+        required: true
 
-  pull_request:
-    branches:
-      - master
-      - develop
-    types:
-      - opened
-      - edited
-    paths:
-      - '**.go'
+  workflow_dispatch: {}
 
 jobs:
   tests:

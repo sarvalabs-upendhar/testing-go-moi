@@ -1,0 +1,73 @@
+name: GO Deploy
+on:
+  push:
+    branches:
+      - master
+      - develop
+
+  workflow_dispatch: {}
+
+jobs:
+  ci:
+    name: Continuous Integration
+    uses: ./.github/workflows/ci.yml
+    secrets:
+      ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+
+  build:
+   name: Build
+   needs: ci
+   uses: ./.github/workflows/build.yml
+   secrets:
+     ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+
+  deploy:
+    name: go deploy
+    needs: build
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        hosts: [host_1, host_2, host_3, host_4, host_5]
+        include:
+          - hosts: host_1
+            ip: DEV_HOST_1
+            access_key: DEV_ACCESS_KEY_1
+          - hosts: host_2
+            ip: DEV_HOST_2
+            access_key: DEV_ACCESS_KEY_2
+          - hosts: host_3
+            ip: DEV_HOST_3
+            access_key: DEV_ACCESS_KEY_3
+          - hosts: host_4
+            ip: DEV_HOST_4
+            access_key: DEV_ACCESS_KEY_4
+          - hosts: host_5
+            ip: DEV_HOST_5
+            access_key: DEV_ACCESS_KEY_5
+
+    steps:
+      - name: Download latest artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: moichain.build
+
+      - name: Copy the latest artifact to remote hosts
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets[matrix.ip] }}
+          username: ${{ secrets.DEV_USER }}
+          key: ${{ secrets[matrix.access_key] }}
+          port: ${{ secrets.SSH_PORT }}
+          source: moichain.build.tar.gz
+          target: ~/
+          overwrite: true
+
+      - name: Update binary and restart moipods
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets[matrix.ip] }}
+          username: ${{ secrets.DEV_USER }}
+          key: ${{ secrets[matrix.access_key] }}
+          port: ${{ secrets.SSH_PORT }}
+          script: bash deploy.sh ${{ secrets.DEV_OPERATOR_SLOTS  }} ${{ secrets.DEV_VALIDATOR_SLOTS }} ${{ secrets.DEV_ENABLE_TRACING }} ${{ secrets.DEV_JAEGER_ADDRESS }}
