@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/binary"
 	"encoding/hex"
 	"math/big"
 
@@ -104,7 +103,7 @@ func (p *PublicCoreAPI) GetAssetInfoByAssetID(id string) (*types.AssetInfo, erro
 
 	assetInfo.Symbol = assetData.Symbol
 
-	assetInfo.TotalSupply = binary.BigEndian.Uint64(assetData.Extra)
+	assetInfo.TotalSupply = assetData.TotalSupply
 
 	assetInfo.Owner = assetData.Owner.Hex()
 
