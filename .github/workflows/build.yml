@@ -1,0 +1,41 @@
+name: GO Build
+on:
+  workflow_call:
+    secrets:
+      ACCESS_TOKEN:
+        required: true
+
+jobs:
+  build:
+    name: go build
+    runs-on: ubuntu-latest
+    env:
+      GOPRIVATE: github.com/sarvalabs/*
+      ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Go 1.18.x
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.18.x
+
+      - name: Configure git
+        run: git config --global url.https://$ACCESS_TOKEN@github.com/.insteadOf https://github.com/
+
+      - name: Build moichain
+        run: go build -o moichain.build && tar -czvf moichain.build.tar.gz moichain.build
+        env:
+          CC: gcc
+          CXX: g++
+          GOARC: amd64
+          GOOS: linux
+
+      - name: Upload moichain artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: moichain.build
+          path: moichain.build.tar.gz
+          retention-days: 3
