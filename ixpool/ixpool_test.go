@@ -119,7 +119,6 @@ func TestIxPool_ResetWaitTime_WithTesseract(t *testing.T) {
 	acc.incrementCounter(2)
 	assert.Equal(t, int32(1), acc.delayCounter)
 	ixPool.ResetWithHeaders(ts)
-	//assert.Equal(t, int32(0), acc.delayCounter)
 }
 
 // TODO: Add more test cases to check nonce edge conditions
