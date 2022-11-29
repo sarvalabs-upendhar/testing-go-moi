@@ -160,10 +160,10 @@ func (mc *MockChainManager) setStorage(hash types.Hash, tesseract *types.Tessera
 
 func (mc *MockChainManager) setAssets(id types.AssetID, info *types.AssetInfo) {
 	mc.assets[types.BytesToHash(id.GetCID())] = &gtypes.AssetData{
-		LogicID: info.LogicID,
-		Symbol:  info.Symbol,
-		Owner:   types.HexToAddress(info.Owner),
-		Extra:   big.NewInt(int64(info.TotalSupply)).Bytes(),
+		LogicID:     info.LogicID,
+		Symbol:      info.Symbol,
+		Owner:       types.HexToAddress(info.Owner),
+		TotalSupply: info.TotalSupply,
 	}
 }
 

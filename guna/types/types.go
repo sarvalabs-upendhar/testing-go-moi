@@ -1,7 +1,6 @@
 package types
 
 import (
-	"encoding/binary"
 	"encoding/hex"
 	"math/big"
 
@@ -78,10 +77,11 @@ func (a *ApprovalObject) Copy() *ApprovalObject {
 }
 
 type AssetData struct {
-	LogicID types.LogicID
-	Symbol  string
-	Owner   types.Address
-	Extra   []byte
+	LogicID     types.LogicID
+	Symbol      string
+	Owner       types.Address
+	TotalSupply uint64
+	Extra       []byte
 }
 
 func (ad *AssetData) FromBytes(bytes []byte) error {
@@ -116,7 +116,7 @@ func GetAssetID(
 	if isMintable {
 		info |= 0x01
 	} else {
-		binary.BigEndian.PutUint64(assetData.Extra, totalSupply)
+		assetData.TotalSupply = totalSupply
 	}
 
 	if isFungible {
