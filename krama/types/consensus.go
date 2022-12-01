@@ -21,7 +21,8 @@ type (
 )
 
 const (
-	PREVOTE ConsensusMsgType = iota
+	PROPOSAL ConsensusMsgType = iota
+	PREVOTE
 	PRECOMMIT
 )
 
@@ -51,6 +52,7 @@ type CanonicalVote struct {
 	GridID *types.TesseractGridID
 }
 
+// Bytes polorizes and returns either the CanonicalVote in bytes or an error if failed to polorize.
 func (cv *CanonicalVote) Bytes() ([]byte, error) {
 	rawData, err := polo.Polorize(cv)
 	if err != nil {
@@ -60,6 +62,8 @@ func (cv *CanonicalVote) Bytes() ([]byte, error) {
 	return rawData, nil
 }
 
+// SignBytes creates a CanonicalVote from Vote.
+// Polorizes and returns either the CanonicalVote in bytes or an error if failed to polorize.
 func (v *Vote) SignBytes() ([]byte, error) {
 	canonicalVote := CanonicalVote{
 		Type:   v.Type,
@@ -75,6 +79,7 @@ func (v *Vote) SignBytes() ([]byte, error) {
 	return rawData, nil
 }
 
+// Bytes polorizes and returns either the vote in bytes or an error if failed to polorize.
 func (v *Vote) Bytes() ([]byte, error) {
 	rawData, err := polo.Polorize(v)
 	if err != nil {
@@ -84,6 +89,7 @@ func (v *Vote) Bytes() ([]byte, error) {
 	return rawData, nil
 }
 
+// FromBytes deplorizes and updates the vote or returns an error if failed to depolorize.
 func (v *Vote) FromBytes(bytes []byte) error {
 	if err := polo.Depolorize(v, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize vote")
@@ -97,10 +103,16 @@ func (v *Vote) Validate() error {
 	return nil
 }
 
+type WALMsg struct {
+	PeerID  id.KramaID
+	MsgType ptypes.MsgType
+	Msg     []byte
+}
+
 type TimedWALMessage struct {
 	ClusterID types.ClusterID
 	Timestamp int64
-	Message   ConsensusMessage
+	Message   *WALMsg
 }
 
 func (twm *TimedWALMessage) Bytes() ([]byte, error) {
@@ -121,6 +133,7 @@ func (twm *TimedWALMessage) FromBytes(bytes []byte) error {
 }
 
 type Proposal struct {
+	Type      ConsensusMsgType
 	Height    []uint64
 	Round     int32
 	POLRound  int32
@@ -141,6 +154,7 @@ func NewProposal(
 	gridID *types.TesseractGridID,
 ) *Proposal {
 	return &Proposal{
+		Type:     PROPOSAL,
 		Height:   heights,
 		Round:    round,
 		POLRound: polround,
@@ -149,10 +163,21 @@ func NewProposal(
 	}
 }
 
+// Bytes polorizes and returns either the Proposal in bytes or an error if failed to polorize.
+func (p *Proposal) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(p)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize proposal")
+	}
+
+	return rawData, nil
+}
+
 // Cmessage is an interface that represents messages used in achieving consensus
 type Cmessage interface {
 	// Validate is a method that validates the message
 	Validate() error
+	Bytes() ([]byte, error)
 }
 
 // ConsensusMessage is a struct that represents an envelope for a consensus message.
@@ -165,31 +190,55 @@ type ConsensusMessage struct {
 	Message Cmessage
 }
 
+// ICSMsg returns a new instance of ICSMSG
 func (c *ConsensusMessage) ICSMsg(clusterID types.ClusterID) (*ICSMSG, error) {
-	var (
-		msgType ptypes.MsgType
-		rawData []byte
-		err     error
-	)
-
-	switch msg := c.Message.(type) {
-	case *VoteMessage:
-		rawData, err = msg.Vote.Bytes()
-		if err != nil {
-			return nil, err
-		}
-
-		msgType = ptypes.VOTEMSG
-	default:
-		return nil, errors.New("invalid message type")
+	msgType, msg, err := getRawMessage(c.Message)
+	if err != nil {
+		return nil, err
 	}
 
 	return &ICSMSG{
 		msgType,
-		rawData,
+		msg,
 		c.PeerID,
 		string(clusterID),
 	}, nil
+}
+
+// WALMsg returns a new instance of WALMsg
+func (c *ConsensusMessage) WALMsg() (*WALMsg, error) {
+	msgType, msg, err := getRawMessage(c.Message)
+	if err != nil {
+		return nil, err
+	}
+
+	return &WALMsg{
+		c.PeerID,
+		msgType,
+		msg,
+	}, nil
+}
+
+// getRawMessage returns the message type and raw message.
+func getRawMessage(message Cmessage) (ptypes.MsgType, []byte, error) {
+	switch msg := message.(type) {
+	case *VoteMessage:
+		rawData, err := msg.Vote.Bytes()
+		if err != nil {
+			return -1, nil, err
+		}
+
+		return ptypes.VOTEMSG, rawData, nil
+	case *ProposalMessage:
+		rawData, err := msg.Proposal.Bytes()
+		if err != nil {
+			return -1, nil, err
+		}
+
+		return ptypes.PROPOSALMSG, rawData, nil
+	default:
+		return -1, nil, errors.New("invalid message type")
+	}
 }
 
 // Validate is a method of ConsensusMessage to implement the Cmessage interface.
@@ -211,6 +260,17 @@ func (m *ProposalMessage) Validate() error {
 	return nil
 }
 
+// Bytes is a method of ProposalMessage to implement the Cmessage interface.
+// Returns either the ProposalMessage in bytes or an error if failed to polorize.
+func (m *ProposalMessage) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(m)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize vote message")
+	}
+
+	return rawData, err
+}
+
 // VoteMessage is a struct that represents a Vote consensus message.
 // Implements the Cmessage interface.
 type VoteMessage struct {
@@ -223,12 +283,24 @@ func (m *VoteMessage) Validate() error {
 	return m.Vote.Validate()
 }
 
+// Bytes is a method of VoteMessage to implement the Cmessage interface.
+// Returns either the VoteMessage in bytes or an error if failed to polorize.
+func (m *VoteMessage) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(m)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize vote message")
+	}
+
+	return rawData, err
+}
+
 type TesseractGrid struct {
 	Hash       types.Hash
 	Total      int32
 	Tesseracts []*types.Tesseract
 }
 
+// GetTesseractGridID creates and returns a new instance of TesseractGridID
 func (t *TesseractGrid) GetTesseractGridID() (*types.TesseractGridID, error) {
 	gridID := &types.TesseractGridID{
 		Hash: t.Hash,
@@ -252,8 +324,9 @@ func (t *TesseractGrid) GetTesseractGridID() (*types.TesseractGridID, error) {
 	return gridID, nil
 }
 
-func (t *TesseractGrid) CompareHash(h types.Hash) bool {
-	if len(h.Bytes()) == 0 {
+// CompareHash checks whether the given grid hash argument matches with the tesseract grid hash
+func (t *TesseractGrid) CompareHash(gridHash types.Hash) bool {
+	if len(gridHash.Bytes()) == 0 {
 		return false
 	}
 
@@ -261,7 +334,7 @@ func (t *TesseractGrid) CompareHash(h types.Hash) bool {
 		return false
 	}
 
-	return bytes.Equal(t.Hash.Bytes(), h.Bytes())
+	return bytes.Equal(t.Hash.Bytes(), gridHash.Bytes())
 }
 
 type NodeSet struct {
@@ -273,6 +346,7 @@ type NodeSet struct {
 	QuorumSize  int
 }
 
+// NewNodeSet creates and returns a new instance of NodeSet
 func NewNodeSet(ids []id.KramaID, keys [][]byte) *NodeSet {
 	return &NodeSet{
 		Ids:         ids,
@@ -288,6 +362,7 @@ type ICSNodes struct {
 	Size  int
 }
 
+// NewICSNodes creates and returns a new instance of ICSNodes
 func NewICSNodes(size int) *ICSNodes {
 	ics := &ICSNodes{
 		Nodes: make([]*NodeSet, size),
@@ -297,6 +372,7 @@ func NewICSNodes(size int) *ICSNodes {
 	return ics
 }
 
+// GetKramaID returns the slot id, slot index, krama id and bls public key of the validator node based on the index
 func (i *ICSNodes) GetKramaID(index int32) (slotID int, slotIndex int, kramaID id.KramaID, publicKey []byte) {
 	if index < 0 || int(index) >= i.Size {
 		return -1, -1, "", nil
@@ -317,13 +393,13 @@ func (i *ICSNodes) GetKramaID(index int32) (slotID int, slotIndex int, kramaID i
 			continue
 		}
 
-		// if set.Responses.GetIndex(int(index)) {
 		return v, int(index), set.Ids[index], set.PublicKeys[index]
 	}
 
 	return -1, -1, "", nil
 }
 
+// GetIndex returns the index and existence status of the validator node from ICSNodes based on the krama id
 func (i *ICSNodes) GetIndex(peerID id.KramaID) (int32, bool) {
 	offset := 0
 
@@ -348,6 +424,7 @@ func (i *ICSNodes) GetIndex(peerID id.KramaID) (int32, bool) {
 	return -1, false
 }
 
+// UpdateNodeSet updates the specific node set of the ICSNodes based on the node set type
 func (i *ICSNodes) UpdateNodeSet(setType IcsSetType, data *NodeSet) {
 	if data == nil {
 		return
@@ -357,6 +434,7 @@ func (i *ICSNodes) UpdateNodeSet(setType IcsSetType, data *NodeSet) {
 	i.Size += len(data.Ids)
 }
 
+// GetNodes returns krama id's of all the nodes from the ICSNodes nodeset
 func (i *ICSNodes) GetNodes() []id.KramaID {
 	var nodes []id.KramaID
 
@@ -369,6 +447,7 @@ func (i *ICSNodes) GetNodes() []id.KramaID {
 	return nodes
 }
 
+// IsContextQuorum check's whether context quorum condition is satisfied or not
 func (i *ICSNodes) IsContextQuorum() bool {
 	for j := 0; j < 4; j += 2 {
 		count := 0
@@ -394,10 +473,12 @@ func (i *ICSNodes) IsContextQuorum() bool {
 	return true
 }
 
+// IsRandomQuorum check's whether random quorum condition is satisfied or not
 func (i *ICSNodes) IsRandomQuorum(requiredRandomNodes int) bool {
 	return i.Nodes[RandomSet].Count >= requiredRandomNodes
 }
 
+// SenderSetSize returns the sum of number of nodes in the sender's behaviour node set and random node set
 func (i *ICSNodes) SenderSetSize() int {
 	count := 0
 
@@ -416,6 +497,7 @@ func (i *ICSNodes) SenderSetSize() int {
 	return count
 }
 
+// ReceiverSetSize returns the sum of number of nodes in the receiver's behaviour node set and random node set
 func (i *ICSNodes) ReceiverSetSize() int {
 	count := 0
 
@@ -434,6 +516,7 @@ func (i *ICSNodes) ReceiverSetSize() int {
 	return count
 }
 
+// RandomSetSize returns the random node set size
 func (i *ICSNodes) RandomSetSize() int {
 	count := len(i.Nodes[RandomSet].Ids)
 	if count <= 0 {
@@ -443,6 +526,7 @@ func (i *ICSNodes) RandomSetSize() int {
 	return count
 }
 
+// SenderQuorumSize returns the sender's quorum size
 func (i *ICSNodes) SenderQuorumSize() int {
 	count := i.SenderSetSize()
 	if count <= 0 {
@@ -452,6 +536,7 @@ func (i *ICSNodes) SenderQuorumSize() int {
 	return count*2/3 + 1
 }
 
+// ReceiverQuorumSize returns the receiver's quorum size
 func (i *ICSNodes) ReceiverQuorumSize() int {
 	count := i.ReceiverSetSize()
 	if count <= 0 {
@@ -461,10 +546,12 @@ func (i *ICSNodes) ReceiverQuorumSize() int {
 	return count*2/3 + 1
 }
 
+// RandomQuorumSize returns the random quorum size
 func (i *ICSNodes) RandomQuorumSize() int {
 	return i.Nodes[RandomSet].QuorumSize*2/3 + 1
 }
 
+// String returns the ICSNodes in string
 func (i *ICSNodes) String() string {
 	rawBytes, err := json.Marshal(i)
 	if err != nil {

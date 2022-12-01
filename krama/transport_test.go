@@ -21,12 +21,8 @@ type InitClusterCommArgs struct {
 }
 
 func CreateTransport() (*Transport, *MockServer) {
-	logger := hclog.New(&hclog.LoggerOptions{
-		Name:  "MOI",
-		Level: hclog.LevelFromString("TRACE"),
-	})
 	network := NewMockServer()
-	transport := NewKramaTransport(logger, network)
+	transport := NewKramaTransport(hclog.NewNullLogger(), network)
 
 	return transport, network
 }

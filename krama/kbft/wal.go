@@ -107,6 +107,7 @@ func (wal *BaseWAL) SetFlushInterval(i time.Duration) {
 	wal.flushInterval = i
 }
 
+// Group returns the wal group
 func (wal *BaseWAL) Group() *utils.Group {
 	return wal.group
 }
@@ -186,10 +187,15 @@ func (wal *BaseWAL) Write(msg ktypes.ConsensusMessage, clusterID types.ClusterID
 		return nil
 	}
 
-	if err := wal.enc.Encode(&ktypes.TimedWALMessage{
+	walMsg, err := msg.WALMsg()
+	if err != nil {
+		return err
+	}
+
+	if err = wal.enc.Encode(&ktypes.TimedWALMessage{
 		ClusterID: clusterID,
 		Timestamp: time.Now().UnixNano(),
-		Message:   msg,
+		Message:   walMsg,
 	}); err != nil {
 		wal.logger.Error(
 			"error writing msg to consensus wal."+
@@ -419,7 +425,7 @@ func (dec *WALDecoder) Decode() (*ktypes.TimedWALMessage, error) {
 
 	res := new(ktypes.TimedWALMessage)
 
-	if err := res.FromBytes(data); err != nil {
+	if err = res.FromBytes(data); err != nil {
 		return nil, DataCorruptionError{fmt.Errorf("failed to decode data: %w", err)}
 	}
 
