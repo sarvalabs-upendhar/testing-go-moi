@@ -28,7 +28,7 @@ jobs:
 
     strategy:
       matrix:
-        hosts: [host_1, host_2, host_3, host_4, host_5]
+        hosts: [host_1, host_2, host_3, host_4, host_5, host_6, host_7, host_8, host_9, host_10, host_11, host_12]
         include:
           - hosts: host_1
             ip: DEV_HOST_1
@@ -45,6 +45,27 @@ jobs:
           - hosts: host_5
             ip: DEV_HOST_5
             access_key: DEV_ACCESS_KEY_5
+          - hosts: host_6
+            ip: DEV_HOST_6
+            access_key: DEV_ACCESS_KEY_6
+          - hosts: host_7
+            ip: DEV_HOST_7
+            access_key: DEV_ACCESS_KEY_7
+          - hosts: host_8
+            ip: DEV_HOST_8
+            access_key: DEV_ACCESS_KEY_8
+          - hosts: host_9
+            ip: DEV_HOST_9
+            access_key: DEV_ACCESS_KEY_9
+          - hosts: host_10
+            ip: DEV_HOST_10
+            access_key: DEV_ACCESS_KEY_10
+          - hosts: host_11
+            ip: DEV_HOST_11
+            access_key: DEV_ACCESS_KEY_11
+          - hosts: host_12
+            ip: DEV_HOST_12
+            access_key: DEV_ACCESS_KEY_12
 
     steps:
       - name: Download latest artifact
