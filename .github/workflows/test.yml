@@ -4,6 +4,8 @@ on:
     secrets:
       ACCESS_TOKEN:
         required: true
+      CODECOV_TOKEN:
+        required: true
 
   workflow_dispatch: {}
 
@@ -28,4 +30,11 @@ jobs:
         run: git config --global url.https://$ACCESS_TOKEN@github.com/.insteadOf https://github.com/
 
       - name: Run tests
-        run: go test -v ./...
+        run: go test -v -coverprofile coverage.out -timeout 10m ./...
+
+      - name: Upload coverage file to codecov
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.out
+          flags: unittests

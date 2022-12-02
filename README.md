@@ -1,6 +1,7 @@
 # MOI Chain
 ### Official Go Implementation of the MOI Protocol.
 ![banner](./moichain-banner.png)
+[![codecov](https://codecov.io/gh/sarvalabs/moichain/branch/develop/graph/badge.svg?token=7EKUYID0LM)](https://codecov.io/gh/sarvalabs/moichain)
 
 **MOI** is the **World's First Personalized Global Value Network.**  
 www.moi.technology
