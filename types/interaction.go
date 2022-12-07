@@ -6,12 +6,15 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
+
 	"github.com/sarvalabs/moichain/mudra/kramaid"
 )
 
 const (
 	ValueTransfer IxType = iota
 	AssetCreation
+	LogicDeploy
+	LogicExecute
 )
 
 // IxType ...
@@ -211,15 +214,15 @@ func (ix *Interaction) ToAddress() Address {
 // Nonce returns the account nonce of the transaction
 func (ix *Interaction) Nonce() uint64 { return ix.Data.Input.Nonce }
 
-func (ix *Interaction) GasPrice() *big.Int { return new(big.Int).SetUint64(ix.Data.Input.AnuPrice) }
+func (ix *Interaction) FuelPrice() *big.Int { return new(big.Int).SetUint64(ix.Data.Input.AnuPrice) }
 
-func (ix *Interaction) GasPriceCmp(other *Interaction) int {
+func (ix *Interaction) FuelPriceCmp(other *Interaction) int {
 	return new(big.Int).SetUint64(ix.Data.Input.AnuPrice).Cmp(new(big.Int).SetUint64(other.Data.Input.AnuPrice))
 }
 
-func (ix *Interaction) Gas() uint64 { return ix.Data.Input.AnuLimit }
+func (ix *Interaction) Fuel() uint64 { return ix.Data.Input.AnuLimit }
 
-func (ix *Interaction) GasPriceIntCmp(other *big.Int) int {
+func (ix *Interaction) FuelPriceIntCmp(other *big.Int) int {
 	return new(big.Int).SetUint64(ix.Data.Input.AnuPrice).Cmp(other)
 }
 
@@ -233,7 +236,7 @@ func (ix *Interaction) Cost() *big.Int {
 }
 
 func (ix *Interaction) IsUnderpriced(priceLimit uint64) bool {
-	return ix.GasPrice().Cmp(big.NewInt(0).SetUint64(priceLimit)) < 0
+	return ix.FuelPrice().Cmp(big.NewInt(0).SetUint64(priceLimit)) < 0
 }
 
 func (ix *Interaction) Bytes() ([]byte, error) {

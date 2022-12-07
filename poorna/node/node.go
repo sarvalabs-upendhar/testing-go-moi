@@ -16,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/dhruva"
 	"github.com/sarvalabs/moichain/guna"
@@ -49,7 +50,7 @@ type Node struct {
 	network          *poorna.Server
 	state            *guna.StateManager
 	chain            *lattice.ChainManager
-	exec             *jug.Exec
+	exec             *jug.ExecutionManager
 	kramaEngine      *krama.Engine
 	db               *dhruva.PersistenceManager
 	ixpool           *ixpool.IxPool
@@ -127,7 +128,7 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 		return nil, err
 	}
 	// setup execution engine
-	n.exec = jug.NewExec(n.state)
+	n.exec = jug.NewExecutionManager(n.state, n.logger, cfg.Execution)
 	// setup ixpool
 	n.ixpool = ixpool.NewIxPool(n.ctx, n.logger, n.eventMux, n.state, cfg.IxPool, n.nodeMetrics.ixpool)
 

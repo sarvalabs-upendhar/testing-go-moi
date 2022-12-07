@@ -9,12 +9,20 @@ import (
 	"sync"
 	"time"
 
+	gtypes "github.com/sarvalabs/moichain/guna/types"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
-	gtypes "github.com/sarvalabs/moichain/guna/types"
-
+	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/guna"
 	"github.com/sarvalabs/moichain/ixpool"
-
+	"github.com/sarvalabs/moichain/krama/kbft"
+	"github.com/sarvalabs/moichain/krama/observer"
+	"github.com/sarvalabs/moichain/mudra"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/poorna/flux"
+	"github.com/sarvalabs/moichain/telemetry/tracing"
+	"github.com/sarvalabs/moichain/types"
 	"github.com/sarvalabs/moichain/utils"
 
 	"github.com/hashicorp/go-hclog"
@@ -23,16 +31,6 @@ import (
 	"github.com/moby/locker"
 	"github.com/mr-tron/base58/base58"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/guna"
-	"github.com/sarvalabs/moichain/krama/kbft"
-	"github.com/sarvalabs/moichain/krama/observer"
-	ktypes "github.com/sarvalabs/moichain/krama/types"
-	"github.com/sarvalabs/moichain/mudra"
-	id "github.com/sarvalabs/moichain/mudra/kramaid"
-	"github.com/sarvalabs/moichain/poorna/flux"
-	"github.com/sarvalabs/moichain/telemetry/tracing"
-	"github.com/sarvalabs/moichain/types"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/crypto/blake2b"
@@ -92,13 +90,9 @@ type ixPool interface {
 }
 
 type execution interface {
-	CleanupExecutorInstances(id types.ClusterID)
-	ExecuteInteractions(
-		clusterID types.ClusterID,
-		ixs []*types.Interaction,
-		contextDelta types.ContextDelta,
-	) (types.Receipts, error)
-	Revert(clusterID types.ClusterID) error
+	ExecuteInteractions(types.ClusterID, types.Interactions, types.ContextDelta) (types.Receipts, error)
+	Revert(types.ClusterID) error
+	Cleanup(types.ClusterID)
 }
 
 type Response struct {
@@ -580,7 +574,6 @@ func (k *Engine) handleReq(req Request) {
 		cancelFn()
 
 		slot := k.slots.GetSlot(clusterID)
-
 		k.slots.CleanupSlot(clusterID)
 
 		if slot != nil {
@@ -591,7 +584,7 @@ func (k *Engine) handleReq(req Request) {
 			}
 		}
 
-		k.exec.CleanupExecutorInstances(clusterID)
+		k.exec.Cleanup(clusterID)
 	}()
 
 	switch req.reqType {
@@ -1297,12 +1290,12 @@ func (k *Engine) finalizedTesseractHandler(tesseracts []*types.Tesseract) error 
 
 func GenerateTesseracts(state *ktypes.ClusterInfo) ([]*types.Tesseract, error) {
 	ix := state.Ixs[0] // TODO: Improve this
-	gasUsed := state.GetGasUsed()
+	fuelUsed := state.GetFuelUsed()
 	groupBuffer := make([]byte, 0)
 	tesseractGroup := make([]*types.Tesseract, 0)
 
 	if !ix.FromAddress().IsNil() {
-		senderTesseract, err := generateTesseract(ix.Hash, ix.FromAddress(), state, gasUsed, 1000)
+		senderTesseract, err := generateTesseract(ix.Hash, ix.FromAddress(), state, fuelUsed, 1000)
 		if err != nil {
 			return nil, err
 		}
@@ -1312,7 +1305,7 @@ func GenerateTesseracts(state *ktypes.ClusterInfo) ([]*types.Tesseract, error) {
 	}
 
 	if !ix.ToAddress().IsNil() {
-		receiverTesseract, err := generateTesseract(ix.Hash, ix.ToAddress(), state, gasUsed, 1000)
+		receiverTesseract, err := generateTesseract(ix.Hash, ix.ToAddress(), state, fuelUsed, 1000)
 		if err != nil {
 			return nil, err
 		}
@@ -1321,7 +1314,7 @@ func GenerateTesseracts(state *ktypes.ClusterInfo) ([]*types.Tesseract, error) {
 		groupBuffer = append(groupBuffer, receiverTesseract.BodyHash().Bytes()...)
 
 		if state.AccountInfos.IsGenesis(ix.ToAddress()) {
-			genesisTesseract, err := generateTesseract(ix.Hash, guna.SargaAddress, state, gasUsed, 1000)
+			genesisTesseract, err := generateTesseract(ix.Hash, guna.SargaAddress, state, fuelUsed, 1000)
 			if err != nil {
 				return nil, err
 			}
@@ -1343,8 +1336,8 @@ func generateTesseract(
 	ixHash types.Hash,
 	addr types.Address,
 	state *ktypes.ClusterInfo,
-	gasUsed,
-	gasLimit uint64,
+	fuelUsed,
+	fuelLimit uint64,
 ) (*types.Tesseract, error) {
 	ixsHash, err := state.Ixs.Hash()
 	if err != nil {
@@ -1362,8 +1355,8 @@ func generateTesseract(
 			ContextLock: state.ContextLock,
 			PrevHash:    state.AccountInfos.GetLatestHash(addr),
 			Height:      uint64(state.AccountInfos.GetHeight(addr) + 1),
-			AnuUsed:     gasUsed,
-			AnuLimit:    gasLimit,
+			AnuUsed:     fuelUsed,
+			AnuLimit:    fuelLimit,
 			ClusterID:   string(state.ID),
 			Operator:    string(state.Operator),
 			Extra: types.CommitData{

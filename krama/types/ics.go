@@ -13,9 +13,10 @@ import (
 	"github.com/sarvalabs/moichain/utils"
 
 	"github.com/sarvalabs/go-polo"
+	"golang.org/x/crypto/blake2b"
+
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/types"
-	"golang.org/x/crypto/blake2b"
 )
 
 type ClusterInfo struct {
@@ -300,9 +301,9 @@ func (i *ClusterInfo) GetStateHash(ixHash types.Hash, addr types.Address) types.
 	return receipt.StateHashes[addr]
 }
 
-func (i *ClusterInfo) GetGasUsed() (gasUsed uint64) {
+func (i *ClusterInfo) GetFuelUsed() (fuelUsed uint64) {
 	for _, receipt := range i.Receipts {
-		gasUsed += receipt.GasUsed
+		fuelUsed += receipt.FuelUsed
 	}
 
 	return

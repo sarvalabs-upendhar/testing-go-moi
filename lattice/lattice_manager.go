@@ -21,6 +21,7 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/moby/locker"
 	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/guna"
 	"github.com/sarvalabs/moichain/jug"
@@ -90,12 +91,8 @@ type ixpool interface {
 }
 
 type executor interface {
-	ExecuteInteractions(
-		clusterID types.ClusterID,
-		ixs []*types.Interaction,
-		contextDelta types.ContextDelta,
-	) (types.Receipts, error)
-	Revert(clusterID types.ClusterID) error
+	ExecuteInteractions(types.ClusterID, types.Interactions, types.ContextDelta) (types.Receipts, error)
+	Revert(types.ClusterID) error
 }
 
 type ChainManager struct {
@@ -128,7 +125,7 @@ func NewChainManager(
 	network server,
 	ix ixpool,
 	cache *lru.Cache,
-	exec *jug.Exec,
+	exec *jug.ExecutionManager,
 	senatus reputationEngine,
 	metrics *Metrics,
 ) (*ChainManager, error) {

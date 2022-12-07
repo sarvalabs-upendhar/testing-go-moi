@@ -19,6 +19,7 @@ type Config struct {
 	Chain          *ChainConfig
 	Consensus      *ConsensusConfig
 	DB             *DBConfig
+	Execution      *ExecutionConfig
 	IxPool         *IxPoolConfig
 	Metrics        Telemetry
 	LogFilePath    string
@@ -43,6 +44,10 @@ type DBConfig struct {
 	CidPrefixMhLength int    `yaml:"cidPrefixMhLength"`
 }
 
+type ExecutionConfig struct {
+	FuelLimit uint64
+}
+
 type IxPoolConfig struct {
 	Mode       int
 	PriceLimit uint64
@@ -50,19 +55,14 @@ type IxPoolConfig struct {
 
 // NetworkConfig is the p2p configuration of the node
 type NetworkConfig struct {
-	BootstrapPeers []maddr.Multiaddr
-
-	MaxPeers uint
-
-	RelayNodeAddr string
-
+	BootstrapPeers  []maddr.Multiaddr
+	MaxPeers        uint
+	RelayNodeAddr   string
 	ListenAddresses []maddr.Multiaddr
+	ProtocolID      protocol.ID
+	JSONRPCAddr     *net.TCPAddr
+	MTQ             float64
 
-	ProtocolID protocol.ID
-
-	JSONRPCAddr *net.TCPAddr
-
-	MTQ float64
 	// this will be removed
 	NetworkSize uint64
 }
@@ -123,6 +123,9 @@ func DefaultConfig(path string) *Config {
 			CidPrefixCodec:    0x50,
 			CidPrefixMhType:   0xb220,
 			CidPrefixMhLength: -1,
+		},
+		Execution: &ExecutionConfig{
+			FuelLimit: 1000,
 		},
 		IxPool: &IxPoolConfig{
 			Mode:       0,

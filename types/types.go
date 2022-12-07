@@ -660,7 +660,7 @@ func (agi *AccountGenesisInfo) FromBytes(bytes []byte) error {
 type Receipt struct {
 	IxType        int
 	IxHash        Hash
-	GasUsed       uint64
+	FuelUsed      uint64
 	StateHashes   map[Address]Hash
 	ContextHashes map[Address]Hash
 	ExtraData     json.RawMessage

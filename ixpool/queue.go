@@ -212,7 +212,7 @@ func (q *maxPriceQueue) Swap(i, j int) {
 }
 
 func (q *maxPriceQueue) Less(i, j int) bool {
-	return (*q)[i].GasPrice().Uint64() > (*q)[j].GasPrice().Uint64()
+	return (*q)[i].FuelPrice().Uint64() > (*q)[j].FuelPrice().Uint64()
 }
 
 func (q *maxPriceQueue) Push(x interface{}) {
