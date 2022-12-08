@@ -9,6 +9,7 @@ import (
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/guna"
 	"github.com/sarvalabs/moichain/jug/engine"
+	"github.com/sarvalabs/moichain/jug/pisa"
 	"github.com/sarvalabs/moichain/types"
 )
 
@@ -50,7 +51,7 @@ func NewExecutionManager(
 
 		// Create a factory for each supported runtime
 		factories: map[engine.Kind]engine.Factory{
-			engine.PISA: nil,
+			engine.PISA: pisa.NewFactory(),
 		},
 	}
 }
