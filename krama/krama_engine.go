@@ -123,7 +123,7 @@ type Engine struct {
 	ctxCancel    context.CancelFunc
 	cfg          *common.ConsensusConfig
 	logger       hclog.Logger
-	operator     id.KramaID
+	selfID       id.KramaID
 	slots        *ktypes.Slots
 	requests     chan Request
 	randomizer   *flux.Randomizer
@@ -163,7 +163,7 @@ func NewKramaEngine(ctx context.Context,
 		ctxCancel:    ctxCancel,
 		cfg:          cfg,
 		logger:       logger.Named("Krama-Engine"),
-		operator:     network.GetKramaID(),
+		selfID:       network.GetKramaID(),
 		state:        state,
 		slots:        ktypes.NewSlots(cfg.OperatorSlotCount, cfg.ValidatorSlotCount),
 		requests:     make(chan Request),
@@ -191,7 +191,7 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID types.Cluster
 	// Create cluster id using operatorID and IxHash
 	k.logger.Info("Creating cluster", "Cluster id", clusterID)
 
-	clusterState := ktypes.NewICS(6, request.ixs, clusterID, k.operator, time.Now())
+	clusterState := ktypes.NewICS(6, request.ixs, clusterID, k.selfID, time.Now())
 
 	// create a slot and try adding it
 	newSlot := ktypes.NewSlot(ktypes.OperatorSlot, clusterState)
@@ -270,7 +270,7 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID types.Cluster
 		randomNodesReceiverChan,
 	)
 
-	if !request.ixs[0].ToAddress().IsNil() {
+	if !request.ixs[0].Receiver().IsNil() {
 		finalWaitGroup.Add(2)
 
 		go k.sendICSRequest(
@@ -338,7 +338,7 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID types.Cluster
 	}
 
 	if !clusterState.IsOperatorIncluded() {
-		operatorRandomNodes = append([]id.KramaID{k.operator}, operatorRandomNodes...) // TODO:Improve this
+		operatorRandomNodes = append([]id.KramaID{k.selfID}, operatorRandomNodes...) // TODO:Improve this
 	}
 
 	exemptedNodes := respondedEligibleSet
@@ -409,11 +409,7 @@ func (k *Engine) observerNodeDelta(setSize int) int {
 }
 
 func generateClusterID(operator id.KramaID, ixns types.Interactions) (types.ClusterID, error) {
-	ixHash, err := ixns[0].GetIxHash()
-	if err != nil {
-		return "", err
-	}
-
+	ixHash := ixns[0].Hash()
 	buffer := ixHash.Bytes()
 
 	peerID, err := operator.PeerID()
@@ -466,10 +462,7 @@ func (k *Engine) joinCluster(ctx context.Context, req Request) error {
 	ctx, span := tracing.Span(ctx, "Krama.KramaEngine", "joinCluster")
 	defer span.End()
 
-	ixHash, err := req.ixs[0].GetIxHash()
-	if err != nil {
-		return err
-	}
+	ixHash := req.ixs[0].Hash()
 
 	k.logger.Debug(
 		"Received an ICS join request",
@@ -529,7 +522,7 @@ func (k *Engine) joinCluster(ctx context.Context, req Request) error {
 }
 
 func (k *Engine) handleReq(req Request) {
-	clusterID, err := req.getClusterID(k.operator)
+	clusterID, err := req.getClusterID(k.selfID)
 	if err != nil {
 		k.logger.Error("Error fetching cluster id", "err", err)
 		req.responseChan <- Response{requestType: req.reqType, err: err}
@@ -698,7 +691,7 @@ func (k *Engine) handleReq(req Request) {
 		icsEvidence := kbft.NewEvidence(ixHash, clusterInfo.Operator, clusterInfo.Size())
 		bft := kbft.NewKBFTService(
 			ctx,
-			k.operator,
+			k.selfID,
 			k.logger.With("cluster-id", clusterID),
 			k.cfg,
 			slot.BftOutboundChan,
@@ -732,17 +725,17 @@ func (k *Engine) fetchIxAccounts(ctx context.Context, ix *types.Interaction) (kt
 
 	accounts := make(ktypes.AccountInfos)
 
-	if !ix.FromAddress().IsNil() {
-		accInfo, err := k.state.GetAccountMetaInfo(ix.FromAddress())
+	if !ix.Sender().IsNil() {
+		accInfo, err := k.state.GetAccountMetaInfo(ix.Sender())
 		if err != nil {
 			return nil, err
 		}
 
-		accounts[ix.FromAddress()] = accInfo
+		accounts[ix.Sender()] = accInfo
 	}
 
-	if !ix.ToAddress().IsNil() {
-		accountRegistered, err := k.state.IsAccountRegistered(ix.ToAddress())
+	if !ix.Receiver().IsNil() {
+		accountRegistered, err := k.state.IsAccountRegistered(ix.Receiver())
 		if err != nil {
 			return nil, err
 		}
@@ -754,7 +747,7 @@ func (k *Engine) fetchIxAccounts(ctx context.Context, ix *types.Interaction) (kt
 			}
 
 			acc := &types.AccountMetaInfo{
-				Address:       ix.FromAddress(),
+				Address:       ix.Sender(),
 				Type:          types.RegularAccount,
 				TesseractHash: types.NilHash,
 				LatticeExists: true,
@@ -763,17 +756,17 @@ func (k *Engine) fetchIxAccounts(ctx context.Context, ix *types.Interaction) (kt
 			}
 
 			accounts[guna.SargaAddress] = genesisAccInfo
-			accounts[ix.ToAddress()] = acc
+			accounts[ix.Receiver()] = acc
 
 			return accounts, nil
 		}
 
-		accInfo, err := k.state.GetAccountMetaInfo(ix.FromAddress())
+		accInfo, err := k.state.GetAccountMetaInfo(ix.Sender())
 		if err != nil {
 			return nil, err
 		}
 
-		accounts[ix.ToAddress()] = accInfo
+		accounts[ix.Receiver()] = accInfo
 	}
 
 	return accounts, nil
@@ -1007,7 +1000,7 @@ func (k *Engine) getICSReqMsg(
 
 	icsReqMsg.IxData = rawData
 	icsReqMsg.ClusterID = string(clusterID)
-	icsReqMsg.Operator = string(k.operator)
+	icsReqMsg.Operator = string(k.selfID)
 	icsReqMsg.ContextLock = lockInfo
 	icsReqMsg.Timestamp = timestamp.UnixNano()
 
@@ -1124,8 +1117,8 @@ func (k *Engine) updateContextDelta(clusterID types.ClusterID) error {
 	deltaMap := make(types.ContextDelta)
 
 	for _, ix := range clusterState.Ixs {
-		senderAddr := ix.FromAddress()
-		receiverAddr := ix.ToAddress()
+		senderAddr := ix.Sender()
+		receiverAddr := ix.Receiver()
 
 		if !senderAddr.IsNil() && !seenAccounts[senderAddr] {
 			senderDeltaGroup := new(types.DeltaGroup)
@@ -1272,9 +1265,15 @@ func (k *Engine) finalizedTesseractHandler(tesseracts []*types.Tesseract) error 
 	}
 
 	for _, ts := range tesseracts {
+		rawIxns, err := ts.Ixns.Bytes()
+		if err != nil {
+			return err
+		}
+
 		msg := &ptypes.TesseractMessage{
-			Tesseract: ts,
-			Sender:    k.operator,
+			CanonicalTesseract: ts.Canonical(),
+			Sender:             k.selfID,
+			Ixns:               rawIxns,
 			Delta: map[types.Hash][]byte{
 				ts.Body.ConsensusProof.ICSHash: clusterInfo.GetDirty()[ts.Body.ConsensusProof.ICSHash],
 			},
@@ -1294,8 +1293,8 @@ func GenerateTesseracts(state *ktypes.ClusterInfo) ([]*types.Tesseract, error) {
 	groupBuffer := make([]byte, 0)
 	tesseractGroup := make([]*types.Tesseract, 0)
 
-	if !ix.FromAddress().IsNil() {
-		senderTesseract, err := generateTesseract(ix.Hash, ix.FromAddress(), state, fuelUsed, 1000)
+	if !ix.Sender().IsNil() {
+		senderTesseract, err := generateTesseract(ix.Hash(), ix.Sender(), state, fuelUsed, 1000)
 		if err != nil {
 			return nil, err
 		}
@@ -1304,8 +1303,8 @@ func GenerateTesseracts(state *ktypes.ClusterInfo) ([]*types.Tesseract, error) {
 		groupBuffer = append(groupBuffer, senderTesseract.BodyHash().Bytes()...)
 	}
 
-	if !ix.ToAddress().IsNil() {
-		receiverTesseract, err := generateTesseract(ix.Hash, ix.ToAddress(), state, fuelUsed, 1000)
+	if !ix.Receiver().IsNil() {
+		receiverTesseract, err := generateTesseract(ix.Hash(), ix.Receiver(), state, fuelUsed, 1000)
 		if err != nil {
 			return nil, err
 		}
@@ -1313,8 +1312,8 @@ func GenerateTesseracts(state *ktypes.ClusterInfo) ([]*types.Tesseract, error) {
 		tesseractGroup = append(tesseractGroup, receiverTesseract)
 		groupBuffer = append(groupBuffer, receiverTesseract.BodyHash().Bytes()...)
 
-		if state.AccountInfos.IsGenesis(ix.ToAddress()) {
-			genesisTesseract, err := generateTesseract(ix.Hash, guna.SargaAddress, state, fuelUsed, 1000)
+		if state.AccountInfos.IsGenesis(ix.Receiver()) {
+			genesisTesseract, err := generateTesseract(ix.Hash(), guna.SargaAddress, state, fuelUsed, 1000)
 			if err != nil {
 				return nil, err
 			}
@@ -1407,17 +1406,14 @@ func (k *Engine) Close() {
 
 func (k *Engine) validateInteractions(ixs types.Interactions) error {
 	for _, ix := range ixs {
-		ixHash, err := ix.GetIxHash()
-		if err != nil {
-			return err
-		}
+		ixHash := ix.Hash()
 
 		k.logger.Debug(
 			"Validating Interaction",
 			"Hash", ixHash,
 			"Nonce", ix.Nonce(),
-			"From", ix.FromAddress().Hex(),
-			"Type", ix.IxType(),
+			"From", ix.Sender().Hex(),
+			"Type", ix.Type(),
 		)
 		/*
 			Checks to perform
@@ -1425,7 +1421,7 @@ func (k *Engine) validateInteractions(ixs types.Interactions) error {
 			2) Verify the balances
 			3) Verify the account states
 		*/
-		latestNonce, err := k.state.GetLatestNonce(ix.FromAddress())
+		latestNonce, err := k.state.GetLatestNonce(ix.Sender())
 		if err != nil {
 			return err
 		}
@@ -1445,52 +1441,49 @@ func (k *Engine) validateInteractions(ixs types.Interactions) error {
 
 // IsIxValid performs validity checks based on the type of interaction
 func (k *Engine) IsIxValid(ix *types.Interaction) error {
-	if ix.FromAddress().IsNil() {
+	if ix.Sender().IsNil() {
 		return types.ErrInvalidAddress
 	}
 
-	if accountRegistered, err := k.state.IsAccountRegistered(ix.FromAddress()); err != nil || !accountRegistered {
+	if accountRegistered, err := k.state.IsAccountRegistered(ix.Sender()); err != nil || !accountRegistered {
 		return errors.New("account not found")
 	}
 
-	switch ix.Data.Input.Type {
-	case types.ValueTransfer:
-		stateObject, err := k.state.GetLatestStateObject(ix.FromAddress())
+	switch ix.Type() {
+	case types.IxValueTransfer:
+		stateObject, err := k.state.GetLatestStateObject(ix.Sender())
 		if err != nil {
-			k.logger.Error("Error fetching stateObject", "addr", ix.FromAddress().Hex())
+			k.logger.Error("Error fetching stateObject", "addr", ix.Sender().Hex())
 
 			return err
 		}
 
-		for assetID, value := range ix.Data.Input.TransferValue {
-			if bal, err := stateObject.BalanceOf(assetID); err != nil || bal.Uint64() < value {
+		for assetID, value := range ix.TransferValues() {
+			if bal, err := stateObject.BalanceOf(assetID); err != nil || bal.Cmp(value) == -1 {
 				return errors.New("invalid balance")
 			}
 		}
-	case types.AssetCreation:
-		assetData := ix.Data.Input.Payload.AssetData
 
-		stateObject, err := k.state.GetLatestStateObject(ix.FromAddress())
+	case types.IxAssetCreate:
+		assetPayload, err := ix.GetAssetPayload()
 		if err != nil {
-			k.logger.Error("Error fetching stateObject", "addr", ix.FromAddress().Hex())
+			k.logger.Error("error fetching asset payload")
 
 			return err
 		}
 
-		logicID, _, err := gtypes.GetLogicID(assetData.Code, false)
+		stateObject, err := k.state.GetLatestStateObject(ix.Sender())
 		if err != nil {
+			k.logger.Error("Error fetching stateObject", "addr", ix.Sender().Hex())
+
 			return err
 		}
 
-		assetID, _, _, err := gtypes.GetAssetID(
-			ix.FromAddress(),
-			uint8(assetData.Dimension),
-			assetData.IsFungible,
-			assetData.IsMintable,
-			assetData.Symbol,
-			assetData.TotalSupply,
-			logicID,
-		)
+		if assetPayload.Create == nil {
+			return errors.New("asset create payload is empty")
+		}
+
+		assetID, _, _, err := gtypes.GetAssetID(types.NewAssetDescriptor(ix.Sender(), *assetPayload.Create))
 		if err != nil {
 			return err
 		}

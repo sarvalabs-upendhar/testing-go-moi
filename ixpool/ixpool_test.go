@@ -2,6 +2,7 @@ package ixpool
 
 import (
 	"context"
+	"math/big"
 	"testing"
 	"time"
 
@@ -9,9 +10,10 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/types"
-	"github.com/stretchr/testify/assert"
 )
 
 type MockStateManager struct {
@@ -39,7 +41,7 @@ func (mc *MockStateManager) GetLatestNonce(addr types.Address) (uint64, error) {
 func TestIxPool_IncrementWaitTime_InvalidAccount(t *testing.T) {
 	ixPool := CreateIxpool(func(c *common.IxPoolConfig) {
 		c.Mode = 0
-		c.PriceLimit = 100
+		c.PriceLimit = big.NewInt(100)
 	})
 
 	err := ixPool.IncrementWaitTime(types.Address{0x0}, 2)
@@ -80,7 +82,7 @@ func TestIxPool_IncrementWaitTime(t *testing.T) {
 
 	ixPool := CreateIxpool(func(c *common.IxPoolConfig) {
 		c.Mode = 0
-		c.PriceLimit = 100
+		c.PriceLimit = big.NewInt(100)
 	})
 
 	for _, test := range tests {
@@ -113,7 +115,7 @@ func TestIxPool_ResetWaitTime_WithTesseract(t *testing.T) {
 
 	ixPool := CreateIxpool(func(c *common.IxPoolConfig) {
 		c.Mode = 0
-		c.PriceLimit = 100
+		c.PriceLimit = big.NewInt(100)
 	})
 	acc := ixPool.createAccountOnce(types.Address{0x00}, 0)
 	acc.incrementCounter(2)

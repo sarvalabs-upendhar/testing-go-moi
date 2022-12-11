@@ -43,7 +43,7 @@ type db interface {
 		id types.Address,
 		height *big.Int,
 		tesseractHash types.Hash,
-		accType types.AccType,
+		accType types.AccountType,
 		latticeExists bool,
 		tesseractExists bool,
 	) (int32, bool, error)
@@ -60,9 +60,9 @@ type reputationEngine interface {
 }
 
 type stateManager interface {
-	CreateDirtyObject(addr types.Address, accType types.AccType) *guna.StateObject
+	CreateDirtyObject(addr types.Address, accType types.AccountType) *guna.StateObject
 	FlushDirtyObject(addrs types.Address) error
-	GetAccTypeUsingStateObject(address types.Address) (types.AccType, error)
+	GetAccTypeUsingStateObject(address types.Address) (types.AccountType, error)
 	GetLatestTesseract(addr types.Address, withInteractions bool) (*types.Tesseract, error)
 	DeleteStateObject(addr types.Address)
 	GetContextByHash(addr types.Address, hash types.Hash) (types.Hash, []id.KramaID, []id.KramaID, error)
@@ -294,13 +294,13 @@ func (c *ChainManager) GetTesseractByHeight(
 	return c.GetTesseract(types.BytesToHash(tesseractHash), withInteractions)
 }
 
-func (c *ChainManager) GetAssetDataByAssetHash(assetHash []byte) (*gtypes.AssetData, error) {
+func (c *ChainManager) GetAssetDataByAssetHash(assetHash []byte) (*gtypes.AssetObject, error) {
 	rawData, err := c.db.ReadEntry(assetHash)
 	if err != nil {
 		return nil, err
 	}
 
-	assetData := new(gtypes.AssetData)
+	assetData := new(gtypes.AssetObject)
 
 	if err = assetData.FromBytes(rawData); err != nil {
 		return nil, err
@@ -342,12 +342,7 @@ func (c *ChainManager) GetReceipt(addr types.Address, ixHash types.Hash) (*types
 
 	for !ts.Header.PrevHash.IsNil() {
 		for _, ix := range ts.Interactions() {
-			hash, err := ix.GetIxHash()
-			if err != nil {
-				return nil, err
-			}
-
-			if hash == ixHash {
+			if hash := ix.Hash(); hash == ixHash {
 				return c.getReceipt(hash, ts.Body.ReceiptHash)
 			}
 		}
@@ -479,7 +474,7 @@ func (c *ChainManager) addTesseract(
 	tesseractExists bool,
 ) error {
 	var (
-		accType       types.AccType
+		accType       types.AccountType
 		err           error
 		latticeExists = true
 	)
@@ -814,7 +809,7 @@ func (c *ChainManager) validateAccountCreationInfo(acc AccountInfo) (*gtypes.Acc
 		return nil, err
 	}
 
-	accArgs.AccType, err = utils.ValidateAccountType(acc.AccType)
+	accArgs.AccType, err = utils.ValidateAccountType(acc.AccountType)
 	if err != nil {
 		return nil, err
 	}
@@ -951,7 +946,11 @@ func (c *ChainManager) tesseractHandler(pubSubMsg *pubsub.Message) error {
 		return err
 	}
 
-	ts := msg.Tesseract
+	ts, err := msg.Tesseract()
+	if err != nil {
+		return errors.Wrap(err, "failed to parse tesseract message")
+	}
+
 	// TODO:Add logic to avoid posting event if validator is part of the tesseract already
 
 	if ts.Operator() == string(c.network.GetKramaID()) {
@@ -970,14 +969,14 @@ func (c *ChainManager) tesseractHandler(pubSubMsg *pubsub.Message) error {
 	}
 
 	clusterInfo := new(ptypes.ICSClusterInfo)
-	if err = clusterInfo.FromBytes(msg.Delta[msg.Tesseract.GetICSHash()]); err != nil {
+	if err = clusterInfo.FromBytes(msg.Delta[ts.GetICSHash()]); err != nil {
 		return err
 	}
 
 	c.logger.Trace("Tesseract Received from",
 		"Sender", msg.Sender,
 		"Hash", tsHash,
-		"Address", msg.Tesseract.Header.Address.Hex())
+		"Address", ts.Header.Address.Hex())
 
 	if !c.knownTesseracts.Contains(tsHash) {
 		c.knownTesseracts.Add(tsHash)
@@ -1038,12 +1037,7 @@ func (c *ChainManager) executeAndValidate(ts []*types.Tesseract) (map[types.Hash
 
 func areStateHashesValid(tesseracts []*types.Tesseract, receipts types.Receipts) bool {
 	for _, ix := range tesseracts[0].Interactions() {
-		ixHash, err := ix.GetIxHash()
-		if err != nil {
-			return false
-		}
-
-		receipt, err := receipts.GetReceipt(ixHash)
+		receipt, err := receipts.GetReceipt(ix.Hash())
 		if err != nil {
 			return false
 		}

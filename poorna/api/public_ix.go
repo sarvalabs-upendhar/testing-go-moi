@@ -1,7 +1,12 @@
 package api
 
 import (
+	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"math/big"
+
+	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/moichain/utils"
 
@@ -35,72 +40,105 @@ func NewPublicIXAPI(ixpool IxPool, sm StateManager, cfg *common.IxPoolConfig) *P
 }
 
 // SendInteraction is a method of PublicIXAPI that stores the interaction
-func (p *PublicIXAPI) SendInteraction(args *SendIXArgs) (types.Interactions, error) {
+func (p *PublicIXAPI) SendInteraction(args *SendIXArgs) (*types.Interaction, error) {
 	err := validateArguments(args, p)
 	if err != nil {
 		return nil, err
 	}
 
-	nonce, err := p.ixpool.GetNonce(types.HexToAddress(args.From))
+	nonce, err := p.ixpool.GetNonce(types.HexToAddress(args.Sender))
 	if err != nil {
 		return nil, err
 	}
 
-	ixns, err := constructInteraction(args, nonce)
+	ixn, err := constructInteraction(args, nonce)
 	if err != nil {
 		return nil, err
 	}
 
-	err = validateInteraction(ixns[0], p)
+	err = validateInteraction(ixn, p)
 	if err != nil {
 		return nil, err
 	}
 
 	// Call the following method to add interactions to pool
-	return ixns, p.ixpool.AddInteractions(ixns)[0]
+	return ixn, p.ixpool.AddInteractions(types.Interactions{ixn})[0]
 }
 
 // helper function
-func constructInteraction(args *SendIXArgs, nonce uint64) (types.Interactions, error) {
-	// Construct the interactions data
-	ixns := make(types.Interactions, 1)
-	ixns[0] = new(types.Interaction)
-
-	ixns[0].Data = types.IxData{
-		Input: types.InteractionInput{
-			Type:     args.IxType,
-			Nonce:    nonce,
-			From:     types.HexToAddress(args.From),
-			To:       types.HexToAddress(args.To),
-			AnuPrice: args.AnuPrice,
+func constructInteraction(args *SendIXArgs, nonce uint64) (*types.Interaction, error) {
+	data := types.IxData{
+		Input: types.IxInput{
+			Type:           args.Type,
+			Nonce:          nonce,
+			Sender:         types.HexToAddress(args.Sender),
+			Receiver:       types.HexToAddress(args.Receiver),
+			TransferValues: make(map[types.AssetID]*big.Int, len(args.TransferValues)),
+			FuelPrice:      new(big.Int).SetBytes(types.FromHex(args.FuelPrice)),
+			FuelLimit:      new(big.Int).SetBytes(types.FromHex(args.FuelLimit)),
 		},
 	}
 
-	switch args.IxType {
-	case 0:
-		ixns[0].Data.Input.TransferValue = map[types.AssetID]uint64{types.AssetID(args.AssetID): uint64(args.Value)}
+	switch args.Type {
+	case types.IxValueTransfer:
+		// Decode the transfer values
+		for asset, value := range args.TransferValues {
+			valueData, err := hex.DecodeString(value)
+			if err != nil {
+				return nil, err
+			}
 
-	case 1:
-		ixns[0].Data.Input.Payload = types.InteractionInputPayload{
-			AssetData: types.AssetDataInput{
-				Dimension:   args.AssetCreation.Dimension,
-				TotalSupply: args.AssetCreation.TotalSupply,
-				Symbol:      args.AssetCreation.Symbol,
-				IsFungible:  args.AssetCreation.IsFungible,
-				IsMintable:  args.AssetCreation.IsMintable,
-				Code:        args.AssetCreation.Code,
-			},
+			data.Input.TransferValues[asset] = new(big.Int).SetBytes(valueData)
 		}
+
+	case types.IxAssetCreate:
+		payloadArgs := new(AssetCreationArgs)
+		if err := json.Unmarshal(args.Payload, payloadArgs); err != nil {
+			return nil, err
+		}
+
+		supplyData, err := hex.DecodeString(payloadArgs.Supply)
+		if err != nil {
+			return nil, err
+		}
+
+		createPayload := &types.AssetCreatePayload{
+			Type:   payloadArgs.Type,
+			Symbol: payloadArgs.Symbol,
+			Supply: new(big.Int).SetBytes(supplyData),
+
+			Dimension: payloadArgs.Dimension,
+			Decimals:  payloadArgs.Decimals,
+
+			IsFungible:     payloadArgs.IsFungible,
+			IsMintable:     payloadArgs.IsMintable,
+			IsTransferable: payloadArgs.IsTransferable,
+
+			LogicID: types.LogicID(payloadArgs.LogicID),
+			// LogicCode: payloadArgs.LogicCode,
+		}
+
+		assetPayload := types.AssetPayload{
+			Create: createPayload,
+		}
+
+		payloadData, err := polo.Polorize(assetPayload)
+		if err != nil {
+			return nil, err
+		}
+
+		data.Input.Payload = payloadData
+
 	default:
-		return ixns, errors.New("invalid interaction type")
+		return nil, errors.New("invalid interaction type")
 	}
 
-	return ixns, nil
+	return types.NewInteraction(data, nil), nil
 }
 
 func validateArguments(args *SendIXArgs, p *PublicIXAPI) error {
 	// Reject interaction if sender address is invalid
-	senderAddress, err := utils.ValidateAddress(args.From)
+	senderAddress, err := utils.ValidateAddress(args.Sender)
 	if err != nil {
 		return types.ErrInvalidAddress
 	}
@@ -110,8 +148,8 @@ func validateArguments(args *SendIXArgs, p *PublicIXAPI) error {
 		return ErrGenesisAccount
 	}
 
-	if args.To != "" {
-		receiverAddress, err := utils.ValidateAddress(args.To)
+	if args.Receiver != "" {
+		receiverAddress, err := utils.ValidateAddress(args.Receiver)
 		if err != nil {
 			return types.ErrInvalidAddress
 		}
@@ -122,17 +160,19 @@ func validateArguments(args *SendIXArgs, p *PublicIXAPI) error {
 		}
 	}
 
+	// TODO: Add more checks to validate inputs
+
 	return nil
 }
 
 func validateInteraction(ix *types.Interaction, p *PublicIXAPI) error {
 	// Check the interaction size to overcome DOS Attacks
-	ixSize, err := ix.GetSize()
+	ixSize, err := ix.Size()
 	if err != nil {
 		return err
 	}
 
-	if uint64(ixSize) > txMaxSize {
+	if ixSize > txMaxSize {
 		return ErrOversizedData
 	}
 
@@ -142,7 +182,7 @@ func validateInteraction(ix *types.Interaction, p *PublicIXAPI) error {
 	}
 
 	// Check nonce ordering
-	if n, _ := p.sm.GetLatestNonce(ix.FromAddress()); n > ix.Nonce() {
+	if n, _ := p.sm.GetLatestNonce(ix.Sender()); n > ix.Nonce() {
 		return ErrNonceTooLow
 	}
 

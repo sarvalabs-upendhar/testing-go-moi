@@ -8,8 +8,11 @@ import (
 	"github.com/mr-tron/base58"
 
 	"github.com/sarvalabs/go-polo"
+
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 )
+
+type ParticipantRole int
 
 const (
 	Sender ParticipantRole = iota
@@ -226,6 +229,15 @@ func (c *CanonicalTesseract) FromBytes(bytes []byte) error {
 	}
 
 	return nil
+}
+
+func (c *CanonicalTesseract) ToTesseract(ixns Interactions) *Tesseract {
+	return &Tesseract{
+		Header: c.Header,
+		Body:   c.Body,
+		Ixns:   ixns,
+		Seal:   c.Seal,
+	}
 }
 
 type CanonicalTesseractWithoutSeal struct {

@@ -1,8 +1,6 @@
 package jug
 
 import (
-	"math/big"
-
 	"github.com/pkg/errors"
 
 	"github.com/sarvalabs/moichain/guna"
@@ -41,18 +39,18 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 		}
 
 		// Retrieve the receipt for the interaction
-		receipt := executor.getReceipt(ix.Hash)
+		receipt := executor.getReceipt(ix.Hash())
 
-		switch ix.IxType() {
+		switch ix.Type() {
 		// Value Transfer Interaction
-		case types.ValueTransfer:
+		case types.IxValueTransfer:
 			// For each asset, apply the value transfer routine for the given transfer amount.
-			for assetID, transferValue := range ix.Data.Input.TransferValue {
+			for assetID, transferValue := range ix.TransferValues() {
 				// Perform value transfer and record fuel consumed
-				fuelConsumed, err := ValueTransfer(
-					executor.getStateObject(ix.FromAddress()),
-					executor.getStateObject(ix.ToAddress()),
-					assetID, new(big.Int).SetUint64(transferValue),
+				fuelConsumed, err := executor.ValueTransfer(
+					executor.getStateObject(ix.Sender()),
+					executor.getStateObject(ix.Receiver()),
+					assetID, transferValue,
 				)
 				if err != nil {
 					return errors.Wrap(types.ErrExecutionFailed, err.Error())
@@ -63,12 +61,21 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 				receipt.FuelUsed += fuelConsumed
 			}
 
-		// Asset Creation Interaction
-		case types.AssetCreation:
+		// Asset Create Interaction
+		case types.IxAssetCreate:
+			payload, err := ix.GetAssetPayload()
+			if err != nil {
+				return err
+			}
+
+			if payload.Create == nil {
+				return errors.New("asset create payload is empty")
+			}
+
 			// Perform asset creation and record fuel consumed
-			fuelConsumed, assetID, err := CreateAsset(
-				executor.getStateObject(ix.FromAddress()),
-				ix.GetAssetCreationPayload(),
+			fuelConsumed, assetID, err := executor.CreateAsset(
+				executor.getStateObject(ix.Sender()),
+				*payload.Create,
 			)
 			if err != nil {
 				return errors.Wrap(types.ErrExecutionFailed, err.Error())
@@ -121,14 +128,14 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 // If the interaction receiver is a new account, the context and hash for the sarga account is also updated.
 func (executor *IxExecutor) UpdateContext(ix *types.Interaction, contextDelta types.ContextDelta) error {
 	// Retrieve the receipt for the interaction
-	receipt := executor.getReceipt(ix.Hash)
+	receipt := executor.getReceipt(ix.Hash())
 
 	for addr, delta := range contextDelta {
 		// For the address of each delta group in the context delta, determine action
 		// based on whether it is the sender, receiver or the sarga address
 		switch addr {
 		// Receiver Address
-		case ix.ToAddress():
+		case ix.Receiver():
 			var hash types.Hash
 
 			// Check if the account is registered
@@ -157,7 +164,7 @@ func (executor *IxExecutor) UpdateContext(ix *types.Interaction, contextDelta ty
 			fallthrough
 
 		// Sender Address / Sarga Address
-		case ix.FromAddress(), guna.SargaAddress:
+		case ix.Sender(), guna.SargaAddress:
 			// Retrieve the state object for address and update its context
 			hash, err := executor.getStateObject(addr).UpdateContext(delta.BehaviouralNodes, delta.RandomNodes)
 			if err != nil {
@@ -176,30 +183,30 @@ func (executor *IxExecutor) UpdateContext(ix *types.Interaction, contextDelta ty
 // If the interaction receiver is a new account, the StateObject of the sarga account is also committed.
 func (executor *IxExecutor) CommitStateObjects(ix *types.Interaction) error {
 	// Retrieve the receipt for the interaction
-	receipt := executor.getReceipt(ix.Hash)
+	receipt := executor.getReceipt(ix.Hash())
 
 	// Commit the sender state object (if it exists)
-	if !ix.FromAddress().IsNil() {
-		senderHash, err := executor.getStateObject(ix.FromAddress()).Commit()
+	if !ix.Sender().IsNil() {
+		senderHash, err := executor.getStateObject(ix.Sender()).Commit()
 		if err != nil {
 			return err
 		}
 
-		receipt.StateHashes[ix.FromAddress()] = senderHash
+		receipt.StateHashes[ix.Sender()] = senderHash
 	}
 
 	// Commit the receiver state object (if it exists)
-	if !ix.ToAddress().IsNil() {
-		receiverHash, err := executor.getStateObject(ix.ToAddress()).Commit()
+	if !ix.Receiver().IsNil() {
+		receiverHash, err := executor.getStateObject(ix.Receiver()).Commit()
 		if err != nil {
 			return err
 		}
 
-		receipt.StateHashes[ix.ToAddress()] = receiverHash
+		receipt.StateHashes[ix.Receiver()] = receiverHash
 	}
 
 	// Check if the receiver account is registered
-	accountRegistered, err := executor.state.IsAccountRegistered(ix.ToAddress())
+	accountRegistered, err := executor.state.IsAccountRegistered(ix.Receiver())
 	if err != nil {
 		return err
 	}
@@ -228,21 +235,21 @@ func (executor *IxExecutor) Receipts() types.Receipts {
 func (executor *IxExecutor) Revert() error {
 	for _, ix := range executor.Interactions {
 		// Revert sender state object to snapshot state
-		if !ix.FromAddress().IsNil() {
-			if err := executor.state.Revert(executor.snapshots[ix.FromAddress()]); err != nil {
+		if !ix.Sender().IsNil() {
+			if err := executor.state.Revert(executor.snapshots[ix.Sender()]); err != nil {
 				return err // This should not happen
 			}
 		}
 
 		// Revert receiver state object to snapshot state
-		if !ix.ToAddress().IsNil() {
-			if err := executor.state.Revert(executor.snapshots[ix.ToAddress()]); err != nil {
+		if !ix.Receiver().IsNil() {
+			if err := executor.state.Revert(executor.snapshots[ix.Receiver()]); err != nil {
 				return err // This should not happen
 			}
 		}
 
 		// Check if the receiver account has been registered
-		accountRegistered, err := executor.state.IsAccountRegistered(ix.ToAddress())
+		accountRegistered, err := executor.state.IsAccountRegistered(ix.Receiver())
 		if err != nil {
 			return err
 		}
@@ -285,7 +292,7 @@ func (executor *IxExecutor) getReceipt(ixHash types.Hash) *types.Receipt {
 // If the receiver address is already registered, no change is performed.
 func (executor *IxExecutor) updateSargaState(ix *types.Interaction) error {
 	// Check if the receiver address is an already registered account
-	accountRegistered, err := executor.state.IsAccountRegistered(ix.ToAddress())
+	accountRegistered, err := executor.state.IsAccountRegistered(ix.Receiver())
 	if err != nil {
 		return err
 	}
@@ -302,7 +309,7 @@ func (executor *IxExecutor) updateSargaState(ix *types.Interaction) error {
 	}
 
 	// Add the account genesis information for the new account
-	return sargaObject.AddAccountGenesisInfo(ix.ToAddress(), ix.Hash)
+	return sargaObject.AddAccountGenesisInfo(ix.Receiver(), ix.Hash())
 }
 
 // getStateObject returns the guna.StateObject for the given address.
@@ -316,7 +323,7 @@ func (executor *IxExecutor) getStateObject(addr types.Address) *guna.StateObject
 // the genesis state object and create a state object for the new account.
 func (executor *IxExecutor) fetchStateObjects(ix *types.Interaction) error {
 	// Fetch state object for sender if valid and not already available in the executor
-	if sender := ix.FromAddress(); !sender.IsNil() && executor.getStateObject(sender) == nil {
+	if sender := ix.Sender(); !sender.IsNil() && executor.getStateObject(sender) == nil {
 		// Retrieve the dirty object for the sender from the state manager
 		senderObject, err := executor.state.GetDirtyObject(sender)
 		if err != nil {
@@ -329,11 +336,11 @@ func (executor *IxExecutor) fetchStateObjects(ix *types.Interaction) error {
 	}
 
 	// Fetch state object for receiver if valid
-	if receiver := ix.ToAddress(); !receiver.IsNil() {
+	if receiver := ix.Receiver(); !receiver.IsNil() {
 		var receiverObject *guna.StateObject
 
 		// Check if the receiver address is an already registered account
-		accountRegistered, err := executor.state.IsAccountRegistered(ix.ToAddress())
+		accountRegistered, err := executor.state.IsAccountRegistered(ix.Receiver())
 		if err != nil {
 			return err
 		}
@@ -350,7 +357,7 @@ func (executor *IxExecutor) fetchStateObjects(ix *types.Interaction) error {
 			executor.snapshots[guna.SargaAddress] = genesisObject.Copy()
 
 			// Create a new dirty state object for the account
-			receiverObject = executor.state.CreateDirtyObject(receiver, types.AccTypeFromIxType(ix.IxType()))
+			receiverObject = executor.state.CreateDirtyObject(receiver, types.AccTypeFromIxType(ix.Type()))
 		} else {
 			// Retrieve the dirty object for the receiver from the state manager
 			if receiverObject, err = executor.state.GetDirtyObject(receiver); err != nil {

@@ -27,7 +27,7 @@ type MockChainManager struct {
 	interactions        map[types.Address]map[types.Hash]types.Interactions
 	receipts            map[types.Address]map[types.Hash]*types.Receipt
 	storage             map[types.Hash]*types.Tesseract
-	assets              map[types.Hash]*gtypes.AssetData
+	assets              map[types.Hash]*gtypes.AssetObject
 }
 
 type MockStateManager struct {
@@ -52,7 +52,7 @@ func NewMockChainManager(t *testing.T) *MockChainManager {
 	mockChain.latestTesseractHash = make(map[types.Address]types.Hash)
 	mockChain.interactions = make(map[types.Address]map[types.Hash]types.Interactions, 0)
 	mockChain.receipts = make(map[types.Address]map[types.Hash]*types.Receipt, 0)
-	mockChain.assets = make(map[types.Hash]*gtypes.AssetData, 0)
+	mockChain.assets = make(map[types.Hash]*gtypes.AssetObject, 0)
 	mockChain.storage = make(map[types.Hash]*types.Tesseract, 0)
 
 	return mockChain
@@ -111,7 +111,7 @@ func (mc *MockChainManager) GetReceipt(addr types.Address, ixHash types.Hash) (*
 	return nil, types.ErrReceiptNotFound
 }
 
-func (mc *MockChainManager) GetAssetDataByAssetHash(assetHash []byte) (*gtypes.AssetData, error) {
+func (mc *MockChainManager) GetAssetDataByAssetHash(assetHash []byte) (*gtypes.AssetObject, error) {
 	if result, ok := mc.assets[types.BytesToHash(assetHash)]; ok {
 		return result, nil
 	}
@@ -158,12 +158,12 @@ func (mc *MockChainManager) setStorage(hash types.Hash, tesseract *types.Tessera
 	mc.storage[hash] = tesseract
 }
 
-func (mc *MockChainManager) setAssets(id types.AssetID, info *types.AssetInfo) {
-	mc.assets[types.BytesToHash(id.GetCID())] = &gtypes.AssetData{
-		LogicID:     info.LogicID,
-		Symbol:      info.Symbol,
-		Owner:       types.HexToAddress(info.Owner),
-		TotalSupply: info.TotalSupply,
+func (mc *MockChainManager) setAssets(id types.AssetID, spec *types.AssetDescriptor) {
+	mc.assets[types.BytesToHash(id.GetCID())] = &gtypes.AssetObject{
+		LogicID: spec.LogicID,
+		Symbol:  spec.Symbol,
+		Owner:   spec.Owner,
+		Supply:  spec.Supply,
 	}
 }
 
@@ -193,8 +193,8 @@ func (ms *MockStateManager) GetBalances(addr types.Address) (*gtypes.BalanceObje
 
 func (ms *MockStateManager) GetBalance(addr types.Address, assetID types.AssetID) (*big.Int, error) {
 	if _, ok := ms.balances[addr]; ok {
-		if _, ok := ms.balances[addr].Bal[assetID]; ok {
-			return ms.balances[addr].Bal[assetID], nil
+		if _, ok := ms.balances[addr].Balances[assetID]; ok {
+			return ms.balances[addr].Balances[assetID], nil
 		}
 
 		return nil, types.ErrAssetNotFound
@@ -221,9 +221,9 @@ func (ms *MockStateManager) IsGenesis(addr types.Address) (bool, error) {
 
 func (ms *MockStateManager) setBalance(addr types.Address, assetID types.AssetID, balance *big.Int) {
 	ms.balances[addr] = &gtypes.BalanceObject{
-		Bal: make(gtypes.AssetMap),
+		Balances: make(types.AssetMap),
 	}
-	ms.balances[addr].Bal[assetID] = balance
+	ms.balances[addr].Balances[assetID] = balance
 }
 
 func (ms *MockStateManager) setContext(t *testing.T, hash types.Hash) {
@@ -248,7 +248,7 @@ func (ms *MockStateManager) setAccounts(addr types.Address, latestNonce uint64) 
 	}
 }
 
-func (ms *MockStateManager) getTDU(addr types.Address) gtypes.AssetMap {
+func (ms *MockStateManager) getTDU(addr types.Address) types.AssetMap {
 	data, _ := ms.balances[addr].TDU()
 
 	return data
@@ -274,8 +274,8 @@ func NewIxPool() *MockIxPool {
 func (mc *MockIxPool) AddInteractions(ixs types.Interactions) []error {
 	errs := make([]error, len(ixs))
 
-	mc.interactions[ixs[0].Hash] = ixs[0]
-	mc.nextNonce[ixs[0].FromAddress()]++
+	mc.interactions[ixs[0].Hash()] = ixs[0]
+	mc.nextNonce[ixs[0].Sender()]++
 
 	return errs
 }

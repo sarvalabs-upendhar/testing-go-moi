@@ -1,5 +1,7 @@
 package cmd
 
+import "math/big"
+
 type Config struct {
 	Genesis        string          `json:"genesis"`
 	NodeType       int             `json:"node_type"`
@@ -21,13 +23,14 @@ type NetworkConfig struct {
 }
 
 type IxPoolConfig struct {
-	Mode       int    `json:"mode"`
-	PriceLimit uint64 `json:"price_limit"`
+	Mode       int      `json:"mode"`
+	PriceLimit *big.Int `json:"price_limit"`
 }
 
 type DBConfig struct {
 	DBFolder string `json:"db_folder"`
 }
+
 type Telemetry struct {
 	PrometheusAddr string `json:"prometheus_addr"`
 	JaegerAddr     string `json:"jaeger_addr"`

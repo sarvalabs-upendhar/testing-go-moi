@@ -3,15 +3,19 @@ package krama
 import (
 	"context"
 	"fmt"
+	"log"
+	"math/big"
 	"testing"
 	"time"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/sarvalabs/go-polo"
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/moichain/common/tests"
 	ktypes "github.com/sarvalabs/moichain/krama/types"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/types"
-	"github.com/stretchr/testify/require"
 )
 
 // testcase args
@@ -30,30 +34,31 @@ func CreateTransport() (*Transport, *MockServer) {
 func CreateInteractions(t *testing.T, sender types.Address) *types.Interactions {
 	t.Helper()
 
-	// Construct the interactions data
-	ixns := make(types.Interactions, 1)
-
-	ixns[0] = &types.Interaction{
-		Data: types.IxData{
-			Input: types.InteractionInput{
-				Type:     1,
-				Nonce:    0,
-				From:     sender,
-				AnuPrice: 1000,
-				Payload: types.InteractionInputPayload{
-					AssetData: types.AssetDataInput{
-						Symbol:      "GR",
-						TotalSupply: 100,
-						IsFungible:  true,
-						IsMintable:  false,
-						Dimension:   1,
-					},
-				},
-			},
-		},
+	payload, err := polo.Polorize(types.AssetCreatePayload{
+		Type:           types.AssetKindValue,
+		Symbol:         "GR",
+		Supply:         big.NewInt(100),
+		Dimension:      1,
+		Decimals:       0,
+		IsFungible:     true,
+		IsMintable:     false,
+		IsTransferable: true,
+	})
+	if err != nil {
+		log.Panic(err)
 	}
 
-	return &ixns
+	ixn := types.NewInteraction(types.IxData{
+		Input: types.IxInput{
+			Type:      types.IxAssetCreate,
+			Nonce:     0,
+			Sender:    sender,
+			FuelPrice: big.NewInt(1000),
+			Payload:   payload,
+		},
+	}, nil)
+
+	return &types.Interactions{ixn}
 }
 
 func CreateSlot(t *testing.T, nodeset []*ktypes.NodeSet, slotType ktypes.SlotType) *ktypes.Slot {
@@ -71,7 +76,6 @@ func CreateSlot(t *testing.T, nodeset []*ktypes.NodeSet, slotType ktypes.SlotTyp
 	require.NoError(t, err)
 
 	clusterInfo := ktypes.NewICS(6, *ixs, clusterID, operator, time.Now())
-
 	clusterInfo.ICS.Nodes = nodeset
 
 	slot := ktypes.NewSlot(slotType, clusterInfo)

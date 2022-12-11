@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
+
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 
 	"github.com/sarvalabs/moichain/types"
@@ -172,7 +173,7 @@ func GetNetworkID(id id.KramaID) (peer.ID, error) {
 	return peerID, nil
 }
 
-func ValidateAccountType(acc types.AccType) (types.AccType, error) {
+func ValidateAccountType(acc types.AccountType) (types.AccountType, error) {
 	switch acc {
 	case types.SargaAccount, types.RegularAccount, types.ContractAccount:
 		return acc, nil

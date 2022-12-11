@@ -1,6 +1,10 @@
 package api
 
-import "github.com/sarvalabs/moichain/types"
+import (
+	"encoding/json"
+
+	"github.com/sarvalabs/moichain/types"
+)
 
 // TesseractArgs is a struct that represents an argument wrapper for retrieving the latest Tesseract
 type TesseractArgs struct {
@@ -26,7 +30,7 @@ type TesseractByHeightArgs struct {
 	WithInteractions bool   `json:"with_interactions"`
 }
 
-type AssetInfoArgs struct {
+type AssetDescriptorArgs struct {
 	AssetID string `json:"asset_id"`
 }
 
@@ -46,22 +50,37 @@ type BalArgs struct {
 
 // SendIXArgs is a struct that represents an argument wrapper for sending Interactions to the pool
 type SendIXArgs struct {
-	IxType        types.IxType  `json:"type"`
-	From          string        `json:"from"`
-	To            string        `json:"to"`
-	Value         int           `json:"value"`
-	AssetID       string        `json:"asset_id"`
-	AnuPrice      uint64        `json:"anu_price"`
-	AssetCreation AssetCreation `json:"asset_creation,omitempty"`
+	Type  types.IxType `json:"type"`
+	Nonce uint64       `json:"nonce"`
+
+	Sender   string `json:"sender"`
+	Receiver string `json:"receiver"`
+	Payer    string `json:"payer"`
+
+	TransferValues  map[types.AssetID]string `json:"transfer_values"`
+	PerceivedValues map[types.AssetID]string `json:"perceived_values"`
+
+	FuelPrice string `json:"fuel_price"`
+	FuelLimit string `json:"fuel_limit"`
+
+	Payload json.RawMessage `json:"payload"`
 }
 
-type AssetCreation struct {
-	Symbol      string `json:"symbol"`
-	TotalSupply uint64 `json:"total_supply"`
-	IsFungible  bool   `json:"isFungible"`
-	IsMintable  bool   `json:"isMintable"`
-	Code        []byte `json:"logic,omitempty"`
-	Dimension   int    `json:"dimension"`
+type AssetCreationArgs struct {
+	Type types.AssetKind `json:"type"`
+
+	Symbol string `json:"symbol"`
+	Supply string `json:"supply"`
+
+	Dimension uint8 `json:"dimension"`
+	Decimals  uint8 `json:"decimals"`
+
+	IsFungible     bool `json:"is_fungible"`
+	IsMintable     bool `json:"is_mintable"`
+	IsTransferable bool `json:"is_transferable"`
+
+	LogicID string `json:"logic_id,omitempty"`
+	// LogicCode []byte `json:"logic_code,omitempty"`
 }
 
 // Response is a struct that represents a response wrapper

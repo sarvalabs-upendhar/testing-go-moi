@@ -4,8 +4,6 @@ import (
 	"math/big"
 	"testing"
 
-	gtypes "github.com/sarvalabs/moichain/guna/types"
-
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/common/tests"
@@ -251,7 +249,7 @@ func TestPublicCoreAPI_GetTDU(t *testing.T) {
 	testcases := []struct {
 		name        string
 		args        TesseractArgs
-		expected    gtypes.AssetMap
+		expected    types.AssetMap
 		expectedErr error
 	}{
 		{
@@ -525,13 +523,13 @@ func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
 
 	testcases := []struct {
 		name            string
-		args            *AssetInfoArgs
-		expected        *types.AssetInfo
+		args            *AssetDescriptorArgs
+		expected        *types.AssetDescriptor
 		isErrorExpected bool
 	}{
 		{
 			"Valid asset id",
-			&AssetInfoArgs{
+			&AssetDescriptorArgs{
 				AssetID: string(assetID),
 			},
 			assetInfo,
@@ -539,7 +537,7 @@ func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
 		},
 		{
 			"Valid asset id without state",
-			&AssetInfoArgs{
+			&AssetDescriptorArgs{
 				"01801995a34ceda4db744a5b1363be9a0f2019e7481699c861ad7d1263c95473a2d9",
 			},
 			nil,
@@ -547,7 +545,7 @@ func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
 		},
 		{
 			"Invalid asset id",
-			&AssetInfoArgs{
+			&AssetDescriptorArgs{
 				"01801995a34ceda4db744a5b1363bega0f2019e7481699c861ad7d1263c95473a2d9",
 			},
 			nil,
@@ -649,9 +647,7 @@ func newInteraction(t *testing.T) types.Interactions {
 	t.Helper()
 
 	return types.Interactions{
-		&types.Interaction{
-			Hash: tests.RandomHash(t),
-		},
+		types.NewRandomHashInteraction(),
 	}
 }
 

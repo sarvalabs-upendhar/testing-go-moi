@@ -202,6 +202,7 @@ func (wal *BaseWAL) Write(msg ktypes.ConsensusMessage, clusterID types.ClusterID
 				" WARNING: recover may not be possible for the current height",
 			"err", err,
 			"msg", msg,
+			"msgType", walMsg.MsgType,
 		)
 
 		return err

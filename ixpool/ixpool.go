@@ -8,6 +8,7 @@ import (
 	"github.com/sarvalabs/moichain/utils"
 
 	"github.com/hashicorp/go-hclog"
+
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/types"
 )
@@ -82,13 +83,13 @@ func (i *IxPool) checkIx(ix *types.Interaction) error {
 	// TODO: check for overflow
 
 	// check if already known
-	if _, ok := i.allIxs.get(ix.Hash); ok {
+	if _, ok := i.allIxs.get(ix.Hash()); ok {
 		return ErrAlreadyKnown
 	}
 
 	// initialize account for this address once
-	if !i.accounts.exists(ix.FromAddress()) {
-		i.createAccountOnce(ix.FromAddress(), ix.Data.Input.Nonce)
+	if !i.accounts.exists(ix.Sender()) {
+		i.createAccountOnce(ix.Sender(), ix.Nonce())
 	}
 
 	return nil
@@ -132,7 +133,7 @@ func (i *IxPool) handleEnqueueRequest(req enqueueRequest) {
 	dirtyAccounts := make(map[types.Address]interface{}, 0)
 
 	for _, v := range req.ix {
-		senderAcc := i.accounts.get(v.FromAddress())
+		senderAcc := i.accounts.get(v.Sender())
 		if senderAcc == nil {
 			log.Panicln("Account not found") // FIXME: Added this to identify runtime panic
 		}
@@ -143,7 +144,7 @@ func (i *IxPool) handleEnqueueRequest(req enqueueRequest) {
 
 		i.allIxs.add(v)
 
-		if ixSize, err := v.GetSize(); err == nil {
+		if ixSize, err := v.Size(); err == nil {
 			i.metrics.captureIxPoolSize(float64(ixSize))
 		}
 
@@ -151,7 +152,7 @@ func (i *IxPool) handleEnqueueRequest(req enqueueRequest) {
 			return
 		}
 
-		dirtyAccounts[v.FromAddress()] = nil
+		dirtyAccounts[v.Sender()] = nil
 	}
 	i.promoteReqCh <- promoteRequest{account: dirtyAccounts}
 }
@@ -194,7 +195,7 @@ func (i *IxPool) ResetWithInteractions(ixs types.Interactions) {
 	i.allIxs.remove(ixs)
 
 	for _, ix := range ixs {
-		from := ix.FromAddress()
+		from := ix.Sender()
 		// skip already processed accounts
 		if _, processed := updatedNonces[from]; processed {
 			continue
@@ -253,7 +254,7 @@ func (i *IxPool) resetAccount(addr types.Address, nonce uint64) {
 	i.metrics.capturePendingTxs(float64(-1 * len(pruned)))
 
 	if ixSize, err := GetIxsSize(pruned); err == nil {
-		i.metrics.captureIxPoolSize(float64(-1 * ixSize))
+		i.metrics.captureIxPoolSize(-1 * float64(ixSize))
 	}
 
 	if nonce <= account.getNonce() {
@@ -274,7 +275,7 @@ func (i *IxPool) resetAccount(addr types.Address, nonce uint64) {
 	// p.gauge.decrease(slotsRequired(pruned))
 
 	if ixSize, err := GetIxsSize(pruned); err == nil {
-		i.metrics.captureIxPoolSize(float64(-1 * ixSize))
+		i.metrics.captureIxPoolSize(-1 * float64(ixSize))
 	}
 
 	// update next nonce
@@ -305,7 +306,7 @@ func (i *IxPool) Executables() InteractionQueue {
 // from that account (if any).
 func (i *IxPool) Pop(ix *types.Interaction) {
 	// fetch the associated account
-	account := i.accounts.get(ix.FromAddress())
+	account := i.accounts.get(ix.Sender())
 
 	account.promoted.lock(true)
 	defer account.promoted.unlock()
@@ -340,16 +341,16 @@ func (i *IxPool) IncrementWaitTime(addr types.Address, baseTime time.Duration) e
 
 func (i *IxPool) validateIx(ix *types.Interaction) error {
 	// Check the interaction size to overcome DOS Attacks
-	ixSize, err := ix.GetSize()
+	ixSize, err := ix.Size()
 	if err != nil {
 		return err
 	}
 
-	if uint64(ixSize) > txMaxSize {
+	if ixSize > txMaxSize {
 		return ErrOversizedData
 	}
 
-	if ix.FromAddress().IsNil() {
+	if ix.Sender().IsNil() {
 		return types.ErrInvalidAddress
 	}
 
@@ -361,7 +362,7 @@ func (i *IxPool) validateIx(ix *types.Interaction) error {
 	}
 
 	// Check nonce ordering
-	if n, _ := i.sm.GetLatestNonce(ix.FromAddress()); n > ix.Nonce() {
+	if n, _ := i.sm.GetLatestNonce(ix.Sender()); n > ix.Nonce() {
 		return ErrNonceTooLow
 	}
 	/*
@@ -405,17 +406,17 @@ func (i *IxPool) Start() {
 
 // helper functions
 
-func GetIxsSize(ixs types.Interactions) (int64, error) {
-	var sumOfIxsSize int64 = 0
+func GetIxsSize(ixs types.Interactions) (uint64, error) {
+	var sumSize uint64
 
 	for _, ix := range ixs {
-		rawData, err := ix.Bytes()
+		size, err := ix.Size()
 		if err != nil {
 			return 0, err
 		}
 
-		sumOfIxsSize += int64(len(rawData))
+		sumSize += size
 	}
 
-	return sumOfIxsSize, nil
+	return sumSize, nil
 }

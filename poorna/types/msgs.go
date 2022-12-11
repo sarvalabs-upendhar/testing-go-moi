@@ -29,6 +29,11 @@ const (
 	AGORARESP
 )
 
+type MessagePayload interface {
+	Bytes() ([]byte, error)
+	FromBytes(bytes []byte) error
+}
+
 type Message struct {
 	MsgType MsgType
 	Sender  kramaid.KramaID
@@ -101,6 +106,15 @@ type HandshakeMSG struct {
 	NTQ     int32
 	Degree  int32
 	Error   string
+}
+
+func (hs *HandshakeMSG) Bytes() ([]byte, error) {
+	rawBytes, err := polo.Polorize(hs)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize handshake message")
+	}
+
+	return rawBytes, nil
 }
 
 func (hs *HandshakeMSG) FromBytes(bytes []byte) error {
@@ -201,18 +215,6 @@ func (asr *AccountSyncRequest) FromBytes(bytes []byte) error {
 	return nil
 }
 
-type InteractionMsg struct {
-	Ixs types.Interactions
-}
-
-func (im *InteractionMsg) FromBytes(bytes []byte) error {
-	if err := polo.Depolorize(im, bytes); err != nil {
-		return errors.Wrap(err, "failed to depolorize interaction message")
-	}
-
-	return nil
-}
-
 type AccountSyncResponse struct {
 	Slot     int32
 	Bucket   int32
@@ -254,9 +256,10 @@ type SyncReputationInfo struct {
 }
 
 type TesseractMessage struct {
-	Tesseract *types.Tesseract
-	Sender    kramaid.KramaID
-	Delta     map[types.Hash][]byte
+	Sender             kramaid.KramaID
+	CanonicalTesseract *types.CanonicalTesseract
+	Ixns               []byte
+	Delta              map[types.Hash][]byte
 }
 
 func (tm *TesseractMessage) Bytes() ([]byte, error) {
@@ -274,6 +277,21 @@ func (tm *TesseractMessage) FromBytes(bytes []byte) error {
 	}
 
 	return nil
+}
+
+func (tm *TesseractMessage) Tesseract() (*types.Tesseract, error) {
+	var ixns types.Interactions
+
+	if err := ixns.FromBytes(tm.Ixns); err != nil {
+		return nil, err
+	}
+
+	return &types.Tesseract{
+		Header: tm.CanonicalTesseract.Header,
+		Body:   tm.CanonicalTesseract.Body,
+		Ixns:   ixns,
+		Seal:   tm.CanonicalTesseract.Seal,
+	}, nil
 }
 
 type HelloMsg struct {

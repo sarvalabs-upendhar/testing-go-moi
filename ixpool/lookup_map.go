@@ -26,12 +26,7 @@ func (m *lookupMap) add(txs ...*types.Interaction) {
 	defer m.Unlock()
 
 	for _, ix := range txs {
-		hash, err := ix.GetIxHash()
-		if err != nil {
-			continue
-		}
-
-		m.all[hash] = ix
+		m.all[ix.Hash()] = ix
 	}
 }
 
@@ -41,12 +36,7 @@ func (m *lookupMap) remove(ixs types.Interactions) {
 	defer m.Unlock()
 
 	for _, ix := range ixs {
-		hash, err := ix.GetIxHash()
-		if err != nil {
-			continue
-		}
-
-		delete(m.all, hash)
+		delete(m.all, ix.Hash())
 	}
 }
 

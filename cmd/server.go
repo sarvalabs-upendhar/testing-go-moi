@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/big"
 	"os"
 	"os/signal"
 	"syscall"
@@ -14,10 +15,11 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	maddr "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/profile"
+	"go.opentelemetry.io/otel"
+
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/poorna/node"
 	"github.com/sarvalabs/moichain/telemetry/tracing"
-	"go.opentelemetry.io/otel"
 
 	"github.com/spf13/cobra"
 )
@@ -184,7 +186,7 @@ func BuildConfig(dataDir string, fileCfg *Config) (*common.Config, error) {
 		nodeCfg.Network.ProtocolID = protocol.ID(fileCfg.Network.ProtocolID)
 	}
 
-	if fileCfg.Ixpool.PriceLimit > 0 {
+	if fileCfg.Ixpool.PriceLimit.Cmp(big.NewInt(0)) == 1 {
 		nodeCfg.IxPool.PriceLimit = fileCfg.Ixpool.PriceLimit
 	}
 

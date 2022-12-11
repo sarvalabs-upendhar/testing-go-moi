@@ -59,4 +59,5 @@ var (
 	ErrKeyDoNotExist               = errors.New("key do not exist")
 	ErrInvalidAccountType          = errors.New("invalid account type")
 	ErrExecutorNotFound            = errors.New("executor instance not found")
+	ErrLogicElementNotFound        = errors.New("logic element not found")
 )

@@ -22,7 +22,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/routing"
 	maddr "github.com/multiformats/go-multiaddr"
-	"github.com/sarvalabs/go-polo"
 	"github.com/sarvalabs/moichain/mudra"
 	mcommon "github.com/sarvalabs/moichain/mudra/common"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
@@ -712,14 +711,14 @@ func (s *Server) GetRandomNode() peer.ID {
 	return peers[index]
 }
 
-func (s *Server) SendMessage(peerID peer.ID, msgType ptypes.MsgType, msg interface{}) error {
+func (s *Server) SendMessage(peerID peer.ID, msgType ptypes.MsgType, msg ptypes.MessagePayload) error {
 	if s.Peers.ContainsPeer(peerID) {
 		p := s.Peers.Peer(peerID)
 
 		return p.Send(s.id, msgType, msg)
 	}
 
-	rawData, err := polo.Polorize(msg)
+	rawData, err := msg.Bytes()
 	if err != nil {
 		return errors.Wrap(err, "failed to polorize message payload")
 	}

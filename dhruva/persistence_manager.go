@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/dhruva/db"
 	"github.com/sarvalabs/moichain/dhruva/db/badger"
@@ -113,7 +114,7 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 	id types.Address,
 	height *big.Int,
 	tesseractHash types.Hash,
-	accType types.AccType,
+	accType types.AccountType,
 	latticeExists, stateExists bool,
 ) (int32, bool, error) {
 	if id.IsNil() {

@@ -107,7 +107,7 @@ func (i *ClusterInfo) GetMetaData(msgs []*ICSMSG) (*ICSMetaInfo, error) {
 
 	m := &ICSMetaInfo{
 		ClusterID:    string(i.ID),
-		IxHash:       i.Ixs[0].Hash, // Need to be improved
+		IxHash:       i.Ixs[0].Hash(), // Need to be improved
 		Operator:     string(i.Operator),
 		ClusterSize:  i.ICS.Size,
 		BinaryHash:   i.BinaryHash,

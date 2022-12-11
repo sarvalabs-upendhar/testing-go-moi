@@ -4,8 +4,6 @@ import (
 	"encoding/hex"
 	"math/big"
 
-	gtypes "github.com/sarvalabs/moichain/guna/types"
-
 	"github.com/sarvalabs/moichain/utils"
 
 	"github.com/sarvalabs/moichain/types"
@@ -83,7 +81,7 @@ func (p *PublicCoreAPI) GetTesseractByHeight(args *TesseractByHeightArgs) (*type
 	return tesseract, nil
 }
 
-func (p *PublicCoreAPI) GetAssetInfoByAssetID(id string) (*types.AssetInfo, error) {
+func (p *PublicCoreAPI) GetAssetInfoByAssetID(id string) (*types.AssetDescriptor, error) {
 	_, err := utils.ValidateAssetID(id)
 	if err != nil {
 		return nil, err
@@ -102,11 +100,8 @@ func (p *PublicCoreAPI) GetAssetInfoByAssetID(id string) (*types.AssetInfo, erro
 	}
 
 	assetInfo.Symbol = assetData.Symbol
-
-	assetInfo.TotalSupply = assetData.TotalSupply
-
-	assetInfo.Owner = assetData.Owner.Hex()
-
+	assetInfo.Supply = assetData.Supply
+	assetInfo.Owner = assetData.Owner
 	assetInfo.LogicID = assetData.LogicID
 
 	return assetInfo, nil
@@ -133,7 +128,7 @@ func (p *PublicCoreAPI) GetContextInfoByHash(args *ContextInfoByHashArgs) ([]str
 }
 
 // GetTDU will return the total digital utility associated with address
-func (p *PublicCoreAPI) GetTDU(args *TesseractArgs) (gtypes.AssetMap, error) {
+func (p *PublicCoreAPI) GetTDU(args *TesseractArgs) (types.AssetMap, error) {
 	address, err := utils.ValidateAddress(args.From)
 	if err != nil {
 		return nil, types.ErrInvalidAddress
@@ -178,20 +173,21 @@ func (p *PublicCoreAPI) GetInteractionCountByAddress(args *InteractionCountArgs)
 }
 
 // helper functions
-func parseAssetMetaInfo(aID []byte) *types.AssetInfo {
+func parseAssetMetaInfo(aID []byte) *types.AssetDescriptor {
 	var dimension, info uint8
 
-	assetInfo := new(types.AssetInfo)
+	assetInfo := new(types.AssetDescriptor)
 
 	dimension = uint8(big.NewInt(0).SetBytes(aID[:1]).Uint64())
-
 	info = uint8(big.NewInt(0).SetBytes(aID[1:2]).Uint64())
+
 	// extract most significant bit
 	if 0x80&info == 0x80 {
 		assetInfo.IsFungible = true
 	} else {
 		assetInfo.IsFungible = false
 	}
+
 	// extract least significant bit
 	if 0x01&info == 1 {
 		assetInfo.IsMintable = true

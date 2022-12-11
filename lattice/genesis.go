@@ -12,13 +12,13 @@ type Genesis struct {
 }
 
 type AccountInfo struct {
-	Address          string             `json:"address"`
-	AccType          types.AccType      `json:"type"`
-	MOIId            string             `json:"moi_id"`
-	BehaviourContext []string           `json:"behaviour_context"`
-	RandomContext    []string           `json:"random_context"`
-	AssetDetails     []*types.AssetInfo `json:"assets"`
-	Balances         []*BalanceInfo     `json:"balance"`
+	Address          string                   `json:"address"`
+	AccountType      types.AccountType        `json:"type"`
+	MOIId            string                   `json:"moi_id"`
+	BehaviourContext []string                 `json:"behaviour_context"`
+	RandomContext    []string                 `json:"random_context"`
+	AssetDetails     []*types.AssetDescriptor `json:"assets"`
+	Balances         []*BalanceInfo           `json:"balance"`
 }
 
 type AssetInfo struct {

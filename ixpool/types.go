@@ -314,7 +314,7 @@ func (a *account) promote() (uint64, []types.Hash) {
 
 		// push to promoted
 		a.promoted.push(tx)
-		promotedTxnHashes = append(promotedTxnHashes, tx.Hash)
+		promotedTxnHashes = append(promotedTxnHashes, tx.Hash())
 
 		// update counters
 		nextNonce += 1

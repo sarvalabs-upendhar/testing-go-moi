@@ -8,7 +8,8 @@ import (
 
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/guna"
-	"github.com/sarvalabs/moichain/jug/engine"
+	ctypes "github.com/sarvalabs/moichain/jug/types"
+
 	"github.com/sarvalabs/moichain/jug/pisa"
 	"github.com/sarvalabs/moichain/types"
 )
@@ -21,7 +22,7 @@ type ExecutionManager struct {
 	config *common.ExecutionConfig
 
 	executors sync.Map
-	factories map[engine.Kind]engine.Factory
+	factories map[types.LogicEngine]ctypes.EngineFactory
 }
 
 // state describes a state management interface
@@ -34,7 +35,7 @@ type state interface {
 	// GetDirtyObject must retrieve the guna.StateObject for a given types.Address
 	GetDirtyObject(types.Address) (*guna.StateObject, error)
 	// CreateDirtyObject must generate a new dirty guna.StateObject for the given types.Address
-	CreateDirtyObject(types.Address, types.AccType) *guna.StateObject
+	CreateDirtyObject(types.Address, types.AccountType) *guna.StateObject
 }
 
 // NewExecutionManager creates a new ExecutionManager instance
@@ -50,8 +51,8 @@ func NewExecutionManager(
 		logger: logger.Named("Execution"),
 
 		// Create a factory for each supported runtime
-		factories: map[engine.Kind]engine.Factory{
-			engine.PISA: pisa.NewFactory(),
+		factories: map[types.LogicEngine]ctypes.EngineFactory{
+			types.PISA: pisa.NewFactory(),
 		},
 	}
 }

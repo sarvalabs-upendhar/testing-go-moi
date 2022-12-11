@@ -9,7 +9,6 @@ import (
 
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
-	"github.com/sarvalabs/go-polo"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 
 	"github.com/sarvalabs/moichain/utils"
@@ -17,6 +16,7 @@ import (
 	mapset "github.com/deckarep/golang-set"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
+
 	"github.com/sarvalabs/moichain/types"
 )
 
@@ -51,7 +51,7 @@ func NewKIPPeer(networkID peer.ID, rw bufio.ReadWriter) *KipPeer {
 // SendID is a method of KipPeer that emits the peer's id to the network
 func (p *KipPeer) SendID(id id.KramaID, ntq int32, addrs []multiaddr.Multiaddr) error {
 	// Create a NewPeer proto message
-	msg := ptypes.HandshakeMSG{
+	msg := &ptypes.HandshakeMSG{
 		NTQ:     ntq,
 		Address: utils.MultiAddrToString(addrs...),
 	}
@@ -110,7 +110,7 @@ func (p *KipPeer) InitHandshake(id id.KramaID, ntq int32, addrs []multiaddr.Mult
 }
 
 func (p *KipPeer) sendHandshakeErrorResp(id id.KramaID, err error) error {
-	msg := ptypes.HandshakeMSG{
+	msg := &ptypes.HandshakeMSG{
 		Error: err.Error(),
 	}
 
@@ -121,28 +121,21 @@ func (p *KipPeer) sendHandshakeErrorResp(id id.KramaID, err error) error {
 // Accepts a slice of Interactions to emit.
 func (p *KipPeer) SendIXs(id id.KramaID, ixs types.Interactions) error {
 	// Mark the given Interactions as 'known'
-	for _, j := range ixs {
-		ixHash, err := j.GetIxHash()
-		if err != nil {
-			return err
-		}
-
-		p.markInteraction(ixHash)
+	for _, ix := range ixs {
+		p.markInteraction(ix.Hash())
 	}
 
-	msg := ptypes.InteractionMsg{Ixs: ixs}
-
-	return p.Send(id, ptypes.NEWIXSMSG, msg)
+	return p.Send(id, ptypes.NEWIXSMSG, &ixs)
 }
 
 // Send is a method of KipPeer that emits an arbitrary proto message to the network
 // Accepts the sender id, the message type and message itself.
-func (p *KipPeer) Send(id id.KramaID, code ptypes.MsgType, msg interface{}) error {
+func (p *KipPeer) Send(id id.KramaID, code ptypes.MsgType, msg ptypes.MessagePayload) error {
 	p.mtxLock.Lock()
 	defer p.mtxLock.Unlock()
 
 	// Marshal the proto message into slice of bytes and log and return if an error occurs
-	rawData, err := polo.Polorize(msg)
+	rawData, err := msg.Bytes()
 	if err != nil {
 		return errors.Wrap(err, "failed to polorize message payload")
 	}

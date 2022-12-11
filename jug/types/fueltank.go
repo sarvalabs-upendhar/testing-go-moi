@@ -1,12 +1,8 @@
-package engine
+package types
 
 import (
 	"sync"
-
-	"github.com/pkg/errors"
 )
-
-var ErrInsufficientFuel = errors.New("insufficient fuel")
 
 // FuelTank is a simple thread-safe bounded effort counter.
 // The tank has some capacity (bound) which can be incrementally consumed until it is exhausted.
@@ -29,15 +25,15 @@ func (tank *FuelTank) Level() uint64 {
 
 // Exhaust consumes the given amount of fuel from tank's capacity.
 // Returns an ErrInsufficientFuel error if there isn't enough fuel.
-func (tank *FuelTank) Exhaust(fuel uint64) error {
+func (tank *FuelTank) Exhaust(fuel uint64) bool {
 	tank.Lock()
 	defer tank.Unlock()
 
 	if tank.Level() >= fuel {
 		tank.Consumed += fuel
 
-		return nil
+		return true
 	}
 
-	return ErrInsufficientFuel
+	return false
 }

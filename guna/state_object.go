@@ -10,6 +10,7 @@ import (
 	"github.com/decred/dcrd/crypto/blake256"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/moichain/dhruva"
 	"github.com/sarvalabs/moichain/guna/tree"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
@@ -30,13 +31,16 @@ func (s Storage) Copy() Storage {
 }
 
 type StateObject struct {
-	address        types.Address
-	accType        types.AccType
-	journal        *Journal
-	mtx            sync.RWMutex
-	cache          *lru.Cache
-	db             *dhruva.PersistenceManager
-	data           types.Account
+	journal *Journal
+	mtx     sync.RWMutex
+	cache   *lru.Cache
+
+	address types.Address
+	accType types.AccountType
+	data    types.Account
+
+	db *dhruva.PersistenceManager
+
 	balance        *gtypes.BalanceObject
 	assetApprovals *gtypes.ApprovalObject
 
@@ -47,10 +51,8 @@ type StateObject struct {
 	dirtyEntries Storage
 	receipts     types.Receipts
 
-	activeStorageTrees map[types.LogicID]tree.MerkleTree
-
-	logics map[types.LogicID]*gtypes.LogicData
-	files  map[types.Hash][]byte
+	activeStorageTrees map[string]tree.MerkleTree
+	files              map[types.Hash][]byte
 }
 
 func NewStateObject(
@@ -59,9 +61,9 @@ func NewStateObject(
 	j *Journal,
 	db *dhruva.PersistenceManager,
 	account types.Account,
-	accType types.AccType,
+	accType types.AccountType,
 ) *StateObject {
-	s := &StateObject{
+	return &StateObject{
 		journal: j,
 		accType: accType,
 		cache:   cache,
@@ -69,21 +71,18 @@ func NewStateObject(
 		data:    account,
 		address: id,
 		balance: &gtypes.BalanceObject{
-			Bal:     make(gtypes.AssetMap),
-			PrvHash: types.NilHash,
+			Balances: make(types.AssetMap),
+			PrvHash:  types.NilHash,
 		},
 		assetApprovals: &gtypes.ApprovalObject{
-			Approvals: make(map[types.Address]gtypes.AssetMap),
+			Approvals: make(map[types.Address]types.AssetMap),
 			PrvHash:   types.NilHash,
 		},
-		logics:             make(map[types.LogicID]*gtypes.LogicData),
 		files:              make(map[types.Hash][]byte),
 		dirtyEntries:       make(Storage),
 		receipts:           make(types.Receipts),
-		activeStorageTrees: make(map[types.LogicID]tree.MerkleTree, 4),
+		activeStorageTrees: make(map[string]tree.MerkleTree, 4),
 	}
-
-	return s
 }
 
 func (s *StateObject) AccountState() types.Account {
@@ -94,7 +93,7 @@ func (s *StateObject) BalanceOf(id types.AssetID) (*big.Int, error) {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 
-	if v, ok := s.balance.Bal[id]; ok {
+	if v, ok := s.balance.Balances[id]; ok {
 		return v, nil
 	}
 
@@ -105,11 +104,11 @@ func (s *StateObject) AddBalance(aid types.AssetID, amount *big.Int) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	bal, ok := s.balance.Bal[aid]
+	bal, ok := s.balance.Balances[aid]
 	if ok {
 		s.setBalance(aid, new(big.Int).Add(amount, bal))
 	} else {
-		s.balance.Bal[aid] = amount
+		s.balance.Balances[aid] = amount
 	}
 }
 
@@ -117,7 +116,7 @@ func (s *StateObject) SubBalance(aid types.AssetID, amount *big.Int) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	if bal, ok := s.balance.Bal[aid]; ok && bal != nil {
+	if bal, ok := s.balance.Balances[aid]; ok && bal != nil {
 		s.setBalance(aid, new(big.Int).Sub(bal, amount))
 	} else {
 		log.Panicln("asset not found")
@@ -125,31 +124,10 @@ func (s *StateObject) SubBalance(aid types.AssetID, amount *big.Int) {
 }
 
 func (s *StateObject) setBalance(aid types.AssetID, amount *big.Int) {
-	s.balance.Bal[aid] = amount
+	s.balance.Balances[aid] = amount
 }
 
-func (s *StateObject) GetLogic(logicID types.LogicID) (data *gtypes.LogicData, err error) {
-	ld, ok := s.logics[logicID]
-	if !ok {
-		data, err := s.getLogicTrie(s.db, s.data.LogicRoot.Bytes()).Get(logicID.Bytes())
-		if err != nil {
-			return nil, err
-		}
-
-		if data != nil {
-			msg := new(gtypes.LogicData)
-			if err := msg.FromBytes(data); err != nil {
-				return nil, err
-			}
-
-			return msg, nil
-		}
-	}
-
-	return ld, nil
-}
-
-func (s *StateObject) GetAccountType() types.AccType {
+func (s *StateObject) GetAccountType() types.AccountType {
 	return s.accType
 }
 
@@ -171,10 +149,6 @@ func (s *StateObject) Copy() *StateObject {
 	// sObj.storageTrie = s.storageTrie.Copy()
 	// sObj.logicTrie = s.logicTrie.Copy()
 	// sObj.fileTrie = s.fileTrie.Copy()
-
-	for k, v := range sObj.logics {
-		sObj.logics[k] = v
-	}
 
 	for k, v := range sObj.files {
 		sObj.files[k] = v
@@ -263,7 +237,7 @@ func (s *StateObject) commitStorage() (types.Hash, error) {
 			return types.NilHash, err
 		}
 
-		if err := s.storageTrie.Set(logicID.Bytes(), rootHash.Bytes()); err != nil {
+		if err := s.storageTrie.Set(types.FromHex(logicID), rootHash.Bytes()); err != nil {
 			return types.NilHash, err
 		}
 	}
@@ -342,59 +316,18 @@ func (s *StateObject) CreateStorageTreeForLogic(logicID types.LogicID) (tree.Mer
 		return nil, err
 	}
 
-	s.activeStorageTrees[logicID] = newStorageTree
+	s.activeStorageTrees[logicID.Hex()] = newStorageTree
 
-	return newStorageTree, s.storageTrie.Set(logicID.Bytes(), types.NilHash.Bytes())
+	return newStorageTree, s.storageTrie.Set(logicID, types.NilHash.Bytes())
 }
 
-func (s *StateObject) CreateLogic(logicID types.LogicID, data *gtypes.LogicData) error {
-	if _, ok := s.logics[logicID]; !ok {
-		// TODO:journal this
-		s.logics[logicID] = data
-	} else {
-		return errors.New("duplicate logic")
-	}
-
-	return nil
-}
-
-func (s *StateObject) CreateAsset(
-	dimension uint8,
-	isFungible bool,
-	isMintable bool,
-	symbol string,
-	totalSupply uint64,
-	code []byte,
-) (types.AssetID, error) {
+func (s *StateObject) CreateAsset(descriptor *types.AssetDescriptor) (types.AssetID, error) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	var (
-		logicID   types.LogicID
-		logicData *gtypes.LogicData
-		err       error
-	)
+	descriptor.Owner = s.address
 
-	if code != nil {
-		logicID, logicData, err = gtypes.GetLogicID(code, false)
-		if err != nil {
-			return "", err
-		}
-
-		if err = s.CreateLogic(logicID, logicData); err != nil {
-			return "", err
-		}
-	}
-
-	assetID, assetHash, data, err := gtypes.GetAssetID(
-		s.address,
-		dimension,
-		isFungible,
-		isMintable,
-		symbol,
-		totalSupply,
-		logicID,
-	)
+	assetID, assetHash, data, err := gtypes.GetAssetID(descriptor)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to polorize asset data")
 	}
@@ -408,13 +341,13 @@ func (s *StateObject) CreateAsset(
 	s.dirtyEntries[key] = data
 
 	// Update the balance
-	if _, ok := s.balance.Bal[assetID]; !ok {
-		s.balance.Bal[assetID] = new(big.Int).SetUint64(totalSupply)
-
-		return assetID, nil
+	if _, ok := s.balance.Balances[assetID]; ok {
+		return "", errors.Wrap(types.ErrAssetCreation, "asset already exists")
 	}
 
-	return "", errors.Wrap(types.ErrAssetCreation, "asset already exists")
+	s.balance.Balances[assetID] = descriptor.Supply
+
+	return assetID, nil
 }
 
 func (s *StateObject) AddAccountGenesisInfo(address types.Address, ixHash types.Hash) error {
@@ -617,19 +550,10 @@ func getBalanceObject(
 	return balObject, nil
 }
 
-func (s *StateObject) getLogicTrie(db *dhruva.PersistenceManager, root []byte) tree.MerkleTree {
-	return nil
-}
-
 func (s *StateObject) GetStorageTree(logicID types.LogicID) (tree.MerkleTree, error) {
-	storageTree, ok := s.activeStorageTrees[logicID]
+	storageTree, ok := s.activeStorageTrees[logicID.Hex()]
 	if ok {
 		return storageTree, nil
-	}
-
-	rawID := logicID.Bytes()
-	if rawID == nil {
-		return nil, types.ErrInvalidLogicID
 	}
 
 	if s.storageTrie == nil {
@@ -641,7 +565,7 @@ func (s *StateObject) GetStorageTree(logicID types.LogicID) (tree.MerkleTree, er
 		s.storageTrie = merkleTree
 	}
 
-	root, err := s.storageTrie.Get(rawID)
+	root, err := s.storageTrie.Get(logicID)
 	if err != nil {
 		return nil, types.ErrLogicStorageTreeNotFound
 	}
@@ -651,13 +575,13 @@ func (s *StateObject) GetStorageTree(logicID types.LogicID) (tree.MerkleTree, er
 		return nil, errors.Wrap(err, "failed to initiate logic storage tree")
 	}
 
-	s.activeStorageTrees[logicID] = storageTree
+	s.activeStorageTrees[logicID.Hex()] = storageTree
 
 	return storageTree, nil
 }
 
 func (s *StateObject) SetStorageEntry(logicID types.LogicID, key, value []byte) (err error) {
-	merkleTree, ok := s.activeStorageTrees[logicID]
+	merkleTree, ok := s.activeStorageTrees[logicID.Hex()]
 	if ok {
 		return merkleTree.Set(key, value)
 	}
@@ -671,7 +595,7 @@ func (s *StateObject) SetStorageEntry(logicID types.LogicID, key, value []byte) 
 }
 
 func (s *StateObject) GetStorageEntry(logicID types.LogicID, key []byte) (value []byte, err error) {
-	merkleTree, ok := s.activeStorageTrees[logicID]
+	merkleTree, ok := s.activeStorageTrees[logicID.Hex()]
 	if ok {
 		return merkleTree.Get(key)
 	}

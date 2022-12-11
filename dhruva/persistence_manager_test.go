@@ -4,9 +4,10 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/types"
-	"github.com/stretchr/testify/require"
 )
 
 func TestUpdateAccMetaInfo_CheckErrors(t *testing.T) {
@@ -24,7 +25,7 @@ func TestUpdateAccMetaInfo_CheckErrors(t *testing.T) {
 			accMetaInfo: nil,
 			args: &types.AccountMetaInfo{
 				Address:       types.NilAddress,
-				Type:          types.AccType(1),
+				Type:          types.AccountType(1),
 				Height:        big.NewInt(7),
 				TesseractHash: tests.RandomHash(t),
 				LatticeExists: true,
@@ -37,7 +38,7 @@ func TestUpdateAccMetaInfo_CheckErrors(t *testing.T) {
 			accMetaInfo: nil,
 			args: &types.AccountMetaInfo{
 				Address:       tests.RandomAddress(t),
-				Type:          types.AccType(1),
+				Type:          types.AccountType(1),
 				Height:        big.NewInt(8),
 				TesseractHash: types.NilHash,
 				LatticeExists: true,
@@ -49,7 +50,7 @@ func TestUpdateAccMetaInfo_CheckErrors(t *testing.T) {
 			name: "hash mismatch",
 			accMetaInfo: &types.AccountMetaInfo{
 				Address:       address,
-				Type:          types.AccType(1),
+				Type:          types.AccountType(1),
 				Height:        big.NewInt(8),
 				TesseractHash: tests.RandomHash(t),
 				LatticeExists: true,
@@ -57,7 +58,7 @@ func TestUpdateAccMetaInfo_CheckErrors(t *testing.T) {
 			},
 			args: &types.AccountMetaInfo{
 				Address:       address,
-				Type:          types.AccType(1),
+				Type:          types.AccountType(1),
 				Height:        big.NewInt(8),
 				TesseractHash: tests.RandomHash(t),
 				LatticeExists: true,
@@ -134,7 +135,7 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 			name: "should update with new height",
 			accMetaInfo: &types.AccountMetaInfo{
 				Address:       addresses[0],
-				Type:          types.AccType(1),
+				Type:          types.AccountType(1),
 				Height:        big.NewInt(height),
 				TesseractHash: tests.RandomHash(t),
 				LatticeExists: true,
@@ -142,7 +143,7 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 			},
 			args: &types.AccountMetaInfo{
 				Address:       addresses[0],
-				Type:          types.AccType(1),
+				Type:          types.AccountType(1),
 				Height:        big.NewInt(height + 1),
 				TesseractHash: tests.RandomHash(t),
 				LatticeExists: false,
@@ -154,7 +155,7 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 			name: "should update with equal height ",
 			accMetaInfo: &types.AccountMetaInfo{
 				Address:       addresses[1],
-				Type:          types.AccType(3),
+				Type:          types.AccountType(3),
 				Height:        big.NewInt(height),
 				TesseractHash: hash,
 				LatticeExists: true,
@@ -162,7 +163,7 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 			},
 			args: &types.AccountMetaInfo{
 				Address:       addresses[1],
-				Type:          types.AccType(3),
+				Type:          types.AccountType(3),
 				Height:        big.NewInt(height),
 				TesseractHash: hash,
 				LatticeExists: false,
@@ -174,7 +175,7 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 			name: "shouldn't update with low height",
 			accMetaInfo: &types.AccountMetaInfo{
 				Address:       addresses[2],
-				Type:          types.AccType(1),
+				Type:          types.AccountType(1),
 				Height:        big.NewInt(height),
 				TesseractHash: tests.RandomHash(t),
 				LatticeExists: true,
@@ -182,7 +183,7 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 			},
 			args: &types.AccountMetaInfo{
 				Address:       addresses[2],
-				Type:          types.AccType(3),
+				Type:          types.AccountType(3),
 				Height:        big.NewInt(height - 1),
 				TesseractHash: tests.RandomHash(t),
 				LatticeExists: false,
@@ -241,7 +242,7 @@ func TestUpdateAccMetaInfo_CheckBucketID(t *testing.T) {
 
 	accMetaInfo := types.AccountMetaInfo{
 		Address:       address,
-		Type:          types.AccType(1),
+		Type:          types.AccountType(1),
 		Height:        big.NewInt(1),
 		TesseractHash: tests.RandomHash(t),
 		LatticeExists: true,
@@ -249,7 +250,7 @@ func TestUpdateAccMetaInfo_CheckBucketID(t *testing.T) {
 	}
 	args := &types.AccountMetaInfo{
 		Address:       address,
-		Type:          types.AccType(1),
+		Type:          types.AccountType(1),
 		Height:        big.NewInt(3),
 		TesseractHash: tests.RandomHash(t),
 		LatticeExists: false,
@@ -443,7 +444,7 @@ func TestUpdateTesseractStatus_CheckHeight(t *testing.T) {
 			name: "shouldn't update with lower height",
 			accMetaInfo: &types.AccountMetaInfo{
 				Address:       addresses[0],
-				Type:          types.AccType(1),
+				Type:          types.AccountType(1),
 				Height:        big.NewInt(height),
 				TesseractHash: hashes[0],
 				LatticeExists: true,
@@ -460,7 +461,7 @@ func TestUpdateTesseractStatus_CheckHeight(t *testing.T) {
 			name: "should update with equal height",
 			accMetaInfo: &types.AccountMetaInfo{
 				Address:       addresses[1],
-				Type:          types.AccType(1),
+				Type:          types.AccountType(1),
 				Height:        big.NewInt(height),
 				TesseractHash: hashes[1],
 				LatticeExists: true,
@@ -477,7 +478,7 @@ func TestUpdateTesseractStatus_CheckHeight(t *testing.T) {
 			name: "should update with new height",
 			accMetaInfo: &types.AccountMetaInfo{
 				Address:       addresses[2],
-				Type:          types.AccType(1),
+				Type:          types.AccountType(1),
 				Height:        big.NewInt(height),
 				TesseractHash: hashes[2],
 				LatticeExists: true,

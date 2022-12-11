@@ -117,14 +117,14 @@ func (s *Slots) AddSlot(id types.ClusterID, slot *Slot) bool {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	fromAddr := slot.clusterState.Ixs[0].FromAddress()
-	toAddr := slot.clusterState.Ixs[0].ToAddress()
+	fromAddr := slot.clusterState.Ixs[0].Sender()
+	toAddr := slot.clusterState.Ixs[0].Receiver()
 
 	if !s.areAccountsActive(fromAddr, toAddr) && s.areSlotsAvailable(slot.SlotType) {
 		s.slots[id] = slot
 		s.decrementSlots(slot.SlotType)
-		s.activeAccounts[slot.clusterState.Ixs[0].FromAddress()] = slot.clusterState.ID
-		s.activeAccounts[slot.clusterState.Ixs[0].ToAddress()] = slot.clusterState.ID
+		s.activeAccounts[slot.clusterState.Ixs[0].Sender()] = slot.clusterState.ID
+		s.activeAccounts[slot.clusterState.Ixs[0].Receiver()] = slot.clusterState.ID
 
 		return true
 	}
@@ -159,8 +159,8 @@ func (s *Slots) CleanupSlot(id types.ClusterID) {
 	defer s.mtx.Unlock()
 
 	if slot, ok := s.slots[id]; ok {
-		delete(s.activeAccounts, slot.clusterState.Ixs[0].FromAddress())
-		delete(s.activeAccounts, slot.clusterState.Ixs[0].ToAddress())
+		delete(s.activeAccounts, slot.clusterState.Ixs[0].Sender())
+		delete(s.activeAccounts, slot.clusterState.Ixs[0].Receiver())
 		close(slot.CloseCh)
 		delete(s.slots, id)
 		s.incrementSlots(slot.SlotType)

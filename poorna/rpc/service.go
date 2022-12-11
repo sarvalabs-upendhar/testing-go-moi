@@ -90,7 +90,7 @@ func (r *rpcService) GetTesseractByHeight(
 	return nil
 }
 
-func (r *rpcService) GetAssetInfoByAssetID(req *http.Request, args *api.AssetInfoArgs, resp *api.Response) error {
+func (r *rpcService) GetAssetInfoByAssetID(req *http.Request, args *api.AssetDescriptorArgs, resp *api.Response) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
 		return types.ErrInvalidAPI
@@ -139,11 +139,7 @@ func (r *rpcService) SendInteractions(req *http.Request, args *api.SendIXArgs, r
 		return err
 	}
 
-	ixHash, err := ixn[0].GetIxHash()
-	if err != nil {
-		return err
-	}
-
+	ixHash := ixn.Hash()
 	resp.Data = ixHash.Hex()
 
 	return nil

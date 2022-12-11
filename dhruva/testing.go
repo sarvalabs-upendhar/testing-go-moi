@@ -7,11 +7,12 @@ import (
 	"testing"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/net/context"
+
 	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/dhruva/db"
 	"github.com/sarvalabs/moichain/types"
-	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
 )
 
 // mockDB is an in-memory key-value database used for testing purposes
@@ -185,7 +186,7 @@ func getAccMetaInfo(t *testing.T, height int64) *types.AccountMetaInfo {
 
 	return &types.AccountMetaInfo{
 		Address:       tests.RandomAddress(t),
-		Type:          types.AccType(1),
+		Type:          types.AccountType(1),
 		Height:        big.NewInt(height),
 		TesseractHash: tests.RandomHash(t),
 		LatticeExists: true,

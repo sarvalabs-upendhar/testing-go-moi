@@ -20,12 +20,14 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
+
 	ktypes "github.com/sarvalabs/moichain/krama/types"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/telemetry/tracing"
-	"golang.org/x/sync/errgroup"
 
 	lru "github.com/hashicorp/golang-lru"
+
 	"github.com/sarvalabs/moichain/dhruva"
 	"github.com/sarvalabs/moichain/types"
 )
@@ -56,24 +58,29 @@ type Senatus interface {
 }
 
 var (
-	SargaAddress  = types.BytesToAddress(types.GetHash([]byte("sargaAccount")).Bytes())
-	SargaLogicID  = types.LogicID(types.BytesToHex(types.GetHash([]byte("sargaContract")).Bytes()))
-	GenesisIxHash = types.GetHash([]byte("Genesis Interaction"))
+	SargaAddress    = types.BytesToAddress(types.GetHash([]byte("sargaAccount")).Bytes())
+	SargaLogicID, _ = types.NewLogicIDv0(0, true, 0, SargaAddress)
+	GenesisIxHash   = types.GetHash([]byte("Genesis Interaction"))
 )
 
 type StateManager struct {
-	ctx              context.Context
-	logger           hclog.Logger
-	db               *dhruva.PersistenceManager
-	cache            *lru.Cache
-	senatus          Senatus
-	network          server
-	objects          map[types.Address]*StateObject
-	dirtyObjects     map[types.Address]*StateObject
+	ctx    context.Context
+	logger hclog.Logger
+	cache  *lru.Cache
+
+	db *dhruva.PersistenceManager
+
+	senatus Senatus
+	network server
+	client  *http.Client
+
+	objectsLock sync.Mutex
+	objects     map[types.Address]*StateObject
+
 	dirtyObjectsLock sync.Mutex
-	objectsLock      sync.Mutex
-	client           *http.Client
-	metrics          *Metrics
+	dirtyObjects     map[types.Address]*StateObject
+
+	metrics *Metrics
 }
 
 func NewStateManager(
@@ -111,7 +118,7 @@ func NewStateManager(
 	return sm, nil
 }
 
-func (sm *StateManager) createStateObject(addr types.Address, accType types.AccType) *StateObject {
+func (sm *StateManager) createStateObject(addr types.Address, accType types.AccountType) *StateObject {
 	journal := new(Journal)
 	stateObject := NewStateObject(addr, sm.cache, journal, sm.db, types.Account{}, accType)
 
@@ -128,7 +135,7 @@ func (sm *StateManager) cleanupDirtyObject(addr types.Address) {
 	sm.metrics.captureActiveStateObjects(-1)
 }
 
-func (sm *StateManager) CreateDirtyObject(addr types.Address, accType types.AccType) *StateObject {
+func (sm *StateManager) CreateDirtyObject(addr types.Address, accType types.AccountType) *StateObject {
 	sm.dirtyObjectsLock.Lock()
 	defer sm.dirtyObjectsLock.Unlock()
 
@@ -536,7 +543,7 @@ func (sm *StateManager) FetchContextLock(ts *types.Tesseract) (*ktypes.ICSNodes,
 	ics := ktypes.NewICSNodes(6)
 
 	for address, info := range ts.Header.ContextLock {
-		if address == ix.FromAddress() {
+		if address == ix.Sender() {
 			behaviourSet, randomSet, err := sm.fetchParticipantContextByHash(address, info.ContextHash)
 			if err != nil {
 				return nil, err
@@ -544,7 +551,7 @@ func (sm *StateManager) FetchContextLock(ts *types.Tesseract) (*ktypes.ICSNodes,
 
 			ics.UpdateNodeSet(ktypes.SenderBehaviourSet, behaviourSet)
 			ics.UpdateNodeSet(ktypes.SenderRandomSet, randomSet)
-		} else if address == ix.ToAddress() || address == SargaAddress {
+		} else if address == ix.Receiver() || address == SargaAddress {
 			if info.ContextHash.IsNil() {
 				continue
 			}
@@ -580,19 +587,19 @@ func (sm *StateManager) FetchInteractionContext(ctx context.Context, ix *types.I
 		nodeSet       = make([]*ktypes.NodeSet, 6)
 	)
 
-	if !ix.FromAddress().IsNil() {
-		contextHash, behaviourSet, randomSet, err = sm.fetchLatestParticipantContext(ix.FromAddress())
+	if !ix.Sender().IsNil() {
+		contextHash, behaviourSet, randomSet, err = sm.fetchLatestParticipantContext(ix.Sender())
 		if err != nil {
 			return nil, nil, err
 		}
 
-		contextHashes[ix.FromAddress()] = contextHash
+		contextHashes[ix.Sender()] = contextHash
 		nodeSet[ktypes.SenderBehaviourSet] = behaviourSet
 		nodeSet[ktypes.SenderRandomSet] = randomSet
 	}
 
-	if !ix.ToAddress().IsNil() {
-		accountRegistered, err := sm.IsAccountRegistered(ix.ToAddress())
+	if !ix.Receiver().IsNil() {
+		accountRegistered, err := sm.IsAccountRegistered(ix.Receiver())
 		if err != nil {
 			return nil, nil, err
 		}
@@ -605,12 +612,12 @@ func (sm *StateManager) FetchInteractionContext(ctx context.Context, ix *types.I
 
 			contextHashes[SargaAddress] = contextHash
 		} else {
-			contextHash, behaviourSet, randomSet, err = sm.fetchLatestParticipantContext(ix.ToAddress())
+			contextHash, behaviourSet, randomSet, err = sm.fetchLatestParticipantContext(ix.Receiver())
 			if err != nil {
 				return nil, nil, err
 			}
 
-			contextHashes[ix.ToAddress()] = contextHash
+			contextHashes[ix.Receiver()] = contextHash
 		}
 
 		nodeSet[ktypes.ReceiverBehaviourSet] = behaviourSet
@@ -629,6 +636,7 @@ func (sm *StateManager) IsAccountRegistered(addr types.Address) (bool, error) {
 	if err != nil {
 		return true, errors.Wrap(types.ErrObjectNotFound, err.Error())
 	}
+
 	// Fetch the account info from genesis state
 	_, err = sargaObject.GetStorageEntry(SargaLogicID, addr.Bytes())
 	if errors.Is(err, types.ErrKeyNotFound) {
@@ -688,7 +696,7 @@ func (sm *StateManager) GetBalance(addrs types.Address, assetID types.AssetID) (
 	return stateObject.BalanceOf(assetID)
 }
 
-func (sm *StateManager) GetAccTypeUsingStateObject(address types.Address) (types.AccType, error) {
+func (sm *StateManager) GetAccTypeUsingStateObject(address types.Address) (types.AccountType, error) {
 	so, err := sm.GetDirtyObject(address)
 	if err != nil {
 		return 0, err
@@ -764,14 +772,7 @@ func (sm *StateManager) SetupNewAccount(info *gtypes.AccountSetupArgs) (types.Ha
 
 	if len(info.Assets) > 0 {
 		for _, asset := range info.Assets {
-			_, err := stateObject.CreateAsset(
-				asset.Dimension,
-				asset.IsFungible,
-				asset.IsMintable,
-				asset.Symbol,
-				asset.TotalSupply,
-				nil,
-			)
+			_, err := stateObject.CreateAsset(asset)
 			if err != nil {
 				return types.NilHash, types.NilHash, errors.Wrap(err, "failed to create an asset")
 			}

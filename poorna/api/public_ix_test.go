@@ -1,14 +1,18 @@
 package api
 
 import (
+	"encoding/hex"
+	"encoding/json"
 	"log"
+	"math/big"
 	"testing"
 
 	"github.com/sarvalabs/moichain/guna"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/common/tests"
-	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/types"
 )
@@ -23,24 +27,31 @@ func TestIx_SendInteraction(t *testing.T) {
 	stateManager := NewMockStateManager(t)
 	cfg := new(common.IxPoolConfig)
 	cfg.Mode = 0
-	cfg.PriceLimit = 100
+	cfg.PriceLimit = big.NewInt(100)
 
 	ixpool.setNonce(address, 5)
 	stateManager.setAccounts(address, 5)
 
 	ixAPI := NewPublicIXAPI(ixpool, stateManager, cfg)
 
+	assetPayload, err := json.Marshal(AssetCreationArgs{
+		Type:           types.AssetKindValue,
+		Symbol:         "GR",
+		Supply:         hex.EncodeToString(big.NewInt(100).Bytes()),
+		Dimension:      1,
+		IsFungible:     true,
+		IsMintable:     false,
+		IsTransferable: true,
+	})
+	if err != nil {
+		log.Panic(err)
+	}
+
 	expectedIxnArgs := SendIXArgs{
-		IxType:   1,
-		From:     address.String(),
-		AnuPrice: 100,
-		AssetCreation: AssetCreation{
-			Symbol:      "GR",
-			TotalSupply: 100,
-			IsFungible:  true,
-			IsMintable:  false,
-			Dimension:   1,
-		},
+		Type:      types.IxAssetCreate,
+		Sender:    address.String(),
+		FuelPrice: hex.EncodeToString(big.NewInt(100).Bytes()),
+		Payload:   assetPayload,
 	}
 
 	expectedIxns, err := constructInteraction(&expectedIxnArgs, 5)
@@ -51,38 +62,26 @@ func TestIx_SendInteraction(t *testing.T) {
 	testcases := []struct {
 		name        string
 		args        SendIXArgs
-		expected    types.Interactions
+		expected    *types.Interaction
 		expectedErr error
 	}{
 		{
 			name: "Invalid account",
 			args: SendIXArgs{
-				IxType:   1,
-				From:     "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
-				AnuPrice: 100,
-				AssetCreation: AssetCreation{
-					Symbol:      "GR",
-					TotalSupply: 100,
-					IsFungible:  true,
-					IsMintable:  false,
-					Dimension:   1,
-				},
+				Type:      1,
+				Sender:    "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+				FuelPrice: hex.EncodeToString(big.NewInt(100).Bytes()),
+				Payload:   assetPayload,
 			},
 			expectedErr: types.ErrInvalidAddress,
 		},
 		{
 			name: "Genesis account",
 			args: SendIXArgs{
-				IxType:   1,
-				From:     genesisAddress.String(),
-				AnuPrice: 100,
-				AssetCreation: AssetCreation{
-					Symbol:      "GR",
-					TotalSupply: 100,
-					IsFungible:  true,
-					IsMintable:  false,
-					Dimension:   1,
-				},
+				Type:      1,
+				Sender:    genesisAddress.String(),
+				FuelPrice: hex.EncodeToString(big.NewInt(100).Bytes()),
+				Payload:   assetPayload,
 			},
 			expectedErr: ErrGenesisAccount,
 		},
@@ -95,13 +94,13 @@ func TestIx_SendInteraction(t *testing.T) {
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(testing *testing.T) {
-			ixns, err := ixAPI.SendInteraction(&testcase.args)
+			ixn, err := ixAPI.SendInteraction(&testcase.args)
 			if testcase.expectedErr != nil {
 				require.Error(t, err)
 				require.Equal(t, testcase.expectedErr, err)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, testcase.expected[0], ixns[0])
+				require.Equal(t, testcase.expected, ixn)
 			}
 		})
 	}

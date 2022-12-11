@@ -21,7 +21,7 @@ type ChainManager interface {
 	GetTesseract(hash types.Hash, withInteractions bool) (*types.Tesseract, error)
 	GetReceipt(addr types.Address, ixHash types.Hash) (*types.Receipt, error)
 	GetTesseractByHeight(address types.Address, height uint64, withInteractions bool) (*types.Tesseract, error)
-	GetAssetDataByAssetHash(assetHash []byte) (*gtypes.AssetData, error)
+	GetAssetDataByAssetHash(assetHash []byte) (*gtypes.AssetObject, error)
 }
 
 type StateManager interface {

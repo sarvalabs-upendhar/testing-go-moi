@@ -12,10 +12,11 @@ import (
 
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/stretchr/testify/require"
+
 	gtypes "github.com/sarvalabs/moichain/guna/types"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/types"
-	"github.com/stretchr/testify/require"
 )
 
 func RandomAddress(t *testing.T) types.Address {
@@ -216,7 +217,7 @@ func GetRandomUpperCaseString(t *testing.T, length int) (string, error) {
 	return string(randomString), nil
 }
 
-func getRandomAssetInfo(t *testing.T) (*types.AssetInfo, error) {
+func getRandomAssetInfo(t *testing.T) (*types.AssetDescriptor, error) {
 	t.Helper()
 
 	symbol, err := GetRandomUpperCaseString(t, 5)
@@ -224,20 +225,20 @@ func getRandomAssetInfo(t *testing.T) (*types.AssetInfo, error) {
 		return nil, err
 	}
 
-	asset := &types.AssetInfo{
-		Owner:       RandomAddress(t).String(),
-		Dimension:   1,
-		TotalSupply: 1000,
-		Symbol:      symbol,
-		IsFungible:  true,
-		IsMintable:  false,
-		LogicID:     types.LogicID(RandomHash(t).String()),
+	asset := &types.AssetDescriptor{
+		Owner:      RandomAddress(t),
+		Dimension:  1,
+		Supply:     big.NewInt(1000),
+		Symbol:     symbol,
+		IsFungible: true,
+		IsMintable: false,
+		LogicID:    types.LogicID(RandomHash(t).String()),
 	}
 
 	return asset, nil
 }
 
-func CreateTestAsset(t *testing.T, address types.Address) (types.AssetID, *types.AssetInfo) {
+func CreateTestAsset(t *testing.T, address types.Address) (types.AssetID, *types.AssetDescriptor) {
 	t.Helper()
 
 	asset, err := getRandomAssetInfo(t)
@@ -245,15 +246,8 @@ func CreateTestAsset(t *testing.T, address types.Address) (types.AssetID, *types
 		log.Panic("Failed to create asset")
 	}
 
-	assetID, _, _, err := gtypes.GetAssetID(
-		address,
-		asset.Dimension,
-		asset.IsFungible,
-		asset.IsMintable,
-		asset.Symbol,
-		asset.TotalSupply,
-		asset.LogicID,
-	)
+	asset.Owner = address
+	assetID, _, _, err := gtypes.GetAssetID(asset)
 	require.NoError(t, err)
 
 	return assetID, asset
@@ -267,15 +261,8 @@ func GetRandomAssetID(t *testing.T, address types.Address) types.AssetID {
 		log.Panic("Failed to create asset")
 	}
 
-	assetID, _, _, err := gtypes.GetAssetID(
-		address,
-		asset.Dimension,
-		asset.IsFungible,
-		asset.IsMintable,
-		asset.Symbol,
-		asset.TotalSupply,
-		asset.LogicID,
-	)
+	asset.Owner = address
+	assetID, _, _, err := gtypes.GetAssetID(asset)
 	require.NoError(t, err)
 
 	return assetID

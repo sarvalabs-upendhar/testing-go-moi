@@ -8,6 +8,7 @@ import (
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
 	"github.com/hashicorp/go-hclog"
+
 	"github.com/sarvalabs/moichain/ixpool"
 	"github.com/sarvalabs/moichain/lattice"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
@@ -119,6 +120,8 @@ func (eh *SubHandler) newPeerLoop() {
 				// Handle messages from the peer
 				for {
 					if err := eh.handlePeerMessage(peer); err != nil {
+						eh.logger.Error("Error handling peer message", err)
+
 						return
 					}
 				}
@@ -153,28 +156,23 @@ func (eh *SubHandler) handlePeerMessage(p *KipPeer) error {
 		eh.logger.Info("Received Interactions from", "id", p.id)
 
 		// Unmarshal message proto into an InteractionsData message
-		ixns := new(ptypes.InteractionMsg)
+		var ixns types.Interactions
 		if err := ixns.FromBytes(message.Payload); err != nil {
 			return err
 		}
 
 		// Mark the interactions in the message as 'known' by the peer
-		for _, v := range ixns.Ixs {
-			ixHash, err := v.GetIxHash()
-			if err != nil {
-				return err
-			}
-
-			p.markInteraction(ixHash)
+		for _, v := range ixns {
+			p.markInteraction(v.Hash())
 		}
 
 		// Add the interactions to the handler's interaction pool
-		errs := eh.ixpool.AddInteractions(ixns.Ixs)
+		errs := eh.ixpool.AddInteractions(ixns)
 		for index, err := range errs {
 			if err != nil {
-				ixHash, ixHashErr := ixns.Ixs[index].GetIxHash()
-				if ixHashErr != nil {
-					eh.logger.Error("Unable to create interaction hash", "hash", ixHash, "error", ixHashErr)
+				ixHash := ixns[index].Hash()
+				if ixHash.IsNil() {
+					eh.logger.Error("Unable to create interaction hash", "hash", ixHash)
 
 					return nil
 				}
@@ -185,7 +183,7 @@ func (eh *SubHandler) handlePeerMessage(p *KipPeer) error {
 			}
 		}
 
-		if err := eh.broadcastIXs(ixns.Ixs); err != nil {
+		if err := eh.broadcastIXs(ixns); err != nil {
 			eh.logger.Error("Failed to broadcast interactions", "error", err)
 		}
 
@@ -218,19 +216,16 @@ func (eh *SubHandler) broadcastIXs(ixs []*types.Interaction) error {
 	peerIxSet := make(map[*KipPeer][]*types.Interaction)
 
 	for _, ix := range ixs {
-		// Identify the peers in the handler's working set that do not know of the interaction
-		ixHash, err := ix.GetIxHash()
-		if err != nil {
-			return err
-		}
+		ixhash := ix.Hash()
 
-		peers := eh.peers.PeersWithoutIX(ixHash)
+		// Identify the peers in the handler's working set that do not know of the interaction
+		peers := eh.peers.PeersWithoutIX(ixhash)
 		for _, peer := range peers {
 			// Add the peer and the interaction it does not know about to the peerIxSet
 			peerIxSet[peer] = append(peerIxSet[peer], ix)
 		}
 		// Log the Interaction broadcast
-		fmt.Printf("Broadcasting Interaction %s ", ixHash)
+		fmt.Printf("Broadcasting Interaction %s ", ixhash)
 	}
 
 	// FIXME: Include the following line of code

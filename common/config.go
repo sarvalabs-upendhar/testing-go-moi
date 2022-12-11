@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"math/big"
 	"net"
 	"time"
 
@@ -50,7 +51,7 @@ type ExecutionConfig struct {
 
 type IxPoolConfig struct {
 	Mode       int
-	PriceLimit uint64
+	PriceLimit *big.Int
 }
 
 // NetworkConfig is the p2p configuration of the node
@@ -129,7 +130,7 @@ func DefaultConfig(path string) *Config {
 		},
 		IxPool: &IxPoolConfig{
 			Mode:       0,
-			PriceLimit: 10,
+			PriceLimit: big.NewInt(10),
 		},
 		Metrics: Telemetry{
 			PrometheusAddr: nil,
