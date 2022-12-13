@@ -320,7 +320,7 @@ func createTestHashTreeWithEntries(
 ) *KramaHashTree {
 	t.Helper()
 
-	hashTree, err := NewKramaHashTree(address, types.NilHash, db, blake256.New())
+	hashTree, err := NewKramaHashTree(address, types.NilHash, db, blake256.New(), dhruva.Storage)
 	require.NoError(t, err)
 
 	for k, v := range entries {

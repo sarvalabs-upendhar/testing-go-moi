@@ -112,7 +112,13 @@ func (ix Interaction) Sender() Address {
 
 // Receiver returns the Address of the Interaction receiver.
 func (ix Interaction) Receiver() Address {
-	return ix.inner.Input.Receiver
+	// Based on the interaction type return the address
+	switch ix.Type() {
+	case IxLogicExecute, IxLogicDeploy:
+		return ix.payload.logic.Logic.Address()
+	default:
+		return ix.inner.Input.Receiver
+	}
 }
 
 // Nonce returns the account nonce of the Interaction sender
@@ -141,6 +147,24 @@ func (ix *Interaction) GetAssetPayload() (*AssetPayload, error) {
 	ix.payload = &IxPayload{asset: assetPayload}
 	// Return the AssetPayload
 	return assetPayload, nil
+}
+
+func (ix *Interaction) GetLogicPayload() (*LogicPayload, error) {
+	// If payload has been decoded, return the logic form
+	if ix.payload != nil {
+		return ix.payload.logic, nil
+	}
+
+	// Decode the payload bytes from IxInput into an LogicPayload
+	logicPayload := new(LogicPayload)
+	if err := logicPayload.FromBytes(ix.inner.Input.Payload); err != nil {
+		return nil, errors.Wrap(err, "invalid payload")
+	}
+
+	// Create a new IxPayload with an asset form
+	ix.payload = &IxPayload{logic: logicPayload}
+	// Return the AssetPayload
+	return logicPayload, nil
 }
 
 func (ix Interaction) FuelPrice() *big.Int {

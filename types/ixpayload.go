@@ -80,17 +80,31 @@ type FilePayload struct {
 }
 
 type LogicPayload struct {
+	// Logic specifies the Logic ID to execute a method on. Only required for Execute and Upgrade
+	Logic LogicID
+	// Callsite specifies the method name to execute. Only required for Execute
+	Callsite string
+	// Calldata specifies the input call data. Only required for Execute and Deploy
+	Calldata []byte
+	// Deploy contains the payload for IxLogicDeploy
+	Deploy *LogicDeployPayload
+}
+
+func (logic *LogicPayload) FromBytes(data []byte) error {
+	if err := polo.Depolorize(logic, data); err != nil {
+		return errors.Wrap(err, "failed to depolorize logic payload")
+	}
+
+	return nil
+}
+
+type LogicDeployPayload struct {
 	// Type specifies the type of Logic. Only required for Deploy
 	Type LogicKind
 	// IsStateful specifies if the Logic is stateful. Only required for Deploy
 	IsStateful bool
+	// IsInteractive specifies if the Logic is interactive. Only required for Deploy
+	IsInteractive bool
 	// Manifest specifies some Logic manifest artifact. Only required for Deploy and Upgrade
 	Manifest []byte
-
-	// Logic specifies the Logic ID to execute a method on. Only required for Execute and Upgrade
-	Logic LogicID
-	// Callpoint specifies the method name to execute. Only required for Execute
-	Callpoint string
-	// Calldata specifies the input call data. Only required for Execute and Deploy
-	Calldata []byte
 }

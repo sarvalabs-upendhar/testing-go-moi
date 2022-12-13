@@ -43,9 +43,10 @@ func NewKramaHashTree(
 	root types.Hash,
 	db persistentDB,
 	hasher hash.Hash,
+	dataType dhruva.Prefix,
 ) (*KramaHashTree, error) {
 	kht := &KramaHashTree{
-		db:     NewTreeDB(address, dhruva.Storage, db),
+		db:     NewTreeDB(address, dataType, db),
 		hasher: hasher,
 		root: &rootNode{
 			MerkleRoot: types.NilHash,
@@ -156,7 +157,7 @@ func (kht *KramaHashTree) Commit() error {
 	}
 
 	if kht.root.HashTable != types.NilHash {
-		if err := kht.db.Set(kht.root.HashTable.Bytes(), deltaInfo); err != nil {
+		if err = kht.db.Set(kht.root.HashTable.Bytes(), deltaInfo); err != nil {
 			return errors.Wrap(err, "failed to write delta info to db")
 		}
 	}

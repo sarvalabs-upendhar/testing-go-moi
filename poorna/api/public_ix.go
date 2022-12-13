@@ -3,40 +3,30 @@ package api
 import (
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"math/big"
 
+	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/moichain/utils"
 
 	"github.com/sarvalabs/moichain/guna"
 
-	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/types"
 )
 
-const (
-	txMaxSize = 128 * 1024 // 128Kb
-)
-
-var (
-	ErrNonceTooLow    = errors.New("nonce too low")
-	ErrOversizedData  = errors.New("over sized data")
-	ErrGenesisAccount = errors.New("genesis account interactions forbidden")
-)
+var ErrGenesisAccount = errors.New("genesis account interactions forbidden")
 
 // PublicIXAPI is a struct that represents a wrapper for the public interaction APIs.
 type PublicIXAPI struct {
 	// Represents the API backend
 	ixpool IxPool
 	sm     StateManager
-	cfg    *common.IxPoolConfig
 }
 
-func NewPublicIXAPI(ixpool IxPool, sm StateManager, cfg *common.IxPoolConfig) *PublicIXAPI {
+func NewPublicIXAPI(ixpool IxPool, sm StateManager) *PublicIXAPI {
 	// Create the public interaction API wrapper and return it
-	return &PublicIXAPI{ixpool, sm, cfg}
+	return &PublicIXAPI{ixpool, sm}
 }
 
 // SendInteraction is a method of PublicIXAPI that stores the interaction
@@ -56,17 +46,12 @@ func (p *PublicIXAPI) SendInteraction(args *SendIXArgs) (*types.Interaction, err
 		return nil, err
 	}
 
-	err = validateInteraction(ixn, p)
-	if err != nil {
-		return nil, err
-	}
-
 	// Call the following method to add interactions to pool
 	return ixn, p.ixpool.AddInteractions(types.Interactions{ixn})[0]
 }
 
 // helper function
-func constructInteraction(args *SendIXArgs, nonce uint64) (*types.Interaction, error) {
+func constructInteraction(args *SendIXArgs, nonce uint64) (ix *types.Interaction, err error) {
 	data := types.IxData{
 		Input: types.IxInput{
 			Type:           args.Type,
@@ -92,42 +77,22 @@ func constructInteraction(args *SendIXArgs, nonce uint64) (*types.Interaction, e
 		}
 
 	case types.IxAssetCreate:
-		payloadArgs := new(AssetCreationArgs)
-		if err := json.Unmarshal(args.Payload, payloadArgs); err != nil {
-			return nil, err
-		}
-
-		supplyData, err := hex.DecodeString(payloadArgs.Supply)
+		data.Input.Payload, err = GetRawIXPayloadForAssetCreation(args.Payload)
 		if err != nil {
 			return nil, err
 		}
 
-		createPayload := &types.AssetCreatePayload{
-			Type:   payloadArgs.Type,
-			Symbol: payloadArgs.Symbol,
-			Supply: new(big.Int).SetBytes(supplyData),
-
-			Dimension: payloadArgs.Dimension,
-			Decimals:  payloadArgs.Decimals,
-
-			IsFungible:     payloadArgs.IsFungible,
-			IsMintable:     payloadArgs.IsMintable,
-			IsTransferable: payloadArgs.IsTransferable,
-
-			LogicID: types.LogicID(payloadArgs.LogicID),
-			// LogicCode: payloadArgs.LogicCode,
-		}
-
-		assetPayload := types.AssetPayload{
-			Create: createPayload,
-		}
-
-		payloadData, err := polo.Polorize(assetPayload)
+	case types.IxLogicDeploy:
+		data.Input.Payload, err = GetRawIXPayloadForLogicDeploy(args.Payload, nonce, data.Input.Sender)
 		if err != nil {
 			return nil, err
 		}
 
-		data.Input.Payload = payloadData
+	case types.IxLogicExecute:
+		data.Input.Payload, err = GetRawIXPayloadForLogicExecute(args.Payload)
+		if err != nil {
+			return nil, err
+		}
 
 	default:
 		return nil, errors.New("invalid interaction type")
@@ -165,26 +130,86 @@ func validateArguments(args *SendIXArgs, p *PublicIXAPI) error {
 	return nil
 }
 
-func validateInteraction(ix *types.Interaction, p *PublicIXAPI) error {
-	// Check the interaction size to overcome DOS Attacks
-	ixSize, err := ix.Size()
+func GetRawIXPayloadForAssetCreation(jsonPayload []byte) ([]byte, error) {
+	payloadArgs := new(AssetCreationArgs)
+	if err := json.Unmarshal(jsonPayload, payloadArgs); err != nil {
+		return nil, err
+	}
+
+	supplyData, err := hex.DecodeString(payloadArgs.Supply)
 	if err != nil {
-		return err
+		return nil, errors.New("failed to decode supply")
 	}
 
-	if ixSize > txMaxSize {
-		return ErrOversizedData
+	createPayload := &types.AssetCreatePayload{
+		Type:   payloadArgs.Type,
+		Symbol: payloadArgs.Symbol,
+		Supply: new(big.Int).SetBytes(supplyData),
+
+		Dimension: payloadArgs.Dimension,
+		Decimals:  payloadArgs.Decimals,
+
+		IsFungible:     payloadArgs.IsFungible,
+		IsMintable:     payloadArgs.IsMintable,
+		IsTransferable: payloadArgs.IsTransferable,
+
+		LogicID: types.LogicID(payloadArgs.LogicID),
+		// LogicCode: payloadArgs.LogicCode,
 	}
 
-	// Reject underpriced transactions
-	if ix.IsUnderpriced(p.cfg.PriceLimit) {
-		return types.ErrUnderpriced
+	assetPayload := &types.AssetPayload{
+		Create: createPayload,
 	}
 
-	// Check nonce ordering
-	if n, _ := p.sm.GetLatestNonce(ix.Sender()); n > ix.Nonce() {
-		return ErrNonceTooLow
+	return polo.Polorize(assetPayload)
+}
+
+func GetRawIXPayloadForLogicDeploy(jsonPayload []byte, nonce uint64, sender types.Address) ([]byte, error) {
+	payload := new(LogicDeployArgs)
+	if err := json.Unmarshal(jsonPayload, payload); err != nil {
+		return nil, err
 	}
 
-	return nil
+	if len(payload.Manifest) == 0 {
+		return nil, types.ErrEmptyManifest
+	}
+
+	// FIXME: It is not appropriate to generate logicID here
+	logicID, err := types.NewLogicIDv0(
+		payload.Type,
+		payload.IsStateFul,
+		0,
+		utils.NewAccountAddress(nonce, sender),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	deployPayload := &types.LogicPayload{
+		Logic:    logicID,
+		Calldata: payload.CallData,
+		Deploy: &types.LogicDeployPayload{
+			Type:          payload.Type,
+			IsStateful:    payload.IsStateFul,
+			IsInteractive: payload.IsInteractive,
+			Manifest:      payload.Manifest,
+		},
+	}
+
+	return polo.Polorize(deployPayload)
+}
+
+func GetRawIXPayloadForLogicExecute(jsonPayload []byte) ([]byte, error) {
+	payload := new(LogicExecuteArgs)
+	if err := json.Unmarshal(jsonPayload, payload); err != nil {
+		return nil, err
+	}
+
+	logicExecPayload := &types.LogicPayload{
+		Logic:    types.FromHex(payload.LogicID),
+		Callsite: payload.CallSite,
+		Calldata: payload.CallData,
+	}
+
+	return polo.Polorize(logicExecPayload)
 }

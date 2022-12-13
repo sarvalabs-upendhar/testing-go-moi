@@ -39,6 +39,11 @@ type InteractionCountArgs struct {
 	Status bool   `json:"status"`
 }
 
+type GetStorageArgs struct {
+	LogicID    string `json:"logic_id"`
+	StorageKey string `json:"storage-key"`
+}
+
 // BalArgs is a struct that represents an argument wrapper for retrieving balance of an asset
 type BalArgs struct {
 	// Represents the address for which to retrieve the balance
@@ -81,6 +86,20 @@ type AssetCreationArgs struct {
 
 	LogicID string `json:"logic_id,omitempty"`
 	// LogicCode []byte `json:"logic_code,omitempty"`
+}
+
+type LogicDeployArgs struct {
+	Type          types.LogicKind `json:"type"`
+	IsStateFul    bool            `json:"is_stateful"`
+	IsInteractive bool            `json:"is_interactive"`
+	Manifest      []byte          `json:"manifest"`
+	CallData      []byte          `json:"calldata"`
+}
+
+type LogicExecuteArgs struct {
+	LogicID  string `json:"logic_id"`
+	CallSite string `json:"callsite"`
+	CallData []byte `json:"calldata"`
 }
 
 // Response is a struct that represents a response wrapper

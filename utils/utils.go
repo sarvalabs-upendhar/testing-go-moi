@@ -4,6 +4,7 @@ package utils
 This file has all the utility function required for KIP
 */
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -242,4 +243,14 @@ func KramaIDToString(peers []id.KramaID) []string {
 	}
 
 	return ids
+}
+
+func NewAccountAddress(nonce uint64, address types.Address) types.Address {
+	rawBytes := make([]byte, 40)
+	binary.BigEndian.PutUint64(rawBytes, nonce)
+	copy(rawBytes[8:], address.Bytes())
+
+	types.GetHash(rawBytes)
+
+	return types.BytesToAddress(types.GetHash(rawBytes).Bytes())
 }

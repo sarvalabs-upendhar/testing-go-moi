@@ -12,6 +12,8 @@ import (
 	maddr "github.com/multiformats/go-multiaddr"
 )
 
+var DefaultIxPriceLimit = big.NewInt(10)
+
 type Config struct {
 	NodeType       int
 	KramaIDVersion int
@@ -130,7 +132,7 @@ func DefaultConfig(path string) *Config {
 		},
 		IxPool: &IxPoolConfig{
 			Mode:       0,
-			PriceLimit: big.NewInt(10),
+			PriceLimit: DefaultIxPriceLimit,
 		},
 		Metrics: Telemetry{
 			PrometheusAddr: nil,

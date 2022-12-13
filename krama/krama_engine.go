@@ -260,6 +260,7 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID types.Cluster
 		reqMsg,
 		randomNodesReceiverChan,
 	)
+
 	go k.sendICSRequest(
 		ctx,
 		ktypes.SenderRandomSet,
@@ -734,40 +735,42 @@ func (k *Engine) fetchIxAccounts(ctx context.Context, ix *types.Interaction) (kt
 		accounts[ix.Sender()] = accInfo
 	}
 
-	if !ix.Receiver().IsNil() {
-		accountRegistered, err := k.state.IsAccountRegistered(ix.Receiver())
-		if err != nil {
-			return nil, err
-		}
-
-		if !accountRegistered {
-			genesisAccInfo, err := k.state.GetAccountMetaInfo(guna.SargaAddress)
-			if err != nil {
-				return nil, err
-			}
-
-			acc := &types.AccountMetaInfo{
-				Address:       ix.Sender(),
-				Type:          types.RegularAccount,
-				TesseractHash: types.NilHash,
-				LatticeExists: true,
-				StateExists:   true,
-				Height:        big.NewInt(-1),
-			}
-
-			accounts[guna.SargaAddress] = genesisAccInfo
-			accounts[ix.Receiver()] = acc
-
-			return accounts, nil
-		}
-
-		accInfo, err := k.state.GetAccountMetaInfo(ix.Sender())
-		if err != nil {
-			return nil, err
-		}
-
-		accounts[ix.Receiver()] = accInfo
+	if ix.Receiver().IsNil() {
+		return accounts, nil
 	}
+
+	accountRegistered, err := k.state.IsAccountRegistered(ix.Receiver())
+	if err != nil {
+		return nil, err
+	}
+
+	if !accountRegistered {
+		genesisAccInfo, err := k.state.GetAccountMetaInfo(guna.SargaAddress)
+		if err != nil {
+			return nil, err
+		}
+
+		acc := &types.AccountMetaInfo{
+			Address:       ix.Sender(),
+			Type:          types.AccTypeFromIxType(ix.Type()),
+			TesseractHash: types.NilHash,
+			LatticeExists: true,
+			StateExists:   true,
+			Height:        big.NewInt(-1),
+		}
+
+		accounts[guna.SargaAddress] = genesisAccInfo
+		accounts[ix.Receiver()] = acc
+
+		return accounts, nil
+	}
+
+	accInfo, err := k.state.GetAccountMetaInfo(ix.Receiver())
+	if err != nil {
+		return nil, err
+	}
+
+	accounts[ix.Receiver()] = accInfo
 
 	return accounts, nil
 }

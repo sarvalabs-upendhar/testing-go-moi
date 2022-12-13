@@ -1,7 +1,12 @@
 package utils
 
 import (
+	"encoding/binary"
+	"math/rand"
 	"testing"
+
+	"github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/moichain/types"
 
 	"github.com/stretchr/testify/require"
 )
@@ -197,4 +202,17 @@ func TestValidateAssetID(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewAccountAddress(t *testing.T) {
+	randNonce := rand.Uint64()
+	randAddress := tests.RandomAddress(t)
+
+	rawBytes := make([]byte, 40)
+	binary.BigEndian.PutUint64(rawBytes, randNonce)
+	copy(rawBytes[8:], randAddress.Bytes())
+
+	generatedAddress := NewAccountAddress(randNonce, randAddress)
+
+	require.Equal(t, generatedAddress.Bytes(), types.GetHash(rawBytes).Bytes())
 }

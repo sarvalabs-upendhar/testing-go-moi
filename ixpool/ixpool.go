@@ -5,6 +5,8 @@ import (
 	"log"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/moichain/utils"
 
 	"github.com/hashicorp/go-hclog"
@@ -24,12 +26,15 @@ const (
 
 type stateManager interface {
 	GetLatestNonce(addr types.Address) (uint64, error)
+	IsAccountRegistered(addr types.Address) (bool, error)
+	IsLogicRegistered(logicID types.LogicID) error
 }
 
 type IxConfig struct {
 	Mode       int
 	PriceLimit uint64
 }
+
 type IxPool struct {
 	ctx          context.Context
 	ctxCancel    context.CancelFunc
@@ -377,7 +382,31 @@ func (i *IxPool) validateIx(ix *types.Interaction) error {
 		}
 	*/
 
+	switch ix.Type() {
+	case types.IxLogicDeploy:
+		return i.validateLogicDeployPayload(ix)
+	case types.IxLogicExecute:
+		return i.validateLogicExecutePayload(ix)
+	}
+
 	return nil
+}
+
+func (i *IxPool) validateLogicDeployPayload(ix *types.Interaction) error {
+	if accountRegistered, err := i.sm.IsAccountRegistered(ix.Receiver()); err != nil || accountRegistered {
+		return errors.New("account registered")
+	}
+
+	return nil
+}
+
+func (i *IxPool) validateLogicExecutePayload(ix *types.Interaction) error {
+	payload, err := ix.GetLogicPayload()
+	if err != nil {
+		return err
+	}
+
+	return i.sm.IsLogicRegistered(payload.Logic)
 }
 
 func (i *IxPool) handleRequests() {

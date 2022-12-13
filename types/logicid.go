@@ -3,8 +3,6 @@ package types
 import (
 	"encoding/binary"
 	"encoding/hex"
-
-	"github.com/pkg/errors"
 )
 
 // LogicID is a unique identifier for a callable logic at a specific logic address.
@@ -25,7 +23,7 @@ func NewLogicIDv0(kind LogicKind, stateful bool, edition uint16, address Address
 
 	// Error if logic kind value is greater than 7 (3 bit space)
 	if kind > 0x7 {
-		return nil, errors.New("cannot construct logic ID for invalid logic kind")
+		return nil, ErrInvalidLogicID
 	}
 
 	// Set the logic kind to the lowest 3 bits. This is

@@ -7,7 +7,7 @@ type PublicAPI struct {
 
 func NewPublicAPI(backend *Backend) *PublicAPI {
 	return &PublicAPI{
-		IxAPI:   NewPublicIXAPI(backend.ixpool, backend.sm, backend.cfg),
+		IxAPI:   NewPublicIXAPI(backend.ixpool, backend.sm),
 		CoreAPI: NewPublicCoreAPI(backend.chain, backend.sm),
 	}
 }

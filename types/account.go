@@ -105,7 +105,7 @@ func (agi *AccountGenesisInfo) FromBytes(bytes []byte) error {
 
 func AccTypeFromIxType(ixType IxType) AccountType {
 	switch ixType {
-	case 2:
+	case IxLogicDeploy:
 		return ContractAccount
 	default:
 		return RegularAccount

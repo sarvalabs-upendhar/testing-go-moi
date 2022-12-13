@@ -16,10 +16,6 @@ import (
 	"github.com/sarvalabs/moichain/types"
 )
 
-type MockStateManager struct {
-	acc map[types.Address]uint64
-}
-
 func CreateIxpool(cfgCallback func(cfg *common.IxPoolConfig)) *IxPool {
 	ctx := context.Background()
 	eventMux := new(utils.TypeMux)
@@ -32,10 +28,6 @@ func CreateIxpool(cfgCallback func(cfg *common.IxPoolConfig)) *IxPool {
 	}
 
 	return NewIxPool(ctx, hclog.NewNullLogger(), eventMux, mockChain, cfg, metrics)
-}
-
-func (mc *MockStateManager) GetLatestNonce(addr types.Address) (uint64, error) {
-	return mc.acc[addr], nil
 }
 
 func TestIxPool_IncrementWaitTime_InvalidAccount(t *testing.T) {

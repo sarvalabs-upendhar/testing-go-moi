@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/moichain/guna"
 
 	"github.com/stretchr/testify/require"
@@ -23,8 +25,8 @@ func TestIx_SendInteraction(t *testing.T) {
 
 	address := tests.RandomAddress(t)
 	genesisAddress := guna.SargaAddress
-	ixpool := NewIxPool()
-	stateManager := NewMockStateManager(t)
+	ixpool := NewMockIxPool()
+	stateManager := NewMockStateManager()
 	cfg := new(common.IxPoolConfig)
 	cfg.Mode = 0
 	cfg.PriceLimit = big.NewInt(100)
@@ -32,7 +34,7 @@ func TestIx_SendInteraction(t *testing.T) {
 	ixpool.setNonce(address, 5)
 	stateManager.setAccounts(address, 5)
 
-	ixAPI := NewPublicIXAPI(ixpool, stateManager, cfg)
+	ixAPI := NewPublicIXAPI(ixpool, stateManager)
 
 	assetPayload, err := json.Marshal(AssetCreationArgs{
 		Type:           types.AssetKindValue,
@@ -71,7 +73,7 @@ func TestIx_SendInteraction(t *testing.T) {
 				Type:      1,
 				Sender:    "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
 				FuelPrice: hex.EncodeToString(big.NewInt(100).Bytes()),
-				Payload:   assetPayload,
+				Payload:   nil,
 			},
 			expectedErr: types.ErrInvalidAddress,
 		},
@@ -81,7 +83,7 @@ func TestIx_SendInteraction(t *testing.T) {
 				Type:      1,
 				Sender:    genesisAddress.String(),
 				FuelPrice: hex.EncodeToString(big.NewInt(100).Bytes()),
-				Payload:   assetPayload,
+				Payload:   nil,
 			},
 			expectedErr: ErrGenesisAccount,
 		},
@@ -101,6 +103,86 @@ func TestIx_SendInteraction(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, testcase.expected, ixn)
+			}
+		})
+	}
+}
+
+func TestGetRawIXPayloadForLogicDeploy(t *testing.T) {
+	nonce := uint64(0)
+	address := tests.RandomAddress(t)
+
+	tableTests := []struct {
+		name               string
+		deployArgsCallback func(args *LogicDeployArgs)
+		error              error
+	}{
+		{
+			name: "should fail for empty manifest",
+			deployArgsCallback: func(args *LogicDeployArgs) {
+				args.Manifest = nil
+			},
+			error: types.ErrEmptyManifest,
+		},
+		{
+			name: "should fail for invalid logicType",
+			deployArgsCallback: func(args *LogicDeployArgs) {
+				args.Type = 12 // type > 7 is not valid
+			},
+			error: types.ErrInvalidLogicID,
+		},
+		{
+			name:               "should pass for valid data",
+			deployArgsCallback: nil,
+			error:              nil,
+		},
+	}
+
+	for _, test := range tableTests {
+		t.Run(test.name, func(t *testing.T) {
+			// Create test payload
+			jsonPayload, poloPayload := GetTestLogicDeployPayload(t, nonce, address, test.deployArgsCallback)
+			obtainedPayload, err := GetRawIXPayloadForLogicDeploy(jsonPayload, nonce, address)
+			if test.error != nil {
+				require.ErrorContains(t, err, test.error.Error())
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, poloPayload, obtainedPayload)
+			}
+		})
+	}
+}
+
+func TestGetRawIXPayloadForAssetCreation(t *testing.T) {
+	tableTests := []struct {
+		name                  string
+		assetCreationCallback func(args *AssetCreationArgs)
+		error                 error
+	}{
+		{
+			name: "should fail for invalid supply",
+			assetCreationCallback: func(args *AssetCreationArgs) {
+				args.Supply = "h123"
+			},
+			error: errors.New("failed to decode supply"),
+		},
+		{
+			name:                  "should pass for valid data",
+			assetCreationCallback: nil,
+			error:                 nil,
+		},
+	}
+
+	for _, test := range tableTests {
+		t.Run(test.name, func(t *testing.T) {
+			// Create test payload
+			jsonPayload, poloPayload := GetTestIxCreationPayload(t, test.assetCreationCallback)
+			obtainedPayload, err := GetRawIXPayloadForAssetCreation(jsonPayload)
+			if err != nil {
+				require.ErrorContains(t, err, test.error.Error())
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, poloPayload, obtainedPayload)
 			}
 		})
 	}

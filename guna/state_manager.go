@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/sarvalabs/moichain/guna/tree"
+
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/utils"
 
@@ -40,6 +42,7 @@ const (
 type server interface {
 	Subscribe(ctx context.Context, topic string, handler func(msg *pubsub.Message) error) error
 }
+
 type Senatus interface {
 	AddNewPeer(key id.KramaID, data *ReputationInfo) error
 	UpdateAddress(key id.KramaID, addrs []string) error
@@ -150,15 +153,19 @@ func (sm *StateManager) CreateDirtyObject(addr types.Address, accType types.Acco
 func (sm *StateManager) FlushDirtyObject(addrs types.Address) error {
 	so, err := sm.GetDirtyObject(addrs)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to fetch state object")
 	}
 
-	if err := so.flushActiveStorageTreesToDB(); err != nil {
+	if err = so.flushLogicTree(); err != nil {
+		return errors.Wrap(err, "failed to fetch logic tree")
+	}
+
+	if err = so.flushActiveStorageTrees(); err != nil {
 		return errors.Wrap(err, "failed to flush active storage trees")
 	}
 
 	for k, v := range so.GetDirtyStorage() {
-		if err = sm.db.CreateEntry(types.Hex2Bytes(k), v); err != nil {
+		if err = sm.db.CreateEntry(types.FromHex(k), v); err != nil {
 			return errors.Wrap(err, "failed to write dirty entries")
 		}
 	}
@@ -240,6 +247,54 @@ func (sm *StateManager) DeleteStateObject(addr types.Address) {
 	sm.cleanupDirtyObject(addr)
 }
 
+func (sm *StateManager) GetLatestTesseract(addr types.Address, withInteractions bool) (*types.Tesseract, error) {
+	tesseractHash, err := sm.getLatestTesseractHash(addr)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to fetch latest tesseract hash")
+	}
+
+	return sm.getTesseractByHash(tesseractHash, withInteractions)
+}
+
+func (sm *StateManager) FetchTesseractFromDB(hash types.Hash, withInteractions bool) (*types.Tesseract, error) {
+	// Fetch Tesseract from DB
+	buf, err := sm.db.GetTesseract(hash)
+	if err != nil {
+		return nil, err
+	}
+
+	// canonicalTesseract is a clone of the tesseract. The only difference is that it won't have the interactions field.
+	canonicalTesseract := new(types.CanonicalTesseract)
+
+	if err = canonicalTesseract.FromBytes(buf); err != nil {
+		return nil, errors.Wrap(err, "failed to depolorize tesseract")
+	}
+
+	interactions := new(types.Interactions)
+
+	if withInteractions {
+		// Fetch interactions from DB
+		buf, err = sm.db.GetInteractions(canonicalTesseract.Body.InteractionHash)
+
+		if err != nil {
+			return nil, errors.Wrap(err, types.ErrFetchingInteractions.Error())
+		}
+
+		if err := interactions.FromBytes(buf); err != nil {
+			return nil, errors.Wrap(err, "failed to depolarize interactions")
+		}
+	}
+
+	tesseract := &types.Tesseract{
+		Header: canonicalTesseract.Header,
+		Body:   canonicalTesseract.Body,
+		Ixns:   *interactions,
+		Seal:   canonicalTesseract.Seal,
+	}
+
+	return tesseract, nil
+}
+
 func (sm *StateManager) getLatestTesseractHash(addr types.Address) (types.Hash, error) {
 	if addr.IsNil() {
 		return types.NilHash, types.ErrInvalidAddress
@@ -284,56 +339,6 @@ func (sm *StateManager) getTesseractByHash(hash types.Hash, withInteractions boo
 	}
 
 	return ts, nil
-}
-
-func (sm *StateManager) GetLatestTesseract(addr types.Address, withInteractions bool) (*types.Tesseract, error) {
-	sm.logger.Debug("Fetching  latest tesseract", addr.Hex())
-
-	tesseractHash, err := sm.getLatestTesseractHash(addr)
-	if err != nil {
-		return nil, errors.Wrap(err, "latest tesseract hash fetch failed")
-	}
-
-	return sm.getTesseractByHash(tesseractHash, withInteractions)
-}
-
-func (sm *StateManager) FetchTesseractFromDB(hash types.Hash, withInteractions bool) (*types.Tesseract, error) {
-	// Fetch Tesseract from DB
-	buf, err := sm.db.GetTesseract(hash)
-	if err != nil {
-		return nil, err
-	}
-
-	// canonicalTesseract is a clone of the tesseract. The only difference is that it won't have the interactions field.
-	canonicalTesseract := new(types.CanonicalTesseract)
-
-	if err = canonicalTesseract.FromBytes(buf); err != nil {
-		return nil, errors.Wrap(err, "failed to depolarize tesseract")
-	}
-
-	interactions := new(types.Interactions)
-
-	if withInteractions {
-		// Fetch interactions from DB
-		buf, err = sm.db.GetInteractions(canonicalTesseract.Body.InteractionHash)
-
-		if err != nil {
-			return nil, errors.Wrap(err, types.ErrFetchingInteractions.Error())
-		}
-
-		if err := interactions.FromBytes(buf); err != nil {
-			return nil, errors.Wrap(err, "failed to depolarize interactions")
-		}
-	}
-
-	tesseract := &types.Tesseract{
-		Header: canonicalTesseract.Header,
-		Body:   canonicalTesseract.Body,
-		Ixns:   *interactions,
-		Seal:   canonicalTesseract.Seal,
-	}
-
-	return tesseract, nil
 }
 
 func (sm *StateManager) Cleanup(address types.Address) {
@@ -884,7 +889,7 @@ func (sm *StateManager) GetPublicKeyFromContract(ctx context.Context, ids ...id.
 
 	data1 := new(Response)
 
-	if err := json.Unmarshal(body, data1); err != nil {
+	if err = json.Unmarshal(body, data1); err != nil {
 		log.Panicln(err)
 	}
 
@@ -906,4 +911,143 @@ func (sm *StateManager) Start(id id.KramaID, ntq int32, publicKey []byte, addrs 
 	}
 
 	return sm.senatus.Start(id, ntq, publicKey, addrs)
+}
+
+// IsLogicRegistered checks if the logicID is registered with the account.
+// If the logicID is not registered, this returns an error
+func (sm *StateManager) IsLogicRegistered(logicID types.LogicID) error {
+	so, err := sm.GetLatestStateObject(logicID.Address())
+	if err != nil {
+		return err
+	}
+
+	return so.isLogicRegistered(logicID)
+}
+
+func (sm *StateManager) SyncStorageTrees(
+	address types.Address,
+	oldRoot, newRoot types.Hash,
+	metaStorageTreeDelta map[string][]byte,
+	logicStorageTreeDelta map[string]map[string][]byte,
+) error {
+	var (
+		so  *StateObject
+		err error
+	)
+
+	// check if this is genesis tesseract, i.e. previous hash == nil
+	if oldRoot == types.NilHash {
+		sm.CreateDirtyObject(address, types.RegularAccount)
+	}
+
+	so, err = sm.GetDirtyObject(address)
+	if err != nil {
+		return err
+	}
+
+	metaStorageTree, err := so.getMetaStorageTree()
+	if err != nil {
+		return err
+	}
+
+	g, _ := errgroup.WithContext(context.Background())
+
+	for logicID, delta := range logicStorageTreeDelta {
+		root, ok := metaStorageTreeDelta[logicID]
+		if !ok {
+			return errors.New("new root not found")
+		}
+
+		storageRoot, code, newEntries := root, logicID, delta
+
+		g.Go(func() error {
+			return sm.syncLogicStorageTree(
+				so,
+				types.LogicID(code),
+				types.BytesToHash(storageRoot),
+				newEntries,
+			)
+		})
+	}
+
+	if err = g.Wait(); err != nil {
+		return err
+	}
+
+	// sync the metaStorageTree
+	return sm.syncTree(metaStorageTree, newRoot, metaStorageTreeDelta)
+}
+
+func (sm *StateManager) syncLogicStorageTree(
+	so *StateObject,
+	logicID types.LogicID,
+	newRoot types.Hash,
+	delta map[string][]byte,
+) error {
+	var (
+		err         error
+		storageTree tree.MerkleTree
+	)
+
+	storageTree, err = so.GetStorageTree(logicID)
+	if err != nil {
+		switch {
+		case errors.Is(err, types.ErrLogicStorageTreeNotFound):
+			storageTree, err = so.createStorageTreeForLogic(logicID)
+			if err != nil {
+				return err
+			}
+
+		default:
+			return err
+		}
+	}
+
+	return sm.syncTree(storageTree, newRoot, delta)
+}
+
+func (sm *StateManager) syncTree(
+	tree tree.MerkleTree,
+	newRoot types.Hash,
+	delta map[string][]byte,
+) error {
+	for key, value := range delta {
+		rawKey, err := hex.DecodeString(key)
+		if err != nil {
+			return errors.Wrap(err, "failed to decode logic-id")
+		}
+
+		if err = tree.Set(rawKey, value); err != nil {
+			return errors.Wrap(err, "failed to set entry")
+		}
+	}
+
+	if err := tree.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+
+	updatedRoot, err := tree.Root()
+	if err != nil {
+		return err
+	}
+
+	if updatedRoot != newRoot {
+		return errors.New("updated root doesn't match")
+	}
+
+	if err = tree.Flush(); err != nil {
+		return errors.Wrap(err, "failed to flush")
+	}
+
+	return nil
+}
+
+// GetStorageEntry returns the storage data associated with the given slot and logicID
+func (sm *StateManager) GetStorageEntry(logicID types.LogicID, slot []byte) ([]byte, error) {
+	so, err := sm.GetLatestStateObject(logicID.Address())
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to fetch state object")
+	}
+
+	return so.GetStorageEntry(logicID, slot)
 }

@@ -144,6 +144,7 @@ func (p *PublicCoreAPI) GetTDU(args *TesseractArgs) (types.AssetMap, error) {
 	return data, nil
 }
 
+// GetInteractionReceipt returns the receipt for the given interaction hash
 func (p *PublicCoreAPI) GetInteractionReceipt(args *ReceiptArgs) (*types.Receipt, error) {
 	address, err := utils.ValidateAddress(args.Address)
 	if err != nil {
@@ -158,6 +159,7 @@ func (p *PublicCoreAPI) GetInteractionReceipt(args *ReceiptArgs) (*types.Receipt
 	return p.chain.GetReceipt(address, types.HexToHash(hash))
 }
 
+// GetInteractionCountByAddress returns the number of interactions sent for the given address
 func (p *PublicCoreAPI) GetInteractionCountByAddress(args *InteractionCountArgs) (uint64, error) {
 	addr, err := utils.ValidateAddress(args.From)
 	if err != nil {
@@ -170,6 +172,11 @@ func (p *PublicCoreAPI) GetInteractionCountByAddress(args *InteractionCountArgs)
 	}
 
 	return interactionCount, nil
+}
+
+// GetStorageAt returns the data associated with the given storage slot
+func (p *PublicCoreAPI) GetStorageAt(args *GetStorageArgs) ([]byte, error) {
+	return p.sm.GetStorageEntry(types.FromHex(args.LogicID), types.FromHex(args.StorageKey))
 }
 
 // helper functions
