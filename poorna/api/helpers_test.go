@@ -332,8 +332,8 @@ func GetTestLogicDeployPayload(
 		Type:          0,
 		IsStateFul:    true,
 		IsInteractive: false,
-		Manifest:      []byte{0x00, 0x01},
-		CallData:      GenerateRandomIXPayload(t, 20),
+		Manifest:      types.BytesToHex([]byte{0x00, 0x01}),
+		CallData:      types.BytesToHex(GenerateRandomIXPayload(t, 20)),
 	}
 
 	if callback != nil {
@@ -346,18 +346,19 @@ func GetTestLogicDeployPayload(
 	logicID, _ := types.NewLogicIDv0(
 		logicArgs.Type,
 		logicArgs.IsStateFul,
+		logicArgs.IsInteractive,
 		0,
 		utils.NewAccountAddress(nonce, address),
 	)
 
 	deployPayload := &types.LogicPayload{
 		Logic:    logicID,
-		Calldata: logicArgs.CallData,
+		Calldata: types.FromHex(logicArgs.CallData),
 		Deploy: &types.LogicDeployPayload{
 			Type:          logicArgs.Type,
 			IsStateful:    logicArgs.IsStateFul,
 			IsInteractive: logicArgs.IsInteractive,
-			Manifest:      logicArgs.Manifest,
+			Manifest:      types.FromHex(logicArgs.Manifest),
 		},
 	}
 

@@ -318,26 +318,36 @@ func (vs *VoteSet) addVerifiedVote(
 }
 
 // getSumIndex is a method of VoteSet that retrieves the index on the sum set for a given validator index
-func (vs *VoteSet) getSumIndex(valIndex int32) (int32, error) {
-	var offset int32
+func (vs *VoteSet) getSumIndex(valIndex int32) ([]int32, error) {
+	sumSlots := make([]int32, 0, 3)
 
-	for i, v := range vs.valset.GetTotalVotingPower() {
-		offset += v
-		if valIndex < offset {
-			return int32(i), nil
+	validator, _ := vs.valset.GetByIndex(valIndex)
+	if validator == "" {
+		return nil, errors.New("invalid validator index")
+	}
+
+	for i, nodeSet := range vs.valset.ICS.Nodes {
+		if nodeSet != nil {
+			for _, kramaID := range nodeSet.Ids {
+				if kramaID == validator {
+					sumSlots = append(sumSlots, int32(i/2))
+				}
+			}
 		}
 	}
 
-	return -1, errors.New("invalid validator index")
+	return sumSlots, nil
 }
 
 // updateSum is a method of VoteSet that updates the sum value at a given validator index by a given vote power value
 func (vs *VoteSet) updateSum(valIndex int32, vp int32) {
-	index, err := vs.getSumIndex(valIndex)
+	indexes, err := vs.getSumIndex(valIndex)
 	if err != nil {
 		return
 	}
 
-	vs.sum[index] += 1
-	vs.votingPowerSum[index] += vp
+	for _, index := range indexes {
+		vs.sum[index] += 1
+		vs.votingPowerSum[index] += vp
+	}
 }

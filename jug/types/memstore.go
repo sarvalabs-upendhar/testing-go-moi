@@ -27,11 +27,53 @@ func NewMemStorage(addr types.Address) *MemStorage {
 }
 
 func (store MemStorage) EncodePOLO() ([]byte, error) {
-	return polo.Polorize(store)
+	// Create a new Packer
+	packer := polo.NewPacker()
+	// Pack the address
+	if err := packer.Pack(store.address); err != nil {
+		return nil, err
+	}
+	// Pack the storage
+	if err := packer.Pack(store.storage); err != nil {
+		return nil, err
+	}
+	// Pack the balances
+	if err := packer.Pack(store.balances); err != nil {
+		return nil, err
+	}
+	// Pack the approvals
+	if err := packer.Pack(store.approvals); err != nil {
+		return nil, err
+	}
+
+	// Return packed bytes
+	return packer.Bytes(), nil
 }
 
 func (store *MemStorage) DecodePOLO(bytes []byte) error {
-	return polo.Depolorize(store, bytes)
+	// Create a new Unpacker
+	unpacker, err := polo.NewUnpacker(bytes)
+	if err != nil {
+		return err
+	}
+	// Unpack address
+	if err = unpacker.Unpack(&store.address); err != nil {
+		return err
+	}
+	// Unpack storage
+	if err = unpacker.Unpack(&store.storage); err != nil {
+		return err
+	}
+	// Unpack balances
+	if err = unpacker.Unpack(&store.balances); err != nil {
+		return err
+	}
+	// Unpack approvals
+	if err = unpacker.Unpack(&store.approvals); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Address returns the address of the MemStorage account
@@ -43,8 +85,8 @@ func (store MemStorage) Address() types.Address {
 // GetStorageEntry retrieves some []byte data for a given key from the MemStorage.
 // Returns error if there is no data for the key.
 // Implements the Storage interface for MemStorage.
-func (store MemStorage) GetStorageEntry(namespace string, key []byte) ([]byte, error) {
-	tree, ok := store.storage[namespace]
+func (store MemStorage) GetStorageEntry(logicID types.LogicID, key []byte) ([]byte, error) {
+	tree, ok := store.storage[string(logicID)]
 	if !ok {
 		return nil, errors.New("no such namespace")
 	}
@@ -60,13 +102,14 @@ func (store MemStorage) GetStorageEntry(namespace string, key []byte) ([]byte, e
 // SetStorageEntry inserts a key-value pair of data into the MemStorage.
 // If data already exists for the key, it is overwritten.
 // Implements the Storage interface for MemStorage.
-func (store MemStorage) SetStorageEntry(namespace string, key, val []byte) error {
-	tree, ok := store.storage[namespace]
+func (store *MemStorage) SetStorageEntry(logicID types.LogicID, key, val []byte) error {
+	tree, ok := store.storage[string(logicID)]
 	if !ok {
 		tree = make(map[string][]byte)
 	}
 
 	tree[string(key)] = val
+	store.storage[string(logicID)] = tree
 
 	return nil
 }

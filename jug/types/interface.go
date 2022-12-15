@@ -2,6 +2,7 @@ package types
 
 import (
 	"context"
+	"strings"
 
 	"github.com/sarvalabs/moichain/types"
 )
@@ -26,7 +27,7 @@ type ExecutionEngine interface {
 	// The callsite to execute and input data are provided as part of the ExecutionScope.
 	// The output values along with any error (and error code) that may occur and the
 	// execution effort (fuel consumption) are returned with the ExecutionResult.
-	Execute(context.Context, Logic, *ExecutionScope) *ExecutionResult
+	Execute(context.Context, Logic, *ExecutionOrder) *ExecutionResult
 
 	// Compile will compile a logic manifest into a LogicDescriptor.
 	// This LogicDescriptor can be used to generate a LogicObject.
@@ -43,12 +44,13 @@ type ExecutionEngine interface {
 type Logic interface {
 	IsSealed() bool
 	IsStateful() bool
+	IsInteractive() bool
 
 	LogicID() types.LogicID
 	Engine() types.LogicEngine
 	Manifest() types.Hash
 
-	GetCallsite(name string) (types.LogicCallsite, error)
+	GetCallsite(name string) (types.LogicCallsite, bool)
 	GetLogicElement(kind string, index uint64) (*types.LogicElement, error)
 }
 
@@ -56,8 +58,8 @@ type Logic interface {
 type Storage interface {
 	Address() types.Address
 
-	GetStorageEntry(string, []byte) ([]byte, error)
-	SetStorageEntry(string, []byte, []byte) error
+	GetStorageEntry(types.LogicID, []byte) ([]byte, error)
+	SetStorageEntry(types.LogicID, []byte, []byte) error
 
 	// GetAssetBalance(types.AssetID) (*big.Int, error)
 	// AddAssetBalance(types.AssetID, *big.Int) error
@@ -73,4 +75,10 @@ type Storage interface {
 type ManifestHeader struct {
 	Syntax string `polo:"syntax" yaml:"syntax" json:"syntax"`
 	Engine string `polo:"engine" yaml:"engine" json:"engine"`
+}
+
+// LogicEngine returns the normalized form of the logic engine value in the ManifestHeader.
+// It is capitalized to uppercase letter and converted into a types.LogicEngine
+func (header ManifestHeader) LogicEngine() types.LogicEngine {
+	return types.LogicEngine(strings.ToUpper(header.Engine))
 }

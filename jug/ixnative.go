@@ -1,11 +1,15 @@
 package jug
 
 import (
+	"context"
 	"math/big"
 
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/moichain/guna"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
+	ctypes "github.com/sarvalabs/moichain/jug/types"
 	"github.com/sarvalabs/moichain/types"
 )
 
@@ -43,7 +47,7 @@ func (executor IxExecutor) ValueTransfer(
 
 // CreateAsset performs the IxCreateAsset interaction on the given creator StateObject.
 // The given asset creation spec is used to create the asset which is then
-// created in the state object of the creator (sender of interaction)
+// inserted into the state object of the creator (sender of interaction)
 func (executor IxExecutor) CreateAsset(
 	creator *guna.StateObject,
 	payload types.AssetCreatePayload,
@@ -63,4 +67,141 @@ func (executor IxExecutor) CreateAsset(
 
 	// Return the string form of the asset ID
 	return 1, string(assetID), nil
+}
+
+// LogicDeploy performs the IxLogicDeploy interaction on the given state (logic account).
+// The given logic deployment payload is used to create a logic which is then inserted into
+// the state object. The logic is then initialised (if stateful)
+func (executor IxExecutor) LogicDeploy(
+	state *guna.StateObject,
+	payload *types.LogicPayload,
+) (uint64, types.LogicID, error) {
+	// Get the current tank level
+	available := executor.tank.Level()
+
+	// Decode the manifest data into a ManifestHeader
+	header := new(ctypes.ManifestHeader)
+	if err := polo.Depolorize(header, payload.Deploy.Manifest); err != nil {
+		return 0, nil, errors.Wrap(err, "could not decode manifest header")
+	}
+
+	// Obtain the factory for the logic engine in the header
+	factory, ok := executor.exec.factories[header.LogicEngine()]
+	if !ok {
+		return 0, nil, errors.Errorf("unsupported manifest engine: %v", header.Engine)
+	}
+
+	// Create a compiler engine
+	compiler := factory.NewExecutionEngine(available)
+	// Compile the manifest into a LogicDescriptor
+	logicDescriptor, compileResult := compiler.Compile(context.Background(), payload.Deploy.Manifest)
+	// Check compile result
+	if !compileResult.Ok() {
+		return compileResult.Fuel, nil, errors.Errorf(
+			"manifest compile failed [error code: %v]: %v",
+			compileResult.ErrCode, compileResult.ErrMessage,
+		)
+	}
+
+	// Get the current consumed fuel
+	consumed := compileResult.Fuel
+	available -= consumed
+
+	if available == 0 {
+		return consumed, nil, errors.New("insufficient fuel: could not initialise after compile")
+	}
+
+	// Generate the LogicID from the payload
+	logicID, err := types.NewLogicIDv0(
+		payload.Deploy.Type,
+		payload.Deploy.IsStateful,
+		payload.Deploy.IsInteractive,
+		0, state.Address(),
+	)
+	if err != nil {
+		return consumed, nil, errors.Wrap(err, "could not generate logic id")
+	}
+
+	// Create a new LogicObject from the LogicDescriptor
+	logicObject := gtypes.NewLogicObject(logicID, logicDescriptor)
+	// Insert the LogicObject into the state object of the logic
+	if err = state.InsertNewLogicObject(logicID, logicObject); err != nil {
+		return consumed, nil, errors.Wrap(err, "could not insert logic object into stateobject")
+	}
+
+	// Initialize a storage tree for the LogicID on the state object
+	if err = state.CreateStorageTreeForLogic(logicID); err != nil {
+		return consumed, nil, errors.Wrap(err, "could not init storage tree for logic")
+	}
+
+	// Decode the calldata inputs into a polo.Document
+	inputs := new(polo.Document)
+	if err = polo.Depolorize(inputs, payload.Calldata); err != nil {
+		return consumed, nil, errors.Wrap(err, "could not decode calldata into polo document")
+	}
+
+	// Create a new engine for the execution
+	engine := factory.NewExecutionEngine(available)
+	order := &ctypes.ExecutionOrder{Initialise: true, Inputs: inputs, Callee: state}
+
+	// Execute the initialisation order in the engine
+	execResult := engine.Execute(context.Background(), logicObject, order)
+	// Check execution result
+	if !execResult.Ok() {
+		return consumed + execResult.Fuel, nil, errors.Errorf(
+			"initialise execution failed [error code: %v]: %v",
+			execResult.ErrCode, execResult.ErrMessage,
+		)
+	}
+
+	// Return the total fuel consumed and the logic ID
+	return consumed + execResult.Fuel, logicID, nil
+}
+
+// LogicExecute performs the IxLogicExecute interface on the given state (logic account).
+// The given logic payload describes the callsite and calldata for the execution.
+func (executor IxExecutor) LogicExecute(
+	state *guna.StateObject,
+	payload *types.LogicPayload,
+) (uint64, []byte, error) {
+	// Get the current tank level
+	available := executor.tank.Level()
+
+	// Fetch the logic object from the state object
+	logicObject, err := state.FetchLogicObject(payload.Logic)
+	if err != nil {
+		return 0, nil, errors.Wrap(err, "could not fetch logic object")
+	}
+
+	// Check that the logic contains the payload callsite
+	if _, ok := logicObject.GetCallsite(payload.Callsite); !ok {
+		return 0, nil, errors.Wrap(err, "callsite does not exists for logic")
+	}
+
+	// Decode the calldata inputs into a polo.Document
+	inputs := new(polo.Document)
+	if err = polo.Depolorize(inputs, payload.Calldata); err != nil {
+		return 0, nil, errors.Wrap(err, "could not decode calldata into polo document")
+	}
+
+	// Obtain the factory for the logic engine of the logic object
+	factory := executor.exec.factories[logicObject.Engine()]
+
+	// Create a new engine for the execution
+	engine := factory.NewExecutionEngine(available)
+	// Create an execution order with the input data and callsite
+	order := &ctypes.ExecutionOrder{Callsite: payload.Callsite, Inputs: inputs, Callee: state}
+
+	// Execute the order in the engine
+	execResult := engine.Execute(context.Background(), logicObject, order)
+	// Check execution result
+	if !execResult.Ok() {
+		return execResult.Fuel, nil, errors.Errorf(
+			"runtime execution failed [error code: %v]: %v",
+			execResult.ErrCode, execResult.ErrMessage,
+		)
+	}
+
+	// Return the total fuel consumed and the return data
+	return execResult.Fuel, execResult.Outputs.Bytes(), nil
 }

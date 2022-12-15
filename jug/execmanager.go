@@ -88,8 +88,7 @@ func (exec *ExecutionManager) SpawnExecutor(fuelLimit uint64) *IxExecutor {
 	return &IxExecutor{
 		exec:  exec,
 		state: exec.state,
-
-		fuelLimit: fuelLimit,
+		tank:  ctypes.NewFuelTank(fuelLimit),
 
 		objects:   make(map[types.Address]*guna.StateObject),
 		snapshots: make(map[types.Address]*guna.StateObject),

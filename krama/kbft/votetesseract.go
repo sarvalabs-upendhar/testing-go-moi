@@ -46,7 +46,7 @@ func (tv *tesseractVoteSet) getByIndex(index int32) *ktypes.Vote {
 
 // addVerifiedVote is a method of tesseractVoteSet that adds a verified vote to the set.
 // Accepts the sum index, the vote and the voting power of the validator placing the vote.
-func (tv *tesseractVoteSet) addVerifiedVote(sindex int32, vote *ktypes.Vote, votingpower int32) {
+func (tv *tesseractVoteSet) addVerifiedVote(sumIndexs []int32, vote *ktypes.Vote, votingpower int32) {
 	// Fetch the index of the validator placing the vote
 	valindex := vote.ValidatorIndex
 
@@ -56,9 +56,10 @@ func (tv *tesseractVoteSet) addVerifiedVote(sindex int32, vote *ktypes.Vote, vot
 		tv.bitarray.SetIndex(int(valindex), true)
 		tv.votes[valindex] = vote
 
-		// Add the voting power to the sum set at the specified index
-		tv.sum[sindex] += votingpower
-		tv.votingPowerSum[sindex] += votingpower
+		for _, index := range sumIndexs {
+			tv.sum[index] += votingpower
+			tv.votingPowerSum[index] += votingpower
+		}
 	}
 }
 

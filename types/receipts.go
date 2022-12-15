@@ -66,3 +66,11 @@ func (rs *Receipts) FromBytes(bytes []byte) error {
 type AssetCreationReceipt struct {
 	AssetID string `json:"asset_id"`
 }
+
+type LogicDeployReceipt struct {
+	LogicID string `json:"logic_id"`
+}
+
+type LogicExecuteReceipt struct {
+	ReturnData []byte `json:"return_data"`
+}

@@ -90,14 +90,6 @@ type LogicPayload struct {
 	Deploy *LogicDeployPayload
 }
 
-func (logic *LogicPayload) FromBytes(data []byte) error {
-	if err := polo.Depolorize(logic, data); err != nil {
-		return errors.Wrap(err, "failed to depolorize logic payload")
-	}
-
-	return nil
-}
-
 type LogicDeployPayload struct {
 	// Type specifies the type of Logic. Only required for Deploy
 	Type LogicKind
@@ -107,4 +99,21 @@ type LogicDeployPayload struct {
 	IsInteractive bool
 	// Manifest specifies some Logic manifest artifact. Only required for Deploy and Upgrade
 	Manifest []byte
+}
+
+func (logic LogicPayload) Bytes() ([]byte, error) {
+	data, err := polo.Polorize(logic)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize logic payload")
+	}
+
+	return data, nil
+}
+
+func (logic *LogicPayload) FromBytes(data []byte) error {
+	if err := polo.Depolorize(logic, data); err != nil {
+		return errors.Wrap(err, "failed to depolorize logic payload")
+	}
+
+	return nil
 }

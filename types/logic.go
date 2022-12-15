@@ -27,9 +27,11 @@ type LogicCallsite uint64
 // LogicDescriptor represents an object that describes the internal
 // components and characteristics of a Logic implementation
 type LogicDescriptor struct {
-	Engine   LogicEngine
 	Manifest Hash
-	Stateful bool
+	Engine   LogicEngine
+
+	Stateful    bool
+	Interactive bool
 
 	Elements  []*LogicElement
 	Callsites map[string]LogicCallsite

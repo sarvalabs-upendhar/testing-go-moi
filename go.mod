@@ -28,6 +28,7 @@ require (
 	github.com/libp2p/go-libp2p v0.22.0
 	github.com/libp2p/go-libp2p-kad-dht v0.18.0
 	github.com/libp2p/go-libp2p-pubsub v0.8.1
+	github.com/manishmeganathan/symbolizer v0.1.1
 	github.com/moby/locker v1.0.1
 	github.com/mr-tron/base58 v1.2.0
 	github.com/munna0908/smt v0.3.1-0.20221031083403-de579d90bc8e
@@ -36,7 +37,7 @@ require (
 	github.com/pkg/profile v1.6.0
 	github.com/prometheus/client_golang v1.13.0
 	github.com/rs/zerolog v1.27.0
-	github.com/sarvalabs/go-polo v0.2.2
+	github.com/sarvalabs/go-polo v0.2.3
 	github.com/spf13/cobra v1.5.0
 	github.com/stretchr/testify v1.8.1
 	github.com/supranational/blst v0.3.7
@@ -112,7 +113,6 @@ require (
 	github.com/libp2p/go-reuseport v0.2.0 // indirect
 	github.com/libp2p/go-yamux/v3 v3.1.2 // indirect
 	github.com/lucas-clemente/quic-go v0.28.1 // indirect
-	github.com/manishmeganathan/symbolizer v0.1.1 // indirect
 	github.com/marten-seemann/qtls-go1-16 v0.1.5 // indirect
 	github.com/marten-seemann/qtls-go1-17 v0.1.2 // indirect
 	github.com/marten-seemann/qtls-go1-18 v0.1.2 // indirect

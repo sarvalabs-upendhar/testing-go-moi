@@ -2,7 +2,10 @@ package rpc
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+
+	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/moichain/poorna/api"
 	"github.com/sarvalabs/moichain/types"
@@ -221,6 +224,32 @@ func (r *rpcService) GetInteractionCountByAddress(
 	}
 
 	resp.Data = interactionCount
+
+	return nil
+}
+
+func (r *rpcService) GetStorage(req *http.Request,
+	args *api.GetStorageArgs,
+	resp *api.Response,
+) error {
+	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
+	if !ok {
+		return types.ErrInvalidAPI
+	}
+
+	storageData, err := coreAPI.GetStorageAt(args)
+	if err != nil {
+		return err
+	}
+
+	doc := make(map[types.Address]uint64)
+	if err = polo.Depolorize(&doc, storageData); err != nil {
+		panic(err)
+	}
+
+	fmt.Println(doc)
+
+	resp.Data = storageData
 
 	return nil
 }

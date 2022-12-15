@@ -92,14 +92,14 @@ type LogicDeployArgs struct {
 	Type          types.LogicKind `json:"type"`
 	IsStateFul    bool            `json:"is_stateful"`
 	IsInteractive bool            `json:"is_interactive"`
-	Manifest      []byte          `json:"manifest"`
-	CallData      []byte          `json:"calldata"`
+	Manifest      string          `json:"manifest"`
+	CallData      string          `json:"calldata"`
 }
 
 type LogicExecuteArgs struct {
 	LogicID  string `json:"logic_id"`
 	CallSite string `json:"callsite"`
-	CallData []byte `json:"calldata"`
+	CallData string `json:"calldata"`
 }
 
 // Response is a struct that represents a response wrapper

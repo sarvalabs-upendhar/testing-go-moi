@@ -18,7 +18,6 @@ var (
 	ErrSlotsFull                   = errors.New("slots not available")
 	ErrContextStateNotFound        = errors.New("context state not found")
 	ErrHashMismatch                = errors.New("hash mismatch")
-	ErrExecutionFailed             = errors.New("execution failed")
 	ErrStateNotFound               = errors.New("state not found")
 	ErrObjectNotFound              = errors.New("unable to fetch state object")
 	ErrInvalidKramaID              = errors.New("invalid krama id")
@@ -61,4 +60,5 @@ var (
 	ErrExecutorNotFound            = errors.New("executor instance not found")
 	ErrLogicElementNotFound        = errors.New("logic element not found")
 	ErrEmptyManifest               = errors.New("empty manifest")
+	ErrInsufficientFuel            = errors.New("insufficient fuel")
 )

@@ -85,6 +85,10 @@ func NewStateObject(
 	}
 }
 
+func (s *StateObject) Address() types.Address {
+	return s.address
+}
+
 func (s *StateObject) BalanceOf(id types.AssetID) (*big.Int, error) {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
@@ -332,8 +336,10 @@ func (s *StateObject) Commit() (types.Hash, error) {
 	return accCid, nil
 }
 
-func (s *StateObject) CreateStorageTreeForLogic(logicID types.LogicID) (tree.MerkleTree, error) {
-	return s.createStorageTreeForLogic(logicID)
+func (s *StateObject) CreateStorageTreeForLogic(logicID types.LogicID) error {
+	_, err := s.createStorageTreeForLogic(logicID)
+
+	return err
 }
 
 func (s *StateObject) CreateAsset(descriptor *types.AssetDescriptor) (types.AssetID, error) {
@@ -666,8 +672,8 @@ func (s *StateObject) isLogicRegistered(logicID types.LogicID) error {
 }
 
 func (s *StateObject) getMetaLogicTree() (tree.MerkleTree, error) {
-	if s.metaStorageTree != nil {
-		return s.metaStorageTree, nil
+	if s.logicTree != nil {
+		return s.logicTree, nil
 	}
 
 	merkleTree, err := tree.NewKramaHashTree(s.address, s.data.LogicRoot, s.db, blakeHasher, dhruva.Logic)

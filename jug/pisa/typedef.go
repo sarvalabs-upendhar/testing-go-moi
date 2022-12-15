@@ -13,7 +13,7 @@ type Datatype struct {
 	I uint64 // represents the ptr index to the typedef for a Class or Event.
 
 	F *FieldTable // represents the fields for a Class or Event
-	// M methods  	 // represents the methods for a Class
+	// M Methods     // represents the methods for a Class
 }
 
 // newArrayType creates a new Array Datatype

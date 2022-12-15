@@ -178,6 +178,7 @@ func GetRawIXPayloadForLogicDeploy(jsonPayload []byte, nonce uint64, sender type
 	logicID, err := types.NewLogicIDv0(
 		payload.Type,
 		payload.IsStateFul,
+		payload.IsInteractive,
 		0,
 		utils.NewAccountAddress(nonce, sender),
 	)
@@ -187,12 +188,12 @@ func GetRawIXPayloadForLogicDeploy(jsonPayload []byte, nonce uint64, sender type
 
 	deployPayload := &types.LogicPayload{
 		Logic:    logicID,
-		Calldata: payload.CallData,
+		Calldata: types.FromHex(payload.CallData),
 		Deploy: &types.LogicDeployPayload{
 			Type:          payload.Type,
 			IsStateful:    payload.IsStateFul,
 			IsInteractive: payload.IsInteractive,
-			Manifest:      payload.Manifest,
+			Manifest:      types.FromHex(payload.Manifest),
 		},
 	}
 
@@ -208,7 +209,7 @@ func GetRawIXPayloadForLogicExecute(jsonPayload []byte) ([]byte, error) {
 	logicExecPayload := &types.LogicPayload{
 		Logic:    types.FromHex(payload.LogicID),
 		Callsite: payload.CallSite,
-		Calldata: payload.CallData,
+		Calldata: types.FromHex(payload.CallData),
 	}
 
 	return polo.Polorize(logicExecPayload)

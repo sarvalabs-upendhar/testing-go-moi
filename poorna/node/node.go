@@ -114,7 +114,7 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 
 	n.db = db
 
-	if cfg.Chain.Genesis != "nil" {
+	if !cfg.Chain.SkipGenesis {
 		if err := n.db.Cleanup(); err != nil {
 			return nil, err
 		}

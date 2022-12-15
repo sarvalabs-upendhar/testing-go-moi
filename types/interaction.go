@@ -115,7 +115,12 @@ func (ix Interaction) Receiver() Address {
 	// Based on the interaction type return the address
 	switch ix.Type() {
 	case IxLogicExecute, IxLogicDeploy:
-		return ix.payload.logic.Logic.Address()
+		payload, err := ix.GetLogicPayload()
+		if err != nil {
+			panic(err)
+		}
+
+		return payload.Logic.Address()
 	default:
 		return ix.inner.Input.Receiver
 	}

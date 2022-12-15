@@ -24,7 +24,7 @@ func (tank *FuelTank) Level() uint64 {
 }
 
 // Exhaust consumes the given amount of fuel from tank's capacity.
-// Returns an ErrInsufficientFuel error if there isn't enough fuel.
+// Returns false if there isn't sufficient fuel to exhaust.
 func (tank *FuelTank) Exhaust(fuel uint64) bool {
 	tank.Lock()
 	defer tank.Unlock()

@@ -4,6 +4,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/sarvalabs/moichain/guna"
+	ctypes "github.com/sarvalabs/moichain/jug/types"
 	"github.com/sarvalabs/moichain/types"
 )
 
@@ -13,10 +14,9 @@ type IxExecutor struct {
 	Interactions types.Interactions
 	contextDelta types.ContextDelta
 
-	fuelTotal, fuelLimit uint64
-
 	state state
 	exec  *ExecutionManager
+	tank  *ctypes.FuelTank
 
 	objects   map[types.Address]*guna.StateObject
 	snapshots map[types.Address]*guna.StateObject
@@ -35,7 +35,7 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 	for _, ix := range executor.Interactions {
 		// Retrieve the state objects for interaction participants
 		if err := executor.fetchStateObjects(ix); err != nil {
-			return err
+			return errors.Wrap(err, "execution failed")
 		}
 
 		// Retrieve the receipt for the interaction
@@ -53,11 +53,14 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 					assetID, transferValue,
 				)
 				if err != nil {
-					return errors.Wrap(types.ErrExecutionFailed, err.Error())
+					return errors.Wrap(err, "execution failed (IxValueTransfer)")
 				}
 
 				// Update fuel consumption
-				executor.fuelTotal += fuelConsumed
+				if !executor.tank.Exhaust(fuelConsumed) {
+					return errors.Wrap(types.ErrInsufficientFuel, "execution failed (IxValueTransfer)")
+				}
+
 				receipt.FuelUsed += fuelConsumed
 			}
 
@@ -69,7 +72,7 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 			}
 
 			if payload.Create == nil {
-				return errors.New("asset create payload is empty")
+				return errors.New("execution failed (IxAssetCreate): asset create payload is empty")
 			}
 
 			// Perform asset creation and record fuel consumed
@@ -78,29 +81,86 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 				*payload.Create,
 			)
 			if err != nil {
-				return errors.Wrap(types.ErrExecutionFailed, err.Error())
+				return errors.Wrap(err, "execution failed (IxAssetCreate)")
 			}
 
 			// Update fuel consumption
-			executor.fuelTotal += fuelConsumed
+			if !executor.tank.Exhaust(fuelConsumed) {
+				return errors.Wrap(types.ErrInsufficientFuel, "execution failed (IxAssetCreate)")
+			}
+
 			receipt.FuelUsed += fuelConsumed
 
 			// Create data for asset creation receipt and set it into the receipt
 			receiptData := types.AssetCreationReceipt{AssetID: assetID}
 			if err = receipt.SetExtraData(receiptData); err != nil {
-				return errors.Wrap(types.ErrExecutionFailed, err.Error())
+				return errors.Wrap(err, "execution failed (IxAssetCreate)")
 			}
 
-		// todo: implement IxDeployLogic
-		// // Deploy Logic Interaction
-		// case types.LogicDeploy:
+		// Deploy Logic Interaction
+		case types.IxLogicDeploy:
+			payload, err := ix.GetLogicPayload()
+			if err != nil {
+				return err
+			}
 
-		// todo: implement IxExecuteLogic
-		// // Execute Logic Interaction
-		// case types.LogicExecute:
+			if payload.Deploy == nil {
+				return errors.New("execution failed (IxLogicDeploy): logic deploy payload is empty")
+			}
+
+			// Perform logic deploy and record fuel consumed
+			fuelConsumed, logicID, err := executor.LogicDeploy(
+				executor.getStateObject(ix.Receiver()),
+				payload,
+			)
+			if err != nil {
+				return errors.Wrap(err, "execution failed (IxLogicDeploy)")
+			}
+
+			// Update fuel consumption
+			if !executor.tank.Exhaust(fuelConsumed) {
+				return errors.Wrap(types.ErrInsufficientFuel, "execution failed (IxLogicDeploy)")
+			}
+
+			receipt.FuelUsed += fuelConsumed
+
+			// Create data for logic deploy receipt and set it into the receipt
+			receiptData := types.LogicDeployReceipt{LogicID: logicID.Hex()}
+			if err = receipt.SetExtraData(receiptData); err != nil {
+				return errors.Wrap(err, "execution failed (IxLogicDeploy)")
+			}
+
+		// Execute Logic Interaction
+		case types.IxLogicExecute:
+			payload, err := ix.GetLogicPayload()
+			if err != nil {
+				return err
+			}
+
+			// Perform logic deploy and record fuel consumed
+			fuelConsumed, returnData, err := executor.LogicExecute(
+				executor.getStateObject(ix.Receiver()),
+				payload,
+			)
+			if err != nil {
+				return errors.Wrap(err, "execution failed (IxLogicExecute)")
+			}
+
+			// Update fuel consumption
+			if !executor.tank.Exhaust(fuelConsumed) {
+				return errors.Wrap(types.ErrInsufficientFuel, "execution failed (IxLogicExecute)")
+			}
+
+			receipt.FuelUsed += fuelConsumed
+
+			// Create data for logic execute receipt and set it into the receipt
+			receiptData := types.LogicExecuteReceipt{ReturnData: returnData}
+			if err = receipt.SetExtraData(receiptData); err != nil {
+				return errors.Wrap(err, "execution failed (IxLogicExecute)")
+			}
 
 		default:
-			return errors.Wrap(types.ErrExecutionFailed, types.ErrInvalidInteractionType.Error())
+			return errors.Wrap(types.ErrInvalidInteractionType, "execution failed")
 		}
 
 		// Update Sarga state if the interaction receiver if it is an unregistered (new) account
@@ -111,12 +171,12 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 		// Update the context for all interaction participants and update
 		// the interaction receipt with their updated context hashes
 		if err := executor.UpdateContext(ix, executor.contextDelta); err != nil {
-			return errors.Wrap(types.ErrExecutionFailed, err.Error())
+			return errors.Wrap(err, "execution failed")
 		}
 
 		// Commit the state objects of all interaction participants
 		if err := executor.CommitStateObjects(ix); err != nil {
-			return errors.Wrap(types.ErrExecutionFailed, err.Error())
+			return errors.Wrap(err, "execution failed")
 		}
 	}
 
@@ -327,7 +387,7 @@ func (executor *IxExecutor) fetchStateObjects(ix *types.Interaction) error {
 		// Retrieve the dirty object for the sender from the state manager
 		senderObject, err := executor.state.GetDirtyObject(sender)
 		if err != nil {
-			return errors.Wrap(types.ErrExecutionFailed, err.Error())
+			return errors.Wrap(err, "state object fetch failed")
 		}
 
 		// Add sender state object and its snapshot to the executor
@@ -342,14 +402,14 @@ func (executor *IxExecutor) fetchStateObjects(ix *types.Interaction) error {
 		// Check if the receiver address is an already registered account
 		accountRegistered, err := executor.state.IsAccountRegistered(ix.Receiver())
 		if err != nil {
-			return err
+			return errors.Wrap(err, "state object fetch failed")
 		}
 
 		if !accountRegistered {
 			// Retrieve the dirty object for genesis (sarga) address
 			genesisObject, err := executor.state.GetDirtyObject(guna.SargaAddress)
 			if err != nil {
-				return err
+				return errors.Wrap(err, "state object fetch failed")
 			}
 
 			// Add genesis state object and its snapshot to the executor
@@ -361,7 +421,7 @@ func (executor *IxExecutor) fetchStateObjects(ix *types.Interaction) error {
 		} else {
 			// Retrieve the dirty object for the receiver from the state manager
 			if receiverObject, err = executor.state.GetDirtyObject(receiver); err != nil {
-				return errors.Wrap(types.ErrExecutionFailed, err.Error())
+				return errors.Wrap(err, "state object fetch failed")
 			}
 		}
 

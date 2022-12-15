@@ -9,25 +9,32 @@ import (
 // It holds the base instruction set and type table that is copied
 // into every engine instance instead of recomputing them each time.
 // Implements the engine.Factory interface.
-type Factory struct{}
+type Factory struct {
+	datatypes TypeTable
+	instructs InstructionSet
+}
 
 // NewFactory generates a new Factory instance that can be
 // used to generate new instances of the PISA Execution Engine
 func NewFactory() Factory {
-	return Factory{}
+	return Factory{
+		datatypes: BaseTypeTable(),
+		instructs: BaseInstructionSet(),
+	}
 }
 
 // Kind returns the kind of engine factory and implements
 // the engine.Factory interface for the PISA runtime
-func (f Factory) Kind() types.LogicEngine {
-	return types.PISA
-}
+func (factory Factory) Kind() types.LogicEngine { return types.PISA }
 
 // NewExecutionEngine generates a new PISA ExecutionEngine instance for the given fuel capacity.
 // The returned engine instance has the base instruction set and type table configured.
-func (f Factory) NewExecutionEngine(fuelCap uint64) ctypes.ExecutionEngine {
+func (factory Factory) NewExecutionEngine(fuelCap uint64) ctypes.ExecutionEngine {
 	return &Engine{
-		fueltank:  ctypes.NewFuelTank(fuelCap),
+		instructs: factory.instructs,
+		datatypes: factory.datatypes,
 		constants: make(ConstantTable),
+		routines:  NewRoutineTable(),
+		fueltank:  ctypes.NewFuelTank(fuelCap),
 	}
 }

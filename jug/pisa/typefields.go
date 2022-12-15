@@ -17,16 +17,16 @@ type FieldTable struct {
 // NewFieldTable generates a FieldTable from a map of positions to field expression strings.
 // Each field expression must be '{name} [{datatype}]', where datatype must be a valid type expression.
 // Returns an error if the given map of field expressions contains positional gaps or invalid expressions.
-func NewFieldTable(table map[uint8]string) (*FieldTable, error) {
+func NewFieldTable(table map[uint8]string) (FieldTable, error) {
 	// Create a blank field table
-	fields := &FieldTable{
+	fields := FieldTable{
 		make(map[uint8]*typefield, len(table)),
 		make(map[string]uint8, len(table)),
 	}
 
 	// Ensure that there are less than 256 field expressions
 	if len(table) > 256 {
-		return nil, errors.New("cannot have more than 256 fields for FieldTable")
+		return FieldTable{}, errors.New("cannot have more than 256 fields for FieldTable")
 	}
 
 	// Iterate through each position, querying the expression map for each position
@@ -35,13 +35,13 @@ func NewFieldTable(table map[uint8]string) (*FieldTable, error) {
 		// Query for the field expression and error if not found
 		expr, ok := table[position]
 		if !ok {
-			return nil, errors.Errorf("missing field in position '%v' for FieldTable", position)
+			return FieldTable{}, errors.Errorf("missing field in position '%v' for FieldTable", position)
 		}
 
 		// Parse the field expression into a typefield
 		parsed, err := parseTypefield(expr)
 		if err != nil {
-			return nil, errors.Wrapf(err, "invalid field expression in position '%v' for FieldTable", position)
+			return FieldTable{}, errors.Wrapf(err, "invalid field expression in position '%v' for FieldTable", position)
 		}
 
 		// Insert the typefield into the FieldTable
@@ -68,7 +68,7 @@ func (fields FieldTable) String() string {
 
 // fetch retrieves a typefield from the FieldTable for a given position.
 // Returns nil if there is typefield for that position
-func (fields FieldTable) fetch(position uint8) *typefield { //nolint:unused
+func (fields FieldTable) fetch(position uint8) *typefield {
 	return fields.Table[position]
 }
 
@@ -80,7 +80,7 @@ func (fields *FieldTable) insert(name string, index uint8, field *typefield) {
 
 // lookup retrieves a typefield from the FieldTable for a given name.
 // Returns nil if there is no typefield for that name.
-func (fields FieldTable) lookup(name string) *typefield { //nolint:unused
+func (fields FieldTable) lookup(name string) *typefield {
 	index, exists := fields.Symbols[name]
 	if !exists {
 		return nil

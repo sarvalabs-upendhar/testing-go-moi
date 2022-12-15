@@ -62,7 +62,7 @@ type Senatus interface {
 
 var (
 	SargaAddress    = types.BytesToAddress(types.GetHash([]byte("sargaAccount")).Bytes())
-	SargaLogicID, _ = types.NewLogicIDv0(0, true, 0, SargaAddress)
+	SargaLogicID, _ = types.NewLogicIDv0(0, true, false, 0, SargaAddress)
 	GenesisIxHash   = types.GetHash([]byte("Genesis Interaction"))
 )
 
@@ -743,7 +743,7 @@ func (sm *StateManager) SetupSargaAccount(
 		return types.NilHash, types.NilHash, errors.Wrap(err, "context initiation failed in genesis")
 	}
 
-	if _, err := stateObject.CreateStorageTreeForLogic(SargaLogicID); err != nil {
+	if err := stateObject.CreateStorageTreeForLogic(SargaLogicID); err != nil {
 		return types.NilHash, types.NilHash, errors.Wrap(err, "failed to create storage tree")
 	}
 

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/big"
 	"net/http"
 	"os"
 	"strconv"
@@ -128,6 +129,10 @@ func CreateConfigFile(datadir string, index int) []byte {
 			BootStrapPeers: []string{
 				bootnode,
 			},
+		},
+		Ixpool: IxPoolConfig{
+			Mode:       0,
+			PriceLimit: big.NewInt(10),
 		},
 		Telemetry: Telemetry{
 			PrometheusAddr: ":" + strconv.Itoa(30000+index),

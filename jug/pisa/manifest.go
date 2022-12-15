@@ -13,11 +13,7 @@ type ManifestSchemaV1 struct {
 	Syntax string `yaml:"syntax" json:"syntax"`
 	Engine string `yaml:"engine" json:"engine"`
 
-	EngineFlags []string `yaml:"flags" json:"flags"`
-
-	Storage  map[uint8]string `yaml:"storage" json:"storage"`
-	Builders []RoutineSchema  `yaml:"builders" json:"builders"`
-
+	Storage   *StorageSchema           `yaml:"storage" json:"storage"`
 	Constants map[uint64]string        `yaml:"constants" json:"constants"`
 	Routines  map[uint64]RoutineSchema `yaml:"routines" json:"routines"`
 
@@ -46,6 +42,13 @@ func (manifest *ManifestSchemaV1) FromBytes(data []byte) error {
 	}
 
 	return nil
+}
+
+// StorageSchema represents a structural layout and an intermediary
+// format for defining a Logic Storage for the PISA Execution Engine
+type StorageSchema struct {
+	Fields  map[uint8]string `yaml:"fields" json:"fields"`
+	Builder RoutineSchema    `yaml:"builder" json:"builder"`
 }
 
 // ClassSchema represents a structural layout and an intermediary

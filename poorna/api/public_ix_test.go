@@ -120,7 +120,7 @@ func TestGetRawIXPayloadForLogicDeploy(t *testing.T) {
 		{
 			name: "should fail for empty manifest",
 			deployArgsCallback: func(args *LogicDeployArgs) {
-				args.Manifest = nil
+				args.Manifest = ""
 			},
 			error: types.ErrEmptyManifest,
 		},
