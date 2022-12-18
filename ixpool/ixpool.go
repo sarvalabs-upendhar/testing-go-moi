@@ -10,7 +10,6 @@ import (
 	"github.com/sarvalabs/moichain/utils"
 
 	"github.com/hashicorp/go-hclog"
-
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/types"
 )
@@ -21,7 +20,7 @@ const (
 )
 
 const (
-	txMaxSize = 128 * 1024 // 128Kb
+	ixMaxSize = 128 * 1024 // 128Kb
 )
 
 type stateManager interface {
@@ -110,12 +109,12 @@ func (i *IxPool) GetNonce(addr types.Address) (uint64, error) {
 
 func (i *IxPool) AddInteractions(ixs types.Interactions) []error {
 	newIxs := make(types.Interactions, 0, len(ixs))
-	errs := make([]error, len(ixs))
+	errs := make([]error, 0, len(ixs))
 
-	for index, ix := range ixs {
+	for _, ix := range ixs {
 		if err := i.checkIx(ix); err != nil {
-			log.Println("Error adding the interaction", err)
-			errs[index] = err
+			i.logger.Error("Error adding the interaction", "error", err)
+			errs = append(errs, err)
 		} else {
 			newIxs = append(newIxs, ix)
 		}
@@ -125,9 +124,9 @@ func (i *IxPool) AddInteractions(ixs types.Interactions) []error {
 		return errs
 	}
 
-	i.enqueueReqCh <- enqueueRequest{ix: newIxs}
+	i.enqueueReqCh <- enqueueRequest{ixs: newIxs}
 
-	if err := i.mux.Post(utils.NewIxsEvent{Ixs: ixs}); err != nil {
+	if err := i.mux.Post(utils.NewIxsEvent{Ixs: newIxs}); err != nil {
 		i.logger.Error("Error posting event", "error", err)
 	}
 
@@ -137,11 +136,8 @@ func (i *IxPool) AddInteractions(ixs types.Interactions) []error {
 func (i *IxPool) handleEnqueueRequest(req enqueueRequest) {
 	dirtyAccounts := make(map[types.Address]interface{}, 0)
 
-	for _, v := range req.ix {
+	for _, v := range req.ixs {
 		senderAcc := i.accounts.get(v.Sender())
-		if senderAcc == nil {
-			log.Panicln("Account not found") // FIXME: Added this to identify runtime panic
-		}
 
 		if err := senderAcc.enqueue(v); err != nil {
 			continue
@@ -154,11 +150,16 @@ func (i *IxPool) handleEnqueueRequest(req enqueueRequest) {
 		}
 
 		if v.Nonce() > senderAcc.getNonce() {
-			return
+			continue
 		}
 
 		dirtyAccounts[v.Sender()] = nil
 	}
+
+	if len(dirtyAccounts) == 0 {
+		return
+	}
+
 	i.promoteReqCh <- promoteRequest{account: dirtyAccounts}
 }
 
@@ -166,9 +167,9 @@ func (i *IxPool) handlePromoteRequest(req promoteRequest) {
 	for addr := range req.account {
 		account := i.accounts.get(addr)
 
-		// promote enqueued txs
+		// promote enqueued ixs
 		promoted, _ := account.promote()
-		i.metrics.capturePendingTxs(float64(promoted))
+		i.metrics.capturePendingIxs(float64(promoted))
 		log.Println("promote request", "promoted", promoted, "addr", addr)
 	}
 }
@@ -256,7 +257,16 @@ func (i *IxPool) resetAccount(addr types.Address, nonce uint64) {
 	// update pool state
 	i.allIxs.remove(pruned)
 
-	i.metrics.capturePendingTxs(float64(-1 * len(pruned)))
+	// lock enqueued
+	account.enqueued.lock(true)
+
+	defer func() {
+		// update accountsMap
+		i.accounts.remove(addr)
+		account.enqueued.unlock()
+	}()
+
+	i.metrics.capturePendingIxs(float64(-1 * len(pruned)))
 
 	if ixSize, err := GetIxsSize(pruned); err == nil {
 		i.metrics.captureIxPoolSize(-1 * float64(ixSize))
@@ -267,17 +277,13 @@ func (i *IxPool) resetAccount(addr types.Address, nonce uint64) {
 		return
 	}
 
-	// lock enqueued
-	account.enqueued.lock(true)
-	defer account.enqueued.unlock()
-
 	// prune enqueued
 	pruned = account.enqueued.prune(nonce)
 
-	log.Println("Prunned tx", pruned)
+	log.Println("Prunned ixs", pruned)
+
 	// update pool state
 	i.allIxs.remove(pruned)
-	// p.gauge.decrease(slotsRequired(pruned))
 
 	if ixSize, err := GetIxsSize(pruned); err == nil {
 		i.metrics.captureIxPoolSize(-1 * float64(ixSize))
@@ -288,7 +294,7 @@ func (i *IxPool) resetAccount(addr types.Address, nonce uint64) {
 
 	if first := account.enqueued.peek(); first != nil &&
 		first.Nonce() == nonce {
-		// first enqueued tx is expected -> signal promotion
+		// first enqueued ix is expected -> signal promotion
 		req := promoteRequest{account: make(map[types.Address]interface{})}
 		req.account[addr] = nil
 		i.promoteReqCh <- req
@@ -305,7 +311,7 @@ func (i *IxPool) Executables() InteractionQueue {
 	return nil
 }
 
-// Pop removes the given transaction from the
+// Pop removes the given interaction from the
 // associated promoted queue (account).
 // Will update executables with the next primary
 // from that account (if any).
@@ -326,6 +332,46 @@ func (i *IxPool) Pop(ix *types.Interaction) {
 			}
 	*/
 	account.promoted.pop()
+}
+
+func (i *IxPool) Drop(ix *types.Interaction) {
+	// fetch the associated account
+	account := i.accounts.get(ix.Sender())
+
+	if account != nil {
+		// lock enqueued and promoted
+		account.enqueued.lock(true)
+		account.promoted.lock(true)
+
+		defer func() {
+			account.enqueued.unlock()
+			account.promoted.unlock()
+		}()
+
+		noOfDroppedIxs := 0
+
+		// remove the dropped ixs from the allIxs lookup map
+		cleanAllIxs := func(ixs types.Interactions) {
+			i.allIxs.remove(ixs)
+
+			noOfDroppedIxs += len(ixs)
+		}
+
+		// drop promoted
+		dropped := account.promoted.clear()
+		cleanAllIxs(dropped)
+
+		i.metrics.capturePendingIxs(float64(-1 * len(dropped)))
+
+		// drop enqueued
+		dropped = account.enqueued.clear()
+		cleanAllIxs(dropped)
+
+		// drop the account
+		i.accounts.remove(ix.Sender())
+
+		i.logger.Debug("Dropped ixs", "count", noOfDroppedIxs, "address", ix.Sender())
+	}
 }
 
 // IncrementWaitTime updates the waitTime for the given account
@@ -351,7 +397,7 @@ func (i *IxPool) validateIx(ix *types.Interaction) error {
 		return err
 	}
 
-	if ixSize > txMaxSize {
+	if ixSize > ixMaxSize {
 		return ErrOversizedData
 	}
 
@@ -361,7 +407,7 @@ func (i *IxPool) validateIx(ix *types.Interaction) error {
 
 	// TODO: Check the signature
 
-	// Reject underpriced transactions
+	// Reject underpriced interactions
 	if ix.IsUnderpriced(i.cfg.PriceLimit) {
 		return types.ErrUnderpriced
 	}
@@ -376,7 +422,7 @@ func (i *IxPool) validateIx(ix *types.Interaction) error {
 			return ErrInvalidAccountState
 		}
 
-		// Check if the sender has enough funds to execute the transaction
+		// Check if the sender has enough funds to execute the interaction
 		if accountBalance.Cmp(ix.Cost()) < 0 {
 			return ErrInsufficientFunds
 		}
@@ -436,7 +482,7 @@ func (i *IxPool) Start() {
 // helper functions
 
 func GetIxsSize(ixs types.Interactions) (uint64, error) {
-	var sumSize uint64
+	var ixsSize uint64
 
 	for _, ix := range ixs {
 		size, err := ix.Size()
@@ -444,8 +490,8 @@ func GetIxsSize(ixs types.Interactions) (uint64, error) {
 			return 0, err
 		}
 
-		sumSize += size
+		ixsSize += size
 	}
 
-	return sumSize, nil
+	return ixsSize, nil
 }

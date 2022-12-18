@@ -10,7 +10,7 @@ import (
 )
 
 type Metrics struct {
-	PendingTxs      metrics.Gauge
+	PendingIxs      metrics.Gauge
 	IxPoolSize      metrics.Gauge
 	AccountWaitTime metrics.Histogram
 }
@@ -23,7 +23,7 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 	}
 
 	return &Metrics{
-		PendingTxs: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
+		PendingIxs: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
 			Namespace: namespace,
 			Subsystem: "ixpool",
 			Name:      "pending_transactions",
@@ -46,7 +46,7 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 
 func NilMetrics() *Metrics {
 	return &Metrics{
-		PendingTxs:      discard.NewGauge(),
+		PendingIxs:      discard.NewGauge(),
 		IxPoolSize:      discard.NewGauge(),
 		AccountWaitTime: discard.NewHistogram(),
 	}
@@ -55,13 +55,13 @@ func NilMetrics() *Metrics {
 // methods to capture telemetry metrics
 func (metrics *Metrics) initMetrics() {
 	// set default value of ixpool pending transactions gauge
-	metrics.PendingTxs.Set(0)
+	metrics.PendingIxs.Set(0)
 	// set default value of ixpool size gauge
 	metrics.IxPoolSize.Set(0)
 }
 
-func (metrics *Metrics) capturePendingTxs(delta float64) {
-	metrics.PendingTxs.Add(delta)
+func (metrics *Metrics) capturePendingIxs(delta float64) {
+	metrics.PendingIxs.Add(delta)
 }
 
 func (metrics *Metrics) captureIxPoolSize(delta float64) {

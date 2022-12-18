@@ -60,22 +60,32 @@ func (q *accountQueue) unlock() {
 // with nonce lower than given.
 func (q *accountQueue) prune(nonce uint64) (pruned []*types.Interaction) {
 	for {
-		tx := q.peek()
-		if tx == nil ||
-			tx.Nonce() >= nonce {
+		ix := q.peek()
+		if ix == nil ||
+			ix.Nonce() >= nonce {
 			break
 		}
 
-		tx = q.pop()
-		pruned = append(pruned, tx)
+		ix = q.pop()
+		pruned = append(pruned, ix)
 	}
 
 	return
 }
 
+func (q *accountQueue) clear() (dropped []*types.Interaction) {
+	// copy ixs
+	dropped = q.queue
+
+	// clear queue
+	q.queue = q.queue[:0]
+
+	return dropped
+}
+
 // push pushes the given Interactions onto the queue.
-func (q *accountQueue) push(tx *types.Interaction) {
-	heap.Push(&q.queue, tx)
+func (q *accountQueue) push(ix *types.Interaction) {
+	heap.Push(&q.queue, ix)
 }
 
 // peek returns the first Interaction from the queue without removing it.
@@ -144,7 +154,6 @@ func (q *minNonceQueue) Pop() interface{} {
 	return x
 }
 
-/*
 type pricedQueue struct {
 	queue maxPriceQueue
 }
@@ -159,37 +168,36 @@ func newPricedQueue() *pricedQueue {
 	return &q
 }
 
-// clear empties the underlying queue
-// and returns the removed Interactions.
-func (q *pricedQueue) clear() {
-	for {
-		tx := q.pop()
-		if tx == nil {
-			break
-		}
-	}
-}
-
-// Pushes the given Interactions onto the queue.
-func (q *pricedQueue) push(tx *types.Interaction) {
-	heap.Push(&q.queue, tx)
+// Push the given Interactions onto the queue.
+func (q *pricedQueue) Push(ix *types.Interaction) {
+	heap.Push(&q.queue, ix)
 }
 
 // Pop removes the first Interaction from the queue
-// or nil if the queue is empty.
-func (q *pricedQueue) pop() *types.Interaction {
-	if q.length() == 0 {
+// or return nil if the queue is empty.
+func (q *pricedQueue) Pop() interface{} {
+	if q.Len() == 0 {
 		return nil
 	}
 
-	return heap.Pop(&q.queue).(*types.Interaction)
+	return heap.Pop(&q.queue).(*types.Interaction) //nolint
 }
 
-// length returns the number of Interactions in the queue.
-func (q *pricedQueue) length() uint64 {
-	return uint64(q.queue.Len())
+// Peek returns the first Interaction from the queue
+// or nil if the queue is empty.
+func (q *pricedQueue) Peek() *types.Interaction {
+	if q.Len() == 0 {
+		return nil
+	}
+
+	return q.queue.Peek()
 }
-*/
+
+// Len returns the number of Interactions in the queue.
+func (q *pricedQueue) Len() int {
+	return q.queue.Len()
+}
+
 // Interactions sorted by gas price (descending)
 type maxPriceQueue []*types.Interaction
 
@@ -226,6 +234,50 @@ func (q *maxPriceQueue) Pop() interface{} {
 	*q = (*old)[0 : n-1]
 
 	return x
+}
+
+type waitQueue struct {
+	queue maxWaitQueue
+}
+
+func newWaitQueue() *waitQueue {
+	q := waitQueue{
+		queue: make(maxWaitQueue, 0),
+	}
+
+	heap.Init(&q.queue)
+
+	return &q
+}
+
+// Push the given Interactions onto the queue.
+func (q *waitQueue) Push(ix interface{}) {
+	heap.Push(&q.queue, ix)
+}
+
+// Pop removes the first Interaction from the queue
+// or return nil if the queue is empty.
+func (q *waitQueue) Pop() interface{} {
+	if q.Len() == 0 {
+		return nil
+	}
+
+	return heap.Pop(&q.queue).(*types.Interaction) //nolint
+}
+
+// Peek returns the first Interaction from the queue
+// or nil if the queue is empty.
+func (q *waitQueue) Peek() *types.Interaction {
+	if q.Len() == 0 {
+		return nil
+	}
+
+	return q.queue.Peek()
+}
+
+// Len returns the number of Interactions in the queue.
+func (q *waitQueue) Len() int {
+	return q.queue.Len()
 }
 
 // Interactions sorted by wait counter  (descending)

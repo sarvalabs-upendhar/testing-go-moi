@@ -86,7 +86,7 @@ type state interface {
 type ixPool interface {
 	IncrementWaitTime(addr types.Address, baseTime time.Duration) error
 	Executables() ixpool.InteractionQueue
-	ResetWithInteractions(ixs types.Interactions)
+	Drop(ix *types.Interaction)
 }
 
 type execution interface {

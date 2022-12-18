@@ -46,8 +46,13 @@ func (p *PublicIXAPI) SendInteraction(args *SendIXArgs) (*types.Interaction, err
 		return nil, err
 	}
 
-	// Call the following method to add interactions to pool
-	return ixn, p.ixpool.AddInteractions(types.Interactions{ixn})[0]
+	// add the interactions to ix pool
+	errs := p.ixpool.AddInteractions(types.Interactions{ixn})
+	if len(errs) > 0 {
+		return ixn, errs[0]
+	}
+
+	return ixn, nil
 }
 
 // helper function

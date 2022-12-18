@@ -21,11 +21,11 @@ func NewLookupMap() *lookupMap {
 }
 
 // add inserts the given Interaction into the map. [thread-safe]
-func (m *lookupMap) add(txs ...*types.Interaction) {
+func (m *lookupMap) add(ixs ...*types.Interaction) {
 	m.Lock()
 	defer m.Unlock()
 
-	for _, ix := range txs {
+	for _, ix := range ixs {
 		m.all[ix.Hash()] = ix
 	}
 }

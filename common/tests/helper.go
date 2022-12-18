@@ -286,28 +286,14 @@ func GetTesseract(t *testing.T, height uint64) *types.Tesseract {
 	return &tesseract
 }
 
-/*
-// Unused functions
-
-func GetInvalidHash(t *testing.T) string {
+func GetRandomAddressList(t *testing.T, count uint8) []types.Address {
 	t.Helper()
-	randomHash := RandomHash(t).String()
 
-	randmath.Seed(time.Now().UnixNano())
-	randomNum := randmath.Intn(62)
-	randAlphabet := 'g' + randmath.Intn(17)
+	address := make([]types.Address, count)
 
-	return randomHash[:randomNum] + string(rune(randAlphabet)) + randomHash[randomNum+1:]
+	for i := uint8(0); i < count; i++ {
+		address[i] = RandomAddress(t)
+	}
+
+	return address
 }
-
-func GetInvalidAddress(t *testing.T) string {
-	t.Helper()
-	randomHash := RandomHash(t).String()
-
-	randmath.Seed(time.Now().UnixNano())
-	randomNum := randmath.Intn(62)
-	randAlphabet := 'g' + randmath.Intn(17)
-
-	return randomHash[:randomNum] + string(rune(randAlphabet)) + randomHash[randomNum+1:]
-}
-*/

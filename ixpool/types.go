@@ -24,7 +24,7 @@ type promoteRequest struct {
 }
 
 type enqueueRequest struct {
-	ix types.Interactions
+	ixs types.Interactions
 }
 
 // Thread safe map of all accounts registered by the pool.
@@ -66,8 +66,8 @@ func (m *accountsMap) exists(addr types.Address) bool {
 }
 
 // getPrimaries returns the interactions sorted based on the waitTime of the account
-func (m *accountsMap) getWaitPrimaries() *maxWaitQueue {
-	waitQueue := make(maxWaitQueue, 0)
+func (m *accountsMap) getWaitPrimaries() *waitQueue {
+	waitQueue := newWaitQueue()
 
 	m.Range(func(key, value interface{}) bool {
 		addressKey, ok := key.(types.Address)
@@ -80,24 +80,24 @@ func (m *accountsMap) getWaitPrimaries() *maxWaitQueue {
 		account.promoted.lock(false)
 		defer account.promoted.unlock()
 
-		if !time.Now().After(account.waitTime) {
+		if !time.Now().After(account.getWaitTime()) {
 			return true
 		}
 		// add head of the queue
 		if ix := account.promoted.peek(); ix != nil {
-			waitIX := &WaitInteractions{account.delayCounter, ix}
+			waitIX := &WaitInteractions{account.getDelayCounter(), ix}
 			waitQueue.Push(waitIX)
 		}
 
 		return true
 	})
 
-	return &waitQueue
+	return waitQueue
 }
 
 // getCostPrimaries returns the interactions sorted based on the waitTime of the account
-func (m *accountsMap) getCostPrimaries() *maxPriceQueue {
-	priceQueue := make(maxPriceQueue, 0)
+func (m *accountsMap) getCostPrimaries() *pricedQueue {
+	priceQueue := newPricedQueue()
 
 	m.Range(func(key, value interface{}) bool {
 		addressKey, ok := key.(types.Address)
@@ -110,7 +110,7 @@ func (m *accountsMap) getCostPrimaries() *maxPriceQueue {
 		account.promoted.lock(false)
 		defer account.promoted.unlock()
 
-		if !time.Now().After(account.waitTime) {
+		if !time.Now().After(account.getWaitTime()) {
 			return true
 		}
 		// add head of the queue
@@ -121,7 +121,7 @@ func (m *accountsMap) getCostPrimaries() *maxPriceQueue {
 		return true
 	})
 
-	return &priceQueue
+	return priceQueue
 }
 
 // get returns the account associated with the given address.
@@ -160,8 +160,8 @@ func (m *accountsMap) promoted() (total uint64) { //nolint
 	return
 }
 
-// allTxs returns all promoted and all enqueued Interactions, depending on the flag.
-func (m *accountsMap) allTxs(includeEnqueued bool) ( //nolint
+// allIxs returns all promoted and all enqueued Interactions, depending on the flag.
+func (m *accountsMap) allIxs(includeEnqueued bool) ( //nolint
 	allPromoted, allEnqueued map[types.Address][]*types.Interaction,
 ) {
 	allPromoted = make(map[types.Address][]*types.Interaction)
@@ -191,6 +191,15 @@ func (m *accountsMap) allTxs(includeEnqueued bool) ( //nolint
 	})
 
 	return
+}
+
+// remove deletes the account from the accountsMap if the enqueue and promoted queue of the account is empty
+func (m *accountsMap) remove(address types.Address) {
+	account := m.get(address)
+
+	if account.enqueued.length() == 0 && account.promoted.length() == 0 {
+		m.Delete(address)
+	}
 }
 
 // An account is the core structure for processing
@@ -224,7 +233,7 @@ func (a *account) incrementCounter(baseTime time.Duration) {
 // getWaitTime returns the wait time associated with the account
 func (a *account) getWaitTime() time.Time {
 	a.waitLock.RLock()
-	defer a.waitLock.Unlock()
+	defer a.waitLock.RUnlock()
 
 	return a.waitTime
 }
@@ -255,14 +264,14 @@ func (a *account) resetWaitTimeAndCounter() {
 	a.waitTime = time.Now()
 }
 
-// enqueue attempts tp push the Interaction onto the enqueued queue.
-func (a *account) enqueue(tx *types.Interaction) error {
+// enqueue attempts to push the Interaction onto the enqueued queue.
+func (a *account) enqueue(ix *types.Interaction) error {
 	a.enqueued.lock(true)
 	defer a.enqueued.unlock()
 
 	// only accept low nonce if
-	// tx was demoted
-	if tx.Nonce() < a.getNonce() {
+	// ix was demoted
+	if ix.Nonce() < a.getNonce() {
 		return ErrNonceTooLow
 	}
 
@@ -271,8 +280,8 @@ func (a *account) enqueue(tx *types.Interaction) error {
 		a.resetWaitTimeAndCounter()
 	}
 
-	// enqueue tx
-	a.enqueued.push(tx)
+	// enqueue ix
+	a.enqueued.push(ix)
 
 	return nil
 }
@@ -299,22 +308,22 @@ func (a *account) promote() (uint64, []types.Hash) {
 	}
 
 	promoted := uint64(0)
-	promotedTxnHashes := make([]types.Hash, 0)
+	promotedIxnHashes := make([]types.Hash, 0)
 	nextNonce := a.enqueued.peek().Nonce()
 
 	for {
-		tx := a.enqueued.peek()
-		if tx == nil ||
-			tx.Nonce() != nextNonce {
+		ix := a.enqueued.peek()
+		if ix == nil ||
+			ix.Nonce() != nextNonce {
 			break
 		}
 
 		// pop from enqueued
-		tx = a.enqueued.pop()
+		ix = a.enqueued.pop()
 
 		// push to promoted
-		a.promoted.push(tx)
-		promotedTxnHashes = append(promotedTxnHashes, tx.Hash())
+		a.promoted.push(ix)
+		promotedIxnHashes = append(promotedIxnHashes, ix.Hash())
 
 		// update counters
 		nextNonce += 1
@@ -327,5 +336,5 @@ func (a *account) promote() (uint64, []types.Hash) {
 		a.setNonce(nextNonce)
 	}
 
-	return promoted, promotedTxnHashes
+	return promoted, promotedIxnHashes
 }

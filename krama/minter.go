@@ -34,7 +34,7 @@ func (k *Engine) minter() {
 				if resp.err != nil {
 					switch resp.err.Error() {
 					case types.ErrInvalidInteractions.Error():
-						k.pool.ResetWithInteractions(ixs)
+						k.pool.Drop(ix)
 					default:
 						if !errors.Is(resp.err, types.ErrSlotsFull) {
 							if err := k.pool.IncrementWaitTime(ix.Sender(), k.avgICSTime); err != nil {

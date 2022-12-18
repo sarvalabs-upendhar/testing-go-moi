@@ -75,7 +75,7 @@ jobs:
           name: moichain.build
 
       - name: Copy the latest artifact to remote hosts
-        uses: appleboy/scp-action@master
+        uses: appleboy/scp-action@v0.1.3
         with:
           host: ${{ secrets[matrix.ip] }}
           username: ${{ secrets.DEV_USER }}
@@ -86,7 +86,7 @@ jobs:
           overwrite: true
 
       - name: Update binary and restart moipods
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v0.1.4
         with:
           host: ${{ secrets[matrix.ip] }}
           username: ${{ secrets.DEV_USER }}

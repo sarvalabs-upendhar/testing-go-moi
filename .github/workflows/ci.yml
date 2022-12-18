@@ -4,6 +4,10 @@ on:
     branches:
       - master
       - develop
+    types:
+      - opened
+      - synchronize
+      - ready_for_review
 
   workflow_call:
     secrets:
