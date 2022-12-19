@@ -320,7 +320,19 @@ func (sm *StateManager) getLatestTesseractHash(addr types.Address) (types.Hash, 
 	return accMetaInfo.TesseractHash, nil
 }
 
+// getTesseractByHash returns tesseract with/without interactions
+// - with interactions always fetches from db
+// - without interactions fetches from cache or db
 func (sm *StateManager) getTesseractByHash(hash types.Hash, withInteractions bool) (*types.Tesseract, error) {
+	if withInteractions {
+		ts, err := sm.FetchTesseractFromDB(hash, withInteractions)
+		if err != nil {
+			return nil, err
+		}
+
+		return ts, nil
+	}
+
 	object, isCached := sm.cache.Get(hash)
 	if !isCached {
 		ts, err := sm.FetchTesseractFromDB(hash, withInteractions)

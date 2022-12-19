@@ -550,7 +550,7 @@ func (c *ChainManager) addTesseract(
 
 	if cache {
 		c.tesseracts.Add(addr, tesseractHash)
-		c.tesseracts.Add(tesseractHash, t)
+		c.tesseracts.Add(tesseractHash, t.GetTesseractWithoutIxns())
 	}
 
 	c.logger.Info("!!!!!.... tesseract  added ....!!!!!", addr, tesseractHash)

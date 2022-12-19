@@ -207,6 +207,14 @@ func (t *Tesseract) Canonical() *CanonicalTesseract {
 	}
 }
 
+func (t *Tesseract) GetTesseractWithoutIxns() *Tesseract {
+	return &Tesseract{
+		Header: t.Header,
+		Body:   t.Body,
+		Seal:   t.Seal,
+	}
+}
+
 type CanonicalTesseract struct {
 	Header TesseractHeader
 	Body   TesseractBody
