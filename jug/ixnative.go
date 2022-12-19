@@ -103,6 +103,10 @@ func (executor IxExecutor) LogicDeploy(
 		)
 	}
 
+	// Set the manifest data into the state object dirty entries.
+	// This manifest will now be content addressed with its hash.
+	state.SetDirtyEntry(logicDescriptor.Manifest.Hex(), payload.Deploy.Manifest)
+
 	// Get the current consumed fuel
 	consumed := compileResult.Fuel
 	available -= consumed

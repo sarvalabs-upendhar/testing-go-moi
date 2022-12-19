@@ -161,6 +161,10 @@ func (s *StateObject) Copy() *StateObject {
 	return sObj
 }
 
+func (s *StateObject) SetDirtyEntry(key string, value []byte) {
+	s.dirtyEntries[key] = value
+}
+
 func (s *StateObject) commitBalanceObject() ([]byte, error) {
 	data, err := s.balance.Bytes()
 	if err != nil {

@@ -228,7 +228,8 @@ func (r *rpcService) GetInteractionCountByAddress(
 	return nil
 }
 
-func (r *rpcService) GetStorage(req *http.Request,
+func (r *rpcService) GetStorage(
+	req *http.Request,
 	args *api.GetStorageArgs,
 	resp *api.Response,
 ) error {
@@ -250,6 +251,26 @@ func (r *rpcService) GetStorage(req *http.Request,
 	fmt.Println(doc)
 
 	resp.Data = storageData
+
+	return nil
+}
+
+func (r *rpcService) GetLogicManifest(
+	req *http.Request,
+	args *api.GetLogicManifestArgs,
+	resp *api.Response,
+) error {
+	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
+	if !ok {
+		return types.ErrInvalidAPI
+	}
+
+	manifest, err := coreAPI.GetLogicManifest(args)
+	if err != nil {
+		return err
+	}
+
+	resp.Data = manifest
 
 	return nil
 }

@@ -44,6 +44,10 @@ type GetStorageArgs struct {
 	StorageKey string `json:"storage-key"`
 }
 
+type GetLogicManifestArgs struct {
+	LogicID string `json:"logic_id"`
+}
+
 // BalArgs is a struct that represents an argument wrapper for retrieving balance of an asset
 type BalArgs struct {
 	// Represents the address for which to retrieve the balance

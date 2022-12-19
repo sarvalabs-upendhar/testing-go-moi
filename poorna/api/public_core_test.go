@@ -14,7 +14,7 @@ import (
 func TestPublicCoreAPI_GetBalance(t *testing.T) {
 	address := tests.RandomAddress(t)
 	chainManager := NewMockChainManager(t)
-	stateManager := NewMockStateManager()
+	stateManager := NewMockStateManager(t)
 	assetID, _ := tests.CreateTestAsset(t, address)
 
 	stateManager.setBalance(address, assetID, big.NewInt(300))
@@ -166,7 +166,7 @@ func TestPublicCoreAPI_GetLatestTesseract(t *testing.T) {
 func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
 	address := tests.RandomAddress(t)
 	chainManager := NewMockChainManager(t)
-	stateManager := NewMockStateManager()
+	stateManager := NewMockStateManager(t)
 	latestContextHash, _, _ := getTesseracts(t, address)
 
 	stateManager.setLatestContextHash(address, latestContextHash)
@@ -239,7 +239,7 @@ func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
 func TestPublicCoreAPI_GetTDU(t *testing.T) {
 	address := tests.RandomAddress(t)
 	chainManager := NewMockChainManager(t)
-	stateManager := NewMockStateManager()
+	stateManager := NewMockStateManager(t)
 	assetID, _ := tests.CreateTestAsset(t, address)
 
 	stateManager.setBalance(address, assetID, big.NewInt(300))
@@ -429,7 +429,7 @@ func TestPublicCoreAPI_GetTesseractByHash(t *testing.T) {
 func TestPublicCoreAPI_GetTesseractByHeight(t *testing.T) {
 	address := tests.RandomAddress(t)
 	chainManager := NewMockChainManager(t)
-	stateManager := NewMockStateManager()
+	stateManager := NewMockStateManager(t)
 	_, latestTesseractHash, tesseracts := getTesseracts(t, address)
 	interactions := getInteractions(t, tesseracts)
 	latestTesseract := tesseracts[latestTesseractHash]
@@ -570,7 +570,7 @@ func TestPublicCoreAPI_GetInteractionCountByAddress(t *testing.T) {
 	address := tests.RandomAddress(t)
 	latestNonce := uint64(5)
 	chainManager := NewMockChainManager(t)
-	stateManager := NewMockStateManager()
+	stateManager := NewMockStateManager(t)
 
 	stateManager.setAccounts(address, latestNonce)
 
@@ -620,6 +620,53 @@ func TestPublicCoreAPI_GetInteractionCountByAddress(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, fetchedNonce, testcase.expected)
+			}
+		})
+	}
+}
+
+func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
+	chainManager := NewMockChainManager(t)
+	stateManager := NewMockStateManager(t)
+	logicID := types.LogicID(tests.RandomHash(t).String())
+
+	stateManager.setLogicManifest(logicID.Hex(), []byte{0x00, 0x01})
+
+	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
+
+	testcases := []struct {
+		name            string
+		args            *GetLogicManifestArgs
+		expected        []byte
+		isErrorExpected bool
+	}{
+		{
+			name: "Valid logic id without state",
+			args: &GetLogicManifestArgs{
+				LogicID: types.LogicID(tests.RandomHash(t).String()).Hex(),
+			},
+			isErrorExpected: true,
+		},
+		{
+			name: "Valid logic id",
+			args: &GetLogicManifestArgs{
+				LogicID: logicID.Hex(),
+			},
+			expected:        []byte{0x00, 0x01},
+			isErrorExpected: false,
+		},
+		// TODO: test case for invalid logic id
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			manifest, err := coreAPI.GetLogicManifest(testcase.args)
+
+			if testcase.isErrorExpected {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, manifest, testcase.expected)
 			}
 		})
 	}

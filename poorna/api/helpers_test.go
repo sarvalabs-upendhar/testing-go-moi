@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"math/big"
 	"math/rand"
 	"sync/atomic"
@@ -41,7 +42,17 @@ type MockStateManager struct {
 	balances          map[types.Address]*gtypes.BalanceObject
 	accounts          map[types.Address]*types.Account
 	context           map[types.Hash]*Context
+	logicManifests    map[string][]byte
 	latestContextHash map[types.Address]types.Hash
+}
+
+func (ms *MockStateManager) GetLogicManifest(logicID types.LogicID) ([]byte, error) {
+	logicManifest, ok := ms.logicManifests[logicID.Hex()]
+	if !ok {
+		return logicManifest, errors.New("logic manifest not found")
+	}
+
+	return logicManifest, nil
 }
 
 func (ms *MockStateManager) GetStorageEntry(logicID types.LogicID, slot []byte) ([]byte, error) {
@@ -69,7 +80,9 @@ func NewMockChainManager(t *testing.T) *MockChainManager {
 	return mockChain
 }
 
-func NewMockStateManager() *MockStateManager {
+func NewMockStateManager(t *testing.T) *MockStateManager {
+	t.Helper()
+
 	mockState := new(MockStateManager)
 
 	mockState.balances = make(map[types.Address]*gtypes.BalanceObject)
@@ -77,6 +90,7 @@ func NewMockStateManager() *MockStateManager {
 	mockState.storage = make(map[types.Hash][]byte)
 	mockState.accounts = make(map[types.Address]*types.Account)
 	mockState.context = make(map[types.Hash]*Context)
+	mockState.logicManifests = make(map[string][]byte)
 
 	return mockState
 }
@@ -265,6 +279,10 @@ func (ms *MockStateManager) getTDU(addr types.Address) types.AssetMap {
 
 func (ms *MockStateManager) setLatestContextHash(addr types.Address, hash types.Hash) {
 	ms.latestContextHash[addr] = hash
+}
+
+func (ms *MockStateManager) setLogicManifest(logicID string, logicManifest []byte) {
+	ms.logicManifests[logicID] = logicManifest
 }
 
 type MockIxPool struct {

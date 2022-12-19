@@ -179,6 +179,12 @@ func (p *PublicCoreAPI) GetStorageAt(args *GetStorageArgs) ([]byte, error) {
 	return p.sm.GetStorageEntry(types.FromHex(args.LogicID), types.FromHex(args.StorageKey))
 }
 
+// GetLogicManifest returns the manifest associated with the given logic id
+func (p *PublicCoreAPI) GetLogicManifest(args *GetLogicManifestArgs) ([]byte, error) {
+	// TODO: logic to validate logic id
+	return p.sm.GetLogicManifest(types.FromHex(args.LogicID))
+}
+
 // helper functions
 func parseAssetMetaInfo(aID []byte) *types.AssetDescriptor {
 	var dimension, info uint8

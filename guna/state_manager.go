@@ -1087,3 +1087,23 @@ func (sm *StateManager) GetStorageEntry(logicID types.LogicID, slot []byte) ([]b
 
 	return so.GetStorageEntry(logicID, slot)
 }
+
+// GetLogicManifest returns the manifest associated with the given logicID
+func (sm *StateManager) GetLogicManifest(logicID types.LogicID) ([]byte, error) {
+	so, err := sm.GetLatestStateObject(logicID.Address())
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to fetch state object")
+	}
+
+	logicObject, err := so.getLogicObject(logicID)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to fetch logic object")
+	}
+
+	logicManifest, err := sm.db.ReadEntry(types.FromHex(logicObject.ManifestHash.Hex()))
+	if err != nil {
+		return nil, errors.Wrap(err, types.ErrFetchingLogicManifest.Error())
+	}
+
+	return logicManifest, nil
+}
