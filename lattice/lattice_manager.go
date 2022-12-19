@@ -64,7 +64,6 @@ type stateManager interface {
 	FlushDirtyObject(addrs types.Address) error
 	GetAccTypeUsingStateObject(address types.Address) (types.AccountType, error)
 	GetLatestTesseract(addr types.Address, withInteractions bool) (*types.Tesseract, error)
-	DeleteStateObject(addr types.Address)
 	GetContextByHash(addr types.Address, hash types.Hash) (types.Hash, []id.KramaID, []id.KramaID, error)
 	GetPublicKeys(id ...id.KramaID) (keys [][]byte, err error)
 	Cleanup(addrs types.Address)

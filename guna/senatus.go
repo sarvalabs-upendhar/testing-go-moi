@@ -24,7 +24,7 @@ import (
 	// "go/build"
 )
 
-type store interface {
+type senatusStore interface {
 	CreateEntry(key []byte, value []byte) error
 	ReadEntry(key []byte) ([]byte, error)
 	Contains(key []byte) (bool, error)
@@ -64,7 +64,7 @@ type ReputationEngine struct {
 	kramaID  id.KramaID
 	ctx      context.Context
 	logger   hclog.Logger
-	db       store
+	db       senatusStore
 	cache    *lru.Cache
 	locks    *locker.Locker
 	state    state
@@ -75,7 +75,7 @@ func NewReputationEngine(
 	ctx context.Context,
 	logger hclog.Logger,
 	state state,
-	db store,
+	db senatusStore,
 ) (*ReputationEngine, error) {
 	cache, err := lru.New(100)
 	if err != nil {

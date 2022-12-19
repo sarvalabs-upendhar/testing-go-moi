@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/dhruva"
-	"github.com/sarvalabs/moichain/dhruva/db"
+	dhruvaDB "github.com/sarvalabs/moichain/dhruva/db"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/types"
 	"github.com/stretchr/testify/require"
@@ -18,7 +18,7 @@ func TestReputationEngine_GetInfo_FetchFromDB(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	mstore := NewMockStore()
+	mstore := NewMockSenatusStore()
 	mState := NewMockState()
 	kramaIDs := tests.GetTestKramaIDs(t, 1)
 	engine := NewTestReputationEngine(t, ctx, mState, mstore)
@@ -33,7 +33,7 @@ func TestReputationEngine_GetInfo_FetchFromDB(t *testing.T) {
 
 	// add entry to DB
 	err = mstore.CreateEntry(dhruva.NtqDBKey(kramaIDs[0]), rawData)
-	require.NoError(t, err, "error adding reputation info to db")
+	require.NoError(t, err, "error adding reputation info to store")
 
 	storedInfo, err := engine.getInfo(kramaIDs[0])
 	require.NoError(t, err)
@@ -41,7 +41,7 @@ func TestReputationEngine_GetInfo_FetchFromDB(t *testing.T) {
 	require.Equal(t, storedInfo.PublickKey, info.PublickKey)
 }
 
-func NewTestReputationEngine(t *testing.T, ctx context.Context, state state, db store) *ReputationEngine {
+func NewTestReputationEngine(t *testing.T, ctx context.Context, state state, db senatusStore) *ReputationEngine {
 	t.Helper()
 
 	r, err := NewReputationEngine(ctx, hclog.NewNullLogger(), state, db)
@@ -51,17 +51,17 @@ func NewTestReputationEngine(t *testing.T, ctx context.Context, state state, db 
 	return r
 }
 
-type mockStore struct {
+type mockSenatusStore struct {
 	data map[string][]byte
 }
 
-func NewMockStore() *mockStore {
-	return &mockStore{
+func NewMockSenatusStore() *mockSenatusStore {
+	return &mockSenatusStore{
 		data: make(map[string][]byte),
 	}
 }
 
-func (store *mockStore) ReadEntry(key []byte) ([]byte, error) {
+func (store *mockSenatusStore) ReadEntry(key []byte) ([]byte, error) {
 	hexKey := hex.EncodeToString(key)
 
 	data, ok := store.data[hexKey]
@@ -72,7 +72,7 @@ func (store *mockStore) ReadEntry(key []byte) ([]byte, error) {
 	return data, nil
 }
 
-func (store *mockStore) CreateEntry(key, value []byte) error {
+func (store *mockSenatusStore) CreateEntry(key, value []byte) error {
 	hexKey := hex.EncodeToString(key)
 	if _, ok := store.data[hexKey]; ok {
 		return types.ErrKeyExists
@@ -83,7 +83,7 @@ func (store *mockStore) CreateEntry(key, value []byte) error {
 	return nil
 }
 
-func (store *mockStore) Contains(key []byte) (bool, error) {
+func (store *mockSenatusStore) Contains(key []byte) (bool, error) {
 	hexKey := hex.EncodeToString(key)
 	if _, ok := store.data[hexKey]; ok {
 		return true, nil
@@ -92,7 +92,7 @@ func (store *mockStore) Contains(key []byte) (bool, error) {
 	return false, nil
 }
 
-func (store *mockStore) UpdateEntry(key, value []byte) error {
+func (store *mockSenatusStore) UpdateEntry(key, value []byte) error {
 	hexKey := hex.EncodeToString(key)
 
 	if _, ok := store.data[hexKey]; !ok {
@@ -104,11 +104,11 @@ func (store *mockStore) UpdateEntry(key, value []byte) error {
 	return nil
 }
 
-func (store *mockStore) NewBatchWriter() db.BatchWriter {
+func (store *mockSenatusStore) NewBatchWriter() dhruvaDB.BatchWriter {
 	return nil
 }
 
-func (store *mockStore) GetEntries(prefix []byte) chan types.DBEntry {
+func (store *mockSenatusStore) GetEntries(prefix []byte) chan types.DBEntry {
 	return nil
 }
 

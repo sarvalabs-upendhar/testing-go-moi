@@ -181,19 +181,6 @@ func (it *mockIterator) GetNext() (*types.DBEntry, error) {
 	}, nil
 }
 
-func getAccMetaInfo(t *testing.T, height int64) *types.AccountMetaInfo {
-	t.Helper()
-
-	return &types.AccountMetaInfo{
-		Address:       tests.RandomAddress(t),
-		Type:          types.AccountType(1),
-		Height:        big.NewInt(height),
-		TesseractHash: tests.RandomHash(t),
-		LatticeExists: true,
-		StateExists:   true,
-	}
-}
-
 func insertTestAccMetaInfo(t *testing.T, pm *PersistenceManager) map[int64]types.Accounts {
 	t.Helper()
 
@@ -202,7 +189,7 @@ func insertTestAccMetaInfo(t *testing.T, pm *PersistenceManager) map[int64]types
 	accountCount := 10000
 	for i := 0; i < accountCount; i++ {
 		// test data
-		AccMetaInfo := getAccMetaInfo(t, 1)
+		AccMetaInfo := tests.GetRandomAccMetaInfo(t, 1)
 		// insert test data in to db
 		_, _, err := pm.UpdateAccMetaInfo(
 			AccMetaInfo.Address,

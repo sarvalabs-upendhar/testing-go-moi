@@ -39,14 +39,14 @@ type StateObject struct {
 	accType types.AccountType
 	data    types.Account
 
-	db *dhruva.PersistenceManager
+	db store
 
 	balance        *gtypes.BalanceObject
 	assetApprovals *gtypes.ApprovalObject
 
 	logicTree       tree.MerkleTree
 	metaStorageTree tree.MerkleTree
-	fileTrie        tree.MerkleTree //nolint
+	fileTree        tree.MerkleTree //nolint
 
 	dirtyEntries Storage
 	receipts     types.Receipts
@@ -59,7 +59,7 @@ func NewStateObject(
 	id types.Address,
 	cache *lru.Cache,
 	j *Journal,
-	db *dhruva.PersistenceManager,
+	db store,
 	account types.Account,
 	accType types.AccountType,
 ) *StateObject {
@@ -304,7 +304,7 @@ func (s *StateObject) flushActiveStorageTrees() error {
 	// flush active storage trees
 	for _, storageTree := range s.activeStorageTrees {
 		if err := storageTree.Flush(); err != nil {
-			return errors.Wrap(err, "failed to commit modified storage tree entries to db")
+			return errors.Wrap(err, "failed to commit modified storage tree entries to store")
 		}
 	}
 
@@ -428,6 +428,10 @@ func (s *StateObject) CreateContext(behaviouralNodes, randomNodes []id.KramaID) 
 }
 
 func (s *StateObject) UpdateContext(behaviouralNodes []id.KramaID, randomNodes []id.KramaID) (types.Hash, error) {
+	if len(behaviouralNodes) == 0 && len(randomNodes) == 0 {
+		return s.data.ContextHash, nil
+	}
+
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
@@ -441,6 +445,7 @@ func (s *StateObject) UpdateContext(behaviouralNodes []id.KramaID, randomNodes [
 	if err != nil {
 		return types.NilHash, err
 	}
+
 	// Set the previous Hash
 	metaObj.PreviousHash = s.ContextHash()
 
@@ -555,8 +560,12 @@ func (s *StateObject) getContextObjectCopy(hash types.Hash) (*gtypes.ContextObje
 func getBalanceObject(
 	addr types.Address,
 	hash types.Hash,
-	db *dhruva.PersistenceManager,
+	db store,
 ) (*gtypes.BalanceObject, error) {
+	if hash.IsNil() {
+		return &gtypes.BalanceObject{}, nil
+	}
+
 	data, err := db.GetBalance(addr, hash)
 	if err != nil {
 		return nil, err
@@ -564,7 +573,7 @@ func getBalanceObject(
 
 	balObject := new(gtypes.BalanceObject)
 
-	if err := balObject.FromBytes(data); err != nil {
+	if err = balObject.FromBytes(data); err != nil {
 		return nil, err
 	}
 
@@ -598,12 +607,7 @@ func (s *StateObject) GetStorageTree(logicID types.LogicID) (tree.MerkleTree, er
 }
 
 func (s *StateObject) SetStorageEntry(logicID types.LogicID, key, value []byte) (err error) {
-	merkleTree, ok := s.activeStorageTrees[logicID.Hex()]
-	if ok {
-		return merkleTree.Set(key, value)
-	}
-
-	merkleTree, err = s.GetStorageTree(logicID)
+	merkleTree, err := s.GetStorageTree(logicID)
 	if err != nil {
 		return err
 	}
@@ -612,12 +616,7 @@ func (s *StateObject) SetStorageEntry(logicID types.LogicID, key, value []byte) 
 }
 
 func (s *StateObject) GetStorageEntry(logicID types.LogicID, key []byte) (value []byte, err error) {
-	merkleTree, ok := s.activeStorageTrees[logicID.Hex()]
-	if ok {
-		return merkleTree.Get(key)
-	}
-
-	merkleTree, err = s.GetStorageTree(logicID)
+	merkleTree, err := s.GetStorageTree(logicID)
 	if err != nil {
 		return nil, err
 	}

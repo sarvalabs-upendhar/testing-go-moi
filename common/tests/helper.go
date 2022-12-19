@@ -217,7 +217,7 @@ func GetRandomUpperCaseString(t *testing.T, length int) (string, error) {
 	return string(randomString), nil
 }
 
-func getRandomAssetInfo(t *testing.T) (*types.AssetDescriptor, error) {
+func GetRandomAssetInfo(t *testing.T) (*types.AssetDescriptor, error) {
 	t.Helper()
 
 	symbol, err := GetRandomUpperCaseString(t, 5)
@@ -241,7 +241,7 @@ func getRandomAssetInfo(t *testing.T) (*types.AssetDescriptor, error) {
 func CreateTestAsset(t *testing.T, address types.Address) (types.AssetID, *types.AssetDescriptor) {
 	t.Helper()
 
-	asset, err := getRandomAssetInfo(t)
+	asset, err := GetRandomAssetInfo(t)
 	if err != nil {
 		log.Panic("Failed to create asset")
 	}
@@ -256,7 +256,7 @@ func CreateTestAsset(t *testing.T, address types.Address) (types.AssetID, *types
 func GetRandomAssetID(t *testing.T, address types.Address) types.AssetID {
 	t.Helper()
 
-	asset, err := getRandomAssetInfo(t)
+	asset, err := GetRandomAssetInfo(t)
 	if err != nil {
 		log.Panic("Failed to create asset")
 	}
@@ -286,6 +286,38 @@ func GetTesseract(t *testing.T, height uint64) *types.Tesseract {
 	return &tesseract
 }
 
+func GetRandomAccMetaInfo(t *testing.T, height int64) *types.AccountMetaInfo {
+	t.Helper()
+
+	return &types.AccountMetaInfo{
+		Address:       RandomAddress(t),
+		Type:          types.AccountType(1),
+		Height:        big.NewInt(height),
+		TesseractHash: RandomHash(t),
+		LatticeExists: true,
+		StateExists:   true,
+	}
+}
+
+func GetTestPublicKeys(t *testing.T, count int) [][]byte {
+	t.Helper()
+
+	p := make([][]byte, 0)
+
+	for i := 0; i < count; i++ {
+		addr := RandomAddress(t).Bytes()
+		p = append(p, addr)
+	}
+
+	return p
+}
+
+func GetTestKramaIdsWithPublicKeys(t *testing.T, count int) ([]id.KramaID, [][]byte) {
+	t.Helper()
+
+	return GetTestKramaIDs(t, count), GetTestPublicKeys(t, count)
+}
+
 func GetRandomAddressList(t *testing.T, count uint8) []types.Address {
 	t.Helper()
 
@@ -297,3 +329,29 @@ func GetRandomAddressList(t *testing.T, count uint8) []types.Address {
 
 	return address
 }
+
+/*
+// Unused functions
+
+func GetInvalidHash(t *testing.T) string {
+	t.Helper()
+	randomHash := RandomHash(t).String()
+
+	randmath.Seed(time.Now().UnixNano())
+	randomNum := randmath.Intn(62)
+	randAlphabet := 'g' + randmath.Intn(17)
+
+	return randomHash[:randomNum] + string(rune(randAlphabet)) + randomHash[randomNum+1:]
+}
+
+func GetInvalidAddress(t *testing.T) string {
+	t.Helper()
+	randomHash := RandomHash(t).String()
+
+	randmath.Seed(time.Now().UnixNano())
+	randomNum := randmath.Intn(62)
+	randAlphabet := 'g' + randmath.Intn(17)
+
+	return randomHash[:randomNum] + string(rune(randAlphabet)) + randomHash[randomNum+1:]
+}
+*/

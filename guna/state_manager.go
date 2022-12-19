@@ -11,7 +11,9 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/sarvalabs/moichain/dhruva/db"
 	"github.com/sarvalabs/moichain/guna/tree"
+	"github.com/sarvalabs/moichain/types"
 
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/utils"
@@ -31,7 +33,6 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 
 	"github.com/sarvalabs/moichain/dhruva"
-	"github.com/sarvalabs/moichain/types"
 )
 
 const (
@@ -60,6 +61,27 @@ type Senatus interface {
 	Start(id id.KramaID, ntq int32, publicKey []byte, address []multiaddr.Multiaddr) error
 }
 
+type store interface {
+	GetAccount(addr types.Address, hash types.Hash) ([]byte, error)
+	GetContext(addr types.Address, hash types.Hash) ([]byte, error)
+	GetAccountMetaInfo(id []byte) (*types.AccountMetaInfo, error)
+	GetInteractions(hash types.Hash) ([]byte, error)
+	GetTesseract(hash types.Hash) ([]byte, error)
+	GetBalance(addr types.Address, hash types.Hash) ([]byte, error)
+	GetMerkleTreeEntry(address types.Address, prefix dhruva.Prefix, key []byte) ([]byte, error)
+	SetMerkleTreeEntry(address types.Address, prefix dhruva.Prefix, key, value []byte) error
+	SetMerkleTreeEntries(address types.Address, prefix dhruva.Prefix, entries map[string][]byte) error
+	WritePreImages(address types.Address, entries map[types.Hash][]byte) error
+	GetPreImage(address types.Address, hash types.Hash) ([]byte, error)
+	DeleteEntry(key []byte) error
+	CreateEntry(key []byte, value []byte) error
+	ReadEntry(key []byte) ([]byte, error)
+	Contains(key []byte) (bool, error)
+	UpdateEntry(key []byte, newValue []byte) error
+	NewBatchWriter() db.BatchWriter
+	GetEntries(prefix []byte) chan types.DBEntry
+}
+
 var (
 	SargaAddress    = types.BytesToAddress(types.GetHash([]byte("sargaAccount")).Bytes())
 	SargaLogicID, _ = types.NewLogicIDv0(0, true, false, 0, SargaAddress)
@@ -71,7 +93,7 @@ type StateManager struct {
 	logger hclog.Logger
 	cache  *lru.Cache
 
-	db *dhruva.PersistenceManager
+	db store
 
 	senatus Senatus
 	network server
@@ -88,7 +110,7 @@ type StateManager struct {
 
 func NewStateManager(
 	ctx context.Context,
-	db *dhruva.PersistenceManager,
+	db store,
 	logger hclog.Logger,
 	cache *lru.Cache,
 	network server,
@@ -124,8 +146,6 @@ func NewStateManager(
 func (sm *StateManager) createStateObject(addr types.Address, accType types.AccountType) *StateObject {
 	journal := new(Journal)
 	stateObject := NewStateObject(addr, sm.cache, journal, sm.db, types.Account{}, accType)
-
-	sm.dirtyObjects[addr] = stateObject
 
 	return stateObject
 }
@@ -225,8 +245,7 @@ func (sm *StateManager) GetStateObjectByHash(addr types.Address, hash types.Hash
 		return nil, err
 	}
 
-	newJournal := new(Journal)
-	sObj := NewStateObject(addr, sm.cache, newJournal, sm.db, *acc, acc.AccType)
+	sObj := NewStateObject(addr, sm.cache, new(Journal), sm.db, *acc, acc.AccType)
 
 	sObj.balance, err = getBalanceObject(addr, acc.Balance, sm.db)
 	if err != nil {
@@ -237,14 +256,6 @@ func (sm *StateManager) GetStateObjectByHash(addr types.Address, hash types.Hash
 	sm.objects[addr] = sObj
 
 	return sObj, nil
-}
-
-func (sm *StateManager) DeleteStateObject(addr types.Address) {
-	sm.objectsLock.Lock()
-	defer sm.objectsLock.Unlock()
-
-	delete(sm.objects, addr)
-	sm.cleanupDirtyObject(addr)
 }
 
 func (sm *StateManager) GetLatestTesseract(addr types.Address, withInteractions bool) (*types.Tesseract, error) {
@@ -325,12 +336,7 @@ func (sm *StateManager) getLatestTesseractHash(addr types.Address) (types.Hash, 
 // - without interactions fetches from cache or db
 func (sm *StateManager) getTesseractByHash(hash types.Hash, withInteractions bool) (*types.Tesseract, error) {
 	if withInteractions {
-		ts, err := sm.FetchTesseractFromDB(hash, withInteractions)
-		if err != nil {
-			return nil, err
-		}
-
-		return ts, nil
+		return sm.FetchTesseractFromDB(hash, withInteractions)
 	}
 
 	object, isCached := sm.cache.Get(hash)
@@ -434,11 +440,11 @@ func (sm *StateManager) fetchParticipantContextByHash(addr types.Address, hash t
 	behaviouralSet, randomSet *ktypes.NodeSet,
 	err error,
 ) {
-	behaviouralContext, randomContext, err := sm.getContextByHash(addr, hash)
+	behaviouralContext, randomContext, err := sm.getContext(addr, hash)
 	if err != nil {
 		sm.logger.Error("failed to retrieve sender context nodes", "error", err)
 
-		return nil, nil, types.ErrAccountNotFound
+		return nil, nil, err
 	}
 
 	if len(behaviouralContext) > 0 {
@@ -508,7 +514,7 @@ func (sm *StateManager) GetCommittedContextHash(add types.Address) (types.Hash, 
 	return tesseract.Body.ContextHash, nil
 }
 
-func (sm *StateManager) getContextByHash(addr types.Address, hash types.Hash) ([]id.KramaID, []id.KramaID, error) {
+func (sm *StateManager) getContext(addr types.Address, hash types.Hash) ([]id.KramaID, []id.KramaID, error) {
 	metaContextObject, err := sm.getMetaContextObject(addr, hash)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "metaContextObject fetch failed")
@@ -547,7 +553,7 @@ func (sm *StateManager) GetContextByHash(
 		hash = ts.Body.ContextHash
 	}
 
-	behaviourSet, randomSet, err := sm.getContextByHash(address, hash)
+	behaviourSet, randomSet, err := sm.getContext(address, hash)
 	if err != nil {
 		return types.NilHash, nil, nil, err
 	}
@@ -616,32 +622,50 @@ func (sm *StateManager) FetchInteractionContext(ctx context.Context, ix *types.I
 	}
 
 	if !ix.Receiver().IsNil() {
-		accountRegistered, err := sm.IsAccountRegistered(ix.Receiver())
-		if err != nil {
+		if err = sm.getReceiverContext(ix, nodeSet, contextHashes); err != nil {
 			return nil, nil, err
 		}
-
-		if !accountRegistered {
-			contextHash, behaviourSet, randomSet, err = sm.fetchLatestParticipantContext(SargaAddress)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			contextHashes[SargaAddress] = contextHash
-		} else {
-			contextHash, behaviourSet, randomSet, err = sm.fetchLatestParticipantContext(ix.Receiver())
-			if err != nil {
-				return nil, nil, err
-			}
-
-			contextHashes[ix.Receiver()] = contextHash
-		}
-
-		nodeSet[ktypes.ReceiverBehaviourSet] = behaviourSet
-		nodeSet[ktypes.ReceiverRandomSet] = randomSet
 	}
 
 	return contextHashes, nodeSet, err
+}
+
+func (sm *StateManager) getReceiverContext(
+	ix *types.Interaction,
+	nodeSet []*ktypes.NodeSet,
+	contextHashes map[types.Address]types.Hash,
+) error {
+	var (
+		behaviourSet *ktypes.NodeSet
+		randomSet    *ktypes.NodeSet
+		contextHash  types.Hash
+	)
+
+	accountRegistered, err := sm.IsAccountRegistered(ix.Receiver())
+	if err != nil {
+		return err
+	}
+
+	if !accountRegistered {
+		contextHash, behaviourSet, randomSet, err = sm.fetchLatestParticipantContext(SargaAddress)
+		if err != nil {
+			return err
+		}
+
+		contextHashes[SargaAddress] = contextHash
+	} else {
+		contextHash, behaviourSet, randomSet, err = sm.fetchLatestParticipantContext(ix.Receiver())
+		if err != nil {
+			return err
+		}
+
+		contextHashes[ix.Receiver()] = contextHash
+	}
+
+	nodeSet[ktypes.ReceiverBehaviourSet] = behaviourSet
+	nodeSet[ktypes.ReceiverRandomSet] = randomSet
+
+	return nil
 }
 
 func (sm *StateManager) IsAccountRegistered(addr types.Address) (bool, error) {

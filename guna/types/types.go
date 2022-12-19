@@ -106,6 +106,15 @@ func (m *MetaContextObject) FromBytes(bytes []byte) error {
 	return nil
 }
 
+func (m *MetaContextObject) Hash() (types.Hash, error) {
+	hash, err := types.PoloHash(m)
+	if err != nil {
+		return types.NilHash, errors.Wrap(err, "failed to polorize meta context object")
+	}
+
+	return hash, nil
+}
+
 type AccountSetupArgs struct {
 	Address            types.Address
 	AccType            types.AccountType

@@ -57,6 +57,8 @@ var (
 	ErrInvalidValue                = errors.New("invalid value")
 	ErrKeyDoNotExist               = errors.New("key do not exist")
 	ErrInvalidAccountType          = errors.New("invalid account type")
+	ErrFetchingAccMetaInfo         = errors.New("account meta info fetch failed")
+	ErrFetchingBalance             = errors.New("failed to fetch balance object")
 	ErrExecutorNotFound            = errors.New("executor instance not found")
 	ErrLogicElementNotFound        = errors.New("logic element not found")
 	ErrEmptyManifest               = errors.New("empty manifest")

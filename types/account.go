@@ -45,6 +45,10 @@ func (a *Account) FromBytes(bytes []byte) error {
 	return nil
 }
 
+func (a *Account) Hash() (Hash, error) {
+	return PoloHash(a)
+}
+
 // Accounts ...
 type Accounts []*AccountMetaInfo
 

@@ -91,7 +91,7 @@ func TestUpdateAccMetaInfo_CheckErrors(t *testing.T) {
 func TestUpdateAccMetaInfo_AddNewAccount(t *testing.T) {
 	pm := NewTestPersistenceManager(t)
 
-	args := getAccMetaInfo(t, 1)
+	args := tests.GetRandomAccMetaInfo(t, 1)
 
 	bucketID, isInsert, err := pm.UpdateAccMetaInfo(
 		args.Address,
@@ -279,7 +279,7 @@ func TestGetAccountMetaInfo(t *testing.T) {
 	pm := NewTestPersistenceManager(t)
 
 	// test data
-	AccMetaInfo := getAccMetaInfo(t, 1)
+	AccMetaInfo := tests.GetRandomAccMetaInfo(t, 1)
 
 	// insert test data in to db
 	insertAccMetaInfo(t, pm, *AccMetaInfo)
@@ -376,7 +376,7 @@ func TestUpdateTesseractStatus_CheckErrors(t *testing.T) {
 		status  bool
 	}
 
-	AccMetaInfo := getAccMetaInfo(t, int64(30))
+	AccMetaInfo := tests.GetRandomAccMetaInfo(t, int64(30))
 	insertAccMetaInfo(t, pm, *AccMetaInfo)
 
 	testcases := []struct {
