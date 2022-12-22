@@ -459,7 +459,7 @@ func (kbft *KBFT) finalizeCommit(h []uint64) {
 		return
 	}
 
-	if err := kbft.finalizedTesseractHandler(kbft.ProposalGrid.Tesseracts); err != nil {
+	if err = kbft.finalizedTesseractHandler(kbft.ProposalGrid.Tesseracts); err != nil {
 		kbft.Close(err)
 
 		return

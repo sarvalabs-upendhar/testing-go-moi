@@ -195,6 +195,7 @@ func (n *Node) InitSubHandlers() (err error) {
 		n.db,
 		"full",
 		n.chain,
+		n.state,
 		n.logger,
 		n.nodeMetrics.agora,
 	); err != nil {

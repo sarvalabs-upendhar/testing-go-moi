@@ -31,6 +31,7 @@ type StateManager interface {
 	GetBalance(addr types.Address, assetID types.AssetID) (*big.Int, error)
 	GetLatestNonce(addr types.Address) (uint64, error)
 	GetStorageEntry(logicID types.LogicID, slot []byte) ([]byte, error)
+	GetAccountState(addr types.Address, stateHash types.Hash) (*types.Account, error)
 	GetLogicManifest(logicID types.LogicID) ([]byte, error)
 }
 

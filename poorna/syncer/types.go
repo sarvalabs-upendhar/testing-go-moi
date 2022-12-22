@@ -61,6 +61,14 @@ func contextCID(hash types.Hash) atypes.CID {
 	return atypes.ContentID(dhruva.Context.Byte(), hash)
 }
 
+func storageCID(hash types.Hash) atypes.CID {
+	return atypes.ContentID(dhruva.Storage.Byte(), hash)
+}
+
+func logicCID(hash types.Hash) atypes.CID {
+	return atypes.ContentID(dhruva.Logic.Byte(), hash)
+}
+
 func balanceCID(hash types.Hash) atypes.CID {
 	return atypes.ContentID(dhruva.Balance.Byte(), hash)
 }

@@ -21,7 +21,7 @@ import (
 
 const (
 	DefaultFlushInterval = 2 * time.Second
-	maxMsgSizeBytes      = 1024 * 4
+	maxMsgSizeBytes      = 1024 * 12
 )
 
 var crc32c = crc32.MakeTable(crc32.Castagnoli)

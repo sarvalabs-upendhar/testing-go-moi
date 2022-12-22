@@ -230,8 +230,8 @@ func (i *ClusterInfo) GetByIndex(index int32) (id.KramaID, []byte) {
 	i.mtx.Lock()
 	defer i.mtx.Unlock()
 
-	slotID, slotIndex, kramaID, publicKey := i.ICS.GetKramaID(index)
-	if slotID == -1 || !i.ICS.Nodes[slotID].Responses.GetIndex(slotIndex) {
+	slots, slotIndex, kramaID, publicKey := i.ICS.GetKramaID(index)
+	if slots == nil || !i.ICS.Nodes[slots[0]].Responses.GetIndex(slotIndex) {
 		return "", nil
 	}
 

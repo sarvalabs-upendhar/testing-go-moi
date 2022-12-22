@@ -36,7 +36,7 @@ func (b *ArrayOfBits) SizeOf() int {
 	return b.Size
 }
 
-// GetIndex returns the bit at index i within the bit array.
+// GetIndex returns true if the bit at the given index is set.
 func (b *ArrayOfBits) GetIndex(i int) bool {
 	if b == nil {
 		return false

@@ -42,8 +42,9 @@ type TesseractAddedEvent struct {
 
 // TesseractSyncEvent is fired when a new tesseract received and needs to be synced up.
 type TesseractSyncEvent struct {
-	Tesseract *types.Tesseract
-	Context   []id.KramaID
+	Tesseract   *types.Tesseract
+	ClusterInfo *ptypes.ICSClusterInfo
+	Context     []id.KramaID
 }
 
 type SyncStatusUpdate struct {

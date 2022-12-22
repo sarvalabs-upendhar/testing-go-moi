@@ -179,6 +179,11 @@ func (p *PublicCoreAPI) GetStorageAt(args *GetStorageArgs) ([]byte, error) {
 	return p.sm.GetStorageEntry(types.FromHex(args.LogicID), types.FromHex(args.StorageKey))
 }
 
+// GetAccountState returns the account state of the given address
+func (p *PublicCoreAPI) GetAccountState(args *GetAccountArgs) (*types.Account, error) {
+	return p.sm.GetAccountState(types.HexToAddress(args.Address), types.HexToHash(args.StateHash))
+}
+
 // GetLogicManifest returns the manifest associated with the given logic id
 func (p *PublicCoreAPI) GetLogicManifest(args *GetLogicManifestArgs) ([]byte, error) {
 	// TODO: logic to validate logic id

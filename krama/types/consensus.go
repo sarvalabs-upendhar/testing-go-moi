@@ -373,10 +373,12 @@ func NewICSNodes(size int) *ICSNodes {
 }
 
 // GetKramaID returns the slot id, slot index, krama id and bls public key of the validator node based on the index
-func (i *ICSNodes) GetKramaID(index int32) (slotID int, slotIndex int, kramaID id.KramaID, publicKey []byte) {
+func (i *ICSNodes) GetKramaID(index int32) (slots []int, slotIndex int, kramaID id.KramaID, publicKey []byte) {
 	if index < 0 || int(index) >= i.Size {
-		return -1, -1, "", nil
+		return nil, -1, "", nil
 	}
+
+	slots = make([]int, 0, 5)
 
 	for v, set := range i.Nodes {
 		if set == nil {
@@ -384,7 +386,7 @@ func (i *ICSNodes) GetKramaID(index int32) (slotID int, slotIndex int, kramaID i
 		}
 
 		if v == len(i.Nodes)-1 {
-			return -1, -1, "", nil
+			return nil, -1, "", nil
 		}
 
 		if int(index) >= len(set.Ids) {
@@ -393,10 +395,25 @@ func (i *ICSNodes) GetKramaID(index int32) (slotID int, slotIndex int, kramaID i
 			continue
 		}
 
-		return v, int(index), set.Ids[index], set.PublicKeys[index]
+		slots = append(slots, v)
+
+		for j := v + 1; j < len(i.Nodes)-1; j++ {
+			// check for empty set
+			if i.Nodes[j] == nil {
+				continue
+			}
+			// check for krama ID on not empty set
+			for _, kID := range i.Nodes[j].Ids {
+				if kID == set.Ids[index] {
+					slots = append(slots, j)
+				}
+			}
+		}
+
+		return slots, int(index), set.Ids[index], set.PublicKeys[index]
 	}
 
-	return -1, -1, "", nil
+	return nil, -1, "", nil
 }
 
 // GetIndex returns the index and existence status of the validator node from ICSNodes based on the krama id

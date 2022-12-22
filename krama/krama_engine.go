@@ -618,15 +618,10 @@ func (k *Engine) handleReq(req Request) {
 		timeout := time.After(ICSTimeOutDuration)
 
 		select {
-		case success := <-slot.ICSSuccessChan:
-			if !success {
-				k.metrics.captureICSParticipationFailureCount(1)
-				//	k.logger.Info("@@@@@@@@@@@ ClusterInfo Creation successful", clusterID)
-				return
-			} else {
+		case _, ok := <-slot.ICSSuccessChan:
+			if ok {
 				k.metrics.captureICSJoiningTime(requestTime)
 			}
-
 		case <-timeout:
 			k.logger.Info("ICS success timeout", "cluster-id", req.msg.ClusterID)
 			k.metrics.captureICSParticipationFailureCount(1)
@@ -744,33 +739,33 @@ func (k *Engine) fetchIxAccounts(ctx context.Context, ix *types.Interaction) (kt
 		return nil, err
 	}
 
-	if !accountRegistered {
-		genesisAccInfo, err := k.state.GetAccountMetaInfo(guna.SargaAddress)
+	if accountRegistered {
+		accInfo, err := k.state.GetAccountMetaInfo(ix.Receiver())
 		if err != nil {
 			return nil, err
 		}
 
-		acc := &types.AccountMetaInfo{
-			Address:       ix.Sender(),
-			Type:          types.AccTypeFromIxType(ix.Type()),
-			TesseractHash: types.NilHash,
-			LatticeExists: true,
-			StateExists:   true,
-			Height:        big.NewInt(-1),
-		}
-
-		accounts[guna.SargaAddress] = genesisAccInfo
-		accounts[ix.Receiver()] = acc
+		accounts[ix.Receiver()] = accInfo
 
 		return accounts, nil
 	}
 
-	accInfo, err := k.state.GetAccountMetaInfo(ix.Receiver())
+	genesisAccInfo, err := k.state.GetAccountMetaInfo(guna.SargaAddress)
 	if err != nil {
 		return nil, err
 	}
 
-	accounts[ix.Receiver()] = accInfo
+	acc := &types.AccountMetaInfo{
+		Address:       ix.Sender(),
+		Type:          types.AccTypeFromIxType(ix.Type()),
+		TesseractHash: types.NilHash,
+		LatticeExists: true,
+		StateExists:   true,
+		Height:        big.NewInt(-1),
+	}
+
+	accounts[guna.SargaAddress] = genesisAccInfo
+	accounts[ix.Receiver()] = acc
 
 	return accounts, nil
 }

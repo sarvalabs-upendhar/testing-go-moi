@@ -103,6 +103,9 @@ func (tdb *TreeDB) IsDirty() bool {
 
 // Copy returns a copy of DB
 func (tdb *TreeDB) Copy() DB {
+	tdb.mtx.RLock()
+	defer tdb.mtx.RUnlock()
+
 	newTreeDB := &TreeDB{
 		address:  tdb.address,
 		dataType: tdb.dataType,

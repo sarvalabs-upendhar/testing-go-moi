@@ -240,7 +240,7 @@ func (s *StateObject) commitStorage() (types.Hash, error) {
 			return types.NilHash, errors.Wrap(err, "failed to commit storage tree")
 		}
 
-		rootHash, err := merkleTree.Root()
+		rootHash, err := merkleTree.RootHash()
 		if err != nil {
 			return types.NilHash, err
 		}
@@ -258,7 +258,7 @@ func (s *StateObject) commitStorage() (types.Hash, error) {
 		return types.NilHash, err
 	}
 
-	rootHash, err := s.metaStorageTree.Root()
+	rootHash, err := s.metaStorageTree.RootHash()
 	if err != nil {
 		return types.NilHash, err
 	}
@@ -284,7 +284,7 @@ func (s *StateObject) commitLogics() (types.Hash, error) {
 		return types.NilHash, errors.Wrap(err, "failed to commit logic tree")
 	}
 
-	s.data.LogicRoot, err = s.logicTree.Root()
+	s.data.LogicRoot, err = s.logicTree.RootHash()
 	if err != nil {
 		return types.NilHash, err
 	}
@@ -600,7 +600,7 @@ func (s *StateObject) GetStorageTree(logicID types.LogicID) (tree.MerkleTree, er
 		return nil, types.ErrLogicStorageTreeNotFound
 	}
 
-	storageTree, err = tree.NewKramaHashTree(s.address, types.BytesToHash(root), s.db, blakeHasher, dhruva.Storage)
+	storageTree, err = tree.NewKramaHashTree(s.address, types.BytesToHash(root), s.db, blake256.New(), dhruva.Storage)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to initiate logic storage tree")
 	}
@@ -640,7 +640,7 @@ func (s *StateObject) getMetaStorageTree() (tree.MerkleTree, error) {
 		return s.metaStorageTree, nil
 	}
 
-	merkleTree, err := tree.NewKramaHashTree(s.address, s.data.StorageRoot, s.db, blakeHasher, dhruva.Storage)
+	merkleTree, err := tree.NewKramaHashTree(s.address, s.data.StorageRoot, s.db, blake256.New(), dhruva.Storage)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to initiate storage tree")
 	}
@@ -655,7 +655,7 @@ func (s *StateObject) createStorageTreeForLogic(logicID types.LogicID) (tree.Mer
 		return nil, err
 	}
 
-	newStorageTree, err := tree.NewKramaHashTree(s.address, types.NilHash, s.db, blakeHasher, dhruva.Storage)
+	newStorageTree, err := tree.NewKramaHashTree(s.address, types.NilHash, s.db, blake256.New(), dhruva.Storage)
 	if err != nil {
 		return nil, err
 	}

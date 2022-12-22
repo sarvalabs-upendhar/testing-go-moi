@@ -17,6 +17,7 @@ const (
 	NTQ             Prefix = 0x81
 	Tesseract       Prefix = 0x82
 	TesseractHeight Prefix = 0x83
+	Receipts        Prefix = 0x83
 
 	// Prefix MSB is unset for account based keys
 

@@ -230,7 +230,12 @@ func (sm *StateManager) GetLatestStateObject(addr types.Address) (*StateObject, 
 		return nil, err
 	}
 
-	return sm.GetStateObjectByHash(addr, t.Body.StateHash)
+	sm.objects[addr], err = sm.GetStateObjectByHash(addr, t.Body.StateHash)
+	if err != nil {
+		return nil, err
+	}
+
+	return sm.objects[addr], nil
 }
 
 func (sm *StateManager) GetStateObjectByHash(addr types.Address, hash types.Hash) (*StateObject, error) {
@@ -251,9 +256,6 @@ func (sm *StateManager) GetStateObjectByHash(addr types.Address, hash types.Hash
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch balance object")
 	}
-
-	//  add the new object to map
-	sm.objects[addr] = sObj
 
 	return sObj, nil
 }
@@ -750,7 +752,7 @@ func (sm *StateManager) GetAccountMetaInfo(addr types.Address) (*types.AccountMe
 	return sm.db.GetAccountMetaInfo(addr.Bytes())
 }
 
-func (sm *StateManager) GetAccountInfo(addr types.Address, stateHash types.Hash) (*types.Account, error) {
+func (sm *StateManager) GetAccountState(addr types.Address, stateHash types.Hash) (*types.Account, error) {
 	rawData, err := sm.db.GetAccount(addr, stateHash)
 	if err != nil {
 		return nil, err
@@ -786,11 +788,7 @@ func (sm *StateManager) SetupSargaAccount(
 	for _, info := range otherAccounts {
 		if info.Address != SargaAddress {
 			// Add account to sarga storage tree
-			if err := stateObject.SetStorageEntry(
-				SargaLogicID,
-				info.Address.Bytes(),
-				GenesisIxHash.Bytes(),
-			); err != nil {
+			if err := stateObject.AddAccountGenesisInfo(info.Address, GenesisIxHash); err != nil {
 				return types.NilHash, types.NilHash, err
 			}
 		}
@@ -962,19 +960,13 @@ func (sm *StateManager) IsLogicRegistered(logicID types.LogicID) error {
 
 func (sm *StateManager) SyncStorageTrees(
 	address types.Address,
-	oldRoot, newRoot types.Hash,
-	metaStorageTreeDelta map[string][]byte,
-	logicStorageTreeDelta map[string]map[string][]byte,
+	newRoot *types.RootNode,
+	logicStorageTreeRoots map[string]*types.RootNode,
 ) error {
 	var (
 		so  *StateObject
 		err error
 	)
-
-	// check if this is genesis tesseract, i.e. previous hash == nil
-	if oldRoot == types.NilHash {
-		sm.CreateDirtyObject(address, types.RegularAccount)
-	}
 
 	so, err = sm.GetDirtyObject(address)
 	if err != nil {
@@ -988,20 +980,14 @@ func (sm *StateManager) SyncStorageTrees(
 
 	g, _ := errgroup.WithContext(context.Background())
 
-	for logicID, delta := range logicStorageTreeDelta {
-		root, ok := metaStorageTreeDelta[logicID]
-		if !ok {
-			return errors.New("new root not found")
-		}
-
-		storageRoot, code, newEntries := root, logicID, delta
+	for logic, rootNode := range logicStorageTreeRoots {
+		storageRoot, logicID := rootNode, logic
 
 		g.Go(func() error {
 			return sm.syncLogicStorageTree(
 				so,
-				types.LogicID(code),
-				types.BytesToHash(storageRoot),
-				newEntries,
+				[]byte(logicID),
+				storageRoot,
 			)
 		})
 	}
@@ -1011,21 +997,15 @@ func (sm *StateManager) SyncStorageTrees(
 	}
 
 	// sync the metaStorageTree
-	return sm.syncTree(metaStorageTree, newRoot, metaStorageTreeDelta)
+	return sm.syncTree(metaStorageTree, newRoot)
 }
 
 func (sm *StateManager) syncLogicStorageTree(
 	so *StateObject,
 	logicID types.LogicID,
-	newRoot types.Hash,
-	delta map[string][]byte,
+	newRoot *types.RootNode,
 ) error {
-	var (
-		err         error
-		storageTree tree.MerkleTree
-	)
-
-	storageTree, err = so.GetStorageTree(logicID)
+	storageTree, err := so.GetStorageTree(logicID)
 	if err != nil {
 		switch {
 		case errors.Is(err, types.ErrLogicStorageTreeNotFound):
@@ -1039,21 +1019,15 @@ func (sm *StateManager) syncLogicStorageTree(
 		}
 	}
 
-	return sm.syncTree(storageTree, newRoot, delta)
+	return sm.syncTree(storageTree, newRoot)
 }
 
 func (sm *StateManager) syncTree(
 	tree tree.MerkleTree,
-	newRoot types.Hash,
-	delta map[string][]byte,
+	newRoot *types.RootNode,
 ) error {
-	for key, value := range delta {
-		rawKey, err := hex.DecodeString(key)
-		if err != nil {
-			return errors.Wrap(err, "failed to decode logic-id")
-		}
-
-		if err = tree.Set(rawKey, value); err != nil {
+	for key, value := range newRoot.HashTable {
+		if err := tree.Set([]byte(key), value); err != nil {
 			return errors.Wrap(err, "failed to set entry")
 		}
 	}
@@ -1062,12 +1036,17 @@ func (sm *StateManager) syncTree(
 		return errors.Wrap(err, "failed to commit")
 	}
 
-	updatedRoot, err := tree.Root()
+	updatedLocalRoot, err := tree.RootHash()
 	if err != nil {
 		return err
 	}
 
-	if updatedRoot != newRoot {
+	actualRoot, err := newRoot.Hash()
+	if err != nil {
+		return err
+	}
+
+	if updatedLocalRoot != actualRoot {
 		return errors.New("updated root doesn't match")
 	}
 
@@ -1076,6 +1055,28 @@ func (sm *StateManager) syncTree(
 	}
 
 	return nil
+}
+
+func (sm *StateManager) SyncLogicTree(
+	address types.Address,
+	newRoot *types.RootNode,
+) error {
+	var (
+		so  *StateObject
+		err error
+	)
+
+	so, err = sm.GetDirtyObject(address)
+	if err != nil {
+		return err
+	}
+
+	logicTree, err := so.getMetaLogicTree()
+	if err != nil {
+		return err
+	}
+
+	return sm.syncTree(logicTree, newRoot)
 }
 
 // GetStorageEntry returns the storage data associated with the given slot and logicID

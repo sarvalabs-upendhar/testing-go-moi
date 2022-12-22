@@ -4,9 +4,9 @@ import (
 	"hash"
 	"sync"
 
+	"github.com/decred/dcrd/crypto/blake256"
 	"github.com/munna0908/smt"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-polo"
 	"github.com/sarvalabs/moichain/dhruva"
 	"github.com/sarvalabs/moichain/types"
 )
@@ -29,13 +29,11 @@ type DB interface {
 // - Hash of the hash table
 // This hash table maintains the list of newly added leaf nodes
 type KramaHashTree struct {
-	root       *rootNode
-	mtx        sync.RWMutex
-	tree       *smt.SparseMerkleTree
-	preImages  map[types.Hash][]byte
-	deltaNodes map[string][]byte
-	db         DB
-	hasher     hash.Hash
+	root      *types.RootNode
+	mtx       sync.RWMutex
+	tree      *smt.SparseMerkleTree
+	preImages map[types.Hash][]byte
+	db        DB
 }
 
 func NewKramaHashTree(
@@ -46,14 +44,12 @@ func NewKramaHashTree(
 	dataType dhruva.Prefix,
 ) (*KramaHashTree, error) {
 	kht := &KramaHashTree{
-		db:     NewTreeDB(address, dataType, db),
-		hasher: hasher,
-		root: &rootNode{
+		db: NewTreeDB(address, dataType, db),
+		root: &types.RootNode{
 			MerkleRoot: types.NilHash,
-			HashTable:  types.NilHash,
+			HashTable:  make(map[string][]byte),
 		},
-		preImages:  make(map[types.Hash][]byte),
-		deltaNodes: make(map[string][]byte),
+		preImages: make(map[types.Hash][]byte),
 	}
 
 	if root != types.NilHash {
@@ -62,7 +58,7 @@ func NewKramaHashTree(
 			return nil, errors.Wrap(err, "failed to fetch root node from db")
 		}
 
-		if err := kht.root.FromBytes(rawData); err != nil {
+		if err = kht.root.FromBytes(rawData); err != nil {
 			return nil, errors.Wrap(err, "failed to depolarise root node")
 		}
 	}
@@ -76,13 +72,19 @@ func NewKramaHashTree(
 	return kht, nil
 }
 
-// Root returns the hash of root node
-func (kht *KramaHashTree) Root() (types.Hash, error) {
+// RootHash returns the hash of root node
+func (kht *KramaHashTree) RootHash() (types.Hash, error) {
+	kht.mtx.RLock()
+	defer kht.mtx.RUnlock()
+
 	return kht.root.Hash()
 }
 
 // Get traversals the tree and returns the value of the key
 func (kht *KramaHashTree) Get(key []byte) ([]byte, error) {
+	kht.mtx.RLock()
+	defer kht.mtx.RUnlock()
+
 	value, err := kht.tree.GetDescend(kht.hashKey(key).Bytes())
 	if err != nil {
 		return nil, err
@@ -97,6 +99,9 @@ func (kht *KramaHashTree) Get(key []byte) ([]byte, error) {
 
 // Set adds the give key-value to the merkle tree and stores the preimage
 func (kht *KramaHashTree) Set(key, value []byte) error {
+	kht.mtx.Lock()
+	defer kht.mtx.Unlock()
+
 	if len(key) == 0 {
 		return types.ErrInvalidKey
 	}
@@ -111,28 +116,25 @@ func (kht *KramaHashTree) Set(key, value []byte) error {
 		return err
 	}
 
-	kht.mtx.Lock()
-	defer kht.mtx.Unlock()
-
 	kht.preImages[hashKey] = key
-	kht.deltaNodes[string(key)] = value
+	kht.root.HashTable[string(key)] = value
 
 	return nil
 }
 
 // Delete removes the key-value from tree and deletes the pre-images from cache
 func (kht *KramaHashTree) Delete(key []byte) error {
+	kht.mtx.Lock()
+	defer kht.mtx.Unlock()
+
 	hashKey := kht.hashKey(key)
 
 	if _, err := kht.tree.Delete(hashKey.Bytes()); err != nil {
 		return err
 	}
 
-	kht.mtx.Lock()
-	defer kht.mtx.Unlock()
-
 	delete(kht.preImages, hashKey)
-	delete(kht.deltaNodes, string(key))
+	delete(kht.root.HashTable, string(key))
 
 	return nil
 }
@@ -143,24 +145,10 @@ func (kht *KramaHashTree) Commit() error {
 		return nil
 	}
 
-	deltaInfo, err := polo.Polorize(kht.deltaNodes)
-	if err != nil {
-		return errors.Wrap(err, "failed to polorize delta nodes")
-	}
-
 	kht.mtx.Lock()
 	defer kht.mtx.Unlock()
 
-	kht.root = &rootNode{
-		HashTable:  types.GetHash(deltaInfo),
-		MerkleRoot: types.BytesToHash(kht.tree.Root()),
-	}
-
-	if kht.root.HashTable != types.NilHash {
-		if err = kht.db.Set(kht.root.HashTable.Bytes(), deltaInfo); err != nil {
-			return errors.Wrap(err, "failed to write delta info to db")
-		}
-	}
+	kht.root.MerkleRoot = types.BytesToHash(kht.tree.Root())
 
 	rootHash, err := kht.root.Hash()
 	if err != nil {
@@ -177,6 +165,9 @@ func (kht *KramaHashTree) Commit() error {
 
 // Flush commits the merkle tree changes and writes the preimages to db
 func (kht *KramaHashTree) Flush() error {
+	kht.mtx.Lock()
+	defer kht.mtx.Unlock()
+
 	if !kht.IsDirty() {
 		return nil
 	}
@@ -185,9 +176,6 @@ func (kht *KramaHashTree) Flush() error {
 	if err := kht.db.Flush(); err != nil {
 		return err
 	}
-
-	kht.mtx.Lock()
-	defer kht.mtx.Unlock()
 
 	// flush the preimage keys
 	return kht.db.WritePreImages(kht.preImages)
@@ -211,25 +199,19 @@ func (kht *KramaHashTree) GetPreImageKey(hashKey types.Hash) ([]byte, error) {
 
 // Copy returns the copy of krama hash tree
 func (kht *KramaHashTree) Copy() MerkleTree {
-	newSMT := &KramaHashTree{
-		root:       &rootNode{MerkleRoot: kht.root.MerkleRoot, HashTable: kht.root.HashTable},
-		hasher:     kht.hasher,
-		db:         kht.db.Copy(),
-		preImages:  make(map[types.Hash][]byte, len(kht.preImages)),
-		deltaNodes: make(map[string][]byte, len(kht.deltaNodes)),
-	}
-
-	newSMT.tree = smt.ImportSparseMerkleTree(newSMT.db, newSMT.db, newSMT.hasher, kht.root.MerkleRoot.Bytes())
-
 	kht.mtx.RLock()
 	defer kht.mtx.RUnlock()
 
-	for k, v := range kht.preImages {
-		newSMT.preImages[k] = v
+	newSMT := &KramaHashTree{
+		root:      &types.RootNode{MerkleRoot: kht.root.MerkleRoot, HashTable: kht.root.HashTable},
+		db:        kht.db.Copy(),
+		preImages: make(map[types.Hash][]byte, len(kht.preImages)),
 	}
 
-	for k, v := range kht.deltaNodes {
-		newSMT.deltaNodes[k] = v
+	newSMT.tree = smt.ImportSparseMerkleTree(newSMT.db, newSMT.db, blake256.New(), kht.root.MerkleRoot.Bytes())
+
+	for k, v := range kht.preImages {
+		newSMT.preImages[k] = v
 	}
 
 	return newSMT
@@ -241,19 +223,11 @@ func (kht *KramaHashTree) IsDirty() bool {
 }
 
 func (kht *KramaHashTree) hashKey(key []byte) types.Hash {
-	kht.hasher.Write(key)
-	sum := kht.hasher.Sum(nil)
-	kht.hasher.Reset()
+	hasher := blake256.New()
+
+	hasher.Write(key)
+	sum := hasher.Sum(nil)
+	hasher.Reset()
 
 	return types.BytesToHash(sum)
-}
-
-func FetchDeltaNodes(rawData []byte) (map[string][]byte, error) {
-	var entries map[string][]byte
-
-	if err := polo.Depolorize(&entries, rawData); err != nil {
-		return nil, err
-	}
-
-	return entries, nil
 }

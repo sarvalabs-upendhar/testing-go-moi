@@ -59,7 +59,7 @@ func TestKramaHashTree_Set_NewEntry(t *testing.T) {
 				require.ErrorIs(t, err, test.expectedError)
 			} else {
 				// check for the value in db
-				checkForEntryInDB(t, test.inputKey, test.inputValue, hashTree, true)
+				checkForEntry(t, test.inputKey, test.inputValue, hashTree, true)
 
 				// check for preimage
 				checkForPreImage(t, test.inputKey, hashTree, true)
@@ -90,14 +90,14 @@ func TestKramaHashTree_Set_UpdateEntry(t *testing.T) {
 	require.NoError(t, err)
 
 	// check for the initial value in db
-	checkForEntryInDB(t, key, initialValue, hashTree, true)
+	checkForEntry(t, key, initialValue, hashTree, true)
 
 	// update the entry
 	err = hashTree.Set(key, updatedValue)
 	require.NoError(t, err)
 
 	// check for the updated value in db
-	checkForEntryInDB(t, key, updatedValue, hashTree, true)
+	checkForEntry(t, key, updatedValue, hashTree, true)
 
 	// check for preimage
 	checkForPreImage(t, key, hashTree, true)
@@ -214,8 +214,10 @@ func TestKramaHashTree_Commit(t *testing.T) {
 		nil,
 	)
 
-	initialRoot, err := hashTree.Root()
+	initialRoot, err := hashTree.RootHash()
 	require.NoError(t, err)
+
+	smtRoot := hashTree.root.MerkleRoot
 
 	key := []byte("Test-Key")
 	value := []byte("Test-Value")
@@ -228,14 +230,15 @@ func TestKramaHashTree_Commit(t *testing.T) {
 	require.NoError(t, err)
 
 	// verify that root has changed
-	updatedRoot, err := hashTree.Root()
+	updatedRoot, err := hashTree.RootHash()
 	require.NoError(t, err)
-	require.NotEqual(t, updatedRoot, initialRoot)
+	require.NotEqual(t, smtRoot, hashTree.root.MerkleRoot)
+	require.NotEqual(t, initialRoot, updatedRoot)
 
-	_, deltaNodes := fetchRootNodeAndDelta(t, hashTree)
+	rootNode := fetchRootNodeAndDelta(t, hashTree)
 
 	// check for the inserted values in delta set
-	dbValue, ok := deltaNodes[string(key)]
+	dbValue, ok := rootNode.HashTable[string(key)]
 	require.True(t, ok, "leaf not found in delta nodes")
 	require.Equal(t, value, dbValue, "value mismatch")
 }
@@ -261,7 +264,7 @@ func TestKramaHashTree_Delete(t *testing.T) {
 	require.NoError(t, err)
 
 	// check for the value in db
-	checkForEntryInDB(t, key, value, hashTree, false)
+	checkForEntry(t, key, value, hashTree, false)
 
 	// check for preimage
 	checkForPreImage(t, key, hashTree, false)
@@ -287,7 +290,7 @@ func checkForPreImage(t *testing.T, key []byte, hashTree *KramaHashTree, shouldE
 func checkForDeltaNodes(t *testing.T, key, value []byte, hashTree *KramaHashTree, shouldExist bool) {
 	t.Helper()
 
-	v, ok := hashTree.deltaNodes[string(key)]
+	v, ok := hashTree.root.HashTable[string(key)]
 	if !shouldExist {
 		require.False(t, ok)
 
@@ -298,12 +301,12 @@ func checkForDeltaNodes(t *testing.T, key, value []byte, hashTree *KramaHashTree
 	require.Equal(t, value, v, "leaf value mismatch")
 }
 
-func checkForEntryInDB(t *testing.T, key, value []byte, hashTree *KramaHashTree, shouldExist bool) {
+func checkForEntry(t *testing.T, key, value []byte, hashTree *KramaHashTree, shouldExist bool) {
 	t.Helper()
 
-	dbValue, err := hashTree.db.Get(hashTree.hashKey(key).Bytes())
+	dbValue, err := hashTree.tree.GetDescend(hashTree.hashKey(key).Bytes())
 	if !shouldExist {
-		require.ErrorIs(t, err, types.ErrKeyNotFound)
+		require.Empty(t, dbValue)
 
 		return
 	}
@@ -331,24 +334,18 @@ func createTestHashTreeWithEntries(
 	return hashTree
 }
 
-func fetchRootNodeAndDelta(t *testing.T, hashTree *KramaHashTree) (*rootNode, map[string][]byte) {
+func fetchRootNodeAndDelta(t *testing.T, hashTree *KramaHashTree) *types.RootNode {
 	t.Helper()
 
-	rootHash, err := hashTree.Root()
+	rootHash, err := hashTree.RootHash()
 	require.NoError(t, err)
 
 	rawData, err := hashTree.db.Get(rootHash.Bytes())
 	require.NoError(t, err)
 
-	root := new(rootNode)
+	root := new(types.RootNode)
 
 	require.NoError(t, polo.Depolorize(root, rawData))
 
-	deltaInfo, err := hashTree.db.Get(root.HashTable.Bytes())
-	require.NoError(t, err)
-
-	deltaNodes, err := FetchDeltaNodes(deltaInfo)
-	require.NoError(t, err)
-
-	return root, deltaNodes
+	return root
 }

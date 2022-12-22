@@ -5,7 +5,7 @@ import "errors"
 var (
 	ErrInvalidAddress              = errors.New("invalid address")
 	ErrEmptyHash                   = errors.New("empty hash")
-	ErrKeyNotFound                 = errors.New("key is not available")
+	ErrKeyNotFound                 = errors.New("key not found")
 	ErrDBCallFailed                = errors.New("db call failed")
 	ErrDBInit                      = errors.New("db initiation failed")
 	ErrUnderpriced                 = errors.New("transaction underpriced")

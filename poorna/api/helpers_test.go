@@ -65,6 +65,11 @@ func (ms *MockStateManager) GetLatestStateObject(addr types.Address) (*guna.Stat
 	panic("implement me")
 }
 
+func (ms *MockStateManager) GetAccountState(addr types.Address, stateHash types.Hash) (*types.Account, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 func NewMockChainManager(t *testing.T) *MockChainManager {
 	t.Helper()
 

@@ -166,28 +166,17 @@ func (c *ChainManager) hasTesseract(hash types.Hash) bool {
 	return exists
 }
 
-func (c *ChainManager) fetchContextForAgora(t *types.Tesseract) ([]id.KramaID, error) {
+func (c *ChainManager) fetchContextForAgora(ts types.Tesseract) ([]id.KramaID, error) {
 	var (
-		tesseractHash types.Hash
-		address       = t.Address()
-		peers         = make([]id.KramaID, 0)
-		err           error
+		address = ts.Address()
+		peers   = make([]id.KramaID, 0)
 	)
 
-	tesseractHash, err = t.Hash()
-	if err != nil {
-		return nil, err
-	}
-
-	for !tesseractHash.IsNil() {
+	for {
 		if len(peers) >= 10 {
 			break
 		}
 
-		ts, err := c.GetTesseract(tesseractHash, false)
-		if err != nil {
-			return nil, errors.Wrap(err, "error fetching tesseract")
-		}
 		// fetch the context delta
 		deltaGroup := ts.Body.ContextDelta[address]
 		// add the delta peers to list
@@ -195,16 +184,23 @@ func (c *ChainManager) fetchContextForAgora(t *types.Tesseract) ([]id.KramaID, e
 		peers = append(peers, deltaGroup.RandomNodes...)
 
 		_, behaviour, random, err := c.sm.GetContextByHash(address, ts.Header.ContextLock[address].ContextHash)
-		if err != nil {
-			tesseractHash = ts.Header.PrevHash
+		if err == nil {
+			peers = append(peers, behaviour...)
+			peers = append(peers, random...)
 
-			continue
+			break
 		}
 
-		peers = append(peers, behaviour...)
-		peers = append(peers, random...)
+		if ts.PreviousHash().IsNil() {
+			break
+		}
 
-		break
+		t, err := c.GetTesseract(ts.PreviousHash(), false)
+		if err != nil {
+			return nil, errors.Wrap(err, "error fetching tesseract")
+		}
+
+		ts = *t
 	}
 
 	return peers, nil
@@ -381,10 +377,13 @@ func (c *ChainManager) verifySignatures(ts *types.Tesseract, ics *ktypes.ICSNode
 	)
 
 	for _, index := range ts.Header.Extra.VoteSet.GetTrueIndices() {
-		slotID, _, _, publicKey := ics.GetKramaID(int32(index))
-		if slotID != -1 && ts.Header.Extra.VoteSet.GetIndex(index) {
+		slots, _, _, publicKey := ics.GetKramaID(int32(index))
+		if slots != nil { // ts.Header.Extra.VoteSet.GetIndex(index)
 			publicKeys = append(publicKeys, publicKey)
-			votesCounter[slotID]++
+
+			for _, slotID := range slots {
+				votesCounter[slotID]++
+			}
 		} else {
 			c.logger.Debug("Error fetching validator address", "index", index)
 		}
@@ -427,7 +426,7 @@ func (c *ChainManager) verifyHeaders(ts *types.Tesseract) error {
 		err               error
 	)
 
-	c.logger.Trace("Verifying headers", "addr", ts.Header.Address.Hex())
+	c.logger.Trace("Verifying headers", "addr", ts.Header.Address.Hex(), ts.Header.ContextLock)
 
 	if ts.Header.ClusterID == "genesis" {
 		return nil
@@ -446,7 +445,7 @@ func (c *ChainManager) verifyHeaders(ts *types.Tesseract) error {
 	if accountRegistered {
 		parent, err := c.GetTesseract(ts.Header.PrevHash, false)
 		if err != nil {
-			c.logger.Error("Failed to fetch parent tesseract", "error", err)
+			c.logger.Error("Failed to fetch parent tesseract", "error", err, ts.Address())
 
 			return types.ErrFetchingTesseract
 		}
@@ -623,7 +622,7 @@ func (c *ChainManager) addTesseractsWithState(
 	return nil
 }
 
-func (c *ChainManager) addTesseractsWithOutState(
+func (c *ChainManager) AddSyncedTesseract(
 	clusterInfo *ptypes.ICSClusterInfo,
 	tesseracts ...*types.Tesseract,
 ) error {
@@ -647,7 +646,7 @@ func (c *ChainManager) addTesseractsWithOutState(
 				return nil
 			}
 
-			if err = c.addTesseract(true, ts.Header.Address, ts, false, true); err != nil {
+			if err = c.addTesseract(true, ts.Header.Address, ts, true, true); err != nil {
 				return err
 			}
 
@@ -769,12 +768,6 @@ func (c *ChainManager) AddTesseractWithOutState(
 
 		return c.addTesseractsWithState(clusterInfo, dirtyStorage, tesseractGrid...)
 	}
-
-	if err = c.addTesseractsWithOutState(clusterInfo, ts); err != nil {
-		return err
-	}
-
-	c.logger.Info("Added tesseract without state", "Addr", ts.Header.Address.Hex(), "Hash", tsHash)
 
 	c.sendTesseractSyncRequest(ts, clusterInfo)
 
@@ -921,15 +914,15 @@ func (c *ChainManager) parseGenesisFile(path string) (*gtypes.AccountSetupArgs, 
 
 func (c *ChainManager) sendTesseractSyncRequest(ts *types.Tesseract, clusterInfo *ptypes.ICSClusterInfo) {
 	// fetch context info for agora
-	fetchContext, err := c.fetchContextForAgora(ts)
+	fetchContext, err := c.fetchContextForAgora(*ts)
 	if err != nil {
-		c.logger.Error("Error fetching fetchContext for agora", "error", err)
+		c.logger.Error("Error fetching context for agora", "error", err)
 	}
 
 	// add ics random nodes to agora context
 	fetchContext = append(fetchContext, utils.KramaIDFromString(clusterInfo.RandomSet)...)
 
-	event := utils.TesseractSyncEvent{Tesseract: ts, Context: fetchContext}
+	event := utils.TesseractSyncEvent{Tesseract: ts, ClusterInfo: clusterInfo, Context: fetchContext}
 	if err := c.mux.Post(event); err != nil {
 		log.Panic(err)
 	}

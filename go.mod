@@ -31,7 +31,7 @@ require (
 	github.com/manishmeganathan/symbolizer v0.1.1
 	github.com/moby/locker v1.0.1
 	github.com/mr-tron/base58 v1.2.0
-	github.com/munna0908/smt v0.3.1-0.20221031083403-de579d90bc8e
+	github.com/munna0908/smt v0.3.1-0.20221216160339-b2e832948125
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20210609091139-0a56a4bca00b
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/profile v1.6.0

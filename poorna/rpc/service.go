@@ -255,6 +255,25 @@ func (r *rpcService) GetStorage(
 	return nil
 }
 
+func (r *rpcService) GetAccountState(req *http.Request,
+	args *api.GetAccountArgs,
+	resp *api.Response,
+) error {
+	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
+	if !ok {
+		return types.ErrInvalidAPI
+	}
+
+	account, err := coreAPI.GetAccountState(args)
+	if err != nil {
+		return err
+	}
+
+	resp.Data = account
+
+	return nil
+}
+
 func (r *rpcService) GetLogicManifest(
 	req *http.Request,
 	args *api.GetLogicManifestArgs,

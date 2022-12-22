@@ -537,6 +537,8 @@ github.com/multiformats/go-varint v0.0.6 h1:gk85QWKxh3TazbLxED/NlDVv8+q+ReFJk7Y2
 github.com/multiformats/go-varint v0.0.6/go.mod h1:3Ls8CIEsrijN6+B7PbrXRPxHRPuXSrVKRY101jdMZYE=
 github.com/munna0908/smt v0.3.1-0.20221031083403-de579d90bc8e h1:0Jy1esr5y9pUo62f3NffiqNMMNHMwhfGqibyDR/xNiY=
 github.com/munna0908/smt v0.3.1-0.20221031083403-de579d90bc8e/go.mod h1:J7z9UYds+5ZJShloERFJmoK/wTO8k5ffWpIs4HjGzYE=
+github.com/munna0908/smt v0.3.1-0.20221216160339-b2e832948125 h1:3c8F+Daj8BG1Uv1XebIJW4SSKzXeL9/1SLjooYp3ZH4=
+github.com/munna0908/smt v0.3.1-0.20221216160339-b2e832948125/go.mod h1:J7z9UYds+5ZJShloERFJmoK/wTO8k5ffWpIs4HjGzYE=
 github.com/mwitkow/go-conntrack v0.0.0-20161129095857-cc309e4a2223/go.mod h1:qRWi+5nqEBWmkhHvq77mSJWrCKwh8bxhgT7d/eI7P4U=
 github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f/go.mod h1:qRWi+5nqEBWmkhHvq77mSJWrCKwh8bxhgT7d/eI7P4U=
 github.com/neelance/astrewrite v0.0.0-20160511093645-99348263ae86/go.mod h1:kHJEU3ofeGjhHklVoIGuVj85JJwZ6kWPaJwCIxgnFmo=

@@ -319,24 +319,19 @@ func (vs *VoteSet) addVerifiedVote(
 
 // getSumIndex is a method of VoteSet that retrieves the index on the sum set for a given validator index
 func (vs *VoteSet) getSumIndex(valIndex int32) ([]int32, error) {
-	sumSlots := make([]int32, 0, 3)
+	slotsSum := make([]int32, 0, 3)
 
-	validator, _ := vs.valset.GetByIndex(valIndex)
-	if validator == "" {
+	slots, _, _, _ := vs.valset.ICS.GetKramaID(valIndex)
+
+	if slots == nil {
 		return nil, errors.New("invalid validator index")
 	}
 
-	for i, nodeSet := range vs.valset.ICS.Nodes {
-		if nodeSet != nil {
-			for _, kramaID := range nodeSet.Ids {
-				if kramaID == validator {
-					sumSlots = append(sumSlots, int32(i/2))
-				}
-			}
-		}
+	for _, slot := range slots {
+		slotsSum = append(slotsSum, int32(slot/2))
 	}
 
-	return sumSlots, nil
+	return slotsSum, nil
 }
 
 // updateSum is a method of VoteSet that updates the sum value at a given validator index by a given vote power value

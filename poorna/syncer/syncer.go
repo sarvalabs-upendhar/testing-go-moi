@@ -65,6 +65,7 @@ type SyncJob struct {
 }
 type TesseractSyncJob struct {
 	tesseract    *types.Tesseract
+	clusterInfo  *ptypes.ICSClusterInfo
 	fetchContext []id.KramaID
 }
 
@@ -74,7 +75,27 @@ type lattice interface {
 		sender id.KramaID,
 		ics *ptypes.ICSClusterInfo,
 	) error
+	AddSyncedTesseract(
+		clusterInfo *ptypes.ICSClusterInfo,
+		tesseracts ...*types.Tesseract,
+	) error
 	GetTesseract(hash types.Hash, withInteractions bool) (*types.Tesseract, error)
+}
+
+type state interface {
+	SyncStorageTrees(
+		address types.Address,
+		newRoot *types.RootNode,
+		logicStorageTreeRoots map[string]*types.RootNode,
+	) error
+	SyncLogicTree(
+		address types.Address,
+		newRoot *types.RootNode,
+	) error
+	CreateDirtyObject(
+		addr types.Address,
+		accType types.AccountType,
+	) *guna.StateObject
 }
 
 type store interface {
@@ -103,6 +124,7 @@ type Status struct {
 	bucketSizes sync.Map
 	Ntq         float32
 }
+
 type Syncer struct {
 	ctx              context.Context
 	node             *poorna.Server
@@ -122,6 +144,7 @@ type Syncer struct {
 	mode             string
 	rpcClient        *moirpc.Client
 	lattice          lattice
+	state            state
 	logger           hclog.Logger
 	ReputationEngine *guna.ReputationEngine
 	ntqtablesynconce sync.Once
@@ -134,6 +157,7 @@ func NewSyncer(
 	db store,
 	mode string,
 	lattice lattice,
+	sm state,
 	logger hclog.Logger,
 	metrics *agora.Metrics,
 ) (*Syncer, error) {
@@ -150,6 +174,7 @@ func NewSyncer(
 		db:         db,
 		mode:       mode,
 		lattice:    lattice,
+		state:      sm,
 		peerCount:  0,
 		logger:     logger.Named("Syncer"),
 		reqQueue:   make(chan *SyncJob),
@@ -426,7 +451,7 @@ func (s *Syncer) handleSyncPeer(p *SyncPeer) {
 
 			accSyncReq := new(ptypes.AccountSyncRequest)
 
-			if err := accSyncReq.FromBytes(message.Payload); err != nil {
+			if err = accSyncReq.FromBytes(message.Payload); err != nil {
 				s.logger.Error("Error depolarizing account sync request", "error", err)
 
 				continue
@@ -540,8 +565,8 @@ func (s *Syncer) fetchData(ctx context.Context, session *session.Session, ids ..
 	return returnErr
 }
 
-// getContextData fetches the behavioural context and random context associated with the given hash using agora
-func (s *Syncer) getContextData(ctx context.Context, session *session.Session, cid atypes.CID) error {
+// syncContextData fetches the behavioural context and random context associated with the given hash using agora
+func (s *Syncer) syncContextData(ctx context.Context, session *session.Session, cid atypes.CID) error {
 	ok, err := s.db.Contains(dbKeyFromCID(session.ID(), cid))
 	if ok || err != nil {
 		return err
@@ -590,11 +615,11 @@ func (s *Syncer) fetchTesseractState(tesseract *types.Tesseract, fetchContext []
 	defer newSession.Close()
 
 	acc := new(types.Account)
-	if err := acc.FromBytes(block.GetData()); err != nil {
+	if err = acc.FromBytes(block.GetData()); err != nil {
 		return err
 	}
 
-	if err := s.fetchData(
+	if err = s.fetchData(
 		ctx,
 		newSession,
 		balanceCID(acc.Balance),
@@ -607,10 +632,22 @@ func (s *Syncer) fetchTesseractState(tesseract *types.Tesseract, fetchContext []
 		return err
 	}
 
-	if err = s.getContextData(ctx, newSession, contextCID(acc.ContextHash)); err != nil {
+	if err = s.syncContextData(ctx, newSession, contextCID(acc.ContextHash)); err != nil {
 		s.logger.Error("Error fetching context data", "error", err)
 
 		return err
+	}
+
+	if tesseract.PreviousHash().IsNil() {
+		s.state.CreateDirtyObject(tesseract.Address(), types.AccTypeFromIxType(tesseract.Interactions()[0].Type()))
+	}
+
+	if err = s.syncLogicTree(ctx, newSession, acc.LogicRoot); err != nil {
+		return errors.Wrap(err, "failed to sync logic tree")
+	}
+
+	if err = s.syncStorageTree(ctx, newSession, acc.StorageRoot); err != nil {
+		return errors.Wrap(err, "failed to sync storage tree")
 	}
 
 	if err = s.db.SetAccount(tesseract.Address(), tesseract.StateHash(), block.GetData()); err != nil {
@@ -682,25 +719,25 @@ func (s *Syncer) tesseractWorker(id int, reqQueue chan *TesseractSyncJob) {
 				s.logger.Error("Error fetching tesseract state", "err", err)
 
 				continue
-			} else {
-				tsHash, err := ts.Hash()
-				if err != nil {
-					s.logger.Error("Error creating tesseract hash", "err", err)
-
-					continue
-				}
-
-				if err = s.db.UpdateTesseractStatus(
-					ts.Address(),
-					ts.Height(),
-					tsHash,
-					true,
-				); err != nil {
-					s.logger.Error("Error updating the lattice status")
-
-					continue
-				}
 			}
+
+			if err := s.lattice.AddSyncedTesseract(job.clusterInfo, job.tesseract); err != nil {
+				s.logger.Error("Failed to add synced tesseract")
+
+				continue
+			}
+
+			// if err = s.db.UpdateTesseractStatus(
+			// 	ts.Address(),
+			// 	ts.Height(),
+			// 	tsHash,
+			// 	true,
+			// ); err != nil {
+			// 	s.logger.Error("Error updating the lattice status")
+
+			// 	continue
+			// }
+
 		default:
 			time.Sleep(200 * time.Millisecond)
 		}
@@ -720,7 +757,7 @@ func (s *Syncer) handleSyncEvents() {
 	for obj := range s.tesseractSub.Chan() {
 		if t, ok := obj.Data.(utils.TesseractSyncEvent); ok {
 			go func() {
-				s.reqQueue1 <- &TesseractSyncJob{tesseract: t.Tesseract, fetchContext: t.Context}
+				s.reqQueue1 <- &TesseractSyncJob{tesseract: t.Tesseract, clusterInfo: t.ClusterInfo, fetchContext: t.Context}
 			}()
 		}
 	}
@@ -1114,6 +1151,96 @@ func (s *Syncer) GetTesseract(hash types.Hash, withInteractions bool) (*types.Te
 	}
 
 	return ts, nil
+}
+
+func (s *Syncer) syncStorageTree(ctx context.Context, session *session.Session, newRoot types.Hash) error {
+	if newRoot.IsNil() {
+		return nil
+	}
+
+	ok, err := s.db.Contains(dbKeyFromCID(session.ID(), storageCID(newRoot)))
+	if ok || err != nil {
+		return err
+	}
+
+	block, err := session.GetBlock(ctx, storageCID(newRoot))
+	if err != nil {
+		return err
+	}
+
+	metaStorageRoot := new(types.RootNode)
+	if err = metaStorageRoot.FromBytes(block.GetData()); err != nil {
+		return err
+	}
+
+	var (
+		rootHashToLogicID = make(map[atypes.CID]string)
+
+		storageTreeRoots = make(map[string]*types.RootNode, len(metaStorageRoot.HashTable))
+
+		storageCIDs = make([]atypes.CID, 0, len(metaStorageRoot.HashTable))
+	)
+
+	for logicID, storageRoot := range metaStorageRoot.HashTable {
+		rootCID := storageCID(types.BytesToHash(storageRoot))
+
+		storageCIDs = append(storageCIDs, rootCID)
+
+		rootHashToLogicID[rootCID] = logicID
+	}
+
+	ch := session.GetBlocks(ctx, storageCIDs)
+
+	for block := range ch {
+		rootNode := new(types.RootNode)
+		if err = polo.Depolorize(&rootNode, block.GetData()); err != nil {
+			return err
+		}
+
+		logicID, ok := rootHashToLogicID[block.GetCid()]
+		if !ok {
+			s.logger.Error("Received unwanted block")
+
+			continue
+		}
+
+		storageTreeRoots[logicID] = rootNode
+	}
+
+	if len(storageTreeRoots) != len(metaStorageRoot.HashTable) {
+		return errors.New("failed to fetch storage tree info")
+	}
+
+	if err := s.state.SyncStorageTrees(session.ID(), metaStorageRoot, storageTreeRoots); err != nil {
+		s.logger.Error("Failed to sync storage tree", session.ID())
+
+		return err
+	}
+
+	return nil
+}
+
+func (s *Syncer) syncLogicTree(ctx context.Context, session *session.Session, newRoot types.Hash) error {
+	if newRoot.IsNil() {
+		return nil
+	}
+
+	ok, err := s.db.Contains(dbKeyFromCID(session.ID(), logicCID(newRoot)))
+	if ok || err != nil {
+		return err
+	}
+
+	block, err := session.GetBlock(ctx, logicCID(newRoot))
+	if err != nil {
+		return err
+	}
+
+	metaLogicRoot := new(types.RootNode)
+	if err = metaLogicRoot.FromBytes(block.GetData()); err != nil {
+		return err
+	}
+
+	return s.state.SyncLogicTree(session.ID(), metaLogicRoot)
 }
 
 func (s *Syncer) Close() {

@@ -44,6 +44,11 @@ type GetStorageArgs struct {
 	StorageKey string `json:"storage-key"`
 }
 
+type GetAccountArgs struct {
+	Address   string `json:"address"`
+	StateHash string `json:"state_hash"`
+}
+
 type GetLogicManifestArgs struct {
 	LogicID string `json:"logic_id"`
 }

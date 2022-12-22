@@ -633,7 +633,7 @@ func mockMerkleTreeWithDB() *MockMerkleTree {
 	}
 }
 
-func (m *MockMerkleTree) Root() (types.Hash, error) {
+func (m *MockMerkleTree) RootHash() (types.Hash, error) {
 	return m.merkleRoot, nil
 }
 
@@ -1166,7 +1166,7 @@ func createTestKramaHashTree(
 	err = kt.Flush()
 	require.NoError(t, err)
 
-	storageRoot, err := kt.Root()
+	storageRoot, err := kt.RootHash()
 	require.NoError(t, err)
 
 	return kt, storageRoot
@@ -1292,11 +1292,18 @@ func checkForOtherAccountsInSargaObject(
 			info.Address.Bytes(),
 		)
 		require.NoError(t, err)
-		require.Equal(t, GenesisIxHash.Bytes(), val)
+
+		genesisInfo := types.AccountGenesisInfo{
+			IxHash: GenesisIxHash,
+		}
+		rawGenesisInfo, err := polo.Polorize(genesisInfo)
+		assert.NoError(t, err)
+
+		require.Equal(t, val, rawGenesisInfo)
 	}
 }
 
-func CheckForObjectCreation(t *testing.T, sm *StateManager, address types.Address, contextHash types.Hash) {
+func checkForObjectCreation(t *testing.T, sm *StateManager, address types.Address, contextHash types.Hash) {
 	t.Helper()
 
 	// check if dirty object created

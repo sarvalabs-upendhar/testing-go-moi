@@ -1828,7 +1828,7 @@ func TestGetAccountInfo(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			acc, err := sm.GetAccountInfo(types.NilAddress, test.stateHash)
+			acc, err := sm.GetAccountState(types.NilAddress, test.stateHash)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -1970,7 +1970,7 @@ func TestSetupSargaAcc(t *testing.T) {
 
 			require.NoError(t, err)
 
-			CheckForObjectCreation(t, sm, SargaAddress, contextHash)
+			checkForObjectCreation(t, sm, SargaAddress, contextHash)
 
 			obj, _ := sm.GetDirtyObject(SargaAddress)
 
@@ -2057,7 +2057,7 @@ func TestSetupNewAccount(t *testing.T) {
 
 			require.NoError(t, err)
 
-			CheckForObjectCreation(t, sm, test.newAcc.Address, contextHash)
+			checkForObjectCreation(t, sm, test.newAcc.Address, contextHash)
 
 			obj, _ := sm.GetDirtyObject(test.newAcc.Address)
 

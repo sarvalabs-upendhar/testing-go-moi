@@ -2,6 +2,7 @@ package ixpool
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -170,7 +171,6 @@ func (i *IxPool) handlePromoteRequest(req promoteRequest) {
 		// promote enqueued ixs
 		promoted, _ := account.promote()
 		i.metrics.capturePendingIxs(float64(promoted))
-		log.Println("promote request", "promoted", promoted, "addr", addr)
 	}
 }
 
@@ -440,7 +440,7 @@ func (i *IxPool) validateIx(ix *types.Interaction) error {
 
 func (i *IxPool) validateLogicDeployPayload(ix *types.Interaction) error {
 	if accountRegistered, err := i.sm.IsAccountRegistered(ix.Receiver()); err != nil || accountRegistered {
-		return errors.New("account registered")
+		return errors.Wrap(err, fmt.Sprintf("account registered %s", ix.Receiver()))
 	}
 
 	return nil
