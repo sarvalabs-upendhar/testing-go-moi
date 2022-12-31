@@ -395,7 +395,7 @@ func TestUpdateTesseractStatus_CheckErrors(t *testing.T) {
 			expectedError: types.ErrKeyNotFound,
 		},
 		{
-			name: "should fail with hash mismatch",
+			name: "should return error if hash mismatch",
 			arg: args{
 				address: AccMetaInfo.Address,
 				height:  AccMetaInfo.Height.Uint64(),

@@ -163,7 +163,7 @@ func TestPricedQueue_Len(t *testing.T) {
 			expected: 0,
 		},
 		{
-			name: "Should return the expected length",
+			name: "should return the expected length",
 			ixs: types.Interactions{
 				newIxWithFuelPrice(t, 0, types.NilAddress, 8),
 				newIxWithFuelPrice(t, 0, types.NilAddress, 2),
@@ -347,7 +347,7 @@ func TestWaitQueue_Len(t *testing.T) {
 			expected: 0,
 		},
 		{
-			name: "Should return the expected length",
+			name: "should return the expected length",
 			ixs: []*WaitInteractions{
 				newIxWithWaitCounter(t, 0, types.NilAddress, 8),
 				newIxWithWaitCounter(t, 0, types.NilAddress, 2),

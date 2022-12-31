@@ -12,21 +12,26 @@ type Genesis struct {
 }
 
 type AccountInfo struct {
-	Address          string                   `json:"address"`
-	AccountType      types.AccountType        `json:"type"`
-	MOIId            string                   `json:"moi_id"`
-	BehaviourContext []string                 `json:"behaviour_context"`
-	RandomContext    []string                 `json:"random_context"`
-	AssetDetails     []*types.AssetDescriptor `json:"assets"`
-	Balances         []*BalanceInfo           `json:"balance"`
+	Address          string            `json:"address"`
+	AccountType      types.AccountType `json:"type"`
+	MOIId            string            `json:"moi_id"`
+	BehaviourContext []string          `json:"behaviour_context"`
+	RandomContext    []string          `json:"random_context"`
+	AssetDetails     []*AssetInfo      `json:"assets"`
+	Balances         []*BalanceInfo    `json:"balance"`
 }
 
 type AssetInfo struct {
-	Dimension   int    `json:"dimension"`
-	TotalSupply int    `json:"total_supply"`
-	Symbol      string `json:"symbol"`
-	IsFungible  bool   `json:"isFungible"`
-	IsMintable  bool   `json:"isMintable"`
+	Type           int    `json:"type"`
+	Symbol         string `json:"symbol"`
+	Owner          string `json:"owner"`
+	TotalSupply    uint64 `json:"total_supply"`
+	Dimension      uint8  `json:"dimension"`
+	Decimals       uint8  `json:"decimals"`
+	IsFungible     bool   `json:"is_fungible"`
+	IsMintable     bool   `json:"is_mintable"`
+	IsTransferable bool   `json:"is_transferable"`
+	LogicID        string `json:"logic_id"`
 }
 
 type BalanceInfo struct {

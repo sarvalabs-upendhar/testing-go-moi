@@ -75,7 +75,7 @@ func TestGetLatestTesseractHash(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name:          "should fail if nil address",
+			name:          "should return error if nil address",
 			address:       types.NilAddress,
 			hash:          accMetaInfo[0].TesseractHash,
 			expectedError: types.ErrInvalidAddress,

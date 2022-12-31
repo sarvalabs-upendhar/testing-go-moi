@@ -85,9 +85,7 @@ func NewMockChainManager(t *testing.T) *MockChainManager {
 	return mockChain
 }
 
-func NewMockStateManager(t *testing.T) *MockStateManager {
-	t.Helper()
-
+func NewMockStateManager() *MockStateManager {
 	mockState := new(MockStateManager)
 
 	mockState.balances = make(map[types.Address]*gtypes.BalanceObject)
@@ -131,7 +129,7 @@ func (mc *MockChainManager) GetTesseract(hash types.Hash, withInteractions bool)
 	return nil, types.ErrKeyNotFound
 }
 
-func (mc *MockChainManager) GetReceipt(addr types.Address, ixHash types.Hash) (*types.Receipt, error) {
+func (mc *MockChainManager) GetReceiptByIxHash(addr types.Address, ixHash types.Hash) (*types.Receipt, error) {
 	if receipt := mc.receipts[addr][ixHash]; receipt != nil {
 		return receipt, nil
 	}

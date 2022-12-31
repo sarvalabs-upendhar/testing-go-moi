@@ -24,7 +24,6 @@ import (
 
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/guna"
-	"github.com/sarvalabs/moichain/jug"
 	"github.com/sarvalabs/moichain/mudra"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/types"
@@ -94,6 +93,8 @@ type executor interface {
 	Revert(types.ClusterID) error
 }
 
+type AggregatedSignatureVerifier func(data []byte, aggSignature []byte, multiplePubKeys [][]byte) (bool, error)
+
 type ChainManager struct {
 	ctx                 context.Context
 	cfg                 *common.ChainConfig
@@ -112,6 +113,7 @@ type ChainManager struct {
 	network             server
 	exec                executor
 	metrics             *Metrics
+	signatureVerifier   AggregatedSignatureVerifier
 }
 
 func NewChainManager(
@@ -124,9 +126,10 @@ func NewChainManager(
 	network server,
 	ix ixpool,
 	cache *lru.Cache,
-	exec *jug.ExecutionManager,
+	exec executor,
 	senatus reputationEngine,
 	metrics *Metrics,
+	verifier AggregatedSignatureVerifier,
 ) (*ChainManager, error) {
 	orphansCache, err := lru.New(25)
 	if err != nil {
@@ -134,22 +137,23 @@ func NewChainManager(
 	}
 
 	c := &ChainManager{
-		ctx:              ctx,
-		cfg:              cfg,
-		db:               db,
-		mux:              mux,
-		ixpool:           ix,
-		sm:               sm,
-		tesseracts:       cache,
-		exec:             exec,
-		network:          network,
-		orphanTesseracts: orphansCache,
-		gridsCache:       NewGridCache(),
-		knownTesseracts:  NewKnownCache(150),
-		latticeLocks:     locker.New(),
-		logger:           logger.Named("Chain-Manager"),
-		senatus:          senatus,
-		metrics:          metrics,
+		ctx:               ctx,
+		cfg:               cfg,
+		db:                db,
+		mux:               mux,
+		ixpool:            ix,
+		sm:                sm,
+		tesseracts:        cache,
+		exec:              exec,
+		network:           network,
+		orphanTesseracts:  orphansCache,
+		gridsCache:        NewGridCache(),
+		knownTesseracts:   NewKnownCache(150),
+		latticeLocks:      locker.New(),
+		logger:            logger.Named("Chain-Manager"),
+		senatus:           senatus,
+		metrics:           metrics,
+		signatureVerifier: verifier,
 	}
 
 	return c, nil
@@ -256,6 +260,10 @@ func (c *ChainManager) UpdateNodeInclusivity(delta types.ContextDelta) error {
 }
 
 func (c *ChainManager) GetTesseract(hash types.Hash, withInteractions bool) (*types.Tesseract, error) {
+	if withInteractions {
+		return c.sm.FetchTesseractFromDB(hash, withInteractions)
+	}
+
 	tesseractData, isCached := c.tesseracts.Get(hash)
 	if !isCached {
 		tesseract, err := c.sm.FetchTesseractFromDB(hash, withInteractions)
@@ -329,17 +337,21 @@ func (c *ChainManager) getReceipt(ixHash, receiptRoot types.Hash) (*types.Receip
 	return receipts.GetReceipt(ixHash)
 }
 
-func (c *ChainManager) GetReceipt(addr types.Address, ixHash types.Hash) (*types.Receipt, error) {
+func (c *ChainManager) GetReceiptByIxHash(addr types.Address, ixHash types.Hash) (*types.Receipt, error) {
 	ts, err := c.GetLatestTesseract(addr, true)
 	if err != nil {
 		return nil, errors.Wrap(types.ErrReceiptNotFound, err.Error())
 	}
 
-	for !ts.Header.PrevHash.IsNil() {
+	for {
 		for _, ix := range ts.Interactions() {
 			if hash := ix.Hash(); hash == ixHash {
 				return c.getReceipt(hash, ts.Body.ReceiptHash)
 			}
+		}
+
+		if ts.Header.PrevHash.IsNil() {
+			return nil, types.ErrReceiptNotFound
 		}
 
 		previousTesseract, err := c.GetTesseract(ts.Header.PrevHash, true)
@@ -349,8 +361,6 @@ func (c *ChainManager) GetReceipt(addr types.Address, ixHash types.Hash) (*types
 
 		ts = previousTesseract
 	}
-
-	return nil, types.ErrReceiptNotFound
 }
 
 func (c *ChainManager) isSealValid(ts *types.Tesseract, id id.KramaID) (bool, error) {
@@ -410,7 +420,7 @@ func (c *ChainManager) verifySignatures(ts *types.Tesseract, ics *ktypes.ICSNode
 		return false, err
 	}
 
-	verified, err := mudra.VerifyAggregateSignature(rawData, ts.Header.Extra.CommitSignature, publicKeys)
+	verified, err := c.signatureVerifier(rawData, ts.Header.Extra.CommitSignature, publicKeys)
 	if err != nil {
 		return false, err
 	}
@@ -482,7 +492,7 @@ func (c *ChainManager) addTesseract(
 		return err
 	}
 
-	if exists, err := c.db.Contains(t.Header.PrevHash.Bytes()); !exists || err != nil {
+	if exists, err := c.db.HasTesseract(t.Header.PrevHash); !exists || err != nil {
 		latticeExists = false
 	}
 
@@ -561,11 +571,18 @@ func (c *ChainManager) addTesseract(
 }
 
 func (c *ChainManager) addTesseractsWithState(
-	clusterInfo *ptypes.ICSClusterInfo,
 	dirtyStorage map[types.Hash][]byte,
 	tesseracts ...*types.Tesseract,
 ) error {
 	tsAdditionInitTime := time.Now()
+
+	if len(tesseracts) == 0 {
+		return errors.New("empty tesseracts")
+	}
+
+	if _, ok := dirtyStorage[tesseracts[0].GetICSHash()]; !ok {
+		return errors.New("cluster info not found")
+	}
 
 	for _, ts := range tesseracts {
 		if err := func(addr types.Address, ts *types.Tesseract) error {
@@ -598,18 +615,6 @@ func (c *ChainManager) addTesseractsWithState(
 		}
 	}
 
-	// Add cluster info to db
-	if clusterInfo != nil && len(tesseracts) > 0 {
-		rawData, err := clusterInfo.Bytes()
-		if err != nil {
-			return err
-		}
-
-		if err = c.db.CreateEntry(tesseracts[0].GetICSHash().Bytes(), rawData); err != nil {
-			return errors.Wrap(err, "failed to write cluster info to db")
-		}
-	}
-
 	for key, value := range dirtyStorage {
 		if err := c.db.CreateEntry(key.Bytes(), value); err != nil {
 			return errors.Wrap(err, "failed to write dirty keys")
@@ -626,49 +631,20 @@ func (c *ChainManager) AddSyncedTesseract(
 	clusterInfo *ptypes.ICSClusterInfo,
 	tesseracts ...*types.Tesseract,
 ) error {
-	for _, ts := range tesseracts {
-		if err := func(addr types.Address, ts *types.Tesseract) error {
-			tsHash, err := ts.Hash()
-			if err != nil {
-				return err
-			}
-
-			c.latticeLocks.Lock(tsHash.Hex())
-			defer func() {
-				if err = c.latticeLocks.Unlock(tsHash.Hex()); err != nil {
-					c.logger.Error("failed to unlock lattice", "error", err, "addr", addr)
-				}
-
-				c.validatedTesseracts.Delete(tsHash)
-			}()
-
-			if c.hasTesseract(tsHash) {
-				return nil
-			}
-
-			if err = c.addTesseract(true, ts.Header.Address, ts, true, true); err != nil {
-				return err
-			}
-
-			return nil
-		}(ts.Address(), ts); err != nil {
-			return err
-		}
+	if clusterInfo == nil {
+		return errors.New("nil cluster info")
 	}
 
-	// Add cluster info to db
-	if clusterInfo != nil && len(tesseracts) > 0 {
-		rawData, err := clusterInfo.Bytes()
-		if err != nil {
-			return err
-		}
+	dirtyStorage := make(map[types.Hash][]byte)
 
-		if err = c.db.CreateEntry(tesseracts[0].Body.ConsensusProof.ICSHash.Bytes(), rawData); err != nil {
-			return errors.Wrap(err, "failed to write cluster info to db")
-		}
+	rawData, err := clusterInfo.Bytes()
+	if err != nil {
+		return err
 	}
 
-	return nil
+	dirtyStorage[tesseracts[0].GetICSHash()] = rawData
+
+	return c.addTesseractsWithState(dirtyStorage, tesseracts...)
 }
 
 func (c *ChainManager) validateTesseract(sender id.KramaID, ts *types.Tesseract, ics *ktypes.ICSNodes) error {
@@ -713,6 +689,46 @@ func (c *ChainManager) validateTesseract(sender id.KramaID, ts *types.Tesseract,
 	return nil
 }
 
+func (c *ChainManager) executeAndAdd(ts *types.Tesseract, clusterInfo *ptypes.ICSClusterInfo) error {
+	if clusterInfo == nil {
+		return errors.New("empty cluster info")
+	}
+
+	if isGridComplete, err := c.gridsCache.AddTesseract(ts); !isGridComplete {
+		if err != nil {
+			c.logger.Error("Failed to add the tesseract to grids cache", "error", err)
+		}
+
+		return nil
+	}
+
+	var tesseractGrid []*types.Tesseract
+
+	if ts.GridLength() == 1 {
+		tesseractGrid = []*types.Tesseract{ts}
+	} else {
+		tesseractGrid = c.gridsCache.CleanupGrid(ts.GridHash())
+	}
+
+	if tesseractGrid == nil {
+		return errors.New("nil grid")
+	}
+
+	dirtyStorage, err := c.executeAndValidate(tesseractGrid)
+	if err != nil {
+		return err
+	}
+
+	rawData, err := clusterInfo.Bytes()
+	if err != nil {
+		return err
+	}
+
+	dirtyStorage[types.GetHash(rawData)] = rawData
+
+	return c.addTesseractsWithState(dirtyStorage, tesseractGrid...)
+}
+
 func (c *ChainManager) AddTesseractWithOutState(
 	ts *types.Tesseract,
 	sender id.KramaID,
@@ -726,7 +742,7 @@ func (c *ChainManager) AddTesseractWithOutState(
 	c.logger.Debug("Adding gossiped tesseract", tsHash, ts.Address())
 
 	if c.hasTesseract(tsHash) {
-		return nil
+		return types.ErrAlreadyKnown
 	}
 
 	ics, err := c.fetchICSNodeSet(ts, clusterInfo)
@@ -741,32 +757,7 @@ func (c *ChainManager) AddTesseractWithOutState(
 	index, _ := ics.GetIndex(c.network.GetKramaID())
 
 	if c.cfg.ShouldExecute && index == -1 { // TODO: Should execute if validator responded false to operator request
-		if isGridComplete, err := c.gridsCache.AddTesseract(ts); !isGridComplete {
-			if err != nil {
-				c.logger.Error("Failed to add the tesseract to grids cache", "error", err)
-			}
-
-			return nil
-		}
-
-		var tesseractGrid []*types.Tesseract
-
-		if ts.GridLength() == 1 {
-			tesseractGrid = []*types.Tesseract{ts}
-		} else {
-			tesseractGrid = c.gridsCache.CleanupGrid(ts.GridHash())
-		}
-
-		if tesseractGrid == nil {
-			return errors.New("nil grid")
-		}
-
-		dirtyStorage, err := c.executeAndValidate(tesseractGrid)
-		if err != nil {
-			return err
-		}
-
-		return c.addTesseractsWithState(clusterInfo, dirtyStorage, tesseractGrid...)
+		return c.executeAndAdd(ts, clusterInfo)
 	}
 
 	c.sendTesseractSyncRequest(ts, clusterInfo)
@@ -775,18 +766,52 @@ func (c *ChainManager) AddTesseractWithOutState(
 }
 
 func (c *ChainManager) AddTesseracts(tesseracts []*types.Tesseract, dirtyStorage map[types.Hash][]byte) error {
-	if tesseracts != nil {
-		gridHash := tesseracts[0].GridHash()
-		for _, ts := range tesseracts {
-			if ts.GridHash() != gridHash {
-				return errors.New("grid id mismatch")
-			}
-		}
-
-		return c.addTesseractsWithState(nil, dirtyStorage, tesseracts...)
+	if len(tesseracts) == 0 {
+		return errors.New("nil grid")
 	}
 
-	return errors.New("nil grid")
+	if len(dirtyStorage) == 0 {
+		return errors.New("empty dirty storage")
+	}
+
+	gridHash := tesseracts[0].GridHash()
+	for _, ts := range tesseracts {
+		if ts.GridHash() != gridHash {
+			return errors.New("grid id mismatch")
+		}
+	}
+
+	return c.addTesseractsWithState(dirtyStorage, tesseracts...)
+}
+
+func validateAssetDetails(info *AssetInfo) (*types.AssetDescriptor, error) {
+	var err error
+
+	assetDescriptor := new(types.AssetDescriptor)
+	assetType := types.AssetKind(info.Type)
+
+	switch assetType {
+	case types.AssetKindValue, types.AssetKindFile, types.AssetKindLogic, types.AssetKindContext:
+		assetDescriptor.Type = assetType
+	default:
+		return nil, types.ErrInvalidAssetKind
+	}
+
+	assetDescriptor.Owner, err = utils.ValidateAddress(info.Owner)
+	if err != nil {
+		return nil, err
+	}
+
+	assetDescriptor.Symbol = info.Symbol
+	assetDescriptor.Supply = big.NewInt(int64(info.TotalSupply))
+	assetDescriptor.Dimension = info.Dimension
+	assetDescriptor.Decimals = info.Decimals
+	assetDescriptor.IsFungible = info.IsFungible
+	assetDescriptor.IsMintable = info.IsMintable
+	assetDescriptor.IsTransferable = info.IsTransferable
+	assetDescriptor.LogicID = types.Hex2Bytes(info.LogicID)
+
+	return assetDescriptor, nil
 }
 
 func (c *ChainManager) validateAccountCreationInfo(acc AccountInfo) (*gtypes.AccountSetupArgs, error) {
@@ -795,6 +820,9 @@ func (c *ChainManager) validateAccountCreationInfo(acc AccountInfo) (*gtypes.Acc
 		accArgs = new(gtypes.AccountSetupArgs)
 		err     error
 	)
+
+	accArgs.Balances = make(map[types.AssetID]*big.Int)
+	accArgs.Assets = make([]*types.AssetDescriptor, len(acc.AssetDetails))
 
 	accArgs.Address, err = utils.ValidateAddress(acc.Address)
 	if err != nil {
@@ -820,9 +848,16 @@ func (c *ChainManager) validateAccountCreationInfo(acc AccountInfo) (*gtypes.Acc
 		accArgs.Balances[assetID] = big.NewInt(v.Amount)
 	}
 
+	for i, assetDetails := range acc.AssetDetails {
+		accArgs.Assets[i], err = validateAssetDetails(assetDetails)
+		if err != nil {
+			return nil, errors.Wrap(err, "invalid asset details")
+		}
+	}
+
 	accArgs.BehaviouralContext = utils.KramaIDFromString(acc.BehaviourContext)
 	accArgs.RandomContext = utils.KramaIDFromString(acc.RandomContext)
-	accArgs.Assets = acc.AssetDetails
+	accArgs.MoiID = acc.MOIId
 
 	return accArgs, nil
 }
@@ -874,7 +909,7 @@ func (c *ChainManager) SetupGenesis(path string) error {
 			v.Address,
 			stateHash,
 			contextHash,
-			sargaAccount.ContextDelta(),
+			v.ContextDelta(),
 		); err != nil {
 			return err
 		}
@@ -946,7 +981,7 @@ func (c *ChainManager) tesseractHandler(pubSubMsg *pubsub.Message) error {
 	// TODO:Add logic to avoid posting event if validator is part of the tesseract already
 
 	if ts.Operator() == string(c.network.GetKramaID()) {
-		return nil
+		return errors.New("this node is the operator of tesseract")
 	}
 
 	tsHash, err := ts.Hash()
@@ -954,10 +989,10 @@ func (c *ChainManager) tesseractHandler(pubSubMsg *pubsub.Message) error {
 		return err
 	}
 
-	if exists, err := c.db.Contains(tsHash.Bytes()); err != nil || exists {
+	if exists, err := c.db.HasTesseract(tsHash); err != nil || exists {
 		c.logger.Info("Skipping tesseract", "hash", tsHash)
 
-		return nil
+		return types.ErrAlreadyKnown
 	}
 
 	clusterInfo := new(ptypes.ICSClusterInfo)
@@ -973,7 +1008,7 @@ func (c *ChainManager) tesseractHandler(pubSubMsg *pubsub.Message) error {
 	if !c.knownTesseracts.Contains(tsHash) {
 		c.knownTesseracts.Add(tsHash)
 
-		if err := c.AddTesseractWithOutState(ts, msg.Sender, clusterInfo); err != nil {
+		if err = c.AddTesseractWithOutState(ts, msg.Sender, clusterInfo); err != nil {
 			c.logger.Error("Error adding tesseract ", "error", err, "addr", ts.Address(), "hash", tsHash)
 
 			return err
@@ -981,9 +1016,11 @@ func (c *ChainManager) tesseractHandler(pubSubMsg *pubsub.Message) error {
 
 		c.metrics.captureStatelessTesseractCounter(1)
 		c.metrics.captureStatelessTesseractAdditionTime(tsAdditionInitTime)
+
+		return nil
 	}
 
-	return nil
+	return types.ErrAlreadyKnown
 }
 
 func (c *ChainManager) Start() error {
@@ -1009,6 +1046,8 @@ func (c *ChainManager) executeAndValidate(ts []*types.Tesseract) (map[types.Hash
 	if !isReceiptAndGroupHashValid(ts, receipts) || !areStateHashesValid(ts, receipts) {
 		if err = c.exec.Revert(ts[0].ClusterID()); err != nil {
 			c.logger.Error("Failed to revert the execution changes", "cluster-id", ts[0].ClusterID())
+
+			return nil, errors.Wrap(err, "failed to revert the execution changes")
 		}
 
 		return nil, errors.New("failed to validate the tesseract")
@@ -1028,6 +1067,10 @@ func (c *ChainManager) executeAndValidate(ts []*types.Tesseract) (map[types.Hash
 }
 
 func areStateHashesValid(tesseracts []*types.Tesseract, receipts types.Receipts) bool {
+	if len(tesseracts[0].Interactions()) == 0 {
+		return false
+	}
+
 	for _, ix := range tesseracts[0].Interactions() {
 		receipt, err := receipts.GetReceipt(ix.Hash())
 		if err != nil {
@@ -1045,7 +1088,7 @@ func areStateHashesValid(tesseracts []*types.Tesseract, receipts types.Receipts)
 }
 
 func isReceiptAndGroupHashValid(tesseracts []*types.Tesseract, receipts types.Receipts) bool {
-	groupHash := tesseracts[0].Header.GridHash
+	gridHash := tesseracts[0].Header.GridHash
 
 	receiptsHash, err := receipts.Hash()
 	if err != nil {
@@ -1053,7 +1096,7 @@ func isReceiptAndGroupHashValid(tesseracts []*types.Tesseract, receipts types.Re
 	}
 
 	for _, ts := range tesseracts {
-		if ts.ReceiptHash() != receiptsHash || ts.Header.GridHash != groupHash {
+		if ts.ReceiptHash() != receiptsHash || ts.Header.GridHash != gridHash {
 			return false
 		}
 	}

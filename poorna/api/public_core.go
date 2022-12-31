@@ -156,7 +156,7 @@ func (p *PublicCoreAPI) GetInteractionReceipt(args *ReceiptArgs) (*types.Receipt
 		return nil, types.ErrInvalidHash
 	}
 
-	return p.chain.GetReceipt(address, types.HexToHash(hash))
+	return p.chain.GetReceiptByIxHash(address, types.HexToHash(hash))
 }
 
 // GetInteractionCountByAddress returns the number of interactions sent for the given address

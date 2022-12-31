@@ -14,7 +14,7 @@ import (
 func TestPublicCoreAPI_GetBalance(t *testing.T) {
 	address := tests.RandomAddress(t)
 	chainManager := NewMockChainManager(t)
-	stateManager := NewMockStateManager(t)
+	stateManager := NewMockStateManager()
 	assetID, _ := tests.CreateTestAsset(t, address)
 
 	stateManager.setBalance(address, assetID, big.NewInt(300))
@@ -166,7 +166,7 @@ func TestPublicCoreAPI_GetLatestTesseract(t *testing.T) {
 func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
 	address := tests.RandomAddress(t)
 	chainManager := NewMockChainManager(t)
-	stateManager := NewMockStateManager(t)
+	stateManager := NewMockStateManager()
 	latestContextHash, _, _ := getTesseracts(t, address)
 
 	stateManager.setLatestContextHash(address, latestContextHash)
@@ -239,7 +239,7 @@ func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
 func TestPublicCoreAPI_GetTDU(t *testing.T) {
 	address := tests.RandomAddress(t)
 	chainManager := NewMockChainManager(t)
-	stateManager := NewMockStateManager(t)
+	stateManager := NewMockStateManager()
 	assetID, _ := tests.CreateTestAsset(t, address)
 
 	stateManager.setBalance(address, assetID, big.NewInt(300))
@@ -429,7 +429,7 @@ func TestPublicCoreAPI_GetTesseractByHash(t *testing.T) {
 func TestPublicCoreAPI_GetTesseractByHeight(t *testing.T) {
 	address := tests.RandomAddress(t)
 	chainManager := NewMockChainManager(t)
-	stateManager := NewMockStateManager(t)
+	stateManager := NewMockStateManager()
 	_, latestTesseractHash, tesseracts := getTesseracts(t, address)
 	interactions := getInteractions(t, tesseracts)
 	latestTesseract := tesseracts[latestTesseractHash]
@@ -570,7 +570,7 @@ func TestPublicCoreAPI_GetInteractionCountByAddress(t *testing.T) {
 	address := tests.RandomAddress(t)
 	latestNonce := uint64(5)
 	chainManager := NewMockChainManager(t)
-	stateManager := NewMockStateManager(t)
+	stateManager := NewMockStateManager()
 
 	stateManager.setAccounts(address, latestNonce)
 
@@ -627,7 +627,7 @@ func TestPublicCoreAPI_GetInteractionCountByAddress(t *testing.T) {
 
 func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 	chainManager := NewMockChainManager(t)
-	stateManager := NewMockStateManager(t)
+	stateManager := NewMockStateManager()
 	logicID := types.LogicID(tests.RandomHash(t).String())
 
 	stateManager.setLogicManifest(logicID.Hex(), []byte{0x00, 0x01})

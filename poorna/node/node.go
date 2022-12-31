@@ -22,7 +22,7 @@ import (
 	"github.com/sarvalabs/moichain/guna"
 	"github.com/sarvalabs/moichain/jug"
 	"github.com/sarvalabs/moichain/krama"
-	kcrypto "github.com/sarvalabs/moichain/mudra"
+	"github.com/sarvalabs/moichain/mudra"
 	"github.com/sarvalabs/moichain/poorna"
 	"github.com/sarvalabs/moichain/poorna/api"
 	"github.com/sarvalabs/moichain/poorna/flux"
@@ -59,7 +59,7 @@ type Node struct {
 	rpc              *krpc.Server
 	nodeMetrics      *nodeMetrics
 	prometheusServer *http.Server
-	vault            *kcrypto.KramaVault
+	vault            *mudra.KramaVault
 }
 
 func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
@@ -75,7 +75,7 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 		return nil, err
 	}
 
-	n.vault, err = kcrypto.NewVault(cfg.Vault, 1, 1)
+	n.vault, err = mudra.NewVault(cfg.Vault, 1, 1)
 	if err != nil {
 		return nil, errors.Wrap(types.ErrVaultInit, err.Error())
 	}
@@ -149,6 +149,7 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 		n.exec,
 		n.state.SenatusInstance(),
 		n.nodeMetrics.chain,
+		mudra.VerifyAggregateSignature,
 	); err != nil {
 		return nil, err
 	}

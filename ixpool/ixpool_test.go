@@ -23,7 +23,7 @@ func TestIxPool_AddInteractions_checkIx(t *testing.T) {
 	testcases := []struct {
 		name        string
 		ix          *types.Interaction
-		testFn      func(interaction *types.Interaction)
+		preTestFn   func(interaction *types.Interaction)
 		expectedErr error
 	}{
 		{
@@ -34,7 +34,7 @@ func TestIxPool_AddInteractions_checkIx(t *testing.T) {
 		{
 			name: "Already known Interaction",
 			ix:   newTestInteraction(t, 0, types.NilAddress, nil),
-			testFn: func(interaction *types.Interaction) {
+			preTestFn: func(interaction *types.Interaction) {
 				ixPool.allIxs.add(interaction)
 			},
 			expectedErr: ErrAlreadyKnown,
@@ -48,8 +48,8 @@ func TestIxPool_AddInteractions_checkIx(t *testing.T) {
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			if testcase.testFn != nil {
-				testcase.testFn(testcase.ix)
+			if testcase.preTestFn != nil {
+				testcase.preTestFn(testcase.ix)
 			}
 
 			err := ixPool.checkIx(testcase.ix)

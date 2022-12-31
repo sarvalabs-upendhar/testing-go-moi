@@ -236,7 +236,7 @@ func Test_handleRequests_RequestFormats(t *testing.T) {
 			expectedErr: nil,
 		},
 		{
-			name: "Should return error, if the request id is of type float and significand value is greater than 0",
+			name: "should return error, if the request id is of type float and significand value is greater than 0",
 			message: []byte(fmt.Sprintf(`{
 				"id": 2.1,
 				"method": "moi.subscribe",
@@ -303,12 +303,12 @@ func Test_RemoveSubscription(t *testing.T) {
 		expected       bool
 	}{
 		{
-			name:           "Should return false, when non existing Subscription ID is passed as parameter",
+			name:           "should return false, when non existing Subscription ID is passed as parameter",
 			subscriptionID: uuid.New().String(),
 			expected:       true,
 		},
 		{
-			name:           "Should return true, when valid Subscription ID is passed as parameter",
+			name:           "should return true, when valid Subscription ID is passed as parameter",
 			subscriptionID: mockConnManager.GetSubscriptionID(),
 			expected:       false,
 		},
