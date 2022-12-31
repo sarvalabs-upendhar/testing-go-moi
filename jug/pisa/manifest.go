@@ -48,7 +48,7 @@ func (manifest *ManifestSchemaV1) FromBytes(data []byte) error {
 // format for defining a Logic Storage for the PISA Execution Engine
 type StorageSchema struct {
 	Fields  map[uint8]string `yaml:"fields" json:"fields"`
-	Builder RoutineSchema    `yaml:"builder" json:"builder"`
+	Builder *RoutineSchema   `yaml:"builder" json:"builder"`
 }
 
 // ClassSchema represents a structural layout and an intermediary

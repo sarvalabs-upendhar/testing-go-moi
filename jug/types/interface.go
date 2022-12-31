@@ -51,7 +51,7 @@ type Logic interface {
 	Manifest() types.Hash
 
 	GetCallsite(name string) (types.LogicCallsite, bool)
-	GetLogicElement(kind string, index uint64) (*types.LogicElement, error)
+	GetLogicElement(kind string, index uint64) (*types.LogicElement, bool)
 }
 
 // Storage is an interface that defines a storage driver for an ExecutionEngine

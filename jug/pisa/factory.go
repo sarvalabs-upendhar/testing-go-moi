@@ -1,6 +1,7 @@
 package pisa
 
 import (
+	"github.com/sarvalabs/moichain/jug/pisa/runtime"
 	ctypes "github.com/sarvalabs/moichain/jug/types"
 	"github.com/sarvalabs/moichain/types"
 )
@@ -10,16 +11,16 @@ import (
 // into every engine instance instead of recomputing them each time.
 // Implements the engine.Factory interface.
 type Factory struct {
-	datatypes TypeTable
-	instructs InstructionSet
+	datatypes runtime.TypeTable
+	instructs runtime.InstructionSet
 }
 
 // NewFactory generates a new Factory instance that can be
 // used to generate new instances of the PISA Execution Engine
 func NewFactory() Factory {
 	return Factory{
-		datatypes: BaseTypeTable(),
-		instructs: BaseInstructionSet(),
+		datatypes: runtime.BabylonTypeTable(),
+		instructs: runtime.BabylonInstructionSet(),
 	}
 }
 
@@ -33,8 +34,8 @@ func (factory Factory) NewExecutionEngine(fuelCap uint64) ctypes.ExecutionEngine
 	return &Engine{
 		instructs: factory.instructs,
 		datatypes: factory.datatypes,
-		constants: make(ConstantTable),
-		routines:  NewRoutineTable(),
+		constants: make(runtime.ConstantTable),
+		routines:  runtime.NewRoutineTable(),
 		fueltank:  ctypes.NewFuelTank(fuelCap),
 	}
 }

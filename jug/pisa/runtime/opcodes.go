@@ -1,6 +1,9 @@
-package pisa
+package runtime
 
-import "fmt"
+import (
+	"bytes"
+	"fmt"
+)
 
 // OpCode represents a PISA Opcode
 type OpCode byte
@@ -73,6 +76,35 @@ const (
 	// TIME loads the timestamp from the environment into a register
 	// 	- TIME <reg:string>
 	TIME OpCode = 0x17
+)
+
+// register methods
+const (
+	// INVOKE invokes a register method with a specified number of args.
+	// Each argument is a register whose type must match the method calldata.
+	//  - INVOKE <reg:X> <byte[method]> <byte[inputno]> <...registers:inputs...> <byte[outputno]> <...registers:outputs...>
+	INVOKE OpCode = 0x20
+	// THROW throws an exception to the VM.
+	// The register must be class that implements __throw__. If there is no catch specified for the line
+	// in which the instruction is thrown, it aborts execution and exits, otherwise execution moves to the
+	// location specified by the catch
+	//	- THROW <reg:throwable>
+	THROW OpCode = 0x21
+
+	// BOOL returns a boolean value for the register. The register type must implement __bool__.
+	// string(if "" false, else true), bytes, address (if 0x0 false, else true), integer(if 0 false, else true),
+	// boolean(direct value), sequence, mapping(if len==0 false, else true), class(value from __bool__ implementation)
+	// 	- BOOL <reg:X>
+	BOOL OpCode = 0x22
+	// STR returns a string value for the register. The register type must implement __string__.
+	// 	- STR <reg:X>
+	STR OpCode = 0x23
+
+	// JOIN joins the contents of two registers into another.
+	// They must be of the same type and implement __join__. Classes will be joined per this method.
+	// bytes and string (concatenation), integer (addition), boolean (and), sequence (append), mapping (merge).
+	// 	- JOIN <reg:A> <reg:A> <reg:A>
+	JOIN OpCode = 0x25
 )
 
 // register and binding operations
@@ -189,6 +221,12 @@ var opCodeToString = map[OpCode]string{
 	BALANCE: "BALANCE",
 	TIME:    "TIME",
 
+	INVOKE: "INVOKE",
+	THROW:  "THROW",
+	BOOL:   "BOOL",
+	STR:    "STR",
+	JOIN:   "JOIN",
+
 	TYPEOF: "TYPEOF",
 	ISNULL: "ISNULL",
 
@@ -250,6 +288,12 @@ var stringToOpCode = map[string]OpCode{
 	"BALANCE": BALANCE,
 	"TIME":    TIME,
 
+	"INVOKE": INVOKE,
+	"THROW":  THROW,
+	"BOOL":   BOOL,
+	"STR":    STR,
+	"JOIN":   JOIN,
+
 	"TYPEOF": TYPEOF,
 	"ISNULL": ISNULL,
 
@@ -282,4 +326,77 @@ var stringToOpCode = map[string]OpCode{
 // StringToOpCode finds the opcode whose name is stored in str.
 func StringToOpCode(str string) OpCode {
 	return stringToOpCode[str]
+}
+
+// operand0 reads 0 bytes from the reader as operands.
+func operand0(_ *bytes.Reader) ([]byte, bool) {
+	return nil, true
+}
+
+// operand1 reads 1 bytes from the reader as operands.
+func operand1(reader *bytes.Reader) ([]byte, bool) {
+	operand, err := reader.ReadByte()
+	if err != nil {
+		return nil, false
+	}
+
+	return []byte{operand}, true
+}
+
+// operand2 reads 2 bytes from the reader as operands.
+func operand2(reader *bytes.Reader) ([]byte, bool) {
+	operands := make([]byte, 2)
+	read, err := reader.Read(operands)
+
+	if read != 2 || err != nil {
+		return nil, false
+	}
+
+	return operands, true
+}
+
+// operand3 reads 3 bytes from the reader as operands.
+func operand3(reader *bytes.Reader) ([]byte, bool) {
+	operands := make([]byte, 3)
+	read, err := reader.Read(operands)
+
+	if read != 3 || err != nil {
+		return nil, false
+	}
+
+	return operands, true
+}
+
+// operandLDPTR reads bytes from the reader for the LDPTR opcode.
+// LDPTR takes a variable number of operands. The first operand specifies the size of the pointer to read.
+// The second operand specifies the register to load the pointer into, followed by n bytes for the pointer.
+func operandLDPTR(reader *bytes.Reader) ([]byte, bool) {
+	var (
+		err     error
+		regID   byte
+		ptrSize byte
+	)
+
+	if ptrSize, err = reader.ReadByte(); err != nil {
+		return nil, false
+	}
+
+	if regID, err = reader.ReadByte(); err != nil {
+		return nil, false
+	}
+
+	if ptrSize == 0 {
+		return []byte{regID, 1, 0}, true
+	}
+
+	address := make([]byte, ptrSize)
+	if n, err := reader.Read(address); n != int(ptrSize) || err != nil {
+		return nil, false
+	}
+
+	operands := make([]byte, 0, ptrSize+2)
+	operands = append(operands, ptrSize, regID)
+	operands = append(operands, address...)
+
+	return operands, true
 }

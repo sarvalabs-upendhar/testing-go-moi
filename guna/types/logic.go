@@ -62,7 +62,7 @@ func (logic LogicObject) GetCallsite(name string) (types.LogicCallsite, bool) {
 	return callsite, ok
 }
 
-func (logic LogicObject) GetLogicElement(kind string, index uint64) (*types.LogicElement, error) {
+func (logic LogicObject) GetLogicElement(kind string, index uint64) (*types.LogicElement, bool) {
 	return logic.Elements.Fetch(kind, index)
 }
 

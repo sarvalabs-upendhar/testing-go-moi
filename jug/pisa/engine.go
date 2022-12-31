@@ -2,11 +2,12 @@ package pisa
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
+	"github.com/sarvalabs/moichain/jug/pisa/exceptions"
+	"github.com/sarvalabs/moichain/jug/pisa/register"
+	"github.com/sarvalabs/moichain/jug/pisa/runtime"
 	ctypes "github.com/sarvalabs/moichain/jug/types"
 	"github.com/sarvalabs/moichain/types"
 )
@@ -14,30 +15,29 @@ import (
 // Engine represents the execution engine for the PISA Virtual Machine.
 // It implements the types.ExecutionEngine interface.
 type Engine struct {
+	// instructs represents the engine instruction set for PISA.
+	instructs runtime.InstructionSet
+
 	// fueltank represents the fuel tank of the engine
 	fueltank *ctypes.FuelTank
-
-	// instructs represents the engine instruction set for PISA.
-	instructs InstructionSet
-	// datatypes represents the type management table for PISA.
-	datatypes TypeTable
-
 	// logic represents the logic driver
 	logic ctypes.Logic
 	// storage represents a table of storage drivers
-	storage StorageTable
+	storage runtime.StorageTable
 
+	// datatypes represents the type management table for PISA.
+	datatypes runtime.TypeTable
 	// constants represents a table of logic Constant objects indexed by their 64-bit pointer
-	constants ConstantTable
+	constants runtime.ConstantTable
 	// routines represents a table of logic Routine objects indexed by their 64-bit pointers
-	routines RoutineTable
+	routines runtime.RoutineTable
 }
 
 // Kind returns the kind of engine and implements
 // the engine.ExecutionEngine interface for PISA
 func (engine Engine) Kind() types.LogicEngine { return types.PISA }
 
-func (engine Engine) Execute(
+func (engine *Engine) Execute(
 	_ context.Context,
 	logic ctypes.Logic,
 	order *ctypes.ExecutionOrder,
@@ -47,148 +47,137 @@ func (engine Engine) Execute(
 	// Set the storage drivers for the engine if logic is stateful
 	if logic.IsStateful() {
 		// Load the storage layout into the engine
-		if err := engine.loadStorageLayout(); err != nil {
-			return engine.Error(ErrorCodeExecutionSetupFail,
-				fmt.Sprintf("could not load storage layout: %v", err))
+		if _, ok := engine.GetStorageLayout(); !ok {
+			return engine.Error(exceptions.ExceptionExecutionSetup, "could not load storage layout")
 		}
 
 		// Set the storage drivers for the caller and callee
-		engine.storage.callee = order.Callee
-		engine.storage.caller = order.Caller
+		engine.storage.Callee = order.Callee
+		engine.storage.Caller = order.Caller
 	}
 
 	// Set up the execution context depending on the execution order flag
 	if order.Initialise {
-		return engine.BuildStorage(order.Inputs)
+		return engine.InitialiseStorage(order.Inputs)
 	}
 
 	// Fetch the callsite pointer for the given input string callsite
 	callsite, exists := logic.GetCallsite(order.Callsite)
 	if !exists {
-		return engine.Error(ErrorCodeInvalidCallsite, "callsite does not exists")
+		return engine.Errorf(exceptions.ExceptionInvalidCallsite, "callsite '%v' does not exist", order.Callsite)
 	}
 
-	// Load the routine into the engine
-	if err := engine.loadRoutine(uint64(callsite)); err != nil {
-		return engine.Error(ErrorCodeExecutionSetupFail,
-			fmt.Sprintf("could not load routine (%v|%v): %v", order.Callsite, callsite, err))
-	}
-
-	// Spawn an ExecutionContext for the Routine callsite
-	executionCtx, err := engine.spawnRoutineCtx(callsite, order.Inputs)
-	if err != nil {
-		return engine.Error(ErrorCodeExecutionSetupFail, fmt.Sprintf("could not spawn execution context: %v", err))
+	// Get the routine
+	routine, ok := engine.GetRoutine(uint64(callsite))
+	if !ok {
+		return engine.Error(exceptions.ExceptionExecutionSetup, "could not load routine")
 	}
 
 	// Exhaust some fuel for the execution setup
 	if !engine.fueltank.Exhaust(50) {
-		return engine.Error(ErrorCodeRanOutOfFuel, "exhausted before routine execution")
+		return engine.Error(exceptions.ExceptionFuelExhausted, "")
 	}
 
-	// Run the execution and return the result
-	return engine.RunExecution(executionCtx)
+	// Convert the input ExecutionValues into a RegisterTable
+	inputs, err := register.NewValueTable(routine.Inputs, order.Inputs)
+	if err != nil {
+		return engine.Errorf(exceptions.ExceptionExecutionSetup, "invalid calldata: %v", err)
+	}
+
+	// Create a root execution context
+	rootCtx := runtime.RootExecutionScope(engine)
+	// Execute the routine with the root context and inputs
+	outputs := routine.Execute(rootCtx, inputs)
+
+	// If root context has a raised exception return it
+	if rootCtx.ExceptionThrown() {
+		return engine.ErrorException(rootCtx.GetException())
+	}
+
+	// Convert the output RegisterTable into ExecutionValues
+	outputValues := make(polo.Document)
+	// For each output value, set encoded data for the label
+	for label, index := range routine.Outputs.Symbols {
+		if value, ok := outputs[index]; ok {
+			outputValues.Set(label, value.Data())
+		}
+	}
+
+	return engine.Result(outputValues)
 }
 
-func (engine Engine) Compile(_ context.Context, manifest []byte) (*types.LogicDescriptor, *ctypes.ExecutionResult) {
+func (engine *Engine) Compile(_ context.Context, manifest []byte) (*types.LogicDescriptor, *ctypes.ExecutionResult) {
 	// Decode into engine.ManifestHeader
 	header := new(ctypes.ManifestHeader)
 	if err := polo.Depolorize(header, manifest); err != nil {
-		return nil, engine.Error(ErrorCodeInvalidManifest, "malformed header")
+		return nil, engine.Error(exceptions.ExceptionInvalidManifest, "malformed header")
 	}
 
 	// Check that the Engine is PISA
 	if header.LogicEngine() != types.PISA {
-		return nil, engine.Error(ErrorCodeInvalidManifest, "unsupported engine")
+		return nil, engine.Error(exceptions.ExceptionInvalidManifest, "unsupported engine")
 	}
 
 	// Check that syntax is "1". Error for all other syntax forms
 	if header.Syntax != "1" {
-		return nil, engine.Error(ErrorCodeInvalidManifest, "unsupported syntax")
+		return nil, engine.Error(exceptions.ExceptionInvalidManifest, "unsupported syntax")
 	}
 
 	return engine.compileLogicV1(manifest)
 }
 
-func (engine Engine) Implements(_ context.Context, _ ctypes.Logic, _ types.LogicKind) (bool, *ctypes.ExecutionResult) {
+func (engine *Engine) Implements(_ context.Context, _ ctypes.Logic, _ types.LogicKind) (bool, *ctypes.ExecutionResult) {
 	panic("missing implementation: pisa.PISA.Implements()")
 }
 
-func (engine Engine) RunExecution(ctx *ExecutionContext) *ctypes.ExecutionResult {
-	// Execution Loop -> ends when instructions are completed or engine fuel is depleted
-	for !ctx.program.done() {
-		// Get the next instruction from the program
-		instruct := ctx.program.read()
-		// Get the operation for the opcode from the instruction set
-		op := engine.instructs.lookup(instruct.Op)
-
-		// Attempt to exhaust some fuel from the engine -> fails if there is not enough fuel left
-		if ok := engine.fueltank.Exhaust(op.expense(ctx)); !ok {
-			// Fuel Depleted - unread the instruction and break execution
-			ctx.program.unread()
-
-			return engine.Error(ErrorCodeRanOutOfFuel, "Exception: Fuel Depleted")
-		}
-
-		// Execute the instruction
-		if err := op.execute(ctx, instruct.Args); err != nil {
-			// If the error is a terminate signal, break from execution look
-			if errors.Is(err, ErrTerminate) {
-				break
-			}
-
-			ctx.program.unread()
-
-			return engine.Error(
-				ErrorCodeExecutionRuntimeFail,
-				fmt.Sprintf("Execution Halted | Instruction: [%#x] | Cause: %v", ctx.program.pc, err),
-			)
-		}
-	}
-
-	// Generate the ExecutionResult with output values from the ExecutionContext
-	return engine.Result(ctx.Outputs())
-}
-
-func (engine Engine) BuildStorage(inputs ctypes.ExecutionValues) *ctypes.ExecutionResult {
+func (engine *Engine) InitialiseStorage(inputs ctypes.ExecutionValues) *ctypes.ExecutionResult {
 	// Initialize the storage slots
-	for slot, datatype := range engine.storage.layout.Table {
+	for slot, datatype := range engine.storage.Layout.Table {
 		// For each typefield in the storage layout, generate the default value
-		defaultValue, err := NewValue(datatype.Type, nil)
+		defaultValue, err := register.NewValue(datatype.Type, nil)
 		if err != nil {
-			return engine.Error(ErrorCodeStorageBuildFail, fmt.Sprintf("storage build slot [%v]: %v", slot, err))
+			return engine.Errorf(exceptions.ExceptionValueInit, "storage &%v: %v", slot, err)
 		}
 
 		// Create a storage entry for the default value
-		if err = engine.storage.callee.SetStorageEntry(
-			engine.logic.LogicID(), SlotHash(slot), defaultValue.Data(),
-		); err != nil {
-			return engine.Error(ErrorCodeStorageBuildFail, fmt.Sprintf("storage build slot [%v]: %v", slot, err))
+		if err = engine.WriteStorage(slot, defaultValue.Data()); err != nil {
+			return engine.Errorf(exceptions.ExceptionStorageWrite, "storage &%v: %v", slot, err)
 		}
 	}
 
 	// Exhaust some fuel for the storage build
 	if !engine.fueltank.Exhaust(50) {
-		return engine.Error(ErrorCodeRanOutOfFuel, "exhausted before builder execution setup")
+		return engine.Error(exceptions.ExceptionFuelExhausted, "")
 	}
 
-	// Load the routine into the engine
-	if err := engine.loadStorageBuilder(); err != nil {
-		return engine.Error(ErrorCodeExecutionSetupFail, fmt.Sprintf("could not load builder: %v", err))
-	}
-
-	// Spawn an ExecutionContext
-	executionCtx, err := engine.spawnBuilderCtx(inputs)
-	if err != nil {
-		return engine.Error(ErrorCodeExecutionSetupFail, fmt.Sprintf("could not spawn execution context: %v", err))
+	// Get the builder
+	builder, ok := engine.GetStorageBuilder()
+	if !ok {
+		return engine.Error(exceptions.ExceptionExecutionSetup, "could not load builder")
 	}
 
 	// Exhaust some fuel for the execution setup
 	if !engine.fueltank.Exhaust(50) {
-		return engine.Error(ErrorCodeRanOutOfFuel, "exhausted before builder execution")
+		return engine.Error(exceptions.ExceptionFuelExhausted, "")
 	}
 
-	// Run the execution and return the result
-	return engine.RunExecution(executionCtx)
+	// Convert the input ExecutionValues into a RegisterTable
+	inputValues, err := register.NewValueTable(builder.Inputs, inputs)
+	if err != nil {
+		return engine.Errorf(exceptions.ExceptionExecutionSetup, "invalid calldata: %v", err)
+	}
+
+	// Create a root execution context
+	rootCtx := runtime.RootExecutionScope(engine)
+	// Execute the builder with the root context and inputs
+	_ = builder.Execute(rootCtx, inputValues)
+
+	// If root context has a raised exception return it
+	if rootCtx.ExceptionThrown() {
+		return engine.ErrorException(rootCtx.GetException())
+	}
+
+	return engine.Result(nil)
 }
 
 // Result returns an ExecutionResult for some given ExecutionValues.
@@ -196,179 +185,172 @@ func (engine Engine) BuildStorage(inputs ctypes.ExecutionValues) *ctypes.Executi
 func (engine Engine) Result(values ctypes.ExecutionValues) *ctypes.ExecutionResult {
 	return &ctypes.ExecutionResult{
 		Fuel:    engine.fueltank.Consumed,
-		Outputs: values, Logs: nil,
-		ErrCode: uint64(ErrorCodeOk), ErrMessage: "",
+		ErrCode: uint64(exceptions.ExceptionOk),
+		Outputs: values,
 	}
 }
 
 // Error returns an ExecutionResult for some ErrorCode and Error Message.
 // The result contains the consumed fuel and the given ErrorCode and Message.
-func (engine Engine) Error(code ErrorCode, message string) *ctypes.ExecutionResult {
+func (engine Engine) Error(kind exceptions.ExceptionCode, data string) *ctypes.ExecutionResult {
+	return engine.ErrorException(exceptions.Exception(kind, data))
+}
+
+// Errorf returns an ExecutionResult for some ErrorCode and Error Message (with formatting).
+// The result contains the consumed fuel and the given ErrorCode and Message.
+func (engine Engine) Errorf(kind exceptions.ExceptionCode, format string, a ...any) *ctypes.ExecutionResult {
+	return engine.ErrorException(exceptions.Exceptionf(kind, format, a...))
+}
+
+func (engine Engine) ErrorException(exception *exceptions.ExceptionObject) *ctypes.ExecutionResult {
 	return &ctypes.ExecutionResult{
-		Fuel:    engine.fueltank.Consumed,
-		Outputs: nil, Logs: nil,
-		ErrCode:    uint64(code),
-		ErrMessage: message,
+		Fuel:       engine.fueltank.Consumed,
+		ErrCode:    uint64(exception.Code),
+		ErrMessage: exception.String(),
 	}
 }
 
-func (engine *Engine) spawnRoutineCtx(
-	ptr types.LogicCallsite,
-	inputs ctypes.ExecutionValues,
-) (*ExecutionContext, error) {
-	// Fetch the routine
-	routine, exists := engine.routines.fetch(uint64(ptr))
-	if !exists {
-		return nil, errors.Errorf("routine '%v' unavailable", ptr)
-	}
-
-	// Create a table of values from the calldata as defined by the routine input fields
-	// This implicitly performs calldata validation by ensuring that all input fields have
-	// some data of the correct type in the calldata document
-	inputTable, err := NewValueTable(routine.Inputs, inputs)
-	if err != nil {
-		return nil, errors.Wrap(err, "invalid calldata")
-	}
-
-	// Generate an execution runtime for the routine
-	return NewExecutionContext(engine, routine, inputTable), nil
-}
-
-func (engine *Engine) spawnBuilderCtx(inputs ctypes.ExecutionValues) (*ExecutionContext, error) {
-	// Fetch the builder
-	builder := engine.storage.builder
-	if builder == nil {
-		return nil, errors.New("builder unavailable")
-	}
-
-	// Create a table of values from the calldata as defined by the routine input fields
-	// This implicitly performs calldata validation by ensuring that all input fields have
-	// some data of the correct type in the calldata document
-	inputTable, err := NewValueTable(builder.Inputs, inputs)
-	if err != nil {
-		return nil, errors.Wrap(err, "invalid calldata")
-	}
-
-	// Generate an execution runtime for the routine
-	return NewExecutionContext(engine, builder, inputTable), nil
-}
-
-func (engine *Engine) loadRoutine(ptr uint64) error {
+func (engine *Engine) GetRoutine(ptr uint64) (*runtime.Routine, bool) {
 	// If Routine already exists in table, return
-	if _, ok := engine.routines.fetch(ptr); ok {
-		return nil
+	if routine, ok := engine.routines.Get(ptr); ok {
+		return routine, true
 	}
 
 	// Fetch the logic element for the Routine from the logic driver
-	element, err := engine.logic.GetLogicElement(elementRoutine, ptr)
-	if err != nil {
-		return errors.New("routine load: no routine for address")
+	element, ok := engine.logic.GetLogicElement(runtime.ElementCodeRoutine, ptr)
+	if !ok {
+		return nil, false
 	}
 
-	// Depolorize the element data into a Routine
-	routine := new(Routine)
-	if err = polo.Depolorize(routine, element.Data); err != nil {
-		return errors.New("routine load: could not decode")
+	// Attempt to depolorize the element data into a Routine
+	routine := new(runtime.Routine)
+	if err := polo.Depolorize(routine, element.Data); err != nil {
+		return nil, false
 	}
 
 	// Set the Routine into the engine's routine table
-	engine.routines.insert(routine.Name, ptr, routine)
+	engine.routines.Symbols[routine.Name] = ptr
+	engine.routines.Table[ptr] = routine
 
-	return nil
+	return routine, true
 }
 
-func (engine *Engine) loadConstant(ptr uint64) error {
+func (engine *Engine) GetConstant(ptr uint64) (*runtime.Constant, bool) {
 	// If the constant already exists, return
-	if _, ok := engine.constants.fetch(ptr); ok {
-		return nil
+	if constant, ok := engine.constants.Get(ptr); ok {
+		return constant, true
 	}
 
 	// Fetch the logic element for the Constant from the logic driver
-	element, err := engine.logic.GetLogicElement(elementConstant, ptr)
-	if err != nil {
-		return errors.New("constant load: no constant for address")
+	element, ok := engine.logic.GetLogicElement(runtime.ElementCodeConstant, ptr)
+	if !ok {
+		return nil, false
 	}
 
-	// Depolorize the element data into a Constant
-	constant := new(Constant)
-	if err = polo.Depolorize(constant, element.Data); err != nil {
-		return errors.New("constant load: could not decode")
+	// Attempt to depolorize the element data into a Constant
+	constant := new(runtime.Constant)
+	if err := polo.Depolorize(constant, element.Data); err != nil {
+		return nil, false
 	}
 
 	// Set the Constant into the engine's constant table
-	engine.constants.insert(ptr, constant)
+	engine.constants[ptr] = constant
 
-	return nil
+	return constant, true
 }
 
-func (engine *Engine) loadTypedefs(ptr uint64) error {
+func (engine *Engine) GetSymbolicType(ptr uint64) (*register.Typedef, bool) {
 	// If the typedef already exists, return
-	if _, ok := engine.datatypes.symbolic[ptr]; ok {
-		return nil
+	if typedef, ok := engine.datatypes.GetSymbolic(ptr); ok {
+		return typedef, true
 	}
 
 	// Fetch the logic element for the typedef from the logic driver
-	element, err := engine.logic.GetLogicElement(elementTypedef, ptr)
-	if err != nil {
-		return errors.New("typedef load: no typedef element")
+	element, ok := engine.logic.GetLogicElement(runtime.ElementCodeTypedef, ptr)
+	if !ok {
+		return nil, false
 	}
 
-	// Depolorize the element data into a Datatype
-	datatype := new(Datatype)
-	if err = polo.Depolorize(&datatype, element.Data); err != nil {
-		return errors.New("typedef load: could not decode")
+	// Attempt to depolorize the element data into a Typedef
+	datatype := new(register.Typedef)
+	if err := polo.Depolorize(&datatype, element.Data); err != nil {
+		return nil, false
 	}
 
-	// Set the Datatype as symbolic type into engine's type table
-	engine.datatypes.insertSymbolic(ptr, datatype)
+	// Set the Typedef as symbolic type into engine's type table
+	engine.datatypes.SetSymbolic(ptr, datatype)
 
-	return nil
+	return datatype, true
 }
 
-func (engine *Engine) loadStorageLayout() error {
+func (engine *Engine) GetStorageLayout() (*runtime.StorageLayout, bool) {
 	// If the storage layout exists, return
-	if engine.storage.layout != nil {
-		return nil
+	if engine.storage.Layout != nil {
+		return engine.storage.Layout, true
 	}
 
 	// Fetch the logic element for the StorageLayout from the logic driver
-	element, err := engine.logic.GetLogicElement(elementStorage, 0)
-	if err != nil {
-		return errors.New("storage layout load: no such element")
+	element, ok := engine.logic.GetLogicElement(runtime.ElementCodeStorage, 0)
+	if !ok {
+		return nil, false
 	}
 
-	// Depolorize the element data into a StorageLayout
-	storage := new(StorageLayout)
-	if err = polo.Depolorize(storage, element.Data); err != nil {
-		return errors.New("storage layout load: could not decode")
+	// Attempt to depolorize the element data into a StorageLayout
+	layout := new(runtime.StorageLayout)
+	if err := polo.Depolorize(layout, element.Data); err != nil {
+		return nil, false
 	}
 
 	// Set the StorageLayout into the engine's storage table
-	engine.storage.layout = storage
+	engine.storage.Layout = layout
 
-	return nil
+	return layout, true
 }
 
-func (engine *Engine) loadStorageBuilder() error {
+func (engine *Engine) GetStorageBuilder() (*runtime.StorageBuilder, bool) {
 	// If the storage builder exists, return
-	if engine.storage.builder != nil {
-		return nil
+	if engine.storage.Builder != nil {
+		return engine.storage.Builder, true
 	}
 
 	// Fetch the logic element for the StorageBuilder from the logic driver
-	element, err := engine.logic.GetLogicElement(elementStorage, 1)
-	if err != nil {
-		return errors.New("storage builder load: no such element")
+	element, ok := engine.logic.GetLogicElement(runtime.ElementCodeStorage, 1)
+	if !ok {
+		return nil, false
 	}
 
-	// Depolorize the element data into a StorageBuilder
-	builder := new(StorageBuilder)
-	if err = polo.Depolorize(builder, element.Data); err != nil {
-		return errors.New("storage builder load: could not decode")
+	// Attempt to depolorize the element data into a StorageBuilder
+	builder := new(runtime.StorageBuilder)
+	if err := polo.Depolorize(builder, element.Data); err != nil {
+		return nil, false
 	}
 
 	// Set the StorageBuilder into the engine's storage table
-	engine.storage.builder = builder
+	engine.storage.Builder = builder
 
-	return nil
+	return builder, true
+}
+
+func (engine *Engine) ConsumedFuel() uint64 {
+	return engine.fueltank.Consumed
+}
+
+func (engine *Engine) ExhaustFuel(fuel uint64) bool {
+	return engine.fueltank.Exhaust(fuel)
+}
+
+func (engine *Engine) GetInstruction(opcode runtime.OpCode) *runtime.InstructOperation {
+	return engine.instructs[opcode]
+}
+
+func (engine *Engine) GetTypeMethod(dt *register.Typedef, methodCode register.MethodCode) (register.Method, bool) {
+	return engine.datatypes.GetMethod(dt, methodCode)
+}
+
+func (engine *Engine) WriteStorage(slot uint8, data []byte) error {
+	return engine.storage.Callee.SetStorageEntry(engine.logic.LogicID(), runtime.SlotHash(slot), data)
+}
+
+func (engine *Engine) ReadStorage(slot uint8) ([]byte, error) {
+	return engine.storage.Callee.GetStorageEntry(engine.logic.LogicID(), runtime.SlotHash(slot))
 }

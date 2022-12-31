@@ -1,0 +1,158 @@
+package register
+
+import (
+	"fmt"
+
+	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-polo"
+
+	"github.com/sarvalabs/moichain/types"
+)
+
+var (
+	ErrIntegerOverflow = errors.New("IntegerOverflow")
+	ErrDivideByZero    = errors.New("DivideByZero")
+)
+
+// Value describes a type that can be held within
+// a register upon which operations can be applied.
+type Value interface {
+	// Type returns the TypeData of the Value
+	Type() *Typedef
+	// Copy returns a deep copy of the Value
+	Copy() Value
+	// Data returns the POLO serialized bytes of the Value
+	Data() []byte
+}
+
+type Collection interface {
+	Value
+
+	Size() U64Value
+	Get(Value) (Value, error)
+	Set(Value, Value) error
+}
+
+// NewValue generates a RegisterValue object for a given Typedef and some POLO encoded bytes.
+// The encoded bytes must be able to deserialize to the underlying type for Typedef.
+func NewValue(datatype *Typedef, data []byte) (Value, error) {
+	switch datatype.Kind() {
+	case Primitive:
+		switch datatype.P {
+		// StringValue
+		case PrimitiveString:
+			// If empty data, create the default string value and return
+			if data == nil {
+				return StringValue(""), nil
+			}
+
+			// Decode data into a string
+			str := new(string)
+			if err := polo.Depolorize(str, data); err != nil {
+				return nil, errors.New("not string")
+			}
+
+			return StringValue(*str), nil
+
+		// BytesValue
+		case PrimitiveBytes:
+			// If empty data, create the default bytes value and return
+			if data == nil {
+				return BytesValue([]byte{}), nil
+			}
+
+			// Decode data into a bytes
+			bytes := new([]byte)
+			if err := polo.Depolorize(bytes, data); err != nil {
+				return nil, errors.New("not bytes")
+			}
+
+			return BytesValue(*bytes), nil
+
+		// BoolValue
+		case PrimitiveBool:
+			// If empty data, create the default bool value and return
+			if data == nil {
+				return BoolValue(false), nil
+			}
+
+			// Decode data into a bool
+			boolean := new(bool)
+			if err := polo.Depolorize(boolean, data); err != nil {
+				return nil, errors.New("not boolean")
+			}
+
+			return BoolValue(*boolean), nil
+
+		// U64Value
+		case PrimitiveU64:
+			// If empty data, create the default u64 value and return
+			if data == nil {
+				return U64Value(0), nil
+			}
+
+			// Decode data into a uint64
+			number := new(uint64)
+			if err := polo.Depolorize(number, data); err != nil {
+				return nil, errors.New("not uint64")
+			}
+
+			return U64Value(*number), nil
+
+		// I64Value
+		case PrimitiveI64:
+			// If empty data, create the default i64 value and return
+			if data == nil {
+				return I64Value(0), nil
+			}
+
+			// Decode data into a int64
+			number := new(int64)
+			if err := polo.Depolorize(number, data); err != nil {
+				return nil, errors.New("not int64")
+			}
+
+			return I64Value(*number), nil
+
+		// AddressValue
+		case PrimitiveAddress:
+			// If empty data, create the default address value and return
+			if data == nil {
+				return AddressValue(types.NilAddress), nil
+			}
+
+			// Decode data into a address
+			address := new([32]byte)
+			if err := polo.Depolorize(address, data); err != nil {
+				return nil, errors.Wrap(err, "not address")
+			}
+
+			return AddressValue(*address), nil
+
+		default:
+			panic(fmt.Sprintf("unsupported datatype for value generation: %v", datatype))
+		}
+
+	// MapValue
+	case Hashmap:
+		return NewMapValue(datatype, data)
+
+	case Array, Varray:
+		return NewListValue(datatype, data)
+
+	default:
+		panic(fmt.Sprintf("unsupported datatype for value generation: %v", datatype))
+	}
+}
+
+func IsNullValue(value Value) bool {
+	if value == nil {
+		return true
+	}
+
+	if value.Type().Equals(TypeNull) {
+		return true
+	}
+
+	return false
+}

@@ -1,4 +1,4 @@
-package pisa
+package register
 
 import (
 	"fmt"
@@ -18,10 +18,10 @@ const (
 	TokenBoolean
 )
 
-// newTypeParser generates a new symbol parser that ignores whitespaces and detects datatype tokens
+// NewTypeParser generates a new symbol parser that ignores whitespaces and detects datatype tokens
 // such as "map" and "string". It also detects boolean literals ("true" and "false") apart from all
 // the supported token classes from the symbolizer package such identifiers, hex and decimal numbers.
-func newTypeParser(symbol string) *symbolizer.Parser {
+func NewTypeParser(symbol string) *symbolizer.Parser {
 	return symbolizer.NewParser(symbol, symbolizer.IgnoreWhitespaces(), symbolizer.Keywords(typeKeywords))
 }
 
@@ -44,14 +44,14 @@ var typeKeywords = map[string]symbolizer.TokenKind{
 	"events":  TokenEvent,
 }
 
-// ParseDatatype attempts to parse a string input into a Datatype
+// ParseDatatype attempts to parse a string input into a Typedef
 // 1. Valid Primitive types include {bool, bytes, string, address, (u)int(32/64), bigint}
-// 2. Valid Array types are expressed as '[{size}]{element}'. The element must in turn be any valid Datatype.
-// 3. Valid Sequence types are expressed as '[]{element}'. The element must in turn be any valid Datatype
-// 3. Valid Hashmap types are expressed as 'map[{element}]'. The element must in turn be any valid Datatype.
-func ParseDatatype(input string) (*Datatype, error) {
+// 2. Valid Array types are expressed as '[{size}]{element}'. The element must in turn be any valid Typedef.
+// 3. Valid Sequence types are expressed as '[]{element}'. The element must in turn be any valid Typedef
+// 3. Valid Hashmap types are expressed as 'map[{element}]'. The element must in turn be any valid Typedef.
+func ParseDatatype(input string) (*Typedef, error) {
 	// Create a new parser check cursor type
-	parser := newTypeParser(input)
+	parser := NewTypeParser(input)
 	switch parser.Cursor().Kind {
 	// Primitive token
 	case TokenPrimitive:
@@ -63,12 +63,8 @@ func ParseDatatype(input string) (*Datatype, error) {
 			return TypeBytes, nil
 		case "string":
 			return TypeString, nil
-		case "int32":
-			return TypeI32, nil
 		case "int64":
 			return TypeI64, nil
-		case "uint32":
-			return TypeU32, nil
 		case "uint64":
 			return TypeU64, nil
 		case "address":
@@ -89,13 +85,13 @@ func ParseDatatype(input string) (*Datatype, error) {
 
 		// If data within [] is empty -> Sequence
 		if unwrapped == "" {
-			// Parse what's left in the parser into a Datatype
+			// Parse what's left in the parser into a Typedef
 			elementType, err := ParseDatatype(parser.Unparsed())
 			if err != nil {
 				return nil, errors.Wrap(err, "invalid type data for sequence: invalid element type")
 			}
 
-			return newSequenceType(elementType), nil
+			return newVarrayType(elementType), nil
 		}
 
 		// Parse unwrapped data into a uint64 (array size)
@@ -104,7 +100,7 @@ func ParseDatatype(input string) (*Datatype, error) {
 			return nil, errors.New("invalid type data for array: size must be a 64-bit unsigned integer")
 		}
 
-		// Parse what's left in the parser into a Datatype
+		// Parse what's left in the parser into a Typedef
 		elementType, err := ParseDatatype(parser.Unparsed())
 		if err != nil {
 			return nil, errors.Wrap(err, "invalid type data for array: invalid element type")
@@ -124,16 +120,16 @@ func ParseDatatype(input string) (*Datatype, error) {
 
 		// Create a new parser from the enclosed key type data
 		// and check that the first token is a primitive type
-		keyParser := newTypeParser(keyData)
+		keyParser := NewTypeParser(keyData)
 		if !keyParser.IsCursor(TokenPrimitive) {
 			return nil, errors.New("invalid type data for hashmap: invalid key type: must be a valid primitive")
 		}
 
-		// Parse the datatype token into a Datatype.
+		// Parse the datatype token into a Typedef.
 		// This is guaranteed to work because only valid primitive types are literals for TokenPrimitive
 		keyType, _ := ParseDatatype(keyParser.Cursor().Literal)
 
-		// Parse what's left in the parser into a Datatype
+		// Parse what's left in the parser into a Typedef
 		elementType, err := ParseDatatype(parser.Unparsed())
 		if err != nil {
 			return nil, errors.Wrap(err, "invalid type data for hashmap: invalid value type")

@@ -1,4 +1,4 @@
-package pisa
+package runtime
 
 import (
 	"encoding/binary"
@@ -9,91 +9,71 @@ import (
 	"github.com/manishmeganathan/symbolizer"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
+
+	"github.com/sarvalabs/moichain/jug/pisa/register"
+	"github.com/sarvalabs/moichain/types"
 )
 
 // Constant represents a constant value declaration.
 // It consists of the type information of the constant (primitive)
 // and some POLO encoded bytes that describe the constant value.
 type Constant struct {
-	Type PrimitiveType
+	Type register.PrimitiveType
 	Data []byte
+}
+
+// Value generate a new RegisterValue object from a Constant
+// Returns an error if the constant data is not interpretable for its type.
+func (constant *Constant) Value() (register.Value, error) {
+	return register.NewValue(constant.Type.Datatype(), constant.Data)
 }
 
 // ConstantTable represents a collection of Constant
 // objects indexed by their 64-bit pointer (uint64)
 type ConstantTable map[uint64]*Constant
 
-// lookup retrieves a Constant object from the ConstantTable for
+// Get retrieves a Constant object from the ConstantTable for
 // a given pointer with a boolean indicating if it exists.
-func (table ConstantTable) fetch(ptr uint64) (*Constant, bool) {
-	constant, exists := table[ptr]
+func (constants ConstantTable) Get(ptr uint64) (*Constant, bool) {
+	constant, exists := constants[ptr]
 	// Return the Constant and if it exists in the table
 	return constant, exists
 }
 
-// insert adds a Constant object into the ConstantTable at the specified pointer.
-func (table ConstantTable) insert(ptr uint64, constant *Constant) {
-	table[ptr] = constant
+func (constants ConstantTable) Size() int {
+	return len(constants)
 }
 
-// NewConstantValue generates a Value object from a Constant.
-// Returns an error if the constant data is not interpretable for its type.
-func NewConstantValue(constant *Constant) (Value, error) {
-	switch constant.Type {
-	case PrimitiveString:
-		str := new(string)
-		if err := polo.Depolorize(str, constant.Data); err != nil {
-			return nil, errors.New("malformed data for constant: not a string")
-		}
+func (constants ConstantTable) EjectElements() []*types.LogicElement {
+	elements := make([]*types.LogicElement, 0, constants.Size())
 
-		return NewStringValue(*str), nil
-
-	case PrimitiveBool:
-		boolean := new(bool)
-		if err := polo.Depolorize(boolean, constant.Data); err != nil {
-			return nil, errors.New("malformed data for constant: not a bool")
-		}
-
-		return NewBoolValue(*boolean), nil
-
-	case PrimitiveU64:
-		number := new(uint64)
-		if err := polo.Depolorize(number, constant.Data); err != nil {
-			return nil, errors.New("malformed data for constant: not a uint64")
-		}
-
-		return NewU64Value(*number), nil
-
-	case PrimitiveAddress:
-		address := new([32]byte)
-		if err := polo.Depolorize(address, constant.Data); err != nil {
-			return nil, errors.New("malformed data for constant: not an address")
-		}
-
-		return NewAddressValue(*address), nil
-
-	default:
-		panic("cannot generate value for unsupported constant type")
+	for index, constant := range constants {
+		// Polorize the constant
+		data, _ := polo.Polorize(constant)
+		// Create a LogicElement for the constant and append it
+		elements = append(elements, &types.LogicElement{Kind: ElementCodeConstant, Index: index, Data: data})
 	}
+
+	return elements
 }
 
 // ParseConstant attempts to parse an input into a Constant
 // Must follow a struct as follows: {datatype}({value}).
 func ParseConstant(input string) (*Constant, error) {
 	// Create a new parser and confirm the first token as a datatype
-	parser := newTypeParser(input)
-	if !parser.IsCursor(TokenPrimitive) {
+	parser := register.NewTypeParser(input)
+	if !parser.IsCursor(register.TokenPrimitive) {
 		return nil, errors.New("constant does not begin with datatype")
 	}
 
-	// Parse the token literal into a Datatype
-	dt, err := ParseDatatype(parser.Cursor().Literal)
+	// Parse the token literal into a Typedef
+	dt, err := register.ParseDatatype(parser.Cursor().Literal)
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid constant datatype")
 	}
 
 	// Confirm that the type is scalar
-	if dt.Kind() != Primitive {
+	if dt.Kind() != register.Primitive {
 		return nil, errors.New("constant datatype is not scalar")
 	}
 
@@ -105,11 +85,11 @@ func ParseConstant(input string) (*Constant, error) {
 	}
 
 	// Create a parser for the value data and switch over the constant datatype
-	vParser := newTypeParser(enclosed)
+	vParser := register.NewTypeParser(enclosed)
 
 	switch scalar := dt.P; scalar {
 	// Bytes Constant
-	case PrimitiveBytes:
+	case register.PrimitiveBytes:
 		// Value token must be hexadecimal
 		if !vParser.IsCursor(symbolizer.TokenHexNumber) {
 			return nil, errors.New("invalid constant value for bytes: missing hexadecimal")
@@ -123,10 +103,10 @@ func ParseConstant(input string) (*Constant, error) {
 		data, _ := polo.Polorize(val)
 
 		// Return a Bytes Constant
-		return &Constant{Type: PrimitiveBytes, Data: data}, nil
+		return &Constant{Type: register.PrimitiveBytes, Data: data}, nil
 
 	// Address Constant
-	case PrimitiveAddress:
+	case register.PrimitiveAddress:
 		if !vParser.IsCursor(symbolizer.TokenHexNumber) {
 			return nil, errors.New("invalid constant value for address: missing hexadecimal")
 		}
@@ -143,10 +123,10 @@ func ParseConstant(input string) (*Constant, error) {
 		data, _ := polo.Polorize(val)
 
 		// Return an Address Constant
-		return &Constant{Type: PrimitiveAddress, Data: data}, nil
+		return &Constant{Type: register.PrimitiveAddress, Data: data}, nil
 
 	// String Constant
-	case PrimitiveString:
+	case register.PrimitiveString:
 		if !vParser.IsCursor(symbolizer.TokenString) {
 			return nil, errors.New("invalid constant value for string: missing text")
 		}
@@ -154,16 +134,16 @@ func ParseConstant(input string) (*Constant, error) {
 		data, _ := polo.Polorize(vParser.Cursor().Literal)
 
 		// Return a String Constant
-		return &Constant{Type: PrimitiveString, Data: data}, nil
+		return &Constant{Type: register.PrimitiveString, Data: data}, nil
 
 	// Bool Constant
-	case PrimitiveBool:
+	case register.PrimitiveBool:
 		// Check the token kind in the parser
 		var val bool
 
 		switch vParser.Cursor().Kind {
 		// Bool Token
-		case TokenBoolean:
+		case register.TokenBoolean:
 			// true if "true", false otherwise
 			val = vParser.Cursor().Literal == "true"
 
@@ -179,10 +159,10 @@ func ParseConstant(input string) (*Constant, error) {
 		data, _ := polo.Polorize(val)
 
 		// Return a Bool Constant
-		return &Constant{Type: PrimitiveBool, Data: data}, nil
+		return &Constant{Type: register.PrimitiveBool, Data: data}, nil
 
 	// Signed Integer Constant
-	case PrimitiveI32, PrimitiveI64:
+	case register.PrimitiveI64:
 		// Check the token kind in the parser
 		var number string
 
@@ -209,11 +189,7 @@ func ParseConstant(input string) (*Constant, error) {
 			// Concat the number into the number string
 			number += vParser.Cursor().Literal
 			// Set bitSize and kind
-			bits, kind := 32, PrimitiveI32
-			if scalar == PrimitiveI64 {
-				bits, kind = 64, PrimitiveI64
-			}
-
+			bits, kind := 64, register.PrimitiveI64
 			// Parse the number string into an int64
 			val, err := strconv.ParseInt(number, 10, bits)
 			if err != nil {
@@ -234,43 +210,28 @@ func ParseConstant(input string) (*Constant, error) {
 			}
 
 			// Parse into integer based on datatype
-			if scalar == PrimitiveI32 {
-				if len(hexval) > 4 {
-					return nil, errors.New("invalid constant value for int32: hex length too long")
-				}
-
-				val := int32(binary.BigEndian.Uint32(append(make([]byte, 4-len(hexval), 4), hexval...)))
-				data, _ := polo.Polorize(val)
-
-				// Return a I32 Constant
-				return &Constant{Type: PrimitiveI32, Data: data}, nil
-			} else {
-				if len(hexval) > 8 {
-					return nil, errors.New("invalid constant value for int64: hex length too long")
-				}
-
-				val := int64(binary.BigEndian.Uint64(append(make([]byte, 8-len(hexval), 8), hexval...)))
-				data, _ := polo.Polorize(val)
-
-				// Return a I64 Constant
-				return &Constant{Type: PrimitiveI64, Data: data}, nil
+			if len(hexval) > 8 {
+				return nil, errors.New("invalid constant value for int64: hex length too long")
 			}
+
+			val := int64(binary.BigEndian.Uint64(append(make([]byte, 8-len(hexval), 8), hexval...)))
+			data, _ := polo.Polorize(val)
+
+			// Return a I64 Constant
+			return &Constant{Type: register.PrimitiveI64, Data: data}, nil
 
 		default:
 			return nil, errors.Wrapf(err, "invalid constant value for %v: unsupported value form", scalar)
 		}
 
 	// Unsigned Integer Constant
-	case PrimitiveU32, PrimitiveU64:
+	case register.PrimitiveU64:
 		// Check the token kind in the parser
 		switch vParser.Cursor().Kind {
 		// Numeric Token
 		case symbolizer.TokenNumber:
 			// Set bitSize and kind
-			bits, kind := 32, PrimitiveU32
-			if scalar == PrimitiveU64 {
-				bits, kind = 64, PrimitiveU64
-			}
+			bits, kind := 64, register.PrimitiveU64
 
 			// Parse the number string into an uint64
 			val, err := strconv.ParseUint(enclosed, 10, bits)
@@ -291,27 +252,15 @@ func ParseConstant(input string) (*Constant, error) {
 				return nil, errors.Wrapf(err, "invalid constant value for %v: invalid hexadecimal", scalar)
 			}
 
-			if scalar == PrimitiveU32 {
-				if len(hexval) > 4 {
-					return nil, errors.New("invalid constant value for uint32: hex length too long")
-				}
-
-				val := binary.BigEndian.Uint32(append(make([]byte, 4-len(hexval), 4), hexval...))
-				data, _ := polo.Polorize(val)
-
-				// Return a U32 Constant
-				return &Constant{Type: PrimitiveU32, Data: data}, nil
-			} else {
-				if len(hexval) > 8 {
-					return nil, errors.New("invalid constant value for uint64: hex length too long")
-				}
-
-				val := binary.BigEndian.Uint64(append(make([]byte, 8-len(hexval), 8), hexval...))
-				data, _ := polo.Polorize(val)
-
-				// Return a U64 Constant
-				return &Constant{Type: PrimitiveU64, Data: data}, nil
+			if len(hexval) > 8 {
+				return nil, errors.New("invalid constant value for uint64: hex length too long")
 			}
+
+			val := binary.BigEndian.Uint64(append(make([]byte, 8-len(hexval), 8), hexval...))
+			data, _ := polo.Polorize(val)
+
+			// Return a U64 Constant
+			return &Constant{Type: register.PrimitiveU64, Data: data}, nil
 
 		default:
 			return nil, errors.Wrapf(err, "invalid constant value for %v: unsupported value form", scalar)

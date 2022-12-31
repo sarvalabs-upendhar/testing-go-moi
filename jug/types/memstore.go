@@ -113,3 +113,25 @@ func (store *MemStorage) SetStorageEntry(logicID types.LogicID, key, val []byte)
 
 	return nil
 }
+
+func (store *MemStorage) Copy() *MemStorage {
+	copied := &MemStorage{
+		address:   store.address,
+		balances:  store.balances.Copy(),
+		storage:   make(map[string]map[string][]byte, len(store.storage)),
+		approvals: make(map[types.Address]types.AssetMap, len(store.approvals)),
+	}
+
+	for owner, assets := range store.approvals {
+		copied.approvals[owner] = assets.Copy()
+	}
+
+	for namespace, storage := range store.storage {
+		copied.storage[namespace] = make(map[string][]byte, len(storage))
+		for key, val := range storage {
+			copied.storage[namespace][key] = val
+		}
+	}
+
+	return copied
+}

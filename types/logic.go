@@ -85,16 +85,16 @@ func (set LogicElementSet) Insert(elements ...*LogicElement) {
 
 // Fetch fetches an LogicElement for a given kind and index from the LogicElementSet.
 // Returns nil if no LogicElement exists for the given kind or index.
-func (set LogicElementSet) Fetch(kind string, idx uint64) (*LogicElement, error) {
+func (set LogicElementSet) Fetch(kind string, idx uint64) (*LogicElement, bool) {
 	group, exists := set[kind]
 	if !exists {
-		return nil, ErrLogicElementNotFound
+		return nil, false
 	}
 
 	element := group[idx]
 	if element == nil {
-		return nil, ErrLogicElementNotFound
+		return nil, false
 	}
 
-	return element, nil
+	return element, true
 }

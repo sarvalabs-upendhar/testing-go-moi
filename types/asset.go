@@ -15,6 +15,15 @@ const (
 
 type AssetMap map[AssetID]*big.Int
 
+func (assets AssetMap) Copy() AssetMap {
+	copied := make(AssetMap, len(assets))
+	for asset, amount := range assets {
+		copied[asset] = new(big.Int).SetBytes(amount.Bytes())
+	}
+
+	return copied
+}
+
 type AssetDescriptor struct {
 	Type   AssetKind `json:"type"`
 	Symbol string    `json:"symbol"`

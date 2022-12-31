@@ -1,16 +1,37 @@
-package pisa
+package register
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/manishmeganathan/symbolizer"
 	"github.com/pkg/errors"
+
+	"github.com/sarvalabs/moichain/types"
 )
+
+// CallFields represents the input/output symbols for a callable routine.
+type CallFields struct {
+	Inputs  FieldTable
+	Outputs FieldTable
+}
+
+// Signature generates a signature from the RoutineFields symbols and their typedata.
+// It is structured as '(input1, input2)->(output1, output2)', where the values are type data of each field
+func (fields CallFields) Signature() string {
+	return fmt.Sprintf("%v->%v", fields.Inputs.String(), fields.Outputs.String())
+}
+
+// SigHash generates a signature hash from the RoutineFields symbols and their typedata.
+// The signature is hashed and the last 8 characters of the digest are returned as a string.
+func (fields CallFields) SigHash() string {
+	return types.GetHash([]byte(fields.Signature())).Hex()[:8]
+}
 
 // FieldTable represents a collection of typefield objects.
 // The fields are indexed by both their position and name.
 type FieldTable struct {
-	Table   map[uint8]*typefield
+	Table   map[uint8]*TypeField
 	Symbols map[string]uint8
 }
 
@@ -20,13 +41,8 @@ type FieldTable struct {
 func NewFieldTable(table map[uint8]string) (FieldTable, error) {
 	// Create a blank field table
 	fields := FieldTable{
-		make(map[uint8]*typefield, len(table)),
+		make(map[uint8]*TypeField, len(table)),
 		make(map[string]uint8, len(table)),
-	}
-
-	// Ensure that there are less than 256 field expressions
-	if len(table) > 256 {
-		return FieldTable{}, errors.New("cannot have more than 256 fields for FieldTable")
 	}
 
 	// Iterate through each position, querying the expression map for each position
@@ -45,7 +61,8 @@ func NewFieldTable(table map[uint8]string) (FieldTable, error) {
 		}
 
 		// Insert the typefield into the FieldTable
-		fields.insert(parsed.Name, position, parsed)
+		fields.Table[position] = parsed
+		fields.Symbols[parsed.Name] = position
 	}
 
 	return fields, nil
@@ -66,21 +83,15 @@ func (fields FieldTable) String() string {
 	return combined
 }
 
-// fetch retrieves a typefield from the FieldTable for a given position.
+// Get retrieves a typefield from the FieldTable for a given position.
 // Returns nil if there is typefield for that position
-func (fields FieldTable) fetch(position uint8) *typefield {
+func (fields FieldTable) Get(position uint8) *TypeField {
 	return fields.Table[position]
 }
 
-// insert adds a typefield into the FieldTable at the given position with a given name.
-func (fields *FieldTable) insert(name string, index uint8, field *typefield) {
-	fields.Table[index] = field
-	fields.Symbols[name] = index
-}
-
-// lookup retrieves a typefield from the FieldTable for a given name.
+// Lookup retrieves a typefield from the FieldTable for a given name.
 // Returns nil if there is no typefield for that name.
-func (fields FieldTable) lookup(name string) *typefield {
+func (fields FieldTable) Lookup(name string) *TypeField {
 	index, exists := fields.Symbols[name]
 	if !exists {
 		return nil
@@ -89,19 +100,37 @@ func (fields FieldTable) lookup(name string) *typefield {
 	return fields.Table[index]
 }
 
-// typefield represent a named field for composite object such as
+func (fields FieldTable) Validate(values ValueTable) error {
+	for idx, field := range fields.Table {
+		value, ok := values.Get(idx)
+		if !ok {
+			return errors.Errorf("missing value for field &%v '%v'", idx, field.Name)
+		}
+
+		if !value.Type().Equals(field.Type) {
+			return errors.Errorf(
+				"type mismatch for field &%v '%v'. expected: %v. got: %v",
+				idx, field.Name, field.Type, value.Type(),
+			)
+		}
+	}
+
+	return nil
+}
+
+// TypeField represent a named field for composite object such as
 // storage and calldata fields as well as class and event attributes
-type typefield struct {
+type TypeField struct {
 	Name string
-	Type *Datatype
+	Type *Typedef
 }
 
 // parseTypefield attempts to parse an input into a typefield.
 // An expression of a type field has a name and a typedata expression. The pattern for a type
 // field expression is -> '{name} [{datatype}]', where datatype must be a valid type expression.
-func parseTypefield(input string) (*typefield, error) {
+func parseTypefield(input string) (*TypeField, error) {
 	// Create a new parser
-	parser := newTypeParser(input)
+	parser := NewTypeParser(input)
 	// Check that parser's cursor token is an identifier
 	if !parser.IsCursor(symbolizer.TokenIdentifier) {
 		return nil, errors.New("type field does not begin with identifier")
@@ -124,5 +153,26 @@ func parseTypefield(input string) (*typefield, error) {
 	}
 
 	// Create a Symbol with the name and type data
-	return &typefield{Name: name, Type: dt}, nil
+	return &TypeField{Name: name, Type: dt}, nil
+}
+
+func fields(fields []*TypeField) FieldTable {
+	// Ensure that there are less than 256 field expressions
+	// This is an internal call so, is alright to panic
+	if len(fields) > 256 {
+		panic("cannot have more than 256 fields for FieldTable")
+	}
+
+	// Create a blank field table
+	table := FieldTable{
+		Table:   make(map[uint8]*TypeField, len(fields)),
+		Symbols: make(map[string]uint8, len(fields)),
+	}
+
+	for position, field := range fields {
+		table.Table[uint8(position)] = field
+		table.Symbols[field.Name] = uint8(position)
+	}
+
+	return table
 }

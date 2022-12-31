@@ -1,4 +1,4 @@
-package pisa
+package register
 
 import (
 	"reflect"
@@ -10,20 +10,20 @@ import (
 
 // MapValue represents a Value that operates like a mapping.
 type MapValue struct {
-	values   map[Value]Value
-	datatype *Datatype
+	values  map[Value]Value
+	typedef *Typedef
 }
 
-// NewMapValue generates a new MapValue for a given Datatype and some POLO encoded bytes.
-func NewMapValue(datatype *Datatype, data []byte) (*MapValue, error) {
+// NewMapValue generates a new MapValue for a given Typedef and some POLO encoded bytes.
+func NewMapValue(datatype *Typedef, data []byte) (*MapValue, error) {
 	// Check if datatype is a map
 	if datatype.Kind() != Hashmap {
 		return nil, errors.New("datatype is not a hashmap")
 	}
 
-	// Initialize the MapValue with the Datatype and an empty mapping
+	// Initialize the MapValue with the Typedef and an empty mapping
 	mapping := new(MapValue)
-	mapping.datatype = datatype
+	mapping.typedef = datatype
 	mapping.values = make(map[Value]Value)
 
 	// If there is some data to decode into the MapValue
@@ -66,18 +66,18 @@ func NewMapValue(datatype *Datatype, data []byte) (*MapValue, error) {
 	return mapping, nil
 }
 
-// Type returns the Datatype of MapValue, which is some Hashmap Datatype.
+// Type returns the Typedef of MapValue, which is some Hashmap Typedef.
 // Implements the Value interface for MapValue.
-func (mapping MapValue) Type() *Datatype { return mapping.datatype }
+func (mapping MapValue) Type() *Typedef { return mapping.typedef }
 
 // Copy returns a copy of MapValue as a Value.
 // Implements the Value interface for MapValue.
 func (mapping MapValue) Copy() Value {
-	mcopy := MapValue{values: make(map[Value]Value)}
-	mcopy.datatype = mapping.datatype.Copy()
+	mcopy := MapValue{values: make(map[Value]Value, len(mapping.values))}
+	mcopy.typedef = mapping.typedef.Copy()
 
 	for key, val := range mapping.values {
-		mcopy.values[key] = val
+		mcopy.values[key.Copy()] = val.Copy()
 	}
 
 	return mcopy
@@ -103,20 +103,20 @@ func (mapping MapValue) Data() []byte {
 
 // Get is a safe read from the MapValue, returns an error
 // if the key is not of the correct type for MapValue
-func (mapping MapValue) Get(key Value) (Value, error) {
+func (mapping *MapValue) Get(key Value) (Value, error) {
 	keyType := key.Type()
 	if keyType.Kind() != Primitive {
 		return nil, errors.New("cannot Get from MapValue with non-primitive key")
 	}
 
-	if !mapping.datatype.P.Equals(keyType.P) {
+	if !mapping.typedef.P.Equals(keyType.P) {
 		return nil, errors.New("cannot Get from MapValue with incorrect key type")
 	}
 
 	value := mapping.values[key]
 	// If value is nil, generate the default value for the map element type
 	if value == nil {
-		value, _ = NewValue(mapping.datatype.E, nil)
+		value, _ = NewValue(mapping.typedef.E, nil)
 	}
 
 	return value, nil
@@ -124,23 +124,27 @@ func (mapping MapValue) Get(key Value) (Value, error) {
 
 // Set is a safe write into the MapValue, returns an error if
 // either the key or value are not the correct type for MapValue
-func (mapping MapValue) Set(key, val Value) error {
+func (mapping *MapValue) Set(key, val Value) error {
 	keyType := key.Type()
 	if keyType.Kind() != Primitive {
 		return errors.New("cannot Set to MapValue with non-primitive key")
 	}
 
-	if !mapping.datatype.P.Equals(keyType.P) {
+	if !mapping.typedef.P.Equals(keyType.P) {
 		return errors.New("cannot Set to MapValue with incorrect key type")
 	}
 
-	if !mapping.datatype.E.Equals(val.Type()) {
+	if !mapping.typedef.E.Equals(val.Type()) {
 		return errors.New("cannot Set to MapValue with incorrect value type")
 	}
 
 	mapping.values[key] = val
 
 	return nil
+}
+
+func (mapping *MapValue) Size() U64Value {
+	return U64Value(len(mapping.values))
 }
 
 // sorter is used by the sort package to sort a slice of reflect.Value objects.
