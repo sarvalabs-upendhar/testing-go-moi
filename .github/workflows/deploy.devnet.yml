@@ -86,7 +86,7 @@ jobs:
           overwrite: true
 
       - name: Update binary and restart moipods
-        uses: appleboy/ssh-action@v0.1.5
+        uses: appleboy/ssh-action@v0.1.6
         with:
           host: ${{ secrets[matrix.ip] }}
           username: ${{ secrets.DEV_USER }}
