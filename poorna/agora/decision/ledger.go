@@ -161,6 +161,15 @@ func (l *Ledger) Start() {
 	}
 }
 
+func (l *Ledger) scoopJobs() []*job {
+	l.dbJobsLock.Lock()
+	defer l.dbJobsLock.Unlock()
+	jobs := l.dbJobs
+	l.dbJobs = l.dbJobs[len(jobs):]
+
+	return jobs
+}
+
 func (l *Ledger) worker() {
 	defer func() {
 		l.workersLock.Lock()
@@ -177,10 +186,7 @@ func (l *Ledger) worker() {
 		case <-time.After(2 * time.Second):
 		}
 
-		l.dbJobsLock.Lock()
-		jobs := l.dbJobs
-		l.dbJobs = l.dbJobs[len(jobs):]
-		l.dbJobsLock.Unlock()
+		jobs := l.scoopJobs()
 
 		if len(jobs) > 0 {
 			dbWriter := l.db.GetBatchWriter()

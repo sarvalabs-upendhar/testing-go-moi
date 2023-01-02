@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log"
 	"math/big"
+	"net"
 	"testing"
 	"time"
 
@@ -54,7 +55,7 @@ func GetTestKramaIDs(t *testing.T, count int) []id.KramaID {
 		_, err := rand.Read(signKey[:])
 		require.NoError(t, err)
 
-		privateKeys, moiPubBytes, err := getPrivKeysForTest(signKey[:])
+		privateKeys, moiPubBytes, err := GetPrivKeysForTest(signKey[:])
 		require.NoError(t, err)
 
 		kramaID, err := id.NewKramaID(
@@ -106,7 +107,7 @@ func RetryUntilTimeout(ctx context.Context, f func() (interface{}, bool)) (inter
 	return res.data, res.err
 }
 
-func getPrivKeysForTest(seed []byte) ([]byte, []byte, error) {
+func GetPrivKeysForTest(seed []byte) ([]byte, []byte, error) {
 	// Let's derive 'm' in the path
 	masterKey, err := hdkeychain.NewMaster(seed, &chaincfg.MainNetParams) // here key is master key
 	if err != nil {
@@ -268,6 +269,33 @@ func GetRandomAssetID(t *testing.T, address types.Address) types.AssetID {
 	return assetID
 }
 
+func GetAvailablePort(t *testing.T) (port int, err error) {
+	t.Helper()
+
+	var address *net.TCPAddr
+
+	if address, err = net.ResolveTCPAddr("tcp", "localhost:0"); err == nil {
+		var listener *net.TCPListener
+
+		if listener, err = net.ListenTCP("tcp", address); err == nil {
+			defer func() {
+				if err := listener.Close(); err != nil {
+					return
+				}
+			}()
+
+			tcpAddr, ok := listener.Addr().(*net.TCPAddr)
+			require.Equal(t, ok, true)
+
+			port = tcpAddr.Port
+
+			return port, nil
+		}
+	}
+
+	return
+}
+
 func GetTesseract(t *testing.T, height uint64) *types.Tesseract {
 	t.Helper()
 
@@ -332,6 +360,24 @@ func GetRandomAddressList(t *testing.T, count uint8) []types.Address {
 
 /*
 // Unused functions
+
+func GetTestTesseract(t *testing.T, height uint64) *types.Tesseract {
+	t.Helper()
+
+	header := types.TesseractHeader{
+		Address:  RandomAddress(t),
+		PrevHash: RandomHash(t),
+		Height:   height,
+	}
+	body := types.TesseractBody{}
+	tesseract := types.Tesseract{
+		Header: header,
+		Body:   body,
+		Seal:   []byte{1},
+	}
+
+	return &tesseract
+}
 
 func GetInvalidHash(t *testing.T) string {
 	t.Helper()

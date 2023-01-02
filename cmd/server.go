@@ -27,15 +27,17 @@ import (
 var ErrReadingConfig = errors.New("error reading config file")
 
 var (
-	AccountWaitTime int
-	OperatorSlots   int
-	ValidatorSlots  int
-	NetworkSize     uint64
-	MTQ             float64
-	SkipGenesis     bool
-	EnableTracing   bool
-	Bootnode        string
-	JaegerAddress   string
+	AccountWaitTime   int
+	OperatorSlots     int
+	ValidatorSlots    int
+	NetworkSize       uint64
+	MTQ               float64
+	SkipGenesis       bool
+	EnableTracing     bool
+	Bootnode          string
+	JaegerAddress     string
+	InboundConnLimit  uint
+	OutboundConnLimit uint
 )
 
 var serverCmd = &cobra.Command{
@@ -72,6 +74,16 @@ func init() {
 	serverCmd.PersistentFlags().BoolVar(&EnableTracing, "enable-tracing", false, "Enable Tracing")
 	serverCmd.PersistentFlags().StringVar(&JaegerAddress, "jaeger-address", "", "Jeager Collector Address")
 	serverCmd.PersistentFlags().StringVar(&Bootnode, "bootnode", "", "Boot-node MultiAddr")
+	serverCmd.PersistentFlags().UintVar(
+		&InboundConnLimit,
+		"inbound-limit",
+		common.DefaultInboundConnLimit,
+		"Maximum inbound peer connection limit")
+	serverCmd.PersistentFlags().UintVar(
+		&OutboundConnLimit,
+		"outbound-limit",
+		common.DefaultOutboundConnLimit,
+		"Maximum outbound peer connection limit")
 
 	if err := cobra.MarkFlagRequired(serverCmd.PersistentFlags(), "data-dir"); err != nil {
 		log.Print("data-dir is required")
@@ -100,23 +112,67 @@ func BuildConfig(dataDir string, fileCfg *Config) (*common.Config, error) {
 
 	nodeCfg := common.DefaultConfig(dataDir)
 	nodeCfg.LogFilePath = fileCfg.LogFilePath
+
 	// TODO:Check node type and krama version
+
+	buildChainConfig(nodeCfg, fileCfg)
+
+	if err = buildNetworkConfig(nodeCfg, fileCfg); err != nil {
+		return nil, err
+	}
+
+	buildConsensusConfig(nodeCfg, fileCfg)
+
+	buildIxPoolConfig(nodeCfg, fileCfg)
+
+	buildDBConfig(nodeCfg, fileCfg)
+
+	if err = buildTelemetryConfig(nodeCfg, fileCfg); err != nil {
+		return nil, err
+	}
+
+	buildVaultConfig(nodeCfg, fileCfg)
+
+	return nodeCfg, nil
+}
+
+func buildChainConfig(nodeCfg *common.Config, fileCfg *Config) {
 	if fileCfg.Genesis != "" {
-		nodeCfg.Chain.Genesis = fileCfg.Genesis
+		nodeCfg.Chain.GenesisFilePath = fileCfg.Genesis
 	}
 
 	if SkipGenesis {
 		nodeCfg.Chain.SkipGenesis = SkipGenesis
 	}
+}
 
-	if NetworkSize != 0 {
-		nodeCfg.Network.NetworkSize = NetworkSize
+func buildNetworkConfig(nodeCfg *common.Config, fileCfg *Config) (err error) {
+	assignNetworkSize(nodeCfg)
+
+	assignNetworkMTQ(nodeCfg)
+
+	assignNetworkInboundLimit(nodeCfg, fileCfg)
+
+	assignNetworkOutboundLimit(nodeCfg, fileCfg)
+
+	if err = assignNetworkBootStrapNodes(nodeCfg, fileCfg); err != nil {
+		return err
 	}
 
-	if MTQ != 0 {
-		nodeCfg.Network.MTQ = MTQ
+	if err = assignNetworkLibp2pListenAddress(nodeCfg, fileCfg); err != nil {
+		return err
 	}
 
+	if err = assignNetworkJSONRPCAddr(nodeCfg, fileCfg); err != nil {
+		return err
+	}
+
+	assignNetworkProtocolID(nodeCfg, fileCfg)
+
+	return nil
+}
+
+func buildConsensusConfig(nodeCfg *common.Config, fileCfg *Config) {
 	if OperatorSlots != 0 {
 		nodeCfg.Consensus.OperatorSlotCount = OperatorSlots
 	} else if fileCfg.Consensus.OperatorSlots != 0 {
@@ -134,58 +190,9 @@ func BuildConfig(dataDir string, fileCfg *Config) (*common.Config, error) {
 	} else if fileCfg.Consensus.AccountWaitTime != 0 {
 		nodeCfg.Consensus.AccountWaitTime = time.Duration(fileCfg.Consensus.AccountWaitTime) * time.Millisecond
 	}
+}
 
-	if Bootnode != "" {
-		addr, err := maddr.NewMultiaddr(Bootnode)
-		if err != nil {
-			return nil, errors.New("invalid bootnode address")
-		}
-
-		nodeCfg.Network.BootstrapPeers = append(nodeCfg.Network.BootstrapPeers, addr)
-	} else {
-		// validate bootnode address
-		if len(fileCfg.Network.BootStrapPeers) == 0 {
-			return nil, errors.New("minimum one bootnode is required")
-		}
-
-		for _, v := range fileCfg.Network.BootStrapPeers {
-			addr, err := maddr.NewMultiaddr(v)
-			if err != nil {
-				return nil, errors.New("invalid bootnode address")
-			}
-
-			nodeCfg.Network.BootstrapPeers = append(nodeCfg.Network.BootstrapPeers, addr)
-		}
-	}
-
-	// validate listener address
-	if len(fileCfg.Network.Libp2pAddr) == 0 {
-		return nil, errors.New("lip2p address not specified")
-	}
-
-	for _, v := range fileCfg.Network.Libp2pAddr {
-		addr, err := maddr.NewMultiaddr(v)
-		if err != nil {
-			return nil, errors.New("invalid libp2p address")
-		}
-
-		nodeCfg.Network.ListenAddresses = append(nodeCfg.Network.ListenAddresses, addr)
-	}
-
-	// validate json-rpc address
-	if fileCfg.Network.JSONRPCAddr == "" {
-		return nil, errors.New("empty json address")
-	}
-
-	nodeCfg.Network.JSONRPCAddr, err = common.ResolveAddr(fileCfg.Network.JSONRPCAddr)
-	if err != nil {
-		return nil, errors.New("invalid json-rpc address")
-	}
-
-	if fileCfg.Network.ProtocolID != "" {
-		nodeCfg.Network.ProtocolID = protocol.ID(fileCfg.Network.ProtocolID)
-	}
-
+func buildIxPoolConfig(nodeCfg *common.Config, fileCfg *Config) {
 	if fileCfg.Ixpool.PriceLimit.Cmp(big.NewInt(0)) == 1 {
 		nodeCfg.IxPool.PriceLimit = fileCfg.Ixpool.PriceLimit
 	}
@@ -193,20 +200,20 @@ func BuildConfig(dataDir string, fileCfg *Config) (*common.Config, error) {
 	if fileCfg.Ixpool.Mode != 0 {
 		nodeCfg.IxPool.Mode = fileCfg.Ixpool.Mode
 	}
+}
 
+func buildDBConfig(nodeCfg *common.Config, fileCfg *Config) {
 	if fileCfg.DB.DBFolder != "" {
 		nodeCfg.DB.DBFolderPath = fileCfg.DB.DBFolder
 	}
+}
 
+func buildTelemetryConfig(nodeCfg *common.Config, fileCfg *Config) (err error) {
 	if fileCfg.Telemetry.PrometheusAddr != "" {
 		nodeCfg.Metrics.PrometheusAddr, err = common.ResolveAddr(fileCfg.Telemetry.PrometheusAddr)
 		if err != nil {
-			return nil, errors.New("invalid prometheus address")
+			return errors.New("invalid prometheus address")
 		}
-	}
-
-	if fileCfg.Telemetry.JaegerAddr != "" {
-		nodeCfg.Metrics.JaegerAddr = fileCfg.Telemetry.JaegerAddr
 	}
 
 	if EnableTracing {
@@ -216,10 +223,14 @@ func BuildConfig(dataDir string, fileCfg *Config) (*common.Config, error) {
 		case fileCfg.Telemetry.JaegerAddr != "":
 			nodeCfg.Metrics.JaegerAddr = fileCfg.Telemetry.JaegerAddr
 		default:
-			return nil, errors.New("tracing is enabled but a valid JaegerCollector address is not passed")
+			return errors.New("tracing is enabled but a valid JaegerCollector address is not passed")
 		}
 	}
 
+	return nil
+}
+
+func buildVaultConfig(nodeCfg *common.Config, fileCfg *Config) {
 	if fileCfg.Vault.NodePassword != "" {
 		nodeCfg.Vault.NodePassword = fileCfg.Vault.NodePassword
 	}
@@ -227,8 +238,100 @@ func BuildConfig(dataDir string, fileCfg *Config) (*common.Config, error) {
 	if fileCfg.Vault.DataDir != "" {
 		nodeCfg.Vault.DataDir = fileCfg.Vault.DataDir
 	}
+}
 
-	return nodeCfg, nil
+func assignNetworkInboundLimit(nodeCfg *common.Config, fileCfg *Config) {
+	if InboundConnLimit != common.DefaultInboundConnLimit {
+		nodeCfg.Network.InboundConnLimit = InboundConnLimit
+	} else if fileCfg.Network.InboundConnLimit != 0 {
+		nodeCfg.Network.InboundConnLimit = fileCfg.Network.InboundConnLimit
+	}
+}
+
+func assignNetworkOutboundLimit(nodeCfg *common.Config, fileCfg *Config) {
+	if OutboundConnLimit != common.DefaultOutboundConnLimit {
+		nodeCfg.Network.OutboundConnLimit = OutboundConnLimit
+	} else if fileCfg.Network.OutboundConnLimit != 0 {
+		nodeCfg.Network.OutboundConnLimit = fileCfg.Network.OutboundConnLimit
+	}
+}
+
+func assignNetworkSize(nodeCfg *common.Config) {
+	if NetworkSize != 0 {
+		nodeCfg.Network.NetworkSize = NetworkSize
+	}
+}
+
+func assignNetworkMTQ(nodeCfg *common.Config) {
+	if MTQ != 0 {
+		nodeCfg.Network.MTQ = MTQ
+	}
+}
+
+func assignNetworkBootStrapNodes(nodeCfg *common.Config, fileCfg *Config) error {
+	if Bootnode != "" {
+		addr, err := maddr.NewMultiaddr(Bootnode)
+		if err != nil {
+			return errors.New("invalid bootnode address")
+		}
+
+		nodeCfg.Network.BootstrapPeers = append(nodeCfg.Network.BootstrapPeers, addr)
+
+		return nil
+	}
+
+	// validate bootnode address
+	if len(fileCfg.Network.BootStrapPeers) == 0 {
+		return errors.New("minimum one bootnode is required")
+	}
+
+	for _, v := range fileCfg.Network.BootStrapPeers {
+		addr, err := maddr.NewMultiaddr(v)
+		if err != nil {
+			return errors.New("invalid bootnode address")
+		}
+
+		nodeCfg.Network.BootstrapPeers = append(nodeCfg.Network.BootstrapPeers, addr)
+	}
+
+	return nil
+}
+
+func assignNetworkLibp2pListenAddress(nodeCfg *common.Config, fileCfg *Config) error {
+	if len(fileCfg.Network.Libp2pAddr) == 0 {
+		return errors.New("lip2p address not specified")
+	}
+
+	for _, v := range fileCfg.Network.Libp2pAddr {
+		addr, err := maddr.NewMultiaddr(v)
+		if err != nil {
+			return errors.New("invalid libp2p address")
+		}
+
+		nodeCfg.Network.ListenAddresses = append(nodeCfg.Network.ListenAddresses, addr)
+	}
+
+	return nil
+}
+
+func assignNetworkJSONRPCAddr(nodeCfg *common.Config, fileCfg *Config) (err error) {
+	// validate json-rpc address
+	if fileCfg.Network.JSONRPCAddr == "" {
+		return errors.New("empty json address")
+	}
+
+	nodeCfg.Network.JSONRPCAddr, err = common.ResolveAddr(fileCfg.Network.JSONRPCAddr)
+	if err != nil {
+		return errors.New("invalid json-rpc address")
+	}
+
+	return nil
+}
+
+func assignNetworkProtocolID(nodeCfg *common.Config, fileCfg *Config) {
+	if fileCfg.Network.ProtocolID != "" {
+		nodeCfg.Network.ProtocolID = protocol.ID(fileCfg.Network.ProtocolID)
+	}
 }
 
 func Err(err error) {
@@ -273,7 +376,10 @@ func SetupNode(datadir string, cfgPath string) {
 		Err(err)
 	}
 
-	n.Start()
+	err = n.Start()
+	if err != nil {
+		Err(err)
+	}
 
 	signal.Notify(closeCh, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 

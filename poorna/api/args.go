@@ -7,16 +7,14 @@ import (
 	"github.com/sarvalabs/moichain/types"
 )
 
-// TesseractArgs is a struct that represents an argument wrapper for retrieving the latest Tesseract
+// TesseractArgs is an argument wrapper for retrieving the latest Tesseract
 type TesseractArgs struct {
-	// Represents the address for which to retrieve the latest Tesseract
-	From             string `json:"from"`
+	From             string `json:"from"` // Address for which to retrieve the latest Tesseract
 	WithInteractions bool   `json:"with_interactions"`
 }
 
 type ContextInfoByHashArgs struct {
-	// Represents the address for which to retrieve the latest Tesseract
-	From string `json:"from"`
+	From string `json:"from"` // Address for which to retrieve the latest Tesseract
 	Hash string `json:"hash"`
 }
 
@@ -54,16 +52,13 @@ type GetLogicManifestArgs struct {
 	LogicID string `json:"logic_id"`
 }
 
-// BalArgs is a struct that represents an argument wrapper for retrieving balance of an asset
+// BalArgs is an argument wrapper for retrieving balance of an asset
 type BalArgs struct {
-	// Represents the address for which to retrieve the balance
-	From string `json:"from"`
-
-	// Represents the asset for which to retrieve balance
-	AssetID string `json:"assetid"`
+	From    string `json:"from"`    // Address for which to retrieve the balance
+	AssetID string `json:"assetid"` // Asset for which to retrieve balance
 }
 
-// SendIXArgs is a struct that represents an argument wrapper for sending Interactions to the pool
+// SendIXArgs is an argument wrapper for sending Interactions to the pool
 type SendIXArgs struct {
 	Type  types.IxType `json:"type"`
 	Nonce uint64       `json:"nonce"`
@@ -112,25 +107,25 @@ type LogicExecuteArgs struct {
 	CallData string `json:"calldata"`
 }
 
-// Response is a struct that represents a response wrapper
+// Response wrapper
 type Response struct {
 	Status string      `json:"status,omitempty"`
 	Data   interface{} `json:"data"`
 }
 
-// ContextResponse is a response object for fetching context info
+// ContextResponse is response object for fetching context info
 type ContextResponse struct {
 	BehaviourNodes []string
 	RandomNodes    []string
 	StorageNodes   []string
 }
 
-// ReceiptArgs is a struct that represent an argument wrapper for retrieving the receipt of an interaction
+// ReceiptArgs is an argument wrapper for retrieving the receipt of an interaction
 type ReceiptArgs struct {
 	Hash string
 }
 
-// ReceiptResponse is a response wrapper for receipts
+// ReceiptResponse is response wrapper for receipts
 type ReceiptResponse struct {
 	Receipt types.Receipt
 }

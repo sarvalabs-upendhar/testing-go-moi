@@ -2,7 +2,6 @@ package rpc
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"time"
@@ -52,7 +51,7 @@ func NewRPCServer(path string, logger hclog.Logger, addr *net.TCPAddr, eventMux 
 }
 
 // Start is a method of Server that starts the RPC server
-func (s *Server) Start() {
+func (s *Server) Start() error {
 	s.server.RegisterCodec(json2.NewCodec(), "application/json")
 	s.router.Handle(s.url, s.server)
 	// Web socket route
@@ -60,15 +59,21 @@ func (s *Server) Start() {
 
 	// Print the server start message
 	s.logger.Info(fmt.Sprintf("RPC Server started on %s:%s", s.url, s.addr))
+
 	// Start the RPC server
 	server := &http.Server{
 		Addr:              s.addr.String(),
 		Handler:           s.router,
 		ReadHeaderTimeout: 3 * time.Second,
 	}
+
 	if err := server.ListenAndServe(); err != nil {
-		log.Panic(err)
+		s.logger.Error("JSON RPC server stopped", "error", err)
+
+		return err
 	}
+
+	return nil
 }
 
 // RegisterService is a method of Server that registers a service with the RPC service.

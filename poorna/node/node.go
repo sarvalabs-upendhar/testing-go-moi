@@ -2,7 +2,6 @@ package node
 
 import (
 	"context"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -32,7 +31,10 @@ import (
 )
 
 const (
-	LRUSIZE = 2000
+	lruSize        = 2000
+	validatorType  = 1
+	kramaIDVersion = 1
+	syncMode       = "full"
 )
 
 type SubHandlers struct {
@@ -63,83 +65,212 @@ type Node struct {
 }
 
 func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
-	n = new(Node)
-
-	n.cfg = cfg
-	n.eventMux = new(utils.TypeMux)
+	n = &Node{
+		cfg:      cfg,
+		eventMux: new(utils.TypeMux),
+		handlers: new(SubHandlers),
+	}
 	n.ctx, n.ctxCancel = context.WithCancel(context.Background())
-	n.handlers = new(SubHandlers)
 
-	n.cache, err = lru.New(LRUSIZE)
-	if err != nil {
+	if err = n.setupCacheStore(); err != nil {
 		return nil, err
 	}
 
-	n.vault, err = mudra.NewVault(cfg.Vault, 1, 1)
-	if err != nil {
+	if err = n.setupVault(); err != nil {
 		return nil, errors.Wrap(types.ErrVaultInit, err.Error())
 	}
 
-	if cfg.LogFilePath != "" {
-		logFileName := cfg.LogFilePath + string(n.vault.KramaID())
-
-		f, err := os.OpenFile(logFileName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
-		if err != nil {
-			return nil, err
-		}
-
-		n.logger = hclog.New(&hclog.LoggerOptions{
-			Name:   "MOI",
-			Output: f,
-			Level:  hclog.LevelFromString(logLevel),
-		})
-	} else {
-		n.logger = hclog.New(&hclog.LoggerOptions{
-			Name:  "MOI",
-			Level: hclog.LevelFromString(logLevel),
-		})
-	}
-
-	// setup p2p network server
-	n.network, err = poorna.NewServer(n.ctx, n.logger, n.vault.KramaID(), n.eventMux, cfg.Network, n.vault)
-	if err != nil {
+	if err = n.setLogger(logLevel); err != nil {
 		return nil, err
 	}
 
-	// setup persistence manager
-	db, err := dhruva.NewPersistenceManager(n.ctx, n.logger, cfg.DB)
-	if err != nil {
+	n.setupNetwork()
+
+	if err = n.network.StartServer(); err != nil {
+		n.logger.Error("start server", err)
+
 		return nil, err
 	}
 
-	n.db = db
-
-	if !cfg.Chain.SkipGenesis {
-		if err := n.db.Cleanup(); err != nil {
-			return nil, err
-		}
+	if err = n.setupPersistenceManager(); err != nil {
+		return nil, err
 	}
 
-	// setup metrics
+	if err = n.newGenesisCheck(); err != nil {
+		return nil, err
+	}
+
 	n.setupTelemetry()
-	// setup state manager
-	n.state, err = guna.NewStateManager(n.ctx, db, n.logger, n.cache, n.network, n.nodeMetrics.guna)
-	if err != nil {
+
+	if err = n.setupStateManager(); err != nil {
 		return nil, err
 	}
-	// setup execution engine
-	n.exec = jug.NewExecutionManager(n.state, n.logger, cfg.Execution)
-	// setup ixpool
-	n.ixpool = ixpool.NewIxPool(n.ctx, n.logger, n.eventMux, n.state, cfg.IxPool, n.nodeMetrics.ixpool)
 
+	n.setupExecEngine()
+
+	n.setupIxPool()
+
+	n.setupSenatusToNetwork()
+
+	n.setupRandomizer()
+
+	if err = n.setupChainManager(); err != nil {
+		return nil, err
+	}
+
+	if err = n.setupKramaEngine(); err != nil {
+		return nil, err
+	}
+
+	// setup JSON-RPC
+	if err = n.setupRPC(); err != nil {
+		return nil, types.ErrRPCFailed
+	}
+
+	if err = n.setupSyncer(); err != nil {
+		return nil, errors.New("unable to create and setup syncer")
+	}
+
+	n.setupSubHandler()
+
+	if err = n.setupGenesis(); err != nil {
+		return nil, err
+	}
+
+	return n, nil
+}
+
+// Start starts network Stream handler, network's Discovery routine, Handlers, IxPool
+// Krama engine, State manager, JSON-RPC server Chain manager
+// returns any error invoked
+func (n *Node) Start() (err error) {
+	n.startHandlers()
+
+	n.ixpool.Start()
+
+	n.kramaEngine.Start()
+
+	if err = n.state.Start(
+		n.network.GetKramaID(),
+		1,
+		n.vault.GetConsensusPrivateKey().GetPublicKeyInBytes(),
+		n.network.GetAddrs()); err != nil {
+		return errors.Wrap(err, "failed to start stated manager")
+	}
+
+	// starting JSON-RPC server
+	go n.startJSONRPCServer()
+
+	if err := n.chain.Start(); err != nil {
+		return errors.Wrap(err, "failed to start chain manager")
+	}
+
+	return nil
+}
+
+// startJsonRPCServer start JSON-RPC server and stops node when JSON-RPC server stops
+func (n *Node) startJSONRPCServer() {
+	defer n.Stop()
+	err := n.rpc.Start()
+	n.logger.Error("JSON RPC server stopped", "error", err)
+}
+
+// setupCacheStore creates new lru cache store and setups it to node
+func (n *Node) setupCacheStore() (err error) {
+	if n.cache, err = lru.New(lruSize); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// newGenesisCheck checks if a genesis file path is present in config and cleans the db if genesis file path is passed
+func (n *Node) newGenesisCheck() error {
+	if n.cfg.Chain.GenesisFilePath == "nil" {
+		return nil
+	}
+
+	if err := n.db.Cleanup(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// setupGenesis calls SetupGenesis method in chain if SkipGenesis is false in config
+func (n *Node) setupGenesis() (err error) {
+	if n.cfg.Chain.SkipGenesis {
+		return nil
+	}
+
+	if err = n.chain.SetupGenesis(n.cfg.Chain.GenesisFilePath); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// setupVault creates new vault and setups it to node
+func (n *Node) setupVault() (err error) {
+	n.vault, err = mudra.NewVault(n.cfg.Vault, validatorType, kramaIDVersion)
+	if err != nil {
+		return errors.Wrap(types.ErrVaultInit, err.Error())
+	}
+
+	return nil
+}
+
+// setupServer creates new server object and setups it to node
+func (n *Node) setupNetwork() {
+	n.network = poorna.NewServer(n.ctx, n.logger, n.vault.KramaID(), n.eventMux, n.cfg.Network, n.vault)
+}
+
+// setupPersistenceManager creates new dhruva(db) object and setups it to node
+func (n *Node) setupPersistenceManager() (err error) {
+	n.db, err = dhruva.NewPersistenceManager(n.ctx, n.logger, n.cfg.DB)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// setupStateManager creates new StateManager object and setups it to node
+func (n *Node) setupStateManager() (err error) {
+	n.state, err = guna.NewStateManager(n.ctx, n.db, n.logger, n.cache, n.network, n.nodeMetrics.guna)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// setupExecEngine creates new ExecutionEngine object and setups it to node
+func (n *Node) setupExecEngine() {
+	n.exec = jug.NewExecutionManager(n.state, n.logger, n.cfg.Execution)
+}
+
+// setupIxPool creates new InteractionPool object and setups it to node
+func (n *Node) setupIxPool() {
+	n.ixpool = ixpool.NewIxPool(n.ctx, n.logger, n.eventMux, n.state, n.cfg.IxPool, n.nodeMetrics.ixpool)
+}
+
+// setupSenatusToNetwork fetches Senatus from state and setups it to node's network manager(poorna server)
+func (n *Node) setupSenatusToNetwork() {
 	n.network.Senatus = n.state.SenatusInstance()
+}
 
+// setupRandomizer creates new Randomizer object and setups it to node
+func (n *Node) setupRandomizer() {
 	n.handlers.flux = flux.NewRandomizer(n.ctx, n.logger, n.network, n.nodeMetrics.flux)
-	// setup lattice manager
+}
+
+// setupChainManager creates new Chain Manager object and setups it to node
+func (n *Node) setupChainManager() (err error) {
 	if n.chain, err = lattice.NewChainManager(
 		n.ctx,
 		n.cfg.Chain,
-		db,
+		n.db,
 		n.state,
 		n.logger,
 		n.eventMux,
@@ -151,12 +282,17 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 		n.nodeMetrics.chain,
 		mudra.VerifyAggregateSignature,
 	); err != nil {
-		return nil, err
+		return err
 	}
-	// setup krama engine
+
+	return nil
+}
+
+// setupKramaEngine creates new Krama Engine object and setups it to node
+func (n *Node) setupKramaEngine() (err error) {
 	if n.kramaEngine, err = krama.NewKramaEngine(
 		n.ctx,
-		cfg.Consensus,
+		n.cfg.Consensus,
 		n.logger,
 		n.state,
 		n.network,
@@ -167,34 +303,20 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 		n.handlers.flux,
 		n.nodeMetrics.krama,
 	); err != nil {
-		return nil, err
+		return err
 	}
 
-	// setup JSON-RPC
-	if err = n.SetupRPC(); err != nil {
-		return nil, types.ErrRPCFailed
-	}
-
-	if err = n.InitSubHandlers(); err != nil {
-		return nil, types.ErrHandlersFailed
-	}
-
-	if !cfg.Chain.SkipGenesis {
-		if err = n.chain.SetupGenesis(cfg.Chain.Genesis); err != nil {
-			return nil, err
-		}
-	}
-
-	return n, nil
+	return nil
 }
 
-func (n *Node) InitSubHandlers() (err error) {
+// setupSyncer creates new Syncer object and setups it to node
+func (n *Node) setupSyncer() (err error) {
 	if n.handlers.syncer, err = syncer.NewSyncer(
 		n.ctx,
 		n.network,
 		n.eventMux,
 		n.db,
-		"full",
+		syncMode,
 		n.chain,
 		n.state,
 		n.logger,
@@ -203,6 +325,11 @@ func (n *Node) InitSubHandlers() (err error) {
 		return err
 	}
 
+	return nil
+}
+
+// setupSubHandler creates new poorna SubHandler object and setups it to node's handler's core
+func (n *Node) setupSubHandler() {
 	n.handlers.core = poorna.NewSubHandler(
 		n.ctx,
 		n.network.GetKramaID(),
@@ -213,11 +340,36 @@ func (n *Node) InitSubHandlers() (err error) {
 		n.ixpool,
 		n.chain,
 	)
-
-	return
 }
 
-func (n *Node) SetupRPC() error {
+func (n *Node) setLogger(logLevel string) error {
+	if n.cfg.LogFilePath == "" {
+		n.logger = hclog.New(&hclog.LoggerOptions{
+			Name:  "MOI",
+			Level: hclog.LevelFromString(logLevel),
+		})
+
+		return nil
+	}
+
+	logFileName := n.cfg.LogFilePath + string(n.vault.KramaID())
+
+	fileName, err := os.OpenFile(logFileName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
+	if err != nil {
+		return err
+	}
+
+	n.logger = hclog.New(&hclog.LoggerOptions{
+		Name:   "MOI",
+		Output: fileName,
+		Level:  hclog.LevelFromString(logLevel),
+	})
+
+	return nil
+}
+
+// setupRPC sets JSON-RPC
+func (n *Node) setupRPC() error {
 	n.rpc = krpc.NewRPCServer("/", n.logger, n.cfg.Network.JSONRPCAddr, n.eventMux)
 
 	rpcService := krpc.NewRPCService()
@@ -235,31 +387,8 @@ func (n *Node) SetupRPC() error {
 	return nil
 }
 
-func (n *Node) Start() {
-	if err := n.network.Start(); err != nil {
-		log.Panic(err)
-	}
-
-	n.startSubHandlers()
-	n.ixpool.Start()
-	n.kramaEngine.Start()
-
-	if err := n.state.Start(
-		n.network.GetKramaID(),
-		1,
-		n.vault.GetConsensusPrivateKey().GetPublicKeyInBytes(),
-		n.network.GetAddrs()); err != nil {
-		log.Panic(err)
-	}
-
-	go n.rpc.Start()
-
-	if err := n.chain.Start(); err != nil {
-		log.Panic(err)
-	}
-}
-
-func (n *Node) startSubHandlers() {
+// startHandlers starts syncer, core and flux(randomizer)
+func (n *Node) startHandlers() {
 	n.logger.Info("Starting Sub-Handlers")
 
 	go n.handlers.core.Start()
@@ -269,37 +398,42 @@ func (n *Node) startSubHandlers() {
 	go n.handlers.flux.Start()
 }
 
-func (n *Node) stopSubHandlers() {
+// stopHandlers stops syncer, core and flux(randomizer)
+func (n *Node) stopHandlers() {
 	n.handlers.core.Close()
 	n.handlers.syncer.Close()
 	n.handlers.flux.Close()
 }
 
 func (n *Node) Stop() {
+	defer n.ctxCancel()
 	n.logger.Info("Gracefully shutting down...!!!!")
 	n.network.Stop()
 	n.ixpool.Close()
 	n.chain.Close()
 	n.db.Close()
-	n.stopSubHandlers()
+	n.stopHandlers()
 	n.stopTelemetry()
 }
 
 func (n *Node) setupTelemetry() {
-	if n.cfg.Metrics.PrometheusAddr != nil {
-		n.nodeMetrics = metricProvider("MOI", "test-net", true)
-
-		n.startPrometheusServer(n.cfg.Metrics.PrometheusAddr)
-	} else {
+	if n.cfg.Metrics.PrometheusAddr == nil {
 		n.nodeMetrics = metricProvider("MOI", "test-net", false)
+
+		return
 	}
+
+	n.nodeMetrics = metricProvider("MOI", "test-net", true)
+	n.prometheusServer = n.startPrometheusServer(n.cfg.Metrics.PrometheusAddr)
 }
 
 func (n *Node) stopTelemetry() {
-	if n.prometheusServer != nil {
-		if err := n.prometheusServer.Shutdown(context.Background()); err != nil {
-			n.logger.Error("Prometheus server shutdown error", err)
-		}
+	if n.prometheusServer == nil {
+		return
+	}
+
+	if err := n.prometheusServer.Shutdown(context.Background()); err != nil {
+		n.logger.Error("Prometheus server shutdown error", err)
 	}
 }
 

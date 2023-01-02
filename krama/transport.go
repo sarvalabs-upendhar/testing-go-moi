@@ -30,9 +30,9 @@ type network interface {
 	Unsubscribe(topic string) error
 	Broadcast(topic string, data []byte) error
 	Subscribe(ctx context.Context, topic string, handler func(msg *pubsub.Message) error) error
-	ConnectPeer(kramaID id.KramaID) error
+	ConnectPeer(krama id.KramaID) error
 	DisconnectPeer(kramaID id.KramaID) error
-	InitNewRPCServer(protocol protocol.ID) *moirpc.Client
+	StartNewRPCServer(protocol protocol.ID) *moirpc.Client
 	RegisterNewRPCService(protocol protocol.ID, serviceName string, service interface{}) error
 	GetKramaID() id.KramaID
 }
@@ -51,7 +51,7 @@ func NewKramaTransport(logger hclog.Logger, network network) *Transport {
 }
 
 func (t *Transport) RegisterRPCService(serviceID protocol.ID, serviceName string, service interface{}) error {
-	t.rpcClient = t.network.InitNewRPCServer(serviceID)
+	t.rpcClient = t.network.StartNewRPCServer(serviceID)
 
 	return t.network.RegisterNewRPCService(serviceID, serviceName, service)
 }

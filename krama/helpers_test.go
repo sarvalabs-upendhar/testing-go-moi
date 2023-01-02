@@ -32,7 +32,7 @@ func (m *MockServer) Subscribe(ctx context.Context, topic string, handler func(m
 	return nil
 }
 
-func (m *MockServer) InitNewRPCServer(protocol protocol.ID) *moirpc.Client {
+func (m *MockServer) StartNewRPCServer(protocol protocol.ID) *moirpc.Client {
 	// TODO implement me
 	panic("implement me")
 }
@@ -50,7 +50,7 @@ func (m *MockServer) ConnectPeer(kramaID id.KramaID) error {
 }
 
 func (m *MockServer) DisconnectPeer(kramaID id.KramaID) error {
-	indexOf := func(kramaID id.KramaID) int {
+	indexOf := func(peerID id.KramaID) int {
 		for i, peer := range m.peers {
 			if peer == kramaID {
 				return i

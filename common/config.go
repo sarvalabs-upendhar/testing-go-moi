@@ -14,6 +14,11 @@ import (
 
 var DefaultIxPriceLimit = big.NewInt(10)
 
+const (
+	DefaultInboundConnLimit  = 10
+	DefaultOutboundConnLimit = 30
+)
+
 type Config struct {
 	NodeType       int
 	KramaIDVersion int
@@ -34,9 +39,9 @@ type Telemetry struct {
 }
 
 type ChainConfig struct {
-	SkipGenesis   bool
-	Genesis       string
-	ShouldExecute bool
+	SkipGenesis     bool
+	GenesisFilePath string
+	ShouldExecute   bool
 }
 
 type DBConfig struct {
@@ -68,6 +73,10 @@ type NetworkConfig struct {
 
 	// this will be removed
 	NetworkSize uint64
+
+	InboundConnLimit uint
+
+	OutboundConnLimit uint
 }
 
 type ConsensusConfig struct {
@@ -96,14 +105,16 @@ func DefaultConfig(path string) *Config {
 		},
 
 		Network: &NetworkConfig{
-			ListenAddresses: make([]maddr.Multiaddr, 0),
-			BootstrapPeers:  make([]maddr.Multiaddr, 0),
-			MaxPeers:        0, // current we don't limit the no.of peers
-			ProtocolID:      protocol.ID("MOI"),
+			ListenAddresses:   make([]maddr.Multiaddr, 0),
+			BootstrapPeers:    make([]maddr.Multiaddr, 0),
+			MaxPeers:          0, // current we don't limit the no.of peers
+			ProtocolID:        protocol.ID("MOI"),
+			InboundConnLimit:  DefaultInboundConnLimit,
+			OutboundConnLimit: DefaultOutboundConnLimit,
 		},
 		Chain: &ChainConfig{
-			Genesis:       path + "/genesis.json",
-			ShouldExecute: true,
+			GenesisFilePath: path + "/genesis.json",
+			ShouldExecute:   true,
 		},
 		Consensus: &ConsensusConfig{
 			DirectoryPath:         path + "/consensus",

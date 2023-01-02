@@ -96,7 +96,7 @@ func NewReputationEngine(
 }
 
 func (r *ReputationEngine) AddNewPeer(key id.KramaID, data *ReputationInfo) error {
-	r.logger.Debug("Added peer to NTQ table", "id")
+	r.logger.Debug("Added peer to NTQ table", "id", key)
 
 	contains, err := r.db.Contains(dhruva.NtqDBKey(key))
 	if err != nil {

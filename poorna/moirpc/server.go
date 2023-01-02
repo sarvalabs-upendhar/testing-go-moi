@@ -250,7 +250,12 @@ func (server *Server) handle(s *streamWrap) {
 		// with a huge header for what ends up being an unauthorized method.
 		err := s.dec.Decode(&svcID)
 		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return
+			}
+
 			server.logger.Error("[handle]", " server error , failed to decode service ID : ", err)
+
 			sendErr := sendError(server.logger, s, ServiceID{}, newServerError(fmt.Errorf("error reading service ID: %w", err)))
 
 			if sendErr != nil {

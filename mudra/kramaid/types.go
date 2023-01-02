@@ -5,8 +5,12 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/mr-tron/base58"
 	"github.com/pkg/errors"
+
+	"github.com/mr-tron/base58"
+
+	"github.com/libp2p/go-libp2p/core/peer"
+
 	"github.com/sarvalabs/moichain/mudra/common"
 )
 
@@ -176,6 +180,21 @@ func (kid KramaID) PeerID() (string, error) {
 	}
 
 	return p2pID, nil
+}
+
+func (kid KramaID) DecodedPeerID() (peer.ID, error) {
+	libp2pID, err := kid.PeerID()
+	if err != nil {
+		return "", err
+	}
+
+	// Decode the encoded PeerID
+	peerID, err := peer.Decode(libp2pID)
+	if err != nil {
+		return "", err
+	}
+
+	return peerID, nil
 }
 
 func getKramaIDComponents(krmID KramaID) ([]byte, string, error) {

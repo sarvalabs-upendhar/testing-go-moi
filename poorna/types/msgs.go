@@ -11,7 +11,7 @@ import (
 type MsgType int64
 
 const (
-	REQUESTMSG MsgType = iota
+	REQUESTMSG MsgType = iota + 1
 	RESPONSEMSG
 	ICSSUCCESS
 	NEWIXSMSG
@@ -27,6 +27,7 @@ const (
 	HANDSHAKEMSG
 	AGORAREQ
 	AGORARESP
+	DISCONNECTREQ
 )
 
 type MessagePayload interface {
@@ -39,6 +40,8 @@ type Message struct {
 	Sender  kramaid.KramaID
 	Payload []byte
 }
+
+var NilMessage Message
 
 func (m *Message) Bytes() ([]byte, error) {
 	rawData, err := polo.Polorize(m)
@@ -84,6 +87,27 @@ type ICSSuccessMsg struct {
 	QuorumSizes []int
 }
 
+type DisconnectReq struct {
+	Reason string
+}
+
+func (disconnReq *DisconnectReq) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(disconnReq)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize disconnect request message")
+	}
+
+	return rawData, nil
+}
+
+func (disconnReq *DisconnectReq) FromBytes(bytes []byte) error {
+	if err := polo.Depolorize(disconnReq, bytes); err != nil {
+		return errors.Wrap(err, "failed to depolorize disconnect request message")
+	}
+
+	return nil
+}
+
 func (ism *ICSSuccessMsg) Bytes() ([]byte, error) {
 	rawData, err := polo.Polorize(ism)
 	if err != nil {
@@ -106,6 +130,32 @@ type HandshakeMSG struct {
 	NTQ     int32
 	Degree  int32
 	Error   string
+}
+
+var NilHandshakeMSG HandshakeMSG
+
+func ConstructHandshakeMSG(
+	address []string,
+	ntq int32,
+	degree int32,
+	err string,
+) HandshakeMSG {
+	return HandshakeMSG{
+		Address: address,
+		NTQ:     ntq,
+		Degree:  degree,
+		Error:   err,
+	}
+}
+
+func (m *Message) IsHandShakeMessage() bool {
+	var hsMsg HandshakeMSG
+
+	if err := hsMsg.FromBytes(m.Payload); err != nil {
+		return false
+	}
+
+	return true
 }
 
 func (hs *HandshakeMSG) Bytes() ([]byte, error) {

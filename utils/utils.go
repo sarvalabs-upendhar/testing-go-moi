@@ -139,12 +139,14 @@ func MultiAddrToString(maddr ...multiaddr.Multiaddr) (addrs []string) {
 
 func MultiAddrFromString(maddr ...string) (addrs []multiaddr.Multiaddr) {
 	for _, v := range maddr {
-		madd, err := multiaddr.NewMultiaddr(v)
+		maddr, err := multiaddr.NewMultiaddr(v)
 		if err != nil {
 			log.Println("Error parsing multi address")
 
-			addrs = append(addrs, madd)
+			continue
 		}
+
+		addrs = append(addrs, maddr)
 	}
 
 	return

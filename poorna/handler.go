@@ -16,34 +16,26 @@ import (
 	"github.com/sarvalabs/moichain/utils"
 )
 
-// SubHandler is a struct that represents the network event handler
+// Struct that represents the network event handler
 type SubHandler struct {
-	// Context for handler life cycle
-	ctx context.Context
+	ctx context.Context // Context for handler life cycle
 
-	// Context cancel function
-	ctxCancel context.CancelFunc
+	ctxCancel context.CancelFunc // Context cancel function
 
-	// Represents the KipID of the node running the handler
-	id id.KramaID
+	id id.KramaID // KramaID of the node running the handler
 
-	// Represents the working set of peers of the handler
-	peers *peerSet
+	peers *peerSet // working set of peers of the handler
 
-	// Represents the Interaction pool of the handler
-	ixpool *ixpool.IxPool
+	ixpool *ixpool.IxPool // Interaction pool of the handler
 
 	// Represents the chain manager of the handler
 	chain *lattice.ChainManager
 
-	// Represents the event type mux of the handler
-	mux *utils.TypeMux
+	mux *utils.TypeMux // event type mux of the handler
 
-	// Represents the interactions event subscription
-	ixSub *utils.Subscription
+	ixSub *utils.Subscription // interactions event subscription
 
-	// Represents the newpeer event subscription
-	newPeerSub *utils.Subscription
+	newPeerSub *utils.Subscription // newpeer event subscription
 
 	server *Server
 
@@ -51,7 +43,7 @@ type SubHandler struct {
 }
 
 // NewSubHandler is a constructor function generates and returns a new subHandle object.
-// Accepts a KipID, an event TypeMux, an IxPool, an ICS, a BFT engine and a Chain manager.
+// Accepts a KramaID, an event TypeMux, an IxPool, an ICS, a BFT engine and a Chain manager.
 func NewSubHandler(
 	ctx context.Context,
 	id id.KramaID,
@@ -93,7 +85,7 @@ func (eh *SubHandler) Start() {
 }
 
 // newPeerLoop is a method of SubHandler that handles NewPeerEvents.
-// Creates a new KipPeer for every NewPeerEvent signal, registers it with the
+// Creates a new Peer for every NewPeerEvent signal, registers it with the
 // handler working set and starts a goroutine to listen for messages from the peer.
 func (eh *SubHandler) newPeerLoop() {
 	// Read events from a newpeer channel
@@ -107,20 +99,22 @@ func (eh *SubHandler) newPeerLoop() {
 
 			peer := eh.peers.Peer(p.PeerID)
 			// Asynchronously handle the new peer
-			go func(peer *KipPeer) {
+			go func(peer *Peer) {
 				// Defer the peer unregister from the handler working set
 				defer func() {
 					if err := eh.peers.Unregister(peer); err != nil {
 						eh.logger.Error("Error unregistering peer", "error", err)
 					}
 
-					eh.logger.Info("Peer Disconnected", "id", peer.id)
+					eh.logger.Info("Peer Disconnected", "id", peer.kramaID)
 				}()
 
 				// Handle messages from the peer
 				for {
 					if err := eh.handlePeerMessage(peer); err != nil {
 						eh.logger.Error("Error handling peer message", err)
+
+						eh.sendDisconnectRequest(peer, err)
 
 						return
 					}
@@ -130,8 +124,8 @@ func (eh *SubHandler) newPeerLoop() {
 	}
 }
 
-// handlePeerMessage is a method of SubHandler that handles a message from a KipPeer
-func (eh *SubHandler) handlePeerMessage(p *KipPeer) error {
+// handlePeerMessage is a method of SubHandler that handles a message from a Peer
+func (eh *SubHandler) handlePeerMessage(p *Peer) error {
 	// Read the peer's io read/writer into a buffer
 	// p.mtxLock.Lock()
 	// defer p.mtxLock.Unlock()
@@ -152,8 +146,8 @@ func (eh *SubHandler) handlePeerMessage(p *KipPeer) error {
 	switch message.MsgType {
 	// NEWIXTS
 	case ptypes.NEWIXSMSG:
-		// Print the KipID of the interactions sender
-		eh.logger.Info("Received Interactions from", "id", p.id)
+		// Print the KramaID of the interactions sender
+		eh.logger.Info("Received Interactions from", "id", p.kramaID)
 
 		// Unmarshal message proto into an InteractionsData message
 		var ixns types.Interactions
@@ -188,10 +182,36 @@ func (eh *SubHandler) handlePeerMessage(p *KipPeer) error {
 		}
 
 	case ptypes.RANDOMWALKREQ:
-		log.Println("Got an random request", message.Sender)
+		eh.logger.Info("Received a random-walk request", "from", message.Sender)
+
+	case ptypes.DISCONNECTREQ:
+		eh.handleDisconnectRequest(p, message)
+
+		return nil
 	}
 
 	return nil
+}
+
+func (eh *SubHandler) handleDisconnectRequest(peer *Peer, msg *ptypes.Message) {
+	var disconnectMsg ptypes.DisconnectReq
+
+	if err := disconnectMsg.FromBytes(msg.Payload); err != nil {
+		eh.logger.Error("Decode disconnect req", "from", msg.Sender, "error", err)
+
+		go peer.resetStream()
+
+		return
+	}
+
+	eh.logger.Info("Received disconnect request", "from", msg.Sender, "reason", disconnectMsg.Reason)
+}
+
+func (eh *SubHandler) sendDisconnectRequest(peer *Peer, err error) {
+	disconnectMsg := &ptypes.DisconnectReq{
+		Reason: err.Error(),
+	}
+	peer.Send(eh.server.GetKramaID(), ptypes.DISCONNECTREQ, disconnectMsg)
 }
 
 // ixBroadcastLoop is a method of SubHandler that handles NewIxsEvents.
@@ -213,7 +233,7 @@ func (eh *SubHandler) ixBroadcastLoop() {
 // Only emits it from peers that are not already aware of the interaction.
 func (eh *SubHandler) broadcastIXs(ixs []*types.Interaction) error {
 	// Accumulate a mapping of peers to the the Interaction they do not know about
-	peerIxSet := make(map[*KipPeer][]*types.Interaction)
+	peerIxSet := make(map[*Peer][]*types.Interaction)
 
 	for _, ix := range ixs {
 		ixhash := ix.Hash()
@@ -233,7 +253,7 @@ func (eh *SubHandler) broadcastIXs(ixs []*types.Interaction) error {
 
 	// Emit the Interaction
 	for peer, ixs := range peerIxSet {
-		go func(peer *KipPeer, ixs []*types.Interaction) {
+		go func(peer *Peer, ixs []*types.Interaction) {
 			if err := peer.SendIXs(eh.id, ixs); err != nil {
 				eh.logger.Error("Error sending interaction", "error", err)
 			}

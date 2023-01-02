@@ -57,6 +57,8 @@ var (
 	ErrInvalidKey                  = errors.New("invalid key")
 	ErrInvalidValue                = errors.New("invalid value")
 	ErrKeyDoNotExist               = errors.New("key do not exist")
+	ErrNTQNotFound                 = errors.New("ntq not found")
+	ErrOutboundConnLimit           = errors.New("maximum outbound connection limit exceeded")
 	ErrInvalidAccountType          = errors.New("invalid account type")
 	ErrFetchingAccMetaInfo         = errors.New("account meta info fetch failed")
 	ErrFetchingBalance             = errors.New("failed to fetch balance object")

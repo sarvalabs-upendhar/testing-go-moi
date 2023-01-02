@@ -420,7 +420,7 @@ func (r *Randomizer) SendFluxMessage(peerID peer.ID, msgType ptypes.MsgType, msg
 		Sender:  r.server.GetKramaID(),
 	}
 
-	stream, err := r.server.NewStream(context.Background(), FluxProtocol, peerID)
+	stream, err := r.server.NewStream(context.Background(), peerID, FluxProtocol)
 	if err != nil {
 		// Return error if stream setup fails
 		return err

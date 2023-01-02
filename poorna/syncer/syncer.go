@@ -194,7 +194,7 @@ func NewSyncer(
 }
 
 func (s *Syncer) RegisterRPCService() error {
-	s.rpcClient = s.node.InitNewRPCServer(SyncRPCProtocol)
+	s.rpcClient = s.node.StartNewRPCServer(SyncRPCProtocol)
 
 	return s.node.RegisterNewRPCService(SyncRPCProtocol, "SYNCRPC", NewSyncRPCService(s))
 }
@@ -262,8 +262,8 @@ func (s *Syncer) StreamHandler(stream network.Stream) {
 		msg.BucketSizes[k] = v.Bytes()
 	}
 
-	kipPeer := s.node.Peers.Peer(remotePeer)
-	peerKramaID := kipPeer.GetKramaID()
+	peer := s.node.Peers.Peer(remotePeer)
+	peerKramaID := peer.GetKramaID()
 	resp := new(Response)
 
 	if err := s.rpcClient.MoiCall(peerKramaID,
@@ -379,7 +379,7 @@ func (s *Syncer) accSync(peerID peer.ID) error {
 	return nil
 }
 
-// Send is a method of KipPeer that emits an arbitrary proto message to the network
+// Send is a method of peer that emits an arbitrary proto message to the network
 // Accepts the sender id, the message type and message itself.
 func (p *SyncPeer) Send(id id.KramaID, code ptypes.MsgType, msg interface{}) error {
 	var (
@@ -703,7 +703,7 @@ func (s *Syncer) tesseractWorker(id int, reqQueue chan *TesseractSyncJob) {
 				return
 			}
 
-			// TODO:Check whether tesseract data exsist
+			// TODO:Check whether tesseract data exists
 
 			ts := job.tesseract
 
@@ -782,7 +782,7 @@ func (s *Syncer) handleNewPeer() {
 		if p, ok := obj.Data.(utils.PeerDiscoveredEvent); ok {
 			fmt.Println("Identified new peer sending sync request", p.ID)
 
-			stream, err := s.node.NewStream(context.Background(), SyncStreamProtocol, p.ID)
+			stream, err := s.node.NewStream(context.Background(), p.ID, SyncStreamProtocol)
 			if err != nil {
 				s.logger.Error("Error opening sync stream", "error", err)
 
@@ -837,8 +837,8 @@ func (s *Syncer) handleNewPeer() {
 			}
 
 			resp := new(Response)
-			kipPeer := s.node.Peers.Peer(p.ID)
-			peerKramaID := kipPeer.GetKramaID()
+			peer := s.node.Peers.Peer(p.ID)
+			peerKramaID := peer.GetKramaID()
 
 			if err := s.rpcClient.MoiCall(peerKramaID,
 				"SYNCRPC",
@@ -1122,8 +1122,8 @@ func (s *Syncer) getTesseract(
 	req.WithInteractions = withInteractions
 
 	resp := new(TesseractResponse)
-	kipPeer := s.node.Peers.Peer(bestPeer.id)
-	kramaPeerID := kipPeer.GetKramaID()
+	peer := s.node.Peers.Peer(bestPeer.id)
+	kramaPeerID := peer.GetKramaID()
 
 	if err := s.rpcClient.MoiCall(
 		kramaPeerID,

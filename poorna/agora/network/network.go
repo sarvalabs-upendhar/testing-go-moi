@@ -133,7 +133,7 @@ func (an *AgoraNetwork) SendAgoraMessage(id id.KramaID, msgType ptypes.MsgType, 
 
 	peer, ok := an.peers.Load(peerID)
 	if !ok {
-		stream, err := an.server.NewStream(context.Background(), AgoraStreamProtocol, peerID)
+		stream, err := an.server.NewStream(context.Background(), peerID, AgoraStreamProtocol)
 		if err != nil {
 			return err
 		}

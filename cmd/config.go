@@ -16,10 +16,12 @@ type Config struct {
 }
 
 type NetworkConfig struct {
-	Libp2pAddr     []string `json:"libp2p_addr"`
-	ProtocolID     string   `json:"protocol_id"`
-	JSONRPCAddr    string   `json:"jsonrpc_addr"`
-	BootStrapPeers []string `json:"bootnodes"`
+	Libp2pAddr        []string `json:"libp2p_addr"`
+	ProtocolID        string   `json:"protocol_id"`
+	JSONRPCAddr       string   `json:"jsonrpc_addr"`
+	BootStrapPeers    []string `json:"bootnodes"`
+	InboundConnLimit  uint     `json:"inbound_conn_limit"`
+	OutboundConnLimit uint     `json:"outbound_conn_limit"`
 }
 
 type IxPoolConfig struct {
