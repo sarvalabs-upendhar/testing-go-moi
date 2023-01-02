@@ -53,7 +53,9 @@ type MockDB struct {
 	updateMetaInfoHook          func() (int32, bool, error)
 	setTesseractHook            func() error
 	setInteractionsHook         func() error
+	setReceiptsHook             func() error
 	setTesseractHeightEntryHook func() error
+	setIxLookupHook             func() error
 	createEntryHook             func() error
 }
 
@@ -181,6 +183,44 @@ func (m *MockDB) SetTesseractHeightEntry(addr types.Address, height uint64, hash
 	key := addr.Hex() + strconv.Itoa(int(height))
 
 	m.dbStorage[key] = hash.Bytes()
+
+	return nil
+}
+
+func (m *MockDB) GetIxLookup(ixHash types.Hash) ([]byte, error) {
+	data, ok := m.dbStorage[ixHash.String()]
+	if !ok {
+		return nil, types.ErrKeyNotFound
+	}
+
+	return data, nil
+}
+
+func (m *MockDB) SetIxLookup(ixHash types.Hash, data []byte) error {
+	if m.setIxLookupHook != nil {
+		return m.setIxLookupHook()
+	}
+
+	m.dbStorage[ixHash.String()] = data
+
+	return nil
+}
+
+func (m *MockDB) GetReceipts(receiptHash types.Hash) ([]byte, error) {
+	data, ok := m.dbStorage[receiptHash.String()]
+	if !ok {
+		return nil, types.ErrKeyNotFound
+	}
+
+	return data, nil
+}
+
+func (m *MockDB) SetReceipts(receiptHash types.Hash, data []byte) error {
+	if m.setReceiptsHook != nil {
+		return m.setReceiptsHook()
+	}
+
+	m.dbStorage[receiptHash.String()] = data
 
 	return nil
 }
@@ -763,6 +803,7 @@ func tesseractParamsWithICSClusterInfo(
 	return &createTesseractParams{
 		ixns: ixns,
 		callback: func(ts *types.Tesseract) {
+			ts.Body.ReceiptHash = tests.RandomHash(t)
 			ts.Body.ConsensusProof.ICSHash = types.GetHash(rawData)
 		},
 	}
@@ -1346,13 +1387,20 @@ func getIxAndReceiptsWithStateHash(
 	return ixs, receipts
 }
 
+func insertIxLookup(t *testing.T, db db, ixHash types.Hash, receipts types.Receipts) {
+	t.Helper()
+
+	err := db.SetIxLookup(ixHash, getReceiptHash(t, receipts).Bytes())
+	require.NoError(t, err)
+}
+
 func insertReceipts(t *testing.T, db db, receipts types.Receipts) {
 	t.Helper()
 
 	rawData, err := receipts.Bytes()
 	require.NoError(t, err)
 
-	err = db.CreateEntry(getReceiptHash(t, receipts).Bytes(), rawData)
+	err = db.SetReceipts(getReceiptHash(t, receipts), rawData)
 	require.NoError(t, err)
 }
 
@@ -1933,18 +1981,6 @@ func checkForOrphanTSInCache(t *testing.T, c *ChainManager, expectedTS *types.Te
 	actualTS, ok := c.orphanTesseracts.Get(getTesseractHash(t, expectedTS))
 	require.True(t, ok)
 	require.Equal(t, expectedTS, actualTS)
-}
-
-func checkForReceiptsInDirtyStorage(t *testing.T, dirtyStorage map[types.Hash][]byte, receipts types.Receipts) {
-	t.Helper()
-
-	rawData, ok := dirtyStorage[getReceiptHash(t, receipts)]
-	require.True(t, ok)
-
-	actualReceipts := make(types.Receipts)
-	err := actualReceipts.FromBytes(rawData)
-	require.NoError(t, err)
-	require.Equal(t, receipts, actualReceipts)
 }
 
 func fetchContextWithNodes(t *testing.T, c *ChainManager, ts *types.Tesseract, randomset []string) []id.KramaID {

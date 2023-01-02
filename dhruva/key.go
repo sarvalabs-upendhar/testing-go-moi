@@ -17,7 +17,8 @@ const (
 	NTQ             Prefix = 0x81
 	Tesseract       Prefix = 0x82
 	TesseractHeight Prefix = 0x83
-	Receipts        Prefix = 0x83
+	IxLookup        Prefix = 0x84
+	Receipt         Prefix = 0x85
 
 	// Prefix MSB is unset for account based keys
 
@@ -55,16 +56,16 @@ func NtqCacheKey(key id.KramaID) string {
 	return types.BytesToHex([]byte{NTQ.Byte()}) + string(key)
 }
 
-func ContextObjectKey(address types.Address, hash types.Hash) []byte {
-	return dbKey(address, Context, hash.Bytes())
+func ContextObjectKey(address types.Address, contextHash types.Hash) []byte {
+	return dbKey(address, Context, contextHash.Bytes())
 }
 
-func BalanceObjectKey(address types.Address, hash types.Hash) []byte {
-	return dbKey(address, Balance, hash.Bytes())
+func BalanceObjectKey(address types.Address, balanceHash types.Hash) []byte {
+	return dbKey(address, Balance, balanceHash.Bytes())
 }
 
-func AccountKey(address types.Address, hash types.Hash) []byte {
-	return dbKey(address, Account, hash.Bytes())
+func AccountKey(address types.Address, stateHash types.Hash) []byte {
+	return dbKey(address, Account, stateHash.Bytes())
 }
 
 func PreImageKey(address types.Address, hash types.Hash) []byte {

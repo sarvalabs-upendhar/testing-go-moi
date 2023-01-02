@@ -62,12 +62,12 @@ type Senatus interface {
 }
 
 type store interface {
-	GetAccount(addr types.Address, hash types.Hash) ([]byte, error)
-	GetContext(addr types.Address, hash types.Hash) ([]byte, error)
+	GetAccount(addr types.Address, stateHash types.Hash) ([]byte, error)
+	GetContext(addr types.Address, contextHash types.Hash) ([]byte, error)
 	GetAccountMetaInfo(id []byte) (*types.AccountMetaInfo, error)
-	GetInteractions(hash types.Hash) ([]byte, error)
-	GetTesseract(hash types.Hash) ([]byte, error)
-	GetBalance(addr types.Address, hash types.Hash) ([]byte, error)
+	GetInteractions(ixHash types.Hash) ([]byte, error)
+	GetTesseract(tsHash types.Hash) ([]byte, error)
+	GetBalance(addr types.Address, balanceHash types.Hash) ([]byte, error)
 	GetMerkleTreeEntry(address types.Address, prefix dhruva.Prefix, key []byte) ([]byte, error)
 	SetMerkleTreeEntry(address types.Address, prefix dhruva.Prefix, key, value []byte) error
 	SetMerkleTreeEntries(address types.Address, prefix dhruva.Prefix, entries map[string][]byte) error
@@ -288,7 +288,6 @@ func (sm *StateManager) FetchTesseractFromDB(hash types.Hash, withInteractions b
 	if withInteractions {
 		// Fetch interactions from DB
 		buf, err = sm.db.GetInteractions(canonicalTesseract.Body.InteractionHash)
-
 		if err != nil {
 			return nil, errors.Wrap(err, types.ErrFetchingInteractions.Error())
 		}

@@ -146,17 +146,12 @@ func (p *PublicCoreAPI) GetTDU(args *TesseractArgs) (types.AssetMap, error) {
 
 // GetInteractionReceipt returns the receipt for the given interaction hash
 func (p *PublicCoreAPI) GetInteractionReceipt(args *ReceiptArgs) (*types.Receipt, error) {
-	address, err := utils.ValidateAddress(args.Address)
-	if err != nil {
-		return nil, types.ErrInvalidAddress
-	}
-
 	hash, err := utils.ValidateHash(args.Hash)
 	if err != nil {
 		return nil, types.ErrInvalidHash
 	}
 
-	return p.chain.GetReceiptByIxHash(address, types.HexToHash(hash))
+	return p.chain.GetReceiptByIxHash(types.HexToHash(hash))
 }
 
 // GetInteractionCountByAddress returns the number of interactions sent for the given address

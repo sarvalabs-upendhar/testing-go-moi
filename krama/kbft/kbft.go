@@ -465,14 +465,6 @@ func (kbft *KBFT) finalizeCommit(h []uint64) {
 		return
 	}
 
-	receiptHash, err := kbft.ics.Receipts.Hash()
-	if err != nil {
-		kbft.logger.Error("Error creating receipts hash", err)
-		panic(err)
-	}
-
-	kbft.logger.Trace("Adding Receipts to dirty storage", "receipt-hash", receiptHash)
-
 	// Stop the ClusterInfo and other process
 	kbft.Close(nil)
 }
@@ -489,23 +481,15 @@ func (kbft *KBFT) updateConsensusInfoInTesseracts(
 	// Add evidence data to dirty list
 	kbft.ics.AddDirty(evidenceHash, data)
 
-	// Add Receipts to dirty list
-	// This will be modified once smt is integrated
-	rawData, err := kbft.ics.Receipts.Bytes()
-	if err != nil {
-		return err
-	}
-
-	kbft.ics.AddDirty(types.GetHash(rawData), rawData)
-
 	for _, tesseract := range kbft.ProposalGrid.Tesseracts {
 		tesseract.Header.Extra.Round = kbft.Round
 		tesseract.Header.Extra.VoteSet = preCommits.bitarray
 		tesseract.Header.Extra.EvidenceHash = evidenceHash
 		tesseract.Header.Extra.GridID = gridID
 		tesseract.Header.Extra.CommitSignature = signature
+		tesseract.Receipts = kbft.ics.Receipts
 
-		rawData, err = tesseract.Bytes()
+		rawData, err := tesseract.Bytes()
 		if err != nil {
 			return err
 		}

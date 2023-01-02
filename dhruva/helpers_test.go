@@ -333,3 +333,35 @@ func getRandomPreImageEntries(t *testing.T, count int) map[types.Hash][]byte {
 
 	return testPreImageEntries
 }
+
+func getRandomReceipts(t *testing.T, receiptHash types.Hash, count int) types.Receipts {
+	t.Helper()
+
+	receipts := make(types.Receipts, count)
+
+	for i := 0; i < count; i++ {
+		receipts[receiptHash] = &types.Receipt{
+			IxHash: tests.RandomHash(t),
+			IxType: 2,
+		}
+	}
+
+	return receipts
+}
+
+func insertIxLookup(t *testing.T, pm *PersistenceManager, ixHash types.Hash, receiptHash types.Hash) {
+	t.Helper()
+
+	err := pm.SetIxLookup(ixHash, receiptHash.Bytes())
+	require.NoError(t, err)
+}
+
+func insertReceipts(t *testing.T, pm *PersistenceManager, receiptHash types.Hash, receipts types.Receipts) {
+	t.Helper()
+
+	rawData, err := receipts.Bytes()
+	require.NoError(t, err)
+
+	err = pm.SetReceipts(receiptHash, rawData)
+	require.NoError(t, err)
+}

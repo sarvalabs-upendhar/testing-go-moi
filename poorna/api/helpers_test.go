@@ -32,7 +32,7 @@ type MockChainManager struct {
 	tesseracts          map[types.Address]map[types.Hash]*types.Tesseract
 	latestTesseractHash map[types.Address]types.Hash
 	interactions        map[types.Address]map[types.Hash]types.Interactions
-	receipts            map[types.Address]map[types.Hash]*types.Receipt
+	receipts            map[types.Hash]*types.Receipt
 	storage             map[types.Hash]*types.Tesseract
 	assets              map[types.Hash]*gtypes.AssetObject
 }
@@ -78,14 +78,16 @@ func NewMockChainManager(t *testing.T) *MockChainManager {
 	mockChain.tesseracts = make(map[types.Address]map[types.Hash]*types.Tesseract, 0)
 	mockChain.latestTesseractHash = make(map[types.Address]types.Hash)
 	mockChain.interactions = make(map[types.Address]map[types.Hash]types.Interactions, 0)
-	mockChain.receipts = make(map[types.Address]map[types.Hash]*types.Receipt, 0)
+	mockChain.receipts = make(map[types.Hash]*types.Receipt, 0)
 	mockChain.assets = make(map[types.Hash]*gtypes.AssetObject, 0)
 	mockChain.storage = make(map[types.Hash]*types.Tesseract, 0)
 
 	return mockChain
 }
 
-func NewMockStateManager() *MockStateManager {
+func NewMockStateManager(t *testing.T) *MockStateManager {
+	t.Helper()
+
 	mockState := new(MockStateManager)
 
 	mockState.balances = make(map[types.Address]*gtypes.BalanceObject)
@@ -129,8 +131,8 @@ func (mc *MockChainManager) GetTesseract(hash types.Hash, withInteractions bool)
 	return nil, types.ErrKeyNotFound
 }
 
-func (mc *MockChainManager) GetReceiptByIxHash(addr types.Address, ixHash types.Hash) (*types.Receipt, error) {
-	if receipt := mc.receipts[addr][ixHash]; receipt != nil {
+func (mc *MockChainManager) GetReceiptByIxHash(ixHash types.Hash) (*types.Receipt, error) {
+	if receipt := mc.receipts[ixHash]; receipt != nil {
 		return receipt, nil
 	}
 
@@ -176,8 +178,8 @@ func (mc *MockChainManager) setInteractions(addr types.Address, interactions map
 	mc.interactions[addr] = interactions
 }
 
-func (mc *MockChainManager) setReceipt(addr types.Address, receipts map[types.Hash]*types.Receipt) {
-	mc.receipts[addr] = receipts
+func (mc *MockChainManager) setReceipt(hash types.Hash, receipt *types.Receipt) {
+	mc.receipts[hash] = receipt
 }
 
 func (mc *MockChainManager) setStorage(hash types.Hash, tesseract *types.Tesseract) {

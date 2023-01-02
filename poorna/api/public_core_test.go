@@ -14,7 +14,7 @@ import (
 func TestPublicCoreAPI_GetBalance(t *testing.T) {
 	address := tests.RandomAddress(t)
 	chainManager := NewMockChainManager(t)
-	stateManager := NewMockStateManager()
+	stateManager := NewMockStateManager(t)
 	assetID, _ := tests.CreateTestAsset(t, address)
 
 	stateManager.setBalance(address, assetID, big.NewInt(300))
@@ -166,7 +166,7 @@ func TestPublicCoreAPI_GetLatestTesseract(t *testing.T) {
 func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
 	address := tests.RandomAddress(t)
 	chainManager := NewMockChainManager(t)
-	stateManager := NewMockStateManager()
+	stateManager := NewMockStateManager(t)
 	latestContextHash, _, _ := getTesseracts(t, address)
 
 	stateManager.setLatestContextHash(address, latestContextHash)
@@ -239,7 +239,7 @@ func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
 func TestPublicCoreAPI_GetTDU(t *testing.T) {
 	address := tests.RandomAddress(t)
 	chainManager := NewMockChainManager(t)
-	stateManager := NewMockStateManager()
+	stateManager := NewMockStateManager(t)
 	assetID, _ := tests.CreateTestAsset(t, address)
 
 	stateManager.setBalance(address, assetID, big.NewInt(300))
@@ -290,12 +290,11 @@ func TestPublicCoreAPI_GetTDU(t *testing.T) {
 }
 
 func TestPublicCoreAPI_GetInteractionReceipt(t *testing.T) {
-	address := tests.RandomAddress(t)
 	chainManager := NewMockChainManager(t)
 	stateManager := new(MockStateManager)
-	validReceiptHash, receipts := getReceipts(t)
+	receiptHash, receipt := getReceipt(t)
 
-	chainManager.setReceipt(address, receipts)
+	chainManager.setReceipt(receiptHash, receipt)
 
 	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
 
@@ -306,28 +305,25 @@ func TestPublicCoreAPI_GetInteractionReceipt(t *testing.T) {
 		expectedErr error
 	}{
 		{
-			name: "Invalid address",
-			args: ReceiptArgs{
-				Address: "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
-				Hash:    tests.RandomHash(t).String(),
-			},
-			expectedErr: types.ErrInvalidAddress,
-		},
-		{
 			name: "Invalid hash",
 			args: ReceiptArgs{
-				Address: address.String(),
-				Hash:    tests.RandomHash(t).String(),
+				Hash: "68510188a88ff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+			},
+			expectedErr: types.ErrInvalidHash,
+		},
+		{
+			name: "Valid hash without state",
+			args: ReceiptArgs{
+				Hash: tests.RandomHash(t).String(),
 			},
 			expectedErr: types.ErrReceiptNotFound,
 		},
 		{
-			name: "Valid account and hash",
+			name: "Valid hash with state",
 			args: ReceiptArgs{
-				Address: address.String(),
-				Hash:    validReceiptHash.String(),
+				Hash: receiptHash.String(),
 			},
-			expected: receipts[validReceiptHash],
+			expected: receipt,
 		},
 	}
 
@@ -429,7 +425,7 @@ func TestPublicCoreAPI_GetTesseractByHash(t *testing.T) {
 func TestPublicCoreAPI_GetTesseractByHeight(t *testing.T) {
 	address := tests.RandomAddress(t)
 	chainManager := NewMockChainManager(t)
-	stateManager := NewMockStateManager()
+	stateManager := NewMockStateManager(t)
 	_, latestTesseractHash, tesseracts := getTesseracts(t, address)
 	interactions := getInteractions(t, tesseracts)
 	latestTesseract := tesseracts[latestTesseractHash]
@@ -570,7 +566,7 @@ func TestPublicCoreAPI_GetInteractionCountByAddress(t *testing.T) {
 	address := tests.RandomAddress(t)
 	latestNonce := uint64(5)
 	chainManager := NewMockChainManager(t)
-	stateManager := NewMockStateManager()
+	stateManager := NewMockStateManager(t)
 
 	stateManager.setAccounts(address, latestNonce)
 
@@ -627,7 +623,7 @@ func TestPublicCoreAPI_GetInteractionCountByAddress(t *testing.T) {
 
 func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 	chainManager := NewMockChainManager(t)
-	stateManager := NewMockStateManager()
+	stateManager := NewMockStateManager(t)
 	logicID := types.LogicID(tests.RandomHash(t).String())
 
 	stateManager.setLogicManifest(logicID.Hex(), []byte{0x00, 0x01})
@@ -698,10 +694,12 @@ func newInteraction(t *testing.T) types.Interactions {
 	}
 }
 
-func newReceipt(interactionHash types.Hash) *types.Receipt {
+func newReceipt(t *testing.T) *types.Receipt {
+	t.Helper()
+
 	return &types.Receipt{
 		IxType: 1,
-		IxHash: interactionHash,
+		IxHash: tests.RandomHash(t),
 	}
 }
 
@@ -729,14 +727,13 @@ func getInteractions(t *testing.T, tesseracts map[types.Hash]*types.Tesseract) m
 	return interactions
 }
 
-func getReceipts(t *testing.T) (types.Hash, map[types.Hash]*types.Receipt) {
+func getReceipt(t *testing.T) (types.Hash, *types.Receipt) {
 	t.Helper()
 
-	receipts := make(map[types.Hash]*types.Receipt)
-	interactionHash := tests.RandomHash(t)
-	receipts[interactionHash] = newReceipt(interactionHash)
+	receiptHash := tests.RandomHash(t)
+	receipt := newReceipt(t)
 
-	return interactionHash, receipts
+	return receiptHash, receipt
 }
 
 func getTesseractHash(t *testing.T, tesseract *types.Tesseract) types.Hash {

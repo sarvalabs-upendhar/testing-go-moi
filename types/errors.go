@@ -38,6 +38,7 @@ var (
 	ErrInvalidInteractionType      = errors.New("invalid interaction type")
 	ErrFetchingTesseract           = errors.New("error fetching tesseract")
 	ErrFetchingInteractions        = errors.New("error fetching interactions")
+	ErrFetchingReceipts            = errors.New("error fetching receipts")
 	ErrInvalidNonce                = errors.New("invalid nonce")
 	ErrAssetNotFound               = errors.New("asset not found")
 	ErrInvalidInteractions         = errors.New("invalid interactions")

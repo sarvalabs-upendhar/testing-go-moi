@@ -596,3 +596,156 @@ func TestWritePreImages(t *testing.T) {
 		require.Equal(t, v, dbValue)
 	}
 }
+
+func TestSetIxLookup(t *testing.T) {
+	pm := NewTestPersistenceManager(t)
+
+	testcases := []struct {
+		name        string
+		ixHash      types.Hash
+		receiptHash types.Hash
+		expectedErr bool
+	}{
+		{
+			name:        "Create an entry in db for the given tesseract hash",
+			ixHash:      tests.RandomHash(t),
+			receiptHash: tests.RandomHash(t),
+			expectedErr: false,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			err := pm.SetIxLookup(testcase.ixHash, testcase.receiptHash.Bytes())
+			require.NoError(t, err)
+
+			rawData, err := pm.ReadEntry(DBKey(types.NilAddress, IxLookup, testcase.ixHash.Bytes()))
+			require.NoError(t, err)
+
+			require.Equal(t, testcase.receiptHash.Bytes(), rawData)
+		})
+	}
+}
+
+func TestGetIxLookup(t *testing.T) {
+	pm := NewTestPersistenceManager(t)
+
+	ixHash := tests.RandomHash(t)
+	receiptHash := tests.RandomHash(t)
+	insertIxLookup(t, pm, ixHash, receiptHash)
+
+	testcases := []struct {
+		name        string
+		ixHash      types.Hash
+		expectedErr bool
+	}{
+		{
+			name:        "valid hash without state",
+			ixHash:      tests.RandomHash(t),
+			expectedErr: true,
+		},
+		{
+			name:        "valid hash with state",
+			ixHash:      ixHash,
+			expectedErr: false,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			ixLookup, err := pm.GetIxLookup(testcase.ixHash)
+
+			if testcase.expectedErr {
+				require.Error(t, err)
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, receiptHash.Bytes(), ixLookup)
+		})
+	}
+}
+
+func TestSetReceipts(t *testing.T) {
+	pm := NewTestPersistenceManager(t)
+
+	// create random receipts
+	receiptHash := tests.RandomHash(t)
+	receipts := getRandomReceipts(t, receiptHash, 2)
+
+	testcases := []struct {
+		name        string
+		receipts    types.Receipts
+		receiptHash types.Hash
+	}{
+		{
+			name:        "Create an entry in db for the given receipts",
+			receipts:    receipts,
+			receiptHash: receiptHash,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			receipts, err := testcase.receipts.Bytes()
+			require.NoError(t, err)
+
+			err = pm.SetReceipts(testcase.receiptHash, receipts)
+			require.NoError(t, err)
+
+			rawData, err := pm.GetReceipts(testcase.receiptHash)
+			require.NoError(t, err)
+
+			require.Equal(t, receipts, rawData)
+		})
+	}
+}
+
+func TestGetReceipts(t *testing.T) {
+	pm := NewTestPersistenceManager(t)
+
+	// create random receipts
+	receiptHash := tests.RandomHash(t)
+	receipts := getRandomReceipts(t, receiptHash, 2)
+
+	insertReceipts(t, pm, receiptHash, receipts)
+
+	testcases := []struct {
+		name        string
+		receipts    types.Receipts
+		receiptHash types.Hash
+		expectedErr bool
+	}{
+		{
+			name:        "valid hash without state",
+			receiptHash: tests.RandomHash(t),
+			expectedErr: true,
+		},
+		{
+			name:        "valid hash with state",
+			receipts:    receipts,
+			receiptHash: receiptHash,
+			expectedErr: false,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			receipts, err := pm.GetReceipts(testcase.receiptHash)
+
+			if testcase.expectedErr {
+				require.Error(t, err)
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			expectedReceipts, err := testcase.receipts.Bytes()
+			require.NoError(t, err)
+
+			require.Equal(t, expectedReceipts, receipts)
+		})
+	}
+}

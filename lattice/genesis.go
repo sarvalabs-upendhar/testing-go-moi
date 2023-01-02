@@ -4,8 +4,6 @@ import (
 	"github.com/sarvalabs/moichain/types"
 )
 
-var GenesisIxHash = types.GetHash([]byte("Genesis Interaction"))
-
 type Genesis struct {
 	SargaAccount AccountInfo   `json:"sarga_account"`
 	Accounts     []AccountInfo `json:"accounts"`
@@ -44,6 +42,7 @@ func createGenesisTesseract(
 	stateHash, contextHash types.Hash,
 	contextDelta types.ContextDelta,
 ) (*types.Tesseract, error) {
+	ixHash := types.GetHash([]byte("Genesis" + stateHash.Hex()))
 	Tesseract := &types.Tesseract{
 		Header: types.TesseractHeader{
 			Address:  addr,
@@ -67,13 +66,12 @@ func createGenesisTesseract(
 			ContextHash:     contextHash,
 			ContextDelta:    contextDelta,
 			ReceiptHash:     types.Hash{},
-			InteractionHash: GenesisIxHash,
+			InteractionHash: ixHash,
 			ConsensusProof: types.PoXCData{
 				IdentityHash: types.NilHash,
 				BinaryHash:   types.NilHash,
 			},
 		},
-		Ixns: nil,
 	}
 
 	tsBodyHash, err := Tesseract.ComputeBodyHash()

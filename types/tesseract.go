@@ -36,10 +36,11 @@ type ContextLockInfo struct {
 }
 
 type Tesseract struct {
-	Header TesseractHeader
-	Body   TesseractBody
-	Ixns   Interactions
-	Seal   []byte
+	Header   TesseractHeader
+	Body     TesseractBody
+	Ixns     Interactions
+	Receipts Receipts
+	Seal     []byte
 }
 
 type TesseractHeader struct {
@@ -129,6 +130,10 @@ func (t *Tesseract) Hash() (Hash, error) {
 
 func (t *Tesseract) Interactions() Interactions {
 	return t.Ixns
+}
+
+func (t *Tesseract) GetReceipts() Receipts {
+	return t.Receipts
 }
 
 func (t *Tesseract) ContextDelta() ContextDelta {

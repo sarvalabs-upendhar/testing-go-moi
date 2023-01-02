@@ -592,6 +592,8 @@ func TestGetReceiptByIxHash(t *testing.T) {
 		dbCallback: func(db *MockDB) {
 			insertReceipts(t, db, receipts)
 			insertReceipts(t, db, receipts2)
+			insertIxLookup(t, db, ixns2[0].Hash(), receipts2)
+			insertIxLookup(t, db, ixns[0].Hash(), receipts)
 		},
 		smCallBack: func(sm *MockStateManager) {
 			sm.InsertLatestTesseracts(t, tesseracts[1])
@@ -603,7 +605,6 @@ func TestGetReceiptByIxHash(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		address       types.Address
 		ixHash        types.Hash
 		receipts      types.Receipts
 		expectedError error
@@ -611,32 +612,23 @@ func TestGetReceiptByIxHash(t *testing.T) {
 		{
 			name:     "receipt present in latest tesseract",
 			ixHash:   ixns2[0].Hash(),
-			address:  address,
 			receipts: receipts2,
 		},
 		{
 			name:     "receipt of non latest tesseract ",
 			ixHash:   ixns[0].Hash(),
-			address:  address,
 			receipts: receipts,
-		},
-		{
-			name:          "should return error if tesseract doesn't exist",
-			ixHash:        ixns[0].Hash(),
-			address:       tests.RandomAddress(t),
-			expectedError: types.ErrFetchingTesseract,
 		},
 		{
 			name:          "should return error if ixHash is invalid",
 			ixHash:        tests.RandomHash(t),
-			address:       address,
 			expectedError: types.ErrReceiptNotFound,
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			actualReceipt, err := c.GetReceiptByIxHash(test.address, test.ixHash)
+			actualReceipt, err := c.GetReceiptByIxHash(test.ixHash)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -880,7 +872,9 @@ func TestAddTesseract(t *testing.T) {
 		smCallBack                  func(sm *MockStateManager)
 		setTesseractHook            func() error
 		setInteractionsHook         func() error
+		setReceiptsHook             func() error
 		setTesseractHeightEntryHook func() error
+		setIxLookupHook             func() error
 		updateInclusivityHook       func() error
 		tsCount                     int
 		latticeExists               bool
@@ -950,6 +944,16 @@ func TestAddTesseract(t *testing.T) {
 			expectedError: errors.New("error writing interactions to db"),
 		},
 		{
+			name:    "should return error if unable to store receipts",
+			args:    testTSArgs{},
+			accType: types.ContractAccount,
+			setReceiptsHook: func() error {
+				return errors.New("error writing receipts to db")
+			},
+			tsCount:       1,
+			expectedError: errors.New("error writing receipts to db"),
+		},
+		{
 			name:    "should return error if unable to store tesseract height entry",
 			args:    testTSArgs{},
 			accType: types.ContractAccount,
@@ -958,6 +962,21 @@ func TestAddTesseract(t *testing.T) {
 			},
 			tsCount:       1,
 			expectedError: errors.New("failed to write tesseract height entry"),
+		},
+		{
+			name:    "should return error if unable to store ix lookup",
+			args:    testTSArgs{},
+			accType: types.ContractAccount,
+			tesseractsParams: map[int]*createTesseractParams{
+				0: {
+					ixns: ixns,
+				},
+			},
+			setIxLookupHook: func() error {
+				return errors.New("error writing ix lookup to db")
+			},
+			tsCount:       1,
+			expectedError: errors.New("error writing ix lookup to db"),
 		},
 		{
 			name:    "should return error if unable to update node inclusivity",
@@ -1004,7 +1023,9 @@ func TestAddTesseract(t *testing.T) {
 					}
 					db.setTesseractHook = test.setTesseractHook
 					db.setInteractionsHook = test.setInteractionsHook
+					db.setReceiptsHook = test.setReceiptsHook
 					db.setTesseractHeightEntryHook = test.setTesseractHeightEntryHook
+					db.setIxLookupHook = test.setIxLookupHook
 				},
 				senatusCallback: func(senatus *MockSenatus) {
 					senatus.UpdateInclusivityHook = test.updateInclusivityHook
@@ -1594,7 +1615,7 @@ func TestExecuteAndValidate(t *testing.T) {
 
 			c := createTestChainManager(t, chainParams)
 
-			dirtyStorage, err := c.executeAndValidate(ts)
+			err := c.executeAndValidate(ts)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -1602,7 +1623,7 @@ func TestExecuteAndValidate(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			checkForReceiptsInDirtyStorage(t, dirtyStorage, receipts)
+			require.Equal(t, receipts, ts[0].Receipts)
 		})
 	}
 }

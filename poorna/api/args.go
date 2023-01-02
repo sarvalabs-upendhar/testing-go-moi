@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"math/big"
 
 	"github.com/sarvalabs/moichain/types"
 )
@@ -126,8 +127,7 @@ type ContextResponse struct {
 
 // ReceiptArgs is a struct that represent an argument wrapper for retrieving the receipt of an interaction
 type ReceiptArgs struct {
-	Address string
-	Hash    string
+	Hash string
 }
 
 // ReceiptResponse is a response wrapper for receipts
@@ -201,6 +201,19 @@ type TesseractBody struct {
 	ConsensusProof PoXCData
 }
 
+// InteractionArg is a struct that represents a single interaction
+type InteractionArg struct {
+	Nonce     uint64
+	Type      uint64
+	Sender    string
+	Receiver  string
+	Cost      *big.Int
+	FuelPrice *big.Int
+	FuelLimit *big.Int
+	Input     []byte
+	Hash      string
+}
+
 // TesseractArg is a struct that represents a Tesseract
 type TesseractArg struct {
 	// Represents the header of the Tesseract
@@ -208,7 +221,7 @@ type TesseractArg struct {
 	// Represents the body of the Tesseract
 	Body TesseractBody
 	// Represents the Interactions in the Tesseract
-	Interactions types.Interactions
+	Interactions []InteractionArg
 }
 
 // NewTesseractArg is a constructor function that generates and returns a new TesseractArg for a given Tesseract
@@ -248,8 +261,20 @@ func NewTesseractArg(t *types.Tesseract, withInteractions bool) TesseractArg {
 		},
 	}
 
-	if withInteractions {
-		tesseract.Interactions = t.Ixns
+	if withInteractions && len(t.Ixns) > 0 {
+		tesseract.Interactions = []InteractionArg{
+			{
+				Nonce:     t.Ixns[0].Nonce(),
+				Type:      uint64(t.Ixns[0].Type()),
+				Sender:    t.Ixns[0].Sender().Hex(),
+				Receiver:  t.Ixns[0].Receiver().Hex(),
+				Cost:      t.Ixns[0].Cost(),
+				FuelPrice: t.Ixns[0].FuelPrice(),
+				FuelLimit: t.Ixns[0].FuelLimit(),
+				Input:     t.Ixns[0].ToMessage().Data.Input.Payload,
+				Hash:      t.Body.InteractionHash.Hex(),
+			},
+		}
 	}
 
 	for k, v := range t.Header.ContextLock {

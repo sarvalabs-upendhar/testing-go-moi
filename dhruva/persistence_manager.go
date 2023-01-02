@@ -206,7 +206,7 @@ func (p *PersistenceManager) CreateEntry(key []byte, value []byte) error {
 func (p *PersistenceManager) UpdateTesseractStatus(
 	addr types.Address,
 	height uint64,
-	hash types.Hash,
+	tsHash types.Hash,
 	status bool,
 ) error {
 	key, _ := BucketIDFromAddress(addr.Bytes())
@@ -225,7 +225,7 @@ func (p *PersistenceManager) UpdateTesseractStatus(
 		return nil
 	}
 
-	if hash == accMetaInfo.TesseractHash {
+	if tsHash == accMetaInfo.TesseractHash {
 		accMetaInfo.StateExists = status
 	} else {
 		return types.ErrHashMismatch
@@ -325,26 +325,26 @@ func (p *PersistenceManager) GetEntries(prefix []byte) chan types.DBEntry {
 	return ch
 }
 
-func (p *PersistenceManager) SetAccount(addr types.Address, hash types.Hash, data []byte) error {
-	key := dbKey(addr, Account, hash.Bytes())
+func (p *PersistenceManager) SetAccount(addr types.Address, stateHash types.Hash, data []byte) error {
+	key := dbKey(addr, Account, stateHash.Bytes())
 
 	return p.CreateEntry(key, data)
 }
 
-func (p *PersistenceManager) GetAccount(addr types.Address, hash types.Hash) ([]byte, error) {
-	key := dbKey(addr, Account, hash.Bytes())
+func (p *PersistenceManager) GetAccount(addr types.Address, stateHash types.Hash) ([]byte, error) {
+	key := dbKey(addr, Account, stateHash.Bytes())
 
 	return p.ReadEntry(key)
 }
 
-func (p *PersistenceManager) GetBalance(addr types.Address, hash types.Hash) ([]byte, error) {
-	key := dbKey(addr, Balance, hash.Bytes())
+func (p *PersistenceManager) GetBalance(addr types.Address, balanceHash types.Hash) ([]byte, error) {
+	key := dbKey(addr, Balance, balanceHash.Bytes())
 
 	return p.ReadEntry(key)
 }
 
-func (p *PersistenceManager) GetContext(addr types.Address, hash types.Hash) ([]byte, error) {
-	key := dbKey(addr, Context, hash.Bytes())
+func (p *PersistenceManager) GetContext(addr types.Address, contextHash types.Hash) ([]byte, error) {
+	key := dbKey(addr, Context, contextHash.Bytes())
 
 	return p.ReadEntry(key)
 }
@@ -355,20 +355,20 @@ func (p *PersistenceManager) GetStorage(addr types.Address, hash types.Hash) ([]
 	return p.ReadEntry(key)
 }
 
-func (p *PersistenceManager) GetTesseract(hash types.Hash) ([]byte, error) {
-	key := dbKey(types.NilAddress, Tesseract, hash.Bytes())
+func (p *PersistenceManager) GetTesseract(tsHash types.Hash) ([]byte, error) {
+	key := dbKey(types.NilAddress, Tesseract, tsHash.Bytes())
 
 	return p.ReadEntry(key)
 }
 
-func (p *PersistenceManager) SetTesseract(hash types.Hash, data []byte) error {
-	key := dbKey(types.NilAddress, Tesseract, hash.Bytes())
+func (p *PersistenceManager) SetTesseract(tsHash types.Hash, data []byte) error {
+	key := dbKey(types.NilAddress, Tesseract, tsHash.Bytes())
 
 	return p.CreateEntry(key, data)
 }
 
-func (p *PersistenceManager) HasTesseract(hash types.Hash) (bool, error) {
-	key := dbKey(types.NilAddress, Tesseract, hash.Bytes())
+func (p *PersistenceManager) HasTesseract(tsHash types.Hash) (bool, error) {
+	key := dbKey(types.NilAddress, Tesseract, tsHash.Bytes())
 
 	return p.db.Has(key)
 }
@@ -377,18 +377,42 @@ func (p *PersistenceManager) GetTesseractHeightEntry(addr types.Address, height 
 	return p.ReadEntry(tesseractHeightKey(addr, height))
 }
 
-func (p *PersistenceManager) SetTesseractHeightEntry(addr types.Address, height uint64, hash types.Hash) error {
-	return p.CreateEntry(tesseractHeightKey(addr, height), hash.Bytes())
+func (p *PersistenceManager) SetTesseractHeightEntry(addr types.Address, height uint64, tsHash types.Hash) error {
+	return p.CreateEntry(tesseractHeightKey(addr, height), tsHash.Bytes())
 }
 
-func (p *PersistenceManager) GetInteractions(hash types.Hash) ([]byte, error) {
-	key := dbKey(types.NilAddress, Interaction, hash.Bytes())
+func (p *PersistenceManager) GetInteractions(ixHash types.Hash) ([]byte, error) {
+	key := dbKey(types.NilAddress, Interaction, ixHash.Bytes())
 
 	return p.ReadEntry(key)
 }
 
-func (p *PersistenceManager) SetInteractions(hash types.Hash, data []byte) error {
-	key := dbKey(types.NilAddress, Interaction, hash.Bytes())
+func (p *PersistenceManager) SetInteractions(ixHash types.Hash, data []byte) error {
+	key := dbKey(types.NilAddress, Interaction, ixHash.Bytes())
+
+	return p.CreateEntry(key, data)
+}
+
+func (p *PersistenceManager) GetIxLookup(ixHash types.Hash) ([]byte, error) {
+	key := dbKey(types.NilAddress, IxLookup, ixHash.Bytes())
+
+	return p.ReadEntry(key)
+}
+
+func (p *PersistenceManager) SetIxLookup(ixHash types.Hash, data []byte) error {
+	key := dbKey(types.NilAddress, IxLookup, ixHash.Bytes())
+
+	return p.CreateEntry(key, data)
+}
+
+func (p *PersistenceManager) GetReceipts(receiptHash types.Hash) ([]byte, error) {
+	key := dbKey(types.NilAddress, Receipt, receiptHash.Bytes())
+
+	return p.ReadEntry(key)
+}
+
+func (p *PersistenceManager) SetReceipts(receiptHash types.Hash, data []byte) error {
+	key := dbKey(types.NilAddress, Receipt, receiptHash.Bytes())
 
 	return p.CreateEntry(key, data)
 }

@@ -46,12 +46,16 @@ type db interface {
 		latticeExists bool,
 		tesseractExists bool,
 	) (int32, bool, error)
-	GetTesseract(hash types.Hash) ([]byte, error)
-	SetTesseract(hash types.Hash, data []byte) error
-	HasTesseract(hash types.Hash) (bool, error)
-	SetInteractions(hash types.Hash, data []byte) error
+	GetTesseract(tsHash types.Hash) ([]byte, error)
+	SetTesseract(tsHash types.Hash, data []byte) error
+	HasTesseract(tsHash types.Hash) (bool, error)
+	SetInteractions(ixHash types.Hash, data []byte) error
 	GetTesseractHeightEntry(addr types.Address, height uint64) ([]byte, error)
-	SetTesseractHeightEntry(addr types.Address, height uint64, hash types.Hash) error
+	SetTesseractHeightEntry(addr types.Address, height uint64, tsHash types.Hash) error
+	GetIxLookup(ixHash types.Hash) ([]byte, error)
+	SetIxLookup(ixHash types.Hash, data []byte) error
+	SetReceipts(receiptHash types.Hash, data []byte) error
+	GetReceipts(receiptHash types.Hash) ([]byte, error)
 }
 
 type reputationEngine interface {
@@ -159,8 +163,8 @@ func NewChainManager(
 	return c, nil
 }
 
-func (c *ChainManager) hasTesseract(hash types.Hash) bool {
-	exists, err := c.db.HasTesseract(hash)
+func (c *ChainManager) hasTesseract(tsHash types.Hash) bool {
+	exists, err := c.db.HasTesseract(tsHash)
 	if err != nil {
 		c.logger.Error("Failed to fetch hash from db", "error", err)
 
@@ -321,7 +325,7 @@ func (c *ChainManager) GetLatestTesseract(addr types.Address, withInteractions b
 }
 
 func (c *ChainManager) getReceipt(ixHash, receiptRoot types.Hash) (*types.Receipt, error) {
-	rawData, err := c.db.ReadEntry(receiptRoot.Bytes())
+	rawData, err := c.db.GetReceipts(receiptRoot)
 	if err != nil {
 		c.logger.Error("Error fetching receipt root", "error", err.Error(), receiptRoot, ixHash)
 
@@ -337,30 +341,20 @@ func (c *ChainManager) getReceipt(ixHash, receiptRoot types.Hash) (*types.Receip
 	return receipts.GetReceipt(ixHash)
 }
 
-func (c *ChainManager) GetReceiptByIxHash(addr types.Address, ixHash types.Hash) (*types.Receipt, error) {
-	ts, err := c.GetLatestTesseract(addr, true)
+func (c *ChainManager) GetReceiptByIxHash(ixHash types.Hash) (*types.Receipt, error) {
+	ixLookup, err := c.db.GetIxLookup(ixHash)
 	if err != nil {
 		return nil, errors.Wrap(types.ErrReceiptNotFound, err.Error())
 	}
 
-	for {
-		for _, ix := range ts.Interactions() {
-			if hash := ix.Hash(); hash == ixHash {
-				return c.getReceipt(hash, ts.Body.ReceiptHash)
-			}
-		}
+	receiptRoot := types.BytesToHash(ixLookup)
 
-		if ts.Header.PrevHash.IsNil() {
-			return nil, types.ErrReceiptNotFound
-		}
-
-		previousTesseract, err := c.GetTesseract(ts.Header.PrevHash, true)
-		if err != nil {
-			return nil, errors.Wrap(types.ErrReceiptNotFound, err.Error())
-		}
-
-		ts = previousTesseract
+	receipt, err := c.getReceipt(ixHash, receiptRoot)
+	if err != nil {
+		return nil, errors.Wrap(types.ErrReceiptNotFound, err.Error())
 	}
+
+	return receipt, nil
 }
 
 func (c *ChainManager) isSealValid(ts *types.Tesseract, id id.KramaID) (bool, error) {
@@ -525,8 +519,23 @@ func (c *ChainManager) addTesseract(
 		return errors.Wrap(err, "error writing interactions to db")
 	}
 
+	receiptRawData, err := t.GetReceipts().Bytes()
+	if err != nil {
+		return err
+	}
+
+	if err = c.db.SetReceipts(t.ReceiptHash(), receiptRawData); err != nil {
+		return errors.Wrap(err, "error writing receipts to db")
+	}
+
 	if err = c.db.SetTesseractHeightEntry(addr, t.Height(), tesseractHash); err != nil {
 		return errors.Wrap(err, "failed to write tesseract height entry")
+	}
+
+	for _, ix := range t.Interactions() {
+		if err = c.db.SetIxLookup(ix.Hash(), t.ReceiptHash().Bytes()); err != nil {
+			return errors.Wrap(err, "error writing ix lookup to db")
+		}
 	}
 
 	bucketNo, isBucketCountIncremented, err := c.db.UpdateAccMetaInfo(
@@ -714,8 +723,7 @@ func (c *ChainManager) executeAndAdd(ts *types.Tesseract, clusterInfo *ptypes.IC
 		return errors.New("nil grid")
 	}
 
-	dirtyStorage, err := c.executeAndValidate(tesseractGrid)
-	if err != nil {
+	if err := c.executeAndValidate(tesseractGrid); err != nil {
 		return err
 	}
 
@@ -724,6 +732,7 @@ func (c *ChainManager) executeAndAdd(ts *types.Tesseract, clusterInfo *ptypes.IC
 		return err
 	}
 
+	dirtyStorage := make(map[types.Hash][]byte)
 	dirtyStorage[types.GetHash(rawData)] = rawData
 
 	return c.addTesseractsWithState(dirtyStorage, tesseractGrid...)
@@ -1035,35 +1044,25 @@ func (c *ChainManager) Close() {
 	log.Println("Closing Chain manager")
 }
 
-func (c *ChainManager) executeAndValidate(ts []*types.Tesseract) (map[types.Hash][]byte, error) {
-	dirtyStorage := make(map[types.Hash][]byte)
-
+func (c *ChainManager) executeAndValidate(ts []*types.Tesseract) error {
 	receipts, err := c.exec.ExecuteInteractions(ts[0].ClusterID(), ts[0].Interactions(), ts[0].ContextDelta())
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if !isReceiptAndGroupHashValid(ts, receipts) || !areStateHashesValid(ts, receipts) {
 		if err = c.exec.Revert(ts[0].ClusterID()); err != nil {
 			c.logger.Error("Failed to revert the execution changes", "cluster-id", ts[0].ClusterID())
 
-			return nil, errors.Wrap(err, "failed to revert the execution changes")
+			return errors.Wrap(err, "failed to revert the execution changes")
 		}
 
-		return nil, errors.New("failed to validate the tesseract")
+		return errors.New("failed to validate the tesseract")
 	}
 
-	receiptHash, err := receipts.Hash()
-	if err != nil {
-		return nil, err
-	}
+	ts[0].Receipts = receipts
 
-	dirtyStorage[receiptHash], err = receipts.Bytes()
-	if err != nil {
-		return nil, err
-	}
-
-	return dirtyStorage, nil
+	return nil
 }
 
 func areStateHashesValid(tesseracts []*types.Tesseract, receipts types.Receipts) bool {

@@ -105,11 +105,11 @@ type store interface {
 	ReadEntry([]byte) ([]byte, error)
 	Contains([]byte) (bool, error)
 	DeleteEntry([]byte) error
-	SetAccount(addr types.Address, hash types.Hash, data []byte) error
+	SetAccount(addr types.Address, stateHash types.Hash, data []byte) error
 	GetAccountMetaInfo(id []byte) (*types.AccountMetaInfo, error)
 	GetAccounts(bucketID int32) (types.Accounts, error)
 	GetBucketSizes() (map[int32]*big.Int, error)
-	UpdateTesseractStatus(addr types.Address, height uint64, hash types.Hash, status bool) error
+	UpdateTesseractStatus(addr types.Address, height uint64, tsHash types.Hash, status bool) error
 }
 
 type SyncPeer struct {

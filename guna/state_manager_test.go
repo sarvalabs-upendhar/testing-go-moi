@@ -120,7 +120,7 @@ func TestFetchTesseractFromDB(t *testing.T) {
 	// set the interactions to nil for tesseract-1
 	tesseractParams[1].ixns = nil
 
-	tesseracts := createTesseracts(t, 2, tesseractParams)
+	tesseracts := createTesseracts(t, 3, tesseractParams)
 
 	smParams := &CreateStateManagerParams{
 		dbCallback: func(db *MockDB) {
