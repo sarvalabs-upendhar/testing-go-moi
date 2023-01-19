@@ -154,7 +154,7 @@ func (s *StateObject) Copy() *StateObject {
 		sObj.metaStorageTree = s.metaStorageTree.Copy() // TODO: Check if we require deep copy
 	}
 
-	for k, v := range sObj.files {
+	for k, v := range s.files {
 		sObj.files[k] = v
 	}
 
@@ -163,6 +163,15 @@ func (s *StateObject) Copy() *StateObject {
 
 func (s *StateObject) SetDirtyEntry(key string, value []byte) {
 	s.dirtyEntries[key] = value
+}
+
+func (s *StateObject) GetDirtyEntry(key string) ([]byte, error) {
+	val, ok := s.dirtyEntries[key]
+	if !ok {
+		return nil, types.ErrKeyNotFound
+	}
+
+	return val, nil
 }
 
 func (s *StateObject) commitBalanceObject() ([]byte, error) {
@@ -179,7 +188,7 @@ func (s *StateObject) commitBalanceObject() ([]byte, error) {
 	})
 
 	key := types.BytesToHex(dhruva.BalanceObjectKey(s.address, hash))
-	s.dirtyEntries[key] = data
+	s.SetDirtyEntry(key, data)
 	s.data.Balance = hash
 
 	return hash.Bytes(), nil
@@ -201,7 +210,7 @@ func (s *StateObject) commitAccount() (types.Hash, error) {
 	})
 
 	key := types.BytesToHex(dhruva.AccountKey(s.address, hash))
-	s.dirtyEntries[key] = data
+	s.SetDirtyEntry(key, data)
 
 	return hash, nil
 }
@@ -221,15 +230,12 @@ func (s *StateObject) commitContextObject(obj gtypes.Context) (types.Hash, error
 	})
 
 	key := types.BytesToHex(dhruva.ContextObjectKey(s.address, hash))
-	s.dirtyEntries[key] = rawData
+	s.SetDirtyEntry(key, rawData)
 
 	return hash, nil
 }
 
-func (s *StateObject) commitStorage() (types.Hash, error) {
-	if s.metaStorageTree == nil {
-		return s.data.StorageRoot, nil
-	}
+func (s *StateObject) commitActiveStorageTrees() error {
 	// Add the updated logic-id <=> storage-root in master storage merkleTree
 	for logicID, merkleTree := range s.activeStorageTrees {
 		if !merkleTree.IsDirty() {
@@ -237,19 +243,23 @@ func (s *StateObject) commitStorage() (types.Hash, error) {
 		}
 
 		if err := merkleTree.Commit(); err != nil {
-			return types.NilHash, errors.Wrap(err, "failed to commit storage tree")
+			return errors.Wrap(err, "failed to commit storage tree")
 		}
 
 		rootHash, err := merkleTree.RootHash()
 		if err != nil {
-			return types.NilHash, err
+			return err
 		}
 
 		if err = s.metaStorageTree.Set(types.FromHex(logicID), rootHash.Bytes()); err != nil {
-			return types.NilHash, err
+			return err
 		}
 	}
 
+	return nil
+}
+
+func (s *StateObject) commitMetaStorageTree() (types.Hash, error) {
 	if !s.metaStorageTree.IsDirty() {
 		return s.data.StorageRoot, nil
 	}
@@ -271,6 +281,19 @@ func (s *StateObject) commitStorage() (types.Hash, error) {
 	s.data.StorageRoot = rootHash
 
 	return rootHash, nil
+}
+
+func (s *StateObject) commitStorage() (types.Hash, error) {
+	if s.metaStorageTree == nil {
+		return s.data.StorageRoot, nil
+	}
+
+	err := s.commitActiveStorageTrees()
+	if err != nil {
+		return types.NilHash, err
+	}
+
+	return s.commitMetaStorageTree()
 }
 
 // commitLogics commits and the logic tree and flushes the changes to db
@@ -363,7 +386,7 @@ func (s *StateObject) CreateAsset(descriptor *types.AssetDescriptor) (types.Asse
 	})
 
 	key := assetHash.String()
-	s.dirtyEntries[key] = data
+	s.SetDirtyEntry(key, data)
 
 	// Update the balance
 	if _, ok := s.balance.Balances[assetID]; ok {
@@ -390,7 +413,7 @@ func (s *StateObject) AddAccountGenesisInfo(address types.Address, ixHash types.
 
 func (s *StateObject) CreateContext(behaviouralNodes, randomNodes []id.KramaID) (types.Hash, error) {
 	if len(behaviouralNodes)+len(randomNodes) < minimumContextSize {
-		return types.NilHash, errors.New("livness size not met")
+		return types.NilHash, errors.New("liveliness size not met")
 	}
 
 	var (
@@ -539,7 +562,7 @@ func (s *StateObject) getContextObjectCopy(hash types.Hash) (*gtypes.ContextObje
 	if !isAvailable {
 		rawData, err := s.db.GetContext(s.address, hash)
 		if err != nil {
-			return nil, errors.Wrap(types.ErrUpdatingContextObject, err.Error())
+			return nil, errors.Wrap(err, "failed to fetch context object")
 		}
 
 		obj := new(gtypes.ContextObject)

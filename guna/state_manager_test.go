@@ -30,7 +30,7 @@ func TestCreateStateObject(t *testing.T) {
 func TestCleanupDirtyObject(t *testing.T) {
 	stateObject := createTestStateObject(t, nil)
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		smCallBack: func(sm *StateManager) {
 			sm.dirtyObjects[stateObject.address] = stateObject
 		},
@@ -40,7 +40,7 @@ func TestCleanupDirtyObject(t *testing.T) {
 
 	sm.cleanupDirtyObject(stateObject.address)
 
-	CheckForDirtyObject(t, sm, stateObject.address, false)
+	checkForDirtyObject(t, sm, stateObject.address, false)
 }
 
 func TestCreateDirtyObject(t *testing.T) {
@@ -57,7 +57,7 @@ func TestCreateDirtyObject(t *testing.T) {
 func TestGetLatestTesseractHash(t *testing.T) {
 	accMetaInfo := getAccMetaInfos(t, 2)
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
 			db.setAccountMetaInfo(accMetaInfo[0])
 		},
@@ -116,13 +116,10 @@ func TestGetLatestTesseractHash(t *testing.T) {
 }
 
 func TestFetchTesseractFromDB(t *testing.T) {
-	tesseractParams := getTesseractParamsMapWithIxns(t, 2)
-	// set the interactions to nil for tesseract-1
-	tesseractParams[1].ixns = nil
+	tesseractParams := getTesseractParamsMapWithIxns(t, 1, 2)
+	tesseracts := createTesseracts(t, 2, tesseractParams)
 
-	tesseracts := createTesseracts(t, 3, tesseractParams)
-
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
 			insertTesseractsInDB(t, db, tesseracts...)
 		},
@@ -180,17 +177,15 @@ func TestFetchTesseractFromDB(t *testing.T) {
 }
 
 func TestGetTesseractByHash(t *testing.T) {
-	tesseractParams := getTesseractParamsMapWithIxns(t, 3)
-	tesseractParams[0].ixns = nil
-
+	tesseractParams := getTesseractParamsMapWithIxns(t, 2, 2)
 	tesseracts := createTesseracts(t, 3, tesseractParams)
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
-			insertTesseractsInDB(t, db, tesseracts[1:]...)
+			insertTesseractsInDB(t, db, tesseracts[:2]...)
 		},
 		smCallBack: func(sm *StateManager) {
-			sm.cache.Add(getTesseractHash(t, tesseracts[0]), tesseracts[0])
+			sm.cache.Add(getTesseractHash(t, tesseracts[2]), tesseracts[2])
 		},
 	}
 
@@ -205,9 +200,9 @@ func TestGetTesseractByHash(t *testing.T) {
 	}{
 		{
 			name:             "fetches tesseract from cache", // only tesseracts without interactions exists in cache
-			hash:             getTesseractHash(t, tesseracts[0]),
+			hash:             getTesseractHash(t, tesseracts[2]),
 			withInteractions: false,
-			expectedTS:       tesseracts[0],
+			expectedTS:       tesseracts[2],
 			expectedError:    nil,
 		},
 		{
@@ -218,16 +213,16 @@ func TestGetTesseractByHash(t *testing.T) {
 		},
 		{
 			name:             "with interactions",
-			hash:             getTesseractHash(t, tesseracts[1]),
+			hash:             getTesseractHash(t, tesseracts[0]),
 			withInteractions: true,
-			expectedTS:       tesseracts[1],
+			expectedTS:       tesseracts[0],
 			expectedError:    nil,
 		},
 		{
 			name:             "without interactions",
-			hash:             getTesseractHash(t, tesseracts[2]),
+			hash:             getTesseractHash(t, tesseracts[1]),
 			withInteractions: false,
-			expectedTS:       tesseracts[2],
+			expectedTS:       tesseracts[1],
 			expectedError:    nil,
 		},
 	}
@@ -251,14 +246,14 @@ func TestGetStateObjectByHash(t *testing.T) {
 	balances, balanceHashes := getTestBalances(t, 2)
 	accounts, stateHashes := getTestAccounts(t, balanceHashes, 2)
 
-	soParams := map[int]*CreateStateObjectParams{
-		0: getStateObjectParamsWithBalance(t, balanceHashes[0], balances[0]), // Add balance as we validate balance
-		1: getStateObjectParamsWithBalance(t, balanceHashes[1], balances[1]),
+	soParams := map[int]*createStateObjectParams{
+		0: stateObjectParamsWithBalance(t, balanceHashes[0], balances[0]), // Add balance as we validate balance
+		1: stateObjectParamsWithBalance(t, balanceHashes[1], balances[1]),
 	}
 
 	so := createTestStateObjects(t, 2, soParams)
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
 			insertAccountsInDB(t, db, stateHashes, accounts...)   // insert account into db
 			insertBalancesInDB(t, db, balanceHashes, balances[0]) // (stateHash : account, balanceHash : balance)
@@ -314,21 +309,21 @@ func TestGetLatestStateObject(t *testing.T) {
 	balances, balanceHashes := getTestBalances(t, 2)
 	accounts, stateHashes := getTestAccounts(t, balanceHashes, 2)
 
-	soParams := map[int]*CreateStateObjectParams{
-		0: getStateObjectParamsWithBalance(t, balanceHashes[0], balances[0]), // Add balance as we validate balance
-		1: getStateObjectParamsWithBalance(t, balanceHashes[1], balances[1]),
+	soParams := map[int]*createStateObjectParams{
+		0: stateObjectParamsWithBalance(t, balanceHashes[0], balances[0]), // Add balance as we validate balance
+		1: stateObjectParamsWithBalance(t, balanceHashes[1], balances[1]),
 	}
 
 	so := createTestStateObjects(t, 2, soParams)
 
-	tesseractParams := map[int]*CreateTesseractParams{
+	tesseractParams := map[int]*createTesseractParams{
 		0: getTesseractParamsWithStateHash(so[0].address, stateHashes[0]),
 		1: getTesseractParamsWithStateHash(tests.RandomAddress(t), tests.RandomHash(t)),
 	}
 
 	tesseracts := createTesseracts(t, 2, tesseractParams)
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
 			insertAccountsInDB(t, db, stateHashes, accounts...)
 			insertBalancesInDB(t, db, balanceHashes, balances...)
@@ -394,10 +389,11 @@ func TestGetLatestTesseract(t *testing.T) {
 		getTesseractParamsMapWithIxns(
 			t,
 			3,
+			2,
 		),
 	)
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
 			insertTesseractsInDB(t, db, tesseracts[1:]...)
 		},
@@ -461,14 +457,14 @@ func TestGetLatestTesseract(t *testing.T) {
 func TestGetDirtyObject(t *testing.T) {
 	balances, balanceHashes := getTestBalances(t, 2)
 
-	soParams := map[int]*CreateStateObjectParams{
-		0: getStateObjectParamsWithBalance(t, balanceHashes[0], balances[0]), // Add balance as we validate it
-		1: getStateObjectParamsWithBalance(t, balanceHashes[1], balances[1]),
+	soParams := map[int]*createStateObjectParams{
+		0: stateObjectParamsWithBalance(t, balanceHashes[0], balances[0]), // Add balance as we validate it
+		1: stateObjectParamsWithBalance(t, balanceHashes[1], balances[1]),
 	}
 
 	so := createTestStateObjects(t, 2, soParams)
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		smCallBack: func(sm *StateManager) {
 			insertDirtyObject(sm, so[0])
 			insertObject(sm, so[1])
@@ -512,7 +508,7 @@ func TestGetDirtyObject(t *testing.T) {
 			}
 
 			checkForStateObject(t, test.sObj, so)
-			CheckForDirtyObject(t, sm, test.address, true)
+			checkForDirtyObject(t, sm, test.address, true)
 		})
 	}
 }
@@ -520,7 +516,7 @@ func TestGetDirtyObject(t *testing.T) {
 func TestCleanup(t *testing.T) {
 	so := createTestStateObject(t, nil)
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		smCallBack: func(sm *StateManager) {
 			insertObject(sm, so)
 			insertDirtyObject(sm, so)
@@ -547,28 +543,28 @@ func TestCleanup(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			sm.Cleanup(test.address)
 
-			CheckForDirtyObject(t, sm, test.address, false)
-			CheckForObject(t, sm, test.address, false)
+			checkForDirtyObject(t, sm, test.address, false)
+			checkForObject(t, sm, test.address, false)
 		})
 	}
 }
 
 func TestRevert(t *testing.T) {
 	address := tests.RandomAddress(t)
-	getStateObjectParams := func() *CreateStateObjectParams {
-		return &CreateStateObjectParams{
+	getStateObjectParams := func() *createStateObjectParams {
+		return &createStateObjectParams{
 			address: address,
 		}
 	}
 
-	soParams := map[int]*CreateStateObjectParams{
+	soParams := map[int]*createStateObjectParams{
 		0: getStateObjectParams(),
 		1: getStateObjectParams(),
 	}
 
 	so := createTestStateObjects(t, 2, soParams)
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		smCallBack: func(sm *StateManager) {
 			insertDirtyObject(sm, so[0])
 		},
@@ -598,7 +594,7 @@ func TestRevert(t *testing.T) {
 			err := sm.Revert(test.snap)
 			require.NoError(t, err)
 
-			CheckIfDirtyObjectEqual(t, sm, test.expectedObject.address, test.expectedObject)
+			checkIfDirtyObjectEqual(t, sm, test.expectedObject.address, test.expectedObject)
 		})
 	}
 }
@@ -607,7 +603,7 @@ func TestGetContextObject(t *testing.T) {
 	kramaIDs, _ := tests.GetTestKramaIdsWithPublicKeys(t, 4)
 	obj, cHash := getContextObjects(t, kramaIDs, 2, 2)
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
 			db.setContext(t, obj[1])
 		},
@@ -668,7 +664,7 @@ func TestGetMetaContextObject(t *testing.T) {
 	_, hashes := getContextObjects(t, kramaIDs, 2, 4)
 	mObj, hashes := getMetaContextObjects(t, hashes)
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
 			db.setMetaContext(t, mObj[1])
 		},
@@ -733,7 +729,7 @@ func TestGetContext(t *testing.T) {
 	mObj[1], mHash[1] = getMetaContextObject(t, cHash[2], types.NilHash)
 	mObj[2], mHash[2] = getMetaContextObject(t, types.NilHash, cHash[3])
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
 			insertMetaContextsInDB(t, db, mObj...)
 			insertContextsInDB(t, db, obj...)
@@ -800,7 +796,7 @@ func TestGetContextByHash(t *testing.T) {
 
 	ts := createTesseract(t, getTesseractParamsWithContextHash(tests.RandomAddress(t), mHash[1]))
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
 			insertMetaContextsInDB(t, db, mObj...)
 			insertContextsInDB(t, db, obj...)
@@ -878,25 +874,19 @@ func TestGetContextByHash(t *testing.T) {
 	}
 }
 
-func setKramaIds(ids []id.KramaID, val string) {
-	for i := 0; i < len(ids); i++ {
-		ids[i] = id.KramaID(val)
-	}
-}
-
 func TestFetchParticipantContextByHash(t *testing.T) {
 	kramaIDs, pk := tests.GetTestKramaIdsWithPublicKeys(t, 12)
 	obj, cHash := getContextObjects(t, kramaIDs, 2, 6)
 	mObj, mHash := getMetaContextObjects(t, cHash)
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
 			insertMetaContextsInDB(t, db, mObj...)
 			insertContextsInDB(t, db, obj...)
 		},
 		senatusCallBack: func(s *MockSenatus) {
-			setKramaIds(kramaIDs[6:10], "")
 			setPublicKeys(s, kramaIDs, pk)
+			removePublicKeys(s, kramaIDs[6:10])
 		},
 	}
 
@@ -939,7 +929,7 @@ func TestFetchParticipantContextByHash(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			CheckIfNodesetEqual(
+			checkIfNodesetEqual(
 				t,
 				ktypes.NewNodeSet(obj[0].Ids, pk[:2]),
 				ktypes.NewNodeSet(obj[1].Ids, pk[2:4]),
@@ -953,7 +943,7 @@ func TestFetchParticipantContextByHash(t *testing.T) {
 func TestGetCommittedContextHash(t *testing.T) {
 	ts := createTesseract(t, getTesseractParamsWithContextHash(tests.RandomAddress(t), tests.RandomHash(t)))
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
 			insertTesseractsInDB(t, db, ts)
 		},
@@ -1010,8 +1000,8 @@ func TestFetchContextLock(t *testing.T) {
 		ixns types.Interactions,
 		addresses []types.Address,
 		hashes ...types.Hash,
-	) *CreateTesseractParams {
-		return &CreateTesseractParams{
+	) *createTesseractParams {
+		return &createTesseractParams{
 			ixns: ixns,
 			tesseractCallback: func(ts *types.Tesseract) {
 				ts.Header.ContextLock = mockContextLock()
@@ -1022,7 +1012,7 @@ func TestFetchContextLock(t *testing.T) {
 		}
 	}
 
-	tesseractParams := map[int]*CreateTesseractParams{
+	tesseractParams := map[int]*createTesseractParams{
 		0: getTesseractParams(
 			ixns[0:1],
 			[]types.Address{ixns[0].Sender(), ixns[0].Receiver()},
@@ -1052,7 +1042,7 @@ func TestFetchContextLock(t *testing.T) {
 
 	ts := createTesseracts(t, 5, tesseractParams)
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
 			insertMetaContextsInDB(t, db, mObj...)
 			insertContextsInDB(t, db, obj...)
@@ -1126,7 +1116,7 @@ func TestFetchContextLock(t *testing.T) {
 
 			require.NoError(t, err)
 			if test.nodes.senderBeh != nil {
-				CheckIfNodesetEqual(
+				checkIfNodesetEqual(
 					t,
 					test.nodes.senderBeh,
 					test.nodes.senderRand,
@@ -1135,7 +1125,7 @@ func TestFetchContextLock(t *testing.T) {
 				)
 			}
 			if test.nodes.receiverBeh != nil {
-				CheckIfNodesetEqual(
+				checkIfNodesetEqual(
 					t,
 					test.nodes.receiverBeh,
 					test.nodes.receiverRand,
@@ -1149,7 +1139,7 @@ func TestFetchContextLock(t *testing.T) {
 
 func TestIsAccountRegistered_With_SargaObject(t *testing.T) {
 	address := tests.RandomAddress(t)
-	soParams := &CreateStateObjectParams{
+	soParams := &createStateObjectParams{
 		address: SargaAddress,
 		activeStorageTreeCallback: func(activeStorageTrees map[string]tree.MerkleTree) {
 			m := mockMerkleTreeWithDirtyStorage()
@@ -1162,7 +1152,7 @@ func TestIsAccountRegistered_With_SargaObject(t *testing.T) {
 
 	so := createTestStateObject(t, soParams)
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		smCallBack: func(sm *StateManager) {
 			insertStateObject(sm, so)
 		},
@@ -1171,7 +1161,7 @@ func TestIsAccountRegistered_With_SargaObject(t *testing.T) {
 	testcases := []struct {
 		name          string
 		address       types.Address
-		smParams      *CreateStateManagerParams
+		smParams      *createStateManagerParams
 		isRegistered  bool
 		expectedError error
 	}{
@@ -1220,16 +1210,16 @@ func TestIsAccountRegistered_With_SargaObject(t *testing.T) {
 }
 
 func TestGetLatestNonce(t *testing.T) {
-	soParams := &CreateStateObjectParams{
+	soParams := &createStateObjectParams{
 		address: SargaAddress,
-		account: types.Account{
+		account: &types.Account{
 			Nonce: 5,
 		},
 	}
 
 	so := createTestStateObject(t, soParams)
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		smCallBack: func(sm *StateManager) {
 			insertStateObject(sm, so)
 		},
@@ -1277,7 +1267,7 @@ func TestGetLatestNonce(t *testing.T) {
 }
 
 func TestGetBalances(t *testing.T) {
-	soParams := &CreateStateObjectParams{
+	soParams := &createStateObjectParams{
 		address: SargaAddress,
 		soCallback: func(so *StateObject) {
 			AddAssetInBalance(t, so)
@@ -1286,7 +1276,7 @@ func TestGetBalances(t *testing.T) {
 
 	so := createTestStateObject(t, soParams)
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		smCallBack: func(sm *StateManager) {
 			insertStateObject(sm, so)
 		},
@@ -1329,7 +1319,7 @@ func TestGetBalances(t *testing.T) {
 }
 
 func TestGetBalance(t *testing.T) {
-	soParams := &CreateStateObjectParams{
+	soParams := &createStateObjectParams{
 		address: SargaAddress,
 		soCallback: func(so *StateObject) {
 			so.balance.Balances[types.AssetID("MOI")] = big.NewInt(54332)
@@ -1338,7 +1328,7 @@ func TestGetBalance(t *testing.T) {
 
 	so := createTestStateObject(t, soParams)
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		smCallBack: func(sm *StateManager) {
 			insertStateObject(sm, so)
 		},
@@ -1394,7 +1384,7 @@ func TestFetchLatestParticipantContext(t *testing.T) {
 	obj, cHash := getContextObjects(t, kramaIDs, 2, 6)
 	mObj, mHash := getMetaContextObjects(t, cHash)
 
-	tesseractParams := map[int]*CreateTesseractParams{
+	tesseractParams := map[int]*createTesseractParams{
 		0: getTesseractParamsWithContextHash(tests.RandomAddress(t), mHash[0]),
 		1: getTesseractParamsWithContextHash(tests.RandomAddress(t), mHash[1]),
 		2: getTesseractParamsWithContextHash(tests.RandomAddress(t), mHash[2]),
@@ -1402,7 +1392,7 @@ func TestFetchLatestParticipantContext(t *testing.T) {
 
 	ts := createTesseracts(t, 3, tesseractParams)
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		smCallBack: func(sm *StateManager) {
 			storeTesseractHashInCache(t, sm.cache, ts...)
 		},
@@ -1412,9 +1402,9 @@ func TestFetchLatestParticipantContext(t *testing.T) {
 			insertTesseractsInDB(t, db, ts...)
 		},
 		senatusCallBack: func(s *MockSenatus) {
-			setKramaIds(kramaIDs[4:6], "")
-			setKramaIds(kramaIDs[10:12], "")
 			setPublicKeys(s, kramaIDs, pk)
+			removePublicKeys(s, kramaIDs[4:6])
+			removePublicKeys(s, kramaIDs[10:12])
 		},
 	}
 
@@ -1464,7 +1454,7 @@ func TestFetchLatestParticipantContext(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Equal(t, test.ctxHash, hash)
-			CheckIfNodesetEqual(
+			checkIfNodesetEqual(
 				t,
 				test.behSet,
 				test.randSet,
@@ -1484,14 +1474,14 @@ func TestGetReceiverContext_RegisteredAccount(t *testing.T) {
 
 	ts := createTesseract(t, tesseractParams)
 
-	ixParams := map[int]*CreateIxParams{
+	ixParams := map[int]*createIxParams{
 		0: getIxParamsWithAddress(types.NilAddress, ts.Address()),
 		1: getIxParamsWithAddress(types.NilAddress, tests.RandomAddress(t)),
 	}
 
 	ixs := createIxns(t, 2, ixParams)
 
-	soParams := &CreateStateObjectParams{
+	soParams := &createStateObjectParams{
 		address: SargaAddress,
 		activeStorageTreeCallback: func(activeStorageTrees map[string]tree.MerkleTree) {
 			m := mockMerkleTreeWithDirtyStorage() // used to check if account registered
@@ -1505,7 +1495,7 @@ func TestGetReceiverContext_RegisteredAccount(t *testing.T) {
 
 	so := createTestStateObject(t, soParams)
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
 			insertTesseractsInDB(t, db, ts)
 			insertMetaContextsInDB(t, db, mObj...)
@@ -1559,7 +1549,7 @@ func TestGetReceiverContext_RegisteredAccount(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			CheckIfNodesetEqual(t,
+			checkIfNodesetEqual(t,
 				test.behSet,
 				test.randSet,
 				nodeSet[ktypes.ReceiverBehaviourSet],
@@ -1579,7 +1569,7 @@ func TestGetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 
 	ts := createTesseract(t, tesseractParams)
 
-	ixParams := map[int]*CreateIxParams{
+	ixParams := map[int]*createIxParams{
 		0: getIxParamsWithAddress(types.NilAddress, tests.RandomAddress(t)),
 		1: getIxParamsWithAddress(types.NilAddress, tests.RandomAddress(t)),
 		2: getIxParamsWithAddress(types.NilAddress, tests.RandomAddress(t)),
@@ -1587,7 +1577,7 @@ func TestGetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 
 	ixs := createIxns(t, 3, ixParams)
 
-	soParams := &CreateStateObjectParams{
+	soParams := &createStateObjectParams{
 		address: SargaAddress,
 		activeStorageTreeCallback: func(activeStorageTrees map[string]tree.MerkleTree) {
 			activeStorageTrees[SargaLogicID.Hex()] = mockMerkleTreeWithDirtyStorage()
@@ -1599,8 +1589,8 @@ func TestGetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 	testcases := []struct {
 		name          string
 		ix            *types.Interaction
-		soParams      *CreateStateObjectParams
-		smParams      *CreateStateManagerParams
+		soParams      *createStateObjectParams
+		smParams      *createStateManagerParams
 		behSet        *ktypes.NodeSet
 		randSet       *ktypes.NodeSet
 		address       types.Address
@@ -1610,7 +1600,7 @@ func TestGetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 		{
 			name: "context of sarga account found",
 			ix:   ixs[0],
-			smParams: &CreateStateManagerParams{
+			smParams: &createStateManagerParams{
 				dbCallback: func(db *MockDB) {
 					insertTesseractsInDB(t, db, ts)
 					insertMetaContextsInDB(t, db, mObj...)
@@ -1633,7 +1623,7 @@ func TestGetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 		{
 			name: "context of sarga account not found",
 			ix:   ixs[1],
-			smParams: &CreateStateManagerParams{
+			smParams: &createStateManagerParams{
 				smCallBack: func(sm *StateManager) {
 					insertStateObject(sm, so)
 				},
@@ -1663,7 +1653,7 @@ func TestGetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			CheckIfNodesetEqual(t,
+			checkIfNodesetEqual(t,
 				test.behSet,
 				test.randSet,
 				nodeSet[ktypes.ReceiverBehaviourSet],
@@ -1679,21 +1669,21 @@ func TestFetchInteractionContext(t *testing.T) {
 	obj, cHash := getContextObjects(t, kramaIDs, 2, 4)
 	mObj, mHash := getMetaContextObjects(t, cHash)
 
-	tesseractParams := map[int]*CreateTesseractParams{
+	tesseractParams := map[int]*createTesseractParams{
 		0: getTesseractParamsWithContextHash(tests.RandomAddress(t), mHash[0]),
 		1: getTesseractParamsWithContextHash(tests.RandomAddress(t), mHash[1]),
 	}
 
 	ts := createTesseracts(t, 2, tesseractParams)
 
-	ixParams := map[int]*CreateIxParams{
+	ixParams := map[int]*createIxParams{
 		0: getIxParamsWithAddress(ts[0].Address(), ts[1].Address()),
 		1: getIxParamsWithAddress(types.NilAddress, types.NilAddress),
 	}
 
 	ixs := createIxns(t, 2, ixParams)
 
-	soParams := &CreateStateObjectParams{
+	soParams := &createStateObjectParams{
 		address: SargaAddress,
 		activeStorageTreeCallback: func(activeStorageTrees map[string]tree.MerkleTree) {
 			m := mockMerkleTreeWithDirtyStorage() // used to check if account registered
@@ -1706,7 +1696,7 @@ func TestFetchInteractionContext(t *testing.T) {
 
 	so := createTestStateObject(t, soParams)
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
 			insertMetaContextsInDB(t, db, mObj...)
 			insertContextsInDB(t, db, obj...)
@@ -1772,14 +1762,14 @@ func TestFetchInteractionContext(t *testing.T) {
 
 				return
 			}
-			CheckIfNodesetEqual(
+			checkIfNodesetEqual(
 				t,
 				test.ics.senderBeh,
 				test.ics.senderRand,
 				nodeSet[ktypes.SenderBehaviourSet],
 				nodeSet[ktypes.SenderRandomSet],
 			)
-			CheckIfNodesetEqual(
+			checkIfNodesetEqual(
 				t,
 				test.ics.receiverBeh,
 				test.ics.receiverRand,
@@ -1799,7 +1789,7 @@ func TestGetAccountInfo(t *testing.T) {
 		Balance: tests.RandomHash(t),
 	}
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
 			db.setAccount(t, hash, acc)
 		},
@@ -1842,14 +1832,14 @@ func TestGetAccountInfo(t *testing.T) {
 }
 
 func TestGetAccTypeUsingStateObject(t *testing.T) {
-	soParams := &CreateStateObjectParams{
+	soParams := &createStateObjectParams{
 		journal: mockJournal(),
 		accType: types.ContractAccount,
 	}
 
 	so := createTestStateObject(t, soParams)
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		smCallBack: func(sm *StateManager) {
 			sm.dirtyObjects[so.address] = so
 		},
@@ -2069,8 +2059,10 @@ func TestSetupNewAccount(t *testing.T) {
 				require.Equal(t, bal, balance)
 			}
 
+			journalIndex := 3 // index is 3 as there will be 3 entries before asset creation
 			for _, asset := range test.newAcc.Assets {
-				checkForAssetCreation(t, obj, asset)
+				checkForAssetCreation(t, obj, asset, journalIndex)
+				journalIndex++
 			}
 		})
 	}
@@ -2078,11 +2070,11 @@ func TestSetupNewAccount(t *testing.T) {
 
 func TestFlushDirtyObject(t *testing.T) {
 	dirtyEntries := getDirtyEntries(t, 5)
-	keys := getEntries(t, 4)
-	values := getEntries(t, 4)
+
+	keys, values := getEntries(t, 4)
 
 	merkle := mockMerkleTreeWithDB()
-	soParams := map[int]*CreateStateObjectParams{
+	soParams := map[int]*createStateObjectParams{
 		0: {
 			metaStorageTreeCallback: func(so *StateObject) {
 				so.metaStorageTree = merkle
@@ -2110,14 +2102,14 @@ func TestFlushDirtyObject(t *testing.T) {
 		insertDirtyObject(sm, so...)
 	}
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		smCallBack: smCallback,
 	}
 
 	testcases := []struct {
 		name          string
 		address       types.Address
-		smParams      *CreateStateManagerParams
+		smParams      *createStateManagerParams
 		expectedError error
 	}{
 		{
@@ -2141,7 +2133,7 @@ func TestFlushDirtyObject(t *testing.T) {
 		{
 			name:    "db failure",
 			address: so[0].address,
-			smParams: &CreateStateManagerParams{
+			smParams: &createStateManagerParams{
 				dbCallback: func(db *MockDB) {
 					db.createEntryHook = func() error {
 						return types.ErrKeyNotFound
@@ -2167,9 +2159,9 @@ func TestFlushDirtyObject(t *testing.T) {
 
 			// check if meta storage tree entries flushed to db
 			for i := 0; i < len(keys); i += 1 {
-				val, err := merkle.dbStorage[keys[i]]
+				val, err := merkle.dbStorage[string(keys[i])]
 				require.True(t, err)
-				require.Equal(t, values[i], string(val))
+				require.Equal(t, values[i], val)
 			}
 
 			// check if dirty entries flushed to db
@@ -2200,7 +2192,7 @@ func TestIsAccountRegisteredAt(t *testing.T) {
 		acc.StorageRoot = storageRoot
 	})
 
-	soParams := &CreateStateObjectParams{
+	soParams := &createStateObjectParams{
 		address: SargaAddress,
 		journal: mockJournal(),
 		db:      db,
@@ -2211,14 +2203,14 @@ func TestIsAccountRegisteredAt(t *testing.T) {
 
 	so := createTestStateObject(t, soParams)
 
-	tesseractParams := map[int]*CreateTesseractParams{
+	tesseractParams := map[int]*createTesseractParams{
 		0: getTesseractParamsWithStateHash(SargaAddress, stateHash),
 		1: getTesseractParamsWithStateHash(tests.RandomAddress(t), tests.RandomHash(t)),
 	}
 
 	tesseracts := createTesseracts(t, 2, tesseractParams)
 
-	smParams := &CreateStateManagerParams{
+	smParams := &createStateManagerParams{
 		db: db,
 		dbCallback: func(db *MockDB) {
 			insertTesseractsInDB(t, db, tesseracts...)

@@ -2,8 +2,11 @@ package guna
 
 import (
 	"context"
+	"encoding/hex"
 	"math/big"
 	"testing"
+
+	"github.com/sarvalabs/moichain/dhruva/db"
 
 	"github.com/stretchr/testify/assert"
 
@@ -17,7 +20,6 @@ import (
 	"github.com/sarvalabs/go-polo"
 	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/dhruva"
-	DhruvaDB "github.com/sarvalabs/moichain/dhruva/db"
 	"github.com/sarvalabs/moichain/guna/tree"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
@@ -26,15 +28,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var (
+	emptyKeys   [][]byte
+	emptyValues [][]byte
+)
+
 type MockServer struct{}
+
+func mockServer() *MockServer {
+	return new(MockServer)
+}
 
 func (m *MockServer) Subscribe(ctx context.Context, topic string, handler func(msg *pubsub.Message) error) error {
 	// TODO implement me
 	panic("implement me")
-}
-
-func mockServer() *MockServer {
-	return new(MockServer)
 }
 
 type MockDB struct {
@@ -110,7 +117,7 @@ func (m *MockDB) UpdateEntry(key, value []byte) error {
 	return nil
 }
 
-func (m *MockDB) NewBatchWriter() DhruvaDB.BatchWriter {
+func (m *MockDB) NewBatchWriter() db.BatchWriter {
 	return nil
 }
 
@@ -282,342 +289,82 @@ func (m *MockDB) DeleteEntry(key []byte) error {
 	panic("mock DeleteEntry not implemented")
 }
 
-type CreateTesseractParams struct {
-	address           types.Address
-	height            uint64
-	ixns              types.Interactions
-	tesseractCallback func(ts *types.Tesseract)
-}
-
-func createTesseracts(t *testing.T, count int, paramsMap map[int]*CreateTesseractParams) []*types.Tesseract {
+func getMockDB(t *testing.T, db store) *MockDB {
 	t.Helper()
 
-	tesseracts := make([]*types.Tesseract, count)
+	if db != nil {
+		mDB, ok := db.(*MockDB)
+		require.True(t, ok)
 
-	if paramsMap == nil {
-		paramsMap = map[int]*CreateTesseractParams{}
+		return mDB
 	}
 
-	for i := 0; i < count; i++ {
-		tesseracts[i] = createTesseract(t, paramsMap[i])
-	}
-
-	return tesseracts
+	return nil
 }
 
-func mockCache(t *testing.T) *lru.Cache {
+func insertTesseractsInDB(t *testing.T, db store, tesseracts ...*types.Tesseract) {
 	t.Helper()
 
-	cache, err := lru.New(1200)
-	require.NoError(t, err)
+	mDB := getMockDB(t, db)
 
-	return cache
-}
+	for _, ts := range tesseracts {
+		mDB.insertTesseract(t, ts)
 
-func createTesseract(t *testing.T, params *CreateTesseractParams) *types.Tesseract {
-	t.Helper()
-
-	if params == nil {
-		params = &CreateTesseractParams{}
-	}
-
-	if params.address.IsNil() {
-		params.address = tests.RandomAddress(t)
-	}
-
-	ts := &types.Tesseract{
-		Header: types.TesseractHeader{
-			Address: params.address,
-			Height:  params.height,
-		},
-		Body: types.TesseractBody{},
-		Ixns: params.ixns,
-	}
-
-	if params.ixns != nil {
-		hash, err := params.ixns.Hash()
-		require.NoError(t, err)
-
-		ts.Body.InteractionHash = hash
-	}
-
-	if params.tesseractCallback != nil {
-		params.tesseractCallback(ts)
-	}
-
-	return ts
-}
-
-func getTesseractParamsWithStateHash(address types.Address, hash types.Hash) *CreateTesseractParams {
-	return &CreateTesseractParams{
-		address: address,
-		tesseractCallback: func(ts *types.Tesseract) {
-			insertStateHash(ts, hash)
-		},
-	}
-}
-
-func getTesseractParamsWithContextHash(address types.Address, hash types.Hash) *CreateTesseractParams {
-	return &CreateTesseractParams{
-		address: address,
-		tesseractCallback: func(ts *types.Tesseract) {
-			ts.Body.ContextHash = hash
-		},
-	}
-}
-
-func getTesseractParamsMapWithIxns(t *testing.T, tsCount int) map[int]*CreateTesseractParams {
-	t.Helper()
-
-	tesseractParams := make(map[int]*CreateTesseractParams, tsCount)
-	addresses := getAddresses(t, 4*tsCount) // for each interaction, sender and receiver addresses needed
-	ixns := createIxns(t, 2*tsCount, getIxParamsMapWithAddresses(addresses[:2*tsCount], addresses[2*tsCount:]))
-
-	for i := 0; i < tsCount; i++ {
-		tesseractParams[i] = &CreateTesseractParams{
-			ixns: ixns[i*2 : i*2+2], // allocate two interactions per tesseract
+		if ts.Interactions() != nil {
+			mDB.insertIxns(t, ts.InteractionHash(), ts.Interactions())
 		}
 	}
-
-	return tesseractParams
 }
 
-type CreateStateManagerParams struct {
-	db              *MockDB
-	dbCallback      func(db *MockDB)
-	serverCallback  func(n *MockServer)
-	senatusCallBack func(sm *MockSenatus)
-	smCallBack      func(sm *StateManager)
-}
-
-func createTestStateManager(t *testing.T, params *CreateStateManagerParams) *StateManager {
+func insertAccountsInDB(t *testing.T, db store, hashes []types.Hash, acc ...*types.Account) {
 	t.Helper()
 
-	var (
-		db      = mockDB()
-		server  = mockServer()
-		senatus = mockSenatus(t)
-	)
+	mDB := getMockDB(t, db)
 
-	if params == nil {
-		params = &CreateStateManagerParams{}
+	for i, hash := range hashes {
+		mDB.setAccount(t, hash, acc[i])
 	}
-
-	if params.db != nil {
-		db = params.db
-	}
-
-	if params.dbCallback != nil {
-		params.dbCallback(db)
-	}
-
-	if params.serverCallback != nil {
-		params.serverCallback(server)
-	}
-
-	sm, err := NewStateManager(context.Background(), db, hclog.NewNullLogger(), mockCache(t), server, NilMetrics())
-	require.NoError(t, err)
-
-	if params.smCallBack != nil {
-		params.smCallBack(sm)
-	}
-
-	if params.senatusCallBack != nil {
-		sm.senatus = senatus
-		params.senatusCallBack(senatus) // senatus called after instantiating state manager inorder to override senatus
-	}
-
-	return sm
 }
 
-type CreateStateObjectParams struct {
-	address                   types.Address
-	cache                     *lru.Cache
-	journal                   *Journal
-	db                        *MockDB
-	account                   types.Account
-	accType                   types.AccountType
-	soCallback                func(so *StateObject)
-	metaStorageTreeCallback   func(so *StateObject)
-	dbCallback                func(db *MockDB)
-	activeStorageTreeCallback func(activeStorageTrees map[string]tree.MerkleTree)
-}
-
-func createTestStateObject(t *testing.T, params *CreateStateObjectParams) *StateObject {
+func insertBalancesInDB(t *testing.T, db store, hashes []types.Hash, balances ...*gtypes.BalanceObject) {
 	t.Helper()
 
-	var (
-		addr = tests.RandomAddress(t)
-		db   = mockDB()
-	)
+	mDB := getMockDB(t, db)
 
-	if params == nil {
-		params = &CreateStateObjectParams{}
+	for i, bal := range balances {
+		mDB.setBalance(t, hashes[i], bal)
 	}
-
-	if !params.address.IsNil() {
-		addr = params.address
-	}
-
-	if params.db != nil {
-		db = params.db
-	}
-
-	if params.dbCallback != nil {
-		params.dbCallback(db)
-	}
-
-	so := NewStateObject(addr, params.cache, mockJournal(), db, params.account, params.accType)
-
-	if params.soCallback != nil {
-		params.soCallback(so)
-	}
-
-	if params.activeStorageTreeCallback != nil {
-		params.activeStorageTreeCallback(so.activeStorageTrees)
-	}
-
-	if params.metaStorageTreeCallback != nil {
-		params.metaStorageTreeCallback(so)
-	}
-
-	return so
 }
 
-func createTestStateObjects(t *testing.T, count int, paramsMap map[int]*CreateStateObjectParams) []*StateObject {
+func insertContextsInDB(t *testing.T, db store, context ...*gtypes.ContextObject) {
 	t.Helper()
 
-	objects := make([]*StateObject, count)
+	mDB := getMockDB(t, db)
 
-	if paramsMap == nil {
-		paramsMap = map[int]*CreateStateObjectParams{}
+	for _, ctx := range context {
+		mDB.setContext(t, ctx)
 	}
-
-	for i := 0; i < count; i++ {
-		objects[i] = createTestStateObject(t, paramsMap[i])
-	}
-
-	return objects
 }
 
-func mockJournal() *Journal {
-	return new(Journal)
-}
-
-func getStateObjectParamsWithBalance(
-	t *testing.T,
-	balanceHash types.Hash,
-	balance *gtypes.BalanceObject,
-) *CreateStateObjectParams {
+func insertMetaContextsInDB(t *testing.T, db store, context ...*gtypes.MetaContextObject) {
 	t.Helper()
 
-	return &CreateStateObjectParams{
-		soCallback: func(so *StateObject) {
-			so.data.Balance = balanceHash
-			so.balance = balance
-		},
+	mDB := getMockDB(t, db)
+
+	for _, ctx := range context {
+		mDB.setMetaContext(t, ctx)
 	}
-}
-
-func getTestBalances(t *testing.T, count int) ([]*gtypes.BalanceObject, []types.Hash) {
-	t.Helper()
-
-	balances := make([]*gtypes.BalanceObject, count)
-	hashes := make([]types.Hash, count)
-
-	for i := 0; i < count; i++ {
-		balances[i], hashes[i] = getTestBalance(t)
-	}
-
-	return balances, hashes
-}
-
-func getTestAccounts(t *testing.T, balanceHash []types.Hash, count int) ([]*types.Account, []types.Hash) {
-	t.Helper()
-
-	accounts := make([]*types.Account, count)
-	hashes := make([]types.Hash, count)
-
-	for i := 0; i < count; i++ {
-		acc, stateHash := getTestAccount(t, func(acc *types.Account) {
-			acc.Balance = balanceHash[i]
-		})
-
-		accounts[i] = acc
-		hashes[i] = stateHash
-	}
-
-	return accounts, hashes
-}
-
-type CreateIxParams struct {
-	ixDataCallback func(ix *types.IxData)
-}
-
-func createIX(t *testing.T, params *CreateIxParams) *types.Interaction {
-	t.Helper()
-
-	if params == nil {
-		params = &CreateIxParams{}
-	}
-
-	data := &types.IxData{
-		Input: types.IxInput{},
-	}
-
-	if params.ixDataCallback != nil {
-		params.ixDataCallback(data)
-	}
-
-	ix := types.NewInteraction(*data, []byte{})
-
-	return ix
-}
-
-func createIxns(t *testing.T, count int, paramsMap map[int]*CreateIxParams) types.Interactions {
-	t.Helper()
-
-	if paramsMap == nil {
-		paramsMap = map[int]*CreateIxParams{}
-	}
-
-	ixns := make(types.Interactions, count)
-
-	for i := 0; i < count; i++ {
-		ixns[i] = createIX(t, paramsMap[i])
-	}
-
-	return ixns
-}
-
-func getIxParamsWithAddress(from types.Address, to types.Address) *CreateIxParams {
-	return &CreateIxParams{
-		ixDataCallback: func(ix *types.IxData) {
-			ix.Input.Sender = from
-			ix.Input.Receiver = to
-		},
-	}
-}
-
-func getIxParamsMapWithAddresses(
-	from []types.Address,
-	to []types.Address,
-) map[int]*CreateIxParams {
-	count := len(from)
-	ixParams := make(map[int]*CreateIxParams, count)
-
-	for i := 0; i < count; i++ {
-		ixParams[i] = getIxParamsWithAddress(from[i], to[i])
-	}
-
-	return ixParams
 }
 
 type MockMerkleTree struct {
-	dbStorage  map[string][]byte
-	dirty      map[string][]byte
-	merkleRoot types.Hash
-	flushHook  func() error
+	dbStorage    map[string][]byte
+	dirty        map[string][]byte
+	merkleRoot   types.Hash
+	isFlushed    bool
+	flushHook    func() error
+	rootHashHook func() (types.Hash, error)
+	commitHook   func() error
+	setHook      func() error
 }
 
 func mockMerkleTreeWithDirtyStorage() *MockMerkleTree {
@@ -634,10 +381,18 @@ func mockMerkleTreeWithDB() *MockMerkleTree {
 }
 
 func (m *MockMerkleTree) RootHash() (types.Hash, error) {
+	if m.rootHashHook != nil {
+		return m.rootHashHook()
+	}
+
 	return m.merkleRoot, nil
 }
 
 func (m *MockMerkleTree) Commit() error {
+	if m.commitHook != nil {
+		return m.commitHook()
+	}
+
 	bytes, err := polo.Polorize(m.dbStorage)
 	if err != nil {
 		return err
@@ -665,16 +420,32 @@ func (m *MockMerkleTree) IsDirty() bool {
 func (m *MockMerkleTree) Copy() tree.MerkleTree {
 	merkleTree := MockMerkleTree{
 		dbStorage: make(map[string][]byte),
+		dirty:     make(map[string][]byte),
 	}
 
 	for k, v := range m.dbStorage {
 		merkleTree.dbStorage[k] = v
 	}
 
+	for k, v := range m.dirty {
+		merkleTree.dirty[k] = v
+	}
+
+	merkleTree.merkleRoot = m.merkleRoot
+	merkleTree.isFlushed = m.isFlushed
+
 	return &merkleTree
 }
 
 func (m *MockMerkleTree) Set(key []byte, value []byte) error {
+	if m.setHook != nil {
+		return m.setHook()
+	}
+
+	if m.dirty == nil {
+		m.dirty = make(map[string][]byte)
+	}
+
 	m.dirty[string(key)] = value
 
 	return nil
@@ -711,15 +482,118 @@ func (m *MockMerkleTree) Flush() error {
 		return m.flushHook()
 	}
 
+	m.isFlushed = true
+
 	for k, v := range m.dirty {
 		m.dbStorage[k] = v
 	}
+
+	m.dirty = nil
 
 	return nil
 }
 
 func (m *MockMerkleTree) Close() error {
 	return nil
+}
+
+func setEntries(t *testing.T, m *MockMerkleTree, keys, values [][]byte) {
+	t.Helper()
+
+	for i := 0; i < len(keys); i += 1 {
+		err := m.Set(keys[i], values[i])
+		require.NoError(t, err)
+	}
+}
+
+func storeInMerkleTree(t *testing.T, m *MockMerkleTree, k, v []byte) {
+	t.Helper()
+
+	err := m.Set(k, v)
+	require.NoError(t, err)
+}
+
+func getMerkleTreeWithEntries(t *testing.T, keys [][]byte, values [][]byte) *MockMerkleTree {
+	t.Helper()
+
+	merkleTree := mockMerkleTreeWithDB()
+
+	for i, key := range keys {
+		err := merkleTree.Set(key, values[i])
+		require.NoError(t, err)
+	}
+
+	return merkleTree
+}
+
+func getMerkleTreeWithFlushedEntries(t *testing.T, keys [][]byte, values [][]byte) *MockMerkleTree {
+	t.Helper()
+
+	merkleTree := getMerkleTreeWithEntries(t, keys, values)
+	err := merkleTree.Flush()
+	require.NoError(t, err)
+
+	return merkleTree
+}
+
+func getMerkleTreeWithCommitHook(
+	t *testing.T,
+	keys [][]byte,
+	values [][]byte,
+	commitHook func() error,
+) *MockMerkleTree {
+	t.Helper()
+
+	merkleTree := getMerkleTreeWithEntries(t, keys, values) // insert entries to make tree dirty
+	merkleTree.commitHook = commitHook
+
+	return merkleTree
+}
+
+func getMerkleTreeWithFlushHook(
+	t *testing.T,
+	keys [][]byte,
+	values [][]byte,
+	flushHook func() error,
+) *MockMerkleTree {
+	t.Helper()
+
+	merkleTree := getMerkleTreeWithEntries(t, keys, values) // insert entries to make tree dirty
+	merkleTree.flushHook = flushHook
+
+	return merkleTree
+}
+
+func getMerkleTreeWithRootHashHook(
+	t *testing.T,
+	keys [][]byte,
+	values [][]byte,
+	rootHashHook func() (types.Hash, error),
+) *MockMerkleTree {
+	t.Helper()
+
+	merkleTree := getMerkleTreeWithEntries(t, keys, values) // insert entries to make tree dirty
+	merkleTree.rootHashHook = rootHashHook
+
+	return merkleTree
+}
+
+func getMerkleTreeWithSetHook(t *testing.T, keys [][]byte, values [][]byte, setHook func() error) *MockMerkleTree {
+	t.Helper()
+
+	merkleTree := getMerkleTreeWithEntries(t, keys, values) // insert entries to make tree dirty
+	merkleTree.setHook = setHook
+
+	return merkleTree
+}
+
+func getRoot(t *testing.T, m *MockMerkleTree) types.Hash {
+	t.Helper()
+
+	bytes, err := polo.Polorize(m.dbStorage)
+	require.NoError(t, err)
+
+	return types.BytesToHash(bytes)
 }
 
 type MockSenatus struct {
@@ -814,15 +688,200 @@ func (m *MockSenatus) Start(id id.KramaID, ntq int32, publicKey []byte, address 
 	return nil
 }
 
-func getAccMetaInfos(t *testing.T, count int) []*types.AccountMetaInfo {
+func removePublicKeys(s *MockSenatus, ids []id.KramaID) {
+	for _, kramaID := range ids {
+		delete(s.publicKeys, kramaID)
+	}
+}
+
+func setPublicKeys(s *MockSenatus, ids []id.KramaID, pk [][]byte) {
+	for i, kramaID := range ids {
+		s.setPublicKey(kramaID, pk[i])
+	}
+}
+
+type createLogicObjectParams struct {
+	id            types.LogicID
+	logicCallback func(object *gtypes.LogicObject)
+}
+
+func createLogicObject(t *testing.T, params *createLogicObjectParams) *gtypes.LogicObject {
 	t.Helper()
 
-	accMetaInfo := make([]*types.AccountMetaInfo, count)
-	for i := 0; i < count; i++ {
-		accMetaInfo[i] = tests.GetRandomAccMetaInfo(t, 8)
+	if params == nil {
+		params = &createLogicObjectParams{}
 	}
 
-	return accMetaInfo
+	logicObject := &gtypes.LogicObject{
+		ID: params.id,
+	}
+
+	if params.logicCallback != nil {
+		params.logicCallback(logicObject)
+	}
+
+	return logicObject
+}
+
+func getLogicObjectParamsWithLogicID(logicID types.LogicID) *createLogicObjectParams {
+	return &createLogicObjectParams{
+		id: logicID,
+	}
+}
+
+type createIxParams struct {
+	ixDataCallback func(ix *types.IxData)
+}
+
+func createIX(t *testing.T, params *createIxParams) *types.Interaction {
+	t.Helper()
+
+	if params == nil {
+		params = &createIxParams{}
+	}
+
+	data := &types.IxData{
+		Input: types.IxInput{},
+	}
+
+	if params.ixDataCallback != nil {
+		params.ixDataCallback(data)
+	}
+
+	ix := types.NewInteraction(*data, []byte{})
+
+	return ix
+}
+
+func createIxns(t *testing.T, count int, paramsMap map[int]*createIxParams) types.Interactions {
+	t.Helper()
+
+	if paramsMap == nil {
+		paramsMap = map[int]*createIxParams{}
+	}
+
+	ixns := make(types.Interactions, count)
+
+	for i := 0; i < count; i++ {
+		ixns[i] = createIX(t, paramsMap[i])
+	}
+
+	return ixns
+}
+
+func getIxParamsWithAddress(from types.Address, to types.Address) *createIxParams {
+	return &createIxParams{
+		ixDataCallback: func(ix *types.IxData) {
+			ix.Input.Sender = from
+			ix.Input.Receiver = to
+		},
+	}
+}
+
+func getIxParamsMapWithAddresses(
+	from []types.Address,
+	to []types.Address,
+) map[int]*createIxParams {
+	count := len(from)
+	ixParams := make(map[int]*createIxParams, count)
+
+	for i := 0; i < count; i++ {
+		ixParams[i] = getIxParamsWithAddress(from[i], to[i])
+	}
+
+	return ixParams
+}
+
+type createTesseractParams struct {
+	address           types.Address
+	height            uint64
+	ixns              types.Interactions
+	tesseractCallback func(ts *types.Tesseract)
+}
+
+func createTesseract(t *testing.T, params *createTesseractParams) *types.Tesseract {
+	t.Helper()
+
+	if params == nil {
+		params = &createTesseractParams{}
+	}
+
+	if params.address.IsNil() {
+		params.address = tests.RandomAddress(t)
+	}
+
+	ts := &types.Tesseract{
+		Header: types.TesseractHeader{
+			Address: params.address,
+			Height:  params.height,
+		},
+		Body: types.TesseractBody{},
+		Ixns: params.ixns,
+	}
+
+	if params.ixns != nil {
+		hash, err := params.ixns.Hash()
+		require.NoError(t, err)
+
+		ts.Body.InteractionHash = hash
+	}
+
+	if params.tesseractCallback != nil {
+		params.tesseractCallback(ts)
+	}
+
+	return ts
+}
+
+func createTesseracts(t *testing.T, count int, paramsMap map[int]*createTesseractParams) []*types.Tesseract {
+	t.Helper()
+
+	tesseracts := make([]*types.Tesseract, count)
+
+	if paramsMap == nil {
+		paramsMap = map[int]*createTesseractParams{}
+	}
+
+	for i := 0; i < count; i++ {
+		tesseracts[i] = createTesseract(t, paramsMap[i])
+	}
+
+	return tesseracts
+}
+
+func getTesseractParamsWithStateHash(address types.Address, hash types.Hash) *createTesseractParams {
+	return &createTesseractParams{
+		address: address,
+		tesseractCallback: func(ts *types.Tesseract) {
+			insertStateHash(ts, hash)
+		},
+	}
+}
+
+func getTesseractParamsWithContextHash(address types.Address, hash types.Hash) *createTesseractParams {
+	return &createTesseractParams{
+		address: address,
+		tesseractCallback: func(ts *types.Tesseract) {
+			ts.Body.ContextHash = hash
+		},
+	}
+}
+
+// each tesseract will have ixnCount interactions
+func getTesseractParamsMapWithIxns(t *testing.T, tsCount, ixnCount int) map[int]*createTesseractParams {
+	t.Helper()
+
+	tesseractParams := make(map[int]*createTesseractParams, tsCount)
+	addresses := getAddresses(t, 2*tsCount*ixnCount) // for each interaction, sender and receiver addresses needed
+	ixns := createIxns(t, tsCount*ixnCount, getIxParamsMapWithAddresses(addresses[:2*tsCount], addresses[2*tsCount:]))
+
+	for i := 0; i < tsCount; i++ {
+		tesseractParams[i] = &createTesseractParams{
+			ixns: ixns[i*ixnCount : i*ixnCount+ixnCount], // allocate two interactions per tesseract
+		}
+	}
+
+	return tesseractParams
 }
 
 func getTesseractHash(t *testing.T, ts *types.Tesseract) types.Hash {
@@ -832,6 +891,405 @@ func getTesseractHash(t *testing.T, ts *types.Tesseract) types.Hash {
 	require.NoError(t, err)
 
 	return hash
+}
+
+func insertStateHash(ts *types.Tesseract, hash types.Hash) {
+	ts.Body.StateHash = hash
+}
+
+func storeTesseractHashInCache(t *testing.T, cache *lru.Cache, tesseracts ...*types.Tesseract) {
+	t.Helper()
+
+	for _, ts := range tesseracts {
+		cache.Add(ts.Address(), getTesseractHash(t, ts))
+	}
+}
+
+func insertInContextLock(ts *types.Tesseract, address types.Address, hash types.Hash) {
+	ts.Header.ContextLock[address] = types.ContextLockInfo{
+		ContextHash: hash,
+	}
+}
+
+func mockCache(t *testing.T) *lru.Cache {
+	t.Helper()
+
+	cache, err := lru.New(1200)
+	require.NoError(t, err)
+
+	return cache
+}
+
+type createStateManagerParams struct {
+	db              *MockDB
+	dbCallback      func(db *MockDB)
+	serverCallback  func(n *MockServer)
+	senatusCallBack func(sm *MockSenatus)
+	smCallBack      func(sm *StateManager)
+}
+
+func createTestStateManager(t *testing.T, params *createStateManagerParams) *StateManager {
+	t.Helper()
+
+	var (
+		mDB     = mockDB()
+		server  = mockServer()
+		senatus = mockSenatus(t)
+	)
+
+	if params == nil {
+		params = &createStateManagerParams{}
+	}
+
+	if params.db != nil {
+		mDB = params.db
+	}
+
+	if params.dbCallback != nil {
+		params.dbCallback(mDB)
+	}
+
+	if params.serverCallback != nil {
+		params.serverCallback(server)
+	}
+
+	sm, err := NewStateManager(context.Background(), mDB, hclog.NewNullLogger(), mockCache(t), server, NilMetrics())
+	require.NoError(t, err)
+
+	if params.smCallBack != nil {
+		params.smCallBack(sm)
+	}
+
+	if params.senatusCallBack != nil {
+		sm.senatus = senatus
+		params.senatusCallBack(senatus) // senatus called after instantiating state manager inorder to override senatus
+	}
+
+	return sm
+}
+
+func mockJournal() *Journal {
+	return new(Journal)
+}
+
+func insertContextHash(so *StateObject, hash types.Hash) {
+	so.data.ContextHash = hash
+}
+
+func insertObject(sm *StateManager, so *StateObject) {
+	sm.objects[so.address] = so
+}
+
+func insertDirtyObject(sm *StateManager, objects ...*StateObject) {
+	for _, obj := range objects {
+		sm.dirtyObjects[obj.address] = obj
+	}
+}
+
+func insertStateObject(sm *StateManager, so *StateObject) {
+	sm.objects[so.address] = so
+}
+
+func storeInSmCache(sm *StateManager, k, v interface{}) {
+	sm.cache.Add(k, v)
+}
+
+func AddAssetInBalance(t *testing.T, so *StateObject) {
+	t.Helper()
+
+	so.balance.Balances[tests.GetRandomAssetID(t, types.NilAddress)] = big.NewInt(100)
+}
+
+type createStateObjectParams struct {
+	address                   types.Address
+	cache                     *lru.Cache
+	journal                   *Journal
+	db                        *MockDB
+	account                   *types.Account
+	accType                   types.AccountType
+	soCallback                func(so *StateObject)
+	metaStorageTreeCallback   func(so *StateObject)
+	dbCallback                func(db *MockDB)
+	activeStorageTreeCallback func(activeStorageTrees map[string]tree.MerkleTree)
+}
+
+func createTestStateObject(t *testing.T, params *createStateObjectParams) *StateObject {
+	t.Helper()
+
+	var (
+		addr  = tests.RandomAddress(t)
+		mDB   = mockDB()
+		cache = mockCache(t)
+		data  = new(types.Account)
+	)
+
+	if params == nil {
+		params = &createStateObjectParams{}
+	}
+
+	if !params.address.IsNil() {
+		addr = params.address
+	}
+
+	if params.db != nil {
+		mDB = params.db
+	}
+
+	if params.dbCallback != nil {
+		params.dbCallback(mDB)
+	}
+
+	if params.cache != nil {
+		cache = params.cache
+	}
+
+	if params.account != nil {
+		data = params.account
+	}
+
+	so := NewStateObject(addr, cache, mockJournal(), mDB, *data, params.accType)
+	so.metaStorageTree = mockMerkleTreeWithDB()
+	so.logicTree = mockMerkleTreeWithDB()
+
+	if params.soCallback != nil {
+		params.soCallback(so)
+	}
+
+	if params.activeStorageTreeCallback != nil {
+		params.activeStorageTreeCallback(so.activeStorageTrees)
+	}
+
+	if params.metaStorageTreeCallback != nil {
+		params.metaStorageTreeCallback(so)
+	}
+
+	return so
+}
+
+func createTestStateObjects(t *testing.T, count int, paramsMap map[int]*createStateObjectParams) []*StateObject {
+	t.Helper()
+
+	objects := make([]*StateObject, count)
+
+	if paramsMap == nil {
+		paramsMap = map[int]*createStateObjectParams{}
+	}
+
+	for i := 0; i < count; i++ {
+		objects[i] = createTestStateObject(t, paramsMap[i])
+	}
+
+	return objects
+}
+
+func stateObjectParamsWithBalance(
+	t *testing.T,
+	balanceHash types.Hash,
+	balance *gtypes.BalanceObject,
+) *createStateObjectParams {
+	t.Helper()
+
+	return &createStateObjectParams{
+		soCallback: func(so *StateObject) {
+			so.data.Balance = balanceHash
+			so.balance = balance
+		},
+	}
+}
+
+func stateObjectParamsWithASTAndMST(
+	t *testing.T,
+	ast map[string]tree.MerkleTree,
+	mst tree.MerkleTree,
+) *createStateObjectParams {
+	t.Helper()
+
+	return &createStateObjectParams{
+		soCallback: func(so *StateObject) {
+			so.activeStorageTrees = ast
+			so.metaStorageTree = mst
+		},
+	}
+}
+
+func stateObjectParamsWithAST(t *testing.T, ast map[string]tree.MerkleTree) *createStateObjectParams {
+	t.Helper()
+
+	return &createStateObjectParams{
+		soCallback: func(so *StateObject) {
+			so.activeStorageTrees = ast
+		},
+	}
+}
+
+func stateObjectParamsWithInvalidMST(t *testing.T) *createStateObjectParams {
+	t.Helper()
+
+	return stateObjectParamsWithMST(t, types.NilAddress, nil, nil, tests.RandomHash(t))
+}
+
+func stateObjectParamsWithMST(
+	t *testing.T,
+	address types.Address,
+	db store,
+	mst tree.MerkleTree,
+	root types.Hash,
+) *createStateObjectParams {
+	t.Helper()
+
+	mDB := getMockDB(t, db)
+
+	return &createStateObjectParams{
+		address: address,
+		db:      mDB,
+		soCallback: func(so *StateObject) {
+			so.metaStorageTree = mst
+			so.data.StorageRoot = root
+		},
+	}
+}
+
+func stateObjectParamsWithLogicTree(
+	t *testing.T,
+	address types.Address,
+	db store,
+	logicTree tree.MerkleTree,
+	root types.Hash,
+) *createStateObjectParams {
+	t.Helper()
+
+	mDB := getMockDB(t, db)
+
+	return &createStateObjectParams{
+		address: address,
+		db:      mDB,
+		soCallback: func(so *StateObject) {
+			so.logicTree = logicTree
+			so.data.LogicRoot = root // set logic root as it needs to be returned
+		},
+	}
+}
+
+// stateObjectParamsWithMetaContextObject stores object in db if inDB is true else stores in cache
+func stateObjectParamsWithMetaContextObject(
+	t *testing.T,
+	obj *gtypes.MetaContextObject,
+	hash types.Hash,
+	addToDB bool,
+) *createStateObjectParams {
+	t.Helper()
+
+	if addToDB {
+		return &createStateObjectParams{
+			soCallback: func(so *StateObject) {
+				insertContextHash(so, hash)
+				mDB := getMockDB(t, so.db)
+
+				rawData, err := obj.Bytes()
+				require.NoError(t, err)
+
+				mDB.context[hash] = rawData
+			},
+		}
+	}
+
+	return &createStateObjectParams{
+		soCallback: func(so *StateObject) {
+			so.data.ContextHash = hash
+			so.cache.Add(so.ContextHash(), obj)
+		},
+	}
+}
+
+// stateObjectParamsWithContextObject stores object in db if inDB is true else stores in cache
+func stateObjectParamsWithContextObject(
+	t *testing.T,
+	obj *gtypes.ContextObject,
+	hash types.Hash,
+	addToDB bool,
+) *createStateObjectParams {
+	t.Helper()
+
+	if addToDB {
+		return &createStateObjectParams{
+			soCallback: func(so *StateObject) {
+				mDB, ok := so.db.(*MockDB)
+				require.True(t, ok)
+
+				rawData, err := obj.Bytes()
+				require.NoError(t, err)
+
+				mDB.context[hash] = rawData
+			},
+		}
+	}
+
+	return &createStateObjectParams{
+		soCallback: func(so *StateObject) {
+			so.cache.Add(hash, obj)
+		},
+	}
+}
+
+func stateObjectParamsWithTestData(t *testing.T, areTreesNil bool) *createStateObjectParams {
+	t.Helper()
+
+	keys, values := getEntries(t, 2)
+
+	return &createStateObjectParams{
+		soCallback: func(s *StateObject) {
+			s.accType = types.ContractAccount
+			acc, _ := getTestAccount(t, func(acc *types.Account) {
+				acc.ContextHash = tests.RandomHash(t)
+			})
+
+			s.data = *acc
+			s.balance, _ = getTestBalance(t)
+			s.assetApprovals.PrvHash = tests.RandomHash(t) // initialize any one field in asset approvals object
+
+			s.logicTree = getMerkleTreeWithFlushedEntries(t, keys[0:1], values[0:1])
+
+			s.files = make(map[types.Hash][]byte)
+			s.files[tests.RandomHash(t)] = tests.RandomHash(t).Bytes()
+			s.files[tests.RandomHash(t)] = tests.RandomHash(t).Bytes()
+
+			if areTreesNil {
+				s.logicTree = nil
+			}
+		},
+		metaStorageTreeCallback: func(s *StateObject) {
+			s.metaStorageTree = getMerkleTreeWithFlushedEntries(t, keys[1:], values[1:])
+			if areTreesNil {
+				s.metaStorageTree = nil
+			}
+		},
+	}
+}
+
+func getCopiedStateObject(s *StateObject) *StateObject {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	j := new(Journal)
+	sObj := NewStateObject(s.address, s.cache, j, s.db, s.data, s.data.AccType)
+
+	sObj.balance = s.balance.Copy()
+	sObj.assetApprovals = s.assetApprovals.Copy()
+	sObj.dirtyEntries = s.dirtyEntries.Copy()
+
+	if s.logicTree != nil {
+		sObj.logicTree = s.logicTree.Copy()
+	}
+
+	if s.metaStorageTree != nil {
+		sObj.metaStorageTree = s.metaStorageTree.Copy() // TODO: Check if we require deep copy
+	}
+
+	for k, v := range s.files {
+		sObj.files[k] = v
+	}
+
+	return sObj
 }
 
 func getTestBalance(t *testing.T) (*gtypes.BalanceObject, types.Hash) {
@@ -849,6 +1307,19 @@ func getTestBalance(t *testing.T) (*gtypes.BalanceObject, types.Hash) {
 	return balance, types.GetHash(data)
 }
 
+func getTestBalances(t *testing.T, count int) ([]*gtypes.BalanceObject, []types.Hash) {
+	t.Helper()
+
+	balances := make([]*gtypes.BalanceObject, count)
+	hashes := make([]types.Hash, count)
+
+	for i := 0; i < count; i++ {
+		balances[i], hashes[i] = getTestBalance(t)
+	}
+
+	return balances, hashes
+}
+
 func getTestAccount(t *testing.T, callBack func(acc *types.Account)) (*types.Account, types.Hash) {
 	t.Helper()
 
@@ -863,31 +1334,38 @@ func getTestAccount(t *testing.T, callBack func(acc *types.Account)) (*types.Acc
 	return acc, accHash
 }
 
-func insertStateObject(sm *StateManager, so *StateObject) {
-	sm.objects[so.address] = so
-}
-
-func AddAssetInBalance(t *testing.T, so *StateObject) {
+func getTestAccounts(t *testing.T, balanceHash []types.Hash, count int) ([]*types.Account, []types.Hash) {
 	t.Helper()
 
-	so.balance.Balances[tests.GetRandomAssetID(t, types.NilAddress)] = big.NewInt(100)
-}
+	accounts := make([]*types.Account, count)
+	hashes := make([]types.Hash, count)
 
-func insertStateHash(ts *types.Tesseract, hash types.Hash) {
-	ts.Body.StateHash = hash
-}
+	for i := 0; i < count; i++ {
+		acc, stateHash := getTestAccount(t, func(acc *types.Account) {
+			acc.Balance = balanceHash[i]
+		})
 
-func storeTesseractHashInCache(t *testing.T, cache *lru.Cache, tesseracts ...*types.Tesseract) {
-	t.Helper()
-
-	for _, ts := range tesseracts {
-		cache.Add(ts.Address(), getTesseractHash(t, ts))
+		accounts[i] = acc
+		hashes[i] = stateHash
 	}
+
+	return accounts, hashes
+}
+
+func getAccMetaInfos(t *testing.T, count int) []*types.AccountMetaInfo {
+	t.Helper()
+
+	accMetaInfo := make([]*types.AccountMetaInfo, count)
+	for i := 0; i < count; i++ {
+		accMetaInfo[i] = tests.GetRandomAccMetaInfo(t, 8)
+	}
+
+	return accMetaInfo
 }
 
 func getContextObjects(
 	t *testing.T,
-	id []id.KramaID,
+	ids []id.KramaID,
 	idsPerObj int,
 	objCount int,
 ) ([]*gtypes.ContextObject, []types.Hash) {
@@ -897,8 +1375,12 @@ func getContextObjects(
 	hashes := make([]types.Hash, objCount)
 
 	for i := 0; i < objCount; i++ {
+		copiedIds := make([]id.KramaID, idsPerObj)
+
+		copy(copiedIds, ids[i*idsPerObj:i*idsPerObj+idsPerObj])
+
 		obj[i] = &gtypes.ContextObject{
-			Ids: id[i*idsPerObj : i*idsPerObj+idsPerObj],
+			Ids: copiedIds,
 		}
 
 		hash, err := obj[i].Hash()
@@ -908,10 +1390,6 @@ func getContextObjects(
 	}
 
 	return obj, hashes
-}
-
-func storeInSmCache(sm *StateManager, k, v interface{}) {
-	sm.cache.Add(k, v)
 }
 
 func getMetaContextObject(
@@ -949,68 +1427,6 @@ func getMetaContextObjects(t *testing.T, hashes []types.Hash) ([]*gtypes.MetaCon
 	return mObj, mHashes
 }
 
-func setPublicKeys(s *MockSenatus, ids []id.KramaID, pk [][]byte) {
-	for i, kramaID := range ids {
-		if !(string(kramaID) == "") {
-			s.setPublicKey(kramaID, pk[i])
-		}
-	}
-}
-
-func insertObject(sm *StateManager, so *StateObject) {
-	sm.objects[so.address] = so
-}
-
-func insertDirtyObject(sm *StateManager, objects ...*StateObject) {
-	for _, obj := range objects {
-		sm.dirtyObjects[obj.address] = obj
-	}
-}
-
-func insertTesseractsInDB(t *testing.T, db *MockDB, tesseracts ...*types.Tesseract) {
-	t.Helper()
-
-	for _, ts := range tesseracts {
-		db.insertTesseract(t, ts)
-
-		if ts.Interactions() != nil {
-			db.insertIxns(t, ts.InteractionHash(), ts.Interactions())
-		}
-	}
-}
-
-func insertAccountsInDB(t *testing.T, db *MockDB, hashes []types.Hash, acc ...*types.Account) {
-	t.Helper()
-
-	for i, hash := range hashes {
-		db.setAccount(t, hash, acc[i])
-	}
-}
-
-func insertBalancesInDB(t *testing.T, db *MockDB, hashes []types.Hash, balances ...*gtypes.BalanceObject) {
-	t.Helper()
-
-	for i, bal := range balances {
-		db.setBalance(t, hashes[i], bal)
-	}
-}
-
-func insertContextsInDB(t *testing.T, db *MockDB, context ...*gtypes.ContextObject) {
-	t.Helper()
-
-	for _, ctx := range context {
-		db.setContext(t, ctx)
-	}
-}
-
-func insertMetaContextsInDB(t *testing.T, db *MockDB, context ...*gtypes.MetaContextObject) {
-	t.Helper()
-
-	for _, ctx := range context {
-		db.setMetaContext(t, ctx)
-	}
-}
-
 type ICSNodes struct {
 	senderBeh    *ktypes.NodeSet
 	senderRand   *ktypes.NodeSet
@@ -1036,23 +1452,6 @@ func mockContextLock() map[types.Address]types.ContextLockInfo {
 	return make(map[types.Address]types.ContextLockInfo)
 }
 
-func insertInContextLock(ts *types.Tesseract, address types.Address, hash types.Hash) {
-	ts.Header.ContextLock[address] = types.ContextLockInfo{
-		ContextHash: hash,
-	}
-}
-
-func getAddresses(t *testing.T, count int) []types.Address {
-	t.Helper()
-
-	addresses := make([]types.Address, count)
-	for i := 0; i < count; i++ {
-		addresses[i] = tests.RandomAddress(t)
-	}
-
-	return addresses
-}
-
 func getAccountSetupArgs(
 	t *testing.T,
 	address types.Address,
@@ -1075,7 +1474,13 @@ func getAccountSetupArgs(
 	}
 }
 
-func getAsset(dimension int, totalSupply int, symbol string, isFungible bool, isMintable bool) *types.AssetDescriptor {
+func getAsset(
+	dimension int,
+	totalSupply int,
+	symbol string,
+	isFungible bool,
+	isMintable bool,
+) *types.AssetDescriptor {
 	return &types.AssetDescriptor{
 		Dimension:  uint8(dimension),
 		Supply:     big.NewInt(int64(totalSupply)),
@@ -1085,52 +1490,26 @@ func getAsset(dimension int, totalSupply int, symbol string, isFungible bool, is
 	}
 }
 
-func getDirtyEntries(t *testing.T, count int) Storage {
+func getDefaultAssetDescriptor(t *testing.T, symbol string) *types.AssetDescriptor {
 	t.Helper()
 
-	d := make(Storage, count)
-
-	for i := 0; i < count; i++ {
-		d[tests.RandomHash(t).Hex()] = tests.RandomAddress(t).Bytes()
+	return &types.AssetDescriptor{
+		Type:           types.AssetKindLogic,
+		Symbol:         symbol,
+		Owner:          tests.RandomAddress(t),
+		Supply:         big.NewInt(10000),
+		Dimension:      4,
+		Decimals:       3,
+		IsFungible:     true,
+		IsMintable:     false,
+		IsTransferable: true,
+		LogicID:        getLogicID(t, tests.RandomAddress(t)),
 	}
-
-	return d
-}
-
-func getEntries(t *testing.T, count int) []string {
-	t.Helper()
-
-	entries := make([]string, count)
-
-	for i := 0; i < count; i++ {
-		str, err := tests.GetRandomUpperCaseString(t, 10)
-		require.NoError(t, err)
-
-		entries[i] = str
-	}
-
-	return entries
-}
-
-func setEntries(t *testing.T, m *MockMerkleTree, keys, values []string) {
-	t.Helper()
-
-	for i := 0; i < len(keys); i += 1 {
-		err := m.Set([]byte(keys[i]), []byte(values[i]))
-		require.NoError(t, err)
-	}
-}
-
-func storeInMerkleTree(t *testing.T, m *MockMerkleTree, k, v []byte) {
-	t.Helper()
-
-	err := m.Set(k, v)
-	require.NoError(t, err)
 }
 
 func createMetaStorageTree(
 	t *testing.T,
-	db *MockDB,
+	db store,
 	address types.Address,
 	logicID types.LogicID,
 	storageKeys [][]byte,
@@ -1145,7 +1524,7 @@ func createMetaStorageTree(
 
 func createTestKramaHashTree(
 	t *testing.T,
-	db *MockDB,
+	db store,
 	address types.Address,
 	keys [][]byte,
 	values [][]byte,
@@ -1172,17 +1551,257 @@ func createTestKramaHashTree(
 	return kt, storageRoot
 }
 
-func validateTesseract(t *testing.T, ts *types.Tesseract, expectedTS *types.Tesseract, withInteractions bool) {
-	t.Helper()
+func getCopiedAST(ast map[string]tree.MerkleTree) map[string]tree.MerkleTree {
+	copiedAST := make(map[string]tree.MerkleTree, len(ast))
 
-	if withInteractions { // check if tesseracts matches
-		require.Equal(t, expectedTS, ts)
-
-		return
+	for logic, merkleTree := range ast {
+		copiedAST[logic] = merkleTree.Copy()
 	}
 
-	require.Equal(t, expectedTS.Canonical(), ts.Canonical())
-	require.Equal(t, 0, len(ts.Ixns)) // make sure returned tesseract has zero ixns
+	return copiedAST
+}
+
+// getASTWithDefaultFlushedEntries returns ast with merkle trees of tree count
+func getASTWithDefaultFlushedEntries(
+	t *testing.T,
+	treeCount int,
+	entriesPerTree int,
+) map[string]tree.MerkleTree {
+	t.Helper()
+
+	logicIds := getLogicIDs(t, treeCount)
+	keys, values := getEntries(t, entriesPerTree)
+	ast := getActiveStorageTreesWithFlushedEntries(t, logicIds, keys, values)
+
+	return ast
+}
+
+// getASTWithDefaultDirtyEntries returns ast with merkle trees of tree count that have both flushed and dirty entries
+func getASTWithDefaultDirtyEntries(
+	t *testing.T,
+	treeCount int,
+	entriesPerTree int,
+) map[string]tree.MerkleTree {
+	t.Helper()
+
+	ast := getASTWithDefaultFlushedEntries(t, treeCount, entriesPerTree)
+
+	for _, merkleTree := range ast {
+		insertRandomEntriesInMerkleTree(t, merkleTree, entriesPerTree)
+	}
+
+	return ast
+}
+
+func getMerkleTreeWithDefaultFlushedEntries(t *testing.T, entriesPerTree int) tree.MerkleTree {
+	t.Helper()
+
+	keys, values := getEntries(t, entriesPerTree)
+
+	return getMerkleTreeWithFlushedEntries(t, keys, values)
+}
+
+// insertRandomEntriesInMerkleTress makes tree dirty by inserting random entries
+func insertRandomEntriesInMerkleTree(t *testing.T, merkleTree tree.MerkleTree, entriesPerTree int) {
+	t.Helper()
+
+	keys, values := getEntries(t, entriesPerTree)
+
+	for i, key := range keys {
+		err := merkleTree.Set(key, values[i])
+		require.NoError(t, err)
+	}
+}
+
+// getMerkleTreeWithDefaultDirtyEntries return merkle tree that has both flushed and dirty entries
+func getMerkleTreeWithDefaultDirtyEntries(t *testing.T, entriesPerTree int) tree.MerkleTree {
+	t.Helper()
+
+	mst := getMerkleTreeWithDefaultFlushedEntries(t, entriesPerTree)
+	insertRandomEntriesInMerkleTree(t, mst, entriesPerTree)
+
+	return mst
+}
+
+func getActiveStorageTrees(
+	t *testing.T,
+	logicIds []types.LogicID,
+	keys [][]byte,
+	values [][]byte,
+) map[string]tree.MerkleTree {
+	t.Helper()
+
+	count := len(logicIds)
+	activeStorageTrees := make(map[string]tree.MerkleTree, count)
+
+	for i := 0; i < count; i++ {
+		activeStorageTrees[logicIds[i].Hex()] = getMerkleTreeWithEntries(t, keys, values)
+	}
+
+	return activeStorageTrees
+}
+
+func getActiveStorageTreesWithFlushedEntries(
+	t *testing.T,
+	logicIds []types.LogicID,
+	keys [][]byte,
+	values [][]byte,
+) map[string]tree.MerkleTree {
+	t.Helper()
+
+	count := len(logicIds)
+	activeStorageTrees := make(map[string]tree.MerkleTree, count)
+
+	for i := 0; i < count; i++ {
+		activeStorageTrees[logicIds[i].Hex()] = getMerkleTreeWithFlushedEntries(t, keys, values)
+	}
+
+	return activeStorageTrees
+}
+
+func getActiveStorageTreesWithCommitHook(
+	t *testing.T,
+	logicIds []types.LogicID,
+	keys [][]byte,
+	values [][]byte,
+	commitHook func() error,
+) map[string]tree.MerkleTree {
+	t.Helper()
+
+	count := len(logicIds)
+	activeStorageTrees := make(map[string]tree.MerkleTree, count)
+
+	for i := 0; i < count; i++ {
+		activeStorageTrees[logicIds[i].Hex()] = getMerkleTreeWithCommitHook(t, keys, values, commitHook)
+	}
+
+	return activeStorageTrees
+}
+
+func getActiveStorageTreesWithFlushHook(
+	t *testing.T,
+	logicIds []types.LogicID,
+	keys [][]byte,
+	values [][]byte,
+	commitHook func() error,
+) map[string]tree.MerkleTree {
+	t.Helper()
+
+	count := len(logicIds)
+	activeStorageTrees := make(map[string]tree.MerkleTree, count)
+
+	for i := 0; i < count; i++ {
+		activeStorageTrees[logicIds[i].Hex()] = getMerkleTreeWithFlushHook(t, keys, values, commitHook)
+	}
+
+	return activeStorageTrees
+}
+
+func getActiveStorageTreesWithRootHook(
+	t *testing.T,
+	logicIds []types.LogicID,
+	keys [][]byte,
+	values [][]byte,
+	rootHashHook func() (types.Hash, error),
+) map[string]tree.MerkleTree {
+	t.Helper()
+
+	count := len(logicIds)
+	activeStorageTrees := make(map[string]tree.MerkleTree, count)
+
+	for i := 0; i < count; i++ {
+		activeStorageTrees[logicIds[i].Hex()] = getMerkleTreeWithRootHashHook(t, keys, values, rootHashHook)
+	}
+
+	return activeStorageTrees
+}
+
+func getTestAssetID(asset *types.AssetDescriptor) (types.AssetID, types.Hash, []byte, error) {
+	assetObject := gtypes.AssetObject{
+		Owner:    asset.Owner,
+		Symbol:   asset.Symbol,
+		Decimals: asset.Decimals,
+		Extra:    make([]byte, 8),
+	}
+
+	var (
+		buf  []byte
+		info uint8 = 0x00
+	)
+
+	if asset.IsMintable {
+		info |= 0x01
+	} else {
+		assetObject.Supply = asset.Supply
+	}
+
+	if asset.IsFungible {
+		info |= 0x80
+	}
+
+	buf = append(buf, asset.Dimension)
+	buf = append(buf, info)
+
+	data, err := polo.Polorize(assetObject)
+	if err != nil {
+		return "", types.NilHash, nil, err
+	}
+
+	assetCID := types.GetHash(data)
+	buf = append(buf, assetCID.Bytes()...)
+	assetID := types.AssetID(hex.EncodeToString(buf))
+
+	return assetID, assetCID, data, nil
+}
+
+func getContextObjFromCache(t *testing.T, so *StateObject, hash types.Hash) *gtypes.ContextObject {
+	t.Helper()
+
+	bCtxData, ok := so.cache.Get(hash)
+	require.True(t, ok)
+	ctx, ok := bCtxData.(*gtypes.ContextObject)
+	require.True(t, ok)
+
+	return ctx
+}
+
+func getMetaContextObjFromCache(t *testing.T, so *StateObject, hash types.Hash) *gtypes.MetaContextObject {
+	t.Helper()
+
+	bCtxData, ok := so.cache.Get(hash)
+	require.True(t, ok)
+	ctx, ok := bCtxData.(*gtypes.MetaContextObject)
+	require.True(t, ok)
+
+	return ctx
+}
+
+func getMetaContextObjectFromDirtyEntries(t *testing.T, s *StateObject, hash types.Hash) *gtypes.MetaContextObject {
+	t.Helper()
+
+	key := types.BytesToHex(dhruva.ContextObjectKey(s.address, hash))
+	rawData, err := s.GetDirtyEntry(key)
+	require.NoError(t, err)
+
+	obj := new(gtypes.MetaContextObject)
+	err = obj.FromBytes(rawData)
+	require.NoError(t, err)
+
+	return obj
+}
+
+func getContextObjectFromDirtyEntries(t *testing.T, s *StateObject, hash types.Hash) *gtypes.ContextObject {
+	t.Helper()
+
+	key := types.BytesToHex(dhruva.ContextObjectKey(s.address, hash))
+	rawData, err := s.GetDirtyEntry(key)
+	require.NoError(t, err)
+
+	obj := new(gtypes.ContextObject)
+	err = obj.FromBytes(rawData)
+	require.NoError(t, err)
+
+	return obj
 }
 
 func checkForTesseractInSMCache(t *testing.T, sm *StateManager, ts *types.Tesseract, withInteractions bool) {
@@ -1203,25 +1822,14 @@ func checkForTesseractInSMCache(t *testing.T, sm *StateManager, ts *types.Tesser
 	require.Equal(t, ts, cachedTS) // make sure cached tesseract matches
 }
 
-func validateStateObject(t *testing.T, so *StateObject, accType types.AccountType, address types.Address) {
-	t.Helper()
-
-	require.Equal(t, address, so.address)
-	require.Equal(t, accType, so.accType)
-	require.NotNil(t, so.journal)
-	require.NotNil(t, so.db)
-	require.NotNil(t, so.data)
-	require.NotNil(t, so.cache)
-}
-
-func CheckForDirtyObject(t *testing.T, sm *StateManager, address types.Address, exists bool) {
+func checkForDirtyObject(t *testing.T, sm *StateManager, address types.Address, exists bool) {
 	t.Helper()
 
 	_, ok := sm.dirtyObjects[address]
 	require.Equal(t, exists, ok)
 }
 
-func CheckIfDirtyObjectEqual(t *testing.T, sm *StateManager, address types.Address, expectedObj *StateObject) {
+func checkIfDirtyObjectEqual(t *testing.T, sm *StateManager, address types.Address, expectedObj *StateObject) {
 	t.Helper()
 
 	obj, ok := sm.dirtyObjects[address]
@@ -1229,7 +1837,7 @@ func CheckIfDirtyObjectEqual(t *testing.T, sm *StateManager, address types.Addre
 	require.Equal(t, expectedObj, obj)
 }
 
-func CheckForObject(t *testing.T, sm *StateManager, address types.Address, exists bool) {
+func checkForObject(t *testing.T, sm *StateManager, address types.Address, exists bool) {
 	t.Helper()
 
 	_, ok := sm.objects[address]
@@ -1243,13 +1851,26 @@ func checkForCache(t *testing.T, sm *StateManager, address types.Address) {
 	require.True(t, isCached)
 }
 
-func checkForStateObject(t *testing.T, expectedObj *StateObject, obj *StateObject) {
+func checkForObjectCreation(t *testing.T, sm *StateManager, address types.Address, contextHash types.Hash) {
 	t.Helper()
 
-	require.Equal(t, expectedObj.balance, obj.balance)
-	require.Equal(t, expectedObj.data, obj.data)
-	require.Equal(t, expectedObj.address, obj.address)
-	require.Equal(t, expectedObj.accType, obj.accType)
+	// check if dirty object created
+	obj, err := sm.GetDirtyObject(address)
+	require.NoError(t, err)
+
+	// check if context created
+	_, err = obj.GetDirtyEntry(types.BytesToHex(dhruva.ContextObjectKey(address, contextHash)))
+	require.NoError(t, err)
+
+	// check if object committed
+	data, err := obj.balance.Bytes()
+	require.NoError(t, err)
+
+	hash := types.GetHash(data)
+	key := types.BytesToHex(dhruva.BalanceObjectKey(address, hash))
+	val, err := obj.GetDirtyEntry(key)
+	require.NoError(t, err)
+	require.Equal(t, data, val)
 }
 
 func checkIfContextMatches(
@@ -1265,7 +1886,7 @@ func checkIfContextMatches(
 	require.Equal(t, expectedRand.Ids, rand)
 }
 
-func CheckIfNodesetEqual(
+func checkIfNodesetEqual(
 	t *testing.T,
 	expectedBeh *ktypes.NodeSet,
 	expectedRand *ktypes.NodeSet,
@@ -1276,6 +1897,44 @@ func CheckIfNodesetEqual(
 
 	require.Equal(t, expectedBeh, beh)
 	require.Equal(t, expectedRand, rand)
+}
+
+func checkIfTreesAreEqual(t *testing.T, expectedTree tree.MerkleTree, actualTree tree.MerkleTree) {
+	t.Helper()
+
+	err := expectedTree.Commit()
+	require.NoError(t, err)
+
+	err = actualTree.Commit()
+	require.NoError(t, err)
+
+	expectedRoot, err := expectedTree.RootHash()
+	require.NoError(t, err)
+
+	actualRoot, err := actualTree.RootHash()
+	require.NoError(t, err)
+
+	require.Equal(t, expectedRoot, actualRoot)
+}
+
+func validateStateObject(t *testing.T, so *StateObject, accType types.AccountType, address types.Address) {
+	t.Helper()
+
+	require.Equal(t, address, so.address)
+	require.Equal(t, accType, so.accType)
+	require.NotNil(t, so.journal)
+	require.NotNil(t, so.db)
+	require.NotNil(t, so.data)
+	require.NotNil(t, so.cache)
+}
+
+func checkForStateObject(t *testing.T, expectedObj *StateObject, obj *StateObject) {
+	t.Helper()
+
+	require.Equal(t, expectedObj.balance, obj.balance)
+	require.Equal(t, expectedObj.data, obj.data)
+	require.Equal(t, expectedObj.address, obj.address)
+	require.Equal(t, expectedObj.accType, obj.accType)
 }
 
 func checkForOtherAccountsInSargaObject(
@@ -1303,53 +1962,434 @@ func checkForOtherAccountsInSargaObject(
 	}
 }
 
-func checkForObjectCreation(t *testing.T, sm *StateManager, address types.Address, contextHash types.Hash) {
+func checkForAssetCreation(
+	t *testing.T,
+	s *StateObject,
+	assetDescriptor *types.AssetDescriptor,
+	journalIndex int,
+) {
 	t.Helper()
 
-	// check if dirty object created
-	obj, err := sm.GetDirtyObject(address)
+	expectedAssetID, expectedAssetHash, expectedData, err := getTestAssetID(assetDescriptor)
 	require.NoError(t, err)
 
-	// check if context created
-	_, ok := obj.dirtyEntries[types.BytesToHex(dhruva.ContextObjectKey(address, contextHash))]
-	require.True(t, ok)
-
-	// check if object committed
-	data, err := obj.balance.Bytes()
+	actualData, err := s.GetDirtyEntry(expectedAssetHash.String()) // check if asset data inserted in dirty entries
 	require.NoError(t, err)
+	require.Equal(t, expectedData, actualData)
 
-	hash := types.GetHash(data)
-	key := types.BytesToHex(dhruva.BalanceObjectKey(address, hash))
-	val, ok := obj.dirtyEntries[key]
-	require.True(t, ok)
-	require.Equal(t, data, val)
+	actualSupply, err := s.BalanceOf(expectedAssetID)
+	require.NoError(t, err)
+	require.Equal(t, assetDescriptor.Supply, actualSupply) // check total supply is stored in balances
+
+	require.Equal(t, s.address, assetDescriptor.Owner)            // check if address is assigned to owner
+	checkForJournalEntries(t, s, journalIndex, expectedAssetHash) // check if address and hash inserted in journal
 }
 
-func checkForAssetCreation(t *testing.T, obj *StateObject, asset *types.AssetDescriptor) {
+func checkIfStateObjectAreEqual(
+	t *testing.T,
+	expectedObj *StateObject,
+	actualObj *StateObject,
+	areTreesNil bool,
+) {
 	t.Helper()
 
-	// check asset
-	assetID, assetHash, data, err := gtypes.GetAssetID(
-		&types.AssetDescriptor{
-			Owner:      obj.address,
-			Dimension:  asset.Dimension,
-			IsFungible: asset.IsFungible,
-			IsMintable: asset.IsMintable,
-			Symbol:     asset.Symbol,
-			Supply:     asset.Supply,
-			LogicID:    asset.LogicID,
-		},
+	require.NotNil(t, actualObj.db)
+	require.NotNil(t, actualObj.cache)
+	require.NotNil(t, actualObj.journal)
+	require.Equal(t, expectedObj.balance.Balances, actualObj.balance.Balances)
+	require.Equal(t, expectedObj.assetApprovals, actualObj.assetApprovals)
+	require.Equal(t, expectedObj.dirtyEntries, actualObj.dirtyEntries)
+	require.Equal(t, expectedObj.data, actualObj.data)
+	require.Equal(t, expectedObj.files, actualObj.files)
+
+	if expectedObj.logicTree != nil {
+		checkIfTreesAreEqual(t, expectedObj.logicTree, actualObj.logicTree)
+	}
+
+	if expectedObj.metaStorageTree != nil {
+		checkIfTreesAreEqual(t, expectedObj.metaStorageTree, actualObj.metaStorageTree)
+	}
+
+	if areTreesNil {
+		require.Nil(t, actualObj.logicTree)
+		require.Nil(t, actualObj.metaStorageTree)
+	}
+}
+
+func checkForBalances(t *testing.T, sObj *StateObject, expectedBalance *big.Int, assetID types.AssetID) {
+	t.Helper()
+
+	actualBalance, err := sObj.BalanceOf(assetID)
+	require.NoError(t, err)
+	require.Equal(t, expectedBalance, actualBalance)
+}
+
+func checkForBalance(
+	t *testing.T,
+	sObj *StateObject,
+	expectedBalance *gtypes.BalanceObject,
+	actualBalanceHash types.Hash,
+	journalIndex int,
+) {
+	t.Helper()
+
+	expectedBalanceData, err := expectedBalance.Bytes()
+	require.NoError(t, err)
+
+	expectedBalanceHash := types.GetHash(expectedBalanceData)
+	require.Equal(t, expectedBalanceHash, actualBalanceHash)
+
+	// check if balance data in dirty entries and state object is same
+	key := types.BytesToHex(dhruva.BalanceObjectKey(sObj.address, expectedBalanceHash))
+	actualBalanceData, err := sObj.GetDirtyEntry(key) // get balance data from dirty entries
+	require.NoError(t, err)
+
+	require.Equal(t, expectedBalanceData, actualBalanceData)
+
+	require.Equal(t, sObj.data.Balance.Bytes(), actualBalanceHash.Bytes()) // check if balance hash inserted in account
+
+	// check if address and balance hash inserted in journal
+	checkForJournalEntries(t, sObj, journalIndex, actualBalanceHash)
+}
+
+func checkForAccount(
+	t *testing.T,
+	sObj *StateObject,
+	expectedAcc *types.Account,
+	actualAccHash types.Hash,
+	journalIndex int,
+) {
+	t.Helper()
+
+	require.Equal(t, expectedAcc.Nonce, sObj.data.Nonce)
+
+	expectedAccData, err := expectedAcc.Bytes()
+	require.NoError(t, err)
+
+	expectedAccHash := types.GetHash(expectedAccData)
+	require.Equal(t, expectedAccHash, actualAccHash)
+
+	// check if account data in dirty entries and state object is same
+	key := types.BytesToHex(dhruva.AccountKey(sObj.address, expectedAccHash))
+	actualAccData, err := sObj.GetDirtyEntry(key) // get account data from dirty entries
+	require.NoError(t, err)
+	require.Equal(t, expectedAccData, actualAccData)
+
+	// check if address and acc hash inserted in journal
+	checkForJournalEntries(t, sObj, journalIndex, actualAccHash)
+}
+
+func checkForContextObject(
+	t *testing.T,
+	sObj *StateObject,
+	ctxObject gtypes.ContextObject,
+	actualCtxHash types.Hash,
+) {
+	t.Helper()
+
+	expectedObjData, err := ctxObject.Bytes()
+	require.NoError(t, err)
+
+	expectedCtxHash := types.GetHash(expectedObjData)
+	require.Equal(t, expectedCtxHash, actualCtxHash)
+
+	// check if ctxObject data in dirty entries matches
+	key := types.BytesToHex(dhruva.ContextObjectKey(sObj.address, expectedCtxHash))
+	actualObjData, err := sObj.GetDirtyEntry(key) // get ctx object data from dirty entries
+	require.NoError(t, err)
+	require.Equal(t, expectedObjData, actualObjData)
+}
+
+func checkForMetaContextObject(
+	t *testing.T,
+	sObj *StateObject,
+	ctxObject gtypes.MetaContextObject,
+	actualCtxHash types.Hash,
+) {
+	t.Helper()
+
+	expectedObjData, err := ctxObject.Bytes()
+	require.NoError(t, err)
+
+	expectedCtxHash := types.GetHash(expectedObjData)
+	require.Equal(t, expectedCtxHash, actualCtxHash)
+
+	// check if ctxObject data in dirty entries matches
+	key := types.BytesToHex(dhruva.ContextObjectKey(sObj.address, expectedCtxHash))
+	actualObjData, err := sObj.GetDirtyEntry(key) // get ctx object data from dirty entries
+	require.NoError(t, err)
+	require.Equal(t, expectedObjData, actualObjData)
+}
+
+func checkIfActiveStorageTreesAreCommitted(
+	t *testing.T,
+	inputAST map[string]tree.MerkleTree,
+	sObj *StateObject,
+) {
+	t.Helper()
+
+	for logicID, merkleTree := range inputAST {
+		inputMerkleTree, ok := merkleTree.(*MockMerkleTree) // convert inorder to extract concrete type
+		require.True(t, ok)
+
+		expectedRoot := getRoot(t, inputMerkleTree)
+
+		actualMerkleTree, ok := sObj.activeStorageTrees[logicID].(*MockMerkleTree)
+		require.True(t, ok)
+
+		// make sure merkleTree is not committed, if merkle tree doesn't have dirty entries
+		if !inputMerkleTree.IsDirty() {
+			require.Equal(t, inputMerkleTree.merkleRoot, actualMerkleTree.merkleRoot) // check merkle root didn't change
+
+			continue
+		}
+
+		// make sure merkle root updated
+		require.Equal(t, expectedRoot, actualMerkleTree.merkleRoot)
+
+		// make sure metaStorageTree has logicID,storageRoot pair
+		actualRoot, err := sObj.metaStorageTree.Get(types.FromHex(logicID))
+		require.NoError(t, err)
+
+		require.Equal(t, expectedRoot.Bytes(), actualRoot)
+	}
+}
+
+func checkIfMetaStorageTreeCommitted(
+	t *testing.T,
+	inputMST tree.MerkleTree,
+	sObj *StateObject,
+	actualRoot types.Hash,
+	journalIndex int,
+) {
+	t.Helper()
+
+	inputMerkleTree, ok := inputMST.(*MockMerkleTree)
+	require.True(t, ok)
+
+	expectedRoot := getRoot(t, inputMerkleTree)
+
+	actualMerkleTree, ok := sObj.metaStorageTree.(*MockMerkleTree)
+	require.True(t, ok)
+
+	require.Equal(t, sObj.data.StorageRoot, actualRoot) // make sure storage root returned and stored are same
+
+	// make sure merkle tree is not committed, if merkle tree doesn't have dirty entries
+	if !inputMerkleTree.IsDirty() {
+		require.Equal(t, inputMerkleTree.merkleRoot, actualMerkleTree.merkleRoot) // check merkle root didn't change
+
+		return
+	}
+
+	require.Equal(t, expectedRoot, actualMerkleTree.merkleRoot)
+	require.Equal(t, expectedRoot, actualRoot)
+	checkForJournalEntries(t, sObj, journalIndex, expectedRoot)
+}
+
+func checkForJournalEntries(t *testing.T, sObj *StateObject, journalIndex int, hash types.Hash) {
+	t.Helper()
+
+	require.Equal(t, hash.Bytes(), sObj.journal.entries[journalIndex].cID().Bytes())
+	require.Equal(t, sObj.address, *sObj.journal.entries[journalIndex].modifiedAddress())
+}
+
+func checkIfLogicTreeCommitted(
+	t *testing.T,
+	inputLogicTree tree.MerkleTree,
+	sObj *StateObject,
+	actualRoot types.Hash,
+) {
+	t.Helper()
+
+	inputMerkleTree, ok := inputLogicTree.(*MockMerkleTree)
+	require.True(t, ok)
+
+	expectedRoot := getRoot(t, inputMerkleTree)
+
+	actualMerkleTree, ok := sObj.logicTree.(*MockMerkleTree)
+	require.True(t, ok)
+
+	require.Equal(t, sObj.data.LogicRoot, actualRoot) // make sure storage root returned and stored are same
+	require.Equal(t, expectedRoot, actualMerkleTree.merkleRoot)
+	require.Equal(t, expectedRoot, actualRoot)
+}
+
+func checkIfMerkleTreeFlushed(t *testing.T, merkle tree.MerkleTree, isFlushed bool) {
+	t.Helper()
+
+	m, ok := merkle.(*MockMerkleTree)
+	require.True(t, ok)
+
+	require.Equal(t, isFlushed, m.isFlushed)
+}
+
+func checkIfActiveStorageTreesFlushed(t *testing.T, logicIDs []types.LogicID, s *StateObject, isFlushed bool) {
+	t.Helper()
+
+	for _, logicID := range logicIDs {
+		storageTree, ok := s.activeStorageTrees[logicID.Hex()]
+		require.True(t, ok)
+
+		checkIfMerkleTreeFlushed(t, storageTree, isFlushed)
+	}
+}
+
+func checkForContextUpdate(
+	t *testing.T,
+	sObj *StateObject,
+	cObj []*gtypes.ContextObject,
+	metaHash types.Hash,
+	behaviouralNodes []id.KramaID,
+	randomNodes []id.KramaID,
+) {
+	t.Helper()
+
+	// get context objects from dirty entries
+	actualMetaContext := getMetaContextObjectFromDirtyEntries(t, sObj, metaHash)
+	actualBehaviouralContext := getContextObjectFromDirtyEntries(t, sObj, actualMetaContext.BehaviouralContext)
+	actualRandomContext := getContextObjectFromDirtyEntries(t, sObj, actualMetaContext.RandomContext)
+
+	cObj[0].Ids = append(cObj[0].Ids, behaviouralNodes...)
+	cObj[1].Ids = append(cObj[1].Ids, randomNodes...)
+
+	// check if context objects has updated nodes
+	require.Equal(t, cObj[0].Ids, actualBehaviouralContext.Ids)
+	require.Equal(t, cObj[1].Ids, actualRandomContext.Ids)
+}
+
+func checkForEntryInMST(t *testing.T, s *StateObject, key []byte, value []byte) {
+	t.Helper()
+
+	actualValue, err := s.metaStorageTree.Get(key)
+	require.NoError(t, err)
+	require.Equal(t, value, actualValue)
+}
+
+func checkForKramaHashTree(
+	t *testing.T,
+	expectedTree tree.MerkleTree,
+	actualTree tree.MerkleTree,
+) {
+	t.Helper()
+
+	expectedRoot, err := expectedTree.RootHash()
+	require.NoError(t, err)
+
+	actualRoot, err := actualTree.RootHash()
+	require.NoError(t, err)
+
+	require.Equal(t, expectedRoot, actualRoot)
+}
+
+func checkForEntryInMerkleTree(t *testing.T, merkleTree tree.MerkleTree, key []byte, value []byte) {
+	t.Helper()
+
+	actualValue, err := merkleTree.Get(key)
+	require.NoError(t, err)
+	require.Equal(t, value, actualValue)
+}
+
+func checkForEntriesInMerkleTree(t *testing.T, merkleTree tree.MerkleTree, keys [][]byte, values [][]byte) {
+	t.Helper()
+
+	for i, k := range keys {
+		checkForEntryInMerkleTree(t, merkleTree, k, values[i])
+	}
+}
+
+func validateTesseract(t *testing.T, ts *types.Tesseract, expectedTS *types.Tesseract, withInteractions bool) {
+	t.Helper()
+
+	if withInteractions { // check if tesseracts matches
+		require.Equal(t, expectedTS, ts)
+
+		return
+	}
+
+	require.Equal(t, expectedTS.Canonical(), ts.Canonical())
+	require.Equal(t, 0, len(ts.Ixns)) // make sure returned tesseract has zero ixns
+}
+
+// utility functions
+
+func getRandomBytes(t *testing.T, count int) [][]byte {
+	t.Helper()
+
+	bytes := make([][]byte, count)
+
+	for i := 0; i < count; i++ {
+		str, err := tests.GetRandomUpperCaseString(t, 10)
+		require.NoError(t, err)
+
+		bytes[i] = []byte(str)
+	}
+
+	return bytes
+}
+
+func getEntries(t *testing.T, count int) ([][]byte, [][]byte) {
+	t.Helper()
+
+	return getRandomBytes(t, count), getRandomBytes(t, count)
+}
+
+func getLogicID(t *testing.T, address types.Address) types.LogicID {
+	t.Helper()
+
+	logicID, err := types.NewLogicIDv0(
+		types.LogicKindSimple,
+		true,
+		true,
+		1,
+		address,
 	)
 	require.NoError(t, err)
 
-	v, ok := obj.dirtyEntries[assetHash.String()]
-	require.True(t, ok)
+	return logicID
+}
 
-	require.Equal(t, data, v)
+func getLogicIDs(t *testing.T, count int) []types.LogicID {
+	t.Helper()
 
-	// check if balance updated
-	supply, err := obj.BalanceOf(assetID)
-	require.NoError(t, err)
+	logicIDs := make([]types.LogicID, count)
 
-	require.Equal(t, asset.Supply, supply)
+	for i := 0; i < count; i++ {
+		logicIDs[i] = getLogicID(t, tests.RandomAddress(t))
+	}
+
+	return logicIDs
+}
+
+func getAddresses(t *testing.T, count int) []types.Address {
+	t.Helper()
+
+	addresses := make([]types.Address, count)
+	for i := 0; i < count; i++ {
+		addresses[i] = tests.RandomAddress(t)
+	}
+
+	return addresses
+}
+
+func getHashes(t *testing.T, count int) []types.Hash {
+	t.Helper()
+
+	hashes := make([]types.Hash, count)
+	for i := 0; i < count; i++ {
+		hashes[i] = tests.RandomHash(t)
+	}
+
+	return hashes
+}
+
+func getDirtyEntries(t *testing.T, count int) Storage {
+	t.Helper()
+
+	d := make(Storage, count)
+
+	for i := 0; i < count; i++ {
+		d[tests.RandomHash(t).Hex()] = tests.RandomAddress(t).Bytes()
+	}
+
+	return d
 }
