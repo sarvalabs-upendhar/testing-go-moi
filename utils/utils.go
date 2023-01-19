@@ -213,6 +213,22 @@ func ValidateHash(hash string) (string, error) {
 	return hash, nil
 }
 
+func ValidateLogicID(logicID string) (types.LogicID, error) {
+	logicID = strings.TrimPrefix(logicID, "0x")
+
+	logicBytes, err := hex.DecodeString(logicID)
+	if err != nil {
+		return nil, err
+	}
+
+	logic := types.LogicID(logicBytes)
+	if ok := logic.Valid(); !ok {
+		return nil, types.ErrInvalidLogicID
+	}
+
+	return logic, nil
+}
+
 func ValidateAssetID(aID string) (types.AssetID, error) {
 	aID = strings.TrimPrefix(aID, "0x")
 	if len(aID) != 68 {

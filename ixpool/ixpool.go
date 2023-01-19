@@ -26,7 +26,7 @@ const (
 )
 
 type stateManager interface {
-	GetLatestNonce(addr types.Address) (uint64, error)
+	GetNonce(addr types.Address, stateHash types.Hash) (uint64, error)
 	IsAccountRegistered(addr types.Address) (bool, error)
 	IsLogicRegistered(logicID types.LogicID) error
 }
@@ -106,7 +106,7 @@ func (i *IxPool) GetNonce(addr types.Address) (uint64, error) {
 		return acc.getNonce(), nil
 	}
 
-	return i.sm.GetLatestNonce(addr)
+	return i.sm.GetNonce(addr, types.NilHash)
 }
 
 func (i *IxPool) AddInteractions(ixs types.Interactions) []error {
@@ -179,7 +179,7 @@ func (i *IxPool) handlePromoteRequest(req promoteRequest) {
 // ensures it is only initialized once.
 func (i *IxPool) createAccountOnce(newAddr types.Address, nonce uint64) *account {
 	// fetch nonce from the latest state
-	stateNonce, err := i.sm.GetLatestNonce(newAddr)
+	stateNonce, err := i.sm.GetNonce(newAddr, types.NilHash)
 	if err != nil {
 		stateNonce = nonce
 	}
@@ -209,7 +209,7 @@ func (i *IxPool) ResetWithInteractions(ixs types.Interactions) {
 		}
 
 		// fetch the latest nonce from the state
-		latestNonce, err := i.sm.GetLatestNonce(from)
+		latestNonce, err := i.sm.GetNonce(from, types.NilHash)
 		if err != nil {
 			latestNonce = ix.Nonce() + 1
 		}
@@ -414,7 +414,7 @@ func (i *IxPool) validateIx(ix *types.Interaction) error {
 	}
 
 	// Check nonce ordering
-	if n, _ := i.sm.GetLatestNonce(ix.Sender()); n > ix.Nonce() {
+	if n, _ := i.sm.GetNonce(ix.Sender(), types.NilHash); n > ix.Nonce() {
 		return ErrNonceTooLow
 	}
 	/*

@@ -32,7 +32,11 @@ func TestIx_SendInteraction(t *testing.T) {
 	cfg.PriceLimit = big.NewInt(100)
 
 	ixpool.setNonce(address, 5)
-	stateManager.setAccounts(address, 5)
+
+	acc, _ := tests.GetTestAccount(t, func(acc *types.Account) {
+		acc.Nonce = uint64(5)
+	})
+	stateManager.setAccount(address, *acc)
 
 	ixAPI := NewPublicIXAPI(ixpool, stateManager)
 

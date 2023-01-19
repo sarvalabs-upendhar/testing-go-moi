@@ -116,8 +116,8 @@ func TestGetLatestTesseractHash(t *testing.T) {
 }
 
 func TestFetchTesseractFromDB(t *testing.T) {
-	tesseractParams := getTesseractParamsMapWithIxns(t, 1, 2)
-	tesseracts := createTesseracts(t, 2, tesseractParams)
+	tesseractParams := tests.GetTesseractParamsMapWithIxns(t, 1, 2)
+	tesseracts := tests.CreateTesseracts(t, 2, tesseractParams)
 
 	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
@@ -177,8 +177,8 @@ func TestFetchTesseractFromDB(t *testing.T) {
 }
 
 func TestGetTesseractByHash(t *testing.T) {
-	tesseractParams := getTesseractParamsMapWithIxns(t, 2, 2)
-	tesseracts := createTesseracts(t, 3, tesseractParams)
+	tesseractParams := tests.GetTesseractParamsMapWithIxns(t, 2, 2)
+	tesseracts := tests.CreateTesseracts(t, 3, tesseractParams)
 
 	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
@@ -243,7 +243,8 @@ func TestGetTesseractByHash(t *testing.T) {
 }
 
 func TestGetStateObjectByHash(t *testing.T) {
-	balances, balanceHashes := getTestBalances(t, 2)
+	assetIDs, bal := getAssetIDsAndBalances(t, 2)
+	balances, balanceHashes := getTestBalances(t, getAssetMaps(assetIDs, bal, 1), 2)
 	accounts, stateHashes := getTestAccounts(t, balanceHashes, 2)
 
 	soParams := map[int]*createStateObjectParams{
@@ -270,11 +271,10 @@ func TestGetStateObjectByHash(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name:          "state object exists",
-			stateHash:     stateHashes[0],
-			address:       so[0].address,
-			sObj:          so[0],
-			expectedError: nil,
+			name:      "state object exists",
+			stateHash: stateHashes[0],
+			address:   so[0].address,
+			sObj:      so[0],
 		},
 		{
 			name:          "should fail if account not found",
@@ -306,7 +306,8 @@ func TestGetStateObjectByHash(t *testing.T) {
 }
 
 func TestGetLatestStateObject(t *testing.T) {
-	balances, balanceHashes := getTestBalances(t, 2)
+	assetIDs, bal := getAssetIDsAndBalances(t, 2)
+	balances, balanceHashes := getTestBalances(t, getAssetMaps(assetIDs, bal, 1), 2)
 	accounts, stateHashes := getTestAccounts(t, balanceHashes, 2)
 
 	soParams := map[int]*createStateObjectParams{
@@ -316,12 +317,12 @@ func TestGetLatestStateObject(t *testing.T) {
 
 	so := createTestStateObjects(t, 2, soParams)
 
-	tesseractParams := map[int]*createTesseractParams{
+	tesseractParams := map[int]*tests.CreateTesseractParams{
 		0: getTesseractParamsWithStateHash(so[0].address, stateHashes[0]),
 		1: getTesseractParamsWithStateHash(tests.RandomAddress(t), tests.RandomHash(t)),
 	}
 
-	tesseracts := createTesseracts(t, 2, tesseractParams)
+	tesseracts := tests.CreateTesseracts(t, 2, tesseractParams)
 
 	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
@@ -344,16 +345,14 @@ func TestGetLatestStateObject(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name:          "state object exists in state manager",
-			address:       so[1].address,
-			sObj:          so[1],
-			expectedError: nil,
+			name:    "state object exists in state manager",
+			address: so[1].address,
+			sObj:    so[1],
 		},
 		{
-			name:          "state object constructed from db",
-			address:       so[0].address,
-			sObj:          so[0],
-			expectedError: nil,
+			name:    "state object constructed from db",
+			address: so[0].address,
+			sObj:    so[0],
 		},
 		{
 			name:          "should fail if tesseract not found",
@@ -383,10 +382,64 @@ func TestGetLatestStateObject(t *testing.T) {
 	}
 }
 
+func TestGetStateObject(t *testing.T) {
+	assetIDs, bal := getAssetIDsAndBalances(t, 1)
+	balances, balanceHashes := getTestBalances(t, getAssetMaps(assetIDs, bal, 1), 1)
+	accounts, stateHashes := getTestAccounts(t, balanceHashes, 1)
+
+	soParams := map[int]*createStateObjectParams{
+		// insert balance hash inorder to construct state object
+		0: stateObjectParamsWithBalance(t, balanceHashes[0], balances[0]),
+	}
+
+	so := createTestStateObjects(t, 2, soParams)
+
+	smParams := &createStateManagerParams{
+		dbCallback: func(db *MockDB) {
+			insertAccountsInDB(t, db, stateHashes, accounts...)
+			insertBalancesInDB(t, db, balanceHashes, balances...)
+		},
+		smCallBack: func(sm *StateManager) {
+			insertStateObject(sm, so[1])
+		},
+	}
+
+	sm := createTestStateManager(t, smParams)
+
+	testcases := []struct {
+		name      string
+		address   types.Address
+		stateHash types.Hash
+		sObj      *StateObject
+	}{
+		{
+			name:      "fetch state object from state hash",
+			address:   so[0].address,
+			stateHash: stateHashes[0],
+			sObj:      so[0],
+		},
+		{
+			name:      "fetch latest state object",
+			address:   so[1].address,
+			stateHash: types.NilHash,
+			sObj:      so[1],
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			stateObject, err := sm.getStateObject(test.address, test.stateHash)
+			require.NoError(t, err)
+
+			checkForStateObject(t, test.sObj, stateObject)
+		})
+	}
+}
+
 func TestGetLatestTesseract(t *testing.T) {
-	tesseracts := createTesseracts(t,
+	tesseracts := tests.CreateTesseracts(t,
 		2,
-		getTesseractParamsMapWithIxns(
+		tests.GetTesseractParamsMapWithIxns(
 			t,
 			3,
 			2,
@@ -455,7 +508,8 @@ func TestGetLatestTesseract(t *testing.T) {
 }
 
 func TestGetDirtyObject(t *testing.T) {
-	balances, balanceHashes := getTestBalances(t, 2)
+	assets, bal := getAssetIDsAndBalances(t, 2)
+	balances, balanceHashes := getTestBalances(t, getAssetMaps(assets, bal, 1), 2)
 
 	soParams := map[int]*createStateObjectParams{
 		0: stateObjectParamsWithBalance(t, balanceHashes[0], balances[0]), // Add balance as we validate it
@@ -480,16 +534,14 @@ func TestGetDirtyObject(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name:          "address in state manager's objects",
-			address:       so[0].address,
-			sObj:          so[0],
-			expectedError: nil,
+			name:    "address in state manager's objects",
+			address: so[0].address,
+			sObj:    so[0],
 		},
 		{
-			name:          "address in state manager's dirty object",
-			address:       so[1].address,
-			sObj:          so[1],
-			expectedError: nil,
+			name:    "address in state manager's dirty object",
+			address: so[1].address,
+			sObj:    so[1],
 		},
 		{
 			name:          "should fail if state object not found",
@@ -621,16 +673,14 @@ func TestGetContextObject(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name:          "context object in cache",
-			hash:          cHash[0],
-			ctx:           obj[0],
-			expectedError: nil,
+			name: "context object in cache",
+			hash: cHash[0],
+			ctx:  obj[0],
 		},
 		{
-			name:          "context object in db",
-			hash:          cHash[1],
-			ctx:           obj[1],
-			expectedError: nil,
+			name: "context object in db",
+			hash: cHash[1],
+			ctx:  obj[1],
 		},
 		{
 			name:          "should fail if context object not found",
@@ -682,16 +732,14 @@ func TestGetMetaContextObject(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name:          "meta context object in cache",
-			hash:          hashes[0],
-			ctx:           mObj[0],
-			expectedError: nil,
+			name: "meta context object in cache",
+			hash: hashes[0],
+			ctx:  mObj[0],
 		},
 		{
-			name:          "meta context object in db",
-			hash:          hashes[1],
-			ctx:           mObj[1],
-			expectedError: nil,
+			name: "meta context object in db",
+			hash: hashes[1],
+			ctx:  mObj[1],
 		},
 		{
 			name:          "should fail if meta context object not found",
@@ -761,11 +809,10 @@ func TestGetContext(t *testing.T) {
 			expectedError: errors.New("randomContextObject fetch failed"),
 		},
 		{
-			name:          "valid context",
-			hash:          mHash[0],
-			behCtx:        obj[0],
-			randCtx:       obj[1],
-			expectedError: nil,
+			name:    "valid context",
+			hash:    mHash[0],
+			behCtx:  obj[0],
+			randCtx: obj[1],
 		},
 	}
 
@@ -794,7 +841,7 @@ func TestGetContextByHash(t *testing.T) {
 	obj, cHash := getContextObjects(t, kramaIDs, 2, 4)
 	mObj, mHash := getMetaContextObjects(t, cHash)
 
-	ts := createTesseract(t, getTesseractParamsWithContextHash(tests.RandomAddress(t), mHash[1]))
+	ts := tests.CreateTesseract(t, getTesseractParamsWithContextHash(tests.RandomAddress(t), mHash[1]))
 
 	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
@@ -941,7 +988,7 @@ func TestFetchParticipantContextByHash(t *testing.T) {
 }
 
 func TestGetCommittedContextHash(t *testing.T) {
-	ts := createTesseract(t, getTesseractParamsWithContextHash(tests.RandomAddress(t), tests.RandomHash(t)))
+	ts := tests.CreateTesseract(t, getTesseractParamsWithContextHash(tests.RandomAddress(t), tests.RandomHash(t)))
 
 	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
@@ -966,10 +1013,9 @@ func TestGetCommittedContextHash(t *testing.T) {
 			expectedError: errors.New("failed to fetch latest tesseract hash"),
 		},
 		{
-			name:          "context exists",
-			address:       ts.Address(),
-			contextHash:   ts.ContextHash(),
-			expectedError: nil,
+			name:        "context exists",
+			address:     ts.Address(),
+			contextHash: ts.ContextHash(),
 		},
 	}
 
@@ -994,16 +1040,16 @@ func TestFetchContextLock(t *testing.T) {
 	mObj, mHash := getMetaContextObjects(t, cHash)
 
 	addresses := getAddresses(t, 10)
-	ixns := createIxns(t, 5, getIxParamsMapWithAddresses(addresses[:5], addresses[5:10]))
+	ixns := tests.CreateIxns(t, 5, tests.GetIxParamsMapWithAddresses(addresses[:5], addresses[5:10]))
 
 	getTesseractParams := func(
 		ixns types.Interactions,
 		addresses []types.Address,
 		hashes ...types.Hash,
-	) *createTesseractParams {
-		return &createTesseractParams{
-			ixns: ixns,
-			tesseractCallback: func(ts *types.Tesseract) {
+	) *tests.CreateTesseractParams {
+		return &tests.CreateTesseractParams{
+			Ixns: ixns,
+			TesseractCallback: func(ts *types.Tesseract) {
 				ts.Header.ContextLock = mockContextLock()
 				for i, address := range addresses {
 					insertInContextLock(ts, address, hashes[i])
@@ -1012,7 +1058,7 @@ func TestFetchContextLock(t *testing.T) {
 		}
 	}
 
-	tesseractParams := map[int]*createTesseractParams{
+	tesseractParams := map[int]*tests.CreateTesseractParams{
 		0: getTesseractParams(
 			ixns[0:1],
 			[]types.Address{ixns[0].Sender(), ixns[0].Receiver()},
@@ -1040,7 +1086,7 @@ func TestFetchContextLock(t *testing.T) {
 		),
 	}
 
-	ts := createTesseracts(t, 5, tesseractParams)
+	ts := tests.CreateTesseracts(t, 5, tesseractParams)
 
 	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
@@ -1078,8 +1124,6 @@ func TestFetchContextLock(t *testing.T) {
 				nil,
 				nil,
 			),
-
-			expectedError: nil,
 		},
 		{
 			name: "sarga address in context lock",
@@ -1089,7 +1133,6 @@ func TestFetchContextLock(t *testing.T) {
 				ktypes.NewNodeSet(obj[2].Ids, pk[4:6]),
 				ktypes.NewNodeSet(obj[3].Ids, pk[6:8]),
 			),
-			expectedError: nil,
 		},
 		{
 			name: "valid context hashes",
@@ -1100,7 +1143,6 @@ func TestFetchContextLock(t *testing.T) {
 				ktypes.NewNodeSet(obj[2].Ids, pk[4:6]),
 				ktypes.NewNodeSet(obj[3].Ids, pk[6:8]),
 			),
-			expectedError: nil,
 		},
 	}
 
@@ -1209,19 +1251,33 @@ func TestIsAccountRegistered_With_SargaObject(t *testing.T) {
 	}
 }
 
-func TestGetLatestNonce(t *testing.T) {
-	soParams := &createStateObjectParams{
-		address: SargaAddress,
-		account: &types.Account{
-			Nonce: 5,
+func TestGetNonce(t *testing.T) {
+	assets, bal := getAssetIDsAndBalances(t, 1)
+	balances, balanceHashes := getTestBalances(t, getAssetMaps(assets, bal, 1), 1)
+	accounts, stateHashes := getTestAccounts(t, balanceHashes, 1)
+	accounts[0].Nonce = 8882
+
+	acc, _ := tests.GetTestAccount(t, func(acc *types.Account) {
+		acc.Nonce = 5
+	})
+	copiedAcc := *acc
+	soParams := map[int]*createStateObjectParams{
+		// Add balance hash as we need to fetch balance object to construct state object
+		0: stateObjectParamsWithBalance(t, balanceHashes[0], balances[0]),
+		1: {
+			account: &copiedAcc,
 		},
 	}
 
-	so := createTestStateObject(t, soParams)
+	so := createTestStateObjects(t, 2, soParams)
 
 	smParams := &createStateManagerParams{
+		dbCallback: func(db *MockDB) {
+			insertAccountsInDB(t, db, stateHashes, accounts...)
+			insertBalancesInDB(t, db, balanceHashes, balances...)
+		},
 		smCallBack: func(sm *StateManager) {
-			insertStateObject(sm, so)
+			insertStateObject(sm, so[1])
 		},
 	}
 
@@ -1230,19 +1286,25 @@ func TestGetLatestNonce(t *testing.T) {
 	testcases := []struct {
 		name          string
 		address       types.Address
+		stateHash     types.Hash
 		nonce         uint64
 		expectedError error
 	}{
 		{
-			name:          "state object found",
-			address:       so.address,
-			nonce:         5,
-			expectedError: nil,
+			name:    "fetch nonce from latest state",
+			address: so[1].address,
+			nonce:   acc.Nonce,
 		},
 		{
-			name:          "state object not found",
+			name:      "fetch nonce at particular state",
+			address:   so[0].address,
+			stateHash: stateHashes[0],
+			nonce:     accounts[0].Nonce,
+		},
+		{
+			name:          "should return error if failed to fetch nonce",
 			address:       tests.RandomAddress(t),
-			expectedError: errors.New("failed to fetch latest tesseract hash"),
+			expectedError: errors.New("failed to fetch state object"),
 		},
 		{
 			name:          "nil address",
@@ -1253,7 +1315,7 @@ func TestGetLatestNonce(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			nonce, err := sm.GetLatestNonce(test.address)
+			nonce, err := sm.GetNonce(test.address, test.stateHash)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -1267,18 +1329,25 @@ func TestGetLatestNonce(t *testing.T) {
 }
 
 func TestGetBalances(t *testing.T) {
-	soParams := &createStateObjectParams{
-		address: SargaAddress,
-		soCallback: func(so *StateObject) {
-			AddAssetInBalance(t, so)
-		},
+	assets, bal := getAssetIDsAndBalances(t, 2)
+	balances, balanceHashes := getTestBalances(t, getAssetMaps(assets, bal, 1), 2)
+	accounts, stateHashes := getTestAccounts(t, balanceHashes, 1)
+
+	soParams := map[int]*createStateObjectParams{
+		// Add balance hash as we need to fetch balance object to construct state object
+		0: stateObjectParamsWithBalance(t, balanceHashes[0], balances[0]),
+		1: stateObjectParamsWithBalance(t, balanceHashes[1], balances[1]),
 	}
 
-	so := createTestStateObject(t, soParams)
+	so := createTestStateObjects(t, 2, soParams)
 
 	smParams := &createStateManagerParams{
+		dbCallback: func(db *MockDB) {
+			insertAccountsInDB(t, db, stateHashes, accounts...)
+			insertBalancesInDB(t, db, balanceHashes, balances...)
+		},
 		smCallBack: func(sm *StateManager) {
-			insertStateObject(sm, so)
+			insertStateObject(sm, so[1])
 		},
 	}
 
@@ -1287,17 +1356,23 @@ func TestGetBalances(t *testing.T) {
 	testcases := []struct {
 		name          string
 		address       types.Address
+		stateHash     types.Hash
 		balance       *gtypes.BalanceObject
 		expectedError error
 	}{
 		{
-			name:          "state object found",
-			address:       so.address,
-			balance:       so.balance,
-			expectedError: nil,
+			name:    "fetch balances from latest state",
+			address: so[1].address,
+			balance: balances[1],
 		},
 		{
-			name:          "state object not found",
+			name:      "fetch balances at particular state",
+			address:   so[0].address,
+			stateHash: stateHashes[0],
+			balance:   balances[0],
+		},
+		{
+			name:          "failed to fetch balances",
 			address:       tests.RandomAddress(t),
 			expectedError: errors.New("failed to fetch latest tesseract hash"),
 		},
@@ -1305,7 +1380,7 @@ func TestGetBalances(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			balance, err := sm.GetBalances(test.address)
+			balance, err := sm.GetBalances(test.address, test.stateHash)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -1319,18 +1394,29 @@ func TestGetBalances(t *testing.T) {
 }
 
 func TestGetBalance(t *testing.T) {
-	soParams := &createStateObjectParams{
-		address: SargaAddress,
-		soCallback: func(so *StateObject) {
-			so.balance.Balances[types.AssetID("MOI")] = big.NewInt(54332)
+	assetIDs, bal := getAssetIDsAndBalances(t, 2)
+	balances, balanceHashes := getTestBalances(t, getAssetMaps(assetIDs, bal, 1), 2)
+	accounts, stateHashes := getTestAccounts(t, balanceHashes, 1)
+
+	soParams := map[int]*createStateObjectParams{
+		// Add balance hash as we need to fetch balance object to construct state object
+		0: stateObjectParamsWithBalance(t, balanceHashes[0], balances[0]),
+		1: {
+			soCallback: func(so *StateObject) {
+				insertAssetAndBalance(so, assetIDs[0], bal[0])
+			},
 		},
 	}
 
-	so := createTestStateObject(t, soParams)
+	so := createTestStateObjects(t, 2, soParams)
 
 	smParams := &createStateManagerParams{
+		dbCallback: func(db *MockDB) {
+			insertAccountsInDB(t, db, stateHashes, accounts...)
+			insertBalancesInDB(t, db, balanceHashes, balances...)
+		},
 		smCallBack: func(sm *StateManager) {
-			insertStateObject(sm, so)
+			insertStateObject(sm, so[1])
 		},
 	}
 
@@ -1340,33 +1426,40 @@ func TestGetBalance(t *testing.T) {
 		name          string
 		address       types.Address
 		assetID       types.AssetID
+		stateHash     types.Hash
 		balance       *gtypes.BalanceObject
 		expectedError error
 	}{
 		{
-			name:          "state object found",
-			address:       so.address,
-			assetID:       types.AssetID("MOI"),
-			balance:       so.balance,
-			expectedError: nil,
+			name:    "fetch balance from latest state",
+			address: so[1].address,
+			assetID: assetIDs[0],
+			balance: balances[0],
 		},
 		{
-			name:          "asset not found",
-			address:       so.address,
-			assetID:       types.AssetID("BTC"),
+			name:      "fetch balance at particular state",
+			address:   so[0].address,
+			assetID:   assetIDs[0],
+			stateHash: stateHashes[0],
+			balance:   balances[0],
+		},
+		{
+			name:          "should return error if asset not found",
+			address:       so[1].address,
+			assetID:       tests.GetRandomAssetID(t, tests.RandomAddress(t)),
 			expectedError: types.ErrAssetNotFound,
 		},
 		{
-			name:          "state object not found",
+			name:          "should return error if failed to fetch balance",
 			address:       tests.RandomAddress(t),
-			assetID:       types.AssetID("MOI"),
-			expectedError: errors.New("failed to fetch latest tesseract hash"),
+			assetID:       assetIDs[0],
+			expectedError: errors.New("failed to fetch state object"),
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			balance, err := sm.GetBalance(test.address, test.assetID)
+			balance, err := sm.GetBalance(test.address, test.assetID, test.stateHash)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -1384,13 +1477,13 @@ func TestFetchLatestParticipantContext(t *testing.T) {
 	obj, cHash := getContextObjects(t, kramaIDs, 2, 6)
 	mObj, mHash := getMetaContextObjects(t, cHash)
 
-	tesseractParams := map[int]*createTesseractParams{
+	tesseractParams := map[int]*tests.CreateTesseractParams{
 		0: getTesseractParamsWithContextHash(tests.RandomAddress(t), mHash[0]),
 		1: getTesseractParamsWithContextHash(tests.RandomAddress(t), mHash[1]),
 		2: getTesseractParamsWithContextHash(tests.RandomAddress(t), mHash[2]),
 	}
 
-	ts := createTesseracts(t, 3, tesseractParams)
+	ts := tests.CreateTesseracts(t, 3, tesseractParams)
 
 	smParams := &createStateManagerParams{
 		smCallBack: func(sm *StateManager) {
@@ -1433,12 +1526,11 @@ func TestFetchLatestParticipantContext(t *testing.T) {
 			expectedError: types.ErrPublicKeyNotFound,
 		},
 		{
-			name:          "valid hash and public keys",
-			address:       ts[0].Address(),
-			ctxHash:       ts[0].ContextHash(),
-			behSet:        ktypes.NewNodeSet(obj[0].Ids, pk[:2]),
-			randSet:       ktypes.NewNodeSet(obj[1].Ids, pk[2:4]),
-			expectedError: nil,
+			name:    "valid hash and public keys",
+			address: ts[0].Address(),
+			ctxHash: ts[0].ContextHash(),
+			behSet:  ktypes.NewNodeSet(obj[0].Ids, pk[:2]),
+			randSet: ktypes.NewNodeSet(obj[1].Ids, pk[2:4]),
 		},
 	}
 
@@ -1472,14 +1564,14 @@ func TestGetReceiverContext_RegisteredAccount(t *testing.T) {
 
 	tesseractParams := getTesseractParamsWithContextHash(tests.RandomAddress(t), mHash[0])
 
-	ts := createTesseract(t, tesseractParams)
+	ts := tests.CreateTesseract(t, tesseractParams)
 
-	ixParams := map[int]*createIxParams{
-		0: getIxParamsWithAddress(types.NilAddress, ts.Address()),
-		1: getIxParamsWithAddress(types.NilAddress, tests.RandomAddress(t)),
+	ixParams := map[int]*tests.CreateIxParams{
+		0: tests.GetIxParamsWithAddress(types.NilAddress, ts.Address()),
+		1: tests.GetIxParamsWithAddress(types.NilAddress, tests.RandomAddress(t)),
 	}
 
-	ixs := createIxns(t, 2, ixParams)
+	ixs := tests.CreateIxns(t, 2, ixParams)
 
 	soParams := &createStateObjectParams{
 		address: SargaAddress,
@@ -1521,13 +1613,12 @@ func TestGetReceiverContext_RegisteredAccount(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name:          "context of receiver found",
-			ix:            ixs[0],
-			behSet:        ktypes.NewNodeSet(obj[0].Ids, pk[:2]),
-			randSet:       ktypes.NewNodeSet(obj[1].Ids, pk[2:4]),
-			address:       ixs[0].Receiver(),
-			contextHash:   ts.ContextHash(),
-			expectedError: nil,
+			name:        "context of receiver found",
+			ix:          ixs[0],
+			behSet:      ktypes.NewNodeSet(obj[0].Ids, pk[:2]),
+			randSet:     ktypes.NewNodeSet(obj[1].Ids, pk[2:4]),
+			address:     ixs[0].Receiver(),
+			contextHash: ts.ContextHash(),
 		},
 		{
 			name:          "failed to fetch receiver context",
@@ -1567,15 +1658,15 @@ func TestGetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 
 	tesseractParams := getTesseractParamsWithContextHash(SargaAddress, mHash[0])
 
-	ts := createTesseract(t, tesseractParams)
+	ts := tests.CreateTesseract(t, tesseractParams)
 
-	ixParams := map[int]*createIxParams{
-		0: getIxParamsWithAddress(types.NilAddress, tests.RandomAddress(t)),
-		1: getIxParamsWithAddress(types.NilAddress, tests.RandomAddress(t)),
-		2: getIxParamsWithAddress(types.NilAddress, tests.RandomAddress(t)),
+	ixParams := map[int]*tests.CreateIxParams{
+		0: tests.GetIxParamsWithAddress(types.NilAddress, tests.RandomAddress(t)),
+		1: tests.GetIxParamsWithAddress(types.NilAddress, tests.RandomAddress(t)),
+		2: tests.GetIxParamsWithAddress(types.NilAddress, tests.RandomAddress(t)),
 	}
 
-	ixs := createIxns(t, 3, ixParams)
+	ixs := tests.CreateIxns(t, 3, ixParams)
 
 	soParams := &createStateObjectParams{
 		address: SargaAddress,
@@ -1614,11 +1705,10 @@ func TestGetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 					setPublicKeys(s, kramaIDs, pk)
 				},
 			},
-			behSet:        ktypes.NewNodeSet(obj[0].Ids, pk[:2]),
-			randSet:       ktypes.NewNodeSet(obj[1].Ids, pk[2:4]),
-			address:       SargaAddress,
-			contextHash:   ts.ContextHash(),
-			expectedError: nil,
+			behSet:      ktypes.NewNodeSet(obj[0].Ids, pk[:2]),
+			randSet:     ktypes.NewNodeSet(obj[1].Ids, pk[2:4]),
+			address:     SargaAddress,
+			contextHash: ts.ContextHash(),
 		},
 		{
 			name: "context of sarga account not found",
@@ -1633,7 +1723,6 @@ func TestGetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 		{
 			name:          "with out sarga object",
 			ix:            ixs[2],
-			smParams:      nil,
 			expectedError: types.ErrObjectNotFound,
 		},
 	}
@@ -1669,19 +1758,19 @@ func TestFetchInteractionContext(t *testing.T) {
 	obj, cHash := getContextObjects(t, kramaIDs, 2, 4)
 	mObj, mHash := getMetaContextObjects(t, cHash)
 
-	tesseractParams := map[int]*createTesseractParams{
+	tesseractParams := map[int]*tests.CreateTesseractParams{
 		0: getTesseractParamsWithContextHash(tests.RandomAddress(t), mHash[0]),
 		1: getTesseractParamsWithContextHash(tests.RandomAddress(t), mHash[1]),
 	}
 
-	ts := createTesseracts(t, 2, tesseractParams)
+	ts := tests.CreateTesseracts(t, 2, tesseractParams)
 
-	ixParams := map[int]*createIxParams{
-		0: getIxParamsWithAddress(ts[0].Address(), ts[1].Address()),
-		1: getIxParamsWithAddress(types.NilAddress, types.NilAddress),
+	ixParams := map[int]*tests.CreateIxParams{
+		0: tests.GetIxParamsWithAddress(ts[0].Address(), ts[1].Address()),
+		1: tests.GetIxParamsWithAddress(types.NilAddress, types.NilAddress),
 	}
 
-	ixs := createIxns(t, 2, ixParams)
+	ixs := tests.CreateIxns(t, 2, ixParams)
 
 	soParams := &createStateObjectParams{
 		address: SargaAddress,
@@ -1732,12 +1821,10 @@ func TestFetchInteractionContext(t *testing.T) {
 				ixs[0].Sender():   ts[0].ContextHash(),
 				ixs[0].Receiver(): ts[1].ContextHash(),
 			},
-			expectedError: nil,
 		},
 		{
-			name:          "both sender and receiver addresses don't have context",
-			ix:            ixs[1],
-			expectedError: nil,
+			name: "both sender and receiver addresses don't have context",
+			ix:   ixs[1],
 		},
 	}
 
@@ -1854,10 +1941,9 @@ func TestGetAccTypeUsingStateObject(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name:          "state object exists",
-			address:       so.address,
-			sObj:          so,
-			expectedError: nil,
+			name:    "state object exists",
+			address: so.address,
+			sObj:    so,
 		},
 		{
 			name:          "state object doesn't exist",
@@ -1945,7 +2031,6 @@ func TestSetupSargaAcc(t *testing.T) {
 					nil,
 				),
 			},
-			expectedError: nil,
 		},
 	}
 
@@ -2020,7 +2105,6 @@ func TestSetupNewAccount(t *testing.T) {
 					"BTC": big.NewInt(18000),
 				},
 			),
-			expectedError: nil,
 		},
 		{
 			name: "account without assets and balances",
@@ -2032,7 +2116,6 @@ func TestSetupNewAccount(t *testing.T) {
 				make([]*types.AssetDescriptor, 0),
 				make(map[types.AssetID]*big.Int),
 			),
-			expectedError: nil,
 		},
 	}
 
@@ -2113,10 +2196,9 @@ func TestFlushDirtyObject(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name:          "state object exists",
-			address:       so[0].address,
-			smParams:      smParams,
-			expectedError: nil,
+			name:     "state object exists",
+			address:  so[0].address,
+			smParams: smParams,
 		},
 		{
 			name:          "state object doesn't exist",
@@ -2186,9 +2268,9 @@ func TestIsAccountRegisteredAt(t *testing.T) {
 		[][]byte{types.NilHash.Bytes()},
 	)
 
-	balance, balanceHash := getTestBalance(t)
+	balance, balanceHash := getTestBalance(t, getAssetMap(getAssetIDsAndBalances(t, 2)))
 
-	acc, stateHash := getTestAccount(t, func(acc *types.Account) {
+	acc, stateHash := tests.GetTestAccount(t, func(acc *types.Account) {
 		acc.StorageRoot = storageRoot
 	})
 
@@ -2203,12 +2285,12 @@ func TestIsAccountRegisteredAt(t *testing.T) {
 
 	so := createTestStateObject(t, soParams)
 
-	tesseractParams := map[int]*createTesseractParams{
+	tesseractParams := map[int]*tests.CreateTesseractParams{
 		0: getTesseractParamsWithStateHash(SargaAddress, stateHash),
 		1: getTesseractParamsWithStateHash(tests.RandomAddress(t), tests.RandomHash(t)),
 	}
 
-	tesseracts := createTesseracts(t, 2, tesseractParams)
+	tesseracts := tests.CreateTesseracts(t, 2, tesseractParams)
 
 	smParams := &createStateManagerParams{
 		db: db,

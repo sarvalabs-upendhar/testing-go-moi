@@ -1899,19 +1899,6 @@ func checkIfTesseractCachedInCM(t *testing.T, c *ChainManager, withInteractions 
 	require.Equal(t, 0, len(cachedTS.Ixns))
 }
 
-func checkForTesseracts(t *testing.T, expectedTS, actualTS *types.Tesseract, withInteractions bool) {
-	t.Helper()
-
-	if withInteractions {
-		require.Equal(t, expectedTS, actualTS)
-
-		return
-	}
-
-	require.Equal(t, expectedTS.Canonical(), actualTS.Canonical())
-	require.Nil(t, actualTS.Ixns)
-}
-
 func checkForValidatedTesseracts(t *testing.T, c *ChainManager, exists bool, tesseracts ...*types.Tesseract) {
 	t.Helper()
 

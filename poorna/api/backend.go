@@ -27,12 +27,12 @@ type ChainManager interface {
 type StateManager interface {
 	GetLatestStateObject(addr types.Address) (*guna.StateObject, error)
 	GetContextByHash(address types.Address, hash types.Hash) (types.Hash, []id.KramaID, []id.KramaID, error)
-	GetBalances(addrs types.Address) (*gtypes.BalanceObject, error)
-	GetBalance(addr types.Address, assetID types.AssetID) (*big.Int, error)
-	GetLatestNonce(addr types.Address) (uint64, error)
-	GetStorageEntry(logicID types.LogicID, slot []byte) ([]byte, error)
+	GetBalances(addrs types.Address, stateHash types.Hash) (*gtypes.BalanceObject, error)
+	GetBalance(addr types.Address, assetID types.AssetID, stateHash types.Hash) (*big.Int, error)
+	GetNonce(addr types.Address, stateHash types.Hash) (uint64, error)
 	GetAccountState(addr types.Address, stateHash types.Hash) (*types.Account, error)
-	GetLogicManifest(logicID types.LogicID) ([]byte, error)
+	GetLogicManifest(logicID types.LogicID, stateHash types.Hash) ([]byte, error)
+	GetStorageEntry(logicID types.LogicID, slot []byte, stateHash types.Hash) ([]byte, error)
 }
 
 // Backend is a struct that represents the API backend

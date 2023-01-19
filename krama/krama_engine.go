@@ -80,7 +80,7 @@ type state interface {
 	GetAccountMetaInfo(addr types.Address) (*types.AccountMetaInfo, error)
 	IsAccountRegistered(addr types.Address) (bool, error)
 	GetLatestStateObject(addr types.Address) (*guna.StateObject, error)
-	GetLatestNonce(addr types.Address) (uint64, error)
+	GetNonce(addr types.Address, stateHash types.Hash) (uint64, error)
 }
 
 type ixPool interface {
@@ -1419,7 +1419,7 @@ func (k *Engine) validateInteractions(ixs types.Interactions) error {
 			2) Verify the balances
 			3) Verify the account states
 		*/
-		latestNonce, err := k.state.GetLatestNonce(ix.Sender())
+		latestNonce, err := k.state.GetNonce(ix.Sender(), types.NilHash)
 		if err != nil {
 			return err
 		}

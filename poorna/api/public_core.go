@@ -4,6 +4,8 @@ import (
 	"encoding/hex"
 	"math/big"
 
+	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/moichain/utils"
 
 	"github.com/sarvalabs/moichain/types"
@@ -23,62 +25,172 @@ func NewPublicCoreAPI(chain ChainManager, sm StateManager) *PublicCoreAPI {
 	return &PublicCoreAPI{chain, sm}
 }
 
-// GetBalance is a method of PublicCoreAPI for retrieving the balance of an address.
-// Accepts the address and asset for which to retrieve the balance.
-// Returns the balance as a big Integer and any error that occurs.
-func (p *PublicCoreAPI) GetBalance(args *BalArgs) (*big.Int, error) {
-	address, err := utils.ValidateAddress(args.From)
+func getTesseractArgs(address string, options TesseractNumberOrHash) *TesseractArgs {
+	return &TesseractArgs{
+		From:    address,
+		Options: options,
+	}
+}
+
+func (p *PublicCoreAPI) getTesseractByHash(hash string, withInteractions bool) (*types.Tesseract, error) {
+	hash, err := utils.ValidateHash(hash)
+	if err != nil {
+		return nil, err
+	}
+
+	return p.chain.GetTesseract(types.HexToHash(hash), withInteractions)
+}
+
+func (p *PublicCoreAPI) getTesseractByHeight(
+	from string,
+	height int64,
+	withInteractions bool,
+) (*types.Tesseract, error) {
+	address, err := utils.ValidateAddress(from)
 	if err != nil {
 		return nil, types.ErrInvalidAddress
 	}
 
-	assetID, err := utils.ValidateAssetID(args.AssetID)
-	if err != nil {
-		return nil, types.ErrInvalidAssetID
+	if height == LatestTesseractHeight {
+		return p.chain.GetLatestTesseract(address, withInteractions)
 	}
 
-	// Retrieve the state object for the address from the backend state manager and return if an error occurs
-	// Get the balance of the asset from the state object and return if an error occurs
-	bal, err := p.sm.GetBalance(address, assetID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Return the balance and a nil error
-	return bal, nil
-}
-
-// GetLatestTesseract is a method of PublicCoreAPI for retrieving the latest Tesseract of an address
-func (p *PublicCoreAPI) GetLatestTesseract(args *TesseractArgs) (*types.Tesseract, error) {
-	address, err := utils.ValidateAddress(args.From)
-	if err != nil {
-		return nil, types.ErrInvalidAddress
-	}
-
-	return p.chain.GetLatestTesseract(address, args.WithInteractions)
-}
-
-func (p *PublicCoreAPI) GetTesseractByHash(args *TesseractByHashArgs) (*types.Tesseract, error) {
-	hash, err := utils.ValidateHash(args.Hash)
-	if err != nil {
-		return nil, err
-	}
-
-	return p.chain.GetTesseract(types.BytesToHash(types.Hex2Bytes(hash)), args.WithInteractions)
-}
-
-func (p *PublicCoreAPI) GetTesseractByHeight(args *TesseractByHeightArgs) (*types.Tesseract, error) {
-	from, err := utils.ValidateAddress(args.From)
-	if err != nil {
-		return nil, err
-	}
-
-	tesseract, err := p.chain.GetTesseractByHeight(from, args.Height, args.WithInteractions)
+	tesseract, err := p.chain.GetTesseractByHeight(address, uint64(height), withInteractions)
 	if err != nil {
 		return nil, err
 	}
 
 	return tesseract, nil
+}
+
+func (p *PublicCoreAPI) GetTesseract(args *TesseractArgs) (*types.Tesseract, error) {
+	if args.Options.TesseractHash != nil && args.Options.TesseractNumber != nil {
+		return nil, errors.New("can not use both tesseract number and tesseract hash")
+	}
+
+	if hash, ok := args.Options.Hash(); ok {
+		return p.getTesseractByHash(hash, args.WithInteractions)
+	}
+
+	height, err := args.Options.Number()
+	if err == nil {
+		return p.getTesseractByHeight(args.From, height, args.WithInteractions)
+	}
+
+	if errors.Is(err, types.ErrEmptyHeight) {
+		return nil, types.ErrEmptyOptions
+	}
+
+	return nil, errors.Wrap(err, "invalid options")
+}
+
+// GetContextInfo will fetch the context associated with the given address
+func (p *PublicCoreAPI) GetContextInfo(args *ContextInfoArgs) ([]string, []string, error) {
+	ts, err := p.GetTesseract(getTesseractArgs(args.From, args.Options))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	_, behaviourSet, RandomSet, err := p.sm.GetContextByHash(ts.Address(), ts.ContextHash())
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return utils.KramaIDToString(behaviourSet), utils.KramaIDToString(RandomSet), nil
+}
+
+// GetBalance is a method of PublicCoreAPI for retrieving the balance of an address.
+// Accepts the address and asset for which to retrieve the balance.
+// Returns the balance as a big Integer and any error that occurs.
+func (p *PublicCoreAPI) GetBalance(args *BalArgs) (*big.Int, error) {
+	assetID, err := utils.ValidateAssetID(args.AssetID)
+	if err != nil {
+		return nil, types.ErrInvalidAssetID
+	}
+
+	ts, err := p.GetTesseract(getTesseractArgs(args.From, args.Options))
+	if err != nil {
+		return nil, err
+	}
+
+	return p.sm.GetBalance(ts.Address(), assetID, ts.StateHash())
+}
+
+// GetTDU will return the total digital utility associated with address
+func (p *PublicCoreAPI) GetTDU(args *TesseractArgs) (types.AssetMap, error) {
+	ts, err := p.GetTesseract(getTesseractArgs(args.From, args.Options))
+	if err != nil {
+		return nil, err
+	}
+
+	object, err := p.sm.GetBalances(ts.Address(), ts.StateHash())
+	if err != nil {
+		return nil, err
+	}
+
+	data, _ := object.TDU()
+
+	return data, nil
+}
+
+// GetInteractionReceipt returns the receipt for the given interaction hash
+func (p *PublicCoreAPI) GetInteractionReceipt(args *ReceiptArgs) (*types.Receipt, error) {
+	hash, err := utils.ValidateHash(args.Hash)
+	if err != nil {
+		return nil, err
+	}
+
+	return p.chain.GetReceiptByIxHash(types.HexToHash(hash))
+}
+
+// GetInteractionCount returns the number of interactions sent for the given address
+func (p *PublicCoreAPI) GetInteractionCount(args *InteractionCountArgs) (uint64, error) {
+	ts, err := p.GetTesseract(getTesseractArgs(args.From, args.Options))
+	if err != nil {
+		return 0, err
+	}
+
+	return p.sm.GetNonce(ts.Address(), ts.StateHash())
+}
+
+// GetAccountState returns the account state of the given address
+func (p *PublicCoreAPI) GetAccountState(args *GetAccountArgs) (*types.Account, error) {
+	ts, err := p.GetTesseract(getTesseractArgs(args.Address, args.Options))
+	if err != nil {
+		return nil, err
+	}
+
+	return p.sm.GetAccountState(ts.Address(), ts.StateHash())
+}
+
+// GetLogicManifest returns the manifest associated with the given logic id
+func (p *PublicCoreAPI) GetLogicManifest(args *GetLogicManifestArgs) ([]byte, error) {
+	logicID, err := utils.ValidateLogicID(args.LogicID)
+	if err != nil {
+		return nil, err
+	}
+
+	ts, err := p.GetTesseract(getTesseractArgs(logicID.Address().Hex(), args.Options))
+	if err != nil {
+		return nil, err
+	}
+
+	return p.sm.GetLogicManifest(logicID, ts.StateHash())
+}
+
+// GetStorageAt returns the data associated with the given storage slot
+func (p *PublicCoreAPI) GetStorageAt(args *GetStorageArgs) ([]byte, error) {
+	logicID, err := utils.ValidateLogicID(args.LogicID)
+	if err != nil {
+		return nil, err
+	}
+
+	ts, err := p.GetTesseract(getTesseractArgs(logicID.Address().String(), args.Options))
+	if err != nil {
+		return nil, err
+	}
+
+	return p.sm.GetStorageEntry(logicID, types.FromHex(args.StorageKey), ts.StateHash())
 }
 
 func (p *PublicCoreAPI) GetAssetInfoByAssetID(id string) (*types.AssetDescriptor, error) {
@@ -105,84 +217,6 @@ func (p *PublicCoreAPI) GetAssetInfoByAssetID(id string) (*types.AssetDescriptor
 	assetInfo.LogicID = assetData.LogicID
 
 	return assetInfo, nil
-}
-
-// GetContextInfoByHash will fetch the context associated with the given address
-func (p *PublicCoreAPI) GetContextInfoByHash(args *ContextInfoByHashArgs) ([]string, []string, error) {
-	address, err := utils.ValidateAddress(args.From)
-	if err != nil {
-		return nil, nil, types.ErrInvalidAddress
-	}
-
-	hash, err := utils.ValidateHash(args.Hash)
-	if err != nil && args.Hash != "" {
-		return nil, nil, types.ErrInvalidHash
-	}
-
-	_, behaviourSet, RandomSet, err := p.sm.GetContextByHash(address, types.HexToHash(hash))
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return utils.KramaIDToString(behaviourSet), utils.KramaIDToString(RandomSet), nil
-}
-
-// GetTDU will return the total digital utility associated with address
-func (p *PublicCoreAPI) GetTDU(args *TesseractArgs) (types.AssetMap, error) {
-	address, err := utils.ValidateAddress(args.From)
-	if err != nil {
-		return nil, types.ErrInvalidAddress
-	}
-
-	object, err := p.sm.GetBalances(address)
-	if err != nil {
-		return nil, err
-	}
-
-	data, _ := object.TDU()
-
-	return data, nil
-}
-
-// GetInteractionReceipt returns the receipt for the given interaction hash
-func (p *PublicCoreAPI) GetInteractionReceipt(args *ReceiptArgs) (*types.Receipt, error) {
-	hash, err := utils.ValidateHash(args.Hash)
-	if err != nil {
-		return nil, types.ErrInvalidHash
-	}
-
-	return p.chain.GetReceiptByIxHash(types.HexToHash(hash))
-}
-
-// GetInteractionCountByAddress returns the number of interactions sent for the given address
-func (p *PublicCoreAPI) GetInteractionCountByAddress(args *InteractionCountArgs) (uint64, error) {
-	addr, err := utils.ValidateAddress(args.From)
-	if err != nil {
-		return 0, err
-	}
-
-	interactionCount, err := p.sm.GetLatestNonce(addr)
-	if err != nil {
-		return 0, err
-	}
-
-	return interactionCount, nil
-}
-
-// GetStorageAt returns the data associated with the given storage slot
-func (p *PublicCoreAPI) GetStorageAt(args *GetStorageArgs) ([]byte, error) {
-	return p.sm.GetStorageEntry(types.FromHex(args.LogicID), types.FromHex(args.StorageKey))
-}
-
-// GetAccountState returns the account state of the given address
-func (p *PublicCoreAPI) GetAccountState(args *GetAccountArgs) (*types.Account, error) {
-	return p.sm.GetAccountState(types.HexToAddress(args.Address), types.HexToHash(args.StateHash))
-}
-
-// GetLogicManifest returns the manifest associated with the given logic id
-func (p *PublicCoreAPI) GetLogicManifest(args *GetLogicManifestArgs) ([]byte, error) {
-	// TODO: logic to validate logic id
-	return p.sm.GetLogicManifest(types.FromHex(args.LogicID))
 }
 
 // helper functions

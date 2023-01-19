@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/stretchr/testify/require"
@@ -254,6 +256,21 @@ func CreateTestAsset(t *testing.T, address types.Address) (types.AssetID, *types
 	return assetID, asset
 }
 
+func GetRandomNumbers(t *testing.T, max int, count int) []*big.Int {
+	t.Helper()
+
+	var err error
+
+	numbers := make([]*big.Int, count)
+
+	for i := 0; i < count; i++ {
+		numbers[i], err = rand.Int(rand.Reader, big.NewInt(int64(max)))
+		require.NoError(t, err)
+	}
+
+	return numbers
+}
+
 func GetRandomAssetID(t *testing.T, address types.Address) types.AssetID {
 	t.Helper()
 
@@ -358,27 +375,192 @@ func GetRandomAddressList(t *testing.T, count uint8) []types.Address {
 	return address
 }
 
-/*
-// Unused functions
-
-func GetTestTesseract(t *testing.T, height uint64) *types.Tesseract {
-	t.Helper()
-
-	header := types.TesseractHeader{
-		Address:  RandomAddress(t),
-		PrevHash: RandomHash(t),
-		Height:   height,
-	}
-	body := types.TesseractBody{}
-	tesseract := types.Tesseract{
-		Header: header,
-		Body:   body,
-		Seal:   []byte{1},
-	}
-
-	return &tesseract
+type CreateTesseractParams struct {
+	Address           types.Address
+	Height            uint64
+	Ixns              types.Interactions
+	TesseractCallback func(ts *types.Tesseract)
 }
 
+func CreateTesseract(t *testing.T, params *CreateTesseractParams) *types.Tesseract {
+	t.Helper()
+
+	if params == nil {
+		params = &CreateTesseractParams{}
+	}
+
+	if params.Address.IsNil() {
+		params.Address = RandomAddress(t)
+	}
+
+	ts := &types.Tesseract{
+		Header: types.TesseractHeader{
+			Address: params.Address,
+			Height:  params.Height,
+		},
+		Body: types.TesseractBody{},
+		Ixns: params.Ixns,
+	}
+
+	if params.Ixns != nil {
+		hash, err := params.Ixns.Hash()
+		require.NoError(t, err)
+
+		ts.Body.InteractionHash = hash
+	}
+
+	if params.TesseractCallback != nil {
+		params.TesseractCallback(ts)
+	}
+
+	return ts
+}
+
+func CreateTesseracts(t *testing.T, count int, paramsMap map[int]*CreateTesseractParams) []*types.Tesseract {
+	t.Helper()
+
+	tesseracts := make([]*types.Tesseract, count)
+
+	if paramsMap == nil {
+		paramsMap = map[int]*CreateTesseractParams{}
+	}
+
+	for i := 0; i < count; i++ {
+		tesseracts[i] = CreateTesseract(t, paramsMap[i])
+	}
+
+	return tesseracts
+}
+
+func GetTesseractHash(t *testing.T, ts *types.Tesseract) types.Hash {
+	t.Helper()
+
+	hash, err := ts.Hash()
+	require.NoError(t, err)
+
+	return hash
+}
+
+func GetAddresses(t *testing.T, count int) []types.Address {
+	t.Helper()
+
+	addresses := make([]types.Address, count)
+	for i := 0; i < count; i++ {
+		addresses[i] = RandomAddress(t)
+	}
+
+	return addresses
+}
+
+type CreateIxParams struct {
+	ixDataCallback func(ix *types.IxData)
+}
+
+func CreateIX(t *testing.T, params *CreateIxParams) *types.Interaction {
+	t.Helper()
+
+	if params == nil {
+		params = &CreateIxParams{}
+	}
+
+	data := &types.IxData{
+		Input: types.IxInput{},
+	}
+
+	if params.ixDataCallback != nil {
+		params.ixDataCallback(data)
+	}
+
+	ix := types.NewInteraction(*data, []byte{})
+
+	return ix
+}
+
+func CreateIxns(t *testing.T, count int, paramsMap map[int]*CreateIxParams) types.Interactions {
+	t.Helper()
+
+	if paramsMap == nil {
+		paramsMap = map[int]*CreateIxParams{}
+	}
+
+	ixns := make(types.Interactions, count)
+
+	for i := 0; i < count; i++ {
+		ixns[i] = CreateIX(t, paramsMap[i])
+	}
+
+	return ixns
+}
+
+func GetIxParamsWithAddress(from types.Address, to types.Address) *CreateIxParams {
+	return &CreateIxParams{
+		ixDataCallback: func(ix *types.IxData) {
+			ix.Input.Sender = from
+			ix.Input.Receiver = to
+		},
+	}
+}
+
+func GetIxParamsMapWithAddresses(
+	from []types.Address,
+	to []types.Address,
+) map[int]*CreateIxParams {
+	count := len(from)
+	ixParams := make(map[int]*CreateIxParams, count)
+
+	for i := 0; i < count; i++ {
+		ixParams[i] = GetIxParamsWithAddress(from[i], to[i])
+	}
+
+	return ixParams
+}
+
+// GetTesseractParamsMapWithIxns returns tsCount no.of tesseracts and each one will have ixnCount interactions
+func GetTesseractParamsMapWithIxns(t *testing.T, tsCount, ixnCount int) map[int]*CreateTesseractParams {
+	t.Helper()
+
+	tesseractParams := make(map[int]*CreateTesseractParams, tsCount)
+	addresses := GetAddresses(t, 2*tsCount*ixnCount) // for each interaction, sender and receiver addresses needed
+	ixns := CreateIxns(t, tsCount*ixnCount, GetIxParamsMapWithAddresses(addresses[:2*tsCount], addresses[2*tsCount:]))
+
+	for i := 0; i < tsCount; i++ {
+		tesseractParams[i] = &CreateTesseractParams{
+			Ixns: ixns[i*ixnCount : i*ixnCount+ixnCount], // allocate two interactions per tesseract
+		}
+	}
+
+	return tesseractParams
+}
+
+func GetTestAccount(t *testing.T, callBack func(acc *types.Account)) (*types.Account, types.Hash) {
+	t.Helper()
+
+	acc := new(types.Account)
+	if callBack != nil {
+		callBack(acc)
+	}
+
+	accHash, err := acc.Hash()
+	assert.NoError(t, err)
+
+	return acc, accHash
+}
+
+func CheckForTesseract(t *testing.T, expectedTS, actualTS *types.Tesseract, withInteractions bool) {
+	t.Helper()
+
+	if withInteractions {
+		require.Equal(t, expectedTS, actualTS)
+
+		return
+	}
+
+	require.Equal(t, expectedTS.Canonical(), actualTS.Canonical())
+	require.Nil(t, actualTS.Ixns)
+}
+
+/*
+// Unused functions
 func GetInvalidHash(t *testing.T) string {
 	t.Helper()
 	randomHash := RandomHash(t).String()

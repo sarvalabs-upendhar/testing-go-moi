@@ -136,7 +136,7 @@ func TestCopy(t *testing.T) {
 }
 
 func TestCommitBalanceObject(t *testing.T) {
-	balance, balanceHash := getTestBalance(t)
+	balance, balanceHash := getTestBalance(t, getAssetMap(getAssetIDsAndBalances(t, 2)))
 	sObj := createTestStateObject(t, stateObjectParamsWithBalance(t, balanceHash, balance))
 
 	actualBalanceHash, err := sObj.commitBalanceObject()
@@ -146,7 +146,7 @@ func TestCommitBalanceObject(t *testing.T) {
 }
 
 func TestCommitAccount(t *testing.T) {
-	inputAcc, _ := getTestAccount(t, func(acc *types.Account) {
+	inputAcc, _ := tests.GetTestAccount(t, func(acc *types.Account) {
 		acc.ContextHash = tests.RandomHash(t)
 	})
 
@@ -465,7 +465,7 @@ func TestCommit(t *testing.T) {
 	logicIds := getLogicIDs(t, 1)
 	keys, values := getEntries(t, 1)
 
-	balance, _ := getTestBalance(t)
+	balance, _ := getTestBalance(t, getAssetMap(getAssetIDsAndBalances(t, 2)))
 
 	astWithDirtyEntries := getASTWithDefaultDirtyEntries(t, 2, 1)
 	inputAST := getCopiedAST(astWithDirtyEntries)
@@ -933,7 +933,9 @@ func TestUpdateContext(t *testing.T) {
 }
 
 func TestGetBalanceObject(t *testing.T) {
-	balance, balanceHash := getTestBalances(t, 1)
+	assetIDs, bal := getAssetIDsAndBalances(t, 2)
+	balance, balanceHash := getTestBalances(t, getAssetMaps(assetIDs, bal, 1), 1)
+
 	soParams := &createStateObjectParams{
 		soCallback: func(so *StateObject) {
 			insertBalancesInDB(t, so.db, balanceHash, balance...)

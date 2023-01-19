@@ -36,7 +36,7 @@ func CreateTestIxpool(t *testing.T, cfgCallback func(cfg *common.IxPoolConfig)) 
 }
 
 // GetLatestNonce returns the latest nonce from the mock account
-func (ms *MockStateManager) GetLatestNonce(addr types.Address) (uint64, error) {
+func (ms *MockStateManager) GetNonce(addr types.Address, stateHash types.Hash) (uint64, error) {
 	if account, ok := ms.acc[addr]; ok {
 		return account, nil
 	}

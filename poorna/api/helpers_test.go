@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math/big"
 	"math/rand"
+	"strconv"
 	"sync/atomic"
 	"testing"
 
@@ -29,25 +30,24 @@ type Context struct {
 }
 
 type MockChainManager struct {
-	tesseracts          map[types.Address]map[types.Hash]*types.Tesseract
-	latestTesseractHash map[types.Address]types.Hash
-	interactions        map[types.Address]map[types.Hash]types.Interactions
-	receipts            map[types.Hash]*types.Receipt
-	storage             map[types.Hash]*types.Tesseract
-	assets              map[types.Hash]*gtypes.AssetObject
+	receipts           map[types.Hash]*types.Receipt
+	assets             map[types.Hash]*gtypes.AssetObject
+	tesseractsByHash   map[types.Hash]*types.Tesseract
+	tesseractsByHeight map[string]*types.Tesseract
+	latestTesseracts   map[types.Address]*types.Tesseract
 }
 
 type MockStateManager struct {
-	storage           map[types.Hash][]byte
-	balances          map[types.Address]*gtypes.BalanceObject
-	accounts          map[types.Address]*types.Account
-	context           map[types.Hash]*Context
-	logicManifests    map[string][]byte
-	latestContextHash map[types.Address]types.Hash
+	storage        map[types.Hash][]byte
+	balances       map[types.Address]*gtypes.BalanceObject
+	accounts       map[types.Address]*types.Account
+	context        map[types.Address]*Context
+	logicManifests map[string][]byte
+	logicStorage   map[string]map[string]string // first key denotes logic id, second key denotes storage key
 }
 
-func (ms *MockStateManager) GetLogicManifest(logicID types.LogicID) ([]byte, error) {
-	logicManifest, ok := ms.logicManifests[logicID.Hex()]
+func (s *MockStateManager) GetLogicManifest(logicID types.LogicID, stateHash types.Hash) ([]byte, error) {
+	logicManifest, ok := s.logicManifests[logicID.Hex()]
 	if !ok {
 		return logicManifest, errors.New("logic manifest not found")
 	}
@@ -55,19 +55,36 @@ func (ms *MockStateManager) GetLogicManifest(logicID types.LogicID) ([]byte, err
 	return logicManifest, nil
 }
 
-func (ms *MockStateManager) GetStorageEntry(logicID types.LogicID, slot []byte) ([]byte, error) {
+func (s *MockStateManager) SetStorageEntry(logicID types.LogicID, storage map[string]string) {
+	s.logicStorage[logicID.Hex()] = storage
+}
+
+func (s *MockStateManager) GetStorageEntry(logicID types.LogicID, slot []byte, stateHash types.Hash) ([]byte, error) {
+	storage, ok := s.logicStorage[logicID.Hex()]
+	if !ok {
+		return nil, types.ErrLogicStorageTreeNotFound
+	}
+
+	value, ok := storage[string(slot)]
+	if !ok {
+		return nil, types.ErrKeyNotFound
+	}
+
+	return []byte(value), nil
+}
+
+func (s *MockStateManager) GetLatestStateObject(addr types.Address) (*guna.StateObject, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (ms *MockStateManager) GetLatestStateObject(addr types.Address) (*guna.StateObject, error) {
-	// TODO implement me
-	panic("implement me")
-}
+func (s *MockStateManager) GetAccountState(addr types.Address, stateHash types.Hash) (*types.Account, error) {
+	account, ok := s.accounts[addr]
+	if !ok {
+		return nil, types.ErrAccountNotFound
+	}
 
-func (ms *MockStateManager) GetAccountState(addr types.Address, stateHash types.Hash) (*types.Account, error) {
-	// TODO implement me
-	panic("implement me")
+	return account, nil
 }
 
 func NewMockChainManager(t *testing.T) *MockChainManager {
@@ -75,12 +92,11 @@ func NewMockChainManager(t *testing.T) *MockChainManager {
 
 	mockChain := new(MockChainManager)
 
-	mockChain.tesseracts = make(map[types.Address]map[types.Hash]*types.Tesseract, 0)
-	mockChain.latestTesseractHash = make(map[types.Address]types.Hash)
-	mockChain.interactions = make(map[types.Address]map[types.Hash]types.Interactions, 0)
 	mockChain.receipts = make(map[types.Hash]*types.Receipt, 0)
 	mockChain.assets = make(map[types.Hash]*gtypes.AssetObject, 0)
-	mockChain.storage = make(map[types.Hash]*types.Tesseract, 0)
+	mockChain.tesseractsByHash = make(map[types.Hash]*types.Tesseract)
+	mockChain.tesseractsByHeight = make(map[string]*types.Tesseract)
+	mockChain.latestTesseracts = make(map[types.Address]*types.Tesseract)
 
 	return mockChain
 }
@@ -91,103 +107,117 @@ func NewMockStateManager(t *testing.T) *MockStateManager {
 	mockState := new(MockStateManager)
 
 	mockState.balances = make(map[types.Address]*gtypes.BalanceObject)
-	mockState.latestContextHash = make(map[types.Address]types.Hash)
 	mockState.storage = make(map[types.Hash][]byte)
 	mockState.accounts = make(map[types.Address]*types.Account)
-	mockState.context = make(map[types.Hash]*Context)
+	mockState.context = make(map[types.Address]*Context)
 	mockState.logicManifests = make(map[string][]byte)
+	mockState.logicStorage = make(map[string]map[string]string, 0)
 
 	return mockState
 }
 
+func (c *MockChainManager) setLatestTesseract(
+	t *testing.T,
+	ts *types.Tesseract,
+) {
+	t.Helper()
+
+	c.latestTesseracts[ts.Address()] = ts
+}
+
 // Chain manager mock functions
-func (mc *MockChainManager) GetLatestTesseract(addr types.Address, withInteractions bool) (*types.Tesseract, error) {
-	if _, ok := mc.tesseracts[addr]; ok {
-		tesseract := mc.tesseracts[addr][mc.latestTesseractHash[addr]]
-
-		if withInteractions {
-			tesseract.Ixns = mc.interactions[addr][tesseract.InteractionHash()]
-		}
-
-		return tesseract, nil
+func (c *MockChainManager) GetLatestTesseract(addr types.Address, withInteractions bool) (*types.Tesseract, error) {
+	ts, ok := c.latestTesseracts[addr]
+	if !ok {
+		return nil, types.ErrFetchingTesseract
 	}
 
-	return nil, types.ErrAccountNotFound
-}
+	tsCopy := *ts // copy, so that stored tesseract won't be modified
 
-func (mc *MockChainManager) GetTesseract(hash types.Hash, withInteractions bool) (*types.Tesseract, error) {
-	for _, tesseracts := range mc.tesseracts {
-		for tsHash, tesseract := range tesseracts {
-			if tsHash == hash {
-				if withInteractions {
-					tesseract.Ixns = mc.interactions[tesseract.Address()][tesseract.InteractionHash()]
-				}
-
-				return tesseract, nil
-			}
-		}
+	if !withInteractions {
+		tsCopy.Ixns = nil
 	}
 
-	return nil, types.ErrKeyNotFound
+	return &tsCopy, nil
 }
 
-func (mc *MockChainManager) GetReceiptByIxHash(ixHash types.Hash) (*types.Receipt, error) {
-	if receipt := mc.receipts[ixHash]; receipt != nil {
+func (c *MockChainManager) GetTesseract(hash types.Hash, withInteractions bool) (*types.Tesseract, error) {
+	ts, ok := c.tesseractsByHash[hash]
+	if !ok {
+		return nil, types.ErrFetchingTesseract
+	}
+
+	tsCopy := *ts // copy, so that stored tesseract won't be modified
+
+	if !withInteractions {
+		tsCopy.Ixns = nil
+	}
+
+	return &tsCopy, nil
+}
+
+func (c *MockChainManager) setTesseractByHeight(
+	t *testing.T,
+	ts *types.Tesseract,
+) {
+	t.Helper()
+
+	key := ts.Address().Hex() + strconv.Itoa(int(ts.Height()))
+	c.tesseractsByHeight[key] = ts
+}
+
+func (c *MockChainManager) GetTesseractByHeight(
+	address types.Address,
+	height uint64,
+	withInteractions bool,
+) (*types.Tesseract, error) {
+	key := address.Hex() + strconv.Itoa(int(height))
+
+	ts, ok := c.tesseractsByHeight[key]
+	if !ok {
+		return nil, types.ErrFetchingTesseract
+	}
+
+	tsCopy := *ts // copy, so that stored tesseract won't be modified
+
+	if !withInteractions {
+		tsCopy.Ixns = nil
+	}
+
+	return &tsCopy, nil
+}
+
+func (c *MockChainManager) GetReceiptByIxHash(ixHash types.Hash) (*types.Receipt, error) {
+	if receipt := c.receipts[ixHash]; receipt != nil {
 		return receipt, nil
 	}
 
 	return nil, types.ErrReceiptNotFound
 }
 
-func (mc *MockChainManager) GetAssetDataByAssetHash(assetHash []byte) (*gtypes.AssetObject, error) {
-	if result, ok := mc.assets[types.BytesToHash(assetHash)]; ok {
+func (c *MockChainManager) GetAssetDataByAssetHash(assetHash []byte) (*gtypes.AssetObject, error) {
+	if result, ok := c.assets[types.BytesToHash(assetHash)]; ok {
 		return result, nil
 	}
 
 	return nil, types.ErrFetchingAssetDataInfo
 }
 
-func (mc *MockChainManager) GetTesseractByHeight(
-	address types.Address,
-	height uint64,
-	withInteractions bool,
-) (*types.Tesseract, error) {
-	for _, tesseract := range mc.storage {
-		if tesseract.Address() == address && tesseract.Height() == height {
-			if withInteractions {
-				tesseract.Ixns = mc.interactions[address][tesseract.InteractionHash()]
-			}
-
-			return tesseract, nil
-		}
-	}
-
-	return nil, types.ErrKeyNotFound
-}
-
-func (mc *MockChainManager) setTesseracts(
-	addr types.Address,
-	latestTesseractHash types.Hash,
-	tesseracts map[types.Hash]*types.Tesseract,
+func (c *MockChainManager) setTesseractByHash(
+	t *testing.T,
+	ts *types.Tesseract,
 ) {
-	mc.latestTesseractHash[addr] = latestTesseractHash
-	mc.tesseracts[addr] = tesseracts
+	t.Helper()
+
+	c.tesseractsByHash[tests.GetTesseractHash(t, ts)] = ts
 }
 
-func (mc *MockChainManager) setInteractions(addr types.Address, interactions map[types.Hash]types.Interactions) {
-	mc.interactions[addr] = interactions
+func (c *MockChainManager) setReceipt(hash types.Hash, receipt *types.Receipt) {
+	c.receipts[hash] = receipt
 }
 
-func (mc *MockChainManager) setReceipt(hash types.Hash, receipt *types.Receipt) {
-	mc.receipts[hash] = receipt
-}
-
-func (mc *MockChainManager) setStorage(hash types.Hash, tesseract *types.Tesseract) {
-	mc.storage[hash] = tesseract
-}
-
-func (mc *MockChainManager) setAssets(id types.AssetID, spec *types.AssetDescriptor) {
-	mc.assets[types.BytesToHash(id.GetCID())] = &gtypes.AssetObject{
+func (c *MockChainManager) setAssets(id types.AssetID, spec *types.AssetDescriptor) {
+	c.assets[types.BytesToHash(id.GetCID())] = &gtypes.AssetObject{
 		LogicID: spec.LogicID,
 		Symbol:  spec.Symbol,
 		Owner:   spec.Owner,
@@ -197,32 +227,33 @@ func (mc *MockChainManager) setAssets(id types.AssetID, spec *types.AssetDescrip
 
 // State Manager mock functions
 
-func (ms *MockStateManager) GetContextByHash(address types.Address,
+func (s *MockStateManager) GetContextByHash(address types.Address,
 	hash types.Hash,
 ) (types.Hash, []id.KramaID, []id.KramaID, error) {
-	if hash == types.NilHash {
-		if hash, ok := ms.latestContextHash[address]; ok {
-			return hash, ms.context[hash].behaviourNodes, ms.context[hash].randomNodes, nil
-		}
-
-		return types.NilHash, nil, nil, types.ErrAccountNotFound
+	context, ok := s.context[address]
+	if !ok {
+		return types.NilHash, nil, nil, types.ErrContextStateNotFound
 	}
 
-	return hash, ms.context[hash].behaviourNodes, ms.context[hash].randomNodes, nil
+	return hash, context.behaviourNodes, context.randomNodes, nil
 }
 
-func (ms *MockStateManager) GetBalances(addr types.Address) (*gtypes.BalanceObject, error) {
-	if _, ok := ms.balances[addr]; ok {
-		return ms.balances[addr].Copy(), nil
+func (s *MockStateManager) GetBalances(addr types.Address, stateHash types.Hash) (*gtypes.BalanceObject, error) {
+	if _, ok := s.balances[addr]; ok {
+		return s.balances[addr].Copy(), nil
 	}
 
 	return nil, types.ErrAccountNotFound
 }
 
-func (ms *MockStateManager) GetBalance(addr types.Address, assetID types.AssetID) (*big.Int, error) {
-	if _, ok := ms.balances[addr]; ok {
-		if _, ok := ms.balances[addr].Balances[assetID]; ok {
-			return ms.balances[addr].Balances[assetID], nil
+func (s *MockStateManager) GetBalance(
+	addr types.Address,
+	assetID types.AssetID,
+	stateHash types.Hash,
+) (*big.Int, error) {
+	if _, ok := s.balances[addr]; ok {
+		if _, ok := s.balances[addr].Balances[assetID]; ok {
+			return s.balances[addr].Balances[assetID], nil
 		}
 
 		return nil, types.ErrAssetNotFound
@@ -231,63 +262,56 @@ func (ms *MockStateManager) GetBalance(addr types.Address, assetID types.AssetID
 	return nil, types.ErrAccountNotFound
 }
 
-func (ms *MockStateManager) GetLatestNonce(addr types.Address) (uint64, error) {
-	if _, ok := ms.accounts[addr]; ok {
-		return ms.accounts[addr].Nonce, nil
+func (s *MockStateManager) GetNonce(addr types.Address, stateHash types.Hash) (uint64, error) {
+	if _, ok := s.accounts[addr]; ok {
+		return s.accounts[addr].Nonce, nil
 	}
 
 	return 0, types.ErrAccountNotFound
 }
 
-func (ms *MockStateManager) IsGenesis(addr types.Address) (bool, error) {
-	if _, ok := ms.storage[types.GetHash(addr.Bytes())]; ok {
+func (s *MockStateManager) IsGenesis(addr types.Address) (bool, error) {
+	if _, ok := s.storage[types.GetHash(addr.Bytes())]; ok {
 		return true, nil
 	}
 
 	return false, nil
 }
 
-func (ms *MockStateManager) setBalance(addr types.Address, assetID types.AssetID, balance *big.Int) {
-	ms.balances[addr] = &gtypes.BalanceObject{
+func (s *MockStateManager) setBalance(addr types.Address, assetID types.AssetID, balance *big.Int) {
+	s.balances[addr] = &gtypes.BalanceObject{
 		Balances: make(types.AssetMap),
 	}
-	ms.balances[addr].Balances[assetID] = balance
+	s.balances[addr].Balances[assetID] = balance
 }
 
-func (ms *MockStateManager) setContext(t *testing.T, hash types.Hash) {
+func getContext(t *testing.T, count int) *Context {
 	t.Helper()
 
-	ms.context[hash] = &Context{
-		tests.GetTestKramaIDs(t, 10),
-		tests.GetTestKramaIDs(t, 10),
+	return &Context{
+		tests.GetTestKramaIDs(t, count),
+		tests.GetTestKramaIDs(t, count),
 	}
 }
 
-func (ms *MockStateManager) getContextNodes(hash types.Hash) []string {
-	return append(
-		utils.KramaIDToString(ms.context[hash].behaviourNodes),
-		utils.KramaIDToString(ms.context[hash].randomNodes)...,
-	)
+func (s *MockStateManager) setContext(t *testing.T, address types.Address, context *Context) {
+	t.Helper()
+
+	s.context[address] = context
 }
 
-func (ms *MockStateManager) setAccounts(addr types.Address, latestNonce uint64) {
-	ms.accounts[addr] = &types.Account{
-		Nonce: latestNonce,
-	}
+func (s *MockStateManager) setAccount(addr types.Address, acc types.Account) {
+	s.accounts[addr] = &acc
 }
 
-func (ms *MockStateManager) getTDU(addr types.Address) types.AssetMap {
-	data, _ := ms.balances[addr].TDU()
+func (s *MockStateManager) getTDU(addr types.Address, stateHash types.Hash) types.AssetMap {
+	data, _ := s.balances[addr].TDU()
 
 	return data
 }
 
-func (ms *MockStateManager) setLatestContextHash(addr types.Address, hash types.Hash) {
-	ms.latestContextHash[addr] = hash
-}
-
-func (ms *MockStateManager) setLogicManifest(logicID string, logicManifest []byte) {
-	ms.logicManifests[logicID] = logicManifest
+func (s *MockStateManager) setLogicManifest(logicID string, logicManifest []byte) {
+	s.logicManifests[logicID] = logicManifest
 }
 
 type MockIxPool struct {
@@ -431,4 +455,93 @@ func GetTestIxCreationPayload(t *testing.T, callBack func(args *AssetCreationArg
 	assert.NoError(t, err)
 
 	return jsonRaw, poloRaw
+}
+
+func getTesseractsHashes(t *testing.T, tesseracts []*types.Tesseract) []string {
+	t.Helper()
+
+	count := len(tesseracts)
+	hashes := make([]string, count)
+
+	for i, ts := range tesseracts {
+		hashes[i] = getTesseractHash(t, ts).String()
+	}
+
+	return hashes
+}
+
+func getTesseractHash(t *testing.T, tesseract *types.Tesseract) types.Hash {
+	t.Helper()
+
+	tsHash, err := tesseract.Hash()
+	require.NoError(t, err)
+
+	return tsHash
+}
+
+func newReceipt(t *testing.T) *types.Receipt {
+	t.Helper()
+
+	return &types.Receipt{
+		IxType: 1,
+		IxHash: tests.RandomHash(t),
+	}
+}
+
+func getReceipt(t *testing.T) (types.Hash, *types.Receipt) {
+	t.Helper()
+
+	receiptHash := tests.RandomHash(t)
+	receipt := newReceipt(t)
+
+	return receiptHash, receipt
+}
+
+func getLogicID(t *testing.T, address types.Address) types.LogicID {
+	t.Helper()
+
+	logicID, err := types.NewLogicIDv0(
+		types.LogicKindSimple,
+		true,
+		true,
+		1,
+		address,
+	)
+	require.NoError(t, err)
+
+	return logicID
+}
+
+func getStorageMap(keys []string, values []string) map[string]string {
+	storage := make(map[string]string)
+
+	for i, key := range keys {
+		storage[string(types.FromHex(key))] = values[i] // each hex character should be a byte
+	}
+
+	return storage
+}
+
+func getHexEntries(t *testing.T, count int) []string {
+	t.Helper()
+
+	entries := make([]string, count)
+
+	for i := 0; i < count; i++ {
+		entries[i] = tests.RandomHash(t).Hex()
+	}
+
+	return entries
+}
+
+func checkForContext(
+	t *testing.T,
+	actualContext *Context,
+	expectedBehaviouralNodes []string,
+	expectedRandomNodes []string,
+) {
+	t.Helper()
+
+	require.Equal(t, expectedBehaviouralNodes, utils.KramaIDToString(actualContext.behaviourNodes))
+	require.Equal(t, expectedRandomNodes, utils.KramaIDToString(actualContext.randomNodes))
 }

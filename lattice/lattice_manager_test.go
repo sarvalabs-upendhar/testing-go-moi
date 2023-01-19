@@ -336,7 +336,7 @@ func TestGetTesseract(t *testing.T) {
 
 			require.NoError(t, err)
 
-			checkForTesseracts(t, test.expectedTS, actualTS, test.withInteractions)
+			tests.CheckForTesseract(t, test.expectedTS, actualTS, test.withInteractions)
 
 			checkIfTesseractCachedInCM(t, c, test.withInteractions, test.tsHash)
 		})
@@ -409,7 +409,7 @@ func TestGetTesseractByHeight(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			checkForTesseracts(t, test.expectedTS, actualTS, test.args.withInteractions)
+			tests.CheckForTesseract(t, test.expectedTS, actualTS, test.args.withInteractions)
 			checkIfTesseractCachedInCM(t, c, test.args.withInteractions, getTesseractHash(t, ts))
 		})
 	}
@@ -518,7 +518,7 @@ func TestGetLatestTesseract(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			checkForTesseracts(t, test.expectedTS, actualTS, test.withInteractions)
+			tests.CheckForTesseract(t, test.expectedTS, actualTS, test.withInteractions)
 		})
 	}
 }

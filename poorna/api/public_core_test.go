@@ -4,6 +4,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/pkg/errors"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/common/tests"
@@ -11,498 +13,785 @@ import (
 )
 
 // Core Api Testcases
-func TestPublicCoreAPI_GetBalance(t *testing.T) {
-	address := tests.RandomAddress(t)
-	chainManager := NewMockChainManager(t)
-	stateManager := NewMockStateManager(t)
-	assetID, _ := tests.CreateTestAsset(t, address)
 
-	stateManager.setBalance(address, assetID, big.NewInt(300))
+func TestPublicCoreAPI_GetTesseractByHash(t *testing.T) {
+	tesseractParams := tests.GetTesseractParamsMapWithIxns(t, 1, 2)
+	ts := tests.CreateTesseracts(t, 1, tesseractParams)
 
-	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
+	c := NewMockChainManager(t)
+	coreAPI := NewPublicCoreAPI(c, nil)
+
+	c.setTesseractByHash(t, ts[0])
+
+	tsHash := tests.GetTesseractHash(t, ts[0]).String()
 
 	testcases := []struct {
-		name        string
-		args        BalArgs
-		expected    *big.Int
-		expectedErr error
+		name             string
+		hash             string
+		withInteractions bool
+		expectedTS       *types.Tesseract
+		expectedError    error
 	}{
 		{
-			name: "Invalid address",
-			args: BalArgs{
-				From:    "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
-				AssetID: "",
-			},
-			expectedErr: types.ErrInvalidAddress,
+			name:             "should return error if valid hash without state",
+			hash:             tests.RandomHash(t).String(),
+			withInteractions: false,
+			expectedError:    types.ErrFetchingTesseract,
 		},
 		{
-			name: "Account without state",
-			args: BalArgs{
-				From:    tests.RandomAddress(t).String(),
-				AssetID: string(assetID),
-			},
-			expectedErr: types.ErrAccountNotFound,
+			name:             "should return error if hash is invalid",
+			hash:             "68510188a88ff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+			withInteractions: false,
+			expectedError:    types.ErrInvalidHash,
 		},
 		{
-			name: "Invalid asset Id",
-			args: BalArgs{
-				From:    address.String(),
-				AssetID: "01801995a34ceda4db744a5b1363bega0f2019e7481699c861ad7d1263c95473a2d9",
-			},
-			expectedErr: types.ErrInvalidAssetID,
+			name:             "fetch tesseract with interactions",
+			hash:             tsHash,
+			withInteractions: true,
+			expectedTS:       ts[0],
 		},
 		{
-			name: "Valid asset id without state",
-			args: BalArgs{
-				From:    address.String(),
-				AssetID: string(tests.GetRandomAssetID(t, address)),
-			},
-			expectedErr: types.ErrAssetNotFound,
-		},
-		{
-			name: "Valid address and asset id",
-			args: BalArgs{
-				From:    address.String(),
-				AssetID: string(assetID),
-			},
-			expected: big.NewInt(300),
+			name:             "fetch tesseract without interactions",
+			hash:             tsHash,
+			withInteractions: false,
+			expectedTS:       ts[0],
 		},
 	}
 
-	for _, testcase := range testcases {
-		t.Run(testcase.name, func(testing *testing.T) {
-			balance, err := coreAPI.GetBalance(&testcase.args)
-			if testcase.expectedErr != nil {
-				require.Error(t, err)
-				require.Equal(t, testcase.expectedErr, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, testcase.expected, balance)
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			fetchedTesseract, err := coreAPI.getTesseractByHash(test.hash, test.withInteractions)
+
+			if test.expectedError != nil {
+				require.EqualError(t, err, test.expectedError.Error())
+
+				return
 			}
+
+			require.NoError(t, err)
+			tests.CheckForTesseract(t, test.expectedTS, fetchedTesseract, test.withInteractions)
 		})
 	}
 }
 
-func TestPublicCoreAPI_GetLatestTesseract(t *testing.T) {
-	address := tests.RandomAddress(t)
-	chainManager := NewMockChainManager(t)
-	stateManager := new(MockStateManager)
-	_, latestTesseractHash, tesseracts := getTesseracts(t, address)
-	interactions := getInteractions(t, tesseracts)
-	latestTesseract := tesseracts[latestTesseractHash]
-	latestTesseractWithIxns := &types.Tesseract{
-		Header: latestTesseract.Header,
-		Body:   latestTesseract.Body,
-		Ixns:   interactions[latestTesseract.InteractionHash()],
-	}
+func TestPublicCoreAPI_GetTesseractByHeight(t *testing.T) {
+	tesseractParams := tests.GetTesseractParamsMapWithIxns(t, 2, 2)
+	tesseractParams[0].Height = 8
 
-	chainManager.setTesseracts(address, latestTesseractHash, tesseracts)
-	chainManager.setInteractions(address, interactions)
+	ts := tests.CreateTesseracts(t, 2, tesseractParams)
 
-	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
+	c := NewMockChainManager(t)
+	coreAPI := NewPublicCoreAPI(c, nil)
+
+	c.setTesseractByHeight(t, ts[0])
+	c.setLatestTesseract(t, ts[1])
 
 	testcases := []struct {
-		name        string
-		args        TesseractArgs
-		expected    *types.Tesseract
-		expectedErr error
+		name             string
+		from             string
+		height           int64
+		withInteractions bool
+		expectedTS       *types.Tesseract
+		expectedError    error
 	}{
 		{
-			name: "Invalid address",
-			args: TesseractArgs{
-				From:             "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
-				WithInteractions: false,
-			},
-			expectedErr: types.ErrInvalidAddress,
+			name:             "should return error if address is invalid",
+			from:             "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+			height:           8,
+			withInteractions: false,
+			expectedError:    types.ErrInvalidAddress,
 		},
 		{
-			name: "Account without state",
-			args: TesseractArgs{
-				From:             tests.RandomAddress(t).String(),
-				WithInteractions: false,
-			},
-			expectedErr: types.ErrAccountNotFound,
+			name:             "should return error if height doesn't exist",
+			from:             ts[0].Address().String(),
+			height:           9,
+			withInteractions: true,
+			expectedError:    types.ErrFetchingTesseract,
 		},
 		{
-			name: "Valid address",
-			args: TesseractArgs{
-				From:             address.String(),
-				WithInteractions: false,
-			},
-			expected: latestTesseract,
+			name:             "fetch Tesseract with interactions",
+			from:             ts[0].Address().String(),
+			height:           8,
+			withInteractions: true,
+			expectedTS:       ts[0],
 		},
 		{
-			name: "Tesseract with interactions",
-			args: TesseractArgs{
-				From:             address.String(),
-				WithInteractions: true,
-			},
-			expected: latestTesseractWithIxns,
+			name:             "fetch Tesseract without interactions",
+			from:             ts[0].Address().String(),
+			height:           8,
+			withInteractions: false,
+			expectedTS:       ts[0],
 		},
 		{
-			name: "Tesseract without interactions",
-			args: TesseractArgs{
-				From:             address.String(),
-				WithInteractions: false,
-			},
-			expected: latestTesseract,
+			name:             "fetch latest Tesseract with interactions",
+			from:             ts[1].Address().String(),
+			height:           LatestTesseractHeight,
+			withInteractions: true,
+			expectedTS:       ts[1],
+		},
+		{
+			name:             "fetch latest Tesseract without interactions",
+			from:             ts[1].Address().String(),
+			height:           LatestTesseractHeight,
+			withInteractions: false,
+			expectedTS:       ts[1],
 		},
 	}
 
-	for _, testcase := range testcases {
-		t.Run(testcase.name, func(testing *testing.T) {
-			tesseract, err := coreAPI.GetLatestTesseract(&testcase.args)
-			if testcase.expectedErr != nil {
-				require.Error(t, err)
-				require.Equal(t, testcase.expectedErr, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, testcase.expected, tesseract)
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			fetchedTesseract, err := coreAPI.getTesseractByHeight(
+				test.from,
+				test.height,
+				test.withInteractions,
+			)
+
+			if test.expectedError != nil {
+				require.EqualError(t, err, test.expectedError.Error())
+
+				return
 			}
+
+			require.NoError(t, err)
+			tests.CheckForTesseract(t, test.expectedTS, fetchedTesseract, test.withInteractions)
+		})
+	}
+}
+
+func TestPublicCoreAPI_GetTesseract(t *testing.T) {
+	height := int64(8)
+	invalidHeight := int64(-2)
+	tesseractParams := tests.GetTesseractParamsMapWithIxns(t, 2, 2)
+	tesseractParams[0].Height = uint64(height)
+
+	ts := tests.CreateTesseracts(t, 2, tesseractParams)
+
+	c := NewMockChainManager(t)
+	coreAPI := NewPublicCoreAPI(c, nil)
+
+	c.setTesseractByHeight(t, ts[0])
+	c.setTesseractByHash(t, ts[1])
+
+	tsHash := tests.GetTesseractHash(t, ts[1]).String()
+
+	testcases := []struct {
+		name          string
+		args          TesseractArgs
+		expectedTS    *types.Tesseract
+		expectedError error
+	}{
+		{
+			name: "should return error if both options are provided",
+			args: TesseractArgs{
+				Options: TesseractNumberOrHash{
+					TesseractNumber: &height,
+					TesseractHash:   &tsHash,
+				},
+			},
+			expectedError: errors.New("can not use both tesseract number and tesseract hash"),
+		},
+		{
+			name: "should return error if options are empty",
+			args: TesseractArgs{
+				Options: TesseractNumberOrHash{},
+			},
+			expectedError: types.ErrEmptyOptions,
+		},
+		{
+			name: "should return error if height is invalid",
+			args: TesseractArgs{
+				Options: TesseractNumberOrHash{
+					TesseractNumber: &invalidHeight,
+				},
+			},
+			expectedError: errors.New("invalid options"),
+		},
+		{
+			name: "get Tesseract by height with interactions",
+			args: TesseractArgs{
+				From:             ts[0].Address().String(),
+				WithInteractions: true,
+				Options: TesseractNumberOrHash{
+					TesseractNumber: &height,
+				},
+			},
+			expectedTS: ts[0],
+		},
+		{
+			name: "get Tesseract by height Tesseract without interactions",
+			args: TesseractArgs{
+				From:             ts[0].Address().String(),
+				WithInteractions: false,
+				Options: TesseractNumberOrHash{
+					TesseractNumber: &height,
+				},
+			},
+			expectedTS: ts[0],
+		},
+		{
+			name: "get Tesseract by hash with interactions",
+			args: TesseractArgs{
+				From:             ts[1].Address().String(),
+				WithInteractions: true,
+				Options: TesseractNumberOrHash{
+					TesseractHash: &tsHash,
+				},
+			},
+			expectedTS: ts[1],
+		},
+		{
+			name: "get Tesseract by hash Tesseract without interactions",
+			args: TesseractArgs{
+				From:             ts[1].Address().String(),
+				WithInteractions: false,
+				Options: TesseractNumberOrHash{
+					TesseractHash: &tsHash,
+				},
+			},
+			expectedTS: ts[1],
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(testing *testing.T) {
+			fetchedTesseract, err := coreAPI.GetTesseract(&test.args)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			tests.CheckForTesseract(t, test.expectedTS, fetchedTesseract, test.args.WithInteractions)
+		})
+	}
+}
+
+func TestPublicCoreAPI_GetBalance(t *testing.T) {
+	ts := tests.CreateTesseract(t, nil)
+
+	c := NewMockChainManager(t)
+	s := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(c, s)
+
+	c.setTesseractByHash(t, ts)
+
+	randomHash := tests.RandomHash(t).String()
+	tsHash := tests.GetTesseractHash(t, ts).String()
+	assetID, _ := tests.CreateTestAsset(t, ts.Address())
+
+	s.setBalance(ts.Address(), assetID, big.NewInt(300))
+	address := ts.Address().String()
+
+	testcases := []struct {
+		name            string
+		args            BalArgs
+		expectedBalance *big.Int
+		expectedError   error
+	}{
+		{
+			name: "should return error if failed to fetch balance",
+			args: BalArgs{
+				From:    address,
+				AssetID: string(assetID),
+				Options: TesseractNumberOrHash{
+					TesseractHash: &randomHash,
+				},
+			},
+			expectedError: types.ErrFetchingTesseract,
+		},
+		{
+			name: "should return error if asset Id is invalid",
+			args: BalArgs{
+				From:    address,
+				AssetID: "01801995a34ceda4db744a5b1363bega0f2019e7481699c861ad7d1263c95473a2d9",
+				Options: TesseractNumberOrHash{
+					TesseractHash: &tsHash,
+				},
+			},
+			expectedError: types.ErrInvalidAssetID,
+		},
+		{
+			name: "fetched balance successfully",
+			args: BalArgs{
+				From:    address,
+				AssetID: string(assetID),
+				Options: TesseractNumberOrHash{
+					TesseractHash: &tsHash,
+				},
+			},
+			expectedBalance: big.NewInt(300),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(testing *testing.T) {
+			balance, err := coreAPI.GetBalance(&test.args)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedBalance, balance)
 		})
 	}
 }
 
 func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
-	address := tests.RandomAddress(t)
-	chainManager := NewMockChainManager(t)
-	stateManager := NewMockStateManager(t)
-	latestContextHash, _, _ := getTesseracts(t, address)
+	ts := tests.CreateTesseracts(t, 2, nil)
 
-	stateManager.setLatestContextHash(address, latestContextHash)
-	stateManager.setContext(t, latestContextHash)
+	c := NewMockChainManager(t)
+	s := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(c, s)
 
-	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
+	context := getContext(t, 2)
+	s.setContext(t, ts[0].Address(), context)
+	c.setTesseractByHash(t, ts[0])
+	c.setTesseractByHash(t, ts[1])
+
+	address := ts[0].Address().String()
+	tsHash := getTesseractsHashes(t, ts)
+	randomHash := tests.RandomHash(t).String()
 
 	testcases := []struct {
-		name        string
-		args        ContextInfoByHashArgs
-		expected    []string
-		expectedErr error
+		name            string
+		args            ContextInfoArgs
+		expectedContext *Context
+		expectedError   error
 	}{
 		{
-			name: "Invalid address",
-			args: ContextInfoByHashArgs{
-				From: "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
-				Hash: "68510188a8Bff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+			name: "fetched context info successfully",
+			args: ContextInfoArgs{
+				From: address,
+				Options: TesseractNumberOrHash{
+					TesseractHash: &tsHash[0],
+				},
 			},
-			expectedErr: types.ErrInvalidAddress,
+			expectedContext: context,
 		},
 		{
-			name: "Invalid hash",
-			args: ContextInfoByHashArgs{
-				From: address.Hex(),
-				Hash: "68510188Z8Bff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+			name: "should return error if tesseract not found",
+			args: ContextInfoArgs{
+				Options: TesseractNumberOrHash{
+					TesseractHash: &randomHash,
+				},
 			},
-			expectedErr: types.ErrInvalidHash,
+			expectedError: types.ErrFetchingTesseract,
 		},
 		{
-			name: "Address without state",
-			args: ContextInfoByHashArgs{
-				From: tests.RandomAddress(t).Hex(),
-				Hash: "",
+			name: "should return error if context not found",
+			args: ContextInfoArgs{
+				From: ts[1].Address().String(),
+				Options: TesseractNumberOrHash{
+					TesseractHash: &tsHash[1],
+				},
 			},
-			expectedErr: types.ErrAccountNotFound,
-		},
-		{
-			name: "Valid address and valid hash",
-			args: ContextInfoByHashArgs{
-				From: address.Hex(),
-				Hash: latestContextHash.Hex(),
-			},
-			expected: stateManager.getContextNodes(latestContextHash),
-		},
-		{
-			name: "Valid address and empty hash",
-			args: ContextInfoByHashArgs{
-				From: address.Hex(),
-				Hash: "",
-			},
-			expected: stateManager.getContextNodes(latestContextHash),
+			expectedError: types.ErrContextStateNotFound,
 		},
 	}
 
-	for _, testcase := range testcases {
-		t.Run(testcase.name, func(testing *testing.T) {
-			behaviour, observer, err := coreAPI.GetContextInfoByHash(&testcase.args)
-			if testcase.expectedErr != nil {
-				require.Error(t, err)
-				require.Equal(t, testcase.expectedErr, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, append(behaviour, observer...), testcase.expected)
+	for _, test := range testcases {
+		t.Run(test.name, func(testing *testing.T) {
+			behaviouralNodes, randomNodes, err := coreAPI.GetContextInfo(&test.args)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
 			}
+
+			require.NoError(t, err)
+			checkForContext(t, test.expectedContext, behaviouralNodes, randomNodes)
 		})
 	}
 }
 
 func TestPublicCoreAPI_GetTDU(t *testing.T) {
-	address := tests.RandomAddress(t)
-	chainManager := NewMockChainManager(t)
-	stateManager := NewMockStateManager(t)
-	assetID, _ := tests.CreateTestAsset(t, address)
+	ts := tests.CreateTesseracts(t, 2, nil)
 
-	stateManager.setBalance(address, assetID, big.NewInt(300))
+	c := NewMockChainManager(t)
+	s := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(c, s)
 
-	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
+	c.setTesseractByHash(t, ts[0])
+	c.setTesseractByHash(t, ts[1])
+
+	randomHash := tests.RandomHash(t).String()
+	tsHash := getTesseractsHashes(t, ts)
+	assetID, _ := tests.CreateTestAsset(t, ts[0].Address())
+
+	s.setBalance(ts[0].Address(), assetID, big.NewInt(300))
+	address := ts[0].Address().String()
 
 	testcases := []struct {
-		name        string
-		args        TesseractArgs
-		expected    types.AssetMap
-		expectedErr error
+		name          string
+		args          TesseractArgs
+		expectedTDU   types.AssetMap
+		expectedError error
 	}{
 		{
-			name: "Invalid address",
+			name: "should return error if tesseract not found",
 			args: TesseractArgs{
-				From: "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+				From: address,
+				Options: TesseractNumberOrHash{
+					TesseractHash: &randomHash,
+				},
 			},
-			expectedErr: types.ErrInvalidAddress,
+			expectedError: types.ErrFetchingTesseract,
 		},
 		{
-			name: "Account without state",
+			name: "should return error if TDU not found",
 			args: TesseractArgs{
-				From: tests.RandomAddress(t).String(),
+				From: address,
+				Options: TesseractNumberOrHash{
+					TesseractHash: &tsHash[1],
+				},
 			},
-			expectedErr: types.ErrAccountNotFound,
+			expectedError: types.ErrAccountNotFound,
 		},
 		{
-			name: "Valid address",
+			name: "fetched TDU successfully",
 			args: TesseractArgs{
-				From: address.String(),
+				From: address,
+				Options: TesseractNumberOrHash{
+					TesseractHash: &tsHash[0],
+				},
 			},
-			expected: stateManager.getTDU(address),
+			expectedTDU: s.getTDU(ts[0].Address(), types.NilHash),
 		},
 	}
 
-	for _, testcase := range testcases {
-		t.Run(testcase.name, func(testing *testing.T) {
-			data, err := coreAPI.GetTDU(&testcase.args)
-			if testcase.expectedErr != nil {
-				require.Error(t, err)
-				require.Equal(t, testcase.expectedErr, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, testcase.expected, data)
+	for _, test := range testcases {
+		t.Run(test.name, func(testing *testing.T) {
+			data, err := coreAPI.GetTDU(&test.args)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
 			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedTDU, data)
+		})
+	}
+}
+
+func TestPublicCoreAPI_GetInteractionCountByAddress(t *testing.T) {
+	ts := tests.CreateTesseract(t, nil)
+
+	c := NewMockChainManager(t)
+	s := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(c, s)
+
+	c.setTesseractByHash(t, ts)
+
+	randomHash := tests.RandomHash(t).String()
+	tsHash := tests.GetTesseractHash(t, ts).String()
+	latestNonce := uint64(5)
+	acc, _ := tests.GetTestAccount(t, func(acc *types.Account) {
+		acc.Nonce = uint64(5)
+	})
+
+	s.setAccount(ts.Address(), *acc)
+
+	testcases := []struct {
+		name          string
+		args          *InteractionCountArgs
+		expectedNonce uint64
+		expectedError error
+	}{
+		{
+			name: "interaction count fetched successfully",
+			args: &InteractionCountArgs{
+				From: ts.Address().String(),
+				Options: TesseractNumberOrHash{
+					TesseractHash: &tsHash,
+				},
+			},
+			expectedNonce: latestNonce,
+		},
+		{
+			name: "should return error if failed to fetch interaction count",
+			args: &InteractionCountArgs{
+				Options: TesseractNumberOrHash{
+					TesseractHash: &randomHash,
+				},
+			},
+			expectedError: types.ErrFetchingTesseract,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			fetchedNonce, err := coreAPI.GetInteractionCount(test.args)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedNonce, fetchedNonce)
+		})
+	}
+}
+
+func TestPublicCoreAPI_GetAccountState(t *testing.T) {
+	ts := tests.CreateTesseract(t, nil)
+
+	c := NewMockChainManager(t)
+	s := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(c, s)
+
+	c.setTesseractByHash(t, ts)
+
+	randomHash := tests.RandomHash(t).String()
+	tsHash := tests.GetTesseractHash(t, ts).String()
+	acc, _ := tests.GetTestAccount(t, func(acc *types.Account) {
+		acc.Nonce = uint64(5)
+	})
+
+	s.setAccount(ts.Address(), *acc)
+
+	testcases := []struct {
+		name          string
+		args          *GetAccountArgs
+		expectedAcc   *types.Account
+		expectedError error
+	}{
+		{
+			name: "account state fetched successfully",
+			args: &GetAccountArgs{
+				Address: ts.Address().String(),
+				Options: TesseractNumberOrHash{
+					TesseractHash: &tsHash,
+				},
+			},
+			expectedAcc: acc,
+		},
+		{
+			name: "should return error if failed to fetch interaction count",
+			args: &GetAccountArgs{
+				Options: TesseractNumberOrHash{
+					TesseractHash: &randomHash,
+				},
+			},
+			expectedError: types.ErrFetchingTesseract,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			fetchedAcc, err := coreAPI.GetAccountState(test.args)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedAcc, fetchedAcc)
+		})
+	}
+}
+
+func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
+	ts := tests.CreateTesseract(t, nil)
+
+	c := NewMockChainManager(t)
+	s := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(c, s)
+
+	randomHash := tests.RandomHash(t).String()
+	tsHash := tests.GetTesseractHash(t, ts).String()
+
+	logicID := getLogicID(t, ts.Address())
+	logicIDWithoutState := getLogicID(t, tests.RandomAddress(t))
+
+	s.setLogicManifest(logicID.Hex(), []byte{0x00, 0x01})
+	c.setTesseractByHash(t, ts)
+
+	testcases := []struct {
+		name                  string
+		args                  *GetLogicManifestArgs
+		expectedLogicManifest []byte
+		expectedError         error
+	}{
+		{
+			name: "returns error if logic id is invalid",
+			args: &GetLogicManifestArgs{
+				LogicID: types.LogicID(tests.RandomHash(t).String()).Hex(),
+				Options: TesseractNumberOrHash{
+					TesseractHash: &randomHash,
+				},
+			},
+			expectedError: types.ErrInvalidLogicID,
+		},
+		{
+			name: "returns error if failed to fetch logic manifest",
+			args: &GetLogicManifestArgs{
+				LogicID: logicIDWithoutState.Hex(),
+				Options: TesseractNumberOrHash{
+					TesseractHash: &randomHash,
+				},
+			},
+			expectedError: types.ErrFetchingTesseract,
+		},
+		{
+			name: "fetched logic manifest successfully",
+			args: &GetLogicManifestArgs{
+				LogicID: logicID.Hex(),
+				Options: TesseractNumberOrHash{
+					TesseractHash: &tsHash,
+				},
+			},
+			expectedLogicManifest: []byte{0x00, 0x01},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			manifest, err := coreAPI.GetLogicManifest(test.args)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedLogicManifest, manifest)
+		})
+	}
+}
+
+func TestPublicCoreAPI_GetStorageAt(t *testing.T) {
+	ts := tests.CreateTesseract(t, nil)
+
+	c := NewMockChainManager(t)
+	s := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(c, s)
+
+	randomHash := tests.RandomHash(t).String()
+	tsHash := tests.GetTesseractHash(t, ts).String()
+
+	logicID := getLogicID(t, ts.Address())
+	logicIDWithoutState := getLogicID(t, tests.RandomAddress(t))
+
+	c.setTesseractByHash(t, ts)
+
+	keys := getHexEntries(t, 1)
+	values := getHexEntries(t, 1)
+
+	s.SetStorageEntry(logicID, getStorageMap(keys, values))
+
+	testcases := []struct {
+		name          string
+		args          *GetStorageArgs
+		expectedValue []byte
+		expectedError error
+	}{
+		{
+			name: "returns error if logic id is invalid",
+			args: &GetStorageArgs{
+				LogicID: types.LogicID(tests.RandomHash(t).String()).Hex(),
+				Options: TesseractNumberOrHash{
+					TesseractHash: &randomHash,
+				},
+			},
+			expectedError: types.ErrInvalidLogicID,
+		},
+		{
+			name: "returns error if failed to fetch logic manifest",
+			args: &GetStorageArgs{
+				LogicID: logicIDWithoutState.Hex(),
+				Options: TesseractNumberOrHash{
+					TesseractHash: &randomHash,
+				},
+			},
+			expectedError: types.ErrFetchingTesseract,
+		},
+		{
+			name: "fetched logic manifest successfully",
+			args: &GetStorageArgs{
+				LogicID:    logicID.Hex(),
+				StorageKey: keys[0],
+				Options: TesseractNumberOrHash{
+					TesseractHash: &tsHash,
+				},
+			},
+			expectedValue: []byte(values[0]),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			value, err := coreAPI.GetStorageAt(test.args)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedValue, value)
 		})
 	}
 }
 
 func TestPublicCoreAPI_GetInteractionReceipt(t *testing.T) {
 	chainManager := NewMockChainManager(t)
-	stateManager := new(MockStateManager)
 	receiptHash, receipt := getReceipt(t)
 
 	chainManager.setReceipt(receiptHash, receipt)
 
-	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
+	coreAPI := NewPublicCoreAPI(chainManager, nil)
 
 	testcases := []struct {
-		name        string
-		args        ReceiptArgs
-		expected    *types.Receipt
-		expectedErr error
+		name            string
+		args            ReceiptArgs
+		expectedReceipt *types.Receipt
+		expectedError   error
 	}{
 		{
 			name: "Invalid hash",
 			args: ReceiptArgs{
 				Hash: "68510188a88ff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
 			},
-			expectedErr: types.ErrInvalidHash,
+			expectedError: types.ErrInvalidHash,
 		},
 		{
 			name: "Valid hash without state",
 			args: ReceiptArgs{
 				Hash: tests.RandomHash(t).String(),
 			},
-			expectedErr: types.ErrReceiptNotFound,
+			expectedError: types.ErrReceiptNotFound,
 		},
 		{
 			name: "Valid hash with state",
 			args: ReceiptArgs{
 				Hash: receiptHash.String(),
 			},
-			expected: receipt,
+			expectedReceipt: receipt,
 		},
 	}
 
-	for _, testcase := range testcases {
-		t.Run(testcase.name, func(testing *testing.T) {
-			receipt, err := coreAPI.GetInteractionReceipt(&testcase.args)
-			if testcase.expectedErr != nil {
-				require.Error(t, err)
-				require.Equal(t, testcase.expectedErr, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, receipt, testcase.expected)
+	for _, test := range testcases {
+		t.Run(test.name, func(testing *testing.T) {
+			receipt, err := coreAPI.GetInteractionReceipt(&test.args)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
 			}
-		})
-	}
-}
 
-func TestPublicCoreAPI_GetTesseractByHash(t *testing.T) {
-	address := tests.RandomAddress(t)
-	chainManager := NewMockChainManager(t)
-	stateManager := new(MockStateManager)
-	_, latestTesseractHash, tesseracts := getTesseracts(t, address)
-	interactions := getInteractions(t, tesseracts)
-	latestTesseract := tesseracts[latestTesseractHash]
-	latestTesseractWithIxns := &types.Tesseract{
-		Header: latestTesseract.Header,
-		Body:   latestTesseract.Body,
-		Ixns:   interactions[latestTesseract.InteractionHash()],
-	}
-
-	chainManager.setTesseracts(address, latestTesseractHash, tesseracts)
-	chainManager.setInteractions(address, interactions)
-
-	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
-
-	testcases := []struct {
-		name        string
-		args        *TesseractByHashArgs
-		expected    *types.Tesseract
-		expectedErr error
-	}{
-		{
-			name: "Valid hash",
-			args: &TesseractByHashArgs{
-				Hash:             getTesseractHash(t, latestTesseract).String(),
-				WithInteractions: false,
-			},
-			expected: latestTesseract,
-		},
-		{
-			name: "Valid hash without state",
-			args: &TesseractByHashArgs{
-				Hash:             tests.RandomHash(t).String(),
-				WithInteractions: false,
-			},
-			expectedErr: types.ErrKeyNotFound,
-		},
-		{
-			name: "Invalid hash",
-			args: &TesseractByHashArgs{
-				Hash:             "68510188a88ff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
-				WithInteractions: false,
-			},
-			expectedErr: types.ErrInvalidHash,
-		},
-		{
-			name: "Tesseract with interactions",
-			args: &TesseractByHashArgs{
-				Hash:             getTesseractHash(t, latestTesseractWithIxns).String(),
-				WithInteractions: true,
-			},
-			expected: latestTesseractWithIxns,
-		},
-		{
-			name: "Tesseract without interactions",
-			args: &TesseractByHashArgs{
-				Hash:             getTesseractHash(t, latestTesseract).String(),
-				WithInteractions: false,
-			},
-			expected: latestTesseract,
-		},
-	}
-
-	for _, testcase := range testcases {
-		t.Run(testcase.name, func(t *testing.T) {
-			fetchedTesseract, err := coreAPI.GetTesseractByHash(testcase.args)
-
-			if testcase.expectedErr != nil {
-				require.Error(t, err)
-				require.Equal(t, testcase.expectedErr, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, testcase.expected, fetchedTesseract)
-			}
-		})
-	}
-}
-
-func TestPublicCoreAPI_GetTesseractByHeight(t *testing.T) {
-	address := tests.RandomAddress(t)
-	chainManager := NewMockChainManager(t)
-	stateManager := NewMockStateManager(t)
-	_, latestTesseractHash, tesseracts := getTesseracts(t, address)
-	interactions := getInteractions(t, tesseracts)
-	latestTesseract := tesseracts[latestTesseractHash]
-	latestTesseractWithIxns := &types.Tesseract{
-		Header: latestTesseract.Header,
-		Body:   latestTesseract.Body,
-		Ixns:   interactions[latestTesseract.InteractionHash()],
-	}
-
-	chainManager.setStorage(latestTesseractHash, tesseracts[latestTesseractHash])
-	chainManager.setInteractions(address, interactions)
-
-	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
-
-	testcases := []struct {
-		name        string
-		args        *TesseractByHeightArgs
-		expected    *types.Tesseract
-		expectedErr error
-	}{
-		{
-			name: "Valid address",
-			args: &TesseractByHeightArgs{
-				From:             latestTesseract.Address().String(),
-				Height:           latestTesseract.Height(),
-				WithInteractions: false,
-			},
-			expected: latestTesseract,
-		},
-		{
-			name: "Valid address without state",
-			args: &TesseractByHeightArgs{
-				From:             tests.RandomAddress(t).String(),
-				Height:           22,
-				WithInteractions: false,
-			},
-			expectedErr: types.ErrKeyNotFound,
-		},
-		{
-			name: "Invalid address",
-			args: &TesseractByHeightArgs{
-				From:             "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
-				Height:           8,
-				WithInteractions: false,
-			},
-			expectedErr: types.ErrInvalidAddress,
-		},
-		{
-			name: "Tesseract with interactions",
-			args: &TesseractByHeightArgs{
-				From:             latestTesseract.Address().String(),
-				Height:           latestTesseract.Height(),
-				WithInteractions: true,
-			},
-			expected: latestTesseractWithIxns,
-		},
-		{
-			name: "Tesseract without interactions",
-			args: &TesseractByHeightArgs{
-				From:             latestTesseract.Address().String(),
-				Height:           latestTesseract.Height(),
-				WithInteractions: false,
-			},
-			expected: latestTesseract,
-		},
-	}
-
-	for _, testcase := range testcases {
-		t.Run(testcase.name, func(t *testing.T) {
-			fetchedTesseract, err := coreAPI.GetTesseractByHeight(testcase.args)
-			if testcase.expectedErr != nil {
-				require.Error(t, err)
-				require.Equal(t, testcase.expectedErr, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, testcase.expected, fetchedTesseract)
-			}
+			require.NoError(t, err)
+			require.Equal(t, receipt, test.expectedReceipt)
 		})
 	}
 }
@@ -510,237 +799,52 @@ func TestPublicCoreAPI_GetTesseractByHeight(t *testing.T) {
 func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
 	address := tests.RandomAddress(t)
 	chainManager := NewMockChainManager(t)
-	stateManager := new(MockStateManager)
 	assetID, assetInfo := tests.CreateTestAsset(t, address)
 
 	chainManager.setAssets(assetID, assetInfo)
 
-	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
+	coreAPI := NewPublicCoreAPI(chainManager, nil)
 
 	testcases := []struct {
-		name            string
-		args            *AssetDescriptorArgs
-		expected        *types.AssetDescriptor
-		isErrorExpected bool
+		name                    string
+		args                    *AssetDescriptorArgs
+		expectedAssetDescriptor *types.AssetDescriptor
+		isErrorExpected         bool
 	}{
 		{
-			"Valid asset id",
-			&AssetDescriptorArgs{
+			name: "Valid asset id",
+			args: &AssetDescriptorArgs{
 				AssetID: string(assetID),
 			},
-			assetInfo,
-			false,
+			expectedAssetDescriptor: assetInfo,
 		},
 		{
-			"Valid asset id without state",
-			&AssetDescriptorArgs{
+			name: "Valid asset id without state",
+			args: &AssetDescriptorArgs{
 				"01801995a34ceda4db744a5b1363be9a0f2019e7481699c861ad7d1263c95473a2d9",
-			},
-			nil,
-			true,
-		},
-		{
-			"Invalid asset id",
-			&AssetDescriptorArgs{
-				"01801995a34ceda4db744a5b1363bega0f2019e7481699c861ad7d1263c95473a2d9",
-			},
-			nil,
-			true,
-		},
-	}
-
-	for _, testcase := range testcases {
-		t.Run(testcase.name, func(t *testing.T) {
-			fetchedAssetInfo, err := coreAPI.GetAssetInfoByAssetID(testcase.args.AssetID)
-			if testcase.isErrorExpected {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, testcase.expected, fetchedAssetInfo)
-			}
-		})
-	}
-}
-
-func TestPublicCoreAPI_GetInteractionCountByAddress(t *testing.T) {
-	address := tests.RandomAddress(t)
-	latestNonce := uint64(5)
-	chainManager := NewMockChainManager(t)
-	stateManager := NewMockStateManager(t)
-
-	stateManager.setAccounts(address, latestNonce)
-
-	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
-
-	testcases := []struct {
-		name            string
-		args            *InteractionCountArgs
-		expected        uint64
-		isErrorExpected bool
-	}{
-		{
-			"Valid address",
-			&InteractionCountArgs{
-				address.String(),
-				false,
-			},
-			latestNonce,
-			false,
-		},
-		{
-			"Valid address without state",
-			&InteractionCountArgs{
-				tests.RandomAddress(t).String(),
-				false,
-			},
-			0,
-			true,
-		},
-		{
-			"Invalid address",
-			&InteractionCountArgs{
-				"68510188a88ff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
-				false,
-			},
-			0,
-			true,
-		},
-	}
-
-	for _, testcase := range testcases {
-		t.Run(testcase.name, func(t *testing.T) {
-			fetchedNonce, err := coreAPI.GetInteractionCountByAddress(testcase.args)
-
-			if testcase.isErrorExpected {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, fetchedNonce, testcase.expected)
-			}
-		})
-	}
-}
-
-func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
-	chainManager := NewMockChainManager(t)
-	stateManager := NewMockStateManager(t)
-	logicID := types.LogicID(tests.RandomHash(t).String())
-
-	stateManager.setLogicManifest(logicID.Hex(), []byte{0x00, 0x01})
-
-	coreAPI := NewPublicCoreAPI(chainManager, stateManager)
-
-	testcases := []struct {
-		name            string
-		args            *GetLogicManifestArgs
-		expected        []byte
-		isErrorExpected bool
-	}{
-		{
-			name: "Valid logic id without state",
-			args: &GetLogicManifestArgs{
-				LogicID: types.LogicID(tests.RandomHash(t).String()).Hex(),
 			},
 			isErrorExpected: true,
 		},
 		{
-			name: "Valid logic id",
-			args: &GetLogicManifestArgs{
-				LogicID: logicID.Hex(),
+			name: "Invalid asset id",
+			args: &AssetDescriptorArgs{
+				"01801995a34ceda4db744a5b1363bega0f2019e7481699c861ad7d1263c95473a2d9",
 			},
-			expected:        []byte{0x00, 0x01},
-			isErrorExpected: false,
+			isErrorExpected: true,
 		},
-		// TODO: test case for invalid logic id
 	}
 
-	for _, testcase := range testcases {
-		t.Run(testcase.name, func(t *testing.T) {
-			manifest, err := coreAPI.GetLogicManifest(testcase.args)
-
-			if testcase.isErrorExpected {
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			fetchedAssetInfo, err := coreAPI.GetAssetInfoByAssetID(test.args.AssetID)
+			if test.isErrorExpected {
 				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, manifest, testcase.expected)
+
+				return
 			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedAssetDescriptor, fetchedAssetInfo)
 		})
 	}
-}
-
-// helper function
-func newTesseract(t *testing.T, height int, address types.Address) *types.Tesseract {
-	t.Helper()
-
-	return &types.Tesseract{
-		Header: types.TesseractHeader{
-			Address:  address,
-			PrevHash: tests.RandomHash(t),
-			Height:   uint64(height),
-		},
-		Body: types.TesseractBody{
-			StateHash:       tests.RandomHash(t),
-			ContextHash:     tests.RandomHash(t),
-			InteractionHash: tests.RandomHash(t),
-		},
-	}
-}
-
-func newInteraction(t *testing.T) types.Interactions {
-	t.Helper()
-
-	return types.Interactions{
-		types.NewRandomHashInteraction(),
-	}
-}
-
-func newReceipt(t *testing.T) *types.Receipt {
-	t.Helper()
-
-	return &types.Receipt{
-		IxType: 1,
-		IxHash: tests.RandomHash(t),
-	}
-}
-
-func getTesseracts(t *testing.T, address types.Address) (types.Hash, types.Hash, map[types.Hash]*types.Tesseract) {
-	t.Helper()
-
-	tesseracts := make(map[types.Hash]*types.Tesseract)
-	tesseract := newTesseract(t, 1, address)
-	contextHash := tesseract.ContextHash()
-	tesseractHash := getTesseractHash(t, tesseract)
-	tesseracts[tesseractHash] = tesseract
-
-	return contextHash, tesseractHash, tesseracts
-}
-
-func getInteractions(t *testing.T, tesseracts map[types.Hash]*types.Tesseract) map[types.Hash]types.Interactions {
-	t.Helper()
-
-	interactions := make(map[types.Hash]types.Interactions)
-
-	for _, tesseract := range tesseracts {
-		interactions[tesseract.InteractionHash()] = newInteraction(t)
-	}
-
-	return interactions
-}
-
-func getReceipt(t *testing.T) (types.Hash, *types.Receipt) {
-	t.Helper()
-
-	receiptHash := tests.RandomHash(t)
-	receipt := newReceipt(t)
-
-	return receiptHash, receipt
-}
-
-func getTesseractHash(t *testing.T, tesseract *types.Tesseract) types.Hash {
-	t.Helper()
-
-	tsHash, err := tesseract.Hash()
-	require.NoError(t, err)
-
-	return tsHash
 }

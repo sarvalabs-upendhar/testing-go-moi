@@ -2,10 +2,7 @@ package rpc
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
-
-	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/moichain/poorna/api"
 	"github.com/sarvalabs/moichain/types"
@@ -37,9 +34,9 @@ func (r *rpcService) RegisterAPIs(apis map[string]interface{}) error {
 	return nil
 }
 
-// GetLatestTesseract is a method of rpcService that retrieves the latest Tesseract.
+// GetTesseract is a method of rpcService that retrieves the latest Tesseract.
 // Expects a GetTesseract argument and returns TesseractArg wrapped in a Response.
-func (r *rpcService) GetLatestTesseract(req *http.Request, args *api.TesseractArgs, resp *api.Response) error {
+func (r *rpcService) GetTesseract(req *http.Request, args *api.TesseractArgs, resp *api.Response) error {
 	// Retrieve the public core API and call the method to get the latest Tesseract
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
@@ -47,47 +44,11 @@ func (r *rpcService) GetLatestTesseract(req *http.Request, args *api.TesseractAr
 	}
 
 	// Retrieve the latest Tesseract for the address from the backend lattice manager
-	tesseract, err := coreAPI.GetLatestTesseract(args)
+	tesseract, err := coreAPI.GetTesseract(args)
 	if err != nil {
 		return err
 	}
 	// Wrap the TesseractArg in a Response
-	resp.Data = api.NewTesseractArg(tesseract, args.WithInteractions)
-
-	return nil
-}
-
-func (r *rpcService) GetTesseractByHash(req *http.Request, args *api.TesseractByHashArgs, resp *api.Response) error {
-	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
-	if !ok {
-		return types.ErrInvalidAPI
-	}
-
-	tesseract, err := coreAPI.GetTesseractByHash(args)
-	if err != nil {
-		return err
-	}
-
-	resp.Data = api.NewTesseractArg(tesseract, args.WithInteractions)
-
-	return nil
-}
-
-func (r *rpcService) GetTesseractByHeight(
-	req *http.Request,
-	args *api.TesseractByHeightArgs,
-	resp *api.Response,
-) error {
-	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
-	if !ok {
-		return types.ErrInvalidAPI
-	}
-
-	tesseract, err := coreAPI.GetTesseractByHeight(args)
-	if err != nil {
-		return err
-	}
-
 	resp.Data = api.NewTesseractArg(tesseract, args.WithInteractions)
 
 	return nil
@@ -165,10 +126,10 @@ func (r *rpcService) GetTDU(req *http.Request, args *api.TesseractArgs, resp *ap
 	return nil
 }
 
-// GetContextInfoByHash is an RPC method that returns the context Info of the queried address
-func (r *rpcService) GetContextInfoByHash(
+// GetContextInfo is an RPC method that returns the context Info of the queried address
+func (r *rpcService) GetContextInfo(
 	req *http.Request,
-	args *api.ContextInfoByHashArgs,
+	args *api.ContextInfoArgs,
 	resp *api.Response,
 ) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
@@ -176,7 +137,7 @@ func (r *rpcService) GetContextInfoByHash(
 		return types.ErrInvalidAPI
 	}
 
-	behaviour, observer, err := coreAPI.GetContextInfoByHash(args)
+	behaviour, observer, err := coreAPI.GetContextInfo(args)
 	if err != nil {
 		return err
 	}
@@ -208,7 +169,7 @@ func (r *rpcService) GetInteractionReceipt(req *http.Request, args *api.ReceiptA
 	return nil
 }
 
-func (r *rpcService) GetInteractionCountByAddress(
+func (r *rpcService) GetInteractionCount(
 	req *http.Request,
 	args *api.InteractionCountArgs,
 	resp *api.Response,
@@ -218,7 +179,7 @@ func (r *rpcService) GetInteractionCountByAddress(
 		return types.ErrInvalidAPI
 	}
 
-	interactionCount, err := coreAPI.GetInteractionCountByAddress(args)
+	interactionCount, err := coreAPI.GetInteractionCount(args)
 	if err != nil {
 		return err
 	}
@@ -243,14 +204,7 @@ func (r *rpcService) GetStorage(
 		return err
 	}
 
-	doc := make(map[types.Address]uint64)
-	if err = polo.Depolorize(&doc, storageData); err != nil {
-		panic(err)
-	}
-
-	fmt.Println(doc)
-
-	resp.Data = storageData
+	resp.Data = types.BytesToHex(storageData)
 
 	return nil
 }

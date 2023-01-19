@@ -5,6 +5,8 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/types"
 
@@ -12,194 +14,245 @@ import (
 )
 
 func TestValidateAddress(t *testing.T) {
-	tests := []struct {
+	testcases := []struct {
 		name            string
 		address         string
 		expectedAddress string
-		isErrorExpected bool
+		expectedError   error
 	}{
 		{
-			"address with 0x should pass",
-			"0xa6ba9853f131679e00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
-			"0xa6ba9853f131679e00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
-			false,
+			name:            "address with 0x should pass",
+			address:         "0xa6ba9853f131679e00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
+			expectedAddress: "0xa6ba9853f131679e00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
 		},
 		{
-			"address with out 0x should pass",
-			"a6ba9853f131679e00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
-			"0xa6ba9853f131679e00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
-			false,
+			name:            "address with out 0x should pass",
+			address:         "a6ba9853f131679e00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
+			expectedAddress: "0xa6ba9853f131679e00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
 		},
 		{
-			"address with length less than 64 should fail",
-			"0xa6ba9853f131679d0da0f033516a3efe9cd53c3d54e1f9a6e60e9077e9f9384",
-			"",
-			true,
+			name:          "address with length less than 64 should fail",
+			address:       "0xa6ba9853f131679d0da0f033516a3efe9cd53c3d54e1f9a6e60e9077e9f9384",
+			expectedError: types.ErrInvalidAddress,
 		},
 		{
-			"address with length greater than 64 should fail",
-			"a6ba9853f131679d00da0f033516a3efe9cd53c3d54e1f9a6e60e9077e9f9384z",
-			"",
-			true,
+			name:          "address with length greater than 64 should fail",
+			address:       "a6ba9853f131679d00da0f033516a3efe9cd53c3d54e1f9a6e60e9077e9f9384z",
+			expectedError: types.ErrInvalidAddress,
 		},
 		{
-			"address with capitals should pass",
-			"0xA6Ba9853f131679d00da0f033416a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
-			"0xa6ba9853f131679d00da0f033416a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
-			false,
+			name:            "address with capitals should pass",
+			address:         "0xA6Ba9853f131679d00da0f033416a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
+			expectedAddress: "0xa6ba9853f131679d00da0f033416a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
 		},
 		{
-			"address with [g-z] should fail ",
-			"a6ba9853f131679d00da0f033516a2afe9cd53c3d54e1f9a6e60e9077e9f938g",
-			"",
-			true,
+			name:          "address with [g-z] should fail ",
+			address:       "a6ba9853f131679d00da0f033516a2afe9cd53c3d54e1f9a6e60e9077e9f938g",
+			expectedError: types.ErrInvalidAddress,
 		},
 		{
-			"empty address",
-			"",
-			"",
-			true,
+			name:          "empty address",
+			address:       "",
+			expectedError: types.ErrInvalidAddress,
 		},
 	}
 
-	for _, test := range tests {
+	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			result, err := ValidateAddress(test.address)
-			if test.isErrorExpected {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, test.expectedAddress, result.Hex())
+			if test.expectedError != nil {
+				require.EqualError(t, err, test.expectedError.Error())
+
+				return
 			}
+
+			require.Equal(t, test.expectedAddress, result.Hex())
 		})
 	}
 }
 
 func TestValidateHash(t *testing.T) {
-	tests := []struct {
-		name            string
-		hash            string
-		expectedHash    string
-		isErrorExpected bool
+	testcases := []struct {
+		name          string
+		hash          string
+		expectedHash  string
+		expectedError error
 	}{
 		{
-			"hash with 0x",
-			"0xa6ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
-			"a6ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
-			false,
+			name:         "hash with 0x",
+			hash:         "0xa6ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
+			expectedHash: "a6ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
 		},
 		{
-			"hash with out 0x should pass",
-			"a6ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
-			"a6ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
-			false,
+			name:         "hash with out 0x should pass",
+			hash:         "a6ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
+			expectedHash: "a6ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
 		},
 		{
-			"hash with length less than 64 should fail",
-			"0xa6ba9853f131679d0da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
-			"",
-			true,
+			name:          "hash with length less than 64 should fail",
+			hash:          "0xa6ba9853f131679d0da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
+			expectedError: types.ErrInvalidHash,
 		},
 		{
-			"hash with length greater than 64 should fail",
-			"a6ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384z",
-			"",
-			true,
+			name:          "hash with length greater than 64 should fail",
+			hash:          "a6ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384z",
+			expectedError: types.ErrInvalidHash,
 		},
 		{
-			"hash with capitals should pass",
-			"0xA6Ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
-			"A6Ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
-			false,
+			name:         "hash with capitals should pass",
+			hash:         "0xA6Ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
+			expectedHash: "A6Ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
 		},
 		{
-			"hash with [g-z] should fail ",
-			"a6ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f938g",
-			"",
-			true,
+			name:          "hash with [g-z] should fail ",
+			hash:          "a6ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f938g",
+			expectedError: types.ErrInvalidHash,
 		},
 		{
-			"empty hash",
-			"",
-			"bcd",
-			true,
+			name:          "empty hash",
+			hash:          "",
+			expectedError: types.ErrInvalidHash,
 		},
 	}
 
-	for _, test := range tests {
+	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			result, err := ValidateHash(test.hash)
-			if test.isErrorExpected {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, test.expectedHash, result)
+			if test.expectedError != nil {
+				require.EqualError(t, err, test.expectedError.Error())
+
+				return
 			}
+
+			require.Equal(t, test.expectedHash, result)
+		})
+	}
+}
+
+func TestValidateLogicID(t *testing.T) {
+	testcases := []struct {
+		name            string
+		logicID         string
+		expectedLogicID types.LogicID
+		expectedError   error
+	}{
+		{
+			name:    "logic id with 0x",
+			logicID: "0x06ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384abcdef",
+			expectedLogicID: getLogicID(
+				t,
+				"0x06ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384abcdef"),
+		},
+		{
+			name:    "logic id with out 0x should pass",
+			logicID: "06ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384abcdef",
+			expectedLogicID: getLogicID(
+				t,
+				"06ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384abcdef",
+			),
+		},
+		{
+			name:          "logic id with length less than 70 should fail",
+			logicID:       "06ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384abcd",
+			expectedError: types.ErrInvalidLogicID,
+		},
+		{
+			name:          "logic id with length greater than 70 should fail",
+			logicID:       "06ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384abcdefaa",
+			expectedError: types.ErrInvalidLogicID,
+		},
+		{
+			name:    "logic id with capitals should pass",
+			logicID: "06BA9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384abcdef",
+			expectedLogicID: getLogicID(
+				t,
+				"06BA9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384abcdef",
+			),
+		},
+		{
+			name:          "logic id with [g-z] should fail ",
+			logicID:       "06ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384abcdgz",
+			expectedError: errors.New("encoding/hex: invalid byte: U+0067 'g'"),
+		},
+		{
+			name:          "empty logic id",
+			logicID:       "",
+			expectedError: types.ErrInvalidLogicID,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := ValidateLogicID(test.logicID)
+			if test.expectedError != nil {
+				require.EqualError(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.Equal(t, test.expectedLogicID, result)
 		})
 	}
 }
 
 func TestValidateAssetID(t *testing.T) {
-	tests := []struct {
+	testcases := []struct {
 		name            string
 		assetID         string
 		expectedAssetID string
-		isErrorExpected bool
+		expectedError   error
 	}{
 		{
-			"asset id with 0x should pass",
-			"0xa6ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384abcd",
-			"a6ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384abcd",
-			false,
+			name:            "asset id with 0x should pass",
+			assetID:         "0xa6ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384abcd",
+			expectedAssetID: "a6ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384abcd",
 		},
 		{
-			"asset id with out 0x should pass",
-			"a6ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384abcd",
-			"a6ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384abcd",
-			false,
+			name:            "asset id with out 0x should pass",
+			assetID:         "a6ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384abcd",
+			expectedAssetID: "a6ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384abcd",
 		},
 		{
-			"asset id with length less than 68 should fail",
-			"0xa6ba9853f131679d0da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
-			"",
-			true,
+			name:            "asset id with length less than 68 should fail",
+			assetID:         "0xa6ba9853f131679d0da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384",
+			expectedAssetID: "",
+			expectedError:   types.ErrInvalidAssetID,
 		},
 		{
-			"asset id with length greater than 68 should fail",
-			"a6ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384zabcdef",
-			"",
-			true,
+			name:            "asset id with length greater than 68 should fail",
+			assetID:         "a6ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384zabcdef",
+			expectedAssetID: "",
+			expectedError:   types.ErrInvalidAssetID,
 		},
 		{
-			"asset id with capitals should pass",
-			"0xA6Ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384abcd",
-			"A6Ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384abcd",
-			false,
+			name:            "asset id with capitals should pass",
+			assetID:         "0xA6Ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384abcd",
+			expectedAssetID: "A6Ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384abcd",
 		},
 		{
-			"asset id with [g-z] should fail ",
-			"a6ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f938gabcd",
-			"",
-			true,
+			name:            "asset id with [g-z] should fail ",
+			assetID:         "a6ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f938gabcd",
+			expectedAssetID: "",
+			expectedError:   types.ErrInvalidAssetID,
 		},
 		{
-			"empty asset id",
-			"",
-			"bcd",
-			true,
+			name:            "empty asset id",
+			assetID:         "",
+			expectedAssetID: "bcd",
+			expectedError:   types.ErrInvalidAssetID,
 		},
 	}
 
-	for _, test := range tests {
+	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			result, err := ValidateAssetID(test.assetID)
+			if test.expectedError != nil {
+				require.EqualError(t, test.expectedError, err.Error())
 
-			if test.isErrorExpected {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, test.expectedAssetID, string(result))
+				return
 			}
+
+			require.Equal(t, test.expectedAssetID, string(result))
 		})
 	}
 }

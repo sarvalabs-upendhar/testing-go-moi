@@ -68,4 +68,7 @@ var (
 	ErrInsufficientFuel            = errors.New("insufficient fuel")
 	ErrFetchingLogicManifest       = errors.New("error fetching logic manifest")
 	ErrInvalidAssetKind            = errors.New("invalid asset kind")
+	ErrEmptyHeight                 = errors.New("empty height")
+	ErrInvalidOptions              = errors.New("invalid options")
+	ErrEmptyOptions                = errors.New("empty options")
 )

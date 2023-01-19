@@ -7,15 +7,45 @@ import (
 	"github.com/sarvalabs/moichain/types"
 )
 
-// TesseractArgs is an argument wrapper for retrieving the latest Tesseract
-type TesseractArgs struct {
-	From             string `json:"from"` // Address for which to retrieve the latest Tesseract
-	WithInteractions bool   `json:"with_interactions"`
+const (
+	LatestTesseractHeight = -1
+)
+
+type TesseractNumberOrHash struct {
+	TesseractNumber *int64  `json:"tesseract_number"`
+	TesseractHash   *string `json:"tesseract_hash"`
 }
 
-type ContextInfoByHashArgs struct {
-	From string `json:"from"` // Address for which to retrieve the latest Tesseract
-	Hash string `json:"hash"`
+func (t *TesseractNumberOrHash) Number() (int64, error) {
+	if t.TesseractNumber == nil {
+		return 0, types.ErrEmptyHeight
+	}
+
+	if *t.TesseractNumber < LatestTesseractHeight { // if tesseract number less than -1 then it is invalid
+		return 0, types.ErrInvalidHeight
+	}
+
+	return *t.TesseractNumber, nil
+}
+
+func (t *TesseractNumberOrHash) Hash() (string, bool) {
+	if t.TesseractHash == nil {
+		return "", false
+	}
+
+	return *t.TesseractHash, true
+}
+
+// TesseractArgs is an argument wrapper for retrieving the latest Tesseract
+type TesseractArgs struct {
+	From             string                `json:"from"` // Address for which to retrieve the latest Tesseract
+	WithInteractions bool                  `json:"with_interactions"`
+	Options          TesseractNumberOrHash `json:"options"`
+}
+
+type ContextInfoArgs struct {
+	From    string                `json:"from"` // Address for which to retrieve the latest Tesseract
+	Options TesseractNumberOrHash `json:"options"`
 }
 
 type TesseractByHashArgs struct {
@@ -34,28 +64,31 @@ type AssetDescriptorArgs struct {
 }
 
 type InteractionCountArgs struct {
-	From   string `json:"from"`
-	Status bool   `json:"status"`
+	From    string                `json:"from"`
+	Options TesseractNumberOrHash `json:"options"`
 }
 
 type GetStorageArgs struct {
-	LogicID    string `json:"logic_id"`
-	StorageKey string `json:"storage-key"`
+	LogicID    string                `json:"logic_id"`
+	StorageKey string                `json:"storage-key"`
+	Options    TesseractNumberOrHash `json:"options"`
 }
 
 type GetAccountArgs struct {
-	Address   string `json:"address"`
-	StateHash string `json:"state_hash"`
+	Address string                `json:"address"`
+	Options TesseractNumberOrHash `json:"options"`
 }
 
 type GetLogicManifestArgs struct {
-	LogicID string `json:"logic_id"`
+	LogicID string                `json:"logic_id"`
+	Options TesseractNumberOrHash `json:"options"`
 }
 
 // BalArgs is an argument wrapper for retrieving balance of an asset
 type BalArgs struct {
-	From    string `json:"from"`    // Address for which to retrieve the balance
-	AssetID string `json:"assetid"` // Asset for which to retrieve balance
+	From    string                `json:"from"`    // Address for which to retrieve the balance
+	AssetID string                `json:"assetid"` // Asset for which to retrieve balance
+	Options TesseractNumberOrHash `json:"options"`
 }
 
 // SendIXArgs is an argument wrapper for sending Interactions to the pool

@@ -212,6 +212,14 @@ func (sm *StateManager) GetDirtyObject(addr types.Address) (*StateObject, error)
 	return sm.dirtyObjects[addr], nil
 }
 
+func (sm *StateManager) getStateObject(addr types.Address, stateHash types.Hash) (*StateObject, error) {
+	if stateHash.IsNil() {
+		return sm.GetLatestStateObject(addr)
+	}
+
+	return sm.GetStateObjectByHash(addr, stateHash)
+}
+
 func (sm *StateManager) GetLatestStateObject(addr types.Address) (*StateObject, error) {
 	sm.objectsLock.Lock()
 	defer sm.objectsLock.Unlock()
@@ -707,35 +715,39 @@ func (sm *StateManager) IsAccountRegisteredAt(addr types.Address, tesseractHash 
 	return true, err
 }
 
-func (sm *StateManager) GetLatestNonce(addr types.Address) (uint64, error) {
+func (sm *StateManager) GetNonce(addr types.Address, stateHash types.Hash) (uint64, error) {
 	if addr.IsNil() {
 		return 0, types.ErrInvalidAddress
 	}
 
-	object, err := sm.GetLatestStateObject(addr)
+	so, err := sm.getStateObject(addr, stateHash)
 	if err != nil {
-		return 0, err
+		return 0, errors.Wrap(err, "failed to fetch state object")
 	}
 
-	return object.data.Nonce, nil
+	return so.data.Nonce, nil
 }
 
-func (sm *StateManager) GetBalances(addrs types.Address) (*gtypes.BalanceObject, error) {
-	stateObject, err := sm.GetLatestStateObject(addrs)
+func (sm *StateManager) GetBalances(addrs types.Address, stateHash types.Hash) (*gtypes.BalanceObject, error) {
+	stateObject, err := sm.getStateObject(addrs, stateHash)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to fetch state object")
 	}
 
 	return stateObject.balance.Copy(), nil
 }
 
-func (sm *StateManager) GetBalance(addrs types.Address, assetID types.AssetID) (*big.Int, error) {
-	stateObject, err := sm.GetLatestStateObject(addrs)
+func (sm *StateManager) GetBalance(
+	addrs types.Address,
+	assetID types.AssetID,
+	stateHash types.Hash,
+) (*big.Int, error) {
+	so, err := sm.getStateObject(addrs, stateHash)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to fetch state object")
 	}
 
-	return stateObject.BalanceOf(assetID)
+	return so.BalanceOf(assetID)
 }
 
 func (sm *StateManager) GetAccTypeUsingStateObject(address types.Address) (types.AccountType, error) {
@@ -1079,8 +1091,8 @@ func (sm *StateManager) SyncLogicTree(
 }
 
 // GetStorageEntry returns the storage data associated with the given slot and logicID
-func (sm *StateManager) GetStorageEntry(logicID types.LogicID, slot []byte) ([]byte, error) {
-	so, err := sm.GetLatestStateObject(logicID.Address())
+func (sm *StateManager) GetStorageEntry(logicID types.LogicID, slot []byte, stateHash types.Hash) ([]byte, error) {
+	so, err := sm.getStateObject(logicID.Address(), stateHash)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch state object")
 	}
@@ -1089,8 +1101,8 @@ func (sm *StateManager) GetStorageEntry(logicID types.LogicID, slot []byte) ([]b
 }
 
 // GetLogicManifest returns the manifest associated with the given logicID
-func (sm *StateManager) GetLogicManifest(logicID types.LogicID) ([]byte, error) {
-	so, err := sm.GetLatestStateObject(logicID.Address())
+func (sm *StateManager) GetLogicManifest(logicID types.LogicID, stateHash types.Hash) ([]byte, error) {
+	so, err := sm.getStateObject(logicID.Address(), stateHash)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch state object")
 	}

@@ -729,159 +729,22 @@ func getLogicObjectParamsWithLogicID(logicID types.LogicID) *createLogicObjectPa
 	}
 }
 
-type createIxParams struct {
-	ixDataCallback func(ix *types.IxData)
-}
-
-func createIX(t *testing.T, params *createIxParams) *types.Interaction {
-	t.Helper()
-
-	if params == nil {
-		params = &createIxParams{}
-	}
-
-	data := &types.IxData{
-		Input: types.IxInput{},
-	}
-
-	if params.ixDataCallback != nil {
-		params.ixDataCallback(data)
-	}
-
-	ix := types.NewInteraction(*data, []byte{})
-
-	return ix
-}
-
-func createIxns(t *testing.T, count int, paramsMap map[int]*createIxParams) types.Interactions {
-	t.Helper()
-
-	if paramsMap == nil {
-		paramsMap = map[int]*createIxParams{}
-	}
-
-	ixns := make(types.Interactions, count)
-
-	for i := 0; i < count; i++ {
-		ixns[i] = createIX(t, paramsMap[i])
-	}
-
-	return ixns
-}
-
-func getIxParamsWithAddress(from types.Address, to types.Address) *createIxParams {
-	return &createIxParams{
-		ixDataCallback: func(ix *types.IxData) {
-			ix.Input.Sender = from
-			ix.Input.Receiver = to
-		},
-	}
-}
-
-func getIxParamsMapWithAddresses(
-	from []types.Address,
-	to []types.Address,
-) map[int]*createIxParams {
-	count := len(from)
-	ixParams := make(map[int]*createIxParams, count)
-
-	for i := 0; i < count; i++ {
-		ixParams[i] = getIxParamsWithAddress(from[i], to[i])
-	}
-
-	return ixParams
-}
-
-type createTesseractParams struct {
-	address           types.Address
-	height            uint64
-	ixns              types.Interactions
-	tesseractCallback func(ts *types.Tesseract)
-}
-
-func createTesseract(t *testing.T, params *createTesseractParams) *types.Tesseract {
-	t.Helper()
-
-	if params == nil {
-		params = &createTesseractParams{}
-	}
-
-	if params.address.IsNil() {
-		params.address = tests.RandomAddress(t)
-	}
-
-	ts := &types.Tesseract{
-		Header: types.TesseractHeader{
-			Address: params.address,
-			Height:  params.height,
-		},
-		Body: types.TesseractBody{},
-		Ixns: params.ixns,
-	}
-
-	if params.ixns != nil {
-		hash, err := params.ixns.Hash()
-		require.NoError(t, err)
-
-		ts.Body.InteractionHash = hash
-	}
-
-	if params.tesseractCallback != nil {
-		params.tesseractCallback(ts)
-	}
-
-	return ts
-}
-
-func createTesseracts(t *testing.T, count int, paramsMap map[int]*createTesseractParams) []*types.Tesseract {
-	t.Helper()
-
-	tesseracts := make([]*types.Tesseract, count)
-
-	if paramsMap == nil {
-		paramsMap = map[int]*createTesseractParams{}
-	}
-
-	for i := 0; i < count; i++ {
-		tesseracts[i] = createTesseract(t, paramsMap[i])
-	}
-
-	return tesseracts
-}
-
-func getTesseractParamsWithStateHash(address types.Address, hash types.Hash) *createTesseractParams {
-	return &createTesseractParams{
-		address: address,
-		tesseractCallback: func(ts *types.Tesseract) {
+func getTesseractParamsWithStateHash(address types.Address, hash types.Hash) *tests.CreateTesseractParams {
+	return &tests.CreateTesseractParams{
+		Address: address,
+		TesseractCallback: func(ts *types.Tesseract) {
 			insertStateHash(ts, hash)
 		},
 	}
 }
 
-func getTesseractParamsWithContextHash(address types.Address, hash types.Hash) *createTesseractParams {
-	return &createTesseractParams{
-		address: address,
-		tesseractCallback: func(ts *types.Tesseract) {
+func getTesseractParamsWithContextHash(address types.Address, hash types.Hash) *tests.CreateTesseractParams {
+	return &tests.CreateTesseractParams{
+		Address: address,
+		TesseractCallback: func(ts *types.Tesseract) {
 			ts.Body.ContextHash = hash
 		},
 	}
-}
-
-// each tesseract will have ixnCount interactions
-func getTesseractParamsMapWithIxns(t *testing.T, tsCount, ixnCount int) map[int]*createTesseractParams {
-	t.Helper()
-
-	tesseractParams := make(map[int]*createTesseractParams, tsCount)
-	addresses := getAddresses(t, 2*tsCount*ixnCount) // for each interaction, sender and receiver addresses needed
-	ixns := createIxns(t, tsCount*ixnCount, getIxParamsMapWithAddresses(addresses[:2*tsCount], addresses[2*tsCount:]))
-
-	for i := 0; i < tsCount; i++ {
-		tesseractParams[i] = &createTesseractParams{
-			ixns: ixns[i*ixnCount : i*ixnCount+ixnCount], // allocate two interactions per tesseract
-		}
-	}
-
-	return tesseractParams
 }
 
 func getTesseractHash(t *testing.T, ts *types.Tesseract) types.Hash {
@@ -992,12 +855,6 @@ func insertStateObject(sm *StateManager, so *StateObject) {
 
 func storeInSmCache(sm *StateManager, k, v interface{}) {
 	sm.cache.Add(k, v)
-}
-
-func AddAssetInBalance(t *testing.T, so *StateObject) {
-	t.Helper()
-
-	so.balance.Balances[tests.GetRandomAssetID(t, types.NilAddress)] = big.NewInt(100)
 }
 
 type createStateObjectParams struct {
@@ -1239,12 +1096,12 @@ func stateObjectParamsWithTestData(t *testing.T, areTreesNil bool) *createStateO
 	return &createStateObjectParams{
 		soCallback: func(s *StateObject) {
 			s.accType = types.ContractAccount
-			acc, _ := getTestAccount(t, func(acc *types.Account) {
+			acc, _ := tests.GetTestAccount(t, func(acc *types.Account) {
 				acc.ContextHash = tests.RandomHash(t)
 			})
 
 			s.data = *acc
-			s.balance, _ = getTestBalance(t)
+			s.balance, _ = getTestBalance(t, getAssetMap(getAssetIDsAndBalances(t, 2)))
 			s.assetApprovals.PrvHash = tests.RandomHash(t) // initialize any one field in asset approvals object
 
 			s.logicTree = getMerkleTreeWithFlushedEntries(t, keys[0:1], values[0:1])
@@ -1292,13 +1149,50 @@ func getCopiedStateObject(s *StateObject) *StateObject {
 	return sObj
 }
 
-func getTestBalance(t *testing.T) (*gtypes.BalanceObject, types.Hash) {
+func insertAssetAndBalance(so *StateObject, assetID types.AssetID, balance *big.Int) {
+	so.balance.Balances[assetID] = balance
+}
+
+func getAssetIDsAndBalances(t *testing.T, count int) ([]types.AssetID, []*big.Int) {
+	t.Helper()
+
+	ids := make([]types.AssetID, count)
+	for i := 0; i < count; i++ {
+		ids[i] = tests.GetRandomAssetID(t, tests.RandomAddress(t))
+	}
+
+	return ids, tests.GetRandomNumbers(t, 10000, count)
+}
+
+func getAssetMap(assetIDs []types.AssetID, balances []*big.Int) types.AssetMap {
+	assetMap := make(types.AssetMap)
+
+	for i := 0; i < len(assetIDs); i++ {
+		assetMap[assetIDs[i]] = balances[i]
+	}
+
+	return assetMap
+}
+
+func getAssetMaps(assetIDs []types.AssetID, balances []*big.Int, assetsPerAssetMap int) []types.AssetMap {
+	assetMapCount := len(assetIDs) / assetsPerAssetMap
+	assetMap := make([]types.AssetMap, assetMapCount)
+
+	for i := 0; i < assetMapCount; i++ {
+		assetMap[i] = getAssetMap(
+			assetIDs[i*assetsPerAssetMap:i*assetsPerAssetMap+assetsPerAssetMap],
+			balances[i*assetsPerAssetMap:i*assetsPerAssetMap+assetsPerAssetMap],
+		)
+	}
+
+	return assetMap
+}
+
+func getTestBalance(t *testing.T, assetMap types.AssetMap) (*gtypes.BalanceObject, types.Hash) {
 	t.Helper()
 
 	balance := &gtypes.BalanceObject{
-		Balances: types.AssetMap{
-			tests.GetRandomAssetID(t, types.NilAddress): big.NewInt(100),
-		},
+		Balances: assetMap,
 	}
 
 	data, err := balance.Bytes()
@@ -1307,31 +1201,17 @@ func getTestBalance(t *testing.T) (*gtypes.BalanceObject, types.Hash) {
 	return balance, types.GetHash(data)
 }
 
-func getTestBalances(t *testing.T, count int) ([]*gtypes.BalanceObject, []types.Hash) {
+func getTestBalances(t *testing.T, assetMap []types.AssetMap, count int) ([]*gtypes.BalanceObject, []types.Hash) {
 	t.Helper()
 
 	balances := make([]*gtypes.BalanceObject, count)
 	hashes := make([]types.Hash, count)
 
 	for i := 0; i < count; i++ {
-		balances[i], hashes[i] = getTestBalance(t)
+		balances[i], hashes[i] = getTestBalance(t, assetMap[i])
 	}
 
 	return balances, hashes
-}
-
-func getTestAccount(t *testing.T, callBack func(acc *types.Account)) (*types.Account, types.Hash) {
-	t.Helper()
-
-	acc := new(types.Account)
-	if callBack != nil {
-		callBack(acc)
-	}
-
-	accHash, err := acc.Hash()
-	assert.NoError(t, err)
-
-	return acc, accHash
 }
 
 func getTestAccounts(t *testing.T, balanceHash []types.Hash, count int) ([]*types.Account, []types.Hash) {
@@ -1341,7 +1221,7 @@ func getTestAccounts(t *testing.T, balanceHash []types.Hash, count int) ([]*type
 	hashes := make([]types.Hash, count)
 
 	for i := 0; i < count; i++ {
-		acc, stateHash := getTestAccount(t, func(acc *types.Account) {
+		acc, stateHash := tests.GetTestAccount(t, func(acc *types.Account) {
 			acc.Balance = balanceHash[i]
 		})
 
