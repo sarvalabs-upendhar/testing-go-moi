@@ -14,6 +14,10 @@ import (
 type IxPool interface {
 	AddInteractions(ixs types.Interactions) []error
 	GetNonce(addr types.Address) (uint64, error)
+	GetIxs(addr types.Address, inclQueued bool) (promoted, enqueued []*types.Interaction)
+	GetAllIxs(inclQueued bool) (allPromoted, allEnqueued map[types.Address][]*types.Interaction)
+	GetAccountWaitTime(addr types.Address) (int64, error)
+	GetAllAccountsWaitTime() map[types.Address]int64
 }
 
 type ChainManager interface {

@@ -317,12 +317,20 @@ func (s *MockStateManager) setLogicManifest(logicID string, logicManifest []byte
 type MockIxPool struct {
 	interactions map[types.Hash]*types.Interaction
 	nextNonce    map[types.Address]uint64
+	waitTime     map[types.Address]int64
+	pending      map[types.Address][]*types.Interaction
+	queued       map[types.Address][]*types.Interaction
 }
 
-func NewMockIxPool() *MockIxPool {
+func NewMockIxPool(t *testing.T) *MockIxPool {
+	t.Helper()
+
 	ixpool := new(MockIxPool)
 	ixpool.interactions = make(map[types.Hash]*types.Interaction)
 	ixpool.nextNonce = make(map[types.Address]uint64)
+	ixpool.waitTime = make(map[types.Address]int64)
+	ixpool.pending = make(map[types.Address][]*types.Interaction)
+	ixpool.queued = make(map[types.Address][]*types.Interaction)
 
 	return ixpool
 }
@@ -337,24 +345,52 @@ func (mc *MockIxPool) AddInteractions(ixs types.Interactions) []error {
 }
 
 func (mc *MockIxPool) GetNonce(addr types.Address) (uint64, error) {
-	nextNonce := mc.nextNonce[addr]
+	if nextNonce, ok := mc.nextNonce[addr]; ok {
+		return atomic.LoadUint64(&nextNonce), nil
+	}
 
-	return atomic.LoadUint64(&nextNonce), nil
+	return 0, types.ErrAccountNotFound
+}
+
+func (mc *MockIxPool) GetIxs(addr types.Address, inclQueued bool) (promoted, enqueued []*types.Interaction) {
+	if inclQueued {
+		return mc.pending[addr], mc.queued[addr]
+	}
+
+	return mc.pending[addr], types.Interactions{}
+}
+
+func (mc *MockIxPool) GetAllIxs(inclQueued bool) (allPromoted, allEnqueued map[types.Address][]*types.Interaction) {
+	if inclQueued {
+		return mc.pending, mc.queued
+	}
+
+	return mc.pending, map[types.Address][]*types.Interaction{}
+}
+
+func (mc *MockIxPool) GetAccountWaitTime(addr types.Address) (int64, error) {
+	if waitTime, ok := mc.waitTime[addr]; ok {
+		return waitTime, nil
+	}
+
+	return 0, types.ErrAccountNotFound
+}
+
+func (mc *MockIxPool) GetAllAccountsWaitTime() map[types.Address]int64 {
+	return mc.waitTime
 }
 
 func (mc *MockIxPool) setNonce(addr types.Address, nonce uint64) {
 	mc.nextNonce[addr] = nonce
 }
 
-func NewTestInteraction(ixType types.IxType, callback func(ix *types.InteractionMessage)) *types.Interaction {
-	ixMsg := new(types.InteractionMessage)
-	ixMsg.Data.Input.Type = ixType
+func (mc *MockIxPool) setWaitTime(addr types.Address, waitTime int64) {
+	mc.waitTime[addr] = waitTime
+}
 
-	if callback != nil {
-		callback(ixMsg)
-	}
-
-	return ixMsg.ToInteraction()
+func (mc *MockIxPool) setIxs(addr types.Address, pending, queued []*types.Interaction) {
+	mc.pending[addr] = pending
+	mc.queued[addr] = queued
 }
 
 func GenerateRandomIXPayload(t *testing.T, size uint32) []byte {
@@ -544,4 +580,22 @@ func checkForContext(
 
 	require.Equal(t, expectedBehaviouralNodes, utils.KramaIDToString(actualContext.behaviourNodes))
 	require.Equal(t, expectedRandomNodes, utils.KramaIDToString(actualContext.randomNodes))
+}
+
+func newTestInteraction(
+	t *testing.T,
+	ixType types.IxType,
+	callback func(ix *types.InteractionMessage),
+) *types.Interaction {
+	t.Helper()
+
+	ixMsg := new(types.InteractionMessage)
+	ixMsg.Data.Input.Type = ixType
+	ixMsg.Data.Input.FuelLimit = big.NewInt(10000)
+
+	if callback != nil {
+		callback(ixMsg)
+	}
+
+	return ixMsg.ToInteraction()
 }

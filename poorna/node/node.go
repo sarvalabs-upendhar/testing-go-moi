@@ -372,16 +372,19 @@ func (n *Node) setLogger(logLevel string) error {
 func (n *Node) setupRPC() error {
 	n.rpc = krpc.NewRPCServer("/", n.logger, n.cfg.Network.JSONRPCAddr, n.eventMux)
 
-	rpcService := krpc.NewRPCService()
 	backend := api.NewBackend(n.ixpool, n.chain, n.state, n.cfg.IxPool)
 	publicApis := api.GetPublicAPIs(backend)
 
-	if err := rpcService.RegisterAPIs(publicApis); err != nil {
-		return err
-	}
+	for _, api := range publicApis {
+		rpcService := krpc.NewRPCService()
 
-	if err := n.rpc.RegisterService("moi", rpcService); err != nil {
-		return err
+		if err := rpcService.RegisterAPIs(api.Services); err != nil {
+			return err
+		}
+
+		if err := n.rpc.RegisterService(api.Namespace, rpcService); err != nil {
+			return err
+		}
 	}
 
 	return nil

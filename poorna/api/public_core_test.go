@@ -19,7 +19,7 @@ func TestPublicCoreAPI_GetTesseractByHash(t *testing.T) {
 	ts := tests.CreateTesseracts(t, 1, tesseractParams)
 
 	c := NewMockChainManager(t)
-	coreAPI := NewPublicCoreAPI(c, nil)
+	coreAPI := NewPublicCoreAPI(nil, c, nil)
 
 	c.setTesseractByHash(t, ts[0])
 
@@ -81,7 +81,7 @@ func TestPublicCoreAPI_GetTesseractByHeight(t *testing.T) {
 	ts := tests.CreateTesseracts(t, 2, tesseractParams)
 
 	c := NewMockChainManager(t)
-	coreAPI := NewPublicCoreAPI(c, nil)
+	coreAPI := NewPublicCoreAPI(nil, c, nil)
 
 	c.setTesseractByHeight(t, ts[0])
 	c.setLatestTesseract(t, ts[1])
@@ -167,7 +167,7 @@ func TestPublicCoreAPI_GetTesseract(t *testing.T) {
 	ts := tests.CreateTesseracts(t, 2, tesseractParams)
 
 	c := NewMockChainManager(t)
-	coreAPI := NewPublicCoreAPI(c, nil)
+	coreAPI := NewPublicCoreAPI(nil, c, nil)
 
 	c.setTesseractByHeight(t, ts[0])
 	c.setTesseractByHash(t, ts[1])
@@ -273,7 +273,7 @@ func TestPublicCoreAPI_GetBalance(t *testing.T) {
 
 	c := NewMockChainManager(t)
 	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(c, s)
+	coreAPI := NewPublicCoreAPI(nil, c, s)
 
 	c.setTesseractByHash(t, ts)
 
@@ -345,7 +345,7 @@ func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
 
 	c := NewMockChainManager(t)
 	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(c, s)
+	coreAPI := NewPublicCoreAPI(nil, c, s)
 
 	context := getContext(t, 2)
 	s.setContext(t, ts[0].Address(), context)
@@ -413,7 +413,7 @@ func TestPublicCoreAPI_GetTDU(t *testing.T) {
 
 	c := NewMockChainManager(t)
 	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(c, s)
+	coreAPI := NewPublicCoreAPI(nil, c, s)
 
 	c.setTesseractByHash(t, ts[0])
 	c.setTesseractByHash(t, ts[1])
@@ -478,12 +478,12 @@ func TestPublicCoreAPI_GetTDU(t *testing.T) {
 	}
 }
 
-func TestPublicCoreAPI_GetInteractionCountByAddress(t *testing.T) {
+func TestPublicCoreAPI_GetInteractionCount(t *testing.T) {
 	ts := tests.CreateTesseract(t, nil)
 
 	c := NewMockChainManager(t)
 	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(c, s)
+	coreAPI := NewPublicCoreAPI(nil, c, s)
 
 	c.setTesseractByHash(t, ts)
 
@@ -539,12 +539,69 @@ func TestPublicCoreAPI_GetInteractionCountByAddress(t *testing.T) {
 	}
 }
 
+func TestPublicIXPoolAPI_GetPendingInteractionCount(t *testing.T) {
+	address := tests.RandomAddress(t)
+	ixpool := NewMockIxPool(t)
+
+	ixpool.setNonce(address, 5)
+
+	coreAPI := NewPublicCoreAPI(ixpool, nil, nil)
+
+	testcases := []struct {
+		name            string
+		args            *InteractionCountArgs
+		expectedIxCount uint64
+		expectedErr     error
+	}{
+		{
+			name: "Valid address with state",
+			args: &InteractionCountArgs{
+				From: address.String(),
+			},
+			expectedIxCount: 5,
+			expectedErr:     nil,
+		},
+		{
+			name: "Valid address without state",
+			args: &InteractionCountArgs{
+				From: tests.RandomAddress(t).String(),
+			},
+			expectedIxCount: 0,
+			expectedErr:     types.ErrAccountNotFound,
+		},
+		{
+			name: "Invalid address",
+			args: &InteractionCountArgs{
+				From: "68510188a88ff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+			},
+			expectedIxCount: 0,
+			expectedErr:     types.ErrInvalidAddress,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			ixCount, err := coreAPI.GetPendingInteractionCount(testcase.args)
+
+			if testcase.expectedErr != nil {
+				require.Error(t, err)
+				require.Equal(t, testcase.expectedErr, err)
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, testcase.expectedIxCount, ixCount)
+		})
+	}
+}
+
 func TestPublicCoreAPI_GetAccountState(t *testing.T) {
 	ts := tests.CreateTesseract(t, nil)
 
 	c := NewMockChainManager(t)
 	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(c, s)
+	coreAPI := NewPublicCoreAPI(nil, c, s)
 
 	c.setTesseractByHash(t, ts)
 
@@ -604,7 +661,7 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 
 	c := NewMockChainManager(t)
 	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(c, s)
+	coreAPI := NewPublicCoreAPI(nil, c, s)
 
 	randomHash := tests.RandomHash(t).String()
 	tsHash := tests.GetTesseractHash(t, ts).String()
@@ -674,7 +731,7 @@ func TestPublicCoreAPI_GetStorageAt(t *testing.T) {
 
 	c := NewMockChainManager(t)
 	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(c, s)
+	coreAPI := NewPublicCoreAPI(nil, c, s)
 
 	randomHash := tests.RandomHash(t).String()
 	tsHash := tests.GetTesseractHash(t, ts).String()
@@ -750,7 +807,7 @@ func TestPublicCoreAPI_GetInteractionReceipt(t *testing.T) {
 
 	chainManager.setReceipt(receiptHash, receipt)
 
-	coreAPI := NewPublicCoreAPI(chainManager, nil)
+	coreAPI := NewPublicCoreAPI(nil, chainManager, nil)
 
 	testcases := []struct {
 		name            string
@@ -803,7 +860,7 @@ func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
 
 	chainManager.setAssets(assetID, assetInfo)
 
-	coreAPI := NewPublicCoreAPI(chainManager, nil)
+	coreAPI := NewPublicCoreAPI(nil, chainManager, nil)
 
 	testcases := []struct {
 		name                    string

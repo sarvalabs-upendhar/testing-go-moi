@@ -157,11 +157,38 @@ func (m *accountsMap) promoted() (total uint64) { //nolint
 		return true
 	})
 
-	return
+	return total
+}
+
+// getIxs returns the promoted and enqueued Interactions of the given address, depending on the flag.
+func (m *accountsMap) getIxs(addr types.Address, includeEnqueued bool) (
+	promoted, enqueued []*types.Interaction,
+) {
+	account := m.get(addr)
+
+	if account != nil {
+		account.promoted.lock(false)
+		defer account.promoted.unlock()
+
+		if account.promoted.length() != 0 {
+			promoted = account.promoted.queue
+		}
+
+		if includeEnqueued {
+			account.enqueued.lock(false)
+			defer account.enqueued.unlock()
+
+			if account.enqueued.length() != 0 {
+				enqueued = account.enqueued.queue
+			}
+		}
+	}
+
+	return promoted, enqueued
 }
 
 // allIxs returns all promoted and all enqueued Interactions, depending on the flag.
-func (m *accountsMap) allIxs(includeEnqueued bool) ( //nolint
+func (m *accountsMap) allIxs(includeEnqueued bool) (
 	allPromoted, allEnqueued map[types.Address][]*types.Interaction,
 ) {
 	allPromoted = make(map[types.Address][]*types.Interaction)
@@ -190,7 +217,7 @@ func (m *accountsMap) allIxs(includeEnqueued bool) ( //nolint
 		return true
 	})
 
-	return
+	return allPromoted, allEnqueued
 }
 
 // remove deletes the account from the accountsMap if the enqueue and promoted queue of the account is empty

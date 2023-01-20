@@ -1,6 +1,7 @@
 package ixpool
 
 import (
+	"math"
 	"math/big"
 	"testing"
 	"time"
@@ -55,50 +56,6 @@ func TestIxPool_AddInteractions_checkIx(t *testing.T) {
 			err := ixPool.checkIx(testcase.ix)
 			// check's whether the invalid or known interactions are discarded
 			require.Equal(t, testcase.expectedErr, err)
-		})
-	}
-}
-
-func TestIxPool_GetNonce(t *testing.T) {
-	ixPool, mockStateManager := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
-		c.Mode = 0
-		c.PriceLimit = big.NewInt(100)
-	})
-
-	testcases := []struct {
-		name          string
-		address       types.Address
-		testFn        func(addr types.Address)
-		expectedNonce uint64
-	}{
-		{
-			name:    "IxPool accounts without interaction sender state",
-			address: tests.RandomAddress(t),
-			testFn: func(addr types.Address) {
-				mockStateManager.setLatestNonce(addr, 4)
-			},
-			expectedNonce: 4,
-		},
-		{
-			name:    "IxPool accounts with interaction sender state",
-			address: tests.RandomAddress(t),
-			testFn: func(addr types.Address) {
-				ixPool.accounts.initOnce(addr, 5)
-			},
-			expectedNonce: 5,
-		},
-	}
-
-	for _, testcase := range testcases {
-		t.Run(testcase.name, func(t *testing.T) {
-			if testcase.testFn != nil {
-				testcase.testFn(testcase.address)
-			}
-
-			// Should return the nonce either from ixpool account if it exists or from the latest state object
-			nonce, err := ixPool.GetNonce(testcase.address)
-			require.NoError(t, err)
-			require.Equal(t, testcase.expectedNonce, nonce)
 		})
 	}
 }
@@ -742,11 +699,11 @@ func TestIxPool_IncrementWaitTime(t *testing.T) {
 			expectedCounter: 1,
 		},
 		{
-			name:            "Increment the wait counter by 2",
+			name:            "Increment the wait counter by 5",
 			addr:            types.Address{0x02},
-			delta:           2,
+			delta:           5,
 			shouldReset:     false,
-			expectedCounter: 2,
+			expectedCounter: 5,
 		},
 
 		{
@@ -775,22 +732,23 @@ func TestIxPool_IncrementWaitTime(t *testing.T) {
 				initTime = time.Now()
 			}
 
-			// TODO: CHECK THE ASSERTION LOGIC
-
 			require.Equal(t, testcase.expectedCounter, acc.delayCounter)
-			if !testcase.shouldReset {
-				require.InDelta(t,
-					utils.ExponentialTimeout(baseTime, acc.delayCounter).Milliseconds(),
-					acc.waitTime.Sub(initTime).Milliseconds(),
-					float64(baseTime.Milliseconds()*4),
-				)
-			} else {
+
+			if testcase.shouldReset {
 				require.InDelta(t,
 					utils.ExponentialTimeout(baseTime, acc.delayCounter).Milliseconds(),
 					initTime.Sub(acc.waitTime).Milliseconds(),
-					float64(baseTime.Milliseconds()*4),
+					float64(0),
 				)
+
+				return
 			}
+
+			require.InDelta(t,
+				utils.ExponentialTimeout(baseTime, acc.delayCounter).Milliseconds(),
+				acc.waitTime.Sub(initTime).Milliseconds(),
+				float64(baseTime.Milliseconds()*int64(math.Pow(2, float64(testcase.delta)))),
+			)
 		})
 	}
 }

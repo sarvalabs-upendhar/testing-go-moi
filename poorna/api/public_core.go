@@ -11,18 +11,19 @@ import (
 	"github.com/sarvalabs/moichain/types"
 )
 
-// PublicCoreAPI is a struct that represents a wrapper for the core public APIs
+// PublicCoreAPI is a struct that represents a wrapper for the core public core APIs
 type PublicCoreAPI struct {
 	// Represents the API backend
-	chain ChainManager
-	sm    StateManager
+	ixpool IxPool
+	chain  ChainManager
+	sm     StateManager
 }
 
 // NewPublicCoreAPI is a constructor function that generates and returns a new
 // PublicCoreAPI object for a given API backend object.
-func NewPublicCoreAPI(chain ChainManager, sm StateManager) *PublicCoreAPI {
+func NewPublicCoreAPI(ixpool IxPool, chain ChainManager, sm StateManager) *PublicCoreAPI {
 	// Create the core public API wrapper and return it
-	return &PublicCoreAPI{chain, sm}
+	return &PublicCoreAPI{ixpool, chain, sm}
 }
 
 func getTesseractArgs(address string, options TesseractNumberOrHash) *TesseractArgs {
@@ -151,6 +152,22 @@ func (p *PublicCoreAPI) GetInteractionCount(args *InteractionCountArgs) (uint64,
 	}
 
 	return p.sm.GetNonce(ts.Address(), ts.StateHash())
+}
+
+// GetPendingInteractionCount returns the number of interactions sent for the given address.
+// Including the pending interactions in IxPool.
+func (p *PublicCoreAPI) GetPendingInteractionCount(args *InteractionCountArgs) (uint64, error) {
+	addr, err := utils.ValidateAddress(args.From)
+	if err != nil {
+		return 0, err
+	}
+
+	interactionCount, err := p.ixpool.GetNonce(addr)
+	if err != nil {
+		return 0, err
+	}
+
+	return interactionCount, nil
 }
 
 // GetAccountState returns the account state of the given address

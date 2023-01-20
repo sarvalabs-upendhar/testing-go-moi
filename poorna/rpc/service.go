@@ -34,6 +34,8 @@ func (r *rpcService) RegisterAPIs(apis map[string]interface{}) error {
 	return nil
 }
 
+/* RPC methods that are associated with the core namespace. */
+
 // GetTesseract is a method of rpcService that retrieves the latest Tesseract.
 // Expects a GetTesseract argument and returns TesseractArg wrapped in a Response.
 func (r *rpcService) GetTesseract(req *http.Request, args *api.TesseractArgs, resp *api.Response) error {
@@ -86,25 +88,6 @@ func (r *rpcService) GetBalance(req *http.Request, args *api.BalArgs, resp *api.
 
 	// Wrap the balance in a Response after casting to a u64
 	resp.Data = bal.Uint64()
-
-	return nil
-}
-
-// SendInteractions is a method of rpcService that sends Interactions
-func (r *rpcService) SendInteractions(req *http.Request, args *api.SendIXArgs, resp *api.Response) error {
-	// Retrieve the public ix API
-	ixAPI, ok := r.apis["ix"].(*api.PublicIXAPI)
-	if !ok {
-		return types.ErrInvalidAPI
-	}
-
-	ixn, err := ixAPI.SendInteraction(args)
-	if err != nil {
-		return err
-	}
-
-	ixHash := ixn.Hash()
-	resp.Data = ixHash.Hex()
 
 	return nil
 }
@@ -189,6 +172,26 @@ func (r *rpcService) GetInteractionCount(
 	return nil
 }
 
+func (r *rpcService) GetPendingInteractionCount(
+	req *http.Request,
+	args *api.InteractionCountArgs,
+	resp *api.Response,
+) error {
+	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
+	if !ok {
+		return types.ErrInvalidAPI
+	}
+
+	interactionCount, err := coreAPI.GetPendingInteractionCount(args)
+	if err != nil {
+		return err
+	}
+
+	resp.Data = interactionCount
+
+	return nil
+}
+
 func (r *rpcService) GetStorage(
 	req *http.Request,
 	args *api.GetStorageArgs,
@@ -209,7 +212,8 @@ func (r *rpcService) GetStorage(
 	return nil
 }
 
-func (r *rpcService) GetAccountState(req *http.Request,
+func (r *rpcService) GetAccountState(
+	req *http.Request,
 	args *api.GetAccountArgs,
 	resp *api.Response,
 ) error {
@@ -243,7 +247,136 @@ func (r *rpcService) GetLogicManifest(
 		return err
 	}
 
-	resp.Data = manifest
+	resp.Data = types.BytesToHex(manifest)
+
+	return nil
+}
+
+/* RPC methods that are associated with the ix namespace. */
+
+// SendInteractions is a method of rpcService that sends Interactions
+func (r *rpcService) SendInteractions(req *http.Request, args *api.SendIXArgs, resp *api.Response) error {
+	// Retrieve the public ix API
+	ixAPI, ok := r.apis["ix"].(*api.PublicIXAPI)
+	if !ok {
+		return types.ErrInvalidAPI
+	}
+
+	ixn, err := ixAPI.SendInteraction(args)
+	if err != nil {
+		return err
+	}
+
+	ixHash := ixn.Hash()
+	resp.Data = ixHash.Hex()
+
+	return nil
+}
+
+/* RPC methods that are associated with the ixpool namespace. */
+
+// Content is an RPC method that returns the interactions present in the IxPool.
+func (r *rpcService) Content(
+	req *http.Request,
+	args *api.IxPoolArgs,
+	resp *api.Response,
+) error {
+	ixPoolAPI, ok := r.apis["ixpool"].(*api.PublicIXPoolAPI)
+	if !ok {
+		return types.ErrInvalidAPI
+	}
+
+	content, err := ixPoolAPI.Content()
+	if err != nil {
+		return err
+	}
+
+	resp.Data = content
+
+	return nil
+}
+
+// ContentFrom is an RPC method that returns the interactions present in IxPool for the queried address.
+func (r *rpcService) ContentFrom(
+	req *http.Request,
+	args *api.IxPoolArgs,
+	resp *api.Response,
+) error {
+	ixPoolAPI, ok := r.apis["ixpool"].(*api.PublicIXPoolAPI)
+	if !ok {
+		return types.ErrInvalidAPI
+	}
+
+	content, err := ixPoolAPI.ContentFrom(args)
+	if err != nil {
+		return err
+	}
+
+	resp.Data = content
+
+	return nil
+}
+
+// Status is an RPC method that returns the number of pending and queued interactions in the IxPool.
+func (r *rpcService) Status(
+	req *http.Request,
+	args *api.IxPoolArgs,
+	resp *api.Response,
+) error {
+	ixPoolAPI, ok := r.apis["ixpool"].(*api.PublicIXPoolAPI)
+	if !ok {
+		return types.ErrInvalidAPI
+	}
+
+	status, err := ixPoolAPI.Status()
+	if err != nil {
+		return err
+	}
+
+	resp.Data = status
+
+	return nil
+}
+
+// Inspect is an RPC method that returns the interactions present in the IxPool in a clear and easy-to-read format,
+// as well as a list of all the accounts in IxPool and their respective wait times.
+func (r *rpcService) Inspect(
+	req *http.Request,
+	args *api.IxPoolArgs,
+	resp *api.Response,
+) error {
+	ixPoolAPI, ok := r.apis["ixpool"].(*api.PublicIXPoolAPI)
+	if !ok {
+		return types.ErrInvalidAPI
+	}
+
+	data, err := ixPoolAPI.Inspect()
+	if err != nil {
+		return err
+	}
+
+	resp.Data = data
+
+	return nil
+}
+
+// WaitTime is an RPC method that returns the wait time for an account in IxPool, based on the queried address.
+func (r *rpcService) WaitTime(
+	req *http.Request,
+	args *api.IxPoolArgs,
+	resp *api.Response,
+) error {
+	ixPoolAPI, ok := r.apis["ixpool"].(*api.PublicIXPoolAPI)
+	if !ok {
+		return types.ErrInvalidAPI
+	}
+
+	data, err := ixPoolAPI.WaitTime(args)
+	if err != nil {
+		return err
+	}
+
+	resp.Data = data
 
 	return nil
 }

@@ -25,7 +25,7 @@ func TestIx_SendInteraction(t *testing.T) {
 
 	address := tests.RandomAddress(t)
 	genesisAddress := guna.SargaAddress
-	ixpool := NewMockIxPool()
+	ixpool := NewMockIxPool(t)
 	stateManager := NewMockStateManager(t)
 	cfg := new(common.IxPoolConfig)
 	cfg.Mode = 0

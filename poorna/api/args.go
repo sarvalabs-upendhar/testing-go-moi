@@ -68,6 +68,10 @@ type InteractionCountArgs struct {
 	Options TesseractNumberOrHash `json:"options"`
 }
 
+type IxPoolArgs struct {
+	From string `json:"from"`
+}
+
 type GetStorageArgs struct {
 	LogicID    string                `json:"logic_id"`
 	StorageKey string                `json:"storage-key"`
@@ -238,8 +242,23 @@ type InteractionArg struct {
 	Cost      *big.Int
 	FuelPrice *big.Int
 	FuelLimit *big.Int
-	Input     []byte
+	Input     string
 	Hash      string
+}
+
+// NewInteractionArg is a contructor function that generates and returns a new InteractionArg for a given Interaction
+func NewInteractionArg(ix *types.Interaction) *InteractionArg {
+	return &InteractionArg{
+		Nonce:     ix.Nonce(),
+		Type:      uint64(ix.Type()),
+		Sender:    ix.Sender().Hex(),
+		Receiver:  ix.Receiver().Hex(),
+		Cost:      ix.Cost(),
+		FuelPrice: ix.FuelPrice(),
+		FuelLimit: ix.FuelLimit(),
+		Input:     types.BytesToHex(ix.ToMessage().Data.Input.Payload),
+		Hash:      ix.Hash().Hex(),
+	}
 }
 
 // TesseractArg is a struct that represents a Tesseract
@@ -290,18 +309,9 @@ func NewTesseractArg(t *types.Tesseract, withInteractions bool) TesseractArg {
 	}
 
 	if withInteractions && len(t.Ixns) > 0 {
-		tesseract.Interactions = []InteractionArg{
-			{
-				Nonce:     t.Ixns[0].Nonce(),
-				Type:      uint64(t.Ixns[0].Type()),
-				Sender:    t.Ixns[0].Sender().Hex(),
-				Receiver:  t.Ixns[0].Receiver().Hex(),
-				Cost:      t.Ixns[0].Cost(),
-				FuelPrice: t.Ixns[0].FuelPrice(),
-				FuelLimit: t.Ixns[0].FuelLimit(),
-				Input:     t.Ixns[0].ToMessage().Data.Input.Payload,
-				Hash:      t.Body.InteractionHash.Hex(),
-			},
+		tesseract.Interactions = make([]InteractionArg, 0)
+		for _, ix := range t.Ixns {
+			tesseract.Interactions = append(tesseract.Interactions, *NewInteractionArg(ix))
 		}
 	}
 

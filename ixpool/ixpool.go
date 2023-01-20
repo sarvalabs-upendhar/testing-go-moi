@@ -101,14 +101,6 @@ func (i *IxPool) checkIx(ix *types.Interaction) error {
 	return nil
 }
 
-func (i *IxPool) GetNonce(addr types.Address) (uint64, error) {
-	if acc := i.accounts.get(addr); acc != nil {
-		return acc.getNonce(), nil
-	}
-
-	return i.sm.GetNonce(addr, types.NilHash)
-}
-
 func (i *IxPool) AddInteractions(ixs types.Interactions) []error {
 	newIxs := make(types.Interactions, 0, len(ixs))
 	errs := make([]error, 0, len(ixs))
