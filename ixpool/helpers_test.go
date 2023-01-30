@@ -81,8 +81,7 @@ func newTestInteraction(
 		address = tests.RandomAddress(t)
 	}
 
-	ixMsg := new(types.InteractionMessage)
-	ixMsg.Data = types.IxData{
+	ixData := &types.IxData{
 		Input: types.IxInput{
 			Sender:    address,
 			Nonce:     uint64(nonce),
@@ -91,10 +90,10 @@ func newTestInteraction(
 	}
 
 	if cb != nil {
-		cb(&ixMsg.Data)
+		cb(ixData)
 	}
 
-	return ixMsg.ToInteraction()
+	return types.NewInteraction(*ixData, nil)
 }
 
 // createTestIxs creates and returns multiple instances of types.Interactions based on the given range

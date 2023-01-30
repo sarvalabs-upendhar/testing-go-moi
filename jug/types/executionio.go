@@ -1,6 +1,7 @@
 package types
 
 import (
+	"github.com/sarvalabs/go-polo"
 	"github.com/sarvalabs/moichain/types"
 )
 
@@ -9,11 +10,11 @@ type ExecutionValues interface {
 	Size() int
 	Bytes() []byte
 
-	Get(string) []byte
-	Set(string, []byte)
+	GetRaw(string) polo.Raw
+	SetRaw(string, polo.Raw)
 
-	GetObject(string, any) error
-	SetObject(string, any) error
+	Get(string, any) error
+	Set(string, any) error
 }
 
 // ExecutionOrder is the input passed into the ExecutionEnvironment

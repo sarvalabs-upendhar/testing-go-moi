@@ -24,17 +24,24 @@ func NewListValue(typedef *Typedef, data []byte) (*ListValue, error) {
 	}
 
 	if data != nil {
-		unpacker, err := polo.NewUnpacker(data)
+		depolorizer, err := polo.NewDepolorizer(data)
 		if err != nil {
+			return nil, err
+		}
+
+		depolorizer, err = depolorizer.DepolorizePacked()
+		if errors.Is(err, polo.ErrNullPack) {
+			return list, nil
+		} else if err != nil {
 			return nil, err
 		}
 
 		var index uint64
 
-		for !unpacker.Done() {
+		for !depolorizer.Done() {
 			var edata []byte
-			// Unpack the element data from the wire
-			if edata, err = unpacker.UnpackWire(); err != nil {
+			// Depolorize the element data from the wire
+			if edata, err = depolorizer.DepolorizeRaw(); err != nil {
 				return nil, err
 			}
 
@@ -77,12 +84,12 @@ func (list ListValue) Copy() Value {
 }
 
 func (list ListValue) Data() []byte {
-	packer := polo.NewPacker()
+	polorizer := polo.NewPolorizer()
 	for _, val := range list.values {
-		_ = packer.PackWire(val.Data())
+		polorizer.PolorizeRaw(val.Data())
 	}
 
-	return packer.Bytes()
+	return polorizer.Bytes()
 }
 
 func (list *ListValue) Get(index Value) (Value, error) {

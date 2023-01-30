@@ -55,10 +55,10 @@ func TestPublicIXPoolAPI_Content(t *testing.T) {
 			accounts: map[types.Address]*account{
 				addressList[0]: {
 					pending: types.Interactions{
-						newTestInteraction(t, 1, func(ixMsg *types.InteractionMessage) {
-							ixMsg.Data.Input.Sender = addressList[0]
-							ixMsg.Data.Input.Nonce = 1
-							ixMsg.Data.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, 1, func(ixData *types.IxData) {
+							ixData.Input.Sender = addressList[0]
+							ixData.Input.Nonce = 1
+							ixData.Input.FuelPrice = big.NewInt(100)
 						}),
 					},
 					queued: types.Interactions{},
@@ -82,10 +82,10 @@ func TestPublicIXPoolAPI_Content(t *testing.T) {
 				addressList[0]: {
 					pending: types.Interactions{},
 					queued: types.Interactions{
-						newTestInteraction(t, 1, func(ixMsg *types.InteractionMessage) {
-							ixMsg.Data.Input.Sender = addressList[0]
-							ixMsg.Data.Input.Nonce = 1
-							ixMsg.Data.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, 1, func(ixData *types.IxData) {
+							ixData.Input.Sender = addressList[0]
+							ixData.Input.Nonce = 1
+							ixData.Input.FuelPrice = big.NewInt(100)
 						}),
 					},
 				},
@@ -108,36 +108,36 @@ func TestPublicIXPoolAPI_Content(t *testing.T) {
 				addressList[0]: {
 					pending: types.Interactions{},
 					queued: types.Interactions{
-						newTestInteraction(t, 1, func(ixMsg *types.InteractionMessage) {
-							ixMsg.Data.Input.Sender = addressList[0]
-							ixMsg.Data.Input.Nonce = 1
-							ixMsg.Data.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, 1, func(ixData *types.IxData) {
+							ixData.Input.Sender = addressList[0]
+							ixData.Input.Nonce = 1
+							ixData.Input.FuelPrice = big.NewInt(100)
 						}),
-						newTestInteraction(t, 1, func(ixMsg *types.InteractionMessage) {
-							ixMsg.Data.Input.Sender = addressList[0]
-							ixMsg.Data.Input.Nonce = 2
-							ixMsg.Data.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, 1, func(ixData *types.IxData) {
+							ixData.Input.Sender = addressList[0]
+							ixData.Input.Nonce = 2
+							ixData.Input.FuelPrice = big.NewInt(100)
 						}),
 					},
 				},
 				addressList[1]: {
 					pending: types.Interactions{
-						newTestInteraction(t, 1, func(ixMsg *types.InteractionMessage) {
-							ixMsg.Data.Input.Sender = addressList[1]
-							ixMsg.Data.Input.Nonce = 1
-							ixMsg.Data.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, 1, func(ixData *types.IxData) {
+							ixData.Input.Sender = addressList[1]
+							ixData.Input.Nonce = 1
+							ixData.Input.FuelPrice = big.NewInt(100)
 						}),
-						newTestInteraction(t, 1, func(ixMsg *types.InteractionMessage) {
-							ixMsg.Data.Input.Sender = addressList[1]
-							ixMsg.Data.Input.Nonce = 2
-							ixMsg.Data.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, 1, func(ixData *types.IxData) {
+							ixData.Input.Sender = addressList[1]
+							ixData.Input.Nonce = 2
+							ixData.Input.FuelPrice = big.NewInt(100)
 						}),
 					},
 					queued: types.Interactions{
-						newTestInteraction(t, 1, func(ixMsg *types.InteractionMessage) {
-							ixMsg.Data.Input.Sender = addressList[1]
-							ixMsg.Data.Input.Nonce = 3
-							ixMsg.Data.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, 1, func(ixData *types.IxData) {
+							ixData.Input.Sender = addressList[1]
+							ixData.Input.Nonce = 3
+							ixData.Input.FuelPrice = big.NewInt(100)
 						}),
 					},
 				},
@@ -223,10 +223,10 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 			accounts: map[types.Address]*account{
 				addressList[0]: {
 					pending: types.Interactions{
-						newTestInteraction(t, 1, func(ixMsg *types.InteractionMessage) {
-							ixMsg.Data.Input.Sender = addressList[0]
-							ixMsg.Data.Input.Nonce = 1
-							ixMsg.Data.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, 1, func(ixData *types.IxData) {
+							ixData.Input.Sender = addressList[0]
+							ixData.Input.Nonce = 1
+							ixData.Input.FuelPrice = big.NewInt(100)
 						}),
 					},
 					queued: types.Interactions{},
@@ -252,10 +252,10 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 				addressList[0]: {
 					pending: types.Interactions{},
 					queued: types.Interactions{
-						newTestInteraction(t, 1, func(ixMsg *types.InteractionMessage) {
-							ixMsg.Data.Input.Sender = addressList[0]
-							ixMsg.Data.Input.Nonce = 1
-							ixMsg.Data.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, 1, func(ixData *types.IxData) {
+							ixData.Input.Sender = addressList[0]
+							ixData.Input.Nonce = 1
+							ixData.Input.FuelPrice = big.NewInt(100)
 						}),
 					},
 				},
@@ -280,36 +280,36 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 				addressList[0]: {
 					pending: types.Interactions{},
 					queued: types.Interactions{
-						newTestInteraction(t, 1, func(ixMsg *types.InteractionMessage) {
-							ixMsg.Data.Input.Sender = addressList[0]
-							ixMsg.Data.Input.Nonce = 1
-							ixMsg.Data.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, 1, func(ixData *types.IxData) {
+							ixData.Input.Sender = addressList[0]
+							ixData.Input.Nonce = 1
+							ixData.Input.FuelPrice = big.NewInt(100)
 						}),
-						newTestInteraction(t, 1, func(ixMsg *types.InteractionMessage) {
-							ixMsg.Data.Input.Sender = addressList[0]
-							ixMsg.Data.Input.Nonce = 2
-							ixMsg.Data.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, 1, func(ixData *types.IxData) {
+							ixData.Input.Sender = addressList[0]
+							ixData.Input.Nonce = 2
+							ixData.Input.FuelPrice = big.NewInt(100)
 						}),
 					},
 				},
 				addressList[1]: {
 					pending: types.Interactions{
-						newTestInteraction(t, 1, func(ixMsg *types.InteractionMessage) {
-							ixMsg.Data.Input.Sender = addressList[1]
-							ixMsg.Data.Input.Nonce = 1
-							ixMsg.Data.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, 1, func(ixData *types.IxData) {
+							ixData.Input.Sender = addressList[1]
+							ixData.Input.Nonce = 1
+							ixData.Input.FuelPrice = big.NewInt(100)
 						}),
-						newTestInteraction(t, 1, func(ixMsg *types.InteractionMessage) {
-							ixMsg.Data.Input.Sender = addressList[1]
-							ixMsg.Data.Input.Nonce = 2
-							ixMsg.Data.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, 1, func(ixData *types.IxData) {
+							ixData.Input.Sender = addressList[1]
+							ixData.Input.Nonce = 2
+							ixData.Input.FuelPrice = big.NewInt(100)
 						}),
 					},
 					queued: types.Interactions{
-						newTestInteraction(t, 1, func(ixMsg *types.InteractionMessage) {
-							ixMsg.Data.Input.Sender = addressList[1]
-							ixMsg.Data.Input.Nonce = 3
-							ixMsg.Data.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, 1, func(ixData *types.IxData) {
+							ixData.Input.Sender = addressList[1]
+							ixData.Input.Nonce = 3
+							ixData.Input.FuelPrice = big.NewInt(100)
 						}),
 					},
 				},
@@ -380,36 +380,36 @@ func TestPublicIXPoolAPI_Status(t *testing.T) {
 				addressList[0]: {
 					pending: types.Interactions{},
 					queued: types.Interactions{
-						newTestInteraction(t, 1, func(ixMsg *types.InteractionMessage) {
-							ixMsg.Data.Input.Sender = addressList[0]
-							ixMsg.Data.Input.Nonce = 1
-							ixMsg.Data.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, 1, func(ixData *types.IxData) {
+							ixData.Input.Sender = addressList[0]
+							ixData.Input.Nonce = 1
+							ixData.Input.FuelPrice = big.NewInt(100)
 						}),
-						newTestInteraction(t, 1, func(ixMsg *types.InteractionMessage) {
-							ixMsg.Data.Input.Sender = addressList[0]
-							ixMsg.Data.Input.Nonce = 2
-							ixMsg.Data.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, 1, func(ixData *types.IxData) {
+							ixData.Input.Sender = addressList[0]
+							ixData.Input.Nonce = 2
+							ixData.Input.FuelPrice = big.NewInt(100)
 						}),
 					},
 				},
 				addressList[1]: {
 					pending: types.Interactions{
-						newTestInteraction(t, 1, func(ixMsg *types.InteractionMessage) {
-							ixMsg.Data.Input.Sender = addressList[1]
-							ixMsg.Data.Input.Nonce = 1
-							ixMsg.Data.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, 1, func(ixData *types.IxData) {
+							ixData.Input.Sender = addressList[1]
+							ixData.Input.Nonce = 1
+							ixData.Input.FuelPrice = big.NewInt(100)
 						}),
-						newTestInteraction(t, 1, func(ixMsg *types.InteractionMessage) {
-							ixMsg.Data.Input.Sender = addressList[1]
-							ixMsg.Data.Input.Nonce = 2
-							ixMsg.Data.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, 1, func(ixData *types.IxData) {
+							ixData.Input.Sender = addressList[1]
+							ixData.Input.Nonce = 2
+							ixData.Input.FuelPrice = big.NewInt(100)
 						}),
 					},
 					queued: types.Interactions{
-						newTestInteraction(t, 1, func(ixMsg *types.InteractionMessage) {
-							ixMsg.Data.Input.Sender = addressList[1]
-							ixMsg.Data.Input.Nonce = 3
-							ixMsg.Data.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, 1, func(ixData *types.IxData) {
+							ixData.Input.Sender = addressList[1]
+							ixData.Input.Nonce = 3
+							ixData.Input.FuelPrice = big.NewInt(100)
 						}),
 					},
 				},
@@ -479,11 +479,11 @@ func TestPublicIXPoolAPI_Inspect(t *testing.T) {
 			accounts: map[types.Address]*account{
 				addressList[0]: {
 					pending: types.Interactions{
-						newTestInteraction(t, 0, func(ixMsg *types.InteractionMessage) {
-							ixMsg.Data.Input.Sender = addressList[0]
-							ixMsg.Data.Input.Receiver = addressList[1]
-							ixMsg.Data.Input.Nonce = 1
-							ixMsg.Data.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, 0, func(ixData *types.IxData) {
+							ixData.Input.Sender = addressList[0]
+							ixData.Input.Receiver = addressList[1]
+							ixData.Input.Nonce = 1
+							ixData.Input.FuelPrice = big.NewInt(100)
 						}),
 					},
 					queued:   types.Interactions{},
@@ -510,11 +510,11 @@ func TestPublicIXPoolAPI_Inspect(t *testing.T) {
 				addressList[0]: {
 					pending: types.Interactions{},
 					queued: types.Interactions{
-						newTestInteraction(t, 1, func(ixMsg *types.InteractionMessage) {
-							ixMsg.Data.Input.Sender = addressList[0]
-							ixMsg.Data.Input.Receiver = addressList[1]
-							ixMsg.Data.Input.Nonce = 1
-							ixMsg.Data.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, 1, func(ixData *types.IxData) {
+							ixData.Input.Sender = addressList[0]
+							ixData.Input.Receiver = addressList[1]
+							ixData.Input.Nonce = 1
+							ixData.Input.FuelPrice = big.NewInt(100)
 						}),
 					},
 					waitTime: int64(2500 * time.Millisecond),
@@ -540,37 +540,37 @@ func TestPublicIXPoolAPI_Inspect(t *testing.T) {
 				addressList[0]: {
 					pending: types.Interactions{},
 					queued: types.Interactions{
-						newTestInteraction(t, 1, func(ixMsg *types.InteractionMessage) {
-							ixMsg.Data.Input.Sender = addressList[0]
-							ixMsg.Data.Input.Nonce = 1
-							ixMsg.Data.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, 1, func(ixData *types.IxData) {
+							ixData.Input.Sender = addressList[0]
+							ixData.Input.Nonce = 1
+							ixData.Input.FuelPrice = big.NewInt(100)
 						}),
-						newTestInteraction(t, 1, func(ixMsg *types.InteractionMessage) {
-							ixMsg.Data.Input.Sender = addressList[0]
-							ixMsg.Data.Input.Nonce = 2
-							ixMsg.Data.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, 1, func(ixData *types.IxData) {
+							ixData.Input.Sender = addressList[0]
+							ixData.Input.Nonce = 2
+							ixData.Input.FuelPrice = big.NewInt(100)
 						}),
 					},
 					waitTime: int64(500 * time.Millisecond),
 				},
 				addressList[1]: {
 					pending: types.Interactions{
-						newTestInteraction(t, 1, func(ixMsg *types.InteractionMessage) {
-							ixMsg.Data.Input.Sender = addressList[1]
-							ixMsg.Data.Input.Nonce = 1
-							ixMsg.Data.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, 1, func(ixData *types.IxData) {
+							ixData.Input.Sender = addressList[1]
+							ixData.Input.Nonce = 1
+							ixData.Input.FuelPrice = big.NewInt(100)
 						}),
-						newTestInteraction(t, 1, func(ixMsg *types.InteractionMessage) {
-							ixMsg.Data.Input.Sender = addressList[1]
-							ixMsg.Data.Input.Nonce = 2
-							ixMsg.Data.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, 1, func(ixData *types.IxData) {
+							ixData.Input.Sender = addressList[1]
+							ixData.Input.Nonce = 2
+							ixData.Input.FuelPrice = big.NewInt(100)
 						}),
 					},
 					queued: types.Interactions{
-						newTestInteraction(t, 1, func(ixMsg *types.InteractionMessage) {
-							ixMsg.Data.Input.Sender = addressList[1]
-							ixMsg.Data.Input.Nonce = 3
-							ixMsg.Data.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, 1, func(ixData *types.IxData) {
+							ixData.Input.Sender = addressList[1]
+							ixData.Input.Nonce = 3
+							ixData.Input.FuelPrice = big.NewInt(100)
 						}),
 					},
 					waitTime: int64(1000 * time.Millisecond),

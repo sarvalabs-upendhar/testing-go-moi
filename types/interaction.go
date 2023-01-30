@@ -49,8 +49,21 @@ type Interaction struct {
 	signature atomic.Value
 }
 
-func NewInteraction(data IxData, signature []byte) *Interaction {
-	return InteractionMessage{Data: data, Signature: signature}.ToInteraction()
+func NewInteraction(ixData IxData, signature []byte) *Interaction {
+	ix := &Interaction{inner: ixData}
+	ix.signature.Store(signature)
+
+	data, err := polo.Polorize(ixData)
+	if err != nil {
+		log.Fatalln(err, "failed to generate bytes of interaction message")
+
+		return nil
+	}
+
+	ix.hash.Store(GetHash(data))
+	ix.size.Store(uint64(len(data) + len(signature)))
+
+	return ix
 }
 
 func NewRandomHashInteraction() *Interaction {
@@ -136,6 +149,11 @@ func (ix Interaction) TransferValues() map[AssetID]*big.Int {
 	return ix.inner.Input.TransferValues
 }
 
+// Payload returns the interaction payload
+func (ix Interaction) Payload() []byte {
+	return ix.inner.Input.Payload
+}
+
 func (ix *Interaction) GetAssetPayload() (*AssetPayload, error) {
 	// If payload has been decoded, return the asset form
 	if ix.payload != nil {
@@ -201,7 +219,7 @@ func (ix *Interaction) Hash() Hash {
 		return hash.(Hash) //nolint:forcetypeassert
 	}
 
-	hash, err := PoloHash(ix.ToMessage())
+	hash, err := PoloHash(ix)
 	if err != nil {
 		return NilHash
 	}
@@ -216,7 +234,7 @@ func (ix *Interaction) Size() (uint64, error) {
 		return size.(uint64), nil //nolint:forcetypeassert
 	}
 
-	data, err := polo.Polorize(ix.ToMessage())
+	data, err := ix.Bytes()
 	if err != nil {
 		return 0, errors.Wrap(err, "failed to polorize interaction")
 	}
@@ -227,82 +245,117 @@ func (ix *Interaction) Size() (uint64, error) {
 	return size, err
 }
 
-func (ix Interaction) ToMessage() InteractionMessage {
-	if sig, ok := ix.signature.Load().([]byte); ok {
-		return InteractionMessage{Data: ix.inner, Signature: sig}
+func (ix Interaction) Polorize() (*polo.Polorizer, error) {
+	polorizer := polo.NewPolorizer()
+	if err := polorizer.Polorize(ix.inner); err != nil {
+		return nil, errors.Wrap(err, "failed to polorize interaction data")
 	}
 
-	return InteractionMessage{Data: ix.inner}
+	sig, ok := ix.signature.Load().([]byte)
+	if !ok {
+		panic("invalid data stored into interaction signature")
+	}
+
+	polorizer.PolorizeBytes(sig)
+
+	return polorizer, nil
 }
 
-type InteractionMessage struct {
-	Data      IxData
-	Signature []byte
-}
-
-func (ixmsg InteractionMessage) Bytes() ([]byte, error) {
-	data, err := polo.Polorize(ixmsg)
+func (ix *Interaction) Depolorize(depolorizer *polo.Depolorizer) (err error) {
+	depolorizer, err = depolorizer.DepolorizePacked()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to polorize interaction message")
+		return errors.Wrap(err, "failed to depolorize interaction")
 	}
 
-	return data, nil
+	data := new(IxData)
+	if err = depolorizer.Depolorize(data); err != nil {
+		return errors.Wrap(err, "failed to depolorize interaction data")
+	}
+
+	sig, err := depolorizer.DepolorizeBytes()
+	if err != nil {
+		return errors.Wrap(err, "failed to depolorize interaction signature")
+	}
+
+	*ix = *NewInteraction(*data, sig)
+
+	return nil
 }
 
-func (ixmsg *InteractionMessage) FromBytes(data []byte) error {
-	if err := polo.Depolorize(ixmsg, data); err != nil {
-		return errors.Wrap(err, "failed to depolorize interaction message")
+func (ix Interaction) Bytes() ([]byte, error) {
+	polorizer, err := ix.Polorize()
+	if err != nil {
+		return nil, err
+	}
+
+	return polorizer.Bytes(), nil
+}
+
+func (ix *Interaction) FromBytes(data []byte) error {
+	depolorizer, err := polo.NewDepolorizer(data)
+	if err != nil {
+		return errors.Wrap(err, "failed to depolorize interaction")
+	}
+
+	if err = ix.Depolorize(depolorizer); err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func (ixmsg InteractionMessage) ToInteraction() *Interaction {
-	ix := &Interaction{inner: ixmsg.Data}
-	ix.signature.Store(ixmsg.Signature)
-
-	data, err := polo.Polorize(ixmsg.Data)
-	if err != nil {
-		log.Fatalln(err, "failed to generate bytes of interaction message")
-
-		return nil
-	}
-
-	ix.hash.Store(GetHash(data))
-	ix.size.Store(uint64(len(data) + len(ixmsg.Signature)))
-
-	return ix
-}
-
 // Interactions are array of Transactions
 type Interactions []*Interaction
 
-// Bytes returns the POLO serialized bytes of all Interactions
-func (ixs Interactions) Bytes() ([]byte, error) {
-	packer := polo.NewPacker()
+func (ixs Interactions) Polorize() (*polo.Polorizer, error) {
+	polorizer := polo.NewPolorizer()
 	for _, ix := range ixs {
-		if err := packer.Pack(ix.ToMessage()); err != nil {
+		if err := polorizer.Polorize(ix); err != nil {
 			return nil, errors.Wrap(err, "failed to pack interactions")
 		}
 	}
 
-	return packer.Bytes(), nil
+	return polorizer, nil
 }
 
-// FromBytes decodes the POLO serialized bytes into Interactions
-func (ixs *Interactions) FromBytes(bytes []byte) error {
-	unpacker, err := polo.NewUnpacker(bytes)
+// Bytes returns the POLO serialized bytes of all Interactions
+func (ixs Interactions) Bytes() ([]byte, error) {
+	polorizer, err := ixs.Polorize()
+	if err != nil {
+		return nil, err
+	}
+
+	return polorizer.Bytes(), nil
+}
+
+func (ixs *Interactions) Depolorize(depolorizer *polo.Depolorizer) (err error) {
+	depolorizer, err = depolorizer.DepolorizePacked()
 	if err != nil {
 		return err
 	}
 
-	for !unpacker.Done() {
-		ixMsg := new(InteractionMessage)
-		if err = unpacker.Unpack(ixMsg); err != nil {
+	for !depolorizer.Done() {
+		ix := new(Interaction)
+
+		if err = depolorizer.Depolorize(ix); err != nil {
 			return errors.Wrap(err, "failed to unpack interactions")
 		}
 
-		*ixs = append(*ixs, ixMsg.ToInteraction())
+		*ixs = append(*ixs, ix)
+	}
+
+	return nil
+}
+
+// FromBytes decodes the POLO serialized bytes into Interactions
+func (ixs *Interactions) FromBytes(bytes []byte) error {
+	depolorizer, err := polo.NewDepolorizer(bytes)
+	if err != nil {
+		return err
+	}
+
+	if err = ixs.Depolorize(depolorizer); err != nil {
+		return err
 	}
 
 	return nil

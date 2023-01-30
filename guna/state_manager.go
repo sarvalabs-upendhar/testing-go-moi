@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/sarvalabs/go-polo"
+
 	"github.com/sarvalabs/moichain/dhruva/db"
 	"github.com/sarvalabs/moichain/guna/tree"
 	"github.com/sarvalabs/moichain/types"
@@ -301,7 +303,9 @@ func (sm *StateManager) FetchTesseractFromDB(hash types.Hash, withInteractions b
 		}
 
 		if err := interactions.FromBytes(buf); err != nil {
-			return nil, errors.Wrap(err, "failed to depolarize interactions")
+			if !errors.Is(err, polo.ErrNullPack) {
+				return nil, errors.Wrap(err, "failed to depolarize interactions")
+			}
 		}
 	}
 

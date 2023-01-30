@@ -230,7 +230,7 @@ func (suite *ERC20TestSuite) callmethodName() (uint64, string) {
 	result := suite.performExecution(&ctypes.ExecutionOrder{Callsite: "Name", Callee: suite.storage, Inputs: nil})
 
 	name := new(string)
-	if err := result.Outputs.GetObject("name", name); err != nil {
+	if err := result.Outputs.Get("name", name); err != nil {
 		suite.T().Fatalf("Output Decode Failed: %v", err)
 	}
 
@@ -241,7 +241,7 @@ func (suite *ERC20TestSuite) callmethodSymbol() (uint64, string) {
 	result := suite.performExecution(&ctypes.ExecutionOrder{Callsite: "Symbol", Callee: suite.storage, Inputs: nil})
 
 	symbol := new(string)
-	if err := result.Outputs.GetObject("symbol", symbol); err != nil {
+	if err := result.Outputs.Get("symbol", symbol); err != nil {
 		suite.T().Fatalf("Output Decode Failed: %v", err)
 	}
 
@@ -252,7 +252,7 @@ func (suite *ERC20TestSuite) callmethodDecimals() (uint64, uint64) {
 	result := suite.performExecution(&ctypes.ExecutionOrder{Callsite: "Decimals", Callee: suite.storage, Inputs: nil})
 
 	decimals := new(uint64)
-	if err := result.Outputs.GetObject("decimals", decimals); err != nil {
+	if err := result.Outputs.Get("decimals", decimals); err != nil {
 		suite.T().Fatalf("Output Decode Failed: %v", err)
 	}
 
@@ -263,7 +263,7 @@ func (suite *ERC20TestSuite) callmethodTotalSupply() (uint64, uint64) {
 	result := suite.performExecution(&ctypes.ExecutionOrder{Callsite: "TotalSupply", Callee: suite.storage, Inputs: nil})
 
 	supply := new(uint64)
-	if err := result.Outputs.GetObject("supply", supply); err != nil {
+	if err := result.Outputs.Get("supply", supply); err != nil {
 		suite.T().Fatalf("Output Decode Failed: %v", err)
 	}
 
@@ -272,12 +272,12 @@ func (suite *ERC20TestSuite) callmethodTotalSupply() (uint64, uint64) {
 
 func (suite *ERC20TestSuite) callmethodBalanceOf(address types.Address) (uint64, uint64) {
 	inputs := make(polo.Document)
-	_ = inputs.SetObject("addr", address)
+	_ = inputs.Set("addr", address)
 
 	result := suite.performExecution(&ctypes.ExecutionOrder{Callsite: "BalanceOf", Callee: suite.storage, Inputs: inputs})
 
 	balance := new(uint64)
-	if err := result.Outputs.GetObject("balance", balance); err != nil {
+	if err := result.Outputs.Get("balance", balance); err != nil {
 		suite.T().Fatalf("Output Decode Failed: %v", err)
 	}
 
@@ -286,13 +286,13 @@ func (suite *ERC20TestSuite) callmethodBalanceOf(address types.Address) (uint64,
 
 func (suite *ERC20TestSuite) callmethodAllowance(owner, spender types.Address) (uint64, uint64) {
 	inputs := make(polo.Document)
-	_ = inputs.SetObject("owner", owner)
-	_ = inputs.SetObject("spender", spender)
+	_ = inputs.Set("owner", owner)
+	_ = inputs.Set("spender", spender)
 
 	result := suite.performExecution(&ctypes.ExecutionOrder{Callsite: "Allowance", Callee: suite.storage, Inputs: inputs})
 
 	allowance := new(uint64)
-	if err := result.Outputs.GetObject("allowance", allowance); err != nil {
+	if err := result.Outputs.Get("allowance", allowance); err != nil {
 		suite.T().Fatalf("Output Decode Failed: %v", err)
 	}
 
@@ -301,14 +301,14 @@ func (suite *ERC20TestSuite) callmethodAllowance(owner, spender types.Address) (
 
 func (suite *ERC20TestSuite) callmethodApprove(owner, spender types.Address, amount uint64) (uint64, bool) {
 	inputs := make(polo.Document)
-	_ = inputs.SetObject("owner", owner)
-	_ = inputs.SetObject("spender", spender)
-	_ = inputs.SetObject("amount", amount)
+	_ = inputs.Set("owner", owner)
+	_ = inputs.Set("spender", spender)
+	_ = inputs.Set("amount", amount)
 
 	result := suite.performExecution(&ctypes.ExecutionOrder{Callsite: "Approve!", Callee: suite.storage, Inputs: inputs})
 
 	ok := new(bool)
-	if err := result.Outputs.GetObject("ok", ok); err != nil {
+	if err := result.Outputs.Get("ok", ok); err != nil {
 		suite.T().Fatalf("Output Decode Failed: %v", err)
 	}
 
@@ -317,14 +317,14 @@ func (suite *ERC20TestSuite) callmethodApprove(owner, spender types.Address, amo
 
 func (suite *ERC20TestSuite) callmethodTransfer(from, to types.Address, amount uint64) (uint64, bool) {
 	inputs := make(polo.Document)
-	_ = inputs.SetObject("from", from)
-	_ = inputs.SetObject("to", to)
-	_ = inputs.SetObject("amount", amount)
+	_ = inputs.Set("from", from)
+	_ = inputs.Set("to", to)
+	_ = inputs.Set("amount", amount)
 
 	result := suite.performExecution(&ctypes.ExecutionOrder{Callsite: "Transfer!", Callee: suite.storage, Inputs: inputs})
 
 	ok := new(bool)
-	if err := result.Outputs.GetObject("ok", ok); err != nil {
+	if err := result.Outputs.Get("ok", ok); err != nil {
 		suite.T().Fatalf("Output Decode Failed: %v", err)
 	}
 
@@ -333,13 +333,13 @@ func (suite *ERC20TestSuite) callmethodTransfer(from, to types.Address, amount u
 
 func (suite *ERC20TestSuite) callmethodMint(address types.Address, amount uint64) (uint64, bool) {
 	inputs := make(polo.Document)
-	_ = inputs.SetObject("addr", address)
-	_ = inputs.SetObject("amount", amount)
+	_ = inputs.Set("addr", address)
+	_ = inputs.Set("amount", amount)
 
 	result := suite.performExecution(&ctypes.ExecutionOrder{Callsite: "Mint!", Callee: suite.storage, Inputs: inputs})
 
 	ok := new(bool)
-	if err := result.Outputs.GetObject("ok", ok); err != nil {
+	if err := result.Outputs.Get("ok", ok); err != nil {
 		suite.T().Fatalf("Output Decode Failed: %v", err)
 	}
 
@@ -348,13 +348,13 @@ func (suite *ERC20TestSuite) callmethodMint(address types.Address, amount uint64
 
 func (suite *ERC20TestSuite) callmethodBurn(address types.Address, amount uint64) (uint64, bool) {
 	inputs := make(polo.Document)
-	_ = inputs.SetObject("addr", address)
-	_ = inputs.SetObject("amount", amount)
+	_ = inputs.Set("addr", address)
+	_ = inputs.Set("amount", amount)
 
 	result := suite.performExecution(&ctypes.ExecutionOrder{Callsite: "Burn!", Callee: suite.storage, Inputs: inputs})
 
 	ok := new(bool)
-	if err := result.Outputs.GetObject("ok", ok); err != nil {
+	if err := result.Outputs.Get("ok", ok); err != nil {
 		suite.T().Fatalf("Output Decode Failed: %v", err)
 	}
 

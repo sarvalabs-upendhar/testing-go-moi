@@ -333,7 +333,9 @@ func (tm *TesseractMessage) Tesseract() (*types.Tesseract, error) {
 	var ixns types.Interactions
 
 	if err := ixns.FromBytes(tm.Ixns); err != nil {
-		return nil, err
+		if !errors.Is(err, polo.ErrNullPack) {
+			return nil, err
+		}
 	}
 
 	return &types.Tesseract{

@@ -256,7 +256,7 @@ func NewInteractionArg(ix *types.Interaction) *InteractionArg {
 		Cost:      ix.Cost(),
 		FuelPrice: ix.FuelPrice(),
 		FuelLimit: ix.FuelLimit(),
-		Input:     types.BytesToHex(ix.ToMessage().Data.Input.Payload),
+		Input:     types.BytesToHex(ix.Payload()),
 		Hash:      ix.Hash().Hex(),
 	}
 }

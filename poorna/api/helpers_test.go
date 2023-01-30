@@ -585,17 +585,20 @@ func checkForContext(
 func newTestInteraction(
 	t *testing.T,
 	ixType types.IxType,
-	callback func(ix *types.InteractionMessage),
+	callback func(ixData *types.IxData),
 ) *types.Interaction {
 	t.Helper()
 
-	ixMsg := new(types.InteractionMessage)
-	ixMsg.Data.Input.Type = ixType
-	ixMsg.Data.Input.FuelLimit = big.NewInt(10000)
-
-	if callback != nil {
-		callback(ixMsg)
+	ixData := &types.IxData{
+		Input: types.IxInput{
+			Type:      ixType,
+			FuelLimit: big.NewInt(10000),
+		},
 	}
 
-	return ixMsg.ToInteraction()
+	if callback != nil {
+		callback(ixData)
+	}
+
+	return types.NewInteraction(*ixData, nil)
 }

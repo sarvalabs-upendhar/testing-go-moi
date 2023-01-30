@@ -29,21 +29,28 @@ func NewMapValue(datatype *Typedef, data []byte) (*MapValue, error) {
 	// If there is some data to decode into the MapValue
 	// Unpack each key value pair from the wire into Values based on their expected datatype.
 	if data != nil {
-		unpacker, err := polo.NewUnpacker(data)
+		depolorizer, err := polo.NewDepolorizer(data)
 		if err != nil {
 			return nil, err
 		}
 
-		for !unpacker.Done() {
+		depolorizer, err = depolorizer.DepolorizePacked()
+		if errors.Is(err, polo.ErrNullPack) {
+			return mapping, nil
+		} else if err != nil {
+			return nil, err
+		}
+
+		for !depolorizer.Done() {
 			var kdata, vdata []byte
 
 			// Unpack the key data from the wire
-			if kdata, err = unpacker.UnpackWire(); err != nil {
+			if kdata, err = depolorizer.DepolorizeRaw(); err != nil {
 				return nil, err
 			}
 
 			// Unpack the value data from the wire
-			if vdata, err = unpacker.UnpackWire(); err != nil {
+			if vdata, err = depolorizer.DepolorizeRaw(); err != nil {
 				return nil, err
 			}
 
@@ -86,7 +93,7 @@ func (mapping MapValue) Copy() Value {
 // Data returns the POLO encoded bytes of MapValue.
 // Implements the Value interface for MapValue.
 func (mapping MapValue) Data() []byte {
-	packer := polo.NewPacker()
+	polorizer := polo.NewPolorizer()
 	v := reflect.ValueOf(mapping.values)
 
 	keys := v.MapKeys()
@@ -94,11 +101,11 @@ func (mapping MapValue) Data() []byte {
 
 	//nolint:forcetypeassert
 	for _, key := range keys {
-		_ = packer.PackWire(key.Interface().(Value).Data())
-		_ = packer.PackWire(v.MapIndex(key).Interface().(Value).Data())
+		polorizer.PolorizeRaw(key.Interface().(Value).Data())
+		polorizer.PolorizeRaw(v.MapIndex(key).Interface().(Value).Data())
 	}
 
-	return packer.Bytes()
+	return polorizer.Bytes()
 }
 
 // Get is a safe read from the MapValue, returns an error

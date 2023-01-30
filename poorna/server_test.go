@@ -350,7 +350,7 @@ func TestStreamHandlerFunc_Invalid_MessagePayload(t *testing.T) {
 
 	peer := openStream(t, servers[0], servers[1]) // connect to peer-1 and get peer
 
-	invalidMessagePayload := []byte{0}
+	invalidMessagePayload := []byte{200}
 	// send invalid message payload to server-1
 	sendMessage(t, peer, invalidMessagePayload)
 

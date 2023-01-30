@@ -27,49 +27,49 @@ func NewMemStorage(addr types.Address) *MemStorage {
 }
 
 func (store MemStorage) EncodePOLO() ([]byte, error) {
-	// Create a new Packer
-	packer := polo.NewPacker()
-	// Pack the address
-	if err := packer.Pack(store.address); err != nil {
+	// Create a new Polorizer
+	polorizer := polo.NewPolorizer()
+	// Polorize the address
+	if err := polorizer.Polorize(store.address); err != nil {
 		return nil, err
 	}
-	// Pack the storage
-	if err := packer.Pack(store.storage); err != nil {
+	// Polorize the storage
+	if err := polorizer.Polorize(store.storage); err != nil {
 		return nil, err
 	}
-	// Pack the balances
-	if err := packer.Pack(store.balances); err != nil {
+	// Polorize the balances
+	if err := polorizer.Polorize(store.balances); err != nil {
 		return nil, err
 	}
-	// Pack the approvals
-	if err := packer.Pack(store.approvals); err != nil {
+	// Polorize the approvals
+	if err := polorizer.Polorize(store.approvals); err != nil {
 		return nil, err
 	}
 
 	// Return packed bytes
-	return packer.Bytes(), nil
+	return polorizer.Bytes(), nil
 }
 
 func (store *MemStorage) DecodePOLO(bytes []byte) error {
-	// Create a new Unpacker
-	unpacker, err := polo.NewUnpacker(bytes)
+	// Create a new Depolorizer
+	depolorizer, err := polo.NewDepolorizer(bytes)
 	if err != nil {
 		return err
 	}
-	// Unpack address
-	if err = unpacker.Unpack(&store.address); err != nil {
+	// Depolorize address
+	if err = depolorizer.Depolorize(&store.address); err != nil {
 		return err
 	}
-	// Unpack storage
-	if err = unpacker.Unpack(&store.storage); err != nil {
+	// Depolorize storage
+	if err = depolorizer.Depolorize(&store.storage); err != nil {
 		return err
 	}
-	// Unpack balances
-	if err = unpacker.Unpack(&store.balances); err != nil {
+	// Depolorize balances
+	if err = depolorizer.Depolorize(&store.balances); err != nil {
 		return err
 	}
-	// Unpack approvals
-	if err = unpacker.Unpack(&store.approvals); err != nil {
+	// Depolorize approvals
+	if err = depolorizer.Depolorize(&store.approvals); err != nil {
 		return err
 	}
 

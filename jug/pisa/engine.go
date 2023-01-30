@@ -99,7 +99,7 @@ func (engine *Engine) Execute(
 	// For each output value, set encoded data for the label
 	for label, index := range routine.Outputs.Symbols {
 		if value, ok := outputs[index]; ok {
-			outputValues.Set(label, value.Data())
+			outputValues.SetRaw(label, value.Data())
 		}
 	}
 

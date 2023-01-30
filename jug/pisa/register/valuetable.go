@@ -22,7 +22,7 @@ func NewValueTable(fields FieldTable, values ctypes.ExecutionValues) (ValueTable
 	}
 
 	for label, index := range fields.Symbols {
-		data := values.Get(label)
+		data := values.GetRaw(label)
 		if data == nil {
 			return nil, errors.Errorf("missing data for '%v'", label)
 		}

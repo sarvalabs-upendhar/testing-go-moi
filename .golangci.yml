@@ -21,7 +21,6 @@ linters:
     - gosec
     - gosimple
     - govet
-    - ifshort
     - importas
     - ineffassign
     - lll
@@ -39,7 +38,6 @@ linters:
     - typecheck
     - unconvert
     - unused
-    - wastedassign
     - whitespace
     - wsl
 
