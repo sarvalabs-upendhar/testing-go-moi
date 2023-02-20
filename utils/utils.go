@@ -18,12 +18,10 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/multiformats/go-multiaddr"
 
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
-
 	"github.com/sarvalabs/moichain/types"
-
-	"github.com/multiformats/go-multiaddr"
 )
 
 const charset = "abcdefghijklmnopqrstuvwxyz" +
@@ -32,8 +30,8 @@ const charset = "abcdefghijklmnopqrstuvwxyz" +
 var seededRand = rand.New(
 	rand.NewSource(time.Now().UnixNano()))
 
-// stringWithCharset returns a random string from tha charset supplied
-func stringWithCharset(length int, charset string) string {
+// RandString returns a random string from tha charset supplied
+func RandString(length int) string {
 	b := make([]byte, length)
 	for i := range b {
 		b[i] = charset[seededRand.Intn(len(charset))]
@@ -51,11 +49,6 @@ func EnsureDir(dir string, mode os.FileMode) error {
 	return nil
 }
 
-// RandString generated random string of given length
-func RandString(length int) string {
-	return stringWithCharset(length, charset)
-}
-
 // ItemExists is used to check whether the given element is present in the interface ...
 func ItemExists(arrayType interface{}, item interface{}) bool {
 	arr := reflect.ValueOf(arrayType)
@@ -70,15 +63,6 @@ func ItemExists(arrayType interface{}, item interface{}) bool {
 	}
 
 	return false
-}
-
-func HexToByte(str string) []byte {
-	data, err := hex.DecodeString(str)
-	if err == nil {
-		return data
-	}
-
-	return nil
 }
 
 func ExponentialTimeout(baseTime time.Duration, exponent int32) time.Duration {
