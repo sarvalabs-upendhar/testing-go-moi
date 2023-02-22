@@ -907,6 +907,19 @@ func (s *Server) constructHandshakeMSG() (ptypes.HandshakeMSG, error) {
 	return handShakeMessage, nil
 }
 
+func (s *Server) GetPeers() ([]id.KramaID, error) {
+	s.Peers.lock.Lock()
+	defer s.Peers.lock.Unlock()
+
+	peers := make([]id.KramaID, 0)
+
+	for _, peer := range s.Peers.peers {
+		peers = append(peers, peer.kramaID)
+	}
+
+	return peers, nil
+}
+
 func (pst *pubSubTopics) addTopicSet(topicName string, topicSet *TopicSet) {
 	pst.topicSetLock.Lock()
 	defer pst.topicSetLock.Unlock()

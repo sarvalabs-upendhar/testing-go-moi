@@ -380,3 +380,24 @@ func (r *rpcService) WaitTime(
 
 	return nil
 }
+
+// Peers is an RPC Method that returns an array of Krama ID's connected to a client
+func (r *rpcService) Peers(
+	req *http.Request,
+	args *api.NetArgs,
+	resp *api.Response,
+) error {
+	NetAPI, ok := r.apis["net"].(*api.PublicNetAPI)
+	if !ok {
+		return types.ErrInvalidAPI
+	}
+
+	data, err := NetAPI.Peers()
+	if err != nil {
+		return err
+	}
+
+	resp.Data = data
+
+	return nil
+}

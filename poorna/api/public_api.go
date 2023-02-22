@@ -10,6 +10,7 @@ type PublicAPI struct {
 	IxAPI     *PublicIXAPI
 	IxPoolAPI *PublicIXPoolAPI
 	CoreAPI   *PublicCoreAPI
+	NetAPI    *PublicNetAPI
 }
 
 func NewPublicAPI(backend *Backend) *PublicAPI {
@@ -17,6 +18,7 @@ func NewPublicAPI(backend *Backend) *PublicAPI {
 		IxAPI:     NewPublicIXAPI(backend.ixpool, backend.sm),
 		IxPoolAPI: NewPublicIXPoolAPI(backend.ixpool),
 		CoreAPI:   NewPublicCoreAPI(backend.ixpool, backend.chain, backend.sm),
+		NetAPI:    NewPublicNetAPI(backend.network),
 	}
 }
 
@@ -35,6 +37,12 @@ func GetPublicAPIs(backend *Backend) []API {
 			Namespace: "ixpool",
 			Services: map[string]interface{}{
 				"ixpool": publicAPI.IxPoolAPI,
+			},
+		},
+		{
+			Namespace: "net",
+			Services: map[string]interface{}{
+				"net": publicAPI.NetAPI,
 			},
 		},
 	}

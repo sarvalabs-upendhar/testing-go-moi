@@ -14,6 +14,7 @@ import (
 
 	"github.com/sarvalabs/go-polo"
 	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/common/tests"
 	mudraCommon "github.com/sarvalabs/moichain/mudra/common"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
@@ -573,6 +574,56 @@ func TestDisconnectPeer(t *testing.T) {
 					}
 				}
 			}
+		})
+	}
+}
+
+func TestGetPeers(t *testing.T) {
+	bootNodes := getBootstrapNodes(t, 2)
+	params := getParamsToCreateMultipleServers(t, 2, bootNodes, 2, 2)
+	paramsMap := map[int]*CreateServerParams{
+		0: params[0],
+		1: params[1],
+	}
+	servers := createMultipleServers(t, 2, paramsMap)
+
+	t.Cleanup(func() {
+		closeTestServers(t, servers)
+	})
+
+	peersList := tests.GetTestKramaIDs(t, 2)
+
+	testcases := []struct {
+		name         string
+		server       *Server
+		expectedList []id.KramaID
+		testFn       func()
+	}{
+		{
+			name:         "Should return an empty list if no Krama ID's in peersList",
+			server:       servers[0],
+			expectedList: make([]id.KramaID, 0),
+		},
+		{
+			name:   "Returns a slice of Krama ID's connected to a client",
+			server: servers[1],
+			testFn: func() {
+				setServerPeers(t, servers[1], peersList)
+			},
+			expectedList: peersList,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(testing *testing.T) {
+			if test.testFn != nil {
+				test.testFn()
+			}
+
+			fetchedList, err := test.server.GetPeers()
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedList, fetchedList)
 		})
 	}
 }

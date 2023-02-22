@@ -393,6 +393,27 @@ func (mc *MockIxPool) setIxs(addr types.Address, pending, queued []*types.Intera
 	mc.queued[addr] = queued
 }
 
+type MockNetwork struct {
+	peers []id.KramaID
+}
+
+func NewMockNetwork(t *testing.T) *MockNetwork {
+	t.Helper()
+
+	network := new(MockNetwork)
+	network.peers = make([]id.KramaID, 0)
+
+	return network
+}
+
+func (mn *MockNetwork) setPeers(peersList []id.KramaID) {
+	mn.peers = peersList
+}
+
+func (mn *MockNetwork) GetPeers() ([]id.KramaID, error) {
+	return mn.peers, nil
+}
+
 func GenerateRandomIXPayload(t *testing.T, size uint32) []byte {
 	t.Helper()
 

@@ -39,6 +39,10 @@ type StateManager interface {
 	GetStorageEntry(logicID types.LogicID, slot []byte, stateHash types.Hash) ([]byte, error)
 }
 
+type Network interface {
+	GetPeers() ([]id.KramaID, error)
+}
+
 // Backend is a struct that represents the API backend
 type Backend struct {
 	// Represents the API interaction pool
@@ -50,12 +54,15 @@ type Backend struct {
 	// Represents the API state manager
 	sm StateManager
 
+	// Represents the API network
+	network Network
+
 	// Represents the node config
 	cfg *common.IxPoolConfig
 }
 
 // NewBackend is a constructor function that generates and returns a new API Backend object
-func NewBackend(ixpool IxPool, chain ChainManager, sm StateManager, cfg *common.IxPoolConfig) *Backend {
+func NewBackend(ixpool IxPool, chain ChainManager, sm StateManager, net Network, cfg *common.IxPoolConfig) *Backend {
 	// Create a new API Backend object and return it
-	return &Backend{ixpool, chain, sm, cfg}
+	return &Backend{ixpool, chain, sm, net, cfg}
 }

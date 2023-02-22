@@ -372,7 +372,7 @@ func (n *Node) setLogger(logLevel string) error {
 func (n *Node) setupRPC() error {
 	n.rpc = krpc.NewRPCServer("/", n.logger, n.cfg.Network.JSONRPCAddr, n.eventMux)
 
-	backend := api.NewBackend(n.ixpool, n.chain, n.state, n.cfg.IxPool)
+	backend := api.NewBackend(n.ixpool, n.chain, n.state, n.network, n.cfg.IxPool)
 	publicApis := api.GetPublicAPIs(backend)
 
 	for _, api := range publicApis {

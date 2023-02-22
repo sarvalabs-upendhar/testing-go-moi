@@ -176,6 +176,16 @@ func (vault *MockVault) SetNetworkPrivateKey(t *testing.T, privKeyBytes []byte) 
 	vault.networkPrivateKey = networkPrivKey
 }
 
+func setServerPeers(t *testing.T, s *Server, peersList []kramaid.KramaID) {
+	t.Helper()
+
+	for _, peer := range peersList {
+		peerID, err := peer.DecodedPeerID()
+		require.NoError(t, err)
+		s.Peers.addPeer(&Peer{kramaID: peer, networkID: peerID})
+	}
+}
+
 // helper functions
 func getPeerInfo(t *testing.T, server *Server) *libp2pPeer.AddrInfo {
 	t.Helper()
