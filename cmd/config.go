@@ -1,6 +1,13 @@
 package cmd
 
-import "math/big"
+import (
+	"encoding/json"
+	"errors"
+	"math/big"
+	"os"
+)
+
+var ErrReadingPeerList = errors.New("error reading peer list file")
 
 type Config struct {
 	Genesis        string          `json:"genesis"`
@@ -16,12 +23,14 @@ type Config struct {
 }
 
 type NetworkConfig struct {
-	Libp2pAddr        []string `json:"libp2p_addr"`
-	ProtocolID        string   `json:"protocol_id"`
-	JSONRPCAddr       string   `json:"jsonrpc_addr"`
-	BootStrapPeers    []string `json:"bootnodes"`
-	InboundConnLimit  uint     `json:"inbound_conn_limit"`
-	OutboundConnLimit uint     `json:"outbound_conn_limit"`
+	Libp2pAddr        []string   `json:"libp2p_addr"`
+	ProtocolID        string     `json:"protocol_id"`
+	JSONRPCAddr       string     `json:"jsonrpc_addr"`
+	BootStrapPeers    []string   `json:"bootnodes"`
+	TrustedPeers      []PeerInfo `json:"trusted_peers"`
+	StaticPeers       []PeerInfo `json:"static_peers"`
+	InboundConnLimit  int64      `json:"inbound_conn_limit"`
+	OutboundConnLimit int64      `json:"outbound_conn_limit"`
 }
 
 type IxPoolConfig struct {
@@ -59,4 +68,33 @@ type VaultConfig struct {
 	MoiIDPassword string
 	MoiIDURL      string
 	NodePassword  string
+}
+
+type PeerInfo struct {
+	ID      string `json:"krama_id"`
+	Address string `json:"address"`
+}
+
+type PeerList struct {
+	TrustedPeers []PeerInfo `json:"trusted_peers"`
+	StaticPeers  []PeerInfo `json:"static_peers"`
+}
+
+// ReadPeerList reads the list of trusted and static peers from the given file and returns it.
+func ReadPeerList(path string) (*PeerList, error) {
+	if path == "" {
+		return &PeerList{}, nil
+	}
+
+	file, err := os.ReadFile(path)
+	if err != nil {
+		return nil, ErrReadingPeerList
+	}
+
+	peerList := new(PeerList)
+	if err = json.Unmarshal(file, peerList); err != nil {
+		return nil, ErrReadingPeerList
+	}
+
+	return peerList, nil
 }

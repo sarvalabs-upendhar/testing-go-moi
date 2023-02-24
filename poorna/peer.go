@@ -2,7 +2,6 @@ package poorna
 
 import (
 	"bufio"
-	"log"
 	"sync"
 
 	"github.com/hashicorp/go-hclog"
@@ -132,8 +131,6 @@ func (p *Peer) InitHandshake(s *Server) error {
 
 	byteCount, err := p.rw.Reader.Read(buffer)
 	if err != nil {
-		log.Println(err)
-
 		return err
 	}
 

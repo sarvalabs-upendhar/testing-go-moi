@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	MaxBFTimeout = 10 * time.Second
+	MaxBFTimeout = 30 * time.Second
 )
 
 type vault interface {
@@ -247,8 +247,13 @@ func (kbft *KBFT) handleTimeout(ti timeoutInfo, r RoundState) {
 }
 
 func (kbft *KBFT) handleMsg(msg ktypes.ConsensusMessage) error {
+	_, span := tracing.Span(kbft.ctx, "Krama.KBFT", "handleMsg")
+
 	kbft.mx.Lock()
-	defer kbft.mx.Unlock()
+	defer func() {
+		kbft.mx.Unlock()
+		span.End()
+	}()
 
 	m, peerID := msg.Message, msg.PeerID
 
@@ -609,17 +614,6 @@ func (kbft *KBFT) enterPropose(heights []uint64, round int32) {
 	}
 
 	if _, exists := kbft.ics.HasKramaID(kbft.vault.KramaID()); !exists {
-		log.Panic(
-			"Validator id missing",
-			kbft.vault.KramaID(),
-			kbft.ics.ICS.Nodes[0].Ids,
-			kbft.ics.ICS.Nodes[1].Ids,
-			kbft.ics.ICS.Nodes[1].Ids,
-			kbft.ics.ICS.Nodes[3].Ids,
-			kbft.ics.ICS.Nodes[4].Ids,
-			kbft.ics.ICS.Nodes[5].Ids,
-		)
-
 		return
 	}
 
@@ -967,7 +961,7 @@ func areHeightsEqual(systemHeight []uint64, newHeight []uint64) bool {
 func areHeightsGreater(systemHeight []uint64, newHeight []uint64) bool {
 	// Iterate over system heights
 	for idx, value := range systemHeight {
-		if value < newHeight[idx] {
+		if value <= newHeight[idx] {
 			// Height lesser, return false
 			return false
 		}

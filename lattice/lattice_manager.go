@@ -56,10 +56,11 @@ type db interface {
 	SetIxLookup(ixHash types.Hash, data []byte) error
 	SetReceipts(receiptHash types.Hash, data []byte) error
 	GetReceipts(receiptHash types.Hash) ([]byte, error)
+	GetInteractions(ixHash types.Hash) ([]byte, error)
 }
 
 type reputationEngine interface {
-	UpdateInclusivity(key id.KramaID, delta int64) error
+	UpdateWalletCount(peerID id.KramaID, delta int32) error
 }
 
 type stateManager interface {
@@ -242,19 +243,19 @@ func (c *ChainManager) AddKnownHashes(tesseracts []*types.Tesseract) {
 func (c *ChainManager) UpdateNodeInclusivity(delta types.ContextDelta) error {
 	for _, deltaGroup := range delta {
 		for _, kramaID := range deltaGroup.BehaviouralNodes {
-			if err := c.senatus.UpdateInclusivity(kramaID, 1); err != nil {
+			if err := c.senatus.UpdateWalletCount(kramaID, 1); err != nil {
 				return err
 			}
 		}
 
 		for _, kramaID := range deltaGroup.RandomNodes {
-			if err := c.senatus.UpdateInclusivity(kramaID, 1); err != nil {
+			if err := c.senatus.UpdateWalletCount(kramaID, 1); err != nil {
 				return err
 			}
 		}
 
 		for _, kramaID := range deltaGroup.ReplacedNodes {
-			if err := c.senatus.UpdateInclusivity(kramaID, -1); err != nil {
+			if err := c.senatus.UpdateWalletCount(kramaID, -1); err != nil {
 				return err
 			}
 		}
@@ -468,6 +469,62 @@ func (c *ChainManager) verifyHeaders(ts *types.Tesseract) error {
 	return nil
 }
 
+func (c *ChainManager) storeReceipts(ts *types.Tesseract) error {
+	receipts := ts.GetReceipts()
+
+	if receipts != nil {
+		rawReceipts, err := receipts.Bytes()
+		if err != nil {
+			return err
+		}
+
+		receiptHash := types.GetHash(rawReceipts)
+
+		_, err = c.db.GetReceipts(receiptHash)
+		if errors.Is(err, types.ErrKeyNotFound) {
+			if err = c.db.SetReceipts(receiptHash, rawReceipts); err != nil {
+				return errors.Wrap(err, "error writing receipts to db")
+			}
+
+			return nil
+		}
+
+		return err
+	}
+
+	return nil
+}
+
+func (c *ChainManager) storeInteractions(ts *types.Tesseract) error {
+	ixs := ts.Interactions()
+
+	if ixs != nil {
+		ixRawData, err := ixs.Bytes()
+		if err != nil {
+			return err
+		}
+
+		_, err = c.db.GetInteractions(ts.InteractionHash())
+		if errors.Is(err, types.ErrKeyNotFound) {
+			if err = c.db.SetInteractions(ts.InteractionHash(), ixRawData); err != nil {
+				return errors.Wrap(err, "error writing interactions to db")
+			}
+
+			for _, ix := range ts.Interactions() {
+				if err = c.db.SetIxLookup(ix.Hash(), ts.ReceiptHash().Bytes()); err != nil {
+					return errors.Wrap(err, "error writing ix lookup to db")
+				}
+			}
+
+			return nil
+		}
+
+		return err
+	}
+
+	return nil
+}
+
 func (c *ChainManager) addTesseract(
 	cache bool,
 	addr types.Address,
@@ -506,36 +563,20 @@ func (c *ChainManager) addTesseract(
 		return err
 	}
 
+	if err = c.storeInteractions(t); err != nil {
+		return errors.Wrap(err, "failed to store interactions")
+	}
+
+	if err = c.storeReceipts(t); err != nil {
+		return errors.Wrap(err, "failed to store receipts")
+	}
+
 	if err = c.db.SetTesseract(tesseractHash, tsRawData); err != nil {
 		return errors.Wrap(err, "error writing tesseract to db")
 	}
 
-	ixRawData, err := t.Interactions().Bytes()
-	if err != nil {
-		return err
-	}
-
-	if err = c.db.SetInteractions(t.InteractionHash(), ixRawData); err != nil {
-		return errors.Wrap(err, "error writing interactions to db")
-	}
-
-	receiptRawData, err := t.GetReceipts().Bytes()
-	if err != nil {
-		return err
-	}
-
-	if err = c.db.SetReceipts(t.ReceiptHash(), receiptRawData); err != nil {
-		return errors.Wrap(err, "error writing receipts to db")
-	}
-
 	if err = c.db.SetTesseractHeightEntry(addr, t.Height(), tesseractHash); err != nil {
 		return errors.Wrap(err, "failed to write tesseract height entry")
-	}
-
-	for _, ix := range t.Interactions() {
-		if err = c.db.SetIxLookup(ix.Hash(), t.ReceiptHash().Bytes()); err != nil {
-			return errors.Wrap(err, "error writing ix lookup to db")
-		}
 	}
 
 	bucketNo, isBucketCountIncremented, err := c.db.UpdateAccMetaInfo(
@@ -1060,7 +1101,9 @@ func (c *ChainManager) executeAndValidate(ts []*types.Tesseract) error {
 		return errors.New("failed to validate the tesseract")
 	}
 
-	ts[0].Receipts = receipts
+	for _, t := range ts {
+		t.Receipts = receipts
+	}
 
 	return nil
 }

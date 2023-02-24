@@ -87,7 +87,7 @@ func (k *Engine) handleInboundMsg(slot *ktypes.Slot, msg *ktypes.ICSMSG) error {
 		return errors.New("nil slot")
 	}
 
-	clusterState := slot.CLusterInfo()
+	clusterState := slot.ClusterInfo()
 
 	sender, data, msgType := msg.Sender, msg.Msg, msg.MsgType
 	switch msgType {

@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"go.opentelemetry.io/otel/attribute"
+
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/jaeger"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -52,7 +55,12 @@ func buildExporters(ctx context.Context, jaegerAddress string) ([]trace.SpanExpo
 }
 
 // NewTracerProvider creates and configures a TracerProvider.
-func NewTracerProvider(ctx context.Context, enableTracing bool, jaegerAddress string) (shutdownTracerProvider, error) {
+func NewTracerProvider(
+	ctx context.Context,
+	enableTracing bool,
+	jaegerAddress string,
+	kramaID id.KramaID,
+) (shutdownTracerProvider, error) {
 	if !enableTracing {
 		return &noopShutdownTracerProvider{TracerProvider: traceapi.NewNoopTracerProvider()}, nil
 	}
@@ -73,6 +81,7 @@ func NewTracerProvider(ctx context.Context, enableTracing bool, jaegerAddress st
 		resource.NewSchemaless(
 			semconv.ServiceNameKey.String("moi-chain"),
 			semconv.ServiceVersionKey.String("0.0.1"),
+			attribute.String("krama-id", string(kramaID)),
 		),
 	)
 	if err != nil {

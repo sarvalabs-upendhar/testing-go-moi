@@ -5,11 +5,22 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"log"
 	"math/big"
 	"net"
+	"os"
 	"testing"
 	"time"
+
+	"github.com/multiformats/go-multiaddr"
+
+	"github.com/libp2p/go-libp2p/core/peer"
+
+	"github.com/sarvalabs/moichain/mudra"
+	mudracommon "github.com/sarvalabs/moichain/mudra/common"
+	"github.com/sarvalabs/moichain/mudra/poi"
+	"github.com/sarvalabs/moichain/mudra/poi/moinode"
 
 	"github.com/stretchr/testify/assert"
 
@@ -46,33 +57,65 @@ func RandomHash(t *testing.T) types.Hash {
 	return types.BytesToHash(hash)
 }
 
+func GetTestKramaID(t *testing.T, nthValidator uint32) id.KramaID {
+	t.Helper()
+
+	var signKey [32]byte
+
+	_, err := rand.Read(signKey[:])
+	require.NoError(t, err)
+
+	privateKeys, moiPubBytes, err := GetPrivKeysForTest(signKey[:])
+	require.NoError(t, err)
+
+	kramaID, err := id.NewKramaID(
+		privateKeys[32:],
+		nthValidator,
+		hex.EncodeToString(moiPubBytes),
+		1,
+		true,
+	)
+	require.NoError(t, err)
+
+	return kramaID
+}
+
 func GetTestKramaIDs(t *testing.T, count int) []id.KramaID {
 	t.Helper()
 
 	ids := make([]id.KramaID, 0, count)
 
 	for i := 0; i < count; i++ {
-		var signKey [32]byte
-
-		_, err := rand.Read(signKey[:])
-		require.NoError(t, err)
-
-		privateKeys, moiPubBytes, err := GetPrivKeysForTest(signKey[:])
-		require.NoError(t, err)
-
-		kramaID, err := id.NewKramaID(
-			privateKeys[32:],
-			uint32(i),
-			hex.EncodeToString(moiPubBytes),
-			1,
-			true,
-		)
-		require.NoError(t, err)
-
-		ids = append(ids, kramaID)
+		ids = append(ids, GetTestKramaID(t, uint32(i)))
 	}
 
 	return ids
+}
+
+func GetTestPeerID(t *testing.T) peer.ID {
+	t.Helper()
+
+	var signKey [32]byte
+
+	_, err := rand.Read(signKey[:])
+	require.NoError(t, err)
+
+	privateKeys, _, err := GetPrivKeysForTest(signKey[:])
+	require.NoError(t, err)
+
+	peerID, err := id.GeneratePeerID(privateKeys[32:])
+	require.NoError(t, err)
+
+	return peerID
+}
+
+func DecodePeerIDFromKramaID(t *testing.T, kramaID id.KramaID) peer.ID {
+	t.Helper()
+
+	peerID, err := kramaID.DecodedPeerID()
+	require.NoError(t, err)
+
+	return peerID
 }
 
 func RetryUntilTimeout(ctx context.Context, f func() (interface{}, bool)) (interface{}, error) {
@@ -313,6 +356,23 @@ func GetAvailablePort(t *testing.T) (port int, err error) {
 	return
 }
 
+// GetListenAddresses returns a new multi-address on localhost associated with an empty port.
+func GetListenAddresses(t *testing.T, count int) []multiaddr.Multiaddr {
+	t.Helper()
+
+	ListenAddresses := make([]multiaddr.Multiaddr, count)
+
+	for i := 0; i < count; i++ {
+		port, err := GetAvailablePort(t)
+		require.NoError(t, err)
+
+		ListenAddresses[i], err = multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", port))
+		require.NoError(t, err)
+	}
+
+	return ListenAddresses
+}
+
 func GetTesseract(t *testing.T, height uint64) *types.Tesseract {
 	t.Helper()
 
@@ -344,13 +404,19 @@ func GetRandomAccMetaInfo(t *testing.T, height int64) *types.AccountMetaInfo {
 	}
 }
 
+func GetTestPublicKey(t *testing.T) []byte {
+	t.Helper()
+
+	return RandomAddress(t).Bytes()
+}
+
 func GetTestPublicKeys(t *testing.T, count int) [][]byte {
 	t.Helper()
 
 	p := make([][]byte, 0)
 
 	for i := 0; i < count; i++ {
-		addr := RandomAddress(t).Bytes()
+		addr := GetTestPublicKey(t)
 		p = append(p, addr)
 	}
 
@@ -426,6 +492,12 @@ func CreateTesseracts(t *testing.T, count int, paramsMap map[int]*CreateTesserac
 	}
 
 	for i := 0; i < count; i++ {
+		if paramsMap[i] == nil {
+			paramsMap[i] = &CreateTesseractParams{
+				Height: uint64(i),
+			}
+		}
+
 		tesseracts[i] = CreateTesseract(t, paramsMap[i])
 	}
 
@@ -520,12 +592,22 @@ func GetTesseractParamsMapWithIxns(t *testing.T, tsCount, ixnCount int) map[int]
 	t.Helper()
 
 	tesseractParams := make(map[int]*CreateTesseractParams, tsCount)
-	addresses := GetAddresses(t, 2*tsCount*ixnCount) // for each interaction, sender and receiver addresses needed
-	ixns := CreateIxns(t, tsCount*ixnCount, GetIxParamsMapWithAddresses(addresses[:2*tsCount], addresses[2*tsCount:]))
+	addresses := GetAddresses(t, 2*(tsCount-1)*ixnCount) // for each interaction, sender and receiver addresses needed
+	ixns := CreateIxns(
+		t,
+		(tsCount-1)*ixnCount,
+		GetIxParamsMapWithAddresses(addresses[:2*(tsCount-1)], addresses[2*(tsCount-1):]),
+	)
 
+	// allocate interactions to each tesseract, excluding the first tesseract (which is the genesis tesseract)
 	for i := 0; i < tsCount; i++ {
 		tesseractParams[i] = &CreateTesseractParams{
-			Ixns: ixns[i*ixnCount : i*ixnCount+ixnCount], // allocate two interactions per tesseract
+			Height: uint64(i),
+		}
+
+		if i > 0 {
+			// allocate two interactions per tesseract
+			tesseractParams[i].Ixns = ixns[(i-1)*ixnCount : (i-1)*ixnCount+ixnCount]
 		}
 	}
 
@@ -557,6 +639,41 @@ func CheckForTesseract(t *testing.T, expectedTS, actualTS *types.Tesseract, with
 
 	require.Equal(t, expectedTS.Canonical(), actualTS.Canonical())
 	require.Nil(t, actualTS.Ixns)
+}
+
+func SignBytes(t *testing.T, msg []byte) (sigBytes, pk []byte) {
+	t.Helper()
+
+	// create keystore.json in current directory
+	dataDir := "./"
+	password := "test123"
+
+	_, _, err := poi.RandGenKeystore(dataDir, password)
+	require.NoError(t, err)
+
+	config := &mudra.VaultConfig{
+		DataDir:       dataDir,
+		NodePassword:  password,
+		MoiIDUsername: "",
+		MoiIDPassword: "",
+		MoiIDURL:      "dev",
+	}
+
+	vault, err := mudra.NewVault(config, moinode.MoiFullNode, 1)
+	require.NoError(t, err)
+
+	// gets the public key of signer
+	pk = vault.GetConsensusPrivateKey().GetPublicKeyInBytes()
+
+	// signs the bytes
+	sigBytes, err = vault.Sign(msg, mudracommon.BlsBLST)
+	require.NoError(t, err)
+
+	// remove keystore.json in current directory
+	err = os.Remove("./keystore.json")
+	require.NoError(t, err)
+
+	return sigBytes, pk
 }
 
 /*

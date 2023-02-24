@@ -59,6 +59,8 @@ func (ds *DataStore) worker() {
 		select {
 		case <-ds.ctx.Done():
 			ds.logger.Info("Closing data store worker")
+
+			return
 		case job := <-ds.jobs:
 			job()
 		}

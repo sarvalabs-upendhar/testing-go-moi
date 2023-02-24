@@ -4,17 +4,11 @@ import (
 	"context"
 	"errors"
 
-	"github.com/sarvalabs/moichain/utils"
+	"github.com/sarvalabs/go-polo"
 
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
 	"github.com/sarvalabs/moichain/types"
-)
-
-const (
-	Slotsfull int64 = iota
-	Hashmismatch
-	Internalerror
 )
 
 // ICSRPCService is a struct that represents an ICS RPC Service
@@ -41,7 +35,9 @@ func (icsrpc *ICSRPCService) ICSRequest(
 	)
 
 	if err := interactions.FromBytes(req.IxData); err != nil {
-		return errors.New("ixs decode error")
+		if !errors.Is(err, polo.ErrNullPack) {
+			return errors.New("ixs decode error")
+		}
 	}
 
 	kramaRequest := Request{
@@ -54,30 +50,21 @@ func (icsrpc *ICSRPCService) ICSRequest(
 	icsrpc.engine.requests <- kramaRequest
 	// Wait for response from krama engine
 	response.ClusterID = req.ClusterID
-	// TODO: check for context
-	if resp := <-respChan; resp.err != nil {
-		response.Response = 0
 
+	if resp := <-respChan; resp.err != nil {
 		switch resp.err.Error() {
 		case types.ErrSlotsFull.Error():
-			response.StatusCode = Slotsfull
+			response.StatusCode = ptypes.SlotsFull
 		case types.ErrHashMismatch.Error():
-			response.StatusCode = Hashmismatch
+			response.StatusCode = ptypes.InvalidHash
 		default:
-			response.StatusCode = Internalerror
+			response.StatusCode = ptypes.InternalError
 		}
 
 		return nil
 	}
 
-	response.Response = 1
-
-	randomNodes, err := icsrpc.engine.getRandomNodes(ctx, 1, nil)
-	if err != nil {
-		return errors.New("unable to fetch random nodes")
-	}
-
-	response.RandomNodes = utils.KramaIDToString(randomNodes)
+	response.StatusCode = ptypes.Success
 
 	return nil
 }

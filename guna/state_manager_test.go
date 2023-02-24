@@ -116,8 +116,8 @@ func TestGetLatestTesseractHash(t *testing.T) {
 }
 
 func TestFetchTesseractFromDB(t *testing.T) {
-	tesseractParams := tests.GetTesseractParamsMapWithIxns(t, 1, 2)
-	tesseracts := tests.CreateTesseracts(t, 2, tesseractParams)
+	tesseractParams := tests.GetTesseractParamsMapWithIxns(t, 2, 2)
+	tesseracts := tests.CreateTesseracts(t, 3, tesseractParams)
 
 	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
@@ -135,17 +135,24 @@ func TestFetchTesseractFromDB(t *testing.T) {
 		expectedError    error
 	}{
 		{
-			name:             "with interactions",
+			name:             "genesis tesseract with interactions",
 			hash:             getTesseractHash(t, tesseracts[0]),
 			withInteractions: true,
 			expectedTS:       tesseracts[0],
 			expectedError:    nil,
 		},
 		{
+			name:             "non-genesis tesseract with interactions",
+			hash:             getTesseractHash(t, tesseracts[1]),
+			withInteractions: true,
+			expectedTS:       tesseracts[1],
+			expectedError:    nil,
+		},
+		{
 			name:             "without interactions",
-			hash:             getTesseractHash(t, tesseracts[0]),
+			hash:             getTesseractHash(t, tesseracts[1]),
 			withInteractions: false,
-			expectedTS:       tesseracts[0],
+			expectedTS:       tesseracts[1],
 			expectedError:    nil,
 		},
 		{
@@ -156,7 +163,7 @@ func TestFetchTesseractFromDB(t *testing.T) {
 		},
 		{
 			name:             "should fail if interactions not found",
-			hash:             getTesseractHash(t, tesseracts[1]),
+			hash:             getTesseractHash(t, tesseracts[2]),
 			withInteractions: true,
 			expectedError:    types.ErrFetchingInteractions,
 		},
@@ -923,6 +930,7 @@ func TestGetContextByHash(t *testing.T) {
 
 func TestFetchParticipantContextByHash(t *testing.T) {
 	kramaIDs, pk := tests.GetTestKramaIdsWithPublicKeys(t, 12)
+	contract := NewMockContract(t, append(kramaIDs[:5], kramaIDs[11:]...), append(pk[:5], pk[11:]...))
 	obj, cHash := getContextObjects(t, kramaIDs, 2, 6)
 	mObj, mHash := getMetaContextObjects(t, cHash)
 
@@ -931,10 +939,6 @@ func TestFetchParticipantContextByHash(t *testing.T) {
 			insertMetaContextsInDB(t, db, mObj...)
 			insertContextsInDB(t, db, obj...)
 		},
-		senatusCallBack: func(s *MockSenatus) {
-			setPublicKeys(s, kramaIDs, pk)
-			removePublicKeys(s, kramaIDs[6:10])
-		},
 	}
 
 	sm := createTestStateManager(t, smParams)
@@ -942,6 +946,7 @@ func TestFetchParticipantContextByHash(t *testing.T) {
 	testcases := []struct {
 		name          string
 		hash          types.Hash
+		mockFn        func()
 		expectedError error
 	}{
 		{
@@ -953,20 +958,33 @@ func TestFetchParticipantContextByHash(t *testing.T) {
 			name:          "behavioural context node's public keys not found",
 			hash:          mHash[2],
 			expectedError: types.ErrPublicKeyNotFound,
+			mockFn: func() {
+				retrievePublicKeys(t, contract)
+			},
 		},
 		{
 			name:          "random context node's public keys not found",
 			hash:          mHash[1],
 			expectedError: types.ErrPublicKeyNotFound,
+			mockFn: func() {
+				retrievePublicKeys(t, contract)
+			},
 		},
 		{
 			name: "valid hash and public keys",
 			hash: mHash[0],
+			mockFn: func() {
+				retrievePublicKeys(t, contract)
+			},
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
+			if test.mockFn != nil {
+				test.mockFn()
+			}
+
 			behCtx, randCtx, err := sm.fetchParticipantContextByHash(types.NilAddress, test.hash)
 
 			if test.expectedError != nil {
@@ -1036,6 +1054,7 @@ func TestGetCommittedContextHash(t *testing.T) {
 
 func TestFetchContextLock(t *testing.T) {
 	kramaIDs, pk := tests.GetTestKramaIdsWithPublicKeys(t, 8)
+	contract := NewMockContract(t, kramaIDs, pk)
 	obj, cHash := getContextObjects(t, kramaIDs, 2, 4)
 	mObj, mHash := getMetaContextObjects(t, cHash)
 
@@ -1093,9 +1112,6 @@ func TestFetchContextLock(t *testing.T) {
 			insertMetaContextsInDB(t, db, mObj...)
 			insertContextsInDB(t, db, obj...)
 		},
-		senatusCallBack: func(s *MockSenatus) {
-			setPublicKeys(s, kramaIDs, pk)
-		},
 	}
 
 	sm := createTestStateManager(t, smParams)
@@ -1103,6 +1119,7 @@ func TestFetchContextLock(t *testing.T) {
 		name          string
 		tess          *types.Tesseract
 		nodes         *ICSNodes
+		mockFn        func()
 		expectedError error
 	}{
 		{
@@ -1124,6 +1141,9 @@ func TestFetchContextLock(t *testing.T) {
 				nil,
 				nil,
 			),
+			mockFn: func() {
+				retrievePublicKeys(t, contract)
+			},
 		},
 		{
 			name: "sarga address in context lock",
@@ -1133,6 +1153,9 @@ func TestFetchContextLock(t *testing.T) {
 				ktypes.NewNodeSet(obj[2].Ids, pk[4:6]),
 				ktypes.NewNodeSet(obj[3].Ids, pk[6:8]),
 			),
+			mockFn: func() {
+				retrievePublicKeys(t, contract)
+			},
 		},
 		{
 			name: "valid context hashes",
@@ -1143,11 +1166,18 @@ func TestFetchContextLock(t *testing.T) {
 				ktypes.NewNodeSet(obj[2].Ids, pk[4:6]),
 				ktypes.NewNodeSet(obj[3].Ids, pk[6:8]),
 			),
+			mockFn: func() {
+				retrievePublicKeys(t, contract)
+			},
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
+			if test.mockFn != nil {
+				test.mockFn()
+			}
+
 			icsNodes, err := sm.FetchContextLock(test.tess)
 
 			if test.expectedError != nil {
@@ -1474,6 +1504,7 @@ func TestGetBalance(t *testing.T) {
 
 func TestFetchLatestParticipantContext(t *testing.T) {
 	kramaIDs, pk := tests.GetTestKramaIdsWithPublicKeys(t, 12)
+	contract := NewMockContract(t, append(kramaIDs[:3], kramaIDs[7:10]...), append(pk[:3], pk[7:10]...))
 	obj, cHash := getContextObjects(t, kramaIDs, 2, 6)
 	mObj, mHash := getMetaContextObjects(t, cHash)
 
@@ -1494,11 +1525,6 @@ func TestFetchLatestParticipantContext(t *testing.T) {
 			insertContextsInDB(t, db, obj...)
 			insertTesseractsInDB(t, db, ts...)
 		},
-		senatusCallBack: func(s *MockSenatus) {
-			setPublicKeys(s, kramaIDs, pk)
-			removePublicKeys(s, kramaIDs[4:6])
-			removePublicKeys(s, kramaIDs[10:12])
-		},
 	}
 
 	sm := createTestStateManager(t, smParams)
@@ -1508,6 +1534,7 @@ func TestFetchLatestParticipantContext(t *testing.T) {
 		ctxHash       types.Hash
 		behSet        *ktypes.NodeSet
 		randSet       *ktypes.NodeSet
+		mockFn        func()
 		expectedError error
 	}{
 		{
@@ -1516,13 +1543,19 @@ func TestFetchLatestParticipantContext(t *testing.T) {
 			expectedError: types.ErrAccountNotFound,
 		},
 		{
-			name:          "behavioural context Nodes doesn't have public keys",
-			address:       ts[1].Address(),
+			name:    "behavioural context Nodes doesn't have public keys",
+			address: ts[1].Address(),
+			mockFn: func() {
+				retrievePublicKeys(t, contract)
+			},
 			expectedError: types.ErrPublicKeyNotFound,
 		},
 		{
-			name:          "random context Nodes doesn't have public keys",
-			address:       ts[2].Address(),
+			name:    "random context Nodes doesn't have public keys",
+			address: ts[2].Address(),
+			mockFn: func() {
+				retrievePublicKeys(t, contract)
+			},
 			expectedError: types.ErrPublicKeyNotFound,
 		},
 		{
@@ -1531,11 +1564,18 @@ func TestFetchLatestParticipantContext(t *testing.T) {
 			ctxHash: ts[0].ContextHash(),
 			behSet:  ktypes.NewNodeSet(obj[0].Ids, pk[:2]),
 			randSet: ktypes.NewNodeSet(obj[1].Ids, pk[2:4]),
+			mockFn: func() {
+				retrievePublicKeys(t, contract)
+			},
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
+			if test.mockFn != nil {
+				test.mockFn()
+			}
+
 			hash, behSet, randSet, err := sm.fetchLatestParticipantContext(test.address)
 
 			if test.expectedError != nil {
@@ -1559,6 +1599,7 @@ func TestFetchLatestParticipantContext(t *testing.T) {
 
 func TestGetReceiverContext_RegisteredAccount(t *testing.T) {
 	kramaIDs, pk := tests.GetTestKramaIdsWithPublicKeys(t, 4)
+	contract := NewMockContract(t, kramaIDs, pk)
 	obj, cHash := getContextObjects(t, kramaIDs, 2, 2)
 	mObj, mHash := getMetaContextObjects(t, cHash)
 
@@ -1597,9 +1638,6 @@ func TestGetReceiverContext_RegisteredAccount(t *testing.T) {
 			insertStateObject(sm, so)
 			storeTesseractHashInCache(t, sm.cache, ts)
 		},
-		senatusCallBack: func(s *MockSenatus) {
-			setPublicKeys(s, kramaIDs, pk)
-		},
 	}
 
 	sm := createTestStateManager(t, smParams)
@@ -1610,6 +1648,7 @@ func TestGetReceiverContext_RegisteredAccount(t *testing.T) {
 		randSet       *ktypes.NodeSet
 		address       types.Address
 		contextHash   types.Hash
+		mockFn        func()
 		expectedError error
 	}{
 		{
@@ -1619,6 +1658,9 @@ func TestGetReceiverContext_RegisteredAccount(t *testing.T) {
 			randSet:     ktypes.NewNodeSet(obj[1].Ids, pk[2:4]),
 			address:     ixs[0].Receiver(),
 			contextHash: ts.ContextHash(),
+			mockFn: func() {
+				retrievePublicKeys(t, contract)
+			},
 		},
 		{
 			name:          "failed to fetch receiver context",
@@ -1631,6 +1673,11 @@ func TestGetReceiverContext_RegisteredAccount(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			nodeSet := make([]*ktypes.NodeSet, 4)
 			contextHashes := make(map[types.Address]types.Hash)
+
+			if test.mockFn != nil {
+				test.mockFn()
+			}
+
 			err := sm.getReceiverContext(test.ix, nodeSet, contextHashes)
 
 			if test.expectedError != nil {
@@ -1653,6 +1700,7 @@ func TestGetReceiverContext_RegisteredAccount(t *testing.T) {
 
 func TestGetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 	kramaIDs, pk := tests.GetTestKramaIdsWithPublicKeys(t, 4)
+	contract := NewMockContract(t, kramaIDs, pk)
 	obj, cHash := getContextObjects(t, kramaIDs, 2, 2)
 	mObj, mHash := getMetaContextObjects(t, cHash)
 
@@ -1686,6 +1734,7 @@ func TestGetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 		randSet       *ktypes.NodeSet
 		address       types.Address
 		contextHash   types.Hash
+		mockFn        func()
 		expectedError error
 	}{
 		{
@@ -1701,14 +1750,14 @@ func TestGetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 					insertStateObject(sm, so)
 					storeTesseractHashInCache(t, sm.cache, ts)
 				},
-				senatusCallBack: func(s *MockSenatus) {
-					setPublicKeys(s, kramaIDs, pk)
-				},
 			},
 			behSet:      ktypes.NewNodeSet(obj[0].Ids, pk[:2]),
 			randSet:     ktypes.NewNodeSet(obj[1].Ids, pk[2:4]),
 			address:     SargaAddress,
 			contextHash: ts.ContextHash(),
+			mockFn: func() {
+				retrievePublicKeys(t, contract)
+			},
 		},
 		{
 			name: "context of sarga account not found",
@@ -1733,6 +1782,10 @@ func TestGetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 			nodeSet := make([]*ktypes.NodeSet, 4)
 			contextHashes := make(map[types.Address]types.Hash)
 
+			if test.mockFn != nil {
+				test.mockFn()
+			}
+
 			err := sm.getReceiverContext(test.ix, nodeSet, contextHashes)
 
 			if test.expectedError != nil {
@@ -1755,6 +1808,7 @@ func TestGetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 
 func TestFetchInteractionContext(t *testing.T) {
 	kramaIDs, pk := tests.GetTestKramaIdsWithPublicKeys(t, 8)
+	contract := NewMockContract(t, kramaIDs, pk)
 	obj, cHash := getContextObjects(t, kramaIDs, 2, 4)
 	mObj, mHash := getMetaContextObjects(t, cHash)
 
@@ -1795,9 +1849,6 @@ func TestFetchInteractionContext(t *testing.T) {
 			insertObject(sm, so)
 			storeTesseractHashInCache(t, sm.cache, ts...)
 		},
-		senatusCallBack: func(s *MockSenatus) {
-			setPublicKeys(s, kramaIDs, pk)
-		},
 	}
 
 	sm := createTestStateManager(t, smParams)
@@ -1806,6 +1857,7 @@ func TestFetchInteractionContext(t *testing.T) {
 		ix            *types.Interaction
 		ics           *ICSNodes
 		contextHashes map[types.Address]types.Hash
+		mockFn        func()
 		expectedError error
 	}{
 		{
@@ -1821,6 +1873,9 @@ func TestFetchInteractionContext(t *testing.T) {
 				ixs[0].Sender():   ts[0].ContextHash(),
 				ixs[0].Receiver(): ts[1].ContextHash(),
 			},
+			mockFn: func() {
+				retrievePublicKeys(t, contract)
+			},
 		},
 		{
 			name: "both sender and receiver addresses don't have context",
@@ -1830,6 +1885,10 @@ func TestFetchInteractionContext(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
+			if test.mockFn != nil {
+				test.mockFn()
+			}
+
 			contextHashes, nodeSet, err := sm.FetchInteractionContext(context.Background(), test.ix)
 
 			if test.expectedError != nil {

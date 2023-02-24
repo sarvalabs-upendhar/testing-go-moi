@@ -186,7 +186,7 @@ func (r *Randomizer) Start() {
 
 				return
 			case <-ticker.C:
-				if r.server.Peers.Len() > 8 {
+				if uint32(r.server.Peers.Len()) >= 3 {
 					for k, v := range r.peers {
 						v.mtx.RLock()
 						lastUpdates := v.lastUpdated
@@ -282,6 +282,11 @@ func (r *Randomizer) HandleReqMsg(reqMsg *ptypes.RandomWalkReq) error {
 
 		// log.Println("Address",responseMsg,polo.Polorize(responseMsg),polo.Polorize(&responseMsg))
 		rawData, err := responseMsg.Bytes()
+		if err != nil {
+			return err
+		}
+
+		_, err = r.server.JoinPubSubTopic(reqMsg.Topic)
 		if err != nil {
 			return err
 		}

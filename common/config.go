@@ -6,6 +6,8 @@ import (
 	"net"
 	"time"
 
+	"github.com/sarvalabs/moichain/mudra/kramaid"
+
 	kcrypto "github.com/sarvalabs/moichain/mudra"
 
 	"github.com/libp2p/go-libp2p/core/protocol"
@@ -15,8 +17,8 @@ import (
 var DefaultIxPriceLimit = big.NewInt(10)
 
 const (
-	DefaultInboundConnLimit  = 10
-	DefaultOutboundConnLimit = 30
+	DefaultInboundConnLimit  = 80
+	DefaultOutboundConnLimit = 20
 )
 
 type Config struct {
@@ -61,9 +63,16 @@ type IxPoolConfig struct {
 	PriceLimit *big.Int
 }
 
+type NodeInfo struct {
+	ID      kramaid.KramaID
+	Address maddr.Multiaddr
+}
+
 // NetworkConfig is the p2p configuration of the node
 type NetworkConfig struct {
 	BootstrapPeers  []maddr.Multiaddr
+	TrustedPeers    []NodeInfo
+	StaticPeers     []NodeInfo
 	MaxPeers        uint
 	RelayNodeAddr   string
 	ListenAddresses []maddr.Multiaddr
@@ -74,9 +83,10 @@ type NetworkConfig struct {
 	// this will be removed
 	NetworkSize uint64
 
-	InboundConnLimit uint
-
-	OutboundConnLimit uint
+	NoDiscovery       bool
+	RefreshSenatus    bool
+	InboundConnLimit  int64
+	OutboundConnLimit int64
 }
 
 type ConsensusConfig struct {

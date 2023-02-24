@@ -20,13 +20,15 @@ import (
 )
 
 var (
-	directoryIndex int
-	count          int
-	bootnode       string
-	jaegerAddress  string
-	password       string
-	logFilePath    string
-	port           int
+	directoryIndex   int
+	count            int
+	bootnode         string
+	jaegerAddress    string
+	password         string
+	logFilePath      string
+	peerListFilePath string
+	port             int
+	peerList         *PeerList
 )
 
 // initCmd represents the init command
@@ -57,6 +59,11 @@ to quickly create a Cobra application.`,
 			}
 
 			if err := StoreKey(kramaID, publicKey); err != nil {
+				Err(err)
+			}
+
+			peerList, err = ReadPeerList(peerListFilePath)
+			if err != nil {
 				Err(err)
 			}
 
@@ -109,6 +116,12 @@ func init() {
 		"",
 		"path at which you'd like to store the logs file",
 	)
+	testCmd.PersistentFlags().StringVar(
+		&peerListFilePath,
+		"peer-list",
+		"",
+		"peer list file path",
+	)
 
 	if err := cobra.MarkFlagRequired(testCmd.PersistentFlags(), "port"); err != nil {
 		Err(err)
@@ -129,6 +142,8 @@ func CreateConfigFile(datadir string, index int) []byte {
 			BootStrapPeers: []string{
 				bootnode,
 			},
+			TrustedPeers: peerList.TrustedPeers,
+			StaticPeers:  peerList.StaticPeers,
 		},
 		Ixpool: IxPoolConfig{
 			Mode:       0,

@@ -18,8 +18,7 @@ func (k *Engine) minter() {
 			for interactionQueue.Len() > 0 {
 				ix, ok := interactionQueue.Pop().(*types.Interaction)
 				if !ok {
-					ixHash := ix.Hash()
-					k.logger.Error("Error interaction type assertion failed", "hash", ixHash)
+					k.logger.Error("Error interaction type assertion failed", "hash", ix.Hash())
 
 					continue
 				}
@@ -38,11 +37,13 @@ func (k *Engine) minter() {
 					default:
 						if !errors.Is(resp.err, types.ErrSlotsFull) {
 							if err := k.pool.IncrementWaitTime(ix.Sender(), k.avgICSTime); err != nil {
-								k.logger.Error("Error incrementing wait time")
+								k.logger.Error("Error incrementing wait time", "error", err)
 							}
-						} else {
-							k.logger.Error("ICS creation failed", resp.err)
+
+							continue
 						}
+
+						k.logger.Error("ICS creation failed", resp.err)
 					}
 				}
 			}

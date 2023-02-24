@@ -1,6 +1,7 @@
 package types
 
 import (
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 	"github.com/sarvalabs/moichain/types"
@@ -29,6 +30,16 @@ const (
 	AGORARESP
 	DISCONNECTREQ
 )
+
+const (
+	SlotsFull ICSResponseCode = iota + 1
+	InvalidHash
+	InvalidInteractions
+	InternalError
+	Success
+)
+
+type ICSResponseCode int32
 
 type MessagePayload interface {
 	Bytes() ([]byte, error)
@@ -73,8 +84,7 @@ type ICSRequest struct {
 
 type ICSResponse struct {
 	ClusterID   string
-	Response    int64
-	StatusCode  int64
+	StatusCode  ICSResponseCode
 	RandomNodes []string
 }
 
@@ -127,7 +137,7 @@ func (ism *ICSSuccessMsg) FromBytes(bytes []byte) error {
 
 type HandshakeMSG struct {
 	Address []string
-	NTQ     int32
+	NTQ     float32
 	Degree  int32
 	Error   string
 }
@@ -136,7 +146,7 @@ var NilHandshakeMSG HandshakeMSG
 
 func ConstructHandshakeMSG(
 	address []string,
-	ntq int32,
+	ntq float32,
 	degree int32,
 	err string,
 ) HandshakeMSG {
@@ -286,10 +296,8 @@ type TesseractReq struct {
 }
 
 type PeerInfo struct {
-	ID      kramaid.KramaID
-	Ntq     int32
-	Address []string
-	Degree  int64
+	ID   peer.ID
+	Data []byte
 }
 
 func (pi *PeerInfo) Bytes() ([]byte, error) {
@@ -347,7 +355,8 @@ func (tm *TesseractMessage) Tesseract() (*types.Tesseract, error) {
 }
 
 type HelloMsg struct {
-	Info      PeerInfo
+	KramaID   kramaid.KramaID
+	Address   []string
 	Signature []byte
 }
 

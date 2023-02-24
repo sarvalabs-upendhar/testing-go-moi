@@ -21,10 +21,9 @@ import (
 
 const (
 	MinimumConnectionCount = 3
+	kramaMoirpcStreamTTL   = 0
 	TesseractTopic         = "MOI_PUBSUB_TESSERACT"
 )
-
-const kramaMoirpcStreamTTL = time.Duration(2) * time.Minute
 
 type network interface {
 	Unsubscribe(topic string) error
@@ -143,7 +142,7 @@ func (t *Transport) BroadcastTesseract(msg *ptypes.TesseractMessage) error {
 func (t *Transport) connectRandomPeers(slot *ktypes.Slot) []id.KramaID {
 	var randomICSNodes []id.KramaID
 
-	clusterInfo := slot.CLusterInfo()
+	clusterInfo := slot.ClusterInfo()
 
 	icsNodes := clusterInfo.ICS.GetNodes()
 	visitedNodes := make(map[int]interface{})

@@ -216,7 +216,7 @@ func NewServer(logger hclog.Logger, h host.Host, p protocol.ID, opts ...ServerOp
 	if h != nil {
 		h.SetStreamHandler(p, func(stream network.Stream) {
 			sWrap := wrapStream(stream)
-			// defer stream.Close()
+			defer stream.Close()
 			s.handle(sWrap)
 		})
 	}
@@ -391,7 +391,7 @@ func (s *service) methodCall(ctx context.Context, sw *streamWrap, mtype *methodT
 	errmsg := ""
 
 	if errInter != nil {
-		s.logger.Error("[methodCall]", " server : received error from function call :", err)
+		s.logger.Error("[methodCall]", " server : received error from function call :", errInter, svcID)
 
 		err, ok := errInter.(error)
 		if !ok {

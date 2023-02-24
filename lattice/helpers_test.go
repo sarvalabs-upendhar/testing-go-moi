@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"math/big"
 	"math/rand"
-	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -23,11 +22,7 @@ import (
 	"github.com/sarvalabs/moichain/guna"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
 	ktypes "github.com/sarvalabs/moichain/krama/types"
-	"github.com/sarvalabs/moichain/mudra"
-	mudracommon "github.com/sarvalabs/moichain/mudra/common"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
-	"github.com/sarvalabs/moichain/mudra/poi"
-	"github.com/sarvalabs/moichain/mudra/poi/moinode"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 	"github.com/sarvalabs/moichain/utils"
@@ -152,6 +147,14 @@ func (m *MockDB) HasTesseract(hash types.Hash) (bool, error) {
 	_, ok := m.dbStorage[hash.String()]
 
 	return ok, nil
+}
+
+func (m *MockDB) GetInteractions(ixHash types.Hash) ([]byte, error) {
+	if ix, ok := m.dbStorage[ixHash.String()]; ok {
+		return ix, nil
+	}
+
+	return nil, types.ErrKeyNotFound
 }
 
 func (m *MockDB) SetInteractions(hash types.Hash, data []byte) error {
@@ -566,16 +569,16 @@ type MockIXPool struct {
 }
 
 type MockSenatus struct {
-	NodeInclusivity       map[id.KramaID]int64
-	UpdateInclusivityHook func() error
+	WalletCount           map[id.KramaID]int32
+	UpdateWalletCountHook func() error
 }
 
-func (s *MockSenatus) UpdateInclusivity(key id.KramaID, delta int64) error {
-	if s.UpdateInclusivityHook != nil {
-		return s.UpdateInclusivityHook()
+func (s *MockSenatus) UpdateWalletCount(peerID id.KramaID, delta int32) error {
+	if s.UpdateWalletCountHook != nil {
+		return s.UpdateWalletCountHook()
 	}
 
-	s.NodeInclusivity[key] += delta
+	s.WalletCount[peerID] += delta
 
 	return nil
 }
@@ -721,6 +724,7 @@ type createTesseractParams struct {
 	address  types.Address
 	height   uint64
 	ixns     types.Interactions
+	receipts types.Receipts
 	callback func(ts *types.Tesseract)
 }
 
@@ -746,7 +750,8 @@ func createTesseract(t *testing.T, params *createTesseractParams) *types.Tessera
 			ContextDelta:   mockContextDelta(),
 			ConsensusProof: mockConsensusProof(),
 		},
-		Ixns: params.ixns,
+		Ixns:     params.ixns,
+		Receipts: params.receipts,
 	}
 
 	if params.ixns != nil {
@@ -1022,7 +1027,7 @@ func mockSenatus(t *testing.T) *MockSenatus {
 	t.Helper()
 
 	return &MockSenatus{
-		NodeInclusivity: make(map[id.KramaID]int64),
+		WalletCount: make(map[id.KramaID]int32),
 	}
 }
 
@@ -1455,48 +1460,13 @@ func signTesseract(t *testing.T, sm *MockStateManager, ts *types.Tesseract) (sig
 	rawData, err := ts.Bytes()
 	require.NoError(t, err)
 
-	seal, pk := signBytes(t, rawData) // calculate the seal of tesseract
-	ts.Seal = seal                    // store seal in tesseract
+	seal, pk := tests.SignBytes(t, rawData) // calculate the seal of tesseract
+	ts.Seal = seal                          // store seal in tesseract
 	ids := tests.GetTestKramaIDs(t, 1)
 
 	sm.setPublicKey(ids[0], pk) // store the public key for the signed sender
 
 	return ids[0]
-}
-
-func signBytes(t *testing.T, msg []byte) (sigBytes, pk []byte) {
-	t.Helper()
-
-	// create keystore.json in current directory
-	dataDir := "./"
-	password := "test123"
-
-	_, _, err := poi.RandGenKeystore(dataDir, password)
-	require.NoError(t, err)
-
-	config := &mudra.VaultConfig{
-		DataDir:       dataDir,
-		NodePassword:  password,
-		MoiIDUsername: "",
-		MoiIDPassword: "",
-		MoiIDURL:      "dev",
-	}
-
-	vault, err := mudra.NewVault(config, moinode.MoiFullNode, 1)
-	require.NoError(t, err)
-
-	// gets the public key of signer
-	pk = vault.GetConsensusPrivateKey().GetPublicKeyInBytes()
-
-	// signs the bytes
-	sigBytes, err = vault.Sign(msg, mudracommon.BlsBLST)
-	require.NoError(t, err)
-
-	// remove keystore.json in current directory
-	err = os.Remove("./keystore.json")
-	require.NoError(t, err)
-
-	return sigBytes, pk
 }
 
 func insertValidatedTesseracts(t *testing.T, c *ChainManager, tesseracts []*types.Tesseract) {
@@ -1726,15 +1696,15 @@ func validateNodeInclusivity(t *testing.T, senatus *MockSenatus, ctxDelta types.
 
 	for _, deltaGroup := range ctxDelta {
 		for _, kramaID := range deltaGroup.BehaviouralNodes {
-			require.Equal(t, senatus.NodeInclusivity[kramaID], int64(1))
+			require.Equal(t, senatus.WalletCount[kramaID], int32(1))
 		}
 
 		for _, kramaID := range deltaGroup.RandomNodes {
-			require.Equal(t, senatus.NodeInclusivity[kramaID], int64(1))
+			require.Equal(t, senatus.WalletCount[kramaID], int32(1))
 		}
 
 		for _, kramaID := range deltaGroup.ReplacedNodes {
-			require.Equal(t, senatus.NodeInclusivity[kramaID], int64(-1))
+			require.Equal(t, senatus.WalletCount[kramaID], int32(-1))
 		}
 	}
 }

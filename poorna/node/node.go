@@ -6,6 +6,11 @@ import (
 	"net/http"
 	"os"
 
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+
+	"github.com/sarvalabs/moichain/guna/senatus"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
+
 	"github.com/sarvalabs/moichain/ixpool"
 	"github.com/sarvalabs/moichain/lattice"
 	"github.com/sarvalabs/moichain/utils"
@@ -52,6 +57,7 @@ type Node struct {
 	network          *poorna.Server
 	state            *guna.StateManager
 	chain            *lattice.ChainManager
+	senatus          *senatus.ReputationEngine
 	exec             *jug.ExecutionManager
 	kramaEngine      *krama.Engine
 	db               *dhruva.PersistenceManager
@@ -86,9 +92,7 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 
 	n.setupNetwork()
 
-	if err = n.network.StartServer(); err != nil {
-		n.logger.Error("start server", err)
-
+	if err = n.network.SetupServer(); err != nil {
 		return nil, err
 	}
 
@@ -102,6 +106,10 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 
 	n.setupTelemetry()
 
+	if err = n.setupReputationEngine(); err != nil {
+		return nil, err
+	}
+
 	if err = n.setupStateManager(); err != nil {
 		return nil, err
 	}
@@ -110,7 +118,15 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 
 	n.setupIxPool()
 
-	n.setupSenatusToNetwork()
+	if err = n.setupSenatusToNetwork(); err != nil {
+		return nil, err
+	}
+
+	if err = n.network.StartServer(); err != nil {
+		n.logger.Error("start server", err)
+
+		return nil, err
+	}
 
 	n.setupRandomizer()
 
@@ -140,6 +156,10 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 	return n, nil
 }
 
+func (n *Node) GetKramaID() id.KramaID {
+	return n.network.GetKramaID()
+}
+
 // Start starts network Stream handler, network's Discovery routine, Handlers, IxPool
 // Krama engine, State manager, JSON-RPC server Chain manager
 // returns any error invoked
@@ -150,12 +170,8 @@ func (n *Node) Start() (err error) {
 
 	n.kramaEngine.Start()
 
-	if err = n.state.Start(
-		n.network.GetKramaID(),
-		1,
-		n.vault.GetConsensusPrivateKey().GetPublicKeyInBytes(),
-		n.network.GetAddrs()); err != nil {
-		return errors.Wrap(err, "failed to start stated manager")
+	if err = n.senatus.Start(); err != nil {
+		return errors.Wrap(err, "failed to start senatus")
 	}
 
 	// starting JSON-RPC server
@@ -237,7 +253,29 @@ func (n *Node) setupPersistenceManager() (err error) {
 
 // setupStateManager creates new StateManager object and setups it to node
 func (n *Node) setupStateManager() (err error) {
-	n.state, err = guna.NewStateManager(n.ctx, n.db, n.logger, n.cache, n.network, n.nodeMetrics.guna)
+	n.state, err = guna.NewStateManager(n.ctx, n.db, n.logger, n.cache, n.nodeMetrics.guna, n.senatus)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (n *Node) setupReputationEngine() (err error) {
+	nodeMetaInfo := &gtypes.NodeMetaInfo{
+		Addrs:      utils.MultiAddrToString(n.network.GetAddrs()...),
+		NTQ:        1,
+		PublickKey: n.vault.GetConsensusPrivateKey().GetPublicKeyInBytes(),
+	}
+
+	n.senatus, err = senatus.NewReputationEngine(
+		n.ctx,
+		n.logger,
+		n.network,
+		n.db,
+		n.vault.KramaID(),
+		nodeMetaInfo,
+	)
 	if err != nil {
 		return err
 	}
@@ -256,8 +294,20 @@ func (n *Node) setupIxPool() {
 }
 
 // setupSenatusToNetwork fetches Senatus from state and setups it to node's network manager(poorna server)
-func (n *Node) setupSenatusToNetwork() {
-	n.network.Senatus = n.state.SenatusInstance()
+func (n *Node) setupSenatusToNetwork() error {
+	n.network.Senatus = n.senatus
+
+	for _, staticPeer := range n.cfg.Network.StaticPeers {
+		err := n.network.Senatus.AddNewPeer(staticPeer.ID, &gtypes.NodeMetaInfo{
+			Addrs: utils.MultiAddrToString(staticPeer.Address),
+			NTQ:   senatus.DefaultPeerNTQ,
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // setupRandomizer creates new Randomizer object and setups it to node
@@ -278,7 +328,7 @@ func (n *Node) setupChainManager() (err error) {
 		n.ixpool,
 		n.cache,
 		n.exec,
-		n.state.SenatusInstance(),
+		n.senatus,
 		n.nodeMetrics.chain,
 		mudra.VerifyAggregateSignature,
 	); err != nil {

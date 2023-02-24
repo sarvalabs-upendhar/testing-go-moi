@@ -297,32 +297,38 @@ func (p *PersistenceManager) Cleanup() error {
 	return p.db.CleanUp()
 }
 
-// GetEntries fetches array of k,v pair given a prefix key
-func (p *PersistenceManager) GetEntries(prefix []byte) chan types.DBEntry {
+// GetEntriesWithPrefix fetches array of k,v pairs with the given prefix
+func (p *PersistenceManager) GetEntriesWithPrefix(ctx context.Context, prefix []byte) (chan types.DBEntry, error) {
 	ch := make(chan types.DBEntry)
 
+	it, err := p.db.NewIterator()
+	if err != nil {
+		return nil, errors.New("failed to initiate iterator")
+	}
+
 	go func() {
-		it, err := p.db.NewIterator()
-		if err != nil {
-			p.logger.Error("Prefix Iteration failed", "error")
-		} else {
-			defer it.Close()
+		defer func() {
+			it.Close()
+			close(ch)
+		}()
 
-			for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-				dbEntry, err := it.GetNext()
-				if err != nil {
-					p.logger.Error("Prefix Iteration failed", "error")
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			dbEntry, err := it.GetNext()
+			if err != nil {
+				p.logger.Error("Prefix Iteration failed", "error")
 
-					break
-				}
-				ch <- *dbEntry
+				break
+			}
+
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- *dbEntry:
 			}
 		}
-
-		close(ch)
 	}()
 
-	return ch
+	return ch, nil
 }
 
 func (p *PersistenceManager) SetAccount(addr types.Address, stateHash types.Hash, data []byte) error {

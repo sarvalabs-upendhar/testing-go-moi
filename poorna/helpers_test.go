@@ -9,6 +9,10 @@ import (
 	"testing"
 	"time"
 
+	discovery "github.com/libp2p/go-libp2p/p2p/discovery/routing"
+
+	gtypes "github.com/sarvalabs/moichain/guna/types"
+
 	mrand "math/rand"
 
 	errors "github.com/pkg/errors"
@@ -50,12 +54,64 @@ type MockVault struct {
 }
 
 type MockReputationEngine struct {
-	ntq map[kramaid.KramaID]int32
+	ntq      map[kramaid.KramaID]float32
+	peerInfo map[libp2pPeer.ID]*gtypes.NodeMetaInfo
 }
 
-func (m *MockReputationEngine) GetAddress(key kramaid.KramaID) (multiAddrs []multiaddr.Multiaddr, err error) {
-	// TODO implement me
-	panic("implement me")
+func NewMockReputationEngine() *MockReputationEngine {
+	return &MockReputationEngine{
+		ntq:      make(map[kramaid.KramaID]float32),
+		peerInfo: make(map[libp2pPeer.ID]*gtypes.NodeMetaInfo),
+	}
+}
+
+func (m *MockReputationEngine) AddNewPeer(key kramaid.KramaID, data *gtypes.NodeMetaInfo) error {
+	peerID, err := key.DecodedPeerID()
+	if err != nil {
+		return types.ErrInvalidKramaID
+	}
+
+	return m.AddNewPeerWithPeerID(peerID, data)
+}
+
+func (m *MockReputationEngine) AddNewPeerWithPeerID(peerID libp2pPeer.ID, data *gtypes.NodeMetaInfo) error {
+	m.peerInfo[peerID] = data
+
+	return nil
+}
+
+func (m *MockReputationEngine) GetNTQ(id kramaid.KramaID) (float32, error) {
+	ntq, ok := m.ntq[id]
+	if !ok {
+		return -1, types.ErrKeyNotFound
+	}
+
+	return ntq, nil
+}
+
+func (m *MockReputationEngine) SetNTQ(id kramaid.KramaID, val int) {
+	m.ntq[id] = float32(val)
+}
+
+func (m *MockReputationEngine) GetAddress(key kramaid.KramaID) ([]multiaddr.Multiaddr, error) {
+	peerID, err := key.DecodedPeerID()
+	if err != nil {
+		return nil, types.ErrInvalidKramaID
+	}
+
+	return m.GetAddressByPeerID(peerID)
+}
+
+func (m *MockReputationEngine) GetAddressByPeerID(peerID libp2pPeer.ID) ([]multiaddr.Multiaddr, error) {
+	if peerInfo, ok := m.peerInfo[peerID]; ok {
+		return utils.MultiAddrFromString(peerInfo.Addrs...), nil
+	}
+
+	return nil, types.ErrKramaIDNotFound
+}
+
+func (m *MockReputationEngine) SetPeerInfo(key libp2pPeer.ID, peerInfo *gtypes.NodeMetaInfo) {
+	m.peerInfo[key] = peerInfo
 }
 
 type CreateServerParams struct {
@@ -95,8 +151,9 @@ func getParamsToCreateMultipleServers(
 	t *testing.T,
 	count int,
 	bootNodes []host.Host,
-	inboundConnLimit uint,
-	outboundConnLimit uint,
+	inboundConnLimit int64,
+	outboundConnLimit int64,
+	noDiscovery bool,
 ) []*CreateServerParams {
 	t.Helper()
 
@@ -109,6 +166,7 @@ func getParamsToCreateMultipleServers(
 				c.BootstrapPeers = getMultiAddresses(t, bootNodes)
 				c.InboundConnLimit = inboundConnLimit
 				c.OutboundConnLimit = outboundConnLimit
+				c.NoDiscovery = noDiscovery
 			},
 			ServerCallback: func(s *Server) {
 				m := NewMockReputationEngine()
@@ -135,29 +193,6 @@ func getRandomMultiAddrArray(t *testing.T) []multiaddr.Multiaddr {
 	randomMultiAddressArray[0] = randomAddress
 
 	return randomMultiAddressArray
-}
-
-func NewMockReputationEngine() *MockReputationEngine {
-	return &MockReputationEngine{
-		ntq: make(map[kramaid.KramaID]int32),
-	}
-}
-
-func (m *MockReputationEngine) SenatusHandler(msg *pubsub.Message) error {
-	return nil
-}
-
-func (m *MockReputationEngine) GetNTQ(id kramaid.KramaID) (int32, error) {
-	ntq, ok := m.ntq[id]
-	if !ok {
-		return -1, types.ErrKeyNotFound
-	}
-
-	return ntq, nil
-}
-
-func (m *MockReputationEngine) SetNTQ(id kramaid.KramaID, val int) {
-	m.ntq[id] = int32(val)
 }
 
 func (vault *MockVault) GetNetworkPrivateKey() kcrypto.PrivateKey {
@@ -242,23 +277,6 @@ func getPeerIDs(t *testing.T, hosts []host.Host) []libp2pPeer.ID {
 	}
 
 	return peerIDs
-}
-
-// Finds an empty port and returns a new multi-address(on localhost) with it
-func getListenAddresses(t *testing.T, count int) []multiaddr.Multiaddr {
-	t.Helper()
-
-	ListenAddresses := make([]multiaddr.Multiaddr, count)
-
-	for i := 0; i < count; i++ {
-		port, err := tests.GetAvailablePort(t)
-		require.NoError(t, err)
-
-		ListenAddresses[i], err = multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", port))
-		require.NoError(t, err)
-	}
-
-	return ListenAddresses
 }
 
 func getBootstrapNodes(t *testing.T, count int) []host.Host {
@@ -350,7 +368,7 @@ func createServer(
 
 	ctx := context.Background()
 	cfg := common.DefaultConfig("test")
-	cfg.Network.ListenAddresses = getListenAddresses(t, 1)
+	cfg.Network.ListenAddresses = tests.GetListenAddresses(t, 1)
 
 	if params == nil {
 		params = emptyParams
@@ -390,9 +408,7 @@ func createServer(
 		require.NoError(t, err)
 	}
 
-	server.SetStreamHandler()
-
-	// go server.Discover()
+	server.setStreamHandler()
 
 	return server
 }
@@ -435,8 +451,24 @@ func startDiscovery(t *testing.T, servers ...*Server) {
 	t.Helper()
 
 	for _, s := range servers {
-		// s.SetStreamHandler()
-		go s.Discover()
+		// s.setStreamHandler()
+		go s.discover()
+	}
+}
+
+func initDiscoveryAndAdvertise(t *testing.T, servers ...*Server) {
+	t.Helper()
+
+	for _, s := range servers {
+		s.discovery = discovery.NewRoutingDiscovery(s.kadDHT)
+
+		// Advertise the rendezvous string to the discovery service
+		s.logger.Info("Announcing ourselves")
+
+		_, err := s.discovery.Advertise(s.ctx, string(s.cfg.ProtocolID))
+		if err != nil {
+			s.logger.Error("Failed to advertise the rendezvous string to the discovery service", "error", err)
+		}
 	}
 }
 
@@ -449,7 +481,7 @@ func getRandomNumber(t *testing.T, max int) int {
 	return int(nBig.Int64())
 }
 
-func getNTQ(t *testing.T, s *Server) int32 {
+func getNTQ(t *testing.T, s *Server) float32 {
 	t.Helper()
 
 	ntq, err := s.Senatus.GetNTQ(s.GetKramaID())
@@ -755,9 +787,8 @@ func validatePeerDiscoveredEvent(t *testing.T, peerDiscoveredSub *utils.Subscrip
 func validateHelloMessage(t *testing.T, hello ptypes.HelloMsg, sender *Server) {
 	t.Helper()
 
-	require.Equal(t, getNTQ(t, sender), hello.Info.Ntq)
-	require.Equal(t, sender.id, hello.Info.ID)
-	require.Equal(t, sender.GetAddrs(), utils.MultiAddrFromString(hello.Info.Address...))
+	require.Equal(t, sender.id, hello.KramaID)
+	require.Equal(t, sender.GetAddrs(), utils.MultiAddrFromString(hello.Address...))
 	require.Equal(t, SignedData, hello.Signature)
 }
 

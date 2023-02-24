@@ -16,6 +16,7 @@ var (
 	ErrGenesisSetupFailed          = errors.New("genesis setup failed")
 	ErrTimeOut                     = errors.New("timeout")
 	ErrSlotsFull                   = errors.New("slots not available")
+	ErrSlotExists                  = errors.New("slot exists")
 	ErrContextStateNotFound        = errors.New("context state not found")
 	ErrHashMismatch                = errors.New("hash mismatch")
 	ErrStateNotFound               = errors.New("state not found")
@@ -71,4 +72,5 @@ var (
 	ErrEmptyHeight                 = errors.New("empty height")
 	ErrInvalidOptions              = errors.New("invalid options")
 	ErrEmptyOptions                = errors.New("empty options")
+	ErrStreamReset                 = errors.New("stream reset")
 )

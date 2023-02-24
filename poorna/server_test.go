@@ -6,6 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/peer"
+	testsCommon "github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/moichain/guna/senatus"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -14,7 +19,6 @@ import (
 
 	"github.com/sarvalabs/go-polo"
 	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/tests"
 	mudraCommon "github.com/sarvalabs/moichain/mudra/common"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
@@ -32,7 +36,14 @@ const (
 var testLogger = hclog.NewNullLogger()
 
 func TestServer_ConnectAndRegisterPeer(t *testing.T) {
-	params := getParamsToCreateMultipleServers(t, 4, nil, 1, 2)
+	params := getParamsToCreateMultipleServers(
+		t,
+		4,
+		nil,
+		1,
+		2,
+		false,
+	)
 	paramsMap := map[int]*CreateServerParams{
 		0: params[0],
 		1: params[1],
@@ -92,7 +103,14 @@ func TestServer_ConnectAndRegisterPeer(t *testing.T) {
 }
 
 func TestConnectToBootStrapNodes(t *testing.T) {
-	params := getParamsToCreateMultipleServers(t, 1, nil, 1, 2)
+	params := getParamsToCreateMultipleServers(
+		t,
+		1,
+		nil,
+		1,
+		2,
+		false,
+	)
 	paramsMap := map[int]*CreateServerParams{
 		0: params[0],
 	}
@@ -150,7 +168,14 @@ func TestConnectToBootStrapNodes(t *testing.T) {
 func TestNewServer_CheckBootNodeConnections(t *testing.T) {
 	bootNodes := getBootstrapNodes(t, 3)
 
-	defaultConfig := getParamsToCreateMultipleServers(t, 1, bootNodes, 2, 2)
+	defaultConfig := getParamsToCreateMultipleServers(
+		t,
+		1,
+		bootNodes,
+		2,
+		2,
+		false,
+	)
 
 	server := createServer(t, 0, defaultConfig[0])
 	server.StartServer()
@@ -208,13 +233,99 @@ func TestSetupHost(t *testing.T) {
 	}
 }
 
+func TestConnectToTrustedNodes(t *testing.T) {
+	params := getParamsToCreateMultipleServers(
+		t,
+		5,
+		nil,
+		2,
+		0,
+		true,
+	)
+	paramsMap := map[int]*CreateServerParams{
+		0: params[0],
+		1: params[1],
+		2: params[2],
+		3: params[3],
+		4: params[4],
+	}
+	servers := createMultipleServers(t, 5, paramsMap)
+
+	for index, server := range servers {
+		testLogger.Debug("TestConnectPeer", "index", index, "id", server.id)
+	}
+
+	t.Cleanup(func() {
+		closeTestServers(t, servers)
+	})
+
+	testcases := []struct {
+		name                   string
+		kramaID                id.KramaID
+		establishedConnections map[int][]*Server
+		newConnections         map[int][]*Server
+	}{
+		{
+			name:                   "connected nodes",
+			establishedConnections: map[int][]*Server{0: {servers[1]}},
+			newConnections:         map[int][]*Server{0: {servers[1]}},
+		},
+		{
+			name:                   "not connected nodes",
+			establishedConnections: nil,
+			newConnections:         map[int][]*Server{2: {servers[3], servers[4]}},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			// connect servers
+			if test.establishedConnections != nil {
+				for i, destinations := range test.establishedConnections {
+					connectTo(t, servers[i], destinations...)
+
+					for _, destination := range destinations {
+						err := servers[i].Peers.Register(getPeer(t, servers[i], destination))
+						require.NoError(t, err)
+					}
+				}
+			}
+
+			for i, destinations := range test.newConnections {
+				for _, destination := range destinations {
+					// get peer info of node we connect to
+					info := getPeerInfo(t, destination)
+
+					// add peer info to peer store
+					addPeerInfo(t, servers[i], info)
+
+					servers[i].cfg.TrustedPeers = append(servers[i].cfg.TrustedPeers, common.NodeInfo{
+						ID:      destination.id,
+						Address: getMultiAddresses(t, []host.Host{destination.host})[0],
+					})
+				}
+
+				// connect to trusted nodes
+				servers[i].connectToTrustedNodes()
+
+				for _, destination := range destinations {
+					// get peer info of the node that we have connected to
+					info := getPeerInfo(t, destination)
+
+					checkConnection(t, servers[i], info.ID, true)
+				}
+			}
+		})
+	}
+}
+
 func TestSetupKadDht(t *testing.T) {
 	server := createServerWithoutHost(t)
 	t.Cleanup(func() {
 		closeTestServer(t, server)
 	})
 
-	libp2pHost, err := libp2p.New(libp2p.ListenAddrs(getListenAddresses(t, 1)...))
+	libp2pHost, err := libp2p.New(libp2p.ListenAddrs(testsCommon.GetListenAddresses(t, 1)...))
 	require.NoError(t, err)
 
 	server.host = libp2pHost
@@ -269,7 +380,14 @@ func TestSetupPubSub(t *testing.T) {
 
 func TestStreamHandler_Valid_HandshakeMsg(t *testing.T) {
 	bootNodes := getBootstrapNodes(t, 1)
-	defaultConfig := getParamsToCreateMultipleServers(t, 2, bootNodes, 1, 2)
+	defaultConfig := getParamsToCreateMultipleServers(
+		t,
+		2,
+		bootNodes,
+		1,
+		2,
+		false,
+	)
 
 	paramsMap := map[int]*CreateServerParams{
 		0: defaultConfig[0],
@@ -301,7 +419,14 @@ func TestStreamHandler_Valid_HandshakeMsg(t *testing.T) {
 
 func TestStreamHandler_Invalid_HandshakeMsgPayload(t *testing.T) {
 	bootNodes := getBootstrapNodes(t, 1)
-	defaultConfig := getParamsToCreateMultipleServers(t, 2, bootNodes, 1, 2)
+	defaultConfig := getParamsToCreateMultipleServers(
+		t,
+		2,
+		bootNodes,
+		1,
+		2,
+		false,
+	)
 
 	paramsMap := map[int]*CreateServerParams{
 		0: defaultConfig[0],
@@ -335,7 +460,14 @@ func TestStreamHandler_Invalid_HandshakeMsgPayload(t *testing.T) {
 
 func TestStreamHandlerFunc_Invalid_MessagePayload(t *testing.T) {
 	bootNodes := getBootstrapNodes(t, 1)
-	defaultConfig := getParamsToCreateMultipleServers(t, 2, bootNodes, 1, 2)
+	defaultConfig := getParamsToCreateMultipleServers(
+		t,
+		2,
+		bootNodes,
+		1,
+		2,
+		false,
+	)
 
 	paramsMap := map[int]*CreateServerParams{
 		0: defaultConfig[0],
@@ -367,7 +499,14 @@ func TestStreamHandlerFunc_Invalid_MessagePayload(t *testing.T) {
 
 func TestStreamHandler_Already_RegisteredPeer(t *testing.T) {
 	bootNodes := getBootstrapNodes(t, 1)
-	defaultConfig := getParamsToCreateMultipleServers(t, 2, bootNodes, 2, 2)
+	defaultConfig := getParamsToCreateMultipleServers(
+		t,
+		2,
+		bootNodes,
+		2,
+		2,
+		false,
+	)
 
 	paramsMap := map[int]*CreateServerParams{
 		0: defaultConfig[0],
@@ -399,7 +538,14 @@ func TestStreamHandler_Already_RegisteredPeer(t *testing.T) {
 
 func TestDiscover_CheckEvents(t *testing.T) {
 	bootNodes := getBootstrapNodes(t, 2)
-	defaultConfig := getParamsToCreateMultipleServers(t, 2, bootNodes, 2, 2)
+	defaultConfig := getParamsToCreateMultipleServers(
+		t,
+		2,
+		bootNodes,
+		2,
+		2,
+		false,
+	)
 	paramsMap := map[int]*CreateServerParams{
 		0: defaultConfig[0],
 		1: defaultConfig[1],
@@ -414,10 +560,10 @@ func TestDiscover_CheckEvents(t *testing.T) {
 	PeerEventSub := servers[0].mux.Subscribe(utils.NewPeerEvent{}) // subscribe to server-1 events
 	PeerDiscoveredEventSub := servers[0].mux.Subscribe(utils.PeerDiscoveredEvent{})
 
-	go servers[0].Discover()
+	go servers[0].discover()
 	time.Sleep(8 * time.Second)
 
-	go servers[1].Discover()
+	go servers[1].discover()
 	time.Sleep(5 * time.Second)
 
 	// check if server-0,1 are able to discover each other after 10 seconds
@@ -428,9 +574,185 @@ func TestDiscover_CheckEvents(t *testing.T) {
 	validatePeerDiscoveredEvent(t, PeerDiscoveredEventSub, servers[1])
 }
 
+func TestServer_HandleDiscovery(t *testing.T) {
+	bootNodes := getBootstrapNodes(t, 2)
+	params := getParamsToCreateMultipleServers(
+		t,
+		2,
+		bootNodes,
+		2,
+		2,
+		false,
+	)
+	paramsMap := map[int]*CreateServerParams{
+		0: params[0],
+		1: params[1],
+	}
+
+	tests := []struct {
+		name           string
+		noDiscovery    bool
+		refreshSenatus bool
+		testFn         func()
+	}{
+		{
+			name:           "discovery disabled, refresh senatus enabled",
+			noDiscovery:    true,
+			refreshSenatus: true,
+			testFn: func() {
+				paramsMap[0].ConfigCallback = func(c *common.NetworkConfig) {
+					c.BootstrapPeers = getMultiAddresses(t, bootNodes)
+					c.OutboundConnLimit = 2
+					c.InboundConnLimit = 2
+					c.NoDiscovery = true
+					c.RefreshSenatus = true
+				}
+			},
+		},
+		{
+			name:           "discovery enabled, refresh senatus disabled",
+			noDiscovery:    false,
+			refreshSenatus: false,
+			testFn: func() {
+				paramsMap[0].ConfigCallback = func(c *common.NetworkConfig) {
+					c.BootstrapPeers = getMultiAddresses(t, bootNodes)
+					c.OutboundConnLimit = 2
+					c.InboundConnLimit = 2
+					c.NoDiscovery = false
+					c.RefreshSenatus = false
+				}
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if test.testFn != nil {
+				test.testFn()
+			}
+
+			servers := createMultipleServers(t, 2, paramsMap)
+
+			t.Cleanup(func() {
+				closeTestServers(t, servers)
+			})
+
+			initDiscoveryAndAdvertise(t, servers...)
+
+			err := servers[0].handleDiscovery()
+			require.NoError(t, err)
+
+			peerIDs := getPeerIDs(t, []host.Host{servers[0].host, servers[1].host})
+
+			require.Equal(t, !test.noDiscovery, servers[0].Peers.ContainsPeer(peerIDs[1]))
+
+			if !test.refreshSenatus {
+				_, err := servers[0].Senatus.GetAddressByPeerID(peerIDs[1])
+				require.Error(t, err)
+
+				return
+			}
+
+			addr, err := servers[0].Senatus.GetAddressByPeerID(peerIDs[1])
+			require.NoError(t, err)
+
+			require.Equal(t, servers[1].host.Addrs(), addr)
+		})
+	}
+}
+
+func TestServer_GetPeerInfo(t *testing.T) {
+	params := &CreateServerParams{
+		EventMux: &utils.TypeMux{},
+		ConfigCallback: func(c *common.NetworkConfig) {
+			c.InboundConnLimit = 10
+			c.OutboundConnLimit = 5
+		},
+		Logger: testLogger,
+	}
+	server := createServer(t, 0, params)
+
+	tests := []struct {
+		name        string
+		peerInfo    *peer.AddrInfo
+		testFn      func(peerInfo *peer.AddrInfo)
+		expectedErr error
+	}{
+		{
+			name: "Peer info present in Peer Store",
+			peerInfo: &peer.AddrInfo{
+				ID:    testsCommon.GetTestPeerID(t),
+				Addrs: testsCommon.GetListenAddresses(t, 1),
+			},
+			testFn: func(peerInfo *peer.AddrInfo) {
+				server.addToPeerStore(peerInfo)
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "Peer info not present in Peer Store, present in Senatus",
+			peerInfo: &peer.AddrInfo{
+				ID:    testsCommon.GetTestPeerID(t),
+				Addrs: testsCommon.GetListenAddresses(t, 1),
+			},
+			testFn: func(peerInfo *peer.AddrInfo) {
+				params.ServerCallback = func(s *Server) {
+					m := NewMockReputationEngine()
+					m.SetPeerInfo(
+						peerInfo.ID,
+						&gtypes.NodeMetaInfo{
+							Addrs: utils.MultiAddrToString(peerInfo.Addrs...),
+							NTQ:   senatus.DefaultPeerNTQ,
+						},
+					)
+					s.Senatus = m
+				}
+
+				server = createServer(t, 0, params)
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "Peer info not present in Peer Store, not present in Senatus",
+			peerInfo: &peer.AddrInfo{
+				ID:    testsCommon.GetTestPeerID(t),
+				Addrs: testsCommon.GetListenAddresses(t, 1),
+			},
+			expectedErr: types.ErrKramaIDNotFound,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if test.testFn != nil {
+				test.testFn(test.peerInfo)
+			}
+
+			peerInfo, err := server.getPeerInfo(test.peerInfo.ID)
+
+			if test.expectedErr != nil {
+				require.Error(t, err)
+				require.ErrorContains(t, err, test.expectedErr.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.peerInfo, peerInfo)
+		})
+	}
+}
+
 func TestConnectPeer(t *testing.T) {
 	bootNodes := getBootstrapNodes(t, 1)
-	params := getParamsToCreateMultipleServers(t, 4, bootNodes, 2, 2)
+	params := getParamsToCreateMultipleServers(
+		t,
+		4,
+		bootNodes,
+		2,
+		2,
+		false,
+	)
 	paramsMap := map[int]*CreateServerParams{
 		0: params[0],
 		1: params[1],
@@ -510,7 +832,14 @@ func TestConnectPeer(t *testing.T) {
 
 func TestDisconnectPeer(t *testing.T) {
 	bootNodes := getBootstrapNodes(t, 1)
-	params := getParamsToCreateMultipleServers(t, 4, bootNodes, 2, 2)
+	params := getParamsToCreateMultipleServers(
+		t,
+		4,
+		bootNodes,
+		2,
+		2,
+		false,
+	)
 	paramsMap := map[int]*CreateServerParams{
 		0: params[0],
 		1: params[1],
@@ -580,7 +909,14 @@ func TestDisconnectPeer(t *testing.T) {
 
 func TestGetPeers(t *testing.T) {
 	bootNodes := getBootstrapNodes(t, 2)
-	params := getParamsToCreateMultipleServers(t, 2, bootNodes, 2, 2)
+	params := getParamsToCreateMultipleServers(
+		t,
+		2,
+		bootNodes,
+		2,
+		2,
+		true,
+	)
 	paramsMap := map[int]*CreateServerParams{
 		0: params[0],
 		1: params[1],
@@ -591,7 +927,7 @@ func TestGetPeers(t *testing.T) {
 		closeTestServers(t, servers)
 	})
 
-	peersList := tests.GetTestKramaIDs(t, 2)
+	peersList := testsCommon.GetTestKramaIDs(t, 2)
 
 	testcases := []struct {
 		name         string
@@ -623,14 +959,21 @@ func TestGetPeers(t *testing.T) {
 			fetchedList, err := test.server.GetPeers()
 
 			require.NoError(t, err)
-			require.Equal(t, test.expectedList, fetchedList)
+			require.ElementsMatch(t, test.expectedList, fetchedList)
 		})
 	}
 }
 
 func TestSendMessage_CheckMsgHandler(t *testing.T) {
 	bootNodes := getBootstrapNodes(t, 1)
-	params := getParamsToCreateMultipleServers(t, 4, bootNodes, 2, 2)
+	params := getParamsToCreateMultipleServers(
+		t,
+		4,
+		bootNodes,
+		2,
+		2,
+		false,
+	)
 	paramsMap := map[int]*CreateServerParams{
 		0: params[0],
 		1: params[1],
@@ -700,7 +1043,14 @@ func TestSendMessage_CheckMsgHandler(t *testing.T) {
 
 func TestSubscribe_Twice_OnSameTopic(t *testing.T) {
 	bootNodes := getBootstrapNodes(t, 1)
-	params := getParamsToCreateMultipleServers(t, 1, bootNodes, 2, 2)
+	params := getParamsToCreateMultipleServers(
+		t,
+		1,
+		bootNodes,
+		2,
+		2,
+		false,
+	)
 	paramsMap := map[int]*CreateServerParams{
 		0: params[0],
 	}
@@ -722,7 +1072,14 @@ func TestSubscribe_CheckMsgOnTopic(t *testing.T) {
 	response := make(chan int)
 
 	bootNodes := getBootstrapNodes(t, 2)
-	defaultConfig := getParamsToCreateMultipleServers(t, 2, bootNodes, 2, 2)
+	defaultConfig := getParamsToCreateMultipleServers(
+		t,
+		2,
+		bootNodes,
+		2,
+		2,
+		false,
+	)
 
 	paramsMap := map[int]*CreateServerParams{
 		0: defaultConfig[0],
@@ -760,7 +1117,14 @@ func TestSubscribe_CheckMsgOnTopic(t *testing.T) {
 
 func TestUnSubscribe_CheckTopic(t *testing.T) {
 	bootNodes := getBootstrapNodes(t, 1)
-	params := getParamsToCreateMultipleServers(t, 1, bootNodes, 2, 2)
+	params := getParamsToCreateMultipleServers(
+		t,
+		1,
+		bootNodes,
+		2,
+		2,
+		false,
+	)
 	server := createServer(t, 0, params[0])
 
 	t.Cleanup(func() {
@@ -773,11 +1137,25 @@ func TestUnSubscribe_CheckTopic(t *testing.T) {
 	checkForTopic(t, server, topic, false)
 }
 
+func TestBroadcast_UnSubscribedTopic(t *testing.T) {
+	s := createServer(t, 0, nil)
+
+	err := s.Broadcast("topic_2", []byte("0x00"))
+	require.ErrorContains(t, err, "topic not found")
+}
+
 func TestBroadcast_CheckMsgOnTopic(t *testing.T) {
 	response := make(chan int)
 
 	bootNodes := getBootstrapNodes(t, 2)
-	defaultConfig := getParamsToCreateMultipleServers(t, 2, bootNodes, 2, 2)
+	defaultConfig := getParamsToCreateMultipleServers(
+		t,
+		2,
+		bootNodes,
+		2,
+		2,
+		false,
+	)
 	paramsMap := map[int]*CreateServerParams{
 		0: defaultConfig[0],
 		1: defaultConfig[1],
@@ -808,25 +1186,62 @@ func TestBroadcast_CheckMsgOnTopic(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestBroadcast_CheckTopicSet(t *testing.T) {
+func TestJoinPubSubTopic(t *testing.T) {
 	bootNodes := getBootstrapNodes(t, 1)
-	params := getParamsToCreateMultipleServers(t, 1, bootNodes, 2, 2)
+	params := getParamsToCreateMultipleServers(
+		t,
+		1,
+		bootNodes,
+		2,
+		2,
+		false,
+	)
 	server := createServer(t, 0, params[0])
 
 	t.Cleanup(func() {
 		closeTestServer(t, server)
 	})
 
-	require.Nil(t, server.pubSubTopics.getTopicSet(topic)) // make sure server-0 didn't join topic before
+	testTopicSet := &TopicSet{
+		topicHandle: new(pubsub.Topic),
+		subHandle:   nil,
+	}
 
-	rawData, err := polo.Polorize(message)
-	require.NoError(t, err)
+	server.pubSubTopics.addTopicSet("topic_1", testTopicSet)
 
-	err = server.Broadcast(topic, rawData)
-	require.NoError(t, err)
-	// make sure only topicHandle created
-	require.NotNil(t, server.pubSubTopics.getTopicSet(topic).topicHandle)
-	require.Nil(t, server.pubSubTopics.getTopicSet(topic).subHandle)
+	tests := []struct {
+		name             string
+		topic            string
+		existingTopicSet *TopicSet
+	}{
+		{
+			name:             "Should return available topicSet for existing topic",
+			topic:            "topic_1",
+			existingTopicSet: testTopicSet,
+		},
+		{
+			name:             "Should return new topicSet for non-existing topic",
+			topic:            "topic_2",
+			existingTopicSet: nil,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			existingTopicSet, err := server.JoinPubSubTopic(test.topic)
+			require.NoError(t, err)
+
+			if test.existingTopicSet != nil {
+				require.Equal(t, testTopicSet, existingTopicSet)
+
+				return
+			}
+
+			// make sure only topicHandle created
+			require.NotNil(t, server.pubSubTopics.getTopicSet(test.topic).topicHandle)
+			require.Nil(t, server.pubSubTopics.getTopicSet(test.topic).subHandle)
+		})
+	}
 }
 
 func TestSendHelloMessage_CheckMsgOnTopic(t *testing.T) {
@@ -834,7 +1249,14 @@ func TestSendHelloMessage_CheckMsgOnTopic(t *testing.T) {
 	response := make(chan int)
 
 	bootNodes := getBootstrapNodes(t, 2)
-	defaultConfig := getParamsToCreateMultipleServers(t, 2, bootNodes, 2, 2)
+	defaultConfig := getParamsToCreateMultipleServers(
+		t,
+		2,
+		bootNodes,
+		2,
+		2,
+		false,
+	)
 
 	paramsMap := map[int]*CreateServerParams{
 		0: defaultConfig[0],

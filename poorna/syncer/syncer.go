@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sarvalabs/moichain/guna/senatus"
+
 	"github.com/sarvalabs/go-polo"
 
 	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
@@ -146,7 +148,7 @@ type Syncer struct {
 	lattice          lattice
 	state            state
 	logger           hclog.Logger
-	ReputationEngine *guna.ReputationEngine
+	ReputationEngine *senatus.ReputationEngine
 	ntqtablesynconce sync.Once
 }
 
@@ -262,19 +264,22 @@ func (s *Syncer) StreamHandler(stream network.Stream) {
 		msg.BucketSizes[k] = v.Bytes()
 	}
 
-	peer := s.node.Peers.Peer(remotePeer)
-	peerKramaID := peer.GetKramaID()
-	resp := new(Response)
+	peerInfo := s.node.Peers.Peer(remotePeer)
+	if peerInfo != nil {
+		resp := new(Response)
+		peerKramaID := peerInfo.GetKramaID()
 
-	if err := s.rpcClient.MoiCall(peerKramaID,
-		"SYNCRPC",
-		"StatusUpdate",
-		msg,
-		resp,
-		syncerMoirpcStreamTTL); err != nil {
-		log.Println("RPC Call panic", err)
+		if err := s.rpcClient.MoiCall(
+			peerKramaID,
+			"SYNCRPC",
+			"StatusUpdate",
+			msg,
+			resp,
+			syncerMoirpcStreamTTL); err != nil {
+			log.Println("RPC Call panic", err)
 
-		return
+			return
+		}
 	}
 }
 
@@ -836,16 +841,19 @@ func (s *Syncer) handleNewPeer() {
 				msg.BucketSizes[k] = v.Bytes()
 			}
 
-			resp := new(Response)
-			peer := s.node.Peers.Peer(p.ID)
-			peerKramaID := peer.GetKramaID()
+			peerInfo := s.node.Peers.Peer(p.ID)
+			if peerInfo != nil {
+				resp := new(Response)
+				peerKramaID := peerInfo.GetKramaID()
 
-			if err := s.rpcClient.MoiCall(peerKramaID,
-				"SYNCRPC",
-				"StatusUpdate",
-				msg, resp,
-				time.Duration(10)*time.Minute); err != nil {
-				log.Println("RPC Call panic", err)
+				if err := s.rpcClient.MoiCall(
+					peerKramaID,
+					"SYNCRPC",
+					"StatusUpdate",
+					msg, resp,
+					time.Duration(10)*time.Minute); err != nil {
+					log.Println("RPC Call panic", err)
+				}
 			}
 		}
 	}
@@ -1131,7 +1139,7 @@ func (s *Syncer) getTesseract(
 		"GetTesseract",
 		req,
 		resp,
-		time.Duration(10)*time.Minute); err != nil {
+		0); err != nil {
 		return nil, nil, err
 	}
 

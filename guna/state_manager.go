@@ -17,14 +17,11 @@ import (
 	"github.com/sarvalabs/moichain/guna/tree"
 	"github.com/sarvalabs/moichain/types"
 
-	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/utils"
 
 	gtypes "github.com/sarvalabs/moichain/guna/types"
 
 	"github.com/hashicorp/go-hclog"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 
@@ -38,30 +35,8 @@ import (
 )
 
 const (
-	SenatusTopic       = "MOI_PUBSUB_SENATUS"
 	minimumContextSize = 1
 )
-
-type server interface {
-	Subscribe(ctx context.Context, topic string, handler func(msg *pubsub.Message) error) error
-}
-
-type Senatus interface {
-	AddNewPeer(key id.KramaID, data *ReputationInfo) error
-	UpdateAddress(key id.KramaID, addrs []string) error
-	UpdateNTQ(key id.KramaID, ntq int32) error
-	UpdateInclusivity(key id.KramaID, delta int64) error
-	GetAddress(key id.KramaID) (multiAddrs []multiaddr.Multiaddr, err error)
-	GetNTQ(id id.KramaID) (int32, error)
-	UpdatePublicKey(key id.KramaID, pk []byte) error
-	GetPublicKey(ctx context.Context, id id.KramaID) ([]byte, error)
-	AddEntries(msg ptypes.SyncReputationInfo) error
-	GetInclusivity(id id.KramaID) (int64, error)
-	GetAllEntries() (chan *ptypes.SyncReputationInfo, error)
-	SenatusHandler(msg *pubsub.Message) error
-	HandleHelloMessages(msgs []*ptypes.HelloMsg) (int, error)
-	Start(id id.KramaID, ntq int32, publicKey []byte, address []multiaddr.Multiaddr) error
-}
 
 type store interface {
 	GetAccount(addr types.Address, stateHash types.Hash) ([]byte, error)
@@ -81,7 +56,11 @@ type store interface {
 	Contains(key []byte) (bool, error)
 	UpdateEntry(key []byte, newValue []byte) error
 	NewBatchWriter() db.BatchWriter
-	GetEntries(prefix []byte) chan types.DBEntry
+}
+
+type senatus interface {
+	GetPublicKey(kramaID id.KramaID) ([]byte, error)
+	UpdatePublicKey(kramaID id.KramaID, pk []byte) error
 }
 
 var (
@@ -97,8 +76,7 @@ type StateManager struct {
 
 	db store
 
-	senatus Senatus
-	network server
+	senatus senatus
 	client  *http.Client
 
 	objectsLock sync.Mutex
@@ -115,14 +93,14 @@ func NewStateManager(
 	db store,
 	logger hclog.Logger,
 	cache *lru.Cache,
-	network server,
 	metrics *Metrics,
+	senatus senatus,
 ) (*StateManager, error) {
 	sm := &StateManager{
 		ctx:     ctx,
 		cache:   cache,
 		db:      db,
-		network: network,
+		senatus: senatus,
 		client: &http.Client{Transport: &http.Transport{
 			MaxIdleConns:    1024,
 			MaxConnsPerHost: 1000,
@@ -132,13 +110,6 @@ func NewStateManager(
 		logger:       logger.Named("State-Manager"),
 		metrics:      metrics,
 	}
-
-	senatus, err := NewReputationEngine(ctx, logger, sm, db)
-	if err != nil {
-		return nil, err
-	}
-
-	sm.senatus = senatus
 
 	sm.metrics.initMetrics()
 
@@ -295,7 +266,7 @@ func (sm *StateManager) FetchTesseractFromDB(hash types.Hash, withInteractions b
 
 	interactions := new(types.Interactions)
 
-	if withInteractions {
+	if withInteractions && canonicalTesseract.Header.Height > 0 {
 		// Fetch interactions from DB
 		buf, err = sm.db.GetInteractions(canonicalTesseract.Body.InteractionHash)
 		if err != nil {
@@ -847,10 +818,6 @@ func (sm *StateManager) SetupNewAccount(info *gtypes.AccountSetupArgs) (types.Ha
 	return stateHash, stateObject.data.ContextHash, nil
 }
 
-func (sm *StateManager) SenatusInstance() Senatus {
-	return sm.senatus
-}
-
 type Response struct {
 	Data []string `json:"data"`
 }
@@ -865,7 +832,7 @@ func (sm *StateManager) GetPublicKeys(ids ...id.KramaID) ([][]byte, error) {
 
 	publicKeys := make([][]byte, len(ids))
 
-	g, ctx := errgroup.WithContext(context.Background())
+	g, _ := errgroup.WithContext(context.Background())
 
 	for index, kramaID := range ids {
 		i, k := index, kramaID
@@ -873,11 +840,9 @@ func (sm *StateManager) GetPublicKeys(ids ...id.KramaID) ([][]byte, error) {
 		g.Go(
 			func() error {
 				return func(id id.KramaID, index int) error {
-					pk, err := sm.senatus.GetPublicKey(ctx, id)
-					if errors.Is(err, context.Canceled) {
-						return err
-					} else if err != nil {
-						keys, err := sm.GetPublicKeyFromContract(ctx, id)
+					pk, err := sm.senatus.GetPublicKey(id)
+					if err != nil {
+						keys, err := sm.GetPublicKeyFromContract(id)
 						if err != nil {
 							return err
 						}
@@ -905,61 +870,8 @@ func (sm *StateManager) GetPublicKeys(ids ...id.KramaID) ([][]byte, error) {
 	return publicKeys, nil
 }
 
-func (sm *StateManager) GetPublicKeyFromContract(ctx context.Context, ids ...id.KramaID) (keys [][]byte, err error) {
-	data, err := json.Marshal(Request{utils.KramaIDToString(ids)})
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("POST", "http://45.140.185.105/api/fetchPublicKeys", bytes.NewBuffer(data))
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", "application/json")
-
-	response, err := sm.client.Do(req)
-	if err != nil {
-		sm.logger.Error("Api fetch failed", "error", err, "kramaIDs", ids)
-
-		return nil, err
-	}
-
-	body, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		log.Panicln(err)
-	}
-
-	defer response.Body.Close()
-
-	if response.StatusCode != 200 {
-		sm.logger.Error("Http request failed", response.StatusCode, string(body))
-	}
-
-	data1 := new(Response)
-
-	if err = json.Unmarshal(body, data1); err != nil {
-		log.Panicln(err)
-	}
-
-	for _, v := range data1.Data {
-		str, err := hex.DecodeString(v)
-		if err != nil {
-			return nil, err
-		}
-
-		keys = append(keys, str)
-	}
-
-	return keys, nil
-}
-
-func (sm *StateManager) Start(id id.KramaID, ntq int32, publicKey []byte, addrs []multiaddr.Multiaddr) error {
-	if err := sm.network.Subscribe(sm.ctx, SenatusTopic, sm.senatus.SenatusHandler); err != nil {
-		return errors.Wrap(err, "failed to subscribe senatus topic")
-	}
-
-	return sm.senatus.Start(id, ntq, publicKey, addrs)
+func (sm *StateManager) GetPublicKeyFromContract(ids ...id.KramaID) (keys [][]byte, err error) {
+	return RetrievePublicKeys(ids, sm.client, sm.logger)
 }
 
 // IsLogicRegistered checks if the logicID is registered with the account.
@@ -1122,4 +1034,53 @@ func (sm *StateManager) GetLogicManifest(logicID types.LogicID, stateHash types.
 	}
 
 	return logicManifest, nil
+}
+
+var RetrievePublicKeys = func(ids []id.KramaID, client *http.Client, logger hclog.Logger) (keys [][]byte, err error) {
+	data, err := json.Marshal(Request{utils.KramaIDToString(ids)})
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", "http://45.140.185.105/api/fetchPublicKeys", bytes.NewBuffer(data))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", "application/json")
+
+	response, err := client.Do(req)
+	if err != nil {
+		logger.Error("Api fetch failed", "error", err, "kramaIDs", ids)
+
+		return nil, err
+	}
+
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		log.Panicln(err)
+	}
+
+	defer response.Body.Close()
+
+	if response.StatusCode != 200 {
+		logger.Error("Http request failed", response.StatusCode, string(body))
+	}
+
+	data1 := new(Response)
+
+	if err = json.Unmarshal(body, data1); err != nil {
+		log.Panicln(err)
+	}
+
+	for _, v := range data1.Data {
+		str, err := hex.DecodeString(v)
+		if err != nil {
+			return nil, err
+		}
+
+		keys = append(keys, str)
+	}
+
+	return keys, nil
 }

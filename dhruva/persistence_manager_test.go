@@ -1,6 +1,7 @@
 package dhruva
 
 import (
+	"context"
 	"math/big"
 	"testing"
 
@@ -557,14 +558,15 @@ func TestGetAccounts(t *testing.T) {
 }
 
 // here we insert 10000 entries and check if inserted entries and fetched entries match
-func TestGetEntries(t *testing.T) {
+func TestGetEntriesWithPrefix(t *testing.T) {
 	pm := NewTestPersistenceManager(t)
 	insertedEntries, prefixes := insertTestEntries(t, pm)
 
 	actualEntryCount := 0
 
 	for _, prefix := range prefixes {
-		actualEntries := pm.GetEntries([]byte(prefix))
+		actualEntries, err := pm.GetEntriesWithPrefix(context.Background(), []byte(prefix))
+		require.NoError(t, err)
 
 		for actualEntry := range actualEntries {
 			actualEntryCount++

@@ -4,10 +4,14 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"log"
 	"math/rand"
 	"sync"
 	"time"
+
+	"github.com/libp2p/go-libp2p/core/peerstore"
+	"github.com/sarvalabs/moichain/guna/senatus"
+
+	gtypes "github.com/sarvalabs/moichain/guna/types"
 
 	"github.com/pkg/errors"
 
@@ -53,9 +57,11 @@ type Vault interface {
 	Sign(data []byte, sigType mcommon.SigType) ([]byte, error)
 }
 type Senatus interface {
-	SenatusHandler(msg *pubsub.Message) error
-	GetNTQ(id id.KramaID) (int32, error)
-	GetAddress(key id.KramaID) (multiAddrs []maddr.Multiaddr, err error)
+	GetNTQ(peerID id.KramaID) (float32, error)
+	GetAddress(key id.KramaID) ([]maddr.Multiaddr, error)
+	GetAddressByPeerID(peerID peer.ID) ([]maddr.Multiaddr, error)
+	AddNewPeer(key id.KramaID, data *gtypes.NodeMetaInfo) error
+	AddNewPeerWithPeerID(key peer.ID, data *gtypes.NodeMetaInfo) error
 }
 
 // TopicSet is a wrapper for Topic & Subscription
@@ -85,6 +91,8 @@ type Server struct {
 	id id.KramaID // KramaID of the node
 
 	Peers *peerSet // peerSet of node
+
+	connInfo *ConnectionInfo // connection info of the node
 
 	rpcServers map[protocol.ID]*moirpc.Server // map of MOI-RPC Server's Protocol ID to respective MOI-RPC Server
 
@@ -117,6 +125,7 @@ func NewServer(
 		cfg:        config,
 		mux:        mux,
 		Peers:      newPeerSet(),
+		connInfo:   NewConnectionInfo(config.InboundConnLimit, config.OutboundConnLimit),
 		rpcServers: make(map[protocol.ID]*moirpc.Server),
 		vault:      vault,
 	}
@@ -124,9 +133,7 @@ func NewServer(
 	return server
 }
 
-// StartServer sets up node's libp2p host, Kad DHT, PubSub route
-// after which it bootstraps itself by attempting to connect to bootstrap peers.
-func (s *Server) StartServer() error {
+func (s *Server) SetupServer() error {
 	if err := s.setupHost(); err != nil {
 		return fmt.Errorf("setup host: %w", err)
 	}
@@ -135,15 +142,29 @@ func (s *Server) StartServer() error {
 		return fmt.Errorf("setup PubSub: %w", err)
 	}
 
-	s.logger.Info("[StartServer]", "Krama-ID", s.id, "Addrs", s.host.Addrs())
+	s.logger.Info("[StartServer]", "Krama-ID", s.id, "Address", s.host.Addrs())
 
 	if err := s.connectToBootStrapNodes(); err != nil {
 		return fmt.Errorf("bootstrap nodes connection: %w", err)
 	}
 
-	s.SetStreamHandler()
+	return nil
+}
 
-	go s.Discover()
+// StartServer sets up node's libp2p host, Kad DHT, PubSub route
+// after which it bootstraps itself by attempting to connect to bootstrap peers.
+func (s *Server) StartServer() error {
+	s.setStreamHandler()
+
+	if s.cfg.NoDiscovery {
+		go s.connectToTrustedNodes()
+
+		if !s.cfg.RefreshSenatus {
+			return nil
+		}
+	}
+
+	go s.discover()
 
 	return nil
 }
@@ -162,31 +183,21 @@ func (s *Server) connectToBootStrapNodes() error {
 		return ErrMinBootnodes
 	}
 
-	var (
-		wg                   sync.WaitGroup
-		bootstrapConnections int8
-	)
+	var bootstrapConnections int8
+
+	s.logger.Info("BootNodes", s.cfg.BootstrapPeers)
 
 	for _, bootstrapPeer := range s.cfg.BootstrapPeers {
-		wg.Add(1)
-		// Start a goroutine to connect to the bootstrap node
-		go func(bootstrapPeer maddr.Multiaddr) {
-			defer wg.Done()
+		if err := s.connectToMaddr(bootstrapPeer); err != nil {
+			s.logger.Error("Bootstrap connection failed", "peer", bootstrapPeer, "error", err)
 
-			if err := s.connectToMaddr(bootstrapPeer); err != nil {
-				s.logger.Error("Bootstrap connection failed", "peer", bootstrapPeer, "error", err)
+			continue
+		}
 
-				return
-			}
+		s.logger.Info("Connection established with bootstrap node", "peer", bootstrapPeer)
 
-			s.logger.Info("Connection established with bootstrap node", "peer", bootstrapPeer)
-
-			bootstrapConnections += 1
-		}(bootstrapPeer)
+		bootstrapConnections += 1
 	}
-
-	// Wait for all connections to fail/succeed
-	wg.Wait()
 
 	if bootstrapConnections == 0 {
 		return ErrMinBootnodeConns
@@ -201,11 +212,29 @@ func (s *Server) connectToMaddr(peerAddr maddr.Multiaddr) error {
 		return err
 	}
 
-	if err := s.host.Connect(s.ctx, *peerInfo); err != nil {
+	if err = s.host.Connect(s.ctx, *peerInfo); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// connectToTrustedNodes attempts to connect to and register the given list of trusted nodes.
+func (s *Server) connectToTrustedNodes() {
+	s.logger.Info("Connecting to trusted nodes")
+
+	for _, trustedPeer := range s.cfg.TrustedPeers {
+		peerInfo, err := peer.AddrInfoFromP2pAddr(trustedPeer.Address)
+		if err != nil {
+			s.logger.Error("invalid trusted peer address", "error", err)
+
+			continue
+		}
+
+		if err := s.ConnectAndRegisterPeer(*peerInfo); err != nil {
+			s.logger.Error("failed to establish connection with trusted peer", "error", err)
+		}
+	}
 }
 
 // StartNewRPCServer starts a new MOI-RPC server & client with the given ProtocolID
@@ -213,9 +242,9 @@ func (s *Server) connectToMaddr(peerAddr maddr.Multiaddr) error {
 func (s *Server) StartNewRPCServer(protocol protocol.ID) *moirpc.Client {
 	s.logger.Debug("starting new moirpc server", "protocol", protocol)
 
-	s.rpcServers[protocol] = moirpc.NewServer(s.logger, s.host, protocol)
+	s.rpcServers[protocol] = moirpc.NewServer(s.logger.Named(string(protocol)), s.host, protocol)
 
-	return moirpc.NewClient(s.logger, s.host, protocol, s.Senatus)
+	return moirpc.NewClient(s.logger.Named(string(protocol)), s.host, protocol, s.Senatus)
 }
 
 // setupHost sets up the libp2p host for the node
@@ -229,9 +258,8 @@ func (s *Server) setupHost() (err error) {
 		return errors.New("lifecycle context for node not configured")
 	}
 
-	var hostOptions libp2p.Option
-
-	if hostOptions, err = s.getLibp2pHostOptions(); err != nil {
+	hostOptions, err := s.getLibp2pHostOptions()
+	if err != nil {
 		return err
 	}
 
@@ -254,7 +282,6 @@ func (s *Server) getLibp2pHostOptions() (libp2p.Option, error) {
 		// Enable UPnP and hole punching
 		s.getSelfRouting(),
 		libp2p.NATPortMap(),
-		libp2p.EnableAutoRelay(),
 		libp2p.EnableNATService(),
 		libp2p.Identity(prvKey),
 		libp2p.ListenAddrs(s.cfg.ListenAddresses...),
@@ -290,7 +317,7 @@ func (s *Server) SetupStreamHandler(protocolID protocol.ID, handle func(network.
 	s.host.SetStreamHandler(protocolID, handle)
 }
 
-// RemoveStreamHandler removes a handler for a given ProtocolId on the mux that was set by SetStreamHandler
+// RemoveStreamHandler removes a handler for a given ProtocolId on the mux that was set by setStreamHandler
 func (s *Server) RemoveStreamHandler(protocolID protocol.ID) {
 	s.host.RemoveStreamHandler(protocolID)
 }
@@ -379,17 +406,17 @@ func (s *Server) setupPubSub() (err error) {
 // Creates a NewPeerEvent when a new stream is acquired and posts it
 // to the network for all receivers registered to receive the event.
 func (s *Server) streamHandlerFunc(stream network.Stream) {
-	s.logger.Trace("new stream", "protocol", stream.Protocol(), "kPeer", stream.Conn().RemotePeer())
-
-	if inboundConnLimitReached := s.isInBoundLimitReached(); inboundConnLimitReached {
-		s.logger.Info("inbound conn limit reached", "unable to handle kPeer", stream.Conn().RemotePeer())
+	if s.connInfo.isInboundConnLimitReached() {
+		s.logger.Error("Closing peer connection", stream.Conn().RemotePeer())
 
 		if err := stream.Reset(); err != nil {
-			s.logger.Error("stream reset", "error", err)
+			s.logger.Error("Failed to reset stream", "error", err)
 		}
 
 		return
 	}
+
+	s.logger.Trace("new stream", "protocol", stream.Protocol(), "kPeer", stream.Conn().RemotePeer())
 
 	kPeer := newPeer(stream, s.logger)
 
@@ -410,6 +437,9 @@ func (s *Server) streamHandlerFunc(stream network.Stream) {
 		return
 	}
 
+	// Update the inbound connection count
+	s.connInfo.updateInboundConnCount(1)
+
 	if err := kPeer.SendHandshakeMessage(s); err != nil {
 		s.logger.Error("SendHandshakeMessage", "error", err)
 
@@ -423,15 +453,15 @@ func (s *Server) streamHandlerFunc(stream network.Stream) {
 		return
 	}
 
-	s.logger.Info("handled stream, connected and registered", "kPeer", kPeer.kramaID)
+	s.logger.Info("Handled stream, connected and registered", "kPeer", kPeer.kramaID)
 }
 
-// Discover is a method of Server that starts a discovery routine using a libp2p routing
+// discover is a method of Server that starts a discovery routine using a libp2p routing
 // discovery mechanism that uses the Kad DHT of the node.
 //
 // Advertises the protocol rendezvous and discovers other peers that are advertising it.
-// The peer discovery process is repeated every 3 seconds.
-func (s *Server) Discover() {
+// The peer discovery process is repeated every 5 seconds.
+func (s *Server) discover() {
 	s.discovery = discovery.NewRoutingDiscovery(s.kadDHT)
 
 	// Advertise the rendezvous string to the discovery service
@@ -443,7 +473,7 @@ func (s *Server) Discover() {
 		s.logger.Error("Failed to advertise the rendezvous string to the discovery service", "error", err)
 	}
 
-	// Discover other peers that are advertising themselves
+	// discover other peers that are advertising themselves
 	s.logger.Info("Starting discovery routine")
 
 	for {
@@ -453,7 +483,7 @@ func (s *Server) Discover() {
 			return
 		}
 
-		if err := s.handleDiscovery(); err != nil {
+		if err = s.handleDiscovery(); err != nil {
 			s.logger.Error("handle discovery", "error", err)
 		}
 	}
@@ -473,15 +503,30 @@ func (s *Server) handleDiscovery() error {
 			continue
 		}
 
-		if err := s.ConnectAndRegisterPeer(p); err != nil {
-			/*
-				Skip iteration on,
-				* Connection failure
-				* Stream setup failure
-				* Error fetching ntq
-				* Handshake failure
-			*/
-			continue
+		if !s.cfg.NoDiscovery {
+			if err = s.ConnectAndRegisterPeer(p); err != nil {
+				/*
+					Skip iteration on,
+					* Connection failure
+					* Outbound connection limit failure
+					* Stream setup failure
+					* Error fetching ntq
+					* Handshake failure
+				*/
+				continue
+			}
+		}
+
+		if s.cfg.RefreshSenatus {
+			err = s.Senatus.AddNewPeerWithPeerID(p.ID, &gtypes.NodeMetaInfo{
+				Addrs: utils.MultiAddrToString(p.Addrs...),
+				NTQ:   senatus.DefaultPeerNTQ,
+			})
+			if err != nil && !errors.Is(err, types.ErrAlreadyKnown) {
+				s.logger.Error("failed to add peer information to senatus", err)
+
+				continue
+			}
 		}
 	}
 
@@ -497,47 +542,60 @@ func (s *Server) ConnectAndRegisterPeer(peerInfo peer.AddrInfo) error {
 		kPeer  *Peer
 	)
 
+	if !s.cfg.NoDiscovery && s.connInfo.isOutboundConnLimitReached() {
+		return types.ErrOutboundConnLimit
+	}
+
 	if s.Peers.ContainsPeer(peerInfo.ID) {
-		return nil
+		return errAlreadyRegistered
 	}
 
 	if err = s.connectPeer(peerInfo.ID); err != nil && !errors.Is(err, types.ErrConnectionExists) {
-		s.logger.Error("Failed to Connect", "kPeer", peerInfo.ID, "error", err)
-
 		return err
 	}
 
 	// create a new stream to the kPeer over the MOI protocol
 	if stream, err = s.host.NewStream(s.ctx, peerInfo.ID, s.cfg.ProtocolID); err != nil {
-		s.logger.Error("failed to open NewStream", "error", err)
+		s.logger.Error("Failed to open NewStream", "error", err)
 		// return error if stream setup fails
 		return err
 	}
 
 	kPeer = newPeer(stream, s.logger)
 
-	if err := kPeer.InitHandshake(s); err != nil {
-		s.logger.Error("Handshake Failed", "kPeer", peerInfo.ID, "error", err)
+	if err = kPeer.InitHandshake(s); err != nil {
+		if !errors.Is(err, types.ErrStreamReset) {
+			s.logger.Error("Handshake Failed", "kPeer", peerInfo.ID, "error", err)
+		}
 
 		return err
 	}
 
 	// Register the kPeer to the handler working set
-	if err := s.Peers.Register(kPeer); err != nil {
+	if err = s.Peers.Register(kPeer); err != nil {
 		s.logger.Error("Failed to Register", "kPeer", peerInfo.ID, "error", err)
+
+		return err
 	}
+
+	// Update the outbound connection count
+	s.connInfo.updateOutboundConnCount(1)
 
 	// Post the event to the registered receivers for NewPeerEvents
 	if err = s.postNewPeerEvent(kPeer.networkID); err != nil {
+		s.logger.Error("Failed to post new peer event", err)
+
 		return err
 	}
 
 	// Post the event to the registered receivers for Syncer
 	if err = s.postPeerDiscoveredEvent(kPeer.networkID); err != nil {
+		s.logger.Error("Failed to post peer discovery event", err)
+
 		return err
 	}
 
-	s.logger.Info("connected and registered kPeer successfully ", "id", kPeer.kramaID)
+	s.logger.Info("Connected and registered kPeer successfully ", "id", kPeer.kramaID)
 
 	// Return a nil error
 	return nil
@@ -545,7 +603,7 @@ func (s *Server) ConnectAndRegisterPeer(peerInfo peer.AddrInfo) error {
 
 func (s *Server) postNewPeerEvent(peerID peer.ID) error {
 	if err := s.mux.Post(utils.NewPeerEvent{PeerID: peerID}); err != nil {
-		return fmt.Errorf("post new peer event %w", err)
+		return err
 	}
 
 	return nil
@@ -553,35 +611,30 @@ func (s *Server) postNewPeerEvent(peerID peer.ID) error {
 
 func (s *Server) postPeerDiscoveredEvent(peerID peer.ID) error {
 	if err := s.mux.Post(utils.PeerDiscoveredEvent{ID: peerID}); err != nil {
-		return fmt.Errorf("post peer discovered event %w", err)
+		return err
 	}
 
 	return nil
 }
 
-func (s *Server) isOutBoundLimitReached() bool {
-	return uint(s.Peers.Len()) >= s.cfg.OutboundConnLimit
-}
-
-func (s *Server) isInBoundLimitReached() bool {
-	return uint(s.Peers.Len()) >= s.cfg.InboundConnLimit
-}
-
 func (s *Server) connectPeer(peerID peer.ID) error {
-	if s.isOutBoundLimitReached() {
-		return types.ErrOutboundConnLimit
-	}
-
 	// check if the host is already connected to the peer
 	if s.isConnectedToPeer(peerID) {
 		return types.ErrConnectionExists
 	}
-	// attempt to connect the node host to the peer
-	if err := s.host.Connect(s.ctx, s.getPeerInfo(peerID)); err != nil {
+
+	// get the peer info from peer store
+	peerInfo, err := s.getPeerInfo(peerID)
+	if err != nil {
 		return err
 	}
 
-	s.logger.Debug("connect peer success", "from", s.id, "to", peerID)
+	// attempt to connect the node host to the peer
+	if err := s.host.Connect(s.ctx, *peerInfo); err != nil {
+		return err
+	}
+
+	//	s.logger.Debug("connect peer success", "from", s.id, "to", peerID)
 
 	return nil
 }
@@ -605,8 +658,40 @@ func (s *Server) isConnectedToPeer(peerID peer.ID) bool {
 	return s.host.Network().Connectedness(peerID) == network.Connected
 }
 
-func (s *Server) getPeerInfo(peerID peer.ID) peer.AddrInfo {
-	return s.host.Peerstore().PeerInfo(peerID)
+// getPeerInfo retrieves and returns peer information from the peer store, or from senatus if not found in the store.
+func (s *Server) getPeerInfo(peerID peer.ID) (*peer.AddrInfo, error) {
+	// get the peer info from peer store
+	peerInfo := s.getFromPeerStore(peerID)
+	// retrieves peer information from senatus and adds it to the peer store if it is not present in the store.
+	if peerInfo == nil || len(peerInfo.Addrs) == 0 {
+		addr, err := s.Senatus.GetAddressByPeerID(peerID)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to get peer info from senatus")
+		}
+
+		peerInfo = &peer.AddrInfo{ID: peerID, Addrs: addr}
+
+		s.addToPeerStore(peerInfo)
+	}
+
+	return peerInfo, nil
+}
+
+// getFromPeerStore gets the peer information from the node's peer store
+func (s *Server) getFromPeerStore(peerID peer.ID) *peer.AddrInfo {
+	peerInfo := s.host.Peerstore().PeerInfo(peerID)
+
+	return &peerInfo
+}
+
+// addToPeerStore adds peer information to the node's peer store
+func (s *Server) addToPeerStore(peerInfo *peer.AddrInfo) {
+	s.host.Peerstore().AddAddr(peerInfo.ID, peerInfo.Addrs[0], peerstore.PermanentAddrTTL)
+}
+
+// RemoveFromPeerStore removes peer information from the node's peer store
+func (s *Server) removeFromPeerStore(peerID peer.ID) {
+	s.host.Peerstore().RemovePeer(peerID)
 }
 
 // DisconnectPeer is a method of Server that disconnects a peer associated with a given KramaID from the network.
@@ -633,7 +718,12 @@ func (s *Server) DisconnectPeer(kramaID id.KramaID) error {
 			return err
 		}
 		// Log the successful connection closure to the peer
-		log.Println("Disconnected", peerID)
+		s.logger.Info("Disconnected", "peer", peerID)
+	}
+
+	// Remove the peer information from peer store
+	if s.getFromPeerStore(peerID) != nil {
+		s.removeFromPeerStore(peerID)
 	}
 
 	return nil
@@ -644,23 +734,15 @@ func (s *Server) RegisterNewRPCService(protocol protocol.ID, serviceName string,
 	return s.rpcServers[protocol].RegisterName(serviceName, service)
 }
 
-// Broadcast is a method of Server that broadcasts a given protocol buffer message to a
+// Broadcast is a method of Server that broadcasts a given polo message to a
 // given PubSub topic. Expects the node to be subscribed to that topic.
 func (s *Server) Broadcast(topicName string, data []byte) error {
+	s.pubSubTopics.topicSetLock.RLock()
+	defer s.pubSubTopics.topicSetLock.RUnlock()
+
 	topicSet := s.pubSubTopics.getTopicSet(topicName)
-	// s.topicSetLock.RUnlock()
-	// log.Println("Printing the topic", topicSet)
 	if topicSet == nil {
-		topic, err := s.psRouter.Join(topicName)
-		if err != nil {
-			s.logger.Error("PubSub Join", "topic", topicName, "error", err)
-
-			return err
-		}
-
-		s.pubSubTopics.addTopicSet(topicName, &TopicSet{topic, nil})
-
-		topicSet = s.pubSubTopics.getTopicSet(topicName)
+		return errors.New("topic not found")
 	}
 
 	// Attempt to publish the message to the pubsub topic
@@ -673,13 +755,35 @@ func (s *Server) Broadcast(topicName string, data []byte) error {
 	return nil
 }
 
-// Subscribe is a method of Server that subscribes the node to a given PubSub topic.
+// JoinPubSubTopic joins the pubsub topic and returns the TopicSet with topic handler only
+// Note that this doesn't subscribe to the given topic, Call Subscribe for creating a subscription handler
+func (s *Server) JoinPubSubTopic(topicName string) (*TopicSet, error) {
+	s.pubSubTopics.topicSetLock.Lock()
+	defer s.pubSubTopics.topicSetLock.Unlock()
+
+	topicSet := s.pubSubTopics.getTopicSet(topicName)
+	if topicSet == nil {
+		topic, err := s.psRouter.Join(topicName)
+		if err != nil {
+			return nil, err
+		}
+
+		s.pubSubTopics.addTopicSet(topicName, &TopicSet{topic, nil})
+	}
+
+	return s.pubSubTopics.getTopicSet(topicName), nil
+}
+
+// Subscribe subscribes the node to a given PubSub topic.
 // Accepts the topic name to subscribe and handler function to handle messages from that subscription.
 //
 // Creates topic and subscription handles for the topic, wraps it in a TopicSet
 // and adds it to the node's pubsub topicset. Creates a handler pipeline with the
 // given handler function and starts a subscription loop that invokes the pipeline.
 func (s *Server) Subscribe(ctx context.Context, topicName string, handler func(msg *pubsub.Message) error) error {
+	s.pubSubTopics.topicSetLock.Lock()
+	defer s.pubSubTopics.topicSetLock.Unlock()
+
 	// Join pubsub topic and get a topic handle
 	topicHandle, err := s.psRouter.Join(topicName)
 	if err != nil {
@@ -713,7 +817,7 @@ func (s *Server) routeSubscriptionMessages(
 		// Call the given subscription handler
 		// an error because it is being invoked as a goroutine
 		if err := handler(msg); err != nil {
-			s.logger.Debug("subcHandlerPipeline", "error calling handler method", err, "msg", msg)
+			s.logger.Debug("subcHandlerPipeline", "error calling handler method", err)
 
 			return
 		}
@@ -739,6 +843,9 @@ func (s *Server) routeSubscriptionMessages(
 
 // Unsubscribe is a method of Server that unsubscribes the node from a given PubSub topic
 func (s *Server) Unsubscribe(topicName string) error {
+	s.pubSubTopics.topicSetLock.Lock()
+	defer s.pubSubTopics.topicSetLock.Unlock()
+
 	topicSet := s.pubSubTopics.getTopicSet(topicName)
 
 	// Check if topic exists
@@ -836,8 +943,8 @@ func (s *Server) NewStream(ctx context.Context, id peer.ID, protocol protocol.ID
 	return s.host.NewStream(ctx, id, protocol)
 }
 
-// SetStreamHandler starts stream handler for the ProtocolID present in the node's config
-func (s *Server) SetStreamHandler() {
+// setStreamHandler starts stream handler for the ProtocolID present in the node's config
+func (s *Server) setStreamHandler() {
 	s.host.SetStreamHandler(s.cfg.ProtocolID, s.streamHandlerFunc)
 }
 
@@ -854,42 +961,33 @@ func (s *Server) GetAddrs() []maddr.Multiaddr {
 // SendHelloMessage sends a hello message to complete network using PubSub
 func (s *Server) SendHelloMessage() {
 	s.init.Do(func() {
-		ntq, err := s.Senatus.GetNTQ(s.id)
+		msg := ptypes.HelloMsg{
+			KramaID:   s.GetKramaID(),
+			Address:   utils.MultiAddrToString(s.GetAddrs()...),
+			Signature: nil,
+		}
+
+		rawMsg, err := msg.Bytes()
 		if err != nil {
-			s.logger.Error("Error fetching NTQ", "error", err)
+			s.logger.Error("Error polorising message", "error", err)
 			panic(err)
 		}
 
-		peerInfo := ptypes.PeerInfo{
-			ID:      s.id,
-			Ntq:     ntq,
-			Address: utils.MultiAddrToString(s.GetAddrs()...),
-		}
-
-		rawData, err := peerInfo.Bytes()
-		if err != nil {
-			s.logger.Error("Error polorizing peer info", "error", err)
-			panic(err)
-		}
-
-		signature, err := s.vault.Sign(rawData, mcommon.BlsBLST)
+		signature, err := s.vault.Sign(rawMsg, mcommon.BlsBLST)
 		if err != nil {
 			s.logger.Error("Error signing message", "error", err)
 			panic(err)
 		}
 
-		msg := ptypes.HelloMsg{
-			Info:      peerInfo,
-			Signature: signature,
-		}
+		msg.Signature = signature
 
-		rawData, err = msg.Bytes()
+		rawData, err := msg.Bytes()
 		if err != nil {
 			s.logger.Error("Error serializing hello message", "error", err)
 			panic(err)
 		}
 
-		if err := s.Broadcast(SenatusTopic, rawData); err != nil {
+		if err = s.Broadcast(SenatusTopic, rawData); err != nil {
 			s.logger.Error("Error broadcasting hello message", "error", err)
 			panic(err)
 		}
@@ -907,6 +1005,12 @@ func (s *Server) constructHandshakeMSG() (ptypes.HandshakeMSG, error) {
 	return handShakeMessage, nil
 }
 
+func (s *Server) MinimumPeersCount() uint32 {
+	minimumCount := (s.connInfo.getMaxInboundConnCount() + s.connInfo.getMaxOutboundConnCount()) / 3
+
+	return uint32(minimumCount)
+}
+
 func (s *Server) GetPeers() ([]id.KramaID, error) {
 	s.Peers.lock.Lock()
 	defer s.Peers.lock.Unlock()
@@ -921,22 +1025,13 @@ func (s *Server) GetPeers() ([]id.KramaID, error) {
 }
 
 func (pst *pubSubTopics) addTopicSet(topicName string, topicSet *TopicSet) {
-	pst.topicSetLock.Lock()
-	defer pst.topicSetLock.Unlock()
-
 	pst.psTopics[topicName] = topicSet
 }
 
 func (pst *pubSubTopics) getTopicSet(topicName string) *TopicSet {
-	pst.topicSetLock.Lock()
-	defer pst.topicSetLock.Unlock()
-
 	return pst.psTopics[topicName]
 }
 
 func (pst *pubSubTopics) deleteTopicSet(topicName string) {
-	pst.topicSetLock.Lock()
-	defer pst.topicSetLock.Unlock()
-
 	delete(pst.psTopics, topicName)
 }

@@ -73,7 +73,7 @@ func (info *Slot) ClusterID() types.ClusterID {
 	return info.clusterState.ID
 }
 
-func (info *Slot) CLusterInfo() *ClusterInfo {
+func (info *Slot) ClusterInfo() *ClusterInfo {
 	return info.clusterState
 }
 

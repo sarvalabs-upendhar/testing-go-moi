@@ -2,8 +2,11 @@ package poorna
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
+
+	"github.com/sarvalabs/go-polo"
 
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
@@ -104,7 +107,12 @@ func (eh *SubHandler) newPeerLoop() {
 				defer func() {
 					if err := eh.peers.Unregister(peer); err != nil {
 						eh.logger.Error("Error unregistering peer", "error", err)
+
+						return
 					}
+
+					// Update inbound/outbound connection count based on the peer stream's direction
+					eh.server.connInfo.updateConnCount(peer.stream.Stat().Direction, -1)
 
 					eh.logger.Info("Peer Disconnected", "id", peer.kramaID)
 				}()
@@ -152,7 +160,9 @@ func (eh *SubHandler) handlePeerMessage(p *Peer) error {
 		// Unmarshal message proto into an InteractionsData message
 		var ixns types.Interactions
 		if err := ixns.FromBytes(message.Payload); err != nil {
-			return err
+			if !errors.Is(err, polo.ErrNullPack) {
+				return err
+			}
 		}
 
 		// Mark the interactions in the message as 'known' by the peer

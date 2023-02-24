@@ -1,5 +1,6 @@
 /test_*
 genesis.json
+peer-list.json
 file.key
 .idea
 .DS_Store

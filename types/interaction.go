@@ -307,55 +307,20 @@ func (ix *Interaction) FromBytes(data []byte) error {
 // Interactions are array of Transactions
 type Interactions []*Interaction
 
-func (ixs Interactions) Polorize() (*polo.Polorizer, error) {
-	polorizer := polo.NewPolorizer()
-	for _, ix := range ixs {
-		if err := polorizer.Polorize(ix); err != nil {
-			return nil, errors.Wrap(err, "failed to pack interactions")
-		}
-	}
-
-	return polorizer, nil
-}
-
 // Bytes returns the POLO serialized bytes of all Interactions
 func (ixs Interactions) Bytes() ([]byte, error) {
-	polorizer, err := ixs.Polorize()
+	rawData, err := polo.Polorize(ixs)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to polorize interactions")
 	}
 
-	return polorizer.Bytes(), nil
-}
-
-func (ixs *Interactions) Depolorize(depolorizer *polo.Depolorizer) (err error) {
-	depolorizer, err = depolorizer.DepolorizePacked()
-	if err != nil {
-		return err
-	}
-
-	for !depolorizer.Done() {
-		ix := new(Interaction)
-
-		if err = depolorizer.Depolorize(ix); err != nil {
-			return errors.Wrap(err, "failed to unpack interactions")
-		}
-
-		*ixs = append(*ixs, ix)
-	}
-
-	return nil
+	return rawData, nil
 }
 
 // FromBytes decodes the POLO serialized bytes into Interactions
 func (ixs *Interactions) FromBytes(bytes []byte) error {
-	depolorizer, err := polo.NewDepolorizer(bytes)
-	if err != nil {
-		return err
-	}
-
-	if err = ixs.Depolorize(depolorizer); err != nil {
-		return err
+	if err := polo.Depolorize(ixs, bytes); err != nil {
+		return errors.Wrap(err, "failed to depolorize interactions")
 	}
 
 	return nil

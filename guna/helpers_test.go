@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"math/big"
+	"net/http"
 	"testing"
 
 	"github.com/sarvalabs/moichain/dhruva/db"
@@ -15,7 +16,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/multiformats/go-multiaddr"
 	"github.com/munna0908/smt"
 	"github.com/sarvalabs/go-polo"
 	"github.com/sarvalabs/moichain/common/tests"
@@ -23,7 +23,6 @@ import (
 	"github.com/sarvalabs/moichain/guna/tree"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
-	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 	"github.com/stretchr/testify/require"
 )
@@ -598,7 +597,6 @@ func getRoot(t *testing.T, m *MockMerkleTree) types.Hash {
 
 type MockSenatus struct {
 	publicKeys map[id.KramaID][]byte
-	start      map[id.KramaID]bool
 }
 
 func mockSenatus(t *testing.T) *MockSenatus {
@@ -609,94 +607,54 @@ func mockSenatus(t *testing.T) *MockSenatus {
 	}
 }
 
-func (m *MockSenatus) AddNewPeer(key id.KramaID, data *ReputationInfo) error {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (m *MockSenatus) UpdateAddress(key id.KramaID, addrs []string) error {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (m *MockSenatus) UpdateNTQ(key id.KramaID, ntq int32) error {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (m *MockSenatus) UpdateInclusivity(key id.KramaID, delta int64) error {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (m *MockSenatus) GetAddress(key id.KramaID) (multiAddrs []multiaddr.Multiaddr, err error) {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (m *MockSenatus) GetNTQ(id id.KramaID) (int32, error) {
-	// TODO implement me
-	panic("implement me")
-}
-
 func (m *MockSenatus) UpdatePublicKey(key id.KramaID, pk []byte) error {
-	// TODO implement me
-	panic("implement me")
+	m.publicKeys[key] = pk
+
+	return nil
 }
 
-func (m *MockSenatus) GetPublicKey(ctx context.Context, id id.KramaID) ([]byte, error) {
-	val, ok := m.publicKeys[id]
+func (m *MockSenatus) GetPublicKey(kramaID id.KramaID) ([]byte, error) {
+	val, ok := m.publicKeys[kramaID]
 	if !ok {
-		return nil, context.Canceled
+		return nil, types.ErrKramaIDNotFound
 	}
 
 	return val, nil
 }
 
-func (m *MockSenatus) setPublicKey(id id.KramaID, pk []byte) {
-	m.publicKeys[id] = pk
+type MockContract struct {
+	publicKeys map[id.KramaID][]byte
 }
 
-func (m *MockSenatus) AddEntries(msg ptypes.SyncReputationInfo) error {
-	// TODO implement me
-	panic("implement me")
-}
+func NewMockContract(t *testing.T, kramaIDs []id.KramaID, publicKeys [][]byte) *MockContract {
+	t.Helper()
 
-func (m *MockSenatus) GetInclusivity(id id.KramaID) (int64, error) {
-	// TODO implement me
-	panic("implement me")
-}
+	mockContract := new(MockContract)
+	mockContract.publicKeys = make(map[id.KramaID][]byte)
 
-func (m *MockSenatus) GetAllEntries() (chan *ptypes.SyncReputationInfo, error) {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (m *MockSenatus) SenatusHandler(msg *pubsub.Message) error {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (m *MockSenatus) HandleHelloMessages(msgs []*ptypes.HelloMsg) (int, error) {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (m *MockSenatus) Start(id id.KramaID, ntq int32, publicKey []byte, address []multiaddr.Multiaddr) error {
-	m.start[id] = true
-
-	return nil
-}
-
-func removePublicKeys(s *MockSenatus, ids []id.KramaID) {
-	for _, kramaID := range ids {
-		delete(s.publicKeys, kramaID)
+	for i := 0; i < len(kramaIDs); i++ {
+		mockContract.publicKeys[kramaIDs[i]] = publicKeys[i]
 	}
+
+	return mockContract
 }
 
-func setPublicKeys(s *MockSenatus, ids []id.KramaID, pk [][]byte) {
-	for i, kramaID := range ids {
-		s.setPublicKey(kramaID, pk[i])
+func retrievePublicKeys(t *testing.T, contract *MockContract) {
+	t.Helper()
+
+	RetrievePublicKeys = func(ids []id.KramaID, client *http.Client, logger hclog.Logger) (keys [][]byte, err error) {
+		publicKeys := make([][]byte, 0)
+		for _, kramaID := range ids {
+			if publicKey, ok := contract.publicKeys[kramaID]; ok {
+				publicKeys = append(publicKeys, publicKey)
+
+				continue
+			}
+
+			return nil, types.ErrPublicKeyNotFound
+		}
+
+		return publicKeys, nil
 	}
 }
 
@@ -784,20 +742,18 @@ func mockCache(t *testing.T) *lru.Cache {
 }
 
 type createStateManagerParams struct {
-	db              *MockDB
-	dbCallback      func(db *MockDB)
-	serverCallback  func(n *MockServer)
-	senatusCallBack func(sm *MockSenatus)
-	smCallBack      func(sm *StateManager)
+	db             *MockDB
+	dbCallback     func(db *MockDB)
+	serverCallback func(n *MockServer)
+	smCallBack     func(sm *StateManager)
 }
 
 func createTestStateManager(t *testing.T, params *createStateManagerParams) *StateManager {
 	t.Helper()
 
 	var (
-		mDB     = mockDB()
-		server  = mockServer()
-		senatus = mockSenatus(t)
+		mDB    = mockDB()
+		server = mockServer()
 	)
 
 	if params == nil {
@@ -816,16 +772,18 @@ func createTestStateManager(t *testing.T, params *createStateManagerParams) *Sta
 		params.serverCallback(server)
 	}
 
-	sm, err := NewStateManager(context.Background(), mDB, hclog.NewNullLogger(), mockCache(t), server, NilMetrics())
+	sm, err := NewStateManager(
+		context.Background(),
+		mDB,
+		hclog.NewNullLogger(),
+		mockCache(t),
+		NilMetrics(),
+		mockSenatus(t),
+	)
 	require.NoError(t, err)
 
 	if params.smCallBack != nil {
 		params.smCallBack(sm)
-	}
-
-	if params.senatusCallBack != nil {
-		sm.senatus = senatus
-		params.senatusCallBack(senatus) // senatus called after instantiating state manager inorder to override senatus
 	}
 
 	return sm

@@ -27,6 +27,12 @@ import (
 // ClientOption allows for functional setting of options on a Client.
 type ClientOption func(*Client)
 
+func WithLogLevel(level hclog.Level) ClientOption {
+	return func(client *Client) {
+		client.logger.SetLevel(level)
+	}
+}
+
 // WithClientStatsHandler provides an implementation of stats.Handler to be
 // used by the Client.
 func WithClientStatsHandler(h stats.Handler) ClientOption {
@@ -195,7 +201,7 @@ func (c *Client) MoiCall(
 				c.logger.Warn(" failed to find address in senatus : ", err)
 			} else {
 				c.logger.Info(" entry found in senatus, adding to peer store")
-				c.host.Peerstore().AddAddrs(p, mAddr, peerstore.ProviderAddrTTL)
+				c.host.Peerstore().AddAddrs(p, mAddr, peerstore.RecentlyConnectedAddrTTL)
 			}
 		} else {
 			c.logger.Warn("by-passing senatus")
@@ -778,8 +784,6 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 
 // receiveResponse reads a response to an RPC call
 func receiveResponse(logger hclog.Logger, s *streamWrap, call *Call) error {
-	logger.Debug("[receiveResponse]", "waiting response for", call.SvcID, "to", call.Dest)
-
 	var resp Response
 
 	if err := s.dec.Decode(&resp); err != nil {

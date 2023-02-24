@@ -3,9 +3,9 @@ package dhruva
 import (
 	"encoding/binary"
 
-	"github.com/sarvalabs/moichain/types"
+	"github.com/libp2p/go-libp2p/core/peer"
 
-	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/types"
 )
 
 type Prefix byte
@@ -48,12 +48,12 @@ func dbKey(address types.Address, prefix Prefix, key []byte) []byte {
 	return append(address.Bytes(), append([]byte{prefix.Byte()}, key...)...)
 }
 
-func NtqDBKey(kramaID id.KramaID) []byte {
-	return append([]byte{NTQ.Byte()}, []byte(kramaID)...)
+func NtqDBKey(peerID peer.ID) []byte {
+	return append([]byte{NTQ.Byte()}, []byte(peerID)...)
 }
 
-func NtqCacheKey(key id.KramaID) string {
-	return types.BytesToHex([]byte{NTQ.Byte()}) + string(key)
+func NtqCacheKey(peerID peer.ID) string {
+	return types.BytesToHex([]byte{NTQ.Byte()}) + string(peerID)
 }
 
 func ContextObjectKey(address types.Address, contextHash types.Hash) []byte {

@@ -863,6 +863,7 @@ func TestAddTesseract(t *testing.T) {
 	address := tests.RandomAddress(t)
 	addresses := getAddresses(t, 4)
 	ixns := createIxns(t, 2, getIxParamsMapWithAddresses(addresses[:2], addresses[2:]))
+	_, receipts := getIxAndReceipts(t, 1)
 
 	testcases := []struct {
 		name                        string
@@ -875,7 +876,7 @@ func TestAddTesseract(t *testing.T) {
 		setReceiptsHook             func() error
 		setTesseractHeightEntryHook func() error
 		setIxLookupHook             func() error
-		updateInclusivityHook       func() error
+		updateWalletCountHook       func() error
 		tsCount                     int
 		latticeExists               bool
 		expectedError               error
@@ -937,6 +938,11 @@ func TestAddTesseract(t *testing.T) {
 			name:    "should return error if unable to store interactions",
 			args:    testTSArgs{},
 			accType: types.ContractAccount,
+			tesseractsParams: map[int]*createTesseractParams{
+				0: {
+					ixns: ixns,
+				},
+			},
 			setInteractionsHook: func() error {
 				return errors.New("error writing interactions to db")
 			},
@@ -947,6 +953,12 @@ func TestAddTesseract(t *testing.T) {
 			name:    "should return error if unable to store receipts",
 			args:    testTSArgs{},
 			accType: types.ContractAccount,
+			tesseractsParams: map[int]*createTesseractParams{
+				0: {
+					ixns:     ixns,
+					receipts: receipts,
+				},
+			},
 			setReceiptsHook: func() error {
 				return errors.New("error writing receipts to db")
 			},
@@ -991,7 +1003,7 @@ func TestAddTesseract(t *testing.T) {
 					},
 				},
 			},
-			updateInclusivityHook: func() error {
+			updateWalletCountHook: func() error {
 				return types.ErrUpdatingInclusivity
 			},
 			tsCount:       1,
@@ -1028,7 +1040,7 @@ func TestAddTesseract(t *testing.T) {
 					db.setIxLookupHook = test.setIxLookupHook
 				},
 				senatusCallback: func(senatus *MockSenatus) {
-					senatus.UpdateInclusivityHook = test.updateInclusivityHook
+					senatus.UpdateWalletCountHook = test.updateWalletCountHook
 				},
 			}
 
