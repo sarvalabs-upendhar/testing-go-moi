@@ -1,6 +1,7 @@
 package dhruva
 
 import (
+	"context"
 	"math/big"
 	"reflect"
 	"strings"
@@ -8,7 +9,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
 
 	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/dhruva/db"
