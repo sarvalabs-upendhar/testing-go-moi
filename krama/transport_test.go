@@ -211,12 +211,12 @@ func Test_InitClusterCommunication_Disconnect(t *testing.T) {
 
 			require.Equal(t, testcase.expectedErr, err)
 			// Check whether three random ics nodes are connected
-			require.Equal(t, testcase.expectedConn, uint8(len(network.peers)))
+			require.Equal(t, testcase.expectedConn, uint8(len(network.getPeers())))
 			// Disconnect from the connected random ics nodes
 			cancel()
 			time.Sleep(2 * time.Second)
 			// Check whether all the connected random ics nodes are disconnected
-			require.Equal(t, testcase.expected, uint8(len(network.peers)))
+			require.Equal(t, testcase.expected, uint8(len(network.getPeers())))
 		})
 	}
 }

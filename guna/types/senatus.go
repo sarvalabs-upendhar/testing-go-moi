@@ -43,7 +43,7 @@ type NodeMetaInfo struct {
 	Addrs         []string
 	NTQ           float32
 	WalletCount   int32
-	PublickKey    []byte
+	PublicKey     []byte
 	PeerSignature []byte
 }
 
@@ -65,7 +65,7 @@ func (mi *NodeMetaInfo) UpdatePublicKey(publicKey []byte) {
 	mi.mtx.Lock()
 	defer mi.mtx.Unlock()
 
-	mi.PublickKey = publicKey
+	mi.PublicKey = publicKey
 }
 
 func (mi *NodeMetaInfo) GetNTQ() float32 {

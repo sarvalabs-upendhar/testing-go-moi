@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"github.com/gorilla/websocket"
@@ -40,6 +41,7 @@ type MockMessage struct {
 }
 
 type MockWSConn struct {
+	mtx     sync.Mutex
 	message *MockMessage
 }
 
@@ -59,6 +61,9 @@ func (mc *MockConnManager) HasConn() bool {
 }
 
 func (mc *MockConnManager) WriteMessage(messageType int, data []byte) error {
+	mc.wsConn.mtx.Lock()
+	defer mc.wsConn.mtx.Unlock()
+
 	if mc.wsConn != nil {
 		mc.wsConn.message = &MockMessage{
 			messageType,
@@ -72,6 +77,9 @@ func (mc *MockConnManager) WriteMessage(messageType int, data []byte) error {
 }
 
 func (mc *MockConnManager) readMessage() (messageType int, p []byte, err error) {
+	mc.wsConn.mtx.Lock()
+	defer mc.wsConn.mtx.Unlock()
+
 	if mc.wsConn.message != nil {
 		message := mc.wsConn.message
 		mc.wsConn.message = nil

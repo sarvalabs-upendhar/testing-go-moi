@@ -198,7 +198,7 @@ func TestReputationEngine_UpdatePeer(t *testing.T) {
 				Addrs:         utils.MultiAddrToString(tests.GetListenAddresses(t, 1)...),
 				NTQ:           2,
 				WalletCount:   1,
-				PublickKey:    tests.GetTestPublicKey(t),
+				PublicKey:     tests.GetTestPublicKey(t),
 				PeerSignature: []byte{0x05, 0x80},
 			},
 		},
@@ -213,7 +213,7 @@ func TestReputationEngine_UpdatePeer(t *testing.T) {
 						Addrs:         utils.MultiAddrToString(tests.GetListenAddresses(t, 1)...),
 						NTQ:           2,
 						WalletCount:   1,
-						PublickKey:    tests.GetTestPublicKey(t),
+						PublicKey:     tests.GetTestPublicKey(t),
 						PeerSignature: []byte{0x05, 0x80},
 					},
 				)
@@ -407,8 +407,8 @@ func TestReputationEngine_UpdatePublicKey(t *testing.T) {
 			kramaID:   tests.GetTestKramaID(t, 1),
 			publicKey: publicKeys[1],
 			expectedNodeInfo: &gtypes.NodeMetaInfo{
-				NTQ:        DefaultPeerNTQ,
-				PublickKey: publicKeys[1],
+				NTQ:       DefaultPeerNTQ,
+				PublicKey: publicKeys[1],
 			},
 		},
 		{
@@ -428,7 +428,7 @@ func TestReputationEngine_UpdatePublicKey(t *testing.T) {
 			expectedNodeInfo: &gtypes.NodeMetaInfo{
 				NTQ:         1,
 				WalletCount: -1,
-				PublickKey:  publicKeys[2],
+				PublicKey:   publicKeys[2],
 			},
 		},
 	}
@@ -849,6 +849,9 @@ func TestReputationEngine_DBWorker(t *testing.T) {
 
 	// Wait for a short time to let the worker handle messages
 	time.Sleep(6 * time.Second)
+
+	reputationEngine.dirtyLock.RLock()
+	defer reputationEngine.dirtyLock.RUnlock()
 
 	require.Equal(t, 0, len(reputationEngine.dirtyEntries))
 

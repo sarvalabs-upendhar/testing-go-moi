@@ -2,6 +2,7 @@ package krama
 
 import (
 	"context"
+	"sync"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/protocol"
@@ -13,6 +14,15 @@ import (
 type MockServer struct {
 	subscribers map[string]context.Context
 	peers       []id.KramaID
+	peersLock   sync.RWMutex
+}
+
+func NewMockServer() *MockServer {
+	return &MockServer{
+		subscribers: make(map[string]context.Context),
+		peers:       make([]id.KramaID, 0),
+		peersLock:   sync.RWMutex{},
+	}
 }
 
 func (m *MockServer) Unsubscribe(topic string) error {
@@ -50,6 +60,9 @@ func (m *MockServer) ConnectPeer(kramaID id.KramaID) error {
 }
 
 func (m *MockServer) DisconnectPeer(kramaID id.KramaID) error {
+	m.peersLock.Lock()
+	defer m.peersLock.Unlock()
+
 	indexOf := func(peerID id.KramaID) int {
 		for i, peer := range m.peers {
 			if peer == kramaID {
@@ -77,9 +90,9 @@ func (m *MockServer) GetKramaID() id.KramaID {
 	panic("implement me")
 }
 
-func NewMockServer() *MockServer {
-	return &MockServer{
-		subscribers: make(map[string]context.Context),
-		peers:       make([]id.KramaID, 0),
-	}
+func (m *MockServer) getPeers() []id.KramaID {
+	m.peersLock.RLock()
+	defer m.peersLock.RUnlock()
+
+	return m.peers
 }

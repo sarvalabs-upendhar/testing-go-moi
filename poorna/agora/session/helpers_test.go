@@ -86,6 +86,9 @@ func AreSessionInterestRecorded(
 	keys []atypes.CID,
 ) bool {
 	status, err := tests.RetryUntilTimeout(ctx, func() (interface{}, bool) {
+		im.mutex.Lock()
+		defer im.mutex.Unlock()
+
 		for _, hash := range keys {
 			data, ok := im.wants[hash]
 
@@ -115,6 +118,8 @@ func AreSessionInterestRemoved(
 	keys []atypes.CID,
 ) bool {
 	status, err := tests.RetryUntilTimeout(ctx, func() (interface{}, bool) {
+		im.mutex.Lock()
+		defer im.mutex.Unlock()
 		for _, hash := range keys {
 			data, ok := im.wants[hash]
 			if ok && data[sessionID] {

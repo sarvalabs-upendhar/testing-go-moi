@@ -39,7 +39,6 @@ func NewSubscriptionManager(logger hclog.Logger, eventMux *utils.TypeMux) *Subsc
 	subscriptionManager := &SubscriptionManager{
 		logger:            logger.Named("subscription"),
 		timeout:           DefaultTimeout,
-		lock:              sync.RWMutex{},
 		subscriptions:     make(map[string]subscription),
 		timeouts:          Timeouts{},
 		updateCh:          make(chan struct{}),
@@ -48,6 +47,17 @@ func NewSubscriptionManager(logger hclog.Logger, eventMux *utils.TypeMux) *Subsc
 	}
 
 	return subscriptionManager
+}
+
+func (f *SubscriptionManager) hasSubscribed(subscriptionID string) bool {
+	f.lock.RLock()
+	defer f.lock.RUnlock()
+
+	if _, ok := f.subscriptions[subscriptionID]; ok {
+		return true
+	}
+
+	return false
 }
 
 // subscribeEvents subscribes for events of the given types
@@ -109,6 +119,9 @@ func (f *SubscriptionManager) emitSignalToUpdateCh() {
 
 // removeSubscriptionByID removes the subscription with given ID, unsafe against race condition
 func (f *SubscriptionManager) removeSubscriptionByID(id string) bool {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
 	subscription, ok := f.subscriptions[id]
 	if !ok {
 		return false
@@ -158,9 +171,6 @@ func (f *SubscriptionManager) addSubscription(subscription subscription) string 
 
 // Uninstall removes the subscription with given ID from list
 func (f *SubscriptionManager) Uninstall(id string) bool {
-	f.lock.Lock()
-	defer f.lock.Unlock()
-
 	return f.removeSubscriptionByID(id)
 }
 
@@ -222,11 +232,9 @@ func (f *SubscriptionManager) flushWsSubscriptions(data interface{}) error {
 
 	// remove subscriptions with closed web socket connections from SubscriptionManager
 	if len(closedSubscriptionIDs) > 0 {
-		f.lock.Lock()
 		for _, id := range closedSubscriptionIDs {
 			f.removeSubscriptionByID(id)
 		}
-		f.lock.Unlock()
 
 		f.logger.Info(
 			fmt.Sprintf(

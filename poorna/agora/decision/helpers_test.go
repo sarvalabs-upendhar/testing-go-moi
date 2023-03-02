@@ -2,6 +2,7 @@ package decision
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/sarvalabs/moichain/poorna/agora/db"
@@ -60,6 +61,7 @@ func NewTest(t *testing.T,
 }
 
 type MockDB struct {
+	mtx  sync.Mutex
 	data map[string][]byte
 }
 
@@ -70,12 +72,18 @@ func NewMockDB() *MockDB {
 }
 
 func (db *MockDB) DoesStateExists(address types.Address, stateHash atypes.CID) bool {
+	db.mtx.Lock()
+	defer db.mtx.Unlock()
+
 	_, ok := db.data[string(stateHash.Bytes())]
 
 	return ok
 }
 
 func (db *MockDB) Get(key []byte) ([]byte, error) {
+	db.mtx.Lock()
+	defer db.mtx.Unlock()
+
 	data, ok := db.data[string(key)]
 	if !ok {
 		return nil, types.ErrKeyNotFound
@@ -85,6 +93,9 @@ func (db *MockDB) Get(key []byte) ([]byte, error) {
 }
 
 func (db *MockDB) Set(key, value []byte) {
+	db.mtx.Lock()
+	defer db.mtx.Unlock()
+
 	db.data[string(key)] = value
 }
 
@@ -97,6 +108,9 @@ func (db *MockDB) GetData(
 	address types.Address,
 	keys []atypes.CID,
 ) (map[atypes.CID][]byte, error) {
+	db.mtx.Lock()
+	defer db.mtx.Unlock()
+
 	resp := make(map[atypes.CID][]byte, len(keys))
 
 	for _, key := range keys {
@@ -112,6 +126,9 @@ type mockBatchWriter struct {
 }
 
 func (bw *mockBatchWriter) Set(key []byte, value []byte) error {
+	bw.db.mtx.Lock()
+	defer bw.db.mtx.Unlock()
+
 	bw.db.data[string(key)] = value
 
 	return nil
@@ -154,6 +171,7 @@ func (mc *MockLedger) UpdateAssociatedPeers(addr types.Address, stateHash atypes
 }
 
 type MockNetwork struct {
+	mtx sync.Mutex
 	msg map[id.KramaID]atypes.Message
 }
 
@@ -164,6 +182,9 @@ func NewMockNetwork() *MockNetwork {
 }
 
 func (mn *MockNetwork) SendAgoraMessage(id id.KramaID, msgType ptypes.MsgType, msg atypes.Message) error {
+	mn.mtx.Lock()
+	defer mn.mtx.Unlock()
+
 	mn.msg[id] = msg
 
 	return nil
@@ -184,6 +205,9 @@ func WaitForResponseMsg(
 	network *MockNetwork,
 ) (*atypes.AgoraResponseMsg, error) {
 	resp, err := tests.RetryUntilTimeout(ctx, func() (interface{}, bool) {
+		network.mtx.Lock()
+		defer network.mtx.Unlock()
+
 		msg, ok := network.msg[from]
 		if !ok {
 			return nil, true

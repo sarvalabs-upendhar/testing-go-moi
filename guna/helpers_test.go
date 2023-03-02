@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"math/big"
 	"net/http"
+	"sync"
 	"testing"
 
 	"github.com/sarvalabs/moichain/dhruva/db"
@@ -596,6 +597,7 @@ func getRoot(t *testing.T, m *MockMerkleTree) types.Hash {
 }
 
 type MockSenatus struct {
+	lock       sync.RWMutex
 	publicKeys map[id.KramaID][]byte
 }
 
@@ -603,17 +605,24 @@ func mockSenatus(t *testing.T) *MockSenatus {
 	t.Helper()
 
 	return &MockSenatus{
+		lock:       sync.RWMutex{},
 		publicKeys: make(map[id.KramaID][]byte),
 	}
 }
 
 func (m *MockSenatus) UpdatePublicKey(key id.KramaID, pk []byte) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	m.publicKeys[key] = pk
 
 	return nil
 }
 
 func (m *MockSenatus) GetPublicKey(kramaID id.KramaID) ([]byte, error) {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
 	val, ok := m.publicKeys[kramaID]
 	if !ok {
 		return nil, types.ErrKramaIDNotFound

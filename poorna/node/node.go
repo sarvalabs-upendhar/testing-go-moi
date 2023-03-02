@@ -263,9 +263,9 @@ func (n *Node) setupStateManager() (err error) {
 
 func (n *Node) setupReputationEngine() (err error) {
 	nodeMetaInfo := &gtypes.NodeMetaInfo{
-		Addrs:      utils.MultiAddrToString(n.network.GetAddrs()...),
-		NTQ:        1,
-		PublickKey: n.vault.GetConsensusPrivateKey().GetPublicKeyInBytes(),
+		Addrs:     utils.MultiAddrToString(n.network.GetAddrs()...),
+		NTQ:       1,
+		PublicKey: n.vault.GetConsensusPrivateKey().GetPublicKeyInBytes(),
 	}
 
 	n.senatus, err = senatus.NewReputationEngine(

@@ -197,6 +197,9 @@ func addAndEnqueueIxs(t *testing.T, ixPool *IxPool, ixs types.Interactions, send
 
 	time.Sleep(100 * time.Millisecond)
 
+	ixPool.accounts.get(senderAddr).enqueued.lock(false)
+	defer ixPool.accounts.get(senderAddr).enqueued.unlock()
+
 	// checks whether the ixs are enqueued
 	require.Equal(t, uint64(len(ixs)), ixPool.accounts.get(senderAddr).enqueued.length())
 	require.Equal(t, uint64(0), ixPool.accounts.get(senderAddr).promoted.length())
@@ -313,6 +316,16 @@ func getSuccessfulIxs(t *testing.T, ixPool *IxPool, noOfExpectedIxs int) types.I
 	}
 
 	return successfulIxs
+}
+
+// setDelayCounter updates the given account's delay counter
+func setDelayCounter(t *testing.T, acc *account, delayCount int32) {
+	t.Helper()
+
+	acc.waitLock.Lock()
+	defer acc.waitLock.Unlock()
+
+	acc.delayCounter = delayCount
 }
 
 // getIxNonce returns a map of ix sender address to nonce

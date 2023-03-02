@@ -160,7 +160,7 @@ func (r *ReputationEngine) AddNewPeerWithPeerID(peerID peer.ID, data *gtypes.Nod
 }
 
 func (r *ReputationEngine) hasRequiredNodeMetaInfo(info *gtypes.NodeMetaInfo) bool {
-	if info.NTQ != 0 && len(info.Addrs) != 0 && len(info.PublickKey) != 0 && len(info.PeerSignature) != 0 {
+	if info.NTQ != 0 && len(info.Addrs) != 0 && len(info.PublicKey) != 0 && len(info.PeerSignature) != 0 {
 		return true
 	}
 
@@ -199,8 +199,8 @@ func (r *ReputationEngine) UpdatePeer(kramaID id.KramaID, data *gtypes.NodeMetaI
 			data.PeerSignature = info.PeerSignature
 		}
 
-		if len(data.PublickKey) == 0 {
-			data.PublickKey = info.PublickKey
+		if len(data.PublicKey) == 0 {
+			data.PublicKey = info.PublicKey
 		}
 	}
 
@@ -308,8 +308,8 @@ func (r *ReputationEngine) UpdatePublicKey(kramaID id.KramaID, pk []byte) error 
 	}
 
 	info = &gtypes.NodeMetaInfo{
-		PublickKey: pk,
-		NTQ:        DefaultPeerNTQ,
+		PublicKey: pk,
+		NTQ:       DefaultPeerNTQ,
 	}
 
 	r.cache.Add(dhruva.NtqCacheKey(peerID), info)
@@ -384,11 +384,11 @@ func (r *ReputationEngine) GetPublicKey(kramaID id.KramaID) ([]byte, error) {
 		return nil, err
 	}
 
-	if info.PublickKey == nil {
+	if info.PublicKey == nil {
 		return nil, errors.New("public key not found")
 	}
 
-	return info.PublickKey, nil
+	return info.PublicKey, nil
 }
 
 func (r *ReputationEngine) getPublicKeyFromContract(ids ...id.KramaID) (keys [][]byte, err error) {
@@ -504,7 +504,7 @@ func (r *ReputationEngine) handleMessages(msgs []*gtypes.NodeMetaInfoMsg) {
 			Addrs:         msg.Address,
 			NTQ:           msg.NTQ,
 			WalletCount:   msg.WalletCount,
-			PublickKey:    publicKey,
+			PublicKey:     publicKey,
 			PeerSignature: msg.PeerSignature,
 		}); err != nil {
 			r.logger.Error("Failed to add node meta info", "error", err, "krama id", msg.KramaID)
@@ -552,8 +552,9 @@ func (r *ReputationEngine) dbWorker() {
 
 func (r *ReputationEngine) cleanUpDirtyStorage() {
 	r.dirtyLock.Lock()
+	defer r.dirtyLock.Unlock()
+
 	r.dirtyEntries = make(map[peer.ID]*gtypes.NodeMetaInfo)
-	r.dirtyLock.Unlock()
 }
 
 func (r *ReputationEngine) Start() error {

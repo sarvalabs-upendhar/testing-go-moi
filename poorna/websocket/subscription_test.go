@@ -96,19 +96,8 @@ func TestSubscriptionTimeout(t *testing.T) {
 	subscriptionID := subscriptionManager.NewTesseractSubscription(nil, tesseract.Address())
 
 	// Check if the subscription manager has the subscription
-	require.True(t, hasSubscribed(subscriptionID, subscriptionManager.subscriptions))
+	require.True(t, subscriptionManager.hasSubscribed(subscriptionID))
 	time.Sleep(2 * time.Second)
 	// Check if the subscription manager has removed the subscription or not
-	require.False(t, hasSubscribed(subscriptionID, subscriptionManager.subscriptions))
-}
-
-// helper function
-
-// check subscription exists
-func hasSubscribed(subscriptionID string, subscriptions map[string]subscription) bool {
-	if _, ok := subscriptions[subscriptionID]; ok {
-		return true
-	}
-
-	return false
+	require.False(t, subscriptionManager.hasSubscribed(subscriptionID))
 }

@@ -3,6 +3,7 @@ package ixpool
 import (
 	"math"
 	"math/big"
+	"sync"
 	"testing"
 	"time"
 
@@ -99,6 +100,7 @@ func TestIxPool_AddInteractions(t *testing.T) {
 			var (
 				enqueuedIxs types.Interactions
 				newIxsEvent utils.NewIxsEvent
+				wg          sync.WaitGroup
 				errs        []error
 			)
 
@@ -107,7 +109,10 @@ func TestIxPool_AddInteractions(t *testing.T) {
 				c.PriceLimit = big.NewInt(100)
 			})
 
+			wg.Add(1)
+
 			go func() {
+				defer wg.Done()
 				errs = ixPool.AddInteractions(testcase.ixs)
 			}()
 
@@ -115,7 +120,7 @@ func TestIxPool_AddInteractions(t *testing.T) {
 				enqueuedIxs, newIxsEvent = waitForNewIxs(t, ixPool)
 			}
 
-			time.Sleep(100 * time.Millisecond)
+			wg.Wait()
 
 			// checks whether the invalid interactions are filtered
 			require.Equal(t, testcase.expectedErrs, len(errs))
@@ -839,7 +844,7 @@ func TestIxPool_Executables_Wait_Mode(t *testing.T) {
 			updateDelayCounter: func(ixPool *IxPool, delayCounters delayCounters) {
 				for addr := range delayCounters {
 					acc := ixPool.accounts.get(addr)
-					acc.delayCounter = delayCounters[addr]
+					setDelayCounter(t, acc, delayCounters[addr])
 				}
 			},
 			expectedAddrList: []types.Address{
@@ -866,7 +871,7 @@ func TestIxPool_Executables_Wait_Mode(t *testing.T) {
 			updateDelayCounter: func(ixPool *IxPool, delayCounters delayCounters) {
 				for addr := range delayCounters {
 					acc := ixPool.accounts.get(addr)
-					acc.delayCounter = delayCounters[addr]
+					setDelayCounter(t, acc, delayCounters[addr])
 				}
 			},
 			expectedAddrList: []types.Address{
