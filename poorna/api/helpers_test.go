@@ -414,6 +414,31 @@ func (mn *MockNetwork) GetPeers() ([]id.KramaID, error) {
 	return mn.peers, nil
 }
 
+type MockDatabase struct {
+	database map[string][]byte
+}
+
+func NewMockDatabase(t *testing.T) *MockDatabase {
+	t.Helper()
+
+	db := new(MockDatabase)
+	db.database = make(map[string][]byte)
+
+	return db
+}
+
+func (d *MockDatabase) setDBEntry(key []byte) {
+	d.database[string(key)] = key
+}
+
+func (d *MockDatabase) ReadEntry(key []byte) ([]byte, error) {
+	if _, ok := d.database[string(key)]; ok {
+		return d.database[string(key)], nil
+	}
+
+	return nil, types.ErrKeyNotFound
+}
+
 func GenerateRandomIXPayload(t *testing.T, size uint32) []byte {
 	t.Helper()
 

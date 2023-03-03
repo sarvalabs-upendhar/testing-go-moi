@@ -14,6 +14,7 @@ func NewPublicNetAPI(network Network) *PublicNetAPI {
 	return &PublicNetAPI{network}
 }
 
+// Peers returns an array of Krama ID's that are connected to a node
 func (p *PublicNetAPI) Peers() ([]id.KramaID, error) {
 	content, err := p.network.GetPeers()
 	if err != nil {

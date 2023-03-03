@@ -33,6 +33,7 @@ func getTesseractArgs(address string, options TesseractNumberOrHash) *TesseractA
 	}
 }
 
+// getTesseractByHash returns the tesseract based on the hash given
 func (p *PublicCoreAPI) getTesseractByHash(hash string, withInteractions bool) (*types.Tesseract, error) {
 	hash, err := utils.ValidateHash(hash)
 	if err != nil {
@@ -42,6 +43,7 @@ func (p *PublicCoreAPI) getTesseractByHash(hash string, withInteractions bool) (
 	return p.chain.GetTesseract(types.HexToHash(hash), withInteractions)
 }
 
+// getTesseractByHeight returns the tesseract based on the height given
 func (p *PublicCoreAPI) getTesseractByHeight(
 	from string,
 	height int64,
@@ -64,6 +66,7 @@ func (p *PublicCoreAPI) getTesseractByHeight(
 	return tesseract, nil
 }
 
+// GetTesseract returns the tesseract based on the given tesseract arguments
 func (p *PublicCoreAPI) GetTesseract(args *TesseractArgs) (*types.Tesseract, error) {
 	if args.Options.TesseractHash != nil && args.Options.TesseractNumber != nil {
 		return nil, errors.New("can not use both tesseract number and tesseract hash")
@@ -210,6 +213,7 @@ func (p *PublicCoreAPI) GetStorageAt(args *GetStorageArgs) ([]byte, error) {
 	return p.sm.GetStorageEntry(logicID, types.FromHex(args.StorageKey), ts.StateHash())
 }
 
+// GetAssetInfoByAssetID returns the asset info associated with the given asset id
 func (p *PublicCoreAPI) GetAssetInfoByAssetID(id string) (*types.AssetDescriptor, error) {
 	_, err := utils.ValidateAssetID(id)
 	if err != nil {

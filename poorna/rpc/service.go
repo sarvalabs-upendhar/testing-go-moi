@@ -401,3 +401,24 @@ func (r *rpcService) Peers(
 
 	return nil
 }
+
+// DBGet is an RPC Method that returns the raw value of the key stored in the database
+func (r *rpcService) DBGet(
+	req *http.Request,
+	args *api.DebugArgs,
+	resp *api.Response,
+) error {
+	DebugAPI, ok := r.apis["debug"].(*api.PublicDebugAPI)
+	if !ok {
+		return types.ErrInvalidAPI
+	}
+
+	data, err := DebugAPI.DBGet(args)
+	if err != nil {
+		return err
+	}
+
+	resp.Data = data
+
+	return nil
+}

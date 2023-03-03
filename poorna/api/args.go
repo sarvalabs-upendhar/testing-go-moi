@@ -74,6 +74,10 @@ type IxPoolArgs struct {
 
 type NetArgs struct{}
 
+type DebugArgs struct {
+	Key string `json:"storage_key"`
+}
+
 type GetStorageArgs struct {
 	LogicID    string                `json:"logic_id"`
 	StorageKey string                `json:"storage-key"`

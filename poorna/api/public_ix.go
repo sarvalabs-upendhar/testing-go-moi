@@ -106,6 +106,7 @@ func constructInteraction(args *SendIXArgs, nonce uint64) (ix *types.Interaction
 	return types.NewInteraction(data, nil), nil
 }
 
+// ValidateArguments checks whether the SendIXArgs are valid or not
 func validateArguments(args *SendIXArgs, p *PublicIXAPI) error {
 	// Reject interaction if sender address is invalid
 	senderAddress, err := utils.ValidateAddress(args.Sender)
@@ -135,6 +136,7 @@ func validateArguments(args *SendIXArgs, p *PublicIXAPI) error {
 	return nil
 }
 
+// GetRawIXPayloadForAssetCreation returns the raw IXPayload for asset creation
 func GetRawIXPayloadForAssetCreation(jsonPayload []byte) ([]byte, error) {
 	payloadArgs := new(AssetCreationArgs)
 	if err := json.Unmarshal(jsonPayload, payloadArgs); err != nil {
@@ -169,6 +171,7 @@ func GetRawIXPayloadForAssetCreation(jsonPayload []byte) ([]byte, error) {
 	return polo.Polorize(assetPayload)
 }
 
+// GetRawIXPayloadForLogicDeploy returns the raw IXPayload for logic deployment
 func GetRawIXPayloadForLogicDeploy(jsonPayload []byte, nonce uint64, sender types.Address) ([]byte, error) {
 	payload := new(LogicDeployArgs)
 	if err := json.Unmarshal(jsonPayload, payload); err != nil {
@@ -205,6 +208,7 @@ func GetRawIXPayloadForLogicDeploy(jsonPayload []byte, nonce uint64, sender type
 	return polo.Polorize(deployPayload)
 }
 
+// GetRawIXPayloadForLogicExecute returns the raw IXPayload for logic execution
 func GetRawIXPayloadForLogicExecute(jsonPayload []byte) ([]byte, error) {
 	payload := new(LogicExecuteArgs)
 	if err := json.Unmarshal(jsonPayload, payload); err != nil {
