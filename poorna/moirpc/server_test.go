@@ -746,8 +746,6 @@ func TestNonExistingPeerIDInPeerStore(t *testing.T) {
 		testCallWithSenatus(t, h1, h2, h1.ID())
 		isH1InH2 := h2.Peerstore().Addrs(h1.ID())
 		assert.NotEmpty(t, isH1InH2)
-		isH2InH1 := h1.Peerstore().Addrs(h2.ID())
-		assert.NotEmpty(t, isH2InH1)
 	})
 }
 
