@@ -401,7 +401,7 @@ func testCallWithSenatus(t *testing.T, servNode, clientNode host.Host, dest peer
 		t.Fatal(err)
 	}
 
-	c := NewClientWithServer(testLogger, clientNode, "rpc", sm, s)
+	c := NewClient(testLogger, clientNode, "rpc", sm)
 
 	var arith Arith
 
@@ -413,7 +413,15 @@ func testCallWithSenatus(t *testing.T, servNode, clientNode host.Host, dest peer
 
 	var q Quotient
 
-	err = c.MoiCall(id.KramaID(getKramaID(dest)), "Arith", "Divide", &Args{20, 6}, &q, 300*time.Millisecond)
+	err = c.MoiCall(
+		id.KramaID(getKramaID(dest)),
+		"Arith",
+		"Divide",
+
+		&Args{20, 6},
+		&q,
+		0,
+	)
 
 	if err != nil {
 		t.Fatal(err)
