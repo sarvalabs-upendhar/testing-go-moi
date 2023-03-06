@@ -1042,7 +1042,7 @@ var RetrievePublicKeys = func(ids []id.KramaID, client *http.Client, logger hclo
 		return nil, err
 	}
 
-	req, err := http.NewRequest("POST", "http://45.140.185.105/api/fetchPublicKeys", bytes.NewBuffer(data))
+	req, err := http.NewRequest("POST", "http://91.107.196.74/api/fetchPublicKeys", bytes.NewBuffer(data))
 	if err != nil {
 		return nil, err
 	}

@@ -177,7 +177,7 @@ func StoreKey(id id.KramaID, key []byte) error {
 		return err
 	}
 
-	res, err := http.Post("http://159.203.191.91/api/store", "application/json", bytes.NewBuffer(data))
+	res, err := http.Post("http://91.107.196.74/api/store", "application/json", bytes.NewBuffer(data))
 	if err != nil {
 		return err
 	}
