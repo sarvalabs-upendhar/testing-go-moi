@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sarvalabs/moichain/mudra"
+
 	"github.com/sarvalabs/moichain/utils"
 
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -26,7 +28,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/moichain/dhruva"
 	"github.com/sarvalabs/moichain/dhruva/db"
-	"github.com/sarvalabs/moichain/mudra"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/types"
 )
@@ -468,6 +469,10 @@ func (r *ReputationEngine) senatusHandler(msg *pubsub.Message) error {
 }
 
 func (r *ReputationEngine) handleMessages(msgs []*gtypes.NodeMetaInfoMsg) {
+	if len(msgs) == 0 {
+		return
+	}
+
 	kramaIDs := make([]id.KramaID, len(msgs))
 
 	for index, msg := range msgs {
