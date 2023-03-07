@@ -15,81 +15,9 @@ jobs:
       ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-  build:
-   name: Build
-   needs: ci
-   uses: ./.github/workflows/build.yml
-   secrets:
-     ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
-
-  deploy:
-    name: go deploy
-    needs: build
-    runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        hosts: [host_1, host_2, host_3, host_4, host_5, host_6, host_7, host_8, host_9, host_10, host_11, host_12]
-        include:
-          - hosts: host_1
-            ip: DEV_HOST_1
-            access_key: DEV_ACCESS_KEY_1
-          - hosts: host_2
-            ip: DEV_HOST_2
-            access_key: DEV_ACCESS_KEY_2
-          - hosts: host_3
-            ip: DEV_HOST_3
-            access_key: DEV_ACCESS_KEY_3
-          - hosts: host_4
-            ip: DEV_HOST_4
-            access_key: DEV_ACCESS_KEY_4
-          - hosts: host_5
-            ip: DEV_HOST_5
-            access_key: DEV_ACCESS_KEY_5
-          - hosts: host_6
-            ip: DEV_HOST_6
-            access_key: DEV_ACCESS_KEY_6
-          - hosts: host_7
-            ip: DEV_HOST_7
-            access_key: DEV_ACCESS_KEY_7
-          - hosts: host_8
-            ip: DEV_HOST_8
-            access_key: DEV_ACCESS_KEY_8
-          - hosts: host_9
-            ip: DEV_HOST_9
-            access_key: DEV_ACCESS_KEY_9
-          - hosts: host_10
-            ip: DEV_HOST_10
-            access_key: DEV_ACCESS_KEY_10
-          - hosts: host_11
-            ip: DEV_HOST_11
-            access_key: DEV_ACCESS_KEY_11
-          - hosts: host_12
-            ip: DEV_HOST_12
-            access_key: DEV_ACCESS_KEY_12
-
-    steps:
-      - name: Download latest artifact
-        uses: actions/download-artifact@v3
-        with:
-          name: moichain.build
-
-      - name: Copy the latest artifact to remote hosts
-        uses: appleboy/scp-action@v0.1.3
-        with:
-          host: ${{ secrets[matrix.ip] }}
-          username: ${{ secrets.DEV_USER }}
-          key: ${{ secrets[matrix.access_key] }}
-          port: ${{ secrets.SSH_PORT }}
-          source: moichain.build.tar.gz
-          target: ~/
-          overwrite: true
-
-      - name: Update binary and restart moipods
-        uses: appleboy/ssh-action@v0.1.7
-        with:
-          host: ${{ secrets[matrix.ip] }}
-          username: ${{ secrets.DEV_USER }}
-          key: ${{ secrets[matrix.access_key] }}
-          port: ${{ secrets.SSH_PORT }}
-          script: bash deploy.sh ${{ secrets.DEV_OPERATOR_SLOTS  }} ${{ secrets.DEV_VALIDATOR_SLOTS }} ${{ secrets.DEV_ENABLE_TRACING }} ${{ secrets.DEV_JAEGER_ADDRESS }}
+  cd:
+    name: Continuous Deployment
+    needs: ci
+    uses: ./.github/workflows/docker.yml
+    secrets:
+      ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}

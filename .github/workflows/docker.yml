@@ -5,16 +5,15 @@ permissions:
   contents: read
   
 on:
-  pull_request:
-    branches:
-      - develop
-    types:
-      - closed
+  workflow_call:
+    secrets:
+      ACCESS_TOKEN:
+        required: true
+
   workflow_dispatch:
 
 jobs:
   publish:
-    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -33,5 +32,3 @@ jobs:
           tags: 'ghcr.io/sarvalabs/moichain:latest'
           build-args: |
             ACCESS_TOKEN=${{ secrets.ACCESS_TOKEN }}
-          secrets: |
-            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
