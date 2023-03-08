@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -8,19 +9,19 @@ import (
 	"github.com/sarvalabs/moichain/types"
 )
 
-// rpcService is a struct that represents a mapping of RPC service APIs
-type rpcService struct {
+// Service is a struct that represents a mapping of RPC service APIs
+type Service struct {
 	apis map[string]interface{}
 }
 
 // NewRPCService is a constructor function that generates and returns an rpcServer object
-func NewRPCService() *rpcService {
+func NewRPCService() *Service {
 	// Create the rpcServer struct and return it
-	return &rpcService{apis: make(map[string]interface{})}
+	return &Service{apis: make(map[string]interface{})}
 }
 
-// RegisterAPIs is a method of rpcService that registers a new API to it
-func (r *rpcService) RegisterAPIs(apis map[string]interface{}) error {
+// RegisterAPIs is a method of Service that registers a new API to it
+func (r *Service) RegisterAPIs(apis map[string]interface{}) error {
 	for name, api := range apis {
 		// Return an error if the API is already registered
 		if _, exists := r.apis[name]; exists {
@@ -36,9 +37,9 @@ func (r *rpcService) RegisterAPIs(apis map[string]interface{}) error {
 
 /* RPC methods that are associated with the core namespace. */
 
-// GetTesseract is a method of rpcService that retrieves the latest Tesseract.
-// Expects a GetTesseract argument and returns TesseractArg wrapped in a Response.
-func (r *rpcService) GetTesseract(req *http.Request, args *api.TesseractArgs, resp *api.Response) error {
+// Tesseract is a method of Service that retrieves the latest Tesseract.
+// Expects a GetTesseract argument and returns types.Tesseract wrapped in a Response.
+func (r *Service) Tesseract(req *http.Request, args *api.TesseractArgs, resp *api.Response) error {
 	// Retrieve the public core API and call the method to get the latest Tesseract
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
@@ -48,15 +49,19 @@ func (r *rpcService) GetTesseract(req *http.Request, args *api.TesseractArgs, re
 	// Retrieve the latest Tesseract for the address from the backend lattice manager
 	tesseract, err := coreAPI.GetTesseract(args)
 	if err != nil {
+		resp.Error = err
+	}
+
+	// Convert the Tesseract into bytes
+	resp.Data, err = json.Marshal(tesseract)
+	if err != nil {
 		return err
 	}
-	// Wrap the TesseractArg in a Response
-	resp.Data = api.NewTesseractArg(tesseract, args.WithInteractions)
 
 	return nil
 }
 
-func (r *rpcService) GetAssetInfoByAssetID(req *http.Request, args *api.AssetDescriptorArgs, resp *api.Response) error {
+func (r *Service) AssetInfoByAssetID(req *http.Request, args *api.AssetDescriptorArgs, resp *api.Response) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
 		return types.ErrInvalidAPI
@@ -67,14 +72,17 @@ func (r *rpcService) GetAssetInfoByAssetID(req *http.Request, args *api.AssetDes
 		return err
 	}
 
-	resp.Data = assetInfo
+	resp.Data, err = json.Marshal(assetInfo)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
-// GetBalance is a method of rpcService that retrieves the balance.
-// Expects a GetBalArgs argument and returns an uint64 wrapped in a Response.
-func (r *rpcService) GetBalance(req *http.Request, args *api.BalArgs, resp *api.Response) error {
+// Balance is a method of ƒService that retrieves the balance.
+// Expects BalArgs as argument and returns an uint64 wrapped in a Response.
+func (r *Service) Balance(req *http.Request, args *api.BalArgs, resp *api.Response) error {
 	// Retrieve the public core API and call the method to get the balance for the asset
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
@@ -87,30 +95,36 @@ func (r *rpcService) GetBalance(req *http.Request, args *api.BalArgs, resp *api.
 	}
 
 	// Wrap the balance in a Response after casting to a u64
-	resp.Data = bal.Uint64()
+	resp.Data, err = json.Marshal(bal.Uint64())
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
-// GetTDU is an RPC method that returns the TDU of the queried address
-func (r *rpcService) GetTDU(req *http.Request, args *api.TesseractArgs, resp *api.Response) error {
+// TDU is an RPC method that returns the TDU of the queried address
+func (r *Service) TDU(req *http.Request, args *api.TesseractArgs, resp *api.Response) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
 		return types.ErrInvalidAPI
 	}
 
-	data, err := coreAPI.GetTDU(args)
+	assetMap, err := coreAPI.GetTDU(args)
 	if err != nil {
 		return err
 	}
 
-	resp.Data = data
+	resp.Data, err = json.Marshal(assetMap)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
-// GetContextInfo is an RPC method that returns the context Info of the queried address
-func (r *rpcService) GetContextInfo(
+// ContextInfo is an RPC method that returns the context Info of the queried address
+func (r *Service) ContextInfo(
 	req *http.Request,
 	args *api.ContextInfoArgs,
 	resp *api.Response,
@@ -120,23 +134,27 @@ func (r *rpcService) GetContextInfo(
 		return types.ErrInvalidAPI
 	}
 
-	behaviour, observer, err := coreAPI.GetContextInfo(args)
+	behaviourSet, observerSet, err := coreAPI.GetContextInfo(args)
 	if err != nil {
 		return err
 	}
 
-	var response api.ContextResponse
+	response := api.ContextResponse{
+		BehaviourNodes: behaviourSet,
+		RandomNodes:    observerSet,
+		StorageNodes:   make([]string, 0),
+	}
 
-	response.BehaviourNodes = behaviour
-	response.RandomNodes = observer
-	response.StorageNodes = make([]string, 0)
-	resp.Data = response
+	resp.Data, err = json.Marshal(response)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
-// GetInteractionReceipt returns the receipt of the interaction
-func (r *rpcService) GetInteractionReceipt(req *http.Request, args *api.ReceiptArgs, resp *api.Response) error {
+// InteractionReceipt returns the receipt of the interaction
+func (r *Service) InteractionReceipt(req *http.Request, args *api.ReceiptArgs, resp *api.Response) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
 		return types.ErrInvalidAPI
@@ -147,12 +165,16 @@ func (r *rpcService) GetInteractionReceipt(req *http.Request, args *api.ReceiptA
 		return err
 	}
 
-	resp.Data = receipt
+	resp.Data, err = json.Marshal(receipt)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
-func (r *rpcService) GetInteractionCount(
+// InteractionCount returns the number of interactions sent for the given address
+func (r *Service) InteractionCount(
 	req *http.Request,
 	args *api.InteractionCountArgs,
 	resp *api.Response,
@@ -167,12 +189,16 @@ func (r *rpcService) GetInteractionCount(
 		return err
 	}
 
-	resp.Data = interactionCount
+	resp.Data, err = json.Marshal(interactionCount)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
-func (r *rpcService) GetPendingInteractionCount(
+// PendingInteractionCount returns the number of interactions sent for the given address.
+func (r *Service) PendingInteractionCount(
 	req *http.Request,
 	args *api.InteractionCountArgs,
 	resp *api.Response,
@@ -187,12 +213,16 @@ func (r *rpcService) GetPendingInteractionCount(
 		return err
 	}
 
-	resp.Data = interactionCount
+	resp.Data, err = json.Marshal(interactionCount)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
-func (r *rpcService) GetStorage(
+// Storage returns the data associated with the given storage slot
+func (r *Service) Storage(
 	req *http.Request,
 	args *api.GetStorageArgs,
 	resp *api.Response,
@@ -207,12 +237,16 @@ func (r *rpcService) GetStorage(
 		return err
 	}
 
-	resp.Data = types.BytesToHex(storageData)
+	resp.Data, err = json.Marshal(storageData)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
-func (r *rpcService) GetAccountState(
+// AccountState returns the account state of the given address
+func (r *Service) AccountState(
 	req *http.Request,
 	args *api.GetAccountArgs,
 	resp *api.Response,
@@ -227,14 +261,18 @@ func (r *rpcService) GetAccountState(
 		return err
 	}
 
-	resp.Data = account
+	resp.Data, err = json.Marshal(account)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
-func (r *rpcService) GetLogicManifest(
+// LogicManifest returns the manifest associated with the given logic id
+func (r *Service) LogicManifest(
 	req *http.Request,
-	args *api.GetLogicManifestArgs,
+	args *api.LogicManifestArgs,
 	resp *api.Response,
 ) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
@@ -247,28 +285,33 @@ func (r *rpcService) GetLogicManifest(
 		return err
 	}
 
-	resp.Data = types.BytesToHex(manifest)
+	resp.Data, err = json.Marshal(manifest)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
 /* RPC methods that are associated with the ix namespace. */
 
-// SendInteractions is a method of rpcService that sends Interactions
-func (r *rpcService) SendInteractions(req *http.Request, args *api.SendIXArgs, resp *api.Response) error {
+// SendInteractions is a method of Service that sends Interactions
+func (r *Service) SendInteractions(req *http.Request, args *api.SendIXArgs, resp *api.Response) error {
 	// Retrieve the public ix API
 	ixAPI, ok := r.apis["ix"].(*api.PublicIXAPI)
 	if !ok {
 		return types.ErrInvalidAPI
 	}
 
-	ixn, err := ixAPI.SendInteraction(args)
+	ix, err := ixAPI.SendInteraction(args)
 	if err != nil {
 		return err
 	}
 
-	ixHash := ixn.Hash()
-	resp.Data = ixHash.Hex()
+	resp.Data, err = json.Marshal(ix.Hash())
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -276,7 +319,7 @@ func (r *rpcService) SendInteractions(req *http.Request, args *api.SendIXArgs, r
 /* RPC methods that are associated with the ixpool namespace. */
 
 // Content is an RPC method that returns the interactions present in the IxPool.
-func (r *rpcService) Content(
+func (r *Service) Content(
 	req *http.Request,
 	args *api.IxPoolArgs,
 	resp *api.Response,
@@ -291,13 +334,16 @@ func (r *rpcService) Content(
 		return err
 	}
 
-	resp.Data = content
+	resp.Data, err = json.Marshal(content)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
 // ContentFrom is an RPC method that returns the interactions present in IxPool for the queried address.
-func (r *rpcService) ContentFrom(
+func (r *Service) ContentFrom(
 	req *http.Request,
 	args *api.IxPoolArgs,
 	resp *api.Response,
@@ -312,13 +358,16 @@ func (r *rpcService) ContentFrom(
 		return err
 	}
 
-	resp.Data = content
+	resp.Data, err = json.Marshal(content)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
 // Status is an RPC method that returns the number of pending and queued interactions in the IxPool.
-func (r *rpcService) Status(
+func (r *Service) Status(
 	req *http.Request,
 	args *api.IxPoolArgs,
 	resp *api.Response,
@@ -333,14 +382,17 @@ func (r *rpcService) Status(
 		return err
 	}
 
-	resp.Data = status
+	resp.Data, err = json.Marshal(status)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
 // Inspect is an RPC method that returns the interactions present in the IxPool in a clear and easy-to-read format,
 // as well as a list of all the accounts in IxPool and their respective wait times.
-func (r *rpcService) Inspect(
+func (r *Service) Inspect(
 	req *http.Request,
 	args *api.IxPoolArgs,
 	resp *api.Response,
@@ -355,13 +407,16 @@ func (r *rpcService) Inspect(
 		return err
 	}
 
-	resp.Data = data
+	resp.Data, err = json.Marshal(data)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
 // WaitTime is an RPC method that returns the wait time for an account in IxPool, based on the queried address.
-func (r *rpcService) WaitTime(
+func (r *Service) WaitTime(
 	req *http.Request,
 	args *api.IxPoolArgs,
 	resp *api.Response,
@@ -371,18 +426,21 @@ func (r *rpcService) WaitTime(
 		return types.ErrInvalidAPI
 	}
 
-	data, err := ixPoolAPI.WaitTime(args)
+	waitTime, err := ixPoolAPI.WaitTime(args)
 	if err != nil {
 		return err
 	}
 
-	resp.Data = data
+	resp.Data, err = json.Marshal(waitTime)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
 // Peers is an RPC Method that returns an array of Krama ID's connected to a client
-func (r *rpcService) Peers(
+func (r *Service) Peers(
 	req *http.Request,
 	args *api.NetArgs,
 	resp *api.Response,
@@ -392,18 +450,21 @@ func (r *rpcService) Peers(
 		return types.ErrInvalidAPI
 	}
 
-	data, err := NetAPI.Peers()
+	peers, err := NetAPI.Peers()
 	if err != nil {
 		return err
 	}
 
-	resp.Data = data
+	resp.Data, err = json.Marshal(peers)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
 // DBGet is an RPC Method that returns the raw value of the key stored in the database
-func (r *rpcService) DBGet(
+func (r *Service) DBGet(
 	req *http.Request,
 	args *api.DebugArgs,
 	resp *api.Response,
@@ -413,12 +474,15 @@ func (r *rpcService) DBGet(
 		return types.ErrInvalidAPI
 	}
 
-	data, err := DebugAPI.DBGet(args)
+	key, err := DebugAPI.DBGet(args)
 	if err != nil {
 		return err
 	}
 
-	resp.Data = data
+	resp.Data, err = json.Marshal(key)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

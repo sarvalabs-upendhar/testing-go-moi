@@ -1,4 +1,5 @@
 /test_*
+/build
 genesis.json
 peer-list.json
 file.key

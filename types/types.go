@@ -5,6 +5,7 @@ Most of the types in this file are yet to be finalized.All the below structs are
 */
 import (
 	"encoding/hex"
+	"fmt"
 
 	"github.com/sarvalabs/go-polo"
 	"golang.org/x/crypto/blake2b"
@@ -57,6 +58,21 @@ func (a Address) MarshalText() ([]byte, error) {
 	hex.Encode(result, a.Bytes())
 
 	return result, nil
+}
+
+// UnmarshalText sets the address to the value of text.
+func (a *Address) UnmarshalText(text []byte) error {
+	if text[0] == byte('0') && (text[1] == byte('X') || text[1] == byte('x')) {
+		text = text[2:]
+	}
+
+	if len(text) != AddressLength*2 {
+		return fmt.Errorf("invalid address length: %d", len(text)/2)
+	}
+
+	_, err := hex.Decode(a[:], text)
+
+	return err
 }
 
 // Hex return the Hex representation of the Address
@@ -118,6 +134,16 @@ func (h Hash) MarshalText() ([]byte, error) {
 	hex.Encode(result, h.Bytes())
 
 	return result, nil
+}
+
+func (h *Hash) UnmarshalText(text []byte) error {
+	if len(text) != HashLength*2 {
+		return fmt.Errorf("invalid address length: %d", len(text)/2)
+	}
+
+	_, err := hex.Decode(h[:], text)
+
+	return err
 }
 
 // FromHex returns the bytes represented by the hexadecimal string s

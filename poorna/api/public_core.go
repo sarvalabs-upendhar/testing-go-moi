@@ -184,7 +184,7 @@ func (p *PublicCoreAPI) GetAccountState(args *GetAccountArgs) (*types.Account, e
 }
 
 // GetLogicManifest returns the manifest associated with the given logic id
-func (p *PublicCoreAPI) GetLogicManifest(args *GetLogicManifestArgs) ([]byte, error) {
+func (p *PublicCoreAPI) GetLogicManifest(args *LogicManifestArgs) ([]byte, error) {
 	logicID, err := utils.ValidateLogicID(args.LogicID)
 	if err != nil {
 		return nil, err

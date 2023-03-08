@@ -674,13 +674,13 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 
 	testcases := []struct {
 		name                  string
-		args                  *GetLogicManifestArgs
+		args                  *LogicManifestArgs
 		expectedLogicManifest []byte
 		expectedError         error
 	}{
 		{
 			name: "returns error if logic id is invalid",
-			args: &GetLogicManifestArgs{
+			args: &LogicManifestArgs{
 				LogicID: types.LogicID(tests.RandomHash(t).String()).Hex(),
 				Options: TesseractNumberOrHash{
 					TesseractHash: &randomHash,
@@ -690,7 +690,7 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 		},
 		{
 			name: "returns error if failed to fetch logic manifest",
-			args: &GetLogicManifestArgs{
+			args: &LogicManifestArgs{
 				LogicID: logicIDWithoutState.Hex(),
 				Options: TesseractNumberOrHash{
 					TesseractHash: &randomHash,
@@ -700,7 +700,7 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 		},
 		{
 			name: "fetched logic manifest successfully",
-			args: &GetLogicManifestArgs{
+			args: &LogicManifestArgs{
 				LogicID: logicID.Hex(),
 				Options: TesseractNumberOrHash{
 					TesseractHash: &tsHash,

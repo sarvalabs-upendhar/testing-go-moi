@@ -470,10 +470,8 @@ func (c *ChainManager) verifyHeaders(ts *types.Tesseract) error {
 }
 
 func (c *ChainManager) storeReceipts(ts *types.Tesseract) error {
-	receipts := ts.GetReceipts()
-
-	if receipts != nil {
-		rawReceipts, err := receipts.Bytes()
+	if ts.GetReceipts() != nil {
+		rawReceipts, err := ts.GetReceipts().Bytes()
 		if err != nil {
 			return err
 		}
@@ -496,10 +494,8 @@ func (c *ChainManager) storeReceipts(ts *types.Tesseract) error {
 }
 
 func (c *ChainManager) storeInteractions(ts *types.Tesseract) error {
-	ixs := ts.Interactions()
-
-	if ixs != nil {
-		ixRawData, err := ixs.Bytes()
+	if ts.Interactions() != nil {
+		ixRawData, err := ts.Interactions().Bytes()
 		if err != nil {
 			return err
 		}
