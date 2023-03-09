@@ -674,6 +674,10 @@ func (k *Engine) handleReq(req Request) {
 			k.logger.Info("Error executing interactions ", "error", execResp.Err, "cluster-id", clusterID)
 			k.metrics.captureAgreementFailureCount(1)
 
+			for _, interaction := range clusterInfo.Ixs {
+				k.pool.Drop(interaction)
+			}
+
 			return
 		}
 
