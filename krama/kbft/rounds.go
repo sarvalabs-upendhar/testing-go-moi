@@ -107,3 +107,12 @@ type RoundState struct {
 
 	TriggeredTimeoutPrecommit bool `json:"triggered_timeout_precommit"`
 }
+
+// RoundStateEvent returns the H/R/S of the RoundState as an event.
+func (rs *RoundState) RoundStateEvent() eventDataRoundState {
+	return eventDataRoundState{
+		Height: rs.Height,
+		Round:  rs.Round,
+		Step:   rs.Step.String(),
+	}
+}

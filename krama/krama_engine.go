@@ -695,15 +695,15 @@ func (k *Engine) handleReq(req Request) {
 		bft := kbft.NewKBFTService(
 			ctx,
 			k.selfID,
-			k.logger.With("cluster-id", clusterID),
 			k.cfg,
 			slot.BftOutboundChan,
 			slot.BftInboundChan,
 			k.vault,
-			icsEvidence,
 			clusterInfo,
-			k.wal,
 			k.finalizedTesseractHandler,
+			kbft.WithLogger(k.logger.With("cluster-id", clusterID)),
+			kbft.WithWal(k.wal),
+			kbft.WithEvidence(icsEvidence),
 		)
 
 		if err = bft.Start(); err != nil {

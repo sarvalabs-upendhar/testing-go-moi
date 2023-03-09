@@ -102,12 +102,20 @@ func (vault *KramaVault) GetConsensusPrivateKey() PrivateKey {
 	return vault.consensusPriv
 }
 
+func (vault *KramaVault) SetConsensusPrivateKey(key PrivateKey) {
+	vault.consensusPriv = key
+}
+
 func (vault *KramaVault) GetNetworkPrivateKey() PrivateKey {
 	return vault.networkPriv
 }
 
 func (vault *KramaVault) KramaID() kramaid.KramaID {
 	return vault.kramaID
+}
+
+func (vault *KramaVault) SetKramaID(id kramaid.KramaID) {
+	vault.kramaID = id
 }
 
 func (vault *KramaVault) MOiID() (string, error) {

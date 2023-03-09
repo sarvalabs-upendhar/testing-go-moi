@@ -5,6 +5,8 @@ import (
 	"log"
 	"sync"
 
+	"github.com/hashicorp/go-hclog"
+
 	"github.com/sarvalabs/moichain/types"
 
 	ktypes "github.com/sarvalabs/moichain/krama/types"
@@ -22,6 +24,8 @@ type RoundVoteSet struct {
 
 // HeightVoteSet is a struct that represents a set of votes across multiple heights and votes
 type HeightVoteSet struct {
+	logger hclog.Logger
+
 	// Represents the slice of lattice IDs for the voteset
 	chainIDs []string
 
@@ -47,9 +51,15 @@ type HeightVoteSet struct {
 
 // NewHeightVoteSet is a constructor function that generates and returns a new HeightVoteSet.
 // Accepts a slice of chainIDs, heights and the set of validators.
-func NewHeightVoteSet(chainIDs []string, heights []uint64, valset *ktypes.ClusterInfo) *HeightVoteSet {
+func NewHeightVoteSet(
+	chainIDs []string,
+	heights []uint64,
+	valset *ktypes.ClusterInfo,
+	logger hclog.Logger,
+) *HeightVoteSet {
 	// Create a new HeightVoteSet with the lattice IDs
 	hvs := &HeightVoteSet{
+		logger:            logger,
 		chainIDs:          chainIDs,
 		mtx:               sync.Mutex{},
 		peerCatchupRounds: make(map[id.KramaID][]int32),
@@ -150,8 +160,8 @@ func (hvs *HeightVoteSet) addRound(r int32) {
 
 	// Create a new RoundVoteSet and set it for the round
 	hvs.roundVoteSets[r] = RoundVoteSet{
-		Prevotes:   NewVoteSet(hvs.heights, r, ktypes.PREVOTE, hvs.valset),
-		Precommits: NewVoteSet(hvs.heights, r, ktypes.PRECOMMIT, hvs.valset),
+		Prevotes:   NewVoteSet(hvs.heights, r, ktypes.PREVOTE, hvs.valset, hvs.logger),
+		Precommits: NewVoteSet(hvs.heights, r, ktypes.PRECOMMIT, hvs.valset, hvs.logger),
 	}
 }
 

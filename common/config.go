@@ -176,3 +176,17 @@ func ResolveAddr(raw string) (*net.TCPAddr, error) {
 
 	return addr, nil
 }
+
+// PrevoteWaitDuration returns the amount of time to wait for straggler votes after receiving any +2/3 prevotes
+func (cfg *ConsensusConfig) PrevoteWaitDuration(round int32) time.Duration {
+	return time.Duration(
+		cfg.TimeoutPrevote.Nanoseconds()+cfg.TimeoutPrevoteDelta.Nanoseconds()*int64(round),
+	) * time.Nanosecond
+}
+
+// PrecommitWaitDuration returns the amount of time to wait for straggler votes after receiving any +2/3 precommits
+func (cfg *ConsensusConfig) PrecommitWaitDuration(round int32) time.Duration {
+	return time.Duration(
+		cfg.TimeoutPrecommit.Nanoseconds()+cfg.TimeoutPrecommitDelta.Nanoseconds()*int64(round),
+	) * time.Nanosecond
+}

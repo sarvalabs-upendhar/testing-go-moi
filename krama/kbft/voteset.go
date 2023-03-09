@@ -3,9 +3,10 @@ package kbft
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"log"
 	"sync"
+
+	"github.com/hashicorp/go-hclog"
 
 	ktypes "github.com/sarvalabs/moichain/krama/types"
 	"github.com/sarvalabs/moichain/mudra"
@@ -16,6 +17,8 @@ import (
 
 // VoteSet is a struct that represents a set of consensus Votes
 type VoteSet struct {
+	logger hclog.Logger
+
 	// Represent the height for which the vote-set applies
 	heights []uint64
 
@@ -61,11 +64,13 @@ func NewVoteSet(
 	round int32,
 	voteType ktypes.ConsensusMsgType,
 	validatorSet *ktypes.ClusterInfo,
+	logger hclog.Logger,
 ) *VoteSet {
 	// Log the creation and the set of validators
-	log.Printf("creating new vote set with %v validators\n", validatorSet.Size())
+	logger.Info("creating new vote set with %v validators\n", validatorSet.Size())
 
 	return &VoteSet{
+		logger:           logger,
 		heights:          heights,
 		round:            round,
 		votetype:         voteType,
@@ -153,7 +158,7 @@ func (vs *VoteSet) TwoThirdMajority() (tesseractGroupID *types.TesseractGridID, 
 		return vs.maj23, true
 	}
 
-	fmt.Println("Returning no majority ")
+	vs.logger.Debug("Returning no majority")
 
 	// No majority
 	return nil, false
@@ -295,9 +300,8 @@ func (vs *VoteSet) addVerifiedVote(
 	// prevotesum := tesseractVotes.sum
 	tesseractVotes.addVerifiedVote(sumIndex, vote, votePower)
 	postVoteSum := tesseractVotes.sum
-	log.Println("###%%%%%% printing quorum", quorum, "gridID:", gridID.Hex(), "sum", postVoteSum)
 
-	log.Println("###%%%%%% printing quorum", quorum, "gridID:", gridID.Hex(), "sum", postVoteSum)
+	vs.logger.Debug("###%%%%%% printing quorum", quorum, "gridID:", gridID.Hex(), "sum", postVoteSum)
 
 	if vs.maj23 == nil {
 		// Check if the quorum threshold was just crossed. Only the first quorum reach is considered

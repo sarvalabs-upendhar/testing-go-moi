@@ -1,8 +1,9 @@
 package kbft
 
 import (
-	"log"
 	"time"
+
+	"github.com/hashicorp/go-hclog"
 )
 
 // timeoutInfo is a struct that represents some timeout information that are emitted by the Ticker struct
@@ -19,6 +20,8 @@ type timeoutInfo struct {
 
 // Ticker is a struct that represent timout ticker
 type Ticker struct {
+	logger hclog.Logger
+
 	// Represents the internal timer clock
 	timer *time.Timer
 
@@ -33,12 +36,13 @@ type Ticker struct {
 }
 
 // NewTicker is a constructor function that generates and returns a new Ticker
-func NewTicker() *Ticker {
+func NewTicker(logger hclog.Logger) *Ticker {
 	t := &Ticker{
-		timer: time.NewTimer(0),
-		tick:  make(chan timeoutInfo, 15),
-		tock:  make(chan timeoutInfo, 15),
-		quit:  make(chan struct{}),
+		logger: logger,
+		timer:  time.NewTimer(0),
+		tick:   make(chan timeoutInfo, 15),
+		tock:   make(chan timeoutInfo, 15),
+		quit:   make(chan struct{}),
 	}
 	t.Stop()
 
@@ -73,12 +77,12 @@ func (t *Ticker) Stop() {
 		// Drain the channel
 		case <-t.timer.C:
 		default:
-			log.Println("ticker cannot be stopped. not running")
+			t.logger.Debug("ticker cannot be stopped. not running")
 		}
 	}
 
 	// Log the ticker stop
-	log.Println("ticker stopped")
+	t.logger.Debug("ticker stopped")
 }
 
 // ScheduleTimeout is a method of Ticker that schedules a new timeout.
@@ -134,6 +138,6 @@ func (t *Ticker) timeoutRoutine() {
 // Close is a method of Ticker that closes all ticker routines.
 // Discards all scheduled timeouts as well.
 func (t *Ticker) Close() {
-	log.Println("closing timer")
+	t.logger.Debug("closing timer")
 	close(t.quit)
 }
