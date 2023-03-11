@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sarvalabs/moichain/common/tests"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 	"github.com/stretchr/testify/require"
 )
@@ -185,7 +186,7 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 
 	testcases := []struct {
 		name            string
-		args            *IxPoolArgs
+		args            *ptypes.IxPoolArgs
 		accounts        map[types.Address]*account
 		testFn          func(accounts map[types.Address]*account)
 		expectedIxQueue *expectedResult
@@ -193,14 +194,14 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 	}{
 		{
 			name: "Invalid address",
-			args: &IxPoolArgs{
+			args: &ptypes.IxPoolArgs{
 				From: "68510188a88ff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
 			},
 			expectedErr: types.ErrInvalidAddress,
 		},
 		{
 			name: "Ix pool with no interactions",
-			args: &IxPoolArgs{
+			args: &ptypes.IxPoolArgs{
 				From: addressList[0].Hex(),
 			},
 			accounts: map[types.Address]*account{
@@ -217,7 +218,7 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 		},
 		{
 			name: "Ix pool with one pending interaction",
-			args: &IxPoolArgs{
+			args: &ptypes.IxPoolArgs{
 				From: addressList[0].Hex(),
 			},
 			accounts: map[types.Address]*account{
@@ -245,7 +246,7 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 		},
 		{
 			name: "Ix pool with one queued interaction",
-			args: &IxPoolArgs{
+			args: &ptypes.IxPoolArgs{
 				From: addressList[0].Hex(),
 			},
 			accounts: map[types.Address]*account{
@@ -273,7 +274,7 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 		},
 		{
 			name: "Ix pool with multiple pending and queued interactions",
-			args: &IxPoolArgs{
+			args: &ptypes.IxPoolArgs{
 				From: addressList[1].Hex(),
 			},
 			accounts: map[types.Address]*account{
@@ -643,27 +644,27 @@ func TestPublicIXPoolAPI_WaitTime(t *testing.T) {
 
 	testcases := []struct {
 		name             string
-		args             *IxPoolArgs
+		args             *ptypes.IxPoolArgs
 		expectedWaitTime int64
 		expectedErr      error
 	}{
 		{
 			name: "Invalid address",
-			args: &IxPoolArgs{
+			args: &ptypes.IxPoolArgs{
 				From: "68510188a88ff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
 			},
 			expectedErr: types.ErrInvalidAddress,
 		},
 		{
 			name: "Account without state",
-			args: &IxPoolArgs{
+			args: &ptypes.IxPoolArgs{
 				From: tests.RandomAddress(t).Hex(),
 			},
 			expectedErr: types.ErrAccountNotFound,
 		},
 		{
 			name: "Account with state",
-			args: &IxPoolArgs{
+			args: &ptypes.IxPoolArgs{
 				From: address.Hex(),
 			},
 			expectedWaitTime: waitTime,

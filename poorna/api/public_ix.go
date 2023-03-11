@@ -8,11 +8,10 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
-	"github.com/sarvalabs/moichain/utils"
-
 	"github.com/sarvalabs/moichain/guna"
-
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/utils"
 )
 
 var ErrGenesisAccount = errors.New("genesis account interactions forbidden")
@@ -30,7 +29,7 @@ func NewPublicIXAPI(ixpool IxPool, sm StateManager) *PublicIXAPI {
 }
 
 // SendInteraction is a method of PublicIXAPI that stores the interaction
-func (p *PublicIXAPI) SendInteraction(args *SendIXArgs) (*types.Interaction, error) {
+func (p *PublicIXAPI) SendInteraction(args *ptypes.SendIXArgs) (*types.Interaction, error) {
 	err := validateArguments(args, p)
 	if err != nil {
 		return nil, err
@@ -56,7 +55,7 @@ func (p *PublicIXAPI) SendInteraction(args *SendIXArgs) (*types.Interaction, err
 }
 
 // helper function
-func constructInteraction(args *SendIXArgs, nonce uint64) (ix *types.Interaction, err error) {
+func constructInteraction(args *ptypes.SendIXArgs, nonce uint64) (ix *types.Interaction, err error) {
 	data := types.IxData{
 		Input: types.IxInput{
 			Type:           args.Type,
@@ -107,7 +106,7 @@ func constructInteraction(args *SendIXArgs, nonce uint64) (ix *types.Interaction
 }
 
 // ValidateArguments checks whether the SendIXArgs are valid or not
-func validateArguments(args *SendIXArgs, p *PublicIXAPI) error {
+func validateArguments(args *ptypes.SendIXArgs, p *PublicIXAPI) error {
 	// Reject interaction if sender address is invalid
 	senderAddress, err := utils.ValidateAddress(args.Sender)
 	if err != nil {
@@ -138,7 +137,7 @@ func validateArguments(args *SendIXArgs, p *PublicIXAPI) error {
 
 // GetRawIXPayloadForAssetCreation returns the raw IXPayload for asset creation
 func GetRawIXPayloadForAssetCreation(jsonPayload []byte) ([]byte, error) {
-	payloadArgs := new(AssetCreationArgs)
+	payloadArgs := new(ptypes.AssetCreationArgs)
 	if err := json.Unmarshal(jsonPayload, payloadArgs); err != nil {
 		return nil, err
 	}
@@ -173,7 +172,7 @@ func GetRawIXPayloadForAssetCreation(jsonPayload []byte) ([]byte, error) {
 
 // GetRawIXPayloadForLogicDeploy returns the raw IXPayload for logic deployment
 func GetRawIXPayloadForLogicDeploy(jsonPayload []byte, nonce uint64, sender types.Address) ([]byte, error) {
-	payload := new(LogicDeployArgs)
+	payload := new(ptypes.LogicDeployArgs)
 	if err := json.Unmarshal(jsonPayload, payload); err != nil {
 		return nil, err
 	}
@@ -210,7 +209,7 @@ func GetRawIXPayloadForLogicDeploy(jsonPayload []byte, nonce uint64, sender type
 
 // GetRawIXPayloadForLogicExecute returns the raw IXPayload for logic execution
 func GetRawIXPayloadForLogicExecute(jsonPayload []byte) ([]byte, error) {
-	payload := new(LogicExecuteArgs)
+	payload := new(ptypes.LogicExecuteArgs)
 	if err := json.Unmarshal(jsonPayload, payload); err != nil {
 		return nil, err
 	}

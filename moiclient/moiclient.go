@@ -15,22 +15,19 @@ import (
 
 	"github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/poorna/api"
-	poornarpc "github.com/sarvalabs/moichain/poorna/rpc"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 )
 
 type Client struct {
-	url    string
-	client *poornarpc.Service
+	url string
 }
 
 var ErrNoResult = errors.New("no result in JSON-RPC response")
 
 // NewClient creates a new rpc client.
 func NewClient(url string) (*Client, error) {
-	serv := poornarpc.NewRPCService()
-
-	return &Client{url, serv}, nil
+	return &Client{url}, nil
 }
 
 type requestOp struct {
@@ -170,8 +167,8 @@ func (c *Client) nextID() json.RawMessage {
 }
 
 // Tesseract returns tesseract based on the given arguments
-func (c *Client) Tesseract(args *api.TesseractArgs) (*types.Tesseract, error) {
-	var resp api.Response
+func (c *Client) Tesseract(args *ptypes.TesseractArgs) (*types.Tesseract, error) {
+	var resp ptypes.Response
 
 	err := c.Call(&resp, "moi.Tesseract", args)
 	if err != nil {
@@ -194,11 +191,11 @@ func (c *Client) Tesseract(args *api.TesseractArgs) (*types.Tesseract, error) {
 
 // GetAssetInfoByAssetID returns asset description for the given assetID
 func (c *Client) GetAssetInfoByAssetID(assetID string) (*types.AssetDescriptor, error) {
-	args := &api.AssetDescriptorArgs{
+	args := &ptypes.AssetDescriptorArgs{
 		AssetID: assetID,
 	}
 
-	var resp api.Response
+	var resp ptypes.Response
 
 	err := c.Call(&resp, "moi.AssetInfoByAssetID", args)
 	if err != nil {
@@ -220,8 +217,8 @@ func (c *Client) GetAssetInfoByAssetID(assetID string) (*types.AssetDescriptor, 
 }
 
 // GetBalance returns the balance of assetID for given api.BalArgs
-func (c *Client) GetBalance(args *api.BalArgs) (uint64, error) {
-	var resp api.Response
+func (c *Client) GetBalance(args *ptypes.BalArgs) (uint64, error) {
+	var resp ptypes.Response
 
 	err := c.Call(&resp, "moi.Balance", args)
 	if err != nil {
@@ -243,8 +240,8 @@ func (c *Client) GetBalance(args *api.BalArgs) (uint64, error) {
 }
 
 // TDU retrieves the TDU of the queried address
-func (c *Client) TDU(args *api.TesseractArgs) (types.AssetMap, error) {
-	var resp api.Response
+func (c *Client) TDU(args *ptypes.TesseractArgs) (types.AssetMap, error) {
+	var resp ptypes.Response
 
 	err := c.Call(&resp, "moi.TDU", args)
 	if err != nil {
@@ -266,8 +263,8 @@ func (c *Client) TDU(args *api.TesseractArgs) (types.AssetMap, error) {
 }
 
 // GetContextInfo returns the context Info of the queried address.
-func (c *Client) GetContextInfo(args *api.ContextInfoArgs) (*api.ContextResponse, error) {
-	var resp api.Response
+func (c *Client) GetContextInfo(args *ptypes.ContextInfoArgs) (*ptypes.ContextResponse, error) {
+	var resp ptypes.Response
 
 	err := c.Call(&resp, "moi.ContextInfo", args)
 	if err != nil {
@@ -278,7 +275,7 @@ func (c *Client) GetContextInfo(args *api.ContextInfoArgs) (*api.ContextResponse
 		return nil, resp.Error
 	}
 
-	var contextResp api.ContextResponse
+	var contextResp ptypes.ContextResponse
 
 	err = json.Unmarshal(resp.Data, &contextResp)
 	if err != nil {
@@ -289,8 +286,8 @@ func (c *Client) GetContextInfo(args *api.ContextInfoArgs) (*api.ContextResponse
 }
 
 // InteractionReceipt returns the receipt of the interaction for given hash
-func (c *Client) InteractionReceipt(args *api.ReceiptArgs) (*types.Receipt, error) {
-	var resp api.Response
+func (c *Client) InteractionReceipt(args *ptypes.ReceiptArgs) (*types.Receipt, error) {
+	var resp ptypes.Response
 
 	err := c.Call(&resp, "moi.InteractionReceipt", args)
 	if err != nil {
@@ -312,8 +309,8 @@ func (c *Client) InteractionReceipt(args *api.ReceiptArgs) (*types.Receipt, erro
 }
 
 // InteractionCount returns the number of interactions sent for the given address
-func (c *Client) InteractionCount(args *api.InteractionCountArgs) (uint64, error) {
-	var resp api.Response
+func (c *Client) InteractionCount(args *ptypes.InteractionCountArgs) (uint64, error) {
+	var resp ptypes.Response
 
 	err := c.Call(&resp, "moi.InteractionCount", args)
 	if err != nil {
@@ -335,8 +332,8 @@ func (c *Client) InteractionCount(args *api.InteractionCountArgs) (uint64, error
 }
 
 // PendingInteractionCount returns the number of interactions sent for the given address.
-func (c *Client) PendingInteractionCount(args *api.InteractionCountArgs) (*uint64, error) {
-	var resp api.Response
+func (c *Client) PendingInteractionCount(args *ptypes.InteractionCountArgs) (*uint64, error) {
+	var resp ptypes.Response
 
 	err := c.Call(&resp, "moi.PendingInteractionCount", args)
 	if err != nil {
@@ -358,8 +355,8 @@ func (c *Client) PendingInteractionCount(args *api.InteractionCountArgs) (*uint6
 }
 
 // Storage returns the data associated with the given storage slot
-func (c *Client) Storage(args *api.GetStorageArgs) (string, error) {
-	var resp api.Response
+func (c *Client) Storage(args *ptypes.GetStorageArgs) (string, error) {
+	var resp ptypes.Response
 
 	err := c.Call(&resp, "moi.Storage", args)
 	if err != nil {
@@ -381,8 +378,8 @@ func (c *Client) Storage(args *api.GetStorageArgs) (string, error) {
 }
 
 // AccountState returns the account state of the given address
-func (c *Client) AccountState(args *api.GetAccountArgs) (*types.Account, error) {
-	var resp api.Response
+func (c *Client) AccountState(args *ptypes.GetAccountArgs) (*types.Account, error) {
+	var resp ptypes.Response
 
 	err := c.Call(&resp, "moi.AccountState", args)
 	if err != nil {
@@ -404,8 +401,8 @@ func (c *Client) AccountState(args *api.GetAccountArgs) (*types.Account, error) 
 }
 
 // LogicManifest returns the manifest associated with the given logic id
-func (c *Client) LogicManifest(args *api.LogicManifestArgs) ([]byte, error) {
-	var resp api.Response
+func (c *Client) LogicManifest(args *ptypes.LogicManifestArgs) ([]byte, error) {
+	var resp ptypes.Response
 
 	err := c.Call(&resp, "moi.LogicManifest", args)
 	if err != nil {
@@ -427,8 +424,8 @@ func (c *Client) LogicManifest(args *api.LogicManifestArgs) ([]byte, error) {
 }
 
 // SendInteractions sends given Interactions
-func (c *Client) SendInteractions(args *api.SendIXArgs) (string, error) {
-	var resp api.Response
+func (c *Client) SendInteractions(args *ptypes.SendIXArgs) (string, error) {
+	var resp ptypes.Response
 
 	err := c.Call(&resp, "moi.SendInteractions", args)
 	if err != nil {
@@ -450,8 +447,8 @@ func (c *Client) SendInteractions(args *api.SendIXArgs) (string, error) {
 }
 
 // Content returns the interactions present in the given IxPool.
-func (c *Client) Content(args *api.IxPoolArgs) (*api.ContentResponse, error) {
-	var resp api.Response
+func (c *Client) Content(args *ptypes.IxPoolArgs) (*api.ContentResponse, error) {
+	var resp ptypes.Response
 
 	err := c.Call(&resp, "ixPool.Content", args)
 	if err != nil {
@@ -473,8 +470,8 @@ func (c *Client) Content(args *api.IxPoolArgs) (*api.ContentResponse, error) {
 }
 
 // ContentFrom returns the interactions present in IxPool for the queried address.
-func (c *Client) ContentFrom(args *api.IxPoolArgs) (*api.ContentFromResponse, error) {
-	var resp api.Response
+func (c *Client) ContentFrom(args *ptypes.IxPoolArgs) (*api.ContentFromResponse, error) {
+	var resp ptypes.Response
 
 	err := c.Call(&resp, "ixPool.ContentFrom", args)
 	if err != nil {
@@ -496,8 +493,8 @@ func (c *Client) ContentFrom(args *api.IxPoolArgs) (*api.ContentFromResponse, er
 }
 
 // Status returns the number of pending and queued interactions in the IxPool.
-func (c *Client) Status(args *api.IxPoolArgs) (*api.StatusResponse, error) {
-	var resp api.Response
+func (c *Client) Status(args *ptypes.IxPoolArgs) (*api.StatusResponse, error) {
+	var resp ptypes.Response
 
 	err := c.Call(&resp, "ixPool.Status", args)
 	if err != nil {
@@ -519,8 +516,8 @@ func (c *Client) Status(args *api.IxPoolArgs) (*api.StatusResponse, error) {
 }
 
 // Inspect returns the interactions present in the IxPool in a clear and easy-to-read format,
-func (c *Client) Inspect(args *api.IxPoolArgs) (*api.InspectResponse, error) {
-	var resp api.Response
+func (c *Client) Inspect(args *ptypes.IxPoolArgs) (*api.InspectResponse, error) {
+	var resp ptypes.Response
 
 	err := c.Call(&resp, "ixPool.Inspect", args)
 	if err != nil {
@@ -542,8 +539,8 @@ func (c *Client) Inspect(args *api.IxPoolArgs) (*api.InspectResponse, error) {
 }
 
 // WaitTime returns the wait time for an account in IxPool, based on the queried address.
-func (c *Client) WaitTime(args *api.IxPoolArgs) (int64, error) {
-	var resp api.Response
+func (c *Client) WaitTime(args *ptypes.IxPoolArgs) (int64, error) {
+	var resp ptypes.Response
 
 	err := c.Call(&resp, "ixPool.WaitTime", args)
 	if err != nil {
@@ -565,8 +562,8 @@ func (c *Client) WaitTime(args *api.IxPoolArgs) (int64, error) {
 }
 
 // Peers returns an array of Krama IDs connected to a client
-func (c *Client) Peers(args *api.NetArgs) (*[]kramaid.KramaID, error) {
-	var resp api.Response
+func (c *Client) Peers(args *ptypes.NetArgs) (*[]kramaid.KramaID, error) {
+	var resp ptypes.Response
 
 	err := c.Call(&resp, "net.Peers", args)
 	if err != nil {
@@ -588,8 +585,8 @@ func (c *Client) Peers(args *api.NetArgs) (*[]kramaid.KramaID, error) {
 }
 
 // DBGet returns raw value of the key stored in the database
-func (c *Client) DBGet(args *api.NetArgs) (*[]kramaid.KramaID, error) {
-	var resp api.Response
+func (c *Client) DBGet(args *ptypes.NetArgs) (*[]kramaid.KramaID, error) {
+	var resp ptypes.Response
 
 	err := c.Call(&resp, "debug.DBGet", args)
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/common/tests"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 )
 
@@ -125,14 +126,14 @@ func TestPublicCoreAPI_GetTesseractByHeight(t *testing.T) {
 		{
 			name:             "fetch latest Tesseract with interactions",
 			from:             ts[1].Address().String(),
-			height:           LatestTesseractHeight,
+			height:           ptypes.LatestTesseractHeight,
 			withInteractions: true,
 			expectedTS:       ts[1],
 		},
 		{
 			name:             "fetch latest Tesseract without interactions",
 			from:             ts[1].Address().String(),
-			height:           LatestTesseractHeight,
+			height:           ptypes.LatestTesseractHeight,
 			withInteractions: false,
 			expectedTS:       ts[1],
 		},
@@ -176,14 +177,14 @@ func TestPublicCoreAPI_GetTesseract(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		args          TesseractArgs
+		args          ptypes.TesseractArgs
 		expectedTS    *types.Tesseract
 		expectedError error
 	}{
 		{
 			name: "should return error if both options are provided",
-			args: TesseractArgs{
-				Options: TesseractNumberOrHash{
+			args: ptypes.TesseractArgs{
+				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &height,
 					TesseractHash:   &tsHash,
 				},
@@ -192,15 +193,15 @@ func TestPublicCoreAPI_GetTesseract(t *testing.T) {
 		},
 		{
 			name: "should return error if options are empty",
-			args: TesseractArgs{
-				Options: TesseractNumberOrHash{},
+			args: ptypes.TesseractArgs{
+				Options: ptypes.TesseractNumberOrHash{},
 			},
 			expectedError: types.ErrEmptyOptions,
 		},
 		{
 			name: "should return error if height is invalid",
-			args: TesseractArgs{
-				Options: TesseractNumberOrHash{
+			args: ptypes.TesseractArgs{
+				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &invalidHeight,
 				},
 			},
@@ -208,10 +209,10 @@ func TestPublicCoreAPI_GetTesseract(t *testing.T) {
 		},
 		{
 			name: "get Tesseract by height with interactions",
-			args: TesseractArgs{
+			args: ptypes.TesseractArgs{
 				From:             ts[0].Address().String(),
 				WithInteractions: true,
-				Options: TesseractNumberOrHash{
+				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &height,
 				},
 			},
@@ -219,10 +220,10 @@ func TestPublicCoreAPI_GetTesseract(t *testing.T) {
 		},
 		{
 			name: "get Tesseract by height Tesseract without interactions",
-			args: TesseractArgs{
+			args: ptypes.TesseractArgs{
 				From:             ts[0].Address().String(),
 				WithInteractions: false,
-				Options: TesseractNumberOrHash{
+				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &height,
 				},
 			},
@@ -230,10 +231,10 @@ func TestPublicCoreAPI_GetTesseract(t *testing.T) {
 		},
 		{
 			name: "get Tesseract by hash with interactions",
-			args: TesseractArgs{
+			args: ptypes.TesseractArgs{
 				From:             ts[1].Address().String(),
 				WithInteractions: true,
-				Options: TesseractNumberOrHash{
+				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash,
 				},
 			},
@@ -241,10 +242,10 @@ func TestPublicCoreAPI_GetTesseract(t *testing.T) {
 		},
 		{
 			name: "get Tesseract by hash Tesseract without interactions",
-			args: TesseractArgs{
+			args: ptypes.TesseractArgs{
 				From:             ts[1].Address().String(),
 				WithInteractions: false,
-				Options: TesseractNumberOrHash{
+				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash,
 				},
 			},
@@ -286,16 +287,16 @@ func TestPublicCoreAPI_GetBalance(t *testing.T) {
 
 	testcases := []struct {
 		name            string
-		args            BalArgs
+		args            ptypes.BalArgs
 		expectedBalance *big.Int
 		expectedError   error
 	}{
 		{
 			name: "should return error if failed to fetch balance",
-			args: BalArgs{
+			args: ptypes.BalArgs{
 				From:    address,
 				AssetID: string(assetID),
-				Options: TesseractNumberOrHash{
+				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
 				},
 			},
@@ -303,10 +304,10 @@ func TestPublicCoreAPI_GetBalance(t *testing.T) {
 		},
 		{
 			name: "should return error if asset Id is invalid",
-			args: BalArgs{
+			args: ptypes.BalArgs{
 				From:    address,
 				AssetID: "01801995a34ceda4db744a5b1363bega0f2019e7481699c861ad7d1263c95473a2d9",
-				Options: TesseractNumberOrHash{
+				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash,
 				},
 			},
@@ -314,10 +315,10 @@ func TestPublicCoreAPI_GetBalance(t *testing.T) {
 		},
 		{
 			name: "fetched balance successfully",
-			args: BalArgs{
+			args: ptypes.BalArgs{
 				From:    address,
 				AssetID: string(assetID),
-				Options: TesseractNumberOrHash{
+				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash,
 				},
 			},
@@ -358,15 +359,15 @@ func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
 
 	testcases := []struct {
 		name            string
-		args            ContextInfoArgs
+		args            ptypes.ContextInfoArgs
 		expectedContext *Context
 		expectedError   error
 	}{
 		{
 			name: "fetched context info successfully",
-			args: ContextInfoArgs{
+			args: ptypes.ContextInfoArgs{
 				From: address,
-				Options: TesseractNumberOrHash{
+				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash[0],
 				},
 			},
@@ -374,8 +375,8 @@ func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
 		},
 		{
 			name: "should return error if tesseract not found",
-			args: ContextInfoArgs{
-				Options: TesseractNumberOrHash{
+			args: ptypes.ContextInfoArgs{
+				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
 				},
 			},
@@ -383,9 +384,9 @@ func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
 		},
 		{
 			name: "should return error if context not found",
-			args: ContextInfoArgs{
+			args: ptypes.ContextInfoArgs{
 				From: ts[1].Address().String(),
-				Options: TesseractNumberOrHash{
+				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash[1],
 				},
 			},
@@ -427,15 +428,15 @@ func TestPublicCoreAPI_GetTDU(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		args          TesseractArgs
+		args          ptypes.TesseractArgs
 		expectedTDU   types.AssetMap
 		expectedError error
 	}{
 		{
 			name: "should return error if tesseract not found",
-			args: TesseractArgs{
+			args: ptypes.TesseractArgs{
 				From: address,
-				Options: TesseractNumberOrHash{
+				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
 				},
 			},
@@ -443,9 +444,9 @@ func TestPublicCoreAPI_GetTDU(t *testing.T) {
 		},
 		{
 			name: "should return error if TDU not found",
-			args: TesseractArgs{
+			args: ptypes.TesseractArgs{
 				From: address,
-				Options: TesseractNumberOrHash{
+				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash[1],
 				},
 			},
@@ -453,9 +454,9 @@ func TestPublicCoreAPI_GetTDU(t *testing.T) {
 		},
 		{
 			name: "fetched TDU successfully",
-			args: TesseractArgs{
+			args: ptypes.TesseractArgs{
 				From: address,
-				Options: TesseractNumberOrHash{
+				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash[0],
 				},
 			},
@@ -498,15 +499,15 @@ func TestPublicCoreAPI_GetInteractionCount(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		args          *InteractionCountArgs
+		args          *ptypes.InteractionCountArgs
 		expectedNonce uint64
 		expectedError error
 	}{
 		{
 			name: "interaction count fetched successfully",
-			args: &InteractionCountArgs{
+			args: &ptypes.InteractionCountArgs{
 				From: ts.Address().String(),
-				Options: TesseractNumberOrHash{
+				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash,
 				},
 			},
@@ -514,8 +515,8 @@ func TestPublicCoreAPI_GetInteractionCount(t *testing.T) {
 		},
 		{
 			name: "should return error if failed to fetch interaction count",
-			args: &InteractionCountArgs{
-				Options: TesseractNumberOrHash{
+			args: &ptypes.InteractionCountArgs{
+				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
 				},
 			},
@@ -549,13 +550,13 @@ func TestPublicIXPoolAPI_GetPendingInteractionCount(t *testing.T) {
 
 	testcases := []struct {
 		name            string
-		args            *InteractionCountArgs
+		args            *ptypes.InteractionCountArgs
 		expectedIxCount uint64
 		expectedErr     error
 	}{
 		{
 			name: "Valid address with state",
-			args: &InteractionCountArgs{
+			args: &ptypes.InteractionCountArgs{
 				From: address.String(),
 			},
 			expectedIxCount: 5,
@@ -563,7 +564,7 @@ func TestPublicIXPoolAPI_GetPendingInteractionCount(t *testing.T) {
 		},
 		{
 			name: "Valid address without state",
-			args: &InteractionCountArgs{
+			args: &ptypes.InteractionCountArgs{
 				From: tests.RandomAddress(t).String(),
 			},
 			expectedIxCount: 0,
@@ -571,7 +572,7 @@ func TestPublicIXPoolAPI_GetPendingInteractionCount(t *testing.T) {
 		},
 		{
 			name: "Invalid address",
-			args: &InteractionCountArgs{
+			args: &ptypes.InteractionCountArgs{
 				From: "68510188a88ff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
 			},
 			expectedIxCount: 0,
@@ -615,15 +616,15 @@ func TestPublicCoreAPI_GetAccountState(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		args          *GetAccountArgs
+		args          *ptypes.GetAccountArgs
 		expectedAcc   *types.Account
 		expectedError error
 	}{
 		{
 			name: "account state fetched successfully",
-			args: &GetAccountArgs{
+			args: &ptypes.GetAccountArgs{
 				Address: ts.Address().String(),
-				Options: TesseractNumberOrHash{
+				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash,
 				},
 			},
@@ -631,8 +632,8 @@ func TestPublicCoreAPI_GetAccountState(t *testing.T) {
 		},
 		{
 			name: "should return error if failed to fetch interaction count",
-			args: &GetAccountArgs{
-				Options: TesseractNumberOrHash{
+			args: &ptypes.GetAccountArgs{
+				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
 				},
 			},
@@ -674,15 +675,15 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 
 	testcases := []struct {
 		name                  string
-		args                  *LogicManifestArgs
+		args                  *ptypes.LogicManifestArgs
 		expectedLogicManifest []byte
 		expectedError         error
 	}{
 		{
 			name: "returns error if logic id is invalid",
-			args: &LogicManifestArgs{
+			args: &ptypes.LogicManifestArgs{
 				LogicID: types.LogicID(tests.RandomHash(t).String()).Hex(),
-				Options: TesseractNumberOrHash{
+				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
 				},
 			},
@@ -690,9 +691,9 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 		},
 		{
 			name: "returns error if failed to fetch logic manifest",
-			args: &LogicManifestArgs{
+			args: &ptypes.LogicManifestArgs{
 				LogicID: logicIDWithoutState.Hex(),
-				Options: TesseractNumberOrHash{
+				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
 				},
 			},
@@ -700,9 +701,9 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 		},
 		{
 			name: "fetched logic manifest successfully",
-			args: &LogicManifestArgs{
+			args: &ptypes.LogicManifestArgs{
 				LogicID: logicID.Hex(),
-				Options: TesseractNumberOrHash{
+				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash,
 				},
 			},
@@ -748,15 +749,15 @@ func TestPublicCoreAPI_GetStorageAt(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		args          *GetStorageArgs
+		args          *ptypes.GetStorageArgs
 		expectedValue []byte
 		expectedError error
 	}{
 		{
 			name: "returns error if logic id is invalid",
-			args: &GetStorageArgs{
+			args: &ptypes.GetStorageArgs{
 				LogicID: types.LogicID(tests.RandomHash(t).String()).Hex(),
-				Options: TesseractNumberOrHash{
+				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
 				},
 			},
@@ -764,9 +765,9 @@ func TestPublicCoreAPI_GetStorageAt(t *testing.T) {
 		},
 		{
 			name: "returns error if failed to fetch logic manifest",
-			args: &GetStorageArgs{
+			args: &ptypes.GetStorageArgs{
 				LogicID: logicIDWithoutState.Hex(),
-				Options: TesseractNumberOrHash{
+				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
 				},
 			},
@@ -774,10 +775,10 @@ func TestPublicCoreAPI_GetStorageAt(t *testing.T) {
 		},
 		{
 			name: "fetched logic manifest successfully",
-			args: &GetStorageArgs{
+			args: &ptypes.GetStorageArgs{
 				LogicID:    logicID.Hex(),
 				StorageKey: keys[0],
-				Options: TesseractNumberOrHash{
+				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash,
 				},
 			},
@@ -811,27 +812,27 @@ func TestPublicCoreAPI_GetInteractionReceipt(t *testing.T) {
 
 	testcases := []struct {
 		name            string
-		args            ReceiptArgs
+		args            ptypes.ReceiptArgs
 		expectedReceipt *types.Receipt
 		expectedError   error
 	}{
 		{
 			name: "Invalid hash",
-			args: ReceiptArgs{
+			args: ptypes.ReceiptArgs{
 				Hash: "68510188a88ff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
 			},
 			expectedError: types.ErrInvalidHash,
 		},
 		{
 			name: "Valid hash without state",
-			args: ReceiptArgs{
+			args: ptypes.ReceiptArgs{
 				Hash: tests.RandomHash(t).String(),
 			},
 			expectedError: types.ErrReceiptNotFound,
 		},
 		{
 			name: "Valid hash with state",
-			args: ReceiptArgs{
+			args: ptypes.ReceiptArgs{
 				Hash: receiptHash.String(),
 			},
 			expectedReceipt: receipt,
@@ -864,28 +865,28 @@ func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
 
 	testcases := []struct {
 		name                    string
-		args                    *AssetDescriptorArgs
+		args                    *ptypes.AssetDescriptorArgs
 		expectedAssetDescriptor *types.AssetDescriptor
 		isErrorExpected         bool
 	}{
 		{
 			name: "Valid asset id",
-			args: &AssetDescriptorArgs{
+			args: &ptypes.AssetDescriptorArgs{
 				AssetID: string(assetID),
 			},
 			expectedAssetDescriptor: assetInfo,
 		},
 		{
 			name: "Valid asset id without state",
-			args: &AssetDescriptorArgs{
-				"01801995a34ceda4db744a5b1363be9a0f2019e7481699c861ad7d1263c95473a2d9",
+			args: &ptypes.AssetDescriptorArgs{
+				AssetID: "01801995a34ceda4db744a5b1363be9a0f2019e7481699c861ad7d1263c95473a2d9",
 			},
 			isErrorExpected: true,
 		},
 		{
 			name: "Invalid asset id",
-			args: &AssetDescriptorArgs{
-				"01801995a34ceda4db744a5b1363bega0f2019e7481699c861ad7d1263c95473a2d9",
+			args: &ptypes.AssetDescriptorArgs{
+				AssetID: "01801995a34ceda4db744a5b1363bega0f2019e7481699c861ad7d1263c95473a2d9",
 			},
 			isErrorExpected: true,
 		},

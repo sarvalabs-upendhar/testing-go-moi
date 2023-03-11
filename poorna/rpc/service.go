@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/sarvalabs/moichain/poorna/api"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 )
 
@@ -39,7 +40,7 @@ func (r *Service) RegisterAPIs(apis map[string]interface{}) error {
 
 // Tesseract is a method of Service that retrieves the latest Tesseract.
 // Expects a GetTesseract argument and returns types.Tesseract wrapped in a Response.
-func (r *Service) Tesseract(req *http.Request, args *api.TesseractArgs, resp *api.Response) error {
+func (r *Service) Tesseract(req *http.Request, args *ptypes.TesseractArgs, resp *ptypes.Response) error {
 	// Retrieve the public core API and call the method to get the latest Tesseract
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
@@ -49,19 +50,23 @@ func (r *Service) Tesseract(req *http.Request, args *api.TesseractArgs, resp *ap
 	// Retrieve the latest Tesseract for the address from the backend lattice manager
 	tesseract, err := coreAPI.GetTesseract(args)
 	if err != nil {
-		resp.Error = err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	// Convert the Tesseract into bytes
 	resp.Data, err = json.Marshal(tesseract)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	return nil
 }
 
-func (r *Service) AssetInfoByAssetID(req *http.Request, args *api.AssetDescriptorArgs, resp *api.Response) error {
+func (r *Service) AssetInfoByAssetID(req *http.Request, args *ptypes.AssetDescriptorArgs, resp *ptypes.Response) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
 		return types.ErrInvalidAPI
@@ -69,12 +74,16 @@ func (r *Service) AssetInfoByAssetID(req *http.Request, args *api.AssetDescripto
 
 	assetInfo, err := coreAPI.GetAssetInfoByAssetID(args.AssetID)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	resp.Data, err = json.Marshal(assetInfo)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	return nil
@@ -82,7 +91,7 @@ func (r *Service) AssetInfoByAssetID(req *http.Request, args *api.AssetDescripto
 
 // Balance is a method of ƒService that retrieves the balance.
 // Expects BalArgs as argument and returns an uint64 wrapped in a Response.
-func (r *Service) Balance(req *http.Request, args *api.BalArgs, resp *api.Response) error {
+func (r *Service) Balance(req *http.Request, args *ptypes.BalArgs, resp *ptypes.Response) error {
 	// Retrieve the public core API and call the method to get the balance for the asset
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
@@ -91,20 +100,24 @@ func (r *Service) Balance(req *http.Request, args *api.BalArgs, resp *api.Respon
 
 	bal, err := coreAPI.GetBalance(args)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	// Wrap the balance in a Response after casting to a u64
 	resp.Data, err = json.Marshal(bal.Uint64())
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	return nil
 }
 
 // TDU is an RPC method that returns the TDU of the queried address
-func (r *Service) TDU(req *http.Request, args *api.TesseractArgs, resp *api.Response) error {
+func (r *Service) TDU(req *http.Request, args *ptypes.TesseractArgs, resp *ptypes.Response) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
 		return types.ErrInvalidAPI
@@ -112,12 +125,16 @@ func (r *Service) TDU(req *http.Request, args *api.TesseractArgs, resp *api.Resp
 
 	assetMap, err := coreAPI.GetTDU(args)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	resp.Data, err = json.Marshal(assetMap)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	return nil
@@ -126,8 +143,8 @@ func (r *Service) TDU(req *http.Request, args *api.TesseractArgs, resp *api.Resp
 // ContextInfo is an RPC method that returns the context Info of the queried address
 func (r *Service) ContextInfo(
 	req *http.Request,
-	args *api.ContextInfoArgs,
-	resp *api.Response,
+	args *ptypes.ContextInfoArgs,
+	resp *ptypes.Response,
 ) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
@@ -136,10 +153,12 @@ func (r *Service) ContextInfo(
 
 	behaviourSet, observerSet, err := coreAPI.GetContextInfo(args)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
-	response := api.ContextResponse{
+	response := ptypes.ContextResponse{
 		BehaviourNodes: behaviourSet,
 		RandomNodes:    observerSet,
 		StorageNodes:   make([]string, 0),
@@ -147,14 +166,16 @@ func (r *Service) ContextInfo(
 
 	resp.Data, err = json.Marshal(response)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	return nil
 }
 
 // InteractionReceipt returns the receipt of the interaction
-func (r *Service) InteractionReceipt(req *http.Request, args *api.ReceiptArgs, resp *api.Response) error {
+func (r *Service) InteractionReceipt(req *http.Request, args *ptypes.ReceiptArgs, resp *ptypes.Response) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
 		return types.ErrInvalidAPI
@@ -162,12 +183,16 @@ func (r *Service) InteractionReceipt(req *http.Request, args *api.ReceiptArgs, r
 
 	receipt, err := coreAPI.GetInteractionReceipt(args)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	resp.Data, err = json.Marshal(receipt)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	return nil
@@ -176,8 +201,8 @@ func (r *Service) InteractionReceipt(req *http.Request, args *api.ReceiptArgs, r
 // InteractionCount returns the number of interactions sent for the given address
 func (r *Service) InteractionCount(
 	req *http.Request,
-	args *api.InteractionCountArgs,
-	resp *api.Response,
+	args *ptypes.InteractionCountArgs,
+	resp *ptypes.Response,
 ) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
@@ -186,12 +211,16 @@ func (r *Service) InteractionCount(
 
 	interactionCount, err := coreAPI.GetInteractionCount(args)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	resp.Data, err = json.Marshal(interactionCount)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	return nil
@@ -200,8 +229,8 @@ func (r *Service) InteractionCount(
 // PendingInteractionCount returns the number of interactions sent for the given address.
 func (r *Service) PendingInteractionCount(
 	req *http.Request,
-	args *api.InteractionCountArgs,
-	resp *api.Response,
+	args *ptypes.InteractionCountArgs,
+	resp *ptypes.Response,
 ) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
@@ -210,12 +239,16 @@ func (r *Service) PendingInteractionCount(
 
 	interactionCount, err := coreAPI.GetPendingInteractionCount(args)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	resp.Data, err = json.Marshal(interactionCount)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	return nil
@@ -224,8 +257,8 @@ func (r *Service) PendingInteractionCount(
 // Storage returns the data associated with the given storage slot
 func (r *Service) Storage(
 	req *http.Request,
-	args *api.GetStorageArgs,
-	resp *api.Response,
+	args *ptypes.GetStorageArgs,
+	resp *ptypes.Response,
 ) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
@@ -234,12 +267,16 @@ func (r *Service) Storage(
 
 	storageData, err := coreAPI.GetStorageAt(args)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	resp.Data, err = json.Marshal(storageData)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	return nil
@@ -248,8 +285,8 @@ func (r *Service) Storage(
 // AccountState returns the account state of the given address
 func (r *Service) AccountState(
 	req *http.Request,
-	args *api.GetAccountArgs,
-	resp *api.Response,
+	args *ptypes.GetAccountArgs,
+	resp *ptypes.Response,
 ) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
@@ -258,12 +295,16 @@ func (r *Service) AccountState(
 
 	account, err := coreAPI.GetAccountState(args)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	resp.Data, err = json.Marshal(account)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	return nil
@@ -272,8 +313,8 @@ func (r *Service) AccountState(
 // LogicManifest returns the manifest associated with the given logic id
 func (r *Service) LogicManifest(
 	req *http.Request,
-	args *api.LogicManifestArgs,
-	resp *api.Response,
+	args *ptypes.LogicManifestArgs,
+	resp *ptypes.Response,
 ) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
@@ -282,12 +323,16 @@ func (r *Service) LogicManifest(
 
 	manifest, err := coreAPI.GetLogicManifest(args)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	resp.Data, err = json.Marshal(manifest)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	return nil
@@ -296,7 +341,7 @@ func (r *Service) LogicManifest(
 /* RPC methods that are associated with the ix namespace. */
 
 // SendInteractions is a method of Service that sends Interactions
-func (r *Service) SendInteractions(req *http.Request, args *api.SendIXArgs, resp *api.Response) error {
+func (r *Service) SendInteractions(req *http.Request, args *ptypes.SendIXArgs, resp *ptypes.Response) error {
 	// Retrieve the public ix API
 	ixAPI, ok := r.apis["ix"].(*api.PublicIXAPI)
 	if !ok {
@@ -305,12 +350,16 @@ func (r *Service) SendInteractions(req *http.Request, args *api.SendIXArgs, resp
 
 	ix, err := ixAPI.SendInteraction(args)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	resp.Data, err = json.Marshal(ix.Hash())
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	return nil
@@ -321,8 +370,8 @@ func (r *Service) SendInteractions(req *http.Request, args *api.SendIXArgs, resp
 // Content is an RPC method that returns the interactions present in the IxPool.
 func (r *Service) Content(
 	req *http.Request,
-	args *api.IxPoolArgs,
-	resp *api.Response,
+	args *ptypes.IxPoolArgs,
+	resp *ptypes.Response,
 ) error {
 	ixPoolAPI, ok := r.apis["ixpool"].(*api.PublicIXPoolAPI)
 	if !ok {
@@ -331,12 +380,16 @@ func (r *Service) Content(
 
 	content, err := ixPoolAPI.Content()
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	resp.Data, err = json.Marshal(content)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	return nil
@@ -345,8 +398,8 @@ func (r *Service) Content(
 // ContentFrom is an RPC method that returns the interactions present in IxPool for the queried address.
 func (r *Service) ContentFrom(
 	req *http.Request,
-	args *api.IxPoolArgs,
-	resp *api.Response,
+	args *ptypes.IxPoolArgs,
+	resp *ptypes.Response,
 ) error {
 	ixPoolAPI, ok := r.apis["ixpool"].(*api.PublicIXPoolAPI)
 	if !ok {
@@ -355,12 +408,16 @@ func (r *Service) ContentFrom(
 
 	content, err := ixPoolAPI.ContentFrom(args)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	resp.Data, err = json.Marshal(content)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	return nil
@@ -369,8 +426,8 @@ func (r *Service) ContentFrom(
 // Status is an RPC method that returns the number of pending and queued interactions in the IxPool.
 func (r *Service) Status(
 	req *http.Request,
-	args *api.IxPoolArgs,
-	resp *api.Response,
+	args *ptypes.IxPoolArgs,
+	resp *ptypes.Response,
 ) error {
 	ixPoolAPI, ok := r.apis["ixpool"].(*api.PublicIXPoolAPI)
 	if !ok {
@@ -379,12 +436,16 @@ func (r *Service) Status(
 
 	status, err := ixPoolAPI.Status()
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	resp.Data, err = json.Marshal(status)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	return nil
@@ -394,8 +455,8 @@ func (r *Service) Status(
 // as well as a list of all the accounts in IxPool and their respective wait times.
 func (r *Service) Inspect(
 	req *http.Request,
-	args *api.IxPoolArgs,
-	resp *api.Response,
+	args *ptypes.IxPoolArgs,
+	resp *ptypes.Response,
 ) error {
 	ixPoolAPI, ok := r.apis["ixpool"].(*api.PublicIXPoolAPI)
 	if !ok {
@@ -404,12 +465,16 @@ func (r *Service) Inspect(
 
 	data, err := ixPoolAPI.Inspect()
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	resp.Data, err = json.Marshal(data)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	return nil
@@ -418,8 +483,8 @@ func (r *Service) Inspect(
 // WaitTime is an RPC method that returns the wait time for an account in IxPool, based on the queried address.
 func (r *Service) WaitTime(
 	req *http.Request,
-	args *api.IxPoolArgs,
-	resp *api.Response,
+	args *ptypes.IxPoolArgs,
+	resp *ptypes.Response,
 ) error {
 	ixPoolAPI, ok := r.apis["ixpool"].(*api.PublicIXPoolAPI)
 	if !ok {
@@ -428,12 +493,16 @@ func (r *Service) WaitTime(
 
 	waitTime, err := ixPoolAPI.WaitTime(args)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	resp.Data, err = json.Marshal(waitTime)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	return nil
@@ -442,8 +511,8 @@ func (r *Service) WaitTime(
 // Peers is an RPC Method that returns an array of Krama ID's connected to a client
 func (r *Service) Peers(
 	req *http.Request,
-	args *api.NetArgs,
-	resp *api.Response,
+	args *ptypes.NetArgs,
+	resp *ptypes.Response,
 ) error {
 	NetAPI, ok := r.apis["net"].(*api.PublicNetAPI)
 	if !ok {
@@ -452,12 +521,16 @@ func (r *Service) Peers(
 
 	peers, err := NetAPI.Peers()
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	resp.Data, err = json.Marshal(peers)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	return nil
@@ -466,8 +539,8 @@ func (r *Service) Peers(
 // DBGet is an RPC Method that returns the raw value of the key stored in the database
 func (r *Service) DBGet(
 	req *http.Request,
-	args *api.DebugArgs,
-	resp *api.Response,
+	args *ptypes.DebugArgs,
+	resp *ptypes.Response,
 ) error {
 	DebugAPI, ok := r.apis["debug"].(*api.PublicDebugAPI)
 	if !ok {
@@ -476,12 +549,16 @@ func (r *Service) DBGet(
 
 	key, err := DebugAPI.DBGet(args)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	resp.Data, err = json.Marshal(key)
 	if err != nil {
-		return err
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
 	}
 
 	return nil

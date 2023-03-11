@@ -1,6 +1,7 @@
 package api
 
 import (
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 )
 
@@ -15,7 +16,7 @@ func NewPublicDebugAPI(db DB) *PublicDebugAPI {
 }
 
 // DBGet returns the raw value of the key that is stored in the database
-func (p *PublicDebugAPI) DBGet(args *DebugArgs) (string, error) {
+func (p *PublicDebugAPI) DBGet(args *ptypes.DebugArgs) (string, error) {
 	encodedData := types.FromHex(args.Key)
 
 	// Read the value of the encodedData from the database

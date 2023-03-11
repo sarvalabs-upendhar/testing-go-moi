@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/sarvalabs/moichain/common/tests"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 	"github.com/stretchr/testify/require"
 )
@@ -19,20 +20,20 @@ func TestPublicDebugAPI_DBGet(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		args          DebugArgs
+		args          ptypes.DebugArgs
 		expectedValue string
 		expectedError error
 	}{
 		{
 			name: "The key does not exist in the database",
-			args: DebugArgs{
+			args: ptypes.DebugArgs{
 				Key: tests.RandomHash(t).String(),
 			},
 			expectedError: types.ErrKeyNotFound,
 		},
 		{
 			name: "Returns the raw value of a key stored in the database",
-			args: DebugArgs{
+			args: ptypes.DebugArgs{
 				Key: key.String(),
 			},
 			expectedValue: key.String(),

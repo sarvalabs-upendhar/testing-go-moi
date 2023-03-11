@@ -6,9 +6,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/sarvalabs/moichain/utils"
-
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/utils"
 )
 
 // PublicCoreAPI is a struct that represents a wrapper for the core public core APIs
@@ -26,8 +26,8 @@ func NewPublicCoreAPI(ixpool IxPool, chain ChainManager, sm StateManager) *Publi
 	return &PublicCoreAPI{ixpool, chain, sm}
 }
 
-func getTesseractArgs(address string, options TesseractNumberOrHash) *TesseractArgs {
-	return &TesseractArgs{
+func getTesseractArgs(address string, options ptypes.TesseractNumberOrHash) *ptypes.TesseractArgs {
+	return &ptypes.TesseractArgs{
 		From:    address,
 		Options: options,
 	}
@@ -54,7 +54,7 @@ func (p *PublicCoreAPI) getTesseractByHeight(
 		return nil, types.ErrInvalidAddress
 	}
 
-	if height == LatestTesseractHeight {
+	if height == ptypes.LatestTesseractHeight {
 		return p.chain.GetLatestTesseract(address, withInteractions)
 	}
 
@@ -67,7 +67,7 @@ func (p *PublicCoreAPI) getTesseractByHeight(
 }
 
 // GetTesseract returns the tesseract based on the given tesseract arguments
-func (p *PublicCoreAPI) GetTesseract(args *TesseractArgs) (*types.Tesseract, error) {
+func (p *PublicCoreAPI) GetTesseract(args *ptypes.TesseractArgs) (*types.Tesseract, error) {
 	if args.Options.TesseractHash != nil && args.Options.TesseractNumber != nil {
 		return nil, errors.New("can not use both tesseract number and tesseract hash")
 	}
@@ -89,7 +89,7 @@ func (p *PublicCoreAPI) GetTesseract(args *TesseractArgs) (*types.Tesseract, err
 }
 
 // GetContextInfo will fetch the context associated with the given address
-func (p *PublicCoreAPI) GetContextInfo(args *ContextInfoArgs) ([]string, []string, error) {
+func (p *PublicCoreAPI) GetContextInfo(args *ptypes.ContextInfoArgs) ([]string, []string, error) {
 	ts, err := p.GetTesseract(getTesseractArgs(args.From, args.Options))
 	if err != nil {
 		return nil, nil, err
@@ -106,7 +106,7 @@ func (p *PublicCoreAPI) GetContextInfo(args *ContextInfoArgs) ([]string, []strin
 // GetBalance is a method of PublicCoreAPI for retrieving the balance of an address.
 // Accepts the address and asset for which to retrieve the balance.
 // Returns the balance as a big Integer and any error that occurs.
-func (p *PublicCoreAPI) GetBalance(args *BalArgs) (*big.Int, error) {
+func (p *PublicCoreAPI) GetBalance(args *ptypes.BalArgs) (*big.Int, error) {
 	assetID, err := utils.ValidateAssetID(args.AssetID)
 	if err != nil {
 		return nil, types.ErrInvalidAssetID
@@ -121,7 +121,7 @@ func (p *PublicCoreAPI) GetBalance(args *BalArgs) (*big.Int, error) {
 }
 
 // GetTDU will return the total digital utility associated with address
-func (p *PublicCoreAPI) GetTDU(args *TesseractArgs) (types.AssetMap, error) {
+func (p *PublicCoreAPI) GetTDU(args *ptypes.TesseractArgs) (types.AssetMap, error) {
 	ts, err := p.GetTesseract(getTesseractArgs(args.From, args.Options))
 	if err != nil {
 		return nil, err
@@ -138,7 +138,7 @@ func (p *PublicCoreAPI) GetTDU(args *TesseractArgs) (types.AssetMap, error) {
 }
 
 // GetInteractionReceipt returns the receipt for the given interaction hash
-func (p *PublicCoreAPI) GetInteractionReceipt(args *ReceiptArgs) (*types.Receipt, error) {
+func (p *PublicCoreAPI) GetInteractionReceipt(args *ptypes.ReceiptArgs) (*types.Receipt, error) {
 	hash, err := utils.ValidateHash(args.Hash)
 	if err != nil {
 		return nil, err
@@ -148,7 +148,7 @@ func (p *PublicCoreAPI) GetInteractionReceipt(args *ReceiptArgs) (*types.Receipt
 }
 
 // GetInteractionCount returns the number of interactions sent for the given address
-func (p *PublicCoreAPI) GetInteractionCount(args *InteractionCountArgs) (uint64, error) {
+func (p *PublicCoreAPI) GetInteractionCount(args *ptypes.InteractionCountArgs) (uint64, error) {
 	ts, err := p.GetTesseract(getTesseractArgs(args.From, args.Options))
 	if err != nil {
 		return 0, err
@@ -159,7 +159,7 @@ func (p *PublicCoreAPI) GetInteractionCount(args *InteractionCountArgs) (uint64,
 
 // GetPendingInteractionCount returns the number of interactions sent for the given address.
 // Including the pending interactions in IxPool.
-func (p *PublicCoreAPI) GetPendingInteractionCount(args *InteractionCountArgs) (uint64, error) {
+func (p *PublicCoreAPI) GetPendingInteractionCount(args *ptypes.InteractionCountArgs) (uint64, error) {
 	addr, err := utils.ValidateAddress(args.From)
 	if err != nil {
 		return 0, err
@@ -174,7 +174,7 @@ func (p *PublicCoreAPI) GetPendingInteractionCount(args *InteractionCountArgs) (
 }
 
 // GetAccountState returns the account state of the given address
-func (p *PublicCoreAPI) GetAccountState(args *GetAccountArgs) (*types.Account, error) {
+func (p *PublicCoreAPI) GetAccountState(args *ptypes.GetAccountArgs) (*types.Account, error) {
 	ts, err := p.GetTesseract(getTesseractArgs(args.Address, args.Options))
 	if err != nil {
 		return nil, err
@@ -184,7 +184,7 @@ func (p *PublicCoreAPI) GetAccountState(args *GetAccountArgs) (*types.Account, e
 }
 
 // GetLogicManifest returns the manifest associated with the given logic id
-func (p *PublicCoreAPI) GetLogicManifest(args *LogicManifestArgs) ([]byte, error) {
+func (p *PublicCoreAPI) GetLogicManifest(args *ptypes.LogicManifestArgs) ([]byte, error) {
 	logicID, err := utils.ValidateLogicID(args.LogicID)
 	if err != nil {
 		return nil, err
@@ -199,7 +199,7 @@ func (p *PublicCoreAPI) GetLogicManifest(args *LogicManifestArgs) ([]byte, error
 }
 
 // GetStorageAt returns the data associated with the given storage slot
-func (p *PublicCoreAPI) GetStorageAt(args *GetStorageArgs) ([]byte, error) {
+func (p *PublicCoreAPI) GetStorageAt(args *ptypes.GetStorageArgs) ([]byte, error) {
 	logicID, err := utils.ValidateLogicID(args.LogicID)
 	if err != nil {
 		return nil, err

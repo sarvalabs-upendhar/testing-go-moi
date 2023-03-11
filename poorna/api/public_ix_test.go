@@ -8,14 +8,12 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
-
-	"github.com/sarvalabs/moichain/guna"
-
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/common/tests"
-
+	"github.com/sarvalabs/moichain/guna"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 )
 
@@ -40,7 +38,7 @@ func TestIx_SendInteraction(t *testing.T) {
 
 	ixAPI := NewPublicIXAPI(ixpool, stateManager)
 
-	assetPayload, err := json.Marshal(AssetCreationArgs{
+	assetPayload, err := json.Marshal(ptypes.AssetCreationArgs{
 		Type:           types.AssetKindValue,
 		Symbol:         "GR",
 		Supply:         hex.EncodeToString(big.NewInt(100).Bytes()),
@@ -53,7 +51,7 @@ func TestIx_SendInteraction(t *testing.T) {
 		log.Panic(err)
 	}
 
-	expectedIxnArgs := SendIXArgs{
+	expectedIxnArgs := ptypes.SendIXArgs{
 		Type:      types.IxAssetCreate,
 		Sender:    address.String(),
 		FuelPrice: hex.EncodeToString(big.NewInt(100).Bytes()),
@@ -67,13 +65,13 @@ func TestIx_SendInteraction(t *testing.T) {
 
 	testcases := []struct {
 		name        string
-		args        SendIXArgs
+		args        ptypes.SendIXArgs
 		expected    *types.Interaction
 		expectedErr error
 	}{
 		{
 			name: "Invalid account",
-			args: SendIXArgs{
+			args: ptypes.SendIXArgs{
 				Type:      1,
 				Sender:    "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
 				FuelPrice: hex.EncodeToString(big.NewInt(100).Bytes()),
@@ -83,7 +81,7 @@ func TestIx_SendInteraction(t *testing.T) {
 		},
 		{
 			name: "Genesis account",
-			args: SendIXArgs{
+			args: ptypes.SendIXArgs{
 				Type:      1,
 				Sender:    genesisAddress.String(),
 				FuelPrice: hex.EncodeToString(big.NewInt(100).Bytes()),
@@ -118,19 +116,19 @@ func TestGetRawIXPayloadForLogicDeploy(t *testing.T) {
 
 	tableTests := []struct {
 		name               string
-		deployArgsCallback func(args *LogicDeployArgs)
+		deployArgsCallback func(args *ptypes.LogicDeployArgs)
 		error              error
 	}{
 		{
 			name: "should fail for empty manifest",
-			deployArgsCallback: func(args *LogicDeployArgs) {
+			deployArgsCallback: func(args *ptypes.LogicDeployArgs) {
 				args.Manifest = ""
 			},
 			error: types.ErrEmptyManifest,
 		},
 		{
 			name: "should fail for invalid logicType",
-			deployArgsCallback: func(args *LogicDeployArgs) {
+			deployArgsCallback: func(args *ptypes.LogicDeployArgs) {
 				args.Type = 12 // type > 7 is not valid
 			},
 			error: types.ErrInvalidLogicID,
@@ -160,12 +158,12 @@ func TestGetRawIXPayloadForLogicDeploy(t *testing.T) {
 func TestGetRawIXPayloadForAssetCreation(t *testing.T) {
 	tableTests := []struct {
 		name                  string
-		assetCreationCallback func(args *AssetCreationArgs)
+		assetCreationCallback func(args *ptypes.AssetCreationArgs)
 		error                 error
 	}{
 		{
 			name: "should fail for invalid supply",
-			assetCreationCallback: func(args *AssetCreationArgs) {
+			assetCreationCallback: func(args *ptypes.AssetCreationArgs) {
 				args.Supply = "h123"
 			},
 			error: errors.New("failed to decode supply"),

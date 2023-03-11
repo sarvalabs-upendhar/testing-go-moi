@@ -7,7 +7,6 @@ import (
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/sarvalabs/moichain/poorna/api"
 	"github.com/sarvalabs/moichain/poorna/moirpc"
 	"github.com/sarvalabs/moichain/types"
 )
@@ -25,7 +24,7 @@ func NewSyncRPCService(syncer *Syncer) *SYNCRPCService {
 func (syncRPC *SYNCRPCService) StatusUpdate(
 	ctx context.Context,
 	req *ptypes.AccountsStatusMsg,
-	resp *api.Response,
+	resp *ptypes.Response,
 ) error {
 	peerID, ok := ctx.Value(moirpc.ContextKeyRequestSender).(peer.ID)
 	if !ok {

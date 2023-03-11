@@ -1,4 +1,4 @@
-package api
+package types
 
 import (
 	"encoding/json"
@@ -154,7 +154,7 @@ type LogicExecuteArgs struct {
 type Response struct {
 	Status string          `json:"status,omitempty"`
 	Data   json.RawMessage `json:"data"`
-	Error  error           `json:"error"`
+	Error  *JSONError      `json:"error,omitempty"`
 }
 
 // ContextResponse is response object for fetching context info

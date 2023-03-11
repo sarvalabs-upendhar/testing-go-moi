@@ -9,19 +9,17 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/moichain/utils"
-
-	gtypes "github.com/sarvalabs/moichain/guna/types"
-
-	"github.com/sarvalabs/moichain/types"
-
+	"github.com/sarvalabs/go-polo"
 	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/guna"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
+	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/utils"
 )
 
 type Context struct {
@@ -453,11 +451,11 @@ func GetTestLogicDeployPayload(
 	t *testing.T,
 	nonce uint64,
 	address types.Address,
-	callback func(args *LogicDeployArgs),
+	callback func(args *ptypes.LogicDeployArgs),
 ) ([]byte, []byte) {
 	t.Helper()
 
-	logicArgs := &LogicDeployArgs{
+	logicArgs := &ptypes.LogicDeployArgs{
 		Type:          0,
 		IsStateFul:    true,
 		IsInteractive: false,
@@ -497,10 +495,10 @@ func GetTestLogicDeployPayload(
 	return rawJSON, rawPolo
 }
 
-func GetTestIxCreationPayload(t *testing.T, callBack func(args *AssetCreationArgs)) ([]byte, []byte) {
+func GetTestIxCreationPayload(t *testing.T, callBack func(args *ptypes.AssetCreationArgs)) ([]byte, []byte) {
 	t.Helper()
 
-	payloadArgs := &AssetCreationArgs{
+	payloadArgs := &ptypes.AssetCreationArgs{
 		Type:   1,
 		Symbol: "rahul",
 		Supply: "78",
