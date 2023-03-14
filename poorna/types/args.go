@@ -16,6 +16,24 @@ type TesseractNumberOrHash struct {
 	TesseractHash   *string `json:"tesseract_hash"`
 }
 
+type RPCInteraction struct {
+	Input     types.IxInput
+	Compute   types.IxCompute
+	Trust     types.IxTrust
+	Hash      types.Hash
+	Signature []byte
+}
+
+type RPCInteractions []*RPCInteraction
+
+type RPCTesseract struct {
+	Header   types.TesseractHeader
+	Body     types.TesseractBody
+	Ixns     RPCInteractions
+	Receipts types.Receipts
+	Seal     []byte
+}
+
 func (t *TesseractNumberOrHash) Number() (int64, error) {
 	if t.TesseractNumber == nil {
 		return 0, types.ErrEmptyHeight

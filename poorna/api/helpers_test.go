@@ -614,6 +614,24 @@ func getHexEntries(t *testing.T, count int) []string {
 	return entries
 }
 
+// getIxParamsWithInputComputeTrust returns ixparams initialized with ixType, payload, mtq, and mode
+// We initialize at least one field in input, compute, and trust.
+func getIxParamsWithInputComputeTrust(
+	ixType types.IxType,
+	payload json.RawMessage,
+	mtq uint,
+	mode int,
+) *tests.CreateIxParams {
+	return &tests.CreateIxParams{
+		IxDataCallback: func(ix *types.IxData) {
+			ix.Input.Type = ixType
+			ix.Input.Payload = payload
+			ix.Compute.Mode = mode
+			ix.Trust.MTQ = mtq
+		},
+	}
+}
+
 func checkForContext(
 	t *testing.T,
 	actualContext *Context,
@@ -645,4 +663,58 @@ func newTestInteraction(
 	}
 
 	return types.NewInteraction(*ixData, nil)
+}
+
+// checkForRPCIxn validates a field from input, compute, trust, and verifies payload.
+func checkForRPCIxn(t *testing.T, rpcIxn *ptypes.RPCInteraction, ix *types.Interaction) {
+	t.Helper()
+
+	require.Equal(t, rpcIxn.Input.Type, ix.Type())
+	require.Equal(t, rpcIxn.Compute, ix.Compute())
+	require.Equal(t, rpcIxn.Trust, ix.Trust())
+
+	switch ix.Type() {
+	case types.IxValueTransfer:
+		require.Nil(t, rpcIxn.Input.Payload)
+
+	case types.IxAssetCreate:
+		assetCreationPayload := new(types.AssetPayload)
+		err := assetCreationPayload.FromBytes(ix.Payload())
+		require.NoError(t, err)
+
+		expectedPayload, err := json.Marshal(assetCreationPayload)
+		require.NoError(t, err)
+
+		require.Equal(t, expectedPayload, []byte(rpcIxn.Input.Payload))
+
+	case types.IxLogicDeploy:
+		fallthrough
+
+	case types.IxLogicExecute:
+		logicPayload := new(types.LogicPayload)
+
+		err := logicPayload.FromBytes(ix.Payload())
+		require.NoError(t, err)
+
+		expectedPayload, err := json.Marshal(logicPayload)
+		require.NoError(t, err)
+
+		require.Equal(t, expectedPayload, []byte(rpcIxn.Input.Payload))
+	default:
+		require.FailNow(t, "invalid ix type")
+	}
+}
+
+// checkForRPCTesseract validates fields of rpc tesseract
+func checkForRPCTesseract(t *testing.T, rpcTS *ptypes.RPCTesseract, ts *types.Tesseract) {
+	t.Helper()
+
+	require.Equal(t, rpcTS.Header, ts.Header)
+	require.Equal(t, rpcTS.Body, ts.Body)
+	require.Equal(t, rpcTS.Receipts, ts.Receipts)
+	require.Equal(t, rpcTS.Seal, ts.Seal)
+
+	for i, ixn := range ts.Ixns {
+		checkForRPCIxn(t, rpcTS.Ixns[i], ixn)
+	}
 }

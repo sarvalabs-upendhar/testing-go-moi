@@ -2,6 +2,7 @@ package types
 
 import (
 	"crypto/rand"
+	"encoding/json"
 	"log"
 	"math/big"
 	"sync/atomic"
@@ -99,7 +100,7 @@ type IxInput struct {
 	FuelLimit *big.Int
 	FuelPrice *big.Int
 
-	Payload []byte
+	Payload json.RawMessage
 }
 
 type IxCompute struct {
@@ -111,6 +112,27 @@ type IxCompute struct {
 type IxTrust struct {
 	MTQ   uint
 	Nodes []kramaid.KramaID
+}
+
+func (ix Interaction) Input() IxInput {
+	return ix.inner.Input
+}
+
+func (ix Interaction) Compute() IxCompute {
+	return ix.inner.Compute
+}
+
+func (ix Interaction) Trust() IxTrust {
+	return ix.inner.Trust
+}
+
+func (ix Interaction) Signature() []byte {
+	signature, ok := ix.signature.Load().([]byte)
+	if !ok {
+		panic("invalid data stored into interaction signature")
+	}
+
+	return signature
 }
 
 // Type returns the type of Interaction as an IxType

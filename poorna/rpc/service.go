@@ -48,7 +48,7 @@ func (r *Service) Tesseract(req *http.Request, args *ptypes.TesseractArgs, resp 
 	}
 
 	// Retrieve the latest Tesseract for the address from the backend lattice manager
-	tesseract, err := coreAPI.GetTesseract(args)
+	tesseract, err := coreAPI.GetRPCTesseract(args)
 	if err != nil {
 		resp.Error = &ptypes.JSONError{Message: err.Error()}
 

@@ -101,7 +101,7 @@ type LogicDeployPayload struct {
 	Manifest []byte
 }
 
-func (logic LogicPayload) Bytes() ([]byte, error) {
+func (logic *LogicPayload) Bytes() ([]byte, error) {
 	data, err := polo.Polorize(logic)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to polorize logic payload")

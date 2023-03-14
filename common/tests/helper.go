@@ -448,6 +448,8 @@ type CreateTesseractParams struct {
 	TesseractCallback func(ts *types.Tesseract)
 }
 
+// CreateTesseract creates a tesseract using tessseract params fields
+// if any field thats not available in params need to be initialized using TesseractCallback field
 func CreateTesseract(t *testing.T, params *CreateTesseractParams) *types.Tesseract {
 	t.Helper()
 
@@ -525,7 +527,7 @@ func GetAddresses(t *testing.T, count int) []types.Address {
 }
 
 type CreateIxParams struct {
-	ixDataCallback func(ix *types.IxData)
+	IxDataCallback func(ix *types.IxData)
 }
 
 func CreateIX(t *testing.T, params *CreateIxParams) *types.Interaction {
@@ -539,8 +541,8 @@ func CreateIX(t *testing.T, params *CreateIxParams) *types.Interaction {
 		Input: types.IxInput{},
 	}
 
-	if params.ixDataCallback != nil {
-		params.ixDataCallback(data)
+	if params.IxDataCallback != nil {
+		params.IxDataCallback(data)
 	}
 
 	ix := types.NewInteraction(*data, []byte{})
@@ -566,7 +568,7 @@ func CreateIxns(t *testing.T, count int, paramsMap map[int]*CreateIxParams) type
 
 func GetIxParamsWithAddress(from types.Address, to types.Address) *CreateIxParams {
 	return &CreateIxParams{
-		ixDataCallback: func(ix *types.IxData) {
+		IxDataCallback: func(ix *types.IxData) {
 			ix.Input.Sender = from
 			ix.Input.Receiver = to
 		},

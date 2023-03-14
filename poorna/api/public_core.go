@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"math/big"
 
 	"github.com/pkg/errors"
@@ -66,8 +67,8 @@ func (p *PublicCoreAPI) getTesseractByHeight(
 	return tesseract, nil
 }
 
-// GetTesseract returns the tesseract based on the given tesseract arguments
-func (p *PublicCoreAPI) GetTesseract(args *ptypes.TesseractArgs) (*types.Tesseract, error) {
+// getTesseract returns tesseract using arguments.
+func (p *PublicCoreAPI) getTesseract(args *ptypes.TesseractArgs) (*types.Tesseract, error) {
 	if args.Options.TesseractHash != nil && args.Options.TesseractNumber != nil {
 		return nil, errors.New("can not use both tesseract number and tesseract hash")
 	}
@@ -88,9 +89,19 @@ func (p *PublicCoreAPI) GetTesseract(args *ptypes.TesseractArgs) (*types.Tessera
 	return nil, errors.Wrap(err, "invalid options")
 }
 
+// GetRPCTesseract returns the rpc tesseract using given arguments
+func (p *PublicCoreAPI) GetRPCTesseract(args *ptypes.TesseractArgs) (*ptypes.RPCTesseract, error) {
+	ts, err := p.getTesseract(args)
+	if err != nil {
+		return nil, err
+	}
+
+	return createRPCTesseract(ts)
+}
+
 // GetContextInfo will fetch the context associated with the given address
 func (p *PublicCoreAPI) GetContextInfo(args *ptypes.ContextInfoArgs) ([]string, []string, error) {
-	ts, err := p.GetTesseract(getTesseractArgs(args.From, args.Options))
+	ts, err := p.getTesseract(getTesseractArgs(args.From, args.Options))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -112,7 +123,7 @@ func (p *PublicCoreAPI) GetBalance(args *ptypes.BalArgs) (*big.Int, error) {
 		return nil, types.ErrInvalidAssetID
 	}
 
-	ts, err := p.GetTesseract(getTesseractArgs(args.From, args.Options))
+	ts, err := p.getTesseract(getTesseractArgs(args.From, args.Options))
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +133,7 @@ func (p *PublicCoreAPI) GetBalance(args *ptypes.BalArgs) (*big.Int, error) {
 
 // GetTDU will return the total digital utility associated with address
 func (p *PublicCoreAPI) GetTDU(args *ptypes.TesseractArgs) (types.AssetMap, error) {
-	ts, err := p.GetTesseract(getTesseractArgs(args.From, args.Options))
+	ts, err := p.getTesseract(getTesseractArgs(args.From, args.Options))
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +160,7 @@ func (p *PublicCoreAPI) GetInteractionReceipt(args *ptypes.ReceiptArgs) (*types.
 
 // GetInteractionCount returns the number of interactions sent for the given address
 func (p *PublicCoreAPI) GetInteractionCount(args *ptypes.InteractionCountArgs) (uint64, error) {
-	ts, err := p.GetTesseract(getTesseractArgs(args.From, args.Options))
+	ts, err := p.getTesseract(getTesseractArgs(args.From, args.Options))
 	if err != nil {
 		return 0, err
 	}
@@ -175,7 +186,7 @@ func (p *PublicCoreAPI) GetPendingInteractionCount(args *ptypes.InteractionCount
 
 // GetAccountState returns the account state of the given address
 func (p *PublicCoreAPI) GetAccountState(args *ptypes.GetAccountArgs) (*types.Account, error) {
-	ts, err := p.GetTesseract(getTesseractArgs(args.Address, args.Options))
+	ts, err := p.getTesseract(getTesseractArgs(args.Address, args.Options))
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +201,7 @@ func (p *PublicCoreAPI) GetLogicManifest(args *ptypes.LogicManifestArgs) ([]byte
 		return nil, err
 	}
 
-	ts, err := p.GetTesseract(getTesseractArgs(logicID.Address().Hex(), args.Options))
+	ts, err := p.getTesseract(getTesseractArgs(logicID.Address().Hex(), args.Options))
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +216,7 @@ func (p *PublicCoreAPI) GetStorageAt(args *ptypes.GetStorageArgs) ([]byte, error
 		return nil, err
 	}
 
-	ts, err := p.GetTesseract(getTesseractArgs(logicID.Address().String(), args.Options))
+	ts, err := p.getTesseract(getTesseractArgs(logicID.Address().String(), args.Options))
 	if err != nil {
 		return nil, err
 	}
@@ -266,4 +277,75 @@ func parseAssetMetaInfo(aID []byte) *types.AssetDescriptor {
 	assetInfo.Dimension = dimension
 
 	return assetInfo
+}
+
+// createRPCInteraction creates an RPC Interaction by copying all fields of the interaction into the RPC Interaction,
+// depolarizing the payload based on the interaction type, JSON marshalling it, and storing it in the input payload.
+func createRPCInteraction(ix *types.Interaction) (*ptypes.RPCInteraction, error) {
+	rpcIX := &ptypes.RPCInteraction{
+		Input:     ix.Input(),
+		Compute:   ix.Compute(),
+		Trust:     ix.Trust(),
+		Hash:      ix.Hash(),
+		Signature: ix.Signature(),
+	}
+
+	var err error
+
+	switch ix.Type() {
+	case types.IxValueTransfer:
+
+	case types.IxAssetCreate:
+		assetPayload := new(types.AssetPayload)
+		if err = assetPayload.FromBytes(ix.Payload()); err != nil {
+			return nil, err
+		}
+
+		rpcIX.Input.Payload, err = json.Marshal(assetPayload)
+		if err != nil {
+			return nil, err
+		}
+
+	case types.IxLogicDeploy:
+		fallthrough
+
+	case types.IxLogicExecute:
+		logicPayload := new(types.LogicPayload)
+
+		if err = logicPayload.FromBytes(ix.Payload()); err != nil {
+			return nil, err
+		}
+
+		rpcIX.Input.Payload, err = json.Marshal(logicPayload)
+		if err != nil {
+			return nil, err
+		}
+
+	default:
+		return nil, errors.New("invalid interaction type")
+	}
+
+	return rpcIX, nil
+}
+
+// createRPCTesseract creates rpc tesseract from tesseract
+func createRPCTesseract(ts *types.Tesseract) (*ptypes.RPCTesseract, error) {
+	var err error
+
+	rpcIxns := make([]*ptypes.RPCInteraction, len(ts.Ixns))
+
+	for i, ixn := range ts.Ixns {
+		rpcIxns[i], err = createRPCInteraction(ixn)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &ptypes.RPCTesseract{
+		Header:   ts.Header,
+		Body:     ts.Body,
+		Ixns:     rpcIxns,
+		Receipts: ts.Receipts,
+		Seal:     ts.Seal,
+	}, nil
 }

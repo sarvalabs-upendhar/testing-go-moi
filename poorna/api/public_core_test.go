@@ -4,6 +4,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/sarvalabs/go-polo"
+
 	"github.com/pkg/errors"
 
 	"github.com/stretchr/testify/require"
@@ -14,6 +16,215 @@ import (
 )
 
 // Core Api Testcases
+
+func TestPublicCoreAPI_CreateRPCInteraction(t *testing.T) {
+	invalidPayload := []byte{1}
+	assetPayload := types.AssetPayload{
+		Create: &types.AssetCreatePayload{
+			Symbol: "MOI",
+		},
+	}
+
+	assetPayloadBytes, err := polo.Polorize(assetPayload)
+	require.NoError(t, err)
+
+	logicPayload := &types.LogicPayload{
+		Callsite: "call site",
+	}
+
+	logicPayloadBytes, err := polo.Polorize(logicPayload)
+	require.NoError(t, err)
+
+	testcases := []struct {
+		name          string
+		ixParams      *tests.CreateIxParams
+		expectedError error
+	}{
+		{
+			name:     "create rpc interaction for value transfer interaction",
+			ixParams: getIxParamsWithInputComputeTrust(types.IxValueTransfer, nil, 2, 3),
+		},
+		{
+			name:     "create rpc interaction for asset creation interaction",
+			ixParams: getIxParamsWithInputComputeTrust(types.IxAssetCreate, assetPayloadBytes, 2, 3),
+		},
+		{
+			name:     "create rpc interaction for logic deploy interaction",
+			ixParams: getIxParamsWithInputComputeTrust(types.IxLogicDeploy, logicPayloadBytes, 4, 6),
+		},
+		{
+			name:     "create rpc interaction for logic execute interaction",
+			ixParams: getIxParamsWithInputComputeTrust(types.IxLogicExecute, logicPayloadBytes, 6, 8),
+		},
+		{
+			name:          "invalid interaction type",
+			ixParams:      getIxParamsWithInputComputeTrust(types.IxAssetMint, logicPayloadBytes, 6, 8),
+			expectedError: errors.New("invalid interaction type"),
+		},
+		{
+			name:          "invalid payload",
+			ixParams:      getIxParamsWithInputComputeTrust(types.IxAssetCreate, invalidPayload, 6, 8),
+			expectedError: errors.New("failed to depolorize asset payload"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			ix := tests.CreateIX(t, test.ixParams)
+			rpcIxn, err := createRPCInteraction(ix)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			checkForRPCIxn(t, rpcIxn, ix)
+		})
+	}
+}
+
+func TestPublicCoreAPI_CreateRPCTesseract(t *testing.T) {
+	invalidPayload := []byte{1}
+	assetPayload := types.AssetPayload{
+		Create: &types.AssetCreatePayload{
+			Symbol: "MOI",
+		},
+	}
+
+	assetPayloadBytes, err := polo.Polorize(assetPayload)
+	require.NoError(t, err)
+
+	// make sure to fill at least one field of every field of tesseract so that we can verify that every field is copied
+	tesseractParams := &tests.CreateTesseractParams{
+		Address: tests.RandomAddress(t),
+		TesseractCallback: func(ts *types.Tesseract) {
+			ts.Seal = []byte{1, 2}
+			ts.Receipts = map[types.Hash]*types.Receipt{
+				tests.RandomHash(t): {IxHash: tests.RandomHash(t)},
+			}
+			ts.Body = types.TesseractBody{
+				StateHash: tests.RandomHash(t),
+			}
+		},
+	}
+
+	testcases := []struct {
+		name          string
+		ixParams      *tests.CreateIxParams
+		expectedError error
+	}{
+		{
+			name:          "failed to create rpc tesseract",
+			ixParams:      getIxParamsWithInputComputeTrust(types.IxAssetCreate, invalidPayload, 2, 3),
+			expectedError: errors.New("failed to depolorize asset payload"),
+		},
+		{
+			name:     "created rpc tesseract successfully",
+			ixParams: getIxParamsWithInputComputeTrust(types.IxAssetCreate, assetPayloadBytes, 2, 3),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			ix := tests.CreateIX(t, test.ixParams)
+			tesseractParams.Ixns = []*types.Interaction{ix}
+			ts := tests.CreateTesseract(t, tesseractParams)
+
+			rpcTS, err := createRPCTesseract(ts)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			checkForRPCTesseract(t, rpcTS, ts)
+		})
+	}
+}
+
+func TestPublicCoreAPI_GetRPCTesseract(t *testing.T) {
+	height := uint64(8)
+	argsHeight := int64(8)
+
+	assetPayload := types.AssetPayload{
+		Create: &types.AssetCreatePayload{
+			Symbol: "MOI",
+		},
+	}
+
+	assetPayloadBytes, err := polo.Polorize(assetPayload)
+	require.NoError(t, err)
+
+	ix := tests.CreateIX(t, getIxParamsWithInputComputeTrust(types.IxAssetCreate, assetPayloadBytes, 2, 3))
+
+	tesseractParams := &tests.CreateTesseractParams{
+		Address: tests.RandomAddress(t),
+		Height:  height,
+		Ixns:    []*types.Interaction{ix},
+		TesseractCallback: func(ts *types.Tesseract) {
+			ts.Seal = []byte{1, 2}
+			ts.Receipts = map[types.Hash]*types.Receipt{
+				tests.RandomHash(t): {IxHash: tests.RandomHash(t)},
+			}
+			ts.Body = types.TesseractBody{
+				StateHash: tests.RandomHash(t),
+			}
+		},
+	}
+
+	ts := tests.CreateTesseract(t, tesseractParams)
+
+	c := NewMockChainManager(t)
+	coreAPI := NewPublicCoreAPI(nil, c, nil)
+
+	c.setTesseractByHeight(t, ts)
+
+	testcases := []struct {
+		name          string
+		args          ptypes.TesseractArgs
+		expectedError error
+	}{
+		{
+			name: "get rpc tesseract returns error",
+			args: ptypes.TesseractArgs{
+				Options: ptypes.TesseractNumberOrHash{},
+			},
+			expectedError: types.ErrEmptyOptions,
+		},
+		{
+			name: "get rpc tesseract by height with interactions",
+			args: ptypes.TesseractArgs{
+				From:             ts.Address().String(),
+				WithInteractions: true,
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &argsHeight,
+				},
+			},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(testing *testing.T) {
+			fetchedTesseract, err := coreAPI.GetRPCTesseract(&test.args)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			checkForRPCTesseract(t, fetchedTesseract, ts)
+		})
+	}
+}
 
 func TestPublicCoreAPI_GetTesseractByHash(t *testing.T) {
 	tesseractParams := tests.GetTesseractParamsMapWithIxns(t, 1, 2)
@@ -110,28 +321,28 @@ func TestPublicCoreAPI_GetTesseractByHeight(t *testing.T) {
 			expectedError:    types.ErrFetchingTesseract,
 		},
 		{
-			name:             "fetch Tesseract with interactions",
+			name:             "fetch tesseract with interactions",
 			from:             ts[0].Address().String(),
 			height:           8,
 			withInteractions: true,
 			expectedTS:       ts[0],
 		},
 		{
-			name:             "fetch Tesseract without interactions",
+			name:             "fetch tesseract without interactions",
 			from:             ts[0].Address().String(),
 			height:           8,
 			withInteractions: false,
 			expectedTS:       ts[0],
 		},
 		{
-			name:             "fetch latest Tesseract with interactions",
+			name:             "fetch latest tesseract with interactions",
 			from:             ts[1].Address().String(),
 			height:           ptypes.LatestTesseractHeight,
 			withInteractions: true,
 			expectedTS:       ts[1],
 		},
 		{
-			name:             "fetch latest Tesseract without interactions",
+			name:             "fetch latest tesseract without interactions",
 			from:             ts[1].Address().String(),
 			height:           ptypes.LatestTesseractHeight,
 			withInteractions: false,
@@ -219,7 +430,7 @@ func TestPublicCoreAPI_GetTesseract(t *testing.T) {
 			expectedTS: ts[0],
 		},
 		{
-			name: "get Tesseract by height Tesseract without interactions",
+			name: "get tesseract by height tesseract without interactions",
 			args: ptypes.TesseractArgs{
 				From:             ts[0].Address().String(),
 				WithInteractions: false,
@@ -230,7 +441,7 @@ func TestPublicCoreAPI_GetTesseract(t *testing.T) {
 			expectedTS: ts[0],
 		},
 		{
-			name: "get Tesseract by hash with interactions",
+			name: "get tesseract by hash with interactions",
 			args: ptypes.TesseractArgs{
 				From:             ts[1].Address().String(),
 				WithInteractions: true,
@@ -241,7 +452,7 @@ func TestPublicCoreAPI_GetTesseract(t *testing.T) {
 			expectedTS: ts[1],
 		},
 		{
-			name: "get Tesseract by hash Tesseract without interactions",
+			name: "get tesseract by hash tesseract without interactions",
 			args: ptypes.TesseractArgs{
 				From:             ts[1].Address().String(),
 				WithInteractions: false,
@@ -255,7 +466,7 @@ func TestPublicCoreAPI_GetTesseract(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(testing *testing.T) {
-			fetchedTesseract, err := coreAPI.GetTesseract(&test.args)
+			fetchedTesseract, err := coreAPI.getTesseract(&test.args)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
