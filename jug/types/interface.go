@@ -33,18 +33,15 @@ type ExecutionEngine interface {
 	// This LogicDescriptor can be used to generate a LogicObject.
 	// The execution effort and any compile error are returned with the ExecutionResult
 	Compile(context.Context, []byte) (*types.LogicDescriptor, *ExecutionResult)
-
-	// Implements checks if the LogicObject implements a certain LogicKind interface.
-	// Each LogicKind expects certain routines or classes to be defined in the LogicObject.
-	// If the engine does not support a certain LogicKind, it will return false always.
-	Implements(context.Context, Logic, types.LogicKind) (bool, *ExecutionResult)
 }
 
 // Logic is an interface that defines a logic driver for an ExecutionEngine
 type Logic interface {
 	IsSealed() bool
-	IsStateful() bool
-	IsInteractive() bool
+
+	HasPersistentState() bool
+	HasEphemeralState() bool
+	AllowsInteractions() bool
 
 	LogicID() types.LogicID
 	Engine() types.LogicEngine

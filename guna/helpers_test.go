@@ -19,13 +19,14 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/munna0908/smt"
 	"github.com/sarvalabs/go-polo"
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/dhruva"
 	"github.com/sarvalabs/moichain/guna/tree"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/types"
-	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -2183,13 +2184,7 @@ func getEntries(t *testing.T, count int) ([][]byte, [][]byte) {
 func getLogicID(t *testing.T, address types.Address) types.LogicID {
 	t.Helper()
 
-	logicID, err := types.NewLogicIDv0(
-		types.LogicKindSimple,
-		true,
-		true,
-		1,
-		address,
-	)
+	logicID, err := types.NewLogicIDv0(true, false, false, false, 0, address)
 	require.NoError(t, err)
 
 	return logicID

@@ -309,7 +309,7 @@ func createRPCInteraction(ix *types.Interaction) (*ptypes.RPCInteraction, error)
 	case types.IxLogicDeploy:
 		fallthrough
 
-	case types.IxLogicExecute:
+	case types.IxLogicInvoke:
 		logicPayload := new(types.LogicPayload)
 
 		if err = logicPayload.FromBytes(ix.Payload()); err != nil {

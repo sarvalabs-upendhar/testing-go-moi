@@ -92,8 +92,8 @@ func constructInteraction(args *ptypes.SendIXArgs, nonce uint64) (ix *types.Inte
 			return nil, err
 		}
 
-	case types.IxLogicExecute:
-		data.Input.Payload, err = GetRawIXPayloadForLogicExecute(args.Payload)
+	case types.IxLogicInvoke:
+		data.Input.Payload, err = GetRawIXPayloadForLogicInvoke(args.Payload)
 		if err != nil {
 			return nil, err
 		}
@@ -181,44 +181,22 @@ func GetRawIXPayloadForLogicDeploy(jsonPayload []byte, nonce uint64, sender type
 		return nil, types.ErrEmptyManifest
 	}
 
-	// FIXME: It is not appropriate to generate logicID here
-	logicID, err := types.NewLogicIDv0(
-		payload.Type,
-		payload.IsStateFul,
-		payload.IsInteractive,
-		0,
-		utils.NewAccountAddress(nonce, sender),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	deployPayload := &types.LogicPayload{
-		Logic:    logicID,
-		Calldata: types.FromHex(payload.CallData),
-		Deploy: &types.LogicDeployPayload{
-			Type:          payload.Type,
-			IsStateful:    payload.IsStateFul,
-			IsInteractive: payload.IsInteractive,
-			Manifest:      types.FromHex(payload.Manifest),
-		},
-	}
-
-	return polo.Polorize(deployPayload)
+	return polo.Polorize(&types.LogicPayload{
+		Calldata: types.FromHex(payload.Calldata),
+		Manifest: types.FromHex(payload.Manifest),
+	})
 }
 
-// GetRawIXPayloadForLogicExecute returns the raw IXPayload for logic execution
-func GetRawIXPayloadForLogicExecute(jsonPayload []byte) ([]byte, error) {
-	payload := new(ptypes.LogicExecuteArgs)
+// GetRawIXPayloadForLogicInvoke returns the raw IXPayload for logic invoke
+func GetRawIXPayloadForLogicInvoke(jsonPayload []byte) ([]byte, error) {
+	payload := new(ptypes.LogicInvokeArgs)
 	if err := json.Unmarshal(jsonPayload, payload); err != nil {
 		return nil, err
 	}
 
-	logicExecPayload := &types.LogicPayload{
+	return polo.Polorize(&types.LogicPayload{
 		Logic:    types.FromHex(payload.LogicID),
-		Callsite: payload.CallSite,
-		Calldata: types.FromHex(payload.CallData),
-	}
-
-	return polo.Polorize(logicExecPayload)
+		Callsite: payload.Callsite,
+		Calldata: types.FromHex(payload.Calldata),
+	})
 }

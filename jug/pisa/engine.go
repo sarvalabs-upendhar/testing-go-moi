@@ -45,7 +45,7 @@ func (engine *Engine) Execute(
 	// Set the logic driver for the engine
 	engine.logic = logic
 	// Set the storage drivers for the engine if logic is stateful
-	if logic.IsStateful() {
+	if logic.HasPersistentState() {
 		// Load the storage layout into the engine
 		if _, ok := engine.GetStorageLayout(); !ok {
 			return engine.Error(exceptions.ExceptionExecutionSetup, "could not load storage layout")
@@ -124,10 +124,6 @@ func (engine *Engine) Compile(_ context.Context, manifest []byte) (*types.LogicD
 	}
 
 	return engine.compileLogicV1(manifest)
-}
-
-func (engine *Engine) Implements(_ context.Context, _ ctypes.Logic, _ types.LogicKind) (bool, *ctypes.ExecutionResult) {
-	panic("missing implementation: pisa.PISA.Implements()")
 }
 
 func (engine *Engine) InitialiseStorage(inputs ctypes.ExecutionValues) *ctypes.ExecutionResult {

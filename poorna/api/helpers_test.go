@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-polo"
+
 	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/guna"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
@@ -456,11 +457,8 @@ func GetTestLogicDeployPayload(
 	t.Helper()
 
 	logicArgs := &ptypes.LogicDeployArgs{
-		Type:          0,
-		IsStateFul:    true,
-		IsInteractive: false,
-		Manifest:      types.BytesToHex([]byte{0x00, 0x01}),
-		CallData:      types.BytesToHex(GenerateRandomIXPayload(t, 20)),
+		Manifest: types.BytesToHex([]byte{0x00, 0x01}),
+		Calldata: types.BytesToHex(GenerateRandomIXPayload(t, 20)),
 	}
 
 	if callback != nil {
@@ -470,23 +468,9 @@ func GetTestLogicDeployPayload(
 	rawJSON, err := json.Marshal(logicArgs)
 	require.NoError(t, err)
 
-	logicID, _ := types.NewLogicIDv0(
-		logicArgs.Type,
-		logicArgs.IsStateFul,
-		logicArgs.IsInteractive,
-		0,
-		utils.NewAccountAddress(nonce, address),
-	)
-
 	deployPayload := &types.LogicPayload{
-		Logic:    logicID,
-		Calldata: types.FromHex(logicArgs.CallData),
-		Deploy: &types.LogicDeployPayload{
-			Type:          logicArgs.Type,
-			IsStateful:    logicArgs.IsStateFul,
-			IsInteractive: logicArgs.IsInteractive,
-			Manifest:      types.FromHex(logicArgs.Manifest),
-		},
+		Calldata: types.FromHex(logicArgs.Calldata),
+		Manifest: types.FromHex(logicArgs.Manifest),
 	}
 
 	rawPolo, err := polo.Polorize(deployPayload)
@@ -580,13 +564,7 @@ func getReceipt(t *testing.T) (types.Hash, *types.Receipt) {
 func getLogicID(t *testing.T, address types.Address) types.LogicID {
 	t.Helper()
 
-	logicID, err := types.NewLogicIDv0(
-		types.LogicKindSimple,
-		true,
-		true,
-		1,
-		address,
-	)
+	logicID, err := types.NewLogicIDv0(true, false, false, false, 0, address)
 	require.NoError(t, err)
 
 	return logicID
@@ -690,7 +668,7 @@ func checkForRPCIxn(t *testing.T, rpcIxn *ptypes.RPCInteraction, ix *types.Inter
 	case types.IxLogicDeploy:
 		fallthrough
 
-	case types.IxLogicExecute:
+	case types.IxLogicInvoke:
 		logicPayload := new(types.LogicPayload)
 
 		err := logicPayload.FromBytes(ix.Payload())

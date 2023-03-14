@@ -13,28 +13,33 @@ type LogicID []byte
 // NewLogicIDv0 generates a new LogicID with the v0 form.
 // Returns an error if the LogicKind is greater than 3.
 // LogicID v0 Form is defined as follows:
-// [version(4bits)|kind(2bits)|stateful(1bit)|interactive(1bit)][edition(16bits)][address(256bits)]
-func NewLogicIDv0(kind LogicKind, stateful bool, interactive bool, edition uint16, address Address) (LogicID, error) {
+// [version(4bits)|persistent-state(1bit)|ephemeral-state(1bit)|allow-interactions(1bit)|asset-logic(1bit)]
+// [edition(16bits)][address(256bits)]
+func NewLogicIDv0(
+	persistentState, ephemeralState, allowInteractions, assetLogic bool,
+	edition uint16, address Address,
+) (LogicID, error) {
 	// The 4 MSB bits of the head are set the
 	// version of the Logic ID Form (v0)
 	var head uint8 = 0x00 << 4
 
-	// Error if logic kind value is greater than 3 (2 bit space)
-	if kind > 0x3 {
-		return nil, ErrInvalidLogicID
+	// If persistent stateful flag is on, the 5th MSB is set
+	if persistentState {
+		head |= 0x8
 	}
 
-	// Set the 5th and 6th MSB to the logic kind.
-	// This is guaranteed to be 2 bits wide as we have sized the value
-	head |= uint8(kind) << 2
+	// If ephemeral stateful flag is on, the 6th MSB is set
+	if ephemeralState {
+		head |= 0x4
+	}
 
-	// If stateful flag is on, the 7th MSB is set
-	if stateful {
+	// If allow interactions flag is on, the 7th MSB is set
+	if allowInteractions {
 		head |= 0x2
 	}
 
-	// If interactive flag is on, the 8th MSB is set
-	if interactive {
+	// If asset logic flag is on, the 8th MSB is set
+	if assetLogic {
 		head |= 0x1
 	}
 
@@ -84,18 +89,6 @@ func (logic LogicID) Version() int {
 
 	// Determine the highest 4 bits of the first byte (v0)
 	return int(logic[0] & 0xF0)
-}
-
-// Kind returns the LogicKind of the LogicID.
-// Returns LogicKindInvalid if LogicID is invalid.
-func (logic LogicID) Kind() LogicKind {
-	// Check logic version, internally checks validity
-	if logic.Version() != 0 {
-		return LogicKindInvalid
-	}
-
-	// Determine the 5th and 6th bits of the first byte (v0)
-	return LogicKind(logic[0] & 0xC)
 }
 
 // Stateful returns whether the stateful flag is set for the LogicID.
@@ -152,7 +145,7 @@ func (logic LogicID) Address() Address {
 
 	// Address data is everything after the third byte (v0)
 	// We know it will be 32 bytes, because of the validity check
-	address := logic[4:]
+	address := logic[3:]
 	// Convert address data into an Address and return
 	return BytesToAddress(address)
 }

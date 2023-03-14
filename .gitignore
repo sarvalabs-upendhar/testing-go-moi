@@ -1,9 +1,14 @@
-/test_*
-/build
-genesis.json
-peer-list.json
-file.key
+# IDE
 .idea
+
+# Misc Artifacts
+file.key
 .DS_Store
 
+# Development Artifacts
+/test_*
+/build
 .artifacts
+genesis.json
+peer-list.json
+**/*_devscript.sh

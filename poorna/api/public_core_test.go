@@ -54,7 +54,7 @@ func TestPublicCoreAPI_CreateRPCInteraction(t *testing.T) {
 		},
 		{
 			name:     "create rpc interaction for logic execute interaction",
-			ixParams: getIxParamsWithInputComputeTrust(types.IxLogicExecute, logicPayloadBytes, 6, 8),
+			ixParams: getIxParamsWithInputComputeTrust(types.IxLogicInvoke, logicPayloadBytes, 6, 8),
 		},
 		{
 			name:          "invalid interaction type",

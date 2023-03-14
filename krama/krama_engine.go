@@ -1502,7 +1502,7 @@ func (k *Engine) IsIxValid(ix *types.Interaction) error {
 			return errors.New("asset already found")
 		}
 
-	case types.IxLogicDeploy, types.IxLogicExecute:
+	case types.IxLogicDeploy, types.IxLogicInvoke:
 		return nil
 	default:
 		return types.ErrInvalidInteractionType

@@ -4,6 +4,7 @@ package types
 Most of the types in this file are yet to be finalized.All the below structs are temporary type definitions
 */
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 
@@ -92,6 +93,16 @@ func BytesToAddress(b []byte) Address {
 // HexToAddress converts string to Address
 func HexToAddress(s string) Address {
 	return BytesToAddress(FromHex(s))
+}
+
+func NewAccountAddress(nonce uint64, address Address) Address {
+	rawBytes := make([]byte, 40)
+	binary.BigEndian.PutUint64(rawBytes, nonce)
+	copy(rawBytes[8:], address.Bytes())
+
+	GetHash(rawBytes)
+
+	return BytesToAddress(GetHash(rawBytes).Bytes())
 }
 
 // Hash represents the 32 byte hash of arbitrary data.

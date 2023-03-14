@@ -26,7 +26,8 @@ const (
 	IxAssetBurn
 
 	IxLogicDeploy
-	IxLogicExecute
+	IxLogicInvoke
+	IxLogicInteract
 	IxLogicUpgrade
 
 	IxFileCreate
@@ -149,13 +150,17 @@ func (ix Interaction) Sender() Address {
 func (ix Interaction) Receiver() Address {
 	// Based on the interaction type return the address
 	switch ix.Type() {
-	case IxLogicExecute, IxLogicDeploy:
+	case IxLogicDeploy:
+		return NewAccountAddress(ix.Nonce(), ix.Sender())
+
+	case IxLogicInvoke:
 		payload, err := ix.GetLogicPayload()
 		if err != nil {
 			panic(err)
 		}
 
 		return payload.Logic.Address()
+
 	default:
 		return ix.inner.Input.Receiver
 	}

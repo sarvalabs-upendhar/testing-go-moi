@@ -65,7 +65,7 @@ type senatus interface {
 
 var (
 	SargaAddress    = types.BytesToAddress(types.GetHash([]byte("sargaAccount")).Bytes())
-	SargaLogicID, _ = types.NewLogicIDv0(0, true, false, 0, SargaAddress)
+	SargaLogicID, _ = types.NewLogicIDv0(true, false, false, false, 0, SargaAddress)
 	GenesisIxHash   = types.GetHash([]byte("Genesis Interaction"))
 )
 

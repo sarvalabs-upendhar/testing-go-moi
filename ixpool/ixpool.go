@@ -424,8 +424,8 @@ func (i *IxPool) validateIx(ix *types.Interaction) error {
 	switch ix.Type() {
 	case types.IxLogicDeploy:
 		return i.validateLogicDeployPayload(ix)
-	case types.IxLogicExecute:
-		return i.validateLogicExecutePayload(ix)
+	case types.IxLogicInvoke:
+		return i.validateLogicInvokePayload(ix)
 	}
 
 	return nil
@@ -439,7 +439,7 @@ func (i *IxPool) validateLogicDeployPayload(ix *types.Interaction) error {
 	return nil
 }
 
-func (i *IxPool) validateLogicExecutePayload(ix *types.Interaction) error {
+func (i *IxPool) validateLogicInvokePayload(ix *types.Interaction) error {
 	payload, err := ix.GetLogicPayload()
 	if err != nil {
 		return err

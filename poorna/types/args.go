@@ -155,17 +155,14 @@ type AssetCreationArgs struct {
 }
 
 type LogicDeployArgs struct {
-	Type          types.LogicKind `json:"type"`
-	IsStateFul    bool            `json:"is_stateful"`
-	IsInteractive bool            `json:"is_interactive"`
-	Manifest      string          `json:"manifest"`
-	CallData      string          `json:"calldata"`
+	Manifest string `json:"manifest"`
+	Calldata string `json:"calldata"`
 }
 
-type LogicExecuteArgs struct {
+type LogicInvokeArgs struct {
 	LogicID  string `json:"logic_id"`
-	CallSite string `json:"callsite"`
-	CallData string `json:"calldata"`
+	Callsite string `json:"callsite"`
+	Calldata string `json:"calldata"`
 }
 
 // Response wrapper

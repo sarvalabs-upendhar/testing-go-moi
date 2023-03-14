@@ -19,9 +19,11 @@ type LogicObject struct {
 	// Represents the CID of the Logic Manifest
 	ManifestHash types.Hash
 
-	Sealed      bool
-	Stateful    bool
-	Interactive bool
+	Sealed bool
+
+	PersistentStateful  bool
+	EphemeralStateful   bool
+	InteractionsAllowed bool
 
 	// Represents the collection of all LogicElement objects
 	Elements types.LogicElementSet
@@ -39,18 +41,21 @@ func NewLogicObject(id types.LogicID, descriptor *types.LogicDescriptor) *LogicO
 		EngineKind:   descriptor.Engine,
 		ManifestHash: descriptor.Manifest,
 
-		Sealed:      false,
-		Interactive: descriptor.Interactive,
-		Stateful:    descriptor.Stateful,
+		Sealed: false,
+
+		PersistentStateful:  descriptor.PersistentState,
+		EphemeralStateful:   descriptor.EphemeralState,
+		InteractionsAllowed: descriptor.AllowsInteractions,
 
 		Elements:  elements,
 		Callsites: descriptor.Callsites,
 	}
 }
 
-func (logic LogicObject) IsSealed() bool      { return logic.Sealed }
-func (logic LogicObject) IsStateful() bool    { return logic.Stateful }
-func (logic LogicObject) IsInteractive() bool { return logic.Interactive }
+func (logic LogicObject) IsSealed() bool           { return logic.Sealed }
+func (logic LogicObject) HasPersistentState() bool { return logic.PersistentStateful }
+func (logic LogicObject) HasEphemeralState() bool  { return logic.EphemeralStateful }
+func (logic LogicObject) AllowsInteractions() bool { return logic.InteractionsAllowed }
 
 func (logic LogicObject) LogicID() types.LogicID    { return logic.ID }
 func (logic LogicObject) Engine() types.LogicEngine { return logic.EngineKind }

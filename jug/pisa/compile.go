@@ -40,7 +40,7 @@ func (engine *Engine) compileLogicV1(manifestData []byte) (*types.LogicDescripto
 		}
 
 		// Set descriptor as stateful
-		descriptor.Stateful = true
+		descriptor.PersistentState = true
 	}
 
 	var err error

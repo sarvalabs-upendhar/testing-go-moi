@@ -1,15 +1,5 @@
 package types
 
-// LogicKind describes a kind of logic.
-// The kind of logic is simply an indication of what the logic is intended to be used for.
-type LogicKind int
-
-const (
-	LogicKindInvalid LogicKind = iota - 1
-	LogicKindSimple
-	LogicKindAsset
-)
-
 // LogicEngine is an enum with its variants
 // representing the execution engine
 type LogicEngine string
@@ -30,8 +20,9 @@ type LogicDescriptor struct {
 	Manifest Hash
 	Engine   LogicEngine
 
-	Stateful    bool
-	Interactive bool
+	PersistentState    bool
+	EphemeralState     bool
+	AllowsInteractions bool
 
 	Elements  []*LogicElement
 	Callsites map[string]LogicCallsite

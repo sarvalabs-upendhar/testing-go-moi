@@ -104,8 +104,8 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 				return err
 			}
 
-			if payload.Deploy == nil {
-				return errors.New("execution failed (IxLogicDeploy): logic deploy payload is empty")
+			if payload.Manifest == nil {
+				return errors.New("execution failed (IxLogicDeploy): missing manifest for logic deploy")
 			}
 
 			// Perform logic deploy and record fuel consumed
@@ -130,15 +130,15 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 				return errors.Wrap(err, "execution failed (IxLogicDeploy)")
 			}
 
-		// Execute Logic Interaction
-		case types.IxLogicExecute:
+		// Invoke Logic Interaction
+		case types.IxLogicInvoke:
 			payload, err := ix.GetLogicPayload()
 			if err != nil {
 				return err
 			}
 
 			// Perform logic deploy and record fuel consumed
-			fuelConsumed, returnData, err := executor.LogicExecute(
+			fuelConsumed, returnData, err := executor.LogicInvoke(
 				executor.getStateObject(ix.Receiver()),
 				payload,
 			)

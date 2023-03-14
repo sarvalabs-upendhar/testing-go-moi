@@ -81,7 +81,7 @@ func (executor IxExecutor) LogicDeploy(
 
 	// Decode the manifest data into a ManifestHeader
 	header := new(ctypes.ManifestHeader)
-	if err := polo.Depolorize(header, payload.Deploy.Manifest); err != nil {
+	if err := polo.Depolorize(header, payload.Manifest); err != nil {
 		return 0, nil, errors.Wrap(err, "could not decode manifest header")
 	}
 
@@ -94,7 +94,7 @@ func (executor IxExecutor) LogicDeploy(
 	// Create a compiler engine
 	compiler := factory.NewExecutionEngine(available)
 	// Compile the manifest into a LogicDescriptor
-	logicDescriptor, compileResult := compiler.Compile(context.Background(), payload.Deploy.Manifest)
+	logicDescriptor, compileResult := compiler.Compile(context.Background(), payload.Manifest)
 	// Check compile result
 	if !compileResult.Ok() {
 		return compileResult.Fuel, nil, errors.Errorf(
@@ -105,7 +105,7 @@ func (executor IxExecutor) LogicDeploy(
 
 	// Set the manifest data into the state object dirty entries.
 	// This manifest will now be content addressed with its hash.
-	state.SetDirtyEntry(logicDescriptor.Manifest.Hex(), payload.Deploy.Manifest)
+	state.SetDirtyEntry(logicDescriptor.Manifest.Hex(), payload.Manifest)
 
 	// Get the current consumed fuel
 	consumed := compileResult.Fuel
@@ -117,9 +117,10 @@ func (executor IxExecutor) LogicDeploy(
 
 	// Generate the LogicID from the payload
 	logicID, err := types.NewLogicIDv0(
-		payload.Deploy.Type,
-		payload.Deploy.IsStateful,
-		payload.Deploy.IsInteractive,
+		logicDescriptor.PersistentState,
+		logicDescriptor.EphemeralState,
+		logicDescriptor.AllowsInteractions,
+		false,
 		0, state.Address(),
 	)
 	if err != nil {
@@ -162,9 +163,9 @@ func (executor IxExecutor) LogicDeploy(
 	return consumed + execResult.Fuel, logicID, nil
 }
 
-// LogicExecute performs the IxLogicExecute interface on the given state (logic account).
+// LogicInvoke performs the IxLogicInvoke interface on the given state (logic account).
 // The given logic payload describes the callsite and calldata for the execution.
-func (executor IxExecutor) LogicExecute(
+func (executor IxExecutor) LogicInvoke(
 	state *guna.StateObject,
 	payload *types.LogicPayload,
 ) (uint64, []byte, error) {

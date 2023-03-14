@@ -257,6 +257,7 @@ func TestValidateAssetID(t *testing.T) {
 	}
 }
 
+// TODO: move this to types package when implementing its tests
 func TestNewAccountAddress(t *testing.T) {
 	randNonce := rand.Uint64()
 	randAddress := tests.RandomAddress(t)
@@ -265,7 +266,7 @@ func TestNewAccountAddress(t *testing.T) {
 	binary.BigEndian.PutUint64(rawBytes, randNonce)
 	copy(rawBytes[8:], randAddress.Bytes())
 
-	generatedAddress := NewAccountAddress(randNonce, randAddress)
+	generatedAddress := types.NewAccountAddress(randNonce, randAddress)
 
 	require.Equal(t, generatedAddress.Bytes(), types.GetHash(rawBytes).Bytes())
 }

@@ -127,13 +127,6 @@ func TestGetRawIXPayloadForLogicDeploy(t *testing.T) {
 			error: types.ErrEmptyManifest,
 		},
 		{
-			name: "should fail for invalid logicType",
-			deployArgsCallback: func(args *ptypes.LogicDeployArgs) {
-				args.Type = 12 // type > 7 is not valid
-			},
-			error: types.ErrInvalidLogicID,
-		},
-		{
 			name:               "should pass for valid data",
 			deployArgsCallback: nil,
 			error:              nil,
