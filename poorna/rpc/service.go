@@ -338,6 +338,34 @@ func (r *Service) LogicManifest(
 	return nil
 }
 
+// AccountMetaInfo returns the account meta info associated with the given address
+func (r *Service) AccountMetaInfo(
+	req *http.Request,
+	args *ptypes.GetAccountArgs,
+	resp *ptypes.Response,
+) error {
+	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
+	if !ok {
+		return types.ErrInvalidAPI
+	}
+
+	accountInfo, err := coreAPI.AccountMetaInfo(args)
+	if err != nil {
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	resp.Data, err = json.Marshal(accountInfo)
+	if err != nil {
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	return nil
+}
+
 /* RPC methods that are associated with the ix namespace. */
 
 // SendInteractions is a method of Service that sends Interactions
@@ -548,6 +576,34 @@ func (r *Service) DBGet(
 	}
 
 	key, err := DebugAPI.DBGet(args)
+	if err != nil {
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	resp.Data, err = json.Marshal(key)
+	if err != nil {
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	return nil
+}
+
+// GetAccounts is an RPC Method that returns the address of all the accounts
+func (r *Service) GetAccounts(
+	req *http.Request,
+	args *ptypes.NetArgs,
+	resp *ptypes.Response,
+) error {
+	DebugAPI, ok := r.apis["debug"].(*api.PublicDebugAPI)
+	if !ok {
+		return types.ErrInvalidAPI
+	}
+
+	key, err := DebugAPI.GetAccounts()
 	if err != nil {
 		resp.Error = &ptypes.JSONError{Message: err.Error()}
 

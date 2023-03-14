@@ -1,7 +1,11 @@
 package api
 
 import (
+	"context"
+
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
+
+	"github.com/sarvalabs/moichain/dhruva"
 	"github.com/sarvalabs/moichain/types"
 )
 
@@ -28,4 +32,25 @@ func (p *PublicDebugAPI) DBGet(args *ptypes.DebugArgs) (string, error) {
 	decodedData := types.BytesToHex(content)
 
 	return decodedData, nil
+}
+
+// GetAccounts returns a list of registered account addresses
+func (p *PublicDebugAPI) GetAccounts() ([]types.Address, error) {
+	addrsList := make([]types.Address, 0)
+
+	for i := int64(0); i <= 1024; i++ {
+		prefix := dhruva.IDToBytes(i)
+
+		entries, err := p.db.GetEntriesWithPrefix(context.Background(), prefix)
+		if err != nil {
+			return nil, err
+		}
+
+		for entry := range entries {
+			addr := entry.Key[10:]
+			addrsList = append(addrsList, types.BytesToAddress(addr))
+		}
+	}
+
+	return addrsList, nil
 }

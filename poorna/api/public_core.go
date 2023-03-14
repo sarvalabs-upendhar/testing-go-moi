@@ -251,6 +251,21 @@ func (p *PublicCoreAPI) GetAssetInfoByAssetID(id string) (*types.AssetDescriptor
 	return assetInfo, nil
 }
 
+// AccountMetaInfo returns the account meta info associated with the given address
+func (p *PublicCoreAPI) AccountMetaInfo(args *ptypes.GetAccountArgs) (*types.AccountMetaInfo, error) {
+	addr, err := utils.ValidateAddress(args.Address)
+	if err != nil {
+		return nil, err
+	}
+
+	accountInfo, err := p.sm.GetAccountMetaInfo(types.HexToAddress(addr.String()))
+	if err != nil {
+		return nil, err
+	}
+
+	return accountInfo, nil
+}
+
 // helper functions
 func parseAssetMetaInfo(aID []byte) *types.AssetDescriptor {
 	var dimension, info uint8

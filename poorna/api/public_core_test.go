@@ -1117,3 +1117,61 @@ func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
 		})
 	}
 }
+
+func TestPublicCoreAPI_GetAccountMetaInfo(t *testing.T) {
+	ts := tests.CreateTesseract(t, nil)
+
+	c := NewMockChainManager(t)
+	s := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(nil, c, s)
+
+	c.setTesseractByHash(t, ts)
+
+	randomHash := tests.RandomHash(t).String()
+	tsHash := tests.GetTesseractHash(t, ts).String()
+	acc := tests.GetRandomAccMetaInfo(t, 1)
+
+	s.setAccountMetaInfo(t, ts.Address(), acc)
+
+	testcases := []struct {
+		name                string
+		args                *ptypes.GetAccountArgs
+		expectedAccMetaInfo *types.AccountMetaInfo
+		expectedError       error
+	}{
+		{
+			name: "account meta info fetched successfully",
+			args: &ptypes.GetAccountArgs{
+				Address: ts.Address().String(),
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractHash: &tsHash,
+				},
+			},
+			expectedAccMetaInfo: acc,
+		},
+		{
+			name: "should return error if failed to fetch account meta info",
+			args: &ptypes.GetAccountArgs{
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractHash: &randomHash,
+				},
+			},
+			expectedError: types.ErrFetchingTesseract,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			fetchedAccMetaInfo, err := coreAPI.AccountMetaInfo(test.args)
+
+			if test.expectedError != nil {
+				require.Error(t, err)
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedAccMetaInfo, fetchedAccMetaInfo)
+		})
+	}
+}

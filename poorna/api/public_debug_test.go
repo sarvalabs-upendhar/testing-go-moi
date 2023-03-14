@@ -54,3 +54,40 @@ func TestPublicDebugAPI_DBGet(t *testing.T) {
 		})
 	}
 }
+
+func TestPublicDebugAPI_GetAccounts(t *testing.T) {
+	db := NewMockDatabase(t)
+	debugAPI := NewPublicDebugAPI(db)
+	addressList := tests.GetAddresses(t, 5)
+
+	testcases := []struct {
+		name         string
+		expectedList []types.Address
+		setAddressFn func()
+	}{
+		{
+			name:         "Should return an empty list if no accounts are present",
+			expectedList: make([]types.Address, 0),
+		},
+		{
+			name: "Returns a list of address of the accounts",
+			setAddressFn: func() {
+				db.setList(t, addressList)
+			},
+			expectedList: addressList,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(testing *testing.T) {
+			if test.setAddressFn != nil {
+				test.setAddressFn()
+			}
+
+			fetchedList, err := debugAPI.GetAccounts()
+
+			require.NoError(t, err)
+			require.ElementsMatch(t, test.expectedList, fetchedList)
+		})
+	}
+}

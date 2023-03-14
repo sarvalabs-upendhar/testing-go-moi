@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"math/big"
 
 	gtypes "github.com/sarvalabs/moichain/guna/types"
@@ -37,6 +38,7 @@ type StateManager interface {
 	GetAccountState(addr types.Address, stateHash types.Hash) (*types.Account, error)
 	GetLogicManifest(logicID types.LogicID, stateHash types.Hash) ([]byte, error)
 	GetStorageEntry(logicID types.LogicID, slot []byte, stateHash types.Hash) ([]byte, error)
+	GetAccountMetaInfo(addr types.Address) (*types.AccountMetaInfo, error)
 }
 
 type Network interface {
@@ -45,6 +47,7 @@ type Network interface {
 
 type DB interface {
 	ReadEntry(key []byte) ([]byte, error)
+	GetEntriesWithPrefix(ctx context.Context, prefix []byte) (chan types.DBEntry, error)
 }
 
 // Backend is a struct that represents the API backend

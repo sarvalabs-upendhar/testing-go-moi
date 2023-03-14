@@ -1,6 +1,8 @@
 package api
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"math/big"
@@ -15,6 +17,7 @@ import (
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/moichain/dhruva"
 	"github.com/sarvalabs/moichain/guna"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
@@ -43,6 +46,7 @@ type MockStateManager struct {
 	context        map[types.Address]*Context
 	logicManifests map[string][]byte
 	logicStorage   map[string]map[string]string // first key denotes logic id, second key denotes storage key
+	accMetaInfo    map[types.Address]*types.AccountMetaInfo
 }
 
 func (s *MockStateManager) GetLogicManifest(logicID types.LogicID, stateHash types.Hash) ([]byte, error) {
@@ -52,6 +56,25 @@ func (s *MockStateManager) GetLogicManifest(logicID types.LogicID, stateHash typ
 	}
 
 	return logicManifest, nil
+}
+
+func (s *MockStateManager) setAccountMetaInfo(
+	t *testing.T,
+	address types.Address,
+	ts *types.AccountMetaInfo,
+) {
+	t.Helper()
+
+	s.accMetaInfo[address] = ts
+}
+
+func (s *MockStateManager) GetAccountMetaInfo(addr types.Address) (*types.AccountMetaInfo, error) {
+	accMetaInfo, ok := s.accMetaInfo[addr]
+	if !ok {
+		return nil, types.ErrKeyNotFound
+	}
+
+	return accMetaInfo, nil
 }
 
 func (s *MockStateManager) SetStorageEntry(logicID types.LogicID, storage map[string]string) {
@@ -111,6 +134,7 @@ func NewMockStateManager(t *testing.T) *MockStateManager {
 	mockState.context = make(map[types.Address]*Context)
 	mockState.logicManifests = make(map[string][]byte)
 	mockState.logicStorage = make(map[string]map[string]string, 0)
+	mockState.accMetaInfo = make(map[types.Address]*types.AccountMetaInfo)
 
 	return mockState
 }
@@ -436,6 +460,34 @@ func (d *MockDatabase) ReadEntry(key []byte) ([]byte, error) {
 	}
 
 	return nil, types.ErrKeyNotFound
+}
+
+func (d *MockDatabase) setList(t *testing.T, addressList []types.Address) {
+	t.Helper()
+
+	for _, addr := range addressList {
+		key, _ := dhruva.BucketIDFromAddress(addr.Bytes())
+		d.setDBEntry(key)
+	}
+}
+
+func (d *MockDatabase) GetEntriesWithPrefix(ctx context.Context, prefix []byte) (chan types.DBEntry, error) {
+	entries := make(chan types.DBEntry)
+
+	go func() {
+		for k, v := range d.database {
+			if bytes.HasPrefix([]byte(k), prefix) {
+				entries <- types.DBEntry{
+					Key:   []byte(k),
+					Value: v,
+				}
+			}
+		}
+
+		close(entries)
+	}()
+
+	return entries, nil
 }
 
 func GenerateRandomIXPayload(t *testing.T, size uint32) []byte {
