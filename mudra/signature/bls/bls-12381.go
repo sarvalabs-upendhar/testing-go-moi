@@ -1,9 +1,10 @@
 package bls
 
 import (
+	blst "github.com/supranational/blst/bindings/go"
+
 	"github.com/sarvalabs/moichain/mudra/common"
 	"github.com/sarvalabs/moichain/mudra/kramaid"
-	blst "github.com/supranational/blst/bindings/go"
 )
 
 const BLSPublicKeyLength = 48

@@ -2,6 +2,7 @@ package tree
 
 import (
 	"github.com/munna0908/smt"
+
 	"github.com/sarvalabs/moichain/types"
 )
 

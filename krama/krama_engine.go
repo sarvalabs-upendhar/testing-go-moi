@@ -9,22 +9,6 @@ import (
 	"sync"
 	"time"
 
-	gtypes "github.com/sarvalabs/moichain/guna/types"
-	ktypes "github.com/sarvalabs/moichain/krama/types"
-	ptypes "github.com/sarvalabs/moichain/poorna/types"
-
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/guna"
-	"github.com/sarvalabs/moichain/ixpool"
-	"github.com/sarvalabs/moichain/krama/kbft"
-	"github.com/sarvalabs/moichain/krama/observer"
-	"github.com/sarvalabs/moichain/mudra"
-	id "github.com/sarvalabs/moichain/mudra/kramaid"
-	"github.com/sarvalabs/moichain/poorna/flux"
-	"github.com/sarvalabs/moichain/telemetry/tracing"
-	"github.com/sarvalabs/moichain/types"
-	"github.com/sarvalabs/moichain/utils"
-
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
@@ -34,6 +18,21 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/crypto/blake2b"
+
+	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/guna"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
+	"github.com/sarvalabs/moichain/ixpool"
+	"github.com/sarvalabs/moichain/krama/kbft"
+	"github.com/sarvalabs/moichain/krama/observer"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
+	"github.com/sarvalabs/moichain/mudra"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/poorna/flux"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
+	"github.com/sarvalabs/moichain/telemetry/tracing"
+	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/utils"
 )
 
 const (
@@ -1098,7 +1097,11 @@ func (k *Engine) createProposalGrid(slot *ktypes.Slot) ([]*types.Tesseract, erro
 	}
 
 	clusterState := slot.ClusterInfo()
-	clusterState.ComputeICSHash()
+
+	_, err := clusterState.ComputeICSHash()
+	if err != nil {
+		return nil, err
+	}
 
 	receipts, err := k.exec.ExecuteInteractions(
 		clusterState.ID,

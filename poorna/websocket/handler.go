@@ -6,6 +6,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/hashicorp/go-hclog"
+
 	"github.com/sarvalabs/moichain/utils"
 )
 

@@ -8,6 +8,8 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/moichain/common/tests"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
 	ktypes "github.com/sarvalabs/moichain/krama/types"
@@ -15,7 +17,6 @@ import (
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 	"github.com/sarvalabs/moichain/utils"
-	"github.com/stretchr/testify/require"
 )
 
 func TestHasTesseract(t *testing.T) {
@@ -1829,7 +1830,7 @@ func TestAddTesseractWithOutState_SyncScenarios(t *testing.T) {
 				sm.insertPublicKeys(kramaIDs, publicKeys)
 			},
 			preTestFn: func(c *ChainManager, ts *types.Tesseract) {
-				networkID = signTesseract(t, c.sm.(*MockStateManager), ts) //nolint
+				networkID = signTesseract(t, c.sm.(*MockStateManager), ts) //nolint:forcetypeassert
 			},
 		},
 		{
@@ -1842,7 +1843,7 @@ func TestAddTesseractWithOutState_SyncScenarios(t *testing.T) {
 				sm.insertPublicKeys(kramaIDs, publicKeys)
 			},
 			preTestFn: func(c *ChainManager, ts *types.Tesseract) {
-				networkID = signTesseract(t, c.sm.(*MockStateManager), ts) //nolint
+				networkID = signTesseract(t, c.sm.(*MockStateManager), ts) //nolint:forcetypeassert
 			},
 		},
 		{
@@ -1855,7 +1856,7 @@ func TestAddTesseractWithOutState_SyncScenarios(t *testing.T) {
 				sm.insertPublicKeys(kramaIDs, publicKeys)
 			},
 			preTestFn: func(c *ChainManager, ts *types.Tesseract) {
-				networkID = signTesseract(t, c.sm.(*MockStateManager), ts) //nolint
+				networkID = signTesseract(t, c.sm.(*MockStateManager), ts) //nolint:forcetypeassert
 				c.cfg.ShouldExecute = false
 			},
 		},

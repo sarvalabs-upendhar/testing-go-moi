@@ -6,26 +6,25 @@ import (
 	"testing"
 	"time"
 
-	"github.com/libp2p/go-libp2p/core/peer"
-	testsCommon "github.com/sarvalabs/moichain/common/tests"
-	"github.com/sarvalabs/moichain/guna/senatus"
-	gtypes "github.com/sarvalabs/moichain/guna/types"
-
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
-
 	"github.com/sarvalabs/go-polo"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/moichain/common"
+	testsCommon "github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/moichain/guna/senatus"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
 	mudraCommon "github.com/sarvalabs/moichain/mudra/common"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 	"github.com/sarvalabs/moichain/utils"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 const (

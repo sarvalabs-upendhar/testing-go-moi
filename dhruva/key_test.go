@@ -4,9 +4,9 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"github.com/sarvalabs/moichain/types"
-
 	"github.com/stretchr/testify/require"
+
+	"github.com/sarvalabs/moichain/types"
 )
 
 func TestGetAddressHeightKey(t *testing.T) {

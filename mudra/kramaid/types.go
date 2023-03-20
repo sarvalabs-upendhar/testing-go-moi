@@ -5,11 +5,9 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/pkg/errors"
-
-	"github.com/mr-tron/base58"
-
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/mr-tron/base58"
+	"github.com/pkg/errors"
 
 	"github.com/sarvalabs/moichain/mudra/common"
 )

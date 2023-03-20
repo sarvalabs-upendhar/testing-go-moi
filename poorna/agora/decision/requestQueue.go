@@ -5,9 +5,8 @@ import (
 	"sync"
 	"time"
 
-	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
-
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
 	"github.com/sarvalabs/moichain/types"
 )
 

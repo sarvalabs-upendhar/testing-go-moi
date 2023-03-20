@@ -4,17 +4,14 @@ import (
 	"bufio"
 	"sync"
 
-	"github.com/hashicorp/go-hclog"
-	"github.com/pkg/errors"
-
-	ptypes "github.com/sarvalabs/moichain/poorna/types"
-
-	id "github.com/sarvalabs/moichain/mudra/kramaid"
-
 	mapset "github.com/deckarep/golang-set"
+	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/pkg/errors"
 
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 )
 

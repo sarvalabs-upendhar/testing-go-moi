@@ -4,9 +4,9 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
-	"github.com/sarvalabs/moichain/types"
 
 	"github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/types"
 )
 
 type MsgType int64

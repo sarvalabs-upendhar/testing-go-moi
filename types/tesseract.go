@@ -3,13 +3,11 @@ package types
 import (
 	"sync"
 
-	"github.com/pkg/errors"
-
 	"github.com/mr-tron/base58"
-
+	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
-	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/mudra/kramaid"
 )
 
 type ParticipantRole int
@@ -24,9 +22,9 @@ type ContextDelta map[Address]*DeltaGroup
 
 type DeltaGroup struct {
 	Role             ParticipantRole
-	BehaviouralNodes []id.KramaID
-	RandomNodes      []id.KramaID
-	ReplacedNodes    []id.KramaID
+	BehaviouralNodes []kramaid.KramaID
+	RandomNodes      []kramaid.KramaID
+	ReplacedNodes    []kramaid.KramaID
 }
 
 type ContextLockInfo struct {
@@ -261,7 +259,7 @@ type CanonicalTesseractWithoutSeal struct {
 type Item struct {
 	Tesseract *Tesseract
 	Delta     map[Hash][]byte
-	Sender    id.KramaID
+	Sender    kramaid.KramaID
 }
 
 type TesseractStack struct {

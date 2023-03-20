@@ -6,11 +6,10 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/types"
-
-	"github.com/stretchr/testify/require"
 )
 
 func TestValidateAddress(t *testing.T) {

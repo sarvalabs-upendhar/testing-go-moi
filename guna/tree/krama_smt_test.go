@@ -3,15 +3,13 @@ package tree
 import (
 	"testing"
 
-	"github.com/sarvalabs/moichain/dhruva"
-
-	"github.com/sarvalabs/moichain/types"
-
 	"github.com/decred/dcrd/crypto/blake256"
+	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/go-polo"
 	"github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/moichain/dhruva"
+	"github.com/sarvalabs/moichain/types"
 )
 
 func TestKramaHashTree_Set_NewEntry(t *testing.T) {

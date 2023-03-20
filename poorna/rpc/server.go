@@ -6,13 +6,13 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gorilla/rpc/v2/json2"
-	"github.com/hashicorp/go-hclog"
-	"github.com/sarvalabs/moichain/poorna/websocket"
-	"github.com/sarvalabs/moichain/utils"
-
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2"
+	"github.com/gorilla/rpc/v2/json2"
+	"github.com/hashicorp/go-hclog"
+
+	"github.com/sarvalabs/moichain/poorna/websocket"
+	"github.com/sarvalabs/moichain/utils"
 )
 
 // Server is a struct that represents a wrapper for a libp2p RPC server

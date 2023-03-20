@@ -6,15 +6,13 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/sarvalabs/go-polo"
-
-	ptypes "github.com/sarvalabs/moichain/poorna/types"
-
 	"github.com/hashicorp/go-hclog"
+	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/moichain/ixpool"
 	"github.com/sarvalabs/moichain/lattice"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 	"github.com/sarvalabs/moichain/utils"
 )

@@ -5,14 +5,13 @@ import (
 	"math/big"
 	"sync"
 
-	gtypes "github.com/sarvalabs/moichain/guna/types"
-
 	"github.com/decred/dcrd/crypto/blake256"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
 
 	"github.com/sarvalabs/moichain/dhruva"
 	"github.com/sarvalabs/moichain/guna/tree"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/types"
 )
@@ -46,7 +45,7 @@ type StateObject struct {
 
 	logicTree       tree.MerkleTree
 	metaStorageTree tree.MerkleTree
-	fileTree        tree.MerkleTree //nolint
+	fileTree        tree.MerkleTree //nolint:unused
 
 	dirtyEntries Storage
 	receipts     types.Receipts

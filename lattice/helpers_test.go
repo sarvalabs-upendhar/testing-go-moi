@@ -17,6 +17,8 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/guna"
@@ -26,7 +28,6 @@ import (
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 	"github.com/sarvalabs/moichain/utils"
-	"github.com/stretchr/testify/require"
 )
 
 const GenesisFile = "genesis_test"
@@ -1921,7 +1922,7 @@ func checkForAddedTesseracts(
 		accType,
 		false,
 		true,
-		c.db.(*MockDB), //nolint
+		c.db.(*MockDB), //nolint:forcetypeassert
 		ts...,
 	)
 

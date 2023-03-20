@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/sarvalabs/moichain/common/tests"
-
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sarvalabs/moichain/common/tests"
 )
 
 type RequestArgs struct {

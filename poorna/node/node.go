@@ -5,15 +5,7 @@ import (
 	"net"
 	"net/http"
 	"os"
-
-	id "github.com/sarvalabs/moichain/mudra/kramaid"
-
-	"github.com/sarvalabs/moichain/guna/senatus"
-	gtypes "github.com/sarvalabs/moichain/guna/types"
-
-	"github.com/sarvalabs/moichain/ixpool"
-	"github.com/sarvalabs/moichain/lattice"
-	"github.com/sarvalabs/moichain/utils"
+	"time"
 
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
@@ -24,22 +16,29 @@ import (
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/dhruva"
 	"github.com/sarvalabs/moichain/guna"
+	"github.com/sarvalabs/moichain/guna/senatus"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
+	"github.com/sarvalabs/moichain/ixpool"
 	"github.com/sarvalabs/moichain/jug"
 	"github.com/sarvalabs/moichain/krama"
+	"github.com/sarvalabs/moichain/lattice"
 	"github.com/sarvalabs/moichain/mudra"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/poorna"
 	"github.com/sarvalabs/moichain/poorna/api"
 	"github.com/sarvalabs/moichain/poorna/flux"
 	krpc "github.com/sarvalabs/moichain/poorna/rpc"
 	"github.com/sarvalabs/moichain/poorna/syncer"
 	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/utils"
 )
 
 const (
-	lruSize        = 2000
-	validatorType  = 1
-	kramaIDVersion = 1
-	syncMode       = "full"
+	lruSize           = 2000
+	validatorType     = 1
+	kramaIDVersion    = 1
+	syncMode          = "full"
+	readHeaderTimeout = 5 * time.Second
 )
 
 type SubHandlers struct {
@@ -491,7 +490,7 @@ func (n *Node) stopTelemetry() {
 }
 
 func (n *Node) startPrometheusServer(listenAddr *net.TCPAddr) *http.Server {
-	srv := &http.Server{ //nolint
+	srv := &http.Server{
 		Addr: listenAddr.String(),
 		Handler: promhttp.InstrumentMetricHandler(
 			prometheus.DefaultRegisterer, promhttp.HandlerFor(
@@ -499,8 +498,9 @@ func (n *Node) startPrometheusServer(listenAddr *net.TCPAddr) *http.Server {
 				promhttp.HandlerOpts{},
 			),
 		),
+		ReadHeaderTimeout: readHeaderTimeout,
 	}
-	// TODO: Slowloris attack fix
+
 	go func() {
 		n.logger.Info("Prometheus server started", "addr=", listenAddr.String())
 

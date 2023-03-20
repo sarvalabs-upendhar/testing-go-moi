@@ -5,14 +5,13 @@ import (
 	"testing"
 	"time"
 
-	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
-
-	"github.com/sarvalabs/moichain/dhruva"
-
-	"github.com/sarvalabs/moichain/common/tests"
-	"github.com/sarvalabs/moichain/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/moichain/dhruva"
+	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 func TestHandleRequest_StateNotAvailable(t *testing.T) {

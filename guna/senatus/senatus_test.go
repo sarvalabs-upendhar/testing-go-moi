@@ -6,19 +6,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/libp2p/go-libp2p/core/peer"
-
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/dhruva"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/types"
 	"github.com/sarvalabs/moichain/utils"
-	"github.com/stretchr/testify/require"
 )
 
 func TestReputationEngine_NodeMetaInfo(t *testing.T) {

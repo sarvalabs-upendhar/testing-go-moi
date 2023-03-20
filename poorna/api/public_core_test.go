@@ -4,10 +4,8 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/sarvalabs/go-polo"
-
 	"github.com/pkg/errors"
-
+	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/common/tests"

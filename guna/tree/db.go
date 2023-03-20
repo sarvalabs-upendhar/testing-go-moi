@@ -3,9 +3,8 @@ package tree
 import (
 	"sync"
 
-	"github.com/sarvalabs/moichain/types"
-
 	db "github.com/sarvalabs/moichain/dhruva"
+	"github.com/sarvalabs/moichain/types"
 )
 
 // persistentDB defines all methods that need to be implemented by persistent DB to handle tree data

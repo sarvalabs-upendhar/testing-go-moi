@@ -5,17 +5,17 @@ import (
 	"context"
 	"testing"
 
-	"github.com/libp2p/go-libp2p/core/peer"
-
 	"github.com/hashicorp/go-hclog"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/dhruva"
 	"github.com/sarvalabs/moichain/dhruva/db"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/types"
-	"github.com/stretchr/testify/require"
 )
 
 type MockDB struct {

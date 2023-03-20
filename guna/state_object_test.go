@@ -4,14 +4,14 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/sarvalabs/moichain/guna/tree"
-
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/moichain/guna/tree"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/types"
-	"github.com/stretchr/testify/require"
 )
 
 func TestBalanceOf(t *testing.T) {

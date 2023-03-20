@@ -1,13 +1,14 @@
 package ecdsa
 
 import (
-	hexutil "encoding/hex"
+	"encoding/hex"
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/sarvalabs/moichain/mudra/common"
 	"github.com/sarvalabs/moichain/mudra/kramaid"
-	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -30,7 +31,7 @@ func TestECDSASignWithSecp256k1(t *testing.T) {
 	}
 
 	rawSig := common.MarshalSignature(common.Signature(s256))
-	rawSigInHex := hexutil.EncodeToString(rawSig)
+	rawSigInHex := hex.EncodeToString(rawSig)
 	assert.EqualValues(t,
 		"0146304402207bb29ab5609dd826c114aed914f72b6f5d4860637671dafe7"+
 			"47d519a190b7528022011a02462f8f66ff1645e7df7466e2323d50a224eaee35104c5082aa90c9a027e",

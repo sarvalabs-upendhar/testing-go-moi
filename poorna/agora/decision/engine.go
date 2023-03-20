@@ -5,12 +5,12 @@ import (
 	"sync"
 	"time"
 
-	ptypes "github.com/sarvalabs/moichain/poorna/types"
-
 	"github.com/hashicorp/go-hclog"
+
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/poorna/agora/db"
 	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 )
 

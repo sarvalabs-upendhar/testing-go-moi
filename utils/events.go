@@ -1,10 +1,10 @@
 package utils
 
 import (
-	ptypes "github.com/sarvalabs/moichain/poorna/types"
-
 	"github.com/libp2p/go-libp2p/core/peer"
+
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 )
 

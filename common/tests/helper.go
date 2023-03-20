@@ -13,23 +13,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/multiformats/go-multiaddr"
-
-	"github.com/libp2p/go-libp2p/core/peer"
-
-	"github.com/sarvalabs/moichain/mudra"
-	mudracommon "github.com/sarvalabs/moichain/mudra/common"
-	"github.com/sarvalabs/moichain/mudra/poi"
-	"github.com/sarvalabs/moichain/mudra/poi/moinode"
-
-	"github.com/stretchr/testify/assert"
-
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/multiformats/go-multiaddr"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	gtypes "github.com/sarvalabs/moichain/guna/types"
+	"github.com/sarvalabs/moichain/mudra"
+	mudracommon "github.com/sarvalabs/moichain/mudra/common"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/mudra/poi"
+	"github.com/sarvalabs/moichain/mudra/poi/moinode"
 	"github.com/sarvalabs/moichain/types"
 )
 

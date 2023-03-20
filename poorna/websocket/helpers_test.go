@@ -9,8 +9,9 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/hashicorp/go-hclog"
-	"github.com/sarvalabs/moichain/utils"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sarvalabs/moichain/utils"
 )
 
 func newMockServer(t *testing.T) *httptest.Server {

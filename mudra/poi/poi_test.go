@@ -5,8 +5,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/sarvalabs/moichain/mudra/common"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sarvalabs/moichain/mudra/common"
 )
 
 func TestGetKeystore(t *testing.T) {

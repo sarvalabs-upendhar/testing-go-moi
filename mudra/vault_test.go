@@ -5,10 +5,11 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/moichain/mudra/common"
 	"github.com/sarvalabs/moichain/mudra/poi"
 	"github.com/sarvalabs/moichain/mudra/poi/moinode"
-	"github.com/stretchr/testify/require"
 )
 
 func TestBLSSignAgg(t *testing.T) {

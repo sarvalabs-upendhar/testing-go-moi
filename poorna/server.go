@@ -8,13 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/libp2p/go-libp2p/core/peerstore"
-	"github.com/sarvalabs/moichain/guna/senatus"
-
-	gtypes "github.com/sarvalabs/moichain/guna/types"
-
-	"github.com/pkg/errors"
-
+	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p"
 	kdht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -22,15 +16,16 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/core/routing"
 	discovery "github.com/libp2p/go-libp2p/p2p/discovery/routing"
-
-	"github.com/hashicorp/go-hclog"
-
 	maddr "github.com/multiformats/go-multiaddr"
+	"github.com/pkg/errors"
 
 	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/guna/senatus"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
 	"github.com/sarvalabs/moichain/mudra"
 	mcommon "github.com/sarvalabs/moichain/mudra/common"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"

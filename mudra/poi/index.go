@@ -15,10 +15,11 @@ import (
 
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/chaincfg"
+	blst "github.com/supranational/blst/bindings/go"
+
 	"github.com/sarvalabs/moichain/mudra/common"
 	"github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/mudra/poi/moinode"
-	blst "github.com/supranational/blst/bindings/go"
 )
 
 // GetKeystore returns keystore of node that persists private key required for consensus and p2p network communication

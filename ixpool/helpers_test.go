@@ -7,12 +7,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/moichain/common/tests"
-
-	"github.com/hashicorp/go-hclog"
 	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/types"
 	"github.com/sarvalabs/moichain/utils"
 )

@@ -7,18 +7,17 @@ import (
 	"sync"
 	"time"
 
-	ptypes "github.com/sarvalabs/moichain/poorna/types"
-
-	"github.com/sarvalabs/moichain/utils"
-
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
+
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/poorna"
 	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/utils"
 )
 
 const (

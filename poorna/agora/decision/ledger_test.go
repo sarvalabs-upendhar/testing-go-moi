@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/moichain/dhruva"
-
 	"github.com/hashicorp/go-hclog"
-	"github.com/sarvalabs/moichain/common/tests"
-	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/moichain/dhruva"
+	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
 )
 
 func TestGetAssociatedPeers_FetchFromCache(t *testing.T) {

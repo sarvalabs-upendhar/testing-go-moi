@@ -6,36 +6,30 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	mrand "math/rand"
 	"testing"
 	"time"
 
-	discovery "github.com/libp2p/go-libp2p/p2p/discovery/routing"
-
-	gtypes "github.com/sarvalabs/moichain/guna/types"
-
-	mrand "math/rand"
-
-	errors "github.com/pkg/errors"
-
 	"github.com/hashicorp/go-hclog"
-	"github.com/stretchr/testify/require"
-
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
-	libp2pPeer "github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/core/routing"
-
+	discovery "github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	"github.com/multiformats/go-multiaddr"
-
+	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/common/tests"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
 	kcrypto "github.com/sarvalabs/moichain/mudra"
 	mudracommon "github.com/sarvalabs/moichain/mudra/common"
 	"github.com/sarvalabs/moichain/mudra/kramaid"
@@ -55,13 +49,13 @@ type MockVault struct {
 
 type MockReputationEngine struct {
 	ntq      map[kramaid.KramaID]float32
-	peerInfo map[libp2pPeer.ID]*gtypes.NodeMetaInfo
+	peerInfo map[peer.ID]*gtypes.NodeMetaInfo
 }
 
 func NewMockReputationEngine() *MockReputationEngine {
 	return &MockReputationEngine{
 		ntq:      make(map[kramaid.KramaID]float32),
-		peerInfo: make(map[libp2pPeer.ID]*gtypes.NodeMetaInfo),
+		peerInfo: make(map[peer.ID]*gtypes.NodeMetaInfo),
 	}
 }
 
@@ -74,7 +68,7 @@ func (m *MockReputationEngine) AddNewPeer(key kramaid.KramaID, data *gtypes.Node
 	return m.AddNewPeerWithPeerID(peerID, data)
 }
 
-func (m *MockReputationEngine) AddNewPeerWithPeerID(peerID libp2pPeer.ID, data *gtypes.NodeMetaInfo) error {
+func (m *MockReputationEngine) AddNewPeerWithPeerID(peerID peer.ID, data *gtypes.NodeMetaInfo) error {
 	m.peerInfo[peerID] = data
 
 	return nil
@@ -102,7 +96,7 @@ func (m *MockReputationEngine) GetAddress(key kramaid.KramaID) ([]multiaddr.Mult
 	return m.GetAddressByPeerID(peerID)
 }
 
-func (m *MockReputationEngine) GetAddressByPeerID(peerID libp2pPeer.ID) ([]multiaddr.Multiaddr, error) {
+func (m *MockReputationEngine) GetAddressByPeerID(peerID peer.ID) ([]multiaddr.Multiaddr, error) {
 	if peerInfo, ok := m.peerInfo[peerID]; ok {
 		return utils.MultiAddrFromString(peerInfo.Addrs...), nil
 	}
@@ -110,7 +104,7 @@ func (m *MockReputationEngine) GetAddressByPeerID(peerID libp2pPeer.ID) ([]multi
 	return nil, types.ErrKramaIDNotFound
 }
 
-func (m *MockReputationEngine) SetPeerInfo(key libp2pPeer.ID, peerInfo *gtypes.NodeMetaInfo) {
+func (m *MockReputationEngine) SetPeerInfo(key peer.ID, peerInfo *gtypes.NodeMetaInfo) {
 	m.peerInfo[key] = peerInfo
 }
 
@@ -222,17 +216,17 @@ func setServerPeers(t *testing.T, s *Server, peersList []kramaid.KramaID) {
 }
 
 // helper functions
-func getPeerInfo(t *testing.T, server *Server) *libp2pPeer.AddrInfo {
+func getPeerInfo(t *testing.T, server *Server) *peer.AddrInfo {
 	t.Helper()
 
 	address := server.GetAddrs()
 	networkID, err := server.id.PeerID()
 	require.NoError(t, err)
 
-	peerID, err := libp2pPeer.Decode(networkID)
+	peerID, err := peer.Decode(networkID)
 	require.NoError(t, err)
 
-	return &libp2pPeer.AddrInfo{
+	return &peer.AddrInfo{
 		ID:    peerID,
 		Addrs: address,
 	}
@@ -267,10 +261,10 @@ func getMultiAddresses(t *testing.T, hosts []host.Host) []multiaddr.Multiaddr {
 	return addresses
 }
 
-func getPeerIDs(t *testing.T, hosts []host.Host) []libp2pPeer.ID {
+func getPeerIDs(t *testing.T, hosts []host.Host) []peer.ID {
 	t.Helper()
 
-	peerIDs := make([]libp2pPeer.ID, len(hosts))
+	peerIDs := make([]peer.ID, len(hosts))
 
 	for i, h := range hosts {
 		peerIDs[i] = h.ID()
@@ -539,7 +533,7 @@ func sendMessage(t *testing.T, p *Peer, msg []byte) {
 	require.NoError(t, err)
 }
 
-func addPeerInfo(t *testing.T, s *Server, info *libp2pPeer.AddrInfo) {
+func addPeerInfo(t *testing.T, s *Server, info *peer.AddrInfo) {
 	t.Helper()
 	s.host.Peerstore().AddAddrs(info.ID, info.Addrs, peerstore.PermanentAddrTTL)
 }
@@ -734,7 +728,7 @@ func checkForKadDHT(t *testing.T, server *Server) {
 	require.NotNil(t, server.kadDHT) // make sure dht setup
 }
 
-func checkConnection(t *testing.T, server *Server, peerID libp2pPeer.ID, connected bool) {
+func checkConnection(t *testing.T, server *Server, peerID peer.ID, connected bool) {
 	t.Helper()
 
 	if connected {

@@ -1,11 +1,12 @@
 package schnorr
 
 import (
-	crand "crypto/rand"
+	"crypto/rand"
 	"crypto/sha256"
 	"errors"
 
 	sr25519In "github.com/oasisprotocol/curve25519-voi/primitives/sr25519"
+
 	"github.com/sarvalabs/moichain/mudra/common"
 )
 
@@ -41,7 +42,7 @@ func (privKey *Sr25519PrivKey) Sign(msg []byte) ([]byte, error) {
 	signingCtx := sr25519In.NewSigningContext([]byte{})
 	st := signingCtx.NewTranscriptBytes(msg)
 
-	sig, err := privKey.kp.Sign(crand.Reader, st)
+	sig, err := privKey.kp.Sign(rand.Reader, st)
 	if err != nil {
 		return nil, errors.New("failed to sign message: " + err.Error())
 	}

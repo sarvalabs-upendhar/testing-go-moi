@@ -8,9 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sarvalabs/moichain/types"
-
 	"github.com/hashicorp/go-hclog"
+	"github.com/libp2p/go-libp2p-gorpc/stats"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -20,8 +19,7 @@ import (
 
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/poorna/moirpc/ttlmap"
-
-	stats "github.com/libp2p/go-libp2p-gorpc/stats"
+	"github.com/sarvalabs/moichain/types"
 )
 
 // ClientOption allows for functional setting of options on a Client.
@@ -679,7 +677,7 @@ func (c *Client) makeCall(call *Call, ttl time.Duration) {
 func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 	var stream network.Stream
 
-	item, err := c.streamMap.Get(call.Dest.Pretty())
+	item, err := c.streamMap.Get(call.Dest.String())
 
 	if err != nil {
 		ns, err := c.host.NewStream(call.ctx, call.Dest, c.protocol)
@@ -766,10 +764,10 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 	// this will be replaced by TTL specified by the user' making
 	// the RPC call.
 	if ttl != 0 {
-		_, err = c.streamMap.Get(call.Dest.Pretty())
+		_, err = c.streamMap.Get(call.Dest.String())
 		if err != nil {
-			c.logger.Warn("[send]", " adding peer id in the ttl map ", call.Dest.Pretty())
-			setErr := c.streamMap.Set(call.Dest.Pretty(), ttlmap.NewItem(stream, ttlmap.WithTTL(ttl)), nil)
+			c.logger.Warn("[send]", " adding peer id in the ttl map ", call.Dest.String())
+			setErr := c.streamMap.Set(call.Dest.String(), ttlmap.NewItem(stream, ttlmap.WithTTL(ttl)), nil)
 
 			if setErr != nil {
 				call.logger.Error("[send]", "failed to Set", setErr)

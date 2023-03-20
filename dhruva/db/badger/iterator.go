@@ -2,6 +2,7 @@ package badger
 
 import (
 	"github.com/dgraph-io/badger/v3"
+
 	"github.com/sarvalabs/moichain/types"
 )
 

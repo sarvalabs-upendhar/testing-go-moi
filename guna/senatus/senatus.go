@@ -11,25 +11,21 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sarvalabs/moichain/mudra"
-
-	"github.com/sarvalabs/moichain/utils"
-
-	"github.com/libp2p/go-libp2p/core/peer"
-
-	gtypes "github.com/sarvalabs/moichain/guna/types"
-
-	ptypes "github.com/sarvalabs/moichain/poorna/types"
-
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/moichain/dhruva"
 	"github.com/sarvalabs/moichain/dhruva/db"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
+	"github.com/sarvalabs/moichain/mudra"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/utils"
 )
 
 const (
@@ -59,7 +55,7 @@ type ReputationEngine struct {
 	dirtyLock           sync.RWMutex
 	dirtyEntries        map[peer.ID]*gtypes.NodeMetaInfo
 	network             network
-	msgQueueLock        sync.Mutex //nolint
+	msgQueueLock        sync.Mutex //nolint:unused
 	signalChan          chan struct{}
 	pendingMessageQueue *gtypes.RequestQueue
 }

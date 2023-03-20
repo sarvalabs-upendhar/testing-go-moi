@@ -5,8 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sarvalabs/moichain/types"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sarvalabs/moichain/types"
 )
 
 func getLogicID(t *testing.T, logicID string) types.LogicID {

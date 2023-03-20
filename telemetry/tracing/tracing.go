@@ -4,15 +4,15 @@ import (
 	"context"
 	"fmt"
 
-	id "github.com/sarvalabs/moichain/mudra/kramaid"
-	"go.opentelemetry.io/otel/attribute"
-
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/jaeger"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	traceapi "go.opentelemetry.io/otel/trace"
+
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
 )
 
 // shutdownTracerProvider adds a shutdown method for tracer providers.
@@ -53,6 +53,8 @@ func buildExporters(ctx context.Context, jaegerAddress string) ([]trace.SpanExpo
 
 	return exporters, nil
 }
+
+// TODO: we're adding an unexported type in an exported func(fix)
 
 // NewTracerProvider creates and configures a TracerProvider.
 func NewTracerProvider(

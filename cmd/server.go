@@ -11,19 +11,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sarvalabs/moichain/telemetry/tracing"
-	"go.opentelemetry.io/otel"
-
-	"github.com/pkg/errors"
-
-	"github.com/sarvalabs/moichain/mudra/kramaid"
-
 	"github.com/libp2p/go-libp2p/core/protocol"
 	maddr "github.com/multiformats/go-multiaddr"
+	"github.com/pkg/errors"
 	"github.com/pkg/profile"
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/poorna/node"
 	"github.com/spf13/cobra"
+	"go.opentelemetry.io/otel"
+
+	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/poorna/node"
+	"github.com/sarvalabs/moichain/telemetry/tracing"
 )
 
 var ErrReadingConfig = errors.New("error reading config file")

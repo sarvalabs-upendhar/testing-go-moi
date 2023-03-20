@@ -5,10 +5,10 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/sarvalabs/moichain/mudra/common"
-
 	"github.com/tyler-smith/go-bip39"
 	"golang.org/x/crypto/scrypt"
+
+	"github.com/sarvalabs/moichain/mudra/common"
 )
 
 // checkAuthenticity is to verify the authenticity of the keystore being altered

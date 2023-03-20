@@ -3,11 +3,10 @@ package syncer
 import (
 	"sync"
 
-	"github.com/sarvalabs/moichain/dhruva"
-
-	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
-
 	"github.com/pkg/errors"
+
+	"github.com/sarvalabs/moichain/dhruva"
+	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
 	"github.com/sarvalabs/moichain/types"
 )
 

@@ -10,12 +10,6 @@ import (
 	"sync"
 	"time"
 
-	ptypes "github.com/sarvalabs/moichain/poorna/types"
-
-	gtypes "github.com/sarvalabs/moichain/guna/types"
-
-	ktypes "github.com/sarvalabs/moichain/krama/types"
-
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -24,8 +18,11 @@ import (
 
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/guna"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
 	"github.com/sarvalabs/moichain/mudra"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 	"github.com/sarvalabs/moichain/utils"
 )

@@ -3,9 +3,8 @@ package api
 import (
 	"context"
 
-	ptypes "github.com/sarvalabs/moichain/poorna/types"
-
 	"github.com/sarvalabs/moichain/dhruva"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 )
 

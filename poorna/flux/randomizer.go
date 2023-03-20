@@ -9,22 +9,20 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
-
-	ptypes "github.com/sarvalabs/moichain/poorna/types"
-
-	"github.com/sarvalabs/moichain/utils"
-
 	"github.com/hashicorp/go-hclog"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
+	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
+
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/poorna"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/telemetry/tracing"
 	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/utils"
 )
 
 const (

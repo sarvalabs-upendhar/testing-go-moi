@@ -6,12 +6,11 @@ import (
 	"fmt"
 	"sync"
 
-	db "github.com/sarvalabs/moichain/dhruva"
-
-	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
-
 	"github.com/hashicorp/go-hclog"
+
+	db "github.com/sarvalabs/moichain/dhruva"
 	dhruva "github.com/sarvalabs/moichain/dhruva/db"
+	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
 	"github.com/sarvalabs/moichain/types"
 )
 

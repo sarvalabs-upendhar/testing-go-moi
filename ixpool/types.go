@@ -6,9 +6,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/sarvalabs/moichain/utils"
-
 	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/utils"
 )
 
 const MaxWaitCounter = 20
@@ -140,7 +139,7 @@ func (m *accountsMap) get(addr types.Address) *account {
 }
 
 // promoted returns the number of all promoted transactions.
-func (m *accountsMap) promoted() (total uint64) { //nolint
+func (m *accountsMap) promoted() (total uint64) { //nolint:unused
 	m.Range(func(key, value interface{}) bool {
 		addressKey, ok := key.(types.Address)
 		if !ok {

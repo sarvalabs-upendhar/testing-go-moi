@@ -17,8 +17,9 @@ import (
 	"time"
 
 	"github.com/eknkc/basex"
-	"github.com/sarvalabs/moichain/mudra/common"
 	"golang.org/x/crypto/scrypt"
+
+	"github.com/sarvalabs/moichain/mudra/common"
 )
 
 const (
@@ -254,6 +255,7 @@ func CheckForKYC(userDefAddr, moiIDBaseURL string) (bool, error) {
 
 	requestBody := bytes.NewBuffer(checkForKYCPayload)
 
+	// TODO: Resolve error
 	client := &http.Client{
 		Transport: &http.Transport{
 			DialContext: (&net.Dialer{

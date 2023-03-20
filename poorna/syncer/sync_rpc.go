@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 
-	ptypes "github.com/sarvalabs/moichain/poorna/types"
-
 	"github.com/libp2p/go-libp2p/core/peer"
+
 	"github.com/sarvalabs/moichain/poorna/moirpc"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 )
 

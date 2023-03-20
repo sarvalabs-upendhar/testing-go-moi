@@ -4,12 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"github.com/sarvalabs/moichain/utils"
+	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/common/tests"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/types"
-	"github.com/stretchr/testify/require"
+	"github.com/sarvalabs/moichain/utils"
 )
 
 func TestPeerDisconnected(t *testing.T) {

@@ -8,9 +8,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-hclog"
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/utils"
-	"github.com/stretchr/testify/require"
 )
 
 func Test_handleRequest_Subscribe(t *testing.T) {
