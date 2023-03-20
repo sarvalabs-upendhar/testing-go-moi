@@ -266,9 +266,7 @@ func (b *ArrayOfBits) PickRandom() (int, bool) {
 		return 0, false
 	}
 
-	b.mtx.Lock()
 	trueIndices := b.GetTrueIndices()
-	b.mtx.Unlock()
 
 	if len(trueIndices) == 0 { // no bits set to true
 		return 0, false
@@ -278,13 +276,13 @@ func (b *ArrayOfBits) PickRandom() (int, bool) {
 }
 
 func (b *ArrayOfBits) TrueIndicesSize() int {
-	b.mtx.Lock()
-	defer b.mtx.Unlock()
-
 	return len(b.GetTrueIndices())
 }
 
 func (b *ArrayOfBits) GetTrueIndices() []int {
+	b.mtx.Lock()
+	defer b.mtx.Unlock()
+
 	trueIndices := make([]int, 0, b.Size)
 	curBit := 0
 	numElements := len(b.Elements)
