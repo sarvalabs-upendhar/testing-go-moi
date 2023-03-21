@@ -189,8 +189,8 @@ func (c *Client) Tesseract(args *ptypes.TesseractArgs) (*types.Tesseract, error)
 	return &tess, nil
 }
 
-// GetAssetInfoByAssetID returns asset description for the given assetID
-func (c *Client) GetAssetInfoByAssetID(assetID string) (*types.AssetDescriptor, error) {
+// AssetInfoByAssetID returns asset description for the given assetID
+func (c *Client) AssetInfoByAssetID(assetID string) (*types.AssetDescriptor, error) {
 	args := &ptypes.AssetDescriptorArgs{
 		AssetID: assetID,
 	}
@@ -216,8 +216,8 @@ func (c *Client) GetAssetInfoByAssetID(assetID string) (*types.AssetDescriptor, 
 	return &assetInfo, nil
 }
 
-// GetBalance returns the balance of assetID for given api.BalArgs
-func (c *Client) GetBalance(args *ptypes.BalArgs) (uint64, error) {
+// Balance returns the balance of assetID for given api.BalArgs
+func (c *Client) Balance(args *ptypes.BalArgs) (uint64, error) {
 	var resp ptypes.Response
 
 	err := c.Call(&resp, "moi.Balance", args)
@@ -262,8 +262,8 @@ func (c *Client) TDU(args *ptypes.TesseractArgs) (types.AssetMap, error) {
 	return assetMap, nil
 }
 
-// GetContextInfo returns the context Info of the queried address.
-func (c *Client) GetContextInfo(args *ptypes.ContextInfoArgs) (*ptypes.ContextResponse, error) {
+// ContextInfo returns the context Info of the queried address.
+func (c *Client) ContextInfo(args *ptypes.ContextInfoArgs) (*ptypes.ContextResponse, error) {
 	var resp ptypes.Response
 
 	err := c.Call(&resp, "moi.ContextInfo", args)
@@ -446,6 +446,29 @@ func (c *Client) SendInteractions(args *ptypes.SendIXArgs) (string, error) {
 	return res, nil
 }
 
+// AccountMetaInfo returns the account meta info associated with the given address
+func (c *Client) AccountMetaInfo(args *ptypes.GetAccountArgs) (*types.AccountMetaInfo, error) {
+	var resp ptypes.Response
+
+	err := c.Call(&resp, "moi.AccountMetaInfo", args)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+
+	var info types.AccountMetaInfo
+
+	err = json.Unmarshal(resp.Data, &info)
+	if err != nil {
+		return nil, err
+	}
+
+	return &info, nil
+}
+
 // Content returns the interactions present in the given IxPool.
 func (c *Client) Content(args *ptypes.IxPoolArgs) (*api.ContentResponse, error) {
 	var resp ptypes.Response
@@ -562,7 +585,7 @@ func (c *Client) WaitTime(args *ptypes.IxPoolArgs) (int64, error) {
 }
 
 // Peers returns an array of Krama IDs connected to a client
-func (c *Client) Peers(args *ptypes.NetArgs) (*[]kramaid.KramaID, error) {
+func (c *Client) Peers(args *ptypes.NetArgs) ([]kramaid.KramaID, error) {
 	var resp ptypes.Response
 
 	err := c.Call(&resp, "net.Peers", args)
@@ -581,11 +604,11 @@ func (c *Client) Peers(args *ptypes.NetArgs) (*[]kramaid.KramaID, error) {
 		return nil, err
 	}
 
-	return &response, nil
+	return response, nil
 }
 
 // DBGet returns raw value of the key stored in the database
-func (c *Client) DBGet(args *ptypes.NetArgs) (*[]kramaid.KramaID, error) {
+func (c *Client) DBGet(args *ptypes.NetArgs) ([]kramaid.KramaID, error) {
 	var resp ptypes.Response
 
 	err := c.Call(&resp, "debug.DBGet", args)
@@ -604,5 +627,28 @@ func (c *Client) DBGet(args *ptypes.NetArgs) (*[]kramaid.KramaID, error) {
 		return nil, err
 	}
 
-	return &response, nil
+	return response, nil
+}
+
+// Accounts returns the address of all the accounts
+func (c *Client) Accounts() ([]types.Address, error) {
+	var resp ptypes.Response
+
+	err := c.Call(&resp, "debug.GetAccounts", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+
+	var addrs []types.Address
+
+	err = json.Unmarshal(resp.Data, &addrs)
+	if err != nil {
+		return nil, err
+	}
+
+	return addrs, nil
 }
