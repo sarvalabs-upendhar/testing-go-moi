@@ -16,24 +16,6 @@ type TesseractNumberOrHash struct {
 	TesseractHash   *string `json:"tesseract_hash"`
 }
 
-type RPCInteraction struct {
-	Input     types.IxInput
-	Compute   types.IxCompute
-	Trust     types.IxTrust
-	Hash      types.Hash
-	Signature []byte
-}
-
-type RPCInteractions []*RPCInteraction
-
-type RPCTesseract struct {
-	Header   types.TesseractHeader
-	Body     types.TesseractBody
-	Ixns     RPCInteractions
-	Receipts types.Receipts
-	Seal     []byte
-}
-
 func (t *TesseractNumberOrHash) Number() (int64, error) {
 	if t.TesseractNumber == nil {
 		return 0, types.ErrEmptyHeight
@@ -52,6 +34,32 @@ func (t *TesseractNumberOrHash) Hash() (string, bool) {
 	}
 
 	return *t.TesseractHash, true
+}
+
+type RPCInteraction struct {
+	Input     types.IxInput
+	Compute   types.IxCompute
+	Trust     types.IxTrust
+	Hash      types.Hash
+	Signature []byte
+}
+
+type RPCInteractions []*RPCInteraction
+
+type RPCTesseract struct {
+	Header   types.TesseractHeader
+	Body     types.TesseractBody
+	Ixns     RPCInteractions
+	Receipts types.Receipts
+	Seal     []byte
+}
+
+func (ts *RPCTesseract) Address() types.Address {
+	return ts.Header.Address
+}
+
+func (ts *RPCTesseract) Height() uint64 {
+	return ts.Header.Height
 }
 
 // TesseractArgs is an argument wrapper for retrieving the latest Tesseract
@@ -89,6 +97,12 @@ type InteractionCountArgs struct {
 type IxPoolArgs struct {
 	From string `json:"from"`
 }
+
+type InspectArgs struct{}
+
+type StatusArgs struct{}
+
+type ContentArgs struct{}
 
 type NetArgs struct{}
 

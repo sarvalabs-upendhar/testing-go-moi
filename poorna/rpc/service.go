@@ -398,7 +398,7 @@ func (r *Service) SendInteractions(req *http.Request, args *ptypes.SendIXArgs, r
 // Content is an RPC method that returns the interactions present in the IxPool.
 func (r *Service) Content(
 	req *http.Request,
-	args *ptypes.IxPoolArgs,
+	args *ptypes.ContentArgs,
 	resp *ptypes.Response,
 ) error {
 	ixPoolAPI, ok := r.apis["ixpool"].(*api.PublicIXPoolAPI)
@@ -454,7 +454,7 @@ func (r *Service) ContentFrom(
 // Status is an RPC method that returns the number of pending and queued interactions in the IxPool.
 func (r *Service) Status(
 	req *http.Request,
-	args *ptypes.IxPoolArgs,
+	args *ptypes.StatusArgs,
 	resp *ptypes.Response,
 ) error {
 	ixPoolAPI, ok := r.apis["ixpool"].(*api.PublicIXPoolAPI)
@@ -483,7 +483,7 @@ func (r *Service) Status(
 // as well as a list of all the accounts in IxPool and their respective wait times.
 func (r *Service) Inspect(
 	req *http.Request,
-	args *ptypes.IxPoolArgs,
+	args *ptypes.InspectArgs,
 	resp *ptypes.Response,
 ) error {
 	ixPoolAPI, ok := r.apis["ixpool"].(*api.PublicIXPoolAPI)

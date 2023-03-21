@@ -1,0 +1,1074 @@
+//nolint:thelper
+package moiclient
+
+import (
+	"context"
+	"encoding/json"
+	"testing"
+
+	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
+
+	"github.com/sarvalabs/moichain/common/tests"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
+	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/utils"
+)
+
+// url of the node to be used by moiclient.
+const url = "http://0.0.0.0:1600"
+
+// setupChain runs these functions in order as tests use heights for identifying the event happened
+// Every function is an interaction, and we only proceed to the next one after receiving the receipt for the current one
+// We are testing interaction execution and receipt generation for every function
+// More verification of interaction execution (like fields) will be done in the following table tests
+// sender account :
+// At height 1, logic is deployed
+// At height 2, asset is created
+// At height 3, tokens are transferred
+// Logic Address account :
+// At height 1, transfer call is made to contract by sender
+func setupChain(t *testing.T, client *Client) {
+	t.Run("DeployLogic", func(t *testing.T) {
+		deployLogic(t, client)
+	})
+	t.Run("ExecuteLogic", func(t *testing.T) {
+		executeLogic(t, client)
+	})
+	t.Run("CreateAsset", func(t *testing.T) {
+		createAsset(t, client)
+	})
+	t.Run("TransferTokens", func(t *testing.T) {
+		transferTokens(t, client)
+	})
+	t.Run("IXPoolAPI", func(t *testing.T) {
+		fillIXPool(t, client)
+	})
+}
+
+// deployLogic deploys logic manifest
+func deployLogic(t *testing.T, client *Client) {
+	ixArgs := getIXArgsForLogicDeployment(t)
+
+	ixHash, err := client.SendInteractions(ixArgs)
+	require.NoError(t, err)
+
+	// make sure interaction executed successfully
+	ctx, cancel := context.WithTimeout(context.Background(), IxnTimeout)
+	defer cancel()
+
+	retryFetchReceipt(t, ctx, client, ixHash)
+}
+
+// executeLogic executes the transfer method on deployed logic
+func executeLogic(t *testing.T, client *Client) {
+	logicExecuteArgs := &ptypes.LogicInvokeArgs{
+		LogicID:  getLogicID(t, client, sender.Hex(), &deployLogicHeight),
+		Callsite: "Transfer!",
+		Calldata: "0daf010665a601e501f6059506616d6f756e74030f424066726f6d06ffcd8ee6a29ec442dbbf9c6124dd3aeb833ef58" +
+			"052237d521654740857716b34746f060fafe52ec42a85db644d5cceba2bb89cf5b0166cc9158211f44ed1e60b06032c",
+	}
+
+	payload, err := json.Marshal(logicExecuteArgs)
+	require.NoError(t, err)
+
+	ixArgs := &ptypes.SendIXArgs{
+		Type:      8,
+		FuelPrice: "030D40",
+		FuelLimit: "030D40",
+		Sender:    sender.Hex(),
+		Payload:   payload,
+	}
+
+	ixHash, err := client.SendInteractions(ixArgs)
+	require.NoError(t, err)
+
+	// make sure interaction executed successfully
+	ctx, cancel := context.WithTimeout(context.Background(), IxnTimeout)
+	defer cancel()
+
+	retryFetchReceipt(t, ctx, client, ixHash)
+}
+
+// createAsset creates asset named "MOI"
+func createAsset(t *testing.T, client *Client) {
+	assetCreationArgs := ptypes.AssetCreationArgs{
+		Type:   2,
+		Symbol: "MOI",
+		Supply: "030D40",
+	}
+	payload, err := json.Marshal(assetCreationArgs)
+	require.NoError(t, err)
+
+	ixArgs := &ptypes.SendIXArgs{
+		Type:      2,
+		Sender:    sender.Hex(),
+		FuelPrice: "030D40",
+		FuelLimit: "030D40",
+		Payload:   payload,
+	}
+
+	ixHash, err := client.SendInteractions(ixArgs)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), IxnTimeout)
+	defer cancel()
+
+	retryFetchReceipt(t, ctx, client, ixHash)
+}
+
+// transferTokens transfers tokens from sender to receiver
+func transferTokens(t *testing.T, client *Client) {
+	assetID := getAssetID(t, client, sender.Hex(), &createAssetHeight)
+	ixArgs := &ptypes.SendIXArgs{
+		Type:     0,
+		Sender:   sender.Hex(),
+		Receiver: receiver,
+		TransferValues: map[types.AssetID]string{
+			types.AssetID(assetID): "10",
+		},
+		FuelPrice: "030D40",
+		FuelLimit: "030D40",
+	}
+
+	ixHash, err := client.SendInteractions(ixArgs)
+	require.NoError(t, err)
+
+	// make sure interaction executed successfully
+	ctx, cancel := context.WithTimeout(context.Background(), IxnTimeout)
+	defer cancel()
+
+	retryFetchReceipt(t, ctx, client, ixHash)
+}
+
+// fillIXPool sends ixnPendingCount number of deploy interactions
+func fillIXPool(t *testing.T, client *Client) {
+	ixArgs := getIXArgsForLogicDeployment(t)
+	ixArgs.Nonce = 2
+
+	for i := 0; i < ixnPendingCount; i++ { // send ixns just to fill ixpool with some data
+		ixArgs.Nonce += 1 // increment nonce to avoid ix already known error
+		_, err := client.SendInteractions(ixArgs)
+		require.NoError(t, err)
+	}
+}
+
+// Need to run minimum 20 fresh nodes for this test to run successfully
+// Ensure chain is set up to run individual tests
+// TestMoiClient tests moi client functions unless short flag is provided
+func TestMoiClient(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	client, err := NewClient(url)
+	require.NoError(t, err)
+
+	setupChain(t, client)
+
+	testcases := map[string]struct {
+		test func(t *testing.T)
+	}{
+		"Tesseract": {
+			test: func(t *testing.T) { testTesseract(t, client) },
+		},
+		"DBGet": {
+			test: func(t *testing.T) { testDBGet(t, client) },
+		},
+		"GetAssetInfoByAssetID": {
+			test: func(t *testing.T) { testGetAssetInfoByAssetID(t, client) },
+		},
+		"GetBalance": {
+			test: func(t *testing.T) { testGetBalance(t, client) },
+		},
+		"TDU": {
+			test: func(t *testing.T) { testTDU(t, client) },
+		},
+		"GetContextInfo": {
+			test: func(t *testing.T) { testGetContextInfo(t, client) },
+		},
+		"InteractionReceipt": {
+			test: func(t *testing.T) { testInteractionReceipt(t, client) },
+		},
+		"InteractionCount": {
+			test: func(t *testing.T) { testInteractionCount(t, client) },
+		},
+		"PendingInteractionCount": {
+			test: func(t *testing.T) { testPendingInteractionCount(t, client) },
+		},
+		"Storage": {
+			test: func(t *testing.T) { testStorage(t, client) },
+		},
+		"AccountState": {
+			test: func(t *testing.T) { testAccountState(t, client) },
+		},
+		"LogicManifest": {
+			test: func(t *testing.T) { testLogicManifest(t, client) },
+		},
+		"Content": {
+			test: func(t *testing.T) { testContent(t, client) },
+		},
+		"ContentFrom": {
+			test: func(t *testing.T) { testContentFrom(t, client) },
+		},
+		"Status": {
+			test: func(t *testing.T) { testStatus(t, client) },
+		},
+		"Inspect": {
+			test: func(t *testing.T) { testInspect(t, client) },
+		},
+		"WaitTime": {
+			test: func(t *testing.T) { testWaitTime(t, client) },
+		},
+		"Peers": {
+			test: func(t *testing.T) { testPeers(t, client) },
+		},
+		"SendInteraction": {
+			test: func(t *testing.T) { testSendInteraction(t, client) },
+		},
+	}
+
+	t.Parallel()
+
+	for name, testcase := range testcases {
+		t.Run(name, testcase.test)
+	}
+}
+
+func testTesseract(t *testing.T, client *Client) {
+	invalidHeight := int64(100000)
+
+	testcases := []struct {
+		name          string
+		tesseractArgs *ptypes.TesseractArgs
+		expectedError error
+	}{
+		{
+			name: "fetch tesseract with interactions",
+			tesseractArgs: &ptypes.TesseractArgs{
+				From:             sender.Hex(),
+				WithInteractions: true,
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &deployLogicHeight,
+				},
+			},
+		},
+		{
+			name: "fetch tesseract without interactions",
+			tesseractArgs: &ptypes.TesseractArgs{
+				From:             sender.Hex(),
+				WithInteractions: false,
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &deployLogicHeight,
+				},
+			},
+		},
+		{
+			name: "fetch genesis tesseract",
+			tesseractArgs: &ptypes.TesseractArgs{
+				From:             sender.Hex(),
+				WithInteractions: false,
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &genesisHeight,
+				},
+			},
+		},
+		{
+			name: "invalid tesseract number",
+			tesseractArgs: &ptypes.TesseractArgs{
+				From:             sender.Hex(),
+				WithInteractions: false,
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &invalidHeight,
+				},
+			},
+			expectedError: errors.New("failed to fetch tesseract height entry"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			ts, err := client.Tesseract(test.tesseractArgs)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			httpTS := httpTesseract(t, test.tesseractArgs)
+
+			require.Equal(t, httpTS, ts)
+			require.Equal(t, sender, ts.Address())
+
+			if test.tesseractArgs.WithInteractions {
+				require.Greater(t, len(ts.Ixns), 0)
+				require.Equal(t, types.IxLogicDeploy, ts.Ixns[0].Input.Type)
+
+				return
+			}
+
+			require.Equal(t, 0, len(ts.Ixns))
+		})
+	}
+}
+
+func testDBGet(t *testing.T, client *Client) {
+	// key and value belongs to genesis tesseract hash and raw data of
+	// a6ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384
+	actualValue := "0e5f0eee19f04aff020686048008800880088608860c8610f610e011e011ee11bdfa7699df0d291d368a7d6bdda0a34d" +
+		"703458d2ba2c76c6a5dcac0915ce16ad0000000000000000000000000000000000000000000000000000000000000000e4dc6c170ed" +
+		"f909d19e61a9a901cedca4b3893326af18200355ac8d9803e72ff000000000000000000000000000000000000000000000000000000" +
+		"000000000067656e6573697367656e657369736f000000068004000000000000000000000000000000000000000000000000000000" +
+		"0000000000bf010686048608860c8e10ee225f5c7f20e1519a7d1577247d48382f5adc98ae9e758acc8d0e3d9fb471984c30fb4fb3" +
+		"29c7a9c2007d6b3f9b49e51095f6d6434726323fca2855f9ce1208bccee978d7b8fefae08b7977f5f02d70c44249c0f7419afeaa65" +
+		"05da822bd120392a00000000000000000000000000000000000000000000000000000000000000003f068e04bdfa7699df0d291d36" +
+		"8a7d6bdda0a34d703458d2ba2c76c6a5dcac0915ce16ad6f000eae0db00d1f066135504b5564567241595948377773626d42546974" +
+		"55765057694d674c7178525148596a61687750776f46796869736763772e31365569753248416d4242576d4e424744526778676a4b" +
+		"61686758566a394341667538475241514361437938747547566b473636350f5f068604860800000000000000000000000000000000" +
+		"0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" +
+		"000000000000000000000000000000000000000000000000000000"
+
+	testcases := []struct {
+		name          string
+		debugArgs     *ptypes.DebugArgs
+		expectedError error
+	}{
+		{
+			name: "fetch value for existing key in db",
+			debugArgs: &ptypes.DebugArgs{
+				Key: "8292de384554c08d6515f060f0f5181f0615fce5c6ab4a9cb08eebe6cd30f56dbb",
+			},
+		},
+		{
+			name: "fetch value for non-existing key in db",
+			debugArgs: &ptypes.DebugArgs{
+				Key: "822c978f24933d17d4a6d8e40459c30ba9ba12d4d958ab2dc80d1720e39fa73ae5",
+			},
+			expectedError: types.ErrKeyNotFound,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			value, err := client.DBGet(test.debugArgs)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			httpValue := httpDBGet(t, test.debugArgs)
+			require.Equal(t, httpValue, value)
+			require.Equal(t, httpValue, actualValue)
+		})
+	}
+}
+
+func testGetAssetInfoByAssetID(t *testing.T, client *Client) {
+	testcases := []struct {
+		name          string
+		assetID       string
+		expectedError error
+	}{
+		{
+			name:    "fetch asset info for existing assetID",
+			assetID: getAssetID(t, client, sender.Hex(), &createAssetHeight),
+		},
+		{
+			name:          "fetch asset info for non-existing assetID",
+			assetID:       string(tests.GetRandomAssetID(t, tests.RandomAddress(t))),
+			expectedError: types.ErrKeyNotFound,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			assetInfo, err := client.AssetInfoByAssetID(test.assetID)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			httpAssetInfo := httpGetAssetInfoByAssetID(t, test.assetID)
+			require.Equal(t, *httpAssetInfo, *assetInfo)
+		})
+	}
+}
+
+func testGetBalance(t *testing.T, client *Client) {
+	receiverTokenTransferHeight := int64(1)
+	assetID := getAssetID(t, client, sender.Hex(), &createAssetHeight)
+
+	testcases := []struct {
+		name            string
+		balanceArgs     *ptypes.BalArgs
+		expectedBalance uint64
+		expectedError   error
+	}{
+		{
+			name: "fetch sender balance at create asset height",
+			balanceArgs: &ptypes.BalArgs{
+				From:    sender.Hex(),
+				AssetID: assetID,
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &createAssetHeight,
+				},
+			},
+			expectedBalance: 200000,
+		},
+		{
+			name: "fetch sender balance at sender transfer token height",
+			balanceArgs: &ptypes.BalArgs{
+				From:    sender.Hex(),
+				AssetID: assetID,
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &transferTokensHeight,
+				},
+			},
+			expectedBalance: 199984,
+		},
+		{
+			name: "fetch receiver balance at receiver transfer token height",
+			balanceArgs: &ptypes.BalArgs{
+				From:    receiver,
+				AssetID: assetID,
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &receiverTokenTransferHeight,
+				},
+			},
+			expectedBalance: 16,
+		},
+		{
+			name: "get balance returns error for unknown asset ID",
+			balanceArgs: &ptypes.BalArgs{
+				From:    sender.Hex(),
+				AssetID: "0000aa7ce9806f914c3fe732d76f920d6d56f0bac776a78157ca91cbe85b20f969c9",
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &LatestTesseractNumber,
+				},
+			},
+			expectedError: errors.New("asset not found"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			balance, err := client.Balance(test.balanceArgs)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, balance, test.expectedBalance)
+
+			httpBalance := httpGetBalance(t, test.balanceArgs)
+			require.Equal(t, httpBalance, balance)
+		})
+	}
+}
+
+func testTDU(t *testing.T, client *Client) {
+	assetID := getAssetID(t, client, sender.Hex(), &createAssetHeight)
+
+	testcases := []struct {
+		name          string
+		tesseractArgs *ptypes.TesseractArgs
+		expectedError error
+	}{
+		{
+			name: "fetch TDU for existing address",
+			tesseractArgs: &ptypes.TesseractArgs{
+				From: sender.Hex(),
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &createAssetHeight,
+				},
+			},
+		},
+		{
+			name: "fetch TDU for non-existing address",
+			tesseractArgs: &ptypes.TesseractArgs{
+				From: tests.RandomAddress(t).Hex(),
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &LatestTesseractNumber,
+				},
+			},
+			expectedError: errors.New("account not found"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			tdu, err := client.TDU(test.tesseractArgs)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			_, ok := tdu[types.AssetID(assetID)]
+			require.True(t, ok)
+			require.Equal(t, 1, len(tdu))
+
+			httpTDU := httpTDU(t, test.tesseractArgs)
+			require.Equal(t, httpTDU, tdu)
+		})
+	}
+}
+
+func testGetContextInfo(t *testing.T, client *Client) {
+	testcases := []struct {
+		name            string
+		contextInfoArgs *ptypes.ContextInfoArgs
+		expectedError   error
+	}{
+		{
+			name: "fetch context info for existing address",
+			contextInfoArgs: &ptypes.ContextInfoArgs{
+				From: sender.Hex(),
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &LatestTesseractNumber,
+				},
+			},
+		},
+		{
+			name: "fetch context info for non-existing address",
+			contextInfoArgs: &ptypes.ContextInfoArgs{
+				From: tests.RandomAddress(t).Hex(),
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &LatestTesseractNumber,
+				},
+			},
+			expectedError: errors.New("account not found"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			contextInfo, err := client.ContextInfo(test.contextInfoArgs)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.GreaterOrEqual(t, len(contextInfo.BehaviourNodes), 1)
+
+			httpContextInfo := httpGetContextInfo(t, test.contextInfoArgs)
+			require.Equal(t, *httpContextInfo, *contextInfo)
+		})
+	}
+}
+
+func testInteractionReceipt(t *testing.T, client *Client) {
+	ts := getTesseract(t, client, sender.Hex(), &executeLogicHeight)
+
+	testcases := []struct {
+		name          string
+		receiptArgs   *ptypes.ReceiptArgs
+		expectedError error
+	}{
+		{
+			name: "fetch receipt for existing hash",
+			receiptArgs: &ptypes.ReceiptArgs{
+				Hash: ts.Ixns[0].Hash.Hex(),
+			},
+		},
+		{
+			name: "fetch receipt for non-existing hash",
+			receiptArgs: &ptypes.ReceiptArgs{
+				Hash: tests.RandomHash(t).Hex(),
+			},
+			expectedError: errors.New("receipt not found"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			receipt, err := client.InteractionReceipt(test.receiptArgs)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, ts.Ixns[0].Hash, receipt.IxHash)
+
+			httpReceipt := httpInteractionReceipt(t, test.receiptArgs)
+			require.Equal(t, *httpReceipt, *receipt)
+		})
+	}
+}
+
+func testInteractionCount(t *testing.T, client *Client) {
+	testcases := []struct {
+		name                 string
+		interactionCountArgs *ptypes.InteractionCountArgs
+		expectedError        error
+	}{
+		{
+			name: "fetch interaction count for existing address",
+			interactionCountArgs: &ptypes.InteractionCountArgs{
+				From: sender.Hex(),
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &transferTokensHeight,
+				},
+			},
+		},
+		{
+			name: "fetch interaction count for non-existing address",
+			interactionCountArgs: &ptypes.InteractionCountArgs{
+				From: tests.RandomAddress(t).Hex(),
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &LatestTesseractNumber,
+				},
+			},
+			expectedError: errors.New("account not found"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			interactionCount, err := client.InteractionCount(test.interactionCountArgs)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.GreaterOrEqual(t, interactionCount, uint64(4))
+
+			httpInteractionCount := httpInteractionCount(t, test.interactionCountArgs)
+			require.Equal(t, httpInteractionCount, interactionCount)
+		})
+	}
+}
+
+func testPendingInteractionCount(t *testing.T, client *Client) {
+	testcases := []struct {
+		name                 string
+		interactionCountArgs *ptypes.InteractionCountArgs
+		expectedError        error
+	}{
+		{
+			name: "fetch pending interaction count for existing address",
+			interactionCountArgs: &ptypes.InteractionCountArgs{
+				From: sender.Hex(),
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &LatestTesseractNumber,
+				},
+			},
+		},
+		{
+			name: "fetch pending interaction count for non-existing address",
+			interactionCountArgs: &ptypes.InteractionCountArgs{
+				From: tests.RandomAddress(t).Hex(),
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &LatestTesseractNumber,
+				},
+			},
+			expectedError: errors.New("account not found"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			pendingInteractionCount, err := client.PendingInteractionCount(test.interactionCountArgs)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Greater(t, *pendingInteractionCount, uint64(4))
+
+			httpPendingInteractionCount := httpPendingInteractionCount(t, test.interactionCountArgs)
+			require.Equal(t, *httpPendingInteractionCount, *pendingInteractionCount)
+		})
+	}
+}
+
+func testStorage(t *testing.T, client *Client) {
+	logicID := getLogicID(t, client, sender.Hex(), &deployLogicHeight)
+
+	testcases := []struct {
+		name                 string
+		interactionCountArgs *ptypes.GetStorageArgs
+		expectedError        error
+	}{
+		{
+			name: "fetch storage value for existing logic ID",
+			interactionCountArgs: &ptypes.GetStorageArgs{
+				LogicID:    logicID,
+				StorageKey: "e88bd757ad5b9bedf372d8d3f0cf6c962a469db61a265f6418e1ffed86da29ec",
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &LatestTesseractNumber,
+				},
+			},
+		},
+		{
+			name: "fetch storage value for non-existing logic ID",
+			interactionCountArgs: &ptypes.GetStorageArgs{
+				LogicID:    "",
+				StorageKey: "e88bd757ad5b9bedf372d8d3f0cf6c962a469db61a265f6418e1ffed86da29ec",
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &LatestTesseractNumber,
+				},
+			},
+			expectedError: errors.New("invalid logic id"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			storageValue, err := client.Storage(test.interactionCountArgs)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			httpStorageValue := httpStorage(t, test.interactionCountArgs)
+			require.Equal(t, httpStorageValue, storageValue)
+		})
+	}
+}
+
+func testAccountState(t *testing.T, client *Client) {
+	testcases := []struct {
+		name          string
+		accountArgs   *ptypes.GetAccountArgs
+		expectedError error
+	}{
+		{
+			name: "fetch account state for existing address",
+			accountArgs: &ptypes.GetAccountArgs{
+				Address: sender.Hex(),
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &transferTokensHeight,
+				},
+			},
+		},
+		{
+			name: "fetch account state for non-existing address",
+			accountArgs: &ptypes.GetAccountArgs{
+				Address: tests.RandomAddress(t).Hex(),
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &LatestTesseractNumber,
+				},
+			},
+			expectedError: errors.New("account not found"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			accountState, err := client.AccountState(test.accountArgs)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.GreaterOrEqual(t, accountState.Nonce, uint64(4))
+
+			httpAccountState := httpAccountState(t, test.accountArgs)
+			require.Equal(t, *httpAccountState, *accountState)
+		})
+	}
+}
+
+func testLogicManifest(t *testing.T, client *Client) {
+	logicID := getLogicID(t, client, sender.Hex(), &deployLogicHeight)
+	ts := getTesseract(t, client, sender.Hex(), &deployLogicHeight)
+
+	var logic types.LogicPayload
+
+	err := json.Unmarshal(ts.Ixns[0].Input.Payload, &logic)
+	require.NoError(t, err)
+
+	testcases := []struct {
+		name              string
+		logicManifestArgs *ptypes.LogicManifestArgs
+		expectedError     error
+	}{
+		{
+			name: "fetch logic manifest for existing logicID",
+			logicManifestArgs: &ptypes.LogicManifestArgs{
+				LogicID: logicID,
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &LatestTesseractNumber,
+				},
+			},
+		},
+		{
+			name: "fetch logic manifest for non-existing logicID",
+			logicManifestArgs: &ptypes.LogicManifestArgs{
+				LogicID: "0200000070c34ed6ec4384c75d469894052647a078b33ac0f08db0d3751c1fce29a49f",
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &LatestTesseractNumber,
+				},
+			},
+			expectedError: errors.New("account not found"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			logicManifest, err := client.LogicManifest(test.logicManifestArgs)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, logic.Manifest, logicManifest)
+
+			httpLogicManifest := httpLogicManifest(t, test.logicManifestArgs)
+			require.Equal(t, httpLogicManifest, logicManifest)
+		})
+	}
+}
+
+func testContent(t *testing.T, client *Client) {
+	testcases := []struct {
+		name          string
+		contentArgs   *ptypes.ContentArgs
+		expectedError error
+	}{
+		{
+			name:        "fetch content from ixpool",
+			contentArgs: &ptypes.ContentArgs{},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			contentResponse, err := client.Content(test.contentArgs)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Greater(t, len(contentResponse.Pending), 0)
+
+			httpContent := httpContent(t, test.contentArgs)
+			require.Equal(t, *httpContent, *contentResponse)
+		})
+	}
+}
+
+func testContentFrom(t *testing.T, client *Client) {
+	testcases := []struct {
+		name          string
+		ixPoolArgs    *ptypes.IxPoolArgs
+		expectedCount int
+	}{
+		{
+			name: "fetch content from for existing address",
+			ixPoolArgs: &ptypes.IxPoolArgs{
+				From: sender.Hex(),
+			},
+			expectedCount: 1,
+		},
+		{
+			name: "fetch  content from for non-existing address",
+			ixPoolArgs: &ptypes.IxPoolArgs{
+				From: tests.RandomAddress(t).Hex(),
+			},
+			expectedCount: 0,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			contentFromResponse, err := client.ContentFrom(test.ixPoolArgs)
+			require.NoError(t, err)
+			require.GreaterOrEqual(t, len(contentFromResponse.Pending), test.expectedCount)
+
+			httpContentFrom := httpContentFrom(t, test.ixPoolArgs)
+			require.Equal(t, *httpContentFrom, *contentFromResponse)
+		})
+	}
+}
+
+func testStatus(t *testing.T, client *Client) {
+	testcases := []struct {
+		name       string
+		ixPoolArgs *ptypes.StatusArgs
+	}{
+		{
+			name:       "fetch status of ixpool",
+			ixPoolArgs: &ptypes.StatusArgs{},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			statusResponse, err := client.Status(test.ixPoolArgs)
+			require.NoError(t, err)
+			require.Greater(t, statusResponse.Pending, uint64(0))
+
+			httpStatus := httpStatus(t, test.ixPoolArgs)
+			require.Equal(t, *httpStatus, *statusResponse)
+		})
+	}
+}
+
+func testInspect(t *testing.T, client *Client) {
+	testcases := []struct {
+		name          string
+		inspectArgs   *ptypes.InspectArgs
+		expectedError error
+	}{
+		{
+			name:        "inspect ixpool",
+			inspectArgs: &ptypes.InspectArgs{},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			inspectResponse, err := client.Inspect(test.inspectArgs)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Greater(t, len(inspectResponse.Pending), 0)
+
+			httpInspectResponse := httpInspect(t, test.inspectArgs)
+			require.Equal(t, httpInspectResponse.Pending, inspectResponse.Pending)
+		})
+	}
+}
+
+func testWaitTime(t *testing.T, client *Client) {
+	testcases := []struct {
+		name          string
+		ixPoolArgs    *ptypes.IxPoolArgs
+		expectedError error
+	}{
+		{
+			name: "fetch wait time for existing address",
+			ixPoolArgs: &ptypes.IxPoolArgs{
+				From: sender.Hex(),
+			},
+		},
+		{
+			name: "fetch wait time for non-existing address",
+			ixPoolArgs: &ptypes.IxPoolArgs{
+				From: tests.RandomAddress(t).Hex(),
+			},
+			expectedError: errors.New("account not found"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := client.WaitTime(test.ixPoolArgs)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			// TODO no validations to make
+			httpWaitTime(t, test.ixPoolArgs)
+		})
+	}
+}
+
+func testPeers(t *testing.T, client *Client) {
+	testcases := []struct {
+		name       string
+		ixPoolArgs *ptypes.NetArgs
+	}{
+		{
+			name:       "fetch peers",
+			ixPoolArgs: &ptypes.NetArgs{},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			clientPeers, err := client.Peers(test.ixPoolArgs)
+			require.NoError(t, err)
+
+			// check if client peers and http peers are same
+			httpPeers := httpPeers(t, test.ixPoolArgs)
+			for _, id := range *httpPeers {
+				require.True(t, utils.ContainsKramaID(clientPeers, id))
+			}
+		})
+	}
+}
+
+func testSendInteraction(t *testing.T, client *Client) {
+	testcases := []struct {
+		name          string
+		ixPoolArgs    *ptypes.SendIXArgs
+		expectedError error
+	}{
+		{
+			name: "invalid sender address",
+			ixPoolArgs: &ptypes.SendIXArgs{
+				Sender: "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151z",
+			},
+			expectedError: errors.New("invalid address"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := client.SendInteractions(test.ixPoolArgs)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}

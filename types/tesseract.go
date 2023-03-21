@@ -174,6 +174,10 @@ func (t *Tesseract) Height() uint64 {
 	return t.Header.Height
 }
 
+func (t *Tesseract) AnuUsed() uint64 {
+	return t.Header.AnuUsed
+}
+
 func (t *Tesseract) Bytes() ([]byte, error) {
 	c := t.CanonicalWithoutSeal()
 

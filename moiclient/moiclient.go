@@ -166,8 +166,8 @@ func (c *Client) nextID() json.RawMessage {
 	return strconv.AppendUint(nil, uint64(id), 10)
 }
 
-// Tesseract returns tesseract based on the given arguments
-func (c *Client) Tesseract(args *ptypes.TesseractArgs) (*types.Tesseract, error) {
+// Tesseract returns RPCTesseract based on the given arguments
+func (c *Client) Tesseract(args *ptypes.TesseractArgs) (*ptypes.RPCTesseract, error) {
 	var resp ptypes.Response
 
 	err := c.Call(&resp, "moi.Tesseract", args)
@@ -179,7 +179,7 @@ func (c *Client) Tesseract(args *ptypes.TesseractArgs) (*types.Tesseract, error)
 		return nil, resp.Error
 	}
 
-	var tess types.Tesseract
+	var tess ptypes.RPCTesseract
 
 	err = json.Unmarshal(resp.Data, &tess)
 	if err != nil {
@@ -355,23 +355,23 @@ func (c *Client) PendingInteractionCount(args *ptypes.InteractionCountArgs) (*ui
 }
 
 // Storage returns the data associated with the given storage slot
-func (c *Client) Storage(args *ptypes.GetStorageArgs) (string, error) {
+func (c *Client) Storage(args *ptypes.GetStorageArgs) ([]byte, error) {
 	var resp ptypes.Response
 
 	err := c.Call(&resp, "moi.Storage", args)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	if resp.Error != nil {
-		return "", resp.Error
+		return nil, resp.Error
 	}
 
-	var res string
+	var res []byte
 
 	err = json.Unmarshal(resp.Data, &res)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	return res, nil
@@ -470,10 +470,10 @@ func (c *Client) AccountMetaInfo(args *ptypes.GetAccountArgs) (*types.AccountMet
 }
 
 // Content returns the interactions present in the given IxPool.
-func (c *Client) Content(args *ptypes.IxPoolArgs) (*api.ContentResponse, error) {
+func (c *Client) Content(args *ptypes.ContentArgs) (*api.ContentResponse, error) {
 	var resp ptypes.Response
 
-	err := c.Call(&resp, "ixPool.Content", args)
+	err := c.Call(&resp, "ixpool.Content", args)
 	if err != nil {
 		return nil, err
 	}
@@ -496,7 +496,7 @@ func (c *Client) Content(args *ptypes.IxPoolArgs) (*api.ContentResponse, error) 
 func (c *Client) ContentFrom(args *ptypes.IxPoolArgs) (*api.ContentFromResponse, error) {
 	var resp ptypes.Response
 
-	err := c.Call(&resp, "ixPool.ContentFrom", args)
+	err := c.Call(&resp, "ixpool.ContentFrom", args)
 	if err != nil {
 		return nil, err
 	}
@@ -516,10 +516,10 @@ func (c *Client) ContentFrom(args *ptypes.IxPoolArgs) (*api.ContentFromResponse,
 }
 
 // Status returns the number of pending and queued interactions in the IxPool.
-func (c *Client) Status(args *ptypes.IxPoolArgs) (*api.StatusResponse, error) {
+func (c *Client) Status(args *ptypes.StatusArgs) (*api.StatusResponse, error) {
 	var resp ptypes.Response
 
-	err := c.Call(&resp, "ixPool.Status", args)
+	err := c.Call(&resp, "ixpool.Status", args)
 	if err != nil {
 		return nil, err
 	}
@@ -539,10 +539,10 @@ func (c *Client) Status(args *ptypes.IxPoolArgs) (*api.StatusResponse, error) {
 }
 
 // Inspect returns the interactions present in the IxPool in a clear and easy-to-read format,
-func (c *Client) Inspect(args *ptypes.IxPoolArgs) (*api.InspectResponse, error) {
+func (c *Client) Inspect(args *ptypes.InspectArgs) (*api.InspectResponse, error) {
 	var resp ptypes.Response
 
-	err := c.Call(&resp, "ixPool.Inspect", args)
+	err := c.Call(&resp, "ixpool.Inspect", args)
 	if err != nil {
 		return nil, err
 	}
@@ -565,7 +565,7 @@ func (c *Client) Inspect(args *ptypes.IxPoolArgs) (*api.InspectResponse, error) 
 func (c *Client) WaitTime(args *ptypes.IxPoolArgs) (int64, error) {
 	var resp ptypes.Response
 
-	err := c.Call(&resp, "ixPool.WaitTime", args)
+	err := c.Call(&resp, "ixpool.WaitTime", args)
 	if err != nil {
 		return 0, err
 	}
@@ -608,23 +608,23 @@ func (c *Client) Peers(args *ptypes.NetArgs) ([]kramaid.KramaID, error) {
 }
 
 // DBGet returns raw value of the key stored in the database
-func (c *Client) DBGet(args *ptypes.NetArgs) ([]kramaid.KramaID, error) {
+func (c *Client) DBGet(args *ptypes.DebugArgs) (string, error) {
 	var resp ptypes.Response
 
 	err := c.Call(&resp, "debug.DBGet", args)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	if resp.Error != nil {
-		return nil, resp.Error
+		return "", resp.Error
 	}
 
-	var response []kramaid.KramaID
+	var response string
 
 	err = json.Unmarshal(resp.Data, &response)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	return response, nil
