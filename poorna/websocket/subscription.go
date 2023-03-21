@@ -12,7 +12,8 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-
+	"github.com/sarvalabs/moichain/poorna/api"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 	"github.com/sarvalabs/moichain/utils"
 )
@@ -137,11 +138,24 @@ func (f *SubscriptionManager) removeSubscriptionByID(id string) bool {
 	return true
 }
 
-// NewTesseractSubscription adds new TesseractSubscription
-func (f *SubscriptionManager) NewTesseractSubscription(ws ConnManager, addr types.Address) string {
-	subscription := &tesseractSubscription{
+// NewAccountTesseractSubscription adds new TesseractSubscription based on address
+func (f *SubscriptionManager) NewAccountTesseractSubscription(ws ConnManager, addr types.Address) string {
+	subscription := &tesseractAccountSubscription{
 		subscriptionBase: newSubscriptionBase(ws),
 		address:          addr,
+	}
+
+	if subscription.hasWSConn() {
+		ws.SetSubscriptionID(subscription.id)
+	}
+
+	return f.addSubscription(subscription)
+}
+
+// NewTesseractSubscription adds new TesseractSubscription
+func (f *SubscriptionManager) NewTesseractSubscription(ws ConnManager) string {
+	subscription := &tesseractSubscription{
+		subscriptionBase: newSubscriptionBase(ws),
 	}
 
 	if subscription.hasWSConn() {
@@ -368,28 +382,58 @@ func (f *subscriptionBase) writeMessage(msg string) error {
 	return nil
 }
 
-// tesseractSubscription is a subscription to store the updates of tesseract
-type tesseractSubscription struct {
+// tesseractAccountSubscription is a subscription to store the updates of tesseract based on address
+type tesseractAccountSubscription struct {
 	subscriptionBase
 	sync.Mutex
 
 	address types.Address
 }
 
+// tesseractSubscription is a subscription to store the updates of tesseract
+type tesseractSubscription struct {
+	subscriptionBase
+	sync.Mutex
+}
+
+func sendTesseract(tesseract *ptypes.RPCTesseract, subscriptionBase *subscriptionBase) error {
+	res, err := json.Marshal(tesseract)
+	if err != nil {
+		return errors.Wrap(err, "failed to marshal tesseract")
+	}
+
+	if err := subscriptionBase.writeMessage(string(res)); err != nil {
+		return errors.Wrap(err, "failed to write the message to the websocket stream")
+	}
+
+	return nil
+}
+
 // sendUpdates writes the new tesseracts to web socket stream, if the subscriber address and tesseract address matches
+func (f *tesseractAccountSubscription) sendUpdate(i interface{}) error {
+	if data, ok := i.(utils.TesseractAddedEvent); ok {
+		tesseract, err := api.CreateRPCTesseract(data.Tesseract)
+		if err != nil {
+			return errors.Wrap(err, "failed to create rpc tesseract from tesseract")
+		}
+
+		if f.address == data.Tesseract.Address() {
+			return sendTesseract(tesseract, &f.subscriptionBase)
+		}
+	}
+
+	return nil
+}
+
+// sendUpdates writes the new tesseracts to web socket stream
 func (f *tesseractSubscription) sendUpdate(i interface{}) error {
 	if data, ok := i.(utils.TesseractAddedEvent); ok {
-		tesseract := data.Tesseract
-		if f.address == tesseract.Address() {
-			res, err := json.Marshal(tesseract)
-			if err != nil {
-				return errors.Wrap(err, "failed to marshal tesseract")
-			}
-
-			if err := f.writeMessage(string(res)); err != nil {
-				return errors.Wrap(err, "failed to write the message to the websocket stream")
-			}
+		tesseract, err := api.CreateRPCTesseract(data.Tesseract)
+		if err != nil {
+			return errors.Wrap(err, "failed to create rpc tesseract from tesseract")
 		}
+
+		return sendTesseract(tesseract, &f.subscriptionBase)
 	}
 
 	return nil

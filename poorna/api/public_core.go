@@ -96,7 +96,7 @@ func (p *PublicCoreAPI) GetRPCTesseract(args *ptypes.TesseractArgs) (*ptypes.RPC
 		return nil, err
 	}
 
-	return createRPCTesseract(ts)
+	return CreateRPCTesseract(ts)
 }
 
 // GetContextInfo will fetch the context associated with the given address
@@ -343,8 +343,8 @@ func createRPCInteraction(ix *types.Interaction) (*ptypes.RPCInteraction, error)
 	return rpcIX, nil
 }
 
-// createRPCTesseract creates rpc tesseract from tesseract
-func createRPCTesseract(ts *types.Tesseract) (*ptypes.RPCTesseract, error) {
+// CreateRPCTesseract creates rpc tesseract from tesseract
+func CreateRPCTesseract(ts *types.Tesseract) (*ptypes.RPCTesseract, error) {
 	var err error
 
 	rpcIxns := make([]*ptypes.RPCInteraction, len(ts.Ixns))

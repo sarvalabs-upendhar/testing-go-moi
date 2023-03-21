@@ -32,6 +32,55 @@ type Message struct {
 	Params  MessageParams `json:"params"`
 }
 
+func TestAccountTesseractSubscription(t *testing.T) {
+	eventMux := new(utils.TypeMux)
+	subscriptionManager := NewSubscriptionManager(hclog.NewNullLogger(), eventMux)
+
+	// start the subscription manager worker process
+	go subscriptionManager.Run()
+
+	// Create a mock connection
+	connManager := NewMockConnectionManager()
+	tesseract := tests.GetTesseract(t, 0)
+	// Create a new tesseract subscription
+	subscriptionID := subscriptionManager.NewAccountTesseractSubscription(connManager, tesseract.Address())
+
+	// post an event
+	if err := eventMux.Post(utils.TesseractAddedEvent{Tesseract: tesseract}); err != nil {
+		t.Fatalf("error sending tesseract added event")
+	}
+
+	// Wait for 100ms, so that the worker process can handle the event
+	time.Sleep(100 * time.Millisecond)
+
+	subscriptionBase := subscriptionManager.subscriptions[subscriptionID].getSubscriptionBase()
+	// Check whether websocket connection exists
+	require.Equal(t, true, subscriptionBase.hasWSConn())
+	// Read the response message from the websocket connection
+	messageType, message, err := connManager.readMessage()
+	require.NoError(t, err)
+	// Check whether the response message type is same as expected message type
+	require.Equal(t, websocket.TextMessage, messageType)
+
+	var response Message
+	// Unmarshal the message
+	err = json.Unmarshal(message, &response)
+	require.NoError(t, err)
+	require.NotNil(
+		t,
+		response.Params,
+		response.Params.Result,
+		response.Params.Subscription,
+	)
+
+	// Check if the received subscription id matches the current subscription id
+	require.Equal(t, subscriptionID, response.Params.Subscription)
+
+	// Check whether the sent tesseract and received tesseract address and height matches
+	require.Equal(t, tesseract.Address(), types.HexToAddress(response.Params.Result.Header.Address))
+	require.Equal(t, tesseract.Height(), uint64(response.Params.Result.Header.Height))
+}
+
 func TestTesseractSubscription(t *testing.T) {
 	eventMux := new(utils.TypeMux)
 	subscriptionManager := NewSubscriptionManager(hclog.NewNullLogger(), eventMux)
@@ -43,7 +92,7 @@ func TestTesseractSubscription(t *testing.T) {
 	connManager := NewMockConnectionManager()
 	tesseract := tests.GetTesseract(t, 0)
 	// Create a new tesseract subscription
-	subscriptionID := subscriptionManager.NewTesseractSubscription(connManager, tesseract.Address())
+	subscriptionID := subscriptionManager.NewTesseractSubscription(connManager)
 
 	// post an event
 	if err := eventMux.Post(utils.TesseractAddedEvent{Tesseract: tesseract}); err != nil {
@@ -93,7 +142,7 @@ func TestSubscriptionTimeout(t *testing.T) {
 
 	// post an event
 	tesseract := tests.GetTesseract(t, 0)
-	subscriptionID := subscriptionManager.NewTesseractSubscription(nil, tesseract.Address())
+	subscriptionID := subscriptionManager.NewAccountTesseractSubscription(nil, tesseract.Address())
 
 	// Check if the subscription manager has the subscription
 	require.True(t, subscriptionManager.hasSubscribed(subscriptionID))

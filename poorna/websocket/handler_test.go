@@ -2,7 +2,6 @@ package websocket
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"testing"
@@ -50,7 +49,6 @@ func Test_HandleWsRequests_Message(t *testing.T) {
 					"params": ["newTesseracts"]
 				}`),
 			},
-			expectedErr: errors.New("invalid params"),
 		},
 		{
 			name: "Subscription request message with valid params",
@@ -60,7 +58,7 @@ func Test_HandleWsRequests_Message(t *testing.T) {
 					"id": 1,
 					"method": "moi.subscribe",
 					"params": [
-						"newTesseracts", 
+						"newAccountTesseracts", 
    						{
 							"address": "%s"
 						}

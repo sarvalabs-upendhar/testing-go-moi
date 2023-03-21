@@ -121,29 +121,32 @@ func (d *Dispatcher) handleSubscribe(req WSRequest, conn ConnManager) (string, e
 		return "", errors.New("invalid json request")
 	}
 
-	if len(params) != 2 {
-		return "", errors.New("invalid params")
-	}
-
 	event, ok := params[0].(string)
 	if !ok {
 		return "", fmt.Errorf("event %s not found", event)
 	}
 
-	var subscriptionID string
+	switch event {
+	case "newTesseracts":
+		subscriptionID := d.sm.NewTesseractSubscription(conn)
 
-	if event == "newTesseracts" {
+		return subscriptionID, nil
+	case "newAccountTesseracts":
+		if len(params) != 2 {
+			return "", errors.New("invalid params")
+		}
+
 		args, err := decodeTesseractArgs(params[1])
 		if err != nil {
 			return "", err
 		}
 
-		subscriptionID = d.sm.NewTesseractSubscription(conn, types.HexToAddress(args.Address))
-	} else {
+		subscriptionID := d.sm.NewAccountTesseractSubscription(conn, types.HexToAddress(args.Address))
+
+		return subscriptionID, nil
+	default:
 		return "", fmt.Errorf("event %s not found", event)
 	}
-
-	return subscriptionID, nil
 }
 
 // handleUnsubscribe method unsubscribes from a specific event

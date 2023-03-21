@@ -30,7 +30,7 @@ func Test_handleRequest_Subscribe(t *testing.T) {
 			name: "Subscription request without address param",
 			message: []byte(`{
 				"method": "moi.subscribe",
-				"params": ["newTesseracts"]
+				"params": ["newAccountTesseracts"]
 			}`),
 			expectedErr: errors.New("invalid params"),
 		},
@@ -45,7 +45,7 @@ func Test_handleRequest_Subscribe(t *testing.T) {
 					}
 				]
 			}`, tests.RandomAddress(t))),
-			expectedErr: errors.New("invalid params"),
+			expectedErr: errors.New("event  not found"),
 		},
 		{
 			name: "Subscription request with a non existing event name",
@@ -67,7 +67,7 @@ func Test_handleRequest_Subscribe(t *testing.T) {
 				"id": 1,
 				"method": "moi.subscribe",
 				"params": [
-					"newTesseracts", 
+					"newAccountTesseracts", 
 					{
 						"address": "%s"
 					}
@@ -201,7 +201,7 @@ func Test_handleRequests_RequestFormats(t *testing.T) {
 				"id": "1",
 				"method": "moi.subscribe",
 				"params": [
-					"newTesseracts", 
+					"newAccountTesseracts", 
 					{
 						"address": "%s"
 					}
@@ -215,7 +215,7 @@ func Test_handleRequests_RequestFormats(t *testing.T) {
 				"id": 2.0,
 				"method": "moi.subscribe",
 				"params": [
-					"newTesseracts", 
+					"newAccountTesseracts", 
 					{
 						"address": "%s"
 					}
@@ -228,7 +228,7 @@ func Test_handleRequests_RequestFormats(t *testing.T) {
 			message: []byte(fmt.Sprintf(`{
 				"method": "moi.subscribe",
 				"params": [
-					"newTesseracts", 
+					"newAccountTesseracts", 
 					{
 						"address": "%s"
 					}
@@ -242,7 +242,7 @@ func Test_handleRequests_RequestFormats(t *testing.T) {
 				"id": 2.1,
 				"method": "moi.subscribe",
 				"params": [
-					"newTesseracts", 
+					"newAccountTesseracts", 
 					{
 						"address": "%s"
 					}
@@ -256,7 +256,7 @@ func Test_handleRequests_RequestFormats(t *testing.T) {
 				"id": null,
 				"method": "moi.subscribe",
 				"params": [
-					"newTesseracts", 
+					"newAccountTesseracts", 
 					{
 						"address": "%s"
 					}
@@ -331,7 +331,7 @@ func subscribeToNewTesseractEvent(t *testing.T, dispatcher Dispatcher, mockConnM
 		"id": 1,
 		"method": "moi.subscribe",
 		"params": [
-			"newTesseracts", 
+			"newAccountTesseracts", 
 			{
 				"address": "%s"
 			}

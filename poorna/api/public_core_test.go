@@ -131,7 +131,7 @@ func TestPublicCoreAPI_CreateRPCTesseract(t *testing.T) {
 			tesseractParams.Ixns = []*types.Interaction{ix}
 			ts := tests.CreateTesseract(t, tesseractParams)
 
-			rpcTS, err := createRPCTesseract(ts)
+			rpcTS, err := CreateRPCTesseract(ts)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
