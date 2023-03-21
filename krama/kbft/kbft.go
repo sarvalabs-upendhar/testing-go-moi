@@ -11,7 +11,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 
-	"github.com/sarvalabs/moichain/guna"
 	ktypes "github.com/sarvalabs/moichain/krama/types"
 	mtypes "github.com/sarvalabs/moichain/mudra/common"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
@@ -41,7 +40,7 @@ type KBFT struct {
 	selfMsgChan               chan ktypes.ConsensusMessage
 	outboundMsgChan           chan ktypes.ConsensusMessage
 	toTicker                  *Ticker
-	ics                       *ktypes.ClusterInfo
+	ics                       *ktypes.ClusterState
 	nSteps                    int
 	closeChan                 chan error
 	ctx                       context.Context
@@ -62,7 +61,7 @@ func NewKBFTService(
 	config *common.ConsensusConfig,
 	outboundChan, inboundChan chan ktypes.ConsensusMessage,
 	vault vault,
-	ics *ktypes.ClusterInfo,
+	ics *ktypes.ClusterState,
 	tesseractHandler func(tesseracts []*types.Tesseract) error,
 	opts ...Option,
 ) *KBFT {
@@ -88,41 +87,22 @@ func NewKBFTService(
 	return k
 }
 
-func (kbft *KBFT) updateToState(ics *ktypes.ClusterInfo) {
-	kbft.logger.Info("updating the state", ics.ICS.Nodes)
-
+func (kbft *KBFT) updateToState(cs *ktypes.ClusterState) {
 	var chainIDs []string
 
-	heights := make([]uint64, len(ics.AccountInfos))
-
-	if senderAddr := ics.Ixs[0].Sender(); !senderAddr.IsNil() {
-		heights[0] = ics.AccountInfos[ics.Ixs[0].Sender()].Height.Uint64() + 1
-	}
-
-	if receiverAddr := ics.Ixs[0].Receiver(); !receiverAddr.IsNil() {
-		height := ics.AccountInfos[ics.Ixs[0].Receiver()].Height.Int64()
-		if height == -1 {
-			heights[2] = ics.AccountInfos[guna.SargaAddress].Height.Uint64() + 1
-		}
-
-		heights[1] = uint64(height + 1)
-	}
-
-	kbft.logger.Info("Heights", heights)
-
 	kbft.toTicker = NewTicker(kbft.logger)
-	kbft.Height = heights
+	kbft.Heights = cs.NewHeights()
 	kbft.updateRoundStep(0, RoundStepNewHeight)
-	kbft.ics = ics
+	kbft.ics = cs
 	kbft.Proposal = nil
 	kbft.ProposalGrid = nil
 	kbft.LockedRound = -1
 	kbft.LockedGrid = nil
 	kbft.ValidRound = -1
 	kbft.ValidGrid = nil
-	kbft.Votes = NewHeightVoteSet(chainIDs, heights, ics, kbft.logger)
+	kbft.Votes = NewHeightVoteSet(chainIDs, kbft.Heights, cs, kbft.logger)
 	kbft.CommitRound = -1
-	kbft.ics = ics
+	kbft.ics = cs
 	kbft.TriggeredTimeoutPrecommit = false
 	kbft.stepChange()
 }
@@ -220,8 +200,8 @@ func (kbft *KBFT) handler(maxSteps int) error {
 }
 
 func (kbft *KBFT) handleTimeout(ti timeoutInfo, r RoundState) {
-	if !areHeightsEqual(ti.Height, r.Height) || r.Round > ti.Round || (ti.Round == r.Round && ti.Step < r.Step) {
-		kbft.logger.Debug("returning from time out", ti.Height, r.Height, r.Round, ti.Round, ti.Step, r.Step)
+	if !areHeightsEqual(ti.Height, r.Heights) || r.Round > ti.Round || (ti.Round == r.Round && ti.Step < r.Step) {
+		kbft.logger.Debug("returning from time out", ti.Height, r.Heights, r.Round, ti.Round, ti.Step, r.Step)
 
 		return
 	}
@@ -279,7 +259,7 @@ func (kbft *KBFT) handleMsg(msg ktypes.ConsensusMessage) error {
 		}
 
 	case *ktypes.VoteMessage:
-		kbft.logger.Trace("Vote Message Received from ", peerID, m.Vote.Type)
+		kbft.logger.Trace("Vote message received", "vote type", m.Vote.Type, "from", peerID)
 
 		added, err := kbft.addVote(m.Vote, peerID)
 		if err != nil {
@@ -303,7 +283,7 @@ func (kbft *KBFT) setProposal(p *ktypes.Proposal) error {
 		return nil
 	}
 
-	if !areHeightsEqual(kbft.Height, p.Height) || p.Round != kbft.Round {
+	if !areHeightsEqual(kbft.Heights, p.Height) || p.Round != kbft.Round {
 		return nil
 	}
 
@@ -333,13 +313,13 @@ func (kbft *KBFT) setProposal(p *ktypes.Proposal) error {
 	}
 
 	if kbft.Step <= RoundStepPropose && kbft.isProposalReceived() {
-		kbft.enterPrevote(kbft.Height, kbft.Round)
+		kbft.enterPrevote(kbft.Heights, kbft.Round)
 
 		if majority {
-			kbft.enterPreCommit(kbft.Height, kbft.Round)
+			kbft.enterPreCommit(kbft.Heights, kbft.Round)
 		}
 	} else if kbft.Step == RoundStepCommit {
-		kbft.finalizeCommit(kbft.Height)
+		kbft.finalizeCommit(kbft.Heights)
 	}
 
 	return nil
@@ -356,13 +336,13 @@ func (kbft *KBFT) SetProposal(p *ktypes.Proposal, peerID id.KramaID) error {
 }
 
 func (kbft *KBFT) addVote(v *ktypes.Vote, peerID id.KramaID) (added bool, err error) {
-	if !areHeightsEqual(v.GridID.Parts.Heights, kbft.Height) {
-		kbft.logger.Trace("Invalid vote BFT Height", kbft.Height, v.GridID.Parts.Heights)
+	if !areHeightsEqual(v.GridID.Parts.Heights, kbft.Heights) {
+		kbft.logger.Trace("Invalid vote BFT Height", "local heights", kbft.Heights, "msg heights", v.GridID.Parts.Heights)
 
 		return
 	}
 
-	height := kbft.Height
+	height := kbft.Heights
 
 	if kbft.ProposalGrid != nil && v.GridID.Hash != kbft.ProposalGrid.Hash {
 		kbft.evidence.AddVote(v)
@@ -450,7 +430,7 @@ func (kbft *KBFT) addVote(v *ktypes.Vote, peerID id.KramaID) (added bool, err er
 }
 
 func (kbft *KBFT) finalizeCommit(h []uint64) {
-	if !areHeightsEqual(kbft.Height, h) {
+	if !areHeightsEqual(kbft.Heights, h) {
 		panic("unmatched heights")
 	}
 
@@ -467,7 +447,7 @@ func (kbft *KBFT) finalizeCommit(h []uint64) {
 		return
 	}
 
-	if !areHeightsEqual(kbft.Height, h) || kbft.Step != RoundStepCommit {
+	if !areHeightsEqual(kbft.Heights, h) || kbft.Step != RoundStepCommit {
 		return
 	}
 
@@ -495,7 +475,7 @@ func (kbft *KBFT) finalizeCommit(h []uint64) {
 		return
 	}
 
-	// Stop the ClusterInfo and other process
+	// stop the bft engine
 	kbft.Close(nil)
 }
 
@@ -534,11 +514,11 @@ func (kbft *KBFT) updateConsensusInfoInTesseracts(
 
 func (kbft *KBFT) ScheduleRound0() {
 	kbft.logger.Info("Scheduling Round 0. TO:")
-	kbft.scheduleTimeout(100*time.Millisecond, kbft.Height, 0, RoundStepNewHeight)
+	kbft.scheduleTimeout(100*time.Millisecond, kbft.Heights, 0, RoundStepNewHeight)
 }
 
 func (kbft *KBFT) enterCommit(heights []uint64, round int32) {
-	if !areHeightsEqual(kbft.Height, heights) || RoundStepCommit <= kbft.Step {
+	if !areHeightsEqual(kbft.Heights, heights) || RoundStepCommit <= kbft.Step {
 		return
 	}
 
@@ -564,7 +544,7 @@ func (kbft *KBFT) enterCommit(heights []uint64, round int32) {
 }
 
 func (kbft *KBFT) enterPrecommitWait(heights []uint64, r int32) {
-	if !areHeightsEqual(kbft.Height, heights) ||
+	if !areHeightsEqual(kbft.Heights, heights) ||
 		r < kbft.Round ||
 		(kbft.Round == r && kbft.TriggeredTimeoutPrecommit) {
 		return
@@ -595,7 +575,7 @@ func (kbft *KBFT) isProposalReceived() bool {
 }
 
 func (kbft *KBFT) enterNewRound(heights []uint64, round int32) {
-	if !areHeightsEqual(kbft.Height, heights) ||
+	if !areHeightsEqual(kbft.Heights, heights) ||
 		round < kbft.Round ||
 		(kbft.Round == round && kbft.Step != RoundStepNewHeight) {
 		return
@@ -625,7 +605,7 @@ func (kbft *KBFT) enterNewRound(heights []uint64, round int32) {
 }
 
 func (kbft *KBFT) enterPropose(heights []uint64, round int32) {
-	if !areHeightsEqual(kbft.Height, heights) ||
+	if !areHeightsEqual(kbft.Heights, heights) ||
 		kbft.Round > round ||
 		(kbft.Round == round && kbft.Step >= RoundStepPropose) {
 		return
@@ -741,7 +721,7 @@ func (kbft *KBFT) proposeTimeout(round int32) time.Duration {
 func (kbft *KBFT) enterPreCommit(heights []uint64, round int32) {
 	kbft.logger.Trace("Entered PreCommit", "round", round)
 
-	if !areHeightsEqual(kbft.Height, heights) ||
+	if !areHeightsEqual(kbft.Heights, heights) ||
 		kbft.Round > round ||
 		(round == kbft.Round && kbft.Step >= RoundStepPrecommit) {
 		return
@@ -834,7 +814,7 @@ func (kbft *KBFT) updateRoundStep(round int32, step RoundStepType) {
 func (kbft *KBFT) enterPrevote(h []uint64, r int32) {
 	kbft.logger.Trace("Entered PreVote")
 
-	if !areHeightsEqual(kbft.Height, h) || kbft.Round > r || (kbft.Round == r && kbft.Step >= RoundStepPrevote) {
+	if !areHeightsEqual(kbft.Heights, h) || kbft.Round > r || (kbft.Round == r && kbft.Step >= RoundStepPrevote) {
 		return
 	}
 
@@ -913,7 +893,7 @@ func (kbft *KBFT) signVote(msgType ktypes.ConsensusMsgType, id *types.TesseractG
 		ValidatorIndex: valIndex,
 		GridID: &types.TesseractGridID{
 			Parts: &types.TesseractParts{
-				Heights: kbft.Height,
+				Heights: kbft.Heights,
 			},
 		},
 		Round: kbft.Round,
@@ -943,7 +923,7 @@ func (kbft *KBFT) signVote(msgType ktypes.ConsensusMsgType, id *types.TesseractG
 func (kbft *KBFT) enterPrevoteWait(h []uint64, r int32) {
 	kbft.logger.Trace("Entered PreVoteWait")
 
-	if !areHeightsEqual(kbft.Height, h) ||
+	if !areHeightsEqual(kbft.Heights, h) ||
 		kbft.Round > r ||
 		(kbft.Step >= RoundStepPrevoteWait && kbft.Round == r) {
 		return
@@ -986,7 +966,7 @@ func (kbft *KBFT) PrintMetrics() {
 	if kbft.Proposal != nil {
 		prevoteSet := prevotes.votesByTesseract[string(kbft.Proposal.GridID.Hash.Bytes())]
 		precommitSet := precommits.votesByTesseract[string(kbft.ProposalGrid.Hash.Bytes())]
-		kbft.logger.Debug("Validators", "list", prevotes.valset.ICS.String())
+		kbft.logger.Debug("Validators", "list", prevotes.valset.NodeSet.String())
 		kbft.logger.Debug("Prevote Received", prevoteSet.bitarray)
 		kbft.logger.Debug("Precommit Received", precommitSet.bitarray)
 	}

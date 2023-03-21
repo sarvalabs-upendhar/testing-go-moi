@@ -3,9 +3,7 @@ package krama
 import (
 	"context"
 	"fmt"
-	"log"
 	"math"
-	"math/big"
 	"sync"
 	"time"
 
@@ -41,10 +39,8 @@ const (
 	// MinMTQ represents the minimum Modulated Trust Quotient
 	MinMTQ float64 = 0.3
 
-	// MaxICSSize represents the maximum size of an ClusterInfo
+	// MaxICSSize represents the maximum size of the cluster
 	MaxICSSize float64 = 10
-
-	RandomNodesDelta float64 = 0.2
 
 	ObserverNodesDelta float64 = 0.2
 
@@ -104,6 +100,10 @@ type Request struct {
 	ixs          types.Interactions
 	msg          *ptypes.ICSRequest
 	responseChan chan Response
+}
+
+func (r *Request) IxHash() types.Hash {
+	return r.ixs[0].Hash()
 }
 
 func (r *Request) getClusterID(operator id.KramaID) (types.ClusterID, error) {
@@ -184,18 +184,41 @@ func NewKramaEngine(ctx context.Context,
 	return k, k.transport.RegisterRPCService(ICSRPCProtocol, "ICSRPC", NewICSRPCService(k))
 }
 
-func (k *Engine) AcquireContextLock(ctx context.Context, clusterID types.ClusterID, request Request) error {
-	ctx, span := tracing.Span(ctx, "Krama.KramaEngine", "AcquireContextLock")
+// loadIxnClusterState fetches the account state and returns the interaction cluster state
+func (k *Engine) loadIxnClusterState(
+	ctx context.Context,
+	ixns types.Interactions,
+	clusterID types.ClusterID,
+	reqTime time.Time,
+	operator id.KramaID,
+) (*ktypes.ClusterState, error) {
+	var err error
+
+	clusterState := ktypes.NewICS(6, ixns, clusterID, operator, reqTime)
+	// Fetch the committed account info of interaction participants
+	clusterState.AccountInfos, err = k.fetchIxAccounts(ctx, ixns[0])
+	if err != nil {
+		return nil, err
+	}
+
+	return clusterState, nil
+}
+
+func (k *Engine) acquireContextLock(ctx context.Context, clusterID types.ClusterID, request Request) error {
+	ctx, span := tracing.Span(ctx, "Krama.KramaEngine", "acquireContextLock")
 	defer span.End()
 	// Create cluster id using operatorID and IxHash
-	k.logger.Info("Creating cluster", "Cluster id", clusterID)
+	k.logger.Debug("Creating cluster", "Cluster id", clusterID)
 
-	clusterState := ktypes.NewICS(6, request.ixs, clusterID, k.selfID, time.Now())
+	cs, err := k.loadIxnClusterState(ctx, request.ixs, clusterID, time.Now(), k.selfID)
+	if err != nil {
+		return err
+	}
 
 	// create a slot and try adding it
-	newSlot := ktypes.NewSlot(ktypes.OperatorSlot, clusterState)
+	newSlot := ktypes.NewSlot(ktypes.OperatorSlot, cs)
 
-	if !k.slots.AddSlot(clusterID, newSlot) {
+	if !k.slots.AddSlot(newSlot) {
 		return types.ErrSlotsFull
 	}
 
@@ -216,14 +239,9 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID types.Cluster
 	if err != nil {
 		return err
 	}
-	// Fetch the committed account info of interaction participants
-	clusterState.AccountInfos, err = k.fetchIxAccounts(ctx, request.ixs[0])
-	if err != nil {
-		return err
-	}
-	// Generate the contextLock
-	lockInfo := GetContextLockInfo(clusterState.AccountInfos, contextHashes)
-	clusterState.ContextLock = lockInfo
+
+	loadContextLockInfo(cs, contextHashes)
+
 	// Initiate the cluster communication by subscribing to clusterID
 	if err = k.initClusterCommunication(ctx, newSlot); err != nil {
 		return errors.Wrap(err, "failed to initiate cluster communication")
@@ -242,14 +260,14 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID types.Cluster
 		}
 	}(ctx)
 
-	clusterState.ICSReqTime = utils.Now()
+	cs.ICSReqTime = utils.Now()
 	// Construct ICS_Request
-	reqMsg, err := k.getICSReqMsg(request.ixs[0], lockInfo, clusterID, clusterState.ICSReqTime)
+	reqMsg, err := k.getICSReqMsg(cs)
 	if err != nil {
 		return err
 	}
 
-	// Send ClusterInfo Request to context nodes of both participants
+	// Send ICSRequest to context nodes of both participants
 	go k.sendICSRequest(
 		ctx,
 		ktypes.SenderBehaviourSet,
@@ -296,28 +314,27 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID types.Cluster
 
 	finalWaitGroup.Wait()
 	// Check for context quorum
-	if !clusterState.IsContextQuorum() {
+	if !cs.IsContextQuorum() {
 		return errors.New("context quorum failed")
 	}
 
-	respondedEligibleSetSize, respondedEligibleSet := clusterState.RespondedEligibleSet()
-	// Calculate the required number of observer nodes in the ClusterInfo cluster based on observer coefficient
-	// value and the actual size of the ClusterInfo cluster including the required observer
+	respondedEligibleSetSize, respondedEligibleSet := cs.RespondedEligibleSet()
+	// Calculate the required number of observer nodes in the cluster based on observer coefficient
+	// value and the actual size of the cluster including the required observer
 	requiredObserverNodes := int(math.Ceil(ObserverCoeff * float64(respondedEligibleSetSize)))
 	observerNodesQueryCount := requiredObserverNodes + k.observerNodeDelta(respondedEligibleSetSize)
 
 	actualICSSize := 3*respondedEligibleSetSize + requiredObserverNodes
 	// Choose the higher value between the user MTQ and the minimum network MTQ and use
-	// that Modulated Trust Quotient to calculate the minimum required ClusterInfo cluster size
+	// that Modulated Trust Quotient to calculate the minimum required cluster size
 	mtqSize := math.Max(MinMTQ, 0.5) // get this from interaction
 	requiredICSSize := int(math.Ceil(mtqSize * MaxICSSize))
 
-	k.logger.Info("Required ClusterInfo Size", "Size", requiredICSSize)
-	k.logger.Info("Actual ClusterInfo Size", "Size", actualICSSize)
-
-	// Determine the number of required random nodes in the ClusterInfo cluster based on
+	k.logger.Info("Actual cluster size info", "size", actualICSSize)
+	k.logger.Info("Required cluster size info", "size", requiredICSSize)
+	// Determine the number of required random nodes in the cluster based on
 	// the size of the responded eligible set and the number of additional nodes
-	// required to satisfy the ClusterInfo cluster size requirement
+	// required to satisfy the cluster size requirement
 	additionalRandomNodes := 1
 	if requiredICSSize > actualICSSize {
 		additionalRandomNodes = requiredICSSize - actualICSSize
@@ -337,7 +354,7 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID types.Cluster
 		return errors.Wrap(err, "unable to retrieve random and observer nodes")
 	}
 
-	if !clusterState.IsOperatorIncluded() {
+	if !cs.IsOperatorIncluded() {
 		operatorRandomNodes = append([]id.KramaID{k.selfID}, operatorRandomNodes...) // TODO:Improve this
 	}
 
@@ -387,7 +404,7 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID types.Cluster
 
 	finalWaitGroup.Wait()
 
-	if !clusterState.IsRandomQuorum(operatorRandomNodesCount, requiredObserverNodes) {
+	if !cs.IsRandomQuorum(operatorRandomNodesCount, requiredObserverNodes) {
 		return errors.New("random quorum failed")
 	}
 
@@ -395,7 +412,7 @@ func (k *Engine) AcquireContextLock(ctx context.Context, clusterID types.Cluster
 		return err
 	}
 
-	k.metrics.captureICSCreationTime(clusterState.ICSReqTime)
+	k.metrics.captureICSCreationTime(cs.ICSReqTime)
 
 	return nil
 }
@@ -462,14 +479,12 @@ func (k *Engine) joinCluster(ctx context.Context, req Request) error {
 	ctx, span := tracing.Span(ctx, "Krama.KramaEngine", "joinCluster")
 	defer span.End()
 
-	ixHash := req.ixs[0].Hash()
-
 	k.logger.Debug(
 		"Received an ICS join request",
 		"from", req.msg.Operator,
 		"cluster-id", req.msg.ClusterID,
 		"timestamp", req.msg.Timestamp,
-		ixHash,
+		"ixHash", req.IxHash(),
 	)
 
 	reqTime := utils.Canonical(time.Unix(0, req.msg.Timestamp))
@@ -478,35 +493,35 @@ func (k *Engine) joinCluster(ctx context.Context, req Request) error {
 		return errors.New("invalid time stamp")
 	}
 
-	clusterState := ktypes.NewICS(
-		6,
+	cs, err := k.loadIxnClusterState(
+		ctx,
 		req.ixs,
 		types.ClusterID(req.msg.ClusterID),
+		reqTime,
 		id.KramaID(req.msg.Operator),
-		reqTime)
+	)
+	if err != nil {
+		return err
+	}
 
-	newSlot := ktypes.NewSlot(ktypes.ValidatorSlot, clusterState)
+	newSlot := ktypes.NewSlot(ktypes.ValidatorSlot, cs)
 	// Create a slot and try adding it
 
-	clusterState.ContextLock = req.msg.ContextLock
-
-	if !k.slots.AddSlot(types.ClusterID(req.msg.ClusterID), newSlot) {
+	if !k.slots.AddSlot(newSlot) {
 		return types.ErrSlotsFull
 	}
 
 	k.metrics.captureAvailableValidatorSlots(-1)
 
-	clusterState.CurrentRole = ktypes.IcsSetType(req.msg.ContextType)
+	cs.CurrentRole = ktypes.IcsSetType(req.msg.ContextType)
 
 	contextHashes, nodeSets, err := k.state.FetchInteractionContext(ctx, req.ixs[0])
 	if err != nil {
 		return err
 	}
 
-	clusterState.AccountInfos, err = k.fetchIxAccounts(ctx, req.ixs[0])
-	if err != nil {
-		return err
-	}
+	loadContextLockInfo(cs, contextHashes)
+
 	// Check whether the context hashes matches
 	for addr, info := range req.msg.ContextLock {
 		if contextHashes[addr] != info.ContextHash {
@@ -514,7 +529,7 @@ func (k *Engine) joinCluster(ctx context.Context, req Request) error {
 		}
 	}
 
-	clusterState.ICS.Nodes = nodeSets
+	cs.NodeSet.Nodes = nodeSets
 
 	k.logger.Debug("Responding to ICS request", "from", req.msg.Operator, "clusterId", req.msg.ClusterID)
 
@@ -556,7 +571,7 @@ func (k *Engine) handleReq(req Request) {
 		}
 	}()
 
-	if err := k.validateInteractions(req.ixs); err != nil {
+	if err = k.validateInteractions(req.ixs); err != nil {
 		k.logger.Error("Invalid Interaction", "error", err)
 
 		sendResponse(req, types.ErrInvalidInteractions)
@@ -585,7 +600,7 @@ func (k *Engine) handleReq(req Request) {
 
 	switch req.reqType {
 	case 0:
-		err = k.AcquireContextLock(ctx, clusterID, req)
+		err = k.acquireContextLock(ctx, clusterID, req)
 
 		sendResponse(req, err)
 
@@ -618,14 +633,12 @@ func (k *Engine) handleReq(req Request) {
 			return
 		}
 
-		timeout := time.After(ICSTimeOutDuration)
-
 		select {
 		case _, ok := <-slot.ICSSuccessChan:
 			if ok {
 				k.metrics.captureICSJoiningTime(requestTime)
 			}
-		case <-timeout:
+		case <-time.After(ICSTimeOutDuration):
 			k.logger.Info("ICS success timeout", "cluster-id", req.msg.ClusterID)
 			k.metrics.captureICSParticipationFailureCount(1)
 
@@ -642,14 +655,13 @@ func (k *Engine) handleReq(req Request) {
 		return
 	}
 
-	clusterInfo := slot.ClusterInfo()
+	cs := slot.ClusterState()
 
-	if clusterInfo.CurrentRole == ktypes.ObserverSet {
+	if cs.CurrentRole == ktypes.ObserverSet {
 		wg := observer.NewWatchDog(ctx, slot)
-
 		wg.StartWatchDog()
 
-		if hash := clusterInfo.ID.Hash(); !hash.IsNil() {
+		if hash := cs.ID.Hash(); !hash.IsNil() {
 			proofs, err := wg.GenerateProofs()
 			if err != nil {
 				k.logger.Error("Failed to generate watchdog proofs")
@@ -657,7 +669,7 @@ func (k *Engine) handleReq(req Request) {
 				return
 			}
 
-			clusterInfo.AddDirty(hash, proofs)
+			cs.AddDirty(hash, proofs)
 
 			return
 		}
@@ -673,7 +685,7 @@ func (k *Engine) handleReq(req Request) {
 			k.logger.Info("Error executing interactions ", "error", execResp.Err, "cluster-id", clusterID)
 			k.metrics.captureAgreementFailureCount(1)
 
-			for _, interaction := range clusterInfo.Ixs {
+			for _, interaction := range cs.Ixs {
 				k.pool.Drop(interaction)
 			}
 
@@ -682,18 +694,18 @@ func (k *Engine) handleReq(req Request) {
 
 		k.logger.Trace("Execution finished")
 		k.metrics.captureGridGenerationTime(executionReqTS)
-		clusterInfo.SetGrid(execResp.Grid)
+		cs.SetGrid(execResp.Grid)
 		k.lattice.AddKnownHashes(execResp.Grid)
 
 		consensusInitTS := time.Now()
-		k.metrics.captureClusterSize(float64(clusterInfo.Size()))
+		k.metrics.captureClusterSize(float64(cs.Size()))
 
-		ixHash, err := clusterInfo.Ixs.Hash()
+		ixHash, err := cs.Ixs.Hash()
 		if err != nil {
 			return
 		}
 
-		icsEvidence := kbft.NewEvidence(ixHash, clusterInfo.Operator, clusterInfo.Size())
+		icsEvidence := kbft.NewEvidence(ixHash, cs.Operator, cs.Size())
 
 		bft := kbft.NewKBFTService(
 			ctx,
@@ -702,7 +714,7 @@ func (k *Engine) handleReq(req Request) {
 			slot.BftOutboundChan,
 			slot.BftInboundChan,
 			k.vault,
-			clusterInfo,
+			cs,
 			k.finalizedTesseractHandler,
 			kbft.WithLogger(k.logger.With("cluster-id", clusterID)),
 			kbft.WithWal(k.wal),
@@ -710,10 +722,10 @@ func (k *Engine) handleReq(req Request) {
 		)
 
 		if err = bft.Start(); err != nil {
-			k.logger.Error("Error consensus failed", "error", err, "cluster-id", clusterInfo.ID)
+			k.logger.Error("Error consensus failed", "error", err, "cluster-id", cs.ID)
 			k.metrics.captureAgreementFailureCount(1)
-			if err := k.exec.Revert(clusterInfo.ID); err != nil {
-				log.Panicln(err)
+			if err := k.exec.Revert(cs.ID); err != nil {
+				k.logger.Error("failed to revert the execution changes", "error", err)
 			}
 
 			return
@@ -722,7 +734,7 @@ func (k *Engine) handleReq(req Request) {
 		k.metrics.captureAgreementTime(consensusInitTS)
 	}
 
-	k.logger.Info("Interaction finalized", "cluster-id", clusterInfo.ID)
+	k.logger.Info("Interaction finalized", "cluster-id", cs.ID)
 }
 
 func (k *Engine) fetchIxAccounts(ctx context.Context, ix *types.Interaction) (ktypes.AccountInfos, error) {
@@ -737,7 +749,7 @@ func (k *Engine) fetchIxAccounts(ctx context.Context, ix *types.Interaction) (kt
 			return nil, err
 		}
 
-		accounts[ix.Sender()] = accInfo
+		accounts[ix.Sender()] = ktypes.AccountInfoFromAccMetaInfo(accInfo, false)
 	}
 
 	if ix.Receiver().IsNil() {
@@ -755,26 +767,25 @@ func (k *Engine) fetchIxAccounts(ctx context.Context, ix *types.Interaction) (kt
 			return nil, err
 		}
 
-		accounts[ix.Receiver()] = accInfo
+		accounts[ix.Receiver()] = ktypes.AccountInfoFromAccMetaInfo(accInfo, false)
 
 		return accounts, nil
 	}
 
-	genesisAccInfo, err := k.state.GetAccountMetaInfo(guna.SargaAddress)
+	genesisAccInfo, err := k.state.GetAccountMetaInfo(types.SargaAddress)
 	if err != nil {
 		return nil, err
 	}
 
-	acc := &types.AccountMetaInfo{
+	acc := &ktypes.AccountInfo{
 		Address:       ix.Sender(),
-		Type:          types.AccTypeFromIxType(ix.Type()),
+		AccType:       types.AccTypeFromIxType(ix.Type()),
 		TesseractHash: types.NilHash,
-		LatticeExists: true,
-		StateExists:   true,
-		Height:        big.NewInt(-1),
+		Height:        0,
+		IsGenesis:     true,
 	}
 
-	accounts[guna.SargaAddress] = genesisAccInfo
+	accounts[types.SargaAddress] = ktypes.AccountInfoFromAccMetaInfo(genesisAccInfo, false)
 	accounts[ix.Receiver()] = acc
 
 	return accounts, nil
@@ -799,7 +810,7 @@ func (k *Engine) sendICSRequestWithBound(
 
 	currentSlot := k.slots.GetSlot(cID)
 
-	clusterState := currentSlot.ClusterInfo()
+	clusterState := currentSlot.ClusterState()
 
 	nodeResponses := make([]bool, len(nodes))
 	rcount := 0
@@ -902,11 +913,10 @@ func (k *Engine) sendICSRequest(
 	randomNodes chan []id.KramaID,
 ) {
 	_, span := tracing.Span(ctx, "Krama.KramaEngine", "sendICSRequest")
-	defer span.End()
-
-	var wg sync.WaitGroup
-
-	defer finalWaitGroup.Done()
+	defer func() {
+		span.End()
+		finalWaitGroup.Done()
+	}()
 
 	if nodesSet == nil {
 		k.logger.Trace("Returning from ICSRequest routine", "set-type", setType)
@@ -914,19 +924,21 @@ func (k *Engine) sendICSRequest(
 		return
 	}
 
-	wg.Add(len(nodesSet.Ids))
+	var (
+		wg            sync.WaitGroup
+		nodeResponses = make([]bool, len(nodesSet.Ids))
+		slot          = k.slots.GetSlot(cID)
+	)
 
-	nodeResponses := make([]bool, len(nodesSet.Ids))
-	currentSlot := k.slots.GetSlot(cID)
-	clusterState := currentSlot.ClusterInfo()
+	wg.Add(len(nodesSet.Ids))
 
 	msg.ContextType = int32(setType)
 
 	for index, kramaID := range nodesSet.Ids {
-		if kramaID == clusterState.Operator {
+		if kramaID == slot.ClusterState().Operator {
 			nodeResponses[index] = true
 
-			clusterState.IncludeOperator()
+			slot.ClusterState().IncludeOperator()
 
 			wg.Done()
 
@@ -943,7 +955,6 @@ func (k *Engine) sendICSRequest(
 
 		peerID, err := peer.Decode(networkID)
 		if err != nil {
-			log.Println("Network id", networkID)
 			k.logger.Error("Unable to decode peer id", "error", err)
 			wg.Done()
 
@@ -981,7 +992,6 @@ func (k *Engine) sendICSRequest(
 	}
 
 	wg.Wait()
-	// idSet := types.NewNodeSet(nodes, keys)
 
 	for index, isAvailable := range nodeResponses {
 		if isAvailable {
@@ -989,29 +999,25 @@ func (k *Engine) sendICSRequest(
 			nodesSet.Count++
 		}
 	}
-	// currentSlot.clusterState.IncrementClusterSize(len(nodes))
-	clusterState.UpdateNodeSet(setType, nodesSet)
+
+	slot.ClusterState().UpdateNodeSet(setType, nodesSet)
 }
 
 func (k *Engine) getICSReqMsg(
-	ix *types.Interaction,
-	lockInfo map[types.Address]types.ContextLockInfo,
-	clusterID types.ClusterID,
-	timestamp time.Time,
+	cs *ktypes.ClusterState,
 ) (ptypes.ICSRequest, error) {
 	icsReqMsg := new(ptypes.ICSRequest)
-	Ixs := types.Interactions{ix}
 
-	rawData, err := Ixs.Bytes()
+	rawData, err := cs.Ixs.Bytes()
 	if err != nil {
 		return *icsReqMsg, err
 	}
 
 	icsReqMsg.IxData = rawData
-	icsReqMsg.ClusterID = string(clusterID)
+	icsReqMsg.ClusterID = string(cs.ID)
 	icsReqMsg.Operator = string(k.selfID)
-	icsReqMsg.ContextLock = lockInfo
-	icsReqMsg.Timestamp = timestamp.UnixNano()
+	icsReqMsg.ContextLock = cs.ContextLock()
+	icsReqMsg.Timestamp = cs.ICSReqTime.UnixNano()
 
 	return *icsReqMsg, nil
 }
@@ -1058,7 +1064,7 @@ func (k *Engine) sendICSSuccess(id types.ClusterID) error {
 	}
 
 	var (
-		clusterState = slot.ClusterInfo()
+		clusterState = slot.ClusterState()
 		msg          = clusterState.CreateICSSuccessMsg()
 	)
 
@@ -1096,7 +1102,7 @@ func (k *Engine) createProposalGrid(slot *ktypes.Slot) ([]*types.Tesseract, erro
 		return nil, err
 	}
 
-	clusterState := slot.ClusterInfo()
+	clusterState := slot.ClusterState()
 
 	_, err := clusterState.ComputeICSHash()
 	if err != nil {
@@ -1125,7 +1131,7 @@ func (k *Engine) updateContextDelta(clusterID types.ClusterID) error {
 		return errors.New("nil slot")
 	}
 
-	clusterState := slot.ClusterInfo()
+	clusterState := slot.ClusterState()
 	seenAccounts := make(map[types.Address]bool)
 	deltaMap := make(types.ContextDelta)
 
@@ -1203,9 +1209,9 @@ func (k *Engine) updateContextDelta(clusterID types.ClusterID) error {
 				)
 				genesisDeltaGroup.RandomNodes = append(genesisDeltaGroup.RandomNodes, genesisRandomDelta...)
 				genesisDeltaGroup.ReplacedNodes = append(genesisDeltaGroup.ReplacedNodes, replacedRandomDelta...)
-				seenAccounts[guna.SargaAddress] = true
-				deltaMap[guna.SargaAddress] = genesisDeltaGroup
-			} else if clusterState.AccountInfos[receiverAddr].Type == 2 {
+				seenAccounts[types.SargaAddress] = true
+				deltaMap[types.SargaAddress] = genesisDeltaGroup
+			} else if clusterState.AccountInfos[receiverAddr].AccType == 2 {
 				receiverBehaviourDelta, replacedNodes := clusterState.GetBehaviouralContextDelta(
 					ktypes.ReceiverBehaviourSet,
 				)
@@ -1235,12 +1241,12 @@ func (k *Engine) updateContextDelta(clusterID types.ClusterID) error {
 }
 
 func (k *Engine) GetNodes(
-	clusterInfo *ktypes.ClusterInfo,
+	clusterInfo *ktypes.ClusterState,
 	requiredRandomNodes,
 	requiredBehaviouralNodes int,
 ) (behaviouralNodes []id.KramaID, randomNodes []id.KramaID, err error) {
 	// TODO: Need to improve this function
-	set := clusterInfo.ICS.Nodes[ktypes.RandomSet]
+	set := clusterInfo.NodeSet.Nodes[ktypes.RandomSet]
 	count := 0
 
 	for index, kramaID := range set.Ids {
@@ -1271,7 +1277,7 @@ func (k *Engine) finalizedTesseractHandler(tesseracts []*types.Tesseract) error 
 		return errors.New("nil slot")
 	}
 
-	clusterInfo := slot.ClusterInfo()
+	clusterInfo := slot.ClusterState()
 
 	if err := k.lattice.AddTesseracts(tesseracts, clusterInfo.GetDirty()); err != nil {
 		return err
@@ -1300,7 +1306,7 @@ func (k *Engine) finalizedTesseractHandler(tesseracts []*types.Tesseract) error 
 	return nil
 }
 
-func GenerateTesseracts(state *ktypes.ClusterInfo) ([]*types.Tesseract, error) {
+func GenerateTesseracts(state *ktypes.ClusterState) ([]*types.Tesseract, error) {
 	ix := state.Ixs[0] // TODO: Improve this
 	fuelUsed := state.GetFuelUsed()
 	groupBuffer := make([]byte, 0)
@@ -1326,7 +1332,7 @@ func GenerateTesseracts(state *ktypes.ClusterInfo) ([]*types.Tesseract, error) {
 		groupBuffer = append(groupBuffer, receiverTesseract.BodyHash().Bytes()...)
 
 		if state.AccountInfos.IsGenesis(ix.Receiver()) {
-			genesisTesseract, err := generateTesseract(ix.Hash(), guna.SargaAddress, state, fuelUsed, 1000)
+			genesisTesseract, err := generateTesseract(ix.Hash(), types.SargaAddress, state, fuelUsed, 1000)
 			if err != nil {
 				return nil, err
 			}
@@ -1347,7 +1353,7 @@ func GenerateTesseracts(state *ktypes.ClusterInfo) ([]*types.Tesseract, error) {
 func generateTesseract(
 	ixHash types.Hash,
 	addr types.Address,
-	state *ktypes.ClusterInfo,
+	state *ktypes.ClusterState,
 	fuelUsed,
 	fuelLimit uint64,
 ) (*types.Tesseract, error) {
@@ -1364,9 +1370,9 @@ func generateTesseract(
 	ts := &types.Tesseract{
 		Header: types.TesseractHeader{
 			Address:     addr,
-			ContextLock: state.ContextLock,
+			ContextLock: state.ContextLock(),
 			PrevHash:    state.AccountInfos.GetLatestHash(addr),
-			Height:      uint64(state.AccountInfos.GetHeight(addr) + 1),
+			Height:      state.NewHeight(addr),
 			AnuUsed:     fuelUsed,
 			AnuLimit:    fuelLimit,
 			ClusterID:   string(state.ID),
@@ -1514,21 +1520,13 @@ func (k *Engine) IsIxValid(ix *types.Interaction) error {
 	return nil
 }
 
-func GetContextLockInfo(
-	accounts ktypes.AccountInfos,
+func loadContextLockInfo(
+	cs *ktypes.ClusterState,
 	hashes map[types.Address]types.Hash,
-) map[types.Address]types.ContextLockInfo {
-	lockInfo := make(map[types.Address]types.ContextLockInfo)
-
-	for addr, accInfo := range accounts {
-		lockInfo[addr] = types.ContextLockInfo{
-			ContextHash:   hashes[addr],
-			Height:        accInfo.Height.Uint64(),
-			TesseractHash: accInfo.TesseractHash,
-		}
+) {
+	for addr, accInfo := range cs.AccountInfos {
+		accInfo.ContextHash = hashes[addr]
 	}
-
-	return lockInfo
 }
 
 func sendResponse(req Request, err error) {

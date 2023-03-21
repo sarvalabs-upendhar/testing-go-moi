@@ -60,10 +60,11 @@ func (rtype RoundStepType) String() string {
 
 // TODO: Add JSON reflect tags for missing fields
 // TODO: Add missing documentation
+
 // RoundState is a struct that represent the state of a consensus round
 type RoundState struct {
-	// Represents the current round height being worked on
-	Height []uint64 `json:"height"`
+	// Represents the current round heights being worked on
+	Heights []uint64 `json:"heights"`
 
 	// Represents the current round number
 	Round int32 `json:"round"`
@@ -111,7 +112,7 @@ type RoundState struct {
 // RoundStateEvent returns the H/R/S of the RoundState as an event.
 func (rs *RoundState) RoundStateEvent() eventDataRoundState {
 	return eventDataRoundState{
-		Height: rs.Height,
+		Height: rs.Heights,
 		Round:  rs.Round,
 		Step:   rs.Step.String(),
 	}

@@ -61,7 +61,6 @@ func (k *Engine) handleOutboundMsg(slot *ktypes.Slot, msg ktypes.ConsensusMessag
 	switch consensusMsg := data.(type) {
 	// Vote Message
 	case *ktypes.VoteMessage:
-		// Marshal proto message into an ClusterInfo message and push into the send queue
 		rawData, err := consensusMsg.Vote.Bytes()
 		if err != nil {
 			return err
@@ -87,7 +86,7 @@ func (k *Engine) handleInboundMsg(slot *ktypes.Slot, msg *ktypes.ICSMSG) error {
 		return errors.New("nil slot")
 	}
 
-	clusterState := slot.ClusterInfo()
+	clusterState := slot.ClusterState()
 
 	sender, data, msgType := msg.Sender, msg.Msg, msg.MsgType
 	switch msgType {
@@ -124,17 +123,17 @@ func (k *Engine) handleInboundMsg(slot *ktypes.Slot, msg *ktypes.ICSMSG) error {
 			return errors.New("failed to retrieve public keys")
 		}
 		// update the cluster state with the latest node set's
-		clusterState.ICS.Nodes[ktypes.ObserverSet] = ktypes.NewNodeSet(successMsg.ObserverSet, observerPublicKeys)
-		clusterState.ICS.Nodes[ktypes.ObserverSet].QuorumSize = successMsg.QuorumSizes[ktypes.ObserverSet]
-		clusterState.ICS.Nodes[ktypes.RandomSet] = ktypes.NewNodeSet(successMsg.RandomSet, randomPublicKeys)
-		clusterState.ICS.Nodes[ktypes.RandomSet].QuorumSize = successMsg.QuorumSizes[ktypes.RandomSet]
+		clusterState.NodeSet.Nodes[ktypes.ObserverSet] = ktypes.NewNodeSet(successMsg.ObserverSet, observerPublicKeys)
+		clusterState.NodeSet.Nodes[ktypes.ObserverSet].QuorumSize = successMsg.QuorumSizes[ktypes.ObserverSet]
+		clusterState.NodeSet.Nodes[ktypes.RandomSet] = ktypes.NewNodeSet(successMsg.RandomSet, randomPublicKeys)
+		clusterState.NodeSet.Nodes[ktypes.RandomSet].QuorumSize = successMsg.QuorumSizes[ktypes.RandomSet]
 
 		clusterState.UpdateClusterSize()
 
-		for j := 0; j < len(clusterState.ICS.Nodes); j++ {
+		for j := 0; j < len(clusterState.NodeSet.Nodes); j++ {
 			if successMsg.Responses[j] != nil && successMsg.Responses[j].Size > 0 {
-				clusterState.ICS.Nodes[j].Responses = successMsg.Responses[j]
-				clusterState.ICS.Nodes[j].Count = clusterState.ICS.Nodes[j].Responses.TrueIndicesSize()
+				clusterState.NodeSet.Nodes[j].Responses = successMsg.Responses[j]
+				clusterState.NodeSet.Nodes[j].Count = clusterState.NodeSet.Nodes[j].Responses.TrueIndicesSize()
 			}
 		}
 

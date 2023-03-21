@@ -4,12 +4,9 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"math/big"
 	"math/rand"
 	"testing"
 	"time"
-
-	"github.com/sarvalabs/moichain/guna"
 
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/common/tests"
@@ -127,7 +124,7 @@ func createICSNodes(
 	receiverRandomSetCount int,
 	randomSetCount int,
 	observerSetCount int,
-) (*ktypes.ICSNodes, [][]*mudra.KramaVault) {
+) (*ktypes.ICSNodeSet, [][]*mudra.KramaVault) {
 	t.Helper()
 
 	senderBehaviourSet, senderBehaviouralValSet := createTestNodeSet(t, senderBehaviourSetCount)
@@ -155,7 +152,7 @@ func createICSNodes(
 		observerValSet,
 	}
 
-	return &ktypes.ICSNodes{
+	return &ktypes.ICSNodeSet{
 		Nodes: testNodeSets,
 		Size: senderBehaviourSetCount + senderRandomSetCount + receiverBehaviourSetCount +
 			receiverRandomSetCount + randomSetCount + observerSetCount,
@@ -213,7 +210,7 @@ func signVote(
 
 	v := &ktypes.Vote{
 		ValidatorIndex: valIndex,
-		GridID:         createGridWithHeights(t, kbft.Height, types.NilHash),
+		GridID:         createGridWithHeights(t, kbft.Heights, types.NilHash),
 		Round:          round,
 		Type:           msgType,
 	}
@@ -320,7 +317,7 @@ func sendAndEnsureVotes(
 		signAddVotes(t, kbft, round, msgType, gridID, v)
 
 		if gridID == nil {
-			ensureVote(t, voteSub, createGridWithHeights(t, kbft.Height, types.NilHash), expectedRound, msgType)
+			ensureVote(t, voteSub, createGridWithHeights(t, kbft.Heights, types.NilHash), expectedRound, msgType)
 
 			continue
 		}
@@ -376,38 +373,37 @@ func createIxs(t *testing.T, senderAddress types.Address, receiverAddress types.
 // and also add tesseract for sarga account
 func createTestClusterInfo(
 	t *testing.T,
-	icsNodes *ktypes.ICSNodes,
+	icsNodes *ktypes.ICSNodeSet,
 	newHeights []uint64,
 	ixs types.Interactions,
 	nonRegisteredReceiver bool,
-) *ktypes.ClusterInfo {
+) *ktypes.ClusterState {
 	t.Helper()
 
 	clusterInfo := ktypes.NewICS(0, ixs, "cluster1", tests.GetTestKramaIDs(t, 1)[0], time.Now())
 
-	func(clusterInfo *ktypes.ClusterInfo) {
-		clusterInfo.ICS = icsNodes
+	func(clusterInfo *ktypes.ClusterState) {
+		clusterInfo.NodeSet = icsNodes
 
-		clusterInfo.AccountInfos = make(map[types.Address]*types.AccountMetaInfo)
-		clusterInfo.AccountInfos[ixs[0].Sender()] = &types.AccountMetaInfo{
-			Height: big.NewInt(int64(newHeights[0] - 1)),
+		clusterInfo.AccountInfos = make(map[types.Address]*ktypes.AccountInfo)
+		clusterInfo.AccountInfos[ixs[0].Sender()] = &ktypes.AccountInfo{
+			Height: newHeights[0] - 1,
 		}
 
 		if nonRegisteredReceiver && !ixs[0].Receiver().IsNil() {
-			clusterInfo.AccountInfos[guna.SargaAddress] = &types.AccountMetaInfo{
-				Height: big.NewInt(int64(newHeights[2] - 1)),
+			clusterInfo.AccountInfos[types.SargaAddress] = &ktypes.AccountInfo{
+				Height: newHeights[2] - 1,
 			}
-			clusterInfo.AccountInfos[ixs[0].Receiver()] = &types.AccountMetaInfo{
+			clusterInfo.AccountInfos[ixs[0].Receiver()] = &ktypes.AccountInfo{
 				Address:       ixs[0].Receiver(),
-				Type:          types.AccTypeFromIxType(ixs[0].Type()),
+				AccType:       types.AccTypeFromIxType(ixs[0].Type()),
 				TesseractHash: types.NilHash,
-				LatticeExists: true,
-				StateExists:   true,
-				Height:        big.NewInt(-1),
+				IsGenesis:     true,
+				Height:        0,
 			}
 		} else if !ixs[0].Receiver().IsNil() {
-			clusterInfo.AccountInfos[ixs[0].Receiver()] = &types.AccountMetaInfo{
-				Height: big.NewInt(int64(newHeights[1] - 1)),
+			clusterInfo.AccountInfos[ixs[0].Receiver()] = &ktypes.AccountInfo{
+				Height: newHeights[1] - 1,
 			}
 		}
 
@@ -432,7 +428,7 @@ func createTestClusterInfo(
 		if nonRegisteredReceiver {
 			clusterInfo.Grid = append(clusterInfo.Grid, &types.Tesseract{
 				Header: types.TesseractHeader{
-					Address: guna.SargaAddress,
+					Address: types.SargaAddress,
 					Height:  newHeights[2],
 				},
 			})

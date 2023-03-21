@@ -1,8 +1,6 @@
 package types
 
 import (
-	"math/big"
-
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 )
@@ -61,7 +59,7 @@ type AccountMetaInfo struct {
 	Mode string
 
 	Address Address
-	Height  *big.Int
+	Height  uint64
 
 	TesseractHash Hash
 	LatticeExists bool

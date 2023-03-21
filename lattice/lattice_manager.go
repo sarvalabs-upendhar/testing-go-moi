@@ -37,7 +37,7 @@ type db interface {
 	CreateEntry(key []byte, value []byte) error
 	UpdateAccMetaInfo(
 		id types.Address,
-		height *big.Int,
+		height uint64,
 		tesseractHash types.Hash,
 		accType types.AccountType,
 		latticeExists bool,
@@ -70,7 +70,7 @@ type stateManager interface {
 	Cleanup(addrs types.Address)
 	IsAccountRegistered(addr types.Address) (bool, error)
 	IsAccountRegisteredAt(addr types.Address, tesseractHash types.Hash) (bool, error)
-	FetchContextLock(ts *types.Tesseract) (*ktypes.ICSNodes, error)
+	FetchContextLock(ts *types.Tesseract) (*ktypes.ICSNodeSet, error)
 	FetchTesseractFromDB(hash types.Hash, withInteractions bool) (*types.Tesseract, error)
 	SetupNewAccount(info *gtypes.AccountSetupArgs) (types.Hash, types.Hash, error)
 	SetupSargaAccount(
@@ -215,7 +215,7 @@ func (c *ChainManager) fetchContextForAgora(ts types.Tesseract) ([]id.KramaID, e
 func (c *ChainManager) fetchICSNodeSet(
 	ts *types.Tesseract,
 	info *ptypes.ICSClusterInfo,
-) (*ktypes.ICSNodes, error) {
+) (*ktypes.ICSNodeSet, error) {
 	nodeSets, err := c.sm.FetchContextLock(ts)
 	if err != nil {
 		return nil, err
@@ -371,7 +371,7 @@ func (c *ChainManager) isSealValid(ts *types.Tesseract, id id.KramaID) (bool, er
 	return mudra.Verify(rawData, ts.Seal, publicKey[0])
 }
 
-func (c *ChainManager) verifySignatures(ts *types.Tesseract, ics *ktypes.ICSNodes) (bool, error) {
+func (c *ChainManager) verifySignatures(ts *types.Tesseract, ics *ktypes.ICSNodeSet) (bool, error) {
 	var (
 		verificationInitTime = time.Now()
 		publicKeys           = make([][]byte, 0, ts.Header.Extra.VoteSet.TrueIndicesSize())
@@ -428,13 +428,13 @@ func (c *ChainManager) verifyHeaders(ts *types.Tesseract) error {
 		err               error
 	)
 
-	c.logger.Trace("Verifying headers", "addr", ts.Header.Address.Hex(), ts.Header.ContextLock)
+	c.logger.Debug("Verifying headers", "addr", ts.Header.Address)
 
 	if ts.Header.ClusterID == "genesis" {
 		return nil
 	}
 
-	if info, ok := ts.Header.ContextLock[guna.SargaAddress]; !ok {
+	if info, ok := ts.Header.ContextLock[types.SargaAddress]; !ok {
 		accountRegistered, err = c.sm.IsAccountRegistered(ts.Header.Address)
 	} else {
 		accountRegistered, err = c.sm.IsAccountRegisteredAt(ts.Header.Address, info.TesseractHash)
@@ -574,7 +574,7 @@ func (c *ChainManager) addTesseract(
 
 	bucketNo, isBucketCountIncremented, err := c.db.UpdateAccMetaInfo(
 		addr,
-		new(big.Int).SetUint64(t.Header.Height),
+		t.Header.Height,
 		tesseractHash,
 		accType,
 		latticeExists,
@@ -604,7 +604,7 @@ func (c *ChainManager) addTesseract(
 		c.tesseracts.Add(tesseractHash, t.GetTesseractWithoutIxns())
 	}
 
-	c.logger.Info("!!!!!.... tesseract  added ....!!!!!", addr, tesseractHash)
+	c.logger.Info("Tesseract Added", "addr", addr, "hash", tesseractHash)
 
 	c.sm.Cleanup(t.Header.Address)
 
@@ -690,7 +690,7 @@ func (c *ChainManager) AddSyncedTesseract(
 	return c.addTesseractsWithState(dirtyStorage, tesseracts...)
 }
 
-func (c *ChainManager) validateTesseract(sender id.KramaID, ts *types.Tesseract, ics *ktypes.ICSNodes) error {
+func (c *ChainManager) validateTesseract(sender id.KramaID, ts *types.Tesseract, ics *ktypes.ICSNodeSet) error {
 	tsHash, err := ts.Hash()
 	if err != nil {
 		return err

@@ -357,14 +357,14 @@ func NewNodeSet(ids []id.KramaID, keys [][]byte) *NodeSet {
 	}
 }
 
-type ICSNodes struct {
+type ICSNodeSet struct {
 	Nodes []*NodeSet
 	Size  int
 }
 
-// NewICSNodes creates and returns a new instance of ICSNodes
-func NewICSNodes(size int) *ICSNodes {
-	ics := &ICSNodes{
+// NewICSNodeSet creates and returns a new instance of ICSNodes
+func NewICSNodeSet(size int) *ICSNodeSet {
+	ics := &ICSNodeSet{
 		Nodes: make([]*NodeSet, size),
 		Size:  0,
 	}
@@ -373,7 +373,7 @@ func NewICSNodes(size int) *ICSNodes {
 }
 
 // GetKramaID returns the slot id, slot index, krama id and bls public key of the validator node based on the index
-func (i *ICSNodes) GetKramaID(index int32) (slots []int, slotIndex int, kramaID id.KramaID, publicKey []byte) {
+func (i *ICSNodeSet) GetKramaID(index int32) (slots []int, slotIndex int, kramaID id.KramaID, publicKey []byte) {
 	if index < 0 || int(index) >= i.Size {
 		return nil, -1, "", nil
 	}
@@ -417,7 +417,7 @@ func (i *ICSNodes) GetKramaID(index int32) (slots []int, slotIndex int, kramaID 
 }
 
 // GetIndex returns the index and existence status of the validator node from ICSNodes based on the krama id
-func (i *ICSNodes) GetIndex(peerID id.KramaID) (int32, bool) {
+func (i *ICSNodeSet) GetIndex(peerID id.KramaID) (int32, bool) {
 	offset := 0
 
 	for index, set := range i.Nodes {
@@ -442,7 +442,7 @@ func (i *ICSNodes) GetIndex(peerID id.KramaID) (int32, bool) {
 }
 
 // UpdateNodeSet updates the specific node set of the ICSNodes based on the node set type
-func (i *ICSNodes) UpdateNodeSet(setType IcsSetType, data *NodeSet) {
+func (i *ICSNodeSet) UpdateNodeSet(setType IcsSetType, data *NodeSet) {
 	if data == nil {
 		return
 	}
@@ -452,7 +452,7 @@ func (i *ICSNodes) UpdateNodeSet(setType IcsSetType, data *NodeSet) {
 }
 
 // GetNodes returns krama id's of all the nodes from the ICSNodes nodeset
-func (i *ICSNodes) GetNodes() []id.KramaID {
+func (i *ICSNodeSet) GetNodes() []id.KramaID {
 	var nodes []id.KramaID
 
 	for _, nodeSet := range i.Nodes {
@@ -465,7 +465,7 @@ func (i *ICSNodes) GetNodes() []id.KramaID {
 }
 
 // IsContextQuorum check's whether context quorum condition is satisfied or not
-func (i *ICSNodes) IsContextQuorum() bool {
+func (i *ICSNodeSet) IsContextQuorum() bool {
 	for j := 0; j < 4; j += 2 {
 		count := 0
 		quorum := 0
@@ -491,12 +491,12 @@ func (i *ICSNodes) IsContextQuorum() bool {
 }
 
 // IsRandomQuorum check's whether random quorum condition is satisfied or not
-func (i *ICSNodes) IsRandomQuorum(requiredRandomNodes int) bool {
+func (i *ICSNodeSet) IsRandomQuorum(requiredRandomNodes int) bool {
 	return i.Nodes[RandomSet].Count >= requiredRandomNodes
 }
 
 // SenderSetSize returns the sum of number of nodes in the sender's behaviour node set and random node set
-func (i *ICSNodes) SenderSetSize() int {
+func (i *ICSNodeSet) SenderSetSize() int {
 	count := 0
 
 	if i.Nodes[SenderBehaviourSet] != nil {
@@ -515,7 +515,7 @@ func (i *ICSNodes) SenderSetSize() int {
 }
 
 // ReceiverSetSize returns the sum of number of nodes in the receiver's behaviour node set and random node set
-func (i *ICSNodes) ReceiverSetSize() int {
+func (i *ICSNodeSet) ReceiverSetSize() int {
 	count := 0
 
 	if i.Nodes[ReceiverBehaviourSet] != nil {
@@ -534,7 +534,7 @@ func (i *ICSNodes) ReceiverSetSize() int {
 }
 
 // RandomSetSize returns the random node set size
-func (i *ICSNodes) RandomSetSize() int {
+func (i *ICSNodeSet) RandomSetSize() int {
 	count := len(i.Nodes[RandomSet].Ids)
 	if count <= 0 {
 		return 0
@@ -544,7 +544,7 @@ func (i *ICSNodes) RandomSetSize() int {
 }
 
 // SenderQuorumSize returns the sender's quorum size
-func (i *ICSNodes) SenderQuorumSize() int {
+func (i *ICSNodeSet) SenderQuorumSize() int {
 	count := i.SenderSetSize()
 	if count <= 0 {
 		return 0
@@ -554,7 +554,7 @@ func (i *ICSNodes) SenderQuorumSize() int {
 }
 
 // ReceiverQuorumSize returns the receiver's quorum size
-func (i *ICSNodes) ReceiverQuorumSize() int {
+func (i *ICSNodeSet) ReceiverQuorumSize() int {
 	count := i.ReceiverSetSize()
 	if count <= 0 {
 		return 0
@@ -564,12 +564,12 @@ func (i *ICSNodes) ReceiverQuorumSize() int {
 }
 
 // RandomQuorumSize returns the random quorum size
-func (i *ICSNodes) RandomQuorumSize() int {
+func (i *ICSNodeSet) RandomQuorumSize() int {
 	return i.Nodes[RandomSet].QuorumSize*2/3 + 1
 }
 
 // String returns the ICSNodes in string
-func (i *ICSNodes) String() string {
+func (i *ICSNodeSet) String() string {
 	rawBytes, err := json.Marshal(i)
 	if err != nil {
 		return "failed to print ics nodes"

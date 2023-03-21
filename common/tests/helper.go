@@ -387,13 +387,13 @@ func GetTesseract(t *testing.T, height uint64) *types.Tesseract {
 	return &tesseract
 }
 
-func GetRandomAccMetaInfo(t *testing.T, height int64) *types.AccountMetaInfo {
+func GetRandomAccMetaInfo(t *testing.T, height uint64) *types.AccountMetaInfo {
 	t.Helper()
 
 	return &types.AccountMetaInfo{
 		Address:       RandomAddress(t),
 		Type:          types.AccountType(1),
-		Height:        big.NewInt(height),
+		Height:        height,
 		TesseractHash: RandomHash(t),
 		LatticeExists: true,
 		StateExists:   true,

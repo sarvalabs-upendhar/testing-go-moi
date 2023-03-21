@@ -32,8 +32,8 @@ type HeightVoteSet struct {
 	// Represents the slice of heights tracked by the voteset
 	heights []uint64
 
-	// Represents the set of validators for the voteset
-	valset *ktypes.ClusterInfo
+	// Represents the cluster state
+	cs *ktypes.ClusterState
 
 	// Represents the highest tracking round of the voteset
 	round int32
@@ -54,7 +54,7 @@ type HeightVoteSet struct {
 func NewHeightVoteSet(
 	chainIDs []string,
 	heights []uint64,
-	valset *ktypes.ClusterInfo,
+	valset *ktypes.ClusterState,
 	logger hclog.Logger,
 ) *HeightVoteSet {
 	// Create a new HeightVoteSet with the lattice IDs
@@ -72,14 +72,14 @@ func NewHeightVoteSet(
 
 // Reset is a method of HeightVoteSet that resets the vote set.
 // Accepts a slice of heights and a set of validators to assign to the height vote set.
-func (hvs *HeightVoteSet) Reset(heights []uint64, valset *ktypes.ClusterInfo) {
+func (hvs *HeightVoteSet) Reset(heights []uint64, valset *ktypes.ClusterState) {
 	// Acquire lock
 	hvs.mtx.Lock()
 	defer hvs.mtx.Unlock()
 
 	// Set the heights and validator set
 	hvs.heights = heights
-	hvs.valset = valset
+	hvs.cs = valset
 
 	// TODO: Should we reset the peerCatchupRounds?
 	// hvs.peerCatchupRounds = make(map[id.KramaID][]int32)
@@ -155,13 +155,13 @@ func (hvs *HeightVoteSet) SetRound(round int32) {
 func (hvs *HeightVoteSet) addRound(r int32) {
 	// Panic if round already exists
 	if _, ok := hvs.roundVoteSets[r]; ok {
-		log.Panicln("Round already exsists")
+		log.Panicln("Round already exists")
 	}
 
 	// Create a new RoundVoteSet and set it for the round
 	hvs.roundVoteSets[r] = RoundVoteSet{
-		Prevotes:   NewVoteSet(hvs.heights, r, ktypes.PREVOTE, hvs.valset, hvs.logger),
-		Precommits: NewVoteSet(hvs.heights, r, ktypes.PRECOMMIT, hvs.valset, hvs.logger),
+		Prevotes:   NewVoteSet(hvs.heights, r, ktypes.PREVOTE, hvs.cs, hvs.logger),
+		Precommits: NewVoteSet(hvs.heights, r, ktypes.PRECOMMIT, hvs.cs, hvs.logger),
 	}
 }
 

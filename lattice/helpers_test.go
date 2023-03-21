@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
-	"math/big"
 	"math/rand"
 	"reflect"
 	"strconv"
@@ -97,7 +96,7 @@ func (m *MockDB) Contains(key []byte) (bool, error) {
 
 func (m *MockDB) UpdateAccMetaInfo(
 	id types.Address,
-	height *big.Int,
+	height uint64,
 	tesseractHash types.Hash,
 	accType types.AccountType,
 	latticeExists bool,
@@ -486,8 +485,8 @@ func getContextLockHash(ts *types.Tesseract) types.Hash {
 	return ts.Header.ContextLock[ts.Address()].ContextHash
 }
 
-func (sm *MockStateManager) FetchContextLock(ts *types.Tesseract) (*ktypes.ICSNodes, error) {
-	ics := ktypes.NewICSNodes(6)
+func (sm *MockStateManager) FetchContextLock(ts *types.Tesseract) (*ktypes.ICSNodeSet, error) {
+	ics := ktypes.NewICSNodeSet(6)
 
 	_, behaviourSet, randomSet, err := sm.GetContextByHash(types.NilAddress, getContextLockHash(ts))
 	if err != nil {
@@ -1274,10 +1273,10 @@ func insertAssetDataByAssetHashInDB(t *testing.T, db db, assetHash types.Hash, a
 	require.NoError(t, err)
 }
 
-func getICSNodeset(t *testing.T, count int) *ktypes.ICSNodes {
+func getICSNodeset(t *testing.T, count int) *ktypes.ICSNodeSet {
 	t.Helper()
 
-	ics := ktypes.NewICSNodes(6)
+	ics := ktypes.NewICSNodeSet(6)
 
 	senderBehaviourSet := tests.GetTestKramaIDs(t, count)
 	senderRandomSet := tests.GetTestKramaIDs(t, count)
@@ -1776,7 +1775,7 @@ func checkIfAccMetaInfoMatches(
 	t.Helper()
 
 	require.Equal(t, ts.Address(), accMetaInfo.Address)
-	require.Equal(t, new(big.Int).SetUint64(ts.Height()), accMetaInfo.Height)
+	require.Equal(t, ts.Height(), accMetaInfo.Height)
 	require.Equal(t, getTesseractHash(t, ts), accMetaInfo.TesseractHash)
 	require.Equal(t, accType, accMetaInfo.Type)
 	require.Equal(t, latticeExists, accMetaInfo.LatticeExists)
@@ -1830,7 +1829,7 @@ func checkIfTesseractAdded(
 
 func checkIfICSNodeSetMatches(
 	t *testing.T,
-	ics *ktypes.ICSNodes,
+	ics *ktypes.ICSNodeSet,
 	senderBehaviourSet *ktypes.NodeSet,
 	senderRandomSet *ktypes.NodeSet,
 	randomSet *ktypes.NodeSet,

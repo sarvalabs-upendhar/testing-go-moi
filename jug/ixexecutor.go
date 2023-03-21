@@ -224,7 +224,7 @@ func (executor *IxExecutor) UpdateContext(ix *types.Interaction, contextDelta ty
 			fallthrough
 
 		// Sender Address / Sarga Address
-		case ix.Sender(), guna.SargaAddress:
+		case ix.Sender(), types.SargaAddress:
 			// Retrieve the state object for address and update its context
 			hash, err := executor.getStateObject(addr).UpdateContext(delta.BehaviouralNodes, delta.RandomNodes)
 			if err != nil {
@@ -274,12 +274,12 @@ func (executor *IxExecutor) CommitStateObjects(ix *types.Interaction) error {
 	// If the receiver account is new (unregistered),
 	// commit the state object of the sarga account
 	if !accountRegistered {
-		genesisHash, err := executor.getStateObject(guna.SargaAddress).Commit()
+		genesisHash, err := executor.getStateObject(types.SargaAddress).Commit()
 		if err != nil {
 			return err
 		}
 
-		receipt.StateHashes[guna.SargaAddress] = genesisHash
+		receipt.StateHashes[types.SargaAddress] = genesisHash
 	}
 
 	return nil
@@ -316,7 +316,7 @@ func (executor *IxExecutor) Revert() error {
 
 		// If the account is new (unregistered), revert sarga state object to its snapshot
 		if !accountRegistered {
-			if err := executor.state.Revert(executor.snapshots[guna.SargaAddress]); err != nil {
+			if err := executor.state.Revert(executor.snapshots[types.SargaAddress]); err != nil {
 				return err // This should not happen
 			}
 		}
@@ -363,7 +363,7 @@ func (executor *IxExecutor) updateSargaState(ix *types.Interaction) error {
 	}
 
 	// Get dirty object for sarga
-	sargaObject := executor.getStateObject(guna.SargaAddress)
+	sargaObject := executor.getStateObject(types.SargaAddress)
 	if sargaObject == nil {
 		return errors.New("sarga object not found")
 	}
@@ -407,14 +407,14 @@ func (executor *IxExecutor) fetchStateObjects(ix *types.Interaction) error {
 
 		if !accountRegistered {
 			// Retrieve the dirty object for genesis (sarga) address
-			genesisObject, err := executor.state.GetDirtyObject(guna.SargaAddress)
+			genesisObject, err := executor.state.GetDirtyObject(types.SargaAddress)
 			if err != nil {
 				return errors.Wrap(err, "state object fetch failed")
 			}
 
 			// Add genesis state object and its snapshot to the executor
-			executor.objects[guna.SargaAddress] = genesisObject
-			executor.snapshots[guna.SargaAddress] = genesisObject.Copy()
+			executor.objects[types.SargaAddress] = genesisObject
+			executor.snapshots[types.SargaAddress] = genesisObject.Copy()
 
 			// Create a new dirty state object for the account
 			receiverObject = executor.state.CreateDirtyObject(receiver, types.AccTypeFromIxType(ix.Type()))

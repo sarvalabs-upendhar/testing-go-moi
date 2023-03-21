@@ -1099,7 +1099,7 @@ func TestFetchContextLock(t *testing.T) {
 		),
 		4: getTesseractParams(
 			ixns[4:5],
-			[]types.Address{SargaAddress},
+			[]types.Address{types.SargaAddress},
 			mHash[1],
 		),
 	}
@@ -1211,7 +1211,7 @@ func TestFetchContextLock(t *testing.T) {
 func TestIsAccountRegistered_With_SargaObject(t *testing.T) {
 	address := tests.RandomAddress(t)
 	soParams := &createStateObjectParams{
-		address: SargaAddress,
+		address: types.SargaAddress,
 		activeStorageTreeCallback: func(activeStorageTrees map[string]tree.MerkleTree) {
 			m := mockMerkleTreeWithDirtyStorage()
 			err := m.Set(address.Bytes(), nil)
@@ -1614,7 +1614,7 @@ func TestGetReceiverContext_RegisteredAccount(t *testing.T) {
 	ixs := tests.CreateIxns(t, 2, ixParams)
 
 	soParams := &createStateObjectParams{
-		address: SargaAddress,
+		address: types.SargaAddress,
 		activeStorageTreeCallback: func(activeStorageTrees map[string]tree.MerkleTree) {
 			m := mockMerkleTreeWithDirtyStorage() // used to check if account registered
 
@@ -1703,7 +1703,7 @@ func TestGetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 	obj, cHash := getContextObjects(t, kramaIDs, 2, 2)
 	mObj, mHash := getMetaContextObjects(t, cHash)
 
-	tesseractParams := getTesseractParamsWithContextHash(SargaAddress, mHash[0])
+	tesseractParams := getTesseractParamsWithContextHash(types.SargaAddress, mHash[0])
 
 	ts := tests.CreateTesseract(t, tesseractParams)
 
@@ -1716,7 +1716,7 @@ func TestGetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 	ixs := tests.CreateIxns(t, 3, ixParams)
 
 	soParams := &createStateObjectParams{
-		address: SargaAddress,
+		address: types.SargaAddress,
 		activeStorageTreeCallback: func(activeStorageTrees map[string]tree.MerkleTree) {
 			activeStorageTrees[SargaLogicID.Hex()] = mockMerkleTreeWithDirtyStorage()
 		},
@@ -1752,7 +1752,7 @@ func TestGetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 			},
 			behSet:      ktypes.NewNodeSet(obj[0].Ids, pk[:2]),
 			randSet:     ktypes.NewNodeSet(obj[1].Ids, pk[2:4]),
-			address:     SargaAddress,
+			address:     types.SargaAddress,
 			contextHash: ts.ContextHash(),
 			mockFn: func() {
 				retrievePublicKeys(t, contract)
@@ -1826,7 +1826,7 @@ func TestFetchInteractionContext(t *testing.T) {
 	ixs := tests.CreateIxns(t, 2, ixParams)
 
 	soParams := &createStateObjectParams{
-		address: SargaAddress,
+		address: types.SargaAddress,
 		activeStorageTreeCallback: func(activeStorageTrees map[string]tree.MerkleTree) {
 			m := mockMerkleTreeWithDirtyStorage() // used to check if account registered
 			storeInMerkleTree(t, m, ixs[0].Receiver().Bytes(), nil)
@@ -2040,7 +2040,7 @@ func TestSetupSargaAcc(t *testing.T) {
 		{
 			name: "behavioural nodes and random nodes are empty",
 			sargaAcc: getAccountSetupArgs(t,
-				SargaAddress,
+				types.SargaAddress,
 				emptyNodes,
 				emptyNodes,
 				2,
@@ -2064,7 +2064,7 @@ func TestSetupSargaAcc(t *testing.T) {
 		{
 			name: "other accounts added to sarga account",
 			sargaAcc: getAccountSetupArgs(t,
-				SargaAddress,
+				types.SargaAddress,
 				nodes[:2],
 				nodes[2:4],
 				2,
@@ -2103,9 +2103,9 @@ func TestSetupSargaAcc(t *testing.T) {
 
 			require.NoError(t, err)
 
-			checkForObjectCreation(t, sm, SargaAddress, contextHash)
+			checkForObjectCreation(t, sm, types.SargaAddress, contextHash)
 
-			obj, _ := sm.GetDirtyObject(SargaAddress)
+			obj, _ := sm.GetDirtyObject(types.SargaAddress)
 
 			checkForOtherAccountsInSargaObject(t, obj, test.otherAccounts)
 		})
@@ -2320,7 +2320,7 @@ func TestIsAccountRegisteredAt(t *testing.T) {
 	_, storageRoot := createMetaStorageTree(
 		t,
 		db,
-		SargaAddress,
+		types.SargaAddress,
 		SargaLogicID,
 		[][]byte{addresses[2].Bytes()},
 		[][]byte{types.NilHash.Bytes()},
@@ -2333,7 +2333,7 @@ func TestIsAccountRegisteredAt(t *testing.T) {
 	})
 
 	soParams := &createStateObjectParams{
-		address: SargaAddress,
+		address: types.SargaAddress,
 		journal: mockJournal(),
 		db:      db,
 		soCallback: func(so *StateObject) {
@@ -2344,7 +2344,7 @@ func TestIsAccountRegisteredAt(t *testing.T) {
 	so := createTestStateObject(t, soParams)
 
 	tesseractParams := map[int]*tests.CreateTesseractParams{
-		0: getTesseractParamsWithStateHash(SargaAddress, stateHash),
+		0: getTesseractParamsWithStateHash(types.SargaAddress, stateHash),
 		1: getTesseractParamsWithStateHash(tests.RandomAddress(t), tests.RandomHash(t)),
 	}
 

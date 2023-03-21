@@ -76,7 +76,7 @@ func CreateSlot(t *testing.T, nodeset []*ktypes.NodeSet, slotType ktypes.SlotTyp
 	require.NoError(t, err)
 
 	clusterInfo := ktypes.NewICS(6, *ixs, clusterID, operator, time.Now())
-	clusterInfo.ICS.Nodes = nodeset
+	clusterInfo.NodeSet.Nodes = nodeset
 
 	slot := ktypes.NewSlot(slotType, clusterInfo)
 

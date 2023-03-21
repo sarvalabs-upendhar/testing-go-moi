@@ -29,7 +29,7 @@ type VoteSet struct {
 	votetype ktypes.ConsensusMsgType
 
 	// Represents a set of validators
-	valset *ktypes.ClusterInfo
+	valset *ktypes.ClusterState
 
 	// Represents an access lock on the vote-set
 	mtx sync.Mutex
@@ -63,11 +63,11 @@ func NewVoteSet(
 	heights []uint64,
 	round int32,
 	voteType ktypes.ConsensusMsgType,
-	validatorSet *ktypes.ClusterInfo,
+	validatorSet *ktypes.ClusterState,
 	logger hclog.Logger,
 ) *VoteSet {
 	// Log the creation and the set of validators
-	logger.Info("creating new vote set with %v validators\n", validatorSet.Size())
+	logger.Info("creating new vote set with validators", "size", validatorSet.Size())
 
 	return &VoteSet{
 		logger:           logger,
@@ -301,7 +301,7 @@ func (vs *VoteSet) addVerifiedVote(
 	tesseractVotes.addVerifiedVote(sumIndex, vote, votePower)
 	postVoteSum := tesseractVotes.sum
 
-	vs.logger.Debug("###%%%%%% printing quorum", quorum, "gridID:", gridID.Hex(), "sum", postVoteSum)
+	vs.logger.Debug("%%% printing quorum %%%", "quorum", quorum, "gridID:", gridID.Hex(), "sum", postVoteSum)
 
 	if vs.maj23 == nil {
 		// Check if the quorum threshold was just crossed. Only the first quorum reach is considered
@@ -325,7 +325,7 @@ func (vs *VoteSet) addVerifiedVote(
 func (vs *VoteSet) getSumIndex(valIndex int32) ([]int32, error) {
 	slotsSum := make([]int32, 0, 3)
 
-	slots, _, _, _ := vs.valset.ICS.GetKramaID(valIndex)
+	slots, _, _, _ := vs.valset.NodeSet.GetKramaID(valIndex)
 
 	if slots == nil {
 		return nil, errors.New("invalid validator index")

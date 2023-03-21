@@ -17,7 +17,7 @@ func NewWatchDog(ctx context.Context, slot *types.Slot) *WatchDog {
 	return &WatchDog{
 		ctx:  ctx,
 		slot: slot,
-		msgs: make([]*types.ICSMSG, 0, slot.ClusterInfo().ICS.Size*2),
+		msgs: make([]*types.ICSMSG, 0, slot.ClusterState().NodeSet.Size*2),
 	}
 }
 
@@ -45,7 +45,7 @@ func (wg *WatchDog) StartWatchDog() {
 }
 
 func (wg *WatchDog) GenerateProofs() ([]byte, error) {
-	metaData, err := wg.slot.ClusterInfo().GetMetaData(wg.msgs)
+	metaData, err := wg.slot.ClusterState().GetMetaData(wg.msgs)
 	if err != nil {
 		return nil, err
 	}

@@ -58,8 +58,7 @@ type senatus interface {
 }
 
 var (
-	SargaAddress    = types.BytesToAddress(types.GetHash([]byte("sargaAccount")).Bytes())
-	SargaLogicID, _ = types.NewLogicIDv0(true, false, false, false, 0, SargaAddress)
+	SargaLogicID, _ = types.NewLogicIDv0(true, false, false, false, 0, types.SargaAddress)
 	GenesisIxHash   = types.GetHash([]byte("Genesis Interaction"))
 )
 
@@ -205,10 +204,12 @@ func (sm *StateManager) GetLatestStateObject(addr types.Address) (*StateObject, 
 		return nil, err
 	}
 
-	sm.objects[addr], err = sm.GetStateObjectByHash(addr, t.Body.StateHash)
+	obj, err := sm.GetStateObjectByHash(addr, t.Body.StateHash)
 	if err != nil {
 		return nil, err
 	}
+
+	sm.objects[addr] = obj
 
 	return sm.objects[addr], nil
 }
@@ -539,9 +540,9 @@ func (sm *StateManager) GetContextByHash(
 	return hash, behaviourSet, randomSet, nil
 }
 
-func (sm *StateManager) FetchContextLock(ts *types.Tesseract) (*ktypes.ICSNodes, error) {
+func (sm *StateManager) FetchContextLock(ts *types.Tesseract) (*ktypes.ICSNodeSet, error) {
 	ix := ts.Interactions()[0]
-	ics := ktypes.NewICSNodes(6)
+	ics := ktypes.NewICSNodeSet(6)
 
 	for address, info := range ts.Header.ContextLock {
 		if address == ix.Sender() {
@@ -552,7 +553,7 @@ func (sm *StateManager) FetchContextLock(ts *types.Tesseract) (*ktypes.ICSNodes,
 
 			ics.UpdateNodeSet(ktypes.SenderBehaviourSet, behaviourSet)
 			ics.UpdateNodeSet(ktypes.SenderRandomSet, randomSet)
-		} else if address == ix.Receiver() || address == SargaAddress {
+		} else if address == ix.Receiver() || address == types.SargaAddress {
 			if info.ContextHash.IsNil() {
 				continue
 			}
@@ -625,12 +626,12 @@ func (sm *StateManager) getReceiverContext(
 	}
 
 	if !accountRegistered {
-		contextHash, behaviourSet, randomSet, err = sm.fetchLatestParticipantContext(SargaAddress)
+		contextHash, behaviourSet, randomSet, err = sm.fetchLatestParticipantContext(types.SargaAddress)
 		if err != nil {
 			return err
 		}
 
-		contextHashes[SargaAddress] = contextHash
+		contextHashes[types.SargaAddress] = contextHash
 	} else {
 		contextHash, behaviourSet, randomSet, err = sm.fetchLatestParticipantContext(ix.Receiver())
 		if err != nil {
@@ -651,7 +652,7 @@ func (sm *StateManager) IsAccountRegistered(addr types.Address) (bool, error) {
 		return true, nil
 	}
 
-	sargaObject, err := sm.GetLatestStateObject(SargaAddress)
+	sargaObject, err := sm.GetLatestStateObject(types.SargaAddress)
 	if err != nil {
 		return true, errors.Wrap(types.ErrObjectNotFound, err.Error())
 	}
@@ -751,11 +752,11 @@ func (sm *StateManager) SetupSargaAccount(
 	sargaAcc *gtypes.AccountSetupArgs,
 	otherAccounts []*gtypes.AccountSetupArgs,
 ) (types.Hash, types.Hash, error) {
-	if sargaAcc.Address != SargaAddress {
+	if sargaAcc.Address != types.SargaAddress {
 		return types.NilHash, types.NilHash, errors.New("invalid sarga account address")
 	}
 
-	stateObject := sm.CreateDirtyObject(SargaAddress, types.SargaAccount)
+	stateObject := sm.CreateDirtyObject(types.SargaAddress, types.SargaAccount)
 
 	if _, err := stateObject.CreateContext(sargaAcc.BehaviouralContext, sargaAcc.RandomContext); err != nil {
 		return types.NilHash, types.NilHash, errors.Wrap(err, "context initiation failed in genesis")
@@ -766,7 +767,7 @@ func (sm *StateManager) SetupSargaAccount(
 	}
 
 	for _, info := range otherAccounts {
-		if info.Address != SargaAddress {
+		if info.Address != types.SargaAddress {
 			// Add account to sarga storage tree
 			if err := stateObject.AddAccountGenesisInfo(info.Address, GenesisIxHash); err != nil {
 				return types.NilHash, types.NilHash, err

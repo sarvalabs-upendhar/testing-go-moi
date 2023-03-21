@@ -8,7 +8,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
-	"github.com/sarvalabs/moichain/guna"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 	"github.com/sarvalabs/moichain/utils"
@@ -114,7 +113,7 @@ func validateArguments(args *ptypes.SendIXArgs, p *PublicIXAPI) error {
 	}
 
 	// Reject genesis account interaction
-	if senderAddress == guna.SargaAddress {
+	if senderAddress == types.SargaAddress {
 		return ErrGenesisAccount
 	}
 
@@ -125,7 +124,7 @@ func validateArguments(args *ptypes.SendIXArgs, p *PublicIXAPI) error {
 		}
 
 		// Reject genesis account interaction
-		if receiverAddress == guna.SargaAddress {
+		if receiverAddress == types.SargaAddress {
 			return ErrGenesisAccount
 		}
 	}

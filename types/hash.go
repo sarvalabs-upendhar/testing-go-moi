@@ -4,7 +4,6 @@ package types
 Most of the types in this file are yet to be finalized.All the below structs are temporary type definitions
 */
 import (
-	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 
@@ -13,96 +12,15 @@ import (
 )
 
 const (
-	// AddressLength is the length of account address
-	AddressLength = 32
 	// HashLength is the length of a hash
 	HashLength = 32
 )
 
-var (
-	NilAddress Address
-	NilHash    Hash
-)
+var NilHash Hash
 
 type DBEntry struct {
 	Key   []byte
 	Value []byte
-}
-
-// Address represents the 32 byte address of an MOI account.
-type Address [AddressLength]byte
-
-func (a Address) IsNil() bool {
-	return a == NilAddress
-}
-
-func (a Address) String() string {
-	if a == NilAddress {
-		return ""
-	}
-
-	return a.Hex()
-}
-func (a Address) Bytes() []byte { return a[:] }
-
-// SetBytes sets the address to the value of b.
-func (a *Address) SetBytes(b []byte) {
-	if len(b) > len(a) {
-		b = b[len(b)-AddressLength:]
-	}
-
-	copy(a[AddressLength-len(b):], b)
-}
-
-func (a Address) MarshalText() ([]byte, error) {
-	result := make([]byte, len(a)*2)
-	hex.Encode(result, a.Bytes())
-
-	return result, nil
-}
-
-// UnmarshalText sets the address to the value of text.
-func (a *Address) UnmarshalText(text []byte) error {
-	if text[0] == byte('0') && (text[1] == byte('X') || text[1] == byte('x')) {
-		text = text[2:]
-	}
-
-	if len(text) != AddressLength*2 {
-		return fmt.Errorf("invalid address length: %d", len(text)/2)
-	}
-
-	_, err := hex.Decode(a[:], text)
-
-	return err
-}
-
-// Hex return the Hex representation of the Address
-func (a Address) Hex() string {
-	return "0x" + hex.EncodeToString(a[:])
-}
-
-// BytesToAddress returns the address from b
-func BytesToAddress(b []byte) Address {
-	var a Address
-
-	a.SetBytes(b)
-
-	return a
-}
-
-// HexToAddress converts string to Address
-func HexToAddress(s string) Address {
-	return BytesToAddress(FromHex(s))
-}
-
-func NewAccountAddress(nonce uint64, address Address) Address {
-	rawBytes := make([]byte, 40)
-	binary.BigEndian.PutUint64(rawBytes, nonce)
-	copy(rawBytes[8:], address.Bytes())
-
-	GetHash(rawBytes)
-
-	return BytesToAddress(GetHash(rawBytes).Bytes())
 }
 
 // Hash represents the 32 byte hash of arbitrary data.

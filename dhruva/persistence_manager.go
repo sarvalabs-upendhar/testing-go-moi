@@ -112,7 +112,7 @@ func (p *PersistenceManager) incrementBucketCount(id []byte, count int64) error 
 // LatticeExists - Does complete lattice exists
 func (p *PersistenceManager) UpdateAccMetaInfo(
 	id types.Address,
-	height *big.Int,
+	height uint64,
 	tesseractHash types.Hash,
 	accType types.AccountType,
 	latticeExists, stateExists bool,
@@ -134,11 +134,11 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 			return -1, false, err
 		}
 
-		if height.Cmp(accMetaInfo.Height) == 0 && tesseractHash != accMetaInfo.TesseractHash {
+		if height == accMetaInfo.Height && tesseractHash != accMetaInfo.TesseractHash {
 			return -1, false, types.ErrHashMismatch
 		}
 
-		if height.Cmp(accMetaInfo.Height) >= 0 {
+		if height >= accMetaInfo.Height {
 			accMetaInfo.StateExists = stateExists
 			accMetaInfo.TesseractHash = tesseractHash
 			accMetaInfo.Address = id
@@ -221,7 +221,7 @@ func (p *PersistenceManager) UpdateTesseractStatus(
 		return err
 	}
 
-	if height < accMetaInfo.Height.Uint64() {
+	if height < accMetaInfo.Height {
 		return nil
 	}
 

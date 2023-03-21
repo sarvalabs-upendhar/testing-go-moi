@@ -141,9 +141,9 @@ func (t *Transport) BroadcastTesseract(msg *ptypes.TesseractMessage) error {
 func (t *Transport) connectRandomPeers(slot *ktypes.Slot) []id.KramaID {
 	var randomICSNodes []id.KramaID
 
-	clusterInfo := slot.ClusterInfo()
+	clusterInfo := slot.ClusterState()
 
-	icsNodes := clusterInfo.ICS.GetNodes()
+	icsNodes := clusterInfo.NodeSet.GetNodes()
 	visitedNodes := make(map[int]interface{})
 
 	/* If the icsNodes slice is not empty, then connect to the random ics nodes. Break the loop

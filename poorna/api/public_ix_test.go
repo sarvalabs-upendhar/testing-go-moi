@@ -12,7 +12,6 @@ import (
 
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/common/tests"
-	"github.com/sarvalabs/moichain/guna"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 )
@@ -22,7 +21,7 @@ func TestIx_SendInteraction(t *testing.T) {
 	t.Helper()
 
 	address := tests.RandomAddress(t)
-	genesisAddress := guna.SargaAddress
+	genesisAddress := types.SargaAddress
 	ixpool := NewMockIxPool(t)
 	stateManager := NewMockStateManager(t)
 	cfg := new(common.IxPoolConfig)
