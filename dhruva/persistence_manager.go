@@ -298,8 +298,8 @@ func (p *PersistenceManager) Cleanup() error {
 }
 
 // GetEntriesWithPrefix fetches array of k,v pairs with the given prefix
-func (p *PersistenceManager) GetEntriesWithPrefix(ctx context.Context, prefix []byte) (chan types.DBEntry, error) {
-	ch := make(chan types.DBEntry)
+func (p *PersistenceManager) GetEntriesWithPrefix(ctx context.Context, prefix []byte) (chan *types.DBEntry, error) {
+	ch := make(chan *types.DBEntry)
 
 	it, err := p.db.NewIterator()
 	if err != nil {
@@ -315,7 +315,7 @@ func (p *PersistenceManager) GetEntriesWithPrefix(ctx context.Context, prefix []
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			dbEntry, err := it.GetNext()
 			if err != nil {
-				p.logger.Error("Prefix Iteration failed", "error")
+				p.logger.Error("Prefix iteration failed", "error")
 
 				break
 			}
@@ -323,7 +323,7 @@ func (p *PersistenceManager) GetEntriesWithPrefix(ctx context.Context, prefix []
 			select {
 			case <-ctx.Done():
 				return
-			case ch <- *dbEntry:
+			case ch <- dbEntry:
 			}
 		}
 	}()

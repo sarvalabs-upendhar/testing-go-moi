@@ -470,13 +470,13 @@ func (d *MockDatabase) setList(t *testing.T, addressList []types.Address) {
 	}
 }
 
-func (d *MockDatabase) GetEntriesWithPrefix(ctx context.Context, prefix []byte) (chan types.DBEntry, error) {
-	entries := make(chan types.DBEntry)
+func (d *MockDatabase) GetEntriesWithPrefix(ctx context.Context, prefix []byte) (chan *types.DBEntry, error) {
+	entries := make(chan *types.DBEntry)
 
 	go func() {
 		for k, v := range d.database {
 			if bytes.HasPrefix([]byte(k), prefix) {
-				entries <- types.DBEntry{
+				entries <- &types.DBEntry{
 					Key:   []byte(k),
 					Value: v,
 				}

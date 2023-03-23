@@ -46,7 +46,7 @@ type Network interface {
 
 type DB interface {
 	ReadEntry(key []byte) ([]byte, error)
-	GetEntriesWithPrefix(ctx context.Context, prefix []byte) (chan types.DBEntry, error)
+	GetEntriesWithPrefix(ctx context.Context, prefix []byte) (chan *types.DBEntry, error)
 }
 
 // Backend is a struct that represents the API backend

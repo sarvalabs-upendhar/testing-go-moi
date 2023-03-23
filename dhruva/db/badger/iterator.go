@@ -40,7 +40,7 @@ func (b *Iterator) GetNext() (*types.DBEntry, error) {
 	item := b.it.Item()
 	err := item.Value(func(v []byte) error {
 		if v != nil {
-			entry = &types.DBEntry{Key: item.Key(), Value: v}
+			entry = &types.DBEntry{Key: item.KeyCopy(nil), Value: append([]byte{}, v...)}
 		}
 
 		return nil

@@ -35,13 +35,13 @@ func (db *MockDB) NewBatchWriter() db.BatchWriter {
 	return &mockBatchWriter{db: db}
 }
 
-func (db *MockDB) GetEntriesWithPrefix(ctx context.Context, prefix []byte) (chan types.DBEntry, error) {
-	entries := make(chan types.DBEntry)
+func (db *MockDB) GetEntriesWithPrefix(ctx context.Context, prefix []byte) (chan *types.DBEntry, error) {
+	entries := make(chan *types.DBEntry)
 
 	go func() {
 		for k, v := range db.data {
 			if bytes.HasPrefix([]byte(k), prefix) {
-				entries <- types.DBEntry{
+				entries <- &types.DBEntry{
 					Key:   []byte(k),
 					Value: v,
 				}

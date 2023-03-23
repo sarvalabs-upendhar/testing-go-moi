@@ -38,7 +38,7 @@ const (
 type store interface {
 	ReadEntry(key []byte) ([]byte, error)
 	NewBatchWriter() db.BatchWriter
-	GetEntriesWithPrefix(ctx context.Context, prefix []byte) (chan types.DBEntry, error)
+	GetEntriesWithPrefix(ctx context.Context, prefix []byte) (chan *types.DBEntry, error)
 }
 
 type network interface {
