@@ -1,8 +1,9 @@
 package types
 
 import (
-	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"sync"
+
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
 	"github.com/sarvalabs/moichain/types"
 )

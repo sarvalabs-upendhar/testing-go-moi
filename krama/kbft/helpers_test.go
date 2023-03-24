@@ -380,7 +380,14 @@ func createTestClusterInfo(
 ) *ktypes.ClusterState {
 	t.Helper()
 
-	clusterInfo := ktypes.NewICS(0, ixs, "cluster1", tests.GetTestKramaIDs(t, 1)[0], time.Now())
+	clusterInfo := ktypes.NewICS(
+		0,
+		nil,
+		ixs,
+		"cluster1",
+		tests.GetTestKramaIDs(t, 1)[0],
+		time.Now(),
+	)
 
 	func(clusterInfo *ktypes.ClusterState) {
 		clusterInfo.NodeSet = icsNodes

@@ -139,7 +139,6 @@ type Engine struct {
 	clusterLocks *locker.Locker
 	metrics      *Metrics
 	avgICSTime   time.Duration
-	activeIxns   sync.Map
 }
 
 func NewKramaEngine(ctx context.Context,
@@ -414,6 +413,7 @@ func (k *Engine) observerNodeDelta(setSize int) int {
 
 func generateClusterID() (types.ClusterID, error) {
 	randHash := make([]byte, 32)
+
 	_, err := rand.Read(randHash)
 	if err != nil {
 		return "", err
