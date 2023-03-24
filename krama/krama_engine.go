@@ -2,7 +2,7 @@ package krama
 
 import (
 	"context"
-	"fmt"
+	"crypto/rand"
 	"math"
 	"sync"
 	"time"
@@ -91,14 +91,16 @@ type execution interface {
 }
 
 type Response struct {
-	requestID int32
-	err       error
+	slotType ktypes.SlotType
+	err      error
 }
 
 type Request struct {
-	reqType      int32
 	ixs          types.Interactions
 	msg          *ptypes.ICSRequest
+	operator     id.KramaID
+	slotType     ktypes.SlotType
+	reqTime      time.Time
 	responseChan chan Response
 }
 
@@ -106,11 +108,11 @@ func (r *Request) IxHash() types.Hash {
 	return r.ixs[0].Hash()
 }
 
-func (r *Request) getClusterID(operator id.KramaID) (types.ClusterID, error) {
-	switch r.reqType {
-	case 0:
-		return generateClusterID(operator, r.ixs)
-	case 1:
+func (r *Request) getClusterID() (types.ClusterID, error) {
+	switch r.slotType {
+	case ktypes.OperatorSlot:
+		return generateClusterID()
+	case ktypes.ValidatorSlot:
 		return types.ClusterID(r.msg.ClusterID), nil
 	default:
 		return "", errors.New("invalid request type")
@@ -137,6 +139,7 @@ type Engine struct {
 	clusterLocks *locker.Locker
 	metrics      *Metrics
 	avgICSTime   time.Duration
+	activeIxns   sync.Map
 }
 
 func NewKramaEngine(ctx context.Context,
@@ -187,16 +190,14 @@ func NewKramaEngine(ctx context.Context,
 // loadIxnClusterState fetches the account state and returns the interaction cluster state
 func (k *Engine) loadIxnClusterState(
 	ctx context.Context,
-	ixns types.Interactions,
+	req Request,
 	clusterID types.ClusterID,
-	reqTime time.Time,
-	operator id.KramaID,
 ) (*ktypes.ClusterState, error) {
 	var err error
 
-	clusterState := ktypes.NewICS(6, ixns, clusterID, operator, reqTime)
+	clusterState := ktypes.NewICS(6, req.msg, req.ixs, clusterID, req.operator, req.reqTime)
 	// Fetch the committed account info of interaction participants
-	clusterState.AccountInfos, err = k.fetchIxAccounts(ctx, ixns[0])
+	clusterState.AccountInfos, err = k.fetchIxAccounts(ctx, req.ixs[0])
 	if err != nil {
 		return nil, err
 	}
@@ -204,25 +205,11 @@ func (k *Engine) loadIxnClusterState(
 	return clusterState, nil
 }
 
-func (k *Engine) acquireContextLock(ctx context.Context, clusterID types.ClusterID, request Request) error {
+func (k *Engine) acquireContextLock(ctx context.Context, slot *ktypes.Slot) error {
 	ctx, span := tracing.Span(ctx, "Krama.KramaEngine", "acquireContextLock")
 	defer span.End()
 	// Create cluster id using operatorID and IxHash
-	k.logger.Debug("Creating cluster", "Cluster id", clusterID)
-
-	cs, err := k.loadIxnClusterState(ctx, request.ixs, clusterID, time.Now(), k.selfID)
-	if err != nil {
-		return err
-	}
-
-	// create a slot and try adding it
-	newSlot := ktypes.NewSlot(ktypes.OperatorSlot, cs)
-
-	if !k.slots.AddSlot(newSlot) {
-		return types.ErrSlotsFull
-	}
-
-	k.metrics.captureAvailableOperatorSlots(-1)
+	k.logger.Debug("Creating cluster", "Cluster id", slot.ClusterID())
 
 	finalWaitGroup := new(sync.WaitGroup)
 
@@ -235,15 +222,15 @@ func (k *Engine) acquireContextLock(ctx context.Context, clusterID types.Cluster
 	)
 
 	// Fetch the context nodes of interaction participants
-	contextHashes, nodeSets, err := k.state.FetchInteractionContext(ctx, request.ixs[0])
+	contextHashes, nodeSets, err := k.state.FetchInteractionContext(ctx, slot.ClusterState().Ixs[0])
 	if err != nil {
 		return err
 	}
 
-	loadContextLockInfo(cs, contextHashes)
+	loadContextLockInfo(slot.ClusterState(), contextHashes)
 
 	// Initiate the cluster communication by subscribing to clusterID
-	if err = k.initClusterCommunication(ctx, newSlot); err != nil {
+	if err = k.initClusterCommunication(ctx, slot); err != nil {
 		return errors.Wrap(err, "failed to initiate cluster communication")
 	}
 	// Start routine to capture the random nodes provided by the context nodes
@@ -260,9 +247,9 @@ func (k *Engine) acquireContextLock(ctx context.Context, clusterID types.Cluster
 		}
 	}(ctx)
 
-	cs.ICSReqTime = utils.Now()
+	slot.ClusterState().ICSReqTime = utils.Now()
 	// Construct ICS_Request
-	reqMsg, err := k.getICSReqMsg(cs)
+	reqMsg, err := k.getICSReqMsg(slot.ClusterState())
 	if err != nil {
 		return err
 	}
@@ -272,7 +259,7 @@ func (k *Engine) acquireContextLock(ctx context.Context, clusterID types.Cluster
 		ctx,
 		ktypes.SenderBehaviourSet,
 		finalWaitGroup,
-		clusterID,
+		slot.ClusterID(),
 		nodeSets[ktypes.SenderBehaviourSet],
 		reqMsg,
 		randomNodesReceiverChan,
@@ -282,20 +269,20 @@ func (k *Engine) acquireContextLock(ctx context.Context, clusterID types.Cluster
 		ctx,
 		ktypes.SenderRandomSet,
 		finalWaitGroup,
-		clusterID,
+		slot.ClusterID(),
 		nodeSets[ktypes.SenderRandomSet],
 		reqMsg,
 		randomNodesReceiverChan,
 	)
 
-	if !request.ixs[0].Receiver().IsNil() {
+	if !slot.ClusterState().Ixs[0].Receiver().IsNil() {
 		finalWaitGroup.Add(2)
 
 		go k.sendICSRequest(
 			ctx,
 			ktypes.ReceiverBehaviourSet,
 			finalWaitGroup,
-			clusterID,
+			slot.ClusterID(),
 			nodeSets[ktypes.ReceiverBehaviourSet],
 			reqMsg,
 			randomNodesReceiverChan,
@@ -305,7 +292,7 @@ func (k *Engine) acquireContextLock(ctx context.Context, clusterID types.Cluster
 			ctx,
 			ktypes.ReceiverRandomSet,
 			finalWaitGroup,
-			clusterID,
+			slot.ClusterID(),
 			nodeSets[ktypes.ReceiverRandomSet],
 			reqMsg,
 			randomNodesReceiverChan,
@@ -314,11 +301,11 @@ func (k *Engine) acquireContextLock(ctx context.Context, clusterID types.Cluster
 
 	finalWaitGroup.Wait()
 	// Check for context quorum
-	if !cs.IsContextQuorum() {
+	if !slot.ClusterState().IsContextQuorum() {
 		return errors.New("context quorum failed")
 	}
 
-	respondedEligibleSetSize, respondedEligibleSet := cs.RespondedEligibleSet()
+	respondedEligibleSetSize, respondedEligibleSet := slot.ClusterState().RespondedEligibleSet()
 	// Calculate the required number of observer nodes in the cluster based on observer coefficient
 	// value and the actual size of the cluster including the required observer
 	requiredObserverNodes := int(math.Ceil(ObserverCoeff * float64(respondedEligibleSetSize)))
@@ -354,7 +341,7 @@ func (k *Engine) acquireContextLock(ctx context.Context, clusterID types.Cluster
 		return errors.Wrap(err, "unable to retrieve random and observer nodes")
 	}
 
-	if !cs.IsOperatorIncluded() {
+	if !slot.ClusterState().IsOperatorIncluded() {
 		operatorRandomNodes = append([]id.KramaID{k.selfID}, operatorRandomNodes...) // TODO:Improve this
 	}
 
@@ -385,7 +372,7 @@ func (k *Engine) acquireContextLock(ctx context.Context, clusterID types.Cluster
 		ktypes.RandomSet,
 		operatorRandomNodesCount,
 		finalWaitGroup,
-		clusterID,
+		slot.ClusterID(),
 		operatorRandomNodes,
 		randomKeys,
 		reqMsg,
@@ -396,7 +383,7 @@ func (k *Engine) acquireContextLock(ctx context.Context, clusterID types.Cluster
 		ktypes.ObserverSet,
 		requiredObserverNodes,
 		finalWaitGroup,
-		clusterID,
+		slot.ClusterID(),
 		observerNodes,
 		observerKeys,
 		reqMsg,
@@ -404,15 +391,15 @@ func (k *Engine) acquireContextLock(ctx context.Context, clusterID types.Cluster
 
 	finalWaitGroup.Wait()
 
-	if !cs.IsRandomQuorum(operatorRandomNodesCount, requiredObserverNodes) {
+	if !slot.ClusterState().IsRandomQuorum(operatorRandomNodesCount, requiredObserverNodes) {
 		return errors.New("random quorum failed")
 	}
 
-	if err = k.sendICSSuccess(clusterID); err != nil {
+	if err = k.sendICSSuccess(slot.ClusterID()); err != nil {
 		return err
 	}
 
-	k.metrics.captureICSCreationTime(cs.ICSReqTime)
+	k.metrics.captureICSCreationTime(slot.ClusterState().ICSReqTime)
 
 	return nil
 }
@@ -425,24 +412,14 @@ func (k *Engine) observerNodeDelta(setSize int) int {
 	return int(math.Ceil(ObserverNodesDelta * float64(setSize)))
 }
 
-func generateClusterID(operator id.KramaID, ixns types.Interactions) (types.ClusterID, error) {
-	ixHash := ixns[0].Hash()
-	buffer := ixHash.Bytes()
-
-	peerID, err := operator.PeerID()
+func generateClusterID() (types.ClusterID, error) {
+	randHash := make([]byte, 32)
+	_, err := rand.Read(randHash)
 	if err != nil {
-		return "", types.ErrInvalidKramaID
+		return "", err
 	}
 
-	rawBytes, err := base58.Decode(peerID)
-	if err != nil {
-		return "", types.ErrInvalidKramaID
-	}
-
-	buffer = append(buffer, rawBytes...)
-	clusterHash := blake2b.Sum256(buffer)
-
-	return types.ClusterID(base58.Encode(clusterHash[:])), nil
+	return types.ClusterID(base58.Encode(randHash)), nil
 }
 
 func (k *Engine) Start() {
@@ -475,71 +452,50 @@ func (k *Engine) isTimely(reqTime time.Time, currentTime time.Time) bool {
 	return true
 }
 
-func (k *Engine) joinCluster(ctx context.Context, req Request) error {
+func (k *Engine) joinCluster(ctx context.Context, slot *ktypes.Slot) error {
 	ctx, span := tracing.Span(ctx, "Krama.KramaEngine", "joinCluster")
 	defer span.End()
 
 	k.logger.Debug(
 		"Received an ICS join request",
-		"from", req.msg.Operator,
-		"cluster-id", req.msg.ClusterID,
-		"timestamp", req.msg.Timestamp,
-		"ixHash", req.IxHash(),
+		"from", slot.ClusterState().Operator,
+		"timestamp", slot.ClusterState().RequestMsg.Timestamp,
+		"ixHash", slot.ClusterState().Ixs[0].Hash(),
 	)
 
-	reqTime := utils.Canonical(time.Unix(0, req.msg.Timestamp))
+	reqTime := utils.Canonical(time.Unix(0, slot.ICSRequestMsg().Timestamp))
 
 	if !k.isTimely(reqTime, utils.Now()) {
 		return errors.New("invalid time stamp")
 	}
 
-	cs, err := k.loadIxnClusterState(
-		ctx,
-		req.ixs,
-		types.ClusterID(req.msg.ClusterID),
-		reqTime,
-		id.KramaID(req.msg.Operator),
-	)
+	slot.ClusterState().CurrentRole = ktypes.IcsSetType(slot.ICSRequestMsg().ContextType)
+
+	contextHashes, nodeSets, err := k.state.FetchInteractionContext(ctx, slot.ClusterState().Ixs[0])
 	if err != nil {
 		return err
 	}
 
-	newSlot := ktypes.NewSlot(ktypes.ValidatorSlot, cs)
-	// Create a slot and try adding it
-
-	if !k.slots.AddSlot(newSlot) {
-		return types.ErrSlotsFull
-	}
-
-	k.metrics.captureAvailableValidatorSlots(-1)
-
-	cs.CurrentRole = ktypes.IcsSetType(req.msg.ContextType)
-
-	contextHashes, nodeSets, err := k.state.FetchInteractionContext(ctx, req.ixs[0])
-	if err != nil {
-		return err
-	}
-
-	loadContextLockInfo(cs, contextHashes)
+	loadContextLockInfo(slot.ClusterState(), contextHashes)
 
 	// Check whether the context hashes matches
-	for addr, info := range req.msg.ContextLock {
+	for addr, info := range slot.ICSRequestMsg().ContextLock {
 		if contextHashes[addr] != info.ContextHash {
 			return types.ErrHashMismatch
 		}
 	}
 
-	cs.NodeSet.Nodes = nodeSets
+	slot.ClusterState().NodeSet.Nodes = nodeSets
 
-	k.logger.Debug("Responding to ICS request", "from", req.msg.Operator, "clusterId", req.msg.ClusterID)
+	k.logger.Debug("Responding to ICS request", "from", slot.ClusterState().Operator)
 
-	return k.initClusterCommunication(ctx, newSlot)
+	return k.initClusterCommunication(ctx, slot)
 }
 
 func (k *Engine) handleReq(req Request) {
-	clusterID, err := req.getClusterID(k.selfID)
+	clusterID, err := req.getClusterID()
 	if err != nil {
-		req.responseChan <- Response{requestID: req.reqType, err: errors.New("failed to decode clusterID")}
+		req.responseChan <- Response{slotType: req.slotType, err: errors.New("failed to decode clusterID")}
 
 		return
 	}
@@ -552,7 +508,7 @@ func (k *Engine) handleReq(req Request) {
 	)
 	defer span.End()
 
-	if !k.slots.AreSlotsAvailable(ktypes.SlotType(req.reqType)) {
+	if !k.slots.AreSlotsAvailable(req.slotType) {
 		sendResponse(req, types.ErrSlotsFull)
 
 		return
@@ -564,12 +520,23 @@ func (k *Engine) handleReq(req Request) {
 		return
 	}
 
-	k.clusterLocks.Lock(clusterID.String())
-	defer func() {
-		if err := k.clusterLocks.Unlock(clusterID.String()); err != nil {
-			k.logger.Error(fmt.Sprintf("Failed to release cluster lock id-%s", clusterID.String()))
-		}
-	}()
+	cs, err := k.loadIxnClusterState(ctx, req, clusterID)
+	if err != nil {
+		sendResponse(req, err)
+
+		return
+	}
+
+	// create a slot and try adding it
+	newSlot := ktypes.NewSlot(req.slotType, cs)
+
+	if !k.slots.AddSlot(newSlot) {
+		sendResponse(req, types.ErrSlotsFull)
+
+		return
+	}
+
+	k.metrics.captureAvailableOperatorSlots(-1)
 
 	if err = k.validateInteractions(req.ixs); err != nil {
 		k.logger.Error("Invalid Interaction", "error", err)
@@ -598,9 +565,9 @@ func (k *Engine) handleReq(req Request) {
 		k.exec.Cleanup(clusterID)
 	}()
 
-	switch req.reqType {
-	case 0:
-		err = k.acquireContextLock(ctx, clusterID, req)
+	switch req.slotType {
+	case ktypes.OperatorSlot:
+		err = k.acquireContextLock(ctx, newSlot)
 
 		sendResponse(req, err)
 
@@ -613,10 +580,10 @@ func (k *Engine) handleReq(req Request) {
 
 		k.logger.Info("Cluster creation successful", clusterID)
 
-	case 1:
+	case ktypes.ValidatorSlot:
 		requestTime := time.Now()
 
-		err = k.joinCluster(ctx, req)
+		err = k.joinCluster(ctx, newSlot)
 		sendResponse(req, err)
 
 		if err != nil {
@@ -654,8 +621,6 @@ func (k *Engine) handleReq(req Request) {
 
 		return
 	}
-
-	cs := slot.ClusterState()
 
 	if cs.CurrentRole == ktypes.ObserverSet {
 		wg := observer.NewWatchDog(ctx, slot)
@@ -1530,5 +1495,5 @@ func loadContextLockInfo(
 }
 
 func sendResponse(req Request, err error) {
-	req.responseChan <- Response{requestID: req.reqType, err: err}
+	req.responseChan <- Response{slotType: req.slotType, err: err}
 }

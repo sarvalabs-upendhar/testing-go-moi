@@ -27,7 +27,7 @@ func (k *Engine) minter() {
 
 				k.logger.Info("Forwarding request to krama engine")
 
-				k.requests <- Request{reqType: 0, ixs: ixs, msg: nil, responseChan: respChan}
+				k.requests <- Request{slotType: ktypes.OperatorSlot, operator: k.selfID, ixs: ixs, msg: nil, responseChan: respChan}
 				// Wait for response from krama engine handler
 				resp := <-respChan
 				if resp.err != nil {

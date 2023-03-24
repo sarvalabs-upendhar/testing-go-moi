@@ -1,6 +1,7 @@
 package types
 
 import (
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"sync"
 
 	"github.com/sarvalabs/moichain/types"
@@ -75,6 +76,10 @@ func (info *Slot) ClusterID() types.ClusterID {
 
 func (info *Slot) ClusterState() *ClusterState {
 	return info.clusterState
+}
+
+func (info *Slot) ICSRequestMsg() *ptypes.ICSRequest {
+	return info.clusterState.RequestMsg
 }
 
 type Slots struct {

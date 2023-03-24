@@ -3,6 +3,8 @@ package krama
 import (
 	"context"
 	"errors"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
 
 	"github.com/sarvalabs/go-polo"
 
@@ -40,7 +42,8 @@ func (icsrpc *ICSRPCService) ICSRequest(
 	}
 
 	kramaRequest := Request{
-		reqType:      1,
+		slotType:     ktypes.ValidatorSlot,
+		operator:     id.KramaID(req.Operator),
 		msg:          req,
 		responseChan: respChan,
 		ixs:          *interactions,

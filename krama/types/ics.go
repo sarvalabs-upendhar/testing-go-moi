@@ -35,6 +35,7 @@ type ClusterState struct {
 	ICSReqTime               time.Time
 	operatorIncluded         bool
 	CurrentRole              IcsSetType
+	RequestMsg               *ptypes.ICSRequest
 	SuccessMsg               *ICSMSG
 }
 
@@ -42,6 +43,7 @@ type ClusterState struct {
 
 func NewICS(
 	size int,
+	icsReqMsg *ptypes.ICSRequest,
 	ixs types.Interactions,
 	clusterID types.ClusterID,
 	operator id.KramaID,
@@ -58,6 +60,7 @@ func NewICS(
 		Receipts:         make(types.Receipts, 1), // This should be changed base on the transactions
 		dirty:            make(map[types.Hash][]byte),
 		ICSReqTime:       reqTime,
+		RequestMsg:       icsReqMsg,
 	}
 }
 
