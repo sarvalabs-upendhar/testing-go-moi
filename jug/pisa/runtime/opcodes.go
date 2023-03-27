@@ -56,8 +56,8 @@ const (
 	// 	- RETURN <reg:X> <slot:byte>
 	RETURN OpCode = 0x11
 
-	// EMIT emits an event object to the logic event stream
-	//  - EMIT <reg:event>
+	// EMIT emits an event to the logic event stream
+	//  - EMIT <reg:emittable>
 	EMIT OpCode = 0x12
 
 	// LOAD loads a value from storage into a register

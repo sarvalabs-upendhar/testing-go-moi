@@ -1,16 +1,13 @@
 package register
 
-import "github.com/sarvalabs/moichain/jug/pisa/exceptions"
+import "github.com/sarvalabs/moichain/jug/pisa/exception"
 
-type ExecutionScope interface {
-	Throw(object *exceptions.ExceptionObject)
-	ExceptionThrown() bool
-	GetException() *exceptions.ExceptionObject
-}
+// Method is an interface that describes an executable type method
+type Method interface {
+	Executable
 
-type Executable interface {
-	Interface() CallFields
-	Execute(ExecutionScope, ValueTable) ValueTable
+	Builtin() bool
+	Datatype() *Typedef
 }
 
 // MethodCode represents a method ID for a type
@@ -35,20 +32,12 @@ const (
 // MethodTable represents a collection of Methods
 type MethodTable [256]Method
 
-// Method is an interface that describes an executable type method
-type Method interface {
-	Executable
-
-	Builtin() bool
-	Datatype() *Typedef
-}
-
 // BuiltinMethod represents a method for a Builtin type (Primitive).
 // Implements the Method interface
 type BuiltinMethod struct {
 	datatype PrimitiveType
 	fields   CallFields
-	execute  func(inputs ValueTable) (outputs ValueTable, exception *exceptions.ExceptionObject)
+	execute  func(inputs ValueTable) (outputs ValueTable, exception *exception.Object)
 }
 
 func (method BuiltinMethod) Builtin() bool { return true }
@@ -59,20 +48,20 @@ func (method BuiltinMethod) Interface() CallFields { return method.fields }
 
 func (method BuiltinMethod) Execute(scope ExecutionScope, inputs ValueTable) (outputs ValueTable) {
 	if err := method.Interface().Inputs.Validate(inputs); err != nil {
-		scope.Throw(exceptions.Exception(exceptions.ExceptionInputValidate, err.Error()))
+		scope.Throw(exception.Exception(exception.InvalidInputs, err.Error()))
 
 		return nil
 	}
 
-	var exception *exceptions.ExceptionObject
-	if outputs, exception = method.execute(inputs); exception != nil {
-		scope.Throw(exception)
+	var except *exception.Object
+	if outputs, except = method.execute(inputs); except != nil {
+		scope.Throw(except)
 
 		return nil
 	}
 
 	if err := method.Interface().Outputs.Validate(outputs); err != nil {
-		scope.Throw(exceptions.Exception(exceptions.ExceptionOutputValidate, err.Error()))
+		scope.Throw(exception.Exception(exception.InvalidOutputs, err.Error()))
 
 		return nil
 	}

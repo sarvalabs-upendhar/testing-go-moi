@@ -1,17 +1,17 @@
 package runtime
 
 import (
-	"github.com/sarvalabs/go-polo"
-
-	"github.com/sarvalabs/moichain/jug/pisa/exceptions"
+	"github.com/sarvalabs/moichain/jug/engineio"
+	"github.com/sarvalabs/moichain/jug/pisa/exception"
 	"github.com/sarvalabs/moichain/jug/pisa/register"
-	"github.com/sarvalabs/moichain/types"
 )
 
 // Routine represents an executable logic procedure
 type Routine struct {
 	// Name represents the name of the routine
 	Name string
+	// Kind represents the kind of routine callsite
+	Kind engineio.CallsiteKind
 
 	// CallFields contains the input/output symbols
 	// injected into the Routine when invoked/called.
@@ -26,18 +26,22 @@ type Routine struct {
 	// Catches CatchTable
 }
 
+// Interface returns the input/output CallFields of the Routine.
+// Implements the register.Executable interface for Routine.
 func (routine Routine) Interface() register.CallFields { return routine.CallFields }
 
+// Execute performs the execution of the Routine within the provided ExecutionScope with the given input values.
+// Implements the register.Executable interface for Routine.
 func (routine Routine) Execute(scope register.ExecutionScope, inputs register.ValueTable) register.ValueTable {
 	// Perform input validation
 	if err := routine.Inputs.Validate(inputs); err != nil {
-		scope.Throw(exceptions.Exception(exceptions.ExceptionInputValidate, err.Error()))
+		scope.Throw(exception.Exception(exception.InvalidInputs, err.Error()))
 
 		return nil
 	}
 
 	// This assertion must never fail
-	outerScope, ok := scope.(*RoutineScope)
+	outerScope, ok := scope.(*Scope)
 	if !ok {
 		panic("non routine scope used for routine execution")
 	}
@@ -59,7 +63,7 @@ func (routine Routine) Execute(scope register.ExecutionScope, inputs register.Va
 
 	// Perform output validation
 	if err := routine.Outputs.Validate(innerScope.outputs); err != nil {
-		outerScope.Throw(exceptions.Exception(exceptions.ExceptionOutputValidate, err.Error()))
+		outerScope.Throw(exception.Exception(exception.InvalidOutputs, err.Error()))
 
 		return nil
 	}
@@ -67,65 +71,14 @@ func (routine Routine) Execute(scope register.ExecutionScope, inputs register.Va
 	return innerScope.outputs
 }
 
-// RoutineTable is a collection of Routine objects.
-// The Routines are indexed by both their pointer and name.
-type RoutineTable struct {
-	Table   map[uint64]*Routine
-	Symbols map[string]uint64
+func (routine Routine) Exported() bool {
+	return IsExportedName(routine.Name)
 }
 
-// NewRoutineTable generates a blank RoutineTable
-func NewRoutineTable() RoutineTable {
-	return RoutineTable{
-		Table:   make(map[uint64]*Routine),
-		Symbols: make(map[string]uint64),
-	}
+func (routine Routine) Mutable() bool {
+	return IsMutableName(routine.Name)
 }
 
-func (routines RoutineTable) Callsites() map[string]types.LogicCallsite {
-	callsites := make(map[string]types.LogicCallsite)
-
-	for name, index := range routines.Symbols {
-		if exported(name) {
-			callsites[name] = types.LogicCallsite(index)
-		}
-	}
-
-	return callsites
-}
-
-// Get retrieves a Routine from the RoutineTable for a given position.
-// Returns nil if there is Routine for that position
-func (routines RoutineTable) Get(ptr uint64) (*Routine, bool) {
-	routine, exists := routines.Table[ptr]
-	// Return the Routine and if it exists in the table
-	return routine, exists
-}
-
-// Lookup retrieves a Routine from the RoutineTable for a given name.
-// Returns nil if there is no Routine for that name.
-func (routines RoutineTable) Lookup(name string) *Routine {
-	index, exists := routines.Symbols[name]
-	if !exists {
-		return nil
-	}
-
-	return routines.Table[index]
-}
-
-func (routines RoutineTable) Size() int {
-	return len(routines.Table)
-}
-
-func (routines RoutineTable) EjectElements() []*types.LogicElement {
-	elements := make([]*types.LogicElement, 0, routines.Size())
-
-	for index, routine := range routines.Table {
-		// Polorize the routine
-		data, _ := polo.Polorize(routine)
-		// Create a LogicElement for the routine and append it
-		elements = append(elements, &types.LogicElement{Kind: ElementCodeRoutine, Index: index, Data: data})
-	}
-
-	return elements
+func (routine Routine) Payable() bool {
+	return IsPayableName(routine.Name)
 }

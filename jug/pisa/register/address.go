@@ -5,7 +5,7 @@ import (
 
 	"github.com/sarvalabs/go-polo"
 
-	"github.com/sarvalabs/moichain/jug/pisa/exceptions"
+	"github.com/sarvalabs/moichain/jug/pisa/exception"
 	"github.com/sarvalabs/moichain/types"
 )
 
@@ -38,10 +38,10 @@ func AddressMethods() MethodTable {
 		MethodBool: &BuiltinMethod{
 			datatype: PrimitiveAddress,
 			fields: CallFields{
-				Inputs:  fields([]*TypeField{{"self", TypeAddress}}),
-				Outputs: fields([]*TypeField{{"result", TypeBool}}),
+				Inputs:  makefields([]*TypeField{{"self", TypeAddress}}),
+				Outputs: makefields([]*TypeField{{"result", TypeBool}}),
 			},
-			execute: func(inputs ValueTable) (ValueTable, *exceptions.ExceptionObject) {
+			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				// True for all values except nil address
 				result := inputs[0].(AddressValue) != AddressValue(types.NilAddress) //nolint:forcetypeassert
 				// Set value into outputs
@@ -53,10 +53,10 @@ func AddressMethods() MethodTable {
 		MethodStr: &BuiltinMethod{
 			datatype: PrimitiveAddress,
 			fields: CallFields{
-				Inputs:  fields([]*TypeField{{"self", TypeAddress}}),
-				Outputs: fields([]*TypeField{{"result", TypeString}}),
+				Inputs:  makefields([]*TypeField{{"self", TypeAddress}}),
+				Outputs: makefields([]*TypeField{{"result", TypeString}}),
 			},
-			execute: func(inputs ValueTable) (ValueTable, *exceptions.ExceptionObject) {
+			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				// Hex encode the address
 				result := inputs[0].(AddressValue).ToHex() //nolint:forcetypeassert
 				// Set the result into the outputs

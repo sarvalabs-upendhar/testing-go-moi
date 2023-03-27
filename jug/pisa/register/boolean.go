@@ -3,7 +3,7 @@ package register
 import (
 	"github.com/sarvalabs/go-polo"
 
-	"github.com/sarvalabs/moichain/jug/pisa/exceptions"
+	"github.com/sarvalabs/moichain/jug/pisa/exception"
 )
 
 // BoolValue represents a Value that operates like a boolean
@@ -43,10 +43,10 @@ func BoolMethods() MethodTable {
 		MethodBool: &BuiltinMethod{
 			datatype: PrimitiveBool,
 			fields: CallFields{
-				Inputs:  fields([]*TypeField{{"self", TypeBool}}),
-				Outputs: fields([]*TypeField{{"result", TypeBool}}),
+				Inputs:  makefields([]*TypeField{{"self", TypeBool}}),
+				Outputs: makefields([]*TypeField{{"result", TypeBool}}),
 			},
-			execute: func(inputs ValueTable) (ValueTable, *exceptions.ExceptionObject) {
+			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				// Return a copy of the bool value
 				return ValueTable{0: inputs[0].Copy()}, nil
 			},
@@ -56,10 +56,10 @@ func BoolMethods() MethodTable {
 		MethodStr: &BuiltinMethod{
 			datatype: PrimitiveBool,
 			fields: CallFields{
-				Inputs:  fields([]*TypeField{{"self", TypeBool}}),
-				Outputs: fields([]*TypeField{{"result", TypeString}}),
+				Inputs:  makefields([]*TypeField{{"self", TypeBool}}),
+				Outputs: makefields([]*TypeField{{"result", TypeString}}),
 			},
-			execute: func(inputs ValueTable) (ValueTable, *exceptions.ExceptionObject) {
+			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				// Convert bool to its string form
 				var result StringValue
 				if inputs[0].(BoolValue) { //nolint:forcetypeassert

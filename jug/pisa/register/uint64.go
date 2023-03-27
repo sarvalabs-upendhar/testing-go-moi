@@ -6,7 +6,7 @@ import (
 
 	"github.com/sarvalabs/go-polo"
 
-	"github.com/sarvalabs/moichain/jug/pisa/exceptions"
+	"github.com/sarvalabs/moichain/jug/pisa/exception"
 )
 
 // U64Value represents a Value that operates like an uint64
@@ -114,10 +114,10 @@ func U64Methods() MethodTable {
 		MethodBool: &BuiltinMethod{
 			datatype: PrimitiveU64,
 			fields: CallFields{
-				Inputs:  fields([]*TypeField{{"self", TypeU64}}),
-				Outputs: fields([]*TypeField{{"result", TypeBool}}),
+				Inputs:  makefields([]*TypeField{{"self", TypeU64}}),
+				Outputs: makefields([]*TypeField{{"result", TypeBool}}),
 			},
-			execute: func(inputs ValueTable) (ValueTable, *exceptions.ExceptionObject) {
+			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				// True for all values except 0
 				result := inputs[0].(U64Value) != 0 //nolint:forcetypeassert
 				// Set value into outputs
@@ -129,10 +129,10 @@ func U64Methods() MethodTable {
 		MethodStr: &BuiltinMethod{
 			datatype: PrimitiveU64,
 			fields: CallFields{
-				Inputs:  fields([]*TypeField{{"self", TypeU64}}),
-				Outputs: fields([]*TypeField{{"result", TypeString}}),
+				Inputs:  makefields([]*TypeField{{"self", TypeU64}}),
+				Outputs: makefields([]*TypeField{{"result", TypeString}}),
 			},
-			execute: func(inputs ValueTable) (ValueTable, *exceptions.ExceptionObject) {
+			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				// Format into a string (base 10)
 				result := strconv.FormatUint(uint64(inputs[0].(U64Value)), 10) //nolint:forcetypeassert
 				// Set value into outputs
@@ -144,10 +144,10 @@ func U64Methods() MethodTable {
 		MethodLt: &BuiltinMethod{
 			datatype: PrimitiveU64,
 			fields: CallFields{
-				Inputs:  fields([]*TypeField{{"x", TypeU64}, {"y", TypeU64}}),
-				Outputs: fields([]*TypeField{{"result", TypeBool}}),
+				Inputs:  makefields([]*TypeField{{"x", TypeU64}, {"y", TypeU64}}),
+				Outputs: makefields([]*TypeField{{"result", TypeBool}}),
 			},
-			execute: func(inputs ValueTable) (ValueTable, *exceptions.ExceptionObject) {
+			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				x, y := inputs[0], inputs[1]
 				result := x.(U64Value).Lt(y.(U64Value)) //nolint:forcetypeassert
 
@@ -159,10 +159,10 @@ func U64Methods() MethodTable {
 		MethodGt: &BuiltinMethod{
 			datatype: PrimitiveU64,
 			fields: CallFields{
-				Inputs:  fields([]*TypeField{{"x", TypeU64}, {"y", TypeU64}}),
-				Outputs: fields([]*TypeField{{"result", TypeBool}}),
+				Inputs:  makefields([]*TypeField{{"x", TypeU64}, {"y", TypeU64}}),
+				Outputs: makefields([]*TypeField{{"result", TypeBool}}),
 			},
-			execute: func(inputs ValueTable) (ValueTable, *exceptions.ExceptionObject) {
+			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				x, y := inputs[0], inputs[1]
 				result := x.(U64Value).Gt(y.(U64Value)) //nolint:forcetypeassert
 
@@ -174,10 +174,10 @@ func U64Methods() MethodTable {
 		MethodEq: &BuiltinMethod{
 			datatype: PrimitiveU64,
 			fields: CallFields{
-				Inputs:  fields([]*TypeField{{"x", TypeU64}, {"y", TypeU64}}),
-				Outputs: fields([]*TypeField{{"result", TypeBool}}),
+				Inputs:  makefields([]*TypeField{{"x", TypeU64}, {"y", TypeU64}}),
+				Outputs: makefields([]*TypeField{{"result", TypeBool}}),
 			},
-			execute: func(inputs ValueTable) (ValueTable, *exceptions.ExceptionObject) {
+			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				x, y := inputs[0], inputs[1]
 				result := x.(U64Value).Eq(y.(U64Value)) //nolint:forcetypeassert
 

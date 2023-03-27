@@ -1,72 +1,115 @@
 package runtime
 
 import (
-	"github.com/sarvalabs/moichain/jug/pisa/exceptions"
+	"github.com/pkg/errors"
+
+	"github.com/sarvalabs/moichain/jug/engineio"
+	"github.com/sarvalabs/moichain/jug/pisa/exception"
 	"github.com/sarvalabs/moichain/jug/pisa/register"
+	"github.com/sarvalabs/moichain/types"
 )
 
-const MaxCallDepth = 1024
-
-type FlowCode int
+// ExecutionFlow defines an enum with variations
+// that describe the current nature of execution flow
+type ExecutionFlow int
 
 const (
-	FlowOk FlowCode = iota
+	FlowOk ExecutionFlow = iota
 	FlowJump
 	FlowExcept
 	FlowTerminate
 )
 
-type Environment interface {
-	ConsumedFuel() uint64
-	ExhaustFuel(uint64) bool
+// MaxCallDepth defines the max call depth for child Scope objects
+const MaxCallDepth = 1024
 
-	ReadStorage(uint8) ([]byte, error)
-	WriteStorage(uint8, []byte) error
-	GetStorageLayout() (*StorageLayout, bool)
+// Runtime is an interface through which the instruction set
+// can access logic elements, manipulate the fuel tank, lookup
+// instructions and invoke external environmental calls.
+// It is implemented by the pisa.Engine type.
+type Runtime interface {
+	FuelConsumed() engineio.Fuel
+	ConsumeFuel(engineio.Fuel) bool
 
-	GetConstant(uint64) (*Constant, bool)
-	GetRoutine(ptr uint64) (*Routine, bool)
+	GetRoutine(uint64) (*Routine, error)
+	GetConstant(uint64) (*register.Constant, error)
+	GetTypedef(uint64) (*register.Typedef, error)
+	GetStateFields(engineio.ContextStateKind) (*register.StateFields, error)
+
 	GetInstruction(OpCode) *InstructOperation
-	GetSymbolicType(uint64) (*register.Typedef, bool)
 	GetTypeMethod(*register.Typedef, register.MethodCode) (register.Method, bool)
 }
 
-// RoutineScope represents an isolated runtime environment for executing some logic Instructions.
-// It acts as an execution space with its own Register set and load/yield value slots.
-type RoutineScope struct {
+// Scope represents an isolated runtime environment for executing some logic Instructions.
+// It acts as an execution space with its own register set and accept/return value slots.
+type Scope struct {
 	routine Routine
-	environ Environment
+	runtime Runtime
 
 	calldepth   uint64
 	instructptr uint64
 
-	flow   FlowCode
 	jump   *uint64
-	except *exceptions.ExceptionObject
+	flow   ExecutionFlow
+	except *exception.Object
+
+	ixn      *engineio.IxnObject
+	internal engineio.CtxDriver
+	sender   engineio.CtxDriver
+	receiver engineio.CtxDriver
 
 	inputs    register.ValueTable
 	outputs   register.ValueTable
 	registers register.ValueTable
 }
 
-// RootExecutionScope generates a root RoutineScope for some Environment (pisa.Engine).
-// It has a call depth of 0 and is used to capture execution halting.
-func RootExecutionScope(environ Environment) register.ExecutionScope {
-	return &RoutineScope{
-		environ: environ,
+// Root generates a root Scope for some Runtime (pisa.Engine).
+// It has a call depth of 0 and is the root of all execution calls.
+// It requires the logic's engineio.CtxDriver along with a variadic
+// number of them, that depends on the nature of the Interaction
+func Root(
+	runtime Runtime,
+	ixn *engineio.IxnObject,
+	logic engineio.CtxDriver,
+	participants ...engineio.CtxDriver,
+) (
+	*Scope, error,
+) {
+	// Declare the base scope with the runtime, routine and ixn
+	scope := &Scope{ixn: ixn, runtime: runtime, internal: logic}
+
+	// Check the number of participant contexts based on the interaction type
+	switch ixn.IxType() {
+	case types.IxLogicDeploy, types.IxLogicInvoke:
+		if len(participants) != 1 {
+			return nil, errors.Errorf("invalid no of participant contexts for %v", ixn.IxType())
+		}
+
+		scope.sender = participants[0]
+
+	default:
+		return nil, errors.Errorf("unsupported interaction type %v", ixn.IxType())
 	}
+
+	return scope, nil
 }
 
-func (scope *RoutineScope) child(routine Routine, inputs register.ValueTable) *RoutineScope {
+func (scope *Scope) child(routine Routine, inputs register.ValueTable) *Scope {
 	if calldepth := scope.calldepth + 1; calldepth > MaxCallDepth {
 		// todo: throw exception
 		return nil
 	}
 
-	return &RoutineScope{
-		routine:   routine,
-		environ:   scope.environ,
+	return &Scope{
+		routine: routine,
+		ixn:     scope.ixn,
+		runtime: scope.runtime,
+
 		calldepth: scope.calldepth + 1,
+
+		internal: scope.internal,
+		sender:   scope.sender,
+		receiver: scope.receiver,
 
 		inputs:    inputs,
 		outputs:   make(register.ValueTable),
@@ -74,7 +117,7 @@ func (scope *RoutineScope) child(routine Routine, inputs register.ValueTable) *R
 	}
 }
 
-func (scope *RoutineScope) run() {
+func (scope *Scope) run() {
 	// Execution Loop
 	for !scope.done() {
 		switch scope.flow {
@@ -88,13 +131,13 @@ func (scope *RoutineScope) run() {
 			// Get the next instruction from the program
 			instruct := scope.read()
 			// Get the operation for the opcode from the instruction set
-			op := scope.environ.GetInstruction(instruct.Op)
+			op := scope.runtime.GetInstruction(instruct.Op)
 
 			// Attempt to exhaust some fuel from the engine -> fails if there is not enough fuel left
-			if ok := scope.environ.ExhaustFuel(op.Expense(scope)); !ok {
+			if ok := scope.runtime.ConsumeFuel(op.Expense(scope)); !ok {
 				// Fuel Depleted - unread the instruction and throw exception
 				scope.unread()
-				scope.Throw(exceptions.Exception(exceptions.ExceptionFuelExhausted, ""))
+				scope.Throw(exception.Exception(exception.FuelExhausted, ""))
 
 				continue
 			}
@@ -108,14 +151,14 @@ func (scope *RoutineScope) run() {
 			// If attempting to jump to instruction that does not exist
 			if *scope.jump >= scope.routine.Instructs.Len() {
 				// Throw an InvalidJump exception
-				scope.Throw(exceptions.Exception(exceptions.ExceptionInvalidJump, "destination out of bounds"))
+				scope.Throw(exception.Exception(exception.InvalidJumpsite, "destination out of bounds"))
 
 				continue
 			}
 
 			if instruct := scope.routine.Instructs[*scope.jump]; instruct.Op != DEST {
 				// Throw an InvalidJump exception
-				scope.Throw(exceptions.Exception(exceptions.ExceptionInvalidJump, "invalid jump destination"))
+				scope.Throw(exception.Exception(exception.InvalidJumpsite, "invalid jump destination"))
 
 				continue
 			}
@@ -128,18 +171,37 @@ func (scope *RoutineScope) run() {
 	}
 }
 
+// Throw throws an exception in the execution
+// Scope and changes the flow to FlowExcept
+func (scope *Scope) Throw(except *exception.Object) {
+	scope.flow = FlowExcept
+	scope.except = except
+}
+
+// ExceptionThrown returns whether the execution
+// Scope is currently in the FlowExcept flow
+func (scope *Scope) ExceptionThrown() bool {
+	return scope.flow == FlowExcept
+}
+
+// GetException returns the current exception in the execution Scope.
+// Returns nil if flow is not FlowExcept
+func (scope *Scope) GetException() *exception.Object {
+	return scope.except
+}
+
 // GetPtrValue resolves a register ID into uint64 pointer address.
 // The Register at the reg address must exist and be of type TypePtr.
-func (scope *RoutineScope) GetPtrValue(regID byte) (uint64, *exceptions.ExceptionObject) {
+func (scope *Scope) GetPtrValue(regID byte) (uint64, *exception.Object) {
 	// Retrieve the Register object
 	reg, exists := scope.registers.Get(regID)
 	if !exists {
-		return 0, exceptions.Exceptionf(exceptions.ExceptionNotFound, "register $%v", regID)
+		return 0, exception.Exceptionf(exception.RegisterNotFound, "register $%v", regID)
 	}
 
 	// Check that the register type is Ptr
 	if reg.Type() != register.TypePtr {
-		return 0, exceptions.Exceptionf(exceptions.ExceptionInvalidRegisterType, "register $%v is not a pointer", regID)
+		return 0, exception.Exceptionf(exception.InvalidRegisterType, "register $%v is not a pointer", regID)
 	}
 
 	// Cast into a PtrValue
@@ -150,35 +212,31 @@ func (scope *RoutineScope) GetPtrValue(regID byte) (uint64, *exceptions.Exceptio
 
 // GetSymmetricValues obtains two registers of the same Typedef for the given register IDs.
 // Returns an error if either of the Registers are empty or are not of the same type.
-func (scope *RoutineScope) GetSymmetricValues(a, b byte) (
+func (scope *Scope) GetSymmetricValues(a, b byte) (
 	regA, regB register.Value,
-	exception *exceptions.ExceptionObject,
+	except *exception.Object,
 ) {
 	var exists bool
 
 	// Retrieve the register for A
 	if regA, exists = scope.registers.Get(a); !exists {
-		return nil, nil, exceptions.Exceptionf(exceptions.ExceptionNotFound, "register $%v", a)
+		return nil, nil, exception.Exceptionf(exception.RegisterNotFound, "register $%v", a)
 	}
 
 	// Retrieve the register for B
 	if regB, exists = scope.registers.Get(b); !exists {
-		return nil, nil, exceptions.Exceptionf(exceptions.ExceptionNotFound, "register $%v", b)
+		return nil, nil, exception.Exceptionf(exception.RegisterNotFound, "register $%v", b)
 	}
 
 	// Check that register types are equal
 	if !regA.Type().Equals(regB.Type()) {
-		return nil, nil, exceptions.Exceptionf(exceptions.ExceptionInvalidRegisterType, "unequal types ($%v, $%v)", a, b)
+		return nil, nil, exception.Exceptionf(exception.InvalidRegisterType, "unequal types ($%v, $%v)", a, b)
 	}
 
 	return regA, regB, nil
 }
 
-func (scope RoutineScope) done() bool {
-	return scope.instructptr >= uint64(len(scope.routine.Instructs))
-}
-
-func (scope *RoutineScope) read() Instruction {
+func (scope *Scope) read() Instruction {
 	if scope.done() {
 		return Instruction{}
 	}
@@ -189,7 +247,7 @@ func (scope *RoutineScope) read() Instruction {
 	return instruct
 }
 
-func (scope *RoutineScope) unread() {
+func (scope *Scope) unread() {
 	if scope.instructptr == 0 {
 		return
 	}
@@ -197,24 +255,15 @@ func (scope *RoutineScope) unread() {
 	scope.instructptr--
 }
 
-func (scope *RoutineScope) stop() {
+func (scope Scope) done() bool {
+	return scope.instructptr >= uint64(len(scope.routine.Instructs))
+}
+
+func (scope *Scope) stop() {
 	scope.flow = FlowTerminate
 }
 
-func (scope *RoutineScope) jumpTo(ptr uint64) {
+func (scope *Scope) jumpTo(ptr uint64) {
 	scope.flow = FlowJump
 	scope.jump = &ptr
-}
-
-func (scope *RoutineScope) Throw(except *exceptions.ExceptionObject) {
-	scope.flow = FlowExcept
-	scope.except = except
-}
-
-func (scope *RoutineScope) ExceptionThrown() bool {
-	return scope.flow == FlowExcept
-}
-
-func (scope *RoutineScope) GetException() *exceptions.ExceptionObject {
-	return scope.except
 }

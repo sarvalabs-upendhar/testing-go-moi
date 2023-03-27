@@ -4,6 +4,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
+	"github.com/sarvalabs/moichain/jug/engineio"
 	"github.com/sarvalabs/moichain/types"
 )
 
@@ -15,60 +16,86 @@ type LogicObject struct {
 	// Represents the Logic ID
 	ID types.LogicID
 	// Represents the Logic Engine
-	EngineKind types.LogicEngine
+	EngineKind engineio.EngineKind
 	// Represents the CID of the Logic Manifest
 	ManifestHash types.Hash
 
-	Sealed bool
+	Sealed     bool
+	AssetLogic bool
 
-	PersistentStateful  bool
-	EphemeralStateful   bool
+	PersistentStateful  *uint64
+	EphemeralStateful   *uint64
 	InteractionsAllowed bool
 
+	Dependencies *engineio.DependencyGraph
 	// Represents the collection of all LogicElement objects
-	Elements types.LogicElementSet
+	Elements map[uint64]*engineio.LogicElement
 	// Represents mapping of string names to LogicCallsite pointers
-	Callsites map[string]types.LogicCallsite
+	Callsites map[string]*engineio.Callsite
 }
 
 // NewLogicObject generates a new LogicObject for a given LogicID, LogicDescriptor and Storage Namespace key
-func NewLogicObject(id types.LogicID, descriptor *types.LogicDescriptor) *LogicObject {
-	elements := make(types.LogicElementSet)
-	elements.Insert(descriptor.Elements...)
+func NewLogicObject(address types.Address, descriptor *engineio.LogicDescriptor) *LogicObject {
+	// Generate the LogicID from the payload
+	logicID, _ := types.NewLogicIDv0(
+		descriptor.PersistentState != nil,
+		descriptor.EphemeralState != nil,
+		descriptor.AllowsInteractions,
+		false, 0, address,
+	)
 
 	return &LogicObject{
-		ID:           id,
+		ID:           logicID,
 		EngineKind:   descriptor.Engine,
 		ManifestHash: descriptor.Manifest,
 
-		Sealed: false,
+		Sealed:     false,
+		AssetLogic: false,
 
 		PersistentStateful:  descriptor.PersistentState,
 		EphemeralStateful:   descriptor.EphemeralState,
 		InteractionsAllowed: descriptor.AllowsInteractions,
 
-		Elements:  elements,
-		Callsites: descriptor.Callsites,
+		Dependencies: descriptor.DepGraph,
+		Elements:     descriptor.Elements,
+		Callsites:    descriptor.Callsites,
 	}
 }
 
-func (logic LogicObject) IsSealed() bool           { return logic.Sealed }
-func (logic LogicObject) HasPersistentState() bool { return logic.PersistentStateful }
-func (logic LogicObject) HasEphemeralState() bool  { return logic.EphemeralStateful }
+func (logic LogicObject) LogicID() types.LogicID { return logic.ID }
+
+func (logic LogicObject) Engine() engineio.EngineKind { return logic.EngineKind }
+
+func (logic LogicObject) Manifest() types.Hash { return logic.ManifestHash }
+
+func (logic LogicObject) IsSealed() bool { return logic.Sealed }
+
+func (logic LogicObject) IsAssetLogic() bool { return logic.AssetLogic }
+
 func (logic LogicObject) AllowsInteractions() bool { return logic.InteractionsAllowed }
 
-func (logic LogicObject) LogicID() types.LogicID    { return logic.ID }
-func (logic LogicObject) Engine() types.LogicEngine { return logic.EngineKind }
-func (logic LogicObject) Manifest() types.Hash      { return logic.ManifestHash }
+func (logic LogicObject) PersistentState() (uint64, bool) {
+	return *logic.PersistentStateful, logic.PersistentStateful != nil
+}
 
-func (logic LogicObject) GetCallsite(name string) (types.LogicCallsite, bool) {
+func (logic LogicObject) EphemeralState() (uint64, bool) {
+	return *logic.EphemeralStateful, logic.EphemeralStateful != nil
+}
+
+func (logic LogicObject) GetCallsite(name string) (*engineio.Callsite, bool) {
 	callsite, ok := logic.Callsites[name]
-	// Return the callsite and if it was found in the LogicObject
+
 	return callsite, ok
 }
 
-func (logic LogicObject) GetLogicElement(kind string, index uint64) (*types.LogicElement, bool) {
-	return logic.Elements.Fetch(kind, index)
+func (logic LogicObject) GetElementDeps(ptr uint64) []uint64 {
+	return logic.Dependencies.AllDependencies(ptr)
+}
+
+func (logic LogicObject) GetElement(index uint64) (*engineio.LogicElement, bool) {
+	element, ok := logic.Elements[index]
+
+	return element, ok
 }
 
 func (logic *LogicObject) Bytes() ([]byte, error) {
@@ -86,4 +113,39 @@ func (logic *LogicObject) FromBytes(bytes []byte) error {
 	}
 
 	return nil
+}
+
+type logicStateObject interface {
+	Address() types.Address
+	GetStorageEntry(types.LogicID, []byte) ([]byte, error)
+	SetStorageEntry(types.LogicID, []byte, []byte) error
+}
+
+type LogicContextObject struct {
+	state logicStateObject
+	logic types.LogicID
+}
+
+func NewLogicContextObject(logic types.LogicID, state logicStateObject) *LogicContextObject {
+	return &LogicContextObject{state: state, logic: logic}
+}
+
+func (ctx LogicContextObject) Address() types.Address {
+	return ctx.state.Address()
+}
+
+func (ctx LogicContextObject) LogicID() types.LogicID {
+	return ctx.logic
+}
+
+func (ctx LogicContextObject) GetStorageEntry(key []byte) ([]byte, bool) {
+	data, err := ctx.state.GetStorageEntry(ctx.logic, key)
+
+	return data, err == nil
+}
+
+func (ctx LogicContextObject) SetStorageEntry(key, val []byte) bool {
+	err := ctx.state.SetStorageEntry(ctx.logic, key, val)
+
+	return err == nil
 }

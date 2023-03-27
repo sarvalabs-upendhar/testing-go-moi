@@ -21,6 +21,7 @@ import (
 	"github.com/sarvalabs/moichain/dhruva/db"
 	"github.com/sarvalabs/moichain/guna/tree"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
+	"github.com/sarvalabs/moichain/jug/engineio"
 	ktypes "github.com/sarvalabs/moichain/krama/types"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/types"
@@ -677,8 +678,11 @@ func createLogicObject(t *testing.T, params *createLogicObjectParams) *gtypes.Lo
 		params = &createLogicObjectParams{}
 	}
 
+	ptr := new(uint64)
+
 	logicObject := &gtypes.LogicObject{
-		ID: params.id,
+		ID: params.id, PersistentStateful: ptr, EphemeralStateful: ptr,
+		Dependencies: engineio.NewDependencyGraph(),
 	}
 
 	if params.logicCallback != nil {

@@ -2,16 +2,25 @@ package runtime
 
 import (
 	"encoding/binary"
+	"strings"
 	"unicode"
 
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/blake2b"
 )
 
-// exported returns whether a given string represents an exported label.
+// IsExportedName returns whether a given string represents an exported label.
 // The first letter of the string must be unicode upper case character for this to be true
-func exported(str string) bool {
+func IsExportedName(str string) bool {
 	return unicode.IsUpper(rune(str[0]))
+}
+
+func IsMutableName(str string) bool {
+	return strings.HasSuffix(str, "!")
+}
+
+func IsPayableName(str string) bool {
+	return strings.HasSuffix(str, "$")
 }
 
 // decipher interprets a slice of bytes into a 64-bit unsigned integer

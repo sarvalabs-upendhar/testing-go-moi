@@ -4,7 +4,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/sarvalabs/moichain/guna"
-	ctypes "github.com/sarvalabs/moichain/jug/types"
+	"github.com/sarvalabs/moichain/jug/engineio"
 	"github.com/sarvalabs/moichain/types"
 )
 
@@ -16,7 +16,7 @@ type IxExecutor struct {
 
 	state state
 	exec  *ExecutionManager
-	tank  *ctypes.FuelTank
+	tank  *engineio.FuelTank
 
 	objects   map[types.Address]*guna.StateObject
 	snapshots map[types.Address]*guna.StateObject
@@ -57,7 +57,7 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 				}
 
 				// Update fuel consumption
-				if !executor.tank.Exhaust(fuelConsumed) {
+				if !executor.tank.Exhaust(engineio.Fuel(fuelConsumed)) {
 					return errors.Wrap(types.ErrInsufficientFuel, "execution failed (IxValueTransfer)")
 				}
 
@@ -85,7 +85,7 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 			}
 
 			// Update fuel consumption
-			if !executor.tank.Exhaust(fuelConsumed) {
+			if !executor.tank.Exhaust(engineio.Fuel(fuelConsumed)) {
 				return errors.Wrap(types.ErrInsufficientFuel, "execution failed (IxAssetCreate)")
 			}
 
@@ -122,7 +122,7 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 				return errors.Wrap(types.ErrInsufficientFuel, "execution failed (IxLogicDeploy)")
 			}
 
-			receipt.FuelUsed += fuelConsumed
+			receipt.FuelUsed += uint64(fuelConsumed)
 
 			// Create data for logic deploy receipt and set it into the receipt
 			receiptData := types.LogicDeployReceipt{LogicID: logicID.Hex()}
@@ -151,7 +151,7 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 				return errors.Wrap(types.ErrInsufficientFuel, "execution failed (IxLogicExecute)")
 			}
 
-			receipt.FuelUsed += fuelConsumed
+			receipt.FuelUsed += uint64(fuelConsumed)
 
 			// Create data for logic execute receipt and set it into the receipt
 			receiptData := types.LogicExecuteReceipt{ReturnData: returnData}

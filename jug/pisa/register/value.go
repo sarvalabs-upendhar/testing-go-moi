@@ -33,6 +33,20 @@ type Collection interface {
 	Set(Value, Value) error
 }
 
+// Constant represents a constant value declaration.
+// It consists of the type information of the constant (primitive)
+// and some POLO encoded bytes that describe the constant value.
+type Constant struct {
+	Type PrimitiveType
+	Data []byte
+}
+
+// Value generate a new RegisterValue object from a Constant
+// Returns an error if the constant data is not interpretable for its type.
+func (constant *Constant) Value() (Value, error) {
+	return NewValue(constant.Type.Datatype(), constant.Data)
+}
+
 // NewValue generates a RegisterValue object for a given Typedef and some POLO encoded bytes.
 // The encoded bytes must be able to deserialize to the underlying type for Typedef.
 func NewValue(datatype *Typedef, data []byte) (Value, error) {

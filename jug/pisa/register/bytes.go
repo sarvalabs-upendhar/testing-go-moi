@@ -3,7 +3,7 @@ package register
 import (
 	"github.com/sarvalabs/go-polo"
 
-	"github.com/sarvalabs/moichain/jug/pisa/exceptions"
+	"github.com/sarvalabs/moichain/jug/pisa/exception"
 )
 
 // BytesValue represents Value that operates like a bytes
@@ -36,10 +36,10 @@ func BytesMethods() MethodTable {
 		MethodBool: &BuiltinMethod{
 			datatype: PrimitiveBytes,
 			fields: CallFields{
-				Inputs:  fields([]*TypeField{{"self", TypeBytes}}),
-				Outputs: fields([]*TypeField{{"result", TypeBool}}),
+				Inputs:  makefields([]*TypeField{{"self", TypeBytes}}),
+				Outputs: makefields([]*TypeField{{"result", TypeBool}}),
 			},
-			execute: func(inputs ValueTable) (ValueTable, *exceptions.ExceptionObject) {
+			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				// True for all values except empty bytes
 				result := len(inputs[0].(BytesValue)) != 0 //nolint:forcetypeassert
 				// Set value into outputs
@@ -51,10 +51,10 @@ func BytesMethods() MethodTable {
 		MethodStr: &BuiltinMethod{
 			datatype: PrimitiveBytes,
 			fields: CallFields{
-				Inputs:  fields([]*TypeField{{"self", TypeBytes}}),
-				Outputs: fields([]*TypeField{{"result", TypeString}}),
+				Inputs:  makefields([]*TypeField{{"self", TypeBytes}}),
+				Outputs: makefields([]*TypeField{{"result", TypeString}}),
 			},
-			execute: func(inputs ValueTable) (ValueTable, *exceptions.ExceptionObject) {
+			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				// Return bytes converted into a string
 				return ValueTable{0: StringValue(inputs[0].(BytesValue))}, nil //nolint:forcetypeassert
 			},

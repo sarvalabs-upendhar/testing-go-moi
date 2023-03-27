@@ -760,3 +760,8 @@ func (s *StateObject) InsertNewLogicObject(logicID types.LogicID, logicObject *g
 func (s *StateObject) FetchLogicObject(logicID types.LogicID) (*gtypes.LogicObject, error) {
 	return s.getLogicObject(logicID)
 }
+
+// GenerateLogicContextObject returns a LogicContextObject scoped to a given types.LogicID
+func (s *StateObject) GenerateLogicContextObject(logicID types.LogicID) *gtypes.LogicContextObject {
+	return gtypes.NewLogicContextObject(logicID, s)
+}

@@ -8,11 +8,14 @@ import (
 
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/guna"
-	ctypes "github.com/sarvalabs/moichain/jug/types"
-
+	"github.com/sarvalabs/moichain/jug/engineio"
 	"github.com/sarvalabs/moichain/jug/pisa"
 	"github.com/sarvalabs/moichain/types"
 )
+
+func init() {
+	engineio.RegisterElementRegistry(engineio.PISA, pisa.ElementRegistry())
+}
 
 // ExecutionManager represents a type for managing interaction execution across multiple consensus clusters.
 // It also manages execution environment generation for logic execution.
@@ -22,7 +25,7 @@ type ExecutionManager struct {
 	config *common.ExecutionConfig
 
 	executors sync.Map
-	factories map[types.LogicEngine]ctypes.EngineFactory
+	factories map[engineio.EngineKind]engineio.EngineFactory
 }
 
 // state describes a state management interface
@@ -51,8 +54,8 @@ func NewExecutionManager(
 		logger: logger.Named("Execution"),
 
 		// Create a factory for each supported runtime
-		factories: map[types.LogicEngine]ctypes.EngineFactory{
-			types.PISA: pisa.NewFactory(),
+		factories: map[engineio.EngineKind]engineio.EngineFactory{
+			engineio.PISA: pisa.NewFactory(),
 		},
 	}
 }
@@ -88,7 +91,7 @@ func (exec *ExecutionManager) SpawnExecutor(fuelLimit uint64) *IxExecutor {
 	return &IxExecutor{
 		exec:  exec,
 		state: exec.state,
-		tank:  ctypes.NewFuelTank(fuelLimit),
+		tank:  engineio.NewFuelTank(engineio.Fuel(fuelLimit)),
 
 		objects:   make(map[types.Address]*guna.StateObject),
 		snapshots: make(map[types.Address]*guna.StateObject),

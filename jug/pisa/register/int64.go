@@ -6,7 +6,7 @@ import (
 
 	"github.com/sarvalabs/go-polo"
 
-	"github.com/sarvalabs/moichain/jug/pisa/exceptions"
+	"github.com/sarvalabs/moichain/jug/pisa/exception"
 )
 
 // I64Value represents Value that operates like an int64
@@ -126,10 +126,10 @@ func I64Methods() MethodTable {
 		MethodBool: &BuiltinMethod{
 			datatype: PrimitiveI64,
 			fields: CallFields{
-				Inputs:  fields([]*TypeField{{"self", TypeI64}}),
-				Outputs: fields([]*TypeField{{"result", TypeBool}}),
+				Inputs:  makefields([]*TypeField{{"self", TypeI64}}),
+				Outputs: makefields([]*TypeField{{"result", TypeBool}}),
 			},
-			execute: func(inputs ValueTable) (ValueTable, *exceptions.ExceptionObject) {
+			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				// True for all values except 0
 				result := inputs[0].(I64Value) != 0 //nolint:forcetypeassert
 				// Set value into outputs
@@ -141,10 +141,10 @@ func I64Methods() MethodTable {
 		MethodStr: &BuiltinMethod{
 			datatype: PrimitiveI64,
 			fields: CallFields{
-				Inputs:  fields([]*TypeField{{"self", TypeI64}}),
-				Outputs: fields([]*TypeField{{"result", TypeString}}),
+				Inputs:  makefields([]*TypeField{{"self", TypeI64}}),
+				Outputs: makefields([]*TypeField{{"result", TypeString}}),
 			},
-			execute: func(inputs ValueTable) (ValueTable, *exceptions.ExceptionObject) {
+			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				// Format into a string (base 10)
 				result := strconv.FormatInt(int64(inputs[0].(I64Value)), 10) //nolint:forcetypeassert
 				// Set value into outputs
@@ -156,10 +156,10 @@ func I64Methods() MethodTable {
 		MethodLt: &BuiltinMethod{
 			datatype: PrimitiveI64,
 			fields: CallFields{
-				Inputs:  fields([]*TypeField{{"x", TypeI64}, {"y", TypeI64}}),
-				Outputs: fields([]*TypeField{{"result", TypeBool}}),
+				Inputs:  makefields([]*TypeField{{"x", TypeI64}, {"y", TypeI64}}),
+				Outputs: makefields([]*TypeField{{"result", TypeBool}}),
 			},
-			execute: func(inputs ValueTable) (ValueTable, *exceptions.ExceptionObject) {
+			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				x, y := inputs[0], inputs[1]
 				result := x.(I64Value).Lt(y.(I64Value)) //nolint:forcetypeassert
 
@@ -171,10 +171,10 @@ func I64Methods() MethodTable {
 		MethodGt: &BuiltinMethod{
 			datatype: PrimitiveI64,
 			fields: CallFields{
-				Inputs:  fields([]*TypeField{{"x", TypeI64}, {"y", TypeI64}}),
-				Outputs: fields([]*TypeField{{"result", TypeBool}}),
+				Inputs:  makefields([]*TypeField{{"x", TypeI64}, {"y", TypeI64}}),
+				Outputs: makefields([]*TypeField{{"result", TypeBool}}),
 			},
-			execute: func(inputs ValueTable) (ValueTable, *exceptions.ExceptionObject) {
+			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				x, y := inputs[0], inputs[1]
 				result := x.(I64Value).Gt(y.(I64Value)) //nolint:forcetypeassert
 
@@ -186,10 +186,10 @@ func I64Methods() MethodTable {
 		MethodEq: &BuiltinMethod{
 			datatype: PrimitiveI64,
 			fields: CallFields{
-				Inputs:  fields([]*TypeField{{"x", TypeI64}, {"y", TypeI64}}),
-				Outputs: fields([]*TypeField{{"result", TypeBool}}),
+				Inputs:  makefields([]*TypeField{{"x", TypeI64}, {"y", TypeI64}}),
+				Outputs: makefields([]*TypeField{{"result", TypeBool}}),
 			},
-			execute: func(inputs ValueTable) (ValueTable, *exceptions.ExceptionObject) {
+			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				x, y := inputs[0], inputs[1]
 				result := x.(I64Value).Eq(y.(I64Value)) //nolint:forcetypeassert
 

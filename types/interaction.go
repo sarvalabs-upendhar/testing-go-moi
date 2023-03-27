@@ -27,6 +27,7 @@ const (
 
 	IxLogicDeploy
 	IxLogicInvoke
+	IxLogicEnlist
 	IxLogicInteract
 	IxLogicUpgrade
 

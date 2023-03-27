@@ -170,6 +170,7 @@ type AssetCreationArgs struct {
 
 type LogicDeployArgs struct {
 	Manifest string `json:"manifest"`
+	Callsite string `json:"callsite"`
 	Calldata string `json:"calldata"`
 }
 

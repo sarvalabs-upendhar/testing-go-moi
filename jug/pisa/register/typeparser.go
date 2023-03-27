@@ -14,7 +14,6 @@ const (
 	TokenPrimitive symbolizer.TokenKind = -(iota + 10)
 	TokenHashmap
 	TokenClass
-	TokenEvent
 	TokenBoolean
 )
 
@@ -41,7 +40,6 @@ var typeKeywords = map[string]symbolizer.TokenKind{
 
 	"map":     TokenHashmap,
 	"classes": TokenClass,
-	"events":  TokenEvent,
 }
 
 // ParseDatatype attempts to parse a string input into a Typedef
@@ -137,13 +135,9 @@ func ParseDatatype(input string) (*Typedef, error) {
 
 		return newHashmapType(keyType.P, elementType), nil
 
-	// todo: class & event support
-
+	// todo: class support
 	// // Class Token
 	// case TokenClass:
-
-	// // Event Token
-	// case TokenEvent:
 
 	default:
 		// Input does not start with type or bind keyword

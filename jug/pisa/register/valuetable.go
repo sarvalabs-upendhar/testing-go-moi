@@ -2,18 +2,17 @@ package register
 
 import (
 	"github.com/pkg/errors"
-
-	ctypes "github.com/sarvalabs/moichain/jug/types"
+	"github.com/sarvalabs/go-polo"
 )
 
 // ValueTable is a collection of byte indexed Value objects.
 type ValueTable map[byte]Value
 
-// NewValueTable generates a RegisterTable for given set of fields and values as engine.Values.
+// NewValueTable generates a ValueTable for given set of fields and values as a polo.Document.
 // Each field in the FieldTable must have some associated data in the values that can be interpreted for its type.
-// A RegisterValue is generated with this data and attached to the table index specified by the FieldTable.
+// A Value is generated with this data and attached to the table index specified by the FieldTable.
 // Returns an error if data is missing for a field or is malformed and cannot be interpreted for a field's type.
-func NewValueTable(fields FieldTable, values ctypes.ExecutionValues) (ValueTable, error) {
+func NewValueTable(fields *FieldTable, values polo.Document) (ValueTable, error) {
 	table := make(ValueTable, len(fields.Symbols))
 
 	// If there are fields expected but values is nil

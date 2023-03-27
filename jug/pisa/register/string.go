@@ -5,7 +5,7 @@ import (
 
 	"github.com/sarvalabs/go-polo"
 
-	"github.com/sarvalabs/moichain/jug/pisa/exceptions"
+	"github.com/sarvalabs/moichain/jug/pisa/exception"
 )
 
 // StringValue represents a Value that operates like a string.
@@ -41,10 +41,10 @@ func StringMethods() MethodTable {
 		MethodBool: &BuiltinMethod{
 			datatype: PrimitiveString,
 			fields: CallFields{
-				Inputs:  fields([]*TypeField{{"self", TypeString}}),
-				Outputs: fields([]*TypeField{{"result", TypeBool}}),
+				Inputs:  makefields([]*TypeField{{"self", TypeString}}),
+				Outputs: makefields([]*TypeField{{"result", TypeBool}}),
 			},
-			execute: func(inputs ValueTable) (ValueTable, *exceptions.ExceptionObject) {
+			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				// True for all values except empty string
 				result := inputs[0].(StringValue) != "" //nolint:forcetypeassert
 				// Set value into outputs
@@ -56,10 +56,10 @@ func StringMethods() MethodTable {
 		MethodStr: &BuiltinMethod{
 			datatype: PrimitiveString,
 			fields: CallFields{
-				Inputs:  fields([]*TypeField{{"self", TypeString}}),
-				Outputs: fields([]*TypeField{{"result", TypeString}}),
+				Inputs:  makefields([]*TypeField{{"self", TypeString}}),
+				Outputs: makefields([]*TypeField{{"result", TypeString}}),
 			},
-			execute: func(inputs ValueTable) (ValueTable, *exceptions.ExceptionObject) {
+			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				// Return a copy of the string value
 				return ValueTable{0: inputs[0].Copy()}, nil
 			},
@@ -69,10 +69,10 @@ func StringMethods() MethodTable {
 		0x10: &BuiltinMethod{
 			datatype: PrimitiveString,
 			fields: CallFields{
-				Inputs:  fields([]*TypeField{{"self", TypeString}, {"prefix", TypeString}}),
-				Outputs: fields([]*TypeField{{"ok", TypeBool}}),
+				Inputs:  makefields([]*TypeField{{"self", TypeString}, {"prefix", TypeString}}),
+				Outputs: makefields([]*TypeField{{"ok", TypeBool}}),
 			},
-			execute: func(inputs ValueTable) (ValueTable, *exceptions.ExceptionObject) {
+			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				self, prefix := inputs[0], inputs[1]
 				ok := self.(StringValue).HasPrefix(prefix.(StringValue)) //nolint:forcetypeassert
 

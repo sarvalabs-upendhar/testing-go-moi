@@ -181,6 +181,7 @@ func GetRawIXPayloadForLogicDeploy(jsonPayload []byte, nonce uint64, sender type
 	}
 
 	return polo.Polorize(&types.LogicPayload{
+		Callsite: payload.Callsite,
 		Calldata: types.FromHex(payload.Calldata),
 		Manifest: types.FromHex(payload.Manifest),
 	})
@@ -194,8 +195,8 @@ func GetRawIXPayloadForLogicInvoke(jsonPayload []byte) ([]byte, error) {
 	}
 
 	return polo.Polorize(&types.LogicPayload{
-		Logic:    types.FromHex(payload.LogicID),
 		Callsite: payload.Callsite,
 		Calldata: types.FromHex(payload.Calldata),
+		Logic:    types.FromHex(payload.LogicID),
 	})
 }

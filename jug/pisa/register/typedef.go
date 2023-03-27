@@ -10,9 +10,9 @@ type Typedef struct {
 	E *Typedef      // represents the element datatype for Array, Sequence or Hashmap value.
 
 	S uint64 // represents the size for Array.
-	I uint64 // represents the ptr index to the typedef for a Class or Event.
+	I uint64 // represents the ptr index Class typedef
 
-	F *FieldTable // represents the fields for a Class or Event
+	F *FieldTable // represents the fields for a Class
 	// M Methods     // represents the methods for a Class
 }
 
@@ -120,7 +120,6 @@ const (
 	Array
 	Varray
 	Hashmap
-	Event
 	Class
 )
 
@@ -129,7 +128,6 @@ var datatypeKindToString = map[TypeKind]string{
 	Array:     "array",
 	Varray:    "varray",
 	Hashmap:   "hashmap",
-	Event:     "event",
 	Class:     "class",
 }
 

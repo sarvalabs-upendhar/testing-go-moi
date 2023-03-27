@@ -11,4 +11,4 @@ file.key
 .artifacts
 genesis.json
 peer-list.json
-**/*_devscript.sh
+.scripts
