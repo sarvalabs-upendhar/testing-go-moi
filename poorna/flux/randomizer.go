@@ -48,7 +48,7 @@ type Randomizer struct {
 type PeerList struct {
 	mtx           sync.RWMutex
 	updatePending bool
-	lastUpdated   time.Time
+	lastRequest   time.Time
 	nonUtilized   map[id.KramaID]int
 	pendingCount  int
 }
@@ -73,9 +73,9 @@ func NewRandomizer(
 	for i := 0; i < SLOTCOUNT; i++ {
 		r.peers[i] = &PeerList{
 			updatePending: true,
-			lastUpdated:   time.Now(),
+			lastRequest:   time.Now(),
 			nonUtilized:   make(map[id.KramaID]int),
-			pendingCount:  6,
+			pendingCount:  PEERSCOUNT,
 		}
 		r.peers[i].updatePending = true
 		r.requestIDs[i] = -1
@@ -139,7 +139,6 @@ func (r *Randomizer) addPeer(slot int, id id.KramaID) error {
 		r.peers[slot].pendingCount--
 
 		r.peers[slot].nonUtilized[id] = 1
-		r.peers[slot].lastUpdated = time.Now()
 
 		for k, v := range r.peers[slot].nonUtilized {
 			if v == -1 {
@@ -187,11 +186,11 @@ func (r *Randomizer) Start() {
 				if uint32(r.server.Peers.Len()) >= 3 {
 					for k, v := range r.peers {
 						v.mtx.RLock()
-						lastUpdates := v.lastUpdated
+						lastRequest := v.lastRequest
 						updateRequired := v.updatePending
 						v.mtx.RUnlock()
 
-						if updateRequired && time.Since(lastUpdates).Milliseconds() > 800 {
+						if updateRequired && time.Since(lastRequest).Milliseconds() > PEERSCOUNT*100 {
 							//	log.Println("Populating the pool for slot", k)
 							r.PopulatePool(k)
 						}
@@ -245,30 +244,32 @@ func (r *Randomizer) getPeers(slotNo int, count int, avoidPeers []id.KramaID) []
 func (r *Randomizer) HandleReqMsg(reqMsg *ptypes.RandomWalkReq) error {
 	requesterID := reqMsg.PeerID
 
+	peerID, err := requesterID.PeerID()
+	if err != nil {
+		r.logger.Error("Error parsing krama peerID", "error", err)
+
+		return err
+	}
+
 	for {
 		randomPeer := r.server.GetRandomNode()
 
-		peerID, err := requesterID.PeerID()
-		if err != nil {
-			r.logger.Error("Error parsing krama peerID", "error", err)
-
-			return err
+		if randomPeer == peer.ID(peerID) {
+			continue
 		}
 
-		if randomPeer != peer.ID(peerID) {
-			if reqMsg.Count-1 > 0 {
-				msg := &ptypes.RandomWalkReq{
-					ReqID:  reqMsg.ReqID,
-					Count:  reqMsg.Count - 1,
-					PeerID: requesterID,
-					Topic:  reqMsg.Topic,
-				}
+		if reqMsg.Count-1 > 0 {
+			msg := &ptypes.RandomWalkReq{
+				ReqID:  reqMsg.ReqID,
+				Count:  reqMsg.Count - 1,
+				PeerID: requesterID,
+				Topic:  reqMsg.Topic,
+			}
 
-				// forward the request
-				if err := r.SendFluxMessage(randomPeer, ptypes.RANDOMWALKREQ, msg); err != nil {
-					// log.Println("Unable to forward the random walk request", err, randomPeer.String())
-					continue
-				}
+			// forward the request
+			if err := r.SendFluxMessage(randomPeer, ptypes.RANDOMWALKREQ, msg); err != nil {
+				// log.Println("Unable to forward the random walk request", err, randomPeer.String())
+				continue
 			}
 		}
 
@@ -344,20 +345,24 @@ func (r *Randomizer) getRequestID(slot int) int64 {
 }
 
 func (r *Randomizer) PopulatePool(slotID int) {
+	msg := &ptypes.RandomWalkReq{
+		ReqID:  r.getRequestID(slotID),
+		Count:  2 * PEERSCOUNT,
+		Topic:  r.topic,
+		PeerID: r.server.GetKramaID(),
+	}
+
 	// Step 1: Select some random peer from random table and
 	for {
 		randomPeer := r.server.GetRandomNode()
-		// Step 2:
-		msg := &ptypes.RandomWalkReq{
-			ReqID:  r.getRequestID(slotID),
-			Count:  PEERSCOUNT,
-			Topic:  r.topic,
-			PeerID: r.server.GetKramaID(),
-		}
-		// log.Println("Sending random request", r.getRequestID(slotID), slotID)
+
 		if err := r.SendFluxMessage(randomPeer, ptypes.RANDOMWALKREQ, msg); err != nil {
 			continue
 		}
+
+		r.peers[slotID].mtx.Lock()
+		r.peers[slotID].lastRequest = time.Now()
+		r.peers[slotID].mtx.Unlock()
 
 		return
 	}
@@ -397,7 +402,7 @@ func (r *Randomizer) GetRandomNodes(
 			}
 
 			avoidPeers = append(avoidPeers, randomPeers...)
-			requiredNo -= len(randomPeers)
+			requiredNo -= len(peers)
 		}
 	}
 }

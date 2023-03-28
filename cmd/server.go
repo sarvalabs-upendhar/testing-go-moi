@@ -69,8 +69,8 @@ func init() {
 
 	serverCmd.PersistentFlags().String("config", "config.json", "Config file name")
 	serverCmd.PersistentFlags().IntVar(&AccountWaitTime, "wait-time", 0, "WaitTime per account")
-	serverCmd.PersistentFlags().IntVar(&OperatorSlots, "operator-slots", 0, "Maximum number of operator slots")
-	serverCmd.PersistentFlags().IntVar(&ValidatorSlots, "validator-slots", 0, "Maximum number of validator slots")
+	serverCmd.PersistentFlags().IntVar(&OperatorSlots, "operator-slots", -1, "Maximum number of operator slots")
+	serverCmd.PersistentFlags().IntVar(&ValidatorSlots, "validator-slots", -1, "Maximum number of validator slots")
 	serverCmd.PersistentFlags().Uint64Var(&NetworkSize, "network-size", 12, "Network Size")
 	serverCmd.PersistentFlags().Float64Var(&MTQ, "mtq", 0.7, "Default MTQ")
 	serverCmd.PersistentFlags().String("data-dir", "test-chain", "Data directory location")
@@ -185,13 +185,13 @@ func buildNetworkConfig(nodeCfg *common.Config, fileCfg *Config) (err error) {
 }
 
 func buildConsensusConfig(nodeCfg *common.Config, fileCfg *Config) {
-	if OperatorSlots != 0 {
+	if OperatorSlots != -1 {
 		nodeCfg.Consensus.OperatorSlotCount = OperatorSlots
 	} else if fileCfg.Consensus.OperatorSlots != 0 {
 		nodeCfg.Consensus.OperatorSlotCount = fileCfg.Consensus.OperatorSlots
 	}
 
-	if ValidatorSlots != 0 {
+	if ValidatorSlots != -1 {
 		nodeCfg.Consensus.ValidatorSlotCount = ValidatorSlots
 	} else if fileCfg.Consensus.ValidatorSlots != 0 {
 		nodeCfg.Consensus.ValidatorSlotCount = fileCfg.Consensus.ValidatorSlots

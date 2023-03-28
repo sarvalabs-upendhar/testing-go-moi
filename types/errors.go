@@ -19,6 +19,7 @@ var (
 	ErrSlotExists                  = errors.New("slot exists")
 	ErrContextStateNotFound        = errors.New("context state not found")
 	ErrHashMismatch                = errors.New("hash mismatch")
+	ErrHeightMismatch              = errors.New("height mismatch")
 	ErrStateNotFound               = errors.New("state not found")
 	ErrObjectNotFound              = errors.New("unable to fetch state object")
 	ErrInvalidKramaID              = errors.New("invalid krama id")

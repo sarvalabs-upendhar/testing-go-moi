@@ -483,6 +483,10 @@ func (k *Engine) joinCluster(ctx context.Context, slot *ktypes.Slot) error {
 		if contextHashes[addr] != info.ContextHash {
 			return types.ErrHashMismatch
 		}
+
+		if slot.ClusterState().AccountInfos.GetHeight(addr) != info.Height {
+			return types.ErrHeightMismatch
+		}
 	}
 
 	slot.ClusterState().NodeSet.Nodes = nodeSets
@@ -743,7 +747,7 @@ func (k *Engine) fetchIxAccounts(ctx context.Context, ix *types.Interaction) (kt
 	}
 
 	acc := &ktypes.AccountInfo{
-		Address:       ix.Sender(),
+		Address:       ix.Receiver(),
 		AccType:       types.AccTypeFromIxType(ix.Type()),
 		TesseractHash: types.NilHash,
 		Height:        0,

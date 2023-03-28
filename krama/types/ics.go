@@ -205,12 +205,10 @@ func (cs *ClusterState) GetRandomContextDelta(
 ) (addedPeers, replacedPeers []id.KramaID) {
 	addedPeers = make([]id.KramaID, 0, requiredCount)
 
-	if cs.NodeSet.Nodes[setType] == nil {
-		return
-	}
-
-	if replaceCount := len(cs.NodeSet.Nodes[setType].Ids) + requiredCount - gtypes.MaxRandomContextSize; replaceCount > 0 {
-		replacedPeers = cs.NodeSet.Nodes[setType].Ids[0:replaceCount]
+	if cs.NodeSet.Nodes[setType] != nil {
+		if count := len(cs.NodeSet.Nodes[setType].Ids) + requiredCount - gtypes.MaxRandomContextSize; count > 0 {
+			replacedPeers = cs.NodeSet.Nodes[setType].Ids[0:count]
+		}
 	}
 
 	set := cs.NodeSet.Nodes[RandomSet]
