@@ -133,7 +133,7 @@ func (k *Engine) handleInboundMsg(slot *ktypes.Slot, msg *ktypes.ICSMSG) error {
 		for j := 0; j < len(clusterState.NodeSet.Nodes); j++ {
 			if successMsg.Responses[j] != nil && successMsg.Responses[j].Size > 0 {
 				clusterState.NodeSet.Nodes[j].Responses = successMsg.Responses[j]
-				clusterState.NodeSet.Nodes[j].Count = clusterState.NodeSet.Nodes[j].Responses.TrueIndicesSize()
+				clusterState.NodeSet.Nodes[j].RespCount = clusterState.NodeSet.Nodes[j].Responses.TrueIndicesSize()
 			}
 		}
 

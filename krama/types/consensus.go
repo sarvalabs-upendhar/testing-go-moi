@@ -342,7 +342,7 @@ type NodeSet struct {
 	PublicKeys  [][]byte
 	Responses   *types.ArrayOfBits
 	VotingPower []int64
-	Count       int
+	RespCount   int
 	QuorumSize  int
 }
 
@@ -353,7 +353,7 @@ func NewNodeSet(ids []id.KramaID, keys [][]byte) *NodeSet {
 		PublicKeys:  keys,
 		Responses:   types.NewArrayOfBits(len(ids)),
 		VotingPower: make([]int64, len(ids)),
-		Count:       0,
+		RespCount:   0,
 	}
 }
 
@@ -464,6 +464,18 @@ func (i *ICSNodeSet) GetNodes() []id.KramaID {
 	return nodes
 }
 
+// GetRespondedNodeCount returns count of nodes that responded from selected ICSNodes
+// between start and end indexes (inclusive)
+func (i *ICSNodeSet) GetRespondedNodeCount(start, end int) (count int) {
+	for j := start; j <= end; j++ {
+		if i.Nodes[j] != nil {
+			count += i.Nodes[j].RespCount
+		}
+	}
+
+	return
+}
+
 // IsContextQuorum check's whether context quorum condition is satisfied or not
 func (i *ICSNodeSet) IsContextQuorum() bool {
 	for j := 0; j < 4; j += 2 {
@@ -471,12 +483,12 @@ func (i *ICSNodeSet) IsContextQuorum() bool {
 		quorum := 0
 
 		if i.Nodes[j] != nil {
-			count += i.Nodes[j].Count
+			count += i.Nodes[j].RespCount
 			quorum += len(i.Nodes[j].Ids)
 		}
 
 		if i.Nodes[j+1] != nil {
-			count += i.Nodes[j+1].Count
+			count += i.Nodes[j+1].RespCount
 			quorum += len(i.Nodes[j].Ids)
 		}
 
@@ -492,7 +504,7 @@ func (i *ICSNodeSet) IsContextQuorum() bool {
 
 // IsRandomQuorum check's whether random quorum condition is satisfied or not
 func (i *ICSNodeSet) IsRandomQuorum(requiredRandomNodes int) bool {
-	return i.Nodes[RandomSet].Count >= requiredRandomNodes
+	return i.Nodes[RandomSet].RespCount >= requiredRandomNodes
 }
 
 // SenderSetSize returns the sum of number of nodes in the sender's behaviour node set and random node set

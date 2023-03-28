@@ -861,7 +861,7 @@ func (k *Engine) sendICSRequestWithBound(
 	for index, isAvailable := range nodeResponses {
 		if isAvailable {
 			idSet.Responses.SetIndex(index, true)
-			idSet.Count++
+			idSet.RespCount++
 		}
 	}
 
@@ -965,7 +965,7 @@ func (k *Engine) sendICSRequest(
 	for index, isAvailable := range nodeResponses {
 		if isAvailable {
 			nodesSet.Responses.SetIndex(index, true)
-			nodesSet.Count++
+			nodesSet.RespCount++
 		}
 	}
 

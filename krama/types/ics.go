@@ -174,10 +174,14 @@ func (cs *ClusterState) IncrementClusterSize(delta int) {
 }
 
 func (cs *ClusterState) RespondedEligibleSet() (count int, nodes []id.KramaID) {
-	for j := 0; j < 4; j++ {
-		if cs.NodeSet.Nodes[j] != nil {
-			count += cs.NodeSet.Nodes[j].Count
-			nodes = append(nodes, cs.NodeSet.Nodes[j].Ids...)
+	count = cs.NodeSet.GetRespondedNodeCount(0, 3)
+	nodes = make([]id.KramaID, 0, count)
+
+	for i := 0; i < 4; i++ {
+		if cs.NodeSet.Nodes[i] != nil {
+			for _, respIndex := range cs.NodeSet.Nodes[i].Responses.GetTrueIndices() {
+				nodes = append(nodes, cs.NodeSet.Nodes[i].Ids[respIndex])
+			}
 		}
 	}
 
@@ -242,8 +246,8 @@ func (cs *ClusterState) IsRandomQuorum(requiredRandomNodes, requiredObserverNode
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	return cs.NodeSet.Nodes[RandomSet].Count >= requiredRandomNodes &&
-		cs.NodeSet.Nodes[ObserverSet].Count >= requiredObserverNodes
+	return cs.NodeSet.Nodes[RandomSet].RespCount >= requiredRandomNodes &&
+		cs.NodeSet.Nodes[ObserverSet].RespCount >= requiredObserverNodes
 }
 
 func (cs *ClusterState) HasKramaID(kramaID id.KramaID) (int32, bool) {
