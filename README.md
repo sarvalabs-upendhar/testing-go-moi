@@ -58,6 +58,7 @@ please check out the **[Moichain Documentation](http://62.171.167.60:7000/)**.
 ## Code Owner
 - Rahul Lenkala
 - Manish Meganathan
+- Sahith Narahari 
 
 ## Contributors
 - Ganesh Prasad Kumble
