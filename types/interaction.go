@@ -43,6 +43,107 @@ const (
 	IxStakeTransfer
 )
 
+type IxData struct {
+	Input   IxInput
+	Compute IxCompute
+	Trust   IxTrust
+}
+
+func (ixData *IxData) Copy() IxData {
+	return IxData{
+		Input:   ixData.Input.Copy(),
+		Compute: ixData.Compute.Copy(),
+		Trust:   ixData.Trust.Copy(),
+	}
+}
+
+type IxInput struct {
+	Type  IxType
+	Nonce uint64
+
+	Sender   Address
+	Receiver Address
+	Payer    Address
+
+	TransferValues  map[AssetID]*big.Int
+	PerceivedValues map[AssetID]*big.Int
+	PerceivedProofs []byte
+
+	FuelLimit *big.Int
+	FuelPrice *big.Int
+
+	Payload json.RawMessage
+}
+
+func (ixInput *IxInput) Copy() IxInput {
+	input := *ixInput
+
+	input.TransferValues = make(map[AssetID]*big.Int)
+	input.PerceivedValues = make(map[AssetID]*big.Int)
+	input.PerceivedProofs = make([]byte, len(ixInput.PerceivedProofs))
+
+	input.Payload = make(json.RawMessage, len(ixInput.Payload))
+
+	if ixInput.FuelLimit != nil {
+		input.FuelLimit = new(big.Int).Set(ixInput.FuelLimit)
+	}
+
+	if ixInput.FuelPrice != nil {
+		input.FuelPrice = new(big.Int).Set(ixInput.FuelPrice)
+	}
+
+	for k, v := range ixInput.TransferValues {
+		input.TransferValues[k] = new(big.Int).SetBytes(v.Bytes())
+	}
+
+	for k, v := range ixInput.PerceivedValues {
+		input.PerceivedValues[k] = new(big.Int).SetBytes(v.Bytes())
+	}
+
+	copy(input.PerceivedProofs, ixInput.PerceivedProofs)
+
+	if ixInput.Payload != nil {
+		copy(input.Payload, ixInput.Payload)
+	}
+
+	return input
+}
+
+type IxCompute struct {
+	Mode         int
+	Hash         []byte
+	ComputeNodes []kramaid.KramaID
+}
+
+func (ixCompute *IxCompute) Copy() IxCompute {
+	compute := IxCompute{
+		Mode:         ixCompute.Mode,
+		Hash:         make([]byte, len(ixCompute.Hash)),
+		ComputeNodes: make([]kramaid.KramaID, len(ixCompute.ComputeNodes)),
+	}
+
+	copy(compute.Hash, ixCompute.Hash)
+	copy(compute.ComputeNodes, ixCompute.ComputeNodes)
+
+	return compute
+}
+
+type IxTrust struct {
+	MTQ        uint
+	TrustNodes []kramaid.KramaID
+}
+
+func (ixTrust *IxTrust) Copy() IxTrust {
+	trust := IxTrust{
+		MTQ:        ixTrust.MTQ,
+		TrustNodes: make([]kramaid.KramaID, len(ixTrust.TrustNodes)),
+	}
+
+	copy(trust.TrustNodes, ixTrust.TrustNodes)
+
+	return trust
+}
+
 type Interaction struct {
 	inner   IxData
 	payload *IxPayload
@@ -53,10 +154,10 @@ type Interaction struct {
 }
 
 func NewInteraction(ixData IxData, signature []byte) *Interaction {
-	ix := &Interaction{inner: ixData}
+	ix := &Interaction{inner: ixData.Copy()}
 	ix.signature.Store(signature)
 
-	data, err := polo.Polorize(ixData)
+	data, err := polo.Polorize(ixData.Copy())
 	if err != nil {
 		log.Fatalln(err, "failed to generate bytes of interaction message")
 
@@ -81,51 +182,16 @@ func NewRandomHashInteraction() *Interaction {
 	return &Interaction{hash: v}
 }
 
-type IxData struct {
-	Input   IxInput
-	Compute IxCompute
-	Trust   IxTrust
-}
-
-type IxInput struct {
-	Type  IxType
-	Nonce uint64
-
-	Sender   Address
-	Receiver Address
-	Payer    Address
-
-	TransferValues  map[AssetID]*big.Int
-	PerceivedValues map[AssetID]*big.Int
-	PerceivedProofs []byte
-
-	FuelLimit *big.Int
-	FuelPrice *big.Int
-
-	Payload json.RawMessage
-}
-
-type IxCompute struct {
-	Mode  int
-	Hash  []byte
-	Nodes []kramaid.KramaID
-}
-
-type IxTrust struct {
-	MTQ   uint
-	Nodes []kramaid.KramaID
-}
-
 func (ix Interaction) Input() IxInput {
-	return ix.inner.Input
+	return ix.inner.Input.Copy()
 }
 
 func (ix Interaction) Compute() IxCompute {
-	return ix.inner.Compute
+	return ix.inner.Compute.Copy()
 }
 
 func (ix Interaction) Trust() IxTrust {
-	return ix.inner.Trust
+	return ix.inner.Trust.Copy()
 }
 
 func (ix Interaction) Signature() []byte {
@@ -219,11 +285,11 @@ func (ix *Interaction) GetLogicPayload() (*LogicPayload, error) {
 }
 
 func (ix Interaction) FuelPrice() *big.Int {
-	return ix.inner.Input.FuelPrice
+	return ix.inner.Input.Copy().FuelPrice
 }
 
 func (ix Interaction) FuelLimit() *big.Int {
-	return ix.inner.Input.FuelLimit
+	return ix.inner.Input.Copy().FuelLimit
 }
 
 func (ix Interaction) FuelPriceCmp(other *Interaction) int {

@@ -704,7 +704,7 @@ func checkForRPCIxn(t *testing.T, rpcIxn *ptypes.RPCInteraction, ix *types.Inter
 
 	switch ix.Type() {
 	case types.IxValueTransfer:
-		require.Nil(t, rpcIxn.Input.Payload)
+		require.Equal(t, rpcIxn.Input.Payload, json.RawMessage{})
 
 	case types.IxAssetCreate:
 		assetCreationPayload := new(types.AssetPayload)
