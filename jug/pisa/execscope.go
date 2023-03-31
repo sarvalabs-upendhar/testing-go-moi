@@ -1,4 +1,4 @@
-package runtime
+package pisa
 
 import (
 	"github.com/pkg/errors"
@@ -23,28 +23,12 @@ const (
 // MaxCallDepth defines the max call depth for child Scope objects
 const MaxCallDepth = 1024
 
-// Runtime is an interface through which the instruction set
-// can access logic elements, manipulate the fuel tank, lookup
-// instructions and invoke external environmental calls.
-// It is implemented by the pisa.Engine type.
-type Runtime interface {
-	FuelConsumed() engineio.Fuel
-	ConsumeFuel(engineio.Fuel) bool
-
-	GetRoutine(uint64) (*Routine, error)
-	GetConstant(uint64) (*register.Constant, error)
-	GetTypedef(uint64) (*register.Typedef, error)
-	GetStateFields(engineio.ContextStateKind) (*register.StateFields, error)
-
-	GetInstruction(OpCode) *InstructOperation
-	GetTypeMethod(*register.Typedef, register.MethodCode) (register.Method, bool)
-}
-
-// Scope represents an isolated runtime environment for executing some logic Instructions.
+// ExecutionScope represents an isolated runtime environment for executing some logic Instructions.
 // It acts as an execution space with its own register set and accept/return value slots.
-type Scope struct {
+// Implements the register.ExecutionScope interface
+type ExecutionScope struct {
+	engine  *Engine
 	routine Routine
-	runtime Runtime
 
 	calldepth   uint64
 	instructptr uint64
@@ -68,15 +52,15 @@ type Scope struct {
 // It requires the logic's engineio.CtxDriver along with a variadic
 // number of them, that depends on the nature of the Interaction
 func Root(
-	runtime Runtime,
+	engine *Engine,
 	ixn *engineio.IxnObject,
 	logic engineio.CtxDriver,
 	participants ...engineio.CtxDriver,
 ) (
-	*Scope, error,
+	*ExecutionScope, error,
 ) {
 	// Declare the base scope with the runtime, routine and ixn
-	scope := &Scope{ixn: ixn, runtime: runtime, internal: logic}
+	scope := &ExecutionScope{ixn: ixn, engine: engine, internal: logic}
 
 	// Check the number of participant contexts based on the interaction type
 	switch ixn.IxType() {
@@ -94,16 +78,16 @@ func Root(
 	return scope, nil
 }
 
-func (scope *Scope) child(routine Routine, inputs register.ValueTable) *Scope {
+func (scope *ExecutionScope) child(routine Routine, inputs register.ValueTable) *ExecutionScope {
 	if calldepth := scope.calldepth + 1; calldepth > MaxCallDepth {
 		// todo: throw exception
 		return nil
 	}
 
-	return &Scope{
+	return &ExecutionScope{
 		routine: routine,
 		ixn:     scope.ixn,
-		runtime: scope.runtime,
+		engine:  scope.engine,
 
 		calldepth: scope.calldepth + 1,
 
@@ -117,7 +101,7 @@ func (scope *Scope) child(routine Routine, inputs register.ValueTable) *Scope {
 	}
 }
 
-func (scope *Scope) run() {
+func (scope *ExecutionScope) run() {
 	// Execution Loop
 	for !scope.done() {
 		switch scope.flow {
@@ -131,10 +115,10 @@ func (scope *Scope) run() {
 			// Get the next instruction from the program
 			instruct := scope.read()
 			// Get the operation for the opcode from the instruction set
-			op := scope.runtime.GetInstruction(instruct.Op)
+			op := scope.engine.GetInstruction(instruct.Op)
 
 			// Attempt to exhaust some fuel from the engine -> fails if there is not enough fuel left
-			if ok := scope.runtime.ConsumeFuel(op.Expense(scope)); !ok {
+			if ok := scope.engine.ConsumeFuel(op.Expense(scope)); !ok {
 				// Fuel Depleted - unread the instruction and throw exception
 				scope.unread()
 				scope.Throw(exception.Exception(exception.FuelExhausted, ""))
@@ -173,26 +157,26 @@ func (scope *Scope) run() {
 
 // Throw throws an exception in the execution
 // Scope and changes the flow to FlowExcept
-func (scope *Scope) Throw(except *exception.Object) {
+func (scope *ExecutionScope) Throw(except *exception.Object) {
 	scope.flow = FlowExcept
 	scope.except = except
 }
 
 // ExceptionThrown returns whether the execution
 // Scope is currently in the FlowExcept flow
-func (scope *Scope) ExceptionThrown() bool {
+func (scope *ExecutionScope) ExceptionThrown() bool {
 	return scope.flow == FlowExcept
 }
 
 // GetException returns the current exception in the execution Scope.
 // Returns nil if flow is not FlowExcept
-func (scope *Scope) GetException() *exception.Object {
+func (scope *ExecutionScope) GetException() *exception.Object {
 	return scope.except
 }
 
 // GetPtrValue resolves a register ID into uint64 pointer address.
 // The Register at the reg address must exist and be of type TypePtr.
-func (scope *Scope) GetPtrValue(regID byte) (uint64, *exception.Object) {
+func (scope *ExecutionScope) GetPtrValue(regID byte) (engineio.ElementPtr, *exception.Object) {
 	// Retrieve the Register object
 	reg, exists := scope.registers.Get(regID)
 	if !exists {
@@ -207,12 +191,12 @@ func (scope *Scope) GetPtrValue(regID byte) (uint64, *exception.Object) {
 	// Cast into a PtrValue
 	ptr, _ := reg.(register.PtrValue)
 	// Return PtrValue as a uint64
-	return uint64(ptr), nil
+	return engineio.ElementPtr(ptr), nil
 }
 
 // GetSymmetricValues obtains two registers of the same Typedef for the given register IDs.
 // Returns an error if either of the Registers are empty or are not of the same type.
-func (scope *Scope) GetSymmetricValues(a, b byte) (
+func (scope *ExecutionScope) GetSymmetricValues(a, b byte) (
 	regA, regB register.Value,
 	except *exception.Object,
 ) {
@@ -236,7 +220,7 @@ func (scope *Scope) GetSymmetricValues(a, b byte) (
 	return regA, regB, nil
 }
 
-func (scope *Scope) read() Instruction {
+func (scope *ExecutionScope) read() Instruction {
 	if scope.done() {
 		return Instruction{}
 	}
@@ -247,7 +231,7 @@ func (scope *Scope) read() Instruction {
 	return instruct
 }
 
-func (scope *Scope) unread() {
+func (scope *ExecutionScope) unread() {
 	if scope.instructptr == 0 {
 		return
 	}
@@ -255,15 +239,15 @@ func (scope *Scope) unread() {
 	scope.instructptr--
 }
 
-func (scope Scope) done() bool {
+func (scope ExecutionScope) done() bool {
 	return scope.instructptr >= uint64(len(scope.routine.Instructs))
 }
 
-func (scope *Scope) stop() {
+func (scope *ExecutionScope) stop() {
 	scope.flow = FlowTerminate
 }
 
-func (scope *Scope) jumpTo(ptr uint64) {
+func (scope *ExecutionScope) jumpTo(ptr uint64) {
 	scope.flow = FlowJump
 	scope.jump = &ptr
 }

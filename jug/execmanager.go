@@ -14,18 +14,17 @@ import (
 )
 
 func init() {
-	engineio.RegisterElementRegistry(engineio.PISA, pisa.ElementRegistry())
+	engineio.RegisterEngineRuntime(pisa.NewRuntime())
 }
 
 // ExecutionManager represents a type for managing interaction execution across multiple consensus clusters.
 // It also manages execution environment generation for logic execution.
 type ExecutionManager struct {
-	state  state
 	logger hclog.Logger
 	config *common.ExecutionConfig
 
+	state     state
 	executors sync.Map
-	factories map[engineio.EngineKind]engineio.EngineFactory
 }
 
 // state describes a state management interface
@@ -52,11 +51,6 @@ func NewExecutionManager(
 		state:  state,
 		config: config,
 		logger: logger.Named("Execution"),
-
-		// Create a factory for each supported runtime
-		factories: map[engineio.EngineKind]engineio.EngineFactory{
-			engineio.PISA: pisa.NewFactory(),
-		},
 	}
 }
 

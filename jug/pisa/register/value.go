@@ -23,6 +23,8 @@ type Value interface {
 	Copy() Value
 	// Data returns the POLO serialized bytes of the Value
 	Data() []byte
+	// Norm returns the normalized value of the Value
+	Norm() any
 }
 
 type Collection interface {

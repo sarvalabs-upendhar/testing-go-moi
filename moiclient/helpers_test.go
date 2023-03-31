@@ -48,7 +48,7 @@ func readERC20Manifest(t *testing.T) string {
 	require.NoError(t, err)
 
 	// Register the PISA element registry with the EngineIO package
-	engineio.RegisterElementRegistry(engineio.PISA, pisa.ElementRegistry())
+	engineio.RegisterEngineRuntime(pisa.NewRuntime())
 	// Decode the JSON manifest into a Manifest object
 	manifest, err := engineio.NewManifest(data, engineio.JSON)
 	require.NoError(t, err)

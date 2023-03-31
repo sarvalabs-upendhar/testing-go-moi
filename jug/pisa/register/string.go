@@ -19,6 +19,10 @@ func (str StringValue) Type() *Typedef { return TypeString }
 // Implements the Value interface for StringValue.
 func (str StringValue) Copy() Value { return StringValue(strings.Clone(string(str))) }
 
+// Norm returns the normalized value of StringValue as a string.
+// Implements the Value interface for StringValue.
+func (str StringValue) Norm() any { return string(str) }
+
 // Data returns the POLO encoded bytes of StringValue.
 // Implements the Value interface for StringValue.
 func (str StringValue) Data() []byte {

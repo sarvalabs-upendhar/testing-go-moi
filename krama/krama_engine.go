@@ -414,8 +414,7 @@ func (k *Engine) observerNodeDelta(setSize int) int {
 func generateClusterID() (types.ClusterID, error) {
 	randHash := make([]byte, 32)
 
-	_, err := rand.Read(randHash)
-	if err != nil {
+	if _, err := rand.Read(randHash); err != nil {
 		return "", err
 	}
 

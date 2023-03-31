@@ -20,6 +20,10 @@ func (addr AddressValue) Type() *Typedef { return TypeAddress }
 // Implements the Value interface for AddressValue.
 func (addr AddressValue) Copy() Value { return addr }
 
+// Norm returns the normalized value of AddressValue as a [32]byte.
+// Implements the Value interface for AddressValue.
+func (addr AddressValue) Norm() any { return [32]byte(addr) }
+
 // Data returns the POLO encoded bytes of AddressValue.
 // Implements the Value interface for AddressValue.
 func (addr AddressValue) Data() []byte {

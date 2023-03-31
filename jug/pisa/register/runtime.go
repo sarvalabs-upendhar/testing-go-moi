@@ -13,6 +13,10 @@ func (null NullValue) Type() *Typedef { return TypeNull }
 // Implements the Value interface for NullValue.
 func (null NullValue) Copy() Value { return NullValue{} }
 
+// Norm returns the normalized value of NullValue as a nil.
+// Implements the Value interface for NullValue.
+func (null NullValue) Norm() any { return nil }
+
 // Data returns the POLO encoded bytes of NullValue.
 // Implements the Value interface for NullValue.
 func (null NullValue) Data() []byte { return []byte{0} }
@@ -28,6 +32,10 @@ func (ptr PtrValue) Type() *Typedef { return TypePtr }
 // Copy returns a copy of PtrValue as a Value.
 // Implements the Value interface for PtrValue.
 func (ptr PtrValue) Copy() Value { return ptr }
+
+// Norm returns the normalized value of PtrValue as an uint64.
+// Implements the Value interface for PtrValue.
+func (ptr PtrValue) Norm() any { return uint64(ptr) }
 
 // Data returns the POLO encoded bytes of PtrValue.
 // Implements the Value interface for PtrValue.

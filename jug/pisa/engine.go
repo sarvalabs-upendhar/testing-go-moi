@@ -1,7 +1,6 @@
 package pisa
 
 import (
-	"bytes"
 	"context"
 
 	"github.com/pkg/errors"
@@ -10,7 +9,6 @@ import (
 	"github.com/sarvalabs/moichain/jug/engineio"
 	"github.com/sarvalabs/moichain/jug/pisa/exception"
 	"github.com/sarvalabs/moichain/jug/pisa/register"
-	"github.com/sarvalabs/moichain/jug/pisa/runtime"
 	"github.com/sarvalabs/moichain/types"
 )
 
@@ -28,133 +26,19 @@ type Engine struct {
 	environment engineio.EnvDriver
 
 	// instructs represents the engine instruction set for PISA.
-	instructs runtime.InstructionSet
+	instructs InstructionSet
 	// builtins represents the methods for builtin types
 	builtins map[register.PrimitiveType]register.MethodTable
 
 	// elements represents the decoded engineio.LogicElement cache
-	elements map[uint64]any
+	elements map[engineio.ElementPtr]any
 	// classes represents a name-map for classes to their element pointers
-	classes map[string]uint64
+	classes map[string]engineio.ElementPtr
 }
 
 // Kind returns the engineio.EngineKind of the PISA
 // It implements the engineio.EngineDriver interface.
 func (engine Engine) Kind() engineio.EngineKind { return engineio.PISA }
-
-// Bootstrapped returns whether the engine has been bootstrapped
-// or initialized based on the null-ness of the logic driver.
-// It implements the engineio.EngineDriver interface.
-func (engine Engine) Bootstrapped() bool { return engine.logic != nil }
-
-// Bootstrap initializes the engine with some fuel, an engineio.LogicDriver, its corresponding
-// engineio.CtxDriver and an engineio.EnvDriver. The bootstrap will fail if the logic and
-// context drivers don't match or if the logic driver is not supported by PISA.
-// It implements the engineio.EngineDriver interface.
-func (engine *Engine) Bootstrap(
-	ctx context.Context, fuel engineio.Fuel,
-	logic engineio.LogicDriver,
-	internal engineio.CtxDriver,
-	env engineio.EnvDriver,
-) error {
-	// Check logic driver engine
-	if logic.Engine() != engineio.PISA {
-		return errors.New("incompatible logic driver: not a PISA logic")
-	}
-
-	// Check logic driver's logic ID and its context's logic ID.
-	if !bytes.Equal(logic.LogicID(), internal.LogicID()) {
-		return errors.New("incompatible context driver for logic: logic ID is not equal")
-	}
-
-	// Check the logic driver and context driver's addresses
-	if logic.LogicID().Address().Hex() != internal.Address().Hex() {
-		return errors.New("incompatible context driver for logic: address does not match")
-	}
-
-	engine.logic = logic
-	engine.internal = internal
-	engine.environment = env
-	engine.fueltank = engineio.NewFuelTank(fuel)
-
-	return nil
-}
-
-// Compile generates an engineio.LogicDescriptor from an engineio.Manifest object.
-// The compilation will fail if the manifest object is not compatible or has malformed elements.
-// It implements the engineio.EngineDriver interface.
-func (engine Engine) Compile(
-	ctx context.Context, fuel engineio.Fuel, manifest *engineio.Manifest,
-) (
-	*engineio.LogicDescriptor, engineio.Fuel, error,
-) {
-	// Check that the Manifest Engine is PISA
-	if manifest.Header().LogicEngine() != engineio.PISA {
-		return nil, 0, errors.New("invalid manifest: manifest engine is not PISA")
-	}
-
-	// Create a ManifestCompiler instance
-	compiler, err := newManifestCompiler(fuel, manifest, engine.instructs)
-	if err != nil {
-		return nil, 0, errors.Wrap(err, "")
-	}
-
-	// Compile the manifest
-	descriptor, err := compiler.compile()
-	if err != nil {
-		return nil, compiler.fueltank.Consumed, errors.Wrap(err, "")
-	}
-
-	return descriptor, compiler.fueltank.Consumed, nil
-}
-
-// ValidateCall verifies the IxnObject's callsite and calldata for a given engineio.LogicDriver.
-// Returns an error if the logic is supported by PISA or if the callsite does not exist or if the
-// callsite is not compatible with the ixn type or if the calldata is invalid for the callsite.
-func (engine Engine) ValidateCall(ctx context.Context, logic engineio.LogicDriver, ixn *engineio.IxnObject) error {
-	// Check logic driver engine
-	if logic.Engine() != engineio.PISA {
-		return errors.New("incompatible logic driver: not a PISA logic")
-	}
-
-	// Get the callsite information from the logic and verify that it exists
-	callsite, ok := engine.logic.GetCallsite(ixn.Callsite())
-	if !ok {
-		return errors.Errorf("invalid callsite '%v': does not exist", ixn.Callsite())
-	}
-
-	// Check that the callsite kind and ixn type of the IxnObject are compatible
-	switch callsite.Kind {
-	case engineio.InvokableCallsite:
-		if ixn.IxType() != types.IxLogicInvoke {
-			return errors.Errorf("invalid callsite '%v' for IxnLogicInvoke", ixn.Callsite())
-		}
-
-	case engineio.DeployerCallsite:
-		if ixn.IxType() != types.IxLogicDeploy {
-			return errors.Errorf("invalid callsite '%v' for IxnLogicDeploy", ixn.Callsite())
-		}
-
-	case engineio.InteractableCallsite, engineio.EnlisterCallsite:
-		return errors.Errorf("unsupported callsite kind '%v' for callsite '%v'", callsite.Kind, ixn.Callsite())
-
-	default:
-		panic("invalid callsite kind variant detected")
-	}
-
-	// Retrieve the Routine for the Callsite from the Logic
-	routine, err := engine.GetRoutine(callsite.Ptr)
-	if err != nil {
-		return errors.Errorf("could not fetch routine for callsite '%v'", ixn.Callsite())
-	}
-
-	// Convert the input Calldata into a ValueTable
-	if _, err = register.NewValueTable(routine.Inputs, ixn.Calldata()); err != nil {
-		return errors.Errorf("invalid calldata for callsite '%v': %v", ixn.Callsite(), err)
-	}
-
-	return nil
-}
 
 // Call performs the execution of a logic function from the logic driver in the Engine.
 // Call will fail if the engine is not already bootstrapped. It will also fail if the callsite from the
@@ -162,51 +46,40 @@ func (engine Engine) ValidateCall(ctx context.Context, logic engineio.LogicDrive
 // It implements the engineio.EngineDriver interface.
 func (engine *Engine) Call(
 	ctx context.Context,
-	kind engineio.CallsiteKind,
 	ixn *engineio.IxnObject,
 	participants ...engineio.CtxDriver,
 ) *engineio.CallResult {
-	// Check if the engine is bootstrapped
-	if !engine.Bootstrapped() {
-		return engine.Error(exception.EngineNotBootstrapped, "")
-	}
-
 	// Get the callsite information from the logic and verify that it exists
 	callsite, ok := engine.logic.GetCallsite(ixn.Callsite())
 	if !ok {
 		return engine.Errorf(exception.InvalidCallsite, "callsite '%v' does not exist", ixn.Callsite())
 	}
 
-	// Verify that the call kind and callsite match
-	if kind != callsite.Kind {
-		return engine.Errorf(exception.InvalidCallsite, "callsite '%v' is not a deployer", ixn.Callsite())
-	}
-
-	switch kind {
+	switch callsite.Kind {
 	case engineio.InvokableCallsite:
-		if kind != callsite.Kind {
-			return engine.Errorf(exception.InvalidCallsite, "callsite '%v' is not an invokable", ixn.Callsite())
+		if ixn.IxType() != types.IxLogicInvoke {
+			return engine.Errorf(exception.InvalidIxnCtx, "invokable callsite cannot be called with IxLogicInvoke")
 		}
 
 		if len(participants) != 1 {
-			return engine.Errorf(exception.InvalidIxnCtx, "invokable call has malformed context drivers (must have 1)")
+			return engine.Errorf(exception.InvalidIxnCtx, "invokable call has insufficient context drivers (must have 1)")
 		}
 
 	case engineio.DeployerCallsite:
-		if kind != callsite.Kind {
-			return engine.Errorf(exception.InvalidCallsite, "callsite '%v' is not an deployer", ixn.Callsite())
+		if ixn.IxType() != types.IxLogicDeploy {
+			return engine.Errorf(exception.InvalidIxnCtx, "deployer callsite cannot be called with IxLogicDeploy")
 		}
 
 		if len(participants) != 1 {
-			return engine.Errorf(exception.InvalidIxnCtx, "deployer call has malformed context drivers (must have 1)")
+			return engine.Errorf(exception.InvalidIxnCtx, "deployer call has insufficient context drivers (must have 1)")
 		}
 
 	default:
-		return engine.Errorf(exception.InvalidCallsite, "unsupported call type '%v'", kind)
+		return engine.Errorf(exception.InvalidCallsite, "unsupported callsite kind '%v'", callsite.Kind)
 	}
 
 	// Generate a set of pointer to load (the callsite pointer and its dependencies)
-	elements := append([]uint64{callsite.Ptr}, engine.logic.GetElementDeps(callsite.Ptr)...)
+	elements := append([]engineio.ElementPtr{callsite.Ptr}, engine.logic.GetElementDeps(callsite.Ptr)...)
 	// Iterate over the element dependency pointers for the callsite
 	for _, ptr := range elements {
 		// Retrieve the LogicElement from the Logic
@@ -239,7 +112,7 @@ func (engine *Engine) Call(
 	}
 
 	// Create a runtime root and execute the routine with it
-	root, err := runtime.Root(engine, ixn, engine.internal, participants...)
+	root, err := Root(engine, ixn, engine.internal, participants...)
 	if err != nil {
 		return engine.Errorf(exception.InvalidIxnCtx, "%v", err)
 	}
@@ -303,7 +176,7 @@ func (engine *Engine) ConsumeFuel(fuel engineio.Fuel) bool {
 	return engine.fueltank.Exhaust(fuel)
 }
 
-func (engine Engine) GetInstruction(opcode runtime.OpCode) *runtime.InstructOperation {
+func (engine Engine) GetInstruction(opcode OpCode) *InstructOperation {
 	return engine.instructs[opcode]
 }
 
@@ -319,7 +192,7 @@ func (engine *Engine) GetTypeMethod(datatype *register.Typedef, mtcode register.
 	return nil, false
 }
 
-func (engine *Engine) GetTypedef(ptr uint64) (*register.Typedef, error) {
+func (engine *Engine) GetTypedef(ptr engineio.ElementPtr) (*register.Typedef, error) {
 	if item, cached := engine.elements[ptr]; cached {
 		routine, _ := item.(*register.Typedef)
 
@@ -341,7 +214,7 @@ func (engine *Engine) GetTypedef(ptr uint64) (*register.Typedef, error) {
 	return typedef, nil
 }
 
-func (engine *Engine) GetConstant(ptr uint64) (*register.Constant, error) {
+func (engine *Engine) GetConstant(ptr engineio.ElementPtr) (*register.Constant, error) {
 	if item, cached := engine.elements[ptr]; cached {
 		routine, _ := item.(*register.Constant)
 
@@ -363,9 +236,9 @@ func (engine *Engine) GetConstant(ptr uint64) (*register.Constant, error) {
 	return constant, nil
 }
 
-func (engine *Engine) GetRoutine(ptr uint64) (*runtime.Routine, error) {
+func (engine *Engine) GetRoutine(ptr engineio.ElementPtr) (*Routine, error) {
 	if item, cached := engine.elements[ptr]; cached {
-		routine, _ := item.(*runtime.Routine)
+		routine, _ := item.(*Routine)
 
 		return routine, nil
 	}
@@ -375,7 +248,7 @@ func (engine *Engine) GetRoutine(ptr uint64) (*runtime.Routine, error) {
 		return nil, errors.Errorf("could not find element at %#x", ptr)
 	}
 
-	routine := new(runtime.Routine)
+	routine := new(Routine)
 	if err := polo.Depolorize(routine, element.Data); err != nil {
 		return nil, err
 	}
@@ -387,7 +260,7 @@ func (engine *Engine) GetRoutine(ptr uint64) (*runtime.Routine, error) {
 
 func (engine *Engine) GetStateFields(kind engineio.ContextStateKind) (*register.StateFields, error) {
 	var (
-		ptr uint64
+		ptr engineio.ElementPtr
 		ok  bool
 	)
 
@@ -429,16 +302,16 @@ func (engine *Engine) GetStateFields(kind engineio.ContextStateKind) (*register.
 	return state, nil
 }
 
-func (engine *Engine) loadLogicElement(ptr uint64, element *engineio.LogicElement) error {
+func (engine *Engine) loadLogicElement(ptr engineio.ElementPtr, element *engineio.LogicElement) error {
 	// If the element pointer has already been loaded into the engine, skip
 	if _, exists := engine.elements[ptr]; exists {
 		return nil
 	}
 
 	// Check the kind of element
-	switch ElementKind(element.Kind) {
+	switch element.Kind {
 	case RoutineElement:
-		routine := new(runtime.Routine)
+		routine := new(Routine)
 		if err := polo.Depolorize(routine, element.Data); err != nil {
 			return err
 		}

@@ -90,6 +90,17 @@ func (mapping MapValue) Copy() Value {
 	return mcopy
 }
 
+// Norm returns the normalized value of MapValue as a map[any]any.
+// Implements the Value interface for MapValue.
+func (mapping MapValue) Norm() any {
+	norm := make(map[any]any, len(mapping.values))
+	for k, v := range mapping.values {
+		norm[k.Norm()] = v.Norm()
+	}
+
+	return norm
+}
+
 // Data returns the POLO encoded bytes of MapValue.
 // Implements the Value interface for MapValue.
 func (mapping MapValue) Data() []byte {

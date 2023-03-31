@@ -12,12 +12,6 @@ import (
 // StateFields represents the state symbols for a Logic
 type StateFields = FieldTable
 
-// CallFields represents the input/output symbols for a callable routine.
-type CallFields struct {
-	Inputs  *FieldTable
-	Outputs *FieldTable
-}
-
 // Signature generates a signature from the RoutineFields symbols and their typedata.
 // It is structured as '(input1, input2)->(output1, output2)', where the values are type data of each field
 func (fields CallFields) Signature() string {

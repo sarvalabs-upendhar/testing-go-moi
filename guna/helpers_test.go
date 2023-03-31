@@ -678,13 +678,7 @@ func createLogicObject(t *testing.T, params *createLogicObjectParams) *gtypes.Lo
 		params = &createLogicObjectParams{}
 	}
 
-	ptr := new(uint64)
-
-	logicObject := &gtypes.LogicObject{
-		ID: params.id, PersistentStateful: ptr, EphemeralStateful: ptr,
-		Dependencies: engineio.NewDependencyGraph(),
-	}
-
+	logicObject := &gtypes.LogicObject{ID: params.id}
 	if params.logicCallback != nil {
 		params.logicCallback(logicObject)
 	}
@@ -695,6 +689,9 @@ func createLogicObject(t *testing.T, params *createLogicObjectParams) *gtypes.Lo
 func getLogicObjectParamsWithLogicID(logicID types.LogicID) *createLogicObjectParams {
 	return &createLogicObjectParams{
 		id: logicID,
+		logicCallback: func(object *gtypes.LogicObject) {
+			object.Dependencies = engineio.NewDependencyGraph()
+		},
 	}
 }
 

@@ -20,6 +20,10 @@ func (x I64Value) Type() *Typedef { return TypeI64 }
 // Implements the Value interface for I64Value.
 func (x I64Value) Copy() Value { return x }
 
+// Norm returns the normalized value of I64Value as an int64.
+// Implements the Value interface for I64Value.
+func (x I64Value) Norm() any { return int64(x) }
+
 // Data returns the POLO encoded bytes of I64Value.
 // Implements the Value interface for I64Value.
 func (x I64Value) Data() []byte {

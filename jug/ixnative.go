@@ -85,16 +85,14 @@ func (executor IxExecutor) LogicDeploy(
 		return 0, nil, errors.Wrap(err, "could not decode manifest")
 	}
 
-	// Obtain the factory for the logic engine in the header
-	factory, ok := executor.exec.factories[manifest.Header().LogicEngine()]
+	// Obtain the runtime for the logic engine in the header
+	runtime, ok := engineio.FetchEngineRuntime(manifest.Header().LogicEngine())
 	if !ok {
 		return 0, nil, errors.Errorf("unsupported manifest engine: %v", manifest.Header().LogicEngine())
 	}
 
-	// Create a compiler engine
-	compiler := factory.NewEngine()
 	// Compile the manifest into a LogicDescriptor
-	logicDescriptor, consumed, err := compiler.Compile(context.Background(), available, manifest)
+	logicDescriptor, consumed, err := runtime.CompileManifest(available, manifest)
 	if err != nil {
 		return consumed, nil, errors.Wrap(err, "manifest compile failed")
 	}
@@ -126,22 +124,17 @@ func (executor IxExecutor) LogicDeploy(
 		return consumed, nil, errors.Wrap(err, "could not decode calldata into polo document")
 	}
 
-	// Create a new engine for the execution
-	engine := factory.NewEngine()
 	logicCtx := state.GenerateLogicContextObject(logicObject.LogicID())
-	// Bootstrap the engine with the logic object and context
-	if err = engine.Bootstrap(
-		context.Background(), available,
-		logicObject, logicCtx,
-		engineio.NewEnvDriver(),
-	); err != nil {
+	// Create a new engine for the execution
+	engine, err := runtime.SpawnEngine(available, logicObject, logicCtx, engineio.NewEnvDriver())
+	if err != nil {
 		return 0, nil, errors.Wrap(err, "could not bootstrap engine")
 	}
 
 	// Create an IxnObject
 	ixn := engineio.NewIxnObject(types.IxLogicDeploy, payload.Callsite, calldata)
 	// Perform a Deployer Call
-	result := engine.Call(context.Background(), engineio.DeployerCallsite, ixn, nil)
+	result := engine.Call(context.Background(), ixn, nil)
 
 	// Increment the amount of consumed fuel
 	consumed += result.Fuel
@@ -180,25 +173,23 @@ func (executor IxExecutor) LogicInvoke(
 		return 0, nil, errors.Wrap(err, "could not decode calldata into polo document")
 	}
 
-	// Obtain the factory for the logic engine of the logic object
-	factory := executor.exec.factories[logicObject.Engine()]
+	// Obtain the runtime for the logic engine of the logic object
+	runtime, ok := engineio.FetchEngineRuntime(logicObject.Engine())
+	if !ok {
+		return 0, nil, errors.Errorf("missing engine factory: %v", logicObject.Engine())
+	}
 
-	// Create a new engine for the execution
-	engine := factory.NewEngine()
 	logicCtx := state.GenerateLogicContextObject(logicObject.LogicID())
-	// Bootstrap the engine
-	if err = engine.Bootstrap(
-		context.Background(), available,
-		logicObject, logicCtx,
-		engineio.NewEnvDriver(),
-	); err != nil {
+	// Create a new engine for the execution
+	engine, err := runtime.SpawnEngine(available, logicObject, logicCtx, engineio.NewEnvDriver())
+	if err != nil {
 		return 0, nil, errors.Wrap(err, "could not bootstrap engine")
 	}
 
 	// Create an IxnObject
 	ixn := engineio.NewIxnObject(types.IxLogicInvoke, payload.Callsite, calldata)
 	// Perform an Invokable Call
-	result := engine.Call(context.Background(), engineio.InvokableCallsite, ixn, nil)
+	result := engine.Call(context.Background(), ixn, nil)
 
 	// Check the execution result
 	if !result.Ok() {

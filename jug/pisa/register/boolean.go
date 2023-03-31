@@ -17,6 +17,10 @@ func (boolean BoolValue) Type() *Typedef { return TypeBool }
 // Implements the Value interface for BoolValue.
 func (boolean BoolValue) Copy() Value { return boolean }
 
+// Norm returns the normalized value of BoolValue as a bool.
+// Implements the Value interface for BoolValue.
+func (boolean BoolValue) Norm() any { return bool(boolean) }
+
 // Data returns the POLO encoded bytes of BoolValue.
 // Implements the Value interface for BoolValue.
 func (boolean BoolValue) Data() []byte {

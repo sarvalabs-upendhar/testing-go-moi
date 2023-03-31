@@ -1,4 +1,4 @@
-package runtime
+package pisa
 
 import (
 	"github.com/sarvalabs/moichain/jug/engineio"
@@ -41,7 +41,7 @@ func (routine Routine) Execute(scope register.ExecutionScope, inputs register.Va
 	}
 
 	// This assertion must never fail
-	outerScope, ok := scope.(*Scope)
+	outerScope, ok := scope.(*ExecutionScope)
 	if !ok {
 		panic("non routine scope used for routine execution")
 	}

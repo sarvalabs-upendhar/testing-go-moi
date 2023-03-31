@@ -22,6 +22,10 @@ func (bytes BytesValue) Copy() Value {
 	return copied
 }
 
+// Norm returns the normalized value of BytesValue as a []byte.
+// Implements the Value interface for BytesValue.
+func (bytes BytesValue) Norm() any { return []byte(bytes) }
+
 // Data returns the POLO encoded bytes of BytesValue.
 // Implements the Value interface for BytesValue.
 func (bytes BytesValue) Data() []byte {

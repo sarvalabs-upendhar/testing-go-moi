@@ -83,6 +83,15 @@ func (list ListValue) Copy() Value {
 	return lcopy
 }
 
+func (list ListValue) Norm() any {
+	norm := make([]any, 0, len(list.values))
+	for _, v := range list.values {
+		norm = append(norm, v.Norm())
+	}
+
+	return norm
+}
+
 func (list ListValue) Data() []byte {
 	polorizer := polo.NewPolorizer()
 	for _, val := range list.values {

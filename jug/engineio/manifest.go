@@ -21,8 +21,6 @@ const (
 )
 
 type Manifest struct {
-	encoding ManifestEncoding
-
 	Syntax   string
 	Engine   ManifestEngineSpec
 	Elements []ManifestElement
@@ -34,9 +32,9 @@ type ManifestEngineSpec struct {
 }
 
 type ManifestElement struct {
-	Ptr  uint64
-	Kind string
-	Deps []uint64
+	Ptr  ElementPtr
+	Deps []ElementPtr
+	Kind ElementKind
 	Data ManifestElementObject
 }
 
@@ -45,16 +43,7 @@ type ManifestElementObject interface {
 	polo.Depolorizable
 }
 
-type (
-	ManifestElementGenerator func() ManifestElementObject
-	ManifestElementRegistry  map[string]ManifestElementGenerator
-)
-
-var elementRegistries = map[EngineKind]ManifestElementRegistry{}
-
-func RegisterElementRegistry(kind EngineKind, registry ManifestElementRegistry) {
-	elementRegistries[kind] = registry
-}
+type ManifestElementGenerator func() ManifestElementObject
 
 func NewManifest(data []byte, encoding ManifestEncoding) (*Manifest, error) {
 	manifest := new(Manifest)
@@ -73,8 +62,6 @@ func NewManifest(data []byte, encoding ManifestEncoding) (*Manifest, error) {
 	default:
 		return nil, errors.New("unsupported manifest encoding")
 	}
-
-	manifest.encoding = encoding
 
 	return manifest, nil
 }
@@ -118,17 +105,16 @@ func (header ManifestHeader) LogicEngine() EngineKind {
 	return EngineKind(strings.ToUpper(header.Engine.Kind))
 }
 
-func (header ManifestHeader) validate() (ManifestElementRegistry, error) {
+func (header ManifestHeader) validate() error {
 	if header.Syntax != "0.1.0" {
-		return nil, errors.New("unsupported manifest syntax")
+		return errors.New("unsupported manifest syntax")
 	}
 
-	registry, ok := elementRegistries[header.LogicEngine()]
-	if !ok {
-		return nil, errors.New("unsupported manifest engine: element registry not found")
+	if _, ok := FetchEngineRuntime(header.LogicEngine()); !ok {
+		return errors.New("unsupported manifest engine: element registry not found")
 	}
 
-	return registry, nil
+	return nil
 }
 
 func (manifest *Manifest) Depolorize(depolorizer *polo.Depolorizer) (err error) {
@@ -136,9 +122,9 @@ func (manifest *Manifest) Depolorize(depolorizer *polo.Depolorizer) (err error) 
 		Syntax   string
 		Engine   ManifestEngineSpec
 		Elements []struct {
-			Ptr  uint64
-			Kind string
-			Deps []uint64
+			Ptr  ElementPtr
+			Deps []ElementPtr
+			Kind ElementKind
 			Data polo.Raw
 		}
 	}
@@ -151,15 +137,16 @@ func (manifest *Manifest) Depolorize(depolorizer *polo.Depolorizer) (err error) 
 	manifest.Syntax = raw.Syntax
 	manifest.Engine = raw.Engine
 
-	registry, err := manifest.Header().validate()
-	if err != nil {
+	if err = manifest.Header().validate(); err != nil {
 		return err
 	}
+
+	runtime, _ := FetchEngineRuntime(manifest.Header().LogicEngine())
 
 	manifest.Elements = make([]ManifestElement, 0, len(raw.Elements))
 
 	for _, element := range raw.Elements {
-		generator, ok := registry[element.Kind]
+		generator, ok := runtime.GetElementGenerator(element.Kind)
 		if !ok {
 			return errors.Errorf("unrecognized element kind: '%v'", element.Kind)
 		}
@@ -190,9 +177,9 @@ func (manifest *Manifest) UnmarshalJSON(data []byte) (err error) {
 		Syntax   string             `json:"syntax"`
 		Engine   ManifestEngineSpec `json:"engine"`
 		Elements []struct {
-			Ptr  uint64          `json:"ptr"`
-			Kind string          `json:"kind"`
-			Deps []uint64        `json:"deps"`
+			Ptr  ElementPtr      `json:"ptr"`
+			Deps []ElementPtr    `json:"deps"`
+			Kind ElementKind     `json:"kind"`
 			Data json.RawMessage `json:"data"`
 		} `json:"elements"`
 	}
@@ -205,15 +192,16 @@ func (manifest *Manifest) UnmarshalJSON(data []byte) (err error) {
 	manifest.Syntax = raw.Syntax
 	manifest.Engine = raw.Engine
 
-	registry, err := manifest.Header().validate()
-	if err != nil {
+	if err = manifest.Header().validate(); err != nil {
 		return err
 	}
+
+	runtime, _ := FetchEngineRuntime(manifest.Header().LogicEngine())
 
 	manifest.Elements = make([]ManifestElement, 0, len(raw.Elements))
 
 	for _, element := range raw.Elements {
-		generator, ok := registry[element.Kind]
+		generator, ok := runtime.GetElementGenerator(element.Kind)
 		if !ok {
 			return errors.Errorf("unrecognized element kind: '%v'", element.Kind)
 		}
@@ -232,4 +220,14 @@ func (manifest *Manifest) UnmarshalJSON(data []byte) (err error) {
 	}
 
 	return nil
+}
+
+func (manifest *Manifest) FindElement(ptr ElementPtr) (ManifestElement, bool) {
+	for _, element := range manifest.Elements {
+		if element.Ptr == ptr {
+			return element, true
+		}
+	}
+
+	return ManifestElement{}, false
 }

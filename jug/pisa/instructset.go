@@ -1,4 +1,4 @@
-package runtime
+package pisa
 
 import (
 	"bytes"
@@ -32,9 +32,9 @@ type InstructOperation struct {
 	Operand func(*bytes.Reader) ([]byte, bool)
 
 	// execute specifies a function for executing an OpCode within a given Context for some operands.
-	Execute func(*Scope, []byte)
+	Execute func(*ExecutionScope, []byte)
 	// expense specifies a function for calculating the fuel consumption of an OpCode.
-	Expense func(scope *Scope) engineio.Fuel
+	Expense func(scope *ExecutionScope) engineio.Fuel
 }
 
 // InstructionSet represents the opcode instructions for the PISA Runtime
@@ -87,13 +87,13 @@ func BaseInstructionSet() InstructionSet {
 }
 
 // fuel is a standard fuel function that deducts 10 FUEL
-func fuel(_ *Scope) engineio.Fuel { return 10 }
+func fuel(_ *ExecutionScope) engineio.Fuel { return 10 }
 
-func opTERM(scope *Scope, _ []byte) { scope.stop() }
+func opTERM(scope *ExecutionScope, _ []byte) { scope.stop() }
 
-func opDEST(_ *Scope, _ []byte) {}
+func opDEST(_ *ExecutionScope, _ []byte) {}
 
-func opJUMP(scope *Scope, operands []byte) {
+func opJUMP(scope *ExecutionScope, operands []byte) {
 	destination := operands[0]
 
 	// Load the pointer value from the register
@@ -104,10 +104,10 @@ func opJUMP(scope *Scope, operands []byte) {
 		return
 	}
 
-	scope.jumpTo(pointer)
+	scope.jumpTo(uint64(pointer))
 }
 
-func opJUMPI(scope *Scope, operands []byte) {
+func opJUMPI(scope *ExecutionScope, operands []byte) {
 	condition, destination := operands[0], operands[1]
 
 	// Retrieve the condition register
@@ -141,10 +141,10 @@ func opJUMPI(scope *Scope, operands []byte) {
 		return
 	}
 
-	scope.jumpTo(pointer)
+	scope.jumpTo(uint64(pointer))
 }
 
-func opMAKE(scope *Scope, operands []byte) {
+func opMAKE(scope *ExecutionScope, operands []byte) {
 	// Fetch the target register and the type ID
 	output, typeID := operands[0], operands[1]
 
@@ -169,7 +169,7 @@ func opMAKE(scope *Scope, operands []byte) {
 	scope.registers.Set(output, value)
 }
 
-func opLDPTR(scope *Scope, operands []byte) {
+func opLDPTR(scope *ExecutionScope, operands []byte) {
 	// Fetch the register ID and pointer value
 	target, pointerData := operands[1], operands[2:]
 
@@ -187,7 +187,7 @@ func opLDPTR(scope *Scope, operands []byte) {
 	scope.registers.Set(target, pointer)
 }
 
-func opCONST(scope *Scope, operands []byte) {
+func opCONST(scope *ExecutionScope, operands []byte) {
 	// Fetch the registers ID
 	regID := operands[0]
 	// Load the pointer value from the register
@@ -199,7 +199,7 @@ func opCONST(scope *Scope, operands []byte) {
 	}
 
 	// Get the constant from the environment
-	constant, err := scope.runtime.GetConstant(pointer)
+	constant, err := scope.engine.GetConstant(pointer)
 	if err != nil {
 		scope.Throw(exception.Exceptionf(exception.ElementNotFound, "constant %#v not found: %v", pointer, err))
 
@@ -218,7 +218,7 @@ func opCONST(scope *Scope, operands []byte) {
 	scope.registers.Set(regID, constVal)
 }
 
-func opBUILD(scope *Scope, operands []byte) {
+func opBUILD(scope *ExecutionScope, operands []byte) {
 	// Fetch the registers ID
 	regID := operands[0]
 	// Load the pointer value from the register
@@ -229,7 +229,7 @@ func opBUILD(scope *Scope, operands []byte) {
 		return
 	}
 
-	typedef, err := scope.runtime.GetTypedef(pointer)
+	typedef, err := scope.engine.GetTypedef(pointer)
 	if err != nil {
 		scope.Throw(exception.Exceptionf(exception.ElementNotFound, "typedef %#v not found: %v", pointer, err))
 
@@ -248,7 +248,7 @@ func opBUILD(scope *Scope, operands []byte) {
 	scope.registers.Set(regID, typeval)
 }
 
-func opACCEPT(scope *Scope, operands []byte) {
+func opACCEPT(scope *ExecutionScope, operands []byte) {
 	// Fetch the register ID and load slot
 	regID, slot := operands[0], operands[1]
 
@@ -264,7 +264,7 @@ func opACCEPT(scope *Scope, operands []byte) {
 	scope.registers.Set(regID, val)
 }
 
-func opRETURN(scope *Scope, operands []byte) {
+func opRETURN(scope *ExecutionScope, operands []byte) {
 	// Fetch the register ID and return slot
 	regID, slot := operands[0], operands[1]
 
@@ -280,11 +280,11 @@ func opRETURN(scope *Scope, operands []byte) {
 	scope.outputs.Set(slot, value)
 }
 
-func opLOAD(scope *Scope, operands []byte) {
+func opLOAD(scope *ExecutionScope, operands []byte) {
 	// Fetch the register ID and storage slot
 	regID, slot := operands[0], operands[1]
 
-	layout, err := scope.runtime.GetStateFields(engineio.PersistentState)
+	layout, err := scope.engine.GetStateFields(engineio.PersistentState)
 	if err != nil {
 		scope.Throw(exception.Exceptionf(exception.ElementNotFound, "persistent state field not found: %v", err))
 
@@ -314,7 +314,7 @@ func opLOAD(scope *Scope, operands []byte) {
 	scope.registers.Set(regID, value)
 }
 
-func opSTORE(scope *Scope, operands []byte) {
+func opSTORE(scope *ExecutionScope, operands []byte) {
 	// Fetch the register ID and storage slot
 	regID, slot := operands[0], operands[1]
 
@@ -333,7 +333,7 @@ func opSTORE(scope *Scope, operands []byte) {
 	}
 }
 
-func opBOOL(scope *Scope, operands []byte) {
+func opBOOL(scope *ExecutionScope, operands []byte) {
 	regID := operands[0]
 
 	// Retrieve the register
@@ -345,7 +345,7 @@ func opBOOL(scope *Scope, operands []byte) {
 	}
 
 	// Retrieve the __bool__ method for the register type
-	method, ok := scope.runtime.GetTypeMethod(reg.Type(), register.MethodBool)
+	method, ok := scope.engine.GetTypeMethod(reg.Type(), register.MethodBool)
 	if !ok {
 		scope.Throw(exception.Exceptionf(exception.MethodNotFound, "%v does not implement __bool__", reg.Type()))
 
@@ -365,7 +365,7 @@ func opBOOL(scope *Scope, operands []byte) {
 	scope.registers.Set(regID, result)
 }
 
-func opSTR(scope *Scope, operands []byte) {
+func opSTR(scope *ExecutionScope, operands []byte) {
 	regID := operands[0]
 
 	// Retrieve the register
@@ -377,7 +377,7 @@ func opSTR(scope *Scope, operands []byte) {
 	}
 
 	// Retrieve the __str__ method for the register type
-	method, ok := scope.runtime.GetTypeMethod(reg.Type(), register.MethodStr)
+	method, ok := scope.engine.GetTypeMethod(reg.Type(), register.MethodStr)
 	if !ok {
 		scope.Throw(exception.Exceptionf(exception.MethodNotFound, "%v does not implement __str__", reg.Type()))
 
@@ -397,7 +397,7 @@ func opSTR(scope *Scope, operands []byte) {
 	scope.registers.Set(regID, result)
 }
 
-func opISNULL(scope *Scope, operands []byte) {
+func opISNULL(scope *ExecutionScope, operands []byte) {
 	// Fetch the registers IDs
 	out, regID := operands[0], operands[1]
 
@@ -415,7 +415,7 @@ func opISNULL(scope *Scope, operands []byte) {
 	scope.registers.Set(out, isnull)
 }
 
-func opCOPY(scope *Scope, operands []byte) {
+func opCOPY(scope *ExecutionScope, operands []byte) {
 	// Fetch the source and destination registers IDs
 	destination, source := operands[0], operands[1]
 
@@ -431,7 +431,7 @@ func opCOPY(scope *Scope, operands []byte) {
 	scope.registers.Set(destination, reg.Copy())
 }
 
-func opMOVE(scope *Scope, operands []byte) {
+func opMOVE(scope *ExecutionScope, operands []byte) {
 	// Fetch the source and destination registers IDs
 	destination, source := operands[0], operands[1]
 
@@ -449,7 +449,7 @@ func opMOVE(scope *Scope, operands []byte) {
 	scope.registers.Unset(source)
 }
 
-func opGETIDX(scope *Scope, operands []byte) {
+func opGETIDX(scope *ExecutionScope, operands []byte) {
 	// <reg:B> <reg:map[A]B> <reg:A>
 	output, collection, index := operands[0], operands[1], operands[2]
 
@@ -492,7 +492,7 @@ func opGETIDX(scope *Scope, operands []byte) {
 	scope.registers.Set(output, element)
 }
 
-func opSETIDX(scope *Scope, operands []byte) {
+func opSETIDX(scope *ExecutionScope, operands []byte) {
 	// <reg:map[A]B> <reg:A> <reg:B>
 	collection, index, element := operands[0], operands[1], operands[2]
 
@@ -548,7 +548,7 @@ func opSETIDX(scope *Scope, operands []byte) {
 	scope.registers.Set(collection, collectionValue)
 }
 
-func opLT(scope *Scope, operands []byte) {
+func opLT(scope *ExecutionScope, operands []byte) {
 	// Fetch the register IDs for the inputs
 	a, b := operands[1], operands[2]
 	// Get two values of the same type
@@ -560,7 +560,7 @@ func opLT(scope *Scope, operands []byte) {
 	}
 
 	// Retrieve the __lt__ method for the register type
-	method, ok := scope.runtime.GetTypeMethod(regA.Type(), register.MethodLt)
+	method, ok := scope.engine.GetTypeMethod(regA.Type(), register.MethodLt)
 	if !ok {
 		scope.Throw(exception.Exceptionf(exception.MethodNotFound, "%v does not implement __lt__", regA.Type()))
 
@@ -581,7 +581,7 @@ func opLT(scope *Scope, operands []byte) {
 }
 
 //nolint:dupl
-func opLE(scope *Scope, operands []byte) {
+func opLE(scope *ExecutionScope, operands []byte) {
 	// Fetch the register IDs for the inputs
 	a, b := operands[1], operands[2]
 	// Get two values of the same type
@@ -593,7 +593,7 @@ func opLE(scope *Scope, operands []byte) {
 	}
 
 	// Retrieve the __lt__ method for the register type
-	methodLT, ok := scope.runtime.GetTypeMethod(regA.Type(), register.MethodLt)
+	methodLT, ok := scope.engine.GetTypeMethod(regA.Type(), register.MethodLt)
 	if !ok {
 		scope.Throw(exception.Exceptionf(exception.MethodNotFound, "%v does not implement __lt__", regA.Type()))
 
@@ -601,7 +601,7 @@ func opLE(scope *Scope, operands []byte) {
 	}
 
 	// Retrieve the __eq__ method for the register type
-	methodEQ, ok := scope.runtime.GetTypeMethod(regA.Type(), register.MethodEq)
+	methodEQ, ok := scope.engine.GetTypeMethod(regA.Type(), register.MethodEq)
 	if !ok {
 		scope.Throw(exception.Exceptionf(exception.MethodNotFound, "%v does not implement __eq__", regA.Type()))
 
@@ -628,7 +628,7 @@ func opLE(scope *Scope, operands []byte) {
 	scope.registers.Set(operands[0], result)
 }
 
-func opGT(scope *Scope, operands []byte) {
+func opGT(scope *ExecutionScope, operands []byte) {
 	// Fetch the register IDs for the inputs
 	a, b := operands[1], operands[2]
 	// Get two values of the same type
@@ -640,7 +640,7 @@ func opGT(scope *Scope, operands []byte) {
 	}
 
 	// Retrieve the __gt__ method for the register type
-	method, ok := scope.runtime.GetTypeMethod(regA.Type(), register.MethodGt)
+	method, ok := scope.engine.GetTypeMethod(regA.Type(), register.MethodGt)
 	if !ok {
 		scope.Throw(exception.Exceptionf(exception.MethodNotFound, "%v does not implement __gt__", regA.Type()))
 
@@ -661,7 +661,7 @@ func opGT(scope *Scope, operands []byte) {
 }
 
 //nolint:dupl
-func opGE(scope *Scope, operands []byte) {
+func opGE(scope *ExecutionScope, operands []byte) {
 	// Fetch the register IDs for the inputs
 	a, b := operands[1], operands[2]
 	// Get two values of the same type
@@ -673,7 +673,7 @@ func opGE(scope *Scope, operands []byte) {
 	}
 
 	// Retrieve the __gt__ method for the register type
-	methodGT, ok := scope.runtime.GetTypeMethod(regA.Type(), register.MethodGt)
+	methodGT, ok := scope.engine.GetTypeMethod(regA.Type(), register.MethodGt)
 	if !ok {
 		scope.Throw(exception.Exceptionf(exception.MethodNotFound, "%v does not implement __gt__", regA.Type()))
 
@@ -681,7 +681,7 @@ func opGE(scope *Scope, operands []byte) {
 	}
 
 	// Retrieve the __eq__ method for the register type
-	methodEQ, ok := scope.runtime.GetTypeMethod(regA.Type(), register.MethodEq)
+	methodEQ, ok := scope.engine.GetTypeMethod(regA.Type(), register.MethodEq)
 	if !ok {
 		scope.Throw(exception.Exceptionf(exception.MethodNotFound, "%v does not implement __eq__", regA.Type()))
 
@@ -708,7 +708,7 @@ func opGE(scope *Scope, operands []byte) {
 	scope.registers.Set(operands[0], result)
 }
 
-func opEQ(scope *Scope, operands []byte) {
+func opEQ(scope *ExecutionScope, operands []byte) {
 	// Fetch the register IDs for the inputs
 	a, b := operands[1], operands[2]
 	// Get two values of the same type
@@ -720,7 +720,7 @@ func opEQ(scope *Scope, operands []byte) {
 	}
 
 	// Retrieve the __eq__ method for the register type
-	method, ok := scope.runtime.GetTypeMethod(regA.Type(), register.MethodEq)
+	method, ok := scope.engine.GetTypeMethod(regA.Type(), register.MethodEq)
 	if !ok {
 		scope.Throw(exception.Exceptionf(exception.MethodNotFound, "%v does not implement __eq__", regA.Type()))
 
@@ -740,7 +740,7 @@ func opEQ(scope *Scope, operands []byte) {
 	scope.registers.Set(operands[0], result)
 }
 
-func opNEQ(scope *Scope, operands []byte) {
+func opNEQ(scope *ExecutionScope, operands []byte) {
 	// Fetch the register IDs for the inputs
 	a, b := operands[1], operands[2]
 	// Get two values of the same type
@@ -752,7 +752,7 @@ func opNEQ(scope *Scope, operands []byte) {
 	}
 
 	// Retrieve the __eq__ method for the register type
-	method, ok := scope.runtime.GetTypeMethod(regA.Type(), register.MethodEq)
+	method, ok := scope.engine.GetTypeMethod(regA.Type(), register.MethodEq)
 	if !ok {
 		scope.Throw(exception.Exceptionf(exception.MethodNotFound, "%v does not implement __eq__", regA.Type()))
 
@@ -772,7 +772,7 @@ func opNEQ(scope *Scope, operands []byte) {
 	scope.registers.Set(operands[0], result)
 }
 
-func opINVERT(scope *Scope, operands []byte) {
+func opINVERT(scope *ExecutionScope, operands []byte) {
 	regID := operands[0]
 
 	// Retrieve the register
@@ -797,7 +797,7 @@ func opINVERT(scope *Scope, operands []byte) {
 }
 
 //nolint:dupl
-func opADD(scope *Scope, operands []byte) {
+func opADD(scope *ExecutionScope, operands []byte) {
 	// Fetch the register IDs for output and inputs
 	out, a, b := operands[0], operands[1], operands[2]
 	// Get two values of the same type
@@ -840,7 +840,7 @@ func opADD(scope *Scope, operands []byte) {
 }
 
 //nolint:dupl
-func opSUB(scope *Scope, operands []byte) {
+func opSUB(scope *ExecutionScope, operands []byte) {
 	// Fetch the register IDs for output and inputs
 	out, a, b := operands[0], operands[1], operands[2]
 	// Get two values of the same type
@@ -883,7 +883,7 @@ func opSUB(scope *Scope, operands []byte) {
 }
 
 //nolint:dupl
-func opMUL(scope *Scope, operands []byte) {
+func opMUL(scope *ExecutionScope, operands []byte) {
 	// Fetch the register IDs for output and inputs
 	out, a, b := operands[0], operands[1], operands[2]
 	// Get two values of the same type
@@ -925,7 +925,7 @@ func opMUL(scope *Scope, operands []byte) {
 	scope.registers.Set(out, result)
 }
 
-func opDIV(scope *Scope, operands []byte) {
+func opDIV(scope *ExecutionScope, operands []byte) {
 	// Fetch the register IDs for output and inputs
 	out, a, b := operands[0], operands[1], operands[2]
 	// Get two values of the same type

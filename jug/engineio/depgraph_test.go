@@ -9,8 +9,8 @@ import (
 )
 
 type node struct {
-	ptr  uint64
-	deps []uint64
+	ptr  ElementPtr
+	deps []ElementPtr
 }
 
 func TestDependencyGraph(t *testing.T) {
@@ -18,45 +18,45 @@ func TestDependencyGraph(t *testing.T) {
 		inputs []node
 		str    string
 		size   uint64
-		iter   []uint64
+		iter   []ElementPtr
 
 		resolves bool
-		resolved []uint64
-		batches  [][]uint64
+		resolved []ElementPtr
+		batches  [][]ElementPtr
 	}{
 		{
 			[]node{
 				{0, nil},
-				{1, []uint64{0, 2, 4}},
+				{1, []ElementPtr{0, 2, 4}},
 				{2, nil},
 				{3, nil},
 				{4, nil},
 				{5, nil},
 				{6, nil},
 				{7, nil},
-				{8, []uint64{7, 5}},
-				{9, []uint64{0, 4, 5}},
-				{10, []uint64{0, 6}},
+				{8, []ElementPtr{7, 5}},
+				{9, []ElementPtr{0, 4, 5}},
+				{10, []ElementPtr{0, 6}},
 			},
 			"DependencyGraph{0, 1:[0 2 4], 2, 3, 4, 5, 6, 7, 8:[5 7], 9:[0 4 5], 10:[0 6]}",
 			11,
-			[]uint64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+			[]ElementPtr{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
 			true,
-			[]uint64{0, 2, 3, 4, 5, 6, 7, 1, 8, 9, 10},
-			[][]uint64{{0, 2, 3, 4, 5, 6, 7}, {1, 8, 9, 10}},
+			[]ElementPtr{0, 2, 3, 4, 5, 6, 7, 1, 8, 9, 10},
+			[][]ElementPtr{{0, 2, 3, 4, 5, 6, 7}, {1, 8, 9, 10}},
 		},
 		{
 			[]node{
 				{0, nil},
 				{1, nil},
-				{2, []uint64{3}},
-				{3, []uint64{2}},
+				{2, []ElementPtr{3}},
+				{3, []ElementPtr{2}},
 				{4, nil},
 				{5, nil},
 			},
 			"DependencyGraph{0, 1, 2:[3], 3:[2], 4, 5}",
 			6,
-			[]uint64{0, 1, 2, 3, 4, 5},
+			[]ElementPtr{0, 1, 2, 3, 4, 5},
 			false,
 			nil,
 			nil,
@@ -64,13 +64,13 @@ func TestDependencyGraph(t *testing.T) {
 		{
 			[]node{
 				{0, nil},
-				{1, []uint64{3}},
-				{2, []uint64{1}},
-				{3, []uint64{2}},
+				{1, []ElementPtr{3}},
+				{2, []ElementPtr{1}},
+				{3, []ElementPtr{2}},
 			},
 			"DependencyGraph{0, 1:[3], 2:[1], 3:[2]}",
 			4,
-			[]uint64{0, 1, 2, 3},
+			[]ElementPtr{0, 1, 2, 3},
 			false,
 			nil,
 			nil,
@@ -79,7 +79,7 @@ func TestDependencyGraph(t *testing.T) {
 
 	for _, test := range tests {
 		dgraph := NewDependencyGraph()
-		require.Equal(t, &DependencyGraph{graph: make(map[uint64]mapset.Set)}, dgraph)
+		require.Equal(t, &DependencyGraph{graph: make(map[ElementPtr]mapset.Set)}, dgraph)
 
 		for _, input := range test.inputs {
 			dgraph.Insert(input.ptr, input.deps...)
@@ -112,16 +112,16 @@ func TestDependencyGraph(t *testing.T) {
 func TestDependencyGraph_AllDependencies(t *testing.T) {
 	inputs := []node{
 		{0, nil},
-		{1, []uint64{0, 2, 4, 8}},
+		{1, []ElementPtr{0, 2, 4, 8}},
 		{2, nil},
 		{3, nil},
 		{4, nil},
 		{5, nil},
 		{6, nil},
 		{7, nil},
-		{8, []uint64{7, 5, 9}},
-		{9, []uint64{0, 4, 5}},
-		{10, []uint64{0, 6}},
+		{8, []ElementPtr{7, 5, 9}},
+		{9, []ElementPtr{0, 4, 5}},
+		{10, []ElementPtr{0, 6}},
 	}
 
 	dgraph := NewDependencyGraph()
@@ -130,22 +130,22 @@ func TestDependencyGraph_AllDependencies(t *testing.T) {
 	}
 
 	deps := dgraph.AllDependencies(1)
-	require.Equal(t, []uint64{0, 2, 4, 5, 7, 8, 9}, deps)
+	require.Equal(t, []ElementPtr{0, 2, 4, 5, 7, 8, 9}, deps)
 }
 
 func TestDependencyGraph_Serialization(t *testing.T) {
 	inputs := []node{
 		{0, nil},
-		{1, []uint64{0, 2, 4, 8}},
+		{1, []ElementPtr{0, 2, 4, 8}},
 		{2, nil},
 		{3, nil},
 		{4, nil},
 		{5, nil},
 		{6, nil},
 		{7, nil},
-		{8, []uint64{7, 5, 9}},
-		{9, []uint64{0, 4, 5}},
-		{10, []uint64{0, 6}},
+		{8, []ElementPtr{7, 5, 9}},
+		{9, []ElementPtr{0, 4, 5}},
+		{10, []ElementPtr{0, 6}},
 	}
 
 	dgraph := NewDependencyGraph()

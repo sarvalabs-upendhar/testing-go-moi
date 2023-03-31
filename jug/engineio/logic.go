@@ -22,16 +22,16 @@ type LogicDriver interface {
 
 	// PersistentState returns the pointer to the persistent state element
 	// with a confirmation that the Logic defines a PersistentState
-	PersistentState() (uint64, bool)
+	PersistentState() (ElementPtr, bool)
 	// EphemeralState returns the pointer to the ephemeral state element
 	// with a confirmation that the Logic defines a EphemeralState
-	EphemeralState() (uint64, bool)
+	EphemeralState() (ElementPtr, bool)
 
 	// GetElementDeps returns the aggregated dependencies of an element pointer.
 	// The aggregation includes all sub-dependencies recursively.
-	GetElementDeps(uint64) []uint64
+	GetElementDeps(ElementPtr) []ElementPtr
 	// GetElement returns the LogicElement for a given element pointer with confirmation of its existence.
-	GetElement(uint64) (*LogicElement, bool)
+	GetElement(ElementPtr) (*LogicElement, bool)
 	// GetCallsite returns Callsite for a given string name with confirmation of it existence.
 	GetCallsite(string) (*Callsite, bool)
 }
@@ -42,14 +42,20 @@ type LogicDescriptor struct {
 	Manifest types.Hash
 	Engine   EngineKind
 
-	AllowsInteractions bool
-	PersistentState    *uint64
-	EphemeralState     *uint64
+	Interactive bool
+	StateMatrix ContextStateMatrix
 
 	DepGraph  *DependencyGraph
-	Elements  map[uint64]*LogicElement
+	Elements  map[ElementPtr]*LogicElement
 	Callsites map[string]*Callsite
 }
+
+type (
+	// ElementKind is a type alias for an element kind string
+	ElementKind string
+	// ElementPtr is a type alias for an element pointer
+	ElementPtr uint64
+)
 
 // LogicElement represents a generic container for a logic Element.
 // It is uniquely identified with a group name and an index pointer.
@@ -57,11 +63,11 @@ type LogicDescriptor struct {
 // namespacing and index conflicts within a group.
 type LogicElement struct {
 	// Kind represents some type identifier for the element
-	Kind string
+	Kind ElementKind
+	// Deps represents the relational neighbours of the element
+	Deps []ElementPtr
 	// Data represents the data container for the element
 	Data []byte
-	// Deps represents the relational neighbours of the element
-	Deps []uint64
 }
 
 // LogicImplSchema represents a schematic for verifying that a

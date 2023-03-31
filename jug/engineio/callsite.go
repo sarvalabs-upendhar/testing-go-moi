@@ -5,12 +5,14 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
+
+	"github.com/sarvalabs/moichain/types"
 )
 
 // Callsite represents a callable point in a Logic.
 // It can be resolved from a string by looking it up on the LogicDriver
 type Callsite struct {
-	Ptr  uint64
+	Ptr  ElementPtr
 	Kind CallsiteKind
 }
 
@@ -46,6 +48,22 @@ func (callsite CallsiteKind) String() string {
 	}
 
 	return str
+}
+
+// IxnType returns the appropriate types.IxType variant for the CallsiteKind
+func (callsite CallsiteKind) IxnType() types.IxType {
+	switch callsite {
+	case InvokableCallsite:
+		return types.IxLogicInvoke
+	case DeployerCallsite:
+		return types.IxLogicDeploy
+	case InteractableCallsite:
+		return types.IxLogicInteract
+	case EnlisterCallsite:
+		return types.IxLogicEnlist
+	default:
+		panic("unknown CallsiteKind variant")
+	}
 }
 
 // Polorize implements the polo.Polorizable interface for CallsiteKind
@@ -93,6 +111,14 @@ func (callsite *CallsiteKind) UnmarshalJSON(data []byte) error {
 	*callsite = kind
 
 	return nil
+}
+
+// CallEncoder is an interface with capabilities to encode
+// inputs and decode outputs for a specific callable site.
+// It can be generated from either a Manifest or LogicDriver.
+type CallEncoder interface {
+	EncodeInputs(map[string]any) (polo.Document, error)
+	DecodeOutputs(polo.Document) (map[string]any, error)
 }
 
 // CallResult is the output emitted by EngineDriver when making function calls.

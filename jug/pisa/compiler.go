@@ -11,7 +11,6 @@ import (
 
 	"github.com/sarvalabs/moichain/jug/engineio"
 	"github.com/sarvalabs/moichain/jug/pisa/register"
-	"github.com/sarvalabs/moichain/jug/pisa/runtime"
 )
 
 // ManifestCompiler is a compiler implementation for PISA that converts
@@ -19,18 +18,17 @@ import (
 // in turn be used to construct an engineio.LogicDriver implementation.
 type ManifestCompiler struct {
 	fueltank  *engineio.FuelTank
-	instructs runtime.InstructionSet
+	instructs InstructionSet
 	manifest  *engineio.Manifest
 
-	elements []engineio.ManifestElement
-	kindmap  map[uint64]ElementKind
+	elements map[engineio.ElementPtr]engineio.ManifestElement
+	kindmap  map[engineio.ElementPtr]engineio.ElementKind
 	depgraph *engineio.DependencyGraph
 
 	callsites map[string]*engineio.Callsite
-	compiled  map[uint64]*engineio.LogicElement
+	compiled  map[engineio.ElementPtr]*engineio.LogicElement
 
-	persistent *uint64
-	ephemeral  *uint64
+	state engineio.ContextStateMatrix
 }
 
 // newManifestCompiler generates a new ManifestCompiler for some given
@@ -39,7 +37,7 @@ type ManifestCompiler struct {
 func newManifestCompiler(
 	fuel engineio.Fuel,
 	manifest *engineio.Manifest,
-	instructs runtime.InstructionSet,
+	instructs InstructionSet,
 ) (
 	*ManifestCompiler, error,
 ) {
@@ -48,12 +46,13 @@ func newManifestCompiler(
 		manifest:  manifest,
 		fueltank:  engineio.NewFuelTank(fuel),
 		depgraph:  engineio.NewDependencyGraph(),
-		kindmap:   make(map[uint64]ElementKind, len(manifest.Elements)),
-		elements:  make([]engineio.ManifestElement, 0, len(manifest.Elements)),
+		state:     make(engineio.ContextStateMatrix, 2),
+		kindmap:   make(map[engineio.ElementPtr]engineio.ElementKind, len(manifest.Elements)),
+		elements:  make(map[engineio.ElementPtr]engineio.ManifestElement, len(manifest.Elements)),
 	}
 
 	// Create a map that can track ptr duplicates and positional gaps
-	ptrs := make(map[uint64]struct{}, len(manifest.Elements))
+	ptrs := make(map[engineio.ElementPtr]struct{}, len(manifest.Elements))
 	// Iterate over the manifest elements
 	for _, element := range manifest.Elements {
 		// If the ptr has already been encountered, return error
@@ -65,9 +64,9 @@ func newManifestCompiler(
 		ptrs[element.Ptr] = struct{}{}
 
 		// Add the element to the element set, depgraph and kindmap
-		compiler.elements = append(compiler.elements, element)
+		compiler.elements[element.Ptr] = element
 		compiler.depgraph.Insert(element.Ptr, element.Deps...)
-		compiler.kindmap[element.Ptr] = ElementKind(element.Kind)
+		compiler.kindmap[element.Ptr] = element.Kind
 	}
 
 	// Check if there are gaps in the elements pointers
@@ -95,41 +94,38 @@ func (compiler *ManifestCompiler) compile() (*engineio.LogicDescriptor, error) {
 	}
 
 	// Set up the compiler accumulators
-	compiler.compiled = make(map[uint64]*engineio.LogicElement, len(compiler.elements))
+	compiler.compiled = make(map[engineio.ElementPtr]*engineio.LogicElement, len(compiler.elements))
 	compiler.callsites = make(map[string]*engineio.Callsite)
 
 	// Iterate over the element pointers in compile order
 	for _, ptr := range order {
-		// Fetch the element by its index
-		element := compiler.elements[ptr]
-
-		switch ElementKind(element.Kind) {
+		switch kind := compiler.kindmap[ptr]; kind {
 		case ConstantElement:
 			// Compile the element as a ConstantElement
-			if err := compiler.compileConstantElement(ptr, element); err != nil {
+			if err := compiler.compileConstantElement(ptr); err != nil {
 				return nil, errors.Wrapf(err, "constant element [%#v] compile failed", ptr)
 			}
 
 		case TypedefElement:
 			// Compile the element as a TypedefElement
-			if err := compiler.compileTypedefElement(ptr, element); err != nil {
+			if err := compiler.compileTypedefElement(ptr); err != nil {
 				return nil, errors.Wrapf(err, "typedef element [%#v] compile failed", ptr)
 			}
 
 		case StateElement:
 			// Compile the element as a StateElement
-			if err := compiler.compileStateElement(ptr, element); err != nil {
+			if err := compiler.compileStateElement(ptr); err != nil {
 				return nil, errors.Wrapf(err, "state element [%#v] compile failed", ptr)
 			}
 
 		case RoutineElement:
 			// Compile the element as a RoutineElement
-			if err := compiler.compileRoutineElement(ptr, element); err != nil {
+			if err := compiler.compileRoutineElement(ptr); err != nil {
 				return nil, errors.Wrapf(err, "routine element [%#v] compile failed", ptr)
 			}
 
 		default:
-			return nil, errors.Errorf("invalid element kind [%#v]: %v", ptr, element.Kind)
+			return nil, errors.Errorf("invalid element kind [%#v]: %v", ptr, kind)
 		}
 	}
 
@@ -142,21 +138,22 @@ func (compiler *ManifestCompiler) compile() (*engineio.LogicDescriptor, error) {
 	manifestHash, _ := compiler.manifest.Hash()
 	// Generate a LogicDescriptor from the compiler data
 	return &engineio.LogicDescriptor{
-		Manifest:           manifestHash,
-		Engine:             engineio.PISA,
-		AllowsInteractions: false,
+		Manifest:    manifestHash,
+		Engine:      engineio.PISA,
+		Interactive: false,
 
-		PersistentState: compiler.persistent,
-		EphemeralState:  compiler.ephemeral,
-
-		DepGraph:  compiler.depgraph,
-		Elements:  compiler.compiled,
-		Callsites: compiler.callsites,
+		StateMatrix: compiler.state,
+		DepGraph:    compiler.depgraph,
+		Elements:    compiler.compiled,
+		Callsites:   compiler.callsites,
 	}, nil
 }
 
 // compileConstantElement compiles an engineio.ManifestElement object of type ConstantElement
-func (compiler *ManifestCompiler) compileConstantElement(ptr uint64, element engineio.ManifestElement) error {
+func (compiler *ManifestCompiler) compileConstantElement(ptr engineio.ElementPtr) error {
+	// Get the element from the compiler
+	element := compiler.elements[ptr]
+
 	// Convert element into a ConstantSchema
 	constantSchema, ok := element.Data.(*ConstantSchema)
 	if !ok {
@@ -177,7 +174,7 @@ func (compiler *ManifestCompiler) compileConstantElement(ptr uint64, element eng
 	// Generate the compiled element and store it
 	encoded, _ := polo.Polorize(constant)
 	compiler.compiled[ptr] = &engineio.LogicElement{
-		Kind: string(ConstantElement),
+		Kind: ConstantElement,
 		Data: encoded,
 		Deps: element.Deps,
 	}
@@ -186,7 +183,10 @@ func (compiler *ManifestCompiler) compileConstantElement(ptr uint64, element eng
 }
 
 // compileTypedefElement compiles an engineio.ManifestElement object of type TypedefElement
-func (compiler *ManifestCompiler) compileTypedefElement(ptr uint64, element engineio.ManifestElement) error {
+func (compiler *ManifestCompiler) compileTypedefElement(ptr engineio.ElementPtr) error {
+	// Get the element from the compiler
+	element := compiler.elements[ptr]
+
 	// Convert element into a TypedefSchema
 	typedefSchema, ok := element.Data.(*TypedefSchema)
 	if !ok {
@@ -209,7 +209,7 @@ func (compiler *ManifestCompiler) compileTypedefElement(ptr uint64, element engi
 	// Generate the compiled element and store it
 	encoded, _ := polo.Polorize(datatype)
 	compiler.compiled[ptr] = &engineio.LogicElement{
-		Kind: string(TypedefElement),
+		Kind: TypedefElement,
 		Data: encoded,
 		Deps: element.Deps,
 	}
@@ -218,7 +218,10 @@ func (compiler *ManifestCompiler) compileTypedefElement(ptr uint64, element engi
 }
 
 // compileStateElement compiles an engineio.ManifestElement object of type StateElement
-func (compiler *ManifestCompiler) compileStateElement(ptr uint64, element engineio.ManifestElement) error {
+func (compiler *ManifestCompiler) compileStateElement(ptr engineio.ElementPtr) error {
+	// Get the element from the compiler
+	element := compiler.elements[ptr]
+
 	// Convert element into a StateSchema
 	stateSchema, ok := element.Data.(*StateSchema)
 	if !ok {
@@ -236,7 +239,7 @@ func (compiler *ManifestCompiler) compileStateElement(ptr uint64, element engine
 	switch stateSchema.Kind {
 	case engineio.PersistentState:
 		// Check if a persistent storage class has already been compiled
-		if compiler.persistent != nil {
+		if compiler.state.Persistent() {
 			return errors.New("invalid state element: duplicate persistent state")
 		}
 
@@ -247,12 +250,12 @@ func (compiler *ManifestCompiler) compileStateElement(ptr uint64, element engine
 		}
 
 		// Set the persistent state pointer in the compiler
-		compiler.persistent = &ptr
+		compiler.state[engineio.PersistentState] = ptr
 
 		// Generate the compiled element and store it
 		encoded, _ := polo.Polorize(layout)
 		compiler.compiled[ptr] = &engineio.LogicElement{
-			Kind: string(StateElement),
+			Kind: StateElement,
 			Data: encoded,
 			Deps: element.Deps,
 		}
@@ -267,7 +270,10 @@ func (compiler *ManifestCompiler) compileStateElement(ptr uint64, element engine
 }
 
 // compileRoutineElement compiles an engineio.ManifestElement object of type RoutineElement
-func (compiler *ManifestCompiler) compileRoutineElement(ptr uint64, element engineio.ManifestElement) error {
+func (compiler *ManifestCompiler) compileRoutineElement(ptr engineio.ElementPtr) error {
+	// Get the element from the compiler
+	element := compiler.elements[ptr]
+
 	// Convert element into a RoutineSchema
 	routineSchema, ok := element.Data.(*RoutineSchema)
 	if !ok {
@@ -280,8 +286,13 @@ func (compiler *ManifestCompiler) compileRoutineElement(ptr uint64, element engi
 		// Supported with no checks (all dependencies supported)
 
 	case engineio.DeployerCallsite:
-		if !runtime.IsExportedName(routineSchema.Name) || !runtime.IsMutableName(routineSchema.Name) {
+		if !IsExportedName(routineSchema.Name) || !IsMutableName(routineSchema.Name) {
 			return errors.Errorf("invalid routine element: invalid name '%v' for deployer routine", routineSchema.Name)
+		}
+
+		// Check if the persistent state has been compiled
+		if !compiler.state.Persistent() {
+			return errors.New("invalid routine element: deployer routine for non-existent persistent storage")
 		}
 
 		var stateDepFound bool
@@ -294,9 +305,9 @@ func (compiler *ManifestCompiler) compileRoutineElement(ptr uint64, element engi
 					return errors.New("invalid routine element: dependency on multiple state elements")
 				}
 
-				// Check if the persistent state has been compiled and that the dependency pointer matches it
-				if *compiler.persistent != dep {
-					return errors.New("invalid routine element: deployer routine for non-existent persistent storage")
+				// Check that dependency pointer matches persistent state
+				if compiler.state[engineio.PersistentState] != dep {
+					return errors.New("invalid routine element: invalid state element dep")
 				}
 
 				// Set the stateDepFound to true, this prevents the same
@@ -330,7 +341,7 @@ func (compiler *ManifestCompiler) compileRoutineElement(ptr uint64, element engi
 	// Generate the compiled element
 	encoded, _ := polo.Polorize(routine)
 	compiler.compiled[ptr] = &engineio.LogicElement{
-		Kind: string(RoutineElement),
+		Kind: RoutineElement,
 		Data: encoded,
 		Deps: element.Deps,
 	}
@@ -339,7 +350,7 @@ func (compiler *ManifestCompiler) compileRoutineElement(ptr uint64, element engi
 }
 
 // compileRoutine compiles a RoutineSchema object into a runtime.Routine.
-func compileRoutine(schema *RoutineSchema, instructSet runtime.InstructionSet) (*runtime.Routine, error) {
+func compileRoutine(schema *RoutineSchema, instructSet InstructionSet) (*Routine, error) {
 	// Create a new FieldSet from the schema 'accepts'
 	inputs, err := compileFieldTable(schema.Accepts)
 	if err != nil {
@@ -359,7 +370,7 @@ func compileRoutine(schema *RoutineSchema, instructSet runtime.InstructionSet) (
 	}
 
 	// Create a routine for the compiled instructions
-	return &runtime.Routine{
+	return &Routine{
 		Name:      schema.Name,
 		Kind:      schema.Kind,
 		Instructs: instructions,
@@ -371,7 +382,7 @@ func compileRoutine(schema *RoutineSchema, instructSet runtime.InstructionSet) (
 }
 
 // compileInstructions compiles an InstructionsSchema into some runtime.Instructions.
-func compileInstructions(schema InstructionsSchema, instructSet runtime.InstructionSet) (runtime.Instructions, error) {
+func compileInstructions(schema InstructionsSchema, instructSet InstructionSet) (Instructions, error) {
 	switch {
 	case schema.Bin != nil:
 		return compileBinInstructions(schema.Bin, instructSet)
@@ -385,9 +396,9 @@ func compileInstructions(schema InstructionsSchema, instructSet runtime.Instruct
 }
 
 // compileBinInstructions compiles an InstructionsSchema with binary instructions into runtime.Instructions.
-func compileBinInstructions(instructions []byte, instructSet runtime.InstructionSet) (runtime.Instructions, error) {
+func compileBinInstructions(instructions []byte, instructSet InstructionSet) (Instructions, error) {
 	reader := bytes.NewReader(instructions)
-	instructs := make(runtime.Instructions, 0)
+	instructs := make(Instructions, 0)
 
 	for line := 1; reader.Len() != 0; line++ {
 		// Read an opcode byte
@@ -405,14 +416,14 @@ func compileBinInstructions(instructions []byte, instructSet runtime.Instruction
 		}
 
 		// Append instruction into the program code
-		instructs = append(instructs, runtime.Instruction{Op: runtime.OpCode(opcode), Args: operands})
+		instructs = append(instructs, Instruction{Op: OpCode(opcode), Args: operands})
 	}
 
 	return instructs, nil
 }
 
 // compileHexInstructions compiles an InstructionsSchema with hexadecimal instructions into runtime.Instructions.
-func compileHexInstructions(instructions string, instructSet runtime.InstructionSet) (runtime.Instructions, error) {
+func compileHexInstructions(instructions string, instructSet InstructionSet) (Instructions, error) {
 	// Remove the 0x prefix if it exists
 	instructions = strings.TrimPrefix(instructions, "0x")
 
@@ -425,7 +436,7 @@ func compileHexInstructions(instructions string, instructSet runtime.Instruction
 }
 
 // compileAsmInstructions compiles an InstructionsSchema with assembly instructions into runtime.Instructions.
-func compileAsmInstructions(_ []string, _ runtime.InstructionSet) (runtime.Instructions, error) {
+func compileAsmInstructions(_ []string, _ InstructionSet) (Instructions, error) {
 	return nil, errors.New("cannot compile assembly instructions (yet!)")
 }
 

@@ -20,6 +20,10 @@ func (x U64Value) Type() *Typedef { return TypeU64 }
 // Implements the Value interface for U64Value.
 func (x U64Value) Copy() Value { return x }
 
+// Norm returns the normalized value of U64Value as an uint64.
+// Implements the Value interface for U64Value.
+func (x U64Value) Norm() any { return uint64(x) }
+
 // Data returns the POLO encoded bytes of U64Value.
 // Implements the Value interface for U64Value.
 func (x U64Value) Data() []byte {

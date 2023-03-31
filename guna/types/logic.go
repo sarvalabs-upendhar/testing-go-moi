@@ -20,16 +20,16 @@ type LogicObject struct {
 	// Represents the CID of the Logic Manifest
 	ManifestHash types.Hash
 
-	Sealed     bool
-	AssetLogic bool
+	Sealed      bool
+	AssetLogic  bool
+	Interactive bool
 
-	PersistentStateful  *uint64
-	EphemeralStateful   *uint64
-	InteractionsAllowed bool
-
+	// Represents the usage of different type of context states by the logic
+	StateMatrix engineio.ContextStateMatrix
+	// Represents the dependency graph between logic elements
 	Dependencies *engineio.DependencyGraph
 	// Represents the collection of all LogicElement objects
-	Elements map[uint64]*engineio.LogicElement
+	Elements map[engineio.ElementPtr]*engineio.LogicElement
 	// Represents mapping of string names to LogicCallsite pointers
 	Callsites map[string]*engineio.Callsite
 }
@@ -38,9 +38,9 @@ type LogicObject struct {
 func NewLogicObject(address types.Address, descriptor *engineio.LogicDescriptor) *LogicObject {
 	// Generate the LogicID from the payload
 	logicID, _ := types.NewLogicIDv0(
-		descriptor.PersistentState != nil,
-		descriptor.EphemeralState != nil,
-		descriptor.AllowsInteractions,
+		descriptor.StateMatrix.Persistent(),
+		descriptor.StateMatrix.Ephemeral(),
+		descriptor.Interactive,
 		false, 0, address,
 	)
 
@@ -49,13 +49,11 @@ func NewLogicObject(address types.Address, descriptor *engineio.LogicDescriptor)
 		EngineKind:   descriptor.Engine,
 		ManifestHash: descriptor.Manifest,
 
-		Sealed:     false,
-		AssetLogic: false,
+		Sealed:      false,
+		AssetLogic:  false,
+		Interactive: descriptor.Interactive,
 
-		PersistentStateful:  descriptor.PersistentState,
-		EphemeralStateful:   descriptor.EphemeralState,
-		InteractionsAllowed: descriptor.AllowsInteractions,
-
+		StateMatrix:  descriptor.StateMatrix,
 		Dependencies: descriptor.DepGraph,
 		Elements:     descriptor.Elements,
 		Callsites:    descriptor.Callsites,
@@ -72,14 +70,18 @@ func (logic LogicObject) IsSealed() bool { return logic.Sealed }
 
 func (logic LogicObject) IsAssetLogic() bool { return logic.AssetLogic }
 
-func (logic LogicObject) AllowsInteractions() bool { return logic.InteractionsAllowed }
+func (logic LogicObject) AllowsInteractions() bool { return logic.Interactive }
 
-func (logic LogicObject) PersistentState() (uint64, bool) {
-	return *logic.PersistentStateful, logic.PersistentStateful != nil
+func (logic LogicObject) PersistentState() (engineio.ElementPtr, bool) {
+	ptr, exists := logic.StateMatrix[engineio.PersistentState]
+
+	return ptr, exists
 }
 
-func (logic LogicObject) EphemeralState() (uint64, bool) {
-	return *logic.EphemeralStateful, logic.EphemeralStateful != nil
+func (logic LogicObject) EphemeralState() (engineio.ElementPtr, bool) {
+	ptr, exists := logic.StateMatrix[engineio.EphemeralState]
+
+	return ptr, exists
 }
 
 func (logic LogicObject) GetCallsite(name string) (*engineio.Callsite, bool) {
@@ -88,11 +90,11 @@ func (logic LogicObject) GetCallsite(name string) (*engineio.Callsite, bool) {
 	return callsite, ok
 }
 
-func (logic LogicObject) GetElementDeps(ptr uint64) []uint64 {
+func (logic LogicObject) GetElementDeps(ptr engineio.ElementPtr) []engineio.ElementPtr {
 	return logic.Dependencies.AllDependencies(ptr)
 }
 
-func (logic LogicObject) GetElement(index uint64) (*engineio.LogicElement, bool) {
+func (logic LogicObject) GetElement(index engineio.ElementPtr) (*engineio.LogicElement, bool) {
 	element, ok := logic.Elements[index]
 
 	return element, ok

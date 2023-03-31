@@ -7,23 +7,19 @@ import (
 	"github.com/sarvalabs/moichain/jug/engineio"
 )
 
-type ElementKind string
-
 const (
-	StateElement    ElementKind = "state"
-	ConstantElement ElementKind = "constant"
-	RoutineElement  ElementKind = "routine"
-	TypedefElement  ElementKind = "typedef"
-	ClassElement    ElementKind = "class"
+	StateElement    engineio.ElementKind = "state"
+	ConstantElement engineio.ElementKind = "constant"
+	RoutineElement  engineio.ElementKind = "routine"
+	TypedefElement  engineio.ElementKind = "typedef"
+	ClassElement    engineio.ElementKind = "class"
 )
 
-func ElementRegistry() engineio.ManifestElementRegistry {
-	return map[string]engineio.ManifestElementGenerator{
-		string(StateElement):    func() engineio.ManifestElementObject { return new(StateSchema) },
-		string(TypedefElement):  func() engineio.ManifestElementObject { return new(TypedefSchema) },
-		string(ConstantElement): func() engineio.ManifestElementObject { return new(ConstantSchema) },
-		string(RoutineElement):  func() engineio.ManifestElementObject { return new(RoutineSchema) },
-	}
+var elementGenerators = map[engineio.ElementKind]engineio.ManifestElementGenerator{
+	StateElement:    func() engineio.ManifestElementObject { return new(StateSchema) },
+	TypedefElement:  func() engineio.ManifestElementObject { return new(TypedefSchema) },
+	ConstantElement: func() engineio.ManifestElementObject { return new(ConstantSchema) },
+	RoutineElement:  func() engineio.ManifestElementObject { return new(RoutineSchema) },
 }
 
 type StateSchema struct {
