@@ -2,6 +2,7 @@ package kbft
 
 import (
 	"github.com/hashicorp/go-hclog"
+
 	"github.com/sarvalabs/moichain/utils"
 )
 

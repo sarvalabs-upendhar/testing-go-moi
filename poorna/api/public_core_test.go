@@ -98,14 +98,12 @@ func TestPublicCoreAPI_CreateRPCTesseract(t *testing.T) {
 	// make sure to fill at least one field of every field of tesseract so that we can verify that every field is copied
 	tesseractParams := &tests.CreateTesseractParams{
 		Address: tests.RandomAddress(t),
-		TesseractCallback: func(ts *types.Tesseract) {
-			ts.Seal = []byte{1, 2}
-			ts.Receipts = map[types.Hash]*types.Receipt{
-				tests.RandomHash(t): {IxHash: tests.RandomHash(t)},
-			}
-			ts.Body = types.TesseractBody{
-				StateHash: tests.RandomHash(t),
-			}
+		Receipts: map[types.Hash]*types.Receipt{
+			tests.RandomHash(t): {IxHash: tests.RandomHash(t)},
+		},
+		Seal: []byte{1, 2},
+		BodyCallback: func(body *types.TesseractBody) {
+			body.StateHash = tests.RandomHash(t)
 		},
 	}
 
@@ -165,14 +163,12 @@ func TestPublicCoreAPI_GetRPCTesseract(t *testing.T) {
 		Address: tests.RandomAddress(t),
 		Height:  height,
 		Ixns:    []*types.Interaction{ix},
-		TesseractCallback: func(ts *types.Tesseract) {
-			ts.Seal = []byte{1, 2}
-			ts.Receipts = map[types.Hash]*types.Receipt{
-				tests.RandomHash(t): {IxHash: tests.RandomHash(t)},
-			}
-			ts.Body = types.TesseractBody{
-				StateHash: tests.RandomHash(t),
-			}
+		Receipts: map[types.Hash]*types.Receipt{
+			tests.RandomHash(t): {IxHash: tests.RandomHash(t)},
+		},
+		Seal: []byte{1, 2},
+		BodyCallback: func(body *types.TesseractBody) {
+			body.StateHash = tests.RandomHash(t)
 		},
 	}
 

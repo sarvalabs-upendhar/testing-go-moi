@@ -67,13 +67,13 @@ import (
 	"unicode/utf8"
 
 	"github.com/hashicorp/go-hclog"
+	stats "github.com/libp2p/go-libp2p-gorpc/stats"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	"github.com/sarvalabs/moichain/types"
 
-	stats "github.com/libp2p/go-libp2p-gorpc/stats"
+	"github.com/sarvalabs/moichain/types"
 )
 
 // ContextKey is special type for using as a key with context.Context

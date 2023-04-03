@@ -347,9 +347,9 @@ func createRPCInteraction(ix *types.Interaction) (*ptypes.RPCInteraction, error)
 func CreateRPCTesseract(ts *types.Tesseract) (*ptypes.RPCTesseract, error) {
 	var err error
 
-	rpcIxns := make([]*ptypes.RPCInteraction, len(ts.Ixns))
+	rpcIxns := make([]*ptypes.RPCInteraction, len(ts.Interactions()))
 
-	for i, ixn := range ts.Ixns {
+	for i, ixn := range ts.Interactions() {
 		rpcIxns[i], err = createRPCInteraction(ixn)
 		if err != nil {
 			return nil, err
@@ -357,10 +357,10 @@ func CreateRPCTesseract(ts *types.Tesseract) (*ptypes.RPCTesseract, error) {
 	}
 
 	return &ptypes.RPCTesseract{
-		Header:   ts.Header,
-		Body:     ts.Body,
+		Header:   ts.Header(),
+		Body:     ts.Body(),
 		Ixns:     rpcIxns,
-		Receipts: ts.Receipts,
-		Seal:     ts.Seal,
+		Receipts: ts.Receipts(),
+		Seal:     ts.Seal(),
 	}, nil
 }

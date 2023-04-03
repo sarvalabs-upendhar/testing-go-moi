@@ -9,14 +9,12 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/sarvalabs/moichain/types"
-
-	ktypes "github.com/sarvalabs/moichain/krama/types"
-
-	"github.com/sarvalabs/moichain/utils"
-
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
+
+	ktypes "github.com/sarvalabs/moichain/krama/types"
+	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/utils"
 )
 
 const (

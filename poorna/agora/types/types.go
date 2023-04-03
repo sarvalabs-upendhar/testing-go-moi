@@ -1,16 +1,16 @@
 package types
 
 import (
+	"log"
 	"sync"
 	"time"
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
+	"golang.org/x/crypto/blake2b"
 
-	"github.com/rs/zerolog/log"
 	"github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/types"
-	"golang.org/x/crypto/blake2b"
 )
 
 const MaxPeerListSize = 5

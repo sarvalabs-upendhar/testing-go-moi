@@ -7,13 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/moichain/utils"
-
 	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/utils"
 )
 
 func TestIxPool_AddInteractions_checkIx(t *testing.T) {

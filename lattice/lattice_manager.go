@@ -183,13 +183,16 @@ func (c *ChainManager) fetchContextForAgora(ts types.Tesseract) ([]id.KramaID, e
 			break
 		}
 
+		ts.ContextHash()
 		// fetch the context delta
-		deltaGroup := ts.Body.ContextDelta[address]
+		deltaGroup, _ := ts.GetContextDeltaByAddress(address)
 		// add the delta peers to list
 		peers = append(peers, deltaGroup.BehaviouralNodes...)
 		peers = append(peers, deltaGroup.RandomNodes...)
 
-		_, behaviour, random, err := c.sm.GetContextByHash(address, ts.Header.ContextLock[address].ContextHash)
+		contextLock, _ := ts.ContextLockByAddress(address)
+
+		_, behaviour, random, err := c.sm.GetContextByHash(address, contextLock.ContextHash)
 		if err == nil {
 			peers = append(peers, behaviour...)
 			peers = append(peers, random...)
@@ -197,11 +200,11 @@ func (c *ChainManager) fetchContextForAgora(ts types.Tesseract) ([]id.KramaID, e
 			break
 		}
 
-		if ts.PreviousHash().IsNil() {
+		if ts.PrevHash().IsNil() {
 			break
 		}
 
-		t, err := c.GetTesseract(ts.PreviousHash(), false)
+		t, err := c.GetTesseract(ts.PrevHash(), false)
 		if err != nil {
 			return nil, errors.Wrap(err, "error fetching tesseract")
 		}
@@ -368,17 +371,19 @@ func (c *ChainManager) isSealValid(ts *types.Tesseract, id id.KramaID) (bool, er
 		return false, err
 	}
 
-	return mudra.Verify(rawData, ts.Seal, publicKey[0])
+	return mudra.Verify(rawData, ts.Seal(), publicKey[0])
 }
 
 func (c *ChainManager) verifySignatures(ts *types.Tesseract, ics *ktypes.ICSNodeSet) (bool, error) {
+	extraData := ts.Extra()
+
 	var (
 		verificationInitTime = time.Now()
-		publicKeys           = make([][]byte, 0, ts.Header.Extra.VoteSet.TrueIndicesSize())
+		publicKeys           = make([][]byte, 0, extraData.VoteSet.TrueIndicesSize())
 		votesCounter         = make([]int, 5) // Only 5 because we don't consider observer nodes vote
 	)
 
-	for _, index := range ts.Header.Extra.VoteSet.GetTrueIndices() {
+	for _, index := range extraData.VoteSet.GetTrueIndices() {
 		slots, _, _, publicKey := ics.GetKramaID(int32(index))
 		if slots != nil { // ts.Header.Extra.VoteSet.GetIndex(index)
 			publicKeys = append(publicKeys, publicKey)
@@ -403,8 +408,8 @@ func (c *ChainManager) verifySignatures(ts *types.Tesseract, ics *ktypes.ICSNode
 
 	vote := ktypes.CanonicalVote{
 		Type:   ktypes.PRECOMMIT,
-		Round:  ts.Header.Extra.Round,
-		GridID: ts.Header.Extra.GridID,
+		Round:  extraData.Round,
+		GridID: extraData.GridID,
 	}
 
 	rawData, err := vote.Bytes()
@@ -412,7 +417,7 @@ func (c *ChainManager) verifySignatures(ts *types.Tesseract, ics *ktypes.ICSNode
 		return false, err
 	}
 
-	verified, err := c.signatureVerifier(rawData, ts.Header.Extra.CommitSignature, publicKeys)
+	verified, err := c.signatureVerifier(rawData, extraData.CommitSignature, publicKeys)
 	if err != nil {
 		return false, err
 	}
@@ -428,16 +433,16 @@ func (c *ChainManager) verifyHeaders(ts *types.Tesseract) error {
 		err               error
 	)
 
-	c.logger.Debug("Verifying headers", "addr", ts.Header.Address)
+	c.logger.Debug("Verifying headers", "addr", ts.Address())
 
-	if ts.Header.ClusterID == "genesis" {
+	if ts.ClusterID() == "genesis" {
 		return nil
 	}
 
-	if info, ok := ts.Header.ContextLock[types.SargaAddress]; !ok {
-		accountRegistered, err = c.sm.IsAccountRegistered(ts.Header.Address)
+	if info, ok := ts.ContextLockByAddress(types.SargaAddress); !ok {
+		accountRegistered, err = c.sm.IsAccountRegistered(ts.Address())
 	} else {
-		accountRegistered, err = c.sm.IsAccountRegisteredAt(ts.Header.Address, info.TesseractHash)
+		accountRegistered, err = c.sm.IsAccountRegisteredAt(ts.Address(), info.TesseractHash)
 	}
 
 	if err != nil {
@@ -445,7 +450,7 @@ func (c *ChainManager) verifyHeaders(ts *types.Tesseract) error {
 	}
 
 	if accountRegistered {
-		parent, err := c.GetTesseract(ts.Header.PrevHash, false)
+		parent, err := c.GetTesseract(ts.PrevHash(), false)
 		if err != nil {
 			c.logger.Error("Failed to fetch parent tesseract", "error", err, ts.Address())
 
@@ -453,12 +458,12 @@ func (c *ChainManager) verifyHeaders(ts *types.Tesseract) error {
 		}
 
 		// Check Heights
-		if parent.Header.Height != ts.Header.Height-1 {
+		if parent.Height() != ts.Height()-1 {
 			return types.ErrInvalidHeight
 		}
 		// TODO: Add more checks
 		// Check time stamp
-		if ts.Header.Timestamp < parent.Header.Timestamp {
+		if ts.Timestamp() < parent.Timestamp() {
 			return types.ErrInvalidBlockTime
 		}
 	}
@@ -467,8 +472,8 @@ func (c *ChainManager) verifyHeaders(ts *types.Tesseract) error {
 }
 
 func (c *ChainManager) storeReceipts(ts *types.Tesseract) error {
-	if ts.GetReceipts() != nil {
-		rawReceipts, err := ts.GetReceipts().Bytes()
+	if ts.HasReceipts() {
+		rawReceipts, err := ts.Receipts().Bytes()
 		if err != nil {
 			return err
 		}
@@ -536,7 +541,7 @@ func (c *ChainManager) addTesseract(
 		return err
 	}
 
-	if exists, err := c.db.HasTesseract(t.Header.PrevHash); !exists || err != nil {
+	if exists, err := c.db.HasTesseract(t.PrevHash()); !exists || err != nil {
 		latticeExists = false
 	}
 
@@ -574,7 +579,7 @@ func (c *ChainManager) addTesseract(
 
 	bucketNo, isBucketCountIncremented, err := c.db.UpdateAccMetaInfo(
 		addr,
-		t.Header.Height,
+		t.Height(),
 		tesseractHash,
 		accType,
 		latticeExists,
@@ -606,7 +611,7 @@ func (c *ChainManager) addTesseract(
 
 	c.logger.Info("Tesseract Added", "addr", addr, "hash", tesseractHash)
 
-	c.sm.Cleanup(t.Header.Address)
+	c.sm.Cleanup(t.Address())
 
 	c.ixpool.ResetWithHeaders(t)
 
@@ -623,7 +628,7 @@ func (c *ChainManager) addTesseractsWithState(
 		return errors.New("empty tesseracts")
 	}
 
-	if _, ok := dirtyStorage[tesseracts[0].GetICSHash()]; !ok {
+	if _, ok := dirtyStorage[tesseracts[0].ICSHash()]; !ok {
 		return errors.New("cluster info not found")
 	}
 
@@ -685,7 +690,7 @@ func (c *ChainManager) AddSyncedTesseract(
 		return err
 	}
 
-	dirtyStorage[tesseracts[0].GetICSHash()] = rawData
+	dirtyStorage[tesseracts[0].ICSHash()] = rawData
 
 	return c.addTesseractsWithState(dirtyStorage, tesseracts...)
 }
@@ -1039,14 +1044,14 @@ func (c *ChainManager) tesseractHandler(pubSubMsg *pubsub.Message) error {
 	}
 
 	clusterInfo := new(ptypes.ICSClusterInfo)
-	if err = clusterInfo.FromBytes(msg.Delta[ts.GetICSHash()]); err != nil {
+	if err = clusterInfo.FromBytes(msg.Delta[ts.ICSHash()]); err != nil {
 		return err
 	}
 
 	c.logger.Trace("Tesseract Received from",
 		"Sender", msg.Sender,
 		"Hash", tsHash,
-		"Address", ts.Header.Address.Hex())
+		"Address", ts.Address().Hex())
 
 	if !c.knownTesseracts.Contains(tsHash) {
 		c.knownTesseracts.Add(tsHash)
@@ -1095,7 +1100,7 @@ func (c *ChainManager) executeAndValidate(ts []*types.Tesseract) error {
 	}
 
 	for _, t := range ts {
-		t.Receipts = receipts
+		t.SetReceipts(receipts)
 	}
 
 	return nil
@@ -1123,7 +1128,7 @@ func areStateHashesValid(tesseracts []*types.Tesseract, receipts types.Receipts)
 }
 
 func isReceiptAndGroupHashValid(tesseracts []*types.Tesseract, receipts types.Receipts) bool {
-	gridHash := tesseracts[0].Header.GridHash
+	gridHash := tesseracts[0].GridHash()
 
 	receiptsHash, err := receipts.Hash()
 	if err != nil {
@@ -1131,7 +1136,7 @@ func isReceiptAndGroupHashValid(tesseracts []*types.Tesseract, receipts types.Re
 	}
 
 	for _, ts := range tesseracts {
-		if ts.ReceiptHash() != receiptsHash || ts.Header.GridHash != gridHash {
+		if ts.ReceiptHash() != receiptsHash || ts.GridHash() != gridHash {
 			return false
 		}
 	}

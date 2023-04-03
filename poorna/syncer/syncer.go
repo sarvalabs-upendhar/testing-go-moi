@@ -634,7 +634,7 @@ func (s *Syncer) fetchTesseractState(tesseract *types.Tesseract, fetchContext []
 		return err
 	}
 
-	if tesseract.PreviousHash().IsNil() {
+	if tesseract.PrevHash().IsNil() {
 		s.state.CreateDirtyObject(tesseract.Address(), types.AccTypeFromIxType(tesseract.Interactions()[0].Type()))
 	}
 
@@ -706,9 +706,9 @@ func (s *Syncer) tesseractWorker(id int, reqQueue chan *TesseractSyncJob) {
 			s.logger.Debug(
 				"Got a new tesseract info sync JOB",
 				"address",
-				job.tesseract.Header.Address,
+				job.tesseract.Address(),
 				"height",
-				job.tesseract.Header.Height,
+				job.tesseract.Height(),
 			)
 
 			if err := s.fetchTesseractState(ts, job.fetchContext); err != nil {
@@ -1000,15 +1000,15 @@ func (s *Syncer) latticeWorker(id int, job <-chan *SyncJob) {
 						tesseractStack.Push(&types.Item{Tesseract: t, Delta: delta, Sender: "job.peer"}) // FIXME:
 					}
 
-					if !t.Header.PrevHash.IsNil() {
-						exists, err = s.db.Contains(t.Header.PrevHash.Bytes())
+					if !t.PrevHash().IsNil() {
+						exists, err = s.db.Contains(t.PrevHash().Bytes())
 						if err != nil {
 							s.logger.Error("Unable to fetch previous tesseract", "hash", hash)
 
 							return
 						}
 
-						hash = t.Header.PrevHash
+						hash = t.PrevHash()
 					} else {
 						exists = true
 					}
@@ -1023,11 +1023,11 @@ func (s *Syncer) latticeWorker(id int, job <-chan *SyncJob) {
 						log.Fatal("Error creating tesseract hash", err)
 					}
 
-					log.Printf("Adding %s tesseract to lattice %v", item.Tesseract.Header.Address.Hex(), tsHash)
+					log.Printf("Adding %s tesseract to lattice %v", item.Tesseract.Address().Hex(), tsHash)
 
 					icsClusterInfo := new(ptypes.ICSClusterInfo)
 					if err := icsClusterInfo.FromBytes(
-						item.Delta[item.Tesseract.Body.ConsensusProof.ICSHash],
+						item.Delta[item.Tesseract.ICSHash()],
 					); err != nil {
 						s.logger.Error("Error depolarising ics cluster Info", "err", err)
 
@@ -1047,7 +1047,7 @@ func (s *Syncer) latticeWorker(id int, job <-chan *SyncJob) {
 					log.Printf("Unable to get tesseract %s from %s Error %s", job.peer.id, job.hash, err)
 				} else {
 					icsClusterInfo := new(ptypes.ICSClusterInfo)
-					if err := icsClusterInfo.FromBytes(delta[t.Body.ConsensusProof.ICSHash]); err != nil {
+					if err := icsClusterInfo.FromBytes(delta[t.ICSHash()]); err != nil {
 						s.logger.Error("Error depolarising ics cluster Info", "err", err)
 
 						continue

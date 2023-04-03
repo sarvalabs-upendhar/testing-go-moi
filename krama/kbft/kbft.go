@@ -6,18 +6,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sarvalabs/moichain/utils"
-
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 
+	"github.com/sarvalabs/moichain/common"
 	ktypes "github.com/sarvalabs/moichain/krama/types"
 	mtypes "github.com/sarvalabs/moichain/mudra/common"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/telemetry/tracing"
-
-	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/utils"
 )
 
 const (
@@ -488,25 +486,32 @@ func (kbft *KBFT) updateConsensusInfoInTesseracts(
 	if err != nil {
 		return err
 	}
+
 	// Add evidence data to dirty list
 	kbft.ics.AddDirty(evidenceHash, data)
 
 	for _, tesseract := range kbft.ProposalGrid.Tesseracts {
-		tesseract.Header.Extra.Round = kbft.Round
-		tesseract.Header.Extra.VoteSet = preCommits.bitarray
-		tesseract.Header.Extra.EvidenceHash = evidenceHash
-		tesseract.Header.Extra.GridID = gridID
-		tesseract.Header.Extra.CommitSignature = signature
-		tesseract.Receipts = kbft.ics.Receipts
+		extraData := types.CommitData{
+			Round:           kbft.Round,
+			CommitSignature: signature,
+			VoteSet:         preCommits.bitarray,
+			EvidenceHash:    evidenceHash,
+			GridID:          gridID,
+		}
+
+		tesseract.SetExtraData(extraData)
 
 		rawData, err := tesseract.Bytes()
 		if err != nil {
 			return err
 		}
 
-		if tesseract.Seal, err = kbft.vault.Sign(rawData, mtypes.BlsBLST); err != nil {
+		seal, err := kbft.vault.Sign(rawData, mtypes.BlsBLST)
+		if err != nil {
 			return errors.Wrap(err, "failed to sign the tesseract")
 		}
+
+		tesseract.SetSeal(seal)
 	}
 
 	return nil

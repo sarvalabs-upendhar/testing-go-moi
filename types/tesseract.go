@@ -2,6 +2,7 @@ package types
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"github.com/mr-tron/base58"
 	"github.com/pkg/errors"
@@ -20,11 +21,36 @@ const (
 
 type ContextDelta map[Address]*DeltaGroup
 
+func (ctx ContextDelta) Copy() ContextDelta {
+	contextDelta := make(ContextDelta)
+
+	for key, value := range ctx {
+		contextDelta[key] = value.Copy()
+	}
+
+	return contextDelta
+}
+
 type DeltaGroup struct {
 	Role             ParticipantRole
 	BehaviouralNodes []kramaid.KramaID
 	RandomNodes      []kramaid.KramaID
 	ReplacedNodes    []kramaid.KramaID
+}
+
+func (d DeltaGroup) Copy() *DeltaGroup {
+	deltaGroup := &DeltaGroup{
+		Role:             d.Role,
+		BehaviouralNodes: make([]kramaid.KramaID, len(d.BehaviouralNodes)),
+		RandomNodes:      make([]kramaid.KramaID, len(d.RandomNodes)),
+		ReplacedNodes:    make([]kramaid.KramaID, len(d.ReplacedNodes)),
+	}
+
+	copy(deltaGroup.BehaviouralNodes, d.BehaviouralNodes)
+	copy(deltaGroup.RandomNodes, d.RandomNodes)
+	copy(deltaGroup.ReplacedNodes, d.ReplacedNodes)
+
+	return deltaGroup
 }
 
 type ContextLockInfo struct {
@@ -34,11 +60,12 @@ type ContextLockInfo struct {
 }
 
 type Tesseract struct {
-	Header   TesseractHeader
-	Body     TesseractBody
-	Ixns     Interactions
-	Receipts Receipts
-	Seal     []byte
+	header   TesseractHeader
+	body     TesseractBody
+	ixns     Interactions
+	receipts Receipts
+	seal     []byte
+	hash     atomic.Value
 }
 
 type TesseractHeader struct {
@@ -56,6 +83,42 @@ type TesseractHeader struct {
 	Extra       CommitData
 }
 
+func (h *TesseractHeader) Copy() TesseractHeader {
+	header := *h
+	header.ContextLock = make(map[Address]ContextLockInfo, len(h.ContextLock))
+
+	for k, v := range h.ContextLock {
+		header.ContextLock[k] = v
+	}
+
+	header.Extra = h.Extra.Copy()
+
+	return header
+}
+
+func (h *TesseractHeader) Hash() (Hash, error) {
+	header := TesseractHeader{
+		Address:     h.Address,
+		PrevHash:    h.PrevHash,
+		Height:      h.Height,
+		AnuUsed:     h.AnuUsed,
+		AnuLimit:    h.AnuLimit,
+		BodyHash:    h.BodyHash,
+		GridHash:    h.GridHash,
+		Operator:    h.Operator,
+		ClusterID:   h.ClusterID,
+		Timestamp:   h.Timestamp,
+		ContextLock: h.ContextLock,
+	}
+
+	data, err := polo.Polorize(header)
+	if err != nil {
+		return Hash{}, errors.Wrap(err, "failed to polorize tesseract header")
+	}
+
+	return GetHash(data), nil
+}
+
 type TesseractBody struct {
 	StateHash       Hash
 	ContextHash     Hash
@@ -63,6 +126,23 @@ type TesseractBody struct {
 	ReceiptHash     Hash
 	ContextDelta    ContextDelta // Some Problem here
 	ConsensusProof  PoXCData
+}
+
+func (b *TesseractBody) Copy() TesseractBody {
+	body := *b
+
+	body.ContextDelta = b.ContextDelta.Copy()
+
+	return body
+}
+
+func (b *TesseractBody) Hash() (Hash, error) {
+	hash, err := PoloHash(b)
+	if err != nil {
+		return NilHash, errors.Wrap(err, "failed to polorize tesseract body")
+	}
+
+	return hash, nil
 }
 
 type PoXCData struct {
@@ -79,103 +159,198 @@ type CommitData struct {
 	GridID          *TesseractGridID
 }
 
-func (t *Tesseract) GridLength() int32 {
-	return t.Header.Extra.GridID.Parts.Total
-}
+func (commitData *CommitData) Copy() CommitData {
+	data := *commitData
 
-func (t *Tesseract) Operator() string {
-	return t.Header.Operator
-}
+	if len(commitData.CommitSignature) > 0 {
+		data.CommitSignature = make([]byte, len(data.CommitSignature))
 
-func (t *Tesseract) GetICSHash() Hash {
-	return t.Body.ConsensusProof.ICSHash
-}
-
-func (t *Tesseract) BodyHash() Hash {
-	return t.Header.BodyHash
-}
-
-func (t *Tesseract) ComputeBodyHash() (Hash, error) {
-	hash, err := PoloHash(t.Body)
-	if err != nil {
-		return NilHash, errors.Wrap(err, "failed to polorize tesseract body")
+		copy(data.CommitSignature, commitData.CommitSignature)
 	}
 
-	return hash, nil
-}
-
-func (t *Tesseract) Hash() (Hash, error) {
-	protoHeader := new(TesseractHeader)
-	protoHeader.ContextLock = t.Header.ContextLock
-	protoHeader.Address = t.Header.Address
-	protoHeader.PrevHash = t.Header.PrevHash
-	protoHeader.Height = t.Header.Height
-	protoHeader.AnuUsed = t.Header.AnuUsed
-	protoHeader.AnuLimit = t.Header.AnuLimit
-	protoHeader.BodyHash = t.Header.BodyHash
-	protoHeader.GridHash = t.Header.GridHash
-	protoHeader.Operator = t.Header.Operator
-	protoHeader.ClusterID = t.Header.ClusterID
-	protoHeader.Timestamp = t.Header.Timestamp
-
-	data, err := polo.Polorize(protoHeader)
-	if err != nil {
-		return Hash{}, errors.Wrap(err, "failed to polorize tesseract header")
+	if commitData.VoteSet != nil {
+		data.VoteSet = commitData.VoteSet.Copy()
 	}
 
-	return GetHash(data), nil
+	if commitData.GridID != nil {
+		data.GridID = commitData.GridID.Copy()
+	}
+
+	return data
+}
+
+func NewTesseract(
+	header TesseractHeader,
+	body TesseractBody,
+	ixns Interactions,
+	receipts Receipts,
+	seal []byte,
+) *Tesseract {
+	bytes := make([]byte, len(seal))
+	copy(bytes, seal)
+
+	return &Tesseract{
+		header:   header.Copy(),
+		body:     body.Copy(),
+		ixns:     ixns,
+		receipts: receipts.Copy(),
+		seal:     bytes,
+	}
+}
+
+func (t *Tesseract) SetExtraData(data CommitData) {
+	t.header.Extra = data
+}
+
+func (t *Tesseract) SetSeal(seal []byte) {
+	t.seal = seal
+}
+
+func (t *Tesseract) SetReceipts(receipts Receipts) {
+	t.receipts = receipts.Copy()
+}
+
+func (t *Tesseract) Header() TesseractHeader {
+	return t.header.Copy()
+}
+
+func (t *Tesseract) Body() TesseractBody {
+	return t.body.Copy()
 }
 
 func (t *Tesseract) Interactions() Interactions {
-	return t.Ixns
+	return t.ixns
 }
 
-func (t *Tesseract) GetReceipts() Receipts {
-	return t.Receipts
+func (t *Tesseract) Receipts() Receipts {
+	return t.receipts.Copy()
 }
 
-func (t *Tesseract) ContextDelta() ContextDelta {
-	return t.Body.ContextDelta
+func (t *Tesseract) HasReceipts() bool {
+	return t.receipts != nil
+}
+
+func (t *Tesseract) Seal() []byte {
+	bytes := make([]byte, len(t.seal))
+
+	copy(bytes, t.seal)
+
+	return bytes
 }
 
 func (t *Tesseract) Address() Address {
-	return t.Header.Address
+	return t.header.Address
 }
 
-func (t *Tesseract) ContextHash() Hash {
-	return t.Body.ContextHash
-}
-
-func (t *Tesseract) PreviousHash() Hash {
-	return t.Header.PrevHash
-}
-
-func (t *Tesseract) InteractionHash() Hash {
-	return t.Body.InteractionHash
-}
-
-func (t *Tesseract) ReceiptHash() Hash {
-	return t.Body.ReceiptHash
-}
-
-func (t *Tesseract) GridHash() Hash {
-	return t.Header.GridHash
-}
-
-func (t *Tesseract) ClusterID() ClusterID {
-	return ClusterID(t.Header.ClusterID)
-}
-
-func (t *Tesseract) StateHash() Hash {
-	return t.Body.StateHash
+func (t *Tesseract) PrevHash() Hash {
+	return t.header.PrevHash
 }
 
 func (t *Tesseract) Height() uint64 {
-	return t.Header.Height
+	return t.header.Height
 }
 
-func (t *Tesseract) AnuUsed() uint64 {
-	return t.Header.AnuUsed
+func (t *Tesseract) BodyHash() Hash {
+	return t.header.BodyHash
+}
+
+func (t *Tesseract) GridHash() Hash {
+	return t.header.GridHash
+}
+
+func (t *Tesseract) Operator() string {
+	return t.header.Operator
+}
+
+func (t *Tesseract) ContextLock() map[Address]ContextLockInfo {
+	contextLock := make(map[Address]ContextLockInfo, len(t.header.ContextLock))
+
+	for k, v := range t.header.ContextLock {
+		contextLock[k] = v
+	}
+
+	return contextLock
+}
+
+func (t *Tesseract) ContextLockByAddress(address Address) (ContextLockInfo, bool) {
+	ctxLockInfo, ok := t.header.ContextLock[address]
+
+	return ctxLockInfo, ok
+}
+
+func (t *Tesseract) GridLength() int32 {
+	return t.header.Extra.GridID.Parts.Total
+}
+
+func (t *Tesseract) ClusterID() ClusterID {
+	return ClusterID(t.header.ClusterID)
+}
+
+func (t *Tesseract) Timestamp() int64 {
+	return t.header.Timestamp
+}
+
+func (t *Tesseract) Extra() CommitData {
+	return t.header.Extra.Copy()
+}
+
+func (t *Tesseract) ContextDelta() ContextDelta {
+	return t.body.ContextDelta.Copy()
+}
+
+func (t *Tesseract) GetContextDeltaByAddress(address Address) (DeltaGroup, bool) {
+	delta, ok := t.body.ContextDelta[address]
+	if !ok {
+		return DeltaGroup{}, ok
+	}
+
+	return *delta.Copy(), ok
+}
+
+func (t *Tesseract) ContextHash() Hash {
+	return t.body.ContextHash
+}
+
+func (t *Tesseract) InteractionHash() Hash {
+	return t.body.InteractionHash
+}
+
+func (t *Tesseract) ReceiptHash() Hash {
+	return t.body.ReceiptHash
+}
+
+func (t *Tesseract) StateHash() Hash {
+	return t.body.StateHash
+}
+
+func (t *Tesseract) ConsensusProof() PoXCData {
+	return t.body.ConsensusProof
+}
+
+func (t *Tesseract) ICSHash() Hash {
+	return t.body.ConsensusProof.ICSHash
+}
+
+func (t *Tesseract) Hash() (Hash, error) {
+	if hash := t.hash.Load(); hash != nil {
+		actualHash, ok := hash.(Hash)
+		if !ok {
+			return NilHash, ErrInvalidHash
+		}
+
+		return actualHash, nil
+	}
+
+	header := t.Header()
+
+	hash, err := header.Hash()
+	if err != nil {
+		return Hash{}, err
+	}
+
+	t.hash.Store(hash)
+
+	return hash, nil
 }
 
 func (t *Tesseract) Bytes() ([]byte, error) {
@@ -200,25 +375,25 @@ func (t *Tesseract) FromBytes(bytes []byte) error {
 // CanonicalWithoutSeal method returns a copy of the tesseract without seal and interactions
 func (t *Tesseract) CanonicalWithoutSeal() *CanonicalTesseractWithoutSeal {
 	return &CanonicalTesseractWithoutSeal{
-		Header: t.Header,
-		Body:   t.Body,
+		Header: t.header,
+		Body:   t.body,
 	}
 }
 
 // Canonical method returns a copy of the tesseract without interactions
 func (t *Tesseract) Canonical() *CanonicalTesseract {
 	return &CanonicalTesseract{
-		Header: t.Header,
-		Body:   t.Body,
-		Seal:   t.Seal,
+		Header: t.header,
+		Body:   t.body,
+		Seal:   t.seal,
 	}
 }
 
 func (t *Tesseract) GetTesseractWithoutIxns() *Tesseract {
 	return &Tesseract{
-		Header: t.Header,
-		Body:   t.Body,
-		Seal:   t.Seal,
+		header: t.header,
+		body:   t.body,
+		seal:   t.seal,
 	}
 }
 
@@ -248,10 +423,10 @@ func (c *CanonicalTesseract) FromBytes(bytes []byte) error {
 
 func (c *CanonicalTesseract) ToTesseract(ixns Interactions) *Tesseract {
 	return &Tesseract{
-		Header: c.Header,
-		Body:   c.Body,
-		Ixns:   ixns,
-		Seal:   c.Seal,
+		header: c.Header,
+		body:   c.Body,
+		ixns:   ixns,
+		seal:   c.Seal,
 	}
 }
 
@@ -304,21 +479,44 @@ type TesseractParts struct {
 	Heights []uint64
 }
 
+func (p *TesseractParts) Copy() *TesseractParts {
+	parts := &TesseractParts{
+		Total:   p.Total,
+		Hashes:  make([]Hash, len(p.Hashes)),
+		Heights: make([]uint64, len(p.Heights)),
+	}
+
+	copy(parts.Hashes, p.Hashes)
+	copy(parts.Heights, p.Heights)
+
+	return parts
+}
+
 type TesseractGridID struct {
 	Hash  Hash
 	Parts *TesseractParts
 }
 
-func (tid *TesseractGridID) IsNil() bool {
-	return tid.Hash.IsNil() && len(tid.Parts.Hashes) == 0
+func (gridId *TesseractGridID) IsNil() bool {
+	return gridId.Hash.IsNil() && len(gridId.Parts.Hashes) == 0
 }
 
-func (tid *TesseractGridID) String() string {
-	if !tid.IsNil() {
-		return tid.Hash.Hex()
+func (gridId *TesseractGridID) String() string {
+	if !gridId.IsNil() {
+		return gridId.Hash.Hex()
 	}
 
 	return "Nil"
+}
+
+func (gridId *TesseractGridID) Copy() *TesseractGridID {
+	id := *gridId
+
+	if gridId.Parts != nil {
+		id.Parts = gridId.Parts.Copy()
+	}
+
+	return &id
 }
 
 // ClusterID ...

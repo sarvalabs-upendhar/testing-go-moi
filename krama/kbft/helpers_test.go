@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/common/tests"
 	ktypes "github.com/sarvalabs/moichain/krama/types"
@@ -16,7 +18,6 @@ import (
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/types"
 	"github.com/sarvalabs/moichain/utils"
-	"github.com/stretchr/testify/require"
 )
 
 const ensureTimeout = time.Millisecond * 200
@@ -414,31 +415,37 @@ func createTestClusterInfo(
 			}
 		}
 
+		senderHeader := types.TesseractHeader{
+			Address: ixs[0].Sender(),
+			Height:  newHeights[0],
+		}
+
 		clusterInfo.Grid = []*types.Tesseract{
-			{
-				Header: types.TesseractHeader{
-					Address: ixs[0].Sender(),
-					Height:  newHeights[0],
-				},
-			},
+			types.NewTesseract(senderHeader, types.TesseractBody{}, nil, nil, nil),
 		}
 
 		if !ixs[0].Receiver().IsNil() {
-			clusterInfo.Grid = append(clusterInfo.Grid, &types.Tesseract{
-				Header: types.TesseractHeader{
-					Address: ixs[0].Receiver(),
-					Height:  newHeights[1],
-				},
-			})
+			receiverHeader := types.TesseractHeader{
+				Address: ixs[0].Receiver(),
+				Height:  newHeights[1],
+			}
+
+			clusterInfo.Grid = append(
+				clusterInfo.Grid,
+				types.NewTesseract(receiverHeader, types.TesseractBody{}, nil, nil, nil),
+			)
 		}
 
 		if nonRegisteredReceiver {
-			clusterInfo.Grid = append(clusterInfo.Grid, &types.Tesseract{
-				Header: types.TesseractHeader{
-					Address: types.SargaAddress,
-					Height:  newHeights[2],
-				},
-			})
+			sargaHeader := types.TesseractHeader{
+				Address: types.SargaAddress,
+				Height:  newHeights[2],
+			}
+
+			clusterInfo.Grid = append(
+				clusterInfo.Grid,
+				types.NewTesseract(sargaHeader, types.TesseractBody{}, nil, nil, nil),
+			)
 		}
 	}(clusterInfo)
 

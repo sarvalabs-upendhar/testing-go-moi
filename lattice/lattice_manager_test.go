@@ -96,9 +96,11 @@ func TestFetchContextForAgora(t *testing.T) {
 				0: tesseractParamsWithContextDelta(t, address, 3, 3, 0),
 				1: {
 					address: address,
-					callback: func(ts *types.Tesseract) {
-						setContextDelta(ts, address, getDeltaGroup(t, 2, 2, 0))
-						setContextLock(ts, address, getContextLockInfo(hash, types.NilHash, 0))
+					headerCallback: func(header *types.TesseractHeader) {
+						setContextLock(header, address, getContextLockInfo(hash, types.NilHash, 0))
+					},
+					bodyCallback: func(body *types.TesseractBody) {
+						setContextDelta(body, address, getDeltaGroup(t, 2, 2, 0))
 					},
 				},
 			},
@@ -114,9 +116,11 @@ func TestFetchContextForAgora(t *testing.T) {
 			paramsMap: map[int]*createTesseractParams{
 				0: {
 					address: address,
-					callback: func(ts *types.Tesseract) {
-						ts.Body.ContextDelta[address] = getDeltaGroup(t, 1, 3, 0)
-						ts.Header.PrevHash = tests.RandomHash(t)
+					headerCallback: func(header *types.TesseractHeader) {
+						header.PrevHash = tests.RandomHash(t)
+					},
+					bodyCallback: func(body *types.TesseractBody) {
+						body.ContextDelta[address] = getDeltaGroup(t, 1, 3, 0)
 					},
 				},
 			},
@@ -127,9 +131,7 @@ func TestFetchContextForAgora(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			ts := createTesseracts(t, test.tsCount, test.paramsMap)
-
-			makeChain(t, ts)
+			ts := createTesseractsWithChain(t, test.tsCount, test.paramsMap)
 
 			chainParams := &CreateChainParams{
 				smCallBack: test.smCallBack,
@@ -168,8 +170,8 @@ func TestFetchICSNodeSet(t *testing.T) {
 	getTesseractParamsWithContextLock := func(address types.Address, ctxHash types.Hash) *createTesseractParams {
 		return &createTesseractParams{
 			address: address,
-			callback: func(ts *types.Tesseract) {
-				setContextLock(ts, address, getContextLockInfo(ctxHash, types.NilHash, 0))
+			headerCallback: func(header *types.TesseractHeader) {
+				setContextLock(header, address, getContextLockInfo(ctxHash, types.NilHash, 0))
 			},
 		}
 	}
@@ -278,8 +280,10 @@ func TestUpdateNodeInclusivity(t *testing.T) {
 }
 
 func TestGetTesseract(t *testing.T) {
-	ts := createTesseracts(t, 3, getTesseractParamsMapWithIxns(t, 3))
-	ts[0].Ixns = nil // set the interactions to nil for first tesseract
+	// set the interactions to nil for first tesseract
+	ts := createTesseracts(t, 1, nil)
+	tsWithInteractions := createTesseracts(t, 2, getTesseractParamsMapWithIxns(t, 3))
+	ts = append(ts, tsWithInteractions...)
 
 	chainParams := &CreateChainParams{
 		chainManagerCallback: func(c *ChainManager) {
@@ -586,8 +590,7 @@ func TestGetReceiptByIxHash(t *testing.T) {
 		1: tesseractParamsWithIxnsAndReceiptHash(t, address, ixns2, receipts2),
 	}
 
-	tesseracts := createTesseracts(t, 2, tesseractParams)
-	makeChain(t, tesseracts)
+	tesseracts := createTesseractsWithChain(t, 2, tesseractParams)
 
 	chainParams := &CreateChainParams{
 		dbCallback: func(db *MockDB) {
@@ -646,8 +649,8 @@ func TestGetReceiptByIxHash(t *testing.T) {
 func TestVerifySignatures(t *testing.T) {
 	getTesseractParamsWithVoteset := func(index int, value bool) *createTesseractParams {
 		return &createTesseractParams{
-			callback: func(ts *types.Tesseract) {
-				ts.Header.Extra.VoteSet.SetIndex(index, value)
+			headerCallback: func(header *types.TesseractHeader) {
+				header.Extra.VoteSet.SetIndex(index, value)
 			},
 		}
 	}
@@ -727,9 +730,9 @@ func TestVerifyHeaders(t *testing.T) {
 	getTesseractParams := func(clusterID string, height uint64) *createTesseractParams {
 		return &createTesseractParams{
 			address: address,
-			callback: func(ts *types.Tesseract) {
-				ts.Header.ClusterID = clusterID
-				ts.Header.Height = height
+			headerCallback: func(header *types.TesseractHeader) {
+				header.ClusterID = clusterID
+				header.Height = height
 			},
 		}
 	}
@@ -737,10 +740,10 @@ func TestVerifyHeaders(t *testing.T) {
 	getTesseractParamsWithTimeStamp := func(height uint64, timestamp int64) *createTesseractParams {
 		return &createTesseractParams{
 			address: address,
-			callback: func(ts *types.Tesseract) {
-				ts.Header.ClusterID = "non-genesis"
-				ts.Header.Height = height
-				ts.Header.Timestamp = timestamp
+			headerCallback: func(header *types.TesseractHeader) {
+				header.ClusterID = "non-genesis"
+				header.Height = height
+				header.Timestamp = timestamp
 			},
 		}
 	}
@@ -780,9 +783,9 @@ func TestVerifyHeaders(t *testing.T) {
 			paramsMap: map[int]*createTesseractParams{
 				0: {
 					address: address,
-					callback: func(ts *types.Tesseract) {
-						ts.Header.ClusterID = "non-genesis"
-						ts.Header.PrevHash = tests.RandomHash(t)
+					headerCallback: func(header *types.TesseractHeader) {
+						header.ClusterID = "non-genesis"
+						header.PrevHash = tests.RandomHash(t)
 					},
 				},
 			},
@@ -835,9 +838,7 @@ func TestVerifyHeaders(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			ts := createTesseracts(t, len(test.paramsMap), test.paramsMap)
-
-			makeChain(t, ts)
+			ts := createTesseractsWithChain(t, len(test.paramsMap), test.paramsMap)
 
 			chainParams := &CreateChainParams{
 				smCallBack: test.smCallBack,
@@ -894,9 +895,11 @@ func TestAddTesseract(t *testing.T) {
 				0: {
 					address: address,
 					ixns:    ixns,
-					callback: func(ts *types.Tesseract) {
-						ts.Header.PrevHash = tests.RandomHash(t)
-						ts.Body.ContextDelta[address] = getDeltaGroup(t, 3, 3, 0)
+					headerCallback: func(header *types.TesseractHeader) {
+						header.PrevHash = tests.RandomHash(t)
+					},
+					bodyCallback: func(body *types.TesseractBody) {
+						body.ContextDelta[address] = getDeltaGroup(t, 3, 3, 0)
 					},
 				},
 			},
@@ -999,8 +1002,8 @@ func TestAddTesseract(t *testing.T) {
 				0: {
 					address: address,
 					ixns:    ixns,
-					callback: func(ts *types.Tesseract) {
-						ts.Body.ContextDelta[address] = getDeltaGroup(t, 3, 3, 0)
+					bodyCallback: func(body *types.TesseractBody) {
+						body.ContextDelta[address] = getDeltaGroup(t, 3, 3, 0)
 					},
 				},
 			},
@@ -1015,9 +1018,7 @@ func TestAddTesseract(t *testing.T) {
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			tsCount := test.tsCount
-			ts := createTesseracts(t, test.tsCount, test.tesseractsParams)
-
-			makeChain(t, ts)
+			ts := createTesseractsWithChain(t, test.tsCount, test.tesseractsParams)
 
 			db := mockDB(t)
 			senatus := mockSenatus(t)
@@ -1257,8 +1258,8 @@ func TestValidateTesseract(t *testing.T) {
 		1: tesseractParamsWithCommitSign(invalidCommitSign),
 		2: tesseractParamsWithCommitSign(validCommitSign),
 		3: {
-			address:  address, // initialize address separately as it needs to be registered later
-			callback: getTesseractCallbackWithCommitSign(validCommitSign),
+			address:        address, // initialize address separately as it needs to be registered later
+			headerCallback: getHeaderCallbackWithCommitSign(validCommitSign),
 		},
 		4: tesseractParamsWithCommitSign(validCommitSign),
 		5: tesseractParamsWithCommitSign(validCommitSign),
@@ -1367,10 +1368,12 @@ func TestAddTesseracts(t *testing.T) {
 		require.NoError(t, err)
 
 		return &createTesseractParams{
-			callback: func(ts *types.Tesseract) {
-				ts.Header.PrevHash = tests.RandomHash(t)
-				ts.Body.ConsensusProof.ICSHash = types.GetHash(rawData)
-				ts.Header.GridHash = gridHash
+			headerCallback: func(header *types.TesseractHeader) {
+				header.PrevHash = tests.RandomHash(t)
+				header.GridHash = gridHash
+			},
+			bodyCallback: func(body *types.TesseractBody) {
+				body.ConsensusProof.ICSHash = types.GetHash(rawData)
 			},
 		}
 	}
@@ -1525,8 +1528,8 @@ func TestAreStateHashesValid(t *testing.T) {
 			params: &createTesseractParams{
 				address: address,
 				ixns:    ixs,
-				callback: func(ts *types.Tesseract) {
-					ts.Body.StateHash = stateHash
+				bodyCallback: func(body *types.TesseractBody) {
+					body.StateHash = stateHash
 				},
 			},
 			receipts: receipts,
@@ -1636,25 +1639,22 @@ func TestExecuteAndValidate(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, receipts, ts[0].Receipts)
+			require.Equal(t, receipts, ts[0].Receipts())
 		})
 	}
 }
 
 func TestSendTesseractSyncRequest(t *testing.T) {
-	paramsMap := map[int]*createTesseractParams{
-		0: tesseractParamsWithContextDelta(
-			t,
-			tests.RandomAddress(t),
-			1,
-			3,
-			0,
-		),
-	}
+	tsParams := tesseractParamsWithContextDelta(
+		t,
+		tests.RandomAddress(t),
+		1,
+		3,
+		0,
+	)
 
 	t.Run("should fire tesseract sync event with given tesseract", func(t *testing.T) {
-		ts := createTesseracts(t, 2, paramsMap)
-		makeChain(t, ts)
+		ts := createTesseract(t, tsParams)
 
 		var (
 			c       = createTestChainManager(t, nil)
@@ -1670,9 +1670,9 @@ func TestSendTesseractSyncRequest(t *testing.T) {
 
 		go handleMuxEvents(ctx, syncSub, resp) // keeps checking for event until timeout
 
-		c.sendTesseractSyncRequest(ts[0], info)
+		c.sendTesseractSyncRequest(ts, info)
 
-		validateTSSyncEvent(t, c, ts[0], resp, info)
+		validateTSSyncEvent(t, c, ts, resp, info)
 	},
 	)
 }
@@ -2021,8 +2021,8 @@ func TestTesseractHandler_SkipScenarios(t *testing.T) {
 		{
 			name: "should skip tesseract if the handling node is operator",
 			tesseractParams: &createTesseractParams{
-				callback: func(ts *types.Tesseract) {
-					ts.Header.Operator = string(nodes[0])
+				headerCallback: func(header *types.TesseractHeader) {
+					header.Operator = string(nodes[0])
 				},
 			},
 			expectedError: errors.New("node is the operator of tesseract"),
@@ -2045,8 +2045,8 @@ func TestTesseractHandler_SkipScenarios(t *testing.T) {
 			name: "should skip if tesseract is already available in cache",
 			info: getTestClusterInfo(t, 2),
 			tesseractParams: &createTesseractParams{
-				callback: func(ts *types.Tesseract) {
-					ts.Body.ConsensusProof.ICSHash = tests.RandomHash(t)
+				bodyCallback: func(body *types.TesseractBody) {
+					body.ConsensusProof.ICSHash = tests.RandomHash(t)
 				},
 			},
 			preTestFn: func(c *ChainManager, ts *types.Tesseract) {
@@ -2427,6 +2427,7 @@ func TestSetupGenesis(t *testing.T) {
 					sargaAddress: {
 						BehaviouralNodes: utils.KramaIDFromString(sargaAccount.BehaviourContext),
 						RandomNodes:      utils.KramaIDFromString(sargaAccount.RandomContext),
+						ReplacedNodes:    make([]id.KramaID, 0),
 					},
 				},
 			)
@@ -2444,6 +2445,7 @@ func TestSetupGenesis(t *testing.T) {
 						genesisAddress: {
 							BehaviouralNodes: utils.KramaIDFromString(genesisAccount.BehaviourContext),
 							RandomNodes:      utils.KramaIDFromString(genesisAccount.RandomContext),
+							ReplacedNodes:    make([]id.KramaID, 0),
 						},
 					},
 				)

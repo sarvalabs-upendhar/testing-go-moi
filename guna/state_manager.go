@@ -204,7 +204,7 @@ func (sm *StateManager) GetLatestStateObject(addr types.Address) (*StateObject, 
 		return nil, err
 	}
 
-	obj, err := sm.GetStateObjectByHash(addr, t.Body.StateHash)
+	obj, err := sm.GetStateObjectByHash(addr, t.StateHash())
 	if err != nil {
 		return nil, err
 	}
@@ -275,14 +275,13 @@ func (sm *StateManager) FetchTesseractFromDB(hash types.Hash, withInteractions b
 		}
 	}
 
-	tesseract := &types.Tesseract{
-		Header: canonicalTesseract.Header,
-		Body:   canonicalTesseract.Body,
-		Ixns:   *interactions,
-		Seal:   canonicalTesseract.Seal,
-	}
-
-	return tesseract, nil
+	return types.NewTesseract(
+		canonicalTesseract.Header,
+		canonicalTesseract.Body,
+		*interactions,
+		nil,
+		canonicalTesseract.Seal,
+	), nil
 }
 
 func (sm *StateManager) getLatestTesseractHash(addr types.Address) (types.Hash, error) {
@@ -490,7 +489,7 @@ func (sm *StateManager) GetCommittedContextHash(add types.Address) (types.Hash, 
 		return types.NilHash, err
 	}
 
-	return tesseract.Body.ContextHash, nil
+	return tesseract.ContextHash(), nil
 }
 
 func (sm *StateManager) getContext(addr types.Address, hash types.Hash) ([]id.KramaID, []id.KramaID, error) {
@@ -527,9 +526,9 @@ func (sm *StateManager) GetContextByHash(
 			return types.NilHash, nil, nil, errors.Wrap(err, "tesseract fetch failed")
 		}
 
-		sm.logger.Debug("Fetching context info", "addr", address.Hex(), ts.Body.ContextHash)
+		sm.logger.Debug("Fetching context info", "addr", address.Hex(), ts.ContextHash())
 
-		hash = ts.Body.ContextHash
+		hash = ts.ContextHash()
 	}
 
 	behaviourSet, randomSet, err := sm.getContext(address, hash)
@@ -544,7 +543,7 @@ func (sm *StateManager) FetchContextLock(ts *types.Tesseract) (*ktypes.ICSNodeSe
 	ix := ts.Interactions()[0]
 	ics := ktypes.NewICSNodeSet(6)
 
-	for address, info := range ts.Header.ContextLock {
+	for address, info := range ts.ContextLock() {
 		if address == ix.Sender() {
 			behaviourSet, randomSet, err := sm.fetchParticipantContextByHash(address, info.ContextHash)
 			if err != nil {
@@ -672,7 +671,7 @@ func (sm *StateManager) IsAccountRegisteredAt(addr types.Address, tesseractHash 
 		return false, err
 	}
 
-	sargaObject, err := sm.GetStateObjectByHash(ts.Header.Address, ts.Body.StateHash)
+	sargaObject, err := sm.GetStateObjectByHash(ts.Address(), ts.Body().StateHash)
 	if err != nil {
 		return false, err
 	}

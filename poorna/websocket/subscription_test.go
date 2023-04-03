@@ -41,7 +41,7 @@ func TestAccountTesseractSubscription(t *testing.T) {
 
 	// Create a mock connection
 	connManager := NewMockConnectionManager()
-	tesseract := tests.GetTesseract(t, 0)
+	tesseract := tests.GetTesseract(t, 0, nil)
 	// Create a new tesseract subscription
 	subscriptionID := subscriptionManager.NewAccountTesseractSubscription(connManager, tesseract.Address())
 
@@ -90,7 +90,7 @@ func TestTesseractSubscription(t *testing.T) {
 
 	// Create a mock connection
 	connManager := NewMockConnectionManager()
-	tesseract := tests.GetTesseract(t, 0)
+	tesseract := tests.GetTesseract(t, 0, nil)
 	// Create a new tesseract subscription
 	subscriptionID := subscriptionManager.NewTesseractSubscription(connManager)
 
@@ -141,7 +141,7 @@ func TestSubscriptionTimeout(t *testing.T) {
 	go subscriptionManager.Run()
 
 	// post an event
-	tesseract := tests.GetTesseract(t, 0)
+	tesseract := tests.GetTesseract(t, 0, nil)
 	subscriptionID := subscriptionManager.NewAccountTesseractSubscription(nil, tesseract.Address())
 
 	// Check if the subscription manager has the subscription

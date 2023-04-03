@@ -119,10 +119,11 @@ func subscribeToNewIxsEvent(t *testing.T, eventMux *utils.TypeMux) *utils.Subscr
 func getTesseractWithIxs(t *testing.T, address types.Address, nonce int) *types.Tesseract {
 	t.Helper()
 
-	ts := tests.GetTesseract(t, 0)
-	ts.Ixns = types.Interactions{
+	ixns := types.Interactions{
 		newTestInteraction(t, nonce, address, nil),
 	}
+
+	ts := tests.GetTesseract(t, 0, ixns)
 
 	return ts
 }

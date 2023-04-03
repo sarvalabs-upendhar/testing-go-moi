@@ -5,7 +5,6 @@ import (
 	"crypto/ed25519"
 
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
-
 	"github.com/sarvalabs/moichain/types"
 )
 

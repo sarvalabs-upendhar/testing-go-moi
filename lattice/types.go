@@ -32,14 +32,13 @@ func (g *GridCache) AddTesseract(ts *types.Tesseract) (bool, error) {
 		return false, err
 	}
 
-	_, ok := g.grids[ts.Header.GridHash]
-	if !ok {
-		g.grids[ts.Header.GridHash] = make(map[types.Hash]*types.Tesseract)
+	if _, ok := g.grids[ts.GridHash()]; !ok {
+		g.grids[ts.GridHash()] = make(map[types.Hash]*types.Tesseract)
 	}
 
-	g.grids[ts.Header.GridHash][tsHash] = ts
+	g.grids[ts.GridHash()][tsHash] = ts
 
-	return int32(len(g.grids[ts.Header.GridHash])) == ts.GridLength(), nil
+	return int32(len(g.grids[ts.GridHash()])) == ts.GridLength(), nil
 }
 
 func (g *GridCache) CleanupGrid(gridID types.Hash) []*types.Tesseract {

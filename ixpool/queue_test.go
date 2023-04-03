@@ -3,8 +3,9 @@ package ixpool
 import (
 	"testing"
 
-	"github.com/sarvalabs/moichain/types"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sarvalabs/moichain/types"
 )
 
 func TestPricedQueue_Push(t *testing.T) {

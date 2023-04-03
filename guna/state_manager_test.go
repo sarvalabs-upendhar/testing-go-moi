@@ -1067,10 +1067,10 @@ func TestFetchContextLock(t *testing.T) {
 	) *tests.CreateTesseractParams {
 		return &tests.CreateTesseractParams{
 			Ixns: ixns,
-			TesseractCallback: func(ts *types.Tesseract) {
-				ts.Header.ContextLock = mockContextLock()
+			HeaderCallback: func(header *types.TesseractHeader) {
+				header.ContextLock = mockContextLock()
 				for i, address := range addresses {
-					insertInContextLock(ts, address, hashes[i])
+					insertInContextLock(header, address, hashes[i])
 				}
 			},
 		}

@@ -346,12 +346,13 @@ func (tm *TesseractMessage) Tesseract() (*types.Tesseract, error) {
 		}
 	}
 
-	return &types.Tesseract{
-		Header: tm.CanonicalTesseract.Header,
-		Body:   tm.CanonicalTesseract.Body,
-		Ixns:   ixns,
-		Seal:   tm.CanonicalTesseract.Seal,
-	}, nil
+	return types.NewTesseract(
+		tm.CanonicalTesseract.Header,
+		tm.CanonicalTesseract.Body,
+		ixns,
+		nil,
+		tm.CanonicalTesseract.Seal,
+	), nil
 }
 
 type HelloMsg struct {

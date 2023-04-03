@@ -1252,7 +1252,7 @@ func (k *Engine) finalizedTesseractHandler(tesseracts []*types.Tesseract) error 
 	}
 
 	for _, ts := range tesseracts {
-		rawIxns, err := ts.Ixns.Bytes()
+		rawIxns, err := ts.Interactions().Bytes()
 		if err != nil {
 			return err
 		}
@@ -1262,7 +1262,7 @@ func (k *Engine) finalizedTesseractHandler(tesseracts []*types.Tesseract) error 
 			Sender:             k.selfID,
 			Ixns:               rawIxns,
 			Delta: map[types.Hash][]byte{
-				ts.Body.ConsensusProof.ICSHash: clusterInfo.GetDirty()[ts.Body.ConsensusProof.ICSHash],
+				ts.ICSHash(): clusterInfo.GetDirty()[ts.ICSHash()],
 			},
 		}
 
@@ -1274,58 +1274,59 @@ func (k *Engine) finalizedTesseractHandler(tesseracts []*types.Tesseract) error 
 	return nil
 }
 
+func generateBody(
+	addr types.Address,
+	state *ktypes.ClusterState,
+	ixHash, ixnsHash, receiptHash types.Hash,
+) types.TesseractBody {
+	return types.TesseractBody{
+		StateHash:       state.GetStateHash(ixHash, addr),
+		ContextHash:     state.GetContextHash(ixHash, addr),
+		ContextDelta:    state.GetContextDelta(),
+		InteractionHash: ixnsHash,
+		ReceiptHash:     receiptHash,
+		ConsensusProof: types.PoXCData{
+			BinaryHash:   state.BinaryHash,
+			IdentityHash: state.IdentityHash,
+			ICSHash:      state.ICSHash,
+		},
+	}
+}
+
+func generateTesseract(
+	addr types.Address,
+	state *ktypes.ClusterState,
+	body types.TesseractBody,
+	tsBodyHash, gridHash types.Hash,
+	fuelUsed, fuelLimit uint64,
+) *types.Tesseract {
+	header := types.TesseractHeader{
+		Address:     addr,
+		ContextLock: state.ContextLock(),
+		PrevHash:    state.AccountInfos.GetLatestHash(addr),
+		Height:      state.NewHeight(addr),
+		AnuUsed:     fuelUsed,
+		AnuLimit:    fuelLimit,
+		ClusterID:   string(state.ID),
+		Operator:    string(state.Operator),
+		BodyHash:    tsBodyHash,
+		GridHash:    gridHash,
+		Extra: types.CommitData{
+			VoteSet:         nil,
+			CommitSignature: nil,
+		},
+	}
+
+	return types.NewTesseract(header, body, state.Ixs, state.Receipts, nil)
+}
+
 func GenerateTesseracts(state *ktypes.ClusterState) ([]*types.Tesseract, error) {
 	ix := state.Ixs[0] // TODO: Improve this
 	fuelUsed := state.GetFuelUsed()
 	groupBuffer := make([]byte, 0)
 	tesseractGroup := make([]*types.Tesseract, 0)
 
-	if !ix.Sender().IsNil() {
-		senderTesseract, err := generateTesseract(ix.Hash(), ix.Sender(), state, fuelUsed, 1000)
-		if err != nil {
-			return nil, err
-		}
-
-		tesseractGroup = append(tesseractGroup, senderTesseract)
-		groupBuffer = append(groupBuffer, senderTesseract.BodyHash().Bytes()...)
-	}
-
-	if !ix.Receiver().IsNil() {
-		receiverTesseract, err := generateTesseract(ix.Hash(), ix.Receiver(), state, fuelUsed, 1000)
-		if err != nil {
-			return nil, err
-		}
-
-		tesseractGroup = append(tesseractGroup, receiverTesseract)
-		groupBuffer = append(groupBuffer, receiverTesseract.BodyHash().Bytes()...)
-
-		if state.AccountInfos.IsGenesis(ix.Receiver()) {
-			genesisTesseract, err := generateTesseract(ix.Hash(), types.SargaAddress, state, fuelUsed, 1000)
-			if err != nil {
-				return nil, err
-			}
-
-			tesseractGroup = append(tesseractGroup, genesisTesseract)
-			groupBuffer = append(groupBuffer, genesisTesseract.BodyHash().Bytes()...)
-		}
-	}
-
-	groupHash := blake2b.Sum256(groupBuffer)
-	for _, v := range tesseractGroup {
-		v.Header.GridHash = groupHash
-	}
-
-	return tesseractGroup, nil
-}
-
-func generateTesseract(
-	ixHash types.Hash,
-	addr types.Address,
-	state *ktypes.ClusterState,
-	fuelUsed,
-	fuelLimit uint64,
-) (*types.Tesseract, error) {
-	ixsHash, err := state.Ixs.Hash()
+	ixnsHash, err := state.Ixs.Hash()
 	if err != nil {
 		return nil, err
 	}
@@ -1335,44 +1336,67 @@ func generateTesseract(
 		return nil, err
 	}
 
-	ts := &types.Tesseract{
-		Header: types.TesseractHeader{
-			Address:     addr,
-			ContextLock: state.ContextLock(),
-			PrevHash:    state.AccountInfos.GetLatestHash(addr),
-			Height:      state.NewHeight(addr),
-			AnuUsed:     fuelUsed,
-			AnuLimit:    fuelLimit,
-			ClusterID:   string(state.ID),
-			Operator:    string(state.Operator),
-			Extra: types.CommitData{
-				VoteSet:         nil,
-				CommitSignature: nil,
-			},
-		},
-		Body: types.TesseractBody{
-			StateHash:       state.GetStateHash(ixHash, addr),
-			ContextHash:     state.GetContextHash(ixHash, addr),
-			ContextDelta:    state.GetContextDelta(),
-			InteractionHash: ixsHash,
-			ReceiptHash:     receiptHash,
-			ConsensusProof: types.PoXCData{
-				BinaryHash:   state.BinaryHash,
-				IdentityHash: state.IdentityHash,
-				ICSHash:      state.ICSHash,
-			},
-		},
-		Ixns: state.Ixs,
+	var (
+		senderBody       types.TesseractBody
+		receiverBody     types.TesseractBody
+		genesisBody      types.TesseractBody
+		senderBodyHash   types.Hash
+		receiverBodyHash types.Hash
+		genesisBodyHash  types.Hash
+	)
+
+	if !ix.Sender().IsNil() {
+		senderBody = generateBody(ix.Sender(), state, ix.Hash(), ixnsHash, receiptHash)
+
+		senderBodyHash, err = senderBody.Hash()
+		if err != nil {
+			return nil, err
+		}
+
+		groupBuffer = append(groupBuffer, senderBodyHash.Bytes()...)
 	}
 
-	tsBodyHash, err := ts.ComputeBodyHash()
-	if err != nil {
-		return nil, err
+	if !ix.Receiver().IsNil() {
+		receiverBody = generateBody(ix.Receiver(), state, ix.Hash(), ixnsHash, receiptHash)
+
+		receiverBodyHash, err = receiverBody.Hash()
+		if err != nil {
+			return nil, err
+		}
+
+		groupBuffer = append(groupBuffer, receiverBodyHash.Bytes()...)
+
+		if state.AccountInfos.IsGenesis(ix.Receiver()) {
+			genesisBody = generateBody(types.SargaAddress, state, ix.Hash(), ixnsHash, receiptHash)
+
+			genesisBodyHash, err = genesisBody.Hash()
+			if err != nil {
+				return nil, err
+			}
+
+			groupBuffer = append(groupBuffer, genesisBodyHash.Bytes()...)
+		}
 	}
 
-	ts.Header.BodyHash = tsBodyHash
+	groupHash := blake2b.Sum256(groupBuffer)
 
-	return ts, nil
+	if !ix.Sender().IsNil() {
+		tesseractGroup = append(tesseractGroup, // append sender tesseract
+			generateTesseract(ix.Sender(), state, senderBody, senderBodyHash, groupHash, fuelUsed, 1000))
+	}
+
+	if !ix.Receiver().IsNil() {
+		tesseractGroup = append(tesseractGroup, // append receiver tesseract
+			generateTesseract(ix.Receiver(), state, receiverBody, receiverBodyHash, groupHash, fuelUsed, 1000))
+
+		if state.AccountInfos.IsGenesis(ix.Receiver()) {
+			tesseractGroup = append(tesseractGroup, // append sarga tesseract
+				generateTesseract(types.SargaAddress, state, genesisBody, genesisBodyHash, groupHash,
+					fuelUsed, 1000))
+		}
+	}
+
+	return tesseractGroup, nil
 }
 
 func (k *Engine) executionRoutine() {

@@ -16,6 +16,26 @@ type Receipt struct {
 	ExtraData     json.RawMessage
 }
 
+func (r *Receipt) Copy() *Receipt {
+	receipt := *r
+
+	receipt.StateHashes = make(map[Address]Hash)
+	receipt.ContextHashes = make(map[Address]Hash)
+	receipt.ExtraData = make(json.RawMessage, len(r.ExtraData))
+
+	for key, value := range r.StateHashes {
+		receipt.StateHashes[key] = value
+	}
+
+	for key, value := range r.ContextHashes {
+		receipt.ContextHashes[key] = value
+	}
+
+	copy(receipt.ExtraData, r.ExtraData)
+
+	return &receipt
+}
+
 func (r *Receipt) SetExtraData(data interface{}) error {
 	rawData, err := json.Marshal(data)
 	if err != nil {
@@ -28,6 +48,16 @@ func (r *Receipt) SetExtraData(data interface{}) error {
 }
 
 type Receipts map[Hash]*Receipt
+
+func (rs Receipts) Copy() Receipts {
+	receipts := make(Receipts)
+
+	for key, value := range rs {
+		receipts[key] = value.Copy()
+	}
+
+	return receipts
+}
 
 func (rs Receipts) Hash() (Hash, error) {
 	hash, err := PoloHash(rs)

@@ -7,10 +7,9 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 
-	"github.com/sarvalabs/moichain/types"
-
 	ktypes "github.com/sarvalabs/moichain/krama/types"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/types"
 )
 
 // RoundVoteSet is a struct that represents a set for a votes for a single round.

@@ -6,13 +6,11 @@ import (
 	"log"
 
 	"github.com/pkg/errors"
-
-	ptypes "github.com/sarvalabs/moichain/poorna/types"
-
-	"github.com/sarvalabs/moichain/types"
-
 	"github.com/sarvalabs/go-polo"
+
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 type (
@@ -318,7 +316,7 @@ func (t *TesseractGrid) GetTesseractGridID() (*types.TesseractGridID, error) {
 		}
 
 		gridID.Parts.Hashes = append(gridID.Parts.Hashes, tsHash)
-		gridID.Parts.Heights = append(gridID.Parts.Heights, tesseract.Header.Height)
+		gridID.Parts.Heights = append(gridID.Parts.Heights, tesseract.Height())
 	}
 
 	return gridID, nil

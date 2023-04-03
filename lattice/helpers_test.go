@@ -397,7 +397,7 @@ func (sm *MockStateManager) GetLatestTesseract(addr types.Address, withInteracti
 	copyTS := *ts // copy, so that stored tesseract wont't be modified
 
 	if !withInteractions {
-		copyTS.Ixns = nil
+		copyTS = *copyTS.GetTesseractWithoutIxns()
 	}
 
 	return &copyTS, nil
@@ -481,14 +481,12 @@ func (sm *MockStateManager) IsAccountRegisteredAt(addr types.Address, tesseractH
 	return ok, nil
 }
 
-func getContextLockHash(ts *types.Tesseract) types.Hash {
-	return ts.Header.ContextLock[ts.Address()].ContextHash
-}
-
 func (sm *MockStateManager) FetchContextLock(ts *types.Tesseract) (*ktypes.ICSNodeSet, error) {
 	ics := ktypes.NewICSNodeSet(6)
 
-	_, behaviourSet, randomSet, err := sm.GetContextByHash(types.NilAddress, getContextLockHash(ts))
+	contextLock, _ := ts.ContextLockByAddress(ts.Address())
+
+	_, behaviourSet, randomSet, err := sm.GetContextByHash(types.NilAddress, contextLock.ContextHash)
 	if err != nil {
 		return nil, err
 	}
@@ -519,7 +517,7 @@ func (sm *MockStateManager) FetchTesseractFromDB(hash types.Hash, withInteractio
 	tsCopy := *ts // copy, so that stored tesseract wont't be modified
 
 	if !withInteractions {
-		tsCopy.Ixns = nil
+		tsCopy = *tsCopy.GetTesseractWithoutIxns()
 	}
 
 	return &tsCopy, nil
@@ -721,11 +719,14 @@ func defaultCommitData() types.CommitData {
 }
 
 type createTesseractParams struct {
-	address  types.Address
-	height   uint64
-	ixns     types.Interactions
-	receipts types.Receipts
-	callback func(ts *types.Tesseract)
+	address           types.Address
+	height            uint64
+	ixns              types.Interactions
+	receipts          types.Receipts
+	seal              []byte
+	headerCallback    func(header *types.TesseractHeader)
+	makeChainCallback func(header *types.TesseractHeader)
+	bodyCallback      func(body *types.TesseractBody)
 }
 
 func createTesseract(t *testing.T, params *createTesseractParams) *types.Tesseract {
@@ -739,33 +740,40 @@ func createTesseract(t *testing.T, params *createTesseractParams) *types.Tessera
 		params.address = tests.RandomAddress(t)
 	}
 
-	ts := &types.Tesseract{
-		Header: types.TesseractHeader{
-			Address:     params.address,
-			Height:      params.height,
-			ContextLock: mockContextLock(),
-			Extra:       defaultCommitData(),
-		},
-		Body: types.TesseractBody{
-			ContextDelta:   mockContextDelta(),
-			ConsensusProof: mockConsensusProof(),
-		},
-		Ixns:     params.ixns,
-		Receipts: params.receipts,
-	}
+	var interactionHash types.Hash
 
 	if params.ixns != nil {
 		hash, err := params.ixns.Hash()
 		require.NoError(t, err)
 
-		ts.Body.InteractionHash = hash
+		interactionHash = hash
 	}
 
-	if params.callback != nil {
-		params.callback(ts)
+	header := &types.TesseractHeader{
+		Address:     params.address,
+		Height:      params.height,
+		ContextLock: mockContextLock(),
+		Extra:       defaultCommitData(),
+	}
+	body := &types.TesseractBody{
+		ContextDelta:    mockContextDelta(),
+		ConsensusProof:  mockConsensusProof(),
+		InteractionHash: interactionHash,
 	}
 
-	return ts
+	if params.headerCallback != nil {
+		params.headerCallback(header)
+	}
+
+	if params.bodyCallback != nil {
+		params.bodyCallback(body)
+	}
+
+	if params.makeChainCallback != nil {
+		params.makeChainCallback(header)
+	}
+
+	return types.NewTesseract(*header, *body, params.ixns, params.receipts, params.seal)
 }
 
 func createTesseracts(t *testing.T, count int, paramsMap map[int]*createTesseractParams) []*types.Tesseract {
@@ -778,6 +786,30 @@ func createTesseracts(t *testing.T, count int, paramsMap map[int]*createTesserac
 	}
 
 	for i := 0; i < count; i++ {
+		tesseracts[i] = createTesseract(t, paramsMap[i])
+	}
+
+	return tesseracts
+}
+
+func createTesseractsWithChain(t *testing.T, count int, paramsMap map[int]*createTesseractParams) []*types.Tesseract {
+	t.Helper()
+
+	tesseracts := make([]*types.Tesseract, count)
+
+	if paramsMap == nil {
+		paramsMap = map[int]*createTesseractParams{}
+	}
+
+	tesseracts[0] = createTesseract(t, paramsMap[0])
+
+	for i := 1; i < count; i++ {
+		paramsMap[i].makeChainCallback = func(header *types.TesseractHeader) {
+			hash, err := tesseracts[i-1].Hash()
+			require.NoError(t, err)
+
+			header.PrevHash = hash
+		}
 		tesseracts[i] = createTesseract(t, paramsMap[i])
 	}
 
@@ -807,9 +839,9 @@ func tesseractParamsWithICSClusterInfo(
 
 	return &createTesseractParams{
 		ixns: ixns,
-		callback: func(ts *types.Tesseract) {
-			ts.Body.ReceiptHash = tests.RandomHash(t)
-			ts.Body.ConsensusProof.ICSHash = types.GetHash(rawData)
+		bodyCallback: func(body *types.TesseractBody) {
+			body.ReceiptHash = tests.RandomHash(t)
+			body.ConsensusProof.ICSHash = types.GetHash(rawData)
 		},
 	}
 }
@@ -830,13 +862,15 @@ func tesseractParamsWithGridInfo(
 	return &createTesseractParams{
 		address: address,
 		ixns:    ixns,
-		callback: func(ts *types.Tesseract) {
-			ts.Header.Extra.GridID = getTestTesseractGrid(t)
-			ts.Header.Extra.GridID.Parts.Total = gridSize
-			ts.Body.ConsensusProof.ICSHash = types.GetHash(rawBytes)
-			ts.Body.StateHash = stateHash
-			ts.Body.ReceiptHash = receiptHash
-			ts.Body.InteractionHash = tests.RandomHash(t) // make sure that nil hash won't be inserted as key
+		headerCallback: func(header *types.TesseractHeader) {
+			header.Extra.GridID = getTestTesseractGrid(t)
+			header.Extra.GridID.Parts.Total = gridSize
+		},
+		bodyCallback: func(body *types.TesseractBody) {
+			body.ConsensusProof.ICSHash = types.GetHash(rawBytes)
+			body.StateHash = stateHash
+			body.ReceiptHash = receiptHash
+			body.InteractionHash = tests.RandomHash(t) // make sure that nil hash won't be inserted as key
 		},
 	}
 }
@@ -858,18 +892,18 @@ func tesseractParamsForExecution(
 	return &createTesseractParams{
 		address: address,
 		ixns:    ixns,
-		callback: func(ts *types.Tesseract) {
-			// set header fields
-			ts.Header.ContextLock[address] = types.ContextLockInfo{ContextHash: contextHash}
-			ts.Header.Extra.GridID = getTestTesseractGrid(t)
-			ts.Header.Extra.GridID.Parts.Total = gridSize
-			ts.Header.Extra.CommitSignature = validCommitSign
-			// set body fields
-			ts.Body.StateHash = stateHash
-			ts.Body.ReceiptHash = getReceiptHash(t, receipts)
-			ts.Body.InteractionHash = tests.RandomHash(t) // make sure that nil hash won't be inserted as key
-			ts.Body.ContextDelta[address] = getDeltaGroup(t, 2, 2, 0)
-			ts.Body.ConsensusProof.ICSHash = types.GetHash(rawBytes)
+		headerCallback: func(header *types.TesseractHeader) {
+			header.ContextLock[address] = types.ContextLockInfo{ContextHash: contextHash}
+			header.Extra.GridID = getTestTesseractGrid(t)
+			header.Extra.GridID.Parts.Total = gridSize
+			header.Extra.CommitSignature = validCommitSign
+		},
+		bodyCallback: func(body *types.TesseractBody) {
+			body.StateHash = stateHash
+			body.ReceiptHash = getReceiptHash(t, receipts)
+			body.InteractionHash = tests.RandomHash(t) // make sure that nil hash won't be inserted as key
+			body.ContextDelta[address] = getDeltaGroup(t, 2, 2, 0)
+			body.ConsensusProof.ICSHash = types.GetHash(rawBytes)
 		},
 	}
 }
@@ -883,8 +917,8 @@ func tesseractParamsWithContextDelta(
 
 	return &createTesseractParams{
 		address: address,
-		callback: func(ts *types.Tesseract) {
-			ts.Body.ContextDelta[address] = getDeltaGroup(t, behaviouralCount, randomCount, replacedCount)
+		bodyCallback: func(body *types.TesseractBody) {
+			body.ContextDelta[address] = getDeltaGroup(t, behaviouralCount, randomCount, replacedCount)
 		},
 	}
 }
@@ -900,10 +934,9 @@ func tesseractParamsWithIxnsAndReceiptHash(
 	return &createTesseractParams{
 		address: address,
 		ixns:    ixns,
-		callback: func(ts *types.Tesseract) {
-			ts.Ixns = ixns
-			ts.Body.InteractionHash = getInteractionsHash(t, ixns)
-			ts.Body.ReceiptHash = getReceiptHash(t, receipts)
+		bodyCallback: func(body *types.TesseractBody) {
+			body.InteractionHash = getInteractionsHash(t, ixns)
+			body.ReceiptHash = getReceiptHash(t, receipts)
 		},
 	}
 }
@@ -918,10 +951,12 @@ func tesseractParamsWithContextHash(
 
 	return &createTesseractParams{
 		address: address,
-		callback: func(ts *types.Tesseract) {
-			ts.Header.ContextLock[address] = types.ContextLockInfo{ContextHash: ctxHash}
-			ts.Body.ContextDelta[address] = getDeltaGroup(t, 1, 1, 1)
-			ts.Header.Extra.CommitSignature = sign
+		headerCallback: func(header *types.TesseractHeader) {
+			header.ContextLock[address] = types.ContextLockInfo{ContextHash: ctxHash}
+			header.Extra.CommitSignature = sign
+		},
+		bodyCallback: func(body *types.TesseractBody) {
+			body.ContextDelta[address] = getDeltaGroup(t, 1, 1, 1)
 		},
 	}
 }
@@ -930,9 +965,11 @@ func tesseractParamsWithReceiptHash(t *testing.T, receiptHash types.Hash, gridHa
 	t.Helper()
 
 	return &createTesseractParams{
-		callback: func(ts *types.Tesseract) {
-			ts.Body.ReceiptHash = receiptHash
-			ts.Header.GridHash = gridHash
+		headerCallback: func(header *types.TesseractHeader) {
+			header.GridHash = gridHash
+		},
+		bodyCallback: func(body *types.TesseractBody) {
+			body.ReceiptHash = receiptHash
 		},
 	}
 }
@@ -941,8 +978,8 @@ func tesseractParamsWithStateHash(t *testing.T, stateHash types.Hash) *createTes
 	t.Helper()
 
 	return &createTesseractParams{
-		callback: func(ts *types.Tesseract) {
-			ts.Body.StateHash = stateHash
+		bodyCallback: func(body *types.TesseractBody) {
+			body.StateHash = stateHash
 		},
 	}
 }
@@ -954,8 +991,8 @@ func getTSParamsMapWithStateHash(t *testing.T, paramsCount int) map[int]*createT
 
 	for i := 0; i < paramsCount; i++ {
 		tsParamsMap[i] = &createTesseractParams{
-			callback: func(ts *types.Tesseract) {
-				ts.Body.StateHash = tests.RandomHash(t)
+			bodyCallback: func(body *types.TesseractBody) {
+				body.StateHash = tests.RandomHash(t)
 			},
 		}
 	}
@@ -963,15 +1000,15 @@ func getTSParamsMapWithStateHash(t *testing.T, paramsCount int) map[int]*createT
 	return tsParamsMap
 }
 
-func getTesseractCallbackWithCommitSign(commitSign []byte) func(ts *types.Tesseract) {
-	return func(ts *types.Tesseract) {
-		ts.Header.Extra.CommitSignature = commitSign
+func getHeaderCallbackWithCommitSign(commitSign []byte) func(header *types.TesseractHeader) {
+	return func(header *types.TesseractHeader) {
+		header.Extra.CommitSignature = commitSign
 	}
 }
 
 func tesseractParamsWithCommitSign(commitSign []byte) *createTesseractParams {
 	return &createTesseractParams{
-		callback: getTesseractCallbackWithCommitSign(commitSign),
+		headerCallback: getHeaderCallbackWithCommitSign(commitSign),
 	}
 }
 
@@ -1134,11 +1171,13 @@ func fetchContextFromLattice(t *testing.T, ts types.Tesseract, c *ChainManager) 
 			break
 		}
 
-		delta := ts.Body.ContextDelta[address]
+		delta, _ := ts.GetContextDeltaByAddress(address)
 		peers = append(peers, delta.BehaviouralNodes...)
 		peers = append(peers, delta.RandomNodes...)
 
-		_, behaviour, random, err := c.sm.GetContextByHash(address, ts.Header.ContextLock[address].ContextHash)
+		contextLock, _ := ts.ContextLockByAddress(address)
+
+		_, behaviour, random, err := c.sm.GetContextByHash(address, contextLock.ContextHash)
 		if err == nil {
 			peers = append(peers, behaviour...)
 			peers = append(peers, random...)
@@ -1146,11 +1185,11 @@ func fetchContextFromLattice(t *testing.T, ts types.Tesseract, c *ChainManager) 
 			break
 		}
 
-		if ts.PreviousHash().IsNil() {
+		if ts.PrevHash().IsNil() {
 			break
 		}
 
-		t, err := c.GetTesseract(ts.PreviousHash(), false)
+		t, err := c.GetTesseract(ts.PrevHash(), false)
 		if err != nil {
 			return nil
 		}
@@ -1159,20 +1198,6 @@ func fetchContextFromLattice(t *testing.T, ts types.Tesseract, c *ChainManager) 
 	}
 
 	return peers
-}
-
-func makeChain(t *testing.T, tesseracts []*types.Tesseract) {
-	t.Helper()
-
-	for i, ts := range tesseracts {
-		if i == 0 {
-			continue
-		}
-
-		if ts.Address() == tesseracts[i-1].Address() {
-			ts.Header.PrevHash = getTesseractHash(t, tesseracts[i-1])
-		}
-	}
 }
 
 func getTesseractHash(t *testing.T, ts *types.Tesseract) types.Hash {
@@ -1215,12 +1240,12 @@ func getContextLockInfo(contextHash types.Hash, tsHash types.Hash, height uint64
 	}
 }
 
-func setContextDelta(ts *types.Tesseract, address types.Address, delta *types.DeltaGroup) {
-	ts.Body.ContextDelta[address] = delta
+func setContextDelta(body *types.TesseractBody, address types.Address, delta *types.DeltaGroup) {
+	body.ContextDelta[address] = delta
 }
 
-func setContextLock(ts *types.Tesseract, address types.Address, info types.ContextLockInfo) {
-	ts.Header.ContextLock[address] = info
+func setContextLock(header *types.TesseractHeader, address types.Address, info types.ContextLockInfo) {
+	header.ContextLock[address] = info
 }
 
 func insertTesseractsInCache(t *testing.T, c *ChainManager, tesseracts ...*types.Tesseract) {
@@ -1332,7 +1357,7 @@ func getReceipt(ixHash types.Hash) *types.Receipt {
 		FuelUsed:      rand.Uint64(),
 		StateHashes:   make(map[types.Address]types.Hash),
 		ContextHashes: make(map[types.Address]types.Hash),
-		ExtraData:     nil,
+		ExtraData:     make(json.RawMessage, 0),
 	}
 }
 
@@ -1461,7 +1486,8 @@ func signTesseract(t *testing.T, sm *MockStateManager, ts *types.Tesseract) (sig
 	require.NoError(t, err)
 
 	seal, pk := tests.SignBytes(t, rawData) // calculate the seal of tesseract
-	ts.Seal = seal                          // store seal in tesseract
+	ts.SetSeal(seal)                        // store seal in tesseract
+
 	ids := tests.GetTestKramaIDs(t, 1)
 
 	sm.setPublicKey(ids[0], pk) // store the public key for the signed sender
@@ -1580,7 +1606,7 @@ func getPubSubMsg(t *testing.T, ts *types.Tesseract, sender id.KramaID, info *pt
 
 	msg.CanonicalTesseract = ts.Canonical()
 	msg.Sender = sender
-	rawIxns, err := ts.Ixns.Bytes()
+	rawIxns, err := ts.Interactions().Bytes()
 	require.NoError(t, err)
 
 	msg.Ixns = rawIxns
@@ -1588,7 +1614,7 @@ func getPubSubMsg(t *testing.T, ts *types.Tesseract, sender id.KramaID, info *pt
 	rawInfo, err := info.Bytes()
 	require.NoError(t, err)
 
-	msg.Delta[ts.GetICSHash()] = rawInfo
+	msg.Delta[ts.ICSHash()] = rawInfo
 
 	tsMsg, err := msg.Bytes()
 	require.NoError(t, err)
@@ -1753,7 +1779,7 @@ func checkForIxnsInDB(t *testing.T, c *ChainManager, expectedTS *types.Tesseract
 	err = actualIxns.FromBytes(rawData)
 	require.NoError(t, err)
 
-	require.Equal(t, expectedTS.Ixns, *actualIxns)
+	require.Equal(t, expectedTS.Interactions(), *actualIxns)
 }
 
 func checkForTesseractByHeight(t *testing.T, c *ChainManager, ts *types.Tesseract) {
@@ -1866,7 +1892,7 @@ func checkIfTesseractCachedInCM(t *testing.T, c *ChainManager, withInteractions 
 	require.True(t, ok)
 
 	// make sure tesseract in cache doesn't have interactions
-	require.Equal(t, 0, len(cachedTS.Ixns))
+	require.Equal(t, 0, len(cachedTS.Interactions()))
 }
 
 func checkForValidatedTesseracts(t *testing.T, c *ChainManager, exists bool, tesseracts ...*types.Tesseract) {

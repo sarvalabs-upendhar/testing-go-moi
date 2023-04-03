@@ -157,7 +157,7 @@ func (c *MockChainManager) GetLatestTesseract(addr types.Address, withInteractio
 	tsCopy := *ts // copy, so that stored tesseract won't be modified
 
 	if !withInteractions {
-		tsCopy.Ixns = nil
+		tsCopy = *tsCopy.GetTesseractWithoutIxns()
 	}
 
 	return &tsCopy, nil
@@ -172,7 +172,7 @@ func (c *MockChainManager) GetTesseract(hash types.Hash, withInteractions bool) 
 	tsCopy := *ts // copy, so that stored tesseract won't be modified
 
 	if !withInteractions {
-		tsCopy.Ixns = nil
+		tsCopy = *tsCopy.GetTesseractWithoutIxns()
 	}
 
 	return &tsCopy, nil
@@ -203,7 +203,7 @@ func (c *MockChainManager) GetTesseractByHeight(
 	tsCopy := *ts // copy, so that stored tesseract won't be modified
 
 	if !withInteractions {
-		tsCopy.Ixns = nil
+		tsCopy = *tsCopy.GetTesseractWithoutIxns()
 	}
 
 	return &tsCopy, nil
@@ -738,12 +738,13 @@ func checkForRPCIxn(t *testing.T, rpcIxn *ptypes.RPCInteraction, ix *types.Inter
 func checkForRPCTesseract(t *testing.T, rpcTS *ptypes.RPCTesseract, ts *types.Tesseract) {
 	t.Helper()
 
-	require.Equal(t, rpcTS.Header, ts.Header)
-	require.Equal(t, rpcTS.Body, ts.Body)
-	require.Equal(t, rpcTS.Receipts, ts.Receipts)
-	require.Equal(t, rpcTS.Seal, ts.Seal)
+	h := ts.Header()
+	require.Equal(t, rpcTS.Header, h)
+	require.Equal(t, rpcTS.Body, ts.Body())
+	require.Equal(t, rpcTS.Receipts, ts.Receipts())
+	require.Equal(t, rpcTS.Seal, ts.Seal())
 
-	for i, ixn := range ts.Ixns {
+	for i, ixn := range ts.Interactions() {
 		checkForRPCIxn(t, rpcTS.Ixns[i], ixn)
 	}
 }

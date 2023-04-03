@@ -127,10 +127,9 @@ func TestCopy(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			sObj := createTestStateObject(t, test.soParams)
 
-			expectedSO := getCopiedStateObject(sObj)
 			copiedSO := sObj.Copy()
 
-			checkIfStateObjectAreEqual(t, expectedSO, copiedSO, test.areTreesNil)
+			checkIfStateObjectAreEqual(t, sObj, copiedSO, test.areTreesNil)
 		})
 	}
 }

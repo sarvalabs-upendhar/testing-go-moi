@@ -43,43 +43,41 @@ func createGenesisTesseract(
 	contextDelta types.ContextDelta,
 ) (*types.Tesseract, error) {
 	ixHash := types.GetHash([]byte("Genesis" + stateHash.Hex()))
-	Tesseract := &types.Tesseract{
-		Header: types.TesseractHeader{
-			Address:  addr,
-			PrevHash: types.NilHash,
-			Height:   0,
-			// Timestamp:     time.Now().UnixNano(),
-			AnuUsed:   0,
-			AnuLimit:  0,
-			BodyHash:  types.NilHash,
-			GridHash:  types.NilHash,
-			ClusterID: "genesis",
-			Operator:  "genesis",
-			Extra: types.CommitData{
-				CommitSignature: nil,
-				Round:           0,
-				VoteSet:         nil,
-			},
-		},
-		Body: types.TesseractBody{
-			StateHash:       stateHash,
-			ContextHash:     contextHash,
-			ContextDelta:    contextDelta,
-			ReceiptHash:     types.Hash{},
-			InteractionHash: ixHash,
-			ConsensusProof: types.PoXCData{
-				IdentityHash: types.NilHash,
-				BinaryHash:   types.NilHash,
-			},
+
+	body := types.TesseractBody{
+		StateHash:       stateHash,
+		ContextHash:     contextHash,
+		ContextDelta:    contextDelta,
+		ReceiptHash:     types.Hash{},
+		InteractionHash: ixHash,
+		ConsensusProof: types.PoXCData{
+			IdentityHash: types.NilHash,
+			BinaryHash:   types.NilHash,
 		},
 	}
 
-	tsBodyHash, err := Tesseract.ComputeBodyHash()
+	tsBodyHash, err := body.Hash()
 	if err != nil {
 		return nil, err
 	}
 
-	Tesseract.Header.BodyHash = tsBodyHash
+	header := types.TesseractHeader{
+		Address:  addr,
+		PrevHash: types.NilHash,
+		Height:   0,
+		// Timestamp:     time.Now().UnixNano(),
+		AnuUsed:   0,
+		AnuLimit:  0,
+		BodyHash:  tsBodyHash,
+		GridHash:  types.NilHash,
+		ClusterID: "genesis",
+		Operator:  "genesis",
+		Extra: types.CommitData{
+			CommitSignature: nil,
+			Round:           0,
+			VoteSet:         nil,
+		},
+	}
 
-	return Tesseract, nil
+	return types.NewTesseract(header, body, nil, nil, nil), nil
 }

@@ -698,8 +698,8 @@ func getLogicObjectParamsWithLogicID(logicID types.LogicID) *createLogicObjectPa
 func getTesseractParamsWithStateHash(address types.Address, hash types.Hash) *tests.CreateTesseractParams {
 	return &tests.CreateTesseractParams{
 		Address: address,
-		TesseractCallback: func(ts *types.Tesseract) {
-			insertStateHash(ts, hash)
+		BodyCallback: func(body *types.TesseractBody) {
+			body.StateHash = hash
 		},
 	}
 }
@@ -707,8 +707,8 @@ func getTesseractParamsWithStateHash(address types.Address, hash types.Hash) *te
 func getTesseractParamsWithContextHash(address types.Address, hash types.Hash) *tests.CreateTesseractParams {
 	return &tests.CreateTesseractParams{
 		Address: address,
-		TesseractCallback: func(ts *types.Tesseract) {
-			ts.Body.ContextHash = hash
+		BodyCallback: func(body *types.TesseractBody) {
+			body.ContextHash = hash
 		},
 	}
 }
@@ -722,10 +722,6 @@ func getTesseractHash(t *testing.T, ts *types.Tesseract) types.Hash {
 	return hash
 }
 
-func insertStateHash(ts *types.Tesseract, hash types.Hash) {
-	ts.Body.StateHash = hash
-}
-
 func storeTesseractHashInCache(t *testing.T, cache *lru.Cache, tesseracts ...*types.Tesseract) {
 	t.Helper()
 
@@ -734,8 +730,8 @@ func storeTesseractHashInCache(t *testing.T, cache *lru.Cache, tesseracts ...*ty
 	}
 }
 
-func insertInContextLock(ts *types.Tesseract, address types.Address, hash types.Hash) {
-	ts.Header.ContextLock[address] = types.ContextLockInfo{
+func insertInContextLock(header *types.TesseractHeader, address types.Address, hash types.Hash) {
+	header.ContextLock[address] = types.ContextLockInfo{
 		ContextHash: hash,
 	}
 }
@@ -1087,32 +1083,6 @@ func stateObjectParamsWithTestData(t *testing.T, areTreesNil bool) *createStateO
 			}
 		},
 	}
-}
-
-func getCopiedStateObject(s *StateObject) *StateObject {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-
-	j := new(Journal)
-	sObj := NewStateObject(s.address, s.cache, j, s.db, s.data, s.data.AccType)
-
-	sObj.balance = s.balance.Copy()
-	sObj.assetApprovals = s.assetApprovals.Copy()
-	sObj.dirtyEntries = s.dirtyEntries.Copy()
-
-	if s.logicTree != nil {
-		sObj.logicTree = s.logicTree.Copy()
-	}
-
-	if s.metaStorageTree != nil {
-		sObj.metaStorageTree = s.metaStorageTree.Copy() // TODO: Check if we require deep copy
-	}
-
-	for k, v := range s.files {
-		sObj.files[k] = v
-	}
-
-	return sObj
 }
 
 func insertAssetAndBalance(so *StateObject, assetID types.AssetID, balance *big.Int) {
@@ -2147,13 +2117,16 @@ func validateTesseract(t *testing.T, ts *types.Tesseract, expectedTS *types.Tess
 	t.Helper()
 
 	if withInteractions { // check if tesseracts matches
+		_, err := ts.Hash() // calculate hash to fill hash field in tesseract
+		require.NoError(t, err)
+
 		require.Equal(t, expectedTS, ts)
 
 		return
 	}
 
 	require.Equal(t, expectedTS.Canonical(), ts.Canonical())
-	require.Equal(t, 0, len(ts.Ixns)) // make sure returned tesseract has zero ixns
+	require.Equal(t, 0, len(ts.Interactions())) // make sure returned tesseract has zero ixns
 }
 
 // utility functions

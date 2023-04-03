@@ -369,7 +369,7 @@ func GetListenAddresses(t *testing.T, count int) []multiaddr.Multiaddr {
 	return ListenAddresses
 }
 
-func GetTesseract(t *testing.T, height uint64) *types.Tesseract {
+func GetTesseract(t *testing.T, height uint64, ixns types.Interactions) *types.Tesseract {
 	t.Helper()
 
 	header := types.TesseractHeader{
@@ -378,13 +378,8 @@ func GetTesseract(t *testing.T, height uint64) *types.Tesseract {
 		Height:   height,
 	}
 	body := types.TesseractBody{}
-	tesseract := types.Tesseract{
-		Header: header,
-		Body:   body,
-		Seal:   []byte{1},
-	}
 
-	return &tesseract
+	return types.NewTesseract(header, body, ixns, nil, []byte{1})
 }
 
 func GetRandomAccMetaInfo(t *testing.T, height uint64) *types.AccountMetaInfo {
@@ -438,10 +433,13 @@ func GetRandomAddressList(t *testing.T, count uint8) []types.Address {
 }
 
 type CreateTesseractParams struct {
-	Address           types.Address
-	Height            uint64
-	Ixns              types.Interactions
-	TesseractCallback func(ts *types.Tesseract)
+	Address        types.Address
+	Height         uint64
+	Ixns           types.Interactions
+	Receipts       types.Receipts
+	Seal           []byte
+	HeaderCallback func(header *types.TesseractHeader)
+	BodyCallback   func(body *types.TesseractBody)
 }
 
 // CreateTesseract creates a tesseract using tessseract params fields
@@ -457,27 +455,33 @@ func CreateTesseract(t *testing.T, params *CreateTesseractParams) *types.Tessera
 		params.Address = RandomAddress(t)
 	}
 
-	ts := &types.Tesseract{
-		Header: types.TesseractHeader{
-			Address: params.Address,
-			Height:  params.Height,
-		},
-		Body: types.TesseractBody{},
-		Ixns: params.Ixns,
-	}
+	var interactionHash types.Hash
 
 	if params.Ixns != nil {
 		hash, err := params.Ixns.Hash()
 		require.NoError(t, err)
 
-		ts.Body.InteractionHash = hash
+		interactionHash = hash
 	}
 
-	if params.TesseractCallback != nil {
-		params.TesseractCallback(ts)
+	header := &types.TesseractHeader{
+		Address: params.Address,
+		Height:  params.Height,
 	}
 
-	return ts
+	body := &types.TesseractBody{
+		InteractionHash: interactionHash,
+	}
+
+	if params.HeaderCallback != nil {
+		params.HeaderCallback(header)
+	}
+
+	if params.BodyCallback != nil {
+		params.BodyCallback(body)
+	}
+
+	return types.NewTesseract(*header, *body, params.Ixns, params.Receipts, params.Seal)
 }
 
 func CreateTesseracts(t *testing.T, count int, paramsMap map[int]*CreateTesseractParams) []*types.Tesseract {
@@ -636,7 +640,7 @@ func CheckForTesseract(t *testing.T, expectedTS, actualTS *types.Tesseract, with
 	}
 
 	require.Equal(t, expectedTS.Canonical(), actualTS.Canonical())
-	require.Nil(t, actualTS.Ixns)
+	require.Nil(t, actualTS.Interactions())
 }
 
 func SignBytes(t *testing.T, msg []byte) (sigBytes, pk []byte) {

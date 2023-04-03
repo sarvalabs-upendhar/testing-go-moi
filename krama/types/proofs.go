@@ -3,6 +3,7 @@ package types
 import (
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
+
 	"github.com/sarvalabs/moichain/types"
 )
 
