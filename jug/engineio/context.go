@@ -5,6 +5,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
+	"gopkg.in/yaml.v3"
 
 	"github.com/sarvalabs/moichain/types"
 )
@@ -101,6 +102,28 @@ func (state ContextStateKind) MarshalJSON() ([]byte, error) {
 func (state *ContextStateKind) UnmarshalJSON(data []byte) error {
 	raw := new(string)
 	if err := json.Unmarshal(data, raw); err != nil {
+		return err
+	}
+
+	kind, ok := contextStateKindFromString[*raw]
+	if !ok {
+		return errors.New("invalid ContextStateKind value")
+	}
+
+	*state = kind
+
+	return nil
+}
+
+// MarshalYAML implements the yaml.Marshaller interface for ContextStateKind
+func (state ContextStateKind) MarshalYAML() (interface{}, error) {
+	return state.String(), nil
+}
+
+// UnmarshalYAML implements the yaml.Unmarshaller interface for ContextStateKind
+func (state *ContextStateKind) UnmarshalYAML(node *yaml.Node) error {
+	raw := new(string)
+	if err := node.Decode(raw); err != nil {
 		return err
 	}
 

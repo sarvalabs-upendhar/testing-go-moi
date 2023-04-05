@@ -9,6 +9,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
+	"gopkg.in/yaml.v3"
 
 	"github.com/sarvalabs/moichain/types"
 )
@@ -60,6 +61,11 @@ func NewManifest(data []byte, encoding ManifestEncoding) (*Manifest, error) {
 		if err := polo.Depolorize(manifest, data); err != nil {
 			return nil, err
 		}
+	case YAML:
+		if err := yaml.Unmarshal(data, manifest); err != nil {
+			return nil, err
+		}
+
 	default:
 		return nil, errors.New("unsupported manifest encoding")
 	}
@@ -83,6 +89,8 @@ func ReadManifestFile(path string) (*Manifest, error) {
 		encoding = JSON
 	case ".polo":
 		encoding = POLO
+	case ".yaml":
+		encoding = YAML
 	default:
 		return nil, errors.Errorf("manifest file has unsupported extension: '%v'", extension)
 	}
@@ -119,6 +127,8 @@ func (manifest Manifest) Encode(encoding ManifestEncoding) ([]byte, error) {
 		return json.Marshal(manifest)
 	case POLO:
 		return polo.Polorize(manifest)
+	case YAML:
+		return yaml.Marshal(manifest)
 
 	default:
 		return nil, errors.New("unsupported manifest encoding")
@@ -242,6 +252,56 @@ func (manifest *Manifest) UnmarshalJSON(data []byte) (err error) {
 
 		object := generator()
 		if err = json.Unmarshal(element.Data, object); err != nil {
+			return err
+		}
+
+		manifest.Elements = append(manifest.Elements, ManifestElement{
+			Ptr:  element.Ptr,
+			Kind: element.Kind,
+			Deps: element.Deps,
+			Data: object,
+		})
+	}
+
+	return nil
+}
+
+func (manifest *Manifest) UnmarshalYAML(node *yaml.Node) error {
+	type ManifestYAML struct {
+		Syntax   string             `yaml:"syntax"`
+		Engine   ManifestEngineSpec `yaml:"engine"`
+		Elements []struct {
+			Ptr  ElementPtr   `yaml:"ptr"`
+			Deps []ElementPtr `yaml:"deps"`
+			Kind ElementKind  `yaml:"kind"`
+			Data yaml.Node    `yaml:"data"`
+		} `yaml:"elements"`
+	}
+
+	raw := new(ManifestYAML)
+	if err := node.Decode(raw); err != nil {
+		return err
+	}
+
+	manifest.Syntax = raw.Syntax
+	manifest.Engine = raw.Engine
+
+	if err := manifest.Header().validate(); err != nil {
+		return err
+	}
+
+	runtime, _ := FetchEngineRuntime(manifest.Header().LogicEngine())
+
+	manifest.Elements = make([]ManifestElement, 0, len(raw.Elements))
+
+	for _, element := range raw.Elements {
+		generator, ok := runtime.GetElementGenerator(element.Kind)
+		if !ok {
+			return errors.Errorf("unrecognized element kind: '%v'", element.Kind)
+		}
+
+		object := generator()
+		if err := element.Data.Decode(object); err != nil {
 			return err
 		}
 

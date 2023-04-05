@@ -5,6 +5,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
+	"gopkg.in/yaml.v3"
 
 	"github.com/sarvalabs/moichain/types"
 )
@@ -100,6 +101,28 @@ func (callsite CallsiteKind) MarshalJSON() ([]byte, error) {
 func (callsite *CallsiteKind) UnmarshalJSON(data []byte) error {
 	raw := new(string)
 	if err := json.Unmarshal(data, raw); err != nil {
+		return err
+	}
+
+	kind, ok := callsiteKindFromString[*raw]
+	if !ok {
+		return errors.New("invalid CallsiteKind value")
+	}
+
+	*callsite = kind
+
+	return nil
+}
+
+// MarshalYAML implements the yaml.Marshaller interface for CallsiteKind
+func (callsite CallsiteKind) MarshalYAML() (interface{}, error) {
+	return callsite.String(), nil
+}
+
+// UnmarshalYAML implements the yaml.Unmarshaller interface for CallsiteKind
+func (callsite *CallsiteKind) UnmarshalYAML(node *yaml.Node) error {
+	raw := new(string)
+	if err := node.Decode(raw); err != nil {
 		return err
 	}
 

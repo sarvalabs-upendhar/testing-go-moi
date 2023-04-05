@@ -2,7 +2,6 @@ package pisa
 
 import (
 	"context"
-	"io/ioutil"
 	"testing"
 
 	"github.com/pkg/errors"
@@ -46,16 +45,10 @@ func TestERC20TestSuite(t *testing.T) {
 }
 
 func (suite *ERC20TestSuite) SetupSuite() {
-	// Read manifest file (JSON)
-	data, err := ioutil.ReadFile("./../manifests/erc20.json")
+	// Read manifest file
+	manifest, err := engineio.ReadManifestFile("./../manifests/erc20.yaml")
 	if err != nil {
-		suite.T().Fatalf("manifest hex decode: %v", err)
-	}
-
-	// Decode manifest file into Manifest object
-	manifest, err := engineio.NewManifest(data, engineio.JSON)
-	if err != nil {
-		suite.T().Fatalf("manifest decode: %v", err)
+		suite.T().Fatalf("manifest read failed: %v", err)
 	}
 
 	runtime, _ := engineio.FetchEngineRuntime(manifest.Header().LogicEngine())
