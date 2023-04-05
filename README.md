@@ -53,7 +53,7 @@ for multiple key-value databases and enables the persistence of network-wide con
 
 ## Documentation 📝
 If you'd like to learn more about the Moichain, how it works and how you can use it for your project, 
-please check out the **[Moichain Documentation](http://62.171.167.60:7000/)**.
+please check out the **[Moichain Documentation](https://moichain-docs.pages.dev/)**.
 
 ## Code Owner
 - Rahul Lenkala
