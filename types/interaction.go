@@ -82,8 +82,6 @@ func (ixInput *IxInput) Copy() IxInput {
 	input.PerceivedValues = make(map[AssetID]*big.Int)
 	input.PerceivedProofs = make([]byte, len(ixInput.PerceivedProofs))
 
-	input.Payload = make(json.RawMessage, len(ixInput.Payload))
-
 	if ixInput.FuelLimit != nil {
 		input.FuelLimit = new(big.Int).Set(ixInput.FuelLimit)
 	}
@@ -103,6 +101,7 @@ func (ixInput *IxInput) Copy() IxInput {
 	copy(input.PerceivedProofs, ixInput.PerceivedProofs)
 
 	if ixInput.Payload != nil {
+		input.Payload = make(json.RawMessage, len(ixInput.Payload))
 		copy(input.Payload, ixInput.Payload)
 	}
 
