@@ -841,6 +841,10 @@ func (sm *StateManager) GetPublicKeys(ids ...id.KramaID) ([][]byte, error) {
 							return err
 						}
 
+						if len(keys) == 0 {
+							return nil
+						}
+
 						pk = keys[0]
 
 						if err := sm.senatus.UpdatePublicKey(id, pk); err != nil {
