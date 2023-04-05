@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"math/big"
 	"testing"
 
@@ -40,7 +41,7 @@ func TestPublicCoreAPI_CreateRPCInteraction(t *testing.T) {
 	}{
 		{
 			name:     "create rpc interaction for value transfer interaction",
-			ixParams: getIxParamsWithInputComputeTrust(types.IxValueTransfer, nil, 2, 3),
+			ixParams: getIxParamsWithInputComputeTrust(types.IxValueTransfer, json.RawMessage{}, 2, 3),
 		},
 		{
 			name:     "create rpc interaction for asset creation interaction",
