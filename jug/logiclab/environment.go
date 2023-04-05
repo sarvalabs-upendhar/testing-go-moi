@@ -1,0 +1,219 @@
+package logiclab
+
+import (
+	"bufio"
+	"fmt"
+	"io"
+	"os"
+	"os/signal"
+	"syscall"
+
+	"github.com/pkg/errors"
+	"go.uber.org/atomic"
+
+	"github.com/sarvalabs/moichain/jug/engineio"
+	"github.com/sarvalabs/moichain/jug/pisa"
+	"github.com/sarvalabs/moichain/types"
+)
+
+func init() {
+	engineio.RegisterEngineRuntime(pisa.NewRuntime())
+}
+
+const (
+	replPrompt  = ">> "
+	replDivider = "======================================================"
+	replStrike  = "------------------------------------------------------"
+	replFiglet  = "" + replDivider + "\n" +
+		"dP                   oo          dP          dP       \n" +
+		"88                               88          88       \n" +
+		"88 .d8888b. .d8888b. dP .d8888b. 88 .d8888b. 88d888b. \n" +
+		"88 88'  `88 88'  `88 88 88'  `\"\" 88 88'  `88 88'  `88 \n" +
+		"88 88.  .88 88.  .88 88 88.  ... 88 88.  .88 88.  .88 \n" +
+		"dP `88888P' `8888P88 dP `88888P' dP `88888P8 88Y8888' \n" +
+		"                 .88                                  \n" +
+		"             d8888P                                   \n" +
+		replDivider + "\n"
+)
+
+// Environment represents the logic lab runtime environment
+type Environment struct {
+	// abort represents the abort flag
+	abort atomic.Bool
+	repl  atomic.Bool
+
+	// input is the command read buffer
+	input io.Reader
+	// output is result write buffer
+	output io.Writer
+
+	// memory contains any runtime value assigned with 'set'
+	memory map[string]any
+	// inventory contains all the items the lab has
+	// access to, such as participants and logics
+	inventory *Inventory
+	// directory is the path to the directory containing all saved lab items
+	directory string
+}
+
+// LoadEnvironment loads an existing LogicLab environment.
+// Fails it there isn't a directory at the given path with an inventory.json file in it.
+func LoadEnvironment(dirpath string) (*Environment, error) {
+	if !pathExists(dirpath) {
+		return nil, errors.Errorf("could not start LogicLab at directory '%v': directory does not exist", dirpath)
+	}
+
+	inventory := new(Inventory)
+	if err := inventory.load(dirpath); err != nil {
+		return nil, errors.Wrap(err, "could not start LogicLab at directory '%v':")
+	}
+
+	return &Environment{
+		directory: dirpath,
+		inventory: inventory,
+		memory:    make(map[string]any),
+	}, nil
+}
+
+// InitEnvironment initializes a new LogicLab environment.
+// Fails if there already exists a directory at the given path.
+// The directory is created and initialized with a new inventory.json file.
+func InitEnvironment(dirpath string) error {
+	if pathExists(dirpath) {
+		return errors.Errorf("could not initialize LogicLab directory at '%v': directory already exists", dirpath)
+	}
+
+	if err := createDir(dirpath); err != nil {
+		return errors.Wrapf(err, "could not initialize LogicLab directory at '%v'", dirpath)
+	}
+
+	inventory := Inventory{
+		labdir: dirpath,
+
+		BaseFuel:      5000,
+		Participants:  make(map[string]types.Address),
+		LogicAccounts: make(map[string]types.LogicID),
+	}
+
+	if err := inventory.save(); err != nil {
+		return errors.Wrap(err, "could not initialize LogicLab directory: failed to create inventory file")
+	}
+
+	return nil
+}
+
+// StartREPL starts Read-Evaluate-Print Loop for LogicLab Commands.
+// Input commands are read from the input buffer and output results are written to the output buffer.
+func (env *Environment) StartREPL(in io.Reader, out io.Writer) {
+	// Set REPL flag to ON
+	env.repl.Store(true)
+	defer env.repl.Store(false)
+
+	// Start signal handler
+	env.handleSignals()
+
+	// Set up the IO buffers
+	env.input, env.output = in, out
+	scanner := bufio.NewScanner(env.input)
+
+	// Launch Sequence
+	env.write(replFiglet)
+	env.write("LogicLab Initialized @ " + env.directory)
+	env.write("LogicLab Codebase & Documentation: https://www.github.com/sarvalabs/moichain/jug/logiclab")
+
+	env.write("Starting LogicLab REPL ... (use 'exit' or ctrl-c to close the REPL)")
+	env.write(replDivider)
+
+REPL:
+	// Start Read-Evaluate-Print Loop
+	for {
+		// Write line prompt
+		_, _ = fmt.Fprint(env.output, replPrompt)
+		// Scan user input
+		scanned := scanner.Scan()
+		if !scanned {
+			return
+		}
+
+		// Collect the scanned text and parse into a command
+		command := ParseCommand(scanner.Text())
+		// Perform the command
+		result := command(env)
+		// If abort is detected, close the lab and break from REPL
+		if env.abort.Load() {
+			_ = env.close()
+
+			break REPL
+		}
+
+		// Write the output of the command run
+		env.write(result)
+	}
+}
+
+// write outputs the given content to the environment output buffer.
+// The given output is always suffixed with a new line character.
+func (env *Environment) write(s string) {
+	_, _ = io.WriteString(env.output, fmt.Sprintf("%v\n", s))
+}
+
+// handleSignals sets ups the system interrupt handler.
+// Any system level interrupt will abort all execution exit gracefully.
+func (env *Environment) handleSignals() {
+	signals := make(chan os.Signal, 2)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		sig := <-signals
+		switch sig {
+		case os.Interrupt, syscall.SIGTERM, syscall.SIGKILL:
+			// Abort any running execution
+			env.abort.Store(true)
+			// Close the environment
+			_ = env.close()
+
+			// Exit with code 0
+			os.Exit(0)
+		}
+	}()
+}
+
+// close exits the environment by saving the lab session to the inventory
+func (env *Environment) close() error {
+	if env.repl.Load() {
+		env.write("\r" + replDivider + "\nClosing LogicLab REPL")
+	}
+
+	// Flush the inventory file to the directory
+	if err := env.inventory.save(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// MemoryVar is type wrapper for memory object identifiers
+type MemoryVar string
+
+// SetValueCommand generates a Command runner to set the value
+// of an identifier to a given value in the environment memory
+func SetValueCommand(ident string, value any) Command {
+	return func(env *Environment) string {
+		env.memory[ident] = value
+
+		return fmt.Sprintf("'%v' has been set to %v", ident, value)
+	}
+}
+
+// GetValueCommand generates a Command runner to get the
+// value of an identifier from the environment memory
+func GetValueCommand(ident string) Command {
+	return func(env *Environment) string {
+		value, ok := env.memory[ident]
+		if !ok {
+			return fmt.Sprintf("no value set for '%v'", ident)
+		}
+
+		return fmt.Sprintf("'%v' is set to %v", ident, value)
+	}
+}

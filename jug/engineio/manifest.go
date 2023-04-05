@@ -2,6 +2,9 @@ package engineio
 
 import (
 	"encoding/json"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -53,14 +56,45 @@ func NewManifest(data []byte, encoding ManifestEncoding) (*Manifest, error) {
 		if err := json.Unmarshal(data, manifest); err != nil {
 			return nil, err
 		}
-
 	case POLO:
 		if err := polo.Depolorize(manifest, data); err != nil {
 			return nil, err
 		}
-
 	default:
 		return nil, errors.New("unsupported manifest encoding")
+	}
+
+	return manifest, nil
+}
+
+func ReadManifestFile(path string) (*Manifest, error) {
+	path, _ = filepath.Abs(path)
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil, errors.Errorf("manifest file not found @ '%v'", path)
+	}
+
+	var (
+		extension string
+		encoding  ManifestEncoding
+	)
+
+	switch extension = filepath.Ext(path); extension {
+	case ".json":
+		encoding = JSON
+	case ".polo":
+		encoding = POLO
+	default:
+		return nil, errors.Errorf("manifest file has unsupported extension: '%v'", extension)
+	}
+
+	encoded, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to read manifest file")
+	}
+
+	manifest, err := NewManifest(encoded, encoding)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to decode %v manifest data", extension)
 	}
 
 	return manifest, nil

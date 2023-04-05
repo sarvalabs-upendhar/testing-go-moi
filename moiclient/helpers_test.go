@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 	"testing"
@@ -43,14 +42,11 @@ var (
 func readERC20Manifest(t *testing.T) string {
 	t.Helper()
 
-	// Read erc20.json manifest from jug/manifests
-	data, err := ioutil.ReadFile("./../jug/manifests/erc20.json")
-	require.NoError(t, err)
-
 	// Register the PISA element registry with the EngineIO package
 	engineio.RegisterEngineRuntime(pisa.NewRuntime())
-	// Decode the JSON manifest into a Manifest object
-	manifest, err := engineio.NewManifest(data, engineio.JSON)
+
+	// Read erc20.json manifest from jug/manifests
+	manifest, err := engineio.ReadManifestFile("./../jug/manifests/erc20.json")
 	require.NoError(t, err)
 
 	// Encode the Manifest into POLO data

@@ -1,6 +1,7 @@
 package engineio
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -309,8 +310,9 @@ func (dgraph *DependencyGraph) peek(ptr ElementPtr) (mapset.Set, bool) {
 	return set, ok
 }
 
-// Polorize implements the polo.Polorizable interface for DependencyGraph
-func (dgraph *DependencyGraph) Polorize() (*polo.Polorizer, error) {
+// encode converts the DependencyGraph into a map of pointers to their dependencies.
+// The generated map is safe to encode with any encoding scheme.
+func (dgraph *DependencyGraph) encode() map[ElementPtr][]ElementPtr {
 	// Declare a map to collect all graph nodes
 	encodable := make(map[ElementPtr][]ElementPtr, dgraph.Size())
 	// Iterate over the graph vertices
@@ -332,6 +334,45 @@ func (dgraph *DependencyGraph) Polorize() (*polo.Polorizer, error) {
 		encodable[ptr] = deps
 	}
 
+	return encodable
+}
+
+// decode converts a given map of pointers to their dependencies into a DependencyGraph and absorbs it.
+func (dgraph *DependencyGraph) decode(data map[ElementPtr][]ElementPtr) {
+	// Insert each node into the graph
+	*dgraph = *NewDependencyGraph()
+	for ptr, deps := range data {
+		dgraph.Insert(ptr, deps...)
+	}
+}
+
+// MarshalJSON implements the json.Marshaller interface for DependencyGraph
+func (dgraph *DependencyGraph) MarshalJSON() ([]byte, error) {
+	// Get encodable version of dgraph
+	encodable := dgraph.encode()
+
+	return json.Marshal(encodable)
+}
+
+// UnmarshalJSON implements the json.Unmarshaller interface for DependencyGraph
+func (dgraph *DependencyGraph) UnmarshalJSON(data []byte) error {
+	// Decode the data into a map of graph nodes
+	decodable := make(map[ElementPtr][]ElementPtr)
+	if err := json.Unmarshal(data, &decodable); err != nil {
+		return err
+	}
+
+	// Decode data into dgraph
+	dgraph.decode(decodable)
+
+	return nil
+}
+
+// Polorize implements the polo.Polorizable interface for DependencyGraph
+func (dgraph *DependencyGraph) Polorize() (*polo.Polorizer, error) {
+	// Get encodable version of dgraph
+	encodable := dgraph.encode()
+
 	// Serialize the encodable map
 	polorizer := polo.NewPolorizer()
 	if err := polorizer.Polorize(encodable); err != nil {
@@ -349,11 +390,8 @@ func (dgraph *DependencyGraph) Depolorize(depolorizer *polo.Depolorizer) error {
 		return err
 	}
 
-	// Insert each node into the graph
-	*dgraph = *NewDependencyGraph()
-	for ptr, deps := range decodable {
-		dgraph.Insert(ptr, deps...)
-	}
+	// Decode data into dgraph
+	dgraph.decode(decodable)
 
 	return nil
 }
