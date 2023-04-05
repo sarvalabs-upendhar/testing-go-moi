@@ -67,7 +67,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/hashicorp/go-hclog"
-	stats "github.com/libp2p/go-libp2p-gorpc/stats"
+	"github.com/libp2p/go-libp2p-gorpc/stats"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"

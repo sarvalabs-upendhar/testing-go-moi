@@ -112,8 +112,12 @@ func (tdb *TreeDB) Copy() DB {
 		dirty:    make(map[string][]byte, len(tdb.dirty)),
 	}
 
-	for k, v := range tdb.dirty {
-		newTreeDB.dirty[k] = v
+	for key, value := range tdb.dirty {
+		v := make([]byte, len(value))
+
+		copy(v, value)
+
+		newTreeDB.dirty[key] = v
 	}
 
 	return newTreeDB

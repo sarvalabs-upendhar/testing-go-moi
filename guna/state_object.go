@@ -21,12 +21,17 @@ type Storage map[string][]byte
 var blakeHasher = blake256.New()
 
 func (s Storage) Copy() Storage {
-	cpy := make(Storage)
+	storage := make(Storage)
+
 	for key, value := range s {
-		cpy[key] = value
+		v := make([]byte, len(value))
+
+		copy(v, value)
+
+		storage[key] = v
 	}
 
-	return cpy
+	return storage
 }
 
 type StateObject struct {
@@ -153,8 +158,12 @@ func (s *StateObject) Copy() *StateObject {
 		sObj.metaStorageTree = s.metaStorageTree.Copy() // TODO: Check if we require deep copy
 	}
 
-	for k, v := range s.files {
-		sObj.files[k] = v
+	for key, value := range s.files {
+		v := make([]byte, len(value))
+
+		copy(v, value)
+
+		sObj.files[key] = v
 	}
 
 	return sObj

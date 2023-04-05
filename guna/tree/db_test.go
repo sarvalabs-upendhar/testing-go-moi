@@ -1,6 +1,7 @@
 package tree
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -42,4 +43,19 @@ func TestTreeDB_Get_UncommittedEntry(t *testing.T) {
 	fetchedValue, err := treeDB.Get(testKey)
 	require.NoError(t, err)
 	require.Equal(t, testValue, fetchedValue)
+}
+
+func TestTreeDB_Copy(t *testing.T) {
+	treeDB := NewTreeDB(tests.RandomAddress(t), db.Storage, NewMockDB())
+	treeDB.dirty["hello"] = []byte{1, 2}
+
+	copiedDB := treeDB.Copy()
+	copiedTreeDB, ok := copiedDB.(*TreeDB)
+	require.True(t, ok)
+
+	require.Equal(t, treeDB, copiedTreeDB)
+	require.NotEqual(t,
+		reflect.ValueOf(treeDB.dirty).Pointer(),
+		reflect.ValueOf(copiedTreeDB.dirty).Pointer(),
+	)
 }

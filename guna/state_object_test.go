@@ -130,6 +130,7 @@ func TestCopy(t *testing.T) {
 			copiedSO := sObj.Copy()
 
 			checkIfStateObjectAreEqual(t, sObj, copiedSO, test.areTreesNil)
+			checkForReferences(t, sObj, copiedSO)
 		})
 	}
 }

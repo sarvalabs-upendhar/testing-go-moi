@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"math/big"
 	"net/http"
+	"reflect"
 	"sync"
 	"testing"
 
@@ -422,12 +423,20 @@ func (m *MockMerkleTree) Copy() tree.MerkleTree {
 		dirty:     make(map[string][]byte),
 	}
 
-	for k, v := range m.dbStorage {
-		merkleTree.dbStorage[k] = v
+	for key, value := range m.dbStorage {
+		v := make([]byte, len(value))
+
+		copy(v, value)
+
+		merkleTree.dbStorage[key] = v
 	}
 
-	for k, v := range m.dirty {
-		merkleTree.dirty[k] = v
+	for key, value := range m.dirty {
+		v := make([]byte, len(value))
+
+		copy(v, value)
+
+		merkleTree.dirty[key] = v
 	}
 
 	merkleTree.merkleRoot = m.merkleRoot
@@ -1085,6 +1094,39 @@ func stateObjectParamsWithTestData(t *testing.T, areTreesNil bool) *createStateO
 	}
 }
 
+func checkForReferences(t *testing.T, sObj, copiedSO *StateObject) {
+	t.Helper()
+
+	require.NotEqual(t,
+		reflect.ValueOf(sObj.files).Pointer(),
+		reflect.ValueOf(copiedSO.files).Pointer(),
+	)
+	require.NotEqual(t,
+		reflect.ValueOf(sObj.dirtyEntries).Pointer(),
+		reflect.ValueOf(copiedSO.dirtyEntries).Pointer(),
+	)
+	require.NotEqual(t,
+		reflect.ValueOf(sObj.assetApprovals.Approvals).Pointer(),
+		reflect.ValueOf(copiedSO.assetApprovals.Approvals).Pointer(),
+	)
+	require.NotEqual(t,
+		reflect.ValueOf(sObj.balance.Balances).Pointer(),
+		reflect.ValueOf(copiedSO.balance.Balances).Pointer(),
+	)
+	require.NotEqual(t,
+		reflect.ValueOf(sObj.assetApprovals).Pointer(),
+		reflect.ValueOf(copiedSO.assetApprovals).Pointer(),
+	)
+	require.NotEqual(t,
+		reflect.ValueOf(sObj.balance).Pointer(),
+		reflect.ValueOf(copiedSO.balance).Pointer(),
+	)
+	require.NotEqual(t,
+		reflect.ValueOf(sObj.journal).Pointer(),
+		reflect.ValueOf(copiedSO.journal).Pointer(),
+	)
+}
+
 func insertAssetAndBalance(so *StateObject, assetID types.AssetID, balance *big.Int) {
 	so.balance.Balances[assetID] = balance
 }
@@ -1129,6 +1171,7 @@ func getTestBalance(t *testing.T, assetMap types.AssetMap) (*gtypes.BalanceObjec
 
 	balance := &gtypes.BalanceObject{
 		Balances: assetMap,
+		PrvHash:  tests.RandomHash(t),
 	}
 
 	data, err := balance.Bytes()

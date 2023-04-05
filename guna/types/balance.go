@@ -20,8 +20,9 @@ func (b *BalanceObject) TDU() (types.AssetMap, types.Hash) {
 
 func (b *BalanceObject) Copy() *BalanceObject {
 	newObject := new(BalanceObject)
-	newObject.Balances = make(types.AssetMap)
+	newObject.PrvHash = b.PrvHash
 
+	newObject.Balances = make(types.AssetMap)
 	for k, v := range b.Balances {
 		newObject.Balances[k] = new(big.Int).SetBytes(v.Bytes())
 	}
@@ -57,7 +58,7 @@ func (a *ApprovalObject) Copy() *ApprovalObject {
 	newObject.Approvals = make(map[types.Address]types.AssetMap)
 
 	for k, v := range a.Approvals {
-		newObject.Approvals[k] = v
+		newObject.Approvals[k] = v.Copy()
 	}
 
 	return newObject

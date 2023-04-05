@@ -204,15 +204,27 @@ func (kht *KramaHashTree) Copy() MerkleTree {
 	defer kht.mtx.RUnlock()
 
 	newSMT := &KramaHashTree{
-		root:      &types.RootNode{MerkleRoot: kht.root.MerkleRoot, HashTable: kht.root.HashTable},
+		root:      &types.RootNode{MerkleRoot: kht.root.MerkleRoot, HashTable: make(map[string][]byte)},
 		db:        kht.db.Copy(),
 		preImages: make(map[types.Hash][]byte, len(kht.preImages)),
 	}
 
 	newSMT.tree = smt.ImportSparseMerkleTree(newSMT.db, newSMT.db, blake256.New(), kht.root.MerkleRoot.Bytes())
 
-	for k, v := range kht.preImages {
-		newSMT.preImages[k] = v
+	for key, value := range kht.root.HashTable {
+		v := make([]byte, len(value))
+
+		copy(v, value)
+
+		newSMT.root.HashTable[key] = v
+	}
+
+	for key, value := range kht.preImages {
+		v := make([]byte, len(value))
+
+		copy(v, value)
+
+		newSMT.preImages[key] = v
 	}
 
 	return newSMT

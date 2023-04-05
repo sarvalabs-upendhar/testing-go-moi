@@ -3,8 +3,6 @@ package tree
 import (
 	"testing"
 
-	"github.com/decred/dcrd/crypto/blake256"
-	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/common/tests"
@@ -271,79 +269,33 @@ func TestKramaHashTree_Delete(t *testing.T) {
 	checkForDeltaNodes(t, key, value, hashTree, false)
 }
 
-func checkForPreImage(t *testing.T, key []byte, hashTree *KramaHashTree, shouldExist bool) {
-	t.Helper()
+func TestKramaHashTree_Copy(t *testing.T) {
+	address := tests.RandomAddress(t)
+	db := NewMockDB()
 
-	v, ok := hashTree.preImages[hashTree.hashKey(key)]
-	if !shouldExist {
-		require.False(t, ok)
+	key := []byte("Test-Key")
+	value := []byte("Test-Value")
 
-		return
-	}
+	kht := createTestHashTreeWithEntries(
+		t,
+		address,
+		db,
+		map[string][]byte{string(key): value},
+	)
 
+	copiedMerkleTree := kht.Copy()
+	copiedKHT, ok := copiedMerkleTree.(*KramaHashTree)
 	require.True(t, ok)
-	require.Equal(t, key, v, "pre image mismatch")
-}
 
-func checkForDeltaNodes(t *testing.T, key, value []byte, hashTree *KramaHashTree, shouldExist bool) {
-	t.Helper()
-
-	v, ok := hashTree.root.HashTable[string(key)]
-	if !shouldExist {
-		require.False(t, ok)
-
-		return
-	}
-
+	treeDB, ok := kht.db.(*TreeDB)
 	require.True(t, ok)
-	require.Equal(t, value, v, "leaf value mismatch")
-}
 
-func checkForEntry(t *testing.T, key, value []byte, hashTree *KramaHashTree, shouldExist bool) {
-	t.Helper()
+	copiedTreeeDB, ok := copiedKHT.db.(*TreeDB)
+	require.True(t, ok)
 
-	dbValue, err := hashTree.tree.GetDescend(hashTree.hashKey(key).Bytes())
-	if !shouldExist {
-		require.Empty(t, dbValue)
+	require.Equal(t, kht.root, copiedKHT.root)
+	require.Equal(t, kht.preImages, copiedKHT.preImages)
+	require.Equal(t, treeDB, copiedTreeeDB)
 
-		return
-	}
-
-	require.NoError(t, err)
-	require.Equal(t, value, dbValue)
-}
-
-func createTestHashTreeWithEntries(
-	t *testing.T,
-	address types.Address,
-	db persistentDB,
-	entries map[string][]byte,
-) *KramaHashTree {
-	t.Helper()
-
-	hashTree, err := NewKramaHashTree(address, types.NilHash, db, blake256.New(), dhruva.Storage)
-	require.NoError(t, err)
-
-	for k, v := range entries {
-		err := hashTree.Set([]byte(k), v)
-		require.NoError(t, err, "failed to insert")
-	}
-
-	return hashTree
-}
-
-func fetchRootNodeAndDelta(t *testing.T, hashTree *KramaHashTree) *types.RootNode {
-	t.Helper()
-
-	rootHash, err := hashTree.RootHash()
-	require.NoError(t, err)
-
-	rawData, err := hashTree.db.Get(rootHash.Bytes())
-	require.NoError(t, err)
-
-	root := new(types.RootNode)
-
-	require.NoError(t, polo.Depolorize(root, rawData))
-
-	return root
+	checkForReferences(t, kht, copiedKHT)
 }
