@@ -1013,7 +1013,7 @@ func (k *Engine) getObserverNodes(ctx context.Context, count int, exemptedNodes 
 	_, span := tracing.Span(ctx, "Krama.KramaEngine", "getObserverNodes")
 	defer span.End()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 	defer cancel()
 
 	peers, err := k.randomizer.GetRandomNodes(ctx, count, exemptedNodes)

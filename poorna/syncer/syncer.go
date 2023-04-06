@@ -778,7 +778,7 @@ func (s *Syncer) handleNewPeer() {
 		if p, ok := obj.Data.(utils.PeerDiscoveredEvent); ok {
 			fmt.Println("Identified new peer sending sync request", p.ID)
 
-			stream, err := s.node.NewStream(context.Background(), p.ID, SyncStreamProtocol)
+			stream, err := s.node.NewStream(s.ctx, p.ID, SyncStreamProtocol)
 			if err != nil {
 				s.logger.Error("Error opening sync stream", "error", err)
 

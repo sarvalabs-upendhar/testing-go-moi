@@ -826,7 +826,7 @@ func (sm *StateManager) GetPublicKeys(ids ...id.KramaID) ([][]byte, error) {
 
 	publicKeys := make([][]byte, len(ids))
 
-	g, _ := errgroup.WithContext(context.Background())
+	g, _ := errgroup.WithContext(sm.ctx)
 
 	for index, kramaID := range ids {
 		i, k := index, kramaID
@@ -903,7 +903,7 @@ func (sm *StateManager) SyncStorageTrees(
 		return err
 	}
 
-	g, _ := errgroup.WithContext(context.Background())
+	g, _ := errgroup.WithContext(sm.ctx)
 
 	for logic, rootNode := range logicStorageTreeRoots {
 		storageRoot, logicID := rootNode, logic

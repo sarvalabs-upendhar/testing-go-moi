@@ -5,4 +5,4 @@ lint:
 	-E goconst -E forcetypeassert -E dogsled -E dupl -E errname -E errorlint -E nolintlint
 
 install:
-	go install .
+	go install ./cmd/moichain

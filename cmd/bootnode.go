@@ -38,8 +38,6 @@ var bootnodeCmd = &cobra.Command{
 			log.Panic("Failed to get private keys : ", err)
 		}
 
-		ctx := context.Background()
-
 		// 0.0.0.0 will listen on any interface device.
 		sourceMultiAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", ipAddress, portNumber))
 
@@ -48,7 +46,7 @@ var bootnodeCmd = &cobra.Command{
 				dht.Mode(dht.ModeServer),
 				dht.ProtocolPrefix("MOI"),
 			}
-			Dht, errs := dht.New(ctx, h, dhtOpts...)
+			Dht, errs := dht.New(context.Background(), h, dhtOpts...)
 			if errs != nil {
 				panic(err)
 			}

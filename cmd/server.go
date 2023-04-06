@@ -426,6 +426,8 @@ func SetupNode(datadir string, cfgPath string) {
 	profiling := profile.Start(profile.BlockProfile, profile.MutexProfile, profile.ProfilePath(datadir))
 	closeCh := make(chan os.Signal, 1)
 
+	defer profiling.Stop()
+
 	fileCfg, err := ReadConfig(datadir + "/" + cfgPath)
 	Err(err)
 
@@ -443,6 +445,8 @@ func SetupNode(datadir string, cfgPath string) {
 	if err != nil {
 		Err(err)
 	}
+
+	defer n.Stop()
 
 	// init trace provider
 	ctx := context.Background()
@@ -464,10 +468,5 @@ func SetupNode(datadir string, cfgPath string) {
 
 	signal.Notify(closeCh, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 
-	for range closeCh {
-		profiling.Stop()
-		n.Stop()
-
-		return
-	}
+	<-closeCh
 }
