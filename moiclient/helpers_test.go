@@ -12,8 +12,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/moichain/jug/engineio"
-	"github.com/sarvalabs/moichain/jug/pisa"
+	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/poorna/api"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
@@ -37,25 +36,6 @@ var (
 	transferTokensHeight = int64(4)
 	ixnPendingCount      = 10
 )
-
-// Reads the ERC20 JSON Manifest and returns it as POLO encoded hex string
-func readERC20Manifest(t *testing.T) string {
-	t.Helper()
-
-	// Register the PISA element registry with the EngineIO package
-	engineio.RegisterEngineRuntime(pisa.NewRuntime())
-
-	// Read erc20.json manifest from jug/manifests
-	manifest, err := engineio.ReadManifestFile("./../jug/manifests/erc20.json")
-	require.NoError(t, err)
-
-	// Encode the Manifest into POLO data
-	encoded, err := manifest.Encode(engineio.POLO)
-	require.NoError(t, err)
-
-	// Hex encode the POLO manifest
-	return hex.EncodeToString(encoded)
-}
 
 // makeHTTPRequest takes method, args and makes an HTTP POST request to node http://0.0.0.0:1600,
 // returning a response with data, status, and error.
@@ -102,7 +82,7 @@ func getIXArgsForLogicDeployment(t *testing.T) *ptypes.SendIXArgs {
 	t.Helper()
 
 	logicDeployArgs := &ptypes.LogicDeployArgs{
-		Manifest: readERC20Manifest(t),
+		Manifest: hex.EncodeToString(tests.ReadERC20Manifest(t)),
 		Callsite: "Seeder!",
 		Calldata: "0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd8ee6a29ec4" +
 			"42dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49",

@@ -933,7 +933,12 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 	logicID := getLogicID(t, ts.Address())
 	logicIDWithoutState := getLogicID(t, tests.RandomAddress(t))
 
-	s.setLogicManifest(logicID.Hex(), []byte{0x00, 0x01})
+	poloManifest := tests.ReadERC20Manifest(t)
+	s.setLogicManifest(logicID.Hex(), poloManifest)
+
+	jsonManifest := tests.GetJSONManifest(t)
+	yamlManifest := tests.GetYAMLManifest(t)
+
 	c.setTesseractByHash(t, ts)
 
 	testcases := []struct {
@@ -945,7 +950,8 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 		{
 			name: "returns error if logic id is invalid",
 			args: &ptypes.LogicManifestArgs{
-				LogicID: types.LogicID(tests.RandomHash(t).String()).Hex(),
+				LogicID:  types.LogicID(tests.RandomHash(t).String()).Hex(),
+				Encoding: "JSON",
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
 				},
@@ -955,7 +961,8 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 		{
 			name: "returns error if failed to fetch logic manifest",
 			args: &ptypes.LogicManifestArgs{
-				LogicID: logicIDWithoutState.Hex(),
+				LogicID:  logicIDWithoutState.Hex(),
+				Encoding: "JSON",
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
 				},
@@ -963,14 +970,37 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 			expectedError: types.ErrFetchingTesseract,
 		},
 		{
-			name: "fetched logic manifest successfully",
+			name: "fetched json encoded logic manifest successfully",
 			args: &ptypes.LogicManifestArgs{
-				LogicID: logicID.Hex(),
+				LogicID:  logicID.Hex(),
+				Encoding: "JSON",
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash,
 				},
 			},
-			expectedLogicManifest: []byte{0x00, 0x01},
+			expectedLogicManifest: jsonManifest,
+		},
+		{
+			name: "fetched polo encoded logic manifest successfully",
+			args: &ptypes.LogicManifestArgs{
+				LogicID:  logicID.Hex(),
+				Encoding: "POLO",
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractHash: &tsHash,
+				},
+			},
+			expectedLogicManifest: poloManifest,
+		},
+		{
+			name: "fetched yaml encoded logic manifest successfully",
+			args: &ptypes.LogicManifestArgs{
+				LogicID:  logicID.Hex(),
+				Encoding: "YAML",
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractHash: &tsHash,
+				},
+			},
+			expectedLogicManifest: yamlManifest,
 		},
 	}
 

@@ -821,9 +821,30 @@ func testLogicManifest(t *testing.T, client *Client) {
 		expectedError     error
 	}{
 		{
-			name: "fetch logic manifest for existing logicID",
+			name: "fetch json logic manifest for existing logicID",
 			logicManifestArgs: &ptypes.LogicManifestArgs{
-				LogicID: logicID,
+				LogicID:  logicID,
+				Encoding: "JSON",
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &LatestTesseractNumber,
+				},
+			},
+		},
+		{
+			name: "fetch polo logic manifest for existing logicID",
+			logicManifestArgs: &ptypes.LogicManifestArgs{
+				LogicID:  logicID,
+				Encoding: "POLO",
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &LatestTesseractNumber,
+				},
+			},
+		},
+		{
+			name: "fetch yaml logic manifest for existing logicID",
+			logicManifestArgs: &ptypes.LogicManifestArgs{
+				LogicID:  logicID,
+				Encoding: "YAML",
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
@@ -832,7 +853,8 @@ func testLogicManifest(t *testing.T, client *Client) {
 		{
 			name: "fetch logic manifest for non-existing logicID",
 			logicManifestArgs: &ptypes.LogicManifestArgs{
-				LogicID: "0200000070c34ed6ec4384c75d469894052647a078b33ac0f08db0d3751c1fce29a49f",
+				LogicID:  "0200000070c34ed6ec4384c75d469894052647a078b33ac0f08db0d3751c1fce29a49f",
+				Encoding: "JSON",
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},

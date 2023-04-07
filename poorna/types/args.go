@@ -157,8 +157,9 @@ type GetAccountArgs struct {
 }
 
 type LogicManifestArgs struct {
-	LogicID string                `json:"logic_id"`
-	Options TesseractNumberOrHash `json:"options"`
+	LogicID  string                `json:"logic_id"`
+	Encoding string                `json:"encoding"`
+	Options  TesseractNumberOrHash `json:"options"`
 }
 
 // BalArgs is an argument wrapper for retrieving balance of an asset

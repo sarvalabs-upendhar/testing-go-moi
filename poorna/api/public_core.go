@@ -7,6 +7,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/sarvalabs/moichain/jug/engineio"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 	"github.com/sarvalabs/moichain/utils"
@@ -206,7 +207,41 @@ func (p *PublicCoreAPI) GetLogicManifest(args *ptypes.LogicManifestArgs) ([]byte
 		return nil, err
 	}
 
-	return p.sm.GetLogicManifest(logicID, ts.StateHash())
+	logicManifest, err := p.sm.GetLogicManifest(logicID, ts.StateHash())
+	if err != nil {
+		return nil, err
+	}
+
+	switch args.Encoding {
+	case "POLO", "":
+		return logicManifest, nil
+	case "JSON":
+		depolorizedManifest, err := engineio.NewManifest(logicManifest, engineio.POLO)
+		if err != nil {
+			return nil, err
+		}
+
+		manifest, err := depolorizedManifest.Encode(engineio.JSON)
+		if err != nil {
+			return nil, err
+		}
+
+		return manifest, nil
+	case "YAML":
+		depolorizedManifest, err := engineio.NewManifest(logicManifest, engineio.POLO)
+		if err != nil {
+			return nil, err
+		}
+
+		manifest, err := depolorizedManifest.Encode(engineio.YAML)
+		if err != nil {
+			return nil, err
+		}
+
+		return manifest, nil
+	default:
+		return nil, errors.New("invalid encoding type")
+	}
 }
 
 // GetStorageAt returns the data associated with the given storage slot
