@@ -4,5 +4,8 @@ lint:
 	-E predeclared -E nlreturn -E misspell -E makezero -E lll -E importas -E ifshort -E gosec -E gofumpt \
 	-E goconst -E forcetypeassert -E dogsled -E dupl -E errname -E errorlint -E nolintlint
 
+build:
+	go build -o ./build/ ./cmd/moichain
+
 install:
 	go install ./cmd/moichain

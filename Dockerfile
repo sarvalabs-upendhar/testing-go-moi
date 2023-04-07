@@ -10,7 +10,7 @@ WORKDIR /src
 RUN --mount=type=bind,source=.,rw \
   --mount=type=cache,target=/root/.cache \
   --mount=type=cache,target=/go/pkg/mod \
-  go build -o /bin/moichain
+  go build -o /bin/moichain ./cmd/moichain
 
 FROM alpine:latest
 VOLUME /data 
