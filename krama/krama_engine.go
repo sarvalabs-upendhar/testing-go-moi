@@ -539,16 +539,6 @@ func (k *Engine) handleReq(req Request) {
 		return
 	}
 
-	k.metrics.captureAvailableOperatorSlots(-1)
-
-	if err = k.validateInteractions(req.ixs); err != nil {
-		k.logger.Error("Invalid Interaction", "error", err)
-
-		sendResponse(req, types.ErrInvalidInteractions)
-
-		return
-	}
-
 	ctx, cancelFn := context.WithCancel(ctx)
 	defer func() {
 		// delete the slot from the slots queue
@@ -567,6 +557,16 @@ func (k *Engine) handleReq(req Request) {
 
 		k.exec.Cleanup(clusterID)
 	}()
+
+	k.metrics.captureAvailableOperatorSlots(-1)
+
+	if err = k.validateInteractions(req.ixs); err != nil {
+		k.logger.Error("Invalid Interaction", "error", err)
+
+		sendResponse(req, types.ErrInvalidInteractions)
+
+		return
+	}
 
 	switch req.slotType {
 	case ktypes.OperatorSlot:
