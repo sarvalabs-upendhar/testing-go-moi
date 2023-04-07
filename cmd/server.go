@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -47,12 +48,6 @@ var (
 var serverCmd = &cobra.Command{
 	Use:   "server",
 	Short: "Starts the moi-chain server",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		cfgPath, err := cmd.Flags().GetString("config")
 		Err(err)
@@ -428,8 +423,10 @@ func SetupNode(datadir string, cfgPath string) {
 
 	defer profiling.Stop()
 
-	fileCfg, err := ReadConfig(datadir + "/" + cfgPath)
-	Err(err)
+	fileCfg, err := ReadConfig(filepath.Join(datadir, cfgPath))
+	if err != nil {
+		Err(err)
+	}
 
 	cfg, err := BuildConfig(datadir, fileCfg)
 	if err != nil {

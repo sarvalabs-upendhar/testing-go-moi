@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/spf13/cobra"
@@ -34,22 +35,16 @@ var (
 // initCmd represents the init command
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "Initialised necessary config files",
 	Run: func(cmd *cobra.Command, args []string) {
 		log.Println("Test Directories created")
 
 		for i := 0; i < count; i++ {
-			if err := os.MkdirAll(fmt.Sprintf("test_%d/libp2p", directoryIndex+i), os.ModePerm); err != nil {
+			if err := os.MkdirAll(filepath.Join(fmt.Sprintf("test_%d", directoryIndex+i), "libp2p"), os.ModePerm); err != nil {
 				Err(err)
 			}
 
-			if err := os.Mkdir(fmt.Sprintf("test_%d/consensus", directoryIndex+i), os.ModePerm); err != nil {
+			if err := os.Mkdir(filepath.Join(fmt.Sprintf("test_%d", directoryIndex+i), "consensus"), os.ModePerm); err != nil {
 				Err(err)
 			}
 
@@ -77,53 +72,53 @@ to quickly create a Cobra application.`,
 }
 
 func init() {
-	testCmd.AddCommand(initCmd)
+	testnetCmd.AddCommand(initCmd)
 
-	testCmd.PersistentFlags().IntVar(
+	testnetCmd.PersistentFlags().IntVar(
 		&port,
 		"port",
 		0,
 		"Provide the starting port number",
 	)
-	testCmd.PersistentFlags().IntVar(
+	testnetCmd.PersistentFlags().IntVar(
 		&count,
 		"count",
 		10,
 		"Number of test directories",
 	)
-	testCmd.PersistentFlags().IntVar(
+	testnetCmd.PersistentFlags().IntVar(
 		&directoryIndex,
 		"directory-index",
 		0,
 		"Directory Index",
 	)
-	testCmd.PersistentFlags().StringVar(&bootnode, "bootnode",
+	testnetCmd.PersistentFlags().StringVar(&bootnode, "bootnode",
 		"/ip4/139.59.73.20/tcp/4001/p2p/16Uiu2HAmVFp1xtDsokTWuCTkThQSDetjqTx7W9EwcCSxrXqH33Dm",
 		"Bootnode MultiAddr",
 	)
-	testCmd.PersistentFlags().StringVar(&jaegerAddress, "jaegerAddress",
+	testnetCmd.PersistentFlags().StringVar(&jaegerAddress, "jaegerAddress",
 		"",
 		"Jeager Address",
 	)
-	testCmd.PersistentFlags().StringVar(&password,
+	testnetCmd.PersistentFlags().StringVar(&password,
 		"password",
 		"test123",
 		"password to unlock key store",
 	)
-	testCmd.PersistentFlags().StringVar(
+	testnetCmd.PersistentFlags().StringVar(
 		&logFilePath,
 		"logfile",
 		"",
 		"path at which you'd like to store the logs file",
 	)
-	testCmd.PersistentFlags().StringVar(
+	testnetCmd.PersistentFlags().StringVar(
 		&peerListFilePath,
 		"peer-list",
 		"",
 		"peer list file path",
 	)
 
-	if err := cobra.MarkFlagRequired(testCmd.PersistentFlags(), "port"); err != nil {
+	if err := testnetCmd.MarkFlagRequired("port"); err != nil {
 		Err(err)
 	}
 }
@@ -161,7 +156,9 @@ func CreateConfigFile(datadir string, index int) []byte {
 	}
 
 	file, err := json.MarshalIndent(data, "", "")
-	Err(err)
+	if err != nil {
+		Err(err)
+	}
 
 	return file
 }
@@ -181,6 +178,8 @@ func StoreKey(id id.KramaID, key []byte) error {
 	if err != nil {
 		return err
 	}
+
+	defer res.Body.Close()
 
 	if res.StatusCode != 200 {
 		return errors.New("error storing the public key")

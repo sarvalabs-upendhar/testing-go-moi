@@ -46,8 +46,8 @@ var bootnodeCmd = &cobra.Command{
 				dht.Mode(dht.ModeServer),
 				dht.ProtocolPrefix("MOI"),
 			}
-			Dht, errs := dht.New(context.Background(), h, dhtOpts...)
-			if errs != nil {
+			Dht, err := dht.New(context.Background(), h, dhtOpts...)
+			if err != nil {
 				panic(err)
 			}
 			KadDHT = Dht
@@ -141,7 +141,8 @@ func getPrivateKey(keyfile string) (crypto.PrivKey, error) {
 		}
 
 		// Write the private key data to keyfile and check for errors
-		if err := ioutil.WriteFile(keyfile, data, 0o600); err != nil {
+		err = ioutil.WriteFile(keyfile, data, 0o600)
+		if err != nil {
 			// Return the error
 			return nil, err
 		}
