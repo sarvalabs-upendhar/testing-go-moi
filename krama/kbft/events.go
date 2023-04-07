@@ -1,19 +1,22 @@
 package kbft
 
-import "github.com/sarvalabs/moichain/krama/types"
+import (
+	ktypes "github.com/sarvalabs/moichain/krama/types"
+	"github.com/sarvalabs/moichain/types"
+)
 
 type eventDataRoundState struct {
-	Height []uint64 `json:"height"`
-	Round  int32    `json:"round"`
-	Step   string   `json:"step"`
+	Height map[types.Address]uint64 `json:"height"`
+	Round  int32                    `json:"round"`
+	Step   string                   `json:"step"`
 }
 
 type eventProposal struct {
-	proposal *types.Proposal
+	proposal *ktypes.Proposal
 }
 
 type eventVote struct {
-	vote *types.Vote
+	vote *ktypes.Vote
 }
 
 type eventRelock struct {

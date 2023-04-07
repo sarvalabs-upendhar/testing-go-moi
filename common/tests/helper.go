@@ -630,6 +630,66 @@ func GetTestAccount(t *testing.T, callBack func(acc *types.Account)) (*types.Acc
 	return acc, accHash
 }
 
+func CreateTesseractPartsWithTestData(t *testing.T) *types.TesseractParts {
+	t.Helper()
+
+	parts := &types.TesseractParts{
+		Total: 3,
+		Grid:  make(map[types.Address]types.TesseractHeightAndHash),
+	}
+
+	for i := 0; i < 2; i++ {
+		parts.Grid[RandomAddress(t)] = types.TesseractHeightAndHash{
+			Height: 3,
+			Hash:   RandomHash(t),
+		}
+	}
+
+	return parts
+}
+
+func CreateCommitDataWithTestData(t *testing.T) types.CommitData {
+	t.Helper()
+
+	return types.CommitData{
+		Round:           4,
+		CommitSignature: []byte{1, 2, 3},
+		VoteSet: &types.ArrayOfBits{
+			Elements: []uint64{4, 4},
+		},
+		EvidenceHash: RandomHash(t),
+		GridID: &types.TesseractGridID{
+			Hash:  RandomHash(t),
+			Parts: CreateTesseractPartsWithTestData(t),
+		},
+	}
+}
+
+func CreateHeaderWithTestData(t *testing.T) types.TesseractHeader {
+	t.Helper()
+
+	header := types.TesseractHeader{
+		Address:     RandomAddress(t),
+		PrevHash:    RandomHash(t),
+		Height:      4444,
+		AnuUsed:     5,
+		AnuLimit:    6,
+		BodyHash:    RandomHash(t),
+		GridHash:    RandomHash(t),
+		Operator:    "operator",
+		ClusterID:   "cluster-ID",
+		Timestamp:   1,
+		ContextLock: make(map[types.Address]types.ContextLockInfo),
+		Extra:       CreateCommitDataWithTestData(t),
+	}
+
+	header.ContextLock[RandomAddress(t)] = types.ContextLockInfo{
+		TesseractHash: RandomHash(t),
+	}
+
+	return header
+}
+
 func CheckForTesseract(t *testing.T, expectedTS, actualTS *types.Tesseract, withInteractions bool) {
 	t.Helper()
 

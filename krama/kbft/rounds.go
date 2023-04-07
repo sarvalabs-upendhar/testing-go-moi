@@ -3,7 +3,8 @@ package kbft
 import (
 	"time"
 
-	"github.com/sarvalabs/moichain/krama/types"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
+	"github.com/sarvalabs/moichain/types"
 )
 
 // A type alias that represents a type of consensus round step
@@ -64,7 +65,7 @@ func (rtype RoundStepType) String() string {
 // RoundState is a struct that represent the state of a consensus round
 type RoundState struct {
 	// Represents the current round heights being worked on
-	Heights []uint64 `json:"heights"`
+	Heights map[types.Address]uint64 `json:"heights"`
 
 	// Represents the current round number
 	Round int32 `json:"round"`
@@ -85,21 +86,21 @@ type RoundState struct {
 	CommitRound int32 `json:"commit_round"`
 
 	// Represents the round proposal
-	Proposal *types.Proposal `json:"proposal"`
+	Proposal *ktypes.Proposal `json:"proposal"`
 
 	// Represents the proposed tesseract grid for the round
-	ProposalGrid *types.TesseractGrid `json:"proposal_tesseract"`
+	ProposalGrid *ktypes.TesseractGrid `json:"proposal_tesseract"`
 
 	// TODO: Add docs
 	LockedRound int32 `json:"locked_round"`
 
-	LockedGrid *types.TesseractGrid `json:"locked_tesseract"`
+	LockedGrid *ktypes.TesseractGrid `json:"locked_tesseract"`
 
 	// Represents the last known round with proof of lock for a non-nil valid block
 	ValidRound int32 `json:"valid_round"`
 
 	// Represents the tesseract grid (block) for the last known round with proof of lock for a non-nil valid block
-	ValidGrid *types.TesseractGrid `json:"valid_tesseract"`
+	ValidGrid *ktypes.TesseractGrid `json:"valid_tesseract"`
 
 	// Represents the last precommit at height-1
 	LastCommit *VoteSet `json:"last_commit"`

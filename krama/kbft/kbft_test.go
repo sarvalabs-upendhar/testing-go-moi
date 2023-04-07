@@ -36,13 +36,18 @@ func TestFullRound_WithMultipleNodes(t *testing.T) {
 	out := make(chan ktypes.ConsensusMessage)
 	in := make(chan ktypes.ConsensusMessage)
 	c := defaultChain()
-	heights := []uint64{2, 3}
 	round := int32(0)
 
 	icsNodes, valSet := createICSNodes(t, 4, 4, 4,
 		4, 32, 0)
 
 	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
+
+	heights := map[types.Address]uint64{
+		ixs[0].Sender():   2,
+		ixs[0].Receiver(): 3,
+	}
+
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
 	ctx := context.Background()
 	thisNode := valSet[ktypes.SenderBehaviourSet][0]
@@ -118,7 +123,6 @@ func TestFullRound_WithNonRegisteredReceiver(t *testing.T) {
 	out := make(chan ktypes.ConsensusMessage)
 	in := make(chan ktypes.ConsensusMessage)
 	c := new(chain)
-	heights := []uint64{2, 0, 9}
 	round := int32(0)
 
 	// 32 random nodes are chosen to simulate reality 2 * context node(16)
@@ -126,6 +130,11 @@ func TestFullRound_WithNonRegisteredReceiver(t *testing.T) {
 		4, 32, 0)
 
 	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
+	heights := map[types.Address]uint64{
+		ixs[0].Sender():    2,
+		ixs[0].Receiver():  0,
+		types.SargaAddress: 9,
+	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, true)
 	ctx := context.Background()
 	thisNode := valSet[ktypes.SenderBehaviourSet][0]
@@ -201,13 +210,15 @@ func TestFullRound_WithNilReceiverAddress(t *testing.T) {
 	out := make(chan ktypes.ConsensusMessage)
 	in := make(chan ktypes.ConsensusMessage)
 	c := new(chain)
-	heights := []uint64{2}
 	round := int32(0)
 
 	icsNodes, valSet := createICSNodes(t, 4, 4, 4,
 		4, 32, 0)
 
 	ixs := createIxs(t, tests.RandomAddress(t), types.NilAddress)
+	heights := map[types.Address]uint64{
+		ixs[0].Sender(): 2,
+	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
 	ctx := context.Background()
 	thisNode := valSet[ktypes.SenderBehaviourSet][0]
@@ -285,13 +296,16 @@ func TestFullRound_WithLessThan23rdPrevotes(t *testing.T) {
 	out := make(chan ktypes.ConsensusMessage)
 	in := make(chan ktypes.ConsensusMessage)
 	c := defaultChain()
-	heights := []uint64{2, 3}
 	round := int32(0)
 
 	icsNodes, valSet := createICSNodes(t, 4, 4, 4,
 		4, 32, 0)
 
 	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
+	heights := map[types.Address]uint64{
+		ixs[0].Sender():   2,
+		ixs[0].Receiver(): 3,
+	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
 	ctx := context.Background()
 	thisNode := valSet[ktypes.SenderBehaviourSet][0]
@@ -355,13 +369,16 @@ func TestFullRound_WithLessThan23rdPrecommit(t *testing.T) {
 	out := make(chan ktypes.ConsensusMessage)
 	in := make(chan ktypes.ConsensusMessage)
 	c := defaultChain()
-	heights := []uint64{2, 3}
 	round := int32(0)
 
 	icsNodes, valSet := createICSNodes(t, 4, 4, 4,
 		4, 32, 0)
 
 	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
+	heights := map[types.Address]uint64{
+		ixs[0].Sender():   2,
+		ixs[0].Receiver(): 3,
+	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
 	ctx := context.Background()
 	thisNode := valSet[ktypes.SenderBehaviourSet][0]
@@ -431,13 +448,16 @@ func TestFullRound_WithAny23rdPrevote_Any23rdPrecommit(t *testing.T) {
 	out := make(chan ktypes.ConsensusMessage)
 	in := make(chan ktypes.ConsensusMessage)
 	c := defaultChain()
-	heights := []uint64{2, 3}
 	round := int32(0)
 
 	icsNodes, valSet := createICSNodes(t, 4, 4, 4,
 		4, 32, 0)
 
 	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
+	heights := map[types.Address]uint64{
+		ixs[0].Sender():   2,
+		ixs[0].Receiver(): 3,
+	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
 	ctx := context.Background()
 	thisNode := valSet[ktypes.SenderBehaviourSet][0]
@@ -513,13 +533,16 @@ func TestFullRound_With23rdNilPrecommit(t *testing.T) {
 	out := make(chan ktypes.ConsensusMessage)
 	in := make(chan ktypes.ConsensusMessage)
 	c := defaultChain()
-	heights := []uint64{2, 3}
 	round := int32(0)
 
 	icsNodes, valSet := createICSNodes(t, 4, 4, 4,
 		4, 32, 0)
 
 	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
+	heights := map[types.Address]uint64{
+		ixs[0].Sender():   2,
+		ixs[0].Receiver(): 3,
+	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
 	ctx := context.Background()
 	thisNode := valSet[ktypes.SenderBehaviourSet][0]
@@ -597,12 +620,16 @@ func TestSignVote(t *testing.T) {
 	out := make(chan ktypes.ConsensusMessage)
 	in := make(chan ktypes.ConsensusMessage)
 	c := defaultChain()
-	heights := []uint64{2, 3}
 
 	icsNodes, valSet := createICSNodes(t, 1, 0, 0,
 		0, 0, 0)
 
 	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
+	heights := map[types.Address]uint64{
+		ixs[0].Sender():   2,
+		ixs[0].Receiver(): 3,
+	}
+
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
 	ctx := context.Background()
 	thisNode := valSet[ktypes.SenderBehaviourSet][0]
@@ -643,13 +670,17 @@ func TestConflictPrevote(t *testing.T) {
 	out := make(chan ktypes.ConsensusMessage)
 	in := make(chan ktypes.ConsensusMessage)
 	c := defaultChain()
-	heights := []uint64{2, 3}
 	round := int32(0)
 
 	icsNodes, valSet := createICSNodes(t, 2, 0,
 		0, 0, 0, 0)
 
 	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
+	heights := map[types.Address]uint64{
+		ixs[0].Sender():   2,
+		ixs[0].Receiver(): 3,
+	}
+
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
 	ctx := context.Background()
 	thisNode := valSet[ktypes.SenderBehaviourSet][0]
@@ -710,13 +741,17 @@ func TestConflictPrecommit(t *testing.T) {
 	out := make(chan ktypes.ConsensusMessage)
 	in := make(chan ktypes.ConsensusMessage)
 	c := defaultChain()
-	heights := []uint64{2, 3}
 	round := int32(0)
 
 	icsNodes, valSet := createICSNodes(t, 4, 4, 4,
 		4, 32, 0)
 
 	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
+	heights := map[types.Address]uint64{
+		ixs[0].Sender():   2,
+		ixs[0].Receiver(): 3,
+	}
+
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
 	ctx := context.Background()
 	thisNode := valSet[ktypes.SenderBehaviourSet][0]
@@ -791,7 +826,6 @@ func TestRandomValidatorPreVote(t *testing.T) {
 	out := make(chan ktypes.ConsensusMessage)
 	in := make(chan ktypes.ConsensusMessage)
 	c := defaultChain()
-	heights := []uint64{2, 3}
 	round := int32(0)
 
 	icsNodes, valSet := createICSNodes(t, 4, 4, 4,
@@ -800,6 +834,10 @@ func TestRandomValidatorPreVote(t *testing.T) {
 	_, randomVal := createTestNodeSet(t, 1)
 
 	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
+	heights := map[types.Address]uint64{
+		ixs[0].Sender():   2,
+		ixs[0].Receiver(): 3,
+	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
 	ctx := context.Background()
 	thisNode := valSet[ktypes.SenderBehaviourSet][0]
@@ -860,13 +898,16 @@ func TestRandomValidatorPrecommit(t *testing.T) {
 	out := make(chan ktypes.ConsensusMessage)
 	in := make(chan ktypes.ConsensusMessage)
 	c := defaultChain()
-	heights := []uint64{2, 3}
 	round := int32(0)
 
 	icsNodes, valSet := createICSNodes(t, 4, 4, 4,
 		4, 32, 0)
 
 	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
+	heights := map[types.Address]uint64{
+		ixs[0].Sender():   2,
+		ixs[0].Receiver(): 3,
+	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
 	ctx := context.Background()
 	thisNode := valSet[ktypes.SenderBehaviourSet][0]
@@ -941,13 +982,16 @@ func TestReceivePrevoteDuringPrevoteWait(t *testing.T) {
 	out := make(chan ktypes.ConsensusMessage)
 	in := make(chan ktypes.ConsensusMessage)
 	c := defaultChain()
-	heights := []uint64{2, 3}
 	round := int32(0)
 
 	icsNodes, valSet := createICSNodes(t, 4, 4, 4,
 		4, 32, 0)
 
 	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
+	heights := map[types.Address]uint64{
+		ixs[0].Sender():   2,
+		ixs[0].Receiver(): 3,
+	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
 	ctx := context.Background()
 	thisNode := valSet[ktypes.SenderBehaviourSet][0]
@@ -997,7 +1041,8 @@ func TestReceivePrevoteDuringPrevoteWait(t *testing.T) {
 
 	// 2/3 rd any majority is reached with the following vote
 	sendAndEnsurePreVote(t, kbft, round, nil, voteSub, round, valSet[ktypes.RandomSet][21])
-	time.Sleep(5 * time.Millisecond) // wait for 5 ms as prevote timeout is 10 ms
+	time.Sleep(3 * time.Millisecond) // wait for 3 ms as prevote timeout is 10 ms
+
 	// send the 2/3 rd prevote
 	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.RandomSet][22])
 
@@ -1014,13 +1059,16 @@ func TestReceivePrecommitDuringPrecommmitWait(t *testing.T) {
 	out := make(chan ktypes.ConsensusMessage)
 	in := make(chan ktypes.ConsensusMessage)
 	c := defaultChain()
-	heights := []uint64{2, 3}
 	round := int32(0)
 
 	icsNodes, valSet := createICSNodes(t, 4, 4, 4,
 		4, 32, 0)
 
 	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
+	heights := map[types.Address]uint64{
+		ixs[0].Sender():   2,
+		ixs[0].Receiver(): 3,
+	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
 	ctx := context.Background()
 	thisNode := valSet[ktypes.SenderBehaviourSet][0]

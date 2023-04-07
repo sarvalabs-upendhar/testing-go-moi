@@ -46,8 +46,43 @@ type RPCInteraction struct {
 
 type RPCInteractions []*RPCInteraction
 
+type RPCTesseractParts struct {
+	Total     int32
+	Addresses []types.Address
+	Hashes    []types.Hash
+	Heights   []uint64
+}
+
+type RPCTesseractGridID struct {
+	Hash  types.Hash
+	Parts *RPCTesseractParts
+}
+
+type RPCCommitData struct {
+	Round           int32
+	CommitSignature []byte
+	VoteSet         *types.ArrayOfBits
+	EvidenceHash    types.Hash
+	GridID          *RPCTesseractGridID
+}
+
+type RPCHeader struct {
+	Address     types.Address
+	PrevHash    types.Hash
+	Height      uint64
+	AnuUsed     uint64
+	AnuLimit    uint64
+	BodyHash    types.Hash
+	GridHash    types.Hash
+	Operator    string
+	ClusterID   string
+	Timestamp   int64
+	ContextLock map[types.Address]types.ContextLockInfo
+	Extra       RPCCommitData
+}
+
 type RPCTesseract struct {
-	Header   types.TesseractHeader
+	Header   RPCHeader
 	Body     types.TesseractBody
 	Ixns     RPCInteractions
 	Receipts types.Receipts

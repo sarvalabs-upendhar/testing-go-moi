@@ -95,11 +95,11 @@ func (cs *ClusterState) IsOperatorIncluded() bool {
 	return cs.operatorIncluded
 }
 
-func (cs *ClusterState) NewHeights() []uint64 {
-	heights := make([]uint64, len(cs.AccountInfos))
+func (cs *ClusterState) NewHeights() map[types.Address]uint64 {
+	heights := make(map[types.Address]uint64, len(cs.AccountInfos))
 
 	if !cs.Ixs[0].Sender().IsNil() {
-		heights[0] = cs.AccountInfos.GetHeight(cs.Ixs[0].Sender()) + 1
+		heights[cs.Ixs[0].Sender()] = cs.AccountInfos.GetHeight(cs.Ixs[0].Sender()) + 1
 	}
 
 	if cs.Ixs[0].Receiver().IsNil() {
@@ -107,13 +107,13 @@ func (cs *ClusterState) NewHeights() []uint64 {
 	}
 
 	if !cs.AccountInfos[cs.Ixs[0].Receiver()].IsGenesis {
-		heights[1] = cs.AccountInfos.GetHeight(cs.Ixs[0].Receiver()) + 1
+		heights[cs.Ixs[0].Receiver()] = cs.AccountInfos.GetHeight(cs.Ixs[0].Receiver()) + 1
 
 		return heights
 	}
 
-	heights[2] = cs.AccountInfos.GetHeight(types.SargaAddress) + 1
-	heights[1] = cs.AccountInfos.GetHeight(cs.Ixs[0].Receiver())
+	heights[types.SargaAddress] = cs.AccountInfos.GetHeight(types.SargaAddress) + 1
+	heights[cs.Ixs[0].Receiver()] = cs.AccountInfos.GetHeight(cs.Ixs[0].Receiver())
 
 	return heights
 }

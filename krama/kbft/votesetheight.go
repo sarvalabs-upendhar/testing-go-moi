@@ -29,7 +29,7 @@ type HeightVoteSet struct {
 	chainIDs []string
 
 	// Represents the slice of heights tracked by the voteset
-	heights []uint64
+	heights map[types.Address]uint64
 
 	// Represents the cluster state
 	cs *ktypes.ClusterState
@@ -52,7 +52,7 @@ type HeightVoteSet struct {
 // Accepts a slice of chainIDs, heights and the set of validators.
 func NewHeightVoteSet(
 	chainIDs []string,
-	heights []uint64,
+	heights map[types.Address]uint64,
 	valset *ktypes.ClusterState,
 	logger hclog.Logger,
 ) *HeightVoteSet {
@@ -71,7 +71,7 @@ func NewHeightVoteSet(
 
 // Reset is a method of HeightVoteSet that resets the vote set.
 // Accepts a slice of heights and a set of validators to assign to the height vote set.
-func (hvs *HeightVoteSet) Reset(heights []uint64, valset *ktypes.ClusterState) {
+func (hvs *HeightVoteSet) Reset(heights map[types.Address]uint64, valset *ktypes.ClusterState) {
 	// Acquire lock
 	hvs.mtx.Lock()
 	defer hvs.mtx.Unlock()

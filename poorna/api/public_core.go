@@ -343,6 +343,63 @@ func createRPCInteraction(ix *types.Interaction) (*ptypes.RPCInteraction, error)
 	return rpcIX, nil
 }
 
+func CreateRPCTesseractGridID(tesseractGridID *types.TesseractGridID) *ptypes.RPCTesseractGridID {
+	newGrid := &ptypes.RPCTesseractGridID{
+		Hash: tesseractGridID.Hash,
+	}
+
+	if tesseractGridID.Parts != nil {
+		grid := tesseractGridID.Parts.Grid
+		addresses := make([]types.Address, 0, len(grid))
+		hashes := make([]types.Hash, 0, len(grid))
+		heights := make([]uint64, 0, len(grid))
+
+		for address, heightAndHash := range grid {
+			addresses = append(addresses, address)
+			hashes = append(hashes, heightAndHash.Hash)
+			heights = append(heights, heightAndHash.Height)
+		}
+
+		newGrid.Parts = &ptypes.RPCTesseractParts{
+			Total:     tesseractGridID.Parts.Total,
+			Addresses: addresses,
+			Hashes:    hashes,
+			Heights:   heights,
+		}
+	}
+
+	return newGrid
+}
+
+// CreateRPCHeader creates rpc header from header
+func CreateRPCHeader(h types.TesseractHeader) ptypes.RPCHeader {
+	rpcHeader := ptypes.RPCHeader{
+		Address:     h.Address,
+		PrevHash:    h.PrevHash,
+		Height:      h.Height,
+		AnuUsed:     h.AnuUsed,
+		AnuLimit:    h.AnuLimit,
+		BodyHash:    h.BodyHash,
+		GridHash:    h.GridHash,
+		Operator:    h.Operator,
+		ClusterID:   h.ClusterID,
+		Timestamp:   h.Timestamp,
+		ContextLock: h.ContextLock,
+		Extra: ptypes.RPCCommitData{
+			Round:           h.Extra.Round,
+			CommitSignature: h.Extra.CommitSignature,
+			VoteSet:         h.Extra.VoteSet,
+			EvidenceHash:    h.Extra.EvidenceHash,
+		},
+	}
+
+	if h.Extra.GridID != nil {
+		rpcHeader.Extra.GridID = CreateRPCTesseractGridID(h.Extra.GridID)
+	}
+
+	return rpcHeader
+}
+
 // CreateRPCTesseract creates rpc tesseract from tesseract
 func CreateRPCTesseract(ts *types.Tesseract) (*ptypes.RPCTesseract, error) {
 	var err error
@@ -357,7 +414,7 @@ func CreateRPCTesseract(ts *types.Tesseract) (*ptypes.RPCTesseract, error) {
 	}
 
 	return &ptypes.RPCTesseract{
-		Header:   ts.Header(),
+		Header:   CreateRPCHeader(ts.Header()),
 		Body:     ts.Body(),
 		Ixns:     rpcIxns,
 		Receipts: ts.Receipts(),

@@ -473,21 +473,42 @@ func (s *TesseractStack) Len() int32 {
 	return int32(len(s.Items))
 }
 
+type TesseractHeightAndHash struct {
+	Height uint64
+	Hash   Hash
+}
+
 type TesseractParts struct {
-	Total   int32
-	Hashes  []Hash
-	Heights []uint64
+	Total int32
+	Grid  map[Address]TesseractHeightAndHash
+}
+
+func (p *TesseractParts) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(p)
+	if err != nil {
+		return nil, errors.Wrap(err, "error polorizing tesseract parts")
+	}
+
+	return rawData, nil
+}
+
+func (p *TesseractParts) FromBytes(data []byte) error {
+	if err := polo.Depolorize(p, data); err != nil {
+		return errors.Wrap(err, "error depolorizing tesseract parts")
+	}
+
+	return nil
 }
 
 func (p *TesseractParts) Copy() *TesseractParts {
 	parts := &TesseractParts{
-		Total:   p.Total,
-		Hashes:  make([]Hash, len(p.Hashes)),
-		Heights: make([]uint64, len(p.Heights)),
+		Total: p.Total,
+		Grid:  make(map[Address]TesseractHeightAndHash),
 	}
 
-	copy(parts.Hashes, p.Hashes)
-	copy(parts.Heights, p.Heights)
+	for k, v := range p.Grid {
+		parts.Grid[k] = v
+	}
 
 	return parts
 }
@@ -498,7 +519,7 @@ type TesseractGridID struct {
 }
 
 func (gridId *TesseractGridID) IsNil() bool {
-	return gridId.Hash.IsNil() && len(gridId.Parts.Hashes) == 0
+	return gridId.Hash.IsNil()
 }
 
 func (gridId *TesseractGridID) String() string {

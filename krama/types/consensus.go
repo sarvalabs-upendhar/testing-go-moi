@@ -132,7 +132,7 @@ func (twm *TimedWALMessage) FromBytes(bytes []byte) error {
 
 type Proposal struct {
 	Type      ConsensusMsgType
-	Height    []uint64
+	Height    map[types.Address]uint64
 	Round     int32
 	POLRound  int32
 	Grid      *TesseractGrid
@@ -145,7 +145,7 @@ type Proposal struct {
 // Accepts the heights, round, POL round and a tesseract grid id.
 // Timestamp of the proposal is set to Now()
 func NewProposal(
-	heights []uint64,
+	heights map[types.Address]uint64,
 	round int32,
 	polround int32,
 	grid *TesseractGrid,
@@ -303,9 +303,8 @@ func (t *TesseractGrid) GetTesseractGridID() (*types.TesseractGridID, error) {
 	gridID := &types.TesseractGridID{
 		Hash: t.Hash,
 		Parts: &types.TesseractParts{
-			Total:   t.Total,
-			Hashes:  make([]types.Hash, 0, len(t.Tesseracts)),
-			Heights: make([]uint64, 0, len(t.Tesseracts)),
+			Total: t.Total,
+			Grid:  make(map[types.Address]types.TesseractHeightAndHash),
 		},
 	}
 
@@ -315,8 +314,10 @@ func (t *TesseractGrid) GetTesseractGridID() (*types.TesseractGridID, error) {
 			return nil, err
 		}
 
-		gridID.Parts.Hashes = append(gridID.Parts.Hashes, tsHash)
-		gridID.Parts.Heights = append(gridID.Parts.Heights, tesseract.Height())
+		gridID.Parts.Grid[tesseract.Address()] = types.TesseractHeightAndHash{
+			Hash:   tsHash,
+			Height: tesseract.Height(),
+		}
 	}
 
 	return gridID, nil

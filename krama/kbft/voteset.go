@@ -19,7 +19,7 @@ type VoteSet struct {
 	logger hclog.Logger
 
 	// Represent the height for which the vote-set applies
-	heights []uint64
+	heights map[types.Address]uint64
 
 	// Represents the round for which the vote-set applies
 	round int32
@@ -59,7 +59,7 @@ type VoteSet struct {
 // NewVoteSet is a constructor function that generates and returns a new VoteSet.
 // Accepts a slice of heights, the vote round, the type of votes in the set and a set of validators for the VoteSet.
 func NewVoteSet(
-	heights []uint64,
+	heights map[types.Address]uint64,
 	round int32,
 	voteType ktypes.ConsensusMsgType,
 	validatorSet *ktypes.ClusterState,
@@ -185,7 +185,7 @@ func (vs *VoteSet) AddVote(v *ktypes.Vote, peerID id.KramaID) (added bool, err e
 	}
 
 	// Check that heights and round match for the vote and voteset
-	if !areHeightsEqual(v.GridID.Parts.Heights, vs.heights) || (v.Round != vs.round) || (v.Type != vs.votetype) {
+	if !areVoteHeightsEqual(v.GridID.Parts.Grid, vs.heights) || (v.Round != vs.round) || (v.Type != vs.votetype) {
 		return false, errors.New("invalid round and height details")
 	}
 

@@ -17,7 +17,7 @@ func TestCopyHeader(t *testing.T) {
 	}{
 		{
 			name:   "copy header",
-			header: createHeaderWithTestData(t),
+			header: tests.CreateHeaderWithTestData(t),
 		},
 	}
 
@@ -103,7 +103,7 @@ func TestCopyCommitData(t *testing.T) {
 	}{
 		{
 			name:       "copy commit data",
-			commitData: createCommitDataWithTestData(t),
+			commitData: tests.CreateCommitDataWithTestData(t),
 		},
 	}
 
@@ -168,11 +168,8 @@ func TestCopyTesseractGridID(t *testing.T) {
 		{
 			name: "copy tesseract grid id",
 			tsGridID: types.TesseractGridID{
-				Hash: tests.RandomHash(t),
-				Parts: &types.TesseractParts{
-					Hashes:  make([]types.Hash, 0),
-					Heights: []uint64{2, 3},
-				},
+				Hash:  tests.RandomHash(t),
+				Parts: tests.CreateTesseractPartsWithTestData(t),
 			},
 		},
 	}
@@ -192,15 +189,11 @@ func TestCopyTesseractGridID(t *testing.T) {
 func TestCopyTesseractParts(t *testing.T) {
 	testcases := []struct {
 		name    string
-		tsParts types.TesseractParts
+		tsParts *types.TesseractParts
 	}{
 		{
-			name: "copy tesseract parts",
-			tsParts: types.TesseractParts{
-				Total:   4,
-				Hashes:  []types.Hash{tests.RandomHash(t)},
-				Heights: []uint64{1, 2, 3},
-			},
+			name:    "copy tesseract parts",
+			tsParts: tests.CreateTesseractPartsWithTestData(t),
 		},
 	}
 
@@ -210,9 +203,11 @@ func TestCopyTesseractParts(t *testing.T) {
 
 			copiedParts := test.tsParts.Copy()
 
-			require.Equal(t, expectedTSParts, *copiedParts)
-			require.NotEqual(t, reflect.ValueOf(test.tsParts.Hashes).Pointer(), reflect.ValueOf(copiedParts.Hashes).Pointer())
-			require.NotEqual(t, reflect.ValueOf(test.tsParts.Heights).Pointer(), reflect.ValueOf(copiedParts.Heights).Pointer())
+			require.Equal(t, expectedTSParts, copiedParts)
+			require.NotEqual(t,
+				reflect.ValueOf(test.tsParts.Grid).Pointer(),
+				reflect.ValueOf(copiedParts.Grid).Pointer(),
+			)
 		})
 	}
 }
@@ -233,7 +228,7 @@ func TestNewTesseract(t *testing.T) {
 	}{
 		{
 			name:     "copy tesseract parts",
-			header:   createHeaderWithTestData(t),
+			header:   tests.CreateHeaderWithTestData(t),
 			body:     createBodyWithTestData(t),
 			ixns:     tests.CreateIxns(t, 1, ixParams),
 			receipts: createReceiptsWithTestData(t, tests.RandomHash(t)),

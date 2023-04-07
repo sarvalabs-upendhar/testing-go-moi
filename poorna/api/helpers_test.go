@@ -489,6 +489,28 @@ func (d *MockDatabase) GetEntriesWithPrefix(ctx context.Context, prefix []byte) 
 	return entries, nil
 }
 
+func createHeaderCallbackWithTestData(t *testing.T) func(header *types.TesseractHeader) {
+	t.Helper()
+
+	return func(header *types.TesseractHeader) {
+		header.Address = tests.RandomAddress(t)
+		header.PrevHash = tests.RandomHash(t)
+		header.Height = 4
+		header.AnuUsed = 88
+		header.AnuLimit = 99
+		header.BodyHash = tests.RandomHash(t)
+		header.GridHash = tests.RandomHash(t)
+		header.Operator = "operator"
+		header.ClusterID = "cluster-id"
+		header.Timestamp = 3
+		header.ContextLock = make(map[types.Address]types.ContextLockInfo)
+		header.ContextLock[tests.RandomAddress(t)] = types.ContextLockInfo{
+			Height: 4,
+		}
+		header.Extra = tests.CreateCommitDataWithTestData(t)
+	}
+}
+
 func GenerateRandomIXPayload(t *testing.T, size uint32) []byte {
 	t.Helper()
 
@@ -695,16 +717,16 @@ func newTestInteraction(
 }
 
 // checkForRPCIxn validates a field from input, compute, trust, and verifies payload.
-func checkForRPCIxn(t *testing.T, rpcIxn *ptypes.RPCInteraction, ix *types.Interaction) {
+func checkForRPCIxn(t *testing.T, ix *types.Interaction, rpcIxn *ptypes.RPCInteraction) {
 	t.Helper()
 
-	require.Equal(t, rpcIxn.Input.Type, ix.Type())
-	require.Equal(t, rpcIxn.Compute, ix.Compute())
-	require.Equal(t, rpcIxn.Trust, ix.Trust())
+	require.Equal(t, ix.Type(), rpcIxn.Input.Type)
+	require.Equal(t, ix.Compute(), rpcIxn.Compute)
+	require.Equal(t, ix.Trust(), rpcIxn.Trust)
 
 	switch ix.Type() {
 	case types.IxValueTransfer:
-		require.Equal(t, rpcIxn.Input.Payload, json.RawMessage{})
+		require.Equal(t, json.RawMessage{}, rpcIxn.Input.Payload)
 
 	case types.IxAssetCreate:
 		assetCreationPayload := new(types.AssetPayload)
@@ -734,17 +756,83 @@ func checkForRPCIxn(t *testing.T, rpcIxn *ptypes.RPCInteraction, ix *types.Inter
 	}
 }
 
-// checkForRPCTesseract validates fields of rpc tesseract
-func checkForRPCTesseract(t *testing.T, rpcTS *ptypes.RPCTesseract, ts *types.Tesseract) {
+func checkForRPCTesseractParts(
+	t *testing.T,
+	parts *types.TesseractParts,
+	rpcParts *ptypes.RPCTesseractParts,
+) {
 	t.Helper()
 
-	h := ts.Header()
-	require.Equal(t, rpcTS.Header, h)
-	require.Equal(t, rpcTS.Body, ts.Body())
-	require.Equal(t, rpcTS.Receipts, ts.Receipts())
-	require.Equal(t, rpcTS.Seal, ts.Seal())
+	require.Equal(t, parts.Total, rpcParts.Total)
+	require.Equal(t, len(parts.Grid), len(rpcParts.Addresses))
+	require.Equal(t, len(parts.Grid), len(rpcParts.Hashes))
+	require.Equal(t, len(parts.Grid), len(rpcParts.Heights))
+
+	for i, address := range rpcParts.Addresses {
+		heightAndHash, ok := parts.Grid[address]
+		require.True(t, ok)
+
+		require.Equal(t, heightAndHash.Hash, rpcParts.Hashes[i])
+		require.Equal(t, heightAndHash.Height, rpcParts.Heights[i])
+	}
+}
+
+func checkForRPCTesseractGridID(
+	t *testing.T,
+	tesseractGridID *types.TesseractGridID,
+	rpcTesseractGridID *ptypes.RPCTesseractGridID,
+) {
+	t.Helper()
+
+	require.Equal(t, tesseractGridID.Hash, rpcTesseractGridID.Hash)
+
+	if tesseractGridID.Parts != nil {
+		checkForRPCTesseractParts(t, tesseractGridID.Parts, rpcTesseractGridID.Parts)
+	}
+}
+
+func checkForRPCCommitData(t *testing.T, commitData types.CommitData, rpcCommitData ptypes.RPCCommitData) {
+	t.Helper()
+
+	require.Equal(t, commitData.Round, rpcCommitData.Round)
+	require.Equal(t, commitData.CommitSignature, rpcCommitData.CommitSignature)
+	require.Equal(t, commitData.VoteSet, rpcCommitData.VoteSet)
+	require.Equal(t, commitData.EvidenceHash, rpcCommitData.EvidenceHash)
+
+	if commitData.GridID != nil {
+		checkForRPCTesseractGridID(t, commitData.GridID, rpcCommitData.GridID)
+	}
+}
+
+func checkForRPCHeader(t *testing.T, header types.TesseractHeader, rpcHeader ptypes.RPCHeader) {
+	t.Helper()
+
+	require.Equal(t, header.Address, rpcHeader.Address)
+	require.Equal(t, header.PrevHash, rpcHeader.PrevHash)
+	require.Equal(t, header.Height, rpcHeader.Height)
+	require.Equal(t, header.AnuUsed, rpcHeader.AnuUsed)
+	require.Equal(t, header.AnuLimit, rpcHeader.AnuLimit)
+	require.Equal(t, header.BodyHash, rpcHeader.BodyHash)
+	require.Equal(t, header.GridHash, rpcHeader.GridHash)
+	require.Equal(t, header.Operator, rpcHeader.Operator)
+	require.Equal(t, header.ClusterID, rpcHeader.ClusterID)
+	require.Equal(t, header.Timestamp, rpcHeader.Timestamp)
+	require.Equal(t, header.ContextLock, rpcHeader.ContextLock)
+
+	checkForRPCCommitData(t, header.Extra, rpcHeader.Extra)
+}
+
+// checkForRPCTesseract validates fields of rpc tesseract
+func checkForRPCTesseract(t *testing.T, ts *types.Tesseract, rpcTS *ptypes.RPCTesseract) {
+	t.Helper()
+
+	checkForRPCHeader(t, ts.Header(), rpcTS.Header)
+	require.Equal(t, ts.Address(), rpcTS.Header.Address)
+	require.Equal(t, ts.Body(), rpcTS.Body)
+	require.Equal(t, ts.Receipts(), rpcTS.Receipts)
+	require.Equal(t, ts.Seal(), rpcTS.Seal)
 
 	for i, ixn := range ts.Interactions() {
-		checkForRPCIxn(t, rpcTS.Ixns[i], ixn)
+		checkForRPCIxn(t, ixn, rpcTS.Ixns[i])
 	}
 }

@@ -80,7 +80,63 @@ func TestPublicCoreAPI_CreateRPCInteraction(t *testing.T) {
 
 			require.NoError(t, err)
 
-			checkForRPCIxn(t, rpcIxn, ix)
+			checkForRPCIxn(t, ix, rpcIxn)
+		})
+	}
+}
+
+func TestPublicCoreAPI_CreateRPCTesseractGridID(t *testing.T) {
+	testcases := []struct {
+		name   string
+		gridID *types.TesseractGridID
+	}{
+		{
+			name: "create rpc tesseract grid id from tesseract grid id with nil tesseract parts",
+			gridID: &types.TesseractGridID{
+				Hash: tests.RandomHash(t),
+			},
+		},
+		{
+			name: "create rpc tesseract grid id from tesseract grid id",
+			gridID: &types.TesseractGridID{
+				Hash:  tests.RandomHash(t),
+				Parts: tests.CreateTesseractPartsWithTestData(t),
+			},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(testing *testing.T) {
+			rpcTesseractGridID := CreateRPCTesseractGridID(test.gridID)
+
+			checkForRPCTesseractGridID(t, test.gridID, rpcTesseractGridID)
+		})
+	}
+}
+
+func TestPublicCoreAPI_CreateRPCHeader(t *testing.T) {
+	headerWithNilGrid := tests.CreateHeaderWithTestData(t)
+	headerWithNilGrid.Extra.GridID = nil
+
+	testcases := []struct {
+		name   string
+		header types.TesseractHeader
+	}{
+		{
+			name:   "create rpc header from tesseract header with nil tesseract grid id",
+			header: headerWithNilGrid,
+		},
+		{
+			name:   "create rpc header from tesseract header",
+			header: tests.CreateHeaderWithTestData(t),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(testing *testing.T) {
+			rpcHeader := CreateRPCHeader(test.header)
+
+			checkForRPCHeader(t, test.header, rpcHeader)
 		})
 	}
 }
@@ -102,7 +158,8 @@ func TestPublicCoreAPI_CreateRPCTesseract(t *testing.T) {
 		Receipts: map[types.Hash]*types.Receipt{
 			tests.RandomHash(t): {IxHash: tests.RandomHash(t)},
 		},
-		Seal: []byte{1, 2},
+		Seal:           []byte{1, 2},
+		HeaderCallback: createHeaderCallbackWithTestData(t),
 		BodyCallback: func(body *types.TesseractBody) {
 			body.StateHash = tests.RandomHash(t)
 		},
@@ -140,7 +197,7 @@ func TestPublicCoreAPI_CreateRPCTesseract(t *testing.T) {
 
 			require.NoError(t, err)
 
-			checkForRPCTesseract(t, rpcTS, ts)
+			checkForRPCTesseract(t, ts, rpcTS)
 		})
 	}
 }
@@ -216,7 +273,7 @@ func TestPublicCoreAPI_GetRPCTesseract(t *testing.T) {
 
 			require.NoError(t, err)
 
-			checkForRPCTesseract(t, fetchedTesseract, ts)
+			checkForRPCTesseract(t, ts, fetchedTesseract)
 		})
 	}
 }

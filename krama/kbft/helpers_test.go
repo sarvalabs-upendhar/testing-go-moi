@@ -160,7 +160,7 @@ func createICSNodes(
 	}, valset
 }
 
-func startTestRound(state *KBFT, heights []uint64, round int32, err chan<- error) {
+func startTestRound(state *KBFT, heights map[types.Address]uint64, round int32, err chan<- error) {
 	state.enterNewRound(heights, round)
 
 	err1 := state.Start()
@@ -184,13 +184,13 @@ func handleOutboundMsgChannel(kbft *KBFT, ctx context.Context, out <-chan ktypes
 	}()
 }
 
-func createGridWithHeights(t *testing.T, heights []uint64, hash types.Hash) *types.TesseractGridID {
+func createGridWithHeights(t *testing.T, heights map[types.Address]uint64, hash types.Hash) *types.TesseractGridID {
 	t.Helper()
 
 	return &types.TesseractGridID{
 		Hash: hash,
 		Parts: &types.TesseractParts{
-			Heights: heights,
+			Grid: getTesseractPartsGridFromHeights(heights),
 		},
 	}
 }
@@ -375,7 +375,7 @@ func createIxs(t *testing.T, senderAddress types.Address, receiverAddress types.
 func createTestClusterInfo(
 	t *testing.T,
 	icsNodes *ktypes.ICSNodeSet,
-	newHeights []uint64,
+	newHeights map[types.Address]uint64,
 	ixs types.Interactions,
 	nonRegisteredReceiver bool,
 ) *ktypes.ClusterState {
@@ -395,12 +395,12 @@ func createTestClusterInfo(
 
 		clusterInfo.AccountInfos = make(map[types.Address]*ktypes.AccountInfo)
 		clusterInfo.AccountInfos[ixs[0].Sender()] = &ktypes.AccountInfo{
-			Height: newHeights[0] - 1,
+			Height: newHeights[ixs[0].Sender()] - 1,
 		}
 
 		if nonRegisteredReceiver && !ixs[0].Receiver().IsNil() {
 			clusterInfo.AccountInfos[types.SargaAddress] = &ktypes.AccountInfo{
-				Height: newHeights[2] - 1,
+				Height: newHeights[types.SargaAddress] - 1,
 			}
 			clusterInfo.AccountInfos[ixs[0].Receiver()] = &ktypes.AccountInfo{
 				Address:       ixs[0].Receiver(),
@@ -411,13 +411,13 @@ func createTestClusterInfo(
 			}
 		} else if !ixs[0].Receiver().IsNil() {
 			clusterInfo.AccountInfos[ixs[0].Receiver()] = &ktypes.AccountInfo{
-				Height: newHeights[1] - 1,
+				Height: newHeights[ixs[0].Receiver()] - 1,
 			}
 		}
 
 		senderHeader := types.TesseractHeader{
 			Address: ixs[0].Sender(),
-			Height:  newHeights[0],
+			Height:  newHeights[ixs[0].Sender()],
 		}
 
 		clusterInfo.Grid = []*types.Tesseract{
@@ -427,7 +427,7 @@ func createTestClusterInfo(
 		if !ixs[0].Receiver().IsNil() {
 			receiverHeader := types.TesseractHeader{
 				Address: ixs[0].Receiver(),
-				Height:  newHeights[1],
+				Height:  newHeights[ixs[0].Receiver()],
 			}
 
 			clusterInfo.Grid = append(
@@ -439,7 +439,7 @@ func createTestClusterInfo(
 		if nonRegisteredReceiver {
 			sargaHeader := types.TesseractHeader{
 				Address: types.SargaAddress,
-				Height:  newHeights[2],
+				Height:  newHeights[types.SargaAddress],
 			}
 
 			clusterInfo.Grid = append(
@@ -453,7 +453,7 @@ func createTestClusterInfo(
 }
 
 // ensureProposal times out if proposal event not received in time
-func ensureProposal(t *testing.T, proposalSub *utils.Subscription, heights []uint64, round int32) {
+func ensureProposal(t *testing.T, proposalSub *utils.Subscription, heights map[types.Address]uint64, round int32) {
 	t.Helper()
 
 	select {
@@ -480,7 +480,7 @@ func ensureProposal(t *testing.T, proposalSub *utils.Subscription, heights []uin
 func validateRoundState(
 	t *testing.T,
 	roundState eventDataRoundState,
-	heights []uint64, round int32,
+	heights map[types.Address]uint64, round int32,
 	step RoundStepType,
 ) {
 	t.Helper()
@@ -496,7 +496,7 @@ func validateRoundState(
 	require.Equal(t, step.String(), roundState.Step)
 }
 
-func ensureNewRound(t *testing.T, roundSub *utils.Subscription, heights []uint64, round int32) {
+func ensureNewRound(t *testing.T, roundSub *utils.Subscription, heights map[types.Address]uint64, round int32) {
 	t.Helper()
 
 	select {
@@ -513,7 +513,7 @@ func ensureNewRound(t *testing.T, roundSub *utils.Subscription, heights []uint64
 	}
 }
 
-func ensurePolka(t *testing.T, polkaSub *utils.Subscription, heights []uint64, round int32) {
+func ensurePolka(t *testing.T, polkaSub *utils.Subscription, heights map[types.Address]uint64, round int32) {
 	t.Helper()
 
 	select {
@@ -533,7 +533,7 @@ func ensurePolka(t *testing.T, polkaSub *utils.Subscription, heights []uint64, r
 func ensurePrevoteTimeout(
 	t *testing.T,
 	timeoutSub *utils.Subscription,
-	heights []uint64,
+	heights map[types.Address]uint64,
 	round int32,
 	timeout int64,
 ) {
@@ -557,7 +557,7 @@ func ensurePrevoteTimeout(
 func ensurePrecommitTimeout(
 	t *testing.T,
 	timeoutSub *utils.Subscription,
-	heights []uint64,
+	heights map[types.Address]uint64,
 	round int32,
 	timeout int64,
 ) {
@@ -599,15 +599,15 @@ func ensureVote(
 		}
 
 		vote := voteEvent.vote
-		require.Equal(t, vote.GridID, gridID, "grid id's doesn't match") // ensures heights are equal
+		if vote.Type != voteType {
+			require.FailNow(t, fmt.Sprintf("expected type %v, got %v", voteType, vote.Type))
+		}
 
 		if vote.Round != round {
 			require.FailNow(t, fmt.Sprintf("expected round %v, got %v", round, vote.Round))
 		}
 
-		if vote.Type != voteType {
-			require.FailNow(t, fmt.Sprintf("expected type %v, got %v", voteType, vote.Type))
-		}
+		require.Equal(t, gridID, vote.GridID, "grid id's doesn't match") // ensures heights are equal
 	}
 }
 
@@ -616,7 +616,7 @@ func ensurePrevote(
 	voteSub *utils.Subscription,
 	gridID *types.TesseractGridID,
 	round int32,
-	heights []uint64,
+	heights map[types.Address]uint64,
 ) {
 	t.Helper()
 
@@ -634,7 +634,7 @@ func ensurePrecommit(
 	voteSub *utils.Subscription,
 	gridID *types.TesseractGridID,
 	round int32,
-	heights []uint64,
+	heights map[types.Address]uint64,
 ) {
 	t.Helper()
 

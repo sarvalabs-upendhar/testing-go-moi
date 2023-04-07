@@ -334,8 +334,8 @@ func (kbft *KBFT) SetProposal(p *ktypes.Proposal, peerID id.KramaID) error {
 }
 
 func (kbft *KBFT) addVote(v *ktypes.Vote, peerID id.KramaID) (added bool, err error) {
-	if !areHeightsEqual(v.GridID.Parts.Heights, kbft.Heights) {
-		kbft.logger.Trace("Invalid vote BFT Height", "local heights", kbft.Heights, "msg heights", v.GridID.Parts.Heights)
+	if !areVoteHeightsEqual(v.GridID.Parts.Grid, kbft.Heights) {
+		kbft.logger.Trace("Invalid vote BFT Height", "local heights", kbft.Heights, "msg heights", v.GridID.Parts.Grid)
 
 		return
 	}
@@ -427,7 +427,7 @@ func (kbft *KBFT) addVote(v *ktypes.Vote, peerID id.KramaID) (added bool, err er
 	return added, err
 }
 
-func (kbft *KBFT) finalizeCommit(h []uint64) {
+func (kbft *KBFT) finalizeCommit(h map[types.Address]uint64) {
 	if !areHeightsEqual(kbft.Heights, h) {
 		panic("unmatched heights")
 	}
@@ -522,7 +522,7 @@ func (kbft *KBFT) ScheduleRound0() {
 	kbft.scheduleTimeout(100*time.Millisecond, kbft.Heights, 0, RoundStepNewHeight)
 }
 
-func (kbft *KBFT) enterCommit(heights []uint64, round int32) {
+func (kbft *KBFT) enterCommit(heights map[types.Address]uint64, round int32) {
 	if !areHeightsEqual(kbft.Heights, heights) || RoundStepCommit <= kbft.Step {
 		return
 	}
@@ -548,7 +548,7 @@ func (kbft *KBFT) enterCommit(heights []uint64, round int32) {
 	}
 }
 
-func (kbft *KBFT) enterPrecommitWait(heights []uint64, r int32) {
+func (kbft *KBFT) enterPrecommitWait(heights map[types.Address]uint64, r int32) {
 	if !areHeightsEqual(kbft.Heights, heights) ||
 		r < kbft.Round ||
 		(kbft.Round == r && kbft.TriggeredTimeoutPrecommit) {
@@ -579,7 +579,7 @@ func (kbft *KBFT) isProposalReceived() bool {
 	return kbft.Votes.getPrevotes(kbft.Proposal.POLRound).HasMajority()
 }
 
-func (kbft *KBFT) enterNewRound(heights []uint64, round int32) {
+func (kbft *KBFT) enterNewRound(heights map[types.Address]uint64, round int32) {
 	if !areHeightsEqual(kbft.Heights, heights) ||
 		round < kbft.Round ||
 		(kbft.Round == round && kbft.Step != RoundStepNewHeight) {
@@ -609,7 +609,7 @@ func (kbft *KBFT) enterNewRound(heights []uint64, round int32) {
 	kbft.enterPropose(heights, round)
 }
 
-func (kbft *KBFT) enterPropose(heights []uint64, round int32) {
+func (kbft *KBFT) enterPropose(heights map[types.Address]uint64, round int32) {
 	if !areHeightsEqual(kbft.Heights, heights) ||
 		kbft.Round > round ||
 		(kbft.Round == round && kbft.Step >= RoundStepPropose) {
@@ -667,7 +667,7 @@ func (kbft *KBFT) createProposalGrid() (*ktypes.TesseractGrid, error) {
 }
 
 // createProposal will create a proposal message for the given height,round and tesseract grid
-func (kbft *KBFT) createProposal(heights []uint64, round int32) error {
+func (kbft *KBFT) createProposal(heights map[types.Address]uint64, round int32) error {
 	kbft.logger.Info("Creating proposal", "Heights", heights, "Round", round)
 
 	var (
@@ -723,7 +723,7 @@ func (kbft *KBFT) proposeTimeout(round int32) time.Duration {
 	return time.Duration(proposeTimeout+proposeTimeoutDelta*int64(round)) * time.Nanosecond
 }
 
-func (kbft *KBFT) enterPreCommit(heights []uint64, round int32) {
+func (kbft *KBFT) enterPreCommit(heights map[types.Address]uint64, round int32) {
 	kbft.logger.Trace("Entered PreCommit", "round", round)
 
 	if !areHeightsEqual(kbft.Heights, heights) ||
@@ -816,7 +816,7 @@ func (kbft *KBFT) updateRoundStep(round int32, step RoundStepType) {
 	kbft.Step = step
 }
 
-func (kbft *KBFT) enterPrevote(h []uint64, r int32) {
+func (kbft *KBFT) enterPrevote(h map[types.Address]uint64, r int32) {
 	kbft.logger.Trace("Entered PreVote")
 
 	if !areHeightsEqual(kbft.Heights, h) || kbft.Round > r || (kbft.Round == r && kbft.Step >= RoundStepPrevote) {
@@ -898,7 +898,7 @@ func (kbft *KBFT) signVote(msgType ktypes.ConsensusMsgType, id *types.TesseractG
 		ValidatorIndex: valIndex,
 		GridID: &types.TesseractGridID{
 			Parts: &types.TesseractParts{
-				Heights: kbft.Heights,
+				Grid: getTesseractPartsGridFromHeights(kbft.Heights),
 			},
 		},
 		Round: kbft.Round,
@@ -925,7 +925,7 @@ func (kbft *KBFT) signVote(msgType ktypes.ConsensusMsgType, id *types.TesseractG
 	return v, nil
 }
 
-func (kbft *KBFT) enterPrevoteWait(h []uint64, r int32) {
+func (kbft *KBFT) enterPrevoteWait(h map[types.Address]uint64, r int32) {
 	kbft.logger.Trace("Entered PreVoteWait")
 
 	if !areHeightsEqual(kbft.Heights, h) ||
@@ -949,7 +949,7 @@ func (kbft *KBFT) enterPrevoteWait(h []uint64, r int32) {
 }
 
 // scheduleTimeout will schedule a timeout for the given step,round and height
-func (kbft *KBFT) scheduleTimeout(d time.Duration, heights []uint64, r int32, step RoundStepType) {
+func (kbft *KBFT) scheduleTimeout(d time.Duration, heights map[types.Address]uint64, r int32, step RoundStepType) {
 	kbft.logger.Info("Scheduling timeout", "step", step, "duration", d, "heights", heights)
 	kbft.toTicker.ScheduleTimeout(timeoutInfo{d, heights, r, step})
 }
@@ -1030,13 +1030,42 @@ func (kbft *KBFT) publishEventTimeoutPrecommit(state eventDataRoundState) error 
 }
 
 // A function that checks if two sets of heights are equal.
-// Accepts two sets of heights (int64 slice) and compares them. Returns a bool.
-// Every index in each slice must be equal for true result.
-func areHeightsEqual(systemHeight []uint64, newHeight []uint64) bool {
+// Accepts two sets of heights and compares them. Returns a bool.
+// if heights of respective addresses matches then true is returned
+func areHeightsEqual(systemHeights map[types.Address]uint64, newHeights map[types.Address]uint64) bool {
+	if len(systemHeights) != len(newHeights) {
+		return false
+	}
+
 	// Iterate over system heights
-	for idx, value := range systemHeight {
-		if value != newHeight[idx] {
-			// Height mismatch, return false
+	for systemAddress, systemHeight := range systemHeights {
+		newHeight, ok := newHeights[systemAddress]
+		if !ok || systemHeight != newHeight {
+			// if system address not found or system heights are not equal, return false
+			return false
+		}
+	}
+
+	// Heights match, return true
+	return true
+}
+
+// A function that checks if two sets of heights are equal.
+// Accepts two sets of heights and compares them. Returns a bool.
+// if heights of respective addresses matches then true is returned.
+func areVoteHeightsEqual(
+	voteHeights map[types.Address]types.TesseractHeightAndHash,
+	systemHeights map[types.Address]uint64,
+) bool {
+	if len(voteHeights) != len(systemHeights) {
+		return false
+	}
+
+	// Iterate over system heights
+	for voteAddress, voteHeightAndHash := range voteHeights {
+		systemHeight, ok := systemHeights[voteAddress]
+		if !ok || voteHeightAndHash.Height != systemHeight {
+			// if system address not found or system heights are not equal, return false
 			return false
 		}
 	}
@@ -1047,12 +1076,17 @@ func areHeightsEqual(systemHeight []uint64, newHeight []uint64) bool {
 
 // A function that checks if the second set of heights is greater than the first.
 // Accepts two sets of heights (int64 slice) and compares them. Returns a bool.
-// Every index in the second set must be greater than the first set for a true result.
-func areHeightsGreater(systemHeight []uint64, newHeight []uint64) bool {
+// if heights of respective addresses from first set are greater than second set then true is returned.
+func areHeightsGreater(systemHeights map[types.Address]uint64, newHeights map[types.Address]uint64) bool {
+	if len(systemHeights) != len(newHeights) {
+		return false
+	}
+
 	// Iterate over system heights
-	for idx, value := range systemHeight {
-		if value <= newHeight[idx] {
-			// Height lesser, return false
+	for systemAddress, systemHeight := range systemHeights {
+		newHeight, ok := newHeights[systemAddress]
+		if !ok || systemHeight <= newHeight {
+			// if system address not found or system heights less than or equal to new height, return false
 			return false
 		}
 	}
@@ -1072,4 +1106,16 @@ func areGreater(oldValues, newValues []int32) bool {
 
 	// All heights are greater, return true
 	return true
+}
+
+func getTesseractPartsGridFromHeights(heights map[types.Address]uint64) map[types.Address]types.TesseractHeightAndHash {
+	grid := make(map[types.Address]types.TesseractHeightAndHash)
+
+	for address, height := range heights {
+		grid[address] = types.TesseractHeightAndHash{
+			Height: height,
+		}
+	}
+
+	return grid
 }

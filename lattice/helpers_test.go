@@ -675,7 +675,7 @@ func getTestTesseractGrid(t *testing.T) *types.TesseractGridID {
 	return &types.TesseractGridID{
 		Hash: tests.RandomHash(t),
 		Parts: &types.TesseractParts{
-			Hashes: getHashes(t, 2, false),
+			Grid: make(map[types.Address]types.TesseractHeightAndHash),
 		},
 	}
 }

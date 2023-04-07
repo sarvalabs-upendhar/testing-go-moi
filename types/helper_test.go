@@ -34,26 +34,6 @@ func createReceiptsWithTestData(t *testing.T, hash types.Hash) types.Receipts {
 	return receipts
 }
 
-func createCommitDataWithTestData(t *testing.T) types.CommitData {
-	t.Helper()
-
-	return types.CommitData{
-		Round:           4,
-		CommitSignature: []byte{1, 2, 3},
-		VoteSet: &types.ArrayOfBits{
-			Elements: []uint64{4, 4},
-		},
-		EvidenceHash: tests.RandomHash(t),
-		GridID: &types.TesseractGridID{
-			Hash: tests.RandomHash(t),
-			Parts: &types.TesseractParts{
-				Heights: []uint64{1, 2},
-				Hashes:  []types.Hash{tests.RandomHash(t)},
-			},
-		},
-	}
-}
-
 func createBodyWithTestData(t *testing.T) types.TesseractBody {
 	t.Helper()
 
@@ -77,31 +57,6 @@ func createBodyWithTestData(t *testing.T) types.TesseractBody {
 	}
 
 	return body
-}
-
-func createHeaderWithTestData(t *testing.T) types.TesseractHeader {
-	t.Helper()
-
-	header := types.TesseractHeader{
-		Address:     tests.RandomAddress(t),
-		PrevHash:    tests.RandomHash(t),
-		Height:      4444,
-		AnuUsed:     5,
-		AnuLimit:    6,
-		BodyHash:    tests.RandomHash(t),
-		GridHash:    tests.RandomHash(t),
-		Operator:    "operator",
-		ClusterID:   "cluster-ID",
-		Timestamp:   1,
-		ContextLock: make(map[types.Address]types.ContextLockInfo),
-		Extra:       createCommitDataWithTestData(t),
-	}
-
-	header.ContextLock[tests.RandomAddress(t)] = types.ContextLockInfo{
-		TesseractHash: tests.RandomHash(t),
-	}
-
-	return header
 }
 
 func createInputWithTestData(t *testing.T) types.IxInput {
