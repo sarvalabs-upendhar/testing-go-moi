@@ -1,4 +1,4 @@
-package cmd
+package main
 
 import (
 	"bytes"
@@ -118,7 +118,7 @@ func init() {
 		"peer list file path",
 	)
 
-	if err := testnetCmd.MarkFlagRequired("port"); err != nil {
+	if err := cobra.MarkFlagRequired(testnetCmd.PersistentFlags(), "port"); err != nil {
 		Err(err)
 	}
 }
