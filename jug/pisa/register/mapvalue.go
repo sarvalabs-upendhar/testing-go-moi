@@ -6,24 +6,26 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
+
+	"github.com/sarvalabs/moichain/jug/engineio"
 )
 
 // MapValue represents a Value that operates like a mapping.
 type MapValue struct {
-	values  map[Value]Value
-	typedef *Typedef
+	values   map[Value]Value
+	datatype *engineio.Datatype
 }
 
-// NewMapValue generates a new MapValue for a given Typedef and some POLO encoded bytes.
-func NewMapValue(datatype *Typedef, data []byte) (*MapValue, error) {
+// NewMapValue generates a new MapValue for a given engineio.Datatype and some POLO encoded bytes.
+func NewMapValue(datatype *engineio.Datatype, data []byte) (*MapValue, error) {
 	// Check if datatype is a map
-	if datatype.Kind() != Hashmap {
-		return nil, errors.New("datatype is not a hashmap")
+	if datatype.Kind != engineio.MappingType {
+		return nil, errors.New("datatype is not a mapping")
 	}
 
 	// Initialize the MapValue with the Typedef and an empty mapping
 	mapping := new(MapValue)
-	mapping.typedef = datatype
+	mapping.datatype = datatype
 	mapping.values = make(map[Value]Value)
 
 	// If there is some data to decode into the MapValue
@@ -45,24 +47,24 @@ func NewMapValue(datatype *Typedef, data []byte) (*MapValue, error) {
 			var kdata, vdata []byte
 
 			// Unpack the key data from the wire
-			if kdata, err = depolorizer.DepolorizeRaw(); err != nil {
+			if kdata, err = depolorizer.DepolorizeAny(); err != nil {
 				return nil, err
 			}
 
 			// Unpack the value data from the wire
-			if vdata, err = depolorizer.DepolorizeRaw(); err != nil {
+			if vdata, err = depolorizer.DepolorizeAny(); err != nil {
 				return nil, err
 			}
 
 			var key, val Value
 
 			// Create new value from the data for the key
-			if key, err = NewValue(datatype.P.Datatype(), kdata); err != nil {
+			if key, err = NewValue(datatype.Prim.Datatype(), kdata); err != nil {
 				return nil, err
 			}
 
 			// Create new value from the data for the value
-			if val, err = NewValue(datatype.E, vdata); err != nil {
+			if val, err = NewValue(datatype.Elem, vdata); err != nil {
 				return nil, err
 			}
 
@@ -73,15 +75,15 @@ func NewMapValue(datatype *Typedef, data []byte) (*MapValue, error) {
 	return mapping, nil
 }
 
-// Type returns the Typedef of MapValue, which is some Hashmap Typedef.
+// Type returns the Typedef of MapValue, which is some Mapping engineio.Datatype.
 // Implements the Value interface for MapValue.
-func (mapping MapValue) Type() *Typedef { return mapping.typedef }
+func (mapping MapValue) Type() *engineio.Datatype { return mapping.datatype }
 
 // Copy returns a copy of MapValue as a Value.
 // Implements the Value interface for MapValue.
 func (mapping MapValue) Copy() Value {
 	mcopy := MapValue{values: make(map[Value]Value, len(mapping.values))}
-	mcopy.typedef = mapping.typedef.Copy()
+	mcopy.datatype = mapping.datatype.Copy()
 
 	for key, val := range mapping.values {
 		mcopy.values[key.Copy()] = val.Copy()
@@ -108,12 +110,12 @@ func (mapping MapValue) Data() []byte {
 	v := reflect.ValueOf(mapping.values)
 
 	keys := v.MapKeys()
-	sort.Slice(keys, sorter(keys))
+	sort.Slice(keys, MapSorter(keys))
 
 	//nolint:forcetypeassert
 	for _, key := range keys {
-		polorizer.PolorizeRaw(key.Interface().(Value).Data())
-		polorizer.PolorizeRaw(v.MapIndex(key).Interface().(Value).Data())
+		_ = polorizer.PolorizeAny(key.Interface().(Value).Data())
+		_ = polorizer.PolorizeAny(v.MapIndex(key).Interface().(Value).Data())
 	}
 
 	return polorizer.Bytes()
@@ -123,18 +125,18 @@ func (mapping MapValue) Data() []byte {
 // if the key is not of the correct type for MapValue
 func (mapping *MapValue) Get(key Value) (Value, error) {
 	keyType := key.Type()
-	if keyType.Kind() != Primitive {
+	if keyType.Kind != engineio.PrimitiveType {
 		return nil, errors.New("cannot Get from MapValue with non-primitive key")
 	}
 
-	if !mapping.typedef.P.Equals(keyType.P) {
+	if !mapping.datatype.Prim.Equals(keyType.Prim) {
 		return nil, errors.New("cannot Get from MapValue with incorrect key type")
 	}
 
 	value := mapping.values[key]
 	// If value is nil, generate the default value for the map element type
 	if value == nil {
-		value, _ = NewValue(mapping.typedef.E, nil)
+		value, _ = NewValue(mapping.datatype.Elem, nil)
 	}
 
 	return value, nil
@@ -144,15 +146,15 @@ func (mapping *MapValue) Get(key Value) (Value, error) {
 // either the key or value are not the correct type for MapValue
 func (mapping *MapValue) Set(key, val Value) error {
 	keyType := key.Type()
-	if keyType.Kind() != Primitive {
+	if keyType.Kind != engineio.PrimitiveType {
 		return errors.New("cannot Set to MapValue with non-primitive key")
 	}
 
-	if !mapping.typedef.P.Equals(keyType.P) {
+	if !mapping.datatype.Prim.Equals(keyType.Prim) {
 		return errors.New("cannot Set to MapValue with incorrect key type")
 	}
 
-	if !mapping.typedef.E.Equals(val.Type()) {
+	if !mapping.datatype.Elem.Equals(val.Type()) {
 		return errors.New("cannot Set to MapValue with incorrect value type")
 	}
 
@@ -165,10 +167,10 @@ func (mapping *MapValue) Size() U64Value {
 	return U64Value(len(mapping.values))
 }
 
-// sorter is used by the sort package to sort a slice of reflect.Value objects.
+// MapSorter is used by the sort package to sort a slice of reflect.Value objects.
 // Assumes that the reflect.Value objects can only be types which are comparable
 // i.e, can be used as a map key. (will panic otherwise)
-func sorter(keys []reflect.Value) func(int, int) bool {
+func MapSorter(keys []reflect.Value) func(int, int) bool {
 	return func(i int, j int) bool {
 		a, b := keys[i], keys[j]
 		if a.Kind() == reflect.Interface {
@@ -197,7 +199,7 @@ func sorter(keys []reflect.Value) func(int, int) bool {
 			}
 
 			for i := 0; i < a.Len(); i++ {
-				result := compare(a.Index(i), b.Index(i))
+				result := MapCompare(a.Index(i), b.Index(i))
 				if result == 0 {
 					continue
 				}
@@ -212,10 +214,10 @@ func sorter(keys []reflect.Value) func(int, int) bool {
 	}
 }
 
-// compare returns an integer representing the comparison between two reflect.Value objects.
+// MapCompare returns an integer representing the comparison between two reflect.Value objects.
 // Assumes that a and b can only have a type that is comparable. (will panic otherwise).
 // Returns 1 (a > b); 0 (a == b); -1 (a < b)
-func compare(a, b reflect.Value) int {
+func MapCompare(a, b reflect.Value) int {
 	if a.Kind() == reflect.Interface {
 		a, b = a.Elem(), b.Elem()
 	}
@@ -275,7 +277,7 @@ func compare(a, b reflect.Value) int {
 		}
 
 		for i := 0; i < a.Len(); i++ {
-			result := compare(a.Index(i), b.Index(i))
+			result := MapCompare(a.Index(i), b.Index(i))
 			if result == 0 {
 				continue
 			}

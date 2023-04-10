@@ -120,8 +120,12 @@ as defined by the logic. The arguments for the call are parsed from rules specif
 Values Section and encoded by the Call Encoder generated for the callsite. The callsite must be 
 valid and match the form of call for the logic call to succeed.
 
-deploy [name] [callsite]([field: argument],...) - 
-invoke [name] [callsite]([field: argument],...) -
+deploy [name] [callsite](calldata) 
+invoke [name] [callsite](calldata)
+
+The calldata for the logic call can be provided as a series of key value pairs which will be
+encoded with the runtime CallEncoder for the input specification and validated accordingly.
+Alternately, the calldata can be directly provided as a POLO Document in its hex string form. 
 
 Examples:
 >> set addr1 0xf6cd8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34
@@ -136,15 +140,24 @@ Execution Outputs ||| name: MOI-Token
 Execution Complete! [90 FUEL]
 Execution Outputs ||| balance: 100000000
 
+>> invoke ERC20 BalanceOf(0x0d2f06456164647206f6cd8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34)
+Execution Complete! [90 FUEL]
+Execution Outputs ||| balance: 100000000
+
 ==== Argument Values
 Argument Value Rules are used when parsing the argument in logic function calls or when storing
 them to the environment session memory. Logic function calls can also use variables from the memory.
+Memory references are only supported for highest level arguments, using memory variables in nested
+levels will fail (supported for nested memory references will added eventually)
 
 Supported types
 - Integer (Ex: 100, -934343, 329429352)
 - String (Ex: "Hello", "Fahrenheit 451")
 - Boolean (Ex: true, True, TRUE, false, False, FALSE)
 - Bytes/Address (Ex: 0xf6cd8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34)
+- Lists (Ex: [256, 2345], ["foo", "bar"])
+- Mappings (Ex: {"a": 123, "b": 345}, {456: "foo", 123: "bar"}) // value keys
+- Objects (Ex: {a: 123, b: 345}, {name: "Darius", age: 45})     // ident keys
 ` + replStrike
 
 // ParseCommand parses an input command string into a Command runner

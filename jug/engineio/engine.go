@@ -52,13 +52,9 @@ type EngineRuntime interface {
 	// given ElementKind. Returns false, if no such element is defined by the runtime
 	GetElementGenerator(ElementKind) (ManifestElementGenerator, bool)
 
-	// GetCallEncoderFromManifest returns a CallEncoder object for
-	// a given callsite element pointer from a Manifest object
-	GetCallEncoderFromManifest(*Callsite, *Manifest) (CallEncoder, error)
-
-	// GetCallEncoderFromLogic returns a CallEncoder object for
-	// a given callsite element pointer from a LogicDriver object
-	GetCallEncoderFromLogic(*Callsite, LogicDriver) (CallEncoder, error)
+	// GetCallEncoder returns a CallEncoder object for a given
+	// callsite element pointer from a LogicDriver object
+	GetCallEncoder(*Callsite, LogicDriver) (CallEncoder, error)
 }
 
 // Engine is an interface that defines an execution engine

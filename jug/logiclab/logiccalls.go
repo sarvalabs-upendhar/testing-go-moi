@@ -2,6 +2,7 @@ package logiclab
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"strings"
 
@@ -39,7 +40,7 @@ func CallCommand(kind engineio.CallsiteKind, name, callsite, args string) Comman
 		}
 
 		// Generate the call encoder for the callsite
-		encoder, err := runtime.GetCallEncoderFromLogic(site, logic.Object)
+		encoder, err := runtime.GetCallEncoder(site, logic.Object)
 		if err != nil {
 			return fmt.Sprintf("failed to generate call encoder for callsite '%v'", callsite)
 		}
@@ -68,6 +69,23 @@ func CallCommand(kind engineio.CallsiteKind, name, callsite, args string) Comman
 }
 
 func formatArguments(env *Environment, args string, encoder engineio.CallEncoder) (polo.Document, error) {
+	// Check if args begins with 0x -> Assume raw calldata provided instead of keyed parameters
+	if strings.HasPrefix(args, "0x") {
+		// Decode hex string into bytes
+		argdata, err := hex.DecodeString(strings.TrimPrefix(args, "0x"))
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to parse calldata")
+		}
+
+		// Decode bytes into a polo.Document
+		calldata := make(polo.Document)
+		if err = polo.Depolorize(&calldata, argdata); err != nil {
+			return nil, errors.Wrap(err, "failed parse calldata into doc")
+		}
+
+		return calldata, nil
+	}
+
 	// Parse the input arguments into an object map
 	arguments, err := parseArguments(args)
 	if err != nil {

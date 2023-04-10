@@ -169,7 +169,7 @@ func (manifest *Manifest) Depolorize(depolorizer *polo.Depolorizer) (err error) 
 			Ptr  ElementPtr
 			Deps []ElementPtr
 			Kind ElementKind
-			Data polo.Raw
+			Data polo.Any
 		}
 	}
 
@@ -314,14 +314,4 @@ func (manifest *Manifest) UnmarshalYAML(node *yaml.Node) error {
 	}
 
 	return nil
-}
-
-func (manifest *Manifest) FindElement(ptr ElementPtr) (ManifestElement, bool) {
-	for _, element := range manifest.Elements {
-		if element.Ptr == ptr {
-			return element, true
-		}
-	}
-
-	return ManifestElement{}, false
 }

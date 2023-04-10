@@ -6,6 +6,7 @@ import (
 
 	"github.com/sarvalabs/go-polo"
 
+	"github.com/sarvalabs/moichain/jug/engineio"
 	"github.com/sarvalabs/moichain/jug/pisa/exception"
 )
 
@@ -14,7 +15,7 @@ type U64Value uint64
 
 // Type returns the Typedef of U64Value, which is TypeU64.
 // Implements the Value interface for U64Value.
-func (x U64Value) Type() *Typedef { return TypeU64 }
+func (x U64Value) Type() *engineio.Datatype { return engineio.TypeU64 }
 
 // Copy returns a copy of U64Value as a Value.
 // Implements the Value interface for U64Value.
@@ -111,15 +112,15 @@ func (x U64Value) Eq(y U64Value) BoolValue {
 	return x == y
 }
 
-//nolint:dupl
+//nolint:dupl, lll
 func U64Methods() MethodTable {
 	return MethodTable{
 		// uint64.__bool__() -> bool
 		MethodBool: &BuiltinMethod{
-			datatype: PrimitiveU64,
-			fields: CallFields{
-				Inputs:  makefields([]*TypeField{{"self", TypeU64}}),
-				Outputs: makefields([]*TypeField{{"result", TypeBool}}),
+			datatype: engineio.PrimitiveU64,
+			fields: engineio.CallFields{
+				Inputs:  makefields([]*engineio.TypeField{{Name: "self", Type: engineio.TypeU64}}),
+				Outputs: makefields([]*engineio.TypeField{{Name: "result", Type: engineio.TypeBool}}),
 			},
 			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				// True for all values except 0
@@ -131,10 +132,10 @@ func U64Methods() MethodTable {
 
 		// uint64.__str__() -> string
 		MethodStr: &BuiltinMethod{
-			datatype: PrimitiveU64,
-			fields: CallFields{
-				Inputs:  makefields([]*TypeField{{"self", TypeU64}}),
-				Outputs: makefields([]*TypeField{{"result", TypeString}}),
+			datatype: engineio.PrimitiveU64,
+			fields: engineio.CallFields{
+				Inputs:  makefields([]*engineio.TypeField{{Name: "self", Type: engineio.TypeU64}}),
+				Outputs: makefields([]*engineio.TypeField{{Name: "result", Type: engineio.TypeString}}),
 			},
 			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				// Format into a string (base 10)
@@ -146,10 +147,10 @@ func U64Methods() MethodTable {
 
 		// uint64.__lt__(int64) -> bool
 		MethodLt: &BuiltinMethod{
-			datatype: PrimitiveU64,
-			fields: CallFields{
-				Inputs:  makefields([]*TypeField{{"x", TypeU64}, {"y", TypeU64}}),
-				Outputs: makefields([]*TypeField{{"result", TypeBool}}),
+			datatype: engineio.PrimitiveU64,
+			fields: engineio.CallFields{
+				Inputs:  makefields([]*engineio.TypeField{{Name: "x", Type: engineio.TypeU64}, {Name: "y", Type: engineio.TypeU64}}),
+				Outputs: makefields([]*engineio.TypeField{{Name: "result", Type: engineio.TypeBool}}),
 			},
 			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				x, y := inputs[0], inputs[1]
@@ -161,10 +162,10 @@ func U64Methods() MethodTable {
 
 		// uint64.__gt__(int64) -> bool
 		MethodGt: &BuiltinMethod{
-			datatype: PrimitiveU64,
-			fields: CallFields{
-				Inputs:  makefields([]*TypeField{{"x", TypeU64}, {"y", TypeU64}}),
-				Outputs: makefields([]*TypeField{{"result", TypeBool}}),
+			datatype: engineio.PrimitiveU64,
+			fields: engineio.CallFields{
+				Inputs:  makefields([]*engineio.TypeField{{Name: "x", Type: engineio.TypeU64}, {Name: "y", Type: engineio.TypeU64}}),
+				Outputs: makefields([]*engineio.TypeField{{Name: "result", Type: engineio.TypeBool}}),
 			},
 			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				x, y := inputs[0], inputs[1]
@@ -176,10 +177,10 @@ func U64Methods() MethodTable {
 
 		// uint64.__eq__(int64) -> bool
 		MethodEq: &BuiltinMethod{
-			datatype: PrimitiveU64,
-			fields: CallFields{
-				Inputs:  makefields([]*TypeField{{"x", TypeU64}, {"y", TypeU64}}),
-				Outputs: makefields([]*TypeField{{"result", TypeBool}}),
+			datatype: engineio.PrimitiveU64,
+			fields: engineio.CallFields{
+				Inputs:  makefields([]*engineio.TypeField{{Name: "x", Type: engineio.TypeU64}, {Name: "y", Type: engineio.TypeU64}}),
+				Outputs: makefields([]*engineio.TypeField{{Name: "result", Type: engineio.TypeBool}}),
 			},
 			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				x, y := inputs[0], inputs[1]

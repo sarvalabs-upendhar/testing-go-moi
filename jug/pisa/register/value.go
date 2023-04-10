@@ -6,6 +6,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
+	"github.com/sarvalabs/moichain/jug/engineio"
 	"github.com/sarvalabs/moichain/types"
 )
 
@@ -17,8 +18,8 @@ var (
 // Value describes a type that can be held within
 // a register upon which operations can be applied.
 type Value interface {
-	// Type returns the TypeData of the Value
-	Type() *Typedef
+	// Type returns the Datatype of the Value
+	Type() *engineio.Datatype
 	// Copy returns a deep copy of the Value
 	Copy() Value
 	// Data returns the POLO serialized bytes of the Value
@@ -39,7 +40,7 @@ type Collection interface {
 // It consists of the type information of the constant (primitive)
 // and some POLO encoded bytes that describe the constant value.
 type Constant struct {
-	Type PrimitiveType
+	Type engineio.Primitive
 	Data []byte
 }
 
@@ -51,12 +52,12 @@ func (constant *Constant) Value() (Value, error) {
 
 // NewValue generates a RegisterValue object for a given Typedef and some POLO encoded bytes.
 // The encoded bytes must be able to deserialize to the underlying type for Typedef.
-func NewValue(datatype *Typedef, data []byte) (Value, error) {
-	switch datatype.Kind() {
-	case Primitive:
-		switch datatype.P {
+func NewValue(datatype *engineio.Datatype, data []byte) (Value, error) {
+	switch datatype.Kind {
+	case engineio.PrimitiveType:
+		switch datatype.Prim {
 		// StringValue
-		case PrimitiveString:
+		case engineio.PrimitiveString:
 			// If empty data, create the default string value and return
 			if data == nil {
 				return StringValue(""), nil
@@ -71,7 +72,7 @@ func NewValue(datatype *Typedef, data []byte) (Value, error) {
 			return StringValue(*str), nil
 
 		// BytesValue
-		case PrimitiveBytes:
+		case engineio.PrimitiveBytes:
 			// If empty data, create the default bytes value and return
 			if data == nil {
 				return BytesValue([]byte{}), nil
@@ -86,7 +87,7 @@ func NewValue(datatype *Typedef, data []byte) (Value, error) {
 			return BytesValue(*bytes), nil
 
 		// BoolValue
-		case PrimitiveBool:
+		case engineio.PrimitiveBool:
 			// If empty data, create the default bool value and return
 			if data == nil {
 				return BoolValue(false), nil
@@ -101,7 +102,7 @@ func NewValue(datatype *Typedef, data []byte) (Value, error) {
 			return BoolValue(*boolean), nil
 
 		// U64Value
-		case PrimitiveU64:
+		case engineio.PrimitiveU64:
 			// If empty data, create the default u64 value and return
 			if data == nil {
 				return U64Value(0), nil
@@ -116,7 +117,7 @@ func NewValue(datatype *Typedef, data []byte) (Value, error) {
 			return U64Value(*number), nil
 
 		// I64Value
-		case PrimitiveI64:
+		case engineio.PrimitiveI64:
 			// If empty data, create the default i64 value and return
 			if data == nil {
 				return I64Value(0), nil
@@ -131,7 +132,7 @@ func NewValue(datatype *Typedef, data []byte) (Value, error) {
 			return I64Value(*number), nil
 
 		// AddressValue
-		case PrimitiveAddress:
+		case engineio.PrimitiveAddress:
 			// If empty data, create the default address value and return
 			if data == nil {
 				return AddressValue(types.NilAddress), nil
@@ -150,10 +151,10 @@ func NewValue(datatype *Typedef, data []byte) (Value, error) {
 		}
 
 	// MapValue
-	case Hashmap:
+	case engineio.MappingType:
 		return NewMapValue(datatype, data)
 
-	case Array, Varray:
+	case engineio.ArrayType, engineio.VarrayType:
 		return NewListValue(datatype, data)
 
 	default:
@@ -166,7 +167,7 @@ func IsNullValue(value Value) bool {
 		return true
 	}
 
-	if value.Type().Equals(TypeNull) {
+	if value.Type().Equals(engineio.TypeNull) {
 		return true
 	}
 

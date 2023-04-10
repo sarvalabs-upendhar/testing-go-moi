@@ -15,7 +15,7 @@ type Routine struct {
 
 	// CallFields contains the input/output symbols
 	// injected into the Routine when invoked/called.
-	register.CallFields
+	engineio.CallFields
 
 	// Instructs represents the set of logic instructions to
 	// execute when the Routine is invoked/called.
@@ -28,13 +28,13 @@ type Routine struct {
 
 // Interface returns the input/output CallFields of the Routine.
 // Implements the register.Executable interface for Routine.
-func (routine Routine) Interface() register.CallFields { return routine.CallFields }
+func (routine Routine) Interface() engineio.CallFields { return routine.CallFields }
 
 // Execute performs the execution of the Routine within the provided ExecutionScope with the given input values.
 // Implements the register.Executable interface for Routine.
 func (routine Routine) Execute(scope register.ExecutionScope, inputs register.ValueTable) register.ValueTable {
 	// Perform input validation
-	if err := routine.Inputs.Validate(inputs); err != nil {
+	if err := inputs.Validate(routine.Inputs); err != nil {
 		scope.Throw(exception.Exception(exception.InvalidInputs, err.Error()))
 
 		return nil
@@ -62,7 +62,7 @@ func (routine Routine) Execute(scope register.ExecutionScope, inputs register.Va
 	}
 
 	// Perform output validation
-	if err := routine.Outputs.Validate(innerScope.outputs); err != nil {
+	if err := innerScope.outputs.Validate(routine.Outputs); err != nil {
 		outerScope.Throw(exception.Exception(exception.InvalidOutputs, err.Error()))
 
 		return nil

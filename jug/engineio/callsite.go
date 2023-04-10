@@ -2,6 +2,7 @@ package engineio
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
@@ -142,6 +143,24 @@ func (callsite *CallsiteKind) UnmarshalYAML(node *yaml.Node) error {
 type CallEncoder interface {
 	EncodeInputs(map[string]any) (polo.Document, error)
 	DecodeOutputs(polo.Document) (map[string]any, error)
+}
+
+// CallFields represents the input/output symbols for a callable.
+type CallFields struct {
+	Inputs  *TypeFields
+	Outputs *TypeFields
+}
+
+// Signature generates a signature from the CallFields symbols and their typedata.
+// It is structured as '(input1, input2)->(output1, output2)', where the values are type data of each field
+func (fields CallFields) Signature() string {
+	return fmt.Sprintf("%v->%v", fields.Inputs.String(), fields.Outputs.String())
+}
+
+// SigHash generates a signature hash from the CallFields symbols and their typedata.
+// The signature is hashed and the last 8 characters of the digest are returned as a string.
+func (fields CallFields) SigHash() string {
+	return types.GetHash([]byte(fields.Signature())).Hex()[:8]
 }
 
 // CallResult is the output emitted by EngineDriver when making function calls.

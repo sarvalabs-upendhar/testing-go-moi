@@ -3,6 +3,7 @@ package register
 import (
 	"github.com/sarvalabs/go-polo"
 
+	"github.com/sarvalabs/moichain/jug/engineio"
 	"github.com/sarvalabs/moichain/jug/pisa/exception"
 )
 
@@ -11,7 +12,7 @@ type BytesValue []byte
 
 // Type returns the Typedef of BytesValue, which is TypeBytes.
 // Implements the Value interface for BytesValue.
-func (bytes BytesValue) Type() *Typedef { return TypeBytes }
+func (bytes BytesValue) Type() *engineio.Datatype { return engineio.TypeBytes }
 
 // Copy returns a copy of BytesValue as a Value.
 // Implements the Value interface for BytesValue.
@@ -38,10 +39,10 @@ func BytesMethods() MethodTable {
 	return MethodTable{
 		// bytes.__bool__() -> bool
 		MethodBool: &BuiltinMethod{
-			datatype: PrimitiveBytes,
-			fields: CallFields{
-				Inputs:  makefields([]*TypeField{{"self", TypeBytes}}),
-				Outputs: makefields([]*TypeField{{"result", TypeBool}}),
+			datatype: engineio.PrimitiveBytes,
+			fields: engineio.CallFields{
+				Inputs:  makefields([]*engineio.TypeField{{Name: "self", Type: engineio.TypeBytes}}),
+				Outputs: makefields([]*engineio.TypeField{{Name: "result", Type: engineio.TypeBool}}),
 			},
 			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				// True for all values except empty bytes
@@ -53,10 +54,10 @@ func BytesMethods() MethodTable {
 
 		// bytes.__str__() -> string
 		MethodStr: &BuiltinMethod{
-			datatype: PrimitiveBytes,
-			fields: CallFields{
-				Inputs:  makefields([]*TypeField{{"self", TypeBytes}}),
-				Outputs: makefields([]*TypeField{{"result", TypeString}}),
+			datatype: engineio.PrimitiveBytes,
+			fields: engineio.CallFields{
+				Inputs:  makefields([]*engineio.TypeField{{Name: "self", Type: engineio.TypeBytes}}),
+				Outputs: makefields([]*engineio.TypeField{{Name: "result", Type: engineio.TypeString}}),
 			},
 			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				// Return bytes converted into a string

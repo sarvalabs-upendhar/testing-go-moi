@@ -3,21 +3,23 @@ package register
 import (
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
+
+	"github.com/sarvalabs/moichain/jug/engineio"
 )
 
 type ListValue struct {
-	values  []Value
-	typedef *Typedef
+	values   []Value
+	datatype *engineio.Datatype
 }
 
-func NewListValue(typedef *Typedef, data []byte) (*ListValue, error) {
+func NewListValue(datatype *engineio.Datatype, data []byte) (*ListValue, error) {
 	list := new(ListValue)
-	list.typedef = typedef
+	list.datatype = datatype
 
-	switch typedef.Kind() {
-	case Array:
-		list.values = make([]Value, typedef.S)
-	case Varray:
+	switch datatype.Kind {
+	case engineio.ArrayType:
+		list.values = make([]Value, datatype.Size)
+	case engineio.VarrayType:
 		list.values = make([]Value, 0)
 	default:
 		return nil, errors.New("type is not an array or varray")
@@ -41,25 +43,25 @@ func NewListValue(typedef *Typedef, data []byte) (*ListValue, error) {
 		for !depolorizer.Done() {
 			var edata []byte
 			// Depolorize the element data from the wire
-			if edata, err = depolorizer.DepolorizeRaw(); err != nil {
+			if edata, err = depolorizer.DepolorizeAny(); err != nil {
 				return nil, err
 			}
 
 			var element Value
 			// Create new value from the data for the element
-			if element, err = NewValue(typedef.E, edata); err != nil {
+			if element, err = NewValue(datatype.Elem, edata); err != nil {
 				return nil, err
 			}
 
-			switch typedef.Kind() {
-			case Array:
-				if index >= typedef.S {
+			switch datatype.Kind {
+			case engineio.ArrayType:
+				if index >= datatype.Size {
 					return nil, errors.New("too many elements in data")
 				}
 
 				list.values[index] = element
 
-			case Varray:
+			case engineio.VarrayType:
 				list.values = append(list.values, element)
 			}
 
@@ -70,11 +72,11 @@ func NewListValue(typedef *Typedef, data []byte) (*ListValue, error) {
 	return list, nil
 }
 
-func (list ListValue) Type() *Typedef { return list.typedef }
+func (list ListValue) Type() *engineio.Datatype { return list.datatype }
 
 func (list ListValue) Copy() Value {
 	lcopy := ListValue{values: make([]Value, len(list.values))}
-	lcopy.typedef = list.typedef.Copy()
+	lcopy.datatype = list.datatype.Copy()
 
 	for idx, val := range list.values {
 		lcopy.values[idx] = val.Copy()
@@ -95,14 +97,14 @@ func (list ListValue) Norm() any {
 func (list ListValue) Data() []byte {
 	polorizer := polo.NewPolorizer()
 	for _, val := range list.values {
-		polorizer.PolorizeRaw(val.Data())
+		_ = polorizer.PolorizeAny(val.Data())
 	}
 
 	return polorizer.Bytes()
 }
 
 func (list *ListValue) Get(index Value) (Value, error) {
-	if !index.Type().Equals(TypeU64) {
+	if !index.Type().Equals(engineio.TypeU64) {
 		return nil, errors.New("cannot access list element without uint64 index")
 	}
 
@@ -113,14 +115,14 @@ func (list *ListValue) Get(index Value) (Value, error) {
 
 	value := list.values[listIndex]
 	if value == nil {
-		value, _ = NewValue(list.typedef.E, nil)
+		value, _ = NewValue(list.datatype.Elem, nil)
 	}
 
 	return value, nil
 }
 
 func (list *ListValue) Set(index Value, element Value) error {
-	if !index.Type().Equals(TypeU64) {
+	if !index.Type().Equals(engineio.TypeU64) {
 		return errors.New("cannot access list element without uint64 index")
 	}
 
@@ -129,7 +131,7 @@ func (list *ListValue) Set(index Value, element Value) error {
 		return errors.New("cannot access list element: index out of bounds")
 	}
 
-	if !list.typedef.E.Equals(element.Type()) {
+	if !list.datatype.Elem.Equals(element.Type()) {
 		return errors.New("cannot set list element with invalid type")
 	}
 
@@ -139,8 +141,8 @@ func (list *ListValue) Set(index Value, element Value) error {
 }
 
 func (list ListValue) Size() U64Value {
-	if list.typedef.Kind() == Array {
-		return U64Value(list.typedef.S)
+	if list.datatype.Kind == engineio.ArrayType {
+		return U64Value(list.datatype.Size)
 	}
 
 	return U64Value(len(list.values))

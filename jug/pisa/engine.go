@@ -28,7 +28,7 @@ type Engine struct {
 	// instructs represents the engine instruction set for PISA.
 	instructs InstructionSet
 	// builtins represents the methods for builtin types
-	builtins map[register.PrimitiveType]register.MethodTable
+	builtins map[engineio.Primitive]register.MethodTable
 
 	// elements represents the decoded engineio.LogicElement cache
 	elements map[engineio.ElementPtr]any
@@ -180,9 +180,9 @@ func (engine Engine) GetInstruction(opcode OpCode) *InstructOperation {
 	return engine.instructs[opcode]
 }
 
-func (engine *Engine) GetTypeMethod(datatype *register.Typedef, mtcode register.MethodCode) (register.Method, bool) {
-	if datatype.Kind() == register.Primitive {
-		if methods, ok := engine.builtins[datatype.P]; ok {
+func (engine *Engine) GetTypeMethod(datatype *engineio.Datatype, mtcode register.MethodCode) (register.Method, bool) {
+	if datatype.Kind == engineio.PrimitiveType {
+		if methods, ok := engine.builtins[datatype.Prim]; ok {
 			if method := methods[mtcode]; method != nil {
 				return method, true
 			}
@@ -192,9 +192,9 @@ func (engine *Engine) GetTypeMethod(datatype *register.Typedef, mtcode register.
 	return nil, false
 }
 
-func (engine *Engine) GetTypedef(ptr engineio.ElementPtr) (*register.Typedef, error) {
+func (engine *Engine) GetTypedef(ptr engineio.ElementPtr) (*engineio.Datatype, error) {
 	if item, cached := engine.elements[ptr]; cached {
-		routine, _ := item.(*register.Typedef)
+		routine, _ := item.(*engineio.Datatype)
 
 		return routine, nil
 	}
@@ -204,7 +204,7 @@ func (engine *Engine) GetTypedef(ptr engineio.ElementPtr) (*register.Typedef, er
 		return nil, errors.Errorf("could not find element at %#x", ptr)
 	}
 
-	typedef := new(register.Typedef)
+	typedef := new(engineio.Datatype)
 	if err := polo.Depolorize(typedef, element.Data); err != nil {
 		return nil, err
 	}
@@ -258,7 +258,7 @@ func (engine *Engine) GetRoutine(ptr engineio.ElementPtr) (*Routine, error) {
 	return routine, nil
 }
 
-func (engine *Engine) GetStateFields(kind engineio.ContextStateKind) (*register.StateFields, error) {
+func (engine *Engine) GetStateFields(kind engineio.ContextStateKind) (*engineio.StateFields, error) {
 	var (
 		ptr engineio.ElementPtr
 		ok  bool
@@ -282,7 +282,7 @@ func (engine *Engine) GetStateFields(kind engineio.ContextStateKind) (*register.
 	}
 
 	if item, cached := engine.elements[ptr]; cached {
-		state, _ := item.(*register.StateFields)
+		state, _ := item.(*engineio.StateFields)
 
 		return state, nil
 	}
@@ -292,7 +292,7 @@ func (engine *Engine) GetStateFields(kind engineio.ContextStateKind) (*register.
 		return nil, errors.Errorf("could not find element at %#x", ptr)
 	}
 
-	state := new(register.StateFields)
+	state := new(engineio.StateFields)
 	if err := polo.Depolorize(state, element.Data); err != nil {
 		return nil, err
 	}
@@ -319,7 +319,7 @@ func (engine *Engine) loadLogicElement(ptr engineio.ElementPtr, element *enginei
 		engine.elements[ptr] = routine
 
 	case StateElement:
-		state := new(register.StateFields)
+		state := new(engineio.StateFields)
 		if err := polo.Depolorize(state, element.Data); err != nil {
 			return err
 		}
@@ -327,7 +327,7 @@ func (engine *Engine) loadLogicElement(ptr engineio.ElementPtr, element *enginei
 		engine.elements[ptr] = state
 
 	case TypedefElement:
-		typedef := new(register.Typedef)
+		typedef := new(engineio.Datatype)
 		if err := polo.Depolorize(typedef, element.Data); err != nil {
 			return err
 		}

@@ -1,18 +1,10 @@
 package logiclab
 
 import (
-	"encoding/hex"
-	"strconv"
-
 	"github.com/manishmeganathan/symbolizer"
 	"github.com/pkg/errors"
 
 	"github.com/sarvalabs/moichain/jug/engineio"
-)
-
-const (
-	TokenBooleanTrue symbolizer.TokenKind = -(iota + 8)
-	TokenBooleanFalse
 )
 
 const (
@@ -77,7 +69,7 @@ func parseLogicCommand(parser *symbolizer.Parser) Command {
 
 	switch parser.Cursor().Literal {
 	case "compile":
-		if !parser.ExpectPeek(symbolizer.TokenIdentifier) {
+		if !parser.ExpectPeek(symbolizer.TokenIdent) {
 			return InvalidCommandError("invalid 'logic compile' command: missing name")
 		}
 
@@ -103,14 +95,14 @@ func parseLogicCommand(parser *symbolizer.Parser) Command {
 		return LogicCompileFromManifestCommand(ident, path)
 
 	case "inspect":
-		if !parser.ExpectPeek(symbolizer.TokenIdentifier) {
+		if !parser.ExpectPeek(symbolizer.TokenIdent) {
 			return InvalidCommandError("invalid 'logic inspect' command: missing name")
 		}
 
 		return LogicInspectCommand(parser.Cursor().Literal)
 
 	case "delete":
-		if !parser.ExpectPeek(symbolizer.TokenIdentifier) {
+		if !parser.ExpectPeek(symbolizer.TokenIdent) {
 			return InvalidCommandError("invalid 'logic drop' command: missing name")
 		}
 
@@ -132,21 +124,21 @@ func parseParticipantCommand(parser *symbolizer.Parser) Command {
 
 	switch parser.Cursor().Literal {
 	case "register":
-		if !parser.ExpectPeek(symbolizer.TokenIdentifier) {
+		if !parser.ExpectPeek(symbolizer.TokenIdent) {
 			return InvalidCommandError("invalid 'participant register' command: missing username")
 		}
 
 		return ParticipantRegisterCommand(parser.Cursor().Literal)
 
 	case "inspect":
-		if !parser.ExpectPeek(symbolizer.TokenIdentifier) {
+		if !parser.ExpectPeek(symbolizer.TokenIdent) {
 			return InvalidCommandError("invalid 'participant inspect' command: missing username")
 		}
 
 		return ParticipantInspectCommand(parser.Cursor().Literal)
 
 	case "delete":
-		if !parser.ExpectPeek(symbolizer.TokenIdentifier) {
+		if !parser.ExpectPeek(symbolizer.TokenIdent) {
 			return InvalidCommandError("invalid 'participant drop' command: missing username")
 		}
 
@@ -160,7 +152,7 @@ func parseParticipantCommand(parser *symbolizer.Parser) Command {
 }
 
 func parseDesignateCommand(parser *symbolizer.Parser) Command {
-	if !parser.ExpectPeek(symbolizer.TokenIdentifier) {
+	if !parser.ExpectPeek(symbolizer.TokenIdent) {
 		return InvalidCommandErrorf("invalid 'designate' command: missing participant name")
 	}
 
@@ -201,13 +193,13 @@ func parseDesignatedCommand(parser *symbolizer.Parser) Command {
 func parseCallActionCommand(parser *symbolizer.Parser) Command {
 	switch callkind := parser.Cursor().Literal; callkind {
 	case "deploy", "invoke":
-		if !parser.ExpectPeek(symbolizer.TokenIdentifier) {
+		if !parser.ExpectPeek(symbolizer.TokenIdent) {
 			return InvalidCommandErrorf("invalid '%v' command: missing logic identifier", callkind)
 		}
 
 		logic := parser.Cursor().Literal
 
-		if !parser.ExpectPeek(symbolizer.TokenIdentifier) {
+		if !parser.ExpectPeek(symbolizer.TokenIdent) {
 			return InvalidCommandErrorf("invalid '%v' command: missing logic callsite", callkind)
 		}
 
@@ -240,7 +232,7 @@ func parseCallActionCommand(parser *symbolizer.Parser) Command {
 func parseMemoryActionCommand(parser *symbolizer.Parser) Command {
 	action := parser.Cursor().Literal
 
-	if !parser.ExpectPeek(symbolizer.TokenIdentifier) {
+	if !parser.ExpectPeek(symbolizer.TokenIdent) {
 		return InvalidCommandErrorf("invalid '%v' command: missing identifier", action)
 	}
 
@@ -251,9 +243,9 @@ func parseMemoryActionCommand(parser *symbolizer.Parser) Command {
 
 	parser.Advance()
 
-	argument, err := parseArg(parser)
+	argument, err := parseValue(parser)
 	if err != nil {
-		return InvalidCommandErrorf("invalid '%v' command: invalid argument", action)
+		return InvalidCommandErrorf("invalid '%v' command: invalid argument value: %v", action, err)
 	}
 
 	return SetValueCommand(ident, argument)
@@ -274,57 +266,156 @@ func parseManifestExpression(parser *symbolizer.Parser) (string, error) {
 		return "", errors.New("invalid 'manifest' expression: missing file path")
 	}
 
-	return argParser.Cursor().Literal, nil
+	path, _ := argParser.Cursor().Value()
+
+	return path.(string), nil //nolint:forcetypeassert
 }
 
-func parseArg(parser *symbolizer.Parser) (any, error) {
-	switch cursor := parser.Cursor(); cursor.Kind {
-	case symbolizer.TokenIdentifier:
-		return MemoryVar(cursor.Literal), nil
+func parseValue(parser *symbolizer.Parser) (any, error) {
+	switch parser.Cursor().Kind {
+	case symbolizer.TokenIdent:
+		return MemoryVar(parser.Cursor().Literal), nil
 
-	case symbolizer.TokenString:
-		return cursor.Literal, nil
+	case symbolizer.TokenKind('['):
+		unwrapped, err := parser.Unwrap(symbolizer.EnclosureSquare())
+		if err != nil {
+			return nil, errors.Wrap(err, "cannot convert to value: list malformed")
+		}
 
-	case symbolizer.TokenNumber:
-		number, err := strconv.ParseUint(cursor.Literal, 10, 64)
+		values, err := parseUnkeyedValues(unwrapped, symbolizer.TokenKind(','))
+		if err != nil {
+			return nil, errors.Wrap(err, "cannot convert to values: list malformed")
+		}
+
+		return values, nil
+
+	case symbolizer.TokenKind('{'):
+		unwrapped, err := parser.Unwrap(symbolizer.EnclosureCurly())
+		if err != nil {
+			return nil, errors.Wrap(err, "cannot convert to value: object malformed")
+		}
+
+		keyedValues, detected, err := parseKeyedValues(unwrapped, symbolizer.TokenKind(','))
+		if err != nil {
+			return nil, errors.Wrap(err, "cannot convert to values: list malformed")
+		}
+
+		if detected == symbolizer.TokenIdent {
+			values := make(map[string]any, len(keyedValues))
+
+			for key, val := range keyedValues {
+				values[key.(string)] = val //nolint:forcetypeassert
+			}
+
+			return values, nil
+		} else {
+			values := make(map[any]any, len(keyedValues))
+
+			for key, val := range keyedValues {
+				values[key] = val
+			}
+
+			return values, nil
+		}
+
+	default:
+		if parser.Cursor().Kind.CanValue() {
+			return parser.Cursor().Value()
+		}
+
+		return nil, errors.New("unsupported argument")
+	}
+}
+
+func parseUnkeyedValues(input string, delim symbolizer.TokenKind) ([]any, error) {
+	arguments := make([]any, 0)
+
+	parser := symbolizer.NewParser(input,
+		symbolizer.IgnoreWhitespaces(),
+		symbolizer.Keywords(map[string]symbolizer.TokenKind{
+			"true": symbolizer.TokenBoolean, "false": symbolizer.TokenBoolean,
+			"TRUE": symbolizer.TokenBoolean, "FALSE": symbolizer.TokenBoolean,
+			"True": symbolizer.TokenBoolean, "False": symbolizer.TokenBoolean,
+		}),
+	)
+
+	for !parser.IsCursor(symbolizer.TokenEoF) {
+		arg, err := parseValue(parser)
 		if err != nil {
 			return nil, err
 		}
 
-		return number, nil
+		arguments = append(arguments, arg)
 
-	case symbolizer.TokenHexNumber:
-		data, err := hex.DecodeString(cursor.Literal)
-		if err != nil {
-			return nil, err
+		switch {
+		case parser.IsCursor(delim):
+			parser.Advance()
+		case !(parser.ExpectPeek(delim) || parser.ExpectPeek(symbolizer.TokenEoF)):
+			return nil, errors.Errorf("missing delimiter after argument")
+		default:
+			parser.Advance()
+		}
+	}
+
+	return arguments, nil
+}
+
+func parseKeyedValues(input string, delim symbolizer.TokenKind) (map[any]any, symbolizer.TokenKind, error) {
+	arguments := make(map[any]any)
+
+	parser := symbolizer.NewParser(input,
+		symbolizer.IgnoreWhitespaces(),
+		symbolizer.Keywords(map[string]symbolizer.TokenKind{
+			"true": symbolizer.TokenBoolean, "false": symbolizer.TokenBoolean,
+			"TRUE": symbolizer.TokenBoolean, "FALSE": symbolizer.TokenBoolean,
+			"True": symbolizer.TokenBoolean, "False": symbolizer.TokenBoolean,
+		}),
+	)
+
+	detected := parser.Cursor().Kind
+
+	for !parser.IsCursor(symbolizer.TokenEoF) {
+		if !parser.IsCursor(detected) {
+			return nil, detected, errors.New("inconsistent key kind")
 		}
 
-		return data, nil
+		var key any
 
-	case TokenBooleanFalse:
-		return false, nil
+		if detected == symbolizer.TokenIdent {
+			key = parser.Cursor().Literal
+		} else {
+			var err error
 
-	case TokenBooleanTrue:
-		return true, nil
+			key, err = parseValue(parser)
+			if err != nil {
+				return nil, detected, errors.Wrapf(err, "malformed value for key")
+			}
+		}
 
-	case symbolizer.TokenKind('-'):
-		if !parser.IsPeek(symbolizer.TokenNumber) {
-			return nil, errors.New("negative sign missing number")
+		if !parser.ExpectPeek(symbolizer.TokenKind(':')) {
+			return nil, detected, errors.New("missing colon after key")
 		}
 
 		parser.Advance()
-		literal := "-" + parser.Cursor().Literal
 
-		number, err := strconv.ParseInt(literal, 10, 64)
+		arg, err := parseValue(parser)
 		if err != nil {
-			return nil, err
+			return nil, detected, errors.Wrapf(err, "malformed value for key '%v'", key)
 		}
 
-		return number, nil
+		arguments[key] = arg
 
-	default:
-		return nil, errors.New("unsupported argument")
+		switch {
+		case parser.IsCursor(delim):
+			parser.Advance()
+		case !(parser.ExpectPeek(delim) || parser.ExpectPeek(symbolizer.TokenEoF)):
+			return nil, detected, errors.Errorf("missing delimiter after argument for key '%v'", key)
+		default:
+			parser.Advance()
+		}
 	}
+
+	return arguments, detected, nil
 }
 
 func parseArguments(args string) (map[string]any, error) {
@@ -333,47 +424,17 @@ func parseArguments(args string) (map[string]any, error) {
 		return arguments, nil
 	}
 
-	parser := symbolizer.NewParser(args,
-		symbolizer.IgnoreWhitespaces(),
-		symbolizer.Keywords(map[string]symbolizer.TokenKind{
-			"true":  TokenBooleanTrue,
-			"True":  TokenBooleanTrue,
-			"TRUE":  TokenBooleanTrue,
-			"false": TokenBooleanFalse,
-			"False": TokenBooleanFalse,
-			"FALSE": TokenBooleanFalse,
-		}),
-	)
+	keyedArgs, detection, err := parseKeyedValues(args, symbolizer.TokenKind(','))
+	if err != nil {
+		return nil, errors.Wrap(err, "malformed arguments")
+	}
 
-	for !parser.IsCursor(symbolizer.TokenEoF) {
-		if !parser.IsCursor(symbolizer.TokenIdentifier) {
-			return nil, errors.New("missing identifier")
-		}
+	if detection != symbolizer.TokenIdent {
+		return nil, errors.Errorf("malformed arguments: missing identifier keys")
+	}
 
-		label := parser.Cursor().Literal
-
-		if !parser.ExpectPeek(symbolizer.TokenKind(':')) {
-			return nil, errors.New("missing colon after identifier")
-		}
-
-		parser.Advance()
-
-		arg, err := parseArg(parser)
-		if err != nil {
-			return nil, err
-		}
-
-		arguments[label] = arg
-
-		if !parser.ExpectPeek(symbolizer.TokenKind(',')) {
-			if parser.ExpectPeek(symbolizer.TokenEoF) {
-				break
-			}
-
-			return nil, errors.New("missing comma after argument")
-		}
-
-		parser.Advance()
+	for key, arg := range keyedArgs {
+		arguments[key.(string)] = arg //nolint:forcetypeassert
 	}
 
 	return arguments, nil

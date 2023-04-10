@@ -32,9 +32,8 @@ func init() {
 type ERC20TestSuite struct {
 	suite.Suite
 
-	logic    engineio.LogicDriver
-	manifest *engineio.Manifest
-	runtime  engineio.EngineRuntime
+	logic   engineio.LogicDriver
+	runtime engineio.EngineRuntime
 
 	internal *DebugContextDriver
 	snapshot *DebugContextDriver
@@ -96,7 +95,6 @@ func (suite *ERC20TestSuite) SetupSuite() {
 	suite.logic = logicObject
 	suite.internal = logicCtx
 	suite.runtime = runtime
-	suite.manifest = manifest
 }
 
 func (suite *ERC20TestSuite) SetupTest() {
@@ -287,7 +285,7 @@ func (suite *ERC20TestSuite) EncodeInputs(callsite string, inputs map[string]any
 		return nil, nil, errors.Errorf("callsite '%v' does not exist", callsite)
 	}
 
-	encoder, err := suite.runtime.GetCallEncoderFromManifest(site, suite.manifest)
+	encoder, err := suite.runtime.GetCallEncoder(site, suite.logic)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to generate calldata encoder for callsite '%v'", callsite)
 	}

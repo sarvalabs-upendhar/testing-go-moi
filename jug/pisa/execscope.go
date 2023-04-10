@@ -184,7 +184,7 @@ func (scope *ExecutionScope) GetPtrValue(regID byte) (engineio.ElementPtr, *exce
 	}
 
 	// Check that the register type is Ptr
-	if reg.Type() != register.TypePtr {
+	if reg.Type() != engineio.TypePtr {
 		return 0, exception.Exceptionf(exception.InvalidRegisterType, "register $%v is not a pointer", regID)
 	}
 

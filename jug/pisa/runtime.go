@@ -16,7 +16,7 @@ import (
 // of recomputing them each time. Implements the engineio.EngineFactory interface.
 type Runtime struct {
 	instructs InstructionSet
-	builtins  map[register.PrimitiveType]register.MethodTable
+	builtins  map[engineio.Primitive]register.MethodTable
 }
 
 // NewRuntime generates a new Runtime instance that can be
@@ -24,13 +24,13 @@ type Runtime struct {
 func NewRuntime() Runtime {
 	return Runtime{
 		instructs: BaseInstructionSet(),
-		builtins: map[register.PrimitiveType]register.MethodTable{
-			register.PrimitiveBool:    register.BoolMethods(),
-			register.PrimitiveBytes:   register.BytesMethods(),
-			register.PrimitiveString:  register.StringMethods(),
-			register.PrimitiveU64:     register.U64Methods(),
-			register.PrimitiveI64:     register.I64Methods(),
-			register.PrimitiveAddress: register.AddressMethods(),
+		builtins: map[engineio.Primitive]register.MethodTable{
+			engineio.PrimitiveBool:    register.BoolMethods(),
+			engineio.PrimitiveBytes:   register.BytesMethods(),
+			engineio.PrimitiveString:  register.StringMethods(),
+			engineio.PrimitiveU64:     register.U64Methods(),
+			engineio.PrimitiveI64:     register.I64Methods(),
+			engineio.PrimitiveAddress: register.AddressMethods(),
 		},
 	}
 }
@@ -168,55 +168,10 @@ func (runtime Runtime) GetElementGenerator(kind engineio.ElementKind) (engineio.
 	return generator, exists
 }
 
-// GetCallEncoderFromManifest generates an engineio.CallEncoder from an engineio.Manifest
+// GetCallEncoder generates an engineio.CallEncoder from a engineio.LogicDriver
 // that can encode inputs and decode outputs for a given callsite pointer. This will fail
 // if no valid callsite element exists for the given pointer in the given Manifest.
-func (runtime Runtime) GetCallEncoderFromManifest(
-	callsite *engineio.Callsite, manifest *engineio.Manifest,
-) (
-	engineio.CallEncoder, error,
-) {
-	// Check that the manifest engine matches for the runtime
-	if manifest.Header().LogicEngine() != runtime.Kind() {
-		return nil, errors.New("incompatible manifest for runtime: PISA")
-	}
-
-	// Get the ManifestElement from the Manifest
-	element, ok := manifest.FindElement(callsite.Ptr)
-	if !ok {
-		return nil, errors.Errorf("cannot find manifest element for ptr '%v'", callsite)
-	}
-
-	// Check that the element is a RoutineElement
-	if element.Kind != RoutineElement {
-		return nil, errors.Errorf("cannot generate CallEncode for '%v' element", element.Kind)
-	}
-
-	// Convert the element data into a RoutineSchema
-	routine, ok := element.Data.(*RoutineSchema)
-	if !ok {
-		return nil, errors.New("could not convert 'routine' element into RoutineSchema")
-	}
-
-	// Create a new FieldTable from the schema 'accepts'
-	inputs, err := compileFieldTable(routine.Accepts)
-	if err != nil {
-		return nil, errors.Wrap(err, "invalid accept fields")
-	}
-
-	// Create a new FieldTable from the schema 'returns'
-	outputs, err := compileFieldTable(routine.Returns)
-	if err != nil {
-		return nil, errors.Wrap(err, "invalid return fields")
-	}
-
-	return register.CallFields{Inputs: inputs, Outputs: outputs}, nil
-}
-
-// GetCallEncoderFromLogic generates an engineio.CallEncoder from a engineio.LogicDriver
-// that can encode inputs and decode outputs for a given callsite pointer. This will fail
-// if no valid callsite element exists for the given pointer in the given Manifest.
-func (runtime Runtime) GetCallEncoderFromLogic(
+func (runtime Runtime) GetCallEncoder(
 	callsite *engineio.Callsite, logic engineio.LogicDriver,
 ) (
 	engineio.CallEncoder, error,
@@ -243,6 +198,6 @@ func (runtime Runtime) GetCallEncoderFromLogic(
 		return nil, errors.Errorf("could not decode 'routine' element into Routine")
 	}
 
-	// Return the routine callfields
-	return routine.CallFields, nil
+	// Return the routine callfields as a CallEncoder
+	return CallEncoder(routine.CallFields), nil
 }

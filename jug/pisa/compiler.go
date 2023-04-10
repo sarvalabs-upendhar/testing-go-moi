@@ -194,7 +194,7 @@ func (compiler *ManifestCompiler) compileTypedefElement(ptr engineio.ElementPtr)
 	}
 
 	// Parse the type expression into a Typedef
-	datatype, err := register.ParseDatatype(string(*typedefSchema))
+	datatype, err := engineio.ParseDatatype(string(*typedefSchema))
 	if err != nil {
 		return errors.Wrap(err, "invalid typedef element: invalid type expression")
 	}
@@ -244,7 +244,7 @@ func (compiler *ManifestCompiler) compileStateElement(ptr engineio.ElementPtr) e
 		}
 
 		// Create a new FieldSet from the map set
-		layout, err := compileFieldTable(stateSchema.Fields)
+		layout, err := compileTypeFields(stateSchema.Fields)
 		if err != nil {
 			return errors.Errorf("invalid state element: invalid fields: %v", err)
 		}
@@ -352,13 +352,13 @@ func (compiler *ManifestCompiler) compileRoutineElement(ptr engineio.ElementPtr)
 // compileRoutine compiles a RoutineSchema object into a runtime.Routine.
 func compileRoutine(schema *RoutineSchema, instructSet InstructionSet) (*Routine, error) {
 	// Create a new FieldSet from the schema 'accepts'
-	inputs, err := compileFieldTable(schema.Accepts)
+	inputs, err := compileTypeFields(schema.Accepts)
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid accept fields")
 	}
 
 	// Create a new FieldSet from the schema 'returns'
-	outputs, err := compileFieldTable(schema.Returns)
+	outputs, err := compileTypeFields(schema.Returns)
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid return fields")
 	}
@@ -374,7 +374,7 @@ func compileRoutine(schema *RoutineSchema, instructSet InstructionSet) (*Routine
 		Name:      schema.Name,
 		Kind:      schema.Kind,
 		Instructs: instructions,
-		CallFields: register.CallFields{
+		CallFields: engineio.CallFields{
 			Inputs:  inputs,
 			Outputs: outputs,
 		},
@@ -443,13 +443,13 @@ func compileAsmInstructions(_ []string, _ InstructionSet) (Instructions, error) 
 // compileConstant compiles a ConstantSchema object into a register.Constant.
 func compileConstant(schema *ConstantSchema) (*register.Constant, error) {
 	// Parse the token literal into a Typedef
-	datatype, err := register.ParseDatatype(schema.Type)
+	datatype, err := engineio.ParseDatatype(schema.Type)
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid constant datatype")
 	}
 
 	// Confirm that the type is scalar
-	if datatype.Kind() != register.Primitive {
+	if datatype.Kind != engineio.PrimitiveType {
 		return nil, errors.New("constant datatype is not scalar")
 	}
 
@@ -470,15 +470,15 @@ func compileConstant(schema *ConstantSchema) (*register.Constant, error) {
 	}
 
 	// Create a constant and return it
-	return &register.Constant{Type: datatype.P, Data: value.Data()}, nil
+	return &register.Constant{Type: datatype.Prim, Data: value.Data()}, nil
 }
 
-// compileFieldTable compiles a map of TypefieldSchema objects into a register.FieldTable.
+// compileTypeFields compiles a map of TypefieldSchema objects into an engineio.TypeFields.
 // Returns an error if the given map of field expressions contains positional gaps or invalid expressions.
-func compileFieldTable(table []TypefieldSchema) (*register.FieldTable, error) {
+func compileTypeFields(table []TypefieldSchema) (*engineio.TypeFields, error) {
 	// Create a blank field table
-	fields := &register.FieldTable{
-		Table:   make(map[uint8]*register.TypeField, len(table)),
+	fields := &engineio.TypeFields{
+		Table:   make(map[uint8]*engineio.TypeField, len(table)),
 		Symbols: make(map[string]uint8, len(table)),
 	}
 
@@ -506,8 +506,7 @@ func compileFieldTable(table []TypefieldSchema) (*register.FieldTable, error) {
 		}
 
 		// Insert the typefield into the FieldTable
-		fields.Table[typefield.Slot] = compiled
-		fields.Symbols[compiled.Name] = typefield.Slot
+		fields.Insert(typefield.Slot, compiled)
 	}
 
 	// Check if the slot tracker has gaps
@@ -518,16 +517,16 @@ func compileFieldTable(table []TypefieldSchema) (*register.FieldTable, error) {
 	return fields, nil
 }
 
-// compileTypefield compiles a TypefieldSchema into a register.TypeField.
-func compileTypefield(schema TypefieldSchema) (*register.TypeField, error) {
+// compileTypefield compiles a TypefieldSchema into a engineio.TypeField.
+func compileTypefield(schema TypefieldSchema) (*engineio.TypeField, error) {
 	// Parse the enclosed data into a datatype
-	dt, err := register.ParseDatatype(schema.Type)
+	dt, err := engineio.ParseDatatype(schema.Type)
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid type field type data")
 	}
 
 	// Create a Symbol with the name and type data
-	return &register.TypeField{Name: schema.Label, Type: dt}, nil
+	return &engineio.TypeField{Name: schema.Label, Type: dt}, nil
 }
 
 // hasGaps returns if the keys of a map of unsigned numbers has gaps.

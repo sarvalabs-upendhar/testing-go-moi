@@ -1,13 +1,17 @@
 package register
 
-import "github.com/sarvalabs/go-polo"
+import (
+	"github.com/sarvalabs/go-polo"
+
+	"github.com/sarvalabs/moichain/jug/engineio"
+)
 
 // NullValue represents the default empty value for a register
 type NullValue struct{}
 
 // Type returns the Typedef of NullValue, which is TypeNull.
 // Implements the Value interface for NullValue.
-func (null NullValue) Type() *Typedef { return TypeNull }
+func (null NullValue) Type() *engineio.Datatype { return engineio.TypeNull }
 
 // Copy returns a copy of NullValue as a Value.
 // Implements the Value interface for NullValue.
@@ -27,7 +31,7 @@ type PtrValue uint64
 
 // Type returns the Typedef of PtrValue, which is TypePtr.
 // Implements the Value interface for PtrValue.
-func (ptr PtrValue) Type() *Typedef { return TypePtr }
+func (ptr PtrValue) Type() *engineio.Datatype { return engineio.TypePtr }
 
 // Copy returns a copy of PtrValue as a Value.
 // Implements the Value interface for PtrValue.

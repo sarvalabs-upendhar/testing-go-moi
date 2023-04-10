@@ -7,6 +7,7 @@ import (
 
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 func TestCallsiteKind_String(t *testing.T) {
@@ -67,6 +68,29 @@ func TestCallsite_Serialization(t *testing.T) {
 
 		malformed := bytes.Join([][]byte{{34}, []byte("malformed"), {34}}, []byte{})
 		err := json.Unmarshal(malformed, new(CallsiteKind))
+		require.EqualError(t, err, "invalid CallsiteKind value")
+	})
+
+	t.Run("YAML", func(t *testing.T) {
+		for kind, str := range callsiteKindToString {
+			encoded, err := yaml.Marshal(kind)
+
+			require.Nil(t, err)
+			require.Equal(t, bytes.Join([][]byte{[]byte(str), {10}}, []byte{}), encoded)
+
+			decoded := new(CallsiteKind)
+			err = yaml.Unmarshal(encoded, decoded)
+
+			require.Nil(t, err)
+			require.Equal(t, kind, *decoded)
+		}
+
+		require.PanicsWithValue(t, "unknown CallsiteKind variant", func() {
+			_, _ = yaml.Marshal(CallsiteKind(10))
+		})
+
+		malformed := bytes.Join([][]byte{{34}, []byte("malformed"), {34}}, []byte{})
+		err := yaml.Unmarshal(malformed, new(CallsiteKind))
 		require.EqualError(t, err, "invalid CallsiteKind value")
 	})
 }

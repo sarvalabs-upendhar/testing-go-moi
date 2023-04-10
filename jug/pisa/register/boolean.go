@@ -3,6 +3,7 @@ package register
 import (
 	"github.com/sarvalabs/go-polo"
 
+	"github.com/sarvalabs/moichain/jug/engineio"
 	"github.com/sarvalabs/moichain/jug/pisa/exception"
 )
 
@@ -11,7 +12,7 @@ type BoolValue bool
 
 // Type returns the Typedef of BoolValue, which is TypeBool.
 // Implements the Value interface for BoolValue.
-func (boolean BoolValue) Type() *Typedef { return TypeBool }
+func (boolean BoolValue) Type() *engineio.Datatype { return engineio.TypeBool }
 
 // Copy returns a copy of BoolValue as a Value.
 // Implements the Value interface for BoolValue.
@@ -45,10 +46,10 @@ func BoolMethods() MethodTable {
 	return MethodTable{
 		// bool.__bool__() -> bool
 		MethodBool: &BuiltinMethod{
-			datatype: PrimitiveBool,
-			fields: CallFields{
-				Inputs:  makefields([]*TypeField{{"self", TypeBool}}),
-				Outputs: makefields([]*TypeField{{"result", TypeBool}}),
+			datatype: engineio.PrimitiveBool,
+			fields: engineio.CallFields{
+				Inputs:  makefields([]*engineio.TypeField{{Name: "self", Type: engineio.TypeBool}}),
+				Outputs: makefields([]*engineio.TypeField{{Name: "result", Type: engineio.TypeBool}}),
 			},
 			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				// Return a copy of the bool value
@@ -58,10 +59,10 @@ func BoolMethods() MethodTable {
 
 		// bool.__str__() -> string
 		MethodStr: &BuiltinMethod{
-			datatype: PrimitiveBool,
-			fields: CallFields{
-				Inputs:  makefields([]*TypeField{{"self", TypeBool}}),
-				Outputs: makefields([]*TypeField{{"result", TypeString}}),
+			datatype: engineio.PrimitiveBool,
+			fields: engineio.CallFields{
+				Inputs:  makefields([]*engineio.TypeField{{Name: "self", Type: engineio.TypeBool}}),
+				Outputs: makefields([]*engineio.TypeField{{Name: "result", Type: engineio.TypeString}}),
 			},
 			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				// Convert bool to its string form

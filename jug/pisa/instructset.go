@@ -119,7 +119,7 @@ func opJUMPI(scope *ExecutionScope, operands []byte) {
 	}
 
 	// Check that register is Boolean
-	if !regCondition.Type().Equals(register.TypeBool) {
+	if !regCondition.Type().Equals(engineio.TypeBool) {
 		scope.Throw(exception.Exception(
 			exception.InvalidRegisterType,
 			"cannot evaluate non-boolean register for jump condition",
@@ -149,14 +149,14 @@ func opMAKE(scope *ExecutionScope, operands []byte) {
 	output, typeID := operands[0], operands[1]
 
 	// Check if type ID is valid
-	if typeID > register.MaxTypeID {
+	if typeID > engineio.MaxPrimitive {
 		scope.Throw(exception.Exceptionf(exception.InvalidTypeID, "type ID %#v", typeID))
 
 		return
 	}
 
 	// Create a datatype from the type ID
-	datatype := register.PrimitiveType(typeID).Datatype()
+	datatype := engineio.Primitive(typeID).Datatype()
 	// Create a value for the datatype
 	value, err := register.NewValue(datatype, nil)
 	if err != nil {
@@ -472,7 +472,7 @@ func opGETIDX(scope *ExecutionScope, operands []byte) {
 		return
 	}
 
-	if !regCol.Type().IsCollection() {
+	if !regCol.Type().Kind.IsCollection() {
 		scope.Throw(exception.Exceptionf(exception.InvalidRegisterType, "$%v is not a collection type", collection))
 
 		return
@@ -529,7 +529,7 @@ func opSETIDX(scope *ExecutionScope, operands []byte) {
 		return
 	}
 
-	if !regCol.Type().IsCollection() {
+	if !regCol.Type().Kind.IsCollection() {
 		scope.Throw(exception.Exceptionf(exception.InvalidRegisterType, "$%v is not a collection type", collection))
 
 		return
@@ -784,7 +784,7 @@ func opINVERT(scope *ExecutionScope, operands []byte) {
 	}
 
 	// Check that register is Boolean
-	if !reg.Type().Equals(register.TypeBool) {
+	if !reg.Type().Equals(engineio.TypeBool) {
 		scope.Throw(exception.Exceptionf(exception.InvalidRegisterType, "cannot INVERT register of type %v", reg.Type()))
 
 		return
@@ -814,11 +814,11 @@ func opADD(scope *ExecutionScope, operands []byte) {
 	)
 
 	switch dt := regA.Type(); dt {
-	case register.TypeU64:
+	case engineio.TypeU64:
 		// Cast register values to U64 and call Add (check for overflow)
 		result, overflow = regA.(register.U64Value).Add(regB.(register.U64Value))
 
-	case register.TypeI64:
+	case engineio.TypeI64:
 		// Cast register values to I64 and call Add (check for overflow)
 		result, overflow = regA.(register.I64Value).Add(regB.(register.I64Value))
 
@@ -857,11 +857,11 @@ func opSUB(scope *ExecutionScope, operands []byte) {
 	)
 
 	switch dt := regA.Type(); dt {
-	case register.TypeU64:
+	case engineio.TypeU64:
 		// Cast register values to U64 and call Sub (check for overflow)
 		result, overflow = regA.(register.U64Value).Sub(regB.(register.U64Value))
 
-	case register.TypeI64:
+	case engineio.TypeI64:
 		// Cast register values to I64 and call Sub (check for overflow)
 		result, overflow = regA.(register.I64Value).Sub(regB.(register.I64Value))
 
@@ -900,11 +900,11 @@ func opMUL(scope *ExecutionScope, operands []byte) {
 	)
 
 	switch dt := regA.Type(); dt {
-	case register.TypeU64:
+	case engineio.TypeU64:
 		// Cast register values to U64 and call Mul (check for overflow)
 		result, overflow = regA.(register.U64Value).Mul(regB.(register.U64Value))
 
-	case register.TypeI64:
+	case engineio.TypeI64:
 		// Cast register values to I64 and call Mul (check for overflow)
 		result, overflow = regA.(register.I64Value).Mul(regB.(register.I64Value))
 
@@ -942,11 +942,11 @@ func opDIV(scope *ExecutionScope, operands []byte) {
 	)
 
 	switch dt := regA.Type(); dt {
-	case register.TypeU64:
+	case engineio.TypeU64:
 		// Cast register values to U64 and call Div (check for error)
 		result, matherr = regA.(register.U64Value).Div(regB.(register.U64Value))
 
-	case register.TypeI64:
+	case engineio.TypeI64:
 		// Cast register values to I64 and call Div (check for overflow)
 		result, matherr = regA.(register.I64Value).Div(regB.(register.I64Value))
 

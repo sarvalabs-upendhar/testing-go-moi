@@ -5,6 +5,7 @@ import (
 
 	"github.com/sarvalabs/go-polo"
 
+	"github.com/sarvalabs/moichain/jug/engineio"
 	"github.com/sarvalabs/moichain/jug/pisa/exception"
 )
 
@@ -13,7 +14,7 @@ type StringValue string
 
 // Type returns the Typedef of StringValue, which is TypeString.
 // Implements the Value interface for StringValue.
-func (str StringValue) Type() *Typedef { return TypeString }
+func (str StringValue) Type() *engineio.Datatype { return engineio.TypeString }
 
 // Copy returns a copy of StringValue as a Value.
 // Implements the Value interface for StringValue.
@@ -39,14 +40,15 @@ func (str StringValue) HasPrefix(prefix StringValue) BoolValue {
 	return BoolValue(strings.HasPrefix(string(str), string(prefix)))
 }
 
+//nolint:lll
 func StringMethods() MethodTable {
 	return MethodTable{
 		// string.__bool__() -> bool
 		MethodBool: &BuiltinMethod{
-			datatype: PrimitiveString,
-			fields: CallFields{
-				Inputs:  makefields([]*TypeField{{"self", TypeString}}),
-				Outputs: makefields([]*TypeField{{"result", TypeBool}}),
+			datatype: engineio.PrimitiveString,
+			fields: engineio.CallFields{
+				Inputs:  makefields([]*engineio.TypeField{{Name: "self", Type: engineio.TypeString}}),
+				Outputs: makefields([]*engineio.TypeField{{Name: "result", Type: engineio.TypeBool}}),
 			},
 			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				// True for all values except empty string
@@ -58,10 +60,10 @@ func StringMethods() MethodTable {
 
 		// string.__str__() -> string
 		MethodStr: &BuiltinMethod{
-			datatype: PrimitiveString,
-			fields: CallFields{
-				Inputs:  makefields([]*TypeField{{"self", TypeString}}),
-				Outputs: makefields([]*TypeField{{"result", TypeString}}),
+			datatype: engineio.PrimitiveString,
+			fields: engineio.CallFields{
+				Inputs:  makefields([]*engineio.TypeField{{Name: "self", Type: engineio.TypeString}}),
+				Outputs: makefields([]*engineio.TypeField{{Name: "result", Type: engineio.TypeString}}),
 			},
 			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				// Return a copy of the string value
@@ -71,10 +73,10 @@ func StringMethods() MethodTable {
 
 		// string.HasPrefix(string) -> bool
 		0x10: &BuiltinMethod{
-			datatype: PrimitiveString,
-			fields: CallFields{
-				Inputs:  makefields([]*TypeField{{"self", TypeString}, {"prefix", TypeString}}),
-				Outputs: makefields([]*TypeField{{"ok", TypeBool}}),
+			datatype: engineio.PrimitiveString,
+			fields: engineio.CallFields{
+				Inputs:  makefields([]*engineio.TypeField{{Name: "self", Type: engineio.TypeString}, {Name: "prefix", Type: engineio.TypeString}}),
+				Outputs: makefields([]*engineio.TypeField{{Name: "ok", Type: engineio.TypeBool}}),
 			},
 			execute: func(inputs ValueTable) (ValueTable, *exception.Object) {
 				self, prefix := inputs[0], inputs[1]
