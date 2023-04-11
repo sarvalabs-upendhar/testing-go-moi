@@ -25,9 +25,9 @@ const (
 )
 
 type Manifest struct {
-	Syntax   string
-	Engine   ManifestEngineSpec
-	Elements []ManifestElement
+	Syntax   string             `yaml:"syntax" json:"syntax"`
+	Engine   ManifestEngineSpec `yaml:"engine" json:"engine"`
+	Elements []ManifestElement  `yaml:"elements" json:"elements"`
 }
 
 type ManifestEngineSpec struct {
@@ -36,10 +36,10 @@ type ManifestEngineSpec struct {
 }
 
 type ManifestElement struct {
-	Ptr  ElementPtr
-	Deps []ElementPtr
-	Kind ElementKind
-	Data ManifestElementObject
+	Ptr  ElementPtr            `yaml:"ptr" json:"ptr"`
+	Deps []ElementPtr          `yaml:"deps" json:"deps"`
+	Kind ElementKind           `yaml:"kind" json:"kind"`
+	Data ManifestElementObject `yaml:"data" json:"data"`
 }
 
 type ManifestElementObject interface {

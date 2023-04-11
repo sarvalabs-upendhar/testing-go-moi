@@ -23,8 +23,8 @@ var elementGenerators = map[engineio.ElementKind]engineio.ManifestElementGenerat
 }
 
 type StateSchema struct {
-	Kind   engineio.ContextStateKind `json:"kind"`
-	Fields []TypefieldSchema         `json:"fields"`
+	Kind   engineio.ContextStateKind `yaml:"kind" json:"kind"`
+	Fields []TypefieldSchema         `yaml:"fields" json:"fields"`
 }
 
 func (state StateSchema) Polorize() (*polo.Polorizer, error) {
@@ -61,12 +61,12 @@ func (state *StateSchema) Depolorize(depolorizer *polo.Depolorizer) (err error) 
 }
 
 type RoutineSchema struct {
-	Name string `yaml:"name" json:"name"`
+	Name string                `yaml:"name" json:"name"`
+	Kind engineio.CallsiteKind `yaml:"kind" json:"kind"`
 
-	Kind    engineio.CallsiteKind `yaml:"kind" json:"kind"`
-	Accepts []TypefieldSchema     `yaml:"accepts" json:"accepts"`
-	Returns []TypefieldSchema     `yaml:"returns" json:"returns"`
-	Catches []string              `yaml:"catches" json:"catches"`
+	Accepts []TypefieldSchema `yaml:"accepts" json:"accepts"`
+	Returns []TypefieldSchema `yaml:"returns" json:"returns"`
+	Catches []string          `yaml:"catches" json:"catches"`
 
 	Executes InstructionsSchema `yaml:"executes" json:"executes"`
 }
@@ -155,8 +155,8 @@ func (symbolic *TypedefSchema) Depolorize(depolorizer *polo.Depolorizer) error {
 }
 
 type ConstantSchema struct {
-	Type  string `json:"type"`
-	Value string `json:"value"`
+	Type  string `yaml:"type" json:"type"`
+	Value string `yaml:"value" json:"value"`
 }
 
 func (constant ConstantSchema) Polorize() (*polo.Polorizer, error) {
