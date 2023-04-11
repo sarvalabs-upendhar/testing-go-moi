@@ -496,8 +496,8 @@ func createHeaderCallbackWithTestData(t *testing.T) func(header *types.Tesseract
 		header.Address = tests.RandomAddress(t)
 		header.PrevHash = tests.RandomHash(t)
 		header.Height = 4
-		header.AnuUsed = 88
-		header.AnuLimit = 99
+		header.FuelUsed = 88
+		header.FuelLimit = 99
 		header.BodyHash = tests.RandomHash(t)
 		header.GridHash = tests.RandomHash(t)
 		header.Operator = "operator"
@@ -810,8 +810,8 @@ func checkForRPCHeader(t *testing.T, header types.TesseractHeader, rpcHeader pty
 	require.Equal(t, header.Address, rpcHeader.Address)
 	require.Equal(t, header.PrevHash, rpcHeader.PrevHash)
 	require.Equal(t, header.Height, rpcHeader.Height)
-	require.Equal(t, header.AnuUsed, rpcHeader.AnuUsed)
-	require.Equal(t, header.AnuLimit, rpcHeader.AnuLimit)
+	require.Equal(t, header.FuelUsed, rpcHeader.FuelUsed)
+	require.Equal(t, header.FuelLimit, rpcHeader.FuelLimit)
 	require.Equal(t, header.BodyHash, rpcHeader.BodyHash)
 	require.Equal(t, header.GridHash, rpcHeader.GridHash)
 	require.Equal(t, header.Operator, rpcHeader.Operator)

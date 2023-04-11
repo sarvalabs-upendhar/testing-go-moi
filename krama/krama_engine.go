@@ -1305,8 +1305,8 @@ func generateTesseract(
 		ContextLock: state.ContextLock(),
 		PrevHash:    state.AccountInfos.GetLatestHash(addr),
 		Height:      state.NewHeight(addr),
-		AnuUsed:     fuelUsed,
-		AnuLimit:    fuelLimit,
+		FuelUsed:    fuelUsed,
+		FuelLimit:   fuelLimit,
 		ClusterID:   string(state.ID),
 		Operator:    string(state.Operator),
 		BodyHash:    tsBodyHash,
@@ -1315,6 +1315,7 @@ func generateTesseract(
 			VoteSet:         nil,
 			CommitSignature: nil,
 		},
+		Timestamp: state.ICSReqTime.UnixNano(),
 	}
 
 	return types.NewTesseract(header, body, state.Ixs, state.Receipts, nil)

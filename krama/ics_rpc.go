@@ -3,6 +3,7 @@ package krama
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/sarvalabs/go-polo"
 
@@ -46,6 +47,7 @@ func (icsrpc *ICSRPCService) ICSRequest(
 		operator:     id.KramaID(req.Operator),
 		msg:          req,
 		responseChan: respChan,
+		reqTime:      time.Unix(0, req.Timestamp),
 		ixs:          *interactions,
 	}
 

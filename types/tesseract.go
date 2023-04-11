@@ -72,8 +72,8 @@ type TesseractHeader struct {
 	Address     Address
 	PrevHash    Hash
 	Height      uint64
-	AnuUsed     uint64
-	AnuLimit    uint64
+	FuelUsed    uint64
+	FuelLimit   uint64
 	BodyHash    Hash
 	GridHash    Hash
 	Operator    string
@@ -101,8 +101,8 @@ func (h *TesseractHeader) Hash() (Hash, error) {
 		Address:     h.Address,
 		PrevHash:    h.PrevHash,
 		Height:      h.Height,
-		AnuUsed:     h.AnuUsed,
-		AnuLimit:    h.AnuLimit,
+		FuelUsed:    h.FuelUsed,
+		FuelLimit:   h.FuelLimit,
 		BodyHash:    h.BodyHash,
 		GridHash:    h.GridHash,
 		Operator:    h.Operator,

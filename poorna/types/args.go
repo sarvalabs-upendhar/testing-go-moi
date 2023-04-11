@@ -70,8 +70,8 @@ type RPCHeader struct {
 	Address     types.Address
 	PrevHash    types.Hash
 	Height      uint64
-	AnuUsed     uint64
-	AnuLimit    uint64
+	FuelUsed    uint64
+	FuelLimit   uint64
 	BodyHash    types.Hash
 	GridHash    types.Hash
 	Operator    string
