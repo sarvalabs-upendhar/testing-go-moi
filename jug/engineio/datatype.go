@@ -35,6 +35,11 @@ func NewMappingType(key Primitive, val *Datatype) *Datatype {
 	return &Datatype{Kind: MappingType, Prim: key, Elem: val}
 }
 
+// NewClassType creates a new Class Datatype
+func NewClassType(name string, fields *TypeFields) *Datatype {
+	return &Datatype{Kind: ClassType, Ident: name, Fields: fields}
+}
+
 var (
 	// TypePtr is a PrimitivePtr as a Datatype
 	TypePtr = &Datatype{Prim: PrimitivePtr}
@@ -69,6 +74,8 @@ func (datatype Datatype) String() string {
 		return fmt.Sprintf("[]%v", datatype.Elem.String())
 	case MappingType:
 		return fmt.Sprintf("map[%v]%v", datatype.Prim.String(), datatype.Elem.String())
+	case ClassType:
+		return datatype.Ident
 
 	default:
 		panic("unsupported string conversion for Datatype")
@@ -111,6 +118,8 @@ func (datatype Datatype) Equals(other *Datatype) bool {
 		return datatype.Elem.Equals(other.Elem)
 	case MappingType:
 		return datatype.Elem.Equals(other.Elem) && datatype.Prim.Equals(other.Prim)
+	case ClassType:
+		return datatype.Fields.Equals(other.Fields) && datatype.Ident == other.Ident
 
 	default:
 		panic("cannot check type equality for unknown datatype kind")
@@ -247,12 +256,18 @@ func newTypeParser(symbol string) *symbolizer.Parser {
 	)
 }
 
+// ClassdefProvider is an interface that
+// provides Class Datatype definitions
+type ClassdefProvider interface {
+	GetClassdef(string) (*Datatype, bool)
+}
+
 // ParseDatatype attempts to parse a string input into a Typedef
 // 1. Valid Primitive types include {bool, bytes, string, address, (u)int(32/64), bigint}
 // 2. Valid Array types are expressed as '[{size}]{element}'. The element must in turn be any valid Typedef.
 // 3. Valid Sequence types are expressed as '[]{element}'. The element must in turn be any valid Typedef
 // 3. Valid Hashmap types are expressed as 'map[{element}]'. The element must in turn be any valid Typedef.
-func ParseDatatype(input string) (*Datatype, error) {
+func ParseDatatype(input string, provider ClassdefProvider) (*Datatype, error) {
 	// Create a new parser check cursor type
 	parser := newTypeParser(input)
 
@@ -290,7 +305,7 @@ func ParseDatatype(input string) (*Datatype, error) {
 		// If data within [] is empty -> Sequence
 		if unwrapped == "" {
 			// Parse what's left in the parser into a Typedef
-			elementType, err := ParseDatatype(parser.Unparsed())
+			elementType, err := ParseDatatype(parser.Unparsed(), provider)
 			if err != nil {
 				return nil, errors.Wrap(err, "invalid type data for sequence: invalid element type")
 			}
@@ -305,7 +320,7 @@ func ParseDatatype(input string) (*Datatype, error) {
 		}
 
 		// Parse what's left in the parser into a Typedef
-		elementType, err := ParseDatatype(parser.Unparsed())
+		elementType, err := ParseDatatype(parser.Unparsed(), provider)
 		if err != nil {
 			return nil, errors.Wrap(err, "invalid type data for array: invalid element type")
 		}
@@ -331,19 +346,33 @@ func ParseDatatype(input string) (*Datatype, error) {
 
 		// Parse the datatype token into a Typedef.
 		// This is guaranteed to work because only valid primitive types are literals for TokenPrimitive
-		keyType, _ := ParseDatatype(keyParser.Cursor().Literal)
+		keyType, _ := ParseDatatype(keyParser.Cursor().Literal, provider)
 
 		// Parse what's left in the parser into a Typedef
-		elementType, err := ParseDatatype(parser.Unparsed())
+		elementType, err := ParseDatatype(parser.Unparsed(), provider)
 		if err != nil {
 			return nil, errors.Wrap(err, "invalid type data for hashmap: invalid value type")
 		}
 
 		return NewMappingType(keyType.Prim, elementType), nil
 
-	// todo: class support
-	// // Class Token
-	// case symbolizer.TokenIdentifier:
+	// Identifier Token (Class)
+	case symbolizer.TokenIdent:
+		// Get the name of the class
+		className := parser.Cursor().Literal
+
+		// Get the typedef for the class from the provider
+		classDef, ok := provider.GetClassdef(className)
+		if !ok {
+			return nil, errors.Errorf("invalid class reference: '%v' not found", className)
+		}
+
+		// Check that the typedef is of kind ClassType
+		if classDef.Kind != ClassType {
+			return nil, errors.Errorf("invalid class reference: '%v' is not a class", className)
+		}
+
+		return classDef, nil
 
 	default:
 		// Input does not start with type or bind keyword

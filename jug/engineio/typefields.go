@@ -1,6 +1,9 @@
 package engineio
 
-import "strings"
+import (
+	"reflect"
+	"strings"
+)
 
 // StateFields represents the state symbols for a Logic
 type StateFields = TypeFields
@@ -9,7 +12,7 @@ type StateFields = TypeFields
 // as storage and calldata fields as well as class attributes
 type TypeField struct {
 	Name string
-	Type *Datatype
+	Type *Datatype // implements a method (datatype Datatype) Equals(other *Datatype) bool
 }
 
 // TypeFields represents a collection of TypeField objects.
@@ -71,4 +74,9 @@ func (fields TypeFields) Copy() *TypeFields {
 	}
 
 	return clone
+}
+
+// Equals returns whether the given TypeFields is equal to another
+func (fields TypeFields) Equals(other *TypeFields) bool {
+	return reflect.DeepEqual(fields, *other)
 }

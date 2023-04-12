@@ -20,6 +20,7 @@ var elementGenerators = map[engineio.ElementKind]engineio.ManifestElementGenerat
 	TypedefElement:  func() engineio.ManifestElementObject { return new(TypedefSchema) },
 	ConstantElement: func() engineio.ManifestElementObject { return new(ConstantSchema) },
 	RoutineElement:  func() engineio.ManifestElementObject { return new(RoutineSchema) },
+	ClassElement:    func() engineio.ManifestElementObject { return new(ClassSchema) },
 }
 
 type StateSchema struct {
@@ -54,6 +55,44 @@ func (state *StateSchema) Depolorize(depolorizer *polo.Depolorizer) (err error) 
 	}
 
 	if err = depolorizer.Depolorize(&state.Fields); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type ClassSchema struct {
+	Name   string            `yaml:"name" json:"name"`
+	Fields []TypefieldSchema `yaml:"fields" json:"fields"`
+}
+
+func (class ClassSchema) Polorize() (*polo.Polorizer, error) {
+	polorizer := polo.NewPolorizer()
+
+	if err := polorizer.Polorize(class.Name); err != nil {
+		return nil, err
+	}
+
+	if err := polorizer.Polorize(class.Fields); err != nil {
+		return nil, err
+	}
+
+	return polorizer, nil
+}
+
+func (class *ClassSchema) Depolorize(depolorizer *polo.Depolorizer) (err error) {
+	depolorizer, err = depolorizer.DepolorizePacked()
+	if errors.Is(err, polo.ErrNullPack) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	if err = depolorizer.Depolorize(&class.Name); err != nil {
+		return err
+	}
+
+	if err = depolorizer.Depolorize(&class.Fields); err != nil {
 		return err
 	}
 

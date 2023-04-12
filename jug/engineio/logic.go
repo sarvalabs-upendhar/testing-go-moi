@@ -32,22 +32,26 @@ type LogicDriver interface {
 	GetElementDeps(ElementPtr) []ElementPtr
 	// GetElement returns the LogicElement for a given element pointer with confirmation of its existence.
 	GetElement(ElementPtr) (*LogicElement, bool)
-	// GetCallsite returns Callsite for a given string name with confirmation of it existence.
+	// GetCallsite returns Callsite for a given string name with confirmation of its existence.
 	GetCallsite(string) (*Callsite, bool)
+	// GetClassdef returns class Datatype for a given string name with confirmation of its existence.
+	GetClassdef(string) (*Datatype, bool)
 }
 
 // LogicDescriptor represents an object that describes the internal
 // components and characteristics of a Logic implementation
 type LogicDescriptor struct {
-	Manifest types.Hash
 	Engine   EngineKind
+	Manifest types.Hash
 
 	Interactive bool
 	StateMatrix ContextStateMatrix
 
-	DepGraph  *DependencyGraph
-	Elements  map[ElementPtr]*LogicElement
+	DepGraph *DependencyGraph
+	Elements map[ElementPtr]*LogicElement
+
 	Callsites map[string]*Callsite
+	Classdefs map[string]*Datatype
 }
 
 type (

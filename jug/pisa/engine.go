@@ -326,6 +326,14 @@ func (engine *Engine) loadLogicElement(ptr engineio.ElementPtr, element *enginei
 
 		engine.elements[ptr] = state
 
+	case ClassElement:
+		class := new(engineio.Datatype)
+		if err := polo.Depolorize(class, element.Data); err != nil {
+			return err
+		}
+
+		engine.elements[ptr] = class
+
 	case TypedefElement:
 		typedef := new(engineio.Datatype)
 		if err := polo.Depolorize(typedef, element.Data); err != nil {

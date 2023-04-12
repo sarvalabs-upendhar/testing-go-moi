@@ -69,6 +69,8 @@ func BaseInstructionSet() InstructionSet {
 
 		GETIDX: {operand3, opGETIDX, fuel},
 		SETIDX: {operand3, opSETIDX, fuel},
+		GETFLD: {operand3, opGETFLD, fuel},
+		SETFLD: {operand3, opSETFLD, fuel},
 
 		LT:  {operand3, opLT, fuel},
 		LE:  {operand3, opLE, fuel},
@@ -546,6 +548,93 @@ func opSETIDX(scope *ExecutionScope, operands []byte) {
 
 	// Update the collection register
 	scope.registers.Set(collection, collectionValue)
+}
+
+func opGETFLD(scope *ExecutionScope, operands []byte) {
+	// GETFLD <reg:A> <reg:class[A,B]> <slot:0>
+	output, class, slot := operands[0], operands[1], operands[2]
+
+	var (
+		exists   bool
+		regClass register.Value
+	)
+
+	// Retrieve the register for class
+	if regClass, exists = scope.registers.Get(class); !exists {
+		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", class))
+
+		return
+	}
+
+	// Verify that register is of ClassType
+	if regClass.Type().Kind != engineio.ClassType {
+		scope.Throw(exception.Exceptionf(exception.InvalidRegisterType, "$%v is not a class type", class))
+
+		return
+	}
+
+	// Cast the value into a ClassValue
+	classValue := regClass.(*register.ClassValue) //nolint:forcetypeassert
+	// Get the field value for the slot
+	fieldValue, err := classValue.Get(slot)
+	if err != nil {
+		scope.Throw(exception.Exception(exception.ClassFieldAccess, err.Error()))
+
+		return
+	}
+
+	// Set the output register
+	scope.registers.Set(output, fieldValue)
+}
+
+func opSETFLD(scope *ExecutionScope, operands []byte) {
+	// SETFLD <reg:class[A,B]> <slot:0> <reg:A>
+	class, slot, element := operands[0], operands[1], operands[2]
+
+	var (
+		exists            bool
+		regClass, regElem register.Value
+	)
+
+	// Retrieve the register for class
+	if regClass, exists = scope.registers.Get(class); !exists {
+		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", class))
+
+		return
+	}
+
+	// Retrieve the register for field element
+	if regElem, exists = scope.registers.Get(element); !exists {
+		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", element))
+
+		return
+	}
+
+	// Check if class value has been initialized
+	if register.IsNullValue(regClass) {
+		scope.Throw(exception.Exception(exception.NilCollection, "cannot set to nil class"))
+
+		return
+	}
+
+	// Verify that register is of ClassType
+	if regClass.Type().Kind != engineio.ClassType {
+		scope.Throw(exception.Exceptionf(exception.InvalidRegisterType, "$%v is not a class type", class))
+
+		return
+	}
+
+	// Cast the value into a ClassValue
+	classValue := regClass.(*register.ClassValue) //nolint:forcetypeassert
+	// Set the element value to the class
+	if err := classValue.Set(slot, regElem); err != nil {
+		scope.Throw(exception.Exception(exception.ClassFieldAccess, err.Error()))
+
+		return
+	}
+
+	// Update the class register
+	scope.registers.Set(class, classValue)
 }
 
 func opLT(scope *ExecutionScope, operands []byte) {

@@ -7,7 +7,6 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
-	"golang.org/x/exp/constraints"
 
 	"github.com/sarvalabs/moichain/jug/engineio"
 	"github.com/sarvalabs/moichain/jug/pisa/register"
@@ -26,6 +25,7 @@ type ManifestCompiler struct {
 	depgraph *engineio.DependencyGraph
 
 	callsites map[string]*engineio.Callsite
+	classdefs map[string]*engineio.Datatype
 	compiled  map[engineio.ElementPtr]*engineio.LogicElement
 
 	state engineio.ContextStateMatrix
@@ -96,6 +96,7 @@ func (compiler *ManifestCompiler) compile() (*engineio.LogicDescriptor, error) {
 	// Set up the compiler accumulators
 	compiler.compiled = make(map[engineio.ElementPtr]*engineio.LogicElement, len(compiler.elements))
 	compiler.callsites = make(map[string]*engineio.Callsite)
+	compiler.classdefs = make(map[string]*engineio.Datatype)
 
 	// Iterate over the element pointers in compile order
 	for _, ptr := range order {
@@ -110,6 +111,12 @@ func (compiler *ManifestCompiler) compile() (*engineio.LogicDescriptor, error) {
 			// Compile the element as a TypedefElement
 			if err := compiler.compileTypedefElement(ptr); err != nil {
 				return nil, errors.Wrapf(err, "typedef element [%#v] compile failed", ptr)
+			}
+
+		case ClassElement:
+			// Compile the element as a TypedefElement
+			if err := compiler.compileClassElement(ptr); err != nil {
+				return nil, errors.Wrapf(err, "class element [%#v] compile failed", ptr)
 			}
 
 		case StateElement:
@@ -146,6 +153,7 @@ func (compiler *ManifestCompiler) compile() (*engineio.LogicDescriptor, error) {
 		DepGraph:    compiler.depgraph,
 		Elements:    compiler.compiled,
 		Callsites:   compiler.callsites,
+		Classdefs:   compiler.classdefs,
 	}, nil
 }
 
@@ -161,7 +169,7 @@ func (compiler *ManifestCompiler) compileConstantElement(ptr engineio.ElementPtr
 	}
 
 	// Create a new Constant object
-	constant, err := compileConstant(constantSchema)
+	constant, err := compiler.compileConstant(constantSchema)
 	if err != nil {
 		return errors.Wrap(err, "invalid constant element")
 	}
@@ -193,12 +201,6 @@ func (compiler *ManifestCompiler) compileTypedefElement(ptr engineio.ElementPtr)
 		return errors.New("invalid element data for 'typedef' kind")
 	}
 
-	// Parse the type expression into a Typedef
-	datatype, err := engineio.ParseDatatype(string(*typedefSchema))
-	if err != nil {
-		return errors.Wrap(err, "invalid typedef element: invalid type expression")
-	}
-
 	// Check the dependencies for the typedef (must only be a ClassElement)
 	for _, dep := range element.Deps {
 		if kind := compiler.kindmap[dep]; kind != ClassElement {
@@ -206,10 +208,60 @@ func (compiler *ManifestCompiler) compileTypedefElement(ptr engineio.ElementPtr)
 		}
 	}
 
+	// Parse the type expression into a Typedef
+	datatype, err := engineio.ParseDatatype(string(*typedefSchema), compiler)
+	if err != nil {
+		return errors.Wrap(err, "invalid typedef element: invalid type expression")
+	}
+
 	// Generate the compiled element and store it
 	encoded, _ := polo.Polorize(datatype)
 	compiler.compiled[ptr] = &engineio.LogicElement{
 		Kind: TypedefElement,
+		Data: encoded,
+		Deps: element.Deps,
+	}
+
+	return nil
+}
+
+func (compiler *ManifestCompiler) compileClassElement(ptr engineio.ElementPtr) error {
+	// Get the element from the compiler
+	element := compiler.elements[ptr]
+
+	// Convert element into a ClassSchema
+	classSchema, ok := element.Data.(*ClassSchema)
+	if !ok {
+		return errors.New("invalid element data for 'class' kind")
+	}
+
+	// Check the dependencies for the typedef (must only be a ClassElement)
+	for _, dep := range element.Deps {
+		if kind := compiler.kindmap[dep]; kind != ClassElement {
+			return errors.Errorf("invalid class element: cannot have a '%v' as dependency", kind)
+		}
+	}
+
+	// Check that no class with the given name is already available
+	if _, exists := compiler.classdefs[classSchema.Name]; exists {
+		return errors.Errorf("invalid class element: duplicate class with name '%v'", classSchema.Name)
+	}
+
+	// Create a new TypeFields from the class fields
+	fields, err := compiler.compileTypeFields(classSchema.Fields)
+	if err != nil {
+		return errors.Errorf("invalid class element: invalid fields: %v", err)
+	}
+
+	// Create a new Class Typedef
+	datatype := engineio.NewClassType(classSchema.Name, fields)
+	// Register the class with the compiler
+	compiler.classdefs[classSchema.Name] = datatype
+
+	// Generate the compiled element and store it
+	encoded, _ := polo.Polorize(datatype)
+	compiler.compiled[ptr] = &engineio.LogicElement{
+		Kind: ClassElement,
 		Data: encoded,
 		Deps: element.Deps,
 	}
@@ -244,7 +296,7 @@ func (compiler *ManifestCompiler) compileStateElement(ptr engineio.ElementPtr) e
 		}
 
 		// Create a new FieldSet from the map set
-		layout, err := compileTypeFields(stateSchema.Fields)
+		layout, err := compiler.compileTypeFields(stateSchema.Fields)
 		if err != nil {
 			return errors.Errorf("invalid state element: invalid fields: %v", err)
 		}
@@ -286,7 +338,7 @@ func (compiler *ManifestCompiler) compileRoutineElement(ptr engineio.ElementPtr)
 		// Supported with no checks (all dependencies supported)
 
 	case engineio.DeployerCallsite:
-		if !IsExportedName(routineSchema.Name) || !IsMutableName(routineSchema.Name) {
+		if !isExportedName(routineSchema.Name) || !isMutableName(routineSchema.Name) {
 			return errors.Errorf("invalid routine element: invalid name '%v' for deployer routine", routineSchema.Name)
 		}
 
@@ -329,7 +381,7 @@ func (compiler *ManifestCompiler) compileRoutineElement(ptr engineio.ElementPtr)
 	}
 
 	// Create a Routine object
-	routine, err := compileRoutine(routineSchema, compiler.instructs)
+	routine, err := compiler.compileRoutine(routineSchema)
 	if err != nil {
 		return errors.Wrapf(err, "invalid routine element")
 	}
@@ -350,21 +402,21 @@ func (compiler *ManifestCompiler) compileRoutineElement(ptr engineio.ElementPtr)
 }
 
 // compileRoutine compiles a RoutineSchema object into a runtime.Routine.
-func compileRoutine(schema *RoutineSchema, instructSet InstructionSet) (*Routine, error) {
+func (compiler *ManifestCompiler) compileRoutine(schema *RoutineSchema) (*Routine, error) {
 	// Create a new FieldSet from the schema 'accepts'
-	inputs, err := compileTypeFields(schema.Accepts)
+	inputs, err := compiler.compileTypeFields(schema.Accepts)
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid accept fields")
 	}
 
 	// Create a new FieldSet from the schema 'returns'
-	outputs, err := compileTypeFields(schema.Returns)
+	outputs, err := compiler.compileTypeFields(schema.Returns)
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid return fields")
 	}
 
 	// Compile the instructions for the routine logic
-	instructions, err := compileInstructions(schema.Executes, instructSet)
+	instructions, err := compiler.compileInstructions(schema.Executes)
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid instructions")
 	}
@@ -382,21 +434,21 @@ func compileRoutine(schema *RoutineSchema, instructSet InstructionSet) (*Routine
 }
 
 // compileInstructions compiles an InstructionsSchema into some runtime.Instructions.
-func compileInstructions(schema InstructionsSchema, instructSet InstructionSet) (Instructions, error) {
+func (compiler *ManifestCompiler) compileInstructions(schema InstructionsSchema) (Instructions, error) {
 	switch {
 	case schema.Bin != nil:
-		return compileBinInstructions(schema.Bin, instructSet)
+		return compiler.compileBinInstructions(schema.Bin)
 	case schema.Hex != "":
-		return compileHexInstructions(schema.Hex, instructSet)
+		return compiler.compileHexInstructions(schema.Hex)
 	case schema.Asm != nil:
-		return compileAsmInstructions(schema.Asm, instructSet)
+		return compiler.compileAsmInstructions(schema.Asm)
 	default:
 		return nil, errors.New("no instructions found")
 	}
 }
 
 // compileBinInstructions compiles an InstructionsSchema with binary instructions into runtime.Instructions.
-func compileBinInstructions(instructions []byte, instructSet InstructionSet) (Instructions, error) {
+func (compiler *ManifestCompiler) compileBinInstructions(instructions []byte) (Instructions, error) {
 	reader := bytes.NewReader(instructions)
 	instructs := make(Instructions, 0)
 
@@ -404,7 +456,7 @@ func compileBinInstructions(instructions []byte, instructSet InstructionSet) (In
 		// Read an opcode byte
 		opcode, _ := reader.ReadByte()
 		// Lookup the instructions for the opcode
-		op := instructSet[opcode]
+		op := compiler.instructs[opcode]
 		if op == nil {
 			return nil, errors.Errorf("invalid opcode '%#v' [line %v]", opcode, line)
 		}
@@ -423,7 +475,7 @@ func compileBinInstructions(instructions []byte, instructSet InstructionSet) (In
 }
 
 // compileHexInstructions compiles an InstructionsSchema with hexadecimal instructions into runtime.Instructions.
-func compileHexInstructions(instructions string, instructSet InstructionSet) (Instructions, error) {
+func (compiler *ManifestCompiler) compileHexInstructions(instructions string) (Instructions, error) {
 	// Remove the 0x prefix if it exists
 	instructions = strings.TrimPrefix(instructions, "0x")
 
@@ -432,18 +484,18 @@ func compileHexInstructions(instructions string, instructSet InstructionSet) (In
 		return nil, errors.Wrap(err, "invalid hex instructions")
 	}
 
-	return compileBinInstructions(decodedInstructs, instructSet)
+	return compiler.compileBinInstructions(decodedInstructs)
 }
 
 // compileAsmInstructions compiles an InstructionsSchema with assembly instructions into runtime.Instructions.
-func compileAsmInstructions(_ []string, _ InstructionSet) (Instructions, error) {
+func (compiler *ManifestCompiler) compileAsmInstructions(_ []string) (Instructions, error) {
 	return nil, errors.New("cannot compile assembly instructions (yet!)")
 }
 
 // compileConstant compiles a ConstantSchema object into a register.Constant.
-func compileConstant(schema *ConstantSchema) (*register.Constant, error) {
+func (compiler *ManifestCompiler) compileConstant(schema *ConstantSchema) (*register.Constant, error) {
 	// Parse the token literal into a Typedef
-	datatype, err := engineio.ParseDatatype(schema.Type)
+	datatype, err := engineio.ParseDatatype(schema.Type, compiler)
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid constant datatype")
 	}
@@ -475,7 +527,7 @@ func compileConstant(schema *ConstantSchema) (*register.Constant, error) {
 
 // compileTypeFields compiles a map of TypefieldSchema objects into an engineio.TypeFields.
 // Returns an error if the given map of field expressions contains positional gaps or invalid expressions.
-func compileTypeFields(table []TypefieldSchema) (*engineio.TypeFields, error) {
+func (compiler *ManifestCompiler) compileTypeFields(table []TypefieldSchema) (*engineio.TypeFields, error) {
 	// Create a blank field table
 	fields := &engineio.TypeFields{
 		Table:   make(map[uint8]*engineio.TypeField, len(table)),
@@ -500,7 +552,7 @@ func compileTypeFields(table []TypefieldSchema) (*engineio.TypeFields, error) {
 		slots[typefield.Slot] = struct{}{}
 
 		// Compile the TypefieldSchema into a register.TypeField
-		compiled, err := compileTypefield(typefield)
+		compiled, err := compiler.compileTypefield(typefield)
 		if err != nil {
 			return nil, errors.Wrapf(err, "invalid typefield for slot '%v'", typefield.Slot)
 		}
@@ -518,9 +570,9 @@ func compileTypeFields(table []TypefieldSchema) (*engineio.TypeFields, error) {
 }
 
 // compileTypefield compiles a TypefieldSchema into a engineio.TypeField.
-func compileTypefield(schema TypefieldSchema) (*engineio.TypeField, error) {
+func (compiler *ManifestCompiler) compileTypefield(schema TypefieldSchema) (*engineio.TypeField, error) {
 	// Parse the enclosed data into a datatype
-	dt, err := engineio.ParseDatatype(schema.Type)
+	dt, err := engineio.ParseDatatype(schema.Type, compiler)
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid type field type data")
 	}
@@ -529,14 +581,8 @@ func compileTypefield(schema TypefieldSchema) (*engineio.TypeField, error) {
 	return &engineio.TypeField{Name: schema.Label, Type: dt}, nil
 }
 
-// hasGaps returns if the keys of a map of unsigned numbers has gaps.
-// They must also start from 0 and go up to len-1
-func hasGaps[U constraints.Unsigned](indices map[U]struct{}) bool {
-	for i := U(0); i < U(len(indices)); i++ {
-		if _, exists := indices[i]; !exists {
-			return true
-		}
-	}
+func (compiler *ManifestCompiler) GetClassdef(name string) (*engineio.Datatype, bool) {
+	classdef, ok := compiler.classdefs[name]
 
-	return false
+	return classdef, ok
 }

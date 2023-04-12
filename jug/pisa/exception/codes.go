@@ -31,6 +31,7 @@ const (
 
 	NilCollection
 	CollectionAccess
+	ClassFieldAccess
 
 	StorageRead
 	StorageWrite
@@ -62,6 +63,7 @@ var CodeToString = map[Code]string{
 
 	NilCollection:    "NilCollection",
 	CollectionAccess: "CollectionAccess",
+	ClassFieldAccess: "ClassFieldAccess",
 
 	StorageRead:  "StorageRead",
 	StorageWrite: "StorageWrite",

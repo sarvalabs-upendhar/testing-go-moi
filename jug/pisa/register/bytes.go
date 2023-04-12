@@ -17,10 +17,10 @@ func (bytes BytesValue) Type() *engineio.Datatype { return engineio.TypeBytes }
 // Copy returns a copy of BytesValue as a Value.
 // Implements the Value interface for BytesValue.
 func (bytes BytesValue) Copy() Value {
-	copied := BytesValue{}
-	copy(bytes, copied)
+	clone := make(BytesValue, len(bytes))
+	copy(clone, bytes)
 
-	return copied
+	return clone
 }
 
 // Norm returns the normalized value of BytesValue as a []byte.

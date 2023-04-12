@@ -1,4 +1,4 @@
-package pisa
+package testing
 
 import (
 	"testing"
@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/jug/engineio"
+	"github.com/sarvalabs/moichain/jug/pisa"
 )
 
 func makefields(fields []*engineio.TypeField) *engineio.TypeFields {
@@ -83,15 +84,17 @@ func TestCallEncoder_EncodeInputs(t *testing.T) {
 				{Name: "a", Type: engineio.NewMappingType(engineio.PrimitiveString, engineio.TypeString)},
 			}),
 			map[string]any{
-				"a": map[string]any{"name": "Manish", "age": 23},
+				"a": map[any]any{"foo": "bar", "boo": "far"},
 			},
-			nil,
-			"invalid input data for 'a': call encoding does not support object types",
+			polo.Document{
+				"a": polo.Raw{14, 95, 6, 54, 102, 150, 1, 98, 111, 111, 102, 97, 114, 102, 111, 111, 98, 97, 114},
+			},
+			"",
 		},
 	}
 
 	for _, test := range tests {
-		callEncoder := CallEncoder(engineio.CallFields{Inputs: test.fields})
+		callEncoder := pisa.CallEncoder(engineio.CallFields{Inputs: test.fields})
 
 		doc, err := callEncoder.EncodeInputs(test.inputs)
 		require.Equal(t, test.encoded, doc)
@@ -155,7 +158,7 @@ func TestCallEncoder_DecodeOutputs(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		callEncoder := CallEncoder(engineio.CallFields{Outputs: test.fields})
+		callEncoder := pisa.CallEncoder(engineio.CallFields{Outputs: test.fields})
 
 		doc, err := callEncoder.DecodeOutputs(test.outputs)
 		require.Equal(t, test.decoded, doc)

@@ -1,0 +1,118 @@
+syntax  : 0.1.0
+engine  :
+  kind : PISA
+  flags: [ ]
+
+elements:
+  - ptr : 0
+    kind: state
+    deps: [ 1 ]
+    data:
+      kind  : persistent
+      fields:
+        - slot : 0
+          label: registry
+          type : map[string]Person
+
+  - ptr : 1
+    kind: class
+    data:
+      name  : Person
+      fields:
+        - slot : 0
+          label: name
+          type : string
+        - slot : 1
+          label: age
+          type : uint64
+        - slot : 2
+          label: gender
+          type : string
+
+  - ptr : 2
+    kind: routine
+    deps: [ 0, 1 ]
+    data:
+      name    : StorePerson!
+      kind    : invokable
+      accepts :
+        - slot : 0
+          label: person
+          type : Person
+      executes:
+        bin: [
+          0x10, 0x00, 0x00,         # accept $0 &0
+          0x42, 0x01, 0x00, 0x00,   # getfld $1 $0 &0
+          0x13, 0x02, 0x00,         # load $2 &0
+          0x41, 0x02, 0x01, 0x00,   # setidx $2 $1 $0
+          0x14, 0x02, 0x00,         # store $2 &0
+        ]
+
+  - ptr : 3
+    kind: routine
+    deps: [ 0, 1 ]
+    data:
+      name    : GetPerson
+      kind    : invokable
+      accepts :
+        - slot : 0
+          label: name
+          type : string
+      returns :
+        - slot : 0
+          label: person
+          type : Person
+      executes:
+        bin: [
+          0x13, 0x00, 0x00,         # load $0 &0
+          0x10, 0x01, 0x00,         # accept $1 &0
+          0x40, 0x02, 0x00, 0x01,   # getidx $2 $0 $1
+          0x11, 0x02, 0x00,         # return $2 &0
+        ]
+
+  - ptr : 4
+    kind: routine
+    deps: [ 1 ]
+    data:
+      name    : GetNameOf
+      kind    : invokable
+      accepts :
+        - slot : 0
+          label: person
+          type : Person
+      returns :
+        - slot : 0
+          label: name
+          type : string
+      executes:
+        bin: [
+          0x10, 0x00, 0x00,         # accept $0 &0
+          0x42, 0x01, 0x00, 0x00,   # getfld $1 $0 &0
+          0x11, 0x01, 0x00,         # return $1 &0
+        ]
+
+  - ptr : 5
+    kind: routine
+    deps: [ 1 ]
+    data:
+      name    : DoubleAge
+      kind    : invokable
+      accepts :
+        - slot : 0
+          label: person
+          type : Person
+      returns :
+        - slot : 0
+          label: person
+          type : Person
+      executes:
+        bin: [
+          0x10, 0x00, 0x00,         # accept $0 &0
+          0x42, 0x01, 0x00, 0x01,   # getfld $1 $0 &1
+          0x3C, 0x02, 0x01,         # copy $2 $1
+          0x59, 0x02, 0x02, 0x01,   # add $2 $2 $1
+          0x43, 0x00, 0x01, 0x02,   # setfld $0 &1 $2
+          0x11, 0x00, 0x00,         # return $0 &0
+        ]
+
+

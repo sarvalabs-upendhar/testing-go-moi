@@ -77,10 +77,22 @@ func (encoder CallEncoder) DecodeOutputs(outputs polo.Document) (map[string]any,
 // encodeValues encodes a value into a bytes, recursively resolving any internal type data
 func encodeValues(value any) ([]byte, error) {
 	switch val := value.(type) {
-	// todo: class support
 	// Object Type (ClassType)
 	case map[string]any:
-		return nil, errors.New("call encoding does not support object types")
+		document := make(polo.Document)
+
+		// For each field in the object
+		for field, v := range val {
+			// Encode field value
+			data, err := encodeValues(v)
+			if err != nil {
+				return nil, err
+			}
+
+			document.SetRaw(field, data)
+		}
+
+		return document.Bytes(), nil
 
 	// Map Type (MapType)
 	case map[any]any:

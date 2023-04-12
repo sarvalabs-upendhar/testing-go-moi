@@ -150,12 +150,17 @@ func NewValue(datatype *engineio.Datatype, data []byte) (Value, error) {
 			panic(fmt.Sprintf("unsupported datatype for value generation: %v", datatype))
 		}
 
+	// ListValue
+	case engineio.ArrayType, engineio.VarrayType:
+		return NewListValue(datatype, data)
+
 	// MapValue
 	case engineio.MappingType:
 		return NewMapValue(datatype, data)
 
-	case engineio.ArrayType, engineio.VarrayType:
-		return NewListValue(datatype, data)
+	// ClassValue
+	case engineio.ClassType:
+		return NewClassValue(datatype, data)
 
 	default:
 		panic(fmt.Sprintf("unsupported datatype for value generation: %v", datatype))

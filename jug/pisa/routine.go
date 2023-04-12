@@ -72,13 +72,13 @@ func (routine Routine) Execute(scope register.ExecutionScope, inputs register.Va
 }
 
 func (routine Routine) Exported() bool {
-	return IsExportedName(routine.Name)
+	return isExportedName(routine.Name)
 }
 
 func (routine Routine) Mutable() bool {
-	return IsMutableName(routine.Name)
+	return isMutableName(routine.Name)
 }
 
 func (routine Routine) Payable() bool {
-	return IsPayableName(routine.Name)
+	return isPayableName(routine.Name)
 }

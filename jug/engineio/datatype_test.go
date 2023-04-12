@@ -169,6 +169,16 @@ func TestDatatype_Equals(t *testing.T) {
 	})
 }
 
+type mockClassdefProvider struct {
+	classdefs map[string]*Datatype
+}
+
+func (m mockClassdefProvider) GetClassdef(name string) (*Datatype, bool) {
+	class, ok := m.classdefs[name]
+
+	return class, ok
+}
+
 func TestParseDatatype(t *testing.T) {
 	tests := []struct {
 		symbol   string
@@ -193,15 +203,21 @@ func TestParseDatatype(t *testing.T) {
 		{"[Type1", "invalid type data for array: missing end of enclosure: ']'", nil},
 		{"[20000000000000000000]address", "invalid type data for array: size must be a 64-bit unsigned integer", nil},
 		{"[56String]address", "invalid type data for array: size must be a 64-bit unsigned integer", nil},
-		{"[6]addr", "invalid type data for array: invalid element type: not a datatype", nil},
-		{"[]big", "invalid type data for sequence: invalid element type: not a datatype", nil},
+		{"[6]addr", "invalid type data for array: invalid element type: invalid class reference: 'addr' not found", nil},
+		{"[]big", "invalid type data for sequence: invalid element type: invalid class reference: 'big' not found", nil},
 		{"map{string, string}", "invalid type data for hashmap: missing start of enclosure: '['", nil},
 		{"map[StringType]", "invalid type data for hashmap: invalid key type: must be a valid primitive", nil},
-		{"map[uint64]StringType", "invalid type data for hashmap: invalid value type: not a datatype", nil},
+		{
+			"map[uint64]StringType",
+			"invalid type data for hashmap: invalid value type: invalid class reference: 'StringType' not found",
+			nil,
+		},
 	}
 
+	provider := mockClassdefProvider{classdefs: map[string]*Datatype{}}
+
 	for _, test := range tests {
-		_, err := ParseDatatype(test.symbol)
+		_, err := ParseDatatype(test.symbol, provider)
 		if test.err == "" {
 			require.NoError(t, err)
 		} else {

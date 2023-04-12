@@ -140,6 +140,9 @@ const (
 	// 	- SETIDX <reg:sequence[A]> <reg:int64> <reg:A>
 	// 	- SETIDX <reg:mapping[A->B]> <reg:A> <reg:B>
 	SETIDX OpCode = 0x41
+
+	GETFLD OpCode = 0x42
+	SETFLD OpCode = 0x43
 )
 
 // comparison and arithmetic operators
@@ -237,6 +240,8 @@ var opCodeToString = map[OpCode]string{
 
 	GETIDX: "GETIDX",
 	SETIDX: "SETIDX",
+	GETFLD: "GETFLD",
+	SETFLD: "SETFLD",
 
 	LT:  "LT",
 	LE:  "LE",
@@ -304,6 +309,8 @@ var stringToOpCode = map[string]OpCode{
 
 	"GETIDX": GETIDX,
 	"SETIDX": SETIDX,
+	"GETFLD": GETFLD,
+	"SETFLD": SETFLD,
 
 	"LT":  LT,
 	"LE":  LE,
