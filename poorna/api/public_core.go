@@ -30,7 +30,7 @@ func NewPublicCoreAPI(ixpool IxPool, chain ChainManager, sm StateManager) *Publi
 
 func getTesseractArgs(address string, options ptypes.TesseractNumberOrHash) *ptypes.TesseractArgs {
 	return &ptypes.TesseractArgs{
-		From:    address,
+		Address: address,
 		Options: options,
 	}
 }
@@ -80,7 +80,7 @@ func (p *PublicCoreAPI) getTesseract(args *ptypes.TesseractArgs) (*types.Tessera
 
 	height, err := args.Options.Number()
 	if err == nil {
-		return p.getTesseractByHeight(args.From, height, args.WithInteractions)
+		return p.getTesseractByHeight(args.Address, height, args.WithInteractions)
 	}
 
 	if errors.Is(err, types.ErrEmptyHeight) {
@@ -102,7 +102,7 @@ func (p *PublicCoreAPI) GetRPCTesseract(args *ptypes.TesseractArgs) (*ptypes.RPC
 
 // GetContextInfo will fetch the context associated with the given address
 func (p *PublicCoreAPI) GetContextInfo(args *ptypes.ContextInfoArgs) ([]string, []string, error) {
-	ts, err := p.getTesseract(getTesseractArgs(args.From, args.Options))
+	ts, err := p.getTesseract(getTesseractArgs(args.Address, args.Options))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -124,7 +124,7 @@ func (p *PublicCoreAPI) GetBalance(args *ptypes.BalArgs) (*big.Int, error) {
 		return nil, types.ErrInvalidAssetID
 	}
 
-	ts, err := p.getTesseract(getTesseractArgs(args.From, args.Options))
+	ts, err := p.getTesseract(getTesseractArgs(args.Address, args.Options))
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +134,7 @@ func (p *PublicCoreAPI) GetBalance(args *ptypes.BalArgs) (*big.Int, error) {
 
 // GetTDU will return the total digital utility associated with address
 func (p *PublicCoreAPI) GetTDU(args *ptypes.TesseractArgs) (types.AssetMap, error) {
-	ts, err := p.getTesseract(getTesseractArgs(args.From, args.Options))
+	ts, err := p.getTesseract(getTesseractArgs(args.Address, args.Options))
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +161,7 @@ func (p *PublicCoreAPI) GetInteractionReceipt(args *ptypes.ReceiptArgs) (*types.
 
 // GetInteractionCount returns the number of interactions sent for the given address
 func (p *PublicCoreAPI) GetInteractionCount(args *ptypes.InteractionCountArgs) (uint64, error) {
-	ts, err := p.getTesseract(getTesseractArgs(args.From, args.Options))
+	ts, err := p.getTesseract(getTesseractArgs(args.Address, args.Options))
 	if err != nil {
 		return 0, err
 	}
@@ -172,7 +172,7 @@ func (p *PublicCoreAPI) GetInteractionCount(args *ptypes.InteractionCountArgs) (
 // GetPendingInteractionCount returns the number of interactions sent for the given address.
 // Including the pending interactions in IxPool.
 func (p *PublicCoreAPI) GetPendingInteractionCount(args *ptypes.InteractionCountArgs) (uint64, error) {
-	addr, err := utils.ValidateAddress(args.From)
+	addr, err := utils.ValidateAddress(args.Address)
 	if err != nil {
 		return 0, err
 	}

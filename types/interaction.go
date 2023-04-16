@@ -58,21 +58,21 @@ func (ixData *IxData) Copy() IxData {
 }
 
 type IxInput struct {
-	Type  IxType
-	Nonce uint64
+	Type  IxType `json:"type"`
+	Nonce uint64 `json:"nonce"`
 
-	Sender   Address
-	Receiver Address
-	Payer    Address
+	Sender   Address `json:"sender"`
+	Receiver Address `json:"options"`
+	Payer    Address `json:"payer"`
 
-	TransferValues  map[AssetID]*big.Int
-	PerceivedValues map[AssetID]*big.Int
-	PerceivedProofs []byte
+	TransferValues  map[AssetID]*big.Int `json:"transfer_values"`
+	PerceivedValues map[AssetID]*big.Int `json:"perceived_values"`
+	PerceivedProofs []byte               `json:"perceived_proofs"`
 
-	FuelLimit *big.Int
-	FuelPrice *big.Int
+	FuelLimit *big.Int `json:"fuel_limit"`
+	FuelPrice *big.Int `json:"fuel_price"`
 
-	Payload json.RawMessage
+	Payload json.RawMessage `json:"payload"`
 }
 
 func (ixInput *IxInput) Copy() IxInput {
@@ -109,9 +109,9 @@ func (ixInput *IxInput) Copy() IxInput {
 }
 
 type IxCompute struct {
-	Mode         int
-	Hash         []byte
-	ComputeNodes []kramaid.KramaID
+	Mode         int               `json:"mode"`
+	Hash         []byte            `json:"hash"`
+	ComputeNodes []kramaid.KramaID `json:"compute_nodes"`
 }
 
 func (ixCompute *IxCompute) Copy() IxCompute {
@@ -128,8 +128,8 @@ func (ixCompute *IxCompute) Copy() IxCompute {
 }
 
 type IxTrust struct {
-	MTQ        uint
-	TrustNodes []kramaid.KramaID
+	MTQ        uint              `json:"mtq"`
+	TrustNodes []kramaid.KramaID `json:"trust_nodes"`
 }
 
 func (ixTrust *IxTrust) Copy() IxTrust {

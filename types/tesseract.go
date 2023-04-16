@@ -32,10 +32,10 @@ func (ctx ContextDelta) Copy() ContextDelta {
 }
 
 type DeltaGroup struct {
-	Role             ParticipantRole
-	BehaviouralNodes []kramaid.KramaID
-	RandomNodes      []kramaid.KramaID
-	ReplacedNodes    []kramaid.KramaID
+	Role             ParticipantRole   `json:"role"`
+	BehaviouralNodes []kramaid.KramaID `json:"behavioural_nodes"`
+	RandomNodes      []kramaid.KramaID `json:"random_nodes"`
+	ReplacedNodes    []kramaid.KramaID `json:"replaced_nodes"`
 }
 
 func (d DeltaGroup) Copy() *DeltaGroup {
@@ -54,9 +54,9 @@ func (d DeltaGroup) Copy() *DeltaGroup {
 }
 
 type ContextLockInfo struct {
-	ContextHash   Hash
-	Height        uint64
-	TesseractHash Hash
+	ContextHash   Hash   `json:"context_hash"`
+	Height        uint64 `json:"height"`
+	TesseractHash Hash   `json:"tesseract_hash"`
 }
 
 type Tesseract struct {
@@ -120,12 +120,12 @@ func (h *TesseractHeader) Hash() (Hash, error) {
 }
 
 type TesseractBody struct {
-	StateHash       Hash
-	ContextHash     Hash
-	InteractionHash Hash
-	ReceiptHash     Hash
-	ContextDelta    ContextDelta // Some Problem here
-	ConsensusProof  PoXCData
+	StateHash       Hash         `json:"state_hash"`
+	ContextHash     Hash         `json:"context_hash"`
+	InteractionHash Hash         `json:"interaction_hash"`
+	ReceiptHash     Hash         `json:"receipt_hash"`
+	ContextDelta    ContextDelta `json:"context_delta"` // Some Problem here
+	ConsensusProof  PoXCData     `json:"consensus_proof"`
 }
 
 func (b *TesseractBody) Copy() TesseractBody {
@@ -146,9 +146,9 @@ func (b *TesseractBody) Hash() (Hash, error) {
 }
 
 type PoXCData struct {
-	BinaryHash   Hash
-	IdentityHash Hash
-	ICSHash      Hash
+	BinaryHash   Hash `json:"binary_hash"`
+	IdentityHash Hash `json:"identity_hash"`
+	ICSHash      Hash `json:"ics_hash"`
 }
 
 type CommitData struct {

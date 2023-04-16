@@ -196,14 +196,14 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 		{
 			name: "Invalid address",
 			args: &ptypes.IxPoolArgs{
-				From: "68510188a88ff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+				Address: "68510188a88ff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
 			},
 			expectedErr: types.ErrInvalidAddress,
 		},
 		{
 			name: "Ix pool with no interactions",
 			args: &ptypes.IxPoolArgs{
-				From: addressList[0].Hex(),
+				Address: addressList[0].Hex(),
 			},
 			accounts: map[types.Address]*account{
 				addressList[0]: {
@@ -220,7 +220,7 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 		{
 			name: "Ix pool with one pending interaction",
 			args: &ptypes.IxPoolArgs{
-				From: addressList[0].Hex(),
+				Address: addressList[0].Hex(),
 			},
 			accounts: map[types.Address]*account{
 				addressList[0]: {
@@ -248,7 +248,7 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 		{
 			name: "Ix pool with one queued interaction",
 			args: &ptypes.IxPoolArgs{
-				From: addressList[0].Hex(),
+				Address: addressList[0].Hex(),
 			},
 			accounts: map[types.Address]*account{
 				addressList[0]: {
@@ -276,7 +276,7 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 		{
 			name: "Ix pool with multiple pending and queued interactions",
 			args: &ptypes.IxPoolArgs{
-				From: addressList[1].Hex(),
+				Address: addressList[1].Hex(),
 			},
 			accounts: map[types.Address]*account{
 				addressList[0]: {
@@ -652,21 +652,21 @@ func TestPublicIXPoolAPI_WaitTime(t *testing.T) {
 		{
 			name: "Invalid address",
 			args: &ptypes.IxPoolArgs{
-				From: "68510188a88ff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+				Address: "68510188a88ff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
 			},
 			expectedErr: types.ErrInvalidAddress,
 		},
 		{
 			name: "Account without state",
 			args: &ptypes.IxPoolArgs{
-				From: tests.RandomAddress(t).Hex(),
+				Address: tests.RandomAddress(t).Hex(),
 			},
 			expectedErr: types.ErrAccountNotFound,
 		},
 		{
 			name: "Account with state",
 			args: &ptypes.IxPoolArgs{
-				From: address.Hex(),
+				Address: address.Hex(),
 			},
 			expectedWaitTime: waitTime,
 			expectedErr:      nil,

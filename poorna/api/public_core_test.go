@@ -252,7 +252,7 @@ func TestPublicCoreAPI_GetRPCTesseract(t *testing.T) {
 		{
 			name: "get rpc tesseract by height with interactions",
 			args: ptypes.TesseractArgs{
-				From:             ts.Address().String(),
+				Address:          ts.Address().String(),
 				WithInteractions: true,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &argsHeight,
@@ -473,7 +473,7 @@ func TestPublicCoreAPI_GetTesseract(t *testing.T) {
 		{
 			name: "get Tesseract by height with interactions",
 			args: ptypes.TesseractArgs{
-				From:             ts[0].Address().String(),
+				Address:          ts[0].Address().String(),
 				WithInteractions: true,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &height,
@@ -484,7 +484,7 @@ func TestPublicCoreAPI_GetTesseract(t *testing.T) {
 		{
 			name: "get tesseract by height tesseract without interactions",
 			args: ptypes.TesseractArgs{
-				From:             ts[0].Address().String(),
+				Address:          ts[0].Address().String(),
 				WithInteractions: false,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &height,
@@ -495,7 +495,7 @@ func TestPublicCoreAPI_GetTesseract(t *testing.T) {
 		{
 			name: "get tesseract by hash with interactions",
 			args: ptypes.TesseractArgs{
-				From:             ts[1].Address().String(),
+				Address:          ts[1].Address().String(),
 				WithInteractions: true,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash,
@@ -506,7 +506,7 @@ func TestPublicCoreAPI_GetTesseract(t *testing.T) {
 		{
 			name: "get tesseract by hash tesseract without interactions",
 			args: ptypes.TesseractArgs{
-				From:             ts[1].Address().String(),
+				Address:          ts[1].Address().String(),
 				WithInteractions: false,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash,
@@ -557,7 +557,7 @@ func TestPublicCoreAPI_GetBalance(t *testing.T) {
 		{
 			name: "should return error if failed to fetch balance",
 			args: ptypes.BalArgs{
-				From:    address,
+				Address: address,
 				AssetID: string(assetID),
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
@@ -568,7 +568,7 @@ func TestPublicCoreAPI_GetBalance(t *testing.T) {
 		{
 			name: "should return error if asset Id is invalid",
 			args: ptypes.BalArgs{
-				From:    address,
+				Address: address,
 				AssetID: "01801995a34ceda4db744a5b1363bega0f2019e7481699c861ad7d1263c95473a2d9",
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash,
@@ -579,7 +579,7 @@ func TestPublicCoreAPI_GetBalance(t *testing.T) {
 		{
 			name: "fetched balance successfully",
 			args: ptypes.BalArgs{
-				From:    address,
+				Address: address,
 				AssetID: string(assetID),
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash,
@@ -629,7 +629,7 @@ func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
 		{
 			name: "fetched context info successfully",
 			args: ptypes.ContextInfoArgs{
-				From: address,
+				Address: address,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash[0],
 				},
@@ -648,7 +648,7 @@ func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
 		{
 			name: "should return error if context not found",
 			args: ptypes.ContextInfoArgs{
-				From: ts[1].Address().String(),
+				Address: ts[1].Address().String(),
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash[1],
 				},
@@ -698,7 +698,7 @@ func TestPublicCoreAPI_GetTDU(t *testing.T) {
 		{
 			name: "should return error if tesseract not found",
 			args: ptypes.TesseractArgs{
-				From: address,
+				Address: address,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
 				},
@@ -708,7 +708,7 @@ func TestPublicCoreAPI_GetTDU(t *testing.T) {
 		{
 			name: "should return error if TDU not found",
 			args: ptypes.TesseractArgs{
-				From: address,
+				Address: address,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash[1],
 				},
@@ -718,7 +718,7 @@ func TestPublicCoreAPI_GetTDU(t *testing.T) {
 		{
 			name: "fetched TDU successfully",
 			args: ptypes.TesseractArgs{
-				From: address,
+				Address: address,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash[0],
 				},
@@ -769,7 +769,7 @@ func TestPublicCoreAPI_GetInteractionCount(t *testing.T) {
 		{
 			name: "interaction count fetched successfully",
 			args: &ptypes.InteractionCountArgs{
-				From: ts.Address().String(),
+				Address: ts.Address().String(),
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash,
 				},
@@ -820,7 +820,7 @@ func TestPublicIXPoolAPI_GetPendingInteractionCount(t *testing.T) {
 		{
 			name: "Valid address with state",
 			args: &ptypes.InteractionCountArgs{
-				From: address.String(),
+				Address: address.String(),
 			},
 			expectedIxCount: 5,
 			expectedErr:     nil,
@@ -828,7 +828,7 @@ func TestPublicIXPoolAPI_GetPendingInteractionCount(t *testing.T) {
 		{
 			name: "Valid address without state",
 			args: &ptypes.InteractionCountArgs{
-				From: tests.RandomAddress(t).String(),
+				Address: tests.RandomAddress(t).String(),
 			},
 			expectedIxCount: 0,
 			expectedErr:     types.ErrAccountNotFound,
@@ -836,7 +836,7 @@ func TestPublicIXPoolAPI_GetPendingInteractionCount(t *testing.T) {
 		{
 			name: "Invalid address",
 			args: &ptypes.InteractionCountArgs{
-				From: "68510188a88ff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+				Address: "68510188a88ff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
 			},
 			expectedIxCount: 0,
 			expectedErr:     types.ErrInvalidAddress,

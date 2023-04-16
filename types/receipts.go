@@ -8,12 +8,12 @@ import (
 )
 
 type Receipt struct {
-	IxType        int
-	IxHash        Hash
-	FuelUsed      uint64
-	StateHashes   map[Address]Hash
-	ContextHashes map[Address]Hash
-	ExtraData     json.RawMessage
+	IxType        int              `json:"ix_type"`
+	IxHash        Hash             `json:"ix_hash"`
+	FuelUsed      uint64           `json:"fuel_used"`
+	StateHashes   map[Address]Hash `json:"state_hashes"`
+	ContextHashes map[Address]Hash `json:"context_hashes"`
+	ExtraData     json.RawMessage  `json:"extra_data"`
 }
 
 func (r *Receipt) Copy() *Receipt {

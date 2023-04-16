@@ -246,7 +246,7 @@ func testTesseract(t *testing.T, client *Client) {
 		{
 			name: "fetch tesseract with interactions",
 			tesseractArgs: &ptypes.TesseractArgs{
-				From:             sender.Hex(),
+				Address:          sender.Hex(),
 				WithInteractions: true,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &deployLogicHeight,
@@ -256,7 +256,7 @@ func testTesseract(t *testing.T, client *Client) {
 		{
 			name: "fetch tesseract without interactions",
 			tesseractArgs: &ptypes.TesseractArgs{
-				From:             sender.Hex(),
+				Address:          sender.Hex(),
 				WithInteractions: false,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &deployLogicHeight,
@@ -266,7 +266,7 @@ func testTesseract(t *testing.T, client *Client) {
 		{
 			name: "fetch genesis tesseract",
 			tesseractArgs: &ptypes.TesseractArgs{
-				From:             sender.Hex(),
+				Address:          sender.Hex(),
 				WithInteractions: false,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &genesisHeight,
@@ -276,7 +276,7 @@ func testTesseract(t *testing.T, client *Client) {
 		{
 			name: "invalid tesseract number",
 			tesseractArgs: &ptypes.TesseractArgs{
-				From:             sender.Hex(),
+				Address:          sender.Hex(),
 				WithInteractions: false,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &invalidHeight,
@@ -418,7 +418,7 @@ func testGetBalance(t *testing.T, client *Client) {
 		{
 			name: "fetch sender balance at create asset height",
 			balanceArgs: &ptypes.BalArgs{
-				From:    sender.Hex(),
+				Address: sender.Hex(),
 				AssetID: assetID,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &createAssetHeight,
@@ -429,7 +429,7 @@ func testGetBalance(t *testing.T, client *Client) {
 		{
 			name: "fetch sender balance at sender transfer token height",
 			balanceArgs: &ptypes.BalArgs{
-				From:    sender.Hex(),
+				Address: sender.Hex(),
 				AssetID: assetID,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &transferTokensHeight,
@@ -440,7 +440,7 @@ func testGetBalance(t *testing.T, client *Client) {
 		{
 			name: "fetch receiver balance at receiver transfer token height",
 			balanceArgs: &ptypes.BalArgs{
-				From:    receiver,
+				Address: receiver,
 				AssetID: assetID,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &receiverTokenTransferHeight,
@@ -451,7 +451,7 @@ func testGetBalance(t *testing.T, client *Client) {
 		{
 			name: "get balance returns error for unknown asset ID",
 			balanceArgs: &ptypes.BalArgs{
-				From:    sender.Hex(),
+				Address: sender.Hex(),
 				AssetID: "0000aa7ce9806f914c3fe732d76f920d6d56f0bac776a78157ca91cbe85b20f969c9",
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
@@ -491,7 +491,7 @@ func testTDU(t *testing.T, client *Client) {
 		{
 			name: "fetch TDU for existing address",
 			tesseractArgs: &ptypes.TesseractArgs{
-				From: sender.Hex(),
+				Address: sender.Hex(),
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &createAssetHeight,
 				},
@@ -500,7 +500,7 @@ func testTDU(t *testing.T, client *Client) {
 		{
 			name: "fetch TDU for non-existing address",
 			tesseractArgs: &ptypes.TesseractArgs{
-				From: tests.RandomAddress(t).Hex(),
+				Address: tests.RandomAddress(t).Hex(),
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
@@ -540,7 +540,7 @@ func testGetContextInfo(t *testing.T, client *Client) {
 		{
 			name: "fetch context info for existing address",
 			contextInfoArgs: &ptypes.ContextInfoArgs{
-				From: sender.Hex(),
+				Address: sender.Hex(),
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
@@ -549,7 +549,7 @@ func testGetContextInfo(t *testing.T, client *Client) {
 		{
 			name: "fetch context info for non-existing address",
 			contextInfoArgs: &ptypes.ContextInfoArgs{
-				From: tests.RandomAddress(t).Hex(),
+				Address: tests.RandomAddress(t).Hex(),
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
@@ -628,7 +628,7 @@ func testInteractionCount(t *testing.T, client *Client) {
 		{
 			name: "fetch interaction count for existing address",
 			interactionCountArgs: &ptypes.InteractionCountArgs{
-				From: sender.Hex(),
+				Address: sender.Hex(),
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &transferTokensHeight,
 				},
@@ -637,7 +637,7 @@ func testInteractionCount(t *testing.T, client *Client) {
 		{
 			name: "fetch interaction count for non-existing address",
 			interactionCountArgs: &ptypes.InteractionCountArgs{
-				From: tests.RandomAddress(t).Hex(),
+				Address: tests.RandomAddress(t).Hex(),
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
@@ -674,7 +674,7 @@ func testPendingInteractionCount(t *testing.T, client *Client) {
 		{
 			name: "fetch pending interaction count for existing address",
 			interactionCountArgs: &ptypes.InteractionCountArgs{
-				From: sender.Hex(),
+				Address: sender.Hex(),
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
@@ -683,7 +683,7 @@ func testPendingInteractionCount(t *testing.T, client *Client) {
 		{
 			name: "fetch pending interaction count for non-existing address",
 			interactionCountArgs: &ptypes.InteractionCountArgs{
-				From: tests.RandomAddress(t).Hex(),
+				Address: tests.RandomAddress(t).Hex(),
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
@@ -922,14 +922,14 @@ func testContentFrom(t *testing.T, client *Client) {
 		{
 			name: "fetch content from for existing address",
 			ixPoolArgs: &ptypes.IxPoolArgs{
-				From: sender.Hex(),
+				Address: sender.Hex(),
 			},
 			expectedCount: 1,
 		},
 		{
 			name: "fetch  content from for non-existing address",
 			ixPoolArgs: &ptypes.IxPoolArgs{
-				From: tests.RandomAddress(t).Hex(),
+				Address: tests.RandomAddress(t).Hex(),
 			},
 			expectedCount: 0,
 		},
@@ -1010,13 +1010,13 @@ func testWaitTime(t *testing.T, client *Client) {
 		{
 			name: "fetch wait time for existing address",
 			ixPoolArgs: &ptypes.IxPoolArgs{
-				From: sender.Hex(),
+				Address: sender.Hex(),
 			},
 		},
 		{
 			name: "fetch wait time for non-existing address",
 			ixPoolArgs: &ptypes.IxPoolArgs{
-				From: tests.RandomAddress(t).Hex(),
+				Address: tests.RandomAddress(t).Hex(),
 			},
 			expectedError: errors.New("account not found"),
 		},

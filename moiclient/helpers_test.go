@@ -107,7 +107,7 @@ func getTesseract(t *testing.T, client *Client, sender string, height *int64) *p
 	t.Helper()
 
 	args := &ptypes.TesseractArgs{
-		From:             sender,
+		Address:          sender,
 		WithInteractions: true,
 		Options: ptypes.TesseractNumberOrHash{
 			TesseractNumber: height,

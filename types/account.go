@@ -15,15 +15,15 @@ const (
 )
 
 type Account struct {
-	Nonce   uint64
-	AccType AccountType
+	Nonce   uint64      `json:"nonce"`
+	AccType AccountType `json:"acc_type"`
 
-	Balance        Hash
-	AssetApprovals Hash
-	ContextHash    Hash
-	StorageRoot    Hash
-	LogicRoot      Hash
-	FileRoot       Hash
+	Balance        Hash `json:"balance"`
+	AssetApprovals Hash `json:"asset_approvals"`
+	ContextHash    Hash `json:"context_hash"`
+	StorageRoot    Hash `json:"storage_root"`
+	LogicRoot      Hash `json:"logic_root"`
+	FileRoot       Hash `json:"file_root"`
 }
 
 func (a *Account) Bytes() ([]byte, error) {
@@ -55,15 +55,15 @@ func (acc *Accounts) Bytes() ([]byte, error) {
 }
 
 type AccountMetaInfo struct {
-	Type AccountType
-	Mode string
+	Type AccountType `json:"type"`
+	Mode string      `json:"mode"`
 
-	Address Address
-	Height  uint64
+	Address Address `json:"address"`
+	Height  uint64  `json:"height"`
 
-	TesseractHash Hash
-	LatticeExists bool
-	StateExists   bool
+	TesseractHash Hash `json:"tesseract_hash"`
+	LatticeExists bool `json:"lattice_exists"`
+	StateExists   bool `json:"state_exists"`
 }
 
 func (ami *AccountMetaInfo) Bytes() ([]byte, error) {

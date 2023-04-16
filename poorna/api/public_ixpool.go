@@ -73,7 +73,7 @@ func (p *PublicIXPoolAPI) Content() (*ContentResponse, error) {
 
 // ContentFrom returns the interactions present in the IxPool based on the given address.
 func (p *PublicIXPoolAPI) ContentFrom(args *ptypes.IxPoolArgs) (*ContentFromResponse, error) {
-	addr, err := utils.ValidateAddress(args.From)
+	addr, err := utils.ValidateAddress(args.Address)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +183,7 @@ func (p *PublicIXPoolAPI) Inspect() (*InspectResponse, error) {
 
 // WaitTime returns the wait time for an account in IxPool, based on the queried address.
 func (p *PublicIXPoolAPI) WaitTime(args *ptypes.IxPoolArgs) (int64, error) {
-	addr, err := utils.ValidateAddress(args.From)
+	addr, err := utils.ValidateAddress(args.Address)
 	if err != nil {
 		return 0, err
 	}

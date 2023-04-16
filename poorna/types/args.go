@@ -37,56 +37,56 @@ func (t *TesseractNumberOrHash) Hash() (string, bool) {
 }
 
 type RPCInteraction struct {
-	Input     types.IxInput
-	Compute   types.IxCompute
-	Trust     types.IxTrust
-	Hash      types.Hash
-	Signature []byte
+	Input     types.IxInput   `json:"input"`
+	Compute   types.IxCompute `json:"compute"`
+	Trust     types.IxTrust   `json:"trust"`
+	Hash      types.Hash      `json:"hash"`
+	Signature []byte          `json:"signature"`
 }
 
 type RPCInteractions []*RPCInteraction
 
 type RPCTesseractParts struct {
-	Total     int32
-	Addresses []types.Address
-	Hashes    []types.Hash
-	Heights   []uint64
+	Total     int32           `json:"total"`
+	Addresses []types.Address `json:"addresses"`
+	Hashes    []types.Hash    `json:"hashes"`
+	Heights   []uint64        `json:"heights"`
 }
 
 type RPCTesseractGridID struct {
-	Hash  types.Hash
-	Parts *RPCTesseractParts
+	Hash  types.Hash         `json:"hash"`
+	Parts *RPCTesseractParts `json:"parts"`
 }
 
 type RPCCommitData struct {
-	Round           int32
-	CommitSignature []byte
-	VoteSet         *types.ArrayOfBits
-	EvidenceHash    types.Hash
-	GridID          *RPCTesseractGridID
+	Round           int32               `json:"round"`
+	CommitSignature []byte              `json:"commit_signature"`
+	VoteSet         *types.ArrayOfBits  `json:"vote_set"`
+	EvidenceHash    types.Hash          `json:"evidence_hash"`
+	GridID          *RPCTesseractGridID `json:"grid_id"`
 }
 
 type RPCHeader struct {
-	Address     types.Address
-	PrevHash    types.Hash
-	Height      uint64
-	FuelUsed    uint64
-	FuelLimit   uint64
-	BodyHash    types.Hash
-	GridHash    types.Hash
-	Operator    string
-	ClusterID   string
-	Timestamp   int64
-	ContextLock map[types.Address]types.ContextLockInfo
-	Extra       RPCCommitData
+	Address     types.Address                           `json:"address"`
+	PrevHash    types.Hash                              `json:"prev_hash"`
+	Height      uint64                                  `json:"height"`
+	FuelUsed    uint64                                  `json:"fuel_used"`
+	FuelLimit   uint64                                  `json:"fuel_limit"`
+	BodyHash    types.Hash                              `json:"body_hash"`
+	GridHash    types.Hash                              `json:"grid_hash"`
+	Operator    string                                  `json:"operator"`
+	ClusterID   string                                  `json:"cluster_id"`
+	Timestamp   int64                                   `json:"timestamp"`
+	ContextLock map[types.Address]types.ContextLockInfo `json:"context_lock"`
+	Extra       RPCCommitData                           `json:"extra"`
 }
 
 type RPCTesseract struct {
-	Header   RPCHeader
-	Body     types.TesseractBody
-	Ixns     RPCInteractions
-	Receipts types.Receipts
-	Seal     []byte
+	Header   RPCHeader           `json:"header"`
+	Body     types.TesseractBody `json:"body"`
+	Ixns     RPCInteractions     `json:"ixns"`
+	Receipts types.Receipts      `json:"receipts"`
+	Seal     []byte              `json:"seal"`
 }
 
 func (ts *RPCTesseract) Address() types.Address {
@@ -99,13 +99,13 @@ func (ts *RPCTesseract) Height() uint64 {
 
 // TesseractArgs is an argument wrapper for retrieving the latest Tesseract
 type TesseractArgs struct {
-	From             string                `json:"from"` // Address for which to retrieve the latest Tesseract
+	Address          string                `json:"address"` // Address for which to retrieve the latest Tesseract
 	WithInteractions bool                  `json:"with_interactions"`
 	Options          TesseractNumberOrHash `json:"options"`
 }
 
 type ContextInfoArgs struct {
-	From    string                `json:"from"` // Address for which to retrieve the latest Tesseract
+	Address string                `json:"address"` // Address for which to retrieve the latest Tesseract
 	Options TesseractNumberOrHash `json:"options"`
 }
 
@@ -115,7 +115,7 @@ type TesseractByHashArgs struct {
 }
 
 type TesseractByHeightArgs struct {
-	From             string `json:"from"`
+	Address          string `json:"address"`
 	Height           uint64 `json:"height"`
 	WithInteractions bool   `json:"with_interactions"`
 }
@@ -125,12 +125,12 @@ type AssetDescriptorArgs struct {
 }
 
 type InteractionCountArgs struct {
-	From    string                `json:"from"`
+	Address string                `json:"address"`
 	Options TesseractNumberOrHash `json:"options"`
 }
 
 type IxPoolArgs struct {
-	From string `json:"from"`
+	Address string `json:"address"`
 }
 
 type InspectArgs struct{}
@@ -147,7 +147,7 @@ type DebugArgs struct {
 
 type GetStorageArgs struct {
 	LogicID    string                `json:"logic_id"`
-	StorageKey string                `json:"storage-key"`
+	StorageKey string                `json:"storage_key"`
 	Options    TesseractNumberOrHash `json:"options"`
 }
 
@@ -164,8 +164,8 @@ type LogicManifestArgs struct {
 
 // BalArgs is an argument wrapper for retrieving balance of an asset
 type BalArgs struct {
-	From    string                `json:"from"`    // Address for which to retrieve the balance
-	AssetID string                `json:"assetid"` // Asset for which to retrieve balance
+	Address string                `json:"address"`  // Address for which to retrieve the balance
+	AssetID string                `json:"asset_id"` // Asset for which to retrieve balance
 	Options TesseractNumberOrHash `json:"options"`
 }
 
@@ -225,27 +225,27 @@ type Response struct {
 
 // ContextResponse is response object for fetching context info
 type ContextResponse struct {
-	BehaviourNodes []string
-	RandomNodes    []string
-	StorageNodes   []string
+	BehaviourNodes []string `json:"behaviour_nodes"`
+	RandomNodes    []string `json:"random_nodes"`
+	StorageNodes   []string `json:"storage_nodes"`
 }
 
 // ReceiptArgs is an argument wrapper for retrieving the receipt of an interaction
 type ReceiptArgs struct {
-	Hash string
+	Hash string `json:"hash"`
 }
 
 // InteractionArg is a struct that represents a single interaction
 type InteractionArg struct {
-	Nonce     uint64
-	Type      uint64
-	Sender    string
-	Receiver  string
-	Cost      *big.Int
-	FuelPrice *big.Int
-	FuelLimit *big.Int
-	Input     string
-	Hash      string
+	Nonce     uint64   `json:"nonce"`
+	Type      uint64   `json:"type"`
+	Sender    string   `json:"sender"`
+	Receiver  string   `json:"receiver"`
+	Cost      *big.Int `json:"cost"`
+	FuelPrice *big.Int `json:"fuel_price"`
+	FuelLimit *big.Int `json:"fuel_limit"`
+	Input     string   `json:"input"`
+	Hash      string   `json:"hash"`
 }
 
 // NewInteractionArg is a contructor function that generates and returns a new InteractionArg for a given Interaction
