@@ -741,12 +741,12 @@ func SignBytes(t *testing.T, msg []byte) (sigBytes, pk []byte) {
 	return sigBytes, pk
 }
 
-// Reads the ERC20 JSON Manifest and returns it as POLO encoded hex string
-func ReadERC20Manifest(t *testing.T) []byte {
+// ReadERC20Manifest Reads the ERC20 JSON Manifest and returns it as POLO encoded hex string
+func ReadERC20Manifest(t *testing.T, filePath string) []byte {
 	t.Helper()
 
 	// Read erc20.json manifest from jug/manifests
-	data, err := ioutil.ReadFile("./../../jug/manifests/erc20.json")
+	data, err := ioutil.ReadFile(filePath)
 	require.NoError(t, err)
 
 	// Register the PISA element registry with the EngineIO package

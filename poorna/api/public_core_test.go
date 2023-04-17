@@ -933,7 +933,7 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 	logicID := getLogicID(t, ts.Address())
 	logicIDWithoutState := getLogicID(t, tests.RandomAddress(t))
 
-	poloManifest := tests.ReadERC20Manifest(t)
+	poloManifest := tests.ReadERC20Manifest(t, "./../../jug/manifests/erc20.json")
 	s.setLogicManifest(logicID.Hex(), poloManifest)
 
 	jsonManifest := tests.GetJSONManifest(t)

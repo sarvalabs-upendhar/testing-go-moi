@@ -37,7 +37,7 @@ var (
 	ixnPendingCount      = 10
 )
 
-// makeHTTPRequest takes method, args and makes an HTTP POST request to node http://0.0.0.0:1600,
+// makeHTTPRequest takes method, args and makes an HTTP POST request to node specified by url constant
 // returning a response with data, status, and error.
 func makeHTTPRequest(t *testing.T, method string, args interface{}) *ptypes.Response {
 	t.Helper()
@@ -55,7 +55,7 @@ func makeHTTPRequest(t *testing.T, method string, args interface{}) *ptypes.Resp
 	jsonData, err := json.Marshal(values)
 	require.NoError(t, err)
 
-	httpResponse, err := http.Post("http://0.0.0.0:1600", "application/json", bytes.NewBuffer(jsonData))
+	httpResponse, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
 	require.NoError(t, err)
 
 	// status should be >= 200 && < 300
@@ -82,7 +82,7 @@ func getIXArgsForLogicDeployment(t *testing.T) *ptypes.SendIXArgs {
 	t.Helper()
 
 	logicDeployArgs := &ptypes.LogicDeployArgs{
-		Manifest: hex.EncodeToString(tests.ReadERC20Manifest(t)),
+		Manifest: hex.EncodeToString(tests.ReadERC20Manifest(t, "./../jug/manifests/erc20.json")),
 		Callsite: "Seeder!",
 		Calldata: "0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd8ee6a29ec4" +
 			"42dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49",
