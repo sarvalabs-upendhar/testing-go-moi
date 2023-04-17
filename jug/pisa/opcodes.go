@@ -1,264 +1,374 @@
 package pisa
 
 import (
-	"bytes"
 	"fmt"
 )
 
 // OpCode represents a PISA Opcode
 type OpCode byte
 
-// runtime operations
+// Control Flow Opcodes
 const (
-	// TERM halts code execution
+	// TERM [0] Terminate execution
 	TERM OpCode = 0x0
-	// DEST marks a valid jump destination
-	//  - JUMP <jump:ptr>
+	// DEST [0] Mark jump destination site
 	DEST OpCode = 0x1
-	// JUMP jumps and moves code execution to a jump destination.
-	// The jump dest is a pointer representing the line of code to jump to.
-	//  - JUMP <jump:ptr>
+	// JUMP [1] Jump unconditionally to the instruction pointer in register $X
+	// - JUMP [$X: ptr]
 	JUMP OpCode = 0x2
-	// JUMPI conditionally jumps and moves code execution to a jump destination.
-	// The jump dest is a pointer representing the line of code to jump to.
-	//  - JUMPI <reg:bool> <jump:ptr>
+	// JUMPI [2] Jump to the instruction pointer in register $X if the $Y.__bool__() is true
+	// - JUMPI [$X: ptr][$Y: __bool__]
 	JUMPI OpCode = 0x3
 
-	// MAKE generates a register of a specified primitive type.
-	// The type is specified with the primitive type ID
-	//  - MAKE <reg:X> <byte:type-ID>
-	MAKE OpCode = 0x4
-	// LDPTR loads a pointer of specific size into a pointer register. Pointers can be between
-	// 0 and 8 bytes long (max 64 bits). The pointer value si decoded from this data (big endian)
-	// 	- LDPTR <byte:size of address> <reg:Ptr> <bytes[address]>
-	LDPTR OpCode = 0x5
+	// OBTAIN [2] Obtain a value from the accept slot &Y and store it in the register $X
+	// - OBTAIN [$X][&Y]
+	OBTAIN OpCode = 0x4
+	// YIELD [2] Yield a value in the register $X to the return slot &Y
+	// - YIELD [$X][&Y]
+	YIELD OpCode = 0x5
 
-	// CONST converts a pointer register into a constant value. The value of the pointer is resolved
-	// and the constant value is loaded into the same register replacing the pointer data.
-	// 	- CONST <reg:Ptr>
-	CONST OpCode = 0x6
-	// BUILD converts a pointer register into a register of a certain type. The built type is resolved
-	// from the type definition at the pointer. It is loaded into the same register replacing the pointer data
-	// 	- TYPE <reg:Ptr>
-	BUILD OpCode = 0x7
-	// CALL calls a routine at the pointer with a specified number of args.
-	// Each argument is a register whose type must match the routine calldata.
-	// 	- CALL <reg:Ptr> <byte:no-of-inputs> <byte:no-of-outputs> <...registers:inputs...> <...registers:outputs...>
-	CALL OpCode = 0x8
+	// CARGS [1] Create a call args object in register $X
+	// - CARGS [$X: callargs]
+	CARGS OpCode = 0xA
+	// CALLB [2] Call a builtin routine defined at pointer $X with the call args in $Y
+	// - CALLB [$X: ptr][$Y: callargs]
+	CALLB OpCode = 0xB
+	// CALLR [2] Call a routine defined at pointer $X with the call args in $Y
+	// - CALLR [$X: ptr][$Y: callargs]
+	CALLR OpCode = 0xC
+	// CALLM [3] Call a method with code Y on the register $X with the call args in $Z
+	// - CALLM [$X][Y: 0x00][$Z: callargs]
+	CALLM OpCode = 0xD
 )
 
-// environment operations
+// Pointer Loading & Constant Handling Opcodes
 const (
-	// ACCEPT accepts a value from an input slot into a register.
-	// 	- ACCEPT <reg:X> <slot:byte>
-	ACCEPT OpCode = 0x10
-	// RETURN returns a value into an output slot from a register
-	// 	- RETURN <reg:X> <slot:byte>
-	RETURN OpCode = 0x11
+	// CONST [2] Read a constant at pointer $Y into $X
+	// - CONST [$X][$Y: ptr]
+	CONST OpCode = 0x10
 
-	// EMIT emits an event to the logic event stream
-	//  - EMIT <reg:emittable>
-	EMIT OpCode = 0x12
-
-	// LOAD loads a value from storage into a register
-	//  - LOAD <reg:X> <slot:byte>
-	LOAD OpCode = 0x13
-	// STORE stores a values to storage from a register
-	// 	- STORE <reg:X> <slot:byte>
-	STORE OpCode = 0x14
-
-	// CALLER loads the calling address into a register
-	// 	- CALLER <reg:address>
-	CALLER OpCode = 0x15
-	// BALANCE loads the balance of an asset ID for the calling address into a register.
-	//  - BALANCE <reg:bigint> <reg:string>
-	BALANCE OpCode = 0x16
-	// TIME loads the timestamp from the environment into a register
-	// 	- TIME <reg:string>
-	TIME OpCode = 0x17
+	// LDPTR1 [2] Load a pointer of size 1 byte into $X
+	// - LDPTR1 [$X: ptr][0x00]
+	LDPTR1 OpCode = 0x11
+	// LDPTR2 [3] Load a pointer of size 2 bytes into $X
+	// - LDPTR2 [$X: ptr][0x0000]
+	LDPTR2 OpCode = 0x12
+	// LDPTR3 [4] Load a pointer of size 3 bytes into $X
+	// - LDPTR3 [$X: ptr][0x000000]
+	LDPTR3 OpCode = 0x13
+	// LDPTR4 [5] Load a pointer of size 4 bytes into $X
+	// - LDPTR4 [$X: ptr][0x00000000]
+	LDPTR4 OpCode = 0x14
+	// LDPTR5 [6] Load a pointer of size 5 bytes into $X
+	// - LDPTR5 [$X: ptr][0x0000000000]
+	LDPTR5 OpCode = 0x15
+	// LDPTR6 [7] Load a pointer of size 6 bytes into $X
+	// - LDPTR6 [$X: ptr][0x000000000000]
+	LDPTR6 OpCode = 0x16
+	// LDPTR7 [8] Load a pointer of size 7 bytes into $X
+	// - LDPTR7 [$X: ptr][0x00000000000000]
+	LDPTR7 OpCode = 0x17
+	// LDPTR8 [9] Load a pointer of size 8 bytes into $X
+	// - LDPTR1 [$X: ptr][0x0000000000000000]
+	LDPTR8 OpCode = 0x18
 )
 
-// register methods
+// Register Handling & Initialization Opcodes
 const (
-	// INVOKE invokes a register method with a specified number of args.
-	// Each argument is a register whose type must match the method calldata.
-	//  - INVOKE <reg:X> <byte[method]> <byte[inputno]> <...registers:inputs...> <byte[outputno]> <...registers:outputs...>
-	INVOKE OpCode = 0x20
-	// THROW throws an exception to the VM.
-	// The register must be class that implements __throw__. If there is no catch specified for the line
-	// in which the instruction is thrown, it aborts execution and exits, otherwise execution moves to the
-	// location specified by the catch
-	//	- THROW <reg:throwable>
-	THROW OpCode = 0x21
+	// ISNULL [2] Check if $Y is null/empty and set to $X
+	// - ISNULL [$X: bool][$Y]
+	ISNULL OpCode = 0x20
+	// ZERO [1] Set the value of $X to its zero value. The register retains its type.
+	// - ZERO [$X]
+	ZERO OpCode = 0x21
+	// CLEAR [1] Clear the value of register $X. The register is completely discarded.
+	// - CLEAR [$X]
+	CLEAR OpCode = 0x22
+	// SAME [3] Check if $Y and $Z have the same data and set to $X. Different from EQ.
+	// - SAME [$X: bool][$Y][$Z]
+	SAME OpCode = 0x23
+	// COPY [2] Copy the value of register $Y to $X
+	// - COPY [$X][$Y]
+	COPY OpCode = 0x24
+	// SWAP [2] Swap the value of registers $X and $Y
+	// - SWAP [$X][$Y]
+	SWAP OpCode = 0x25
 
-	// BOOL returns a boolean value for the register. The register type must implement __bool__.
-	// string(if "" false, else true), bytes, address (if 0x0 false, else true), integer(if 0 false, else true),
-	// boolean(direct value), sequence, mapping(if len==0 false, else true), class(value from __bool__ implementation)
-	// 	- BOOL <reg:X>
-	BOOL OpCode = 0x22
-	// STR returns a string value for the register. The register type must implement __string__.
-	// 	- STR <reg:X>
-	STR OpCode = 0x23
+	// SERIAL [2] Serialize $Y with POLO and set data to $X
+	// - SERIAL [$X: bytes][$Y]
+	SERIAL OpCode = 0x26
+	// DESERIAL [3] Deserialize $Z with POLO into a type at pointer $Y and set it to register $X
+	// - DESERIAL [$X][$Y: ptr][$Z: bytes]
+	DESERIAL OpCode = 0x27
 
-	// JOIN joins the contents of two registers into another.
-	// They must be of the same type and implement __join__. Classes will be joined per this method.
-	// bytes and string (concatenation), integer (addition), boolean (and), sequence (append), mapping (merge).
-	// 	- JOIN <reg:A> <reg:A> <reg:A>
-	JOIN OpCode = 0x25
+	// MAKE [2] Make $X with a type defined at pointer $Y. The register is initialized
+	// with the zero value of the type. Can be used for any datatype.
+	// - MAKE [$X][$Y: ptr]
+	MAKE OpCode = 0x28
+	// PMAKE [2] Make register $X with primitive datatype with given type ID. The primitive
+	// type register is set to the zero value of the type.
+	// - PMAKE [$X][Y: 0x00]
+	PMAKE OpCode = 0x29
+	// VMAKE [3] Make varray register $X with typedef defined at pointer $Y with size $Z.
+	// - VMAKE [$X][$Y: ptr][$Z: U64]
+	VMAKE OpCode = 0x2A
+	// BMAKE [3] Make register $X with the type defined at pointer $Y by calling method code
+	// 0x0 (__build__) with the call args in $Z. Can be used for primitives and classes
+	// - BMAKE [$X][$Y: ptr][$Z: callargs]
+	BMAKE OpCode = 0x2B
 )
 
-// register and binding operations
+// Special (Dunder) Methods Calls Opcodes
 const (
-	// TYPEOF loads the datatype of a register into another as a typedef
-	TYPEOF OpCode = 0x32
-	// ISNULL returns whether a register is empty (null)
-	ISNULL OpCode = 0x33
+	// BUILD [2] Call the method code 0x0 (__build__) of $X with the call args in $Y
+	// - BUILD [$X: __build__][$Y: callargs]
+	BUILD OpCode = 0x40
+	// THROW [1] Throw a runtime exception with the string returned by calling the
+	// method code 0x1 (__throw__) on the register $X
+	// - THROW [$X: __throw__]
+	THROW OpCode = 0x41
+	// EMIT [1] Emit the runtime log returned by calling the method code 0x2 (__emit__) on register $X
+	// - EMIT [$X: __emit__]
+	EMIT OpCode = 0x42
+	// JOIN [2] Join $Y and $Z and set to $X. Calls the method code 0x3 (__join__)
+	// of $Y and $Z, both of which must be of the same type
+	// - JOIN [$X][$Y: __join__][$Z: __join__]
+	JOIN OpCode = 0x43
 
-	// COPY copies the contents of a register into another, retaining it in the original location.
-	// 	- COPY <reg:dest> <reg:src>
-	COPY OpCode = 0x3C
-	// MOVE moves the contents of a register into another, removing it from the original location.
-	// 	- MOVE <reg:dest> <reg:src>
-	MOVE OpCode = 0x3D
-	// SWAP swaps the contents of two registers.
-	// 	- SWAP <reg:X> <reg:Y>
-	SWAP OpCode = 0x3E
-	// CLEAR removes the contents of a register
-	// 	- CLEAR <reg:X>
-	CLEAR OpCode = 0x3F
+	// LT [3] Check if $Y < $Z by calling the method code 0x4 (__lt__) of $Y and
+	// setting it to $X. $Y and $Z must be of the same type.
+	// - LT [$X: bool][$Y: __lt__][$Z: __lt__]
+	LT OpCode = 0x44
+	// GT [3] Check if $Y > $Z by calling the method code 0x5 (__gt__) of $Y and
+	// setting it to $X. $Y and $Z must be of the same type.
+	// - GT [$X: bool][$Y: __gt__][$Z: __gt__]
+	GT OpCode = 0x45
+	// EQ [3] Check if $Y == $Z by calling the method code 0x6 (__eq__) of $Y and
+	// setting it to $X. $Y and $Z must be of the same type.
+	// - EQ [$X: bool][$Y: __eq__][$Z: __eq__]
+	EQ OpCode = 0x46
+
+	// BOOL [2] Converts $Y into its boolean form and sets it to $X. Calls the method code 0x7 (__bool__)
+	// - BOOL [$X: bool][$Y: __bool__]
+	BOOL OpCode = 0x47
+	// STR [2] Converts $Y into its string form and sets it to $X. Calls the method code 0x8 (__str__)
+	// - STR [$X: string][$Y: __str__]
+	STR OpCode = 0x48
+	// ADDR [2] Converts $Y into its address form and sets it to $X. Call the method code 0x9 (__addr__)
+	// - ADDR [$X: address][$Y: __addr__]
+	ADDR OpCode = 0x49
 )
 
-// collection operators
+// Collection & Class Handling Opcodes
 const (
-	// GETIDX gets the value at a given index for the collection.
-	// The collection may be sequence or mapping with the index being the appropriate index type.
-	// 	- GETIDX <reg:A> <reg:sequence[A]> <reg:int64>
-	// 	- GETIDX <reg:B> <reg:mapping[A->B]> <reg:A>
-	GETIDX OpCode = 0x40
-	// SETIDX sets the value at a given index in the collection.
-	// Collection may be sequence or mapping with the index being the appropriate index type.
-	// 	- SETIDX <reg:sequence[A]> <reg:int64> <reg:A>
-	// 	- SETIDX <reg:mapping[A->B]> <reg:A> <reg:B>
-	SETIDX OpCode = 0x41
+	// SIZEOF [2] Get the size of the collection or class register $Y and set it to $X (always u64).
+	// If $Y is class, the size represents the number of fields in the class
+	// - SIZEOF [$X: u64][$Y: col/class]
+	SIZEOF OpCode = 0x50
 
-	GETFLD OpCode = 0x42
-	SETFLD OpCode = 0x43
+	// GETFLD [3] Get the field at slot &Z of a class register $Y and set it to $X
+	// - GETFLD [$X][$Y: class][&Z: 0x00]
+	GETFLD OpCode = 0x51
+	// SETFLD [3] Set the field slot &Y of a class register $X to the value of $Z
+	// - SETFLD [$X: class][&Y: 0x00][$Z]
+	SETFLD OpCode = 0x52
+
+	// GETIDX [3] Get the value of index $Z of a collection register $Y and set it to $X.
+	// If  $Y is a (v)array, $Z must be u64. If it is a map, then $Z is the map key type
+	// - GETIDX [$X][$Y:col][$Z: idx]
+	GETIDX OpCode = 0x53
+	// SETIDX [3] Set the value of index $Y of a collection register $X to the value of $Z.
+	// If $X is a v/array, $Y must be u64. If it is a map, then $Y is the map key type
+	// - SETIDX [$X: col][$Y: idx][$Z]
+	SETIDX OpCode = 0x54
+
+	// GROW [2] Grow the size of a varray register $X by $Y which specifies the growth delta
+	// - GROW [$X: varray][$Y: u64]
+	GROW OpCode = 0x55
+	// SLICE [4] Slice the v/array register $Y between the indices $Z and $W and set it $X
+	// which is always a varray register. The v/array is sliced as [Z: W)
+	// - SLICE [$X: varray][$Y: v/array][$Z: u64][$W: u64]
+	SLICE OpCode = 0x56
+
+	// APPEND [2] Append value in $Y to the varray in $X. Grows the varray by 1
+	// - APPEND [$X: varray][$Y]
+	APPEND OpCode = 0x57
+	// POPEND [2] Pop a value from the end of varray $Y to $X. Shrinks the varray by 1
+	// - POPEND [$X][$Y: varray]
+	POPEND OpCode = 0x58
+	// DELKEY [2] Delete a key $Y from the map $X. No-op if the key does not exist
+	// - DELKEY [$X: map][$Y]
+	DELKEY OpCode = 0x59
 )
 
-// comparison and arithmetic operators
+// Bitwise, Arithmetic & Logical Operator Opcodes
 const (
-	// LT compares two registers (less than) and returns a boolean.
-	// Classes must implement __lt__.
-	//	- LT <reg:bool> <reg:A> <reg:A>
-	LT OpCode = 0x50
-	// LE compares two registers (less than or equal) and returns a boolean.
-	// Classes must implement __lt__ and __eq__.
-	//	- LE <reg:bool> <reg:A> <reg:A>
-	LE OpCode = 0x51
-	// GT compares two registers (greater than) and returns a boolean.
-	// Classes must implement __gt__.
-	//	- GT <reg:bool> <reg:A> <reg:A>
-	GT OpCode = 0x52
-	// GE compares two registers (greater than or equal) and returns a boolean.
-	// Classes must implement __gt__ and __eq__.
-	//	- GE <reg:bool> <reg:A> <reg:A>
-	GE OpCode = 0x53
-	// EQ compares two registers (equals) and returns a boolean.
-	// Classes must implement __eq__.
-	//	- EQ <reg:bool> <reg:A> <reg:A>
-	EQ OpCode = 0x54
-	// NEQ compares two registers (not equals) and returns a boolean.
-	// Classes must implement __eq__.
-	//	- NEQ <reg:bool> <reg:A> <reg:A>
-	NEQ OpCode = 0x55
+	// AND [3] Perform logical AND ($Y && $Z) and set the result to $X. $Y and $Z must __bool__
+	// - AND [$X: bool][$Y: __bool__][$Y: __bool__]
+	AND OpCode = 0x60
+	// OR [3] Perform logical OR ($Y || $Z) and set the result to $X. $Y and $Z must __bool__
+	// - OR [$X: bool][$Y: __bool__][$Y: __bool__]
+	OR OpCode = 0x61
+	// NOT [2] Perform logical NOT on $Y and set it to $X by calling its __bool__ method and inverting
+	// - NOT [$X: bool][$Y: __bool__]
+	NOT OpCode = 0x62
 
-	// INVERT flips a boolean value
-	//  - INVERT <reg:bool>
-	INVERT OpCode = 0x56
-	// INCR increments the value of a numeric register by 1.
-	//  - INCR <reg:numeric>
-	INCR OpCode = 0x57
-	// DECR decrements the value of a numeric register by 1.
-	//  - DECR <reg:numeric>
-	DECR OpCode = 0x58
+	// INCR [1] Increment numeric register $X by 1
+	// - INCR [$X]
+	INCR OpCode = 0x63
+	// DECR [1] Decrement numeric register $X by 1
+	// - DECR [$Y]
+	DECR OpCode = 0x64
 
-	// ADD applies the add operation on two numeric registers (same type)
-	// and returns another numeric of the same type.
-	//  - ADD <reg:numeric> <reg:numeric> <reg:numeric>
-	ADD OpCode = 0x59
-	// SUB applies the subtract operation on two numeric registers (same type)
-	// and returns another numeric of the same type.
-	//  - SUB <reg:numeric> <reg:numeric> <reg:numeric>
-	SUB OpCode = 0x5A
-	// MUL applies the multiply operation on two numeric registers (same type)
-	// and returns another numeric of the same type.
-	//  - MUL <reg:numeric> <reg:numeric> <reg:numeric>
-	MUL OpCode = 0x5B
-	// DIV applies the division on two numeric registers (same type)
-	// and returns another numeric of the same type.
-	//  - DIV <reg:numeric> <reg:numeric> <reg:numeric>
-	DIV OpCode = 0x5C
-	// MOD applies the modulo division operation on two numeric registers (same type)
-	// and returns another numeric of the same type.
-	//  - MOD <reg:numeric> <reg:numeric> <reg:numeric>
-	MOD OpCode = 0x5D
+	// ADD [3] Perform arithmetic ADD ($Y + $Z) and set the result to $X.
+	// $Y and $Z must be numeric and of the same type
+	// - ADD [$X][$Y][$Z]
+	ADD OpCode = 0x65
+	// SUB [3] Perform arithmetic SUB ($Y - $Z) and set the result to $X.
+	// $Y and $Z must be numeric and of the same type
+	// - SUB [$X][$Y][$Z]
+	SUB OpCode = 0x66
+	// MUL [3] Perform arithmetic MUL ($Y * $Z) and set the result to $X.
+	// $Y and $Z must be numeric and of the same type
+	// - MUL [$X][$Y][$Z]
+	MUL OpCode = 0x67
+	// DIV [3] Perform arithmetic DIV ($Y // $Z) and set the result to $X.
+	// $Y and $Z must be numeric and of the same type
+	// - DIV [$X][$Y][$Z]
+	DIV OpCode = 0x68
+	// MOD [3] Perform arithmetic MOD ($Y % $Z) and set the result to $X.
+	// $Y and $Z must be numeric and of the same type
+	// - MOD [$X][$Y][$Z]
+	MOD OpCode = 0x69
+
+	// BXOR [3] Perform bitwise XOR ($Y ^ $Z) and set the result to $X.
+	// $Y and $Z must be numeric and of the same type
+	// - BXOR [$X][$Y][$Z]
+	BXOR OpCode = 0x6A
+
+	// BAND [3] Perform bitwise AND ($Y & $Z) and set the result to $X.
+	// $Y and $Z must be numeric and of the same type
+	// - BAND [$X][$Y][$Z]
+	BAND OpCode = 0x6B
+
+	// BOR [3] Perform bitwise OR ($Y | $Z) and set the result to $X.
+	// $Y and $Z must be numeric and of the same type
+	// - BOR [$X][$Y][$Z]
+	BOR OpCode = 0x6C
+
+	// BNOT [2] Perform bitwise NOT on $Y and set the result to $X. $Y must be numeric
+	// - BNOT BNOT [$X][$Y]
+	BNOT OpCode = 0x6D
 )
 
+// Environment Access Opcodes
+const (
+	// LOGIC [1] Obtain the context object of the logic and set it to $X
+	// - LOGIC [$X]
+	LOGIC OpCode = 0x70
+	// SENDER [1] Obtain the context object of the sender and set it to $X
+	// - SENDER [$X]
+	SENDER OpCode = 0x71
+)
+
+// Persistent Context Handling Opcodes
+const (
+	// PLOAD [1] Load a stored value into $X from the &Y slot of the persistent logic state
+	// - PLOAD [$X: stored][&Y: 0x00]
+	PLOAD OpCode = 0x80
+	// PSAVE [1] Save a stored valued from $X into the &Y slot of the persistent logic state
+	// - PSAVE [$X: stored][&Y: 0x00]
+	PSAVE OpCode = 0x81
+)
+
+//nolint:dupl
 var opCodeToString = map[OpCode]string{
 	TERM:  "TERM",
 	DEST:  "DEST",
 	JUMP:  "JUMP",
 	JUMPI: "JUMPI",
-	MAKE:  "MAKE",
-	LDPTR: "LDPTR",
+
+	OBTAIN: "OBTAIN",
+	YIELD:  "YIELD",
+
+	CARGS: "CARGS",
+	CALLB: "CALLB",
+	CALLR: "CALLR",
+	CALLM: "CALLM",
+
 	CONST: "CONST",
+
+	LDPTR1: "LDPTR1",
+	LDPTR2: "LDPTR2",
+	LDPTR3: "LDPTR3",
+	LDPTR4: "LDPTR4",
+	LDPTR5: "LDPTR5",
+	LDPTR6: "LDPTR6",
+	LDPTR7: "LDPTR7",
+	LDPTR8: "LDPTR8",
+
+	ISNULL:   "ISNULL",
+	ZERO:     "ZERO",
+	CLEAR:    "CLEAR",
+	SAME:     "SAME",
+	COPY:     "COPY",
+	SWAP:     "SWAP",
+	SERIAL:   "SERIAL",
+	DESERIAL: "DESERIAL",
+
+	MAKE:  "MAKE",
+	PMAKE: "PMAKE",
+	VMAKE: "VMAKE",
+	BMAKE: "BMAKE",
+
 	BUILD: "BUILD",
-	CALL:  "CALL",
+	THROW: "THROW",
+	EMIT:  "EMIT",
+	JOIN:  "JOIN",
 
-	ACCEPT:  "ACCEPT",
-	RETURN:  "RETURN",
-	EMIT:    "EMIT",
-	LOAD:    "LOAD",
-	STORE:   "STORE",
-	CALLER:  "CALLER",
-	BALANCE: "BALANCE",
-	TIME:    "TIME",
+	LT: "LT",
+	GT: "GT",
+	EQ: "EQ",
 
-	INVOKE: "INVOKE",
-	THROW:  "THROW",
-	BOOL:   "BOOL",
-	STR:    "STR",
-	JOIN:   "JOIN",
+	BOOL: "BOOL",
+	STR:  "STR",
+	ADDR: "ADDR",
 
-	TYPEOF: "TYPEOF",
-	ISNULL: "ISNULL",
-
-	COPY:  "COPY",
-	MOVE:  "MOVE",
-	SWAP:  "SWAP",
-	CLEAR: "CLEAR",
-
-	GETIDX: "GETIDX",
-	SETIDX: "SETIDX",
+	SIZEOF: "SIZEOF",
 	GETFLD: "GETFLD",
 	SETFLD: "SETFLD",
+	GETIDX: "GETIDX",
+	SETIDX: "SETIDX",
 
-	LT:  "LT",
-	LE:  "LE",
-	GT:  "GT",
-	GE:  "GE",
-	EQ:  "EQ",
-	NEQ: "NEQ",
+	GROW:   "GROW",
+	SLICE:  "SLICE",
+	APPEND: "APPEND",
+	POPEND: "POPEND",
+	DELKEY: "DELKEY",
 
-	INVERT: "INVERT",
-	INCR:   "INCR",
-	DECR:   "DECR",
+	AND: "AND",
+	OR:  "OR",
+	NOT: "NOT",
+
+	INCR: "INCR",
+	DECR: "DECR",
 
 	ADD: "ADD",
 	SUB: "SUB",
 	MUL: "MUL",
 	DIV: "DIV",
 	MOD: "MOD",
+
+	BXOR: "BXOR",
+	BAND: "BAND",
+	BOR:  "BOR",
+	BNOT: "BNOT",
+
+	LOGIC:  "LOGIC",
+	SENDER: "SENDER",
+
+	PLOAD: "PLOAD",
+	PSAVE: "PSAVE",
 }
 
 // String returns the string representation of OpCode.
@@ -278,56 +388,88 @@ var stringToOpCode = map[string]OpCode{
 	"DEST":  DEST,
 	"JUMP":  JUMP,
 	"JUMPI": JUMPI,
-	"MAKE":  MAKE,
-	"LDPTR": LDPTR,
+
+	"OBTAIN": OBTAIN,
+	"YIELD":  YIELD,
+
+	"CARGS": CARGS,
+	"CALLB": CALLB,
+	"CALLR": CALLR,
+	"CALLM": CALLM,
+
 	"CONST": CONST,
+
+	"LDPTR1": LDPTR1,
+	"LDPTR2": LDPTR2,
+	"LDPTR3": LDPTR3,
+	"LDPTR4": LDPTR4,
+	"LDPTR5": LDPTR5,
+	"LDPTR6": LDPTR6,
+	"LDPTR7": LDPTR7,
+	"LDPTR8": LDPTR8,
+
+	"ISNULL":   ISNULL,
+	"ZERO":     ZERO,
+	"CLEAR":    CLEAR,
+	"SAME":     SAME,
+	"COPY":     COPY,
+	"SWAP":     SWAP,
+	"SERIAL":   SERIAL,
+	"DESERIAL": DESERIAL,
+
+	"MAKE":  MAKE,
+	"PMAKE": PMAKE,
+	"VMAKE": VMAKE,
+	"BMAKE": BMAKE,
+
 	"BUILD": BUILD,
-	"CALL":  CALL,
+	"THROW": THROW,
+	"EMIT":  EMIT,
+	"JOIN":  JOIN,
 
-	"ACCEPT":  ACCEPT,
-	"RETURN":  RETURN,
-	"EMIT":    EMIT,
-	"LOAD":    LOAD,
-	"STORE":   STORE,
-	"CALLER":  CALLER,
-	"BALANCE": BALANCE,
-	"TIME":    TIME,
+	"LT": LT,
+	"GT": GT,
+	"EQ": EQ,
 
-	"INVOKE": INVOKE,
-	"THROW":  THROW,
-	"BOOL":   BOOL,
-	"STR":    STR,
-	"JOIN":   JOIN,
+	"BOOL": BOOL,
+	"STR":  STR,
+	"ADDR": ADDR,
 
-	"TYPEOF": TYPEOF,
-	"ISNULL": ISNULL,
-
-	"COPY":  COPY,
-	"MOVE":  MOVE,
-	"SWAP":  SWAP,
-	"CLEAR": CLEAR,
-
-	"GETIDX": GETIDX,
-	"SETIDX": SETIDX,
+	"SIZEOF": SIZEOF,
 	"GETFLD": GETFLD,
 	"SETFLD": SETFLD,
+	"GETIDX": GETIDX,
+	"SETIDX": SETIDX,
 
-	"LT":  LT,
-	"LE":  LE,
-	"GT":  GT,
-	"GE":  GE,
-	"EQ":  EQ,
-	"NEQ": NEQ,
+	"GROW":   GROW,
+	"SLICE":  SLICE,
+	"APPEND": APPEND,
+	"POPEND": POPEND,
+	"DELKEY": DELKEY,
 
-	"INVERT": INVERT,
-	"INCR":   INCR,
-	"DECR":   DECR,
+	"AND": AND,
+	"OR":  OR,
+	"NOT": NOT,
+
+	"INCR": INCR,
+	"DECR": DECR,
 
 	"ADD": ADD,
 	"SUB": SUB,
 	"MUL": MUL,
 	"DIV": DIV,
 	"MOD": MOD,
+
+	"BXOR": BXOR,
+	"BAND": BAND,
+	"BOR":  BOR,
+	"BNOT": BNOT,
+
+	"LOGIC":  LOGIC,
+	"SENDER": SENDER,
+
+	"PLOAD": PLOAD,
+	"PSAVE": PSAVE,
 }
 
 // StringToOpCode finds the opcode whose name is stored in str.
@@ -335,75 +477,83 @@ func StringToOpCode(str string) OpCode {
 	return stringToOpCode[str]
 }
 
-// operand0 reads 0 bytes from the reader as operands.
-func operand0(_ *bytes.Reader) ([]byte, bool) {
-	return nil, true
+//nolint:dupl
+var opCodeToOperandCount = map[OpCode]int{
+	TERM:     0,
+	DEST:     0,
+	JUMP:     1,
+	JUMPI:    2,
+	OBTAIN:   2,
+	YIELD:    2,
+	CARGS:    2,
+	CALLB:    3,
+	CALLR:    3,
+	CALLM:    3,
+	CONST:    2,
+	LDPTR1:   2,
+	LDPTR2:   3,
+	LDPTR3:   4,
+	LDPTR4:   5,
+	LDPTR5:   6,
+	LDPTR6:   7,
+	LDPTR7:   8,
+	LDPTR8:   9,
+	ISNULL:   2,
+	ZERO:     1,
+	CLEAR:    1,
+	SAME:     3,
+	COPY:     2,
+	SWAP:     2,
+	SERIAL:   2,
+	DESERIAL: 3,
+	MAKE:     2,
+	PMAKE:    2,
+	VMAKE:    3,
+	BMAKE:    3,
+	BUILD:    2,
+	THROW:    1,
+	EMIT:     1,
+	LT:       3,
+	GT:       3,
+	EQ:       3,
+	JOIN:     3,
+	BOOL:     2,
+	STR:      2,
+	ADDR:     2,
+	SIZEOF:   2,
+	GETFLD:   3,
+	SETFLD:   3,
+	GETIDX:   3,
+	SETIDX:   3,
+	GROW:     2,
+	SLICE:    4,
+	APPEND:   2,
+	POPEND:   2,
+	DELKEY:   3,
+	AND:      3,
+	OR:       3,
+	NOT:      2,
+	INCR:     1,
+	DECR:     1,
+	ADD:      3,
+	SUB:      3,
+	MUL:      3,
+	DIV:      3,
+	MOD:      3,
+	BXOR:     3,
+	BAND:     3,
+	BOR:      3,
+	BNOT:     2,
+	LOGIC:    1,
+	SENDER:   1,
+	PLOAD:    2,
+	PSAVE:    2,
 }
 
-// operand1 reads 1 bytes from the reader as operands.
-func operand1(reader *bytes.Reader) ([]byte, bool) {
-	operand, err := reader.ReadByte()
-	if err != nil {
-		return nil, false
-	}
+// Operands returns the number of operands to expect for the opcode.
+// Returns false for an undefined opcode.
+func (op OpCode) Operands() (int, bool) {
+	count, ok := opCodeToOperandCount[op]
 
-	return []byte{operand}, true
-}
-
-// operand2 reads 2 bytes from the reader as operands.
-func operand2(reader *bytes.Reader) ([]byte, bool) {
-	operands := make([]byte, 2)
-	read, err := reader.Read(operands)
-
-	if read != 2 || err != nil {
-		return nil, false
-	}
-
-	return operands, true
-}
-
-// operand3 reads 3 bytes from the reader as operands.
-func operand3(reader *bytes.Reader) ([]byte, bool) {
-	operands := make([]byte, 3)
-	read, err := reader.Read(operands)
-
-	if read != 3 || err != nil {
-		return nil, false
-	}
-
-	return operands, true
-}
-
-// operandLDPTR reads bytes from the reader for the LDPTR opcode.
-// LDPTR takes a variable number of operands. The first operand specifies the size of the pointer to read.
-// The second operand specifies the register to load the pointer into, followed by n bytes for the pointer.
-func operandLDPTR(reader *bytes.Reader) ([]byte, bool) {
-	var (
-		err     error
-		regID   byte
-		ptrSize byte
-	)
-
-	if ptrSize, err = reader.ReadByte(); err != nil {
-		return nil, false
-	}
-
-	if regID, err = reader.ReadByte(); err != nil {
-		return nil, false
-	}
-
-	if ptrSize == 0 {
-		return []byte{regID, 1, 0}, true
-	}
-
-	address := make([]byte, ptrSize)
-	if n, err := reader.Read(address); n != int(ptrSize) || err != nil {
-		return nil, false
-	}
-
-	operands := make([]byte, 0, ptrSize+2)
-	operands = append(operands, ptrSize, regID)
-	operands = append(operands, address...)
-
-	return operands, true
+	return count, ok
 }

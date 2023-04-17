@@ -27,7 +27,7 @@ func (suite *PersonTestSuite) SetupSuite() {
 	address := randomAddress()
 	logicID, _ := types.NewLogicIDv0(true, false, false, false, 0, address)
 
-	consumed := suite.Initialize(manifest, logicID, address)
+	consumed := suite.Initialize(manifest, logicID, address, 5000)
 	suite.Equal(engineio.Fuel(100), consumed)
 }
 
@@ -36,13 +36,13 @@ func (suite *PersonTestSuite) TestGetNameOf() {
 		"person": map[string]any{"name": "Joe", "age": 40, "gender": "male"},
 	})
 	suite.Equal("Joe", output["name"])
-	suite.Equal(engineio.Fuel(80), consumed)
+	suite.Equal(engineio.Fuel(70), consumed)
 
 	consumed, output = suite.Call("GetNameOf", map[string]any{
 		"person": map[string]any{"name": "Marco"},
 	})
 	suite.Equal("Marco", output["name"])
-	suite.Equal(engineio.Fuel(80), consumed)
+	suite.Equal(engineio.Fuel(70), consumed)
 }
 
 func (suite *PersonTestSuite) TestDoubleAge() {
@@ -50,35 +50,35 @@ func (suite *PersonTestSuite) TestDoubleAge() {
 		"person": map[string]any{"name": "Joe", "age": 40, "gender": "male"},
 	})
 	suite.Equal(map[string]any{"name": "Joe", "age": uint64(80), "gender": "male"}, output["person"])
-	suite.Equal(engineio.Fuel(110), consumed)
+	suite.Equal(engineio.Fuel(115), consumed)
 
 	consumed, output = suite.Call("DoubleAge", map[string]any{
 		"person": map[string]any{"name": "Marco", "age": 26},
 	})
 	suite.Equal(map[string]any{"name": "Marco", "age": uint64(52)}, output["person"])
-	suite.Equal(engineio.Fuel(110), consumed)
+	suite.Equal(engineio.Fuel(115), consumed)
 }
 
 func (suite *PersonTestSuite) TestPersonStorage() {
 	consumed, _ := suite.Call("StorePerson!", map[string]any{
 		"person": map[string]any{"name": "Joe", "age": 40, "gender": "male"},
 	})
-	suite.Equal(engineio.Fuel(100), consumed)
+	suite.Equal(engineio.Fuel(235), consumed)
 
 	consumed, output := suite.Call("GetPerson", map[string]any{"name": "Joe"})
 	suite.Equal(map[string]any{"name": "Joe", "age": uint64(40), "gender": "male"}, output["person"])
-	suite.Equal(engineio.Fuel(90), consumed)
+	suite.Equal(engineio.Fuel(120), consumed)
 
 	consumed, output = suite.Call("GetPerson", map[string]any{"name": "Marco"})
 	suite.Equal(map[string]any{}, output["person"])
-	suite.Equal(engineio.Fuel(90), consumed)
+	suite.Equal(engineio.Fuel(120), consumed)
 
 	consumed, _ = suite.Call("StorePerson!", map[string]any{
 		"person": map[string]any{"name": "Marco", "age": 26, "gender": "male"},
 	})
-	suite.Equal(engineio.Fuel(100), consumed)
+	suite.Equal(engineio.Fuel(235), consumed)
 
 	consumed, output = suite.Call("GetPerson", map[string]any{"name": "Marco"})
 	suite.Equal(map[string]any{"name": "Marco", "age": uint64(26), "gender": "male"}, output["person"])
-	suite.Equal(engineio.Fuel(90), consumed)
+	suite.Equal(engineio.Fuel(120), consumed)
 }

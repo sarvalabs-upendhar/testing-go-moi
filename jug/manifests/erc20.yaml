@@ -46,16 +46,16 @@ elements:
           type : address
       executes:
         bin: [
-          0x10, 0x00, 0x00,         # accept $0 &0      // $0 = accepts::name
-          0x14, 0x00, 0x00,         # store $0 &0       // storage::name = $0
-          0x10, 0x00, 0x01,         # accept $0 &1      // $0 = accepts::symbol
-          0x14, 0x00, 0x01,         # store $0 &1       // storage::symbol = $0
-          0x10, 0x00, 0x02,         # accept $0 &2      // $0 = accepts::supply
-          0x14, 0x00, 0x02,         # store $0 &2       // storage::supply = $0
-          0x13, 0x01, 0x03,         # load $1 &3        // $1 = storage::balances
-          0x10, 0x02, 0x03,         # accept $2 &3      // $2 = accepts::seeder
-          0x41, 0x01, 0x02, 0x00,   # setidx $1 $2 $0   // $1[$2] = $0
-          0x14, 0x01, 0x03,         # store $1 &3       // storage::balances = $1
+          0x04, 0x00, 0x00,         # obtain $0 &0      // $0 = accepts::name
+          0x81, 0x00, 0x00,         # psave $0 &0       // p.storage::name = $0
+          0x04, 0x00, 0x01,         # obtain $0 &1      // $0 = accepts::symbol
+          0x81, 0x00, 0x01,         # psave $0 &1       // p.storage::symbol = $0
+          0x04, 0x00, 0x02,         # obtain $0 &2      // $0 = accepts::supply
+          0x81, 0x00, 0x02,         # psave $0 &2       // p.storage::supply = $0
+          0x80, 0x01, 0x03,         # pload $1 &3       // $1 = p.storage::balances
+          0x04, 0x02, 0x03,         # obtain $2 &3      // $2 = accepts::seeder
+          0x54, 0x01, 0x02, 0x00,   # setidx $1 $2 $0   // $1[$2] = $0
+          0x81, 0x01, 0x03,         # psave $1 &3       // p.storage::balances = $1
         ]
 
   - ptr : 2
@@ -80,8 +80,8 @@ elements:
           type : string
       executes:
         bin: [
-          0x13, 0x00, 0x00,         # load $0 &0      // $0 = storage::name
-          0x11, 0x00, 0x00,         # return $0 &0    // returns::name = $0
+          0x80, 0x00, 0x00,         # pload $0 &0    // $0 = p.storage::name
+          0x05, 0x00, 0x00,         # yield $0 &0    // returns::name = $0
         ]
 
   - ptr : 5
@@ -96,8 +96,8 @@ elements:
           type : string
       executes:
         bin: [
-          0x13, 0x00, 0x01,         # load $0 &1      // $0 = storage::symbol
-          0x11, 0x00, 0x00,         # return $0 &0    // returns::symbol = $0
+          0x80, 0x00, 0x01,         # pload $0 &1    // $0 = p.storage::symbol
+          0x05, 0x00, 0x00,         # yield $0 &0    // returns::symbol = $0
         ]
 
   - ptr : 6
@@ -112,9 +112,9 @@ elements:
           type : uint64
       executes:
         bin: [
-          0x05, 0x01, 0x00, 0x02,   # ldptr 1 $0 0x0    // $0 = Ptr(0x0)
-          0x06, 0x00,               # const $0          // $0 = constant @ $0
-          0x11, 0x00, 0x00,         # return $0 &0      // returns::decimals = $0
+          0x11, 0x00, 0x02,         # ldptr1 $0 0x2     // $0 = Ptr(0x2)
+          0x10, 0x00, 0x00,         # const $0 $0       // $0 = constant @ $0
+          0x05, 0x00, 0x00,         # yield $0 &0       // returns::decimals = $0
         ]
 
   - ptr : 7
@@ -129,8 +129,8 @@ elements:
           type : uint64
       executes:
         bin: [
-          0x13, 0x00, 0x02,         # load $0 &2      // $0 = storage::supply
-          0x11, 0x00, 0x00,         # return $0 &0    // returns::symbol = $0
+          0x80, 0x00, 0x02,         # pload $0 &2     // $0 = p.storage::supply
+          0x05, 0x00, 0x00,         # yield $0 &0     // returns::symbol = $0
         ]
 
   - ptr : 8
@@ -149,10 +149,10 @@ elements:
           type : uint64
       executes:
         bin: [
-          0x13, 0x00, 0x03,         # load $0 &3          // $0 = storage::supply
-          0x10, 0x01, 0x00,         # accept $1 &0        // $1 = accepts::addr
-          0x40, 0x02, 0x00, 0x01,   # getidx $2 $0 $1     // $2 = $0[$1]
-          0x11, 0x02, 0x00,         # return $2 &0        // returns::balance = $2
+          0x80, 0x00, 0x03,         # pload $0 &3         // $0 = p.storage::supply
+          0x04, 0x01, 0x00,         # obtain $1 &0        // $1 = accepts::addr
+          0x53, 0x02, 0x00, 0x01,   # getidx $2 $0 $1     // $2 = $0[$1]
+          0x05, 0x02, 0x00,         # yield $2 &0         // returns::balance = $2
         ]
 
   - ptr : 9
@@ -174,12 +174,12 @@ elements:
           type : uint64
       executes:
         bin: [
-          0x13, 0x00, 0x04,         # load $0 &4          // $0 = storage::allowances
-          0x10, 0x01, 0x00,         # accept $1 &0        // $1 = accepts::owner
-          0x40, 0x02, 0x00, 0x01,   # getidx $2 $0 $1     // $2 = $0[$1]
-          0x10, 0x03, 0x01,         # accept $3 &1        // $3 = accepts::spender
-          0x40, 0x04, 0x02, 0x03,   # getidx $4 $2 $3     // $4 = $2[$3]
-          0x11, 0x04, 0x00,         # return $4 &0        // returns::allowance = $4
+          0x80, 0x00, 0x04,         # pload $0 &4         // $0 = storage::allowances
+          0x04, 0x01, 0x00,         # obtain $1 &0        // $1 = accepts::owner
+          0x53, 0x02, 0x00, 0x01,   # getidx $2 $0 $1     // $2 = $0[$1]
+          0x04, 0x03, 0x01,         # obtain $3 &1        // $3 = accepts::spender
+          0x53, 0x04, 0x02, 0x03,   # getidx $4 $2 $3     // $4 = $2[$3]
+          0x05, 0x04, 0x00,         # yield $4 &0         // returns::allowance = $4
         ]
 
   - ptr : 10
@@ -204,25 +204,25 @@ elements:
           type : bool
       executes:
         bin: [
-          0x13, 0x0, 0x4,           # load $0 &4        // $0 = storage::allowances
-          0x10, 0x1, 0x0,           # accept $1 &0      // $1 = accepts::owner
-          0x40, 0x2, 0x0, 0x1,      # getidx $2 $0 $1   // $2 = $0[$1]
-          0x33, 0x3, 0x2,           # isnull $3 $2      // $3 = isnull($2)
-          0x56, 0x3,                # invert $3         // $3 = !$3
-          0x05, 0x1, 0x4, 0xA,      # ldptr 1 $4 0xA    // $4 = Ptr(0xA)
-          0x03, 0x3, 0x4,           # jumpi $3 $4       // if $3 -> jump to line $4 (0xA)
-          0x05, 0x1, 0x4, 0x0,      # ldptr 1 $4 0x0    // $4 = Ptr(0x0)
-          0x07, 0x4,                # build $4          // $4 = build typedef @ $4 (0x0)
-          0x3C, 0x2, 0x4,           # copy $2 $4        // $2 = $4
+          0x80, 0x0, 0x4,           # pload $0 &4       // $0 = p.storage::allowances
+          0x04, 0x1, 0x0,           # obtain $1 &0      // $1 = accepts::owner
+          0x53, 0x2, 0x0, 0x1,      # getidx $2 $0 $1   // $2 = $0[$1]
+          0x20, 0x3, 0x2,           # isnull $3 $2      // $3 = isnull($2)
+          0x62, 0x3, 0x3,           # not $3 $3         // $3 = !$3
+          0x11, 0x4, 0xA,           # ldptr1 $4 0xA     // $4 = Ptr(0xA)
+          0x03, 0x4, 0x3,           # jumpi $4 $3       // if $3 -> jump to line $4 (0xA)
+          0x11, 0x4, 0x0,           # ldptr1 $4 0x0     // $4 = Ptr(0x0)
+          0x28, 0x4, 0x4,           # make $4 $4        // $4 = build typedef @ $4 (0x0)
+          0x24, 0x2, 0x4,           # copy $2 $4        // $2 = $4
           0x1,                      # dest              // jump destination (line 0xA)
-          0x10, 0x3, 0x1,           # accept $3 &1      // $3 = accepts::spender
-          0x10, 0x4, 0x2,           # accept $4 &2      // $4 = accepts::amount
-          0x41, 0x2, 0x3, 0x4,      # setidx $2 $3 $4   // $2[$3] = $4
-          0x41, 0x0, 0x1, 0x2,      # setidx $0 $1 $2   // $0[$1] = $2
-          0x14, 0x0, 0x4,           # store $0 &4       // storage::allowances = $0
-          0x04, 0x0, 0x1,           # make $0 0x1       // $0 = make(bool)
-          0x56, 0x0,                # invert $0         // $0 = !$0
-          0x11, 0x0, 0x0,           # return $0 &0      // returns::ok = $0
+          0x04, 0x3, 0x1,           # obtain $3 &1      // $3 = accepts::spender
+          0x04, 0x4, 0x2,           # obtain $4 &2      // $4 = accepts::amount
+          0x54, 0x2, 0x3, 0x4,      # setidx $2 $3 $4   // $2[$3] = $4
+          0x54, 0x0, 0x1, 0x2,      # setidx $0 $1 $2   // $0[$1] = $2
+          0x81, 0x0, 0x4,           # psave $0 &4       // p.storage::allowances = $0
+          0x29, 0x0, 0x1,           # pmake $0 0x1      // $0 = make(bool)
+          0x62, 0x0, 0x0,           # not $0 $0         // $0 = !$0
+          0x05, 0x0, 0x0,           # yield $0 &0       // returns::ok = $0
         ]
 
   - ptr : 11
@@ -247,27 +247,27 @@ elements:
           type : bool
       executes:
         bin: [
-          0x13, 0x0, 0x3,           # load $0 &3        // $0 = storage::balances
-          0x10, 0x1, 0x0,           # accept $1 &0      // $1 = accepts::from
-          0x40, 0x2, 0x0, 0x1,      # getidx $2 $0 $1   // $2 = $0[$1]
-          0x10, 0x3, 0x2,           # accept $3 &2      // $3 = accepts::amount
-          0x50, 0x4, 0x3, 0x2,      # lt $4 $3 $2       // $4 = $3 < $2
-          0x05, 0x1, 0x5, 0xA,      # ldptr 1 $5 0xA    // $5 = Ptr(0xA)
-          0x03, 0x4, 0x5,           # jumpi $4 $5       // if $4 -> jump to line $5 (0xA)
-          0x04, 0x0, 0x1,           # make $0 0x1       // $0 = make(bool)
-          0x11, 0x0, 0x0,           # return $0 &0      // returns::ok = $0
+          0x80, 0x0, 0x3,           # pload $0 &3       // $0 = storage::balances
+          0x04, 0x1, 0x0,           # obtain $1 &0      // $1 = accepts::from
+          0x53, 0x2, 0x0, 0x1,      # getidx $2 $0 $1   // $2 = $0[$1]
+          0x04, 0x3, 0x2,           # obtain $3 &2      // $3 = accepts::amount
+          0x44, 0x4, 0x3, 0x2,      # lt $4 $3 $2       // $4 = $3 < $2
+          0x11, 0x5, 0xA,           # ldptr1 $5 0xA     // $5 = Ptr(0xA)
+          0x03, 0x5, 0x4,           # jumpi $5 $4       // if $4 -> jump to line $5 (0xA)
+          0x29, 0x0, 0x1,           # pmake $0 0x1      // $0 = make(bool)
+          0x05, 0x0, 0x0,           # yield $0 &0       // returns::ok = $0
           0x0,                      # term              // terminate routine
           0x1,                      # dest              // jump destination (line 0xA)
-          0x5A, 0x4, 0x2, 0x3,      # sub $4 $2 $3      // $4 = $2 - $3
-          0x41, 0x0, 0x1, 0x4,      # setidx $0 $1 $4   // $0[$1] = $4
-          0x10, 0x5, 0x1,           # accept $5 &1      // $5 = accepts::to
-          0x40, 0x4, 0x0, 0x5,      # getidx $4 $0 $5   // $4 = $0[$5]
-          0x59, 0x6, 0x4, 0x3,      # add $6 $4 $3      // $6 = $4 + $3
-          0x41, 0x0, 0x5, 0x6,      # setidx $0 $5 $6   // $0[$5] = $6
-          0x14, 0x0, 0x3,           # store $0 &3       // storage::balances = $0
-          0x04, 0x0, 0x1,           # make $0 0x1       // $0 = make(bool)
-          0x56, 0x0,                # invert $0         // $0 = !$0
-          0x11, 0x0, 0x0,           # return $0 &0      // returns::ok = $0
+          0x66, 0x4, 0x2, 0x3,      # sub $4 $2 $3      // $4 = $2 - $3
+          0x54, 0x0, 0x1, 0x4,      # setidx $0 $1 $4   // $0[$1] = $4
+          0x04, 0x5, 0x1,           # obtain $5 &1      // $5 = accepts::to
+          0x53, 0x4, 0x0, 0x5,      # getidx $4 $0 $5   // $4 = $0[$5]
+          0x65, 0x6, 0x4, 0x3,      # add $6 $4 $3      // $6 = $4 + $3
+          0x54, 0x0, 0x5, 0x6,      # setidx $0 $5 $6   // $0[$5] = $6
+          0x81, 0x0, 0x3,           # psave $0 &3       // p.storage::balances = $0
+          0x29, 0x0, 0x1,           # pmake $0 0x1      // $0 = make(bool)
+          0x62, 0x0, 0x0,           # not $0 $0         // $0 = !$0
+          0x05, 0x0, 0x0,           # yield $0 &0       // returns::ok = $0
         ]
 
   - ptr : 12
@@ -289,19 +289,19 @@ elements:
           type : bool
       executes:
         bin: [
-          0x13, 0x0, 0x2,           # load $0 &2        // $0 = storage::supply
-          0x10, 0x1, 0x0,           # accept $1 &0      // $1 = accepts::amount
-          0x59, 0x0, 0x0, 0x1,      # add $0 $0 $1      // $0 = $0 + $1
-          0x14, 0x0, 0x2,           # store $0 &2       // storage::supply = $0
-          0x13, 0x0, 0x3,           # load $0 &3        // $0 = storage::balances
-          0x10, 0x2, 0x1,           # accept $2 &1      // $2 = accepts::addr
-          0x40, 0x3, 0x0, 0x2,      # getidx $3 $0 $2   // $3 = $0[$2]
-          0x59, 0x3, 0x3, 0x1,      # add $3 $3 $1      // $3 = $3 + $1
-          0x41, 0x0, 0x2, 0x3,      # setidx $0 $2 $3   // $0[$2] = $3
-          0x14, 0x0, 0x3,           # store $0 &3       // storage::balances = $0
-          0x04, 0x0, 0x1,           # make $0 0x1       // $0 = make(bool)
-          0x56, 0x0,                # invert $0         // $0 = !$0
-          0x11, 0x0, 0x0,           # return $0 &0      // returns::ok = $0
+          0x80, 0x0, 0x2,           # pload $0 &2       // $0 = p.storage::supply
+          0x04, 0x1, 0x0,           # obtain $1 &0      // $1 = accepts::amount
+          0x65, 0x0, 0x0, 0x1,      # add $0 $0 $1      // $0 = $0 + $1
+          0x81, 0x0, 0x2,           # psave $0 &2       // p.storage::supply = $0
+          0x80, 0x0, 0x3,           # pload $0 &3       // $0 = p.storage::balances
+          0x04, 0x2, 0x1,           # obtain $2 &1      // $2 = accepts::addr
+          0x53, 0x3, 0x0, 0x2,      # getidx $3 $0 $2   // $3 = $0[$2]
+          0x65, 0x3, 0x3, 0x1,      # add $3 $3 $1      // $3 = $3 + $1
+          0x54, 0x0, 0x2, 0x3,      # setidx $0 $2 $3   // $0[$2] = $3
+          0x81, 0x0, 0x3,           # psave $0 &3       // p.storage::balances = $0
+          0x29, 0x0, 0x1,           # pmake $0 0x1      // $0 = make(bool)
+          0x62, 0x0, 0x0,           # not $0 $0         // $0 = !$0
+          0x05, 0x0, 0x0,           # yield $0 &0       // returns::ok = $0
         ]
 
   - ptr : 13
@@ -323,25 +323,24 @@ elements:
           type : bool
       executes:
         bin: [
-          0x13, 0x0, 0x3,       # load $0 &3        // $0 = storage::balances
-          0x10, 0x1, 0x1,       # accept $1 &1      // $1 = accepts::addr
-          0x40, 0x2, 0x0, 0x1,  # getidx $2 $0 $1   // $2 = $0[$1]
-          0x10, 0x3, 0x0,       # accept $3 &0      // $3 = accepts::amount
-          0x50, 0x4, 0x3, 0x2,  # lt $4 $3 $2       // $4 = $3 < $2
-          0x05, 0x1, 0x5, 0xA,  # ldptr 1 $5 0xA    // $5 = Ptr(0xA)
-          0x03, 0x4, 0x5,       # jumpi $4 $5       // if $4 -> jump to line $5 (0xA)
-          0x04, 0x0, 0x1,       # make $0 0x1       // $0 = make(bool)
-          0x11, 0x0, 0x0,       # return $0 &0      // returns::ok = $0
+          0x80, 0x0, 0x3,       # pload $0 &3       // $0 = storage::balances
+          0x04, 0x1, 0x1,       # obtain $1 &1      // $1 = accepts::addr
+          0x53, 0x2, 0x0, 0x1,  # getidx $2 $0 $1   // $2 = $0[$1]
+          0x04, 0x3, 0x0,       # obtain $3 &0      // $3 = accepts::amount
+          0x44, 0x4, 0x3, 0x2,  # lt $4 $3 $2       // $4 = $3 < $2
+          0x11, 0x5, 0xA,       # ldptr1 $5 0xA     // $5 = Ptr(0xA)
+          0x03, 0x5, 0x4,       # jumpi $5 $4       // if $4 -> jump to line $5 (0xA)
+          0x29, 0x0, 0x1,       # pmake $0 0x1      // $0 = make(bool)
+          0x05, 0x0, 0x0,       # yield $0 &0       // returns::ok = $0
           0x0,                  # term              // terminate routine
           0x1,                  # dest              // jump destination (line 0xA)
-          0x5A, 0x4, 0x2, 0x3,  # sub $4 $2 $3      // $4 = $2 - $3
-          0x41, 0x0, 0x1, 0x4,  # setidx $0 $1 $4   // $0[$1] = $4
-          0x14, 0x0, 0x3,       # store $0 &3       // storage::balances = $0
-          0x13, 0x0, 0x2,       # load $0 $2        // $0 = storage::supply
-          0x5A, 0x0, 0x0, 0x3,  # sub $0 $0 $3      // $0 = $0 - $3
-          0x14, 0x0, 0x2,       # store $0 &2       // storage::supply = $0
-          0x04, 0x0, 0x1,       # make $0 0x1       // $0 = make(bool)
-          0x56, 0x0,            # invert $0         // $0 = !$0
-          0x11, 0x0, 0x0,       # return $0 &0      // returns::ok = $0
+          0x66, 0x4, 0x2, 0x3,  # sub $4 $2 $3      // $4 = $2 - $3
+          0x54, 0x0, 0x1, 0x4,  # setidx $0 $1 $4   // $0[$1] = $4
+          0x81, 0x0, 0x3,       # psave $0 &3       // storage::balances = $0
+          0x80, 0x0, 0x2,       # pload $0 $2       // $0 = storage::supply
+          0x66, 0x0, 0x0, 0x3,  # sub $0 $0 $3      // $0 = $0 - $3
+          0x81, 0x0, 0x2,       # psave $0 &2       // storage::supply = $0
+          0x29, 0x0, 0x1,       # pmake $0 0x1      // $0 = make(bool)
+          0x62, 0x0, 0x0,       # not $0 $0         // $0 = !$0
+          0x05, 0x0, 0x0,       # yield $0 &0       // returns::ok = $0
         ]
-

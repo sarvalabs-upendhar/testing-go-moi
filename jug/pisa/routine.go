@@ -41,7 +41,7 @@ func (routine Routine) Execute(scope register.ExecutionScope, inputs register.Va
 	}
 
 	// This assertion must never fail
-	outerScope, ok := scope.(*ExecutionScope)
+	outerScope, ok := scope.(*CallScope)
 	if !ok {
 		panic("non routine scope used for routine execution")
 	}

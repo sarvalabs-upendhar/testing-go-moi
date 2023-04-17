@@ -1,8 +1,7 @@
+//nolint:nlreturn
 package pisa
 
 import (
-	"bytes"
-
 	"github.com/pkg/errors"
 
 	"github.com/sarvalabs/moichain/jug/engineio"
@@ -24,137 +23,329 @@ func (instructs Instructions) Len() uint64 {
 	return uint64(len(instructs))
 }
 
-// InstructOperation represents the instruction operations for a single PISA OpCode.
-// The operations include fuel calculation, operand reading and op execution
-type InstructOperation struct {
-	// operand specifies a function for reading the operands for an OpCode from a bytes.Reader.
-	// The function returns the slice of operands as well as a bool indicating a successful read.
-	Operand func(*bytes.Reader) ([]byte, bool)
-
-	// execute specifies a function for executing an OpCode within a given Context for some operands.
-	Execute func(*ExecutionScope, []byte)
-	// expense specifies a function for calculating the fuel consumption of an OpCode.
-	Expense func(scope *ExecutionScope) engineio.Fuel
-}
+// InstructOperation represents the instruction operation for a single PISA OpCode.
+// The function executes within a given execution scope
+type InstructOperation func(*CallScope, []byte) engineio.Fuel
 
 // InstructionSet represents the opcode instructions for the PISA Runtime
-type InstructionSet [256]*InstructOperation
+type InstructionSet [256]InstructOperation
 
 // BaseInstructionSet returns an InstructionSet with all the base opcodes and their instructions initialized.
 func BaseInstructionSet() InstructionSet {
 	return InstructionSet{
-		TERM:  {operand0, opTERM, fuel},
-		DEST:  {operand0, opDEST, fuel},
-		JUMP:  {operand1, opJUMP, fuel},
-		JUMPI: {operand2, opJUMPI, fuel},
+		TERM:   opTERM,
+		DEST:   opDEST,
+		JUMP:   opJUMP,
+		JUMPI:  opJUMPI,
+		OBTAIN: opOBTAIN,
+		YIELD:  opYIELD,
 
-		MAKE:  {operand2, opMAKE, fuel},
-		LDPTR: {operandLDPTR, opLDPTR, fuel},
-		CONST: {operand1, opCONST, fuel},
-		BUILD: {operand1, opBUILD, fuel},
+		// CARGS: opCARGS,
+		// CALLB:  opCALLB,
+		// CALLR:  opCALLR,
+		// CALLM:  opCALLM,
 
-		ACCEPT: {operand2, opACCEPT, fuel},
-		RETURN: {operand2, opRETURN, fuel},
+		CONST:  opCONST,
+		LDPTR1: opLDPTR,
+		LDPTR2: opLDPTR,
+		LDPTR3: opLDPTR,
+		LDPTR4: opLDPTR,
+		LDPTR5: opLDPTR,
+		LDPTR6: opLDPTR,
+		LDPTR7: opLDPTR,
+		LDPTR8: opLDPTR,
 
-		LOAD:  {operand2, opLOAD, fuel},
-		STORE: {operand2, opSTORE, fuel},
+		ISNULL: opISNULL,
+		// ZERO: opZERO,
+		// CLEAR: opCLEAR,
+		// SAME: opSAME,
+		COPY: opCOPY,
+		// SWAP: opSWAP,
+		// SERIAL: opSERIAL,
+		// DESERIAL: opDESERIAL,
 
-		BOOL: {operand1, opBOOL, fuel},
-		STR:  {operand1, opSTR, fuel},
+		MAKE:  opMAKE,
+		PMAKE: opPMAKE,
+		// VMAKE: opVMAKE,
+		// BMAKE: opBMAKE,
 
-		ISNULL: {operand2, opISNULL, fuel},
+		// BUILD: opBUILD,
+		// THROW: opTHROW,
+		// EMIT: opEMIT,
+		// JOIN: opJOIN,
 
-		COPY: {operand2, opCOPY, fuel},
-		MOVE: {operand2, opMOVE, fuel},
+		LT: opLT,
+		GT: opGT,
+		EQ: opEQ,
 
-		GETIDX: {operand3, opGETIDX, fuel},
-		SETIDX: {operand3, opSETIDX, fuel},
-		GETFLD: {operand3, opGETFLD, fuel},
-		SETFLD: {operand3, opSETFLD, fuel},
+		BOOL: opBOOL,
+		STR:  opSTR,
+		// ADDR: opADDR,
 
-		LT:  {operand3, opLT, fuel},
-		LE:  {operand3, opLE, fuel},
-		GT:  {operand3, opGT, fuel},
-		GE:  {operand3, opGE, fuel},
-		EQ:  {operand3, opEQ, fuel},
-		NEQ: {operand3, opNEQ, fuel},
+		// SIZEOF: opSIZEOF,
+		GETFLD: opGETFLD,
+		SETFLD: opSETFLD,
+		GETIDX: opGETIDX,
+		SETIDX: opSETIDX,
 
-		INVERT: {operand1, opINVERT, fuel},
+		// GROW: opGROW,
+		// SLICE: opSLICE,
+		// APPEND: opAPPEND,
+		// POPEND: opPOPEND,
+		// DELKEY: opDELKEY,
 
-		ADD: {operand3, opADD, fuel},
-		SUB: {operand3, opSUB, fuel},
-		MUL: {operand3, opMUL, fuel},
-		DIV: {operand3, opDIV, fuel},
+		// AND: opAND,
+		// OR: opOR,
+		NOT: opNOT,
+
+		// INCR: opINCR,
+		// DECR: opDECR,
+
+		ADD: opADD,
+		SUB: opSUB,
+		MUL: opMUL,
+		DIV: opDIV,
+		// MOD: opMOD,
+
+		// BXOR: opBXOR,
+		// BAND: opBAND,
+		// BOR: opBOR,
+		// BNOT: opBNOT,
+
+		// LOGIC: opLOGIC,
+		// SENDER: opSENDER,
+
+		PLOAD: opPLOAD,
+		PSAVE: opPSAVE,
 	}
 }
 
-// fuel is a standard fuel function that deducts 10 FUEL
-func fuel(_ *ExecutionScope) engineio.Fuel { return 10 }
+func opTERM(scope *CallScope, _ []byte) engineio.Fuel {
+	scope.stop()
+	return 0
+}
 
-func opTERM(scope *ExecutionScope, _ []byte) { scope.stop() }
+func opDEST(_ *CallScope, _ []byte) engineio.Fuel {
+	return 1
+}
 
-func opDEST(_ *ExecutionScope, _ []byte) {}
-
-func opJUMP(scope *ExecutionScope, operands []byte) {
+func opJUMP(scope *CallScope, operands []byte) engineio.Fuel {
+	// JUMP [$X: ptr]
 	destination := operands[0]
 
 	// Load the pointer value from the register
 	pointer, except := scope.GetPtrValue(destination)
 	if except != nil {
 		scope.Throw(except)
-
-		return
+		return 0
 	}
 
 	scope.jumpTo(uint64(pointer))
+
+	return 10
 }
 
-func opJUMPI(scope *ExecutionScope, operands []byte) {
-	condition, destination := operands[0], operands[1]
+func opJUMPI(scope *CallScope, operands []byte) engineio.Fuel {
+	// JUMPI [$X: ptr][$Y: __bool__]
+	destination, condition := operands[0], operands[1]
 
 	// Retrieve the condition register
 	regCondition, exists := scope.registers.Get(condition)
 	if !exists {
 		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", condition))
-
-		return
+		return 0
 	}
 
-	// Check that register is Boolean
-	if !regCondition.Type().Equals(engineio.TypeBool) {
-		scope.Throw(exception.Exception(
-			exception.InvalidRegisterType,
-			"cannot evaluate non-boolean register for jump condition",
-		))
+	// Check that condition register implements __bool__
+	methodBool, ok := scope.engine.GetTypeMethod(regCondition.Type(), register.MethodBool)
+	if !ok {
+		scope.Throw(exception.Exceptionf(exception.MethodNotFound, "%v does not implement __bool__", regCondition.Type()))
+		return 0
+	}
 
-		return
+	// Execute the __bool__ method of the condition
+	outputs := methodBool.Execute(scope, register.ValueTable{0: regCondition})
+	// Check if an exception was thrown
+	if scope.ExceptionThrown() {
+		return 10
 	}
 
 	// If condition is false, no jump
-	if !regCondition.(register.BoolValue) { //nolint:forcetypeassert
-		return
+	result := outputs[0]
+	if !result.(register.BoolValue) { //nolint:forcetypeassert
+		return 10
 	}
 
 	// Load the pointer value from the register
 	pointer, except := scope.GetPtrValue(destination)
 	if except != nil {
 		scope.Throw(except)
-
-		return
+		return 10
 	}
 
 	scope.jumpTo(uint64(pointer))
+
+	return 20
 }
 
-func opMAKE(scope *ExecutionScope, operands []byte) {
-	// Fetch the target register and the type ID
+func opOBTAIN(scope *CallScope, operands []byte) engineio.Fuel {
+	// OBTAIN [$X][&Y]
+	reg, slot := operands[0], operands[1]
+
+	// Retrieve the calldata value
+	val, exists := scope.inputs.Get(slot)
+	if !exists {
+		scope.Throw(exception.Exceptionf(exception.InputNotFound, "input &%v", slot))
+		return 0
+	}
+
+	// Set the register value
+	scope.registers.Set(reg, val)
+
+	return 5
+}
+
+func opYIELD(scope *CallScope, operands []byte) engineio.Fuel {
+	// YIELD [$X][&Y]
+	reg, slot := operands[0], operands[1]
+
+	// Retrieve the register
+	value, exists := scope.registers.Get(reg)
+	if !exists {
+		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", reg))
+		return 0
+	}
+
+	// Set the return slot value
+	scope.outputs.Set(slot, value)
+
+	return 5
+}
+
+func opCONST(scope *CallScope, operands []byte) engineio.Fuel {
+	// CONST [$X][$Y: ptr]
+	out, reg := operands[0], operands[1]
+
+	// Load the pointer value from the register
+	pointer, except := scope.GetPtrValue(reg)
+	if except != nil {
+		scope.Throw(except)
+		return 0
+	}
+
+	// Get the constant from the environment
+	constant, err := scope.engine.GetConstant(pointer)
+	if err != nil {
+		scope.Throw(exception.Exceptionf(exception.ElementNotFound, "constant %#v not found: %v", pointer, err))
+		return 0
+	}
+
+	// Create value from the constant definition
+	constVal, err := constant.Value()
+	if err != nil {
+		scope.Throw(exception.Exception(exception.ValueInit, err.Error()))
+		return 0
+	}
+
+	// Set the constant value into the register
+	scope.registers.Set(out, constVal)
+
+	return 20
+}
+
+func opLDPTR(scope *CallScope, operands []byte) engineio.Fuel {
+	// LDPTRn [$X: ptr][0x00]
+	target, ptr := operands[0], operands[1:]
+
+	// Decipher constant ID into 64-bit address
+	value, err := ptrdecode(ptr)
+	if err != nil {
+		scope.Throw(exception.Exception(exception.PointerOverflow, ""))
+		return 0
+	}
+
+	// Create a new Pointer value
+	pointer := register.PtrValue(value)
+	// Set the register value
+	scope.registers.Set(target, pointer)
+
+	return 10 + engineio.Fuel(len(ptr))
+}
+
+func opISNULL(scope *CallScope, operands []byte) engineio.Fuel {
+	// ISNULL [$X: bool][$Y]
+	out, reg := operands[0], operands[1]
+
+	// Retrieve the register
+	regVal, exists := scope.registers.Get(reg)
+	if !exists {
+		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", reg))
+		return 0
+	}
+
+	// Set isnull to true if register has nil value or has type Null
+	isnull := register.BoolValue(register.IsNullValue(regVal))
+	// Set the register
+	scope.registers.Set(out, isnull)
+
+	return 5
+}
+
+func opCOPY(scope *CallScope, operands []byte) engineio.Fuel {
+	// Fetch the source and destination registers IDs
+	destination, source := operands[0], operands[1]
+
+	// Retrieve the register at source
+	reg, exists := scope.registers.Get(source)
+	if !exists {
+		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", source))
+		return 0
+	}
+
+	// Set a copy of the register to the destination
+	scope.registers.Set(destination, reg.Copy())
+
+	return 5
+}
+
+func opMAKE(scope *CallScope, operands []byte) engineio.Fuel {
+	// MAKE [$X][$Y: ptr]
+	reg := operands[0]
+
+	// Load the pointer value from the register
+	pointer, except := scope.GetPtrValue(reg)
+	if except != nil {
+		scope.Throw(except)
+		return 0
+	}
+
+	typedef, err := scope.engine.GetTypedef(pointer)
+	if err != nil {
+		scope.Throw(exception.Exceptionf(exception.ElementNotFound, "typedef %#v not found: %v", pointer, err))
+		return 0
+	}
+
+	// Create a new default value for the typedef
+	typeval, err := register.NewValue(typedef, nil)
+	if err != nil {
+		scope.Throw(exception.Exception(exception.ValueInit, err.Error()))
+		return 0
+	}
+
+	// Set the constant value into the register
+	scope.registers.Set(reg, typeval)
+
+	return 20
+}
+
+func opPMAKE(scope *CallScope, operands []byte) engineio.Fuel {
+	// PMAKE [$X][Y: 0x00]
 	output, typeID := operands[0], operands[1]
 
 	// Check if type ID is valid
 	if typeID > engineio.MaxPrimitive {
 		scope.Throw(exception.Exceptionf(exception.InvalidTypeID, "type ID %#v", typeID))
-
-		return
+		return 0
 	}
 
 	// Create a datatype from the type ID
@@ -163,395 +354,182 @@ func opMAKE(scope *ExecutionScope, operands []byte) {
 	value, err := register.NewValue(datatype, nil)
 	if err != nil {
 		scope.Throw(exception.Exception(exception.ValueInit, err.Error()))
-
-		return
+		return 0
 	}
 
 	// Set the register value
 	scope.registers.Set(output, value)
+
+	return 10
 }
 
-func opLDPTR(scope *ExecutionScope, operands []byte) {
-	// Fetch the register ID and pointer value
-	target, pointerData := operands[1], operands[2:]
+func opLT(scope *CallScope, operands []byte) engineio.Fuel {
+	// LT [$X: bool][$Y: __lt__][$Z: __lt__]
+	out, a, b := operands[0], operands[1], operands[2]
 
-	// Decipher constant ID into 64-bit address
-	pointerVal, err := ptrdecode(pointerData)
-	if err != nil {
-		scope.Throw(exception.Exception(exception.PointerOverflow, ""))
-
-		return
-	}
-
-	// Create a new Pointer value
-	pointer := register.PtrValue(pointerVal)
-	// Set the register value
-	scope.registers.Set(target, pointer)
-}
-
-func opCONST(scope *ExecutionScope, operands []byte) {
-	// Fetch the registers ID
-	regID := operands[0]
-	// Load the pointer value from the register
-	pointer, except := scope.GetPtrValue(regID)
+	// Get two values of the same type
+	regA, regB, except := scope.GetSymmetricValues(a, b)
 	if except != nil {
 		scope.Throw(except)
-
-		return
+		return 0
 	}
 
-	// Get the constant from the environment
-	constant, err := scope.engine.GetConstant(pointer)
-	if err != nil {
-		scope.Throw(exception.Exceptionf(exception.ElementNotFound, "constant %#v not found: %v", pointer, err))
-
-		return
-	}
-
-	// Create value from the constant definition
-	constVal, err := constant.Value()
-	if err != nil {
-		scope.Throw(exception.Exception(exception.ValueInit, err.Error()))
-
-		return
-	}
-
-	// Set the constant value into the register
-	scope.registers.Set(regID, constVal)
-}
-
-func opBUILD(scope *ExecutionScope, operands []byte) {
-	// Fetch the registers ID
-	regID := operands[0]
-	// Load the pointer value from the register
-	pointer, except := scope.GetPtrValue(regID)
-	if except != nil {
-		scope.Throw(except)
-
-		return
-	}
-
-	typedef, err := scope.engine.GetTypedef(pointer)
-	if err != nil {
-		scope.Throw(exception.Exceptionf(exception.ElementNotFound, "typedef %#v not found: %v", pointer, err))
-
-		return
-	}
-
-	// Create a new default value for the typedef
-	typeval, err := register.NewValue(typedef, nil)
-	if err != nil {
-		scope.Throw(exception.Exception(exception.ValueInit, err.Error()))
-
-		return
-	}
-
-	// Set the constant value into the register
-	scope.registers.Set(regID, typeval)
-}
-
-func opACCEPT(scope *ExecutionScope, operands []byte) {
-	// Fetch the register ID and load slot
-	regID, slot := operands[0], operands[1]
-
-	// Retrieve the calldata value
-	val, exists := scope.inputs.Get(slot)
-	if !exists {
-		scope.Throw(exception.Exceptionf(exception.InputNotFound, "input &%v", slot))
-
-		return
-	}
-
-	// Set the register value
-	scope.registers.Set(regID, val)
-}
-
-func opRETURN(scope *ExecutionScope, operands []byte) {
-	// Fetch the register ID and return slot
-	regID, slot := operands[0], operands[1]
-
-	// Retrieve the register
-	value, exists := scope.registers.Get(regID)
-	if !exists {
-		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", regID))
-
-		return
-	}
-
-	// Set the calldata value
-	scope.outputs.Set(slot, value)
-}
-
-func opLOAD(scope *ExecutionScope, operands []byte) {
-	// Fetch the register ID and storage slot
-	regID, slot := operands[0], operands[1]
-
-	layout, err := scope.engine.GetStateFields(engineio.PersistentState)
-	if err != nil {
-		scope.Throw(exception.Exceptionf(exception.ElementNotFound, "persistent state field not found: %v", err))
-
-		return
-	}
-
-	storageField := layout.Get(slot)
-	if storageField == nil {
-		scope.Throw(exception.Exceptionf(exception.ElementNotFound, "persistent state field &%v", slot))
-
-		return
-	}
-
-	storedValue, ok := scope.internal.GetStorageEntry(SlotHash(slot))
+	// Retrieve the __lt__ method for the register type
+	method, ok := scope.engine.GetTypeMethod(regA.Type(), register.MethodLt)
 	if !ok {
-		storedValue = nil
+		scope.Throw(exception.Exceptionf(exception.MethodNotFound, "%v does not implement __lt__", regA.Type()))
+		return 0
 	}
 
-	value, err := register.NewValue(storageField.Type, storedValue)
-	if err != nil {
-		scope.Throw(exception.Exception(exception.ValueInit, err.Error()))
-
-		return
+	// Execute the __lt__ method
+	outputs := method.Execute(scope, register.ValueTable{0: regA, 1: regB})
+	// Check for exceptions
+	if scope.ExceptionThrown() {
+		return 0
 	}
 
-	// Set the register value
-	scope.registers.Set(regID, value)
+	// Get the result from the outputs
+	result := outputs[0]
+	// Set the register
+	scope.registers.Set(out, result)
+
+	return 20
 }
 
-func opSTORE(scope *ExecutionScope, operands []byte) {
-	// Fetch the register ID and storage slot
-	regID, slot := operands[0], operands[1]
+func opGT(scope *CallScope, operands []byte) engineio.Fuel {
+	// GT [$X: bool][$Y: __gt__][$Z: __gt__]
+	out, a, b := operands[0], operands[1], operands[2]
 
-	// Retrieve the register
-	reg, exists := scope.registers.Get(regID)
-	if !exists {
-		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", regID))
-
-		return
+	// Get two values of the same type
+	regA, regB, except := scope.GetSymmetricValues(a, b)
+	if except != nil {
+		scope.Throw(except)
+		return 0
 	}
 
-	if ok := scope.internal.SetStorageEntry(SlotHash(slot), reg.Data()); !ok {
-		scope.Throw(exception.Exceptionf(exception.StorageWrite, "could not write to &%v", slot))
-
-		return
+	// Retrieve the __gt__ method for the register type
+	method, ok := scope.engine.GetTypeMethod(regA.Type(), register.MethodGt)
+	if !ok {
+		scope.Throw(exception.Exceptionf(exception.MethodNotFound, "%v does not implement __gt__", regA.Type()))
+		return 0
 	}
+
+	// Execute the __gt__ method
+	outputs := method.Execute(scope, register.ValueTable{0: regA, 1: regB})
+	// Check for exceptions
+	if scope.ExceptionThrown() {
+		return 0
+	}
+
+	// Get the result from the outputs
+	result := outputs[0]
+	// Set the register
+	scope.registers.Set(out, result)
+
+	return 20
 }
 
-func opBOOL(scope *ExecutionScope, operands []byte) {
-	regID := operands[0]
+func opEQ(scope *CallScope, operands []byte) engineio.Fuel {
+	// EQ [$X: bool][$Y: __eq__][$Z: __eq__]
+	a, b := operands[1], operands[2]
+
+	// Get two values of the same type
+	regA, regB, except := scope.GetSymmetricValues(a, b)
+	if except != nil {
+		scope.Throw(except)
+		return 0
+	}
+
+	// Retrieve the __eq__ method for the register type
+	method, ok := scope.engine.GetTypeMethod(regA.Type(), register.MethodEq)
+	if !ok {
+		scope.Throw(exception.Exceptionf(exception.MethodNotFound, "%v does not implement __eq__", regA.Type()))
+		return 0
+	}
+
+	// Execute the __eq__ method
+	outputs := method.Execute(scope, register.ValueTable{0: regA, 1: regB})
+	// Check for exceptions
+	if scope.ExceptionThrown() {
+		return 0
+	}
+
+	// Get the result from the outputs
+	result := outputs[0]
+	// Set the register
+	scope.registers.Set(operands[0], result)
+
+	return 20
+}
+
+func opBOOL(scope *CallScope, operands []byte) engineio.Fuel {
+	// BOOL [$X: bool][$Y: __bool__]
+	out, reg := operands[0], operands[1]
 
 	// Retrieve the register
-	reg, exists := scope.registers.Get(regID)
+	regVal, exists := scope.registers.Get(reg)
 	if !exists {
-		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", regID))
-
-		return
+		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", reg))
+		return 0
 	}
 
 	// Retrieve the __bool__ method for the register type
-	method, ok := scope.engine.GetTypeMethod(reg.Type(), register.MethodBool)
+	method, ok := scope.engine.GetTypeMethod(regVal.Type(), register.MethodBool)
 	if !ok {
-		scope.Throw(exception.Exceptionf(exception.MethodNotFound, "%v does not implement __bool__", reg.Type()))
-
-		return
+		scope.Throw(exception.Exceptionf(exception.MethodNotFound, "%v does not implement __bool__", regVal.Type()))
+		return 0
 	}
 
 	// Execute the __bool__ method
-	outputs := method.Execute(scope, register.ValueTable{0: reg})
-
+	outputs := method.Execute(scope, register.ValueTable{0: regVal})
+	// Check for exceptions
 	if scope.ExceptionThrown() {
-		return
+		return 0
 	}
 
 	// Get the result from the outputs
 	result := outputs[0]
 	// Set the register
-	scope.registers.Set(regID, result)
+	scope.registers.Set(out, result)
+
+	return 20
 }
 
-func opSTR(scope *ExecutionScope, operands []byte) {
-	regID := operands[0]
+func opSTR(scope *CallScope, operands []byte) engineio.Fuel {
+	// STR [$X: string][$Y: __str__]
+	out, reg := operands[0], operands[1]
 
 	// Retrieve the register
-	reg, exists := scope.registers.Get(regID)
+	regVal, exists := scope.registers.Get(reg)
 	if !exists {
-		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", regID))
-
-		return
+		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", reg))
+		return 0
 	}
 
 	// Retrieve the __str__ method for the register type
-	method, ok := scope.engine.GetTypeMethod(reg.Type(), register.MethodStr)
+	method, ok := scope.engine.GetTypeMethod(regVal.Type(), register.MethodStr)
 	if !ok {
-		scope.Throw(exception.Exceptionf(exception.MethodNotFound, "%v does not implement __str__", reg.Type()))
-
-		return
+		scope.Throw(exception.Exceptionf(exception.MethodNotFound, "%v does not implement __str__", regVal.Type()))
+		return 0
 	}
 
 	// Execute the __str__ method
-	outputs := method.Execute(scope, register.ValueTable{0: reg})
-
+	outputs := method.Execute(scope, register.ValueTable{0: regVal})
+	// Check for exceptions
 	if scope.ExceptionThrown() {
-		return
+		return 0
 	}
 
 	// Get the result from the outputs
 	result := outputs[0]
 	// Set the register
-	scope.registers.Set(regID, result)
+	scope.registers.Set(out, result)
+
+	return 20
 }
 
-func opISNULL(scope *ExecutionScope, operands []byte) {
-	// Fetch the registers IDs
-	out, regID := operands[0], operands[1]
-
-	// Retrieve the register
-	reg, exists := scope.registers.Get(regID)
-	if !exists {
-		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", regID))
-
-		return
-	}
-
-	// Set isnull to true if register has nil value or has type Null
-	isnull := register.BoolValue(register.IsNullValue(reg))
-	// Set the register
-	scope.registers.Set(out, isnull)
-}
-
-func opCOPY(scope *ExecutionScope, operands []byte) {
-	// Fetch the source and destination registers IDs
-	destination, source := operands[0], operands[1]
-
-	// Retrieve the register at source
-	reg, exists := scope.registers.Get(source)
-	if !exists {
-		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", source))
-
-		return
-	}
-
-	// Set a copy of the register to the destination
-	scope.registers.Set(destination, reg.Copy())
-}
-
-func opMOVE(scope *ExecutionScope, operands []byte) {
-	// Fetch the source and destination registers IDs
-	destination, source := operands[0], operands[1]
-
-	// Retrieve the register at source
-	reg, exists := scope.registers.Get(source)
-	if !exists {
-		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", source))
-
-		return
-	}
-
-	// Set a copy of the register to the destination
-	scope.registers.Set(destination, reg.Copy())
-	// UnSet() the register at source
-	scope.registers.Unset(source)
-}
-
-func opGETIDX(scope *ExecutionScope, operands []byte) {
-	// <reg:B> <reg:map[A]B> <reg:A>
-	output, collection, index := operands[0], operands[1], operands[2]
-
-	var (
-		exists         bool
-		regCol, regIdx register.Value
-	)
-
-	// Retrieve the register for collection
-	if regCol, exists = scope.registers.Get(collection); !exists {
-		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", collection))
-
-		return
-	}
-
-	// Retrieve the register for index
-	if regIdx, exists = scope.registers.Get(index); !exists {
-		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", index))
-
-		return
-	}
-
-	if !regCol.Type().Kind.IsCollection() {
-		scope.Throw(exception.Exceptionf(exception.InvalidRegisterType, "$%v is not a collection type", collection))
-
-		return
-	}
-
-	// Cast the collection into a Collection
-	collectionValue := regCol.(register.Collection) //nolint:forcetypeassert
-	// Get the value from the collection
-	element, err := collectionValue.Get(regIdx)
-	if err != nil {
-		scope.Throw(exception.Exception(exception.CollectionAccess, err.Error()))
-
-		return
-	}
-
-	// Set the output register
-	scope.registers.Set(output, element)
-}
-
-func opSETIDX(scope *ExecutionScope, operands []byte) {
-	// <reg:map[A]B> <reg:A> <reg:B>
-	collection, index, element := operands[0], operands[1], operands[2]
-
-	var (
-		exists                  bool
-		regCol, regIdx, regElem register.Value
-	)
-
-	// Retrieve the register for collection
-	if regCol, exists = scope.registers.Get(collection); !exists {
-		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", collection))
-
-		return
-	}
-
-	// Retrieve the register for index
-	if regIdx, exists = scope.registers.Get(index); !exists {
-		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", index))
-
-		return
-	}
-
-	// Retrieve the register for element
-	if regElem, exists = scope.registers.Get(element); !exists {
-		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", element))
-
-		return
-	}
-
-	// Check if collection value has been initialized
-	if register.IsNullValue(regCol) {
-		scope.Throw(exception.Exception(exception.NilCollection, "cannot set to nil mapping"))
-
-		return
-	}
-
-	if !regCol.Type().Kind.IsCollection() {
-		scope.Throw(exception.Exceptionf(exception.InvalidRegisterType, "$%v is not a collection type", collection))
-
-		return
-	}
-
-	// Cast the collection into a Collection
-	collectionValue := regCol.(register.Collection) //nolint:forcetypeassert
-	// Set the element value to the collection
-	if err := collectionValue.Set(regIdx, regElem); err != nil {
-		scope.Throw(exception.Exception(exception.CollectionAccess, err.Error()))
-
-		return
-	}
-
-	// Update the collection register
-	scope.registers.Set(collection, collectionValue)
-}
-
-func opGETFLD(scope *ExecutionScope, operands []byte) {
-	// GETFLD <reg:A> <reg:class[A,B]> <slot:0>
+func opGETFLD(scope *CallScope, operands []byte) engineio.Fuel {
+	// GETFLD [$X][$Y: class][&Z: 0x00]
 	output, class, slot := operands[0], operands[1], operands[2]
 
 	var (
@@ -562,15 +540,13 @@ func opGETFLD(scope *ExecutionScope, operands []byte) {
 	// Retrieve the register for class
 	if regClass, exists = scope.registers.Get(class); !exists {
 		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", class))
-
-		return
+		return 0
 	}
 
 	// Verify that register is of ClassType
 	if regClass.Type().Kind != engineio.ClassType {
 		scope.Throw(exception.Exceptionf(exception.InvalidRegisterType, "$%v is not a class type", class))
-
-		return
+		return 0
 	}
 
 	// Cast the value into a ClassValue
@@ -579,16 +555,17 @@ func opGETFLD(scope *ExecutionScope, operands []byte) {
 	fieldValue, err := classValue.Get(slot)
 	if err != nil {
 		scope.Throw(exception.Exception(exception.ClassFieldAccess, err.Error()))
-
-		return
+		return 0
 	}
 
 	// Set the output register
 	scope.registers.Set(output, fieldValue)
+
+	return 10
 }
 
-func opSETFLD(scope *ExecutionScope, operands []byte) {
-	// SETFLD <reg:class[A,B]> <slot:0> <reg:A>
+func opSETFLD(scope *CallScope, operands []byte) engineio.Fuel {
+	// SETFLD [$X: class][&Y: 0x00][$Z]
 	class, slot, element := operands[0], operands[1], operands[2]
 
 	var (
@@ -599,29 +576,25 @@ func opSETFLD(scope *ExecutionScope, operands []byte) {
 	// Retrieve the register for class
 	if regClass, exists = scope.registers.Get(class); !exists {
 		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", class))
-
-		return
+		return 0
 	}
 
 	// Retrieve the register for field element
 	if regElem, exists = scope.registers.Get(element); !exists {
 		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", element))
-
-		return
+		return 0
 	}
 
 	// Check if class value has been initialized
 	if register.IsNullValue(regClass) {
 		scope.Throw(exception.Exception(exception.NilCollection, "cannot set to nil class"))
-
-		return
+		return 0
 	}
 
 	// Verify that register is of ClassType
 	if regClass.Type().Kind != engineio.ClassType {
 		scope.Throw(exception.Exceptionf(exception.InvalidRegisterType, "$%v is not a class type", class))
-
-		return
+		return 0
 	}
 
 	// Cast the value into a ClassValue
@@ -629,272 +602,143 @@ func opSETFLD(scope *ExecutionScope, operands []byte) {
 	// Set the element value to the class
 	if err := classValue.Set(slot, regElem); err != nil {
 		scope.Throw(exception.Exception(exception.ClassFieldAccess, err.Error()))
-
-		return
+		return 0
 	}
 
 	// Update the class register
 	scope.registers.Set(class, classValue)
+
+	return 20
 }
 
-func opLT(scope *ExecutionScope, operands []byte) {
-	// Fetch the register IDs for the inputs
-	a, b := operands[1], operands[2]
-	// Get two values of the same type
-	regA, regB, except := scope.GetSymmetricValues(a, b)
-	if except != nil {
-		scope.Throw(except)
+func opGETIDX(scope *CallScope, operands []byte) engineio.Fuel {
+	// GETIDX [$X][$Y:col][$Z: idx]
+	output, collection, index := operands[0], operands[1], operands[2]
 
-		return
+	var (
+		exists         bool
+		regCol, regIdx register.Value
+	)
+
+	// Retrieve the register for collection
+	if regCol, exists = scope.registers.Get(collection); !exists {
+		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", collection))
+		return 0
 	}
 
-	// Retrieve the __lt__ method for the register type
-	method, ok := scope.engine.GetTypeMethod(regA.Type(), register.MethodLt)
-	if !ok {
-		scope.Throw(exception.Exceptionf(exception.MethodNotFound, "%v does not implement __lt__", regA.Type()))
-
-		return
+	// Retrieve the register for index
+	if regIdx, exists = scope.registers.Get(index); !exists {
+		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", index))
+		return 0
 	}
 
-	// Execute the __lt__ method
-	outputs := method.Execute(scope, register.ValueTable{0: regA, 1: regB})
-
-	if scope.ExceptionThrown() {
-		return
+	if !regCol.Type().Kind.IsCollection() {
+		scope.Throw(exception.Exceptionf(exception.InvalidRegisterType, "$%v is not a collection type", collection))
+		return 0
 	}
 
-	// Get the result from the outputs
-	result := outputs[0]
-	// Set the register
-	scope.registers.Set(operands[0], result)
+	// Cast the collection into a Collection
+	collectionValue := regCol.(register.Collection) //nolint:forcetypeassert
+	// Get the value from the collection
+	element, err := collectionValue.Get(regIdx)
+	if err != nil {
+		scope.Throw(exception.Exception(exception.CollectionAccess, err.Error()))
+		return 0
+	}
+
+	// Set the output register
+	scope.registers.Set(output, element)
+
+	return 10
 }
 
-//nolint:dupl
-func opLE(scope *ExecutionScope, operands []byte) {
-	// Fetch the register IDs for the inputs
-	a, b := operands[1], operands[2]
-	// Get two values of the same type
-	regA, regB, except := scope.GetSymmetricValues(a, b)
-	if except != nil {
-		scope.Throw(except)
+func opSETIDX(scope *CallScope, operands []byte) engineio.Fuel {
+	// SETIDX [$X: col][$Y: idx][$Z]
+	collection, index, element := operands[0], operands[1], operands[2]
 
-		return
+	var (
+		exists                  bool
+		regCol, regIdx, regElem register.Value
+	)
+
+	// Retrieve the register for collection
+	if regCol, exists = scope.registers.Get(collection); !exists {
+		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", collection))
+		return 0
 	}
 
-	// Retrieve the __lt__ method for the register type
-	methodLT, ok := scope.engine.GetTypeMethod(regA.Type(), register.MethodLt)
-	if !ok {
-		scope.Throw(exception.Exceptionf(exception.MethodNotFound, "%v does not implement __lt__", regA.Type()))
-
-		return
+	// Retrieve the register for index
+	if regIdx, exists = scope.registers.Get(index); !exists {
+		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", index))
+		return 0
 	}
 
-	// Retrieve the __eq__ method for the register type
-	methodEQ, ok := scope.engine.GetTypeMethod(regA.Type(), register.MethodEq)
-	if !ok {
-		scope.Throw(exception.Exceptionf(exception.MethodNotFound, "%v does not implement __eq__", regA.Type()))
-
-		return
+	// Retrieve the register for element
+	if regElem, exists = scope.registers.Get(element); !exists {
+		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", element))
+		return 0
 	}
 
-	// Execute the __lt__ method
-	outputsLT := methodLT.Execute(scope, register.ValueTable{0: regA, 1: regB})
-
-	if scope.ExceptionThrown() {
-		return
+	// Check if collection value has been initialized
+	if register.IsNullValue(regCol) {
+		scope.Throw(exception.Exception(exception.NilCollection, "cannot set to nil mapping"))
+		return 0
 	}
 
-	// Execute the __eq__ method
-	outputsEQ := methodEQ.Execute(scope, register.ValueTable{0: regA, 1: regB})
-
-	if scope.ExceptionThrown() {
-		return
+	if !regCol.Type().Kind.IsCollection() {
+		scope.Throw(exception.Exceptionf(exception.InvalidRegisterType, "$%v is not a collection type", collection))
+		return 0
 	}
 
-	// Get the result from the outputs lt OR eq (as booleans)
-	result := outputsLT[0].(register.BoolValue).Or(outputsEQ[0].(register.BoolValue)) //nolint:forcetypeassert
-	// Set the register
-	scope.registers.Set(operands[0], result)
+	// Cast the collection into a Collection
+	collectionValue := regCol.(register.Collection) //nolint:forcetypeassert
+	// Set the element value to the collection
+	if err := collectionValue.Set(regIdx, regElem); err != nil {
+		scope.Throw(exception.Exception(exception.CollectionAccess, err.Error()))
+		return 0
+	}
+
+	// Update the collection register
+	scope.registers.Set(collection, collectionValue)
+
+	return 20
 }
 
-func opGT(scope *ExecutionScope, operands []byte) {
-	// Fetch the register IDs for the inputs
-	a, b := operands[1], operands[2]
-	// Get two values of the same type
-	regA, regB, except := scope.GetSymmetricValues(a, b)
-	if except != nil {
-		scope.Throw(except)
-
-		return
-	}
-
-	// Retrieve the __gt__ method for the register type
-	method, ok := scope.engine.GetTypeMethod(regA.Type(), register.MethodGt)
-	if !ok {
-		scope.Throw(exception.Exceptionf(exception.MethodNotFound, "%v does not implement __gt__", regA.Type()))
-
-		return
-	}
-
-	// Execute the __gt__ method
-	outputs := method.Execute(scope, register.ValueTable{0: regA, 1: regB})
-
-	if scope.ExceptionThrown() {
-		return
-	}
-
-	// Get the result from the outputs
-	result := outputs[0]
-	// Set the register
-	scope.registers.Set(operands[0], result)
-}
-
-//nolint:dupl
-func opGE(scope *ExecutionScope, operands []byte) {
-	// Fetch the register IDs for the inputs
-	a, b := operands[1], operands[2]
-	// Get two values of the same type
-	regA, regB, except := scope.GetSymmetricValues(a, b)
-	if except != nil {
-		scope.Throw(except)
-
-		return
-	}
-
-	// Retrieve the __gt__ method for the register type
-	methodGT, ok := scope.engine.GetTypeMethod(regA.Type(), register.MethodGt)
-	if !ok {
-		scope.Throw(exception.Exceptionf(exception.MethodNotFound, "%v does not implement __gt__", regA.Type()))
-
-		return
-	}
-
-	// Retrieve the __eq__ method for the register type
-	methodEQ, ok := scope.engine.GetTypeMethod(regA.Type(), register.MethodEq)
-	if !ok {
-		scope.Throw(exception.Exceptionf(exception.MethodNotFound, "%v does not implement __eq__", regA.Type()))
-
-		return
-	}
-
-	// Execute the __gt__ method
-	outputsGT := methodGT.Execute(scope, register.ValueTable{0: regA, 1: regB})
-
-	if scope.ExceptionThrown() {
-		return
-	}
-
-	// Execute the __eq__ method
-	outputsEQ := methodEQ.Execute(scope, register.ValueTable{0: regA, 1: regB})
-
-	if scope.ExceptionThrown() {
-		return
-	}
-
-	// Get the result from the outputs gt OR eq (as booleans)
-	result := outputsGT[0].(register.BoolValue).Or(outputsEQ[0].(register.BoolValue)) //nolint:forcetypeassert
-	// Set the register
-	scope.registers.Set(operands[0], result)
-}
-
-func opEQ(scope *ExecutionScope, operands []byte) {
-	// Fetch the register IDs for the inputs
-	a, b := operands[1], operands[2]
-	// Get two values of the same type
-	regA, regB, except := scope.GetSymmetricValues(a, b)
-	if except != nil {
-		scope.Throw(except)
-
-		return
-	}
-
-	// Retrieve the __eq__ method for the register type
-	method, ok := scope.engine.GetTypeMethod(regA.Type(), register.MethodEq)
-	if !ok {
-		scope.Throw(exception.Exceptionf(exception.MethodNotFound, "%v does not implement __eq__", regA.Type()))
-
-		return
-	}
-
-	// Execute the __eq__ method
-	outputs := method.Execute(scope, register.ValueTable{0: regA, 1: regB})
-
-	if scope.ExceptionThrown() {
-		return
-	}
-
-	// Get the result from the outputs
-	result := outputs[0]
-	// Set the register
-	scope.registers.Set(operands[0], result)
-}
-
-func opNEQ(scope *ExecutionScope, operands []byte) {
-	// Fetch the register IDs for the inputs
-	a, b := operands[1], operands[2]
-	// Get two values of the same type
-	regA, regB, except := scope.GetSymmetricValues(a, b)
-	if except != nil {
-		scope.Throw(except)
-
-		return
-	}
-
-	// Retrieve the __eq__ method for the register type
-	method, ok := scope.engine.GetTypeMethod(regA.Type(), register.MethodEq)
-	if !ok {
-		scope.Throw(exception.Exceptionf(exception.MethodNotFound, "%v does not implement __eq__", regA.Type()))
-
-		return
-	}
-
-	// Execute the __eq__ method
-	outputs := method.Execute(scope, register.ValueTable{0: regA, 1: regB})
-
-	if scope.ExceptionThrown() {
-		return
-	}
-
-	// Get the result from the outputs and invert it (as a boolean)
-	result := outputs[0].(register.BoolValue).Not() //nolint:forcetypeassert
-	// Set the register
-	scope.registers.Set(operands[0], result)
-}
-
-func opINVERT(scope *ExecutionScope, operands []byte) {
-	regID := operands[0]
+func opNOT(scope *CallScope, operands []byte) engineio.Fuel {
+	// NOT [$X: bool][$Y: __bool__]
+	out, reg := operands[0], operands[1]
 
 	// Retrieve the register
-	reg, exists := scope.registers.Get(regID)
+	regVal, exists := scope.registers.Get(reg)
 	if !exists {
-		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", regID))
-
-		return
+		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", reg))
+		return 0
 	}
 
 	// Check that register is Boolean
-	if !reg.Type().Equals(engineio.TypeBool) {
-		scope.Throw(exception.Exceptionf(exception.InvalidRegisterType, "cannot INVERT register of type %v", reg.Type()))
-
-		return
+	if !regVal.Type().Equals(engineio.TypeBool) {
+		scope.Throw(exception.Exceptionf(exception.InvalidRegisterType, "type %v does not implement __bool__", regVal.Type()))
+		return 0
 	}
 
 	// Cast the register value to Bool and flip
-	inverted := reg.(register.BoolValue).Not() //nolint:forcetypeassert
+	inverted := regVal.(register.BoolValue).Not() //nolint:forcetypeassert
 	// Set the register
-	scope.registers.Set(regID, inverted)
+	scope.registers.Set(out, inverted)
+
+	return 10
 }
 
 //nolint:dupl
-func opADD(scope *ExecutionScope, operands []byte) {
-	// Fetch the register IDs for output and inputs
+func opADD(scope *CallScope, operands []byte) engineio.Fuel {
+	// ADD [$X][$Y][$Z]
 	out, a, b := operands[0], operands[1], operands[2]
+
 	// Get two values of the same type
 	regA, regB, except := scope.GetSymmetricValues(a, b)
 	if except != nil {
 		scope.Throw(except)
-
-		return
+		return 0
 	}
 
 	var (
@@ -913,31 +757,31 @@ func opADD(scope *ExecutionScope, operands []byte) {
 
 	default:
 		scope.Throw(exception.Exceptionf(exception.InvalidRegisterType, "cannot ADD registers of type %v", regA.Type()))
-
-		return
+		return 0
 	}
 
 	// Throw an exception if overflow occurred
 	if overflow != nil {
 		scope.Throw(exception.Exception(exception.ArithmeticOverflow, "addition"))
-
-		return
+		return 20
 	}
 
 	// Set the register
 	scope.registers.Set(out, result)
+
+	return 20
 }
 
 //nolint:dupl
-func opSUB(scope *ExecutionScope, operands []byte) {
-	// Fetch the register IDs for output and inputs
+func opSUB(scope *CallScope, operands []byte) engineio.Fuel {
+	// SUB [$X][$Y][$Z]
 	out, a, b := operands[0], operands[1], operands[2]
+
 	// Get two values of the same type
 	regA, regB, except := scope.GetSymmetricValues(a, b)
 	if except != nil {
 		scope.Throw(except)
-
-		return
+		return 0
 	}
 
 	var (
@@ -956,31 +800,31 @@ func opSUB(scope *ExecutionScope, operands []byte) {
 
 	default:
 		scope.Throw(exception.Exceptionf(exception.InvalidRegisterType, "cannot SUB registers of type %v", regA.Type()))
-
-		return
+		return 0
 	}
 
 	// Throw an exception if overflow occurred
 	if overflow != nil {
 		scope.Throw(exception.Exception(exception.ArithmeticOverflow, "subtraction"))
-
-		return
+		return 20
 	}
 
 	// Set the register
 	scope.registers.Set(out, result)
+
+	return 20
 }
 
 //nolint:dupl
-func opMUL(scope *ExecutionScope, operands []byte) {
-	// Fetch the register IDs for output and inputs
+func opMUL(scope *CallScope, operands []byte) engineio.Fuel {
+	// MUL [$X][$Y][$Z]
 	out, a, b := operands[0], operands[1], operands[2]
+
 	// Get two values of the same type
 	regA, regB, except := scope.GetSymmetricValues(a, b)
 	if except != nil {
 		scope.Throw(except)
-
-		return
+		return 0
 	}
 
 	var (
@@ -999,30 +843,30 @@ func opMUL(scope *ExecutionScope, operands []byte) {
 
 	default:
 		scope.Throw(exception.Exceptionf(exception.InvalidRegisterType, "cannot MUL registers of type %v", regA.Type()))
-
-		return
+		return 0
 	}
 
 	// Throw an exception if overflow occurred
 	if overflow != nil {
 		scope.Throw(exception.Exception(exception.ArithmeticOverflow, "multiplication"))
-
-		return
+		return 30
 	}
 
 	// Set the register
 	scope.registers.Set(out, result)
+
+	return 30
 }
 
-func opDIV(scope *ExecutionScope, operands []byte) {
-	// Fetch the register IDs for output and inputs
+func opDIV(scope *CallScope, operands []byte) engineio.Fuel {
+	// DIV [$X][$Y][$Z]
 	out, a, b := operands[0], operands[1], operands[2]
+
 	// Get two values of the same type
 	regA, regB, except := scope.GetSymmetricValues(a, b)
 	if except != nil {
 		scope.Throw(except)
-
-		return
+		return 0
 	}
 
 	var (
@@ -1041,8 +885,7 @@ func opDIV(scope *ExecutionScope, operands []byte) {
 
 	default:
 		scope.Throw(exception.Exceptionf(exception.InvalidRegisterType, "cannot DIV registers of type %v", regA.Type()))
-
-		return
+		return 0
 	}
 
 	// Throw an exception if overflow occurred
@@ -1053,9 +896,63 @@ func opDIV(scope *ExecutionScope, operands []byte) {
 			scope.Throw(exception.Exception(exception.ArithmeticDivideByZero, "division"))
 		}
 
-		return
+		return 30
 	}
 
 	// Set the register
 	scope.registers.Set(out, result)
+
+	return 30
+}
+
+func opPLOAD(scope *CallScope, operands []byte) engineio.Fuel {
+	// PLOAD [$X: stored][&Y: 0x00]
+	reg, slot := operands[0], operands[1]
+
+	layout, err := scope.engine.GetStateFields(engineio.PersistentState)
+	if err != nil {
+		scope.Throw(exception.Exceptionf(exception.ElementNotFound, "persistent state field not found: %v", err))
+		return 0
+	}
+
+	storageField := layout.Get(slot)
+	if storageField == nil {
+		scope.Throw(exception.Exceptionf(exception.ElementNotFound, "persistent state field &%v", slot))
+		return 0
+	}
+
+	storedValue, ok := scope.internal.GetStorageEntry(SlotHash(slot))
+	if !ok {
+		storedValue = nil
+	}
+
+	value, err := register.NewValue(storageField.Type, storedValue)
+	if err != nil {
+		scope.Throw(exception.Exception(exception.ValueInit, err.Error()))
+		return 0
+	}
+
+	// Set the register value
+	scope.registers.Set(reg, value)
+
+	return 50
+}
+
+func opPSAVE(scope *CallScope, operands []byte) engineio.Fuel {
+	// PSAVE [$X: stored][&Y: 0x00]
+	reg, slot := operands[0], operands[1]
+
+	// Retrieve the register
+	regVal, exists := scope.registers.Get(reg)
+	if !exists {
+		scope.Throw(exception.Exceptionf(exception.RegisterNotFound, "register $%v", reg))
+		return 0
+	}
+
+	if ok := scope.internal.SetStorageEntry(SlotHash(slot), regVal.Data()); !ok {
+		scope.Throw(exception.Exceptionf(exception.StorageWrite, "could not write to &%v", slot))
+		return 0
+	}
+
+	return 100
 }

@@ -176,7 +176,7 @@ func (engine *Engine) ConsumeFuel(fuel engineio.Fuel) bool {
 	return engine.fueltank.Exhaust(fuel)
 }
 
-func (engine Engine) GetInstruction(opcode OpCode) *InstructOperation {
+func (engine Engine) GetInstruction(opcode OpCode) InstructOperation {
 	return engine.instructs[opcode]
 }
 

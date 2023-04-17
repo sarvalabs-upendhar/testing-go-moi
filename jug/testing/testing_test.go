@@ -21,6 +21,7 @@ func init() {
 type LogicTestSuite struct {
 	suite.Suite
 
+	fuel    engineio.Fuel
 	logic   engineio.LogicDriver
 	runtime engineio.EngineRuntime
 
@@ -40,10 +41,11 @@ func (suite *LogicTestSuite) Initialize(
 	manifest *engineio.Manifest,
 	expectedLogicID types.LogicID,
 	logicAddress types.Address,
+	fuel engineio.Fuel,
 ) engineio.Fuel {
 	runtime, _ := engineio.FetchEngineRuntime(manifest.Header().LogicEngine())
 	// Compile the Manifest into a LogicDescriptor
-	descriptor, consumed, err := runtime.CompileManifest(500, manifest)
+	descriptor, consumed, err := runtime.CompileManifest(fuel, manifest)
 	if err != nil {
 		suite.T().Fatalf("Compile Failed! Error: %v\n", err)
 	}
@@ -56,6 +58,7 @@ func (suite *LogicTestSuite) Initialize(
 	// Generate a new storage object
 	logicCtx := NewDebugContextDriver(logicAddress, logicObject.LogicID())
 
+	suite.fuel = fuel
 	suite.runtime = runtime
 	suite.logic = logicObject
 	suite.internal = logicCtx
@@ -65,7 +68,7 @@ func (suite *LogicTestSuite) Initialize(
 
 func (suite *LogicTestSuite) Deploy(ixn *engineio.IxnObject) engineio.Fuel {
 	// Create a PISA Engine for the executor
-	executor, err := suite.runtime.SpawnEngine(500, suite.logic, suite.internal, nil)
+	executor, err := suite.runtime.SpawnEngine(suite.fuel, suite.logic, suite.internal, nil)
 	if err != nil {
 		suite.T().Fatalf("Engine Bootstrap Failed! Error: %v\n", err)
 	}
@@ -92,7 +95,7 @@ func (suite *LogicTestSuite) Call(callsite string, inputs map[string]any) (engin
 
 func (suite *LogicTestSuite) Run(ixn *engineio.IxnObject) *engineio.CallResult {
 	// Create a PISA Engine for the executor
-	executor, err := suite.runtime.SpawnEngine(500, suite.logic, suite.internal, nil)
+	executor, err := suite.runtime.SpawnEngine(suite.fuel, suite.logic, suite.internal, nil)
 	if err != nil {
 		suite.T().Fatalf("Bootstrap Failed: %v", err)
 	}

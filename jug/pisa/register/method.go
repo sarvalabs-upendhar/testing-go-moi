@@ -18,18 +18,18 @@ type Method interface {
 type MethodCode byte
 
 const (
-	MethodNew  MethodCode = 0x0
-	MethodInit MethodCode = 0x1
-
-	MethodBool MethodCode = 0x2
-	MethodStr  MethodCode = 0x3
+	MethodBuild MethodCode = 0x0
+	MethodThrow MethodCode = 0x1
+	MethodEmit  MethodCode = 0x2
+	MethodJoin  MethodCode = 0x3
 
 	MethodLt MethodCode = 0x4
 	MethodGt MethodCode = 0x5
 	MethodEq MethodCode = 0x6
 
-	MethodJoin  MethodCode = 0x7
-	MethodThrow MethodCode = 0x8
+	MethodBool MethodCode = 0x7
+	MethodStr  MethodCode = 0x8
+	MethodAddr MethodCode = 0x9
 )
 
 // MethodTable represents a collection of Methods

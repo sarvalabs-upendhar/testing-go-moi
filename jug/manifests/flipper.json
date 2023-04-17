@@ -25,7 +25,7 @@
         "name": "Flip!",
         "kind": "invokable",
         "executes": {
-          "hex": "0x1300005600140000"
+          "hex": "0x800000620000810000"
         }
       }
     },
@@ -41,7 +41,7 @@
           {"slot": 0, "label": "value", "type": "bool"}
         ],
         "executes": {
-          "hex": "0x130000110000"
+          "hex": "0x800000050000"
         }
       }
     },
@@ -57,7 +57,7 @@
           {"slot": 0, "label": "value", "type": "bool"}
         ],
         "executes": {
-          "hex": "0x100000140000"
+          "hex": "0x040000810000"
         }
       }
     }

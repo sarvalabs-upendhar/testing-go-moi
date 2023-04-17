@@ -27,26 +27,26 @@ func (suite *FlipperTestSuite) SetupSuite() {
 	address := randomAddress()
 	logicID, _ := types.NewLogicIDv0(true, false, false, false, 0, address)
 
-	consumed := suite.Initialize(manifest, logicID, address)
+	consumed := suite.Initialize(manifest, logicID, address, 5000)
 	suite.Equal(engineio.Fuel(100), consumed)
 }
 
 func (suite *FlipperTestSuite) TestFlipping() {
 	consumed, output := suite.Call("Mode", nil)
 	suite.Equal(false, output["value"])
-	suite.Equal(engineio.Fuel(70), consumed)
+	suite.Equal(engineio.Fuel(105), consumed)
 
 	consumed, _ = suite.Call("Set!", map[string]any{"value": true})
-	suite.Equal(engineio.Fuel(70), consumed)
+	suite.Equal(engineio.Fuel(155), consumed)
 
 	consumed, output = suite.Call("Mode", nil)
 	suite.Equal(true, output["value"])
-	suite.Equal(engineio.Fuel(70), consumed)
+	suite.Equal(engineio.Fuel(105), consumed)
 
 	consumed, _ = suite.Call("Flip!", nil)
-	suite.Equal(engineio.Fuel(80), consumed)
+	suite.Equal(engineio.Fuel(210), consumed)
 
 	consumed, output = suite.Call("Mode", nil)
 	suite.Equal(false, output["value"])
-	suite.Equal(engineio.Fuel(70), consumed)
+	suite.Equal(engineio.Fuel(105), consumed)
 }

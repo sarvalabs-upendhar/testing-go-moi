@@ -455,15 +455,16 @@ func (compiler *ManifestCompiler) compileBinInstructions(instructions []byte) (I
 	for line := 1; reader.Len() != 0; line++ {
 		// Read an opcode byte
 		opcode, _ := reader.ReadByte()
-		// Lookup the instructions for the opcode
-		op := compiler.instructs[opcode]
-		if op == nil {
+		// Check the number of args for the opcode
+		count, ok := OpCode(opcode).Operands()
+		if !ok {
 			return nil, errors.Errorf("invalid opcode '%#v' [line %v]", opcode, line)
 		}
 
-		// Read the operands for the opcode
-		operands, ok := op.Operand(reader)
-		if !ok {
+		operands := make([]byte, count)
+		// Read the operands
+		read, err := reader.Read(operands)
+		if read != count || err != nil {
 			return nil, errors.Errorf("insufficient operands for '%#v' [line %v]", opcode, line)
 		}
 

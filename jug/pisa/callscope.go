@@ -23,10 +23,10 @@ const (
 // MaxCallDepth defines the max call depth for child Scope objects
 const MaxCallDepth = 1024
 
-// ExecutionScope represents an isolated runtime environment for executing some logic Instructions.
+// CallScope represents an isolated runtime environment for executing some logic Instructions.
 // It acts as an execution space with its own register set and accept/return value slots.
 // Implements the register.ExecutionScope interface
-type ExecutionScope struct {
+type CallScope struct {
 	engine  *Engine
 	routine Routine
 
@@ -57,10 +57,10 @@ func Root(
 	logic engineio.CtxDriver,
 	participants ...engineio.CtxDriver,
 ) (
-	*ExecutionScope, error,
+	*CallScope, error,
 ) {
 	// Declare the base scope with the runtime, routine and ixn
-	scope := &ExecutionScope{ixn: ixn, engine: engine, internal: logic}
+	scope := &CallScope{ixn: ixn, engine: engine, internal: logic}
 
 	// Check the number of participant contexts based on the interaction type
 	switch ixn.IxType() {
@@ -78,13 +78,13 @@ func Root(
 	return scope, nil
 }
 
-func (scope *ExecutionScope) child(routine Routine, inputs register.ValueTable) *ExecutionScope {
+func (scope *CallScope) child(routine Routine, inputs register.ValueTable) *CallScope {
 	if calldepth := scope.calldepth + 1; calldepth > MaxCallDepth {
 		// todo: throw exception
 		return nil
 	}
 
-	return &ExecutionScope{
+	return &CallScope{
 		routine: routine,
 		ixn:     scope.ixn,
 		engine:  scope.engine,
@@ -101,7 +101,7 @@ func (scope *ExecutionScope) child(routine Routine, inputs register.ValueTable) 
 	}
 }
 
-func (scope *ExecutionScope) run() {
+func (scope *CallScope) run() {
 	// Execution Loop
 	for !scope.done() {
 		switch scope.flow {
@@ -116,9 +116,11 @@ func (scope *ExecutionScope) run() {
 			instruct := scope.read()
 			// Get the operation for the opcode from the instruction set
 			op := scope.engine.GetInstruction(instruct.Op)
+			// Execute the instruction with the args
+			consumed := op(scope, instruct.Args)
 
 			// Attempt to exhaust some fuel from the engine -> fails if there is not enough fuel left
-			if ok := scope.engine.ConsumeFuel(op.Expense(scope)); !ok {
+			if ok := scope.engine.ConsumeFuel(consumed); !ok {
 				// Fuel Depleted - unread the instruction and throw exception
 				scope.unread()
 				scope.Throw(exception.Exception(exception.FuelExhausted, ""))
@@ -127,7 +129,7 @@ func (scope *ExecutionScope) run() {
 			}
 
 			// Execute the instruction
-			if op.Execute(scope, instruct.Args); scope.ExceptionThrown() {
+			if scope.ExceptionThrown() {
 				scope.unread()
 			}
 
@@ -157,26 +159,26 @@ func (scope *ExecutionScope) run() {
 
 // Throw throws an exception in the execution
 // Scope and changes the flow to FlowExcept
-func (scope *ExecutionScope) Throw(except *exception.Object) {
+func (scope *CallScope) Throw(except *exception.Object) {
 	scope.flow = FlowExcept
 	scope.except = except
 }
 
 // ExceptionThrown returns whether the execution
 // Scope is currently in the FlowExcept flow
-func (scope *ExecutionScope) ExceptionThrown() bool {
+func (scope *CallScope) ExceptionThrown() bool {
 	return scope.flow == FlowExcept
 }
 
 // GetException returns the current exception in the execution Scope.
 // Returns nil if flow is not FlowExcept
-func (scope *ExecutionScope) GetException() *exception.Object {
+func (scope *CallScope) GetException() *exception.Object {
 	return scope.except
 }
 
 // GetPtrValue resolves a register ID into uint64 pointer address.
 // The Register at the reg address must exist and be of type TypePtr.
-func (scope *ExecutionScope) GetPtrValue(regID byte) (engineio.ElementPtr, *exception.Object) {
+func (scope *CallScope) GetPtrValue(regID byte) (engineio.ElementPtr, *exception.Object) {
 	// Retrieve the Register object
 	reg, exists := scope.registers.Get(regID)
 	if !exists {
@@ -196,7 +198,7 @@ func (scope *ExecutionScope) GetPtrValue(regID byte) (engineio.ElementPtr, *exce
 
 // GetSymmetricValues obtains two registers of the same Typedef for the given register IDs.
 // Returns an error if either of the Registers are empty or are not of the same type.
-func (scope *ExecutionScope) GetSymmetricValues(a, b byte) (
+func (scope *CallScope) GetSymmetricValues(a, b byte) (
 	regA, regB register.Value,
 	except *exception.Object,
 ) {
@@ -220,7 +222,7 @@ func (scope *ExecutionScope) GetSymmetricValues(a, b byte) (
 	return regA, regB, nil
 }
 
-func (scope *ExecutionScope) read() Instruction {
+func (scope *CallScope) read() Instruction {
 	if scope.done() {
 		return Instruction{}
 	}
@@ -231,7 +233,7 @@ func (scope *ExecutionScope) read() Instruction {
 	return instruct
 }
 
-func (scope *ExecutionScope) unread() {
+func (scope *CallScope) unread() {
 	if scope.instructptr == 0 {
 		return
 	}
@@ -239,15 +241,15 @@ func (scope *ExecutionScope) unread() {
 	scope.instructptr--
 }
 
-func (scope ExecutionScope) done() bool {
+func (scope CallScope) done() bool {
 	return scope.instructptr >= uint64(len(scope.routine.Instructs))
 }
 
-func (scope *ExecutionScope) stop() {
+func (scope *CallScope) stop() {
 	scope.flow = FlowTerminate
 }
 
-func (scope *ExecutionScope) jumpTo(ptr uint64) {
+func (scope *CallScope) jumpTo(ptr uint64) {
 	scope.flow = FlowJump
 	scope.jump = &ptr
 }
