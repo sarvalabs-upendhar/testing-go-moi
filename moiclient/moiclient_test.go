@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/moichain/dhruva"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 	"github.com/sarvalabs/moichain/utils"
@@ -316,20 +317,8 @@ func testTesseract(t *testing.T, client *Client) {
 }
 
 func testDBGet(t *testing.T, client *Client) {
-	// key and value belongs to genesis tesseract hash and raw data of
-	// a6ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384
-	actualValue := "0e5f0eee19f04aff020686048008800880088608860c8610f610e011e011ee11bdfa7699df0d291d368a7d6bdda0a34d" +
-		"703458d2ba2c76c6a5dcac0915ce16ad0000000000000000000000000000000000000000000000000000000000000000e4dc6c170ed" +
-		"f909d19e61a9a901cedca4b3893326af18200355ac8d9803e72ff000000000000000000000000000000000000000000000000000000" +
-		"000000000067656e6573697367656e657369736f000000068004000000000000000000000000000000000000000000000000000000" +
-		"0000000000bf010686048608860c8e10ee225f5c7f20e1519a7d1577247d48382f5adc98ae9e758acc8d0e3d9fb471984c30fb4fb3" +
-		"29c7a9c2007d6b3f9b49e51095f6d6434726323fca2855f9ce1208bccee978d7b8fefae08b7977f5f02d70c44249c0f7419afeaa65" +
-		"05da822bd120392a00000000000000000000000000000000000000000000000000000000000000003f068e04bdfa7699df0d291d36" +
-		"8a7d6bdda0a34d703458d2ba2c76c6a5dcac0915ce16ad6f000eae0db00d1f066135504b5564567241595948377773626d42546974" +
-		"55765057694d674c7178525148596a61687750776f46796869736763772e31365569753248416d4242576d4e424744526778676a4b" +
-		"61686758566a394341667538475241514361437938747547566b473636350f5f068604860800000000000000000000000000000000" +
-		"0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" +
-		"000000000000000000000000000000000000000000000000000000"
+	// key and value belongs to genesis tesseract account meta info
+	key, _ := dhruva.BucketIDFromAddress(types.SargaAddress.Bytes())
 
 	testcases := []struct {
 		name          string
@@ -339,7 +328,7 @@ func testDBGet(t *testing.T, client *Client) {
 		{
 			name: "fetch value for existing key in db",
 			debugArgs: &ptypes.DebugArgs{
-				Key: "8292de384554c08d6515f060f0f5181f0615fce5c6ab4a9cb08eebe6cd30f56dbb",
+				Key: types.BytesToHex(key),
 			},
 		},
 		{
@@ -365,7 +354,11 @@ func testDBGet(t *testing.T, client *Client) {
 
 			httpValue := httpDBGet(t, test.debugArgs)
 			require.Equal(t, httpValue, value)
-			require.Equal(t, httpValue, actualValue)
+
+			accMetaInfo := new(types.AccountMetaInfo)
+			require.NoError(t, accMetaInfo.FromBytes(types.Hex2Bytes(httpValue)))
+			require.Equal(t, types.SargaAddress, accMetaInfo.Address)
+			require.Equal(t, types.SargaAccount, accMetaInfo.Type)
 		})
 	}
 }
