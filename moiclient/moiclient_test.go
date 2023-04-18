@@ -227,6 +227,12 @@ func TestMoiClient(t *testing.T) {
 		"SendInteraction": {
 			test: func(t *testing.T) { testSendInteraction(t, client) },
 		},
+		"testAccounts": {
+			test: func(t *testing.T) { testAccounts(t, client) },
+		},
+		"testAccountMetaInfo": {
+			test: func(t *testing.T) { testAccountMetaInfo(t, client) },
+		},
 	}
 
 	t.Parallel()
@@ -1084,6 +1090,77 @@ func testSendInteraction(t *testing.T, client *Client) {
 			}
 
 			require.NoError(t, err)
+		})
+	}
+}
+
+func testAccounts(t *testing.T, client *Client) {
+	testcases := []struct {
+		name    string
+		accArgs *ptypes.AccountArgs
+	}{
+		{
+			name:    "fetch accounts",
+			accArgs: &ptypes.AccountArgs{},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			accountsResponse, err := client.Accounts(test.accArgs)
+			require.NoError(t, err)
+
+			httpAccounts := httpAccounts(t, test.accArgs)
+			require.Equal(t, httpAccounts, accountsResponse)
+
+			for _, account := range accountsResponse {
+				if account == types.SargaAddress {
+					return
+				}
+			}
+
+			require.FailNow(t, "sarga address not found in list of accounts")
+		})
+	}
+}
+
+func testAccountMetaInfo(t *testing.T, client *Client) {
+	testcases := []struct {
+		name          string
+		accArgs       *ptypes.GetAccountArgs
+		expectedError error
+	}{
+		{
+			name: "fetch account meta info for sarga address",
+			accArgs: &ptypes.GetAccountArgs{
+				Address: types.SargaAddress.Hex(),
+			},
+		},
+		{
+			name: "fetch account meta info for random address",
+			accArgs: &ptypes.GetAccountArgs{
+				Address: tests.RandomAddress(t).Hex(),
+			},
+			expectedError: types.ErrKeyNotFound,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			accountMetaInfoResponse, err := client.AccountMetaInfo(test.accArgs)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			httpAccountMetaInfo := httpAccountMetaInfo(t, test.accArgs)
+			require.Equal(t, httpAccountMetaInfo, accountMetaInfoResponse)
+			require.Equal(t, types.SargaAddress, accountMetaInfoResponse.Address)
+			require.Equal(t, types.SargaAccount, accountMetaInfoResponse.Type)
 		})
 	}
 }

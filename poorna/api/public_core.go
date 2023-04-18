@@ -293,12 +293,7 @@ func (p *PublicCoreAPI) AccountMetaInfo(args *ptypes.GetAccountArgs) (*types.Acc
 		return nil, err
 	}
 
-	accountInfo, err := p.sm.GetAccountMetaInfo(types.HexToAddress(addr.String()))
-	if err != nil {
-		return nil, err
-	}
-
-	return accountInfo, nil
+	return p.sm.GetAccountMetaInfo(types.HexToAddress(addr.String()))
 }
 
 // helper functions

@@ -151,6 +151,8 @@ type ContentArgs struct{}
 
 type NetArgs struct{}
 
+type AccountArgs struct{}
+
 type DebugArgs struct {
 	Key string `json:"storage_key"`
 }

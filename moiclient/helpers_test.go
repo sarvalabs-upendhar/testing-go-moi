@@ -446,3 +446,31 @@ func httpDBGet(t *testing.T, args *ptypes.DebugArgs) string {
 
 	return response
 }
+
+// httpAccounts returns the addresses of all the accounts
+func httpAccounts(t *testing.T, args *ptypes.AccountArgs) []types.Address {
+	t.Helper()
+
+	resp := makeHTTPRequest(t, "debug.GetAccounts", args)
+
+	var addrs []types.Address
+
+	err := json.Unmarshal(resp.Data, &addrs)
+	require.NoError(t, err)
+
+	return addrs
+}
+
+// httpAccountMetaInfo returns the account meta info associated with the given address
+func httpAccountMetaInfo(t *testing.T, args *ptypes.GetAccountArgs) *types.AccountMetaInfo {
+	t.Helper()
+
+	resp := makeHTTPRequest(t, "moi.AccountMetaInfo", args)
+
+	var info types.AccountMetaInfo
+
+	err := json.Unmarshal(resp.Data, &info)
+	require.NoError(t, err)
+
+	return &info
+}

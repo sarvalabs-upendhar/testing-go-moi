@@ -595,7 +595,7 @@ func (r *Service) DBGet(
 // GetAccounts is an RPC Method that returns the address of all the accounts
 func (r *Service) GetAccounts(
 	req *http.Request,
-	args *ptypes.NetArgs,
+	args *ptypes.AccountArgs,
 	resp *ptypes.Response,
 ) error {
 	DebugAPI, ok := r.apis["debug"].(*api.PublicDebugAPI)

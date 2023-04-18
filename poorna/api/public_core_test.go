@@ -1235,7 +1235,7 @@ func TestPublicCoreAPI_GetAccountMetaInfo(t *testing.T) {
 					TesseractHash: &randomHash,
 				},
 			},
-			expectedError: types.ErrFetchingTesseract,
+			expectedError: types.ErrInvalidAddress,
 		},
 	}
 
@@ -1244,7 +1244,7 @@ func TestPublicCoreAPI_GetAccountMetaInfo(t *testing.T) {
 			fetchedAccMetaInfo, err := coreAPI.AccountMetaInfo(test.args)
 
 			if test.expectedError != nil {
-				require.Error(t, err)
+				require.ErrorContains(t, err, test.expectedError.Error())
 
 				return
 			}
