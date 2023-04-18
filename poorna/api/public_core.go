@@ -448,11 +448,17 @@ func CreateRPCTesseract(ts *types.Tesseract) (*ptypes.RPCTesseract, error) {
 		}
 	}
 
+	hash, err := ts.Hash()
+	if err != nil {
+		return nil, err
+	}
+
 	return &ptypes.RPCTesseract{
 		Header:   CreateRPCHeader(ts.Header()),
 		Body:     ts.Body(),
 		Ixns:     rpcIxns,
 		Receipts: ts.Receipts(),
 		Seal:     ts.Seal(),
+		Hash:     hash,
 	}, nil
 }

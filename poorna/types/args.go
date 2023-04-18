@@ -87,6 +87,7 @@ type RPCTesseract struct {
 	Ixns     RPCInteractions     `json:"ixns"`
 	Receipts types.Receipts      `json:"receipts"`
 	Seal     []byte              `json:"seal"`
+	Hash     types.Hash          `json:"hash"`
 }
 
 func (ts *RPCTesseract) Address() types.Address {

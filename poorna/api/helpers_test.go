@@ -831,6 +831,10 @@ func checkForRPCTesseract(t *testing.T, ts *types.Tesseract, rpcTS *ptypes.RPCTe
 	require.Equal(t, ts.Body(), rpcTS.Body)
 	require.Equal(t, ts.Receipts(), rpcTS.Receipts)
 	require.Equal(t, ts.Seal(), rpcTS.Seal)
+	hash, err := ts.Hash()
+	require.NoError(t, err)
+
+	require.Equal(t, hash, rpcTS.Hash)
 
 	for i, ixn := range ts.Interactions() {
 		checkForRPCIxn(t, ixn, rpcTS.Ixns[i])
