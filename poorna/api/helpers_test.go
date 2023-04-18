@@ -758,22 +758,19 @@ func checkForRPCIxn(t *testing.T, ix *types.Interaction, rpcIxn *ptypes.RPCInter
 
 func checkForRPCTesseractParts(
 	t *testing.T,
-	parts *types.TesseractParts,
-	rpcParts *ptypes.RPCTesseractParts,
+	expectedParts *types.TesseractParts,
+	rpcParts ptypes.RPCTesseractParts,
 ) {
 	t.Helper()
 
-	require.Equal(t, parts.Total, rpcParts.Total)
-	require.Equal(t, len(parts.Grid), len(rpcParts.Addresses))
-	require.Equal(t, len(parts.Grid), len(rpcParts.Hashes))
-	require.Equal(t, len(parts.Grid), len(rpcParts.Heights))
+	require.Equal(t, len(expectedParts.Grid), len(rpcParts))
 
-	for i, address := range rpcParts.Addresses {
-		heightAndHash, ok := parts.Grid[address]
+	for _, rpcPart := range rpcParts {
+		heightAndHash, ok := expectedParts.Grid[rpcPart.Address]
 		require.True(t, ok)
 
-		require.Equal(t, heightAndHash.Hash, rpcParts.Hashes[i])
-		require.Equal(t, heightAndHash.Height, rpcParts.Heights[i])
+		require.Equal(t, heightAndHash.Hash, rpcPart.Hash)
+		require.Equal(t, heightAndHash.Height, rpcPart.Height)
 	}
 }
 
@@ -787,8 +784,14 @@ func checkForRPCTesseractGridID(
 	require.Equal(t, tesseractGridID.Hash, rpcTesseractGridID.Hash)
 
 	if tesseractGridID.Parts != nil {
+		require.Equal(t, tesseractGridID.Parts.Total, rpcTesseractGridID.Total)
 		checkForRPCTesseractParts(t, tesseractGridID.Parts, rpcTesseractGridID.Parts)
+		tests.CheckIfPartsSorted(t, rpcTesseractGridID.Parts)
+
+		return
 	}
+
+	require.Equal(t, 0, int(rpcTesseractGridID.Total))
 }
 
 func checkForRPCCommitData(t *testing.T, commitData types.CommitData, rpcCommitData ptypes.RPCCommitData) {

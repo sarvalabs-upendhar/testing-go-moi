@@ -29,6 +29,7 @@ import (
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/mudra/poi"
 	"github.com/sarvalabs/moichain/mudra/poi/moinode"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 )
 
@@ -639,7 +640,7 @@ func CreateTesseractPartsWithTestData(t *testing.T) *types.TesseractParts {
 	t.Helper()
 
 	parts := &types.TesseractParts{
-		Total: 3,
+		Total: 2,
 		Grid:  make(map[types.Address]types.TesseractHeightAndHash),
 	}
 
@@ -706,6 +707,14 @@ func CheckForTesseract(t *testing.T, expectedTS, actualTS *types.Tesseract, with
 
 	require.Equal(t, expectedTS.Canonical(), actualTS.Canonical())
 	require.Nil(t, actualTS.Interactions())
+}
+
+func CheckIfPartsSorted(t *testing.T, parts ptypes.RPCTesseractParts) {
+	t.Helper()
+
+	for i := 1; i < len(parts); i++ {
+		require.True(t, parts[i-1].Address.Hex() < parts[i].Address.Hex())
+	}
 }
 
 func SignBytes(t *testing.T, msg []byte) (sigBytes, pk []byte) {

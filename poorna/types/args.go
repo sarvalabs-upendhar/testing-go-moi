@@ -3,6 +3,7 @@ package types
 import (
 	"encoding/json"
 	"math/big"
+	"sort"
 
 	"github.com/sarvalabs/moichain/types"
 )
@@ -46,16 +47,24 @@ type RPCInteraction struct {
 
 type RPCInteractions []*RPCInteraction
 
-type RPCTesseractParts struct {
-	Total     int32           `json:"total"`
-	Addresses []types.Address `json:"addresses"`
-	Hashes    []types.Hash    `json:"hashes"`
-	Heights   []uint64        `json:"heights"`
+type RPCTesseractPart struct {
+	Address types.Address `json:"address"`
+	Hash    types.Hash    `json:"hash"`
+	Height  uint64        `json:"height"`
+}
+
+type RPCTesseractParts []RPCTesseractPart
+
+func (parts RPCTesseractParts) Sort() {
+	sort.Slice(parts, func(i, j int) bool {
+		return parts[i].Address.Hex() < parts[j].Address.Hex()
+	})
 }
 
 type RPCTesseractGridID struct {
-	Hash  types.Hash         `json:"hash"`
-	Parts *RPCTesseractParts `json:"parts"`
+	Hash  types.Hash        `json:"hash"`
+	Total int32             `json:"total"`
+	Parts RPCTesseractParts `json:"parts"`
 }
 
 type RPCCommitData struct {

@@ -384,23 +384,22 @@ func CreateRPCTesseractGridID(tesseractGridID *types.TesseractGridID) *ptypes.RP
 	}
 
 	if tesseractGridID.Parts != nil {
+		newGrid.Total = tesseractGridID.Parts.Total
+		newGrid.Parts = make(ptypes.RPCTesseractParts, 0, tesseractGridID.Parts.Total)
 		grid := tesseractGridID.Parts.Grid
-		addresses := make([]types.Address, 0, len(grid))
-		hashes := make([]types.Hash, 0, len(grid))
-		heights := make([]uint64, 0, len(grid))
 
 		for address, heightAndHash := range grid {
-			addresses = append(addresses, address)
-			hashes = append(hashes, heightAndHash.Hash)
-			heights = append(heights, heightAndHash.Height)
+			newGrid.Parts = append(
+				newGrid.Parts,
+				ptypes.RPCTesseractPart{
+					Address: address,
+					Height:  heightAndHash.Height,
+					Hash:    heightAndHash.Hash,
+				},
+			)
 		}
 
-		newGrid.Parts = &ptypes.RPCTesseractParts{
-			Total:     tesseractGridID.Parts.Total,
-			Addresses: addresses,
-			Hashes:    hashes,
-			Heights:   heights,
-		}
+		newGrid.Parts.Sort()
 	}
 
 	return newGrid
