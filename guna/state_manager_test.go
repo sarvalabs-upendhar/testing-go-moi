@@ -46,10 +46,12 @@ func TestCreateDirtyObject(t *testing.T) {
 	sm := createTestStateManager(t, nil)
 
 	address := tests.RandomAddress(t)
-	do := sm.CreateDirtyObject(address, 1)
+	do := sm.CreateDirtyObject(address, types.SargaAccount)
 
 	dirtyObject, ok := sm.dirtyObjects[address]
+
 	require.True(t, ok)
+	require.Equal(t, do.accType, types.SargaAccount)
 	require.Equal(t, do, dirtyObject)
 }
 
@@ -1979,7 +1981,7 @@ func TestGetAccountInfo(t *testing.T) {
 func TestGetAccTypeUsingStateObject(t *testing.T) {
 	soParams := &createStateObjectParams{
 		journal: mockJournal(),
-		accType: types.ContractAccount,
+		account: &types.Account{AccType: types.ContractAccount},
 	}
 
 	so := createTestStateObject(t, soParams)

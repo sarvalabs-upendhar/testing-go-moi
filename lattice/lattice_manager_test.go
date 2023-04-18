@@ -1025,6 +1025,7 @@ func TestAddTesseract(t *testing.T) {
 			sm := mockStateManager(t)
 			ixPool := mockIXPool(t)
 
+			sm.setAccType(address, test.accType)
 			chainParams := &CreateChainParams{
 				db:         db,
 				senatus:    senatus,
@@ -1064,7 +1065,6 @@ func TestAddTesseract(t *testing.T) {
 				test.args.cache,
 				address,
 				ts[tsCount-1],
-				test.args.stateExists,
 				test.args.tesseractExists,
 			)
 
@@ -2102,7 +2102,7 @@ func TestValidateAccountCreationInfo(t *testing.T) {
 			accountInfo: getAccountInfo(
 				t,
 				address,
-				types.AccountType(3),
+				tests.InvalidAccount,
 				"moi-id",
 				walletContext[:2],
 				walletContext[2:4],
@@ -2278,7 +2278,7 @@ func TestParseGenesisFile(t *testing.T) {
 		},
 		{
 			name:            "should return error if sarga account info is invalid",
-			sargaAccount:    getTestAccountWithAccType(t, types.AccountType(3)),
+			sargaAccount:    getTestAccountWithAccType(t, tests.InvalidAccount),
 			genesisAccounts: []AccountInfo{},
 			expectedError:   errors.New("invalid sarga account info"),
 		},
@@ -2286,7 +2286,7 @@ func TestParseGenesisFile(t *testing.T) {
 			name:         "should return error if genesis account info is invalid",
 			sargaAccount: getTestAccountWithAccType(t, types.SargaAccount),
 			genesisAccounts: []AccountInfo{
-				getTestAccountWithAccType(t, types.AccountType(3)),
+				getTestAccountWithAccType(t, tests.InvalidAccount),
 			},
 			expectedError: errors.New("invalid genesis account info"),
 		},

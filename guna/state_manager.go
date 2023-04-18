@@ -111,7 +111,9 @@ func NewStateManager(
 
 func (sm *StateManager) createStateObject(addr types.Address, accType types.AccountType) *StateObject {
 	journal := new(Journal)
-	stateObject := NewStateObject(addr, sm.cache, journal, sm.db, types.Account{}, accType)
+	stateObject := NewStateObject(addr, sm.cache, journal, sm.db, types.Account{
+		AccType: accType,
+	})
 
 	return stateObject
 }
@@ -226,7 +228,7 @@ func (sm *StateManager) GetStateObjectByHash(addr types.Address, hash types.Hash
 		return nil, err
 	}
 
-	sObj := NewStateObject(addr, sm.cache, new(Journal), sm.db, *acc, acc.AccType)
+	sObj := NewStateObject(addr, sm.cache, new(Journal), sm.db, *acc)
 
 	sObj.balance, err = getBalanceObject(addr, acc.Balance, sm.db)
 	if err != nil {
@@ -755,7 +757,7 @@ func (sm *StateManager) SetupSargaAccount(
 		return types.NilHash, types.NilHash, errors.New("invalid sarga account address")
 	}
 
-	stateObject := sm.CreateDirtyObject(types.SargaAddress, types.SargaAccount)
+	stateObject := sm.CreateDirtyObject(types.SargaAddress, sargaAcc.AccType)
 
 	if _, err := stateObject.CreateContext(sargaAcc.BehaviouralContext, sargaAcc.RandomContext); err != nil {
 		return types.NilHash, types.NilHash, errors.Wrap(err, "context initiation failed in genesis")

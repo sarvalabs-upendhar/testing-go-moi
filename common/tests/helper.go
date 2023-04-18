@@ -32,6 +32,8 @@ import (
 	"github.com/sarvalabs/moichain/types"
 )
 
+const InvalidAccount types.AccountType = 9999
+
 func RandomAddress(t *testing.T) types.Address {
 	t.Helper()
 

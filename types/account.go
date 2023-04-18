@@ -9,8 +9,8 @@ import (
 type AccountType int
 
 const (
-	RegularAccount AccountType = iota
-	SargaAccount
+	SargaAccount AccountType = iota + 1
+	RegularAccount
 	ContractAccount
 )
 

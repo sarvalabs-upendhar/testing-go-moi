@@ -65,11 +65,10 @@ func NewStateObject(
 	j *Journal,
 	db store,
 	account types.Account,
-	accType types.AccountType,
 ) *StateObject {
 	return &StateObject{
 		journal: j,
-		accType: accType,
+		accType: account.AccType,
 		cache:   cache,
 		db:      db,
 		data:    account,
@@ -144,7 +143,7 @@ func (s *StateObject) Copy() *StateObject {
 	defer s.mtx.Unlock()
 
 	j := new(Journal)
-	sObj := NewStateObject(s.address, s.cache, j, s.db, s.data, s.data.AccType)
+	sObj := NewStateObject(s.address, s.cache, j, s.db, s.data)
 
 	sObj.balance = s.balance.Copy()
 	sObj.assetApprovals = s.assetApprovals.Copy()

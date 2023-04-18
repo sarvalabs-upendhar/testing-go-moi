@@ -834,7 +834,6 @@ type createStateObjectParams struct {
 	journal                   *Journal
 	db                        *MockDB
 	account                   *types.Account
-	accType                   types.AccountType
 	soCallback                func(so *StateObject)
 	metaStorageTreeCallback   func(so *StateObject)
 	dbCallback                func(db *MockDB)
@@ -875,7 +874,7 @@ func createTestStateObject(t *testing.T, params *createStateObjectParams) *State
 		data = params.account
 	}
 
-	so := NewStateObject(addr, cache, mockJournal(), mDB, *data, params.accType)
+	so := NewStateObject(addr, cache, mockJournal(), mDB, *data)
 	so.metaStorageTree = mockMerkleTreeWithDB()
 	so.logicTree = mockMerkleTreeWithDB()
 

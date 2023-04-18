@@ -527,7 +527,6 @@ func (c *ChainManager) addTesseract(
 	cache bool,
 	addr types.Address,
 	t *types.Tesseract,
-	stateExists,
 	tesseractExists bool,
 ) error {
 	var (
@@ -545,15 +544,13 @@ func (c *ChainManager) addTesseract(
 		latticeExists = false
 	}
 
-	if stateExists {
-		if err = c.sm.FlushDirtyObject(addr); err != nil {
-			return err
-		}
+	if err = c.sm.FlushDirtyObject(addr); err != nil {
+		return err
+	}
 
-		accType, err = c.sm.GetAccTypeUsingStateObject(addr)
-		if err != nil {
-			return errors.Wrap(err, "failed to fetch account type")
-		}
+	accType, err = c.sm.GetAccTypeUsingStateObject(addr)
+	if err != nil {
+		return errors.Wrap(err, "failed to fetch account type")
 	}
 
 	tsRawData, err := t.Canonical().Bytes()
@@ -653,7 +650,7 @@ func (c *ChainManager) addTesseractsWithState(
 				return nil
 			}
 
-			if err = c.addTesseract(true, addr, ts, true, true); err != nil {
+			if err = c.addTesseract(true, addr, ts, true); err != nil {
 				return err
 			}
 
@@ -920,7 +917,7 @@ func (c *ChainManager) addGenesisTesseract(
 		return err
 	}
 
-	if err = c.addTesseract(true, address, tesseract, true, true); err != nil {
+	if err = c.addTesseract(true, address, tesseract, true); err != nil {
 		return errors.New("error adding genesis tesseract")
 	}
 
