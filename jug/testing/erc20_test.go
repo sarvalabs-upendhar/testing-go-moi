@@ -21,15 +21,25 @@ const (
 
 type ERC20TestSuite struct {
 	LogicTestSuite
+
+	filename string
 }
 
-func TestERC20TestSuite(t *testing.T) {
-	suite.Run(t, new(ERC20TestSuite))
+func TestERC20TestSuiteJSON(t *testing.T) {
+	erc20 := new(ERC20TestSuite)
+	erc20.filename = "./../manifests/erc20.json"
+	suite.Run(t, erc20)
+}
+
+func TestERC20TestSuiteYAML(t *testing.T) {
+	erc20 := new(ERC20TestSuite)
+	erc20.filename = "./../manifests/erc20.yaml"
+	suite.Run(t, erc20)
 }
 
 func (suite *ERC20TestSuite) SetupSuite() {
 	// Read manifest file
-	manifest, err := engineio.ReadManifestFile("./../manifests/erc20.yaml")
+	manifest, err := engineio.ReadManifestFile(suite.filename)
 	if err != nil {
 		suite.T().Fatalf("manifest read failed: %v", err)
 	}

@@ -762,44 +762,29 @@ func ReadERC20Manifest(t *testing.T, filePath string) []byte {
 	return encoded
 }
 
-func GetJSONManifest(t *testing.T) []byte {
+func GetManifests(t *testing.T, filepath string) (poloEncoded, jsonEncoded, yamlEncoded []byte) {
 	t.Helper()
-
-	// Read erc20.json manifest from jug/manifests
-	data, err := ioutil.ReadFile("./../../jug/manifests/erc20.json")
-	require.NoError(t, err)
 
 	// Register the PISA element registry with the EngineIO package
 	engineio.RegisterEngineRuntime(pisa.NewRuntime())
-	// Decode the JSON manifest into a Manifest object
-	manifest, err := engineio.NewManifest(data, engineio.JSON)
+
+	// Read manifest at file path
+	manifest, err := engineio.ReadManifestFile(filepath)
 	require.NoError(t, err)
 
 	// Encode the Manifest into POLO data
-	encoded, err := manifest.Encode(engineio.JSON)
+	poloEncoded, err = manifest.Encode(engineio.POLO)
 	require.NoError(t, err)
 
-	return encoded
-}
-
-func GetYAMLManifest(t *testing.T) []byte {
-	t.Helper()
-
-	// Read erc20.json manifest from jug/manifests
-	data, err := ioutil.ReadFile("./../../jug/manifests/erc20.json")
+	// Encode the Manifest into JSON data
+	jsonEncoded, err = manifest.Encode(engineio.JSON)
 	require.NoError(t, err)
 
-	// Register the PISA element registry with the EngineIO package
-	engineio.RegisterEngineRuntime(pisa.NewRuntime())
-	// Decode the JSON manifest into a Manifest object
-	manifest, err := engineio.NewManifest(data, engineio.YAML)
+	// Encode the Manifest into YAML data
+	yamlEncoded, err = manifest.Encode(engineio.YAML)
 	require.NoError(t, err)
 
-	// Encode the Manifest into POLO data
-	encoded, err := manifest.Encode(engineio.YAML)
-	require.NoError(t, err)
-
-	return encoded
+	return
 }
 
 /*
