@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"math/big"
@@ -15,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/sarvalabs/moichain/common/hexutil"
 	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/dhruva"
 	"github.com/sarvalabs/moichain/guna"
@@ -339,7 +341,7 @@ func (s *MockStateManager) setLogicManifest(logicID string, logicManifest []byte
 type MockIxPool struct {
 	interactions map[types.Hash]*types.Interaction
 	nextNonce    map[types.Address]uint64
-	waitTime     map[types.Address]int64
+	waitTime     map[types.Address]*big.Int
 	pending      map[types.Address][]*types.Interaction
 	queued       map[types.Address][]*types.Interaction
 }
@@ -350,7 +352,7 @@ func NewMockIxPool(t *testing.T) *MockIxPool {
 	ixpool := new(MockIxPool)
 	ixpool.interactions = make(map[types.Hash]*types.Interaction)
 	ixpool.nextNonce = make(map[types.Address]uint64)
-	ixpool.waitTime = make(map[types.Address]int64)
+	ixpool.waitTime = make(map[types.Address]*big.Int)
 	ixpool.pending = make(map[types.Address][]*types.Interaction)
 	ixpool.queued = make(map[types.Address][]*types.Interaction)
 
@@ -390,15 +392,15 @@ func (mc *MockIxPool) GetAllIxs(inclQueued bool) (allPromoted, allEnqueued map[t
 	return mc.pending, map[types.Address][]*types.Interaction{}
 }
 
-func (mc *MockIxPool) GetAccountWaitTime(addr types.Address) (int64, error) {
+func (mc *MockIxPool) GetAccountWaitTime(addr types.Address) (*big.Int, error) {
 	if waitTime, ok := mc.waitTime[addr]; ok {
 		return waitTime, nil
 	}
 
-	return 0, types.ErrAccountNotFound
+	return nil, types.ErrAccountNotFound
 }
 
-func (mc *MockIxPool) GetAllAccountsWaitTime() map[types.Address]int64 {
+func (mc *MockIxPool) GetAllAccountsWaitTime() map[types.Address]*big.Int {
 	return mc.waitTime
 }
 
@@ -407,7 +409,7 @@ func (mc *MockIxPool) setNonce(addr types.Address, nonce uint64) {
 }
 
 func (mc *MockIxPool) setWaitTime(addr types.Address, waitTime int64) {
-	mc.waitTime[addr] = waitTime
+	mc.waitTime[addr] = big.NewInt(waitTime)
 }
 
 func (mc *MockIxPool) setIxs(addr types.Address, pending, queued []*types.Interaction) {
@@ -525,13 +527,13 @@ func GetTestLogicDeployPayload(
 	t *testing.T,
 	nonce uint64,
 	address types.Address,
-	callback func(args *ptypes.LogicDeployArgs),
+	callback func(args *ptypes.RPCLogicPayload),
 ) ([]byte, []byte) {
 	t.Helper()
 
-	logicArgs := &ptypes.LogicDeployArgs{
-		Manifest: types.BytesToHex([]byte{0x00, 0x01}),
-		Calldata: types.BytesToHex(GenerateRandomIXPayload(t, 20)),
+	logicArgs := &ptypes.RPCLogicPayload{
+		Manifest: hexutil.Bytes([]byte{0x00, 0x01}),
+		Calldata: hexutil.Bytes(GenerateRandomIXPayload(t, 20)),
 	}
 
 	if callback != nil {
@@ -542,8 +544,8 @@ func GetTestLogicDeployPayload(
 	require.NoError(t, err)
 
 	deployPayload := &types.LogicPayload{
-		Calldata: types.FromHex(logicArgs.Calldata),
-		Manifest: types.FromHex(logicArgs.Manifest),
+		Calldata: logicArgs.Calldata.Bytes(),
+		Manifest: logicArgs.Manifest.Bytes(),
 	}
 
 	rawPolo, err := polo.Polorize(deployPayload)
@@ -552,13 +554,13 @@ func GetTestLogicDeployPayload(
 	return rawJSON, rawPolo
 }
 
-func GetTestIxCreationPayload(t *testing.T, callBack func(args *ptypes.AssetCreationArgs)) ([]byte, []byte) {
+func GetTestIxCreationPayload(t *testing.T, callBack func(args *ptypes.RPCAssetCreation)) ([]byte, []byte) {
 	t.Helper()
 
-	payloadArgs := &ptypes.AssetCreationArgs{
+	payloadArgs := &ptypes.RPCAssetCreation{
 		Type:   1,
 		Symbol: "rahul",
-		Supply: "78",
+		Supply: (*hexutil.Big)(big.NewInt(78)),
 	}
 
 	if callBack != nil {
@@ -571,10 +573,10 @@ func GetTestIxCreationPayload(t *testing.T, callBack func(args *ptypes.AssetCrea
 	createPayload := &types.AssetCreatePayload{
 		Type:   payloadArgs.Type,
 		Symbol: payloadArgs.Symbol,
-		Supply: new(big.Int).SetInt64(120),
+		Supply: payloadArgs.Supply.ToInt(),
 
-		Dimension: payloadArgs.Dimension,
-		Decimals:  payloadArgs.Decimals,
+		Dimension: payloadArgs.Dimension.ToInt(),
+		Decimals:  payloadArgs.Decimals.ToInt(),
 
 		IsFungible:     payloadArgs.IsFungible,
 		IsMintable:     payloadArgs.IsMintable,
@@ -594,14 +596,14 @@ func GetTestIxCreationPayload(t *testing.T, callBack func(args *ptypes.AssetCrea
 	return jsonRaw, poloRaw
 }
 
-func getTesseractsHashes(t *testing.T, tesseracts []*types.Tesseract) []string {
+func getTesseractsHashes(t *testing.T, tesseracts []*types.Tesseract) []types.Hash {
 	t.Helper()
 
 	count := len(tesseracts)
-	hashes := make([]string, count)
+	hashes := make([]types.Hash, count)
 
 	for i, ts := range tesseracts {
-		hashes[i] = getTesseractHash(t, ts).String()
+		hashes[i] = getTesseractHash(t, ts)
 	}
 
 	return hashes
@@ -614,24 +616,6 @@ func getTesseractHash(t *testing.T, tesseract *types.Tesseract) types.Hash {
 	require.NoError(t, err)
 
 	return tsHash
-}
-
-func newReceipt(t *testing.T) *types.Receipt {
-	t.Helper()
-
-	return &types.Receipt{
-		IxType: 1,
-		IxHash: tests.RandomHash(t),
-	}
-}
-
-func getReceipt(t *testing.T) (types.Hash, *types.Receipt) {
-	t.Helper()
-
-	receiptHash := tests.RandomHash(t)
-	receipt := newReceipt(t)
-
-	return receiptHash, receipt
 }
 
 func getLogicID(t *testing.T, address types.Address) types.LogicID {
@@ -683,6 +667,18 @@ func getIxParamsWithInputComputeTrust(
 	}
 }
 
+func createInteractionWithTestData(t *testing.T, ixType types.IxType, payload []byte) *types.Interaction {
+	t.Helper()
+
+	ixData := types.IxData{
+		Input:   tests.CreateIXInputWithTestData(t, ixType, payload, []byte{187, 1, 29, 103}),
+		Compute: tests.CreateComputeWithTestData(t, tests.RandomHash(t).Bytes(), tests.GetTestKramaIDs(t, 2)),
+		Trust:   tests.CreateTrustWithTestData(t),
+	}
+
+	return types.NewInteraction(ixData, tests.RandomHash(t).Bytes())
+}
+
 func checkForContext(
 	t *testing.T,
 	actualContext *Context,
@@ -720,23 +716,97 @@ func newTestInteraction(
 func checkForRPCIxn(t *testing.T, ix *types.Interaction, rpcIxn *ptypes.RPCInteraction) {
 	t.Helper()
 
-	require.Equal(t, ix.Type(), rpcIxn.Input.Type)
-	require.Equal(t, ix.Compute(), rpcIxn.Compute)
-	require.Equal(t, ix.Trust(), rpcIxn.Trust)
+	input := ix.Input()
+	compute := ix.Compute()
+	trust := ix.Trust()
+
+	require.Equal(t, ix.Hash(), rpcIxn.Hash)
+	require.Equal(t, ix.Signature(), rpcIxn.Signature.Bytes())
+
+	require.Equal(t, input.Type, rpcIxn.Type)
+	require.Equal(t, input.Nonce, rpcIxn.Nonce.ToInt())
+
+	require.Equal(t, input.Sender, rpcIxn.Sender)
+	require.Equal(t, input.Receiver, rpcIxn.Receiver)
+	require.Equal(t, input.Payer, rpcIxn.Payer)
+
+	require.Equal(t, len(input.TransferValues), len(rpcIxn.TransferValues))
+	require.Equal(t, len(input.PerceivedValues), len(rpcIxn.PerceivedValues))
+
+	for assetID, amount := range input.TransferValues {
+		flag := false
+
+		for rpcAssetID, rpcAmount := range rpcIxn.TransferValues {
+			if assetID == rpcAssetID {
+				flag = true
+
+				rpcAmountData, err := hex.DecodeString(rpcAmount)
+				require.NoError(t, err)
+
+				require.Equal(t, amount, new(big.Int).SetBytes(rpcAmountData))
+			}
+		}
+
+		require.True(t, flag)
+	}
+
+	for assetID, amount := range input.PerceivedValues {
+		flag := false
+
+		for rpcAssetID, rpcAmount := range rpcIxn.PerceivedValues {
+			if assetID == rpcAssetID {
+				flag = true
+
+				rpcAmountData, err := hex.DecodeString(rpcAmount)
+				require.NoError(t, err)
+
+				require.Equal(t, amount, new(big.Int).SetBytes(rpcAmountData))
+			}
+		}
+
+		require.True(t, flag)
+	}
+
+	require.Equal(t, input.PerceivedProofs, rpcIxn.PerceivedProofs.Bytes())
+
+	require.Equal(t, input.FuelLimit, rpcIxn.FuelLimit.ToInt())
+	require.Equal(t, input.FuelPrice, rpcIxn.FuelPrice.ToInt())
+
+	require.Equal(t, compute.Mode, int(rpcIxn.Mode.ToInt()))
+	require.Equal(t, compute.Hash, rpcIxn.ComputeHash.Bytes())
+	require.Equal(t, compute.ComputeNodes, rpcIxn.ComputeNodes)
+
+	require.Equal(t, trust.MTQ, uint(rpcIxn.MTQ.ToInt()))
+	require.Equal(t, trust.TrustNodes, rpcIxn.TrustNodes)
 
 	switch ix.Type() {
 	case types.IxValueTransfer:
-		require.Equal(t, json.RawMessage{}, rpcIxn.Input.Payload)
+		require.Equal(t, json.RawMessage(nil), rpcIxn.Payload)
 
 	case types.IxAssetCreate:
 		assetCreationPayload := new(types.AssetPayload)
 		err := assetCreationPayload.FromBytes(ix.Payload())
 		require.NoError(t, err)
 
-		expectedPayload, err := json.Marshal(assetCreationPayload)
+		rpcAssetCreationPayload := ptypes.RPCAssetCreation{
+			Type:   assetCreationPayload.Create.Type,
+			Symbol: assetCreationPayload.Create.Symbol,
+			Supply: (*hexutil.Big)(assetCreationPayload.Create.Supply),
+
+			Dimension: hexutil.Uint8(assetCreationPayload.Create.Dimension),
+			Decimals:  hexutil.Uint8(assetCreationPayload.Create.Decimals),
+
+			IsFungible:     assetCreationPayload.Create.IsFungible,
+			IsMintable:     assetCreationPayload.Create.IsMintable,
+			IsTransferable: assetCreationPayload.Create.IsTransferable,
+
+			LogicID: types.BytesToHex(assetCreationPayload.Create.LogicID),
+		}
+
+		expectedPayload, err := json.Marshal(rpcAssetCreationPayload)
 		require.NoError(t, err)
 
-		require.Equal(t, expectedPayload, []byte(rpcIxn.Input.Payload))
+		require.Equal(t, expectedPayload, []byte(rpcIxn.Payload))
 
 	case types.IxLogicDeploy:
 		fallthrough
@@ -747,10 +817,17 @@ func checkForRPCIxn(t *testing.T, ix *types.Interaction, rpcIxn *ptypes.RPCInter
 		err := logicPayload.FromBytes(ix.Payload())
 		require.NoError(t, err)
 
-		expectedPayload, err := json.Marshal(logicPayload)
+		rpcLogicPayload := &ptypes.RPCLogicPayload{
+			Manifest: (hexutil.Bytes)(logicPayload.Manifest),
+			LogicID:  types.BytesToHex(logicPayload.Logic),
+			Callsite: logicPayload.Callsite,
+			Calldata: (hexutil.Bytes)(logicPayload.Calldata),
+		}
+
+		expectedPayload, err := json.Marshal(rpcLogicPayload)
 		require.NoError(t, err)
 
-		require.Equal(t, expectedPayload, []byte(rpcIxn.Input.Payload))
+		require.Equal(t, expectedPayload, []byte(rpcIxn.Payload))
 	default:
 		require.FailNow(t, "invalid ix type")
 	}
@@ -770,7 +847,7 @@ func checkForRPCTesseractParts(
 		require.True(t, ok)
 
 		require.Equal(t, heightAndHash.Hash, rpcPart.Hash)
-		require.Equal(t, heightAndHash.Height, rpcPart.Height)
+		require.Equal(t, heightAndHash.Height, rpcPart.Height.ToInt())
 	}
 }
 
@@ -781,10 +858,16 @@ func checkForRPCTesseractGridID(
 ) {
 	t.Helper()
 
+	if tesseractGridID == nil {
+		require.Nil(t, rpcTesseractGridID)
+
+		return
+	}
+
 	require.Equal(t, tesseractGridID.Hash, rpcTesseractGridID.Hash)
 
 	if tesseractGridID.Parts != nil {
-		require.Equal(t, tesseractGridID.Parts.Total, rpcTesseractGridID.Total)
+		require.Equal(t, uint64(tesseractGridID.Parts.Total), rpcTesseractGridID.Total.ToInt())
 		checkForRPCTesseractParts(t, tesseractGridID.Parts, rpcTesseractGridID.Parts)
 		tests.CheckIfPartsSorted(t, rpcTesseractGridID.Parts)
 
@@ -797,13 +880,72 @@ func checkForRPCTesseractGridID(
 func checkForRPCCommitData(t *testing.T, commitData types.CommitData, rpcCommitData ptypes.RPCCommitData) {
 	t.Helper()
 
-	require.Equal(t, commitData.Round, rpcCommitData.Round)
-	require.Equal(t, commitData.CommitSignature, rpcCommitData.CommitSignature)
-	require.Equal(t, commitData.VoteSet, rpcCommitData.VoteSet)
+	require.Equal(t, uint64(commitData.Round), rpcCommitData.Round.ToInt())
+	require.Equal(t, commitData.CommitSignature, rpcCommitData.CommitSignature.Bytes())
+	require.Equal(t, commitData.VoteSet.String(), rpcCommitData.VoteSet)
 	require.Equal(t, commitData.EvidenceHash, rpcCommitData.EvidenceHash)
 
 	if commitData.GridID != nil {
 		checkForRPCTesseractGridID(t, commitData.GridID, rpcCommitData.GridID)
+	}
+}
+
+func checkForRPCContextLockInfos(
+	t *testing.T,
+	expectedContextLockInfos map[types.Address]types.ContextLockInfo,
+	rpcContextLockInfos ptypes.RPCContextLockInfos,
+) {
+	t.Helper()
+
+	if len(expectedContextLockInfos) == 0 {
+		require.Nil(t, rpcContextLockInfos)
+
+		return
+	}
+
+	require.Equal(t, len(expectedContextLockInfos), len(rpcContextLockInfos))
+
+	for _, rpcContextLockInfo := range rpcContextLockInfos {
+		contextLockInfo, ok := expectedContextLockInfos[rpcContextLockInfo.Address]
+		require.True(t, ok)
+
+		require.Equal(t, contextLockInfo.ContextHash, rpcContextLockInfo.ContextHash)
+		require.Equal(t, contextLockInfo.Height, rpcContextLockInfo.Height.ToInt())
+		require.Equal(t, contextLockInfo.TesseractHash, rpcContextLockInfo.TesseractHash)
+	}
+
+	for i := 1; i < len(rpcContextLockInfos); i++ {
+		require.True(t, rpcContextLockInfos[i-1].Address.Hex() < rpcContextLockInfos[i].Address.Hex())
+	}
+}
+
+func checkForRPCDeltaGroups(
+	t *testing.T,
+	expectedRPCDeltaGroups map[types.Address]*types.DeltaGroup,
+	rpcDeltaGroups ptypes.RPCDeltaGroups,
+) {
+	t.Helper()
+
+	if len(expectedRPCDeltaGroups) == 0 {
+		require.Nil(t, rpcDeltaGroups)
+
+		return
+	}
+
+	require.Equal(t, len(expectedRPCDeltaGroups), len(rpcDeltaGroups))
+
+	for _, rpcDeltaGroup := range rpcDeltaGroups {
+		deltaGroup, ok := expectedRPCDeltaGroups[rpcDeltaGroup.Address]
+		require.True(t, ok)
+
+		require.Equal(t, deltaGroup.Role, rpcDeltaGroup.Role)
+		require.Equal(t, deltaGroup.BehaviouralNodes, rpcDeltaGroup.BehaviouralNodes)
+		require.Equal(t, deltaGroup.RandomNodes, rpcDeltaGroup.RandomNodes)
+		require.Equal(t, deltaGroup.ReplacedNodes, rpcDeltaGroup.ReplacedNodes)
+	}
+
+	for i := 1; i < len(rpcDeltaGroups); i++ {
+		require.True(t, rpcDeltaGroups[i-1].Address.Hex() < rpcDeltaGroups[i].Address.Hex())
 	}
 }
 
@@ -812,17 +954,28 @@ func checkForRPCHeader(t *testing.T, header types.TesseractHeader, rpcHeader pty
 
 	require.Equal(t, header.Address, rpcHeader.Address)
 	require.Equal(t, header.PrevHash, rpcHeader.PrevHash)
-	require.Equal(t, header.Height, rpcHeader.Height)
-	require.Equal(t, header.FuelUsed, rpcHeader.FuelUsed)
-	require.Equal(t, header.FuelLimit, rpcHeader.FuelLimit)
+	require.Equal(t, header.Height, rpcHeader.Height.ToInt())
+	require.Equal(t, header.FuelUsed, rpcHeader.FuelUsed.ToInt())
+	require.Equal(t, header.FuelLimit, rpcHeader.FuelLimit.ToInt())
 	require.Equal(t, header.BodyHash, rpcHeader.BodyHash)
 	require.Equal(t, header.GridHash, rpcHeader.GridHash)
 	require.Equal(t, header.Operator, rpcHeader.Operator)
 	require.Equal(t, header.ClusterID, rpcHeader.ClusterID)
-	require.Equal(t, header.Timestamp, rpcHeader.Timestamp)
-	require.Equal(t, header.ContextLock, rpcHeader.ContextLock)
+	require.Equal(t, uint64(header.Timestamp), rpcHeader.Timestamp.ToInt())
+	checkForRPCContextLockInfos(t, header.ContextLock, rpcHeader.ContextLock)
 
 	checkForRPCCommitData(t, header.Extra, rpcHeader.Extra)
+}
+
+func checkForRPCBody(t *testing.T, body types.TesseractBody, rpcBody ptypes.RPCBody) {
+	t.Helper()
+
+	require.Equal(t, body.StateHash, rpcBody.StateHash)
+	require.Equal(t, body.ContextHash, rpcBody.ContextHash)
+	require.Equal(t, body.InteractionHash, rpcBody.InteractionHash)
+	require.Equal(t, body.ReceiptHash, rpcBody.ReceiptHash)
+	checkForRPCDeltaGroups(t, body.ContextDelta, rpcBody.ContextDelta)
+	require.Equal(t, body.ConsensusProof, rpcBody.ConsensusProof)
 }
 
 // checkForRPCTesseract validates fields of rpc tesseract
@@ -830,10 +983,8 @@ func checkForRPCTesseract(t *testing.T, ts *types.Tesseract, rpcTS *ptypes.RPCTe
 	t.Helper()
 
 	checkForRPCHeader(t, ts.Header(), rpcTS.Header)
-	require.Equal(t, ts.Address(), rpcTS.Header.Address)
-	require.Equal(t, ts.Body(), rpcTS.Body)
-	require.Equal(t, ts.Receipts(), rpcTS.Receipts)
-	require.Equal(t, ts.Seal(), rpcTS.Seal)
+	checkForRPCBody(t, ts.Body(), rpcTS.Body)
+	require.Equal(t, ts.Seal(), rpcTS.Seal.Bytes())
 	hash, err := ts.Hash()
 	require.NoError(t, err)
 
@@ -842,4 +993,61 @@ func checkForRPCTesseract(t *testing.T, ts *types.Tesseract, rpcTS *ptypes.RPCTe
 	for i, ixn := range ts.Interactions() {
 		checkForRPCIxn(t, ixn, rpcTS.Ixns[i])
 	}
+}
+
+func checkForRPCStateHashes(
+	t *testing.T,
+	expectedRPCStateHashes map[types.Address]types.Hash,
+	rpcStateHashes ptypes.RPCStateHashes,
+) {
+	t.Helper()
+
+	require.Equal(t, len(expectedRPCStateHashes), len(rpcStateHashes))
+
+	for _, rpcStateHash := range rpcStateHashes {
+		hash, ok := expectedRPCStateHashes[rpcStateHash.Address]
+		require.True(t, ok)
+
+		require.Equal(t, hash, rpcStateHash.Hash)
+	}
+
+	for i := 1; i < len(rpcStateHashes); i++ {
+		require.True(t, rpcStateHashes[i-1].Address.Hex() < rpcStateHashes[i].Address.Hex())
+	}
+}
+
+func checkForRPCContextHashes(
+	t *testing.T,
+	expectedRPCStateHashes map[types.Address]types.Hash,
+	rpcContextHashes ptypes.RPCContextHashes,
+) {
+	t.Helper()
+
+	require.Equal(t, len(expectedRPCStateHashes), len(rpcContextHashes))
+
+	for _, rpcStateHash := range rpcContextHashes {
+		hash, ok := expectedRPCStateHashes[rpcStateHash.Address]
+		require.True(t, ok)
+
+		require.Equal(t, hash, rpcStateHash.Hash)
+	}
+
+	for i := 1; i < len(rpcContextHashes); i++ {
+		require.True(t, rpcContextHashes[i-1].Address.Hex() < rpcContextHashes[i].Address.Hex())
+	}
+}
+
+func checkForRPCReceipt(
+	t *testing.T,
+	receipt *types.Receipt,
+	rpcReceipt *ptypes.RPCReceipt,
+) {
+	t.Helper()
+
+	require.Equal(t, uint64(receipt.IxType), rpcReceipt.IxType.ToInt())
+	require.Equal(t, receipt.IxHash, rpcReceipt.IxHash)
+	require.Equal(t, receipt.FuelUsed, rpcReceipt.FuelUsed.ToInt())
+	checkForRPCStateHashes(t, receipt.StateHashes, rpcReceipt.StateHashes)
+	checkForRPCContextHashes(t, receipt.ContextHashes, rpcReceipt.ContextHashes)
+	require.Equal(t, receipt.ExtraData, rpcReceipt.ExtraData)
 }

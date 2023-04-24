@@ -21,7 +21,6 @@ func (r *Receipt) Copy() *Receipt {
 
 	receipt.StateHashes = make(map[Address]Hash)
 	receipt.ContextHashes = make(map[Address]Hash)
-	receipt.ExtraData = make(json.RawMessage, len(r.ExtraData))
 
 	for key, value := range r.StateHashes {
 		receipt.StateHashes[key] = value
@@ -31,7 +30,10 @@ func (r *Receipt) Copy() *Receipt {
 		receipt.ContextHashes[key] = value
 	}
 
-	copy(receipt.ExtraData, r.ExtraData)
+	if r.ExtraData != nil {
+		receipt.ExtraData = make(json.RawMessage, len(r.ExtraData))
+		copy(receipt.ExtraData, r.ExtraData)
+	}
 
 	return &receipt
 }
@@ -50,6 +52,10 @@ func (r *Receipt) SetExtraData(data interface{}) error {
 type Receipts map[Hash]*Receipt
 
 func (rs Receipts) Copy() Receipts {
+	if len(rs) == 0 {
+		return nil
+	}
+
 	receipts := make(Receipts)
 
 	for key, value := range rs {

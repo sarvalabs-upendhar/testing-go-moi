@@ -2,31 +2,37 @@ package api
 
 import (
 	"fmt"
+	"math/big"
 
+	"github.com/sarvalabs/moichain/common/hexutil"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
-	"github.com/sarvalabs/moichain/utils"
 )
 
 type ContentResponse struct {
-	Pending map[types.Address]map[uint64]*ptypes.InteractionArg `json:"pending"`
-	Queued  map[types.Address]map[uint64]*ptypes.InteractionArg `json:"queued"`
+	Pending map[types.Address]map[hexutil.Uint64]*ptypes.InteractionArg `json:"pending"`
+	Queued  map[types.Address]map[hexutil.Uint64]*ptypes.InteractionArg `json:"queued"`
 }
 
 type ContentFromResponse struct {
-	Pending map[uint64]*ptypes.InteractionArg `json:"pending"`
-	Queued  map[uint64]*ptypes.InteractionArg `json:"queued"`
+	Pending map[hexutil.Uint64]*ptypes.InteractionArg `json:"pending"`
+	Queued  map[hexutil.Uint64]*ptypes.InteractionArg `json:"queued"`
 }
 
 type StatusResponse struct {
-	Pending uint64 `json:"pending"`
-	Queued  uint64 `json:"queued"`
+	Pending hexutil.Uint64 `json:"pending"`
+	Queued  hexutil.Uint64 `json:"queued"`
 }
 
 type InspectResponse struct {
 	Pending  map[string]map[string]string `json:"pending"`
 	Queued   map[string]map[string]string `json:"queued"`
-	WaitTime map[string]int64             `json:"wait_time"`
+	WaitTime map[string]*WaitTimeResponse `json:"wait_time"`
+}
+
+type WaitTimeResponse struct {
+	Expired bool         `json:"expired"`
+	Time    *hexutil.Big `json:"time"`
 }
 
 // PublicIXPoolAPI is a struct that represents a wrapper for the public IxPool APIs.
@@ -43,28 +49,28 @@ func NewPublicIXPoolAPI(ixpool IxPool) *PublicIXPoolAPI {
 // Content returns the interactions present in the IxPool.
 func (p *PublicIXPoolAPI) Content() (*ContentResponse, error) {
 	content := &ContentResponse{
-		Pending: make(map[types.Address]map[uint64]*ptypes.InteractionArg),
-		Queued:  make(map[types.Address]map[uint64]*ptypes.InteractionArg),
+		Pending: make(map[types.Address]map[hexutil.Uint64]*ptypes.InteractionArg),
+		Queued:  make(map[types.Address]map[hexutil.Uint64]*ptypes.InteractionArg),
 	}
 	pendingIxs, queuedIxs := p.ixpool.GetAllIxs(true)
 
 	// update pending ixs
 	for addr, ixs := range pendingIxs {
-		content.Pending[addr] = make(map[uint64]*ptypes.InteractionArg, len(ixs))
+		content.Pending[addr] = make(map[hexutil.Uint64]*ptypes.InteractionArg, len(ixs))
 
 		for _, ix := range ixs {
 			ixArg := ptypes.NewInteractionArg(ix)
-			content.Pending[addr][ix.Nonce()] = ixArg
+			content.Pending[addr][hexutil.Uint64(ix.Nonce())] = ixArg
 		}
 	}
 
 	// update queued ixs
 	for addr, ixs := range queuedIxs {
-		content.Queued[addr] = make(map[uint64]*ptypes.InteractionArg, len(ixs))
+		content.Queued[addr] = make(map[hexutil.Uint64]*ptypes.InteractionArg, len(ixs))
 
 		for _, ix := range ixs {
 			ixArg := ptypes.NewInteractionArg(ix)
-			content.Queued[addr][ix.Nonce()] = ixArg
+			content.Queued[addr][hexutil.Uint64(ix.Nonce())] = ixArg
 		}
 	}
 
@@ -73,27 +79,26 @@ func (p *PublicIXPoolAPI) Content() (*ContentResponse, error) {
 
 // ContentFrom returns the interactions present in the IxPool based on the given address.
 func (p *PublicIXPoolAPI) ContentFrom(args *ptypes.IxPoolArgs) (*ContentFromResponse, error) {
-	addr, err := utils.ValidateAddress(args.Address)
-	if err != nil {
-		return nil, err
+	if args.Address.IsNil() {
+		return nil, types.ErrInvalidAddress
 	}
 
 	content := &ContentFromResponse{
-		Pending: make(map[uint64]*ptypes.InteractionArg),
-		Queued:  make(map[uint64]*ptypes.InteractionArg),
+		Pending: make(map[hexutil.Uint64]*ptypes.InteractionArg),
+		Queued:  make(map[hexutil.Uint64]*ptypes.InteractionArg),
 	}
-	pendingIxs, queuedIxs := p.ixpool.GetIxs(addr, true)
+	pendingIxs, queuedIxs := p.ixpool.GetIxs(args.Address, true)
 
 	// update pending ixs
 	for _, ix := range pendingIxs {
 		ixArg := ptypes.NewInteractionArg(ix)
-		content.Pending[ix.Nonce()] = ixArg
+		content.Pending[hexutil.Uint64(ix.Nonce())] = ixArg
 	}
 
 	// update queued ixs
 	for _, ix := range queuedIxs {
 		ixArg := ptypes.NewInteractionArg(ix)
-		content.Queued[ix.Nonce()] = ixArg
+		content.Queued[hexutil.Uint64(ix.Nonce())] = ixArg
 	}
 
 	return content, nil
@@ -117,8 +122,8 @@ func (p *PublicIXPoolAPI) Status() (*StatusResponse, error) {
 	}
 
 	status := &StatusResponse{
-		Pending: uint64(pendingIxsCount),
-		Queued:  uint64(queuedIxsCount),
+		Pending: hexutil.Uint64(pendingIxsCount),
+		Queued:  hexutil.Uint64(queuedIxsCount),
 	}
 
 	return status, nil
@@ -130,7 +135,7 @@ func (p *PublicIXPoolAPI) Inspect() (*InspectResponse, error) {
 	content := &InspectResponse{
 		Pending:  make(map[string]map[string]string),
 		Queued:   make(map[string]map[string]string),
-		WaitTime: make(map[string]int64),
+		WaitTime: make(map[string]*WaitTimeResponse),
 	}
 	pendingIxs, queuedIxs := p.ixpool.GetAllIxs(true)
 	accountWaitTimes := p.ixpool.GetAllAccountsWaitTime()
@@ -175,18 +180,37 @@ func (p *PublicIXPoolAPI) Inspect() (*InspectResponse, error) {
 
 	// update wait time
 	for addr, waitTime := range accountWaitTimes {
-		content.WaitTime[addr.Hex()] = waitTime
+		content.WaitTime[addr.Hex()] = createWaitTime(waitTime)
 	}
 
 	return content, nil
 }
 
 // WaitTime returns the wait time for an account in IxPool, based on the queried address.
-func (p *PublicIXPoolAPI) WaitTime(args *ptypes.IxPoolArgs) (int64, error) {
-	addr, err := utils.ValidateAddress(args.Address)
-	if err != nil {
-		return 0, err
+func (p *PublicIXPoolAPI) WaitTime(args *ptypes.IxPoolArgs) (*WaitTimeResponse, error) {
+	if args.Address.IsNil() {
+		return nil, types.ErrInvalidAddress
 	}
 
-	return p.ixpool.GetAccountWaitTime(addr)
+	waitTime, err := p.ixpool.GetAccountWaitTime(args.Address)
+	if err != nil {
+		return nil, err
+	}
+
+	return createWaitTime(waitTime), nil
+}
+
+func createWaitTime(waitTime *big.Int) *WaitTimeResponse {
+	var expired bool
+
+	if waitTime.Sign() <= 0 {
+		expired = true
+	}
+
+	waitTime.Abs(waitTime)
+
+	return &WaitTimeResponse{
+		Expired: expired,
+		Time:    (*hexutil.Big)(waitTime),
+	}
 }

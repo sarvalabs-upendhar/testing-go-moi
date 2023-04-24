@@ -259,7 +259,7 @@ func TestIxPool_GetAccountWaitTime(t *testing.T) {
 			require.NoError(t, err)
 			require.InDelta(t,
 				utils.ExponentialTimeout(baseTime, 1).Milliseconds(),
-				waitTime,
+				waitTime.Int64(),
 				float64(baseTime.Milliseconds()*2),
 			)
 		})
@@ -311,7 +311,7 @@ func TestIxPool_GetAllAccountsWaitTime(t *testing.T) {
 				if delta > MaxWaitCounter {
 					require.InDelta(t,
 						utils.ExponentialTimeout(baseTime, acc.delayCounter).Milliseconds(),
-						waitTime,
+						waitTime.Int64(),
 						float64(0),
 					)
 
@@ -320,7 +320,7 @@ func TestIxPool_GetAllAccountsWaitTime(t *testing.T) {
 
 				require.InDelta(t,
 					utils.ExponentialTimeout(baseTime, acc.delayCounter).Milliseconds(),
-					waitTime,
+					waitTime.Int64(),
 					float64(baseTime.Milliseconds()*int64(math.Pow(2, float64(delta)))),
 				)
 			}

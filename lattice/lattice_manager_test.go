@@ -2427,7 +2427,6 @@ func TestSetupGenesis(t *testing.T) {
 					sargaAddress: {
 						BehaviouralNodes: utils.KramaIDFromString(sargaAccount.BehaviourContext),
 						RandomNodes:      utils.KramaIDFromString(sargaAccount.RandomContext),
-						ReplacedNodes:    make([]id.KramaID, 0),
 					},
 				},
 			)
@@ -2445,7 +2444,6 @@ func TestSetupGenesis(t *testing.T) {
 						genesisAddress: {
 							BehaviouralNodes: utils.KramaIDFromString(genesisAccount.BehaviourContext),
 							RandomNodes:      utils.KramaIDFromString(genesisAccount.RandomContext),
-							ReplacedNodes:    make([]id.KramaID, 0),
 						},
 					},
 				)

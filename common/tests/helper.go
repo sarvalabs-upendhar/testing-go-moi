@@ -798,6 +798,107 @@ func GetManifests(t *testing.T, filepath string) (poloEncoded, jsonEncoded, yaml
 	return
 }
 
+func CreateIXInputWithTestData(
+	t *testing.T,
+	ixType types.IxType,
+	payload []byte,
+	perceivedProofs []byte,
+) types.IxInput {
+	t.Helper()
+
+	IxInput := types.IxInput{
+		Type:  ixType,
+		Nonce: 2,
+
+		Sender:   RandomAddress(t),
+		Receiver: RandomAddress(t),
+		Payer:    RandomAddress(t),
+
+		TransferValues: map[types.AssetID]*big.Int{
+			"0180127603f47e5aff68052402fda5c4364e8e6cff1e107e4e821af00d0eee2edf16": big.NewInt(1033),
+			"0180127603f47e5aff68052402fda5c4364e8e6cff1e107e4e821af00d0eee2edf15": big.NewInt(1093),
+		},
+		PerceivedValues: map[types.AssetID]*big.Int{
+			"0180127603f47e5aff68053102fda5c4364e8e6cff1e107e4e821af00d0eee2edf16": big.NewInt(1233),
+			"0180127603f47e5aff68053102fda5c4364e8e6cff1e107e4e821af00d0eee2ed416": big.NewInt(1333),
+		},
+		PerceivedProofs: perceivedProofs,
+
+		FuelLimit: new(big.Int).SetUint64(1043),
+		FuelPrice: new(big.Int).SetUint64(1088),
+
+		Payload: payload,
+	}
+
+	return IxInput
+}
+
+func CreateComputeWithTestData(t *testing.T, hash []byte, kramaIDs []id.KramaID) types.IxCompute {
+	t.Helper()
+
+	IxCompute := types.IxCompute{
+		Mode:         3,
+		Hash:         hash,
+		ComputeNodes: kramaIDs,
+	}
+
+	return IxCompute
+}
+
+func CreateTrustWithTestData(t *testing.T) types.IxTrust {
+	t.Helper()
+
+	IxTrust := types.IxTrust{
+		MTQ:        8,
+		TrustNodes: GetTestKramaIDs(t, 2),
+	}
+
+	return IxTrust
+}
+
+func CreateBodyWithTestData(t *testing.T) types.TesseractBody {
+	t.Helper()
+
+	body := types.TesseractBody{
+		StateHash:       RandomHash(t),
+		ContextHash:     RandomHash(t),
+		InteractionHash: RandomHash(t),
+		ReceiptHash:     RandomHash(t),
+		ContextDelta:    make(map[types.Address]*types.DeltaGroup),
+		ConsensusProof: types.PoXCData{
+			BinaryHash:   RandomHash(t),
+			IdentityHash: RandomHash(t),
+			ICSHash:      RandomHash(t),
+		},
+	}
+
+	body.ContextDelta[RandomAddress(t)] = &types.DeltaGroup{
+		BehaviouralNodes: GetTestKramaIDs(t, 2),
+	}
+
+	return body
+}
+
+func CreateReceiptWithTestData(t *testing.T) *types.Receipt {
+	t.Helper()
+
+	receipt := &types.Receipt{
+		IxType:        2,
+		IxHash:        RandomHash(t),
+		FuelUsed:      99,
+		StateHashes:   make(map[types.Address]types.Hash),
+		ContextHashes: make(map[types.Address]types.Hash),
+		ExtraData:     []byte{1, 2},
+	}
+
+	for i := 0; i < 3; i++ {
+		receipt.StateHashes[RandomAddress(t)] = RandomHash(t)
+		receipt.ContextHashes[RandomAddress(t)] = RandomHash(t)
+	}
+
+	return receipt
+}
+
 /*
 // Unused functions
 func GetInvalidHash(t *testing.T) string {

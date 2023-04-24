@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/moichain/common/hexutil"
+
 	"github.com/gorilla/websocket"
 	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/require"
@@ -17,7 +19,7 @@ import (
 type Result struct {
 	Header struct {
 		Address string
-		Height  int
+		Height  hexutil.Uint64
 	}
 }
 

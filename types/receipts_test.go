@@ -10,13 +10,22 @@ import (
 )
 
 func TestCopyReceipt(t *testing.T) {
+	receiptWithNilExtraData := createReceiptWithTestData(t)
+	receiptWithNilExtraData.ExtraData = nil
+
 	testcases := []struct {
-		name    string
-		receipt *types.Receipt
+		name           string
+		receipt        *types.Receipt
+		isExtraDataNil bool
 	}{
 		{
 			name:    "copy receipt",
 			receipt: createReceiptWithTestData(t),
+		},
+		{
+			name:           "copy receipt with nil extra data",
+			receipt:        receiptWithNilExtraData,
+			isExtraDataNil: true,
 		},
 	}
 
@@ -26,18 +35,22 @@ func TestCopyReceipt(t *testing.T) {
 			copiedReceipt := test.receipt.Copy()
 
 			require.Equal(t, expectedReceipt, copiedReceipt)
+
 			require.NotEqual(t,
-				reflect.ValueOf(test.receipt.StateHashes).Pointer(),
+				reflect.ValueOf(expectedReceipt.StateHashes).Pointer(),
 				reflect.ValueOf(copiedReceipt.StateHashes).Pointer(),
 			)
 			require.NotEqual(t,
-				reflect.ValueOf(test.receipt.ContextHashes).Pointer(),
+				reflect.ValueOf(expectedReceipt.ContextHashes).Pointer(),
 				reflect.ValueOf(copiedReceipt.ContextHashes).Pointer(),
 			)
-			require.NotEqual(t,
-				reflect.ValueOf(test.receipt.ExtraData).Pointer(),
-				reflect.ValueOf(copiedReceipt.ExtraData).Pointer(),
-			)
+
+			if !test.isExtraDataNil {
+				require.NotEqual(t,
+					reflect.ValueOf(expectedReceipt.ExtraData).Pointer(),
+					reflect.ValueOf(copiedReceipt.ExtraData).Pointer(),
+				)
+			}
 		})
 	}
 }

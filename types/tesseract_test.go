@@ -47,7 +47,7 @@ func TestCopyBody(t *testing.T) {
 	}{
 		{
 			name: "copy body",
-			body: createBodyWithTestData(t),
+			body: tests.CreateBodyWithTestData(t),
 		},
 	}
 
@@ -229,7 +229,7 @@ func TestNewTesseract(t *testing.T) {
 		{
 			name:     "copy tesseract parts",
 			header:   tests.CreateHeaderWithTestData(t),
-			body:     createBodyWithTestData(t),
+			body:     tests.CreateBodyWithTestData(t),
 			ixns:     tests.CreateIxns(t, 1, ixParams),
 			receipts: createReceiptsWithTestData(t, tests.RandomHash(t)),
 			seal:     []byte{1, 2, 3},

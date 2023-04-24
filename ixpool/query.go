@@ -1,6 +1,7 @@
 package ixpool
 
 import (
+	"math/big"
 	"time"
 
 	"github.com/sarvalabs/moichain/types"
@@ -31,23 +32,23 @@ func (i *IxPool) GetAllIxs(inclQueued bool) (
 }
 
 // GetAccountWaitTime returns the wait time for an account based on the queried address.
-func (i *IxPool) GetAccountWaitTime(addr types.Address) (int64, error) {
+func (i *IxPool) GetAccountWaitTime(addr types.Address) (*big.Int, error) {
 	if acc := i.accounts.get(addr); acc != nil {
-		return time.Until(acc.getWaitTime()).Milliseconds(), nil
+		return big.NewInt(time.Until(acc.getWaitTime()).Milliseconds()), nil
 	}
 
-	return 0, types.ErrAccountNotFound
+	return nil, types.ErrAccountNotFound
 }
 
 // GetAllAccountsWaitTime returns the wait times for all the accounts that are present in IxPool.
-func (i *IxPool) GetAllAccountsWaitTime() map[types.Address]int64 {
-	waitTime := make(map[types.Address]int64)
+func (i *IxPool) GetAllAccountsWaitTime() map[types.Address]*big.Int {
+	waitTime := make(map[types.Address]*big.Int)
 
 	i.accounts.Range(func(key, value interface{}) bool {
 		addr, _ := key.(types.Address)
 		account := i.accounts.get(addr)
 
-		waitTime[addr] = time.Until(account.getWaitTime()).Milliseconds()
+		waitTime[addr] = big.NewInt(time.Until(account.getWaitTime()).Milliseconds())
 
 		return true
 	})

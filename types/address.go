@@ -42,17 +42,20 @@ func (a *Address) SetBytes(b []byte) {
 
 // MarshalText implements the custom json marshaller
 func (a Address) MarshalText() ([]byte, error) {
-	result := make([]byte, len(a)*2)
-	hex.Encode(result, a.Bytes())
+	result := make([]byte, len(a)*2+2)
+	copy(result[:2], "0x")
+	hex.Encode(result[2:], a.Bytes())
 
 	return result, nil
 }
 
 // UnmarshalText sets the address to the value of text.
 func (a *Address) UnmarshalText(text []byte) error {
-	if text[0] == byte('0') && (text[1] == byte('X') || text[1] == byte('x')) {
-		text = text[2:]
+	if !(len(text) >= 2 && text[0] == byte('0') && (text[1] == byte('X') || text[1] == byte('x'))) {
+		return ErrInvalidAddress
 	}
+
+	text = text[2:]
 
 	if len(text) != AddressLength*2 {
 		return fmt.Errorf("invalid address length: %d", len(text)/2)

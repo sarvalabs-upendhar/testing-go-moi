@@ -59,13 +59,20 @@ func (h Hash) Bytes() []byte { return h[:] }
 func (h Hash) Hex() string { return BytesToHex(h.Bytes()) }
 
 func (h Hash) MarshalText() ([]byte, error) {
-	result := make([]byte, len(h)*2)
-	hex.Encode(result, h.Bytes())
+	result := make([]byte, len(h)*2+2)
+	copy(result[:2], "0x")
+	hex.Encode(result[2:], h.Bytes())
 
 	return result, nil
 }
 
 func (h *Hash) UnmarshalText(text []byte) error {
+	if !(len(text) >= 2 && text[0] == byte('0') && (text[1] == byte('X') || text[1] == byte('x'))) {
+		return ErrInvalidHash
+	}
+
+	text = text[2:]
+
 	if len(text) != HashLength*2 {
 		return fmt.Errorf("invalid address length: %d", len(text)/2)
 	}
@@ -103,6 +110,10 @@ func has0xPrefix(str string) bool {
 
 // Hex2Bytes decodes string to []byte
 func Hex2Bytes(str string) []byte {
+	if has0xPrefix(str) {
+		str = str[2:]
+	}
+
 	h, err := hex.DecodeString(str)
 	if err != nil {
 		panic(err)

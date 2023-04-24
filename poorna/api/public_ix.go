@@ -10,7 +10,6 @@ import (
 
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
-	"github.com/sarvalabs/moichain/utils"
 )
 
 var ErrGenesisAccount = errors.New("genesis account interactions forbidden")
@@ -34,7 +33,7 @@ func (p *PublicIXAPI) SendInteraction(args *ptypes.SendIXArgs) (*types.Interacti
 		return nil, err
 	}
 
-	nonce, err := p.ixpool.GetNonce(types.HexToAddress(args.Sender))
+	nonce, err := p.ixpool.GetNonce(args.Sender)
 	if err != nil {
 		return nil, err
 	}
@@ -59,11 +58,11 @@ func constructInteraction(args *ptypes.SendIXArgs, nonce uint64) (ix *types.Inte
 		Input: types.IxInput{
 			Type:           args.Type,
 			Nonce:          nonce,
-			Sender:         types.HexToAddress(args.Sender),
-			Receiver:       types.HexToAddress(args.Receiver),
+			Sender:         args.Sender,
+			Receiver:       args.Receiver,
 			TransferValues: make(map[types.AssetID]*big.Int, len(args.TransferValues)),
-			FuelPrice:      new(big.Int).SetBytes(types.FromHex(args.FuelPrice)),
-			FuelLimit:      new(big.Int).SetBytes(types.FromHex(args.FuelLimit)),
+			FuelPrice:      args.FuelPrice.ToInt(),
+			FuelLimit:      args.FuelLimit.ToInt(),
 		},
 	}
 
@@ -106,25 +105,18 @@ func constructInteraction(args *ptypes.SendIXArgs, nonce uint64) (ix *types.Inte
 
 // ValidateArguments checks whether the SendIXArgs are valid or not
 func validateArguments(args *ptypes.SendIXArgs, p *PublicIXAPI) error {
-	// Reject interaction if sender address is invalid
-	senderAddress, err := utils.ValidateAddress(args.Sender)
-	if err != nil {
+	if args.Sender.IsNil() {
 		return types.ErrInvalidAddress
 	}
 
 	// Reject genesis account interaction
-	if senderAddress == types.SargaAddress {
+	if args.Sender == types.SargaAddress {
 		return ErrGenesisAccount
 	}
 
-	if args.Receiver != "" {
-		receiverAddress, err := utils.ValidateAddress(args.Receiver)
-		if err != nil {
-			return types.ErrInvalidAddress
-		}
-
+	if !args.Receiver.IsNil() {
 		// Reject genesis account interaction
-		if receiverAddress == types.SargaAddress {
+		if args.Receiver == types.SargaAddress {
 			return ErrGenesisAccount
 		}
 	}
@@ -136,23 +128,18 @@ func validateArguments(args *ptypes.SendIXArgs, p *PublicIXAPI) error {
 
 // GetRawIXPayloadForAssetCreation returns the raw IXPayload for asset creation
 func GetRawIXPayloadForAssetCreation(jsonPayload []byte) ([]byte, error) {
-	payloadArgs := new(ptypes.AssetCreationArgs)
+	payloadArgs := new(ptypes.RPCAssetCreation)
 	if err := json.Unmarshal(jsonPayload, payloadArgs); err != nil {
 		return nil, err
-	}
-
-	supplyData, err := hex.DecodeString(payloadArgs.Supply)
-	if err != nil {
-		return nil, errors.New("failed to decode supply")
 	}
 
 	createPayload := &types.AssetCreatePayload{
 		Type:   payloadArgs.Type,
 		Symbol: payloadArgs.Symbol,
-		Supply: new(big.Int).SetBytes(supplyData),
+		Supply: payloadArgs.Supply.ToInt(),
 
-		Dimension: payloadArgs.Dimension,
-		Decimals:  payloadArgs.Decimals,
+		Dimension: payloadArgs.Dimension.ToInt(),
+		Decimals:  payloadArgs.Decimals.ToInt(),
 
 		IsFungible:     payloadArgs.IsFungible,
 		IsMintable:     payloadArgs.IsMintable,
@@ -171,7 +158,7 @@ func GetRawIXPayloadForAssetCreation(jsonPayload []byte) ([]byte, error) {
 
 // GetRawIXPayloadForLogicDeploy returns the raw IXPayload for logic deployment
 func GetRawIXPayloadForLogicDeploy(jsonPayload []byte, nonce uint64, sender types.Address) ([]byte, error) {
-	payload := new(ptypes.LogicDeployArgs)
+	payload := new(ptypes.RPCLogicPayload)
 	if err := json.Unmarshal(jsonPayload, payload); err != nil {
 		return nil, err
 	}
@@ -182,21 +169,21 @@ func GetRawIXPayloadForLogicDeploy(jsonPayload []byte, nonce uint64, sender type
 
 	return polo.Polorize(&types.LogicPayload{
 		Callsite: payload.Callsite,
-		Calldata: types.FromHex(payload.Calldata),
-		Manifest: types.FromHex(payload.Manifest),
+		Calldata: payload.Calldata.Bytes(),
+		Manifest: payload.Manifest.Bytes(),
 	})
 }
 
 // GetRawIXPayloadForLogicInvoke returns the raw IXPayload for logic invoke
 func GetRawIXPayloadForLogicInvoke(jsonPayload []byte) ([]byte, error) {
-	payload := new(ptypes.LogicInvokeArgs)
+	payload := new(ptypes.RPCLogicPayload)
 	if err := json.Unmarshal(jsonPayload, payload); err != nil {
 		return nil, err
 	}
 
 	return polo.Polorize(&types.LogicPayload{
 		Callsite: payload.Callsite,
-		Calldata: types.FromHex(payload.Calldata),
+		Calldata: payload.Calldata.Bytes(),
 		Logic:    types.FromHex(payload.LogicID),
 	})
 }

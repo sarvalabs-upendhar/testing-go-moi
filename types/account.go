@@ -56,7 +56,6 @@ func (acc *Accounts) Bytes() ([]byte, error) {
 
 type AccountMetaInfo struct {
 	Type AccountType `json:"type"`
-	Mode string      `json:"mode"`
 
 	Address Address `json:"address"`
 	Height  uint64  `json:"height"`

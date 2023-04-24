@@ -3,8 +3,9 @@ package moiclient
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"math/big"
 	"net/http"
 	"strconv"
 	"testing"
@@ -12,7 +13,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/sarvalabs/moichain/common/hexutil"
 	"github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/moichain/jug/engineio"
 	"github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/poorna/api"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
@@ -28,7 +31,7 @@ const IxnTimeout = 180 * time.Second
 
 var (
 	sender               = types.HexToAddress("377a4674fca572f072a8176d61b86d9015914b9df0a57bb1d80fafecce233084")
-	receiver             = "bdfa7699df0d291d368a7d6bdda0a34d703458d2ba2c76c6a5dcac0915ce16ad"
+	receiver             = types.HexToAddress("bdfa7699df0d291d368a7d6bdda0a34d703458d2ba2c76c6a5dcac0915ce16ad")
 	genesisHeight        = int64(0)
 	deployLogicHeight    = int64(1)
 	executeLogicHeight   = int64(2)
@@ -81,21 +84,28 @@ func makeHTTPRequest(t *testing.T, method string, args interface{}) *ptypes.Resp
 func getIXArgsForLogicDeployment(t *testing.T) *ptypes.SendIXArgs {
 	t.Helper()
 
-	logicDeployArgs := &ptypes.LogicDeployArgs{
-		Manifest: hex.EncodeToString(tests.ReadERC20Manifest(t, "./../jug/manifests/erc20.json")),
+	calldata := "0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd8ee6a29ec4" +
+		"42dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49"
+
+	manifest := "0x" + types.BytesToHex(tests.ReadERC20Manifest(t, "./../jug/manifests/erc20.json"))
+
+	logicPayload := &ptypes.RPCLogicPayload{
+		Manifest: hexutil.Bytes(types.Hex2Bytes(manifest)),
 		Callsite: "Seeder!",
-		Calldata: "0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd8ee6a29ec4" +
-			"42dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49",
+		Calldata: hexutil.Bytes(types.Hex2Bytes(calldata)),
 	}
 
-	payload, err := json.Marshal(logicDeployArgs)
+	payload, err := json.Marshal(logicPayload)
 	require.NoError(t, err)
+
+	fuelPrice, _ := new(big.Int).SetString("130D41", 16)
+	fuelLimit, _ := new(big.Int).SetString("130D41", 16)
 
 	ixArgs := &ptypes.SendIXArgs{
 		Type:      7,
-		FuelPrice: "030D40",
-		FuelLimit: "030D40",
-		Sender:    sender.Hex(),
+		FuelPrice: (*hexutil.Big)(fuelPrice),
+		FuelLimit: (*hexutil.Big)(fuelLimit),
+		Sender:    sender,
 		Payload:   payload,
 	}
 
@@ -103,7 +113,7 @@ func getIXArgsForLogicDeployment(t *testing.T) *ptypes.SendIXArgs {
 }
 
 // getTesseract returns tesseract for the given sender and height
-func getTesseract(t *testing.T, client *Client, sender string, height *int64) *ptypes.RPCTesseract {
+func getTesseract(t *testing.T, client *Client, sender types.Address, height *int64) *ptypes.RPCTesseract {
 	t.Helper()
 
 	args := &ptypes.TesseractArgs{
@@ -121,13 +131,13 @@ func getTesseract(t *testing.T, client *Client, sender string, height *int64) *p
 }
 
 // getAssetID returns assetID for the given sender and height
-func getAssetID(t *testing.T, client *Client, sender string, height *int64) string {
+func getAssetID(t *testing.T, client *Client, sender types.Address, height *int64) string {
 	t.Helper()
 
 	ts := getTesseract(t, client, sender, height)
 
 	receiptArgs := &ptypes.ReceiptArgs{
-		Hash: ts.Ixns[0].Hash.Hex(),
+		Hash: ts.Ixns[0].Hash,
 	}
 
 	receipt, err := client.InteractionReceipt(receiptArgs)
@@ -142,13 +152,13 @@ func getAssetID(t *testing.T, client *Client, sender string, height *int64) stri
 }
 
 // getLogicID returns logicID for the given sender and height
-func getLogicID(t *testing.T, client *Client, sender string, height *int64) string {
+func getLogicID(t *testing.T, client *Client, sender types.Address, height *int64) string {
 	t.Helper()
 
 	ts := getTesseract(t, client, sender, height)
 
 	receiptArgs := &ptypes.ReceiptArgs{
-		Hash: ts.Ixns[0].Hash.Hex(),
+		Hash: ts.Ixns[0].Hash,
 	}
 
 	receipt, err := client.InteractionReceipt(receiptArgs)
@@ -165,7 +175,7 @@ func getLogicID(t *testing.T, client *Client, sender string, height *int64) stri
 // retryFetchReceipt keeps trying to fetch receipt for given ixHash until it is timed out
 // and also checks if moi client response matches with http response
 // Use this to check if interaction is successful on the chain.
-func retryFetchReceipt(t *testing.T, ctx context.Context, client *Client, ixHash string) *types.Receipt {
+func retryFetchReceipt(t *testing.T, ctx context.Context, client *Client, ixHash types.Hash) *ptypes.RPCReceipt {
 	t.Helper()
 
 	receiptArgs := &ptypes.ReceiptArgs{
@@ -176,7 +186,7 @@ func retryFetchReceipt(t *testing.T, ctx context.Context, client *Client, ixHash
 		select {
 		case <-ctx.Done():
 			require.FailNow(t, "ix receipt not found,"+
-				" as forming the ICS took more time, so try running tests again")
+				" as forming the ICS took more time, so try running tests again", ixHash)
 		default:
 			receipt, err := client.InteractionReceipt(receiptArgs)
 			if err == nil {
@@ -188,6 +198,50 @@ func retryFetchReceipt(t *testing.T, ctx context.Context, client *Client, ixHash
 
 			time.Sleep(time.Second)
 		}
+	}
+}
+
+// getLogicManifestByEncodingType returns the manifest according to the given encoding type POLO, JSON or YAML
+func getLogicManifestByEncodingType(
+	t *testing.T,
+	res hexutil.Bytes,
+	args *ptypes.LogicManifestArgs,
+) (hexutil.Bytes, error) {
+	t.Helper()
+
+	switch args.Encoding {
+	case "POLO", "":
+		return res, nil
+	case "JSON":
+		logicManifest := res.Bytes()
+
+		depolorizedManifest, err := engineio.NewManifest(logicManifest, engineio.POLO)
+		if err != nil {
+			return nil, err
+		}
+
+		manifest, err := depolorizedManifest.Encode(engineio.JSON)
+		if err != nil {
+			return nil, err
+		}
+
+		return manifest, nil
+	case "YAML":
+		logicManifest := res.Bytes()
+
+		depolorizedManifest, err := engineio.NewManifest(logicManifest, engineio.POLO)
+		if err != nil {
+			return nil, err
+		}
+
+		manifest, err := depolorizedManifest.Encode(engineio.YAML)
+		if err != nil {
+			return nil, err
+		}
+
+		return manifest, nil
+	default:
+		return nil, errors.New("invalid encoding type")
 	}
 }
 
@@ -206,7 +260,7 @@ func httpTesseract(t *testing.T, args interface{}) *ptypes.RPCTesseract {
 }
 
 // httpGetAssetInfoByAssetID returns asset description for the given assetID
-func httpGetAssetInfoByAssetID(t *testing.T, assetID string) *types.AssetDescriptor {
+func httpGetAssetInfoByAssetID(t *testing.T, assetID string) *ptypes.RPCAssetDescriptor {
 	t.Helper()
 
 	args := &ptypes.AssetDescriptorArgs{
@@ -215,7 +269,7 @@ func httpGetAssetInfoByAssetID(t *testing.T, assetID string) *types.AssetDescrip
 
 	resp := makeHTTPRequest(t, "moi.AssetInfoByAssetID", args)
 
-	var assetInfo types.AssetDescriptor
+	var assetInfo ptypes.RPCAssetDescriptor
 
 	err := json.Unmarshal(resp.Data, &assetInfo)
 	require.NoError(t, err)
@@ -224,12 +278,12 @@ func httpGetAssetInfoByAssetID(t *testing.T, assetID string) *types.AssetDescrip
 }
 
 // httpGetBalance returns the balance of assetID for given BalArgs
-func httpGetBalance(t *testing.T, args *ptypes.BalArgs) uint64 {
+func httpGetBalance(t *testing.T, args *ptypes.BalArgs) *hexutil.Big {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.Balance", args)
 
-	var bal uint64
+	var bal *hexutil.Big
 
 	err := json.Unmarshal(resp.Data, &bal)
 	require.NoError(t, err)
@@ -238,12 +292,12 @@ func httpGetBalance(t *testing.T, args *ptypes.BalArgs) uint64 {
 }
 
 // httpTDU retrieves the TDU of the queried address
-func httpTDU(t *testing.T, args *ptypes.TesseractArgs) types.AssetMap {
+func httpTDU(t *testing.T, args *ptypes.TesseractArgs) map[types.AssetID]string {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.TDU", args)
 
-	var assetMap types.AssetMap
+	var assetMap map[types.AssetID]string
 
 	err := json.Unmarshal(resp.Data, &assetMap)
 	require.NoError(t, err)
@@ -266,12 +320,12 @@ func httpGetContextInfo(t *testing.T, args *ptypes.ContextInfoArgs) *ptypes.Cont
 }
 
 // httpInteractionReceipt returns the receipt of the interaction for given hash
-func httpInteractionReceipt(t *testing.T, args *ptypes.ReceiptArgs) *types.Receipt {
+func httpInteractionReceipt(t *testing.T, args *ptypes.ReceiptArgs) *ptypes.RPCReceipt {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.InteractionReceipt", args)
 
-	var receipt types.Receipt
+	var receipt ptypes.RPCReceipt
 
 	err := json.Unmarshal(resp.Data, &receipt)
 	require.NoError(t, err)
@@ -280,12 +334,12 @@ func httpInteractionReceipt(t *testing.T, args *ptypes.ReceiptArgs) *types.Recei
 }
 
 // httpInteractionCount returns the number of interactions sent for the given address
-func httpInteractionCount(t *testing.T, args *ptypes.InteractionCountArgs) uint64 {
+func httpInteractionCount(t *testing.T, args *ptypes.InteractionCountArgs) *hexutil.Uint64 {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.InteractionCount", args)
 
-	var count uint64
+	var count *hexutil.Uint64
 
 	err := json.Unmarshal(resp.Data, &count)
 	require.NoError(t, err)
@@ -294,26 +348,26 @@ func httpInteractionCount(t *testing.T, args *ptypes.InteractionCountArgs) uint6
 }
 
 // httpPendingInteractionCount returns the number of interactions sent for the given address.
-func httpPendingInteractionCount(t *testing.T, args *ptypes.InteractionCountArgs) *uint64 {
+func httpPendingInteractionCount(t *testing.T, args *ptypes.InteractionCountArgs) *hexutil.Uint64 {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.PendingInteractionCount", args)
 
-	var count uint64
+	var count *hexutil.Uint64
 
 	err := json.Unmarshal(resp.Data, &count)
 	require.NoError(t, err)
 
-	return &count
+	return count
 }
 
 // httpStorage returns the data associated with the given httpStorage slot
-func httpStorage(t *testing.T, args *ptypes.GetStorageArgs) []byte {
+func httpStorage(t *testing.T, args *ptypes.GetStorageArgs) hexutil.Bytes {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.Storage", args)
 
-	var res []byte
+	var res hexutil.Bytes
 
 	err := json.Unmarshal(resp.Data, &res)
 	require.NoError(t, err)
@@ -322,12 +376,12 @@ func httpStorage(t *testing.T, args *ptypes.GetStorageArgs) []byte {
 }
 
 // httpAccountState returns the account state of the given address
-func httpAccountState(t *testing.T, args *ptypes.GetAccountArgs) *types.Account {
+func httpAccountState(t *testing.T, args *ptypes.GetAccountArgs) *ptypes.RPCAccount {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.AccountState", args)
 
-	var account types.Account
+	var account ptypes.RPCAccount
 
 	err := json.Unmarshal(resp.Data, &account)
 	require.NoError(t, err)
@@ -336,12 +390,12 @@ func httpAccountState(t *testing.T, args *ptypes.GetAccountArgs) *types.Account 
 }
 
 // httpLogicManifest returns the manifest associated with the given logic id
-func httpLogicManifest(t *testing.T, args *ptypes.LogicManifestArgs) []byte {
+func httpLogicManifest(t *testing.T, args *ptypes.LogicManifestArgs) hexutil.Bytes {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.LogicManifest", args)
 
-	var res []byte
+	var res hexutil.Bytes
 
 	err := json.Unmarshal(resp.Data, &res)
 	require.NoError(t, err)
@@ -406,17 +460,17 @@ func httpInspect(t *testing.T, args *ptypes.InspectArgs) *api.InspectResponse {
 }
 
 // httpWaitTime returns the wait time for an account in IxPool, based on the queried address.
-func httpWaitTime(t *testing.T, args *ptypes.IxPoolArgs) int64 {
+func httpWaitTime(t *testing.T, args *ptypes.IxPoolArgs) *api.WaitTimeResponse {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "ixpool.WaitTime", args)
 
-	var time int64
+	var waitTime api.WaitTimeResponse
 
-	err := json.Unmarshal(resp.Data, &time)
+	err := json.Unmarshal(resp.Data, &waitTime)
 	require.NoError(t, err)
 
-	return time
+	return &waitTime
 }
 
 // httpPeers returns an array of Krama IDs connected to a client
@@ -462,12 +516,12 @@ func httpAccounts(t *testing.T, args *ptypes.AccountArgs) []types.Address {
 }
 
 // httpAccountMetaInfo returns the account meta info associated with the given address
-func httpAccountMetaInfo(t *testing.T, args *ptypes.GetAccountArgs) *types.AccountMetaInfo {
+func httpAccountMetaInfo(t *testing.T, args *ptypes.GetAccountArgs) *ptypes.RPCAccountMetaInfo {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.AccountMetaInfo", args)
 
-	var info types.AccountMetaInfo
+	var info ptypes.RPCAccountMetaInfo
 
 	err := json.Unmarshal(resp.Data, &info)
 	require.NoError(t, err)

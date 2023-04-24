@@ -23,6 +23,7 @@ type expectedResult struct {
 	pending  int
 	queued   int
 	waitTime int64
+	expired  bool
 }
 
 //nolint:dupl
@@ -194,16 +195,16 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 		expectedErr     error
 	}{
 		{
-			name: "Invalid address",
+			name: "nil address",
 			args: &ptypes.IxPoolArgs{
-				Address: "68510188a88ff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+				Address: types.NilAddress,
 			},
 			expectedErr: types.ErrInvalidAddress,
 		},
 		{
 			name: "Ix pool with no interactions",
 			args: &ptypes.IxPoolArgs{
-				Address: addressList[0].Hex(),
+				Address: addressList[0],
 			},
 			accounts: map[types.Address]*account{
 				addressList[0]: {
@@ -220,7 +221,7 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 		{
 			name: "Ix pool with one pending interaction",
 			args: &ptypes.IxPoolArgs{
-				Address: addressList[0].Hex(),
+				Address: addressList[0],
 			},
 			accounts: map[types.Address]*account{
 				addressList[0]: {
@@ -248,7 +249,7 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 		{
 			name: "Ix pool with one queued interaction",
 			args: &ptypes.IxPoolArgs{
-				Address: addressList[0].Hex(),
+				Address: addressList[0],
 			},
 			accounts: map[types.Address]*account{
 				addressList[0]: {
@@ -276,7 +277,7 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 		{
 			name: "Ix pool with multiple pending and queued interactions",
 			args: &ptypes.IxPoolArgs{
-				Address: addressList[1].Hex(),
+				Address: addressList[1],
 			},
 			accounts: map[types.Address]*account{
 				addressList[0]: {
@@ -437,8 +438,8 @@ func TestPublicIXPoolAPI_Status(t *testing.T) {
 			response, err := ixPoolAPI.Status()
 			require.NoError(t, err)
 
-			require.Equal(t, uint64(testcase.expectedIxQueue.pending), response.Pending)
-			require.Equal(t, uint64(testcase.expectedIxQueue.queued), response.Queued)
+			require.Equal(t, uint64(testcase.expectedIxQueue.pending), response.Pending.ToInt())
+			require.Equal(t, uint64(testcase.expectedIxQueue.queued), response.Queued.ToInt())
 		})
 	}
 }
@@ -473,6 +474,7 @@ func TestPublicIXPoolAPI_Inspect(t *testing.T) {
 					pending:  0,
 					queued:   0,
 					waitTime: 0,
+					expired:  true,
 				},
 			},
 		},
@@ -503,6 +505,7 @@ func TestPublicIXPoolAPI_Inspect(t *testing.T) {
 					pending:  1,
 					queued:   0,
 					waitTime: int64(1500 * time.Millisecond),
+					expired:  false,
 				},
 			},
 		},
@@ -533,6 +536,7 @@ func TestPublicIXPoolAPI_Inspect(t *testing.T) {
 					pending:  0,
 					queued:   1,
 					waitTime: int64(2500 * time.Millisecond),
+					expired:  false,
 				},
 			},
 		},
@@ -589,11 +593,13 @@ func TestPublicIXPoolAPI_Inspect(t *testing.T) {
 					pending:  0,
 					queued:   2,
 					waitTime: int64(500 * time.Millisecond),
+					expired:  false,
 				},
 				addressList[1]: {
 					pending:  2,
 					queued:   1,
 					waitTime: int64(1000 * time.Millisecond),
+					expired:  false,
 				},
 			},
 		},
@@ -611,7 +617,8 @@ func TestPublicIXPoolAPI_Inspect(t *testing.T) {
 			for address, accInfo := range testcase.expectedAccInfo {
 				require.Equal(t, accInfo.pending, len(response.Pending[address.Hex()]))
 				require.Equal(t, accInfo.queued, len(response.Queued[address.Hex()]))
-				require.Equal(t, accInfo.waitTime, response.WaitTime[address.Hex()])
+				require.Equal(t, big.NewInt(accInfo.waitTime), response.WaitTime[address.Hex()].Time.ToInt())
+				require.Equal(t, accInfo.expired, response.WaitTime[address.Hex()].Expired)
 
 				if len(testcase.accounts[address].pending) > 0 {
 					interactionInfo := response.Pending[address.Hex()]
@@ -650,26 +657,25 @@ func TestPublicIXPoolAPI_WaitTime(t *testing.T) {
 		expectedErr      error
 	}{
 		{
-			name: "Invalid address",
+			name: "nil address",
 			args: &ptypes.IxPoolArgs{
-				Address: "68510188a88ff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
+				Address: types.NilAddress,
 			},
 			expectedErr: types.ErrInvalidAddress,
 		},
 		{
 			name: "Account without state",
 			args: &ptypes.IxPoolArgs{
-				Address: tests.RandomAddress(t).Hex(),
+				Address: tests.RandomAddress(t),
 			},
 			expectedErr: types.ErrAccountNotFound,
 		},
 		{
 			name: "Account with state",
 			args: &ptypes.IxPoolArgs{
-				Address: address.Hex(),
+				Address: address,
 			},
 			expectedWaitTime: waitTime,
-			expectedErr:      nil,
 		},
 	}
 
@@ -685,7 +691,44 @@ func TestPublicIXPoolAPI_WaitTime(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, testcase.expectedWaitTime, waitTime)
+			require.Equal(t, big.NewInt(testcase.expectedWaitTime), waitTime.Time.ToInt())
+			require.Equal(t, false, waitTime.Expired)
+		})
+	}
+}
+
+func TestCreateWaitTime(t *testing.T) {
+	testcases := []struct {
+		name         string
+		waitTime     *big.Int
+		expired      bool
+		expectedTime *big.Int
+	}{
+		{
+			name:         "after time out",
+			waitTime:     big.NewInt(-105),
+			expired:      true,
+			expectedTime: big.NewInt(105),
+		},
+		{
+			name:         "before time out",
+			waitTime:     big.NewInt(105),
+			expired:      false,
+			expectedTime: big.NewInt(105),
+		},
+		{
+			name:         "at time",
+			waitTime:     big.NewInt(0),
+			expired:      true,
+			expectedTime: big.NewInt(0),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			waitTime := createWaitTime(test.waitTime)
+			require.Equal(t, test.expired, waitTime.Expired)
+			require.Equal(t, test.expectedTime, waitTime.Time.ToInt())
 		})
 	}
 }

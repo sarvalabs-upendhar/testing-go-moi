@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/sarvalabs/moichain/common/tests"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/types"
@@ -16,7 +18,11 @@ func TestCopyIxInput(t *testing.T) {
 	}{
 		{
 			name:  "IxInput copied successfully",
-			input: createInputWithTestData(t),
+			input: tests.CreateIXInputWithTestData(t, types.IxAssetCreate, []byte{187, 1, 29, 103}, []byte{187, 1, 29, 103}),
+		},
+		{
+			name:  "copy ix input with nil perceived proofs ",
+			input: tests.CreateIXInputWithTestData(t, types.IxAssetCreate, []byte{187, 1, 29, 103}, nil),
 		},
 	}
 
@@ -39,11 +45,6 @@ func TestCopyIxInput(t *testing.T) {
 			)
 
 			require.NotEqual(t,
-				reflect.ValueOf(expectedIxInput.PerceivedProofs).Pointer(),
-				reflect.ValueOf(inputCopy.PerceivedProofs).Pointer(),
-			)
-
-			require.NotEqual(t,
 				reflect.ValueOf(expectedIxInput.FuelLimit).Pointer(),
 				reflect.ValueOf(inputCopy.FuelLimit).Pointer(),
 			)
@@ -57,6 +58,13 @@ func TestCopyIxInput(t *testing.T) {
 				reflect.ValueOf(expectedIxInput.Payload).Pointer(),
 				reflect.ValueOf(inputCopy.Payload).Pointer(),
 			)
+
+			if test.input.PerceivedProofs != nil {
+				require.NotEqual(t,
+					reflect.ValueOf(expectedIxInput.PerceivedProofs).Pointer(),
+					reflect.ValueOf(inputCopy.PerceivedProofs).Pointer(),
+				)
+			}
 		})
 	}
 }
@@ -68,7 +76,11 @@ func TestCopyIxCompute(t *testing.T) {
 	}{
 		{
 			name:    "IxCompute copied successfully",
-			compute: createComputeWithTestData(t),
+			compute: tests.CreateComputeWithTestData(t, tests.RandomHash(t).Bytes(), tests.GetTestKramaIDs(t, 2)),
+		},
+		{
+			name:    "copy ix compute with nil hash and zero nodes",
+			compute: tests.CreateComputeWithTestData(t, nil, nil),
 		},
 	}
 
@@ -80,15 +92,19 @@ func TestCopyIxCompute(t *testing.T) {
 
 			require.Equal(t, expectedCompute, computeCopy)
 
-			require.NotEqual(t,
-				reflect.ValueOf(expectedCompute.Hash).Pointer(),
-				reflect.ValueOf(computeCopy.Hash).Pointer(),
-			)
+			if test.compute.Hash != nil {
+				require.NotEqual(t,
+					reflect.ValueOf(expectedCompute.Hash).Pointer(),
+					reflect.ValueOf(computeCopy.Hash).Pointer(),
+				)
+			}
 
-			require.NotEqual(t,
-				reflect.ValueOf(expectedCompute.ComputeNodes).Pointer(),
-				reflect.ValueOf(computeCopy.ComputeNodes).Pointer(),
-			)
+			if len(test.compute.ComputeNodes) > 0 {
+				require.NotEqual(t,
+					reflect.ValueOf(expectedCompute.ComputeNodes).Pointer(),
+					reflect.ValueOf(computeCopy.ComputeNodes).Pointer(),
+				)
+			}
 		})
 	}
 }
@@ -100,7 +116,7 @@ func TestCopyIxTrust(t *testing.T) {
 	}{
 		{
 			name:  "IxTrust copied successfully",
-			trust: createTrustWithTestData(t),
+			trust: tests.CreateTrustWithTestData(t),
 		},
 	}
 

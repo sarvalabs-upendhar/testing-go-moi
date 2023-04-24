@@ -95,9 +95,13 @@ func (b *ArrayOfBits) Copy() *ArrayOfBits {
 }
 
 func (b *ArrayOfBits) copy() *ArrayOfBits {
-	c := make([]uint64, len(b.Elements))
+	var c []uint64
 
-	copy(c, b.Elements)
+	if len(b.Elements) > 0 {
+		c = make([]uint64, len(b.Elements))
+
+		copy(c, b.Elements)
+	}
 
 	return &ArrayOfBits{
 		Size:     b.Size,

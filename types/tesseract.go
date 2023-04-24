@@ -22,6 +22,10 @@ const (
 type ContextDelta map[Address]*DeltaGroup
 
 func (ctx ContextDelta) Copy() ContextDelta {
+	if len(ctx) == 0 {
+		return nil
+	}
+
 	contextDelta := make(ContextDelta)
 
 	for key, value := range ctx {
@@ -40,15 +44,23 @@ type DeltaGroup struct {
 
 func (d DeltaGroup) Copy() *DeltaGroup {
 	deltaGroup := &DeltaGroup{
-		Role:             d.Role,
-		BehaviouralNodes: make([]kramaid.KramaID, len(d.BehaviouralNodes)),
-		RandomNodes:      make([]kramaid.KramaID, len(d.RandomNodes)),
-		ReplacedNodes:    make([]kramaid.KramaID, len(d.ReplacedNodes)),
+		Role: d.Role,
 	}
 
-	copy(deltaGroup.BehaviouralNodes, d.BehaviouralNodes)
-	copy(deltaGroup.RandomNodes, d.RandomNodes)
-	copy(deltaGroup.ReplacedNodes, d.ReplacedNodes)
+	if len(d.BehaviouralNodes) > 0 {
+		deltaGroup.BehaviouralNodes = make([]kramaid.KramaID, len(d.BehaviouralNodes))
+		copy(deltaGroup.BehaviouralNodes, d.BehaviouralNodes)
+	}
+
+	if len(d.RandomNodes) > 0 {
+		deltaGroup.RandomNodes = make([]kramaid.KramaID, len(d.RandomNodes))
+		copy(deltaGroup.RandomNodes, d.RandomNodes)
+	}
+
+	if len(d.ReplacedNodes) > 0 {
+		deltaGroup.ReplacedNodes = make([]kramaid.KramaID, len(d.ReplacedNodes))
+		copy(deltaGroup.ReplacedNodes, d.ReplacedNodes)
+	}
 
 	return deltaGroup
 }
@@ -85,10 +97,13 @@ type TesseractHeader struct {
 
 func (h *TesseractHeader) Copy() TesseractHeader {
 	header := *h
-	header.ContextLock = make(map[Address]ContextLockInfo, len(h.ContextLock))
 
-	for k, v := range h.ContextLock {
-		header.ContextLock[k] = v
+	if len(h.ContextLock) > 0 {
+		header.ContextLock = make(map[Address]ContextLockInfo, len(h.ContextLock))
+
+		for k, v := range h.ContextLock {
+			header.ContextLock[k] = v
+		}
 	}
 
 	header.Extra = h.Extra.Copy()
@@ -130,7 +145,6 @@ type TesseractBody struct {
 
 func (b *TesseractBody) Copy() TesseractBody {
 	body := *b
-
 	body.ContextDelta = b.ContextDelta.Copy()
 
 	return body
@@ -503,11 +517,14 @@ func (p *TesseractParts) FromBytes(data []byte) error {
 func (p *TesseractParts) Copy() *TesseractParts {
 	parts := &TesseractParts{
 		Total: p.Total,
-		Grid:  make(map[Address]TesseractHeightAndHash),
 	}
 
-	for k, v := range p.Grid {
-		parts.Grid[k] = v
+	if len(p.Grid) > 0 {
+		parts.Grid = make(map[Address]TesseractHeightAndHash)
+
+		for k, v := range p.Grid {
+			parts.Grid[k] = v
+		}
 	}
 
 	return parts

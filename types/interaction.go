@@ -62,7 +62,7 @@ type IxInput struct {
 	Nonce uint64 `json:"nonce"`
 
 	Sender   Address `json:"sender"`
-	Receiver Address `json:"options"`
+	Receiver Address `json:"receiver"`
 	Payer    Address `json:"payer"`
 
 	TransferValues  map[AssetID]*big.Int `json:"transfer_values"`
@@ -78,10 +78,6 @@ type IxInput struct {
 func (ixInput *IxInput) Copy() IxInput {
 	input := *ixInput
 
-	input.TransferValues = make(map[AssetID]*big.Int)
-	input.PerceivedValues = make(map[AssetID]*big.Int)
-	input.PerceivedProofs = make([]byte, len(ixInput.PerceivedProofs))
-
 	if ixInput.FuelLimit != nil {
 		input.FuelLimit = new(big.Int).Set(ixInput.FuelLimit)
 	}
@@ -90,17 +86,28 @@ func (ixInput *IxInput) Copy() IxInput {
 		input.FuelPrice = new(big.Int).Set(ixInput.FuelPrice)
 	}
 
-	for k, v := range ixInput.TransferValues {
-		input.TransferValues[k] = new(big.Int).SetBytes(v.Bytes())
+	if len(ixInput.TransferValues) > 0 {
+		input.TransferValues = make(map[AssetID]*big.Int)
+
+		for k, v := range ixInput.TransferValues {
+			input.TransferValues[k] = new(big.Int).SetBytes(v.Bytes())
+		}
 	}
 
-	for k, v := range ixInput.PerceivedValues {
-		input.PerceivedValues[k] = new(big.Int).SetBytes(v.Bytes())
+	if len(ixInput.PerceivedValues) > 0 {
+		input.PerceivedValues = make(map[AssetID]*big.Int)
+
+		for k, v := range ixInput.PerceivedValues {
+			input.PerceivedValues[k] = new(big.Int).SetBytes(v.Bytes())
+		}
 	}
 
-	copy(input.PerceivedProofs, ixInput.PerceivedProofs)
+	if len(ixInput.PerceivedProofs) > 0 {
+		input.PerceivedProofs = make([]byte, len(ixInput.PerceivedProofs))
+		copy(input.PerceivedProofs, ixInput.PerceivedProofs)
+	}
 
-	if ixInput.Payload != nil {
+	if len(ixInput.Payload) > 0 {
 		input.Payload = make(json.RawMessage, len(ixInput.Payload))
 		copy(input.Payload, ixInput.Payload)
 	}
@@ -116,13 +123,18 @@ type IxCompute struct {
 
 func (ixCompute *IxCompute) Copy() IxCompute {
 	compute := IxCompute{
-		Mode:         ixCompute.Mode,
-		Hash:         make([]byte, len(ixCompute.Hash)),
-		ComputeNodes: make([]kramaid.KramaID, len(ixCompute.ComputeNodes)),
+		Mode: ixCompute.Mode,
 	}
 
-	copy(compute.Hash, ixCompute.Hash)
-	copy(compute.ComputeNodes, ixCompute.ComputeNodes)
+	if len(ixCompute.Hash) > 0 {
+		compute.Hash = make([]byte, len(ixCompute.Hash))
+		copy(compute.Hash, ixCompute.Hash)
+	}
+
+	if len(ixCompute.ComputeNodes) > 0 {
+		compute.ComputeNodes = make([]kramaid.KramaID, len(ixCompute.ComputeNodes))
+		copy(compute.ComputeNodes, ixCompute.ComputeNodes)
+	}
 
 	return compute
 }
@@ -134,11 +146,13 @@ type IxTrust struct {
 
 func (ixTrust *IxTrust) Copy() IxTrust {
 	trust := IxTrust{
-		MTQ:        ixTrust.MTQ,
-		TrustNodes: make([]kramaid.KramaID, len(ixTrust.TrustNodes)),
+		MTQ: ixTrust.MTQ,
 	}
 
-	copy(trust.TrustNodes, ixTrust.TrustNodes)
+	if len(ixTrust.TrustNodes) > 0 {
+		trust.TrustNodes = make([]kramaid.KramaID, len(ixTrust.TrustNodes))
+		copy(trust.TrustNodes, ixTrust.TrustNodes)
+	}
 
 	return trust
 }
@@ -153,10 +167,11 @@ type Interaction struct {
 }
 
 func NewInteraction(ixData IxData, signature []byte) *Interaction {
-	ix := &Interaction{inner: ixData.Copy()}
+	ixData = ixData.Copy()
+	ix := &Interaction{inner: ixData}
 	ix.signature.Store(signature)
 
-	data, err := polo.Polorize(ixData.Copy())
+	data, err := polo.Polorize(ixData)
 	if err != nil {
 		log.Fatalln(err, "failed to generate bytes of interaction message")
 

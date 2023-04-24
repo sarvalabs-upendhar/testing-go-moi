@@ -105,8 +105,8 @@ func (r *Service) Balance(req *http.Request, args *ptypes.BalArgs, resp *ptypes.
 		return nil
 	}
 
-	// Wrap the balance in a Response after casting to a u64
-	resp.Data, err = json.Marshal(bal.Uint64())
+	// Wrap the balance in a Response after casting to hexadecimal
+	resp.Data, err = json.Marshal(bal)
 	if err != nil {
 		resp.Error = &ptypes.JSONError{Message: err.Error()}
 

@@ -1,16 +1,16 @@
 package api
 
 import (
-	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"log"
 	"math/big"
 	"testing"
 
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/common/hexutil"
 	"github.com/sarvalabs/moichain/common/tests"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
@@ -37,10 +37,10 @@ func TestIx_SendInteraction(t *testing.T) {
 
 	ixAPI := NewPublicIXAPI(ixpool, stateManager)
 
-	assetPayload, err := json.Marshal(ptypes.AssetCreationArgs{
+	assetPayload, err := json.Marshal(ptypes.RPCAssetCreation{
 		Type:           types.AssetKindValue,
 		Symbol:         "GR",
-		Supply:         hex.EncodeToString(big.NewInt(100).Bytes()),
+		Supply:         (*hexutil.Big)(big.NewInt(100)),
 		Dimension:      1,
 		IsFungible:     true,
 		IsMintable:     false,
@@ -52,8 +52,8 @@ func TestIx_SendInteraction(t *testing.T) {
 
 	expectedIxnArgs := ptypes.SendIXArgs{
 		Type:      types.IxAssetCreate,
-		Sender:    address.String(),
-		FuelPrice: hex.EncodeToString(big.NewInt(100).Bytes()),
+		Sender:    address,
+		FuelPrice: (*hexutil.Big)(big.NewInt(100)),
 		Payload:   assetPayload,
 	}
 
@@ -72,18 +72,18 @@ func TestIx_SendInteraction(t *testing.T) {
 			name: "Invalid account",
 			args: ptypes.SendIXArgs{
 				Type:      1,
-				Sender:    "68510188a8yff3bc0f4bd4f7a1b0100cc7a15aacc8fxa0adf7c539054c93151c",
-				FuelPrice: hex.EncodeToString(big.NewInt(100).Bytes()),
+				Sender:    types.SargaAddress,
+				FuelPrice: (*hexutil.Big)(big.NewInt(100)),
 				Payload:   nil,
 			},
-			expectedErr: types.ErrInvalidAddress,
+			expectedErr: ErrGenesisAccount,
 		},
 		{
 			name: "Genesis account",
 			args: ptypes.SendIXArgs{
 				Type:      1,
-				Sender:    genesisAddress.String(),
-				FuelPrice: hex.EncodeToString(big.NewInt(100).Bytes()),
+				Sender:    genesisAddress,
+				FuelPrice: (*hexutil.Big)(big.NewInt(100)),
 				Payload:   nil,
 			},
 			expectedErr: ErrGenesisAccount,
@@ -99,8 +99,7 @@ func TestIx_SendInteraction(t *testing.T) {
 		t.Run(testcase.name, func(testing *testing.T) {
 			ixn, err := ixAPI.SendInteraction(&testcase.args)
 			if testcase.expectedErr != nil {
-				require.Error(t, err)
-				require.Equal(t, testcase.expectedErr, err)
+				require.EqualError(t, testcase.expectedErr, err.Error())
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, testcase.expected, ixn)
@@ -115,13 +114,13 @@ func TestGetRawIXPayloadForLogicDeploy(t *testing.T) {
 
 	tableTests := []struct {
 		name               string
-		deployArgsCallback func(args *ptypes.LogicDeployArgs)
+		deployArgsCallback func(args *ptypes.RPCLogicPayload)
 		error              error
 	}{
 		{
 			name: "should fail for empty manifest",
-			deployArgsCallback: func(args *ptypes.LogicDeployArgs) {
-				args.Manifest = ""
+			deployArgsCallback: func(args *ptypes.RPCLogicPayload) {
+				args.Manifest = hexutil.Bytes{}
 			},
 			error: types.ErrEmptyManifest,
 		},
@@ -150,13 +149,14 @@ func TestGetRawIXPayloadForLogicDeploy(t *testing.T) {
 func TestGetRawIXPayloadForAssetCreation(t *testing.T) {
 	tableTests := []struct {
 		name                  string
-		assetCreationCallback func(args *ptypes.AssetCreationArgs)
+		assetCreationCallback func(args *ptypes.RPCAssetCreation)
 		error                 error
 	}{
 		{
 			name: "should fail for invalid supply",
-			assetCreationCallback: func(args *ptypes.AssetCreationArgs) {
-				args.Supply = "h123"
+			assetCreationCallback: func(args *ptypes.RPCAssetCreation) {
+				supply, _ := new(big.Int).SetString("h1234", 16)
+				args.Supply = (*hexutil.Big)(supply)
 			},
 			error: errors.New("failed to decode supply"),
 		},
