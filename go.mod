@@ -28,7 +28,7 @@ require (
 	github.com/libp2p/go-libp2p v0.24.0
 	github.com/libp2p/go-libp2p-kad-dht v0.20.0
 	github.com/libp2p/go-libp2p-pubsub v0.8.1
-	github.com/manishmeganathan/symbolizer v0.2.0
+	github.com/manishmeganathan/symbolizer v0.2.1
 	github.com/moby/locker v1.0.1
 	github.com/mr-tron/base58 v1.2.0
 	github.com/munna0908/smt v0.3.1-0.20221216160339-b2e832948125

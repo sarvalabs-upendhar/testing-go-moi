@@ -92,22 +92,8 @@ func formatArguments(env *Environment, args string, encoder engineio.CallEncoder
 		return nil, errors.Wrap(err, "failed to parse call arguments")
 	}
 
-	// Search the arguments for memory variables
-	for key, arg := range arguments {
-		// If arg is a memory variable, attempt to retrieve from the memory and
-		// update the argument value with the resolved value, otherwise error
-		if memvar, ok := arg.(MemoryVar); ok {
-			value, exists := env.memory[string(memvar)]
-			if !exists {
-				return nil, errors.Errorf("memory variable '%v' not found", key)
-			}
-
-			arguments[key] = value
-		}
-	}
-
 	// Encode the parsed arguments into a calldata object
-	calldata, err := encoder.EncodeInputs(arguments)
+	calldata, err := encoder.EncodeInputs(arguments, env)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to encode calldata")
 	}

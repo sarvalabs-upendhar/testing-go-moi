@@ -141,7 +141,7 @@ func (callsite *CallsiteKind) UnmarshalYAML(node *yaml.Node) error {
 // inputs and decode outputs for a specific callable site.
 // It can be generated from either a Manifest or LogicDriver.
 type CallEncoder interface {
-	EncodeInputs(map[string]any) (polo.Document, error)
+	EncodeInputs(map[string]any, ReferenceProvider) (polo.Document, error)
 	DecodeOutputs(polo.Document) (map[string]any, error)
 }
 

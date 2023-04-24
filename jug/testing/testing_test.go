@@ -140,7 +140,7 @@ func (suite *LogicTestSuite) EncodeInputs(callsite string, inputs map[string]any
 		return engineio.NewIxnObject(types.IxLogicInvoke, callsite, make(polo.Document)), encoder, nil
 	}
 
-	calldata, err := encoder.EncodeInputs(inputs)
+	calldata, err := encoder.EncodeInputs(inputs, nil)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to encode calldata from inputs for callsite '%v'", callsite)
 	}

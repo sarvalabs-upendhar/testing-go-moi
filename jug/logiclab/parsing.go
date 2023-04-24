@@ -11,14 +11,18 @@ const (
 	TokenExit symbolizer.TokenKind = -(iota + 10)
 	TokenHelp
 
-	TokenDesignate
-	TokenDesignated
-
 	TokenActor
 	TokenAction
 	TokenCallAction
 	TokenMemoryAction
+
+	TokenEncoding
 	TokenPreposition
+
+	TokenDesignate
+	TokenDesignated
+	TokenCallgen
+	TokenSlothash
 
 	TokenLogic
 	TokenManifest
@@ -48,10 +52,17 @@ var keywords = map[string]symbolizer.TokenKind{
 	"set": TokenMemoryAction,
 	"get": TokenMemoryAction,
 
+	"POLO": TokenEncoding,
+	"JSON": TokenEncoding,
+	"YAML": TokenEncoding,
+
 	"as":   TokenPreposition,
 	"from": TokenPreposition,
 	"into": TokenPreposition,
 	"with": TokenPreposition,
+
+	"callgen":  TokenCallgen,
+	"slothash": TokenSlothash,
 
 	"logic":       TokenLogic,
 	"manifest":    TokenManifest,
@@ -149,6 +160,25 @@ func parseParticipantCommand(parser *symbolizer.Parser) Command {
 			"invalid 'participant' command: '%v' is not supported", parser.Cursor().Literal,
 		)
 	}
+}
+
+func parseManifestCommand(parser *symbolizer.Parser) Command {
+	path, err := parseManifestExpression(parser)
+	if err != nil {
+		return InvalidCommandError(err.Error())
+	}
+
+	if parser.Cursor().Literal != "as" {
+		return InvalidCommandError("invalid 'manifest' command: missing encoding")
+	}
+
+	if !parser.ExpectPeek(TokenEncoding) {
+		return InvalidCommandError("invalid 'manifest' command: invalid syntax")
+	}
+
+	encoding := parser.Cursor().Literal
+
+	return ManifestPrintCommand(path, encoding)
 }
 
 func parseDesignateCommand(parser *symbolizer.Parser) Command {
@@ -251,6 +281,37 @@ func parseMemoryActionCommand(parser *symbolizer.Parser) Command {
 	return SetValueCommand(ident, argument)
 }
 
+func parseCallgenCommand(parser *symbolizer.Parser) Command {
+	if parser.ExpectPeek(symbolizer.TokenIdent) {
+		return CallgenMemoryCommand(parser.Cursor().Literal)
+	}
+
+	parser.Advance()
+
+	value, err := parseValue(parser)
+	if err != nil {
+		return InvalidCommandErrorf("invalid 'callgen' command: invalid argument value: %v", err)
+	}
+
+	return CallgenValueCommand(value)
+}
+
+func parseSlothashCommand(parser *symbolizer.Parser) Command {
+	if !parser.ExpectPeek(symbolizer.TokenNumber) {
+		return InvalidCommandErrorf("invalid 'slothash' command: missing slot number")
+	}
+
+	token := parser.Cursor()
+	value, _ := token.Value()
+
+	slot, ok := value.(uint64)
+	if !ok {
+		return InvalidCommandErrorf("invalid 'slothash' command: slot is not an uint64")
+	}
+
+	return SlothashCommand(slot)
+}
+
 func parseManifestExpression(parser *symbolizer.Parser) (string, error) {
 	if !parser.ExpectPeek(symbolizer.TokenKind('(')) {
 		return "", errors.New("invalid manifest expression: missing '('")
@@ -274,7 +335,7 @@ func parseManifestExpression(parser *symbolizer.Parser) (string, error) {
 func parseValue(parser *symbolizer.Parser) (any, error) {
 	switch parser.Cursor().Kind {
 	case symbolizer.TokenIdent:
-		return MemoryVar(parser.Cursor().Literal), nil
+		return engineio.ReferenceVal(parser.Cursor().Literal), nil
 
 	case symbolizer.TokenKind('['):
 		unwrapped, err := parser.Unwrap(symbolizer.EnclosureSquare())

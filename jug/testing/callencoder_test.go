@@ -31,11 +31,20 @@ func makefields(fields []*engineio.TypeField) *engineio.TypeFields {
 	return table
 }
 
+type mockRefProvider map[string]any
+
+func (m mockRefProvider) GetReference(ref engineio.ReferenceVal) (any, bool) {
+	val, ok := m[string(ref)]
+
+	return val, ok
+}
+
 func TestCallEncoder_EncodeInputs(t *testing.T) {
 	tests := []struct {
 		fields  *engineio.TypeFields
 		inputs  map[string]any
 		encoded polo.Document
+		refs    engineio.ReferenceProvider
 		err     string
 	}{
 		{
@@ -63,6 +72,7 @@ func TestCallEncoder_EncodeInputs(t *testing.T) {
 				"e": polo.Raw{14, 47, 3, 19, 123, 1, 200},
 				"f": polo.Raw{14, 79, 6, 22, 70, 86, 97, 102, 111, 111, 98, 98, 97, 114},
 			},
+			nil,
 			"",
 		},
 
@@ -75,6 +85,7 @@ func TestCallEncoder_EncodeInputs(t *testing.T) {
 				"a": "hello",
 				"b": []byte{0xab, 0xc1, 0x23},
 			},
+			nil,
 			nil,
 			"invalid input data for 'b': incompatible wire: unexpected wiretype 'word'. expected one of: {null, pack, document}",
 		},
@@ -89,14 +100,47 @@ func TestCallEncoder_EncodeInputs(t *testing.T) {
 			polo.Document{
 				"a": polo.Raw{14, 95, 6, 54, 102, 150, 1, 98, 111, 111, 102, 97, 114, 102, 111, 111, 98, 97, 114},
 			},
+			nil,
 			"",
+		},
+
+		{
+			makefields([]*engineio.TypeField{{Name: "a", Type: engineio.TypeString}}),
+			map[string]any{
+				"a": engineio.ReferenceVal("clone-data"),
+			},
+			polo.Document{
+				"a": polo.Raw{6, 111, 114, 105, 103, 105, 110, 97, 108, 45, 100, 97, 116, 97},
+			},
+			mockRefProvider{"clone-data": "original-data"},
+			"",
+		},
+
+		{
+			makefields([]*engineio.TypeField{{Name: "a", Type: engineio.TypeString}}),
+			map[string]any{
+				"a": engineio.ReferenceVal("clone-data"),
+			},
+			nil,
+			mockRefProvider{"clone": "original-data"},
+			"invalid input data for 'a': unable to resolve reference 'ref<clone-data>'",
+		},
+
+		{
+			makefields([]*engineio.TypeField{{Name: "a", Type: engineio.TypeString}}),
+			map[string]any{
+				"a": engineio.ReferenceVal("clone-data"),
+			},
+			nil,
+			nil,
+			"invalid input data for 'a': encountered reference value without a ref provider",
 		},
 	}
 
 	for _, test := range tests {
 		callEncoder := pisa.CallEncoder(engineio.CallFields{Inputs: test.fields})
 
-		doc, err := callEncoder.EncodeInputs(test.inputs)
+		doc, err := callEncoder.EncodeInputs(test.inputs, test.refs)
 		require.Equal(t, test.encoded, doc)
 
 		if test.err == "" {

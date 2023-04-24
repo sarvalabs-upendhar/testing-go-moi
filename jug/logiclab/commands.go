@@ -126,6 +126,7 @@ invoke [name] [callsite](calldata)
 The calldata for the logic call can be provided as a series of key value pairs which will be
 encoded with the runtime CallEncoder for the input specification and validated accordingly.
 Alternately, the calldata can be directly provided as a POLO Document in its hex string form. 
+This calldata can be generated from argument values. (refer to the Callgen Utility Section)
 
 Examples:
 >> set addr1 0xf6cd8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34
@@ -147,8 +148,6 @@ Execution Outputs ||| balance: 100000000
 ==== Argument Values
 Argument Value Rules are used when parsing the argument in logic function calls or when storing
 them to the environment session memory. Logic function calls can also use variables from the memory.
-Memory references are only supported for highest level arguments, using memory variables in nested
-levels will fail (supported for nested memory references will added eventually)
 
 Supported types
 - Integer (Ex: 100, -934343, 329429352)
@@ -158,6 +157,52 @@ Supported types
 - Lists (Ex: [256, 2345], ["foo", "bar"])
 - Mappings (Ex: {"a": 123, "b": 345}, {456: "foo", 123: "bar"}) // value keys
 - Objects (Ex: {a: 123, b: 345}, {name: "Darius", age: 45})     // ident keys
+
+==== Slothash Utility
+Slothash for accessing storage data can be generated with the slothash command.
+Currently it only supports a simple slot hashing by accepting a uint8 slot and 
+returning its hash, but this will be extended when PISA's storage layer is complete.
+
+slothash [slot]
+
+Examples:
+>> slothash 0 
+03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314
+
+==== Callgen Utility
+Raw calldata for logic calls can be generated with the callgen command.
+Callgen can be performed on objects from the lab memory or directly with an object literal.
+The returned calldata is the doc-encoded hex string of the object.
+
+callgen [identifier]
+callgen [object]
+
+Examples:
+>> set A 500
+>> set B "manish"
+>> set C {name: A, value: B}
+>> callgen C
+0x0d5f064576c5016e616d650301f476616c7565066d616e697368
+
+>> callgen {name: A, value: B}
+0x0d5f064576c5016e616d650301f476616c7565066d616e697368
+
+==== Manifest Utility
+Converting manifests between encoding schemes can be done with the manifest utility.
+The given manifest at the filepath is decoded and printed in the encoding of choice.
+Returns indented and formatted data for JSON and YAML, and hex string for POLO.
+
+manifest([filepath]) as [encoding]
+
+Example:
+>> manifest("./jug/manifests/erc20.json") as JSON
+// prints JSON object 
+
+>> manifest("./jug/manifests/erc20.json") as YAML
+// prints YAML object
+
+>> manifest("./jug/manifests/erc20.json") as POLO
+// prints hex encoded string of POLO bytes
 ` + replStrike
 
 // ParseCommand parses an input command string into a Command runner
@@ -185,6 +230,13 @@ func ParseCommand(cmd string) Command {
 		return parseParticipantCommand(parser)
 	case TokenLogic:
 		return parseLogicCommand(parser)
+	case TokenManifest:
+		return parseManifestCommand(parser)
+
+	case TokenCallgen:
+		return parseCallgenCommand(parser)
+	case TokenSlothash:
+		return parseSlothashCommand(parser)
 
 	case TokenExit:
 		return ExitCommand()

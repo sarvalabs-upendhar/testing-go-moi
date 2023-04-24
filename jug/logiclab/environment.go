@@ -119,7 +119,7 @@ func (env *Environment) StartREPL(in io.Reader, out io.Writer) {
 	// Launch Sequence
 	env.write(replFiglet)
 	env.write("LogicLab Initialized @ " + env.directory)
-	env.write("LogicLab Codebase & Documentation: https://www.github.com/sarvalabs/moichain/jug/logiclab")
+	env.write("LogicLab Documentation: https://moichain-docs.pages.dev/docs/logiclab-cli")
 
 	env.write("Starting LogicLab REPL ... (use 'exit' or ctrl-c to close the REPL)")
 	env.write(replDivider)
@@ -149,6 +149,13 @@ REPL:
 		// Write the output of the command run
 		env.write(result)
 	}
+}
+
+// GetReference implements the engineio.ReferenceVal
+func (env *Environment) GetReference(ref engineio.ReferenceVal) (any, bool) {
+	val, ok := env.memory[string(ref)]
+
+	return val, ok
 }
 
 // write outputs the given content to the environment output buffer.
@@ -191,9 +198,6 @@ func (env *Environment) close() error {
 
 	return nil
 }
-
-// MemoryVar is type wrapper for memory object identifiers
-type MemoryVar string
 
 // SetValueCommand generates a Command runner to set the value
 // of an identifier to a given value in the environment memory
