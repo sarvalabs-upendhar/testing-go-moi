@@ -11,7 +11,7 @@ type AccountType int
 const (
 	SargaAccount AccountType = iota + 1
 	RegularAccount
-	ContractAccount
+	LogicAccount
 )
 
 type Account struct {
@@ -107,7 +107,7 @@ func (agi *AccountGenesisInfo) FromBytes(bytes []byte) error {
 func AccTypeFromIxType(ixType IxType) AccountType {
 	switch ixType {
 	case IxLogicDeploy:
-		return ContractAccount
+		return LogicAccount
 	default:
 		return RegularAccount
 	}

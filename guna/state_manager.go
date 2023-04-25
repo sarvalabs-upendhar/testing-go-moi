@@ -57,11 +57,6 @@ type senatus interface {
 	UpdatePublicKey(kramaID id.KramaID, pk []byte) error
 }
 
-var (
-	SargaLogicID, _ = types.NewLogicIDv0(true, false, false, false, 0, types.SargaAddress)
-	GenesisIxHash   = types.GetHash([]byte("Genesis Interaction"))
-)
-
 type StateManager struct {
 	ctx    context.Context
 	logger hclog.Logger
@@ -659,7 +654,7 @@ func (sm *StateManager) IsAccountRegistered(addr types.Address) (bool, error) {
 	}
 
 	// Fetch the account info from genesis state
-	_, err = sargaObject.GetStorageEntry(SargaLogicID, addr.Bytes())
+	_, err = sargaObject.GetStorageEntry(types.SargaLogicID, addr.Bytes())
 	if errors.Is(err, types.ErrKeyNotFound) {
 		return false, nil
 	}
@@ -678,7 +673,7 @@ func (sm *StateManager) IsAccountRegisteredAt(addr types.Address, tesseractHash 
 		return false, err
 	}
 
-	_, err = sargaObject.GetStorageEntry(SargaLogicID, addr.Bytes())
+	_, err = sargaObject.GetStorageEntry(types.SargaLogicID, addr.Bytes())
 	if errors.Is(err, types.ErrKeyNotFound) {
 		return false, nil
 	}
@@ -763,14 +758,14 @@ func (sm *StateManager) SetupSargaAccount(
 		return types.NilHash, types.NilHash, errors.Wrap(err, "context initiation failed in genesis")
 	}
 
-	if err := stateObject.CreateStorageTreeForLogic(SargaLogicID); err != nil {
+	if err := stateObject.CreateStorageTreeForLogic(types.SargaLogicID); err != nil {
 		return types.NilHash, types.NilHash, errors.Wrap(err, "failed to create storage tree")
 	}
 
 	for _, info := range otherAccounts {
 		if info.Address != types.SargaAddress {
 			// Add account to sarga storage tree
-			if err := stateObject.AddAccountGenesisInfo(info.Address, GenesisIxHash); err != nil {
+			if err := stateObject.AddAccountGenesisInfo(info.Address, types.GenesisIxHash); err != nil {
 				return types.NilHash, types.NilHash, err
 			}
 		}

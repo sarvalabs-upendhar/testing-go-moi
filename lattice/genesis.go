@@ -5,8 +5,9 @@ import (
 )
 
 type Genesis struct {
-	SargaAccount AccountInfo   `json:"sarga_account"`
-	Accounts     []AccountInfo `json:"accounts"`
+	SargaAccount  AccountInfo    `json:"sarga_account"`
+	Accounts      []AccountInfo  `json:"accounts"`
+	ContractPaths []ContractPath `json:"contract_paths"`
 }
 
 type AccountInfo struct {
@@ -35,6 +36,13 @@ type AssetInfo struct {
 type BalanceInfo struct {
 	AssetID string `json:"asset_id"`
 	Amount  int64  `json:"balance"`
+}
+
+type ContractPath struct {
+	Name               string   `json:"name"`
+	Path               string   `json:"path"`
+	BehaviouralContext []string `json:"behaviour_context"`
+	RandomContext      []string `json:"random_context"`
 }
 
 func createGenesisTesseract(

@@ -695,7 +695,7 @@ func TestCreateAsset(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, expectedAssetID, actualAssetID)
 
-			checkForAssetCreation(t, sObj, test.assetDescriptor, 0)
+			CheckAssetCreation(t, sObj, test.assetDescriptor, 0)
 		})
 	}
 }
@@ -1070,13 +1070,13 @@ func TestGetStorageTree(t *testing.T) {
 						t,
 						so.db,
 						so.address,
-						SargaLogicID,
+						types.SargaLogicID,
 						keys,
 						values,
 					)
 				},
 			},
-			logicID: SargaLogicID,
+			logicID: types.SargaLogicID,
 		},
 		{
 			name: "should return error if failed to initiate logic storage tree",
@@ -1086,12 +1086,12 @@ func TestGetStorageTree(t *testing.T) {
 						t,
 						so.db,
 						so.address,
-						[][]byte{SargaLogicID},
+						[][]byte{types.SargaLogicID},
 						[][]byte{tests.RandomHash(t).Bytes()},
 					)
 				},
 			},
-			logicID:       SargaLogicID,
+			logicID:       types.SargaLogicID,
 			expectedError: errors.New("failed to initiate logic storage tree"),
 		},
 	}

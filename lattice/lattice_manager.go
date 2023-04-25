@@ -19,6 +19,7 @@ import (
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/guna"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
+	"github.com/sarvalabs/moichain/jug"
 	ktypes "github.com/sarvalabs/moichain/krama/types"
 	"github.com/sarvalabs/moichain/mudra"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
@@ -62,6 +63,7 @@ type reputationEngine interface {
 
 type stateManager interface {
 	CreateDirtyObject(addr types.Address, accType types.AccountType) *guna.StateObject
+	GetDirtyObject(addr types.Address) (*guna.StateObject, error)
 	FlushDirtyObject(addrs types.Address) error
 	GetAccTypeUsingStateObject(address types.Address) (types.AccountType, error)
 	GetLatestTesseract(addr types.Address, withInteractions bool) (*types.Tesseract, error)
@@ -72,11 +74,6 @@ type stateManager interface {
 	IsAccountRegisteredAt(addr types.Address, tesseractHash types.Hash) (bool, error)
 	FetchContextLock(ts *types.Tesseract) (*ktypes.ICSNodeSet, error)
 	FetchTesseractFromDB(hash types.Hash, withInteractions bool) (*types.Tesseract, error)
-	SetupNewAccount(info *gtypes.AccountSetupArgs) (types.Hash, types.Hash, error)
-	SetupSargaAccount(
-		sargaAcc *gtypes.AccountSetupArgs,
-		otherAccounts []*gtypes.AccountSetupArgs,
-	) (types.Hash, types.Hash, error)
 }
 
 type server interface {
@@ -93,6 +90,7 @@ type ixpool interface {
 type executor interface {
 	ExecuteInteractions(types.ClusterID, types.Interactions, types.ContextDelta) (types.Receipts, error)
 	Revert(types.ClusterID) error
+	SpawnExecutor(fuelLimit uint64) *jug.IxExecutor
 }
 
 type AggregatedSignatureVerifier func(data []byte, aggSignature []byte, multiplePubKeys [][]byte) (bool, error)
@@ -907,7 +905,7 @@ func (c *ChainManager) validateAccountCreationInfo(acc AccountInfo) (*gtypes.Acc
 	return accArgs, nil
 }
 
-func (c *ChainManager) addGenesisTesseract(
+func (c *ChainManager) AddGenesisTesseract(
 	address types.Address,
 	stateHash, contextHash types.Hash,
 	contextDelta types.ContextDelta,
@@ -918,24 +916,24 @@ func (c *ChainManager) addGenesisTesseract(
 	}
 
 	if err = c.addTesseract(true, address, tesseract, true); err != nil {
-		return errors.New("error adding genesis tesseract")
+		return errors.Wrap(err, "error adding genesis tesseract")
 	}
 
 	return nil
 }
 
-func (c *ChainManager) SetupGenesis(path string) error {
-	sargaAccount, genesisAccounts, err := c.parseGenesisFile(path)
+func (c *ChainManager) SetupGenesis(path string, executor *jug.IxExecutor) error {
+	sargaAccount, genesisAccounts, contractsPaths, err := c.ParseGenesisFile(path)
 	if err != nil {
 		return err
 	}
 
-	stateHash, contextHash, err := c.sm.SetupSargaAccount(sargaAccount, genesisAccounts)
+	stateHash, contextHash, err := c.SetupSargaAccount(sargaAccount, genesisAccounts)
 	if err != nil {
 		return errors.Wrap(err, "failed to setup sarga account")
 	}
 
-	if err = c.addGenesisTesseract(
+	if err = c.AddGenesisTesseract(
 		sargaAccount.Address,
 		stateHash,
 		contextHash,
@@ -945,12 +943,12 @@ func (c *ChainManager) SetupGenesis(path string) error {
 	}
 
 	for _, v := range genesisAccounts {
-		stateHash, contextHash, err = c.sm.SetupNewAccount(v)
+		stateHash, contextHash, err = c.SetupNewAccount(v)
 		if err != nil {
 			return err
 		}
 
-		if err = c.addGenesisTesseract(
+		if err = c.AddGenesisTesseract(
 			v.Address,
 			stateHash,
 			contextHash,
@@ -960,24 +958,33 @@ func (c *ChainManager) SetupGenesis(path string) error {
 		}
 	}
 
+	if _, err := c.ExecuteGenesisContracts(contractsPaths, executor); err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func (c *ChainManager) parseGenesisFile(path string) (*gtypes.AccountSetupArgs, []*gtypes.AccountSetupArgs, error) {
+func (c *ChainManager) ParseGenesisFile(path string) (
+	*gtypes.AccountSetupArgs,
+	[]*gtypes.AccountSetupArgs,
+	[]ContractPath,
+	error,
+) {
 	genesisData := new(Genesis)
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to open genesis file")
+		return nil, nil, nil, errors.Wrap(err, "failed to open genesis file")
 	}
 
 	if err = json.Unmarshal(data, genesisData); err != nil {
-		return nil, nil, errors.Wrap(err, "failed to parse genesis file")
+		return nil, nil, nil, errors.Wrap(err, "failed to parse genesis file")
 	}
 
 	sargaAccount, err := c.validateAccountCreationInfo(genesisData.SargaAccount)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "invalid sarga account info")
+		return nil, nil, nil, errors.Wrap(err, "invalid sarga account info")
 	}
 
 	genesisAccounts := make([]*gtypes.AccountSetupArgs, len(genesisData.Accounts))
@@ -985,11 +992,11 @@ func (c *ChainManager) parseGenesisFile(path string) (*gtypes.AccountSetupArgs, 
 	for index, accInfo := range genesisData.Accounts {
 		genesisAccounts[index], err = c.validateAccountCreationInfo(accInfo)
 		if err != nil {
-			return nil, nil, errors.Wrap(err, fmt.Sprintf("invalid genesis account info %s", accInfo.Address))
+			return nil, nil, nil, errors.Wrap(err, fmt.Sprintf("invalid genesis account info %s", accInfo.Address))
 		}
 	}
 
-	return sargaAccount, genesisAccounts, nil
+	return sargaAccount, genesisAccounts, genesisData.ContractPaths, nil
 }
 
 func (c *ChainManager) sendTesseractSyncRequest(ts *types.Tesseract, clusterInfo *ptypes.ICSClusterInfo) {
@@ -1101,6 +1108,149 @@ func (c *ChainManager) executeAndValidate(ts []*types.Tesseract) error {
 	}
 
 	return nil
+}
+
+func (c *ChainManager) SetupSargaAccount(
+	sargaAcc *gtypes.AccountSetupArgs,
+	otherAccounts []*gtypes.AccountSetupArgs,
+) (types.Hash, types.Hash, error) {
+	if sargaAcc.Address != types.SargaAddress {
+		return types.NilHash, types.NilHash, errors.New("invalid sarga account address")
+	}
+
+	stateObject := c.sm.CreateDirtyObject(types.SargaAddress, types.SargaAccount)
+
+	if _, err := stateObject.CreateContext(sargaAcc.BehaviouralContext, sargaAcc.RandomContext); err != nil {
+		return types.NilHash, types.NilHash, errors.Wrap(err, "context initiation failed in genesis")
+	}
+
+	if err := stateObject.CreateStorageTreeForLogic(types.SargaLogicID); err != nil {
+		return types.NilHash, types.NilHash, errors.Wrap(err, "failed to create storage tree")
+	}
+
+	for _, info := range otherAccounts {
+		if info.Address != types.SargaAddress {
+			// Add account to sarga storage tree
+			if err := stateObject.AddAccountGenesisInfo(info.Address, types.GenesisIxHash); err != nil {
+				return types.NilHash, types.NilHash, err
+			}
+		}
+	}
+
+	stateHash, err := stateObject.Commit()
+	if err != nil {
+		return types.NilHash, types.NilHash, err
+	}
+
+	return stateHash, stateObject.ContextHash(), nil
+}
+
+func (c *ChainManager) SetupNewAccount(info *gtypes.AccountSetupArgs) (types.Hash, types.Hash, error) {
+	stateObject := c.sm.CreateDirtyObject(info.Address, info.AccType)
+
+	if _, err := stateObject.CreateContext(info.BehaviouralContext, info.RandomContext); err != nil {
+		return types.NilHash, types.NilHash, errors.Wrap(err, "context initiation failed in genesis")
+	}
+
+	if len(info.Assets) > 0 {
+		for _, asset := range info.Assets {
+			_, err := stateObject.CreateAsset(asset)
+			if err != nil {
+				return types.NilHash, types.NilHash, errors.Wrap(err, "failed to create an asset")
+			}
+		}
+	}
+
+	if len(info.Balances) > 0 {
+		for assetID, balance := range info.Balances {
+			stateObject.AddBalance(assetID, balance)
+		}
+	}
+
+	stateHash, err := stateObject.Commit()
+	if err != nil {
+		return types.NilHash, types.NilHash, err
+	}
+
+	return stateHash, stateObject.ContextHash(), nil
+}
+
+func (c *ChainManager) ExecuteGenesisContracts(paths []ContractPath, exec *jug.IxExecutor) ([]types.Hash, error) {
+	hashes := make([]types.Hash, len(paths))
+
+	for index, contractPath := range paths {
+		var rpcPayload ptypes.RPCLogicPayload
+
+		data, err := os.ReadFile(contractPath.Path)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to open contracts file")
+		}
+
+		if err = json.Unmarshal(data, &rpcPayload); err != nil {
+			return nil, errors.Wrap(err, "failed to parse contracts file")
+		}
+
+		contractAddr := types.CreateAddressFromString(contractPath.Name)
+
+		payload := &types.LogicPayload{
+			Callsite: rpcPayload.Callsite,
+			Calldata: rpcPayload.Calldata,
+			Manifest: rpcPayload.Manifest,
+		}
+
+		if !types.Contains(types.GenesisLogicAddrs, contractAddr) {
+			c.logger.Error("mismatch of contract address for contract %d", contractPath.Name)
+
+			return nil, errors.New("generated address does not exist in predefined contract address")
+		}
+
+		stateObj := c.sm.CreateDirtyObject(contractAddr,
+			types.LogicAccount)
+		// TODO: handle fuel limit when introduced across system
+		_, logicID, err := exec.LogicDeploy(stateObj, payload)
+		if err != nil {
+			c.logger.Error("unable to deploy logic for contract %s", contractPath.Name)
+
+			return nil, errors.Wrap(err, "unable to deploy logic for contract")
+		}
+
+		behaviouralCtx := utils.KramaIDFromString(contractPath.BehaviouralContext)
+		randomCtx := utils.KramaIDFromString(contractPath.RandomContext)
+
+		contextHash, err := stateObj.CreateContext(behaviouralCtx, randomCtx)
+		if err != nil {
+			return nil, errors.Wrap(err, "context initiation failed in genesis")
+		}
+
+		stateHash, err := stateObj.Commit()
+		if err != nil {
+			return nil, err
+		}
+
+		err = c.AddGenesisTesseract(
+			logicID.Address(),
+			stateHash,
+			contextHash,
+			map[types.Address]*types.DeltaGroup{
+				logicID.Address(): {
+					BehaviouralNodes: behaviouralCtx,
+					RandomNodes:      randomCtx,
+				},
+			},
+		)
+
+		if err != nil {
+			c.logger.Error("unable to create genesis tesseract for cotract %d", contractPath.Name)
+
+			return nil, errors.Wrap(err, "unable to create genesis tesseract for contract")
+		}
+
+		c.logger.Info("deployed genesis contract with logicID", logicID)
+
+		hashes[index] = stateHash
+	}
+
+	return hashes, nil
 }
 
 func areStateHashesValid(tesseracts []*types.Tesseract, receipts types.Receipts) bool {

@@ -14,7 +14,6 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/munna0908/smt"
 	"github.com/sarvalabs/go-polo"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/common/tests"
@@ -1065,7 +1064,7 @@ func stateObjectParamsWithTestData(t *testing.T, areTreesNil bool) *createStateO
 
 	return &createStateObjectParams{
 		soCallback: func(s *StateObject) {
-			s.accType = types.ContractAccount
+			s.accType = types.LogicAccount
 			acc, _ := tests.GetTestAccount(t, func(acc *types.Account) {
 				acc.ContextHash = tests.RandomHash(t)
 			})
@@ -1310,44 +1309,6 @@ func mockContextLock() map[types.Address]types.ContextLockInfo {
 	return make(map[types.Address]types.ContextLockInfo)
 }
 
-func getAccountSetupArgs(
-	t *testing.T,
-	address types.Address,
-	behNodes []id.KramaID,
-	randNodes []id.KramaID,
-	accType int,
-	assetDetails []*types.AssetDescriptor,
-	balanceInfo map[types.AssetID]*big.Int,
-) *gtypes.AccountSetupArgs {
-	t.Helper()
-
-	return &gtypes.AccountSetupArgs{
-		Address:            address,
-		MoiID:              tests.RandomAddress(t).Hex(),
-		BehaviouralContext: behNodes,
-		RandomContext:      randNodes,
-		AccType:            types.AccountType(accType),
-		Assets:             assetDetails,
-		Balances:           balanceInfo,
-	}
-}
-
-func getAsset(
-	dimension int,
-	totalSupply int,
-	symbol string,
-	isFungible bool,
-	isMintable bool,
-) *types.AssetDescriptor {
-	return &types.AssetDescriptor{
-		Dimension:  uint8(dimension),
-		Supply:     big.NewInt(int64(totalSupply)),
-		Symbol:     symbol,
-		IsFungible: isFungible,
-		IsMintable: isMintable,
-	}
-}
-
 func getDefaultAssetDescriptor(t *testing.T, symbol string) *types.AssetDescriptor {
 	t.Helper()
 
@@ -1574,44 +1535,6 @@ func getActiveStorageTreesWithRootHook(
 	return activeStorageTrees
 }
 
-func getTestAssetID(asset *types.AssetDescriptor) (types.AssetID, types.Hash, []byte, error) {
-	assetObject := gtypes.AssetObject{
-		Owner:    asset.Owner,
-		Symbol:   asset.Symbol,
-		Decimals: asset.Decimals,
-		Extra:    make([]byte, 8),
-	}
-
-	var (
-		buf  []byte
-		info uint8 = 0x00
-	)
-
-	if asset.IsMintable {
-		info |= 0x01
-	} else {
-		assetObject.Supply = asset.Supply
-	}
-
-	if asset.IsFungible {
-		info |= 0x80
-	}
-
-	buf = append(buf, asset.Dimension)
-	buf = append(buf, info)
-
-	data, err := polo.Polorize(assetObject)
-	if err != nil {
-		return "", types.NilHash, nil, err
-	}
-
-	assetCID := types.GetHash(data)
-	buf = append(buf, assetCID.Bytes()...)
-	assetID := types.AssetID(hex.EncodeToString(buf))
-
-	return assetID, assetCID, data, nil
-}
-
 func getContextObjFromCache(t *testing.T, so *StateObject, hash types.Hash) *gtypes.ContextObject {
 	t.Helper()
 
@@ -1709,28 +1632,6 @@ func checkForCache(t *testing.T, sm *StateManager, address types.Address) {
 	require.True(t, isCached)
 }
 
-func checkForObjectCreation(t *testing.T, sm *StateManager, address types.Address, contextHash types.Hash) {
-	t.Helper()
-
-	// check if dirty object created
-	obj, err := sm.GetDirtyObject(address)
-	require.NoError(t, err)
-
-	// check if context created
-	_, err = obj.GetDirtyEntry(types.BytesToHex(dhruva.ContextObjectKey(address, contextHash)))
-	require.NoError(t, err)
-
-	// check if object committed
-	data, err := obj.balance.Bytes()
-	require.NoError(t, err)
-
-	hash := types.GetHash(data)
-	key := types.BytesToHex(dhruva.BalanceObjectKey(address, hash))
-	val, err := obj.GetDirtyEntry(key)
-	require.NoError(t, err)
-	require.Equal(t, data, val)
-}
-
 func checkIfContextMatches(
 	t *testing.T,
 	expectedBeh *gtypes.ContextObject,
@@ -1793,54 +1694,6 @@ func checkForStateObject(t *testing.T, expectedObj *StateObject, obj *StateObjec
 	require.Equal(t, expectedObj.data, obj.data)
 	require.Equal(t, expectedObj.address, obj.address)
 	require.Equal(t, expectedObj.accType, obj.accType)
-}
-
-func checkForOtherAccountsInSargaObject(
-	t *testing.T,
-	obj *StateObject,
-	accounts []*gtypes.AccountSetupArgs,
-) {
-	t.Helper()
-
-	// check if other accounts address inserted in to sarga account storage
-	for _, info := range accounts {
-		val, err := obj.GetStorageEntry(
-			SargaLogicID,
-			info.Address.Bytes(),
-		)
-		require.NoError(t, err)
-
-		genesisInfo := types.AccountGenesisInfo{
-			IxHash: GenesisIxHash,
-		}
-		rawGenesisInfo, err := polo.Polorize(genesisInfo)
-		assert.NoError(t, err)
-
-		require.Equal(t, val, rawGenesisInfo)
-	}
-}
-
-func checkForAssetCreation(
-	t *testing.T,
-	s *StateObject,
-	assetDescriptor *types.AssetDescriptor,
-	journalIndex int,
-) {
-	t.Helper()
-
-	expectedAssetID, expectedAssetHash, expectedData, err := getTestAssetID(assetDescriptor)
-	require.NoError(t, err)
-
-	actualData, err := s.GetDirtyEntry(expectedAssetHash.String()) // check if asset data inserted in dirty entries
-	require.NoError(t, err)
-	require.Equal(t, expectedData, actualData)
-
-	actualSupply, err := s.BalanceOf(expectedAssetID)
-	require.NoError(t, err)
-	require.Equal(t, assetDescriptor.Supply, actualSupply) // check total supply is stored in balances
-
-	require.Equal(t, s.address, assetDescriptor.Owner)            // check if address is assigned to owner
-	checkForJournalEntries(t, s, journalIndex, expectedAssetHash) // check if address and hash inserted in journal
 }
 
 func checkIfStateObjectAreEqual(
@@ -1907,7 +1760,7 @@ func checkForBalance(
 	require.Equal(t, sObj.data.Balance.Bytes(), actualBalanceHash.Bytes()) // check if balance hash inserted in account
 
 	// check if address and balance hash inserted in journal
-	checkForJournalEntries(t, sObj, journalIndex, actualBalanceHash)
+	checkJournalEntries(t, sObj.Journal(), sObj.address, journalIndex, actualBalanceHash)
 }
 
 func checkForAccount(
@@ -1934,7 +1787,14 @@ func checkForAccount(
 	require.Equal(t, expectedAccData, actualAccData)
 
 	// check if address and acc hash inserted in journal
-	checkForJournalEntries(t, sObj, journalIndex, actualAccHash)
+	checkJournalEntries(t, sObj.Journal(), sObj.Address(), journalIndex, actualAccHash)
+}
+
+func checkJournalEntries(t *testing.T, journal *Journal, addr types.Address, journalIndex int, hash types.Hash) {
+	t.Helper()
+
+	require.Equal(t, hash.Bytes(), journal.entries[journalIndex].cID().Bytes())
+	require.Equal(t, addr, *journal.entries[journalIndex].modifiedAddress())
 }
 
 func checkForContextObject(
@@ -2041,14 +1901,7 @@ func checkIfMetaStorageTreeCommitted(
 
 	require.Equal(t, expectedRoot, actualMerkleTree.merkleRoot)
 	require.Equal(t, expectedRoot, actualRoot)
-	checkForJournalEntries(t, sObj, journalIndex, expectedRoot)
-}
-
-func checkForJournalEntries(t *testing.T, sObj *StateObject, journalIndex int, hash types.Hash) {
-	t.Helper()
-
-	require.Equal(t, hash.Bytes(), sObj.journal.entries[journalIndex].cID().Bytes())
-	require.Equal(t, sObj.address, *sObj.journal.entries[journalIndex].modifiedAddress())
+	checkJournalEntries(t, sObj.Journal(), sObj.Address(), journalIndex, expectedRoot)
 }
 
 func checkIfLogicTreeCommitted(
@@ -2247,4 +2100,64 @@ func getDirtyEntries(t *testing.T, count int) Storage {
 	}
 
 	return d
+}
+
+func CheckAssetCreation(
+	t *testing.T,
+	s *StateObject,
+	assetDescriptor *types.AssetDescriptor,
+	journalIndex int,
+) {
+	t.Helper()
+
+	expectedAssetID, expectedAssetHash, expectedData, err := getTestAssetID(assetDescriptor)
+	require.NoError(t, err)
+
+	actualData, err := s.GetDirtyEntry(expectedAssetHash.String()) // check if asset data inserted in dirty entries
+	require.NoError(t, err)
+	require.Equal(t, expectedData, actualData)
+
+	actualSupply, err := s.BalanceOf(expectedAssetID)
+	require.NoError(t, err)
+	require.Equal(t, assetDescriptor.Supply, actualSupply) // check total supply is stored in balances
+
+	require.Equal(t, s.Address(), assetDescriptor.Owner) // check if address is assigned to owner
+}
+
+func getTestAssetID(asset *types.AssetDescriptor) (types.AssetID, types.Hash, []byte, error) {
+	assetObject := gtypes.AssetObject{
+		Owner:    asset.Owner,
+		Symbol:   asset.Symbol,
+		Decimals: asset.Decimals,
+		Extra:    make([]byte, 8),
+	}
+
+	var (
+		buf  []byte
+		info uint8 = 0x00
+	)
+
+	if asset.IsMintable {
+		info |= 0x01
+	} else {
+		assetObject.Supply = asset.Supply
+	}
+
+	if asset.IsFungible {
+		info |= 0x80
+	}
+
+	buf = append(buf, asset.Dimension)
+	buf = append(buf, info)
+
+	data, err := polo.Polorize(assetObject)
+	if err != nil {
+		return "", types.NilHash, nil, err
+	}
+
+	assetCID := types.GetHash(data)
+	buf = append(buf, assetCID.Bytes()...)
+	assetID := types.AssetID(hex.EncodeToString(buf))
+
+	return assetID, assetCID, data, nil
 }

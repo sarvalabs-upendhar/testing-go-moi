@@ -11,8 +11,16 @@ const (
 )
 
 var (
-	NilAddress   Address
-	SargaAddress = BytesToAddress(GetHash([]byte("sargaAccount")).Bytes())
+	NilAddress      Address
+	SargaLogicID, _ = NewLogicIDv0(true, false, false,
+		false, 0, SargaAddress)
+	GenesisIxHash = GetHash([]byte("Genesis Interaction"))
+)
+
+var (
+	SargaAddress        = CreateAddressFromString("sargaAccount")
+	StakingContractAddr = CreateAddressFromString("staking-contract")
+	GenesisLogicAddrs   = []Address{StakingContractAddr}
 )
 
 // Address represents the 32 byte address of an MOI account.
@@ -83,6 +91,20 @@ func BytesToAddress(b []byte) Address {
 // HexToAddress converts string to Address
 func HexToAddress(s string) Address {
 	return BytesToAddress(FromHex(s))
+}
+
+func Contains(addresses []Address, target Address) bool {
+	for _, addr := range addresses {
+		if addr == target {
+			return true
+		}
+	}
+
+	return false
+}
+
+func CreateAddressFromString(name string) Address {
+	return BytesToAddress(GetHash([]byte(name)).Bytes())
 }
 
 func NewAccountAddress(nonce uint64, address Address) Address {

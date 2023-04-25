@@ -3,7 +3,6 @@ package guna
 import (
 	"context"
 	"errors"
-	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -12,13 +11,12 @@ import (
 	"github.com/sarvalabs/moichain/guna/tree"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
 	ktypes "github.com/sarvalabs/moichain/krama/types"
-	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/types"
 )
 
 func TestCreateStateObject(t *testing.T) {
 	address := tests.RandomAddress(t)
-	accType := types.ContractAccount
+	accType := types.LogicAccount
 
 	sm := createTestStateManager(t, nil)
 	so := sm.createStateObject(address, accType)
@@ -1219,7 +1217,7 @@ func TestIsAccountRegistered_With_SargaObject(t *testing.T) {
 			err := m.Set(address.Bytes(), nil)
 			require.NoError(t, err)
 
-			activeStorageTrees[SargaLogicID.Hex()] = m
+			activeStorageTrees[types.SargaLogicID.Hex()] = m
 		},
 	}
 
@@ -1623,7 +1621,7 @@ func TestGetReceiverContext_RegisteredAccount(t *testing.T) {
 			storeInMerkleTree(t, m, ixs[0].Receiver().Bytes(), nil)
 			storeInMerkleTree(t, m, ixs[1].Receiver().Bytes(), nil)
 
-			activeStorageTrees[SargaLogicID.Hex()] = m
+			activeStorageTrees[types.SargaLogicID.Hex()] = m
 		},
 	}
 
@@ -1720,7 +1718,7 @@ func TestGetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 	soParams := &createStateObjectParams{
 		address: types.SargaAddress,
 		activeStorageTreeCallback: func(activeStorageTrees map[string]tree.MerkleTree) {
-			activeStorageTrees[SargaLogicID.Hex()] = mockMerkleTreeWithDirtyStorage()
+			activeStorageTrees[types.SargaLogicID.Hex()] = mockMerkleTreeWithDirtyStorage()
 		},
 	}
 
@@ -1834,7 +1832,7 @@ func TestFetchInteractionContext(t *testing.T) {
 			storeInMerkleTree(t, m, ixs[0].Receiver().Bytes(), nil)
 			storeInMerkleTree(t, m, ixs[1].Receiver().Bytes(), nil)
 
-			activeStorageTrees[SargaLogicID.Hex()] = m
+			activeStorageTrees[types.SargaLogicID.Hex()] = m
 		},
 	}
 
@@ -1981,7 +1979,7 @@ func TestGetAccountInfo(t *testing.T) {
 func TestGetAccTypeUsingStateObject(t *testing.T) {
 	soParams := &createStateObjectParams{
 		journal: mockJournal(),
-		account: &types.Account{AccType: types.ContractAccount},
+		account: &types.Account{AccType: types.LogicAccount},
 	}
 
 	so := createTestStateObject(t, soParams)
@@ -2022,191 +2020,7 @@ func TestGetAccTypeUsingStateObject(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, accType, types.ContractAccount)
-		})
-	}
-}
-
-func TestSetupSargaAcc(t *testing.T) {
-	sm := createTestStateManager(t, nil)
-	nodes := tests.GetTestKramaIDs(t, 12)
-
-	var emptyNodes []id.KramaID
-
-	testcases := []struct {
-		name          string
-		sargaAcc      *gtypes.AccountSetupArgs
-		otherAccounts []*gtypes.AccountSetupArgs
-		expectedError error
-	}{
-		{
-			name: "behavioural nodes and random nodes are empty",
-			sargaAcc: getAccountSetupArgs(t,
-				types.SargaAddress,
-				emptyNodes,
-				emptyNodes,
-				2,
-				nil,
-				nil,
-			),
-			expectedError: errors.New("context initiation failed in genesis"),
-		},
-		{
-			name: "invalid sarga account address",
-			sargaAcc: getAccountSetupArgs(t,
-				tests.RandomAddress(t),
-				emptyNodes,
-				emptyNodes,
-				2,
-				nil,
-				nil,
-			),
-			expectedError: errors.New("invalid sarga account address"),
-		},
-		{
-			name: "other accounts added to sarga account",
-			sargaAcc: getAccountSetupArgs(t,
-				types.SargaAddress,
-				nodes[:2],
-				nodes[2:4],
-				2,
-				nil,
-				nil,
-			),
-			otherAccounts: []*gtypes.AccountSetupArgs{
-				getAccountSetupArgs(t,
-					tests.RandomAddress(t),
-					nodes[4:6],
-					nodes[6:8],
-					3,
-					nil,
-					nil,
-				),
-				getAccountSetupArgs(t,
-					tests.RandomAddress(t),
-					nodes[8:10],
-					nodes[10:12],
-					9,
-					nil,
-					nil,
-				),
-			},
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			_, contextHash, err := sm.SetupSargaAccount(test.sargaAcc, test.otherAccounts)
-			if test.expectedError != nil {
-				require.ErrorContains(t, err, test.expectedError.Error())
-
-				return
-			}
-
-			require.NoError(t, err)
-
-			checkForObjectCreation(t, sm, types.SargaAddress, contextHash)
-
-			obj, _ := sm.GetDirtyObject(types.SargaAddress)
-
-			checkForOtherAccountsInSargaObject(t, obj, test.otherAccounts)
-		})
-	}
-}
-
-func TestSetupNewAccount(t *testing.T) {
-	sm := createTestStateManager(t, nil)
-	nodes := tests.GetTestKramaIDs(t, 12)
-
-	var emptyNodes []id.KramaID
-
-	testcases := []struct {
-		name          string
-		newAcc        *gtypes.AccountSetupArgs
-		expectedError error
-	}{
-		{
-			name: "behavioural nodes and random nodes are empty",
-			newAcc: getAccountSetupArgs(t,
-				tests.RandomAddress(t),
-				emptyNodes,
-				emptyNodes,
-				3,
-				nil,
-				nil,
-			),
-			expectedError: errors.New("context initiation failed in genesis"),
-		},
-		{
-			name: "account with assets and balances",
-			newAcc: getAccountSetupArgs(t,
-				tests.RandomAddress(t),
-				nodes[:2],
-				nodes[2:4],
-				2,
-				[]*types.AssetDescriptor{
-					getAsset(
-						1,
-						10000,
-						"MOI",
-						true,
-						true,
-					),
-					getAsset(
-						1,
-						10000,
-						"BTC",
-						true,
-						true,
-					),
-				},
-				map[types.AssetID]*big.Int{
-					"MOI": big.NewInt(12000),
-					"BTC": big.NewInt(18000),
-				},
-			),
-		},
-		{
-			name: "account without assets and balances",
-			newAcc: getAccountSetupArgs(t,
-				tests.RandomAddress(t),
-				nodes[:2],
-				nodes[2:4],
-				2,
-				make([]*types.AssetDescriptor, 0),
-				make(map[types.AssetID]*big.Int),
-			),
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			_, contextHash, err := sm.SetupNewAccount(test.newAcc)
-			if test.expectedError != nil {
-				require.ErrorContains(t, err, test.expectedError.Error())
-
-				return
-			}
-
-			require.NoError(t, err)
-
-			checkForObjectCreation(t, sm, test.newAcc.Address, contextHash)
-
-			obj, _ := sm.GetDirtyObject(test.newAcc.Address)
-
-			// check if balances are added
-			for assetID, balance := range test.newAcc.Balances {
-				bal, err := obj.BalanceOf(assetID)
-				require.NoError(t, err)
-
-				require.Equal(t, bal, balance)
-			}
-
-			journalIndex := 3 // index is 3 as there will be 3 entries before asset creation
-			for _, asset := range test.newAcc.Assets {
-				checkForAssetCreation(t, obj, asset, journalIndex)
-				journalIndex++
-			}
+			require.Equal(t, accType, types.LogicAccount)
 		})
 	}
 }
@@ -2323,7 +2137,7 @@ func TestIsAccountRegisteredAt(t *testing.T) {
 		t,
 		db,
 		types.SargaAddress,
-		SargaLogicID,
+		types.SargaLogicID,
 		[][]byte{addresses[2].Bytes()},
 		[][]byte{types.NilHash.Bytes()},
 	)

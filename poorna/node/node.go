@@ -218,7 +218,7 @@ func (n *Node) setupGenesis() (err error) {
 		return nil
 	}
 
-	if err = n.chain.SetupGenesis(n.cfg.Chain.GenesisFilePath); err != nil {
+	if err = n.chain.SetupGenesis(n.cfg.Chain.GenesisFilePath, n.exec.SpawnExecutor(5000)); err != nil {
 		return err
 	}
 

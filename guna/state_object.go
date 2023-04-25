@@ -130,12 +130,20 @@ func (s *StateObject) setBalance(aid types.AssetID, amount *big.Int) {
 	s.balance.Balances[aid] = amount
 }
 
-func (s *StateObject) GetAccountType() types.AccountType {
+func (s *StateObject) AccountType() types.AccountType {
 	return s.accType
 }
 
 func (s *StateObject) AccountState() types.Account {
 	return s.data
+}
+
+func (s *StateObject) Journal() *Journal {
+	return s.journal
+}
+
+func (s *StateObject) Balance() *gtypes.BalanceObject {
+	return s.balance
 }
 
 func (s *StateObject) Copy() *StateObject {
@@ -415,7 +423,7 @@ func (s *StateObject) AddAccountGenesisInfo(address types.Address, ixHash types.
 		return err
 	}
 
-	return s.SetStorageEntry(SargaLogicID, address.Bytes(), rawData)
+	return s.SetStorageEntry(types.SargaLogicID, address.Bytes(), rawData)
 }
 
 func (s *StateObject) CreateContext(behaviouralNodes, randomNodes []id.KramaID) (types.Hash, error) {

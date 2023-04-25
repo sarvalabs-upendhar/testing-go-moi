@@ -2,6 +2,8 @@ package lattice
 
 import (
 	"context"
+	"io/ioutil"
+	"math/big"
 	"os"
 	"testing"
 	"time"
@@ -11,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/moichain/guna"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
 	ktypes "github.com/sarvalabs/moichain/krama/types"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
@@ -890,7 +893,7 @@ func TestAddTesseract(t *testing.T) {
 				stateExists:     true,
 				tesseractExists: false,
 			},
-			accType: types.ContractAccount,
+			accType: types.LogicAccount,
 			tesseractsParams: map[int]*createTesseractParams{
 				0: {
 					address: address,
@@ -904,7 +907,7 @@ func TestAddTesseract(t *testing.T) {
 				},
 			},
 			smCallBack: func(sm *MockStateManager) {
-				sm.setAccType(address, types.ContractAccount)
+				sm.setAccType(address, types.LogicAccount)
 			},
 			tsCount: 1,
 		},
@@ -931,7 +934,7 @@ func TestAddTesseract(t *testing.T) {
 		{
 			name:    "should return error if unable to store tesseract",
 			args:    testTSArgs{},
-			accType: types.ContractAccount,
+			accType: types.LogicAccount,
 			setTesseractHook: func() error {
 				return errors.New("error writing tesseract to db")
 			},
@@ -941,7 +944,7 @@ func TestAddTesseract(t *testing.T) {
 		{
 			name:    "should return error if unable to store interactions",
 			args:    testTSArgs{},
-			accType: types.ContractAccount,
+			accType: types.LogicAccount,
 			tesseractsParams: map[int]*createTesseractParams{
 				0: {
 					ixns: ixns,
@@ -956,7 +959,7 @@ func TestAddTesseract(t *testing.T) {
 		{
 			name:    "should return error if unable to store receipts",
 			args:    testTSArgs{},
-			accType: types.ContractAccount,
+			accType: types.LogicAccount,
 			tesseractsParams: map[int]*createTesseractParams{
 				0: {
 					ixns:     ixns,
@@ -972,7 +975,7 @@ func TestAddTesseract(t *testing.T) {
 		{
 			name:    "should return error if unable to store tesseract height entry",
 			args:    testTSArgs{},
-			accType: types.ContractAccount,
+			accType: types.LogicAccount,
 			setTesseractHeightEntryHook: func() error {
 				return errors.New("failed to write tesseract height entry")
 			},
@@ -982,7 +985,7 @@ func TestAddTesseract(t *testing.T) {
 		{
 			name:    "should return error if unable to store ix lookup",
 			args:    testTSArgs{},
-			accType: types.ContractAccount,
+			accType: types.LogicAccount,
 			tesseractsParams: map[int]*createTesseractParams{
 				0: {
 					ixns: ixns,
@@ -997,7 +1000,7 @@ func TestAddTesseract(t *testing.T) {
 		{
 			name:    "should return error if unable to update node inclusivity",
 			args:    testTSArgs{},
-			accType: types.ContractAccount,
+			accType: types.LogicAccount,
 			tesseractsParams: map[int]*createTesseractParams{
 				0: {
 					address: address,
@@ -1020,9 +1023,9 @@ func TestAddTesseract(t *testing.T) {
 			tsCount := test.tsCount
 			ts := createTesseractsWithChain(t, test.tsCount, test.tesseractsParams)
 
-			db := mockDB(t)
+			db := mockDB()
 			senatus := mockSenatus(t)
-			sm := mockStateManager(t)
+			sm := mockStateManager()
 			ixPool := mockIXPool(t)
 
 			sm.setAccType(address, test.accType)
@@ -1095,7 +1098,7 @@ func TestAddTesseract(t *testing.T) {
 
 func TestAddTesseractsWithState(t *testing.T) {
 	var (
-		accType   = types.ContractAccount
+		accType   = types.LogicAccount
 		addresses = getAddresses(t, 4)
 		ixns      = createIxns(t, 2, getIxParamsMapWithAddresses(addresses[:2], addresses[2:]))
 	)
@@ -1227,7 +1230,7 @@ func TestAddSyncedTesseract(t *testing.T) {
 
 			chainParams := &CreateChainParams{
 				smCallBack: func(sm *MockStateManager) {
-					setAccountType(sm, types.ContractAccount, ts...)
+					setAccountType(sm, types.LogicAccount, ts...)
 				},
 			}
 
@@ -1242,7 +1245,7 @@ func TestAddSyncedTesseract(t *testing.T) {
 
 			require.NoError(t, err)
 			checkForClusterInfo(t, c.db, clusterInfo)
-			checkForAddedTesseracts(t, false, c, ts, types.ContractAccount)
+			checkForAddedTesseracts(t, false, c, ts, types.LogicAccount)
 		})
 	}
 }
@@ -1323,7 +1326,7 @@ func TestValidateTesseract(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			sm := mockStateManager(t)
+			sm := mockStateManager()
 			chainParams := &CreateChainParams{
 				sm:                   sm,
 				smCallBack:           test.smCallback,
@@ -1427,9 +1430,9 @@ func TestAddTesseracts(t *testing.T) {
 			ts := createTesseracts(t, test.tsCount, test.tesseractsParams)
 
 			chainParams := &CreateChainParams{
-				db: mockDB(t),
+				db: mockDB(),
 				smCallBack: func(sm *MockStateManager) {
-					setAccountType(sm, types.ContractAccount, ts...)
+					setAccountType(sm, types.LogicAccount, ts...)
 				},
 			}
 
@@ -1446,7 +1449,7 @@ func TestAddTesseracts(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			checkForAddedTesseracts(t, false, c, ts, types.ContractAccount)
+			checkForAddedTesseracts(t, false, c, ts, types.LogicAccount)
 		})
 	}
 }
@@ -1678,7 +1681,7 @@ func TestSendTesseractSyncRequest(t *testing.T) {
 }
 
 func TestExecuteAndAdd(t *testing.T) {
-	accType := types.ContractAccount
+	accType := types.LogicAccount
 	address := tests.RandomAddress(t)
 	stateHash := tests.RandomHash(t)
 	ixns, receipts := getIxAndReceiptsWithStateHash(t, map[types.Address]types.Hash{address: stateHash}, 1)
@@ -1755,7 +1758,7 @@ func TestExecuteAndAdd(t *testing.T) {
 			tsCount := test.tsCount
 			ts := createTesseracts(t, tsCount, test.tesseractsParams)
 
-			db := mockDB(t)
+			db := mockDB()
 			chainParams := &CreateChainParams{
 				db: db,
 				execCallback: func(exec *MockExec) {
@@ -1899,8 +1902,8 @@ func TestAddTesseractWithOutState_SyncScenarios(t *testing.T) {
 			ts := createTesseract(t, test.tesseractsParams)
 
 			chainParams := &CreateChainParams{
-				db:         mockDB(t),
-				sm:         mockStateManager(t),
+				db:         mockDB(),
+				sm:         mockStateManager(),
 				smCallBack: test.smCallBack,
 				networkCallback: func(network *MockNetwork) {
 					network.kramaID = test.selfID
@@ -1935,7 +1938,7 @@ func TestAddTesseractWithOutState_SyncScenarios(t *testing.T) {
 func TestAddTesseractWithOutState_ExecuteScenarios(t *testing.T) {
 	var (
 		address        = tests.RandomAddress(t)
-		accType        = types.ContractAccount
+		accType        = types.LogicAccount
 		stateHash      = tests.RandomHash(t)
 		contextHash    = tests.RandomHash(t)
 		kramaIDs       = tests.GetTestKramaIDs(t, 5)
@@ -1958,8 +1961,8 @@ func TestAddTesseractWithOutState_ExecuteScenarios(t *testing.T) {
 
 	ts := createTesseract(t, tesseractsParams)
 
-	db := mockDB(t)
-	sm := mockStateManager(t)
+	db := mockDB()
+	sm := mockStateManager()
 
 	chainParams := &CreateChainParams{
 		db: db,
@@ -2088,7 +2091,7 @@ func TestValidateAccountCreationInfo(t *testing.T) {
 			accountInfo: getAccountInfo(
 				t,
 				"0xa6ba9853f131679d0da0f033516a3efe9cd53c3d54e1f9a6e60e9077e9f9384",
-				types.ContractAccount,
+				types.LogicAccount,
 				"moi-id",
 				walletContext[:2],
 				walletContext[2:4],
@@ -2116,7 +2119,7 @@ func TestValidateAccountCreationInfo(t *testing.T) {
 			accountInfo: getAccountInfo(
 				t,
 				address,
-				types.ContractAccount,
+				types.LogicAccount,
 				"moi-id",
 				walletContext[:2],
 				walletContext[2:4],
@@ -2135,7 +2138,7 @@ func TestValidateAccountCreationInfo(t *testing.T) {
 			accountInfo: getAccountInfo(
 				t,
 				address,
-				types.ContractAccount,
+				types.LogicAccount,
 				"moi-id",
 				walletContext[:2],
 				walletContext[2:4],
@@ -2154,7 +2157,7 @@ func TestValidateAccountCreationInfo(t *testing.T) {
 			accountInfo: getAccountInfo(
 				t,
 				address,
-				types.ContractAccount,
+				types.LogicAccount,
 				"moi-id",
 				walletContext[:2],
 				walletContext[2:4],
@@ -2167,7 +2170,7 @@ func TestValidateAccountCreationInfo(t *testing.T) {
 		},
 		{
 			name:        "should pass for valid asset info",
-			accountInfo: getTestAccountWithAccType(t, types.ContractAccount),
+			accountInfo: getTestAccountWithAccType(t, types.LogicAccount),
 		},
 	}
 
@@ -2192,7 +2195,7 @@ func TestAddGenesisTesseract(t *testing.T) {
 		address      = tests.RandomAddress(t)
 		stateHash    = tests.RandomHash(t)
 		contextHash  = tests.RandomHash(t)
-		accType      = types.ContractAccount
+		accType      = types.LogicAccount
 		contextDelta = map[types.Address]*types.DeltaGroup{
 			address: getDeltaGroup(t, 2, 5, 3),
 		}
@@ -2223,7 +2226,7 @@ func TestAddGenesisTesseract(t *testing.T) {
 
 			c := createTestChainManager(t, chainParams)
 
-			err := c.addGenesisTesseract(address, stateHash, contextHash, contextDelta)
+			err := c.AddGenesisTesseract(address, stateHash, contextHash, contextDelta)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -2246,7 +2249,7 @@ func TestAddGenesisTesseract(t *testing.T) {
 
 func TestParseGenesisFile_InvalidPath(t *testing.T) {
 	c := createTestChainManager(t, nil)
-	_, _, err := c.parseGenesisFile("test2/3647663731config.json")
+	_, _, _, err := c.ParseGenesisFile("test2/3647663731config.json")
 
 	require.ErrorContains(t, err, "failed to open genesis file")
 }
@@ -2256,6 +2259,7 @@ func TestParseGenesisFile(t *testing.T) {
 
 	dir, err := os.MkdirTemp(os.TempDir(), " ")
 	require.NoError(t, err)
+	file, err := ioutil.TempFile(dir, "contracts.json")
 
 	t.Cleanup(func() {
 		err = os.RemoveAll(dir)
@@ -2267,6 +2271,7 @@ func TestParseGenesisFile(t *testing.T) {
 		path              string
 		sargaAccount      AccountInfo
 		genesisAccounts   []AccountInfo
+		contractPaths     []ContractPath
 		invalidAccPayload bool
 		expectedError     error
 	}{
@@ -2291,20 +2296,30 @@ func TestParseGenesisFile(t *testing.T) {
 			expectedError: errors.New("invalid genesis account info"),
 		},
 		{
-			name:         "should succeed for valid genesis data",
+			name:         "should succeed for valid genesis data without contract paths",
 			sargaAccount: getTestAccountWithAccType(t, types.SargaAccount),
 			genesisAccounts: []AccountInfo{
 				getTestAccountWithAccType(t, types.RegularAccount),
-				getTestAccountWithAccType(t, types.ContractAccount),
+				getTestAccountWithAccType(t, types.LogicAccount),
 			},
+		},
+		{
+			name:         "should succeed for valid genesis data with contract paths",
+			sargaAccount: getTestAccountWithAccType(t, types.SargaAccount),
+			genesisAccounts: []AccountInfo{
+				getTestAccountWithAccType(t, types.RegularAccount),
+				getTestAccountWithAccType(t, types.LogicAccount),
+			},
+			contractPaths: generateTestContractPaths(t, file),
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			path := createMockGenesisFile(t, dir, test.invalidAccPayload, test.sargaAccount, test.genesisAccounts)
+			path := createMockGenesisFile(t, dir, test.invalidAccPayload, test.sargaAccount,
+				test.genesisAccounts, test.contractPaths)
 
-			sargaAccounts, genesisAccounts, err := c.parseGenesisFile(path)
+			sargaAccounts, genesisAccounts, contractPaths, err := c.ParseGenesisFile(path)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -2315,8 +2330,12 @@ func TestParseGenesisFile(t *testing.T) {
 			checkForAccountCreation(t, test.sargaAccount, sargaAccounts)
 
 			for i, genesisAccount := range test.genesisAccounts {
-				checkForAccountCreation(t, genesisAccount, genesisAccounts[i])
+				checkForAccountCreation(t, genesisAccount, genesisAccounts[i]) // TODO: rename funcs
 			}
+
+			require.Equal(t, len(test.contractPaths), len(contractPaths))
+			t.Log(contractPaths)
+			validateContractPaths(t, test.contractPaths, contractPaths)
 		})
 	}
 }
@@ -2327,7 +2346,7 @@ func TestSetupGenesis(t *testing.T) {
 		sargaAddress    = types.HexToAddress(sargaAccount.Address)
 		genesisAccounts = []AccountInfo{
 			getTestAccountWithAccType(t, types.RegularAccount),
-			getTestAccountWithAccType(t, types.ContractAccount),
+			getTestAccountWithAccType(t, types.LogicAccount),
 		}
 		sargaAccountHashes = AccHash{
 			contextHash: tests.RandomHash(t),
@@ -2347,32 +2366,13 @@ func TestSetupGenesis(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	path := createMockGenesisFile(t, dir, false, sargaAccount, genesisAccounts)
+	path := createMockGenesisFile(t, dir, false, sargaAccount, genesisAccounts, nil)
 
 	testcases := []struct {
 		name          string
 		smCallBack    func(sm *MockStateManager)
 		expectedError error
 	}{
-		{
-			name: "should return error if sarga account setup fails",
-			smCallBack: func(sm *MockStateManager) {
-				sm.sargaAccountHook = func() (types.Hash, types.Hash, error) {
-					return types.NilHash, types.NilHash, errors.New("failed to setup sarga account")
-				}
-			},
-			expectedError: errors.New("failed to setup sarga account"),
-		},
-		{
-			name: "should return error if genesis account setup fails",
-			smCallBack: func(sm *MockStateManager) {
-				sm.newAccountHook = func() (types.Hash, types.Hash, error) {
-					return types.NilHash, types.NilHash, errors.New("failed to setup genesis account")
-				}
-				sm.setAccType(sargaAddress, sargaAccount.AccountType)
-			},
-			expectedError: errors.New("failed to setup genesis account"),
-		},
 		{
 			name: "should return error if failed to add genesis tesseract",
 			smCallBack: func(sm *MockStateManager) {
@@ -2388,10 +2388,6 @@ func TestSetupGenesis(t *testing.T) {
 					sm.setAccType(types.HexToAddress(genesisAccount.Address), genesisAccount.AccountType)
 				}
 
-				sm.sargaAccountHook = func() (types.Hash, types.Hash, error) {
-					return sargaAccountHashes.stateHash, sargaAccountHashes.contextHash, nil
-				}
-
 				sm.newAccountHook = func() (types.Hash, types.Hash, error) {
 					return genesisAccountHashes.stateHash, genesisAccountHashes.contextHash, nil
 				}
@@ -2401,7 +2397,7 @@ func TestSetupGenesis(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			sm := mockStateManager(t)
+			sm := mockStateManager()
 			chainParams := &CreateChainParams{
 				sm:         sm,
 				smCallBack: test.smCallBack,
@@ -2409,7 +2405,7 @@ func TestSetupGenesis(t *testing.T) {
 
 			c := createTestChainManager(t, chainParams)
 
-			err = c.SetupGenesis(path)
+			err = c.SetupGenesis(path, nil)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -2450,4 +2446,307 @@ func TestSetupGenesis(t *testing.T) {
 			}
 		})
 	}
+}
+
+func getAccountSetupArgs(
+	t *testing.T,
+	address types.Address,
+	behNodes []id.KramaID,
+	randNodes []id.KramaID,
+	accType int,
+	assetDetails []*types.AssetDescriptor,
+	balanceInfo map[types.AssetID]*big.Int,
+) *gtypes.AccountSetupArgs {
+	t.Helper()
+
+	return &gtypes.AccountSetupArgs{
+		Address:            address,
+		MoiID:              tests.RandomAddress(t).Hex(),
+		BehaviouralContext: behNodes,
+		RandomContext:      randNodes,
+		AccType:            types.AccountType(accType),
+		Assets:             assetDetails,
+		Balances:           balanceInfo,
+	}
+}
+
+func TestSetupSargaAcc(t *testing.T) {
+	cm := createTestChainManager(t, nil)
+	nodes := tests.GetTestKramaIDs(t, 12)
+
+	var emptyNodes []id.KramaID
+
+	testcases := []struct {
+		name          string
+		sargaAcc      *gtypes.AccountSetupArgs
+		otherAccounts []*gtypes.AccountSetupArgs
+		expectedError error
+	}{
+		{
+			name: "behavioural nodes and random nodes are empty",
+			sargaAcc: getAccountSetupArgs(t,
+				types.SargaAddress,
+				emptyNodes,
+				emptyNodes,
+				2,
+				nil,
+				nil,
+			),
+			expectedError: errors.New("context initiation failed in genesis"),
+		},
+		{
+			name: "invalid sarga account address",
+			sargaAcc: getAccountSetupArgs(t,
+				tests.RandomAddress(t),
+				emptyNodes,
+				emptyNodes,
+				2,
+				nil,
+				nil,
+			),
+			expectedError: errors.New("invalid sarga account address"),
+		},
+		{
+			name: "other accounts added to sarga account",
+			sargaAcc: getAccountSetupArgs(t,
+				types.SargaAddress,
+				nodes[:2],
+				nodes[2:4],
+				2,
+				nil,
+				nil,
+			),
+			otherAccounts: []*gtypes.AccountSetupArgs{
+				getAccountSetupArgs(t,
+					tests.RandomAddress(t),
+					nodes[4:6],
+					nodes[6:8],
+					3,
+					nil,
+					nil,
+				),
+				getAccountSetupArgs(t,
+					tests.RandomAddress(t),
+					nodes[8:10],
+					nodes[10:12],
+					9,
+					nil,
+					nil,
+				),
+			},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			_, contextHash, err := cm.SetupSargaAccount(test.sargaAcc, test.otherAccounts)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			validateObjectCreation(t, cm.sm, types.SargaAddress, contextHash)
+
+			obj, _ := cm.sm.GetDirtyObject(types.SargaAddress)
+
+			checkSargaObjectAccounts(t, obj, test.otherAccounts)
+		})
+	}
+}
+
+func TestSetupNewAccount(t *testing.T) {
+	cm := createTestChainManager(t, nil)
+	nodes := tests.GetTestKramaIDs(t, 12)
+
+	var emptyNodes []id.KramaID
+
+	testcases := []struct {
+		name          string
+		newAcc        *gtypes.AccountSetupArgs
+		expectedError error
+	}{
+		{
+			name: "behavioural nodes and random nodes are empty",
+			newAcc: getAccountSetupArgs(t,
+				tests.RandomAddress(t),
+				emptyNodes,
+				emptyNodes,
+				3,
+				nil,
+				nil,
+			),
+			expectedError: errors.New("context initiation failed in genesis"),
+		},
+		{
+			name: "account with assets and balances",
+			newAcc: getAccountSetupArgs(t,
+				tests.RandomAddress(t),
+				nodes[:2],
+				nodes[2:4],
+				2,
+				[]*types.AssetDescriptor{
+					getAsset(
+						1,
+						10000,
+						"MOI",
+						true,
+						true,
+					),
+					getAsset(
+						1,
+						10000,
+						"BTC",
+						true,
+						true,
+					),
+				},
+				map[types.AssetID]*big.Int{
+					"MOI": big.NewInt(12000),
+					"BTC": big.NewInt(18000),
+				},
+			),
+		},
+		{
+			name: "account without assets and balances",
+			newAcc: getAccountSetupArgs(t,
+				tests.RandomAddress(t),
+				nodes[:2],
+				nodes[2:4],
+				2,
+				make([]*types.AssetDescriptor, 0),
+				make(map[types.AssetID]*big.Int),
+			),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			_, contextHash, err := cm.SetupNewAccount(test.newAcc)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			validateObjectCreation(t, cm.sm, test.newAcc.Address, contextHash)
+
+			obj, _ := cm.sm.GetDirtyObject(test.newAcc.Address)
+
+			// check if balances are added
+			for assetID, balance := range test.newAcc.Balances {
+				bal, err := obj.BalanceOf(assetID)
+				require.NoError(t, err)
+
+				require.Equal(t, bal, balance)
+			}
+
+			journalIndex := 3 // index is 3 as there will be 3 entries before asset creation
+			for _, asset := range test.newAcc.Assets {
+				CheckAssetCreation(t, obj, asset)
+				journalIndex++
+			}
+		})
+	}
+}
+
+func TestExecuteGenesisContracts(t *testing.T) {
+	logicID, err := types.NewLogicIDv0(true, false, false,
+		false, 0, types.StakingContractAddr)
+	require.NoError(t, err)
+
+	dir, err := os.MkdirTemp(os.TempDir(), " ")
+	require.NoError(t, err)
+
+	file, err := ioutil.TempFile(dir, "contracts.json")
+	require.NoError(t, err)
+
+	ids := tests.GetTestKramaIDs(t, 1)
+	nodes := utils.KramaIDToString(ids)
+
+	testcases := []struct {
+		name          string
+		contractPaths []ContractPath
+		smCallBack    func(sm *MockStateManager)
+		expectedError string
+	}{
+		{
+			name: "invalid contract name",
+			contractPaths: []ContractPath{{
+				Name:               "test",
+				Path:               file.Name(),
+				BehaviouralContext: nodes,
+			}},
+			smCallBack: func(sm *MockStateManager) {
+				sm.setAccType(logicID.Address(), types.LogicAccount)
+			},
+			expectedError: "generated address does not exist",
+		},
+		{
+			name: "missing behaviour context",
+			contractPaths: []ContractPath{{
+				Name:               "staking-contract",
+				Path:               file.Name(),
+				BehaviouralContext: nil,
+			}},
+			smCallBack: func(sm *MockStateManager) {
+				sm.setAccType(logicID.Address(), types.LogicAccount)
+			},
+			expectedError: "context initiation failed in genesis",
+		},
+		{
+			name: "valid contract paths",
+			smCallBack: func(sm *MockStateManager) {
+				sm.setAccType(logicID.Address(), types.LogicAccount)
+			},
+			contractPaths: generateTestContractPaths(t, file),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			sm := mockStateManager()
+			chainParams := &CreateChainParams{
+				sm:         sm,
+				smCallBack: test.smCallBack,
+			}
+
+			cm := createTestChainManager(t, chainParams)
+			exec := cm.exec.SpawnExecutor(9999)
+
+			_, err := cm.ExecuteGenesisContracts(test.contractPaths, exec)
+			if test.expectedError != "" {
+				require.ErrorContains(t, err, test.expectedError)
+
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func CheckAssetCreation(
+	t *testing.T,
+	s *guna.StateObject,
+	assetDescriptor *types.AssetDescriptor,
+) {
+	t.Helper()
+
+	expectedAssetID, expectedAssetHash, expectedData, err := getTestAssetID(assetDescriptor)
+	require.NoError(t, err)
+
+	actualData, err := s.GetDirtyEntry(expectedAssetHash.String()) // check if asset data inserted in dirty entries
+	require.NoError(t, err)
+	require.Equal(t, expectedData, actualData)
+
+	actualSupply, err := s.BalanceOf(expectedAssetID)
+	require.NoError(t, err)
+	require.Equal(t, assetDescriptor.Supply, actualSupply) // check total supply is stored in balances
+
+	require.Equal(t, s.Address(), assetDescriptor.Owner) // check if address is assigned to owner
 }

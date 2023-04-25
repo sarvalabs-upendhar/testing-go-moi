@@ -2,9 +2,12 @@ package lattice
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"io/ioutil"
+	"math/big"
 	"math/rand"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -16,12 +19,18 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-polo"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/common/hexutil"
 	"github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/moichain/dhruva"
+	db2 "github.com/sarvalabs/moichain/dhruva/db"
 	"github.com/sarvalabs/moichain/guna"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
+	"github.com/sarvalabs/moichain/jug"
 	ktypes "github.com/sarvalabs/moichain/krama/types"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
@@ -44,6 +53,8 @@ type result struct {
 // MockDB is an in-memory key-value database used for testing purposes
 type MockDB struct {
 	dbStorage                   map[string][]byte
+	accounts                    map[types.Hash][]byte
+	balances                    map[types.Hash][]byte
 	accMetaInfos                map[types.Address]*types.AccountMetaInfo
 	updateMetaInfoHook          func() (int32, bool, error)
 	setTesseractHook            func() error
@@ -60,9 +71,7 @@ type testTSArgs struct {
 	tesseractExists bool
 }
 
-func mockDB(t *testing.T) *MockDB {
-	t.Helper()
-
+func mockDB() *MockDB {
 	return &MockDB{
 		dbStorage:    make(map[string][]byte),
 		accMetaInfos: make(map[types.Address]*types.AccountMetaInfo),
@@ -157,6 +166,15 @@ func (m *MockDB) GetInteractions(ixHash types.Hash) ([]byte, error) {
 	return nil, types.ErrKeyNotFound
 }
 
+func (m *MockDB) GetAccount(addr types.Address, hash types.Hash) ([]byte, error) {
+	account, ok := m.accounts[hash]
+	if !ok {
+		return nil, types.ErrAccountNotFound
+	}
+
+	return account, nil
+}
+
 func (m *MockDB) SetInteractions(hash types.Hash, data []byte) error {
 	if m.setInteractionsHook != nil {
 		return m.setInteractionsHook()
@@ -209,6 +227,15 @@ func (m *MockDB) SetIxLookup(ixHash types.Hash, data []byte) error {
 	return nil
 }
 
+func (m *MockDB) GetBalance(addr types.Address, hash types.Hash) ([]byte, error) {
+	balance, ok := m.balances[hash]
+	if !ok {
+		return nil, types.ErrKeyNotFound
+	}
+
+	return balance, nil
+}
+
 func (m *MockDB) GetReceipts(receiptHash types.Hash) ([]byte, error) {
 	data, ok := m.dbStorage[receiptHash.String()]
 	if !ok {
@@ -226,6 +253,56 @@ func (m *MockDB) SetReceipts(receiptHash types.Hash, data []byte) error {
 	m.dbStorage[receiptHash.String()] = data
 
 	return nil
+}
+
+func (m *MockDB) GetContext(addr types.Address, contextHash types.Hash) ([]byte, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockDB) GetAccountMetaInfo(id []byte) (*types.AccountMetaInfo, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockDB) GetMerkleTreeEntry(address types.Address, prefix dhruva.Prefix, key []byte) ([]byte, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockDB) SetMerkleTreeEntry(address types.Address, prefix dhruva.Prefix, key, value []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockDB) SetMerkleTreeEntries(address types.Address, prefix dhruva.Prefix, entries map[string][]byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockDB) WritePreImages(address types.Address, entries map[types.Hash][]byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockDB) GetPreImage(address types.Address, hash types.Hash) ([]byte, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockDB) DeleteEntry(key []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockDB) UpdateEntry(key []byte, newValue []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockDB) NewBatchWriter() db2.BatchWriter {
+	// TODO implement me
+	panic("implement me")
 }
 
 type MockNetwork struct {
@@ -261,6 +338,12 @@ type MockExec struct {
 	receipts                map[types.Hash]types.Receipts
 	revertHook              func() error
 	executeInteractionsHook func() (types.Receipts, error)
+}
+
+func (e *MockExec) SpawnExecutor(fuelLimit uint64) *jug.IxExecutor {
+	sm := mockStateManager()
+
+	return jug.NewExecutionManager(sm, hclog.NewNullLogger(), nil).SpawnExecutor(fuelLimit)
 }
 
 func mockExec(t *testing.T) *MockExec {
@@ -320,13 +403,16 @@ type MockStateManager struct {
 
 	flushHook               func() error
 	newAccountHook          func() (types.Hash, types.Hash, error)
-	sargaAccountHook        func() (types.Hash, types.Hash, error)
 	accountRegistrationHook func(hash types.Hash) (bool, error)
+	createDirtyObjectHook   func() *guna.StateObject
 }
 
-func mockStateManager(t *testing.T) *MockStateManager {
-	t.Helper()
+func (sm *MockStateManager) Revert(object *guna.StateObject) error {
+	// TODO implement me
+	panic("implement me")
+}
 
+func mockStateManager() *MockStateManager {
 	return &MockStateManager{
 		dirtyObjects:        make(map[types.Address]*guna.StateObject),
 		objects:             make(map[types.Address]*guna.StateObject),
@@ -350,8 +436,18 @@ func (sm *MockStateManager) isCleanup(addrs types.Address) bool {
 }
 
 func (sm *MockStateManager) CreateDirtyObject(addr types.Address, accType types.AccountType) *guna.StateObject {
-	// TODO implement me
-	panic("implement me")
+	if sm.createDirtyObjectHook != nil {
+		return sm.createDirtyObjectHook()
+	}
+
+	obj := guna.NewStateObject(addr, mockCache(), new(guna.Journal), mockDB(), types.Account{AccType: accType})
+	sm.dirtyObjects[addr] = obj.Copy()
+
+	return sm.dirtyObjects[addr]
+}
+
+func (sm *MockStateManager) GetDirtyObject(addr types.Address) (*guna.StateObject, error) {
+	return sm.dirtyObjects[addr], nil
 }
 
 func (sm *MockStateManager) setAccType(address types.Address, accountType types.AccountType) {
@@ -523,25 +619,6 @@ func (sm *MockStateManager) FetchTesseractFromDB(hash types.Hash, withInteractio
 	return &tsCopy, nil
 }
 
-func (sm *MockStateManager) SetupNewAccount(info *gtypes.AccountSetupArgs) (types.Hash, types.Hash, error) {
-	if sm.newAccountHook != nil {
-		return sm.newAccountHook()
-	}
-
-	return types.NilHash, types.NilHash, nil
-}
-
-func (sm *MockStateManager) SetupSargaAccount(
-	sargaAcc *gtypes.AccountSetupArgs,
-	otherAccounts []*gtypes.AccountSetupArgs,
-) (types.Hash, types.Hash, error) {
-	if sm.sargaAccountHook != nil {
-		return sm.sargaAccountHook()
-	}
-
-	return types.NilHash, types.NilHash, nil
-}
-
 func (sm *MockStateManager) InsertLatestTesseracts(t *testing.T, tesseracts ...*types.Tesseract) {
 	t.Helper()
 
@@ -660,11 +737,8 @@ func getIxParamsMapWithAddresses(
 	return ixParams
 }
 
-func mockCache(t *testing.T) *lru.Cache {
-	t.Helper()
-
-	cache, err := lru.New(1200)
-	require.NoError(t, err)
+func mockCache() *lru.Cache {
+	cache, _ := lru.New(1200)
 
 	return cache
 }
@@ -1086,8 +1160,8 @@ func createTestChainManager(t *testing.T, params *CreateChainParams) *ChainManag
 	}
 
 	var (
-		db      = mockDB(t)
-		sm      = mockStateManager(t)
+		db      = mockDB()
+		sm      = mockStateManager()
 		senatus = mockSenatus(t)
 		ixPool  = mockIXPool(t)
 		exec    = mockExec(t)
@@ -1143,7 +1217,7 @@ func createTestChainManager(t *testing.T, params *CreateChainParams) *ChainManag
 		&utils.TypeMux{},
 		network,
 		ixPool,
-		mockCache(t),
+		mockCache(),
 		exec,
 		senatus,
 		NilMetrics(),
@@ -1648,6 +1722,40 @@ func getAccountInfo(
 	}
 }
 
+func generateTestContractPaths(
+	t *testing.T,
+	file *os.File,
+) []ContractPath {
+	t.Helper()
+
+	path := ContractPath{
+		Name:               "staking-contract",
+		Path:               file.Name(),
+		BehaviouralContext: utils.KramaIDToString(tests.GetTestKramaIDs(t, 1)),
+		RandomContext:      nil,
+	}
+
+	calldata := "0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e736565646" +
+		"57206ffcd8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716" +
+		"b34737570706c790305f5e10073796d626f6c064d4f49"
+
+	manifest := "0x" + types.BytesToHex(tests.ReadERC20Manifest(t, "./../jug/manifests/erc20.json"))
+
+	contract := ptypes.RPCLogicPayload{
+		Callsite: "Seeder!",
+		Calldata: hexutil.Bytes(types.Hex2Bytes(calldata)),
+		Manifest: hexutil.Bytes(types.Hex2Bytes(manifest)),
+	}
+
+	bz, err := json.Marshal(contract)
+	require.NoError(t, err)
+
+	_, err = file.Write(bz)
+	require.NoError(t, err)
+
+	return []ContractPath{path}
+}
+
 // createMockGenesisFile is a mock function used to create genesis file
 func createMockGenesisFile(
 	t *testing.T,
@@ -1655,6 +1763,7 @@ func createMockGenesisFile(
 	invalidData bool,
 	sargaAccount AccountInfo,
 	accInfo []AccountInfo,
+	contactPaths []ContractPath,
 ) string {
 	t.Helper()
 
@@ -1664,8 +1773,9 @@ func createMockGenesisFile(
 	)
 
 	genesis := &Genesis{
-		SargaAccount: sargaAccount,
-		Accounts:     accInfo,
+		SargaAccount:  sargaAccount,
+		Accounts:      accInfo,
+		ContractPaths: contactPaths,
 	}
 
 	if invalidData {
@@ -1690,6 +1800,10 @@ func getTestAccountWithAccType(t *testing.T, accType types.AccountType) AccountI
 	ids := tests.GetTestKramaIDs(t, 4)
 	ctx := utils.KramaIDToString(ids)
 	address := tests.RandomAddress(t).Hex()
+
+	if accType == types.SargaAccount {
+		address = types.SargaAddress.String()
+	}
 
 	return getAccountInfo(
 		t,
@@ -2075,6 +2189,17 @@ func checkForAccountCreation(t *testing.T, accountInfo AccountInfo, accSetupArgs
 	}
 }
 
+func validateContractPaths(t *testing.T, expectedPaths []ContractPath, actualPaths []ContractPath) {
+	t.Helper()
+
+	for i := range actualPaths {
+		require.Equal(t, expectedPaths[i].Name, actualPaths[i].Name)
+		require.Equal(t, expectedPaths[i].Path, actualPaths[i].Path)
+		require.Equal(t, expectedPaths[i].BehaviouralContext, actualPaths[i].BehaviouralContext)
+		require.Equal(t, expectedPaths[i].RandomContext, actualPaths[i].RandomContext)
+	}
+}
+
 // checkForGenesisTesseract fetches added tesseract and checks if it valid
 func checkForGenesisTesseract(
 	t *testing.T,
@@ -2100,7 +2225,108 @@ func checkForGenesisTesseract(
 	require.NoError(t, err)
 
 	require.Equal(t, address, ts.Address())
-	require.Equal(t, stateHash, ts.StateHash())
-	require.Equal(t, contextHash, ts.ContextHash())
+	require.NotNil(t, stateHash)
+	require.NotNil(t, contextHash)
 	require.Equal(t, contextDelta, ts.ContextDelta())
+}
+
+func getAsset(
+	dimension int,
+	totalSupply int,
+	symbol string,
+	isFungible bool,
+	isMintable bool,
+) *types.AssetDescriptor {
+	return &types.AssetDescriptor{
+		Dimension:  uint8(dimension),
+		Supply:     big.NewInt(int64(totalSupply)),
+		Symbol:     symbol,
+		IsFungible: isFungible,
+		IsMintable: isMintable,
+	}
+}
+
+func checkSargaObjectAccounts(
+	t *testing.T,
+	obj *guna.StateObject,
+	accounts []*gtypes.AccountSetupArgs,
+) {
+	t.Helper()
+
+	// check if other accounts address inserted in to sarga account storage
+	for _, info := range accounts {
+		val, err := obj.GetStorageEntry(
+			types.SargaLogicID,
+			info.Address.Bytes(),
+		)
+		require.NoError(t, err)
+
+		genesisInfo := types.AccountGenesisInfo{
+			IxHash: types.GenesisIxHash,
+		}
+		rawGenesisInfo, err := polo.Polorize(genesisInfo)
+		assert.NoError(t, err)
+
+		require.Equal(t, val, rawGenesisInfo)
+	}
+}
+
+func validateObjectCreation(t *testing.T, sm stateManager, address types.Address, contextHash types.Hash) {
+	t.Helper()
+
+	// check if dirty object created
+	obj, err := sm.GetDirtyObject(address)
+	require.NoError(t, err)
+
+	// check if context created
+	_, err = obj.GetDirtyEntry(types.BytesToHex(dhruva.ContextObjectKey(address, contextHash)))
+	require.NoError(t, err)
+
+	// check if object committed
+	data, err := obj.Balance().Bytes()
+	require.NoError(t, err)
+
+	hash := types.GetHash(data)
+	key := types.BytesToHex(dhruva.BalanceObjectKey(address, hash))
+	val, err := obj.GetDirtyEntry(key)
+	require.NoError(t, err)
+	require.Equal(t, data, val)
+}
+
+func getTestAssetID(asset *types.AssetDescriptor) (types.AssetID, types.Hash, []byte, error) {
+	assetObject := gtypes.AssetObject{
+		Owner:    asset.Owner,
+		Symbol:   asset.Symbol,
+		Decimals: asset.Decimals,
+		Extra:    make([]byte, 8),
+	}
+
+	var (
+		buf  []byte
+		info uint8 = 0x00
+	)
+
+	if asset.IsMintable {
+		info |= 0x01
+	} else {
+		assetObject.Supply = asset.Supply
+	}
+
+	if asset.IsFungible {
+		info |= 0x80
+	}
+
+	buf = append(buf, asset.Dimension)
+	buf = append(buf, info)
+
+	data, err := polo.Polorize(assetObject)
+	if err != nil {
+		return "", types.NilHash, nil, err
+	}
+
+	assetCID := types.GetHash(data)
+	buf = append(buf, assetCID.Bytes()...)
+	assetID := types.AssetID(hex.EncodeToString(buf))
+
+	return assetID, assetCID, data, nil
 }

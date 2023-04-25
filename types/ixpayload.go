@@ -1,6 +1,8 @@
 package types
 
 import (
+	"encoding/hex"
+	"encoding/json"
 	"math/big"
 
 	"github.com/pkg/errors"
@@ -83,27 +85,63 @@ type LogicPayload struct {
 	// Logic specifies the Logic ID to execute a method on. Only required for Execute and Upgrade
 	Logic LogicID
 
-	// Callsite specifies the method name to execute. Only required for Execute
+	// Callsite specifies the method name to deploy and invoke. Only required for Execute
 	Callsite string
-	// Calldata specifies the input call data. Only required for Execute and Deploy
+	// Calldata specifies the input call data. Only required for invoke and deploy
 	Calldata []byte
 
-	// Manifest specifies some Logic manifest artifact. Only required for Deploy and Upgrade
+	// Manifest specifies some Logic manifest artifact. Only required for deploy and upgrade
 	Manifest []byte
 }
 
-func (logic *LogicPayload) Bytes() ([]byte, error) {
-	data, err := polo.Polorize(logic)
+func (payload *LogicPayload) Bytes() ([]byte, error) {
+	data, err := polo.Polorize(payload)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to polorize logic payload")
+		return nil, errors.Wrap(err, "failed to polorize payload payload")
 	}
 
 	return data, nil
 }
 
-func (logic *LogicPayload) FromBytes(data []byte) error {
-	if err := polo.Depolorize(logic, data); err != nil {
-		return errors.Wrap(err, "failed to depolorize logic payload")
+func (payload *LogicPayload) FromBytes(data []byte) error {
+	if err := polo.Depolorize(payload, data); err != nil {
+		return errors.Wrap(err, "failed to depolorize payload payload")
+	}
+
+	return nil
+}
+
+func (payload *LogicPayload) UnmarshalJSON(data []byte) error {
+	type Alias LogicPayload
+
+	aux := &struct {
+		Manifest string `json:"manifest"`
+		Calldata string `json:"calldata"`
+		*Alias
+	}{
+		Alias: (*Alias)(payload),
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	if aux.Calldata != "" {
+		callDataBytes, err := hex.DecodeString(aux.Calldata)
+		if err != nil {
+			return err
+		}
+
+		payload.Calldata = callDataBytes
+	}
+
+	if aux.Manifest != "" {
+		manifestBytes, err := hex.DecodeString(aux.Manifest)
+		if err != nil {
+			return err
+		}
+
+		payload.Manifest = manifestBytes
 	}
 
 	return nil
