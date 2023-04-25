@@ -505,7 +505,7 @@ func httpDBGet(t *testing.T, args *ptypes.DebugArgs) string {
 func httpAccounts(t *testing.T, args *ptypes.AccountArgs) []types.Address {
 	t.Helper()
 
-	resp := makeHTTPRequest(t, "debug.GetAccounts", args)
+	resp := makeHTTPRequest(t, "debug.Accounts", args)
 
 	var addrs []types.Address
 

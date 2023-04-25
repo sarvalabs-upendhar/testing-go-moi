@@ -634,10 +634,10 @@ func (c *Client) DBGet(args *ptypes.DebugArgs) (string, error) {
 }
 
 // Accounts returns the address of all the accounts
-func (c *Client) Accounts(args *ptypes.AccountArgs) ([]types.Address, error) {
+func (c *Client) Accounts() ([]types.Address, error) {
 	var resp ptypes.Response
 
-	err := c.Call(&resp, "debug.GetAccounts", args)
+	err := c.Call(&resp, "debug.Accounts", nil)
 	if err != nil {
 		return nil, err
 	}

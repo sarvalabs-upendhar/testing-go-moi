@@ -1125,7 +1125,7 @@ func testAccounts(t *testing.T, client *Client) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			accountsResponse, err := client.Accounts(test.accArgs)
+			accountsResponse, err := client.Accounts()
 			require.NoError(t, err)
 
 			httpAccounts := httpAccounts(t, test.accArgs)

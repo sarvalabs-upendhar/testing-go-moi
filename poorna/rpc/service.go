@@ -592,8 +592,8 @@ func (r *Service) DBGet(
 	return nil
 }
 
-// GetAccounts is an RPC Method that returns the address of all the accounts
-func (r *Service) GetAccounts(
+// Accounts is an RPC Method that returns the address of all the accounts
+func (r *Service) Accounts(
 	req *http.Request,
 	args *ptypes.AccountArgs,
 	resp *ptypes.Response,
