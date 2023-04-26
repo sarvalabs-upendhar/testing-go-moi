@@ -87,7 +87,7 @@ type TesseractHeader struct {
 	FuelUsed    uint64
 	FuelLimit   uint64
 	BodyHash    Hash
-	GridHash    Hash
+	GroupHash   Hash
 	Operator    string
 	ClusterID   string
 	Timestamp   int64
@@ -119,7 +119,7 @@ func (h *TesseractHeader) Hash() (Hash, error) {
 		FuelUsed:    h.FuelUsed,
 		FuelLimit:   h.FuelLimit,
 		BodyHash:    h.BodyHash,
-		GridHash:    h.GridHash,
+		GroupHash:   h.GroupHash,
 		Operator:    h.Operator,
 		ClusterID:   h.ClusterID,
 		Timestamp:   h.Timestamp,
@@ -268,8 +268,28 @@ func (t *Tesseract) BodyHash() Hash {
 	return t.header.BodyHash
 }
 
-func (t *Tesseract) GridHash() Hash {
-	return t.header.GridHash
+func (t *Tesseract) GroupHash() Hash {
+	return t.header.GroupHash
+}
+
+func (t *Tesseract) GridHash() (Hash, error) {
+	if t.header.Extra.GridID != nil {
+		return t.header.Extra.GridID.Hash, nil
+	}
+
+	return NilHash, ErrGridIDNotFound
+}
+
+func (t *Tesseract) Parts() (*TesseractParts, error) {
+	if t.header.Extra.GridID == nil {
+		return nil, ErrGridIDNotFound
+	}
+
+	if t.header.Extra.GridID.Parts == nil {
+		return nil, ErrTesseractPartsNotFound
+	}
+
+	return t.header.Extra.GridID.Parts.Copy(), nil
 }
 
 func (t *Tesseract) Operator() string {
@@ -442,6 +462,14 @@ func (c *CanonicalTesseract) ToTesseract(ixns Interactions) *Tesseract {
 		ixns:   ixns,
 		seal:   c.Seal,
 	}
+}
+
+func (c *CanonicalTesseract) GridHash() (Hash, error) {
+	if c.Header.Extra.GridID != nil {
+		return c.Header.Extra.GridID.Hash, nil
+	}
+
+	return NilHash, errors.New("grid hash not found")
 }
 
 type CanonicalTesseractWithoutSeal struct {

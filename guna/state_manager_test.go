@@ -118,9 +118,17 @@ func TestFetchTesseractFromDB(t *testing.T) {
 	tesseractParams := tests.GetTesseractParamsMapWithIxns(t, 2, 2)
 	tesseracts := tests.CreateTesseracts(t, 3, tesseractParams)
 
+	tsParams := &tests.CreateTesseractParams{
+		Height:         3,
+		HeaderCallback: tests.HeaderCallbackWithGridHash(t),
+	}
+
+	ts := tests.CreateTesseract(t, tsParams)
+
 	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
 			insertTesseractsInDB(t, db, tesseracts...)
+			db.insertTesseract(t, ts)
 		},
 	}
 
@@ -161,10 +169,16 @@ func TestFetchTesseractFromDB(t *testing.T) {
 			expectedError:    types.ErrFetchingTesseract,
 		},
 		{
-			name:             "should fail if interactions not found",
+			name:             "should fail if grid hash not found",
 			hash:             getTesseractHash(t, tesseracts[2]),
 			withInteractions: true,
-			expectedError:    types.ErrFetchingInteractions,
+			expectedError:    types.ErrGridHashNotFound,
+		},
+		{
+			name:             "should fail if interactions not found",
+			hash:             getTesseractHash(t, ts),
+			withInteractions: true,
+			expectedError:    types.ErrFetchingInteraction,
 		},
 	}
 

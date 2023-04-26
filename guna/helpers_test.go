@@ -310,7 +310,9 @@ func insertTesseractsInDB(t *testing.T, db store, tesseracts ...*types.Tesseract
 		mDB.insertTesseract(t, ts)
 
 		if ts.Interactions() != nil {
-			mDB.insertIxns(t, ts.InteractionHash(), ts.Interactions())
+			hash, err := ts.GridHash()
+			require.NoError(t, err)
+			mDB.insertIxns(t, hash, ts.Interactions())
 		}
 	}
 }

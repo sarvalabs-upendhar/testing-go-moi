@@ -557,7 +557,7 @@ func createRPCHeader(h types.TesseractHeader) ptypes.RPCHeader {
 		FuelUsed:    hexutil.Uint64(h.FuelUsed),
 		FuelLimit:   hexutil.Uint64(h.FuelLimit),
 		BodyHash:    h.BodyHash,
-		GridHash:    h.GridHash,
+		GridHash:    h.GroupHash,
 		Operator:    h.Operator,
 		ClusterID:   h.ClusterID,
 		Timestamp:   hexutil.Uint64(h.Timestamp),

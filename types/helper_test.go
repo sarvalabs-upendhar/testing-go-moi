@@ -7,27 +7,11 @@ import (
 	"github.com/sarvalabs/moichain/types"
 )
 
-func createReceiptWithTestData(t *testing.T) *types.Receipt {
-	t.Helper()
-
-	receipt := &types.Receipt{
-		IxType:        2,
-		StateHashes:   make(map[types.Address]types.Hash),
-		ContextHashes: make(map[types.Address]types.Hash),
-		ExtraData:     []byte{1, 2},
-	}
-
-	receipt.StateHashes[tests.RandomAddress(t)] = tests.RandomHash(t)
-	receipt.ContextHashes[tests.RandomAddress(t)] = tests.RandomHash(t)
-
-	return receipt
-}
-
 func createReceiptsWithTestData(t *testing.T, hash types.Hash) types.Receipts {
 	t.Helper()
 
 	receipts := make(types.Receipts)
-	receipts[hash] = createReceiptWithTestData(t)
+	receipts[hash] = tests.CreateReceiptWithTestData(t)
 
 	return receipts
 }

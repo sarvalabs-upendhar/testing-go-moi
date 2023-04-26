@@ -56,26 +56,85 @@ type MockDB struct {
 	accounts                    map[types.Hash][]byte
 	balances                    map[types.Hash][]byte
 	accMetaInfos                map[types.Address]*types.AccountMetaInfo
+	gridHashByIxHash            map[string][]byte
+	gridHashByTSHash            map[string][]byte
+	tesseractParts              map[string][]byte
 	updateMetaInfoHook          func() (int32, bool, error)
 	setTesseractHook            func() error
 	setInteractionsHook         func() error
 	setReceiptsHook             func() error
 	setTesseractHeightEntryHook func() error
-	setIxLookupHook             func() error
 	createEntryHook             func() error
-}
-
-type testTSArgs struct {
-	cache           bool
-	stateExists     bool
-	tesseractExists bool
+	setTSGridLookupHook         func() error
 }
 
 func mockDB() *MockDB {
 	return &MockDB{
-		dbStorage:    make(map[string][]byte),
-		accMetaInfos: make(map[types.Address]*types.AccountMetaInfo),
+		dbStorage:        make(map[string][]byte),
+		accMetaInfos:     make(map[types.Address]*types.AccountMetaInfo),
+		gridHashByIxHash: make(map[string][]byte),
+		gridHashByTSHash: make(map[string][]byte),
+		tesseractParts:   make(map[string][]byte),
 	}
+}
+
+func (m *MockDB) SetIXGridLookup(ixHash types.Hash, gridHash types.Hash) error {
+	m.gridHashByIxHash[ixHash.String()] = gridHash.Bytes()
+
+	return nil
+}
+
+func (m *MockDB) GetIXGridLookup(ixHash types.Hash) ([]byte, error) {
+	gridHash, ok := m.gridHashByIxHash[ixHash.String()]
+	if !ok {
+		return nil, types.ErrGridHashNotFound
+	}
+
+	return gridHash, nil
+}
+
+func (m *MockDB) GetTesseractParts(ixHash types.Hash) ([]byte, error) {
+	parts, ok := m.tesseractParts[ixHash.String()]
+	if !ok {
+		return nil, types.ErrTesseractPartsNotFound
+	}
+
+	return parts, nil
+}
+
+func (m *MockDB) SetTesseractParts(gridHash types.Hash, parts []byte) error {
+	m.tesseractParts[gridHash.String()] = parts
+
+	return nil
+}
+
+func (m *MockDB) SetTSGridLookup(tsHash types.Hash, gridHash types.Hash) error {
+	if m.setTSGridLookupHook != nil {
+		return m.setTSGridLookupHook()
+	}
+
+	m.gridHashByTSHash[tsHash.String()] = gridHash.Bytes()
+
+	return nil
+}
+
+func (m *MockDB) GetTSGridLookup(tsHash types.Hash) ([]byte, error) {
+	gridHash, ok := m.gridHashByTSHash[tsHash.String()]
+	if !ok {
+		return nil, types.ErrGridHashNotFound
+	}
+
+	return gridHash, nil
+}
+
+func (m *MockDB) GetInteractionsLookup(ixHash types.Hash) ([]byte, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockDB) SetInteractionsLookup(ixHash types.Hash, interactionsHash types.Hash) error {
+	// TODO implement me
+	panic("implement me")
 }
 
 func (m *MockDB) CreateEntry(key []byte, value []byte) error {
@@ -158,8 +217,8 @@ func (m *MockDB) HasTesseract(hash types.Hash) (bool, error) {
 	return ok, nil
 }
 
-func (m *MockDB) GetInteractions(ixHash types.Hash) ([]byte, error) {
-	if ix, ok := m.dbStorage[ixHash.String()]; ok {
+func (m *MockDB) GetInteractions(gridHash types.Hash) ([]byte, error) {
+	if ix, ok := m.dbStorage[gridHash.String()]; ok {
 		return ix, nil
 	}
 
@@ -175,12 +234,12 @@ func (m *MockDB) GetAccount(addr types.Address, hash types.Hash) ([]byte, error)
 	return account, nil
 }
 
-func (m *MockDB) SetInteractions(hash types.Hash, data []byte) error {
+func (m *MockDB) SetInteractions(gridHash types.Hash, data []byte) error {
 	if m.setInteractionsHook != nil {
 		return m.setInteractionsHook()
 	}
 
-	m.dbStorage[hash.String()] = data
+	m.dbStorage[gridHash.String()] = data
 
 	return nil
 }
@@ -208,25 +267,6 @@ func (m *MockDB) SetTesseractHeightEntry(addr types.Address, height uint64, hash
 	return nil
 }
 
-func (m *MockDB) GetIxLookup(ixHash types.Hash) ([]byte, error) {
-	data, ok := m.dbStorage[ixHash.String()]
-	if !ok {
-		return nil, types.ErrKeyNotFound
-	}
-
-	return data, nil
-}
-
-func (m *MockDB) SetIxLookup(ixHash types.Hash, data []byte) error {
-	if m.setIxLookupHook != nil {
-		return m.setIxLookupHook()
-	}
-
-	m.dbStorage[ixHash.String()] = data
-
-	return nil
-}
-
 func (m *MockDB) GetBalance(addr types.Address, hash types.Hash) ([]byte, error) {
 	balance, ok := m.balances[hash]
 	if !ok {
@@ -236,8 +276,12 @@ func (m *MockDB) GetBalance(addr types.Address, hash types.Hash) ([]byte, error)
 	return balance, nil
 }
 
-func (m *MockDB) GetReceipts(receiptHash types.Hash) ([]byte, error) {
-	data, ok := m.dbStorage[receiptHash.String()]
+func (m *MockDB) GetReceipts(gridHash types.Hash) ([]byte, error) {
+	if m.setReceiptsHook != nil {
+		return nil, m.setReceiptsHook()
+	}
+
+	data, ok := m.dbStorage[gridHash.String()]
 	if !ok {
 		return nil, types.ErrKeyNotFound
 	}
@@ -245,12 +289,12 @@ func (m *MockDB) GetReceipts(receiptHash types.Hash) ([]byte, error) {
 	return data, nil
 }
 
-func (m *MockDB) SetReceipts(receiptHash types.Hash, data []byte) error {
+func (m *MockDB) SetReceipts(gridHash types.Hash, data []byte) error {
 	if m.setReceiptsHook != nil {
 		return m.setReceiptsHook()
 	}
 
-	m.dbStorage[receiptHash.String()] = data
+	m.dbStorage[gridHash.String()] = data
 
 	return nil
 }
@@ -675,6 +719,23 @@ func (i *MockIXPool) IsReset(hash types.Hash) bool {
 	return false
 }
 
+type testTSArgs struct {
+	cache           bool
+	stateExists     bool
+	tesseractExists bool
+}
+
+func createCommitdataWithRandomGridHash(t *testing.T) types.CommitData {
+	t.Helper()
+
+	return types.CommitData{
+		GridID: &types.TesseractGridID{
+			Hash:  tests.RandomHash(t),
+			Parts: &types.TesseractParts{},
+		},
+	}
+}
+
 type CreateIxParams struct {
 	ixDataCallback func(ix *types.IxData)
 }
@@ -788,6 +849,9 @@ func defaultCommitData() types.CommitData {
 	voteSet.Elements[0] = 31 // first 5 ics nodes voted yes
 
 	commitData.VoteSet = voteSet.Copy()
+	commitData.GridID = &types.TesseractGridID{
+		Parts: &types.TesseractParts{},
+	}
 
 	return commitData
 }
@@ -884,6 +948,7 @@ func createTesseractsWithChain(t *testing.T, count int, paramsMap map[int]*creat
 
 			header.PrevHash = hash
 		}
+
 		tesseracts[i] = createTesseract(t, paramsMap[i])
 	}
 
@@ -912,7 +977,8 @@ func tesseractParamsWithICSClusterInfo(
 	require.NoError(t, err)
 
 	return &createTesseractParams{
-		ixns: ixns,
+		ixns:           ixns,
+		headerCallback: tests.HeaderCallbackWithGridHash(t),
 		bodyCallback: func(body *types.TesseractBody) {
 			body.ReceiptHash = tests.RandomHash(t)
 			body.ConsensusProof.ICSHash = types.GetHash(rawData)
@@ -997,24 +1063,6 @@ func tesseractParamsWithContextDelta(
 	}
 }
 
-func tesseractParamsWithIxnsAndReceiptHash(
-	t *testing.T,
-	address types.Address,
-	ixns types.Interactions,
-	receipts types.Receipts,
-) *createTesseractParams {
-	t.Helper()
-
-	return &createTesseractParams{
-		address: address,
-		ixns:    ixns,
-		bodyCallback: func(body *types.TesseractBody) {
-			body.InteractionHash = getInteractionsHash(t, ixns)
-			body.ReceiptHash = getReceiptHash(t, receipts)
-		},
-	}
-}
-
 func tesseractParamsWithContextHash(
 	t *testing.T,
 	address types.Address,
@@ -1035,12 +1083,12 @@ func tesseractParamsWithContextHash(
 	}
 }
 
-func tesseractParamsWithReceiptHash(t *testing.T, receiptHash types.Hash, gridHash types.Hash) *createTesseractParams {
+func tesseractParamsWithReceiptHash(t *testing.T, receiptHash types.Hash, groupHash types.Hash) *createTesseractParams {
 	t.Helper()
 
 	return &createTesseractParams{
 		headerCallback: func(header *types.TesseractHeader) {
-			header.GridHash = gridHash
+			header.GroupHash = groupHash
 		},
 		bodyCallback: func(body *types.TesseractBody) {
 			body.ReceiptHash = receiptHash
@@ -1491,20 +1539,13 @@ func getIxAndReceiptsWithStateHash(
 	return ixs, receipts
 }
 
-func insertIxLookup(t *testing.T, db db, ixHash types.Hash, receipts types.Receipts) {
-	t.Helper()
-
-	err := db.SetIxLookup(ixHash, getReceiptHash(t, receipts).Bytes())
-	require.NoError(t, err)
-}
-
-func insertReceipts(t *testing.T, db db, receipts types.Receipts) {
+func insertReceipts(t *testing.T, db db, gridHash types.Hash, receipts types.Receipts) {
 	t.Helper()
 
 	rawData, err := receipts.Bytes()
 	require.NoError(t, err)
 
-	err = db.SetReceipts(getReceiptHash(t, receipts), rawData)
+	err = db.SetReceipts(gridHash, rawData)
 	require.NoError(t, err)
 }
 
@@ -1512,15 +1553,6 @@ func getReceiptHash(t *testing.T, receipts types.Receipts) types.Hash {
 	t.Helper()
 
 	hash, err := receipts.Hash()
-	require.NoError(t, err)
-
-	return hash
-}
-
-func getInteractionsHash(t *testing.T, ixns types.Interactions) types.Hash {
-	t.Helper()
-
-	hash, err := ixns.Hash()
 	require.NoError(t, err)
 
 	return hash
@@ -1885,8 +1917,10 @@ func checkForCanonicalTSInDB(t *testing.T, c *ChainManager, expectedTS *types.Te
 func checkForIxnsInDB(t *testing.T, c *ChainManager, expectedTS *types.Tesseract) {
 	t.Helper()
 
+	gridHash, err := expectedTS.GridHash()
+	require.NoError(t, err)
 	// check if tesseract matches
-	rawData, err := c.db.GetTesseract(expectedTS.InteractionHash())
+	rawData, err := c.db.GetTesseract(gridHash)
 	require.NoError(t, err)
 
 	actualIxns := new(types.Interactions)

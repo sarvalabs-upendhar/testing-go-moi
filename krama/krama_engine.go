@@ -1310,7 +1310,7 @@ func generateTesseract(
 		ClusterID:   string(state.ID),
 		Operator:    string(state.Operator),
 		BodyHash:    tsBodyHash,
-		GridHash:    gridHash,
+		GroupHash:   gridHash,
 		Extra: types.CommitData{
 			VoteSet:         nil,
 			CommitSignature: nil,

@@ -197,9 +197,7 @@ func (p *PersistenceManager) Close() {
 
 // CreateEntry stores the given k-v entry in database
 func (p *PersistenceManager) CreateEntry(key []byte, value []byte) error {
-	err := p.db.Insert(key, value)
-
-	return err
+	return p.db.Insert(key, value)
 }
 
 // UpdateTesseractStatus is used to update the tesseract state after syncing
@@ -387,40 +385,66 @@ func (p *PersistenceManager) SetTesseractHeightEntry(addr types.Address, height 
 	return p.CreateEntry(tesseractHeightKey(addr, height), tsHash.Bytes())
 }
 
-func (p *PersistenceManager) GetInteractions(ixHash types.Hash) ([]byte, error) {
-	key := dbKey(types.NilAddress, Interaction, ixHash.Bytes())
-
-	return p.ReadEntry(key)
-}
-
-func (p *PersistenceManager) SetInteractions(ixHash types.Hash, data []byte) error {
-	key := dbKey(types.NilAddress, Interaction, ixHash.Bytes())
+// SetInteractions stores grid hash and raw interactions data as key value pair
+func (p *PersistenceManager) SetInteractions(gridHash types.Hash, data []byte) error {
+	key := dbKey(types.NilAddress, Interaction, gridHash.Bytes())
 
 	return p.CreateEntry(key, data)
 }
 
-func (p *PersistenceManager) GetIxLookup(ixHash types.Hash) ([]byte, error) {
-	key := dbKey(types.NilAddress, IxLookup, ixHash.Bytes())
+// GetInteractions returns raw interactions data for the given grid hash
+func (p *PersistenceManager) GetInteractions(gridHash types.Hash) ([]byte, error) {
+	key := dbKey(types.NilAddress, Interaction, gridHash.Bytes())
 
 	return p.ReadEntry(key)
 }
 
-func (p *PersistenceManager) SetIxLookup(ixHash types.Hash, data []byte) error {
-	key := dbKey(types.NilAddress, IxLookup, ixHash.Bytes())
+// SetTSGridLookup stores tesseract hash and grid hash as key value pair
+func (p *PersistenceManager) SetTSGridLookup(tsHash types.Hash, gridHash types.Hash) error {
+	key := dbKey(types.NilAddress, TSGridLookup, tsHash.Bytes())
 
-	return p.CreateEntry(key, data)
+	return p.CreateEntry(key, gridHash.Bytes())
 }
 
-func (p *PersistenceManager) GetReceipts(receiptHash types.Hash) ([]byte, error) {
-	key := dbKey(types.NilAddress, Receipt, receiptHash.Bytes())
+// GetTSGridLookup returns raw grid hash for the given tesseract hash
+func (p *PersistenceManager) GetTSGridLookup(tsHash types.Hash) ([]byte, error) {
+	key := dbKey(types.NilAddress, TSGridLookup, tsHash.Bytes())
 
 	return p.ReadEntry(key)
 }
 
-func (p *PersistenceManager) SetReceipts(receiptHash types.Hash, data []byte) error {
-	key := dbKey(types.NilAddress, Receipt, receiptHash.Bytes())
+// SetIXGridLookup stores interaction hash and grid hash as key value pair
+func (p *PersistenceManager) SetIXGridLookup(ixHash types.Hash, gridHash types.Hash) error {
+	return p.CreateEntry(ixHash.Bytes(), gridHash.Bytes())
+}
+
+// GetIXGridLookup returns raw grid hash for the given interaction hash
+func (p *PersistenceManager) GetIXGridLookup(ixHash types.Hash) ([]byte, error) {
+	return p.ReadEntry(ixHash.Bytes())
+}
+
+// SetTesseractParts stores grid hash and tesseract parts as key value pair
+func (p *PersistenceManager) SetTesseractParts(gridHash types.Hash, parts []byte) error {
+	return p.CreateEntry(gridHash.Bytes(), parts)
+}
+
+// GetTesseractParts returns raw tesseract parts for the given grid hash
+func (p *PersistenceManager) GetTesseractParts(gridHash types.Hash) ([]byte, error) {
+	return p.ReadEntry(gridHash.Bytes())
+}
+
+// SetReceipts stores grid hash and raw receipt data as key value pair
+func (p *PersistenceManager) SetReceipts(gridHash types.Hash, data []byte) error {
+	key := dbKey(types.NilAddress, Receipt, gridHash.Bytes())
 
 	return p.CreateEntry(key, data)
+}
+
+// GetReceipts returns raw receipt data for the given grid hash
+func (p *PersistenceManager) GetReceipts(gridHash types.Hash) ([]byte, error) {
+	key := dbKey(types.NilAddress, Receipt, gridHash.Bytes())
+
+	return p.ReadEntry(key)
 }
 
 func (p *PersistenceManager) GetMerkleTreeEntry(

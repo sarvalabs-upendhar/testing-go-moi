@@ -534,9 +534,11 @@ func TestGetLatestTesseract(t *testing.T) {
 func TestGetReceipt(t *testing.T) {
 	ixs, receipts := getIxAndReceipts(t, 2) // get interactions and receipts
 
+	gridHash := tests.RandomHash(t)
+
 	chainParams := &CreateChainParams{
 		dbCallback: func(db *MockDB) {
-			insertReceipts(t, db, receipts)
+			insertReceipts(t, db, gridHash, receipts)
 		},
 	}
 
@@ -544,24 +546,24 @@ func TestGetReceipt(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		receiptRoot   types.Hash
+		gridHash      types.Hash
 		ixHash        types.Hash
 		expectedError error
 	}{
 		{
-			name:        "receipt exists",
-			receiptRoot: getReceiptHash(t, receipts),
-			ixHash:      ixs[1].Hash(),
+			name:     "receipt exists",
+			gridHash: gridHash,
+			ixHash:   ixs[1].Hash(),
 		},
 		{
 			name:          "should return error if receipt root hash is invalid",
-			receiptRoot:   tests.RandomHash(t),
+			gridHash:      tests.RandomHash(t),
 			ixHash:        ixs[1].Hash(),
 			expectedError: types.ErrKeyNotFound,
 		},
 		{
 			name:          "should return error if ixHash doesn't exist",
-			receiptRoot:   getReceiptHash(t, receipts),
+			gridHash:      gridHash,
 			ixHash:        tests.RandomHash(t),
 			expectedError: types.ErrReceiptNotFound,
 		},
@@ -569,7 +571,7 @@ func TestGetReceipt(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			actualReceipts, err := c.getReceipt(test.ixHash, test.receiptRoot)
+			actualReceipts, err := c.getReceipt(test.ixHash, test.gridHash)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -585,26 +587,24 @@ func TestGetReceipt(t *testing.T) {
 
 func TestGetReceiptByIxHash(t *testing.T) {
 	ixns, receipts := getIxAndReceipts(t, 2)
-	ixns2, receipts2 := getIxAndReceipts(t, 2)
-	address := tests.RandomAddress(t)
-
-	tesseractParams := map[int]*createTesseractParams{
-		0: tesseractParamsWithIxnsAndReceiptHash(t, address, ixns, receipts),
-		1: tesseractParamsWithIxnsAndReceiptHash(t, address, ixns2, receipts2),
-	}
-
-	tesseracts := createTesseractsWithChain(t, 2, tesseractParams)
+	gridHash := tests.RandomHash(t)
+	unknownGridHash := tests.RandomHash(t)
 
 	chainParams := &CreateChainParams{
 		dbCallback: func(db *MockDB) {
-			insertReceipts(t, db, receipts)
-			insertReceipts(t, db, receipts2)
-			insertIxLookup(t, db, ixns2[0].Hash(), receipts2)
-			insertIxLookup(t, db, ixns[0].Hash(), receipts)
-		},
-		smCallBack: func(sm *MockStateManager) {
-			sm.InsertLatestTesseracts(t, tesseracts[1])
-			sm.InsertTesseractsInDB(t, tesseracts...)
+			insertReceipts(t, db, gridHash, receipts)
+
+			err := db.SetIXGridLookup(ixns[0].Hash(), gridHash)
+			require.NoError(t, err)
+
+			err = db.SetIXGridLookup(ixns[1].Hash(), unknownGridHash)
+			require.NoError(t, err)
+
+			receiptData, err := receipts.Bytes()
+			require.NoError(t, err)
+
+			err = db.SetReceipts(gridHash, receiptData)
+			require.NoError(t, err)
 		},
 	}
 
@@ -617,19 +617,19 @@ func TestGetReceiptByIxHash(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name:     "receipt present in latest tesseract",
-			ixHash:   ixns2[0].Hash(),
-			receipts: receipts2,
+			name:          "grid hash not found",
+			ixHash:        tests.RandomHash(t),
+			expectedError: types.ErrGridHashNotFound,
 		},
 		{
-			name:     "receipt of non latest tesseract ",
+			name:          "receipt not found",
+			ixHash:        ixns[1].Hash(),
+			expectedError: types.ErrReceiptNotFound,
+		},
+		{
+			name:     "fetch receipt successfully",
 			ixHash:   ixns[0].Hash(),
 			receipts: receipts,
-		},
-		{
-			name:          "should return error if ixHash is invalid",
-			ixHash:        tests.RandomHash(t),
-			expectedError: types.ErrReceiptNotFound,
 		},
 	}
 
@@ -880,7 +880,7 @@ func TestAddTesseract(t *testing.T) {
 		setInteractionsHook         func() error
 		setReceiptsHook             func() error
 		setTesseractHeightEntryHook func() error
-		setIxLookupHook             func() error
+		setTSGridLookupHook         func() error
 		updateWalletCountHook       func() error
 		tsCount                     int
 		latticeExists               bool
@@ -900,6 +900,7 @@ func TestAddTesseract(t *testing.T) {
 					ixns:    ixns,
 					headerCallback: func(header *types.TesseractHeader) {
 						header.PrevHash = tests.RandomHash(t)
+						header.Extra = createCommitdataWithRandomGridHash(t)
 					},
 					bodyCallback: func(body *types.TesseractBody) {
 						body.ContextDelta[address] = getDeltaGroup(t, 3, 3, 0)
@@ -924,8 +925,9 @@ func TestAddTesseract(t *testing.T) {
 					address: address,
 				},
 				1: {
-					address: address,
-					ixns:    ixns,
+					address:        address,
+					ixns:           ixns,
+					headerCallback: tests.HeaderCallbackWithGridHash(t),
 				},
 			},
 			tsCount:       2,
@@ -938,6 +940,11 @@ func TestAddTesseract(t *testing.T) {
 			setTesseractHook: func() error {
 				return errors.New("error writing tesseract to db")
 			},
+			tesseractsParams: map[int]*createTesseractParams{
+				0: {
+					headerCallback: tests.HeaderCallbackWithGridHash(t),
+				},
+			},
 			tsCount:       1,
 			expectedError: errors.New("error writing tesseract to db"),
 		},
@@ -947,7 +954,8 @@ func TestAddTesseract(t *testing.T) {
 			accType: types.LogicAccount,
 			tesseractsParams: map[int]*createTesseractParams{
 				0: {
-					ixns: ixns,
+					ixns:           ixns,
+					headerCallback: tests.HeaderCallbackWithGridHash(t),
 				},
 			},
 			setInteractionsHook: func() error {
@@ -962,8 +970,9 @@ func TestAddTesseract(t *testing.T) {
 			accType: types.LogicAccount,
 			tesseractsParams: map[int]*createTesseractParams{
 				0: {
-					ixns:     ixns,
-					receipts: receipts,
+					ixns:           ixns,
+					receipts:       receipts,
+					headerCallback: tests.HeaderCallbackWithGridHash(t),
 				},
 			},
 			setReceiptsHook: func() error {
@@ -979,6 +988,11 @@ func TestAddTesseract(t *testing.T) {
 			setTesseractHeightEntryHook: func() error {
 				return errors.New("failed to write tesseract height entry")
 			},
+			tesseractsParams: map[int]*createTesseractParams{
+				0: {
+					headerCallback: tests.HeaderCallbackWithGridHash(t),
+				},
+			},
 			tsCount:       1,
 			expectedError: errors.New("failed to write tesseract height entry"),
 		},
@@ -991,11 +1005,11 @@ func TestAddTesseract(t *testing.T) {
 					ixns: ixns,
 				},
 			},
-			setIxLookupHook: func() error {
-				return errors.New("error writing ix lookup to db")
+			setTSGridLookupHook: func() error {
+				return errors.New("error writing ts grid lookup to db")
 			},
 			tsCount:       1,
-			expectedError: errors.New("error writing ix lookup to db"),
+			expectedError: errors.New("error writing ts grid lookup to db"),
 		},
 		{
 			name:    "should return error if unable to update node inclusivity",
@@ -1003,8 +1017,9 @@ func TestAddTesseract(t *testing.T) {
 			accType: types.LogicAccount,
 			tesseractsParams: map[int]*createTesseractParams{
 				0: {
-					address: address,
-					ixns:    ixns,
+					address:        address,
+					ixns:           ixns,
+					headerCallback: tests.HeaderCallbackWithGridHash(t),
 					bodyCallback: func(body *types.TesseractBody) {
 						body.ContextDelta[address] = getDeltaGroup(t, 3, 3, 0)
 					},
@@ -1043,7 +1058,7 @@ func TestAddTesseract(t *testing.T) {
 					db.setInteractionsHook = test.setInteractionsHook
 					db.setReceiptsHook = test.setReceiptsHook
 					db.setTesseractHeightEntryHook = test.setTesseractHeightEntryHook
-					db.setIxLookupHook = test.setIxLookupHook
+					db.setTSGridLookupHook = test.setTSGridLookupHook
 				},
 				senatusCallback: func(senatus *MockSenatus) {
 					senatus.UpdateWalletCountHook = test.updateWalletCountHook
@@ -1076,6 +1091,8 @@ func TestAddTesseract(t *testing.T) {
 
 				return
 			}
+
+			require.NoError(t, err)
 
 			checkIfTesseractAdded(t,
 				c,
@@ -1363,9 +1380,9 @@ func TestAddTesseracts(t *testing.T) {
 		clusterInfo = getTestClusterInfo(t, 2)
 	)
 
-	tesseractParamsWithGridHash := func(
+	tesseractParamsWithGroupHash := func(
 		clusterInfo *ptypes.ICSClusterInfo,
-		gridHash types.Hash,
+		groupHash types.Hash,
 	) *createTesseractParams {
 		rawData, err := clusterInfo.Bytes()
 		require.NoError(t, err)
@@ -1373,7 +1390,8 @@ func TestAddTesseracts(t *testing.T) {
 		return &createTesseractParams{
 			headerCallback: func(header *types.TesseractHeader) {
 				header.PrevHash = tests.RandomHash(t)
-				header.GridHash = gridHash
+				header.GroupHash = groupHash
+				header.Extra = createCommitdataWithRandomGridHash(t)
 			},
 			bodyCallback: func(body *types.TesseractBody) {
 				body.ConsensusProof.ICSHash = types.GetHash(rawData)
@@ -1392,8 +1410,8 @@ func TestAddTesseracts(t *testing.T) {
 			name:         "valid tesseracts",
 			dirtyStorage: getTestDirtyEntriesWithClusterInfo(t, clusterInfo, 5),
 			tesseractsParams: map[int]*createTesseractParams{
-				0: tesseractParamsWithGridHash(clusterInfo, hashes[1]),
-				1: tesseractParamsWithGridHash(clusterInfo, hashes[1]),
+				0: tesseractParamsWithGroupHash(clusterInfo, hashes[1]),
+				1: tesseractParamsWithGroupHash(clusterInfo, hashes[1]),
 			},
 			tsCount: 2,
 		},
@@ -1408,8 +1426,8 @@ func TestAddTesseracts(t *testing.T) {
 			dirtyStorage: nil,
 			tsCount:      2,
 			tesseractsParams: map[int]*createTesseractParams{
-				0: tesseractParamsWithGridHash(nil, hashes[1]),
-				1: tesseractParamsWithGridHash(nil, hashes[1]),
+				0: tesseractParamsWithGroupHash(nil, hashes[1]),
+				1: tesseractParamsWithGroupHash(nil, hashes[1]),
 			},
 			expectedError: errors.New("empty dirty storage"),
 		},
@@ -1417,8 +1435,8 @@ func TestAddTesseracts(t *testing.T) {
 			name:         "should return error if grid id doesn't match",
 			dirtyStorage: getTestDirtyEntriesWithClusterInfo(t, nil, 5),
 			tesseractsParams: map[int]*createTesseractParams{
-				0: tesseractParamsWithGridHash(nil, hashes[0]),
-				1: tesseractParamsWithGridHash(nil, hashes[1]),
+				0: tesseractParamsWithGroupHash(nil, hashes[0]),
+				1: tesseractParamsWithGroupHash(nil, hashes[1]),
 			},
 			tsCount:       2,
 			expectedError: errors.New("grid id mismatch"),
@@ -1460,7 +1478,7 @@ func TestIsReceiptAndGroupHashValid(t *testing.T) {
 	receiptRoot, err := receipts.Hash()
 	require.NoError(t, err)
 
-	gridHash := tests.RandomHash(t)
+	groupHash := tests.RandomHash(t)
 
 	testcases := []struct {
 		name      string
@@ -1470,24 +1488,24 @@ func TestIsReceiptAndGroupHashValid(t *testing.T) {
 		{
 			name: "receipt hashes doesn't match",
 			paramsMap: map[int]*createTesseractParams{
-				0: tesseractParamsWithReceiptHash(t, receiptRoot, gridHash),
-				1: tesseractParamsWithReceiptHash(t, tests.RandomHash(t), gridHash),
+				0: tesseractParamsWithReceiptHash(t, receiptRoot, groupHash),
+				1: tesseractParamsWithReceiptHash(t, tests.RandomHash(t), groupHash),
 			},
 			isValid: false,
 		},
 		{
 			name: "grid hashes doesn't match",
 			paramsMap: map[int]*createTesseractParams{
-				0: tesseractParamsWithReceiptHash(t, receiptRoot, gridHash),
+				0: tesseractParamsWithReceiptHash(t, receiptRoot, groupHash),
 				1: tesseractParamsWithReceiptHash(t, receiptRoot, tests.RandomHash(t)),
 			},
 			isValid: false,
 		},
 		{
-			name: "valid receipt hash and gridHash",
+			name: "valid receipt hash and groupHash",
 			paramsMap: map[int]*createTesseractParams{
-				0: tesseractParamsWithReceiptHash(t, receiptRoot, gridHash),
-				1: tesseractParamsWithReceiptHash(t, receiptRoot, gridHash),
+				0: tesseractParamsWithReceiptHash(t, receiptRoot, groupHash),
+				1: tesseractParamsWithReceiptHash(t, receiptRoot, groupHash),
 			},
 			isValid: true,
 		},
@@ -1697,7 +1715,7 @@ func TestExecuteAndAdd(t *testing.T) {
 		expectedError           error
 	}{
 		{
-			name:              "should add tesseract to grid cache for pending grids",
+			name:              "should add tesseract to grid cache for pending group",
 			clusterInfo:       clusterInfo,
 			tsCount:           1,
 			isTesseractCached: true,
@@ -1781,7 +1799,7 @@ func TestExecuteAndAdd(t *testing.T) {
 			require.NoError(t, err)
 			// if the grid is incomplete check for the tesseract in grid cache
 			if test.isTesseractCached {
-				_, ok := c.gridsCache.grids[ts[0].GridHash()]
+				_, ok := c.groupCache.group[ts[0].GroupHash()]
 				require.True(t, ok)
 
 				added, err := c.db.HasTesseract(getTesseractHash(t, ts[0]))
@@ -2749,4 +2767,306 @@ func CheckAssetCreation(
 	require.Equal(t, assetDescriptor.Supply, actualSupply) // check total supply is stored in balances
 
 	require.Equal(t, s.Address(), assetDescriptor.Owner) // check if address is assigned to owner
+}
+
+func TestGetTesseractPartsByGridHash(t *testing.T) {
+	var (
+		gridHash = tests.RandomHash(t)
+		parts    = tests.CreateTesseractPartsWithTestData(t)
+		c        = createTestChainManager(t, nil)
+	)
+
+	rawParts, err := parts.Bytes()
+	require.NoError(t, err)
+
+	err = c.db.SetTesseractParts(gridHash, rawParts)
+	require.NoError(t, err)
+
+	testcases := []struct {
+		name          string
+		gridHash      types.Hash
+		expectedParts *types.TesseractParts
+		expectedError error
+	}{
+		{
+			name:          "fetch tesseract parts successfully",
+			gridHash:      gridHash,
+			expectedParts: parts,
+		},
+		{
+			name:          "failed to fetch tesseract parts",
+			gridHash:      tests.RandomHash(t),
+			expectedError: errors.New("tesseract parts not found"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			parts, err := c.getTesseractPartsByGridHash(test.gridHash)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedParts, parts)
+		})
+	}
+}
+
+func TestGetInteractionsByGridHash(t *testing.T) {
+	var (
+		gridHash  = tests.RandomHash(t)
+		paramsMap = tests.GetIxParamsMapWithAddresses(
+			[]types.Address{tests.RandomAddress(t)},
+			[]types.Address{tests.RandomAddress(t)},
+		)
+		ixns = tests.CreateIxns(t, 2, paramsMap)
+		c    = createTestChainManager(t, nil)
+	)
+
+	rawIxns, err := ixns.Bytes()
+	require.NoError(t, err)
+
+	err = c.db.SetInteractions(gridHash, rawIxns)
+	require.NoError(t, err)
+
+	testcases := []struct {
+		name                 string
+		gridHash             types.Hash
+		expectedInteractions types.Interactions
+		expectedError        error
+	}{
+		{
+			name:                 "fetch interactions successfully",
+			gridHash:             gridHash,
+			expectedInteractions: ixns,
+		},
+		{
+			name:          "failed to fetch interactions",
+			gridHash:      tests.RandomHash(t),
+			expectedError: types.ErrFetchingInteractions,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			ixns, err := c.getInteractionsByGridHash(test.gridHash)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedInteractions, ixns)
+		})
+	}
+}
+
+func TestGetInteractionByTSHash(t *testing.T) {
+	var (
+		gridHash             = tests.RandomHash(t)
+		tsHash               = tests.RandomHash(t)
+		tsHashWithoutIxns    = tests.RandomHash(t)
+		tsHashWithoutParts   = tests.RandomHash(t)
+		gridHashWithoutParts = tests.RandomHash(t)
+		paramsMap            = tests.GetIxParamsMapWithAddresses(
+			[]types.Address{tests.RandomAddress(t)},
+			[]types.Address{tests.RandomAddress(t)},
+		)
+		ixns  = tests.CreateIxns(t, 2, paramsMap)
+		parts = tests.CreateTesseractPartsWithTestData(t)
+		c     = createTestChainManager(t, nil)
+	)
+
+	rawIxns, err := ixns.Bytes()
+	require.NoError(t, err)
+
+	rawParts, err := parts.Bytes()
+	require.NoError(t, err)
+
+	err = c.db.SetTSGridLookup(tsHash, gridHash)
+	require.NoError(t, err)
+
+	err = c.db.SetInteractions(gridHash, rawIxns)
+	require.NoError(t, err)
+
+	err = c.db.SetTesseractParts(gridHash, rawParts)
+	require.NoError(t, err)
+
+	err = c.db.SetTSGridLookup(tsHashWithoutIxns, tests.RandomHash(t))
+	require.NoError(t, err)
+
+	err = c.db.SetTSGridLookup(tsHashWithoutParts, gridHashWithoutParts)
+	require.NoError(t, err)
+
+	err = c.db.SetInteractions(gridHashWithoutParts, rawIxns)
+	require.NoError(t, err)
+
+	testcases := []struct {
+		name                 string
+		tsHash               types.Hash
+		ixIndex              int
+		expectedInteractions *types.Interaction
+		expectedParts        *types.TesseractParts
+		expectedError        error
+	}{
+		{
+			name:                 "fetch interactions successfully",
+			tsHash:               tsHash,
+			ixIndex:              1,
+			expectedParts:        parts,
+			expectedInteractions: ixns[1],
+		},
+		{
+			name:          "grid hash not found",
+			tsHash:        tests.RandomHash(t),
+			expectedError: types.ErrGridHashNotFound,
+		},
+		{
+			name:          "interactions not found",
+			tsHash:        tsHashWithoutIxns,
+			expectedError: types.ErrFetchingInteractions,
+		},
+		{
+			name:          "tesseract parts not found",
+			tsHash:        tsHashWithoutParts,
+			expectedError: errors.New("tesseract parts not found"),
+		},
+		{
+			name:          "interaction index exceeded",
+			tsHash:        tsHash,
+			ixIndex:       3,
+			expectedError: types.ErrIndexOutOfRange,
+		},
+		{
+			name:          "interaction index cannot be negative",
+			tsHash:        tsHash,
+			ixIndex:       -1,
+			expectedError: types.ErrIndexOutOfRange,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			ix, parts, err := c.GetInteractionAndPartsByTSHash(test.tsHash, test.ixIndex)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedInteractions, ix)
+			require.Equal(t, test.expectedParts, parts)
+		})
+	}
+}
+
+func TestGetInteractionByIxHash(t *testing.T) {
+	paramsMap := tests.GetIxParamsMapWithAddresses(
+		[]types.Address{tests.RandomAddress(t)},
+		[]types.Address{tests.RandomAddress(t)},
+	)
+	ixns := tests.CreateIxns(t, 2, paramsMap)
+
+	var (
+		gridHash             = tests.RandomHash(t)
+		ixHash               = ixns[1].Hash()
+		ixHashWithoutIxn     = tests.RandomHash(t)
+		ixHashWithoutIxns    = tests.RandomHash(t)
+		ixHashWithoutParts   = ixns[0].Hash()
+		gridHashWithoutParts = tests.RandomHash(t)
+		parts                = tests.CreateTesseractPartsWithTestData(t)
+		c                    = createTestChainManager(t, nil)
+	)
+
+	rawIxns, err := ixns.Bytes()
+	require.NoError(t, err)
+
+	rawParts, err := parts.Bytes()
+	require.NoError(t, err)
+
+	err = c.db.SetIXGridLookup(ixHash, gridHash)
+	require.NoError(t, err)
+
+	err = c.db.SetIXGridLookup(ixHashWithoutIxn, gridHash)
+	require.NoError(t, err)
+
+	err = c.db.SetIXGridLookup(ixHashWithoutParts, gridHashWithoutParts)
+	require.NoError(t, err)
+
+	err = c.db.SetInteractions(gridHash, rawIxns)
+	require.NoError(t, err)
+
+	err = c.db.SetTesseractParts(gridHash, rawParts)
+	require.NoError(t, err)
+
+	err = c.db.SetIXGridLookup(ixHashWithoutIxns, tests.RandomHash(t))
+	require.NoError(t, err)
+
+	err = c.db.SetIXGridLookup(ixHashWithoutParts, gridHashWithoutParts)
+	require.NoError(t, err)
+
+	err = c.db.SetInteractions(gridHashWithoutParts, rawIxns)
+	require.NoError(t, err)
+
+	testcases := []struct {
+		name                 string
+		ixHash               types.Hash
+		expectedInteractions *types.Interaction
+		expectedParts        *types.TesseractParts
+		expectedIndex        int
+		expectedError        error
+	}{
+		{
+			name:                 "fetch interactions successfully",
+			ixHash:               ixHash,
+			expectedParts:        parts,
+			expectedInteractions: ixns[1],
+			expectedIndex:        1,
+		},
+		{
+			name:          "grid hash not found",
+			ixHash:        tests.RandomHash(t),
+			expectedError: types.ErrGridHashNotFound,
+		},
+		{
+			name:          "interactions not found",
+			ixHash:        ixHashWithoutIxns,
+			expectedError: types.ErrFetchingInteractions,
+		},
+		{
+			name:          "interaction not found",
+			ixHash:        ixHashWithoutIxn,
+			expectedError: types.ErrFetchingInteraction,
+		},
+		{
+			name:          "tesseract parts not found",
+			ixHash:        ixns[0].Hash(),
+			expectedError: errors.New("tesseract parts not found"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			ix, parts, ixIndex, err := c.GetInteractionAndPartsByIxHash(test.ixHash)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedInteractions, ix)
+			require.Equal(t, test.expectedParts, parts)
+			require.Equal(t, test.expectedIndex, ixIndex)
+		})
+	}
 }

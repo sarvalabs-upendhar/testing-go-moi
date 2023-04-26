@@ -50,11 +50,15 @@ type db interface {
 	SetInteractions(ixHash types.Hash, data []byte) error
 	GetTesseractHeightEntry(addr types.Address, height uint64) ([]byte, error)
 	SetTesseractHeightEntry(addr types.Address, height uint64, tsHash types.Hash) error
-	GetIxLookup(ixHash types.Hash) ([]byte, error)
-	SetIxLookup(ixHash types.Hash, data []byte) error
 	SetReceipts(receiptHash types.Hash, data []byte) error
 	GetReceipts(receiptHash types.Hash) ([]byte, error)
-	GetInteractions(ixHash types.Hash) ([]byte, error)
+	GetInteractions(gridHash types.Hash) ([]byte, error)
+	SetIXGridLookup(ixHash types.Hash, gridHash types.Hash) error
+	GetIXGridLookup(ixHash types.Hash) ([]byte, error)
+	SetTesseractParts(gridHash types.Hash, parts []byte) error
+	GetTesseractParts(gridHash types.Hash) ([]byte, error)
+	SetTSGridLookup(tsHash types.Hash, gridHash types.Hash) error
+	GetTSGridLookup(tsHash types.Hash) ([]byte, error)
 }
 
 type reputationEngine interface {
@@ -103,7 +107,7 @@ type ChainManager struct {
 	ixpool              ixpool
 	tesseracts          *lru.Cache
 	orphanTesseracts    *lru.Cache
-	gridsCache          *GridCache
+	groupCache          *GroupCache
 	sm                  stateManager
 	validatedTesseracts sync.Map
 	latticeLocks        *locker.Locker
@@ -147,7 +151,7 @@ func NewChainManager(
 		exec:              exec,
 		network:           network,
 		orphanTesseracts:  orphansCache,
-		gridsCache:        NewGridCache(),
+		groupCache:        NewGridCache(),
 		knownTesseracts:   NewKnownCache(150),
 		latticeLocks:      locker.New(),
 		logger:            logger.Named("Chain-Manager"),
@@ -323,10 +327,10 @@ func (c *ChainManager) GetLatestTesseract(addr types.Address, withInteractions b
 	return c.sm.GetLatestTesseract(addr, withInteractions)
 }
 
-func (c *ChainManager) getReceipt(ixHash, receiptRoot types.Hash) (*types.Receipt, error) {
-	rawData, err := c.db.GetReceipts(receiptRoot)
+func (c *ChainManager) getReceipt(ixHash, gridHash types.Hash) (*types.Receipt, error) {
+	rawData, err := c.db.GetReceipts(gridHash)
 	if err != nil {
-		c.logger.Error("Error fetching receipt root", "error", err.Error(), receiptRoot, ixHash)
+		c.logger.Error("Error fetching receipts ", "error", err.Error(), gridHash, ixHash)
 
 		return nil, err
 	}
@@ -341,16 +345,14 @@ func (c *ChainManager) getReceipt(ixHash, receiptRoot types.Hash) (*types.Receip
 }
 
 func (c *ChainManager) GetReceiptByIxHash(ixHash types.Hash) (*types.Receipt, error) {
-	ixLookup, err := c.db.GetIxLookup(ixHash)
+	rawData, err := c.db.GetIXGridLookup(ixHash)
 	if err != nil {
-		return nil, errors.Wrap(types.ErrReceiptNotFound, err.Error())
+		return nil, errors.Wrap(err, "grid hash not found")
 	}
 
-	receiptRoot := types.BytesToHash(ixLookup)
-
-	receipt, err := c.getReceipt(ixHash, receiptRoot)
+	receipt, err := c.getReceipt(ixHash, types.BytesToHash(rawData))
 	if err != nil {
-		return nil, errors.Wrap(types.ErrReceiptNotFound, err.Error())
+		return nil, errors.Wrap(err, "receipt not found")
 	}
 
 	return receipt, nil
@@ -476,11 +478,14 @@ func (c *ChainManager) storeReceipts(ts *types.Tesseract) error {
 			return err
 		}
 
-		receiptHash := types.GetHash(rawReceipts)
+		gridHash, err := ts.GridHash()
+		if err != nil {
+			return err
+		}
 
-		_, err = c.db.GetReceipts(receiptHash)
+		_, err = c.db.GetReceipts(gridHash)
 		if errors.Is(err, types.ErrKeyNotFound) {
-			if err = c.db.SetReceipts(receiptHash, rawReceipts); err != nil {
+			if err = c.db.SetReceipts(gridHash, rawReceipts); err != nil {
 				return errors.Wrap(err, "error writing receipts to db")
 			}
 
@@ -493,6 +498,9 @@ func (c *ChainManager) storeReceipts(ts *types.Tesseract) error {
 	return nil
 }
 
+// The storeInteractions function uses grid hash as a key to store interactions.
+// It also stores key-value pairs of ix hash and grid hash,
+// as well as key-value pairs of grid hash and tesseract parts.
 func (c *ChainManager) storeInteractions(ts *types.Tesseract) error {
 	if ts.Interactions() != nil {
 		ixRawData, err := ts.Interactions().Bytes()
@@ -500,16 +508,35 @@ func (c *ChainManager) storeInteractions(ts *types.Tesseract) error {
 			return err
 		}
 
-		_, err = c.db.GetInteractions(ts.InteractionHash())
+		gridHash, err := ts.GridHash()
+		if err != nil {
+			return err
+		}
+
+		_, err = c.db.GetInteractions(gridHash)
 		if errors.Is(err, types.ErrKeyNotFound) {
-			if err = c.db.SetInteractions(ts.InteractionHash(), ixRawData); err != nil {
+			if err = c.db.SetInteractions(gridHash, ixRawData); err != nil {
 				return errors.Wrap(err, "error writing interactions to db")
 			}
 
 			for _, ix := range ts.Interactions() {
-				if err = c.db.SetIxLookup(ix.Hash(), ts.ReceiptHash().Bytes()); err != nil {
-					return errors.Wrap(err, "error writing ix lookup to db")
+				if err = c.db.SetIXGridLookup(ix.Hash(), gridHash); err != nil {
+					return errors.Wrap(err, "error writing gridID hash to db")
 				}
+			}
+
+			parts, err := ts.Parts()
+			if err != nil {
+				return err
+			}
+
+			rawPartsData, err := parts.Bytes()
+			if err != nil {
+				return err
+			}
+
+			if err := c.db.SetTesseractParts(gridHash, rawPartsData); err != nil {
+				return errors.Wrap(err, "error writing tesseract parts to db")
 			}
 
 			return nil
@@ -554,6 +581,17 @@ func (c *ChainManager) addTesseract(
 	tsRawData, err := t.Canonical().Bytes()
 	if err != nil {
 		return err
+	}
+
+	if t.ClusterID() != GenesisIdentifier {
+		gridHash, err := t.GridHash()
+		if err != nil {
+			return err
+		}
+
+		if err := c.db.SetTSGridLookup(tesseractHash, gridHash); err != nil {
+			return errors.Wrap(err, "failed to set grid look up")
+		}
 	}
 
 	if err = c.storeInteractions(t); err != nil {
@@ -737,27 +775,27 @@ func (c *ChainManager) executeAndAdd(ts *types.Tesseract, clusterInfo *ptypes.IC
 		return errors.New("empty cluster info")
 	}
 
-	if isGridComplete, err := c.gridsCache.AddTesseract(ts); !isGridComplete {
+	if isGridComplete, err := c.groupCache.AddTesseract(ts); !isGridComplete {
 		if err != nil {
-			c.logger.Error("Failed to add the tesseract to grids cache", "error", err)
+			c.logger.Error("Failed to add the tesseract to group cache", "error", err)
 		}
 
 		return nil
 	}
 
-	var tesseractGrid []*types.Tesseract
+	var tesseractGroup []*types.Tesseract
 
 	if ts.GridLength() == 1 {
-		tesseractGrid = []*types.Tesseract{ts}
+		tesseractGroup = []*types.Tesseract{ts}
 	} else {
-		tesseractGrid = c.gridsCache.CleanupGrid(ts.GridHash())
+		tesseractGroup = c.groupCache.CleanupGrid(ts.GroupHash())
 	}
 
-	if tesseractGrid == nil {
-		return errors.New("nil grid")
+	if tesseractGroup == nil {
+		return errors.New("nil group")
 	}
 
-	if err := c.executeAndValidate(tesseractGrid); err != nil {
+	if err := c.executeAndValidate(tesseractGroup); err != nil {
 		return err
 	}
 
@@ -769,7 +807,7 @@ func (c *ChainManager) executeAndAdd(ts *types.Tesseract, clusterInfo *ptypes.IC
 	dirtyStorage := make(map[types.Hash][]byte)
 	dirtyStorage[types.GetHash(rawData)] = rawData
 
-	return c.addTesseractsWithState(dirtyStorage, tesseractGrid...)
+	return c.addTesseractsWithState(dirtyStorage, tesseractGroup...)
 }
 
 func (c *ChainManager) AddTesseractWithOutState(
@@ -817,9 +855,9 @@ func (c *ChainManager) AddTesseracts(tesseracts []*types.Tesseract, dirtyStorage
 		return errors.New("empty dirty storage")
 	}
 
-	gridHash := tesseracts[0].GridHash()
+	groupHash := tesseracts[0].GroupHash()
 	for _, ts := range tesseracts {
-		if ts.GridHash() != gridHash {
+		if ts.GroupHash() != groupHash {
 			return errors.New("grid id mismatch")
 		}
 	}
@@ -1110,6 +1148,101 @@ func (c *ChainManager) executeAndValidate(ts []*types.Tesseract) error {
 	return nil
 }
 
+func (c *ChainManager) getTesseractPartsByGridHash(gridHash types.Hash) (*types.TesseractParts, error) {
+	parts := &types.TesseractParts{
+		Grid: make(map[types.Address]types.TesseractHeightAndHash),
+	}
+
+	rawData, err := c.db.GetTesseractParts(gridHash)
+	if err != nil {
+		return nil, errors.Wrap(err, "tesseract parts not found")
+	}
+
+	if err := parts.FromBytes(rawData); err != nil {
+		return nil, err
+	}
+
+	return parts, nil
+}
+
+func (c *ChainManager) getInteractionsByGridHash(gridHash types.Hash) (types.Interactions, error) {
+	interactions := new(types.Interactions)
+
+	buf, err := c.db.GetInteractions(gridHash)
+	if err != nil {
+		return nil, errors.Wrap(err, "error fetching interactions")
+	}
+
+	if err := interactions.FromBytes(buf); err != nil {
+		return nil, err
+	}
+
+	return *interactions, nil
+}
+
+// GetInteractionAndPartsByTSHash returns interaction,tesseract parts for the given tesseract hash and ix index
+func (c *ChainManager) GetInteractionAndPartsByTSHash(tsHash types.Hash, ixIndex int) (
+	*types.Interaction,
+	*types.TesseractParts,
+	error,
+) {
+	rawData, err := c.db.GetTSGridLookup(tsHash)
+	if err != nil {
+		return nil, nil, errors.Wrap(types.ErrGridHashNotFound, err.Error())
+	}
+
+	gridHash := types.BytesToHash(rawData)
+
+	interactions, err := c.getInteractionsByGridHash(gridHash)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if ixIndex >= len(interactions) || ixIndex < 0 {
+		return nil, nil, types.ErrIndexOutOfRange
+	}
+
+	parts, err := c.getTesseractPartsByGridHash(gridHash)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return interactions[ixIndex], parts, nil
+}
+
+// GetInteractionAndPartsByIxHash returns interaction,tesseract parts, ix index for the given tesseract hash
+func (c *ChainManager) GetInteractionAndPartsByIxHash(ixHash types.Hash) (
+	*types.Interaction,
+	*types.TesseractParts,
+	int,
+	error,
+) {
+	rawData, err := c.db.GetIXGridLookup(ixHash)
+	if err != nil {
+		return nil, nil, 0, errors.Wrap(types.ErrGridHashNotFound, err.Error())
+	}
+
+	gridHash := types.BytesToHash(rawData)
+
+	interactions, err := c.getInteractionsByGridHash(gridHash)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+
+	for ixIndex, ix := range interactions {
+		if ix.Hash() == ixHash {
+			parts, err := c.getTesseractPartsByGridHash(gridHash)
+			if err != nil {
+				return nil, nil, 0, err
+			}
+
+			return ix, parts, ixIndex, nil
+		}
+	}
+
+	return nil, nil, 0, types.ErrFetchingInteraction
+}
+
 func (c *ChainManager) SetupSargaAccount(
 	sargaAcc *gtypes.AccountSetupArgs,
 	otherAccounts []*gtypes.AccountSetupArgs,
@@ -1275,7 +1408,7 @@ func areStateHashesValid(tesseracts []*types.Tesseract, receipts types.Receipts)
 }
 
 func isReceiptAndGroupHashValid(tesseracts []*types.Tesseract, receipts types.Receipts) bool {
-	gridHash := tesseracts[0].GridHash()
+	groupHash := tesseracts[0].GroupHash()
 
 	receiptsHash, err := receipts.Hash()
 	if err != nil {
@@ -1283,7 +1416,7 @@ func isReceiptAndGroupHashValid(tesseracts []*types.Tesseract, receipts types.Re
 	}
 
 	for _, ts := range tesseracts {
-		if ts.ReceiptHash() != receiptsHash || ts.GridHash() != gridHash {
+		if ts.ReceiptHash() != receiptsHash || ts.GroupHash() != groupHash {
 			return false
 		}
 	}

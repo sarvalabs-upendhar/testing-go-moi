@@ -14,7 +14,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-polo"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/sarvalabs/moichain/dhruva"
@@ -244,7 +243,7 @@ func (sm *StateManager) GetLatestTesseract(addr types.Address, withInteractions 
 
 func (sm *StateManager) FetchTesseractFromDB(hash types.Hash, withInteractions bool) (*types.Tesseract, error) {
 	// Fetch Tesseract from DB
-	buf, err := sm.db.GetTesseract(hash)
+	rawTesseract, err := sm.db.GetTesseract(hash)
 	if err != nil {
 		return nil, err
 	}
@@ -252,23 +251,26 @@ func (sm *StateManager) FetchTesseractFromDB(hash types.Hash, withInteractions b
 	// canonicalTesseract is a clone of the tesseract. The only difference is that it won't have the interactions field.
 	canonicalTesseract := new(types.CanonicalTesseract)
 
-	if err = canonicalTesseract.FromBytes(buf); err != nil {
-		return nil, errors.Wrap(err, "failed to depolorize tesseract")
+	if err = canonicalTesseract.FromBytes(rawTesseract); err != nil {
+		return nil, err
 	}
 
 	interactions := new(types.Interactions)
 
 	if withInteractions && canonicalTesseract.Header.Height > 0 {
 		// Fetch interactions from DB
-		buf, err = sm.db.GetInteractions(canonicalTesseract.Body.InteractionHash)
+		gridHash, err := canonicalTesseract.GridHash()
+		if err != nil {
+			return nil, err
+		}
+
+		rawIxns, err := sm.db.GetInteractions(gridHash)
 		if err != nil {
 			return nil, errors.Wrap(err, types.ErrFetchingInteractions.Error())
 		}
 
-		if err := interactions.FromBytes(buf); err != nil {
-			if !errors.Is(err, polo.ErrNullPack) {
-				return nil, errors.Wrap(err, "failed to depolarize interactions")
-			}
+		if err := interactions.FromBytes(rawIxns); err != nil {
+			return nil, err
 		}
 	}
 

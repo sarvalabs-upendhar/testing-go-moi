@@ -349,10 +349,10 @@ func getRandomReceipts(t *testing.T, receiptHash types.Hash, count int) types.Re
 	return receipts
 }
 
-func insertIxLookup(t *testing.T, pm *PersistenceManager, ixHash types.Hash, receiptHash types.Hash) {
+func insertTSGridLookup(t *testing.T, pm *PersistenceManager, tsHash types.Hash, gridHash types.Hash) {
 	t.Helper()
 
-	err := pm.SetIxLookup(ixHash, receiptHash.Bytes())
+	err := pm.SetTSGridLookup(tsHash, gridHash)
 	require.NoError(t, err)
 }
 

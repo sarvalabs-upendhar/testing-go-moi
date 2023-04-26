@@ -6,11 +6,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/types"
 )
 
 func TestCopyReceipt(t *testing.T) {
-	receiptWithNilExtraData := createReceiptWithTestData(t)
+	receiptWithNilExtraData := tests.CreateReceiptWithTestData(t)
 	receiptWithNilExtraData.ExtraData = nil
 
 	testcases := []struct {
@@ -20,7 +21,7 @@ func TestCopyReceipt(t *testing.T) {
 	}{
 		{
 			name:    "copy receipt",
-			receipt: createReceiptWithTestData(t),
+			receipt: tests.CreateReceiptWithTestData(t),
 		},
 		{
 			name:           "copy receipt with nil extra data",

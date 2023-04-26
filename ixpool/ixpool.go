@@ -78,6 +78,11 @@ func NewIxPool(
 	return i
 }
 
+// GetPendingIx returns the interaction in ixpool for the given interaction hash
+func (i *IxPool) GetPendingIx(ixHash types.Hash) (*types.Interaction, bool) {
+	return i.allIxs.get(ixHash)
+}
+
 func (i *IxPool) checkIx(ix *types.Interaction) error {
 	// validate incoming ix
 	if err := i.validateIx(ix); err != nil {

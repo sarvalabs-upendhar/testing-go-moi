@@ -501,7 +501,7 @@ func createHeaderCallbackWithTestData(t *testing.T) func(header *types.Tesseract
 		header.FuelUsed = 88
 		header.FuelLimit = 99
 		header.BodyHash = tests.RandomHash(t)
-		header.GridHash = tests.RandomHash(t)
+		header.GroupHash = tests.RandomHash(t)
 		header.Operator = "operator"
 		header.ClusterID = "cluster-id"
 		header.Timestamp = 3
@@ -958,7 +958,7 @@ func checkForRPCHeader(t *testing.T, header types.TesseractHeader, rpcHeader pty
 	require.Equal(t, header.FuelUsed, rpcHeader.FuelUsed.ToInt())
 	require.Equal(t, header.FuelLimit, rpcHeader.FuelLimit.ToInt())
 	require.Equal(t, header.BodyHash, rpcHeader.BodyHash)
-	require.Equal(t, header.GridHash, rpcHeader.GridHash)
+	require.Equal(t, header.GroupHash, rpcHeader.GridHash)
 	require.Equal(t, header.Operator, rpcHeader.Operator)
 	require.Equal(t, header.ClusterID, rpcHeader.ClusterID)
 	require.Equal(t, uint64(header.Timestamp), rpcHeader.Timestamp.ToInt())

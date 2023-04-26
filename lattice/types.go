@@ -8,18 +8,18 @@ import (
 	"github.com/sarvalabs/moichain/types"
 )
 
-type GridCache struct {
+type GroupCache struct {
 	mtx   sync.Mutex
-	grids map[types.Hash]map[types.Hash]*types.Tesseract
+	group map[types.Hash]map[types.Hash]*types.Tesseract
 }
 
-func NewGridCache() *GridCache {
-	return &GridCache{
-		grids: make(map[types.Hash]map[types.Hash]*types.Tesseract),
+func NewGridCache() *GroupCache {
+	return &GroupCache{
+		group: make(map[types.Hash]map[types.Hash]*types.Tesseract),
 	}
 }
 
-func (g *GridCache) AddTesseract(ts *types.Tesseract) (bool, error) {
+func (g *GroupCache) AddTesseract(ts *types.Tesseract) (bool, error) {
 	g.mtx.Lock()
 	defer g.mtx.Unlock()
 
@@ -32,20 +32,20 @@ func (g *GridCache) AddTesseract(ts *types.Tesseract) (bool, error) {
 		return false, err
 	}
 
-	if _, ok := g.grids[ts.GridHash()]; !ok {
-		g.grids[ts.GridHash()] = make(map[types.Hash]*types.Tesseract)
+	if _, ok := g.group[ts.GroupHash()]; !ok {
+		g.group[ts.GroupHash()] = make(map[types.Hash]*types.Tesseract)
 	}
 
-	g.grids[ts.GridHash()][tsHash] = ts
+	g.group[ts.GroupHash()][tsHash] = ts
 
-	return int32(len(g.grids[ts.GridHash()])) == ts.GridLength(), nil
+	return int32(len(g.group[ts.GroupHash()])) == ts.GridLength(), nil
 }
 
-func (g *GridCache) CleanupGrid(gridID types.Hash) []*types.Tesseract {
+func (g *GroupCache) CleanupGrid(gridID types.Hash) []*types.Tesseract {
 	g.mtx.Lock()
 	defer g.mtx.Unlock()
 
-	grid, ok := g.grids[gridID]
+	grid, ok := g.group[gridID]
 	if !ok {
 		return nil
 	}

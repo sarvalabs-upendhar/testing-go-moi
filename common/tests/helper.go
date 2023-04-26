@@ -595,6 +595,20 @@ func GetIxParamsMapWithAddresses(
 	return ixParams
 }
 
+// HeaderCallbackWithGridHash returns callback which assigns extra field with new commit data having random grid hash
+func HeaderCallbackWithGridHash(t *testing.T) func(header *types.TesseractHeader) {
+	t.Helper()
+
+	return func(header *types.TesseractHeader) {
+		header.Extra = types.CommitData{
+			GridID: &types.TesseractGridID{
+				Hash:  RandomHash(t),
+				Parts: &types.TesseractParts{},
+			},
+		}
+	}
+}
+
 // GetTesseractParamsMapWithIxns returns tsCount no.of tesseracts and each one will have ixnCount interactions
 func GetTesseractParamsMapWithIxns(t *testing.T, tsCount, ixnCount int) map[int]*CreateTesseractParams {
 	t.Helper()
@@ -610,7 +624,8 @@ func GetTesseractParamsMapWithIxns(t *testing.T, tsCount, ixnCount int) map[int]
 	// allocate interactions to each tesseract, excluding the first tesseract (which is the genesis tesseract)
 	for i := 0; i < tsCount; i++ {
 		tesseractParams[i] = &CreateTesseractParams{
-			Height: uint64(i),
+			Height:         uint64(i),
+			HeaderCallback: HeaderCallbackWithGridHash(t),
 		}
 
 		if i > 0 {
@@ -681,7 +696,7 @@ func CreateHeaderWithTestData(t *testing.T) types.TesseractHeader {
 		FuelUsed:    5,
 		FuelLimit:   6,
 		BodyHash:    RandomHash(t),
-		GridHash:    RandomHash(t),
+		GroupHash:   RandomHash(t),
 		Operator:    "operator",
 		ClusterID:   "cluster-ID",
 		Timestamp:   1,

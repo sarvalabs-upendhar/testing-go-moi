@@ -17,7 +17,7 @@ const (
 	NTQ             Prefix = 0x81
 	Tesseract       Prefix = 0x82
 	TesseractHeight Prefix = 0x83
-	IxLookup        Prefix = 0x84
+	TSGridLookup    Prefix = 0x84
 	Receipt         Prefix = 0x85
 
 	// Prefix MSB is unset for account based keys

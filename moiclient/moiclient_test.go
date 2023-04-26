@@ -609,7 +609,7 @@ func testInteractionReceipt(t *testing.T, client *Client) {
 			receiptArgs: &ptypes.ReceiptArgs{
 				Hash: tests.RandomHash(t),
 			},
-			expectedError: errors.New("receipt not found"),
+			expectedError: errors.New("grid hash not found"),
 		},
 	}
 

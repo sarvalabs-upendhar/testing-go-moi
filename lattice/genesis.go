@@ -4,6 +4,8 @@ import (
 	"github.com/sarvalabs/moichain/types"
 )
 
+const GenesisIdentifier = "genesis"
+
 type Genesis struct {
 	SargaAccount  AccountInfo    `json:"sarga_account"`
 	Accounts      []AccountInfo  `json:"accounts"`
@@ -77,9 +79,9 @@ func createGenesisTesseract(
 		FuelUsed:  0,
 		FuelLimit: 0,
 		BodyHash:  tsBodyHash,
-		GridHash:  types.NilHash,
-		ClusterID: "genesis",
-		Operator:  "genesis",
+		GroupHash: types.NilHash,
+		ClusterID: GenesisIdentifier,
+		Operator:  GenesisIdentifier,
 		Extra: types.CommitData{
 			CommitSignature: nil,
 			Round:           0,
