@@ -2,7 +2,6 @@ package lattice
 
 import (
 	"context"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"testing"
@@ -2277,7 +2276,6 @@ func TestParseGenesisFile(t *testing.T) {
 
 	dir, err := os.MkdirTemp(os.TempDir(), " ")
 	require.NoError(t, err)
-	file, err := ioutil.TempFile(dir, "contracts.json")
 
 	t.Cleanup(func() {
 		err = os.RemoveAll(dir)
@@ -2289,7 +2287,7 @@ func TestParseGenesisFile(t *testing.T) {
 		path              string
 		sargaAccount      AccountInfo
 		genesisAccounts   []AccountInfo
-		contractPaths     []ContractPath
+		genesisLogics     []GenesisLogic
 		invalidAccPayload bool
 		expectedError     error
 	}{
@@ -2328,16 +2326,16 @@ func TestParseGenesisFile(t *testing.T) {
 				getTestAccountWithAccType(t, types.RegularAccount),
 				getTestAccountWithAccType(t, types.LogicAccount),
 			},
-			contractPaths: generateTestContractPaths(t, file),
+			genesisLogics: generateTestGenesisLogics(t),
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			path := createMockGenesisFile(t, dir, test.invalidAccPayload, test.sargaAccount,
-				test.genesisAccounts, test.contractPaths)
+				test.genesisAccounts, test.genesisLogics)
 
-			sargaAccounts, genesisAccounts, contractPaths, err := c.ParseGenesisFile(path)
+			sargaAccount, genesisAccounts, genesisLogics, err := c.ParseGenesisFile(path)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -2345,15 +2343,16 @@ func TestParseGenesisFile(t *testing.T) {
 			}
 			require.NoError(t, err)
 
-			checkForAccountCreation(t, test.sargaAccount, sargaAccounts)
+			checkForAccountCreation(t, test.sargaAccount, sargaAccount)
 
 			for i, genesisAccount := range test.genesisAccounts {
 				checkForAccountCreation(t, genesisAccount, genesisAccounts[i]) // TODO: rename funcs
 			}
 
-			require.Equal(t, len(test.contractPaths), len(contractPaths))
-			t.Log(contractPaths)
-			validateContractPaths(t, test.contractPaths, contractPaths)
+			require.Equal(t, len(test.genesisLogics), len(genesisLogics))
+			t.Log(genesisLogics)
+
+			validateGenesisLogics(t, test.genesisLogics, genesisLogics)
 		})
 	}
 }
@@ -2423,7 +2422,7 @@ func TestSetupGenesis(t *testing.T) {
 
 			c := createTestChainManager(t, chainParams)
 
-			err = c.SetupGenesis(path, nil)
+			err = c.SetupGenesis(path)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -2496,13 +2495,14 @@ func TestSetupSargaAcc(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		sargaAcc      *gtypes.AccountSetupArgs
-		otherAccounts []*gtypes.AccountSetupArgs
+		sarga         *gtypes.AccountSetupArgs
+		accounts      []*gtypes.AccountSetupArgs
+		logics        []GenesisLogic
 		expectedError error
 	}{
 		{
 			name: "behavioural nodes and random nodes are empty",
-			sargaAcc: getAccountSetupArgs(t,
+			sarga: getAccountSetupArgs(t,
 				types.SargaAddress,
 				emptyNodes,
 				emptyNodes,
@@ -2514,7 +2514,7 @@ func TestSetupSargaAcc(t *testing.T) {
 		},
 		{
 			name: "invalid sarga account address",
-			sargaAcc: getAccountSetupArgs(t,
+			sarga: getAccountSetupArgs(t,
 				tests.RandomAddress(t),
 				emptyNodes,
 				emptyNodes,
@@ -2526,7 +2526,7 @@ func TestSetupSargaAcc(t *testing.T) {
 		},
 		{
 			name: "other accounts added to sarga account",
-			sargaAcc: getAccountSetupArgs(t,
+			sarga: getAccountSetupArgs(t,
 				types.SargaAddress,
 				nodes[:2],
 				nodes[2:4],
@@ -2534,7 +2534,7 @@ func TestSetupSargaAcc(t *testing.T) {
 				nil,
 				nil,
 			),
-			otherAccounts: []*gtypes.AccountSetupArgs{
+			accounts: []*gtypes.AccountSetupArgs{
 				getAccountSetupArgs(t,
 					tests.RandomAddress(t),
 					nodes[4:6],
@@ -2557,7 +2557,7 @@ func TestSetupSargaAcc(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			_, contextHash, err := cm.SetupSargaAccount(test.sargaAcc, test.otherAccounts)
+			_, contextHash, err := cm.SetupSargaAccount(test.sarga, test.accounts, test.logics)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -2570,7 +2570,7 @@ func TestSetupSargaAcc(t *testing.T) {
 
 			obj, _ := cm.sm.GetDirtyObject(types.SargaAddress)
 
-			checkSargaObjectAccounts(t, obj, test.otherAccounts)
+			checkSargaObjectAccounts(t, obj, test.accounts)
 		})
 	}
 }
@@ -2673,14 +2673,7 @@ func TestSetupNewAccount(t *testing.T) {
 }
 
 func TestExecuteGenesisContracts(t *testing.T) {
-	logicID, err := types.NewLogicIDv0(true, false, false,
-		false, 0, types.StakingContractAddr)
-	require.NoError(t, err)
-
-	dir, err := os.MkdirTemp(os.TempDir(), " ")
-	require.NoError(t, err)
-
-	file, err := ioutil.TempFile(dir, "contracts.json")
+	logicID, err := types.NewLogicIDv0(true, false, false, false, 0, types.StakingContractAddr)
 	require.NoError(t, err)
 
 	ids := tests.GetTestKramaIDs(t, 1)
@@ -2688,15 +2681,14 @@ func TestExecuteGenesisContracts(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		contractPaths []ContractPath
+		logics        []GenesisLogic
 		smCallBack    func(sm *MockStateManager)
 		expectedError string
 	}{
 		{
-			name: "invalid contract name",
-			contractPaths: []ContractPath{{
+			name: "invalid logic name",
+			logics: []GenesisLogic{{
 				Name:               "test",
-				Path:               file.Name(),
 				BehaviouralContext: nodes,
 			}},
 			smCallBack: func(sm *MockStateManager) {
@@ -2706,9 +2698,8 @@ func TestExecuteGenesisContracts(t *testing.T) {
 		},
 		{
 			name: "missing behaviour context",
-			contractPaths: []ContractPath{{
+			logics: []GenesisLogic{{
 				Name:               "staking-contract",
-				Path:               file.Name(),
 				BehaviouralContext: nil,
 			}},
 			smCallBack: func(sm *MockStateManager) {
@@ -2721,7 +2712,7 @@ func TestExecuteGenesisContracts(t *testing.T) {
 			smCallBack: func(sm *MockStateManager) {
 				sm.setAccType(logicID.Address(), types.LogicAccount)
 			},
-			contractPaths: generateTestContractPaths(t, file),
+			logics: generateTestGenesisLogics(t),
 		},
 	}
 
@@ -2734,9 +2725,8 @@ func TestExecuteGenesisContracts(t *testing.T) {
 			}
 
 			cm := createTestChainManager(t, chainParams)
-			exec := cm.exec.SpawnExecutor(9999)
+			_, err := cm.ExecuteGenesisLogics(test.logics)
 
-			_, err := cm.ExecuteGenesisContracts(test.contractPaths, exec)
 			if test.expectedError != "" {
 				require.ErrorContains(t, err, test.expectedError)
 

@@ -82,15 +82,19 @@ type FilePayload struct {
 }
 
 type LogicPayload struct {
-	// Logic specifies the Logic ID to execute a method on. Only required for Execute and Upgrade
+	// Logic specifies the Logic ID to execute a method on.
+	// Required for IxLogicInvoke, IxLogicInteract, IxLogicEnlist, IxLogicUpgrade
 	Logic LogicID
 
-	// Callsite specifies the method name to deploy and invoke. Only required for Execute
+	// Callsite specifies the method name to deploy and invoke.
+	// Required for IxLogicDeploy, IxLogicInvoke, IxLogicInteract, IxLogicEnlist
 	Callsite string
-	// Calldata specifies the input call data. Only required for invoke and deploy
+	// Calldata specifies the input call data.
+	// Required for IxLogicDeploy, IxLogicInvoke, IxLogicInteract, IxLogicEnlist
 	Calldata []byte
 
-	// Manifest specifies some Logic manifest artifact. Only required for deploy and upgrade
+	// Manifest specifies some Logic manifest artifact.
+	// Required for IxLogicDeploy, IxLogicUpgrade
 	Manifest []byte
 }
 

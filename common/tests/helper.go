@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"math/big"
 	"net"
@@ -767,18 +766,16 @@ func SignBytes(t *testing.T, msg []byte) (sigBytes, pk []byte) {
 	return sigBytes, pk
 }
 
-// ReadERC20Manifest Reads the ERC20 JSON Manifest and returns it as POLO encoded hex string
-func ReadERC20Manifest(t *testing.T, filePath string) []byte {
+// ReadManifest Reads the manifest file at the given
+// filepath and returns it as POLO encoded hex string
+func ReadManifest(t *testing.T, filePath string) []byte {
 	t.Helper()
-
-	// Read erc20.json manifest from jug/manifests
-	data, err := ioutil.ReadFile(filePath)
-	require.NoError(t, err)
 
 	// Register the PISA element registry with the EngineIO package
 	engineio.RegisterEngineRuntime(pisa.NewRuntime())
-	// Decode the JSON manifest into a Manifest object
-	manifest, err := engineio.NewManifest(data, engineio.JSON)
+
+	// Decode the manifest into a Manifest object
+	manifest, err := engineio.ReadManifestFile(filePath)
 	require.NoError(t, err)
 
 	// Encode the Manifest into POLO data

@@ -32,53 +32,62 @@ func (suite *PersonTestSuite) SetupSuite() {
 }
 
 func (suite *PersonTestSuite) TestGetNameOf() {
-	consumed, output := suite.Call("GetNameOf", map[string]any{
+	consumed, output, except := suite.Call("GetNameOf", map[string]any{
 		"person": map[string]any{"name": "Joe", "age": 40, "gender": "male"},
 	})
 	suite.Equal("Joe", output["name"])
-	suite.Equal(engineio.Fuel(70), consumed)
+	suite.Equal(engineio.Fuel(20), consumed)
+	suite.Nil(except)
 
-	consumed, output = suite.Call("GetNameOf", map[string]any{
+	consumed, output, except = suite.Call("GetNameOf", map[string]any{
 		"person": map[string]any{"name": "Marco"},
 	})
 	suite.Equal("Marco", output["name"])
-	suite.Equal(engineio.Fuel(70), consumed)
+	suite.Equal(engineio.Fuel(20), consumed)
+	suite.Nil(except)
 }
 
 func (suite *PersonTestSuite) TestDoubleAge() {
-	consumed, output := suite.Call("DoubleAge", map[string]any{
+	consumed, output, except := suite.Call("DoubleAge", map[string]any{
 		"person": map[string]any{"name": "Joe", "age": 40, "gender": "male"},
 	})
 	suite.Equal(map[string]any{"name": "Joe", "age": uint64(80), "gender": "male"}, output["person"])
-	suite.Equal(engineio.Fuel(115), consumed)
+	suite.Equal(engineio.Fuel(65), consumed)
+	suite.Nil(except)
 
-	consumed, output = suite.Call("DoubleAge", map[string]any{
+	consumed, output, except = suite.Call("DoubleAge", map[string]any{
 		"person": map[string]any{"name": "Marco", "age": 26},
 	})
 	suite.Equal(map[string]any{"name": "Marco", "age": uint64(52)}, output["person"])
-	suite.Equal(engineio.Fuel(115), consumed)
+	suite.Equal(engineio.Fuel(65), consumed)
+	suite.Nil(except)
 }
 
 func (suite *PersonTestSuite) TestPersonStorage() {
-	consumed, _ := suite.Call("StorePerson!", map[string]any{
+	consumed, _, except := suite.Call("StorePerson!", map[string]any{
 		"person": map[string]any{"name": "Joe", "age": 40, "gender": "male"},
 	})
-	suite.Equal(engineio.Fuel(235), consumed)
+	suite.Equal(engineio.Fuel(185), consumed)
+	suite.Nil(except)
 
-	consumed, output := suite.Call("GetPerson", map[string]any{"name": "Joe"})
+	consumed, output, except := suite.Call("GetPerson", map[string]any{"name": "Joe"})
 	suite.Equal(map[string]any{"name": "Joe", "age": uint64(40), "gender": "male"}, output["person"])
-	suite.Equal(engineio.Fuel(120), consumed)
+	suite.Equal(engineio.Fuel(70), consumed)
+	suite.Nil(except)
 
-	consumed, output = suite.Call("GetPerson", map[string]any{"name": "Marco"})
+	consumed, output, except = suite.Call("GetPerson", map[string]any{"name": "Marco"})
 	suite.Equal(map[string]any{}, output["person"])
-	suite.Equal(engineio.Fuel(120), consumed)
+	suite.Equal(engineio.Fuel(70), consumed)
+	suite.Nil(except)
 
-	consumed, _ = suite.Call("StorePerson!", map[string]any{
+	consumed, _, except = suite.Call("StorePerson!", map[string]any{
 		"person": map[string]any{"name": "Marco", "age": 26, "gender": "male"},
 	})
-	suite.Equal(engineio.Fuel(235), consumed)
+	suite.Equal(engineio.Fuel(185), consumed)
+	suite.Nil(except)
 
-	consumed, output = suite.Call("GetPerson", map[string]any{"name": "Marco"})
+	consumed, output, except = suite.Call("GetPerson", map[string]any{"name": "Marco"})
 	suite.Equal(map[string]any{"name": "Marco", "age": uint64(26), "gender": "male"}, output["person"])
-	suite.Equal(engineio.Fuel(120), consumed)
+	suite.Equal(engineio.Fuel(70), consumed)
+	suite.Nil(except)
 }

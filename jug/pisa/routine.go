@@ -2,83 +2,178 @@ package pisa
 
 import (
 	"github.com/sarvalabs/moichain/jug/engineio"
-	"github.com/sarvalabs/moichain/jug/pisa/exception"
-	"github.com/sarvalabs/moichain/jug/pisa/register"
 )
 
-// Routine represents an executable logic procedure
+// Runnable represents an object that can be executed.
+type Runnable interface {
+	name() string
+	callfields() CallFields
+	ptr() engineio.ElementPtr
+
+	run(*Engine, RegisterSet) (RegisterSet, *Exception)
+}
+
+// Routine represents an executable of PISA bytecode.
+// Implements the Runnable interface.
 type Routine struct {
+	// CallFields embeds the input and output
+	// symbols for the Routine calling interface.
+	CallFields
+
 	// Name represents the name of the routine
 	Name string
+	// Ptr represents the pointer reference of the routine
+	Ptr engineio.ElementPtr
 	// Kind represents the kind of routine callsite
 	Kind engineio.CallsiteKind
-
-	// CallFields contains the input/output symbols
-	// injected into the Routine when invoked/called.
-	engineio.CallFields
 
 	// Instructs represents the set of logic instructions to
 	// execute when the Routine is invoked/called.
 	Instructs Instructions
-
 	// catches represents the exception catch table specifying the
 	// exceptions to catch between code points and their handling
 	// Catches CatchTable
 }
 
-// Interface returns the input/output CallFields of the Routine.
-// Implements the register.Executable interface for Routine.
-func (routine Routine) Interface() engineio.CallFields { return routine.CallFields }
-
-// Execute performs the execution of the Routine within the provided ExecutionScope with the given input values.
-// Implements the register.Executable interface for Routine.
-func (routine Routine) Execute(scope register.ExecutionScope, inputs register.ValueTable) register.ValueTable {
-	// Perform input validation
-	if err := inputs.Validate(routine.Inputs); err != nil {
-		scope.Throw(exception.Exception(exception.InvalidInputs, err.Error()))
-
-		return nil
-	}
-
-	// This assertion must never fail
-	outerScope, ok := scope.(*CallScope)
-	if !ok {
-		panic("non routine scope used for routine execution")
-	}
-
-	// Create a child context for the routine and its inputs
-	innerScope := outerScope.child(routine, inputs)
-	// If an exception was thrown during child context creation, return
-	if outerScope.ExceptionThrown() {
-		return nil
-	}
-
-	// If an exception was thrown during routine execution,
-	// throw the exception in the parent context and return
-	if innerScope.run(); innerScope.ExceptionThrown() {
-		outerScope.Throw(innerScope.except)
-
-		return nil
-	}
-
-	// Perform output validation
-	if err := innerScope.outputs.Validate(routine.Outputs); err != nil {
-		outerScope.Throw(exception.Exception(exception.InvalidOutputs, err.Error()))
-
-		return nil
-	}
-
-	return innerScope.outputs
-}
-
-func (routine Routine) Exported() bool {
+func (routine Routine) exported() bool {
 	return isExportedName(routine.Name)
 }
 
-func (routine Routine) Mutable() bool {
+func (routine Routine) mutable() bool {
 	return isMutableName(routine.Name)
 }
 
-func (routine Routine) Payable() bool {
+func (routine Routine) payable() bool {
 	return isPayableName(routine.Name)
+}
+
+// name returns the name of the Routine.
+// Implements the Runnable interface for Routine & RoutineMethod.
+func (routine Routine) name() string { return routine.Name }
+
+// ptr returns the element pointer to the Routine.
+// Implements the Runnable interface for Routine & RoutineMethod.
+func (routine Routine) ptr() engineio.ElementPtr { return routine.Ptr }
+
+// callfields returns the input/output CallFields of the Routine.
+// Implements the Runnable interface for Routine & RoutineMethod.
+func (routine Routine) callfields() CallFields { return routine.CallFields }
+
+// run performs the execution of the Routine for the given engine and some input registers.
+// Implements the Runnable interface for Routine
+func (routine Routine) run(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+	if !engine.callstack.push(&callframe{
+		scope: "root",
+		label: routine.name(),
+		point: uint64(routine.ptr()),
+	}) {
+		return nil, exception(RuntimeError, engine.callstack.trace(), "max call depth reached")
+	}
+
+	defer engine.callstack.pop()
+
+	return engine.executeCode(routine.Instructs, inputs)
+}
+
+// RoutineMethod represents a method executable of PISA Bytecode
+// Implements the Runnable & Method interfaces.
+type RoutineMethod struct {
+	// Routine embeds all Routine properties
+	Routine
+	// Code represents the method code of the method
+	Code MethodCode
+	// Datatype represents the type that the method belongs to.
+	Datatype *Datatype
+}
+
+// code returns the method code of the RoutineMethod.
+// Implements the Method interface for RoutineMethod.
+func (rmethod RoutineMethod) code() MethodCode { return rmethod.Code }
+
+// datatype returns the Datatype of the RoutineMethod.
+// Implements the Method interface for RoutineMethod.
+func (rmethod RoutineMethod) datatype() *Datatype { return rmethod.Datatype }
+
+// run performs the execution of the RoutineMethod for the given engine and some input registers.
+// Implements the Runnable interface for RoutineMethod
+func (rmethod RoutineMethod) run(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+	if !engine.callstack.push(&callframe{
+		scope: rmethod.datatype().String(),
+		label: rmethod.name(),
+		point: uint64(rmethod.ptr()),
+	}) {
+		return nil, exception(RuntimeError, engine.callstack.trace(), "max call depth reached")
+	}
+
+	defer engine.callstack.pop()
+
+	return engine.executeCode(rmethod.Instructs, inputs)
+}
+
+// executeCode runs some instructions in the context of the engine with some given inputs.
+// Returns the output of executing the code and any exception that occurs.
+func (engine *Engine) executeCode(instructions Instructions, inputs RegisterSet) (RegisterSet, *Exception) {
+	var (
+		// Declare a program counter
+		pc = uint64(0)
+		// Create a new callscope
+		scope = &callscope{
+			engine:  engine,
+			inputs:  inputs,
+			outputs: make(RegisterSet),
+			memory:  make(RegisterSet),
+		}
+	)
+
+ExecutionLoop:
+	for pc < instructions.Len() {
+		// Get the current instruction
+		instruction := instructions[pc]
+		// Update the callstack with the current instruction
+		engine.callstack.inject(pc, instruction)
+
+		// Lookup the operation function for the instruction
+		operation := scope.engine.lookupInstruction(instruction.Op)
+		// Execute the operation
+		continuity := operation(scope, instruction.Args)
+		// Exhaust fuel for operation
+		if ok := scope.engine.exhaustFuel(continuity.fuel()); !ok {
+			return nil, exception(FuelError, engine.callstack.trace(), "fuel exhausted")
+		}
+
+		switch continuity.mode() {
+		case continueModeOk:
+			pc++
+
+		case continueModeTerm:
+			break ExecutionLoop
+
+		case continueModeJump:
+			jump := continuity.(continueJump) //nolint:forcetypeassert
+
+			// If attempting to jump out of bounds
+			if jump.jumpdest >= instructions.Len() {
+				// Throw an invalid jump exception
+				return nil, exception(RuntimeError, engine.callstack.trace(), "invalid jump: destination out of bounds")
+			}
+
+			// If jump destination is invalid
+			if instruction = instructions[jump.jumpdest]; instruction.Op != DEST {
+				// Throw an invalid jump exception
+				return nil, exception(RuntimeError, engine.callstack.trace(), "invalid jump destination")
+			}
+
+			// Update the program counter
+			pc = jump.jumpdest
+
+		case continueModeExcept:
+			except := continuity.(continueException) //nolint:forcetypeassert
+
+			// todo: check for exception handler with catch table
+
+			return nil, except.exception
+		}
+	}
+
+	return scope.outputs, nil
 }

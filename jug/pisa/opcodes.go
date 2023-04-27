@@ -84,7 +84,7 @@ const (
 	// CLEAR [1] Clear the value of register $X. The register is completely discarded.
 	// - CLEAR [$X]
 	CLEAR OpCode = 0x22
-	// SAME [3] Check if $Y and $Z have the same data and set to $X. Different from EQ.
+	// SAME [3] Check if $Y and $Z have the same datatype and set to $X
 	// - SAME [$X: bool][$Y][$Z]
 	SAME OpCode = 0x23
 	// COPY [2] Copy the value of register $Y to $X
@@ -157,6 +157,10 @@ const (
 	// ADDR [2] Converts $Y into its address form and sets it to $X. Call the method code 0x9 (__addr__)
 	// - ADDR [$X: address][$Y: __addr__]
 	ADDR OpCode = 0x49
+
+	// LEN [2] Get the len of register $X by calling the method code 0xA (__len__) and setting it to $Y
+	// - LEN [$X: U64][$Y: __len__]
+	LEN OpCode = 0x4A
 )
 
 // Collection & Class Handling Opcodes
@@ -333,6 +337,7 @@ var opCodeToString = map[OpCode]string{
 	BOOL: "BOOL",
 	STR:  "STR",
 	ADDR: "ADDR",
+	LEN:  "LEN",
 
 	SIZEOF: "SIZEOF",
 	GETFLD: "GETFLD",
@@ -434,6 +439,7 @@ var stringToOpCode = map[string]OpCode{
 	"BOOL": BOOL,
 	"STR":  STR,
 	"ADDR": ADDR,
+	"LEN":  LEN,
 
 	"SIZEOF": SIZEOF,
 	"GETFLD": GETFLD,
@@ -520,6 +526,7 @@ var opCodeToOperandCount = map[OpCode]int{
 	BOOL:     2,
 	STR:      2,
 	ADDR:     2,
+	LEN:      2,
 	SIZEOF:   2,
 	GETFLD:   3,
 	SETFLD:   3,

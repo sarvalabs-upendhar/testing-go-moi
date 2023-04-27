@@ -1,4 +1,4 @@
-package engineio
+package pisa
 
 import (
 	"reflect"
@@ -173,7 +173,7 @@ type mockClassdefProvider struct {
 	classdefs map[string]*Datatype
 }
 
-func (m mockClassdefProvider) GetClassdef(name string) (*Datatype, bool) {
+func (m mockClassdefProvider) GetClassDatatype(name string) (*Datatype, bool) {
 	class, ok := m.classdefs[name]
 
 	return class, ok

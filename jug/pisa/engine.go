@@ -7,33 +7,37 @@ import (
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/moichain/jug/engineio"
-	"github.com/sarvalabs/moichain/jug/pisa/exception"
-	"github.com/sarvalabs/moichain/jug/pisa/register"
 	"github.com/sarvalabs/moichain/types"
 )
 
 // Engine represents the execution engine for the PISA Virtual Machine.
 // It implements the engineio.EngineDriver interface.
 type Engine struct {
+	// runtime represents the runtime definitions for PISA
+	runtime *Runtime
+	// callstack represents the callstack of the engine
+	callstack callstack
 	// fueltank represents the fuel tank of the engine
 	fueltank *engineio.FuelTank
 
 	// logic represents the logic driver
 	logic engineio.LogicDriver
-	// ctx drivers
-	internal engineio.CtxDriver
-	// env driver
-	environment engineio.EnvDriver
-
-	// instructs represents the engine instruction set for PISA.
-	instructs InstructionSet
-	// builtins represents the methods for builtin types
-	builtins map[engineio.Primitive]register.MethodTable
-
 	// elements represents the decoded engineio.LogicElement cache
 	elements map[engineio.ElementPtr]any
 	// classes represents a name-map for classes to their element pointers
 	classes map[string]engineio.ElementPtr
+
+	// persistent ctx driver
+	persistent engineio.CtxDriver
+	// ephemeralS sender ctx driver
+	ephemeralS engineio.CtxDriver
+	// ephemeralR receiver ctx driver
+	ephemeralR engineio.CtxDriver //nolint:unused
+
+	// ixn driver
+	interaction *engineio.IxnObject
+	// env driver
+	environment engineio.EnvDriver
 }
 
 // Kind returns the engineio.EngineKind of the PISA
@@ -49,33 +53,54 @@ func (engine *Engine) Call(
 	ixn *engineio.IxnObject,
 	participants ...engineio.CtxDriver,
 ) *engineio.CallResult {
+	engine.callstack.push(&callframe{scope: "root", label: "start"})
+	defer engine.callstack.pop()
+
 	// Get the callsite information from the logic and verify that it exists
 	callsite, ok := engine.logic.GetCallsite(ixn.Callsite())
 	if !ok {
-		return engine.Errorf(exception.InvalidCallsite, "callsite '%v' does not exist", ixn.Callsite())
+		return engine.ErrResult(exceptionf(InitError, engine.callstack.trace(),
+			"callsite '%v' does not exist", ixn.Callsite(),
+		))
 	}
+
+	engine.interaction = ixn
 
 	switch callsite.Kind {
 	case engineio.InvokableCallsite:
 		if ixn.IxType() != types.IxLogicInvoke {
-			return engine.Errorf(exception.InvalidIxnCtx, "invokable callsite cannot be called with IxLogicInvoke")
+			return engine.ErrResult(exception(InitError, engine.callstack.trace(),
+				"invokable callsite cannot be called without IxLogicInvoke",
+			))
 		}
 
 		if len(participants) != 1 {
-			return engine.Errorf(exception.InvalidIxnCtx, "invokable call has insufficient context drivers (must have 1)")
+			return engine.ErrResult(exception(InitError, engine.callstack.trace(),
+				"insufficient context drivers for invokable call (needs 1)",
+			))
 		}
+
+		engine.ephemeralS = participants[0]
 
 	case engineio.DeployerCallsite:
 		if ixn.IxType() != types.IxLogicDeploy {
-			return engine.Errorf(exception.InvalidIxnCtx, "deployer callsite cannot be called with IxLogicDeploy")
+			return engine.ErrResult(exception(InitError, engine.callstack.trace(),
+				"deployed callsite cannot be called without IxLogicDeploy",
+			))
 		}
 
 		if len(participants) != 1 {
-			return engine.Errorf(exception.InvalidIxnCtx, "deployer call has insufficient context drivers (must have 1)")
+			return engine.ErrResult(exception(InitError, engine.callstack.trace(),
+				"insufficient context drivers for deployer call (needs 1)",
+			))
 		}
 
+		engine.ephemeralS = participants[0]
+
 	default:
-		return engine.Errorf(exception.InvalidCallsite, "unsupported callsite kind '%v'", callsite.Kind)
+		return engine.ErrResult(exceptionf(InitError, engine.callstack.trace(),
+			"unsupported callsite kind '%v'", callsite.Kind,
+		))
 	}
 
 	// Generate a set of pointer to load (the callsite pointer and its dependencies)
@@ -85,43 +110,45 @@ func (engine *Engine) Call(
 		// Retrieve the LogicElement from the Logic
 		element, ok := engine.logic.GetElement(ptr)
 		if !ok {
-			return engine.Errorf(exception.ElementNotFound, "element %#x not found", ptr)
+			return engine.ErrResult(exceptionf(InitError, engine.callstack.trace(), "element %#x not found", ptr))
 		}
 
 		// Load the LogicElement into the Engine
 		if err := engine.loadLogicElement(ptr, element); err != nil {
-			return engine.Errorf(exception.ElementMalformed, "element %#x not decoded: %v", ptr, err)
+			return engine.ErrResult(exceptionf(InitError, engine.callstack.trace(),
+				"element %#x malformed: %v", ptr, err,
+			))
 		}
-	}
-
-	// Exhaust fuel for execution setup
-	if !engine.ConsumeFuel(50) {
-		return engine.Error(exception.FuelExhausted, "fuel depleted after execution setup")
 	}
 
 	// Get the invokable Routine from the engine
 	routine, err := engine.GetRoutine(callsite.Ptr)
 	if err != nil {
-		return engine.Errorf(exception.ElementNotFound, "routine not found for callsite: %v", err)
+		return engine.ErrResult(exceptionf(InitError, engine.callstack.trace(),
+			"routine not found for callsite: %v", err,
+		))
 	}
 
-	// Convert the input Calldata into a RegisterTable
-	inputs, err := register.NewValueTable(routine.Inputs, ixn.Calldata())
+	calldata := make(polo.Document)
+	// Decode the payload calldata into a polo.Document
+	if ixn.Calldata() != nil {
+		if err = polo.Depolorize(&calldata, ixn.Calldata()); err != nil {
+			return engine.ErrResult(exceptionf(InitError, engine.callstack.trace(),
+				"could not decode calldata into polo document: %v", err,
+			))
+		}
+	}
+
+	// Convert the input Calldata into a RegisterSet
+	inputs, err := NewRegisterSet(routine.Inputs, calldata)
 	if err != nil {
-		return engine.Errorf(exception.InvalidInputs, "%v", err)
+		return engine.ErrResult(exceptionf(InitError, engine.callstack.trace(), "invalid inputs: %v", err))
 	}
 
-	// Create a runtime root and execute the routine with it
-	root, err := Root(engine, ixn, engine.internal, participants...)
-	if err != nil {
-		return engine.Errorf(exception.InvalidIxnCtx, "%v", err)
-	}
-
-	// Perform the execution
-	result := routine.Execute(root, inputs)
-	// Check if an exception was thrown
-	if root.ExceptionThrown() {
-		return engine.ErrorException(root.GetException())
+	// Run the routine and return the error result
+	result, except := engine.run(routine, inputs)
+	if except != nil {
+		return engine.ErrResult(except)
 	}
 
 	// Convert the output RegisterTable into polo.Document
@@ -133,56 +160,57 @@ func (engine *Engine) Call(
 		}
 	}
 
-	return engine.Result(outputs)
+	return engine.OkResult(outputs)
 }
 
-// Error returns an engineio.CallResult for some exception.Code and error Message.
-// The result contains the consumed fuel and the given exception.Code and Message.
-func (engine Engine) Error(kind exception.Code, data string) *engineio.CallResult {
-	return engine.ErrorException(exception.Exception(kind, data))
-}
-
-// Errorf returns an engineio.CallResult for some exception.Code and error message (with formatting).
-// The result contains the consumed fuel and the given exception.Code and Message.
-func (engine Engine) Errorf(kind exception.Code, format string, a ...any) *engineio.CallResult {
-	return engine.ErrorException(exception.Exceptionf(kind, format, a...))
-}
-
-// ErrorException returns an engineio.CallResult for some exception.Object.
-// The result contains the consumed fuel and the given ErrorCode and Message.
-func (engine Engine) ErrorException(except *exception.Object) *engineio.CallResult {
+// ErrResult returns an engineio.CallResult for some Exception.
+// The result contains the consumed fuel and the polo-encoded exception object
+func (engine Engine) ErrResult(except *Exception) *engineio.CallResult {
 	return &engineio.CallResult{
-		Fuel:       engine.fueltank.Consumed,
-		ErrCode:    uint64(except.Code),
-		ErrMessage: except.String(),
+		Consumed: engine.fueltank.Consumed,
+		Error:    except.Bytes(),
 	}
 }
 
-// Result returns an ExecutionResult for some given ExecutionValues.
-// The result contains the consumed fuel, generated logs and the ErrorCodeOk.
-func (engine Engine) Result(values polo.Document) *engineio.CallResult {
+// OkResult returns an engineio.CallResult for some given polo.Document output.
+// The result contains the consumed fuel and output values as doc-encoded bytes
+func (engine Engine) OkResult(values polo.Document) *engineio.CallResult {
 	return &engineio.CallResult{
-		Fuel:    engine.fueltank.Consumed,
-		ErrCode: uint64(exception.Ok),
-		Outputs: values,
+		Consumed: engine.fueltank.Consumed,
+		Outputs:  values.Bytes(),
 	}
 }
 
-func (engine Engine) FuelConsumed() engineio.Fuel {
-	return engine.fueltank.Consumed
+func (engine *Engine) run(runnable Runnable, inputs RegisterSet) (RegisterSet, *Exception) {
+	// Perform input validation
+	if err := inputs.Validate(runnable.callfields().Inputs); err != nil {
+		return nil, exceptionf(CallError, engine.callstack.trace(), "invalid inputs: %v", err)
+	}
+
+	outputs, except := runnable.run(engine, inputs)
+	if except != nil {
+		return nil, except
+	}
+
+	// Perform output validation
+	if err := outputs.Validate(runnable.callfields().Outputs); err != nil {
+		return nil, exceptionf(CallError, engine.callstack.trace(), "invalid outputs: %v", err)
+	}
+
+	return outputs, nil
 }
 
-func (engine *Engine) ConsumeFuel(fuel engineio.Fuel) bool {
+func (engine *Engine) exhaustFuel(fuel engineio.Fuel) bool {
 	return engine.fueltank.Exhaust(fuel)
 }
 
-func (engine Engine) GetInstruction(opcode OpCode) InstructOperation {
-	return engine.instructs[opcode]
+func (engine Engine) lookupInstruction(opcode OpCode) InstructionFunc {
+	return engine.runtime.instructs[opcode]
 }
 
-func (engine *Engine) GetTypeMethod(datatype *engineio.Datatype, mtcode register.MethodCode) (register.Method, bool) {
-	if datatype.Kind == engineio.PrimitiveType {
-		if methods, ok := engine.builtins[datatype.Prim]; ok {
+func (engine *Engine) lookupMethod(dt *Datatype, mtcode MethodCode) (Method, bool) {
+	if dt.Kind == PrimitiveType {
+		if methods, ok := engine.runtime.bmethods[dt.Prim]; ok {
 			if method := methods[mtcode]; method != nil {
 				return method, true
 			}
@@ -192,9 +220,9 @@ func (engine *Engine) GetTypeMethod(datatype *engineio.Datatype, mtcode register
 	return nil, false
 }
 
-func (engine *Engine) GetTypedef(ptr engineio.ElementPtr) (*engineio.Datatype, error) {
+func (engine *Engine) GetTypedef(ptr engineio.ElementPtr) (*Datatype, error) {
 	if item, cached := engine.elements[ptr]; cached {
-		routine, _ := item.(*engineio.Datatype)
+		routine, _ := item.(*Datatype)
 
 		return routine, nil
 	}
@@ -204,7 +232,7 @@ func (engine *Engine) GetTypedef(ptr engineio.ElementPtr) (*engineio.Datatype, e
 		return nil, errors.Errorf("could not find element at %#x", ptr)
 	}
 
-	typedef := new(engineio.Datatype)
+	typedef := new(Datatype)
 	if err := polo.Depolorize(typedef, element.Data); err != nil {
 		return nil, err
 	}
@@ -214,9 +242,9 @@ func (engine *Engine) GetTypedef(ptr engineio.ElementPtr) (*engineio.Datatype, e
 	return typedef, nil
 }
 
-func (engine *Engine) GetConstant(ptr engineio.ElementPtr) (*register.Constant, error) {
+func (engine *Engine) GetConstant(ptr engineio.ElementPtr) (*Constant, error) {
 	if item, cached := engine.elements[ptr]; cached {
-		routine, _ := item.(*register.Constant)
+		routine, _ := item.(*Constant)
 
 		return routine, nil
 	}
@@ -226,7 +254,7 @@ func (engine *Engine) GetConstant(ptr engineio.ElementPtr) (*register.Constant, 
 		return nil, errors.Errorf("could not find element at %#x", ptr)
 	}
 
-	constant := new(register.Constant)
+	constant := new(Constant)
 	if err := polo.Depolorize(constant, element.Data); err != nil {
 		return nil, err
 	}
@@ -258,7 +286,7 @@ func (engine *Engine) GetRoutine(ptr engineio.ElementPtr) (*Routine, error) {
 	return routine, nil
 }
 
-func (engine *Engine) GetStateFields(kind engineio.ContextStateKind) (*engineio.StateFields, error) {
+func (engine *Engine) GetStateFields(kind engineio.ContextStateKind) (*StateFields, error) {
 	var (
 		ptr engineio.ElementPtr
 		ok  bool
@@ -282,7 +310,7 @@ func (engine *Engine) GetStateFields(kind engineio.ContextStateKind) (*engineio.
 	}
 
 	if item, cached := engine.elements[ptr]; cached {
-		state, _ := item.(*engineio.StateFields)
+		state, _ := item.(*StateFields)
 
 		return state, nil
 	}
@@ -292,7 +320,7 @@ func (engine *Engine) GetStateFields(kind engineio.ContextStateKind) (*engineio.
 		return nil, errors.Errorf("could not find element at %#x", ptr)
 	}
 
-	state := new(engineio.StateFields)
+	state := new(StateFields)
 	if err := polo.Depolorize(state, element.Data); err != nil {
 		return nil, err
 	}
@@ -319,7 +347,7 @@ func (engine *Engine) loadLogicElement(ptr engineio.ElementPtr, element *enginei
 		engine.elements[ptr] = routine
 
 	case StateElement:
-		state := new(engineio.StateFields)
+		state := new(StateFields)
 		if err := polo.Depolorize(state, element.Data); err != nil {
 			return err
 		}
@@ -327,7 +355,7 @@ func (engine *Engine) loadLogicElement(ptr engineio.ElementPtr, element *enginei
 		engine.elements[ptr] = state
 
 	case ClassElement:
-		class := new(engineio.Datatype)
+		class := new(Datatype)
 		if err := polo.Depolorize(class, element.Data); err != nil {
 			return err
 		}
@@ -335,7 +363,7 @@ func (engine *Engine) loadLogicElement(ptr engineio.ElementPtr, element *enginei
 		engine.elements[ptr] = class
 
 	case TypedefElement:
-		typedef := new(engineio.Datatype)
+		typedef := new(Datatype)
 		if err := polo.Depolorize(typedef, element.Data); err != nil {
 			return err
 		}
@@ -343,7 +371,7 @@ func (engine *Engine) loadLogicElement(ptr engineio.ElementPtr, element *enginei
 		engine.elements[ptr] = typedef
 
 	case ConstantElement:
-		constant := new(register.Constant)
+		constant := new(Constant)
 		if err := polo.Depolorize(constant, element.Data); err != nil {
 			return err
 		}

@@ -1,15 +1,16 @@
 package lattice
 
 import (
+	"github.com/sarvalabs/moichain/common/hexutil"
 	"github.com/sarvalabs/moichain/types"
 )
 
 const GenesisIdentifier = "genesis"
 
 type Genesis struct {
-	SargaAccount  AccountInfo    `json:"sarga_account"`
-	Accounts      []AccountInfo  `json:"accounts"`
-	ContractPaths []ContractPath `json:"contract_paths"`
+	SargaAccount AccountInfo    `json:"sarga_account"`
+	Accounts     []AccountInfo  `json:"accounts"`
+	Logics       []GenesisLogic `json:"logics"`
 }
 
 type AccountInfo struct {
@@ -40,9 +41,12 @@ type BalanceInfo struct {
 	Amount  int64  `json:"balance"`
 }
 
-type ContractPath struct {
-	Name               string   `json:"name"`
-	Path               string   `json:"path"`
+type GenesisLogic struct {
+	Name     string        `json:"name"`
+	Callsite string        `json:"callsite"`
+	Calldata hexutil.Bytes `json:"calldata"`
+	Manifest hexutil.Bytes `json:"manifest"`
+
 	BehaviouralContext []string `json:"behaviour_context"`
 	RandomContext      []string `json:"random_context"`
 }

@@ -35,7 +35,7 @@ type LogicDriver interface {
 	// GetCallsite returns Callsite for a given string name with confirmation of its existence.
 	GetCallsite(string) (*Callsite, bool)
 	// GetClassdef returns class Datatype for a given string name with confirmation of its existence.
-	GetClassdef(string) (*Datatype, bool)
+	GetClassdef(string) (*Classdef, bool)
 }
 
 // LogicDescriptor represents an object that describes the internal
@@ -51,7 +51,7 @@ type LogicDescriptor struct {
 	Elements map[ElementPtr]*LogicElement
 
 	Callsites map[string]*Callsite
-	Classdefs map[string]*Datatype
+	Classdefs map[string]*Classdef
 }
 
 type (

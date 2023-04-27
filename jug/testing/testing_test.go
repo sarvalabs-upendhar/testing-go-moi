@@ -75,14 +75,14 @@ func (suite *LogicTestSuite) Deploy(ixn *engineio.IxnObject) engineio.Fuel {
 
 	// Execute the deployer function
 	result := executor.Call(context.Background(), ixn, nil)
-	if result.ErrCode != 0 {
-		suite.T().Fatalf("Initialise Failed! Error: [%v] %v\n", result.ErrCode, result.ErrMessage)
+	if !result.Ok() {
+		suite.T().Fatalf("Initialise Failed! Error: %#x\n", result.Error)
 	}
 
-	return result.Fuel
+	return result.Consumed
 }
 
-func (suite *LogicTestSuite) Call(callsite string, inputs map[string]any) (engineio.Fuel, map[string]any) {
+func (suite *LogicTestSuite) Call(callsite string, inputs map[string]any) (engineio.Fuel, map[string]any, []byte) {
 	ixn, encoder, err := suite.EncodeInputs(callsite, inputs)
 	if err != nil {
 		suite.T().Fatalf("Invalid Call: %v", err)
@@ -104,15 +104,15 @@ func (suite *LogicTestSuite) Run(ixn *engineio.IxnObject) *engineio.CallResult {
 }
 
 func (suite *LogicTestSuite) DecodeOutputs(result *engineio.CallResult, encoder engineio.CallEncoder) (
-	engineio.Fuel, map[string]any,
+	engineio.Fuel, map[string]any, []byte,
 ) {
 	// Check if the result is Ok
 	if !result.Ok() {
-		suite.T().Fatalf("Execute Failed | Error: [%v] %v", result.ErrCode, result.ErrMessage)
+		return result.Consumed, nil, result.Error
 	}
 
 	if len(result.Outputs) == 0 {
-		return result.Fuel, make(map[string]any)
+		return result.Consumed, make(map[string]any), nil
 	}
 
 	decoded, err := encoder.DecodeOutputs(result.Outputs)
@@ -120,7 +120,7 @@ func (suite *LogicTestSuite) DecodeOutputs(result *engineio.CallResult, encoder 
 		suite.T().Fatalf("Failed to Decode Outputs: %v", err)
 	}
 
-	return result.Fuel, decoded
+	return result.Consumed, decoded, nil
 }
 
 func (suite *LogicTestSuite) EncodeInputs(callsite string, inputs map[string]any) (
@@ -137,7 +137,7 @@ func (suite *LogicTestSuite) EncodeInputs(callsite string, inputs map[string]any
 	}
 
 	if len(inputs) == 0 {
-		return engineio.NewIxnObject(types.IxLogicInvoke, callsite, make(polo.Document)), encoder, nil
+		return engineio.NewIxnObject(types.IxLogicInvoke, callsite, nil), encoder, nil
 	}
 
 	calldata, err := encoder.EncodeInputs(inputs, nil)
@@ -331,4 +331,12 @@ func randomAddress() types.Address {
 	_, _ = rand.Read(address)
 
 	return types.BytesToAddress(address)
+}
+
+func must[T any](object T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+
+	return object
 }

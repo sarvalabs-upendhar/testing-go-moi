@@ -1,4 +1,4 @@
-package testing
+package pisa
 
 import (
 	"testing"
@@ -7,29 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/jug/engineio"
-	"github.com/sarvalabs/moichain/jug/pisa"
 )
-
-func makefields(fields []*engineio.TypeField) *engineio.TypeFields {
-	// Ensure that there are less than 256 field expressions
-	// This is an internal call so, is alright to panic
-	if len(fields) > 256 {
-		panic("cannot have more than 256 fields for FieldTable")
-	}
-
-	// Create a blank field table
-	table := &engineio.TypeFields{
-		Table:   make(map[uint8]*engineio.TypeField, len(fields)),
-		Symbols: make(map[string]uint8, len(fields)),
-	}
-
-	for position, field := range fields {
-		table.Table[uint8(position)] = field
-		table.Symbols[field.Name] = uint8(position)
-	}
-
-	return table
-}
 
 type mockRefProvider map[string]any
 
@@ -41,20 +19,20 @@ func (m mockRefProvider) GetReference(ref engineio.ReferenceVal) (any, bool) {
 
 func TestCallEncoder_EncodeInputs(t *testing.T) {
 	tests := []struct {
-		fields  *engineio.TypeFields
+		fields  *TypeFields
 		inputs  map[string]any
-		encoded polo.Document
+		encoded []byte
 		refs    engineio.ReferenceProvider
 		err     string
 	}{
 		{
-			makefields([]*engineio.TypeField{
-				{Name: "a", Type: engineio.TypeString},
-				{Name: "b", Type: engineio.TypeI64},
-				{Name: "c", Type: engineio.TypeBool},
-				{Name: "d", Type: engineio.TypeBytes},
-				{Name: "e", Type: engineio.NewVarrayType(engineio.TypeU64)},
-				{Name: "f", Type: engineio.NewMappingType(engineio.PrimitiveString, engineio.TypeString)},
+			makefields([]*TypeField{
+				{Name: "a", Type: TypeString},
+				{Name: "b", Type: TypeI64},
+				{Name: "c", Type: TypeBool},
+				{Name: "d", Type: TypeBytes},
+				{Name: "e", Type: NewVarrayType(TypeU64)},
+				{Name: "f", Type: NewMappingType(PrimitiveString, TypeString)},
 			}),
 			map[string]any{
 				"a": "hello",
@@ -71,15 +49,15 @@ func TestCallEncoder_EncodeInputs(t *testing.T) {
 				"d": polo.Raw{6, 171, 193, 35},
 				"e": polo.Raw{14, 47, 3, 19, 123, 1, 200},
 				"f": polo.Raw{14, 79, 6, 22, 70, 86, 97, 102, 111, 111, 98, 98, 97, 114},
-			},
+			}.Bytes(),
 			nil,
 			"",
 		},
 
 		{
-			makefields([]*engineio.TypeField{
-				{Name: "a", Type: engineio.TypeString},
-				{Name: "b", Type: engineio.NewVarrayType(engineio.TypeU64)},
+			makefields([]*TypeField{
+				{Name: "a", Type: TypeString},
+				{Name: "b", Type: NewVarrayType(TypeU64)},
 			}),
 			map[string]any{
 				"a": "hello",
@@ -91,33 +69,33 @@ func TestCallEncoder_EncodeInputs(t *testing.T) {
 		},
 
 		{
-			makefields([]*engineio.TypeField{
-				{Name: "a", Type: engineio.NewMappingType(engineio.PrimitiveString, engineio.TypeString)},
+			makefields([]*TypeField{
+				{Name: "a", Type: NewMappingType(PrimitiveString, TypeString)},
 			}),
 			map[string]any{
 				"a": map[any]any{"foo": "bar", "boo": "far"},
 			},
 			polo.Document{
 				"a": polo.Raw{14, 95, 6, 54, 102, 150, 1, 98, 111, 111, 102, 97, 114, 102, 111, 111, 98, 97, 114},
-			},
+			}.Bytes(),
 			nil,
 			"",
 		},
 
 		{
-			makefields([]*engineio.TypeField{{Name: "a", Type: engineio.TypeString}}),
+			makefields([]*TypeField{{Name: "a", Type: TypeString}}),
 			map[string]any{
 				"a": engineio.ReferenceVal("clone-data"),
 			},
 			polo.Document{
 				"a": polo.Raw{6, 111, 114, 105, 103, 105, 110, 97, 108, 45, 100, 97, 116, 97},
-			},
+			}.Bytes(),
 			mockRefProvider{"clone-data": "original-data"},
 			"",
 		},
 
 		{
-			makefields([]*engineio.TypeField{{Name: "a", Type: engineio.TypeString}}),
+			makefields([]*TypeField{{Name: "a", Type: TypeString}}),
 			map[string]any{
 				"a": engineio.ReferenceVal("clone-data"),
 			},
@@ -127,7 +105,7 @@ func TestCallEncoder_EncodeInputs(t *testing.T) {
 		},
 
 		{
-			makefields([]*engineio.TypeField{{Name: "a", Type: engineio.TypeString}}),
+			makefields([]*TypeField{{Name: "a", Type: TypeString}}),
 			map[string]any{
 				"a": engineio.ReferenceVal("clone-data"),
 			},
@@ -135,10 +113,41 @@ func TestCallEncoder_EncodeInputs(t *testing.T) {
 			nil,
 			"invalid input data for 'a': encountered reference value without a ref provider",
 		},
+
+		{
+			makefields([]*TypeField{{Name: "a", Type: TypeString}}),
+			nil,
+			nil,
+			nil,
+			"",
+		},
+
+		{
+			makefields([]*TypeField{
+				{Name: "foo", Type: NewClassType("MyClass", makefields([]*TypeField{
+					{Name: "a", Type: TypeString},
+					{Name: "b", Type: TypeI64},
+				}))},
+			}),
+			map[string]any{
+				"foo": map[string]any{
+					"a": "hello",
+					"b": 345,
+				},
+			},
+			polo.Document{
+				"foo": polo.Document{
+					"a": must(polo.Polorize("hello")),
+					"b": must(polo.Polorize(345)),
+				}.Bytes(),
+			}.Bytes(),
+			nil,
+			"",
+		},
 	}
 
 	for _, test := range tests {
-		callEncoder := pisa.CallEncoder(engineio.CallFields{Inputs: test.fields})
+		callEncoder := CallEncoder(CallFields{Inputs: test.fields})
 
 		doc, err := callEncoder.EncodeInputs(test.inputs, test.refs)
 		require.Equal(t, test.encoded, doc)
@@ -153,19 +162,19 @@ func TestCallEncoder_EncodeInputs(t *testing.T) {
 
 func TestCallEncoder_DecodeOutputs(t *testing.T) {
 	tests := []struct {
-		fields  *engineio.TypeFields
-		outputs polo.Document
+		fields  *TypeFields
+		outputs []byte
 		decoded map[string]any
 		err     string
 	}{
 		{
-			makefields([]*engineio.TypeField{
-				{Name: "a", Type: engineio.TypeString},
-				{Name: "b", Type: engineio.TypeI64},
-				{Name: "c", Type: engineio.TypeBool},
-				{Name: "d", Type: engineio.TypeBytes},
-				{Name: "e", Type: engineio.NewVarrayType(engineio.TypeU64)},
-				{Name: "f", Type: engineio.NewMappingType(engineio.PrimitiveString, engineio.TypeString)},
+			makefields([]*TypeField{
+				{Name: "a", Type: TypeString},
+				{Name: "b", Type: TypeI64},
+				{Name: "c", Type: TypeBool},
+				{Name: "d", Type: TypeBytes},
+				{Name: "e", Type: NewVarrayType(TypeU64)},
+				{Name: "f", Type: NewMappingType(PrimitiveString, TypeString)},
 			}),
 			polo.Document{
 				"a": polo.Raw{6, 104, 101, 108, 108, 111},
@@ -174,7 +183,7 @@ func TestCallEncoder_DecodeOutputs(t *testing.T) {
 				"d": polo.Raw{6, 171, 193, 35},
 				"e": polo.Raw{14, 47, 3, 19, 123, 1, 200},
 				"f": polo.Raw{14, 79, 6, 22, 70, 86, 97, 102, 111, 111, 98, 98, 97, 114},
-			},
+			}.Bytes(),
 			map[string]any{
 				"a": "hello",
 				"b": int64(-789),
@@ -187,22 +196,32 @@ func TestCallEncoder_DecodeOutputs(t *testing.T) {
 		},
 
 		{
-			makefields([]*engineio.TypeField{
-				{Name: "a", Type: engineio.TypeString},
-				{Name: "b", Type: engineio.NewVarrayType(engineio.TypeU64)},
+			makefields([]*TypeField{
+				{Name: "a", Type: TypeString},
+				{Name: "b", Type: NewVarrayType(TypeU64)},
 			}),
 			polo.Document{
 				"a": polo.Raw{6, 104, 101, 108, 108, 111},
 				"b": polo.Raw{4, 3, 21},
-			},
+			}.Bytes(),
 			nil,
 			"invalid output data for 'b': incompatible wire: unexpected wiretype 'negint'. " +
 				"expected one of: {null, pack, document}",
 		},
+
+		{
+			makefields([]*TypeField{
+				{Name: "a", Type: TypeString},
+				{Name: "b", Type: NewVarrayType(TypeU64)},
+			}),
+			nil,
+			nil,
+			"",
+		},
 	}
 
 	for _, test := range tests {
-		callEncoder := pisa.CallEncoder(engineio.CallFields{Outputs: test.fields})
+		callEncoder := CallEncoder(CallFields{Outputs: test.fields})
 
 		doc, err := callEncoder.DecodeOutputs(test.outputs)
 		require.Equal(t, test.decoded, doc)

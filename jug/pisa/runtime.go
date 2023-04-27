@@ -7,7 +7,6 @@ import (
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/moichain/jug/engineio"
-	"github.com/sarvalabs/moichain/jug/pisa/register"
 	"github.com/sarvalabs/moichain/types"
 )
 
@@ -16,7 +15,8 @@ import (
 // of recomputing them each time. Implements the engineio.EngineFactory interface.
 type Runtime struct {
 	instructs InstructionSet
-	builtins  map[engineio.Primitive]register.MethodTable
+	builtins  map[uint64]*Builtin
+	bmethods  map[Primitive][256]*BuiltinMethod
 }
 
 // NewRuntime generates a new Runtime instance that can be
@@ -24,13 +24,14 @@ type Runtime struct {
 func NewRuntime() Runtime {
 	return Runtime{
 		instructs: BaseInstructionSet(),
-		builtins: map[engineio.Primitive]register.MethodTable{
-			engineio.PrimitiveBool:    register.BoolMethods(),
-			engineio.PrimitiveBytes:   register.BytesMethods(),
-			engineio.PrimitiveString:  register.StringMethods(),
-			engineio.PrimitiveU64:     register.U64Methods(),
-			engineio.PrimitiveI64:     register.I64Methods(),
-			engineio.PrimitiveAddress: register.AddressMethods(),
+		builtins:  map[uint64]*Builtin{},
+		bmethods: map[Primitive][256]*BuiltinMethod{
+			PrimitiveBool:    methodsBool(),
+			PrimitiveBytes:   methodsBytes(),
+			PrimitiveString:  methodsString(),
+			PrimitiveU64:     methodsU64(),
+			PrimitiveI64:     methodsI64(),
+			PrimitiveAddress: methodsAddress(),
 		},
 	}
 }
@@ -45,7 +46,7 @@ func (runtime Runtime) Kind() engineio.EngineKind { return engineio.PISA }
 func (runtime Runtime) SpawnEngine(
 	fuel engineio.Fuel,
 	logic engineio.LogicDriver,
-	ctx engineio.CtxDriver,
+	state engineio.CtxDriver,
 	env engineio.EnvDriver,
 ) (
 	engineio.Engine, error,
@@ -56,26 +57,26 @@ func (runtime Runtime) SpawnEngine(
 	}
 
 	// Check logic driver's logic ID and its context's logic ID.
-	if !bytes.Equal(logic.LogicID(), ctx.LogicID()) {
+	if !bytes.Equal(logic.LogicID(), state.LogicID()) {
 		return nil, errors.New("incompatible context driver for logic: logic ID is not equal")
 	}
 
 	// Check the logic driver and context driver's addresses
-	if logic.LogicID().Address().Hex() != ctx.Address().Hex() {
+	if logic.LogicID().Address().Hex() != state.Address().Hex() {
 		return nil, errors.New("incompatible context driver for logic: address does not match")
 	}
 
 	return &Engine{
-		environment: env,
-		logic:       logic,
-		internal:    ctx,
+		runtime:   &runtime,
+		callstack: make(callstack, 0),
+		fueltank:  engineio.NewFuelTank(fuel),
 
-		instructs: runtime.instructs,
-		builtins:  runtime.builtins,
-
+		logic:    logic,
 		classes:  make(map[string]engineio.ElementPtr),
 		elements: make(map[engineio.ElementPtr]any),
-		fueltank: engineio.NewFuelTank(fuel),
+
+		persistent:  state,
+		environment: env,
 	}, nil
 }
 
@@ -152,8 +153,16 @@ func (runtime Runtime) ValidateCalldata(logic engineio.LogicDriver, ixn *enginei
 		return errors.Wrap(err, "could not decode element into routine")
 	}
 
-	// Convert the input Calldata into a ValueTable
-	if _, err := register.NewValueTable(routine.Inputs, ixn.Calldata()); err != nil {
+	calldata := make(polo.Document)
+	// Decode the payload calldata into a polo.Document
+	if ixn.Calldata() != nil {
+		if err := polo.Depolorize(&calldata, ixn.Calldata()); err != nil {
+			return errors.Wrap(err, "could not decode calldata into polo document")
+		}
+	}
+
+	// Convert the input Calldata into a RegisterSet confirming
+	if _, err := NewRegisterSet(routine.Inputs, calldata); err != nil {
 		return errors.Errorf("invalid calldata for callsite '%v': %v", ixn.Callsite(), err)
 	}
 

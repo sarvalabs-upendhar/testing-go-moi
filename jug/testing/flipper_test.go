@@ -32,21 +32,26 @@ func (suite *FlipperTestSuite) SetupSuite() {
 }
 
 func (suite *FlipperTestSuite) TestFlipping() {
-	consumed, output := suite.Call("Mode", nil)
+	consumed, output, except := suite.Call("Mode", nil)
 	suite.Equal(false, output["value"])
+	suite.Equal(engineio.Fuel(55), consumed)
+	suite.Nil(except)
+
+	consumed, _, except = suite.Call("Set!", map[string]any{"value": true})
 	suite.Equal(engineio.Fuel(105), consumed)
+	suite.Nil(except)
 
-	consumed, _ = suite.Call("Set!", map[string]any{"value": true})
-	suite.Equal(engineio.Fuel(155), consumed)
-
-	consumed, output = suite.Call("Mode", nil)
+	consumed, output, except = suite.Call("Mode", nil)
 	suite.Equal(true, output["value"])
-	suite.Equal(engineio.Fuel(105), consumed)
+	suite.Equal(engineio.Fuel(55), consumed)
+	suite.Nil(except)
 
-	consumed, _ = suite.Call("Flip!", nil)
-	suite.Equal(engineio.Fuel(210), consumed)
+	consumed, _, except = suite.Call("Flip!", nil)
+	suite.Equal(engineio.Fuel(165), consumed)
+	suite.Nil(except)
 
-	consumed, output = suite.Call("Mode", nil)
+	consumed, output, except = suite.Call("Mode", nil)
 	suite.Equal(false, output["value"])
-	suite.Equal(engineio.Fuel(105), consumed)
+	suite.Equal(engineio.Fuel(55), consumed)
+	suite.Nil(except)
 }

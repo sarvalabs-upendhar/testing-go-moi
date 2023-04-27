@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/moichain/jug/engineio"
 )
@@ -68,7 +67,7 @@ func CallCommand(kind engineio.CallsiteKind, name, callsite, args string) Comman
 	}
 }
 
-func formatArguments(env *Environment, args string, encoder engineio.CallEncoder) (polo.Document, error) {
+func formatArguments(env *Environment, args string, encoder engineio.CallEncoder) ([]byte, error) {
 	// Check if args begins with 0x -> Assume raw calldata provided instead of keyed parameters
 	if strings.HasPrefix(args, "0x") {
 		// Decode hex string into bytes
@@ -77,13 +76,7 @@ func formatArguments(env *Environment, args string, encoder engineio.CallEncoder
 			return nil, errors.Wrap(err, "failed to parse calldata")
 		}
 
-		// Decode bytes into a polo.Document
-		calldata := make(polo.Document)
-		if err = polo.Depolorize(&calldata, argdata); err != nil {
-			return nil, errors.Wrap(err, "failed parse calldata into doc")
-		}
-
-		return calldata, nil
+		return argdata, nil
 	}
 
 	// Parse the input arguments into an object map
@@ -107,13 +100,13 @@ func formatResult(result *engineio.CallResult, encoder engineio.CallEncoder) str
 	var str strings.Builder
 
 	if !result.Ok() {
-		str.WriteString(fmt.Sprintf("Execution Failed! [%v FUEL][Error Code: %v]", result.Fuel, result.ErrCode))
-		str.WriteString(fmt.Sprintf("\nError Message: %v", result.ErrMessage))
+		str.WriteString(fmt.Sprintf("Execution Failed! [%v FUEL]", result.Consumed))
+		str.WriteString(fmt.Sprintf("\nError Data: %#x", result.Error))
 
 		return str.String()
 	}
 
-	str.WriteString(fmt.Sprintf("Execution Complete! [%v FUEL]", result.Fuel))
+	str.WriteString(fmt.Sprintf("Execution Complete! [%v FUEL]", result.Consumed))
 
 	outputs, err := encoder.DecodeOutputs(result.Outputs)
 	if err != nil {

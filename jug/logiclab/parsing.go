@@ -16,6 +16,7 @@ const (
 	TokenCallAction
 	TokenMemoryAction
 
+	TokenEngine
 	TokenEncoding
 	TokenPreposition
 
@@ -23,6 +24,7 @@ const (
 	TokenDesignated
 	TokenCallgen
 	TokenSlothash
+	TokenErrDecode
 
 	TokenLogic
 	TokenManifest
@@ -56,13 +58,16 @@ var keywords = map[string]symbolizer.TokenKind{
 	"JSON": TokenEncoding,
 	"YAML": TokenEncoding,
 
+	"PISA": TokenEngine,
+
 	"as":   TokenPreposition,
 	"from": TokenPreposition,
 	"into": TokenPreposition,
 	"with": TokenPreposition,
 
-	"callgen":  TokenCallgen,
-	"slothash": TokenSlothash,
+	"callgen":   TokenCallgen,
+	"slothash":  TokenSlothash,
+	"errdecode": TokenErrDecode,
 
 	"logic":       TokenLogic,
 	"manifest":    TokenManifest,
@@ -298,7 +303,7 @@ func parseCallgenCommand(parser *symbolizer.Parser) Command {
 
 func parseSlothashCommand(parser *symbolizer.Parser) Command {
 	if !parser.ExpectPeek(symbolizer.TokenNumber) {
-		return InvalidCommandErrorf("invalid 'slothash' command: missing slot number")
+		return InvalidCommandError("invalid 'slothash' command: missing slot number")
 	}
 
 	token := parser.Cursor()
@@ -306,10 +311,43 @@ func parseSlothashCommand(parser *symbolizer.Parser) Command {
 
 	slot, ok := value.(uint64)
 	if !ok {
-		return InvalidCommandErrorf("invalid 'slothash' command: slot is not an uint64")
+		return InvalidCommandError("invalid 'slothash' command: slot is not an uint64")
 	}
 
 	return SlothashCommand(slot)
+}
+
+func parseErrDecodeCommand(parser *symbolizer.Parser) Command {
+	parser.Advance()
+	errdata := parser.Cursor()
+
+	if !parser.ExpectPeek(TokenPreposition) {
+		return InvalidCommandError("invalid 'errdecode' command: missing from after errdata")
+	}
+
+	if !parser.ExpectPeek(TokenEngine) {
+		return InvalidCommandError("invalid 'errdecode' command: missing valid engine")
+	}
+
+	switch engine := parser.Cursor().Literal; engine {
+	case "PISA":
+		switch errdata.Kind {
+		case symbolizer.TokenIdent:
+			return ErrDecodePISAMemoryCommand(errdata.Literal)
+
+		case symbolizer.TokenHexNumber:
+			value, _ := errdata.Value()
+
+			//nolint:forcetypeassert
+			return ErrDecodePISAValueCommand(value.([]byte))
+
+		default:
+			return InvalidCommandError("invalid 'errdecode' command: invalid errdata")
+		}
+
+	default:
+		return InvalidCommandErrorf("invalid 'errdecode' command: invalid engine '%v'", engine)
+	}
 }
 
 func parseManifestExpression(parser *symbolizer.Parser) (string, error) {

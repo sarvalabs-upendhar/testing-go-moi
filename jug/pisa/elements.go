@@ -1,6 +1,9 @@
 package pisa
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
@@ -234,7 +237,20 @@ type TypefieldSchema struct {
 }
 
 type InstructionsSchema struct {
-	Bin []byte   `yaml:"bin" json:"bin"`
-	Hex string   `yaml:"hex" json:"hex"`
-	Asm []string `yaml:"asm" json:"asm"`
+	Bin BinInstructs `yaml:"bin" json:"bin"`
+	Hex string       `yaml:"hex" json:"hex"`
+	Asm []string     `yaml:"asm" json:"asm"`
+}
+
+type BinInstructs []uint8
+
+func (bin BinInstructs) MarshalJSON() ([]byte, error) {
+	var result string
+	if bin == nil {
+		result = "null"
+	} else {
+		result = strings.Join(strings.Fields(fmt.Sprintf("%d", bin)), ",")
+	}
+
+	return []byte(result), nil
 }

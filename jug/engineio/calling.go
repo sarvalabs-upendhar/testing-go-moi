@@ -2,7 +2,6 @@ package engineio
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
@@ -141,42 +140,19 @@ func (callsite *CallsiteKind) UnmarshalYAML(node *yaml.Node) error {
 // inputs and decode outputs for a specific callable site.
 // It can be generated from either a Manifest or LogicDriver.
 type CallEncoder interface {
-	EncodeInputs(map[string]any, ReferenceProvider) (polo.Document, error)
-	DecodeOutputs(polo.Document) (map[string]any, error)
+	EncodeInputs(map[string]any, ReferenceProvider) ([]byte, error)
+	DecodeOutputs([]byte) (map[string]any, error)
 }
 
-// CallFields represents the input/output symbols for a callable.
-type CallFields struct {
-	Inputs  *TypeFields
-	Outputs *TypeFields
-}
-
-// Signature generates a signature from the CallFields symbols and their typedata.
-// It is structured as '(input1, input2)->(output1, output2)', where the values are type data of each field
-func (fields CallFields) Signature() string {
-	return fmt.Sprintf("%v->%v", fields.Inputs.String(), fields.Outputs.String())
-}
-
-// SigHash generates a signature hash from the CallFields symbols and their typedata.
-// The signature is hashed and the last 8 characters of the digest are returned as a string.
-func (fields CallFields) SigHash() string {
-	return types.GetHash([]byte(fields.Signature())).Hex()[:8]
-}
-
-// CallResult is the output emitted by EngineDriver when making function calls.
-// It contains any output values returned along with fuel expended, logs emitted.
-// It may also contain a non-Ok error code (any value that is not zero) with some error message.
+// CallResult is the output emitted by Engine when making function calls.
+// It contains the amount of fuel expended for the call along with either output value or returned error.
 type CallResult struct {
-	Outputs polo.Document
-
-	Fuel Fuel
-	Logs []string
-
-	ErrCode    uint64
-	ErrMessage string
+	Consumed Fuel
+	Outputs  []byte
+	Error    []byte
 }
 
-// Ok returns whether the CallResult has an Ok error code (0)
+// Ok returns whether the CallResult has some error data
 func (result CallResult) Ok() bool {
-	return result.ErrCode == 0
+	return result.Error == nil
 }

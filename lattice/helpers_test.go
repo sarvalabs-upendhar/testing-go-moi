@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"math/big"
 	"math/rand"
-	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -1754,38 +1753,25 @@ func getAccountInfo(
 	}
 }
 
-func generateTestContractPaths(
-	t *testing.T,
-	file *os.File,
-) []ContractPath {
+func generateTestGenesisLogics(t *testing.T) []GenesisLogic {
 	t.Helper()
 
-	path := ContractPath{
-		Name:               "staking-contract",
-		Path:               file.Name(),
+	manifest := "0x" + types.BytesToHex(tests.ReadManifest(t, "./../jug/manifests/erc20.json"))
+	calldata := "0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd8ee6a29e" +
+		"c442dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49"
+
+	logic := GenesisLogic{
+		Name: "staking-contract",
+
+		Callsite: "Seeder!",
+		Calldata: hexutil.Bytes(types.Hex2Bytes(calldata)),
+		Manifest: hexutil.Bytes(types.Hex2Bytes(manifest)),
+
 		BehaviouralContext: utils.KramaIDToString(tests.GetTestKramaIDs(t, 1)),
 		RandomContext:      nil,
 	}
 
-	calldata := "0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e736565646" +
-		"57206ffcd8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716" +
-		"b34737570706c790305f5e10073796d626f6c064d4f49"
-
-	manifest := "0x" + types.BytesToHex(tests.ReadERC20Manifest(t, "./../jug/manifests/erc20.json"))
-
-	contract := ptypes.RPCLogicPayload{
-		Callsite: "Seeder!",
-		Calldata: hexutil.Bytes(types.Hex2Bytes(calldata)),
-		Manifest: hexutil.Bytes(types.Hex2Bytes(manifest)),
-	}
-
-	bz, err := json.Marshal(contract)
-	require.NoError(t, err)
-
-	_, err = file.Write(bz)
-	require.NoError(t, err)
-
-	return []ContractPath{path}
+	return []GenesisLogic{logic}
 }
 
 // createMockGenesisFile is a mock function used to create genesis file
@@ -1793,9 +1779,9 @@ func createMockGenesisFile(
 	t *testing.T,
 	dir string,
 	invalidData bool,
-	sargaAccount AccountInfo,
-	accInfo []AccountInfo,
-	contactPaths []ContractPath,
+	sarga AccountInfo,
+	accounts []AccountInfo,
+	logics []GenesisLogic,
 ) string {
 	t.Helper()
 
@@ -1805,9 +1791,9 @@ func createMockGenesisFile(
 	)
 
 	genesis := &Genesis{
-		SargaAccount:  sargaAccount,
-		Accounts:      accInfo,
-		ContractPaths: contactPaths,
+		SargaAccount: sarga,
+		Accounts:     accounts,
+		Logics:       logics,
 	}
 
 	if invalidData {
@@ -2223,14 +2209,16 @@ func checkForAccountCreation(t *testing.T, accountInfo AccountInfo, accSetupArgs
 	}
 }
 
-func validateContractPaths(t *testing.T, expectedPaths []ContractPath, actualPaths []ContractPath) {
+func validateGenesisLogics(t *testing.T, expected []GenesisLogic, actual []GenesisLogic) {
 	t.Helper()
 
-	for i := range actualPaths {
-		require.Equal(t, expectedPaths[i].Name, actualPaths[i].Name)
-		require.Equal(t, expectedPaths[i].Path, actualPaths[i].Path)
-		require.Equal(t, expectedPaths[i].BehaviouralContext, actualPaths[i].BehaviouralContext)
-		require.Equal(t, expectedPaths[i].RandomContext, actualPaths[i].RandomContext)
+	for i := range actual {
+		require.Equal(t, expected[i].Name, actual[i].Name)
+		require.Equal(t, expected[i].Manifest, actual[i].Manifest)
+		require.Equal(t, expected[i].Callsite, actual[i].Callsite)
+		require.Equal(t, expected[i].Calldata, actual[i].Calldata)
+		require.Equal(t, expected[i].BehaviouralContext, actual[i].BehaviouralContext)
+		require.Equal(t, expected[i].RandomContext, actual[i].RandomContext)
 	}
 }
 

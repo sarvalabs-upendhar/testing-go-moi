@@ -5,11 +5,22 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
+
+	"github.com/sarvalabs/moichain/common/hexutil"
+)
+
+type ReceiptStatus uint64
+
+const (
+	ReceiptOk ReceiptStatus = iota
+	ReceiptFailed
 )
 
 type Receipt struct {
-	IxType        int              `json:"ix_type"`
-	IxHash        Hash             `json:"ix_hash"`
+	IxType int           `json:"ix_type"`
+	IxHash Hash          `json:"ix_hash"`
+	Status ReceiptStatus `json:"status"`
+
 	FuelUsed      uint64           `json:"fuel_used"`
 	StateHashes   map[Address]Hash `json:"state_hashes"`
 	ContextHashes map[Address]Hash `json:"context_hashes"`
@@ -104,9 +115,11 @@ type AssetCreationReceipt struct {
 }
 
 type LogicDeployReceipt struct {
-	LogicID string `json:"logic_id"`
+	LogicID LogicID       `json:"logic_id"`
+	Error   hexutil.Bytes `json:"error"`
 }
 
-type LogicExecuteReceipt struct {
-	ReturnData []byte `json:"return_data"`
+type LogicInvokeReceipt struct {
+	Outputs hexutil.Bytes `json:"outputs"`
+	Error   hexutil.Bytes `json:"error"`
 }

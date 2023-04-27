@@ -694,6 +694,7 @@ func createRPCReceipt(
 	return &ptypes.RPCReceipt{
 		IxType:        hexutil.Uint64(receipt.IxType),
 		IxHash:        receipt.IxHash,
+		Status:        receipt.Status,
 		FuelUsed:      hexutil.Uint64(receipt.FuelUsed),
 		StateHashes:   createRPCStateHashes(receipt.StateHashes),
 		ContextHashes: createRPCContextHashes(receipt.ContextHashes),

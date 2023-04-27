@@ -1,4 +1,4 @@
-package engineio
+package pisa
 
 import (
 	"fmt"
@@ -6,18 +6,30 @@ import (
 
 	"github.com/manishmeganathan/symbolizer"
 	"github.com/pkg/errors"
+
+	"github.com/sarvalabs/moichain/jug/engineio"
 )
 
 // Datatype represents a type information for engine values
 type Datatype struct {
+	// Kind specifies the kind of Datatype.
 	Kind DatatypeKind
 
+	// Prim is the Primitive type for a PrimitiveType.
+	// It also holds the key type for MappingType.
 	Prim Primitive
+	// Elem is the Element type for ArrayType and VarrayType.
+	// It also holds the val type of MappingType.
 	Elem *Datatype
+	// Size specifies the fixed size for an ArrayType.
 	Size uint64
 
-	Ident  string
+	// Ident specifies the name for a ClassType
+	Ident string
+	// Fields specifies the fields for a ClassType
 	Fields *TypeFields
+	// Methods specifies the method code to element pointer for a ClassType
+	Methods map[MethodCode]engineio.ElementPtr
 }
 
 // NewArrayType creates a new Array Datatype
@@ -39,27 +51,6 @@ func NewMappingType(key Primitive, val *Datatype) *Datatype {
 func NewClassType(name string, fields *TypeFields) *Datatype {
 	return &Datatype{Kind: ClassType, Ident: name, Fields: fields}
 }
-
-var (
-	// TypePtr is a PrimitivePtr as a Datatype
-	TypePtr = &Datatype{Prim: PrimitivePtr}
-	// TypeNull is a PrimitiveNull as a Datatype
-	TypeNull = &Datatype{Prim: PrimitiveNull}
-	// TypeBool is a PrimitiveBool as a Datatype
-	TypeBool = &Datatype{Prim: PrimitiveBool}
-	// TypeBytes is a PrimitiveBytes as a Datatype
-	TypeBytes = &Datatype{Prim: PrimitiveBytes}
-	// TypeString is a PrimitiveString as a Datatype
-	TypeString = &Datatype{Prim: PrimitiveString}
-	// TypeU64 is a PrimitiveU64 as a Datatype
-	TypeU64 = &Datatype{Prim: PrimitiveU64}
-	// TypeI64 is a PrimitiveI64 as a Datatype
-	TypeI64 = &Datatype{Prim: PrimitiveI64}
-	// TypeAddress is a PrimitiveAddress as a Datatype
-	TypeAddress = &Datatype{Prim: PrimitiveAddress}
-	// TypeBigInt is a PrimitiveBigInt as a Datatype
-	TypeBigInt = &Datatype{Prim: PrimitiveBigInt}
-)
 
 // String returns the Typedef expression string which is a
 // valid type expression that can be parsed with ParseDatatype.
@@ -126,6 +117,83 @@ func (datatype Datatype) Equals(other *Datatype) bool {
 	}
 }
 
+// Method is extension of the Runnable interface and
+// represents runnable methods on primitive and class types.
+type Method interface {
+	Runnable
+
+	code() MethodCode
+	datatype() *Datatype
+}
+
+// MethodCode represents a unique byte identifier for the method of a type.
+// The first 16 bytes (0x00 - 0x0F) are reserved as special method codes.
+type MethodCode byte
+
+const (
+	MethodBuild MethodCode = 0x0
+	MethodThrow MethodCode = 0x1
+	MethodEmit  MethodCode = 0x2
+	MethodJoin  MethodCode = 0x3
+
+	MethodLt MethodCode = 0x4
+	MethodGt MethodCode = 0x5
+	MethodEq MethodCode = 0x6
+
+	MethodBool MethodCode = 0x7
+	MethodStr  MethodCode = 0x8
+	MethodAddr MethodCode = 0x9
+	MethodLen  MethodCode = 0xA
+)
+
+var methodCodeToString = map[MethodCode]string{
+	MethodBuild: "__build__",
+	MethodThrow: "__throw__",
+	MethodEmit:  "__emit__",
+	MethodJoin:  "__join__",
+
+	MethodLt: "__lt__",
+	MethodGt: "__gt__",
+	MethodEq: "__eq__",
+
+	MethodBool: "__bool__",
+	MethodStr:  "__str__",
+	MethodAddr: "__addr__",
+	MethodLen:  "__len__",
+}
+
+// String returns a string representation of the primitive.
+// It implements the Stringer interface for primitive
+func (method MethodCode) String() string {
+	str, ok := methodCodeToString[method]
+	if !ok {
+		panic("unknown MethodCode variant")
+	}
+
+	return str
+}
+
+var (
+	// TypePtr is a PrimitivePtr as a Datatype
+	TypePtr = &Datatype{Prim: PrimitivePtr}
+	// TypeNull is a PrimitiveNull as a Datatype
+	TypeNull = &Datatype{Prim: PrimitiveNull}
+	// TypeBool is a PrimitiveBool as a Datatype
+	TypeBool = &Datatype{Prim: PrimitiveBool}
+	// TypeBytes is a PrimitiveBytes as a Datatype
+	TypeBytes = &Datatype{Prim: PrimitiveBytes}
+	// TypeString is a PrimitiveString as a Datatype
+	TypeString = &Datatype{Prim: PrimitiveString}
+	// TypeU64 is a PrimitiveU64 as a Datatype
+	TypeU64 = &Datatype{Prim: PrimitiveU64}
+	// TypeI64 is a PrimitiveI64 as a Datatype
+	TypeI64 = &Datatype{Prim: PrimitiveI64}
+	// TypeAddress is a PrimitiveAddress as a Datatype
+	TypeAddress = &Datatype{Prim: PrimitiveAddress}
+	// TypeBigInt is a PrimitiveBigInt as a Datatype
+	TypeBigInt = &Datatype{Prim: PrimitiveBigInt}
+)
+
 // Primitive represents an enum with variations that
 // represent the builtin primitive/scalar datatypes
 type Primitive int
@@ -190,7 +258,7 @@ func (primitive Primitive) Numeric() bool {
 }
 
 // DatatypeKind represents an enum with variants
-// that indicate the kind of Datatype
+// that indicate the different kinds of Datatype
 type DatatypeKind int
 
 const (
@@ -223,43 +291,9 @@ func (kind DatatypeKind) IsCollection() bool {
 	return kind == ArrayType || kind == VarrayType || kind == MappingType
 }
 
-// Custom Token Classes start from -10 and
-// descend as recommended by the symbolizer pkg
-const (
-	tokenPrimitive symbolizer.TokenKind = -(iota + 10)
-	tokenBoolean
-	tokenMapping
-)
-
-// newTypeParser generates a new symbol parser that ignores whitespaces and detects datatype tokens
-// such as "map" and "string". It also detects boolean literals ("true" and "false") apart from all
-// the supported token classes from the symbolizer package such identifiers, hex and decimal numbers.
-func newTypeParser(symbol string) *symbolizer.Parser {
-	return symbolizer.NewParser(
-		symbol,
-		symbolizer.IgnoreWhitespaces(),
-		symbolizer.Keywords(map[string]symbolizer.TokenKind{
-			"bool":    tokenPrimitive,
-			"bytes":   tokenPrimitive,
-			"string":  tokenPrimitive,
-			"uint32":  tokenPrimitive,
-			"uint64":  tokenPrimitive,
-			"int32":   tokenPrimitive,
-			"int64":   tokenPrimitive,
-			"address": tokenPrimitive,
-			"bigint":  tokenPrimitive,
-
-			"true":  tokenBoolean,
-			"false": tokenBoolean,
-			"map":   tokenMapping,
-		}),
-	)
-}
-
-// ClassdefProvider is an interface that
-// provides Class Datatype definitions
-type ClassdefProvider interface {
-	GetClassdef(string) (*Datatype, bool)
+// ClassProvider is an interface that provides Class Datatype definitions
+type ClassProvider interface {
+	GetClassDatatype(string) (*Datatype, bool)
 }
 
 // ParseDatatype attempts to parse a string input into a Typedef
@@ -267,7 +301,7 @@ type ClassdefProvider interface {
 // 2. Valid Array types are expressed as '[{size}]{element}'. The element must in turn be any valid Typedef.
 // 3. Valid Sequence types are expressed as '[]{element}'. The element must in turn be any valid Typedef
 // 3. Valid Hashmap types are expressed as 'map[{element}]'. The element must in turn be any valid Typedef.
-func ParseDatatype(input string, provider ClassdefProvider) (*Datatype, error) {
+func ParseDatatype(input string, provider ClassProvider) (*Datatype, error) {
 	// Create a new parser check cursor type
 	parser := newTypeParser(input)
 
@@ -362,7 +396,7 @@ func ParseDatatype(input string, provider ClassdefProvider) (*Datatype, error) {
 		className := parser.Cursor().Literal
 
 		// Get the typedef for the class from the provider
-		classDef, ok := provider.GetClassdef(className)
+		classDef, ok := provider.GetClassDatatype(className)
 		if !ok {
 			return nil, errors.Errorf("invalid class reference: '%v' not found", className)
 		}
@@ -378,4 +412,37 @@ func ParseDatatype(input string, provider ClassdefProvider) (*Datatype, error) {
 		// Input does not start with type or bind keyword
 		return nil, errors.New("not a datatype")
 	}
+}
+
+// Custom Token Classes start from -10 and
+// descend as recommended by the symbolizer pkg
+const (
+	tokenPrimitive symbolizer.TokenKind = -(iota + 10)
+	tokenBoolean
+	tokenMapping
+)
+
+// newTypeParser generates a new symbol parser that ignores whitespaces and detects datatype tokens
+// such as "map" and "string". It also detects boolean literals ("true" and "false") apart from all
+// the supported token classes from the symbolizer package such identifiers, hex and decimal numbers.
+func newTypeParser(symbol string) *symbolizer.Parser {
+	return symbolizer.NewParser(
+		symbol,
+		symbolizer.IgnoreWhitespaces(),
+		symbolizer.Keywords(map[string]symbolizer.TokenKind{
+			"bool":    tokenPrimitive,
+			"bytes":   tokenPrimitive,
+			"string":  tokenPrimitive,
+			"uint32":  tokenPrimitive,
+			"uint64":  tokenPrimitive,
+			"int32":   tokenPrimitive,
+			"int64":   tokenPrimitive,
+			"address": tokenPrimitive,
+			"bigint":  tokenPrimitive,
+
+			"true":  tokenBoolean,
+			"false": tokenBoolean,
+			"map":   tokenMapping,
+		}),
+	)
 }

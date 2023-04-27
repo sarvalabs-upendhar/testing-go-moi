@@ -105,12 +105,13 @@ func (contextHashes RPCContextHashes) Sort() {
 }
 
 type RPCReceipt struct {
-	IxType        hexutil.Uint64   `json:"ix_type"`
-	IxHash        types.Hash       `json:"ix_hash"`
-	FuelUsed      hexutil.Uint64   `json:"fuel_used"`
-	StateHashes   RPCStateHashes   `json:"state_hashes"`
-	ContextHashes RPCContextHashes `json:"context_hashes"`
-	ExtraData     json.RawMessage  `json:"extra_data"`
+	IxType        hexutil.Uint64      `json:"ix_type"`
+	IxHash        types.Hash          `json:"ix_hash"`
+	Status        types.ReceiptStatus `json:"status"`
+	FuelUsed      hexutil.Uint64      `json:"fuel_used"`
+	StateHashes   RPCStateHashes      `json:"state_hashes"`
+	ContextHashes RPCContextHashes    `json:"context_hashes"`
+	ExtraData     json.RawMessage     `json:"extra_data"`
 }
 
 type RPCInteraction struct {

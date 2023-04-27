@@ -203,6 +203,22 @@ Example:
 
 >> manifest("./jug/manifests/erc20.json") as POLO
 // prints hex encoded string of POLO bytes
+
+==== Error Decoding Utility
+Decoding error objects returned by logic call can be done with the error decoding utility.
+The given error data is decoded for the error object of the respective engine and printed.
+Currently the only supported engine for error decoding is PISA.
+
+errdecode [errdata] from [engine]
+errdecode [identifier] from [engine]
+
+Example:
+>> errdecode 0x0e4f0666ce01737472696e6768656c6c6f213f068602726f6f742e7365747570205b3078305d726f6f742e446f205b3078305d202e2e2e205b3078323a205448524f57203078305d from PISA
+// prints error object
+
+>> set err 0x0e4f0666ce01737472696e6768656c6c6f213f068602726f6f742e7365747570205b3078305d726f6f742e446f205b3078305d202e2e2e205b3078323a205448524f57203078305d
+>> errdecode err from PISA
+// prints error object
 ` + replStrike
 
 // ParseCommand parses an input command string into a Command runner
@@ -237,6 +253,8 @@ func ParseCommand(cmd string) Command {
 		return parseCallgenCommand(parser)
 	case TokenSlothash:
 		return parseSlothashCommand(parser)
+	case TokenErrDecode:
+		return parseErrDecodeCommand(parser)
 
 	case TokenExit:
 		return ExitCommand()

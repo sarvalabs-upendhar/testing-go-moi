@@ -87,7 +87,7 @@ func getIXArgsForLogicDeployment(t *testing.T) *ptypes.SendIXArgs {
 	calldata := "0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd8ee6a29ec4" +
 		"42dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49"
 
-	manifest := "0x" + types.BytesToHex(tests.ReadERC20Manifest(t, "./../jug/manifests/erc20.json"))
+	manifest := "0x" + types.BytesToHex(tests.ReadManifest(t, "./../jug/manifests/erc20.json"))
 
 	logicPayload := &ptypes.RPCLogicPayload{
 		Manifest: hexutil.Bytes(types.Hex2Bytes(manifest)),
@@ -169,7 +169,7 @@ func getLogicID(t *testing.T, client *Client, sender types.Address, height *int6
 	err = json.Unmarshal(receipt.ExtraData, &logicReceipt)
 	require.NoError(t, err)
 
-	return logicReceipt.LogicID
+	return logicReceipt.LogicID.Hex()
 }
 
 // retryFetchReceipt keeps trying to fetch receipt for given ixHash until it is timed out

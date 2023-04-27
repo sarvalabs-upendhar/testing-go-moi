@@ -5,10 +5,8 @@ import (
 	"math/big"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/moichain/guna"
-	gtypes "github.com/sarvalabs/moichain/guna/types"
 	"github.com/sarvalabs/moichain/jug/engineio"
 	"github.com/sarvalabs/moichain/types"
 )
@@ -20,7 +18,9 @@ func (executor IxExecutor) ValueTransfer(
 	sender, receiver *guna.StateObject,
 	assetID types.AssetID,
 	amount *big.Int,
-) (uint64, error) {
+) (
+	engineio.Fuel, error,
+) {
 	// Check if given transfer amount is valid
 	if amount.Sign() <= 0 {
 		return 0, errors.New("invalid transfer amount")
@@ -42,7 +42,7 @@ func (executor IxExecutor) ValueTransfer(
 	// Add amount to receiver balance for asset
 	receiver.AddBalance(assetID, amount)
 
-	return 1, nil
+	return FuelSimpleValueTransfer, nil
 }
 
 // CreateAsset performs the IxCreateAsset interaction on the given creator StateObject.
@@ -51,7 +51,9 @@ func (executor IxExecutor) ValueTransfer(
 func (executor IxExecutor) CreateAsset(
 	creator *guna.StateObject,
 	payload types.AssetCreatePayload,
-) (uint64, string, error) {
+) (
+	engineio.Fuel, *types.AssetCreationReceipt, error,
+) {
 	// todo: if payload.LogicID or LogicCode is set: handle
 	// If logicCode is give, we need to compile it here and create the logic account.
 	// The given logic code must also compile to an asset logic.
@@ -62,102 +64,49 @@ func (executor IxExecutor) CreateAsset(
 	// Create a new asset on the creator state object and get the asset ID
 	assetID, err := creator.CreateAsset(asset)
 	if err != nil {
-		return 0, "", err
+		return 0, nil, err
 	}
 
 	// Return the string form of the asset ID
-	return 1, string(assetID), nil
+	return FuelAssetCreation, &types.AssetCreationReceipt{AssetID: string(assetID)}, nil
 }
 
-// LogicDeploy performs the IxLogicDeploy interaction on the given state (logic account).
-// The given logic deployment payload is used to create a logic which is then inserted into
-// the state object. The logic is then initialised (if stateful)
+// LogicDeploy performs the IxLogicDeploy interaction on the given logic state.
+// The given logic deployment payload is used to create a logic which is then
+// inserted into the state object. The logic is then initialised (if stateful)
 func (executor IxExecutor) LogicDeploy(
-	state *guna.StateObject,
+	logicstate, deployer *guna.StateObject,
 	payload *types.LogicPayload,
-) (engineio.Fuel, types.LogicID, error) {
-	// Get the current tank level
-	available := executor.tank.Level()
+) (
+	engineio.Fuel, *types.LogicDeployReceipt, error,
+) {
+	// Create an options chain
+	options := make([]LogicDeployOption, 0, 3)
+	// Append deploy options for deployer state and fuel limit
+	options = append(options, DeployerState(deployer))
+	options = append(options, DeployFuelLimit(executor.tank.Level()))
 
-	// Decode the manifest data into a engineio.Manifest
-	manifest, err := engineio.NewManifest(payload.Manifest, engineio.POLO)
-	if err != nil {
-		return 0, nil, errors.Wrap(err, "could not decode manifest")
+	// If no callsite is provided, do not append an option for the deployment call
+	if payload.Callsite != "" {
+		options = append(options, DeploymentCall(payload.Callsite, payload.Calldata))
 	}
 
-	// Obtain the runtime for the logic engine in the header
-	runtime, ok := engineio.FetchEngineRuntime(manifest.Header().LogicEngine())
-	if !ok {
-		return 0, nil, errors.Errorf("unsupported manifest engine: %v", manifest.Header().LogicEngine())
-	}
-
-	// Compile the manifest into a LogicDescriptor
-	logicDescriptor, consumed, err := runtime.CompileManifest(available, manifest)
-	if err != nil {
-		return consumed, nil, errors.Wrap(err, "manifest compile failed")
-	}
-
-	// Set the manifest data into the state object dirty entries.
-	// This manifest will now be content addressed with its hash.
-	state.SetDirtyEntry(logicDescriptor.Manifest.Hex(), payload.Manifest)
-
-	// Get the current consumed fuel
-	if available -= consumed; available == 0 {
-		return consumed, nil, errors.New("insufficient fuel: could not initialise after compile")
-	}
-
-	// Create a new LogicObject from the LogicDescriptor
-	logicObject := gtypes.NewLogicObject(state.Address(), logicDescriptor)
-	// Insert the LogicObject into the state object of the logic
-	if err = state.InsertNewLogicObject(logicObject.LogicID(), logicObject); err != nil {
-		return consumed, nil, errors.Wrap(err, "could not insert logic object into stateobject")
-	}
-
-	// Initialize a storage tree for the LogicID on the state object
-	if err = state.CreateStorageTreeForLogic(logicObject.LogicID()); err != nil {
-		return consumed, nil, errors.Wrap(err, "could not init storage tree for logic")
-	}
-
-	// Decode the payload calldata into a polo.Document
-	calldata := make(polo.Document)
-	if err = polo.Depolorize(&calldata, payload.Calldata); err != nil {
-		return consumed, nil, errors.Wrap(err, "could not decode calldata into polo document")
-	}
-
-	logicCtx := state.GenerateLogicContextObject(logicObject.LogicID())
-	// Create a new engine for the execution
-	engine, err := runtime.SpawnEngine(available, logicObject, logicCtx, engineio.NewEnvDriver())
-	if err != nil {
-		return 0, nil, errors.Wrap(err, "could not bootstrap engine")
-	}
-
-	// Create an IxnObject
-	ixn := engineio.NewIxnObject(types.IxLogicDeploy, payload.Callsite, calldata)
-	// Perform a Deployer Call
-	result := engine.Call(context.Background(), ixn, nil)
-
-	// Increment the amount of consumed fuel
-	consumed += result.Fuel
-	// Check the execution result
-	if !result.Ok() {
-		return consumed, nil, errors.Errorf("deployer execution failed [%v]: %v", result.ErrCode, result.ErrMessage)
-	}
-
-	// Return the total fuel consumed and the logic ID
-	return consumed, logicObject.LogicID(), nil
+	return DeployLogic(payload.Manifest, logicstate, options...)
 }
 
 // LogicInvoke performs the IxLogicInvoke interface on the given state (logic account).
 // The given logic payload describes the callsite and calldata for the execution.
 func (executor IxExecutor) LogicInvoke(
-	state *guna.StateObject,
+	logicstate, deployer *guna.StateObject,
 	payload *types.LogicPayload,
-) (engineio.Fuel, []byte, error) {
+) (
+	engineio.Fuel, *types.LogicInvokeReceipt, error,
+) {
 	// Get the current tank level
 	available := executor.tank.Level()
 
 	// Fetch the logic object from the state object
-	logicObject, err := state.FetchLogicObject(payload.Logic)
+	logicObject, err := logicstate.FetchLogicObject(payload.Logic)
 	if err != nil {
 		return 0, nil, errors.Wrap(err, "could not fetch logic object")
 	}
@@ -167,35 +116,32 @@ func (executor IxExecutor) LogicInvoke(
 		return 0, nil, errors.Wrap(err, "callsite does not exists for logic")
 	}
 
-	// Decode the payload calldata into a polo.Document
-	calldata := make(polo.Document)
-	if err = polo.Depolorize(&calldata, payload.Calldata); err != nil {
-		return 0, nil, errors.Wrap(err, "could not decode calldata into polo document")
-	}
-
 	// Obtain the runtime for the logic engine of the logic object
 	runtime, ok := engineio.FetchEngineRuntime(logicObject.Engine())
 	if !ok {
 		return 0, nil, errors.Errorf("missing engine factory: %v", logicObject.Engine())
 	}
 
-	logicCtx := state.GenerateLogicContextObject(logicObject.LogicID())
 	// Create a new engine for the execution
-	engine, err := runtime.SpawnEngine(available, logicObject, logicCtx, engineio.NewEnvDriver())
+	engine, err := runtime.SpawnEngine(
+		available, logicObject,
+		logicstate.GenerateLogicContextObject(logicObject.LogicID()),
+		engineio.NewEnvDriver(),
+	)
 	if err != nil {
 		return 0, nil, errors.Wrap(err, "could not bootstrap engine")
 	}
 
 	// Create an IxnObject
-	ixn := engineio.NewIxnObject(types.IxLogicInvoke, payload.Callsite, calldata)
+	ixn := engineio.NewIxnObject(types.IxLogicInvoke, payload.Callsite, payload.Calldata)
 	// Perform an Invokable Call
-	result := engine.Call(context.Background(), ixn, nil)
+	result := engine.Call(context.Background(), ixn, deployer.GenerateLogicContextObject(logicObject.LogicID()))
 
 	// Check the execution result
 	if !result.Ok() {
-		return result.Fuel, nil, errors.Errorf("invokable execution failed [%v]: %v", result.ErrCode, result.ErrMessage)
+		return result.Consumed, &types.LogicInvokeReceipt{Error: result.Error}, nil
 	}
 
 	// Return the total fuel consumed and the return data
-	return result.Fuel, result.Outputs.Bytes(), nil
+	return result.Consumed, &types.LogicInvokeReceipt{Outputs: result.Outputs}, nil
 }

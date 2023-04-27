@@ -67,6 +67,39 @@ func ManifestPrintCommand(path, encoding string) Command {
 	}
 }
 
+// ErrDecodePISAValueCommand generates a command runner to
+// decode the error object for PISA from the given error bytes data.
+func ErrDecodePISAValueCommand(errdata []byte) Command {
+	return func(env *Environment) string {
+		exception := new(pisa.Exception)
+
+		if err := polo.Depolorize(exception, errdata); err != nil {
+			return fmt.Sprintf("failed to decode error data into pisa.Exception: %v", err)
+		}
+
+		return exception.String()
+	}
+}
+
+// ErrDecodePISAMemoryCommand generates a command runner to
+// decode the error object for PISA from the error bytes data
+// at the given identifier in the lab memory
+func ErrDecodePISAMemoryCommand(ident string) Command {
+	return func(env *Environment) string {
+		value, ok := env.memory[ident]
+		if !ok {
+			return fmt.Sprintf("no value set for '%v'", ident)
+		}
+
+		errdata, ok := value.([]byte)
+		if !ok {
+			return fmt.Sprintf("'%v' is not an hex value", ident)
+		}
+
+		return ErrDecodePISAValueCommand(errdata)(env)
+	}
+}
+
 // SlothashCommand generates a command runner to generate
 // the slothash for a given storage path. Currently, only
 // accepts a single uint8 slot number but will be extended.
@@ -89,17 +122,7 @@ func CallgenMemoryCommand(ident string) Command {
 			return fmt.Sprintf("no value set for '%v'", ident)
 		}
 
-		object, ok := value.(map[string]any)
-		if !ok {
-			return fmt.Sprintf("'%v' is not an object", ident)
-		}
-
-		calldata, err := generateCalldata(object, env)
-		if err != nil {
-			return fmt.Sprintf("could not encode '%v' into calldata: %v", ident, err)
-		}
-
-		return calldata
+		return CallgenValueCommand(value)(env)
 	}
 }
 
@@ -112,28 +135,17 @@ func CallgenValueCommand(value any) Command {
 			return "value is not an object"
 		}
 
-		calldata, err := generateCalldata(object, env)
-		if err != nil {
-			return fmt.Sprintf("could not encode value into calldata: %v", err)
+		doc := make(polo.Document)
+
+		for key, val := range object {
+			data, err := engineio.EncodeValues(val, env)
+			if err != nil {
+				return fmt.Sprintf("could not encode value into calldata: %v", err)
+			}
+
+			doc.SetRaw(key, data)
 		}
 
-		return calldata
+		return "0x" + hex.EncodeToString(doc.Bytes())
 	}
-}
-
-// generateCalldata generates a calldata string (hex-encoded) for a given value
-// object map[string]any. The values are doc-encoded with POLO for the given keys
-func generateCalldata(object map[string]any, refs engineio.ReferenceProvider) (string, error) {
-	doc := make(polo.Document)
-
-	for key, val := range object {
-		data, err := engineio.EncodeValues(val, refs)
-		if err != nil {
-			return "", err
-		}
-
-		doc.SetRaw(key, data)
-	}
-
-	return "0x" + hex.EncodeToString(doc.Bytes()), nil
 }

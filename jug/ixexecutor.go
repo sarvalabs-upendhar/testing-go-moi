@@ -57,11 +57,11 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 				}
 
 				// Update fuel consumption
-				if !executor.tank.Exhaust(engineio.Fuel(fuelConsumed)) {
+				receipt.FuelUsed += uint64(fuelConsumed)
+				// Exhaust fuel from tank
+				if !executor.tank.Exhaust(fuelConsumed) {
 					return errors.Wrap(types.ErrInsufficientFuel, "execution failed (IxValueTransfer)")
 				}
-
-				receipt.FuelUsed += fuelConsumed
 			}
 
 		// Asset Create Interaction
@@ -76,7 +76,7 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 			}
 
 			// Perform asset creation and record fuel consumed
-			fuelConsumed, assetID, err := executor.CreateAsset(
+			fuelConsumed, assetReceipt, err := executor.CreateAsset(
 				executor.getStateObject(ix.Sender()),
 				*payload.Create,
 			)
@@ -85,15 +85,13 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 			}
 
 			// Update fuel consumption
-			if !executor.tank.Exhaust(engineio.Fuel(fuelConsumed)) {
+			receipt.FuelUsed += uint64(fuelConsumed)
+			// Exhaust fuel from tank
+			if !executor.tank.Exhaust(fuelConsumed) {
 				return errors.Wrap(types.ErrInsufficientFuel, "execution failed (IxAssetCreate)")
 			}
 
-			receipt.FuelUsed += fuelConsumed
-
-			// Create data for asset creation receipt and set it into the receipt
-			receiptData := types.AssetCreationReceipt{AssetID: assetID}
-			if err = receipt.SetExtraData(receiptData); err != nil {
+			if err = receipt.SetExtraData(assetReceipt); err != nil {
 				return errors.Wrap(err, "execution failed (IxAssetCreate)")
 			}
 
@@ -108,25 +106,30 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 				return errors.New("execution failed (IxLogicDeploy): missing manifest for logic deploy")
 			}
 
+			logicAddress := types.NewAccountAddress(ix.Nonce(), ix.Sender())
+
 			// Perform logic deploy and record fuel consumed
-			fuelConsumed, logicID, err := executor.LogicDeploy(
-				executor.getStateObject(ix.Receiver()),
+			fuelConsumed, deployReceipt, err := executor.LogicDeploy(
+				executor.getStateObject(logicAddress),
+				executor.getStateObject(ix.Sender()),
 				payload,
 			)
 			if err != nil {
 				return errors.Wrap(err, "execution failed (IxLogicDeploy)")
 			}
 
+			if deployReceipt.Error != nil {
+				receipt.Status = types.ReceiptFailed
+			}
+
 			// Update fuel consumption
+			receipt.FuelUsed += uint64(fuelConsumed)
+			// Exhaust fuel from tank
 			if !executor.tank.Exhaust(fuelConsumed) {
 				return errors.Wrap(types.ErrInsufficientFuel, "execution failed (IxLogicDeploy)")
 			}
 
-			receipt.FuelUsed += uint64(fuelConsumed)
-
-			// Create data for logic deploy receipt and set it into the receipt
-			receiptData := types.LogicDeployReceipt{LogicID: logicID.Hex()}
-			if err = receipt.SetExtraData(receiptData); err != nil {
+			if err = receipt.SetExtraData(deployReceipt); err != nil {
 				return errors.Wrap(err, "execution failed (IxLogicDeploy)")
 			}
 
@@ -137,25 +140,28 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 				return err
 			}
 
-			// Perform logic deploy and record fuel consumed
-			fuelConsumed, returnData, err := executor.LogicInvoke(
-				executor.getStateObject(ix.Receiver()),
+			// Perform logic invoke and record fuel consumed
+			fuelConsumed, invokeReceipt, err := executor.LogicInvoke(
+				executor.getStateObject(payload.Logic.Address()),
+				executor.getStateObject(ix.Sender()),
 				payload,
 			)
 			if err != nil {
 				return errors.Wrap(err, "execution failed (IxLogicExecute)")
 			}
 
+			if invokeReceipt.Error != nil {
+				receipt.Status = types.ReceiptFailed
+			}
+
 			// Update fuel consumption
+			receipt.FuelUsed += uint64(fuelConsumed)
+			// Exhaust fuel from tank
 			if !executor.tank.Exhaust(fuelConsumed) {
 				return errors.Wrap(types.ErrInsufficientFuel, "execution failed (IxLogicExecute)")
 			}
 
-			receipt.FuelUsed += uint64(fuelConsumed)
-
-			// Create data for logic execute receipt and set it into the receipt
-			receiptData := types.LogicExecuteReceipt{ReturnData: returnData}
-			if err = receipt.SetExtraData(receiptData); err != nil {
+			if err = receipt.SetExtraData(invokeReceipt); err != nil {
 				return errors.Wrap(err, "execution failed (IxLogicExecute)")
 			}
 

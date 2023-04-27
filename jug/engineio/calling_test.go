@@ -8,6 +8,8 @@ import (
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
+
+	"github.com/sarvalabs/moichain/types"
 )
 
 func TestCallsiteKind_String(t *testing.T) {
@@ -20,6 +22,17 @@ func TestCallsiteKind_String(t *testing.T) {
 
 	require.PanicsWithValue(t, "unknown CallsiteKind variant", func() {
 		_ = CallsiteKind(10).String()
+	})
+}
+
+func TestCallsiteKind_IxnType(t *testing.T) {
+	require.Equal(t, types.IxLogicInvoke, InvokableCallsite.IxnType())
+	require.Equal(t, types.IxLogicDeploy, DeployerCallsite.IxnType())
+	require.Equal(t, types.IxLogicInteract, InteractableCallsite.IxnType())
+	require.Equal(t, types.IxLogicEnlist, EnlisterCallsite.IxnType())
+
+	require.PanicsWithValue(t, "unknown CallsiteKind variant", func() {
+		CallsiteKind(10).IxnType()
 	})
 }
 
@@ -96,9 +109,9 @@ func TestCallsite_Serialization(t *testing.T) {
 }
 
 func TestCallResult_Ok(t *testing.T) {
-	result1 := &CallResult{ErrCode: 0}
+	result1 := &CallResult{}
 	require.True(t, result1.Ok())
 
-	result2 := &CallResult{ErrCode: 100}
+	result2 := &CallResult{Error: []byte{6, 65}}
 	require.False(t, result2.Ok())
 }

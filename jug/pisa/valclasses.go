@@ -1,29 +1,27 @@
-package register
+package pisa
 
 import (
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
-
-	"github.com/sarvalabs/moichain/jug/engineio"
 )
 
-// ClassValue represents a Value that operates like a class struct.
+// ClassValue represents a RegisterValue that operates like a class struct.
 type ClassValue struct {
-	values   map[uint8]Value
-	datatype *engineio.Datatype
+	values   map[byte]RegisterValue
+	datatype *Datatype
 }
 
 // NewClassValue generates a new ClassValue for a given engineio.Datatype and some POLO encoded bytes.
-func NewClassValue(datatype *engineio.Datatype, data []byte) (*ClassValue, error) {
+func NewClassValue(dt *Datatype, data []byte) (*ClassValue, error) {
 	// Check if datatype is a class
-	if datatype.Kind != engineio.ClassType {
+	if dt.Kind != ClassType {
 		return nil, errors.New("datatype is not a class")
 	}
 
 	// Initialize the ClassValue with the Typedef and an empty value
 	class := new(ClassValue)
-	class.datatype = datatype
-	class.values = make(map[uint8]Value)
+	class.datatype = dt
+	class.values = make(map[byte]RegisterValue)
 
 	// If there is some data to decode into the ClassValue
 	// Unpack each element into
@@ -35,19 +33,19 @@ func NewClassValue(datatype *engineio.Datatype, data []byte) (*ClassValue, error
 
 		for key, raw := range doc {
 			// Get the field type from the class def
-			field := datatype.Fields.Lookup(key)
+			field := dt.Fields.Lookup(key)
 			if field == nil {
-				return nil, errors.Errorf("invalid data for '%v' field '%v': no such field", datatype.Ident, key)
+				return nil, errors.Errorf("invalid data for '%v' field '%v': no such field", dt.Ident, key)
 			}
 
 			// Create new value from the data for the key
-			value, err := NewValue(field.Type, raw)
+			value, err := NewRegisterValue(field.Type, raw)
 			if err != nil {
 				return nil, err
 			}
 
 			// Get the slot for the field and insert it
-			slot := datatype.Fields.Symbols[field.Name]
+			slot := dt.Fields.Symbols[field.Name]
 			class.values[slot] = value
 		}
 	}
@@ -55,14 +53,14 @@ func NewClassValue(datatype *engineio.Datatype, data []byte) (*ClassValue, error
 	return class, nil
 }
 
-// Type returns the Typedef of ClassValue, which is some class engineio.Datatype.
-// Implements the Value interface for ClassValue.
-func (class ClassValue) Type() *engineio.Datatype { return class.datatype }
+// Type returns the Datatype of ClassValue, which is some class Datatype.
+// Implements the RegisterValue interface for ClassValue.
+func (class ClassValue) Type() *Datatype { return class.datatype }
 
-// Copy returns a copy of ClassValue as a Value.
-// Implements the Value interface for ClassValue.
-func (class ClassValue) Copy() Value {
-	clone := ClassValue{values: make(map[uint8]Value, len(class.values))}
+// Copy returns a copy of ClassValue as a RegisterValue.
+// Implements the RegisterValue interface for ClassValue.
+func (class ClassValue) Copy() RegisterValue {
+	clone := ClassValue{values: make(map[byte]RegisterValue, len(class.values))}
 	clone.datatype = class.datatype.Copy()
 
 	for slot, val := range class.values {
@@ -100,14 +98,14 @@ func (class ClassValue) Data() []byte {
 
 // Get is a safe read from the ClassValue, returns an
 // error if the slot is not valid for the ClassValue
-func (class *ClassValue) Get(slot uint8) (Value, error) {
+func (class *ClassValue) Get(slot uint8) (RegisterValue, error) {
 	if slot >= class.Size() {
 		return nil, errors.Errorf("undefined class field slot '%v'", slot)
 	}
 
 	value := class.values[slot]
 	if value == nil {
-		value, _ = NewValue(class.datatype.Fields.Get(slot).Type, nil)
+		value, _ = NewRegisterValue(class.datatype.Fields.Get(slot).Type, nil)
 	}
 
 	return value, nil
@@ -115,7 +113,7 @@ func (class *ClassValue) Get(slot uint8) (Value, error) {
 
 // Set is a safe write into the ClassValue, returns an error if either
 // the slot is invalid or value is not the correct type for ClassValue
-func (class *ClassValue) Set(slot uint8, value Value) error {
+func (class *ClassValue) Set(slot uint8, value RegisterValue) error {
 	if slot >= class.Size() {
 		return errors.Errorf("undefined class field slot '%v'", slot)
 	}
