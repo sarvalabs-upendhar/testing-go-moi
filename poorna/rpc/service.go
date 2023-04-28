@@ -174,6 +174,62 @@ func (r *Service) ContextInfo(
 	return nil
 }
 
+// InteractionByTesseract returns interaction for the given tesseract hash
+func (r *Service) InteractionByTesseract(
+	req *http.Request,
+	args *ptypes.InteractionByTesseract,
+	resp *ptypes.Response,
+) error {
+	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
+	if !ok {
+		return types.ErrInvalidAPI
+	}
+
+	interaction, err := coreAPI.GetInteractionByTesseract(args)
+	if err != nil {
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	resp.Data, err = json.Marshal(interaction)
+	if err != nil {
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	return nil
+}
+
+// InteractionByHash returns the interaction for the given interaction hash
+func (r *Service) InteractionByHash(
+	req *http.Request,
+	args *ptypes.InteractionByHashArgs,
+	resp *ptypes.Response,
+) error {
+	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
+	if !ok {
+		return types.ErrInvalidAPI
+	}
+
+	interaction, err := coreAPI.GetInteractionByHash(args)
+	if err != nil {
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	resp.Data, err = json.Marshal(interaction)
+	if err != nil {
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	return nil
+}
+
 // InteractionReceipt returns the receipt of the interaction
 func (r *Service) InteractionReceipt(req *http.Request, args *ptypes.ReceiptArgs, resp *ptypes.Response) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
@@ -181,14 +237,14 @@ func (r *Service) InteractionReceipt(req *http.Request, args *ptypes.ReceiptArgs
 		return types.ErrInvalidAPI
 	}
 
-	receipt, err := coreAPI.GetInteractionReceipt(args)
+	rpcReceipt, err := coreAPI.GetInteractionReceipt(args)
 	if err != nil {
 		resp.Error = &ptypes.JSONError{Message: err.Error()}
 
 		return nil
 	}
 
-	resp.Data, err = json.Marshal(receipt)
+	resp.Data, err = json.Marshal(rpcReceipt)
 	if err != nil {
 		resp.Error = &ptypes.JSONError{Message: err.Error()}
 

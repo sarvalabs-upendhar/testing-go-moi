@@ -868,29 +868,6 @@ func CreateTrustWithTestData(t *testing.T) types.IxTrust {
 	return IxTrust
 }
 
-func CreateBodyWithTestData(t *testing.T) types.TesseractBody {
-	t.Helper()
-
-	body := types.TesseractBody{
-		StateHash:       RandomHash(t),
-		ContextHash:     RandomHash(t),
-		InteractionHash: RandomHash(t),
-		ReceiptHash:     RandomHash(t),
-		ContextDelta:    make(map[types.Address]*types.DeltaGroup),
-		ConsensusProof: types.PoXCData{
-			BinaryHash:   RandomHash(t),
-			IdentityHash: RandomHash(t),
-			ICSHash:      RandomHash(t),
-		},
-	}
-
-	body.ContextDelta[RandomAddress(t)] = &types.DeltaGroup{
-		BehaviouralNodes: GetTestKramaIDs(t, 2),
-	}
-
-	return body
-}
-
 func CreateReceiptWithTestData(t *testing.T) *types.Receipt {
 	t.Helper()
 
@@ -935,3 +912,26 @@ func GetInvalidAddress(t *testing.T) string {
 	return randomHash[:randomNum] + string(rune(randAlphabet)) + randomHash[randomNum+1:]
 }
 */
+
+func CreateBodyWithTestData(t *testing.T) types.TesseractBody {
+	t.Helper()
+
+	body := types.TesseractBody{
+		StateHash:       RandomHash(t),
+		ContextHash:     RandomHash(t),
+		InteractionHash: RandomHash(t),
+		ReceiptHash:     RandomHash(t),
+		ContextDelta:    make(map[types.Address]*types.DeltaGroup),
+		ConsensusProof: types.PoXCData{
+			BinaryHash:   RandomHash(t),
+			IdentityHash: RandomHash(t),
+			ICSHash:      RandomHash(t),
+		},
+	}
+
+	body.ContextDelta[RandomAddress(t)] = &types.DeltaGroup{
+		BehaviouralNodes: GetTestKramaIDs(t, 2),
+	}
+
+	return body
+}

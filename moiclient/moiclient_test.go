@@ -135,8 +135,8 @@ func transferTokens(t *testing.T, client *Client) {
 		Type:     0,
 		Sender:   sender,
 		Receiver: receiver,
-		TransferValues: map[types.AssetID]string{
-			types.AssetID(assetID): "10",
+		TransferValues: map[types.AssetID]*hexutil.Big{
+			types.AssetID(assetID): (*hexutil.Big)(new(big.Int).SetUint64(16)),
 		},
 		FuelPrice: (*hexutil.Big)(fuelprice),
 		FuelLimit: (*hexutil.Big)(fuelprice),
@@ -236,6 +236,12 @@ func TestMoiClient(t *testing.T) {
 		},
 		"SendInteraction": {
 			test: func(t *testing.T) { testSendInteraction(t, client) },
+		},
+		"ixByHash": {
+			test: func(t *testing.T) { testInteractionByHash(t, client) },
+		},
+		"ixByTesseract": {
+			test: func(t *testing.T) { testInteractionByTesseract(t, client) },
 		},
 		"testAccounts": {
 			test: func(t *testing.T) { testAccounts(t, client) },
@@ -609,7 +615,7 @@ func testInteractionReceipt(t *testing.T, client *Client) {
 			receiptArgs: &ptypes.ReceiptArgs{
 				Hash: tests.RandomHash(t),
 			},
-			expectedError: errors.New("grid hash not found"),
+			expectedError: types.ErrGridHashNotFound,
 		},
 	}
 
@@ -627,7 +633,7 @@ func testInteractionReceipt(t *testing.T, client *Client) {
 			require.Equal(t, ts.Ixns[0].Hash, receipt.IxHash)
 
 			httpReceipt := httpInteractionReceipt(t, test.receiptArgs)
-			require.Equal(t, *httpReceipt, *receipt)
+			checkForRPCReceipt(t, httpReceipt, receipt)
 		})
 	}
 }
@@ -1014,6 +1020,95 @@ func testInspect(t *testing.T, client *Client) {
 
 			httpInspectResponse := httpInspect(t, test.inspectArgs)
 			require.Equal(t, httpInspectResponse.Pending, inspectResponse.Pending)
+		})
+	}
+}
+
+func testInteractionByHash(t *testing.T, client *Client) {
+	ts := getTesseract(t, client, sender, &deployLogicHeight)
+
+	testcases := []struct {
+		name          string
+		ixArgs        *ptypes.InteractionByHashArgs
+		expectedError error
+	}{
+		{
+			name: "fetch interaction for existing ix hash",
+			ixArgs: &ptypes.InteractionByHashArgs{
+				Hash: ts.Ixns[0].Hash,
+			},
+		},
+		{
+			name: "fetch interaction for non-existing ix hash",
+			ixArgs: &ptypes.InteractionByHashArgs{
+				Hash: tests.RandomHash(t),
+			},
+			expectedError: types.ErrFetchingInteraction,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			rpcIxn, err := client.InteractionByHash(test.ixArgs)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, sender, rpcIxn.Sender)
+
+			httpIXResponse := httpInteractionByHash(t, test.ixArgs)
+			require.Equal(t, httpIXResponse, *rpcIxn)
+		})
+	}
+}
+
+func testInteractionByTesseract(t *testing.T, client *Client) {
+	ts := getTesseract(t, client, sender, &deployLogicHeight)
+	randomHash := tests.RandomHash(t)
+
+	testcases := []struct {
+		name          string
+		ixArgs        *ptypes.InteractionByTesseract
+		expectedError error
+	}{
+		{
+			name: "fetch interaction for existing tesseract hash",
+			ixArgs: &ptypes.InteractionByTesseract{
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractHash: &ts.Ixns[0].Parts[0].Hash,
+				},
+			},
+		},
+		{
+			name: "fetch interaction for non-existing tesseract hash",
+			ixArgs: &ptypes.InteractionByTesseract{
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractHash: &randomHash,
+				},
+			},
+			expectedError: errors.New("interaction not found"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			rpcIxn, err := client.InteractionByTesseract(test.ixArgs)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, sender, rpcIxn.Sender)
+
+			httpIXResponse := httpInteractionByTesseract(t, test.ixArgs)
+			require.Equal(t, httpIXResponse, *rpcIxn)
 		})
 	}
 }

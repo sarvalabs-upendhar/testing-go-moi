@@ -422,6 +422,57 @@ func TestGetTesseractByHeight(t *testing.T) {
 	}
 }
 
+func TestGetTesseractHashByHeight(t *testing.T) {
+	address := tests.RandomAddress(t)
+	height := uint64(33)
+	hash := tests.RandomHash(t)
+
+	chainParams := &CreateChainParams{
+		dbCallback: func(db *MockDB) {
+			err := db.SetTesseractHeightEntry(address, height, hash)
+			require.NoError(t, err)
+		},
+	}
+
+	c := createTestChainManager(t, chainParams)
+
+	testcases := []struct {
+		name          string
+		address       types.Address
+		height        uint64
+		expectedHash  types.Hash
+		expectedError error
+	}{
+		{
+			name:         "successfully fetched tesseract hash",
+			address:      address,
+			height:       height,
+			expectedHash: hash,
+		},
+		{
+			name:          "failed to fetch tesseract hash",
+			address:       tests.RandomAddress(t),
+			height:        height,
+			expectedError: types.ErrKeyNotFound,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			hash, err := c.GetTesseractHeightEntry(test.address, test.height)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedHash, hash)
+		})
+	}
+}
+
 func TestGetAssetDataByAssetHash(t *testing.T) {
 	_, assetDescriptor := tests.CreateTestAsset(t, tests.RandomAddress(t))
 	assetDescriptor.Owner = tests.RandomAddress(t)
@@ -2350,7 +2401,6 @@ func TestParseGenesisFile(t *testing.T) {
 			}
 
 			require.Equal(t, len(test.genesisLogics), len(genesisLogics))
-			t.Log(genesisLogics)
 
 			validateGenesisLogics(t, test.genesisLogics, genesisLogics)
 		})

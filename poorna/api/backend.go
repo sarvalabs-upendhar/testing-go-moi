@@ -16,6 +16,7 @@ type IxPool interface {
 	GetNonce(addr types.Address) (uint64, error)
 	GetIxs(addr types.Address, inclQueued bool) (promoted, enqueued []*types.Interaction)
 	GetAllIxs(inclQueued bool) (allPromoted, allEnqueued map[types.Address][]*types.Interaction)
+	GetPendingIx(ixHash types.Hash) (*types.Interaction, bool)
 	GetAccountWaitTime(addr types.Address) (*big.Int, error)
 	GetAllAccountsWaitTime() map[types.Address]*big.Int
 }
@@ -24,8 +25,10 @@ type ChainManager interface {
 	GetLatestTesseract(addr types.Address, withInteractions bool) (*types.Tesseract, error)
 	GetTesseract(hash types.Hash, withInteractions bool) (*types.Tesseract, error)
 	GetReceiptByIxHash(ixHash types.Hash) (*types.Receipt, error)
-	GetTesseractByHeight(address types.Address, height uint64, withInteractions bool) (*types.Tesseract, error)
 	GetAssetDataByAssetHash(assetHash []byte) (*gtypes.AssetObject, error)
+	GetInteractionAndPartsByIxHash(ixHash types.Hash) (*types.Interaction, *types.TesseractParts, int, error)
+	GetInteractionAndPartsByTSHash(tsHash types.Hash, ixIndex int) (*types.Interaction, *types.TesseractParts, error)
+	GetTesseractHeightEntry(address types.Address, height uint64) (types.Hash, error)
 }
 
 type StateManager interface {

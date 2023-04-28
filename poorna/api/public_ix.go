@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"math/big"
 
@@ -70,12 +69,7 @@ func constructInteraction(args *ptypes.SendIXArgs, nonce uint64) (ix *types.Inte
 	case types.IxValueTransfer:
 		// Decode the transfer values
 		for asset, value := range args.TransferValues {
-			valueData, err := hex.DecodeString(value)
-			if err != nil {
-				return nil, err
-			}
-
-			data.Input.TransferValues[asset] = new(big.Int).SetBytes(valueData)
+			data.Input.TransferValues[asset] = value.ToInt()
 		}
 
 	case types.IxAssetCreate:

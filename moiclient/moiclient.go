@@ -288,6 +288,52 @@ func (c *Client) ContextInfo(args *ptypes.ContextInfoArgs) (*ptypes.ContextRespo
 	return &contextResp, nil
 }
 
+// InteractionByTesseract returns the interaction for the given tesseract hash
+func (c *Client) InteractionByTesseract(args *ptypes.InteractionByTesseract) (*ptypes.RPCInteraction, error) {
+	var resp ptypes.Response
+
+	err := c.Call(&resp, "moi.InteractionByTesseract", args)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+
+	var ix ptypes.RPCInteraction
+
+	err = json.Unmarshal(resp.Data, &ix)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ix, nil
+}
+
+// InteractionByHash returns the interaction for given ix hash
+func (c *Client) InteractionByHash(args *ptypes.InteractionByHashArgs) (*ptypes.RPCInteraction, error) {
+	var resp ptypes.Response
+
+	err := c.Call(&resp, "moi.InteractionByHash", args)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+
+	var ix ptypes.RPCInteraction
+
+	err = json.Unmarshal(resp.Data, &ix)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ix, nil
+}
+
 // InteractionReceipt returns the receipt of the interaction for given hash
 func (c *Client) InteractionReceipt(args *ptypes.ReceiptArgs) (*ptypes.RPCReceipt, error) {
 	var resp ptypes.Response

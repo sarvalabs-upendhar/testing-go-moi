@@ -9,6 +9,7 @@ import (
 
 	"github.com/sarvalabs/moichain/common/hexutil"
 	"github.com/sarvalabs/moichain/jug/engineio"
+	"github.com/sarvalabs/moichain/lattice"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 	"github.com/sarvalabs/moichain/utils"
@@ -38,39 +39,30 @@ func getTesseractArgs(address types.Address, options ptypes.TesseractNumberOrHas
 
 // getTesseractByHash returns the tesseract based on the hash given
 func (p *PublicCoreAPI) getTesseractByHash(hash types.Hash, withInteractions bool) (*types.Tesseract, error) {
-	if hash.IsNil() {
-		return nil, types.ErrInvalidHash
-	}
-
 	return p.chain.GetTesseract(hash, withInteractions)
 }
 
-// getTesseractByHeight returns the tesseract based on the height given
-func (p *PublicCoreAPI) getTesseractByHeight(
-	address types.Address,
-	height int64,
-	withInteractions bool,
-) (*types.Tesseract, error) {
+func (p *PublicCoreAPI) getTesseractHashByHeight(address types.Address, height int64) (types.Hash, error) {
 	if address.IsNil() {
-		return nil, types.ErrInvalidAddress
+		return types.NilHash, types.ErrInvalidAddress
 	}
 
 	if height == ptypes.LatestTesseractHeight {
-		return p.chain.GetLatestTesseract(address, withInteractions)
+		accMetaInfo, err := p.sm.GetAccountMetaInfo(address)
+		if err != nil {
+			return types.NilHash, err
+		}
+
+		return accMetaInfo.TesseractHash, nil
 	}
 
-	tesseract, err := p.chain.GetTesseractByHeight(address, uint64(height), withInteractions)
-	if err != nil {
-		return nil, err
-	}
-
-	return tesseract, nil
+	return p.chain.GetTesseractHeightEntry(address, uint64(height))
 }
 
 // getTesseract returns tesseract using arguments.
 func (p *PublicCoreAPI) getTesseract(args *ptypes.TesseractArgs) (*types.Tesseract, error) {
-	if args.Options.TesseractHash != nil && args.Options.TesseractNumber != nil {
-		return nil, errors.New("can not use both tesseract number and tesseract hash")
+	if err := validateOptions(args.Options); err != nil {
+		return nil, err
 	}
 
 	if hash, ok := args.Options.Hash(); ok {
@@ -79,7 +71,12 @@ func (p *PublicCoreAPI) getTesseract(args *ptypes.TesseractArgs) (*types.Tessera
 
 	height, err := args.Options.Number()
 	if err == nil {
-		return p.getTesseractByHeight(args.Address, height, args.WithInteractions)
+		hash, err := p.getTesseractHashByHeight(args.Address, height)
+		if err != nil {
+			return nil, err
+		}
+
+		return p.getTesseractByHash(hash, args.WithInteractions)
 	}
 
 	if errors.Is(err, types.ErrEmptyHeight) {
@@ -159,6 +156,64 @@ func (p *PublicCoreAPI) GetTDU(args *ptypes.TesseractArgs) (map[types.AssetID]st
 	return rpcAssetMap, nil
 }
 
+// GetInteractionByTesseract returns the interaction for the given tesseract hash
+func (p *PublicCoreAPI) GetInteractionByTesseract(args *ptypes.InteractionByTesseract) (*ptypes.RPCInteraction, error) {
+	if err := validateOptions(args.Options); err != nil {
+		return nil, err
+	}
+
+	getRPCIX := func(hash types.Hash, ixIndex hexutil.Uint64) (*ptypes.RPCInteraction, error) {
+		ix, parts, err := p.chain.GetInteractionAndPartsByTSHash(hash, int(args.IxIndex))
+		if err != nil {
+			return nil, errors.Wrap(err, "interaction not found")
+		}
+
+		return createRPCInteraction(ix, parts.Grid, int(ixIndex))
+	}
+
+	if hash, ok := args.Options.Hash(); ok {
+		return getRPCIX(hash, args.IxIndex)
+	}
+
+	height, err := args.Options.Number()
+	if err == nil {
+		hash, err := p.getTesseractHashByHeight(args.Address, height)
+		if err != nil {
+			return nil, errors.Wrap(err, "tesseract hash not found for given address and height")
+		}
+
+		return getRPCIX(hash, args.IxIndex)
+	}
+
+	if errors.Is(err, types.ErrEmptyHeight) {
+		return nil, types.ErrEmptyOptions
+	}
+
+	return nil, errors.Wrap(err, "invalid options")
+}
+
+// GetInteractionByHash returns the interaction for the given interaction hash
+func (p *PublicCoreAPI) GetInteractionByHash(args *ptypes.InteractionByHashArgs) (*ptypes.RPCInteraction, error) {
+	if args.Hash.IsNil() {
+		return nil, types.ErrInvalidHash
+	}
+
+	ix, parts, ixIndex, err := p.chain.GetInteractionAndPartsByIxHash(args.Hash)
+	if err != nil && errors.Is(err, types.ErrGridHashNotFound) {
+		if pendingIX, found := p.ixpool.GetPendingIx(args.Hash); found {
+			return createRPCInteraction(pendingIX, nil, 0)
+		}
+
+		return nil, types.ErrFetchingInteraction
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return createRPCInteraction(ix, parts.Grid, ixIndex)
+}
+
 // GetInteractionReceipt returns the receipt for the given interaction hash
 func (p *PublicCoreAPI) GetInteractionReceipt(args *ptypes.ReceiptArgs) (*ptypes.RPCReceipt, error) {
 	if args.Hash.IsNil() {
@@ -170,7 +225,12 @@ func (p *PublicCoreAPI) GetInteractionReceipt(args *ptypes.ReceiptArgs) (*ptypes
 		return nil, err
 	}
 
-	return createRPCReceipt(receipt), nil
+	ix, parts, ixIndex, err := p.chain.GetInteractionAndPartsByIxHash(args.Hash)
+	if err != nil {
+		return nil, err
+	}
+
+	return createRPCReceipt(receipt, ix, parts.Grid, ixIndex), nil
 }
 
 // GetInteractionCount returns the number of interactions sent for the given address
@@ -290,12 +350,7 @@ func (p *PublicCoreAPI) GetStorageAt(args *ptypes.GetStorageArgs) (hexutil.Bytes
 		return nil, err
 	}
 
-	storageEntry, err := p.sm.GetStorageEntry(logicID, types.FromHex(args.StorageKey), ts.StateHash())
-	if err != nil {
-		return nil, err
-	}
-
-	return storageEntry, nil
+	return p.sm.GetStorageEntry(logicID, types.FromHex(args.StorageKey), ts.StateHash())
 }
 
 // GetAssetInfoByAssetID returns the asset info associated with the given asset id
@@ -391,14 +446,20 @@ func parseAssetMetaInfo(aID []byte) *types.AssetDescriptor {
 
 // createRPCInteraction creates an RPC Interaction by copying all fields of the interaction into the RPC Interaction,
 // depolarizing the payload based on the interaction type, JSON marshalling it, and storing it in the input payload.
-func createRPCInteraction(ix *types.Interaction) (*ptypes.RPCInteraction, error) {
+func createRPCInteraction(
+	ix *types.Interaction,
+	grid map[types.Address]types.TesseractHeightAndHash,
+	ixIndex int,
+) (*ptypes.RPCInteraction, error) {
 	input := ix.Input()
 	compute := ix.Compute()
 	trust := ix.Trust()
 
 	rpcIX := &ptypes.RPCInteraction{
-		Type:  input.Type,
-		Nonce: hexutil.Uint64(input.Nonce),
+		Parts:   getRPCTesseractPartsFromGrid(grid),
+		IxIndex: hexutil.Uint64(ixIndex),
+		Type:    input.Type,
+		Nonce:   hexutil.Uint64(input.Nonce),
 
 		Sender:   input.Sender,
 		Receiver: input.Receiver,
@@ -419,16 +480,16 @@ func createRPCInteraction(ix *types.Interaction) (*ptypes.RPCInteraction, error)
 	}
 
 	if len(input.TransferValues) > 0 {
-		rpcIX.TransferValues = make(map[types.AssetID]string)
+		rpcIX.TransferValues = make(map[types.AssetID]*hexutil.Big)
 		for asset, amount := range input.TransferValues {
-			rpcIX.TransferValues[asset] = hex.EncodeToString(amount.Bytes())
+			rpcIX.TransferValues[asset] = (*hexutil.Big)(amount)
 		}
 	}
 
 	if len(input.PerceivedValues) > 0 {
-		rpcIX.PerceivedValues = make(map[types.AssetID]string)
+		rpcIX.PerceivedValues = make(map[types.AssetID]*hexutil.Big)
 		for asset, amount := range input.PerceivedValues {
-			rpcIX.PerceivedValues[asset] = hex.EncodeToString(amount.Bytes())
+			rpcIX.PerceivedValues[asset] = (*hexutil.Big)(amount)
 		}
 	}
 
@@ -493,6 +554,29 @@ func createRPCInteraction(ix *types.Interaction) (*ptypes.RPCInteraction, error)
 	return rpcIX, nil
 }
 
+func getRPCTesseractPartsFromGrid(grid map[types.Address]types.TesseractHeightAndHash) ptypes.RPCTesseractParts {
+	if len(grid) == 0 {
+		return nil
+	}
+
+	parts := make(ptypes.RPCTesseractParts, 0, len(grid))
+
+	for address, heightAndHash := range grid {
+		parts = append(
+			parts,
+			ptypes.RPCTesseractPart{
+				Address: address,
+				Height:  hexutil.Uint64(heightAndHash.Height),
+				Hash:    heightAndHash.Hash,
+			},
+		)
+	}
+
+	parts.Sort()
+
+	return parts
+}
+
 func createRPCTesseractGridID(tesseractGridID *types.TesseractGridID) *ptypes.RPCTesseractGridID {
 	if tesseractGridID == nil {
 		return nil
@@ -504,21 +588,7 @@ func createRPCTesseractGridID(tesseractGridID *types.TesseractGridID) *ptypes.RP
 
 	if tesseractGridID.Parts != nil {
 		newGrid.Total = hexutil.Uint64(tesseractGridID.Parts.Total)
-		newGrid.Parts = make(ptypes.RPCTesseractParts, 0, tesseractGridID.Parts.Total)
-		grid := tesseractGridID.Parts.Grid
-
-		for address, heightAndHash := range grid {
-			newGrid.Parts = append(
-				newGrid.Parts,
-				ptypes.RPCTesseractPart{
-					Address: address,
-					Height:  hexutil.Uint64(heightAndHash.Height),
-					Hash:    heightAndHash.Hash,
-				},
-			)
-		}
-
-		newGrid.Parts.Sort()
+		newGrid.Parts = getRPCTesseractPartsFromGrid(tesseractGridID.Parts.Grid)
 	}
 
 	return newGrid
@@ -618,11 +688,16 @@ func CreateRPCTesseract(ts *types.Tesseract) (*ptypes.RPCTesseract, error) {
 		rpcIxns []*ptypes.RPCInteraction
 	)
 
-	if len(ts.Interactions()) > 0 {
+	if ts.ClusterID() != lattice.GenesisIdentifier && len(ts.Interactions()) > 0 {
 		rpcIxns = make([]*ptypes.RPCInteraction, len(ts.Interactions()))
 
-		for i, ixn := range ts.Interactions() {
-			rpcIxns[i], err = createRPCInteraction(ixn)
+		parts, err := ts.Parts()
+		if err != nil {
+			return nil, err
+		}
+
+		for ixIndex, ixn := range ts.Interactions() {
+			rpcIxns[ixIndex], err = createRPCInteraction(ixn, parts.Grid, ixIndex)
 			if err != nil {
 				return nil, err
 			}
@@ -690,6 +765,9 @@ func createRPCContextHashes(contextHashes map[types.Address]types.Hash) ptypes.R
 // createRPCReceipt creates rpc receipt from receipt, interaction, grid, interaction index
 func createRPCReceipt(
 	receipt *types.Receipt,
+	ix *types.Interaction,
+	grid map[types.Address]types.TesseractHeightAndHash,
+	ixIndex int,
 ) *ptypes.RPCReceipt {
 	return &ptypes.RPCReceipt{
 		IxType:        hexutil.Uint64(receipt.IxType),
@@ -699,5 +777,17 @@ func createRPCReceipt(
 		StateHashes:   createRPCStateHashes(receipt.StateHashes),
 		ContextHashes: createRPCContextHashes(receipt.ContextHashes),
 		ExtraData:     receipt.ExtraData,
+		From:          ix.Sender(),
+		To:            ix.Receiver(),
+		IXIndex:       hexutil.Uint64(ixIndex),
+		Parts:         getRPCTesseractPartsFromGrid(grid),
 	}
+}
+
+func validateOptions(options ptypes.TesseractNumberOrHash) error {
+	if options.TesseractHash != nil && options.TesseractNumber != nil {
+		return errors.New("can not use both tesseract number and tesseract hash")
+	}
+
+	return nil
 }

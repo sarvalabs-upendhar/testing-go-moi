@@ -112,6 +112,10 @@ type RPCReceipt struct {
 	StateHashes   RPCStateHashes      `json:"state_hashes"`
 	ContextHashes RPCContextHashes    `json:"context_hashes"`
 	ExtraData     json.RawMessage     `json:"extra_data"`
+	From          types.Address       `json:"from"`
+	To            types.Address       `json:"to"`
+	IXIndex       hexutil.Uint64      `json:"ix_index"`
+	Parts         RPCTesseractParts   `json:"parts"`
 }
 
 type RPCInteraction struct {
@@ -122,9 +126,9 @@ type RPCInteraction struct {
 	Receiver types.Address `json:"receiver"`
 	Payer    types.Address `json:"payer"`
 
-	TransferValues  map[types.AssetID]string `json:"transfer_values"`
-	PerceivedValues map[types.AssetID]string `json:"perceived_values"`
-	PerceivedProofs hexutil.Bytes            `json:"perceived_proofs"`
+	TransferValues  map[types.AssetID]*hexutil.Big `json:"transfer_values"`
+	PerceivedValues map[types.AssetID]*hexutil.Big `json:"perceived_values"`
+	PerceivedProofs hexutil.Bytes                  `json:"perceived_proofs"`
 
 	FuelPrice *hexutil.Big `json:"fuel_price"`
 	FuelLimit *hexutil.Big `json:"fuel_limit"`
@@ -138,8 +142,10 @@ type RPCInteraction struct {
 	MTQ        hexutil.Uint64    `json:"mtq"`
 	TrustNodes []kramaid.KramaID `json:"trust_nodes"`
 
-	Hash      types.Hash    `json:"hash"`
-	Signature hexutil.Bytes `json:"signature"`
+	Hash      types.Hash        `json:"hash"`
+	Signature hexutil.Bytes     `json:"signature"`
+	Parts     RPCTesseractParts `json:"parts"`
+	IxIndex   hexutil.Uint64    `json:"ix_index"`
 }
 
 type RPCInteractions []*RPCInteraction
@@ -311,8 +317,8 @@ type SendIXArgs struct {
 	Receiver types.Address `json:"receiver"`
 	Payer    types.Address `json:"payer"`
 
-	TransferValues  map[types.AssetID]string `json:"transfer_values"`
-	PerceivedValues map[types.AssetID]string `json:"perceived_values"`
+	TransferValues  map[types.AssetID]*hexutil.Big `json:"transfer_values"`
+	PerceivedValues map[types.AssetID]*hexutil.Big `json:"perceived_values"`
 
 	FuelPrice *hexutil.Big `json:"fuel_price"`
 	FuelLimit *hexutil.Big `json:"fuel_limit"`
@@ -342,6 +348,16 @@ type RPCLogicPayload struct {
 	LogicID  string        `json:"logic_id"`
 	Callsite string        `json:"callsite"`
 	Calldata hexutil.Bytes `json:"calldata"`
+}
+
+type InteractionByHashArgs struct {
+	Hash types.Hash `json:"hash"`
+}
+
+type InteractionByTesseract struct {
+	Address types.Address         `json:"address"`
+	Options TesseractNumberOrHash `json:"options"`
+	IxIndex hexutil.Uint64        `json:"ix_index"`
 }
 
 // Response wrapper

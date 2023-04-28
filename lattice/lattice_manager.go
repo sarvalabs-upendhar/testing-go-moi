@@ -304,6 +304,15 @@ func (c *ChainManager) GetTesseractByHeight(
 	return c.GetTesseract(types.BytesToHash(tesseractHash), withInteractions)
 }
 
+func (c *ChainManager) GetTesseractHeightEntry(address types.Address, height uint64) (types.Hash, error) {
+	tesseractHash, err := c.db.GetTesseractHeightEntry(address, height)
+	if err != nil {
+		return types.NilHash, errors.Wrap(err, "failed to fetch tesseract height entry")
+	}
+
+	return types.BytesToHash(tesseractHash), nil
+}
+
 func (c *ChainManager) GetAssetDataByAssetHash(assetHash []byte) (*gtypes.AssetObject, error) {
 	rawData, err := c.db.ReadEntry(assetHash)
 	if err != nil {

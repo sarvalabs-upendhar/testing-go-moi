@@ -7,6 +7,7 @@ import (
 	"errors"
 	"math/big"
 	"net/http"
+	"reflect"
 	"strconv"
 	"testing"
 	"time"
@@ -191,7 +192,7 @@ func retryFetchReceipt(t *testing.T, ctx context.Context, client *Client, ixHash
 			receipt, err := client.InteractionReceipt(receiptArgs)
 			if err == nil {
 				httpReceipt := httpInteractionReceipt(t, receiptArgs)
-				require.Equal(t, httpReceipt, receipt)
+				checkForRPCReceipt(t, httpReceipt, receipt)
 
 				return receipt
 			}
@@ -331,6 +332,34 @@ func httpInteractionReceipt(t *testing.T, args *ptypes.ReceiptArgs) *ptypes.RPCR
 	require.NoError(t, err)
 
 	return &receipt
+}
+
+// httpInteractionByHash returns the interaction for given ix hash
+func httpInteractionByHash(t *testing.T, args *ptypes.InteractionByHashArgs) ptypes.RPCInteraction {
+	t.Helper()
+
+	resp := makeHTTPRequest(t, "moi.InteractionByHash", args)
+
+	var ix ptypes.RPCInteraction
+
+	err := json.Unmarshal(resp.Data, &ix)
+	require.NoError(t, err)
+
+	return ix
+}
+
+// httpInteractionByTesseract returns the interaction for the given tesseract hash
+func httpInteractionByTesseract(t *testing.T, args *ptypes.InteractionByTesseract) ptypes.RPCInteraction {
+	t.Helper()
+
+	resp := makeHTTPRequest(t, "moi.InteractionByTesseract", args)
+
+	var ix ptypes.RPCInteraction
+
+	err := json.Unmarshal(resp.Data, &ix)
+	require.NoError(t, err)
+
+	return ix
 }
 
 // httpInteractionCount returns the number of interactions sent for the given address
@@ -499,6 +528,26 @@ func httpDBGet(t *testing.T, args *ptypes.DebugArgs) string {
 	require.NoError(t, err)
 
 	return response
+}
+
+func checkForRPCReceipt(
+	t *testing.T,
+	expectedRPCReceipt *ptypes.RPCReceipt,
+	actualRPCReceipt *ptypes.RPCReceipt,
+) {
+	t.Helper()
+
+	require.Equal(t, expectedRPCReceipt.IxType, actualRPCReceipt.IxType)
+	require.Equal(t, expectedRPCReceipt.IxHash, actualRPCReceipt.IxHash)
+	require.Equal(t, expectedRPCReceipt.FuelUsed, actualRPCReceipt.FuelUsed)
+	require.Equal(t, expectedRPCReceipt.ExtraData, actualRPCReceipt.ExtraData)
+	require.Equal(t, expectedRPCReceipt.From, actualRPCReceipt.From)
+	require.Equal(t, expectedRPCReceipt.To, actualRPCReceipt.To)
+	require.Equal(t, expectedRPCReceipt.IXIndex, actualRPCReceipt.IXIndex)
+	require.Equal(t, expectedRPCReceipt.Parts, actualRPCReceipt.Parts)
+
+	require.True(t, reflect.DeepEqual(expectedRPCReceipt.StateHashes, actualRPCReceipt.StateHashes))
+	require.True(t, reflect.DeepEqual(expectedRPCReceipt.ContextHashes, actualRPCReceipt.ContextHashes))
 }
 
 // httpAccounts returns the addresses of all the accounts

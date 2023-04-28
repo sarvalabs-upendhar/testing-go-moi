@@ -3,7 +3,6 @@ package api
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"math/big"
@@ -21,6 +20,7 @@ import (
 	"github.com/sarvalabs/moichain/dhruva"
 	"github.com/sarvalabs/moichain/guna"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
+	"github.com/sarvalabs/moichain/lattice"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
@@ -32,12 +32,173 @@ type Context struct {
 	randomNodes    []id.KramaID
 }
 
+type ixData struct {
+	ix      *types.Interaction
+	parts   *types.TesseractParts
+	ixIndex int
+}
 type MockChainManager struct {
-	receipts           map[types.Hash]*types.Receipt
-	assets             map[types.Hash]*gtypes.AssetObject
-	tesseractsByHash   map[types.Hash]*types.Tesseract
-	tesseractsByHeight map[string]*types.Tesseract
-	latestTesseracts   map[types.Address]*types.Tesseract
+	receipts                   map[types.Hash]*types.Receipt
+	assets                     map[types.Hash]*gtypes.AssetObject
+	tesseractsByHash           map[types.Hash]*types.Tesseract
+	tesseractsByHeight         map[string]*types.Tesseract
+	latestTesseracts           map[types.Address]*types.Tesseract
+	ixByTSHash                 map[types.Hash]ixData
+	ixByHash                   map[types.Hash]ixData
+	TSHashByHeight             map[string]types.Hash
+	GetInteractionByIxHashHook func() error
+}
+
+func NewMockChainManager(t *testing.T) *MockChainManager {
+	t.Helper()
+
+	mockChain := new(MockChainManager)
+
+	mockChain.receipts = make(map[types.Hash]*types.Receipt, 0)
+	mockChain.assets = make(map[types.Hash]*gtypes.AssetObject, 0)
+	mockChain.tesseractsByHash = make(map[types.Hash]*types.Tesseract)
+	mockChain.tesseractsByHeight = make(map[string]*types.Tesseract)
+	mockChain.latestTesseracts = make(map[types.Address]*types.Tesseract)
+	mockChain.ixByHash = make(map[types.Hash]ixData)
+	mockChain.ixByTSHash = make(map[types.Hash]ixData)
+	mockChain.TSHashByHeight = make(map[string]types.Hash)
+
+	return mockChain
+}
+
+func (c *MockChainManager) SetTesseractHeightEntry(address types.Address, height uint64, hash types.Hash) {
+	key := address.Hex() + strconv.FormatUint(height, 10)
+	c.TSHashByHeight[key] = hash
+}
+
+func (c *MockChainManager) GetTesseractHeightEntry(address types.Address, height uint64) (types.Hash, error) {
+	key := address.Hex() + strconv.FormatUint(height, 10)
+
+	hash, ok := c.TSHashByHeight[key]
+	if !ok {
+		return types.NilHash, types.ErrKeyNotFound
+	}
+
+	return hash, nil
+}
+
+func (c *MockChainManager) SetInteractionDataByTSHash(
+	tsHash types.Hash,
+	ix *types.Interaction,
+	parts *types.TesseractParts,
+) {
+	c.ixByTSHash[tsHash] = ixData{
+		ix:    ix,
+		parts: parts,
+	}
+}
+
+func (c *MockChainManager) GetInteractionAndPartsByTSHash(tsHash types.Hash, ixIndex int) (
+	*types.Interaction,
+	*types.TesseractParts,
+	error,
+) {
+	data, ok := c.ixByTSHash[tsHash]
+	if !ok {
+		return nil, nil, types.ErrFetchingInteraction
+	}
+
+	return data.ix, data.parts, nil
+}
+
+func (c *MockChainManager) SetInteractionDataByIxHash(ix *types.Interaction, parts *types.TesseractParts, ixIndex int) {
+	c.ixByHash[ix.Hash()] = ixData{
+		ix:      ix,
+		parts:   parts,
+		ixIndex: ixIndex,
+	}
+}
+
+func (c *MockChainManager) GetInteractionAndPartsByIxHash(ixHash types.Hash) (
+	*types.Interaction,
+	*types.TesseractParts,
+	int,
+	error,
+) {
+	if c.GetInteractionByIxHashHook != nil {
+		return nil, nil, 0, c.GetInteractionByIxHashHook()
+	}
+
+	data, ok := c.ixByHash[ixHash]
+	if !ok {
+		return nil, nil, 0, types.ErrFetchingInteraction
+	}
+
+	return data.ix, data.parts, data.ixIndex, nil
+}
+
+// Chain manager mock functions
+func (c *MockChainManager) GetLatestTesseract(addr types.Address, withInteractions bool) (*types.Tesseract, error) {
+	ts, ok := c.latestTesseracts[addr]
+	if !ok {
+		return nil, types.ErrFetchingTesseract
+	}
+
+	tsCopy := *ts // copy, so that stored tesseract won't be modified
+
+	if !withInteractions {
+		tsCopy = *tsCopy.GetTesseractWithoutIxns()
+	}
+
+	return &tsCopy, nil
+}
+
+func (c *MockChainManager) GetTesseract(hash types.Hash, withInteractions bool) (*types.Tesseract, error) {
+	ts, ok := c.tesseractsByHash[hash]
+	if !ok {
+		return nil, types.ErrFetchingTesseract
+	}
+
+	tsCopy := *ts // copy, so that stored tesseract won't be modified
+
+	if !withInteractions {
+		tsCopy = *tsCopy.GetTesseractWithoutIxns()
+	}
+
+	return &tsCopy, nil
+}
+
+func (c *MockChainManager) setReceiptByIXHash(ixHash types.Hash, receipt *types.Receipt) {
+	c.receipts[ixHash] = receipt
+}
+
+func (c *MockChainManager) GetReceiptByIxHash(ixHash types.Hash) (*types.Receipt, error) {
+	if receipt := c.receipts[ixHash]; receipt != nil {
+		return receipt, nil
+	}
+
+	return nil, types.ErrReceiptNotFound
+}
+
+func (c *MockChainManager) GetAssetDataByAssetHash(assetHash []byte) (*gtypes.AssetObject, error) {
+	if result, ok := c.assets[types.BytesToHash(assetHash)]; ok {
+		return result, nil
+	}
+
+	return nil, types.ErrFetchingAssetDataInfo
+}
+
+func (c *MockChainManager) setTesseractByHash(
+	t *testing.T,
+	ts *types.Tesseract,
+) {
+	t.Helper()
+
+	c.tesseractsByHash[tests.GetTesseractHash(t, ts)] = ts
+}
+
+func (c *MockChainManager) setAssets(id types.AssetID, spec *types.AssetDescriptor) {
+	c.assets[types.BytesToHash(id.GetCID())] = &gtypes.AssetObject{
+		LogicID: spec.LogicID,
+		Symbol:  spec.Symbol,
+		Owner:   spec.Owner,
+		Supply:  spec.Supply,
+	}
 }
 
 type MockStateManager struct {
@@ -48,6 +209,22 @@ type MockStateManager struct {
 	logicManifests map[string][]byte
 	logicStorage   map[string]map[string]string // first key denotes logic id, second key denotes storage key
 	accMetaInfo    map[types.Address]*types.AccountMetaInfo
+}
+
+func NewMockStateManager(t *testing.T) *MockStateManager {
+	t.Helper()
+
+	mockState := new(MockStateManager)
+
+	mockState.balances = make(map[types.Address]*gtypes.BalanceObject)
+	mockState.storage = make(map[types.Hash][]byte)
+	mockState.accounts = make(map[types.Address]*types.Account)
+	mockState.context = make(map[types.Address]*Context)
+	mockState.logicManifests = make(map[string][]byte)
+	mockState.logicStorage = make(map[string]map[string]string, 0)
+	mockState.accMetaInfo = make(map[types.Address]*types.AccountMetaInfo)
+
+	return mockState
 }
 
 func (s *MockStateManager) GetLogicManifest(logicID types.LogicID, stateHash types.Hash) ([]byte, error) {
@@ -62,11 +239,11 @@ func (s *MockStateManager) GetLogicManifest(logicID types.LogicID, stateHash typ
 func (s *MockStateManager) setAccountMetaInfo(
 	t *testing.T,
 	address types.Address,
-	ts *types.AccountMetaInfo,
+	accMetaInfo *types.AccountMetaInfo,
 ) {
 	t.Helper()
 
-	s.accMetaInfo[address] = ts
+	s.accMetaInfo[address] = accMetaInfo
 }
 
 func (s *MockStateManager) GetAccountMetaInfo(addr types.Address) (*types.AccountMetaInfo, error) {
@@ -109,147 +286,6 @@ func (s *MockStateManager) GetAccountState(addr types.Address, stateHash types.H
 
 	return account, nil
 }
-
-func NewMockChainManager(t *testing.T) *MockChainManager {
-	t.Helper()
-
-	mockChain := new(MockChainManager)
-
-	mockChain.receipts = make(map[types.Hash]*types.Receipt, 0)
-	mockChain.assets = make(map[types.Hash]*gtypes.AssetObject, 0)
-	mockChain.tesseractsByHash = make(map[types.Hash]*types.Tesseract)
-	mockChain.tesseractsByHeight = make(map[string]*types.Tesseract)
-	mockChain.latestTesseracts = make(map[types.Address]*types.Tesseract)
-
-	return mockChain
-}
-
-func NewMockStateManager(t *testing.T) *MockStateManager {
-	t.Helper()
-
-	mockState := new(MockStateManager)
-
-	mockState.balances = make(map[types.Address]*gtypes.BalanceObject)
-	mockState.storage = make(map[types.Hash][]byte)
-	mockState.accounts = make(map[types.Address]*types.Account)
-	mockState.context = make(map[types.Address]*Context)
-	mockState.logicManifests = make(map[string][]byte)
-	mockState.logicStorage = make(map[string]map[string]string, 0)
-	mockState.accMetaInfo = make(map[types.Address]*types.AccountMetaInfo)
-
-	return mockState
-}
-
-func (c *MockChainManager) setLatestTesseract(
-	t *testing.T,
-	ts *types.Tesseract,
-) {
-	t.Helper()
-
-	c.latestTesseracts[ts.Address()] = ts
-}
-
-// Chain manager mock functions
-func (c *MockChainManager) GetLatestTesseract(addr types.Address, withInteractions bool) (*types.Tesseract, error) {
-	ts, ok := c.latestTesseracts[addr]
-	if !ok {
-		return nil, types.ErrFetchingTesseract
-	}
-
-	tsCopy := *ts // copy, so that stored tesseract won't be modified
-
-	if !withInteractions {
-		tsCopy = *tsCopy.GetTesseractWithoutIxns()
-	}
-
-	return &tsCopy, nil
-}
-
-func (c *MockChainManager) GetTesseract(hash types.Hash, withInteractions bool) (*types.Tesseract, error) {
-	ts, ok := c.tesseractsByHash[hash]
-	if !ok {
-		return nil, types.ErrFetchingTesseract
-	}
-
-	tsCopy := *ts // copy, so that stored tesseract won't be modified
-
-	if !withInteractions {
-		tsCopy = *tsCopy.GetTesseractWithoutIxns()
-	}
-
-	return &tsCopy, nil
-}
-
-func (c *MockChainManager) setTesseractByHeight(
-	t *testing.T,
-	ts *types.Tesseract,
-) {
-	t.Helper()
-
-	key := ts.Address().Hex() + strconv.Itoa(int(ts.Height()))
-	c.tesseractsByHeight[key] = ts
-}
-
-func (c *MockChainManager) GetTesseractByHeight(
-	address types.Address,
-	height uint64,
-	withInteractions bool,
-) (*types.Tesseract, error) {
-	key := address.Hex() + strconv.Itoa(int(height))
-
-	ts, ok := c.tesseractsByHeight[key]
-	if !ok {
-		return nil, types.ErrFetchingTesseract
-	}
-
-	tsCopy := *ts // copy, so that stored tesseract won't be modified
-
-	if !withInteractions {
-		tsCopy = *tsCopy.GetTesseractWithoutIxns()
-	}
-
-	return &tsCopy, nil
-}
-
-func (c *MockChainManager) GetReceiptByIxHash(ixHash types.Hash) (*types.Receipt, error) {
-	if receipt := c.receipts[ixHash]; receipt != nil {
-		return receipt, nil
-	}
-
-	return nil, types.ErrReceiptNotFound
-}
-
-func (c *MockChainManager) GetAssetDataByAssetHash(assetHash []byte) (*gtypes.AssetObject, error) {
-	if result, ok := c.assets[types.BytesToHash(assetHash)]; ok {
-		return result, nil
-	}
-
-	return nil, types.ErrFetchingAssetDataInfo
-}
-
-func (c *MockChainManager) setTesseractByHash(
-	t *testing.T,
-	ts *types.Tesseract,
-) {
-	t.Helper()
-
-	c.tesseractsByHash[tests.GetTesseractHash(t, ts)] = ts
-}
-
-func (c *MockChainManager) setReceipt(hash types.Hash, receipt *types.Receipt) {
-	c.receipts[hash] = receipt
-}
-
-func (c *MockChainManager) setAssets(id types.AssetID, spec *types.AssetDescriptor) {
-	c.assets[types.BytesToHash(id.GetCID())] = &gtypes.AssetObject{
-		LogicID: spec.LogicID,
-		Symbol:  spec.Symbol,
-		Owner:   spec.Owner,
-		Supply:  spec.Supply,
-	}
-}
-
-// State Manager mock functions
 
 func (s *MockStateManager) GetContextByHash(address types.Address,
 	hash types.Hash,
@@ -309,15 +345,6 @@ func (s *MockStateManager) setBalance(addr types.Address, assetID types.AssetID,
 	s.balances[addr].Balances[assetID] = balance
 }
 
-func getContext(t *testing.T, count int) *Context {
-	t.Helper()
-
-	return &Context{
-		tests.GetTestKramaIDs(t, count),
-		tests.GetTestKramaIDs(t, count),
-	}
-}
-
 func (s *MockStateManager) setContext(t *testing.T, address types.Address, context *Context) {
 	t.Helper()
 
@@ -344,6 +371,7 @@ type MockIxPool struct {
 	waitTime     map[types.Address]*big.Int
 	pending      map[types.Address][]*types.Interaction
 	queued       map[types.Address][]*types.Interaction
+	pendingIX    map[types.Hash]*types.Interaction
 }
 
 func NewMockIxPool(t *testing.T) *MockIxPool {
@@ -355,8 +383,22 @@ func NewMockIxPool(t *testing.T) *MockIxPool {
 	ixpool.waitTime = make(map[types.Address]*big.Int)
 	ixpool.pending = make(map[types.Address][]*types.Interaction)
 	ixpool.queued = make(map[types.Address][]*types.Interaction)
+	ixpool.pendingIX = make(map[types.Hash]*types.Interaction)
 
 	return ixpool
+}
+
+func (mc *MockIxPool) SetPendingIx(ix *types.Interaction) {
+	mc.pendingIX[ix.Hash()] = ix
+}
+
+func (mc *MockIxPool) GetPendingIx(ixHash types.Hash) (*types.Interaction, bool) {
+	ix, ok := mc.pendingIX[ixHash]
+	if !ok {
+		return nil, false
+	}
+
+	return ix, true
 }
 
 func (mc *MockIxPool) AddInteractions(ixs types.Interactions) []error {
@@ -667,6 +709,15 @@ func getIxParamsWithInputComputeTrust(
 	}
 }
 
+func getContext(t *testing.T, count int) *Context {
+	t.Helper()
+
+	return &Context{
+		tests.GetTestKramaIDs(t, count),
+		tests.GetTestKramaIDs(t, count),
+	}
+}
+
 func createInteractionWithTestData(t *testing.T, ixType types.IxType, payload []byte) *types.Interaction {
 	t.Helper()
 
@@ -713,8 +764,17 @@ func newTestInteraction(
 }
 
 // checkForRPCIxn validates a field from input, compute, trust, and verifies payload.
-func checkForRPCIxn(t *testing.T, ix *types.Interaction, rpcIxn *ptypes.RPCInteraction) {
+func checkForRPCIxn(
+	t *testing.T,
+	ix *types.Interaction,
+	rpcIxn *ptypes.RPCInteraction,
+	grid map[types.Address]types.TesseractHeightAndHash,
+) {
 	t.Helper()
+
+	if len(grid) != 0 {
+		checkForRPCTesseractParts(t, grid, rpcIxn.Parts)
+	}
 
 	input := ix.Input()
 	compute := ix.Compute()
@@ -740,10 +800,7 @@ func checkForRPCIxn(t *testing.T, ix *types.Interaction, rpcIxn *ptypes.RPCInter
 			if assetID == rpcAssetID {
 				flag = true
 
-				rpcAmountData, err := hex.DecodeString(rpcAmount)
-				require.NoError(t, err)
-
-				require.Equal(t, amount, new(big.Int).SetBytes(rpcAmountData))
+				require.Equal(t, amount, rpcAmount.ToInt())
 			}
 		}
 
@@ -757,10 +814,7 @@ func checkForRPCIxn(t *testing.T, ix *types.Interaction, rpcIxn *ptypes.RPCInter
 			if assetID == rpcAssetID {
 				flag = true
 
-				rpcAmountData, err := hex.DecodeString(rpcAmount)
-				require.NoError(t, err)
-
-				require.Equal(t, amount, new(big.Int).SetBytes(rpcAmountData))
+				require.Equal(t, amount, rpcAmount.ToInt())
 			}
 		}
 
@@ -835,20 +889,22 @@ func checkForRPCIxn(t *testing.T, ix *types.Interaction, rpcIxn *ptypes.RPCInter
 
 func checkForRPCTesseractParts(
 	t *testing.T,
-	expectedParts *types.TesseractParts,
+	grid map[types.Address]types.TesseractHeightAndHash,
 	rpcParts ptypes.RPCTesseractParts,
 ) {
 	t.Helper()
 
-	require.Equal(t, len(expectedParts.Grid), len(rpcParts))
+	require.Equal(t, len(grid), len(rpcParts))
 
 	for _, rpcPart := range rpcParts {
-		heightAndHash, ok := expectedParts.Grid[rpcPart.Address]
+		heightAndHash, ok := grid[rpcPart.Address]
 		require.True(t, ok)
 
 		require.Equal(t, heightAndHash.Hash, rpcPart.Hash)
 		require.Equal(t, heightAndHash.Height, rpcPart.Height.ToInt())
 	}
+
+	tests.CheckIfPartsSorted(t, rpcParts)
 }
 
 func checkForRPCTesseractGridID(
@@ -868,8 +924,7 @@ func checkForRPCTesseractGridID(
 
 	if tesseractGridID.Parts != nil {
 		require.Equal(t, uint64(tesseractGridID.Parts.Total), rpcTesseractGridID.Total.ToInt())
-		checkForRPCTesseractParts(t, tesseractGridID.Parts, rpcTesseractGridID.Parts)
-		tests.CheckIfPartsSorted(t, rpcTesseractGridID.Parts)
+		checkForRPCTesseractParts(t, tesseractGridID.Parts.Grid, rpcTesseractGridID.Parts)
 
 		return
 	}
@@ -979,8 +1034,14 @@ func checkForRPCBody(t *testing.T, body types.TesseractBody, rpcBody ptypes.RPCB
 }
 
 // checkForRPCTesseract validates fields of rpc tesseract
-func checkForRPCTesseract(t *testing.T, ts *types.Tesseract, rpcTS *ptypes.RPCTesseract) {
+func checkForRPCTesseract(
+	t *testing.T,
+	ts *types.Tesseract,
+	rpcTS *ptypes.RPCTesseract,
+) {
 	t.Helper()
+
+	var grid map[types.Address]types.TesseractHeightAndHash
 
 	checkForRPCHeader(t, ts.Header(), rpcTS.Header)
 	checkForRPCBody(t, ts.Body(), rpcTS.Body)
@@ -990,8 +1051,21 @@ func checkForRPCTesseract(t *testing.T, ts *types.Tesseract, rpcTS *ptypes.RPCTe
 
 	require.Equal(t, hash, rpcTS.Hash)
 
+	if ts.ClusterID() == lattice.GenesisIdentifier {
+		for _, ix := range rpcTS.Ixns {
+			require.Nil(t, ix)
+		}
+
+		return
+	}
+
+	parts, err := ts.Parts()
+	if err == nil {
+		grid = parts.Grid
+	}
+
 	for i, ixn := range ts.Interactions() {
-		checkForRPCIxn(t, ixn, rpcTS.Ixns[i])
+		checkForRPCIxn(t, ixn, rpcTS.Ixns[i], grid)
 	}
 }
 
@@ -1039,15 +1113,22 @@ func checkForRPCContextHashes(
 
 func checkForRPCReceipt(
 	t *testing.T,
+	grid map[types.Address]types.TesseractHeightAndHash,
+	ix *types.Interaction,
 	receipt *types.Receipt,
 	rpcReceipt *ptypes.RPCReceipt,
+	ixIndex int,
 ) {
 	t.Helper()
 
+	checkForRPCTesseractParts(t, grid, rpcReceipt.Parts)
 	require.Equal(t, uint64(receipt.IxType), rpcReceipt.IxType.ToInt())
 	require.Equal(t, receipt.IxHash, rpcReceipt.IxHash)
 	require.Equal(t, receipt.FuelUsed, rpcReceipt.FuelUsed.ToInt())
 	checkForRPCStateHashes(t, receipt.StateHashes, rpcReceipt.StateHashes)
 	checkForRPCContextHashes(t, receipt.ContextHashes, rpcReceipt.ContextHashes)
 	require.Equal(t, receipt.ExtraData, rpcReceipt.ExtraData)
+	require.Equal(t, ix.Sender(), rpcReceipt.From)
+	require.Equal(t, ix.Receiver(), rpcReceipt.To)
+	require.Equal(t, uint64(ixIndex), rpcReceipt.IXIndex.ToInt())
 }
