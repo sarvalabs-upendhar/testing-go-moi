@@ -1237,6 +1237,10 @@ func (k *Engine) GetNodes(
 }
 
 func (k *Engine) finalizedTesseractHandler(tesseracts []*types.Tesseract) error {
+	if len(tesseracts) == 0 {
+		return errors.New("failed to finalize tesseracts")
+	}
+
 	clusterID := tesseracts[0].ClusterID()
 
 	slot := k.slots.GetSlot(clusterID)
@@ -1251,15 +1255,21 @@ func (k *Engine) finalizedTesseractHandler(tesseracts []*types.Tesseract) error 
 		return err
 	}
 
-	for _, ts := range tesseracts {
-		rawIxns, err := ts.Interactions().Bytes()
-		if err != nil {
-			return err
-		}
+	rawIxns, err := tesseracts[0].Interactions().Bytes()
+	if err != nil {
+		return err
+	}
 
+	rawReceipts, err := tesseracts[0].Receipts().Bytes()
+	if err != nil {
+		return err
+	}
+
+	for _, ts := range tesseracts {
 		msg := &ptypes.TesseractMessage{
 			CanonicalTesseract: ts.Canonical(),
 			Sender:             k.selfID,
+			Receipts:           rawReceipts,
 			Ixns:               rawIxns,
 			Delta: map[types.Hash][]byte{
 				ts.ICSHash(): clusterInfo.GetDirty()[ts.ICSHash()],

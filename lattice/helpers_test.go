@@ -1711,10 +1711,14 @@ func getPubSubMsg(t *testing.T, ts *types.Tesseract, sender id.KramaID, info *pt
 
 	msg.CanonicalTesseract = ts.Canonical()
 	msg.Sender = sender
+
 	rawIxns, err := ts.Interactions().Bytes()
 	require.NoError(t, err)
 
 	msg.Ixns = rawIxns
+
+	msg.Receipts, err = ts.Receipts().Bytes()
+	require.NoError(t, err)
 
 	rawInfo, err := info.Bytes()
 	require.NoError(t, err)

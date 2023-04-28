@@ -317,6 +317,7 @@ type TesseractMessage struct {
 	Sender             kramaid.KramaID
 	CanonicalTesseract *types.CanonicalTesseract
 	Ixns               []byte
+	Receipts           []byte
 	Delta              map[types.Hash][]byte
 }
 
@@ -338,9 +339,16 @@ func (tm *TesseractMessage) FromBytes(bytes []byte) error {
 }
 
 func (tm *TesseractMessage) Tesseract() (*types.Tesseract, error) {
-	var ixns types.Interactions
+	ixns := new(types.Interactions)
+	receipts := new(types.Receipts)
 
 	if err := ixns.FromBytes(tm.Ixns); err != nil {
+		if !errors.Is(err, polo.ErrNullPack) {
+			return nil, err
+		}
+	}
+
+	if err := receipts.FromBytes(tm.Receipts); err != nil {
 		if !errors.Is(err, polo.ErrNullPack) {
 			return nil, err
 		}
@@ -349,8 +357,8 @@ func (tm *TesseractMessage) Tesseract() (*types.Tesseract, error) {
 	return types.NewTesseract(
 		tm.CanonicalTesseract.Header,
 		tm.CanonicalTesseract.Body,
-		ixns,
-		nil,
+		*ixns,
+		*receipts,
 		tm.CanonicalTesseract.Seal,
 	), nil
 }
