@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/libp2p/go-msgio"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -404,10 +406,11 @@ func (p *SyncPeer) Send(id id.KramaID, code ptypes.MsgType, msg interface{}) err
 	}
 
 	// Write the message bytes into the peer's iobuffer
-	_, err = p.rw.Writer.Write(rawData)
-	if err != nil {
+	writer := msgio.NewWriter(p.rw.Writer)
+	if _, err = writer.Write(rawData); err != nil {
 		return err
 	}
+
 	// Flush the peer's iobuffer. This will push the message to the network
 	return p.rw.Flush()
 }
@@ -419,21 +422,17 @@ func (s *Syncer) handleSyncPeer(p *SyncPeer) {
 		atomic.AddUint32(&s.peerCount, ^uint32(0))
 	}()
 
-	for {
-		buffer := make([]byte, 4096)
+	reader := msgio.NewReader(p.rw.Reader)
 
-		bytecount, err := p.rw.Reader.Read(buffer)
+	for {
+		buffer, err := reader.ReadMsg()
 		if err != nil {
 			return
 		}
-		// TODO:Improve this
-		if bytecount == 1 {
-			continue
-		}
 
 		message := new(ptypes.Message)
-		if err := message.FromBytes(buffer[0:bytecount]); err != nil {
-			s.logger.Error("unmarshalling error", "error", err, "byte-count", bytecount)
+		if err := message.FromBytes(buffer); err != nil {
+			s.logger.Error("unmarshalling error", "error", err)
 
 			return
 		}
@@ -916,14 +915,14 @@ func (s *Syncer) Start() {
 							log.Panic(err)
 						}
 
-						rw := bufio.NewReadWriter(bufio.NewReader(v), bufio.NewWriter(v))
+						wr := bufio.NewWriter(v)
 
-						_, err = rw.Writer.Write(rawData)
-						if err != nil {
+						writer := msgio.NewWriter(wr)
+						if err := writer.WriteMsg(rawData); err != nil {
 							log.Panic(err)
 						}
 
-						if err = rw.Flush(); err != nil {
+						if err := wr.Flush(); err != nil {
 							log.Panic(err)
 						}
 					}

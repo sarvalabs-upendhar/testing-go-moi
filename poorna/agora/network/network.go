@@ -1,11 +1,12 @@
 package network
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"sync"
 	"time"
+
+	"github.com/libp2p/go-msgio"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -74,12 +75,10 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 		an.sm.PeerDisconnected(peer.getActiveSessions(), peer.id)
 	}()
 
-	rw := bufio.NewReadWriter(bufio.NewReader(peer.stream), bufio.NewWriter(peer.stream))
+	reader := msgio.NewReader(peer.stream)
 
 	for {
-		buffer := make([]byte, 4096)
-
-		byteCount, err := rw.Reader.Read(buffer)
+		buffer, err := reader.ReadMsg()
 		if err != nil {
 			an.logger.Error("Error reading data from stream", "error", err)
 
@@ -88,7 +87,7 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 
 		// Unmarshal the buffer into a proto message
 		message := new(ptypes.Message)
-		if err := message.FromBytes(buffer[0:byteCount]); err != nil {
+		if err := message.FromBytes(buffer); err != nil {
 			an.logger.Error("Error reading data from stream", "error", err)
 
 			return

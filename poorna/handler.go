@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/libp2p/go-msgio"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/sarvalabs/go-polo"
 
@@ -135,16 +137,16 @@ func (eh *SubHandler) handlePeerMessage(p *Peer) error {
 	// Read the peer's io read/writer into a buffer
 	// p.mtxLock.Lock()
 	// defer p.mtxLock.Unlock()
-	buffer := make([]byte, 4096)
+	reader := msgio.NewReader(p.rw.Reader)
 
-	bytecount, err := p.rw.Reader.Read(buffer)
+	buffer, err := reader.ReadMsg()
 	if err != nil {
 		return err
 	}
 
 	// Unmarshal the buffer into a proto message
 	message := new(ptypes.Message)
-	if err := message.FromBytes(buffer[0:bytecount]); err != nil {
+	if err := message.FromBytes(buffer); err != nil {
 		return err
 	}
 

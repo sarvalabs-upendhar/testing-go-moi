@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"sync"
 
+	"github.com/libp2p/go-msgio"
+
 	mapset "github.com/deckarep/golang-set"
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -86,16 +88,16 @@ func (p *Peer) resetStream() {
 }
 
 func (p *Peer) decodePeerMessage() (ptypes.Message, error) {
-	buffer := make([]byte, 4096)
+	reader := msgio.NewReader(p.rw.Reader)
 
-	byteCount, err := p.rw.Reader.Read(buffer)
+	buffer, err := reader.ReadMsg()
 	if err != nil {
 		return ptypes.NilMessage, err
 	}
 
 	var message ptypes.Message
 
-	err = message.FromBytes(buffer[0:byteCount])
+	err = message.FromBytes(buffer)
 	if err != nil {
 		return ptypes.NilMessage, err
 	}
@@ -124,15 +126,15 @@ func (p *Peer) InitHandshake(s *Server) error {
 		return err
 	}
 
-	buffer := make([]byte, 4096)
+	reader := msgio.NewReader(p.rw.Reader)
 
-	byteCount, err := p.rw.Reader.Read(buffer)
+	buffer, err := reader.ReadMsg()
 	if err != nil {
 		return err
 	}
 
 	message := new(ptypes.Message)
-	if err := message.FromBytes(buffer[0:byteCount]); err != nil {
+	if err := message.FromBytes(buffer); err != nil {
 		return err
 	}
 	// Unmarshal message proto into a NewPeer message

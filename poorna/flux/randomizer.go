@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/libp2p/go-msgio"
+
 	"github.com/hashicorp/go-hclog"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -97,10 +99,10 @@ func (r *Randomizer) messageHandler(stream network.Stream) {
 		}
 	}()
 	// Create a new read/write buffer
-	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
-	buffer := make([]byte, 4096)
 
-	count, err := rw.Reader.Read(buffer)
+	reader := msgio.NewReader(stream)
+
+	buffer, err := reader.ReadMsg()
 	if err != nil {
 		r.logger.Error("Error reading buffer", "err", err)
 
@@ -109,7 +111,7 @@ func (r *Randomizer) messageHandler(stream network.Stream) {
 
 	message := new(ptypes.Message)
 
-	if err := message.FromBytes(buffer[0:count]); err != nil {
+	if err := message.FromBytes(buffer); err != nil {
 		r.logger.Error("Error reading message", "err", err)
 
 		return
@@ -440,20 +442,17 @@ func (r *Randomizer) SendFluxMessage(peerID peer.ID, msgType ptypes.MsgType, msg
 		}
 	}()
 
-	// Create a new read/write buffer
-	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
-	// Create a NewPeerEvent
-
 	rawData, err = m.Bytes()
 	if err != nil {
 		return err
 	}
+
+	wr := bufio.NewWriter(stream)
 	// Write the message bytes into the peer's io buffer
-	_, err = rw.Writer.Write(rawData)
-	if err != nil {
+	writer := msgio.NewWriter(wr)
+	if err := writer.WriteMsg(rawData); err != nil {
 		return err
 	}
 
-	// Flush the peer's io buffer. This will push the message to the network
-	return rw.Flush()
+	return wr.Flush()
 }

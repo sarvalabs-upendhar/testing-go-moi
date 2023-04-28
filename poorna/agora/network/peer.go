@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/libp2p/go-msgio"
+
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
@@ -60,7 +62,6 @@ func (a *AgoraPeer) updateLastActiveTime() {
 }
 
 func (a *AgoraPeer) sendMessage(senderID id.KramaID, msgType ptypes.MsgType, msg interface{}) error {
-	rw := bufio.NewReadWriter(bufio.NewReader(a.stream), bufio.NewWriter(a.stream))
 	// Marshal the proto message into slice of bytes and log and return if an error occurs
 	rawData, err := polo.Polorize(msg)
 	if err != nil {
@@ -80,14 +81,14 @@ func (a *AgoraPeer) sendMessage(senderID id.KramaID, msgType ptypes.MsgType, msg
 		return err
 	}
 
+	wr := bufio.NewWriter(a.stream)
 	// Write the message bytes into the peer's io buffer
-	if _, err := rw.Writer.Write(rawData); err != nil {
+	writer := msgio.NewWriter(wr)
+	if err := writer.WriteMsg(rawData); err != nil {
 		return err
 	}
 
-	// Flush the peer's io buffer. This will push the message to the network
-
-	return rw.Flush()
+	return wr.Flush()
 }
 
 func (a *AgoraPeer) Close() {

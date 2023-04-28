@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/libp2p/go-msgio"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -497,13 +499,12 @@ func getHandShakeMsg(t *testing.T, msg *ptypes.Message) ptypes.HandshakeMSG {
 func readMessageFromBuffer(t *testing.T, p *Peer) *ptypes.Message {
 	t.Helper()
 
-	buffer := make([]byte, 4096)
-
-	byteCount, err := p.rw.Reader.Read(buffer)
+	reader := msgio.NewReader(p.rw.Reader)
+	buffer, err := reader.ReadMsg()
 	require.NoError(t, err)
 
 	message := new(ptypes.Message)
-	err = message.FromBytes(buffer[0:byteCount])
+	err = message.FromBytes(buffer)
 	require.NoError(t, err)
 
 	return message
@@ -525,11 +526,11 @@ func sendMessage(t *testing.T, p *Peer, msg []byte) {
 	t.Helper()
 
 	// Write the message bytes into the peer's io buffer
-	_, err := p.rw.Writer.Write(msg)
+	writer := msgio.NewWriter(p.rw.Writer)
+	err := writer.WriteMsg(msg)
 	require.NoError(t, err)
 
-	// Flush the peer's io buffer. This will push the message to the network
-	err = p.rw.Flush()
+	err = p.rw.Writer.Flush()
 	require.NoError(t, err)
 }
 

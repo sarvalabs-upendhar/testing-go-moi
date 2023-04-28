@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/libp2p/go-msgio"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p"
 	kdht "github.com/libp2p/go-libp2p-kad-dht"
@@ -904,12 +906,12 @@ func (s *Server) SendMessage(peerID peer.ID, msgType ptypes.MsgType, msg ptypes.
 
 func shipMessage(rw *bufio.ReadWriter, data []byte) error {
 	// Write the message bytes into the peer's io buffer
-	if _, err := rw.Writer.Write(data); err != nil {
+	writer := msgio.NewWriter(rw.Writer)
+	if err := writer.WriteMsg(data); err != nil {
 		return err
 	}
 
-	// Flush the peer's io buffer. This will push the message to the network
-	return rw.Flush()
+	return rw.Writer.Flush()
 }
 
 func generateWireMessage(senderKramaID id.KramaID, msgType ptypes.MsgType, msg ptypes.MessagePayload) ([]byte, error) {
