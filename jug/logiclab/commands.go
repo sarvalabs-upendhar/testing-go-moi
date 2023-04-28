@@ -26,10 +26,10 @@ get [identifier]         - Get the value of a memory variable with the identifie
 
 Example:
 >> set addr1 0x0fafe52ec42a85db644d5cceba2bb89cf5b0166cc9158211f44ed1e60b06032c
-'addr1' has been set to [15 175 229 46 196 42 133 219 100 77 92 206 186 43 184 156 245 176 22 108 201 21 130 17 244 78 209 230 11 6 3 44]
+'addr1' has been set to 0x0fafe52ec42a85db644d5cceba2bb89cf5b0166cc9158211f44ed1e60b06032c
 
 >> get addr1 
-'addr1' is set to [15 175 229 46 196 42 133 219 100 77 92 206 186 43 184 156 245 176 22 108 201 21 130 17 244 78 209 230 11 6 3 44]
+'addr1' is set to 0x0fafe52ec42a85db644d5cceba2bb89cf5b0166cc9158211f44ed1e60b06032c
 
 ==== Designated Participants
 Designated Participants are specially designated participants for being the default 
@@ -120,28 +120,32 @@ as defined by the logic. The arguments for the call are parsed from rules specif
 Values Section and encoded by the Call Encoder generated for the callsite. The callsite must be 
 valid and match the form of call for the logic call to succeed.
 
-deploy [name] [callsite](calldata) 
-invoke [name] [callsite](calldata)
+deploy [name].[callsite](calldata) 
+invoke [name].[callsite](calldata)
 
 The calldata for the logic call can be provided as a series of key value pairs which will be
 encoded with the runtime CallEncoder for the input specification and validated accordingly.
-Alternately, the calldata can be directly provided as a POLO Document in its hex string form. 
-This calldata can be generated from argument values. (refer to the Callgen Utility Section)
+Alternately, the calldata can be directly provided as a POLO Document in its hex string form.
+This calldata can be generated from argument values. (refer to the Callgen Utility Section).
+
+Logic calls are gated based on their state configuration. 
+Logics need to be deployed if they have a persistent state, before invoke call can be performed on them.
+Similarly, if they have been deployed already, deploy calls cannot be performed on them.
 
 Examples:
 >> set addr1 0xf6cd8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34
->> deploy ERC20 Seeder!(name: "MOI-Token", symbol: "MOI", supply: 100000000, seeder: addr1)
+>> deploy ERC20.Seeder!(name: "MOI-Token", symbol: "MOI", supply: 100000000, seeder: addr1)
 Execution Complete! [150 FUEL]
 
->> invoke ERC20 Name()
+>> invoke ERC20.Name()
 Execution Complete! [70 FUEL]
 Execution Outputs ||| name: MOI-Token
 
->> invoke ERC20 BalanceOf(addr: 0xf6cd8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34)
+>> invoke ERC20.BalanceOf(addr: 0xf6cd8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34)
 Execution Complete! [90 FUEL]
 Execution Outputs ||| balance: 100000000
 
->> invoke ERC20 BalanceOf(0x0d2f06456164647206f6cd8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34)
+>> invoke ERC20.BalanceOf(0x0d2f06456164647206f6cd8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34)
 Execution Complete! [90 FUEL]
 Execution Outputs ||| balance: 100000000
 
@@ -169,23 +173,38 @@ Examples:
 >> slothash 0 
 03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314
 
-==== Callgen Utility
-Raw calldata for logic calls can be generated with the callgen command.
-Callgen can be performed on objects from the lab memory or directly with an object literal.
+==== Call Encoder Utility
+Raw calldata for logic calls can be generated with the callencode command.
+Call Encode can be performed on objects from the lab memory or directly with an object literal.
 The returned calldata is the doc-encoded hex string of the object.
 
-callgen [identifier]
-callgen [object]
+callencode [identifier]
+callencode [object]
 
 Examples:
 >> set A 500
 >> set B "manish"
 >> set C {name: A, value: B}
->> callgen C
+>> callencode C
 0x0d5f064576c5016e616d650301f476616c7565066d616e697368
 
->> callgen {name: A, value: B}
+>> callencode {name: A, value: B}
 0x0d5f064576c5016e616d650301f476616c7565066d616e697368
+
+==== Call Decoder Utility
+Raw output data from logic calls can be decoded with the calldecode command.
+Call Decode can be performed on objects from the lab memory or directly with an object literal.
+
+calldecode [identifier] from [name].[callsite]
+calldecode [object] from [name].[callsite]
+
+Examples:
+>> set A 0x0d2f06256f6b02
+>> calldecode A from ERC20.Mint!
+// Outputs ||| ok: true 
+
+>> calldecode 0x0d2f06256f6b02 from ERC20.Mint!
+// Outputs ||| ok: true 
 
 ==== Manifest Utility
 Converting manifests between encoding schemes can be done with the manifest utility.
@@ -249,10 +268,12 @@ func ParseCommand(cmd string) Command {
 	case TokenManifest:
 		return parseManifestCommand(parser)
 
-	case TokenCallgen:
-		return parseCallgenCommand(parser)
 	case TokenSlothash:
 		return parseSlothashCommand(parser)
+	case TokenCallEncode:
+		return parseCallEncodeCommand(parser)
+	case TokenCallDecode:
+		return parseCallDecodeCommand(parser)
 	case TokenErrDecode:
 		return parseErrDecodeCommand(parser)
 

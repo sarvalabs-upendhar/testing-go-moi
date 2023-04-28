@@ -15,6 +15,7 @@ import (
 // all contents related to a Logic entity
 type LogicAccountState struct {
 	Name     string
+	Ready    bool
 	Manifest *engineio.Manifest
 
 	Object   *gtypes.LogicObject
@@ -28,7 +29,7 @@ func (logic LogicAccountState) String() string {
 
 	logicID := logic.Object.LogicID()
 
-	str.WriteString(fmt.Sprintf("==== [ %v ] [Address: %v]\n", logic.Name, logicID.Address()))
+	str.WriteString(fmt.Sprintf("==== [ %v ] [Address: %v] [Ready: %v]\n", logic.Name, logicID.Address(), logic.Ready))
 	str.WriteString(fmt.Sprintf("[Edition: %v] [Logic ID: %v]\n", logicID.Edition(), logicID))
 	str.WriteString(fmt.Sprintf("[Engine: %v] [Manifest: %v]\n", logic.Object.Engine(), logic.Object.Manifest()))
 	str.WriteString(fmt.Sprintf(
@@ -161,5 +162,9 @@ func CompileManifestFile(file, name string, fuel engineio.Fuel) (engineio.Fuel, 
 		Manifest: manifest,
 		Object:   logicObject,
 		CtxState: logicCtxState,
+
+		// If the logic ID has no persistent state, it can be marked
+		// as ready, otherwise it requires a deploy to occur first
+		Ready: !logicObject.LogicID().PersistentState(),
 	}, nil
 }

@@ -135,6 +135,11 @@ REPL:
 			return
 		}
 
+		// Continue for empty line
+		if scanner.Text() == "" {
+			continue
+		}
+
 		// Collect the scanned text and parse into a command
 		command := ParseCommand(scanner.Text())
 		// Perform the command
@@ -205,6 +210,10 @@ func SetValueCommand(ident string, value any) Command {
 	return func(env *Environment) string {
 		env.memory[ident] = value
 
+		if data, ok := value.([]byte); ok {
+			return fmt.Sprintf("'%v' has been set to %#x", ident, data)
+		}
+
 		return fmt.Sprintf("'%v' has been set to %v", ident, value)
 	}
 }
@@ -216,6 +225,10 @@ func GetValueCommand(ident string) Command {
 		value, ok := env.memory[ident]
 		if !ok {
 			return fmt.Sprintf("no value set for '%v'", ident)
+		}
+
+		if data, ok := value.([]byte); ok {
+			return fmt.Sprintf("'%v' has been set to %#x", ident, data)
 		}
 
 		return fmt.Sprintf("'%v' is set to %v", ident, value)

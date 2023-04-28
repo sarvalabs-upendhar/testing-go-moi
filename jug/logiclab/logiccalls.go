@@ -11,14 +11,23 @@ import (
 	"github.com/sarvalabs/moichain/jug/engineio"
 )
 
-// CallCommand generates a Command runner to execute a given callsite
+// LogicCallCommand generates a Command runner to execute a given callsite
 // function for a given logic name and some string unparsed arguments.
-func CallCommand(kind engineio.CallsiteKind, name, callsite, args string) Command {
+func LogicCallCommand(kind engineio.CallsiteKind, name, callsite, args string) Command {
 	return func(env *Environment) string {
 		// Find the logic from the inventory
 		logic, exists := env.inventory.FindLogic(name)
 		if !exists {
 			return fmt.Sprintf("logic '%v' does not exist", name)
+		}
+
+		// Perform deploy gating
+		// Only allow to deploy, if logic is not ready.
+		// Only allow to invoke, if logic is ready.
+		if kind == engineio.InvokableCallsite && !logic.Ready {
+			return fmt.Sprintf("logic '%v' is not ready for invoke. deploy to initialize persistent state", name)
+		} else if kind == engineio.DeployerCallsite && logic.Ready {
+			return fmt.Sprintf("logic '%v' is already deployed", name)
 		}
 
 		// Get the callsite from the logic, error if not found
@@ -62,6 +71,10 @@ func CallCommand(kind engineio.CallsiteKind, name, callsite, args string) Comman
 		// Execute the function
 		ixn := engineio.NewIxnObject(kind.IxnType(), callsite, calldata)
 		result := engine.Call(context.Background(), ixn, nil)
+
+		if kind == engineio.DeployerCallsite && result.Ok() {
+			logic.Ready = true
+		}
 
 		return formatResult(result, encoder)
 	}

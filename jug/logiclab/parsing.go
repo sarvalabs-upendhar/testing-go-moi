@@ -18,12 +18,18 @@ const (
 
 	TokenEngine
 	TokenEncoding
-	TokenPreposition
+
+	TokenPrepositionAs
+	TokenPrepositionFrom
+	TokenPrepositionInto
+	TokenPrepositionWith
 
 	TokenDesignate
 	TokenDesignated
-	TokenCallgen
+
 	TokenSlothash
+	TokenCallEncode
+	TokenCallDecode
 	TokenErrDecode
 
 	TokenLogic
@@ -60,14 +66,15 @@ var keywords = map[string]symbolizer.TokenKind{
 
 	"PISA": TokenEngine,
 
-	"as":   TokenPreposition,
-	"from": TokenPreposition,
-	"into": TokenPreposition,
-	"with": TokenPreposition,
+	"as":   TokenPrepositionAs,
+	"from": TokenPrepositionFrom,
+	"into": TokenPrepositionInto,
+	"with": TokenPrepositionWith,
 
-	"callgen":   TokenCallgen,
-	"slothash":  TokenSlothash,
-	"errdecode": TokenErrDecode,
+	"slothash":   TokenSlothash,
+	"callencode": TokenCallEncode,
+	"calldecode": TokenCallDecode,
+	"errdecode":  TokenErrDecode,
 
 	"logic":       TokenLogic,
 	"manifest":    TokenManifest,
@@ -91,11 +98,7 @@ func parseLogicCommand(parser *symbolizer.Parser) Command {
 
 		ident := parser.Cursor().Literal
 
-		if !parser.ExpectPeek(TokenPreposition) {
-			return InvalidCommandError("invalid 'logic compile' command: invalid syntax")
-		}
-
-		if parser.Cursor().Literal != "from" {
+		if !parser.ExpectPeek(TokenPrepositionFrom) {
 			return InvalidCommandError("invalid 'logic compile' command: invalid syntax")
 		}
 
@@ -193,11 +196,7 @@ func parseDesignateCommand(parser *symbolizer.Parser) Command {
 
 	name := parser.Cursor().Literal
 
-	if !parser.ExpectPeek(TokenPreposition) {
-		return InvalidCommandError("invalid 'designate' command: invalid syntax")
-	}
-
-	if parser.Cursor().Literal != "as" {
+	if !parser.ExpectPeek(TokenPrepositionAs) {
 		return InvalidCommandError("invalid 'designate' command: invalid syntax")
 	}
 
@@ -234,6 +233,10 @@ func parseCallActionCommand(parser *symbolizer.Parser) Command {
 
 		logic := parser.Cursor().Literal
 
+		if !parser.ExpectPeek(symbolizer.TokenKind('.')) {
+			return InvalidCommandErrorf("invalid '%v' command: missing . after logic identifier", callkind)
+		}
+
 		if !parser.ExpectPeek(symbolizer.TokenIdent) {
 			return InvalidCommandErrorf("invalid '%v' command: missing logic callsite", callkind)
 		}
@@ -252,9 +255,9 @@ func parseCallActionCommand(parser *symbolizer.Parser) Command {
 
 		switch callkind {
 		case "deploy":
-			return CallCommand(engineio.DeployerCallsite, logic, callsite, args)
+			return LogicCallCommand(engineio.DeployerCallsite, logic, callsite, args)
 		case "invoke":
-			return CallCommand(engineio.InvokableCallsite, logic, callsite, args)
+			return LogicCallCommand(engineio.InvokableCallsite, logic, callsite, args)
 		default:
 			panic("unexpected mutation of callkind")
 		}
@@ -286,21 +289,6 @@ func parseMemoryActionCommand(parser *symbolizer.Parser) Command {
 	return SetValueCommand(ident, argument)
 }
 
-func parseCallgenCommand(parser *symbolizer.Parser) Command {
-	if parser.ExpectPeek(symbolizer.TokenIdent) {
-		return CallgenMemoryCommand(parser.Cursor().Literal)
-	}
-
-	parser.Advance()
-
-	value, err := parseValue(parser)
-	if err != nil {
-		return InvalidCommandErrorf("invalid 'callgen' command: invalid argument value: %v", err)
-	}
-
-	return CallgenValueCommand(value)
-}
-
 func parseSlothashCommand(parser *symbolizer.Parser) Command {
 	if !parser.ExpectPeek(symbolizer.TokenNumber) {
 		return InvalidCommandError("invalid 'slothash' command: missing slot number")
@@ -317,11 +305,66 @@ func parseSlothashCommand(parser *symbolizer.Parser) Command {
 	return SlothashCommand(slot)
 }
 
+func parseCallEncodeCommand(parser *symbolizer.Parser) Command {
+	if parser.ExpectPeek(symbolizer.TokenIdent) {
+		return CallgenMemoryCommand(parser.Cursor().Literal)
+	}
+
+	parser.Advance()
+
+	value, err := parseValue(parser)
+	if err != nil {
+		return InvalidCommandErrorf("invalid 'callencode' command: invalid argument value: %v", err)
+	}
+
+	return CallgenValueCommand(value)
+}
+
+func parseCallDecodeCommand(parser *symbolizer.Parser) Command {
+	parser.Advance()
+	data := parser.Cursor()
+
+	if !parser.ExpectPeek(TokenPrepositionFrom) {
+		return InvalidCommandError("invalid 'calldecode' command: missing from after data")
+	}
+
+	if !parser.ExpectPeek(symbolizer.TokenIdent) {
+		return InvalidCommandError("invalid 'calldecode' command: missing logic identifier")
+	}
+
+	logic := parser.Cursor().Literal
+
+	if !parser.ExpectPeek(symbolizer.TokenKind('.')) {
+		return InvalidCommandError("invalid 'calldecode' command: missing . after logic identifier")
+	}
+
+	parser.Advance()
+
+	callsite := parser.Cursor().Literal
+	if parser.ExpectPeek(symbolizer.TokenKind('!')) || parser.ExpectPeek(symbolizer.TokenKind('$')) {
+		callsite += parser.Cursor().Literal
+	}
+
+	switch data.Kind {
+	case symbolizer.TokenIdent:
+		return CallDecodeMemoryCommand(data.Literal, logic, callsite)
+
+	case symbolizer.TokenHexNumber:
+		value, _ := data.Value()
+
+		//nolint:forcetypeassert
+		return CallDecodeValueCommand(value.([]byte), logic, callsite)
+
+	default:
+		return InvalidCommandError("invalid 'calldecode' command: invalid data")
+	}
+}
+
 func parseErrDecodeCommand(parser *symbolizer.Parser) Command {
 	parser.Advance()
 	errdata := parser.Cursor()
 
-	if !parser.ExpectPeek(TokenPreposition) {
+	if !parser.ExpectPeek(TokenPrepositionFrom) {
 		return InvalidCommandError("invalid 'errdecode' command: missing from after errdata")
 	}
 

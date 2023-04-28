@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/sarvalabs/go-polo"
 	"gopkg.in/yaml.v3"
@@ -67,6 +68,19 @@ func ManifestPrintCommand(path, encoding string) Command {
 	}
 }
 
+// SlothashCommand generates a command runner to generate
+// the slothash for a given storage path. Currently, only
+// accepts a single uint8 slot number but will be extended.
+func SlothashCommand(slot uint64) Command {
+	return func(env *Environment) string {
+		if slot > math.MaxUint8 {
+			return "slot number is too large"
+		}
+
+		return hex.EncodeToString(pisa.SlotHash(uint8(slot)))
+	}
+}
+
 // ErrDecodePISAValueCommand generates a command runner to
 // decode the error object for PISA from the given error bytes data.
 func ErrDecodePISAValueCommand(errdata []byte) Command {
@@ -100,16 +114,63 @@ func ErrDecodePISAMemoryCommand(ident string) Command {
 	}
 }
 
-// SlothashCommand generates a command runner to generate
-// the slothash for a given storage path. Currently, only
-// accepts a single uint8 slot number but will be extended.
-func SlothashCommand(slot uint64) Command {
+func CallDecodeMemoryCommand(ident, name, site string) Command {
 	return func(env *Environment) string {
-		if slot > math.MaxUint8 {
-			return "slot number is too large"
+		value, ok := env.memory[ident]
+		if !ok {
+			return fmt.Sprintf("no value set for '%v'", ident)
 		}
 
-		return hex.EncodeToString(pisa.SlotHash(uint8(slot)))
+		data, ok := value.([]byte)
+		if !ok {
+			return fmt.Sprintf("'%v' is not an hex value", ident)
+		}
+
+		return CallDecodeValueCommand(data, name, site)(env)
+	}
+}
+
+func CallDecodeValueCommand(data []byte, name, site string) Command {
+	return func(env *Environment) string {
+		// Find the logic from the inventory
+		logic, exists := env.inventory.FindLogic(name)
+		if !exists {
+			return fmt.Sprintf("logic '%v' does not exist", name)
+		}
+
+		// Get the callsite from the logic, error if not found
+		callsite, ok := logic.Object.GetCallsite(site)
+		if !ok {
+			return fmt.Sprintf("logic '%v' does not have callsite '%v'", name, callsite)
+		}
+
+		// Obtain the runtime for the logic engine in the header
+		runtime, ok := engineio.FetchEngineRuntime(logic.Object.Engine())
+		if !ok {
+			return "failed to get runtime for logic"
+		}
+
+		// Generate the call encoder for the callsite
+		encoder, err := runtime.GetCallEncoder(callsite, logic.Object)
+		if err != nil {
+			return fmt.Sprintf("failed to generate call encoder for callsite '%v'", callsite)
+		}
+
+		// Decode the outputs with the CallEncoder
+		outputs, err := encoder.DecodeOutputs(data)
+		if err != nil {
+			return fmt.Sprintf("failed decode data for callsite '%v': %v", callsite, err)
+		}
+
+		var str strings.Builder
+
+		str.WriteString("Outputs ||| ")
+
+		for label, object := range outputs {
+			str.WriteString(fmt.Sprintf("%v: %v ", label, object))
+		}
+
+		return str.String()
 	}
 }
 
