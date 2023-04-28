@@ -39,7 +39,7 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 		}
 
 		// Retrieve the receipt for the interaction
-		receipt := executor.getReceipt(ix.Hash())
+		receipt := executor.getReceipt(ix)
 
 		switch ix.Type() {
 		// Value Transfer Interaction
@@ -194,7 +194,7 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 // If the interaction receiver is a new account, the context and hash for the sarga account is also updated.
 func (executor *IxExecutor) UpdateContext(ix *types.Interaction, contextDelta types.ContextDelta) error {
 	// Retrieve the receipt for the interaction
-	receipt := executor.getReceipt(ix.Hash())
+	receipt := executor.getReceipt(ix)
 
 	for addr, delta := range contextDelta {
 		// For the address of each delta group in the context delta, determine action
@@ -249,7 +249,7 @@ func (executor *IxExecutor) UpdateContext(ix *types.Interaction, contextDelta ty
 // If the interaction receiver is a new account, the StateObject of the sarga account is also committed.
 func (executor *IxExecutor) CommitStateObjects(ix *types.Interaction) error {
 	// Retrieve the receipt for the interaction
-	receipt := executor.getReceipt(ix.Hash())
+	receipt := executor.getReceipt(ix)
 
 	// Commit the sender state object (if it exists)
 	if !ix.Sender().IsNil() {
@@ -333,22 +333,23 @@ func (executor *IxExecutor) Revert() error {
 
 // getReceipt returns the types.Receipt object for a given interaction hash.
 // If there is no receipt for the hash, a new Receipt is generated, stored and returned.
-func (executor *IxExecutor) getReceipt(ixHash types.Hash) *types.Receipt {
+func (executor *IxExecutor) getReceipt(ix *types.Interaction) *types.Receipt {
 	// Return receipt from executor's receipts if it exists
-	if receipt, ok := executor.receipts[ixHash]; ok {
+	if receipt, ok := executor.receipts[ix.Hash()]; ok {
 		// Return the existing receipt
 		return receipt
 	}
 
 	// Create new receipt for interaction hash if it does not exist
 	receipt := &types.Receipt{
-		IxHash:        ixHash,
+		IxHash:        ix.Hash(),
+		IxType:        ix.Type(),
 		StateHashes:   make(map[types.Address]types.Hash),
 		ContextHashes: make(map[types.Address]types.Hash),
 	}
 
 	// Set the created receipt into the executor
-	executor.receipts[ixHash] = receipt
+	executor.receipts[ix.Hash()] = receipt
 	// Return the newly created receipt
 	return receipt
 }

@@ -3,10 +3,10 @@ package types
 import (
 	"encoding/json"
 
+	"github.com/sarvalabs/moichain/common/hexutil"
+
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
-
-	"github.com/sarvalabs/moichain/common/hexutil"
 )
 
 type ReceiptStatus uint64
@@ -17,7 +17,7 @@ const (
 )
 
 type Receipt struct {
-	IxType int           `json:"ix_type"`
+	IxType IxType        `json:"ix_type"`
 	IxHash Hash          `json:"ix_hash"`
 	Status ReceiptStatus `json:"status"`
 
