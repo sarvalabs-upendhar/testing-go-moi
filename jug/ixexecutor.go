@@ -41,7 +41,7 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 		// Retrieve the receipt for the interaction
 		receipt := executor.getReceipt(ix)
 
-		switch ix.Type() {
+		switch ixtype := ix.Type(); ixtype {
 		// Value Transfer Interaction
 		case types.IxValueTransfer:
 			// For each asset, apply the value transfer routine for the given transfer amount.
@@ -53,14 +53,14 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 					assetID, transferValue,
 				)
 				if err != nil {
-					return errors.Wrap(err, "execution failed (IxValueTransfer)")
+					return errors.Wrapf(err, "execution failed (%v)", ixtype)
 				}
 
 				// Update fuel consumption
 				receipt.FuelUsed += uint64(fuelConsumed)
 				// Exhaust fuel from tank
 				if !executor.tank.Exhaust(fuelConsumed) {
-					return errors.Wrap(types.ErrInsufficientFuel, "execution failed (IxValueTransfer)")
+					return errors.Wrapf(types.ErrInsufficientFuel, "execution failed (%v)", ixtype)
 				}
 			}
 
@@ -72,7 +72,7 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 			}
 
 			if payload.Create == nil {
-				return errors.New("execution failed (IxAssetCreate): asset create payload is empty")
+				return errors.Errorf("execution failed (%v): asset create payload is empty", ixtype)
 			}
 
 			// Perform asset creation and record fuel consumed
@@ -81,18 +81,18 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 				*payload.Create,
 			)
 			if err != nil {
-				return errors.Wrap(err, "execution failed (IxAssetCreate)")
+				return errors.Wrapf(err, "execution failed (%v)", ixtype)
 			}
 
 			// Update fuel consumption
 			receipt.FuelUsed += uint64(fuelConsumed)
 			// Exhaust fuel from tank
 			if !executor.tank.Exhaust(fuelConsumed) {
-				return errors.Wrap(types.ErrInsufficientFuel, "execution failed (IxAssetCreate)")
+				return errors.Wrapf(types.ErrInsufficientFuel, "execution failed (%v)", ixtype)
 			}
 
 			if err = receipt.SetExtraData(assetReceipt); err != nil {
-				return errors.Wrap(err, "execution failed (IxAssetCreate)")
+				return errors.Wrapf(err, "execution failed (%v)", ixtype)
 			}
 
 		// Deploy Logic Interaction
@@ -103,7 +103,7 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 			}
 
 			if payload.Manifest == nil {
-				return errors.New("execution failed (IxLogicDeploy): missing manifest for logic deploy")
+				return errors.Errorf("execution failed (%v): missing manifest for logic deploy", ixtype)
 			}
 
 			logicAddress := types.NewAccountAddress(ix.Nonce(), ix.Sender())
@@ -115,7 +115,7 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 				payload,
 			)
 			if err != nil {
-				return errors.Wrap(err, "execution failed (IxLogicDeploy)")
+				return errors.Wrapf(err, "execution failed (%v)", ixtype)
 			}
 
 			if deployReceipt.Error != nil {
@@ -126,7 +126,7 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 			receipt.FuelUsed += uint64(fuelConsumed)
 			// Exhaust fuel from tank
 			if !executor.tank.Exhaust(fuelConsumed) {
-				return errors.Wrap(types.ErrInsufficientFuel, "execution failed (IxLogicDeploy)")
+				return errors.Wrapf(types.ErrInsufficientFuel, "execution failed (%v)", ixtype)
 			}
 
 			if err = receipt.SetExtraData(deployReceipt); err != nil {
@@ -147,7 +147,7 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 				payload,
 			)
 			if err != nil {
-				return errors.Wrap(err, "execution failed (IxLogicExecute)")
+				return errors.Wrapf(err, "execution failed (%v)", ixtype)
 			}
 
 			if invokeReceipt.Error != nil {
@@ -158,7 +158,7 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 			receipt.FuelUsed += uint64(fuelConsumed)
 			// Exhaust fuel from tank
 			if !executor.tank.Exhaust(fuelConsumed) {
-				return errors.Wrap(types.ErrInsufficientFuel, "execution failed (IxLogicExecute)")
+				errors.Wrapf(types.ErrInvalidInteractionType, "execution failed (%v)", ixtype)
 			}
 
 			if err = receipt.SetExtraData(invokeReceipt); err != nil {
@@ -166,7 +166,7 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 			}
 
 		default:
-			return errors.Wrap(types.ErrInvalidInteractionType, "execution failed")
+			return errors.Wrapf(types.ErrInvalidInteractionType, "execution failed (%v)", ixtype)
 		}
 
 		// Update Sarga state if the interaction receiver if it is an unregistered (new) account

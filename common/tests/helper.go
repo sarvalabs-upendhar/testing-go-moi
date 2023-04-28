@@ -543,7 +543,9 @@ func CreateIX(t *testing.T, params *CreateIxParams) *types.Interaction {
 	}
 
 	data := &types.IxData{
-		Input: types.IxInput{},
+		Input: types.IxInput{
+			Type: types.IxValueTransfer,
+		},
 	}
 
 	if params.IxDataCallback != nil {

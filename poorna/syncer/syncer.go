@@ -942,6 +942,10 @@ func (s *Syncer) Start() {
 			}
 
 			bestPeer := s.BestPeer()
+			if bestPeer == nil {
+				continue
+			}
+
 			if s.isSyncRequired(bestPeer) {
 				for i := 0; i < s.accDetails.Len(); i++ {
 					accInfo, err := s.accDetails.Pop()

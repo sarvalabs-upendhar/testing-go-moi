@@ -3,6 +3,7 @@ package types
 import (
 	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"log"
 	"math/big"
 	"sync/atomic"
@@ -16,7 +17,8 @@ import (
 type IxType int
 
 const (
-	IxValueTransfer IxType = iota
+	IxInvalid IxType = iota
+	IxValueTransfer
 	IxFuelSupply
 
 	IxAssetCreate
@@ -30,18 +32,29 @@ const (
 	IxLogicEnlist
 	IxLogicInteract
 	IxLogicUpgrade
-
-	IxFileCreate
-	IxFileUpdate
-
-	IxParticipantRegister
-	IxValidatorRegister
-	IxValidatorUnregister
-
-	IxStakeBond
-	IxStakeUnbond
-	IxStakeTransfer
 )
+
+var ixTypeToString = map[IxType]string{
+	IxInvalid:       "IxInvalid",
+	IxValueTransfer: "IxValueTransfer",
+	IxFuelSupply:    "IxFuelSupply",
+	IxAssetCreate:   "IxAssetCreate",
+	IxAssetApprove:  "IxAssetApprove",
+	IxAssetRevoke:   "IxAssetRevoke",
+	IxAssetMint:     "IxAssetMint",
+	IxAssetBurn:     "IxAssetBurn",
+	IxLogicDeploy:   "IxLogicDeploy",
+	IxLogicInvoke:   "IxLogicInvoke",
+}
+
+func (ixtype IxType) String() string {
+	str, ok := ixTypeToString[ixtype]
+	if !ok {
+		return fmt.Sprintf("unknown ixn: %d", ixtype)
+	}
+
+	return str
+}
 
 type IxData struct {
 	Input   IxInput
