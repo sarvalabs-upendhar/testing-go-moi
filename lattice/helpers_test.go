@@ -2264,7 +2264,7 @@ func checkSargaObjectAccounts(
 	}
 }
 
-func validateObjectCreation(t *testing.T, sm stateManager, address types.Address, contextHash types.Hash) {
+func validateContextInitialization(t *testing.T, sm stateManager, address types.Address, contextHash types.Hash) {
 	t.Helper()
 
 	// check if dirty object created
@@ -2274,16 +2274,6 @@ func validateObjectCreation(t *testing.T, sm stateManager, address types.Address
 	// check if context created
 	_, err = obj.GetDirtyEntry(types.BytesToHex(dhruva.ContextObjectKey(address, contextHash)))
 	require.NoError(t, err)
-
-	// check if object committed
-	data, err := obj.Balance().Bytes()
-	require.NoError(t, err)
-
-	hash := types.GetHash(data)
-	key := types.BytesToHex(dhruva.BalanceObjectKey(address, hash))
-	val, err := obj.GetDirtyEntry(key)
-	require.NoError(t, err)
-	require.Equal(t, data, val)
 }
 
 func getTestAssetID(asset *types.AssetDescriptor) (types.AssetID, types.Hash, []byte, error) {

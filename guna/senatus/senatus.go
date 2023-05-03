@@ -35,7 +35,7 @@ const (
 	GossipTopic    = "MOI_PUBSUB_SENATUS"
 )
 
-type store interface {
+type senatusStore interface {
 	ReadEntry(key []byte) ([]byte, error)
 	NewBatchWriter() db.BatchWriter
 	GetEntriesWithPrefix(ctx context.Context, prefix []byte) (chan *types.DBEntry, error)
@@ -49,7 +49,7 @@ type ReputationEngine struct {
 	kramaID             id.KramaID
 	ctx                 context.Context
 	logger              hclog.Logger
-	db                  store
+	db                  senatusStore
 	client              *http.Client
 	cache               *lru.Cache
 	dirtyLock           sync.RWMutex
@@ -64,7 +64,7 @@ func NewReputationEngine(
 	ctx context.Context,
 	logger hclog.Logger,
 	network network,
-	db store,
+	db senatusStore,
 	selfID id.KramaID,
 	selfInfo *gtypes.NodeMetaInfo,
 ) (*ReputationEngine, error) {

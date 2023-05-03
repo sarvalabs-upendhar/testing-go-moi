@@ -3,7 +3,6 @@ package guna
 import (
 	"log"
 	"math/big"
-	"sync"
 
 	"github.com/decred/dcrd/crypto/blake256"
 	lru "github.com/hashicorp/golang-lru"
@@ -36,14 +35,13 @@ func (s Storage) Copy() Storage {
 
 type StateObject struct {
 	journal *Journal
-	mtx     sync.RWMutex
 	cache   *lru.Cache
 
 	address types.Address
 	accType types.AccountType
 	data    types.Account
 
-	db store
+	db Store
 
 	balance        *gtypes.BalanceObject
 	assetApprovals *gtypes.ApprovalObject
@@ -63,7 +61,7 @@ func NewStateObject(
 	id types.Address,
 	cache *lru.Cache,
 	j *Journal,
-	db store,
+	db Store,
 	account types.Account,
 ) *StateObject {
 	return &StateObject{
@@ -73,10 +71,7 @@ func NewStateObject(
 		db:      db,
 		data:    account,
 		address: id,
-		balance: &gtypes.BalanceObject{
-			Balances: make(types.AssetMap),
-			PrvHash:  types.NilHash,
-		},
+		balance: nil,
 		assetApprovals: &gtypes.ApprovalObject{
 			Approvals: make(map[types.Address]types.AssetMap),
 			PrvHash:   types.NilHash,
@@ -92,11 +87,27 @@ func (s *StateObject) Address() types.Address {
 	return s.address
 }
 
-func (s *StateObject) BalanceOf(id types.AssetID) (*big.Int, error) {
-	s.mtx.RLock()
-	defer s.mtx.RUnlock()
+func (s *StateObject) Data() *types.Account {
+	return &s.data
+}
 
-	if v, ok := s.balance.Balances[id]; ok {
+func (s *StateObject) Balances() (*gtypes.BalanceObject, error) {
+	if s.balance == nil {
+		if err := s.loadBalanceObject(); err != nil {
+			return nil, errors.Wrap(err, "failed to load balance object")
+		}
+	}
+
+	return s.balance, nil
+}
+
+func (s *StateObject) BalanceOf(id types.AssetID) (*big.Int, error) {
+	balObject, err := s.Balances()
+	if err != nil {
+		return nil, err
+	}
+
+	if v, ok := balObject.AssetMap[id]; ok {
 		return v, nil
 	}
 
@@ -104,30 +115,37 @@ func (s *StateObject) BalanceOf(id types.AssetID) (*big.Int, error) {
 }
 
 func (s *StateObject) AddBalance(aid types.AssetID, amount *big.Int) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
+	if s.balance == nil {
+		if err := s.loadBalanceObject(); err != nil {
+			panic(err)
+		}
+	}
 
-	bal, ok := s.balance.Balances[aid]
+	bal, ok := s.balance.AssetMap[aid]
 	if ok {
-		s.setBalance(aid, new(big.Int).Add(amount, bal))
+		s.balance.AssetMap[aid] = new(big.Int).Add(amount, bal)
 	} else {
-		s.balance.Balances[aid] = amount
+		s.balance.AssetMap[aid] = amount
 	}
 }
 
 func (s *StateObject) SubBalance(aid types.AssetID, amount *big.Int) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
+	if s.balance == nil {
+		if err := s.loadBalanceObject(); err != nil {
+			panic(err)
+		}
+	}
 
-	if bal, ok := s.balance.Balances[aid]; ok && bal != nil {
-		s.setBalance(aid, new(big.Int).Sub(bal, amount))
+	if bal, ok := s.balance.AssetMap[aid]; ok && bal != nil {
+		s.balance.AssetMap[aid] = new(big.Int).Sub(bal, amount)
 	} else {
 		log.Panicln("asset not found")
 	}
 }
 
-func (s *StateObject) setBalance(aid types.AssetID, amount *big.Int) {
-	s.balance.Balances[aid] = amount
+// setBalance is used for test purposes only
+func (s *StateObject) setBalance(assetID types.AssetID, bal *big.Int) {
+	s.balance.AssetMap[assetID] = bal
 }
 
 func (s *StateObject) AccountType() types.AccountType {
@@ -142,19 +160,28 @@ func (s *StateObject) Journal() *Journal {
 	return s.journal
 }
 
-func (s *StateObject) Balance() *gtypes.BalanceObject {
-	return s.balance
+func (s *StateObject) Balance() (*gtypes.BalanceObject, error) {
+	if s.balance == nil {
+		if err := s.loadBalanceObject(); err != nil {
+			return nil, err
+		}
+	}
+
+	return s.balance, nil
 }
 
 func (s *StateObject) Copy() *StateObject {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-
 	j := new(Journal)
 	sObj := NewStateObject(s.address, s.cache, j, s.db, s.data)
 
-	sObj.balance = s.balance.Copy()
-	sObj.assetApprovals = s.assetApprovals.Copy()
+	if s.balance != nil {
+		sObj.balance = s.balance.Copy()
+	}
+
+	if s.assetApprovals != nil {
+		sObj.assetApprovals = s.assetApprovals.Copy()
+	}
+
 	sObj.dirtyEntries = s.dirtyEntries.Copy()
 
 	if s.logicTree != nil {
@@ -189,10 +216,14 @@ func (s *StateObject) GetDirtyEntry(key string) ([]byte, error) {
 	return val, nil
 }
 
-func (s *StateObject) commitBalanceObject() ([]byte, error) {
+func (s *StateObject) commitBalanceObject() (types.Hash, error) {
+	if s.balance == nil || len(s.balance.AssetMap) == 0 {
+		return types.NilHash, nil
+	}
+
 	data, err := s.balance.Bytes()
 	if err != nil {
-		return nil, err
+		return types.NilHash, err
 	}
 
 	hash := types.GetHash(data)
@@ -206,7 +237,7 @@ func (s *StateObject) commitBalanceObject() ([]byte, error) {
 	s.SetDirtyEntry(key, data)
 	s.data.Balance = hash
 
-	return hash.Bytes(), nil
+	return hash, nil
 }
 
 func (s *StateObject) commitAccount() (types.Hash, error) {
@@ -330,6 +361,25 @@ func (s *StateObject) commitLogics() (types.Hash, error) {
 	return s.data.LogicRoot, nil
 }
 
+// flush will write all dirty entries to the database
+func (s *StateObject) flush() error {
+	if err := s.flushLogicTree(); err != nil {
+		return errors.Wrap(err, "failed to fetch logic tree")
+	}
+
+	if err := s.flushActiveStorageTrees(); err != nil {
+		return errors.Wrap(err, "failed to flush active storage trees")
+	}
+
+	for k, v := range s.GetDirtyStorage() {
+		if err := s.db.CreateEntry(types.FromHex(k), v); err != nil {
+			return errors.Wrap(err, "failed to write dirty entries")
+		}
+	}
+
+	return nil
+}
+
 func (s *StateObject) flushLogicTree() error {
 	if s.logicTree == nil {
 		return nil
@@ -355,9 +405,6 @@ func (s *StateObject) flushActiveStorageTrees() error {
 }
 
 func (s *StateObject) Commit() (types.Hash, error) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-
 	if _, err := s.commitBalanceObject(); err != nil {
 		return types.NilHash, errors.Wrap(err, "failed to commit balance object")
 	}
@@ -385,9 +432,6 @@ func (s *StateObject) CreateStorageTreeForLogic(logicID types.LogicID) error {
 }
 
 func (s *StateObject) CreateAsset(descriptor *types.AssetDescriptor) (types.AssetID, error) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-
 	descriptor.Owner = s.address
 
 	assetID, assetHash, data, err := gtypes.GetAssetID(descriptor)
@@ -403,12 +447,17 @@ func (s *StateObject) CreateAsset(descriptor *types.AssetDescriptor) (types.Asse
 	key := assetHash.String()
 	s.SetDirtyEntry(key, data)
 
+	if s.balance == nil {
+		if err = s.loadBalanceObject(); err != nil {
+			return "", err
+		}
+	}
 	// Update the balance
-	if _, ok := s.balance.Balances[assetID]; ok {
+	if _, ok := s.balance.AssetMap[assetID]; ok {
 		return "", errors.Wrap(types.ErrAssetCreation, "asset already exists")
 	}
 
-	s.balance.Balances[assetID] = descriptor.Supply
+	s.balance.AssetMap[assetID] = descriptor.Supply
 
 	return assetID, nil
 }
@@ -473,9 +522,6 @@ func (s *StateObject) UpdateContext(behaviouralNodes []id.KramaID, randomNodes [
 	if len(behaviouralNodes) == 0 && len(randomNodes) == 0 {
 		return s.data.ContextHash, nil
 	}
-
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
 
 	var (
 		err                 error
@@ -599,27 +645,27 @@ func (s *StateObject) getContextObjectCopy(hash types.Hash) (*gtypes.ContextObje
 	return contextObject.Copy(), nil
 }
 
-func getBalanceObject(
-	addr types.Address,
-	hash types.Hash,
-	db store,
-) (*gtypes.BalanceObject, error) {
-	if hash.IsNil() {
-		return &gtypes.BalanceObject{}, nil
+func (s *StateObject) loadBalanceObject() error {
+	if s.data.Balance.IsNil() {
+		s.balance = &gtypes.BalanceObject{
+			AssetMap: make(map[types.AssetID]*big.Int),
+		}
+
+		return nil
 	}
 
-	data, err := db.GetBalance(addr, hash)
+	data, err := s.db.GetBalance(s.address, s.data.Balance)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	balObject := new(gtypes.BalanceObject)
+	s.balance = new(gtypes.BalanceObject)
 
-	if err = balObject.FromBytes(data); err != nil {
-		return nil, err
+	if err = s.balance.FromBytes(data); err != nil {
+		return err
 	}
 
-	return balObject, nil
+	return nil
 }
 
 func (s *StateObject) GetStorageTree(logicID types.LogicID) (tree.MerkleTree, error) {
@@ -667,9 +713,6 @@ func (s *StateObject) GetStorageEntry(logicID types.LogicID, key []byte) (value 
 }
 
 func (s *StateObject) GetDirtyStorage() Storage {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-
 	return s.dirtyEntries
 }
 

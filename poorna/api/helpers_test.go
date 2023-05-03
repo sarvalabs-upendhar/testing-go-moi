@@ -309,8 +309,8 @@ func (s *MockStateManager) GetBalance(
 	stateHash types.Hash,
 ) (*big.Int, error) {
 	if _, ok := s.balances[addr]; ok {
-		if _, ok := s.balances[addr].Balances[assetID]; ok {
-			return s.balances[addr].Balances[assetID], nil
+		if _, ok := s.balances[addr].AssetMap[assetID]; ok {
+			return s.balances[addr].AssetMap[assetID], nil
 		}
 
 		return nil, types.ErrAssetNotFound
@@ -337,9 +337,9 @@ func (s *MockStateManager) IsGenesis(addr types.Address) (bool, error) {
 
 func (s *MockStateManager) setBalance(addr types.Address, assetID types.AssetID, balance *big.Int) {
 	s.balances[addr] = &gtypes.BalanceObject{
-		Balances: make(types.AssetMap),
+		AssetMap: make(types.AssetMap),
 	}
-	s.balances[addr].Balances[assetID] = balance
+	s.balances[addr].AssetMap[assetID] = balance
 }
 
 func (s *MockStateManager) setContext(t *testing.T, address types.Address, context *Context) {

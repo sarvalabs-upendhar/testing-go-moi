@@ -30,7 +30,7 @@ const (
 	minimumContextSize = 1
 )
 
-type store interface {
+type Store interface {
 	GetAccount(addr types.Address, stateHash types.Hash) ([]byte, error)
 	GetContext(addr types.Address, contextHash types.Hash) ([]byte, error)
 	GetAccountMetaInfo(id types.Address) (*types.AccountMetaInfo, error)
@@ -60,13 +60,10 @@ type StateManager struct {
 	logger hclog.Logger
 	cache  *lru.Cache
 
-	db store
+	db Store
 
 	senatus senatus
 	client  *http.Client
-
-	objectsLock sync.Mutex
-	objects     map[types.Address]*StateObject
 
 	dirtyObjectsLock sync.Mutex
 	dirtyObjects     map[types.Address]*StateObject
@@ -76,7 +73,7 @@ type StateManager struct {
 
 func NewStateManager(
 	ctx context.Context,
-	db store,
+	db Store,
 	logger hclog.Logger,
 	cache *lru.Cache,
 	metrics *Metrics,
@@ -91,7 +88,7 @@ func NewStateManager(
 			MaxIdleConns:    1024,
 			MaxConnsPerHost: 1000,
 		}},
-		objects:      make(map[types.Address]*StateObject),
+		// objects:      make(map[types.Address]*StateObject),
 		dirtyObjects: make(map[types.Address]*StateObject),
 		logger:       logger.Named("State-Manager"),
 		metrics:      metrics,
@@ -135,21 +132,7 @@ func (sm *StateManager) FlushDirtyObject(addrs types.Address) error {
 		return errors.Wrap(err, "failed to fetch state object")
 	}
 
-	if err = so.flushLogicTree(); err != nil {
-		return errors.Wrap(err, "failed to fetch logic tree")
-	}
-
-	if err = so.flushActiveStorageTrees(); err != nil {
-		return errors.Wrap(err, "failed to flush active storage trees")
-	}
-
-	for k, v := range so.GetDirtyStorage() {
-		if err = sm.db.CreateEntry(types.FromHex(k), v); err != nil {
-			return errors.Wrap(err, "failed to write dirty entries")
-		}
-	}
-
-	return nil
+	return so.flush()
 }
 
 func (sm *StateManager) GetDirtyObject(addr types.Address) (*StateObject, error) {
@@ -180,18 +163,6 @@ func (sm *StateManager) getStateObject(addr types.Address, stateHash types.Hash)
 }
 
 func (sm *StateManager) GetLatestStateObject(addr types.Address) (*StateObject, error) {
-	sm.objectsLock.Lock()
-	defer sm.objectsLock.Unlock()
-
-	object, ok := sm.objects[addr]
-	if ok {
-		if object.journal == nil {
-			object.journal = new(Journal)
-		}
-
-		return object, nil
-	}
-	// get the latest tesseract
 	t, err := sm.GetLatestTesseract(addr, false)
 	if err != nil {
 		return nil, err
@@ -202,9 +173,7 @@ func (sm *StateManager) GetLatestStateObject(addr types.Address) (*StateObject, 
 		return nil, err
 	}
 
-	sm.objects[addr] = obj
-
-	return sm.objects[addr], nil
+	return obj, nil
 }
 
 func (sm *StateManager) GetStateObjectByHash(addr types.Address, hash types.Hash) (*StateObject, error) {
@@ -220,11 +189,6 @@ func (sm *StateManager) GetStateObjectByHash(addr types.Address, hash types.Hash
 	}
 
 	sObj := NewStateObject(addr, sm.cache, new(Journal), sm.db, *acc)
-
-	sObj.balance, err = getBalanceObject(addr, acc.Balance, sm.db)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to fetch balance object")
-	}
 
 	return sObj, nil
 }
@@ -328,10 +292,6 @@ func (sm *StateManager) getTesseractByHash(hash types.Hash, withInteractions boo
 }
 
 func (sm *StateManager) Cleanup(address types.Address) {
-	sm.objectsLock.Lock()
-	delete(sm.objects, address)
-	sm.objectsLock.Unlock()
-
 	sm.cleanupDirtyObject(address)
 }
 
@@ -794,7 +754,7 @@ func (sm *StateManager) IsAccountRegistered(addr types.Address) (bool, error) {
 
 	sargaObject, err := sm.GetLatestStateObject(types.SargaAddress)
 	if err != nil {
-		return true, errors.Wrap(types.ErrObjectNotFound, err.Error())
+		return true, errors.Wrap(err, types.ErrObjectNotFound.Error())
 	}
 
 	// Fetch the account info from genesis state
@@ -844,7 +804,12 @@ func (sm *StateManager) GetBalances(addrs types.Address, stateHash types.Hash) (
 		return nil, errors.Wrap(err, "failed to fetch state object")
 	}
 
-	return stateObject.balance.Copy(), nil
+	balances, err := stateObject.Balances()
+	if err != nil {
+		return nil, err
+	}
+
+	return balances.Copy(), nil
 }
 
 func (sm *StateManager) GetBalance(

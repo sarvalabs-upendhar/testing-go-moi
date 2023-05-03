@@ -134,7 +134,7 @@ func (p *PublicCoreAPI) GetBalance(args *ptypes.BalArgs) (*hexutil.Big, error) {
 }
 
 // GetTDU will return the total digital utility associated with address
-func (p *PublicCoreAPI) GetTDU(args *ptypes.TesseractArgs) (map[types.AssetID]*big.Int, error) {
+func (p *PublicCoreAPI) GetTDU(args *ptypes.TesseractArgs) (map[types.AssetID]*hexutil.Big, error) {
 	ts, err := p.getTesseract(getTesseractArgs(args.Address, args.Options))
 	if err != nil {
 		return nil, err
@@ -147,7 +147,13 @@ func (p *PublicCoreAPI) GetTDU(args *ptypes.TesseractArgs) (map[types.AssetID]*b
 
 	data, _ := object.TDU()
 
-	return data, nil
+	rpcAssetMap := make(map[types.AssetID]*hexutil.Big)
+
+	for key, value := range data {
+		rpcAssetMap[key] = (*hexutil.Big)(value)
+	}
+
+	return rpcAssetMap, nil
 }
 
 // GetInteractionByTesseract returns the interaction for the given tesseract hash

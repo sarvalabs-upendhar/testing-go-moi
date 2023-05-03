@@ -10,21 +10,23 @@ import (
 )
 
 type BalanceObject struct {
-	Balances types.AssetMap
+	AssetMap types.AssetMap
 	PrvHash  types.Hash
 }
 
 func (b *BalanceObject) TDU() (types.AssetMap, types.Hash) {
-	return b.Balances, b.PrvHash
+	return b.AssetMap, b.PrvHash
 }
 
 func (b *BalanceObject) Copy() *BalanceObject {
 	newObject := new(BalanceObject)
-	newObject.PrvHash = b.PrvHash
+	if !b.PrvHash.IsNil() {
+		newObject.PrvHash = b.PrvHash
+	}
 
-	newObject.Balances = make(types.AssetMap)
-	for k, v := range b.Balances {
-		newObject.Balances[k] = new(big.Int).SetBytes(v.Bytes())
+	newObject.AssetMap = make(types.AssetMap)
+	for k, v := range b.AssetMap {
+		newObject.AssetMap[k] = new(big.Int).SetBytes(v.Bytes())
 	}
 
 	return newObject

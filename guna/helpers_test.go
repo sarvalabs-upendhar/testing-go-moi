@@ -285,7 +285,7 @@ func (m *MockDB) DeleteEntry(key []byte) error {
 	panic("mock DeleteEntry not implemented")
 }
 
-func getMockDB(t *testing.T, db store) *MockDB {
+func getMockDB(t *testing.T, db Store) *MockDB {
 	t.Helper()
 
 	if db != nil {
@@ -298,7 +298,7 @@ func getMockDB(t *testing.T, db store) *MockDB {
 	return nil
 }
 
-func insertTesseractsInDB(t *testing.T, db store, tesseracts ...*types.Tesseract) {
+func insertTesseractsInDB(t *testing.T, db Store, tesseracts ...*types.Tesseract) {
 	t.Helper()
 
 	mDB := getMockDB(t, db)
@@ -312,7 +312,7 @@ func insertTesseractsInDB(t *testing.T, db store, tesseracts ...*types.Tesseract
 	}
 }
 
-func insertAccountsInDB(t *testing.T, db store, hashes []types.Hash, acc ...*types.Account) {
+func insertAccountsInDB(t *testing.T, db Store, hashes []types.Hash, acc ...*types.Account) {
 	t.Helper()
 
 	mDB := getMockDB(t, db)
@@ -322,7 +322,7 @@ func insertAccountsInDB(t *testing.T, db store, hashes []types.Hash, acc ...*typ
 	}
 }
 
-func insertBalancesInDB(t *testing.T, db store, hashes []types.Hash, balances ...*gtypes.BalanceObject) {
+func insertBalancesInDB(t *testing.T, db Store, hashes []types.Hash, balances ...*gtypes.BalanceObject) {
 	t.Helper()
 
 	mDB := getMockDB(t, db)
@@ -332,7 +332,7 @@ func insertBalancesInDB(t *testing.T, db store, hashes []types.Hash, balances ..
 	}
 }
 
-func insertContextsInDB(t *testing.T, db store, context ...*gtypes.ContextObject) {
+func insertContextsInDB(t *testing.T, db Store, context ...*gtypes.ContextObject) {
 	t.Helper()
 
 	mDB := getMockDB(t, db)
@@ -342,7 +342,7 @@ func insertContextsInDB(t *testing.T, db store, context ...*gtypes.ContextObject
 	}
 }
 
-func insertMetaContextsInDB(t *testing.T, db store, context ...*gtypes.MetaContextObject) {
+func insertMetaContextsInDB(t *testing.T, db Store, context ...*gtypes.MetaContextObject) {
 	t.Helper()
 
 	mDB := getMockDB(t, db)
@@ -366,12 +366,6 @@ type MockMerkleTree struct {
 func (m *MockMerkleTree) Root() types.RootNode {
 	// TODO implement me
 	panic("implement me")
-}
-
-func mockMerkleTreeWithDirtyStorage() *MockMerkleTree {
-	return &MockMerkleTree{
-		dirty: make(map[string][]byte),
-	}
 }
 
 func mockMerkleTreeWithDB() *MockMerkleTree {
@@ -513,13 +507,6 @@ func setEntries(t *testing.T, m *MockMerkleTree, keys, values [][]byte) {
 		err := m.Set(keys[i], values[i])
 		require.NoError(t, err)
 	}
-}
-
-func storeInMerkleTree(t *testing.T, m *MockMerkleTree, k, v []byte) {
-	t.Helper()
-
-	err := m.Set(k, v)
-	require.NoError(t, err)
 }
 
 func getMerkleTreeWithEntries(t *testing.T, keys [][]byte, values [][]byte) *MockMerkleTree {
@@ -810,18 +797,10 @@ func insertContextHash(so *StateObject, hash types.Hash) {
 	so.data.ContextHash = hash
 }
 
-func insertObject(sm *StateManager, so *StateObject) {
-	sm.objects[so.address] = so
-}
-
 func insertDirtyObject(sm *StateManager, objects ...*StateObject) {
 	for _, obj := range objects {
 		sm.dirtyObjects[obj.address] = obj
 	}
-}
-
-func insertStateObject(sm *StateManager, so *StateObject) {
-	sm.objects[so.address] = so
 }
 
 func storeInSmCache(sm *StateManager, k, v interface{}) {
@@ -958,7 +937,7 @@ func stateObjectParamsWithInvalidMST(t *testing.T) *createStateObjectParams {
 func stateObjectParamsWithMST(
 	t *testing.T,
 	address types.Address,
-	db store,
+	db Store,
 	mst tree.MerkleTree,
 	root types.Hash,
 ) *createStateObjectParams {
@@ -979,7 +958,7 @@ func stateObjectParamsWithMST(
 func stateObjectParamsWithLogicTree(
 	t *testing.T,
 	address types.Address,
-	db store,
+	db Store,
 	logicTree tree.MerkleTree,
 	root types.Hash,
 ) *createStateObjectParams {
@@ -1109,8 +1088,8 @@ func checkForReferences(t *testing.T, sObj, copiedSO *StateObject) {
 		reflect.ValueOf(copiedSO.assetApprovals.Approvals).Pointer(),
 	)
 	require.NotEqual(t,
-		reflect.ValueOf(sObj.balance.Balances).Pointer(),
-		reflect.ValueOf(copiedSO.balance.Balances).Pointer(),
+		reflect.ValueOf(sObj.balance.AssetMap).Pointer(),
+		reflect.ValueOf(copiedSO.balance.AssetMap).Pointer(),
 	)
 	require.NotEqual(t,
 		reflect.ValueOf(sObj.assetApprovals).Pointer(),
@@ -1124,10 +1103,6 @@ func checkForReferences(t *testing.T, sObj, copiedSO *StateObject) {
 		reflect.ValueOf(sObj.journal).Pointer(),
 		reflect.ValueOf(copiedSO.journal).Pointer(),
 	)
-}
-
-func insertAssetAndBalance(so *StateObject, assetID types.AssetID, balance *big.Int) {
-	so.balance.Balances[assetID] = balance
 }
 
 func getAssetIDsAndBalances(t *testing.T, count int) ([]types.AssetID, []*big.Int) {
@@ -1169,7 +1144,7 @@ func getTestBalance(t *testing.T, assetMap types.AssetMap) (*gtypes.BalanceObjec
 	t.Helper()
 
 	balance := &gtypes.BalanceObject{
-		Balances: assetMap,
+		AssetMap: assetMap,
 		PrvHash:  tests.RandomHash(t),
 	}
 
@@ -1329,7 +1304,7 @@ func getDefaultAssetDescriptor(t *testing.T, symbol string) *types.AssetDescript
 
 func createMetaStorageTree(
 	t *testing.T,
-	db store,
+	db Store,
 	address types.Address,
 	logicID types.LogicID,
 	storageKeys [][]byte,
@@ -1344,7 +1319,7 @@ func createMetaStorageTree(
 
 func createTestKramaHashTree(
 	t *testing.T,
-	db store,
+	db Store,
 	address types.Address,
 	keys [][]byte,
 	values [][]byte,
@@ -1619,13 +1594,6 @@ func checkIfDirtyObjectEqual(t *testing.T, sm *StateManager, address types.Addre
 	require.Equal(t, expectedObj, obj)
 }
 
-func checkForObject(t *testing.T, sm *StateManager, address types.Address, exists bool) {
-	t.Helper()
-
-	_, ok := sm.objects[address]
-	require.Equal(t, exists, ok)
-}
-
 func checkForCache(t *testing.T, sm *StateManager, address types.Address) {
 	t.Helper()
 
@@ -1708,7 +1676,7 @@ func checkIfStateObjectAreEqual(
 	require.NotNil(t, actualObj.db)
 	require.NotNil(t, actualObj.cache)
 	require.NotNil(t, actualObj.journal)
-	require.Equal(t, expectedObj.balance.Balances, actualObj.balance.Balances)
+	require.Equal(t, expectedObj.balance.AssetMap, actualObj.balance.AssetMap)
 	require.Equal(t, expectedObj.assetApprovals, actualObj.assetApprovals)
 	require.Equal(t, expectedObj.dirtyEntries, actualObj.dirtyEntries)
 	require.Equal(t, expectedObj.data, actualObj.data)

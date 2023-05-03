@@ -2388,7 +2388,7 @@ func TestSetupSargaAcc(t *testing.T) {
 
 			require.NoError(t, err)
 
-			validateObjectCreation(t, cm.sm, types.SargaAddress, contextHash)
+			validateContextInitialization(t, cm.sm, types.SargaAddress, contextHash)
 
 			obj, _ := cm.sm.GetDirtyObject(types.SargaAddress)
 
@@ -2473,7 +2473,7 @@ func TestSetupNewAccount(t *testing.T) {
 
 			require.NoError(t, err)
 
-			validateObjectCreation(t, cm.sm, test.newAcc.Address, contextHash)
+			validateContextInitialization(t, cm.sm, test.newAcc.Address, contextHash)
 
 			obj, _ := cm.sm.GetDirtyObject(test.newAcc.Address)
 

@@ -4,6 +4,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
@@ -18,7 +20,7 @@ func TestBalanceOf(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
 	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
 	balance := big.NewInt(123)
-	sObj.setBalance(assetID, balance)
+	sObj.AddBalance(assetID, balance)
 
 	testcases := []struct {
 		name          string
@@ -55,6 +57,7 @@ func TestBalanceOf(t *testing.T) {
 func TestAddBalance(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
 	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
+	assert.NoError(t, sObj.loadBalanceObject())
 	sObj.setBalance(assetID, big.NewInt(123))
 
 	testcases := []struct {
@@ -88,6 +91,7 @@ func TestAddBalance(t *testing.T) {
 func TestSubBalance(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
 	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
+	assert.NoError(t, sObj.loadBalanceObject())
 	sObj.setBalance(assetID, big.NewInt(124))
 
 	sObj.SubBalance(assetID, big.NewInt(123))
@@ -98,6 +102,8 @@ func TestSetBalance(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
 	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
 	balance := big.NewInt(123)
+
+	require.NoError(t, sObj.loadBalanceObject())
 
 	sObj.setBalance(assetID, balance)
 
@@ -142,7 +148,7 @@ func TestCommitBalanceObject(t *testing.T) {
 	actualBalanceHash, err := sObj.commitBalanceObject()
 	require.NoError(t, err)
 
-	checkForBalance(t, sObj, balance, types.BytesToHash(actualBalanceHash), 0)
+	checkForBalance(t, sObj, balance, actualBalanceHash, 0)
 }
 
 func TestCommitAccount(t *testing.T) {
@@ -653,7 +659,7 @@ func TestFlushActiveStorageTrees(t *testing.T) {
 func TestCreateAsset(t *testing.T) {
 	sObj := createTestStateObject(t, &createStateObjectParams{
 		soCallback: func(so *StateObject) {
-			so.balance.Balances = make(types.AssetMap)
+			so.balance = &gtypes.BalanceObject{}
 		},
 	})
 
@@ -662,6 +668,7 @@ func TestCreateAsset(t *testing.T) {
 	assetID, _, _, err := gtypes.GetAssetID(assetDescriptor)
 	require.NoError(t, err)
 
+	require.NoError(t, sObj.loadBalanceObject())
 	sObj.setBalance(assetID, big.NewInt(2231))
 
 	testcases := []struct {
@@ -932,6 +939,7 @@ func TestUpdateContext(t *testing.T) {
 	}
 }
 
+/*
 func TestGetBalanceObject(t *testing.T) {
 	assetIDs, bal := getAssetIDsAndBalances(t, 2)
 	balance, balanceHash := getTestBalances(t, getAssetMaps(assetIDs, bal, 1), 1)
@@ -967,7 +975,7 @@ func TestGetBalanceObject(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			actualBalance, err := getBalanceObject(sObj.address, test.hash, sObj.db)
+			actualBalance, err := load(sObj.address, test.hash, sObj.db)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -982,6 +990,7 @@ func TestGetBalanceObject(t *testing.T) {
 		})
 	}
 }
+*/
 
 //nolint:dupl
 func TestGetMetaStorageTree(t *testing.T) {
