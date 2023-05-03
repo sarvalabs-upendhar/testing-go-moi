@@ -1,7 +1,10 @@
 package dhruva
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -108,10 +111,10 @@ func TestUpdateAccMetaInfo_AddNewAccount(t *testing.T) {
 	require.True(t, isInsert)
 
 	// check BucketID
-	_, bucket := BucketIDFromAddress(args.Address.Bytes())
-	require.Equal(t, int32(bucket.getID()), bucketID)
+	_, bucket := BucketKeyAndID(args.Address)
+	require.Equal(t, int32(bucket), bucketID)
 
-	afterAccMetaInfo, err := pm.GetAccountMetaInfo(args.Address.Bytes())
+	afterAccMetaInfo, err := pm.GetAccountMetaInfo(args.Address)
 	require.NoError(t, err)
 
 	// check account state
@@ -198,7 +201,7 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 			// insert test accMetaInfo , so that it can be updated
 			insertAccMetaInfo(t, pm, *test.accMetaInfo)
 
-			beforeAccMetaInfo, err := pm.GetAccountMetaInfo(test.args.Address.Bytes())
+			beforeAccMetaInfo, err := pm.GetAccountMetaInfo(test.args.Address)
 			require.NoError(t, err)
 
 			_, isInsert, err := pm.UpdateAccMetaInfo(
@@ -214,7 +217,7 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 			// check if updated
 			require.False(t, isInsert)
 
-			afterAccMetaInfo, err := pm.GetAccountMetaInfo(test.args.Address.Bytes())
+			afterAccMetaInfo, err := pm.GetAccountMetaInfo(test.args.Address)
 			require.NoError(t, err)
 
 			// changes should take place if new height is greater than equal to current height
@@ -271,8 +274,8 @@ func TestUpdateAccMetaInfo_CheckBucketID(t *testing.T) {
 	require.NoError(t, err)
 
 	// check if BucketID matches
-	_, bucket := BucketIDFromAddress(args.Address.Bytes())
-	require.Equal(t, int32(bucket.getID()), bucketID)
+	_, bucket := BucketKeyAndID(args.Address)
+	require.Equal(t, int32(bucket), bucketID)
 }
 
 func TestGetAccountMetaInfo(t *testing.T) {
@@ -306,7 +309,7 @@ func TestGetAccountMetaInfo(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			accMetaInfo, err := pm.GetAccountMetaInfo(test.address.Bytes())
+			accMetaInfo, err := pm.GetAccountMetaInfo(test.address)
 
 			if test.expectedError != nil {
 				require.Error(t, err)
@@ -323,7 +326,7 @@ func TestIncrementBucketCount(t *testing.T) {
 
 	type args struct {
 		address types.Address
-		count   int64
+		count   uint64
 	}
 
 	address := tests.RandomAddress(t)
@@ -331,7 +334,7 @@ func TestIncrementBucketCount(t *testing.T) {
 	testcases := []struct {
 		name          string
 		arg           args
-		expectedCount int64
+		expectedCount uint64
 	}{
 		{
 			name: "account doesn't exist",
@@ -353,15 +356,15 @@ func TestIncrementBucketCount(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			_, bucket := BucketIDFromAddress(test.arg.address.Bytes())
+			_, bucket := BucketKeyAndID(test.arg.address)
 
-			err := pm.incrementBucketCount(bucket.getIDBytes(), test.arg.count)
+			err := pm.incrementBucketCount(bucket, test.arg.count)
 			require.NoError(t, err)
 
-			actualCount, err := pm.getBucketCountByBucketNumber(bucket.getIDBytes())
+			actualCount, err := pm.GetBucketCount(bucket)
 			require.NoError(t, err)
 
-			require.Equal(t, test.expectedCount, actualCount.Int64())
+			require.Equal(t, test.expectedCount, actualCount)
 		})
 	}
 }
@@ -505,7 +508,7 @@ func TestUpdateTesseractStatus_CheckHeight(t *testing.T) {
 			)
 			require.NoError(t, err)
 
-			actualAccMetaInfo, err := pm.GetAccountMetaInfo(test.arg.address.Bytes())
+			actualAccMetaInfo, err := pm.GetAccountMetaInfo(test.arg.address)
 			require.NoError(t, err)
 
 			// changes should take place if new height is greater than equal to current height
@@ -528,7 +531,7 @@ func TestGetBucketSizes(t *testing.T) {
 	require.NoError(t, err)
 
 	for k, v := range actualBucketSizes {
-		require.Equal(t, incrementBucketCounts[k], v.Int64())
+		require.Equal(t, incrementBucketCounts[k], v)
 	}
 }
 
@@ -539,20 +542,20 @@ func TestGetAccounts(t *testing.T) {
 	insertedAccounts := insertTestAccMetaInfo(t, pm)
 
 	// check if all accounts under every bucket number are stored properly
-	for i := 0; i < 1024; i++ {
-		actualAccounts, err := pm.GetAccounts(int32(i))
-		require.NoError(t, err)
+	for i := uint64(0); i < 1024; i++ {
+		resp := make(chan []byte)
+		responses := make([][]byte, 0)
 
-		insertedAccounts := insertedAccounts[int64(i)]
-		require.Equal(t, len(insertedAccounts), len(actualAccounts),
-			"inserted account count doesn't match")
+		go func() {
+			err := pm.StreamAccountMetaInfosRaw(context.Background(), i, resp)
+			require.NoError(t, err)
+		}()
 
-		// traverse inserted accounts and check if it is present in actual accounts
-		for _, insertedAccount := range insertedAccounts {
-			isExists := checkIfAccountExists(insertedAccount, actualAccounts)
-
-			require.True(t, isExists, "inserted account not found")
+		for rawData := range resp {
+			responses = append(responses, rawData)
 		}
+
+		require.Equal(t, len(insertedAccounts[i]), len(responses), "inserted account count doesn't match")
 	}
 }
 
@@ -747,6 +750,59 @@ func TestGetReceipts(t *testing.T) {
 
 			require.Equal(t, expectedReceipts, receipts)
 		})
+	}
+}
+
+func keyWithPrefix(prefix types.Address, k int) []byte {
+	return append(prefix.Bytes(), []byte(fmt.Sprintf("%d", k))...)
+}
+
+func value(k int) []byte {
+	return []byte(fmt.Sprintf("%08d", k))
+}
+
+func TestPersistenceManager_GetAccountSnapshot(t *testing.T) {
+	dir1, err := os.MkdirTemp(os.TempDir(), "test1")
+	require.NoError(t, err)
+
+	dir2, err := os.MkdirTemp(os.TempDir(), "test2")
+	require.NoError(t, err)
+
+	defer func() {
+		os.RemoveAll(dir1)
+		os.RemoveAll(dir2)
+	}()
+
+	pm1 := NewTestPersistenceManagerWithBadger(t, dir1)
+	pm2 := NewTestPersistenceManagerWithBadger(t, dir2)
+
+	address := tests.GetRandomAddressList(t, 3)
+
+	for _, prefix := range address {
+		bw := pm1.db.NewBatchWriter()
+		for i := 1; i <= 100; i++ {
+			require.NoError(t, bw.Set(keyWithPrefix(prefix, i), value(i)))
+		}
+		require.NoError(t, bw.Flush())
+	}
+
+	for _, prefix := range address {
+		snap, err := pm1.GetAccountSnapshot(context.Background(), prefix, 0)
+		require.NoError(t, err)
+
+		err = pm2.StoreAccountSnapShot(snap)
+		require.NoError(t, err)
+	}
+
+	for _, prefix := range address {
+		for i := 1; i <= 100; i++ {
+			val, err := pm2.ReadEntry(keyWithPrefix(prefix, i))
+			require.NoError(t, err)
+
+			bytes.Equal(value(i), val)
+		}
+
+		require.NoError(t, err)
 	}
 }
 

@@ -89,7 +89,7 @@ func createKramaIDAndPrivateKey(t *testing.T, nthValidator uint32) (id.KramaID, 
 // createTestNodeSet return nodeset and vaults
 // nodeset has nodes info like krama ID and public key
 // vaults has node info like krama ID and private key which can be used to sign votes during consensus
-func createTestNodeSet(t *testing.T, n int) (*ktypes.NodeSet, []*mudra.KramaVault) {
+func createTestNodeSet(t *testing.T, n int) (*types.NodeSet, []*mudra.KramaVault) {
 	t.Helper()
 
 	publicKeys := make([][]byte, n)
@@ -106,7 +106,7 @@ func createTestNodeSet(t *testing.T, n int) (*ktypes.NodeSet, []*mudra.KramaVaul
 		valset[i].SetConsensusPrivateKey(privateKey)
 	}
 
-	nodeset := ktypes.NewNodeSet(kramaIDs, publicKeys)
+	nodeset := types.NewNodeSet(kramaIDs, publicKeys)
 	nodeset.QuorumSize = n
 
 	for i := 0; i < n; i++ {
@@ -125,7 +125,7 @@ func createICSNodes(
 	receiverRandomSetCount int,
 	randomSetCount int,
 	observerSetCount int,
-) (*ktypes.ICSNodeSet, [][]*mudra.KramaVault) {
+) (*types.ICSNodeSet, [][]*mudra.KramaVault) {
 	t.Helper()
 
 	senderBehaviourSet, senderBehaviouralValSet := createTestNodeSet(t, senderBehaviourSetCount)
@@ -135,7 +135,7 @@ func createICSNodes(
 	randomSet, randomValSet := createTestNodeSet(t, randomSetCount)
 	observerSet, observerValSet := createTestNodeSet(t, observerSetCount)
 
-	testNodeSets := []*ktypes.NodeSet{
+	testNodeSets := []*types.NodeSet{
 		senderBehaviourSet,
 		senderRandomSet,
 		receiverBehaviourSet,
@@ -153,7 +153,7 @@ func createICSNodes(
 		observerValSet,
 	}
 
-	return &ktypes.ICSNodeSet{
+	return &types.ICSNodeSet{
 		Nodes: testNodeSets,
 		Size: senderBehaviourSetCount + senderRandomSetCount + receiverBehaviourSetCount +
 			receiverRandomSetCount + randomSetCount + observerSetCount,
@@ -374,7 +374,7 @@ func createIxs(t *testing.T, senderAddress types.Address, receiverAddress types.
 // and also add tesseract for sarga account
 func createTestClusterInfo(
 	t *testing.T,
-	icsNodes *ktypes.ICSNodeSet,
+	icsNodes *types.ICSNodeSet,
 	newHeights map[types.Address]uint64,
 	ixs types.Interactions,
 	nonRegisteredReceiver bool,
@@ -386,8 +386,9 @@ func createTestClusterInfo(
 		nil,
 		ixs,
 		"cluster1",
-		tests.GetTestKramaIDs(t, 1)[0],
+		tests.GetTestKramaIDs(t, 2)[0],
 		time.Now(),
+		tests.GetTestKramaIDs(t, 2)[1],
 	)
 
 	func(clusterInfo *ktypes.ClusterState) {
@@ -421,7 +422,7 @@ func createTestClusterInfo(
 		}
 
 		clusterInfo.Grid = []*types.Tesseract{
-			types.NewTesseract(senderHeader, types.TesseractBody{}, nil, nil, nil),
+			types.NewTesseract(senderHeader, types.TesseractBody{}, nil, nil, nil, clusterInfo.SelfKramaID()),
 		}
 
 		if !ixs[0].Receiver().IsNil() {
@@ -432,7 +433,7 @@ func createTestClusterInfo(
 
 			clusterInfo.Grid = append(
 				clusterInfo.Grid,
-				types.NewTesseract(receiverHeader, types.TesseractBody{}, nil, nil, nil),
+				types.NewTesseract(receiverHeader, types.TesseractBody{}, nil, nil, nil, clusterInfo.SelfKramaID()),
 			)
 		}
 
@@ -444,7 +445,7 @@ func createTestClusterInfo(
 
 			clusterInfo.Grid = append(
 				clusterInfo.Grid,
-				types.NewTesseract(sargaHeader, types.TesseractBody{}, nil, nil, nil),
+				types.NewTesseract(sargaHeader, types.TesseractBody{}, nil, nil, nil, clusterInfo.SelfKramaID()),
 			)
 		}
 	}(clusterInfo)

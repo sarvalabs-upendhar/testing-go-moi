@@ -7,6 +7,7 @@ import (
 )
 
 type MerkleTree interface {
+	Root() types.RootNode
 	RootHash() (types.Hash, error)
 	Get(key []byte) ([]byte, error)
 	Set(key, value []byte) error

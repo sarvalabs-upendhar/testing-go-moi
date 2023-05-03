@@ -134,7 +134,7 @@ func (p *PublicCoreAPI) GetBalance(args *ptypes.BalArgs) (*hexutil.Big, error) {
 }
 
 // GetTDU will return the total digital utility associated with address
-func (p *PublicCoreAPI) GetTDU(args *ptypes.TesseractArgs) (map[types.AssetID]string, error) {
+func (p *PublicCoreAPI) GetTDU(args *ptypes.TesseractArgs) (map[types.AssetID]*big.Int, error) {
 	ts, err := p.getTesseract(getTesseractArgs(args.Address, args.Options))
 	if err != nil {
 		return nil, err
@@ -147,13 +147,7 @@ func (p *PublicCoreAPI) GetTDU(args *ptypes.TesseractArgs) (map[types.AssetID]st
 
 	data, _ := object.TDU()
 
-	rpcAssetMap := make(map[types.AssetID]string)
-
-	for key, value := range data {
-		rpcAssetMap[key] = value.Text(16)
-	}
-
-	return rpcAssetMap, nil
+	return data, nil
 }
 
 // GetInteractionByTesseract returns the interaction for the given tesseract hash
@@ -501,7 +495,7 @@ func createRPCInteraction(
 
 	switch ix.Type() {
 	case types.IxValueTransfer:
-
+		break
 	case types.IxAssetCreate:
 		assetPayload := new(types.AssetPayload)
 		if err = assetPayload.FromBytes(ix.Payload()); err != nil {
@@ -683,10 +677,7 @@ func createRPCBody(body types.TesseractBody) ptypes.RPCBody {
 
 // CreateRPCTesseract creates rpc tesseract from tesseract
 func CreateRPCTesseract(ts *types.Tesseract) (*ptypes.RPCTesseract, error) {
-	var (
-		err     error
-		rpcIxns []*ptypes.RPCInteraction
-	)
+	var rpcIxns []*ptypes.RPCInteraction
 
 	if ts.ClusterID() != lattice.GenesisIdentifier && len(ts.Interactions()) > 0 {
 		rpcIxns = make([]*ptypes.RPCInteraction, len(ts.Interactions()))
@@ -704,17 +695,12 @@ func CreateRPCTesseract(ts *types.Tesseract) (*ptypes.RPCTesseract, error) {
 		}
 	}
 
-	hash, err := ts.Hash()
-	if err != nil {
-		return nil, err
-	}
-
 	return &ptypes.RPCTesseract{
 		Header: createRPCHeader(ts.Header()),
 		Body:   createRPCBody(ts.Body()),
 		Ixns:   rpcIxns,
 		Seal:   ts.Seal(),
-		Hash:   hash,
+		Hash:   ts.Hash(),
 	}, nil
 }
 

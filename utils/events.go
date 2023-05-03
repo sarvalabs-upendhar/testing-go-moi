@@ -4,7 +4,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
-	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 )
 
@@ -31,7 +30,7 @@ type NewMinedTesseractEvent struct {
 // TesseractReceivedEvent occurs when a new block is received from the peer
 type TesseractReceivedEvent struct {
 	Tesseract   *types.Tesseract
-	ClusterInfo *ptypes.ICSClusterInfo
+	ClusterInfo *types.ICSClusterInfo
 	Sender      id.KramaID
 }
 
@@ -43,11 +42,14 @@ type TesseractAddedEvent struct {
 // TesseractSyncEvent is fired when a new tesseract received and needs to be synced up.
 type TesseractSyncEvent struct {
 	Tesseract   *types.Tesseract
-	ClusterInfo *ptypes.ICSClusterInfo
+	ClusterInfo *types.ICSClusterInfo
+	Delta       map[types.Hash][]byte
 	Context     []id.KramaID
 }
 
-type SyncStatusUpdate struct {
-	BucketID int32
-	Count    int64
+// SyncRequestEvent is fired by krama engine to sync the tesseract lattice
+type SyncRequestEvent struct {
+	Address  types.Address
+	Height   uint64
+	BestPeer id.KramaID
 }

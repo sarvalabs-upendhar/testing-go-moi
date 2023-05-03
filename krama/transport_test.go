@@ -20,7 +20,7 @@ import (
 
 // testcase args
 type InitClusterCommArgs struct {
-	nodeSet  []*ktypes.NodeSet
+	nodeSet  []*types.NodeSet
 	slotType ktypes.SlotType
 }
 
@@ -61,10 +61,10 @@ func CreateInteractions(t *testing.T, sender types.Address) *types.Interactions 
 	return &types.Interactions{ixn}
 }
 
-func CreateSlot(t *testing.T, nodeset []*ktypes.NodeSet, slotType ktypes.SlotType) *ktypes.Slot {
+func CreateSlot(t *testing.T, nodeset []*types.NodeSet, slotType ktypes.SlotType) *ktypes.Slot {
 	t.Helper()
 
-	kramaIDs := tests.GetTestKramaIDs(t, 1)
+	kramaIDs := tests.GetTestKramaIDs(t, 2)
 	operator := kramaIDs[0]
 
 	address, err := operator.MoiID()
@@ -75,7 +75,7 @@ func CreateSlot(t *testing.T, nodeset []*ktypes.NodeSet, slotType ktypes.SlotTyp
 	clusterID, err := generateClusterID()
 	require.NoError(t, err)
 
-	clusterInfo := ktypes.NewICS(6, nil, *ixs, clusterID, operator, time.Now())
+	clusterInfo := ktypes.NewICS(6, nil, *ixs, clusterID, operator, time.Now(), kramaIDs[1])
 	clusterInfo.NodeSet.Nodes = nodeset
 
 	slot := ktypes.NewSlot(slotType, clusterInfo)
@@ -97,7 +97,7 @@ func Test_InitClusterCommunication_Connect(t *testing.T) {
 				MinimumConnectionCount,
 			),
 			args: InitClusterCommArgs{
-				nodeSet: []*ktypes.NodeSet{
+				nodeSet: []*types.NodeSet{
 					{
 						Ids: tests.GetTestKramaIDs(t, 3),
 					},
@@ -117,7 +117,7 @@ func Test_InitClusterCommunication_Connect(t *testing.T) {
 				MinimumConnectionCount-2,
 			),
 			args: InitClusterCommArgs{
-				nodeSet: []*ktypes.NodeSet{
+				nodeSet: []*types.NodeSet{
 					{
 						Ids: tests.GetTestKramaIDs(t, 3),
 					},
@@ -136,7 +136,7 @@ func Test_InitClusterCommunication_Connect(t *testing.T) {
 		{
 			name: "Operator shouldn't connect with any ics node",
 			args: InitClusterCommArgs{
-				nodeSet: []*ktypes.NodeSet{
+				nodeSet: []*types.NodeSet{
 					{
 						Ids: tests.GetTestKramaIDs(t, 5),
 					},
@@ -181,7 +181,7 @@ func Test_InitClusterCommunication_Disconnect(t *testing.T) {
 		{
 			name: "Validator should disconnect from all the ics nodes",
 			args: InitClusterCommArgs{
-				nodeSet: []*ktypes.NodeSet{
+				nodeSet: []*types.NodeSet{
 					{
 						Ids: tests.GetTestKramaIDs(t, 3),
 					},

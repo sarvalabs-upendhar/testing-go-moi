@@ -6,6 +6,8 @@ import (
 	"net"
 	"time"
 
+	"github.com/sarvalabs/moichain/types"
+
 	"github.com/libp2p/go-libp2p/core/protocol"
 	maddr "github.com/multiformats/go-multiaddr"
 
@@ -30,6 +32,7 @@ type Config struct {
 	DB             *DBConfig
 	Execution      *ExecutionConfig
 	IxPool         *IxPoolConfig
+	Syncer         *SyncerConfig
 	Metrics        Telemetry
 	LogFilePath    string
 }
@@ -39,18 +42,21 @@ type Telemetry struct {
 	JaegerAddr     string
 }
 
+type SyncerConfig struct {
+	ShouldExecute  bool
+	TrustedPeers   []string
+	EnableSnapSync bool
+	SyncMode       types.SyncMode
+}
+
 type ChainConfig struct {
-	SkipGenesis     bool
 	GenesisFilePath string
-	ShouldExecute   bool
 }
 
 type DBConfig struct {
-	DBFolderPath      string `yaml:"DBFolderPath"`
-	CidPrefixVersion  uint64 `yaml:"cidPrefixVersion"`
-	CidPrefixCodec    uint64 `yaml:"cidPrefixCodec"`
-	CidPrefixMhType   uint64 `yaml:"cidPrefixMhType"`
-	CidPrefixMhLength int    `yaml:"cidPrefixMhLength"`
+	CleanDB      bool
+	DBFolderPath string
+	MaxSnapSize  uint64
 }
 
 type ExecutionConfig struct {
@@ -123,7 +129,11 @@ func DefaultConfig(path string) *Config {
 		},
 		Chain: &ChainConfig{
 			GenesisFilePath: path + "/genesis.json",
-			ShouldExecute:   true,
+		},
+		Syncer: &SyncerConfig{
+			ShouldExecute:  true,
+			SyncMode:       types.FullSync,
+			EnableSnapSync: true,
 		},
 		Consensus: &ConsensusConfig{
 			DirectoryPath:         path + "/consensus",
@@ -141,11 +151,9 @@ func DefaultConfig(path string) *Config {
 			ValidatorSlotCount:    3,
 		},
 		DB: &DBConfig{
-			DBFolderPath:      path + "/db",
-			CidPrefixVersion:  1,
-			CidPrefixCodec:    0x50,
-			CidPrefixMhType:   0xb220,
-			CidPrefixMhLength: -1,
+			CleanDB:      false,
+			DBFolderPath: path + "/db",
+			MaxSnapSize:  1024 * 1024 * 1024, // 1GB limit
 		},
 		Execution: &ExecutionConfig{
 			FuelLimit: 1000,

@@ -47,8 +47,8 @@ func (icsrpc *ICSRPCService) ICSRequest(
 		operator:     id.KramaID(req.Operator),
 		msg:          req,
 		responseChan: respChan,
-		reqTime:      time.Unix(0, req.Timestamp),
 		ixs:          *interactions,
+		reqTime:      time.Unix(0, req.Timestamp),
 	}
 
 	icsrpc.engine.requests <- kramaRequest

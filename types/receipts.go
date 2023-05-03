@@ -41,7 +41,7 @@ func (r *Receipt) Copy() *Receipt {
 		receipt.ContextHashes[key] = value
 	}
 
-	if r.ExtraData != nil {
+	if len(r.ExtraData) > 0 {
 		receipt.ExtraData = make(json.RawMessage, len(r.ExtraData))
 		copy(receipt.ExtraData, r.ExtraData)
 	}

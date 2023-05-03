@@ -214,12 +214,14 @@ func (s *Session) GetBlocks(ctx context.Context, cids []atypes.CID) chan *atypes
 			if err != nil {
 				s.logger.Error("Error finding best peer", "error", err)
 
+				attempt++
+
 				continue
 			}
 
 			attemptedPeers[peerID] = true
 
-			if err := s.getBlocks(ctx, peerID, out, idSet); err != nil {
+			if err = s.getBlocks(ctx, peerID, out, idSet); err != nil {
 				s.logger.Error("Error fetching blocks", "error", err)
 
 				s.pm.UpdateFailedAttempts(peerID, 1)

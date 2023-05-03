@@ -1,8 +1,6 @@
 package api
 
 import (
-	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"math/big"
@@ -17,7 +15,6 @@ import (
 
 	"github.com/sarvalabs/moichain/common/hexutil"
 	"github.com/sarvalabs/moichain/common/tests"
-	"github.com/sarvalabs/moichain/dhruva"
 	"github.com/sarvalabs/moichain/guna"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
 	"github.com/sarvalabs/moichain/lattice"
@@ -476,12 +473,13 @@ func (mn *MockNetwork) setPeers(peersList []id.KramaID) {
 	mn.peers = peersList
 }
 
-func (mn *MockNetwork) GetPeers() ([]id.KramaID, error) {
-	return mn.peers, nil
+func (mn *MockNetwork) GetPeers() []id.KramaID {
+	return mn.peers
 }
 
 type MockDatabase struct {
 	database map[string][]byte
+	addrList []types.Address
 }
 
 func NewMockDatabase(t *testing.T) *MockDatabase {
@@ -508,29 +506,11 @@ func (d *MockDatabase) ReadEntry(key []byte) ([]byte, error) {
 func (d *MockDatabase) setList(t *testing.T, addressList []types.Address) {
 	t.Helper()
 
-	for _, addr := range addressList {
-		key, _ := dhruva.BucketIDFromAddress(addr.Bytes())
-		d.setDBEntry(key)
-	}
+	d.addrList = addressList
 }
 
-func (d *MockDatabase) GetEntriesWithPrefix(ctx context.Context, prefix []byte) (chan *types.DBEntry, error) {
-	entries := make(chan *types.DBEntry)
-
-	go func() {
-		for k, v := range d.database {
-			if bytes.HasPrefix([]byte(k), prefix) {
-				entries <- &types.DBEntry{
-					Key:   []byte(k),
-					Value: v,
-				}
-			}
-		}
-
-		close(entries)
-	}()
-
-	return entries, nil
+func (d *MockDatabase) GetRegisteredAccounts() ([]types.Address, error) {
+	return d.addrList, nil
 }
 
 func createHeaderCallbackWithTestData(t *testing.T) func(header *types.TesseractHeader) {
@@ -654,10 +634,7 @@ func getTesseractsHashes(t *testing.T, tesseracts []*types.Tesseract) []types.Ha
 func getTesseractHash(t *testing.T, tesseract *types.Tesseract) types.Hash {
 	t.Helper()
 
-	tsHash, err := tesseract.Hash()
-	require.NoError(t, err)
-
-	return tsHash
+	return tesseract.Hash()
 }
 
 func getLogicID(t *testing.T, address types.Address) types.LogicID {
@@ -1046,10 +1023,8 @@ func checkForRPCTesseract(
 	checkForRPCHeader(t, ts.Header(), rpcTS.Header)
 	checkForRPCBody(t, ts.Body(), rpcTS.Body)
 	require.Equal(t, ts.Seal(), rpcTS.Seal.Bytes())
-	hash, err := ts.Hash()
-	require.NoError(t, err)
 
-	require.Equal(t, hash, rpcTS.Hash)
+	require.Equal(t, ts.Hash(), rpcTS.Hash)
 
 	if ts.ClusterID() == lattice.GenesisIdentifier {
 		for _, ix := range rpcTS.Ixns {

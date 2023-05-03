@@ -182,7 +182,7 @@ func (kbft *KBFT) handler(maxSteps int) error {
 		case msg := <-kbft.selfMsgChan:
 			kbft.logger.Debug("Handling internal Msg", msg.Message)
 
-			if err := kbft.wal.WriteSync(msg, kbft.ics.ID); err != nil {
+			if err := kbft.wal.WriteSync(msg, kbft.ics.ClusterID); err != nil {
 				kbft.logger.Error("Error Writing to WAL")
 			}
 
@@ -467,7 +467,7 @@ func (kbft *KBFT) finalizeCommit(h map[types.Address]uint64) {
 		return
 	}
 
-	if err = kbft.finalizedTesseractHandler(kbft.ProposalGrid.Tesseracts); err != nil {
+	if err = kbft.finalizedTesseractHandler(kbft.ProposalGrid.TesseractsCopy()); err != nil {
 		kbft.Close(err)
 
 		return
@@ -500,6 +500,7 @@ func (kbft *KBFT) updateConsensusInfoInTesseracts(
 		}
 
 		tesseract.SetExtraData(extraData)
+		// FIXME: Add sealer in tesseract generation
 
 		rawData, err := tesseract.Bytes()
 		if err != nil {
@@ -649,12 +650,7 @@ func (kbft *KBFT) createProposalGrid() (*ktypes.TesseractGrid, error) {
 	rawHashes := make([]byte, 0)
 
 	for _, v := range grid {
-		tsHash, err := v.Hash()
-		if err != nil {
-			return nil, err
-		}
-
-		rawHashes = append(rawHashes, tsHash.Bytes()...)
+		rawHashes = append(rawHashes, v.Hash().Bytes()...)
 	}
 
 	tesseractGrid := &ktypes.TesseractGrid{

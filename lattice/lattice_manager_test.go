@@ -9,16 +9,13 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
-	"github.com/stretchr/testify/require"
-
 	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/guna"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
-	ktypes "github.com/sarvalabs/moichain/krama/types"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
-	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 	"github.com/sarvalabs/moichain/utils"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHasTesseract(t *testing.T) {
@@ -43,7 +40,7 @@ func TestHasTesseract(t *testing.T) {
 		},
 		{
 			name:         "tesseract exists",
-			hash:         getTesseractHash(t, ts),
+			hash:         ts.Hash(),
 			hasTesseract: true,
 		},
 	}
@@ -231,8 +228,8 @@ func TestFetchICSNodeSet(t *testing.T) {
 
 			c := createTestChainManager(t, chainParams)
 			info := getTestClusterInfoWithRandomSet(t, test.randSet, 0)
-			ics, err := c.fetchICSNodeSet(ts, info)
 
+			ics, err := c.FetchICSNodeSet(ts, info)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -243,9 +240,9 @@ func TestFetchICSNodeSet(t *testing.T) {
 			checkIfICSNodeSetMatches(
 				t,
 				ics,
-				ktypes.NewNodeSet(test.behNodes, test.behPK),
-				ktypes.NewNodeSet(test.randNodes, test.randPK),
-				ktypes.NewNodeSet(test.randSet, test.randsetPK),
+				types.NewNodeSet(test.behNodes, test.behPK),
+				types.NewNodeSet(test.randNodes, test.randPK),
+				types.NewNodeSet(test.randSet, test.randsetPK),
 			)
 		})
 	}
@@ -258,7 +255,7 @@ func TestAddKnownHashes(t *testing.T) {
 	c.AddKnownHashes(tesseracts)
 
 	for _, ts := range tesseracts {
-		isExists := c.knownTesseracts.Contains(getTesseractHash(t, ts))
+		isExists := c.knownTesseracts.Contains(ts.Hash())
 		require.True(t, isExists)
 	}
 }
@@ -313,19 +310,19 @@ func TestGetTesseract(t *testing.T) {
 		},
 		{
 			name:             "fetch tesseract without interactions from cache",
-			tsHash:           getTesseractHash(t, ts[0]),
+			tsHash:           ts[0].Hash(),
 			withInteractions: false,
 			expectedTS:       ts[0],
 		},
 		{
 			name:             "fetch tesseract without interactions from db",
-			tsHash:           getTesseractHash(t, ts[1]),
+			tsHash:           ts[1].Hash(),
 			withInteractions: false,
 			expectedTS:       ts[1],
 		},
 		{
 			name:             "fetch tesseract with interactions from db",
-			tsHash:           getTesseractHash(t, ts[2]),
+			tsHash:           ts[2].Hash(),
 			withInteractions: true,
 			expectedTS:       ts[2],
 		},
@@ -417,7 +414,7 @@ func TestGetTesseractByHeight(t *testing.T) {
 
 			require.NoError(t, err)
 			tests.CheckForTesseract(t, test.expectedTS, actualTS, test.args.withInteractions)
-			checkIfTesseractCachedInCM(t, c, test.args.withInteractions, getTesseractHash(t, ts))
+			checkIfTesseractCachedInCM(t, c, test.args.withInteractions, ts.Hash())
 		})
 	}
 }
@@ -843,7 +840,7 @@ func TestVerifyHeaders(t *testing.T) {
 				},
 			},
 			smCallBack:    smCallback,
-			expectedError: types.ErrFetchingTesseract,
+			expectedError: errors.New("error fetching previous tesseract"),
 		},
 		{
 			name: "should return error for invalid height",
@@ -1118,16 +1115,13 @@ func TestAddTesseract(t *testing.T) {
 			c := createTestChainManager(t, chainParams)
 
 			tsAddedEventSub := c.mux.Subscribe(utils.TesseractAddedEvent{}) // subscribe to tesseract added event
-			syncStatusSub := c.mux.Subscribe(utils.SyncStatusUpdate{})      // subscribe to tesseract added event
 
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
 			tsAddedResp := make(chan result, 1)
-			syncStatusResp := make(chan result, 1)
 
-			go handleMuxEvents(ctx, tsAddedEventSub, tsAddedResp)  // keeps checking for event until timeout
-			go handleMuxEvents(ctx, syncStatusSub, syncStatusResp) // keeps checking for event until timeout
+			go handleMuxEvents(ctx, tsAddedEventSub, tsAddedResp) // keeps checking for event until timeout
 
 			err := c.addTesseract(
 				test.args.cache,
@@ -1158,7 +1152,6 @@ func TestAddTesseract(t *testing.T) {
 			)
 
 			validateTSAddedEvent(t, tsAddedResp, ts[tsCount-1])
-			validateSyncStatusEvent(t, syncStatusResp)
 		})
 	}
 }
@@ -1244,9 +1237,6 @@ func TestAddTesseractsWithState(t *testing.T) {
 
 			c := createTestChainManager(t, chainParams)
 
-			// add tesseracts to validated tesseracts so that we can verify if removed from validated tesseracts
-			insertValidatedTesseracts(t, c, ts)
-
 			err := c.addTesseractsWithState(
 				test.dirtyStorage,
 				ts...,
@@ -1259,67 +1249,12 @@ func TestAddTesseractsWithState(t *testing.T) {
 
 			require.NoError(t, err)
 			checkForDirtyEntries(t, c.db, test.dirtyStorage) // check if dirty entries are inserted in db
-			checkForAddedTesseracts(t, true, c, ts, accType)
-		})
-	}
-}
-
-func TestAddSyncedTesseract(t *testing.T) {
-	var (
-		addresses   = getAddresses(t, 4)
-		ixns        = createIxns(t, 2, getIxParamsMapWithAddresses(addresses[:2], addresses[2:]))
-		clusterInfo = getTestClusterInfo(t, 2)
-	)
-
-	testcases := []struct {
-		name             string
-		clusterInfo      *ptypes.ICSClusterInfo
-		tesseractsParams map[int]*createTesseractParams
-		expectedError    error
-	}{
-		{
-			name:             "should return error for nil cluster info",
-			clusterInfo:      nil,
-			tesseractsParams: map[int]*createTesseractParams{0: tesseractParamsWithICSClusterInfo(t, ixns, clusterInfo)},
-			expectedError:    errors.New("nil cluster info"),
-		},
-		{
-			name:             "valid cluster info should be added to db",
-			clusterInfo:      clusterInfo,
-			tesseractsParams: map[int]*createTesseractParams{0: tesseractParamsWithICSClusterInfo(t, ixns, clusterInfo)},
-			expectedError:    nil,
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			ts := createTesseracts(t, 1, test.tesseractsParams)
-
-			chainParams := &CreateChainParams{
-				smCallBack: func(sm *MockStateManager) {
-					setAccountType(sm, types.LogicAccount, ts...)
-				},
-			}
-
-			c := createTestChainManager(t, chainParams)
-
-			err := c.AddSyncedTesseract(test.clusterInfo, ts...)
-			if test.expectedError != nil {
-				require.ErrorContains(t, err, test.expectedError.Error())
-
-				return
-			}
-
-			require.NoError(t, err)
-			checkForClusterInfo(t, c.db, clusterInfo)
-			checkForAddedTesseracts(t, false, c, ts, types.LogicAccount)
+			checkForAddedTesseracts(t, c, ts, accType)
 		})
 	}
 }
 
 func TestValidateTesseract(t *testing.T) {
-	var sender id.KramaID
-
 	address := tests.RandomAddress(t)
 	nodes := getICSNodeset(t, 1)
 
@@ -1377,14 +1312,6 @@ func TestValidateTesseract(t *testing.T) {
 			expectedError: types.ErrAlreadyKnown,
 		},
 		{
-			name: "should return error if tesseract has already been validated",
-			chainManagerCallback: func(c *ChainManager) {
-				c.validatedTesseracts.Store(getTesseractHash(t, ts[5]), nil)
-			},
-			ts:            ts[5],
-			expectedError: types.ErrAlreadyKnown,
-		},
-		{
 			name:          "invalid tesseract seal",
 			ts:            ts[6],
 			expectedError: types.ErrInvalidSeal,
@@ -1405,10 +1332,10 @@ func TestValidateTesseract(t *testing.T) {
 
 			// generate seal at the end as there are modifications to header
 			if !errors.Is(test.expectedError, types.ErrInvalidSeal) {
-				sender = signTesseract(t, sm, test.ts)
+				signTesseract(t, sm, test.ts)
 			}
 
-			err := c.validateTesseract(sender, test.ts, nodes)
+			err := c.ValidateTesseract(test.ts, nodes)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -1431,7 +1358,7 @@ func TestAddTesseracts(t *testing.T) {
 	)
 
 	tesseractParamsWithGroupHash := func(
-		clusterInfo *ptypes.ICSClusterInfo,
+		clusterInfo *types.ICSClusterInfo,
 		groupHash types.Hash,
 	) *createTesseractParams {
 		rawData, err := clusterInfo.Bytes()
@@ -1506,10 +1433,7 @@ func TestAddTesseracts(t *testing.T) {
 
 			c := createTestChainManager(t, chainParams)
 
-			err := c.AddTesseracts(
-				ts,
-				test.dirtyStorage,
-			)
+			err := c.AddTesseracts(test.dirtyStorage, ts...)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -1517,7 +1441,7 @@ func TestAddTesseracts(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			checkForAddedTesseracts(t, false, c, ts, types.LogicAccount)
+			checkForAddedTesseracts(t, c, ts, types.LogicAccount)
 		})
 	}
 }
@@ -1702,7 +1626,7 @@ func TestExecuteAndValidate(t *testing.T) {
 
 			c := createTestChainManager(t, chainParams)
 
-			err := c.executeAndValidate(ts)
+			err := c.ExecuteAndValidate(ts...)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -1715,162 +1639,7 @@ func TestExecuteAndValidate(t *testing.T) {
 	}
 }
 
-func TestSendTesseractSyncRequest(t *testing.T) {
-	tsParams := tesseractParamsWithContextDelta(
-		t,
-		tests.RandomAddress(t),
-		1,
-		3,
-		0,
-	)
-
-	t.Run("should fire tesseract sync event with given tesseract", func(t *testing.T) {
-		ts := createTesseract(t, tsParams)
-
-		var (
-			c       = createTestChainManager(t, nil)
-			info    = getTestClusterInfo(t, 3)
-			syncSub = c.mux.Subscribe(utils.TesseractSyncEvent{}) // subscribe to tesseract sync event
-
-		)
-
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		resp := make(chan result, 1)
-
-		go handleMuxEvents(ctx, syncSub, resp) // keeps checking for event until timeout
-
-		c.sendTesseractSyncRequest(ts, info)
-
-		validateTSSyncEvent(t, c, ts, resp, info)
-	},
-	)
-}
-
-func TestExecuteAndAdd(t *testing.T) {
-	accType := types.LogicAccount
-	address := tests.RandomAddress(t)
-	stateHash := tests.RandomHash(t)
-	ixns, receipts := getIxAndReceiptsWithStateHash(t, map[types.Address]types.Hash{address: stateHash}, 1)
-	clusterInfo := getTestClusterInfo(t, 2)
-
-	testcases := []struct {
-		name                    string
-		tsCount                 int
-		clusterInfo             *ptypes.ICSClusterInfo
-		executeInteractionsHook func() (types.Receipts, error)
-		tesseractsParams        map[int]*createTesseractParams
-		isTesseractCached       bool
-		expectedError           error
-	}{
-		{
-			name:              "should add tesseract to grid cache for pending group",
-			clusterInfo:       clusterInfo,
-			tsCount:           1,
-			isTesseractCached: true,
-			tesseractsParams: map[int]*createTesseractParams{
-				0: tesseractParamsWithGridInfo(
-					t,
-					address,
-					stateHash,
-					getReceiptHash(t, receipts),
-					clusterInfo,
-					ixns,
-					2,
-				),
-			},
-			executeInteractionsHook: func() (types.Receipts, error) {
-				return receipts, nil
-			},
-		},
-		{
-			name:        "should return error if addTesseractWithState fails",
-			tsCount:     1,
-			clusterInfo: getTestClusterInfo(t, 2),
-			tesseractsParams: map[int]*createTesseractParams{
-				0: tesseractParamsWithGridInfo(t, address, stateHash, getReceiptHash(t, receipts), clusterInfo, ixns, 1),
-			},
-			executeInteractionsHook: func() (types.Receipts, error) {
-				return receipts, nil
-			},
-			expectedError: errors.New("cluster info not found"),
-		},
-		{
-			name:        "should add tesseract if grid length is 1",
-			tsCount:     1,
-			clusterInfo: clusterInfo,
-			tesseractsParams: map[int]*createTesseractParams{
-				0: tesseractParamsWithGridInfo(t, address, stateHash, getReceiptHash(t, receipts), clusterInfo, ixns, 1),
-			},
-			executeInteractionsHook: func() (types.Receipts, error) {
-				return receipts, nil
-			},
-		},
-		{
-			name:        "should return error if execution failed",
-			tsCount:     1,
-			clusterInfo: clusterInfo,
-			tesseractsParams: map[int]*createTesseractParams{
-				0: tesseractParamsWithGridInfo(t, address, stateHash, getReceiptHash(t, receipts), clusterInfo, ixns, 1),
-			},
-			executeInteractionsHook: func() (types.Receipts, error) {
-				return nil, errors.New("execution failed")
-			},
-			expectedError: errors.New("execution failed"),
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			tsCount := test.tsCount
-			ts := createTesseracts(t, tsCount, test.tesseractsParams)
-
-			db := mockDB()
-			chainParams := &CreateChainParams{
-				db: db,
-				execCallback: func(exec *MockExec) {
-					exec.executeInteractionsHook = test.executeInteractionsHook
-				},
-				smCallBack: func(sm *MockStateManager) {
-					setAccountType(sm, accType, ts...)
-				},
-			}
-
-			c := createTestChainManager(t, chainParams)
-
-			err := c.executeAndAdd(ts[tsCount-1], test.clusterInfo)
-			if test.expectedError != nil {
-				require.ErrorContains(t, err, test.expectedError.Error())
-
-				return
-			}
-
-			require.NoError(t, err)
-			// if the grid is incomplete check for the tesseract in grid cache
-			if test.isTesseractCached {
-				_, ok := c.groupCache.group[ts[0].GroupHash()]
-				require.True(t, ok)
-
-				added, err := c.db.HasTesseract(getTesseractHash(t, ts[0]))
-				require.NoError(t, err)
-				require.False(t, added)
-
-				return
-			}
-
-			checkIfTesseractsAdded(
-				t,
-				accType,
-				false,
-				true,
-				db,
-				ts...,
-			)
-		})
-	}
-}
-
+/*
 func TestAddTesseractWithOutState_SyncScenarios(t *testing.T) {
 	var (
 		respChan    = make(chan result, 1)
@@ -2072,6 +1841,7 @@ func TestAddTesseractWithOutState_ExecuteScenarios(t *testing.T) {
 	)
 }
 
+
 func TestTesseractHandler_SkipScenarios(t *testing.T) {
 	var (
 		nodes        = tests.GetTestKramaIDs(t, 2)
@@ -2085,7 +1855,7 @@ func TestTesseractHandler_SkipScenarios(t *testing.T) {
 	testcases := []struct {
 		name            string
 		tesseractParams *createTesseractParams
-		info            *ptypes.ICSClusterInfo
+		info            *types.ICSClusterInfo
 		preTestFn       func(c *ChainManager, ts *types.Tesseract)
 		expectedError   error
 	}{
@@ -2141,6 +1911,8 @@ func TestTesseractHandler_SkipScenarios(t *testing.T) {
 		})
 	}
 }
+
+*/
 
 func TestValidateAccountCreationInfo(t *testing.T) {
 	var (

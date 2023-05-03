@@ -81,12 +81,6 @@ func (p *Peer) decodeHandshakeMessage() (ptypes.Message, error) {
 	return message, nil
 }
 
-func (p *Peer) resetStream() {
-	if err := p.stream.Reset(); err != nil {
-		p.logger.Error("stream reset", "error", err, "peerID", p)
-	}
-}
-
 func (p *Peer) decodePeerMessage() (ptypes.Message, error) {
 	reader := msgio.NewReader(p.rw.Reader)
 

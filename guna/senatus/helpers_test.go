@@ -77,6 +77,11 @@ type mockBatchWriter struct {
 	db *MockDB
 }
 
+func (bw *mockBatchWriter) WriteBuffer(buf []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (bw *mockBatchWriter) Set(key []byte, value []byte) error {
 	bw.db.data[string(key)] = value
 

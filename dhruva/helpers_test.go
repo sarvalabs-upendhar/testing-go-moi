@@ -3,9 +3,11 @@ package dhruva
 import (
 	"context"
 	"math/big"
-	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/dhruva/db/badger"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/require"
@@ -20,6 +22,21 @@ type mockDB struct {
 	dbStorage map[string][]byte
 }
 
+func (m *mockDB) GetLastActiveTimeStamp() uint64 {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *mockDB) DropWithPrefix(prefix []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *mockDB) Snapshot(ctx context.Context, prefix []byte, sinceTS uint64, collector db.Collector) error {
+	// TODO implement me
+	panic("implement me")
+}
+
 type mockIterator struct {
 	data      map[string][]byte
 	keys      []string
@@ -28,6 +45,11 @@ type mockIterator struct {
 
 type mockBatchWriter struct {
 	db *mockDB
+}
+
+func (bw *mockBatchWriter) WriteBuffer(buf []byte) error {
+	// TODO implement me
+	panic("implement me")
 }
 
 func (bw *mockBatchWriter) Set(key []byte, value []byte) error {
@@ -56,9 +78,29 @@ func NewTestPersistenceManager(t *testing.T) *PersistenceManager {
 	return &PersistenceManager{
 		ctx:       ctx,
 		ctxCancel: ctxCancel,
-		Config:    nil,
+		config:    nil,
 		logger:    hclog.Default(),
 		db:        NewMockDB(t),
+	}
+}
+
+func NewTestPersistenceManagerWithBadger(t *testing.T, badgerPath string) *PersistenceManager {
+	t.Helper()
+
+	ctx, ctxCancel := context.WithCancel(context.Background())
+
+	bg, err := badger.NewBadgerDB(badgerPath)
+	require.NoError(t, err)
+
+	return &PersistenceManager{
+		ctx:       ctx,
+		ctxCancel: ctxCancel,
+		config: &common.DBConfig{
+			DBFolderPath: badgerPath,
+			MaxSnapSize:  1024 * 1024 * 1024,
+		},
+		logger: hclog.Default(),
+		db:     bg,
 	}
 }
 
@@ -181,10 +223,10 @@ func (it *mockIterator) GetNext() (*types.DBEntry, error) {
 	}, nil
 }
 
-func insertTestAccMetaInfo(t *testing.T, pm *PersistenceManager) map[int64]types.Accounts {
+func insertTestAccMetaInfo(t *testing.T, pm *PersistenceManager) map[uint64]types.Accounts {
 	t.Helper()
 
-	insertedAccounts := make(map[int64]types.Accounts, 0)
+	insertedAccounts := make(map[uint64]types.Accounts, 0)
 
 	accountCount := 10000
 	for i := 0; i < accountCount; i++ {
@@ -203,41 +245,32 @@ func insertTestAccMetaInfo(t *testing.T, pm *PersistenceManager) map[int64]types
 
 		// store the data we inserted into db with key as bucket number and  value as account meta info
 		accID := new(big.Int).SetBytes(AccMetaInfo.Address.Bytes())
-		bucketNo := accID.Mod(accID, big.NewInt(BucketCount))
-		insertedAccounts[bucketNo.Int64()] = append(insertedAccounts[bucketNo.Int64()], AccMetaInfo)
+		bucketNo := accID.Mod(accID, new(big.Int).SetUint64(MaxBucketCount))
+
+		insertedAccounts[bucketNo.Uint64()] = append(insertedAccounts[bucketNo.Uint64()], AccMetaInfo)
 	}
 
 	return insertedAccounts
 }
 
 // incrementBuckets takes 10000 random addresses and increment each one by incrementNumber
-func incrementBuckets(t *testing.T, pm *PersistenceManager) map[int32]int64 {
+func incrementBuckets(t *testing.T, pm *PersistenceManager) map[uint64]uint64 {
 	t.Helper()
 
-	incrementBucketSizes := make(map[int32]int64, 0)
+	incrementBucketSizes := make(map[uint64]uint64, 0)
 
-	incrementNumber := int64(3)
+	incrementNumber := uint64(3)
 
 	for i := 0; i < 10000; i++ {
-		_, bucket := BucketIDFromAddress(tests.RandomAddress(t).Bytes())
-		err := pm.incrementBucketCount(bucket.getIDBytes(), incrementNumber)
+		_, bucket := BucketKeyAndID(tests.RandomAddress(t))
+		err := pm.incrementBucketCount(bucket, incrementNumber)
 
 		require.NoError(t, err)
 
-		incrementBucketSizes[int32(new(big.Int).SetBytes(bucket.getIDBytes()).Int64())] += incrementNumber
+		incrementBucketSizes[bucket] += incrementNumber
 	}
 
 	return incrementBucketSizes
-}
-
-func checkIfAccountExists(account *types.AccountMetaInfo, accounts types.Accounts) bool {
-	for _, acc := range accounts {
-		if reflect.DeepEqual(account, acc) {
-			return true
-		}
-	}
-
-	return false
 }
 
 func insertTestEntries(t *testing.T, pm *PersistenceManager) (map[string]string, []string) {
@@ -309,7 +342,7 @@ func getHashes(t *testing.T, count int) []types.Hash {
 func insertAccMetaInfo(t *testing.T, pm *PersistenceManager, accMetaInfo types.AccountMetaInfo) {
 	t.Helper()
 
-	key, bucket := BucketIDFromAddress(accMetaInfo.Address.Bytes())
+	key, bucket := BucketKeyAndID(accMetaInfo.Address)
 
 	rawData, err := accMetaInfo.Bytes()
 	require.NoError(t, err)
@@ -318,7 +351,7 @@ func insertAccMetaInfo(t *testing.T, pm *PersistenceManager, accMetaInfo types.A
 		require.NoError(t, err)
 	}
 
-	if err := pm.incrementBucketCount(bucket.getIDBytes(), 1); err != nil {
+	if err := pm.incrementBucketCount(bucket, 1); err != nil {
 		require.NoError(t, err)
 	}
 }

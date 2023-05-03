@@ -89,6 +89,13 @@ type Block struct {
 	data []byte
 }
 
+func NewBlock(cid CID, data []byte) *Block {
+	return &Block{
+		cid:  cid,
+		data: data,
+	}
+}
+
 func NewBlockFromMessage(data []byte) Block {
 	hash := blake2b.Sum256(data[1:])
 

@@ -93,5 +93,5 @@ func createGenesisTesseract(
 		},
 	}
 
-	return types.NewTesseract(header, body, nil, nil, nil), nil
+	return types.NewTesseract(header, body, nil, nil, nil, ""), nil
 }

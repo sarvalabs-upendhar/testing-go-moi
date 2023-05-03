@@ -137,7 +137,7 @@ func (r *ReputationEngine) AddNewPeer(kramaID id.KramaID, data *gtypes.NodeMetaI
 func (r *ReputationEngine) AddNewPeerWithPeerID(peerID peer.ID, data *gtypes.NodeMetaInfo) error {
 	info, err := r.nodeMetaInfo(peerID)
 	if info != nil {
-		return types.ErrAlreadyKnown
+		return nil
 	}
 
 	if err != nil && !errors.Is(err, types.ErrKramaIDNotFound) {

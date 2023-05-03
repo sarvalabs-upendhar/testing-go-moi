@@ -10,11 +10,9 @@ import (
 )
 
 type Metrics struct {
-	SignatureVerificationTime      metrics.Histogram
-	StatefulTesseractAdditionTime  metrics.Histogram
-	StatelessTesseractAdditionTime metrics.Histogram
-	StatefulTesseractCounter       metrics.Counter
-	StatelessTesseractCounter      metrics.Counter
+	SignatureVerificationTime     metrics.Histogram
+	StatefulTesseractAdditionTime metrics.Histogram
+	StatefulTesseractCounter      metrics.Counter
 }
 
 func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics {
@@ -37,34 +35,20 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 			Name:      "stateful_tesseract_addition_time",
 			Help:      "Time taken to add the created tesseract",
 		}, labels).With(labelsWithValues...),
-		StatelessTesseractAdditionTime: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
-			Namespace: namespace,
-			Subsystem: "chain_manager",
-			Name:      "stateless_tesseract_addition_time",
-			Help:      "Time taken to add the received tesseract",
-		}, labels).With(labelsWithValues...),
 		StatefulTesseractCounter: prometheus.NewCounterFrom(stdprometheus.CounterOpts{
 			Namespace: namespace,
 			Subsystem: "chain_manager",
 			Name:      "stateful_tesseract_counter",
 			Help:      "Number of tesseracts created",
 		}, labels).With(labelsWithValues...),
-		StatelessTesseractCounter: prometheus.NewCounterFrom(stdprometheus.CounterOpts{
-			Namespace: namespace,
-			Subsystem: "chain_manager",
-			Name:      "stateless_tesseract_counter",
-			Help:      "Number of tesseracts received",
-		}, labels).With(labelsWithValues...),
 	}
 }
 
 func NilMetrics() *Metrics {
 	return &Metrics{
-		SignatureVerificationTime:      discard.NewHistogram(),
-		StatefulTesseractAdditionTime:  discard.NewHistogram(),
-		StatelessTesseractAdditionTime: discard.NewHistogram(),
-		StatefulTesseractCounter:       discard.NewCounter(),
-		StatelessTesseractCounter:      discard.NewCounter(),
+		SignatureVerificationTime:     discard.NewHistogram(),
+		StatefulTesseractAdditionTime: discard.NewHistogram(),
+		StatefulTesseractCounter:      discard.NewCounter(),
 	}
 }
 
@@ -77,14 +61,6 @@ func (metrics *Metrics) captureStatefulTesseractAdditionTime(tsAdditionInitTime 
 	metrics.StatefulTesseractAdditionTime.Observe(time.Since(tsAdditionInitTime).Seconds())
 }
 
-func (metrics *Metrics) captureStatelessTesseractAdditionTime(tsAdditionInitTime time.Time) {
-	metrics.StatelessTesseractAdditionTime.Observe(time.Since(tsAdditionInitTime).Seconds())
-}
-
 func (metrics *Metrics) captureStatefulTesseractCounter(delta float64) {
 	metrics.StatefulTesseractCounter.Add(delta)
-}
-
-func (metrics *Metrics) captureStatelessTesseractCounter(delta float64) {
-	metrics.StatelessTesseractCounter.Add(delta)
 }

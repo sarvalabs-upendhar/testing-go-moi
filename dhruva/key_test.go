@@ -2,6 +2,7 @@ package dhruva
 
 import (
 	"encoding/binary"
+	"log"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -25,7 +26,7 @@ func TestGetAddressHeightKey(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			result := tesseractHeightKey(types.HexToAddress(test.address), test.height)
-
+			log.Println(result)
 			parsedAddress := result[:32]
 			parsedPrefix := result[32:33][0]
 			parsedHeight := result[33:]

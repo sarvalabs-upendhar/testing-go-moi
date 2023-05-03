@@ -22,7 +22,6 @@ import (
 	"github.com/sarvalabs/moichain/guna/tree"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
 	"github.com/sarvalabs/moichain/jug/engineio"
-	ktypes "github.com/sarvalabs/moichain/krama/types"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/types"
 )
@@ -124,8 +123,8 @@ func (m *MockDB) GetEntries(prefix []byte) chan types.DBEntry {
 	return nil
 }
 
-func (m *MockDB) GetAccountMetaInfo(id []byte) (*types.AccountMetaInfo, error) {
-	accMetaInfo, ok := m.accMetaInfo[types.BytesToHex(id)]
+func (m *MockDB) GetAccountMetaInfo(id types.Address) (*types.AccountMetaInfo, error) {
+	accMetaInfo, ok := m.accMetaInfo[id.Hex()]
 	if !ok {
 		return nil, types.ErrKeyNotFound
 	}
@@ -138,10 +137,8 @@ func (m *MockDB) insertTesseract(t *testing.T, ts *types.Tesseract) {
 
 	bytes, err := ts.Canonical().Bytes()
 	require.NoError(t, err)
-	hash, err := ts.Hash()
-	require.NoError(t, err)
 
-	m.tesseracts[hash] = bytes
+	m.tesseracts[ts.Hash()] = bytes
 }
 
 func (m *MockDB) insertIxns(t *testing.T, hash types.Hash, ixns types.Interactions) {
@@ -154,7 +151,7 @@ func (m *MockDB) insertIxns(t *testing.T, hash types.Hash, ixns types.Interactio
 }
 
 func (m *MockDB) setAccountMetaInfo(acc *types.AccountMetaInfo) {
-	m.accMetaInfo[types.BytesToHex(acc.Address[:])] = acc
+	m.accMetaInfo[acc.Address.Hex()] = acc
 }
 
 func (m *MockDB) GetMerkleTreeEntry(address types.Address, prefix dhruva.Prefix, key []byte) ([]byte, error) {
@@ -310,9 +307,7 @@ func insertTesseractsInDB(t *testing.T, db store, tesseracts ...*types.Tesseract
 		mDB.insertTesseract(t, ts)
 
 		if ts.Interactions() != nil {
-			hash, err := ts.GridHash()
-			require.NoError(t, err)
-			mDB.insertIxns(t, hash, ts.Interactions())
+			mDB.insertIxns(t, ts.GridHash(), ts.Interactions())
 		}
 	}
 }
@@ -366,6 +361,11 @@ type MockMerkleTree struct {
 	rootHashHook func() (types.Hash, error)
 	commitHook   func() error
 	setHook      func() error
+}
+
+func (m *MockMerkleTree) Root() types.RootNode {
+	// TODO implement me
+	panic("implement me")
 }
 
 func mockMerkleTreeWithDirtyStorage() *MockMerkleTree {
@@ -726,8 +726,7 @@ func getTesseractParamsWithContextHash(address types.Address, hash types.Hash) *
 func getTesseractHash(t *testing.T, ts *types.Tesseract) types.Hash {
 	t.Helper()
 
-	hash, err := ts.Hash()
-	require.NoError(t, err)
+	hash := ts.Hash()
 
 	return hash
 }
@@ -736,7 +735,7 @@ func storeTesseractHashInCache(t *testing.T, cache *lru.Cache, tesseracts ...*ty
 	t.Helper()
 
 	for _, ts := range tesseracts {
-		cache.Add(ts.Address(), getTesseractHash(t, ts))
+		cache.Add(ts.Address(), ts.Hash())
 	}
 }
 
@@ -1287,17 +1286,17 @@ func getMetaContextObjects(t *testing.T, hashes []types.Hash) ([]*gtypes.MetaCon
 }
 
 type ICSNodes struct {
-	senderBeh    *ktypes.NodeSet
-	senderRand   *ktypes.NodeSet
-	receiverBeh  *ktypes.NodeSet
-	receiverRand *ktypes.NodeSet
+	senderBeh    *types.NodeSet
+	senderRand   *types.NodeSet
+	receiverBeh  *types.NodeSet
+	receiverRand *types.NodeSet
 }
 
 func getICSNodes(
-	senderBeh *ktypes.NodeSet,
-	senderRand *ktypes.NodeSet,
-	receiverBeh *ktypes.NodeSet,
-	receiverRand *ktypes.NodeSet,
+	senderBeh *types.NodeSet,
+	senderRand *types.NodeSet,
+	receiverBeh *types.NodeSet,
+	receiverRand *types.NodeSet,
 ) *ICSNodes {
 	return &ICSNodes{
 		senderBeh:    senderBeh,
@@ -1590,7 +1589,7 @@ func getContextObjectFromDirtyEntries(t *testing.T, s *StateObject, hash types.H
 func checkForTesseractInSMCache(t *testing.T, sm *StateManager, ts *types.Tesseract, withInteractions bool) {
 	t.Helper()
 
-	object, isCached := sm.cache.Get(getTesseractHash(t, ts))
+	object, isCached := sm.cache.Get(ts.Hash())
 	if withInteractions {
 		require.False(t, isCached) // make sure tesseract not cached
 
@@ -1649,10 +1648,10 @@ func checkIfContextMatches(
 
 func checkIfNodesetEqual(
 	t *testing.T,
-	expectedBeh *ktypes.NodeSet,
-	expectedRand *ktypes.NodeSet,
-	beh *ktypes.NodeSet,
-	rand *ktypes.NodeSet,
+	expectedBeh *types.NodeSet,
+	expectedRand *types.NodeSet,
+	beh *types.NodeSet,
+	rand *types.NodeSet,
 ) {
 	t.Helper()
 
@@ -2014,8 +2013,7 @@ func validateTesseract(t *testing.T, ts *types.Tesseract, expectedTS *types.Tess
 	t.Helper()
 
 	if withInteractions { // check if tesseracts matches
-		_, err := ts.Hash() // calculate hash to fill hash field in tesseract
-		require.NoError(t, err)
+		ts.Hash() // calculate hash to fill hash field in tesseract
 
 		require.Equal(t, expectedTS, ts)
 

@@ -71,7 +71,7 @@ func (info *Slot) ForwardInboundMsg(msg *ICSMSG) {
 }
 
 func (info *Slot) ClusterID() types.ClusterID {
-	return info.clusterState.ID
+	return info.clusterState.ClusterID
 }
 
 func (info *Slot) ClusterState() *ClusterState {
@@ -133,11 +133,11 @@ func (s *Slots) AddSlot(slot *Slot) bool {
 		return false
 	}
 
-	s.slots[slot.clusterState.ID] = slot
+	s.slots[slot.clusterState.ClusterID] = slot
 	s.decrementSlots(slot.SlotType)
 
 	for addr := range slot.clusterState.AccountInfos {
-		s.activeAccounts[addr] = slot.clusterState.ID
+		s.activeAccounts[addr] = slot.clusterState.ClusterID
 	}
 
 	return true

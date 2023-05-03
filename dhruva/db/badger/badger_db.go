@@ -2,6 +2,7 @@ package badger
 
 import (
 	"bytes"
+	"context"
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/pkg/errors"
@@ -40,6 +41,7 @@ func (b *BadgerDB) NewIterator() (db.Iterator, error) {
 	}
 
 	txn := b.db.NewTransaction(false)
+
 	it := txn.NewIterator(badger.DefaultIteratorOptions)
 
 	return &Iterator{it: it, txn: txn}, nil
@@ -105,16 +107,12 @@ func (b *BadgerDB) Has(key []byte) (bool, error) {
 }
 
 func (b *BadgerDB) Update(key []byte, value []byte) error {
-	// 1. Read the current value stored under the key
-	exists, err := b.Has(key)
-	if exists && err == nil {
-		// 4. If key exists try to update the entry
-		err = b.db.Update(func(txn *badger.Txn) error {
-			return txn.Set(key, value)
-		})
-		if err != nil { // Handle errors if failed to update entry in db
-			return errors.Wrap(types.ErrDBCallFailed, err.Error())
-		}
+	// 4. If key exists try to update the entry
+	err := b.db.Update(func(txn *badger.Txn) error {
+		return txn.Set(key, value)
+	})
+	if err != nil { // Handle errors if failed to update entry in db
+		return errors.Wrap(types.ErrDBCallFailed, err.Error())
 	}
 
 	return err
@@ -160,9 +158,30 @@ func (b *BadgerDB) Get(key []byte) ([]byte, error) {
 	return value, nil
 }
 
+func (b *BadgerDB) Snapshot(ctx context.Context, prefix []byte, sinceTS uint64, collector db.Collector) error {
+	s := b.db.NewStream()
+	s.SinceTs = sinceTS
+	s.Prefix = prefix
+	s.Send = collector.Send
+
+	if err := s.Orchestrate(ctx); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // CleanUp will delete all the data stored in the database
 func (b *BadgerDB) CleanUp() error {
 	return b.db.DropAll()
+}
+
+func (b *BadgerDB) DropWithPrefix(prefix []byte) error {
+	return b.db.DropPrefix(prefix)
+}
+
+func (b *BadgerDB) GetLastActiveTimeStamp() uint64 {
+	return b.db.MaxVersion()
 }
 
 // Close graceful shutdowns the badger database

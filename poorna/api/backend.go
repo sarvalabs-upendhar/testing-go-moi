@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"math/big"
 
 	"github.com/sarvalabs/moichain/common"
@@ -44,12 +43,12 @@ type StateManager interface {
 }
 
 type Network interface {
-	GetPeers() ([]id.KramaID, error)
+	GetPeers() []id.KramaID
 }
 
 type DB interface {
 	ReadEntry(key []byte) ([]byte, error)
-	GetEntriesWithPrefix(ctx context.Context, prefix []byte) (chan *types.DBEntry, error)
+	GetRegisteredAccounts() ([]types.Address, error)
 }
 
 // Backend is a struct that represents the API backend

@@ -157,7 +157,6 @@ func (r *Randomizer) addPeer(slot int, id id.KramaID) error {
 }
 
 func (r *Randomizer) updatePeerListStatus(slot int) {
-	// log.Println("In update slot status", slot, r.peers[slot].pendingCount, int(math.Ceil(0.6*PEERSCOUNT)))
 	if !r.peers[slot].updatePending && r.peers[slot].pendingCount >= int(math.Ceil(0.4*PEERSCOUNT)) {
 		r.peers[slot].updatePending = true
 		r.metrics.capturePendingSlots(1)
@@ -294,7 +293,7 @@ func (r *Randomizer) HandleReqMsg(reqMsg *ptypes.RandomWalkReq) error {
 
 		err = r.server.Broadcast(reqMsg.Topic, rawData)
 		if err != nil {
-			log.Panicln(err)
+			r.logger.Error("Failed to broadcast", "error", err)
 		}
 
 		return nil

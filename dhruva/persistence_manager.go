@@ -2,8 +2,12 @@ package dhruva
 
 import (
 	"context"
+	"encoding/binary"
+	"fmt"
 	"log"
-	"math/big"
+	"time"
+
+	"github.com/sarvalabs/moichain/utils"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
@@ -14,11 +18,16 @@ import (
 	"github.com/sarvalabs/moichain/types"
 )
 
+// MaxBucketCount tells the no of buckets , accounts can be classified into
+const (
+	MaxBucketCount uint64 = 1024
+)
+
 // PersistenceManager manages all the critical information to perform content-addressed persistence services
 type PersistenceManager struct {
 	ctx       context.Context
 	ctxCancel context.CancelFunc
-	Config    *common.DBConfig
+	config    *common.DBConfig
 	db        db.DB
 	logger    hclog.Logger
 }
@@ -34,11 +43,17 @@ func NewPersistenceManager(
 		return nil, errors.Wrap(types.ErrDBInit, err.Error())
 	}
 
+	if config.CleanDB {
+		if err = badgerDB.CleanUp(); err != nil {
+			panic(err)
+		}
+	}
+
 	ctx, ctxCancel := context.WithCancel(ctx)
 	p := &PersistenceManager{
 		ctx:       ctx,
 		ctxCancel: ctxCancel,
-		Config:    config,
+		config:    config,
 		logger:    logger.Named("Dhruva"),
 		db:        badgerDB,
 	}
@@ -46,29 +61,29 @@ func NewPersistenceManager(
 	return p, nil
 }
 
-func (p *PersistenceManager) getBucketCountByBucketNumber(bucketNumber []byte) (*big.Int, error) {
-	val, err := p.ReadEntry(bucketNumber)
-	if err != nil {
-		return big.NewInt(-1), err
+func (p *PersistenceManager) GetBucketCount(bucketNumber uint64) (uint64, error) {
+	val, err := p.ReadEntry(bucketCountKey(bucketNumber))
+	if err == types.ErrKeyNotFound { //nolint
+		return 0, nil
+	} else if err != nil {
+		return 0, err
 	}
 
-	return new(big.Int).SetBytes(val), nil
+	return binary.BigEndian.Uint64(val), nil
 }
 
 // GetBucketSizes returns the accounts count for each bucket
-func (p *PersistenceManager) GetBucketSizes() (map[int32]*big.Int, error) {
-	buckets := make(map[int32]*big.Int, 0)
+func (p *PersistenceManager) GetBucketSizes() (map[uint64]uint64, error) {
+	buckets := make(map[uint64]uint64, 0)
 
-	for i := int64(0); i < BucketCount; i++ {
-		bucketID := big.NewInt(i)
-		bucket := make([]byte, 4)
-
-		bucketID.FillBytes(bucket)
-
-		if count, err := p.getBucketCountByBucketNumber(bucket); err == nil {
-			buckets[int32(i)] = count
-		} else if !errors.Is(err, types.ErrKeyNotFound) {
+	for i := uint64(0); i < MaxBucketCount; i++ {
+		count, err := p.GetBucketCount(i)
+		if !errors.Is(err, types.ErrKeyNotFound) {
 			return nil, err
+		}
+
+		if err == nil {
+			buckets[i] = count
 		}
 	}
 
@@ -76,16 +91,16 @@ func (p *PersistenceManager) GetBucketSizes() (map[int32]*big.Int, error) {
 }
 
 // GetAccountMetaInfo fetches the account meta info for a given address
-func (p *PersistenceManager) GetAccountMetaInfo(id []byte) (*types.AccountMetaInfo, error) {
-	key, _ := BucketIDFromAddress(id)
+func (p *PersistenceManager) GetAccountMetaInfo(id types.Address) (*types.AccountMetaInfo, error) {
+	key, _ := BucketKeyAndID(id)
 
 	data, err := p.ReadEntry(key)
 	if err != nil {
-		return nil, errors.Wrap(types.ErrAccountNotFound, err.Error())
+		return nil, types.ErrAccountNotFound
 	}
 
 	accMetaInfo := new(types.AccountMetaInfo)
-	if err := accMetaInfo.FromBytes(data); err != nil {
+	if err = accMetaInfo.FromBytes(data); err != nil {
 		return nil, err
 	}
 
@@ -93,14 +108,23 @@ func (p *PersistenceManager) GetAccountMetaInfo(id []byte) (*types.AccountMetaIn
 }
 
 // incrementBucketCount is used to increment bucket count when new address is added to lattice
-func (p *PersistenceManager) incrementBucketCount(id []byte, count int64) error {
-	data, err := p.ReadEntry(id)
-	if err == nil {
-		updatedCount := new(big.Int).Add(big.NewInt(count), new(big.Int).SetBytes(data))
+func (p *PersistenceManager) incrementBucketCount(bucket uint64, count uint64) error {
+	var (
+		rawCount = make([]byte, 8)
+		key      = bucketCountKey(bucket)
+	)
 
-		return p.UpdateEntry(id, updatedCount.Bytes())
+	data, err := p.ReadEntry(key)
+	if err == nil {
+		count = binary.BigEndian.Uint64(data) + count
+
+		binary.BigEndian.PutUint64(rawCount, count)
+
+		return p.UpdateEntry(key, rawCount)
 	} else if errors.Is(err, types.ErrKeyNotFound) {
-		return p.CreateEntry(id, big.NewInt(count).Bytes())
+		binary.BigEndian.PutUint64(rawCount, count)
+
+		return p.CreateEntry(key, rawCount)
 	}
 
 	return err
@@ -125,7 +149,7 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 		return 0, false, types.ErrEmptyHash
 	}
 
-	key, bucket := BucketIDFromAddress(id.Bytes())
+	key, bucketID := BucketKeyAndID(id)
 
 	data, err := p.ReadEntry(key)
 	if err == nil {
@@ -154,7 +178,7 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 			return -1, false, err
 		}
 
-		return int32(bucket.getID()), false, p.UpdateEntry(key, rawData)
+		return int32(bucketID), false, p.UpdateEntry(key, rawData)
 	} else if errors.Is(err, types.ErrKeyNotFound) {
 		msg := types.AccountMetaInfo{
 			StateExists:   stateExists,
@@ -174,11 +198,11 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 			return -1, false, err
 		}
 
-		if err = p.incrementBucketCount(bucket.getIDBytes(), 1); err != nil {
+		if err = p.incrementBucketCount(bucketID, 1); err != nil {
 			log.Panic(err)
 		}
 
-		return int32(bucket.getID()), true, nil
+		return int32(bucketID), true, nil
 	}
 
 	return -1, false, err
@@ -187,7 +211,6 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 // Close shutdowns the database
 func (p *PersistenceManager) Close() {
 	p.logger.Info("Closing the database")
-	defer p.ctxCancel()
 	// close the channels
 
 	if err := p.db.Close(); err != nil {
@@ -207,7 +230,7 @@ func (p *PersistenceManager) UpdateTesseractStatus(
 	tsHash types.Hash,
 	status bool,
 ) error {
-	key, _ := BucketIDFromAddress(addr.Bytes())
+	key, _ := BucketKeyAndID(addr)
 
 	data, err := p.ReadEntry(key)
 	if err != nil {
@@ -242,34 +265,37 @@ func (p *PersistenceManager) UpdateEntry(key []byte, newValue []byte) error {
 	return p.db.Update(key, newValue)
 }
 
-// GetAccounts fetches meta info of all the accounts for a given bucket number
-func (p *PersistenceManager) GetAccounts(bucketNumber int32) (types.Accounts, error) {
-	var acc types.Accounts
-
+// StreamAccountMetaInfosRaw fetches meta info of all the accounts for a given bucket number
+func (p *PersistenceManager) StreamAccountMetaInfosRaw(
+	ctx context.Context,
+	bucketNumber uint64,
+	response chan []byte,
+) error {
 	it, err := p.db.NewIterator()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	defer it.Close()
+	defer func() {
+		it.Close()
+		close(response)
+	}()
 
-	bucketID := IDToBytes(int64(bucketNumber))
-	for it.Seek(bucketID); it.ValidForPrefix(bucketID); it.Next() {
-		dbEntry, err := it.GetNext()
-		if err != nil {
-			return nil, err
+	prefix := bucketPrefix(bucketNumber)
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			dbEntry, err := it.GetNext()
+			if err != nil {
+				return err
+			}
+			response <- dbEntry.Value
 		}
-
-		accMetaInfo := new(types.AccountMetaInfo)
-
-		if err := accMetaInfo.FromBytes(dbEntry.Value); err != nil {
-			return nil, err
-		}
-
-		acc = append(acc, accMetaInfo)
 	}
 
-	return acc, nil
+	return nil
 }
 
 // ReadEntry takes the cid and returns corresponding content
@@ -371,10 +397,15 @@ func (p *PersistenceManager) SetTesseract(tsHash types.Hash, data []byte) error 
 	return p.CreateEntry(key, data)
 }
 
-func (p *PersistenceManager) HasTesseract(tsHash types.Hash) (bool, error) {
+func (p *PersistenceManager) HasTesseract(tsHash types.Hash) bool {
 	key := dbKey(types.NilAddress, Tesseract, tsHash.Bytes())
 
-	return p.db.Has(key)
+	exists, err := p.db.Has(key)
+	if err != nil {
+		p.logger.Error("Failed to check for tesseract", "error", err)
+	}
+
+	return exists
 }
 
 func (p *PersistenceManager) GetTesseractHeightEntry(addr types.Address, height uint64) ([]byte, error) {
@@ -438,6 +469,23 @@ func (p *PersistenceManager) SetReceipts(gridHash types.Hash, data []byte) error
 	key := dbKey(types.NilAddress, Receipt, gridHash.Bytes())
 
 	return p.CreateEntry(key, data)
+}
+
+func (p *PersistenceManager) SetAccountSyncStatus(address types.Address, status *types.AccountSyncStatus) error {
+	key := dbKey(types.NilAddress, AccountSyncJob, address.Bytes())
+
+	rawData, err := status.Bytes()
+	if err != nil {
+		return err
+	}
+
+	return p.UpdateEntry(key, rawData)
+}
+
+func (p *PersistenceManager) CleanupAccountSyncStatus(address types.Address) error {
+	key := dbKey(types.NilAddress, AccountSyncJob, address.Bytes())
+
+	return p.DeleteEntry(key)
 }
 
 // GetReceipts returns raw receipt data for the given grid hash
@@ -510,4 +558,145 @@ func (p *PersistenceManager) GetPreImage(
 	key := PreImageKey(address, hash)
 
 	return p.ReadEntry(key)
+}
+
+// GetAccountSnapshot generates a snapshot of all entries with the given key prefix
+// Snapshot contains all the entries with version > sinceTs
+func (p *PersistenceManager) GetAccountSnapshot(
+	ctx context.Context,
+	address types.Address,
+	sinceTS uint64,
+) (*types.Snapshot, error) {
+	kv := NewKVCollector(p.config.MaxSnapSize)
+
+	err := p.db.Snapshot(ctx, address.Bytes(), sinceTS, kv)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to generate snapshot")
+	}
+
+	s := &types.Snapshot{
+		CreatedAt: utils.Canonical(time.Now()).UnixNano(),
+		Prefix:    address.Bytes(),
+		SinceTS:   sinceTS,
+		Entries:   kv.Entries,
+		Size:      kv.Size,
+	}
+
+	return s, nil
+}
+
+func (p *PersistenceManager) GetRecentUpdatedAccMetaInfosRaw(
+	ctx context.Context,
+	bucketID uint64,
+	sinceTS uint64,
+) ([][]byte, error) {
+	vc := NewValueCollector(p.config.MaxSnapSize)
+
+	err := p.db.Snapshot(ctx, bucketPrefix(bucketID), sinceTS, vc)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to generate snapshot")
+	}
+
+	return vc.Entries, nil
+}
+
+func (p *PersistenceManager) StoreAccountSnapShot(snap *types.Snapshot) error {
+	batchWriter := p.db.NewBatchWriter()
+
+	if err := batchWriter.WriteBuffer(snap.Entries); err != nil {
+		return err
+	}
+
+	if err := batchWriter.Flush(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (p *PersistenceManager) GetRegisteredAccounts() ([]types.Address, error) {
+	addrsList := make([]types.Address, 0)
+
+	for i := uint64(0); i < 1024; i++ {
+		prefix := bucketPrefix(i)
+
+		entries, err := p.GetEntriesWithPrefix(context.Background(), prefix)
+		if err != nil {
+			return nil, err
+		}
+
+		for entry := range entries {
+			addr := entry.Key[9:]
+			fmt.Println(addr)
+			addrsList = append(addrsList, types.BytesToAddress(addr))
+		}
+	}
+
+	return addrsList, nil
+}
+
+func (p *PersistenceManager) GetAccountsSyncStatus() ([]*types.AccountSyncStatus, error) {
+	syncInfos := make([]*types.AccountSyncStatus, 0)
+
+	it, err := p.db.NewIterator()
+	if err != nil {
+		return nil, err
+	}
+
+	defer it.Close()
+
+	for it.Seek([]byte{AccountSyncJob.Byte()}); it.ValidForPrefix([]byte{AccountSyncJob.Byte()}); it.Next() {
+		dbEntry, err := it.GetNext()
+		if err != nil {
+			return nil, err
+		}
+
+		syncInfo := new(types.AccountSyncStatus)
+
+		if err = syncInfo.FromBytes(dbEntry.Value); err != nil {
+			return nil, err
+		}
+
+		syncInfos = append(syncInfos, syncInfo)
+	}
+
+	return syncInfos, nil
+}
+
+func (p *PersistenceManager) DropPrefix(prefix []byte) error {
+	return p.db.DropWithPrefix(prefix)
+}
+
+func (p *PersistenceManager) UpdatePrimarySyncStatus(address types.Address) error {
+	return p.CreateEntry(AccSyncStatusKey(address), []byte{0x01})
+}
+
+func (p *PersistenceManager) IsAccountPrimarySyncDone(address types.Address) bool {
+	isSynced, err := p.db.Has(AccSyncStatusKey(address))
+	if err != nil {
+		p.logger.Error("Error checking account sync status", "error", err)
+	}
+
+	return isSynced
+}
+
+func (p *PersistenceManager) IsPrincipalSyncDone() (bool, int64) {
+	value, err := p.db.Get(principalSyncStatusKey())
+	if err != nil {
+		return false, 0
+	}
+
+	return true, int64(binary.BigEndian.Uint64(value))
+}
+
+func (p *PersistenceManager) UpdatePrincipalSyncStatus() error {
+	value := make([]byte, 8)
+
+	binary.BigEndian.PutUint64(value, uint64(time.Now().UnixNano()))
+
+	return p.db.Update(principalSyncStatusKey(), value)
+}
+
+func (p *PersistenceManager) GetLastActiveTimeStamp() uint64 {
+	return p.db.GetLastActiveTimeStamp()
 }

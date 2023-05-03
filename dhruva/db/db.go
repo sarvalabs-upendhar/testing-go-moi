@@ -1,6 +1,15 @@
 package db
 
-import "github.com/sarvalabs/moichain/types"
+import (
+	"context"
+
+	"github.com/dgraph-io/ristretto/z"
+	"github.com/sarvalabs/moichain/types"
+)
+
+type Collector interface {
+	Send(buf *z.Buffer) error
+}
 
 // DB defines a common interface implemented by all key-value database
 type DB interface {
@@ -13,11 +22,15 @@ type DB interface {
 	CleanUp() error
 	Close() error
 	NewBatchWriter() BatchWriter
+	Snapshot(ctx context.Context, prefix []byte, sinceTS uint64, collector Collector) error
+	DropWithPrefix(prefix []byte) error
+	GetLastActiveTimeStamp() uint64
 }
 
 // BatchWriter is a common interface to write bulk entries
 type BatchWriter interface {
 	Set(key, value []byte) error
+	WriteBuffer(buf []byte) error // This should contain key value entries
 	Flush() error
 }
 

@@ -88,7 +88,7 @@ func (t *Transport) InitClusterCommunication(ctx context.Context, slot *ktypes.S
 			select {
 			case <-ctx.Done():
 				if err := t.network.Unsubscribe(string(slot.ClusterID())); err != nil {
-					log.Panicln(err)
+					log.Println(err)
 				}
 
 				// Check whether the slot is a validator slot and the randomICSNodes is not empty

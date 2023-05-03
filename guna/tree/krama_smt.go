@@ -73,6 +73,10 @@ func NewKramaHashTree(
 	return kht, nil
 }
 
+func (kht *KramaHashTree) Root() types.RootNode {
+	return *kht.root
+}
+
 // RootHash returns the hash of root node
 func (kht *KramaHashTree) RootHash() (types.Hash, error) {
 	kht.mtx.RLock()

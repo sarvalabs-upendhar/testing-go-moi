@@ -158,7 +158,7 @@ func (eh *SubHandler) handlePeerMessage(p *Peer) error {
 		eh.logger.Info("Received Interactions from", "id", p.kramaID)
 
 		// Unmarshal message proto into an InteractionsData message
-		var ixns types.Interactions
+		ixns := new(types.Interactions)
 		if err := ixns.FromBytes(message.Payload); err != nil {
 			if !errors.Is(err, polo.ErrNullPack) {
 				return err
@@ -166,28 +166,23 @@ func (eh *SubHandler) handlePeerMessage(p *Peer) error {
 		}
 
 		// Mark the interactions in the message as 'known' by the peer
-		for _, v := range ixns {
+		for _, v := range *ixns {
 			p.markInteraction(v.Hash())
 		}
 
 		// Add the interactions to the handler's interaction pool
-		errs := eh.ixpool.AddInteractions(ixns)
+		errs := eh.ixpool.AddInteractions(*ixns)
 		for index, err := range errs {
 			if err != nil {
-				ixHash := ixns[index].Hash()
-				if ixHash.IsNil() {
-					eh.logger.Error("Unable to create interaction hash", "hash", ixHash)
+				ixnss := *ixns
 
-					return nil
-				}
-
-				eh.logger.Trace("Unable to add Interaction ", "hash", ixHash, "error", err)
+				eh.logger.Trace("Unable to add Interaction ", "hash", ixnss[index].Hash(), "error", err)
 
 				return nil
 			}
 		}
 
-		if err := eh.broadcastIXs(ixns); err != nil {
+		if err := eh.broadcastIXs(*ixns); err != nil {
 			eh.logger.Error("Failed to broadcast interactions", "error", err)
 		}
 
@@ -209,7 +204,7 @@ func (eh *SubHandler) handleDisconnectRequest(peer *Peer, msg *ptypes.Message) {
 	if err := disconnectMsg.FromBytes(msg.Payload); err != nil {
 		eh.logger.Error("Decode disconnect req", "from", msg.Sender, "error", err)
 
-		go peer.resetStream()
+		peer.stream.Conn().Close()
 
 		return
 	}

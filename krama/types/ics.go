@@ -17,9 +17,10 @@ import (
 
 type ClusterState struct {
 	mtx                      sync.Mutex
-	NodeSet                  *ICSNodeSet
+	selfID                   id.KramaID
+	NodeSet                  *types.ICSNodeSet
 	Ixs                      types.Interactions
-	ID                       types.ClusterID
+	ClusterID                types.ClusterID
 	Operator                 id.KramaID
 	AccountInfos             AccountInfos
 	contextDelta             types.ContextDelta
@@ -30,7 +31,7 @@ type ClusterState struct {
 	Grid                     []*types.Tesseract
 	ICSReqTime               time.Time
 	operatorIncluded         bool
-	CurrentRole              IcsSetType
+	CurrentRole              types.IcsSetType
 	RequestMsg               *ptypes.ICSRequest
 	SuccessMsg               *ICSMSG
 }
@@ -44,11 +45,13 @@ func NewICS(
 	clusterID types.ClusterID,
 	operator id.KramaID,
 	reqTime time.Time,
+	selfID id.KramaID,
 ) *ClusterState {
 	return &ClusterState{
-		NodeSet:          NewICSNodeSet(size),
+		NodeSet:          types.NewICSNodeSet(size),
 		Ixs:              ixs,
-		ID:               clusterID,
+		selfID:           selfID,
+		ClusterID:        clusterID,
 		Operator:         operator,
 		operatorIncluded: false,
 		AccountInfos:     make(AccountInfos, 0),
@@ -60,6 +63,10 @@ func NewICS(
 	}
 }
 
+func (cs *ClusterState) SelfKramaID() id.KramaID {
+	return cs.selfID
+}
+
 func (cs *ClusterState) Size() int {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
@@ -67,7 +74,7 @@ func (cs *ClusterState) Size() int {
 	return cs.NodeSet.Size
 }
 
-func (cs *ClusterState) UpdateNodeSet(setType IcsSetType, data *NodeSet) {
+func (cs *ClusterState) UpdateNodeSet(setType types.IcsSetType, data *types.NodeSet) {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
@@ -134,7 +141,7 @@ func (cs *ClusterState) GetMetaData(msgs []*ICSMSG) (*ICSMetaInfo, error) {
 	}
 
 	m := &ICSMetaInfo{
-		ClusterID:    string(cs.ID),
+		ClusterID:    string(cs.ClusterID),
 		IxHash:       cs.Ixs[0].Hash(), // Need to be improved
 		Operator:     string(cs.Operator),
 		ClusterSize:  cs.NodeSet.Size,
@@ -184,7 +191,7 @@ func (cs *ClusterState) RespondedEligibleSet() (count int, nodes []id.KramaID) {
 	return
 }
 
-func (cs *ClusterState) GetBehaviouralContextDelta(setType IcsSetType) (addedPeer, replacedPeer id.KramaID) {
+func (cs *ClusterState) GetBehaviouralContextDelta(setType types.IcsSetType) (addedPeer, replacedPeer id.KramaID) {
 	for _, peerID := range cs.NodeSet.Nodes[setType].Ids {
 		if cs.Operator == peerID { // cs.ICS.Nodes[setType].Responses.GetIndex(index)
 			return
@@ -199,7 +206,7 @@ func (cs *ClusterState) GetBehaviouralContextDelta(setType IcsSetType) (addedPee
 }
 
 func (cs *ClusterState) GetRandomContextDelta(
-	setType IcsSetType,
+	setType types.IcsSetType,
 	requiredCount int,
 	skipPeers ...id.KramaID,
 ) (addedPeers, replacedPeers []id.KramaID) {
@@ -211,7 +218,7 @@ func (cs *ClusterState) GetRandomContextDelta(
 		}
 	}
 
-	set := cs.NodeSet.Nodes[RandomSet]
+	set := cs.NodeSet.Nodes[types.RandomSet]
 	for index, v := range set.Ids {
 		if set.Responses.GetIndex(index) && !utils.ContainsKramaID(skipPeers, v) {
 			addedPeers = append(addedPeers, v)
@@ -242,8 +249,8 @@ func (cs *ClusterState) IsRandomQuorum(requiredRandomNodes, requiredObserverNode
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	return cs.NodeSet.Nodes[RandomSet].RespCount >= requiredRandomNodes &&
-		cs.NodeSet.Nodes[ObserverSet].RespCount >= requiredObserverNodes
+	return cs.NodeSet.Nodes[types.RandomSet].RespCount >= requiredRandomNodes &&
+		cs.NodeSet.Nodes[types.ObserverSet].RespCount >= requiredObserverNodes
 }
 
 func (cs *ClusterState) HasKramaID(kramaID id.KramaID) (int32, bool) {
@@ -273,18 +280,18 @@ func (cs *ClusterState) GetICSNodes() []id.KramaID {
 	return cs.NodeSet.GetNodes()
 }
 
-func (cs *ClusterState) GetObservers() []string {
+func (cs *ClusterState) GetObservers() []id.KramaID {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	return utils.KramaIDToString(cs.NodeSet.Nodes[ObserverSet].Ids)
+	return cs.NodeSet.Nodes[types.ObserverSet].Ids
 }
 
-func (cs *ClusterState) GetRandomNodes() []string {
+func (cs *ClusterState) GetRandomNodes() []id.KramaID {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	return utils.KramaIDToString(cs.NodeSet.Nodes[RandomSet].Ids)
+	return cs.NodeSet.Nodes[types.RandomSet].Ids
 }
 
 func (cs *ClusterState) GetTotalVotingPower() []int32 {
@@ -361,7 +368,7 @@ func (cs *ClusterState) AddDirty(key types.Hash, data []byte) {
 }
 
 func (cs *ClusterState) ComputeICSHash() (types.Hash, error) {
-	msg := &ptypes.ICSClusterInfo{
+	msg := &types.ICSClusterInfo{
 		RandomSet:   cs.GetRandomNodes(),
 		ObserverSet: cs.GetObservers(),
 		Responses:   make([]*types.ArrayOfBits, 6),
@@ -392,9 +399,9 @@ func (cs *ClusterState) CreateICSSuccessMsg() *ptypes.ICSSuccessMsg {
 	defer cs.mtx.Unlock()
 
 	msg := &ptypes.ICSSuccessMsg{
-		ClusterID:   string(cs.ID),
-		RandomSet:   cs.NodeSet.Nodes[RandomSet].Ids,
-		ObserverSet: cs.NodeSet.Nodes[ObserverSet].Ids,
+		ClusterID:   string(cs.ClusterID),
+		RandomSet:   cs.NodeSet.Nodes[types.RandomSet].Ids,
+		ObserverSet: cs.NodeSet.Nodes[types.ObserverSet].Ids,
 		Responses:   make([]*types.ArrayOfBits, 6),
 		Signature:   make([]byte, 0),
 		QuorumSizes: make([]int, 6),
@@ -412,7 +419,7 @@ func (cs *ClusterState) CreateICSSuccessMsg() *ptypes.ICSSuccessMsg {
 
 func (cs *ClusterState) GetRandomDelta(requiredCount int) []id.KramaID {
 	nodes := make([]id.KramaID, 0, requiredCount)
-	set := cs.NodeSet.Nodes[RandomSet]
+	set := cs.NodeSet.Nodes[types.RandomSet]
 
 	for index, v := range set.Ids {
 		if set.Responses.GetIndex(index) {
@@ -500,6 +507,16 @@ func (a AccountInfos) GetHeight(addr types.Address) uint64 {
 
 func (a AccountInfos) IsGenesis(addr types.Address) bool {
 	return a[addr].IsGenesis
+}
+
+func (a AccountInfos) Address() []types.Address {
+	addrs := make([]types.Address, 0, len(a))
+
+	for addr := range a {
+		addrs = append(addrs, addr)
+	}
+
+	return addrs
 }
 
 type ICSMSG struct {

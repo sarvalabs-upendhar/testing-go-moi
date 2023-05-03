@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/common/tests"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/types"
 )
 
@@ -225,6 +226,7 @@ func TestNewTesseract(t *testing.T) {
 		ixns     types.Interactions
 		receipts types.Receipts
 		seal     []byte
+		sealer   id.KramaID
 	}{
 		{
 			name:     "copy tesseract parts",
@@ -233,12 +235,13 @@ func TestNewTesseract(t *testing.T) {
 			ixns:     tests.CreateIxns(t, 1, ixParams),
 			receipts: createReceiptsWithTestData(t, tests.RandomHash(t)),
 			seal:     []byte{1, 2, 3},
+			sealer:   tests.GetTestKramaIDs(t, 1)[0],
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			tesseract := types.NewTesseract(test.header, test.body, test.ixns, test.receipts, test.seal)
+			tesseract := types.NewTesseract(test.header, test.body, test.ixns, test.receipts, test.seal, test.sealer)
 
 			require.Equal(t, test.header, tesseract.Header())
 			require.Equal(t, test.body, tesseract.Body())

@@ -4,11 +4,12 @@ import (
 	"sync"
 	"sync/atomic"
 
+	mapset "github.com/deckarep/golang-set"
 	"github.com/mr-tron/base58"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
-	"github.com/sarvalabs/moichain/mudra/kramaid"
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
 )
 
 type ParticipantRole int
@@ -21,14 +22,14 @@ const (
 
 type ContextDelta map[Address]*DeltaGroup
 
-func (ctx ContextDelta) Copy() ContextDelta {
-	if len(ctx) == 0 {
+func (delta ContextDelta) Copy() ContextDelta {
+	if len(delta) == 0 {
 		return nil
 	}
 
 	contextDelta := make(ContextDelta)
 
-	for key, value := range ctx {
+	for key, value := range delta {
 		contextDelta[key] = value.Copy()
 	}
 
@@ -36,10 +37,10 @@ func (ctx ContextDelta) Copy() ContextDelta {
 }
 
 type DeltaGroup struct {
-	Role             ParticipantRole   `json:"role"`
-	BehaviouralNodes []kramaid.KramaID `json:"behavioural_nodes"`
-	RandomNodes      []kramaid.KramaID `json:"random_nodes"`
-	ReplacedNodes    []kramaid.KramaID `json:"replaced_nodes"`
+	Role             ParticipantRole `json:"role"`
+	BehaviouralNodes []id.KramaID    `json:"behavioural_nodes"`
+	RandomNodes      []id.KramaID    `json:"random_nodes"`
+	ReplacedNodes    []id.KramaID    `json:"replaced_nodes"`
 }
 
 func (d DeltaGroup) Copy() *DeltaGroup {
@@ -48,17 +49,17 @@ func (d DeltaGroup) Copy() *DeltaGroup {
 	}
 
 	if len(d.BehaviouralNodes) > 0 {
-		deltaGroup.BehaviouralNodes = make([]kramaid.KramaID, len(d.BehaviouralNodes))
+		deltaGroup.BehaviouralNodes = make([]id.KramaID, len(d.BehaviouralNodes))
 		copy(deltaGroup.BehaviouralNodes, d.BehaviouralNodes)
 	}
 
 	if len(d.RandomNodes) > 0 {
-		deltaGroup.RandomNodes = make([]kramaid.KramaID, len(d.RandomNodes))
+		deltaGroup.RandomNodes = make([]id.KramaID, len(d.RandomNodes))
 		copy(deltaGroup.RandomNodes, d.RandomNodes)
 	}
 
 	if len(d.ReplacedNodes) > 0 {
-		deltaGroup.ReplacedNodes = make([]kramaid.KramaID, len(d.ReplacedNodes))
+		deltaGroup.ReplacedNodes = make([]id.KramaID, len(d.ReplacedNodes))
 		copy(deltaGroup.ReplacedNodes, d.ReplacedNodes)
 	}
 
@@ -77,6 +78,7 @@ type Tesseract struct {
 	ixns     Interactions
 	receipts Receipts
 	seal     []byte
+	sealer   id.KramaID
 	hash     atomic.Value
 }
 
@@ -199,17 +201,28 @@ func NewTesseract(
 	ixns Interactions,
 	receipts Receipts,
 	seal []byte,
+	sealer id.KramaID,
 ) *Tesseract {
 	bytes := make([]byte, len(seal))
 	copy(bytes, seal)
 
-	return &Tesseract{
-		header:   header.Copy(),
-		body:     body.Copy(),
-		ixns:     ixns,
-		receipts: receipts.Copy(),
-		seal:     bytes,
+	t := &Tesseract{
+		header: header.Copy(),
+		body:   body.Copy(),
+		ixns:   ixns,
+		seal:   bytes,
+		sealer: sealer,
 	}
+
+	if len(receipts) > 0 {
+		t.receipts = receipts.Copy()
+	}
+
+	return t
+}
+
+func (t *Tesseract) Sealer() id.KramaID {
+	return t.sealer
 }
 
 func (t *Tesseract) SetExtraData(data CommitData) {
@@ -218,6 +231,10 @@ func (t *Tesseract) SetExtraData(data CommitData) {
 
 func (t *Tesseract) SetSeal(seal []byte) {
 	t.seal = seal
+}
+
+func (t *Tesseract) SetSealer(sealer id.KramaID) {
+	t.sealer = sealer
 }
 
 func (t *Tesseract) SetReceipts(receipts Receipts) {
@@ -272,12 +289,12 @@ func (t *Tesseract) GroupHash() Hash {
 	return t.header.GroupHash
 }
 
-func (t *Tesseract) GridHash() (Hash, error) {
+func (t *Tesseract) GridHash() Hash {
 	if t.header.Extra.GridID != nil {
-		return t.header.Extra.GridID.Hash, nil
+		return t.header.Extra.GridID.Hash
 	}
 
-	return NilHash, ErrGridIDNotFound
+	return NilHash
 }
 
 func (t *Tesseract) Parts() (*TesseractParts, error) {
@@ -365,26 +382,26 @@ func (t *Tesseract) ICSHash() Hash {
 	return t.body.ConsensusProof.ICSHash
 }
 
-func (t *Tesseract) Hash() (Hash, error) {
+func (t *Tesseract) Hash() Hash {
 	if hash := t.hash.Load(); hash != nil {
 		actualHash, ok := hash.(Hash)
 		if !ok {
-			return NilHash, ErrInvalidHash
+			panic("hash type conversion failed")
 		}
 
-		return actualHash, nil
+		return actualHash
 	}
 
 	header := t.Header()
 
 	hash, err := header.Hash()
 	if err != nil {
-		return Hash{}, err
+		panic(err)
 	}
 
 	t.hash.Store(hash)
 
-	return hash, nil
+	return hash
 }
 
 func (t *Tesseract) Bytes() ([]byte, error) {
@@ -417,9 +434,10 @@ func (t *Tesseract) CanonicalWithoutSeal() *CanonicalTesseractWithoutSeal {
 // Canonical method returns a copy of the tesseract without interactions
 func (t *Tesseract) Canonical() *CanonicalTesseract {
 	return &CanonicalTesseract{
-		Header: t.header,
-		Body:   t.body,
+		Header: t.header.Copy(),
+		Body:   t.body.Copy(),
 		Seal:   t.seal,
+		Sealer: t.sealer,
 	}
 }
 
@@ -428,13 +446,36 @@ func (t *Tesseract) GetTesseractWithoutIxns() *Tesseract {
 		header: t.header,
 		body:   t.body,
 		seal:   t.seal,
+		sealer: t.sealer,
 	}
 }
 
 type CanonicalTesseract struct {
 	Header TesseractHeader
 	Body   TesseractBody
+	Sealer id.KramaID
 	Seal   []byte
+}
+
+func (c *CanonicalTesseract) Hash() Hash {
+	hash, err := c.Header.Hash()
+	if err != nil {
+		panic(err)
+	}
+
+	return hash
+}
+
+func (c *CanonicalTesseract) InteractionHash() Hash {
+	return c.Body.InteractionHash
+}
+
+func (c *CanonicalTesseract) ReceiptHash() Hash {
+	return c.Body.ReceiptHash
+}
+
+func (c *CanonicalTesseract) Height() uint64 {
+	return c.Header.Height
 }
 
 // Bytes method polorizes and returns the canonical tesseract in bytes
@@ -461,6 +502,7 @@ func (c *CanonicalTesseract) ToTesseract(ixns Interactions) *Tesseract {
 		body:   c.Body,
 		ixns:   ixns,
 		seal:   c.Seal,
+		sealer: c.Sealer,
 	}
 }
 
@@ -480,7 +522,7 @@ type CanonicalTesseractWithoutSeal struct {
 type Item struct {
 	Tesseract *Tesseract
 	Delta     map[Hash][]byte
-	Sender    kramaid.KramaID
+	Sender    id.KramaID
 }
 
 type TesseractStack struct {
@@ -528,7 +570,7 @@ type TesseractParts struct {
 func (p *TesseractParts) Bytes() ([]byte, error) {
 	rawData, err := polo.Polorize(p)
 	if err != nil {
-		return nil, errors.Wrap(err, "error polorizing tesseract parts")
+		return nil, errors.Wrap(err, "failed to polorize tesseract parts")
 	}
 
 	return rawData, nil
@@ -536,7 +578,7 @@ func (p *TesseractParts) Bytes() ([]byte, error) {
 
 func (p *TesseractParts) FromBytes(data []byte) error {
 	if err := polo.Depolorize(p, data); err != nil {
-		return errors.Wrap(err, "error depolorizing tesseract parts")
+		return errors.Wrap(err, "failed to depolorize tesseract parts")
 	}
 
 	return nil
@@ -563,26 +605,26 @@ type TesseractGridID struct {
 	Parts *TesseractParts
 }
 
-func (gridId *TesseractGridID) IsNil() bool {
-	return gridId.Hash.IsNil()
+func (gridID *TesseractGridID) IsNil() bool {
+	return gridID.Hash.IsNil()
 }
 
-func (gridId *TesseractGridID) String() string {
-	if !gridId.IsNil() {
-		return gridId.Hash.Hex()
+func (gridID *TesseractGridID) String() string {
+	if !gridID.IsNil() {
+		return gridID.Hash.Hex()
 	}
 
 	return "Nil"
 }
 
-func (gridId *TesseractGridID) Copy() *TesseractGridID {
-	id := *gridId
+func (gridID *TesseractGridID) Copy() *TesseractGridID {
+	newGridID := *gridID
 
-	if gridId.Parts != nil {
-		id.Parts = gridId.Parts.Copy()
+	if gridID.Parts != nil {
+		newGridID.Parts = gridID.Parts.Copy()
 	}
 
-	return &id
+	return &newGridID
 }
 
 // ClusterID ...
@@ -599,4 +641,70 @@ func (c ClusterID) Hash() Hash {
 	}
 
 	return BytesToHash(rawHash)
+}
+
+type ICSClusterInfo struct {
+	RandomSet   []id.KramaID
+	ObserverSet []id.KramaID
+	Responses   []*ArrayOfBits
+}
+
+func (ci *ICSClusterInfo) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(ci)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize ics cluster info")
+	}
+
+	return rawData, nil
+}
+
+func (ci *ICSClusterInfo) FromBytes(bytes []byte) error {
+	if err := polo.Depolorize(ci, bytes); err != nil {
+		return errors.Wrap(err, "failed to depolorize ics cluster info")
+	}
+
+	return nil
+}
+
+// HashRegistry is a cache for known hashes.
+type HashRegistry struct {
+	hashes mapset.Set
+	max    int
+}
+
+// NewHashRegistry creates a new HashRegistry with a max capacity.
+func NewHashRegistry(max int) *HashRegistry {
+	return &HashRegistry{
+		max:    max,
+		hashes: mapset.NewSet(),
+	}
+}
+
+// Add adds a list of elements to the set.
+func (k *HashRegistry) Add(data ...interface{}) {
+	for k.hashes.Cardinality() > Max(0, k.max-len(data)) {
+		k.hashes.Pop()
+	}
+
+	for _, hash := range data {
+		k.hashes.Add(hash)
+	}
+}
+
+// Contains returns whether the given item is in the set.
+func (k *HashRegistry) Contains(data interface{}) bool {
+	return k.hashes.Contains(data)
+}
+
+// Cardinality returns the number of elements in the set.
+func (k *HashRegistry) Cardinality() int {
+	return k.hashes.Cardinality()
+}
+
+func Max(a, b int) int {
+	if a > b {
+		return a
+	}
+
+	return b
 }

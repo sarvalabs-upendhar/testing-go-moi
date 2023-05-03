@@ -955,9 +955,7 @@ func TestGetPeers(t *testing.T) {
 				test.testFn()
 			}
 
-			fetchedList, err := test.server.GetPeers()
-
-			require.NoError(t, err)
+			fetchedList := test.server.GetPeers()
 			require.ElementsMatch(t, test.expectedList, fetchedList)
 		})
 	}

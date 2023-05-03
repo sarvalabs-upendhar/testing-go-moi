@@ -4,7 +4,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
-
 	"github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/types"
 )
@@ -185,28 +184,28 @@ func (hs *HandshakeMSG) FromBytes(bytes []byte) error {
 	return nil
 }
 
-type ICSClusterInfo struct {
-	RandomSet   []string
-	ObserverSet []string
-	Responses   []*types.ArrayOfBits
-}
-
-func (ci *ICSClusterInfo) Bytes() ([]byte, error) {
-	rawData, err := polo.Polorize(ci)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to polorize ics cluster info")
-	}
-
-	return rawData, nil
-}
-
-func (ci *ICSClusterInfo) FromBytes(bytes []byte) error {
-	if err := polo.Depolorize(ci, bytes); err != nil {
-		return errors.Wrap(err, "failed to depolorize ics cluster info")
-	}
-
-	return nil
-}
+// type ICSClusterInfo struct {
+//	RandomSet   []string
+//	ObserverSet []string
+//	Responses   []*types.ArrayOfBits
+//}
+//
+// func (ci *ICSClusterInfo) Bytes() ([]byte, error) {
+//	rawData, err := polo.Polorize(ci)
+//	if err != nil {
+//		return nil, errors.Wrap(err, "failed to polorize ics cluster info")
+//	}
+//
+//	return rawData, nil
+//}
+//
+// func (ci *ICSClusterInfo) FromBytes(bytes []byte) error {
+//	if err := polo.Depolorize(ci, bytes); err != nil {
+//		return errors.Wrap(err, "failed to depolorize ics cluster info")
+//	}
+//
+//	return nil
+//}
 
 type RandomWalkReq struct {
 	ReqID  int64
@@ -314,11 +313,11 @@ type SyncReputationInfo struct {
 }
 
 type TesseractMessage struct {
-	Sender             kramaid.KramaID
-	CanonicalTesseract *types.CanonicalTesseract
-	Ixns               []byte
-	Receipts           []byte
-	Delta              map[types.Hash][]byte
+	Sender    kramaid.KramaID
+	Tesseract *types.CanonicalTesseract
+	Ixns      []byte
+	Receipts  []byte
+	Delta     map[types.Hash][]byte
 }
 
 func (tm *TesseractMessage) Bytes() ([]byte, error) {
@@ -338,28 +337,33 @@ func (tm *TesseractMessage) FromBytes(bytes []byte) error {
 	return nil
 }
 
-func (tm *TesseractMessage) Tesseract() (*types.Tesseract, error) {
+func (tm *TesseractMessage) GetTesseract() (*types.Tesseract, error) {
 	ixns := new(types.Interactions)
 	receipts := new(types.Receipts)
 
-	if err := ixns.FromBytes(tm.Ixns); err != nil {
-		if !errors.Is(err, polo.ErrNullPack) {
-			return nil, err
+	if tm.Ixns != nil && !tm.Tesseract.InteractionHash().IsNil() {
+		if err := ixns.FromBytes(tm.Ixns); err != nil {
+			if !errors.Is(err, polo.ErrNullPack) {
+				return nil, err
+			}
 		}
 	}
 
-	if err := receipts.FromBytes(tm.Receipts); err != nil {
-		if !errors.Is(err, polo.ErrNullPack) {
-			return nil, err
+	if tm.Receipts != nil && !tm.Tesseract.ReceiptHash().IsNil() {
+		if err := receipts.FromBytes(tm.Receipts); err != nil {
+			if !errors.Is(err, polo.ErrNullPack) {
+				return nil, err
+			}
 		}
 	}
 
 	return types.NewTesseract(
-		tm.CanonicalTesseract.Header,
-		tm.CanonicalTesseract.Body,
+		tm.Tesseract.Header,
+		tm.Tesseract.Body,
 		*ixns,
 		*receipts,
-		tm.CanonicalTesseract.Seal,
+		tm.Tesseract.Seal,
+		tm.Tesseract.Sealer,
 	), nil
 }
 

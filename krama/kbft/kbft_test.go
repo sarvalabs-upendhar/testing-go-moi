@@ -50,7 +50,7 @@ func TestFullRound_WithMultipleNodes(t *testing.T) {
 
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
 	ctx := context.Background()
-	thisNode := valSet[ktypes.SenderBehaviourSet][0]
+	thisNode := valSet[types.SenderBehaviourSet][0]
 
 	ixHash, err := clusterInfo.Ixs.Hash()
 	require.NoError(t, err)
@@ -93,11 +93,11 @@ func TestFullRound_WithMultipleNodes(t *testing.T) {
 	// 6 nodes out of 8 sender nodes prevotes on grid
 	// 6 nodes out of 8 receiver nodes prevotes on grid
 	// 22 nodes out of 32 sender nodes prevotes on grid
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderBehaviourSet][1:3]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderRandomSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverBehaviourSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverRandomSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.RandomSet][:22]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.SenderBehaviourSet][1:3]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.SenderRandomSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverBehaviourSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverRandomSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.RandomSet][:22]...)
 
 	ensurePolka(t, polkaSub, heights, round)
 	ensurePrecommit(t, voteSub, gridID, round, heights)
@@ -106,11 +106,11 @@ func TestFullRound_WithMultipleNodes(t *testing.T) {
 	// 6 nodes out of 8 sender nodes precommits on grid
 	// 6 nodes out of 8 receiver nodes precommits on grid
 	// 22 nodes out of 32 sender nodes precommits on grid
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderBehaviourSet][1:3]...)
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderRandomSet][1:4]...)
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverBehaviourSet][1:4]...)
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverRandomSet][1:4]...)
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.RandomSet][:22]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.SenderBehaviourSet][1:3]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.SenderRandomSet][1:4]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverBehaviourSet][1:4]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverRandomSet][1:4]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.RandomSet][:22]...)
 
 	ensureNoError(t, kbftErr)
 	require.Equal(t, c.tsCount, len(heights))
@@ -137,7 +137,7 @@ func TestFullRound_WithNonRegisteredReceiver(t *testing.T) {
 	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, true)
 	ctx := context.Background()
-	thisNode := valSet[ktypes.SenderBehaviourSet][0]
+	thisNode := valSet[types.SenderBehaviourSet][0]
 
 	ixHash, err := clusterInfo.Ixs.Hash()
 	require.NoError(t, err)
@@ -180,11 +180,11 @@ func TestFullRound_WithNonRegisteredReceiver(t *testing.T) {
 	// 6 nodes out of 8 sender nodes prevotes on grid
 	// 6 nodes out of 8 receiver nodes prevotes on grid
 	// 22 nodes out of 32 sender nodes prevotes on grid
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderBehaviourSet][1:3]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderRandomSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverBehaviourSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverRandomSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.RandomSet][:22]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.SenderBehaviourSet][1:3]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.SenderRandomSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverBehaviourSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverRandomSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.RandomSet][:22]...)
 
 	ensurePolka(t, polkaSub, heights, round)
 	ensurePrecommit(t, voteSub, gridID, round, heights)
@@ -193,11 +193,11 @@ func TestFullRound_WithNonRegisteredReceiver(t *testing.T) {
 	// 6 nodes out of 8 sender nodes precommits on gridkbft context gets timed out
 	// 6 nodes out of 8 receiver nodes precommits on grid
 	// 22 nodes out of 32 sender nodes precommits on grid
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderBehaviourSet][1:3]...)
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderRandomSet][1:4]...)
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverBehaviourSet][1:4]...)
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverRandomSet][1:4]...)
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.RandomSet][:22]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.SenderBehaviourSet][1:3]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.SenderRandomSet][1:4]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverBehaviourSet][1:4]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverRandomSet][1:4]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.RandomSet][:22]...)
 
 	ensureNoError(t, kbftErr)
 	require.Equal(t, c.tsCount, len(heights))
@@ -221,7 +221,7 @@ func TestFullRound_WithNilReceiverAddress(t *testing.T) {
 	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
 	ctx := context.Background()
-	thisNode := valSet[ktypes.SenderBehaviourSet][0]
+	thisNode := valSet[types.SenderBehaviourSet][0]
 
 	ixHash, err := clusterInfo.Ixs.Hash()
 	require.NoError(t, err)
@@ -264,11 +264,11 @@ func TestFullRound_WithNilReceiverAddress(t *testing.T) {
 	// 6 nodes out of 8 sender nodes prevotes on grid
 	// 6 nodes out of 8 receiver nodes prevotes on grid
 	// 22 nodes out of 32 sender nodes prevotes on grid
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderBehaviourSet][1:3]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderRandomSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverBehaviourSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverRandomSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.RandomSet][:22]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.SenderBehaviourSet][1:3]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.SenderRandomSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverBehaviourSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverRandomSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.RandomSet][:22]...)
 
 	ensurePolka(t, polkaSub, heights, round)
 	ensurePrecommit(t, voteSub, gridID, round, heights)
@@ -277,11 +277,11 @@ func TestFullRound_WithNilReceiverAddress(t *testing.T) {
 	// 6 nodes out of 8 sender nodes precommits on grid
 	// 6 nodes out of 8 receiver nodes precommits on grid
 	// 22 nodes out of 32 sender nodes precommits on grid
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderBehaviourSet][1:3]...)
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderRandomSet][1:4]...)
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverBehaviourSet][1:4]...)
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverRandomSet][1:4]...)
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.RandomSet][:22]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.SenderBehaviourSet][1:3]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.SenderRandomSet][1:4]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverBehaviourSet][1:4]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverRandomSet][1:4]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.RandomSet][:22]...)
 
 	ensureNoError(t, kbftErr)
 	require.Equal(t, c.tsCount, len(heights))
@@ -308,7 +308,7 @@ func TestFullRound_WithLessThan23rdPrevotes(t *testing.T) {
 	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
 	ctx := context.Background()
-	thisNode := valSet[ktypes.SenderBehaviourSet][0]
+	thisNode := valSet[types.SenderBehaviourSet][0]
 
 	ixHash, err := clusterInfo.Ixs.Hash()
 	require.NoError(t, err)
@@ -347,11 +347,11 @@ func TestFullRound_WithLessThan23rdPrevotes(t *testing.T) {
 	ensurePrevote(t, voteSub, gridID, round, heights)
 	validatePrevote(t, kbft, round, thisNode, gridID.Hash)
 
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderBehaviourSet][1:2]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderRandomSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverBehaviourSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverRandomSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.RandomSet][:22]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.SenderBehaviourSet][1:2]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.SenderRandomSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverBehaviourSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverRandomSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.RandomSet][:22]...)
 
 	ensureNoPrecommitReceived(t, voteSub)
 
@@ -381,7 +381,7 @@ func TestFullRound_WithLessThan23rdPrecommit(t *testing.T) {
 	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
 	ctx := context.Background()
-	thisNode := valSet[ktypes.SenderBehaviourSet][0]
+	thisNode := valSet[types.SenderBehaviourSet][0]
 
 	ixHash, err := clusterInfo.Ixs.Hash()
 	require.NoError(t, err)
@@ -420,20 +420,20 @@ func TestFullRound_WithLessThan23rdPrecommit(t *testing.T) {
 	ensurePrevote(t, voteSub, gridID, round, heights)
 	validatePrevote(t, kbft, round, thisNode, gridID.Hash)
 
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderBehaviourSet][1:3]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderRandomSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverBehaviourSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverRandomSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.RandomSet][:22]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.SenderBehaviourSet][1:3]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.SenderRandomSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverBehaviourSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverRandomSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.RandomSet][:22]...)
 
 	ensurePrecommit(t, voteSub, gridID, round, heights)
 	validatePrecommit(t, kbft, 0, 0, thisNode, gridID.Hash, gridID.Hash)
 
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderBehaviourSet][1:2]...)
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderRandomSet][1:4]...)
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverBehaviourSet][1:4]...)
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverRandomSet][1:4]...)
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.RandomSet][:22]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.SenderBehaviourSet][1:2]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.SenderRandomSet][1:4]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverBehaviourSet][1:4]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverRandomSet][1:4]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.RandomSet][:22]...)
 
 	// kbft context gets timed out
 	ensureError(t, kbftErr, "context deadline exceeded")
@@ -460,7 +460,7 @@ func TestFullRound_WithAny23rdPrevote_Any23rdPrecommit(t *testing.T) {
 	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
 	ctx := context.Background()
-	thisNode := valSet[ktypes.SenderBehaviourSet][0]
+	thisNode := valSet[types.SenderBehaviourSet][0]
 
 	ixHash, err := clusterInfo.Ixs.Hash()
 	require.NoError(t, err)
@@ -502,21 +502,21 @@ func TestFullRound_WithAny23rdPrevote_Any23rdPrecommit(t *testing.T) {
 	validatePrevote(t, kbft, round, thisNode, gridID.Hash)
 
 	randomGridID := createGridWithHeights(t, heights, tests.RandomHash(t))
-	sendAndEnsurePreVote(t, kbft, round, randomGridID, voteSub, round, valSet[ktypes.SenderBehaviourSet][1:3]...)
-	sendAndEnsurePreVote(t, kbft, round, randomGridID, voteSub, round, valSet[ktypes.SenderRandomSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, nil, voteSub, round, valSet[ktypes.ReceiverBehaviourSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, nil, voteSub, round, valSet[ktypes.ReceiverRandomSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, nil, voteSub, round, valSet[ktypes.RandomSet][:22]...)
+	sendAndEnsurePreVote(t, kbft, round, randomGridID, voteSub, round, valSet[types.SenderBehaviourSet][1:3]...)
+	sendAndEnsurePreVote(t, kbft, round, randomGridID, voteSub, round, valSet[types.SenderRandomSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, nil, voteSub, round, valSet[types.ReceiverBehaviourSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, nil, voteSub, round, valSet[types.ReceiverRandomSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, nil, voteSub, round, valSet[types.RandomSet][:22]...)
 
 	ensurePrevoteTimeout(t, prevoteTimeoutSub, heights, round, kbft.config.PrevoteWaitDuration(0).Nanoseconds())
 	ensurePrecommit(t, voteSub, nil, round, heights)
 	validatePrecommit(t, kbft, 0, 0, thisNode, types.NilHash, types.NilHash)
 
-	sendAndEnsurePrecommit(t, kbft, round, randomGridID, voteSub, round, valSet[ktypes.SenderBehaviourSet][1:3]...)
-	sendAndEnsurePrecommit(t, kbft, round, randomGridID, voteSub, round, valSet[ktypes.SenderRandomSet][1:4]...)
-	sendAndEnsurePrecommit(t, kbft, round, nil, voteSub, round, valSet[ktypes.ReceiverBehaviourSet][1:4]...)
-	sendAndEnsurePrecommit(t, kbft, round, nil, voteSub, round, valSet[ktypes.ReceiverRandomSet][1:4]...)
-	sendAndEnsurePrecommit(t, kbft, round, nil, voteSub, round, valSet[ktypes.RandomSet][:22]...)
+	sendAndEnsurePrecommit(t, kbft, round, randomGridID, voteSub, round, valSet[types.SenderBehaviourSet][1:3]...)
+	sendAndEnsurePrecommit(t, kbft, round, randomGridID, voteSub, round, valSet[types.SenderRandomSet][1:4]...)
+	sendAndEnsurePrecommit(t, kbft, round, nil, voteSub, round, valSet[types.ReceiverBehaviourSet][1:4]...)
+	sendAndEnsurePrecommit(t, kbft, round, nil, voteSub, round, valSet[types.ReceiverRandomSet][1:4]...)
+	sendAndEnsurePrecommit(t, kbft, round, nil, voteSub, round, valSet[types.RandomSet][:22]...)
 
 	ensurePrecommitTimeout(t, precommitTimeoutSub, heights, round,
 		kbft.config.PrecommitWaitDuration(0).Nanoseconds())
@@ -545,7 +545,7 @@ func TestFullRound_With23rdNilPrecommit(t *testing.T) {
 	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
 	ctx := context.Background()
-	thisNode := valSet[ktypes.SenderBehaviourSet][0]
+	thisNode := valSet[types.SenderBehaviourSet][0]
 
 	ixHash, err := clusterInfo.Ixs.Hash()
 	require.NoError(t, err)
@@ -585,20 +585,20 @@ func TestFullRound_With23rdNilPrecommit(t *testing.T) {
 	ensurePrevote(t, voteSub, gridID, round, heights)
 	validatePrevote(t, kbft, round, thisNode, gridID.Hash)
 
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderBehaviourSet][1:3]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderRandomSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverBehaviourSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverRandomSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.RandomSet][:22]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.SenderBehaviourSet][1:3]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.SenderRandomSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverBehaviourSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverRandomSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.RandomSet][:22]...)
 
 	ensurePrecommit(t, voteSub, gridID, round, heights)
 	validatePrecommit(t, kbft, 0, 0, thisNode, gridID.Hash, gridID.Hash)
 
-	sendAndEnsurePrecommit(t, kbft, round, nil, voteSub, round, valSet[ktypes.SenderBehaviourSet][1:3]...)
-	sendAndEnsurePrecommit(t, kbft, round, nil, voteSub, round, valSet[ktypes.SenderRandomSet][1:4]...)
-	sendAndEnsurePrecommit(t, kbft, round, nil, voteSub, round, valSet[ktypes.ReceiverBehaviourSet][1:4]...)
-	sendAndEnsurePrecommit(t, kbft, round, nil, voteSub, round, valSet[ktypes.ReceiverRandomSet][1:4]...)
-	sendAndEnsurePrecommit(t, kbft, round, nil, voteSub, round, valSet[ktypes.RandomSet][:22]...)
+	sendAndEnsurePrecommit(t, kbft, round, nil, voteSub, round, valSet[types.SenderBehaviourSet][1:3]...)
+	sendAndEnsurePrecommit(t, kbft, round, nil, voteSub, round, valSet[types.SenderRandomSet][1:4]...)
+	sendAndEnsurePrecommit(t, kbft, round, nil, voteSub, round, valSet[types.ReceiverBehaviourSet][1:4]...)
+	sendAndEnsurePrecommit(t, kbft, round, nil, voteSub, round, valSet[types.ReceiverRandomSet][1:4]...)
+	sendAndEnsurePrecommit(t, kbft, round, nil, voteSub, round, valSet[types.RandomSet][:22]...)
 
 	ensurePrecommitTimeout(
 		t,
@@ -632,7 +632,7 @@ func TestSignVote(t *testing.T) {
 
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
 	ctx := context.Background()
-	thisNode := valSet[ktypes.SenderBehaviourSet][0]
+	thisNode := valSet[types.SenderBehaviourSet][0]
 
 	ixHash, err := clusterInfo.Ixs.Hash()
 	require.NoError(t, err)
@@ -683,7 +683,7 @@ func TestConflictPrevote(t *testing.T) {
 
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
 	ctx := context.Background()
-	thisNode := valSet[ktypes.SenderBehaviourSet][0]
+	thisNode := valSet[types.SenderBehaviourSet][0]
 
 	ixHash, err := clusterInfo.Ixs.Hash()
 	require.NoError(t, err)
@@ -722,12 +722,12 @@ func TestConflictPrevote(t *testing.T) {
 	ensurePrevote(t, voteSub, gridID, round, heights)
 	validatePrevote(t, kbft, round, thisNode, gridID.Hash)
 
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderBehaviourSet][1])
-	signAddVotesSynchronously(t, kbft, round, ktypes.PREVOTE, nil, valSet[ktypes.SenderBehaviourSet][1]) // conflict vote
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.SenderBehaviourSet][1])
+	signAddVotesSynchronously(t, kbft, round, ktypes.PREVOTE, nil, valSet[types.SenderBehaviourSet][1]) // conflict vote
 
 	time.Sleep(5 * time.Millisecond) // wait for 5ms so that conflict prevote gets processed
 
-	expectedConflictVote := signVote(t, kbft, round, ktypes.PREVOTE, nil, valSet[ktypes.SenderBehaviourSet][1])
+	expectedConflictVote := signVote(t, kbft, round, ktypes.PREVOTE, nil, valSet[types.SenderBehaviourSet][1])
 
 	require.Equal(t, expectedConflictVote, kbft.evidence.Votes[len(kbft.evidence.Votes)-1])
 }
@@ -754,7 +754,7 @@ func TestConflictPrecommit(t *testing.T) {
 
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
 	ctx := context.Background()
-	thisNode := valSet[ktypes.SenderBehaviourSet][0]
+	thisNode := valSet[types.SenderBehaviourSet][0]
 
 	ixHash, err := clusterInfo.Ixs.Hash()
 	require.NoError(t, err)
@@ -793,17 +793,17 @@ func TestConflictPrecommit(t *testing.T) {
 	ensurePrevote(t, voteSub, gridID, round, heights)
 	validatePrevote(t, kbft, round, thisNode, gridID.Hash)
 
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderBehaviourSet][1:3]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderRandomSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverBehaviourSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverRandomSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.RandomSet][:22]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.SenderBehaviourSet][1:3]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.SenderRandomSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverBehaviourSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverRandomSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.RandomSet][:22]...)
 
 	ensurePrecommit(t, voteSub, gridID, round, heights)
 	validatePrecommit(t, kbft, 0, 0, thisNode, gridID.Hash, gridID.Hash)
 
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderBehaviourSet][1])
-	signAddVotesSynchronously(t, kbft, round, ktypes.PRECOMMIT, nil, valSet[ktypes.SenderBehaviourSet][1]) // conflict vote
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.SenderBehaviourSet][1])
+	signAddVotesSynchronously(t, kbft, round, ktypes.PRECOMMIT, nil, valSet[types.SenderBehaviourSet][1]) // conflict vote
 
 	time.Sleep(5 * time.Millisecond) // wait for 5ms so that conflict precommit gets processed
 
@@ -812,7 +812,7 @@ func TestConflictPrecommit(t *testing.T) {
 		round,
 		ktypes.PRECOMMIT,
 		nil,
-		valSet[ktypes.SenderBehaviourSet][1],
+		valSet[types.SenderBehaviourSet][1],
 	)
 
 	require.Equal(t, expectedConflictVote, kbft.evidence.Votes[len(kbft.evidence.Votes)-1])
@@ -840,7 +840,7 @@ func TestRandomValidatorPreVote(t *testing.T) {
 	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
 	ctx := context.Background()
-	thisNode := valSet[ktypes.SenderBehaviourSet][0]
+	thisNode := valSet[types.SenderBehaviourSet][0]
 
 	ixHash, err := clusterInfo.Ixs.Hash()
 	require.NoError(t, err)
@@ -879,11 +879,11 @@ func TestRandomValidatorPreVote(t *testing.T) {
 	ensurePrevote(t, voteSub, gridID, round, heights)
 	validatePrevote(t, kbft, round, thisNode, gridID.Hash)
 
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderBehaviourSet][1:3]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderRandomSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverBehaviourSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverRandomSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.RandomSet][:21]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.SenderBehaviourSet][1:3]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.SenderRandomSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverBehaviourSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverRandomSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.RandomSet][:21]...)
 
 	signAddVotes(t, kbft, round, ktypes.PREVOTE, gridID, randomVal[0])
 
@@ -910,7 +910,7 @@ func TestRandomValidatorPrecommit(t *testing.T) {
 	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
 	ctx := context.Background()
-	thisNode := valSet[ktypes.SenderBehaviourSet][0]
+	thisNode := valSet[types.SenderBehaviourSet][0]
 
 	ixHash, err := clusterInfo.Ixs.Hash()
 	require.NoError(t, err)
@@ -951,20 +951,20 @@ func TestRandomValidatorPrecommit(t *testing.T) {
 	ensurePrevote(t, voteSub, gridID, round, heights)
 	validatePrevote(t, kbft, round, thisNode, gridID.Hash)
 
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderBehaviourSet][1:3]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderRandomSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverBehaviourSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverRandomSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.RandomSet][:22]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.SenderBehaviourSet][1:3]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.SenderRandomSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverBehaviourSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverRandomSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.RandomSet][:22]...)
 
 	ensurePrecommit(t, voteSub, gridID, round, heights)
 	validatePrecommit(t, kbft, 0, 0, thisNode, gridID.Hash, gridID.Hash)
 
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderBehaviourSet][1:2]...)
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderRandomSet][1:4]...)
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverBehaviourSet][1:4]...)
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverRandomSet][1:4]...)
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.RandomSet][:21]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.SenderBehaviourSet][1:2]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.SenderRandomSet][1:4]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverBehaviourSet][1:4]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverRandomSet][1:4]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.RandomSet][:21]...)
 
 	signAddVotes(t, kbft, round, ktypes.PRECOMMIT, gridID, randomVal[0])
 
@@ -994,7 +994,7 @@ func TestReceivePrevoteDuringPrevoteWait(t *testing.T) {
 	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
 	ctx := context.Background()
-	thisNode := valSet[ktypes.SenderBehaviourSet][0]
+	thisNode := valSet[types.SenderBehaviourSet][0]
 
 	ixHash, err := clusterInfo.Ixs.Hash()
 	require.NoError(t, err)
@@ -1033,18 +1033,18 @@ func TestReceivePrevoteDuringPrevoteWait(t *testing.T) {
 	ensurePrevote(t, voteSub, gridID, round, heights)
 	validatePrevote(t, kbft, round, thisNode, gridID.Hash)
 
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderBehaviourSet][1:3]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderRandomSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverBehaviourSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverRandomSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.RandomSet][:21]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.SenderBehaviourSet][1:3]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.SenderRandomSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverBehaviourSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverRandomSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.RandomSet][:21]...)
 
 	// 2/3 rd any majority is reached with the following vote
-	sendAndEnsurePreVote(t, kbft, round, nil, voteSub, round, valSet[ktypes.RandomSet][21])
+	sendAndEnsurePreVote(t, kbft, round, nil, voteSub, round, valSet[types.RandomSet][21])
 	time.Sleep(3 * time.Millisecond) // wait for 3 ms as prevote timeout is 10 ms
 
 	// send the 2/3 rd prevote
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.RandomSet][22])
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.RandomSet][22])
 
 	ensurePrecommit(t, voteSub, gridID, round, heights)
 	validatePrecommit(t, kbft, 0, 0, thisNode, gridID.Hash, gridID.Hash)
@@ -1071,7 +1071,7 @@ func TestReceivePrecommitDuringPrecommmitWait(t *testing.T) {
 	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
 	ctx := context.Background()
-	thisNode := valSet[ktypes.SenderBehaviourSet][0]
+	thisNode := valSet[types.SenderBehaviourSet][0]
 
 	ixHash, err := clusterInfo.Ixs.Hash()
 	require.NoError(t, err)
@@ -1110,26 +1110,26 @@ func TestReceivePrecommitDuringPrecommmitWait(t *testing.T) {
 	ensurePrevote(t, voteSub, gridID, round, heights)
 	validatePrevote(t, kbft, round, thisNode, gridID.Hash)
 
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderBehaviourSet][1:3]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderRandomSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverBehaviourSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverRandomSet][1:4]...)
-	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[ktypes.RandomSet][:22]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.SenderBehaviourSet][1:3]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.SenderRandomSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverBehaviourSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverRandomSet][1:4]...)
+	sendAndEnsurePreVote(t, kbft, round, gridID, voteSub, round, valSet[types.RandomSet][:22]...)
 
 	ensurePrecommit(t, voteSub, gridID, round, heights)
 	validatePrecommit(t, kbft, 0, 0, thisNode, gridID.Hash, gridID.Hash)
 
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderBehaviourSet][1:3]...)
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.SenderRandomSet][1:4]...)
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverBehaviourSet][1:4]...)
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.ReceiverRandomSet][1:4]...)
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.RandomSet][:21]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.SenderBehaviourSet][1:3]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.SenderRandomSet][1:4]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverBehaviourSet][1:4]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.ReceiverRandomSet][1:4]...)
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.RandomSet][:21]...)
 
 	// any 2/3 rd majority
-	sendAndEnsurePrecommit(t, kbft, round, nil, voteSub, round, valSet[ktypes.RandomSet][21])
+	sendAndEnsurePrecommit(t, kbft, round, nil, voteSub, round, valSet[types.RandomSet][21])
 	time.Sleep(5 * time.Millisecond) // wait for 5 ms as precommit timeout is 10 ms
 	// send the 2/3 rd precommit
-	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[ktypes.RandomSet][22])
+	sendAndEnsurePrecommit(t, kbft, round, gridID, voteSub, round, valSet[types.RandomSet][22])
 
 	ensureNoError(t, kbftErr)
 	require.Equal(t, c.tsCount, len(heights))

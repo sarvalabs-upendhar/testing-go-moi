@@ -52,7 +52,7 @@ const (
 
 type lattice interface {
 	AddKnownHashes(tesseracts []*types.Tesseract)
-	AddTesseracts(tesseracts []*types.Tesseract, dirtyStorage map[types.Hash][]byte) error
+	AddTesseracts(dirtyStorage map[types.Hash][]byte, tesseracts ...*types.Tesseract) error
 }
 
 type transport interface {
@@ -68,7 +68,7 @@ type state interface {
 		ix *types.Interaction,
 	) (
 		map[types.Address]types.Hash,
-		[]*ktypes.NodeSet,
+		[]*types.NodeSet,
 		error,
 	)
 	GetPublicKeys(ids ...id.KramaID) (keys [][]byte, err error)
@@ -123,6 +123,7 @@ type Engine struct {
 	ctx          context.Context
 	ctxCancel    context.CancelFunc
 	cfg          *common.ConsensusConfig
+	mux          *utils.TypeMux
 	logger       hclog.Logger
 	selfID       id.KramaID
 	slots        *ktypes.Slots
@@ -144,6 +145,7 @@ type Engine struct {
 func NewKramaEngine(ctx context.Context,
 	cfg *common.ConsensusConfig,
 	logger hclog.Logger,
+	mux *utils.TypeMux,
 	state state,
 	network network,
 	exec execution,
@@ -152,6 +154,7 @@ func NewKramaEngine(ctx context.Context,
 	lattice lattice,
 	randomizer *flux.Randomizer,
 	metrics *Metrics,
+	slots *ktypes.Slots,
 ) (*Engine, error) {
 	wal, err := kbft.NewWAL(ctx, logger, cfg.DirectoryPath)
 	if err != nil {
@@ -164,9 +167,10 @@ func NewKramaEngine(ctx context.Context,
 		ctxCancel:    ctxCancel,
 		cfg:          cfg,
 		logger:       logger.Named("Krama-Engine"),
+		mux:          mux,
 		selfID:       network.GetKramaID(),
 		state:        state,
-		slots:        ktypes.NewSlots(cfg.OperatorSlotCount, cfg.ValidatorSlotCount),
+		slots:        slots,
 		requests:     make(chan Request),
 		randomizer:   randomizer,
 		transport:    NewKramaTransport(logger, network),
@@ -194,7 +198,7 @@ func (k *Engine) loadIxnClusterState(
 ) (*ktypes.ClusterState, error) {
 	var err error
 
-	clusterState := ktypes.NewICS(6, req.msg, req.ixs, clusterID, req.operator, req.reqTime)
+	clusterState := ktypes.NewICS(6, req.msg, req.ixs, clusterID, req.operator, req.reqTime, k.selfID)
 	// Fetch the committed account info of interaction participants
 	clusterState.AccountInfos, err = k.fetchIxAccounts(ctx, req.ixs[0])
 	if err != nil {
@@ -256,20 +260,20 @@ func (k *Engine) acquireContextLock(ctx context.Context, slot *ktypes.Slot) erro
 	// Send ICSRequest to context nodes of both participants
 	go k.sendICSRequest(
 		ctx,
-		ktypes.SenderBehaviourSet,
+		types.SenderBehaviourSet,
 		finalWaitGroup,
 		slot.ClusterID(),
-		nodeSets[ktypes.SenderBehaviourSet],
+		nodeSets[types.SenderBehaviourSet],
 		reqMsg,
 		randomNodesReceiverChan,
 	)
 
 	go k.sendICSRequest(
 		ctx,
-		ktypes.SenderRandomSet,
+		types.SenderRandomSet,
 		finalWaitGroup,
 		slot.ClusterID(),
-		nodeSets[ktypes.SenderRandomSet],
+		nodeSets[types.SenderRandomSet],
 		reqMsg,
 		randomNodesReceiverChan,
 	)
@@ -279,20 +283,20 @@ func (k *Engine) acquireContextLock(ctx context.Context, slot *ktypes.Slot) erro
 
 		go k.sendICSRequest(
 			ctx,
-			ktypes.ReceiverBehaviourSet,
+			types.ReceiverBehaviourSet,
 			finalWaitGroup,
 			slot.ClusterID(),
-			nodeSets[ktypes.ReceiverBehaviourSet],
+			nodeSets[types.ReceiverBehaviourSet],
 			reqMsg,
 			randomNodesReceiverChan,
 		)
 
 		go k.sendICSRequest(
 			ctx,
-			ktypes.ReceiverRandomSet,
+			types.ReceiverRandomSet,
 			finalWaitGroup,
 			slot.ClusterID(),
-			nodeSets[ktypes.ReceiverRandomSet],
+			nodeSets[types.ReceiverRandomSet],
 			reqMsg,
 			randomNodesReceiverChan,
 		)
@@ -368,7 +372,7 @@ func (k *Engine) acquireContextLock(ctx context.Context, slot *ktypes.Slot) erro
 
 	go k.sendICSRequestWithBound(
 		ctx,
-		ktypes.RandomSet,
+		types.RandomSet,
 		operatorRandomNodesCount,
 		finalWaitGroup,
 		slot.ClusterID(),
@@ -379,7 +383,7 @@ func (k *Engine) acquireContextLock(ctx context.Context, slot *ktypes.Slot) erro
 
 	go k.sendICSRequestWithBound(
 		ctx,
-		ktypes.ObserverSet,
+		types.ObserverSet,
 		requiredObserverNodes,
 		finalWaitGroup,
 		slot.ClusterID(),
@@ -468,7 +472,7 @@ func (k *Engine) joinCluster(ctx context.Context, slot *ktypes.Slot) error {
 		return errors.New("invalid time stamp")
 	}
 
-	slot.ClusterState().CurrentRole = ktypes.IcsSetType(slot.ICSRequestMsg().ContextType)
+	slot.ClusterState().CurrentRole = types.IcsSetType(slot.ICSRequestMsg().ContextType)
 
 	contextHashes, nodeSets, err := k.state.FetchInteractionContext(ctx, slot.ClusterState().Ixs[0])
 	if err != nil {
@@ -485,6 +489,16 @@ func (k *Engine) joinCluster(ctx context.Context, slot *ktypes.Slot) error {
 
 		if slot.ClusterState().AccountInfos.GetHeight(addr) != info.Height {
 			return types.ErrHeightMismatch
+		}
+
+		if slot.ClusterState().AccountInfos.GetHeight(addr) < info.Height {
+			if err = k.mux.Post(utils.SyncRequestEvent{
+				Address:  addr,
+				Height:   info.Height,
+				BestPeer: slot.ClusterState().Operator,
+			}); err != nil {
+				k.logger.Error("failed to post sync request")
+			}
 		}
 	}
 
@@ -625,11 +639,11 @@ func (k *Engine) handleReq(req Request) {
 		return
 	}
 
-	if cs.CurrentRole == ktypes.ObserverSet {
+	if cs.CurrentRole == types.ObserverSet {
 		wg := observer.NewWatchDog(ctx, slot)
 		wg.StartWatchDog()
 
-		if hash := cs.ID.Hash(); !hash.IsNil() {
+		if hash := cs.ClusterID.Hash(); !hash.IsNil() {
 			proofs, err := wg.GenerateProofs()
 			if err != nil {
 				k.logger.Error("Failed to generate watchdog proofs")
@@ -690,9 +704,9 @@ func (k *Engine) handleReq(req Request) {
 		)
 
 		if err = bft.Start(); err != nil {
-			k.logger.Error("Error consensus failed", "error", err, "cluster-id", cs.ID)
+			k.logger.Error("Error consensus failed", "error", err, "cluster-id", cs.ClusterID)
 			k.metrics.captureAgreementFailureCount(1)
-			if err := k.exec.Revert(cs.ID); err != nil {
+			if err := k.exec.Revert(cs.ClusterID); err != nil {
 				k.logger.Error("failed to revert the execution changes", "error", err)
 			}
 
@@ -702,7 +716,7 @@ func (k *Engine) handleReq(req Request) {
 		k.metrics.captureAgreementTime(consensusInitTS)
 	}
 
-	k.logger.Info("Interaction finalized", "cluster-id", cs.ID)
+	k.logger.Info("Interaction finalized", "cluster-id", cs.ClusterID)
 }
 
 func (k *Engine) fetchIxAccounts(ctx context.Context, ix *types.Interaction) (ktypes.AccountInfos, error) {
@@ -761,7 +775,7 @@ func (k *Engine) fetchIxAccounts(ctx context.Context, ix *types.Interaction) (kt
 
 func (k *Engine) sendICSRequestWithBound(
 	ctx context.Context,
-	setType ktypes.IcsSetType,
+	setType types.IcsSetType,
 	requiredCount int,
 	finalWaitGroup *sync.WaitGroup,
 	cID types.ClusterID,
@@ -855,7 +869,7 @@ func (k *Engine) sendICSRequestWithBound(
 
 	wg.Wait()
 
-	idSet := ktypes.NewNodeSet(nodes, keys)
+	idSet := types.NewNodeSet(nodes, keys)
 
 	for index, isAvailable := range nodeResponses {
 		if isAvailable {
@@ -873,10 +887,10 @@ func (k *Engine) sendICSRequestWithBound(
 
 func (k *Engine) sendICSRequest(
 	ctx context.Context,
-	setType ktypes.IcsSetType,
+	setType types.IcsSetType,
 	finalWaitGroup *sync.WaitGroup,
 	cID types.ClusterID,
-	nodesSet *ktypes.NodeSet,
+	nodesSet *types.NodeSet,
 	msg ptypes.ICSRequest,
 	randomNodes chan []id.KramaID,
 ) {
@@ -982,7 +996,7 @@ func (k *Engine) getICSReqMsg(
 	}
 
 	icsReqMsg.IxData = rawData
-	icsReqMsg.ClusterID = string(cs.ID)
+	icsReqMsg.ClusterID = string(cs.ClusterID)
 	icsReqMsg.Operator = string(k.selfID)
 	icsReqMsg.ContextLock = cs.ContextLock()
 	icsReqMsg.Timestamp = cs.ICSReqTime.UnixNano()
@@ -1066,7 +1080,7 @@ func (k *Engine) initClusterCommunication(ctx context.Context, slot *ktypes.Slot
 }
 
 func (k *Engine) createProposalGrid(slot *ktypes.Slot) ([]*types.Tesseract, error) {
-	if err := k.updateContextDelta(slot.ClusterID()); err != nil {
+	if err := k.updateContextDelta(slot); err != nil {
 		return nil, err
 	}
 
@@ -1078,7 +1092,7 @@ func (k *Engine) createProposalGrid(slot *ktypes.Slot) ([]*types.Tesseract, erro
 	}
 
 	receipts, err := k.exec.ExecuteInteractions(
-		clusterState.ID,
+		clusterState.ClusterID,
 		clusterState.Ixs,
 		clusterState.GetContextDelta(),
 	)
@@ -1092,9 +1106,7 @@ func (k *Engine) createProposalGrid(slot *ktypes.Slot) ([]*types.Tesseract, erro
 	return GenerateTesseracts(clusterState)
 }
 
-func (k *Engine) updateContextDelta(clusterID types.ClusterID) error {
-	slot := k.slots.GetSlot(clusterID)
-
+func (k *Engine) updateContextDelta(slot *ktypes.Slot) error {
 	if slot == nil {
 		return errors.New("nil slot")
 	}
@@ -1111,7 +1123,7 @@ func (k *Engine) updateContextDelta(clusterID types.ClusterID) error {
 			senderDeltaGroup := new(types.DeltaGroup)
 			senderDeltaGroup.Role = types.Sender
 			senderBehaviourDelta, replacedNodes := clusterState.GetBehaviouralContextDelta(
-				ktypes.SenderBehaviourSet,
+				types.SenderBehaviourSet,
 			)
 
 			if senderBehaviourDelta != "" {
@@ -1123,7 +1135,7 @@ func (k *Engine) updateContextDelta(clusterID types.ClusterID) error {
 			}
 
 			senderRandomDelta, replacedRandomDelta := clusterState.GetRandomContextDelta(
-				ktypes.SenderRandomSet,
+				types.SenderRandomSet,
 				1,
 				clusterState.Operator,
 			)
@@ -1160,7 +1172,7 @@ func (k *Engine) updateContextDelta(clusterID types.ClusterID) error {
 				genesisDeltaGroup := new(types.DeltaGroup)
 				genesisDeltaGroup.Role = types.Genesis
 				genesisBehaviourDelta, replacedNodes := clusterState.GetBehaviouralContextDelta(
-					ktypes.ReceiverBehaviourSet,
+					types.ReceiverBehaviourSet,
 				)
 
 				if genesisBehaviourDelta != "" {
@@ -1172,7 +1184,7 @@ func (k *Engine) updateContextDelta(clusterID types.ClusterID) error {
 				}
 
 				genesisRandomDelta, replacedRandomDelta := clusterState.GetRandomContextDelta(
-					ktypes.ReceiverRandomSet,
+					types.ReceiverRandomSet,
 					1,
 				)
 				genesisDeltaGroup.RandomNodes = append(genesisDeltaGroup.RandomNodes, genesisRandomDelta...)
@@ -1181,7 +1193,7 @@ func (k *Engine) updateContextDelta(clusterID types.ClusterID) error {
 				deltaMap[types.SargaAddress] = genesisDeltaGroup
 			} else if clusterState.AccountInfos[receiverAddr].AccType == 2 {
 				receiverBehaviourDelta, replacedNodes := clusterState.GetBehaviouralContextDelta(
-					ktypes.ReceiverBehaviourSet,
+					types.ReceiverBehaviourSet,
 				)
 				if receiverBehaviourDelta != "" {
 					receiverDeltaGroup.BehaviouralNodes = append(receiverDeltaGroup.BehaviouralNodes, receiverBehaviourDelta)
@@ -1190,7 +1202,7 @@ func (k *Engine) updateContextDelta(clusterID types.ClusterID) error {
 					receiverDeltaGroup.ReplacedNodes = append(receiverDeltaGroup.ReplacedNodes, replacedNodes)
 				}
 				receiverRandomDelta, replacedRandomDelta := clusterState.GetRandomContextDelta(
-					ktypes.ReceiverRandomSet,
+					types.ReceiverRandomSet,
 					1,
 					clusterState.Operator,
 				)
@@ -1214,7 +1226,7 @@ func (k *Engine) GetNodes(
 	requiredBehaviouralNodes int,
 ) (behaviouralNodes []id.KramaID, randomNodes []id.KramaID, err error) {
 	// TODO: Need to improve this function
-	set := clusterInfo.NodeSet.Nodes[ktypes.RandomSet]
+	set := clusterInfo.NodeSet.Nodes[types.RandomSet]
 	count := 0
 
 	for index, kramaID := range set.Ids {
@@ -1251,7 +1263,7 @@ func (k *Engine) finalizedTesseractHandler(tesseracts []*types.Tesseract) error 
 
 	clusterInfo := slot.ClusterState()
 
-	if err := k.lattice.AddTesseracts(tesseracts, clusterInfo.GetDirty()); err != nil {
+	if err := k.lattice.AddTesseracts(clusterInfo.GetDirty(), tesseracts...); err != nil {
 		return err
 	}
 
@@ -1267,16 +1279,16 @@ func (k *Engine) finalizedTesseractHandler(tesseracts []*types.Tesseract) error 
 
 	for _, ts := range tesseracts {
 		msg := &ptypes.TesseractMessage{
-			CanonicalTesseract: ts.Canonical(),
-			Sender:             k.selfID,
-			Receipts:           rawReceipts,
-			Ixns:               rawIxns,
+			Tesseract: ts.Canonical(),
+			Sender:    k.selfID,
+			Ixns:      rawIxns,
+			Receipts:  rawReceipts,
 			Delta: map[types.Hash][]byte{
 				ts.ICSHash(): clusterInfo.GetDirty()[ts.ICSHash()],
 			},
 		}
 
-		if err := k.transport.BroadcastTesseract(msg); err != nil {
+		if err = k.transport.BroadcastTesseract(msg); err != nil {
 			k.logger.Error("Failed to broadcast tesseract", "error", err, "cluster-id", clusterID)
 		}
 	}
@@ -1309,6 +1321,7 @@ func generateTesseract(
 	body types.TesseractBody,
 	tsBodyHash, gridHash types.Hash,
 	fuelUsed, fuelLimit uint64,
+	sealer id.KramaID,
 ) *types.Tesseract {
 	header := types.TesseractHeader{
 		Address:     addr,
@@ -1317,7 +1330,7 @@ func generateTesseract(
 		Height:      state.NewHeight(addr),
 		FuelUsed:    fuelUsed,
 		FuelLimit:   fuelLimit,
-		ClusterID:   string(state.ID),
+		ClusterID:   string(state.ClusterID),
 		Operator:    string(state.Operator),
 		BodyHash:    tsBodyHash,
 		GroupHash:   gridHash,
@@ -1328,7 +1341,7 @@ func generateTesseract(
 		Timestamp: state.ICSReqTime.UnixNano(),
 	}
 
-	return types.NewTesseract(header, body, state.Ixs, state.Receipts, nil)
+	return types.NewTesseract(header, body, state.Ixs, state.Receipts, nil, sealer)
 }
 
 func GenerateTesseracts(state *ktypes.ClusterState) ([]*types.Tesseract, error) {
@@ -1393,17 +1406,42 @@ func GenerateTesseracts(state *ktypes.ClusterState) ([]*types.Tesseract, error) 
 
 	if !ix.Sender().IsNil() {
 		tesseractGroup = append(tesseractGroup, // append sender tesseract
-			generateTesseract(ix.Sender(), state, senderBody, senderBodyHash, groupHash, fuelUsed, 1000))
+			generateTesseract(
+				ix.Sender(),
+				state,
+				senderBody,
+				senderBodyHash,
+				groupHash,
+				fuelUsed,
+				1000,
+				state.SelfKramaID()),
+		)
 	}
 
 	if !ix.Receiver().IsNil() {
 		tesseractGroup = append(tesseractGroup, // append receiver tesseract
-			generateTesseract(ix.Receiver(), state, receiverBody, receiverBodyHash, groupHash, fuelUsed, 1000))
+			generateTesseract(
+				ix.Receiver(),
+				state,
+				receiverBody,
+				receiverBodyHash,
+				groupHash,
+				fuelUsed,
+				1000,
+				state.SelfKramaID()),
+		)
 
 		if state.AccountInfos.IsGenesis(ix.Receiver()) {
 			tesseractGroup = append(tesseractGroup, // append sarga tesseract
-				generateTesseract(types.SargaAddress, state, genesisBody, genesisBodyHash, groupHash,
-					fuelUsed, 1000))
+				generateTesseract(types.SargaAddress,
+					state,
+					genesisBody,
+					genesisBodyHash,
+					groupHash,
+					fuelUsed,
+					1000,
+					state.SelfKramaID(),
+				))
 		}
 	}
 

@@ -180,11 +180,11 @@ type Interaction struct {
 }
 
 func NewInteraction(ixData IxData, signature []byte) *Interaction {
-	ixData = ixData.Copy()
-	ix := &Interaction{inner: ixData}
+	cpyIxData := ixData.Copy()
+	ix := &Interaction{inner: cpyIxData}
 	ix.signature.Store(signature)
 
-	data, err := polo.Polorize(ixData)
+	data, err := polo.Polorize(cpyIxData)
 	if err != nil {
 		log.Fatalln(err, "failed to generate bytes of interaction message")
 

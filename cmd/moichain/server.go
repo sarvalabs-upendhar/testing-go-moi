@@ -33,7 +33,6 @@ var (
 	ValidatorSlots    int
 	NetworkSize       uint64
 	MTQ               float64
-	SkipGenesis       bool
 	EnableTracing     bool
 	NoDiscovery       bool
 	RefreshSenatus    bool
@@ -43,6 +42,7 @@ var (
 	PeerListFilePath  string
 	InboundConnLimit  int64
 	OutboundConnLimit int64
+	CleanDB           bool
 )
 
 var serverCmd = &cobra.Command{
@@ -69,7 +69,7 @@ func init() {
 	serverCmd.PersistentFlags().Uint64Var(&NetworkSize, "network-size", 12, "Network Size")
 	serverCmd.PersistentFlags().Float64Var(&MTQ, "mtq", 0.7, "Default MTQ")
 	serverCmd.PersistentFlags().String("data-dir", "test-chain", "Data directory location")
-	serverCmd.PersistentFlags().BoolVar(&SkipGenesis, "skip-genesis", false, "Set the genesis")
+	serverCmd.PersistentFlags().BoolVar(&CleanDB, "clean-db", false, "Deletes the data stored in database")
 	serverCmd.PersistentFlags().BoolVar(&EnableTracing, "enable-tracing", false, "Enable Tracing")
 	serverCmd.PersistentFlags().BoolVar(&NoDiscovery, "no-discovery", false, "Disable peer discovery")
 	serverCmd.PersistentFlags().BoolVar(&RefreshSenatus, "refresh-senatus", false, "Update the senatus with new peers")
@@ -143,10 +143,6 @@ func buildChainConfig(nodeCfg *common.Config, fileCfg *Config) {
 	if fileCfg.Genesis != "" {
 		nodeCfg.Chain.GenesisFilePath = fileCfg.Genesis
 	}
-
-	if SkipGenesis {
-		nodeCfg.Chain.SkipGenesis = SkipGenesis
-	}
 }
 
 func buildNetworkConfig(nodeCfg *common.Config, fileCfg *Config) (err error) {
@@ -213,6 +209,8 @@ func buildDBConfig(nodeCfg *common.Config, fileCfg *Config) {
 	if fileCfg.DB.DBFolder != "" {
 		nodeCfg.DB.DBFolderPath = fileCfg.DB.DBFolder
 	}
+
+	nodeCfg.DB.CleanDB = CleanDB
 }
 
 func buildTelemetryConfig(nodeCfg *common.Config, fileCfg *Config) (err error) {

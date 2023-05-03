@@ -80,7 +80,7 @@ func executeLogic(t *testing.T, client *Client) {
 	fuelprice, _ := new(big.Int).SetString("130D41", 16)
 
 	ixArgs := &ptypes.SendIXArgs{
-		Type:      8,
+		Type:      9,
 		FuelPrice: (*hexutil.Big)(fuelprice),
 		FuelLimit: (*hexutil.Big)(fuelprice),
 		Sender:    sender,
@@ -110,7 +110,7 @@ func createAsset(t *testing.T, client *Client) {
 	require.NoError(t, err)
 
 	ixArgs := &ptypes.SendIXArgs{
-		Type:      2,
+		Type:      3,
 		Sender:    sender,
 		FuelPrice: (*hexutil.Big)(supply),
 		FuelLimit: (*hexutil.Big)(supply),
@@ -132,7 +132,7 @@ func transferTokens(t *testing.T, client *Client) {
 	fuelprice, _ := new(big.Int).SetString("130D41", 16)
 
 	ixArgs := &ptypes.SendIXArgs{
-		Type:     0,
+		Type:     1,
 		Sender:   sender,
 		Receiver: receiver,
 		TransferValues: map[types.AssetID]*hexutil.Big{
@@ -340,7 +340,7 @@ func testTesseract(t *testing.T, client *Client) {
 
 func testDBGet(t *testing.T, client *Client) {
 	// key and value belongs to genesis tesseract account meta info
-	key, _ := dhruva.BucketIDFromAddress(types.SargaAddress.Bytes())
+	key, _ := dhruva.BucketKeyAndID(types.SargaAddress)
 
 	testcases := []struct {
 		name          string
@@ -1254,7 +1254,7 @@ func testAccountMetaInfo(t *testing.T, client *Client) {
 			accArgs: &ptypes.GetAccountArgs{
 				Address: tests.RandomAddress(t),
 			},
-			expectedError: types.ErrKeyNotFound,
+			expectedError: types.ErrAccountNotFound,
 		},
 	}
 

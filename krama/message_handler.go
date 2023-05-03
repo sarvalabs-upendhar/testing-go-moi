@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
+	"github.com/sarvalabs/moichain/types"
+
 	"github.com/pkg/errors"
 
 	ktypes "github.com/sarvalabs/moichain/krama/types"
-	"github.com/sarvalabs/moichain/poorna/types"
 )
 
 func (k *Engine) startMessageHandlers(ctx context.Context, slot *ktypes.Slot) {
@@ -67,7 +69,7 @@ func (k *Engine) handleOutboundMsg(slot *ktypes.Slot, msg ktypes.ConsensusMessag
 		}
 
 		slot.OutboundChan <- &ktypes.ICSMSG{
-			MsgType:   types.VOTEMSG,
+			MsgType:   ptypes.VOTEMSG,
 			Msg:       rawData,
 			Sender:    peerID,
 			ClusterID: string(slot.ClusterID()),
@@ -90,7 +92,7 @@ func (k *Engine) handleInboundMsg(slot *ktypes.Slot, msg *ktypes.ICSMSG) error {
 
 	sender, data, msgType := msg.Sender, msg.Msg, msg.MsgType
 	switch msgType {
-	case types.VOTEMSG:
+	case ptypes.VOTEMSG:
 		vote := new(ktypes.Vote)
 
 		// Unmarshal message
@@ -105,9 +107,9 @@ func (k *Engine) handleInboundMsg(slot *ktypes.Slot, msg *ktypes.ICSMSG) error {
 
 		slot.ForwardMsg(consensusMsg)
 
-	case types.ICSSUCCESS:
+	case ptypes.ICSSUCCESS:
 		// Unmarshal into an ICS success message
-		successMsg := new(types.ICSSuccessMsg)
+		successMsg := new(ptypes.ICSSuccessMsg)
 
 		if err := successMsg.FromBytes(data); err != nil {
 			return errors.Wrap(err, fmt.Sprintf("failed to depolarise ics_success message from %s", sender))
@@ -123,10 +125,10 @@ func (k *Engine) handleInboundMsg(slot *ktypes.Slot, msg *ktypes.ICSMSG) error {
 			return errors.New("failed to retrieve public keys")
 		}
 		// update the cluster state with the latest node set's
-		clusterState.NodeSet.Nodes[ktypes.ObserverSet] = ktypes.NewNodeSet(successMsg.ObserverSet, observerPublicKeys)
-		clusterState.NodeSet.Nodes[ktypes.ObserverSet].QuorumSize = successMsg.QuorumSizes[ktypes.ObserverSet]
-		clusterState.NodeSet.Nodes[ktypes.RandomSet] = ktypes.NewNodeSet(successMsg.RandomSet, randomPublicKeys)
-		clusterState.NodeSet.Nodes[ktypes.RandomSet].QuorumSize = successMsg.QuorumSizes[ktypes.RandomSet]
+		clusterState.NodeSet.Nodes[types.ObserverSet] = types.NewNodeSet(successMsg.ObserverSet, observerPublicKeys)
+		clusterState.NodeSet.Nodes[types.ObserverSet].QuorumSize = successMsg.QuorumSizes[types.ObserverSet]
+		clusterState.NodeSet.Nodes[types.RandomSet] = types.NewNodeSet(successMsg.RandomSet, randomPublicKeys)
+		clusterState.NodeSet.Nodes[types.RandomSet].QuorumSize = successMsg.QuorumSizes[types.RandomSet]
 
 		clusterState.UpdateClusterSize()
 

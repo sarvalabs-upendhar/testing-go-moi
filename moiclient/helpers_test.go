@@ -103,7 +103,7 @@ func getIXArgsForLogicDeployment(t *testing.T) *ptypes.SendIXArgs {
 	fuelLimit, _ := new(big.Int).SetString("130D41", 16)
 
 	ixArgs := &ptypes.SendIXArgs{
-		Type:      7,
+		Type:      8,
 		FuelPrice: (*hexutil.Big)(fuelPrice),
 		FuelLimit: (*hexutil.Big)(fuelLimit),
 		Sender:    sender,

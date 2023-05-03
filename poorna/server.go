@@ -475,7 +475,7 @@ func (s *Server) discover() {
 
 	for {
 		select {
-		case <-time.After(5 * time.Second):
+		case <-time.After(3 * time.Second):
 		case <-s.ctx.Done():
 			return
 		}
@@ -1008,17 +1008,17 @@ func (s *Server) MinimumPeersCount() uint32 {
 	return uint32(minimumCount)
 }
 
-func (s *Server) GetPeers() ([]id.KramaID, error) {
+func (s *Server) GetPeers() []id.KramaID {
 	s.Peers.lock.Lock()
 	defer s.Peers.lock.Unlock()
 
 	peers := make([]id.KramaID, 0)
 
-	for _, peer := range s.Peers.peers {
-		peers = append(peers, peer.kramaID)
+	for _, peerInfo := range s.Peers.peers {
+		peers = append(peers, peerInfo.kramaID)
 	}
 
-	return peers, nil
+	return peers
 }
 
 func (pst *pubSubTopics) addTopicSet(topicName string, topicSet *TopicSet) {

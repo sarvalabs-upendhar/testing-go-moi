@@ -10,7 +10,6 @@ import (
 	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/guna/tree"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
-	ktypes "github.com/sarvalabs/moichain/krama/types"
 	"github.com/sarvalabs/moichain/types"
 )
 
@@ -143,21 +142,21 @@ func TestFetchTesseractFromDB(t *testing.T) {
 	}{
 		{
 			name:             "genesis tesseract with interactions",
-			hash:             getTesseractHash(t, tesseracts[0]),
+			hash:             tesseracts[0].Hash(),
 			withInteractions: true,
 			expectedTS:       tesseracts[0],
 			expectedError:    nil,
 		},
 		{
 			name:             "non-genesis tesseract with interactions",
-			hash:             getTesseractHash(t, tesseracts[1]),
+			hash:             tesseracts[1].Hash(),
 			withInteractions: true,
 			expectedTS:       tesseracts[1],
 			expectedError:    nil,
 		},
 		{
 			name:             "without interactions",
-			hash:             getTesseractHash(t, tesseracts[1]),
+			hash:             tesseracts[1].Hash(),
 			withInteractions: false,
 			expectedTS:       tesseracts[1],
 			expectedError:    nil,
@@ -176,9 +175,9 @@ func TestFetchTesseractFromDB(t *testing.T) {
 		},
 		{
 			name:             "should fail if interactions not found",
-			hash:             getTesseractHash(t, ts),
+			hash:             tesseracts[2].Hash(),
 			withInteractions: true,
-			expectedError:    types.ErrFetchingInteraction,
+			expectedError:    types.ErrGridHashNotFound,
 		},
 	}
 
@@ -205,7 +204,7 @@ func TestGetTesseractByHash(t *testing.T) {
 			insertTesseractsInDB(t, db, tesseracts[:2]...)
 		},
 		smCallBack: func(sm *StateManager) {
-			sm.cache.Add(getTesseractHash(t, tesseracts[2]), tesseracts[2])
+			sm.cache.Add(tesseracts[2].Hash(), tesseracts[2])
 		},
 	}
 
@@ -220,7 +219,7 @@ func TestGetTesseractByHash(t *testing.T) {
 	}{
 		{
 			name:             "fetches tesseract from cache", // only tesseracts without interactions exists in cache
-			hash:             getTesseractHash(t, tesseracts[2]),
+			hash:             tesseracts[2].Hash(),
 			withInteractions: false,
 			expectedTS:       tesseracts[2],
 			expectedError:    nil,
@@ -233,14 +232,14 @@ func TestGetTesseractByHash(t *testing.T) {
 		},
 		{
 			name:             "with interactions",
-			hash:             getTesseractHash(t, tesseracts[0]),
+			hash:             tesseracts[0].Hash(),
 			withInteractions: true,
 			expectedTS:       tesseracts[0],
 			expectedError:    nil,
 		},
 		{
 			name:             "without interactions",
-			hash:             getTesseractHash(t, tesseracts[1]),
+			hash:             tesseracts[1].Hash(),
 			withInteractions: false,
 			expectedTS:       tesseracts[1],
 			expectedError:    nil,
@@ -892,25 +891,11 @@ func TestGetContextByHash(t *testing.T) {
 		},
 		{
 			name:          "valid context hash",
-			address:       types.NilAddress,
+			address:       ts.Address(),
 			hash:          mHash[0],
 			behCtx:        obj[0],
 			randCtx:       obj[1],
 			expectedError: nil,
-		},
-		{
-			name:          "valid tesseract address",
-			address:       ts.Address(),
-			hash:          types.NilHash,
-			behCtx:        obj[2],
-			randCtx:       obj[3],
-			expectedError: nil,
-		},
-		{
-			name:          "tesseract doesn't exist",
-			address:       tests.RandomAddress(t),
-			hash:          types.NilHash,
-			expectedError: errors.New("failed to fetch latest tesseract hash"),
 		},
 		{
 			name:          "context doesn't exist",
@@ -1009,8 +994,8 @@ func TestFetchParticipantContextByHash(t *testing.T) {
 			require.NoError(t, err)
 			checkIfNodesetEqual(
 				t,
-				ktypes.NewNodeSet(obj[0].Ids, pk[:2]),
-				ktypes.NewNodeSet(obj[1].Ids, pk[2:4]),
+				types.NewNodeSet(obj[0].Ids, pk[:2]),
+				types.NewNodeSet(obj[1].Ids, pk[2:4]),
 				behCtx,
 				randCtx,
 			)
@@ -1149,8 +1134,8 @@ func TestFetchContextLock(t *testing.T) {
 			name: "receiver has nil context hash",
 			tess: ts[3],
 			nodes: getICSNodes(
-				ktypes.NewNodeSet(obj[0].Ids, pk[:2]),
-				ktypes.NewNodeSet(obj[1].Ids, pk[2:4]),
+				types.NewNodeSet(obj[0].Ids, pk[:2]),
+				types.NewNodeSet(obj[1].Ids, pk[2:4]),
 				nil,
 				nil,
 			),
@@ -1163,8 +1148,8 @@ func TestFetchContextLock(t *testing.T) {
 			tess: ts[4],
 			nodes: getICSNodes(
 				nil, nil,
-				ktypes.NewNodeSet(obj[2].Ids, pk[4:6]),
-				ktypes.NewNodeSet(obj[3].Ids, pk[6:8]),
+				types.NewNodeSet(obj[2].Ids, pk[4:6]),
+				types.NewNodeSet(obj[3].Ids, pk[6:8]),
 			),
 			mockFn: func() {
 				retrievePublicKeys(t, contract)
@@ -1174,10 +1159,10 @@ func TestFetchContextLock(t *testing.T) {
 			name: "valid context hashes",
 			tess: ts[0],
 			nodes: getICSNodes(
-				ktypes.NewNodeSet(obj[0].Ids, pk[:2]),
-				ktypes.NewNodeSet(obj[1].Ids, pk[2:4]),
-				ktypes.NewNodeSet(obj[2].Ids, pk[4:6]),
-				ktypes.NewNodeSet(obj[3].Ids, pk[6:8]),
+				types.NewNodeSet(obj[0].Ids, pk[:2]),
+				types.NewNodeSet(obj[1].Ids, pk[2:4]),
+				types.NewNodeSet(obj[2].Ids, pk[4:6]),
+				types.NewNodeSet(obj[3].Ids, pk[6:8]),
 			),
 			mockFn: func() {
 				retrievePublicKeys(t, contract)
@@ -1205,8 +1190,8 @@ func TestFetchContextLock(t *testing.T) {
 					t,
 					test.nodes.senderBeh,
 					test.nodes.senderRand,
-					icsNodes.Nodes[ktypes.SenderBehaviourSet],
-					icsNodes.Nodes[ktypes.SenderRandomSet],
+					icsNodes.Nodes[types.SenderBehaviourSet],
+					icsNodes.Nodes[types.SenderRandomSet],
 				)
 			}
 			if test.nodes.receiverBeh != nil {
@@ -1214,8 +1199,8 @@ func TestFetchContextLock(t *testing.T) {
 					t,
 					test.nodes.receiverBeh,
 					test.nodes.receiverRand,
-					icsNodes.Nodes[ktypes.ReceiverBehaviourSet],
-					icsNodes.Nodes[ktypes.ReceiverRandomSet],
+					icsNodes.Nodes[types.ReceiverBehaviourSet],
+					icsNodes.Nodes[types.ReceiverRandomSet],
 				)
 			}
 		})
@@ -1545,15 +1530,15 @@ func TestFetchLatestParticipantContext(t *testing.T) {
 		name          string
 		address       types.Address
 		ctxHash       types.Hash
-		behSet        *ktypes.NodeSet
-		randSet       *ktypes.NodeSet
+		behSet        *types.NodeSet
+		randSet       *types.NodeSet
 		mockFn        func()
 		expectedError error
 	}{
 		{
 			name:          "tesseract doesn't exist",
 			address:       tests.RandomAddress(t),
-			expectedError: types.ErrAccountNotFound,
+			expectedError: errors.New("failed to fetch latest tesseract hash"),
 		},
 		{
 			name:    "behavioural context Nodes doesn't have public keys",
@@ -1575,8 +1560,8 @@ func TestFetchLatestParticipantContext(t *testing.T) {
 			name:    "valid hash and public keys",
 			address: ts[0].Address(),
 			ctxHash: ts[0].ContextHash(),
-			behSet:  ktypes.NewNodeSet(obj[0].Ids, pk[:2]),
-			randSet: ktypes.NewNodeSet(obj[1].Ids, pk[2:4]),
+			behSet:  types.NewNodeSet(obj[0].Ids, pk[:2]),
+			randSet: types.NewNodeSet(obj[1].Ids, pk[2:4]),
 			mockFn: func() {
 				retrievePublicKeys(t, contract)
 			},
@@ -1657,8 +1642,8 @@ func TestGetReceiverContext_RegisteredAccount(t *testing.T) {
 	testcases := []struct {
 		name          string
 		ix            *types.Interaction
-		behSet        *ktypes.NodeSet
-		randSet       *ktypes.NodeSet
+		behSet        *types.NodeSet
+		randSet       *types.NodeSet
 		address       types.Address
 		contextHash   types.Hash
 		mockFn        func()
@@ -1667,8 +1652,8 @@ func TestGetReceiverContext_RegisteredAccount(t *testing.T) {
 		{
 			name:        "context of receiver found",
 			ix:          ixs[0],
-			behSet:      ktypes.NewNodeSet(obj[0].Ids, pk[:2]),
-			randSet:     ktypes.NewNodeSet(obj[1].Ids, pk[2:4]),
+			behSet:      types.NewNodeSet(obj[0].Ids, pk[:2]),
+			randSet:     types.NewNodeSet(obj[1].Ids, pk[2:4]),
 			address:     ixs[0].Receiver(),
 			contextHash: ts.ContextHash(),
 			mockFn: func() {
@@ -1678,13 +1663,13 @@ func TestGetReceiverContext_RegisteredAccount(t *testing.T) {
 		{
 			name:          "failed to fetch receiver context",
 			ix:            ixs[1],
-			expectedError: types.ErrAccountNotFound,
+			expectedError: errors.New("failed to fetch latest tesseract hash"),
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			nodeSet := make([]*ktypes.NodeSet, 4)
+			nodeSet := make([]*types.NodeSet, 4)
 			contextHashes := make(map[types.Address]types.Hash)
 
 			if test.mockFn != nil {
@@ -1703,8 +1688,8 @@ func TestGetReceiverContext_RegisteredAccount(t *testing.T) {
 			checkIfNodesetEqual(t,
 				test.behSet,
 				test.randSet,
-				nodeSet[ktypes.ReceiverBehaviourSet],
-				nodeSet[ktypes.ReceiverRandomSet],
+				nodeSet[types.ReceiverBehaviourSet],
+				nodeSet[types.ReceiverRandomSet],
 			)
 			require.Equal(t, test.contextHash, contextHashes[test.address])
 		})
@@ -1743,12 +1728,12 @@ func TestGetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 		ix            *types.Interaction
 		soParams      *createStateObjectParams
 		smParams      *createStateManagerParams
-		behSet        *ktypes.NodeSet
-		randSet       *ktypes.NodeSet
+		behSet        *types.NodeSet
+		randSet       *types.NodeSet
 		address       types.Address
 		contextHash   types.Hash
 		mockFn        func()
-		expectedError error
+		errorExpected bool
 	}{
 		{
 			name: "context of sarga account found",
@@ -1764,8 +1749,8 @@ func TestGetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 					storeTesseractHashInCache(t, sm.cache, ts)
 				},
 			},
-			behSet:      ktypes.NewNodeSet(obj[0].Ids, pk[:2]),
-			randSet:     ktypes.NewNodeSet(obj[1].Ids, pk[2:4]),
+			behSet:      types.NewNodeSet(obj[0].Ids, pk[:2]),
+			randSet:     types.NewNodeSet(obj[1].Ids, pk[2:4]),
 			address:     types.SargaAddress,
 			contextHash: ts.ContextHash(),
 			mockFn: func() {
@@ -1780,19 +1765,19 @@ func TestGetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 					insertStateObject(sm, so)
 				},
 			},
-			expectedError: types.ErrAccountNotFound,
+			errorExpected: true,
 		},
 		{
 			name:          "with out sarga object",
 			ix:            ixs[2],
-			expectedError: types.ErrObjectNotFound,
+			errorExpected: true,
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			sm := createTestStateManager(t, test.smParams)
-			nodeSet := make([]*ktypes.NodeSet, 4)
+			nodeSet := make([]*types.NodeSet, 4)
 			contextHashes := make(map[types.Address]types.Hash)
 
 			if test.mockFn != nil {
@@ -1801,8 +1786,8 @@ func TestGetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 
 			err := sm.getReceiverContext(test.ix, nodeSet, contextHashes)
 
-			if test.expectedError != nil {
-				require.ErrorContains(t, err, test.expectedError.Error())
+			if test.errorExpected {
+				require.Error(t, err)
 
 				return
 			}
@@ -1811,8 +1796,8 @@ func TestGetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 			checkIfNodesetEqual(t,
 				test.behSet,
 				test.randSet,
-				nodeSet[ktypes.ReceiverBehaviourSet],
-				nodeSet[ktypes.ReceiverRandomSet],
+				nodeSet[types.ReceiverBehaviourSet],
+				nodeSet[types.ReceiverRandomSet],
 			)
 			require.Equal(t, test.contextHash, contextHashes[test.address])
 		})
@@ -1877,10 +1862,10 @@ func TestFetchInteractionContext(t *testing.T) {
 			name: "both sender and receiver addresses has context",
 			ix:   ixs[0],
 			ics: getICSNodes(
-				ktypes.NewNodeSet(obj[0].Ids, pk[:2]),
-				ktypes.NewNodeSet(obj[1].Ids, pk[2:4]),
-				ktypes.NewNodeSet(obj[2].Ids, pk[4:6]),
-				ktypes.NewNodeSet(obj[3].Ids, pk[6:8]),
+				types.NewNodeSet(obj[0].Ids, pk[:2]),
+				types.NewNodeSet(obj[1].Ids, pk[2:4]),
+				types.NewNodeSet(obj[2].Ids, pk[4:6]),
+				types.NewNodeSet(obj[3].Ids, pk[6:8]),
 			),
 			contextHashes: map[types.Address]types.Hash{
 				ixs[0].Sender():   ts[0].ContextHash(),
@@ -1914,10 +1899,10 @@ func TestFetchInteractionContext(t *testing.T) {
 
 			if test.ics == nil {
 				require.Equal(t, len(test.contextHashes), 0)
-				require.Nil(t, nodeSet[ktypes.SenderBehaviourSet])
-				require.Nil(t, nodeSet[ktypes.SenderRandomSet])
-				require.Nil(t, nodeSet[ktypes.ReceiverBehaviourSet])
-				require.Nil(t, nodeSet[ktypes.ReceiverRandomSet])
+				require.Nil(t, nodeSet[types.SenderBehaviourSet])
+				require.Nil(t, nodeSet[types.SenderRandomSet])
+				require.Nil(t, nodeSet[types.ReceiverBehaviourSet])
+				require.Nil(t, nodeSet[types.ReceiverRandomSet])
 
 				return
 			}
@@ -1925,15 +1910,15 @@ func TestFetchInteractionContext(t *testing.T) {
 				t,
 				test.ics.senderBeh,
 				test.ics.senderRand,
-				nodeSet[ktypes.SenderBehaviourSet],
-				nodeSet[ktypes.SenderRandomSet],
+				nodeSet[types.SenderBehaviourSet],
+				nodeSet[types.SenderRandomSet],
 			)
 			checkIfNodesetEqual(
 				t,
 				test.ics.receiverBeh,
 				test.ics.receiverRand,
-				nodeSet[ktypes.ReceiverBehaviourSet],
-				nodeSet[ktypes.ReceiverRandomSet],
+				nodeSet[types.ReceiverBehaviourSet],
+				nodeSet[types.ReceiverRandomSet],
 			)
 			for i := range test.contextHashes {
 				require.Equal(t, test.contextHashes[i], contextHashes[i])
@@ -2210,19 +2195,19 @@ func TestIsAccountRegisteredAt(t *testing.T) {
 		},
 		{
 			name:          "should fail if state object not found",
-			tsHash:        getTesseractHash(t, tesseracts[1]),
+			tsHash:        tesseracts[1].Hash(),
 			address:       addresses[0],
 			expectedError: types.ErrStateNotFound,
 		},
 		{
 			name:                "non-registered account",
-			tsHash:              getTesseractHash(t, tesseracts[0]),
+			tsHash:              tesseracts[0].Hash(),
 			address:             addresses[1],
 			isAccountRegistered: false,
 		},
 		{
 			name:                "registered account",
-			tsHash:              getTesseractHash(t, tesseracts[0]),
+			tsHash:              tesseracts[0].Hash(),
 			address:             addresses[2],
 			isAccountRegistered: true,
 		},

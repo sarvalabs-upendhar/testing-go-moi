@@ -1,29 +1,25 @@
 package syncer
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"log"
-	"math/big"
 	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/libp2p/go-msgio"
-
 	"github.com/hashicorp/go-hclog"
-	"github.com/libp2p/go-libp2p/core/network"
-	"github.com/libp2p/go-libp2p/core/peer"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
-
+	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/dhruva"
 	"github.com/sarvalabs/moichain/dhruva/db"
 	"github.com/sarvalabs/moichain/guna"
-	"github.com/sarvalabs/moichain/guna/senatus"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/poorna"
 	"github.com/sarvalabs/moichain/poorna/agora"
@@ -33,48 +29,32 @@ import (
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 	"github.com/sarvalabs/moichain/utils"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
-	SyncRPCProtocol    = protocol.ID("moi/rpc/sync")
-	SyncStreamProtocol = protocol.ID("moi/stream/sync")
+	SyncRPCProtocol       = protocol.ID("moi/rpc/sync")
+	TesseractTopic        = "MOI_PUBSUB_TESSERACT"
+	MaxBucketSyncAttempts = 3
+	ChannelBufferSize     = 10
+	TesseractFetchTimeOut = 15 * time.Second
 )
-
-const (
-	slotSize   int   = 40
-	bucketSize int32 = 1024
-)
-
-const syncerMoirpcStreamTTL = time.Duration(10) * time.Minute
-
-type Response struct {
-	Status string      `json:"status,omitempty"`
-	Data   interface{} `json:"data"`
-}
-
-type SyncJob struct {
-	address types.Address
-	hash    types.Hash
-	peer    *SyncPeer
-	mode    string
-}
-type TesseractSyncJob struct {
-	tesseract    *types.Tesseract
-	clusterInfo  *ptypes.ICSClusterInfo
-	fetchContext []id.KramaID
-}
 
 type lattice interface {
-	AddTesseractWithOutState(
-		ts *types.Tesseract,
-		sender id.KramaID,
-		ics *ptypes.ICSClusterInfo,
-	) error
-	AddSyncedTesseract(
-		clusterInfo *ptypes.ICSClusterInfo,
-		tesseracts ...*types.Tesseract,
-	) error
+	ExecuteAndValidate(ts ...*types.Tesseract) error
+	AddTesseracts(dirtyStorage map[types.Hash][]byte, tesseracts ...*types.Tesseract) error
 	GetTesseract(hash types.Hash, withInteractions bool) (*types.Tesseract, error)
+	GetTesseractByHeight(
+		address types.Address,
+		height uint64,
+		withInteractions bool,
+	) (*types.Tesseract, error)
+	ValidateTesseract(ts *types.Tesseract, ics *types.ICSNodeSet) error
+	FetchICSNodeSet(
+		ts *types.Tesseract,
+		info *types.ICSClusterInfo,
+	) (*types.ICSNodeSet, error)
+	IsInitialTesseract(ts *types.Tesseract) (bool, error)
 }
 
 type state interface {
@@ -91,6 +71,16 @@ type state interface {
 		addr types.Address,
 		accType types.AccountType,
 	) *guna.StateObject
+	GetParticipantContextRaw(
+		address types.Address,
+		hash types.Hash,
+		rawContext map[types.Hash][]byte,
+	) error
+	GetICSNodeSetFromRawContext(
+		ts *types.Tesseract,
+		rawContext map[types.Hash][]byte,
+		clusterInfo *types.ICSClusterInfo,
+	) (*types.ICSNodeSet, error)
 }
 
 type store interface {
@@ -101,60 +91,66 @@ type store interface {
 	Contains([]byte) (bool, error)
 	DeleteEntry([]byte) error
 	SetAccount(addr types.Address, stateHash types.Hash, data []byte) error
-	GetAccountMetaInfo(id []byte) (*types.AccountMetaInfo, error)
-	GetAccounts(bucketID int32) (types.Accounts, error)
-	GetBucketSizes() (map[int32]*big.Int, error)
+	GetInteractions(gridHash types.Hash) ([]byte, error)
+	GetAccountMetaInfo(id types.Address) (*types.AccountMetaInfo, error)
 	UpdateTesseractStatus(addr types.Address, height uint64, tsHash types.Hash, status bool) error
-}
-
-type SyncPeer struct {
-	id     peer.ID
-	status *Status
-	rw     *bufio.ReadWriter
-	con    network.Conn
-}
-
-type Status struct {
-	Accounts    *big.Int // potential memory leak
-	bucketSizes sync.Map
-	Ntq         float32
+	SetAccountSyncStatus(address types.Address, status *types.AccountSyncStatus) error
+	CleanupAccountSyncStatus(address types.Address) error
+	StoreAccountSnapShot(snap *types.Snapshot) error
+	GetReceipts(gridHash types.Hash) ([]byte, error)
+	GetAccountsSyncStatus() ([]*types.AccountSyncStatus, error)
+	DropPrefix(prefix []byte) error
+	UpdatePrimarySyncStatus(address types.Address) error
+	IsAccountPrimarySyncDone(address types.Address) bool
+	HasTesseract(tsHash types.Hash) bool
+	UpdatePrincipalSyncStatus() error
+	GetBucketCount(bucketNumber uint64) (uint64, error)
+	StreamAccountMetaInfosRaw(ctx context.Context, bucketNumber uint64, response chan []byte) error
+	GetRecentUpdatedAccMetaInfosRaw(ctx context.Context, bucketID uint64, sinceTS uint64) ([][]byte, error)
+	IsPrincipalSyncDone() (bool, int64)
+	GetAccountSnapshot(
+		ctx context.Context,
+		address types.Address,
+		sinceTS uint64,
+	) (*types.Snapshot, error)
 }
 
 type Syncer struct {
-	ctx              context.Context
-	node             *poorna.Server
-	mux              *utils.TypeMux
-	status           *Status
-	peers            sync.Map
-	peerCount        uint32
-	agora            *agora.Agora
-	db               store
-	reqQueue         chan *SyncJob
-	reqQueue1        chan *TesseractSyncJob
-	wrkResults       chan interface{}
-	accDetails       *AccDetailsQueue
-	tesseractSub     *utils.Subscription
-	statusSub        *utils.Subscription
-	newpeerSub       *utils.Subscription
-	mode             string
-	rpcClient        *moirpc.Client
-	lattice          lattice
-	state            state
-	logger           hclog.Logger
-	ReputationEngine *senatus.ReputationEngine
-	ntqtablesynconce sync.Once
+	cfg                 *common.SyncerConfig
+	ctx                 context.Context
+	network             *poorna.Server
+	mux                 *utils.TypeMux
+	gridStore           *GridStore
+	agora               *agora.Agora
+	db                  store
+	tesseractRegistry   *types.HashRegistry
+	jobQueue            *JobQueue
+	rpcClient           *moirpc.Client
+	lattice             lattice
+	state               state
+	logger              hclog.Logger
+	workerLock          sync.Mutex
+	jobWorkerCount      uint32
+	workerSignal        chan struct{}
+	isPrincipalSyncDone bool
+	isBucketSyncDone    bool
+	pendingAccounts     uint64
+	consensusSlots      *ktypes.Slots
+	lastActiveTimeStamp uint64
 }
 
 func NewSyncer(
 	ctx context.Context,
+	cfg *common.SyncerConfig,
+	logger hclog.Logger,
 	node *poorna.Server,
 	mux *utils.TypeMux,
 	db store,
-	mode string,
 	lattice lattice,
 	sm state,
-	logger hclog.Logger,
 	metrics *agora.Metrics,
+	slots *ktypes.Slots,
+	lastActiveTimeStamp uint64,
 ) (*Syncer, error) {
 	agoraInstance, err := agora.NewAgora(ctx, logger, db, node, metrics)
 	if err != nil {
@@ -162,455 +158,1098 @@ func NewSyncer(
 	}
 
 	s := &Syncer{
-		ctx:        ctx,
-		node:       node,
-		mux:        mux,
-		agora:      agoraInstance,
-		db:         db,
-		mode:       mode,
-		lattice:    lattice,
-		state:      sm,
-		peerCount:  0,
-		logger:     logger.Named("Syncer"),
-		reqQueue:   make(chan *SyncJob),
-		reqQueue1:  make(chan *TesseractSyncJob),
-		wrkResults: make(chan interface{}),
-		accDetails: new(AccDetailsQueue),
-		status: &Status{
-			Accounts: big.NewInt(0),
+		ctx:            ctx,
+		network:        node,
+		cfg:            cfg,
+		mux:            mux,
+		agora:          agoraInstance,
+		db:             db,
+		lattice:        lattice,
+		state:          sm,
+		jobWorkerCount: 10,
+		jobQueue: &JobQueue{
+			jobs: make(map[types.Address]*SyncJob),
 		},
-	}
-
-	if err := s.RegisterRPCService(); err != nil {
-		return nil, err
+		gridStore:           NewGridStore(),
+		logger:              logger.Named("Syncer"),
+		workerSignal:        make(chan struct{}),
+		tesseractRegistry:   types.NewHashRegistry(60),
+		consensusSlots:      slots,
+		lastActiveTimeStamp: lastActiveTimeStamp,
 	}
 
 	return s, nil
 }
 
-func (s *Syncer) RegisterRPCService() error {
-	s.rpcClient = s.node.StartNewRPCServer(SyncRPCProtocol)
-
-	return s.node.RegisterNewRPCService(SyncRPCProtocol, "SYNCRPC", NewSyncRPCService(s))
-}
-
-func (sy *Status) updateBucketCount(id int32, v *big.Int) bool {
-	if currentValue, ok := sy.bucketSizes.Load(id); ok {
-		if currentValue, ok := currentValue.(*big.Int); ok {
-			if v.Cmp(currentValue) <= 0 {
-				return false
-			}
+func (s *Syncer) NewSyncRequest(
+	addr types.Address,
+	expectedHeight uint64,
+	syncMode types.SyncMode,
+	bestPeers []id.KramaID,
+	tesseracts ...*TesseractInfo,
+) error {
+	job, ok := s.jobQueue.getJob(addr)
+	if job == nil {
+		job = &SyncJob{
+			db:              s.db,
+			logger:          s.logger,
+			address:         addr,
+			mode:            syncMode,
+			tesseractQueue:  NewTesseractQueue(),
+			jobState:        Pending,
+			bestPeers:       bestPeers,
+			tesseractSignal: make(chan struct{}, 1),
 		}
 	}
 
-	sy.bucketSizes.Store(id, v)
+	metaInfo, err := s.db.GetAccountMetaInfo(addr)
+	if err == nil {
+		if metaInfo.Height >= expectedHeight {
+			_, err = s.postAdditionHook(job, metaInfo.Height)
 
-	return true
-}
-
-func (sy *Status) incrementBucketCount(id int32, v int64) {
-	currentSize, ok := sy.bucketSizes.Load(id)
-	if !ok {
-		sy.bucketSizes.Store(id, big.NewInt(v))
-	} else {
-		if currentSize, ok := currentSize.(*big.Int); ok {
-			sy.bucketSizes.Store(id, new(big.Int).Add(currentSize, big.NewInt(v)))
-		}
-	}
-}
-
-// StreamHandler handles the sync protocol streams
-func (s *Syncer) StreamHandler(stream network.Stream) {
-	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
-	remotePeer := stream.Conn().RemotePeer()
-	sp := &SyncPeer{
-		id: remotePeer,
-		rw: rw,
-		status: &Status{
-			Accounts: big.NewInt(0),
-			Ntq:      1,
-		},
-		con: stream.Conn(),
-	}
-
-	if _, ok := s.peers.Load(remotePeer); !ok {
-		s.peers.Store(remotePeer, sp)
-		atomic.AddUint32(&s.peerCount, 1)
-
-		go s.handleSyncPeer(sp)
-
-		s.logger.Info("[StreamHandler]", "Current Peer Count", atomic.LoadUint32(&s.peerCount))
-	}
-
-	msg := &ptypes.AccountsStatusMsg{
-		TotalAccounts: s.status.Accounts.Bytes(), // FIXME: Race at status
-		BucketSizes:   make(map[int32][]byte),
-		NTQ:           s.status.Ntq,
-	}
-
-	dbBuckets, err := s.db.GetBucketSizes()
-	if err != nil {
-		log.Panicln(err)
-	}
-
-	for k, v := range dbBuckets {
-		msg.BucketSizes[k] = v.Bytes()
-	}
-
-	peerInfo := s.node.Peers.Peer(remotePeer)
-	if peerInfo != nil {
-		resp := new(Response)
-		peerKramaID := peerInfo.GetKramaID()
-
-		if err := s.rpcClient.MoiCall(
-			peerKramaID,
-			"SYNCRPC",
-			"StatusUpdate",
-			msg,
-			resp,
-			syncerMoirpcStreamTTL); err != nil {
-			log.Println("RPC Call panic", err)
-
-			return
-		}
-	}
-}
-
-// sendAccSyncRequest sends an account sync request to the remote peer
-func (s *Syncer) sendAccSyncRequest(peer *SyncPeer) error { //nolint:unused
-	msg := &ptypes.AccountSyncRequest{
-		BulkSync: true,
-	}
-
-	log.Println("Sending account sync request to peer:", peer.id)
-
-	return peer.Send(s.node.GetKramaID(), ptypes.ACCSYNCREQ, msg)
-}
-
-// StatusUpdate is an rpc handler method used to update the status of a sync peer
-func (s *Syncer) StatusUpdate(peerID peer.ID, msg *ptypes.AccountsStatusMsg) error {
-	syncPeer, ok := s.peers.Load(peerID)
-	if !ok {
-		return errors.New("peer Not Found")
-	}
-
-	accountCount := new(big.Int).SetBytes(msg.TotalAccounts)
-	if accountCount.Cmp(s.status.Accounts) <= 0 {
-		return nil
-	}
-	// TODO: leaving NTQ
-	for k, v := range msg.BucketSizes {
-		newSize := new(big.Int).SetBytes(v)
-
-		syncPeer, ok := syncPeer.(*SyncPeer)
-		if !ok {
-			s.logger.Error("Error type assertion failed ")
+			return err
 		}
 
-		updated := syncPeer.status.updateBucketCount(k, newSize)
-		if updated {
-			syncPeer.status.Accounts = new(big.Int).Add(syncPeer.status.Accounts, newSize)
+		if job.getCurrentHeight() < metaInfo.Height {
+			job.updateCurrentHeight(metaInfo.Height)
+		}
+	}
+
+	for _, v := range tesseracts {
+		if job.tesseractQueue.Has(v.tesseract.Height()) || s.db.HasTesseract(v.tesseract.Hash()) {
+			continue
 		}
 
-		log.Println("Received bucketID", k, "Count", v, updated)
+		job.tesseractQueue.Push(v)
 	}
 
-	return nil
-}
-
-// syncBucket will send the address in the given bucket to the requested peer
-func (s *Syncer) syncBucket(bucket int32, peer *SyncPeer) error {
-	accountMetaInfos, err := s.db.GetAccounts(bucket)
-	if err != nil {
-		return err
+	if syncMode == types.FullSync && len(job.bestPeers) == 0 && len(bestPeers) == 0 {
+		_, bestPeers, err = s.findLatestHeightAndBestPeers(addr, expectedHeight)
+		if err != nil {
+			return errors.Wrap(err, "failed to find best peers for sync")
+		}
 	}
 
-	msgs := make([]*ptypes.AccountSyncResponse, 0)
-	msg := new(ptypes.AccountSyncResponse)
-	slot := int32(0)
+	job.updateBestPeers(bestPeers)
 
-	for len(accountMetaInfos) > slotSize {
-		slot++
-
-		msg.Accounts = accountMetaInfos[0:slotSize]
-		msg.Bucket = bucket
-		msg.Slot = slot
-		msgs = append(msgs, msg)
-		accountMetaInfos = accountMetaInfos[slotSize:]
-	}
-
-	slot++
-
-	msg.Accounts = accountMetaInfos
-	msg.Bucket = bucket
-	msg.Slot = slot
-	msgs = append(msgs, msg)
-
-	for _, v := range msgs {
-		if err := peer.Send(s.node.GetKramaID(), ptypes.ACCSYNCRRESP, v); err != nil {
+	if job.getExpectedHeight() < expectedHeight {
+		if err = job.updateExpectedHeight(expectedHeight); err != nil {
 			return err
 		}
 	}
 
-	return nil
-}
+	if job.tesseractQueue.Len() > 0 && job.getJobState() == Done {
+		job.updateJobState(Pending)
+	}
 
-// accSync will send the complete address space to the requested peer by dividing buckets into slots
-// and each message can have upto 40 slots
-func (s *Syncer) accSync(peerID peer.ID) error {
-	syncPeer, ok := s.peers.Load(peerID)
 	if !ok {
-		return errors.New("unable to find syncPeer")
-	}
-
-	for i := int32(0); i < bucketSize; i++ {
-		syncPeer, ok := syncPeer.(*SyncPeer)
-		if !ok {
-			s.logger.Error("Error asserting syncPeer type")
+		if err = s.jobQueue.AddJob(job); err != nil {
+			return err
 		}
 
-		if err := s.syncBucket(i, syncPeer); err != nil {
-			s.logger.Error("Error syncing bucket", "bucket id", i)
+		if err = job.commitJob(); err != nil {
+			return errors.Wrap(err, "failed to commit job")
 		}
+
+		s.signalNewJob()
 	}
 
 	return nil
 }
 
-// Send is a method of peer that emits an arbitrary proto message to the network
-// Accepts the sender id, the message type and message itself.
-func (p *SyncPeer) Send(id id.KramaID, code ptypes.MsgType, msg interface{}) error {
-	var (
-		rawData []byte
-		err     error
-	)
-
-	if msg != nil {
-		// Marshal the proto message into slice of bytes and return if an error occurs
-		rawData, err = polo.Polorize(msg)
-		if err != nil {
-			return errors.Wrap(err, "failed to polorize message payload")
-		}
-	}
-	// Create a network message proto with the bytes payload of the message to send
-	// and convert into a proto message and marshal it into into a slice of bytes
-	m := ptypes.Message{
-		MsgType: code,
-		Payload: rawData,
-		Sender:  id,
-	}
-
-	rawData, err = m.Bytes()
-	if err != nil {
-		return err
-	}
-
-	// Write the message bytes into the peer's iobuffer
-	writer := msgio.NewWriter(p.rw.Writer)
-	if _, err = writer.Write(rawData); err != nil {
-		return err
-	}
-
-	// Flush the peer's iobuffer. This will push the message to the network
-	return p.rw.Flush()
-}
-
-// handle sync peer handles the messages received from a syncPeer
-func (s *Syncer) handleSyncPeer(p *SyncPeer) {
+func (s *Syncer) worker() {
 	defer func() {
-		s.peers.Delete(p.id)
-		atomic.AddUint32(&s.peerCount, ^uint32(0))
+		s.workerLock.Lock()
+		s.jobWorkerCount--
+		s.workerLock.Unlock()
+		s.logger.Info("Closing syncer worker")
 	}()
 
-	reader := msgio.NewReader(p.rw.Reader)
-
 	for {
-		buffer, err := reader.ReadMsg()
-		if err != nil {
+		select {
+		case <-s.workerSignal:
+		case <-time.After(2 * time.Second):
+		case <-s.ctx.Done():
 			return
 		}
 
-		message := new(ptypes.Message)
-		if err := message.FromBytes(buffer); err != nil {
-			s.logger.Error("unmarshalling error", "error", err)
-
-			return
+		job := s.jobQueue.NextJob()
+		if job == nil {
+			continue
 		}
 
-		switch message.MsgType {
-		case ptypes.NTQTABLESYNCREQ:
-
-		case ptypes.NTQTABLESYNCRESP:
-		case ptypes.ACCSYNCREQ:
-			s.logger.Debug("Async message received from ", message.Sender)
-
-			accSyncReq := new(ptypes.AccountSyncRequest)
-
-			if err = accSyncReq.FromBytes(message.Payload); err != nil {
-				s.logger.Error("Error depolarizing account sync request", "error", err)
-
-				continue
-			}
-
-			if accSyncReq.BulkSync {
-				go func() {
-					if err := s.accSync(p.id); err != nil {
-						s.logger.Error("Error syncing address space", "error", err)
-					}
-				}()
-			} else {
-				go func() {
-					if err := s.syncBucket(accSyncReq.Bucket, p); err != nil {
-						s.logger.Error("Error syncing the bucket", "error", err)
-					}
-				}()
-			}
-
-		case ptypes.ACCSYNCRRESP:
-			accSyncRes := new(ptypes.AccountSyncResponse)
-
-			if err := accSyncRes.FromBytes(message.Payload); err != nil {
-				s.logger.Error("Error depolarising AccountSycResp message", "error", err)
-
-				continue
-			}
-
-			s.logger.Debug("Address space messaged received from peer", message.Sender)
-
-			s.accDetails.Push(accSyncRes.Accounts)
+		if err := s.jobProcessor(job); err != nil {
+			s.logger.Error("Error from sync job processor", err)
 		}
 	}
+}
+
+func (s *Syncer) jobClosure(job *SyncJob) error {
+	if currentState := job.getJobState(); currentState == Sleep || currentState == Done {
+		return nil
+	}
+
+	job.updateJobState(Pending)
+
+	return nil
+}
+
+func (s *Syncer) jobProcessor(job *SyncJob) error {
+	var (
+		err      error
+		bestPeer id.KramaID
+	)
+
+	s.logger.Debug("Processing new job", "addr", job.address, job.currentHeight, job.expectedHeight)
+
+	defer func() {
+		if err = s.jobClosure(job); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	if s.consensusSlots.AreAccountsActive(job.address) {
+		job.updateJobState(Sleep)
+
+		return nil
+	}
+
+	if len(job.bestPeers) > 0 {
+		randomNumber := rand.New(rand.NewSource(time.Now().UnixNano()))
+		bestPeer = job.bestPeers[randomNumber.Intn(len(job.bestPeers))]
+	} else {
+		bestPeer, err = s.chooseBestSyncPeer(job)
+		if err != nil {
+			return errors.Wrap(err, "failed to fetch best peer")
+		}
+	}
+
+	if job.mode == types.FullSync {
+		if !job.snapDownloaded && s.isSnapSyncRequired(job.address) {
+			if err = s.fetchAndStoreSnap(bestPeer, job); err != nil {
+				return err
+			}
+		}
+	}
+
+	tsInfo := job.tesseractQueue.Peek()
+	group, groupCtx := errgroup.WithContext(context.Background())
+
+	group.Go(func() error {
+		if err = s.syncLattice(groupCtx, tsInfo, job, bestPeer); err != nil {
+			return errors.Wrap(err, "failed to sync lattice")
+		}
+
+		return nil
+	})
+
+	group.Go(func() error {
+		for job.getCurrentHeight() <= job.getExpectedHeight() {
+			tsInfo = job.tesseractQueue.Peek()
+			for tsInfo == nil {
+				select {
+				case <-groupCtx.Done():
+					return groupCtx.Err()
+				case <-job.tesseractSignal:
+					tsInfo = job.tesseractQueue.Peek()
+				}
+			}
+
+			if !s.db.HasTesseract(tsInfo.tesseract.Hash()) {
+				initial, err := s.lattice.IsInitialTesseract(tsInfo.tesseract)
+				if err != nil {
+					return err
+				}
+
+				if !initial && tsInfo.tesseract.Height() != job.getCurrentHeight()+1 {
+					return fmt.Errorf("missing tesseract for %s at %d", tsInfo.tesseract.Address(), tsInfo.tesseract.Height())
+				}
+
+				isTesseractAdded, err := s.syncTesseract(tsInfo, job)
+				if err != nil {
+					job.tesseractQueue.Pop()
+
+					return err
+				}
+
+				if !isTesseractAdded {
+					job.updateJobState(Sleep)
+
+					return nil
+				}
+			}
+
+			job.tesseractQueue.Pop()
+
+			shouldExit, err := s.postAdditionHook(job, tsInfo.tesseract.Height())
+			if err != nil || shouldExit {
+				return err
+			}
+		}
+
+		return nil
+	})
+
+	/* Algorithm
+	- Check the sync mode,
+	- Check if snap sync is required
+	- Check for the snap, if not available fetch the snap
+	- Check the
+	*/
+	return group.Wait()
+}
+
+// postAdditionHook updates the status flags in the database after successful completion of the job
+func (s *Syncer) postAdditionHook(job *SyncJob, newHeight uint64) (bool, error) {
+	job.updateCurrentHeight(newHeight)
+
+	if job.getExpectedHeight() != newHeight {
+		return false, nil
+	}
+
+	job.updateJobState(Done)
+
+	if job.mode == types.FullSync {
+		if err := s.db.UpdatePrimarySyncStatus(job.address); err != nil {
+			return false, errors.Wrap(err, "failed to update account primary sync status")
+		}
+	}
+
+	if err := s.updatePrincipalSyncStatus(); err != nil {
+		return false, errors.Wrap(err, "failed to update principal sync status")
+	}
+
+	return true, nil
+}
+
+func (s *Syncer) signalNewJob() {
+	select {
+	case s.workerSignal <- struct{}{}:
+	default:
+		fmt.Println("Failed to signal new job")
+	}
+}
+
+func (s *Syncer) updatePrincipalSyncStatus() error {
+	if atomic.LoadUint64(&s.pendingAccounts) == 0 {
+		return nil
+	}
+
+	if !s.isPrincipalSyncDone {
+		atomic.AddUint64(&s.pendingAccounts, ^uint64(0))
+	}
+
+	if atomic.LoadUint64(&s.pendingAccounts) <= uint64(0) && s.isBucketSyncDone {
+		s.isPrincipalSyncDone = true
+
+		return s.db.UpdatePrincipalSyncStatus()
+	}
+
+	return nil
 }
 
 /*
-// syncLattice will fetch the latest info of an account from the bestPeer and creates a lattice sync job
-func (s *Syncer) syncLattice(addr []byte, mode string) error {
-	accDetails, err := s.store.GetAccountDetails(addr)
-	bestPeer := s.BestPeer()
-	if err != nil && grpcStatus.Code(err) != codes.NotFound {
-		return err
-	} else {
-		//Make an rpc call to the peers to get acc details
-		req := &netprotos.ACCSYNCMSG{
-			BulkSync: false,
-			Address:  addr,
-		}
-		resp := new(netprotos.AccountDetails)
-		if err := s.rpcClient.Call(bestPeer.id, "SYNCRPC", "SYNCACCINFO", req, resp); err != nil {
-			return err
-		}
-		acc := types.ProtoToAccDetails(resp)
-		bucketNo, count := s.store.AddAddress(types.Accounts{acc})
-		s.status.incrementBucketCount(bucketNo, count)
-		s.status.Accounts = new(big.Int).Add(s.status.Accounts, big.NewInt(count))
-		accDetails = &acc
-	}
-
-	s.reqQueue <- &SyncJob{
-		address: accDetails.id,
-		peer:    bestPeer,
-	}
-
-	return nil
-}
-*/
-
-// fetchData fetches the complete state information associated with the given state CID
-// this uses agora to fetch the hashes.
-func (s *Syncer) fetchData(ctx context.Context, session *session.Session, ids ...atypes.CID) error {
-	keySet := atypes.NewHashSet()
-
-	for _, cid := range ids {
-		if !cid.IsNil() {
-			if ok, err := s.db.Contains(dbKeyFromCID(session.ID(), cid)); !ok && err == nil {
-				keySet.Add(cid)
-			}
-		}
-	}
-
-	if keySet.Len() <= 0 {
-		s.logger.Debug("Returning from get blocks : keySet is empty")
-
+func (s *Syncer) cleanGridAndReleasePendingJobs(tsInfo *TesseractInfo, job *SyncJob) error {
+	if tsInfo.tesseract.GridLength() == 1 {
 		return nil
 	}
 
-	var (
-		receivedBlocksCount = 0
-		returnErr           error
-	)
+	grid := s.gridStore.GetGrid(tsInfo.tesseract.GridHash())
+	if grid == nil {
+		return errors.New("grid not found")
+	}
 
-	blocksChan := session.GetBlocks(ctx, keySet.Keys())
+	for _, ts := range grid.ts {
+		if ts.Address() == job.address {
+			continue
+		}
 
-	for block := range blocksChan {
-		if err := s.db.CreateEntry(dbKeyFromCID(session.ID(), block.GetCid()), block.GetData()); err != nil {
-			s.logger.Error("Error writing to db", "error", err)
+		pendingJob, ok := s.jobQueue.getJob(ts.Address())
+		if !ok {
+			return fmt.Errorf(" %s job not found", ts.Address())
+		}
 
-			returnErr = err
+		if err := s.releasePendingJob(pendingJob, ts); err != nil {
+			s.logger.Error("Failed to update pending job status")
+		}
+	}
+
+	s.gridStore.CleanupGrid(tsInfo.tesseract.GridHash())
+
+	return nil
+}
+
+// releasePendingJob pops the added tesseract and updates the job state
+func (s *Syncer) releasePendingJob(job *SyncJob, ts *types.Tesseract) error {
+	queuedTSInfo := job.tesseractQueue.Pop()
+	if queuedTSInfo.tesseract.Height() != ts.Height() {
+		return errors.New("height mismatch")
+	}
+
+	shouldExit, err := s.postAdditionHook(job, ts.Height())
+	if err != nil || shouldExit {
+		return err
+	}
+
+	job.updateJobState(Pending)
+
+	return nil
+}
+
+*/
+
+func (s *Syncer) findLatestHeightAndBestPeers(addr types.Address, localHeight uint64) (uint64, []id.KramaID, error) {
+	//	responses := make([]*LatestAccountInfo, 0)
+	bestPeers := make([]id.KramaID, 0)
+	maxHeight := localHeight
+
+	for _, kramaID := range s.network.GetPeers() {
+		resp := new(LatestAccountInfo)
+		if err := s.rpcClient.MoiCall(
+			kramaID,
+			"SYNCRPC",
+			"GetLatestAccountInfo",
+			addr,
+			resp,
+			time.Minute*2,
+		); err != nil {
+			s.logger.Error("Failed to fetch account latest status", "rpcError", err)
 
 			continue
 		}
 
-		receivedBlocksCount++
+		// TODO: Check if we need this
+		// responses = append(responses, resp)
+
+		if resp.Height >= maxHeight {
+			maxHeight = resp.Height
+
+			bestPeers = append(bestPeers, kramaID)
+		}
 	}
 
-	if receivedBlocksCount == keySet.Len() {
-		return nil
-	}
-
-	return returnErr
+	return maxHeight, bestPeers, nil
 }
 
-// syncContextData fetches the behavioural context and random context associated with the given hash using agora
-func (s *Syncer) syncContextData(ctx context.Context, session *session.Session, cid atypes.CID) error {
-	ok, err := s.db.Contains(dbKeyFromCID(session.ID(), cid))
-	if ok || err != nil {
+func (s *Syncer) chooseBestSyncPeer(job *SyncJob) (id.KramaID, error) {
+	var (
+		maxHeight  = job.expectedHeight
+		bestPeerID id.KramaID
+	)
+
+	if job.mode == types.LatestSync && job.tesseractQueue.Peek() != nil {
+		return job.tesseractQueue.Peek().icsNodeSet.GetNodes()[0], nil
+	}
+
+	if len(s.network.GetPeers()) == 0 {
+		return "", errors.New("empty peers list")
+	}
+
+	for _, kramaID := range s.network.GetPeers() {
+		resp := new(LatestAccountInfo)
+		if err := s.rpcClient.MoiCall(
+			kramaID,
+			"SYNCRPC",
+			"GetLatestAccountInfo",
+			job.address,
+			resp,
+			time.Minute*2,
+		); err != nil {
+			s.logger.Error("Failed to fetch account latest status", "rpcError", err)
+
+			continue
+		}
+
+		// TODO: Check if we need this
+		//	responses = append(responses, resp)
+
+		if resp.Height >= maxHeight {
+			maxHeight = resp.Height
+			bestPeerID = kramaID
+		}
+	}
+
+	return bestPeerID, nil
+}
+
+// syncSystemAccount sends a sync request for the specified address and waits for it to complete within a given time.
+// If the sync does not complete within the specified time, an error is returned.
+func (s *Syncer) syncSystemAccount(address types.Address) ([]id.KramaID, error) {
+	bestHeight, bestPeers, err := s.findLatestHeightAndBestPeers(address, 0)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to fetch best peers and height")
+	}
+
+	if err = s.NewSyncRequest(address, bestHeight, types.FullSync, bestPeers); err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(s.ctx, time.Duration(5000+(bestHeight*300))*time.Millisecond)
+	defer cancel()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(200 * time.Millisecond):
+		}
+
+		metaInfo, err := s.db.GetAccountMetaInfo(types.SargaAddress)
+		if err == nil && metaInfo.Height == bestHeight {
+			break
+		}
+	}
+
+	return bestPeers, nil
+}
+
+func (s *Syncer) initSync() error {
+	var principalSyncTimeStamp int64
+
+	for s.network.Peers.Len() < 10 {
+		time.Sleep(2 * time.Second)
+	}
+
+	s.isPrincipalSyncDone, principalSyncTimeStamp = s.db.IsPrincipalSyncDone()
+	if s.isPrincipalSyncDone {
+		s.logger.Info("Principal sync was finished at", "unix-time", principalSyncTimeStamp)
+	}
+
+	// Sync all system accounts
+	bestPeers, err := s.syncSystemAccount(types.SargaAddress)
+	if err != nil {
+		s.logger.Error("Failed to sync sarga account", "error", err)
+
 		return err
 	}
 
-	block, err := session.GetBlock(ctx, cid)
+	if err = s.loadSyncJobsFromDB(); err != nil {
+		s.logger.Error("failed to load sync jobs from db", "error", err)
+	}
+
+	return s.syncBucketsWithMaxAttempts(bestPeers, MaxBucketSyncAttempts)
+}
+
+func (s *Syncer) syncBucketsWithMaxAttempts(bestPeers []id.KramaID, maxAttempts int) error {
+	randomNumber := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	for i := 1; i < maxAttempts; i++ {
+		bestPeer := bestPeers[randomNumber.Intn(len(bestPeers))]
+		if err := s.syncBuckets(bestPeer, i); err != nil {
+			s.logger.Error("failed to sync buckets, retrying...!!!", "error", err)
+
+			continue
+		}
+
+		s.logger.Info("Bucket Sync Successful")
+
+		return nil
+	}
+
+	return errors.New("bucket sync failed")
+}
+
+/*
+func (s *Syncer) syncBucketSince(kramaID id.KramaID, sinceTs uint64) error {
+	var (
+		argsChan = make(chan *BucketSyncRequest, 1)
+		respChan = make(chan *BucketSyncResponse, ChannelBufferSize)
+	)
+
+	peerID, err := kramaID.DecodedPeerID()
+	if err != nil {
+		s.logger.Error("failed to decode peer id", "error", err)
+	}
+
+	errGrp, grpCtx := errgroup.WithContext(s.ctx)
+
+	errGrp.Go(func() error {
+		if err = s.rpcClient.Stream(grpCtx, peerID, "SYNCRPC", "SyncBucketsSince", argsChan, respChan); err != nil {
+			s.logger.Error("failed to sync buckets", "error", err)
+
+			return err
+		}
+
+		return nil
+	})
+
+	errGrp.Go(func() error {
+		defer close(argsChan)
+
+		for i := uint64(0); i < dhruva.MaxBucketCount; i++ {
+			argsChan <- &BucketSyncRequest{
+				BucketID:  i,
+				Timestamp: sinceTs,
+			}
+
+			totalEntriesInBucket := uint64(0)
+			err = func() error {
+				ctx, cancel := context.WithTimeout(grpCtx, 2*time.Second)
+				defer cancel()
+
+				for {
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					case respMsg, ok := <-respChan:
+						if !ok {
+							s.logger.Error("Response chan closed")
+
+							return nil
+						}
+
+						if i != respMsg.BucketID {
+							return errors.New("invalid bucket id")
+						}
+
+						if respMsg.BucketCount == 0 {
+							return nil
+						}
+
+						if totalEntriesInBucket == 0 {
+							totalEntriesInBucket = respMsg.BucketCount
+						}
+
+						// send the data to meta info handler
+						if err = s.handleAccountMetaInfo(respMsg.AccountMetaInfos, types.LatestSync); err != nil {
+							s.logger.Error("failed to create sync jobs from accMetaInfo", "error", err)
+
+							return err
+						}
+
+						totalEntriesInBucket -= uint64(len(respMsg.AccountMetaInfos))
+					}
+
+					if totalEntriesInBucket == 0 {
+						return nil
+					}
+				}
+			}()
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
+	return errGrp.Wait()
+}
+*/
+
+func (s *Syncer) loadSyncJobsFromDB() error {
+	var localHeight uint64
+
+	accountSyncInfos, err := s.db.GetAccountsSyncStatus()
 	if err != nil {
 		return err
 	}
 
-	metaContextObject := new(gtypes.MetaContextObject)
-	if err := metaContextObject.FromBytes(block.GetData()); err != nil {
+	for _, v := range accountSyncInfos {
+		accountMetaInfo, err := s.db.GetAccountMetaInfo(v.Address)
+		if err == nil {
+			localHeight = accountMetaInfo.Height
+		}
+
+		syncJob, err := SyncJobFromCanonicalInfo(s.logger, s.db, localHeight, v)
+		if err != nil {
+			return err
+		}
+
+		if err = s.jobQueue.AddJob(syncJob); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *Syncer) syncBuckets(kramaID id.KramaID, attempts int) error {
+	var (
+		argsChan = make(chan *BucketSyncRequest, 1)
+		respChan = make(chan *BucketSyncResponse, ChannelBufferSize)
+	)
+
+	defer func() {
+		close(argsChan)
+	}()
+
+	peerID, err := kramaID.DecodedPeerID()
+	if err != nil {
+		s.logger.Error("failed to decode peer id", "error", err)
+
 		return err
 	}
 
-	if err = s.fetchData(
-		ctx,
-		session,
-		contextCID(metaContextObject.RandomContext),
-		contextCID(metaContextObject.BehaviouralContext),
-	); err != nil {
+	errGrp, grpCtx := errgroup.WithContext(s.ctx)
+
+	errGrp.Go(func() error {
+		if err = s.rpcClient.Stream(grpCtx, peerID, "SYNCRPC", "SyncBuckets", argsChan, respChan); err != nil {
+			s.logger.Error("failed to sync buckets", "error", err)
+
+			return err
+		}
+
+		return nil
+	})
+
+	for i := uint64(0); i < dhruva.MaxBucketCount; i++ {
+		argsChan <- &BucketSyncRequest{
+			BucketID: i,
+		}
+
+		totalEntriesInBucket := uint64(0)
+
+		err = func() error {
+			for {
+				select {
+				case <-grpCtx.Done():
+					return grpCtx.Err()
+				case respMsg, ok := <-respChan:
+					if !ok {
+						return nil
+					}
+
+					if i != respMsg.BucketID {
+						s.logger.Error("Invalid bucket")
+
+						return errors.New("invalid bucket id")
+					}
+
+					if respMsg.BucketCount == 0 {
+						return nil
+					}
+
+					if totalEntriesInBucket == 0 {
+						totalEntriesInBucket = respMsg.BucketCount
+					}
+
+					// send the data to meta info handler
+					if err = s.handleAccountMetaInfo(respMsg.AccountMetaInfos, types.FullSync); err != nil {
+						s.logger.Error("failed to create sync jobs from accMetaInfo", "error", err)
+
+						return err
+					}
+
+					totalEntriesInBucket -= uint64(len(respMsg.AccountMetaInfos))
+
+					if totalEntriesInBucket == 0 {
+						return nil
+					}
+
+				case <-time.After(time.Duration(5*attempts) * time.Second):
+					return types.ErrTimeOut
+				}
+			}
+		}()
+		if err != nil {
+			return err
+		}
+	}
+
+	s.isBucketSyncDone = true
+
+	return nil
+}
+
+func (s *Syncer) handleAccountMetaInfo(data [][]byte, syncMode types.SyncMode) error {
+	acc := new(types.AccountMetaInfo)
+	for _, v := range data {
+		if err := polo.Depolorize(acc, v); err != nil {
+			return err
+		}
+
+		localMetaInfo, err := s.db.GetAccountMetaInfo(acc.Address)
+		if err == nil {
+			if localMetaInfo.Height >= acc.Height {
+				continue
+			}
+		}
+
+		atomic.AddUint64(&s.pendingAccounts, 1)
+		// TODO: Should improve this, jobQueue will consume most of the memory, if job processor is slow
+		if err = s.NewSyncRequest(
+			acc.Address,
+			acc.Height,
+			syncMode,
+			nil,
+		); err != nil {
+			s.logger.Error(
+				"Failed to add new sync request",
+				"addr", acc.Address,
+				"height", acc.Height,
+				"error", err,
+			)
+		}
+	}
+
+	return nil
+}
+
+func (s *Syncer) isSnapSyncRequired(address types.Address) bool {
+	if !s.cfg.EnableSnapSync {
+		return false
+	}
+
+	return !s.db.IsAccountPrimarySyncDone(address)
+}
+
+func (s *Syncer) fetchAndStoreSnap(bestPeer id.KramaID, job *SyncJob) error {
+	ctx, cancel := context.WithTimeout(
+		context.Background(), // TODO: Need to improve the timeouts
+		time.Duration((1000+job.getExpectedHeight())*500)*time.Millisecond,
+	)
+	defer cancel()
+
+	snap, err := s.fetchSnapShort(ctx, bestPeer, job.address, job.expectedHeight)
+	if err != nil {
+		return errors.Wrap(err, "failed to fetch snapshot")
+	}
+
+	storeErr := func() error {
+		if err = s.db.StoreAccountSnapShot(snap); err != nil {
+			return err
+		}
+
+		if err = job.updateSnap(true); err != nil {
+			return err
+		}
+
+		return nil
+	}()
+	if storeErr != nil {
+		err = s.db.DropPrefix(job.address.Bytes())
+		if err != nil {
+			panic(err) // This should never happen
+		}
+	}
+
+	return storeErr
+}
+
+func (s *Syncer) fetchSnapShort(
+	ctx context.Context,
+	peer id.KramaID,
+	address types.Address,
+	expectedHeight uint64,
+) (*types.Snapshot, error) {
+	peerID, err := peer.DecodedPeerID()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to decode peer ID")
+	}
+
+	var (
+		snapInfo *SnapMetaInfo
+		reqChan  = make(chan *SnapRequest, 1)
+		respChan = make(chan *SnapResponse, 2)
+	)
+
+	currentSnap := &types.Snapshot{
+		Prefix: address.Bytes(),
+	}
+
+	reqChan <- &SnapRequest{
+		Address: address,
+		Height:  expectedHeight,
+	}
+
+	errGrp, grpCtx := errgroup.WithContext(ctx)
+
+	errGrp.Go(func() error {
+		if err = s.rpcClient.Stream(
+			grpCtx,
+			peerID,
+			"SYNCRPC",
+			"SyncSnap",
+			reqChan,
+			respChan,
+		); err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	errGrp.Go(func() error {
+		defer close(reqChan)
+
+		for {
+			select {
+			case <-grpCtx.Done():
+				return errors.New("context expired")
+
+			case snapMsg, ok := <-respChan:
+				if !ok {
+					return errors.New("response chan closed")
+				}
+
+				if snapMsg.MetaInfo != nil && snapInfo == nil {
+					snapInfo = snapMsg.MetaInfo
+					currentSnap.CreatedAt = snapMsg.MetaInfo.CreatedAt
+					currentSnap.Entries = make([]byte, 0, snapInfo.TotalSnapSize)
+				}
+
+				currentSnap.Size += uint64(len(snapMsg.Data))
+				currentSnap.Entries = append(currentSnap.Entries, snapMsg.Data...)
+
+				log.Println("Current Snap Size", snapInfo.TotalSnapSize, currentSnap.Size)
+				if snapInfo != nil && currentSnap.Size == snapInfo.TotalSnapSize {
+					return nil
+				}
+			}
+		}
+	})
+
+	if err = errGrp.Wait(); err != nil {
+		return nil, err
+	}
+
+	return currentSnap, nil
+}
+
+func (s *Syncer) registerRPCService() error {
+	s.rpcClient = s.network.StartNewRPCServer(SyncRPCProtocol)
+
+	return s.network.RegisterNewRPCService(SyncRPCProtocol, "SYNCRPC", NewSyncRPCService(s))
+}
+
+func (s *Syncer) fromGenesis(addr types.Address, currentHeight uint64) bool {
+	if currentHeight == 0 {
+		_, err := s.db.GetAccountMetaInfo(addr)
+		if errors.Is(err, types.ErrAccountNotFound) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (s *Syncer) syncLattice(
+	ctx context.Context,
+	nextTS *TesseractInfo,
+	job *SyncJob,
+	bestPeer id.KramaID,
+) error {
+	var (
+		endHeight   = job.getExpectedHeight()
+		startHeight = job.getCurrentHeight()
+		respChan    = make(chan *ptypes.TesseractMessage, 5)
+		reqChan     = make(chan *LatticeRequest, 1)
+	)
+
+	if nextTS != nil {
+		if int64(nextTS.tesseract.Height()-(startHeight+1)) <= 0 {
+			return nil
+		}
+
+		endHeight = nextTS.tesseract.Height() - 1
+	}
+
+	peerID, err := bestPeer.DecodedPeerID()
+	if err != nil {
+		return errors.Wrap(err, "failed to decode peerID")
+	}
+
+	s.logger.Debug("Sending lattice sync request", job.address)
+
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(endHeight+10)*time.Second)
+	defer func() {
+		cancel()
+	}()
+
+	fromGenesis := s.fromGenesis(job.address, job.getCurrentHeight())
+	if !fromGenesis {
+		startHeight++
+	}
+
+	grp, grpCtx := errgroup.WithContext(ctx)
+
+	grp.Go(func() error {
+		reqChan <- &LatticeRequest{
+			Address:     job.address,
+			StartHeight: startHeight,
+			EndHeight:   endHeight,
+		}
+
+		s.logger.Debug(
+			"Fetching tesseract",
+			"from", peerID,
+			"for", job.address,
+			"start-height", startHeight,
+			"end-height", endHeight,
+		)
+
+		if err = s.rpcClient.Stream(
+			grpCtx,
+			peerID,
+			"SYNCRPC",
+			"FetchLattice",
+			reqChan,
+			respChan,
+		); err != nil {
+			s.logger.Error("Lattice fetch failed", "error", err)
+
+			return err
+		}
+
+		return nil
+	})
+
+	grp.Go(func() error {
+		defer close(reqChan)
+		for {
+			select {
+			case <-grpCtx.Done():
+				return grpCtx.Err()
+
+			case msg, ok := <-respChan:
+				if !ok {
+					return errors.New("receiver channel closed")
+				}
+
+				if job.tesseractQueue.Has(msg.Tesseract.Height()) {
+					continue
+				}
+
+				tsInfo, err := s.tesseractInfoFromTesseractMsg(msg)
+				if err != nil {
+					s.logger.Error("failed to parse tesseract info from msg", "error", err)
+
+					continue
+				}
+
+				job.tesseractQueue.Push(tsInfo)
+				job.signalNewTesseract()
+
+				if job.getCurrentHeight() == endHeight {
+					return nil
+				}
+			}
+		}
+	})
+
+	return grp.Wait()
+}
+
+func (s *Syncer) tesseractInfoFromTesseractMsg(msg *ptypes.TesseractMessage) (*TesseractInfo, error) {
+	var err error
+
+	info := &TesseractInfo{
+		delta:         make(map[types.Hash][]byte),
+		shouldExecute: false,
+	}
+
+	info.tesseract, err = msg.GetTesseract()
+	if err != nil {
+		return nil, err
+	}
+
+	clusterInfo := new(types.ICSClusterInfo)
+
+	if !info.tesseract.ICSHash().IsNil() {
+		info.delta[info.tesseract.ICSHash()] = msg.Delta[info.tesseract.ICSHash()]
+
+		if err = polo.Depolorize(clusterInfo, info.delta[info.tesseract.ICSHash()]); err != nil {
+			return nil, err
+		}
+	}
+
+	info.icsNodeSet, err = s.state.GetICSNodeSetFromRawContext(info.tesseract, msg.Delta, clusterInfo)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to load ICSNodeSet")
+	}
+
+	return info, nil
+}
+
+func (s *Syncer) syncTesseract(msg *TesseractInfo, job *SyncJob) (bool, error) {
+	if !msg.shouldExecute {
+		err := s.lattice.ValidateTesseract(msg.tesseract, msg.icsNodeSet)
+		if err != nil {
+			return false, err
+		}
+
+		if err = s.fetchTesseractState(msg.tesseract, msg.icsNodeSet.GetNodes()); err != nil {
+			return false, errors.Wrap(err, "failed to fetch tesseract state")
+		}
+
+		if err = s.lattice.AddTesseracts(msg.delta, msg.tesseract); err != nil {
+			return false, errors.Wrap(err, "failed to add synced tesseract")
+		}
+
+		return true, nil
+	}
+
+	grid := s.gridStore.GetGrid(msg.tesseract.GridHash())
+	if grid == nil {
+		grid = s.gridStore.NewGrid(msg.tesseract.GridHash())
+	}
+
+	if !grid.HasTesseract(msg.tesseract) {
+		err := s.lattice.ValidateTesseract(msg.tesseract, msg.icsNodeSet)
+		if err != nil {
+			return false, err
+		}
+
+		grid.AddTesseract(msg.tesseract)
+	}
+
+	if !grid.IsGridComplete(msg.tesseract.GridLength()) {
+		return false, nil
+	}
+
+	grid.Lock(true)
+	execActive := grid.active
+
+	if !execActive {
+		grid.active = true
+	}
+	grid.Unlock(true)
+
+	if execActive {
+		return false, nil
+	}
+
+	defer grid.UnActive()
+
+	if err := s.executeAndAdd(msg.delta, grid); err != nil {
+		return false, err
+	}
+
+	s.gridStore.CleanupGrid(msg.tesseract.GridHash())
+
+	// if err := s.cleanGridAndReleasePendingJobs(msg, job); err != nil {
+	//	return false, err
+	//	}
+
+	return true, nil
+}
+
+func (s *Syncer) executeAndAdd(dirty map[types.Hash][]byte, grid *Grid) error {
+	if err := s.lattice.ExecuteAndValidate(grid.Tesseracts()...); err != nil {
 		return err
 	}
 
-	if err := s.db.CreateEntry(dbKeyFromCID(session.ID(), cid), block.GetData()); err != nil {
+	if err := s.lattice.AddTesseracts(dirty, grid.Tesseracts()...); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-// fetchTesseractState fetches the complete state(balance,context,approvals) of the given tesseract using bitswap
+// fetchTesseractState fetches the complete state(balance,context,approvals) of the given tesseract using agora
 func (s *Syncer) fetchTesseractState(tesseract *types.Tesseract, fetchContext []id.KramaID) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second) // TODO: Timeout duration to be optimized
+	ctx, cancel := context.WithTimeout(context.Background(), TesseractFetchTimeOut) // TODO:Optimise timeout duration
 	defer cancel()
 
 	newSession, err := s.agora.NewSession(ctx, fetchContext, tesseract.Address(), accountCID(tesseract.StateHash()))
 	if err != nil {
 		return err
 	}
-
-	block, err := newSession.GetBlock(ctx, accountCID(tesseract.StateHash()))
-	if err != nil {
-		return err
-	}
 	defer newSession.Close()
 
-	acc := new(types.Account)
-	if err = acc.FromBytes(block.GetData()); err != nil {
+	islocal, acc, block, err := s.fetchAccount(ctx, newSession, tesseract.StateHash())
+	if err != nil {
 		return err
 	}
 
@@ -618,9 +1257,8 @@ func (s *Syncer) fetchTesseractState(tesseract *types.Tesseract, fetchContext []
 		ctx,
 		newSession,
 		balanceCID(acc.Balance),
-		//	acc.StorageRoot,
 		approvalsCID(acc.AssetApprovals),
-		// tesseract.Body.ReceiptHash,
+		// receiptsCID(tesseract.GridHash()),
 	); err != nil {
 		s.logger.Error("Error fetching balance data", "error", err)
 
@@ -645,514 +1283,128 @@ func (s *Syncer) fetchTesseractState(tesseract *types.Tesseract, fetchContext []
 		return errors.Wrap(err, "failed to sync storage tree")
 	}
 
-	if err = s.db.SetAccount(tesseract.Address(), tesseract.StateHash(), block.GetData()); err != nil {
-		return err
+	if !islocal {
+		if err = s.db.SetAccount(tesseract.Address(), tesseract.StateHash(), block.GetData()); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
-// is SyncRequired checks if sync is required based on the Account count
-func (s *Syncer) isSyncRequired(bestPeer *SyncPeer) bool {
-	var isRequired bool
-
-	bestPeer.status.bucketSizes.Range(func(key, value interface{}) bool {
-		cValue, ok := s.status.bucketSizes.Load(key)
-		if !ok {
-			isRequired = true
-
-			return false
-		}
-
-		log.Printf("bucketID %d ----->> count %d", key, cValue)
-
-		if peerCount, ok := value.(*big.Int); ok {
-			if selfCount, ok := cValue.(*big.Int); ok {
-				if float64(selfCount.Uint64()) <= 0.6*float64(peerCount.Uint64()) {
-					isRequired = true
-
-					return false
-				}
-			}
-		}
-
-		return true
-	})
-
-	return isRequired
-}
-
-/*
-tesseractWorker handles the tesseract Sync Jobs, it fetches the tesseract state using agora
-and updates the state in the db accordingly
-*/
-func (s *Syncer) tesseractWorker(id int, reqQueue chan *TesseractSyncJob) {
-	for {
-		select {
-		case <-s.ctx.Done():
-			s.logger.Info("Closing tesseract worker", id)
-
-			return
-		case job, ok := <-reqQueue:
-			if !ok {
-				return
-			}
-
-			// TODO:Check whether tesseract data exists
-
-			ts := job.tesseract
-
-			s.logger.Debug(
-				"Got a new tesseract info sync JOB",
-				"address",
-				job.tesseract.Address(),
-				"height",
-				job.tesseract.Height(),
-			)
-
-			if err := s.fetchTesseractState(ts, job.fetchContext); err != nil {
-				s.logger.Error("Error fetching tesseract state", "err", err)
-
-				continue
-			}
-
-			if err := s.lattice.AddSyncedTesseract(job.clusterInfo, job.tesseract); err != nil {
-				s.logger.Error("Failed to add synced tesseract")
-
-				continue
-			}
-
-			// if err = s.db.UpdateTesseractStatus(
-			// 	ts.Address(),
-			// 	ts.Height(),
-			// 	tsHash,
-			// 	true,
-			// ); err != nil {
-			// 	s.logger.Error("Error updating the lattice status")
-
-			// 	continue
-			// }
-
-		default:
-			time.Sleep(200 * time.Millisecond)
-		}
-	}
-}
-
-// startWorkers will start latticeWorkers and tesseractWorkers 5 each, this can be configured down the line..
-func (s *Syncer) startWorkers() {
-	for i := 0; i < 5; i++ {
-		go s.latticeWorker(i, s.reqQueue)
-		go s.tesseractWorker(i, s.reqQueue1)
-	}
-}
-
-// handleSyncEvents handles the TesseractSyncJob created by the lattice manager
-func (s *Syncer) handleSyncEvents() {
-	for obj := range s.tesseractSub.Chan() {
-		if t, ok := obj.Data.(utils.TesseractSyncEvent); ok {
-			go func() {
-				s.reqQueue1 <- &TesseractSyncJob{tesseract: t.Tesseract, clusterInfo: t.ClusterInfo, fetchContext: t.Context}
-			}()
-		}
-	}
-}
-
-// handleStatusEvents handles the status update created by the lattice manager
-func (s *Syncer) handleStatusEvents() {
-	for obj := range s.statusSub.Chan() {
-		if t, ok := obj.Data.(utils.SyncStatusUpdate); ok {
-			s.status.incrementBucketCount(t.BucketID, t.Count)
-			s.status.Accounts = new(big.Int).Add(s.status.Accounts, big.NewInt(t.Count))
-			x, y := s.status.bucketSizes.Load(t.BucketID)
-			log.Println("after updating the status", "Bucket No", x, "Count", y)
-		}
-	}
-}
-
-// handleNewPeer opens a new stream for the sync sub protocol and makes status update call to the newly discovered peer
-func (s *Syncer) handleNewPeer() {
-	// Read events from a newpeer channel
-	for obj := range s.newpeerSub.Chan() {
-		if p, ok := obj.Data.(utils.PeerDiscoveredEvent); ok {
-			fmt.Println("Identified new peer sending sync request", p.ID)
-
-			stream, err := s.node.NewStream(s.ctx, p.ID, SyncStreamProtocol)
-			if err != nil {
-				s.logger.Error("Error opening sync stream", "error", err)
-
-				continue
-			}
-
-			rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
-			if err = rw.WriteByte(1); err != nil {
-				s.logger.Error("Error writing the message", "error", err)
-
-				continue
-			}
-
-			if err := rw.Flush(); err != nil {
-				s.logger.Error("Error writing the message", "error", err)
-
-				continue
-			}
-
-			sp := &SyncPeer{
-				id: p.ID,
-				rw: rw,
-				status: &Status{
-					Accounts: big.NewInt(0),
-					Ntq:      1,
-				},
-				con: stream.Conn(),
-			}
-
-			s.peers.Store(p.ID, sp)
-
-			go s.handleSyncPeer(sp)
-
-			atomic.AddUint32(&s.peerCount, 1)
-
-			r := rand.Intn(500)
-			time.Sleep(time.Duration(r) * time.Millisecond)
-
-			msg := &ptypes.AccountsStatusMsg{
-				TotalAccounts: s.status.Accounts.Bytes(),
-				BucketSizes:   make(map[int32][]byte),
-				NTQ:           s.status.Ntq,
-			}
-
-			dbBuckets, err := s.db.GetBucketSizes()
-			if err != nil {
-				log.Panicln(err)
-			}
-
-			for k, v := range dbBuckets {
-				msg.BucketSizes[k] = v.Bytes()
-			}
-
-			peerInfo := s.node.Peers.Peer(p.ID)
-			if peerInfo != nil {
-				resp := new(Response)
-				peerKramaID := peerInfo.GetKramaID()
-
-				if err := s.rpcClient.MoiCall(
-					peerKramaID,
-					"SYNCRPC",
-					"StatusUpdate",
-					msg, resp,
-					time.Duration(10)*time.Minute); err != nil {
-					log.Println("RPC Call panic", err)
-				}
-			}
-		}
-	}
-}
-
-// Start  starts all event handlers and workers associated with sync sub protocol
-func (s *Syncer) Start() {
-	s.agora.Start()
-
-	fmt.Println("Starting the syncer")
-	s.node.SetupStreamHandler(SyncStreamProtocol, s.StreamHandler)
-	s.tesseractSub = s.mux.Subscribe(utils.TesseractSyncEvent{})
-	s.statusSub = s.mux.Subscribe(utils.SyncStatusUpdate{})
-	s.newpeerSub = s.mux.Subscribe(utils.PeerDiscoveredEvent{})
-
-	defer func() {
-		s.tesseractSub.Unsubscribe()
-		s.statusSub.Unsubscribe()
-		s.newpeerSub.Unsubscribe()
-		s.node.RemoveStreamHandler(SyncStreamProtocol)
-	}()
-
-	go s.handleStatusEvents()
-	go s.handleSyncEvents()
-	go s.handleNewPeer()
-	go s.startWorkers()
-	// update the status from store
-	if err := s.statusInit(); err != nil {
-		log.Panicln(err)
+// getBlock retrieves a block of data with the given CID from either the database or from the network using agora
+// Returns:
+// - found: a boolean value indicating whether the block was found in the database (true) or not (false).
+// - block: pointer to the retrieved block
+// - err: error if any
+func (s *Syncer) getBlock(ctx context.Context, session *session.Session, cid atypes.CID) (bool, *atypes.Block, error) {
+	data, err := s.db.ReadEntry(dbKeyFromCID(session.ID(), cid))
+	if err == nil {
+		return true, atypes.NewBlock(cid, data), nil
 	}
 
-	stop := true
-	for stop {
-		// var bestPeer *SyncPeer
-		if atomic.LoadUint32(&s.peerCount) == poorna.MinimumPeerCount {
-			bestPeer := s.BestPeer()
+	if errors.Is(err, types.ErrKeyNotFound) {
+		block, err := session.GetBlock(ctx, cid)
 
-			time.Sleep(1 * time.Second)
+		return false, block, err
+	}
 
-			s.ntqtablesynconce.Do(func() {
-				if err := bestPeer.Send(s.node.GetKramaID(), ptypes.NTQTABLESYNCREQ, nil); err != nil {
-					s.logger.Error("Error sending NTQ sync request", "error", err)
-				}
-			})
+	return false, nil, err
+}
 
-			if bestPeer.status.Accounts.Cmp(s.status.Accounts) > 0 {
-				// This following logic will be replaced with sendAccsyncReq
-				for k, v := range bestPeer.con.GetStreams() {
-					log.Println(k, v.Protocol(), v.ID(), bestPeer.id, bestPeer.id)
+// fetchAccount retrieves the account data for a given state hash from either the local database or the session,
+// and returns the account data, along with the block that contains it.
+// This also returns a bool value, indicating whether the data was found in the local database (true) or not (false).
+func (s *Syncer) fetchAccount(
+	ctx context.Context,
+	session *session.Session,
+	stateHash types.Hash,
+) (
+	bool,
+	*types.Account,
+	*atypes.Block,
+	error,
+) {
+	islocal, block, err := s.getBlock(ctx, session, accountCID(stateHash))
+	if err != nil {
+		return false, nil, nil, err
+	}
 
-					if v.Protocol() == SyncStreamProtocol {
-						msg := &ptypes.AccountSyncRequest{
-							BulkSync: true,
-						}
+	acc := new(types.Account)
+	if err = acc.FromBytes(block.GetData()); err != nil {
+		return false, nil, nil, err
+	}
 
-						rawData, err := msg.Bytes()
-						if err != nil {
-							log.Panic(errors.Wrap(err, "failed to polorize message payload"))
-						}
+	return islocal, acc, block, nil
+}
 
-						finalMsg := ptypes.Message{
-							MsgType: ptypes.ACCSYNCREQ,
-							Sender:  s.node.GetKramaID(),
-							Payload: rawData,
-						}
+// fetchData retrieves data blocks from the given session object and writes them to the database,
+// using the specified CID values as keys.
+func (s *Syncer) fetchData(ctx context.Context, session *session.Session, ids ...atypes.CID) error {
+	keySet := atypes.NewHashSet()
 
-						rawData, err = finalMsg.Bytes()
-						if err != nil {
-							log.Panic(err)
-						}
-
-						wr := bufio.NewWriter(v)
-
-						writer := msgio.NewWriter(wr)
-						if err := writer.WriteMsg(rawData); err != nil {
-							log.Panic(err)
-						}
-
-						if err := wr.Flush(); err != nil {
-							log.Panic(err)
-						}
-					}
-				}
-
-				stop = false
+	for _, cid := range ids {
+		if !cid.IsNil() {
+			if ok, err := s.db.Contains(dbKeyFromCID(session.ID(), cid)); !ok && err == nil {
+				keySet.Add(cid)
 			}
 		}
 	}
 
-	go func() {
-		for {
-			select {
-			case <-time.After(60 * time.Second):
-			case <-s.ctx.Done():
-				return
-			}
+	if keySet.Len() == 0 {
+		s.logger.Debug("Returning from get blocks : keySet is empty")
 
-			bestPeer := s.BestPeer()
-			if bestPeer == nil {
-				continue
-			}
-
-			if s.isSyncRequired(bestPeer) {
-				for i := 0; i < s.accDetails.Len(); i++ {
-					accInfo, err := s.accDetails.Pop()
-					if err != nil {
-						log.Panic(err)
-					}
-
-					log.Printf("Syncing lattice of account %s \n", accInfo.Address.Hex())
-
-					s.reqQueue <- &SyncJob{
-						address: accInfo.Address,
-						peer:    bestPeer,
-						hash:    accInfo.TesseractHash,
-						mode:    s.mode,
-					}
-				}
-			} else {
-				log.Println("sync not required ")
-			}
-		}
-	}()
-}
-
-// latticeWorker recursively sync the complete tesseract lattice from the best peer using RPC
-func (s *Syncer) latticeWorker(id int, job <-chan *SyncJob) {
-	for {
-		select {
-		case <-s.ctx.Done():
-			s.logger.Info("Closing lattice worker")
-
-			return
-		case job, ok := <-job:
-			if !ok {
-				return
-			}
-
-			if job.mode == "full" {
-				exists, err := s.db.Contains(job.hash.Bytes())
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				hash := job.hash
-				tesseractStack := new(types.TesseractStack)
-
-				for !exists {
-					log.Println(" Lattice Sync Job Received of address ", job.address.Hex(), "Hash", hash)
-
-					t, delta, err := s.getTesseract(job.peer, hash, nil, true)
-					if err != nil {
-						s.logger.Error("Unable to fetch tesseract", "hash", hash, "from", job.peer.id)
-
-						return
-					} else {
-						tesseractStack.Push(&types.Item{Tesseract: t, Delta: delta, Sender: "job.peer"}) // FIXME:
-					}
-
-					if !t.PrevHash().IsNil() {
-						exists, err = s.db.Contains(t.PrevHash().Bytes())
-						if err != nil {
-							s.logger.Error("Unable to fetch previous tesseract", "hash", hash)
-
-							return
-						}
-
-						hash = t.PrevHash()
-					} else {
-						exists = true
-					}
-				}
-
-				stackSize := tesseractStack.Len()
-				for i := 0; i < int(stackSize); i++ {
-					item := tesseractStack.Pop()
-
-					tsHash, err := item.Tesseract.Hash()
-					if err != nil {
-						log.Fatal("Error creating tesseract hash", err)
-					}
-
-					log.Printf("Adding %s tesseract to lattice %v", item.Tesseract.Address().Hex(), tsHash)
-
-					icsClusterInfo := new(ptypes.ICSClusterInfo)
-					if err := icsClusterInfo.FromBytes(
-						item.Delta[item.Tesseract.ICSHash()],
-					); err != nil {
-						s.logger.Error("Error depolarising ics cluster Info", "err", err)
-
-						continue
-					}
-
-					if err := s.lattice.AddTesseractWithOutState(
-						item.Tesseract,
-						item.Sender,
-						icsClusterInfo,
-					); err != nil {
-						log.Fatal("Unable to add tesseract", err)
-					}
-				}
-			} else {
-				if t, delta, err := s.getTesseract(job.peer, job.hash, nil, true); err != nil {
-					log.Printf("Unable to get tesseract %s from %s Error %s", job.peer.id, job.hash, err)
-				} else {
-					icsClusterInfo := new(ptypes.ICSClusterInfo)
-					if err := icsClusterInfo.FromBytes(delta[t.ICSHash()]); err != nil {
-						s.logger.Error("Error depolarising ics cluster Info", "err", err)
-
-						continue
-					}
-
-					// FIXME: Fix the peer id
-					if err := s.lattice.AddTesseractWithOutState(t, "job.peer", icsClusterInfo); err != nil {
-						log.Fatal(err)
-					}
-				}
-			}
-		default:
-			time.Sleep(5 * time.Millisecond)
-		}
+		return nil
 	}
-}
 
-// BestPeer selects the best peer among the available sync peers based on the account count
-func (s *Syncer) BestPeer() *SyncPeer {
-	var bestPeer *SyncPeer
+	receivedBlocksCount := 0
 
-	s.peers.Range(func(id, peer interface{}) bool {
-		if syncPeer, ok := peer.(*SyncPeer); ok {
-			if bestPeer == nil {
-				bestPeer = syncPeer
-			} else if syncPeer.status.Accounts.Cmp(bestPeer.status.Accounts) > 0 {
-				bestPeer = syncPeer
-			}
+	blocksChan := session.GetBlocks(ctx, keySet.Keys())
+	for block := range blocksChan {
+		if err := s.db.CreateEntry(dbKeyFromCID(session.ID(), block.GetCid()), block.GetData()); err != nil {
+			s.logger.Error("Error writing to db", "error", err)
+
+			continue
 		}
 
-		return true
-	})
+		receivedBlocksCount++
+	}
 
-	return bestPeer
+	if receivedBlocksCount == keySet.Len() {
+		return nil
+	}
+
+	return errors.New("failed to fetch all keys")
 }
 
-// statusInit fetches the current status of the node and updated the in memory status
-func (s *Syncer) statusInit() error {
-	buckets, err := s.db.GetBucketSizes()
+// syncContextData fetches the behavioural context and random context associated with the given hash using agora
+func (s *Syncer) syncContextData(ctx context.Context, session *session.Session, cid atypes.CID) error {
+	islocal, block, err := s.getBlock(ctx, session, cid)
 	if err != nil {
 		return err
 	}
 
-	for k, v := range buckets {
-		s.status.bucketSizes.Store(k, v)
-		s.status.Accounts = new(big.Int).Add(s.status.Accounts, v)
+	metaContextObject := new(gtypes.MetaContextObject)
+	if err = metaContextObject.FromBytes(block.GetData()); err != nil {
+		return err
+	}
+
+	if err = s.fetchData(
+		ctx,
+		session,
+		contextCID(metaContextObject.RandomContext),
+		contextCID(metaContextObject.BehaviouralContext),
+	); err != nil {
+		return err
+	}
+
+	if !islocal {
+		if err = s.db.CreateEntry(dbKeyFromCID(session.ID(), cid), block.GetData()); err != nil {
+			return err
+		}
 	}
 
 	return nil
-}
-
-// getTesseract makes an RPC call to fetch the tesseract from best peer
-func (s *Syncer) getTesseract(
-	bestPeer *SyncPeer,
-	hash types.Hash,
-	number *big.Int,
-	withInteractions bool,
-) (*types.Tesseract, map[types.Hash][]byte, error) {
-	req := new(ptypes.TesseractReq)
-
-	log.Println("get tesseract call", hash)
-
-	if !hash.IsNil() {
-		req.Hash = hash
-	}
-
-	if number != nil {
-		req.Number = number.Uint64()
-	}
-
-	req.WithInteractions = withInteractions
-
-	resp := new(TesseractResponse)
-	peer := s.node.Peers.Peer(bestPeer.id)
-	kramaPeerID := peer.GetKramaID()
-
-	if err := s.rpcClient.MoiCall(
-		kramaPeerID,
-		"SYNCRPC",
-		"GetTesseract",
-		req,
-		resp,
-		0); err != nil {
-		return nil, nil, err
-	}
-
-	msg := new(types.Tesseract)
-
-	if err := msg.FromBytes(resp.Data); err != nil {
-		return nil, nil, err
-	}
-
-	return msg, resp.Delta, nil
-}
-
-func (s *Syncer) GetTesseract(hash types.Hash, withInteractions bool) (*types.Tesseract, error) {
-	ts, err := s.lattice.GetTesseract(hash, withInteractions)
-	if err != nil {
-		return nil, err
-	}
-
-	return ts, nil
 }
 
 func (s *Syncer) syncStorageTree(ctx context.Context, session *session.Session, newRoot types.Hash) error {
@@ -1160,12 +1412,7 @@ func (s *Syncer) syncStorageTree(ctx context.Context, session *session.Session, 
 		return nil
 	}
 
-	ok, err := s.db.Contains(dbKeyFromCID(session.ID(), storageCID(newRoot)))
-	if ok || err != nil {
-		return err
-	}
-
-	block, err := session.GetBlock(ctx, storageCID(newRoot))
+	_, block, err := s.getBlock(ctx, session, storageCID(newRoot))
 	if err != nil {
 		return err
 	}
@@ -1227,14 +1474,9 @@ func (s *Syncer) syncLogicTree(ctx context.Context, session *session.Session, ne
 		return nil
 	}
 
-	ok, err := s.db.Contains(dbKeyFromCID(session.ID(), logicCID(newRoot)))
-	if ok || err != nil {
-		return err
-	}
-
-	block, err := session.GetBlock(ctx, logicCID(newRoot))
+	_, block, err := s.getBlock(ctx, session, logicCID(newRoot))
 	if err != nil {
-		return err
+		return nil
 	}
 
 	metaLogicRoot := new(types.RootNode)
@@ -1243,6 +1485,148 @@ func (s *Syncer) syncLogicTree(ctx context.Context, session *session.Session, ne
 	}
 
 	return s.state.SyncLogicTree(session.ID(), metaLogicRoot)
+}
+
+func (s *Syncer) tesseractHandler(msg *pubsub.Message) error {
+	var (
+		tsMsg = new(ptypes.TesseractMessage)
+		err   error
+	)
+
+	if err = tsMsg.FromBytes(msg.GetData()); err != nil {
+		return err
+	}
+
+	exists := s.db.HasTesseract(tsMsg.Tesseract.Hash())
+	if exists {
+		return types.ErrAlreadyKnown
+	}
+
+	ts, err := tsMsg.GetTesseract()
+	if err != nil {
+		return err
+	}
+
+	s.logger.Trace(
+		"Tesseract Received from",
+		"Sender", tsMsg.Sender,
+		"Sealer", ts.Sealer(),
+		"Hash", ts.Hash(),
+		"Address", ts.Address(),
+	)
+
+	if !s.tesseractRegistry.Contains(ts.Hash()) {
+		s.tesseractRegistry.Add(ts.Hash())
+
+		clusterInfo := new(types.ICSClusterInfo)
+		if err = clusterInfo.FromBytes(tsMsg.Delta[ts.ICSHash()]); err != nil {
+			return err
+		}
+
+		nodeSet, err := s.lattice.FetchICSNodeSet(ts, clusterInfo)
+		if err != nil {
+			return errors.Wrap(err, "failed to fetch ICSNodeSet")
+		}
+
+		if err = s.NewSyncRequest(
+			ts.Address(),
+			ts.Height(),
+			types.LatestSync,
+			nil,
+			&TesseractInfo{
+				tesseract:     ts,
+				shouldExecute: s.cfg.ShouldExecute,
+				icsNodeSet:    nodeSet,
+				delta:         tsMsg.Delta,
+			}); err != nil {
+			s.logger.Error("Error adding sync request")
+		}
+	}
+
+	return nil
+}
+
+func (s *Syncer) getTesseractWithRawIxnsAndReceipts(
+	address types.Address,
+	height uint64,
+	withInteractions, withReceipts bool,
+) (ts *types.Tesseract, ixns, receipts []byte, err error) {
+	ts, err = s.lattice.GetTesseractByHeight(address, height, false)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	if withInteractions && !ts.InteractionHash().IsNil() {
+		ixns, err = s.db.GetInteractions(ts.GridHash())
+		if err != nil {
+			return nil, nil, nil, errors.Wrap(err, "failed to load interactions")
+		}
+	}
+
+	if withReceipts && !ts.ReceiptHash().IsNil() {
+		receipts, err = s.db.GetReceipts(ts.GridHash())
+		if err != nil {
+			return nil, nil, nil, errors.Wrap(err, "failed to load receipts")
+		}
+	}
+
+	return ts, ixns, receipts, nil
+}
+
+// Start starts all event handlers and workers associated with sync sub protocol
+func (s *Syncer) Start() error {
+	s.agora.Start()
+
+	if err := s.registerRPCService(); err != nil {
+		return err
+	}
+
+	if err := s.network.Subscribe(s.ctx, TesseractTopic, s.tesseractHandler); err != nil {
+		return err
+	}
+
+	s.startWorkers()
+
+	go func() {
+		if err := s.initSync(); err != nil {
+			s.logger.Error("Initial sync failed", "error", err)
+
+			return
+		}
+
+		s.logger.Info("Initial sync successful")
+	}()
+
+	go s.startSyncEventHandler()
+
+	return nil
+}
+
+func (s *Syncer) startSyncEventHandler() {
+	sub := s.mux.Subscribe(utils.SyncRequestEvent{})
+	defer sub.Unsubscribe()
+
+	for event := range sub.Chan() {
+		req, ok := event.Data.(utils.SyncRequestEvent)
+		if ok {
+			if err := s.NewSyncRequest(
+				req.Address,
+				req.Height,
+				types.LatestSync,
+				[]id.KramaID{req.BestPeer},
+				nil,
+			); err != nil {
+				s.logger.Error("failed to handle sync request from krama engine", "error", err)
+			}
+		}
+	}
+}
+
+// startWorkers will start the sync job workers
+func (s *Syncer) startWorkers() {
+	for i := uint32(0); i < s.jobWorkerCount; i++ {
+		go s.worker()
+	}
 }
 
 func (s *Syncer) Close() {

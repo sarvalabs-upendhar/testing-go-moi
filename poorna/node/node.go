@@ -21,6 +21,7 @@ import (
 	"github.com/sarvalabs/moichain/ixpool"
 	"github.com/sarvalabs/moichain/jug"
 	"github.com/sarvalabs/moichain/krama"
+	ktypes "github.com/sarvalabs/moichain/krama/types"
 	"github.com/sarvalabs/moichain/lattice"
 	"github.com/sarvalabs/moichain/mudra"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
@@ -48,25 +49,27 @@ type SubHandlers struct {
 }
 
 type Node struct {
-	ctx              context.Context
-	ctxCancel        context.CancelFunc
-	logger           hclog.Logger
-	cfg              *common.Config
-	eventMux         *utils.TypeMux
-	network          *poorna.Server
-	state            *guna.StateManager
-	chain            *lattice.ChainManager
-	senatus          *senatus.ReputationEngine
-	exec             *jug.ExecutionManager
-	kramaEngine      *krama.Engine
-	db               *dhruva.PersistenceManager
-	ixpool           *ixpool.IxPool
-	handlers         *SubHandlers
-	cache            *lru.Cache
-	rpc              *krpc.Server
-	nodeMetrics      *nodeMetrics
-	prometheusServer *http.Server
-	vault            *mudra.KramaVault
+	ctx                 context.Context
+	ctxCancel           context.CancelFunc
+	logger              hclog.Logger
+	cfg                 *common.Config
+	eventMux            *utils.TypeMux
+	network             *poorna.Server
+	state               *guna.StateManager
+	chain               *lattice.ChainManager
+	senatus             *senatus.ReputationEngine
+	exec                *jug.ExecutionManager
+	kramaEngine         *krama.Engine
+	db                  *dhruva.PersistenceManager
+	ixpool              *ixpool.IxPool
+	handlers            *SubHandlers
+	cache               *lru.Cache
+	rpc                 *krpc.Server
+	nodeMetrics         *nodeMetrics
+	prometheusServer    *http.Server
+	vault               *mudra.KramaVault
+	consensusSlots      *ktypes.Slots
+	lastActiveTimestamp uint64
 }
 
 func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
@@ -89,21 +92,21 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 		return nil, err
 	}
 
-	n.setupNetwork()
-
-	if err = n.network.SetupServer(); err != nil {
-		return nil, err
-	}
-
 	if err = n.setupPersistenceManager(); err != nil {
 		return nil, err
 	}
 
-	if err = n.newGenesisCheck(); err != nil {
+	if err = n.setupNetwork(); err != nil {
 		return nil, err
 	}
 
+	n.setupConsensusSlots()
 	n.setupTelemetry()
+	n.loadLatestActiveTimeStamp()
+
+	if err = n.newGenesisCheck(); err != nil {
+		return nil, err
+	}
 
 	if err = n.setupReputationEngine(); err != nil {
 		return nil, err
@@ -122,9 +125,7 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 	}
 
 	if err = n.network.StartServer(); err != nil {
-		n.logger.Error("start server", err)
-
-		return nil, err
+		return nil, errors.Wrap(err, "failed to start the p2p server")
 	}
 
 	n.setupRandomizer()
@@ -159,6 +160,10 @@ func (n *Node) GetKramaID() id.KramaID {
 	return n.network.GetKramaID()
 }
 
+func (n *Node) loadLatestActiveTimeStamp() {
+	n.lastActiveTimestamp = n.db.GetLastActiveTimeStamp()
+}
+
 // Start starts network Stream handler, network's Discovery routine, Handlers, IxPool
 // Krama engine, State manager, JSON-RPC server Chain manager
 // returns any error invoked
@@ -185,7 +190,6 @@ func (n *Node) Start() (err error) {
 
 // startJsonRPCServer start JSON-RPC server and stops node when JSON-RPC server stops
 func (n *Node) startJSONRPCServer() {
-	defer n.Stop()
 	err := n.rpc.Start()
 	n.logger.Error("JSON RPC server stopped", "error", err)
 }
@@ -205,19 +209,11 @@ func (n *Node) newGenesisCheck() error {
 		return nil
 	}
 
-	if err := n.db.Cleanup(); err != nil {
-		return err
-	}
-
 	return nil
 }
 
 // setupGenesis calls SetupGenesis method in chain if SkipGenesis is false in config
 func (n *Node) setupGenesis() (err error) {
-	if n.cfg.Chain.SkipGenesis {
-		return nil
-	}
-
 	if err = n.chain.SetupGenesis(n.cfg.Chain.GenesisFilePath); err != nil {
 		return err
 	}
@@ -235,9 +231,16 @@ func (n *Node) setupVault() (err error) {
 	return nil
 }
 
+// setupConsensusSlots creates a slots instance with the given operator and validator count
+func (n *Node) setupConsensusSlots() {
+	n.consensusSlots = ktypes.NewSlots(n.cfg.Consensus.OperatorSlotCount, n.cfg.Consensus.ValidatorSlotCount)
+}
+
 // setupServer creates new server object and setups it to node
-func (n *Node) setupNetwork() {
+func (n *Node) setupNetwork() error {
 	n.network = poorna.NewServer(n.ctx, n.logger, n.vault.KramaID(), n.eventMux, n.cfg.Network, n.vault)
+
+	return n.network.SetupServer()
 }
 
 // setupPersistenceManager creates new dhruva(db) object and setups it to node
@@ -343,6 +346,7 @@ func (n *Node) setupKramaEngine() (err error) {
 		n.ctx,
 		n.cfg.Consensus,
 		n.logger,
+		n.eventMux,
 		n.state,
 		n.network,
 		n.exec,
@@ -351,6 +355,7 @@ func (n *Node) setupKramaEngine() (err error) {
 		n.chain,
 		n.handlers.flux,
 		n.nodeMetrics.krama,
+		n.consensusSlots,
 	); err != nil {
 		return err
 	}
@@ -362,14 +367,16 @@ func (n *Node) setupKramaEngine() (err error) {
 func (n *Node) setupSyncer() (err error) {
 	if n.handlers.syncer, err = syncer.NewSyncer(
 		n.ctx,
+		n.cfg.Syncer,
+		n.logger,
 		n.network,
 		n.eventMux,
 		n.db,
-		syncMode,
 		n.chain,
 		n.state,
-		n.logger,
 		n.nodeMetrics.agora,
+		n.consensusSlots,
+		n.lastActiveTimestamp,
 	); err != nil {
 		return err
 	}
@@ -463,9 +470,9 @@ func (n *Node) Stop() {
 	n.network.Stop()
 	n.ixpool.Close()
 	n.chain.Close()
-	n.db.Close()
 	n.stopHandlers()
 	n.stopTelemetry()
+	n.db.Close()
 }
 
 func (n *Node) setupTelemetry() {
