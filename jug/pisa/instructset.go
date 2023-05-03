@@ -73,18 +73,19 @@ func BaseInstructionSet() InstructionSet {
 		SAME:   opSAME,
 		COPY:   opCOPY,
 		SWAP:   opSWAP,
+
 		// SERIAL: opSERIAL,
 		// DESERIAL: opDESERIAL,
 
 		MAKE:  opMAKE,
 		PMAKE: opPMAKE,
-		// VMAKE: opVMAKE,
+		VMAKE: opVMAKE,
 		// BMAKE: opBMAKE,
 
 		// BUILD: opBUILD,
 		THROW: opTHROW,
 		// EMIT: opEMIT,
-		// JOIN: opJOIN,
+		JOIN: opJOIN,
 
 		LT: opLT,
 		GT: opGT,
@@ -92,33 +93,34 @@ func BaseInstructionSet() InstructionSet {
 
 		BOOL: opBOOL,
 		STR:  opSTR,
-		// ADDR: opADDR,
-		// LEN: opLEN,
+		ADDR: opADDR,
+		LEN:  opLEN,
 
-		// SIZEOF: opSIZEOF,
+		SIZEOF: opSIZEOF,
 		GETFLD: opGETFLD,
 		SETFLD: opSETFLD,
 		GETIDX: opGETIDX,
 		SETIDX: opSETIDX,
 
-		// GROW: opGROW,
+		GROW: opGROW,
 		// SLICE: opSLICE,
-		// APPEND: opAPPEND,
-		// POPEND: opPOPEND,
-		// DELKEY: opDELKEY,
+		APPEND: opAPPEND,
+		POPEND: opPOPEND,
+		HASKEY: opHASKEY,
+		// MERGE: opMERGE,
 
-		// AND: opAND,
-		// OR: opOR,
+		AND: opAND,
+		OR:  opOR,
 		NOT: opNOT,
 
-		// INCR: opINCR,
-		// DECR: opDECR,
+		INCR: opINCR,
+		DECR: opDECR,
 
 		ADD: opADD,
 		SUB: opSUB,
 		MUL: opMUL,
 		DIV: opDIV,
-		// MOD: opMOD,
+		MOD: opMOD,
 
 		// BXOR: opBXOR,
 		// BAND: opBAND,
@@ -148,7 +150,7 @@ func opJUMP(scope *callscope, operands []byte) Continue {
 	// Load the pointer value from the register
 	pointer, except := scope.getPtrValue(destination)
 	if except != nil {
-		return raise(except)
+		return scope.propagate(except)
 	}
 
 	return continueJump{10, uint64(pointer)}
@@ -163,7 +165,7 @@ func opJUMPI(scope *callscope, operands []byte) Continue {
 	// Call the __bool__ method of register
 	result, except := scope.callMethodBool(regCondition)
 	if except != nil {
-		return raise(except).withConsumption(10)
+		return scope.propagate(except).withConsumption(10)
 	}
 
 	// If condition is false, no jump
@@ -174,7 +176,7 @@ func opJUMPI(scope *callscope, operands []byte) Continue {
 	// Load the pointer value from the register
 	pointer, except := scope.getPtrValue(destination)
 	if except != nil {
-		return raise(except).withConsumption(10)
+		return scope.propagate(except).withConsumption(10)
 	}
 
 	return continueJump{20, uint64(pointer)}
@@ -211,19 +213,19 @@ func opCONST(scope *callscope, operands []byte) Continue {
 	// Load the pointer value from the register
 	pointer, except := scope.getPtrValue(reg)
 	if except != nil {
-		return raise(except)
+		return scope.propagate(except)
 	}
 
 	// Get the constant from the environment
 	constant, err := scope.engine.GetConstant(engineio.ElementPtr(pointer))
 	if err != nil {
-		return raise(scope.exceptionf(ReferenceError, "constant %#v not found: %v", pointer, err))
+		return scope.raise(exceptionf(ReferenceError, "constant %#v not found: %v", pointer, err))
 	}
 
 	// Create value from the constant definition
-	constVal, err := constant.Value()
-	if err != nil {
-		return raise(scope.exception(ValueError, err.Error()))
+	constVal, except := constant.value()
+	if except != nil {
+		return scope.raise(except)
 	}
 
 	// Set the constant value into the register
@@ -233,19 +235,19 @@ func opCONST(scope *callscope, operands []byte) Continue {
 }
 
 func opLDPTR(scope *callscope, operands []byte) Continue {
-	// LDPTR[1..8] [$X: ptr][0x00]
+	// LDPTR[1..8] [$X: ptr][0x...]
 	target, ptr := operands[0], operands[1:]
 
 	// Decipher constant ID into 64-bit address
 	value, err := ptrdecode(ptr)
 	if err != nil {
-		return raise(scope.exceptionf(OverflowError, "pointer value: %v", ptr))
+		return scope.raise(exception(OverflowError, "pointer value exceeds 8 bytes"))
 	}
 
 	// Set the register value
 	scope.memory.Set(target, PtrValue(value))
 
-	return continueOk{10 + engineio.Fuel(len(ptr))}
+	return continueOk{8 + engineio.Fuel(len(ptr)*2)}
 }
 
 func opISNULL(scope *callscope, operands []byte) Continue {
@@ -269,11 +271,7 @@ func opZERO(scope *callscope, operands []byte) Continue {
 	// Retrieve the register
 	regVal := scope.memory.Get(reg)
 	// Create a new value for register type with zero data
-	newVal, err := NewRegisterValue(regVal.Type(), nil)
-	if err != nil {
-		return raise(scope.exception(ValueError, err.Error()))
-	}
-
+	newVal, _ := NewRegisterValue(regVal.Type(), nil)
 	// Set the new value to the zero value
 	scope.memory.Set(reg, newVal)
 
@@ -336,12 +334,12 @@ func opMAKE(scope *callscope, operands []byte) Continue {
 	// Load the pointer value from the register
 	pointer, except := scope.getPtrValue(reg)
 	if except != nil {
-		return raise(except)
+		return scope.propagate(except)
 	}
 
 	typedef, err := scope.engine.GetTypedef(engineio.ElementPtr(pointer))
 	if err != nil {
-		return raise(scope.exceptionf(ReferenceError, "typedef %#v not found: %v", pointer, err))
+		return scope.raise(exceptionf(ReferenceError, "typedef %#x not found: %v", pointer, err))
 	}
 
 	// Create a new default value for the typedef
@@ -358,7 +356,7 @@ func opPMAKE(scope *callscope, operands []byte) Continue {
 
 	// Check if type ID is valid
 	if typeID > MaxPrimitive {
-		return raise(scope.exceptionf(TypeError, "invalid type ID: %v", typeID))
+		return scope.raise(exceptionf(TypeError, "invalid primitive type: %#x", typeID))
 	}
 
 	// Create a datatype from the type ID
@@ -372,6 +370,43 @@ func opPMAKE(scope *callscope, operands []byte) Continue {
 	return continueOk{10}
 }
 
+func opVMAKE(scope *callscope, operands []byte) Continue {
+	// VMAKE [$X][$Y: ptr][$Z: U64]
+	out, reg, length := operands[0], operands[1], operands[2]
+
+	// Load the pointer value from the register
+	pointer, except := scope.getPtrValue(reg)
+	if except != nil {
+		return scope.propagate(except)
+	}
+
+	typedef, err := scope.engine.GetTypedef(engineio.ElementPtr(pointer))
+	if err != nil {
+		return scope.raise(exceptionf(ReferenceError, "typedef %#x not found: %v", pointer, err))
+	}
+
+	// Check that datatype is a varray
+	if typedef.Kind != VarrayType {
+		return scope.raise(exceptionf(TypeError, "typedef %#x is not a varray", pointer))
+	}
+
+	// Retrieve the register for length
+	regLen := scope.memory.Get(length)
+	// Cast the register to u64
+	size, ok := regLen.(U64Value)
+	if !ok {
+		return scope.raise(exceptionInvalidDatatype(PrimitiveU64, length))
+	}
+
+	// Create a new list with size
+	// We ignore the error because all checks have been performed
+	list, _ := newSizedList(typedef, size)
+	// Set the register value
+	scope.memory.Set(out, list)
+
+	return continueOk{10 + engineio.Fuel(5*size)}
+}
+
 func opTHROW(scope *callscope, operands []byte) Continue {
 	// THROW [$X: __throw__]
 	reg := operands[0]
@@ -382,13 +417,35 @@ func opTHROW(scope *callscope, operands []byte) Continue {
 	// Call the __throw__ method of register
 	errdata, except := scope.callMethodThrow(regVal)
 	if except != nil {
-		return raise(except).withConsumption(10)
+		return scope.propagate(except).withConsumption(10)
 	}
 
 	// Create the custom exception object
-	except = scope.exception(CustomExceptionClass{regVal.Type()}, string(errdata))
+	except = exception(CustomExceptionClass{regVal.Type()}, string(errdata))
 
-	return raise(except).withConsumption(30)
+	return scope.raise(except).withConsumption(30)
+}
+
+func opJOIN(scope *callscope, operands []byte) Continue {
+	// JOIN [$X][$Y: __join__][$Z: __join__]
+	out, a, b := operands[0], operands[1], operands[2]
+
+	// Get two values of the same type
+	regA, regB, except := scope.getSymmetricValues(a, b)
+	if except != nil {
+		return scope.propagate(except)
+	}
+
+	// Execute the __join__ method
+	result, except := scope.callMethodJoin(regA, regB)
+	if except != nil {
+		return scope.propagate(except)
+	}
+
+	// Set the register
+	scope.memory.Set(out, result)
+
+	return continueOk{30}
 }
 
 func opLT(scope *callscope, operands []byte) Continue {
@@ -398,23 +455,15 @@ func opLT(scope *callscope, operands []byte) Continue {
 	// Get two values of the same type
 	regA, regB, except := scope.getSymmetricValues(a, b)
 	if except != nil {
-		return raise(except)
-	}
-
-	// Retrieve the __lt__ method for the register type
-	methodLT, ok := scope.engine.lookupMethod(regA.Type(), MethodLt)
-	if !ok {
-		return raise(scope.exceptionf(NotImplementedError, "%v does not implement __lt__", regA.Type()))
+		return scope.propagate(except)
 	}
 
 	// Execute the __lt__ method
-	outputs, except := scope.engine.run(methodLT, RegisterSet{0: regA, 1: regB})
+	result, except := scope.callMethodCompare(MethodLt, regA, regB)
 	if except != nil {
-		return raise(except.Wrap(scope.engine.callstack.head().String()))
+		return scope.propagate(except)
 	}
 
-	// Get the result from the outputs
-	result := outputs[0]
 	// Set the register
 	scope.memory.Set(out, result)
 
@@ -428,23 +477,15 @@ func opGT(scope *callscope, operands []byte) Continue {
 	// Get two values of the same type
 	regA, regB, except := scope.getSymmetricValues(a, b)
 	if except != nil {
-		return raise(except)
-	}
-
-	// Retrieve the __gt__ method for the register type
-	methodGT, ok := scope.engine.lookupMethod(regA.Type(), MethodGt)
-	if !ok {
-		return raise(scope.exceptionf(NotImplementedError, "%v does not implement __gt__", regA.Type()))
+		return scope.propagate(except)
 	}
 
 	// Execute the __gt__ method
-	outputs, except := scope.engine.run(methodGT, RegisterSet{0: regA, 1: regB})
+	result, except := scope.callMethodCompare(MethodGt, regA, regB)
 	if except != nil {
-		return raise(except.Wrap(scope.engine.callstack.head().String()))
+		return scope.propagate(except)
 	}
 
-	// Get the result from the outputs
-	result := outputs[0]
 	// Set the register
 	scope.memory.Set(out, result)
 
@@ -453,30 +494,22 @@ func opGT(scope *callscope, operands []byte) Continue {
 
 func opEQ(scope *callscope, operands []byte) Continue {
 	// EQ [$X: bool][$Y: __eq__][$Z: __eq__]
-	a, b := operands[1], operands[2]
+	out, a, b := operands[0], operands[1], operands[2]
 
 	// Get two values of the same type
 	regA, regB, except := scope.getSymmetricValues(a, b)
 	if except != nil {
-		return raise(except)
-	}
-
-	// Retrieve the __eq__ method for the register type
-	methodEQ, ok := scope.engine.lookupMethod(regA.Type(), MethodEq)
-	if !ok {
-		return raise(scope.exceptionf(NotImplementedError, "%v does not implement __eq__", regA.Type()))
+		return scope.propagate(except)
 	}
 
 	// Execute the __eq__ method
-	outputs, except := scope.engine.run(methodEQ, RegisterSet{0: regA, 1: regB})
+	result, except := scope.callMethodCompare(MethodEq, regA, regB)
 	if except != nil {
-		return raise(except.Wrap(scope.engine.callstack.head().String()))
+		return scope.propagate(except)
 	}
 
-	// Get the result from the outputs
-	result := outputs[0]
 	// Set the register
-	scope.memory.Set(operands[0], result)
+	scope.memory.Set(out, result)
 
 	return continueOk{20}
 }
@@ -491,7 +524,7 @@ func opBOOL(scope *callscope, operands []byte) Continue {
 	// Call the __bool__ method of register
 	result, except := scope.callMethodBool(regVal)
 	if except != nil {
-		return raise(except).withConsumption(10)
+		return scope.propagate(except).withConsumption(10)
 	}
 
 	// Set the register
@@ -510,11 +543,86 @@ func opSTR(scope *callscope, operands []byte) Continue {
 	// Call the __str__ method of register
 	result, except := scope.callMethodStr(regVal)
 	if except != nil {
-		return raise(except).withConsumption(10)
+		return scope.propagate(except).withConsumption(10)
 	}
 
 	// Set the register
 	scope.memory.Set(out, result)
+
+	return continueOk{20}
+}
+
+func opADDR(scope *callscope, operands []byte) Continue {
+	// ADDR [$X: address][$Y: __addr__]
+	out, reg := operands[0], operands[1]
+
+	// Retrieve the register
+	regVal := scope.memory.Get(reg)
+
+	// Call the __addr__ method of register
+	result, except := scope.callMethodAddr(regVal)
+	if except != nil {
+		return scope.propagate(except).withConsumption(10)
+	}
+
+	// Set the register
+	scope.memory.Set(out, result)
+
+	return continueOk{20}
+}
+
+func opLEN(scope *callscope, operands []byte) Continue {
+	// LEN [$X: u64][$Y: __len__]
+	out, reg := operands[0], operands[1]
+
+	// Retrieve the register
+	regVal := scope.memory.Get(reg)
+
+	// Call the __len__ method of register
+	result, except := scope.callMethodLen(regVal)
+	if except != nil {
+		return scope.propagate(except).withConsumption(10)
+	}
+
+	// Set the register
+	scope.memory.Set(out, result)
+
+	return continueOk{20}
+}
+
+func opSIZEOF(scope *callscope, operands []byte) Continue {
+	// SIZEOF [$X: u64][$Y: col/class]
+	out, reg := operands[0], operands[1]
+
+	// Retrieve the register
+	regVal := scope.memory.Get(reg)
+
+	// Check if class value has been initialized
+	if IsNullValue(regVal) {
+		return scope.raise(exceptionNullRegister(reg))
+	}
+
+	var size U64Value
+
+	switch regVal.Type().Kind {
+	case ClassType:
+		// Cast the value into a ClassValue
+		class := regVal.(*ClassValue) //nolint:forcetypeassert
+		// Get the size of the class (number of fields)
+		size = class.Size()
+
+	case MappingType, VarrayType, ArrayType:
+		// Cast the collection into a CollectionValue
+		collection := regVal.(CollectionValue) //nolint:forcetypeassert
+		// Get the size of the class (number of elements)
+		size = collection.Size()
+
+	default:
+		return scope.raise(exceptionInvalidDatatype("sizeable", reg))
+	}
+
+	// Set the register
+	scope.memory.Set(out, size)
 
 	return continueOk{20}
 }
@@ -527,15 +635,15 @@ func opGETFLD(scope *callscope, operands []byte) Continue {
 	regClass := scope.memory.Get(class)
 	// Verify that register is of ClassType
 	if regClass.Type().Kind != ClassType {
-		return raise(scope.exceptionf(ValueError, "$%v is not a class type", class))
+		return scope.raise(exceptionInvalidDatatype(ClassType, class))
 	}
 
 	// Cast the value into a ClassValue
 	classValue := regClass.(*ClassValue) //nolint:forcetypeassert
 	// Get the field value for the slot
-	fieldValue, err := classValue.Get(slot)
-	if err != nil {
-		return raise(scope.exception(AccessError, err.Error()))
+	fieldValue, except := classValue.Get(slot)
+	if except != nil {
+		return scope.propagate(except)
 	}
 
 	// Set the output register
@@ -551,21 +659,21 @@ func opSETFLD(scope *callscope, operands []byte) Continue {
 	// Retrieve the register for class and its field element
 	regClass, regElem := scope.memory.Get(class), scope.memory.Get(element)
 
-	// Check if class value has been initialized
-	if IsNullValue(regClass) {
-		return raise(scope.exception(ValueError, "nil register"))
-	}
+	//// Check if class value has been initialized
+	// if IsNullValue(regClass) {
+	//	return scope.raise(exceptionNullRegister(class))
+	// }
 
 	// Verify that register is of ClassType
 	if regClass.Type().Kind != ClassType {
-		return raise(scope.exceptionf(ValueError, "$%v is not a class type", class))
+		return scope.raise(exceptionInvalidDatatype(ClassType, class))
 	}
 
 	// Cast the value into a ClassValue
 	classValue := regClass.(*ClassValue) //nolint:forcetypeassert
 	// Set the element value to the class
-	if err := classValue.Set(slot, regElem); err != nil {
-		return raise(scope.exception(AccessError, err.Error()))
+	if except := classValue.Set(slot, regElem); except != nil {
+		return scope.propagate(except)
 	}
 
 	// Update the class register
@@ -583,15 +691,15 @@ func opGETIDX(scope *callscope, operands []byte) Continue {
 
 	// Verify that register is a Collection type
 	if !regCol.Type().Kind.IsCollection() {
-		return raise(scope.exceptionf(ValueError, "$%v is not a collection type", collection))
+		return scope.raise(exceptionInvalidDatatype("collection", collection))
 	}
 
 	// Cast the collection into a CollectionValue
 	collectionValue := regCol.(CollectionValue) //nolint:forcetypeassert
 	// Get the value from the collection
-	element, err := collectionValue.Get(regIdx)
-	if err != nil {
-		return raise(scope.exception(AccessError, err.Error()))
+	element, except := collectionValue.Get(regIdx)
+	if except != nil {
+		return scope.propagate(except)
 	}
 
 	// Set the output register
@@ -607,24 +715,189 @@ func opSETIDX(scope *callscope, operands []byte) Continue {
 	// Retrieve the register for collection, index and element
 	regCol, regIdx, regElem := scope.memory.Get(collection), scope.memory.Get(index), scope.memory.Get(element)
 
-	// Check if collection value has been initialized
-	if IsNullValue(regCol) {
-		return raise(scope.exception(ValueError, "nil register"))
-	}
+	//// Check if collection value has been initialized
+	// if IsNullValue(regCol) {
+	//	return scope.raise(exceptionNullRegister(collection))
+	// }
 
 	if !regCol.Type().Kind.IsCollection() {
-		return raise(scope.exceptionf(ValueError, "$%v is not a collection type", collection))
+		return scope.raise(exceptionInvalidDatatype("collection", collection))
 	}
 
 	// Cast the collection into a CollectionValue
 	collectionValue := regCol.(CollectionValue) //nolint:forcetypeassert
 	// Set the element value to the collection
-	if err := collectionValue.Set(regIdx, regElem); err != nil {
-		return raise(scope.exception(AccessError, err.Error()))
+	if except := collectionValue.Set(regIdx, regElem); except != nil {
+		return scope.propagate(except)
 	}
 
 	// Update the collection register
 	scope.memory.Set(collection, collectionValue)
+
+	return continueOk{20}
+}
+
+func opGROW(scope *callscope, operands []byte) Continue {
+	// GROW [$X: varray][$Y: U64]
+	varray, length := operands[0], operands[1]
+
+	// Retrieve the register for varray
+	regVarray := scope.memory.Get(varray)
+	// Check that value is of type varray
+	if regVarray.Type().Kind != VarrayType {
+		return scope.raise(exceptionInvalidDatatype(VarrayType, varray))
+	}
+
+	// Retrieve the register for length
+	regLen := scope.memory.Get(length)
+	// Cast the register to u64
+	size, ok := regLen.(U64Value)
+	if !ok {
+		return scope.raise(exceptionInvalidDatatype(PrimitiveU64, length))
+	}
+
+	// Cast into ListValue
+	list, _ := regVarray.(*ListValue)
+	// Grow the list by the given size, we don't need to check for error
+	// because we have already checked for the only possible error case.
+	_ = list.Grow(size)
+
+	return continueOk{5 + engineio.Fuel(5*size)}
+}
+
+func opAPPEND(scope *callscope, operands []byte) Continue {
+	// APPEND [$X: varray][$Y]
+	varray, element := operands[0], operands[1]
+
+	// Retrieve the register for varray and element
+	regVarray, regElem := scope.memory.Get(varray), scope.memory.Get(element)
+	// Check that value is of type varray
+	if regVarray.Type().Kind != VarrayType {
+		return scope.raise(exceptionInvalidDatatype(VarrayType, varray))
+	}
+
+	// Cast into ListValue
+	list, _ := regVarray.(*ListValue)
+	// Append the value into list. Only possible error here is invalid element type
+	if err := list.Append(regElem); err != nil {
+		return scope.raise(exception(TypeError, err.Error()))
+	}
+
+	// Update the varray register
+	scope.memory.Set(varray, regVarray)
+
+	return continueOk{20}
+}
+
+func opPOPEND(scope *callscope, operands []byte) Continue {
+	// POPEND [$X][$Y: varray]
+	out, varray := operands[0], operands[1]
+
+	// Retrieve the register for varray
+	regVarray := scope.memory.Get(varray)
+	// Check that value is of type varray
+	if regVarray.Type().Kind != VarrayType {
+		return scope.raise(exceptionInvalidDatatype(VarrayType, varray))
+	}
+
+	// Cast into ListValue
+	list, _ := regVarray.(*ListValue)
+	// Popend a value from the list. Only possible error here is empty varray
+	element, err := list.Popend()
+	if err != nil {
+		return scope.raise(exception(ValueError, err.Error()))
+	}
+
+	// Update the varray register and set popped value
+	scope.memory.Set(varray, regVarray)
+	scope.memory.Set(out, element)
+
+	return continueOk{20}
+}
+
+func opHASKEY(scope *callscope, operands []byte) Continue {
+	// HASKEY [$X: bool][$Y: map][$Z]
+	out, mapping, key := operands[0], operands[1], operands[2]
+
+	// Retrieve the mapping register
+	regMapping := scope.memory.Get(mapping)
+	// Check that value is of type mapping
+	if regMapping.Type().Kind != MappingType {
+		return scope.raise(exceptionInvalidDatatype(MappingType, mapping))
+	}
+
+	// Retrieve the key register
+	regKey := scope.memory.Get(key)
+	// Cast the mapping into a MapValue
+	mapvalue, _ := regMapping.(*MapValue)
+
+	// Check if the map has the key
+	result, except := mapvalue.Has(regKey)
+	if except != nil {
+		return scope.raise(except)
+	}
+
+	// Set the register
+	scope.memory.Set(out, result)
+
+	return continueOk{15}
+}
+
+func opAND(scope *callscope, operands []byte) Continue {
+	// AND [$X: bool][$Y: __bool__][$Y: __bool__]
+	out, a, b := operands[0], operands[1], operands[2]
+
+	// Get two values of the same type
+	regA, regB, except := scope.getSymmetricValues(a, b)
+	if except != nil {
+		return scope.propagate(except)
+	}
+
+	// Call the __bool__ method of register A
+	valueA, except := scope.callMethodBool(regA)
+	if except != nil {
+		return scope.propagate(except).withConsumption(5)
+	}
+
+	// Call the __bool__ method of register B
+	// We skip the exception check here because, A and B are symmetric
+	// If an exception was not thrown at the boolean evaluation of A, it will not be thrown here.
+	valueB, _ := scope.callMethodBool(regB)
+
+	// Perform boolean AND on bool(A) and bool(B)
+	result := valueA.And(valueB)
+	// Set the register
+	scope.memory.Set(out, result)
+
+	return continueOk{20}
+}
+
+func opOR(scope *callscope, operands []byte) Continue {
+	// OR [$X: bool][$Y: __bool__][$Y: __bool__]
+	out, a, b := operands[0], operands[1], operands[2]
+
+	// Get two values of the same type
+	regA, regB, except := scope.getSymmetricValues(a, b)
+	if except != nil {
+		return scope.propagate(except)
+	}
+
+	// Call the __bool__ method of register A
+	valueA, except := scope.callMethodBool(regA)
+	if except != nil {
+		return scope.propagate(except).withConsumption(5)
+	}
+
+	// Call the __bool__ method of register B
+	valueB, except := scope.callMethodBool(regB)
+	if except != nil {
+		return scope.propagate(except).withConsumption(10)
+	}
+
+	// Perform boolean OR on bool(A) and bool(B)
+	result := valueA.Or(valueB)
+	// Set the register
+	scope.memory.Set(out, result)
 
 	return continueOk{20}
 }
@@ -639,7 +912,7 @@ func opNOT(scope *callscope, operands []byte) Continue {
 	// Call the __bool__ method of register
 	result, except := scope.callMethodBool(regVal)
 	if except != nil {
-		return raise(except).withConsumption(10)
+		return scope.propagate(except).withConsumption(5)
 	}
 
 	// Flip the value
@@ -650,6 +923,78 @@ func opNOT(scope *callscope, operands []byte) Continue {
 	return continueOk{15}
 }
 
+func opINCR(scope *callscope, operands []byte) Continue {
+	// INCR [$X]
+	reg := operands[0]
+
+	// Retrieve the register
+	regVal := scope.memory.Get(reg)
+
+	var (
+		result RegisterValue
+		except *Exception
+	)
+
+	switch dt := regVal.Type(); dt {
+	case TypeU64:
+		// Cast register value to U64 and call Inr (check for overflow)
+		result, except = regVal.(U64Value).Incr()
+
+	case TypeI64:
+		// Cast register value to I64 and call Incr (check for overflow)
+		result, except = regVal.(I64Value).Incr()
+
+	default:
+		return scope.raise(exceptionInvalidOperationForType("increment", regVal.Type()))
+	}
+
+	// Raise an exception if overflow occurred
+	if except != nil {
+		return scope.raise(except).withConsumption(10)
+	}
+
+	// Set the register
+	scope.memory.Set(reg, result)
+
+	return continueOk{10}
+}
+
+func opDECR(scope *callscope, operands []byte) Continue {
+	// DECR [$X]
+	reg := operands[0]
+
+	// Retrieve the register
+	regVal := scope.memory.Get(reg)
+
+	var (
+		result RegisterValue
+		except *Exception
+	)
+
+	switch dt := regVal.Type(); dt {
+	case TypeU64:
+		// Cast register value to U64 and call Decr (check for overflow)
+		result, except = regVal.(U64Value).Decr()
+
+	case TypeI64:
+		// Cast register value to I64 and call Decr (check for overflow)
+		result, except = regVal.(I64Value).Decr()
+
+	default:
+		return scope.raise(exceptionInvalidOperationForType("decrement", regVal.Type()))
+	}
+
+	// Throw an exception if overflow occurred
+	if except != nil {
+		return scope.raise(except).withConsumption(10)
+	}
+
+	// Set the register
+	scope.memory.Set(reg, result)
+
+	return continueOk{10}
+}
+
 func opADD(scope *callscope, operands []byte) Continue {
 	// ADD [$X][$Y][$Z]
 	out, a, b := operands[0], operands[1], operands[2]
@@ -657,30 +1002,27 @@ func opADD(scope *callscope, operands []byte) Continue {
 	// Get two values of the same type
 	regA, regB, except := scope.getSymmetricValues(a, b)
 	if except != nil {
-		return raise(except)
+		return scope.propagate(except)
 	}
 
-	var (
-		result  RegisterValue
-		errcode ExceptionClass
-	)
+	var result RegisterValue
 
 	switch dt := regA.Type(); dt {
 	case TypeU64:
 		// Cast register values to U64 and call Add (check for overflow)
-		result, errcode = regA.(U64Value).Add(regB.(U64Value))
+		result, except = regA.(U64Value).Add(regB.(U64Value))
 
 	case TypeI64:
 		// Cast register values to I64 and call Add (check for overflow)
-		result, errcode = regA.(I64Value).Add(regB.(I64Value))
+		result, except = regA.(I64Value).Add(regB.(I64Value))
 
 	default:
-		return raise(scope.exceptionf(ValueError, "cannot add registers of type %v", regA.Type()))
+		return scope.raise(exceptionInvalidOperationForType("add", regA.Type()))
 	}
 
 	// Throw an exception if overflow occurred
-	if errcode != Ok {
-		return raise(scope.exception(errcode, "addition overflow")).withConsumption(20)
+	if except != nil {
+		return scope.raise(except).withConsumption(20)
 	}
 
 	// Set the register
@@ -696,30 +1038,27 @@ func opSUB(scope *callscope, operands []byte) Continue {
 	// Get two values of the same type
 	regA, regB, except := scope.getSymmetricValues(a, b)
 	if except != nil {
-		return raise(except)
+		return scope.propagate(except)
 	}
 
-	var (
-		result  RegisterValue
-		errcode ExceptionClass
-	)
+	var result RegisterValue
 
 	switch dt := regA.Type(); dt {
 	case TypeU64:
 		// Cast register values to U64 and call Sub (check for overflow)
-		result, errcode = regA.(U64Value).Sub(regB.(U64Value))
+		result, except = regA.(U64Value).Sub(regB.(U64Value))
 
 	case TypeI64:
 		// Cast register values to I64 and call Sub (check for overflow)
-		result, errcode = regA.(I64Value).Sub(regB.(I64Value))
+		result, except = regA.(I64Value).Sub(regB.(I64Value))
 
 	default:
-		return raise(scope.exceptionf(ValueError, "cannot sub registers of type %v", regA.Type()))
+		return scope.raise(exceptionInvalidOperationForType("subtract", regA.Type()))
 	}
 
 	// Throw an exception if overflow occurred
-	if errcode != Ok {
-		return raise(scope.exception(errcode, "subtraction overflow")).withConsumption(20)
+	if except != nil {
+		return scope.raise(except).withConsumption(20)
 	}
 
 	// Set the register
@@ -735,30 +1074,27 @@ func opMUL(scope *callscope, operands []byte) Continue {
 	// Get two values of the same type
 	regA, regB, except := scope.getSymmetricValues(a, b)
 	if except != nil {
-		return raise(except)
+		return scope.propagate(except)
 	}
 
-	var (
-		result  RegisterValue
-		errcode ExceptionClass
-	)
+	var result RegisterValue
 
 	switch dt := regA.Type(); dt {
 	case TypeU64:
 		// Cast register values to U64 and call Mul (check for overflow)
-		result, errcode = regA.(U64Value).Mul(regB.(U64Value))
+		result, except = regA.(U64Value).Mul(regB.(U64Value))
 
 	case TypeI64:
 		// Cast register values to I64 and call Mul (check for overflow)
-		result, errcode = regA.(I64Value).Mul(regB.(I64Value))
+		result, except = regA.(I64Value).Mul(regB.(I64Value))
 
 	default:
-		return raise(scope.exceptionf(ValueError, "cannot mul registers of type %v", regA.Type()))
+		return scope.raise(exceptionInvalidOperationForType("multiply", regA.Type()))
 	}
 
 	// Throw an exception if overflow occurred
-	if errcode != Ok {
-		return raise(scope.exception(errcode, "multiplication overflow")).withConsumption(30)
+	if except != nil {
+		return scope.raise(except).withConsumption(30)
 	}
 
 	// Set the register
@@ -774,30 +1110,63 @@ func opDIV(scope *callscope, operands []byte) Continue {
 	// Get two values of the same type
 	regA, regB, except := scope.getSymmetricValues(a, b)
 	if except != nil {
-		return raise(except)
+		return scope.propagate(except)
 	}
 
-	var (
-		result  RegisterValue
-		errcode ExceptionClass
-	)
+	var result RegisterValue
 
 	switch dt := regA.Type(); dt {
 	case TypeU64:
 		// Cast register values to U64 and call Div (check for error)
-		result, errcode = regA.(U64Value).Div(regB.(U64Value))
+		result, except = regA.(U64Value).Div(regB.(U64Value))
 
 	case TypeI64:
 		// Cast register values to I64 and call Div (check for overflow)
-		result, errcode = regA.(I64Value).Div(regB.(I64Value))
+		result, except = regA.(I64Value).Div(regB.(I64Value))
 
 	default:
-		return raise(scope.exceptionf(ValueError, "cannot div registers of type %v", regA.Type()))
+		return scope.raise(exceptionInvalidOperationForType("divide", regA.Type()))
 	}
 
 	// Throw an exception if error occurred
-	if errcode != Ok {
-		return raise(scope.exception(errcode, "division error")).withConsumption(30)
+	if except != nil {
+		return scope.raise(except).withConsumption(30)
+	}
+
+	// Set the register
+	scope.memory.Set(out, result)
+
+	return continueOk{30}
+}
+
+func opMOD(scope *callscope, operands []byte) Continue {
+	// MOD [$X][$Y][$Z]
+	out, a, b := operands[0], operands[1], operands[2]
+
+	// Get two values of the same type
+	regA, regB, except := scope.getSymmetricValues(a, b)
+	if except != nil {
+		return scope.propagate(except)
+	}
+
+	var result RegisterValue
+
+	switch dt := regA.Type(); dt {
+	case TypeU64:
+		// Cast register values to U64 and call Mod (check for error)
+		result, except = regA.(U64Value).Mod(regB.(U64Value))
+
+	case TypeI64:
+		// Cast register values to I64 and call Mod (check for overflow)
+		result, except = regA.(I64Value).Mod(regB.(I64Value))
+
+	default:
+		return scope.raise(exceptionInvalidOperationForType("modulo divide", regA.Type()))
+	}
+
+	// Throw an exception if error occurred
+	if except != nil {
+		return scope.raise(except).withConsumption(30)
 	}
 
 	// Set the register
@@ -812,12 +1181,12 @@ func opPLOAD(scope *callscope, operands []byte) Continue {
 
 	layout, err := scope.engine.GetStateFields(engineio.PersistentState)
 	if err != nil {
-		return raise(scope.exceptionf(ReferenceError, "persistent state fields not found: %v", err))
+		return scope.raise(exceptionf(ReferenceError, "persistent state fields not found: %v", err))
 	}
 
 	storageField := layout.Get(slot)
 	if storageField == nil {
-		return raise(scope.exceptionf(ReferenceError, "persistent state field not found: %v", slot))
+		return scope.raise(exceptionf(ReferenceError, "persistent state field not found: %v", slot))
 	}
 
 	storedValue, ok := scope.engine.persistent.GetStorageEntry(SlotHash(slot))
@@ -827,7 +1196,7 @@ func opPLOAD(scope *callscope, operands []byte) Continue {
 
 	value, err := NewRegisterValue(storageField.Type, storedValue)
 	if err != nil {
-		return raise(scope.exception(ValueError, err.Error()))
+		return scope.raise(exception(ValueError, err.Error()))
 	}
 
 	// Set the register value
@@ -844,7 +1213,7 @@ func opPSAVE(scope *callscope, operands []byte) Continue {
 	regVal := scope.memory.Get(reg)
 
 	if ok := scope.engine.persistent.SetStorageEntry(SlotHash(slot), regVal.Data()); !ok {
-		return raise(scope.exceptionf(AccessError, "could not write to &%v", slot))
+		return scope.raise(exceptionf(AccessError, "could not write to &%v", slot))
 	}
 
 	return continueOk{100}

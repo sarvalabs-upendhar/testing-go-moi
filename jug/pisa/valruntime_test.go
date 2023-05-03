@@ -12,34 +12,30 @@ func TestConstantValue(t *testing.T) {
 	tests := []struct {
 		constant Constant
 		value    RegisterValue
-		err      string
+		except   *Exception
 	}{
 		{
 			constant: Constant{Type: PrimitiveString, Data: must(polo.Polorize("hello!"))},
 			value:    StringValue("hello!"),
-			err:      "",
+			except:   nil,
 		},
 		{
 			constant: Constant{Type: PrimitiveAddress, Data: must(polo.Polorize([32]byte{}))},
 			value:    AddressValue{},
-			err:      "",
+			except:   nil,
 		},
 		{
 			constant: Constant{Type: PrimitiveU64, Data: []byte{0x6, 0x65}},
 			value:    nil,
-			err:      "not uint64",
+			except:   exception(ValueError, "malformed constant: data does not decode to a uint64"),
 		},
 	}
 
 	for _, test := range tests {
-		value, err := test.constant.Value()
+		value, except := test.constant.value()
 
-		if test.err == "" {
-			require.NoError(t, err)
-			require.Equal(t, test.value, value)
-		} else {
-			require.EqualError(t, err, test.err)
-		}
+		require.Equal(t, test.except, except)
+		require.Equal(t, test.value, value)
 	}
 }
 

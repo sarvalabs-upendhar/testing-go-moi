@@ -11,8 +11,8 @@ type ClassValue struct {
 	datatype *Datatype
 }
 
-// NewClassValue generates a new ClassValue for a given engineio.Datatype and some POLO encoded bytes.
-func NewClassValue(dt *Datatype, data []byte) (*ClassValue, error) {
+// newClassValue generates a new ClassValue for a given Datatype and some doc-encoded POLO encoded bytes.
+func newClassValue(dt *Datatype, data []byte) (*ClassValue, error) {
 	// Check if datatype is a class
 	if dt.Kind != ClassType {
 		return nil, errors.New("datatype is not a class")
@@ -98,9 +98,9 @@ func (class ClassValue) Data() []byte {
 
 // Get is a safe read from the ClassValue, returns an
 // error if the slot is not valid for the ClassValue
-func (class *ClassValue) Get(slot uint8) (RegisterValue, error) {
-	if slot >= class.Size() {
-		return nil, errors.Errorf("undefined class field slot '%v'", slot)
+func (class *ClassValue) Get(slot uint8) (RegisterValue, *Exception) {
+	if slot >= uint8(class.Size()) {
+		return nil, exceptionf(AccessError, "invalid class field: &%v", slot)
 	}
 
 	value := class.values[slot]
@@ -113,13 +113,14 @@ func (class *ClassValue) Get(slot uint8) (RegisterValue, error) {
 
 // Set is a safe write into the ClassValue, returns an error if either
 // the slot is invalid or value is not the correct type for ClassValue
-func (class *ClassValue) Set(slot uint8, value RegisterValue) error {
-	if slot >= class.Size() {
-		return errors.Errorf("undefined class field slot '%v'", slot)
+func (class *ClassValue) Set(slot uint8, value RegisterValue) *Exception {
+	if slot >= uint8(class.Size()) {
+		return exceptionf(AccessError, "invalid field slot: &%v", slot)
 	}
 
-	if !class.datatype.Fields.Get(slot).Type.Equals(value.Type()) {
-		return errors.New("cannot set field value with invalid type")
+	field := class.datatype.Fields.Get(slot)
+	if !field.Type.Equals(value.Type()) {
+		return exceptionf(TypeError, "invalid field value: not a %v", field.Type)
 	}
 
 	class.values[slot] = value
@@ -128,6 +129,6 @@ func (class *ClassValue) Set(slot uint8, value RegisterValue) error {
 }
 
 // Size returns the number of fields in the ClassValue
-func (class ClassValue) Size() uint8 {
-	return uint8(len(class.values))
+func (class ClassValue) Size() U64Value {
+	return U64Value(class.datatype.Fields.Size())
 }

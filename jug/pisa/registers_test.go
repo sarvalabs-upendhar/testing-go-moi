@@ -69,7 +69,7 @@ func TestNewRegisterSet(t *testing.T) {
 				"boo": must(polo.Polorize(5000)),
 			},
 			output: nil,
-			err:    "malformed data for 'boo': not string",
+			err:    "malformed data for 'boo': data does not decode to a string",
 		},
 		{
 			name: "well_formed",

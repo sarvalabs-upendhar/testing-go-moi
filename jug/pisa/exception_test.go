@@ -8,40 +8,51 @@ import (
 )
 
 func TestException(t *testing.T) {
-	trace := []string{"function1()", "function2()"}
 	data := "Something went wrong"
 	class := CustomExceptionClass{datatype: TypeString}
 
-	except := exception(class, trace, data)
+	except := exception(class, data)
 
 	if except.Class != TypeString.String() {
 		t.Errorf("Expected exception class to be 'string', but got '%s'", except.Class)
 	}
 
-	if except.Data != data {
-		t.Errorf("Expected exception data to be '%s', but got '%s'", data, except.Data)
-	}
-
-	if len(except.Trace) != 2 {
-		t.Errorf("Expected exception trace to have length 2, but got %d", len(except.Trace))
+	if except.Error != data {
+		t.Errorf("Expected exception data to be '%s', but got '%s'", data, except.Error)
 	}
 }
 
 func TestExceptionf(t *testing.T) {
-	trace := []string{"function1()", "function2()"}
 	format := "Something went wrong: %v"
 	arg := "argument"
+
 	expectedData := "Something went wrong: argument"
 	class := CustomExceptionClass{datatype: TypeString}
 
-	except := exceptionf(class, trace, format, arg)
+	except := exceptionf(class, format, arg)
 
 	if except.Class != TypeString.String() {
 		t.Errorf("Expected exception class to be 'string', but got '%s'", except.Class)
 	}
 
-	if except.Data != expectedData {
-		t.Errorf("Expected exception data to be '%s', but got '%s'", expectedData, except.Data)
+	if except.Error != expectedData {
+		t.Errorf("Expected exception data to be '%s', but got '%s'", expectedData, except.Error)
+	}
+}
+
+func TestException_Traced(t *testing.T) {
+	data := "Something went wrong"
+	class := CustomExceptionClass{datatype: TypeString}
+	trace := []string{"function1()", "function2()"}
+
+	except := exception(class, data).traced(trace)
+
+	if except.Class != TypeString.String() {
+		t.Errorf("Expected exception class to be 'string', but got '%s'", except.Class)
+	}
+
+	if except.Error != data {
+		t.Errorf("Expected exception data to be '%s', but got '%s'", data, except.Error)
 	}
 
 	if len(except.Trace) != 2 {
@@ -50,31 +61,10 @@ func TestExceptionf(t *testing.T) {
 }
 
 func TestExceptionString(t *testing.T) {
-	except := &Exception{Class: "TestException", Data: "test data", Trace: []string{"frame1", "frame2"}}
+	except := &Exception{Class: "TestException", Error: "test data", Trace: []string{"frame1", "frame2"}}
 	str := except.String()
 
 	require.Equal(t, "pisa.Exception [TestException]\nerror: test data\n-| frame2\n--| frame1", str)
-}
-
-func TestExceptionWrap(t *testing.T) {
-	except := &Exception{Class: "TestException", Data: "test data", Trace: []string{"frame1", "frame2"}}
-
-	except = except.Wrap("frame3")
-
-	expectedTrace := []string{"frame1", "frame2", "frame3"}
-	if len(except.Trace) != len(expectedTrace) {
-		t.Errorf("Wrap() did not append frame to trace. Expected trace length: %v, Got: %v",
-			len(expectedTrace), len(except.Trace),
-		)
-	}
-
-	for i, frame := range expectedTrace {
-		if except.Trace[i] != frame {
-			t.Errorf("Wrap() did not append frame to trace. Expected trace: %v, Got: %v", expectedTrace, except.Trace)
-
-			break
-		}
-	}
 }
 
 func TestCustomExceptionClass(t *testing.T) {

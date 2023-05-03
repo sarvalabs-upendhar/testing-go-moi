@@ -1,9 +1,12 @@
 package pisa
 
 import (
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/sarvalabs/moichain/types"
 )
 
 func TestBoolValue(t *testing.T) {
@@ -132,4 +135,13 @@ func TestAddressValue(t *testing.T) {
 		}
 		assert.Equal(t, expectedData, data, "POLO encoded bytes of AddressValue should match expected value")
 	})
+}
+
+func randomAddressValue(t *testing.T) AddressValue {
+	t.Helper()
+
+	address := make([]byte, 32)
+	_, _ = rand.Read(address)
+
+	return AddressValue(types.BytesToAddress(address))
 }

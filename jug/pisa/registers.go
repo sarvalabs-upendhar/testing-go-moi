@@ -38,7 +38,7 @@ func NewRegisterValue(dt *Datatype, data []byte) (RegisterValue, error) {
 			// Decode data into a string
 			str := new(string)
 			if err := polo.Depolorize(str, data); err != nil {
-				return nil, errors.New("not string")
+				return nil, errors.New("data does not decode to a string")
 			}
 
 			return StringValue(*str), nil
@@ -53,7 +53,7 @@ func NewRegisterValue(dt *Datatype, data []byte) (RegisterValue, error) {
 			// Decode data into a bytes
 			bytes := new([]byte)
 			if err := polo.Depolorize(bytes, data); err != nil {
-				return nil, errors.New("not bytes")
+				return nil, errors.New("data does not decode to bytes")
 			}
 
 			return BytesValue(*bytes), nil
@@ -68,7 +68,7 @@ func NewRegisterValue(dt *Datatype, data []byte) (RegisterValue, error) {
 			// Decode data into a bool
 			boolean := new(bool)
 			if err := polo.Depolorize(boolean, data); err != nil {
-				return nil, errors.New("not boolean")
+				return nil, errors.New("data does not decode to a boolean")
 			}
 
 			return BoolValue(*boolean), nil
@@ -83,7 +83,7 @@ func NewRegisterValue(dt *Datatype, data []byte) (RegisterValue, error) {
 			// Decode data into a uint64
 			number := new(uint64)
 			if err := polo.Depolorize(number, data); err != nil {
-				return nil, errors.New("not uint64")
+				return nil, errors.New("data does not decode to a uint64")
 			}
 
 			return U64Value(*number), nil
@@ -98,7 +98,7 @@ func NewRegisterValue(dt *Datatype, data []byte) (RegisterValue, error) {
 			// Decode data into a int64
 			number := new(int64)
 			if err := polo.Depolorize(number, data); err != nil {
-				return nil, errors.New("not int64")
+				return nil, errors.New("data does not decode to a int64")
 			}
 
 			return I64Value(*number), nil
@@ -113,7 +113,7 @@ func NewRegisterValue(dt *Datatype, data []byte) (RegisterValue, error) {
 			// Decode data into a address
 			address := new([32]byte)
 			if err := polo.Depolorize(address, data); err != nil {
-				return nil, errors.Wrap(err, "not address")
+				return nil, errors.Wrap(err, "data does not decode to an address")
 			}
 
 			return AddressValue(*address), nil
@@ -124,15 +124,15 @@ func NewRegisterValue(dt *Datatype, data []byte) (RegisterValue, error) {
 
 	// ListValue
 	case ArrayType, VarrayType:
-		return NewListValue(dt, data)
+		return newListValue(dt, data)
 
 	// MapValue
 	case MappingType:
-		return NewMapValue(dt, data)
+		return newMapValue(dt, data)
 
 	// ClassValue
 	case ClassType:
-		return NewClassValue(dt, data)
+		return newClassValue(dt, data)
 
 	default:
 		panic(fmt.Sprintf("unsupported datatype for value generation: DatatypeKind(%d)", dt.Kind))

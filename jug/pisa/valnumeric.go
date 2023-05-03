@@ -32,66 +32,82 @@ func (x U64Value) Data() []byte {
 
 // I64 returns x as an I64Value.
 // Returns an OverflowError if x overflows for 64-bit signed integer.
-func (x U64Value) I64() (I64Value, ExceptionClass) {
+func (x U64Value) I64() (I64Value, *Exception) {
 	if x > math.MaxInt64 {
-		return 0, OverflowError
+		return 0, exception(OverflowError, "conversion overflow")
 	}
 
-	return I64Value(int64(x)), Ok
+	return I64Value(int64(x)), nil
 }
 
 // Add returns the value of x + y as a U64Value.
 // Returns an OverflowError if the addition overflows.
-func (x U64Value) Add(y U64Value) (U64Value, ExceptionClass) {
+func (x U64Value) Add(y U64Value) (U64Value, *Exception) {
 	if z := x + y; z >= x {
-		return z, Ok
+		return z, nil
 	}
 
-	return 0, OverflowError
+	return 0, exception(OverflowError, "addition overflow")
 }
 
 // Sub returns the value of x - y as a U64Value.
 // Returns an OverflowError if the subtraction overflows.
-func (x U64Value) Sub(y U64Value) (U64Value, ExceptionClass) {
+func (x U64Value) Sub(y U64Value) (U64Value, *Exception) {
 	if z := x - y; z <= x {
-		return z, Ok
+		return z, nil
 	}
 
-	return 0, OverflowError
+	return 0, exception(OverflowError, "subtraction overflow")
 }
 
 // Mul returns the value of x * y as a U64Value.
 // Returns an OverflowError if the multiplication overflows.
-func (x U64Value) Mul(y U64Value) (U64Value, ExceptionClass) {
+func (x U64Value) Mul(y U64Value) (U64Value, *Exception) {
 	if x == 0 || y == 0 {
-		return 0, Ok
+		return 0, nil
 	}
 
 	if z := x * y; z >= x {
-		return z, Ok
+		return z, nil
 	}
 
-	return 0, OverflowError
+	return 0, exception(OverflowError, "multiplication overflow")
 }
 
 // Div returns the value of x / y as a U64Value.
 // Returns an DivideByZeroError if y is zero.
-func (x U64Value) Div(y U64Value) (U64Value, ExceptionClass) {
+func (x U64Value) Div(y U64Value) (U64Value, *Exception) {
 	if y == 0 {
-		return 0, DivideByZeroError
+		return 0, exception(DivideByZeroError, "division by zero")
 	}
 
-	return x / y, Ok
+	return x / y, nil
 }
 
 // Mod returns the value of x % y as a U64Value.
 // Returns an DivideByZeroError if y is zero.
-func (x U64Value) Mod(y U64Value) (U64Value, ExceptionClass) {
+func (x U64Value) Mod(y U64Value) (U64Value, *Exception) {
 	if y == 0 {
-		return 0, DivideByZeroError
+		return 0, exception(DivideByZeroError, "modulo division by zero")
 	}
 
-	return x % y, Ok
+	return x % y, nil
+}
+
+func (x U64Value) Incr() (U64Value, *Exception) {
+	if y := x + 1; y > x {
+		return y, nil
+	}
+
+	return 0, exception(OverflowError, "increment overflow")
+}
+
+func (x U64Value) Decr() (U64Value, *Exception) {
+	if y := x - 1; y < x {
+		return y, nil
+	}
+
+	return 0, exception(OverflowError, "decrement overflow")
 }
 
 // Gt returns the value of x > y as a BoolValue
@@ -109,9 +125,28 @@ func (x U64Value) Eq(y U64Value) BoolValue {
 	return x == y
 }
 
-//nolint:forcetypeassert
+//nolint:forcetypeassert, dupl
 func methodsU64() [256]*BuiltinMethod {
 	return [256]*BuiltinMethod{
+		// uint64.__join__(uint64) -> uint64
+		MethodJoin: makeBuiltinMethod(
+			MethodJoin.String(),
+			PrimitiveU64, MethodJoin,
+			makefields([]*TypeField{{"self", TypeU64}, {"other", TypeU64}}),
+			makefields([]*TypeField{{"result", TypeU64}}),
+			func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				// Perform unsigned addition on the operands
+				result, except := inputs[0].(U64Value).Add(inputs[1].(U64Value))
+				// Check for overflow and raise exception
+				if except != nil {
+					return nil, except.traced(engine.callstack.trace())
+				}
+
+				// Return the result
+				return RegisterSet{0: result}, nil
+			},
+		),
+
 		// uint64.__lt__(int64) -> bool
 		MethodLt: makeBuiltinMethod(
 			MethodLt.String(),
@@ -121,6 +156,34 @@ func methodsU64() [256]*BuiltinMethod {
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				x, y := inputs[0], inputs[1]
 				result := x.(U64Value).Lt(y.(U64Value))
+
+				return RegisterSet{0: result}, nil
+			},
+		),
+
+		// uint64.__gt__(int64) -> bool
+		MethodGt: makeBuiltinMethod(
+			MethodGt.String(),
+			PrimitiveU64, MethodGt,
+			makefields([]*TypeField{{Name: "x", Type: TypeU64}, {Name: "y", Type: TypeU64}}),
+			makefields([]*TypeField{{Name: "result", Type: TypeBool}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				x, y := inputs[0], inputs[1]
+				result := x.(U64Value).Gt(y.(U64Value))
+
+				return RegisterSet{0: result}, nil
+			},
+		),
+
+		// uint64.__eq__(int64) -> bool
+		MethodEq: makeBuiltinMethod(
+			MethodEq.String(),
+			PrimitiveU64, MethodEq,
+			makefields([]*TypeField{{Name: "x", Type: TypeU64}, {Name: "y", Type: TypeU64}}),
+			makefields([]*TypeField{{Name: "result", Type: TypeBool}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				x, y := inputs[0], inputs[1]
+				result := x.(U64Value).Eq(y.(U64Value))
 
 				return RegisterSet{0: result}, nil
 			},
@@ -151,34 +214,6 @@ func methodsU64() [256]*BuiltinMethod {
 				result := strconv.FormatUint(uint64(inputs[0].(U64Value)), 10)
 				// Set value into outputs
 				return RegisterSet{0: StringValue(result)}, nil
-			},
-		),
-
-		// uint64.__gt__(int64) -> bool
-		MethodGt: makeBuiltinMethod(
-			MethodGt.String(),
-			PrimitiveU64, MethodGt,
-			makefields([]*TypeField{{Name: "x", Type: TypeU64}, {Name: "y", Type: TypeU64}}),
-			makefields([]*TypeField{{Name: "result", Type: TypeBool}}),
-			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
-				x, y := inputs[0], inputs[1]
-				result := x.(U64Value).Gt(y.(U64Value))
-
-				return RegisterSet{0: result}, nil
-			},
-		),
-
-		// uint64.__eq__(int64) -> bool
-		MethodEq: makeBuiltinMethod(
-			MethodEq.String(),
-			PrimitiveU64, MethodEq,
-			makefields([]*TypeField{{Name: "x", Type: TypeU64}, {Name: "y", Type: TypeU64}}),
-			makefields([]*TypeField{{Name: "result", Type: TypeBool}}),
-			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
-				x, y := inputs[0], inputs[1]
-				result := x.(U64Value).Eq(y.(U64Value))
-
-				return RegisterSet{0: result}, nil
 			},
 		),
 	}
@@ -213,78 +248,94 @@ func (x I64Value) Data() []byte {
 
 // U64 returns x as an U64Value.
 // Returns an OverflowError if x is less than 0
-func (x I64Value) U64() (U64Value, ExceptionClass) {
+func (x I64Value) U64() (U64Value, *Exception) {
 	if x < 0 {
-		return 0, OverflowError
+		return 0, exception(OverflowError, "conversion overflow")
 	}
 
-	return U64Value(uint64(x)), Ok
+	return U64Value(uint64(x)), nil
 }
 
 // Add returns the value of x + y as a I64Value.
 // Returns an OverflowError if the addition overflows.
-func (x I64Value) Add(y I64Value) (I64Value, ExceptionClass) {
+func (x I64Value) Add(y I64Value) (I64Value, *Exception) {
 	if z := x + y; z >= x {
-		return z, Ok
+		return z, nil
 	}
 
-	return 0, OverflowError
+	return 0, exception(OverflowError, "addition overflow")
 }
 
 // Sub returns the value of x - y as a I64Value.
 // Returns an OverflowError if the subtraction overflows.
-func (x I64Value) Sub(y I64Value) (I64Value, ExceptionClass) {
+func (x I64Value) Sub(y I64Value) (I64Value, *Exception) {
 	if z := x - y; (z < x) == (y > 0) {
-		return z, Ok
+		return z, nil
 	}
 
-	return 0, OverflowError
+	return 0, exception(OverflowError, "subtraction overflow")
 }
 
 // Mul returns the value of x * y as a I64Value.
 // Returns an OverflowError if the multiplication overflows.
-func (x I64Value) Mul(y I64Value) (I64Value, ExceptionClass) {
+func (x I64Value) Mul(y I64Value) (I64Value, *Exception) {
 	if x == 0 || y == 0 {
-		return 0, Ok
+		return 0, nil
 	}
 
 	if z := x * y; (z < 0) == ((x < 0) != (y < 0)) {
 		if z/y == x {
-			return z, Ok
+			return z, nil
 		}
 	}
 
-	return 0, OverflowError
+	return 0, exception(OverflowError, "multiplication overflow")
 }
 
 // Div returns the value of x / y as a I64Value.
 // Returns an DivideByZeroError if y is zero or
 // OverflowError if x is -1<<63 AND y is -1.
-func (x I64Value) Div(y I64Value) (I64Value, ExceptionClass) {
+func (x I64Value) Div(y I64Value) (I64Value, *Exception) {
 	if y == 0 {
-		return 0, DivideByZeroError
+		return 0, exception(DivideByZeroError, "division by zero")
 	}
 
 	if (x == math.MinInt64) && (y == -1) {
-		return 0, OverflowError
+		return 0, exception(OverflowError, "division overflow")
 	}
 
-	return x / y, Ok
+	return x / y, nil
 }
 
 // Mod returns the value of x % y as a I64Value.
 // Returns an DivideByZeroError if y is zero or
 // OverflowError if x is -1<<63 AND y is -1.
-func (x I64Value) Mod(y I64Value) (I64Value, ExceptionClass) {
+func (x I64Value) Mod(y I64Value) (I64Value, *Exception) {
 	if y == 0 {
-		return 0, DivideByZeroError
+		return 0, exception(DivideByZeroError, "modulo division by zero")
 	}
 
 	if (x == math.MinInt64) && (y == -1) {
-		return 0, OverflowError
+		return 0, exception(OverflowError, "modulo division overflow")
 	}
 
-	return x % y, Ok
+	return x % y, nil
+}
+
+func (x I64Value) Incr() (I64Value, *Exception) {
+	if y := x + 1; y > x {
+		return y, nil
+	}
+
+	return 0, exception(OverflowError, "increment overflow")
+}
+
+func (x I64Value) Decr() (I64Value, *Exception) {
+	if y := x - 1; y < x {
+		return y, nil
+	}
+
+	return 0, exception(OverflowError, "decrement overflow")
 }
 
 // Gt returns the value of x > y as a BoolValue
@@ -302,9 +353,28 @@ func (x I64Value) Eq(y I64Value) BoolValue {
 	return x == y
 }
 
-//nolint:forcetypeassert
+//nolint:forcetypeassert, dupl
 func methodsI64() [256]*BuiltinMethod {
 	return [256]*BuiltinMethod{
+		// int64.__join__(int64) -> int64
+		MethodJoin: makeBuiltinMethod(
+			MethodJoin.String(),
+			PrimitiveI64, MethodJoin,
+			makefields([]*TypeField{{"self", TypeI64}, {"other", TypeI64}}),
+			makefields([]*TypeField{{"result", TypeI64}}),
+			func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				// Perform signed addition on the operands
+				result, except := inputs[0].(I64Value).Add(inputs[1].(I64Value))
+				// Check for overflow and raise exception
+				if except != nil {
+					return nil, except.traced(engine.callstack.trace())
+				}
+
+				// Return the result
+				return RegisterSet{0: result}, nil
+			},
+		),
+
 		// int64.__lt__(int64) -> bool
 		MethodLt: makeBuiltinMethod(
 			MethodLt.String(),

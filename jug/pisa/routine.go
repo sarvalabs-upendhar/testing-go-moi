@@ -67,7 +67,7 @@ func (routine Routine) run(engine *Engine, inputs RegisterSet) (RegisterSet, *Ex
 		label: routine.name(),
 		point: uint64(routine.ptr()),
 	}) {
-		return nil, exception(RuntimeError, engine.callstack.trace(), "max call depth reached")
+		return nil, exception(RuntimeError, "max call depth reached").traced(engine.callstack.trace())
 	}
 
 	defer engine.callstack.pop()
@@ -102,7 +102,7 @@ func (rmethod RoutineMethod) run(engine *Engine, inputs RegisterSet) (RegisterSe
 		label: rmethod.name(),
 		point: uint64(rmethod.ptr()),
 	}) {
-		return nil, exception(RuntimeError, engine.callstack.trace(), "max call depth reached")
+		return nil, exception(RuntimeError, "max call depth reached").traced(engine.callstack.trace())
 	}
 
 	defer engine.callstack.pop()
@@ -138,7 +138,7 @@ ExecutionLoop:
 		continuity := operation(scope, instruction.Args)
 		// Exhaust fuel for operation
 		if ok := scope.engine.exhaustFuel(continuity.fuel()); !ok {
-			return nil, exception(FuelError, engine.callstack.trace(), "fuel exhausted")
+			return nil, exception(FuelError, "fuel exhausted").traced(engine.callstack.trace())
 		}
 
 		switch continuity.mode() {
@@ -154,13 +154,13 @@ ExecutionLoop:
 			// If attempting to jump out of bounds
 			if jump.jumpdest >= instructions.Len() {
 				// Throw an invalid jump exception
-				return nil, exception(RuntimeError, engine.callstack.trace(), "invalid jump: destination out of bounds")
+				return nil, exception(RuntimeError, "invalid jump: out of bounds").traced(engine.callstack.trace())
 			}
 
 			// If jump destination is invalid
 			if instruction = instructions[jump.jumpdest]; instruction.Op != DEST {
 				// Throw an invalid jump exception
-				return nil, exception(RuntimeError, engine.callstack.trace(), "invalid jump destination")
+				return nil, exception(RuntimeError, "invalid jump destination").traced(engine.callstack.trace())
 			}
 
 			// Update the program counter

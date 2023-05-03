@@ -10,10 +10,15 @@ type Constant struct {
 	Data []byte
 }
 
-// Value generate a new RegisterValue object from a Constant
+// value generate a new RegisterValue object from a Constant
 // Returns an error if the constant data is not interpretable for its type.
-func (constant *Constant) Value() (RegisterValue, error) {
-	return NewRegisterValue(constant.Type.Datatype(), constant.Data)
+func (constant *Constant) value() (RegisterValue, *Exception) {
+	value, err := NewRegisterValue(constant.Type.Datatype(), constant.Data)
+	if err != nil {
+		return nil, exceptionf(ValueError, "malformed constant: %v", err)
+	}
+
+	return value, nil
 }
 
 // PtrValue represents a Value that operates like uint64 pointer address.

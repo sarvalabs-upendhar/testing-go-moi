@@ -167,7 +167,7 @@ var methodCodeToString = map[MethodCode]string{
 func (method MethodCode) String() string {
 	str, ok := methodCodeToString[method]
 	if !ok {
-		panic("unknown MethodCode variant")
+		return fmt.Sprintf("method(%#x)", int(method))
 	}
 
 	return str

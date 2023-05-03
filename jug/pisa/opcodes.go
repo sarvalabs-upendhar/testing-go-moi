@@ -200,9 +200,15 @@ const (
 	// POPEND [2] Pop a value from the end of varray $Y to $X. Shrinks the varray by 1
 	// - POPEND [$X][$Y: varray]
 	POPEND OpCode = 0x58
-	// DELKEY [2] Delete a key $Y from the map $X. No-op if the key does not exist
-	// - DELKEY [$X: map][$Y]
-	DELKEY OpCode = 0x59
+
+	// HASKEY [2] Check if the map $Y has a given key $Z and set it to $X
+	// - HASKEY [$X: bool][$Y: map][$Z]
+	HASKEY OpCode = 0x59
+
+	// MERGE [2] Merge collection $Y into $X. Arrays are not supported.
+	// Appends values for varray. Combines keys for mappings overwriting the value from $Y onto $X for shared keys.
+	// - MERGE [$X: col][$Y: col]
+	MERGE OpCode = 0x5A
 )
 
 // Bitwise, Arithmetic & Logical Operator Opcodes
@@ -285,107 +291,122 @@ const (
 	PSAVE OpCode = 0x81
 )
 
-//nolint:dupl
-var opCodeToString = map[OpCode]string{
-	TERM:  "TERM",
-	DEST:  "DEST",
-	JUMP:  "JUMP",
-	JUMPI: "JUMPI",
+type opcodeMetadata struct {
+	str  string
+	args int
+}
 
-	OBTAIN: "OBTAIN",
-	YIELD:  "YIELD",
+var opcodeMetadataTable = map[OpCode]*opcodeMetadata{
+	TERM:   {"TERM", 0},
+	DEST:   {"DEST", 0},
+	JUMP:   {"JUMP", 1},
+	JUMPI:  {"JUMPI", 2},
+	OBTAIN: {"OBTAIN", 2},
+	YIELD:  {"YIELD", 2},
 
-	CARGS: "CARGS",
-	CALLB: "CALLB",
-	CALLR: "CALLR",
-	CALLM: "CALLM",
+	// CARGS: nil,
+	// CALLB: nil,
+	// CALLR: nil,
+	// CALLM: nil,
 
-	CONST: "CONST",
+	CONST:  {"CONST", 2},
+	LDPTR1: {"LDPTR1", 2},
+	LDPTR2: {"LDPTR2", 3},
+	LDPTR3: {"LDPTR3", 4},
+	LDPTR4: {"LDPTR4", 5},
+	LDPTR5: {"LDPTR5", 6},
+	LDPTR6: {"LDPTR6", 7},
+	LDPTR7: {"LDPTR7", 8},
+	LDPTR8: {"LDPTR8", 9},
 
-	LDPTR1: "LDPTR1",
-	LDPTR2: "LDPTR2",
-	LDPTR3: "LDPTR3",
-	LDPTR4: "LDPTR4",
-	LDPTR5: "LDPTR5",
-	LDPTR6: "LDPTR6",
-	LDPTR7: "LDPTR7",
-	LDPTR8: "LDPTR8",
+	ISNULL: {"ISNULL", 2},
+	ZERO:   {"ZERO", 1},
+	CLEAR:  {"CLEAR", 1},
+	SAME:   {"SAME", 3},
+	COPY:   {"COPY", 2},
+	SWAP:   {"SWAP", 2},
 
-	ISNULL:   "ISNULL",
-	ZERO:     "ZERO",
-	CLEAR:    "CLEAR",
-	SAME:     "SAME",
-	COPY:     "COPY",
-	SWAP:     "SWAP",
-	SERIAL:   "SERIAL",
-	DESERIAL: "DESERIAL",
+	// SERIAL:   nil,
+	// DESERIAL: nil,
 
-	MAKE:  "MAKE",
-	PMAKE: "PMAKE",
-	VMAKE: "VMAKE",
-	BMAKE: "BMAKE",
+	MAKE:  {"MAKE", 2},
+	PMAKE: {"PMAKE", 2},
+	VMAKE: {"VMAKE", 3},
+	// BMAKE: nil,
 
-	BUILD: "BUILD",
-	THROW: "THROW",
-	EMIT:  "EMIT",
-	JOIN:  "JOIN",
+	// BUILD: nil,
+	THROW: {"THROW", 1},
+	// EMIT:  nil,
+	JOIN: {"JOIN", 3},
 
-	LT: "LT",
-	GT: "GT",
-	EQ: "EQ",
+	LT: {"LT", 3},
+	GT: {"GT", 3},
+	EQ: {"EQ", 3},
 
-	BOOL: "BOOL",
-	STR:  "STR",
-	ADDR: "ADDR",
-	LEN:  "LEN",
+	BOOL: {"BOOL", 2},
+	STR:  {"STR", 2},
+	ADDR: {"ADDR", 2},
+	LEN:  {"LEN", 2},
 
-	SIZEOF: "SIZEOF",
-	GETFLD: "GETFLD",
-	SETFLD: "SETFLD",
-	GETIDX: "GETIDX",
-	SETIDX: "SETIDX",
+	SIZEOF: {"SIZEOF", 2},
+	GETFLD: {"GETFLD", 3},
+	SETFLD: {"SETFLD", 3},
+	GETIDX: {"GETIDX", 3},
+	SETIDX: {"SETIDX", 3},
 
-	GROW:   "GROW",
-	SLICE:  "SLICE",
-	APPEND: "APPEND",
-	POPEND: "POPEND",
-	DELKEY: "DELKEY",
+	GROW: {"GROW", 2},
+	// SLICE:  nil,
+	APPEND: {"APPEND", 2},
+	POPEND: {"POPEND", 2},
+	// HASKEY: nil,
+	// MERGE: nil,
 
-	AND: "AND",
-	OR:  "OR",
-	NOT: "NOT",
+	AND: {"AND", 3},
+	OR:  {"OR", 3},
+	NOT: {"NOT", 2},
 
-	INCR: "INCR",
-	DECR: "DECR",
+	INCR: {"INCR", 1},
+	DECR: {"DECR", 1},
 
-	ADD: "ADD",
-	SUB: "SUB",
-	MUL: "MUL",
-	DIV: "DIV",
-	MOD: "MOD",
+	ADD: {"ADD", 3},
+	SUB: {"SUB", 3},
+	MUL: {"MUL", 3},
+	DIV: {"DIV", 3},
+	MOD: {"MOD", 3},
 
-	BXOR: "BXOR",
-	BAND: "BAND",
-	BOR:  "BOR",
-	BNOT: "BNOT",
+	// BXOR: nil,
+	// BAND: nil,
+	// BOR:  nil,
+	// BNOT: nil,
 
-	LOGIC:  "LOGIC",
-	SENDER: "SENDER",
+	// LOGIC:  {"LOGIC", 0},
+	// SENDER: {"SENDER", 0},
 
-	PLOAD: "PLOAD",
-	PSAVE: "PSAVE",
+	PLOAD: {"PLOAD", 2},
+	PSAVE: {"PSAVE", 2},
 }
 
 // String returns the string representation of OpCode.
 // Returns an empty string for an undefined opcode.
 // It implements the Stringer interface for OpCode.
 func (op OpCode) String() string {
-	str := opCodeToString[op]
-	if len(str) == 0 {
+	opcode := opcodeMetadataTable[op]
+	if opcode == nil {
 		return fmt.Sprintf("undefined opcode [%#x]", int(op))
 	}
 
-	return str
+	return opcode.str
+}
+
+// Operands returns the number of operands to expect for the opcode.
+// Returns false for an undefined opcode.
+func (op OpCode) Operands() (int, bool) {
+	opcode := opcodeMetadataTable[op]
+	if opcode == nil {
+		return 0, false
+	}
+
+	return opcode.args, true
 }
 
 var stringToOpCode = map[string]OpCode{
@@ -451,7 +472,8 @@ var stringToOpCode = map[string]OpCode{
 	"SLICE":  SLICE,
 	"APPEND": APPEND,
 	"POPEND": POPEND,
-	"DELKEY": DELKEY,
+	"HASKEY": HASKEY,
+	"MERGE":  MERGE,
 
 	"AND": AND,
 	"OR":  OR,
@@ -481,86 +503,4 @@ var stringToOpCode = map[string]OpCode{
 // StringToOpCode finds the opcode whose name is stored in str.
 func StringToOpCode(str string) OpCode {
 	return stringToOpCode[str]
-}
-
-//nolint:dupl
-var opCodeToOperandCount = map[OpCode]int{
-	TERM:     0,
-	DEST:     0,
-	JUMP:     1,
-	JUMPI:    2,
-	OBTAIN:   2,
-	YIELD:    2,
-	CARGS:    2,
-	CALLB:    3,
-	CALLR:    3,
-	CALLM:    3,
-	CONST:    2,
-	LDPTR1:   2,
-	LDPTR2:   3,
-	LDPTR3:   4,
-	LDPTR4:   5,
-	LDPTR5:   6,
-	LDPTR6:   7,
-	LDPTR7:   8,
-	LDPTR8:   9,
-	ISNULL:   2,
-	ZERO:     1,
-	CLEAR:    1,
-	SAME:     3,
-	COPY:     2,
-	SWAP:     2,
-	SERIAL:   2,
-	DESERIAL: 3,
-	MAKE:     2,
-	PMAKE:    2,
-	VMAKE:    3,
-	BMAKE:    3,
-	BUILD:    2,
-	THROW:    1,
-	EMIT:     1,
-	LT:       3,
-	GT:       3,
-	EQ:       3,
-	JOIN:     3,
-	BOOL:     2,
-	STR:      2,
-	ADDR:     2,
-	LEN:      2,
-	SIZEOF:   2,
-	GETFLD:   3,
-	SETFLD:   3,
-	GETIDX:   3,
-	SETIDX:   3,
-	GROW:     2,
-	SLICE:    4,
-	APPEND:   2,
-	POPEND:   2,
-	DELKEY:   3,
-	AND:      3,
-	OR:       3,
-	NOT:      2,
-	INCR:     1,
-	DECR:     1,
-	ADD:      3,
-	SUB:      3,
-	MUL:      3,
-	DIV:      3,
-	MOD:      3,
-	BXOR:     3,
-	BAND:     3,
-	BOR:      3,
-	BNOT:     2,
-	LOGIC:    1,
-	SENDER:   1,
-	PLOAD:    2,
-	PSAVE:    2,
-}
-
-// Operands returns the number of operands to expect for the opcode.
-// Returns false for an undefined opcode.
-func (op OpCode) Operands() (int, bool) {
-	count, ok := opCodeToOperandCount[op]
-
-	return count, ok
 }

@@ -77,7 +77,7 @@ func (suite *ERC20TestSuite) TestReadMethods() {
 
 	consumed, outputs, except = suite.Call("Decimals", nil)
 	suite.Equal(uint64(10), outputs["decimals"])
-	suite.Equal(engineio.Fuel(36), consumed)
+	suite.Equal(engineio.Fuel(35), consumed)
 	suite.Nil(except)
 
 	consumed, outputs, except = suite.Call("TotalSupply", nil)
@@ -94,7 +94,7 @@ func (suite *ERC20TestSuite) TestApproval() {
 		"amount":  500,
 	})
 	suite.Equal(true, output["ok"])
-	suite.Equal(engineio.Fuel(297), consumed)
+	suite.Equal(engineio.Fuel(296), consumed)
 	suite.Nil(except)
 
 	// Check allowance of Addr2 on Addr1 tokens (must be 500)
@@ -130,7 +130,7 @@ func (suite *ERC20TestSuite) TestTransfer() {
 		"amount": 1000,
 	})
 	suite.Equal(true, output["ok"])
-	suite.Equal(engineio.Fuel(347), consumed)
+	suite.Equal(engineio.Fuel(346), consumed)
 	suite.Nil(except)
 
 	// Check balance of Addr1 (must be 100000000 - 1000)
@@ -152,7 +152,7 @@ func (suite *ERC20TestSuite) TestTransfer() {
 		"amount": 10000,
 	})
 	suite.Equal(false, output["ok"])
-	suite.Equal(engineio.Fuel(126), consumed)
+	suite.Equal(engineio.Fuel(125), consumed)
 	suite.Nil(except)
 }
 
@@ -169,7 +169,7 @@ func (suite *ERC20TestSuite) TestInflation() {
 		"amount": 10000,
 	})
 	suite.Equal(true, output["ok"])
-	suite.Equal(engineio.Fuel(462), consumed)
+	suite.Equal(engineio.Fuel(461), consumed)
 	suite.Nil(except)
 
 	// Check balance of Addr1 (must be 99990000)
@@ -211,6 +211,6 @@ func (suite *ERC20TestSuite) TestInflation() {
 		"amount": 100000,
 	})
 	suite.Equal(false, output["ok"])
-	suite.Equal(engineio.Fuel(126), consumed)
+	suite.Equal(engineio.Fuel(125), consumed)
 	suite.Nil(except)
 }

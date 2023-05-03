@@ -36,7 +36,7 @@ func (builtin Builtin) run(engine *Engine, inputs RegisterSet) (RegisterSet, *Ex
 		label: builtin.name(),
 		point: uint64(builtin.ptr()),
 	}) {
-		return nil, exception(RuntimeError, engine.callstack.trace(), "max call depth reached")
+		return nil, exception(RuntimeError, "max call depth reached").traced(engine.callstack.trace())
 	}
 
 	defer engine.callstack.pop()
@@ -65,7 +65,7 @@ func (bmethod BuiltinMethod) run(engine *Engine, inputs RegisterSet) (RegisterSe
 		label: bmethod.name(),
 		point: uint64(bmethod.code()),
 	}) {
-		return nil, exception(RuntimeError, engine.callstack.trace(), "max call depth reached")
+		return nil, exception(RuntimeError, "max call depth reached").traced(engine.callstack.trace())
 	}
 
 	defer engine.callstack.pop()

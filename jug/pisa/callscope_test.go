@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sarvalabs/moichain/jug/engineio"
 )
 
 func TestCallStackPush(t *testing.T) {
@@ -98,35 +100,67 @@ func TestCallStackTrace(t *testing.T) {
 	}, trace, "call stack trace should match expected value")
 }
 
-func TestCallScopeException(t *testing.T) {
+func TestCallScopeThrow(t *testing.T) {
 	scope := &callscope{
-		engine: &Engine{
-			callstack: make(callstack, 0),
-		},
+		engine: &Engine{callstack: make(callstack, 0)},
 	}
 
 	scope.engine.callstack.push(&callframe{scope: "root", label: "start"})
 	scope.engine.callstack.push(&callframe{scope: "foo", label: "bar", point: 0x2000})
 
-	except := scope.exception(RuntimeError, "forced exit")
+	except := scope.throw(exception(RuntimeError, "forced exit"))
 	require.Equal(t, &Exception{
 		Class: "builtin.RuntimeError",
-		Data:  "forced exit",
+		Error: "forced exit",
 		Trace: []string{
 			"root.start()",
 			"foo.bar() [0x2000]",
 		},
 	}, except)
 
-	except = scope.exceptionf(RuntimeError, "forced exit: [%v, %v]", "out", "kick")
+	except = scope.throw(exceptionf(RuntimeError, "forced exit: [%v, %v]", "out", "kick"))
 	require.Equal(t, &Exception{
 		Class: "builtin.RuntimeError",
-		Data:  "forced exit: [out, kick]",
+		Error: "forced exit: [out, kick]",
 		Trace: []string{
 			"root.start()",
 			"foo.bar() [0x2000]",
 		},
 	}, except)
+}
+
+func TestCallScopeRaise(t *testing.T) {
+	t.Run("raiseException", func(t *testing.T) {
+		scope := &callscope{
+			engine: &Engine{callstack: make(callstack, 0)},
+		}
+
+		except := &Exception{Class: RuntimeError.Name(), Error: "test exception"}
+		except = except.traced([]string{})
+
+		continuity := scope.raise(except.traced(nil))
+
+		require.NotNil(t, continuity)
+		assert.Equal(t, continueModeExcept, continuity.mode())
+		assert.Equal(t, engineio.Fuel(0), continuity.fuel())
+		assert.Equal(t, except, continuity.exception)
+	})
+
+	t.Run("raiseExceptionWithConsumption", func(t *testing.T) {
+		scope := &callscope{
+			engine: &Engine{callstack: make(callstack, 0)},
+		}
+
+		except := &Exception{Class: RuntimeError.Name(), Error: "test exception"}
+		except = except.traced([]string{})
+
+		continuity := scope.raise(except).withConsumption(42)
+
+		require.NotNil(t, continuity)
+		assert.Equal(t, continueModeExcept, continuity.mode())
+		assert.Equal(t, engineio.Fuel(42), continuity.fuel())
+		assert.Equal(t, except, continuity.exception)
+	})
 }
 
 func TestCallScopeGetPtrValue(t *testing.T) {
@@ -142,7 +176,7 @@ func TestCallScopeGetPtrValue(t *testing.T) {
 	require.Equal(t, PtrValue(0), reg)
 	require.Equal(t, &Exception{
 		Class: "builtin.ReferenceError",
-		Data:  "register $0 is not a pointer",
+		Error: "not a pointer: $0",
 		Trace: []string{},
 	}, except)
 
@@ -166,7 +200,7 @@ func TestCallScopeGetSymmetricValues(t *testing.T) {
 	require.Nil(t, regB)
 	require.Equal(t, &Exception{
 		Class: "builtin.ValueError",
-		Data:  "registers $0 and $1 are not symmetric",
+		Error: "not symmetric: [$0, $1]",
 		Trace: []string{},
 	}, except)
 

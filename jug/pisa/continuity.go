@@ -54,12 +54,6 @@ type continueException struct {
 	exception *Exception
 }
 
-// raise returns a continueException object for a given Exception object with an
-// assumed fuel consumption of 0 (can be modified with the withConsumption method)
-func raise(except *Exception) continueException {
-	return continueException{exception: except}
-}
-
 func (except continueException) mode() continueMode  { return continueModeExcept }
 func (except continueException) fuel() engineio.Fuel { return except.consumed }
 

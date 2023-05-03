@@ -108,9 +108,9 @@ type RoutineSchema struct {
 
 	Accepts []TypefieldSchema `yaml:"accepts" json:"accepts"`
 	Returns []TypefieldSchema `yaml:"returns" json:"returns"`
-	Catches []string          `yaml:"catches" json:"catches"`
 
 	Executes InstructionsSchema `yaml:"executes" json:"executes"`
+	Catches  []string           `yaml:"catches" json:"catches"`
 }
 
 func (routine RoutineSchema) Polorize() (*polo.Polorizer, error) {
@@ -129,11 +129,11 @@ func (routine RoutineSchema) Polorize() (*polo.Polorizer, error) {
 		return nil, err
 	}
 
-	if err := polorizer.Polorize(routine.Catches); err != nil {
+	if err := polorizer.Polorize(routine.Executes); err != nil {
 		return nil, err
 	}
 
-	if err := polorizer.Polorize(routine.Executes); err != nil {
+	if err := polorizer.Polorize(routine.Catches); err != nil {
 		return nil, err
 	}
 
@@ -165,11 +165,11 @@ func (routine *RoutineSchema) Depolorize(depolorizer *polo.Depolorizer) (err err
 		return err
 	}
 
-	if err = depolorizer.Depolorize(&routine.Catches); err != nil {
+	if err = depolorizer.Depolorize(&routine.Executes); err != nil {
 		return err
 	}
 
-	if err = depolorizer.Depolorize(&routine.Executes); err != nil {
+	if err = depolorizer.Depolorize(&routine.Catches); err != nil {
 		return err
 	}
 

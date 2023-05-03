@@ -1,12 +1,11 @@
 package pisa
 
 import (
+	"bytes"
 	"encoding/hex"
 	"strings"
 
 	"github.com/sarvalabs/go-polo"
-
-	"github.com/sarvalabs/moichain/types"
 )
 
 /*
@@ -57,6 +56,20 @@ func methodsBool() [256]*BuiltinMethod {
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// Return a copy of the bool value
 				return RegisterSet{0: inputs[0].Copy()}, nil
+			},
+		),
+
+		// bool.__join__(bool) -> bool
+		MethodJoin: makeBuiltinMethod(
+			MethodJoin.String(),
+			PrimitiveBool, MethodJoin,
+			makefields([]*TypeField{{"self", TypeBool}, {"other", TypeBool}}),
+			makefields([]*TypeField{{"result", TypeBool}}),
+			func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				// Perform boolean AND on the operands
+				result := inputs[0].(BoolValue).And(inputs[1].(BoolValue))
+				// Return the result
+				return RegisterSet{0: result}, nil
 			},
 		),
 
@@ -128,6 +141,20 @@ func methodsString() [256]*BuiltinMethod {
 			},
 		),
 
+		// string.__join__(string) -> string
+		MethodJoin: makeBuiltinMethod(
+			MethodJoin.String(),
+			PrimitiveString, MethodJoin,
+			makefields([]*TypeField{{"self", TypeString}, {"other", TypeString}}),
+			makefields([]*TypeField{{"result", TypeString}}),
+			func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				// Perform string concatenation on the operands
+				result := inputs[0].(StringValue).Concat(inputs[1].(StringValue))
+				// Return the result
+				return RegisterSet{0: result}, nil
+			},
+		),
+
 		// string.__bool__() -> bool
 		MethodBool: makeBuiltinMethod(
 			MethodBool.String(),
@@ -151,6 +178,20 @@ func methodsString() [256]*BuiltinMethod {
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// Return a copy of the string value
 				return RegisterSet{0: inputs[0].Copy()}, nil
+			},
+		),
+
+		// string.__len__() -> u64
+		MethodLen: makeBuiltinMethod(
+			MethodLen.String(),
+			PrimitiveString, MethodLen,
+			makefields([]*TypeField{{"self", TypeString}}),
+			makefields([]*TypeField{{"length", TypeU64}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				// Get length of bytes
+				length := len(inputs[0].(StringValue))
+				// Return the length as u64
+				return RegisterSet{0: U64Value(length)}, nil
 			},
 		),
 
@@ -179,27 +220,31 @@ type BytesValue []byte
 
 // Type returns the Datatype of BytesValue, which is TypeBytes.
 // Implements the RegisterValue interface for BytesValue.
-func (bytes BytesValue) Type() *Datatype { return TypeBytes }
+func (bytesval BytesValue) Type() *Datatype { return TypeBytes }
 
 // Copy returns a copy of BytesValue as a RegisterValue.
 // Implements the RegisterValue interface for BytesValue.
-func (bytes BytesValue) Copy() RegisterValue {
-	clone := make(BytesValue, len(bytes))
-	copy(clone, bytes)
+func (bytesval BytesValue) Copy() RegisterValue {
+	clone := make(BytesValue, len(bytesval))
+	copy(clone, bytesval)
 
 	return clone
 }
 
 // Norm returns the normalized value of BytesValue as a []byte.
 // Implements the RegisterValue interface for BytesValue.
-func (bytes BytesValue) Norm() any { return []byte(bytes) }
+func (bytesval BytesValue) Norm() any { return []byte(bytesval) }
 
 // Data returns the POLO encoded bytes of BytesValue.
 // Implements the RegisterValue interface for BytesValue.
-func (bytes BytesValue) Data() []byte {
-	data, _ := polo.Polorize(bytes)
+func (bytesval BytesValue) Data() []byte {
+	data, _ := polo.Polorize(bytesval)
 
 	return data
+}
+
+func (bytesval BytesValue) Concat(other BytesValue) BytesValue {
+	return bytes.Join([][]byte{bytesval, other}, []byte{})
 }
 
 //nolint:forcetypeassert
@@ -219,6 +264,20 @@ func methodsBytes() [256]*BuiltinMethod {
 			},
 		),
 
+		// bytes.__join__(bytes) -> bytes
+		MethodJoin: makeBuiltinMethod(
+			MethodJoin.String(),
+			PrimitiveBytes, MethodJoin,
+			makefields([]*TypeField{{"self", TypeBytes}, {"other", TypeBytes}}),
+			makefields([]*TypeField{{"result", TypeBytes}}),
+			func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				// Perform bytes concatenation on the operands
+				result := inputs[0].(BytesValue).Concat(inputs[1].(BytesValue))
+				// Return the result
+				return RegisterSet{0: result}, nil
+			},
+		),
+
 		// bytes.__str__() -> string
 		MethodStr: makeBuiltinMethod(
 			MethodStr.String(),
@@ -231,6 +290,20 @@ func methodsBytes() [256]*BuiltinMethod {
 				return RegisterSet{0: StringValue(inputs[0].(BytesValue))}, nil
 			},
 		),
+
+		// bytes.__len__() -> u64
+		MethodLen: makeBuiltinMethod(
+			MethodLen.String(),
+			PrimitiveBytes, MethodLen,
+			makefields([]*TypeField{{"self", TypeBytes}}),
+			makefields([]*TypeField{{"length", TypeU64}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				// Get length of bytes
+				length := len(inputs[0].(BytesValue))
+				// Return the length as u64
+				return RegisterSet{0: U64Value(length)}, nil
+			},
+		),
 	}
 }
 
@@ -240,6 +313,9 @@ AddressValue Implementation
 
 // AddressValue represents a RegisterValue that operates like a types.Address
 type AddressValue [32]byte
+
+// ZeroAddress represents the zero value of Address
+var ZeroAddress AddressValue
 
 // Type returns the Datatype of AddressValue, which is TypeAddress.
 // Implements the RegisterValue interface for AddressValue.
@@ -275,8 +351,8 @@ func methodsAddress() [256]*BuiltinMethod {
 			makefields([]*TypeField{{"self", TypeAddress}}),
 			makefields([]*TypeField{{"result", TypeBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
-				// True for all values except nil address
-				result := inputs[0].(AddressValue) != AddressValue(types.NilAddress)
+				// True for all values except zero address
+				result := inputs[0].(AddressValue) != ZeroAddress
 				// Set value into outputs
 				return RegisterSet{0: BoolValue(result)}, nil
 			},
@@ -293,6 +369,29 @@ func methodsAddress() [256]*BuiltinMethod {
 				result := inputs[0].(AddressValue).ToHex()
 				// Set the result into the outputs
 				return RegisterSet{0: result}, nil
+			},
+		),
+
+		// address.__addr__() -> address
+		MethodAddr: makeBuiltinMethod(
+			MethodAddr.String(),
+			PrimitiveAddress, MethodAddr,
+			makefields([]*TypeField{{"self", TypeAddress}}),
+			makefields([]*TypeField{{"result", TypeAddress}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				// Return a copy of the address value
+				return RegisterSet{0: inputs[0].Copy()}, nil
+			},
+		),
+
+		// address.__len__() -> u64 (always 32)
+		MethodLen: makeBuiltinMethod(
+			MethodLen.String(),
+			PrimitiveAddress, MethodLen,
+			makefields([]*TypeField{{"self", TypeAddress}}),
+			makefields([]*TypeField{{"length", TypeU64}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				return RegisterSet{0: U64Value(32)}, nil
 			},
 		),
 	}

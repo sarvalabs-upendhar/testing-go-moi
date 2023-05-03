@@ -14,8 +14,8 @@ type CollectionValue interface {
 	RegisterValue
 
 	Size() U64Value
-	Get(RegisterValue) (RegisterValue, error)
-	Set(RegisterValue, RegisterValue) error
+	Get(RegisterValue) (RegisterValue, *Exception)
+	Set(RegisterValue, RegisterValue) *Exception
 }
 
 type ListValue struct {
@@ -23,7 +23,7 @@ type ListValue struct {
 	datatype *Datatype
 }
 
-func NewListValue(dt *Datatype, data []byte) (*ListValue, error) {
+func newListValue(dt *Datatype, data []byte) (*ListValue, error) {
 	list := new(ListValue)
 	list.datatype = dt
 
@@ -33,7 +33,7 @@ func NewListValue(dt *Datatype, data []byte) (*ListValue, error) {
 	case VarrayType:
 		list.values = make([]RegisterValue, 0)
 	default:
-		return nil, errors.New("type is not an array or varray")
+		return nil, errors.New("type is not an v/array")
 	}
 
 	if data != nil {
@@ -83,6 +83,56 @@ func NewListValue(dt *Datatype, data []byte) (*ListValue, error) {
 	return list, nil
 }
 
+func newListFromValues(datatype *Datatype, values ...RegisterValue) (*ListValue, error) {
+	switch datatype.Kind {
+	case ArrayType:
+		if uint64(len(values)) != datatype.Size {
+			return nil, errors.Errorf("incorrect number of values for array of size %v", datatype.Size)
+		}
+
+		fallthrough
+
+	case VarrayType:
+		list := new(ListValue)
+		list.datatype = datatype
+
+		for _, value := range values {
+			if value.Type() != datatype.Elem {
+				return nil, errors.Errorf("incorrect value type for v/array with element %v", datatype.Elem)
+			}
+
+			list.values = append(list.values, value)
+		}
+
+		return list, nil
+
+	default:
+		return nil, errors.New("type is not an v/array")
+	}
+}
+
+func newSizedList(datatype *Datatype, size U64Value) (*ListValue, error) {
+	switch datatype.Kind {
+	case ArrayType:
+		if uint64(size) != datatype.Size {
+			return nil, errors.Errorf("incorrect size for array")
+		}
+
+		fallthrough
+
+	case VarrayType:
+		list := new(ListValue)
+
+		list.datatype = datatype
+		list.values = make([]RegisterValue, size)
+
+		return list, nil
+
+	default:
+		return nil, errors.New("type is not an v/array")
+	}
+}
+
 func (list ListValue) Type() *Datatype { return list.datatype }
 
 func (list ListValue) Copy() RegisterValue {
@@ -111,39 +161,41 @@ func (list ListValue) Data() []byte {
 		_ = polorizer.PolorizeAny(val.Data())
 	}
 
-	return polorizer.Bytes()
+	return polorizer.Packed()
 }
 
-func (list *ListValue) Get(index RegisterValue) (RegisterValue, error) {
+func (list *ListValue) Get(index RegisterValue) (RegisterValue, *Exception) {
 	if !index.Type().Equals(TypeU64) {
-		return nil, errors.New("cannot access list element without uint64 index")
+		return nil, exceptionf(TypeError, "invalid %v index: not a uint64", list.datatype.Kind)
 	}
 
 	listIndex := index.(U64Value) //nolint:forcetypeassert
 	if listIndex >= list.Size() {
-		return nil, errors.New("cannot access list element: index out of bounds")
+		return nil, exceptionf(AccessError, "invalid %v index: out of bounds", list.datatype.Kind)
 	}
 
 	value := list.values[listIndex]
 	if value == nil {
+		// At this point, we know the data is supposed to be an initialized element in the list.
+		// So, if the element is null, we return the zero value for the type
 		value, _ = NewRegisterValue(list.datatype.Elem, nil)
 	}
 
 	return value, nil
 }
 
-func (list *ListValue) Set(index RegisterValue, element RegisterValue) error {
+func (list *ListValue) Set(index RegisterValue, element RegisterValue) *Exception {
 	if !index.Type().Equals(TypeU64) {
-		return errors.New("cannot access list element without uint64 index")
+		return exceptionf(TypeError, "invalid %v index: not a uint64", list.datatype.Kind)
 	}
 
 	listIndex := index.(U64Value) //nolint:forcetypeassert
 	if listIndex >= list.Size() {
-		return errors.New("cannot access list element: index out of bounds")
+		return exceptionf(AccessError, "invalid %v index: out of bounds", list.datatype.Kind)
 	}
 
 	if !list.datatype.Elem.Equals(element.Type()) {
-		return errors.New("cannot set list element with invalid type")
+		exceptionf(TypeError, "invalid %v element: not a %v", list.datatype.Kind, list.datatype.Elem)
 	}
 
 	list.values[listIndex] = element
@@ -159,14 +211,53 @@ func (list ListValue) Size() U64Value {
 	return U64Value(len(list.values))
 }
 
+func (list *ListValue) Append(value RegisterValue) error {
+	if list.Type().Kind != VarrayType {
+		return errors.New("not a varray")
+	}
+
+	if !list.datatype.Elem.Equals(value.Type()) {
+		return errors.Errorf("invalid varray element: not a %v", list.datatype.Elem)
+	}
+
+	list.values = append(list.values, value)
+
+	return nil
+}
+
+func (list *ListValue) Popend() (RegisterValue, error) {
+	if list.Type().Kind != VarrayType {
+		return nil, errors.New("not a varray")
+	}
+
+	if list.Size() == 0 {
+		return nil, errors.New("varray is empty")
+	}
+
+	element := list.values[list.Size()-1]
+	list.values = list.values[:list.Size()-1]
+
+	return element, nil
+}
+
+func (list *ListValue) Grow(size U64Value) error {
+	if list.Type().Kind != VarrayType {
+		return errors.New("not a varray")
+	}
+
+	list.values = append(list.values, make([]RegisterValue, size)...)
+
+	return nil
+}
+
 // MapValue represents a RegisterValue that operates like a mapping.
 type MapValue struct {
 	values   map[RegisterValue]RegisterValue
 	datatype *Datatype
 }
 
-// NewMapValue generates a new MapValue for a given Datatype and some POLO encoded bytes.
-func NewMapValue(dt *Datatype, data []byte) (*MapValue, error) {
+// newMapValue generates a new MapValue for a given Datatype and some POLO encoded bytes.
+func newMapValue(dt *Datatype, data []byte) (*MapValue, error) {
 	// Check if datatype is a map
 	if dt.Kind != MappingType {
 		return nil, errors.New("datatype is not a mapping")
@@ -267,24 +358,22 @@ func (mapping MapValue) Data() []byte {
 		_ = polorizer.PolorizeAny(v.MapIndex(key).Interface().(RegisterValue).Data())
 	}
 
-	return polorizer.Bytes()
+	return polorizer.Packed()
 }
 
 // Get is a safe read from the MapValue, returns an error
 // if the key is not of the correct type for MapValue
-func (mapping *MapValue) Get(key RegisterValue) (RegisterValue, error) {
-	keyType := key.Type()
-	if keyType.Kind != PrimitiveType {
-		return nil, errors.New("cannot Get from MapValue with non-primitive key")
-	}
-
-	if !mapping.datatype.Prim.Equals(keyType.Prim) {
-		return nil, errors.New("cannot Get from MapValue with incorrect key type")
+func (mapping *MapValue) Get(key RegisterValue) (RegisterValue, *Exception) {
+	// We can safely access Prim, because it will default to
+	// PrimitiveNull if the key's datatype is not Primitive
+	if !mapping.datatype.Prim.Equals(key.Type().Prim) {
+		return nil, exceptionf(TypeError, "invalid map key: not a %v", mapping.datatype.Prim)
 	}
 
 	value := mapping.values[key]
-	// If value is nil, generate the default value for the map element type
 	if value == nil {
+		// todo: this should not happen, we need to return NullValue{} and AccessError instead
+		// If value is nil, generate the default value for the map element type
 		value, _ = NewRegisterValue(mapping.datatype.Elem, nil)
 	}
 
@@ -293,18 +382,15 @@ func (mapping *MapValue) Get(key RegisterValue) (RegisterValue, error) {
 
 // Set is a safe write into the MapValue, returns an error if
 // either the key or value are not the correct type for MapValue
-func (mapping *MapValue) Set(key, val RegisterValue) error {
-	keyType := key.Type()
-	if keyType.Kind != PrimitiveType {
-		return errors.New("cannot Set to MapValue with non-primitive key")
-	}
-
-	if !mapping.datatype.Prim.Equals(keyType.Prim) {
-		return errors.New("cannot Set to MapValue with incorrect key type")
+func (mapping *MapValue) Set(key, val RegisterValue) *Exception {
+	// We can safely access Prim, because it will default to
+	// PrimitiveNull if the key's datatype is not Primitive
+	if !mapping.datatype.Prim.Equals(key.Type().Prim) {
+		return exceptionf(TypeError, "invalid map key: not a %v", mapping.datatype.Prim)
 	}
 
 	if !mapping.datatype.Elem.Equals(val.Type()) {
-		return errors.New("cannot Set to MapValue with incorrect value type")
+		exceptionf(TypeError, "invalid map value: not a %v", mapping.datatype.Elem)
 	}
 
 	mapping.values[key] = val
@@ -314,4 +400,16 @@ func (mapping *MapValue) Set(key, val RegisterValue) error {
 
 func (mapping *MapValue) Size() U64Value {
 	return U64Value(len(mapping.values))
+}
+
+func (mapping *MapValue) Has(key RegisterValue) (BoolValue, *Exception) {
+	// We can safely access Prim, because it will default to
+	// PrimitiveNull if the key's datatype is not Primitive
+	if !mapping.datatype.Prim.Equals(key.Type().Prim) {
+		return false, exceptionf(TypeError, "invalid map key: not a %v", mapping.datatype.Prim)
+	}
+
+	_, ok := mapping.values[key]
+
+	return BoolValue(ok), nil
 }

@@ -36,10 +36,10 @@ func (suite *ErrorsTestSuite) SetupSuite() {
 func (suite *ErrorsTestSuite) TestGetThrownError() {
 	consumed, output, except := suite.Call("GetThrownError", nil)
 	suite.Nil(output)
-	suite.Equal(engineio.Fuel(61), consumed)
+	suite.Equal(engineio.Fuel(60), consumed)
 	suite.Equal(except, must(polo.Polorize(pisa.Exception{
 		Class: "string",
-		Data:  "hello!",
+		Error: "hello!",
 		Trace: []string{
 			"root.start()",
 			"root.GetThrownError() [0x2] ... [0x2: THROW 0x0]",
@@ -53,7 +53,7 @@ func (suite *ErrorsTestSuite) TestGetSystemError() {
 	suite.Equal(engineio.Fuel(10), consumed)
 	suite.Equal(except, must(polo.Polorize(pisa.Exception{
 		Class: "builtin.ValueError",
-		Data:  "cannot add registers of type string",
+		Error: "cannot add with string registers",
 		Trace: []string{
 			"root.start()",
 			"root.GetSystemError() [0x3] ... [0x2: ADD 0x2 0x1 0x0]",
@@ -64,10 +64,10 @@ func (suite *ErrorsTestSuite) TestGetSystemError() {
 func (suite *ErrorsTestSuite) TestGetOverflowError() {
 	consumed, output, except := suite.Call("GetOverflowError", map[string]any{"value": 10})
 	suite.Nil(output)
-	suite.Equal(engineio.Fuel(76), consumed)
+	suite.Equal(engineio.Fuel(75), consumed)
 	suite.Equal(except, must(polo.Polorize(pisa.Exception{
 		Class: "builtin.OverflowError",
-		Data:  "subtraction overflow",
+		Error: "subtraction overflow",
 		Trace: []string{
 			"root.start()",
 			"root.GetOverflowError() [0x4] ... [0x4: SUB 0x2 0x0 0x1]",
@@ -78,15 +78,15 @@ func (suite *ErrorsTestSuite) TestGetOverflowError() {
 func (suite *ErrorsTestSuite) TestGetConditionalError() {
 	consumed, output, except := suite.Call("GetConditionalError", map[string]any{"fail": false})
 	suite.Equal(output, map[string]any{})
-	suite.Equal(engineio.Fuel(52), consumed)
+	suite.Equal(engineio.Fuel(51), consumed)
 	suite.Nil(except)
 
 	consumed, output, except = suite.Call("GetConditionalError", map[string]any{"fail": true})
 	suite.Nil(output)
-	suite.Equal(engineio.Fuel(102), consumed)
+	suite.Equal(engineio.Fuel(100), consumed)
 	suite.Equal(except, must(polo.Polorize(pisa.Exception{
 		Class: "string",
-		Data:  "failed!",
+		Error: "failed!",
 		Trace: []string{
 			"root.start()",
 			"root.GetConditionalError() [0x6] ... [0x6: THROW 0x2]",

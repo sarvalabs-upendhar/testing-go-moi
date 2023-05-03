@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/jug/engineio"
 )
@@ -33,25 +32,5 @@ func TestContinuity(t *testing.T) {
 		assert.Equal(t, continueModeJump, cont.mode())
 		assert.Equal(t, fuel, cont.fuel())
 		assert.Equal(t, dest, cont.jumpdest)
-	})
-
-	t.Run("raiseException", func(t *testing.T) {
-		except := &Exception{Class: RuntimeError.Name(), Data: "test exception"}
-		cont := raise(except)
-
-		require.NotNil(t, cont)
-		assert.Equal(t, continueModeExcept, cont.mode())
-		assert.Equal(t, engineio.Fuel(0), cont.fuel())
-		assert.Equal(t, except, cont.exception)
-	})
-
-	t.Run("raiseExceptionWithConsumption", func(t *testing.T) {
-		except := &Exception{Class: RuntimeError.Name(), Data: "test exception"}
-		cont := raise(except).withConsumption(42)
-
-		require.NotNil(t, cont)
-		assert.Equal(t, continueModeExcept, cont.mode())
-		assert.Equal(t, engineio.Fuel(42), cont.fuel())
-		assert.Equal(t, except, cont.exception)
 	})
 }

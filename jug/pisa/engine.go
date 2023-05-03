@@ -59,9 +59,9 @@ func (engine *Engine) Call(
 	// Get the callsite information from the logic and verify that it exists
 	callsite, ok := engine.logic.GetCallsite(ixn.Callsite())
 	if !ok {
-		return engine.ErrResult(exceptionf(InitError, engine.callstack.trace(),
-			"callsite '%v' does not exist", ixn.Callsite(),
-		))
+		return engine.ErrResult(exceptionf(InitError,
+			"callsite '%v' does not exist", ixn.Callsite()).traced(engine.callstack.trace()),
+		)
 	}
 
 	engine.interaction = ixn
@@ -69,38 +69,38 @@ func (engine *Engine) Call(
 	switch callsite.Kind {
 	case engineio.InvokableCallsite:
 		if ixn.IxType() != types.IxLogicInvoke {
-			return engine.ErrResult(exception(InitError, engine.callstack.trace(),
-				"invokable callsite cannot be called without IxLogicInvoke",
-			))
+			return engine.ErrResult(exception(InitError,
+				"invokable callsite cannot be called without IxLogicInvoke").traced(engine.callstack.trace()),
+			)
 		}
 
 		if len(participants) != 1 {
-			return engine.ErrResult(exception(InitError, engine.callstack.trace(),
-				"insufficient context drivers for invokable call (needs 1)",
-			))
+			return engine.ErrResult(exception(InitError,
+				"insufficient context drivers for invokable call (needs 1)").traced(engine.callstack.trace()),
+			)
 		}
 
 		engine.ephemeralS = participants[0]
 
 	case engineio.DeployerCallsite:
 		if ixn.IxType() != types.IxLogicDeploy {
-			return engine.ErrResult(exception(InitError, engine.callstack.trace(),
-				"deployed callsite cannot be called without IxLogicDeploy",
-			))
+			return engine.ErrResult(exception(InitError,
+				"deployed callsite cannot be called without IxLogicDeploy").traced(engine.callstack.trace()),
+			)
 		}
 
 		if len(participants) != 1 {
-			return engine.ErrResult(exception(InitError, engine.callstack.trace(),
-				"insufficient context drivers for deployer call (needs 1)",
-			))
+			return engine.ErrResult(exception(InitError,
+				"insufficient context drivers for deployer call (needs 1)").traced(engine.callstack.trace()),
+			)
 		}
 
 		engine.ephemeralS = participants[0]
 
 	default:
-		return engine.ErrResult(exceptionf(InitError, engine.callstack.trace(),
-			"unsupported callsite kind '%v'", callsite.Kind,
-		))
+		return engine.ErrResult(exceptionf(InitError,
+			"unsupported callsite kind '%v'", callsite.Kind).traced(engine.callstack.trace()),
+		)
 	}
 
 	// Generate a set of pointer to load (the callsite pointer and its dependencies)
@@ -110,39 +110,41 @@ func (engine *Engine) Call(
 		// Retrieve the LogicElement from the Logic
 		element, ok := engine.logic.GetElement(ptr)
 		if !ok {
-			return engine.ErrResult(exceptionf(InitError, engine.callstack.trace(), "element %#x not found", ptr))
+			return engine.ErrResult(exceptionf(InitError,
+				"element %#x not found", ptr).traced(engine.callstack.trace()),
+			)
 		}
 
 		// Load the LogicElement into the Engine
 		if err := engine.loadLogicElement(ptr, element); err != nil {
-			return engine.ErrResult(exceptionf(InitError, engine.callstack.trace(),
-				"element %#x malformed: %v", ptr, err,
-			))
+			return engine.ErrResult(exceptionf(InitError,
+				"element %#x malformed: %v", ptr, err).traced(engine.callstack.trace()),
+			)
 		}
 	}
 
 	// Get the invokable Routine from the engine
 	routine, err := engine.GetRoutine(callsite.Ptr)
 	if err != nil {
-		return engine.ErrResult(exceptionf(InitError, engine.callstack.trace(),
-			"routine not found for callsite: %v", err,
-		))
+		return engine.ErrResult(exceptionf(InitError,
+			"routine not found for callsite: %v", err).traced(engine.callstack.trace()),
+		)
 	}
 
 	calldata := make(polo.Document)
 	// Decode the payload calldata into a polo.Document
 	if ixn.Calldata() != nil {
 		if err = polo.Depolorize(&calldata, ixn.Calldata()); err != nil {
-			return engine.ErrResult(exceptionf(InitError, engine.callstack.trace(),
-				"could not decode calldata into polo document: %v", err,
-			))
+			return engine.ErrResult(exceptionf(InitError,
+				"could not decode calldata into polo document: %v", err).traced(engine.callstack.trace()),
+			)
 		}
 	}
 
 	// Convert the input Calldata into a RegisterSet
 	inputs, err := NewRegisterSet(routine.Inputs, calldata)
 	if err != nil {
-		return engine.ErrResult(exceptionf(InitError, engine.callstack.trace(), "invalid inputs: %v", err))
+		return engine.ErrResult(exceptionf(InitError, "invalid inputs: %v", err).traced(engine.callstack.trace()))
 	}
 
 	// Run the routine and return the error result
@@ -184,7 +186,7 @@ func (engine Engine) OkResult(values polo.Document) *engineio.CallResult {
 func (engine *Engine) run(runnable Runnable, inputs RegisterSet) (RegisterSet, *Exception) {
 	// Perform input validation
 	if err := inputs.Validate(runnable.callfields().Inputs); err != nil {
-		return nil, exceptionf(CallError, engine.callstack.trace(), "invalid inputs: %v", err)
+		return nil, exceptionf(CallError, "invalid inputs: %v", err).traced(engine.callstack.trace())
 	}
 
 	outputs, except := runnable.run(engine, inputs)
@@ -194,7 +196,7 @@ func (engine *Engine) run(runnable Runnable, inputs RegisterSet) (RegisterSet, *
 
 	// Perform output validation
 	if err := outputs.Validate(runnable.callfields().Outputs); err != nil {
-		return nil, exceptionf(CallError, engine.callstack.trace(), "invalid outputs: %v", err)
+		return nil, exceptionf(CallError, "invalid outputs: %v", err).traced(engine.callstack.trace())
 	}
 
 	return outputs, nil

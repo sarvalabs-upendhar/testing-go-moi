@@ -518,24 +518,22 @@ func (compiler *ManifestCompiler) compileConstant(schema *ConstantSchema) (*Cons
 		return nil, errors.New("constant datatype is not scalar")
 	}
 
-	data := schema.Value
 	// Remove the 0x prefix if it exists
-	data = strings.TrimPrefix(data, "0x")
+	value := strings.TrimPrefix(schema.Value, "0x")
 
 	// Decode value hex string into bytes
-	vdata, err := hex.DecodeString(data)
+	data, err := hex.DecodeString(value)
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid constant value: invalid hexadecimal")
 	}
 
 	// Create a register value for the datatype and data
-	value, err := NewRegisterValue(dt, vdata)
-	if err != nil {
+	if _, err = NewRegisterValue(dt, data); err != nil {
 		return nil, errors.Wrap(err, "invalid constant value: invalid data for type")
 	}
 
 	// Create a constant and return it
-	return &Constant{Type: dt.Prim, Data: value.Data()}, nil
+	return &Constant{Type: dt.Prim, Data: data}, nil
 }
 
 // compileTypeFields compiles a map of TypefieldSchema objects into an engineio.TypeFields.

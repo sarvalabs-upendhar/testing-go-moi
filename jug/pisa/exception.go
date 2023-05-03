@@ -16,16 +16,24 @@ type ExceptionClass interface {
 // Exception is the error object for PISA
 type Exception struct {
 	Class string
-	Data  string
+	Error string
 	Trace []string
 }
 
-func exception(class ExceptionClass, trace []string, data string) *Exception {
-	return &Exception{Class: class.Name(), Data: data, Trace: trace}
+func exception(class ExceptionClass, data string) *Exception {
+	return &Exception{Class: class.Name(), Error: data}
 }
 
-func exceptionf(code ExceptionClass, trace []string, format string, a ...any) *Exception {
-	return exception(code, trace, fmt.Sprintf(format, a...))
+func exceptionf(code ExceptionClass, format string, a ...any) *Exception {
+	return exception(code, fmt.Sprintf(format, a...))
+}
+
+func (except *Exception) traced(trace []string) *Exception {
+	return &Exception{
+		Class: except.Class,
+		Error: except.Error,
+		Trace: trace,
+	}
 }
 
 func (except Exception) Bytes() []byte {
@@ -38,7 +46,7 @@ func (except Exception) String() string {
 	var str strings.Builder
 
 	str.WriteString(fmt.Sprintf("pisa.Exception [%v]\n", except.Class))
-	str.WriteString(fmt.Sprintf("error: %v\n", except.Data))
+	str.WriteString(fmt.Sprintf("error: %v\n", except.Error))
 
 	for i := len(except.Trace) - 1; i >= 0; i-- {
 		str.WriteString(strings.Repeat("-", len(except.Trace)-i) + "| " + except.Trace[i])
@@ -49,14 +57,6 @@ func (except Exception) String() string {
 	}
 
 	return str.String()
-}
-
-func (except *Exception) Wrap(frame string) *Exception {
-	return &Exception{
-		Class: except.Class,
-		Data:  except.Data,
-		Trace: append(except.Trace, frame),
-	}
 }
 
 type CustomExceptionClass struct {
@@ -109,4 +109,16 @@ func (err BuiltinExceptionClass) Name() string {
 	}
 
 	return "builtin." + str
+}
+
+func exceptionNullRegister(register byte) *Exception {
+	return exceptionf(ValueError, "$%v is null", register)
+}
+
+func exceptionInvalidDatatype[K string | DatatypeKind | Primitive](kind K, register byte) *Exception {
+	return exceptionf(TypeError, "not a %v: $%v", kind, register)
+}
+
+func exceptionInvalidOperationForType(op string, datatype *Datatype) *Exception {
+	return exceptionf(ValueError, "cannot %v with %v registers", op, datatype)
 }
