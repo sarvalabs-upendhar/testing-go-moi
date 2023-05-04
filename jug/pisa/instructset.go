@@ -122,10 +122,10 @@ func BaseInstructionSet() InstructionSet {
 		DIV: opDIV,
 		MOD: opMOD,
 
-		// BXOR: opBXOR,
-		// BAND: opBAND,
-		// BOR: opBOR,
-		// BNOT: opBNOT,
+		BXOR: opBXOR,
+		BAND: opBAND,
+		BOR:  opBOR,
+		BNOT: opBNOT,
 
 		// LOGIC: opLOGIC,
 		// SENDER: opSENDER,
@@ -921,6 +921,127 @@ func opNOT(scope *callscope, operands []byte) Continue {
 	scope.memory.Set(out, inverted)
 
 	return continueOk{15}
+}
+
+func opBXOR(scope *callscope, operands []byte) Continue {
+	// BXOR [$X][$Y][$Z]
+	out, a, b := operands[0], operands[1], operands[2]
+
+	// Get two values of the same type
+	regA, regB, except := scope.getSymmetricValues(a, b)
+	if except != nil {
+		return scope.propagate(except)
+	}
+
+	var result RegisterValue
+
+	switch dt := regA.Type(); dt {
+	case TypeU64:
+		// Cast register values to U64 and call Bxor
+		result = regA.(U64Value).Bxor(regB.(U64Value)) //nolint:forcetypeassert
+
+	case TypeI64:
+		// Cast register values to I64 and call Bxor
+		result = regA.(I64Value).Bxor(regB.(I64Value)) //nolint:forcetypeassert
+
+	default:
+		return scope.raise(exceptionInvalidOperationForType("bxor", regA.Type()))
+	}
+
+	// Set the register
+	scope.memory.Set(out, result)
+
+	return continueOk{20}
+}
+
+func opBAND(scope *callscope, operands []byte) Continue {
+	// BAND [$X][$Y][$Z]
+	out, a, b := operands[0], operands[1], operands[2]
+
+	// Get two values of the same type
+	regA, regB, except := scope.getSymmetricValues(a, b)
+	if except != nil {
+		return scope.propagate(except)
+	}
+
+	var result RegisterValue
+
+	switch dt := regA.Type(); dt {
+	case TypeU64:
+		// Cast register values to U64 and call Band
+		result = regA.(U64Value).Band(regB.(U64Value)) //nolint:forcetypeassert
+
+	case TypeI64:
+		// Cast register values to I64 and call Band
+		result = regA.(I64Value).Band(regB.(I64Value)) //nolint:forcetypeassert
+
+	default:
+		return scope.raise(exceptionInvalidOperationForType("band", regA.Type()))
+	}
+
+	// Set the register
+	scope.memory.Set(out, result)
+
+	return continueOk{20}
+}
+
+func opBOR(scope *callscope, operands []byte) Continue {
+	// BOR [$X][$Y][$Z]
+	out, a, b := operands[0], operands[1], operands[2]
+
+	// Get two values of the same type
+	regA, regB, except := scope.getSymmetricValues(a, b)
+	if except != nil {
+		return scope.propagate(except)
+	}
+
+	var result RegisterValue
+
+	switch dt := regA.Type(); dt {
+	case TypeU64:
+		// Cast register values to U64 and call Bor
+		result = regA.(U64Value).Bor(regB.(U64Value)) //nolint:forcetypeassert
+
+	case TypeI64:
+		// Cast register values to I64 and call Bor
+		result = regA.(I64Value).Bor(regB.(I64Value)) //nolint:forcetypeassert
+
+	default:
+		return scope.raise(exceptionInvalidOperationForType("bor", regA.Type()))
+	}
+
+	// Set the register
+	scope.memory.Set(out, result)
+
+	return continueOk{20}
+}
+
+func opBNOT(scope *callscope, operands []byte) Continue {
+	// BNOT [$X][$Y]
+	out, a := operands[0], operands[1]
+
+	// Get registervalue of the obtained address
+	regA := scope.memory.Get(a)
+
+	var result RegisterValue
+
+	switch dt := regA.Type(); dt {
+	case TypeU64:
+		// Cast register values to U64 and call Bnot
+		result = regA.(U64Value).Bnot() //nolint:forcetypeassert
+
+	case TypeI64:
+		// Cast register values to I64 and call Bnot
+		result = regA.(I64Value).Bnot() //nolint:forcetypeassert
+
+	default:
+		return scope.raise(exceptionInvalidOperationForType("bnot", regA.Type()))
+	}
+
+	// Set the register
+	scope.memory.Set(out, result)
+
+	return continueOk{20}
 }
 
 func opINCR(scope *callscope, operands []byte) Continue {

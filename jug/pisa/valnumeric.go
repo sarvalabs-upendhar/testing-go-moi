@@ -94,6 +94,26 @@ func (x U64Value) Mod(y U64Value) (U64Value, *Exception) {
 	return x % y, nil
 }
 
+// Bxor returns  the value of x ^ y  as a U64Value
+func (x U64Value) Bxor(y U64Value) U64Value {
+	return x ^ y
+}
+
+// Band returns  the value of x & y  as a U64Value
+func (x U64Value) Band(y U64Value) U64Value {
+	return x & y
+}
+
+// Bor returns  the value of x | y  as a U64Value
+func (x U64Value) Bor(y U64Value) U64Value {
+	return x | y
+}
+
+// Bnot returns  the value of ^x as a U64Value
+func (x U64Value) Bnot() U64Value {
+	return ^x
+}
+
 func (x U64Value) Incr() (U64Value, *Exception) {
 	if y := x + 1; y > x {
 		return y, nil
@@ -320,6 +340,26 @@ func (x I64Value) Mod(y I64Value) (I64Value, *Exception) {
 	}
 
 	return x % y, nil
+}
+
+// Bxor returns  the value of x ^ y  as a I64Value
+func (x I64Value) Bxor(y I64Value) I64Value {
+	return x ^ y
+}
+
+// Band returns  the value of x ^ y  as a I64Value
+func (x I64Value) Band(y I64Value) I64Value {
+	return x & y
+}
+
+// Bor returns  the value of x | y  as a I64Value
+func (x I64Value) Bor(y I64Value) I64Value {
+	return x | y
+}
+
+// Bnot returns  the value of ^x  as a I64Value
+func (x I64Value) Bnot() I64Value {
+	return ^x
 }
 
 func (x I64Value) Incr() (I64Value, *Exception) {

@@ -374,10 +374,10 @@ var opcodeMetadataTable = map[OpCode]*opcodeMetadata{
 	DIV: {"DIV", 3},
 	MOD: {"MOD", 3},
 
-	// BXOR: nil,
-	// BAND: nil,
-	// BOR:  nil,
-	// BNOT: nil,
+	BXOR: {"BXOR", 3},
+	BAND: {"BAND", 3},
+	BOR:  {"BOR", 3},
+	BNOT: {"BNOT", 2},
 
 	// LOGIC:  {"LOGIC", 0},
 	// SENDER: {"SENDER", 0},

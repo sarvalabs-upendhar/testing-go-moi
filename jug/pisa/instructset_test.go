@@ -1883,4 +1883,242 @@ func TestInstructionSet(t *testing.T) {
 			require.Equal(t, U64Value(1), scope.memory[2])
 		})
 	})
+
+	//nolint:dupl
+	t.Run("BXOR", func(t *testing.T) {
+		t.Run("non_symmetric", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: StringValue("foo"),
+					1: U64Value(56),
+				},
+			}
+
+			continuity := opBXOR(scope, []byte{2, 0, 1})
+			require.Equal(t, continueException{0, &Exception{
+				Class: "builtin.ValueError",
+				Error: "not symmetric: [$0, $1]",
+				Trace: []string{},
+			}}, continuity)
+		})
+
+		t.Run("non_numeric", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: StringValue("foo"),
+					1: StringValue("bar"),
+				},
+			}
+
+			continuity := opBXOR(scope, []byte{2, 0, 1})
+			require.Equal(t, continueException{0, &Exception{
+				Class: "builtin.ValueError",
+				Error: "cannot bxor with string registers",
+				Trace: []string{},
+			}}, continuity)
+		})
+
+		t.Run("success_u64", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: U64Value(56),
+					1: U64Value(11),
+				},
+			}
+
+			continuity := opBXOR(scope, []byte{2, 0, 1})
+			require.Equal(t, continueOk{20}, continuity)
+			require.Equal(t, U64Value(51), scope.memory[2])
+		})
+
+		t.Run("success_i64", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: I64Value(-56),
+					1: I64Value(11),
+				},
+			}
+
+			continuity := opBXOR(scope, []byte{2, 0, 1})
+			require.Equal(t, continueOk{20}, continuity)
+			require.Equal(t, I64Value(-61), scope.memory[2])
+		})
+	})
+
+	t.Run("BAND", func(t *testing.T) {
+		t.Run("non_symmetric", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: StringValue("foo"),
+					1: U64Value(56),
+				},
+			}
+
+			continuity := opBAND(scope, []byte{2, 0, 1})
+			require.Equal(t, continueException{0, &Exception{
+				Class: "builtin.ValueError",
+				Error: "not symmetric: [$0, $1]",
+				Trace: []string{},
+			}}, continuity)
+		})
+
+		t.Run("non_numeric", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: StringValue("foo"),
+					1: StringValue("bar"),
+				},
+			}
+
+			continuity := opBAND(scope, []byte{2, 0, 1})
+			require.Equal(t, continueException{0, &Exception{
+				Class: "builtin.ValueError",
+				Error: "cannot band with string registers",
+				Trace: []string{},
+			}}, continuity)
+		})
+
+		t.Run("success_u64", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: U64Value(56),
+					1: U64Value(11),
+				},
+			}
+
+			continuity := opBAND(scope, []byte{2, 0, 1})
+			require.Equal(t, continueOk{20}, continuity)
+			require.Equal(t, U64Value(8), scope.memory[2])
+		})
+
+		t.Run("success_i64", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: I64Value(-56),
+					1: I64Value(11),
+				},
+			}
+
+			continuity := opBAND(scope, []byte{2, 0, 1})
+			require.Equal(t, continueOk{20}, continuity)
+			require.Equal(t, I64Value(8), scope.memory[2])
+		})
+	})
+
+	//nolint:dupl
+	t.Run("BOR", func(t *testing.T) {
+		t.Run("non_symmetric", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: StringValue("foo"),
+					1: U64Value(56),
+				},
+			}
+
+			continuity := opBOR(scope, []byte{2, 0, 1})
+			require.Equal(t, continueException{0, &Exception{
+				Class: "builtin.ValueError",
+				Error: "not symmetric: [$0, $1]",
+				Trace: []string{},
+			}}, continuity)
+		})
+
+		t.Run("non_numeric", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: StringValue("foo"),
+					1: StringValue("bar"),
+				},
+			}
+
+			continuity := opBOR(scope, []byte{2, 0, 1})
+			require.Equal(t, continueException{0, &Exception{
+				Class: "builtin.ValueError",
+				Error: "cannot bor with string registers",
+				Trace: []string{},
+			}}, continuity)
+		})
+
+		t.Run("success_u64", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: U64Value(56),
+					1: U64Value(11),
+				},
+			}
+
+			continuity := opBOR(scope, []byte{2, 0, 1})
+			require.Equal(t, continueOk{20}, continuity)
+			require.Equal(t, U64Value(59), scope.memory[2])
+		})
+
+		t.Run("success_i64", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: I64Value(-56),
+					1: I64Value(11),
+				},
+			}
+
+			continuity := opBOR(scope, []byte{2, 0, 1})
+			require.Equal(t, continueOk{20}, continuity)
+			require.Equal(t, I64Value(-53), scope.memory[2])
+		})
+	})
+
+	t.Run("BNOT", func(t *testing.T) {
+		t.Run("non_numeric", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: StringValue("foo"),
+				},
+			}
+
+			continuity := opBNOT(scope, []byte{2, 0})
+			require.Equal(t, continueException{0, &Exception{
+				Class: "builtin.ValueError",
+				Error: "cannot bnot with string registers",
+				Trace: []string{},
+			}}, continuity)
+		})
+
+		t.Run("success_u64", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: U64Value(56),
+				},
+			}
+
+			continuity := opBNOT(scope, []byte{2, 0})
+			require.Equal(t, continueOk{20}, continuity)
+			require.Equal(t, U64Value(18446744073709551559), scope.memory[2])
+		})
+
+		t.Run("success_i64", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: I64Value(-56),
+				},
+			}
+
+			continuity := opBNOT(scope, []byte{2, 0})
+			require.Equal(t, continueOk{20}, continuity)
+			require.Equal(t, I64Value(55), scope.memory[2])
+		})
+	})
 }
