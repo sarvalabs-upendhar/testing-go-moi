@@ -219,15 +219,6 @@ func (m *accountsMap) allIxs(includeEnqueued bool) (
 	return allPromoted, allEnqueued
 }
 
-// remove deletes the account from the accountsMap if the enqueue and promoted queue of the account is empty
-func (m *accountsMap) remove(address types.Address) {
-	account := m.get(address)
-
-	if account.enqueued.length() == 0 && account.promoted.length() == 0 {
-		m.Delete(address)
-	}
-}
-
 // An account is the core structure for processing
 // Interactions from a specific address. The nextNonce
 // field is what separetes the enqueued from promoted:

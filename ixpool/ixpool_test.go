@@ -377,13 +377,6 @@ func TestIxPool_ResetWithHeaders(t *testing.T) {
 			// from the queues and resets the delay counter to default value
 			ixPool.ResetWithHeaders(ts)
 
-			if testcase.expectedPromotions == 0 {
-				// In this case both the enqueue and promoted queue will be empty, so the account should not exist
-				require.Nil(t, ixPool.accounts.get(senderAddress))
-
-				return
-			}
-
 			require.Equal(t, int32(0), ixPool.accounts.get(senderAddress).delayCounter)
 			require.Equal(t, testcase.expectedPromotions, ixPool.accounts.get(senderAddress).promoted.length())
 		})
@@ -439,13 +432,6 @@ func TestIxPool_resetAccount_enqueued(t *testing.T) {
 				<-ixPool.promoteReqCh
 			}
 
-			if testcase.expectedEnqueues == 0 {
-				// In this case both the enqueue and promoted queue will be empty, so the account should not exist
-				require.Nil(t, ixPool.accounts.get(senderAddress))
-
-				return
-			}
-
 			require.Equal(t, testcase.expectedEnqueues, ixPool.accounts.get(senderAddress).enqueued.length())
 		})
 	}
@@ -491,13 +477,6 @@ func TestIxPool_resetAccount_promoted(t *testing.T) {
 
 			// On reset should prune the ixs from the promoted queue if the nonce is lesser than the given nonce
 			ixPool.resetAccount(senderAddress, testcase.nonce)
-
-			if testcase.expectedPromotions == 0 {
-				// In this case both the enqueue and promoted queue will be empty, so the account should not exist
-				require.Nil(t, ixPool.accounts.get(senderAddress))
-
-				return
-			}
 
 			require.Equal(t, testcase.expectedPromotions, ixPool.accounts.get(senderAddress).promoted.length())
 		})
@@ -595,13 +574,6 @@ func TestIxPool_resetAccount(t *testing.T) {
 			}
 
 			time.Sleep(100 * time.Millisecond)
-
-			if testcase.expected.enqueued == 0 && testcase.expected.promoted == 0 {
-				// In this case both the enqueue and promoted queue will be empty, so the account should not exist
-				require.Nil(t, ixPool.accounts.get(senderAddress))
-
-				return
-			}
 
 			require.Equal(t, testcase.expected.enqueued, ixPool.accounts.get(senderAddress).enqueued.length())
 			require.Equal(t, testcase.expected.promoted, ixPool.accounts.get(senderAddress).promoted.length())

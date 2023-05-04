@@ -258,7 +258,7 @@ func (i *IxPool) resetAccount(addr types.Address, nonce uint64) {
 
 	defer func() {
 		// update accountsMap
-		i.accounts.remove(addr)
+		// i.accounts.remove(addr) FIXME: Issue(https://github.com/sarvalabs/moichain/issues/256)
 		account.enqueued.unlock()
 	}()
 
