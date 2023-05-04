@@ -364,7 +364,7 @@ func (i *IxPool) Drop(ix *types.Interaction) {
 		cleanAllIxs(dropped)
 
 		// drop the account
-		i.accounts.remove(ix.Sender())
+		// i.accounts.remove(ix.Sender()) FIXME: Issue(https://github.com/sarvalabs/moichain/issues/256)
 
 		i.logger.Debug("Dropped ixs", "count", noOfDroppedIxs, "address", ix.Sender())
 	}

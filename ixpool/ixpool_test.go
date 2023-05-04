@@ -672,7 +672,7 @@ func TestIxPool_Drop(t *testing.T) {
 
 			ixPool.Drop(ix)
 
-			require.Nil(t, ixPool.accounts.get(senderAddress))
+			require.Zero(t, ixPool.accounts.get(senderAddress).promoted.length())
 		})
 	}
 }
