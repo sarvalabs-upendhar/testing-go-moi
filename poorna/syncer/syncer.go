@@ -954,7 +954,6 @@ func (s *Syncer) fetchSnapShort(
 	}
 
 	errGrp, grpCtx := errgroup.WithContext(ctx)
-
 	errGrp.Go(func() error {
 		if err = s.rpcClient.Stream(
 			grpCtx,
@@ -1062,15 +1061,15 @@ func (s *Syncer) syncLattice(
 		startHeight++
 	}
 
+	reqChan <- &LatticeRequest{
+		Address:     job.address,
+		StartHeight: startHeight,
+		EndHeight:   endHeight,
+	}
+
 	grp, grpCtx := errgroup.WithContext(ctx)
 
 	grp.Go(func() error {
-		reqChan <- &LatticeRequest{
-			Address:     job.address,
-			StartHeight: startHeight,
-			EndHeight:   endHeight,
-		}
-
 		s.logger.Debug(
 			"Fetching tesseract",
 			"from", peerID,
