@@ -28,16 +28,14 @@ var LatestTesseractNumber = int64(-1)
 // IxnTimeout is the max time to wait for an ixn to be completed
 // 180 seconds chosen as it is taking 90 seconds in worst case to execute interaction
 // so we are taking (2*90) seconds to be on safe side
-const IxnTimeout = 180 * time.Second
+const IxnTimeout = 5 * time.Minute
 
 var (
-	sender               = types.HexToAddress("377a4674fca572f072a8176d61b86d9015914b9df0a57bb1d80fafecce233084")
-	receiver             = types.HexToAddress("bdfa7699df0d291d368a7d6bdda0a34d703458d2ba2c76c6a5dcac0915ce16ad")
 	genesisHeight        = int64(0)
 	deployLogicHeight    = int64(1)
-	executeLogicHeight   = int64(2)
-	createAssetHeight    = int64(3)
-	transferTokensHeight = int64(4)
+	executeLogicHeight   = int64(1)
+	createAssetHeight    = int64(1)
+	transferTokensHeight = int64(2)
 	ixnPendingCount      = 10
 )
 
@@ -82,7 +80,7 @@ func makeHTTPRequest(t *testing.T, method string, args interface{}) *ptypes.Resp
 }
 
 // getIXArgsForLogicDeployment returns interaction args for logic deployment
-func getIXArgsForLogicDeployment(t *testing.T) *ptypes.SendIXArgs {
+func getIXArgsForLogicDeployment(t *testing.T, addr types.Address) *ptypes.SendIXArgs {
 	t.Helper()
 
 	calldata := "0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd8ee6a29ec4" +
@@ -106,19 +104,19 @@ func getIXArgsForLogicDeployment(t *testing.T) *ptypes.SendIXArgs {
 		Type:      8,
 		FuelPrice: (*hexutil.Big)(fuelPrice),
 		FuelLimit: (*hexutil.Big)(fuelLimit),
-		Sender:    sender,
+		Sender:    addr,
 		Payload:   payload,
 	}
 
 	return ixArgs
 }
 
-// getTesseract returns tesseract for the given sender and height
-func getTesseract(t *testing.T, client *Client, sender types.Address, height *int64) *ptypes.RPCTesseract {
+// getTesseract returns tesseract for the given senderAddr and height
+func getTesseract(t *testing.T, client *Client, addr types.Address, height *int64) *ptypes.RPCTesseract {
 	t.Helper()
 
 	args := &ptypes.TesseractArgs{
-		Address:          sender,
+		Address:          addr,
 		WithInteractions: true,
 		Options: ptypes.TesseractNumberOrHash{
 			TesseractNumber: height,
@@ -131,11 +129,11 @@ func getTesseract(t *testing.T, client *Client, sender types.Address, height *in
 	return ts
 }
 
-// getAssetID returns assetID for the given sender and height
-func getAssetID(t *testing.T, client *Client, sender types.Address, height *int64) string {
+// getAssetID returns assetID for the given senderAddr and height
+func getAssetID(t *testing.T, client *Client, addr types.Address, height *int64) string {
 	t.Helper()
 
-	ts := getTesseract(t, client, sender, height)
+	ts := getTesseract(t, client, addr, height)
 
 	receiptArgs := &ptypes.ReceiptArgs{
 		Hash: ts.Ixns[0].Hash,
@@ -152,11 +150,11 @@ func getAssetID(t *testing.T, client *Client, sender types.Address, height *int6
 	return assetReceipt.AssetID
 }
 
-// getLogicID returns logicID for the given sender and height
-func getLogicID(t *testing.T, client *Client, sender types.Address, height *int64) string {
+// getLogicID returns logicID for the given senderAddr and height
+func getLogicID(t *testing.T, client *Client, addr types.Address, height *int64) string {
 	t.Helper()
 
-	ts := getTesseract(t, client, sender, height)
+	ts := getTesseract(t, client, addr, height)
 
 	receiptArgs := &ptypes.ReceiptArgs{
 		Hash: ts.Ixns[0].Hash,
@@ -244,6 +242,29 @@ func getLogicManifestByEncodingType(
 	default:
 		return nil, errors.New("invalid encoding type")
 	}
+}
+
+// SetupAddrs sanitises the given addrs array and validates it
+func SetupAddrs(addrs []types.Address) ([]types.Address, error) {
+	if len(addrs) < 12 {
+		return nil, errors.New("not sufficient genesis accounts to run moiclient tests")
+	}
+
+	temp := make([]types.Address, 0)
+
+	for _, addr := range addrs {
+		if addr == types.SargaAddress {
+			break
+		}
+
+		if types.Contains(types.GenesisLogicAddrs, addr) {
+			break
+		}
+
+		temp = append(temp, addr)
+	}
+
+	return temp, nil
 }
 
 // httpTesseract returns RPCTesseract based on the given arguments

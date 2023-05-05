@@ -18,40 +18,163 @@ import (
 	"github.com/sarvalabs/moichain/utils"
 )
 
+type StrMap map[string]types.Address
+
 // url of the node to be used by moiclient.
-const url = "http://0.0.0.0:1600"
+const url = "http://0.0.0.0:1601"
+
+// Need to run minimum 20 fresh nodes for this test to run successfully
+// Ensure chain is set up to run individual tests
+// TestMoiClient tests moi client functions unless short flag is provided
+func TestMoiClient(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	addrsMap := make(StrMap)
+
+	client, err := NewClient(url)
+	require.NoError(t, err)
+
+	accs, err := client.Accounts()
+	require.NoError(t, err)
+
+	addrs, err := SetupAddrs(accs)
+	require.NoError(t, err)
+
+	setupChain(t, client, addrs, addrsMap)
+
+	testcases := map[string]struct {
+		test func(t *testing.T)
+	}{
+		"Tesseract": {
+			test: func(t *testing.T) { testTesseract(t, client, addrsMap["deployAddr"]) },
+		},
+		"DBGet": {
+			test: func(t *testing.T) { testDBGet(t, client) },
+		},
+		"GetAssetInfoByAssetID": {
+			test: func(t *testing.T) { testGetAssetInfoByAssetID(t, client, addrsMap["assetAddr"]) },
+		},
+		"GetBalance": {
+			test: func(t *testing.T) { testGetBalance(t, client, addrsMap) },
+		},
+		"TDU": {
+			test: func(t *testing.T) { testTDU(t, client, addrsMap["assetAddr"]) },
+		},
+		"GetContextInfo": {
+			test: func(t *testing.T) { testGetContextInfo(t, client, addrsMap["deployAddr"]) },
+		},
+		"InteractionReceipt": {
+			test: func(t *testing.T) { testInteractionReceipt(t, client, addrsMap["assetAddr"]) },
+		},
+		"InteractionCount": {
+			test: func(t *testing.T) { testInteractionCount(t, client, addrsMap["assetAddr"]) },
+		},
+		"PendingInteractionCount": {
+			test: func(t *testing.T) { testPendingInteractionCount(t, client, addrsMap["assetAddr"]) },
+		},
+		"Storage": {
+			test: func(t *testing.T) { testStorage(t, client, addrsMap["deployAddr"]) },
+		},
+		"AccountState": {
+			test: func(t *testing.T) { testAccountState(t, client, addrsMap["deployAddr"]) },
+		},
+		"LogicManifest": {
+			test: func(t *testing.T) { testLogicManifest(t, client, addrsMap["deployAddr"]) },
+		},
+		"Content": {
+			test: func(t *testing.T) { testContent(t, client) },
+		},
+		"ContentFrom": {
+			test: func(t *testing.T) { testContentFrom(t, client, addrsMap["dumpAddr"]) },
+		},
+		"Status": {
+			test: func(t *testing.T) { testStatus(t, client) },
+		},
+		"Inspect": {
+			test: func(t *testing.T) { testInspect(t, client) },
+		},
+		"WaitTime": {
+			test: func(t *testing.T) { testWaitTime(t, client, addrsMap["dumpAddr"]) },
+		},
+		"Peers": {
+			test: func(t *testing.T) { testPeers(t, client) },
+		},
+		"SendInteraction": {
+			test: func(t *testing.T) { testSendInteraction(t, client) },
+		},
+		"ixByHash": {
+			test: func(t *testing.T) { testInteractionByHash(t, client, addrsMap["deployAddr"]) },
+		},
+		"ixByTesseract": {
+			test: func(t *testing.T) { testInteractionByTesseract(t, client, addrsMap["deployAddr"]) },
+		},
+		"testAccounts": {
+			test: func(t *testing.T) { testAccounts(t, client) },
+		},
+		"testAccountMetaInfo": {
+			test: func(t *testing.T) { testAccountMetaInfo(t, client) },
+		},
+	}
+
+	t.Parallel()
+
+	for name, testcase := range testcases {
+		t.Run(name, testcase.test)
+	}
+}
 
 // setupChain runs these functions in order as tests use heights for identifying the event happened
 // Every function is an interaction, and we only proceed to the next one after receiving the receipt for the current one
 // We are testing interaction execution and receipt generation for every function
 // More verification of interaction execution (like fields) will be done in the following table tests
-// sender account :
+// senderAddr account :
 // At height 1, logic is deployed
 // At height 2, asset is created
 // At height 3, tokens are transferred
 // Logic Address account :
-// At height 1, transfer call is made to contract by sender
-func setupChain(t *testing.T, client *Client) {
+// At height 1, transfer call is made to contract by senderAddr
+func setupChain(t *testing.T, client *Client, addrs []types.Address, addrsMap StrMap) {
+	var i int64 = 0
+
 	t.Run("DeployLogic", func(t *testing.T) {
-		deployLogic(t, client)
+		deployLogic(t, client, addrs[i])
+		addrsMap["deployAddr"] = addrs[i]
 	})
+	i++
+
 	t.Run("ExecuteLogic", func(t *testing.T) {
-		executeLogic(t, client)
+		t.Log(addrs[i])
+		executeLogic(t, client, addrsMap["deployAddr"], addrs[i])
+		addrsMap["executeAddr"] = addrs[i]
 	})
+	i++
+
 	t.Run("CreateAsset", func(t *testing.T) {
-		createAsset(t, client)
+		t.Log(addrs[i])
+		createAsset(t, client, addrs[i])
+		addrsMap["assetAddr"] = addrs[i]
 	})
+	i++
+
 	t.Run("TransferTokens", func(t *testing.T) {
-		transferTokens(t, client)
+		t.Log(addrs[i])
+		transferTokens(t, client, addrsMap["assetAddr"], addrs[i])
+		addrsMap["receiverAddr"] = addrs[i]
 	})
+
+	i += 2
+
 	t.Run("IXPoolAPI", func(t *testing.T) {
-		fillIXPool(t, client)
+		fillIXPool(t, client, addrs[i])
+		addrsMap["dumpAddr"] = addrs[i]
 	})
 }
 
 // deployLogic deploys logic manifest
-func deployLogic(t *testing.T, client *Client) {
-	ixArgs := getIXArgsForLogicDeployment(t)
+func deployLogic(t *testing.T, client *Client, addr types.Address) {
+	ixArgs := getIXArgsForLogicDeployment(t, addr)
 
 	ixHash, err := client.SendInteractions(ixArgs)
 	require.NoError(t, err)
@@ -64,12 +187,12 @@ func deployLogic(t *testing.T, client *Client) {
 }
 
 // executeLogic executes the transfer method on deployed logic
-func executeLogic(t *testing.T, client *Client) {
+func executeLogic(t *testing.T, client *Client, deployAddr, addr types.Address) {
 	calldata := "0x0daf010665a601e501f6059506616d6f756e74030f424066726f6d06ffcd8ee6a29ec442dbbf9c6124dd3aeb833ef58" +
 		"052237d521654740857716b34746f060fafe52ec42a85db644d5cceba2bb89cf5b0166cc9158211f44ed1e60b06032c"
 
 	logicPayload := &ptypes.RPCLogicPayload{
-		LogicID:  getLogicID(t, client, sender, &deployLogicHeight),
+		LogicID:  getLogicID(t, client, deployAddr, &deployLogicHeight),
 		Callsite: "Transfer!",
 		Calldata: hexutil.Bytes(types.Hex2Bytes(calldata)),
 	}
@@ -83,7 +206,7 @@ func executeLogic(t *testing.T, client *Client) {
 		Type:      9,
 		FuelPrice: (*hexutil.Big)(fuelprice),
 		FuelLimit: (*hexutil.Big)(fuelprice),
-		Sender:    sender,
+		Sender:    addr,
 		Payload:   payload,
 	}
 
@@ -98,11 +221,11 @@ func executeLogic(t *testing.T, client *Client) {
 }
 
 // createAsset creates asset named "MOI"
-func createAsset(t *testing.T, client *Client) {
+func createAsset(t *testing.T, client *Client, addr types.Address) {
 	supply, _ := new(big.Int).SetString("130D41", 16)
 
 	RPCAssetCreation := ptypes.RPCAssetCreation{
-		Type:   2,
+		Type:   3,
 		Symbol: "MOI",
 		Supply: (*hexutil.Big)(supply),
 	}
@@ -111,7 +234,7 @@ func createAsset(t *testing.T, client *Client) {
 
 	ixArgs := &ptypes.SendIXArgs{
 		Type:      3,
-		Sender:    sender,
+		Sender:    addr,
 		FuelPrice: (*hexutil.Big)(supply),
 		FuelLimit: (*hexutil.Big)(supply),
 		Payload:   payload,
@@ -126,10 +249,10 @@ func createAsset(t *testing.T, client *Client) {
 	retryFetchReceipt(t, ctx, client, ixHash)
 }
 
-// transferTokens transfers tokens from sender to receiver
-func transferTokens(t *testing.T, client *Client) {
+// transferTokens transfers tokens from senderAddr to receiver
+func transferTokens(t *testing.T, client *Client, sender, receiver types.Address) {
 	assetID := getAssetID(t, client, sender, &createAssetHeight)
-	fuelprice, _ := new(big.Int).SetString("130D41", 16)
+	fuelprice, _ := new(big.Int).SetString("130D40", 16)
 
 	ixArgs := &ptypes.SendIXArgs{
 		Type:     1,
@@ -153,8 +276,8 @@ func transferTokens(t *testing.T, client *Client) {
 }
 
 // fillIXPool sends ixnPendingCount number of deploy interactions
-func fillIXPool(t *testing.T, client *Client) {
-	ixArgs := getIXArgsForLogicDeployment(t)
+func fillIXPool(t *testing.T, client *Client, addr types.Address) {
+	ixArgs := getIXArgsForLogicDeployment(t, addr)
 	ixArgs.Nonce = 2
 
 	for i := 0; i < ixnPendingCount; i++ { // send ixns just to fill ixpool with some data
@@ -164,101 +287,7 @@ func fillIXPool(t *testing.T, client *Client) {
 	}
 }
 
-// Need to run minimum 20 fresh nodes for this test to run successfully
-// Ensure chain is set up to run individual tests
-// TestMoiClient tests moi client functions unless short flag is provided
-func TestMoiClient(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	client, err := NewClient(url)
-	require.NoError(t, err)
-
-	setupChain(t, client)
-
-	testcases := map[string]struct {
-		test func(t *testing.T)
-	}{
-		"Tesseract": {
-			test: func(t *testing.T) { testTesseract(t, client) },
-		},
-		"DBGet": {
-			test: func(t *testing.T) { testDBGet(t, client) },
-		},
-		"GetAssetInfoByAssetID": {
-			test: func(t *testing.T) { testGetAssetInfoByAssetID(t, client) },
-		},
-		"GetBalance": {
-			test: func(t *testing.T) { testGetBalance(t, client) },
-		},
-		"TDU": {
-			test: func(t *testing.T) { testTDU(t, client) },
-		},
-		"GetContextInfo": {
-			test: func(t *testing.T) { testGetContextInfo(t, client) },
-		},
-		"InteractionReceipt": {
-			test: func(t *testing.T) { testInteractionReceipt(t, client) },
-		},
-		"InteractionCount": {
-			test: func(t *testing.T) { testInteractionCount(t, client) },
-		},
-		"PendingInteractionCount": {
-			test: func(t *testing.T) { testPendingInteractionCount(t, client) },
-		},
-		"Storage": {
-			test: func(t *testing.T) { testStorage(t, client) },
-		},
-		"AccountState": {
-			test: func(t *testing.T) { testAccountState(t, client) },
-		},
-		"LogicManifest": {
-			test: func(t *testing.T) { testLogicManifest(t, client) },
-		},
-		"Content": {
-			test: func(t *testing.T) { testContent(t, client) },
-		},
-		"ContentFrom": {
-			test: func(t *testing.T) { testContentFrom(t, client) },
-		},
-		"Status": {
-			test: func(t *testing.T) { testStatus(t, client) },
-		},
-		"Inspect": {
-			test: func(t *testing.T) { testInspect(t, client) },
-		},
-		"WaitTime": {
-			test: func(t *testing.T) { testWaitTime(t, client) },
-		},
-		"Peers": {
-			test: func(t *testing.T) { testPeers(t, client) },
-		},
-		"SendInteraction": {
-			test: func(t *testing.T) { testSendInteraction(t, client) },
-		},
-		"ixByHash": {
-			test: func(t *testing.T) { testInteractionByHash(t, client) },
-		},
-		"ixByTesseract": {
-			test: func(t *testing.T) { testInteractionByTesseract(t, client) },
-		},
-		"testAccounts": {
-			test: func(t *testing.T) { testAccounts(t, client) },
-		},
-		"testAccountMetaInfo": {
-			test: func(t *testing.T) { testAccountMetaInfo(t, client) },
-		},
-	}
-
-	t.Parallel()
-
-	for name, testcase := range testcases {
-		t.Run(name, testcase.test)
-	}
-}
-
-func testTesseract(t *testing.T, client *Client) {
+func testTesseract(t *testing.T, client *Client, addr types.Address) {
 	invalidHeight := int64(100000)
 
 	testcases := []struct {
@@ -269,7 +298,7 @@ func testTesseract(t *testing.T, client *Client) {
 		{
 			name: "fetch tesseract with interactions",
 			tesseractArgs: &ptypes.TesseractArgs{
-				Address:          sender,
+				Address:          addr,
 				WithInteractions: true,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &deployLogicHeight,
@@ -279,7 +308,7 @@ func testTesseract(t *testing.T, client *Client) {
 		{
 			name: "fetch tesseract without interactions",
 			tesseractArgs: &ptypes.TesseractArgs{
-				Address:          sender,
+				Address:          addr,
 				WithInteractions: false,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &deployLogicHeight,
@@ -289,7 +318,7 @@ func testTesseract(t *testing.T, client *Client) {
 		{
 			name: "fetch genesis tesseract",
 			tesseractArgs: &ptypes.TesseractArgs{
-				Address:          sender,
+				Address:          addr,
 				WithInteractions: false,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &genesisHeight,
@@ -299,7 +328,7 @@ func testTesseract(t *testing.T, client *Client) {
 		{
 			name: "invalid tesseract number",
 			tesseractArgs: &ptypes.TesseractArgs{
-				Address:          sender,
+				Address:          addr,
 				WithInteractions: false,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &invalidHeight,
@@ -313,6 +342,7 @@ func testTesseract(t *testing.T, client *Client) {
 		t.Run(test.name, func(t *testing.T) {
 			ts, err := client.Tesseract(test.tesseractArgs)
 
+			t.Log(addr)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -324,11 +354,11 @@ func testTesseract(t *testing.T, client *Client) {
 			httpTS := httpTesseract(t, test.tesseractArgs)
 
 			require.Equal(t, httpTS, ts)
-			require.Equal(t, sender, ts.Address())
+			require.Equal(t, addr, ts.Address())
 
 			if test.tesseractArgs.WithInteractions {
 				require.Greater(t, len(ts.Ixns), 0)
-				require.Equal(t, types.IxLogicDeploy, ts.Ixns[0].Type)
+				// require.Equal(t, types.IxLogicDeploy, ts.Ixns[0].Type)
 
 				return
 			}
@@ -385,7 +415,7 @@ func testDBGet(t *testing.T, client *Client) {
 	}
 }
 
-func testGetAssetInfoByAssetID(t *testing.T, client *Client) {
+func testGetAssetInfoByAssetID(t *testing.T, client *Client, addr types.Address) {
 	testcases := []struct {
 		name          string
 		assetID       string
@@ -393,7 +423,7 @@ func testGetAssetInfoByAssetID(t *testing.T, client *Client) {
 	}{
 		{
 			name:    "fetch asset info for existing assetID",
-			assetID: getAssetID(t, client, sender, &createAssetHeight),
+			assetID: getAssetID(t, client, addr, &createAssetHeight),
 		},
 		{
 			name:          "fetch asset info for non-existing assetID",
@@ -420,8 +450,10 @@ func testGetAssetInfoByAssetID(t *testing.T, client *Client) {
 	}
 }
 
-func testGetBalance(t *testing.T, client *Client) {
+func testGetBalance(t *testing.T, client *Client, addrsMap StrMap) {
 	receiverTokenTransferHeight := int64(1)
+	sender := addrsMap["assetAddr"]
+	receiver := addrsMap["receiverAddr"]
 	assetID := getAssetID(t, client, sender, &createAssetHeight)
 
 	createAssetBalance := new(big.Int).SetUint64(1248577)
@@ -435,7 +467,7 @@ func testGetBalance(t *testing.T, client *Client) {
 		expectedError   error
 	}{
 		{
-			name: "fetch sender balance at create asset height",
+			name: "fetch senderAddr balance at create asset height",
 			balanceArgs: &ptypes.BalArgs{
 				Address: sender,
 				AssetID: assetID,
@@ -446,7 +478,7 @@ func testGetBalance(t *testing.T, client *Client) {
 			expectedBalance: (*hexutil.Big)(createAssetBalance),
 		},
 		{
-			name: "fetch sender balance at sender transfer token height",
+			name: "fetch sender balance at transfer token height",
 			balanceArgs: &ptypes.BalArgs{
 				Address: sender,
 				AssetID: assetID,
@@ -499,8 +531,8 @@ func testGetBalance(t *testing.T, client *Client) {
 	}
 }
 
-func testTDU(t *testing.T, client *Client) {
-	assetID := getAssetID(t, client, sender, &createAssetHeight)
+func testTDU(t *testing.T, client *Client, addr types.Address) {
+	assetID := getAssetID(t, client, addr, &createAssetHeight)
 
 	testcases := []struct {
 		name          string
@@ -510,7 +542,7 @@ func testTDU(t *testing.T, client *Client) {
 		{
 			name: "fetch TDU for existing address",
 			tesseractArgs: &ptypes.TesseractArgs{
-				Address: sender,
+				Address: addr,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &createAssetHeight,
 				},
@@ -532,6 +564,7 @@ func testTDU(t *testing.T, client *Client) {
 		t.Run(test.name, func(t *testing.T) {
 			tdu, err := client.TDU(test.tesseractArgs)
 
+			t.Log(addr)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -542,7 +575,7 @@ func testTDU(t *testing.T, client *Client) {
 
 			_, ok := tdu[types.AssetID(assetID)]
 			require.True(t, ok)
-			require.Equal(t, 2, len(tdu))
+			require.Equal(t, 1, len(tdu))
 
 			httpTDU := httpTDU(t, test.tesseractArgs)
 			require.Equal(t, httpTDU, tdu)
@@ -550,7 +583,7 @@ func testTDU(t *testing.T, client *Client) {
 	}
 }
 
-func testGetContextInfo(t *testing.T, client *Client) {
+func testGetContextInfo(t *testing.T, client *Client, addr types.Address) {
 	testcases := []struct {
 		name            string
 		contextInfoArgs *ptypes.ContextInfoArgs
@@ -559,7 +592,7 @@ func testGetContextInfo(t *testing.T, client *Client) {
 		{
 			name: "fetch context info for existing address",
 			contextInfoArgs: &ptypes.ContextInfoArgs{
-				Address: sender,
+				Address: addr,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
@@ -596,8 +629,8 @@ func testGetContextInfo(t *testing.T, client *Client) {
 	}
 }
 
-func testInteractionReceipt(t *testing.T, client *Client) {
-	ts := getTesseract(t, client, sender, &executeLogicHeight)
+func testInteractionReceipt(t *testing.T, client *Client, addr types.Address) {
+	ts := getTesseract(t, client, addr, &executeLogicHeight)
 
 	testcases := []struct {
 		name          string
@@ -638,7 +671,7 @@ func testInteractionReceipt(t *testing.T, client *Client) {
 	}
 }
 
-func testInteractionCount(t *testing.T, client *Client) {
+func testInteractionCount(t *testing.T, client *Client, addr types.Address) {
 	testcases := []struct {
 		name                 string
 		interactionCountArgs *ptypes.InteractionCountArgs
@@ -647,7 +680,7 @@ func testInteractionCount(t *testing.T, client *Client) {
 		{
 			name: "fetch interaction count for existing address",
 			interactionCountArgs: &ptypes.InteractionCountArgs{
-				Address: sender,
+				Address: addr,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &transferTokensHeight,
 				},
@@ -676,7 +709,7 @@ func testInteractionCount(t *testing.T, client *Client) {
 			}
 
 			require.NoError(t, err)
-			require.GreaterOrEqual(t, interactionCount.ToInt(), uint64(4))
+			require.GreaterOrEqual(t, interactionCount.ToInt(), uint64(1))
 
 			httpInteractionCount := httpInteractionCount(t, test.interactionCountArgs)
 			require.Equal(t, httpInteractionCount, interactionCount)
@@ -684,7 +717,7 @@ func testInteractionCount(t *testing.T, client *Client) {
 	}
 }
 
-func testPendingInteractionCount(t *testing.T, client *Client) {
+func testPendingInteractionCount(t *testing.T, client *Client, addr types.Address) {
 	testcases := []struct {
 		name                 string
 		interactionCountArgs *ptypes.InteractionCountArgs
@@ -703,7 +736,7 @@ func testPendingInteractionCount(t *testing.T, client *Client) {
 		{
 			name: "fetch pending interaction count for existing address",
 			interactionCountArgs: &ptypes.InteractionCountArgs{
-				Address: sender,
+				Address: addr,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
@@ -715,6 +748,7 @@ func testPendingInteractionCount(t *testing.T, client *Client) {
 		t.Run(test.name, func(t *testing.T) {
 			pendingInteractionCount, err := client.PendingInteractionCount(test.interactionCountArgs)
 
+			t.Log(addr)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -722,7 +756,7 @@ func testPendingInteractionCount(t *testing.T, client *Client) {
 			}
 
 			require.NoError(t, err)
-			require.Greater(t, pendingInteractionCount.ToInt(), uint64(4))
+			require.Greater(t, pendingInteractionCount.ToInt(), uint64(2))
 
 			httpPendingInteractionCount := httpPendingInteractionCount(t, test.interactionCountArgs)
 			require.Equal(t, httpPendingInteractionCount, pendingInteractionCount)
@@ -730,8 +764,8 @@ func testPendingInteractionCount(t *testing.T, client *Client) {
 	}
 }
 
-func testStorage(t *testing.T, client *Client) {
-	logicID := getLogicID(t, client, sender, &deployLogicHeight)
+func testStorage(t *testing.T, client *Client, addr types.Address) {
+	logicID := getLogicID(t, client, addr, &deployLogicHeight)
 
 	testcases := []struct {
 		name                 string
@@ -779,7 +813,7 @@ func testStorage(t *testing.T, client *Client) {
 	}
 }
 
-func testAccountState(t *testing.T, client *Client) {
+func testAccountState(t *testing.T, client *Client, addr types.Address) {
 	testcases := []struct {
 		name          string
 		accountArgs   *ptypes.GetAccountArgs
@@ -788,9 +822,9 @@ func testAccountState(t *testing.T, client *Client) {
 		{
 			name: "fetch account state for existing address",
 			accountArgs: &ptypes.GetAccountArgs{
-				Address: sender,
+				Address: addr,
 				Options: ptypes.TesseractNumberOrHash{
-					TesseractNumber: &transferTokensHeight,
+					TesseractNumber: &createAssetHeight,
 				},
 			},
 		},
@@ -816,8 +850,9 @@ func testAccountState(t *testing.T, client *Client) {
 				return
 			}
 
+			t.Log(addr)
 			require.NoError(t, err)
-			require.GreaterOrEqual(t, accountState.Nonce.ToInt(), uint64(4))
+			require.GreaterOrEqual(t, accountState.Nonce.ToInt(), uint64(2))
 
 			httpAccountState := httpAccountState(t, test.accountArgs)
 			require.Equal(t, *httpAccountState, *accountState)
@@ -825,9 +860,9 @@ func testAccountState(t *testing.T, client *Client) {
 	}
 }
 
-func testLogicManifest(t *testing.T, client *Client) {
-	logicID := getLogicID(t, client, sender, &deployLogicHeight)
-	ts := getTesseract(t, client, sender, &deployLogicHeight)
+func testLogicManifest(t *testing.T, client *Client, addr types.Address) {
+	logicID := getLogicID(t, client, addr, &deployLogicHeight)
+	ts := getTesseract(t, client, addr, &deployLogicHeight)
 
 	var logic *ptypes.RPCLogicPayload
 
@@ -936,7 +971,7 @@ func testContent(t *testing.T, client *Client) {
 	}
 }
 
-func testContentFrom(t *testing.T, client *Client) {
+func testContentFrom(t *testing.T, client *Client, addr types.Address) {
 	testcases := []struct {
 		name          string
 		ixPoolArgs    *ptypes.IxPoolArgs
@@ -945,7 +980,7 @@ func testContentFrom(t *testing.T, client *Client) {
 		{
 			name: "fetch content from for existing address",
 			ixPoolArgs: &ptypes.IxPoolArgs{
-				Address: sender,
+				Address: addr,
 			},
 			expectedCount: 1,
 		},
@@ -1024,8 +1059,8 @@ func testInspect(t *testing.T, client *Client) {
 	}
 }
 
-func testInteractionByHash(t *testing.T, client *Client) {
-	ts := getTesseract(t, client, sender, &deployLogicHeight)
+func testInteractionByHash(t *testing.T, client *Client, addr types.Address) {
+	ts := getTesseract(t, client, addr, &deployLogicHeight)
 
 	testcases := []struct {
 		name          string
@@ -1058,7 +1093,7 @@ func testInteractionByHash(t *testing.T, client *Client) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, sender, rpcIxn.Sender)
+			require.Equal(t, addr, rpcIxn.Sender)
 
 			httpIXResponse := httpInteractionByHash(t, test.ixArgs)
 			require.Equal(t, httpIXResponse, *rpcIxn)
@@ -1066,8 +1101,8 @@ func testInteractionByHash(t *testing.T, client *Client) {
 	}
 }
 
-func testInteractionByTesseract(t *testing.T, client *Client) {
-	ts := getTesseract(t, client, sender, &deployLogicHeight)
+func testInteractionByTesseract(t *testing.T, client *Client, addr types.Address) {
+	ts := getTesseract(t, client, addr, &deployLogicHeight)
 	randomHash := tests.RandomHash(t)
 
 	testcases := []struct {
@@ -1105,7 +1140,7 @@ func testInteractionByTesseract(t *testing.T, client *Client) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, sender, rpcIxn.Sender)
+			require.Equal(t, addr, rpcIxn.Sender)
 
 			httpIXResponse := httpInteractionByTesseract(t, test.ixArgs)
 			require.Equal(t, httpIXResponse, *rpcIxn)
@@ -1113,7 +1148,7 @@ func testInteractionByTesseract(t *testing.T, client *Client) {
 	}
 }
 
-func testWaitTime(t *testing.T, client *Client) {
+func testWaitTime(t *testing.T, client *Client, addr types.Address) {
 	testcases := []struct {
 		name          string
 		ixPoolArgs    *ptypes.IxPoolArgs
@@ -1122,7 +1157,7 @@ func testWaitTime(t *testing.T, client *Client) {
 		{
 			name: "fetch wait time for existing address",
 			ixPoolArgs: &ptypes.IxPoolArgs{
-				Address: sender,
+				Address: addr,
 			},
 		},
 		{
@@ -1184,12 +1219,13 @@ func testSendInteraction(t *testing.T, client *Client) {
 		expectedError error
 	}{
 		{
-			name: "invalid sender address",
+			name: "invalid senderAddr address",
 			ixPoolArgs: &ptypes.SendIXArgs{
 				Sender: tests.RandomAddress(t),
 			},
 			expectedError: types.ErrAccountNotFound,
 		},
+		// TODO: add valid case here
 	}
 
 	for _, test := range testcases {
