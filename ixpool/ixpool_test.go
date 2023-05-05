@@ -432,6 +432,9 @@ func TestIxPool_resetAccount_enqueued(t *testing.T) {
 				<-ixPool.promoteReqCh
 			}
 
+			ixPool.accounts.get(senderAddress).enqueued.lock(false)
+			defer ixPool.accounts.get(senderAddress).enqueued.unlock()
+
 			require.Equal(t, testcase.expectedEnqueues, ixPool.accounts.get(senderAddress).enqueued.length())
 		})
 	}
@@ -574,6 +577,14 @@ func TestIxPool_resetAccount(t *testing.T) {
 			}
 
 			time.Sleep(100 * time.Millisecond)
+
+			ixPool.accounts.get(senderAddress).enqueued.lock(false)
+			ixPool.accounts.get(senderAddress).promoted.lock(false)
+
+			defer func() {
+				ixPool.accounts.get(senderAddress).enqueued.unlock()
+				ixPool.accounts.get(senderAddress).promoted.unlock()
+			}()
 
 			require.Equal(t, testcase.expected.enqueued, ixPool.accounts.get(senderAddress).enqueued.length())
 			require.Equal(t, testcase.expected.promoted, ixPool.accounts.get(senderAddress).promoted.length())

@@ -137,6 +137,8 @@ type Syncer struct {
 	pendingAccounts     uint64
 	consensusSlots      *ktypes.Slots
 	lastActiveTimeStamp uint64
+	accountsLock        sync.RWMutex
+	lockedAccounts      map[types.Address]types.Hash
 }
 
 func NewSyncer(
@@ -176,6 +178,7 @@ func NewSyncer(
 		tesseractRegistry:   types.NewHashRegistry(60),
 		consensusSlots:      slots,
 		lastActiveTimeStamp: lastActiveTimeStamp,
+		lockedAccounts:      make(map[types.Address]types.Hash, 0),
 	}
 
 	return s, nil
@@ -1197,29 +1200,34 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo, job *SyncJob) (bool, error) {
 		return false, nil
 	}
 
-	grid.Lock(true)
-	execActive := grid.active
+	s.accountsLock.Lock()
+	for _, ts := range grid.ts {
+		if _, ok := s.lockedAccounts[ts.Address()]; ok {
+			s.accountsLock.Unlock()
 
-	if !execActive {
-		grid.active = true
-	}
-	grid.Unlock(true)
-
-	if execActive {
-		return false, nil
+			return false, nil
+		}
 	}
 
-	defer grid.UnActive()
+	for _, ts := range grid.ts {
+		s.lockedAccounts[ts.Address()] = ts.GridHash()
+	}
+
+	s.accountsLock.Unlock()
+
+	defer func() {
+		s.accountsLock.Lock()
+		for _, ts := range grid.ts {
+			delete(s.lockedAccounts, ts.Address())
+		}
+		s.accountsLock.Unlock()
+	}()
 
 	if err := s.executeAndAdd(msg.delta, grid); err != nil {
 		return false, err
 	}
 
 	s.gridStore.CleanupGrid(msg.tesseract.GridHash())
-
-	// if err := s.cleanGridAndReleasePendingJobs(msg, job); err != nil {
-	//	return false, err
-	//	}
 
 	return true, nil
 }

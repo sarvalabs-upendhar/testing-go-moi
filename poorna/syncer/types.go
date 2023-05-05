@@ -241,15 +241,13 @@ type GridStore struct {
 }
 
 type Grid struct {
-	mtx    sync.RWMutex
-	ts     map[types.Hash]*types.Tesseract
-	active bool
+	mtx sync.RWMutex
+	ts  map[types.Hash]*types.Tesseract
 }
 
 func NewGrid() *Grid {
 	return &Grid{
-		ts:     make(map[types.Hash]*types.Tesseract),
-		active: false,
+		ts: make(map[types.Hash]*types.Tesseract),
 	}
 }
 
@@ -274,13 +272,6 @@ func (g *Grid) HasTesseract(ts *types.Tesseract) bool {
 	_, ok := g.ts[ts.Hash()]
 
 	return ok
-}
-
-func (g *Grid) UnActive() {
-	g.mtx.Lock()
-	defer g.mtx.Unlock()
-
-	g.active = false
 }
 
 func (g *Grid) PendingTesseractHashes() []types.Hash {

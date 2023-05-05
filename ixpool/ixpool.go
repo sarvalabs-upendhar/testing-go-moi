@@ -276,7 +276,7 @@ func (i *IxPool) resetAccount(addr types.Address, nonce uint64) {
 	// prune enqueued
 	pruned = account.enqueued.prune(nonce)
 
-	log.Println("Prunned ixs", pruned)
+	i.logger.Info("Pruned Interactions", pruned)
 
 	// update pool state
 	i.allIxs.remove(pruned)
