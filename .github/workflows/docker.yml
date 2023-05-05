@@ -32,3 +32,4 @@ jobs:
           tags: 'ghcr.io/sarvalabs/moichain:latest'
           build-args: |
             ACCESS_TOKEN=${{ secrets.ACCESS_TOKEN }}
+            GIT_COMMIT=${{ github.sha }}

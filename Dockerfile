@@ -3,6 +3,8 @@ RUN --mount=type=cache,target=/tmp/apkcache \
   apk add --cache-dir=/tmp/apkcache build-base git
 RUN go env -w GOPRIVATE=github.com/sarvalabs/go-polo
 ARG ACCESS_TOKEN
+ARG GIT_COMMIT
+ENV GIT_COMMIT=$GIT_COMMIT
 RUN git config --global url."https://golang:${ACCESS_TOKEN}@github.com".insteadOf "https://github.com"
 ENV GO111MODULE=auto
 ENV CGO_ENABLED=1
@@ -16,5 +18,7 @@ FROM alpine:latest
 VOLUME /data 
 WORKDIR /local
 COPY --from=build /bin/moichain /local/moichain
+ARG GIT_COMMIT
+ENV GIT_COMMIT=$GIT_COMMIT
 LABEL org.opencontainers.image.source https://github.com/sarvalabs/moichain
 ENTRYPOINT ["/local/moichain"]
