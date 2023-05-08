@@ -145,7 +145,7 @@ func (x U64Value) Eq(y U64Value) BoolValue {
 	return x == y
 }
 
-//nolint:forcetypeassert, dupl
+//nolint:forcetypeassert
 func methodsU64() [256]*BuiltinMethod {
 	return [256]*BuiltinMethod{
 		// uint64.__join__(uint64) -> uint64
@@ -234,6 +234,19 @@ func methodsU64() [256]*BuiltinMethod {
 				result := strconv.FormatUint(uint64(inputs[0].(U64Value)), 10)
 				// Set value into outputs
 				return RegisterSet{0: StringValue(result)}, nil
+			},
+		),
+
+		// uint64.abs() -> uint64
+		0x10: makeBuiltinMethod(
+			MethodStr.String(),
+			PrimitiveU64, MethodStr,
+			makefields([]*TypeField{{Name: "self", Type: TypeU64}}),
+			makefields([]*TypeField{{Name: "result", Type: TypeU64}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				x := inputs[0]
+
+				return RegisterSet{0: x}, nil
 			},
 		),
 	}
@@ -393,7 +406,7 @@ func (x I64Value) Eq(y I64Value) BoolValue {
 	return x == y
 }
 
-//nolint:forcetypeassert, dupl
+//nolint:forcetypeassert
 func methodsI64() [256]*BuiltinMethod {
 	return [256]*BuiltinMethod{
 		// int64.__join__(int64) -> int64
@@ -482,6 +495,25 @@ func methodsI64() [256]*BuiltinMethod {
 				result := strconv.FormatInt(int64(inputs[0].(I64Value)), 10)
 				// Set value into outputs
 				return RegisterSet{0: StringValue(result)}, nil
+			},
+		),
+
+		// int64.abs() -> int64
+		0x10: makeBuiltinMethod(
+			MethodStr.String(),
+			PrimitiveU64, MethodStr,
+			makefields([]*TypeField{{Name: "self", Type: TypeI64}}),
+			makefields([]*TypeField{{Name: "result", Type: TypeI64}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				x := inputs[0]
+				var result I64Value
+				if x.(I64Value) < 0 {
+					result = x.(I64Value) * -1
+				} else {
+					result = x.(I64Value)
+				}
+
+				return RegisterSet{0: result}, nil
 			},
 		),
 	}

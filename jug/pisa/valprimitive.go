@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"strings"
+	"unicode"
 
 	"github.com/sarvalabs/go-polo"
 )
@@ -195,17 +196,224 @@ func methodsString() [256]*BuiltinMethod {
 			},
 		),
 
-		// string.HasPrefix(string) -> bool
-		0x10: makeBuiltinMethod(
-			"HasPrefix",
+		// string.Get(string, position) -> string
+		0x10: makeBuiltinMethod("Get",
 			PrimitiveString, 0x10,
+			makefields([]*TypeField{{"self", TypeString}, {"position", TypeU64}}),
+			makefields([]*TypeField{{"result", TypeString}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self, pos := inputs[0], inputs[1]
+				char := self.(StringValue)[pos.(U64Value) : pos.(U64Value)+1]
+
+				return RegisterSet{0: char}, nil
+			},
+		),
+
+		// string.Set(string, position, update_string) -> string
+		0x11: makeBuiltinMethod("Set",
+			PrimitiveString, 0x11,
+			makefields([]*TypeField{
+				{Name: "self", Type: TypeString},
+				{Name: "position", Type: TypeU64},
+				{Name: "update_string", Type: TypeString},
+			}),
+			makefields([]*TypeField{{"result", TypeString}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self, pos, updateChar := inputs[0], inputs[1], inputs[2]
+				res := self.(StringValue)[:pos.(U64Value)] + updateChar.(StringValue) + self.(StringValue)[pos.(U64Value)+1:]
+
+				return RegisterSet{0: res}, nil
+			},
+		),
+
+		// string.IsAlpha(string) -> bool
+		0x12: makeBuiltinMethod("IsAlpha",
+			PrimitiveString, 0x12,
+			makefields([]*TypeField{{"self", TypeString}}),
+			makefields([]*TypeField{{"ok", TypeBool}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self := inputs[0].(StringValue)
+				b := true
+				if len(self) == 0 {
+					b = false
+				}
+
+				for _, r := range self {
+					if !unicode.IsLetter(r) {
+						b = false
+
+						break
+					}
+				}
+
+				return RegisterSet{0: BoolValue(b)}, nil
+			},
+		),
+
+		// string.IsNumeric(string) -> bool
+		0x13: makeBuiltinMethod("IsNumeric",
+			PrimitiveString, 0x13,
+			makefields([]*TypeField{{"self", TypeString}}),
+			makefields([]*TypeField{{"ok", TypeBool}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self := inputs[0].(StringValue)
+				b := true
+				if len(self) == 0 {
+					b = false
+				}
+				for _, r := range self {
+					if !unicode.IsNumber(r) {
+						b = false
+
+						break
+					}
+				}
+
+				return RegisterSet{0: BoolValue(b)}, nil
+			},
+		),
+
+		// string.IsLower(string) -> bool
+		0x14: makeBuiltinMethod("IsLower",
+			PrimitiveString, 0x14,
+			makefields([]*TypeField{{"self", TypeString}}),
+			makefields([]*TypeField{{"ok", TypeBool}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self := inputs[0].(StringValue)
+				b := true
+				for _, r := range self {
+					if !unicode.IsLower(r) && unicode.IsLetter(r) {
+						b = false
+
+						break
+					}
+				}
+
+				return RegisterSet{0: BoolValue(b)}, nil
+			},
+		),
+
+		// string.IsUpper(string) -> bool
+		0x15: makeBuiltinMethod("IsUpper",
+			PrimitiveString, 0x15,
+			makefields([]*TypeField{{"self", TypeString}}),
+			makefields([]*TypeField{{"ok", TypeBool}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self := inputs[0].(StringValue)
+				b := true
+				for _, r := range self {
+					if !unicode.IsUpper(r) && unicode.IsLetter(r) {
+						b = false
+
+						break
+					}
+				}
+
+				return RegisterSet{0: BoolValue(b)}, nil
+			},
+		),
+
+		// string.HasPrefix(string) -> bool
+		0x16: makeBuiltinMethod(
+			"HasPrefix",
+			PrimitiveString, 0x16,
 			makefields([]*TypeField{{"self", TypeString}, {"prefix", TypeString}}),
 			makefields([]*TypeField{{"ok", TypeBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self, prefix := inputs[0], inputs[1]
-				ok := self.(StringValue).HasPrefix(prefix.(StringValue))
+				ok := strings.HasPrefix(string(self.(StringValue)), string(prefix.(StringValue)))
 
-				return RegisterSet{0: ok}, nil
+				return RegisterSet{0: BoolValue(ok)}, nil
+			},
+		),
+
+		// string.HasSuffix(string) -> bool
+		0x17: makeBuiltinMethod(
+			"HasSuffix",
+			PrimitiveString, 0x17,
+			makefields([]*TypeField{{"self", TypeString}, {"suffix", TypeString}}),
+			makefields([]*TypeField{{"ok", TypeBool}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self, suffix := inputs[0], inputs[1]
+				ok := strings.HasSuffix(string(self.(StringValue)), string(suffix.(StringValue)))
+
+				return RegisterSet{0: BoolValue(ok)}, nil
+			},
+		),
+
+		// string.Contains(string) -> bool
+		0x18: makeBuiltinMethod(
+			"Contains",
+			PrimitiveString, 0x18,
+			makefields([]*TypeField{{"self", TypeString}, {"contains", TypeString}}),
+			makefields([]*TypeField{{"ok", TypeBool}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self, substr := inputs[0], inputs[1]
+				ok := strings.Contains(string(self.(StringValue)), string(substr.(StringValue)))
+
+				return RegisterSet{0: BoolValue(ok)}, nil
+			},
+		),
+
+		// string.Split(string, delim) -> []string
+		0x19: makeBuiltinMethod(
+			"Split",
+			PrimitiveString, 0x19,
+			makefields([]*TypeField{{"self", TypeString}, {"delim", TypeString}}),
+			makefields([]*TypeField{{"result", NewVarrayType(TypeString)}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self, delim := inputs[0], inputs[1]
+				res := strings.Split(string(self.(StringValue)), string(delim.(StringValue)))
+				var resvalarr []RegisterValue
+				for _, i := range res {
+					resval := StringValue(i)
+					resvalarr = append(resvalarr, resval)
+				}
+				resOp, _ := newListFromValues(NewVarrayType(TypeString), resvalarr...)
+
+				return RegisterSet{0: resOp}, nil
+			},
+		),
+
+		// string.Slice(string) -> string
+		0x1A: makeBuiltinMethod(
+			"Slice",
+			PrimitiveString, 0x1A,
+			makefields([]*TypeField{{"self", TypeString}, {"idx1", TypeU64}, {"idx2", TypeU64}}),
+			makefields([]*TypeField{{"ok", TypeString}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self, idx1, idx2 := inputs[0], inputs[1], inputs[2]
+				res := self.(StringValue)[idx1.(U64Value):idx2.(U64Value)]
+
+				return RegisterSet{0: res}, nil
+			},
+		),
+
+		// string.ToLower() -> string
+		0x1B: makeBuiltinMethod(
+			"ToLower",
+			PrimitiveString, 0x1B,
+			makefields([]*TypeField{{"self", TypeString}}),
+			makefields([]*TypeField{{"res", TypeString}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self := inputs[0]
+				res := strings.ToLower(string(self.(StringValue)))
+
+				return RegisterSet{0: StringValue(res)}, nil
+			},
+		),
+
+		// string.ToUpper() -> string
+		0x1C: makeBuiltinMethod(
+			"ToUpper",
+			PrimitiveString, 0x1C,
+			makefields([]*TypeField{{"self", TypeString}}),
+			makefields([]*TypeField{{"res", TypeString}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self := inputs[0]
+				res := strings.ToUpper(string(self.(StringValue)))
+
+				return RegisterSet{0: StringValue(res)}, nil
 			},
 		),
 	}
@@ -302,6 +510,103 @@ func methodsBytes() [256]*BuiltinMethod {
 				length := len(inputs[0].(BytesValue))
 				// Return the length as u64
 				return RegisterSet{0: U64Value(length)}, nil
+			},
+		),
+
+		// byte.Get(byte, position) -> byte
+		0x10: makeBuiltinMethod("Get",
+			PrimitiveString, 0x10,
+			makefields([]*TypeField{{"self", TypeBytes}, {"position", TypeU64}}),
+			makefields([]*TypeField{{"result", TypeBytes}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self, pos := inputs[0], inputs[1]
+				byteres := self.(BytesValue)[pos.(U64Value) : pos.(U64Value)+1]
+
+				return RegisterSet{0: byteres}, nil
+			},
+		),
+
+		// byte.Set(byte, position, updateByte) -> byte
+		0x11: makeBuiltinMethod("Set",
+			PrimitiveString, 0x11,
+			makefields([]*TypeField{{"self", TypeBytes}, {"position", TypeU64}, {"update_byte", TypeBytes}}),
+			makefields([]*TypeField{{"result", TypeBytes}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self, pos, updateByte := inputs[0], inputs[1], inputs[2]
+				self.(BytesValue)[pos.(U64Value)] = updateByte.(BytesValue)[0]
+
+				return RegisterSet{0: self}, nil
+			},
+		),
+
+		// byte.HasPrefix(byte) -> bool
+		0x12: makeBuiltinMethod("HasPrefix",
+			PrimitiveString, 0x11,
+			makefields([]*TypeField{{"self", TypeBytes}, {"prefix", TypeBytes}}),
+			makefields([]*TypeField{{"ok", TypeBool}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self, prefix := inputs[0], inputs[1]
+				ok := bytes.HasPrefix(self.(BytesValue), prefix.(BytesValue))
+
+				return RegisterSet{0: BoolValue(ok)}, nil
+			},
+		),
+
+		// byte.HasSuffix(byte) -> bool
+		0x13: makeBuiltinMethod("HasSuffix",
+			PrimitiveString, 0x11,
+			makefields([]*TypeField{{"self", TypeBytes}, {"suffix", TypeBytes}}),
+			makefields([]*TypeField{{"ok", TypeBool}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self, prefix := inputs[0], inputs[1]
+				ok := bytes.HasSuffix(self.(BytesValue), prefix.(BytesValue))
+
+				return RegisterSet{0: BoolValue(ok)}, nil
+			},
+		),
+
+		// byte.Contains(byte) -> bool
+		0x14: makeBuiltinMethod("Contains",
+			PrimitiveString, 0x11,
+			makefields([]*TypeField{{"self", TypeBytes}, {"subbyte", TypeBytes}}),
+			makefields([]*TypeField{{"ok", TypeBool}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self, subbyte := inputs[0], inputs[1]
+				ok := bytes.Contains(self.(BytesValue), subbyte.(BytesValue))
+
+				return RegisterSet{0: BoolValue(ok)}, nil
+			},
+		),
+
+		// byte.Split(byte, delim) -> []byte
+		0x15: makeBuiltinMethod("Split",
+			PrimitiveString, 0x15,
+			makefields([]*TypeField{{"self", TypeBytes}, {"delim", TypeBytes}}),
+			makefields([]*TypeField{{"result", NewVarrayType(TypeBytes)}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self, delim := inputs[0], inputs[1]
+				res := bytes.Split(self.(BytesValue), delim.(BytesValue))
+				var resvalarr []RegisterValue
+				for _, i := range res {
+					resval := BytesValue(i)
+					resvalarr = append(resvalarr, resval)
+				}
+				resOp, _ := newListFromValues(NewVarrayType(TypeBytes), resvalarr...)
+
+				return RegisterSet{0: resOp}, nil
+			},
+		),
+
+		// byte.Slice(byte, idx1, idx2) -> byte
+		0x16: makeBuiltinMethod("Slice",
+			PrimitiveString, 0x16,
+			makefields([]*TypeField{{"self", TypeBytes}, {"idx1", TypeU64}, {"idx2", TypeU64}}),
+			makefields([]*TypeField{{"result", NewVarrayType(TypeBytes)}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self, idx1, idx2 := inputs[0], inputs[1], inputs[2]
+				res := self.(BytesValue)[idx1.(U64Value):idx2.(U64Value)]
+
+				return RegisterSet{0: res}, nil
 			},
 		),
 	}
