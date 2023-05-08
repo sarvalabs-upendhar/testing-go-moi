@@ -355,14 +355,14 @@ func opPMAKE(scope *callscope, operands []byte) Continue {
 	out, typeID := operands[0], operands[1]
 
 	// Check if type ID is valid
-	if typeID > MaxPrimitive {
+	if typeID > MaxPrimitiveKind {
 		return scope.raise(exceptionf(TypeError, "invalid primitive type: %#x", typeID))
 	}
 
 	// Create a datatype from the type ID
-	dt := Primitive(typeID).Datatype()
+	datatype := PrimitiveDatatype(typeID)
 	// Create a value for the datatype
-	value, _ := NewRegisterValue(dt, nil)
+	value, _ := NewRegisterValue(datatype, nil)
 
 	// Set the register value
 	scope.memory.Set(out, value)
@@ -386,7 +386,7 @@ func opVMAKE(scope *callscope, operands []byte) Continue {
 	}
 
 	// Check that datatype is a varray
-	if typedef.Kind != VarrayType {
+	if typedef.Kind() != Varray {
 		return scope.raise(exceptionf(TypeError, "typedef %#x is not a varray", pointer))
 	}
 
@@ -398,11 +398,11 @@ func opVMAKE(scope *callscope, operands []byte) Continue {
 		return scope.raise(exceptionInvalidDatatype(PrimitiveU64, length))
 	}
 
-	// Create a new list with size
+	// Create a new varray with size
 	// We ignore the error because all checks have been performed
-	list, _ := newSizedList(typedef, size)
+	varray := newVarrayWithSize(typedef.(VarrayDatatype), uint64(size)) //nolint:forcetypeassert
 	// Set the register value
-	scope.memory.Set(out, list)
+	scope.memory.Set(out, varray)
 
 	return continueOk{10 + engineio.Fuel(5*size)}
 }
@@ -604,14 +604,14 @@ func opSIZEOF(scope *callscope, operands []byte) Continue {
 
 	var size U64Value
 
-	switch regVal.Type().Kind {
-	case ClassType:
+	switch regVal.Type().Kind() {
+	case Class:
 		// Cast the value into a ClassValue
 		class := regVal.(*ClassValue) //nolint:forcetypeassert
 		// Get the size of the class (number of fields)
 		size = class.Size()
 
-	case MappingType, VarrayType, ArrayType:
+	case Mapping, Varray, Array:
 		// Cast the collection into a CollectionValue
 		collection := regVal.(CollectionValue) //nolint:forcetypeassert
 		// Get the size of the class (number of elements)
@@ -634,8 +634,8 @@ func opGETFLD(scope *callscope, operands []byte) Continue {
 	// Retrieve the register for class
 	regClass := scope.memory.Get(class)
 	// Verify that register is of ClassType
-	if regClass.Type().Kind != ClassType {
-		return scope.raise(exceptionInvalidDatatype(ClassType, class))
+	if regClass.Type().Kind() != Class {
+		return scope.raise(exceptionInvalidDatatype(Class, class))
 	}
 
 	// Cast the value into a ClassValue
@@ -665,8 +665,8 @@ func opSETFLD(scope *callscope, operands []byte) Continue {
 	// }
 
 	// Verify that register is of ClassType
-	if regClass.Type().Kind != ClassType {
-		return scope.raise(exceptionInvalidDatatype(ClassType, class))
+	if regClass.Type().Kind() != Class {
+		return scope.raise(exceptionInvalidDatatype(Class, class))
 	}
 
 	// Cast the value into a ClassValue
@@ -690,7 +690,7 @@ func opGETIDX(scope *callscope, operands []byte) Continue {
 	regCol, regIdx := scope.memory.Get(collection), scope.memory.Get(index)
 
 	// Verify that register is a Collection type
-	if !regCol.Type().Kind.IsCollection() {
+	if !regCol.Type().Kind().IsCollection() {
 		return scope.raise(exceptionInvalidDatatype("collection", collection))
 	}
 
@@ -720,7 +720,7 @@ func opSETIDX(scope *callscope, operands []byte) Continue {
 	//	return scope.raise(exceptionNullRegister(collection))
 	// }
 
-	if !regCol.Type().Kind.IsCollection() {
+	if !regCol.Type().Kind().IsCollection() {
 		return scope.raise(exceptionInvalidDatatype("collection", collection))
 	}
 
@@ -739,13 +739,13 @@ func opSETIDX(scope *callscope, operands []byte) Continue {
 
 func opGROW(scope *callscope, operands []byte) Continue {
 	// GROW [$X: varray][$Y: U64]
-	varray, length := operands[0], operands[1]
+	reg, length := operands[0], operands[1]
 
 	// Retrieve the register for varray
-	regVarray := scope.memory.Get(varray)
+	regVarray := scope.memory.Get(reg)
 	// Check that value is of type varray
-	if regVarray.Type().Kind != VarrayType {
-		return scope.raise(exceptionInvalidDatatype(VarrayType, varray))
+	if regVarray.Type().Kind() != Varray {
+		return scope.raise(exceptionInvalidDatatype(Varray, reg))
 	}
 
 	// Retrieve the register for length
@@ -756,60 +756,62 @@ func opGROW(scope *callscope, operands []byte) Continue {
 		return scope.raise(exceptionInvalidDatatype(PrimitiveU64, length))
 	}
 
-	// Cast into ListValue
-	list, _ := regVarray.(*ListValue)
+	// Cast into Varray
+	varray, _ := regVarray.(*VarrayValue)
 	// Grow the list by the given size, we don't need to check for error
 	// because we have already checked for the only possible error case.
-	_ = list.Grow(size)
+	varray.Grow(size)
+
+	scope.memory.Set(reg, varray)
 
 	return continueOk{5 + engineio.Fuel(5*size)}
 }
 
 func opAPPEND(scope *callscope, operands []byte) Continue {
 	// APPEND [$X: varray][$Y]
-	varray, element := operands[0], operands[1]
+	reg, element := operands[0], operands[1]
 
 	// Retrieve the register for varray and element
-	regVarray, regElem := scope.memory.Get(varray), scope.memory.Get(element)
+	regVarray, regElem := scope.memory.Get(reg), scope.memory.Get(element)
 	// Check that value is of type varray
-	if regVarray.Type().Kind != VarrayType {
-		return scope.raise(exceptionInvalidDatatype(VarrayType, varray))
+	if regVarray.Type().Kind() != Varray {
+		return scope.raise(exceptionInvalidDatatype(Varray, reg))
 	}
 
-	// Cast into ListValue
-	list, _ := regVarray.(*ListValue)
+	// Cast into Varray
+	varray, _ := regVarray.(*VarrayValue)
 	// Append the value into list. Only possible error here is invalid element type
-	if err := list.Append(regElem); err != nil {
+	if err := varray.Append(regElem); err != nil {
 		return scope.raise(exception(TypeError, err.Error()))
 	}
 
 	// Update the varray register
-	scope.memory.Set(varray, regVarray)
+	scope.memory.Set(reg, varray)
 
 	return continueOk{20}
 }
 
 func opPOPEND(scope *callscope, operands []byte) Continue {
 	// POPEND [$X][$Y: varray]
-	out, varray := operands[0], operands[1]
+	out, reg := operands[0], operands[1]
 
 	// Retrieve the register for varray
-	regVarray := scope.memory.Get(varray)
+	regVarray := scope.memory.Get(reg)
 	// Check that value is of type varray
-	if regVarray.Type().Kind != VarrayType {
-		return scope.raise(exceptionInvalidDatatype(VarrayType, varray))
+	if regVarray.Type().Kind() != Varray {
+		return scope.raise(exceptionInvalidDatatype(Varray, reg))
 	}
 
-	// Cast into ListValue
-	list, _ := regVarray.(*ListValue)
+	// Cast into Varray
+	varray, _ := regVarray.(*VarrayValue)
 	// Popend a value from the list. Only possible error here is empty varray
-	element, err := list.Popend()
+	element, err := varray.Popend()
 	if err != nil {
 		return scope.raise(exception(ValueError, err.Error()))
 	}
 
 	// Update the varray register and set popped value
-	scope.memory.Set(varray, regVarray)
+	scope.memory.Set(reg, varray)
 	scope.memory.Set(out, element)
 
 	return continueOk{20}
@@ -817,22 +819,22 @@ func opPOPEND(scope *callscope, operands []byte) Continue {
 
 func opHASKEY(scope *callscope, operands []byte) Continue {
 	// HASKEY [$X: bool][$Y: map][$Z]
-	out, mapping, key := operands[0], operands[1], operands[2]
+	out, reg, key := operands[0], operands[1], operands[2]
 
 	// Retrieve the mapping register
-	regMapping := scope.memory.Get(mapping)
+	regMapping := scope.memory.Get(reg)
 	// Check that value is of type mapping
-	if regMapping.Type().Kind != MappingType {
-		return scope.raise(exceptionInvalidDatatype(MappingType, mapping))
+	if regMapping.Type().Kind() != Mapping {
+		return scope.raise(exceptionInvalidDatatype(Mapping, reg))
 	}
 
 	// Retrieve the key register
 	regKey := scope.memory.Get(key)
 	// Cast the mapping into a MapValue
-	mapvalue, _ := regMapping.(*MapValue)
+	mapping, _ := regMapping.(*MapValue)
 
 	// Check if the map has the key
-	result, except := mapvalue.Has(regKey)
+	result, except := mapping.Has(regKey)
 	if except != nil {
 		return scope.raise(except)
 	}
@@ -936,11 +938,11 @@ func opBXOR(scope *callscope, operands []byte) Continue {
 	var result RegisterValue
 
 	switch dt := regA.Type(); dt {
-	case TypeU64:
+	case PrimitiveU64:
 		// Cast register values to U64 and call Bxor
 		result = regA.(U64Value).Bxor(regB.(U64Value)) //nolint:forcetypeassert
 
-	case TypeI64:
+	case PrimitiveI64:
 		// Cast register values to I64 and call Bxor
 		result = regA.(I64Value).Bxor(regB.(I64Value)) //nolint:forcetypeassert
 
@@ -967,11 +969,11 @@ func opBAND(scope *callscope, operands []byte) Continue {
 	var result RegisterValue
 
 	switch dt := regA.Type(); dt {
-	case TypeU64:
+	case PrimitiveU64:
 		// Cast register values to U64 and call Band
 		result = regA.(U64Value).Band(regB.(U64Value)) //nolint:forcetypeassert
 
-	case TypeI64:
+	case PrimitiveI64:
 		// Cast register values to I64 and call Band
 		result = regA.(I64Value).Band(regB.(I64Value)) //nolint:forcetypeassert
 
@@ -998,11 +1000,11 @@ func opBOR(scope *callscope, operands []byte) Continue {
 	var result RegisterValue
 
 	switch dt := regA.Type(); dt {
-	case TypeU64:
+	case PrimitiveU64:
 		// Cast register values to U64 and call Bor
 		result = regA.(U64Value).Bor(regB.(U64Value)) //nolint:forcetypeassert
 
-	case TypeI64:
+	case PrimitiveI64:
 		// Cast register values to I64 and call Bor
 		result = regA.(I64Value).Bor(regB.(I64Value)) //nolint:forcetypeassert
 
@@ -1020,17 +1022,17 @@ func opBNOT(scope *callscope, operands []byte) Continue {
 	// BNOT [$X][$Y]
 	out, a := operands[0], operands[1]
 
-	// Get registervalue of the obtained address
+	// Get the value of register
 	regA := scope.memory.Get(a)
 
 	var result RegisterValue
 
 	switch dt := regA.Type(); dt {
-	case TypeU64:
+	case PrimitiveU64:
 		// Cast register values to U64 and call Bnot
 		result = regA.(U64Value).Bnot() //nolint:forcetypeassert
 
-	case TypeI64:
+	case PrimitiveI64:
 		// Cast register values to I64 and call Bnot
 		result = regA.(I64Value).Bnot() //nolint:forcetypeassert
 
@@ -1057,11 +1059,11 @@ func opINCR(scope *callscope, operands []byte) Continue {
 	)
 
 	switch dt := regVal.Type(); dt {
-	case TypeU64:
+	case PrimitiveU64:
 		// Cast register value to U64 and call Inr (check for overflow)
 		result, except = regVal.(U64Value).Incr()
 
-	case TypeI64:
+	case PrimitiveI64:
 		// Cast register value to I64 and call Incr (check for overflow)
 		result, except = regVal.(I64Value).Incr()
 
@@ -1093,11 +1095,11 @@ func opDECR(scope *callscope, operands []byte) Continue {
 	)
 
 	switch dt := regVal.Type(); dt {
-	case TypeU64:
+	case PrimitiveU64:
 		// Cast register value to U64 and call Decr (check for overflow)
 		result, except = regVal.(U64Value).Decr()
 
-	case TypeI64:
+	case PrimitiveI64:
 		// Cast register value to I64 and call Decr (check for overflow)
 		result, except = regVal.(I64Value).Decr()
 
@@ -1129,11 +1131,11 @@ func opADD(scope *callscope, operands []byte) Continue {
 	var result RegisterValue
 
 	switch dt := regA.Type(); dt {
-	case TypeU64:
+	case PrimitiveU64:
 		// Cast register values to U64 and call Add (check for overflow)
 		result, except = regA.(U64Value).Add(regB.(U64Value))
 
-	case TypeI64:
+	case PrimitiveI64:
 		// Cast register values to I64 and call Add (check for overflow)
 		result, except = regA.(I64Value).Add(regB.(I64Value))
 
@@ -1165,11 +1167,11 @@ func opSUB(scope *callscope, operands []byte) Continue {
 	var result RegisterValue
 
 	switch dt := regA.Type(); dt {
-	case TypeU64:
+	case PrimitiveU64:
 		// Cast register values to U64 and call Sub (check for overflow)
 		result, except = regA.(U64Value).Sub(regB.(U64Value))
 
-	case TypeI64:
+	case PrimitiveI64:
 		// Cast register values to I64 and call Sub (check for overflow)
 		result, except = regA.(I64Value).Sub(regB.(I64Value))
 
@@ -1201,11 +1203,11 @@ func opMUL(scope *callscope, operands []byte) Continue {
 	var result RegisterValue
 
 	switch dt := regA.Type(); dt {
-	case TypeU64:
+	case PrimitiveU64:
 		// Cast register values to U64 and call Mul (check for overflow)
 		result, except = regA.(U64Value).Mul(regB.(U64Value))
 
-	case TypeI64:
+	case PrimitiveI64:
 		// Cast register values to I64 and call Mul (check for overflow)
 		result, except = regA.(I64Value).Mul(regB.(I64Value))
 
@@ -1237,11 +1239,11 @@ func opDIV(scope *callscope, operands []byte) Continue {
 	var result RegisterValue
 
 	switch dt := regA.Type(); dt {
-	case TypeU64:
+	case PrimitiveU64:
 		// Cast register values to U64 and call Div (check for error)
 		result, except = regA.(U64Value).Div(regB.(U64Value))
 
-	case TypeI64:
+	case PrimitiveI64:
 		// Cast register values to I64 and call Div (check for overflow)
 		result, except = regA.(I64Value).Div(regB.(I64Value))
 
@@ -1273,11 +1275,11 @@ func opMOD(scope *callscope, operands []byte) Continue {
 	var result RegisterValue
 
 	switch dt := regA.Type(); dt {
-	case TypeU64:
+	case PrimitiveU64:
 		// Cast register values to U64 and call Mod (check for error)
 		result, except = regA.(U64Value).Mod(regB.(U64Value))
 
-	case TypeI64:
+	case PrimitiveI64:
 		// Cast register values to I64 and call Mod (check for overflow)
 		result, except = regA.(I64Value).Mod(regB.(I64Value))
 

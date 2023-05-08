@@ -27,12 +27,12 @@ func TestCallEncoder_EncodeInputs(t *testing.T) {
 	}{
 		{
 			makefields([]*TypeField{
-				{Name: "a", Type: TypeString},
-				{Name: "b", Type: TypeI64},
-				{Name: "c", Type: TypeBool},
-				{Name: "d", Type: TypeBytes},
-				{Name: "e", Type: NewVarrayType(TypeU64)},
-				{Name: "f", Type: NewMappingType(PrimitiveString, TypeString)},
+				{Name: "a", Type: PrimitiveString},
+				{Name: "b", Type: PrimitiveI64},
+				{Name: "c", Type: PrimitiveBool},
+				{Name: "d", Type: PrimitiveBytes},
+				{Name: "e", Type: VarrayDatatype{PrimitiveU64}},
+				{Name: "f", Type: MapDatatype{PrimitiveString, PrimitiveString}},
 			}),
 			map[string]any{
 				"a": "hello",
@@ -56,8 +56,8 @@ func TestCallEncoder_EncodeInputs(t *testing.T) {
 
 		{
 			makefields([]*TypeField{
-				{Name: "a", Type: TypeString},
-				{Name: "b", Type: NewVarrayType(TypeU64)},
+				{Name: "a", Type: PrimitiveString},
+				{Name: "b", Type: VarrayDatatype{PrimitiveU64}},
 			}),
 			map[string]any{
 				"a": "hello",
@@ -70,7 +70,7 @@ func TestCallEncoder_EncodeInputs(t *testing.T) {
 
 		{
 			makefields([]*TypeField{
-				{Name: "a", Type: NewMappingType(PrimitiveString, TypeString)},
+				{Name: "a", Type: MapDatatype{PrimitiveString, PrimitiveString}},
 			}),
 			map[string]any{
 				"a": map[any]any{"foo": "bar", "boo": "far"},
@@ -83,7 +83,7 @@ func TestCallEncoder_EncodeInputs(t *testing.T) {
 		},
 
 		{
-			makefields([]*TypeField{{Name: "a", Type: TypeString}}),
+			makefields([]*TypeField{{Name: "a", Type: PrimitiveString}}),
 			map[string]any{
 				"a": engineio.ReferenceVal("clone-data"),
 			},
@@ -95,7 +95,7 @@ func TestCallEncoder_EncodeInputs(t *testing.T) {
 		},
 
 		{
-			makefields([]*TypeField{{Name: "a", Type: TypeString}}),
+			makefields([]*TypeField{{Name: "a", Type: PrimitiveString}}),
 			map[string]any{
 				"a": engineio.ReferenceVal("clone-data"),
 			},
@@ -105,7 +105,7 @@ func TestCallEncoder_EncodeInputs(t *testing.T) {
 		},
 
 		{
-			makefields([]*TypeField{{Name: "a", Type: TypeString}}),
+			makefields([]*TypeField{{Name: "a", Type: PrimitiveString}}),
 			map[string]any{
 				"a": engineio.ReferenceVal("clone-data"),
 			},
@@ -115,7 +115,7 @@ func TestCallEncoder_EncodeInputs(t *testing.T) {
 		},
 
 		{
-			makefields([]*TypeField{{Name: "a", Type: TypeString}}),
+			makefields([]*TypeField{{Name: "a", Type: PrimitiveString}}),
 			nil,
 			nil,
 			nil,
@@ -124,10 +124,13 @@ func TestCallEncoder_EncodeInputs(t *testing.T) {
 
 		{
 			makefields([]*TypeField{
-				{Name: "foo", Type: NewClassType("MyClass", makefields([]*TypeField{
-					{Name: "a", Type: TypeString},
-					{Name: "b", Type: TypeI64},
-				}))},
+				{Name: "foo", Type: ClassDatatype{
+					name: "MyClass",
+					fields: makefields([]*TypeField{
+						{Name: "a", Type: PrimitiveString},
+						{Name: "b", Type: PrimitiveI64},
+					}),
+				}},
 			}),
 			map[string]any{
 				"foo": map[string]any{
@@ -169,12 +172,12 @@ func TestCallEncoder_DecodeOutputs(t *testing.T) {
 	}{
 		{
 			makefields([]*TypeField{
-				{Name: "a", Type: TypeString},
-				{Name: "b", Type: TypeI64},
-				{Name: "c", Type: TypeBool},
-				{Name: "d", Type: TypeBytes},
-				{Name: "e", Type: NewVarrayType(TypeU64)},
-				{Name: "f", Type: NewMappingType(PrimitiveString, TypeString)},
+				{Name: "a", Type: PrimitiveString},
+				{Name: "b", Type: PrimitiveI64},
+				{Name: "c", Type: PrimitiveBool},
+				{Name: "d", Type: PrimitiveBytes},
+				{Name: "e", Type: VarrayDatatype{PrimitiveU64}},
+				{Name: "f", Type: MapDatatype{PrimitiveString, PrimitiveString}},
 			}),
 			polo.Document{
 				"a": polo.Raw{6, 104, 101, 108, 108, 111},
@@ -197,8 +200,8 @@ func TestCallEncoder_DecodeOutputs(t *testing.T) {
 
 		{
 			makefields([]*TypeField{
-				{Name: "a", Type: TypeString},
-				{Name: "b", Type: NewVarrayType(TypeU64)},
+				{Name: "a", Type: PrimitiveString},
+				{Name: "b", Type: VarrayDatatype{PrimitiveU64}},
 			}),
 			polo.Document{
 				"a": polo.Raw{6, 104, 101, 108, 108, 111},
@@ -211,8 +214,8 @@ func TestCallEncoder_DecodeOutputs(t *testing.T) {
 
 		{
 			makefields([]*TypeField{
-				{Name: "a", Type: TypeString},
-				{Name: "b", Type: NewVarrayType(TypeU64)},
+				{Name: "a", Type: PrimitiveString},
+				{Name: "b", Type: VarrayDatatype{PrimitiveU64}},
 			}),
 			nil,
 			nil,

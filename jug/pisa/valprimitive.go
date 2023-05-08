@@ -16,9 +16,9 @@ BoolValue Implementation
 // BoolValue represents a RegisterValue that operates like a boolean
 type BoolValue bool
 
-// Type returns the Datatype of BoolValue, which is TypeBool.
+// Type returns the Datatype of BoolValue, which is PrimitiveBool.
 // Implements the RegisterValue interface for BoolValue.
-func (boolean BoolValue) Type() *Datatype { return TypeBool }
+func (boolean BoolValue) Type() Datatype { return PrimitiveBool }
 
 // Copy returns a copy of BoolValue as a RegisterValue.
 // Implements the RegisterValue interface for BoolValue.
@@ -52,8 +52,8 @@ func methodsBool() [256]*BuiltinMethod {
 		MethodBool: makeBuiltinMethod(
 			MethodBool.String(),
 			PrimitiveBool, MethodBool,
-			makefields([]*TypeField{{"self", TypeBool}}),
-			makefields([]*TypeField{{"result", TypeBool}}),
+			makefields([]*TypeField{{"self", PrimitiveBool}}),
+			makefields([]*TypeField{{"result", PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// Return a copy of the bool value
 				return RegisterSet{0: inputs[0].Copy()}, nil
@@ -64,8 +64,8 @@ func methodsBool() [256]*BuiltinMethod {
 		MethodJoin: makeBuiltinMethod(
 			MethodJoin.String(),
 			PrimitiveBool, MethodJoin,
-			makefields([]*TypeField{{"self", TypeBool}, {"other", TypeBool}}),
-			makefields([]*TypeField{{"result", TypeBool}}),
+			makefields([]*TypeField{{"self", PrimitiveBool}, {"other", PrimitiveBool}}),
+			makefields([]*TypeField{{"result", PrimitiveBool}}),
 			func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// Perform boolean AND on the operands
 				result := inputs[0].(BoolValue).And(inputs[1].(BoolValue))
@@ -78,8 +78,8 @@ func methodsBool() [256]*BuiltinMethod {
 		MethodStr: makeBuiltinMethod(
 			MethodStr.String(),
 			PrimitiveBool, MethodStr,
-			makefields([]*TypeField{{"self", TypeBool}}),
-			makefields([]*TypeField{{"result", TypeString}}),
+			makefields([]*TypeField{{"self", PrimitiveBool}}),
+			makefields([]*TypeField{{"result", PrimitiveString}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// Convert bool to its string form
 				if inputs[0].(BoolValue) {
@@ -99,9 +99,9 @@ StringValue Implementation
 // StringValue represents a RegisterValue that operates like a string.
 type StringValue string
 
-// Type returns the Datatype of StringValue, which is TypeString.
+// Type returns the Datatype of StringValue, which is PrimitiveString.
 // Implements the RegisterValue interface for StringValue.
-func (str StringValue) Type() *Datatype { return TypeString }
+func (str StringValue) Type() Datatype { return PrimitiveString }
 
 // Copy returns a copy of StringValue as a RegisterValue.
 // Implements the RegisterValue interface for StringValue.
@@ -134,8 +134,8 @@ func methodsString() [256]*BuiltinMethod {
 		MethodThrow: makeBuiltinMethod(
 			MethodThrow.String(),
 			PrimitiveString, MethodThrow,
-			makefields([]*TypeField{{"self", TypeString}}),
-			makefields([]*TypeField{{"except", TypeString}}),
+			makefields([]*TypeField{{"self", PrimitiveString}}),
+			makefields([]*TypeField{{"except", PrimitiveString}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// Return a copy of the string value
 				return RegisterSet{0: inputs[0].Copy()}, nil
@@ -146,8 +146,8 @@ func methodsString() [256]*BuiltinMethod {
 		MethodJoin: makeBuiltinMethod(
 			MethodJoin.String(),
 			PrimitiveString, MethodJoin,
-			makefields([]*TypeField{{"self", TypeString}, {"other", TypeString}}),
-			makefields([]*TypeField{{"result", TypeString}}),
+			makefields([]*TypeField{{"self", PrimitiveString}, {"other", PrimitiveString}}),
+			makefields([]*TypeField{{"result", PrimitiveString}}),
 			func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// Perform string concatenation on the operands
 				result := inputs[0].(StringValue).Concat(inputs[1].(StringValue))
@@ -160,8 +160,8 @@ func methodsString() [256]*BuiltinMethod {
 		MethodBool: makeBuiltinMethod(
 			MethodBool.String(),
 			PrimitiveString, MethodBool,
-			makefields([]*TypeField{{"self", TypeString}}),
-			makefields([]*TypeField{{"result", TypeBool}}),
+			makefields([]*TypeField{{"self", PrimitiveString}}),
+			makefields([]*TypeField{{"result", PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// True for all values except empty string
 				result := inputs[0].(StringValue) != ""
@@ -174,8 +174,8 @@ func methodsString() [256]*BuiltinMethod {
 		MethodStr: makeBuiltinMethod(
 			MethodStr.String(),
 			PrimitiveString, MethodStr,
-			makefields([]*TypeField{{"self", TypeString}}),
-			makefields([]*TypeField{{"result", TypeString}}),
+			makefields([]*TypeField{{"self", PrimitiveString}}),
+			makefields([]*TypeField{{"result", PrimitiveString}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// Return a copy of the string value
 				return RegisterSet{0: inputs[0].Copy()}, nil
@@ -186,8 +186,8 @@ func methodsString() [256]*BuiltinMethod {
 		MethodLen: makeBuiltinMethod(
 			MethodLen.String(),
 			PrimitiveString, MethodLen,
-			makefields([]*TypeField{{"self", TypeString}}),
-			makefields([]*TypeField{{"length", TypeU64}}),
+			makefields([]*TypeField{{"self", PrimitiveString}}),
+			makefields([]*TypeField{{"length", PrimitiveU64}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// Get length of bytes
 				length := len(inputs[0].(StringValue))
@@ -199,8 +199,8 @@ func methodsString() [256]*BuiltinMethod {
 		// string.Get(string, position) -> string
 		0x10: makeBuiltinMethod("Get",
 			PrimitiveString, 0x10,
-			makefields([]*TypeField{{"self", TypeString}, {"position", TypeU64}}),
-			makefields([]*TypeField{{"result", TypeString}}),
+			makefields([]*TypeField{{"self", PrimitiveString}, {"position", PrimitiveU64}}),
+			makefields([]*TypeField{{"result", PrimitiveString}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self, pos := inputs[0], inputs[1]
 				char := self.(StringValue)[pos.(U64Value) : pos.(U64Value)+1]
@@ -213,11 +213,11 @@ func methodsString() [256]*BuiltinMethod {
 		0x11: makeBuiltinMethod("Set",
 			PrimitiveString, 0x11,
 			makefields([]*TypeField{
-				{Name: "self", Type: TypeString},
-				{Name: "position", Type: TypeU64},
-				{Name: "update_string", Type: TypeString},
+				{Name: "self", Type: PrimitiveString},
+				{Name: "position", Type: PrimitiveU64},
+				{Name: "update_string", Type: PrimitiveString},
 			}),
-			makefields([]*TypeField{{"result", TypeString}}),
+			makefields([]*TypeField{{"result", PrimitiveString}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self, pos, updateChar := inputs[0], inputs[1], inputs[2]
 				res := self.(StringValue)[:pos.(U64Value)] + updateChar.(StringValue) + self.(StringValue)[pos.(U64Value)+1:]
@@ -229,8 +229,8 @@ func methodsString() [256]*BuiltinMethod {
 		// string.IsAlpha(string) -> bool
 		0x12: makeBuiltinMethod("IsAlpha",
 			PrimitiveString, 0x12,
-			makefields([]*TypeField{{"self", TypeString}}),
-			makefields([]*TypeField{{"ok", TypeBool}}),
+			makefields([]*TypeField{{"self", PrimitiveString}}),
+			makefields([]*TypeField{{"ok", PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self := inputs[0].(StringValue)
 				b := true
@@ -253,8 +253,8 @@ func methodsString() [256]*BuiltinMethod {
 		// string.IsNumeric(string) -> bool
 		0x13: makeBuiltinMethod("IsNumeric",
 			PrimitiveString, 0x13,
-			makefields([]*TypeField{{"self", TypeString}}),
-			makefields([]*TypeField{{"ok", TypeBool}}),
+			makefields([]*TypeField{{"self", PrimitiveString}}),
+			makefields([]*TypeField{{"ok", PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self := inputs[0].(StringValue)
 				b := true
@@ -276,8 +276,8 @@ func methodsString() [256]*BuiltinMethod {
 		// string.IsLower(string) -> bool
 		0x14: makeBuiltinMethod("IsLower",
 			PrimitiveString, 0x14,
-			makefields([]*TypeField{{"self", TypeString}}),
-			makefields([]*TypeField{{"ok", TypeBool}}),
+			makefields([]*TypeField{{"self", PrimitiveString}}),
+			makefields([]*TypeField{{"ok", PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self := inputs[0].(StringValue)
 				b := true
@@ -296,8 +296,8 @@ func methodsString() [256]*BuiltinMethod {
 		// string.IsUpper(string) -> bool
 		0x15: makeBuiltinMethod("IsUpper",
 			PrimitiveString, 0x15,
-			makefields([]*TypeField{{"self", TypeString}}),
-			makefields([]*TypeField{{"ok", TypeBool}}),
+			makefields([]*TypeField{{"self", PrimitiveString}}),
+			makefields([]*TypeField{{"ok", PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self := inputs[0].(StringValue)
 				b := true
@@ -317,8 +317,8 @@ func methodsString() [256]*BuiltinMethod {
 		0x16: makeBuiltinMethod(
 			"HasPrefix",
 			PrimitiveString, 0x16,
-			makefields([]*TypeField{{"self", TypeString}, {"prefix", TypeString}}),
-			makefields([]*TypeField{{"ok", TypeBool}}),
+			makefields([]*TypeField{{"self", PrimitiveString}, {"prefix", PrimitiveString}}),
+			makefields([]*TypeField{{"ok", PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self, prefix := inputs[0], inputs[1]
 				ok := strings.HasPrefix(string(self.(StringValue)), string(prefix.(StringValue)))
@@ -331,8 +331,8 @@ func methodsString() [256]*BuiltinMethod {
 		0x17: makeBuiltinMethod(
 			"HasSuffix",
 			PrimitiveString, 0x17,
-			makefields([]*TypeField{{"self", TypeString}, {"suffix", TypeString}}),
-			makefields([]*TypeField{{"ok", TypeBool}}),
+			makefields([]*TypeField{{"self", PrimitiveString}, {"suffix", PrimitiveString}}),
+			makefields([]*TypeField{{"ok", PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self, suffix := inputs[0], inputs[1]
 				ok := strings.HasSuffix(string(self.(StringValue)), string(suffix.(StringValue)))
@@ -345,8 +345,8 @@ func methodsString() [256]*BuiltinMethod {
 		0x18: makeBuiltinMethod(
 			"Contains",
 			PrimitiveString, 0x18,
-			makefields([]*TypeField{{"self", TypeString}, {"contains", TypeString}}),
-			makefields([]*TypeField{{"ok", TypeBool}}),
+			makefields([]*TypeField{{"self", PrimitiveString}, {"contains", PrimitiveString}}),
+			makefields([]*TypeField{{"ok", PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self, substr := inputs[0], inputs[1]
 				ok := strings.Contains(string(self.(StringValue)), string(substr.(StringValue)))
@@ -359,8 +359,8 @@ func methodsString() [256]*BuiltinMethod {
 		0x19: makeBuiltinMethod(
 			"Split",
 			PrimitiveString, 0x19,
-			makefields([]*TypeField{{"self", TypeString}, {"delim", TypeString}}),
-			makefields([]*TypeField{{"result", NewVarrayType(TypeString)}}),
+			makefields([]*TypeField{{"self", PrimitiveString}, {"delim", PrimitiveString}}),
+			makefields([]*TypeField{{"result", VarrayDatatype{PrimitiveString}}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self, delim := inputs[0], inputs[1]
 				res := strings.Split(string(self.(StringValue)), string(delim.(StringValue)))
@@ -369,7 +369,7 @@ func methodsString() [256]*BuiltinMethod {
 					resval := StringValue(i)
 					resvalarr = append(resvalarr, resval)
 				}
-				resOp, _ := newListFromValues(NewVarrayType(TypeString), resvalarr...)
+				resOp, _ := newVarrayFromValues(VarrayDatatype{PrimitiveString}, resvalarr...)
 
 				return RegisterSet{0: resOp}, nil
 			},
@@ -379,8 +379,8 @@ func methodsString() [256]*BuiltinMethod {
 		0x1A: makeBuiltinMethod(
 			"Slice",
 			PrimitiveString, 0x1A,
-			makefields([]*TypeField{{"self", TypeString}, {"idx1", TypeU64}, {"idx2", TypeU64}}),
-			makefields([]*TypeField{{"ok", TypeString}}),
+			makefields([]*TypeField{{"self", PrimitiveString}, {"idx1", PrimitiveU64}, {"idx2", PrimitiveU64}}),
+			makefields([]*TypeField{{"ok", PrimitiveString}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self, idx1, idx2 := inputs[0], inputs[1], inputs[2]
 				res := self.(StringValue)[idx1.(U64Value):idx2.(U64Value)]
@@ -393,8 +393,8 @@ func methodsString() [256]*BuiltinMethod {
 		0x1B: makeBuiltinMethod(
 			"ToLower",
 			PrimitiveString, 0x1B,
-			makefields([]*TypeField{{"self", TypeString}}),
-			makefields([]*TypeField{{"res", TypeString}}),
+			makefields([]*TypeField{{"self", PrimitiveString}}),
+			makefields([]*TypeField{{"res", PrimitiveString}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self := inputs[0]
 				res := strings.ToLower(string(self.(StringValue)))
@@ -407,8 +407,8 @@ func methodsString() [256]*BuiltinMethod {
 		0x1C: makeBuiltinMethod(
 			"ToUpper",
 			PrimitiveString, 0x1C,
-			makefields([]*TypeField{{"self", TypeString}}),
-			makefields([]*TypeField{{"res", TypeString}}),
+			makefields([]*TypeField{{"self", PrimitiveString}}),
+			makefields([]*TypeField{{"res", PrimitiveString}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self := inputs[0]
 				res := strings.ToUpper(string(self.(StringValue)))
@@ -426,9 +426,9 @@ BytesValue Implementation
 // BytesValue represents RegisterValue that operates like a bytes
 type BytesValue []byte
 
-// Type returns the Datatype of BytesValue, which is TypeBytes.
+// Type returns the Datatype of BytesValue, which is PrimitiveBytes.
 // Implements the RegisterValue interface for BytesValue.
-func (bytesval BytesValue) Type() *Datatype { return TypeBytes }
+func (bytesval BytesValue) Type() Datatype { return PrimitiveBytes }
 
 // Copy returns a copy of BytesValue as a RegisterValue.
 // Implements the RegisterValue interface for BytesValue.
@@ -462,8 +462,8 @@ func methodsBytes() [256]*BuiltinMethod {
 		MethodBool: makeBuiltinMethod(
 			MethodBool.String(),
 			PrimitiveBytes, MethodBool,
-			makefields([]*TypeField{{"self", TypeBytes}}),
-			makefields([]*TypeField{{"result", TypeBool}}),
+			makefields([]*TypeField{{"self", PrimitiveBytes}}),
+			makefields([]*TypeField{{"result", PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// True for all values except empty bytes
 				result := len(inputs[0].(BytesValue)) != 0
@@ -476,8 +476,8 @@ func methodsBytes() [256]*BuiltinMethod {
 		MethodJoin: makeBuiltinMethod(
 			MethodJoin.String(),
 			PrimitiveBytes, MethodJoin,
-			makefields([]*TypeField{{"self", TypeBytes}, {"other", TypeBytes}}),
-			makefields([]*TypeField{{"result", TypeBytes}}),
+			makefields([]*TypeField{{"self", PrimitiveBytes}, {"other", PrimitiveBytes}}),
+			makefields([]*TypeField{{"result", PrimitiveBytes}}),
 			func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// Perform bytes concatenation on the operands
 				result := inputs[0].(BytesValue).Concat(inputs[1].(BytesValue))
@@ -490,8 +490,8 @@ func methodsBytes() [256]*BuiltinMethod {
 		MethodStr: makeBuiltinMethod(
 			MethodStr.String(),
 			PrimitiveBytes, MethodStr,
-			makefields([]*TypeField{{"self", TypeBytes}}),
-			makefields([]*TypeField{{"result", TypeString}}),
+			makefields([]*TypeField{{"self", PrimitiveBytes}}),
+			makefields([]*TypeField{{"result", PrimitiveString}}),
 
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// Return bytes converted into a string
@@ -503,8 +503,8 @@ func methodsBytes() [256]*BuiltinMethod {
 		MethodLen: makeBuiltinMethod(
 			MethodLen.String(),
 			PrimitiveBytes, MethodLen,
-			makefields([]*TypeField{{"self", TypeBytes}}),
-			makefields([]*TypeField{{"length", TypeU64}}),
+			makefields([]*TypeField{{"self", PrimitiveBytes}}),
+			makefields([]*TypeField{{"length", PrimitiveU64}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// Get length of bytes
 				length := len(inputs[0].(BytesValue))
@@ -516,8 +516,8 @@ func methodsBytes() [256]*BuiltinMethod {
 		// byte.Get(byte, position) -> byte
 		0x10: makeBuiltinMethod("Get",
 			PrimitiveString, 0x10,
-			makefields([]*TypeField{{"self", TypeBytes}, {"position", TypeU64}}),
-			makefields([]*TypeField{{"result", TypeBytes}}),
+			makefields([]*TypeField{{"self", PrimitiveBytes}, {"position", PrimitiveU64}}),
+			makefields([]*TypeField{{"result", PrimitiveBytes}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self, pos := inputs[0], inputs[1]
 				byteres := self.(BytesValue)[pos.(U64Value) : pos.(U64Value)+1]
@@ -529,8 +529,8 @@ func methodsBytes() [256]*BuiltinMethod {
 		// byte.Set(byte, position, updateByte) -> byte
 		0x11: makeBuiltinMethod("Set",
 			PrimitiveString, 0x11,
-			makefields([]*TypeField{{"self", TypeBytes}, {"position", TypeU64}, {"update_byte", TypeBytes}}),
-			makefields([]*TypeField{{"result", TypeBytes}}),
+			makefields([]*TypeField{{"self", PrimitiveBytes}, {"position", PrimitiveU64}, {"update_byte", PrimitiveBytes}}),
+			makefields([]*TypeField{{"result", PrimitiveBytes}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self, pos, updateByte := inputs[0], inputs[1], inputs[2]
 				self.(BytesValue)[pos.(U64Value)] = updateByte.(BytesValue)[0]
@@ -542,8 +542,8 @@ func methodsBytes() [256]*BuiltinMethod {
 		// byte.HasPrefix(byte) -> bool
 		0x12: makeBuiltinMethod("HasPrefix",
 			PrimitiveString, 0x11,
-			makefields([]*TypeField{{"self", TypeBytes}, {"prefix", TypeBytes}}),
-			makefields([]*TypeField{{"ok", TypeBool}}),
+			makefields([]*TypeField{{"self", PrimitiveBytes}, {"prefix", PrimitiveBytes}}),
+			makefields([]*TypeField{{"ok", PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self, prefix := inputs[0], inputs[1]
 				ok := bytes.HasPrefix(self.(BytesValue), prefix.(BytesValue))
@@ -555,8 +555,8 @@ func methodsBytes() [256]*BuiltinMethod {
 		// byte.HasSuffix(byte) -> bool
 		0x13: makeBuiltinMethod("HasSuffix",
 			PrimitiveString, 0x11,
-			makefields([]*TypeField{{"self", TypeBytes}, {"suffix", TypeBytes}}),
-			makefields([]*TypeField{{"ok", TypeBool}}),
+			makefields([]*TypeField{{"self", PrimitiveBytes}, {"suffix", PrimitiveBytes}}),
+			makefields([]*TypeField{{"ok", PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self, prefix := inputs[0], inputs[1]
 				ok := bytes.HasSuffix(self.(BytesValue), prefix.(BytesValue))
@@ -568,8 +568,8 @@ func methodsBytes() [256]*BuiltinMethod {
 		// byte.Contains(byte) -> bool
 		0x14: makeBuiltinMethod("Contains",
 			PrimitiveString, 0x11,
-			makefields([]*TypeField{{"self", TypeBytes}, {"subbyte", TypeBytes}}),
-			makefields([]*TypeField{{"ok", TypeBool}}),
+			makefields([]*TypeField{{"self", PrimitiveBytes}, {"subbyte", PrimitiveBytes}}),
+			makefields([]*TypeField{{"ok", PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self, subbyte := inputs[0], inputs[1]
 				ok := bytes.Contains(self.(BytesValue), subbyte.(BytesValue))
@@ -581,8 +581,8 @@ func methodsBytes() [256]*BuiltinMethod {
 		// byte.Split(byte, delim) -> []byte
 		0x15: makeBuiltinMethod("Split",
 			PrimitiveString, 0x15,
-			makefields([]*TypeField{{"self", TypeBytes}, {"delim", TypeBytes}}),
-			makefields([]*TypeField{{"result", NewVarrayType(TypeBytes)}}),
+			makefields([]*TypeField{{"self", PrimitiveBytes}, {"delim", PrimitiveBytes}}),
+			makefields([]*TypeField{{"result", VarrayDatatype{PrimitiveBytes}}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self, delim := inputs[0], inputs[1]
 				res := bytes.Split(self.(BytesValue), delim.(BytesValue))
@@ -591,7 +591,7 @@ func methodsBytes() [256]*BuiltinMethod {
 					resval := BytesValue(i)
 					resvalarr = append(resvalarr, resval)
 				}
-				resOp, _ := newListFromValues(NewVarrayType(TypeBytes), resvalarr...)
+				resOp, _ := newVarrayFromValues(VarrayDatatype{PrimitiveBytes}, resvalarr...)
 
 				return RegisterSet{0: resOp}, nil
 			},
@@ -600,8 +600,8 @@ func methodsBytes() [256]*BuiltinMethod {
 		// byte.Slice(byte, idx1, idx2) -> byte
 		0x16: makeBuiltinMethod("Slice",
 			PrimitiveString, 0x16,
-			makefields([]*TypeField{{"self", TypeBytes}, {"idx1", TypeU64}, {"idx2", TypeU64}}),
-			makefields([]*TypeField{{"result", NewVarrayType(TypeBytes)}}),
+			makefields([]*TypeField{{"self", PrimitiveBytes}, {"idx1", PrimitiveU64}, {"idx2", PrimitiveU64}}),
+			makefields([]*TypeField{{"result", VarrayDatatype{PrimitiveBytes}}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self, idx1, idx2 := inputs[0], inputs[1], inputs[2]
 				res := self.(BytesValue)[idx1.(U64Value):idx2.(U64Value)]
@@ -622,9 +622,9 @@ type AddressValue [32]byte
 // ZeroAddress represents the zero value of Address
 var ZeroAddress AddressValue
 
-// Type returns the Datatype of AddressValue, which is TypeAddress.
+// Type returns the Datatype of AddressValue, which is PrimitiveAddress.
 // Implements the RegisterValue interface for AddressValue.
-func (addr AddressValue) Type() *Datatype { return TypeAddress }
+func (addr AddressValue) Type() Datatype { return PrimitiveAddress }
 
 // Copy returns a copy of AddressValue as a RegisterValue.
 // Implements the RegisterValue interface for AddressValue.
@@ -653,8 +653,8 @@ func methodsAddress() [256]*BuiltinMethod {
 		MethodBool: makeBuiltinMethod(
 			MethodBool.String(),
 			PrimitiveAddress, MethodBool,
-			makefields([]*TypeField{{"self", TypeAddress}}),
-			makefields([]*TypeField{{"result", TypeBool}}),
+			makefields([]*TypeField{{"self", PrimitiveAddress}}),
+			makefields([]*TypeField{{"result", PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// True for all values except zero address
 				result := inputs[0].(AddressValue) != ZeroAddress
@@ -667,8 +667,8 @@ func methodsAddress() [256]*BuiltinMethod {
 		MethodStr: makeBuiltinMethod(
 			MethodStr.String(),
 			PrimitiveAddress, MethodStr,
-			makefields([]*TypeField{{"self", TypeAddress}}),
-			makefields([]*TypeField{{"result", TypeString}}),
+			makefields([]*TypeField{{"self", PrimitiveAddress}}),
+			makefields([]*TypeField{{"result", PrimitiveString}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// Hex encode the address
 				result := inputs[0].(AddressValue).ToHex()
@@ -681,8 +681,8 @@ func methodsAddress() [256]*BuiltinMethod {
 		MethodAddr: makeBuiltinMethod(
 			MethodAddr.String(),
 			PrimitiveAddress, MethodAddr,
-			makefields([]*TypeField{{"self", TypeAddress}}),
-			makefields([]*TypeField{{"result", TypeAddress}}),
+			makefields([]*TypeField{{"self", PrimitiveAddress}}),
+			makefields([]*TypeField{{"result", PrimitiveAddress}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// Return a copy of the address value
 				return RegisterSet{0: inputs[0].Copy()}, nil
@@ -693,8 +693,8 @@ func methodsAddress() [256]*BuiltinMethod {
 		MethodLen: makeBuiltinMethod(
 			MethodLen.String(),
 			PrimitiveAddress, MethodLen,
-			makefields([]*TypeField{{"self", TypeAddress}}),
-			makefields([]*TypeField{{"length", TypeU64}}),
+			makefields([]*TypeField{{"self", PrimitiveAddress}}),
+			makefields([]*TypeField{{"length", PrimitiveU64}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				return RegisterSet{0: U64Value(32)}, nil
 			},

@@ -27,7 +27,7 @@ func TestConstantValue(t *testing.T) {
 		{
 			constant: Constant{Type: PrimitiveU64, Data: []byte{0x6, 0x65}},
 			value:    nil,
-			except:   exception(ValueError, "malformed constant: data does not decode to a uint64"),
+			except:   exception(ValueError, "malformed constant: data does not decode to a u64"),
 		},
 	}
 
@@ -44,7 +44,7 @@ func TestPtrValue(t *testing.T) {
 	ptr := PtrValue(12345)
 
 	// Test Type()
-	assert.Equal(t, TypePtr, ptr.Type(), "PtrValue Type should be TypePtr")
+	assert.Equal(t, PrimitivePtr, ptr.Type(), "PtrValue Type should be TypePtr")
 
 	// Test Copy()
 	clone := ptr.Copy()
@@ -62,7 +62,7 @@ func TestPtrValue(t *testing.T) {
 
 func TestNullValue(t *testing.T) {
 	// Test Type method
-	assert.Equal(t, TypeNull, NullValue{}.Type(), "Type method should return TypeNull")
+	assert.Equal(t, PrimitiveNull, NullValue{}.Type(), "Type method should return TypeNull")
 
 	// Test Copy method
 	nullVal := NullValue{}

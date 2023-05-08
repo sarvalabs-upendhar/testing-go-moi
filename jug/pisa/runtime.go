@@ -16,7 +16,9 @@ import (
 type Runtime struct {
 	instructs InstructionSet
 	builtins  map[uint64]*Builtin
-	bmethods  map[Primitive][256]*BuiltinMethod
+	bclasses  map[string]BuiltinDatatype
+	bmethods  map[BuiltinDatatype][256]*BuiltinMethod
+	pmethods  map[PrimitiveDatatype][256]*BuiltinMethod
 }
 
 // NewRuntime generates a new Runtime instance that can be
@@ -25,7 +27,11 @@ func NewRuntime() Runtime {
 	return Runtime{
 		instructs: BaseInstructionSet(),
 		builtins:  map[uint64]*Builtin{},
-		bmethods: map[Primitive][256]*BuiltinMethod{
+
+		bclasses: map[string]BuiltinDatatype{},
+		bmethods: map[BuiltinDatatype][256]*BuiltinMethod{},
+
+		pmethods: map[PrimitiveDatatype][256]*BuiltinMethod{
 			PrimitiveBool:    methodsBool(),
 			PrimitiveBytes:   methodsBytes(),
 			PrimitiveString:  methodsString(),
@@ -204,9 +210,9 @@ func (runtime Runtime) GetCallEncoder(
 	// Decode the element data into a Routine object
 	routine := new(Routine)
 	if err := polo.Depolorize(routine, element.Data); err != nil {
-		return nil, errors.Errorf("could not decode 'routine' element into Routine")
+		return nil, errors.Wrapf(err, "could not decode 'routine' element into Routine")
 	}
 
 	// Return the routine callfields as a CallEncoder
-	return CallEncoder(routine.CallFields), nil
+	return CallEncoder(routine.callfields()), nil
 }

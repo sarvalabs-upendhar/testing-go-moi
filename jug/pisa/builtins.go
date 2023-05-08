@@ -52,12 +52,12 @@ type BuiltinMethod struct {
 	// Code represents the method code of the method
 	Code MethodCode
 	// Datatype represents the type that the method belongs to.
-	Datatype Primitive
+	Datatype PrimitiveDatatype
 }
 
 func (bmethod BuiltinMethod) code() MethodCode { return bmethod.Code }
 
-func (bmethod BuiltinMethod) datatype() *Datatype { return bmethod.Datatype.Datatype() }
+func (bmethod BuiltinMethod) datatype() Datatype { return bmethod.Datatype }
 
 func (bmethod BuiltinMethod) run(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 	if !engine.callstack.push(&callframe{
@@ -74,7 +74,7 @@ func (bmethod BuiltinMethod) run(engine *Engine, inputs RegisterSet) (RegisterSe
 }
 
 func makeBuiltinMethod(
-	name string, dt Primitive, code MethodCode,
+	name string, dt PrimitiveDatatype, code MethodCode,
 	inputs, outputs *TypeFields, runner BuiltinRunner,
 ) *BuiltinMethod {
 	return &BuiltinMethod{

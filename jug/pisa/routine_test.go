@@ -49,6 +49,6 @@ func TestRoutineMethod_code(t *testing.T) {
 }
 
 func TestRoutineMethod_datatype(t *testing.T) {
-	rm := RoutineMethod{Datatype: TypeString}
-	require.Equal(t, TypeString, rm.datatype())
+	rm := RoutineMethod{Datatype: PrimitiveString}
+	require.Equal(t, PrimitiveString, rm.datatype())
 }

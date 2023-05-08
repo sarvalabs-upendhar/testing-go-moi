@@ -16,7 +16,7 @@ func TestBoolValue(t *testing.T) {
 		value := BoolValue(true)
 
 		// Test Type()
-		assert.Equal(t, TypeBool, value.Type(), "BoolValue Type should be TypeBool")
+		assert.Equal(t, PrimitiveBool, value.Type(), "BoolValue Type should be TypeBool")
 
 		// Test Copy()
 		clone := value.Copy()
@@ -55,7 +55,7 @@ func TestStringValue(t *testing.T) {
 		value := StringValue("foobar")
 
 		// Test Type()
-		assert.Equal(t, TypeString, value.Type(), "StringValue Type should be TypeString")
+		assert.Equal(t, PrimitiveString, value.Type(), "StringValue Type should be TypeString")
 
 		// Test Copy()
 		clone := value.Copy()
@@ -93,7 +93,7 @@ func TestBytesValue(t *testing.T) {
 		value := BytesValue{0x10, 0x20, 0x30}
 
 		// Test Type()
-		assert.Equal(t, TypeBytes, value.Type(), "BytesValue Type should be TypeBytes")
+		assert.Equal(t, PrimitiveBytes, value.Type(), "BytesValue Type should be TypeBytes")
 
 		// Test Copy()
 		clone := value.Copy()
@@ -117,7 +117,7 @@ func TestAddressValue(t *testing.T) {
 		value := AddressValue{0x10}
 
 		// Test Type()
-		assert.Equal(t, TypeAddress, value.Type(), "AddressValue Type should be TypeAddress")
+		assert.Equal(t, PrimitiveAddress, value.Type(), "AddressValue Type should be TypeAddress")
 
 		// Test Copy()
 		clone := value.Copy()

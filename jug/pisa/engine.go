@@ -210,9 +210,11 @@ func (engine Engine) lookupInstruction(opcode OpCode) InstructionFunc {
 	return engine.runtime.instructs[opcode]
 }
 
-func (engine *Engine) lookupMethod(dt *Datatype, mtcode MethodCode) (Method, bool) {
-	if dt.Kind == PrimitiveType {
-		if methods, ok := engine.runtime.bmethods[dt.Prim]; ok {
+func (engine *Engine) lookupMethod(dt Datatype, mtcode MethodCode) (Method, bool) {
+	if dt.Kind() == Primitive {
+		primitive, _ := dt.(PrimitiveDatatype)
+
+		if methods, ok := engine.runtime.pmethods[primitive]; ok {
 			if method := methods[mtcode]; method != nil {
 				return method, true
 			}
@@ -222,11 +224,11 @@ func (engine *Engine) lookupMethod(dt *Datatype, mtcode MethodCode) (Method, boo
 	return nil, false
 }
 
-func (engine *Engine) GetTypedef(ptr engineio.ElementPtr) (*Datatype, error) {
+func (engine *Engine) GetTypedef(ptr engineio.ElementPtr) (Datatype, error) {
 	if item, cached := engine.elements[ptr]; cached {
-		routine, _ := item.(*Datatype)
+		typedef, _ := item.(Datatype)
 
-		return routine, nil
+		return typedef, nil
 	}
 
 	element, ok := engine.logic.GetElement(ptr)
@@ -234,8 +236,8 @@ func (engine *Engine) GetTypedef(ptr engineio.ElementPtr) (*Datatype, error) {
 		return nil, errors.Errorf("could not find element at %#x", ptr)
 	}
 
-	typedef := new(Datatype)
-	if err := polo.Depolorize(typedef, element.Data); err != nil {
+	typedef, err := DecodeDatatype(element.Data)
+	if err != nil {
 		return nil, err
 	}
 
@@ -356,21 +358,13 @@ func (engine *Engine) loadLogicElement(ptr engineio.ElementPtr, element *enginei
 
 		engine.elements[ptr] = state
 
-	case ClassElement:
-		class := new(Datatype)
-		if err := polo.Depolorize(class, element.Data); err != nil {
+	case ClassElement, TypedefElement:
+		datatype, err := DecodeDatatype(element.Data)
+		if err != nil {
 			return err
 		}
 
-		engine.elements[ptr] = class
-
-	case TypedefElement:
-		typedef := new(Datatype)
-		if err := polo.Depolorize(typedef, element.Data); err != nil {
-			return err
-		}
-
-		engine.elements[ptr] = typedef
+		engine.elements[ptr] = datatype
 
 	case ConstantElement:
 		constant := new(Constant)

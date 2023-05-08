@@ -24,17 +24,17 @@
           {
             "slot": 2,
             "label": "supply",
-            "type": "uint64"
+            "type": "u64"
           },
           {
             "slot": 3,
             "label": "balances",
-            "type": "map[address]uint64"
+            "type": "map[address]u64"
           },
           {
             "slot": 4,
             "label": "allowances",
-            "type": "map[address]map[address]uint64"
+            "type": "map[address]map[address]u64"
           }
         ]
       }
@@ -62,7 +62,7 @@
           {
             "slot": 2,
             "label": "supply",
-            "type": "uint64"
+            "type": "u64"
           },
           {
             "slot": 3,
@@ -111,14 +111,14 @@
       "ptr": 2,
       "kind": "constant",
       "data": {
-        "type": "uint64",
+        "type": "u64",
         "value": "0x030a"
       }
     },
     {
       "ptr": 3,
       "kind": "typedef",
-      "data": "map[address]uint64"
+      "data": "map[address]u64"
     },
     {
       "ptr": 4,
@@ -189,7 +189,7 @@
           {
             "slot": 0,
             "label": "decimals",
-            "type": "uint64"
+            "type": "u64"
           }
         ],
         "executes": {
@@ -220,7 +220,7 @@
           {
             "slot": 0,
             "label": "supply",
-            "type": "uint64"
+            "type": "u64"
           }
         ],
         "executes": {
@@ -255,7 +255,7 @@
           {
             "slot": 0,
             "label": "balance",
-            "type": "uint64"
+            "type": "u64"
           }
         ],
         "executes": {
@@ -302,7 +302,7 @@
           {
             "slot": 0,
             "label": "allowance",
-            "type": "uint64"
+            "type": "u64"
           }
         ],
         "executes": {
@@ -355,7 +355,7 @@
           {
             "slot": 2,
             "label": "amount",
-            "type": "uint64"
+            "type": "u64"
           }
         ],
         "returns": [
@@ -452,7 +452,7 @@
           {
             "slot": 2,
             "label": "amount",
-            "type": "uint64"
+            "type": "u64"
           }
         ],
         "returns": [
@@ -547,7 +547,7 @@
           {
             "slot": 0,
             "label": "amount",
-            "type": "uint64"
+            "type": "u64"
           },
           {
             "slot": 1,
@@ -624,7 +624,7 @@
           {
             "slot": 0,
             "label": "amount",
-            "type": "uint64"
+            "type": "u64"
           },
           {
             "slot": 1,

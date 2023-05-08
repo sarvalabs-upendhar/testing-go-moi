@@ -13,13 +13,13 @@ import (
 func TestNewRegisterValue(t *testing.T) {
 	t.Run("unsupported_primitive", func(t *testing.T) {
 		require.PanicsWithValue(t, "unsupported datatype for value generation: ptr", func() {
-			_, _ = NewRegisterValue(TypePtr, nil)
+			_, _ = NewRegisterValue(PrimitivePtr, nil)
 		})
 	})
 
 	t.Run("unsupported_type", func(t *testing.T) {
 		require.PanicsWithValue(t, "unsupported datatype for value generation: DatatypeKind(10)", func() {
-			_, _ = NewRegisterValue(&Datatype{Kind: DatatypeKind(10)}, nil)
+			_, _ = NewRegisterValue(mockInvalidDatatype{}, nil)
 		})
 	})
 }
@@ -34,7 +34,7 @@ func TestNewRegisterSet(t *testing.T) {
 	}{
 		{
 			name:   "empty_values_with_fields",
-			fields: makefields([]*TypeField{{"foo", TypeString}}),
+			fields: makefields([]*TypeField{{"foo", PrimitiveString}}),
 			values: nil,
 			output: nil,
 			err:    "missing input values",
@@ -49,8 +49,8 @@ func TestNewRegisterSet(t *testing.T) {
 		{
 			name: "missing_field_data",
 			fields: makefields([]*TypeField{
-				{"foo", TypeAddress},
-				{"boo", TypeString},
+				{"foo", PrimitiveAddress},
+				{"boo", PrimitiveString},
 			}),
 			values: polo.Document{
 				"foo": must(polo.Polorize(types.Address{10, 10, 10, 10})),
@@ -61,8 +61,8 @@ func TestNewRegisterSet(t *testing.T) {
 		{
 			name: "malformed_field_data",
 			fields: makefields([]*TypeField{
-				{"foo", TypeAddress},
-				{"boo", TypeString},
+				{"foo", PrimitiveAddress},
+				{"boo", PrimitiveString},
 			}),
 			values: polo.Document{
 				"foo": must(polo.Polorize(types.Address{10, 10, 10, 10})),
@@ -74,8 +74,8 @@ func TestNewRegisterSet(t *testing.T) {
 		{
 			name: "well_formed",
 			fields: makefields([]*TypeField{
-				{"foo", TypeAddress},
-				{"boo", TypeString},
+				{"foo", PrimitiveAddress},
+				{"boo", PrimitiveString},
 			}),
 			values: polo.Document{
 				"foo": must(polo.Polorize(types.Address{10, 10, 10, 10})),

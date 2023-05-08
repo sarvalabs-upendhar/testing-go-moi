@@ -24,7 +24,7 @@ elements:
           type : string
         - slot : 1
           label: age
-          type : uint64
+          type : u64
         - slot : 2
           label: gender
           type : string

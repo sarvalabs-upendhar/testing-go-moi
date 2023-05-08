@@ -6,14 +6,14 @@ import "github.com/sarvalabs/go-polo"
 // It consists of the type information of the constant (primitive)
 // and some POLO encoded bytes that describe the constant value.
 type Constant struct {
-	Type Primitive
+	Type PrimitiveDatatype
 	Data []byte
 }
 
 // value generate a new RegisterValue object from a Constant
 // Returns an error if the constant data is not interpretable for its type.
 func (constant *Constant) value() (RegisterValue, *Exception) {
-	value, err := NewRegisterValue(constant.Type.Datatype(), constant.Data)
+	value, err := NewRegisterValue(constant.Type, constant.Data)
 	if err != nil {
 		return nil, exceptionf(ValueError, "malformed constant: %v", err)
 	}
@@ -25,9 +25,9 @@ func (constant *Constant) value() (RegisterValue, *Exception) {
 // It is purely a representational Value and has no operations and methods.
 type PtrValue uint64
 
-// Type returns the Datatype of PtrValue, which is TypePtr.
+// Type returns the Datatype of PtrValue, which is PrimitivePtr.
 // Implements the RegisterValue interface for PtrValue.
-func (ptr PtrValue) Type() *Datatype { return TypePtr }
+func (ptr PtrValue) Type() Datatype { return PrimitivePtr }
 
 // Copy returns a copy of PtrValue as a RegisterValue.
 // Implements the Value interface for PtrValue.
@@ -48,9 +48,9 @@ func (ptr PtrValue) Data() []byte {
 // NullValue represents the default empty value for a register
 type NullValue struct{}
 
-// Type returns the Datatype of NullValue, which is TypeNull.
+// Type returns the Datatype of NullValue, which is PrimitiveNull.
 // Implements the RegisterValue interface for NullValue.
-func (null NullValue) Type() *Datatype { return TypeNull }
+func (null NullValue) Type() Datatype { return PrimitiveNull }
 
 // Copy returns a copy of NullValue as a Value.
 // Implements the RegisterValue interface for NullValue.
@@ -65,13 +65,13 @@ func (null NullValue) Norm() any { return nil }
 func (null NullValue) Data() []byte { return []byte{0} }
 
 // IsNullValue returns if the given RegisterValue is null.
-// Is true if the register is empty or its datatype is TypeNull.
+// Is true if the register is empty or its datatype is PrimitiveNull.
 func IsNullValue(value RegisterValue) bool {
 	if value == nil {
 		return true
 	}
 
-	if value.Type().Equals(TypeNull) {
+	if value.Type().Equals(PrimitiveNull) {
 		return true
 	}
 

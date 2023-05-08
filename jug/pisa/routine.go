@@ -83,7 +83,7 @@ type RoutineMethod struct {
 	// Code represents the method code of the method
 	Code MethodCode
 	// Datatype represents the type that the method belongs to.
-	Datatype *Datatype
+	Datatype Datatype
 }
 
 // code returns the method code of the RoutineMethod.
@@ -92,7 +92,7 @@ func (rmethod RoutineMethod) code() MethodCode { return rmethod.Code }
 
 // datatype returns the Datatype of the RoutineMethod.
 // Implements the Method interface for RoutineMethod.
-func (rmethod RoutineMethod) datatype() *Datatype { return rmethod.Datatype }
+func (rmethod RoutineMethod) datatype() Datatype { return rmethod.Datatype }
 
 // run performs the execution of the RoutineMethod for the given engine and some input registers.
 // Implements the Runnable interface for RoutineMethod

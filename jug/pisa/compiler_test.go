@@ -162,7 +162,7 @@ func TestManifestCompiler(t *testing.T) {
 			Syntax: "0.1.0",
 			Engine: engineio.ManifestEngineSpec{Kind: string(engineio.PISA)},
 			Elements: []engineio.ManifestElement{
-				{Ptr: 0, Kind: ConstantElement, Data: &ConstantSchema{"uint64", "0x030a0b"}},
+				{Ptr: 0, Kind: ConstantElement, Data: &ConstantSchema{"u64", "0x030a0b"}},
 				{Ptr: 1, Kind: RoutineElement, Data: &RoutineSchema{
 					Name:     "Hello",
 					Kind:     engineio.InvokableCallsite,

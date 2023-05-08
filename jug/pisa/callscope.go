@@ -119,7 +119,7 @@ func (scope *callscope) getPtrValue(regID byte) (PtrValue, *Exception) {
 	// Retrieve the Register object
 	reg := scope.memory.Get(regID)
 	// Check that the register type is Ptr
-	if reg.Type() != TypePtr {
+	if reg.Type() != PrimitivePtr {
 		return 0, scope.throw(exceptionf(ReferenceError, "not a pointer: $%v", regID))
 	}
 

@@ -15,7 +15,7 @@ func TestTypeFields_Insert(t *testing.T) {
 	}
 
 	// Insert a new TypeField at position 0
-	field := &TypeField{Name: "myField", Type: TypeI64}
+	field := &TypeField{Name: "myField", Type: PrimitiveI64}
 	fields.Insert(0, field)
 
 	// Verify that the field was inserted at the correct position
@@ -30,7 +30,7 @@ func TestTypeFields_Get(t *testing.T) {
 	}
 
 	// Insert a new TypeField at position 0
-	field := &TypeField{Name: "myField", Type: TypeBool}
+	field := &TypeField{Name: "myField", Type: PrimitiveBool}
 	fields.Insert(0, field)
 
 	// Get the TypeField at position 0
@@ -52,7 +52,7 @@ func TestTypeFields_Lookup(t *testing.T) {
 	}
 
 	// Insert a new TypeField at position 0
-	field := &TypeField{Name: "myField", Type: TypeString}
+	field := &TypeField{Name: "myField", Type: PrimitiveString}
 	fields.Insert(0, field)
 
 	// Lookup the TypeField by name
@@ -74,8 +74,8 @@ func TestTypeFields_String(t *testing.T) {
 	}
 
 	// Insert two new TypeFields
-	fields.Insert(0, &TypeField{Name: "field1", Type: TypeString})
-	fields.Insert(1, &TypeField{Name: "field2", Type: TypeAddress})
+	fields.Insert(0, &TypeField{Name: "field1", Type: PrimitiveString})
+	fields.Insert(1, &TypeField{Name: "field2", Type: PrimitiveAddress})
 
 	// Get the string representation of the TypeFields
 	result := fields.String()
@@ -92,7 +92,7 @@ func TestTypeFields_Copy(t *testing.T) {
 	}
 
 	// Insert a new TypeField
-	field := &TypeField{Name: "myField", Type: TypeI64}
+	field := &TypeField{Name: "myField", Type: PrimitiveI64}
 	fields.Insert(0, field)
 
 	// Make a copy of the TypeFields
@@ -101,7 +101,7 @@ func TestTypeFields_Copy(t *testing.T) {
 	require.NotEqual(t, reflect.ValueOf(fields).Pointer(), reflect.ValueOf(clone).Pointer())
 
 	// Modify the original TypeFields
-	fields.Insert(1, &TypeField{Name: "newField", Type: TypeString})
+	fields.Insert(1, &TypeField{Name: "newField", Type: PrimitiveString})
 	// Verify that the copy is not affected by changes to the original
 	require.NotEqual(t, fields, clone)
 }

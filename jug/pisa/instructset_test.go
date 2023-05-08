@@ -233,7 +233,7 @@ func TestInstructionSet(t *testing.T) {
 			continuity := opCONST(scope, []byte{1, 0})
 			require.Equal(t, continueException{0, &Exception{
 				Class: "builtin.ValueError",
-				Error: "malformed constant: data does not decode to a uint64",
+				Error: "malformed constant: data does not decode to a u64",
 				Trace: []string{},
 			}}, continuity)
 		})
@@ -444,7 +444,7 @@ func TestInstructionSet(t *testing.T) {
 					runtime:   &runtime,
 					callstack: make(callstack, 0),
 					elements: map[engineio.ElementPtr]any{
-						0: NewArrayType(32, TypeU64),
+						0: ArrayDatatype{PrimitiveU64, 32},
 					},
 				},
 				memory: map[byte]RegisterValue{
@@ -454,7 +454,7 @@ func TestInstructionSet(t *testing.T) {
 
 			continuity := opMAKE(scope, []byte{1, 0})
 			require.Equal(t, continueOk{20}, continuity)
-			require.Equal(t, must(newListValue(NewArrayType(32, TypeU64), nil)), scope.memory[1])
+			require.Equal(t, must(newArrayValue(ArrayDatatype{PrimitiveU64, 32}, nil)), scope.memory[1])
 		})
 	})
 
@@ -511,7 +511,7 @@ func TestInstructionSet(t *testing.T) {
 					runtime:   &runtime,
 					callstack: make(callstack, 0),
 					elements: map[engineio.ElementPtr]any{
-						0: NewArrayType(32, TypeU64),
+						0: ArrayDatatype{PrimitiveU64, 32},
 					},
 				},
 				memory: map[byte]RegisterValue{
@@ -534,7 +534,7 @@ func TestInstructionSet(t *testing.T) {
 					runtime:   &runtime,
 					callstack: make(callstack, 0),
 					elements: map[engineio.ElementPtr]any{
-						0: NewVarrayType(TypeU64),
+						0: VarrayDatatype{PrimitiveU64},
 					},
 				},
 				memory: map[byte]RegisterValue{
@@ -546,7 +546,7 @@ func TestInstructionSet(t *testing.T) {
 			continuity := opVMAKE(scope, []byte{2, 0, 1})
 			require.Equal(t, continueException{0, &Exception{
 				Class: "builtin.TypeError",
-				Error: "not a uint64: $1",
+				Error: "not a u64: $1",
 				Trace: []string{},
 			}}, continuity)
 		})
@@ -557,7 +557,7 @@ func TestInstructionSet(t *testing.T) {
 					runtime:   &runtime,
 					callstack: make(callstack, 0),
 					elements: map[engineio.ElementPtr]any{
-						0: NewVarrayType(TypeU64),
+						0: VarrayDatatype{PrimitiveU64},
 					},
 				},
 				memory: map[byte]RegisterValue{
@@ -568,9 +568,9 @@ func TestInstructionSet(t *testing.T) {
 
 			continuity := opVMAKE(scope, []byte{2, 0, 1})
 			require.Equal(t, continueOk{10 + (5 * 4)}, continuity)
-			require.Equal(t, &ListValue{
+			require.Equal(t, &VarrayValue{
 				values:   make([]RegisterValue, 4),
-				datatype: NewVarrayType(TypeU64),
+				datatype: VarrayDatatype{PrimitiveU64},
 			}, scope.memory[2])
 		})
 	})
@@ -587,7 +587,7 @@ func TestInstructionSet(t *testing.T) {
 			continuity := opTHROW(scope, []byte{0})
 			require.Equal(t, continueException{10, &Exception{
 				Class: "builtin.NotImplementedError",
-				Error: "int64 does not implement __throw__",
+				Error: "i64 does not implement __throw__",
 				Trace: []string{},
 			}}, continuity)
 		})
@@ -990,7 +990,7 @@ func TestInstructionSet(t *testing.T) {
 			continuity := opLEN(scope, []byte{1, 0})
 			require.Equal(t, continueException{10, &Exception{
 				Class: "builtin.NotImplementedError",
-				Error: "uint64 does not implement __len__",
+				Error: "u64 does not implement __len__",
 				Trace: []string{},
 			}}, continuity)
 		})
@@ -1031,7 +1031,7 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: must(newListValue(NewArrayType(10, TypeI64), nil)),
+					0: must(newArrayValue(ArrayDatatype{PrimitiveU64, 10}, nil)),
 				},
 			}
 
@@ -1044,7 +1044,7 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: must(newSizedList(NewVarrayType(TypeBool), 8)),
+					0: newVarrayWithSize(VarrayDatatype{PrimitiveBool}, 8),
 				},
 			}
 
@@ -1057,7 +1057,7 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: must(newMapValue(NewMappingType(PrimitiveString, TypeString), nil)),
+					0: must(newMapValue(MapDatatype{PrimitiveString, PrimitiveString}, nil)),
 				},
 			}
 
@@ -1070,10 +1070,13 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: must(newClassValue(NewClassType("Person", makefields([]*TypeField{
-						{"Name", TypeString},
-						{"Age", TypeU64},
-					})), nil)),
+					0: must(newClassValue(ClassDatatype{
+						name: "Person",
+						fields: makefields([]*TypeField{
+							{"Name", PrimitiveString},
+							{"Age", PrimitiveU64},
+						}),
+					}, nil)),
 				},
 			}
 
@@ -1105,7 +1108,7 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: must(newListValue(NewVarrayType(TypeString), nil)),
+					0: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
 					1: I64Value(4),
 				},
 			}
@@ -1113,7 +1116,7 @@ func TestInstructionSet(t *testing.T) {
 			continuity := opGROW(scope, []byte{0, 1})
 			require.Equal(t, continueException{0, &Exception{
 				Class: "builtin.TypeError",
-				Error: "not a uint64: $1",
+				Error: "not a u64: $1",
 				Trace: []string{},
 			}}, continuity)
 		})
@@ -1122,14 +1125,14 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: must(newSizedList(NewVarrayType(TypeU64), 4)),
+					0: newVarrayWithSize(VarrayDatatype{PrimitiveU64}, 4),
 					1: U64Value(6),
 				},
 			}
 
 			continuity := opGROW(scope, []byte{0, 1})
 			require.Equal(t, continueOk{35}, continuity)
-			require.Equal(t, must(newSizedList(NewVarrayType(TypeU64), 10)), scope.memory[0])
+			require.Equal(t, newVarrayWithSize(VarrayDatatype{PrimitiveU64}, 10), scope.memory[0])
 		})
 	})
 
@@ -1155,7 +1158,7 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: must(newListValue(NewVarrayType(TypeString), nil)),
+					0: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
 					1: U64Value(0),
 				},
 			}
@@ -1172,14 +1175,14 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: must(newListValue(NewVarrayType(TypeString), nil)),
+					0: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
 					1: StringValue("hello"),
 				},
 			}
 
 			continuity := opAPPEND(scope, []byte{0, 1})
 			require.Equal(t, continueOk{20}, continuity)
-			require.Equal(t, must(newListFromValues(NewVarrayType(TypeString), StringValue("hello"))), scope.memory[0])
+			require.Equal(t, must(newVarrayFromValues(VarrayDatatype{PrimitiveString}, StringValue("hello"))), scope.memory[0])
 		})
 	})
 
@@ -1188,7 +1191,7 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: must(newListFromValues(NewArrayType(2, TypeString), StringValue("foo"), StringValue("bar"))),
+					0: must(newArrayFromValues(ArrayDatatype{PrimitiveString, 2}, StringValue("foo"), StringValue("bar"))),
 				},
 			}
 
@@ -1204,7 +1207,7 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: must(newListValue(NewVarrayType(TypeString), nil)),
+					0: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
 				},
 			}
 
@@ -1220,7 +1223,7 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: must(newListFromValues(NewVarrayType(TypeString), StringValue("foo"), StringValue("bar"))),
+					0: must(newVarrayFromValues(VarrayDatatype{PrimitiveString}, StringValue("foo"), StringValue("bar"))),
 				},
 			}
 
@@ -1228,7 +1231,7 @@ func TestInstructionSet(t *testing.T) {
 			require.Equal(t, continueOk{20}, continuity)
 
 			require.Equal(t, StringValue("bar"), scope.memory[1])
-			require.Equal(t, must(newListFromValues(NewVarrayType(TypeString), StringValue("foo"))), scope.memory[0])
+			require.Equal(t, must(newVarrayFromValues(VarrayDatatype{PrimitiveString}, StringValue("foo"))), scope.memory[0])
 		})
 	})
 
@@ -1237,7 +1240,7 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: must(newListFromValues(NewArrayType(2, TypeString), StringValue("foo"), StringValue("bar"))),
+					0: must(newArrayFromValues(ArrayDatatype{PrimitiveString, 2}, StringValue("foo"), StringValue("bar"))),
 					1: StringValue("foo"),
 				},
 			}
@@ -1254,7 +1257,7 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: must(newMapValue(NewMappingType(PrimitiveString, TypeString), nil)),
+					0: must(newMapValue(MapDatatype{PrimitiveString, PrimitiveString}, nil)),
 					1: BoolValue(true),
 				},
 			}
@@ -1271,7 +1274,7 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: must(newMapValue(NewMappingType(PrimitiveString, TypeString), nil)),
+					0: must(newMapValue(MapDatatype{PrimitiveString, PrimitiveString}, nil)),
 					1: StringValue("hello"),
 				},
 			}

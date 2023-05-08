@@ -214,7 +214,7 @@ func (compiler *ManifestCompiler) compileTypedefElement(ptr engineio.ElementPtr)
 	}
 
 	// Generate the compiled element and store it
-	encoded, _ := polo.Polorize(datatype)
+	encoded, _ := EncodeDatatype(datatype)
 	compiler.compiled[ptr] = &engineio.LogicElement{
 		Kind: TypedefElement,
 		Data: encoded,
@@ -253,12 +253,12 @@ func (compiler *ManifestCompiler) compileClassElement(ptr engineio.ElementPtr) e
 	}
 
 	// Create a new Class Typedef
-	classType := NewClassType(classSchema.Name, fields)
+	classType := ClassDatatype{name: classSchema.Name, fields: fields}
 	// Register the class with the compiler
 	compiler.classdefs[classSchema.Name] = &engineio.Classdef{Ptr: ptr}
 
 	// Generate the compiled element and store it
-	encoded, _ := polo.Polorize(classType)
+	encoded, _ := EncodeDatatype(classType)
 	compiler.compiled[ptr] = &engineio.LogicElement{
 		Kind: ClassElement,
 		Data: encoded,
@@ -508,13 +508,13 @@ func (compiler *ManifestCompiler) compileAsmInstructions(_ []string) (Instructio
 // compileConstant compiles a ConstantSchema object into a register.Constant.
 func (compiler *ManifestCompiler) compileConstant(schema *ConstantSchema) (*Constant, error) {
 	// Parse the token literal into a Typedef
-	dt, err := ParseDatatype(schema.Type, compiler)
+	datatype, err := ParseDatatype(schema.Type, compiler)
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid constant datatype")
 	}
 
 	// Confirm that the type is scalar
-	if dt.Kind != PrimitiveType {
+	if datatype.Kind() != Primitive {
 		return nil, errors.New("constant datatype is not scalar")
 	}
 
@@ -528,12 +528,12 @@ func (compiler *ManifestCompiler) compileConstant(schema *ConstantSchema) (*Cons
 	}
 
 	// Create a register value for the datatype and data
-	if _, err = NewRegisterValue(dt, data); err != nil {
+	if _, err = NewRegisterValue(datatype, data); err != nil {
 		return nil, errors.Wrap(err, "invalid constant value: invalid data for type")
 	}
 
 	// Create a constant and return it
-	return &Constant{Type: dt.Prim, Data: data}, nil
+	return &Constant{Type: datatype.(PrimitiveDatatype), Data: data}, nil //nolint:forcetypeassert
 }
 
 // compileTypeFields compiles a map of TypefieldSchema objects into an engineio.TypeFields.
@@ -592,18 +592,18 @@ func (compiler *ManifestCompiler) compileTypefield(schema TypefieldSchema) (*Typ
 	return &TypeField{Name: schema.Label, Type: dt}, nil
 }
 
-func (compiler *ManifestCompiler) GetClassDatatype(name string) (*Datatype, bool) {
+func (compiler *ManifestCompiler) GetClassDatatype(name string) (ClassDatatype, bool) {
 	classdef, ok := compiler.classdefs[name]
 	if !ok {
-		return nil, false
+		return ClassDatatype{}, false
 	}
 
 	element := compiler.compiled[classdef.Ptr]
 
-	class := new(Datatype)
-	if err := polo.Depolorize(class, element.Data); err != nil {
-		return nil, false
+	datatype, err := DecodeDatatype(element.Data)
+	if err != nil {
+		return ClassDatatype{}, false
 	}
 
-	return class, true
+	return datatype.(ClassDatatype), true //nolint:forcetypeassert
 }

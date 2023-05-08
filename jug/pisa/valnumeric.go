@@ -10,9 +10,9 @@ import (
 // U64Value represents a RegisterValue that operates like an uint64
 type U64Value uint64
 
-// Type returns the Datatype of U64Value, which is TypeU64.
+// Type returns the Datatype of U64Value, which is PrimitiveU64.
 // Implements the RegisterValue interface for U64Value.
-func (x U64Value) Type() *Datatype { return TypeU64 }
+func (x U64Value) Type() Datatype { return PrimitiveU64 }
 
 // Copy returns a copy of U64Value as a RegisterValue.
 // Implements the RegisterValue interface for U64Value.
@@ -148,12 +148,12 @@ func (x U64Value) Eq(y U64Value) BoolValue {
 //nolint:forcetypeassert
 func methodsU64() [256]*BuiltinMethod {
 	return [256]*BuiltinMethod{
-		// uint64.__join__(uint64) -> uint64
+		// uint.__join__(uint) -> uint64
 		MethodJoin: makeBuiltinMethod(
 			MethodJoin.String(),
 			PrimitiveU64, MethodJoin,
-			makefields([]*TypeField{{"self", TypeU64}, {"other", TypeU64}}),
-			makefields([]*TypeField{{"result", TypeU64}}),
+			makefields([]*TypeField{{"self", PrimitiveU64}, {"other", PrimitiveU64}}),
+			makefields([]*TypeField{{"result", PrimitiveU64}}),
 			func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// Perform unsigned addition on the operands
 				result, except := inputs[0].(U64Value).Add(inputs[1].(U64Value))
@@ -167,12 +167,12 @@ func methodsU64() [256]*BuiltinMethod {
 			},
 		),
 
-		// uint64.__lt__(int64) -> bool
+		// uint.__lt__(uint) -> bool
 		MethodLt: makeBuiltinMethod(
 			MethodLt.String(),
 			PrimitiveU64, MethodLt,
-			makefields([]*TypeField{{Name: "x", Type: TypeU64}, {Name: "y", Type: TypeU64}}),
-			makefields([]*TypeField{{Name: "result", Type: TypeBool}}),
+			makefields([]*TypeField{{Name: "x", Type: PrimitiveU64}, {Name: "y", Type: PrimitiveU64}}),
+			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				x, y := inputs[0], inputs[1]
 				result := x.(U64Value).Lt(y.(U64Value))
@@ -181,12 +181,12 @@ func methodsU64() [256]*BuiltinMethod {
 			},
 		),
 
-		// uint64.__gt__(int64) -> bool
+		// uint.__gt__(uint) -> bool
 		MethodGt: makeBuiltinMethod(
 			MethodGt.String(),
 			PrimitiveU64, MethodGt,
-			makefields([]*TypeField{{Name: "x", Type: TypeU64}, {Name: "y", Type: TypeU64}}),
-			makefields([]*TypeField{{Name: "result", Type: TypeBool}}),
+			makefields([]*TypeField{{Name: "x", Type: PrimitiveU64}, {Name: "y", Type: PrimitiveU64}}),
+			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				x, y := inputs[0], inputs[1]
 				result := x.(U64Value).Gt(y.(U64Value))
@@ -195,12 +195,12 @@ func methodsU64() [256]*BuiltinMethod {
 			},
 		),
 
-		// uint64.__eq__(int64) -> bool
+		// uint.__eq__(uint) -> bool
 		MethodEq: makeBuiltinMethod(
 			MethodEq.String(),
 			PrimitiveU64, MethodEq,
-			makefields([]*TypeField{{Name: "x", Type: TypeU64}, {Name: "y", Type: TypeU64}}),
-			makefields([]*TypeField{{Name: "result", Type: TypeBool}}),
+			makefields([]*TypeField{{Name: "x", Type: PrimitiveU64}, {Name: "y", Type: PrimitiveU64}}),
+			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				x, y := inputs[0], inputs[1]
 				result := x.(U64Value).Eq(y.(U64Value))
@@ -209,12 +209,12 @@ func methodsU64() [256]*BuiltinMethod {
 			},
 		),
 
-		// uint64.__bool__() -> bool
+		// uint.__bool__() -> bool
 		MethodBool: makeBuiltinMethod(
 			MethodBool.String(),
 			PrimitiveU64, MethodBool,
-			makefields([]*TypeField{{Name: "self", Type: TypeU64}}),
-			makefields([]*TypeField{{Name: "result", Type: TypeBool}}),
+			makefields([]*TypeField{{Name: "self", Type: PrimitiveU64}}),
+			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// True for all values except 0
 				result := inputs[0].(U64Value) != 0
@@ -223,12 +223,12 @@ func methodsU64() [256]*BuiltinMethod {
 			},
 		),
 
-		// uint64.__str__() -> string
+		// uint.__str__() -> string
 		MethodStr: makeBuiltinMethod(
 			MethodStr.String(),
 			PrimitiveU64, MethodStr,
-			makefields([]*TypeField{{Name: "self", Type: TypeU64}}),
-			makefields([]*TypeField{{Name: "result", Type: TypeString}}),
+			makefields([]*TypeField{{Name: "self", Type: PrimitiveU64}}),
+			makefields([]*TypeField{{Name: "result", Type: PrimitiveString}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// Format into a string (base 10)
 				result := strconv.FormatUint(uint64(inputs[0].(U64Value)), 10)
@@ -241,8 +241,8 @@ func methodsU64() [256]*BuiltinMethod {
 		0x10: makeBuiltinMethod(
 			MethodStr.String(),
 			PrimitiveU64, MethodStr,
-			makefields([]*TypeField{{Name: "self", Type: TypeU64}}),
-			makefields([]*TypeField{{Name: "result", Type: TypeU64}}),
+			makefields([]*TypeField{{Name: "self", Type: PrimitiveU64}}),
+			makefields([]*TypeField{{Name: "result", Type: PrimitiveU64}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				x := inputs[0]
 
@@ -259,9 +259,9 @@ I64Value Implementation
 // I64Value represents RegisterValue that operates like an int64
 type I64Value int64
 
-// Type returns the Datatype of I64Value, which is TypeI64.
+// Type returns the Datatype of I64Value, which is PrimitiveI64.
 // Implements the RegisterValue interface for I64Value.
-func (x I64Value) Type() *Datatype { return TypeI64 }
+func (x I64Value) Type() Datatype { return PrimitiveI64 }
 
 // Copy returns a copy of I64Value as a RegisterValue.
 // Implements the RegisterValue interface for I64Value.
@@ -409,12 +409,12 @@ func (x I64Value) Eq(y I64Value) BoolValue {
 //nolint:forcetypeassert
 func methodsI64() [256]*BuiltinMethod {
 	return [256]*BuiltinMethod{
-		// int64.__join__(int64) -> int64
+		// int.__join__(int) -> int64
 		MethodJoin: makeBuiltinMethod(
 			MethodJoin.String(),
 			PrimitiveI64, MethodJoin,
-			makefields([]*TypeField{{"self", TypeI64}, {"other", TypeI64}}),
-			makefields([]*TypeField{{"result", TypeI64}}),
+			makefields([]*TypeField{{"self", PrimitiveI64}, {"other", PrimitiveI64}}),
+			makefields([]*TypeField{{"result", PrimitiveI64}}),
 			func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// Perform signed addition on the operands
 				result, except := inputs[0].(I64Value).Add(inputs[1].(I64Value))
@@ -428,12 +428,12 @@ func methodsI64() [256]*BuiltinMethod {
 			},
 		),
 
-		// int64.__lt__(int64) -> bool
+		// int.__lt__(int) -> bool
 		MethodLt: makeBuiltinMethod(
 			MethodLt.String(),
 			PrimitiveI64, MethodLt,
-			makefields([]*TypeField{{Name: "x", Type: TypeI64}, {Name: "y", Type: TypeI64}}),
-			makefields([]*TypeField{{Name: "result", Type: TypeBool}}),
+			makefields([]*TypeField{{Name: "x", Type: PrimitiveI64}, {Name: "y", Type: PrimitiveI64}}),
+			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				x, y := inputs[0], inputs[1]
 				result := x.(I64Value).Lt(y.(I64Value))
@@ -442,12 +442,12 @@ func methodsI64() [256]*BuiltinMethod {
 			},
 		),
 
-		// int64.__gt__(int64) -> bool
+		// int.__gt__(int) -> bool
 		MethodGt: makeBuiltinMethod(
 			MethodGt.String(),
 			PrimitiveI64, MethodGt,
-			makefields([]*TypeField{{Name: "x", Type: TypeI64}, {Name: "y", Type: TypeI64}}),
-			makefields([]*TypeField{{Name: "result", Type: TypeBool}}),
+			makefields([]*TypeField{{Name: "x", Type: PrimitiveI64}, {Name: "y", Type: PrimitiveI64}}),
+			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				x, y := inputs[0], inputs[1]
 				result := x.(I64Value).Gt(y.(I64Value))
@@ -456,12 +456,12 @@ func methodsI64() [256]*BuiltinMethod {
 			},
 		),
 
-		// int64.__eq__(int64) -> bool
+		// int.__eq__(int) -> bool
 		MethodEq: makeBuiltinMethod(
 			MethodEq.String(),
 			PrimitiveI64, MethodEq,
-			makefields([]*TypeField{{Name: "x", Type: TypeI64}, {Name: "y", Type: TypeI64}}),
-			makefields([]*TypeField{{Name: "result", Type: TypeBool}}),
+			makefields([]*TypeField{{Name: "x", Type: PrimitiveI64}, {Name: "y", Type: PrimitiveI64}}),
+			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				x, y := inputs[0], inputs[1]
 				result := x.(I64Value).Eq(y.(I64Value))
@@ -470,12 +470,12 @@ func methodsI64() [256]*BuiltinMethod {
 			},
 		),
 
-		// int64.__bool__() -> bool
+		// int.__bool__() -> bool
 		MethodBool: makeBuiltinMethod(
 			MethodBool.String(),
 			PrimitiveI64, MethodBool,
-			makefields([]*TypeField{{Name: "self", Type: TypeI64}}),
-			makefields([]*TypeField{{Name: "result", Type: TypeBool}}),
+			makefields([]*TypeField{{Name: "self", Type: PrimitiveI64}}),
+			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// True for all values except 0
 				result := inputs[0].(I64Value) != 0
@@ -484,12 +484,12 @@ func methodsI64() [256]*BuiltinMethod {
 			},
 		),
 
-		// int64.__str__() -> string
+		// int.__str__() -> string
 		MethodStr: makeBuiltinMethod(
 			MethodStr.String(),
 			PrimitiveI64, MethodStr,
-			makefields([]*TypeField{{Name: "self", Type: TypeI64}}),
-			makefields([]*TypeField{{Name: "result", Type: TypeString}}),
+			makefields([]*TypeField{{Name: "self", Type: PrimitiveI64}}),
+			makefields([]*TypeField{{Name: "result", Type: PrimitiveString}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// Format into a string (base 10)
 				result := strconv.FormatInt(int64(inputs[0].(I64Value)), 10)
@@ -502,8 +502,8 @@ func methodsI64() [256]*BuiltinMethod {
 		0x10: makeBuiltinMethod(
 			MethodStr.String(),
 			PrimitiveU64, MethodStr,
-			makefields([]*TypeField{{Name: "self", Type: TypeI64}}),
-			makefields([]*TypeField{{Name: "result", Type: TypeI64}}),
+			makefields([]*TypeField{{Name: "self", Type: PrimitiveI64}}),
+			makefields([]*TypeField{{Name: "result", Type: PrimitiveI64}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				x := inputs[0]
 				var result I64Value

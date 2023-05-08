@@ -60,7 +60,7 @@ func (except Exception) String() string {
 }
 
 type CustomExceptionClass struct {
-	datatype *Datatype
+	datatype Datatype
 }
 
 func (err CustomExceptionClass) Name() string {
@@ -115,10 +115,10 @@ func exceptionNullRegister(register byte) *Exception {
 	return exceptionf(ValueError, "$%v is null", register)
 }
 
-func exceptionInvalidDatatype[K string | DatatypeKind | Primitive](kind K, register byte) *Exception {
+func exceptionInvalidDatatype[K string | DatatypeKind | PrimitiveDatatype](kind K, register byte) *Exception {
 	return exceptionf(TypeError, "not a %v: $%v", kind, register)
 }
 
-func exceptionInvalidOperationForType(op string, datatype *Datatype) *Exception {
+func exceptionInvalidOperationForType(op string, datatype Datatype) *Exception {
 	return exceptionf(ValueError, "cannot %v with %v registers", op, datatype)
 }

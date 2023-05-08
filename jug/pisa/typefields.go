@@ -5,6 +5,9 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-polo"
+
 	"github.com/sarvalabs/moichain/types"
 )
 
@@ -12,7 +15,7 @@ import (
 // as storage and calldata fields as well as class attributes
 type TypeField struct {
 	Name string
-	Type *Datatype // implements a method (datatype Datatype) Equals(other *Datatype) bool
+	Type Datatype // implements a method (datatype Datatype) Equals(other *Datatype) bool
 }
 
 // TypeFields represents a collection of TypeField objects.
@@ -84,6 +87,60 @@ func (fields TypeFields) Copy() *TypeFields {
 // Equals returns whether the given TypeFields is equal to another
 func (fields TypeFields) Equals(other *TypeFields) bool {
 	return reflect.DeepEqual(fields, *other)
+}
+
+func (fields TypeFields) Polorize() (*polo.Polorizer, error) {
+	polorizer := polo.NewPolorizer()
+
+	for slot := uint8(0); slot < fields.Size(); slot++ {
+		element := fields.Table[slot]
+		polorizer.PolorizeString(element.Name)
+
+		wire, err := EncodeDatatype(element.Type)
+		if err != nil {
+			return nil, err
+		}
+
+		if err = polorizer.PolorizeAny(wire); err != nil {
+			return nil, err
+		}
+	}
+
+	return polorizer, nil
+}
+
+func (fields *TypeFields) Depolorize(depolorizer *polo.Depolorizer) (err error) {
+	depolorizer, err = depolorizer.DepolorizePacked()
+	if errors.Is(err, polo.ErrNullPack) {
+		return nil
+	} else if err != nil {
+		return errors.New("")
+	}
+
+	typefields := make([]*TypeField, 0)
+
+	for !depolorizer.Done() {
+		name, err := depolorizer.DepolorizeString()
+		if err != nil {
+			return err
+		}
+
+		wire, err := depolorizer.DepolorizeAny()
+		if err != nil {
+			return err
+		}
+
+		datatype, err := DecodeDatatype(wire)
+		if err != nil {
+			return err
+		}
+
+		typefields = append(typefields, &TypeField{name, datatype})
+	}
+
+	*fields = *makefields(typefields)
+
+	return nil
 }
 
 // makefields generates a TypeFields object from a slice of TypeField objects.

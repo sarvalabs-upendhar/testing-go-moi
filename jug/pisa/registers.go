@@ -13,7 +13,7 @@ import (
 // register that can be manipulated by PISA
 type RegisterValue interface {
 	// Type returns the Datatype of the RegisterValue
-	Type() *Datatype
+	Type() Datatype
 	// Copy returns a deep copy of the RegisterValue
 	Copy() RegisterValue
 	// Data returns the POLO serialized bytes of the RegisterValue
@@ -24,10 +24,12 @@ type RegisterValue interface {
 
 // NewRegisterValue generates a RegisterValue object for a given Typedef and some POLO encoded bytes.
 // The encoded bytes must be able to deserialize to the underlying type for Typedef.
-func NewRegisterValue(dt *Datatype, data []byte) (RegisterValue, error) {
-	switch dt.Kind {
-	case PrimitiveType:
-		switch dt.Prim {
+func NewRegisterValue(datatype Datatype, data []byte) (RegisterValue, error) {
+	switch datatype.Kind() {
+	case Primitive:
+		prim, _ := datatype.(PrimitiveDatatype)
+
+		switch prim {
 		// StringValue
 		case PrimitiveString:
 			// If empty data, create the default string value and return
@@ -83,7 +85,7 @@ func NewRegisterValue(dt *Datatype, data []byte) (RegisterValue, error) {
 			// Decode data into a uint64
 			number := new(uint64)
 			if err := polo.Depolorize(number, data); err != nil {
-				return nil, errors.New("data does not decode to a uint64")
+				return nil, errors.New("data does not decode to a u64")
 			}
 
 			return U64Value(*number), nil
@@ -98,7 +100,7 @@ func NewRegisterValue(dt *Datatype, data []byte) (RegisterValue, error) {
 			// Decode data into a int64
 			number := new(int64)
 			if err := polo.Depolorize(number, data); err != nil {
-				return nil, errors.New("data does not decode to a int64")
+				return nil, errors.New("data does not decode to a i64")
 			}
 
 			return I64Value(*number), nil
@@ -119,93 +121,149 @@ func NewRegisterValue(dt *Datatype, data []byte) (RegisterValue, error) {
 			return AddressValue(*address), nil
 
 		default:
-			panic(fmt.Sprintf("unsupported datatype for value generation: %v", dt))
+			panic(fmt.Sprintf("unsupported datatype for value generation: %v", datatype))
 		}
 
-	// ListValue
-	case ArrayType, VarrayType:
-		return newListValue(dt, data)
+	// ArrayValue
+	case Array:
+		return newArrayValue(datatype.(ArrayDatatype), data) //nolint:forcetypeassert
+
+	// VarrayValue
+	case Varray:
+		return newVarrayValue(datatype.(VarrayDatatype), data) //nolint:forcetypeassert
 
 	// MapValue
-	case MappingType:
-		return newMapValue(dt, data)
+	case Mapping:
+		return newMapValue(datatype.(MapDatatype), data) //nolint:forcetypeassert
 
 	// ClassValue
-	case ClassType:
-		return newClassValue(dt, data)
+	case Class:
+		return newClassValue(datatype.(ClassDatatype), data) //nolint:forcetypeassert
 
 	default:
-		panic(fmt.Sprintf("unsupported datatype for value generation: DatatypeKind(%d)", dt.Kind))
+		panic(fmt.Sprintf("unsupported datatype for value generation: DatatypeKind(%d)", datatype.Kind()))
 	}
 }
 
-// RegisterSet is a collection of byte indexed RegisterValue objects.
-type RegisterSet map[byte]RegisterValue
+type CollectionValue interface {
+	RegisterValue
 
-// NewRegisterSet generates a RegisterSet for given set of type fields and values as a polo.Document.
-// Each field in the TypeFields must have some associated data in the values that can be interpreted for its type.
-// A RegisterValue is generated with this data and attached to the table index specified by the TypeFields.
-// Returns an error if data is missing for a field or is malformed and cannot be interpreted for a field's type.
-func NewRegisterSet(fields *TypeFields, values polo.Document) (RegisterSet, error) {
-	registers := make(RegisterSet, len(fields.Symbols))
+	Size() U64Value
+	Get(RegisterValue) (RegisterValue, *Exception)
+	Set(RegisterValue, RegisterValue) *Exception
+}
 
-	// If the value is nil, but fields are expected
-	if values == nil && fields.Size() != 0 {
-		return nil, errors.New("missing input values")
+func decodeListedValues(data []byte, elementType Datatype) ([]RegisterValue, error) {
+	depolorizer, err := polo.NewDepolorizer(data)
+	if err != nil {
+		return nil, err
 	}
 
-	for label, index := range fields.Symbols {
-		data := values.GetRaw(label)
-		if data == nil {
-			return nil, errors.Errorf("missing data for '%v'", label)
+	depolorizer, err = depolorizer.DepolorizePacked()
+	if errors.Is(err, polo.ErrNullPack) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+
+	values := make([]RegisterValue, 0)
+
+	var index uint64
+
+	for !depolorizer.Done() {
+		var edata []byte
+
+		// Depolorize the element data from the wire
+		if edata, err = depolorizer.DepolorizeAny(); err != nil {
+			return nil, err
 		}
 
-		fieldVal, err := NewRegisterValue(fields.Lookup(label).Type, data)
+		var element RegisterValue
+		// Create new value from the data for the element
+		if element, err = NewRegisterValue(elementType, edata); err != nil {
+			return nil, err
+		}
+
+		values = append(values, element)
+
+		index++
+	}
+
+	return values, nil
+}
+
+func decodeMappedValues(data []byte, keyType, valType Datatype) (map[RegisterValue]RegisterValue, error) {
+	depolorizer, err := polo.NewDepolorizer(data)
+	if err != nil {
+		return nil, err
+	}
+
+	depolorizer, err = depolorizer.DepolorizePacked()
+	if errors.Is(err, polo.ErrNullPack) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+
+	values := make(map[RegisterValue]RegisterValue)
+
+	// Unpack each key value pair from the wire into Values based on their expected datatype.
+	for !depolorizer.Done() {
+		var kdata, vdata []byte
+
+		// Unpack the key data from the wire
+		if kdata, err = depolorizer.DepolorizeAny(); err != nil {
+			return nil, err
+		}
+
+		// Unpack the value data from the wire
+		if vdata, err = depolorizer.DepolorizeAny(); err != nil {
+			return nil, err
+		}
+
+		var key, val RegisterValue
+
+		// Create new value from the data for the key
+		if key, err = NewRegisterValue(keyType, kdata); err != nil {
+			return nil, err
+		}
+
+		// Create new value from the data for the value
+		if val, err = NewRegisterValue(valType, vdata); err != nil {
+			return nil, err
+		}
+
+		values[key] = val
+	}
+
+	return values, nil
+}
+
+func decodeSlottedValues(data []byte, fields *TypeFields) (map[byte]RegisterValue, error) {
+	doc := make(polo.Document)
+	if err := polo.Depolorize(&doc, data); err != nil {
+		return nil, err
+	}
+
+	values := make(map[byte]RegisterValue)
+
+	for key, raw := range doc {
+		// Get the field type from the class def
+		field := fields.Lookup(key)
+		if field == nil {
+			return nil, errors.Errorf("invalid data for field '%v': no such field", key)
+		}
+
+		// Create new value from the data for the key
+		value, err := NewRegisterValue(field.Type, raw)
 		if err != nil {
-			return nil, errors.Wrapf(err, "malformed data for '%v'", label)
+			return nil, err
 		}
 
-		registers[index] = fieldVal
+		// Get the slot for the field and insert it
+		slot := fields.Symbols[field.Name]
+		values[slot] = value
 	}
 
-	return registers, nil
-}
-
-// Get retrieves a RegisterValue for a given address.
-// Returns a NullValue if there is no value for the address.
-func (registers RegisterSet) Get(id byte) RegisterValue {
-	if reg, ok := registers[id]; ok {
-		return reg
-	}
-
-	return NullValue{}
-}
-
-// Set inserts a RegisterValue to a given address.
-// Overwrites any existing RegisterValue at the address.
-func (registers RegisterSet) Set(id byte, reg RegisterValue) {
-	registers[id] = reg
-}
-
-// Unset clears a RegisterValue at a given address
-func (registers RegisterSet) Unset(id byte) {
-	delete(registers, id)
-}
-
-func (registers RegisterSet) Validate(fields *TypeFields) error {
-	for idx, field := range fields.Table {
-		value := registers.Get(idx)
-		if value.Type() == TypeNull {
-			return errors.Errorf("missing value for field &%v '%v'", idx, field.Name)
-		}
-
-		if !value.Type().Equals(field.Type) {
-			return errors.Errorf(
-				"type mismatch for field &%v '%v'. expected: %v. got: %v",
-				idx, field.Name, field.Type, value.Type(),
-			)
-		}
-	}
-
-	return nil
+	return values, nil
 }

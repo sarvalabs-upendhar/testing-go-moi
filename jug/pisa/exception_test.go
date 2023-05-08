@@ -9,11 +9,11 @@ import (
 
 func TestException(t *testing.T) {
 	data := "Something went wrong"
-	class := CustomExceptionClass{datatype: TypeString}
+	class := CustomExceptionClass{datatype: PrimitiveString}
 
 	except := exception(class, data)
 
-	if except.Class != TypeString.String() {
+	if except.Class != PrimitiveString.String() {
 		t.Errorf("Expected exception class to be 'string', but got '%s'", except.Class)
 	}
 
@@ -27,11 +27,11 @@ func TestExceptionf(t *testing.T) {
 	arg := "argument"
 
 	expectedData := "Something went wrong: argument"
-	class := CustomExceptionClass{datatype: TypeString}
+	class := CustomExceptionClass{datatype: PrimitiveString}
 
 	except := exceptionf(class, format, arg)
 
-	if except.Class != TypeString.String() {
+	if except.Class != PrimitiveString.String() {
 		t.Errorf("Expected exception class to be 'string', but got '%s'", except.Class)
 	}
 
@@ -42,12 +42,12 @@ func TestExceptionf(t *testing.T) {
 
 func TestException_Traced(t *testing.T) {
 	data := "Something went wrong"
-	class := CustomExceptionClass{datatype: TypeString}
+	class := CustomExceptionClass{datatype: PrimitiveString}
 	trace := []string{"function1()", "function2()"}
 
 	except := exception(class, data).traced(trace)
 
-	if except.Class != TypeString.String() {
+	if except.Class != PrimitiveString.String() {
 		t.Errorf("Expected exception class to be 'string', but got '%s'", except.Class)
 	}
 
@@ -68,7 +68,7 @@ func TestExceptionString(t *testing.T) {
 }
 
 func TestCustomExceptionClass(t *testing.T) {
-	datatype := &Datatype{Ident: "MyCustomError"}
+	datatype := ClassDatatype{name: "MyCustomError"}
 
 	err := &CustomExceptionClass{datatype: datatype}
 	assert.Equal(t, datatype.String(), err.Name())
