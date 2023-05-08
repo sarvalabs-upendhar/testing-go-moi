@@ -26,8 +26,6 @@ import (
 var LatestTesseractNumber = int64(-1)
 
 // IxnTimeout is the max time to wait for an ixn to be completed
-// 180 seconds chosen as it is taking 90 seconds in worst case to execute interaction
-// so we are taking (2*90) seconds to be on safe side
 const IxnTimeout = 5 * time.Minute
 
 var (
@@ -254,11 +252,11 @@ func SetupAddrs(addrs []types.Address) ([]types.Address, error) {
 
 	for _, addr := range addrs {
 		if addr == types.SargaAddress {
-			break
+			continue
 		}
 
 		if types.Contains(types.GenesisLogicAddrs, addr) {
-			break
+			continue
 		}
 
 		temp = append(temp, addr)
