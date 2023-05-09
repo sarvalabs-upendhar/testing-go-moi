@@ -34,13 +34,14 @@ type ixData struct {
 	parts   *types.TesseractParts
 	ixIndex int
 }
+
 type MockChainManager struct {
 	receipts                   map[types.Hash]*types.Receipt
 	assets                     map[types.Hash]*gtypes.AssetObject
 	tesseractsByHash           map[types.Hash]*types.Tesseract
 	tesseractsByHeight         map[string]*types.Tesseract
 	latestTesseracts           map[types.Address]*types.Tesseract
-	ixByTSHash                 map[types.Hash]ixData
+	ixByTesseract              map[types.Hash]ixData
 	ixByHash                   map[types.Hash]ixData
 	TSHashByHeight             map[string]types.Hash
 	GetInteractionByIxHashHook func() error
@@ -57,7 +58,7 @@ func NewMockChainManager(t *testing.T) *MockChainManager {
 	mockChain.tesseractsByHeight = make(map[string]*types.Tesseract)
 	mockChain.latestTesseracts = make(map[types.Address]*types.Tesseract)
 	mockChain.ixByHash = make(map[types.Hash]ixData)
-	mockChain.ixByTSHash = make(map[types.Hash]ixData)
+	mockChain.ixByTesseract = make(map[types.Hash]ixData)
 	mockChain.TSHashByHeight = make(map[string]types.Hash)
 
 	return mockChain
@@ -84,7 +85,7 @@ func (c *MockChainManager) SetInteractionDataByTSHash(
 	ix *types.Interaction,
 	parts *types.TesseractParts,
 ) {
-	c.ixByTSHash[tsHash] = ixData{
+	c.ixByTesseract[tsHash] = ixData{
 		ix:    ix,
 		parts: parts,
 	}
@@ -95,7 +96,7 @@ func (c *MockChainManager) GetInteractionAndPartsByTSHash(tsHash types.Hash, ixI
 	*types.TesseractParts,
 	error,
 ) {
-	data, ok := c.ixByTSHash[tsHash]
+	data, ok := c.ixByTesseract[tsHash]
 	if !ok {
 		return nil, nil, types.ErrFetchingInteraction
 	}
@@ -595,10 +596,6 @@ func GetTestIxCreationPayload(t *testing.T, callBack func(args *ptypes.RPCAssetC
 	createPayload := &types.AssetCreatePayload{
 		Type:   payloadArgs.Type,
 		Symbol: payloadArgs.Symbol,
-		Supply: payloadArgs.Supply.ToInt(),
-
-		Dimension: payloadArgs.Dimension.ToInt(),
-		Decimals:  payloadArgs.Decimals.ToInt(),
 
 		IsFungible:     payloadArgs.IsFungible,
 		IsMintable:     payloadArgs.IsMintable,
@@ -606,6 +603,18 @@ func GetTestIxCreationPayload(t *testing.T, callBack func(args *ptypes.RPCAssetC
 
 		LogicID: types.LogicID(payloadArgs.LogicID),
 		// LogicCode: payloadArgs.LogicCode,
+	}
+
+	if payloadArgs.Supply != nil {
+		createPayload.Supply = payloadArgs.Supply.ToInt()
+	}
+
+	if payloadArgs.Dimension != nil {
+		createPayload.Dimension = payloadArgs.Dimension.ToInt()
+	}
+
+	if payloadArgs.Decimals != nil {
+		createPayload.Decimals = payloadArgs.Decimals.ToInt()
 	}
 
 	assetPayload := &types.AssetPayload{
@@ -674,7 +683,7 @@ func getIxParamsWithInputComputeTrust(
 	ixType types.IxType,
 	payload json.RawMessage,
 	mtq uint,
-	mode int,
+	mode uint64,
 ) *tests.CreateIxParams {
 	return &tests.CreateIxParams{
 		IxDataCallback: func(ix *types.IxData) {
@@ -700,7 +709,7 @@ func createInteractionWithTestData(t *testing.T, ixType types.IxType, payload []
 
 	ixData := types.IxData{
 		Input:   tests.CreateIXInputWithTestData(t, ixType, payload, []byte{187, 1, 29, 103}),
-		Compute: tests.CreateComputeWithTestData(t, tests.RandomHash(t).Bytes(), tests.GetTestKramaIDs(t, 2)),
+		Compute: tests.CreateComputeWithTestData(t, tests.RandomHash(t), tests.GetTestKramaIDs(t, 2)),
 		Trust:   tests.CreateTrustWithTestData(t),
 	}
 
@@ -803,8 +812,8 @@ func checkForRPCIxn(
 	require.Equal(t, input.FuelLimit, rpcIxn.FuelLimit.ToInt())
 	require.Equal(t, input.FuelPrice, rpcIxn.FuelPrice.ToInt())
 
-	require.Equal(t, compute.Mode, int(rpcIxn.Mode.ToInt()))
-	require.Equal(t, compute.Hash, rpcIxn.ComputeHash.Bytes())
+	require.Equal(t, compute.Mode, rpcIxn.Mode.ToInt())
+	require.Equal(t, compute.Hash, rpcIxn.ComputeHash)
 	require.Equal(t, compute.ComputeNodes, rpcIxn.ComputeNodes)
 
 	require.Equal(t, trust.MTQ, uint(rpcIxn.MTQ.ToInt()))
@@ -824,8 +833,8 @@ func checkForRPCIxn(
 			Symbol: assetCreationPayload.Create.Symbol,
 			Supply: (*hexutil.Big)(assetCreationPayload.Create.Supply),
 
-			Dimension: hexutil.Uint8(assetCreationPayload.Create.Dimension),
-			Decimals:  hexutil.Uint8(assetCreationPayload.Create.Decimals),
+			Dimension: (*hexutil.Uint8)(&assetCreationPayload.Create.Dimension),
+			Decimals:  (*hexutil.Uint8)(&assetCreationPayload.Create.Decimals),
 
 			IsFungible:     assetCreationPayload.Create.IsFungible,
 			IsMintable:     assetCreationPayload.Create.IsMintable,

@@ -129,20 +129,13 @@ func (ixInput *IxInput) Copy() IxInput {
 }
 
 type IxCompute struct {
-	Mode         int               `json:"mode"`
-	Hash         []byte            `json:"hash"`
+	Mode         uint64            `json:"mode"`
+	Hash         Hash              `json:"hash"`
 	ComputeNodes []kramaid.KramaID `json:"compute_nodes"`
 }
 
 func (ixCompute *IxCompute) Copy() IxCompute {
-	compute := IxCompute{
-		Mode: ixCompute.Mode,
-	}
-
-	if len(ixCompute.Hash) > 0 {
-		compute.Hash = make([]byte, len(ixCompute.Hash))
-		copy(compute.Hash, ixCompute.Hash)
-	}
+	compute := *ixCompute
 
 	if len(ixCompute.ComputeNodes) > 0 {
 		compute.ComputeNodes = make([]kramaid.KramaID, len(ixCompute.ComputeNodes))

@@ -21,7 +21,7 @@ func createIxDataWithTestData(t *testing.T) types.IxData {
 
 	IxData := types.IxData{
 		Input:   tests.CreateIXInputWithTestData(t, types.IxAssetCreate, []byte{187, 1, 29, 103}, []byte{187, 1, 29, 103}),
-		Compute: tests.CreateComputeWithTestData(t, tests.RandomHash(t).Bytes(), tests.GetTestKramaIDs(t, 2)),
+		Compute: tests.CreateComputeWithTestData(t, tests.RandomHash(t), tests.GetTestKramaIDs(t, 2)),
 		Trust:   tests.CreateTrustWithTestData(t),
 	}
 

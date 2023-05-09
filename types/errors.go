@@ -79,4 +79,5 @@ var (
 	ErrGridIDNotFound              = errors.New("grid id not found")
 	ErrIndexOutOfRange             = errors.New("index out of range")
 	ErrTesseractPartsNotFound      = errors.New("tesseract parts not found")
+	ErrIXIndex                     = errors.New("ix index cannot be nil")
 )

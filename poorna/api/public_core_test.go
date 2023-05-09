@@ -45,7 +45,7 @@ func TestPublicCoreAPI_CreateRPCInteraction(t *testing.T) {
 
 	ixData := types.IxData{
 		Input:   input,
-		Compute: tests.CreateComputeWithTestData(t, tests.RandomHash(t).Bytes(), tests.GetTestKramaIDs(t, 2)),
+		Compute: tests.CreateComputeWithTestData(t, tests.RandomHash(t), tests.GetTestKramaIDs(t, 2)),
 		Trust:   tests.CreateTrustWithTestData(t),
 	}
 
@@ -1276,6 +1276,7 @@ func TestPublicCoreAPI_GetInteractionByTSHash(t *testing.T) {
 	randomHeight := int64(6)
 	negativeHeight := int64(-99)
 	randomHash := tests.RandomHash(t)
+	ixIndex := uint64(8)
 
 	testcases := []struct {
 		name          string
@@ -1295,8 +1296,10 @@ func TestPublicCoreAPI_GetInteractionByTSHash(t *testing.T) {
 			expectedError: errors.New("can not use both tesseract number and tesseract hash"),
 		},
 		{
-			name:          "empty options",
-			args:          ptypes.InteractionByTesseract{},
+			name: "empty options",
+			args: ptypes.InteractionByTesseract{
+				IxIndex: (*hexutil.Uint64)(&ixIndex),
+			},
 			expectedError: types.ErrEmptyOptions,
 		},
 		{
@@ -1305,6 +1308,7 @@ func TestPublicCoreAPI_GetInteractionByTSHash(t *testing.T) {
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
 				},
+				IxIndex: (*hexutil.Uint64)(&ixIndex),
 			},
 			expectedError: types.ErrFetchingInteraction,
 		},
@@ -1314,8 +1318,18 @@ func TestPublicCoreAPI_GetInteractionByTSHash(t *testing.T) {
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &randomHeight,
 				},
+				IxIndex: (*hexutil.Uint64)(&ixIndex),
 			},
 			expectedError: types.ErrInvalidAddress,
+		},
+		{
+			name: "ix index is nil",
+			args: ptypes.InteractionByTesseract{
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &randomHeight,
+				},
+			},
+			expectedError: types.ErrIXIndex,
 		},
 		{
 			name: "invalid options",
@@ -1323,6 +1337,7 @@ func TestPublicCoreAPI_GetInteractionByTSHash(t *testing.T) {
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &negativeHeight,
 				},
+				IxIndex: (*hexutil.Uint64)(&ixIndex),
 			},
 			expectedError: errors.New("invalid options"),
 		},
@@ -1332,7 +1347,7 @@ func TestPublicCoreAPI_GetInteractionByTSHash(t *testing.T) {
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash,
 				},
-				IxIndex: 8,
+				IxIndex: (*hexutil.Uint64)(&ixIndex),
 			},
 			expectedIX:    ix,
 			expectedParts: parts,
@@ -1344,7 +1359,7 @@ func TestPublicCoreAPI_GetInteractionByTSHash(t *testing.T) {
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &height,
 				},
-				IxIndex: 8,
+				IxIndex: (*hexutil.Uint64)(&ixIndex),
 			},
 			expectedIX:    ix,
 			expectedParts: parts,
@@ -1363,7 +1378,7 @@ func TestPublicCoreAPI_GetInteractionByTSHash(t *testing.T) {
 			require.NoError(t, err)
 
 			checkForRPCIxn(t, test.expectedIX, rpcIX, test.expectedParts.Grid)
-			require.Equal(t, test.args.IxIndex, rpcIX.IxIndex)
+			require.Equal(t, *test.args.IxIndex, rpcIX.IxIndex)
 		})
 	}
 }

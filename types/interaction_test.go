@@ -76,11 +76,11 @@ func TestCopyIxCompute(t *testing.T) {
 	}{
 		{
 			name:    "IxCompute copied successfully",
-			compute: tests.CreateComputeWithTestData(t, tests.RandomHash(t).Bytes(), tests.GetTestKramaIDs(t, 2)),
+			compute: tests.CreateComputeWithTestData(t, tests.RandomHash(t), tests.GetTestKramaIDs(t, 2)),
 		},
 		{
 			name:    "copy ix compute with nil hash and zero nodes",
-			compute: tests.CreateComputeWithTestData(t, nil, nil),
+			compute: tests.CreateComputeWithTestData(t, types.NilHash, nil),
 		},
 	}
 
@@ -91,13 +91,6 @@ func TestCopyIxCompute(t *testing.T) {
 			computeCopy := test.compute.Copy()
 
 			require.Equal(t, expectedCompute, computeCopy)
-
-			if test.compute.Hash != nil {
-				require.NotEqual(t,
-					reflect.ValueOf(expectedCompute.Hash).Pointer(),
-					reflect.ValueOf(computeCopy.Hash).Pointer(),
-				)
-			}
 
 			if len(test.compute.ComputeNodes) > 0 {
 				require.NotEqual(t,

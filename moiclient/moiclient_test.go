@@ -278,10 +278,12 @@ func transferTokens(t *testing.T, client *Client, sender, receiver types.Address
 // fillIXPool sends ixnPendingCount number of deploy interactions
 func fillIXPool(t *testing.T, client *Client, addr types.Address) {
 	ixArgs := getIXArgsForLogicDeployment(t, addr)
-	ixArgs.Nonce = 2
+	nonce := hexutil.Uint64(2)
+	increment := hexutil.Uint64(1)
+	ixArgs.Nonce = &nonce
 
 	for i := 0; i < ixnPendingCount; i++ { // send ixns just to fill ixpool with some data
-		ixArgs.Nonce += 1 // increment nonce to avoid ix already known error
+		*ixArgs.Nonce += increment // increment nonce to avoid ix already known error
 		_, err := client.SendInteractions(ixArgs)
 		require.NoError(t, err)
 	}
@@ -1104,6 +1106,7 @@ func testInteractionByHash(t *testing.T, client *Client, addr types.Address) {
 func testInteractionByTesseract(t *testing.T, client *Client, addr types.Address) {
 	ts := getTesseract(t, client, addr, &deployLogicHeight)
 	randomHash := tests.RandomHash(t)
+	ixIndex := uint64(0)
 
 	testcases := []struct {
 		name          string
@@ -1116,6 +1119,7 @@ func testInteractionByTesseract(t *testing.T, client *Client, addr types.Address
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &ts.Ixns[0].Parts[0].Hash,
 				},
+				IxIndex: (*hexutil.Uint64)(&ixIndex),
 			},
 		},
 		{
@@ -1124,6 +1128,7 @@ func testInteractionByTesseract(t *testing.T, client *Client, addr types.Address
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
 				},
+				IxIndex: (*hexutil.Uint64)(&ixIndex),
 			},
 			expectedError: errors.New("interaction not found"),
 		},

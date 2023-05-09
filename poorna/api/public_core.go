@@ -162,17 +162,21 @@ func (p *PublicCoreAPI) GetInteractionByTesseract(args *ptypes.InteractionByTess
 		return nil, err
 	}
 
-	getRPCIX := func(hash types.Hash, ixIndex hexutil.Uint64) (*ptypes.RPCInteraction, error) {
-		ix, parts, err := p.chain.GetInteractionAndPartsByTSHash(hash, int(args.IxIndex))
+	if args.IxIndex == nil {
+		return nil, types.ErrIXIndex
+	}
+
+	getRPCIX := func(hash types.Hash) (*ptypes.RPCInteraction, error) {
+		ix, parts, err := p.chain.GetInteractionAndPartsByTSHash(hash, int(args.IxIndex.ToInt()))
 		if err != nil {
 			return nil, errors.Wrap(err, "interaction not found")
 		}
 
-		return createRPCInteraction(ix, parts.Grid, int(ixIndex))
+		return createRPCInteraction(ix, parts.Grid, int(args.IxIndex.ToInt()))
 	}
 
 	if hash, ok := args.Options.Hash(); ok {
-		return getRPCIX(hash, args.IxIndex)
+		return getRPCIX(hash)
 	}
 
 	height, err := args.Options.Number()
@@ -182,7 +186,7 @@ func (p *PublicCoreAPI) GetInteractionByTesseract(args *ptypes.InteractionByTess
 			return nil, errors.Wrap(err, "tesseract hash not found for given address and height")
 		}
 
-		return getRPCIX(hash, args.IxIndex)
+		return getRPCIX(hash)
 	}
 
 	if errors.Is(err, types.ErrEmptyHeight) {
@@ -513,8 +517,8 @@ func createRPCInteraction(
 			Symbol: assetPayload.Create.Symbol,
 			Supply: (*hexutil.Big)(assetPayload.Create.Supply),
 
-			Dimension: hexutil.Uint8(assetPayload.Create.Dimension),
-			Decimals:  hexutil.Uint8(assetPayload.Create.Decimals),
+			Dimension: (*hexutil.Uint8)(&assetPayload.Create.Dimension),
+			Decimals:  (*hexutil.Uint8)(&assetPayload.Create.Decimals),
 
 			IsFungible:     assetPayload.Create.IsFungible,
 			IsMintable:     assetPayload.Create.IsMintable,

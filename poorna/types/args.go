@@ -14,6 +14,8 @@ const (
 	LatestTesseractHeight = -1
 )
 
+// RPC args
+
 type TesseractNumberOrHash struct {
 	TesseractNumber *int64      `json:"tesseract_number"`
 	TesseractHash   *types.Hash `json:"tesseract_hash"`
@@ -38,6 +40,142 @@ func (t *TesseractNumberOrHash) Hash() (types.Hash, bool) {
 
 	return *t.TesseractHash, true
 }
+
+// TesseractArgs is an argument wrapper for retrieving the latest Tesseract
+type TesseractArgs struct {
+	Address          types.Address         `json:"address"` // Address for which to retrieve the latest Tesseract
+	WithInteractions bool                  `json:"with_interactions"`
+	Options          TesseractNumberOrHash `json:"options"`
+}
+
+type ContextInfoArgs struct {
+	Address types.Address         `json:"address"` // Address for which to retrieve the latest Tesseract
+	Options TesseractNumberOrHash `json:"options"`
+}
+
+type AssetDescriptorArgs struct {
+	AssetID string `json:"asset_id"`
+}
+
+type InteractionCountArgs struct {
+	Address types.Address         `json:"address"`
+	Options TesseractNumberOrHash `json:"options"`
+}
+
+type IxPoolArgs struct {
+	Address types.Address `json:"address"`
+}
+
+type InspectArgs struct{}
+
+type StatusArgs struct{}
+
+type ContentArgs struct{}
+
+type NetArgs struct{}
+
+type AccountArgs struct{}
+
+type DebugArgs struct {
+	Key string `json:"storage_key"`
+}
+
+type GetStorageArgs struct {
+	LogicID    string                `json:"logic_id"`
+	StorageKey string                `json:"storage_key"`
+	Options    TesseractNumberOrHash `json:"options"`
+}
+
+type GetAccountArgs struct {
+	Address types.Address         `json:"address"`
+	Options TesseractNumberOrHash `json:"options"`
+}
+
+type LogicManifestArgs struct {
+	LogicID  string                `json:"logic_id"`
+	Encoding string                `json:"encoding"`
+	Options  TesseractNumberOrHash `json:"options"`
+}
+
+// BalArgs is an argument wrapper for retrieving balance of an asset
+type BalArgs struct {
+	Address types.Address         `json:"address"`  // Address for which to retrieve the balance
+	AssetID string                `json:"asset_id"` // Asset for which to retrieve balance
+	Options TesseractNumberOrHash `json:"options"`
+}
+
+// SendIXArgs is an argument wrapper for sending Interactions to the pool
+type SendIXArgs struct {
+	Type  types.IxType    `json:"type"`
+	Nonce *hexutil.Uint64 `json:"nonce"`
+
+	Sender   types.Address `json:"sender"`
+	Receiver types.Address `json:"receiver"`
+	Payer    types.Address `json:"payer"`
+
+	TransferValues  map[types.AssetID]*hexutil.Big `json:"transfer_values"`
+	PerceivedValues map[types.AssetID]*hexutil.Big `json:"perceived_values"`
+
+	FuelPrice *hexutil.Big `json:"fuel_price"`
+	FuelLimit *hexutil.Big `json:"fuel_limit"`
+
+	Payload json.RawMessage `json:"payload"`
+}
+
+type RPCAssetCreation struct {
+	Type types.AssetKind `json:"type"`
+
+	Symbol string       `json:"symbol"`
+	Supply *hexutil.Big `json:"supply"`
+
+	Dimension *hexutil.Uint8 `json:"dimension"`
+	Decimals  *hexutil.Uint8 `json:"decimals"`
+
+	IsFungible     bool `json:"is_fungible"`
+	IsMintable     bool `json:"is_mintable"`
+	IsTransferable bool `json:"is_transferable"`
+
+	LogicID string `json:"logic_id,omitempty"`
+	// LogicCode []byte `json:"logic_code,omitempty"`
+}
+
+type RPCLogicPayload struct {
+	Manifest hexutil.Bytes `json:"manifest"`
+	LogicID  string        `json:"logic_id"`
+	Callsite string        `json:"callsite"`
+	Calldata hexutil.Bytes `json:"calldata"`
+}
+
+type InteractionByHashArgs struct {
+	Hash types.Hash `json:"hash"`
+}
+
+type InteractionByTesseract struct {
+	Address types.Address         `json:"address"`
+	Options TesseractNumberOrHash `json:"options"`
+	IxIndex *hexutil.Uint64       `json:"ix_index"`
+}
+
+// Response wrapper
+type Response struct {
+	Status string          `json:"status,omitempty"`
+	Data   json.RawMessage `json:"data"`
+	Error  *JSONError      `json:"error,omitempty"`
+}
+
+// ContextResponse is response object for fetching context info
+type ContextResponse struct {
+	BehaviourNodes []string `json:"behaviour_nodes"`
+	RandomNodes    []string `json:"random_nodes"`
+	StorageNodes   []string `json:"storage_nodes"`
+}
+
+// ReceiptArgs is an argument wrapper for retrieving the receipt of an interaction
+type ReceiptArgs struct {
+	Hash types.Hash `json:"hash"`
+}
+
+// RPC Responses
 
 type RPCAssetDescriptor struct {
 	Type   types.AssetKind `json:"type"`
@@ -136,7 +274,7 @@ type RPCInteraction struct {
 	Payload json.RawMessage `json:"payload"`
 
 	Mode         hexutil.Uint64    `json:"mode"`
-	ComputeHash  hexutil.Bytes     `json:"compute_hash"`
+	ComputeHash  types.Hash        `json:"compute_hash"`
 	ComputeNodes []kramaid.KramaID `json:"compute_nodes"`
 
 	MTQ        hexutil.Uint64    `json:"mtq"`
@@ -245,142 +383,8 @@ func (ts *RPCTesseract) Address() types.Address {
 	return ts.Header.Address
 }
 
-// TesseractArgs is an argument wrapper for retrieving the latest Tesseract
-type TesseractArgs struct {
-	Address          types.Address         `json:"address"` // Address for which to retrieve the latest Tesseract
-	WithInteractions bool                  `json:"with_interactions"`
-	Options          TesseractNumberOrHash `json:"options"`
-}
-
-type ContextInfoArgs struct {
-	Address types.Address         `json:"address"` // Address for which to retrieve the latest Tesseract
-	Options TesseractNumberOrHash `json:"options"`
-}
-
-type AssetDescriptorArgs struct {
-	AssetID string `json:"asset_id"`
-}
-
-type InteractionCountArgs struct {
-	Address types.Address         `json:"address"`
-	Options TesseractNumberOrHash `json:"options"`
-}
-
-type IxPoolArgs struct {
-	Address types.Address `json:"address"`
-}
-
-type InspectArgs struct{}
-
-type StatusArgs struct{}
-
-type ContentArgs struct{}
-
-type NetArgs struct{}
-
-type AccountArgs struct{}
-
-type DebugArgs struct {
-	Key string `json:"storage_key"`
-}
-
-type GetStorageArgs struct {
-	LogicID    string                `json:"logic_id"`
-	StorageKey string                `json:"storage_key"`
-	Options    TesseractNumberOrHash `json:"options"`
-}
-
-type GetAccountArgs struct {
-	Address types.Address         `json:"address"`
-	Options TesseractNumberOrHash `json:"options"`
-}
-
-type LogicManifestArgs struct {
-	LogicID  string                `json:"logic_id"`
-	Encoding string                `json:"encoding"`
-	Options  TesseractNumberOrHash `json:"options"`
-}
-
-// BalArgs is an argument wrapper for retrieving balance of an asset
-type BalArgs struct {
-	Address types.Address         `json:"address"`  // Address for which to retrieve the balance
-	AssetID string                `json:"asset_id"` // Asset for which to retrieve balance
-	Options TesseractNumberOrHash `json:"options"`
-}
-
-// SendIXArgs is an argument wrapper for sending Interactions to the pool
-type SendIXArgs struct {
-	Type  types.IxType   `json:"type"`
-	Nonce hexutil.Uint64 `json:"nonce"`
-
-	Sender   types.Address `json:"sender"`
-	Receiver types.Address `json:"receiver"`
-	Payer    types.Address `json:"payer"`
-
-	TransferValues  map[types.AssetID]*hexutil.Big `json:"transfer_values"`
-	PerceivedValues map[types.AssetID]*hexutil.Big `json:"perceived_values"`
-
-	FuelPrice *hexutil.Big `json:"fuel_price"`
-	FuelLimit *hexutil.Big `json:"fuel_limit"`
-
-	Payload json.RawMessage `json:"payload"`
-}
-
-type RPCAssetCreation struct {
-	Type types.AssetKind `json:"type"`
-
-	Symbol string       `json:"symbol"`
-	Supply *hexutil.Big `json:"supply"`
-
-	Dimension hexutil.Uint8 `json:"dimension"`
-	Decimals  hexutil.Uint8 `json:"decimals"`
-
-	IsFungible     bool `json:"is_fungible"`
-	IsMintable     bool `json:"is_mintable"`
-	IsTransferable bool `json:"is_transferable"`
-
-	LogicID string `json:"logic_id,omitempty"`
-	// LogicCode []byte `json:"logic_code,omitempty"`
-}
-
-type RPCLogicPayload struct {
-	Manifest hexutil.Bytes `json:"manifest"`
-	LogicID  string        `json:"logic_id"`
-	Callsite string        `json:"callsite"`
-	Calldata hexutil.Bytes `json:"calldata"`
-}
-
-type InteractionByHashArgs struct {
-	Hash types.Hash `json:"hash"`
-}
-
-type InteractionByTesseract struct {
-	Address types.Address         `json:"address"`
-	Options TesseractNumberOrHash `json:"options"`
-	IxIndex hexutil.Uint64        `json:"ix_index"`
-}
-
-// Response wrapper
-type Response struct {
-	Status string          `json:"status,omitempty"`
-	Data   json.RawMessage `json:"data"`
-	Error  *JSONError      `json:"error,omitempty"`
-}
-
-// ContextResponse is response object for fetching context info
-type ContextResponse struct {
-	BehaviourNodes []string `json:"behaviour_nodes"`
-	RandomNodes    []string `json:"random_nodes"`
-	StorageNodes   []string `json:"storage_nodes"`
-}
-
-// ReceiptArgs is an argument wrapper for retrieving the receipt of an interaction
-type ReceiptArgs struct {
-	Hash types.Hash `json:"hash"`
-}
-
-// InteractionArg is a struct that represents a single interaction
-type InteractionArg struct {
+// InteractionResponse is a struct that represents a single interaction
+type InteractionResponse struct {
 	Nonce     hexutil.Uint64 `json:"nonce"`
 	Type      hexutil.Uint64 `json:"type"`
 	Sender    types.Address  `json:"sender"`
@@ -392,9 +396,10 @@ type InteractionArg struct {
 	Hash      types.Hash     `json:"hash"`
 }
 
-// NewInteractionArg is a contructor function that generates and returns a new InteractionArg for a given Interaction
-func NewInteractionArg(ix *types.Interaction) *InteractionArg {
-	return &InteractionArg{
+// NewInteractionResponse is a contructor function that generates
+// and returns a new InteractionResponse for a given Interaction
+func NewInteractionResponse(ix *types.Interaction) *InteractionResponse {
+	return &InteractionResponse{
 		Nonce:     hexutil.Uint64(ix.Nonce()),
 		Type:      hexutil.Uint64(ix.Type()),
 		Sender:    ix.Sender(),

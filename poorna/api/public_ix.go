@@ -60,16 +60,24 @@ func constructInteraction(args *ptypes.SendIXArgs, nonce uint64) (ix *types.Inte
 			Sender:         args.Sender,
 			Receiver:       args.Receiver,
 			TransferValues: make(map[types.AssetID]*big.Int, len(args.TransferValues)),
-			FuelPrice:      args.FuelPrice.ToInt(),
-			FuelLimit:      args.FuelLimit.ToInt(),
 		},
+	}
+
+	if args.FuelPrice != nil {
+		data.Input.FuelPrice = args.FuelPrice.ToInt()
+	}
+
+	if args.FuelLimit != nil {
+		data.Input.FuelLimit = args.FuelLimit.ToInt()
 	}
 
 	switch args.Type {
 	case types.IxValueTransfer:
 		// Decode the transfer values
 		for asset, value := range args.TransferValues {
-			data.Input.TransferValues[asset] = value.ToInt()
+			if value != nil {
+				data.Input.TransferValues[asset] = value.ToInt()
+			}
 		}
 
 	case types.IxAssetCreate:
@@ -130,10 +138,6 @@ func GetRawIXPayloadForAssetCreation(jsonPayload []byte) ([]byte, error) {
 	createPayload := &types.AssetCreatePayload{
 		Type:   payloadArgs.Type,
 		Symbol: payloadArgs.Symbol,
-		Supply: payloadArgs.Supply.ToInt(),
-
-		Dimension: payloadArgs.Dimension.ToInt(),
-		Decimals:  payloadArgs.Decimals.ToInt(),
 
 		IsFungible:     payloadArgs.IsFungible,
 		IsMintable:     payloadArgs.IsMintable,
@@ -141,6 +145,18 @@ func GetRawIXPayloadForAssetCreation(jsonPayload []byte) ([]byte, error) {
 
 		LogicID: types.LogicID(payloadArgs.LogicID),
 		// LogicCode: payloadArgs.LogicCode,
+	}
+
+	if payloadArgs.Supply != nil {
+		createPayload.Supply = payloadArgs.Supply.ToInt()
+	}
+
+	if payloadArgs.Dimension != nil {
+		createPayload.Dimension = payloadArgs.Dimension.ToInt()
+	}
+
+	if payloadArgs.Decimals != nil {
+		createPayload.Decimals = payloadArgs.Decimals.ToInt()
 	}
 
 	assetPayload := &types.AssetPayload{

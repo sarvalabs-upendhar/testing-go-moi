@@ -10,13 +10,13 @@ import (
 )
 
 type ContentResponse struct {
-	Pending map[types.Address]map[hexutil.Uint64]*ptypes.InteractionArg `json:"pending"`
-	Queued  map[types.Address]map[hexutil.Uint64]*ptypes.InteractionArg `json:"queued"`
+	Pending map[types.Address]map[hexutil.Uint64]*ptypes.InteractionResponse `json:"pending"`
+	Queued  map[types.Address]map[hexutil.Uint64]*ptypes.InteractionResponse `json:"queued"`
 }
 
 type ContentFromResponse struct {
-	Pending map[hexutil.Uint64]*ptypes.InteractionArg `json:"pending"`
-	Queued  map[hexutil.Uint64]*ptypes.InteractionArg `json:"queued"`
+	Pending map[hexutil.Uint64]*ptypes.InteractionResponse `json:"pending"`
+	Queued  map[hexutil.Uint64]*ptypes.InteractionResponse `json:"queued"`
 }
 
 type StatusResponse struct {
@@ -49,27 +49,27 @@ func NewPublicIXPoolAPI(ixpool IxPool) *PublicIXPoolAPI {
 // Content returns the interactions present in the IxPool.
 func (p *PublicIXPoolAPI) Content() (*ContentResponse, error) {
 	content := &ContentResponse{
-		Pending: make(map[types.Address]map[hexutil.Uint64]*ptypes.InteractionArg),
-		Queued:  make(map[types.Address]map[hexutil.Uint64]*ptypes.InteractionArg),
+		Pending: make(map[types.Address]map[hexutil.Uint64]*ptypes.InteractionResponse),
+		Queued:  make(map[types.Address]map[hexutil.Uint64]*ptypes.InteractionResponse),
 	}
 	pendingIxs, queuedIxs := p.ixpool.GetAllIxs(true)
 
 	// update pending ixs
 	for addr, ixs := range pendingIxs {
-		content.Pending[addr] = make(map[hexutil.Uint64]*ptypes.InteractionArg, len(ixs))
+		content.Pending[addr] = make(map[hexutil.Uint64]*ptypes.InteractionResponse, len(ixs))
 
 		for _, ix := range ixs {
-			ixArg := ptypes.NewInteractionArg(ix)
+			ixArg := ptypes.NewInteractionResponse(ix)
 			content.Pending[addr][hexutil.Uint64(ix.Nonce())] = ixArg
 		}
 	}
 
 	// update queued ixs
 	for addr, ixs := range queuedIxs {
-		content.Queued[addr] = make(map[hexutil.Uint64]*ptypes.InteractionArg, len(ixs))
+		content.Queued[addr] = make(map[hexutil.Uint64]*ptypes.InteractionResponse, len(ixs))
 
 		for _, ix := range ixs {
-			ixArg := ptypes.NewInteractionArg(ix)
+			ixArg := ptypes.NewInteractionResponse(ix)
 			content.Queued[addr][hexutil.Uint64(ix.Nonce())] = ixArg
 		}
 	}
@@ -84,20 +84,20 @@ func (p *PublicIXPoolAPI) ContentFrom(args *ptypes.IxPoolArgs) (*ContentFromResp
 	}
 
 	content := &ContentFromResponse{
-		Pending: make(map[hexutil.Uint64]*ptypes.InteractionArg),
-		Queued:  make(map[hexutil.Uint64]*ptypes.InteractionArg),
+		Pending: make(map[hexutil.Uint64]*ptypes.InteractionResponse),
+		Queued:  make(map[hexutil.Uint64]*ptypes.InteractionResponse),
 	}
 	pendingIxs, queuedIxs := p.ixpool.GetIxs(args.Address, true)
 
 	// update pending ixs
 	for _, ix := range pendingIxs {
-		ixArg := ptypes.NewInteractionArg(ix)
+		ixArg := ptypes.NewInteractionResponse(ix)
 		content.Pending[hexutil.Uint64(ix.Nonce())] = ixArg
 	}
 
 	// update queued ixs
 	for _, ix := range queuedIxs {
-		ixArg := ptypes.NewInteractionArg(ix)
+		ixArg := ptypes.NewInteractionResponse(ix)
 		content.Queued[hexutil.Uint64(ix.Nonce())] = ixArg
 	}
 

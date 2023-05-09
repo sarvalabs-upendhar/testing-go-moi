@@ -845,7 +845,7 @@ func CreateIXInputWithTestData(
 	return IxInput
 }
 
-func CreateComputeWithTestData(t *testing.T, hash []byte, kramaIDs []id.KramaID) types.IxCompute {
+func CreateComputeWithTestData(t *testing.T, hash types.Hash, kramaIDs []id.KramaID) types.IxCompute {
 	t.Helper()
 
 	IxCompute := types.IxCompute{

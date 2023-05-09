@@ -33,15 +33,17 @@ func TestIx_SendInteraction(t *testing.T) {
 	acc, _ := tests.GetTestAccount(t, func(acc *types.Account) {
 		acc.Nonce = uint64(5)
 	})
+
 	stateManager.setAccount(address, *acc)
 
+	dimension := uint8(1)
 	ixAPI := NewPublicIXAPI(ixpool, stateManager)
 
 	assetPayload, err := json.Marshal(ptypes.RPCAssetCreation{
 		Type:           types.AssetKindValue,
 		Symbol:         "GR",
 		Supply:         (*hexutil.Big)(big.NewInt(100)),
-		Dimension:      1,
+		Dimension:      (*hexutil.Uint8)(&dimension),
 		IsFungible:     true,
 		IsMintable:     false,
 		IsTransferable: true,
