@@ -17,15 +17,61 @@ jobs:
   
   stop:
     name: Stop Containers
+    needs: ci
     uses: ./.github/workflows/stop.yml
+    secrets:
+      IP01: ${{ secrets.IP01 }}
+      IP02: ${{ secrets.IP02 }}
+      IP03: ${{ secrets.IP03 }}
+      IP04: ${{ secrets.IP04 }}
+      IP05: ${{ secrets.IP05 }}
+      IP06: ${{ secrets.IP06 }}
+      IP07: ${{ secrets.IP07 }}
+      IP08: ${{ secrets.IP08 }}
+      IP09: ${{ secrets.IP09 }}
+      IP10: ${{ secrets.IP10 }}
+      IP11: ${{ secrets.IP11 }}
+      IP12: ${{ secrets.IP12 }}
+      IP13: ${{ secrets.IP13 }}
+      IP14: ${{ secrets.IP14 }}
+      NODE_USER: ${{ secrets.NODE_USER }}
+      SSH_KEY: ${{ secrets.SSH_KEY }}
+      SSH_PORT: ${{ secrets.SSH_PORT }}
+      PROXY_HOST: ${{ secrets.PROXY_HOST }}
+      PROXY_USER: ${{ secrets.PROXY_USER }}
+      PROXY_KEY: ${{ secrets.PROXY_KEY }}
+      PROXY_PORT: ${{ secrets.PROXY_PORT }}
 
   cd:
     name: Continuous Deployment
-    needs: ci
+    needs: stop
     uses: ./.github/workflows/docker.yml
     secrets:
       ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
 
   start:
     name: Start Containers
+    needs: cd
     uses: ./.github/workflows/start.yml
+    secrets:
+      IP01: ${{ secrets.IP01 }}
+      IP02: ${{ secrets.IP02 }}
+      IP03: ${{ secrets.IP03 }}
+      IP04: ${{ secrets.IP04 }}
+      IP05: ${{ secrets.IP05 }}
+      IP06: ${{ secrets.IP06 }}
+      IP07: ${{ secrets.IP07 }}
+      IP08: ${{ secrets.IP08 }}
+      IP09: ${{ secrets.IP09 }}
+      IP10: ${{ secrets.IP10 }}
+      IP11: ${{ secrets.IP11 }}
+      IP12: ${{ secrets.IP12 }}
+      IP13: ${{ secrets.IP13 }}
+      IP14: ${{ secrets.IP14 }}
+      NODE_USER: ${{ secrets.NODE_USER }}
+      SSH_KEY: ${{ secrets.SSH_KEY }}
+      SSH_PORT: ${{ secrets.SSH_PORT }}
+      PROXY_HOST: ${{ secrets.PROXY_HOST }}
+      PROXY_USER: ${{ secrets.PROXY_USER }}
+      PROXY_KEY: ${{ secrets.PROXY_KEY }}
+      PROXY_PORT: ${{ secrets.PROXY_PORT }}

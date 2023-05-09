@@ -3,6 +3,49 @@ name: Stop Containers
 on:
   workflow_dispatch:
   workflow_call:
+    secrets:
+      IP01:
+        required: true
+      IP02:
+        required: true
+      IP03:
+        required: true
+      IP04:
+        required: true
+      IP05:
+        required: true
+      IP06:
+        required: true
+      IP07:
+        required: true
+      IP08:
+        required: true
+      IP09:
+        required: true
+      IP10:
+        required: true
+      IP11:
+        required: true
+      IP12:
+        required: true
+      IP13:
+        required: true
+      IP14:
+        required: true
+      NODE_USER:
+        required: true
+      SSH_KEY:
+        required: true
+      SSH_PORT:
+        required: true
+      PROXY_HOST:
+        required: true
+      PROXY_USER:
+        required: true
+      PROXY_KEY:
+        required: true
+      PROXY_PORT:
+        required: true
 
 jobs:
   stop-containers:
