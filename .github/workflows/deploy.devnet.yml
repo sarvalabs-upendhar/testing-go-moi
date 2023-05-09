@@ -14,6 +14,10 @@ jobs:
     secrets:
       ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+  
+  stop:
+    name: Stop Containers
+    uses: ./.github/workflows/stop.yml
 
   cd:
     name: Continuous Deployment
@@ -21,3 +25,7 @@ jobs:
     uses: ./.github/workflows/docker.yml
     secrets:
       ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+
+  start:
+    name: Start Containers
+    uses: ./.github/workflows/start.yml
