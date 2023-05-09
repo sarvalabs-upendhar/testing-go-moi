@@ -44,6 +44,7 @@ type StateManager interface {
 
 type Network interface {
 	GetPeers() []id.KramaID
+	GetVersion() string
 }
 
 type DB interface {

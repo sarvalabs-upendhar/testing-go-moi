@@ -132,7 +132,6 @@ func CreateConfigFile(datadir string, index int) []byte {
 			Libp2pAddr: []string{
 				"/ip4/0.0.0.0/tcp/" + strconv.Itoa(port+index),
 			},
-			ProtocolID:  "MOI",
 			JSONRPCAddr: "0.0.0.0:" + strconv.Itoa(1600+index),
 			BootStrapPeers: []string{
 				bootnode,

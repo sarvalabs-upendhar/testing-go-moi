@@ -620,6 +620,34 @@ func (r *Service) Peers(
 	return nil
 }
 
+// Version is an RPC Method that returns an the version of the protocol
+func (r *Service) Version(
+	req *http.Request,
+	args *ptypes.NetArgs,
+	resp *ptypes.Response,
+) error {
+	NetAPI, ok := r.apis["net"].(*api.PublicNetAPI)
+	if !ok {
+		return types.ErrInvalidAPI
+	}
+
+	version, err := NetAPI.Version()
+	if err != nil {
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	resp.Data, err = json.Marshal(version)
+	if err != nil {
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	return nil
+}
+
 // DBGet is an RPC Method that returns the raw value of the key stored in the database
 func (r *Service) DBGet(
 	req *http.Request,

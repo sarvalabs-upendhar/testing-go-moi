@@ -7,6 +7,7 @@ import (
 
 	"github.com/sarvalabs/moichain/common/tests"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 )
 
 // Net Api Testcases
@@ -44,6 +45,34 @@ func TestPublicNetAPI_Peers(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Equal(t, test.expectedList, fetchedList)
+		})
+	}
+}
+
+func TestPublicNetAPI_Version(t *testing.T) {
+	network := NewMockNetwork(t)
+	netAPI := NewPublicNetAPI(network)
+	version := "0.0.1"
+
+	network.setVersion(version)
+
+	testcases := []struct {
+		name          string
+		args          ptypes.NetArgs
+		expectedValue string
+	}{
+		{
+			name:          "Should return default version",
+			expectedValue: version,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(testing *testing.T) {
+			version, err := netAPI.Version()
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedValue, version)
 		})
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/routing"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/sarvalabs/moichain/common"
 	"github.com/spf13/cobra"
 )
 
@@ -44,7 +45,7 @@ var bootnodeCmd = &cobra.Command{
 		selfRouting := libp2p.Routing(func(h host.Host) (routing.PeerRouting, error) {
 			dhtOpts := []dht.Option{
 				dht.Mode(dht.ModeServer),
-				dht.ProtocolPrefix("MOI"),
+				dht.ProtocolPrefix(common.MOIProtocolStream),
 			}
 			Dht, err := dht.New(context.Background(), h, dhtOpts...)
 			if err != nil {

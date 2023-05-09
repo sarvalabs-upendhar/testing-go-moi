@@ -458,7 +458,8 @@ func (mc *MockIxPool) setIxs(addr types.Address, pending, queued []*types.Intera
 }
 
 type MockNetwork struct {
-	peers []id.KramaID
+	peers   []id.KramaID
+	version string
 }
 
 func NewMockNetwork(t *testing.T) *MockNetwork {
@@ -466,6 +467,7 @@ func NewMockNetwork(t *testing.T) *MockNetwork {
 
 	network := new(MockNetwork)
 	network.peers = make([]id.KramaID, 0)
+	network.version = ""
 
 	return network
 }
@@ -476,6 +478,14 @@ func (mn *MockNetwork) setPeers(peersList []id.KramaID) {
 
 func (mn *MockNetwork) GetPeers() []id.KramaID {
 	return mn.peers
+}
+
+func (mn *MockNetwork) setVersion(version string) {
+	mn.version = version
+}
+
+func (mn *MockNetwork) GetVersion() string {
+	return mn.version
 }
 
 type MockDatabase struct {

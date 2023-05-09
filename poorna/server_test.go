@@ -1013,7 +1013,7 @@ func TestSendMessage_CheckMsgHandler(t *testing.T) {
 			// handles sent message
 			registerMessageHandler(
 				t, servers[test.index+1],
-				servers[test.index+1].cfg.ProtocolID,
+				common.MOIProtocolStream,
 				servers[test.index].id,
 				handShakeMsg,
 				response,

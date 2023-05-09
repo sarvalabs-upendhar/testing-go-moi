@@ -12,7 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/libp2p/go-libp2p/core/protocol"
 	maddr "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
 	"github.com/pkg/profile"
@@ -169,8 +168,6 @@ func buildNetworkConfig(nodeCfg *common.Config, fileCfg *Config) (err error) {
 	if err = assignNetworkJSONRPCAddr(nodeCfg, fileCfg); err != nil {
 		return err
 	}
-
-	assignNetworkProtocolID(nodeCfg, fileCfg)
 
 	return nil
 }
@@ -400,12 +397,6 @@ func assignNetworkJSONRPCAddr(nodeCfg *common.Config, fileCfg *Config) (err erro
 	}
 
 	return nil
-}
-
-func assignNetworkProtocolID(nodeCfg *common.Config, fileCfg *Config) {
-	if fileCfg.Network.ProtocolID != "" {
-		nodeCfg.Network.ProtocolID = protocol.ID(fileCfg.Network.ProtocolID)
-	}
 }
 
 func Err(err error) {

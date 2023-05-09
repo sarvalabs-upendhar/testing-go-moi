@@ -656,6 +656,29 @@ func (c *Client) Peers(args *ptypes.NetArgs) ([]kramaid.KramaID, error) {
 	return response, nil
 }
 
+// Version returns the protocol version
+func (c *Client) Version(args *ptypes.NetArgs) (string, error) {
+	var resp ptypes.Response
+
+	err := c.Call(&resp, "net.Version", args)
+	if err != nil {
+		return "", err
+	}
+
+	if resp.Error != nil {
+		return "", resp.Error
+	}
+
+	var response string
+
+	err = json.Unmarshal(resp.Data, &response)
+	if err != nil {
+		return "", err
+	}
+
+	return response, nil
+}
+
 // DBGet returns raw value of the key stored in the database
 func (c *Client) DBGet(args *ptypes.DebugArgs) (string, error) {
 	var resp ptypes.Response

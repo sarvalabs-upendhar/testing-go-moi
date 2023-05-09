@@ -535,6 +535,20 @@ func httpPeers(t *testing.T, args *ptypes.NetArgs) *[]kramaid.KramaID {
 	return &response
 }
 
+// httpPeers returns an array of Krama IDs connected to a client
+func httpVersion(t *testing.T, args *ptypes.NetArgs) string {
+	t.Helper()
+
+	resp := makeHTTPRequest(t, "net.Version", args)
+
+	var response string
+
+	err := json.Unmarshal(resp.Data, &response)
+	require.NoError(t, err)
+
+	return response
+}
+
 // httpDBGet returns raw value of the key stored in the database
 func httpDBGet(t *testing.T, args *ptypes.DebugArgs) string {
 	t.Helper()

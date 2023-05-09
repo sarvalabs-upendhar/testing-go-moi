@@ -239,7 +239,7 @@ func getPeer(t *testing.T, s *Server, destServer *Server) *Peer {
 	t.Helper()
 
 	var stream network.Stream
-	stream, err := s.NewStream(s.ctx, destServer.host.ID(), s.cfg.ProtocolID)
+	stream, err := s.NewStream(s.ctx, destServer.host.ID(), common.MOIProtocolStream)
 	require.NoError(t, err)
 	// Create new kip peer
 	return newPeer(stream, s.logger)
@@ -328,7 +328,6 @@ func defaultNetworkConfig() *common.NetworkConfig {
 	return &common.NetworkConfig{
 		ListenAddresses: make([]multiaddr.Multiaddr, 0),
 		BootstrapPeers:  make([]multiaddr.Multiaddr, 0),
-		ProtocolID:      protocol.ID("MOI"),
 		MaxPeers:        0,
 	}
 }
@@ -461,7 +460,7 @@ func initDiscoveryAndAdvertise(t *testing.T, servers ...*Server) {
 		// Advertise the rendezvous string to the discovery service
 		s.logger.Info("Announcing ourselves")
 
-		_, err := s.discovery.Advertise(s.ctx, string(s.cfg.ProtocolID))
+		_, err := s.discovery.Advertise(s.ctx, string(common.MOIProtocolStream))
 		if err != nil {
 			s.logger.Error("Failed to advertise the rendezvous string to the discovery service", "error", err)
 		}
@@ -516,7 +515,7 @@ func openStream(t *testing.T, source *Server, destination *Server) *Peer {
 	connectTo(t, source, destination)
 
 	// Setup a new stream to the peer over the MOI protocol
-	stream, err := source.NewStream(source.ctx, destination.host.ID(), source.cfg.ProtocolID)
+	stream, err := source.NewStream(source.ctx, destination.host.ID(), common.MOIProtocolStream)
 	require.NoError(t, err)
 
 	return newPeer(stream, source.logger)
@@ -556,7 +555,7 @@ func startBootStrapNode(t *testing.T, privateKey crypto.PrivKey, sourceMultiAddr
 	selfRouting := libp2p.Routing(func(h host.Host) (routing.PeerRouting, error) {
 		dhtOpts := []dht.Option{
 			dht.Mode(dht.ModeServer),
-			dht.ProtocolPrefix("MOI"),
+			dht.ProtocolPrefix(common.MOIProtocolStream),
 		}
 		Dht, err := dht.New(ctx, h, dhtOpts...)
 		require.NoError(t, err)
@@ -592,7 +591,7 @@ func unsubscribeServers(t *testing.T, server *Server, topic string) {
 
 func registerStreamHandler(servers ...*Server) {
 	for _, server := range servers {
-		server.SetupStreamHandler("MOI", server.streamHandlerFunc)
+		server.SetupStreamHandler(common.MOIProtocolStream, server.streamHandlerFunc)
 	}
 }
 

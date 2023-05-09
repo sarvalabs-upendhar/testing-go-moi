@@ -340,7 +340,7 @@ func (s *Server) getKdhtOptions() []kdht.Option {
 	return []kdht.Option{
 		kdht.Concurrency(10),
 		kdht.Mode(kdht.ModeServer),
-		kdht.ProtocolPrefix(s.cfg.ProtocolID),
+		kdht.ProtocolPrefix(common.MOIProtocolStream),
 	}
 }
 
@@ -465,7 +465,7 @@ func (s *Server) discover() {
 	s.logger.Info("Announcing ourselves")
 
 	// TODO: explore about how many times to advertise
-	_, err := s.discovery.Advertise(s.ctx, string(s.cfg.ProtocolID))
+	_, err := s.discovery.Advertise(s.ctx, string(common.MOIProtocolStream))
 	if err != nil {
 		s.logger.Error("Failed to advertise the rendezvous string to the discovery service", "error", err)
 	}
@@ -488,7 +488,7 @@ func (s *Server) discover() {
 
 func (s *Server) handleDiscovery() error {
 	// Retrieve a channel of peer addresses from the discovery service
-	peerChan, err := s.discovery.FindPeers(s.ctx, string(s.cfg.ProtocolID))
+	peerChan, err := s.discovery.FindPeers(s.ctx, string(common.MOIProtocolStream))
 	if err != nil {
 		return err
 	}
@@ -552,7 +552,7 @@ func (s *Server) ConnectAndRegisterPeer(peerInfo peer.AddrInfo) error {
 	}
 
 	// create a new stream to the kPeer over the MOI protocol
-	if stream, err = s.host.NewStream(s.ctx, peerInfo.ID, s.cfg.ProtocolID); err != nil {
+	if stream, err = s.host.NewStream(s.ctx, peerInfo.ID, common.MOIProtocolStream); err != nil {
 		s.logger.Error("Failed to open NewStream", "error", err)
 		// return error if stream setup fails
 		return err
@@ -890,7 +890,7 @@ func (s *Server) SendMessage(peerID peer.ID, msgType ptypes.MsgType, msg ptypes.
 		return p.Send(s.id, msgType, msg)
 	}
 
-	if stream, err = s.NewStream(s.ctx, peerID, s.cfg.ProtocolID); err != nil {
+	if stream, err = s.NewStream(s.ctx, peerID, common.MOIProtocolStream); err != nil {
 		// Return error if stream setup fails
 		return err
 	}
@@ -942,7 +942,7 @@ func (s *Server) NewStream(ctx context.Context, id peer.ID, protocol protocol.ID
 
 // setStreamHandler starts stream handler for the ProtocolID present in the node's config
 func (s *Server) setStreamHandler() {
-	s.host.SetStreamHandler(s.cfg.ProtocolID, s.streamHandlerFunc)
+	s.host.SetStreamHandler(common.MOIProtocolStream, s.streamHandlerFunc)
 }
 
 // Stop terminates the running poorna server gracefully
@@ -1019,6 +1019,10 @@ func (s *Server) GetPeers() []id.KramaID {
 	}
 
 	return peers
+}
+
+func (s *Server) GetVersion() string {
+	return common.ProtocolVersion
 }
 
 func (pst *pubSubTopics) addTopicSet(topicName string, topicSet *TopicSet) {

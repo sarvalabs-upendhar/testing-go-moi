@@ -11,7 +11,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 	"github.com/sarvalabs/moichain/common"
@@ -33,7 +32,6 @@ import (
 )
 
 const (
-	SyncRPCProtocol       = protocol.ID("moi/rpc/sync")
 	TesseractTopic        = "MOI_PUBSUB_TESSERACT"
 	MaxBucketSyncAttempts = 3
 	ChannelBufferSize     = 10
@@ -1010,9 +1008,9 @@ func (s *Syncer) fetchSnapShort(
 }
 
 func (s *Syncer) registerRPCService() error {
-	s.rpcClient = s.network.StartNewRPCServer(SyncRPCProtocol)
+	s.rpcClient = s.network.StartNewRPCServer(common.SyncProtocolRPC)
 
-	return s.network.RegisterNewRPCService(SyncRPCProtocol, "SYNCRPC", NewSyncRPCService(s))
+	return s.network.RegisterNewRPCService(common.SyncProtocolRPC, "SYNCRPC", NewSyncRPCService(s))
 }
 
 func (s *Syncer) fromGenesis(addr types.Address, currentHeight uint64) bool {

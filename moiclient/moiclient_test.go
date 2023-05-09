@@ -10,6 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
+	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/common/hexutil"
 	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/dhruva"
@@ -100,6 +101,9 @@ func TestMoiClient(t *testing.T) {
 		},
 		"Peers": {
 			test: func(t *testing.T) { testPeers(t, client) },
+		},
+		"Version": {
+			test: func(t *testing.T) { testVersion(t, client) },
 		},
 		"SendInteraction": {
 			test: func(t *testing.T) { testSendInteraction(t, client) },
@@ -1213,6 +1217,31 @@ func testPeers(t *testing.T, client *Client) {
 			for _, id := range *httpPeers {
 				require.True(t, utils.ContainsKramaID(clientPeers, id))
 			}
+		})
+	}
+}
+
+func testVersion(t *testing.T, client *Client) {
+	testcases := []struct {
+		name          string
+		ixPoolArgs    *ptypes.NetArgs
+		expectedValue string
+	}{
+		{
+			name:          "fetch version",
+			ixPoolArgs:    &ptypes.NetArgs{},
+			expectedValue: common.ProtocolVersion,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			version, err := client.Version(test.ixPoolArgs)
+			require.NoError(t, err)
+
+			// check if client peers and http peers are same
+			httpVersion := httpVersion(t, test.ixPoolArgs)
+			require.Equal(t, httpVersion, version)
 		})
 	}
 }

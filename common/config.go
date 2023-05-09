@@ -8,7 +8,6 @@ import (
 
 	"github.com/sarvalabs/moichain/types"
 
-	"github.com/libp2p/go-libp2p/core/protocol"
 	maddr "github.com/multiformats/go-multiaddr"
 
 	kcrypto "github.com/sarvalabs/moichain/mudra"
@@ -81,7 +80,6 @@ type NetworkConfig struct {
 	MaxPeers        uint
 	RelayNodeAddr   string
 	ListenAddresses []maddr.Multiaddr
-	ProtocolID      protocol.ID
 	JSONRPCAddr     *net.TCPAddr
 	MTQ             float64
 
@@ -123,7 +121,6 @@ func DefaultConfig(path string) *Config {
 			ListenAddresses:   make([]maddr.Multiaddr, 0),
 			BootstrapPeers:    make([]maddr.Multiaddr, 0),
 			MaxPeers:          0, // current we don't limit the no.of peers
-			ProtocolID:        protocol.ID("MOI"),
 			InboundConnLimit:  DefaultInboundConnLimit,
 			OutboundConnLimit: DefaultOutboundConnLimit,
 		},

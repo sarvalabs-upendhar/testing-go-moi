@@ -11,18 +11,14 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/protocol"
 
+	"github.com/sarvalabs/moichain/common"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/poorna"
 	atypes "github.com/sarvalabs/moichain/poorna/agora/types"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 	"github.com/sarvalabs/moichain/utils"
-)
-
-const (
-	AgoraStreamProtocol = protocol.ID("moi/stream/agora")
 )
 
 type SessionManager interface {
@@ -47,7 +43,7 @@ func NewAgoraNetwork(ctx context.Context, logger hclog.Logger, server *poorna.Se
 		metrics: metrics,
 	}
 
-	server.SetupStreamHandler(AgoraStreamProtocol, an.streamHandler)
+	server.SetupStreamHandler(common.AgoraProtocolStream, an.streamHandler)
 
 	return an
 }
@@ -131,7 +127,7 @@ func (an *AgoraNetwork) SendAgoraMessage(id id.KramaID, msgType ptypes.MsgType, 
 
 	peer, ok := an.peers.Load(peerID)
 	if !ok {
-		stream, err := an.server.NewStream(context.Background(), peerID, AgoraStreamProtocol)
+		stream, err := an.server.NewStream(context.Background(), peerID, common.AgoraProtocolStream)
 		if err != nil {
 			return err
 		}

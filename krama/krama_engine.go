@@ -34,8 +34,7 @@ import (
 )
 
 const (
-	ICSRPCProtocol         = protocol.ID("moi/rpc/clusterState")
-	ObserverCoeff  float64 = 0.1
+	ObserverCoeff float64 = 0.1
 	// MinMTQ represents the minimum Modulated Trust Quotient
 	MinMTQ float64 = 0.3
 
@@ -187,7 +186,7 @@ func NewKramaEngine(ctx context.Context,
 
 	k.metrics.initMetrics(float64(cfg.OperatorSlotCount), float64(cfg.ValidatorSlotCount))
 
-	return k, k.transport.RegisterRPCService(ICSRPCProtocol, "ICSRPC", NewICSRPCService(k))
+	return k, k.transport.RegisterRPCService(common.ICSProtocolRPC, "ICSRPC", NewICSRPCService(k))
 }
 
 // loadIxnClusterState fetches the account state and returns the interaction cluster state

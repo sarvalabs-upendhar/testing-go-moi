@@ -15,10 +15,10 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
+	"github.com/sarvalabs/moichain/common"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/poorna"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
@@ -30,10 +30,6 @@ import (
 const (
 	SLOTCOUNT  = 20
 	PEERSCOUNT = 6
-)
-
-const (
-	FluxProtocol = protocol.ID("moi/stream/flux")
 )
 
 type Randomizer struct {
@@ -84,7 +80,7 @@ func NewRandomizer(
 	}
 
 	r.metrics.initMetrics(SLOTCOUNT)
-	r.server.SetupStreamHandler(FluxProtocol, r.messageHandler)
+	r.server.SetupStreamHandler(common.FluxProtocolStream, r.messageHandler)
 
 	return r
 }
@@ -429,7 +425,7 @@ func (r *Randomizer) SendFluxMessage(peerID peer.ID, msgType ptypes.MsgType, msg
 		Sender:  r.server.GetKramaID(),
 	}
 
-	stream, err := r.server.NewStream(context.Background(), peerID, FluxProtocol)
+	stream, err := r.server.NewStream(context.Background(), peerID, common.FluxProtocolStream)
 	if err != nil {
 		// Return error if stream setup fails
 		return err

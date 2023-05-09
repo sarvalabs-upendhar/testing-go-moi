@@ -24,7 +24,6 @@ type Config struct {
 
 type NetworkConfig struct {
 	Libp2pAddr        []string   `json:"libp2p_addr"`
-	ProtocolID        string     `json:"protocol_id"`
 	JSONRPCAddr       string     `json:"jsonrpc_addr"`
 	BootStrapPeers    []string   `json:"bootnodes"`
 	TrustedPeers      []PeerInfo `json:"trusted_peers"`

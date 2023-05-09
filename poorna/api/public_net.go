@@ -18,3 +18,8 @@ func NewPublicNetAPI(network Network) *PublicNetAPI {
 func (p *PublicNetAPI) Peers() ([]id.KramaID, error) {
 	return p.network.GetPeers(), nil
 }
+
+// Version returns the protocol version
+func (p *PublicNetAPI) Version() (string, error) {
+	return p.network.GetVersion(), nil
+}
