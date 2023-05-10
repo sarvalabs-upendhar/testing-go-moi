@@ -171,7 +171,7 @@ func methodsU64() [256]*BuiltinMethod {
 		MethodLt: makeBuiltinMethod(
 			MethodLt.String(),
 			PrimitiveU64, MethodLt,
-			makefields([]*TypeField{{Name: "x", Type: PrimitiveU64}, {Name: "y", Type: PrimitiveU64}}),
+			makefields([]*TypeField{{Name: "self", Type: PrimitiveU64}, {Name: "other", Type: PrimitiveU64}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				x, y := inputs[0], inputs[1]
@@ -185,7 +185,7 @@ func methodsU64() [256]*BuiltinMethod {
 		MethodGt: makeBuiltinMethod(
 			MethodGt.String(),
 			PrimitiveU64, MethodGt,
-			makefields([]*TypeField{{Name: "x", Type: PrimitiveU64}, {Name: "y", Type: PrimitiveU64}}),
+			makefields([]*TypeField{{Name: "self", Type: PrimitiveU64}, {Name: "other", Type: PrimitiveU64}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				x, y := inputs[0], inputs[1]
@@ -199,7 +199,7 @@ func methodsU64() [256]*BuiltinMethod {
 		MethodEq: makeBuiltinMethod(
 			MethodEq.String(),
 			PrimitiveU64, MethodEq,
-			makefields([]*TypeField{{Name: "x", Type: PrimitiveU64}, {Name: "y", Type: PrimitiveU64}}),
+			makefields([]*TypeField{{Name: "self", Type: PrimitiveU64}, {Name: "other", Type: PrimitiveU64}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				x, y := inputs[0], inputs[1]
@@ -239,8 +239,8 @@ func methodsU64() [256]*BuiltinMethod {
 
 		// uint64.abs() -> uint64
 		0x10: makeBuiltinMethod(
-			MethodStr.String(),
-			PrimitiveU64, MethodStr,
+			"Abs",
+			PrimitiveU64, 0x10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveU64}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveU64}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -432,7 +432,7 @@ func methodsI64() [256]*BuiltinMethod {
 		MethodLt: makeBuiltinMethod(
 			MethodLt.String(),
 			PrimitiveI64, MethodLt,
-			makefields([]*TypeField{{Name: "x", Type: PrimitiveI64}, {Name: "y", Type: PrimitiveI64}}),
+			makefields([]*TypeField{{Name: "self", Type: PrimitiveI64}, {Name: "other", Type: PrimitiveI64}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				x, y := inputs[0], inputs[1]
@@ -446,7 +446,7 @@ func methodsI64() [256]*BuiltinMethod {
 		MethodGt: makeBuiltinMethod(
 			MethodGt.String(),
 			PrimitiveI64, MethodGt,
-			makefields([]*TypeField{{Name: "x", Type: PrimitiveI64}, {Name: "y", Type: PrimitiveI64}}),
+			makefields([]*TypeField{{Name: "self", Type: PrimitiveI64}, {Name: "other", Type: PrimitiveI64}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				x, y := inputs[0], inputs[1]
@@ -460,7 +460,7 @@ func methodsI64() [256]*BuiltinMethod {
 		MethodEq: makeBuiltinMethod(
 			MethodEq.String(),
 			PrimitiveI64, MethodEq,
-			makefields([]*TypeField{{Name: "x", Type: PrimitiveI64}, {Name: "y", Type: PrimitiveI64}}),
+			makefields([]*TypeField{{Name: "self", Type: PrimitiveI64}, {Name: "other", Type: PrimitiveI64}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				x, y := inputs[0], inputs[1]
@@ -500,8 +500,8 @@ func methodsI64() [256]*BuiltinMethod {
 
 		// int64.abs() -> int64
 		0x10: makeBuiltinMethod(
-			MethodStr.String(),
-			PrimitiveU64, MethodStr,
+			"Abs",
+			PrimitiveI64, 0x10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveI64}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveI64}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {

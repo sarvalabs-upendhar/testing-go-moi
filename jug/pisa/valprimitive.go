@@ -515,7 +515,7 @@ func methodsBytes() [256]*BuiltinMethod {
 
 		// byte.Get(byte, position) -> byte
 		0x10: makeBuiltinMethod("Get",
-			PrimitiveString, 0x10,
+			PrimitiveBytes, 0x10,
 			makefields([]*TypeField{{"self", PrimitiveBytes}, {"position", PrimitiveU64}}),
 			makefields([]*TypeField{{"result", PrimitiveBytes}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -528,7 +528,7 @@ func methodsBytes() [256]*BuiltinMethod {
 
 		// byte.Set(byte, position, updateByte) -> byte
 		0x11: makeBuiltinMethod("Set",
-			PrimitiveString, 0x11,
+			PrimitiveBytes, 0x11,
 			makefields([]*TypeField{{"self", PrimitiveBytes}, {"position", PrimitiveU64}, {"update_byte", PrimitiveBytes}}),
 			makefields([]*TypeField{{"result", PrimitiveBytes}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -541,7 +541,7 @@ func methodsBytes() [256]*BuiltinMethod {
 
 		// byte.HasPrefix(byte) -> bool
 		0x12: makeBuiltinMethod("HasPrefix",
-			PrimitiveString, 0x11,
+			PrimitiveBytes, 0x12,
 			makefields([]*TypeField{{"self", PrimitiveBytes}, {"prefix", PrimitiveBytes}}),
 			makefields([]*TypeField{{"ok", PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -554,7 +554,7 @@ func methodsBytes() [256]*BuiltinMethod {
 
 		// byte.HasSuffix(byte) -> bool
 		0x13: makeBuiltinMethod("HasSuffix",
-			PrimitiveString, 0x11,
+			PrimitiveBytes, 0x13,
 			makefields([]*TypeField{{"self", PrimitiveBytes}, {"suffix", PrimitiveBytes}}),
 			makefields([]*TypeField{{"ok", PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -567,7 +567,7 @@ func methodsBytes() [256]*BuiltinMethod {
 
 		// byte.Contains(byte) -> bool
 		0x14: makeBuiltinMethod("Contains",
-			PrimitiveString, 0x11,
+			PrimitiveBytes, 0x14,
 			makefields([]*TypeField{{"self", PrimitiveBytes}, {"subbyte", PrimitiveBytes}}),
 			makefields([]*TypeField{{"ok", PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -580,7 +580,7 @@ func methodsBytes() [256]*BuiltinMethod {
 
 		// byte.Split(byte, delim) -> []byte
 		0x15: makeBuiltinMethod("Split",
-			PrimitiveString, 0x15,
+			PrimitiveBytes, 0x15,
 			makefields([]*TypeField{{"self", PrimitiveBytes}, {"delim", PrimitiveBytes}}),
 			makefields([]*TypeField{{"result", VarrayDatatype{PrimitiveBytes}}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -599,8 +599,8 @@ func methodsBytes() [256]*BuiltinMethod {
 
 		// byte.Slice(byte, idx1, idx2) -> byte
 		0x16: makeBuiltinMethod("Slice",
-			PrimitiveString, 0x16,
-			makefields([]*TypeField{{"self", PrimitiveBytes}, {"idx1", PrimitiveU64}, {"idx2", PrimitiveU64}}),
+			PrimitiveBytes, 0x16,
+			makefields([]*TypeField{{"self", PrimitiveBytes}, {"idx1", PrimitiveU64}, {"idx2", PrimitiveBytes}}),
 			makefields([]*TypeField{{"result", VarrayDatatype{PrimitiveBytes}}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self, idx1, idx2 := inputs[0], inputs[1], inputs[2]
