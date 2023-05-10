@@ -78,9 +78,9 @@ func TestIxPool_GetIxs(t *testing.T) {
 			address: address,
 			ixs: append(
 				// promoted
-				createTestIxs(t, 6, 8, address),
+				createTestIxs(t, types.IxValueTransfer, 6, 8, address),
 				// enqueued
-				createTestIxs(t, 10, 13, address)...,
+				createTestIxs(t, types.IxValueTransfer, 10, 13, address)...,
 			),
 			inclQueued: false,
 			expectedIxQueue: expectedIxQueue{
@@ -93,9 +93,9 @@ func TestIxPool_GetIxs(t *testing.T) {
 			address: address,
 			ixs: append(
 				// promoted
-				createTestIxs(t, 6, 8, address),
+				createTestIxs(t, types.IxValueTransfer, 6, 8, address),
 				// enqueued
-				createTestIxs(t, 10, 13, address)...,
+				createTestIxs(t, types.IxValueTransfer, 10, 13, address)...,
 			),
 			inclQueued: true,
 			expectedIxQueue: expectedIxQueue{
@@ -136,15 +136,15 @@ func TestIxPool_GetAllIxs(t *testing.T) {
 			accounts: map[types.Address]types.Interactions{
 				addresses[0]: append(
 					// promoted
-					createTestIxs(t, 1, 3, addresses[0]),
+					createTestIxs(t, types.IxValueTransfer, 1, 3, addresses[0]),
 					// enqueued
-					createTestIxs(t, 7, 10, addresses[0])...,
+					createTestIxs(t, types.IxValueTransfer, 7, 10, addresses[0])...,
 				),
 				addresses[1]: append(
 					// promoted
-					createTestIxs(t, 6, 8, addresses[1]),
+					createTestIxs(t, types.IxValueTransfer, 6, 8, addresses[1]),
 					// enqueued
-					createTestIxs(t, 10, 13, addresses[1])...,
+					createTestIxs(t, types.IxValueTransfer, 10, 13, addresses[1])...,
 				),
 			},
 			inclQueued: false,
@@ -164,15 +164,15 @@ func TestIxPool_GetAllIxs(t *testing.T) {
 			accounts: map[types.Address]types.Interactions{
 				addresses[0]: append(
 					// promoted
-					createTestIxs(t, 1, 3, addresses[0]),
+					createTestIxs(t, types.IxValueTransfer, 1, 3, addresses[0]),
 					// enqueued
-					createTestIxs(t, 7, 10, addresses[0])...,
+					createTestIxs(t, types.IxValueTransfer, 7, 10, addresses[0])...,
 				),
 				addresses[1]: append(
 					// promoted
-					createTestIxs(t, 6, 8, addresses[1]),
+					createTestIxs(t, types.IxValueTransfer, 6, 8, addresses[1]),
 					// enqueued
-					createTestIxs(t, 10, 13, addresses[1])...,
+					createTestIxs(t, types.IxValueTransfer, 10, 13, addresses[1])...,
 				),
 			},
 			inclQueued: true,

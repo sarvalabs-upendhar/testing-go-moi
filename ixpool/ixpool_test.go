@@ -34,7 +34,7 @@ func TestIxPool_AddInteractions_checkIx(t *testing.T) {
 		},
 		{
 			name: "Already known Interaction",
-			ix:   newTestInteraction(t, 0, types.NilAddress, nil),
+			ix:   newTestInteraction(t, types.IxValueTransfer, 0, types.NilAddress, nil),
 			preTestFn: func(interaction *types.Interaction) {
 				ixPool.allIxs.add(interaction)
 			},
@@ -42,7 +42,7 @@ func TestIxPool_AddInteractions_checkIx(t *testing.T) {
 		},
 		{
 			name:        "New valid interaction",
-			ix:          newTestInteraction(t, 0, types.NilAddress, nil),
+			ix:          newTestInteraction(t, types.IxValueTransfer, 0, types.NilAddress, nil),
 			expectedErr: nil,
 		},
 	}
@@ -80,15 +80,15 @@ func TestIxPool_AddInteractions(t *testing.T) {
 			name: "Some interactions are valid",
 			ixs: types.Interactions{
 				newIxWithoutAddress(t, 0),
-				newTestInteraction(t, 1, types.NilAddress, nil),
-				newTestInteraction(t, 2, types.NilAddress, nil),
+				newTestInteraction(t, types.IxValueTransfer, 1, types.NilAddress, nil),
+				newTestInteraction(t, types.IxValueTransfer, 2, types.NilAddress, nil),
 			},
 			expectedIxs:  2,
 			expectedErrs: 1,
 		},
 		{
 			name:         "All the interactions are valid",
-			ixs:          createTestIxs(t, 0, 2, types.NilAddress),
+			ixs:          createTestIxs(t, types.IxValueTransfer, 0, 2, types.NilAddress),
 			expectedIxs:  2,
 			expectedErrs: 0,
 		},
@@ -152,8 +152,8 @@ func TestIxPool_handleEnqueueRequest(t *testing.T) {
 		{
 			name: "Enqueue ixs with higher nonce",
 			ixs: types.Interactions{
-				newTestInteraction(t, 0, address, nil),
-				newTestInteraction(t, 5, address, nil),
+				newTestInteraction(t, types.IxValueTransfer, 0, address, nil),
+				newTestInteraction(t, types.IxValueTransfer, 5, address, nil),
 			},
 			expected: expectedResult{
 				enqueued:         2,
@@ -162,7 +162,7 @@ func TestIxPool_handleEnqueueRequest(t *testing.T) {
 		},
 		{
 			name: "All the ixs are with low nonce",
-			ixs:  createTestIxs(t, 0, 5, address),
+			ixs:  createTestIxs(t, types.IxValueTransfer, 0, 5, address),
 			testFn: func(ixPool *IxPool, interactions types.Interactions) {
 				ixPool.createAccountOnce(interactions[0].Sender(), 5)
 			},
@@ -173,7 +173,7 @@ func TestIxPool_handleEnqueueRequest(t *testing.T) {
 		},
 		{
 			name: "Should not enqueue ixs with low nonce",
-			ixs:  createTestIxs(t, 0, 6, address),
+			ixs:  createTestIxs(t, types.IxValueTransfer, 0, 6, address),
 			testFn: func(ixPool *IxPool, interactions types.Interactions) {
 				ixPool.createAccountOnce(interactions[0].Sender(), 5)
 			},
@@ -184,7 +184,7 @@ func TestIxPool_handleEnqueueRequest(t *testing.T) {
 		},
 		{
 			name: "Promote ixs with expected nonce",
-			ixs:  createTestIxs(t, 0, 3, address),
+			ixs:  createTestIxs(t, types.IxValueTransfer, 0, 3, address),
 			expected: expectedResult{
 				enqueued:         3,
 				promotedAccounts: 1,
@@ -226,7 +226,7 @@ func TestIxPool_handlePromoteRequest(t *testing.T) {
 	}{
 		{
 			name: "Promote one ix",
-			ixs:  createTestIxs(t, 0, 1, types.NilAddress),
+			ixs:  createTestIxs(t, types.IxValueTransfer, 0, 1, types.NilAddress),
 			expected: expectedResult{
 				nonce:    1,
 				enqueued: 0,
@@ -235,7 +235,7 @@ func TestIxPool_handlePromoteRequest(t *testing.T) {
 		},
 		{
 			name: "Promote several ixs",
-			ixs:  createTestIxs(t, 0, 3, tests.RandomAddress(t)),
+			ixs:  createTestIxs(t, types.IxValueTransfer, 0, 3, tests.RandomAddress(t)),
 			expected: expectedResult{
 				nonce:    3,
 				enqueued: 0,
@@ -244,7 +244,7 @@ func TestIxPool_handlePromoteRequest(t *testing.T) {
 		},
 		{
 			name: "Should not promote if the enqueue is empty",
-			ixs:  createTestIxs(t, 0, 1, types.NilAddress),
+			ixs:  createTestIxs(t, types.IxValueTransfer, 0, 1, types.NilAddress),
 			popIx: func(address types.Address) {
 				ixPool.accounts.get(address).enqueued.pop()
 			},
@@ -337,19 +337,19 @@ func TestIxPool_ResetWithHeaders(t *testing.T) {
 	}{
 		{
 			name:               "Prune all the interactions with low nonce",
-			ixs:                createTestIxs(t, 0, 5, tests.RandomAddress(t)),
+			ixs:                createTestIxs(t, types.IxValueTransfer, 0, 5, tests.RandomAddress(t)),
 			nonce:              5,
 			expectedPromotions: 0,
 		},
 		{
 			name:               "Prune some interactions with low nonce",
-			ixs:                createTestIxs(t, 0, 5, tests.RandomAddress(t)),
+			ixs:                createTestIxs(t, types.IxValueTransfer, 0, 5, tests.RandomAddress(t)),
 			nonce:              1,
 			expectedPromotions: 3,
 		},
 		{
 			name:  "Reset wait time",
-			ixs:   createTestIxs(t, 0, 5, tests.RandomAddress(t)),
+			ixs:   createTestIxs(t, types.IxValueTransfer, 0, 5, tests.RandomAddress(t)),
 			nonce: 3,
 			incrementCounter: func(acc *account) {
 				// increment the account's delay counter
@@ -398,19 +398,19 @@ func TestIxPool_resetAccount_enqueued(t *testing.T) {
 	}{
 		{
 			name:             "Prune all ixs with low nonce",
-			ixs:              createTestIxs(t, 0, 5, tests.RandomAddress(t)),
+			ixs:              createTestIxs(t, types.IxValueTransfer, 0, 5, tests.RandomAddress(t)),
 			nonce:            5,
 			expectedEnqueues: 0,
 		},
 		{
 			name:             "No low nonce ixs to prune",
-			ixs:              createTestIxs(t, 0, 6, tests.RandomAddress(t))[2:6],
+			ixs:              createTestIxs(t, types.IxValueTransfer, 0, 6, tests.RandomAddress(t))[2:6],
 			nonce:            1,
 			expectedEnqueues: 4,
 		},
 		{
 			name:             "Prune some ixs with low nonce",
-			ixs:              createTestIxs(t, 0, 5, tests.RandomAddress(t)),
+			ixs:              createTestIxs(t, types.IxValueTransfer, 0, 5, tests.RandomAddress(t)),
 			nonce:            3,
 			promote:          true,
 			expectedEnqueues: 2,
@@ -454,19 +454,19 @@ func TestIxPool_resetAccount_promoted(t *testing.T) {
 	}{
 		{
 			name:               "Prune all the ixs with low nonce",
-			ixs:                createTestIxs(t, 0, 5, tests.RandomAddress(t)),
+			ixs:                createTestIxs(t, types.IxValueTransfer, 0, 5, tests.RandomAddress(t)),
 			nonce:              5,
 			expectedPromotions: 0,
 		},
 		{
 			name:               "No low nonce ixs to prune",
-			ixs:                createTestIxs(t, 0, 6, tests.RandomAddress(t))[1:6],
+			ixs:                createTestIxs(t, types.IxValueTransfer, 0, 6, tests.RandomAddress(t))[1:6],
 			nonce:              0,
 			expectedPromotions: 5,
 		},
 		{
 			name:               "Prune some ixs with low nonce",
-			ixs:                createTestIxs(t, 0, 5, tests.RandomAddress(t)),
+			ixs:                createTestIxs(t, types.IxValueTransfer, 0, 5, tests.RandomAddress(t)),
 			nonce:              3,
 			expectedPromotions: 2,
 		},
@@ -501,9 +501,9 @@ func TestIxPool_resetAccount(t *testing.T) {
 			name: "Prune all ixs with low nonce",
 			ixs: append(
 				// promoted
-				createTestIxs(t, 0, 3, address),
+				createTestIxs(t, types.IxValueTransfer, 0, 3, address),
 				// enqueued
-				createTestIxs(t, 4, 7, address)...,
+				createTestIxs(t, types.IxValueTransfer, 4, 7, address)...,
 			),
 			nonce: 7,
 			expected: expectedResult{
@@ -515,9 +515,9 @@ func TestIxPool_resetAccount(t *testing.T) {
 			name: "No low nonce ixs to prune",
 			ixs: append(
 				// promoted
-				createTestIxs(t, 6, 8, address),
+				createTestIxs(t, types.IxValueTransfer, 6, 8, address),
 				// enqueued
-				createTestIxs(t, 10, 13, address)...,
+				createTestIxs(t, types.IxValueTransfer, 10, 13, address)...,
 			),
 			nonce: 5,
 			expected: expectedResult{
@@ -529,9 +529,9 @@ func TestIxPool_resetAccount(t *testing.T) {
 			name: "Prune all promoted and 1 enqueued",
 			ixs: append(
 				// promoted
-				createTestIxs(t, 0, 3, address),
+				createTestIxs(t, types.IxValueTransfer, 0, 3, address),
 				// enqueued
-				createTestIxs(t, 4, 7, address)...,
+				createTestIxs(t, types.IxValueTransfer, 4, 7, address)...,
 			),
 			nonce:   5,
 			promote: true,
@@ -544,9 +544,9 @@ func TestIxPool_resetAccount(t *testing.T) {
 			name: "Prune signals promotion",
 			ixs: append(
 				// promoted
-				createTestIxs(t, 0, 3, address),
+				createTestIxs(t, types.IxValueTransfer, 0, 3, address),
 				// enqueued
-				createTestIxs(t, 4, 7, address)...,
+				createTestIxs(t, types.IxValueTransfer, 4, 7, address)...,
 			),
 			nonce:  5,
 			signal: true,
@@ -605,7 +605,7 @@ func TestIxPool_Pop(t *testing.T) {
 	}{
 		{
 			name:               "Prune the ix from the promoted queue",
-			ixs:                createTestIxs(t, 0, 5, tests.RandomAddress(t)),
+			ixs:                createTestIxs(t, types.IxValueTransfer, 0, 5, tests.RandomAddress(t)),
 			expectedPromotions: 4,
 		},
 	}
@@ -639,7 +639,7 @@ func TestIxPool_Drop(t *testing.T) {
 	}{
 		{
 			name: "Remove the account form accounts map",
-			ixs:  createTestIxs(t, 0, 5, tests.RandomAddress(t)),
+			ixs:  createTestIxs(t, types.IxValueTransfer, 0, 5, tests.RandomAddress(t)),
 		},
 	}
 
@@ -754,7 +754,7 @@ func TestIxPool_validateIx(t *testing.T) {
 	}{
 		{
 			name:        "Oversized data error",
-			ix:          newIxWithPayload(t, 5, types.NilAddress, make([]byte, ixMaxSize+2)),
+			ix:          newIxWithPayload(t, types.IxValueTransfer, 5, types.NilAddress, make([]byte, ixMaxSize+2)),
 			expectedErr: ErrOversizedData,
 		},
 		{
@@ -764,7 +764,7 @@ func TestIxPool_validateIx(t *testing.T) {
 		},
 		{
 			name: "Nonce too low error",
-			ix:   newTestInteraction(t, 9, types.NilAddress, nil),
+			ix:   newTestInteraction(t, types.IxValueTransfer, 9, types.NilAddress, nil),
 			testFn: func(interaction *types.Interaction) {
 				mockStateManager.setLatestNonce(interaction.Sender(), 10)
 			},
@@ -776,9 +776,39 @@ func TestIxPool_validateIx(t *testing.T) {
 			expectedErr: types.ErrUnderpriced,
 		},
 		{
-			name:        "Valid ix should not return error",
-			ix:          newTestInteraction(t, 0, types.NilAddress, nil),
-			expectedErr: nil,
+			name: "Ix with negative transfer value",
+			ix: newTestInteraction(t, types.IxValueTransfer, 0, tests.RandomAddress(t), func(ixData *types.IxData) {
+				ixData.Input.Type = types.IxValueTransfer
+				ixData.Input.TransferValues = map[types.AssetID]*big.Int{
+					"assetID1": new(big.Int).Neg(big.NewInt(20)),
+				}
+			}),
+			expectedErr: types.ErrInvalidValue,
+		},
+		{
+			name: "Ix with invalid assetID",
+			ix: newTestInteraction(t, types.IxValueTransfer, 0, tests.RandomAddress(t), func(ixData *types.IxData) {
+				ixData.Input.Type = types.IxValueTransfer
+				ixData.Input.TransferValues = map[types.AssetID]*big.Int{
+					"assetID1": big.NewInt(20),
+				}
+			}),
+			expectedErr: types.ErrAssetNotFound,
+		},
+		{
+			name: "Ix with insufficient funds",
+			ix: newTestInteraction(t, types.IxValueTransfer, 0, tests.RandomAddress(t), func(ixData *types.IxData) {
+				ixData.Input.Type = types.IxValueTransfer
+				ixData.Input.TransferValues = map[types.AssetID]*big.Int{
+					"assetID1": big.NewInt(20),
+				}
+			}),
+			testFn: func(interaction *types.Interaction) {
+				mockStateManager.balance[interaction.Sender()] = map[types.AssetID]*big.Int{
+					"assetID1": big.NewInt(10),
+				}
+			},
+			expectedErr: types.ErrInsufficientFunds,
 		},
 	}
 
@@ -812,10 +842,10 @@ func TestIxPool_Executables_Wait_Mode(t *testing.T) {
 		{
 			name: "One ix per account",
 			accounts: map[types.Address]types.Interactions{
-				addresses[0]: createTestIxs(t, 0, 1, addresses[0]),
-				addresses[1]: createTestIxs(t, 0, 1, addresses[1]),
-				addresses[2]: createTestIxs(t, 0, 1, addresses[2]),
-				addresses[3]: createTestIxs(t, 0, 1, addresses[3]),
+				addresses[0]: createTestIxs(t, types.IxValueTransfer, 0, 1, addresses[0]),
+				addresses[1]: createTestIxs(t, types.IxValueTransfer, 0, 1, addresses[1]),
+				addresses[2]: createTestIxs(t, types.IxValueTransfer, 0, 1, addresses[2]),
+				addresses[3]: createTestIxs(t, types.IxValueTransfer, 0, 1, addresses[3]),
 			},
 			delayCounters: map[types.Address]int32{
 				addresses[0]: 3,
@@ -839,10 +869,10 @@ func TestIxPool_Executables_Wait_Mode(t *testing.T) {
 		{
 			name: "Several ixs from multiple accounts",
 			accounts: map[types.Address]types.Interactions{
-				addresses[0]: createTestIxs(t, 0, 2, addresses[0]),
-				addresses[1]: createTestIxs(t, 0, 2, addresses[1]),
-				addresses[2]: createTestIxs(t, 0, 2, addresses[2]),
-				addresses[3]: createTestIxs(t, 0, 2, addresses[3]),
+				addresses[0]: createTestIxs(t, types.IxValueTransfer, 0, 2, addresses[0]),
+				addresses[1]: createTestIxs(t, types.IxValueTransfer, 0, 2, addresses[1]),
+				addresses[2]: createTestIxs(t, types.IxValueTransfer, 0, 2, addresses[2]),
+				addresses[3]: createTestIxs(t, types.IxValueTransfer, 0, 2, addresses[3]),
 			},
 			delayCounters: map[types.Address]int32{
 				addresses[0]: 3,
@@ -1007,10 +1037,10 @@ func TestIxPool_Executables_Wait_Time(t *testing.T) {
 		{
 			name: "One ix per account",
 			accounts: map[types.Address]types.Interactions{
-				addresses[0]: createTestIxs(t, 7, 8, addresses[0]),
-				addresses[1]: createTestIxs(t, 8, 9, addresses[1]),
-				addresses[2]: createTestIxs(t, 5, 6, addresses[2]),
-				addresses[3]: createTestIxs(t, 6, 7, addresses[3]),
+				addresses[0]: createTestIxs(t, types.IxValueTransfer, 7, 8, addresses[0]),
+				addresses[1]: createTestIxs(t, types.IxValueTransfer, 8, 9, addresses[1]),
+				addresses[2]: createTestIxs(t, types.IxValueTransfer, 5, 6, addresses[2]),
+				addresses[3]: createTestIxs(t, types.IxValueTransfer, 6, 7, addresses[3]),
 			},
 			accountWaitTime: map[types.Address]time.Time{
 				addresses[0]: time.Now().Add(1000 * time.Millisecond),
@@ -1033,10 +1063,10 @@ func TestIxPool_Executables_Wait_Time(t *testing.T) {
 		{
 			name: "Several ixs from multiple accounts",
 			accounts: map[types.Address]types.Interactions{
-				addresses[0]: createTestIxs(t, 4, 6, addresses[0]),
-				addresses[1]: createTestIxs(t, 5, 7, addresses[1]),
-				addresses[2]: createTestIxs(t, 6, 8, addresses[2]),
-				addresses[3]: createTestIxs(t, 7, 9, addresses[3]),
+				addresses[0]: createTestIxs(t, types.IxValueTransfer, 4, 6, addresses[0]),
+				addresses[1]: createTestIxs(t, types.IxValueTransfer, 5, 7, addresses[1]),
+				addresses[2]: createTestIxs(t, types.IxValueTransfer, 6, 8, addresses[2]),
+				addresses[3]: createTestIxs(t, types.IxValueTransfer, 7, 9, addresses[3]),
 			},
 			accountWaitTime: map[types.Address]time.Time{
 				addresses[0]: time.Now().Add(-200),

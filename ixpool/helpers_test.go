@@ -17,7 +17,26 @@ import (
 )
 
 type MockStateManager struct {
-	acc map[types.Address]uint64
+	nonce   map[types.Address]uint64
+	balance map[types.Address]map[types.AssetID]*big.Int
+}
+
+func (ms *MockStateManager) GetBalance(
+	addrs types.Address,
+	assetID types.AssetID,
+	stateHash types.Hash,
+) (*big.Int, error) {
+	assets, ok := ms.balance[addrs]
+	if !ok {
+		return nil, types.ErrAssetNotFound
+	}
+
+	va, ok := assets[assetID]
+	if !ok {
+		return nil, types.ErrAssetNotFound
+	}
+
+	return va, nil
 }
 
 // CreateTestIxpool returns a new instance of IxPool
@@ -36,7 +55,7 @@ func CreateTestIxpool(t *testing.T, cfgCallback func(cfg *common.IxPoolConfig)) 
 
 // GetLatestNonce returns the latest nonce from the mock account
 func (ms *MockStateManager) GetNonce(addr types.Address, stateHash types.Hash) (uint64, error) {
-	if account, ok := ms.acc[addr]; ok {
+	if account, ok := ms.nonce[addr]; ok {
 		return account, nil
 	}
 
@@ -55,7 +74,7 @@ func (ms *MockStateManager) IsLogicRegistered(logicID types.LogicID) error {
 
 // setLatestNonce updates the mock account with the latest nonce
 func (ms *MockStateManager) setLatestNonce(addr types.Address, nonce uint64) {
-	ms.acc[addr] = nonce
+	ms.nonce[addr] = nonce
 }
 
 // NewMockStateManager returns a new instance of MockStateManager
@@ -63,13 +82,15 @@ func NewMockStateManager(t *testing.T) *MockStateManager {
 	t.Helper()
 
 	return &MockStateManager{
-		acc: make(map[types.Address]uint64, 0),
+		nonce:   make(map[types.Address]uint64, 0),
+		balance: map[types.Address]map[types.AssetID]*big.Int{},
 	}
 }
 
 // newTestInteraction returns a new instance of types.Interaction with the input
 func newTestInteraction(
 	t *testing.T,
+	ixType types.IxType,
 	nonce int,
 	address types.Address,
 	cb func(ixData *types.IxData),
@@ -82,6 +103,7 @@ func newTestInteraction(
 
 	ixData := &types.IxData{
 		Input: types.IxInput{
+			Type:      ixType,
 			Sender:    address,
 			Nonce:     uint64(nonce),
 			FuelPrice: big.NewInt(1000),
@@ -96,13 +118,13 @@ func newTestInteraction(
 }
 
 // createTestIxs creates and returns multiple instances of types.Interactions based on the given range
-func createTestIxs(t *testing.T, start int, end int, address types.Address) types.Interactions {
+func createTestIxs(t *testing.T, ixType types.IxType, start int, end int, address types.Address) types.Interactions {
 	t.Helper()
 
 	ixs := make(types.Interactions, 0)
 
 	for nonce := start; nonce < end; nonce++ {
-		ixs = append(ixs, newTestInteraction(t, nonce, address, nil))
+		ixs = append(ixs, newTestInteraction(t, ixType, nonce, address, nil))
 	}
 
 	return ixs
@@ -120,7 +142,7 @@ func getTesseractWithIxs(t *testing.T, address types.Address, nonce int) *types.
 	t.Helper()
 
 	ixns := types.Interactions{
-		newTestInteraction(t, nonce, address, nil),
+		newTestInteraction(t, types.IxValueTransfer, nonce, address, nil),
 	}
 
 	ts := tests.GetTesseract(t, 0, ixns)
@@ -132,7 +154,7 @@ func getTesseractWithIxs(t *testing.T, address types.Address, nonce int) *types.
 func newIxWithoutAddress(t *testing.T, nonce int) *types.Interaction {
 	t.Helper()
 
-	return newTestInteraction(t, nonce, types.NilAddress, func(ixData *types.IxData) {
+	return newTestInteraction(t, types.IxValueTransfer, nonce, types.NilAddress, func(ixData *types.IxData) {
 		ixData.Input.Sender = types.NilAddress
 	})
 }
@@ -141,7 +163,7 @@ func newIxWithoutAddress(t *testing.T, nonce int) *types.Interaction {
 func newIxWithFuelPrice(t *testing.T, nonce int, address types.Address, fuelPrice int64) *types.Interaction {
 	t.Helper()
 
-	return newTestInteraction(t, nonce, address, func(ixData *types.IxData) {
+	return newTestInteraction(t, types.IxValueTransfer, nonce, address, func(ixData *types.IxData) {
 		ixData.Input.FuelPrice = big.NewInt(fuelPrice)
 	})
 }
@@ -150,16 +172,22 @@ func newIxWithFuelPrice(t *testing.T, nonce int, address types.Address, fuelPric
 func newIxWithWaitCounter(t *testing.T, nonce int, address types.Address, waitCounter int32) *WaitInteractions {
 	t.Helper()
 
-	ix := newTestInteraction(t, nonce, address, nil)
+	ix := newTestInteraction(t, types.IxValueTransfer, nonce, address, nil)
 
 	return &WaitInteractions{waitCounter, ix}
 }
 
 // newIxWithPayload returns a new instance of types.Interaction with the given payload
-func newIxWithPayload(t *testing.T, nonce int, address types.Address, payload []byte) *types.Interaction {
+func newIxWithPayload(
+	t *testing.T,
+	ixType types.IxType,
+	nonce int,
+	address types.Address,
+	payload []byte,
+) *types.Interaction {
 	t.Helper()
 
-	return newTestInteraction(t, nonce, address, func(ixData *types.IxData) {
+	return newTestInteraction(t, ixType, nonce, address, func(ixData *types.IxData) {
 		ixData.Input.Payload = payload
 	})
 }

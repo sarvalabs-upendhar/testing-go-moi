@@ -554,6 +554,10 @@ func (c *ChainManager) addTesseract(
 		latticeExists bool
 	)
 
+	defer func() {
+		c.sm.Cleanup(t.Address())
+	}()
+
 	latticeExists = c.db.HasTesseract(t.PrevHash())
 
 	if err = c.sm.FlushDirtyObject(addr); err != nil {
@@ -621,8 +625,6 @@ func (c *ChainManager) addTesseract(
 	}
 
 	c.logger.Info("Tesseract Added", "addr", addr, "hash", t.Hash(), "sealer", t.Sealer())
-
-	c.sm.Cleanup(t.Address())
 
 	c.ixpool.ResetWithHeaders(t)
 
@@ -825,6 +827,12 @@ func (c *ChainManager) IsInitialTesseract(ts *types.Tesseract) (bool, error) {
 	if info, ok := ts.ContextLock()[types.SargaAddress]; !ok {
 		accountRegistered, err = c.sm.IsAccountRegistered(ts.Address())
 	} else {
+		c.logger.Debug(
+			"Checking for new account ",
+			"addr", ts.Address(),
+			"at height", info.Height,
+			"hash", info.TesseractHash,
+		)
 		accountRegistered, err = c.sm.IsAccountRegisteredAt(ts.Address(), info.TesseractHash)
 	}
 
@@ -939,15 +947,25 @@ func (c *ChainManager) Close() {
 	log.Println("Closing Chain manager")
 }
 
-func (c *ChainManager) ExecuteAndValidate(ts ...*types.Tesseract) error {
-	receipts, err := c.exec.ExecuteInteractions(ts[0].ClusterID(), ts[0].Interactions(), ts[0].ContextDelta())
+func (c *ChainManager) ExecuteAndValidate(tesseracts ...*types.Tesseract) error {
+	c.logger.Debug(
+		"Executing interactions of grid",
+		tesseracts[0].GridHash(),
+		"lock", tesseracts[0].Header().ContextLock,
+	)
+
+	receipts, err := c.exec.ExecuteInteractions(
+		tesseracts[0].ClusterID(),
+		tesseracts[0].Interactions(),
+		tesseracts[0].ContextDelta(),
+	)
 	if err != nil {
 		return err
 	}
 
-	if !isReceiptAndGroupHashValid(ts, receipts) || !areStateHashesValid(ts, receipts) {
-		if err = c.exec.Revert(ts[0].ClusterID()); err != nil {
-			c.logger.Error("Failed to revert the execution changes", "cluster-id", ts[0].ClusterID())
+	if !isReceiptAndGroupHashValid(tesseracts, receipts) || !areStateHashesValid(tesseracts, receipts) {
+		if err = c.exec.Revert(tesseracts[0].ClusterID()); err != nil {
+			c.logger.Error("Failed to revert the execution changes", "cluster-id", tesseracts[0].ClusterID())
 
 			return errors.Wrap(err, "failed to revert the execution changes")
 		}
@@ -955,7 +973,7 @@ func (c *ChainManager) ExecuteAndValidate(ts ...*types.Tesseract) error {
 		return errors.New("failed to validate the tesseract")
 	}
 
-	for _, t := range ts {
+	for _, t := range tesseracts {
 		t.SetReceipts(receipts)
 	}
 

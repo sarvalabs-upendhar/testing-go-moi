@@ -103,7 +103,7 @@ func (ixInput *IxInput) Copy() IxInput {
 		input.TransferValues = make(map[AssetID]*big.Int)
 
 		for k, v := range ixInput.TransferValues {
-			input.TransferValues[k] = new(big.Int).SetBytes(v.Bytes())
+			input.TransferValues[k] = new(big.Int).Set(v)
 		}
 	}
 
@@ -111,7 +111,7 @@ func (ixInput *IxInput) Copy() IxInput {
 		input.PerceivedValues = make(map[AssetID]*big.Int)
 
 		for k, v := range ixInput.PerceivedValues {
-			input.PerceivedValues[k] = new(big.Int).SetBytes(v.Bytes())
+			input.PerceivedValues[k] = new(big.Int).Set(v)
 		}
 	}
 

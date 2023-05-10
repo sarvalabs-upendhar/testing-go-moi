@@ -3,7 +3,6 @@ package session
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -117,10 +116,10 @@ func (s *Session) getBlocks(
 ) error {
 	s.logger.Debug("Fetching data from ", "peer", peerID, "count", idSet.Len())
 
-	requestCtx, cancelFn := context.WithTimeout(ctx, 3*time.Second)
+	//	requestCtx, cancelFn := context.WithTimeout(ctx, 3*time.Second)
 
 	defer func() {
-		cancelFn()
+		// cancelFn()
 		s.pm.UpdatePeerStatus(peerID, false)
 	}()
 
@@ -136,7 +135,7 @@ func (s *Session) getBlocks(
 
 	s.im.RecordSessionInterest(s.id, idSet.Keys()...)
 
-	notifier := s.notifier.Subscribe(requestCtx, idSet.Keys()...)
+	notifier := s.notifier.Subscribe(ctx, idSet.Keys()...)
 
 	statusChan := s.pm.PeerRespChan(peerID)
 	if statusChan == nil {
@@ -168,10 +167,6 @@ func (s *Session) getBlocks(
 
 		case <-s.ctx.Done():
 			s.logger.Error("Request context expired")
-
-			return s.ctx.Err()
-		case <-requestCtx.Done():
-			s.logger.Error("Get Blocks context expired")
 
 			return s.ctx.Err()
 		}

@@ -2,6 +2,7 @@ package syncer
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/pkg/errors"
@@ -166,7 +167,7 @@ func (service *SYNCRPCService) GetLatestAccountInfo(
 ) error {
 	metaInfo, err := service.syncer.db.GetAccountMetaInfo(addr)
 	if err != nil {
-		service.syncer.logger.Error("Failed to fetch account meta info", "err", err)
+		service.syncer.logger.Error("Failed to fetch account meta info", "addr", addr, "err", err)
 
 		return errors.New("failed to fetch account info")
 	}
@@ -181,18 +182,32 @@ func (service *SYNCRPCService) GetLatestAccountInfo(
 
 func (service *SYNCRPCService) FetchLattice(
 	ctx context.Context,
-	req <-chan *LatticeRequest,
-	resp chan<- *ptypes.TesseractMessage,
+	reqChan <-chan *LatticeRequest,
+	respChan chan<- *ptypes.TesseractMessage,
 ) error {
-	latticeRequest := <-req
+	var (
+		req *LatticeRequest
+		ok  bool
+	)
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case req, ok = <-reqChan:
+		if !ok {
+			log.Println("request channel closed")
+
+			return nil
+		}
+	}
 
 	defer func() {
-		close(resp)
+		close(respChan)
 	}()
 
-	for height := latticeRequest.StartHeight; height <= latticeRequest.EndHeight; height++ {
+	for height := req.StartHeight; height <= req.EndHeight; height++ {
 		ts, ixns, receipts, err := service.syncer.getTesseractWithRawIxnsAndReceipts(
-			latticeRequest.Address,
+			req.Address,
 			height,
 			true,
 			true,
@@ -230,7 +245,7 @@ func (service *SYNCRPCService) FetchLattice(
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case resp <- msg:
+		case respChan <- msg:
 		}
 	}
 
@@ -242,7 +257,23 @@ func (service *SYNCRPCService) SyncBuckets(
 	reqChan <-chan *BucketSyncRequest,
 	respChan chan<- BucketSyncResponse,
 ) error {
-	for req := range reqChan {
+	var (
+		req *BucketSyncRequest
+		ok  bool
+	)
+
+	defer close(respChan)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case req, ok = <-reqChan:
+			if !ok {
+				return nil
+			}
+		}
+
 		dbResponse := make(chan []byte)
 
 		count, err := service.syncer.db.GetBucketCount(req.BucketID)
@@ -263,7 +294,6 @@ func (service *SYNCRPCService) SyncBuckets(
 		go func() {
 			if err = service.syncer.db.StreamAccountMetaInfosRaw(ctx, req.BucketID, dbResponse); err != nil {
 				service.syncer.logger.Error("failed to stream account meta infos from db", "error", err)
-				panic(err)
 			}
 		}()
 
@@ -294,6 +324,4 @@ func (service *SYNCRPCService) SyncBuckets(
 			}
 		}
 	}
-
-	return nil
 }

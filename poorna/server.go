@@ -814,7 +814,9 @@ func (s *Server) routeSubscriptionMessages(
 		// Call the given subscription handler
 		// an error because it is being invoked as a goroutine
 		if err := handler(msg); err != nil {
-			s.logger.Debug("subcHandlerPipeline", "error calling handler method", err)
+			if !errors.Is(err, types.ErrAlreadyKnown) {
+				s.logger.Error("subcHandlerPipeline", "error calling handler method", err)
+			}
 
 			return
 		}

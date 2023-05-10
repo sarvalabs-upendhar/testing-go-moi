@@ -147,6 +147,7 @@ func SyncJobFromCanonicalInfo(
 		mode:           data.Mode,
 		expectedHeight: data.ExpectedHeight,
 		lastModifiedAt: *modifiedTime,
+		tesseractQueue: NewTesseractQueue(),
 		hash:           data.CurrentHash,
 		currentHeight:  currentHeight,
 	}, nil

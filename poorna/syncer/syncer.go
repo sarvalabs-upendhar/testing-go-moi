@@ -269,7 +269,7 @@ func (s *Syncer) worker() {
 	for {
 		select {
 		case <-s.workerSignal:
-		case <-time.After(2 * time.Second):
+		case <-time.After(1 * time.Second):
 		case <-s.ctx.Done():
 			return
 		}
@@ -280,7 +280,7 @@ func (s *Syncer) worker() {
 		}
 
 		if err := s.jobProcessor(job); err != nil {
-			s.logger.Error("Error from sync job processor", err)
+			s.logger.Error("Error from sync job processor", "error", err)
 		}
 	}
 }
@@ -301,7 +301,12 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 		bestPeer id.KramaID
 	)
 
-	s.logger.Debug("Processing new job", "addr", job.address, job.currentHeight, job.expectedHeight)
+	s.logger.Debug(
+		"Processing new job",
+		"addr", job.address,
+		"current-height", job.currentHeight,
+		"expected-height", job.expectedHeight,
+	)
 
 	defer func() {
 		if err = s.jobClosure(job); err != nil {
@@ -346,6 +351,12 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 
 	group.Go(func() error {
 		for job.getCurrentHeight() <= job.getExpectedHeight() {
+			select {
+			case <-groupCtx.Done():
+				return groupCtx.Err()
+			default:
+			}
+
 			tsInfo = job.tesseractQueue.Peek()
 			for tsInfo == nil {
 				select {
@@ -359,11 +370,17 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 			if !s.db.HasTesseract(tsInfo.tesseract.Hash()) {
 				initial, err := s.lattice.IsInitialTesseract(tsInfo.tesseract)
 				if err != nil {
-					return err
+					continue
 				}
 
 				if !initial && tsInfo.tesseract.Height() != job.getCurrentHeight()+1 {
-					return fmt.Errorf("missing tesseract for %s at %d", tsInfo.tesseract.Address(), tsInfo.tesseract.Height())
+					s.logger.Error(
+						"missing tesseract ",
+						"addr", tsInfo.tesseract.Address(),
+						"at", tsInfo.tesseract.Height(),
+					)
+
+					continue
 				}
 
 				isTesseractAdded, err := s.syncTesseract(tsInfo, job)
@@ -771,10 +788,6 @@ func (s *Syncer) syncBuckets(kramaID id.KramaID, attempts int) error {
 		respChan = make(chan *BucketSyncResponse, ChannelBufferSize)
 	)
 
-	defer func() {
-		close(argsChan)
-	}()
-
 	peerID, err := kramaID.DecodedPeerID()
 	if err != nil {
 		s.logger.Error("failed to decode peer id", "error", err)
@@ -794,63 +807,69 @@ func (s *Syncer) syncBuckets(kramaID id.KramaID, attempts int) error {
 		return nil
 	})
 
-	for i := uint64(0); i < dhruva.MaxBucketCount; i++ {
-		argsChan <- &BucketSyncRequest{
-			BucketID: i,
-		}
+	errGrp.Go(func() error {
+		defer close(argsChan)
 
-		totalEntriesInBucket := uint64(0)
-
-		err = func() error {
-			for {
-				select {
-				case <-grpCtx.Done():
-					return grpCtx.Err()
-				case respMsg, ok := <-respChan:
-					if !ok {
-						return nil
-					}
-
-					if i != respMsg.BucketID {
-						s.logger.Error("Invalid bucket")
-
-						return errors.New("invalid bucket id")
-					}
-
-					if respMsg.BucketCount == 0 {
-						return nil
-					}
-
-					if totalEntriesInBucket == 0 {
-						totalEntriesInBucket = respMsg.BucketCount
-					}
-
-					// send the data to meta info handler
-					if err = s.handleAccountMetaInfo(respMsg.AccountMetaInfos, types.FullSync); err != nil {
-						s.logger.Error("failed to create sync jobs from accMetaInfo", "error", err)
-
-						return err
-					}
-
-					totalEntriesInBucket -= uint64(len(respMsg.AccountMetaInfos))
-
-					if totalEntriesInBucket == 0 {
-						return nil
-					}
-
-				case <-time.After(time.Duration(5*attempts) * time.Second):
-					return types.ErrTimeOut
-				}
+		for i := uint64(0); i <= dhruva.MaxBucketCount; i++ {
+			argsChan <- &BucketSyncRequest{
+				BucketID: i,
 			}
-		}()
-		if err != nil {
-			return err
+
+			totalEntriesInBucket := uint64(0)
+
+			err = func() error {
+				for {
+					select {
+					case <-grpCtx.Done():
+						return grpCtx.Err()
+					case respMsg, ok := <-respChan:
+						if !ok {
+							return nil
+						}
+
+						if i != respMsg.BucketID {
+							s.logger.Error("Invalid bucket")
+
+							return errors.New("invalid bucket id")
+						}
+
+						if respMsg.BucketCount == 0 {
+							return nil
+						}
+
+						if totalEntriesInBucket == 0 {
+							totalEntriesInBucket = respMsg.BucketCount
+						}
+
+						// send the data to meta info handler
+						if err = s.handleAccountMetaInfo(respMsg.AccountMetaInfos, types.FullSync); err != nil {
+							s.logger.Error("failed to create sync jobs from accMetaInfo", "error", err)
+
+							return err
+						}
+
+						totalEntriesInBucket -= uint64(len(respMsg.AccountMetaInfos))
+
+						if totalEntriesInBucket == 0 {
+							return nil
+						}
+
+					case <-time.After(time.Duration(5*attempts) * time.Second):
+						return types.ErrTimeOut
+					}
+				}
+			}()
+			if err != nil {
+				return err
+			}
 		}
-	}
 
-	s.isBucketSyncDone = true
+		s.isBucketSyncDone = true
 
-	return nil
+		return nil
+	})
+
+	return errGrp.Wait()
 }
 
 func (s *Syncer) handleAccountMetaInfo(data [][]byte, syncMode types.SyncMode) error {
@@ -1118,6 +1137,12 @@ func (s *Syncer) syncLattice(
 					continue
 				}
 
+				s.logger.Debug(
+					"adding tesseract to queue",
+					"address", tsInfo.tesseract.Address(),
+					"height", tsInfo.tesseract.Height(),
+				)
+
 				job.tesseractQueue.Push(tsInfo)
 				job.signalNewTesseract()
 
@@ -1166,7 +1191,7 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo, job *SyncJob) (bool, error) {
 	if !msg.shouldExecute {
 		err := s.lattice.ValidateTesseract(msg.tesseract, msg.icsNodeSet)
 		if err != nil {
-			return false, err
+			return false, errors.Wrap(err, "failed to validate tesseract")
 		}
 
 		if err = s.fetchTesseractState(msg.tesseract, msg.icsNodeSet.GetNodes()); err != nil {
@@ -1188,7 +1213,7 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo, job *SyncJob) (bool, error) {
 	if !grid.HasTesseract(msg.tesseract) {
 		err := s.lattice.ValidateTesseract(msg.tesseract, msg.icsNodeSet)
 		if err != nil {
-			return false, err
+			return false, errors.Wrap(err, "failed to validate tesseract")
 		}
 
 		grid.AddTesseract(msg.tesseract)
@@ -1512,16 +1537,16 @@ func (s *Syncer) tesseractHandler(msg *pubsub.Message) error {
 		return err
 	}
 
-	s.logger.Trace(
-		"Tesseract Received from",
-		"Sender", tsMsg.Sender,
-		"Sealer", ts.Sealer(),
-		"Hash", ts.Hash(),
-		"Address", ts.Address(),
-	)
-
 	if !s.tesseractRegistry.Contains(ts.Hash()) {
 		s.tesseractRegistry.Add(ts.Hash())
+
+		s.logger.Trace(
+			"Tesseract Received from",
+			"Sender", tsMsg.Sender,
+			"Sealer", ts.Sealer(),
+			"Hash", ts.Hash(),
+			"Address", ts.Address(),
+		)
 
 		clusterInfo := new(types.ICSClusterInfo)
 		if err = clusterInfo.FromBytes(tsMsg.Delta[ts.ICSHash()]); err != nil {

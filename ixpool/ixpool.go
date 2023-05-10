@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math/big"
 	"time"
 
 	"github.com/hashicorp/go-hclog"
@@ -27,6 +28,7 @@ type stateManager interface {
 	GetNonce(addr types.Address, stateHash types.Hash) (uint64, error)
 	IsAccountRegistered(addr types.Address) (bool, error)
 	IsLogicRegistered(logicID types.LogicID) error
+	GetBalance(addrs types.Address, assetID types.AssetID, stateHash types.Hash) (*big.Int, error)
 }
 
 type IxConfig struct {
@@ -93,8 +95,10 @@ func (i *IxPool) checkIx(ix *types.Interaction) error {
 
 	// check if already known
 	if _, ok := i.allIxs.get(ix.Hash()); ok {
-		return ErrAlreadyKnown
+		return types.ErrAlreadyKnown
 	}
+
+	i.allIxs.add(ix)
 
 	// initialize account for this address once
 	if !i.accounts.exists(ix.Sender()) {
@@ -110,7 +114,6 @@ func (i *IxPool) AddInteractions(ixs types.Interactions) []error {
 
 	for _, ix := range ixs {
 		if err := i.checkIx(ix); err != nil {
-			i.logger.Error("Error adding the interaction", "error", err)
 			errs = append(errs, err)
 		} else {
 			newIxs = append(newIxs, ix)
@@ -133,24 +136,27 @@ func (i *IxPool) AddInteractions(ixs types.Interactions) []error {
 func (i *IxPool) handleEnqueueRequest(req enqueueRequest) {
 	dirtyAccounts := make(map[types.Address]interface{}, 0)
 
-	for _, v := range req.ixs {
-		senderAcc := i.accounts.get(v.Sender())
+	for _, ixn := range req.ixs {
+		senderAcc := i.accounts.get(ixn.Sender())
+		if senderAcc == nil {
+			i.logger.Error("Queue for account is nil", ixn.Sender(), ixn)
+		}
 
-		if err := senderAcc.enqueue(v); err != nil {
+		if err := senderAcc.enqueue(ixn); err != nil {
+			i.allIxs.remove([]*types.Interaction{ixn})
+
 			continue
 		}
 
-		i.allIxs.add(v)
-
-		if ixSize, err := v.Size(); err == nil {
+		if ixSize, err := ixn.Size(); err == nil {
 			i.metrics.captureIxPoolSize(float64(ixSize))
 		}
 
-		if v.Nonce() > senderAcc.getNonce() {
+		if ixn.Nonce() > senderAcc.getNonce() {
 			continue
 		}
 
-		dirtyAccounts[v.Sender()] = nil
+		dirtyAccounts[ixn.Sender()] = nil
 	}
 
 	if len(dirtyAccounts) == 0 {
@@ -403,6 +409,10 @@ func (i *IxPool) validateIx(ix *types.Interaction) error {
 
 	// TODO: Check the signature
 
+	if ix.Sender() == ix.Receiver() {
+		return types.ErrInvalidIxParticipants
+	}
+
 	// Reject underpriced interactions
 	if ix.IsUnderpriced(i.cfg.PriceLimit) {
 		return types.ErrUnderpriced
@@ -425,10 +435,33 @@ func (i *IxPool) validateIx(ix *types.Interaction) error {
 	*/
 
 	switch ix.Type() {
+	case types.IxValueTransfer:
+		return i.validateValueTransfer(ix)
 	case types.IxLogicDeploy:
 		return i.validateLogicDeployPayload(ix)
 	case types.IxLogicInvoke:
 		return i.validateLogicInvokePayload(ix)
+	case types.IxInvalid:
+		return types.ErrInvalidInteractionType
+	}
+
+	return nil
+}
+
+func (i *IxPool) validateValueTransfer(ix *types.Interaction) error {
+	for assetID, v := range ix.TransferValues() {
+		if v.Sign() < 0 {
+			return types.ErrInvalidValue
+		}
+
+		currentBalance, err := i.sm.GetBalance(ix.Sender(), assetID, types.NilHash)
+		if err != nil {
+			return err
+		}
+
+		if currentBalance.Cmp(v) < 0 {
+			return types.ErrInsufficientFunds
+		}
 	}
 
 	return nil

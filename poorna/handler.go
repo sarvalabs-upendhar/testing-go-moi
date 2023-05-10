@@ -3,7 +3,6 @@ package poorna
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 
 	"github.com/libp2p/go-msgio"
@@ -154,9 +153,6 @@ func (eh *SubHandler) handlePeerMessage(p *Peer) error {
 	switch message.MsgType {
 	// NEWIXTS
 	case ptypes.NEWIXSMSG:
-		// Print the KramaID of the interactions sender
-		eh.logger.Info("Received Interactions from", "id", p.kramaID)
-
 		// Unmarshal message proto into an InteractionsData message
 		ixns := new(types.Interactions)
 		if err := ixns.FromBytes(message.Payload); err != nil {
@@ -167,6 +163,8 @@ func (eh *SubHandler) handlePeerMessage(p *Peer) error {
 
 		// Mark the interactions in the message as 'known' by the peer
 		for _, v := range *ixns {
+			eh.logger.Info("Received Interactions from", "id", p.kramaID, v.Hash())
+
 			p.markInteraction(v.Hash())
 		}
 
@@ -174,16 +172,16 @@ func (eh *SubHandler) handlePeerMessage(p *Peer) error {
 		errs := eh.ixpool.AddInteractions(*ixns)
 		for index, err := range errs {
 			if err != nil {
+				if errors.Is(err, types.ErrAlreadyKnown) {
+					continue
+				}
+
 				ixnss := *ixns
 
-				eh.logger.Trace("Unable to add Interaction ", "hash", ixnss[index].Hash(), "error", err)
+				eh.logger.Error("Unable to add Interaction ", "hash", ixnss[index].Hash(), "error", err)
 
 				return nil
 			}
-		}
-
-		if err := eh.broadcastIXs(*ixns); err != nil {
-			eh.logger.Error("Failed to broadcast interactions", "error", err)
 		}
 
 	case ptypes.RANDOMWALKREQ:
@@ -249,8 +247,6 @@ func (eh *SubHandler) broadcastIXs(ixs []*types.Interaction) error {
 			// Add the peer and the interaction it does not know about to the peerIxSet
 			peerIxSet[peer] = append(peerIxSet[peer], ix)
 		}
-		// Log the Interaction broadcast
-		fmt.Printf("Broadcasting Interaction %s ", ixhash)
 	}
 
 	// FIXME: Include the following line of code

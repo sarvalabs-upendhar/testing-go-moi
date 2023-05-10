@@ -103,6 +103,8 @@ func (s *Manager) handleAgoraResponseMsg(id id.KramaID, msg *atypes.AgoraRespons
 		session, err := s.GetSession(msg.SessionID)
 		if err != nil {
 			s.logger.Error("Error session not found", "error", err)
+
+			return
 		}
 
 		session.HandleMessage(id, msg)
