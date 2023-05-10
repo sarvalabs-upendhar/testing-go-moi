@@ -91,7 +91,6 @@ func NewClient(logger hclog.Logger, h host.Host, p protocol.ID, senatus senatus,
 		InitialCapacity: 1024,
 		// TTL of a value expired in map
 		OnWillExpire: func(key string, item ttlmap.Item) {
-			c.logger.Debug("expired", "key", key, "value", item.Value())
 		},
 		// key is removed from the map
 		OnWillEvict: func(key string, item ttlmap.Item) {

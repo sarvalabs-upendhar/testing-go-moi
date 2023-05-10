@@ -602,7 +602,7 @@ func (s *Syncer) syncSystemAccount(address types.Address) ([]id.KramaID, error) 
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(s.ctx, time.Duration(5000+(bestHeight*300))*time.Millisecond)
+	ctx, cancel := context.WithTimeout(s.ctx, time.Duration(5000+(bestHeight*2000))*time.Millisecond)
 	defer cancel()
 
 	for {
