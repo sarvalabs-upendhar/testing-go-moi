@@ -245,3 +245,17 @@ func KramaIDToString(peers []id.KramaID) []string {
 
 	return ids
 }
+
+func AreSlicesOfStringEqual(addr []string, addr1 []string) bool {
+	if len(addr) != len(addr1) {
+		return false
+	}
+
+	for i := range addr {
+		if addr[i] != addr1[i] {
+			return false
+		}
+	}
+
+	return true
+}

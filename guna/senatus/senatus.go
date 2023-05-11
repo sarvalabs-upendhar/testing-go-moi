@@ -136,20 +136,40 @@ func (r *ReputationEngine) AddNewPeer(kramaID id.KramaID, data *gtypes.NodeMetaI
 
 func (r *ReputationEngine) AddNewPeerWithPeerID(peerID peer.ID, data *gtypes.NodeMetaInfo) error {
 	info, err := r.nodeMetaInfo(peerID)
-	if info != nil {
-		return nil
-	}
-
 	if err != nil && !errors.Is(err, types.ErrKramaIDNotFound) {
 		return err
+	}
+
+	if info != nil {
+		if data.NTQ != 0 && data.NTQ != DefaultPeerNTQ && info.NTQ != data.NTQ {
+			info.NTQ = data.NTQ
+		}
+
+		if data.WalletCount != 0 && info.WalletCount != data.WalletCount {
+			info.WalletCount = data.WalletCount
+		}
+
+		if len(data.Addrs) != 0 && !utils.AreSlicesOfStringEqual(data.Addrs, info.Addrs) {
+			info.Addrs = data.Addrs
+		}
+
+		if len(data.PeerSignature) != 0 && !bytes.Equal(data.PeerSignature, info.PeerSignature) {
+			info.PeerSignature = data.PeerSignature
+		}
+
+		if len(data.PublicKey) != 0 && !bytes.Equal(data.PublicKey, info.PublicKey) {
+			info.PublicKey = data.PublicKey
+		}
+	} else {
+		info = data
 	}
 
 	r.dirtyLock.Lock()
 	defer r.dirtyLock.Unlock()
 
-	r.dirtyEntries[peerID] = data
+	r.dirtyEntries[peerID] = info
 
-	r.cache.Add(dhruva.NtqCacheKey(peerID), data)
+	r.cache.Add(dhruva.NtqCacheKey(peerID), info)
 
 	r.logger.Debug("Added peer to NTQ table", "id", peerID)
 

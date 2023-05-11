@@ -92,8 +92,70 @@ func TestReputationEngine_NodeMetaInfo(t *testing.T) {
 	}
 }
 
+func TestReputationEngine_AddNewPeerwithPeerID(t *testing.T) {
+	reputationEngine, _, _ := CreateTestReputationEngine(t)
+	NodeMetaInfo := &gtypes.NodeMetaInfo{
+		NTQ:         2,
+		WalletCount: 1,
+	}
+
+	testcases := []struct {
+		name         string
+		peerID       peer.ID
+		testFn       func(peerID peer.ID, nodeMetaInfo *gtypes.NodeMetaInfo)
+		nodeMetaInfo *gtypes.NodeMetaInfo
+		expectedErr  error
+	}{
+		{
+			name:   "node meta info found in cache",
+			peerID: tests.GetTestPeerID(t),
+			nodeMetaInfo: &gtypes.NodeMetaInfo{
+				NTQ:         1,
+				WalletCount: 2,
+			},
+			testFn: func(peerID peer.ID, nodeMetaInfo *gtypes.NodeMetaInfo) {
+				reputationEngine.cache.Add(dhruva.NtqCacheKey(peerID), nodeMetaInfo)
+			},
+		},
+		{
+			name:   "node meta info found in dirty entries",
+			peerID: tests.GetTestPeerID(t),
+			nodeMetaInfo: &gtypes.NodeMetaInfo{
+				NTQ:         3,
+				WalletCount: 1,
+			},
+			testFn: func(peerID peer.ID, nodeMetaInfo *gtypes.NodeMetaInfo) {
+				reputationEngine.dirtyEntries[peerID] = nodeMetaInfo
+			},
+			expectedErr: nil,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			if test.testFn != nil {
+				test.testFn(test.peerID, test.nodeMetaInfo)
+			}
+
+			err := reputationEngine.AddNewPeerWithPeerID(test.peerID, NodeMetaInfo)
+
+			if test.expectedErr != nil {
+				require.Error(t, err)
+				require.Equal(t, test.expectedErr, err)
+
+				return
+			}
+
+			nodeInfo, err := reputationEngine.nodeMetaInfo(test.peerID)
+			require.NoError(t, err)
+			require.Equal(t, test.nodeMetaInfo, nodeInfo)
+		})
+	}
+}
+
 func TestReputationEngine_AddNewPeer(t *testing.T) {
 	reputationEngine, mockDB, _ := CreateTestReputationEngine(t)
+
 	testcases := []struct {
 		name         string
 		kramaID      id.KramaID
