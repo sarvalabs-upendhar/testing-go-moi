@@ -211,7 +211,10 @@ func (deployer logicDeployer) callDeployer(logic *gtypes.LogicObject) (*engineio
 	}
 
 	// Perform execution call on the engine
-	result := engine.Call(context.Background(), ixn, deployerCtx)
+	result, err := engine.Call(context.Background(), ixn, deployerCtx)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not perform call")
+	}
 
 	// Exhaust fuel for deployer call
 	if !deployer.fueltank.Exhaust(result.Consumed) {

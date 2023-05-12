@@ -135,7 +135,10 @@ func (executor IxExecutor) LogicInvoke(
 	// Create an IxnObject
 	ixn := engineio.NewIxnObject(types.IxLogicInvoke, payload.Callsite, payload.Calldata)
 	// Perform an Invokable Call
-	result := engine.Call(context.Background(), ixn, deployer.GenerateLogicContextObject(logicObject.LogicID()))
+	result, err := engine.Call(context.Background(), ixn, deployer.GenerateLogicContextObject(logicObject.LogicID()))
+	if err != nil {
+		return 0, nil, errors.Wrap(err, "could not perform call")
+	}
 
 	// Check the execution result
 	if !result.Ok() {

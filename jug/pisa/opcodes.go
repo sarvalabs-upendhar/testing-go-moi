@@ -273,12 +273,15 @@ const (
 
 // Environment Access Opcodes
 const (
+	// IXN [1] Obtain the interaction object and set it to $X
+	// - IXN [$X]
+	IXN OpCode = 0x0
 	// LOGIC [1] Obtain the context object of the logic and set it to $X
 	// - LOGIC [$X]
-	LOGIC OpCode = 0x70
+	LOGIC OpCode = 0x71
 	// SENDER [1] Obtain the context object of the sender and set it to $X
 	// - SENDER [$X]
-	SENDER OpCode = 0x71
+	SENDER OpCode = 0x72
 )
 
 // Persistent Context Handling Opcodes
@@ -379,8 +382,9 @@ var opcodeMetadataTable = map[OpCode]*opcodeMetadata{
 	BOR:  {"BOR", 3},
 	BNOT: {"BNOT", 2},
 
-	// LOGIC:  {"LOGIC", 0},
-	// SENDER: {"SENDER", 0},
+	// IXN: {"IXN", 1}
+	LOGIC:  {"LOGIC", 1},
+	SENDER: {"SENDER", 1},
 
 	PLOAD: {"PLOAD", 2},
 	PSAVE: {"PSAVE", 2},
@@ -493,6 +497,7 @@ var stringToOpCode = map[string]OpCode{
 	"BOR":  BOR,
 	"BNOT": BNOT,
 
+	"IXN":    IXN,
 	"LOGIC":  LOGIC,
 	"SENDER": SENDER,
 

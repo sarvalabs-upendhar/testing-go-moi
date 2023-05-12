@@ -1,0 +1,37 @@
+syntax  : 0.1.0
+engine  :
+  kind : PISA
+  flags: [ ]
+
+elements:
+  - ptr : 0
+    kind: routine
+    data:
+      name    : GetLogicAddress
+      kind    : invokable
+      returns :
+        - slot : 0
+          label: addr
+          type : address
+      executes:
+        bin: [
+          0x71, 0x00,        # logic $0
+          0x49, 0x01, 0x00,  # addr $1 $0
+          0x05, 0x01, 0x00,  # yield $1 &0
+        ]
+
+  - ptr : 1
+    kind: routine
+    data:
+      name    : GetSenderAddress
+      kind    : invokable
+      returns :
+        - slot : 0
+          label: addr
+          type : address
+      executes:
+        bin: [
+          0x72, 0x00,        # sender $0
+          0x49, 0x01, 0x00,  # addr $1 $0
+          0x05, 0x01, 0x00,  # yield $1 &0
+        ]

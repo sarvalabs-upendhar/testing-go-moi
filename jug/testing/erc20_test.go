@@ -3,7 +3,6 @@ package testing
 import (
 	"testing"
 
-	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/sarvalabs/moichain/jug/engineio"
@@ -50,17 +49,14 @@ func (suite *ERC20TestSuite) SetupSuite() {
 	consumed := suite.Initialize(manifest, logicID, address, 5000)
 	suite.Equal(engineio.Fuel(100), consumed)
 
-	// Generate the init data and document encode it
-	inputs, _ := polo.DocumentEncode(struct {
-		Name   string        `polo:"name"`
-		Symbol string        `polo:"symbol"`
-		Supply uint64        `polo:"supply"`
-		Seeder types.Address `polo:"seeder"`
-	}{
-		"MOI-Token", "MOI", 100000000, types.HexToAddress(erc20Addr1),
+	consumed, _, errdata := suite.Call("Seeder!", map[string]any{
+		"name":   "MOI-Token",
+		"symbol": "MOI",
+		"supply": 100000000,
+		"seeder": types.HexToAddress(erc20Addr1),
 	})
 
-	consumed = suite.Deploy(engineio.NewIxnObject(types.IxLogicDeploy, "Seeder!", inputs.Bytes()))
+	suite.Nil(errdata)
 	suite.Equal(engineio.Fuel(490), consumed)
 }
 

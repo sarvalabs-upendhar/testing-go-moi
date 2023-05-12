@@ -7,7 +7,6 @@ import (
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/moichain/jug/engineio"
-	"github.com/sarvalabs/moichain/types"
 )
 
 // Engine represents the execution engine for the PISA Virtual Machine.
@@ -27,12 +26,12 @@ type Engine struct {
 	// classes represents a name-map for classes to their element pointers
 	classes map[string]engineio.ElementPtr
 
-	// persistent ctx driver
+	// persistent represents the logic's ctx state driver
 	persistent engineio.CtxDriver
-	// ephemeralS sender ctx driver
-	ephemeralS engineio.CtxDriver
-	// ephemeralR receiver ctx driver
-	ephemeralR engineio.CtxDriver //nolint:unused
+	// sephemeral represents the ixn sender's ctx state driver
+	sephemeral engineio.CtxDriver
+	// rephemeral represents the ixn receiver's ctx state driver
+	rephemeral engineio.CtxDriver //nolint:unused
 
 	// ixn driver
 	interaction *engineio.IxnObject
@@ -52,55 +51,33 @@ func (engine *Engine) Call(
 	ctx context.Context,
 	ixn *engineio.IxnObject,
 	participants ...engineio.CtxDriver,
-) *engineio.CallResult {
+) (*engineio.CallResult, error) {
 	engine.callstack.push(&callframe{scope: "root", label: "start"})
 	defer engine.callstack.pop()
 
 	// Get the callsite information from the logic and verify that it exists
 	callsite, ok := engine.logic.GetCallsite(ixn.Callsite())
 	if !ok {
-		return engine.ErrResult(exceptionf(InitError,
-			"callsite '%v' does not exist", ixn.Callsite()).traced(engine.callstack.trace()),
-		)
+		return nil, errors.Errorf("callsite '%v' does not exist", ixn.Callsite())
 	}
 
 	engine.interaction = ixn
 
-	switch callsite.Kind {
-	case engineio.InvokableCallsite:
-		if ixn.IxType() != types.IxLogicInvoke {
-			return engine.ErrResult(exception(InitError,
-				"invokable callsite cannot be called without IxLogicInvoke").traced(engine.callstack.trace()),
-			)
+	switch kind := callsite.Kind; kind {
+	case engineio.InvokableCallsite, engineio.DeployerCallsite:
+		if ixn.IxType() != callsite.Kind.IxnType() {
+			return nil, errors.Errorf("callsite kind '%v' is not appropriate for %v", kind, ixn.IxType())
 		}
 
 		if len(participants) != 1 {
-			return engine.ErrResult(exception(InitError,
-				"insufficient context drivers for invokable call (needs 1)").traced(engine.callstack.trace()),
-			)
+			return nil, errors.Errorf("insufficient context drivers for %v call (needs 1)", kind)
 		}
 
-		engine.ephemeralS = participants[0]
-
-	case engineio.DeployerCallsite:
-		if ixn.IxType() != types.IxLogicDeploy {
-			return engine.ErrResult(exception(InitError,
-				"deployed callsite cannot be called without IxLogicDeploy").traced(engine.callstack.trace()),
-			)
-		}
-
-		if len(participants) != 1 {
-			return engine.ErrResult(exception(InitError,
-				"insufficient context drivers for deployer call (needs 1)").traced(engine.callstack.trace()),
-			)
-		}
-
-		engine.ephemeralS = participants[0]
+		// Retrieve the sender context state and check if it is nil
+		engine.sephemeral = participants[0]
 
 	default:
-		return engine.ErrResult(exceptionf(InitError,
-			"unsupported callsite kind '%v'", callsite.Kind).traced(engine.callstack.trace()),
-		)
+		return nil, errors.Errorf("unsupported callsite kind '%v'", kind)
 	}
 
 	// Generate a set of pointer to load (the callsite pointer and its dependencies)
@@ -110,47 +87,41 @@ func (engine *Engine) Call(
 		// Retrieve the LogicElement from the Logic
 		element, ok := engine.logic.GetElement(ptr)
 		if !ok {
-			return engine.ErrResult(exceptionf(InitError,
-				"element %#x not found", ptr).traced(engine.callstack.trace()),
-			)
+			return nil, errors.Errorf("missing element %#x", ptr)
 		}
 
 		// Load the LogicElement into the Engine
 		if err := engine.loadLogicElement(ptr, element); err != nil {
-			return engine.ErrResult(exceptionf(InitError,
-				"element %#x malformed: %v", ptr, err).traced(engine.callstack.trace()),
-			)
+			return nil, errors.Errorf("malformed element %#x: %v", ptr, err)
 		}
 	}
 
 	// Get the invokable Routine from the engine
 	routine, err := engine.GetRoutine(callsite.Ptr)
 	if err != nil {
-		return engine.ErrResult(exceptionf(InitError,
-			"routine not found for callsite: %v", err).traced(engine.callstack.trace()),
-		)
+		return nil, errors.Errorf("routine not found for callsite: %v", err)
 	}
 
 	calldata := make(polo.Document)
 	// Decode the payload calldata into a polo.Document
 	if ixn.Calldata() != nil {
 		if err = polo.Depolorize(&calldata, ixn.Calldata()); err != nil {
-			return engine.ErrResult(exceptionf(InitError,
-				"could not decode calldata into polo document: %v", err).traced(engine.callstack.trace()),
-			)
+			return nil, errors.Errorf("could not decode calldata into polo document: %v", err)
 		}
 	}
 
 	// Convert the input Calldata into a RegisterSet
 	inputs, err := NewRegisterSet(routine.Inputs, calldata)
 	if err != nil {
-		return engine.ErrResult(exceptionf(InitError, "invalid inputs: %v", err).traced(engine.callstack.trace()))
+		return engine.ErrResult(exceptionf(
+			InitError, "invalid inputs: %v", err).
+			traced(engine.callstack.trace())), nil
 	}
 
 	// Run the routine and return the error result
 	result, except := engine.run(routine, inputs)
 	if except != nil {
-		return engine.ErrResult(except)
+		return engine.ErrResult(except), nil
 	}
 
 	// Convert the output RegisterTable into polo.Document
@@ -162,7 +133,7 @@ func (engine *Engine) Call(
 		}
 	}
 
-	return engine.OkResult(outputs)
+	return engine.OkResult(outputs), nil
 }
 
 // ErrResult returns an engineio.CallResult for some Exception.
@@ -211,11 +182,21 @@ func (engine Engine) lookupInstruction(opcode OpCode) InstructionFunc {
 }
 
 func (engine *Engine) lookupMethod(dt Datatype, mtcode MethodCode) (Method, bool) {
-	if dt.Kind() == Primitive {
+	switch dt.Kind() {
+	case Primitive:
 		primitive, _ := dt.(PrimitiveDatatype)
 
-		if methods, ok := engine.runtime.pmethods[primitive]; ok {
+		if methods, ok := engine.runtime.primitiveMethods[primitive]; ok {
 			if method := methods[mtcode]; method != nil {
+				return method, true
+			}
+		}
+
+	case BuiltinClass:
+		builtin, _ := dt.(BuiltinDatatype)
+
+		if class, ok := engine.runtime.builtinClasses[builtin.name]; ok {
+			if method := class.methods[mtcode]; method != nil {
 				return method, true
 			}
 		}

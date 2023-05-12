@@ -14,32 +14,33 @@ import (
 // set and builtin primitives that is copied into every engine instance instead
 // of recomputing them each time. Implements the engineio.EngineFactory interface.
 type Runtime struct {
-	instructs InstructionSet
-	builtins  map[uint64]*Builtin
-	bclasses  map[string]BuiltinDatatype
-	bmethods  map[BuiltinDatatype][256]*BuiltinMethod
-	pmethods  map[PrimitiveDatatype][256]*BuiltinMethod
+	instructs        InstructionSet
+	primitiveMethods map[PrimitiveDatatype][256]*BuiltinMethod
+
+	builtinLibrary map[uint64]*Builtin
+	builtinClasses map[string]struct {
+		datatype BuiltinDatatype
+		methods  [256]*BuiltinMethod
+	}
 }
 
 // NewRuntime generates a new Runtime instance that can be
 // used to generate new instances of the PISA Execution Engine
 func NewRuntime() Runtime {
-	return Runtime{
-		instructs: BaseInstructionSet(),
-		builtins:  map[uint64]*Builtin{},
-
-		bclasses: map[string]BuiltinDatatype{},
-		bmethods: map[BuiltinDatatype][256]*BuiltinMethod{},
-
-		pmethods: map[PrimitiveDatatype][256]*BuiltinMethod{
-			PrimitiveBool:    methodsBool(),
-			PrimitiveBytes:   methodsBytes(),
-			PrimitiveString:  methodsString(),
-			PrimitiveU64:     methodsU64(),
-			PrimitiveI64:     methodsI64(),
-			PrimitiveAddress: methodsAddress(),
-		},
+	runtime := Runtime{
+		instructs:        BaseInstructionSet(),
+		primitiveMethods: make(map[PrimitiveDatatype][256]*BuiltinMethod),
+		builtinClasses: make(map[string]struct {
+			datatype BuiltinDatatype
+			methods  [256]*BuiltinMethod
+		}),
 	}
+
+	runtime.setupBuiltinLibrary()
+	runtime.setupBuiltinClasses()
+	runtime.setupPrimitiveMethods()
+
+	return runtime
 }
 
 // Kind returns the kind of engine factory and implements
@@ -77,10 +78,10 @@ func (runtime Runtime) SpawnEngine(
 		callstack: make(callstack, 0),
 		fueltank:  engineio.NewFuelTank(fuel),
 
-		logic:    logic,
 		classes:  make(map[string]engineio.ElementPtr),
 		elements: make(map[engineio.ElementPtr]any),
 
+		logic:       logic,
 		persistent:  state,
 		environment: env,
 	}, nil
@@ -215,4 +216,46 @@ func (runtime Runtime) GetCallEncoder(
 
 	// Return the routine callfields as a CallEncoder
 	return CallEncoder(routine.callfields()), nil
+}
+
+func (runtime *Runtime) setupPrimitiveMethods() {
+	primitives := []RegisterObject{
+		BoolValue(false),
+		BytesValue{},
+		StringValue(""),
+		U64Value(0),
+		I64Value(0),
+		AddressValue{},
+	}
+
+	for _, primitive := range primitives {
+		// Get the type of the primitive
+		datatype := primitive.Type().(PrimitiveDatatype) //nolint:forcetypeassert
+		// Set the primitive methods to the runtime
+		runtime.primitiveMethods[datatype] = primitive.methods()
+	}
+}
+
+func (runtime *Runtime) setupBuiltinClasses() {
+	builtins := []RegisterObject{
+		LogicContextValue{},
+		ParticipantContextValue{},
+	}
+
+	for _, builtin := range builtins {
+		// Get the type of the builtin
+		datatype := builtin.Type().(BuiltinDatatype) //nolint:forcetypeassert
+		// Set the builtin type reference and its methods to the runtime
+		runtime.builtinClasses[datatype.name] = struct {
+			datatype BuiltinDatatype
+			methods  [256]*BuiltinMethod
+		}{
+			datatype: datatype,
+			methods:  builtin.methods(),
+		}
+	}
+}
+
+func (runtime *Runtime) setupBuiltinLibrary() {
+	runtime.builtinLibrary = make(map[uint64]*Builtin)
 }

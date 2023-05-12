@@ -9,8 +9,8 @@ import (
 	"github.com/sarvalabs/moichain/types"
 )
 
-// RegisterValue describes a value stored in a
-// register that can be manipulated by PISA
+// RegisterValue describes a value stored in a register that can be manipulated by PISA.
+// All value types must implement this interface.
 type RegisterValue interface {
 	// Type returns the Datatype of the RegisterValue
 	Type() Datatype
@@ -20,6 +20,14 @@ type RegisterValue interface {
 	Data() []byte
 	// Norm returns the normalized value of the RegisterValue
 	Norm() any
+}
+
+// RegisterObject describes a RegisterValue that can express some methods
+// All primitive types, builtin classes and user defined classes must implement this interface.
+type RegisterObject interface {
+	RegisterValue
+
+	methods() [256]*BuiltinMethod
 }
 
 // NewRegisterValue generates a RegisterValue object for a given Typedef and some POLO encoded bytes.

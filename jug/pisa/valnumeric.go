@@ -146,7 +146,7 @@ func (x U64Value) Eq(y U64Value) BoolValue {
 }
 
 //nolint:forcetypeassert
-func methodsU64() [256]*BuiltinMethod {
+func (x U64Value) methods() [256]*BuiltinMethod {
 	return [256]*BuiltinMethod{
 		// uint.__join__(uint) -> uint64
 		MethodJoin: makeBuiltinMethod(
@@ -407,7 +407,7 @@ func (x I64Value) Eq(y I64Value) BoolValue {
 }
 
 //nolint:forcetypeassert
-func methodsI64() [256]*BuiltinMethod {
+func (x I64Value) methods() [256]*BuiltinMethod {
 	return [256]*BuiltinMethod{
 		// int.__join__(int) -> int64
 		MethodJoin: makeBuiltinMethod(

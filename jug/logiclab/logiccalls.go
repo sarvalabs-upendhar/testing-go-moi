@@ -68,9 +68,22 @@ func LogicCallCommand(kind engineio.CallsiteKind, name, callsite, args string) C
 			return fmt.Sprintf("failed to bootstrap engine: %v", err)
 		}
 
-		// Execute the function
+		// Fetch the designated sender
+		sender, err := fetchDesignatedSenderState(env)
+		if err != nil {
+			return fmt.Sprintf("failed to fetch state for sender: %v", err)
+		}
+
+		// Generate the context object for the sender
+		senderContext := sender.CtxState.GenerateLogicContextObject(logic.Object.LogicID())
+		// Generate the interaction object
 		ixn := engineio.NewIxnObject(kind.IxnType(), callsite, calldata)
-		result := engine.Call(context.Background(), ixn, nil)
+
+		// Execute the function
+		result, err := engine.Call(context.Background(), ixn, senderContext)
+		if err != nil {
+			return fmt.Sprintf("failed to perform logic call: %v", err)
+		}
 
 		if kind == engineio.DeployerCallsite && result.Ok() {
 			logic.Ready = true
@@ -135,8 +148,37 @@ func formatResult(result *engineio.CallResult, encoder engineio.CallEncoder) str
 	str.WriteString("\nExecution Outputs ||| ")
 
 	for name, object := range outputs {
-		str.WriteString(fmt.Sprintf("%v: %v ", name, object))
+		str.WriteString(name + ": ")
+
+		switch data := object.(type) {
+		case [32]byte:
+			str.WriteString(fmt.Sprintf("%#x", data))
+		case []byte:
+			str.WriteString(fmt.Sprintf("%#x", data))
+		default:
+			str.WriteString(fmt.Sprintf("%v", object))
+		}
+
+		str.WriteString(" ")
 	}
 
 	return str.String()
+}
+
+func fetchDesignatedSenderState(env *Environment) (*ParticipantState, error) {
+	if env.inventory.Sender == "" {
+		return nil, ErrNoDesignatedSender
+	}
+
+	return fetchSenderState(env, env.inventory.Sender)
+}
+
+func fetchSenderState(env *Environment, username string) (*ParticipantState, error) {
+	// Find the participant in the inventory
+	participant, exists := env.inventory.FindParticipant(username)
+	if !exists {
+		return nil, errors.Errorf("participant '%v' not found", username)
+	}
+
+	return participant, nil
 }

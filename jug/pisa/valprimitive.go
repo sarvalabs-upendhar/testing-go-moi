@@ -46,7 +46,7 @@ func (boolean BoolValue) Or(other BoolValue) BoolValue { return boolean || other
 func (boolean BoolValue) Not() BoolValue { return !boolean }
 
 //nolint:forcetypeassert
-func methodsBool() [256]*BuiltinMethod {
+func (boolean BoolValue) methods() [256]*BuiltinMethod {
 	return [256]*BuiltinMethod{
 		// bool.__bool__() -> bool
 		MethodBool: makeBuiltinMethod(
@@ -128,7 +128,7 @@ func (str StringValue) HasPrefix(prefix StringValue) BoolValue {
 }
 
 //nolint:forcetypeassert
-func methodsString() [256]*BuiltinMethod {
+func (str StringValue) methods() [256]*BuiltinMethod {
 	return [256]*BuiltinMethod{
 		// string.__throw__() -> string
 		MethodThrow: makeBuiltinMethod(
@@ -456,7 +456,7 @@ func (bytesval BytesValue) Concat(other BytesValue) BytesValue {
 }
 
 //nolint:forcetypeassert
-func methodsBytes() [256]*BuiltinMethod {
+func (bytesval BytesValue) methods() [256]*BuiltinMethod {
 	return [256]*BuiltinMethod{
 		// bytes.__bool__() -> bool
 		MethodBool: makeBuiltinMethod(
@@ -647,7 +647,7 @@ func (addr AddressValue) ToHex() StringValue {
 }
 
 //nolint:forcetypeassert
-func methodsAddress() [256]*BuiltinMethod {
+func (addr AddressValue) methods() [256]*BuiltinMethod {
 	return [256]*BuiltinMethod{
 		// address.__bool__() -> bool
 		MethodBool: makeBuiltinMethod(

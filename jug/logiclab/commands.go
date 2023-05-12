@@ -305,30 +305,6 @@ func DesignateCommand(actor, name string) Command {
 	}
 }
 
-// DesignatedSenderCommand generates a Command runner
-// to print the current designated sender participant
-func DesignatedSenderCommand() Command {
-	return func(env *Environment) string {
-		if name := env.inventory.Sender; name != "" {
-			return fmt.Sprintf("'%v' is the designated sender", name)
-		}
-
-		return "no designated sender"
-	}
-}
-
-// DesignatedReceiverCommand generates a Command runner
-// to print the current designated receiver participant
-func DesignatedReceiverCommand() Command {
-	return func(env *Environment) string {
-		if name := env.inventory.Receiver; name != "" {
-			return fmt.Sprintf("'%v' is the designated receiver", name)
-		}
-
-		return "no designated receiver"
-	}
-}
-
 // HelpCommand generates a Command runner to print
 // the LogicLab commands and their help strings
 func HelpCommand() Command {

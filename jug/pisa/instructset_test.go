@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/jug/engineio"
+	"github.com/sarvalabs/moichain/types"
 )
 
 func TestInstructionSet(t *testing.T) {
@@ -2122,6 +2123,73 @@ func TestInstructionSet(t *testing.T) {
 			continuity := opBNOT(scope, []byte{2, 0})
 			require.Equal(t, continueOk{20}, continuity)
 			require.Equal(t, I64Value(55), scope.memory[2])
+		})
+	})
+
+	t.Run("LOGIC", func(t *testing.T) {
+		t.Run("unavailable", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{runtime: &runtime, callstack: make(callstack, 0)},
+				memory: map[byte]RegisterValue{},
+			}
+
+			continuity := opLOGIC(scope, []byte{0})
+			require.Equal(t, continueException{0, &Exception{
+				Class: "builtin.AccessError",
+				Error: "persistent state is unavailable",
+				Trace: []string{},
+			}}, continuity)
+		})
+
+		t.Run("available", func(t *testing.T) {
+			logicAddress := types.Address(randomAddressValue(t))
+			logicID, _ := types.NewLogicIDv0(true, false, false, false, 0, logicAddress)
+
+			scope := &callscope{
+				engine: &Engine{
+					runtime: &runtime, callstack: make(callstack, 0),
+					persistent: engineio.NewDebugContextDriver(logicAddress, logicID),
+				},
+				memory: map[byte]RegisterValue{},
+			}
+
+			continuity := opLOGIC(scope, []byte{0})
+			require.Equal(t, continueOk{30}, continuity)
+			require.Equal(t, LogicContextValue{addr: AddressValue(logicAddress)}, scope.memory[0])
+		})
+	})
+
+	t.Run("SENDER", func(t *testing.T) {
+		t.Run("unavailable", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{runtime: &runtime, callstack: make(callstack, 0)},
+				memory: map[byte]RegisterValue{},
+			}
+
+			continuity := opSENDER(scope, []byte{0})
+			require.Equal(t, continueException{0, &Exception{
+				Class: "builtin.AccessError",
+				Error: "sender ephemeral state is unavailable",
+				Trace: []string{},
+			}}, continuity)
+		})
+
+		t.Run("available", func(t *testing.T) {
+			logicAddress := types.Address(randomAddressValue(t))
+			senderAddress := types.Address(randomAddressValue(t))
+			logicID, _ := types.NewLogicIDv0(false, false, false, false, 0, logicAddress)
+
+			scope := &callscope{
+				engine: &Engine{
+					runtime: &runtime, callstack: make(callstack, 0),
+					sephemeral: engineio.NewDebugContextDriver(senderAddress, logicID),
+				},
+				memory: map[byte]RegisterValue{},
+			}
+
+			continuity := opSENDER(scope, []byte{0})
+			require.Equal(t, continueOk{30}, continuity)
+			require.Equal(t, ParticipantContextValue{addr: AddressValue(senderAddress)}, scope.memory[0])
 		})
 	})
 }

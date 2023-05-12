@@ -5,6 +5,8 @@ import (
 	"math/rand"
 	"strings"
 
+	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/moichain/types"
 )
 
@@ -106,6 +108,35 @@ func ParticipantListCommand() Command {
 		}
 
 		return list.String()
+	}
+}
+
+var (
+	ErrNoDesignatedSender   = errors.New("no designated sender")
+	ErrNoDesignatedReceiver = errors.New("no designated receiver")
+)
+
+// DesignatedSenderCommand generates a Command runner
+// to print the current designated sender participant
+func DesignatedSenderCommand() Command {
+	return func(env *Environment) string {
+		if name := env.inventory.Sender; name != "" {
+			return fmt.Sprintf("'%v' is the designated sender", name)
+		}
+
+		return ErrNoDesignatedSender.Error()
+	}
+}
+
+// DesignatedReceiverCommand generates a Command runner
+// to print the current designated receiver participant
+func DesignatedReceiverCommand() Command {
+	return func(env *Environment) string {
+		if name := env.inventory.Receiver; name != "" {
+			return fmt.Sprintf("'%v' is the designated receiver", name)
+		}
+
+		return ErrNoDesignatedReceiver.Error()
 	}
 }
 
