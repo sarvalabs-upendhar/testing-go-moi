@@ -38,7 +38,7 @@ func TestJSONSerializeForUint64(t *testing.T) {
 		fmt.Println(err)
 	}
 
-	require.Equal(t, x.ToInt(), y.ToInt())
+	require.Equal(t, x.ToUint64(), y.ToUint64())
 }
 
 func TestJSONSerializeForUint8(t *testing.T) {

@@ -38,6 +38,10 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 			return errors.Wrap(err, "execution failed")
 		}
 
+		if ix.Sender() != types.NilAddress {
+			executor.getStateObject(ix.Sender()).IncrementNonce(1)
+		}
+
 		// Retrieve the receipt for the interaction
 		receipt := executor.getReceipt(ix)
 

@@ -409,10 +409,6 @@ func (i *IxPool) validateIx(ix *types.Interaction) error {
 
 	// TODO: Check the signature
 
-	if ix.Sender() == ix.Receiver() {
-		return types.ErrInvalidIxParticipants
-	}
-
 	// Reject underpriced interactions
 	if ix.IsUnderpriced(i.cfg.PriceLimit) {
 		return types.ErrUnderpriced

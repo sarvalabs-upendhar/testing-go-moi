@@ -651,8 +651,11 @@ func (p *PersistenceManager) GetAccountsSyncStatus() ([]*types.AccountSyncStatus
 			return nil, err
 		}
 
-		syncInfo := new(types.AccountSyncStatus)
+		if len(dbEntry.Key) != 33 {
+			continue
+		}
 
+		syncInfo := new(types.AccountSyncStatus)
 		if err = syncInfo.FromBytes(dbEntry.Value); err != nil {
 			return nil, err
 		}

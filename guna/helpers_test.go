@@ -1741,8 +1741,6 @@ func checkForAccount(
 ) {
 	t.Helper()
 
-	require.Equal(t, expectedAcc.Nonce, sObj.data.Nonce)
-
 	expectedAccData, err := expectedAcc.Bytes()
 	require.NoError(t, err)
 

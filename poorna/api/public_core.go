@@ -167,12 +167,12 @@ func (p *PublicCoreAPI) GetInteractionByTesseract(args *ptypes.InteractionByTess
 	}
 
 	getRPCIX := func(hash types.Hash) (*ptypes.RPCInteraction, error) {
-		ix, parts, err := p.chain.GetInteractionAndPartsByTSHash(hash, int(args.IxIndex.ToInt()))
+		ix, parts, err := p.chain.GetInteractionAndPartsByTSHash(hash, int(args.IxIndex.ToUint64()))
 		if err != nil {
 			return nil, errors.Wrap(err, "interaction not found")
 		}
 
-		return createRPCInteraction(ix, parts.Grid, int(args.IxIndex.ToInt()))
+		return createRPCInteraction(ix, parts.Grid, int(args.IxIndex.ToUint64()))
 	}
 
 	if hash, ok := args.Options.Hash(); ok {

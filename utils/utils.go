@@ -26,6 +26,10 @@ import (
 const charset = "abcdefghijklmnopqrstuvwxyz" +
 	"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
+func NewUint64(val uint64) *uint64 {
+	return &val
+}
+
 var seededRand = rand.New(
 	rand.NewSource(time.Now().UnixNano()))
 

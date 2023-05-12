@@ -282,14 +282,15 @@ func transferTokens(t *testing.T, client *Client, sender, receiver types.Address
 // fillIXPool sends ixnPendingCount number of deploy interactions
 func fillIXPool(t *testing.T, client *Client, addr types.Address) {
 	ixArgs := getIXArgsForLogicDeployment(t, addr)
-	nonce := hexutil.Uint64(2)
+	nonce := hexutil.Uint64(0)
 	increment := hexutil.Uint64(1)
 	ixArgs.Nonce = &nonce
 
 	for i := 0; i < ixnPendingCount; i++ { // send ixns just to fill ixpool with some data
-		*ixArgs.Nonce += increment // increment nonce to avoid ix already known error
 		_, err := client.SendInteractions(ixArgs)
-		require.NoError(t, err)
+		require.NoError(t, err, "sending interaction failed")
+
+		*ixArgs.Nonce += increment // increment nonce to avoid ix already known error
 	}
 }
 
@@ -715,7 +716,7 @@ func testInteractionCount(t *testing.T, client *Client, addr types.Address) {
 			}
 
 			require.NoError(t, err)
-			require.GreaterOrEqual(t, interactionCount.ToInt(), uint64(1))
+			require.GreaterOrEqual(t, interactionCount.ToUint64(), uint64(1))
 
 			httpInteractionCount := httpInteractionCount(t, test.interactionCountArgs)
 			require.Equal(t, httpInteractionCount, interactionCount)
@@ -762,7 +763,7 @@ func testPendingInteractionCount(t *testing.T, client *Client, addr types.Addres
 			}
 
 			require.NoError(t, err)
-			require.Greater(t, pendingInteractionCount.ToInt(), uint64(2))
+			require.Equal(t, pendingInteractionCount.ToUint64(), uint64(2))
 
 			httpPendingInteractionCount := httpPendingInteractionCount(t, test.interactionCountArgs)
 			require.Equal(t, httpPendingInteractionCount, pendingInteractionCount)
@@ -858,7 +859,7 @@ func testAccountState(t *testing.T, client *Client, addr types.Address) {
 
 			t.Log(addr)
 			require.NoError(t, err)
-			require.GreaterOrEqual(t, accountState.Nonce.ToInt(), uint64(2))
+			require.GreaterOrEqual(t, accountState.Nonce.ToUint64(), uint64(1))
 
 			httpAccountState := httpAccountState(t, test.accountArgs)
 			require.Equal(t, *httpAccountState, *accountState)
@@ -1026,7 +1027,7 @@ func testStatus(t *testing.T, client *Client) {
 		t.Run(test.name, func(t *testing.T) {
 			statusResponse, err := client.Status(test.ixPoolArgs)
 			require.NoError(t, err)
-			require.GreaterOrEqual(t, statusResponse.Pending.ToInt(), uint64(0))
+			require.GreaterOrEqual(t, statusResponse.Pending.ToUint64(), uint64(0))
 
 			httpStatus := httpStatus(t, test.ixPoolArgs)
 			require.Equal(t, *httpStatus, *statusResponse)

@@ -163,8 +163,6 @@ func TestCommitAccount(t *testing.T) {
 	actualAccHash, err := sObj.commitAccount()
 	require.NoError(t, err)
 
-	inputAcc.Nonce = 1 // change expected account nonce to 1 as it needs to be incremented
-
 	checkForAccount(t, sObj, inputAcc, actualAccHash, 0)
 }
 
@@ -553,7 +551,6 @@ func TestCommit(t *testing.T) {
 			inputAcc.StorageRoot = sObj.data.StorageRoot
 			inputAcc.Balance = sObj.data.Balance
 			inputAcc.LogicRoot = sObj.data.LogicRoot
-			inputAcc.Nonce = 1
 
 			checkForAccount(t, sObj, inputAcc, actualAccHash, 2)
 		})

@@ -216,6 +216,10 @@ func (s *StateObject) GetDirtyEntry(key string) ([]byte, error) {
 	return val, nil
 }
 
+func (s *StateObject) IncrementNonce(count uint64) {
+	s.data.Nonce += count
+}
+
 func (s *StateObject) commitBalanceObject() (types.Hash, error) {
 	if s.balance == nil || len(s.balance.AssetMap) == 0 {
 		return types.NilHash, nil
@@ -241,8 +245,6 @@ func (s *StateObject) commitBalanceObject() (types.Hash, error) {
 }
 
 func (s *StateObject) commitAccount() (types.Hash, error) {
-	s.data.Nonce++
-
 	data, err := s.data.Bytes()
 	if err != nil {
 		return types.NilHash, err

@@ -951,7 +951,7 @@ func TestPublicCoreAPI_GetInteractionCount(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, test.expectedNonce, fetchedNonce.ToInt())
+			require.Equal(t, test.expectedNonce, fetchedNonce.ToUint64())
 		})
 	}
 }
@@ -1007,7 +1007,7 @@ func TestPublicIXPoolAPI_GetPendingInteractionCount(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, testcase.expectedIxCount, ixCount.ToInt())
+			require.Equal(t, testcase.expectedIxCount, ixCount.ToUint64())
 		})
 	}
 }
@@ -1481,7 +1481,7 @@ func TestPublicCoreAPI_GetInteractionByHash(t *testing.T) {
 				checkForRPCIxn(t, test.expectedIXData.ix, rpcIX, test.expectedIXData.parts.Grid)
 			}
 
-			require.Equal(t, uint64(test.expectedIXData.ixIndex), rpcIX.IxIndex.ToInt())
+			require.Equal(t, uint64(test.expectedIXData.ixIndex), rpcIX.IxIndex.ToUint64())
 		})
 	}
 }

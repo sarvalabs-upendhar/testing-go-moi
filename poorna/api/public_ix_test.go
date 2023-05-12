@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/sarvalabs/moichain/utils"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/common"
@@ -55,11 +57,12 @@ func TestIx_SendInteraction(t *testing.T) {
 	expectedIxnArgs := ptypes.SendIXArgs{
 		Type:      types.IxAssetCreate,
 		Sender:    address,
+		Nonce:     (*hexutil.Uint64)(utils.NewUint64(uint64(5))),
 		FuelPrice: (*hexutil.Big)(big.NewInt(100)),
 		Payload:   assetPayload,
 	}
 
-	expectedIxns, err := constructInteraction(&expectedIxnArgs, 5)
+	expectedIxns, err := constructInteraction(&expectedIxnArgs)
 	if err != nil {
 		log.Panic(err)
 	}

@@ -780,7 +780,7 @@ func checkForRPCIxn(
 	require.Equal(t, ix.Signature(), rpcIxn.Signature.Bytes())
 
 	require.Equal(t, input.Type, rpcIxn.Type)
-	require.Equal(t, input.Nonce, rpcIxn.Nonce.ToInt())
+	require.Equal(t, input.Nonce, rpcIxn.Nonce.ToUint64())
 
 	require.Equal(t, input.Sender, rpcIxn.Sender)
 	require.Equal(t, input.Receiver, rpcIxn.Receiver)
@@ -822,11 +822,11 @@ func checkForRPCIxn(
 	require.Equal(t, input.FuelLimit, rpcIxn.FuelLimit.ToInt())
 	require.Equal(t, input.FuelPrice, rpcIxn.FuelPrice.ToInt())
 
-	require.Equal(t, compute.Mode, rpcIxn.Mode.ToInt())
+	require.Equal(t, compute.Mode, rpcIxn.Mode.ToUint64())
 	require.Equal(t, compute.Hash, rpcIxn.ComputeHash)
 	require.Equal(t, compute.ComputeNodes, rpcIxn.ComputeNodes)
 
-	require.Equal(t, trust.MTQ, uint(rpcIxn.MTQ.ToInt()))
+	require.Equal(t, trust.MTQ, uint(rpcIxn.MTQ.ToUint64()))
 	require.Equal(t, trust.TrustNodes, rpcIxn.TrustNodes)
 
 	switch ix.Type() {
@@ -897,7 +897,7 @@ func checkForRPCTesseractParts(
 		require.True(t, ok)
 
 		require.Equal(t, heightAndHash.Hash, rpcPart.Hash)
-		require.Equal(t, heightAndHash.Height, rpcPart.Height.ToInt())
+		require.Equal(t, heightAndHash.Height, rpcPart.Height.ToUint64())
 	}
 
 	tests.CheckIfPartsSorted(t, rpcParts)
@@ -919,7 +919,7 @@ func checkForRPCTesseractGridID(
 	require.Equal(t, tesseractGridID.Hash, rpcTesseractGridID.Hash)
 
 	if tesseractGridID.Parts != nil {
-		require.Equal(t, uint64(tesseractGridID.Parts.Total), rpcTesseractGridID.Total.ToInt())
+		require.Equal(t, uint64(tesseractGridID.Parts.Total), rpcTesseractGridID.Total.ToUint64())
 		checkForRPCTesseractParts(t, tesseractGridID.Parts.Grid, rpcTesseractGridID.Parts)
 
 		return
@@ -931,7 +931,7 @@ func checkForRPCTesseractGridID(
 func checkForRPCCommitData(t *testing.T, commitData types.CommitData, rpcCommitData ptypes.RPCCommitData) {
 	t.Helper()
 
-	require.Equal(t, uint64(commitData.Round), rpcCommitData.Round.ToInt())
+	require.Equal(t, uint64(commitData.Round), rpcCommitData.Round.ToUint64())
 	require.Equal(t, commitData.CommitSignature, rpcCommitData.CommitSignature.Bytes())
 	require.Equal(t, commitData.VoteSet.String(), rpcCommitData.VoteSet)
 	require.Equal(t, commitData.EvidenceHash, rpcCommitData.EvidenceHash)
@@ -961,7 +961,7 @@ func checkForRPCContextLockInfos(
 		require.True(t, ok)
 
 		require.Equal(t, contextLockInfo.ContextHash, rpcContextLockInfo.ContextHash)
-		require.Equal(t, contextLockInfo.Height, rpcContextLockInfo.Height.ToInt())
+		require.Equal(t, contextLockInfo.Height, rpcContextLockInfo.Height.ToUint64())
 		require.Equal(t, contextLockInfo.TesseractHash, rpcContextLockInfo.TesseractHash)
 	}
 
@@ -1005,14 +1005,14 @@ func checkForRPCHeader(t *testing.T, header types.TesseractHeader, rpcHeader pty
 
 	require.Equal(t, header.Address, rpcHeader.Address)
 	require.Equal(t, header.PrevHash, rpcHeader.PrevHash)
-	require.Equal(t, header.Height, rpcHeader.Height.ToInt())
-	require.Equal(t, header.FuelUsed, rpcHeader.FuelUsed.ToInt())
-	require.Equal(t, header.FuelLimit, rpcHeader.FuelLimit.ToInt())
+	require.Equal(t, header.Height, rpcHeader.Height.ToUint64())
+	require.Equal(t, header.FuelUsed, rpcHeader.FuelUsed.ToUint64())
+	require.Equal(t, header.FuelLimit, rpcHeader.FuelLimit.ToUint64())
 	require.Equal(t, header.BodyHash, rpcHeader.BodyHash)
 	require.Equal(t, header.GroupHash, rpcHeader.GridHash)
 	require.Equal(t, header.Operator, rpcHeader.Operator)
 	require.Equal(t, header.ClusterID, rpcHeader.ClusterID)
-	require.Equal(t, uint64(header.Timestamp), rpcHeader.Timestamp.ToInt())
+	require.Equal(t, uint64(header.Timestamp), rpcHeader.Timestamp.ToUint64())
 	checkForRPCContextLockInfos(t, header.ContextLock, rpcHeader.ContextLock)
 
 	checkForRPCCommitData(t, header.Extra, rpcHeader.Extra)
@@ -1116,13 +1116,13 @@ func checkForRPCReceipt(
 	t.Helper()
 
 	checkForRPCTesseractParts(t, grid, rpcReceipt.Parts)
-	require.Equal(t, uint64(receipt.IxType), rpcReceipt.IxType.ToInt())
+	require.Equal(t, uint64(receipt.IxType), rpcReceipt.IxType.ToUint64())
 	require.Equal(t, receipt.IxHash, rpcReceipt.IxHash)
-	require.Equal(t, receipt.FuelUsed, rpcReceipt.FuelUsed.ToInt())
+	require.Equal(t, receipt.FuelUsed, rpcReceipt.FuelUsed.ToUint64())
 	checkForRPCStateHashes(t, receipt.StateHashes, rpcReceipt.StateHashes)
 	checkForRPCContextHashes(t, receipt.ContextHashes, rpcReceipt.ContextHashes)
 	require.Equal(t, receipt.ExtraData, rpcReceipt.ExtraData)
 	require.Equal(t, ix.Sender(), rpcReceipt.From)
 	require.Equal(t, ix.Receiver(), rpcReceipt.To)
-	require.Equal(t, uint64(ixIndex), rpcReceipt.IXIndex.ToInt())
+	require.Equal(t, uint64(ixIndex), rpcReceipt.IXIndex.ToUint64())
 }

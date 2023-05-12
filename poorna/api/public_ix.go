@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"math/big"
 
+	"github.com/sarvalabs/moichain/common/hexutil"
+	"github.com/sarvalabs/moichain/utils"
+
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
@@ -32,12 +35,16 @@ func (p *PublicIXAPI) SendInteraction(args *ptypes.SendIXArgs) (*types.Interacti
 		return nil, err
 	}
 
-	nonce, err := p.ixpool.GetNonce(args.Sender)
-	if err != nil {
-		return nil, err
+	if args.Nonce == nil {
+		nonce, err := p.ixpool.GetNonce(args.Sender)
+		if err != nil {
+			return nil, err
+		}
+
+		args.Nonce = (*hexutil.Uint64)(utils.NewUint64(nonce))
 	}
 
-	ixn, err := constructInteraction(args, nonce)
+	ixn, err := constructInteraction(args)
 	if err != nil {
 		return nil, err
 	}
@@ -52,11 +59,11 @@ func (p *PublicIXAPI) SendInteraction(args *ptypes.SendIXArgs) (*types.Interacti
 }
 
 // helper function
-func constructInteraction(args *ptypes.SendIXArgs, nonce uint64) (ix *types.Interaction, err error) {
+func constructInteraction(args *ptypes.SendIXArgs) (ix *types.Interaction, err error) {
 	data := types.IxData{
 		Input: types.IxInput{
 			Type:           args.Type,
-			Nonce:          nonce,
+			Nonce:          args.Nonce.ToUint64(),
 			Sender:         args.Sender,
 			Receiver:       args.Receiver,
 			TransferValues: make(map[types.AssetID]*big.Int, len(args.TransferValues)),
@@ -87,7 +94,7 @@ func constructInteraction(args *ptypes.SendIXArgs, nonce uint64) (ix *types.Inte
 		}
 
 	case types.IxLogicDeploy:
-		data.Input.Payload, err = GetRawIXPayloadForLogicDeploy(args.Payload, nonce, data.Input.Sender)
+		data.Input.Payload, err = GetRawIXPayloadForLogicDeploy(args.Payload, args.Nonce.ToUint64(), data.Input.Sender)
 		if err != nil {
 			return nil, err
 		}
@@ -109,6 +116,10 @@ func constructInteraction(args *ptypes.SendIXArgs, nonce uint64) (ix *types.Inte
 func validateArguments(args *ptypes.SendIXArgs, p *PublicIXAPI) error {
 	if args.Sender.IsNil() {
 		return types.ErrInvalidAddress
+	}
+
+	if args.Sender == args.Receiver {
+		return types.ErrInvalidIxParticipants
 	}
 
 	// Reject genesis account interaction

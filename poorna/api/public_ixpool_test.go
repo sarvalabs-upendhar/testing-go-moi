@@ -438,8 +438,8 @@ func TestPublicIXPoolAPI_Status(t *testing.T) {
 			response, err := ixPoolAPI.Status()
 			require.NoError(t, err)
 
-			require.Equal(t, uint64(testcase.expectedIxQueue.pending), response.Pending.ToInt())
-			require.Equal(t, uint64(testcase.expectedIxQueue.queued), response.Queued.ToInt())
+			require.Equal(t, uint64(testcase.expectedIxQueue.pending), response.Pending.ToUint64())
+			require.Equal(t, uint64(testcase.expectedIxQueue.queued), response.Queued.ToUint64())
 		})
 	}
 }

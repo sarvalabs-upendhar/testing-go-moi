@@ -194,8 +194,8 @@ func (b Uint64) String() string {
 	return EncodeUint64(uint64(b))
 }
 
-// ToInt converts b to uint64.
-func (b Uint64) ToInt() uint64 {
+// ToUint64 converts b to uint64.
+func (b Uint64) ToUint64() uint64 {
 	return uint64(b)
 }
 
