@@ -482,14 +482,6 @@ func (k *Engine) joinCluster(ctx context.Context, slot *ktypes.Slot) error {
 
 	// Check whether the context hashes matches
 	for addr, info := range slot.ICSRequestMsg().ContextLock {
-		if contextHashes[addr] != info.ContextHash {
-			return types.ErrHashMismatch
-		}
-
-		if slot.ClusterState().AccountInfos.GetHeight(addr) != info.Height {
-			return types.ErrHeightMismatch
-		}
-
 		if slot.ClusterState().AccountInfos.GetHeight(addr) < info.Height {
 			if err = k.mux.Post(utils.SyncRequestEvent{
 				Address:  addr,
@@ -498,6 +490,14 @@ func (k *Engine) joinCluster(ctx context.Context, slot *ktypes.Slot) error {
 			}); err != nil {
 				k.logger.Error("failed to post sync request")
 			}
+		}
+
+		if contextHashes[addr] != info.ContextHash {
+			return types.ErrHashMismatch
+		}
+
+		if slot.ClusterState().AccountInfos.GetHeight(addr) != info.Height {
+			return types.ErrHeightMismatch
 		}
 	}
 

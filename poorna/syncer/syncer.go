@@ -224,6 +224,19 @@ func (s *Syncer) NewSyncRequest(
 		job.tesseractQueue.Push(v)
 	}
 
+	if job.getExpectedHeight() < expectedHeight {
+		if err = job.updateExpectedHeight(expectedHeight); err != nil {
+			return err
+		}
+	}
+
+	ts, _ := s.lattice.GetTesseractByHeight(job.address, job.getCurrentHeight(), false)
+	if job.getCurrentHeight() == job.getExpectedHeight() && ts != nil {
+		s.logger.Debug("tesseract found avoiding new sync request")
+
+		return nil
+	}
+
 	if syncMode == types.FullSync && len(job.bestPeers) == 0 && len(bestPeers) == 0 {
 		_, bestPeers, err = s.findLatestHeightAndBestPeers(addr, expectedHeight)
 		if err != nil {
@@ -232,12 +245,6 @@ func (s *Syncer) NewSyncRequest(
 	}
 
 	job.updateBestPeers(bestPeers)
-
-	if job.getExpectedHeight() < expectedHeight {
-		if err = job.updateExpectedHeight(expectedHeight); err != nil {
-			return err
-		}
-	}
 
 	if job.tesseractQueue.Len() > 0 && job.getJobState() == Done {
 		job.updateJobState(Pending)
