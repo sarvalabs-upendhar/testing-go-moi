@@ -1651,7 +1651,6 @@ func (s *Syncer) startSyncEventHandler() {
 				req.Height,
 				types.LatestSync,
 				[]id.KramaID{req.BestPeer},
-				nil,
 			); err != nil {
 				s.logger.Error("failed to handle sync request from krama engine", "error", err)
 			}
