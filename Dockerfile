@@ -1,4 +1,4 @@
-FROM golang@sha256:ab5685692564e027aa84e2980855775b2e48f8fc82c1590c0e1e8cbc2e716542 AS build # 1.18.10-alpine3.17
+FROM golang@sha256:ab5685692564e027aa84e2980855775b2e48f8fc82c1590c0e1e8cbc2e716542 AS build
 RUN apk add --no-cache git gcc g++ ca-certificates tzdata && update-ca-certificates
 RUN go env -w GOPRIVATE=github.com/sarvalabs/go-polo
 ARG ACCESS_TOKEN
@@ -14,7 +14,7 @@ RUN --mount=type=cache,id=go-build-linux-amd64,target=/root/.cache/go-build --mo
 COPY . /go/src/github/sarvalabs/moichain
 RUN --mount=type=cache,id=go-build-linux-amd64,target=/root/.cache/go-build --mount=type=cache,id=go-pkg-linux-amd64,target=/go/pkg go build -trimpath -o /bin/moichain ./cmd/moichain/
 
-FROM alpine@sha256:c0669ef34cdc14332c0f1ab0c2c01acb91d96014b172f1a76f3a39e63d1f0bda # 3.18.0
+FROM alpine@sha256:c0669ef34cdc14332c0f1ab0c2c01acb91d96014b172f1a76f3a39e63d1f0bda
 VOLUME /data
 ARG GIT_COMMIT
 ENV GIT_COMMIT="{$GIT_COMMIT}"
