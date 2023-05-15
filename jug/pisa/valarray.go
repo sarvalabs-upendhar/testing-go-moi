@@ -42,14 +42,18 @@ func newArrayFromValues(datatype ArrayDatatype, values ...RegisterValue) (*Array
 	array := new(ArrayValue)
 
 	array.datatype = datatype
-	array.values = make([]RegisterValue, 0, datatype.size)
+	array.values = make([]RegisterValue, datatype.size)
 
-	for _, value := range values {
+	for idx, value := range values {
+		if value == nil {
+			continue
+		}
+
 		if value.Type() != array.datatype.elem {
 			return nil, errors.Errorf("incorrect value type for v/array with element %v", datatype.elem)
 		}
 
-		array.values = append(array.values, value)
+		array.values[idx] = value
 	}
 
 	return array, nil
@@ -59,12 +63,21 @@ func (array ArrayValue) Type() Datatype { return array.datatype }
 
 func (array ArrayValue) Copy() RegisterValue {
 	//nolint:forcetypeassert
-	clone := ArrayValue{
-		datatype: array.datatype.Copy().(ArrayDatatype),
-		values:   make([]RegisterValue, len(array.values)),
+	clone := &ArrayValue{datatype: array.datatype.Copy().(ArrayDatatype)}
+	// Skip value cloning if values are empty
+	if array.values == nil {
+		return clone
 	}
 
+	// Initialize clone values
+	clone.values = make([]RegisterValue, len(array.values))
+	// Copy each value from the original into the clone
 	for idx, val := range array.values {
+		// Skip the copy if value for index is nil
+		if val == nil {
+			continue
+		}
+
 		clone.values[idx] = val.Copy()
 	}
 
@@ -75,7 +88,11 @@ func (array ArrayValue) Data() []byte {
 	polorizer := polo.NewPolorizer()
 
 	for _, val := range array.values {
-		_ = polorizer.PolorizeAny(val.Data())
+		if val != nil {
+			_ = polorizer.PolorizeAny(val.Data())
+		} else {
+			_ = polorizer.PolorizeAny(nil)
+		}
 	}
 
 	return polorizer.Packed()
