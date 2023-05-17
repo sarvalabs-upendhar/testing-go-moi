@@ -818,7 +818,6 @@ func TestInstructionSet(t *testing.T) {
 		})
 	})
 
-	//nolint:dupl
 	t.Run("EQ", func(t *testing.T) {
 		t.Run("non_symmetric_values", func(t *testing.T) {
 			scope := &callscope{
@@ -841,15 +840,15 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: randomAddressValue(t),
-					1: randomAddressValue(t),
+					0: PtrValue(0),
+					1: PtrValue(10),
 				},
 			}
 
 			continuity := opEQ(scope, []byte{2, 0, 1})
 			require.Equal(t, continueException{0, &Exception{
 				Class: "builtin.NotImplementedError",
-				Error: "address does not implement __eq__",
+				Error: "ptr does not implement __eq__",
 				Trace: []string{},
 			}}, continuity)
 		})

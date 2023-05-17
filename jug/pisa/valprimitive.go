@@ -48,6 +48,20 @@ func (boolean BoolValue) Not() BoolValue { return !boolean }
 //nolint:forcetypeassert
 func (boolean BoolValue) methods() [256]*BuiltinMethod {
 	return [256]*BuiltinMethod{
+		// bool.__eq__(bool) -> bool
+		MethodEq: makeBuiltinMethod(
+			MethodEq.String(),
+			PrimitiveBool, MethodEq,
+			makefields([]*TypeField{{"self", PrimitiveBool}, {"other", PrimitiveBool}}),
+			makefields([]*TypeField{{"result", PrimitiveBool}}),
+			func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				// Check if both boolean values are equal
+				equals := inputs[0].(BoolValue) == inputs[1].(BoolValue)
+				// Return the result
+				return RegisterSet{0: BoolValue(equals)}, nil
+			},
+		),
+
 		// bool.__bool__() -> bool
 		MethodBool: makeBuiltinMethod(
 			MethodBool.String(),
@@ -153,6 +167,20 @@ func (str StringValue) methods() [256]*BuiltinMethod {
 				result := inputs[0].(StringValue).Concat(inputs[1].(StringValue))
 				// Return the result
 				return RegisterSet{0: result}, nil
+			},
+		),
+
+		// string.__eq__(string) -> bool
+		MethodEq: makeBuiltinMethod(
+			MethodEq.String(),
+			PrimitiveString, MethodEq,
+			makefields([]*TypeField{{"self", PrimitiveString}, {"other", PrimitiveString}}),
+			makefields([]*TypeField{{"result", PrimitiveBool}}),
+			func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				// Check if both string values are equal
+				equals := inputs[0].(StringValue) == inputs[1].(StringValue)
+				// Return the result
+				return RegisterSet{0: BoolValue(equals)}, nil
 			},
 		),
 
@@ -458,6 +486,20 @@ func (bytesval BytesValue) Concat(other BytesValue) BytesValue {
 //nolint:forcetypeassert
 func (bytesval BytesValue) methods() [256]*BuiltinMethod {
 	return [256]*BuiltinMethod{
+		// bytes.__eq__(bytes) -> bool
+		MethodEq: makeBuiltinMethod(
+			MethodEq.String(),
+			PrimitiveBytes, MethodEq,
+			makefields([]*TypeField{{"self", PrimitiveBytes}, {"other", PrimitiveBytes}}),
+			makefields([]*TypeField{{"result", PrimitiveBool}}),
+			func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				// Check if both bytes values are equal
+				equals := bytes.Equal(inputs[0].(BytesValue), inputs[1].(BytesValue))
+				// Return the result
+				return RegisterSet{0: BoolValue(equals)}, nil
+			},
+		),
+
 		// bytes.__bool__() -> bool
 		MethodBool: makeBuiltinMethod(
 			MethodBool.String(),
@@ -649,6 +691,20 @@ func (addr AddressValue) ToHex() StringValue {
 //nolint:forcetypeassert
 func (addr AddressValue) methods() [256]*BuiltinMethod {
 	return [256]*BuiltinMethod{
+		// address.__eq__(address) -> bool
+		MethodEq: makeBuiltinMethod(
+			MethodEq.String(),
+			PrimitiveAddress, MethodEq,
+			makefields([]*TypeField{{"self", PrimitiveAddress}, {"other", PrimitiveAddress}}),
+			makefields([]*TypeField{{"result", PrimitiveBool}}),
+			func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				// Check if both address values are equal
+				equals := inputs[0].(AddressValue) == inputs[1].(AddressValue)
+				// Return the result
+				return RegisterSet{0: BoolValue(equals)}, nil
+			},
+		),
+
 		// address.__bool__() -> bool
 		MethodBool: makeBuiltinMethod(
 			MethodBool.String(),

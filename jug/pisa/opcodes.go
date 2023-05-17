@@ -361,7 +361,7 @@ var opcodeMetadataTable = map[OpCode]*opcodeMetadata{
 	// SLICE:  nil,
 	APPEND: {"APPEND", 2},
 	POPEND: {"POPEND", 2},
-	// HASKEY: nil,
+	HASKEY: {"HASKEY", 3},
 	// MERGE: nil,
 
 	AND: {"AND", 3},

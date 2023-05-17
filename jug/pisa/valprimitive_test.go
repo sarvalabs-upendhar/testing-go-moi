@@ -46,6 +46,31 @@ func TestBoolValue(t *testing.T) {
 		// Test Not()
 		assert.False(t, bool(value.Not()))
 	})
+
+	t.Run("Methods", func(t *testing.T) {
+		runtime := NewRuntime()
+
+		t.Run("__eq__ [0x3]", func(t *testing.T) {
+			method := runtime.primitiveMethods[PrimitiveBool][MethodEq]
+
+			tests := []struct {
+				x, y, z BoolValue
+			}{
+				{true, true, true},
+				{true, false, false},
+				{false, true, false},
+				{false, false, true},
+			}
+
+			for _, test := range tests {
+				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}
+				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: test.x, 1: test.y})
+
+				assert.Nil(t, except)
+				assert.Equal(t, test.z, outputs.Get(0), "%v, %v", test.x, test.y)
+			}
+		})
+	})
 }
 
 func TestStringValue(t *testing.T) {
@@ -89,7 +114,7 @@ func TestStringValue(t *testing.T) {
 		runtime := NewRuntime()
 
 		//nolint:dupl
-		t.Run("__eq__[0x3]", func(t *testing.T) {
+		t.Run("__join__ [0x3]", func(t *testing.T) {
 			method := runtime.primitiveMethods[PrimitiveString][0x3]
 
 			tests := []struct {
@@ -118,7 +143,29 @@ func TestStringValue(t *testing.T) {
 			}
 		})
 
-		t.Run("__bool__[0x7]", func(t *testing.T) {
+		t.Run("__eq__ [0x3]", func(t *testing.T) {
+			method := runtime.primitiveMethods[PrimitiveString][MethodEq]
+
+			tests := []struct {
+				x, y StringValue
+				z    BoolValue
+			}{
+				{"foo", "bar", false},
+				{"foo", "foo", true},
+				{"bar", "boo", false},
+				{"boo", "boo", true},
+			}
+
+			for _, test := range tests {
+				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}
+				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: test.x, 1: test.y})
+
+				assert.Nil(t, except)
+				assert.Equal(t, test.z, outputs.Get(0), "%v, %v", test.x, test.y)
+			}
+		})
+
+		t.Run("__bool__ [0x7]", func(t *testing.T) {
 			method := runtime.primitiveMethods[PrimitiveString][0x7]
 
 			tests := []struct {
@@ -146,7 +193,7 @@ func TestStringValue(t *testing.T) {
 			}
 		})
 
-		t.Run("__str__[0x8]", func(t *testing.T) {
+		t.Run("__str__ [0x8]", func(t *testing.T) {
 			method := runtime.primitiveMethods[PrimitiveString][0x8]
 
 			tests := []struct {
@@ -174,7 +221,7 @@ func TestStringValue(t *testing.T) {
 			}
 		})
 
-		t.Run("__len__[0xA]", func(t *testing.T) {
+		t.Run("__len__ [0xA]", func(t *testing.T) {
 			method := runtime.primitiveMethods[PrimitiveString][0xA]
 
 			tests := []struct {
@@ -630,6 +677,28 @@ func TestBytesValue(t *testing.T) {
 	t.Run("Methods", func(t *testing.T) {
 		runtime := NewRuntime()
 
+		t.Run("__eq__ [0x3]", func(t *testing.T) {
+			method := runtime.primitiveMethods[PrimitiveBytes][MethodEq]
+
+			tests := []struct {
+				x, y BytesValue
+				z    BoolValue
+			}{
+				{BytesValue("foo"), BytesValue("bar"), false},
+				{BytesValue("foo"), BytesValue("foo"), true},
+				{BytesValue("bar"), BytesValue("boo"), false},
+				{BytesValue("boo"), BytesValue("boo"), true},
+			}
+
+			for _, test := range tests {
+				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}
+				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: test.x, 1: test.y})
+
+				assert.Nil(t, except)
+				assert.Equal(t, test.z, outputs.Get(0), "%v, %v", test.x, test.y)
+			}
+		})
+
 		t.Run("Get [0x10]", func(t *testing.T) {
 			method := runtime.primitiveMethods[PrimitiveBytes][0x10]
 
@@ -872,6 +941,38 @@ func TestAddressValue(t *testing.T) {
 			0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
 		}
 		assert.Equal(t, expectedData, data, "POLO encoded bytes of AddressValue should match expected value")
+	})
+
+	t.Run("Methods", func(t *testing.T) {
+		runtime := NewRuntime()
+
+		t.Run("__eq__ [0x3]", func(t *testing.T) {
+			method := runtime.primitiveMethods[PrimitiveAddress][MethodEq]
+
+			tests := []struct {
+				x, y AddressValue
+				z    BoolValue
+			}{
+				{
+					AddressValue(types.CreateAddressFromString("foo")),
+					AddressValue(types.CreateAddressFromString("bar")),
+					false,
+				},
+				{
+					AddressValue(types.CreateAddressFromString("foo")),
+					AddressValue(types.CreateAddressFromString("foo")),
+					true,
+				},
+			}
+
+			for _, test := range tests {
+				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}
+				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: test.x, 1: test.y})
+
+				assert.Nil(t, except)
+				assert.Equal(t, test.z, outputs.Get(0), "%v, %v", test.x, test.y)
+			}
+		})
 	})
 }
 
