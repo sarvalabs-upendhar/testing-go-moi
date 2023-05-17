@@ -3,6 +3,8 @@ package pisa
 import (
 	"bytes"
 
+	"github.com/holiman/uint256"
+
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
@@ -223,9 +225,11 @@ func (runtime *Runtime) setupPrimitiveMethods() {
 		BoolValue(false),
 		BytesValue{},
 		StringValue(""),
+		AddressValue{},
 		U64Value(0),
 		I64Value(0),
-		AddressValue{},
+		U256Value(*uint256.NewInt(0)),
+		I256Value(*uint256.NewInt(0)),
 	}
 
 	for _, primitive := range primitives {

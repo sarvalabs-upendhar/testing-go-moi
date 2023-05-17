@@ -3,6 +3,8 @@ package pisa
 import (
 	"fmt"
 
+	"github.com/holiman/uint256"
+
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
@@ -112,6 +114,36 @@ func NewRegisterValue(datatype Datatype, data []byte) (RegisterValue, error) {
 			}
 
 			return I64Value(*number), nil
+
+		// U256Value
+		case PrimitiveU256:
+			// If empty data, create the default U256 value and return
+			if data == nil {
+				return U256Value(*uint256.NewInt(0)), nil
+			}
+
+			// Decode data into a uint256
+			number := new(uint256.Int)
+			if err := polo.Depolorize(number, data); err != nil {
+				return nil, errors.New("data does not decode to a u256")
+			}
+
+			return U256Value(*number), nil
+
+		// I256Value
+		case PrimitiveI256:
+			// If empty data, create the default I256 value and return
+			if data == nil {
+				return I256Value(*uint256.NewInt(0)), nil
+			}
+
+			// Decode data into a int256
+			number := new(uint256.Int)
+			if err := polo.Depolorize(number, data); err != nil {
+				return nil, errors.New("data does not decode to a i256")
+			}
+
+			return I256Value(*number), nil
 
 		// AddressValue
 		case PrimitiveAddress:
