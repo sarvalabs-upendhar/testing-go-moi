@@ -9,7 +9,7 @@ import (
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "moichain",
-	Short: "Moichain is a context aware blockchain application ",
+	Short: "MOIchain is a context aware network",
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

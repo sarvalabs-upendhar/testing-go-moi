@@ -26,4 +26,5 @@ var (
 	ErrInvalidPrivKeyLength            = errors.New("secret key must be 32 bytes")
 	ErrSigningFailed                   = errors.New("error in signing")
 	ErrDerivingPrivKeyFromSRP          = errors.New("error deriving the private bytes from SRP")
+	ErrMnemonicMandatory               = errors.New("seedPhrase/mnemonic must be passed through config in Register Mode")
 )

@@ -31,11 +31,8 @@ func TestBLSSignAgg(t *testing.T) {
 	require.NoError(t, err)
 
 	config := &VaultConfig{
-		DataDir:       datadir1,
-		NodePassword:  "nodepass1",
-		MoiIDUsername: "raman",
-		MoiIDPassword: "Test@123",
-		MoiIDURL:      "dev",
+		DataDir:      datadir1,
+		NodePassword: "nodepass1",
 	}
 
 	vault1, err := NewVault(config, moinode.MoiFullNode, 1)
@@ -79,4 +76,67 @@ func TestBLSSignAgg(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, true, validationStatus)
+}
+
+func TestKramaVaultWithoutAnyMode(t *testing.T) {
+	datadir1, err := ioutil.TempDir("", "random")
+	require.NoError(t, err)
+
+	config := &VaultConfig{
+		DataDir:      datadir1,
+		NodePassword: "nodepass1",
+	}
+
+	_, err = NewVault(config, moinode.MoiFullNode, 1)
+	require.ErrorIs(t, common.ErrNoKeystore, err)
+}
+
+func TestRegisterModeWithoutMnemomic(t *testing.T) {
+	datadir, err := ioutil.TempDir("", "moichain")
+	require.NoError(t, err)
+
+	config := &VaultConfig{
+		DataDir:      datadir,
+		NodePassword: "nodepass1",
+		Mode:         1,
+	}
+
+	_, err = NewVault(config, moinode.MoiFullNode, 1)
+	require.ErrorIs(t, common.ErrMnemonicMandatory, err)
+}
+
+func TestKramaVaultRegisterMode(t *testing.T) {
+	datadir, err := ioutil.TempDir("", "moichain")
+	require.NoError(t, err)
+
+	config := &VaultConfig{
+		DataDir:      datadir,
+		NodePassword: "nodepass1",
+		Mode:         1,
+		SeedPhrase:   "unlock element young void mass casino suffer twin earth drill aerobic tooth",
+	}
+
+	vault, err := NewVault(config, moinode.MoiFullNode, 1)
+	require.NoError(t, err)
+
+	moiIDStringFromSetup, err := vault.MOiID()
+	require.NoError(t, err)
+	kramaIDFromSetup, err := vault.MOiID()
+	require.NoError(t, err)
+
+	config1 := &VaultConfig{
+		DataDir:      datadir,
+		NodePassword: "nodepass1",
+	}
+
+	vault1, err := NewVault(config1, moinode.MoiFullNode, 1)
+	require.NoError(t, err)
+
+	moiIDStringFromStart, err := vault1.MOiID()
+	require.NoError(t, err)
+	kramaIDFromStart, err := vault1.MOiID()
+	require.NoError(t, err)
+
+	require.Equal(t, moiIDStringFromSetup, moiIDStringFromStart)
+	require.Equal(t, kramaIDFromSetup, kramaIDFromStart)
 }

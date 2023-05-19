@@ -1,15 +1,10 @@
 package poi
 
 import (
-	"bytes"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"io/ioutil"
 	mrand "math/rand"
-	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -38,6 +33,40 @@ func GetKeystore(dataDir string) ([]byte, error) {
 	return ksContent, nil
 }
 
+func SetupKeystore(
+	currentKramaID kramaid.KramaID,
+	bothSignAndCommPrivBytes []byte,
+	validatorType moinode.MoiNodeType,
+	dataDir string,
+	passPhrase string,
+) error {
+	nodeSpecificPublicBytes := kramaid.GetPublicKeyFromPrivateBytes(bothSignAndCommPrivBytes[0:32], true)
+	nodeSpecificPublicAddr := kramaid.GetAddressFromPublicBytes(nodeSpecificPublicBytes)
+
+	moiID, err := currentKramaID.MoiID()
+	if err != nil {
+		return err
+	}
+
+	nodeIndex, err := currentKramaID.NodeIndex()
+	if err != nil {
+		return err
+	}
+
+	var nodeKS nodeKeystore
+	nodeKS.MoiID = moiID
+	nodeKS.IGCPath = [4]uint32{NodeIGCPath[0], NodeIGCPath[1], NodeIGCPath[2], nodeIndex}
+	nodeKS.KramaID = string(currentKramaID)
+	nodeKS.NodeType = validatorType.ByteString()
+	nodeKS.NodeAddress = nodeSpecificPublicAddr
+
+	if err = StoreKeystore(bothSignAndCommPrivBytes, passPhrase, dataDir, nodeKS); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func DecryptKeystore(ksInBytes []byte, nodePassPhrase string) ([]byte, string, uint32, error) {
 	var nKs nodeKeystore
 
@@ -52,197 +81,6 @@ func DecryptKeystore(ksInBytes []byte, nodePassPhrase string) ([]byte, string, u
 	}
 
 	return prvKeys, nKs.MoiID, nKs.IGCPath[3], nil
-}
-
-func GenerateKeysForVault(userName, pAsSw0rd, environment string) ([]byte, string, uint32, error) {
-	if environment == "" {
-		return nil, "", 0, errors.New("environment cannot be empty")
-	}
-
-	moiIDBaseURL := getMoiIDBaseURL(environment)
-
-	// Get Base-X Encoded username
-	encodedUserName, err := BaseXEncode(userName)
-	if err != nil {
-		return nil, "", 0, err
-	}
-
-	// Get MOI Wallet Default Address
-	defAddrInBytes, err := sendRequest(moiIDBaseURL, "getdefaultaddress", *encodedUserName)
-	if err != nil {
-		return nil, "", 0, err
-	}
-
-	defautlAddress := string(defAddrInBytes)
-
-	if defautlAddress == ZeroAddress {
-		return nil, "", 0, common.ErrInvalidUsername
-	}
-	// authenticate if user's moi id is correct or not
-	// authStatus is a bool variable which convey if user is a valid moi-id or not
-	authStatus, zkProof, err := Authenticate(defautlAddress, pAsSw0rd, moiIDBaseURL)
-	if err != nil {
-		return nil, "", 0, err
-	}
-
-	if authStatus {
-		// Get Wallet Keystore from MOI id to derive Secret Recovery Phrase
-		ksPayload := map[string]interface{}{
-			"defAddr":     defautlAddress,
-			"typeOfProof": "keystore",
-			"authToken":   zkProof,
-		}
-
-		ksPayloadInJSON, err := json.Marshal(ksPayload)
-		if err != nil {
-			return nil, "", 0, err
-		}
-
-		keystoreResponse, err := http.Post(moiIDBaseURL+"/moi-id/auth/getmks",
-			"application/json", bytes.NewBuffer(ksPayloadInJSON))
-		if err != nil {
-			return nil, "", 0, err
-		}
-
-		keystoreResponseInBytes, err := ioutil.ReadAll(keystoreResponse.Body)
-		if err != nil {
-			return nil, "", 0, err
-		}
-
-		type MKS struct {
-			ZKP             interface{}        `json:"_proof"`
-			KeyStore        WalletKeystoreJSON `json:"_keystore"`
-			MoiCipherParams interface{}        `json:"_moiCipherParams"`
-		}
-
-		var userMks MKS
-		err = json.Unmarshal(keystoreResponseInBytes, &userMks)
-
-		if err != nil {
-			return nil, "", 0, err
-		}
-
-		srp, err := getSRPFromEncryptedJSON(userMks.KeyStore, pAsSw0rd)
-		if err != nil {
-			return nil, "", 0, err
-		}
-
-		_, err = CheckForKYC(defautlAddress, moiIDBaseURL)
-		if err != nil {
-			return nil, "", 0, err
-		}
-
-		/* Initializing the MoiNode Registry */
-		mnReg := moinode.Init(moiIDBaseURL)
-
-		// Get number of nodes the user have
-		_, addressIndex, err := mnReg.GetNodes(map[string]interface{}{
-			"userID":    defautlAddress,
-			"countOnly": true,
-		})
-		if err != nil {
-			return nil, "", 0, err
-		}
-
-		bothSignAndCommPrivBytes, err := kramaid.GetPrivateKeysForSigningAndNetwork(*srp, addressIndex)
-		if err != nil {
-			return nil, "", 0, err
-		}
-
-		moiIDAddressInLC := trimHexString(defautlAddress)
-
-		return bothSignAndCommPrivBytes, moiIDAddressInLC, addressIndex, nil
-	}
-
-	return nil, "", 0, common.ErrAuthFailed
-}
-
-func RegisterNode(bothSignAndCommPrivBytes []byte,
-	moiIDAddress, dataDir, localNodePass string,
-	myKID kramaid.KramaID,
-	nodeType moinode.MoiNodeType,
-	env string,
-) error {
-	defautlAddress := moiIDAddress
-	nodeSpecificPublicBytes := kramaid.GetPublicKeyFromPrivateBytes(bothSignAndCommPrivBytes[0:32], true)
-	nodeSpecificPublicAddr := kramaid.GetAddressFromPublicBytes(nodeSpecificPublicBytes)
-
-	kramaIDInString := string(myKID)
-
-	addressIndex, err := myKID.NodeIndex()
-	if err != nil {
-		return err
-	}
-
-	/* Storing keystore locally */
-	var nodeKS nodeKeystore
-	nodeKS.MoiID = trimHexString(defautlAddress)
-	nodeKS.IGCPath = [4]uint32{NodeIGCPath[0], NodeIGCPath[1], NodeIGCPath[2], addressIndex}
-	nodeKS.KramaID = kramaIDInString
-	nodeKS.NodeType = nodeType.ByteString()
-	nodeKS.NodeAddress = nodeSpecificPublicAddr
-
-	moiIDBaseURL := getMoiIDBaseURL(env)
-
-	mnReg := moinode.Init(moiIDBaseURL)
-
-	_, err = mnReg.UpdateNode(
-		false,
-		nodeSpecificPublicBytes,
-		defautlAddress,
-		nodeType.ByteString(),
-		kramaIDInString,
-	)
-	if err != nil {
-		return err
-	}
-
-	if err = storeKeystore(bothSignAndCommPrivBytes, localNodePass, dataDir, nodeKS); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// storeKeystore stores the keystore bytes in nodedir keystore path
-func storeKeystore(privKeyBytesOfValidator []byte, nodePassPhrase, dataDir string, nodeKS nodeKeystore) error {
-	cryptoStruct, err := encryptAndGetKeystore(privKeyBytesOfValidator, []byte(nodePassPhrase))
-	if err != nil {
-		return err
-	}
-
-	nodeKS.Crypto = cryptoStruct
-
-	ksPayloadInBytes, err := json.Marshal(nodeKS)
-	if err != nil {
-		return err
-	}
-
-	path := filepath.Join(dataDir, "/keystore.json")
-
-	f, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-
-	bytesWritten, err := f.Write(ksPayloadInBytes)
-	if err != nil {
-		err := f.Close()
-		if err != nil {
-			return errors.New("error closing the file " + err.Error())
-		}
-
-		return err
-	}
-
-	if bytesWritten > 0 {
-		err = f.Close()
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func getPrivKeysForTest(seed []byte) ([]byte, []byte, error) {
@@ -378,7 +216,7 @@ func RandGenKeystore(dataDir, localNodePass string) ([]byte, kramaid.KramaID, er
 	nodeKS.KramaID = string(currentKID)
 	nodeKS.NodeType = "0x07"
 
-	if err = storeKeystore(bothSignAndCommPrivBytes, localNodePass, dataDir, nodeKS); err != nil {
+	if err = StoreKeystore(bothSignAndCommPrivBytes, localNodePass, dataDir, nodeKS); err != nil {
 		return nil, "", err
 	}
 

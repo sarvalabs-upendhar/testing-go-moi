@@ -1,188 +1,25 @@
 package poi
 
 import (
-	"bytes"
-	"context"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
-	"encoding/hex"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
-	"io/ioutil"
-	"net"
-	"net/http"
+	"crypto/ecdsa"
+	hexutil "encoding/hex"
+	"math/big"
 	"time"
 
-	"github.com/eknkc/basex"
-	"golang.org/x/crypto/scrypt"
-
-	"github.com/sarvalabs/moichain/mudra/common"
+	"github.com/btcsuite/btcd/btcutil/hdkeychain"
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/tyler-smith/go-bip39"
 )
 
 const (
-	MaxTimeForConnect = 2 * time.Second
-	MaxTimeForRequest = 2 * time.Second
+	MaxTimeForConnect  = 2 * time.Second
+	MaxTimeForRequest  = 2 * time.Second
+	HardenedStartIndex = 2147483648 // 2^31
+	// number of bits in a big.Word
+	wordBits = 32 << (uint64(^big.Word(0)) >> 63)
+	// number of bytes in a big.Word
+	wordBytes = wordBits / 8
 )
-
-// BaseXEncode function converts string to hex and do encode using bitcoin style leading zero compression
-// Know more about this basex encoding here: https://awesomeopensource.com/project/cryptocoinjs/base-x
-func BaseXEncode(username string) (*string, error) {
-	convertedHexstring := fmt.Sprintf("%x", username)
-
-	decodedHexString, err := hex.DecodeString(convertedHexstring)
-	if err != nil {
-		return nil, errors.New("error in decoding the string to hex")
-	}
-
-	base58EncodingScheme, err := basex.NewEncoding(ALPHABET)
-	if err != nil {
-		return nil, errors.New("error in constructing MOI Encoding scheme")
-	}
-
-	moiEncodedString := base58EncodingScheme.Encode(decodedHexString)
-
-	return &moiEncodedString, nil
-}
-
-func getMoiIDBaseURL(env string) string {
-	switch env {
-	case "dev":
-		return "https://devapi.moinet.io"
-	case "qa":
-		return "https://qaapi.moinet.io"
-	case "prod":
-		return "https://api.moinet.io"
-	default:
-		return "https://api.moinet.io"
-	}
-}
-
-func sendRequest(moiIDBaseURL string, reqPath string, encodedUserName string) ([]byte, error) {
-	var (
-		err  error
-		resp *http.Response
-	)
-
-	switch reqPath {
-	case "getdefaultaddress":
-		{
-			resp, err = http.Get(moiIDBaseURL + "/moi-id/identity/getdefaultaddress?username=" + encodedUserName)
-		}
-	default:
-		{
-			return nil, errors.New("invalid request path")
-		}
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	respInBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	return respInBytes, nil
-}
-
-// decryptKeystore decrypts the keystore and return bytes of length 32
-// [0:32] = Consensus Key and [32:64] = Network Key
-func decryptKeystore(cryptoJSON cryptoParams, auth string) ([]byte, error) {
-	if cryptoJSON.Cipher != "aes-128-ctr" {
-		return nil, fmt.Errorf("cipher not supported: %v", cryptoJSON.Cipher)
-	}
-
-	mac, err := hex.DecodeString(cryptoJSON.MAC)
-	if err != nil {
-		return nil, err
-	}
-
-	var targetedInitVector string
-
-	// This is to handle alpha version's poi keystore
-	// in new version IV param is all caps
-	if cryptoJSON.CipherParams["IV"] != "" {
-		targetedInitVector = cryptoJSON.CipherParams["IV"]
-	} else {
-		targetedInitVector = cryptoJSON.CipherParams["iv"]
-	}
-
-	iv, err := hex.DecodeString(targetedInitVector)
-	if err != nil {
-		return nil, err
-	}
-
-	cipherText, err := hex.DecodeString(cryptoJSON.CipherText)
-	if err != nil {
-		return nil, err
-	}
-
-	derivedKey, err := getKDFKeyForKeystore(cryptoJSON, auth)
-	if err != nil {
-		return nil, err
-	}
-
-	calculatedMAC := common.GetKeccak256Hash(derivedKey[16:32], cipherText)
-	if !bytes.Equal(calculatedMAC, mac) {
-		return nil, errors.New("could not decrypt key with given password")
-	}
-
-	plainText, err := aesCTRXOR(derivedKey[:16], cipherText, iv)
-	if err != nil {
-		return nil, err
-	}
-
-	return plainText, err
-}
-
-// aesCTRXOR Standard CTR Mode of AES
-func aesCTRXOR(key, inText, iv []byte) ([]byte, error) {
-	aesBlock, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-
-	stream := cipher.NewCTR(aesBlock, iv)
-	outText := make([]byte, len(inText))
-	stream.XORKeyStream(outText, inText)
-
-	return outText, err
-}
-
-// mParseInt is to parse the int/float64 to int, helps in KDF
-func mParseInt(m interface{}) int {
-	assertedVal, ok := m.(float64)
-	if !ok {
-		return 0
-	}
-
-	return int(assertedVal)
-}
-
-func getKDFKeyForKeystore(cryptoJSON cryptoParams, auth string) ([]byte, error) {
-	authArray := []byte(auth)
-
-	salt, err := hex.DecodeString(cryptoJSON.KDFParams["salt"].(string))
-	if err != nil {
-		return nil, err
-	}
-
-	dkLen := mParseInt(cryptoJSON.KDFParams["dklen"])
-
-	if cryptoJSON.KDF == keyHeaderKDF {
-		n := mParseInt(cryptoJSON.KDFParams["n"])
-		r := mParseInt(cryptoJSON.KDFParams["r"])
-		p := mParseInt(cryptoJSON.KDFParams["p"])
-
-		return scrypt.Key(authArray, salt, n, r, p, dkLen)
-	}
-
-	return nil, fmt.Errorf("unsupported KDF: %s", cryptoJSON.KDF)
-}
 
 // trimHexString remove 0x prefix to hex string
 func trimHexString(hexString string) string {
@@ -194,117 +31,149 @@ func trimHexString(hexString string) string {
 	}
 }
 
-// encryptAndGetKeystore encrypts the secret with the given password 'auth'.
-func encryptAndGetKeystore(data, auth []byte) (cryptoParams, error) {
-	salt := make([]byte, 32)
-	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
-		panic("reading from signature/rand failed: " + err.Error())
+// getPrivateKeyInBytes is a private function that returns the raw privateKey in bytes
+func serializePrivateKey(prvKey *ecdsa.PrivateKey) []byte {
+	bigint := prvKey.D
+	n := prvKey.Params().BitSize / 8
+
+	if bigint.BitLen()/8 >= n {
+		return bigint.Bytes()
 	}
 
-	derivedKey, err := scrypt.Key(auth, salt, 4096, 8, 1, 32)
-	if err != nil {
-		return cryptoParams{}, err
-	}
+	ret := make([]byte, n)
+	ReadBits(bigint, ret)
 
-	encryptKey := derivedKey[:16]
-
-	iv := make([]byte, aes.BlockSize) // 16
-	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-		panic("reading from signature/rand failed: " + err.Error())
-	}
-
-	cipherText, err := aesCTRXOR(encryptKey, data, iv)
-	if err != nil {
-		return cryptoParams{}, err
-	}
-
-	mac := common.GetKeccak256Hash(derivedKey[16:32], cipherText)
-
-	scryptParamsJSON := make(map[string]interface{}, 5)
-	scryptParamsJSON["n"] = 4096
-	scryptParamsJSON["r"] = 8
-	scryptParamsJSON["p"] = 1
-	scryptParamsJSON["dklen"] = 32
-	scryptParamsJSON["salt"] = hex.EncodeToString(salt)
-	cipherParamsJSON := map[string]string{
-		"IV": hex.EncodeToString(iv),
-	}
-
-	cryptoStruct := cryptoParams{
-		Cipher:       "aes-128-ctr",
-		CipherText:   hex.EncodeToString(cipherText),
-		CipherParams: cipherParamsJSON,
-		KDF:          "scrypt",
-		KDFParams:    scryptParamsJSON,
-		MAC:          hex.EncodeToString(mac),
-	}
-
-	return cryptoStruct, nil
+	return ret
 }
 
-// CheckForKYC helps in checking the KYC information
-func CheckForKYC(userDefAddr, moiIDBaseURL string) (bool, error) {
-	// preparing request payload for checkForKYC
-	checkForKYCPayload, err := json.Marshal(map[string]string{
-		"defAddr":   userDefAddr,
-		"nameSpace": "validator",
-	})
+// GetPrivateKeysForSigningAndNetwork used to return concatenated privateKeys
+// one at path m/44'/6174'/5020'/0/0 for signing
+// one at path m/44'/6174'/6020'/0/0 for network communication
+// in bytes
+func GetPrivateKeysForSigningAndNetwork(mnemonic string, nthValidator uint32) ([]byte, string, error) {
+	// Extract seed from mnemonic
+	seed, err := bip39.NewSeedWithErrorChecking(mnemonic, "")
 	if err != nil {
-		return false, err
+		return nil, "", err
 	}
 
-	requestBody := bytes.NewBuffer(checkForKYCPayload)
-
-	// TODO: Resolve error
-	client := &http.Client{
-		Transport: &http.Transport{
-			DialContext: (&net.Dialer{
-				Timeout: MaxTimeForConnect,
-			}).DialContext,
-		},
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), MaxTimeForRequest)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx,
-		http.MethodPost,
-		moiIDBaseURL+"/moi-id/digitalme/checkForKYC",
-		requestBody)
-	req.Header.Set("Content-Type", "application/json")
-
+	// Let's derive 'm' in the path
+	masterKey, err := hdkeychain.NewMaster(seed, &chaincfg.MainNetParams)
 	if err != nil {
-		return false, err
+		return nil, "", err
 	}
 
-	checkForKYCResponse, err := client.Do(req)
+	// Hardened keys index starts from 2147483648 (2^31)
+	// So.,
+	// 44' = 2147483648 + 44 = 2147483692
+	// 6174' = 2147483648 + 6174 = 2147489822
+	igcParams := [2]uint32{2147483692, 2147489822}
+
+	tempKey := masterKey
+	for _, n := range igcParams {
+		tempKey, err = tempKey.Derive(n)
+		if err != nil {
+			return nil, "", err
+		}
+	}
+	// Now tempKey points to extended private key at path: m/44'/6174'
+
+	var aggPrivKey []byte // concatenatation of network and consensus private keys
+
+	// Derive PrivateKey for signing, so load keyPair at path: m/44'/6174'/5020'/0/n
+	validatorPrivKey := tempKey
+
+	var validatorPath [3]uint32
+	validatorPath[0] = HardenedStartIndex + 5020 // hardened
+	validatorPath[1] = 0
+	validatorPath[2] = nthValidator
+
+	for _, n := range validatorPath {
+		validatorPrivKey, err = validatorPrivKey.Derive(n)
+		if err != nil {
+			return nil, "", err
+		}
+	}
+
+	// Casting to Elliptic curve Private key
+	privKeyInEC, err := validatorPrivKey.ECPrivKey()
 	if err != nil {
-		return false, err
+		return nil, "", err
 	}
-	defer checkForKYCResponse.Body.Close()
 
-	checkForKYCResponseInBytes, err := ioutil.ReadAll(checkForKYCResponse.Body)
+	privKeyInECDSA := privKeyInEC.ToECDSA()
+	signingPrivKeyInBytes := serializePrivateKey(privKeyInECDSA)
+	aggPrivKey = append(aggPrivKey, signingPrivKeyInBytes...)
+
+	// Derive PrivateKey for network, so load keyPair at path: m/44'/6174'/6020'/0/n
+	ntwPrivKey := tempKey
+
+	var networkPath [3]uint32
+	networkPath[0] = HardenedStartIndex + 6020
+	networkPath[1] = 0
+	networkPath[2] = nthValidator
+
+	for _, n := range networkPath {
+		ntwPrivKey, err = ntwPrivKey.Derive(n)
+		if err != nil {
+			return nil, "", err
+		}
+	}
+
+	// Casting to Elliptic curve Private key
+	nPrivKeyInEC, err := ntwPrivKey.ECPrivKey()
 	if err != nil {
-		return false, err
+		return nil, "", err
 	}
 
-	// Response from above end-point
-	type responseFromCheckForKYC struct {
-		Status    string `json:"status"`
-		Message   string `json:"message"`
-		OtherData string `json:"otherData"`
+	nPrivKeyInECDSA := nPrivKeyInEC.ToECDSA()
+	ntwPrivKeyInBytes := serializePrivateKey(nPrivKeyInECDSA)
+
+	aggPrivKey = append(aggPrivKey, ntwPrivKeyInBytes...)
+
+	// Derive MOI ID public Key which is at path m/44'/6174'/0'/0/0
+	moiIDPrivateKey := tempKey
+
+	var moiIDPath [3]uint32
+	moiIDPath[0] = HardenedStartIndex + 0
+	moiIDPath[1] = 0
+	moiIDPath[2] = 0
+
+	for _, n := range moiIDPath {
+		moiIDPrivateKey, err = moiIDPrivateKey.Derive(n)
+		if err != nil {
+			return nil, "", err
+		}
 	}
 
-	var parseResponse responseFromCheckForKYC
-	err = json.Unmarshal(checkForKYCResponseInBytes, &parseResponse)
-
+	moiIDPubKey, err := moiIDPrivateKey.Neuter()
 	if err != nil {
-		return false, err
+		return nil, "", err
 	}
 
-	if parseResponse.Status == "failed" {
-		return false, errors.New("\n" + parseResponse.Message + "\n\n" + parseResponse.OtherData)
+	moiIDPubInSecp256k1, err := moiIDPubKey.ECPubKey()
+	if err != nil {
+		return nil, "", err
 	}
 
-	return true, nil
+	moiIDPubBytes := moiIDPubInSecp256k1.SerializeCompressed()
+	// fmt.Println("Pub: ", moiIDPubBytes)
+	// moiID := getAddressFromPublicBytes(moiIDPubBytes)
+	// fmt.Println("Addr: ", moiID)
+	return aggPrivKey, trimHexString(hexutil.EncodeToString(moiIDPubBytes)), nil
+}
+
+// ReadBits encodes the absolute value of bigint as big-endian bytes. Callers must ensure
+// that buf has enough space. If buf is too short the result will be incomplete.
+func ReadBits(bigint *big.Int, buf []byte) {
+	i := len(buf)
+
+	for _, d := range bigint.Bits() {
+		for j := 0; j < wordBytes && i > 0; j++ {
+			i--
+
+			buf[i] = byte(d)
+			d >>= 8
+		}
+	}
 }

@@ -2,6 +2,7 @@ package poi
 
 import (
 	"errors"
+	"strings"
 )
 
 // poi constants
@@ -13,30 +14,6 @@ const (
 )
 
 var NodeIGCPath = [3]uint32{6174, 5020, 0}
-
-// SRPPrivateBytes Secret Recovery Phrase(SRP) with decryptionKey of privateKey and Mnemonic
-type SRPPrivateBytes [64]byte
-
-// FromBytes loads the SRPPrivateBytes with given bytes
-func (srb *SRPPrivateBytes) FromBytes(privateBytes []byte) error {
-	if len(privateBytes) != 64 {
-		return errors.New(" invalid passphrase")
-	}
-
-	copy(srb[:], privateBytes)
-
-	return nil
-}
-
-// getPathKey is private function that returns decryptionKey for privateKey at some IGC
-func (srb *SRPPrivateBytes) getPathKey() []byte {
-	return srb[:32]
-}
-
-// getMnemonicKey is private function that returns decryptionKey for mnemonic
-func (srb *SRPPrivateBytes) getMnemonicKey() []byte {
-	return srb[32:]
-}
 
 // WalletKeystoreJSON is combination of privateKey and mnemonic keystore
 type WalletKeystoreJSON struct {
@@ -77,4 +54,22 @@ type nodeKeystore struct {
 	UUID        string       `json:"id"`
 	Version     int          `json:"version"`
 	IGCPath     [4]uint32    `json:"igcPath"`
+}
+
+type Mnemonic [12]string
+
+func (seed *Mnemonic) FromString(seedPhrase string) error {
+	twelvePhrases := strings.Split(seedPhrase, " ")
+
+	if len(twelvePhrases) == 12 {
+		copy(seed[:], twelvePhrases)
+	} else {
+		return errors.New("invalid length for mnemonic")
+	}
+
+	return nil
+}
+
+func (seed Mnemonic) String() string {
+	return strings.Join(seed[:], " ")
 }

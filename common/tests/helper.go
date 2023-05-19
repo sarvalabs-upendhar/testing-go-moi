@@ -742,11 +742,8 @@ func SignBytes(t *testing.T, msg []byte) (sigBytes, pk []byte) {
 	require.NoError(t, err)
 
 	config := &mudra.VaultConfig{
-		DataDir:       dataDir,
-		NodePassword:  password,
-		MoiIDUsername: "",
-		MoiIDPassword: "",
-		MoiIDURL:      "dev",
+		DataDir:      dataDir,
+		NodePassword: password,
 	}
 
 	vault, err := mudra.NewVault(config, moinode.MoiFullNode, 1)
