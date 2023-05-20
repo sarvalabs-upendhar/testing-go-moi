@@ -28,12 +28,14 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 			Subsystem: "chain_manager",
 			Name:      "signature_verification_time",
 			Help:      "Time taken to verify tesseract signature",
+			Buckets:   []float64{5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 100},
 		}, labels).With(labelsWithValues...),
 		StatefulTesseractAdditionTime: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
 			Namespace: namespace,
 			Subsystem: "chain_manager",
 			Name:      "stateful_tesseract_addition_time",
 			Help:      "Time taken to add the created tesseract",
+			Buckets:   []float64{5, 10, 15, 20, 25, 30, 50, 100},
 		}, labels).With(labelsWithValues...),
 		StatefulTesseractCounter: prometheus.NewCounterFrom(stdprometheus.CounterOpts{
 			Namespace: namespace,

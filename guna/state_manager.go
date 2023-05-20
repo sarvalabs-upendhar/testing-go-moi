@@ -151,6 +151,8 @@ func (sm *StateManager) GetDirtyObject(addr types.Address) (*StateObject, error)
 
 	sm.dirtyObjects[addr] = dirtyObject.Copy()
 
+	sm.metrics.captureActiveStateObjects(1)
+
 	return sm.dirtyObjects[addr], nil
 }
 
@@ -303,6 +305,7 @@ func (sm *StateManager) Revert(snap *StateObject) error {
 		sm.logger.Info("Reverting back the state object", "addr", snap.address.Hex())
 		sm.dirtyObjects[snap.address] = snap
 		sm.metrics.captureNumOfReverts(1)
+		sm.metrics.captureActiveStateObjects(-1)
 	}
 
 	return nil

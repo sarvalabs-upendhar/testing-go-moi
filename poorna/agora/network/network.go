@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sarvalabs/go-polo"
+
 	"github.com/libp2p/go-msgio"
 
 	"github.com/hashicorp/go-hclog"
@@ -91,6 +93,8 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 
 		peer.updateLastActiveTime() // check if remote peer can spam with invalid messages
 
+		an.metrics.captureInboundDataSize(float64(len(message.Payload)))
+
 		switch message.MsgType {
 		case ptypes.AGORAREQ:
 			reqMsg := new(atypes.AgoraRequestMsg)
@@ -100,7 +104,6 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 				continue
 			}
 
-			an.metrics.captureInboundDataSize(float64(len(message.Payload)))
 			an.sm.HandlePeerMessage(message.Sender, reqMsg)
 
 		case ptypes.AGORARESP:
@@ -111,7 +114,6 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 				continue
 			}
 
-			an.metrics.captureOutboundDataSize(float64(len(message.Payload)))
 			an.sm.HandlePeerMessage(message.Sender, respMsg)
 		}
 	}
@@ -157,6 +159,13 @@ func (an *AgoraNetwork) SendAgoraMessage(id id.KramaID, msgType ptypes.MsgType, 
 	if err := agoraPeer.sendMessage(an.server.GetKramaID(), msgType, msg); err != nil {
 		return err
 	}
+
+	rawData, err := polo.Polorize(msg)
+	if err != nil {
+		return err
+	}
+
+	an.metrics.captureOutboundDataSize(float64(len(rawData)))
 
 	agoraPeer.addActiveSession(msg.GetSessionID())
 	agoraPeer.updateLastActiveTime()

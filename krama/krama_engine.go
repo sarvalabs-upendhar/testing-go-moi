@@ -571,7 +571,11 @@ func (k *Engine) handleReq(req Request) {
 		k.exec.Cleanup(clusterID)
 	}()
 
-	k.metrics.captureAvailableOperatorSlots(-1)
+	if req.slotType == ktypes.OperatorSlot {
+		k.metrics.captureAvailableOperatorSlots(-1)
+	} else {
+		k.metrics.captureAvailableValidatorSlots(-1)
+	}
 
 	if err = k.validateInteractions(req.ixs); err != nil {
 		k.logger.Error("Invalid Interaction", "error", err)

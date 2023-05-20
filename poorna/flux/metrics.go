@@ -22,13 +22,13 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 	return &Metrics{
 		PendingSlots: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
 			Namespace: namespace,
-			Subsystem: "flex",
+			Subsystem: "flux",
 			Name:      "pending_slots",
 			Help:      "Number of pending slots in the randomizer",
 		}, labels).With(labelsWithValues...),
 		NumOfRequests: prometheus.NewCounterFrom(stdprometheus.CounterOpts{
 			Namespace: namespace,
-			Subsystem: "flex",
+			Subsystem: "flux",
 			Name:      "number_of_requests",
 			Help:      "Number of requests received",
 		}, labels).With(labelsWithValues...),

@@ -30,12 +30,14 @@ func GetPrometheusMetrics(namespace string, labels []string, labelsWithValues ..
 			Subsystem: "agora",
 			Name:      "request_process_time",
 			Help:      "Time taken by a request to get processed",
+			Buckets:   []float64{100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1500},
 		}, labels).With(labelsWithValues...),
 		CidsPerRequest: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
 			Namespace: namespace,
 			Subsystem: "agora",
 			Name:      "average_cids_per_request",
 			Help:      "Average number of context ids per request",
+			Buckets:   []float64{5, 10, 15, 20, 25, 30, 35, 40},
 		}, labels).With(labelsWithValues...),
 		TimedOutRequests: prometheus.NewCounterFrom(stdprometheus.CounterOpts{
 			Namespace: namespace,
