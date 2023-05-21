@@ -29,7 +29,7 @@ import (
 
 const (
 	SLOTCOUNT  = 20
-	PEERSCOUNT = 6
+	PEERSCOUNT = 20
 )
 
 type Randomizer struct {
@@ -75,7 +75,6 @@ func NewRandomizer(
 			nonUtilized:   make(map[id.KramaID]int),
 			pendingCount:  PEERSCOUNT,
 		}
-		r.peers[i].updatePending = true
 		r.requestIDs[i] = -1
 	}
 
@@ -132,14 +131,22 @@ func (r *Randomizer) messageHandler(stream network.Stream) {
 func (r *Randomizer) addPeer(slot int, id id.KramaID) error {
 	r.peers[slot].mtx.Lock()
 	defer r.peers[slot].mtx.Unlock()
-	// log.Println("Add peer", slot, id)
+
 	if v, ok := r.peers[slot].nonUtilized[id]; !ok || v != 1 {
 		r.peers[slot].pendingCount--
 
 		r.peers[slot].nonUtilized[id] = 1
 
-		for k, v := range r.peers[slot].nonUtilized {
-			if v == -1 {
+		if len(r.peers[slot].nonUtilized) > PEERSCOUNT {
+			randIndex := rand.Intn(len(r.peers[slot].nonUtilized))
+			count := 0
+
+			for k := range r.peers[slot].nonUtilized {
+				count++
+				if randIndex != count {
+					continue
+				}
+
 				delete(r.peers[slot].nonUtilized, k)
 
 				break
@@ -153,10 +160,10 @@ func (r *Randomizer) addPeer(slot int, id id.KramaID) error {
 }
 
 func (r *Randomizer) updatePeerListStatus(slot int) {
-	if !r.peers[slot].updatePending && r.peers[slot].pendingCount >= int(math.Ceil(0.4*PEERSCOUNT)) {
+	if !r.peers[slot].updatePending && r.peers[slot].pendingCount >= int(math.Ceil(0.8*PEERSCOUNT)) {
 		r.peers[slot].updatePending = true
 		r.metrics.capturePendingSlots(1)
-	} else if r.peers[slot].updatePending && r.peers[slot].pendingCount < int(math.Ceil(0.4*PEERSCOUNT)) {
+	} else if r.peers[slot].updatePending && r.peers[slot].pendingCount < int(math.Ceil(0.8*PEERSCOUNT)) {
 		r.peers[slot].updatePending = false
 		r.metrics.capturePendingSlots(-1)
 	}
@@ -171,15 +178,13 @@ func (r *Randomizer) Start() {
 	}
 
 	go func() {
-		ticker := time.NewTicker(500 * time.Millisecond)
-
 		for {
 			select {
 			case <-r.ctx.Done():
 				r.logger.Info("Closing randomizer")
 
 				return
-			case <-ticker.C:
+			case <-time.After(300 * time.Millisecond):
 				if uint32(r.server.Peers.Len()) >= 3 {
 					for k, v := range r.peers {
 						v.mtx.RLock()
@@ -187,7 +192,7 @@ func (r *Randomizer) Start() {
 						updateRequired := v.updatePending
 						v.mtx.RUnlock()
 
-						if updateRequired && time.Since(lastRequest).Milliseconds() > PEERSCOUNT*100 {
+						if updateRequired && time.Since(lastRequest).Milliseconds() > PEERSCOUNT*150 {
 							//	log.Println("Populating the pool for slot", k)
 							r.PopulatePool(k)
 						}
@@ -220,7 +225,6 @@ func (r *Randomizer) getPeers(slotNo int, count int, avoidPeers []id.KramaID) []
 
 		if v == 1 {
 			list = append(list, k)
-			r.peers[slotNo].nonUtilized[k] = -1
 
 			r.peers[slotNo].pendingCount++
 			counter++
@@ -264,8 +268,13 @@ func (r *Randomizer) HandleReqMsg(reqMsg *ptypes.RandomWalkReq) error {
 			}
 
 			// forward the request
-			if err := r.SendFluxMessage(randomPeer, ptypes.RANDOMWALKREQ, msg); err != nil {
-				// log.Println("Unable to forward the random walk request", err, randomPeer.String())
+			if err = r.SendFluxMessage(randomPeer, ptypes.RANDOMWALKREQ, msg); err != nil {
+				r.logger.Error(
+					"Unable to forward the random walk request",
+					"error", err,
+					"peer", randomPeer.String(),
+				)
+
 				continue
 			}
 		}
@@ -387,6 +396,12 @@ func (r *Randomizer) GetRandomNodes(
 			s1 := rand.NewSource(time.Now().UnixNano())
 			reg := rand.New(s1)
 			slotNo := reg.Intn(SLOTCOUNT)
+			r.logger.Debug(
+				"querying for peers",
+				"slot-no", slotNo,
+				"required-count", requiredNo,
+				"available-count", len(randomPeers),
+			)
 
 			peers := r.getPeers(slotNo, requiredNo, avoidPeers)
 			if len(peers) == 0 {
@@ -409,10 +424,8 @@ func (r *Randomizer) Close() {
 }
 
 func (r *Randomizer) SendFluxMessage(peerID peer.ID, msgType ptypes.MsgType, msg interface{}) error {
-	// if s.Peers.ContainsPeer(peerID) {
-	//	 p := s.Peers.Peer(peerID)
-	//	 return p.(s.id, msgType, msg)
-	// }
+	r.logger.Debug("Sending flux message", peerID)
+
 	rawData, err := polo.Polorize(msg)
 	if err != nil {
 		return errors.Wrap(err, "failed to polorize message payload")

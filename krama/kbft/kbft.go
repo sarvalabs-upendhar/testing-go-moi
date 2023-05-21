@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	MaxBFTimeout = 30 * time.Second
+	MaxBFTimeout = 20 * time.Second
 )
 
 type vault interface {

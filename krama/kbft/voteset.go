@@ -157,8 +157,6 @@ func (vs *VoteSet) TwoThirdMajority() (tesseractGroupID *types.TesseractGridID, 
 		return vs.maj23, true
 	}
 
-	vs.logger.Debug("Returning no majority")
-
 	// No majority
 	return nil, false
 }

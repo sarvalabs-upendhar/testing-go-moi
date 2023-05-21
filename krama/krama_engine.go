@@ -462,6 +462,7 @@ func (k *Engine) joinCluster(ctx context.Context, slot *ktypes.Slot) error {
 		"Received an ICS join request",
 		"from", slot.ClusterState().Operator,
 		"timestamp", slot.ClusterState().RequestMsg.Timestamp,
+		"cluster-id", slot.ClusterID(),
 		"ixHash", slot.ClusterState().Ixs[0].Hash(),
 	)
 

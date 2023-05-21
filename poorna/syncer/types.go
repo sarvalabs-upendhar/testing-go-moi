@@ -119,6 +119,7 @@ type LatticeRequest struct {
 type TesseractInfo struct {
 	tesseract     *types.Tesseract
 	shouldExecute bool
+	clusterInfo   *types.ICSClusterInfo
 	icsNodeSet    *types.ICSNodeSet
 	delta         map[types.Hash][]byte
 }

@@ -236,9 +236,7 @@ func (server *Server) ID() peer.ID {
 func (server *Server) handle(s *streamWrap) {
 	for {
 		server.logger.Debug("[handle]",
-			"Server",
-			server.host.ID().Pretty(),
-			"handling remote RPC from",
+			"Handling remote RPC from",
 			s.stream.Conn().RemotePeer())
 
 		var svcID ServiceID
@@ -288,8 +286,6 @@ func (server *Server) handle(s *streamWrap) {
 			}()
 		}
 		// stats end -------------------------
-
-		server.logger.Debug("[handle]", "RPC ServiceID is", svcID)
 
 		// The service needs to have been registered with us.
 		service, mtype, err := server.getService(svcID)

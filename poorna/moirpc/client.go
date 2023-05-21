@@ -687,7 +687,6 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 		}
 
 		stream = ns
-		c.logger.Info("[send]", " creating new stream with ID = ", stream.ID())
 	} else {
 		s, ok := (item.Value()).(network.Stream)
 		if !ok {
@@ -707,7 +706,7 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 		c.logger.Error("[send]", " client error : encode svc ID  : ", err)
 
 		if resetErr := stream.Reset(); resetErr != nil {
-			call.logger.Error("[send]", "failed to Close Stream", resetErr)
+			call.logger.Error("[send]", "failed to close Stream", resetErr)
 		}
 
 		return nil, err
@@ -851,8 +850,6 @@ func (c *Client) makeStream(call *Call) {
 // the destination, writing argument channel objects to it and reading the
 // replies to the replies channel.
 func (c *Client) stream(call *Call) {
-	c.logger.Debug("[stream]", "streaming remote call")
-
 	s, err := c.host.NewStream(call.ctx, call.Dest, c.protocol)
 	if err != nil {
 		call.doneWithError(newClientError(err))

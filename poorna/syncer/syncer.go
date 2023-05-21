@@ -188,7 +188,7 @@ func (s *Syncer) NewSyncRequest(
 	syncMode types.SyncMode,
 	bestPeers []id.KramaID,
 	tesseracts ...*TesseractInfo,
-) error {
+) (err error) {
 	job, ok := s.jobQueue.getJob(addr)
 	if job == nil {
 		job = &SyncJob{
@@ -201,23 +201,23 @@ func (s *Syncer) NewSyncRequest(
 			bestPeers:       bestPeers,
 			tesseractSignal: make(chan struct{}, 1),
 		}
-	}
 
-	metaInfo, err := s.db.GetAccountMetaInfo(addr)
-	if err == nil {
-		if metaInfo.Height >= expectedHeight {
-			_, err = s.postAdditionHook(job, metaInfo.Height)
+		metaInfo, err := s.db.GetAccountMetaInfo(addr)
+		if err == nil {
+			if metaInfo.Height >= expectedHeight {
+				_, err = s.postAdditionHook(job, metaInfo.Height)
 
-			return err
-		}
+				return err
+			}
 
-		if job.getCurrentHeight() < metaInfo.Height {
-			job.updateCurrentHeight(metaInfo.Height)
+			if job.getCurrentHeight() < metaInfo.Height {
+				job.updateCurrentHeight(metaInfo.Height)
+			}
 		}
 	}
 
 	for _, v := range tesseracts {
-		if job.tesseractQueue.Has(v.tesseract.Height()) || s.db.HasTesseract(v.tesseract.Hash()) {
+		if job.tesseractQueue.Has(v.tesseract.Height()) || v.tesseract.Height() < job.getCurrentHeight() {
 			continue
 		}
 
@@ -306,6 +306,7 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 	var (
 		err      error
 		bestPeer id.KramaID
+		jobState = job.getJobState()
 	)
 
 	s.logger.Debug(
@@ -322,14 +323,15 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 	}()
 
 	if s.consensusSlots.AreAccountsActive(job.address) {
+		s.logger.Debug("Account is active job state set to sleep")
 		job.updateJobState(Sleep)
 
 		return nil
 	}
 
 	if len(job.bestPeers) > 0 {
-		randomNumber := rand.New(rand.NewSource(time.Now().UnixNano()))
-		bestPeer = job.bestPeers[randomNumber.Intn(len(job.bestPeers))]
+		randSource := rand.New(rand.NewSource(time.Now().UnixNano()))
+		bestPeer = job.bestPeers[randSource.Intn(len(job.bestPeers))]
 	} else {
 		bestPeer, err = s.chooseBestSyncPeer(job)
 		if err != nil {
@@ -377,7 +379,9 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 			if !s.db.HasTesseract(tsInfo.tesseract.Hash()) {
 				initial, err := s.lattice.IsInitialTesseract(tsInfo.tesseract)
 				if err != nil {
-					continue
+					jobState = Sleep
+
+					return nil
 				}
 
 				if !initial && tsInfo.tesseract.Height() != job.getCurrentHeight()+1 {
@@ -387,7 +391,9 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 						"at", tsInfo.tesseract.Height(),
 					)
 
-					continue
+					jobState = Sleep
+
+					return nil
 				}
 
 				isTesseractAdded, err := s.syncTesseract(tsInfo, job)
@@ -398,7 +404,7 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 				}
 
 				if !isTesseractAdded {
-					job.updateJobState(Sleep)
+					jobState = Sleep
 
 					return nil
 				}
@@ -408,6 +414,8 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 
 			shouldExit, err := s.postAdditionHook(job, tsInfo.tesseract.Height())
 			if err != nil || shouldExit {
+				jobState = Done
+
 				return err
 			}
 		}
@@ -421,18 +429,27 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 	- Check for the snap, if not available fetch the snap
 	- Check the
 	*/
-	return group.Wait()
+
+	if err = group.Wait(); err != nil {
+		job.updateJobState(jobState)
+
+		return err
+	}
+
+	job.updateJobState(jobState)
+
+	return nil
 }
 
 // postAdditionHook updates the status flags in the database after successful completion of the job
 func (s *Syncer) postAdditionHook(job *SyncJob, newHeight uint64) (bool, error) {
-	job.updateCurrentHeight(newHeight)
+	if job.getCurrentHeight() < newHeight {
+		job.updateCurrentHeight(newHeight)
+	}
 
 	if job.getExpectedHeight() != newHeight {
 		return false, nil
 	}
-
-	job.updateJobState(Done)
 
 	if job.mode == types.FullSync {
 		if err := s.db.UpdatePrimarySyncStatus(job.address); err != nil {
@@ -563,7 +580,10 @@ func (s *Syncer) chooseBestSyncPeer(job *SyncJob) (id.KramaID, error) {
 	)
 
 	if job.mode == types.LatestSync && job.tesseractQueue.Peek() != nil {
-		return job.tesseractQueue.Peek().icsNodeSet.GetNodes()[0], nil
+		randomSource := rand.New(rand.NewSource(time.Now().UnixNano()))
+		randNumber := randomSource.Intn(len(job.tesseractQueue.Peek().clusterInfo.RandomSet))
+
+		return job.tesseractQueue.Peek().clusterInfo.RandomSet[randNumber], nil
 	}
 
 	if len(s.network.GetPeers()) == 0 {
@@ -584,9 +604,6 @@ func (s *Syncer) chooseBestSyncPeer(job *SyncJob) (id.KramaID, error) {
 
 			continue
 		}
-
-		// TODO: Check if we need this
-		//	responses = append(responses, resp)
 
 		if resp.Height >= maxHeight {
 			maxHeight = resp.Height
@@ -1088,6 +1105,8 @@ func (s *Syncer) syncLattice(
 		startHeight++
 	}
 
+	requiredTesseractCount := endHeight - startHeight + 1
+
 	reqChan <- &LatticeRequest{
 		Address:     job.address,
 		StartHeight: startHeight,
@@ -1123,7 +1142,7 @@ func (s *Syncer) syncLattice(
 
 	grp.Go(func() error {
 		defer close(reqChan)
-		for {
+		for requiredTesseractCount > 0 {
 			select {
 			case <-grpCtx.Done():
 				return grpCtx.Err()
@@ -1131,6 +1150,10 @@ func (s *Syncer) syncLattice(
 			case msg, ok := <-respChan:
 				if !ok {
 					return errors.New("receiver channel closed")
+				}
+
+				if msg.Tesseract.Height() >= startHeight && msg.Tesseract.Height() <= endHeight {
+					requiredTesseractCount--
 				}
 
 				if job.tesseractQueue.Has(msg.Tesseract.Height()) {
@@ -1158,6 +1181,8 @@ func (s *Syncer) syncLattice(
 				}
 			}
 		}
+
+		return nil
 	})
 
 	return grp.Wait()
@@ -1195,8 +1220,19 @@ func (s *Syncer) tesseractInfoFromTesseractMsg(msg *ptypes.TesseractMessage) (*T
 }
 
 func (s *Syncer) syncTesseract(msg *TesseractInfo, job *SyncJob) (bool, error) {
+	var err error
+
+	if msg.icsNodeSet == nil {
+		msg.icsNodeSet, err = s.lattice.FetchICSNodeSet(msg.tesseract, msg.clusterInfo)
+		if err != nil {
+			s.logger.Error("failed to fetch node set", "error", err)
+
+			return false, nil
+		}
+	}
+
 	if !msg.shouldExecute {
-		err := s.lattice.ValidateTesseract(msg.tesseract, msg.icsNodeSet)
+		err = s.lattice.ValidateTesseract(msg.tesseract, msg.icsNodeSet)
 		if err != nil {
 			return false, errors.Wrap(err, "failed to validate tesseract")
 		}
@@ -1218,7 +1254,7 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo, job *SyncJob) (bool, error) {
 	}
 
 	if !grid.HasTesseract(msg.tesseract) {
-		err := s.lattice.ValidateTesseract(msg.tesseract, msg.icsNodeSet)
+		err = s.lattice.ValidateTesseract(msg.tesseract, msg.icsNodeSet)
 		if err != nil {
 			return false, errors.Wrap(err, "failed to validate tesseract")
 		}
@@ -1560,20 +1596,16 @@ func (s *Syncer) tesseractHandler(msg *pubsub.Message) error {
 			return err
 		}
 
-		nodeSet, err := s.lattice.FetchICSNodeSet(ts, clusterInfo)
-		if err != nil {
-			return errors.Wrap(err, "failed to fetch ICSNodeSet")
-		}
-
 		if err = s.NewSyncRequest(
 			ts.Address(),
 			ts.Height(),
 			types.LatestSync,
-			nil,
+			clusterInfo.RandomSet,
 			&TesseractInfo{
 				tesseract:     ts,
+				clusterInfo:   clusterInfo,
+				icsNodeSet:    nil,
 				shouldExecute: s.cfg.ShouldExecute,
-				icsNodeSet:    nodeSet,
 				delta:         tsMsg.Delta,
 			}); err != nil {
 			s.logger.Error("Error adding sync request")

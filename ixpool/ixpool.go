@@ -359,6 +359,9 @@ func (i *IxPool) Drop(ix *types.Interaction) {
 			noOfDroppedIxs += len(ixs)
 		}
 
+		nonce := ix.Nonce()
+		account.setNonce(nonce)
+
 		// drop promoted
 		dropped := account.promoted.clear()
 		cleanAllIxs(dropped)
@@ -372,7 +375,7 @@ func (i *IxPool) Drop(ix *types.Interaction) {
 		// drop the account
 		// i.accounts.remove(ix.Sender()) FIXME: Issue(https://github.com/sarvalabs/moichain/issues/256)
 
-		i.logger.Debug("Dropped ixs", "count", noOfDroppedIxs, "address", ix.Sender())
+		i.logger.Debug("Dropped ixs", "count", noOfDroppedIxs, "next-nonce", nonce, "address", ix.Sender())
 	}
 }
 

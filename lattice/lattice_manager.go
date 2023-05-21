@@ -510,12 +510,25 @@ func (c *ChainManager) storeInteractions(ts *types.Tesseract) error {
 		_, err = c.db.GetInteractions(gridHash)
 		if errors.Is(err, types.ErrKeyNotFound) {
 			if err = c.db.SetInteractions(gridHash, ixRawData); err != nil {
-				return errors.Wrap(err, "error writing interactions to db")
+				return errors.Wrap(
+					err,
+					fmt.Sprintf("error writing interactions to db with grid-hash %s", gridHash))
 			}
 
 			for _, ix := range ts.Interactions() {
+				c.logger.Debug(
+					"Storing ix grid lookup",
+					"address", ts.Address(),
+					"ix-hash", ix.Hash(),
+					"grid-hash", gridHash)
+
 				if err = c.db.SetIXGridLookup(ix.Hash(), gridHash); err != nil {
-					return errors.Wrap(err, "error writing gridID hash to db")
+					return errors.Wrap(
+						err,
+						fmt.Sprintf("error writing gridID hash to db ix-hash %s grid-hash %s",
+							ix.Hash(),
+							gridHash,
+						))
 				}
 			}
 
@@ -529,7 +542,7 @@ func (c *ChainManager) storeInteractions(ts *types.Tesseract) error {
 				return err
 			}
 
-			if err := c.db.SetTesseractParts(gridHash, rawPartsData); err != nil {
+			if err = c.db.SetTesseractParts(gridHash, rawPartsData); err != nil {
 				return errors.Wrap(err, "error writing tesseract parts to db")
 			}
 

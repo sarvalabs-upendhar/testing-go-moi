@@ -199,3 +199,10 @@ func (s *Slots) incrementSlots(slotType SlotType) {
 
 	s.availableValidatorSlots++
 }
+
+func (s *Slots) AvailableOperatorSlots() int {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	return s.availableOperatorSlots
+}
