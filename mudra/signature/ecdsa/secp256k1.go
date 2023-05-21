@@ -50,6 +50,11 @@ func (s256Sig *EcdsaSecp256k1Signature) Sign(rawMessage []byte, signingKey []byt
 
 // Verify used to verify ECDSA signature against the publicKey
 func (s256Sig *EcdsaSecp256k1Signature) Verify(rawMessage []byte, publicKeyBytes []byte) (bool, error) {
+	if len(publicKeyBytes) == 32 {
+		// Adding 0x03 to signify that publicKey is compressed
+		publicKeyBytes = append([]byte{0x03}, publicKeyBytes...)
+	}
+
 	pubKey, err := btcec.ParsePubKey(publicKeyBytes)
 	if err != nil {
 		return false, err

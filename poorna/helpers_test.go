@@ -6,11 +6,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
-	mrand "math/rand"
 	"testing"
 	"time"
 
-	"github.com/libp2p/go-msgio"
+	mrand "math/rand"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p"
@@ -24,6 +23,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/core/routing"
 	discovery "github.com/libp2p/go-libp2p/p2p/discovery/routing"
+	"github.com/libp2p/go-msgio"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
@@ -33,7 +33,7 @@ import (
 	"github.com/sarvalabs/moichain/common/tests"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
 	kcrypto "github.com/sarvalabs/moichain/mudra"
-	mudracommon "github.com/sarvalabs/moichain/mudra/common"
+	mtypes "github.com/sarvalabs/moichain/mudra/common"
 	"github.com/sarvalabs/moichain/mudra/kramaid"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
@@ -195,7 +195,7 @@ func (vault *MockVault) GetNetworkPrivateKey() kcrypto.PrivateKey {
 	return vault.networkPrivateKey
 }
 
-func (vault *MockVault) Sign(data []byte, sigType mudracommon.SigType) ([]byte, error) {
+func (vault *MockVault) Sign(data []byte, sigType mtypes.SigType, signOptions ...kcrypto.SignOption) ([]byte, error) {
 	return SignedData, nil
 }
 

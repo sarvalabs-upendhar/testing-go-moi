@@ -3,9 +3,13 @@ package poi
 import (
 	"crypto/ecdsa"
 	hexutil "encoding/hex"
+	"errors"
 	"math/big"
+	"strconv"
+	"strings"
 	"time"
 
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/tyler-smith/go-bip39"
@@ -46,6 +50,67 @@ func serializePrivateKey(prvKey *ecdsa.PrivateKey) []byte {
 	return ret
 }
 
+func GetPrivateKeyAtPath(mnemonic, hdPath string) ([]byte, []byte, error) {
+	seed, err := bip39.NewSeedWithErrorChecking(mnemonic, "")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	masterKey, err := hdkeychain.NewMaster(seed, &chaincfg.MainNetParams)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	_hdPath := strings.Split(hdPath, "/")
+	if len(_hdPath) != 6 {
+		return nil, nil, errors.New("invalid Igc path")
+	}
+
+	nodeNumbers := make([]uint32, 5)
+	counter := 0
+
+	for _, node := range _hdPath {
+		if node != "m" {
+			if node[len(node)-1:] == "'" {
+				num, err := strconv.ParseUint(node[:len(node)-1], 10, 32)
+				if err != nil {
+					return nil, nil, err
+				}
+
+				nodeNumbers[counter] = HardenedStartIndex + uint32(num)
+			} else {
+				num, err := strconv.ParseUint(node, 10, 32)
+				if err != nil {
+					return nil, nil, err
+				}
+				nodeNumbers[counter] = uint32(num)
+			}
+			counter++
+		}
+	}
+
+	tempKey := masterKey
+	for _, n := range nodeNumbers {
+		tempKey, err = tempKey.Derive(n)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	privKeyInEC, err := tempKey.ECPrivKey()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	privKeyInECDSA := privKeyInEC.ToECDSA()
+	signingPrivKeyInBytes := serializePrivateKey(privKeyInECDSA)
+	_, publicKey := btcec.PrivKeyFromBytes(signingPrivKeyInBytes)
+
+	compressedPubKey := publicKey.SerializeCompressed()
+
+	return signingPrivKeyInBytes, compressedPubKey[1:], nil
+}
+
 // GetPrivateKeysForSigningAndNetwork used to return concatenated privateKeys
 // one at path m/44'/6174'/5020'/0/0 for signing
 // one at path m/44'/6174'/6020'/0/0 for network communication
@@ -62,6 +127,7 @@ func GetPrivateKeysForSigningAndNetwork(mnemonic string, nthValidator uint32) ([
 	if err != nil {
 		return nil, "", err
 	}
+	// Now tempKey points to extended private key at path: m/44'/6174'
 
 	// Hardened keys index starts from 2147483648 (2^31)
 	// So.,

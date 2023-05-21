@@ -18,7 +18,7 @@ type KramaVault struct {
 	networkPriv   PrivateKey      // Private key used in p2p communication
 	kramaID       kramaid.KramaID // KramaID of the user or node
 	Address       types.Address
-	Mnemonic      poi.Mnemonic
+	mnemonic      poi.Mnemonic
 }
 type VaultConfig struct {
 	DataDir      string
@@ -58,6 +58,7 @@ func loadVault(signingAndNetworkKeys []byte,
 	vault.consensusPriv = cPriv
 	vault.networkPriv = nPriv
 	vault.kramaID = currentKID
+	vault.mnemonic = seed
 
 	return vault, nil
 }
@@ -83,40 +84,40 @@ func NewVault(cfg *VaultConfig, validatorType moinode.MoiNodeType, kramaIDVersio
 			return nil, err
 		}
 	} else {
-		if cfg.SeedPhrase == "" {
+		if cfg.SeedPhrase != "" {
+			var err error
+			if err = mnemonic.FromString(cfg.SeedPhrase); err != nil {
+				return nil, err
+			}
+
+			bothSignAndCommPrivBytes, moiID, err := poi.GetPrivateKeysForSigningAndNetwork(mnemonic.String(), cfg.NodeIndex)
+			if err != nil {
+				return nil, err
+			}
+
+			currentKID, err := kramaid.NewKramaID(
+				bothSignAndCommPrivBytes[32:],
+				cfg.NodeIndex,
+				moiID,
+				kramaIDVersion,
+				true,
+			)
+			if err != nil {
+				return nil, err
+			}
+
+			if err := poi.SetupKeystore(currentKID,
+				bothSignAndCommPrivBytes, validatorType, cfg.DataDir, cfg.NodePassword,
+			); err != nil {
+				return nil, err
+			}
+
+			signingAndNetworkKeys = bothSignAndCommPrivBytes
+			moiIDAddress = moiID
+			nodeIgcPath = cfg.NodeIndex
+		} else {
 			return nil, common.ErrMnemonicMandatory
 		}
-
-		var err error
-		if err = mnemonic.FromString(cfg.SeedPhrase); err != nil {
-			return nil, err
-		}
-
-		bothSignAndCommPrivBytes, moiID, err := poi.GetPrivateKeysForSigningAndNetwork(mnemonic.String(), cfg.NodeIndex)
-		if err != nil {
-			return nil, err
-		}
-
-		currentKID, err := kramaid.NewKramaID(
-			bothSignAndCommPrivBytes[32:],
-			cfg.NodeIndex,
-			moiID,
-			kramaIDVersion,
-			true,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		if err := poi.SetupKeystore(currentKID,
-			bothSignAndCommPrivBytes, validatorType, cfg.DataDir, cfg.NodePassword,
-		); err != nil {
-			return nil, err
-		}
-
-		signingAndNetworkKeys = bothSignAndCommPrivBytes
-		moiIDAddress = moiID
-		nodeIgcPath = cfg.NodeIndex
 	}
 
 	return loadVault(signingAndNetworkKeys, moiIDAddress, nodeIgcPath, kramaIDVersion, mnemonic)
@@ -138,6 +139,10 @@ func (vault *KramaVault) KramaID() kramaid.KramaID {
 	return vault.kramaID
 }
 
+func (vault *KramaVault) GetMnemonic() poi.Mnemonic {
+	return vault.mnemonic
+}
+
 func (vault *KramaVault) SetKramaID(id kramaid.KramaID) {
 	vault.kramaID = id
 }
@@ -146,15 +151,37 @@ func (vault *KramaVault) MOiID() (string, error) {
 	return vault.kramaID.MoiID()
 }
 
-func (vault *KramaVault) Sign(data []byte, sigType common.SigType) ([]byte, error) {
-	signingKey := vault.consensusPriv.Bytes()
+func (vault *KramaVault) Sign(data []byte, sigType common.SigType, signOptions ...SignOption) ([]byte, error) {
+	var (
+		signingKey     []byte
+		err            error
+		signingKeyType KeyType
+	)
+
+	if len(signOptions) != 0 {
+		signingKeyType = SECP256K1
+
+		opts := &SignOptions{}
+		for _, opt := range signOptions {
+			opt(opts)
+		}
+
+		signingKey, _, err = poi.GetPrivateKeyAtPath(vault.mnemonic.String(), opts.IgcPath)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		signingKeyType = BLS
+		signingKey = vault.consensusPriv.Bytes()
+	}
 
 	switch sigType {
 	case common.BlsBLST:
 		{
-			pkType := vault.consensusPriv.KeyType()
-			if pkType != BLS {
-				return nil, common.ErrUnsupportedSigTypeForPrivateKey
+			if signingKeyType == SECP256K1 {
+				blsPrivKey := new(BLSPrivKey)
+				blsPrivKey.UnMarshal(signingKey)
+				signingKey = blsPrivKey.Bytes()
 			}
 
 			blsSigWithBlst := bls.BlsWithBlstSignature{}
@@ -166,11 +193,6 @@ func (vault *KramaVault) Sign(data []byte, sigType common.SigType) ([]byte, erro
 		}
 	case common.SchnorrSecp256k1:
 		{
-			pkType := vault.consensusPriv.KeyType()
-			if pkType != SECP256K1 {
-				return nil, common.ErrUnsupportedSigTypeForPrivateKey
-			}
-
 			schnorrSig := schnorr.SchnorrSignature{}
 			if err := schnorrSig.Sign(data, signingKey, vault.kramaID); err != nil {
 				return nil, errors.Wrap(common.ErrSigningFailed, err.Error())
@@ -180,17 +202,16 @@ func (vault *KramaVault) Sign(data []byte, sigType common.SigType) ([]byte, erro
 		}
 	case common.EcdsaSecp256k1:
 		{
-			pkType := vault.consensusPriv.KeyType()
-			if pkType != SECP256K1 {
-				return nil, common.ErrUnsupportedSigTypeForPrivateKey
-			}
+			if signingKeyType == SECP256K1 {
+				ecdsaSig := ecdsa.EcdsaSecp256k1Signature{}
+				if err := ecdsaSig.Sign(data, signingKey, vault.kramaID); err != nil {
+					return nil, errors.Wrap(common.ErrSigningFailed, err.Error())
+				}
 
-			ecdsaSig := ecdsa.EcdsaSecp256k1Signature{}
-			if err := ecdsaSig.Sign(data, signingKey, vault.kramaID); err != nil {
-				return nil, errors.Wrap(common.ErrSigningFailed, err.Error())
+				return common.MarshalSignature(common.Signature(ecdsaSig)), nil
+			} else {
+				return nil, common.ErrSignOptionsNotPassed
 			}
-
-			return common.MarshalSignature(common.Signature(ecdsaSig)), nil
 		}
 	default:
 		{

@@ -1,33 +1,22 @@
 package common
 
 // SigType represents the Signature algorithm
-type SigType uint
+type SigType byte
 
 const (
 	// EcdsaSecp256k1 is an enum for the ECDSA Signature scheme using secp256k1 private key
-	EcdsaSecp256k1 SigType = iota
+	EcdsaSecp256k1 SigType = 0x01
 	// SchnorrSecp256k1 is an enum for the Schnorr Signature scheme using secp256k1 private key
-	SchnorrSecp256k1
+	SchnorrSecp256k1 SigType = 0x02
 	// SchnorrSR25519 is an enum for the Schnorr signature scheme using sr25519 private key
-	SchnorrSR25519
+	SchnorrSR25519 SigType = 0x03
 	// BlsBLST is an enum for the BLS signature scheme using BLST compression
-	BlsBLST
+	BlsBLST SigType = 0x04
 )
 
 // Byte returns the constant byte associated with Signature type
 func (st SigType) Byte() byte {
-	switch st {
-	case EcdsaSecp256k1:
-		return 0x01
-	case SchnorrSecp256k1:
-		return 0x02
-	case SchnorrSR25519:
-		return 0x03
-	case BlsBLST:
-		return 0x04
-	default:
-		return 0x00
-	}
+	return byte(st)
 }
 
 // Signature represents the multihash construction of signature (<SIG_ALGO>,<SIG_LENGTH>,<SIG_DIGEST>,<SIG_EXTRA>)

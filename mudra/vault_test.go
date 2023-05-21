@@ -1,6 +1,8 @@
 package mudra
 
 import (
+	hexutil "encoding/hex"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -10,6 +12,17 @@ import (
 	"github.com/sarvalabs/moichain/mudra/common"
 	"github.com/sarvalabs/moichain/mudra/poi"
 	"github.com/sarvalabs/moichain/mudra/poi/moinode"
+)
+
+var msg = []byte("I'm getting signed")
+
+const (
+	blsSignSample = "0460a4612b9f516ad866663d2c7e4a9580aecf24bb6c10f6c1a06838" +
+		"5cf0c03fe8f181617fffc340b9c0f5da438ff374c9b40a2cde5fa14280cde318cf7164e669c1" +
+		"28a4874cc19a5b5f67b1488f2b8c63911079add069f387b9361cbf87d0f5cefc"
+
+	ecdsaSignSample = "01473045022100e6823cc24ea8ab0dff424efc35c1a58fa7a5d7f744dca0848ecfcabd11b43" +
+		"c550220115ec0005a878b5c2de44e5e90458ee89e18720f33636929d89b238131179d05"
 )
 
 func TestBLSSignAgg(t *testing.T) {
@@ -109,6 +122,10 @@ func TestKramaVaultRegisterMode(t *testing.T) {
 	datadir, err := ioutil.TempDir("", "moichain")
 	require.NoError(t, err)
 
+	t.Cleanup(func() {
+		os.RemoveAll(datadir)
+	})
+
 	config := &VaultConfig{
 		DataDir:      datadir,
 		NodePassword: "nodepass1",
@@ -119,9 +136,13 @@ func TestKramaVaultRegisterMode(t *testing.T) {
 	vault, err := NewVault(config, moinode.MoiFullNode, 1)
 	require.NoError(t, err)
 
+	testECDSASignWithOptions(t, vault)
+
 	moiIDStringFromSetup, err := vault.MOiID()
 	require.NoError(t, err)
-	kramaIDFromSetup, err := vault.MOiID()
+
+	kramaIDFromSetup := vault.KramaID()
+
 	require.NoError(t, err)
 
 	config1 := &VaultConfig{
@@ -134,9 +155,43 @@ func TestKramaVaultRegisterMode(t *testing.T) {
 
 	moiIDStringFromStart, err := vault1.MOiID()
 	require.NoError(t, err)
-	kramaIDFromStart, err := vault1.MOiID()
+
+	kramaIDFromStart := vault1.KramaID()
+
 	require.NoError(t, err)
 
 	require.Equal(t, moiIDStringFromSetup, moiIDStringFromStart)
 	require.Equal(t, kramaIDFromSetup, kramaIDFromStart)
+
+	testBLSSign(t, vault1)
+	testECDSASign(t, vault1)
+}
+
+func testBLSSign(t *testing.T, vault *KramaVault) {
+	t.Helper()
+	fmt.Print("Testing BLS Signing")
+
+	sigBytes1, err := vault.Sign(msg, common.BlsBLST)
+	require.NoError(t, err)
+	require.Equal(t, hexutil.EncodeToString(sigBytes1), blsSignSample)
+	fmt.Println(": ✓")
+}
+
+func testECDSASign(t *testing.T, vault *KramaVault) {
+	t.Helper()
+	fmt.Print("Testing ECDSA Signing")
+
+	_, err := vault.Sign(msg, common.EcdsaSecp256k1)
+	require.ErrorIs(t, common.ErrSignOptionsNotPassed, err)
+	fmt.Println(": ✓")
+}
+
+func testECDSASignWithOptions(t *testing.T, vault *KramaVault) {
+	t.Helper()
+	fmt.Print("Testing ECDSA Signing with SignOptions")
+
+	sigBytes, err := vault.Sign(msg, common.EcdsaSecp256k1, UsingIgcPath("m/44'/6174'/9023'/0/0"))
+	require.NoError(t, err)
+	require.Equal(t, hexutil.EncodeToString(sigBytes), ecdsaSignSample)
+	fmt.Println(": ✓")
 }

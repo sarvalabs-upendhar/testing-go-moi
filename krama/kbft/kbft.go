@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sarvalabs/moichain/mudra"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 
@@ -23,7 +25,7 @@ const (
 )
 
 type vault interface {
-	Sign(data []byte, sigType mtypes.SigType) ([]byte, error)
+	Sign(data []byte, sigType mtypes.SigType, signOptions ...mudra.SignOption) ([]byte, error)
 	KramaID() id.KramaID
 }
 

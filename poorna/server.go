@@ -51,7 +51,7 @@ var (
 
 type Vault interface {
 	GetNetworkPrivateKey() mudra.PrivateKey
-	Sign(data []byte, sigType mcommon.SigType) ([]byte, error)
+	Sign(data []byte, sigType mcommon.SigType, signOptions ...mudra.SignOption) ([]byte, error)
 }
 type Senatus interface {
 	GetNTQ(peerID id.KramaID) (float32, error)

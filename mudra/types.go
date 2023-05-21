@@ -75,3 +75,16 @@ func (blsPk BLSPrivKey) GetPublicKeyInBytes() []byte {
 
 	return pub.Compress()
 }
+
+// SigningKey - Can also be an option in future
+type SignOptions struct {
+	IgcPath string
+}
+
+type SignOption func(*SignOptions)
+
+func UsingIgcPath(hdPath string) SignOption {
+	return func(opts *SignOptions) {
+		opts.IgcPath = hdPath
+	}
+}
