@@ -1,4 +1,4 @@
-package main
+package logiclab
 
 import (
 	"fmt"
@@ -76,15 +76,21 @@ being used to start a REPL. New environment can be initialized with 'logiclab in
 	},
 }
 
-func init() {
-	// Core 'logiclab' command
-	rootCmd.AddCommand(logiclabCmd)
-	// Sub commands of 'logiclab'
-	logiclabCmd.AddCommand(logiclabInitCmd)
-	logiclabCmd.AddCommand(logiclabStartCmd)
+func GetCommand() *cobra.Command {
+	parseFlags(logiclabCmd)
+	setupSubCommands(logiclabCmd)
 
+	return logiclabCmd
+}
+
+func parseFlags(cmd *cobra.Command) {
 	// Persistent Flags
-	logiclabCmd.PersistentFlags().StringP(
+	cmd.PersistentFlags().StringP(
 		"env", "e", "./.artifacts/logiclab", "directory path for the logiclab environment",
 	)
+}
+
+func setupSubCommands(cmd *cobra.Command) {
+	cmd.AddCommand(logiclabInitCmd)
+	cmd.AddCommand(logiclabStartCmd)
 }

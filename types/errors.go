@@ -82,4 +82,5 @@ var (
 	ErrIndexOutOfRange             = errors.New("index out of range")
 	ErrTesseractPartsNotFound      = errors.New("tesseract parts not found")
 	ErrIXIndex                     = errors.New("ix index cannot be nil")
+	ErrInvalidAssetInfoParams      = errors.New("invalid asset info params")
 )

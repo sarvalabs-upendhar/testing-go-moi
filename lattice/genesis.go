@@ -7,10 +7,58 @@ import (
 
 const GenesisIdentifier = "genesis"
 
+// GenesisV1 is Genesis file with V1 version
+type GenesisV1 struct {
+	SargaAccount AccountInfoV1   `json:"sarga_account"`
+	Accounts     []AccountInfoV1 `json:"accounts"`
+	Logics       []GenesisLogic  `json:"logics"`
+	AssetInfos   []AssetInfoV1   `json:"asset_infos"`
+}
+
+type AccountInfoV1 struct {
+	Address            string            `json:"address"`
+	AccountType        types.AccountType `json:"type"`
+	MoiID              string            `json:"moi_id"`
+	BehaviouralContext []string          `json:"behaviour_context"`
+	RandomContext      []string          `json:"random_context"`
+}
+
+type AssetInfoV1 struct {
+	Symbol      string         `json:"symbol"`
+	Dimension   uint8          `json:"dimension"`
+	Standard    uint16         `json:"standard"`
+	IsLogical   bool           `json:"is_logical"`
+	IsMintable  bool           `json:"is_mintable"`
+	Owner       string         `json:"owner"`
+	Allocations []AllocationV1 `json:"allocations"`
+}
+
+type AllocationV1 struct {
+	Address string `json:"address"`
+	Balance uint64 `json:"balance"`
+}
+
+// Genesis will be older version
 type Genesis struct {
 	SargaAccount AccountInfo    `json:"sarga_account"`
 	Accounts     []AccountInfo  `json:"accounts"`
 	Logics       []GenesisLogic `json:"logics"`
+}
+
+func (g *GenesisV1) AddSargaAccount(info AccountInfoV1) {
+	g.SargaAccount = info
+}
+
+func (g *GenesisV1) AddAccount(info AccountInfoV1) {
+	g.Accounts = append(g.Accounts, info)
+}
+
+func (g *GenesisV1) AddLogic(logic GenesisLogic) {
+	g.Logics = append(g.Logics, logic)
+}
+
+func (g *GenesisV1) AddAssetInfo(info AssetInfoV1) {
+	g.AssetInfos = append(g.AssetInfos, info)
 }
 
 type AccountInfo struct {

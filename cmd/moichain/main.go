@@ -1,5 +1,9 @@
 package main
 
+import (
+	"github.com/sarvalabs/moichain/cmd/root"
+)
+
 func main() {
-	Execute()
+	root.NewRootCommand().Execute()
 }

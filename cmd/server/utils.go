@@ -1,96 +1,17 @@
-package main
+package server
 
 import (
-	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"math/big"
 	"os"
-	"os/signal"
-	"path/filepath"
-	"syscall"
 	"time"
 
 	maddr "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
-	"github.com/pkg/profile"
-	"github.com/spf13/cobra"
-	"go.opentelemetry.io/otel"
-
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/mudra/kramaid"
-	"github.com/sarvalabs/moichain/poorna/node"
-	"github.com/sarvalabs/moichain/telemetry/tracing"
 )
-
-var ErrReadingConfig = errors.New("error reading config file")
-
-var (
-	AccountWaitTime   int
-	OperatorSlots     int
-	ValidatorSlots    int
-	NetworkSize       uint64
-	MTQ               float64
-	EnableTracing     bool
-	NoDiscovery       bool
-	RefreshSenatus    bool
-	Bootnode          string
-	LogLevel          string
-	JaegerAddress     string
-	PeerListFilePath  string
-	InboundConnLimit  int64
-	OutboundConnLimit int64
-	CleanDB           bool
-)
-
-var serverCmd = &cobra.Command{
-	Use:   "server",
-	Short: "Starts the moi-chain server",
-	Run: func(cmd *cobra.Command, args []string) {
-		cfgPath, err := cmd.Flags().GetString("config")
-		Err(err)
-
-		dataDir, err := cmd.Flags().GetString("data-dir")
-		Err(err)
-
-		SetupNode(dataDir, cfgPath)
-	},
-}
-
-func init() {
-	rootCmd.AddCommand(serverCmd)
-
-	serverCmd.PersistentFlags().String("config", "config.json", "Config file name")
-	serverCmd.PersistentFlags().IntVar(&AccountWaitTime, "wait-time", 0, "WaitTime per account")
-	serverCmd.PersistentFlags().IntVar(&OperatorSlots, "operator-slots", -1, "Maximum number of operator slots")
-	serverCmd.PersistentFlags().IntVar(&ValidatorSlots, "validator-slots", -1, "Maximum number of validator slots")
-	serverCmd.PersistentFlags().Uint64Var(&NetworkSize, "network-size", 12, "Network Size")
-	serverCmd.PersistentFlags().Float64Var(&MTQ, "mtq", 0.7, "Default MTQ")
-	serverCmd.PersistentFlags().String("data-dir", "test-chain", "Data directory location")
-	serverCmd.PersistentFlags().BoolVar(&CleanDB, "clean-db", false, "Deletes the data stored in database")
-	serverCmd.PersistentFlags().BoolVar(&EnableTracing, "enable-tracing", false, "Enable Tracing")
-	serverCmd.PersistentFlags().BoolVar(&NoDiscovery, "no-discovery", false, "Disable peer discovery")
-	serverCmd.PersistentFlags().BoolVar(&RefreshSenatus, "refresh-senatus", false, "Update the senatus with new peers")
-	serverCmd.PersistentFlags().StringVar(&JaegerAddress, "jaeger-address", "", "Jeager Collector Address")
-	serverCmd.PersistentFlags().StringVar(&Bootnode, "bootnode", "", "Boot-node MultiAddr")
-	serverCmd.PersistentFlags().StringVar(&PeerListFilePath, "peer-list", "", "Peer list file path")
-	serverCmd.PersistentFlags().StringVar(&LogLevel, "log-level", "TRACE", "Logger level")
-	serverCmd.PersistentFlags().Int64Var(
-		&InboundConnLimit,
-		"inbound-limit",
-		common.DefaultInboundConnLimit,
-		"Maximum inbound peer connection limit")
-	serverCmd.PersistentFlags().Int64Var(
-		&OutboundConnLimit,
-		"outbound-limit",
-		common.DefaultOutboundConnLimit,
-		"Maximum outbound peer connection limit")
-
-	if err := cobra.MarkFlagRequired(serverCmd.PersistentFlags(), "data-dir"); err != nil {
-		log.Print("data-dir is required")
-	}
-}
 
 func ReadConfig(path string) (*Config, error) {
 	cfg := new(Config)
@@ -124,9 +45,7 @@ func BuildConfig(dataDir string, fileCfg *Config) (*common.Config, error) {
 	}
 
 	buildConsensusConfig(nodeCfg, fileCfg)
-
 	buildIxPoolConfig(nodeCfg, fileCfg)
-
 	buildDBConfig(nodeCfg, fileCfg)
 
 	if err = buildTelemetryConfig(nodeCfg, fileCfg); err != nil {
@@ -146,15 +65,10 @@ func buildChainConfig(nodeCfg *common.Config, fileCfg *Config) {
 
 func buildNetworkConfig(nodeCfg *common.Config, fileCfg *Config) (err error) {
 	assignNetworkSize(nodeCfg)
-
 	assignNetworkMTQ(nodeCfg)
-
 	assignNetworkNoDiscovery(nodeCfg)
-
 	assignNetworkRefreshSenatus(nodeCfg)
-
 	assignNetworkInboundLimit(nodeCfg, fileCfg)
-
 	assignNetworkOutboundLimit(nodeCfg, fileCfg)
 
 	if err = assignNetworkNodes(nodeCfg, fileCfg); err != nil {
@@ -397,62 +311,4 @@ func assignNetworkJSONRPCAddr(nodeCfg *common.Config, fileCfg *Config) (err erro
 	}
 
 	return nil
-}
-
-func Err(err error) {
-	if err != nil {
-		log.Println("Error starting MOIPOD", err)
-		os.Exit(1)
-	}
-}
-
-func SetupNode(datadir string, cfgPath string) {
-	profiling := profile.Start(profile.BlockProfile, profile.MutexProfile, profile.ProfilePath(datadir))
-	closeCh := make(chan os.Signal, 1)
-
-	defer profiling.Stop()
-
-	fileCfg, err := ReadConfig(filepath.Join(datadir, cfgPath))
-	if err != nil {
-		Err(err)
-	}
-
-	cfg, err := BuildConfig(datadir, fileCfg)
-	if err != nil {
-		Err(err)
-	}
-
-	n, err := node.NewNode(LogLevel, cfg)
-	if err != nil {
-		Err(err)
-	}
-
-	err = n.Start()
-	if err != nil {
-		Err(err)
-	}
-
-	defer n.Stop()
-
-	// init trace provider
-	ctx := context.Background()
-
-	tp, err := tracing.NewTracerProvider(ctx, EnableTracing, cfg.Metrics.JaegerAddr, n.GetKramaID())
-	if err != nil {
-		fmt.Println("error starting tp")
-	}
-
-	defer func() {
-		fmt.Println("Shutting down trace provider")
-
-		if err := tp.Shutdown(ctx); err != nil {
-			fmt.Println("error shutting down trace provider")
-		}
-	}()
-
-	otel.SetTracerProvider(tp)
-
-	signal.Notify(closeCh, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
-
-	<-closeCh
 }

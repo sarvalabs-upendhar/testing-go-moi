@@ -14,13 +14,6 @@ import (
 	"github.com/sarvalabs/moichain/mudra/kramaid"
 )
 
-var DefaultIxPriceLimit = big.NewInt(10)
-
-const (
-	DefaultInboundConnLimit  = 80
-	DefaultOutboundConnLimit = 20
-)
-
 type Config struct {
 	NodeType       int
 	KramaIDVersion int
@@ -129,9 +122,10 @@ func DefaultConfig(path string) *Config {
 		},
 		Syncer: &SyncerConfig{
 			ShouldExecute:  true,
-			SyncMode:       types.FullSync,
+			SyncMode:       DefaultSyncMode,
 			EnableSnapSync: true,
 		},
+
 		Consensus: &ConsensusConfig{
 			DirectoryPath:         path + "/consensus",
 			TimeoutPropose:        30000 * time.Millisecond,
@@ -149,14 +143,14 @@ func DefaultConfig(path string) *Config {
 		},
 		DB: &DBConfig{
 			CleanDB:      false,
-			DBFolderPath: path + "/db",
-			MaxSnapSize:  1024 * 1024 * 1024, // 1GB limit
+			DBFolderPath: path + DefaultDBDirectory,
+			MaxSnapSize:  DefaultSnapSize, // 1GB limit
 		},
 		Execution: &ExecutionConfig{
-			FuelLimit: 1000,
+			FuelLimit: DefaultFuelLimit,
 		},
 		IxPool: &IxPoolConfig{
-			Mode:       0,
+			Mode:       DefaultIxPoolMode,
 			PriceLimit: DefaultIxPriceLimit,
 		},
 		Metrics: Telemetry{
