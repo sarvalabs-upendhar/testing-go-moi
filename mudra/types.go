@@ -78,7 +78,8 @@ func (blsPk BLSPrivKey) GetPublicKeyInBytes() []byte {
 
 // SigningKey - Can also be an option in future
 type SignOptions struct {
-	IgcPath string
+	IgcPath                  string
+	ShouldSignWithNetworkKey bool
 }
 
 type SignOption func(*SignOptions)
@@ -86,5 +87,11 @@ type SignOption func(*SignOptions)
 func UsingIgcPath(hdPath string) SignOption {
 	return func(opts *SignOptions) {
 		opts.IgcPath = hdPath
+	}
+}
+
+func UsingNetworkKey() SignOption {
+	return func(opts *SignOptions) {
+		opts.ShouldSignWithNetworkKey = true
 	}
 }

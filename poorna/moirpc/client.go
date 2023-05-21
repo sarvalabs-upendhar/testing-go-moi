@@ -699,8 +699,6 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 
 	sWrap := wrapStream(stream)
 
-	c.logger.Debug("[send]", "sending RPC from", call.SvcID, "to", call.Dest)
-
 	if err := sWrap.enc.Encode(call.SvcID); err != nil {
 		call.doneWithError(newClientError(err))
 		c.logger.Error("[send]", " client error : encode svc ID  : ", err)

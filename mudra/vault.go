@@ -158,6 +158,9 @@ func (vault *KramaVault) Sign(data []byte, sigType common.SigType, signOptions .
 		signingKeyType KeyType
 	)
 
+	signingKeyType = BLS
+	signingKey = vault.consensusPriv.Bytes()
+
 	if len(signOptions) != 0 {
 		signingKeyType = SECP256K1
 
@@ -166,13 +169,15 @@ func (vault *KramaVault) Sign(data []byte, sigType common.SigType, signOptions .
 			opt(opts)
 		}
 
-		signingKey, _, err = poi.GetPrivateKeyAtPath(vault.mnemonic.String(), opts.IgcPath)
-		if err != nil {
-			return nil, err
+		switch {
+		case opts.IgcPath != "":
+			signingKey, _, err = poi.GetPrivateKeyAtPath(vault.mnemonic.String(), opts.IgcPath)
+			if err != nil {
+				return nil, err
+			}
+		case opts.ShouldSignWithNetworkKey:
+			signingKey = vault.networkPriv.Bytes()
 		}
-	} else {
-		signingKeyType = BLS
-		signingKey = vault.consensusPriv.Bytes()
 	}
 
 	switch sigType {
@@ -227,19 +232,19 @@ func Verify(data, signature, pubBytes []byte) (bool, error) {
 	}
 
 	switch sig.SigPrefix[0] {
-	case 0x04:
+	case common.BlsBLST.Byte():
 		{
 			blsSigWithBlst := bls.BlsWithBlstSignature(sig)
 
 			return blsSigWithBlst.Verify(data, pubBytes)
 		}
-	case 0x01:
+	case common.EcdsaSecp256k1.Byte():
 		{
 			s256Sig := ecdsa.EcdsaSecp256k1Signature(sig)
 
 			return s256Sig.Verify(data, pubBytes)
 		}
-	case 0x02:
+	case common.SchnorrSecp256k1.Byte():
 		{
 			schSig := schnorr.SchnorrSignature(sig)
 

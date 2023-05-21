@@ -4,13 +4,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io/ioutil"
-	mrand "math/rand"
 	"strings"
-	"time"
 
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/chaincfg"
 	blst "github.com/supranational/blst/bindings/go"
+	"github.com/tyler-smith/go-bip39"
 
 	"github.com/sarvalabs/moichain/mudra/common"
 	"github.com/sarvalabs/moichain/mudra/kramaid"
@@ -176,17 +175,14 @@ func getPrivKeysForTest(seed []byte) ([]byte, []byte, error) {
 }
 
 func RandGenKeystore(dataDir, localNodePass string) ([]byte, kramaid.KramaID, error) {
-	randInt64 := time.Now().UnixNano()
-	source := mrand.NewSource(randInt64)
+	mnemonic := GenerateRandMnemonic()
 
-	var signKey [32]byte
-
-	_, err := mrand.New(source).Read(signKey[:])
+	seed, err := bip39.NewSeedWithErrorChecking(mnemonic.String(), "")
 	if err != nil {
 		return nil, "", err
 	}
 
-	bothSignAndCommPrivBytes, moiPubBytes, err := getPrivKeysForTest(signKey[:])
+	bothSignAndCommPrivBytes, moiPubBytes, err := getPrivKeysForTest(seed)
 	if err != nil {
 		return nil, "", err
 	}
@@ -221,4 +217,16 @@ func RandGenKeystore(dataDir, localNodePass string) ([]byte, kramaid.KramaID, er
 	}
 
 	return pubBytes, currentKID, nil
+}
+
+func GenerateRandMnemonic() Mnemonic {
+	seedPhrase := Mnemonic{}
+
+	// not checking for error, since below function will not return error
+	// as long as we pass bit-size = 128
+	randEntropy, _ := bip39.NewEntropy(128)
+	mnemonic, _ := bip39.NewMnemonic(randEntropy)
+	seedPhrase.FromString(mnemonic)
+
+	return seedPhrase
 }

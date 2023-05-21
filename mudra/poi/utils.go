@@ -121,7 +121,6 @@ func GetPrivateKeysForSigningAndNetwork(mnemonic string, nthValidator uint32) ([
 	if err != nil {
 		return nil, "", err
 	}
-
 	// Let's derive 'm' in the path
 	masterKey, err := hdkeychain.NewMaster(seed, &chaincfg.MainNetParams)
 	if err != nil {

@@ -195,3 +195,30 @@ func testECDSASignWithOptions(t *testing.T, vault *KramaVault) {
 	require.Equal(t, hexutil.EncodeToString(sigBytes), ecdsaSignSample)
 	fmt.Println(": ✓")
 }
+
+func TestSignWithNetworkKey(t *testing.T) {
+	datadir1, err := ioutil.TempDir("", "testDataDir")
+	require.NoError(t, err)
+
+	_, _, err = poi.RandGenKeystore(datadir1, "nodepass1")
+	require.NoError(t, err)
+
+	vConfig := &VaultConfig{
+		DataDir:      datadir1,
+		NodePassword: "nodepass1",
+	}
+
+	vault, err := NewVault(vConfig, moinode.MoiFullNode, 1)
+	require.NoError(t, err)
+
+	signOptions := UsingNetworkKey()
+	sigBytes, err := vault.Sign(msg, common.EcdsaSecp256k1, signOptions)
+	require.NoError(t, err)
+
+	pubKey := vault.GetNetworkPrivateKey().GetPublicKeyInBytes()
+
+	verificationStatus, err := Verify(msg, sigBytes, pubKey)
+	require.NoError(t, err)
+
+	require.Equal(t, true, verificationStatus)
+}
