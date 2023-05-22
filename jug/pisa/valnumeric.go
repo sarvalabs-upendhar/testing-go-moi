@@ -2,9 +2,11 @@ package pisa
 
 import (
 	"math"
+	"math/big"
 	"strconv"
 
 	"github.com/holiman/uint256"
+	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 )
 
@@ -525,154 +527,184 @@ U256Value Implementation
 */
 
 // U256Value represents a RegisterValue that operates like an uint256
-type U256Value uint256.Int
+type U256Value struct {
+	value *uint256.Int
+}
 
 // Type returns the Datatype of U256Value, which is PrimitiveU256.
 // Implements the RegisterValue interface for U256Value.
-func (x U256Value) Type() Datatype { return PrimitiveU256 }
+func (x *U256Value) Type() Datatype { return PrimitiveU256 }
 
 // Copy returns a copy of U256Value as a RegisterValue.
 // Implements the RegisterValue interface for U256Value.
-func (x U256Value) Copy() RegisterValue { return x }
+func (x *U256Value) Copy() RegisterValue { return x }
 
-// Norm returns the normalized value of U256Value as an uint256.
+// Norm returns the normalized value of U256Value as a big.Int.
 // Implements the RegisterValue interface for U256Value.
-func (x U256Value) Norm() any { return uint256.Int(x) }
+func (x *U256Value) Norm() any {
+	return x.value.ToBig()
+}
 
 // Data returns the POLO encoded bytes of U256Value.
 // Implements the RegisterValue interface for U256Value.
-func (x U256Value) Data() []byte {
+func (x *U256Value) Data() []byte {
+	// Polorize the U256 (will call the custom polorizer)
 	data, _ := polo.Polorize(x)
 
 	return data
 }
 
-// I256 returns an I256Value for a U256Value input
-func (x U256Value) I256() (I256Value, *Exception) {
-	if (*uint256.Int)(&x).Lt(MAXI256) {
-		return I256Value(x), nil
+// Polorize implements the Polorizable interface for U256Value.
+// Serializes the array of 64-bit integers as a POLO BigInt instead of as a pack encoded wire.
+func (x *U256Value) Polorize() (*polo.Polorizer, error) {
+	polorizer := polo.NewPolorizer()
+	polorizer.PolorizeBigInt(x.value.ToBig())
+
+	return polorizer, nil
+}
+
+// Depolorize implements the Depolorizable interface for U256Value.
+// Deserialized the array of 64-bit integers from a POLO BigInt instead of as a pack encoded wire.
+func (x *U256Value) Depolorize(depolorizer *polo.Depolorizer) error {
+	bigint, err := depolorizer.DepolorizeBigInt()
+	if err != nil {
+		return err
 	}
 
-	return I256Value(*uint256.NewInt(0)), exception(OverflowError, "conversion overflow")
+	u, overflow := uint256.FromBig(bigint)
+	if overflow {
+		return errors.New("overflow for 256-bit numeric")
+	}
+
+	*x = U256Value{u}
+
+	return nil
+}
+
+// I256 returns an I256Value for a U256Value input
+func (x *U256Value) I256() (*I256Value, *Exception) {
+	if x.value.Lt(MaxI256.value) {
+		return &I256Value{x.value}, nil
+	}
+
+	return nil, exception(OverflowError, "conversion overflow")
 }
 
 // Add returns the value of x + y as a U256Value.
 // Returns an OverflowError if the addition overflows.
-func (x U256Value) Add(y U256Value) (U256Value, *Exception) {
-	if res, overflow := (*uint256.Int)(&x).AddOverflow((*uint256.Int)(&x), (*uint256.Int)(&y)); !overflow {
-		return U256Value(*res), nil
+func (x *U256Value) Add(y *U256Value) (*U256Value, *Exception) {
+	if result, overflow := new(uint256.Int).AddOverflow(x.value, y.value); !overflow {
+		return &U256Value{result}, nil
 	}
 
-	return U256Value(*uint256.NewInt(0)), exception(OverflowError, "addition overflow")
+	return nil, exception(OverflowError, "addition overflow")
 }
 
 // Sub returns the value of x - y as a U256Value.
 // Returns an OverflowError if the subtraction overflows.
-func (x U256Value) Sub(y U256Value) (U256Value, *Exception) {
-	if res, overflow := (*uint256.Int)(&x).SubOverflow((*uint256.Int)(&x), (*uint256.Int)(&y)); !overflow {
-		return U256Value(*res), nil
+func (x *U256Value) Sub(y *U256Value) (*U256Value, *Exception) {
+	if result, overflow := new(uint256.Int).SubOverflow(x.value, y.value); !overflow {
+		return &U256Value{result}, nil
 	}
 
-	return U256Value(*uint256.NewInt(0)), exception(OverflowError, "subtraction overflow")
+	return nil, exception(OverflowError, "subtraction overflow")
 }
 
 // Mul returns the value of x * y as a U256Value.
 // Returns an OverflowError if the multiplication overflows.
-func (x U256Value) Mul(y U256Value) (U256Value, *Exception) {
-	if res, overflow := (*uint256.Int)(&x).MulOverflow((*uint256.Int)(&x), (*uint256.Int)(&y)); !overflow {
-		return U256Value(*res), nil
+func (x *U256Value) Mul(y *U256Value) (*U256Value, *Exception) {
+	if result, overflow := new(uint256.Int).MulOverflow(x.value, y.value); !overflow {
+		return &U256Value{result}, nil
 	}
 
-	return U256Value(*uint256.NewInt(0)), exception(OverflowError, "multiplication overflow")
+	return nil, exception(OverflowError, "multiplication overflow")
 }
 
 // Div returns the value of x / y as a U256Value.
 // Returns an DivideByZeroError if y is zero.
-func (x U256Value) Div(y U256Value) (U256Value, *Exception) {
-	zcheck := uint256.Int(y)
-	if zcheck.Eq(uint256.NewInt(0)) {
-		return U256Value(*uint256.NewInt(0)), exception(DivideByZeroError, "division by zero")
+func (x *U256Value) Div(y *U256Value) (*U256Value, *Exception) {
+	if y.value.Eq(Zero256) {
+		return nil, exception(DivideByZeroError, "division by zero")
 	}
 
-	res := (*uint256.Int)(&x).Div((*uint256.Int)(&x), (*uint256.Int)(&y))
+	result := new(uint256.Int).Div(x.value, y.value)
 
-	return U256Value(*res), nil
+	return &U256Value{result}, nil
 }
 
 // Mod returns the value of x % y as a U256Value.
 // Returns an DivideByZeroError if y is zero.
-func (x U256Value) Mod(y U256Value) (U256Value, *Exception) {
-	zcheck := uint256.Int(y)
-	if zcheck.Eq(uint256.NewInt(0)) {
-		return U256Value(*uint256.NewInt(0)), exception(DivideByZeroError, "modulo division by zero")
+func (x *U256Value) Mod(y *U256Value) (*U256Value, *Exception) {
+	if y.value.Eq(Zero256) {
+		return nil, exception(DivideByZeroError, "modulo division by zero")
 	}
 
-	res := (*uint256.Int)(&x).Mod((*uint256.Int)(&x), (*uint256.Int)(&y))
+	result := new(uint256.Int).Mod(x.value, y.value)
 
-	return U256Value(*res), nil
+	return &U256Value{result}, nil
 }
 
 // Bxor returns  the value of x ^ y  as a U256Value
-func (x U256Value) Bxor(y U256Value) U256Value {
-	res := (*uint256.Int)(&x).Xor((*uint256.Int)(&x), (*uint256.Int)(&y))
+func (x *U256Value) Bxor(y *U256Value) *U256Value {
+	result := new(uint256.Int).Xor(x.value, y.value)
 
-	return U256Value(*res)
+	return &U256Value{result}
 }
 
 // Band returns  the value of x ^ y  as a U256Value
-func (x U256Value) Band(y U256Value) U256Value {
-	res := (*uint256.Int)(&x).And((*uint256.Int)(&x), (*uint256.Int)(&y))
+func (x *U256Value) Band(y *U256Value) *U256Value {
+	result := new(uint256.Int).And(x.value, y.value)
 
-	return U256Value(*res)
+	return &U256Value{result}
 }
 
 // Bor returns  the value of x | y  as a U256Value
-func (x U256Value) Bor(y U256Value) U256Value {
-	res := (*uint256.Int)(&x).Or((*uint256.Int)(&x), (*uint256.Int)(&y))
+func (x *U256Value) Bor(y *U256Value) *U256Value {
+	result := new(uint256.Int).Or(x.value, y.value)
 
-	return U256Value(*res)
+	return &U256Value{result}
 }
 
 // Bnot returns  the value of ^x  as a U256Value
-func (x U256Value) Bnot() U256Value {
-	res := (*uint256.Int)(&x).Not((*uint256.Int)(&x))
+func (x *U256Value) Bnot() *U256Value {
+	result := new(uint256.Int).Not(x.value)
 
-	return U256Value(*res)
+	return &U256Value{result}
 }
 
-func (x U256Value) Incr() (U256Value, *Exception) {
-	if res, overflow := (*uint256.Int)(&x).AddOverflow((*uint256.Int)(&x), uint256.NewInt(1)); !overflow {
-		return U256Value(*res), nil
+func (x *U256Value) Incr() (*U256Value, *Exception) {
+	if result, overflow := new(uint256.Int).AddOverflow(x.value, uint256.NewInt(1)); !overflow {
+		return &U256Value{result}, nil
 	}
 
-	return U256Value(*uint256.NewInt(0)), exception(OverflowError, "increment overflow")
+	return nil, exception(OverflowError, "increment overflow")
 }
 
-func (x U256Value) Decr() (U256Value, *Exception) {
-	if res, overflow := (*uint256.Int)(&x).SubOverflow((*uint256.Int)(&x), uint256.NewInt(1)); !overflow {
-		return U256Value(*res), nil
+func (x *U256Value) Decr() (*U256Value, *Exception) {
+	if result, overflow := new(uint256.Int).SubOverflow(x.value, uint256.NewInt(1)); !overflow {
+		return &U256Value{result}, nil
 	}
 
-	return U256Value(*uint256.NewInt(0)), exception(OverflowError, "decrement overflow")
+	return nil, exception(OverflowError, "decrement overflow")
 }
 
 // Gt returns the value of x > y as a BoolValue
-func (x U256Value) Gt(y U256Value) BoolValue {
-	return BoolValue((*uint256.Int)(&x).Gt((*uint256.Int)(&y)))
+func (x *U256Value) Gt(y *U256Value) BoolValue {
+	return BoolValue(x.value.Gt(y.value))
 }
 
 // Lt returns the value of x < y as a BoolValue
-func (x U256Value) Lt(y U256Value) BoolValue {
-	return BoolValue((*uint256.Int)(&x).Lt((*uint256.Int)(&y)))
+func (x *U256Value) Lt(y *U256Value) BoolValue {
+	return BoolValue(x.value.Lt(y.value))
 }
 
 // Eq returns the value of x == y as a BoolValue
-func (x U256Value) Eq(y U256Value) BoolValue {
-	return BoolValue((*uint256.Int)(&x).Eq((*uint256.Int)(&y)))
+func (x *U256Value) Eq(y *U256Value) BoolValue {
+	return BoolValue(x.value.Eq(y.value))
 }
 
 //nolint:forcetypeassert
-func (x U256Value) methods() [256]*BuiltinMethod {
+func (x *U256Value) methods() [256]*BuiltinMethod {
 	return [256]*BuiltinMethod{
 		// uint.__join__(uint) -> int256
 		MethodJoin: makeBuiltinMethod(
@@ -682,7 +714,7 @@ func (x U256Value) methods() [256]*BuiltinMethod {
 			makefields([]*TypeField{{"result", PrimitiveU256}}),
 			func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// Perform unsigned addition on the operands
-				result, except := inputs[0].(U256Value).Add(inputs[1].(U256Value))
+				result, except := inputs[0].(*U256Value).Add(inputs[1].(*U256Value))
 				// Check for overflow and raise exception
 				if except != nil {
 					return nil, except.traced(engine.callstack.trace())
@@ -700,8 +732,8 @@ func (x U256Value) methods() [256]*BuiltinMethod {
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveU256}, {Name: "other", Type: PrimitiveU256}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
-				x, y := inputs[0], inputs[1]
-				result := x.(U256Value).Lt(y.(U256Value))
+				a, b := inputs[0], inputs[1]
+				result := a.(*U256Value).Lt(b.(*U256Value))
 
 				return RegisterSet{0: result}, nil
 			},
@@ -714,8 +746,8 @@ func (x U256Value) methods() [256]*BuiltinMethod {
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveU256}, {Name: "other", Type: PrimitiveU256}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
-				x, y := inputs[0], inputs[1]
-				result := x.(U256Value).Gt(y.(U256Value))
+				a, b := inputs[0], inputs[1]
+				result := a.(*U256Value).Gt(b.(*U256Value))
 
 				return RegisterSet{0: result}, nil
 			},
@@ -728,8 +760,8 @@ func (x U256Value) methods() [256]*BuiltinMethod {
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveU256}, {Name: "other", Type: PrimitiveU256}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
-				x, y := inputs[0], inputs[1]
-				result := x.(U256Value).Eq(y.(U256Value))
+				a, b := inputs[0], inputs[1]
+				result := a.(*U256Value).Eq(b.(*U256Value))
 
 				return RegisterSet{0: result}, nil
 			},
@@ -742,10 +774,9 @@ func (x U256Value) methods() [256]*BuiltinMethod {
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveU256}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				isZero := inputs[0].(*U256Value).Eq(&U256Value{Zero256})
 				// True for all values except 0
-				result := !inputs[0].(U256Value).Eq(U256Value(*uint256.NewInt(0)))
-				// Set value into outputs
-				return RegisterSet{0: result}, nil
+				return RegisterSet{0: !isZero}, nil
 			},
 		),
 
@@ -757,8 +788,7 @@ func (x U256Value) methods() [256]*BuiltinMethod {
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveString}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// Format into a string (base 10)
-				u := (uint256.Int)(inputs[0].(U256Value))
-				result := u.Dec()
+				result := inputs[0].(*U256Value).value.Dec()
 				// Set value into outputs
 				return RegisterSet{0: StringValue(result)}, nil
 			},
@@ -771,9 +801,7 @@ func (x U256Value) methods() [256]*BuiltinMethod {
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveU256}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveU256}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
-				x := inputs[0]
-
-				return RegisterSet{0: x}, nil
+				return RegisterSet{0: inputs[0]}, nil
 			},
 		),
 	}
@@ -783,296 +811,345 @@ func (x U256Value) methods() [256]*BuiltinMethod {
 I256Value Implementation
 */
 
-var MAXI256, _ = uint256.FromHex("0x8000000000000000000000000000000000000000000000000000000000000000")
+var (
+	Zero256 = uint256.NewInt(0)
+	MinU256 = &U256Value{Zero256}
+	MaxU256 = &U256Value{uint256.MustFromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")}
+	MinI256 = &I256Value{uint256.MustFromHex("0x8000000000000000000000000000000000000000000000000000000000000000")}
+	MaxI256 = &I256Value{uint256.MustFromHex("0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")}
+)
 
 // I256Value represents a RegisterValue that operates like an int256
-type I256Value uint256.Int
+type I256Value struct {
+	value *uint256.Int
+}
 
 // Type returns the Datatype of I256Value, which is PrimitiveI256.
 // Implements the RegisterValue interface for I256Value.
-func (x I256Value) Type() Datatype { return PrimitiveI256 }
+func (x *I256Value) Type() Datatype { return PrimitiveI256 }
 
 // Copy returns a copy of I256Value as a RegisterValue.
 // Implements the RegisterValue interface for I256Value.
-func (x I256Value) Copy() RegisterValue { return x }
+func (x *I256Value) Copy() RegisterValue { return x }
 
-// Norm returns the normalized value of I256Value as an int256.
+// Norm returns the normalized value of I256Value as a big.Int.
 // Implements the RegisterValue interface for I256Value.
-func (x I256Value) Norm() any { return uint256.Int(x) }
+func (x *I256Value) Norm() any {
+	// Convert to big
+	norm := x.value.ToBig()
+	// Flip sign if negative
+	if x.value.Sign() == -1 {
+		norm = new(big.Int).Neg(norm)
+	}
+
+	return norm
+}
 
 // Data returns the POLO encoded bytes of I256Value.
 // Implements the RegisterValue interface for I256Value.
-func (x I256Value) Data() []byte {
+func (x *I256Value) Data() []byte {
 	data, _ := polo.Polorize(x)
 
 	return data
 }
 
-// U256 returns an U256Value for a I256Value input
-func (x I256Value) U256() (U256Value, *Exception) {
-	if (*uint256.Int)(&x).Slt(uint256.NewInt(0)) {
-		return U256Value(*uint256.NewInt(0)), exception(OverflowError, "conversion overflow")
+// Polorize implements the Polorizable interface for I256Value.
+// Serializes the array of 64-bit integers as a POLO BigInt instead of as a pack encoded wire.
+func (x *I256Value) Polorize() (*polo.Polorizer, error) {
+	polorizer := polo.NewPolorizer()
+
+	value := big.NewInt(0)
+
+	switch x.value.Sign() {
+	case 1:
+		value = x.value.ToBig()
+	case -1:
+		value = new(big.Int).Neg(new(uint256.Int).Abs(x.value).ToBig())
 	}
 
-	return U256Value(x), nil
+	polorizer.PolorizeBigInt(value)
+
+	return polorizer, nil
+}
+
+// Depolorize implements the Depolorizable interface for I256Value.
+// Deserialized the array of 64-bit integers from a POLO BigInt instead of as a pack encoded wire.
+func (x *I256Value) Depolorize(depolorizer *polo.Depolorizer) error {
+	bigint, err := depolorizer.DepolorizeBigInt()
+	if err != nil {
+		return err
+	}
+
+	u, overflow := uint256.FromBig(bigint)
+	if overflow {
+		return errors.New("overflow for 256-bit numeric")
+	}
+
+	*x = I256Value{u}
+
+	return nil
+}
+
+// U256 returns an U256Value for a I256Value input
+func (x *I256Value) U256() (*U256Value, *Exception) {
+	if x.value.Slt(Zero256) {
+		return nil, exception(OverflowError, "conversion overflow")
+	}
+
+	return &U256Value{x.value}, nil
 }
 
 // Add returns the value of x + y as a I256Value.
 // Returns an OverflowError if the addition overflows.
-func (x I256Value) Add(y I256Value) (I256Value, *Exception) {
-	signX := (*uint256.Int)(&x).Sign()
-	signY := (*uint256.Int)(&y).Sign()
-	xabs := (*uint256.Int)(&x).Abs((*uint256.Int)(&x))
-	yabs := (*uint256.Int)(&y).Abs((*uint256.Int)(&y))
+func (x *I256Value) Add(y *I256Value) (*I256Value, *Exception) {
+	signX := x.value.Sign()
+	signY := y.value.Sign()
+
+	absX := new(uint256.Int).Abs(x.value)
+	absY := new(uint256.Int).Abs(y.value)
 
 	switch {
+	// Checks if x is -ve and y is +ve
 	case signX == -1 && signY >= 0:
-		{ // Checks if x is -ve and y is +ve
-			// If in y-x, x>y then it does -(x-y) else simply y-x
-			if xabs.Gt(yabs) {
-				if z, overflow := xabs.SubOverflow(xabs, yabs); !overflow && z.Lt(MAXI256) {
-					return I256Value(*z.Neg(z)), nil
-				}
-			} else {
-				if z, overflow := xabs.SubOverflow(yabs, xabs); !overflow && z.Lt(MAXI256) {
-					return I256Value(*z), nil
-				}
+		// If in y-x, x>y then it does -(x-y) else simply y-x
+		if absX.Gt(absY) {
+			if z, overflow := new(uint256.Int).SubOverflow(absX, absY); !overflow && z.Lt(MaxI256.value) {
+				return &I256Value{new(uint256.Int).Neg(z)}, nil
 			}
-
-			return I256Value(*uint256.NewInt(0)), exception(OverflowError, "addition overflow")
+		} else {
+			if z, overflow := new(uint256.Int).SubOverflow(absY, absX); !overflow && z.Lt(MaxI256.value) {
+				return &I256Value{z}, nil
+			}
 		}
+
+		return nil, exception(OverflowError, "addition overflow")
+
+	// Checks if x is +ve and y is -ve
 	case signX >= 0 && signY == -1:
-		{ // Checks if x is +ve and y is -ve
-			// If in x-y, y>x then it does -(y-x) else simply x-y
-			if yabs.Gt(xabs) {
-				if z, overflow := xabs.SubOverflow(yabs, xabs); !overflow && z.Lt(MAXI256) {
-					return I256Value(*z.Neg(z)), nil
-				}
-			} else {
-				if z, overflow := xabs.SubOverflow(xabs, yabs); !overflow && z.Lt(MAXI256) {
-					return I256Value(*z), nil
-				}
+		// If in x-y, y>x then it does -(y-x) else simply x-y
+		if absY.Gt(absX) {
+			if z, overflow := new(uint256.Int).SubOverflow(absY, absX); !overflow && z.Lt(MaxI256.value) {
+				return &I256Value{new(uint256.Int).Neg(z)}, nil
 			}
-
-			return I256Value(*uint256.NewInt(0)), exception(OverflowError, "addition overflow")
+		} else {
+			if z, overflow := new(uint256.Int).SubOverflow(absX, absY); !overflow && z.Lt(MaxI256.value) {
+				return &I256Value{z}, nil
+			}
 		}
+
+		return nil, exception(OverflowError, "addition overflow")
+
+	// If both are neg => -x-y = -(x+y)
 	case signX == -1 && signY == -1:
-		{
-			// If both are neg => -x-y = -(x+y)
-			if z, overflow := xabs.AddOverflow(xabs, yabs); !overflow && z.Lt(MAXI256) {
-				return I256Value(*z.Neg(z)), nil
-			}
-
-			return I256Value(*uint256.NewInt(0)), exception(OverflowError, "addition overflow")
+		if z, overflow := new(uint256.Int).AddOverflow(absX, absY); !overflow && z.Lt(MaxI256.value) {
+			return &I256Value{new(uint256.Int).Neg(z)}, nil
 		}
+
+		return nil, exception(OverflowError, "addition overflow")
+
+	// If both are +ve => x+y
 	default:
-		{
-			// If both are +ve => x+y
-			if z, overflow := xabs.AddOverflow(xabs, yabs); !overflow && z.Lt(MAXI256) {
-				return I256Value(*z), nil
-			}
-
-			return I256Value(*uint256.NewInt(0)), exception(OverflowError, "addition overflow")
+		if z, overflow := new(uint256.Int).AddOverflow(absX, absY); !overflow && z.Lt(MaxI256.value) {
+			return &I256Value{z}, nil
 		}
+
+		return nil, exception(OverflowError, "addition overflow")
 	}
 }
 
 // Sub returns the value of x - y as a I256Value.
 // Returns an OverflowError if the subtraction overflows.
-func (x I256Value) Sub(y I256Value) (I256Value, *Exception) {
-	signX := (*uint256.Int)(&x).Sign()
-	signY := (*uint256.Int)(&y).Sign()
-	xabs := (*uint256.Int)(&x).Abs((*uint256.Int)(&x))
-	yabs := (*uint256.Int)(&y).Abs((*uint256.Int)(&y))
+func (x *I256Value) Sub(y *I256Value) (*I256Value, *Exception) {
+	signX := x.value.Sign()
+	signY := y.value.Sign()
+
+	absX := new(uint256.Int).Abs(x.value)
+	absY := new(uint256.Int).Abs(y.value)
 
 	switch {
+	// Checks if x is -ve and y is +ve
 	case signX == -1 && signY >= 0:
-		{ // Checks if x is -ve and y is +ve
-			// Checks if x is -ve and y is +ve => -x-(+y) = -(x+y)
-			if z, overflow := xabs.AddOverflow(yabs, xabs); !overflow && z.Lt(MAXI256) {
-				return I256Value(*z.Neg(z)), nil
-			}
-
-			return I256Value(*uint256.NewInt(0)), exception(OverflowError, "subtraction overflow")
+		// Checks if x is -ve and y is +ve => -x-(+y) = -(x+y)
+		if z, overflow := new(uint256.Int).AddOverflow(absY, absX); !overflow && z.Lt(MaxI256.value) {
+			return &I256Value{new(uint256.Int).Neg(z)}, nil
 		}
+
+		return nil, exception(OverflowError, "subtraction overflow")
+
+	// Checks if x is +ve and y is -ve => x-(-y) = x+y
 	case signX >= 0 && signY == -1:
-		{ // Checks if x is +ve and y is -ve => x-(-y) = x+y
-			if z, overflow := xabs.AddOverflow(xabs, yabs); !overflow && z.Lt(MAXI256) {
-				return I256Value(*z), nil
-			}
-
-			return I256Value(*uint256.NewInt(0)), exception(OverflowError, "subtraction overflow")
+		if z, overflow := new(uint256.Int).AddOverflow(absX, absY); !overflow && z.Lt(MaxI256.value) {
+			return &I256Value{z}, nil
 		}
+
+		return nil, exception(OverflowError, "subtraction overflow")
+
+	// Checks if x is -ve and y is -ve => -x-(-y) = y-x
 	case signX == -1 && signY == -1:
-		{ // Checks if x is -ve and y is -ve => -x-(-y) = y-x
-			// If in y-x, x>y then it does -(x-y) else simply y-x
-			if xabs.Gt(yabs) {
-				if z, overflow := xabs.SubOverflow(xabs, yabs); !overflow && z.Lt(MAXI256) {
-					return I256Value(*z.Neg(z)), nil
-				}
-			} else {
-				if z, overflow := xabs.SubOverflow(yabs, xabs); !overflow && z.Lt(MAXI256) {
-					return I256Value(*z), nil
-				}
+		// If in y-x, x>y then it does -(x-y) else simply y-x
+		if absX.Gt(absY) {
+			if z, overflow := new(uint256.Int).SubOverflow(absX, absY); !overflow && z.Lt(MaxI256.value) {
+				return &I256Value{new(uint256.Int).Neg(z)}, nil
 			}
-
-			return I256Value(*uint256.NewInt(0)), exception(OverflowError, "subtraction overflow")
+		} else {
+			if z, overflow := new(uint256.Int).SubOverflow(absY, absX); !overflow && z.Lt(MaxI256.value) {
+				return &I256Value{z}, nil
+			}
 		}
+
+		return nil, exception(OverflowError, "subtraction overflow")
+
+	// If both are +ve => x-y
 	default:
-		{ // If both are +ve => x-y
-			// If in x-y, y>x then it does -(y-x) else simply x-y
-			if yabs.Gt(xabs) {
-				if z, overflow := xabs.SubOverflow(yabs, xabs); !overflow && z.Lt(MAXI256) {
-					return I256Value(*z.Neg(z)), nil
-				}
-			} else {
-				if z, overflow := xabs.SubOverflow(xabs, yabs); !overflow && z.Lt(MAXI256) {
-					return I256Value(*z), nil
-				}
+		// If in x-y, y>x then it does -(y-x) else simply x-y
+		if absY.Gt(absX) {
+			if z, overflow := new(uint256.Int).SubOverflow(absY, absX); !overflow && z.Lt(MaxI256.value) {
+				return &I256Value{new(uint256.Int).Neg(z)}, nil
 			}
-
-			return I256Value(*uint256.NewInt(0)), exception(OverflowError, "subtraction overflow")
+		} else {
+			if z, overflow := new(uint256.Int).SubOverflow(absX, absY); !overflow && z.Lt(MaxI256.value) {
+				return &I256Value{z}, nil
+			}
 		}
+
+		return nil, exception(OverflowError, "subtraction overflow")
 	}
 }
 
 // Mul returns the value of x * y as a I256Value.
 // Returns an OverflowError if the multiplication overflows.
-func (x I256Value) Mul(y I256Value) (I256Value, *Exception) {
-	signX := (*uint256.Int)(&x).Sign()
-	signY := (*uint256.Int)(&y).Sign()
-	xabs := (*uint256.Int)(&x).Abs((*uint256.Int)(&x))
-	yabs := (*uint256.Int)(&y).Abs((*uint256.Int)(&y))
+func (x *I256Value) Mul(y *I256Value) (*I256Value, *Exception) {
+	signX := x.value.Sign()
+	signY := y.value.Sign()
+
+	absX := new(uint256.Int).Abs(x.value)
+	absY := new(uint256.Int).Abs(y.value)
 
 	switch {
+	// Checks if any of the values are zero
 	case signX == 0 || signY == 0:
-		{ // Checks if any of the values are zero
-			return I256Value(*uint256.NewInt(0)), nil
-		}
+		return &I256Value{uint256.NewInt(0)}, nil
+
+	// Checks if x is -ve and y is +ve => -x-(+y) = -(x+y)
 	case (signX == -1 && signY == 1) || (signX == 1 && signY == -1):
-		{ // Checks if x is -ve and y is +ve => -x-(+y) = -(x+y)
-			if z, overflow := xabs.MulOverflow(yabs, xabs); !overflow && z.Lt(MAXI256) {
-				return I256Value(*z.Neg(z)), nil
-			}
-
-			return I256Value(*uint256.NewInt(0)), exception(OverflowError, "multiplication overflow")
+		if z, overflow := new(uint256.Int).MulOverflow(absY, absX); !overflow && z.Lt(MaxI256.value) {
+			return &I256Value{new(uint256.Int).Neg(z)}, nil
 		}
+
+		return nil, exception(OverflowError, "multiplication overflow")
+
+	// Checks if x & y are +ve or x & y are -ve in both cases result is +ve
 	default:
-		{ // Checks if x & y are +ve or x & y are -ve in both cases result is +ve
-			if z, overflow := xabs.MulOverflow(yabs, xabs); !overflow && z.Lt(MAXI256) {
-				return I256Value(*z), nil
-			}
-
-			return I256Value(*uint256.NewInt(0)), exception(OverflowError, "multiplication overflow")
+		if z, overflow := new(uint256.Int).MulOverflow(absY, absX); !overflow && z.Lt(MaxI256.value) {
+			return &I256Value{z}, nil
 		}
+
+		return nil, exception(OverflowError, "multiplication overflow")
 	}
 }
 
 // Div returns the value of x / y as a I256Value.
 // Returns an DivideByZeroError if y is zero.
-func (x I256Value) Div(y I256Value) (I256Value, *Exception) {
-	signY := (*uint256.Int)(&y).Sign()
-	if signY == 0 { // Checks if any of the values are 0
-		return I256Value(*uint256.NewInt(0)), exception(DivideByZeroError, "division by zero")
-	} else { // Checks if both values have the same sign
-		z := (*uint256.Int)(&x).SDiv((*uint256.Int)(&x), (*uint256.Int)(&y))
-
-		return I256Value(*z), nil
+func (x *I256Value) Div(y *I256Value) (*I256Value, *Exception) {
+	if y.value.Sign() == 0 { // Checks if any of the values are 0
+		return nil, exception(DivideByZeroError, "division by zero")
 	}
+
+	z := new(uint256.Int).SDiv(x.value, y.value)
+
+	return &I256Value{z}, nil
 }
 
 // Mod returns the value of x % y as a I256Value.
 // Returns an DivideByZeroError if y is zero.
-func (x I256Value) Mod(y I256Value) (I256Value, *Exception) {
-	signY := (*uint256.Int)(&y).Sign()
-	if signY == 0 { // Checks if any of the values are 0
-		return I256Value(*uint256.NewInt(0)), exception(DivideByZeroError, "modulo division by zero")
-	} else { // Checks if both values have the same sign
-		z := (*uint256.Int)(&x).SMod((*uint256.Int)(&x), (*uint256.Int)(&y))
-
-		return I256Value(*z), nil
+func (x *I256Value) Mod(y *I256Value) (*I256Value, *Exception) {
+	if y.value.Sign() == 0 { // Checks if any of the values are 0
+		return nil, exception(DivideByZeroError, "modulo division by zero")
 	}
+
+	z := new(uint256.Int).SMod(x.value, y.value)
+
+	return &I256Value{z}, nil
 }
 
 // Bxor returns  the value of x ^ y  as a I256Value
-func (x I256Value) Bxor(y I256Value) I256Value {
-	res := (*uint256.Int)(&x).Xor((*uint256.Int)(&x), (*uint256.Int)(&y))
+func (x *I256Value) Bxor(y *I256Value) *I256Value {
+	result := new(uint256.Int).Xor(x.value, y.value)
 
-	return I256Value(*res)
+	return &I256Value{result}
 }
 
 // Band returns  the value of x ^ y  as a I256Value
-func (x I256Value) Band(y I256Value) I256Value {
-	res := (*uint256.Int)(&x).And((*uint256.Int)(&x), (*uint256.Int)(&y))
+func (x *I256Value) Band(y *I256Value) *I256Value {
+	result := new(uint256.Int).And(x.value, y.value)
 
-	return I256Value(*res)
+	return &I256Value{result}
 }
 
 // Bor returns  the value of x | y  as a I256Value
-func (x I256Value) Bor(y I256Value) I256Value {
-	res := (*uint256.Int)(&x).Or((*uint256.Int)(&x), (*uint256.Int)(&y))
+func (x *I256Value) Bor(y *I256Value) *I256Value {
+	result := new(uint256.Int).Or(x.value, y.value)
 
-	return I256Value(*res)
+	return &I256Value{result}
 }
 
 // Bnot returns  the value of ^x  as a i256Value
-func (x I256Value) Bnot() I256Value {
-	res := (*uint256.Int)(&x).Not((*uint256.Int)(&x))
+func (x *I256Value) Bnot() *I256Value {
+	result := new(uint256.Int).Not(x.value)
 
-	return I256Value(*res)
+	return &I256Value{result}
 }
 
-func (x I256Value) Incr() (I256Value, *Exception) {
-	signX := (*uint256.Int)(&x).Sign()
-	xabs := (*uint256.Int)(&x).Abs((*uint256.Int)(&x))
+func (x *I256Value) Incr() (*I256Value, *Exception) {
+	absX := new(uint256.Int).Abs(x.value)
 
-	if signX == -1 {
-		if z, overflow := xabs.SubOverflow(xabs, uint256.NewInt(1)); !overflow && xabs.Lt(MAXI256) {
-			return I256Value(*z.Neg(z)), nil
+	if x.value.Sign() == -1 {
+		if z, overflow := new(uint256.Int).SubOverflow(absX, uint256.NewInt(1)); !overflow && absX.Lt(MaxI256.value) {
+			return &I256Value{new(uint256.Int).Neg(z)}, nil
 		}
 
-		return I256Value(*uint256.NewInt(0)), exception(OverflowError, "increment overflow")
-	} else {
-		if z, overflow := xabs.AddOverflow(xabs, uint256.NewInt(1)); !overflow && xabs.Lt(MAXI256) {
-			return I256Value(*z), nil
-		}
-
-		return I256Value(*uint256.NewInt(0)), exception(OverflowError, "increment overflow")
+		return nil, exception(OverflowError, "increment overflow")
 	}
+
+	if z, overflow := new(uint256.Int).AddOverflow(absX, uint256.NewInt(1)); !overflow && absX.Lt(MaxI256.value) {
+		return &I256Value{z}, nil
+	}
+
+	return nil, exception(OverflowError, "increment overflow")
 }
 
-func (x I256Value) Decr() (I256Value, *Exception) {
-	signX := (*uint256.Int)(&x).Sign()
-	xabs := (*uint256.Int)(&x).Abs((*uint256.Int)(&x))
+func (x *I256Value) Decr() (*I256Value, *Exception) {
+	signX := x.value.Sign()
+	absX := new(uint256.Int).Abs(x.value)
 
 	if signX == -1 || signX == 0 {
-		if z, overflow := xabs.AddOverflow(xabs, uint256.NewInt(1)); !overflow && z.Lt(MAXI256) {
-			return I256Value(*z.Neg(z)), nil
+		if z, overflow := new(uint256.Int).AddOverflow(absX, uint256.NewInt(1)); !overflow && z.Lt(MaxI256.value) {
+			return &I256Value{new(uint256.Int).Neg(z)}, nil
 		}
 
-		return I256Value(*uint256.NewInt(0)), exception(OverflowError, "decrement overflow")
-	} else {
-		if z, overflow := xabs.SubOverflow(xabs, uint256.NewInt(1)); !overflow && z.Lt(MAXI256) {
-			return I256Value(*z), nil
-		}
-
-		return I256Value(*uint256.NewInt(0)), exception(OverflowError, "decrement overflow")
+		return nil, exception(OverflowError, "decrement overflow")
 	}
+
+	if z, overflow := new(uint256.Int).SubOverflow(absX, uint256.NewInt(1)); !overflow && z.Lt(MaxI256.value) {
+		return &I256Value{z}, nil
+	}
+
+	return nil, exception(OverflowError, "decrement overflow")
 }
 
 // Gt returns the value of x > y as a BoolValue
-func (x I256Value) Gt(y I256Value) BoolValue {
-	return BoolValue((*uint256.Int)(&x).Sgt((*uint256.Int)(&y)))
+func (x *I256Value) Gt(y *I256Value) BoolValue {
+	return BoolValue(x.value.Sgt(y.value))
 }
 
 // Lt returns the value of x < y as a BoolValue
-func (x I256Value) Lt(y I256Value) BoolValue {
-	return BoolValue((*uint256.Int)(&x).Slt((*uint256.Int)(&y)))
+func (x *I256Value) Lt(y *I256Value) BoolValue {
+	return BoolValue(x.value.Slt(y.value))
 }
 
 // Eq returns the value of x == y as a BoolValue
-func (x I256Value) Eq(y I256Value) BoolValue {
-	return BoolValue((*uint256.Int)(&x).Eq((*uint256.Int)(&y)))
+func (x *I256Value) Eq(y *I256Value) BoolValue {
+	return BoolValue(x.value.Eq(y.value))
 }
 
 //nolint:forcetypeassert
@@ -1086,7 +1163,7 @@ func (x I256Value) methods() [256]*BuiltinMethod {
 			makefields([]*TypeField{{"result", PrimitiveI256}}),
 			func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// Perform signed addition on the operands
-				result, except := inputs[0].(I256Value).Add(inputs[1].(I256Value))
+				result, except := inputs[0].(*I256Value).Add(inputs[1].(*I256Value))
 				// Check for overflow and raise exception
 				if except != nil {
 					return nil, except.traced(engine.callstack.trace())
@@ -1104,8 +1181,8 @@ func (x I256Value) methods() [256]*BuiltinMethod {
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveI256}, {Name: "other", Type: PrimitiveI256}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
-				x, y := inputs[0], inputs[1]
-				result := x.(I256Value).Lt(y.(I256Value))
+				a, b := inputs[0], inputs[1]
+				result := a.(*I256Value).Lt(b.(*I256Value))
 
 				return RegisterSet{0: result}, nil
 			},
@@ -1118,8 +1195,8 @@ func (x I256Value) methods() [256]*BuiltinMethod {
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveI256}, {Name: "other", Type: PrimitiveI256}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
-				x, y := inputs[0], inputs[1]
-				result := x.(I256Value).Gt(y.(I256Value))
+				a, b := inputs[0], inputs[1]
+				result := a.(*I256Value).Gt(b.(*I256Value))
 
 				return RegisterSet{0: result}, nil
 			},
@@ -1132,8 +1209,8 @@ func (x I256Value) methods() [256]*BuiltinMethod {
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveI256}, {Name: "other", Type: PrimitiveI256}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
-				x, y := inputs[0], inputs[1]
-				result := x.(I256Value).Eq(y.(I256Value))
+				a, b := inputs[0], inputs[1]
+				result := a.(*I256Value).Eq(b.(*I256Value))
 
 				return RegisterSet{0: result}, nil
 			},
@@ -1147,7 +1224,7 @@ func (x I256Value) methods() [256]*BuiltinMethod {
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// True for all values except 0
-				result := !inputs[0].(I256Value).Eq(I256Value(*uint256.NewInt(0)))
+				result := !inputs[0].(*I256Value).Eq(&I256Value{Zero256})
 				// Set value into outputs
 				return RegisterSet{0: result}, nil
 			},
@@ -1160,14 +1237,17 @@ func (x I256Value) methods() [256]*BuiltinMethod {
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveI256}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveString}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
-				// Format into a string (base 10)
-				x := (uint256.Int)(inputs[0].(I256Value))
-				signx := x.Sign()
-				uabs := x.Abs(&x)
-				result := uabs.Dec()
-				if signx == -1 {
+				a := inputs[0].(*I256Value)
+				// Obtain absolute value
+				abs := new(uint256.Int).Abs(a.value)
+
+				// Format into base10 string
+				result := abs.Dec()
+				// Prepend negative sign if negative
+				if a.value.Sign() == -1 {
 					result = string('-') + result
 				}
+
 				// Set value into outputs
 				return RegisterSet{0: StringValue(result)}, nil
 			},
@@ -1180,10 +1260,11 @@ func (x I256Value) methods() [256]*BuiltinMethod {
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveI256}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveI256}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
-				x := inputs[0].(I256Value)
-				result := (*uint256.Int)(&x).Abs((*uint256.Int)(&x))
+				a := inputs[0].(*I256Value)
+				// Obtain absolute value
+				result := new(uint256.Int).Abs(a.value)
 
-				return RegisterSet{0: I256Value(*result)}, nil
+				return RegisterSet{0: &I256Value{result}}, nil
 			},
 		),
 	}

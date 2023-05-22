@@ -1587,30 +1587,31 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: U256Value(*uint256.NewInt(56)),
-					1: U256Value(*uint256.NewInt(11)),
+					0: &U256Value{uint256.NewInt(56)},
+					1: &U256Value{uint256.NewInt(11)},
 				},
 			}
 
 			continuity := opADD(scope, []byte{2, 0, 1})
 			require.Equal(t, continueOk{20}, continuity)
-			require.Equal(t, U256Value(*uint256.NewInt(67)), scope.memory[2])
+			require.Equal(t, &U256Value{uint256.NewInt(67)}, scope.memory[2])
 		})
 
 		t.Run("success_i256", func(t *testing.T) {
 			ip1 := big.NewInt(-56)
 			res := big.NewInt(-45)
+
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: I256Value(*uint256.MustFromBig(ip1)),
-					1: I256Value(*uint256.NewInt(11)),
+					0: &I256Value{uint256.MustFromBig(ip1)},
+					1: &I256Value{uint256.NewInt(11)},
 				},
 			}
 
 			continuity := opADD(scope, []byte{2, 0, 1})
 			require.Equal(t, continueOk{20}, continuity)
-			require.Equal(t, I256Value(*uint256.MustFromBig(res)), scope.memory[2])
+			require.Equal(t, &I256Value{uint256.MustFromBig(res)}, scope.memory[2])
 		})
 	})
 
@@ -1684,30 +1685,31 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: U256Value(*uint256.NewInt(56)),
-					1: U256Value(*uint256.NewInt(11)),
+					0: &U256Value{uint256.NewInt(56)},
+					1: &U256Value{uint256.NewInt(11)},
 				},
 			}
 
 			continuity := opSUB(scope, []byte{2, 0, 1})
 			require.Equal(t, continueOk{20}, continuity)
-			require.Equal(t, U256Value(*uint256.NewInt(45)), scope.memory[2])
+			require.Equal(t, &U256Value{uint256.NewInt(45)}, scope.memory[2])
 		})
 
 		t.Run("success_i256", func(t *testing.T) {
 			ip1 := big.NewInt(-56)
 			res := big.NewInt(-67)
+
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: I256Value(*uint256.MustFromBig(ip1)),
-					1: I256Value(*uint256.NewInt(11)),
+					0: &I256Value{uint256.MustFromBig(ip1)},
+					1: &I256Value{uint256.NewInt(11)},
 				},
 			}
 
 			continuity := opSUB(scope, []byte{2, 0, 1})
 			require.Equal(t, continueOk{20}, continuity)
-			require.Equal(t, I256Value(*uint256.MustFromBig(res)), scope.memory[2])
+			require.Equal(t, &I256Value{uint256.MustFromBig(res)}, scope.memory[2])
 		})
 	})
 
@@ -1782,30 +1784,31 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: U256Value(*uint256.NewInt(20)),
-					1: U256Value(*uint256.NewInt(2)),
+					0: &U256Value{uint256.NewInt(20)},
+					1: &U256Value{uint256.NewInt(2)},
 				},
 			}
 
 			continuity := opMUL(scope, []byte{2, 0, 1})
 			require.Equal(t, continueOk{30}, continuity)
-			require.Equal(t, U256Value(*uint256.NewInt(40)), scope.memory[2])
+			require.Equal(t, &U256Value{uint256.NewInt(40)}, scope.memory[2])
 		})
 
 		t.Run("success_i256", func(t *testing.T) {
 			ip1 := big.NewInt(-5)
 			res := big.NewInt(-55)
+
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: I256Value(*uint256.MustFromBig(ip1)),
-					1: I256Value(*uint256.NewInt(11)),
+					0: &I256Value{uint256.MustFromBig(ip1)},
+					1: &I256Value{uint256.NewInt(11)},
 				},
 			}
 
 			continuity := opMUL(scope, []byte{2, 0, 1})
 			require.Equal(t, continueOk{30}, continuity)
-			require.Equal(t, I256Value(*uint256.MustFromBig(res)), scope.memory[2])
+			require.Equal(t, &I256Value{uint256.MustFromBig(res)}, scope.memory[2])
 		})
 	})
 
@@ -1897,14 +1900,14 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: U256Value(*uint256.NewInt(20)),
-					1: U256Value(*uint256.NewInt(2)),
+					0: &U256Value{uint256.NewInt(20)},
+					1: &U256Value{uint256.NewInt(2)},
 				},
 			}
 
 			continuity := opDIV(scope, []byte{2, 0, 1})
 			require.Equal(t, continueOk{30}, continuity)
-			require.Equal(t, U256Value(*uint256.NewInt(10)), scope.memory[2])
+			require.Equal(t, &U256Value{uint256.NewInt(10)}, scope.memory[2])
 		})
 
 		t.Run("success_i256", func(t *testing.T) {
@@ -1913,14 +1916,14 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: I256Value(*uint256.MustFromBig(ip1)),
-					1: I256Value(*uint256.NewInt(2)),
+					0: &I256Value{uint256.MustFromBig(ip1)},
+					1: &I256Value{uint256.NewInt(2)},
 				},
 			}
 
 			continuity := opDIV(scope, []byte{2, 0, 1})
 			require.Equal(t, continueOk{30}, continuity)
-			require.Equal(t, I256Value(*uint256.MustFromBig(res)), scope.memory[2])
+			require.Equal(t, &I256Value{uint256.MustFromBig(res)}, scope.memory[2])
 		})
 	})
 
@@ -2012,30 +2015,31 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: U256Value(*uint256.NewInt(20)),
-					1: U256Value(*uint256.NewInt(2)),
+					0: &U256Value{uint256.NewInt(20)},
+					1: &U256Value{uint256.NewInt(2)},
 				},
 			}
 
 			continuity := opMOD(scope, []byte{2, 0, 1})
 			require.Equal(t, continueOk{30}, continuity)
-			require.Equal(t, U256Value(*uint256.NewInt(0)), scope.memory[2])
+			require.Equal(t, &U256Value{uint256.NewInt(0)}, scope.memory[2])
 		})
 
 		t.Run("success_i256", func(t *testing.T) {
 			ip1 := big.NewInt(-10)
 			res := big.NewInt(-3)
+
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: I256Value(*uint256.MustFromBig(ip1)),
-					1: I256Value(*uint256.NewInt(7)),
+					0: &I256Value{uint256.MustFromBig(ip1)},
+					1: &I256Value{uint256.NewInt(7)},
 				},
 			}
 
 			continuity := opMOD(scope, []byte{2, 0, 1})
 			require.Equal(t, continueOk{30}, continuity)
-			require.Equal(t, I256Value(*uint256.MustFromBig(res)), scope.memory[2])
+			require.Equal(t, &I256Value{uint256.MustFromBig(res)}, scope.memory[2])
 		})
 	})
 
@@ -2107,14 +2111,14 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: U256Value(*uint256.NewInt(56)),
-					1: U256Value(*uint256.NewInt(11)),
+					0: &U256Value{uint256.NewInt(56)},
+					1: &U256Value{uint256.NewInt(11)},
 				},
 			}
 
 			continuity := opBXOR(scope, []byte{2, 0, 1})
 			require.Equal(t, continueOk{20}, continuity)
-			require.Equal(t, U256Value(*uint256.NewInt(51)), scope.memory[2])
+			require.Equal(t, &U256Value{uint256.NewInt(51)}, scope.memory[2])
 		})
 
 		t.Run("success_i256", func(t *testing.T) {
@@ -2123,14 +2127,14 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: I256Value(*uint256.MustFromBig(ip1)),
-					1: I256Value(*uint256.NewInt(11)),
+					0: &I256Value{uint256.MustFromBig(ip1)},
+					1: &I256Value{uint256.NewInt(11)},
 				},
 			}
 
 			continuity := opBXOR(scope, []byte{2, 0, 1})
 			require.Equal(t, continueOk{20}, continuity)
-			require.Equal(t, I256Value(*uint256.MustFromBig(res)), scope.memory[2])
+			require.Equal(t, &I256Value{uint256.MustFromBig(res)}, scope.memory[2])
 		})
 	})
 
@@ -2201,14 +2205,14 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: U256Value(*uint256.NewInt(56)),
-					1: U256Value(*uint256.NewInt(11)),
+					0: &U256Value{uint256.NewInt(56)},
+					1: &U256Value{uint256.NewInt(11)},
 				},
 			}
 
 			continuity := opBAND(scope, []byte{2, 0, 1})
 			require.Equal(t, continueOk{20}, continuity)
-			require.Equal(t, U256Value(*uint256.NewInt(8)), scope.memory[2])
+			require.Equal(t, &U256Value{uint256.NewInt(8)}, scope.memory[2])
 		})
 
 		t.Run("success_i256", func(t *testing.T) {
@@ -2216,14 +2220,14 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: I256Value(*uint256.MustFromBig(ip1)),
-					1: I256Value(*uint256.NewInt(11)),
+					0: &I256Value{uint256.MustFromBig(ip1)},
+					1: &I256Value{uint256.NewInt(11)},
 				},
 			}
 
 			continuity := opBAND(scope, []byte{2, 0, 1})
 			require.Equal(t, continueOk{20}, continuity)
-			require.Equal(t, I256Value(*uint256.NewInt(8)), scope.memory[2])
+			require.Equal(t, &I256Value{uint256.NewInt(8)}, scope.memory[2])
 		})
 	})
 
@@ -2295,30 +2299,31 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: U256Value(*uint256.NewInt(56)),
-					1: U256Value(*uint256.NewInt(11)),
+					0: &U256Value{uint256.NewInt(56)},
+					1: &U256Value{uint256.NewInt(11)},
 				},
 			}
 
 			continuity := opBOR(scope, []byte{2, 0, 1})
 			require.Equal(t, continueOk{20}, continuity)
-			require.Equal(t, U256Value(*uint256.NewInt(59)), scope.memory[2])
+			require.Equal(t, &U256Value{uint256.NewInt(59)}, scope.memory[2])
 		})
 
 		t.Run("success_i256", func(t *testing.T) {
 			ip1 := big.NewInt(-56)
 			res := big.NewInt(-53)
+
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: I256Value(*uint256.MustFromBig(ip1)),
-					1: I256Value(*uint256.NewInt(11)),
+					0: &I256Value{uint256.MustFromBig(ip1)},
+					1: &I256Value{uint256.NewInt(11)},
 				},
 			}
 
 			continuity := opBOR(scope, []byte{2, 0, 1})
 			require.Equal(t, continueOk{20}, continuity)
-			require.Equal(t, I256Value(*uint256.MustFromBig(res)), scope.memory[2])
+			require.Equal(t, &I256Value{uint256.MustFromBig(res)}, scope.memory[2])
 		})
 	})
 
@@ -2369,13 +2374,13 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: U256Value(*uint256.NewInt(56)),
+					0: &U256Value{uint256.NewInt(56)},
 				},
 			}
 
 			continuity := opBNOT(scope, []byte{2, 0, 1})
 			require.Equal(t, continueOk{20}, continuity)
-			require.Equal(t, U256Value(*uint256.MustFromDecimal("115792089237316195423570985008687907853269984665640564039457584007913129639879")), scope.memory[2]) //nolint:lll
+			require.Equal(t, &U256Value{uint256.MustFromDecimal("115792089237316195423570985008687907853269984665640564039457584007913129639879")}, scope.memory[2]) //nolint:lll
 		})
 
 		t.Run("success_i256", func(t *testing.T) {
@@ -2383,13 +2388,13 @@ func TestInstructionSet(t *testing.T) {
 			scope := &callscope{
 				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
 				memory: map[byte]RegisterValue{
-					0: I256Value(*uint256.MustFromBig(ip1)),
+					0: &I256Value{uint256.MustFromBig(ip1)},
 				},
 			}
 
 			continuity := opBNOT(scope, []byte{2, 0, 1})
 			require.Equal(t, continueOk{20}, continuity)
-			require.Equal(t, I256Value(*uint256.MustFromDecimal("55")), scope.memory[2])
+			require.Equal(t, &I256Value{uint256.MustFromDecimal("55")}, scope.memory[2])
 		})
 	})
 

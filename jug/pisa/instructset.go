@@ -949,11 +949,11 @@ func opINCR(scope *callscope, operands []byte) Continue {
 
 	case PrimitiveU256:
 		// Cast register value to U256 and call Inr (check for overflow)
-		result, except = regVal.(U256Value).Incr()
+		result, except = regVal.(*U256Value).Incr()
 
 	case PrimitiveI256:
 		// Cast register value to I256 and call Incr (check for overflow)
-		result, except = regVal.(I256Value).Incr()
+		result, except = regVal.(*I256Value).Incr()
 	default:
 		return scope.raise(exceptionInvalidOperationForType("increment", regVal.Type()))
 	}
@@ -992,11 +992,11 @@ func opDECR(scope *callscope, operands []byte) Continue {
 
 	case PrimitiveU256:
 		// Cast register value to U256 and call Decr (check for overflow)
-		result, except = regVal.(U256Value).Decr()
+		result, except = regVal.(*U256Value).Decr()
 
 	case PrimitiveI256:
 		// Cast register value to I256 and call Decr (check for overflow)
-		result, except = regVal.(I256Value).Decr()
+		result, except = regVal.(*I256Value).Decr()
 	default:
 		return scope.raise(exceptionInvalidOperationForType("decrement", regVal.Type()))
 	}
@@ -1036,11 +1036,11 @@ func opADD(scope *callscope, operands []byte) Continue {
 
 	case PrimitiveU256:
 		// Cast register values to U256 and call Add (check for overflow)
-		result, except = regA.(U256Value).Add(regB.(U256Value))
+		result, except = regA.(*U256Value).Add(regB.(*U256Value))
 
 	case PrimitiveI256:
 		// Cast register values to I256 and call Add (check for overflow)
-		result, except = regA.(I256Value).Add(regB.(I256Value))
+		result, except = regA.(*I256Value).Add(regB.(*I256Value))
 
 	default:
 		return scope.raise(exceptionInvalidOperationForType("add", regA.Type()))
@@ -1081,11 +1081,11 @@ func opSUB(scope *callscope, operands []byte) Continue {
 
 	case PrimitiveU256:
 		// Cast register values to U256 and call Sub (check for overflow)
-		result, except = regA.(U256Value).Sub(regB.(U256Value))
+		result, except = regA.(*U256Value).Sub(regB.(*U256Value))
 
 	case PrimitiveI256:
 		// Cast register values to I256 and call Sub (check for overflow)
-		result, except = regA.(I256Value).Sub(regB.(I256Value))
+		result, except = regA.(*I256Value).Sub(regB.(*I256Value))
 
 	default:
 		return scope.raise(exceptionInvalidOperationForType("subtract", regA.Type()))
@@ -1126,11 +1126,11 @@ func opMUL(scope *callscope, operands []byte) Continue {
 
 	case PrimitiveU256:
 		// Cast register values to U256 and call Mul (check for overflow)
-		result, except = regA.(U256Value).Mul(regB.(U256Value))
+		result, except = regA.(*U256Value).Mul(regB.(*U256Value))
 
 	case PrimitiveI256:
 		// Cast register values to I256 and call Mul (check for overflow)
-		result, except = regA.(I256Value).Mul(regB.(I256Value))
+		result, except = regA.(*I256Value).Mul(regB.(*I256Value))
 
 	default:
 		return scope.raise(exceptionInvalidOperationForType("multiply", regA.Type()))
@@ -1171,11 +1171,11 @@ func opDIV(scope *callscope, operands []byte) Continue {
 
 	case PrimitiveU256:
 		// Cast register values to U256 and call Div (check for error)
-		result, except = regA.(U256Value).Div(regB.(U256Value))
+		result, except = regA.(*U256Value).Div(regB.(*U256Value))
 
 	case PrimitiveI256:
 		// Cast register values to I256 and call Div (check for overflow)
-		result, except = regA.(I256Value).Div(regB.(I256Value))
+		result, except = regA.(*I256Value).Div(regB.(*I256Value))
 
 	default:
 		return scope.raise(exceptionInvalidOperationForType("divide", regA.Type()))
@@ -1216,11 +1216,11 @@ func opMOD(scope *callscope, operands []byte) Continue {
 
 	case PrimitiveU256:
 		// Cast register values to U256 and call Mod (check for error)
-		result, except = regA.(U256Value).Mod(regB.(U256Value))
+		result, except = regA.(*U256Value).Mod(regB.(*U256Value))
 
 	case PrimitiveI256:
 		// Cast register values to I256 and call Mod (check for overflow)
-		result, except = regA.(I256Value).Mod(regB.(I256Value))
+		result, except = regA.(*I256Value).Mod(regB.(*I256Value))
 
 	default:
 		return scope.raise(exceptionInvalidOperationForType("modulo divide", regA.Type()))
@@ -1260,11 +1260,11 @@ func opBXOR(scope *callscope, operands []byte) Continue {
 
 	case PrimitiveU256:
 		// Cast register values to U256 and call Bxor
-		result = regA.(U256Value).Bxor(regB.(U256Value)) //nolint:forcetypeassert
+		result = regA.(*U256Value).Bxor(regB.(*U256Value)) //nolint:forcetypeassert
 
 	case PrimitiveI256:
 		// Cast register values to I256 and call Bxor
-		result = regA.(I256Value).Bxor(regB.(I256Value)) //nolint:forcetypeassert
+		result = regA.(*I256Value).Bxor(regB.(*I256Value)) //nolint:forcetypeassert
 
 	default:
 		return scope.raise(exceptionInvalidOperationForType("bxor", regA.Type()))
@@ -1299,11 +1299,11 @@ func opBAND(scope *callscope, operands []byte) Continue {
 
 	case PrimitiveU256:
 		// Cast register values to U256 and call Band
-		result = regA.(U256Value).Band(regB.(U256Value)) //nolint:forcetypeassert
+		result = regA.(*U256Value).Band(regB.(*U256Value)) //nolint:forcetypeassert
 
 	case PrimitiveI256:
 		// Cast register values to I256 and call Band
-		result = regA.(I256Value).Band(regB.(I256Value)) //nolint:forcetypeassert
+		result = regA.(*I256Value).Band(regB.(*I256Value)) //nolint:forcetypeassert
 
 	default:
 		return scope.raise(exceptionInvalidOperationForType("band", regA.Type()))
@@ -1338,11 +1338,11 @@ func opBOR(scope *callscope, operands []byte) Continue {
 
 	case PrimitiveU256:
 		// Cast register values to U256 and call Bor
-		result = regA.(U256Value).Bor(regB.(U256Value)) //nolint:forcetypeassert
+		result = regA.(*U256Value).Bor(regB.(*U256Value)) //nolint:forcetypeassert
 
 	case PrimitiveI256:
 		// Cast register values to I256 and call Bor
-		result = regA.(I256Value).Bor(regB.(I256Value)) //nolint:forcetypeassert
+		result = regA.(*I256Value).Bor(regB.(*I256Value)) //nolint:forcetypeassert
 	default:
 		return scope.raise(exceptionInvalidOperationForType("bor", regA.Type()))
 	}
@@ -1373,11 +1373,11 @@ func opBNOT(scope *callscope, operands []byte) Continue {
 
 	case PrimitiveU256:
 		// Cast register values to U256 and call Bnot
-		result = regA.(U256Value).Bnot() //nolint:forcetypeassert
+		result = regA.(*U256Value).Bnot() //nolint:forcetypeassert
 
 	case PrimitiveI256:
 		// Cast register values to I256 and call Bnot
-		result = regA.(I256Value).Bnot() //nolint:forcetypeassert
+		result = regA.(*I256Value).Bnot() //nolint:forcetypeassert
 
 	default:
 		return scope.raise(exceptionInvalidOperationForType("bnot", regA.Type()))

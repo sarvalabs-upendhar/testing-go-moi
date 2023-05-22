@@ -119,31 +119,31 @@ func NewRegisterValue(datatype Datatype, data []byte) (RegisterValue, error) {
 		case PrimitiveU256:
 			// If empty data, create the default U256 value and return
 			if data == nil {
-				return U256Value(*uint256.NewInt(0)), nil
+				return &U256Value{uint256.NewInt(0)}, nil
 			}
 
 			// Decode data into a uint256
-			number := new(uint256.Int)
+			number := new(U256Value)
 			if err := polo.Depolorize(number, data); err != nil {
 				return nil, errors.New("data does not decode to a u256")
 			}
 
-			return U256Value(*number), nil
+			return number, nil
 
 		// I256Value
 		case PrimitiveI256:
 			// If empty data, create the default I256 value and return
 			if data == nil {
-				return I256Value(*uint256.NewInt(0)), nil
+				return &I256Value{uint256.NewInt(0)}, nil
 			}
 
 			// Decode data into a int256
-			number := new(uint256.Int)
+			number := new(I256Value)
 			if err := polo.Depolorize(number, data); err != nil {
 				return nil, errors.New("data does not decode to a i256")
 			}
 
-			return I256Value(*number), nil
+			return number, nil
 
 		// AddressValue
 		case PrimitiveAddress:
