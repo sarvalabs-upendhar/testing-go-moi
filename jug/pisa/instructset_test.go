@@ -1138,6 +1138,122 @@ func TestInstructionSet(t *testing.T) {
 		})
 	})
 
+	t.Run("SLICE", func(t *testing.T) {
+		t.Run("invalid_type", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: StringValue("foo"),
+					1: U64Value(1),
+					2: U64Value(2),
+				},
+			}
+
+			continuity := opSLICE(scope, []byte{3, 0, 1, 2})
+			require.Equal(t, continueException{0, &Exception{
+				Class: "builtin.TypeError",
+				Error: "not a primitive: $0",
+				Trace: []string{},
+			}}, continuity)
+		})
+
+		t.Run("invalid_index_type", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: StringValue("foo"),
+					1: StringValue("foo"),
+					2: U64Value(2),
+				},
+			}
+
+			continuity := opSLICE(scope, []byte{3, 0, 1, 2})
+			require.Equal(t, continueException{0, &Exception{
+				Class: "builtin.TypeError",
+				Error: "not a primitive: $0",
+				Trace: []string{},
+			}}, continuity)
+		})
+
+		t.Run("invalid_index_type2", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: must(newArrayFromValues(
+						ArrayDatatype{PrimitiveString, 4},
+						StringValue("foo"), StringValue("bar"), StringValue("car"), StringValue("bat"),
+					)),
+					1: U64Value(2),
+					2: StringValue("foo"),
+				},
+			}
+
+			continuity := opSLICE(scope, []byte{3, 0, 1, 2})
+			require.Equal(t, continueException{0, &Exception{
+				Class: "builtin.TypeError",
+				Error: "invalid array index for slice stop: not a u64",
+				Trace: []string{},
+			}}, continuity)
+		})
+
+		t.Run("index_out_of_range", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: must(newArrayFromValues(
+						ArrayDatatype{PrimitiveString, 4},
+						StringValue("foo"), StringValue("bar"), StringValue("car"), StringValue("bat"),
+					)),
+					1: U64Value(2),
+					2: U64Value(6),
+				},
+			}
+
+			continuity := opSLICE(scope, []byte{3, 0, 1, 2})
+			require.Equal(t, continueException{0, &Exception{
+				Class: "builtin.ValueError",
+				Error: "invalid array index for slice: out of range",
+				Trace: []string{},
+			}}, continuity)
+		})
+
+		t.Run("success_varray", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: must(newVarrayFromValues(
+						VarrayDatatype{PrimitiveString},
+						StringValue("foo"), StringValue("bar"), StringValue("car"), StringValue("bat"),
+					)),
+					1: U64Value(0),
+					2: U64Value(2),
+				},
+			}
+			res := must(newVarrayFromValues(VarrayDatatype{PrimitiveString}, StringValue("foo"), StringValue("bar")))
+			continuity := opSLICE(scope, []byte{3, 0, 1, 2})
+			require.Equal(t, continueOk{30}, continuity)
+			require.Equal(t, res, scope.memory[3])
+		})
+
+		t.Run("success_array", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: must(newArrayFromValues(
+						ArrayDatatype{PrimitiveString, 4},
+						StringValue("foo"), StringValue("bar"), StringValue("car"), StringValue("bat"),
+					)),
+					1: U64Value(0),
+					2: U64Value(2),
+				},
+			}
+			res := must(newVarrayFromValues(VarrayDatatype{PrimitiveString}, StringValue("foo"), StringValue("bar")))
+			continuity := opSLICE(scope, []byte{3, 0, 1, 2})
+			require.Equal(t, continueOk{30}, continuity)
+			require.Equal(t, res, scope.memory[3])
+		})
+	})
+
 	t.Run("APPEND", func(t *testing.T) {
 		t.Run("not_varray", func(t *testing.T) {
 			scope := &callscope{
@@ -1284,6 +1400,140 @@ func TestInstructionSet(t *testing.T) {
 			continuity := opHASKEY(scope, []byte{2, 0, 1})
 			require.Equal(t, continueOk{15}, continuity)
 			require.Equal(t, BoolValue(false), scope.memory[2])
+		})
+	})
+
+	t.Run("MERGE", func(t *testing.T) {
+		t.Run("non_symmetric", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: StringValue("hoo"),
+					1: StringValue("foo"),
+					2: U64Value(56),
+				},
+			}
+
+			continuity := opMERGE(scope, []byte{0, 1, 2})
+			require.Equal(t, continueException{0, &Exception{
+				Class: "builtin.ValueError",
+				Error: "not symmetric: [$1, $2]",
+				Trace: []string{},
+			}}, continuity)
+		})
+
+		t.Run("invalid_type", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: StringValue("hoo"),
+					1: StringValue("foo"),
+					2: StringValue("too"),
+				},
+			}
+
+			continuity := opMERGE(scope, []byte{0, 1, 2})
+			require.Equal(t, continueException{0, &Exception{
+				Class: "builtin.TypeError",
+				Error: "not a primitive: $1",
+				Trace: []string{},
+			}}, continuity)
+		})
+
+		t.Run("empty_varray", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
+					1: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
+					2: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
+				},
+			}
+
+			continuity := opMERGE(scope, []byte{0, 1, 2})
+			require.Equal(t, continueOk{30}, continuity)
+			require.Equal(t, must(newVarrayFromValues(VarrayDatatype{PrimitiveString}, nil)), scope.memory[0])
+		})
+
+		t.Run("success_varray", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
+					1: must(newVarrayFromValues(VarrayDatatype{PrimitiveString}, StringValue("foo"), StringValue("bar"))),
+					2: must(newVarrayFromValues(VarrayDatatype{PrimitiveString}, StringValue("koo"), StringValue("car"))),
+				},
+			}
+
+			continuity := opMERGE(scope, []byte{0, 1, 2})
+			require.Equal(t, continueOk{30}, continuity)
+			require.Equal(t, must(newVarrayFromValues(VarrayDatatype{PrimitiveString},
+				StringValue("foo"), StringValue("bar"), StringValue("koo"), StringValue("car")),
+			), scope.memory[0])
+		})
+
+		t.Run("success_maps", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					1: must(newMapFromValues(
+						MapDatatype{PrimitiveString, PrimitiveString},
+						map[RegisterValue]RegisterValue{
+							StringValue("I"): StringValue("am"),
+						},
+					)),
+					2: must(newMapFromValues(
+						MapDatatype{PrimitiveString, PrimitiveString},
+						map[RegisterValue]RegisterValue{
+							StringValue("hello"): StringValue("yes"),
+							StringValue("yo"):    StringValue("you"),
+						},
+					)),
+				},
+			}
+
+			continuity := opMERGE(scope, []byte{0, 1, 2})
+			require.Equal(t, continueOk{30}, continuity)
+			require.Equal(t, must(newMapFromValues(
+				MapDatatype{PrimitiveString, PrimitiveString},
+				map[RegisterValue]RegisterValue{
+					StringValue("I"):     StringValue("am"),
+					StringValue("hello"): StringValue("yes"),
+					StringValue("yo"):    StringValue("you"),
+				}),
+			), scope.memory[0])
+		})
+
+		t.Run("success_maps_overwrite", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
+					1: must(newMapFromValues(
+						MapDatatype{PrimitiveString, PrimitiveString},
+						map[RegisterValue]RegisterValue{
+							StringValue("I"): StringValue("am"),
+						},
+					)),
+					2: must(newMapFromValues(
+						MapDatatype{PrimitiveString, PrimitiveString},
+						map[RegisterValue]RegisterValue{
+							StringValue("I"):  StringValue("am"),
+							StringValue("yo"): StringValue("you"),
+						},
+					)),
+				},
+			}
+
+			continuity := opMERGE(scope, []byte{0, 1, 2})
+			require.Equal(t, continueOk{30}, continuity)
+			require.Equal(t, must(newMapFromValues(
+				MapDatatype{PrimitiveString, PrimitiveString},
+				map[RegisterValue]RegisterValue{
+					StringValue("I"):  StringValue("am"),
+					StringValue("yo"): StringValue("you"),
+				}),
+			), scope.memory[0])
 		})
 	})
 

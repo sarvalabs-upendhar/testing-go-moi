@@ -110,7 +110,7 @@ func (array ArrayValue) Norm() any {
 
 func (array ArrayValue) Get(index RegisterValue) (RegisterValue, *Exception) {
 	if !index.Type().Equals(PrimitiveU64) {
-		return nil, exception(TypeError, "invalid array index: not a uint64")
+		return nil, exception(TypeError, "invalid array index: not a u64")
 	}
 
 	arrayIndex := index.(U64Value) //nolint:forcetypeassert
@@ -130,7 +130,7 @@ func (array ArrayValue) Get(index RegisterValue) (RegisterValue, *Exception) {
 
 func (array *ArrayValue) Set(index RegisterValue, element RegisterValue) *Exception {
 	if !index.Type().Equals(PrimitiveU64) {
-		return exceptionf(TypeError, "invalid array index: not a uint64")
+		return exceptionf(TypeError, "invalid array index: not a u64")
 	}
 
 	arrayIndex := index.(U64Value) //nolint:forcetypeassert
@@ -149,4 +149,32 @@ func (array *ArrayValue) Set(index RegisterValue, element RegisterValue) *Except
 
 func (array ArrayValue) Size() U64Value {
 	return U64Value(array.datatype.size)
+}
+
+func (array *ArrayValue) Slice(start RegisterValue, stop RegisterValue) (*VarrayValue, *Exception) {
+	if !start.Type().Equals(PrimitiveU64) {
+		return nil, exception(TypeError, "invalid array index for slice start: not a u64")
+	}
+
+	if !stop.Type().Equals(PrimitiveU64) {
+		return nil, exception(TypeError, "invalid array index for slice stop: not a u64")
+	}
+
+	startIdx, stopIdx := start.(U64Value), stop.(U64Value) //nolint:forcetypeassert
+
+	// Verify slice index bounds
+	if stopIdx.Gt(array.Size()) || startIdx.Gt(stopIdx) {
+		return nil, exception(ValueError, "invalid array index for slice: out of range")
+	}
+
+	// Slice the values in a temporary Array
+	sliced := array.values[startIdx:stopIdx]
+
+	// Create a new Varray from the values
+	varray, err := newVarrayFromValues(VarrayDatatype{array.datatype.elem}, sliced...)
+	if err != nil {
+		return nil, exception(ValueError, err.Error())
+	}
+
+	return varray, nil
 }

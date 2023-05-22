@@ -102,12 +102,12 @@ func BaseInstructionSet() InstructionSet {
 		GETIDX: opGETIDX,
 		SETIDX: opSETIDX,
 
-		GROW: opGROW,
-		// SLICE: opSLICE,
+		GROW:   opGROW,
+		SLICE:  opSLICE,
 		APPEND: opAPPEND,
 		POPEND: opPOPEND,
 		HASKEY: opHASKEY,
-		// MERGE: opMERGE,
+		MERGE:  opMERGE,
 
 		AND: opAND,
 		OR:  opOR,
@@ -768,6 +768,46 @@ func opGROW(scope *callscope, operands []byte) Continue {
 	return continueOk{5 + engineio.Fuel(5*size)}
 }
 
+func opSLICE(scope *callscope, operands []byte) Continue {
+	// SLICE [$X: varray][$Y: v/array][$Z: u64][$W: u64]
+	out, list, start, stop := operands[0], operands[1], operands[2], operands[3]
+
+	// Acquire register values
+	regList, regStart, regStop := scope.memory.Get(list), scope.memory.Get(start), scope.memory.Get(stop)
+
+	// Checks if array/varray is empty
+	if IsNullValue(regList) {
+		return scope.raise(exceptionNullRegister(list))
+	}
+
+	var (
+		sliced *VarrayValue
+		except *Exception
+	)
+
+	switch regList.Type().Kind() {
+	case Varray:
+		sliced, except = regList.(*VarrayValue).Slice(regStart, regStop)
+		if except != nil {
+			return scope.raise(except)
+		}
+
+	case Array:
+		sliced, except = regList.(*ArrayValue).Slice(regStart, regStop)
+		if except != nil {
+			return scope.raise(except)
+		}
+
+	default:
+		return scope.raise(exceptionInvalidDatatype(regList.Type().Kind(), list))
+	}
+
+	// Set the output slice
+	scope.memory.Set(out, sliced)
+
+	return continueOk{30}
+}
+
 func opAPPEND(scope *callscope, operands []byte) Continue {
 	// APPEND [$X: varray][$Y]
 	reg, element := operands[0], operands[1]
@@ -844,6 +884,38 @@ func opHASKEY(scope *callscope, operands []byte) Continue {
 	scope.memory.Set(out, result)
 
 	return continueOk{15}
+}
+
+func opMERGE(scope *callscope, operands []byte) Continue {
+	// MERGE [$X: col][$Y: col][$Z: col]
+	out, colX, colY := operands[0], operands[1], operands[2]
+
+	// Get two values of the same type
+	regA, regB, except := scope.getSymmetricValues(colX, colY)
+	if except != nil {
+		return scope.propagate(except)
+	}
+
+	switch regA.Type().Kind() {
+	case Varray:
+		arrayA, _ := regA.(*VarrayValue)
+		arrayB, _ := regB.(*VarrayValue)
+
+		merged := arrayA.Merge(arrayB)
+		scope.memory.Set(out, merged)
+
+	case Mapping:
+		mapA, _ := regA.(*MapValue)
+		mapB, _ := regB.(*MapValue)
+
+		merged := mapA.Merge(mapB)
+		scope.memory.Set(out, merged)
+
+	default:
+		return scope.raise(exceptionInvalidDatatype(regA.Type().Kind(), colX))
+	}
+
+	return continueOk{30}
 }
 
 func opAND(scope *callscope, operands []byte) Continue {

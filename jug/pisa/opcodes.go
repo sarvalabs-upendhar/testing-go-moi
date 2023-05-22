@@ -357,12 +357,12 @@ var opcodeMetadataTable = map[OpCode]*opcodeMetadata{
 	GETIDX: {"GETIDX", 3},
 	SETIDX: {"SETIDX", 3},
 
-	GROW: {"GROW", 2},
-	// SLICE:  nil,
+	GROW:   {"GROW", 2},
+	SLICE:  {"SLICE", 4},
 	APPEND: {"APPEND", 2},
 	POPEND: {"POPEND", 2},
 	HASKEY: {"HASKEY", 3},
-	// MERGE: nil,
+	MERGE:  {"MERGE", 3},
 
 	AND: {"AND", 3},
 	OR:  {"OR", 3},

@@ -176,3 +176,40 @@ func (varray *VarrayValue) Popend() (RegisterValue, error) {
 func (varray *VarrayValue) Grow(size U64Value) {
 	varray.values = append(varray.values, make([]RegisterValue, size)...)
 }
+
+func (varray *VarrayValue) Merge(insert *VarrayValue) *VarrayValue {
+	// Copy the varray values into a new varray
+	merged, _ := varray.Copy().(*VarrayValue)
+	// Append each value into the new merged varray
+	merged.values = append(merged.values, insert.values...)
+
+	return merged
+}
+
+func (varray *VarrayValue) Slice(start RegisterValue, stop RegisterValue) (*VarrayValue, *Exception) {
+	if !start.Type().Equals(PrimitiveU64) {
+		return nil, exception(TypeError, "invalid array index for slice start: not a u64")
+	}
+
+	if !stop.Type().Equals(PrimitiveU64) {
+		return nil, exception(TypeError, "invalid array index for slice stop: not a u64")
+	}
+
+	startIdx, stopIdx := start.(U64Value), stop.(U64Value) //nolint:forcetypeassert
+
+	// Verify slice index bounds
+	if stopIdx.Gt(varray.Size()) || startIdx.Gt(stopIdx) {
+		return nil, exception(ValueError, "invalid array index for slice: out of range")
+	}
+
+	// Slice the values in a temporary Array
+	sliced := varray.values[startIdx:stopIdx]
+
+	// Create a new Varray from the values
+	slicedVarray, err := newVarrayFromValues(VarrayDatatype{varray.datatype.elem}, sliced...)
+	if err != nil {
+		return nil, exception(ValueError, err.Error())
+	}
+
+	return slicedVarray, nil
+}

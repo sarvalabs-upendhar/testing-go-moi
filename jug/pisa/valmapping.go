@@ -37,6 +37,24 @@ func newMapValue(datatype MapDatatype, data []byte) (*MapValue, error) {
 	return mapping, nil
 }
 
+// newMapFromValues generates a new MapValue for a given MapDatatype and some POLO encoded bytes.
+func newMapFromValues(datatype MapDatatype, maps map[RegisterValue]RegisterValue) (*MapValue, error) {
+	// Initialize the MapValue with the Typedef and an empty mapping
+	mapping := MapValue{values: make(map[RegisterValue]RegisterValue, len(maps))}
+	mapping.datatype = datatype
+
+	// If there is no data to decode, return empty MapValue
+	if maps == nil {
+		return &mapping, nil
+	}
+
+	for key, val := range maps {
+		mapping.values[key.Copy()] = val.Copy()
+	}
+
+	return &mapping, nil
+}
+
 // Type returns the Datatype of MapValue, which is some Mapping Datatype.
 // Implements the RegisterValue interface for MapValue.
 func (mapping MapValue) Type() Datatype { return mapping.datatype }
@@ -44,7 +62,7 @@ func (mapping MapValue) Type() Datatype { return mapping.datatype }
 // Copy returns a copy of MapValue as a RegisterValue.
 // Implements the RegisterValue interface for MapValue.
 func (mapping MapValue) Copy() RegisterValue {
-	mcopy := MapValue{values: make(map[RegisterValue]RegisterValue, len(mapping.values))}
+	mcopy := &MapValue{values: make(map[RegisterValue]RegisterValue, len(mapping.values))}
 	mcopy.datatype, _ = mapping.datatype.Copy().(MapDatatype)
 
 	for key, val := range mapping.values {
@@ -134,4 +152,18 @@ func (mapping *MapValue) Has(key RegisterValue) (BoolValue, *Exception) {
 	_, ok := mapping.values[key]
 
 	return BoolValue(ok), nil
+}
+
+func (mapping *MapValue) Merge(insert *MapValue) *MapValue {
+	// Copy the mapping into a new mapping
+	merged, _ := mapping.Copy().(*MapValue)
+
+	// Insert each non-nil entry into the merged map
+	for key, val := range insert.values {
+		if val != nil {
+			merged.values[key] = val
+		}
+	}
+
+	return merged
 }
