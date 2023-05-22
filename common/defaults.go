@@ -41,4 +41,6 @@ const (
 	DefaultFuelLimit = 1000
 )
 
-// Consensus defaults
+const (
+	DefaultMOIWalletPath = "m/44'/6174'/0'/0/1"
+)

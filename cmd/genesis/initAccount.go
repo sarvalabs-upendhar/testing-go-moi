@@ -70,7 +70,7 @@ func initAccount() {
 	}
 
 	if len(behaviourNodes) == 0 && len(randomNodes) == 0 {
-		behaviourNodes, randomNodes = getContextNodes(DefaultBehaviouralCount, DefaultRandomCount)
+		behaviourNodes, randomNodes = getContextNodes(instancesFilePath, DefaultBehaviouralCount, DefaultRandomCount)
 	}
 
 	genesis.AddAccount(lattice.AccountInfoV1{
@@ -81,7 +81,7 @@ func initAccount() {
 		RandomContext:      randomNodes,
 	})
 
-	if err = writeToGenesisFile(genesis); err != nil {
+	if err = WriteToGenesisFile(genesisFilePath, genesis); err != nil {
 		common.Err(err)
 	}
 }

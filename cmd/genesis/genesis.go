@@ -26,7 +26,6 @@ func GetCommand() *cobra.Command {
 
 func setupSubCommands(cmd *cobra.Command) {
 	cmd.AddCommand(
-		GetGenesisTestCommand(),
 		GetInitAccountCommand(),
 		GetPreDeployCommand(),
 		GetPremineCommand(),

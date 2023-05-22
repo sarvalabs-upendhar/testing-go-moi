@@ -3,7 +3,6 @@ package dhruva
 import (
 	"context"
 	"encoding/binary"
-	"fmt"
 	"log"
 	"time"
 
@@ -627,7 +626,6 @@ func (p *PersistenceManager) GetRegisteredAccounts() ([]types.Address, error) {
 
 		for entry := range entries {
 			addr := entry.Key[9:]
-			fmt.Println(addr)
 			addrsList = append(addrsList, types.BytesToAddress(addr))
 		}
 	}

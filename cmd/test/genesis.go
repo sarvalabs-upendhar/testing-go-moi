@@ -1,8 +1,10 @@
-package genesis
+package test
 
 import (
 	"crypto/rand"
 	"errors"
+
+	"github.com/sarvalabs/moichain/cmd/genesis"
 
 	"github.com/sarvalabs/moichain/cmd/common"
 	"github.com/sarvalabs/moichain/lattice"
@@ -10,9 +12,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func GetGenesisTestCommand() *cobra.Command {
+func GetGenesisCommand() *cobra.Command {
 	genesisTestCmd := &cobra.Command{
-		Use:   "test",
+		Use:   "genesis",
 		Short: "create genesis file with accounts and their context nodes",
 		Run:   runGenesisTestCommand,
 	}
@@ -27,36 +29,42 @@ func runGenesisTestCommand(cmd *cobra.Command, args []string) {
 }
 
 func parseGenesisTestFlags(genesisTestCmd *cobra.Command) {
+	genesisTestCmd.Flags().StringVar(
+		&genesisFilePath,
+		"genesis-path",
+		"genesis.json",
+		"path to genesis file",
+	)
+	genesisTestCmd.Flags().StringVar(
+		&accountsFilePath,
+		"accounts-path",
+		"accounts.json",
+		"path to accounts file",
+	)
+	genesisTestCmd.Flags().StringVar(
+		&instancesFilePath,
+		"instances-path",
+		"instances.json",
+		"path to instances file",
+	)
 	genesisTestCmd.Flags().StringSliceVar(
 		&accAddresses,
 		"addresses",
 		[]string{},
-		"addresses of accounts",
+		"list of account address",
 	)
 	genesisTestCmd.Flags().IntVar(
 		&behaviouralNodesCount,
 		"behavioural-count",
-		DefaultBehaviouralCount,
+		genesis.DefaultBehaviouralCount,
 		"Number of behavioural krama ids per account/logic",
 	)
 	genesisTestCmd.Flags().IntVar(
 		&randomNodesCount,
 		"random-count",
-		DefaultRandomCount,
+		genesis.DefaultRandomCount,
 		"Number of random krama ids per account/logic",
 	)
-
-	if err := genesisTestCmd.MarkFlagRequired("behavioural-count"); err != nil {
-		common.Err(err)
-	}
-
-	if err := genesisTestCmd.MarkFlagRequired("random-count"); err != nil {
-		common.Err(err)
-	}
-
-	if err := genesisTestCmd.MarkFlagRequired("addresses"); err != nil {
-		common.Err(err)
-	}
 }
 
 func getRandomMOIID() []byte {
@@ -73,7 +81,7 @@ func getRandomMOIID() []byte {
 func createTestGenesisFile() {
 	var kidTracker int
 
-	kramaIDs, err := readKramaIDsFromInstancesFile()
+	kramaIDs, err := genesis.ReadKramaIDsFromInstancesFile(instancesFilePath)
 	if err != nil {
 		common.Err(err)
 	}
@@ -98,13 +106,20 @@ func createTestGenesisFile() {
 		return ids
 	}
 
+	if len(accAddresses) == 0 {
+		accAddresses, err = GetAddressFromAccountsFile(accountsFilePath)
+		if err != nil {
+			common.Err(err)
+		}
+	}
+
 	accCount := len(accAddresses)
 
-	genesis := &lattice.GenesisV1{
+	g := &lattice.GenesisV1{
 		Accounts: make([]lattice.AccountInfoV1, 0, accCount),
 	}
 
-	genesis.AddSargaAccount(lattice.AccountInfoV1{
+	g.AddSargaAccount(lattice.AccountInfoV1{
 		Address:            types.SargaAddress.Hex(),
 		AccountType:        types.SargaAccount,
 		MoiID:              types.BytesToHex(getRandomMOIID()),
@@ -113,7 +128,7 @@ func createTestGenesisFile() {
 	})
 
 	for i := 0; i < accCount; i++ {
-		genesis.AddAccount(
+		g.AddAccount(
 			lattice.AccountInfoV1{
 				Address:            accAddresses[i],
 				AccountType:        types.RegularAccount,
@@ -124,7 +139,7 @@ func createTestGenesisFile() {
 		)
 	}
 
-	if err = writeToGenesisFile(genesis); err != nil {
+	if err = genesis.WriteToGenesisFile(genesisFilePath, g); err != nil {
 		common.Err(err)
 	}
 }

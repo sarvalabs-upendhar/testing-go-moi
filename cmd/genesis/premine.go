@@ -67,7 +67,7 @@ func addAsset() {
 
 	genesis.AddAssetInfo(*assetInfo)
 
-	if err = writeToGenesisFile(genesis); err != nil {
+	if err = WriteToGenesisFile(genesisFilePath, genesis); err != nil {
 		common.Err(err)
 	}
 }

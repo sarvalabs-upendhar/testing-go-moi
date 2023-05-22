@@ -13,7 +13,7 @@ type Instance struct {
 
 func Err(err error) {
 	if err != nil {
-		log.Println("Error starting MOIPOD", err)
+		log.Println("Failed to start MoiPod", err)
 		os.Exit(1)
 	}
 }

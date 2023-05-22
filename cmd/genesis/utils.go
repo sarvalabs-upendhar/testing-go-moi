@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"math/big"
 	"os"
 	"strings"
@@ -16,10 +15,10 @@ import (
 	"github.com/sarvalabs/moichain/lattice"
 )
 
-func readInstancesFile() ([]common.Instance, error) {
+func readInstancesFile(path string) ([]common.Instance, error) {
 	instances := make([]common.Instance, 0)
 
-	file, err := os.ReadFile(instancesFilePath)
+	file, err := os.ReadFile(path)
 	if err != nil {
 		return nil, errors.New("error reading instances file")
 	}
@@ -31,8 +30,8 @@ func readInstancesFile() ([]common.Instance, error) {
 	return instances, nil
 }
 
-func readKramaIDsFromInstancesFile() ([]string, error) {
-	instances, err := readInstancesFile()
+func ReadKramaIDsFromInstancesFile(path string) ([]string, error) {
+	instances, err := readInstancesFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -60,18 +59,18 @@ func readGenesisFile() (*lattice.GenesisV1, error) {
 	return genesis, nil
 }
 
-// writeToGenesisFile creates a new file if it doesn't exist, or replaces an existing one.
-func writeToGenesisFile(genesis *lattice.GenesisV1) error {
+// WriteToGenesisFile creates a new file if it doesn't exist, or replaces an existing one.
+func WriteToGenesisFile(path string, genesis *lattice.GenesisV1) error {
 	file, err := json.MarshalIndent(genesis, "", "\t")
 	if err != nil {
 		return err
 	}
 
-	if err := ioutil.WriteFile(genesisFilePath, file, os.ModePerm); err != nil {
+	if err := ioutil.WriteFile(path, file, os.ModePerm); err != nil {
 		return err
 	}
 
-	log.Println("genesis file created or updated")
+	fmt.Println("Genesis file created or updated")
 
 	return nil
 }
@@ -99,8 +98,8 @@ func parseUint256orHex(val *string) (*big.Int, error) {
 	return b, nil
 }
 
-func getContextNodes(behaviourCount, randomCount int) ([]string, []string) {
-	kramaIDs, err := readKramaIDsFromInstancesFile()
+func getContextNodes(instancesFile string, behaviourCount, randomCount int) ([]string, []string) {
+	kramaIDs, err := ReadKramaIDsFromInstancesFile(instancesFile)
 	if err != nil {
 		common.Err(err)
 	}

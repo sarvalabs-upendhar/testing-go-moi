@@ -67,7 +67,7 @@ func addGenesisLogic(artifact *Artifact) {
 	}
 
 	if len(behaviourNodes) == 0 && len(randomNodes) == 0 {
-		behaviourNodes, randomNodes = getContextNodes(DefaultBehaviouralCount, DefaultRandomCount)
+		behaviourNodes, randomNodes = getContextNodes(instancesFilePath, DefaultBehaviouralCount, DefaultRandomCount)
 	}
 
 	genesis.AddLogic(lattice.GenesisLogic{
@@ -79,7 +79,7 @@ func addGenesisLogic(artifact *Artifact) {
 		RandomContext:      randomNodes,
 	})
 
-	if err = writeToGenesisFile(genesis); err != nil {
+	if err = WriteToGenesisFile(genesisFilePath, genesis); err != nil {
 		common.Err(err)
 	}
 }

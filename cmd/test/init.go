@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 
-	common2 "github.com/sarvalabs/moichain/cmd/common"
+	cmdCommon "github.com/sarvalabs/moichain/cmd/common"
 	"github.com/sarvalabs/moichain/cmd/server"
 	"github.com/sarvalabs/moichain/common"
 
@@ -17,18 +17,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sarvalabs/moichain/mudra/poi"
-)
-
-var (
-	directoryIndex   int
-	count            int
-	bootnode         string
-	jaegerAddress    string
-	password         string
-	logFilePath      string
-	peerListFilePath string
-	port             int
-	peerList         *server.PeerList
 )
 
 func GetInitCommand() *cobra.Command {
@@ -93,7 +81,7 @@ func parseFlags(initcmd *cobra.Command) {
 	)
 
 	if err := cobra.MarkFlagRequired(initcmd.PersistentFlags(), "port"); err != nil {
-		common2.Err(err)
+		cmdCommon.Err(err)
 	}
 }
 
@@ -130,47 +118,47 @@ func CreateConfigFile(datadir string, index int) []byte {
 
 	file, err := json.MarshalIndent(data, "", "\t")
 	if err != nil {
-		common2.Err(err)
+		cmdCommon.Err(err)
 	}
 
 	return file
 }
 
 func setupTestEnv() {
-	instances := make([]common2.Instance, count)
+	instances := make([]cmdCommon.Instance, count)
 
 	ip, err := getThisNodeIP()
 	if err != nil {
-		common2.Err(err)
+		cmdCommon.Err(err)
 	}
 
 	for i := 0; i < count; i++ {
 		if err = os.MkdirAll(filepath.Join(fmt.Sprintf("test_%d", directoryIndex+i), "libp2p"), os.ModePerm); err != nil {
-			common2.Err(err)
+			cmdCommon.Err(err)
 		}
 
 		if err = os.Mkdir(filepath.Join(fmt.Sprintf("test_%d", directoryIndex+i), "consensus"), os.ModePerm); err != nil {
-			common2.Err(err)
+			cmdCommon.Err(err)
 		}
 
 		publicKey, kramaID, err := poi.RandGenKeystore(fmt.Sprintf("test_%d", directoryIndex+i), password)
 		if err != nil {
-			common2.Err(err)
+			cmdCommon.Err(err)
 		}
 
 		if err = StoreKey(kramaID, publicKey); err != nil {
-			common2.Err(err)
+			cmdCommon.Err(err)
 		}
 
 		peerList, err = server.ReadPeerList(peerListFilePath)
 		if err != nil {
-			common2.Err(err)
+			cmdCommon.Err(err)
 		}
 
 		configData := CreateConfigFile(fmt.Sprintf("test_%d", directoryIndex+i), directoryIndex+i)
 
 		if err := ioutil.WriteFile(fmt.Sprintf("test_%d/config.json", directoryIndex+i), configData, 0o600); err != nil {
-			common2.Err(err)
+			cmdCommon.Err(err)
 		}
 
 		instances[i].KramaID = string(kramaID)
@@ -180,10 +168,10 @@ func setupTestEnv() {
 
 	instancesFile, err := json.MarshalIndent(instances, "", "\t")
 	if err != nil {
-		common2.Err(err)
+		cmdCommon.Err(err)
 	}
 
 	if err = ioutil.WriteFile("instances.json", instancesFile, os.ModePerm); err != nil {
-		common2.Err(err)
+		cmdCommon.Err(err)
 	}
 }
