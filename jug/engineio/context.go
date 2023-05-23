@@ -275,6 +275,7 @@ func (ctx *DebugContextDriver) SetStorageEntry(key, val []byte) bool {
 func (ctx *DebugContextDriver) Copy() *DebugContextDriver {
 	copied := &DebugContextDriver{
 		address: ctx.address,
+		logicID: ctx.logicID,
 
 		spendable: ctx.spendable.Copy(),
 		approvals: make(map[types.Address]types.AssetMap, len(ctx.approvals)),
@@ -283,9 +284,6 @@ func (ctx *DebugContextDriver) Copy() *DebugContextDriver {
 		datastore:  make(map[string][]byte, len(ctx.datastore)),
 		logicstate: make(map[string]map[string][]byte, len(ctx.logicstate)),
 	}
-
-	copied.logicID = make(types.LogicID, len(ctx.logicID))
-	copy(copied.logicID, ctx.logicID)
 
 	for owner, assets := range ctx.approvals {
 		copied.approvals[owner] = assets.Copy()

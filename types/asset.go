@@ -1,7 +1,11 @@
 package types
 
 import (
+	"encoding/hex"
 	"math/big"
+
+	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-polo"
 )
 
 type AssetKind int
@@ -83,4 +87,62 @@ func StringToDimensionID(str string) AssetDimension {
 	}
 
 	return 0
+}
+
+type AssetObject struct {
+	Symbol   string
+	Supply   *big.Int
+	Decimals uint8
+
+	Owner   Address
+	LogicID LogicID
+	Extra   []byte
+}
+
+func (ad *AssetObject) FromBytes(bytes []byte) error {
+	if err := polo.Depolorize(ad, bytes); err != nil {
+		return errors.Wrap(err, "failed to depolorize asset data")
+	}
+
+	return nil
+}
+
+// GetAssetID returns ...
+// WARNING: THIS FUNCTION IS STAGED FOR DEPRECATION [LEGACY CODE]
+func GetAssetID(asset *AssetDescriptor) (AssetID, Hash, []byte, error) {
+	assetObject := AssetObject{
+		Owner:    asset.Owner,
+		Symbol:   asset.Symbol,
+		Decimals: asset.Decimals,
+		Extra:    make([]byte, 8),
+	}
+
+	var (
+		buf  []byte
+		info uint8 = 0x00
+	)
+
+	if asset.IsMintable {
+		info |= 0x01
+	} else {
+		assetObject.Supply = asset.Supply
+	}
+
+	if asset.IsFungible {
+		info |= 0x80
+	}
+
+	buf = append(buf, asset.Dimension)
+	buf = append(buf, info)
+
+	data, err := polo.Polorize(assetObject)
+	if err != nil {
+		return "", NilHash, nil, err
+	}
+
+	assetCID := GetHash(data)
+	buf = append(buf, assetCID.Bytes()...)
+	assetID := AssetID(hex.EncodeToString(buf))
+
+	return assetID, assetCID, data, nil
 }

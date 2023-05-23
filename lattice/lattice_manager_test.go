@@ -474,7 +474,7 @@ func TestGetAssetDataByAssetHash(t *testing.T) {
 	_, assetDescriptor := tests.CreateTestAsset(t, tests.RandomAddress(t))
 	assetDescriptor.Owner = tests.RandomAddress(t)
 
-	_, assetHash, assetObj, err := gtypes.GetAssetID(assetDescriptor)
+	_, assetHash, assetObj, err := types.GetAssetID(assetDescriptor)
 	require.NoError(t, err)
 
 	chainParams := &CreateChainParams{
@@ -2495,8 +2495,7 @@ func TestSetupNewAccount(t *testing.T) {
 }
 
 func TestExecuteGenesisContracts(t *testing.T) {
-	logicID, err := types.NewLogicIDv0(true, false, false, false, 0, types.StakingContractAddr)
-	require.NoError(t, err)
+	logicID := types.NewLogicIDv0(true, false, false, false, 0, types.StakingContractAddr)
 
 	ids := tests.GetTestKramaIDs(t, 1)
 	nodes := utils.KramaIDToString(ids)

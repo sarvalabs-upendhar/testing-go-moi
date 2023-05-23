@@ -24,7 +24,7 @@ type ChainManager interface {
 	GetLatestTesseract(addr types.Address, withInteractions bool) (*types.Tesseract, error)
 	GetTesseract(hash types.Hash, withInteractions bool) (*types.Tesseract, error)
 	GetReceiptByIxHash(ixHash types.Hash) (*types.Receipt, error)
-	GetAssetDataByAssetHash(assetHash []byte) (*gtypes.AssetObject, error)
+	GetAssetDataByAssetHash(assetHash []byte) (*types.AssetObject, error)
 	GetInteractionAndPartsByIxHash(ixHash types.Hash) (*types.Interaction, *types.TesseractParts, int, error)
 	GetInteractionAndPartsByTSHash(tsHash types.Hash, ixIndex int) (*types.Interaction, *types.TesseractParts, error)
 	GetTesseractHeightEntry(address types.Address, height uint64) (types.Hash, error)

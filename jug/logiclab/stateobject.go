@@ -51,7 +51,7 @@ func (ctx LogicContextObject) Address() types.Address { return ctx.State.Address
 func (ctx LogicContextObject) LogicID() types.LogicID { return ctx.Logic }
 
 func (ctx LogicContextObject) GetStorageEntry(key []byte) ([]byte, bool) {
-	tree, ok := ctx.State.LogicState[ctx.Logic.Hex()]
+	tree, ok := ctx.State.LogicState[ctx.Logic.String()]
 	if !ok {
 		return nil, false
 	}
@@ -65,13 +65,13 @@ func (ctx LogicContextObject) GetStorageEntry(key []byte) ([]byte, bool) {
 }
 
 func (ctx LogicContextObject) SetStorageEntry(key, val []byte) bool {
-	tree, ok := ctx.State.LogicState[ctx.Logic.Hex()]
+	tree, ok := ctx.State.LogicState[ctx.Logic.String()]
 	if !ok {
 		tree = make(map[string][]byte)
 	}
 
 	tree[hex.EncodeToString(key)] = val
-	ctx.State.LogicState[ctx.Logic.Hex()] = tree
+	ctx.State.LogicState[ctx.Logic.String()] = tree
 
 	return true
 }

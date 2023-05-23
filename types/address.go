@@ -11,9 +11,8 @@ const (
 )
 
 var (
-	NilAddress      Address
-	SargaLogicID, _ = NewLogicIDv0(true, false, false,
-		false, 0, SargaAddress)
+	NilAddress    Address
+	SargaLogicID  = NewLogicIDv0(true, false, false, false, 0, SargaAddress)
 	GenesisIxHash = GetHash([]byte("Genesis Interaction"))
 )
 

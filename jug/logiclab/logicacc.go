@@ -28,13 +28,14 @@ func (logic LogicAccountState) String() string {
 	var str strings.Builder
 
 	logicID := logic.Object.LogicID()
+	identifier, _ := logicID.Identifier()
 
 	str.WriteString(fmt.Sprintf("==== [ %v ] [Address: %v] [Ready: %v]\n", logic.Name, logicID.Address(), logic.Ready))
-	str.WriteString(fmt.Sprintf("[Edition: %v] [Logic ID: %v]\n", logicID.Edition(), logicID))
+	str.WriteString(fmt.Sprintf("[Edition: %v] [Logic ID: %v]\n", identifier.Edition(), logicID))
 	str.WriteString(fmt.Sprintf("[Engine: %v] [Manifest: %v]\n", logic.Object.Engine(), logic.Object.Manifest()))
 	str.WriteString(fmt.Sprintf(
 		"[Persistent: %v] [Ephemeral: %v] [Interactive: %v] [Asset Logic: %v]\n",
-		logicID.PersistentState(), logicID.EphemeralState(), logicID.Interactive(), logicID.AssetLogic()),
+		identifier.PersistentState(), identifier.EphemeralState(), identifier.Interactive(), identifier.AssetLogic()),
 	)
 
 	str.WriteString("\n==== Callsites\n")
@@ -46,7 +47,7 @@ func (logic LogicAccountState) String() string {
 	str.WriteString("====\n")
 	str.WriteString("\n==== State\n")
 
-	for key, val := range logic.CtxState.LogicState[logic.Object.ID.Hex()] {
+	for key, val := range logic.CtxState.LogicState[logic.Object.ID.String()] {
 		str.WriteString(fmt.Sprintf("%v: %v\n", key, hex.EncodeToString(val)))
 	}
 
@@ -165,6 +166,14 @@ func CompileManifestFile(file, name string, fuel engineio.Fuel) (engineio.Fuel, 
 
 		// If the logic ID has no persistent state, it can be marked
 		// as ready, otherwise it requires a deploy to occur first
-		Ready: !logicObject.LogicID().PersistentState(),
+		Ready: !must(logicObject.LogicID().Identifier()).PersistentState(),
 	}, nil
+}
+
+func must[T any](object T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+
+	return object
 }

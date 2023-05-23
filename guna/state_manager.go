@@ -1024,7 +1024,7 @@ func (sm *StateManager) SyncStorageTrees(
 		g.Go(func() error {
 			return sm.syncLogicStorageTree(
 				so,
-				[]byte(logicID),
+				types.LogicID(logicID),
 				storageRoot,
 			)
 		})

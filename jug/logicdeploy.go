@@ -51,11 +51,11 @@ func DeployFuelLimit(limit engineio.Fuel) LogicDeployOption {
 func DeployGenesisLogic(state *guna.StateObject, payload *types.LogicPayload) (types.LogicID, error) {
 	_, receipt, err := DeployLogic(payload.Manifest, state, DeploymentCall(payload.Callsite, payload.Calldata))
 	if err != nil {
-		return nil, errors.Wrap(err, "deployment failed")
+		return "", errors.Wrap(err, "deployment failed")
 	}
 
 	if receipt.Error != nil {
-		return nil, errors.Errorf("deployment call failed: %#x", receipt.Error)
+		return "", errors.Errorf("deployment call failed: %#x", receipt.Error)
 	}
 
 	return receipt.LogicID, nil

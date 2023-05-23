@@ -524,7 +524,7 @@ func createRPCInteraction(
 			IsMintable:     assetPayload.Create.IsMintable,
 			IsTransferable: assetPayload.Create.IsTransferable,
 
-			LogicID: types.BytesToHex(assetPayload.Create.LogicID),
+			LogicID: assetPayload.Create.LogicID.String(),
 		}
 
 		rpcIX.Payload, err = json.Marshal(rpcAssetPayload)
@@ -541,7 +541,7 @@ func createRPCInteraction(
 
 		rpcLogicPayload := &ptypes.RPCLogicPayload{
 			Manifest: (hexutil.Bytes)(logicPayload.Manifest),
-			LogicID:  types.BytesToHex(logicPayload.Logic),
+			LogicID:  logicPayload.Logic.String(),
 			Callsite: logicPayload.Callsite,
 			Calldata: (hexutil.Bytes)(logicPayload.Calldata),
 		}

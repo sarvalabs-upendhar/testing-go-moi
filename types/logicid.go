@@ -4,19 +4,18 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"strings"
+
+	"github.com/pkg/errors"
 )
 
-// LogicID is a unique identifier for a callable logic at a specific logic address.
-// It encodes information such as whether the logic is stateful and/or interactive
-// along with its kind, edition (upgrade nonce) and the logic address
-type LogicID []byte
+// LogicID is a unique identifier for Logics and is a hex-encoded string.
+// It contains information about the nature of the logic and its deployed address.
+type LogicID string
 
-// NewLogicIDv0 generates a new LogicID with the v0 form.
-// Returns an error if the LogicKind is greater than 3.
-// LogicID v0 Form is defined as follows:
-// [version(4bits)|persistent-state(1bit)|ephemeral-state(1bit)|interactive(1bit)|asset-logic(1bit)]
-// [edition(16bits)][address(256bits)]
-func NewLogicIDv0(persistent, ephemeral, interactive, assetlogic bool, edition uint16, addr Address) (LogicID, error) {
+// NewLogicIDv0 generates a new LogicID with the v0 form. The LogicID v0 Form is defined as follows:
+// [version(4bits)|persistent(1bit)|ephemeral(1bit)|interactive(1bit)|asset(1bit)][edition(16bits)][address(256bits)]
+func NewLogicIDv0(persistent, ephemeral, interactive, assetlogic bool, edition uint16, addr Address) LogicID {
 	// The 4 MSB bits of the head are set the
 	// version of the Logic ID Form (v0)
 	var head uint8 = 0x00 << 4
@@ -51,151 +50,160 @@ func NewLogicIDv0(persistent, ephemeral, interactive, assetlogic bool, edition u
 	buf = append(buf, editionBuf...)
 	buf = append(buf, addr[:]...)
 
-	return buf, nil
+	return LogicID(hex.EncodeToString(buf))
 }
 
-// String returns the hex encoded string form of the LogicID
+// Bytes returns the byte form of the LogicID.
+// The LogicID is hex-decoded and returned.
+// Panics if the logic ID is not a valid hex string
+func (logic LogicID) Bytes() []byte {
+	return Hex2Bytes(string(logic))
+}
+
+// String returns the string form of the LogicID.
 func (logic LogicID) String() string {
-	return logic.Hex()
+	return string(logic)
 }
 
-// Hex returns the LogicID as a hex encoded string
-func (logic LogicID) Hex() string {
-	return hex.EncodeToString(logic)
-}
-
-// MarshalJSON implements the json.Marshaller interface for LogicID
+// MarshalJSON implements the json.Marshaler interface for LogicID
 func (logic LogicID) MarshalJSON() ([]byte, error) {
-	return json.Marshal(logic.Hex())
+	return json.Marshal("0x" + string(logic))
 }
 
-// UnmarshalJSON implements the json.Unmarshaller interface for LogicID
+// UnmarshalJSON implements the json.Unmarshaler interface for LogicID
 func (logic *LogicID) UnmarshalJSON(data []byte) error {
-	logicID := new(string)
-	if err := json.Unmarshal(data, logicID); err != nil {
+	var decoded string
+
+	// Decode the JSON data into a string
+	if err := json.Unmarshal(data, &decoded); err != nil {
 		return err
 	}
 
-	decoded, err := hex.DecodeString(*logicID)
-	if err != nil {
+	// Data MUST contain 0x prefix, attempt the trim and check
+	// if the size has changed (can save a call to HasPrefix)
+	cleaned := strings.TrimPrefix(decoded, "0x")
+	if cleaned == decoded {
+		return errors.New("missing 0x prefix")
+	}
+
+	// Generate an identifier for the LogicID
+	if _, err := LogicID(cleaned).Identifier(); err != nil {
 		return err
 	}
 
-	*logic = decoded
+	*logic = LogicID(cleaned)
 
 	return nil
 }
 
-// Valid returns whether the LogicID is valid.
-// It must be non nil and have sufficient bytes for its version.
-// Only v0 is supported, all other forms are invalid.
-func (logic LogicID) Valid() bool {
-	if len(logic) == 0 {
-		return false
+// Address returns the Logic Address of the LogicID.
+// Returns NilAddress if the LogicID is invalid.
+func (logic LogicID) Address() Address {
+	// Error if length is too short
+	if len(logic) < 64 {
+		return NilAddress
 	}
 
-	// Calculate version of the LogicID
-	// and check if there are enough bytes
-	switch int(logic[0] & 0xF0) {
+	// Trim the last 64 characters (32 bytes) and decode to address
+	return HexToAddress(string(logic[len(logic)-64:]))
+}
+
+// Identifier returns a LogicIdentifier for the LogicID
+func (logic LogicID) Identifier() (LogicIdentifier, error) {
+	idbytes := Hex2Bytes(string(logic))
+	if len(idbytes) == 0 || len(idbytes) < 1 {
+		return nil, errors.New("invalid logic ID: insufficient length")
+	}
+
+	// Determine the version of the LogicID and check if there are enough bytes
+	switch version := int(idbytes[0] & 0xF0); version {
 	case 0:
-		return len(logic) == 35
+		if len(idbytes) != LogicIDV0Length {
+			return nil, errors.New("invalid logic ID: insufficient length for v0")
+		}
+
+		// Create an LogicIdentifierV0 and copy the idbytes into it
+		identifier := LogicIdentifierV0{}
+		copy(identifier[:], idbytes)
+
+		return identifier, nil
+
 	default:
-		return false
+		return nil, errors.Errorf("invalid logic ID: unsupported version: %v", version)
 	}
 }
 
-// Version returns the version of the LogicID.
-// Returns -1, if the LogicID is not valid
-func (logic LogicID) Version() int {
-	// Check validity
-	if !logic.Valid() {
-		return -1
-	}
+// LogicIdentifier is an extension of LogicID which can access
+// the encoded properties of the LogicID such as it state flags,
+// edition (upgrade nonce) and the address of the logic
+type LogicIdentifier interface {
+	Version() int
+	LogicID() LogicID
+	Address() Address
+	Edition() uint16
 
-	// Determine the highest 4 bits of the first byte (v0)
-	return int(logic[0] & 0xF0)
+	PersistentState() bool
+	EphemeralState() bool
+	Interactive() bool
+	AssetLogic() bool
 }
 
-// PersistentState returns whether the persistent state flag is set for the LogicID.
-// Returns false if the LogicID is invalid.
-func (logic LogicID) PersistentState() bool {
-	// Check logic version, internally checks validity
-	if logic.Version() != 0 {
-		return false
-	}
+const LogicIDV0Length = 35
 
+// LogicIdentifierV0 is an implementation of LogicIdentifier for the v0 specification
+type LogicIdentifierV0 [LogicIDV0Length]byte
+
+// LogicID returns the LogicIdentifierV0 as a LogicID
+func (logic LogicIdentifierV0) LogicID() LogicID {
+	return LogicID(hex.EncodeToString(logic[:]))
+}
+
+// Version returns the version of the LogicIdentifierV0.
+// Returns -1, if the LogicIdentifierV0 is not valid
+func (logic LogicIdentifierV0) Version() int { return 0 }
+
+// PersistentState returns whether the persistent state flag is set for the LogicIdentifierV0.
+func (logic LogicIdentifierV0) PersistentState() bool {
 	// Determine the 5th LSB of the first byte (v0)
 	bit := (logic[0] >> 3) & 0x1
 	// Return true if bit is set
 	return bit != 0
 }
 
-// EphemeralState returns whether the ephemeral state flag is set for the LogicID.
-// Returns false if the LogicID is invalid.
-func (logic LogicID) EphemeralState() bool {
-	// Check logic version, internally checks validity
-	if logic.Version() != 0 {
-		return false
-	}
-
+// EphemeralState returns whether the ephemeral state flag is set for the LogicIdentifierV0.
+func (logic LogicIdentifierV0) EphemeralState() bool {
 	// Determine the 6th LSB of the first byte (v0)
 	bit := (logic[0] >> 2) & 0x1
 	// Return true if bit is set
 	return bit != 0
 }
 
-// Interactive returns whether the interactive flag is set for the LogicID.
-// Returns false if the LogicID is invalid.
-func (logic LogicID) Interactive() bool {
-	// Check logic version, internally checks validity
-	if logic.Version() != 0 {
-		return false
-	}
-
+// Interactive returns whether the interactive flag is set for the LogicIdentifierV0.
+func (logic LogicIdentifierV0) Interactive() bool {
 	// Determine the 7th LSB of the first byte (v0)
 	bit := (logic[0] >> 1) & 0x1
 	// Return true if bit is set
 	return bit != 0
 }
 
-// AssetLogic returns whether the asset logic flag is set for the LogicID.
-// Returns false if the LogicID is invalid.
-func (logic LogicID) AssetLogic() bool {
-	// Check logic version, internally checks validity
-	if logic.Version() != 0 {
-		return false
-	}
-
+// AssetLogic returns whether the asset logic flag is set for the LogicIdentifierV0.
+func (logic LogicIdentifierV0) AssetLogic() bool {
 	// Determine the 8th LSB of the first byte (v0)
 	bit := logic[0] & 0x1
 	// Return true if bit is set
 	return bit != 0
 }
 
-// Edition returns the edition number of the LogicID.
-// Returns 0 if the LogicID is invalid.
-func (logic LogicID) Edition() uint16 {
-	// Check logic version, internally checks validity
-	if logic.Version() != 0 {
-		return 0
-	}
-
+// Edition returns the edition number of the LogicIdentifierV0.
+func (logic LogicIdentifierV0) Edition() uint16 {
 	// Edition data is in the second and third byte of the LogicID (v0)
-	editionBuf := logic[1:3]
+	edition := logic[1:3]
 	// Decode into 16-bit number
-	edition := binary.BigEndian.Uint16(editionBuf)
-
-	return edition
+	return binary.BigEndian.Uint16(edition)
 }
 
-// Address returns the Logic Address of the LogicID.
-// Returns NilAddress if the LogicID is invalid.
-func (logic LogicID) Address() Address {
-	// Check logic version, internally checks validity
-	if logic.Version() != 0 {
-		return NilAddress
-	}
-
+// Address returns the Logic Address of the LogicIdentifierV0.
+func (logic LogicIdentifierV0) Address() Address {
 	// Address data is everything after the third byte (v0)
 	// We know it will be 32 bytes, because of the validity check
 	address := logic[3:]

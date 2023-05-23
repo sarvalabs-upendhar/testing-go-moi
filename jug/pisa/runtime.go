@@ -1,8 +1,6 @@
 package pisa
 
 import (
-	"bytes"
-
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
@@ -64,7 +62,7 @@ func (runtime Runtime) SpawnEngine(
 	}
 
 	// Check logic driver's logic ID and its context's logic ID.
-	if !bytes.Equal(logic.LogicID(), state.LogicID()) {
+	if logic.LogicID() != state.LogicID() {
 		return nil, errors.New("incompatible context driver for logic: logic ID is not equal")
 	}
 

@@ -2171,7 +2171,7 @@ func checkForAccountCreation(t *testing.T, accountInfo AccountInfo, accSetupArgs
 		require.Equal(t, assetDetails.IsFungible, accSetupArgs.Assets[i].IsFungible)
 		require.Equal(t, assetDetails.IsMintable, accSetupArgs.Assets[i].IsMintable)
 		require.Equal(t, assetDetails.IsTransferable, accSetupArgs.Assets[i].IsTransferable)
-		require.Equal(t, assetDetails.LogicID, accSetupArgs.Assets[i].LogicID.Hex())
+		require.Equal(t, assetDetails.LogicID, accSetupArgs.Assets[i].LogicID.String())
 	}
 
 	for _, balance := range accountInfo.Balances {
@@ -2277,7 +2277,7 @@ func validateContextInitialization(t *testing.T, sm stateManager, address types.
 }
 
 func getTestAssetID(asset *types.AssetDescriptor) (types.AssetID, types.Hash, []byte, error) {
-	assetObject := gtypes.AssetObject{
+	assetObject := types.AssetObject{
 		Owner:    asset.Owner,
 		Symbol:   asset.Symbol,
 		Decimals: asset.Decimals,

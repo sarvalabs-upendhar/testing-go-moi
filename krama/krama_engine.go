@@ -19,7 +19,6 @@ import (
 
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/guna"
-	gtypes "github.com/sarvalabs/moichain/guna/types"
 	"github.com/sarvalabs/moichain/ixpool"
 	"github.com/sarvalabs/moichain/krama/kbft"
 	"github.com/sarvalabs/moichain/krama/observer"
@@ -1547,7 +1546,7 @@ func (k *Engine) IsIxValid(ix *types.Interaction) error {
 			return errors.New("asset create payload is empty")
 		}
 
-		assetID, _, _, err := gtypes.GetAssetID(types.NewAssetDescriptor(ix.Sender(), *assetPayload.Create))
+		assetID, _, _, err := types.GetAssetID(types.NewAssetDescriptor(ix.Sender(), *assetPayload.Create))
 		if err != nil {
 			return err
 		}

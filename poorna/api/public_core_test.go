@@ -1101,7 +1101,7 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 
 	poloManifest, jsonManifest, yamlManifest := tests.GetManifests(t, "./../../jug/manifests/erc20.json")
 
-	s.setLogicManifest(logicID.Hex(), poloManifest)
+	s.setLogicManifest(logicID.String(), poloManifest)
 	c.setTesseractByHash(t, ts)
 
 	testcases := []struct {
@@ -1113,7 +1113,7 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 		{
 			name: "returns error if logic id is invalid",
 			args: &ptypes.LogicManifestArgs{
-				LogicID:  types.LogicID(tests.RandomHash(t).String()).Hex(),
+				LogicID:  types.LogicID(tests.RandomHash(t).String()).String(),
 				Encoding: "JSON",
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
@@ -1124,7 +1124,7 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 		{
 			name: "returns error if failed to fetch logic manifest",
 			args: &ptypes.LogicManifestArgs{
-				LogicID:  logicIDWithoutState.Hex(),
+				LogicID:  logicIDWithoutState.String(),
 				Encoding: "JSON",
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
@@ -1135,7 +1135,7 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 		{
 			name: "fetched json encoded logic manifest successfully",
 			args: &ptypes.LogicManifestArgs{
-				LogicID:  logicID.Hex(),
+				LogicID:  logicID.String(),
 				Encoding: "JSON",
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash,
@@ -1146,7 +1146,7 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 		{
 			name: "fetched polo encoded logic manifest successfully",
 			args: &ptypes.LogicManifestArgs{
-				LogicID:  logicID.Hex(),
+				LogicID:  logicID.String(),
 				Encoding: "POLO",
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash,
@@ -1157,7 +1157,7 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 		{
 			name: "fetched yaml encoded logic manifest successfully",
 			args: &ptypes.LogicManifestArgs{
-				LogicID:  logicID.Hex(),
+				LogicID:  logicID.String(),
 				Encoding: "YAML",
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash,
@@ -1212,7 +1212,7 @@ func TestPublicCoreAPI_GetStorageAt(t *testing.T) {
 		{
 			name: "returns error if logic id is invalid",
 			args: &ptypes.GetStorageArgs{
-				LogicID: types.LogicID(tests.RandomHash(t).String()).Hex(),
+				LogicID: types.LogicID(tests.RandomHash(t).String()).String(),
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
 				},
@@ -1222,7 +1222,7 @@ func TestPublicCoreAPI_GetStorageAt(t *testing.T) {
 		{
 			name: "returns error if failed to fetch logic manifest",
 			args: &ptypes.GetStorageArgs{
-				LogicID: logicIDWithoutState.Hex(),
+				LogicID: logicIDWithoutState.String(),
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
 				},
@@ -1232,7 +1232,7 @@ func TestPublicCoreAPI_GetStorageAt(t *testing.T) {
 		{
 			name: "fetched logic manifest successfully",
 			args: &ptypes.GetStorageArgs{
-				LogicID:    logicID.Hex(),
+				LogicID:    logicID.String(),
 				StorageKey: keys[0],
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash,

@@ -1314,7 +1314,7 @@ func createMetaStorageTree(
 
 	_, storageRoot := createTestKramaHashTree(t, db, address, storageKeys, storageValues)
 
-	return createTestKramaHashTree(t, db, address, [][]byte{logicID}, [][]byte{storageRoot.Bytes()})
+	return createTestKramaHashTree(t, db, address, [][]byte{logicID.Bytes()}, [][]byte{storageRoot.Bytes()})
 }
 
 func createTestKramaHashTree(
@@ -1430,7 +1430,7 @@ func getActiveStorageTrees(
 	activeStorageTrees := make(map[string]tree.MerkleTree, count)
 
 	for i := 0; i < count; i++ {
-		activeStorageTrees[logicIds[i].Hex()] = getMerkleTreeWithEntries(t, keys, values)
+		activeStorageTrees[logicIds[i].String()] = getMerkleTreeWithEntries(t, keys, values)
 	}
 
 	return activeStorageTrees
@@ -1448,7 +1448,7 @@ func getActiveStorageTreesWithFlushedEntries(
 	activeStorageTrees := make(map[string]tree.MerkleTree, count)
 
 	for i := 0; i < count; i++ {
-		activeStorageTrees[logicIds[i].Hex()] = getMerkleTreeWithFlushedEntries(t, keys, values)
+		activeStorageTrees[logicIds[i].String()] = getMerkleTreeWithFlushedEntries(t, keys, values)
 	}
 
 	return activeStorageTrees
@@ -1467,7 +1467,7 @@ func getActiveStorageTreesWithCommitHook(
 	activeStorageTrees := make(map[string]tree.MerkleTree, count)
 
 	for i := 0; i < count; i++ {
-		activeStorageTrees[logicIds[i].Hex()] = getMerkleTreeWithCommitHook(t, keys, values, commitHook)
+		activeStorageTrees[logicIds[i].String()] = getMerkleTreeWithCommitHook(t, keys, values, commitHook)
 	}
 
 	return activeStorageTrees
@@ -1486,7 +1486,7 @@ func getActiveStorageTreesWithFlushHook(
 	activeStorageTrees := make(map[string]tree.MerkleTree, count)
 
 	for i := 0; i < count; i++ {
-		activeStorageTrees[logicIds[i].Hex()] = getMerkleTreeWithFlushHook(t, keys, values, commitHook)
+		activeStorageTrees[logicIds[i].String()] = getMerkleTreeWithFlushHook(t, keys, values, commitHook)
 	}
 
 	return activeStorageTrees
@@ -1505,7 +1505,7 @@ func getActiveStorageTreesWithRootHook(
 	activeStorageTrees := make(map[string]tree.MerkleTree, count)
 
 	for i := 0; i < count; i++ {
-		activeStorageTrees[logicIds[i].Hex()] = getMerkleTreeWithRootHashHook(t, keys, values, rootHashHook)
+		activeStorageTrees[logicIds[i].String()] = getMerkleTreeWithRootHashHook(t, keys, values, rootHashHook)
 	}
 
 	return activeStorageTrees
@@ -1905,7 +1905,7 @@ func checkIfActiveStorageTreesFlushed(t *testing.T, logicIDs []types.LogicID, s 
 	t.Helper()
 
 	for _, logicID := range logicIDs {
-		storageTree, ok := s.activeStorageTrees[logicID.Hex()]
+		storageTree, ok := s.activeStorageTrees[logicID.String()]
 		require.True(t, ok)
 
 		checkIfMerkleTreeFlushed(t, storageTree, isFlushed)
@@ -2016,10 +2016,7 @@ func getEntries(t *testing.T, count int) ([][]byte, [][]byte) {
 func getLogicID(t *testing.T, address types.Address) types.LogicID {
 	t.Helper()
 
-	logicID, err := types.NewLogicIDv0(true, false, false, false, 0, address)
-	require.NoError(t, err)
-
-	return logicID
+	return types.NewLogicIDv0(true, false, false, false, 0, address)
 }
 
 func getLogicIDs(t *testing.T, count int) []types.LogicID {
@@ -2091,7 +2088,7 @@ func CheckAssetCreation(
 }
 
 func getTestAssetID(asset *types.AssetDescriptor) (types.AssetID, types.Hash, []byte, error) {
-	assetObject := gtypes.AssetObject{
+	assetObject := types.AssetObject{
 		Owner:    asset.Owner,
 		Symbol:   asset.Symbol,
 		Decimals: asset.Decimals,

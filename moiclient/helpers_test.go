@@ -166,7 +166,7 @@ func getLogicID(t *testing.T, client *Client, addr types.Address, height *int64)
 	err = json.Unmarshal(receipt.ExtraData, &logicReceipt)
 	require.NoError(t, err)
 
-	return logicReceipt.LogicID.Hex()
+	return logicReceipt.LogicID.String()
 }
 
 // retryFetchReceipt keeps trying to fetch receipt for given ixHash until it is timed out

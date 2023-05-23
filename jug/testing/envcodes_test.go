@@ -25,7 +25,7 @@ func (suite *EnvCodesTestSuite) SetupSuite() {
 	}
 
 	address := randomAddress()
-	logicID, _ := types.NewLogicIDv0(false, false, false, false, 0, address)
+	logicID := types.NewLogicIDv0(false, false, false, false, 0, address)
 
 	consumed := suite.Initialize(manifest, logicID, address, 5000)
 	suite.Equal(engineio.Fuel(100), consumed)

@@ -2665,7 +2665,7 @@ func TestInstructionSet(t *testing.T) {
 
 		t.Run("available", func(t *testing.T) {
 			logicAddress := types.Address(randomAddressValue(t))
-			logicID, _ := types.NewLogicIDv0(true, false, false, false, 0, logicAddress)
+			logicID := types.NewLogicIDv0(true, false, false, false, 0, logicAddress)
 
 			scope := &callscope{
 				engine: &Engine{
@@ -2699,7 +2699,7 @@ func TestInstructionSet(t *testing.T) {
 		t.Run("available", func(t *testing.T) {
 			logicAddress := types.Address(randomAddressValue(t))
 			senderAddress := types.Address(randomAddressValue(t))
-			logicID, _ := types.NewLogicIDv0(false, false, false, false, 0, logicAddress)
+			logicID := types.NewLogicIDv0(false, false, false, false, 0, logicAddress)
 
 			scope := &callscope{
 				engine: &Engine{

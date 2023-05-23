@@ -20,7 +20,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	gtypes "github.com/sarvalabs/moichain/guna/types"
 	"github.com/sarvalabs/moichain/jug/engineio"
 	"github.com/sarvalabs/moichain/jug/pisa"
 	"github.com/sarvalabs/moichain/mudra"
@@ -294,7 +293,7 @@ func CreateTestAsset(t *testing.T, address types.Address) (types.AssetID, *types
 	}
 
 	asset.Owner = address
-	assetID, _, _, err := gtypes.GetAssetID(asset)
+	assetID, _, _, err := types.GetAssetID(asset)
 	require.NoError(t, err)
 
 	return assetID, asset
@@ -324,7 +323,7 @@ func GetRandomAssetID(t *testing.T, address types.Address) types.AssetID {
 	}
 
 	asset.Owner = address
-	assetID, _, _, err := gtypes.GetAssetID(asset)
+	assetID, _, _, err := types.GetAssetID(asset)
 	require.NoError(t, err)
 
 	return assetID

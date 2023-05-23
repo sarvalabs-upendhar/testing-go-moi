@@ -436,7 +436,7 @@ func (s *StateObject) CreateStorageTreeForLogic(logicID types.LogicID) error {
 func (s *StateObject) CreateAsset(descriptor *types.AssetDescriptor) (types.AssetID, error) {
 	descriptor.Owner = s.address
 
-	assetID, assetHash, data, err := gtypes.GetAssetID(descriptor)
+	assetID, assetHash, data, err := types.GetAssetID(descriptor)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to polorize asset data")
 	}
@@ -671,7 +671,7 @@ func (s *StateObject) loadBalanceObject() error {
 }
 
 func (s *StateObject) GetStorageTree(logicID types.LogicID) (tree.MerkleTree, error) {
-	storageTree, ok := s.activeStorageTrees[logicID.Hex()]
+	storageTree, ok := s.activeStorageTrees[logicID.String()]
 	if ok {
 		return storageTree, nil
 	}
@@ -681,7 +681,7 @@ func (s *StateObject) GetStorageTree(logicID types.LogicID) (tree.MerkleTree, er
 		return nil, err
 	}
 
-	root, err := metaStorageTree.Get(logicID)
+	root, err := metaStorageTree.Get(logicID.Bytes())
 	if err != nil {
 		return nil, types.ErrLogicStorageTreeNotFound
 	}
@@ -691,7 +691,7 @@ func (s *StateObject) GetStorageTree(logicID types.LogicID) (tree.MerkleTree, er
 		return nil, errors.Wrap(err, "failed to initiate logic storage tree")
 	}
 
-	s.activeStorageTrees[logicID.Hex()] = storageTree
+	s.activeStorageTrees[logicID.String()] = storageTree
 
 	return storageTree, nil
 }
@@ -743,9 +743,9 @@ func (s *StateObject) createStorageTreeForLogic(logicID types.LogicID) (tree.Mer
 		return nil, err
 	}
 
-	s.activeStorageTrees[logicID.Hex()] = newStorageTree
+	s.activeStorageTrees[logicID.String()] = newStorageTree
 
-	return newStorageTree, s.metaStorageTree.Set(logicID, types.NilHash.Bytes())
+	return newStorageTree, s.metaStorageTree.Set(logicID.Bytes(), types.NilHash.Bytes())
 }
 
 func (s *StateObject) isLogicRegistered(logicID types.LogicID) error {
@@ -778,7 +778,7 @@ func (s *StateObject) getLogicObject(logicID types.LogicID) (*gtypes.LogicObject
 		return nil, err
 	}
 
-	rawObject, err := logicTree.Get(logicID)
+	rawObject, err := logicTree.Get(logicID.Bytes())
 	if err != nil {
 		return nil, err
 	}
@@ -809,7 +809,7 @@ func (s *StateObject) InsertNewLogicObject(logicID types.LogicID, logicObject *g
 		return err
 	}
 
-	if err = logicTree.Set(logicID, rawLogicObject); err != nil {
+	if err = logicTree.Set(logicID.Bytes(), rawLogicObject); err != nil {
 		return errors.Wrap(err, "failed to add logic object to tree")
 	}
 

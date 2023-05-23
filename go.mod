@@ -22,6 +22,7 @@ require (
 	github.com/dgraph-io/ristretto v0.1.0
 	github.com/eknkc/basex v1.0.1
 	github.com/go-kit/kit v0.12.0
+	github.com/google/gofuzz v1.2.0
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/rpc v1.2.0

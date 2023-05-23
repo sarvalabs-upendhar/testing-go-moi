@@ -662,7 +662,7 @@ func TestCreateAsset(t *testing.T) {
 
 	assetDescriptor := getDefaultAssetDescriptor(t, "btc")
 	assetDescriptor.Owner = sObj.address
-	assetID, _, _, err := gtypes.GetAssetID(assetDescriptor)
+	assetID, _, _, err := types.GetAssetID(assetDescriptor)
 	require.NoError(t, err)
 
 	require.NoError(t, sObj.loadBalanceObject())
@@ -1092,7 +1092,7 @@ func TestGetStorageTree(t *testing.T) {
 						t,
 						so.db,
 						so.address,
-						[][]byte{types.SargaLogicID},
+						[][]byte{types.SargaLogicID.Bytes()},
 						[][]byte{tests.RandomHash(t).Bytes()},
 					)
 				},
@@ -1152,7 +1152,7 @@ func TestSetStorageEntry(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			storageTree, ok := sObj.activeStorageTrees[logicIDs[0].Hex()]
+			storageTree, ok := sObj.activeStorageTrees[logicIDs[0].String()]
 			require.True(t, ok)
 
 			checkForEntryInMerkleTree(t, storageTree, keys[1], values[1])
@@ -1285,7 +1285,7 @@ func TestGetLogicObject(t *testing.T) {
 					_, so.data.LogicRoot = createTestKramaHashTree(t,
 						so.db,
 						so.address,
-						[][]byte{logicID},
+						[][]byte{logicID.Bytes()},
 						[][]byte{rawData},
 					)
 				},
@@ -1328,7 +1328,7 @@ func TestIsLogicRegistered(t *testing.T) {
 		},
 		{
 			name:      "logic registered",
-			logicTree: getMerkleTreeWithEntries(t, [][]byte{logicID}, [][]byte{rawData}),
+			logicTree: getMerkleTreeWithEntries(t, [][]byte{logicID.Bytes()}, [][]byte{rawData}),
 		},
 	}
 
@@ -1372,13 +1372,13 @@ func TestInsertNewLogicObject(t *testing.T) {
 		},
 		{
 			name:          "should return error if logic already registered",
-			logicTree:     getMerkleTreeWithEntries(t, [][]byte{logicID}, [][]byte{rawData}),
+			logicTree:     getMerkleTreeWithEntries(t, [][]byte{logicID.Bytes()}, [][]byte{rawData}),
 			logicID:       logicID,
 			expectedError: errors.New("logic already registered"),
 		},
 		{
 			name:      "logic object inserted successfully",
-			logicTree: getMerkleTreeWithEntries(t, [][]byte{logicID}, [][]byte{rawData}),
+			logicTree: getMerkleTreeWithEntries(t, [][]byte{logicID.Bytes()}, [][]byte{rawData}),
 			logicID:   getLogicID(t, tests.RandomAddress(t)),
 		},
 		{
@@ -1453,11 +1453,11 @@ func TestCreateStorageTreeForLogic(t *testing.T) {
 			require.NoError(t, err)
 
 			// make sure storage tree inserted in AST
-			expectedLogicTree, ok := sObj.activeStorageTrees[logicID.Hex()]
+			expectedLogicTree, ok := sObj.activeStorageTrees[logicID.String()]
 			require.True(t, ok)
 
 			checkForKramaHashTree(t, expectedLogicTree, actualStorageTree)
-			checkForEntryInMST(t, sObj, logicID, types.NilHash.Bytes())
+			checkForEntryInMST(t, sObj, logicID.Bytes(), types.NilHash.Bytes())
 		})
 	}
 }

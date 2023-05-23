@@ -37,7 +37,7 @@ type ixData struct {
 
 type MockChainManager struct {
 	receipts                   map[types.Hash]*types.Receipt
-	assets                     map[types.Hash]*gtypes.AssetObject
+	assets                     map[types.Hash]*types.AssetObject
 	tesseractsByHash           map[types.Hash]*types.Tesseract
 	tesseractsByHeight         map[string]*types.Tesseract
 	latestTesseracts           map[types.Address]*types.Tesseract
@@ -53,7 +53,7 @@ func NewMockChainManager(t *testing.T) *MockChainManager {
 	mockChain := new(MockChainManager)
 
 	mockChain.receipts = make(map[types.Hash]*types.Receipt, 0)
-	mockChain.assets = make(map[types.Hash]*gtypes.AssetObject, 0)
+	mockChain.assets = make(map[types.Hash]*types.AssetObject, 0)
 	mockChain.tesseractsByHash = make(map[types.Hash]*types.Tesseract)
 	mockChain.tesseractsByHeight = make(map[string]*types.Tesseract)
 	mockChain.latestTesseracts = make(map[types.Address]*types.Tesseract)
@@ -173,7 +173,7 @@ func (c *MockChainManager) GetReceiptByIxHash(ixHash types.Hash) (*types.Receipt
 	return nil, types.ErrReceiptNotFound
 }
 
-func (c *MockChainManager) GetAssetDataByAssetHash(assetHash []byte) (*gtypes.AssetObject, error) {
+func (c *MockChainManager) GetAssetDataByAssetHash(assetHash []byte) (*types.AssetObject, error) {
 	if result, ok := c.assets[types.BytesToHash(assetHash)]; ok {
 		return result, nil
 	}
@@ -191,7 +191,7 @@ func (c *MockChainManager) setTesseractByHash(
 }
 
 func (c *MockChainManager) setAssets(id types.AssetID, spec *types.AssetDescriptor) {
-	c.assets[types.BytesToHash(id.GetCID())] = &gtypes.AssetObject{
+	c.assets[types.BytesToHash(id.GetCID())] = &types.AssetObject{
 		LogicID: spec.LogicID,
 		Symbol:  spec.Symbol,
 		Owner:   spec.Owner,
@@ -226,7 +226,7 @@ func NewMockStateManager(t *testing.T) *MockStateManager {
 }
 
 func (s *MockStateManager) GetLogicManifest(logicID types.LogicID, stateHash types.Hash) ([]byte, error) {
-	logicManifest, ok := s.logicManifests[logicID.Hex()]
+	logicManifest, ok := s.logicManifests[logicID.String()]
 	if !ok {
 		return logicManifest, errors.New("logic manifest not found")
 	}
@@ -254,11 +254,11 @@ func (s *MockStateManager) GetAccountMetaInfo(addr types.Address) (*types.Accoun
 }
 
 func (s *MockStateManager) SetStorageEntry(logicID types.LogicID, storage map[string]string) {
-	s.logicStorage[logicID.Hex()] = storage
+	s.logicStorage[logicID.String()] = storage
 }
 
 func (s *MockStateManager) GetStorageEntry(logicID types.LogicID, slot []byte, stateHash types.Hash) ([]byte, error) {
-	storage, ok := s.logicStorage[logicID.Hex()]
+	storage, ok := s.logicStorage[logicID.String()]
 	if !ok {
 		return nil, types.ErrLogicStorageTreeNotFound
 	}
@@ -659,10 +659,7 @@ func getTesseractHash(t *testing.T, tesseract *types.Tesseract) types.Hash {
 func getLogicID(t *testing.T, address types.Address) types.LogicID {
 	t.Helper()
 
-	logicID, err := types.NewLogicIDv0(true, false, false, false, 0, address)
-	require.NoError(t, err)
-
-	return logicID
+	return types.NewLogicIDv0(true, false, false, false, 0, address)
 }
 
 func getStorageMap(keys []string, values []string) map[string]string {
@@ -850,7 +847,7 @@ func checkForRPCIxn(
 			IsMintable:     assetCreationPayload.Create.IsMintable,
 			IsTransferable: assetCreationPayload.Create.IsTransferable,
 
-			LogicID: types.BytesToHex(assetCreationPayload.Create.LogicID),
+			LogicID: assetCreationPayload.Create.LogicID.String(),
 		}
 
 		expectedPayload, err := json.Marshal(rpcAssetCreationPayload)
@@ -869,7 +866,7 @@ func checkForRPCIxn(
 
 		rpcLogicPayload := &ptypes.RPCLogicPayload{
 			Manifest: (hexutil.Bytes)(logicPayload.Manifest),
-			LogicID:  types.BytesToHex(logicPayload.Logic),
+			LogicID:  logicPayload.Logic.String(),
 			Callsite: logicPayload.Callsite,
 			Calldata: (hexutil.Bytes)(logicPayload.Calldata),
 		}

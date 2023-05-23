@@ -316,13 +316,13 @@ func (c *ChainManager) GetTesseractHeightEntry(address types.Address, height uin
 	return types.BytesToHash(tesseractHash), nil
 }
 
-func (c *ChainManager) GetAssetDataByAssetHash(assetHash []byte) (*gtypes.AssetObject, error) {
+func (c *ChainManager) GetAssetDataByAssetHash(assetHash []byte) (*types.AssetObject, error) {
 	rawData, err := c.db.ReadEntry(assetHash)
 	if err != nil {
 		return nil, err
 	}
 
-	assetData := new(gtypes.AssetObject)
+	assetData := new(types.AssetObject)
 
 	if err = assetData.FromBytes(rawData); err != nil {
 		return nil, err
@@ -778,7 +778,7 @@ func validateAssetDetails(info *AssetInfo) (*types.AssetDescriptor, error) {
 	assetDescriptor.IsFungible = info.IsFungible
 	assetDescriptor.IsMintable = info.IsMintable
 	assetDescriptor.IsTransferable = info.IsTransferable
-	assetDescriptor.LogicID = types.Hex2Bytes(info.LogicID)
+	assetDescriptor.LogicID = types.LogicID(info.LogicID)
 
 	return assetDescriptor, nil
 }
@@ -1224,7 +1224,7 @@ func (c *ChainManager) ExecuteGenesisLogics(logics []GenesisLogic) ([]types.Hash
 			return nil, errors.Wrap(err, "unable to create genesis tesseract for contract")
 		}
 
-		c.logger.Info("deployed genesis contract", "name", logic.Name, "logicID", logicID.Hex())
+		c.logger.Info("deployed genesis contract", "name", logic.Name, "logicID", logicID.String())
 
 		hashes[index] = stateHash
 	}

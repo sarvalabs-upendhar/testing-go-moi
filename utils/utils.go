@@ -203,14 +203,15 @@ func ValidateHash(hash string) (string, error) {
 func ValidateLogicID(logicID string) (types.LogicID, error) {
 	logicID = strings.TrimPrefix(logicID, "0x")
 
-	logicBytes, err := hex.DecodeString(logicID)
+	_, err := hex.DecodeString(logicID)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	logic := types.LogicID(logicBytes)
-	if ok := logic.Valid(); !ok {
-		return nil, types.ErrInvalidLogicID
+	logic := types.LogicID(logicID)
+
+	if _, err = logic.Identifier(); err != nil {
+		return "", types.ErrInvalidLogicID
 	}
 
 	return logic, nil

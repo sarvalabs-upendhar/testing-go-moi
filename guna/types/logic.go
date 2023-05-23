@@ -38,7 +38,7 @@ type LogicObject struct {
 // NewLogicObject generates a new LogicObject for a given LogicID, LogicDescriptor and Storage Namespace key
 func NewLogicObject(address types.Address, descriptor *engineio.LogicDescriptor) *LogicObject {
 	// Generate the LogicID from the payload
-	logicID, _ := types.NewLogicIDv0(
+	logicID := types.NewLogicIDv0(
 		descriptor.StateMatrix.Persistent(),
 		descriptor.StateMatrix.Ephemeral(),
 		descriptor.Interactive,
