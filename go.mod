@@ -20,7 +20,6 @@ require (
 	github.com/dgraph-io/badger v1.6.2
 	github.com/dgraph-io/badger/v3 v3.2103.2
 	github.com/dgraph-io/ristretto v0.1.0
-	github.com/eknkc/basex v1.0.1
 	github.com/go-kit/kit v0.12.0
 	github.com/google/gofuzz v1.2.0
 	github.com/google/uuid v1.3.0
@@ -30,7 +29,6 @@ require (
 	github.com/hashicorp/go-hclog v1.3.1
 	github.com/holiman/uint256 v1.2.2
 	github.com/libp2p/go-libp2p v0.24.0
-	github.com/libp2p/go-libp2p-core v0.20.1
 	github.com/libp2p/go-libp2p-kad-dht v0.20.0
 	github.com/libp2p/go-libp2p-pubsub v0.8.1
 	github.com/libp2p/go-msgio v0.2.0
@@ -42,7 +40,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/profile v1.6.0
 	github.com/prometheus/client_golang v1.14.0
-	github.com/sarvalabs/go-polo v0.3.2
+	github.com/sarvalabs/go-polo v0.3.3
 	github.com/spf13/cobra v1.5.0
 	github.com/stretchr/testify v1.8.1
 	github.com/supranational/blst v0.3.7
@@ -86,7 +84,6 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/flatbuffers v1.12.1 // indirect
-	github.com/google/gofuzz v1.2.0
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/google/pprof v0.0.0-20221203041831-ce31453925ec // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
