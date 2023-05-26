@@ -66,7 +66,7 @@ func LogicCompileFromManifestCommand(name, file string) Command {
 		}
 
 		// Compile the manifest into a Logic
-		fuel, logic, err := CompileManifestFile(file, name, env.inventory.BaseFuel)
+		fuel, logic, err := CompileManifestFile(file, name, env.inventory.Config.BaseFuel)
 		if err != nil {
 			return fmt.Sprintf("logic could not be compiled: %v", err)
 		}

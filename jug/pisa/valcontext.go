@@ -45,7 +45,7 @@ func (logic LogicContextValue) methods() [256]*BuiltinMethod {
 		// LogicContext.__addr__() -> address
 		MethodAddr: makeBuiltinMethod(
 			MethodAddr.String(),
-			LogicContextType, MethodAddr,
+			LogicContextType, MethodAddr, 10,
 			makefields([]*TypeField{{"self", LogicContextType}}),
 			makefields([]*TypeField{{"result", PrimitiveAddress}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -101,7 +101,7 @@ func (participant ParticipantContextValue) methods() [256]*BuiltinMethod {
 		// ParticipantContext.__addr__() -> address
 		MethodAddr: makeBuiltinMethod(
 			MethodAddr.String(),
-			ParticipantContextType, MethodAddr,
+			ParticipantContextType, MethodAddr, 10,
 			makefields([]*TypeField{{"self", ParticipantContextType}}),
 			makefields([]*TypeField{{"result", PrimitiveAddress}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {

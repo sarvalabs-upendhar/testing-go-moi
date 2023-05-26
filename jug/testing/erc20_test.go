@@ -90,7 +90,7 @@ func (suite *ERC20TestSuite) TestApproval() {
 		"amount":  500,
 	})
 	suite.Equal(true, output["ok"])
-	suite.Equal(engineio.Fuel(296), consumed)
+	suite.Equal(engineio.Fuel(306), consumed)
 	suite.Nil(except)
 
 	// Check allowance of Addr2 on Addr1 tokens (must be 500)
@@ -126,7 +126,7 @@ func (suite *ERC20TestSuite) TestTransfer() {
 		"amount": 1000,
 	})
 	suite.Equal(true, output["ok"])
-	suite.Equal(engineio.Fuel(346), consumed)
+	suite.Equal(engineio.Fuel(351), consumed)
 	suite.Nil(except)
 
 	// Check balance of Addr1 (must be 100000000 - 1000)
@@ -165,7 +165,7 @@ func (suite *ERC20TestSuite) TestInflation() {
 		"amount": 10000,
 	})
 	suite.Equal(true, output["ok"])
-	suite.Equal(engineio.Fuel(461), consumed)
+	suite.Equal(engineio.Fuel(466), consumed)
 	suite.Nil(except)
 
 	// Check balance of Addr1 (must be 99990000)
@@ -186,7 +186,7 @@ func (suite *ERC20TestSuite) TestInflation() {
 		"amount": 10000,
 	})
 	suite.Equal(true, output["ok"])
-	suite.Equal(engineio.Fuel(410), consumed)
+	suite.Equal(engineio.Fuel(415), consumed)
 	suite.Nil(except)
 
 	// Check balance of Addr6 (must be 10000)

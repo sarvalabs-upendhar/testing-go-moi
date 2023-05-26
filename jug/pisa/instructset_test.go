@@ -74,7 +74,7 @@ func TestInstructionSet(t *testing.T) {
 			}
 
 			continuity := opJUMPI(scope, []byte{0, 1})
-			require.Equal(t, continueException{10, &Exception{
+			require.Equal(t, continueException{0, &Exception{
 				Class: "builtin.NotImplementedError",
 				Error: "ptr does not implement __bool__",
 				Trace: []string{},
@@ -83,7 +83,10 @@ func TestInstructionSet(t *testing.T) {
 
 		t.Run("false_condition", func(t *testing.T) {
 			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				engine: &Engine{
+					runtime: &runtime, callstack: make(callstack, 0),
+					fueltank: engineio.NewFuelTank(1000),
+				},
 				memory: map[byte]RegisterValue{
 					0: PtrValue(5),
 					1: BoolValue(false),
@@ -91,12 +94,15 @@ func TestInstructionSet(t *testing.T) {
 			}
 
 			continuity := opJUMPI(scope, []byte{0, 1})
-			require.Equal(t, continueOk{10}, continuity)
+			require.Equal(t, continueOk{0}, continuity)
 		})
 
 		t.Run("true_condition_invalid_pointer", func(t *testing.T) {
 			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				engine: &Engine{
+					runtime: &runtime, callstack: make(callstack, 0),
+					fueltank: engineio.NewFuelTank(1000),
+				},
 				memory: map[byte]RegisterValue{
 					0: U64Value(5),
 					1: BoolValue(true),
@@ -104,7 +110,7 @@ func TestInstructionSet(t *testing.T) {
 			}
 
 			continuity := opJUMPI(scope, []byte{0, 1})
-			require.Equal(t, continueException{10, &Exception{
+			require.Equal(t, continueException{0, &Exception{
 				Class: "builtin.ReferenceError",
 				Error: "not a pointer: $0",
 				Trace: []string{},
@@ -113,15 +119,21 @@ func TestInstructionSet(t *testing.T) {
 
 		t.Run("true_condition_valid_pointer", func(t *testing.T) {
 			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				engine: &Engine{
+					runtime: &runtime, callstack: make(callstack, 0),
+					fueltank: engineio.NewFuelTank(1000),
+				},
 				memory: map[byte]RegisterValue{
 					0: PtrValue(5),
 					1: BoolValue(true),
 				},
 			}
 
+			level := scope.engine.fueltank.Level()
 			continuity := opJUMPI(scope, []byte{0, 1})
-			require.Equal(t, continueJump{20, uint64(5)}, continuity)
+
+			require.Equal(t, level-10, scope.engine.fueltank.Level())
+			require.Equal(t, continueJump{10, uint64(5)}, continuity)
 		})
 	})
 
@@ -178,6 +190,216 @@ func TestInstructionSet(t *testing.T) {
 			continuity := opYIELD(scope, []byte{0, 0})
 			require.Equal(t, continueOk{5}, continuity)
 			require.Equal(t, NullValue{}, scope.outputs[0])
+		})
+	})
+
+	t.Run("CARGS", func(t *testing.T) {
+		scope := &callscope{
+			engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+			memory: map[byte]RegisterValue{},
+		}
+
+		continuity := opCARGS(scope, []byte{0})
+		require.Equal(t, continueOk{5}, continuity)
+		require.Equal(t, make(CargsValue), scope.memory[0])
+	})
+
+	t.Run("CALLR", func(t *testing.T) {
+		sampleRoutine := &Routine{
+			Ptr:  0,
+			Name: "Doubler",
+			Kind: engineio.InvokableCallsite,
+			CallFields: CallFields{
+				Inputs:  makefields([]*TypeField{{"number", PrimitiveU64}}),
+				Outputs: makefields([]*TypeField{{"doubled", PrimitiveU64}}),
+			},
+			Instructs: Instructions{
+				{OBTAIN, []byte{0, 0}},
+				{ADD, []byte{1, 0, 0}},
+				{YIELD, []byte{1, 0}},
+			},
+		}
+
+		errorRoutine := &Routine{
+			Ptr:  0,
+			Name: "ThrowError",
+			Kind: engineio.InvokableCallsite,
+			CallFields: CallFields{
+				Inputs:  makefields([]*TypeField{{"data", PrimitiveString}}),
+				Outputs: makefields([]*TypeField{{"doubled", PrimitiveU64}}),
+			},
+			Instructs: Instructions{
+				{OBTAIN, []byte{0, 0}},
+				{ADD, []byte{1, 0, 0}},
+				{YIELD, []byte{1, 0}},
+			},
+		}
+
+		t.Run("invalid_pointer", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					1: I64Value(0),
+				},
+			}
+
+			continuity := opCALLR(scope, []byte{2, 1, 0})
+			require.Equal(t, continueException{0, &Exception{
+				Class: "builtin.ReferenceError",
+				Error: "not a pointer: $1",
+				Trace: []string{},
+			}}, continuity)
+		})
+
+		// todo: need capability to disable loading elements from the logic driver
+		// t.Run("missing_element", func(t *testing.T) {}
+
+		t.Run("invalid_args", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{
+					callstack: make(callstack, 0), runtime: &runtime,
+					elements: map[engineio.ElementPtr]any{
+						0: sampleRoutine,
+					},
+				},
+				memory: map[byte]RegisterValue{
+					0: I64Value(10),
+					1: PtrValue(0),
+				},
+			}
+
+			continuity := opCALLR(scope, []byte{2, 1, 0})
+			require.Equal(t, continueException{0, &Exception{
+				Class: "builtin.TypeError",
+				Error: "not a cargs: $0",
+				Trace: []string{},
+			}}, continuity)
+		})
+
+		t.Run("exception_thrown", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{
+					callstack: make(callstack, 0), runtime: &runtime,
+					fueltank: engineio.NewFuelTank(1000),
+					elements: map[engineio.ElementPtr]any{
+						0: errorRoutine,
+					},
+				},
+				memory: map[byte]RegisterValue{
+					0: CargsValue{0: StringValue("foo")},
+					1: PtrValue(0),
+				},
+			}
+
+			level := scope.engine.fueltank.Level()
+			continuity := opCALLR(scope, []byte{2, 1, 0})
+
+			require.Equal(t, level-5, scope.engine.fueltank.Level())
+			require.Equal(t, continueException{50, &Exception{
+				Class: "builtin.ValueError",
+				Error: "cannot add with string registers",
+				Trace: []string{
+					"root.ThrowError() [0x0] ... [0x1: ADD 0x1 0x0 0x0]",
+				},
+			}}, continuity)
+		})
+
+		t.Run("success", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{
+					callstack: make(callstack, 0), runtime: &runtime,
+					fueltank: engineio.NewFuelTank(1000),
+					elements: map[engineio.ElementPtr]any{
+						0: sampleRoutine,
+					},
+				},
+				memory: map[byte]RegisterValue{
+					0: CargsValue{0: U64Value(50)},
+					1: PtrValue(0),
+				},
+			}
+
+			level := scope.engine.fueltank.Level()
+			continuity := opCALLR(scope, []byte{2, 1, 0})
+
+			require.Equal(t, level-30, scope.engine.fueltank.Level())
+			require.Equal(t, continueOk{50}, continuity)
+			require.Equal(t, CargsValue{0: U64Value(100)}, scope.memory[2])
+		})
+	})
+
+	t.Run("CALLM", func(t *testing.T) {
+		t.Run("invalid_args", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: StringValue("foo"),
+				},
+			}
+
+			continuity := opCALLM(scope, []byte{1, 0x3, 0}) // Call __join__
+			require.Equal(t, continueException{0, &Exception{
+				Class: "builtin.TypeError",
+				Error: "not a cargs: $0",
+				Trace: []string{},
+			}}, continuity)
+		})
+
+		t.Run("missing_method_register", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: CargsValue{},
+				},
+			}
+
+			continuity := opCALLM(scope, []byte{1, 0x3, 0}) // Call __join__
+			require.Equal(t, continueException{30, &Exception{
+				Class: "builtin.CallError",
+				Error: "missing method register",
+				Trace: []string{},
+			}}, continuity)
+		})
+
+		t.Run("not_implemented", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				memory: map[byte]RegisterValue{
+					0: CargsValue{
+						0: StringValue("foo"),
+						1: StringValue("bar"),
+					},
+				},
+			}
+
+			continuity := opCALLM(scope, []byte{1, 0x5, 0}) // Call __gt__
+			require.Equal(t, continueException{30, &Exception{
+				Class: "builtin.NotImplementedError",
+				Error: "string does not implement __gt__",
+				Trace: []string{},
+			}}, continuity)
+		})
+
+		t.Run("success", func(t *testing.T) {
+			scope := &callscope{
+				engine: &Engine{
+					callstack: make(callstack, 0), runtime: &runtime,
+					fueltank: engineio.NewFuelTank(1000),
+				},
+				memory: map[byte]RegisterValue{
+					0: CargsValue{
+						0: StringValue("foo"),
+						1: StringValue("bar"),
+					},
+				},
+			}
+
+			level := scope.engine.fueltank.Level()
+			continuity := opCALLM(scope, []byte{1, 0x3, 0}) // Call __join__
+
+			require.Equal(t, level-20, scope.engine.fueltank.Level())
+			require.Equal(t, continueOk{30}, continuity)
+			require.Equal(t, CargsValue{0: StringValue("foobar")}, scope.memory[1])
 		})
 	})
 
@@ -581,14 +803,17 @@ func TestInstructionSet(t *testing.T) {
 	t.Run("THROW", func(t *testing.T) {
 		t.Run("not_implemented", func(t *testing.T) {
 			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				engine: &Engine{
+					runtime: &runtime, callstack: make(callstack, 0),
+					fueltank: engineio.NewFuelTank(1000),
+				},
 				memory: map[byte]RegisterValue{
 					0: I64Value(0),
 				},
 			}
 
 			continuity := opTHROW(scope, []byte{0})
-			require.Equal(t, continueException{10, &Exception{
+			require.Equal(t, continueException{0, &Exception{
 				Class: "builtin.NotImplementedError",
 				Error: "i64 does not implement __throw__",
 				Trace: []string{},
@@ -597,14 +822,20 @@ func TestInstructionSet(t *testing.T) {
 
 		t.Run("str_exception", func(t *testing.T) {
 			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				engine: &Engine{
+					runtime: &runtime, callstack: make(callstack, 0),
+					fueltank: engineio.NewFuelTank(1000),
+				},
 				memory: map[byte]RegisterValue{
 					0: StringValue("FAIL!"),
 				},
 			}
 
+			level := scope.engine.fueltank.Level()
 			continuity := opTHROW(scope, []byte{0})
-			require.Equal(t, continueException{30, &Exception{
+
+			require.Equal(t, level-20, scope.engine.fueltank.Level())
+			require.Equal(t, continueException{10, &Exception{
 				Class: "string",
 				Error: "FAIL!",
 				Trace: []string{},
@@ -649,71 +880,101 @@ func TestInstructionSet(t *testing.T) {
 
 		t.Run("uint64", func(t *testing.T) {
 			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				engine: &Engine{
+					callstack: make(callstack, 0), runtime: &runtime,
+					fueltank: engineio.NewFuelTank(1000),
+				},
 				memory: map[byte]RegisterValue{
 					0: U64Value(66),
 					1: U64Value(99),
 				},
 			}
 
+			level := scope.engine.fueltank.Level()
 			continuity := opJOIN(scope, []byte{2, 0, 1})
-			require.Equal(t, continueOk{30}, continuity)
+
+			require.Equal(t, level-20, scope.engine.fueltank.Level())
+			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, U64Value(165), scope.memory[2])
 		})
 
 		t.Run("int64", func(t *testing.T) {
 			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				engine: &Engine{
+					callstack: make(callstack, 0), runtime: &runtime,
+					fueltank: engineio.NewFuelTank(1000),
+				},
 				memory: map[byte]RegisterValue{
 					0: I64Value(-66),
 					1: I64Value(99),
 				},
 			}
 
+			level := scope.engine.fueltank.Level()
 			continuity := opJOIN(scope, []byte{2, 0, 1})
-			require.Equal(t, continueOk{30}, continuity)
+
+			require.Equal(t, level-20, scope.engine.fueltank.Level())
+			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, I64Value(33), scope.memory[2])
 		})
 
 		t.Run("bool", func(t *testing.T) {
 			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				engine: &Engine{
+					callstack: make(callstack, 0), runtime: &runtime,
+					fueltank: engineio.NewFuelTank(1000),
+				},
 				memory: map[byte]RegisterValue{
 					0: BoolValue(true),
 					1: BoolValue(false),
 				},
 			}
 
+			level := scope.engine.fueltank.Level()
 			continuity := opJOIN(scope, []byte{2, 0, 1})
-			require.Equal(t, continueOk{30}, continuity)
+
+			require.Equal(t, level-20, scope.engine.fueltank.Level())
+			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, BoolValue(false), scope.memory[2])
 		})
 
 		t.Run("string", func(t *testing.T) {
 			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				engine: &Engine{
+					callstack: make(callstack, 0), runtime: &runtime,
+					fueltank: engineio.NewFuelTank(1000),
+				},
 				memory: map[byte]RegisterValue{
 					0: StringValue("foo"),
 					1: StringValue("bar"),
 				},
 			}
 
+			level := scope.engine.fueltank.Level()
 			continuity := opJOIN(scope, []byte{2, 0, 1})
-			require.Equal(t, continueOk{30}, continuity)
+
+			require.Equal(t, level-20, scope.engine.fueltank.Level())
+			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, StringValue("foobar"), scope.memory[2])
 		})
 
 		t.Run("bytes", func(t *testing.T) {
 			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				engine: &Engine{
+					callstack: make(callstack, 0), runtime: &runtime,
+					fueltank: engineio.NewFuelTank(1000),
+				},
 				memory: map[byte]RegisterValue{
 					0: BytesValue{0x01, 0x78},
 					1: BytesValue{0x75, 0x54},
 				},
 			}
 
+			level := scope.engine.fueltank.Level()
 			continuity := opJOIN(scope, []byte{2, 0, 1})
-			require.Equal(t, continueOk{30}, continuity)
+
+			require.Equal(t, level-20, scope.engine.fueltank.Level())
+			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, BytesValue{0x01, 0x78, 0x75, 0x54}, scope.memory[2])
 		})
 	})
@@ -756,15 +1017,21 @@ func TestInstructionSet(t *testing.T) {
 
 		t.Run("success", func(t *testing.T) {
 			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				engine: &Engine{
+					callstack: make(callstack, 0), runtime: &runtime,
+					fueltank: engineio.NewFuelTank(1000),
+				},
 				memory: map[byte]RegisterValue{
 					0: U64Value(66),
 					1: U64Value(99),
 				},
 			}
 
+			level := scope.engine.fueltank.Level()
 			continuity := opLT(scope, []byte{2, 0, 1})
-			require.Equal(t, continueOk{20}, continuity)
+
+			require.Equal(t, level-10, scope.engine.fueltank.Level())
+			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, BoolValue(true), scope.memory[2])
 		})
 	})
@@ -807,15 +1074,21 @@ func TestInstructionSet(t *testing.T) {
 
 		t.Run("success", func(t *testing.T) {
 			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				engine: &Engine{
+					callstack: make(callstack, 0), runtime: &runtime,
+					fueltank: engineio.NewFuelTank(1000),
+				},
 				memory: map[byte]RegisterValue{
 					0: U64Value(66),
 					1: U64Value(99),
 				},
 			}
 
+			level := scope.engine.fueltank.Level()
 			continuity := opGT(scope, []byte{2, 0, 1})
-			require.Equal(t, continueOk{20}, continuity)
+
+			require.Equal(t, level-10, scope.engine.fueltank.Level())
+			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, BoolValue(false), scope.memory[2])
 		})
 	})
@@ -857,15 +1130,21 @@ func TestInstructionSet(t *testing.T) {
 
 		t.Run("success", func(t *testing.T) {
 			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				engine: &Engine{
+					callstack: make(callstack, 0), runtime: &runtime,
+					fueltank: engineio.NewFuelTank(1000),
+				},
 				memory: map[byte]RegisterValue{
 					0: U64Value(66),
 					1: U64Value(99),
 				},
 			}
 
+			level := scope.engine.fueltank.Level()
 			continuity := opEQ(scope, []byte{2, 0, 1})
-			require.Equal(t, continueOk{20}, continuity)
+
+			require.Equal(t, level-10, scope.engine.fueltank.Level())
+			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, BoolValue(false), scope.memory[2])
 		})
 	})
@@ -873,14 +1152,20 @@ func TestInstructionSet(t *testing.T) {
 	t.Run("BOOL", func(t *testing.T) {
 		t.Run("implemented", func(t *testing.T) {
 			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				engine: &Engine{
+					callstack: make(callstack, 0), runtime: &runtime,
+					fueltank: engineio.NewFuelTank(1000),
+				},
 				memory: map[byte]RegisterValue{
 					0: StringValue("foo"),
 				},
 			}
 
+			level := scope.engine.fueltank.Level()
 			continuity := opBOOL(scope, []byte{1, 0})
-			require.Equal(t, continueOk{20}, continuity)
+
+			require.Equal(t, level-10, scope.engine.fueltank.Level())
+			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, BoolValue(true), scope.memory[1])
 		})
 
@@ -893,7 +1178,7 @@ func TestInstructionSet(t *testing.T) {
 			}
 
 			continuity := opBOOL(scope, []byte{1, 0})
-			require.Equal(t, continueException{10, &Exception{
+			require.Equal(t, continueException{0, &Exception{
 				Class: "builtin.NotImplementedError",
 				Error: "ptr does not implement __bool__",
 				Trace: []string{},
@@ -905,14 +1190,20 @@ func TestInstructionSet(t *testing.T) {
 	t.Run("STR", func(t *testing.T) {
 		t.Run("implemented", func(t *testing.T) {
 			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				engine: &Engine{
+					callstack: make(callstack, 0), runtime: &runtime,
+					fueltank: engineio.NewFuelTank(1000),
+				},
 				memory: map[byte]RegisterValue{
 					0: U64Value(757),
 				},
 			}
 
+			level := scope.engine.fueltank.Level()
 			continuity := opSTR(scope, []byte{1, 0})
-			require.Equal(t, continueOk{20}, continuity)
+
+			require.Equal(t, level-10, scope.engine.fueltank.Level())
+			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, StringValue("757"), scope.memory[1])
 		})
 
@@ -925,7 +1216,7 @@ func TestInstructionSet(t *testing.T) {
 			}
 
 			continuity := opSTR(scope, []byte{1, 0})
-			require.Equal(t, continueException{10, &Exception{
+			require.Equal(t, continueException{0, &Exception{
 				Class: "builtin.NotImplementedError",
 				Error: "ptr does not implement __str__",
 				Trace: []string{},
@@ -938,14 +1229,20 @@ func TestInstructionSet(t *testing.T) {
 			addr := randomAddressValue(t)
 
 			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				engine: &Engine{
+					callstack: make(callstack, 0), runtime: &runtime,
+					fueltank: engineio.NewFuelTank(1000),
+				},
 				memory: map[byte]RegisterValue{
 					0: addr,
 				},
 			}
 
+			level := scope.engine.fueltank.Level()
 			continuity := opADDR(scope, []byte{1, 0})
-			require.Equal(t, continueOk{20}, continuity)
+
+			require.Equal(t, level-10, scope.engine.fueltank.Level())
+			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, addr, scope.memory[1])
 		})
 
@@ -958,7 +1255,7 @@ func TestInstructionSet(t *testing.T) {
 			}
 
 			continuity := opADDR(scope, []byte{1, 0})
-			require.Equal(t, continueException{10, &Exception{
+			require.Equal(t, continueException{0, &Exception{
 				Class: "builtin.NotImplementedError",
 				Error: "ptr does not implement __addr__",
 				Trace: []string{},
@@ -970,14 +1267,20 @@ func TestInstructionSet(t *testing.T) {
 	t.Run("LEN", func(t *testing.T) {
 		t.Run("implemented", func(t *testing.T) {
 			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				engine: &Engine{
+					callstack: make(callstack, 0), runtime: &runtime,
+					fueltank: engineio.NewFuelTank(1000),
+				},
 				memory: map[byte]RegisterValue{
 					0: StringValue("hello!"),
 				},
 			}
 
+			level := scope.engine.fueltank.Level()
 			continuity := opLEN(scope, []byte{1, 0})
-			require.Equal(t, continueOk{20}, continuity)
+
+			require.Equal(t, level-10, scope.engine.fueltank.Level())
+			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, U64Value(6), scope.memory[1])
 		})
 
@@ -990,7 +1293,7 @@ func TestInstructionSet(t *testing.T) {
 			}
 
 			continuity := opLEN(scope, []byte{1, 0})
-			require.Equal(t, continueException{10, &Exception{
+			require.Equal(t, continueException{0, &Exception{
 				Class: "builtin.NotImplementedError",
 				Error: "u64 does not implement __len__",
 				Trace: []string{},
@@ -1566,7 +1869,7 @@ func TestInstructionSet(t *testing.T) {
 			}
 
 			continuity := opAND(scope, []byte{2, 0, 1})
-			require.Equal(t, continueException{5, &Exception{
+			require.Equal(t, continueException{0, &Exception{
 				Class: "builtin.NotImplementedError",
 				Error: "ptr does not implement __bool__",
 				Trace: []string{},
@@ -1575,15 +1878,21 @@ func TestInstructionSet(t *testing.T) {
 
 		t.Run("success", func(t *testing.T) {
 			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				engine: &Engine{
+					callstack: make(callstack, 0), runtime: &runtime,
+					fueltank: engineio.NewFuelTank(1000),
+				},
 				memory: map[byte]RegisterValue{
 					0: BoolValue(true),
 					1: BoolValue(true),
 				},
 			}
 
+			level := scope.engine.fueltank.Level()
 			continuity := opAND(scope, []byte{2, 0, 1})
-			require.Equal(t, continueOk{20}, continuity)
+
+			require.Equal(t, level-20, scope.engine.fueltank.Level())
+			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, BoolValue(true), scope.memory[2])
 		})
 	})
@@ -1617,7 +1926,7 @@ func TestInstructionSet(t *testing.T) {
 			}
 
 			continuity := opOR(scope, []byte{2, 0, 1})
-			require.Equal(t, continueException{5, &Exception{
+			require.Equal(t, continueException{0, &Exception{
 				Class: "builtin.NotImplementedError",
 				Error: "ptr does not implement __bool__",
 				Trace: []string{},
@@ -1626,15 +1935,21 @@ func TestInstructionSet(t *testing.T) {
 
 		t.Run("success", func(t *testing.T) {
 			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				engine: &Engine{
+					callstack: make(callstack, 0), runtime: &runtime,
+					fueltank: engineio.NewFuelTank(1000),
+				},
 				memory: map[byte]RegisterValue{
 					0: BoolValue(true),
 					1: BoolValue(false),
 				},
 			}
 
+			level := scope.engine.fueltank.Level()
 			continuity := opOR(scope, []byte{2, 0, 1})
-			require.Equal(t, continueOk{20}, continuity)
+
+			require.Equal(t, level-20, scope.engine.fueltank.Level())
+			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, BoolValue(true), scope.memory[2])
 		})
 	})
@@ -1649,7 +1964,7 @@ func TestInstructionSet(t *testing.T) {
 			}
 
 			continuity := opNOT(scope, []byte{1, 0})
-			require.Equal(t, continueException{5, &Exception{
+			require.Equal(t, continueException{0, &Exception{
 				Class: "builtin.NotImplementedError",
 				Error: "ptr does not implement __bool__",
 				Trace: []string{},
@@ -1658,14 +1973,20 @@ func TestInstructionSet(t *testing.T) {
 
 		t.Run("success", func(t *testing.T) {
 			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+				engine: &Engine{
+					callstack: make(callstack, 0), runtime: &runtime,
+					fueltank: engineio.NewFuelTank(1000),
+				},
 				memory: map[byte]RegisterValue{
 					0: BoolValue(true),
 				},
 			}
 
+			level := scope.engine.fueltank.Level()
 			continuity := opNOT(scope, []byte{1, 0})
-			require.Equal(t, continueOk{15}, continuity)
+
+			require.Equal(t, level-10, scope.engine.fueltank.Level())
+			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, BoolValue(false), scope.memory[1])
 		})
 	})

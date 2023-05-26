@@ -60,7 +60,7 @@ func LogicCallCommand(kind engineio.CallsiteKind, name, callsite, args string) C
 
 		// Spawn an engine for the runtime
 		engine, err := runtime.SpawnEngine(
-			env.inventory.BaseFuel, logic.Object,
+			env.inventory.Config.BaseFuel, logic.Object,
 			logic.CtxState.GenerateLogicContextObject(logic.Object.LogicID()),
 			engineio.NewEnvDriver(),
 		)
@@ -89,7 +89,7 @@ func LogicCallCommand(kind engineio.CallsiteKind, name, callsite, args string) C
 			logic.Ready = true
 		}
 
-		return formatResult(result, encoder)
+		return formatResult(env, result, encoder)
 	}
 }
 
@@ -122,7 +122,7 @@ func formatArguments(env *Environment, args string, encoder engineio.CallEncoder
 
 // formatResults formats an engineio.CallResult object into a string.
 // It accepts a CallEncoder object to decode any outputs returned with the result
-func formatResult(result *engineio.CallResult, encoder engineio.CallEncoder) string {
+func formatResult(env *Environment, result *engineio.CallResult, encoder engineio.CallEncoder) string {
 	var str strings.Builder
 
 	if !result.Ok() {
@@ -148,18 +148,7 @@ func formatResult(result *engineio.CallResult, encoder engineio.CallEncoder) str
 	str.WriteString("\nExecution Outputs ||| ")
 
 	for name, object := range outputs {
-		str.WriteString(name + ": ")
-
-		switch data := object.(type) {
-		case [32]byte:
-			str.WriteString(fmt.Sprintf("%#x", data))
-		case []byte:
-			str.WriteString(fmt.Sprintf("%#x", data))
-		default:
-			str.WriteString(fmt.Sprintf("%v", object))
-		}
-
-		str.WriteString(" ")
+		str.WriteString(fmt.Sprintf("%v: %v ", name, env.formatValue(object)))
 	}
 
 	return str.String()

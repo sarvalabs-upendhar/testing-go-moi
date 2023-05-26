@@ -78,12 +78,12 @@ func (suite *ErrorsTestSuite) TestGetOverflowError() {
 func (suite *ErrorsTestSuite) TestGetConditionalError() {
 	consumed, output, except := suite.Call("GetConditionalError", map[string]any{"fail": false})
 	suite.Equal(output, map[string]any{})
-	suite.Equal(engineio.Fuel(51), consumed)
+	suite.Equal(engineio.Fuel(56), consumed)
 	suite.Nil(except)
 
 	consumed, output, except = suite.Call("GetConditionalError", map[string]any{"fail": true})
 	suite.Nil(output)
-	suite.Equal(engineio.Fuel(100), consumed)
+	suite.Equal(engineio.Fuel(105), consumed)
 	suite.Equal(except, must(polo.Polorize(pisa.Exception{
 		Class: "string",
 		Error: "failed!",

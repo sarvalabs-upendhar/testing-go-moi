@@ -14,12 +14,20 @@ type Inventory struct {
 	pcache map[string]*ParticipantState
 	lcache map[string]*LogicAccountState
 
+	Config LabConfig
+
 	Sender   string
 	Receiver string
-	BaseFuel engineio.Fuel
 
 	Participants  map[string]types.Address
 	LogicAccounts map[string]types.LogicID
+}
+
+type LabConfig struct {
+	BaseFuel engineio.Fuel
+
+	HexBig   bool
+	HexBytes bool
 }
 
 // ParticipantExists returns whether a participant with the given name exists in the Inventory

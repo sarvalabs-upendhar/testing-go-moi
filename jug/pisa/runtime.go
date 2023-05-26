@@ -257,5 +257,7 @@ func (runtime *Runtime) setupBuiltinClasses() {
 }
 
 func (runtime *Runtime) setupBuiltinLibrary() {
-	runtime.builtinLibrary = make(map[uint64]*Builtin)
+	runtime.builtinLibrary = map[uint64]*Builtin{
+		0: builtinSHA256(),
+	}
 }

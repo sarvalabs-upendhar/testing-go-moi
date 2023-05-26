@@ -451,7 +451,8 @@ type PrimitiveDatatype int
 const MaxPrimitiveKind = uint8(PrimitiveI256)
 
 const (
-	PrimitivePtr PrimitiveDatatype = iota - 1
+	PrimitiveCargs PrimitiveDatatype = iota - 2
+	PrimitivePtr
 	PrimitiveNull
 	PrimitiveBool
 	PrimitiveBytes
@@ -464,6 +465,7 @@ const (
 )
 
 var primitiveToString = map[PrimitiveDatatype]string{
+	PrimitiveCargs:   "cargs",
 	PrimitivePtr:     "ptr",
 	PrimitiveNull:    "null",
 	PrimitiveBool:    "bool",

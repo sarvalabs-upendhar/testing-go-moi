@@ -1,6 +1,10 @@
 package logiclab
 
 import (
+	"math/big"
+	"strings"
+
+	"github.com/holiman/uint256"
 	"github.com/manishmeganathan/symbolizer"
 	"github.com/pkg/errors"
 
@@ -15,6 +19,9 @@ const (
 	TokenAction
 	TokenCallAction
 	TokenMemoryAction
+
+	TokenBig
+	TokenManifest
 
 	TokenEngine
 	TokenEncoding
@@ -33,7 +40,7 @@ const (
 	TokenErrDecode
 
 	TokenLogic
-	TokenManifest
+
 	TokenParticipant
 )
 
@@ -66,6 +73,9 @@ var keywords = map[string]symbolizer.TokenKind{
 
 	"PISA": TokenEngine,
 
+	"big":      TokenBig,
+	"manifest": TokenManifest,
+
 	"as":   TokenPrepositionAs,
 	"from": TokenPrepositionFrom,
 	"into": TokenPrepositionInto,
@@ -77,7 +87,6 @@ var keywords = map[string]symbolizer.TokenKind{
 	"errdecode":  TokenErrDecode,
 
 	"logic":       TokenLogic,
-	"manifest":    TokenManifest,
 	"participant": TokenParticipant,
 }
 
@@ -413,11 +422,72 @@ func parseManifestExpression(parser *symbolizer.Parser) (string, error) {
 	return path.(string), nil //nolint:forcetypeassert
 }
 
+func parseBigExpression(parser *symbolizer.Parser) (number *big.Int, err error) {
+	if !parser.ExpectPeek(symbolizer.TokenKind('(')) {
+		return nil, errors.New("invalid big expression: missing '('")
+	}
+
+	expr, err := parser.Unwrap(symbolizer.EnclosureParens())
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid 'big' expression")
+	}
+
+	exprParser := symbolizer.NewParser(expr)
+
+	switch exprParser.Cursor().Kind {
+	// Hex Expression (0xABCD)
+	case symbolizer.TokenHexNumber:
+		hexnum := exprParser.Cursor().Literal
+
+		num256, err := uint256.FromHex(hexnum)
+		if err != nil {
+			return nil, errors.Wrap(err, "invalid 'big' expression")
+		}
+
+		return num256.ToBig(), nil
+
+	// Int Expression ([+/-]X)
+	case symbolizer.TokenNumber:
+		numeric := exprParser.Cursor().Literal
+
+		switch {
+		case strings.HasPrefix(numeric, "-"):
+			defer func() {
+				if err == nil {
+					number = new(big.Int).Neg(number)
+				}
+			}()
+
+			numeric = strings.TrimPrefix(numeric, "-")
+
+			fallthrough
+
+		case strings.HasPrefix(numeric, "+"):
+			numeric = strings.TrimPrefix(numeric, "+")
+
+			fallthrough
+
+		default:
+			num256, err := uint256.FromDecimal(numeric)
+			if err != nil {
+				return nil, errors.Wrap(err, "invalid 'big' expression")
+			}
+
+			return num256.ToBig(), nil
+		}
+
+	default:
+		return nil, errors.New("invalid 'big' expression: unsupported value form")
+	}
+}
+
 func parseValue(parser *symbolizer.Parser) (any, error) {
 	switch parser.Cursor().Kind {
+	// Reference Value
 	case symbolizer.TokenIdent:
 		return engineio.ReferenceVal(parser.Cursor().Literal), nil
 
+	// List Value
 	case symbolizer.TokenKind('['):
 		unwrapped, err := parser.Unwrap(symbolizer.EnclosureSquare())
 		if err != nil {
@@ -431,6 +501,7 @@ func parseValue(parser *symbolizer.Parser) (any, error) {
 
 		return values, nil
 
+	// Map Value
 	case symbolizer.TokenKind('{'):
 		unwrapped, err := parser.Unwrap(symbolizer.EnclosureCurly())
 		if err != nil {
@@ -459,6 +530,10 @@ func parseValue(parser *symbolizer.Parser) (any, error) {
 
 			return values, nil
 		}
+
+	// Big Value
+	case TokenBig:
+		return parseBigExpression(parser)
 
 	default:
 		if parser.Cursor().Kind.CanValue() {

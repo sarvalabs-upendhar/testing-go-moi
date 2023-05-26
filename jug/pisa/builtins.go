@@ -1,6 +1,10 @@
 package pisa
 
 import (
+	"crypto/sha256"
+
+	"github.com/holiman/uint256"
+
 	"github.com/sarvalabs/moichain/jug/engineio"
 )
 
@@ -17,8 +21,9 @@ type Builtin struct {
 	// Name represents the name of the builtin
 	Name string
 	// Ptr represents the pointer reference of the routine
-	Ptr engineio.ElementPtr
+	Ptr uint64
 
+	Cost engineio.Fuel
 	// Execute represents the execution function for the builtin.
 	// It accepts set of inputs and returns some outputs along with an error code and message.
 	runner BuiltinRunner
@@ -28,7 +33,7 @@ func (builtin Builtin) name() string { return builtin.Name }
 
 func (builtin Builtin) callfields() CallFields { return builtin.CallFields }
 
-func (builtin Builtin) ptr() engineio.ElementPtr { return builtin.Ptr }
+func (builtin Builtin) ptr() engineio.ElementPtr { return engineio.ElementPtr(builtin.Ptr) }
 
 func (builtin Builtin) run(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 	if !engine.callstack.push(&callframe{
@@ -40,6 +45,11 @@ func (builtin Builtin) run(engine *Engine, inputs RegisterSet) (RegisterSet, *Ex
 	}
 
 	defer engine.callstack.pop()
+
+	// Exhaust fuel for operation
+	if ok := engine.exhaustFuel(builtin.Cost); !ok {
+		return nil, exception(FuelError, "fuel exhausted").traced(engine.callstack.trace())
+	}
 
 	return builtin.runner(engine, inputs)
 }
@@ -70,17 +80,51 @@ func (bmethod BuiltinMethod) run(engine *Engine, inputs RegisterSet) (RegisterSe
 
 	defer engine.callstack.pop()
 
+	// Exhaust fuel for operation
+	if ok := engine.exhaustFuel(bmethod.Cost); !ok {
+		return nil, exception(FuelError, "fuel exhausted").traced(engine.callstack.trace())
+	}
+
 	return bmethod.runner(engine, inputs)
 }
 
 func makeBuiltinMethod(
-	name string, datatype Datatype, code MethodCode,
+	name string, datatype Datatype, code MethodCode, cost engineio.Fuel,
 	inputs, outputs *TypeFields, runner BuiltinRunner,
 ) *BuiltinMethod {
 	return &BuiltinMethod{
-		Code: code, Datatype: datatype, Builtin: Builtin{
-			Name: name, runner: runner,
+		Datatype: datatype, Code: code,
+		Builtin: Builtin{
+			Name: name, runner: runner, Cost: cost,
 			CallFields: CallFields{Inputs: inputs, Outputs: outputs},
 		},
 	}
+}
+
+func makeBuiltin(
+	name string, ptr uint64, cost engineio.Fuel,
+	inputs, outputs *TypeFields, runner BuiltinRunner,
+) *Builtin {
+	return &Builtin{
+		Name: name, Ptr: ptr, runner: runner, Cost: cost,
+		CallFields: CallFields{Inputs: inputs, Outputs: outputs},
+	}
+}
+
+//nolint:forcetypeassert
+func builtinSHA256() *Builtin {
+	return makeBuiltin(
+		"SHA256", 0, 50,
+		makefields([]*TypeField{{"data", PrimitiveBytes}}),
+		makefields([]*TypeField{{"hash", PrimitiveU256}}),
+		func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+			data := inputs[0].(BytesValue)
+
+			// Hash the data and create a u256 value from it
+			hash := sha256.Sum256(data)
+			u256 := new(uint256.Int).SetBytes(hash[:])
+
+			return RegisterSet{0: &U256Value{u256}}, nil
+		},
+	)
 }

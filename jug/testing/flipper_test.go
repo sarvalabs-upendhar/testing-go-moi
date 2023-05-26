@@ -47,7 +47,7 @@ func (suite *FlipperTestSuite) TestFlipping() {
 	suite.Nil(except)
 
 	consumed, _, except = suite.Call("Flip!", nil)
-	suite.Equal(engineio.Fuel(165), consumed)
+	suite.Equal(engineio.Fuel(170), consumed)
 	suite.Nil(except)
 
 	consumed, output, except = suite.Call("Mode", nil)

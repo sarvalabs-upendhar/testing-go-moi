@@ -181,6 +181,12 @@ func (engine Engine) lookupInstruction(opcode OpCode) InstructionFunc {
 	return engine.runtime.instructs[opcode]
 }
 
+func (engine Engine) lookupBuiltin(ptr uint64) (*Builtin, bool) {
+	builtin, ok := engine.runtime.builtinLibrary[ptr]
+
+	return builtin, ok
+}
+
 func (engine *Engine) lookupMethod(dt Datatype, mtcode MethodCode) (Method, bool) {
 	switch dt.Kind() {
 	case Primitive:

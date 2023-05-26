@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"math/big"
 	"os"
 	"os/signal"
 	"syscall"
@@ -90,7 +91,12 @@ func InitEnvironment(dirpath string) error {
 	inventory := Inventory{
 		labdir: dirpath,
 
-		BaseFuel:      5000,
+		Config: LabConfig{
+			BaseFuel: 5000,
+			HexBig:   true,
+			HexBytes: true,
+		},
+
 		Participants:  make(map[string]types.Address),
 		LogicAccounts: make(map[string]types.LogicID),
 	}
@@ -210,11 +216,7 @@ func SetValueCommand(ident string, value any) Command {
 	return func(env *Environment) string {
 		env.memory[ident] = value
 
-		if data, ok := value.([]byte); ok {
-			return fmt.Sprintf("'%v' has been set to %#x", ident, data)
-		}
-
-		return fmt.Sprintf("'%v' has been set to %v", ident, value)
+		return fmt.Sprintf("'%v' has been set to %v", ident, env.formatValue(value))
 	}
 }
 
@@ -227,10 +229,36 @@ func GetValueCommand(ident string) Command {
 			return fmt.Sprintf("no value set for '%v'", ident)
 		}
 
-		if data, ok := value.([]byte); ok {
-			return fmt.Sprintf("'%v' has been set to %#x", ident, data)
+		return fmt.Sprintf("'%v' is set to %v", ident, env.formatValue(value))
+	}
+}
+
+func (env *Environment) formatValue(value any) string {
+	switch data := value.(type) {
+	case []byte:
+		format := "%v"
+		if env.inventory.Config.HexBytes {
+			format = "%#x"
 		}
 
-		return fmt.Sprintf("'%v' is set to %v", ident, value)
+		return fmt.Sprintf(format, data)
+
+	case [32]byte:
+		format := "%v"
+		if env.inventory.Config.HexBytes {
+			format = "%#x"
+		}
+
+		return fmt.Sprintf(format, data)
+
+	case *big.Int:
+		if env.inventory.Config.HexBig {
+			return fmt.Sprintf("big(%#x)", data.Bytes())
+		} else {
+			return fmt.Sprintf("big(%v)", data.String())
+		}
+
+	default:
+		return fmt.Sprintf("%v", data)
 	}
 }

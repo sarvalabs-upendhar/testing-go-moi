@@ -154,7 +154,7 @@ func (x U64Value) methods() [256]*BuiltinMethod {
 		// uint.__join__(uint) -> uint64
 		MethodJoin: makeBuiltinMethod(
 			MethodJoin.String(),
-			PrimitiveU64, MethodJoin,
+			PrimitiveU64, MethodJoin, 20,
 			makefields([]*TypeField{{"self", PrimitiveU64}, {"other", PrimitiveU64}}),
 			makefields([]*TypeField{{"result", PrimitiveU64}}),
 			func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -173,7 +173,7 @@ func (x U64Value) methods() [256]*BuiltinMethod {
 		// uint.__lt__(uint) -> bool
 		MethodLt: makeBuiltinMethod(
 			MethodLt.String(),
-			PrimitiveU64, MethodLt,
+			PrimitiveU64, MethodLt, 10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveU64}, {Name: "other", Type: PrimitiveU64}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -187,7 +187,7 @@ func (x U64Value) methods() [256]*BuiltinMethod {
 		// uint.__gt__(uint) -> bool
 		MethodGt: makeBuiltinMethod(
 			MethodGt.String(),
-			PrimitiveU64, MethodGt,
+			PrimitiveU64, MethodGt, 10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveU64}, {Name: "other", Type: PrimitiveU64}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -201,7 +201,7 @@ func (x U64Value) methods() [256]*BuiltinMethod {
 		// uint.__eq__(uint) -> bool
 		MethodEq: makeBuiltinMethod(
 			MethodEq.String(),
-			PrimitiveU64, MethodEq,
+			PrimitiveU64, MethodEq, 10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveU64}, {Name: "other", Type: PrimitiveU64}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -215,7 +215,7 @@ func (x U64Value) methods() [256]*BuiltinMethod {
 		// uint.__bool__() -> bool
 		MethodBool: makeBuiltinMethod(
 			MethodBool.String(),
-			PrimitiveU64, MethodBool,
+			PrimitiveU64, MethodBool, 10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveU64}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -229,7 +229,7 @@ func (x U64Value) methods() [256]*BuiltinMethod {
 		// uint.__str__() -> string
 		MethodStr: makeBuiltinMethod(
 			MethodStr.String(),
-			PrimitiveU64, MethodStr,
+			PrimitiveU64, MethodStr, 10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveU64}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveString}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -243,7 +243,7 @@ func (x U64Value) methods() [256]*BuiltinMethod {
 		// uint64.abs() -> uint64
 		0x10: makeBuiltinMethod(
 			"Abs",
-			PrimitiveU64, 0x10,
+			PrimitiveU64, 0x10, 10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveU64}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveU64}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -415,7 +415,7 @@ func (x I64Value) methods() [256]*BuiltinMethod {
 		// int.__join__(int) -> int64
 		MethodJoin: makeBuiltinMethod(
 			MethodJoin.String(),
-			PrimitiveI64, MethodJoin,
+			PrimitiveI64, MethodJoin, 20,
 			makefields([]*TypeField{{"self", PrimitiveI64}, {"other", PrimitiveI64}}),
 			makefields([]*TypeField{{"result", PrimitiveI64}}),
 			func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -434,7 +434,7 @@ func (x I64Value) methods() [256]*BuiltinMethod {
 		// int.__lt__(int) -> bool
 		MethodLt: makeBuiltinMethod(
 			MethodLt.String(),
-			PrimitiveI64, MethodLt,
+			PrimitiveI64, MethodLt, 10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveI64}, {Name: "other", Type: PrimitiveI64}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -448,7 +448,7 @@ func (x I64Value) methods() [256]*BuiltinMethod {
 		// int.__gt__(int) -> bool
 		MethodGt: makeBuiltinMethod(
 			MethodGt.String(),
-			PrimitiveI64, MethodGt,
+			PrimitiveI64, MethodGt, 10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveI64}, {Name: "other", Type: PrimitiveI64}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -462,7 +462,7 @@ func (x I64Value) methods() [256]*BuiltinMethod {
 		// int.__eq__(int) -> bool
 		MethodEq: makeBuiltinMethod(
 			MethodEq.String(),
-			PrimitiveI64, MethodEq,
+			PrimitiveI64, MethodEq, 10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveI64}, {Name: "other", Type: PrimitiveI64}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -476,7 +476,7 @@ func (x I64Value) methods() [256]*BuiltinMethod {
 		// int.__bool__() -> bool
 		MethodBool: makeBuiltinMethod(
 			MethodBool.String(),
-			PrimitiveI64, MethodBool,
+			PrimitiveI64, MethodBool, 10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveI64}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -490,7 +490,7 @@ func (x I64Value) methods() [256]*BuiltinMethod {
 		// int.__str__() -> string
 		MethodStr: makeBuiltinMethod(
 			MethodStr.String(),
-			PrimitiveI64, MethodStr,
+			PrimitiveI64, MethodStr, 10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveI64}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveString}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -504,7 +504,7 @@ func (x I64Value) methods() [256]*BuiltinMethod {
 		// int64.abs() -> int64
 		0x10: makeBuiltinMethod(
 			"Abs",
-			PrimitiveI64, 0x10,
+			PrimitiveI64, 0x10, 10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveI64}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveI64}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -709,7 +709,7 @@ func (x *U256Value) methods() [256]*BuiltinMethod {
 		// uint.__join__(uint) -> int256
 		MethodJoin: makeBuiltinMethod(
 			MethodJoin.String(),
-			PrimitiveU256, MethodJoin,
+			PrimitiveU256, MethodJoin, 20,
 			makefields([]*TypeField{{"self", PrimitiveU256}, {"other", PrimitiveU256}}),
 			makefields([]*TypeField{{"result", PrimitiveU256}}),
 			func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -728,7 +728,7 @@ func (x *U256Value) methods() [256]*BuiltinMethod {
 		// uint.__lt__(uint) -> bool
 		MethodLt: makeBuiltinMethod(
 			MethodLt.String(),
-			PrimitiveU256, MethodLt,
+			PrimitiveU256, MethodLt, 10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveU256}, {Name: "other", Type: PrimitiveU256}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -742,7 +742,7 @@ func (x *U256Value) methods() [256]*BuiltinMethod {
 		// uint.__gt__(uint) -> bool
 		MethodGt: makeBuiltinMethod(
 			MethodGt.String(),
-			PrimitiveU256, MethodGt,
+			PrimitiveU256, MethodGt, 10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveU256}, {Name: "other", Type: PrimitiveU256}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -756,7 +756,7 @@ func (x *U256Value) methods() [256]*BuiltinMethod {
 		// uint.__eq__(uint) -> bool
 		MethodEq: makeBuiltinMethod(
 			MethodEq.String(),
-			PrimitiveU256, MethodEq,
+			PrimitiveU256, MethodEq, 10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveU256}, {Name: "other", Type: PrimitiveU256}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -770,7 +770,7 @@ func (x *U256Value) methods() [256]*BuiltinMethod {
 		// uint.__bool__() -> bool
 		MethodBool: makeBuiltinMethod(
 			MethodBool.String(),
-			PrimitiveU256, MethodBool,
+			PrimitiveU256, MethodBool, 10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveU256}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -783,7 +783,7 @@ func (x *U256Value) methods() [256]*BuiltinMethod {
 		// int.__str__() -> string
 		MethodStr: makeBuiltinMethod(
 			MethodStr.String(),
-			PrimitiveU256, MethodStr,
+			PrimitiveU256, MethodStr, 10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveU256}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveString}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -797,7 +797,7 @@ func (x *U256Value) methods() [256]*BuiltinMethod {
 		// uint256.abs() -> uint256
 		0x10: makeBuiltinMethod(
 			"Abs",
-			PrimitiveU256, 0x10,
+			PrimitiveU256, 0x10, 10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveU256}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveU256}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -1158,7 +1158,7 @@ func (x I256Value) methods() [256]*BuiltinMethod {
 		// int.__join__(int) -> int256
 		MethodJoin: makeBuiltinMethod(
 			MethodJoin.String(),
-			PrimitiveI256, MethodJoin,
+			PrimitiveI256, MethodJoin, 20,
 			makefields([]*TypeField{{"self", PrimitiveI256}, {"other", PrimitiveI256}}),
 			makefields([]*TypeField{{"result", PrimitiveI256}}),
 			func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -1177,7 +1177,7 @@ func (x I256Value) methods() [256]*BuiltinMethod {
 		// int.__lt__(int) -> bool
 		MethodLt: makeBuiltinMethod(
 			MethodLt.String(),
-			PrimitiveI256, MethodLt,
+			PrimitiveI256, MethodLt, 10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveI256}, {Name: "other", Type: PrimitiveI256}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -1191,7 +1191,7 @@ func (x I256Value) methods() [256]*BuiltinMethod {
 		// int.__gt__(int) -> bool
 		MethodGt: makeBuiltinMethod(
 			MethodGt.String(),
-			PrimitiveI256, MethodGt,
+			PrimitiveI256, MethodGt, 10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveI256}, {Name: "other", Type: PrimitiveI256}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -1205,7 +1205,7 @@ func (x I256Value) methods() [256]*BuiltinMethod {
 		// int.__eq__(int) -> bool
 		MethodEq: makeBuiltinMethod(
 			MethodEq.String(),
-			PrimitiveI256, MethodEq,
+			PrimitiveI256, MethodEq, 10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveI256}, {Name: "other", Type: PrimitiveI256}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -1219,7 +1219,7 @@ func (x I256Value) methods() [256]*BuiltinMethod {
 		// int.__bool__() -> bool
 		MethodBool: makeBuiltinMethod(
 			MethodBool.String(),
-			PrimitiveI256, MethodBool,
+			PrimitiveI256, MethodBool, 10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveI256}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveBool}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -1233,7 +1233,7 @@ func (x I256Value) methods() [256]*BuiltinMethod {
 		// int.__str__() -> string
 		MethodStr: makeBuiltinMethod(
 			MethodStr.String(),
-			PrimitiveI256, MethodStr,
+			PrimitiveI256, MethodStr, 10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveI256}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveString}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
@@ -1256,7 +1256,7 @@ func (x I256Value) methods() [256]*BuiltinMethod {
 		// int256.abs() -> int256
 		0x10: makeBuiltinMethod(
 			"Abs",
-			PrimitiveI256, 0x10,
+			PrimitiveI256, 0x10, 10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveI256}}),
 			makefields([]*TypeField{{Name: "result", Type: PrimitiveI256}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {

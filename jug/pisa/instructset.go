@@ -52,10 +52,10 @@ func BaseInstructionSet() InstructionSet {
 		OBTAIN: opOBTAIN,
 		YIELD:  opYIELD,
 
-		// CARGS: opCARGS,
-		// CALLB:  opCALLB,
-		// CALLR:  opCALLR,
-		// CALLM:  opCALLM,
+		CARGS: opCARGS,
+		CALLB: opCALLB,
+		CALLR: opCALLR,
+		CALLM: opCALLM,
 
 		CONST:  opCONST,
 		LDPTR1: opLDPTR,
@@ -166,21 +166,21 @@ func opJUMPI(scope *callscope, operands []byte) Continue {
 	// Call the __bool__ method of register
 	result, except := scope.callMethodBool(regCondition)
 	if except != nil {
-		return scope.propagate(except).withConsumption(10)
+		return scope.propagate(except)
 	}
 
 	// If condition is false, no jump
 	if !result {
-		return continueOk{10}
+		return continueOk{0}
 	}
 
 	// Load the pointer value from the register
 	pointer, except := scope.getPtrValue(destination)
 	if except != nil {
-		return scope.propagate(except).withConsumption(10)
+		return scope.propagate(except)
 	}
 
-	return continueJump{20, uint64(pointer)}
+	return continueJump{10, uint64(pointer)}
 }
 
 func opOBTAIN(scope *callscope, operands []byte) Continue {
@@ -205,6 +205,116 @@ func opYIELD(scope *callscope, operands []byte) Continue {
 	scope.outputs.Set(slot, value)
 
 	return continueOk{5}
+}
+
+func opCARGS(scope *callscope, operands []byte) Continue {
+	// CARGS [$X]
+	reg := operands[0]
+
+	// Create a new call args value
+	cargs := make(CargsValue)
+	// Set the cargs to the register
+	scope.memory.Set(reg, cargs)
+
+	return continueOk{5}
+}
+
+func opCALLB(scope *callscope, operands []byte) Continue {
+	// CALLB [$X: callargs][$Y: ptr][$Z: callargs]
+	out, ptr, in := operands[0], operands[1], operands[2]
+
+	// Load the pointer value from the register
+	pointer, except := scope.getPtrValue(ptr)
+	if except != nil {
+		return scope.propagate(except)
+	}
+
+	builtin, ok := scope.engine.lookupBuiltin(uint64(pointer))
+	if !ok {
+		scope.raise(exceptionf(ReferenceError, "builtin %#x not found", pointer))
+	}
+
+	// Retrieve the input call args and check the type
+	registerInputs := scope.memory.Get(in)
+	if registerInputs.Type() != PrimitiveCargs {
+		return scope.raise(exceptionInvalidDatatype(PrimitiveCargs, in))
+	}
+
+	// Cast the inputs into a RegisterSet
+	inputs := RegisterSet(registerInputs.(CargsValue)) //nolint:forcetypeassert
+
+	// Call the routine with the inputs
+	outputs, except := scope.engine.run(builtin, inputs)
+	if except != nil {
+		return scope.propagate(except).withConsumption(50)
+	}
+
+	// Cast the outputs into CargsValue and set it
+	scope.memory.Set(out, CargsValue(outputs))
+
+	return continueOk{30}
+}
+
+func opCALLR(scope *callscope, operands []byte) Continue {
+	// CALLR [$X: callargs][$Y: ptr][$Z: callargs]
+	out, ptr, in := operands[0], operands[1], operands[2]
+
+	// Load the pointer value from the register
+	pointer, except := scope.getPtrValue(ptr)
+	if except != nil {
+		return scope.propagate(except)
+	}
+
+	// Get the routine from the environment
+	routine, err := scope.engine.GetRoutine(engineio.ElementPtr(pointer))
+	if err != nil {
+		return scope.raise(exceptionf(ReferenceError, "routine %#v not found: %v", pointer, err))
+	}
+
+	// Retrieve the input call args and check the type
+	registerInputs := scope.memory.Get(in)
+	if registerInputs.Type() != PrimitiveCargs {
+		return scope.raise(exceptionInvalidDatatype(PrimitiveCargs, in))
+	}
+
+	// Cast the inputs into a RegisterSet
+	inputs := RegisterSet(registerInputs.(CargsValue)) //nolint:forcetypeassert
+
+	// Call the routine with the inputs
+	outputs, except := scope.engine.run(routine, inputs)
+	if except != nil {
+		return scope.propagate(except).withConsumption(50)
+	}
+
+	// Cast the outputs into CargsValue and set it
+	scope.memory.Set(out, CargsValue(outputs))
+
+	return continueOk{50}
+}
+
+func opCALLM(scope *callscope, operands []byte) Continue {
+	// CALLM [$X: callargs][Y: 0x00][$Z: callargs]
+	out, method, in := operands[0], operands[1], operands[2]
+
+	// Retrieve the input call args and check the type
+	registerInputs := scope.memory.Get(in)
+	if registerInputs.Type() != PrimitiveCargs {
+		return scope.raise(exceptionInvalidDatatype(PrimitiveCargs, in))
+	}
+
+	// Cast the inputs into a RegisterSet
+	inputs := RegisterSet(registerInputs.(CargsValue)) //nolint:forcetypeassert
+
+	// Call the method with the inputs
+	outputs, except := scope.callMethod(MethodCode(method), inputs)
+	if except != nil {
+		return scope.propagate(except).withConsumption(30)
+	}
+
+	// Cast the outputs into CargsValue and set it
+	scope.memory.Set(out, CargsValue(outputs))
+
+	return continueOk{30}
 }
 
 func opCONST(scope *callscope, operands []byte) Continue {
@@ -418,13 +528,13 @@ func opTHROW(scope *callscope, operands []byte) Continue {
 	// Call the __throw__ method of register
 	errdata, except := scope.callMethodThrow(regVal)
 	if except != nil {
-		return scope.propagate(except).withConsumption(10)
+		return scope.propagate(except)
 	}
 
 	// Create the custom exception object
 	except = exception(CustomExceptionClass{regVal.Type()}, string(errdata))
 
-	return scope.raise(except).withConsumption(30)
+	return scope.raise(except).withConsumption(10)
 }
 
 func opJOIN(scope *callscope, operands []byte) Continue {
@@ -446,7 +556,7 @@ func opJOIN(scope *callscope, operands []byte) Continue {
 	// Set the register
 	scope.memory.Set(out, result)
 
-	return continueOk{30}
+	return continueOk{10}
 }
 
 func opLT(scope *callscope, operands []byte) Continue {
@@ -468,7 +578,7 @@ func opLT(scope *callscope, operands []byte) Continue {
 	// Set the register
 	scope.memory.Set(out, result)
 
-	return continueOk{20}
+	return continueOk{10}
 }
 
 func opGT(scope *callscope, operands []byte) Continue {
@@ -490,7 +600,7 @@ func opGT(scope *callscope, operands []byte) Continue {
 	// Set the register
 	scope.memory.Set(out, result)
 
-	return continueOk{20}
+	return continueOk{10}
 }
 
 func opEQ(scope *callscope, operands []byte) Continue {
@@ -512,7 +622,7 @@ func opEQ(scope *callscope, operands []byte) Continue {
 	// Set the register
 	scope.memory.Set(out, result)
 
-	return continueOk{20}
+	return continueOk{10}
 }
 
 func opBOOL(scope *callscope, operands []byte) Continue {
@@ -525,13 +635,13 @@ func opBOOL(scope *callscope, operands []byte) Continue {
 	// Call the __bool__ method of register
 	result, except := scope.callMethodBool(regVal)
 	if except != nil {
-		return scope.propagate(except).withConsumption(10)
+		return scope.propagate(except)
 	}
 
 	// Set the register
 	scope.memory.Set(out, result)
 
-	return continueOk{20}
+	return continueOk{10}
 }
 
 func opSTR(scope *callscope, operands []byte) Continue {
@@ -544,13 +654,13 @@ func opSTR(scope *callscope, operands []byte) Continue {
 	// Call the __str__ method of register
 	result, except := scope.callMethodStr(regVal)
 	if except != nil {
-		return scope.propagate(except).withConsumption(10)
+		return scope.propagate(except)
 	}
 
 	// Set the register
 	scope.memory.Set(out, result)
 
-	return continueOk{20}
+	return continueOk{10}
 }
 
 func opADDR(scope *callscope, operands []byte) Continue {
@@ -563,13 +673,13 @@ func opADDR(scope *callscope, operands []byte) Continue {
 	// Call the __addr__ method of register
 	result, except := scope.callMethodAddr(regVal)
 	if except != nil {
-		return scope.propagate(except).withConsumption(10)
+		return scope.propagate(except)
 	}
 
 	// Set the register
 	scope.memory.Set(out, result)
 
-	return continueOk{20}
+	return continueOk{10}
 }
 
 func opLEN(scope *callscope, operands []byte) Continue {
@@ -582,13 +692,13 @@ func opLEN(scope *callscope, operands []byte) Continue {
 	// Call the __len__ method of register
 	result, except := scope.callMethodLen(regVal)
 	if except != nil {
-		return scope.propagate(except).withConsumption(10)
+		return scope.propagate(except)
 	}
 
 	// Set the register
 	scope.memory.Set(out, result)
 
-	return continueOk{20}
+	return continueOk{10}
 }
 
 func opSIZEOF(scope *callscope, operands []byte) Continue {
@@ -630,55 +740,55 @@ func opSIZEOF(scope *callscope, operands []byte) Continue {
 
 func opGETFLD(scope *callscope, operands []byte) Continue {
 	// GETFLD [$X][$Y: class][&Z: 0x00]
-	output, class, slot := operands[0], operands[1], operands[2]
+	output, reg, slot := operands[0], operands[1], operands[2]
 
 	// Retrieve the register for class
-	regClass := scope.memory.Get(class)
-	// Verify that register is of ClassType
-	if regClass.Type().Kind() != Class {
-		return scope.raise(exceptionInvalidDatatype(Class, class))
+	regFields := scope.memory.Get(reg)
+
+	// Get the type of the register
+	datatype := regFields.Type()
+	// Verify that register is of ClassType or Cargs
+	if datatype.Kind() != Class && !datatype.Equals(PrimitiveCargs) {
+		return scope.raise(exceptionInvalidDatatype(Class, reg))
 	}
 
-	// Cast the value into a ClassValue
-	classValue := regClass.(*ClassValue) //nolint:forcetypeassert
+	// Cast the value into a SlottedValue
+	fields := regFields.(SlottedValue) //nolint:forcetypeassert
 	// Get the field value for the slot
-	fieldValue, except := classValue.Get(slot)
+	value, except := fields.Get(slot)
 	if except != nil {
 		return scope.propagate(except)
 	}
 
 	// Set the output register
-	scope.memory.Set(output, fieldValue)
+	scope.memory.Set(output, value)
 
 	return continueOk{10}
 }
 
 func opSETFLD(scope *callscope, operands []byte) Continue {
 	// SETFLD [$X: class][&Y: 0x00][$Z]
-	class, slot, element := operands[0], operands[1], operands[2]
+	reg, slot, element := operands[0], operands[1], operands[2]
 
 	// Retrieve the register for class and its field element
-	regClass, regElem := scope.memory.Get(class), scope.memory.Get(element)
+	regFields, regElem := scope.memory.Get(reg), scope.memory.Get(element)
 
-	//// Check if class value has been initialized
-	// if IsNullValue(regClass) {
-	//	return scope.raise(exceptionNullRegister(class))
-	// }
-
-	// Verify that register is of ClassType
-	if regClass.Type().Kind() != Class {
-		return scope.raise(exceptionInvalidDatatype(Class, class))
+	// Get the type of the register
+	datatype := regFields.Type()
+	// Verify that register is of ClassType or Cargs
+	if datatype.Kind() != Class && !datatype.Equals(PrimitiveCargs) {
+		return scope.raise(exceptionInvalidDatatype(Class, reg))
 	}
 
-	// Cast the value into a ClassValue
-	classValue := regClass.(*ClassValue) //nolint:forcetypeassert
-	// Set the element value to the class
-	if except := classValue.Set(slot, regElem); except != nil {
+	// Cast the value into a FieldValues
+	fields := regFields.(SlottedValue) //nolint:forcetypeassert
+	// Set the element value to the field values
+	if except := fields.Set(slot, regElem); except != nil {
 		return scope.propagate(except)
 	}
 
-	// Update the class register
-	scope.memory.Set(class, classValue)
+	// Update the field values register
+	scope.memory.Set(reg, fields)
 
 	return continueOk{20}
 }
@@ -715,11 +825,6 @@ func opSETIDX(scope *callscope, operands []byte) Continue {
 
 	// Retrieve the register for collection, index and element
 	regCol, regIdx, regElem := scope.memory.Get(collection), scope.memory.Get(index), scope.memory.Get(element)
-
-	//// Check if collection value has been initialized
-	// if IsNullValue(regCol) {
-	//	return scope.raise(exceptionNullRegister(collection))
-	// }
 
 	if !regCol.Type().Kind().IsCollection() {
 		return scope.raise(exceptionInvalidDatatype("collection", collection))
@@ -931,7 +1036,7 @@ func opAND(scope *callscope, operands []byte) Continue {
 	// Call the __bool__ method of register A
 	valueA, except := scope.callMethodBool(regA)
 	if except != nil {
-		return scope.propagate(except).withConsumption(5)
+		return scope.propagate(except)
 	}
 
 	// Call the __bool__ method of register B
@@ -944,7 +1049,7 @@ func opAND(scope *callscope, operands []byte) Continue {
 	// Set the register
 	scope.memory.Set(out, result)
 
-	return continueOk{20}
+	return continueOk{10}
 }
 
 func opOR(scope *callscope, operands []byte) Continue {
@@ -960,21 +1065,18 @@ func opOR(scope *callscope, operands []byte) Continue {
 	// Call the __bool__ method of register A
 	valueA, except := scope.callMethodBool(regA)
 	if except != nil {
-		return scope.propagate(except).withConsumption(5)
+		return scope.propagate(except)
 	}
 
 	// Call the __bool__ method of register B
-	valueB, except := scope.callMethodBool(regB)
-	if except != nil {
-		return scope.propagate(except).withConsumption(10)
-	}
+	valueB, _ := scope.callMethodBool(regB)
 
 	// Perform boolean OR on bool(A) and bool(B)
 	result := valueA.Or(valueB)
 	// Set the register
 	scope.memory.Set(out, result)
 
-	return continueOk{20}
+	return continueOk{10}
 }
 
 func opNOT(scope *callscope, operands []byte) Continue {
@@ -987,7 +1089,7 @@ func opNOT(scope *callscope, operands []byte) Continue {
 	// Call the __bool__ method of register
 	result, except := scope.callMethodBool(regVal)
 	if except != nil {
-		return scope.propagate(except).withConsumption(5)
+		return scope.propagate(except)
 	}
 
 	// Flip the value
@@ -995,7 +1097,7 @@ func opNOT(scope *callscope, operands []byte) Continue {
 	// Set the register
 	scope.memory.Set(out, inverted)
 
-	return continueOk{15}
+	return continueOk{10}
 }
 
 func opINCR(scope *callscope, operands []byte) Continue {

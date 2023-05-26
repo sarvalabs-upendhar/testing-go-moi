@@ -1,0 +1,99 @@
+syntax  : 0.1.0
+engine  :
+  kind : PISA
+  flags: [ ]
+
+elements:
+  - ptr : 0
+    kind: constant
+    data:
+      type : string
+      value: 0x0668656c6c6f21
+
+  - ptr : 1
+    kind: routine
+    data:
+      name    : InnerFunc
+      kind    : invokable
+      executes:
+        bin: [
+          0x11, 0x00, 0x00, # ldptr1 $0 0x0
+          0x10, 0x00, 0x00, # const $0 $0
+          0x41, 0x00,       # throw $0
+        ]
+
+  - ptr : 2
+    kind: routine
+    data:
+      name    : MidFunc
+      kind    : invokable
+      executes:
+        bin: [
+          0x0A, 0x00,              # cargs $0
+          0x11, 0x02, 0x01,        # ldptr1 $2 0x01 [0x01 => InnerFunc]
+          0x0C, 0x03, 0x02, 0x00,  # callr $3 $2 $0  // $3 = $2($0)
+        ]
+
+  - ptr : 3
+    kind: routine
+    data:
+      name    : OuterFunc
+      kind    : invokable
+      executes:
+        bin: [
+          0x0A, 0x00,              # cargs $0
+          0x11, 0x02, 0x02,        # ldptr1 $2 0x02 [0x02 => MidFunc]
+          0x0C, 0x03, 0x02, 0x00,  # callr $3 $2 $0  // $3 = $2($0)
+        ]
+
+  - ptr : 4
+    kind: routine
+    data:
+      name    : CombineStrings
+      kind    : invokable
+      accepts :
+        - slot : 0
+          label: a
+          type : string
+        - slot : 1
+          label: b
+          type : string
+      returns :
+        - slot : 0
+          label: result
+          type : string
+      executes:
+        bin: [
+          0x0A, 0x00,             # cargs $0
+          0x04, 0x01, 0x00,       # obtain $1 &0
+          0x52, 0x00, 0x00, 0x01, # setfld $0 &0 $1
+          0x04, 0x01, 0x01,       # obtain $1 &1
+          0x52, 0x00, 0x01, 0x01, # setfld $0 &1 $1
+          0x0D, 0x01, 0x03, 0x00, # callm $1 0x03 $0 // $1 = $0.&0.0x03($0) || $1 = __join__($0.&0, $0.&1)
+          0x51, 0x00, 0x01, 0x00, # getfld $0 $1 &0
+          0x05, 0x00, 0x00,       # yield $0 &0
+        ]
+
+  - ptr : 5
+    kind: routine
+    data:
+      name    : Sha256
+      kind    : invokable
+      accepts :
+        - slot : 0
+          label: data
+          type : bytes
+      returns :
+        - slot : 0
+          label: hash
+          type : u256
+      executes:
+        bin: [
+          0x0A, 0x00,             # cargs $0
+          0x04, 0x01, 0x00,       # obtain $1 &0
+          0x52, 0x00, 0x00, 0x01, # setfld $0 &0 $1
+          0x11, 0x01, 0x00,       # ldptr1 $1 0x00
+          0x0B, 0x02, 0x01, 0x00, # callb $2 $1 $0   // $2 = builtins0($0) || $2 = SHA256($0.&0)
+          0x51, 0x00, 0x02, 0x00, # getfld $0 $2 &0
+          0x05, 0x00, 0x00,       # yield $0 &0
+        ]

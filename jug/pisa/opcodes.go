@@ -307,10 +307,10 @@ var opcodeMetadataTable = map[OpCode]*opcodeMetadata{
 	OBTAIN: {"OBTAIN", 2},
 	YIELD:  {"YIELD", 2},
 
-	// CARGS: nil,
-	// CALLB: nil,
-	// CALLR: nil,
-	// CALLM: nil,
+	CARGS: {"CARGS", 1},
+	CALLB: {"CALLB", 3},
+	CALLR: {"CALLR", 3},
+	CALLM: {"CALLM", 3},
 
 	CONST:  {"CONST", 2},
 	LDPTR1: {"LDPTR1", 2},

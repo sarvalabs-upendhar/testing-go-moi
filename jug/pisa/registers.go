@@ -279,6 +279,14 @@ func decodeMappedValues(data []byte, keyType, valType Datatype) (map[RegisterVal
 	return values, nil
 }
 
+type SlottedValue interface {
+	RegisterValue
+
+	Size() U64Value
+	Get(uint8) (RegisterValue, *Exception)
+	Set(uint8, RegisterValue) *Exception
+}
+
 func decodeSlottedValues(data []byte, fields *TypeFields) (map[byte]RegisterValue, error) {
 	doc := make(polo.Document)
 	if err := polo.Depolorize(&doc, data); err != nil {
