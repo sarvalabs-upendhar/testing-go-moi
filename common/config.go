@@ -67,14 +67,15 @@ type NodeInfo struct {
 
 // NetworkConfig is the p2p configuration of the node
 type NetworkConfig struct {
-	BootstrapPeers  []maddr.Multiaddr
-	TrustedPeers    []NodeInfo
-	StaticPeers     []NodeInfo
-	MaxPeers        uint
-	RelayNodeAddr   string
-	ListenAddresses []maddr.Multiaddr
-	JSONRPCAddr     *net.TCPAddr
-	MTQ             float64
+	BootstrapPeers     []maddr.Multiaddr
+	TrustedPeers       []NodeInfo
+	StaticPeers        []NodeInfo
+	MaxPeers           uint
+	RelayNodeAddr      string
+	ListenAddresses    []maddr.Multiaddr
+	JSONRPCAddr        *net.TCPAddr
+	MTQ                float64
+	CorsAllowedOrigins []string
 
 	// this will be removed
 	NetworkSize uint64

@@ -68,6 +68,7 @@ func buildNetworkConfig(nodeCfg *common.Config, fileCfg *Config) (err error) {
 	assignNetworkMTQ(nodeCfg)
 	assignNetworkNoDiscovery(nodeCfg)
 	assignNetworkRefreshSenatus(nodeCfg)
+	assignNetworkCORS(nodeCfg)
 	assignNetworkInboundLimit(nodeCfg, fileCfg)
 	assignNetworkOutboundLimit(nodeCfg, fileCfg)
 
@@ -190,6 +191,10 @@ func assignNetworkNoDiscovery(nodeCfg *common.Config) {
 
 func assignNetworkRefreshSenatus(nodeCfg *common.Config) {
 	nodeCfg.Network.RefreshSenatus = RefreshSenatus
+}
+
+func assignNetworkCORS(nodeCfg *common.Config) {
+	nodeCfg.Network.CorsAllowedOrigins = CorsAllowedOrigins
 }
 
 func assignNetworkBootStrapNodes(nodeCfg *common.Config, fileCfg *Config) error {

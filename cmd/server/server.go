@@ -23,23 +23,24 @@ import (
 var ErrReadingConfig = errors.New("error reading config file")
 
 var (
-	Directory         string
-	ConfigPath        string
-	AccountWaitTime   int
-	OperatorSlots     int
-	ValidatorSlots    int
-	NetworkSize       uint64
-	MTQ               float64
-	EnableTracing     bool
-	NoDiscovery       bool
-	RefreshSenatus    bool
-	Bootnode          string
-	LogLevel          string
-	JaegerAddress     string
-	PeerListFilePath  string
-	InboundConnLimit  int64
-	OutboundConnLimit int64
-	CleanDB           bool
+	Directory          string
+	ConfigPath         string
+	AccountWaitTime    int
+	OperatorSlots      int
+	ValidatorSlots     int
+	NetworkSize        uint64
+	MTQ                float64
+	EnableTracing      bool
+	NoDiscovery        bool
+	RefreshSenatus     bool
+	Bootnode           string
+	LogLevel           string
+	JaegerAddress      string
+	PeerListFilePath   string
+	InboundConnLimit   int64
+	OutboundConnLimit  int64
+	CleanDB            bool
+	CorsAllowedOrigins []string
 )
 
 func GetCommand() *cobra.Command {
@@ -55,6 +56,7 @@ func GetCommand() *cobra.Command {
 }
 
 func runCommand(cmd *cobra.Command, args []string) {
+	log.Println("cors  ", CorsAllowedOrigins, len(CorsAllowedOrigins))
 	SetupNode()
 }
 
@@ -74,6 +76,12 @@ func parseFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&Bootnode, "bootnode", "", "Boot-node MultiAddr")
 	cmd.PersistentFlags().StringVar(&PeerListFilePath, "peer-list", "", "Peer list file path")
 	cmd.PersistentFlags().StringVar(&LogLevel, "log-level", "TRACE", "Logger level")
+	cmd.PersistentFlags().StringSliceVar(
+		&CorsAllowedOrigins,
+		"allow-origins",
+		[]string{},
+		"The CORS header determines if the specified origin is allowed to receive any JSON-RPC response.",
+	)
 	cmd.PersistentFlags().Int64Var(
 		&InboundConnLimit,
 		"inbound-limit",
