@@ -111,7 +111,7 @@ func (sm *StateManager) cleanupDirtyObject(addr types.Address) {
 	defer sm.dirtyObjectsLock.Unlock()
 
 	delete(sm.dirtyObjects, addr)
-	sm.metrics.captureActiveStateObjects(-1)
+	sm.metrics.captureActiveStateObjects(float64(len(sm.dirtyObjects)))
 }
 
 func (sm *StateManager) CreateDirtyObject(addr types.Address, accType types.AccountType) *StateObject {
@@ -121,7 +121,7 @@ func (sm *StateManager) CreateDirtyObject(addr types.Address, accType types.Acco
 	obj := sm.createStateObject(addr, accType)
 
 	sm.dirtyObjects[addr] = obj.Copy()
-	sm.metrics.captureActiveStateObjects(1)
+	sm.metrics.captureActiveStateObjects(float64(len(sm.dirtyObjects)))
 
 	return sm.dirtyObjects[addr]
 }
@@ -151,7 +151,7 @@ func (sm *StateManager) GetDirtyObject(addr types.Address) (*StateObject, error)
 
 	sm.dirtyObjects[addr] = dirtyObject.Copy()
 
-	sm.metrics.captureActiveStateObjects(1)
+	sm.metrics.captureActiveStateObjects(float64(len(sm.dirtyObjects)))
 
 	return sm.dirtyObjects[addr], nil
 }
@@ -305,7 +305,6 @@ func (sm *StateManager) Revert(snap *StateObject) error {
 		sm.logger.Info("Reverting back the state object", "addr", snap.address.Hex())
 		sm.dirtyObjects[snap.address] = snap
 		sm.metrics.captureNumOfReverts(1)
-		sm.metrics.captureActiveStateObjects(-1)
 	}
 
 	return nil

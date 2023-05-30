@@ -49,7 +49,7 @@ func (metrics *Metrics) initMetrics() {
 }
 
 func (metrics *Metrics) captureActiveStateObjects(delta float64) {
-	metrics.ActiveStateObjects.Add(delta)
+	metrics.ActiveStateObjects.Set(delta)
 }
 
 func (metrics *Metrics) captureNumOfReverts(delta float64) {
