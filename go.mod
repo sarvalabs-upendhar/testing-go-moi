@@ -29,6 +29,7 @@ require (
 	github.com/gorilla/websocket v1.5.0
 	github.com/hashicorp/go-hclog v1.3.1
 	github.com/holiman/uint256 v1.2.2
+	github.com/ipfs/go-ds-badger v0.3.0
 	github.com/libp2p/go-libp2p v0.24.0
 	github.com/libp2p/go-libp2p-kad-dht v0.20.0
 	github.com/libp2p/go-libp2p-pubsub v0.8.1
@@ -59,6 +60,7 @@ require (
 )
 
 require (
+	github.com/AndreasBriese/bbloom v0.0.0-20190825152654-46b345b51c96 // indirect
 	github.com/benbjohnson/clock v1.3.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.0.1 // indirect

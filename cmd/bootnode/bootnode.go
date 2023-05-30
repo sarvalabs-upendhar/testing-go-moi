@@ -8,21 +8,27 @@ import (
 	"log"
 	"os"
 
+	badger "github.com/ipfs/go-ds-badger"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/routing"
+	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/spf13/cobra"
+
 	cmdcommon "github.com/sarvalabs/moichain/cmd/common"
 	"github.com/sarvalabs/moichain/common"
-	"github.com/spf13/cobra"
 )
 
 var (
-	portNumber int
-	ipAddress  string
-	keyFile    string
+	portNumber    int
+	ipAddress     string
+	keyFile       string
+	minConnReq    int
+	maxConnReq    int
+	dataStorePath string
 )
 
 func GetCommand() *cobra.Command {
@@ -41,6 +47,9 @@ func parseFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&portNumber, "port", 4001, "Provide the port number")
 	cmd.PersistentFlags().StringVar(&ipAddress, "ip-addr", "0.0.0.0", "Provide the listener ip address")
 	cmd.PersistentFlags().StringVar(&keyFile, "key", "file.key", "Provide the key file path")
+	cmd.PersistentFlags().IntVar(&minConnReq, "min-conn-req", 200, "max number of connections allowed")
+	cmd.PersistentFlags().IntVar(&maxConnReq, "max-conn-req", 400, "max number of connections allowed")
+	cmd.PersistentFlags().StringVar(&dataStorePath, "data-store-path", "", "path to store bootnode data")
 }
 
 func getPrivateKey(keyfile string) (crypto.PrivKey, error) {
@@ -108,12 +117,24 @@ func startBootNode() {
 	}
 
 	// 0.0.0.0 will listen on any interface device.
-	sourceMultiAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", ipAddress, portNumber))
+	sourceMultiAddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", ipAddress, portNumber))
+	if err != nil {
+		panic(err)
+	}
+
+	var dataStore *badger.Datastore
+	if dataStorePath != "" {
+		dataStore, err = badger.NewDatastore(dataStorePath, nil)
+		if err != nil {
+			panic(err)
+		}
+	}
 
 	selfRouting := libp2p.Routing(func(h host.Host) (routing.PeerRouting, error) {
 		dhtOpts := []dht.Option{
 			dht.Mode(dht.ModeServer),
 			dht.ProtocolPrefix(common.MOIProtocolStream),
+			dht.Datastore(dataStore),
 		}
 		Dht, err := dht.New(context.Background(), h, dhtOpts...)
 		if err != nil {
@@ -124,6 +145,11 @@ func startBootNode() {
 		return Dht, nil
 	})
 
+	mgr, err := connmgr.NewConnManager(minConnReq, maxConnReq)
+	if err != nil {
+		panic(err)
+	}
+
 	// libp2p.New constructs a new libp2p Host.
 	// Other options can be added here.
 	host, err := libp2p.New(
@@ -132,6 +158,7 @@ func startBootNode() {
 		libp2p.ForceReachabilityPublic(),
 		libp2p.EnableNATService(),
 		libp2p.Identity(privateKey),
+		libp2p.ConnectionManager(mgr),
 		selfRouting,
 	)
 	if err != nil {
