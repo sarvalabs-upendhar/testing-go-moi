@@ -4,7 +4,6 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/holiman/uint256"
 	"github.com/manishmeganathan/symbolizer"
 	"github.com/pkg/errors"
 
@@ -439,12 +438,12 @@ func parseBigExpression(parser *symbolizer.Parser) (number *big.Int, err error) 
 	case symbolizer.TokenHexNumber:
 		hexnum := exprParser.Cursor().Literal
 
-		num256, err := uint256.FromHex(hexnum)
-		if err != nil {
-			return nil, errors.Wrap(err, "invalid 'big' expression")
+		num256, err := new(big.Int).SetString(hexnum, 0)
+		if !err {
+			return nil, errors.Errorf("invalid 'big' expression")
 		}
 
-		return num256.ToBig(), nil
+		return num256, nil
 
 	// Int Expression ([+/-]X)
 	case symbolizer.TokenNumber:
@@ -468,12 +467,12 @@ func parseBigExpression(parser *symbolizer.Parser) (number *big.Int, err error) 
 			fallthrough
 
 		default:
-			num256, err := uint256.FromDecimal(numeric)
-			if err != nil {
-				return nil, errors.Wrap(err, "invalid 'big' expression")
+			num256, err := new(big.Int).SetString(numeric, 0)
+			if !err {
+				return nil, errors.Errorf("invalid 'big' expression")
 			}
 
-			return num256.ToBig(), nil
+			return num256, nil
 		}
 
 	default:
@@ -550,6 +549,7 @@ func parseUnkeyedValues(input string, delim symbolizer.TokenKind) ([]any, error)
 	parser := symbolizer.NewParser(input,
 		symbolizer.IgnoreWhitespaces(),
 		symbolizer.Keywords(map[string]symbolizer.TokenKind{
+			"big":  TokenBig,
 			"true": symbolizer.TokenBoolean, "false": symbolizer.TokenBoolean,
 			"TRUE": symbolizer.TokenBoolean, "FALSE": symbolizer.TokenBoolean,
 			"True": symbolizer.TokenBoolean, "False": symbolizer.TokenBoolean,
@@ -583,6 +583,7 @@ func parseKeyedValues(input string, delim symbolizer.TokenKind) (map[any]any, sy
 	parser := symbolizer.NewParser(input,
 		symbolizer.IgnoreWhitespaces(),
 		symbolizer.Keywords(map[string]symbolizer.TokenKind{
+			"big":  TokenBig,
 			"true": symbolizer.TokenBoolean, "false": symbolizer.TokenBoolean,
 			"TRUE": symbolizer.TokenBoolean, "FALSE": symbolizer.TokenBoolean,
 			"True": symbolizer.TokenBoolean, "False": symbolizer.TokenBoolean,
@@ -637,6 +638,7 @@ func parseKeyedValues(input string, delim symbolizer.TokenKind) (map[any]any, sy
 
 func parseArguments(args string) (map[string]any, error) {
 	arguments := make(map[string]any)
+
 	if args == "" {
 		return arguments, nil
 	}

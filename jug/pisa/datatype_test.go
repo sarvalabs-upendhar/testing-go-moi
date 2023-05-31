@@ -323,6 +323,7 @@ func TestParseDatatype(t *testing.T) {
 		{"u64", "", PrimitiveU64},
 		{"address", "", PrimitiveAddress},
 		{"u256", "", PrimitiveU256},
+		{"i256", "", PrimitiveI256},
 
 		{"[32]string", "", ArrayDatatype{PrimitiveString, 32}},
 		{"[8]map[string]u256", "", ArrayDatatype{MapDatatype{PrimitiveString, PrimitiveU256}, 8}},

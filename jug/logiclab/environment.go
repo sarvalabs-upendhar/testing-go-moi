@@ -255,7 +255,17 @@ func (env *Environment) formatValue(value any) string {
 		if env.inventory.Config.HexBig {
 			return fmt.Sprintf("big(%#x)", data.Bytes())
 		} else {
-			return fmt.Sprintf("big(%v)", data.String())
+			// Obtain absolute value
+			abs := new(big.Int).Abs(data)
+
+			// Format into base10 string
+			result := abs.String()
+			// Prepend negative sign if negative
+			if data.Sign() == -1 {
+				result = string('-') + result
+			}
+
+			return fmt.Sprintf("big(%v)", result)
 		}
 
 	default:

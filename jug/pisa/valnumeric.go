@@ -836,7 +836,8 @@ func (x *I256Value) Copy() RegisterValue { return x }
 // Implements the RegisterValue interface for I256Value.
 func (x *I256Value) Norm() any {
 	// Convert to big
-	norm := x.value.ToBig()
+	absX := uint256.NewInt(0).Abs(x.value)
+	norm := absX.ToBig()
 	// Flip sign if negative
 	if x.value.Sign() == -1 {
 		norm = new(big.Int).Neg(norm)

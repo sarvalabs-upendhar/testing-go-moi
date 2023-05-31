@@ -583,7 +583,7 @@ func ParseDatatype(input string, provider ClassProvider) (Datatype, error) {
 		case "u256":
 			return PrimitiveU256, nil
 		case "i256":
-			return PrimitiveU256, nil
+			return PrimitiveI256, nil
 		default:
 			panic(fmt.Sprintf("unsupported primtive literal: %v", dt))
 		}
