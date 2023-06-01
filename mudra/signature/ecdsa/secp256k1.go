@@ -39,10 +39,12 @@ func (s256Sig *EcdsaSecp256k1Signature) Sign(rawMessage []byte, signingKey []byt
 		return err
 	}
 
+	pubBytes := publicKey.SerializeCompressed()
+
 	if ver == 1 {
-		s256Sig.Extra = nil // EcdsaSecp256k1Signature does not need any extra bytes if kramaid version is 1
+		s256Sig.Extra = pubBytes[:1] // Adding public key's parity prefix
 	} else {
-		s256Sig.Extra = publicKey.SerializeCompressed()
+		s256Sig.Extra = pubBytes
 	}
 
 	return nil
@@ -51,8 +53,9 @@ func (s256Sig *EcdsaSecp256k1Signature) Sign(rawMessage []byte, signingKey []byt
 // Verify used to verify ECDSA signature against the publicKey
 func (s256Sig *EcdsaSecp256k1Signature) Verify(rawMessage []byte, publicKeyBytes []byte) (bool, error) {
 	if len(publicKeyBytes) == 32 {
-		// Adding 0x03 to signify that publicKey is compressed
-		publicKeyBytes = append([]byte{0x03}, publicKeyBytes...)
+		yAxis := s256Sig.Extra
+		// Adding 0x03/0x02 and making pubkey length as 33 to signify that it is compressed
+		publicKeyBytes = append(yAxis, publicKeyBytes...)
 	}
 
 	pubKey, err := btcec.ParsePubKey(publicKeyBytes)

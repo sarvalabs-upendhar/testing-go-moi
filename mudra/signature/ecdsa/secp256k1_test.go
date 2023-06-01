@@ -16,7 +16,7 @@ var (
 	pubKeyInHex       = "5f2c7306be02b16d0f1ae75ae3fdbedf10b970d98c7646ec5e9beaf325a2e004"
 	message           = []byte("Hello MOI user, this is the message being signed")
 	expectedSignature = "0146304402201b2f03875387cb1964d70d414bae4fc15fc9b244967d973676a" +
-		"7087e628e15bc02207ee005106a92fa003e877ee5d773ded75ac6317672fc3b27def321be3b18d7ca"
+		"7087e628e15bc02207ee005106a92fa003e877ee5d773ded75ac6317672fc3b27def321be3b18d7ca03"
 )
 
 func TestECDSASignWithSecp256k1(t *testing.T) {
@@ -50,7 +50,7 @@ func TestECDSAVerifyWithSecp256k1(t *testing.T) {
 
 	s256 := EcdsaSecp256k1Signature(sig)
 
-	fmt.Println("Verification using 32 length public key without compressed byte")
+	fmt.Println("Verification using 32 length public key without parity byte")
 
 	verificationBool, err := s256.Verify(message, pubKeyBytes)
 	require.NoError(t, err)
