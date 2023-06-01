@@ -141,6 +141,36 @@ func (str StringValue) HasPrefix(prefix StringValue) BoolValue {
 	return BoolValue(strings.HasPrefix(string(str), string(prefix)))
 }
 
+func (str StringValue) Get(idx U64Value) (StringValue, *Exception) {
+	if idx >= U64Value(len(str)) {
+		return "", exceptionOutOfBounds()
+	}
+
+	char := str[idx : idx+1]
+
+	return char, nil
+}
+
+func (str StringValue) Set(idx U64Value, substr StringValue) (StringValue, *Exception) {
+	if idx >= U64Value(len(str)) {
+		return "", exceptionOutOfBounds()
+	}
+
+	res := str[:idx] + substr + str[idx+1:]
+
+	return res, nil
+}
+
+func (str StringValue) Slice(start U64Value, stop U64Value) (StringValue, *Exception) {
+	if stop > U64Value(len(str)) || start > stop {
+		return "", exceptionOutOfBounds()
+	}
+
+	res := str[start:stop]
+
+	return res, nil
+}
+
 //nolint:forcetypeassert
 func (str StringValue) methods() [256]*BuiltinMethod {
 	return [256]*BuiltinMethod{
@@ -231,7 +261,10 @@ func (str StringValue) methods() [256]*BuiltinMethod {
 			makefields([]*TypeField{{"result", PrimitiveString}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self, pos := inputs[0], inputs[1]
-				char := self.(StringValue)[pos.(U64Value) : pos.(U64Value)+1]
+				char, err := self.(StringValue).Get(pos.(U64Value))
+				if err != nil {
+					return nil, err
+				}
 
 				return RegisterSet{0: char}, nil
 			},
@@ -248,7 +281,10 @@ func (str StringValue) methods() [256]*BuiltinMethod {
 			makefields([]*TypeField{{"result", PrimitiveString}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self, pos, updateChar := inputs[0], inputs[1], inputs[2]
-				res := self.(StringValue)[:pos.(U64Value)] + updateChar.(StringValue) + self.(StringValue)[pos.(U64Value)+1:]
+				res, err := self.(StringValue).Set(pos.(U64Value), updateChar.(StringValue))
+				if err != nil {
+					return nil, err
+				}
 
 				return RegisterSet{0: res}, nil
 			},
@@ -416,7 +452,10 @@ func (str StringValue) methods() [256]*BuiltinMethod {
 			makefields([]*TypeField{{"ok", PrimitiveString}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self, idx1, idx2 := inputs[0], inputs[1], inputs[2]
-				res := self.(StringValue)[idx1.(U64Value):idx2.(U64Value)]
+				res, err := self.(StringValue).Slice(idx1.(U64Value), idx2.(U64Value))
+				if err != nil {
+					return nil, err
+				}
 
 				return RegisterSet{0: res}, nil
 			},
@@ -486,6 +525,36 @@ func (bytesval BytesValue) Data() []byte {
 
 func (bytesval BytesValue) Concat(other BytesValue) BytesValue {
 	return bytes.Join([][]byte{bytesval, other}, []byte{})
+}
+
+func (bytesval BytesValue) Get(idx U64Value) (BytesValue, *Exception) {
+	if idx >= U64Value(len(bytesval)) {
+		return []byte{}, exceptionOutOfBounds()
+	}
+
+	res := bytesval[idx : idx+1]
+
+	return res, nil
+}
+
+func (bytesval BytesValue) Set(idx U64Value, updatebyte BytesValue) (BytesValue, *Exception) {
+	if idx >= U64Value(len(bytesval)) {
+		return []byte{}, exceptionOutOfBounds()
+	}
+
+	bytesval[idx] = updatebyte[0]
+
+	return bytesval, nil
+}
+
+func (bytesval BytesValue) Slice(start U64Value, stop U64Value) (BytesValue, *Exception) {
+	if stop > U64Value(len(bytesval)) || start > stop {
+		return []byte{}, exceptionOutOfBounds()
+	}
+
+	res := bytesval[start:stop]
+
+	return res, nil
 }
 
 //nolint:forcetypeassert
@@ -567,7 +636,10 @@ func (bytesval BytesValue) methods() [256]*BuiltinMethod {
 			makefields([]*TypeField{{"result", PrimitiveBytes}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self, pos := inputs[0], inputs[1]
-				byteres := self.(BytesValue)[pos.(U64Value) : pos.(U64Value)+1]
+				byteres, err := self.(BytesValue).Get(pos.(U64Value))
+				if err != nil {
+					return nil, err
+				}
 
 				return RegisterSet{0: byteres}, nil
 			},
@@ -580,9 +652,12 @@ func (bytesval BytesValue) methods() [256]*BuiltinMethod {
 			makefields([]*TypeField{{"result", PrimitiveBytes}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self, pos, updateByte := inputs[0], inputs[1], inputs[2]
-				self.(BytesValue)[pos.(U64Value)] = updateByte.(BytesValue)[0]
+				res, err := self.(BytesValue).Set(pos.(U64Value), updateByte.(BytesValue))
+				if err != nil {
+					return nil, err
+				}
 
-				return RegisterSet{0: self}, nil
+				return RegisterSet{0: res}, nil
 			},
 		),
 
@@ -651,7 +726,10 @@ func (bytesval BytesValue) methods() [256]*BuiltinMethod {
 			makefields([]*TypeField{{"result", VarrayDatatype{PrimitiveBytes}}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self, idx1, idx2 := inputs[0], inputs[1], inputs[2]
-				res := self.(BytesValue)[idx1.(U64Value):idx2.(U64Value)]
+				res, err := self.(BytesValue).Slice(idx1.(U64Value), idx2.(U64Value))
+				if err != nil {
+					return nil, err
+				}
 
 				return RegisterSet{0: res}, nil
 			},

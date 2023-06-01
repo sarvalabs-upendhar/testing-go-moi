@@ -122,3 +122,7 @@ func exceptionInvalidDatatype[K string | DatatypeKind | PrimitiveDatatype](kind 
 func exceptionInvalidOperationForType(op string, datatype Datatype) *Exception {
 	return exceptionf(ValueError, "cannot %v with %v registers", op, datatype)
 }
+
+func exceptionOutOfBounds() *Exception {
+	return exception(AccessError, "index out of bounds")
+}

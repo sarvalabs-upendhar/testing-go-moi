@@ -113,7 +113,6 @@ func TestStringValue(t *testing.T) {
 	t.Run("Methods", func(t *testing.T) {
 		runtime := NewRuntime()
 
-		//nolint:dupl
 		t.Run("__join__ [0x3]", func(t *testing.T) {
 			method := runtime.primitiveMethods[PrimitiveString][0x3]
 
@@ -249,7 +248,6 @@ func TestStringValue(t *testing.T) {
 			}
 		})
 
-		//nolint:dupl
 		t.Run("Get [0x10]", func(t *testing.T) {
 			method := runtime.primitiveMethods[PrimitiveString][0x10]
 
@@ -264,6 +262,8 @@ func TestStringValue(t *testing.T) {
 				{"a", 0, "a", nil},
 				{"//", 1, "/", nil},
 				{" ", 0, " ", nil},
+				{" ", 3, " ", exception(AccessError, "index out of bounds")},
+				{" ", 1, " ", exception(AccessError, "index out of bounds")},
 			}
 
 			for _, test := range tests {
@@ -279,7 +279,6 @@ func TestStringValue(t *testing.T) {
 			}
 		})
 
-		//nolint:dupl
 		t.Run("Set [0x11]", func(t *testing.T) {
 			method := runtime.primitiveMethods[PrimitiveString][0x11]
 
@@ -295,6 +294,7 @@ func TestStringValue(t *testing.T) {
 				{"a", 0, "m", "m", nil},
 				{"//", 1, "r", "/r", nil},
 				{" ", 0, "1", "1", nil},
+				{" ", 3, "1", "", exception(AccessError, "index out of bounds")},
 			}
 
 			for _, test := range tests {
@@ -562,7 +562,6 @@ func TestStringValue(t *testing.T) {
 			}
 		})
 
-		//nolint:dupl
 		t.Run("Slice [0x1A]", func(t *testing.T) {
 			method := runtime.primitiveMethods[PrimitiveString][0x1A]
 
@@ -578,6 +577,8 @@ func TestStringValue(t *testing.T) {
 				{"abc", 1, 2, "b", nil},
 				{"a1b1c1d", 2, 5, "b1c", nil},
 				{"1.2.3", 3, 4, ".", nil},
+				{"1.2.3", 3, 9, "", exception(AccessError, "index out of bounds")},
+				{"1.2.3", 9, 4, "", exception(AccessError, "index out of bounds")},
 			}
 
 			for _, test := range tests {
@@ -711,6 +712,7 @@ func TestBytesValue(t *testing.T) {
 				{[]byte{10, 20, 30, 50, 70}, 1, []byte{20}, nil},
 				{[]byte{1}, 0, []byte{1}, nil},
 				{[]byte{0xb, 0x3, 0x5}, 2, []byte{0x5}, nil},
+				{[]byte{0xb, 0x3, 0x5}, 4, []byte{}, exception(AccessError, "index out of bounds")},
 			}
 
 			for _, test := range tests {
@@ -739,6 +741,7 @@ func TestBytesValue(t *testing.T) {
 				{[]byte{10, 20, 30, 70, 120, 255}, []byte{99}, 2, []byte{10, 20, 99, 70, 120, 255}, nil},
 				{[]byte{10}, []byte{100}, 0, []byte{100}, nil},
 				{[]byte{10, 20, 30, 70, 120, 255}, []byte{55}, 5, []byte{10, 20, 30, 70, 120, 55}, nil},
+				{[]byte{10, 20, 30, 70, 120, 255}, []byte{55}, 7, []byte{}, exception(AccessError, "index out of bounds")},
 			}
 
 			for _, test := range tests {
@@ -900,6 +903,7 @@ func TestBytesValue(t *testing.T) {
 				{[]byte{1, 2, 3, 4, 5}, 3, 4, []byte{4}, nil},
 				{[]byte{1}, 0, 1, []byte{1}, nil},
 				{[]byte{100, 20, 50}, 0, 2, []byte{100, 20}, nil},
+				{[]byte{100, 20, 50}, 0, 7, []byte{100, 20}, exception(AccessError, "index out of bounds")},
 			}
 
 			for _, test := range tests {
