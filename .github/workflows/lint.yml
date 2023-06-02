@@ -23,19 +23,18 @@ jobs:
         uses: actions/setup-go@4d34df0c2316fe8122ab82dc22947d607c0c91f9
         with:
           go-version: 1.18.x
-          
-      - name: Caching dependencies
-        uses: actions/cache@88522ab9f39a2ea568f7027eddc7d8d8bc9d59c8
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.mod') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
             
       - name: Configure git
         run: git config --global url.https://$ACCESS_TOKEN@github.com/.insteadOf https://github.com/
-
+    
+      # fixed issue https://github.com/golangci/golangci-lint/issues/3862
+      - name: Set GOROOT
+        run: echo "GOROOT=$(go env GOROOT)" > "$GITHUB_ENV"
+        
       - name: Install and run golangci-lint
-        uses: golangci/golangci-lint-action@08e2f20817b15149a52b5b3ebe7de50aff2ba8c5
+        uses: golangci/golangci-lint-action@08e2f20817b15149a52b5b3ebe7de50aff2ba8c5 # stable
+        with:
+          version: latest
+          skip-cache: true
+          skip-pkg-cache: true
+          skip-build-cache: true
