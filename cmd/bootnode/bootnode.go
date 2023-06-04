@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
+
 	badger "github.com/ipfs/go-ds-badger"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -105,6 +107,11 @@ func startBootNode() {
 		panic(err)
 	}
 
+	resourceManager, err := rcmgr.NewResourceManager(rcmgr.NewFixedLimiter(rcmgr.InfiniteLimits))
+	if err != nil {
+		panic(err)
+	}
+
 	// libp2p.New constructs a new libp2p Host.
 	// Other options can be added here.
 	p2pHost, err := libp2p.New(
@@ -115,6 +122,7 @@ func startBootNode() {
 		libp2p.Identity(privateKey),
 		libp2p.ConnectionManager(mgr),
 		selfRouting,
+		libp2p.ResourceManager(resourceManager),
 	)
 	if err != nil {
 		panic(err)
