@@ -286,26 +286,20 @@ func insertTestEntries(t *testing.T, pm *PersistenceManager) (map[string]string,
 	valueLength := 30
 
 	for i := 0; i < entryCount; i++ {
-		prefix, err := tests.GetRandomUpperCaseString(t, prefixLength)
-		require.NoError(t, err)
+		prefix := tests.GetRandomUpperCaseString(t, prefixLength)
 
 		prefixes = append(prefixes, prefix)
 		// no of entries for each prefix
 		for j := 0; j < 10; j++ {
-			key, err := tests.GetRandomUpperCaseString(t, keyLength)
-
-			require.NoError(t, err)
-
+			key := tests.GetRandomUpperCaseString(t, keyLength)
 			prefixedKey := prefix + key
 			prefixedKeyBytes := []byte(prefixedKey)
 
-			val, err := tests.GetRandomUpperCaseString(t, valueLength)
-
-			require.NoError(t, err)
+			val := tests.GetRandomUpperCaseString(t, valueLength)
 
 			valBytes := []byte(val)
 
-			err = pm.CreateEntry(prefixedKeyBytes, valBytes)
+			err := pm.CreateEntry(prefixedKeyBytes, valBytes)
 			require.NoError(t, err)
 
 			insertedEntries[prefixedKey] = val

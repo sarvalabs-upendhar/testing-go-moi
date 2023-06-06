@@ -10,9 +10,7 @@ import (
 	"github.com/sarvalabs/moichain/types"
 )
 
-const (
-	LatestTesseractHeight = -1
-)
+var LatestTesseractHeight int64 = -1
 
 // RPC args
 
@@ -48,13 +46,14 @@ type TesseractArgs struct {
 	Options          TesseractNumberOrHash `json:"options"`
 }
 
-type ContextInfoArgs struct {
+type QueryArgs struct {
 	Address types.Address         `json:"address"` // Address for which to retrieve the latest Tesseract
 	Options TesseractNumberOrHash `json:"options"`
 }
 
-type AssetDescriptorArgs struct {
-	AssetID string `json:"asset_id"`
+type ContextInfoArgs struct {
+	Address types.Address         `json:"address"` // Address for which to retrieve the latest Tesseract
+	Options TesseractNumberOrHash `json:"options"`
 }
 
 type InteractionCountArgs struct {
@@ -86,13 +85,18 @@ type GetStorageArgs struct {
 	Options    TesseractNumberOrHash `json:"options"`
 }
 
+type GetAssetInfoArgs struct {
+	AssetID types.AssetID         `json:"asset_id"`
+	Options TesseractNumberOrHash `json:"options"`
+}
+
 type GetAccountArgs struct {
 	Address types.Address         `json:"address"`
 	Options TesseractNumberOrHash `json:"options"`
 }
 
 type LogicManifestArgs struct {
-	LogicID  string                `json:"logic_id"`
+	LogicID  types.LogicID         `json:"logic_id"`
 	Encoding string                `json:"encoding"`
 	Options  TesseractNumberOrHash `json:"options"`
 }
@@ -100,26 +104,13 @@ type LogicManifestArgs struct {
 // BalArgs is an argument wrapper for retrieving balance of an asset
 type BalArgs struct {
 	Address types.Address         `json:"address"`  // Address for which to retrieve the balance
-	AssetID string                `json:"asset_id"` // Asset for which to retrieve balance
+	AssetID types.AssetID         `json:"asset_id"` // Asset for which to retrieve balance
 	Options TesseractNumberOrHash `json:"options"`
 }
 
-// SendIXArgs is an argument wrapper for sending Interactions to the pool
-type SendIXArgs struct {
-	Type  types.IxType    `json:"type"`
-	Nonce *hexutil.Uint64 `json:"nonce"`
-
-	Sender   types.Address `json:"sender"`
-	Receiver types.Address `json:"receiver"`
-	Payer    types.Address `json:"payer"`
-
-	TransferValues  map[types.AssetID]*hexutil.Big `json:"transfer_values"`
-	PerceivedValues map[types.AssetID]*hexutil.Big `json:"perceived_values"`
-
-	FuelPrice *hexutil.Big `json:"fuel_price"`
-	FuelLimit *hexutil.Big `json:"fuel_limit"`
-
-	Payload json.RawMessage `json:"payload"`
+type SendIX struct {
+	IXArgs    string `json:"ix_args"`
+	Signature string `json:"signature"`
 }
 
 type RPCAssetCreation struct {
@@ -128,15 +119,18 @@ type RPCAssetCreation struct {
 	Symbol string       `json:"symbol"`
 	Supply *hexutil.Big `json:"supply"`
 
-	Dimension *hexutil.Uint8 `json:"dimension"`
-	Decimals  *hexutil.Uint8 `json:"decimals"`
+	Dimension *hexutil.Uint8  `json:"dimension"`
+	Standard  *hexutil.Uint16 `json:"standard"`
 
-	IsFungible     bool `json:"is_fungible"`
-	IsMintable     bool `json:"is_mintable"`
-	IsTransferable bool `json:"is_transferable"`
+	IsLogical  bool `json:"is_logical"`
+	IsStateful bool `json:"is_stateful"`
 
-	LogicID string `json:"logic_id,omitempty"`
-	// LogicCode []byte `json:"logic_code,omitempty"`
+	Logic *RPCLogicPayload `json:"logic_code,omitempty"`
+}
+
+type RPCAssetMintOrBurn struct {
+	AssetID types.AssetID `json:"asset_id"`
+	Amount  *hexutil.Big  `json:"amount"`
 }
 
 type RPCLogicPayload struct {
@@ -144,6 +138,28 @@ type RPCLogicPayload struct {
 	LogicID  string        `json:"logic_id"`
 	Callsite string        `json:"callsite"`
 	Calldata hexutil.Bytes `json:"calldata"`
+}
+
+func (l *RPCLogicPayload) LogicPayload() *types.LogicPayload {
+	return &types.LogicPayload{
+		Manifest: l.Manifest.Bytes(),
+		Logic:    types.LogicID(l.LogicID),
+		Calldata: l.Calldata,
+		Callsite: l.Callsite,
+	}
+}
+
+func RPClogicPayloadFromLogicPayload(payload *types.LogicPayload) *RPCLogicPayload {
+	if payload == nil {
+		return nil
+	}
+
+	return &RPCLogicPayload{
+		Manifest: (hexutil.Bytes)(payload.Manifest),
+		LogicID:  payload.Logic.String(),
+		Callsite: payload.Callsite,
+		Calldata: (hexutil.Bytes)(payload.Calldata),
+	}
 }
 
 type InteractionByHashArgs struct {
@@ -177,20 +193,24 @@ type ReceiptArgs struct {
 
 // RPC Responses
 
+type RPCRegistry struct {
+	AssetID   string             `json:"asset_id"`
+	AssetInfo RPCAssetDescriptor `json:"asset_info"`
+}
+
 type RPCAssetDescriptor struct {
 	Type   types.AssetKind `json:"type"`
 	Symbol string          `json:"symbol"`
 	Owner  types.Address   `json:"owner"`
 	Supply hexutil.Big     `json:"supply"`
 
-	Dimension hexutil.Uint8 `json:"dimension"`
-	Decimals  hexutil.Uint8 `json:"decimals"`
+	Dimension hexutil.Uint8  `json:"dimension"`
+	Standard  hexutil.Uint16 `json:"standard"`
 
-	IsFungible     bool `json:"is_fungible"`
-	IsMintable     bool `json:"is_mintable"`
-	IsTransferable bool `json:"is_transferable"`
+	IsLogical  bool `json:"is_logical"`
+	IsStateFul bool `json:"is_stateful"`
 
-	LogicID types.LogicID `json:"logic_id"`
+	LogicID types.LogicID `json:"logic_id,omitempty"`
 }
 
 type RPCAccount struct {
@@ -409,5 +429,19 @@ func NewInteractionResponse(ix *types.Interaction) *InteractionResponse {
 		FuelLimit: (*hexutil.Big)(ix.FuelLimit()),
 		Input:     types.BytesToHex(ix.Payload()),
 		Hash:      ix.Hash(),
+	}
+}
+
+func GetRPCAssetDescriptor(ad *types.AssetDescriptor) RPCAssetDescriptor {
+	return RPCAssetDescriptor{
+		Type:       ad.Type,
+		Symbol:     ad.Symbol,
+		Owner:      ad.Owner,
+		Dimension:  hexutil.Uint8(ad.Dimension),
+		Standard:   hexutil.Uint16(ad.Standard),
+		Supply:     (hexutil.Big)(*ad.Supply),
+		IsLogical:  ad.IsLogical,
+		IsStateFul: ad.IsStateFul,
+		LogicID:    ad.LogicID,
 	}
 }

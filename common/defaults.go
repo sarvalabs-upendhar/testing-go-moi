@@ -3,6 +3,8 @@ package common
 import (
 	"math/big"
 
+	"github.com/sarvalabs/moichain/mudra"
+
 	"github.com/sarvalabs/moichain/types"
 )
 
@@ -42,5 +44,5 @@ const (
 )
 
 const (
-	DefaultMOIWalletPath = "m/44'/6174'/0'/0/1"
+	DefaultMoiWalletPath = mudra.DefaultMOIWalletPath
 )

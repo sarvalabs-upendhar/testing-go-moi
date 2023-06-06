@@ -3,6 +3,7 @@ package moiclient
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"math/big"
@@ -12,6 +13,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/moichain/mudra"
+
+	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/common/hexutil"
@@ -77,8 +81,23 @@ func makeHTTPRequest(t *testing.T, method string, args interface{}) *ptypes.Resp
 	return &resp
 }
 
+func createSendIXFromSendIXArgs(t *testing.T, sendIxArgs *types.SendIXArgs, mnemonic string) *ptypes.SendIX {
+	t.Helper()
+
+	bz, err := polo.Polorize(sendIxArgs)
+	require.NoError(t, err)
+
+	sign, err := mudra.GetSignature(bz, mnemonic)
+	require.NoError(t, err)
+
+	return &ptypes.SendIX{
+		IXArgs:    hex.EncodeToString(bz),
+		Signature: sign,
+	}
+}
+
 // getIXArgsForLogicDeployment returns interaction args for logic deployment
-func getIXArgsForLogicDeployment(t *testing.T, addr types.Address) *ptypes.SendIXArgs {
+func getIXArgsForLogicDeployment(t *testing.T, addr types.Address) *types.SendIXArgs {
 	t.Helper()
 
 	calldata := "0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd8ee6a29ec4" +
@@ -86,22 +105,22 @@ func getIXArgsForLogicDeployment(t *testing.T, addr types.Address) *ptypes.SendI
 
 	manifest := "0x" + types.BytesToHex(tests.ReadManifest(t, "./../jug/manifests/erc20.json"))
 
-	logicPayload := &ptypes.RPCLogicPayload{
+	logicPayload := &types.LogicPayload{
 		Manifest: hexutil.Bytes(types.Hex2Bytes(manifest)),
 		Callsite: "Seeder!",
 		Calldata: hexutil.Bytes(types.Hex2Bytes(calldata)),
 	}
 
-	payload, err := json.Marshal(logicPayload)
+	payload, err := polo.Polorize(logicPayload)
 	require.NoError(t, err)
 
 	fuelPrice, _ := new(big.Int).SetString("130D41", 16)
 	fuelLimit, _ := new(big.Int).SetString("130D41", 16)
 
-	ixArgs := &ptypes.SendIXArgs{
-		Type:      8,
-		FuelPrice: (*hexutil.Big)(fuelPrice),
-		FuelLimit: (*hexutil.Big)(fuelLimit),
+	ixArgs := &types.SendIXArgs{
+		Type:      types.IxLogicDeploy,
+		FuelPrice: fuelPrice,
+		FuelLimit: fuelLimit,
 		Sender:    addr,
 		Payload:   payload,
 	}
@@ -128,7 +147,7 @@ func getTesseract(t *testing.T, client *Client, addr types.Address, height *int6
 }
 
 // getAssetID returns assetID for the given senderAddr and height
-func getAssetID(t *testing.T, client *Client, addr types.Address, height *int64) string {
+func getAssetID(t *testing.T, client *Client, addr types.Address, height *int64) types.AssetID {
 	t.Helper()
 
 	ts := getTesseract(t, client, addr, height)
@@ -149,7 +168,7 @@ func getAssetID(t *testing.T, client *Client, addr types.Address, height *int64)
 }
 
 // getLogicID returns logicID for the given senderAddr and height
-func getLogicID(t *testing.T, client *Client, addr types.Address, height *int64) string {
+func getLogicID(t *testing.T, client *Client, addr types.Address, height *int64) types.LogicID {
 	t.Helper()
 
 	ts := getTesseract(t, client, addr, height)
@@ -166,7 +185,7 @@ func getLogicID(t *testing.T, client *Client, addr types.Address, height *int64)
 	err = json.Unmarshal(receipt.ExtraData, &logicReceipt)
 	require.NoError(t, err)
 
-	return logicReceipt.LogicID.String()
+	return logicReceipt.LogicID
 }
 
 // retryFetchReceipt keeps trying to fetch receipt for given ixHash until it is timed out
@@ -280,12 +299,8 @@ func httpTesseract(t *testing.T, args interface{}) *ptypes.RPCTesseract {
 }
 
 // httpGetAssetInfoByAssetID returns asset description for the given assetID
-func httpGetAssetInfoByAssetID(t *testing.T, assetID string) *ptypes.RPCAssetDescriptor {
+func httpGetAssetInfoByAssetID(t *testing.T, args *ptypes.GetAssetInfoArgs) *ptypes.RPCAssetDescriptor {
 	t.Helper()
-
-	args := &ptypes.AssetDescriptorArgs{
-		AssetID: assetID,
-	}
 
 	resp := makeHTTPRequest(t, "moi.AssetInfoByAssetID", args)
 
@@ -312,7 +327,7 @@ func httpGetBalance(t *testing.T, args *ptypes.BalArgs) *hexutil.Big {
 }
 
 // httpTDU retrieves the TDU of the queried address
-func httpTDU(t *testing.T, args *ptypes.TesseractArgs) map[types.AssetID]string {
+func httpTDU(t *testing.T, args *ptypes.QueryArgs) map[types.AssetID]string {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.TDU", args)
@@ -563,26 +578,6 @@ func httpDBGet(t *testing.T, args *ptypes.DebugArgs) string {
 	return response
 }
 
-func checkForRPCReceipt(
-	t *testing.T,
-	expectedRPCReceipt *ptypes.RPCReceipt,
-	actualRPCReceipt *ptypes.RPCReceipt,
-) {
-	t.Helper()
-
-	require.Equal(t, expectedRPCReceipt.IxType, actualRPCReceipt.IxType)
-	require.Equal(t, expectedRPCReceipt.IxHash, actualRPCReceipt.IxHash)
-	require.Equal(t, expectedRPCReceipt.FuelUsed, actualRPCReceipt.FuelUsed)
-	require.Equal(t, expectedRPCReceipt.ExtraData, actualRPCReceipt.ExtraData)
-	require.Equal(t, expectedRPCReceipt.From, actualRPCReceipt.From)
-	require.Equal(t, expectedRPCReceipt.To, actualRPCReceipt.To)
-	require.Equal(t, expectedRPCReceipt.IXIndex, actualRPCReceipt.IXIndex)
-	require.Equal(t, expectedRPCReceipt.Parts, actualRPCReceipt.Parts)
-
-	require.True(t, reflect.DeepEqual(expectedRPCReceipt.StateHashes, actualRPCReceipt.StateHashes))
-	require.True(t, reflect.DeepEqual(expectedRPCReceipt.ContextHashes, actualRPCReceipt.ContextHashes))
-}
-
 // httpAccounts returns the addresses of all the accounts
 func httpAccounts(t *testing.T, args *ptypes.AccountArgs) []types.Address {
 	t.Helper()
@@ -609,4 +604,34 @@ func httpAccountMetaInfo(t *testing.T, args *ptypes.GetAccountArgs) *ptypes.RPCA
 	require.NoError(t, err)
 
 	return &info
+}
+
+func GetMnemonicFromAccounts(addr types.Address, accs []tests.AccountWithMnemonic) (tests.AccountWithMnemonic, bool) {
+	for _, acc := range accs {
+		if acc.Addr == addr {
+			return acc, true
+		}
+	}
+
+	return tests.AccountWithMnemonic{}, false
+}
+
+func checkForRPCReceipt(
+	t *testing.T,
+	expectedRPCReceipt *ptypes.RPCReceipt,
+	actualRPCReceipt *ptypes.RPCReceipt,
+) {
+	t.Helper()
+
+	require.Equal(t, expectedRPCReceipt.IxType, actualRPCReceipt.IxType)
+	require.Equal(t, expectedRPCReceipt.IxHash, actualRPCReceipt.IxHash)
+	require.Equal(t, expectedRPCReceipt.FuelUsed, actualRPCReceipt.FuelUsed)
+	require.Equal(t, expectedRPCReceipt.ExtraData, actualRPCReceipt.ExtraData)
+	require.Equal(t, expectedRPCReceipt.From, actualRPCReceipt.From)
+	require.Equal(t, expectedRPCReceipt.To, actualRPCReceipt.To)
+	require.Equal(t, expectedRPCReceipt.IXIndex, actualRPCReceipt.IXIndex)
+	require.Equal(t, expectedRPCReceipt.Parts, actualRPCReceipt.Parts)
+
+	require.True(t, reflect.DeepEqual(expectedRPCReceipt.StateHashes, actualRPCReceipt.StateHashes))
+	require.True(t, reflect.DeepEqual(expectedRPCReceipt.ContextHashes, actualRPCReceipt.ContextHashes))
 }

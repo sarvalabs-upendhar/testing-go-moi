@@ -4,6 +4,8 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/sarvalabs/moichain/common/hexutil"
+
 	"github.com/pkg/errors"
 
 	"github.com/sarvalabs/moichain/guna"
@@ -49,7 +51,7 @@ func (executor IxExecutor) ValueTransfer(
 // The given asset creation spec is used to create the asset which is then
 // inserted into the state object of the creator (sender of interaction)
 func (executor IxExecutor) CreateAsset(
-	creator *guna.StateObject,
+	creator, assetAccount *guna.StateObject,
 	payload types.AssetCreatePayload,
 ) (
 	engineio.Fuel, *types.AssetCreationReceipt, error,
@@ -59,16 +61,100 @@ func (executor IxExecutor) CreateAsset(
 	// The given logic code must also compile to an asset logic.
 	// If the logicID is provided, we ignore any given code. We check if the logic id
 	// is for an asset logic and check if such a logic exists.
-	asset := types.NewAssetDescriptor(types.NilAddress, payload)
+	asset := types.NewAssetDescriptor(creator.Address(), payload)
 
 	// Create a new asset on the creator state object and get the asset ID
-	assetID, err := creator.CreateAsset(asset)
+	assetID, err := creator.CreateAsset(assetAccount.Address(), asset)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	creator.AddBalance(assetID, asset.Supply)
+
+	_, err = assetAccount.CreateAsset(assetAccount.Address(), asset)
 	if err != nil {
 		return 0, nil, err
 	}
 
 	// Return the string form of the asset ID
-	return FuelAssetCreation, &types.AssetCreationReceipt{AssetID: string(assetID)}, nil
+	return FuelAssetCreation, &types.AssetCreationReceipt{AssetID: assetID, AssetAccount: assetAccount.Address()}, nil
+}
+
+func (executor IxExecutor) MintAsset(
+	assetOwner, assetAccount *guna.StateObject,
+	payload types.AssetMintOrBurnPayload,
+) (
+	engineio.Fuel, *types.AssetMintOrBurnReceipt, error,
+) {
+	registry, err := assetAccount.GetRegistryEntry(payload.Asset.String())
+	if err != nil {
+		return 0, nil, err
+	}
+
+	ad := new(types.AssetDescriptor)
+	if err = ad.FromBytes(registry); err != nil {
+		return 0, nil, err
+	}
+
+	// update the supply and asset registry
+	ad.Supply.Add(ad.Supply, payload.Amount)
+
+	rawData, err := ad.Bytes()
+	if err != nil {
+		return 0, nil, err
+	}
+
+	if err = assetAccount.UpdateRegistryEntry(payload.Asset.String(), rawData); err != nil {
+		return 0, nil, err
+	}
+
+	// add minted tokens to assetOwner account
+	assetOwner.AddBalance(payload.Asset, payload.Amount)
+
+	return FuelAssetMint, &types.AssetMintOrBurnReceipt{TotalSupply: (hexutil.Big)(*ad.Supply)}, nil
+}
+
+func (executor IxExecutor) BurnAsset(
+	assetOwner, assetAccount *guna.StateObject,
+	payload types.AssetMintOrBurnPayload,
+) (
+	engineio.Fuel, *types.AssetMintOrBurnReceipt, error,
+) {
+	bal, err := assetOwner.BalanceOf(payload.Asset)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	if bal.Cmp(payload.Amount) < 0 {
+		return 0, nil, types.ErrInsufficientFunds
+	}
+
+	// burn tokens from assetOwner account
+	assetOwner.SubBalance(payload.Asset, payload.Amount)
+
+	registry, err := assetAccount.GetRegistryEntry(payload.Asset.String())
+	if err != nil {
+		return 0, nil, err
+	}
+
+	ad := new(types.AssetDescriptor)
+	if err = ad.FromBytes(registry); err != nil {
+		return 0, nil, err
+	}
+
+	// update the supply and asset registry
+	ad.Supply.Sub(ad.Supply, payload.Amount)
+
+	rawData, err := ad.Bytes()
+	if err != nil {
+		return 0, nil, err
+	}
+
+	if err = assetAccount.UpdateRegistryEntry(payload.Asset.String(), rawData); err != nil {
+		return 0, nil, err
+	}
+
+	return FuelAssetMint, &types.AssetMintOrBurnReceipt{TotalSupply: (hexutil.Big)(*ad.Supply)}, nil
 }
 
 // LogicDeploy performs the IxLogicDeploy interaction on the given logic state.

@@ -8,11 +8,12 @@ import (
 	"os"
 	"strings"
 
+	"github.com/sarvalabs/moichain/types"
+
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/moichain/cmd/common"
 	"github.com/sarvalabs/moichain/jug/engineio"
 	"github.com/sarvalabs/moichain/jug/pisa"
-	"github.com/sarvalabs/moichain/lattice"
 )
 
 func readInstancesFile(path string) ([]common.Instance, error) {
@@ -44,8 +45,8 @@ func ReadKramaIDsFromInstancesFile(path string) ([]string, error) {
 	return kramaIDs, nil
 }
 
-func readGenesisFile() (*lattice.GenesisV1, error) {
-	genesis := new(lattice.GenesisV1)
+func readGenesisFile() (*types.GenesisFile, error) {
+	genesis := new(types.GenesisFile)
 
 	file, err := os.ReadFile(genesisFilePath)
 	if err != nil {
@@ -60,7 +61,7 @@ func readGenesisFile() (*lattice.GenesisV1, error) {
 }
 
 // WriteToGenesisFile creates a new file if it doesn't exist, or replaces an existing one.
-func WriteToGenesisFile(path string, genesis *lattice.GenesisV1) error {
+func WriteToGenesisFile(path string, genesis *types.GenesisFile) error {
 	file, err := json.MarshalIndent(genesis, "", "\t")
 	if err != nil {
 		return err

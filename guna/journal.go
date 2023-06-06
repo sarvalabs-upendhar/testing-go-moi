@@ -38,27 +38,6 @@ func (j *journal) revert(sm *StateManager) {
 }
 */
 
-type AssetCreation struct {
-	addr *types.Address
-	id   types.Hash
-}
-
-func (a AssetCreation) modifiedAddress() *types.Address {
-	return a.addr
-}
-
-func (a AssetCreation) revert(sm *StateManager) {
-	// cid, err := a.id.getCID()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	sm.db.DeleteEntry(a.id.Bytes())
-}
-
-func (a AssetCreation) cID() types.Hash {
-	return a.id
-}
-
 type ContextUpdation struct {
 	addr *types.Address
 	id   types.Hash
@@ -74,6 +53,23 @@ func (c ContextUpdation) cID() types.Hash {
 
 func (c ContextUpdation) revert(sm *StateManager) {
 	sm.db.DeleteEntry(c.id.Bytes())
+}
+
+type RegistryUpdation struct {
+	addr *types.Address
+	id   types.Hash
+}
+
+func (r RegistryUpdation) modifiedAddress() *types.Address {
+	return r.addr
+}
+
+func (r RegistryUpdation) revert(sm *StateManager) {
+	sm.db.DeleteEntry(r.id.Bytes())
+}
+
+func (r RegistryUpdation) cID() types.Hash {
+	return r.id
 }
 
 type BalanceUpdation struct {

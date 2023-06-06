@@ -167,6 +167,29 @@ func (c *Client) nextID() json.RawMessage {
 	return strconv.AppendUint(nil, uint64(id), 10)
 }
 
+// Registry returns the asset registry info for the given address and tesseract options
+func (c *Client) Registry(args *ptypes.QueryArgs) ([]ptypes.RPCRegistry, error) {
+	var resp ptypes.Response
+
+	err := c.Call(&resp, "moi.Registry", args)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+
+	var entries []ptypes.RPCRegistry
+
+	err = json.Unmarshal(resp.Data, &entries)
+	if err != nil {
+		return nil, err
+	}
+
+	return entries, nil
+}
+
 // Tesseract returns RPCTesseract based on the given arguments
 func (c *Client) Tesseract(args *ptypes.TesseractArgs) (*ptypes.RPCTesseract, error) {
 	var resp ptypes.Response
@@ -191,11 +214,7 @@ func (c *Client) Tesseract(args *ptypes.TesseractArgs) (*ptypes.RPCTesseract, er
 }
 
 // AssetInfoByAssetID returns asset description for the given assetID
-func (c *Client) AssetInfoByAssetID(assetID string) (*ptypes.RPCAssetDescriptor, error) {
-	args := &ptypes.AssetDescriptorArgs{
-		AssetID: assetID,
-	}
-
+func (c *Client) AssetInfoByAssetID(args *ptypes.GetAssetInfoArgs) (*ptypes.RPCAssetDescriptor, error) {
 	var resp ptypes.Response
 
 	err := c.Call(&resp, "moi.AssetInfoByAssetID", args)
@@ -242,7 +261,7 @@ func (c *Client) Balance(args *ptypes.BalArgs) (*hexutil.Big, error) {
 }
 
 // TDU retrieves the TDU of the queried address
-func (c *Client) TDU(args *ptypes.TesseractArgs) (map[types.AssetID]string, error) {
+func (c *Client) TDU(args *ptypes.QueryArgs) (map[types.AssetID]string, error) {
 	var resp ptypes.Response
 
 	err := c.Call(&resp, "moi.TDU", args)
@@ -473,7 +492,7 @@ func (c *Client) LogicManifest(args *ptypes.LogicManifestArgs) (hexutil.Bytes, e
 }
 
 // SendInteractions sends given Interactions
-func (c *Client) SendInteractions(args *ptypes.SendIXArgs) (types.Hash, error) {
+func (c *Client) SendInteractions(args *ptypes.SendIX) (types.Hash, error) {
 	var resp ptypes.Response
 
 	err := c.Call(&resp, "moi.SendInteractions", args)

@@ -111,7 +111,12 @@ func (rs *Receipts) FromBytes(bytes []byte) error {
 }
 
 type AssetCreationReceipt struct {
-	AssetID string `json:"asset_id"`
+	AssetID      AssetID `json:"asset_id"`
+	AssetAccount Address `json:"address"`
+}
+
+type AssetMintOrBurnReceipt struct {
+	TotalSupply hexutil.Big `json:"total-supply"`
 }
 
 type LogicDeployReceipt struct {

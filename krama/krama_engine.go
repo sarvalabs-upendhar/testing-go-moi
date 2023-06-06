@@ -1194,7 +1194,7 @@ func (k *Engine) updateContextDelta(slot *ktypes.Slot) error {
 				genesisDeltaGroup.ReplacedNodes = append(genesisDeltaGroup.ReplacedNodes, replacedRandomDelta...)
 				seenAccounts[types.SargaAddress] = true
 				deltaMap[types.SargaAddress] = genesisDeltaGroup
-			} else if clusterState.AccountInfos[receiverAddr].AccType == 2 {
+			} else if clusterState.AccountInfos[receiverAddr].AccType == types.LogicAccount {
 				receiverBehaviourDelta, replacedNodes := clusterState.GetBehaviouralContextDelta(
 					types.ReceiverBehaviourSet,
 				)
@@ -1234,7 +1234,7 @@ func (k *Engine) GetNodes(
 
 	for index, kramaID := range set.Ids {
 		if set.Responses.GetIndex(index) {
-			if index < requiredBehaviouralNodes {
+			if len(behaviouralNodes) != requiredBehaviouralNodes {
 				behaviouralNodes = append(behaviouralNodes, kramaID)
 				count++
 			} else {
@@ -1528,7 +1528,7 @@ func (k *Engine) IsIxValid(ix *types.Interaction) error {
 		}
 
 	case types.IxAssetCreate:
-		assetPayload, err := ix.GetAssetPayload()
+		payload, err := ix.GetAssetPayload()
 		if err != nil {
 			k.logger.Error("error fetching asset payload")
 
@@ -1542,20 +1542,23 @@ func (k *Engine) IsIxValid(ix *types.Interaction) error {
 			return err
 		}
 
-		if assetPayload.Create == nil {
+		if payload.Create == nil {
 			return errors.New("asset create payload is empty")
 		}
 
-		assetID, _, _, err := types.GetAssetID(types.NewAssetDescriptor(ix.Sender(), *assetPayload.Create))
-		if err != nil {
-			return err
-		}
+		assetID := types.NewAssetIDv0(
+			payload.Create.IsLogical,
+			payload.Create.IsStateFul,
+			payload.Create.Dimension,
+			payload.Create.Standard,
+			ix.Receiver(),
+		)
 
-		if _, err = stateObject.BalanceOf(assetID); !errors.Is(err, types.ErrAssetNotFound) {
+		if _, err = stateObject.GetRegistryEntry(assetID.String()); err == nil {
 			return errors.New("asset already found")
 		}
 
-	case types.IxLogicDeploy, types.IxLogicInvoke:
+	case types.IxLogicDeploy, types.IxLogicInvoke, types.IxAssetMint, types.IxAssetBurn:
 		return nil
 	default:
 		return types.ErrInvalidInteractionType

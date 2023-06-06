@@ -1,6 +1,7 @@
 package tree
 
 import (
+	"encoding/hex"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -234,7 +235,7 @@ func TestKramaHashTree_Commit(t *testing.T) {
 	rootNode := fetchRootNodeAndDelta(t, hashTree)
 
 	// check for the inserted values in delta set
-	dbValue, ok := rootNode.HashTable[string(key)]
+	dbValue, ok := rootNode.HashTable[hex.EncodeToString(key)]
 	require.True(t, ok, "leaf not found in delta nodes")
 	require.Equal(t, value, dbValue, "value mismatch")
 }

@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/moichain/mudra"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/require"
 
@@ -17,8 +19,22 @@ import (
 )
 
 type MockStateManager struct {
-	nonce   map[types.Address]uint64
-	balance map[types.Address]map[types.AssetID]*big.Int
+	nonce     map[types.Address]uint64
+	balance   map[types.Address]map[types.AssetID]*big.Int
+	assetInfo map[types.AssetID]*types.AssetDescriptor
+}
+
+func (ms *MockStateManager) GetAssetInfo(assetID types.AssetID, stateHash types.Hash) (*types.AssetDescriptor, error) {
+	info, ok := ms.assetInfo[assetID]
+	if !ok {
+		return nil, types.ErrAssetNotFound
+	}
+
+	return info, nil
+}
+
+func (ms *MockStateManager) setAssetInfo(assetID types.AssetID, info *types.AssetDescriptor) {
+	ms.assetInfo[assetID] = info
 }
 
 func (ms *MockStateManager) GetBalance(
@@ -28,21 +44,26 @@ func (ms *MockStateManager) GetBalance(
 ) (*big.Int, error) {
 	assets, ok := ms.balance[addrs]
 	if !ok {
-		return nil, types.ErrAssetNotFound
+		return nil, types.ErrFetchingBalance
 	}
 
 	va, ok := assets[assetID]
 	if !ok {
-		return nil, types.ErrAssetNotFound
+		return nil, types.ErrFetchingBalance
 	}
 
 	return va, nil
 }
 
 // CreateTestIxpool returns a new instance of IxPool
-func CreateTestIxpool(t *testing.T, cfgCallback func(cfg *common.IxPoolConfig)) (*IxPool, *MockStateManager) {
+func CreateTestIxpool(
+	t *testing.T,
+	cfgCallback func(cfg *common.IxPoolConfig),
+	skipSignatureVerification bool,
+) (*IxPool, *MockStateManager) {
 	t.Helper()
 
+	verifier := mudra.Verify
 	cfg := new(common.IxPoolConfig)
 	sm := NewMockStateManager(t)
 
@@ -50,7 +71,14 @@ func CreateTestIxpool(t *testing.T, cfgCallback func(cfg *common.IxPoolConfig)) 
 		cfgCallback(cfg)
 	}
 
-	return NewIxPool(context.Background(), hclog.NewNullLogger(), new(utils.TypeMux), sm, cfg, NilMetrics()), sm
+	if skipSignatureVerification {
+		verifier = func(data, signature, pubBytes []byte) (bool, error) {
+			return true, nil
+		}
+	}
+
+	return NewIxPool(context.Background(), hclog.NewNullLogger(), new(utils.TypeMux), sm, cfg, NilMetrics(), verifier),
+		sm
 }
 
 // GetLatestNonce returns the latest nonce from the mock account
@@ -82,8 +110,27 @@ func NewMockStateManager(t *testing.T) *MockStateManager {
 	t.Helper()
 
 	return &MockStateManager{
-		nonce:   make(map[types.Address]uint64, 0),
-		balance: map[types.Address]map[types.AssetID]*big.Int{},
+		nonce:     make(map[types.Address]uint64, 0),
+		balance:   map[types.Address]map[types.AssetID]*big.Int{},
+		assetInfo: map[types.AssetID]*types.AssetDescriptor{},
+	}
+}
+
+func getIXParams(
+	address types.Address,
+	ixType types.IxType,
+	fuelPrice *big.Int,
+	transferValues map[types.AssetID]*big.Int,
+	sign []byte,
+) *tests.CreateIxParams {
+	return &tests.CreateIxParams{
+		IxDataCallback: func(ix *types.IxData) {
+			ix.Input.Type = ixType
+			ix.Input.Sender = address
+			ix.Input.FuelPrice = fuelPrice
+			ix.Input.TransferValues = transferValues
+		},
+		Sign: sign,
 	}
 }
 
@@ -93,6 +140,7 @@ func newTestInteraction(
 	ixType types.IxType,
 	nonce int,
 	address types.Address,
+
 	cb func(ixData *types.IxData),
 ) *types.Interaction {
 	t.Helper()
@@ -114,7 +162,10 @@ func newTestInteraction(
 		cb(ixData)
 	}
 
-	return types.NewInteraction(*ixData, nil)
+	ix, err := types.NewInteraction(*ixData, nil)
+	require.NoError(t, err)
+
+	return ix
 }
 
 // createTestIxs creates and returns multiple instances of types.Interactions based on the given range

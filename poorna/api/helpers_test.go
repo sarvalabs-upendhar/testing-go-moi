@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"math/big"
@@ -8,6 +9,8 @@ import (
 	"strconv"
 	"sync/atomic"
 	"testing"
+
+	"github.com/sarvalabs/moichain/mudra"
 
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/assert"
@@ -37,7 +40,6 @@ type ixData struct {
 
 type MockChainManager struct {
 	receipts                   map[types.Hash]*types.Receipt
-	assets                     map[types.Hash]*types.AssetObject
 	tesseractsByHash           map[types.Hash]*types.Tesseract
 	tesseractsByHeight         map[string]*types.Tesseract
 	latestTesseracts           map[types.Address]*types.Tesseract
@@ -53,7 +55,6 @@ func NewMockChainManager(t *testing.T) *MockChainManager {
 	mockChain := new(MockChainManager)
 
 	mockChain.receipts = make(map[types.Hash]*types.Receipt, 0)
-	mockChain.assets = make(map[types.Hash]*types.AssetObject, 0)
 	mockChain.tesseractsByHash = make(map[types.Hash]*types.Tesseract)
 	mockChain.tesseractsByHeight = make(map[string]*types.Tesseract)
 	mockChain.latestTesseracts = make(map[types.Address]*types.Tesseract)
@@ -173,14 +174,6 @@ func (c *MockChainManager) GetReceiptByIxHash(ixHash types.Hash) (*types.Receipt
 	return nil, types.ErrReceiptNotFound
 }
 
-func (c *MockChainManager) GetAssetDataByAssetHash(assetHash []byte) (*types.AssetObject, error) {
-	if result, ok := c.assets[types.BytesToHash(assetHash)]; ok {
-		return result, nil
-	}
-
-	return nil, types.ErrFetchingAssetDataInfo
-}
-
 func (c *MockChainManager) setTesseractByHash(
 	t *testing.T,
 	ts *types.Tesseract,
@@ -190,30 +183,40 @@ func (c *MockChainManager) setTesseractByHash(
 	c.tesseractsByHash[tests.GetTesseractHash(t, ts)] = ts
 }
 
-func (c *MockChainManager) setAssets(id types.AssetID, spec *types.AssetDescriptor) {
-	c.assets[types.BytesToHash(id.GetCID())] = &types.AssetObject{
-		LogicID: spec.LogicID,
-		Symbol:  spec.Symbol,
-		Owner:   spec.Owner,
-		Supply:  spec.Supply,
-	}
-}
-
 type MockStateManager struct {
 	storage        map[types.Hash][]byte
 	balances       map[types.Address]*gtypes.BalanceObject
 	accounts       map[types.Address]*types.Account
 	context        map[types.Address]*Context
+	assetRegistry  map[types.AssetID]*types.AssetDescriptor
 	logicManifests map[string][]byte
 	logicStorage   map[string]map[string]string // first key denotes logic id, second key denotes storage key
 	accMetaInfo    map[types.Address]*types.AccountMetaInfo
+}
+
+func (s *MockStateManager) GetRegistry(addr types.Address, stateHash types.Hash) (map[string][]byte, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (s *MockStateManager) GetAssetInfo(assetID types.AssetID, stateHash types.Hash) (*types.AssetDescriptor, error) {
+	v, ok := s.assetRegistry[assetID]
+	if !ok {
+		return nil, types.ErrAssetNotFound
+	}
+
+	return v, nil
+}
+
+func (s *MockStateManager) addAsset(assetID types.AssetID, descriptor *types.AssetDescriptor) {
+	s.assetRegistry[assetID] = descriptor
 }
 
 func NewMockStateManager(t *testing.T) *MockStateManager {
 	t.Helper()
 
 	mockState := new(MockStateManager)
-
+	mockState.assetRegistry = make(map[types.AssetID]*types.AssetDescriptor)
 	mockState.balances = make(map[types.Address]*gtypes.BalanceObject)
 	mockState.storage = make(map[types.Hash][]byte)
 	mockState.accounts = make(map[types.Address]*types.Account)
@@ -364,12 +367,13 @@ func (s *MockStateManager) setLogicManifest(logicID string, logicManifest []byte
 }
 
 type MockIxPool struct {
-	interactions map[types.Hash]*types.Interaction
-	nextNonce    map[types.Address]uint64
-	waitTime     map[types.Address]*big.Int
-	pending      map[types.Address][]*types.Interaction
-	queued       map[types.Address][]*types.Interaction
-	pendingIX    map[types.Hash]*types.Interaction
+	interactions       map[types.Hash]*types.Interaction
+	nextNonce          map[types.Address]uint64
+	waitTime           map[types.Address]*big.Int
+	pending            map[types.Address][]*types.Interaction
+	queued             map[types.Address][]*types.Interaction
+	pendingIX          map[types.Hash]*types.Interaction
+	addInteractionHook func() []error
 }
 
 func NewMockIxPool(t *testing.T) *MockIxPool {
@@ -400,12 +404,15 @@ func (mc *MockIxPool) GetPendingIx(ixHash types.Hash) (*types.Interaction, bool)
 }
 
 func (mc *MockIxPool) AddInteractions(ixs types.Interactions) []error {
-	errs := make([]error, len(ixs))
+	if mc.addInteractionHook != nil {
+		return mc.addInteractionHook()
+	}
 
-	mc.interactions[ixs[0].Hash()] = ixs[0]
-	mc.nextNonce[ixs[0].Sender()]++
+	for _, ix := range ixs {
+		mc.interactions[ix.Hash()] = ix
+	}
 
-	return errs
+	return nil
 }
 
 func (mc *MockIxPool) GetNonce(addr types.Address) (uint64, error) {
@@ -607,12 +614,16 @@ func GetTestIxCreationPayload(t *testing.T, callBack func(args *ptypes.RPCAssetC
 		Type:   payloadArgs.Type,
 		Symbol: payloadArgs.Symbol,
 
-		IsFungible:     payloadArgs.IsFungible,
-		IsMintable:     payloadArgs.IsMintable,
-		IsTransferable: payloadArgs.IsTransferable,
+		IsLogical:  payloadArgs.IsLogical,
+		IsStateFul: payloadArgs.IsStateful,
+	}
 
-		LogicID: types.LogicID(payloadArgs.LogicID),
-		// LogicCode: payloadArgs.LogicCode,
+	if payloadArgs.Logic != nil {
+		createPayload.LogicPayload = payloadArgs.Logic.LogicPayload()
+	}
+
+	if payloadArgs.Standard != nil {
+		createPayload.Standard = payloadArgs.Standard.ToInt()
 	}
 
 	if payloadArgs.Supply != nil {
@@ -621,10 +632,6 @@ func GetTestIxCreationPayload(t *testing.T, callBack func(args *ptypes.RPCAssetC
 
 	if payloadArgs.Dimension != nil {
 		createPayload.Dimension = payloadArgs.Dimension.ToInt()
-	}
-
-	if payloadArgs.Decimals != nil {
-		createPayload.Decimals = payloadArgs.Decimals.ToInt()
 	}
 
 	assetPayload := &types.AssetPayload{
@@ -711,6 +718,29 @@ func getContext(t *testing.T, count int) *Context {
 	}
 }
 
+func getSignatureString(t *testing.T, sendIXArgs *types.SendIXArgs, mnemonic string) string {
+	t.Helper()
+
+	bz, err := sendIXArgs.Bytes()
+	require.NoError(t, err)
+
+	sign, err := mudra.GetSignature(bz, mnemonic)
+	require.NoError(t, err)
+
+	return sign
+}
+
+func getSignatureBytes(t *testing.T, sendIXArgs *types.SendIXArgs, mnemonic string) []byte {
+	t.Helper()
+
+	sign := getSignatureString(t, sendIXArgs, mnemonic)
+
+	signBytes, err := hex.DecodeString(sign)
+	require.NoError(t, err)
+
+	return signBytes
+}
+
 func createInteractionWithTestData(t *testing.T, ixType types.IxType, payload []byte) *types.Interaction {
 	t.Helper()
 
@@ -720,7 +750,10 @@ func createInteractionWithTestData(t *testing.T, ixType types.IxType, payload []
 		Trust:   tests.CreateTrustWithTestData(t),
 	}
 
-	return types.NewInteraction(ixData, tests.RandomHash(t).Bytes())
+	ix, err := types.NewInteraction(ixData, tests.RandomHash(t).Bytes())
+	require.NoError(t, err)
+
+	return ix
 }
 
 func checkForContext(
@@ -753,7 +786,10 @@ func newTestInteraction(
 		callback(ixData)
 	}
 
-	return types.NewInteraction(*ixData, nil)
+	ix, err := types.NewInteraction(*ixData, nil)
+	require.NoError(t, err)
+
+	return ix
 }
 
 // checkForRPCIxn validates a field from input, compute, trust, and verifies payload.
@@ -831,23 +867,21 @@ func checkForRPCIxn(
 		require.Equal(t, json.RawMessage(nil), rpcIxn.Payload)
 
 	case types.IxAssetCreate:
-		assetCreationPayload := new(types.AssetPayload)
+		assetCreationPayload := new(types.AssetCreatePayload)
 		err := assetCreationPayload.FromBytes(ix.Payload())
 		require.NoError(t, err)
 
 		rpcAssetCreationPayload := ptypes.RPCAssetCreation{
-			Type:   assetCreationPayload.Create.Type,
-			Symbol: assetCreationPayload.Create.Symbol,
-			Supply: (*hexutil.Big)(assetCreationPayload.Create.Supply),
+			Type:   assetCreationPayload.Type,
+			Symbol: assetCreationPayload.Symbol,
+			Supply: (*hexutil.Big)(assetCreationPayload.Supply),
 
-			Dimension: (*hexutil.Uint8)(&assetCreationPayload.Create.Dimension),
-			Decimals:  (*hexutil.Uint8)(&assetCreationPayload.Create.Decimals),
+			Dimension:  (*hexutil.Uint8)(&assetCreationPayload.Dimension),
+			Standard:   (*hexutil.Uint16)(&assetCreationPayload.Standard),
+			IsLogical:  assetCreationPayload.IsLogical,
+			IsStateful: assetCreationPayload.IsStateFul,
 
-			IsFungible:     assetCreationPayload.Create.IsFungible,
-			IsMintable:     assetCreationPayload.Create.IsMintable,
-			IsTransferable: assetCreationPayload.Create.IsTransferable,
-
-			LogicID: assetCreationPayload.Create.LogicID.String(),
+			Logic: ptypes.RPClogicPayloadFromLogicPayload(assetCreationPayload.LogicPayload),
 		}
 
 		expectedPayload, err := json.Marshal(rpcAssetCreationPayload)

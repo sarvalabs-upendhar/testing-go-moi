@@ -142,13 +142,26 @@ func TestCopy(t *testing.T) {
 }
 
 func TestCommitBalanceObject(t *testing.T) {
-	balance, balanceHash := getTestBalance(t, getAssetMap(getAssetIDsAndBalances(t, 2)))
-	sObj := createTestStateObject(t, stateObjectParamsWithBalance(t, balanceHash, balance))
+	balance, _ := getTestBalance(t, getAssetMap(getAssetIDsAndBalances(t, 2)))
+	sObj := createTestStateObject(t, stateObjectParamsWithBalance(t, types.NilHash, balance))
 
 	actualBalanceHash, err := sObj.commitBalanceObject()
 	require.NoError(t, err)
 
 	checkForBalance(t, sObj, balance, actualBalanceHash, 0)
+}
+
+func TestCommitRegistryObject(t *testing.T) {
+	registry, _ := getTestRegistryObject(
+		t,
+		map[string][]byte{tests.RandomHash(t).String(): tests.RandomHash(t).Bytes()},
+	)
+	sObj := createTestStateObject(t, stateObjectParamsWithRegistry(t, types.NilHash, registry))
+
+	actualRegistryHash, err := sObj.commitRegistryObject()
+	require.NoError(t, err)
+
+	checkForRegistry(t, sObj, registry, actualRegistryHash)
 }
 
 func TestCommitAccount(t *testing.T) {
@@ -654,39 +667,48 @@ func TestFlushActiveStorageTrees(t *testing.T) {
 }
 
 func TestCreateAsset(t *testing.T) {
-	sObj := createTestStateObject(t, &createStateObjectParams{
-		soCallback: func(so *StateObject) {
-			so.balance = &gtypes.BalanceObject{}
-		},
-	})
+	assetAddress1 := tests.RandomAddress(t)
+	assetAddress2 := tests.RandomAddress(t)
 
-	assetDescriptor := getDefaultAssetDescriptor(t, "btc")
-	assetDescriptor.Owner = sObj.address
-	assetID, _, _, err := types.GetAssetID(assetDescriptor)
-	require.NoError(t, err)
+	sObj := createTestStateObject(t, nil)
 
-	require.NoError(t, sObj.loadBalanceObject())
-	sObj.setBalance(assetID, big.NewInt(2231))
+	assetDescriptor := getTestAssetDescriptor(t, sObj.address, "btc")
+	rawDescriptor, err := assetDescriptor.Bytes()
+	assert.NoError(t, err)
+
+	assetID := types.NewAssetIDv0(
+		assetDescriptor.IsLogical,
+		assetDescriptor.IsStateFul,
+		assetDescriptor.Dimension,
+		assetDescriptor.Standard,
+		assetAddress2,
+	)
+
+	err = sObj.CreateRegistryEntry(assetID.String(), rawDescriptor)
+	assert.NoError(t, err)
 
 	testcases := []struct {
 		name            string
+		assetAddress    types.Address
 		assetDescriptor *types.AssetDescriptor
 		expectedError   error
 	}{
 		{
 			name:            "asset created successfully",
-			assetDescriptor: getDefaultAssetDescriptor(t, "moi"),
+			assetAddress:    assetAddress1,
+			assetDescriptor: getTestAssetDescriptor(t, sObj.address, "moi"),
 		},
 		{
 			name:            "should return error if asset already exists",
+			assetAddress:    assetAddress2,
 			assetDescriptor: assetDescriptor,
-			expectedError:   errors.New("asset already exists"),
+			expectedError:   types.ErrAssetAlreadyRegistered,
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			actualAssetID, err := sObj.CreateAsset(test.assetDescriptor)
+			actualAssetID, err := sObj.CreateAsset(test.assetAddress, test.assetDescriptor)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -695,11 +717,11 @@ func TestCreateAsset(t *testing.T) {
 
 			require.NoError(t, err)
 
-			expectedAssetID, _, _, err := getTestAssetID(test.assetDescriptor)
+			expectedAssetID := getTestAssetID(test.assetAddress, test.assetDescriptor)
 			require.NoError(t, err)
 			require.Equal(t, expectedAssetID, actualAssetID)
 
-			CheckAssetCreation(t, sObj, test.assetDescriptor, 0)
+			CheckAssetCreation(t, sObj, test.assetDescriptor, expectedAssetID)
 		})
 	}
 }

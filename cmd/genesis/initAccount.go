@@ -2,8 +2,8 @@ package genesis
 
 import (
 	"github.com/sarvalabs/moichain/cmd/common"
-	"github.com/sarvalabs/moichain/lattice"
 	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -73,12 +73,12 @@ func initAccount() {
 		behaviourNodes, randomNodes = getContextNodes(instancesFilePath, DefaultBehaviouralCount, DefaultRandomCount)
 	}
 
-	genesis.AddAccount(lattice.AccountInfoV1{
-		Address:            address,
-		AccountType:        types.AccountType(accountType),
+	genesis.AddAccount(types.AccountSetupArgs{
+		Address:            types.HexToAddress(address),
+		AccType:            types.AccountType(accountType),
 		MoiID:              moiID,
-		BehaviouralContext: behaviourNodes,
-		RandomContext:      randomNodes,
+		BehaviouralContext: utils.KramaIDFromString(behaviourNodes),
+		RandomContext:      utils.KramaIDFromString(randomNodes),
 	})
 
 	if err = WriteToGenesisFile(genesisFilePath, genesis); err != nil {

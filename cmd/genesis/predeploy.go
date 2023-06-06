@@ -2,7 +2,7 @@ package genesis
 
 import (
 	"github.com/sarvalabs/moichain/cmd/common"
-	"github.com/sarvalabs/moichain/lattice"
+	"github.com/sarvalabs/moichain/types"
 	"github.com/spf13/cobra"
 )
 
@@ -70,7 +70,7 @@ func addGenesisLogic(artifact *Artifact) {
 		behaviourNodes, randomNodes = getContextNodes(instancesFilePath, DefaultBehaviouralCount, DefaultRandomCount)
 	}
 
-	genesis.AddLogic(lattice.GenesisLogic{
+	genesis.AddLogic(types.GenesisLogic{
 		Name:               artifact.Name,
 		Callsite:           artifact.Callsite,
 		Calldata:           artifact.Calldata,

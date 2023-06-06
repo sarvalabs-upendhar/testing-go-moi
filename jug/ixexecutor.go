@@ -82,7 +82,70 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 			// Perform asset creation and record fuel consumed
 			fuelConsumed, assetReceipt, err := executor.CreateAsset(
 				executor.getStateObject(ix.Sender()),
+				executor.getStateObject(ix.Receiver()),
 				*payload.Create,
+			)
+			if err != nil {
+				return errors.Wrapf(err, "execution failed (%v)", ixtype)
+			}
+
+			// Update fuel consumption
+			receipt.FuelUsed += uint64(fuelConsumed)
+			// Exhaust fuel from tank
+			if !executor.tank.Exhaust(fuelConsumed) {
+				return errors.Wrapf(types.ErrInsufficientFuel, "execution failed (%v)", ixtype)
+			}
+
+			if err = receipt.SetExtraData(assetReceipt); err != nil {
+				return errors.Wrapf(err, "execution failed (%v)", ixtype)
+			}
+
+		case types.IxAssetMint:
+			payload, err := ix.GetAssetPayload()
+			if err != nil {
+				return err
+			}
+
+			if payload.Mint == nil {
+				return errors.Errorf("execution failed (%v): asset mint payload is empty", ixtype)
+			}
+
+			// Update asset supply and record fuel consumed
+			fuelConsumed, assetReceipt, err := executor.MintAsset(
+				executor.getStateObject(ix.Sender()),
+				executor.getStateObject(ix.Receiver()),
+				*payload.Mint,
+			)
+			if err != nil {
+				return errors.Wrapf(err, "execution failed (%v)", ixtype)
+			}
+
+			// Update fuel consumption
+			receipt.FuelUsed += uint64(fuelConsumed)
+			// Exhaust fuel from tank
+			if !executor.tank.Exhaust(fuelConsumed) {
+				return errors.Wrapf(types.ErrInsufficientFuel, "execution failed (%v)", ixtype)
+			}
+
+			if err = receipt.SetExtraData(assetReceipt); err != nil {
+				return errors.Wrapf(err, "execution failed (%v)", ixtype)
+			}
+
+		case types.IxAssetBurn:
+			payload, err := ix.GetAssetPayload()
+			if err != nil {
+				return err
+			}
+
+			if payload.Mint == nil {
+				return errors.Errorf("execution failed (%v): asset burn payload is empty", ixtype)
+			}
+
+			// Update asset supply and record fuel consumed
+			fuelConsumed, assetReceipt, err := executor.BurnAsset(
+				executor.getStateObject(ix.Sender()),
+				executor.getStateObject(ix.Receiver()),
+				*payload.Mint,
 			)
 			if err != nil {
 				return errors.Wrapf(err, "execution failed (%v)", ixtype)

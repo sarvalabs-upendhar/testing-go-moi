@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math/big"
 	"os"
 	"time"
 
@@ -19,7 +18,6 @@ import (
 
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/guna"
-	gtypes "github.com/sarvalabs/moichain/guna/types"
 	ktypes "github.com/sarvalabs/moichain/krama/types"
 	"github.com/sarvalabs/moichain/mudra"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
@@ -314,21 +312,6 @@ func (c *ChainManager) GetTesseractHeightEntry(address types.Address, height uin
 	}
 
 	return types.BytesToHash(tesseractHash), nil
-}
-
-func (c *ChainManager) GetAssetDataByAssetHash(assetHash []byte) (*types.AssetObject, error) {
-	rawData, err := c.db.ReadEntry(assetHash)
-	if err != nil {
-		return nil, err
-	}
-
-	assetData := new(types.AssetObject)
-
-	if err = assetData.FromBytes(rawData); err != nil {
-		return nil, err
-	}
-
-	return assetData, nil
 }
 
 func (c *ChainManager) GetLatestTesseract(addr types.Address, withInteractions bool) (*types.Tesseract, error) {
@@ -753,82 +736,57 @@ func (c *ChainManager) AddTesseracts(dirtyStorage map[types.Hash][]byte, tessera
 	return c.addTesseractsWithState(dirtyStorage, tesseracts...)
 }
 
-func validateAssetDetails(info *AssetInfo) (*types.AssetDescriptor, error) {
-	var err error
-
-	assetDescriptor := new(types.AssetDescriptor)
-	assetType := types.AssetKind(info.Type)
-
-	switch assetType {
-	case types.AssetKindValue, types.AssetKindFile, types.AssetKindLogic, types.AssetKindContext:
-		assetDescriptor.Type = assetType
-	default:
-		return nil, types.ErrInvalidAssetKind
+func (c *ChainManager) validateAccountCreationInfo(accs ...types.AccountSetupArgs) error {
+	for _, acc := range accs {
+		if acc.Address == types.SargaAddress {
+			return types.ErrInvalidAddress
+		}
+		// check for address validity
+		err := utils.ValidateAccountType(acc.AccType)
+		if err != nil {
+			return errors.Wrap(err, fmt.Sprintf("invalid genesis account creation info %s", acc.Address))
+		}
 	}
 
-	assetDescriptor.Owner, err = utils.ValidateAddress(info.Owner)
-	if err != nil {
-		return nil, err
-	}
-
-	assetDescriptor.Symbol = info.Symbol
-	assetDescriptor.Supply = big.NewInt(int64(info.TotalSupply))
-	assetDescriptor.Dimension = info.Dimension
-	assetDescriptor.Decimals = info.Decimals
-	assetDescriptor.IsFungible = info.IsFungible
-	assetDescriptor.IsMintable = info.IsMintable
-	assetDescriptor.IsTransferable = info.IsTransferable
-	assetDescriptor.LogicID = types.LogicID(info.LogicID)
-
-	return assetDescriptor, nil
+	return nil
 }
 
-func (c *ChainManager) validateAccountCreationInfo(acc AccountInfo) (*gtypes.AccountSetupArgs, error) {
+func (c *ChainManager) validateSargaAccountCreationInfo(acc types.AccountSetupArgs) error {
+	if acc.Address != types.SargaAddress {
+		return types.ErrInvalidAddress
+	}
+
 	// check for address validity
-	var (
-		accArgs = new(gtypes.AccountSetupArgs)
-		err     error
-	)
-
-	accArgs.Balances = make(map[types.AssetID]*big.Int)
-	accArgs.Assets = make([]*types.AssetDescriptor, len(acc.AssetDetails))
-
-	accArgs.Address, err = utils.ValidateAddress(acc.Address)
+	err := utils.ValidateAccountType(acc.AccType)
 	if err != nil {
-		return nil, err
+		return errors.Wrap(err, fmt.Sprintf("invalid genesis account creation info %s", acc.Address))
 	}
 
-	accArgs.AccType, err = utils.ValidateAccountType(acc.AccountType)
-	if err != nil {
-		return nil, err
-	}
+	return nil
+}
 
-	// check for assetID validity
-	for _, v := range acc.Balances {
-		assetID, err := utils.ValidateAssetID(v.AssetID)
-		if err != nil {
-			return nil, err
+func (c *ChainManager) validateAssetAccountCreationArgs(assetAccounts ...types.AssetAccountSetupArgs) error {
+	for _, acc := range assetAccounts {
+		if acc.AssetInfo.Owner.IsNil() {
+			return errors.New(fmt.Sprintf("invalid owner %s", acc.AssetInfo.Owner))
 		}
 
-		if v.Amount < 0 {
-			return nil, errors.New("invalid balance")
-		}
-
-		accArgs.Balances[assetID] = big.NewInt(v.Amount)
-	}
-
-	for i, assetDetails := range acc.AssetDetails {
-		accArgs.Assets[i], err = validateAssetDetails(assetDetails)
-		if err != nil {
-			return nil, errors.Wrap(err, "invalid asset details")
+		if len(acc.AssetInfo.Allocations) == 0 {
+			return errors.New("empty allocations")
 		}
 	}
 
-	accArgs.BehaviouralContext = utils.KramaIDFromString(acc.BehaviourContext)
-	accArgs.RandomContext = utils.KramaIDFromString(acc.RandomContext)
-	accArgs.MoiID = acc.MOIId
+	return nil
+}
 
-	return accArgs, nil
+func (c *ChainManager) validateLogicCreationArgs(logicAccounts ...types.GenesisLogic) error {
+	for _, acc := range logicAccounts {
+		if len(acc.Manifest) == 0 {
+			return errors.New("invalid call data")
+		}
+	}
+
+	return nil
 }
 
 func (c *ChainManager) IsInitialTesseract(ts *types.Tesseract) (bool, error) {
@@ -841,7 +799,7 @@ func (c *ChainManager) IsInitialTesseract(ts *types.Tesseract) (bool, error) {
 		accountRegistered, err = c.sm.IsAccountRegistered(ts.Address())
 	} else {
 		c.logger.Debug(
-			"Checking for new account ",
+			"Checking for new account",
 			"addr", ts.Address(),
 			"at height", info.Height,
 			"hash", info.TesseractHash,
@@ -855,9 +813,8 @@ func (c *ChainManager) IsInitialTesseract(ts *types.Tesseract) (bool, error) {
 func (c *ChainManager) AddGenesisTesseract(
 	address types.Address,
 	stateHash, contextHash types.Hash,
-	contextDelta types.ContextDelta,
 ) error {
-	tesseract, err := createGenesisTesseract(address, stateHash, contextHash, contextDelta)
+	tesseract, err := createGenesisTesseract(address, stateHash, contextHash)
 	if err != nil {
 		return err
 	}
@@ -870,7 +827,9 @@ func (c *ChainManager) AddGenesisTesseract(
 }
 
 func (c *ChainManager) SetupGenesis(path string) error {
-	sargaAccount, genesisAccounts, logicPaths, err := c.ParseGenesisFile(path)
+	dirtyObjects := make(map[types.Address]*guna.StateObject)
+
+	sargaAccount, genesisAccounts, assetAccounts, logics, err := c.ParseGenesisFile(path)
 	if err != nil {
 		return err
 	}
@@ -881,75 +840,124 @@ func (c *ChainManager) SetupGenesis(path string) error {
 		return nil
 	}
 
-	stateHash, contextHash, err := c.SetupSargaAccount(sargaAccount, genesisAccounts, logicPaths)
+	sargaObject, err := c.SetupSargaAccount(sargaAccount, genesisAccounts, assetAccounts, logics)
 	if err != nil {
 		return errors.Wrap(err, "failed to setup sarga account")
 	}
 
-	if err = c.AddGenesisTesseract(
-		sargaAccount.Address,
-		stateHash,
-		contextHash,
-		sargaAccount.ContextDelta(),
-	); err != nil {
+	dirtyObjects[sargaObject.Address()] = sargaObject
+
+	for _, v := range genesisAccounts {
+		dirtyObjects[v.Address], err = c.SetupNewAccount(v)
+		if err != nil {
+			return err
+		}
+	}
+
+	if _, err = c.SetupGenesisLogics(dirtyObjects, logics); err != nil {
 		return err
 	}
 
-	for _, v := range genesisAccounts {
-		stateHash, contextHash, err = c.SetupNewAccount(v)
+	if err = c.SetupAssetAccounts(dirtyObjects, assetAccounts); err != nil {
+		return err
+	}
+
+	for _, stateObject := range dirtyObjects {
+		stateHash, err := stateObject.Commit()
 		if err != nil {
 			return err
 		}
 
-		if err = c.AddGenesisTesseract(
-			v.Address,
+		err = c.AddGenesisTesseract(
+			stateObject.Address(),
 			stateHash,
-			contextHash,
-			v.ContextDelta(),
-		); err != nil {
+			stateObject.ContextHash(),
+		)
+		if err != nil {
 			return err
 		}
 	}
 
-	if _, err = c.ExecuteGenesisLogics(logicPaths); err != nil {
-		return err
+	return nil
+}
+
+func (c *ChainManager) SetupAssetAccounts(
+	stateObjects map[types.Address]*guna.StateObject,
+	assetAccs []types.AssetAccountSetupArgs,
+) error {
+	for _, assetAccount := range assetAccs {
+		accAddress := types.CreateAddressFromString(assetAccount.AssetInfo.Symbol)
+
+		stateObjects[accAddress] = c.sm.CreateDirtyObject(accAddress, types.AssetAccount)
+
+		_, err := stateObjects[accAddress].CreateContext(assetAccount.BehaviouralContext, assetAccount.RandomContext)
+		if err != nil {
+			return err
+		}
+
+		assetID, err := stateObjects[accAddress].CreateAsset(accAddress, assetAccount.AssetInfo.AssetDescriptor())
+		if err != nil {
+			return err
+		}
+
+		if _, ok := stateObjects[assetAccount.AssetInfo.Owner]; !ok {
+			return errors.New("owner account not found")
+		}
+
+		_, err = stateObjects[assetAccount.AssetInfo.Owner].CreateAsset(accAddress, assetAccount.AssetInfo.AssetDescriptor())
+		if err != nil {
+			return err
+		}
+
+		for _, allocation := range assetAccount.AssetInfo.Allocations {
+			if _, ok := stateObjects[allocation.Address]; !ok {
+				return errors.New("invalid allocation address")
+			}
+
+			stateObjects[allocation.Address].AddBalance(assetID, allocation.Amount.ToInt())
+		}
 	}
 
 	return nil
 }
 
 func (c *ChainManager) ParseGenesisFile(path string) (
-	*gtypes.AccountSetupArgs,
-	[]*gtypes.AccountSetupArgs,
-	[]GenesisLogic,
+	*types.AccountSetupArgs,
+	[]types.AccountSetupArgs,
+	[]types.AssetAccountSetupArgs,
+	[]types.GenesisLogic,
 	error,
 ) {
-	genesisData := new(Genesis)
+	genesisData := new(types.GenesisFile)
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, nil, nil, errors.Wrap(err, "failed to open genesis file")
+		return nil, nil, nil, nil, errors.Wrap(err, "failed to open genesis file")
 	}
 
 	if err = json.Unmarshal(data, genesisData); err != nil {
-		return nil, nil, nil, errors.Wrap(err, "failed to parse genesis file")
+		return nil, nil, nil, nil, errors.Wrap(err, "failed to parse genesis file")
 	}
 
-	sargaAccount, err := c.validateAccountCreationInfo(genesisData.SargaAccount)
+	err = c.validateSargaAccountCreationInfo(genesisData.SargaAccount)
 	if err != nil {
-		return nil, nil, nil, errors.Wrap(err, "invalid sarga account info")
+		return nil, nil, nil, nil, errors.Wrap(err, "invalid sarga account info")
 	}
 
-	genesisAccounts := make([]*gtypes.AccountSetupArgs, len(genesisData.Accounts))
-
-	for index, accInfo := range genesisData.Accounts {
-		genesisAccounts[index], err = c.validateAccountCreationInfo(accInfo)
-		if err != nil {
-			return nil, nil, nil, errors.Wrap(err, fmt.Sprintf("invalid genesis account info %s", accInfo.Address))
-		}
+	err = c.validateAccountCreationInfo(genesisData.Accounts...)
+	if err != nil {
+		return nil, nil, nil, nil, err
 	}
 
-	return sargaAccount, genesisAccounts, genesisData.Logics, nil
+	if err = c.validateAssetAccountCreationArgs(genesisData.AssetAccounts...); err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	if err = c.validateLogicCreationArgs(genesisData.Logics...); err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	return &genesisData.SargaAccount, genesisData.Accounts, genesisData.AssetAccounts, genesisData.Logics, nil
 }
 
 func (c *ChainManager) Start() error {
@@ -1089,30 +1097,25 @@ func (c *ChainManager) GetInteractionAndPartsByIxHash(ixHash types.Hash) (
 }
 
 func (c *ChainManager) SetupSargaAccount(
-	sarga *gtypes.AccountSetupArgs,
-	accounts []*gtypes.AccountSetupArgs,
-	logics []GenesisLogic,
-) (types.Hash, types.Hash, error) {
-	if sarga.Address != types.SargaAddress {
-		return types.NilHash, types.NilHash, errors.New("invalid sarga account address")
-	}
-
+	sarga *types.AccountSetupArgs,
+	accounts []types.AccountSetupArgs,
+	assets []types.AssetAccountSetupArgs,
+	logics []types.GenesisLogic,
+) (*guna.StateObject, error) {
 	stateObject := c.sm.CreateDirtyObject(types.SargaAddress, types.SargaAccount)
 
 	if _, err := stateObject.CreateContext(sarga.BehaviouralContext, sarga.RandomContext); err != nil {
-		return types.NilHash, types.NilHash, errors.Wrap(err, "context initiation failed in genesis")
+		return nil, errors.Wrap(err, "context initiation failed in genesis")
 	}
 
 	if err := stateObject.CreateStorageTreeForLogic(types.SargaLogicID); err != nil {
-		return types.NilHash, types.NilHash, errors.Wrap(err, "failed to create storage tree")
+		return nil, errors.Wrap(err, "failed to create storage tree")
 	}
 
 	for _, account := range accounts {
-		if account.Address != types.SargaAddress {
-			// Add account to sarga storage tree
-			if err := stateObject.AddAccountGenesisInfo(account.Address, types.GenesisIxHash); err != nil {
-				return types.NilHash, types.NilHash, err
-			}
+		// Add account to sarga storage tree
+		if err := stateObject.AddAccountGenesisInfo(account.Address, types.GenesisIxHash); err != nil {
+			return nil, err
 		}
 	}
 
@@ -1122,52 +1125,39 @@ func (c *ChainManager) SetupSargaAccount(
 			types.CreateAddressFromString(logic.Name),
 			types.GenesisIxHash,
 		); err != nil {
-			return types.NilHash, types.NilHash, err
+			return nil, err
 		}
 	}
 
-	stateHash, err := stateObject.Commit()
-	if err != nil {
-		return types.NilHash, types.NilHash, err
+	for _, assetAcc := range assets {
+		if err := stateObject.AddAccountGenesisInfo(
+			types.CreateAddressFromString(assetAcc.AssetInfo.Symbol),
+			types.GenesisIxHash,
+		); err != nil {
+			return nil, err
+		}
 	}
 
-	return stateHash, stateObject.ContextHash(), nil
+	return stateObject, nil
 }
 
-func (c *ChainManager) SetupNewAccount(info *gtypes.AccountSetupArgs) (types.Hash, types.Hash, error) {
+func (c *ChainManager) SetupNewAccount(info types.AccountSetupArgs) (*guna.StateObject, error) {
 	stateObject := c.sm.CreateDirtyObject(info.Address, info.AccType)
 
 	if _, err := stateObject.CreateContext(info.BehaviouralContext, info.RandomContext); err != nil {
-		return types.NilHash, types.NilHash, errors.Wrap(err, "context initiation failed in genesis")
+		return nil, errors.Wrap(err, "context initiation failed in genesis")
 	}
 
-	if len(info.Assets) > 0 {
-		for _, asset := range info.Assets {
-			_, err := stateObject.CreateAsset(asset)
-			if err != nil {
-				return types.NilHash, types.NilHash, errors.Wrap(err, "failed to create an asset")
-			}
-		}
-	}
-
-	if len(info.Balances) > 0 {
-		for assetID, balance := range info.Balances {
-			stateObject.AddBalance(assetID, balance)
-		}
-	}
-
-	stateHash, err := stateObject.Commit()
-	if err != nil {
-		return types.NilHash, types.NilHash, err
-	}
-
-	return stateHash, stateObject.ContextHash(), nil
+	return stateObject, nil
 }
 
-func (c *ChainManager) ExecuteGenesisLogics(logics []GenesisLogic) ([]types.Hash, error) {
+func (c *ChainManager) SetupGenesisLogics(
+	dirtyObjects map[types.Address]*guna.StateObject,
+	logics []types.GenesisLogic,
+) ([]types.Hash, error) {
 	hashes := make([]types.Hash, len(logics))
 
-	for index, logic := range logics {
+	for _, logic := range logics {
 		logicAddr := types.CreateAddressFromString(logic.Name)
 
 		payload := &types.LogicPayload{
@@ -1188,7 +1178,7 @@ func (c *ChainManager) ExecuteGenesisLogics(logics []GenesisLogic) ([]types.Hash
 		behaviouralCtx := utils.KramaIDFromString(logic.BehaviouralContext)
 		randomCtx := utils.KramaIDFromString(logic.RandomContext)
 
-		contextHash, err := stateObj.CreateContext(behaviouralCtx, randomCtx)
+		_, err := stateObj.CreateContext(behaviouralCtx, randomCtx)
 		if err != nil {
 			return nil, errors.Wrap(err, "context initiation failed in genesis")
 		}
@@ -1201,32 +1191,9 @@ func (c *ChainManager) ExecuteGenesisLogics(logics []GenesisLogic) ([]types.Hash
 			return nil, errors.Wrap(err, "unable to deploy logic for contract")
 		}
 
-		stateHash, err := stateObj.Commit()
-		if err != nil {
-			return nil, err
-		}
-
-		err = c.AddGenesisTesseract(
-			logicID.Address(),
-			stateHash,
-			contextHash,
-			map[types.Address]*types.DeltaGroup{
-				logicID.Address(): {
-					BehaviouralNodes: behaviouralCtx,
-					RandomNodes:      randomCtx,
-				},
-			},
-		)
-
-		if err != nil {
-			c.logger.Error("unable to create genesis tesseract for cotract %d", logic.Name)
-
-			return nil, errors.Wrap(err, "unable to create genesis tesseract for contract")
-		}
+		dirtyObjects[stateObj.Address()] = stateObj
 
 		c.logger.Info("deployed genesis contract", "name", logic.Name, "logicID", logicID.String())
-
-		hashes[index] = stateHash
 	}
 
 	return hashes, nil

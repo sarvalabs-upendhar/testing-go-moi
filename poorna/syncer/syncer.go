@@ -379,6 +379,7 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 			if !s.db.HasTesseract(tsInfo.tesseract.Hash()) {
 				initial, err := s.lattice.IsInitialTesseract(tsInfo.tesseract)
 				if err != nil {
+					log.Println(err)
 					jobState = Sleep
 
 					return nil
@@ -1331,6 +1332,7 @@ func (s *Syncer) fetchTesseractState(tesseract *types.Tesseract, fetchContext []
 		newSession,
 		balanceCID(acc.Balance),
 		approvalsCID(acc.AssetApprovals),
+		registryCID(acc.AssetRegistry),
 		// receiptsCID(tesseract.GridHash()),
 	); err != nil {
 		s.logger.Error("Error fetching balance data", "error", err)
@@ -1608,7 +1610,7 @@ func (s *Syncer) tesseractHandler(msg *pubsub.Message) error {
 				shouldExecute: s.cfg.ShouldExecute,
 				delta:         tsMsg.Delta,
 			}); err != nil {
-			s.logger.Error("Error adding sync request")
+			s.logger.Error("Error adding sync request", "error", err)
 		}
 	}
 

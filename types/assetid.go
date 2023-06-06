@@ -87,6 +87,10 @@ func (asset *AssetID) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+func (asset AssetID) MarshalText() ([]byte, error) {
+	return []byte("0x" + string(asset)), nil
+}
+
 // Address returns the Asset Address of the AssetID.
 // Returns NilAddress if the AssetID is invalid.
 func (asset AssetID) Address() Address {
@@ -190,17 +194,4 @@ func (asset AssetIdentifierV0) Address() Address {
 	address := asset[4:]
 	// Convert address data into an Address and return
 	return BytesToAddress(address)
-}
-
-// GetCID returns ...
-// WARNING: THIS FUNCTION IS STAGED FOR DEPRECATION [LEGACY CODE]
-// This call will return malformed data if attempted on an AssetID that was generated with NewAssetIDv0.
-// For this function to work, the AssetID must be created with guna.GetAssetID (also staged for deprecation)
-func (asset AssetID) GetCID() []byte {
-	data, err := hex.DecodeString(string(asset))
-	if err != nil {
-		return nil
-	}
-
-	return data[2:]
 }

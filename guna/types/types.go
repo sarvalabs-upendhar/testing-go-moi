@@ -1,8 +1,6 @@
 package types
 
 import (
-	"math/big"
-
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
@@ -111,23 +109,4 @@ func (m *MetaContextObject) Hash() (types.Hash, error) {
 	}
 
 	return hash, nil
-}
-
-type AccountSetupArgs struct {
-	Address            types.Address
-	AccType            types.AccountType
-	MoiID              string
-	BehaviouralContext []id.KramaID
-	RandomContext      []id.KramaID
-	Assets             []*types.AssetDescriptor
-	Balances           map[types.AssetID]*big.Int
-}
-
-func (as *AccountSetupArgs) ContextDelta() types.ContextDelta {
-	return map[types.Address]*types.DeltaGroup{
-		as.Address: {
-			BehaviouralNodes: as.BehaviouralContext,
-			RandomNodes:      as.RandomContext,
-		},
-	}
 }

@@ -12,18 +12,19 @@ const (
 	SargaAccount AccountType = iota + 1
 	RegularAccount
 	LogicAccount
+	AssetAccount
 )
 
 type Account struct {
-	Nonce   uint64      `json:"nonce"`
-	AccType AccountType `json:"acc_type"`
-
-	Balance        Hash `json:"balance"`
-	AssetApprovals Hash `json:"asset_approvals"`
-	ContextHash    Hash `json:"context_hash"`
-	StorageRoot    Hash `json:"storage_root"`
-	LogicRoot      Hash `json:"logic_root"`
-	FileRoot       Hash `json:"file_root"`
+	Nonce          uint64      `json:"nonce"`
+	AccType        AccountType `json:"acc_type"`
+	Balance        Hash        `json:"balance"`
+	AssetApprovals Hash        `json:"asset_approvals"`
+	AssetRegistry  Hash        `json:"asset_registry"`
+	ContextHash    Hash        `json:"context_hash"`
+	StorageRoot    Hash        `json:"storage_root"`
+	LogicRoot      Hash        `json:"logic_root"`
+	FileRoot       Hash        `json:"file_root"`
 }
 
 func (a *Account) Bytes() ([]byte, error) {
@@ -106,6 +107,8 @@ func (agi *AccountGenesisInfo) FromBytes(bytes []byte) error {
 
 func AccTypeFromIxType(ixType IxType) AccountType {
 	switch ixType {
+	case IxAssetCreate:
+		return AssetAccount
 	case IxLogicDeploy:
 		return LogicAccount
 	default:

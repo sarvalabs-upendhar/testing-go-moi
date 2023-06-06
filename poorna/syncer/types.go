@@ -79,6 +79,10 @@ func balanceCID(hash types.Hash) atypes.CID {
 	return atypes.ContentID(dhruva.Balance.Byte(), hash)
 }
 
+func registryCID(hash types.Hash) atypes.CID {
+	return atypes.ContentID(dhruva.Registry.Byte(), hash)
+}
+
 func dbKeyFromCID(address types.Address, cid atypes.CID) []byte {
 	return dhruva.DBKey(address, dhruva.Prefix(cid.ContentType()), cid.Key())
 }

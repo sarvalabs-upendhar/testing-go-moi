@@ -170,7 +170,7 @@ func (i *ICSNodeSet) IsContextQuorum() bool {
 
 		if i.Nodes[j+1] != nil {
 			count += i.Nodes[j+1].RespCount
-			quorum += len(i.Nodes[j].Ids)
+			quorum += len(i.Nodes[j+1].Ids)
 		}
 
 		if quorum > 0 && count < quorum*2/3+1 {

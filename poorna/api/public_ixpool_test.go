@@ -488,6 +488,7 @@ func TestPublicIXPoolAPI_Inspect(t *testing.T) {
 							ixData.Input.Receiver = addressList[1]
 							ixData.Input.Nonce = 1
 							ixData.Input.FuelPrice = big.NewInt(100)
+							ixData.Input.Type = types.IxValueTransfer
 						}),
 					},
 					queued:   types.Interactions{},

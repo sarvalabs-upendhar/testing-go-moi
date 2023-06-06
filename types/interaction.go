@@ -2,9 +2,7 @@ package types
 
 import (
 	"crypto/rand"
-	"encoding/json"
 	"fmt"
-	"log"
 	"math/big"
 	"sync/atomic"
 
@@ -56,6 +54,42 @@ func (ixtype IxType) String() string {
 	return str
 }
 
+// SendIXArgs is an argument wrapper for sending Interactions to the pool
+type SendIXArgs struct {
+	Type  IxType `json:"type"`
+	Nonce uint64 `json:"nonce"`
+
+	Sender   Address `json:"sender"`
+	Receiver Address `json:"receiver"`
+	Payer    Address `json:"payer"`
+
+	TransferValues  map[AssetID]*big.Int `json:"transfer_values"`
+	PerceivedValues map[AssetID]*big.Int `json:"perceived_values"`
+
+	FuelPrice *big.Int `json:"fuel_price"`
+	FuelLimit *big.Int `json:"fuel_limit"`
+
+	Payload []byte `json:"payload"`
+}
+
+func (args *SendIXArgs) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(args)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize send ix args")
+	}
+
+	return rawData, nil
+}
+
+func (args *SendIXArgs) FromBytes(bytes []byte) error {
+	err := polo.Depolorize(args, bytes)
+	if err != nil {
+		return errors.Wrap(err, "failed to depolorize send ix args")
+	}
+
+	return nil
+}
+
 type IxData struct {
 	Input   IxInput
 	Compute IxCompute
@@ -85,7 +119,22 @@ type IxInput struct {
 	FuelLimit *big.Int `json:"fuel_limit"`
 	FuelPrice *big.Int `json:"fuel_price"`
 
-	Payload json.RawMessage `json:"payload"`
+	Payload []byte `json:"payload"`
+}
+
+func SendIxArgsFromIxData(ixData IxData) SendIXArgs {
+	return SendIXArgs{
+		Type:            ixData.Input.Type,
+		Nonce:           ixData.Input.Nonce,
+		Sender:          ixData.Input.Sender,
+		Receiver:        ixData.Input.Receiver,
+		Payer:           ixData.Input.Payer,
+		TransferValues:  ixData.Input.TransferValues,
+		PerceivedValues: ixData.Input.PerceivedValues,
+		FuelLimit:       ixData.Input.FuelLimit,
+		FuelPrice:       ixData.Input.FuelPrice,
+		Payload:         ixData.Input.Payload,
+	}
 }
 
 func (ixInput *IxInput) Copy() IxInput {
@@ -121,7 +170,7 @@ func (ixInput *IxInput) Copy() IxInput {
 	}
 
 	if len(ixInput.Payload) > 0 {
-		input.Payload = make(json.RawMessage, len(ixInput.Payload))
+		input.Payload = make([]byte, len(ixInput.Payload))
 		copy(input.Payload, ixInput.Payload)
 	}
 
@@ -172,22 +221,63 @@ type Interaction struct {
 	signature atomic.Value
 }
 
-func NewInteraction(ixData IxData, signature []byte) *Interaction {
+// TODO: We need to generalise the ixHash logic
+
+func NewInteraction(ixData IxData, signature []byte) (*Interaction, error) {
 	cpyIxData := ixData.Copy()
 	ix := &Interaction{inner: cpyIxData}
 	ix.signature.Store(signature)
 
 	data, err := polo.Polorize(cpyIxData)
 	if err != nil {
-		log.Fatalln(err, "failed to generate bytes of interaction message")
+		return nil, err
+	}
 
-		return nil
+	switch ixData.Input.Type {
+	case IxValueTransfer:
+		break
+	case IxAssetCreate:
+		assetCreatePayload := new(AssetCreatePayload)
+		if err = assetCreatePayload.FromBytes(ixData.Input.Payload); err != nil {
+			return nil, err
+		}
+
+		ix.payload = &IxPayload{
+			asset: &AssetPayload{
+				Create: assetCreatePayload,
+			},
+		}
+
+	case IxAssetMint, IxAssetBurn:
+		assetMintOrBurnPayload := new(AssetMintOrBurnPayload)
+		if err = assetMintOrBurnPayload.FromBytes(ixData.Input.Payload); err != nil {
+			return nil, err
+		}
+
+		ix.payload = &IxPayload{
+			asset: &AssetPayload{
+				Mint: assetMintOrBurnPayload,
+			},
+		}
+
+	case IxLogicDeploy, IxLogicInvoke:
+		logicPayload := new(LogicPayload)
+		if err = logicPayload.FromBytes(ixData.Input.Payload); err != nil {
+			return nil, err
+		}
+
+		ix.payload = &IxPayload{
+			logic: logicPayload,
+		}
+
+	default:
+		return nil, errors.New("invalid interaction type")
 	}
 
 	ix.hash.Store(GetHash(data))
 	ix.size.Store(uint64(len(data) + len(signature)))
 
-	return ix
+	return ix, nil
 }
 
 func NewRandomHashInteraction() *Interaction {
@@ -200,6 +290,10 @@ func NewRandomHashInteraction() *Interaction {
 	v.Store(BytesToHash(hash))
 
 	return &Interaction{hash: v}
+}
+
+func (ix Interaction) IXData() IxData {
+	return ix.inner.Copy()
 }
 
 func (ix Interaction) Input() IxInput {
@@ -233,13 +327,26 @@ func (ix Interaction) Sender() Address {
 	return ix.inner.Input.Sender
 }
 
+// Payer returns the Address of the Interaction sender
+func (ix Interaction) Payer() Address {
+	return ix.inner.Input.Payer
+}
+
 // Receiver returns the Address of the Interaction receiver.
 func (ix Interaction) Receiver() Address {
 	// Based on the interaction type return the address
 	switch ix.Type() {
+	case IxAssetCreate:
+		return NewAccountAddress(ix.Nonce(), ix.Sender())
+	case IxAssetMint, IxAssetBurn:
+		payload, err := ix.GetAssetPayload()
+		if err != nil {
+			panic(err)
+		}
+
+		return payload.Mint.Asset.Address()
 	case IxLogicDeploy:
 		return NewAccountAddress(ix.Nonce(), ix.Sender())
-
 	case IxLogicInvoke:
 		payload, err := ix.GetLogicPayload()
 		if err != nil {
@@ -258,6 +365,11 @@ func (ix Interaction) Nonce() uint64 {
 	return ix.inner.Input.Nonce
 }
 
+// PerceivedValues returns the map of AssetID to transfer values
+func (ix Interaction) PerceivedValues() map[AssetID]*big.Int {
+	return ix.inner.Input.PerceivedValues
+}
+
 // TransferValues returns the map of AssetID to transfer values
 func (ix Interaction) TransferValues() map[AssetID]*big.Int {
 	return ix.inner.Input.TransferValues
@@ -270,38 +382,20 @@ func (ix Interaction) Payload() []byte {
 
 func (ix *Interaction) GetAssetPayload() (*AssetPayload, error) {
 	// If payload has been decoded, return the asset form
-	if ix.payload != nil {
+	if ix.payload != nil && ix.payload.asset != nil {
 		return ix.payload.asset, nil
 	}
 
-	// Decode the payload bytes from IxInput into an AssetPayload
-	assetPayload := new(AssetPayload)
-	if err := assetPayload.FromBytes(ix.inner.Input.Payload); err != nil {
-		return nil, errors.Wrap(err, "invalid payload")
-	}
-
-	// Create a new IxPayload with an asset form
-	ix.payload = &IxPayload{asset: assetPayload}
-	// Return the AssetPayload
-	return assetPayload, nil
+	return nil, errors.New("payload not found")
 }
 
 func (ix *Interaction) GetLogicPayload() (*LogicPayload, error) {
 	// If payload has been decoded, return the logic form
-	if ix.payload != nil {
+	if ix.payload != nil && ix.payload.logic != nil {
 		return ix.payload.logic, nil
 	}
 
-	// Decode the payload bytes from IxInput into an LogicPayload
-	logicPayload := new(LogicPayload)
-	if err := logicPayload.FromBytes(ix.inner.Input.Payload); err != nil {
-		return nil, errors.Wrap(err, "invalid payload")
-	}
-
-	// Create a new IxPayload with an asset form
-	ix.payload = &IxPayload{logic: logicPayload}
-	// Return the AssetPayload
-	return logicPayload, nil
+	return nil, errors.New("payload not found")
 }
 
 func (ix Interaction) FuelPrice() *big.Int {
@@ -333,7 +427,7 @@ func (ix *Interaction) Hash() Hash {
 		return hash.(Hash) //nolint:forcetypeassert
 	}
 
-	hash, err := PoloHash(ix)
+	hash, err := PoloHash(ix.inner)
 	if err != nil {
 		return NilHash
 	}
@@ -391,7 +485,12 @@ func (ix *Interaction) Depolorize(depolorizer *polo.Depolorizer) (err error) {
 		return errors.Wrap(err, "failed to depolorize interaction signature")
 	}
 
-	*ix = *NewInteraction(*data, sig)
+	ixn, err := NewInteraction(*data, sig)
+	if err != nil {
+		return err
+	}
+
+	*ix = *ixn
 
 	return nil
 }
@@ -416,6 +515,10 @@ func (ix *Interaction) FromBytes(data []byte) error {
 	}
 
 	return nil
+}
+
+func (ix *Interaction) PayloadForSignature() ([]byte, error) {
+	return polo.Polorize(SendIxArgsFromIxData(ix.inner))
 }
 
 // Interactions are array of Transactions

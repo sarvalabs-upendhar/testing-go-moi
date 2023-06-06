@@ -2,7 +2,6 @@ package ecdsa
 
 import (
 	"encoding/hex"
-	"fmt"
 	"testing"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -50,13 +49,9 @@ func TestECDSAVerifyWithSecp256k1(t *testing.T) {
 
 	s256 := EcdsaSecp256k1Signature(sig)
 
-	fmt.Println("Verification using 32 length public key without parity byte")
-
 	verificationBool, err := s256.Verify(message, pubKeyBytes)
 	require.NoError(t, err)
 	require.Equal(t, true, verificationBool)
-
-	fmt.Println("Verification using 33 length compressed public key derived from private key")
 
 	privateKeyBytes, _ := hex.DecodeString(privateKeyInHex)
 	_, publicKey := btcec.PrivKeyFromBytes(privateKeyBytes)

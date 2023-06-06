@@ -1,11 +1,13 @@
 package test
 
 import (
+	"github.com/spf13/cobra"
+
 	cmdCommon "github.com/sarvalabs/moichain/cmd/common"
 	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/mudra/poi"
 	"github.com/sarvalabs/moichain/types"
-	"github.com/spf13/cobra"
 )
 
 func GetAccountCommand() *cobra.Command {
@@ -38,24 +40,24 @@ func parseAccountFlags(cmd *cobra.Command) {
 }
 
 func runAccountCommand(cmd *cobra.Command, args []string) {
-	accounts := make([]AccountWithMnemonic, 0, count)
+	accounts := make([]tests.AccountWithMnemonic, 0, count)
 
 	for i := 0; i < count; i++ {
 		mnemonic := poi.GenerateRandMnemonic().String()
 
-		_, publicKey, err := poi.GetPrivateKeyAtPath(mnemonic, common.DefaultMOIWalletPath)
+		_, publicKey, err := poi.GetPrivateKeyAtPath(mnemonic, common.DefaultMoiWalletPath)
 		if err != nil {
 			cmdCommon.Err(err)
 		}
 
 		accounts = append(accounts,
-			AccountWithMnemonic{
+			tests.AccountWithMnemonic{
 				Addr:     types.BytesToAddress(publicKey),
 				Mnemonic: mnemonic,
 			})
 	}
 
-	err := WriteToAccountsFile(accountsFilePath, accounts)
+	err := tests.WriteToAccountsFile(accountsFilePath, accounts)
 	if err != nil {
 		cmdCommon.Err(err)
 	}

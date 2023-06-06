@@ -635,6 +635,8 @@ func (kbft *KBFT) enterPropose(heights map[types.Address]uint64, round int32) {
 	}
 
 	if _, exists := kbft.ics.HasKramaID(kbft.vault.KramaID()); !exists {
+		kbft.logger.Error("Validator not found in ICSSet")
+
 		return
 	}
 

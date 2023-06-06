@@ -4,9 +4,10 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"io/ioutil"
 	"math/big"
 	"net"
 	"os"
@@ -20,6 +21,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	cmdCommon "github.com/sarvalabs/moichain/cmd/common"
+	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/jug/engineio"
 	"github.com/sarvalabs/moichain/jug/pisa"
 	"github.com/sarvalabs/moichain/mudra"
@@ -43,6 +46,19 @@ func RandomAddress(t *testing.T) types.Address {
 	}
 
 	return types.BytesToAddress(address)
+}
+
+func RandomAddressWithMnemonic(t *testing.T) (types.Address, string) {
+	t.Helper()
+
+	mnemonic := poi.GenerateRandMnemonic().String()
+
+	_, publicKey, err := poi.GetPrivateKeyAtPath(mnemonic, common.DefaultMoiWalletPath)
+	if err != nil {
+		cmdCommon.Err(err)
+	}
+
+	return types.BytesToAddress(publicKey), mnemonic
 }
 
 func RandomHash(t *testing.T) types.Hash {
@@ -244,7 +260,7 @@ func GetPrivKeysForTest(seed []byte) ([]byte, []byte, error) {
 	return aggPrivKey, moiIDPubBytes, nil
 }
 
-func GetRandomUpperCaseString(t *testing.T, length int) (string, error) {
+func GetRandomUpperCaseString(t *testing.T, length int) string {
 	t.Helper()
 
 	const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -253,48 +269,42 @@ func GetRandomUpperCaseString(t *testing.T, length int) (string, error) {
 
 	for i := 0; i < length; i++ {
 		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(characters))))
-		if err != nil {
-			return "", err
-		}
+		require.NoError(t, err)
 
 		randomString[i] = characters[num.Int64()]
 	}
 
-	return string(randomString), nil
+	return string(randomString)
 }
 
-func GetRandomAssetInfo(t *testing.T) (*types.AssetDescriptor, error) {
+func GetRandomAssetInfo(t *testing.T, addr types.Address) *types.AssetDescriptor {
 	t.Helper()
 
-	symbol, err := GetRandomUpperCaseString(t, 5)
-	if err != nil {
-		return nil, err
+	symbol := GetRandomUpperCaseString(t, 5)
+
+	if addr.IsNil() {
+		addr = RandomAddress(t)
 	}
 
 	asset := &types.AssetDescriptor{
-		Owner:      RandomAddress(t),
+		Owner:      addr,
 		Dimension:  1,
 		Supply:     big.NewInt(1000),
 		Symbol:     symbol,
-		IsFungible: true,
-		IsMintable: false,
+		IsStateFul: true,
+		IsLogical:  false,
 		LogicID:    types.LogicID(RandomHash(t).String()),
 	}
 
-	return asset, nil
+	return asset
 }
 
 func CreateTestAsset(t *testing.T, address types.Address) (types.AssetID, *types.AssetDescriptor) {
 	t.Helper()
 
-	asset, err := GetRandomAssetInfo(t)
-	if err != nil {
-		log.Panic("Failed to create asset")
-	}
+	asset := GetRandomAssetInfo(t, RandomAddress(t))
 
-	asset.Owner = address
-	assetID, _, _, err := types.GetAssetID(asset)
-	require.NoError(t, err)
+	assetID := types.NewAssetIDv0(asset.IsLogical, asset.IsStateFul, asset.Dimension, asset.Standard, address)
 
 	return assetID, asset
 }
@@ -317,14 +327,7 @@ func GetRandomNumbers(t *testing.T, max int, count int) []*big.Int {
 func GetRandomAssetID(t *testing.T, address types.Address) types.AssetID {
 	t.Helper()
 
-	asset, err := GetRandomAssetInfo(t)
-	if err != nil {
-		log.Panic("Failed to create asset")
-	}
-
-	asset.Owner = address
-	assetID, _, _, err := types.GetAssetID(asset)
-	require.NoError(t, err)
+	assetID, _ := CreateTestAsset(t, address)
 
 	return assetID
 }
@@ -530,6 +533,7 @@ func GetAddresses(t *testing.T, count int) []types.Address {
 
 type CreateIxParams struct {
 	IxDataCallback func(ix *types.IxData)
+	Sign           []byte
 }
 
 func CreateIX(t *testing.T, params *CreateIxParams) *types.Interaction {
@@ -549,7 +553,12 @@ func CreateIX(t *testing.T, params *CreateIxParams) *types.Interaction {
 		params.IxDataCallback(data)
 	}
 
-	ix := types.NewInteraction(*data, []byte{})
+	if len(params.Sign) == 0 {
+		params.Sign = []byte{}
+	}
+
+	ix, err := types.NewInteraction(*data, params.Sign)
+	require.NoError(t, err)
 
 	return ix
 }
@@ -576,6 +585,7 @@ func GetIxParamsWithAddress(from types.Address, to types.Address) *CreateIxParam
 			ix.Input.Sender = from
 			ix.Input.Receiver = to
 		},
+		Sign: nil,
 	}
 }
 
@@ -884,31 +894,6 @@ func CreateReceiptWithTestData(t *testing.T) *types.Receipt {
 	return receipt
 }
 
-/*
-// Unused functions
-func GetInvalidHash(t *testing.T) string {
-	t.Helper()
-	randomHash := RandomHash(t).String()
-
-	randmath.Seed(time.Now().UnixNano())
-	randomNum := randmath.Intn(62)
-	randAlphabet := 'g' + randmath.Intn(17)
-
-	return randomHash[:randomNum] + string(rune(randAlphabet)) + randomHash[randomNum+1:]
-}
-
-func GetInvalidAddress(t *testing.T) string {
-	t.Helper()
-	randomHash := RandomHash(t).String()
-
-	randmath.Seed(time.Now().UnixNano())
-	randomNum := randmath.Intn(62)
-	randAlphabet := 'g' + randmath.Intn(17)
-
-	return randomHash[:randomNum] + string(rune(randAlphabet)) + randomHash[randomNum+1:]
-}
-*/
-
 func CreateBodyWithTestData(t *testing.T) types.TesseractBody {
 	t.Helper()
 
@@ -930,4 +915,69 @@ func CreateBodyWithTestData(t *testing.T) types.TesseractBody {
 	}
 
 	return body
+}
+
+func WriteToAccountsFile(filePath string, accounts []AccountWithMnemonic) error {
+	file, err := json.MarshalIndent(accounts, "", "\t")
+	if err != nil {
+		return err
+	}
+
+	if err := ioutil.WriteFile(filePath, file, os.ModePerm); err != nil {
+		return err
+	}
+
+	fmt.Println("Accounts file created")
+
+	return nil
+}
+
+func GetAddressFromAccountsFile(filePath string) ([]string, error) {
+	accounts := make([]AccountWithMnemonic, 0)
+	addresses := make([]string, 0)
+
+	file, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = json.Unmarshal(file, &accounts); err != nil {
+		return nil, err
+	}
+
+	for index := range accounts {
+		addresses = append(addresses, accounts[index].Addr.String())
+	}
+
+	return addresses, nil
+}
+
+func GetAccountMnemonicsFromFile(filePath string) ([]AccountWithMnemonic, error) {
+	accounts := make([]AccountWithMnemonic, 0)
+
+	file, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = json.Unmarshal(file, &accounts); err != nil {
+		return nil, err
+	}
+
+	return accounts, nil
+}
+
+func GetIXSignature(t *testing.T, ixArgs *types.SendIXArgs, mnemonic string) []byte {
+	t.Helper()
+
+	rawIX, err := ixArgs.Bytes()
+	require.NoError(t, err)
+
+	sign, err := mudra.GetSignature(rawIX, mnemonic)
+	require.NoError(t, err)
+
+	rawSign, err := hex.DecodeString(sign)
+	require.NoError(t, err)
+
+	return rawSign
 }

@@ -1,6 +1,7 @@
 package tree
 
 import (
+	"encoding/hex"
 	"hash"
 	"sync"
 
@@ -122,7 +123,8 @@ func (kht *KramaHashTree) Set(key, value []byte) error {
 	}
 
 	kht.preImages[hashKey] = key
-	kht.root.HashTable[string(key)] = value
+
+	kht.root.HashTable[hex.EncodeToString(key)] = value
 
 	return nil
 }
@@ -139,7 +141,7 @@ func (kht *KramaHashTree) Delete(key []byte) error {
 	}
 
 	delete(kht.preImages, hashKey)
-	delete(kht.root.HashTable, string(key))
+	delete(kht.root.HashTable, hex.EncodeToString(key))
 
 	return nil
 }

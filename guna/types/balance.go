@@ -14,6 +14,40 @@ type BalanceObject struct {
 	PrvHash  types.Hash
 }
 
+type RegistryObject struct {
+	Entries map[string][]byte
+}
+
+func (r *RegistryObject) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(r)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize registry object")
+	}
+
+	return rawData, nil
+}
+
+func (r *RegistryObject) FromBytes(bytes []byte) error {
+	if err := polo.Depolorize(r, bytes); err != nil {
+		return errors.Wrap(err, "failed to polorize registry object")
+	}
+
+	return nil
+}
+
+func (r *RegistryObject) Copy() *RegistryObject {
+	newObject := &RegistryObject{
+		Entries: make(map[string][]byte, len(r.Entries)),
+	}
+
+	for k, v := range r.Entries {
+		newObject.Entries[k] = make([]byte, len(v))
+		copy(newObject.Entries[k], v)
+	}
+
+	return r
+}
+
 func (b *BalanceObject) TDU() (types.AssetMap, types.Hash) {
 	return b.AssetMap, b.PrvHash
 }

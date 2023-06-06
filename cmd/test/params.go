@@ -2,7 +2,6 @@ package test
 
 import (
 	"github.com/sarvalabs/moichain/cmd/server"
-	"github.com/sarvalabs/moichain/types"
 )
 
 var (
@@ -22,8 +21,3 @@ var (
 	port                  int
 	peerList              *server.PeerList
 )
-
-type AccountWithMnemonic struct {
-	Addr     types.Address `json:"address"`
-	Mnemonic string        `json:"mnemonic"`
-}

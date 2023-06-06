@@ -664,6 +664,10 @@ func (p *PersistenceManager) GetAccountsSyncStatus() ([]*types.AccountSyncStatus
 	return syncInfos, nil
 }
 
+func (p *PersistenceManager) GetAssetRegistry(addr types.Address, registryHash types.Hash) ([]byte, error) {
+	return p.ReadEntry(RegistryObjectKey(addr, registryHash))
+}
+
 func (p *PersistenceManager) DropPrefix(prefix []byte) error {
 	return p.db.DropWithPrefix(prefix)
 }

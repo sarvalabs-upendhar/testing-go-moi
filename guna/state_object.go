@@ -43,8 +43,9 @@ type StateObject struct {
 
 	db Store
 
-	balance        *gtypes.BalanceObject
-	assetApprovals *gtypes.ApprovalObject
+	balance   *gtypes.BalanceObject
+	approvals *gtypes.ApprovalObject
+	registry  *gtypes.RegistryObject
 
 	logicTree       tree.MerkleTree
 	metaStorageTree tree.MerkleTree
@@ -65,14 +66,15 @@ func NewStateObject(
 	account types.Account,
 ) *StateObject {
 	return &StateObject{
-		journal: j,
-		accType: account.AccType,
-		cache:   cache,
-		db:      db,
-		data:    account,
-		address: id,
-		balance: nil,
-		assetApprovals: &gtypes.ApprovalObject{
+		journal:  j,
+		accType:  account.AccType,
+		cache:    cache,
+		db:       db,
+		data:     account,
+		address:  id,
+		balance:  nil,
+		registry: nil,
+		approvals: &gtypes.ApprovalObject{
 			Approvals: make(map[types.Address]types.AssetMap),
 			PrvHash:   types.NilHash,
 		},
@@ -89,6 +91,68 @@ func (s *StateObject) Address() types.Address {
 
 func (s *StateObject) Data() *types.Account {
 	return &s.data
+}
+
+func (s *StateObject) AccountType() types.AccountType {
+	return s.accType
+}
+
+func (s *StateObject) AccountState() types.Account {
+	return s.data
+}
+
+func (s *StateObject) Journal() *Journal {
+	return s.journal
+}
+
+func (s *StateObject) Registry() (*gtypes.RegistryObject, error) {
+	if s.registry == nil {
+		if err := s.loadRegistryObject(); err != nil {
+			return nil, errors.Wrap(err, "failed to load registry object")
+		}
+	}
+
+	return s.registry, nil
+}
+
+func (s *StateObject) GetRegistryEntry(key string) ([]byte, error) {
+	object, err := s.Registry()
+	if err != nil {
+		return nil, err
+	}
+
+	v, ok := object.Entries[key]
+	if !ok {
+		return nil, types.ErrRegistryEntryNotFound
+	}
+
+	return v, nil
+}
+
+func (s *StateObject) CreateRegistryEntry(key string, info []byte) error {
+	object, err := s.Registry()
+	if err != nil {
+		return err
+	}
+
+	if _, ok := object.Entries[key]; ok {
+		return types.ErrAssetAlreadyRegistered
+	}
+
+	object.Entries[key] = info
+
+	return err
+}
+
+func (s *StateObject) UpdateRegistryEntry(key string, info []byte) error {
+	object, err := s.Registry()
+	if err != nil {
+		return err
+	}
+
+	object.Entries[key] = info
+
+	return err
 }
 
 func (s *StateObject) Balances() (*gtypes.BalanceObject, error) {
@@ -148,16 +212,27 @@ func (s *StateObject) setBalance(assetID types.AssetID, bal *big.Int) {
 	s.balance.AssetMap[assetID] = bal
 }
 
-func (s *StateObject) AccountType() types.AccountType {
-	return s.accType
-}
+func (s *StateObject) loadBalanceObject() error {
+	if s.data.Balance.IsNil() {
+		s.balance = &gtypes.BalanceObject{
+			AssetMap: make(map[types.AssetID]*big.Int),
+		}
 
-func (s *StateObject) AccountState() types.Account {
-	return s.data
-}
+		return nil
+	}
 
-func (s *StateObject) Journal() *Journal {
-	return s.journal
+	data, err := s.db.GetBalance(s.address, s.data.Balance)
+	if err != nil {
+		return err
+	}
+
+	s.balance = new(gtypes.BalanceObject)
+
+	if err = s.balance.FromBytes(data); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *StateObject) Balance() (*gtypes.BalanceObject, error) {
@@ -174,15 +249,19 @@ func (s *StateObject) Copy() *StateObject {
 	j := new(Journal)
 	sObj := NewStateObject(s.address, s.cache, j, s.db, s.data)
 
+	sObj.dirtyEntries = s.dirtyEntries.Copy()
+
 	if s.balance != nil {
 		sObj.balance = s.balance.Copy()
 	}
 
-	if s.assetApprovals != nil {
-		sObj.assetApprovals = s.assetApprovals.Copy()
+	if s.approvals != nil {
+		sObj.approvals = s.approvals.Copy()
 	}
 
-	sObj.dirtyEntries = s.dirtyEntries.Copy()
+	if s.registry != nil {
+		sObj.registry = s.registry.Copy()
+	}
 
 	if s.logicTree != nil {
 		sObj.logicTree = s.logicTree.Copy()
@@ -218,6 +297,58 @@ func (s *StateObject) GetDirtyEntry(key string) ([]byte, error) {
 
 func (s *StateObject) IncrementNonce(count uint64) {
 	s.data.Nonce += count
+}
+
+func (s *StateObject) Commit() (types.Hash, error) {
+	if _, err := s.commitBalanceObject(); err != nil {
+		return types.NilHash, errors.Wrap(err, "failed to commit balance object")
+	}
+
+	if _, err := s.commitRegistryObject(); err != nil {
+		return types.NilHash, errors.Wrap(err, "failed to commit registry object ")
+	}
+
+	if _, err := s.commitLogics(); err != nil {
+		return types.NilHash, errors.Wrap(err, "failed to commit logic tree")
+	}
+
+	if _, err := s.commitStorage(); err != nil {
+		return types.NilHash, errors.Wrap(err, "failed to commit storage tree")
+	}
+
+	accCid, err := s.commitAccount()
+	if err != nil {
+		return types.NilHash, errors.Wrap(err, "failed to commit account")
+	}
+
+	return accCid, nil
+}
+
+func (s *StateObject) commitRegistryObject() (types.Hash, error) {
+	if s.registry == nil || len(s.registry.Entries) == 0 {
+		return types.NilHash, nil
+	}
+
+	data, err := s.registry.Bytes()
+	if err != nil {
+		return types.NilHash, err
+	}
+
+	hash := types.GetHash(data)
+
+	s.journal.append(RegistryUpdation{
+		addr: &s.address,
+		id:   hash,
+	})
+
+	s.SetDirtyEntry(
+		types.BytesToHex(dhruva.RegistryObjectKey(s.address, hash)),
+		data,
+	)
+
+	s.data.AssetRegistry = hash
+
+	return hash, nil
 }
 
 func (s *StateObject) commitBalanceObject() (types.Hash, error) {
@@ -406,60 +537,29 @@ func (s *StateObject) flushActiveStorageTrees() error {
 	return s.metaStorageTree.Flush()
 }
 
-func (s *StateObject) Commit() (types.Hash, error) {
-	if _, err := s.commitBalanceObject(); err != nil {
-		return types.NilHash, errors.Wrap(err, "failed to commit balance object")
-	}
-
-	if _, err := s.commitLogics(); err != nil {
-		return types.NilHash, errors.Wrap(err, "failed to commit logic tree")
-	}
-
-	if _, err := s.commitStorage(); err != nil {
-		return types.NilHash, errors.Wrap(err, "failed to commit storage tree")
-	}
-
-	accCid, err := s.commitAccount()
-	if err != nil {
-		return types.NilHash, errors.Wrap(err, "failed to commit account")
-	}
-
-	return accCid, nil
-}
-
 func (s *StateObject) CreateStorageTreeForLogic(logicID types.LogicID) error {
 	_, err := s.createStorageTreeForLogic(logicID)
 
 	return err
 }
 
-func (s *StateObject) CreateAsset(descriptor *types.AssetDescriptor) (types.AssetID, error) {
-	descriptor.Owner = s.address
+func (s *StateObject) CreateAsset(addr types.Address, descriptor *types.AssetDescriptor) (types.AssetID, error) {
+	assetID := types.NewAssetIDv0(
+		descriptor.IsLogical,
+		descriptor.IsStateFul,
+		descriptor.Dimension,
+		descriptor.Standard,
+		addr,
+	)
 
-	assetID, assetHash, data, err := types.GetAssetID(descriptor)
+	rawBytes, err := descriptor.Bytes()
 	if err != nil {
-		return "", errors.Wrap(err, "failed to polorize asset data")
+		return "", err
 	}
 
-	s.journal.append(AssetCreation{
-		addr: &s.address,
-		id:   assetHash,
-	})
-
-	key := assetHash.String()
-	s.SetDirtyEntry(key, data)
-
-	if s.balance == nil {
-		if err = s.loadBalanceObject(); err != nil {
-			return "", err
-		}
+	if err = s.CreateRegistryEntry(assetID.String(), rawBytes); err != nil {
+		return "", err
 	}
-	// Update the balance
-	if _, ok := s.balance.AssetMap[assetID]; ok {
-		return "", errors.Wrap(types.ErrAssetCreation, "asset already exists")
-	}
-
-	s.balance.AssetMap[assetID] = descriptor.Supply
 
 	return assetID, nil
 }
@@ -478,7 +578,7 @@ func (s *StateObject) AddAccountGenesisInfo(address types.Address, ixHash types.
 }
 
 func (s *StateObject) CreateContext(behaviouralNodes, randomNodes []id.KramaID) (types.Hash, error) {
-	if len(behaviouralNodes)+len(randomNodes) < minimumContextSize {
+	if len(behaviouralNodes)+len(randomNodes) < MinimumContextSize {
 		return types.NilHash, errors.New("liveliness size not met")
 	}
 
@@ -647,23 +747,23 @@ func (s *StateObject) getContextObjectCopy(hash types.Hash) (*gtypes.ContextObje
 	return contextObject.Copy(), nil
 }
 
-func (s *StateObject) loadBalanceObject() error {
-	if s.data.Balance.IsNil() {
-		s.balance = &gtypes.BalanceObject{
-			AssetMap: make(map[types.AssetID]*big.Int),
+func (s *StateObject) loadRegistryObject() error {
+	if s.data.AssetRegistry.IsNil() {
+		s.registry = &gtypes.RegistryObject{
+			Entries: make(map[string][]byte),
 		}
 
 		return nil
 	}
 
-	data, err := s.db.GetBalance(s.address, s.data.Balance)
+	data, err := s.db.GetAssetRegistry(s.address, s.data.AssetRegistry)
 	if err != nil {
 		return err
 	}
 
-	s.balance = new(gtypes.BalanceObject)
+	s.registry = new(gtypes.RegistryObject)
 
-	if err = s.balance.FromBytes(data); err != nil {
+	if err = s.registry.FromBytes(data); err != nil {
 		return err
 	}
 

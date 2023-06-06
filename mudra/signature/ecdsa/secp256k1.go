@@ -3,9 +3,10 @@ package ecdsa
 import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
+	"golang.org/x/crypto/blake2b"
+
 	"github.com/sarvalabs/moichain/mudra/common"
 	"github.com/sarvalabs/moichain/mudra/kramaid"
-	"golang.org/x/crypto/blake2b"
 )
 
 // EcdsaSecp256k1Signature implements Mudra

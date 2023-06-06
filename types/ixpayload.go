@@ -23,7 +23,7 @@ type AssetPayload struct {
 	// Approve contains the payload for IxAssetApprove and IxAssetRevoke
 	Approve *AssetApprovePayload
 	// Mint contains the payload for IxAssetMint and IxAssetBurn
-	Mint *AssetMintPayload
+	Mint *AssetMintOrBurnPayload
 }
 
 type AssetCreatePayload struct {
@@ -31,22 +31,54 @@ type AssetCreatePayload struct {
 	Symbol string
 	Supply *big.Int
 
+	Standard  uint16
 	Dimension uint8
-	Decimals  uint8
 
-	IsFungible     bool
-	IsMintable     bool
-	IsTransferable bool
+	IsStateFul bool
+	IsLogical  bool
 
-	LogicID LogicID
-	// LogicCode []byte
+	LogicPayload *LogicPayload
 }
 
-type AssetMintPayload struct {
-	// AssetID is used to specify the Asset ID for which to mint/burn
+func (asset AssetCreatePayload) Bytes() ([]byte, error) {
+	data, err := polo.Polorize(asset)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize asset create payload")
+	}
+
+	return data, nil
+}
+
+func (asset *AssetCreatePayload) FromBytes(data []byte) error {
+	if err := polo.Depolorize(asset, data); err != nil {
+		return errors.Wrap(err, "failed to depolorize asset create payload")
+	}
+
+	return nil
+}
+
+type AssetMintOrBurnPayload struct {
+	// AssetID is used to specify the Asset ID for which to mint
 	Asset AssetID
 	// Amount is used for mint/burn
 	Amount *big.Int
+}
+
+func (mint AssetMintOrBurnPayload) Bytes() ([]byte, error) {
+	data, err := polo.Polorize(mint)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize asset mint	 payload")
+	}
+
+	return data, nil
+}
+
+func (mint *AssetMintOrBurnPayload) FromBytes(data []byte) error {
+	if err := polo.Depolorize(mint, data); err != nil {
+		return errors.Wrap(err, "failed to depolorize asset mint payload")
+	}
+
+	return nil
 }
 
 type AssetApprovePayload struct {

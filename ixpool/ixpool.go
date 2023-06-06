@@ -29,6 +29,7 @@ type stateManager interface {
 	IsAccountRegistered(addr types.Address) (bool, error)
 	IsLogicRegistered(logicID types.LogicID) error
 	GetBalance(addrs types.Address, assetID types.AssetID, stateHash types.Hash) (*big.Int, error)
+	GetAssetInfo(assetID types.AssetID, hash types.Hash) (*types.AssetDescriptor, error)
 }
 
 type IxConfig struct {
@@ -50,6 +51,7 @@ type IxPool struct {
 	metrics      *Metrics
 	enqueueReqCh chan enqueueRequest
 	promoteReqCh chan promoteRequest
+	verifier     func(data, signature, pubBytes []byte) (bool, error)
 }
 
 func NewIxPool(
@@ -59,6 +61,7 @@ func NewIxPool(
 	sm stateManager,
 	cfg *common.IxPoolConfig,
 	metrics *Metrics,
+	verifier func(data, signature, pubBytes []byte) (bool, error),
 ) *IxPool {
 	ctx, ctxCancel := context.WithCancel(ctx)
 	i := &IxPool{
@@ -75,6 +78,7 @@ func NewIxPool(
 		logger:       logger.Named("Ix-Pool"),
 		enqueueReqCh: make(chan enqueueRequest),
 		promoteReqCh: make(chan promoteRequest),
+		verifier:     verifier,
 	}
 
 	return i
@@ -433,18 +437,32 @@ func (i *IxPool) validateIx(ix *types.Interaction) error {
 		}
 	*/
 
+	rawPayload, err := ix.PayloadForSignature()
+	if err != nil {
+		return err
+	}
+
+	isVerified, err := i.verifier(rawPayload, ix.Signature(), ix.Sender().Bytes())
+	if !isVerified || err != nil {
+		return types.ErrInvalidIXSignature
+	}
+
 	switch ix.Type() {
+	case types.IxAssetCreate:
+		return nil
 	case types.IxValueTransfer:
 		return i.validateValueTransfer(ix)
+	case types.IxAssetMint:
+		return i.validateAssetMint(ix)
+	case types.IxAssetBurn:
+		return i.validateAssetBurn(ix)
 	case types.IxLogicDeploy:
 		return i.validateLogicDeployPayload(ix)
 	case types.IxLogicInvoke:
 		return i.validateLogicInvokePayload(ix)
-	case types.IxInvalid:
+	default:
 		return types.ErrInvalidInteractionType
 	}
-
-	return nil
 }
 
 func (i *IxPool) validateValueTransfer(ix *types.Interaction) error {
@@ -461,6 +479,51 @@ func (i *IxPool) validateValueTransfer(ix *types.Interaction) error {
 		if currentBalance.Cmp(v) < 0 {
 			return types.ErrInsufficientFunds
 		}
+	}
+
+	return nil
+}
+
+func (i *IxPool) validateAssetMint(ix *types.Interaction) error {
+	assetPayload, err := ix.GetAssetPayload()
+	if err != nil {
+		return err
+	}
+
+	assetInfo, err := i.sm.GetAssetInfo(assetPayload.Mint.Asset, types.NilHash)
+	if err != nil {
+		return types.ErrAssetNotFound
+	}
+
+	if assetInfo.Owner != ix.Sender() {
+		return errors.New("Owner address mismatch")
+	}
+
+	return nil
+}
+
+func (i *IxPool) validateAssetBurn(ix *types.Interaction) error {
+	assetPayload, err := ix.GetAssetPayload()
+	if err != nil {
+		return err
+	}
+
+	assetInfo, err := i.sm.GetAssetInfo(assetPayload.Mint.Asset, types.NilHash)
+	if err != nil {
+		return types.ErrAssetNotFound
+	}
+
+	currentBal, err := i.sm.GetBalance(ix.Sender(), assetPayload.Mint.Asset, types.NilHash)
+	if err != nil {
+		return err
+	}
+
+	if currentBal.Cmp(assetPayload.Mint.Amount) < 0 {
+		return types.ErrInsufficientFunds
+	}
+
+	if assetInfo.Owner != ix.Sender() {
+		return errors.New("Owner address mismatch")
 	}
 
 	return nil

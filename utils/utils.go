@@ -163,12 +163,12 @@ func GetNetworkID(id id.KramaID) (peer.ID, error) {
 	return peerID, nil
 }
 
-func ValidateAccountType(acc types.AccountType) (types.AccountType, error) {
+func ValidateAccountType(acc types.AccountType) error {
 	switch acc {
 	case types.SargaAccount, types.RegularAccount, types.LogicAccount:
-		return acc, nil
+		return nil
 	default:
-		return acc, types.ErrInvalidAccountType
+		return types.ErrInvalidAccountType
 	}
 }
 

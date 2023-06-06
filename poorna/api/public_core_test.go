@@ -22,14 +22,11 @@ import (
 func TestPublicCoreAPI_CreateRPCInteraction(t *testing.T) {
 	t.Helper()
 
-	invalidPayload := []byte{1}
-	assetPayload := types.AssetPayload{
-		Create: &types.AssetCreatePayload{
-			Symbol: "MOI",
-		},
+	assetPayload := &types.AssetCreatePayload{
+		Symbol: "MOI",
 	}
 
-	assetPayloadBytes, err := polo.Polorize(assetPayload)
+	assetCreatePayloadBytes, err := assetPayload.Bytes()
 	require.NoError(t, err)
 
 	logicPayload := &types.LogicPayload{
@@ -39,7 +36,7 @@ func TestPublicCoreAPI_CreateRPCInteraction(t *testing.T) {
 	logicPayloadBytes, err := polo.Polorize(logicPayload)
 	require.NoError(t, err)
 
-	input := tests.CreateIXInputWithTestData(t, types.IxAssetCreate, assetPayloadBytes, nil)
+	input := tests.CreateIXInputWithTestData(t, types.IxAssetCreate, assetCreatePayloadBytes, nil)
 	input.PerceivedValues = nil
 	input.TransferValues = nil
 
@@ -49,7 +46,8 @@ func TestPublicCoreAPI_CreateRPCInteraction(t *testing.T) {
 		Trust:   tests.CreateTrustWithTestData(t),
 	}
 
-	ixWithNilFields := types.NewInteraction(ixData, tests.RandomHash(t).Bytes())
+	ixWithNilFields, err := types.NewInteraction(ixData, tests.RandomHash(t).Bytes())
+	require.NoError(t, err)
 
 	testcases := []struct {
 		name          string
@@ -63,7 +61,7 @@ func TestPublicCoreAPI_CreateRPCInteraction(t *testing.T) {
 		},
 		{
 			name: "create rpc interaction for asset creation interaction",
-			ix:   createInteractionWithTestData(t, types.IxAssetCreate, assetPayloadBytes),
+			ix:   createInteractionWithTestData(t, types.IxAssetCreate, assetCreatePayloadBytes),
 		},
 		{
 			name: "create rpc interaction for logic deploy interaction",
@@ -90,16 +88,6 @@ func TestPublicCoreAPI_CreateRPCInteraction(t *testing.T) {
 					Hash:   tests.RandomHash(t),
 				},
 			},
-		},
-		{
-			name:          "invalid interaction type",
-			ix:            createInteractionWithTestData(t, types.IxAssetMint, logicPayloadBytes),
-			expectedError: errors.New("invalid interaction type"),
-		},
-		{
-			name:          "invalid payload",
-			ix:            createInteractionWithTestData(t, types.IxAssetCreate, invalidPayload),
-			expectedError: errors.New("failed to depolorize asset payload"),
 		},
 	}
 
@@ -294,11 +282,8 @@ func TestPublicCoreAPI_CreateRPCBody(t *testing.T) {
 }
 
 func TestPublicCoreAPI_CreateRPCTesseract(t *testing.T) {
-	invalidPayload := []byte{1}
-	assetPayload := types.AssetPayload{
-		Create: &types.AssetCreatePayload{
-			Symbol: "MOI",
-		},
+	assetPayload := &types.AssetCreatePayload{
+		Symbol: "MOI",
 	}
 
 	assetPayloadBytes, err := polo.Polorize(assetPayload)
@@ -326,19 +311,12 @@ func TestPublicCoreAPI_CreateRPCTesseract(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name:          "failed to create rpc tesseract",
-			ixParams:      getIxParamsWithInputComputeTrust(types.IxAssetCreate, invalidPayload, 2, 3),
-			tsParams:      createTesseractParams(createHeaderCallbackWithTestData(t)),
-			expectedError: errors.New("failed to depolorize asset payload"),
-		},
-		{
 			name:     "created rpc tesseract for non-genesis tesseract",
 			ixParams: getIxParamsWithInputComputeTrust(types.IxAssetCreate, assetPayloadBytes, 2, 3),
 			tsParams: createTesseractParams(createHeaderCallbackWithTestData(t)),
 		},
 		{
-			name:     "create rpc tesseract for genesis tesseract",
-			ixParams: getIxParamsWithInputComputeTrust(types.IxAssetCreate, assetPayloadBytes, 2, 3),
+			name: "create rpc tesseract for genesis tesseract",
 			tsParams: createTesseractParams(func(header *types.TesseractHeader) {
 				header.ClusterID = lattice.GenesisIdentifier
 			}),
@@ -375,10 +353,8 @@ func TestPublicCoreAPI_CreateRPCTesseract(t *testing.T) {
 func TestPublicCoreAPI_GetRPCTesseract(t *testing.T) {
 	height := uint64(8)
 
-	assetPayload := types.AssetPayload{
-		Create: &types.AssetCreatePayload{
-			Symbol: "MOI",
-		},
+	assetPayload := &types.AssetCreatePayload{
+		Symbol: "MOI",
 	}
 
 	assetPayloadBytes, err := polo.Polorize(assetPayload)
@@ -707,7 +683,7 @@ func TestPublicCoreAPI_GetBalance(t *testing.T) {
 			name: "should return error if failed to fetch balance",
 			args: ptypes.BalArgs{
 				Address: address,
-				AssetID: string(assetID),
+				AssetID: assetID,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
 				},
@@ -715,21 +691,10 @@ func TestPublicCoreAPI_GetBalance(t *testing.T) {
 			expectedError: types.ErrFetchingTesseract,
 		},
 		{
-			name: "should return error if asset Id is invalid",
-			args: ptypes.BalArgs{
-				Address: address,
-				AssetID: "01801995a34ceda4db744a5b1363bega0f2019e7481699c861ad7d1263c95473a2d9",
-				Options: ptypes.TesseractNumberOrHash{
-					TesseractHash: &tsHash,
-				},
-			},
-			expectedError: types.ErrInvalidAssetID,
-		},
-		{
 			name: "fetched balance successfully",
 			args: ptypes.BalArgs{
 				Address: address,
-				AssetID: string(assetID),
+				AssetID: assetID,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash,
 				},
@@ -840,13 +805,13 @@ func TestPublicCoreAPI_GetTDU(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		args          ptypes.TesseractArgs
+		args          ptypes.QueryArgs
 		expectedTDU   types.AssetMap
 		expectedError error
 	}{
 		{
 			name: "should return error if tesseract not found",
-			args: ptypes.TesseractArgs{
+			args: ptypes.QueryArgs{
 				Address: address,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
@@ -856,7 +821,7 @@ func TestPublicCoreAPI_GetTDU(t *testing.T) {
 		},
 		{
 			name: "should return error if TDU not found",
-			args: ptypes.TesseractArgs{
+			args: ptypes.QueryArgs{
 				Address: address,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash[1],
@@ -866,7 +831,7 @@ func TestPublicCoreAPI_GetTDU(t *testing.T) {
 		},
 		{
 			name: "fetched TDU successfully",
-			args: ptypes.TesseractArgs{
+			args: ptypes.QueryArgs{
 				Address: address,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash[0],
@@ -1027,6 +992,7 @@ func TestPublicCoreAPI_GetAccountState(t *testing.T) {
 		acc.Nonce = uint64(5)
 		acc.AccType = types.RegularAccount
 		acc.Balance = tests.RandomHash(t)
+		acc.AssetRegistry = tests.RandomHash(t)
 		acc.AssetApprovals = tests.RandomHash(t)
 		acc.ContextHash = tests.RandomHash(t)
 		acc.StorageRoot = tests.RandomHash(t)
@@ -1078,6 +1044,7 @@ func TestPublicCoreAPI_GetAccountState(t *testing.T) {
 			require.Equal(t, test.expectedAcc.AccType, fetchedAcc["acc_type"])
 			require.Equal(t, test.expectedAcc.Balance, fetchedAcc["balance"])
 			require.Equal(t, test.expectedAcc.AssetApprovals, fetchedAcc["asset_approvals"])
+			require.Equal(t, test.expectedAcc.AssetRegistry, fetchedAcc["asset_registry"])
 			require.Equal(t, test.expectedAcc.ContextHash, fetchedAcc["context_hash"])
 			require.Equal(t, test.expectedAcc.StorageRoot, fetchedAcc["storage_root"])
 			require.Equal(t, test.expectedAcc.LogicRoot, fetchedAcc["logic_root"])
@@ -1111,20 +1078,9 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 		expectedError         error
 	}{
 		{
-			name: "returns error if logic id is invalid",
-			args: &ptypes.LogicManifestArgs{
-				LogicID:  types.LogicID(tests.RandomHash(t).String()).String(),
-				Encoding: "JSON",
-				Options: ptypes.TesseractNumberOrHash{
-					TesseractHash: &randomHash,
-				},
-			},
-			expectedError: types.ErrInvalidLogicID,
-		},
-		{
 			name: "returns error if failed to fetch logic manifest",
 			args: &ptypes.LogicManifestArgs{
-				LogicID:  logicIDWithoutState.String(),
+				LogicID:  logicIDWithoutState,
 				Encoding: "JSON",
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
@@ -1135,7 +1091,7 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 		{
 			name: "fetched json encoded logic manifest successfully",
 			args: &ptypes.LogicManifestArgs{
-				LogicID:  logicID.String(),
+				LogicID:  logicID,
 				Encoding: "JSON",
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash,
@@ -1146,7 +1102,7 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 		{
 			name: "fetched polo encoded logic manifest successfully",
 			args: &ptypes.LogicManifestArgs{
-				LogicID:  logicID.String(),
+				LogicID:  logicID,
 				Encoding: "POLO",
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash,
@@ -1157,7 +1113,7 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 		{
 			name: "fetched yaml encoded logic manifest successfully",
 			args: &ptypes.LogicManifestArgs{
-				LogicID:  logicID.String(),
+				LogicID:  logicID,
 				Encoding: "YAML",
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash,
@@ -1562,37 +1518,37 @@ func TestPublicCoreAPI_GetInteractionReceipt(t *testing.T) {
 
 func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
 	address := tests.RandomAddress(t)
-	chainManager := NewMockChainManager(t)
+	sm := NewMockStateManager(t)
+	c := NewMockChainManager(t)
 	assetID, assetInfo := tests.CreateTestAsset(t, address)
 
-	chainManager.setAssets(assetID, assetInfo)
+	ts := tests.CreateTesseract(t, nil)
+	tsHash := tests.GetTesseractHash(t, ts)
+	c.setTesseractByHash(t, ts)
+	sm.addAsset(assetID, assetInfo)
 
-	coreAPI := NewPublicCoreAPI(nil, chainManager, nil)
+	coreAPI := NewPublicCoreAPI(nil, c, sm)
 
 	testcases := []struct {
 		name                    string
-		args                    *ptypes.AssetDescriptorArgs
+		args                    *ptypes.GetAssetInfoArgs
 		expectedAssetDescriptor *types.AssetDescriptor
 		isErrorExpected         bool
 	}{
 		{
 			name: "Valid asset id",
-			args: &ptypes.AssetDescriptorArgs{
-				AssetID: string(assetID),
+			args: &ptypes.GetAssetInfoArgs{
+				AssetID: assetID,
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractHash: &tsHash,
+				},
 			},
 			expectedAssetDescriptor: assetInfo,
 		},
 		{
 			name: "Valid asset id without state",
-			args: &ptypes.AssetDescriptorArgs{
-				AssetID: "01801995a34ceda4db744a5b1363be9a0f2019e7481699c861ad7d1263c95473a2d9",
-			},
-			isErrorExpected: true,
-		},
-		{
-			name: "Invalid asset id",
-			args: &ptypes.AssetDescriptorArgs{
-				AssetID: "01801995a34ceda4db744a5b1363bega0f2019e7481699c861ad7d1263c95473a2d9",
+			args: &ptypes.GetAssetInfoArgs{
+				AssetID: tests.GetRandomAssetID(t, types.NilAddress),
 			},
 			isErrorExpected: true,
 		},
@@ -1600,7 +1556,7 @@ func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			fetchedAssetInfo, err := coreAPI.GetAssetInfoByAssetID(test.args.AssetID)
+			fetchedAssetInfo, err := coreAPI.GetAssetInfoByAssetID(test.args)
 			if test.isErrorExpected {
 				require.Error(t, err)
 
@@ -1613,10 +1569,9 @@ func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
 			require.Equal(t, test.expectedAssetDescriptor.Owner, fetchedAssetInfo["owner"])
 			require.Equal(t, (*hexutil.Big)(test.expectedAssetDescriptor.Supply), fetchedAssetInfo["supply"])
 			require.Equal(t, hexutil.Uint8(test.expectedAssetDescriptor.Dimension), fetchedAssetInfo["dimension"])
-			require.Equal(t, hexutil.Uint8(test.expectedAssetDescriptor.Decimals), fetchedAssetInfo["decimals"])
-			require.Equal(t, test.expectedAssetDescriptor.IsFungible, fetchedAssetInfo["is_fungible"])
-			require.Equal(t, test.expectedAssetDescriptor.IsMintable, fetchedAssetInfo["is_mintable"])
-			require.Equal(t, test.expectedAssetDescriptor.IsTransferable, fetchedAssetInfo["is_transferable"])
+			require.Equal(t, hexutil.Uint16(test.expectedAssetDescriptor.Standard), fetchedAssetInfo["standard"])
+			require.Equal(t, test.expectedAssetDescriptor.IsLogical, fetchedAssetInfo["is_logical"])
+			require.Equal(t, test.expectedAssetDescriptor.IsStateFul, fetchedAssetInfo["is_stateful"])
 			require.Equal(t, test.expectedAssetDescriptor.LogicID, fetchedAssetInfo["logic_id"])
 		})
 	}

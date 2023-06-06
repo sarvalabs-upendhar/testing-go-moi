@@ -66,13 +66,14 @@ func (r *Service) Tesseract(req *http.Request, args *ptypes.TesseractArgs, resp 
 	return nil
 }
 
-func (r *Service) AssetInfoByAssetID(req *http.Request, args *ptypes.AssetDescriptorArgs, resp *ptypes.Response) error {
+// AssetInfoByAssetID returns the asset information associated with the assetID
+func (r *Service) AssetInfoByAssetID(req *http.Request, args *ptypes.GetAssetInfoArgs, resp *ptypes.Response) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
 		return types.ErrInvalidAPI
 	}
 
-	assetInfo, err := coreAPI.GetAssetInfoByAssetID(args.AssetID)
+	assetInfo, err := coreAPI.GetAssetInfoByAssetID(args)
 	if err != nil {
 		resp.Error = &ptypes.JSONError{Message: err.Error()}
 
@@ -89,7 +90,31 @@ func (r *Service) AssetInfoByAssetID(req *http.Request, args *ptypes.AssetDescri
 	return nil
 }
 
-// Balance is a method of ƒService that retrieves the balance.
+func (r *Service) Registry(req *http.Request, args *ptypes.QueryArgs, resp *ptypes.Response) error {
+	// Retrieve the public core API and call the method to get the balance for the asset
+	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
+	if !ok {
+		return types.ErrInvalidAPI
+	}
+
+	entries, err := coreAPI.GetRegistry(args)
+	if err != nil {
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	resp.Data, err = json.Marshal(entries)
+	if err != nil {
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	return nil
+}
+
+// Balance is a method of Service that retrieves the balance.
 // Expects BalArgs as argument and returns an uint64 wrapped in a Response.
 func (r *Service) Balance(req *http.Request, args *ptypes.BalArgs, resp *ptypes.Response) error {
 	// Retrieve the public core API and call the method to get the balance for the asset
@@ -117,7 +142,7 @@ func (r *Service) Balance(req *http.Request, args *ptypes.BalArgs, resp *ptypes.
 }
 
 // TDU is an RPC method that returns the TDU of the queried address
-func (r *Service) TDU(req *http.Request, args *ptypes.TesseractArgs, resp *ptypes.Response) error {
+func (r *Service) TDU(req *http.Request, args *ptypes.QueryArgs, resp *ptypes.Response) error {
 	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
 	if !ok {
 		return types.ErrInvalidAPI
@@ -425,7 +450,7 @@ func (r *Service) AccountMetaInfo(
 /* RPC methods that are associated with the ix namespace. */
 
 // SendInteractions is a method of Service that sends Interactions
-func (r *Service) SendInteractions(req *http.Request, args *ptypes.SendIXArgs, resp *ptypes.Response) error {
+func (r *Service) SendInteractions(req *http.Request, args *ptypes.SendIX, resp *ptypes.Response) error {
 	// Retrieve the public ix API
 	ixAPI, ok := r.apis["ix"].(*api.PublicIXAPI)
 	if !ok {

@@ -1,11 +1,7 @@
 package api
 
 import (
-	"encoding/json"
-	"math/big"
-
-	"github.com/sarvalabs/moichain/common/hexutil"
-	"github.com/sarvalabs/moichain/utils"
+	"encoding/hex"
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
@@ -29,22 +25,18 @@ func NewPublicIXAPI(ixpool IxPool, sm StateManager) *PublicIXAPI {
 }
 
 // SendInteraction is a method of PublicIXAPI that stores the interaction
-func (p *PublicIXAPI) SendInteraction(args *ptypes.SendIXArgs) (*types.Interaction, error) {
-	err := validateArguments(args, p)
+func (p *PublicIXAPI) SendInteraction(sendIx *ptypes.SendIX) (*types.Interaction, error) {
+	sign, err := hex.DecodeString(sendIx.Signature)
 	if err != nil {
 		return nil, err
 	}
 
-	if args.Nonce == nil {
-		nonce, err := p.ixpool.GetNonce(args.Sender)
-		if err != nil {
-			return nil, err
-		}
-
-		args.Nonce = (*hexutil.Uint64)(utils.NewUint64(nonce))
+	ixArgs, err := validateArgumentsWithSign(sendIx)
+	if err != nil {
+		return nil, err
 	}
 
-	ixn, err := constructInteraction(args)
+	ixn, err := constructInteraction(ixArgs, sign)
 	if err != nil {
 		return nil, err
 	}
@@ -52,159 +44,75 @@ func (p *PublicIXAPI) SendInteraction(args *ptypes.SendIXArgs) (*types.Interacti
 	// add the interactions to ix pool
 	errs := p.ixpool.AddInteractions(types.Interactions{ixn})
 	if len(errs) > 0 {
-		return ixn, errs[0]
+		return nil, errs[0]
 	}
 
 	return ixn, nil
 }
 
 // helper function
-func constructInteraction(args *ptypes.SendIXArgs) (ix *types.Interaction, err error) {
+func constructInteraction(args *types.SendIXArgs, sign []byte) (ix *types.Interaction, err error) {
+	if args.FuelPrice == nil {
+		return nil, types.ErrFuelPriceNotFound
+	}
+
+	if args.FuelLimit == nil {
+		return nil, types.ErrFuelLimitNotFound
+	}
+
 	data := types.IxData{
 		Input: types.IxInput{
-			Type:           args.Type,
-			Nonce:          args.Nonce.ToUint64(),
-			Sender:         args.Sender,
-			Receiver:       args.Receiver,
-			TransferValues: make(map[types.AssetID]*big.Int, len(args.TransferValues)),
+			Type:            args.Type,
+			Nonce:           args.Nonce,
+			Sender:          args.Sender,
+			Receiver:        args.Receiver,
+			Payer:           args.Payer,
+			TransferValues:  args.TransferValues,
+			PerceivedValues: args.PerceivedValues,
+			FuelPrice:       args.FuelPrice,
+			FuelLimit:       args.FuelLimit,
+			Payload:         args.Payload,
 		},
 	}
 
-	if args.FuelPrice != nil {
-		data.Input.FuelPrice = args.FuelPrice.ToInt()
-	}
-
-	if args.FuelLimit != nil {
-		data.Input.FuelLimit = args.FuelLimit.ToInt()
-	}
-
-	switch args.Type {
-	case types.IxValueTransfer:
-		// Decode the transfer values
-		for asset, value := range args.TransferValues {
-			if value != nil {
-				data.Input.TransferValues[asset] = value.ToInt()
-			}
-		}
-
-	case types.IxAssetCreate:
-		data.Input.Payload, err = GetRawIXPayloadForAssetCreation(args.Payload)
-		if err != nil {
-			return nil, err
-		}
-
-	case types.IxLogicDeploy:
-		data.Input.Payload, err = GetRawIXPayloadForLogicDeploy(args.Payload, args.Nonce.ToUint64(), data.Input.Sender)
-		if err != nil {
-			return nil, err
-		}
-
-	case types.IxLogicInvoke:
-		data.Input.Payload, err = GetRawIXPayloadForLogicInvoke(args.Payload)
-		if err != nil {
-			return nil, err
-		}
-
-	default:
-		return nil, errors.New("invalid interaction type")
-	}
-
-	return types.NewInteraction(data, nil), nil
+	return types.NewInteraction(data, sign)
 }
 
-// ValidateArguments checks whether the SendIXArgs are valid or not
-func validateArguments(args *ptypes.SendIXArgs, p *PublicIXAPI) error {
-	if args.Sender.IsNil() {
-		return types.ErrInvalidAddress
+// validateArgumentsWithSign checks whether the IXArgs are valid or not
+func validateArgumentsWithSign(args *ptypes.SendIX) (*types.SendIXArgs, error) {
+	bz, err := hex.DecodeString(args.IXArgs)
+	if err != nil {
+		return nil, err
 	}
 
-	if args.Sender == args.Receiver {
-		return types.ErrInvalidIxParticipants
+	ixArgs := new(types.SendIXArgs)
+
+	err = polo.Depolorize(ixArgs, bz)
+	if err != nil {
+		return nil, err
+	}
+
+	if ixArgs.Sender.IsNil() {
+		return nil, types.ErrInvalidAddress
+	}
+
+	if ixArgs.Sender == ixArgs.Receiver {
+		return nil, types.ErrInvalidIxParticipants
 	}
 
 	// Reject genesis account interaction
-	if args.Sender == types.SargaAddress {
-		return ErrGenesisAccount
+	if ixArgs.Sender == types.SargaAddress {
+		return nil, ErrGenesisAccount
 	}
 
-	if !args.Receiver.IsNil() {
+	if !ixArgs.Receiver.IsNil() {
 		// Reject genesis account interaction
-		if args.Receiver == types.SargaAddress {
-			return ErrGenesisAccount
+		if ixArgs.Receiver == types.SargaAddress {
+			return nil, ErrGenesisAccount
 		}
 	}
 
 	// TODO: Add more checks to validate inputs
 
-	return nil
-}
-
-// GetRawIXPayloadForAssetCreation returns the raw IXPayload for asset creation
-func GetRawIXPayloadForAssetCreation(jsonPayload []byte) ([]byte, error) {
-	payloadArgs := new(ptypes.RPCAssetCreation)
-	if err := json.Unmarshal(jsonPayload, payloadArgs); err != nil {
-		return nil, err
-	}
-
-	createPayload := &types.AssetCreatePayload{
-		Type:   payloadArgs.Type,
-		Symbol: payloadArgs.Symbol,
-
-		IsFungible:     payloadArgs.IsFungible,
-		IsMintable:     payloadArgs.IsMintable,
-		IsTransferable: payloadArgs.IsTransferable,
-
-		LogicID: types.LogicID(payloadArgs.LogicID),
-		// LogicCode: payloadArgs.LogicCode,
-	}
-
-	if payloadArgs.Supply != nil {
-		createPayload.Supply = payloadArgs.Supply.ToInt()
-	}
-
-	if payloadArgs.Dimension != nil {
-		createPayload.Dimension = payloadArgs.Dimension.ToInt()
-	}
-
-	if payloadArgs.Decimals != nil {
-		createPayload.Decimals = payloadArgs.Decimals.ToInt()
-	}
-
-	assetPayload := &types.AssetPayload{
-		Create: createPayload,
-	}
-
-	return polo.Polorize(assetPayload)
-}
-
-// GetRawIXPayloadForLogicDeploy returns the raw IXPayload for logic deployment
-func GetRawIXPayloadForLogicDeploy(jsonPayload []byte, nonce uint64, sender types.Address) ([]byte, error) {
-	payload := new(ptypes.RPCLogicPayload)
-	if err := json.Unmarshal(jsonPayload, payload); err != nil {
-		return nil, err
-	}
-
-	if len(payload.Manifest) == 0 {
-		return nil, types.ErrEmptyManifest
-	}
-
-	return polo.Polorize(&types.LogicPayload{
-		Callsite: payload.Callsite,
-		Calldata: payload.Calldata.Bytes(),
-		Manifest: payload.Manifest.Bytes(),
-	})
-}
-
-// GetRawIXPayloadForLogicInvoke returns the raw IXPayload for logic invoke
-func GetRawIXPayloadForLogicInvoke(jsonPayload []byte) ([]byte, error) {
-	payload := new(ptypes.RPCLogicPayload)
-	if err := json.Unmarshal(jsonPayload, payload); err != nil {
-		return nil, err
-	}
-
-	return polo.Polorize(&types.LogicPayload{
-		Callsite: payload.Callsite,
-		Calldata: payload.Calldata.Bytes(),
-		Logic:    types.LogicID(payload.LogicID),
-	})
+	return ixArgs, nil
 }

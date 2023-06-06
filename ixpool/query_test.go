@@ -18,7 +18,7 @@ func TestIxPool_GetNonce(t *testing.T) {
 	ixPool, mockStateManager := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 		c.Mode = 0
 		c.PriceLimit = big.NewInt(100)
-	})
+	}, true)
 
 	testcases := []struct {
 		name          string
@@ -110,7 +110,7 @@ func TestIxPool_GetIxs(t *testing.T) {
 			ixPool, _ := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 				c.Mode = 0
 				c.PriceLimit = big.NewInt(100)
-			})
+			}, true)
 
 			addAndProcessIxs(t, ixPool, testcase.ixs)
 
@@ -194,7 +194,7 @@ func TestIxPool_GetAllIxs(t *testing.T) {
 			ixPool, _ := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 				c.Mode = 0
 				c.PriceLimit = big.NewInt(100)
-			})
+			}, true)
 
 			for _, ixs := range testcase.accounts {
 				addAndProcessIxs(t, ixPool, ixs)
@@ -214,7 +214,7 @@ func TestIxPool_GetAccountWaitTime(t *testing.T) {
 	ixPool, _ := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 		c.Mode = 0
 		c.PriceLimit = big.NewInt(100)
-	})
+	}, true)
 
 	testcases := []struct {
 		name        string
@@ -271,7 +271,7 @@ func TestIxPool_GetAllAccountsWaitTime(t *testing.T) {
 	ixPool, _ := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 		c.Mode = 0
 		c.PriceLimit = big.NewInt(100)
-	})
+	}, true)
 
 	testcases := []struct {
 		name     string

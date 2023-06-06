@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	minimumContextSize = 1
+	MinimumContextSize = 1
 )
 
 type Store interface {
@@ -37,6 +37,7 @@ type Store interface {
 	GetInteractions(ixHash types.Hash) ([]byte, error)
 	GetTesseract(tsHash types.Hash) ([]byte, error)
 	GetBalance(addr types.Address, balanceHash types.Hash) ([]byte, error)
+	GetAssetRegistry(addr types.Address, registryHash types.Hash) ([]byte, error)
 	GetMerkleTreeEntry(address types.Address, prefix dhruva.Prefix, key []byte) ([]byte, error)
 	SetMerkleTreeEntry(address types.Address, prefix dhruva.Prefix, key, value []byte) error
 	SetMerkleTreeEntries(address types.Address, prefix dhruva.Prefix, entries map[string][]byte) error
@@ -88,7 +89,6 @@ func NewStateManager(
 			MaxIdleConns:    1024,
 			MaxConnsPerHost: 1000,
 		}},
-		// objects:      make(map[types.Address]*StateObject),
 		dirtyObjects: make(map[types.Address]*StateObject),
 		logger:       logger.Named("State-Manager"),
 		metrics:      metrics,
@@ -814,6 +814,20 @@ func (sm *StateManager) GetBalances(addrs types.Address, stateHash types.Hash) (
 	return balances.Copy(), nil
 }
 
+func (sm *StateManager) GetRegistry(addrs types.Address, stateHash types.Hash) (map[string][]byte, error) {
+	stateObject, err := sm.getStateObject(addrs, stateHash)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to fetch state object")
+	}
+
+	registry, err := stateObject.Registry()
+	if err != nil {
+		return nil, err
+	}
+
+	return registry.Entries, nil
+}
+
 func (sm *StateManager) GetBalance(
 	addrs types.Address,
 	assetID types.AssetID,
@@ -825,6 +839,25 @@ func (sm *StateManager) GetBalance(
 	}
 
 	return so.BalanceOf(assetID)
+}
+
+func (sm *StateManager) GetAssetInfo(assetID types.AssetID, stateHash types.Hash) (*types.AssetDescriptor, error) {
+	stateObject, err := sm.getStateObject(assetID.Address(), stateHash)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to fetch state object")
+	}
+
+	rawDescriptor, err := stateObject.GetRegistryEntry(assetID.String())
+	if err != nil {
+		return nil, types.ErrAssetNotFound
+	}
+
+	ad := new(types.AssetDescriptor)
+	if err = ad.FromBytes(rawDescriptor); err != nil {
+		return nil, err
+	}
+
+	return ad, nil
 }
 
 func (sm *StateManager) GetAccTypeUsingStateObject(address types.Address) (types.AccountType, error) {
@@ -853,75 +886,6 @@ func (sm *StateManager) GetAccountState(addr types.Address, stateHash types.Hash
 	}
 
 	return accInfo, nil
-}
-
-func (sm *StateManager) SetupSargaAccount(
-	sargaAcc *gtypes.AccountSetupArgs,
-	otherAccounts []*gtypes.AccountSetupArgs,
-) (types.Hash, types.Hash, error) {
-	if sargaAcc.Address != types.SargaAddress {
-		return types.NilHash, types.NilHash, errors.New("invalid sarga account address")
-	}
-
-	stateObject := sm.CreateDirtyObject(types.SargaAddress, sargaAcc.AccType)
-
-	if _, err := stateObject.CreateContext(sargaAcc.BehaviouralContext, sargaAcc.RandomContext); err != nil {
-		return types.NilHash, types.NilHash, errors.Wrap(err, "context initiation failed in genesis")
-	}
-
-	if err := stateObject.CreateStorageTreeForLogic(types.SargaLogicID); err != nil {
-		return types.NilHash, types.NilHash, errors.Wrap(err, "failed to create storage tree")
-	}
-
-	if err := stateObject.AddAccountGenesisInfo(types.SargaAddress, types.GenesisIxHash); err != nil {
-		return types.NilHash, types.NilHash, err
-	}
-
-	for _, info := range otherAccounts {
-		if info.Address != types.SargaAddress {
-			// Add account to sarga storage tree
-			if err := stateObject.AddAccountGenesisInfo(info.Address, types.GenesisIxHash); err != nil {
-				return types.NilHash, types.NilHash, err
-			}
-		}
-	}
-
-	stateHash, err := stateObject.Commit()
-	if err != nil {
-		return types.NilHash, types.NilHash, err
-	}
-
-	return stateHash, stateObject.data.ContextHash, nil
-}
-
-func (sm *StateManager) SetupNewAccount(info *gtypes.AccountSetupArgs) (types.Hash, types.Hash, error) {
-	stateObject := sm.CreateDirtyObject(info.Address, info.AccType)
-
-	if _, err := stateObject.CreateContext(info.BehaviouralContext, info.RandomContext); err != nil {
-		return types.NilHash, types.NilHash, errors.Wrap(err, "context initiation failed in genesis")
-	}
-
-	if len(info.Assets) > 0 {
-		for _, asset := range info.Assets {
-			_, err := stateObject.CreateAsset(asset)
-			if err != nil {
-				return types.NilHash, types.NilHash, errors.Wrap(err, "failed to create an asset")
-			}
-		}
-	}
-
-	if len(info.Balances) > 0 {
-		for assetID, balance := range info.Balances {
-			stateObject.AddBalance(assetID, balance)
-		}
-	}
-
-	stateHash, err := stateObject.Commit()
-	if err != nil {
-		return types.NilHash, types.NilHash, err
-	}
-
-	return stateHash, stateObject.data.ContextHash, nil
 }
 
 type Response struct {
@@ -1074,7 +1038,12 @@ func (sm *StateManager) syncTree(
 	}
 
 	for key, value := range newRoot.HashTable {
-		if err = tree.Set([]byte(key), value); err != nil {
+		rawKey, err := hex.DecodeString(key)
+		if err != nil {
+			return err
+		}
+
+		if err = tree.Set(rawKey, value); err != nil {
 			return errors.Wrap(err, "failed to set entry")
 		}
 	}

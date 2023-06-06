@@ -2,7 +2,6 @@ package guna
 
 import (
 	"context"
-	"encoding/hex"
 	"math/big"
 	"net/http"
 	"reflect"
@@ -49,6 +48,7 @@ type MockDB struct {
 	context             map[types.Hash][]byte
 	interactions        map[types.Hash][]byte
 	balances            map[types.Hash][]byte
+	assetRegistry       map[types.Hash][]byte
 	merkleTreeEntries   map[string][]byte
 	preImages           map[types.Hash][]byte
 	data                map[string][]byte
@@ -61,6 +61,7 @@ func mockDB() *MockDB {
 		tesseracts:          make(map[types.Hash][]byte),
 		latestTesseractHash: make(map[types.Address]types.Hash),
 		accounts:            make(map[types.Hash][]byte),
+		assetRegistry:       make(map[types.Hash][]byte),
 		context:             make(map[types.Hash][]byte),
 		interactions:        make(map[types.Hash][]byte),
 		balances:            make(map[types.Hash][]byte),
@@ -73,6 +74,15 @@ func mockDB() *MockDB {
 
 func (m *MockDB) ReadEntry(key []byte) ([]byte, error) {
 	data, ok := m.data[types.BytesToHex(key)]
+	if !ok {
+		return nil, types.ErrKeyNotFound
+	}
+
+	return data, nil
+}
+
+func (m *MockDB) GetAssetRegistry(addr types.Address, registryHash types.Hash) ([]byte, error) {
+	data, ok := m.assetRegistry[registryHash]
 	if !ok {
 		return nil, types.ErrKeyNotFound
 	}
@@ -903,6 +913,21 @@ func stateObjectParamsWithBalance(
 	}
 }
 
+func stateObjectParamsWithRegistry(
+	t *testing.T,
+	registryHash types.Hash,
+	registry *gtypes.RegistryObject,
+) *createStateObjectParams {
+	t.Helper()
+
+	return &createStateObjectParams{
+		soCallback: func(so *StateObject) {
+			so.data.AssetRegistry = registryHash
+			so.registry = registry
+		},
+	}
+}
+
 func stateObjectParamsWithASTAndMST(
 	t *testing.T,
 	ast map[string]tree.MerkleTree,
@@ -1051,13 +1076,18 @@ func stateObjectParamsWithTestData(t *testing.T, areTreesNil bool) *createStateO
 
 			s.data = *acc
 			s.balance, _ = getTestBalance(t, getAssetMap(getAssetIDsAndBalances(t, 2)))
-			s.assetApprovals.PrvHash = tests.RandomHash(t) // initialize any one field in asset approvals object
+			s.approvals.PrvHash = tests.RandomHash(t) // initialize any one field in asset approvals object
 
 			s.logicTree = getMerkleTreeWithFlushedEntries(t, keys[0:1], values[0:1])
 
 			s.files = make(map[types.Hash][]byte)
 			s.files[tests.RandomHash(t)] = tests.RandomHash(t).Bytes()
 			s.files[tests.RandomHash(t)] = tests.RandomHash(t).Bytes()
+			s.registry, _ = getTestRegistryObject(
+				t,
+				map[string][]byte{
+					tests.RandomHash(t).String(): tests.RandomHash(t).Bytes(),
+				})
 
 			if areTreesNil {
 				s.logicTree = nil
@@ -1084,16 +1114,16 @@ func checkForReferences(t *testing.T, sObj, copiedSO *StateObject) {
 		reflect.ValueOf(copiedSO.dirtyEntries).Pointer(),
 	)
 	require.NotEqual(t,
-		reflect.ValueOf(sObj.assetApprovals.Approvals).Pointer(),
-		reflect.ValueOf(copiedSO.assetApprovals.Approvals).Pointer(),
+		reflect.ValueOf(sObj.approvals.Approvals).Pointer(),
+		reflect.ValueOf(copiedSO.approvals.Approvals).Pointer(),
 	)
 	require.NotEqual(t,
 		reflect.ValueOf(sObj.balance.AssetMap).Pointer(),
 		reflect.ValueOf(copiedSO.balance.AssetMap).Pointer(),
 	)
 	require.NotEqual(t,
-		reflect.ValueOf(sObj.assetApprovals).Pointer(),
-		reflect.ValueOf(copiedSO.assetApprovals).Pointer(),
+		reflect.ValueOf(sObj.approvals).Pointer(),
+		reflect.ValueOf(copiedSO.approvals).Pointer(),
 	)
 	require.NotEqual(t,
 		reflect.ValueOf(sObj.balance).Pointer(),
@@ -1138,6 +1168,19 @@ func getAssetMaps(assetIDs []types.AssetID, balances []*big.Int, assetsPerAssetM
 	}
 
 	return assetMap
+}
+
+func getTestRegistryObject(t *testing.T, entries map[string][]byte) (*gtypes.RegistryObject, types.Hash) {
+	t.Helper()
+
+	registry := &gtypes.RegistryObject{
+		Entries: entries,
+	}
+
+	data, err := registry.Bytes()
+	require.NoError(t, err)
+
+	return registry, types.GetHash(data)
 }
 
 func getTestBalance(t *testing.T, assetMap types.AssetMap) (*gtypes.BalanceObject, types.Hash) {
@@ -1285,20 +1328,18 @@ func mockContextLock() map[types.Address]types.ContextLockInfo {
 	return make(map[types.Address]types.ContextLockInfo)
 }
 
-func getDefaultAssetDescriptor(t *testing.T, symbol string) *types.AssetDescriptor {
+func getTestAssetDescriptor(t *testing.T, owner types.Address, symbol string) *types.AssetDescriptor {
 	t.Helper()
 
 	return &types.AssetDescriptor{
-		Type:           types.AssetKindLogic,
-		Symbol:         symbol,
-		Owner:          tests.RandomAddress(t),
-		Supply:         big.NewInt(10000),
-		Dimension:      4,
-		Decimals:       3,
-		IsFungible:     true,
-		IsMintable:     false,
-		IsTransferable: true,
-		LogicID:        getLogicID(t, tests.RandomAddress(t)),
+		Type:       types.AssetKindLogic,
+		Symbol:     symbol,
+		Owner:      owner,
+		Supply:     big.NewInt(10000),
+		Dimension:  4,
+		IsStateFul: false,
+		IsLogical:  false,
+		LogicID:    getLogicID(t, tests.RandomAddress(t)),
 	}
 }
 
@@ -1677,7 +1718,7 @@ func checkIfStateObjectAreEqual(
 	require.NotNil(t, actualObj.cache)
 	require.NotNil(t, actualObj.journal)
 	require.Equal(t, expectedObj.balance.AssetMap, actualObj.balance.AssetMap)
-	require.Equal(t, expectedObj.assetApprovals, actualObj.assetApprovals)
+	require.Equal(t, expectedObj.approvals, actualObj.approvals)
 	require.Equal(t, expectedObj.dirtyEntries, actualObj.dirtyEntries)
 	require.Equal(t, expectedObj.data, actualObj.data)
 	require.Equal(t, expectedObj.files, actualObj.files)
@@ -1702,6 +1743,30 @@ func checkForBalances(t *testing.T, sObj *StateObject, expectedBalance *big.Int,
 	actualBalance, err := sObj.BalanceOf(assetID)
 	require.NoError(t, err)
 	require.Equal(t, expectedBalance, actualBalance)
+}
+
+func checkForRegistry(
+	t *testing.T,
+	sObj *StateObject,
+	expectedRegistry *gtypes.RegistryObject,
+	actualRegistryHash types.Hash,
+) {
+	t.Helper()
+
+	expectedRegistryData, err := expectedRegistry.Bytes()
+	require.NoError(t, err)
+
+	expectedRegistryHash := types.GetHash(expectedRegistryData)
+	require.Equal(t, expectedRegistryHash, actualRegistryHash)
+
+	// check if registry data in dirty entries and state object is same
+	key := types.BytesToHex(dhruva.RegistryObjectKey(sObj.address, expectedRegistryHash))
+	actualRegistryData, err := sObj.GetDirtyEntry(key) // get registry data from dirty entries
+	require.NoError(t, err)
+
+	require.Equal(t, expectedRegistryData, actualRegistryData)
+
+	require.Equal(t, sObj.data.AssetRegistry, actualRegistryHash) // check if registry hash inserted in account
 }
 
 func checkForBalance(
@@ -1998,8 +2063,7 @@ func getRandomBytes(t *testing.T, count int) [][]byte {
 	bytes := make([][]byte, count)
 
 	for i := 0; i < count; i++ {
-		str, err := tests.GetRandomUpperCaseString(t, 10)
-		require.NoError(t, err)
+		str := tests.GetRandomUpperCaseString(t, 10)
 
 		bytes[i] = []byte(str)
 	}
@@ -2069,58 +2133,22 @@ func CheckAssetCreation(
 	t *testing.T,
 	s *StateObject,
 	assetDescriptor *types.AssetDescriptor,
-	journalIndex int,
+	assetID types.AssetID,
 ) {
 	t.Helper()
 
-	expectedAssetID, expectedAssetHash, expectedData, err := getTestAssetID(assetDescriptor)
+	actualRegistryData, err := s.GetRegistryEntry(assetID.String())
 	require.NoError(t, err)
 
-	actualData, err := s.GetDirtyEntry(expectedAssetHash.String()) // check if asset data inserted in dirty entries
+	expectedRegistryData, err := assetDescriptor.Bytes()
 	require.NoError(t, err)
-	require.Equal(t, expectedData, actualData)
 
-	actualSupply, err := s.BalanceOf(expectedAssetID)
-	require.NoError(t, err)
-	require.Equal(t, assetDescriptor.Supply, actualSupply) // check total supply is stored in balances
-
+	require.Equal(t, actualRegistryData, expectedRegistryData)
 	require.Equal(t, s.Address(), assetDescriptor.Owner) // check if address is assigned to owner
 }
 
-func getTestAssetID(asset *types.AssetDescriptor) (types.AssetID, types.Hash, []byte, error) {
-	assetObject := types.AssetObject{
-		Owner:    asset.Owner,
-		Symbol:   asset.Symbol,
-		Decimals: asset.Decimals,
-		Extra:    make([]byte, 8),
-	}
+func getTestAssetID(addr types.Address, asset *types.AssetDescriptor) types.AssetID {
+	types.NewAssetIDv0(asset.IsLogical, asset.IsStateFul, asset.Dimension, asset.Standard, addr)
 
-	var (
-		buf  []byte
-		info uint8 = 0x00
-	)
-
-	if asset.IsMintable {
-		info |= 0x01
-	} else {
-		assetObject.Supply = asset.Supply
-	}
-
-	if asset.IsFungible {
-		info |= 0x80
-	}
-
-	buf = append(buf, asset.Dimension)
-	buf = append(buf, info)
-
-	data, err := polo.Polorize(assetObject)
-	if err != nil {
-		return "", types.NilHash, nil, err
-	}
-
-	assetCID := types.GetHash(data)
-	buf = append(buf, assetCID.Bytes()...)
-	assetID := types.AssetID(hex.EncodeToString(buf))
-
-	return assetID, assetCID, data, nil
+	return types.NewAssetIDv0(asset.IsLogical, asset.IsStateFul, asset.Dimension, asset.Standard, addr)
 }

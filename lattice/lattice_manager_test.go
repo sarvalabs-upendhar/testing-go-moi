@@ -2,16 +2,14 @@ package lattice
 
 import (
 	"context"
-	"math/big"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-polo"
-	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/guna"
-	gtypes "github.com/sarvalabs/moichain/guna/types"
+
+	"github.com/pkg/errors"
+	"github.com/sarvalabs/moichain/common/tests"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/types"
 	"github.com/sarvalabs/moichain/utils"
@@ -466,56 +464,6 @@ func TestGetTesseractHashByHeight(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Equal(t, test.expectedHash, hash)
-		})
-	}
-}
-
-func TestGetAssetDataByAssetHash(t *testing.T) {
-	_, assetDescriptor := tests.CreateTestAsset(t, tests.RandomAddress(t))
-	assetDescriptor.Owner = tests.RandomAddress(t)
-
-	_, assetHash, assetObj, err := types.GetAssetID(assetDescriptor)
-	require.NoError(t, err)
-
-	chainParams := &CreateChainParams{
-		dbCallback: func(db *MockDB) {
-			insertAssetDataByAssetHashInDB(t, db, assetHash, assetObj)
-		},
-	}
-
-	c := createTestChainManager(t, chainParams)
-
-	testcases := []struct {
-		name          string
-		assetHash     types.Hash
-		expectedError error
-	}{
-		{
-			name:      "asset data exists",
-			assetHash: assetHash,
-		},
-		{
-			name:          "should return error if asset data doesn't exist",
-			assetHash:     tests.RandomHash(t),
-			expectedError: types.ErrKeyNotFound,
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			assetData, err := c.GetAssetDataByAssetHash(test.assetHash.Bytes())
-
-			if test.expectedError != nil {
-				require.Error(t, err)
-				require.ErrorContains(t, err, test.expectedError.Error())
-
-				return
-			}
-			require.NoError(t, err)
-
-			actualAssetData, err := polo.Polorize(assetData)
-			require.NoError(t, err)
-			require.Equal(t, assetObj, actualAssetData)
 		})
 	}
 }
@@ -1639,384 +1587,35 @@ func TestExecuteAndValidate(t *testing.T) {
 	}
 }
 
-/*
-func TestAddTesseractWithOutState_SyncScenarios(t *testing.T) {
-	var (
-		respChan    = make(chan result, 1)
-		ctxHash     = tests.RandomHash(t)
-		address     = tests.RandomAddress(t)
-		networkID   = tests.GetTestKramaIDs(t, 1)[0]
-		kramaIDs    = tests.GetTestKramaIDs(t, 5)
-		publicKeys  = getPublicKeys(t, 5)
-		clusterInfo = getTestClusterInfoWithRandomSet(t, kramaIDs, 0)
-	)
-
-	testcases := []struct {
-		name             string
-		tesseractsParams *createTesseractParams
-		selfID           id.KramaID
-		clusterInfo      *ptypes.ICSClusterInfo
-		preTestFn        func(c *ChainManager, ts *types.Tesseract)
-		smCallBack       func(sm *MockStateManager)
-		expectedError    error
-	}{
-		{
-			name:             "node took part in ics, so shouldn't execute",
-			clusterInfo:      clusterInfo,
-			selfID:           kramaIDs[0], // this node should be part of ICS
-			tesseractsParams: tesseractParamsWithContextHash(t, address, ctxHash, validCommitSign),
-			smCallBack: func(sm *MockStateManager) {
-				sm.insertContextNodes(ctxHash, kramaIDs[:2], kramaIDs[2])
-				sm.insertPublicKeys(kramaIDs, publicKeys)
-			},
-			preTestFn: func(c *ChainManager, ts *types.Tesseract) {
-				networkID = signTesseract(t, c.sm.(*MockStateManager), ts) //nolint:forcetypeassert
-			},
-		},
-		{
-			name:             "should sync tesseract since handling node is not part in ics",
-			clusterInfo:      clusterInfo,
-			selfID:           tests.GetTestKramaIDs(t, 1)[0], // this node should not be part of ICS
-			tesseractsParams: tesseractParamsWithContextHash(t, address, ctxHash, validCommitSign),
-			smCallBack: func(sm *MockStateManager) {
-				sm.insertContextNodes(ctxHash, kramaIDs[:2], kramaIDs[2])
-				sm.insertPublicKeys(kramaIDs, publicKeys)
-			},
-			preTestFn: func(c *ChainManager, ts *types.Tesseract) {
-				networkID = signTesseract(t, c.sm.(*MockStateManager), ts) //nolint:forcetypeassert
-			},
-		},
-		{
-			name:             "should sync tesseract if should execute is set to false",
-			clusterInfo:      clusterInfo,
-			selfID:           tests.GetTestKramaIDs(t, 1)[0], // this node should not be part of ICS
-			tesseractsParams: tesseractParamsWithContextHash(t, address, ctxHash, validCommitSign),
-			smCallBack: func(sm *MockStateManager) {
-				sm.insertContextNodes(ctxHash, kramaIDs[:2], kramaIDs[2])
-				sm.insertPublicKeys(kramaIDs, publicKeys)
-			},
-			preTestFn: func(c *ChainManager, ts *types.Tesseract) {
-				networkID = signTesseract(t, c.sm.(*MockStateManager), ts) //nolint:forcetypeassert
-				c.cfg.ShouldExecute = false
-			},
-		},
-		{
-			name:        "should return error if tesseract is already known",
-			clusterInfo: clusterInfo,
-			selfID:      networkID,
-			tesseractsParams: &createTesseractParams{
-				address: address,
-			},
-			preTestFn: func(c *ChainManager, ts *types.Tesseract) {
-				insertTesseractsInDB(t, c.db, ts)
-			},
-			expectedError: types.ErrAlreadyKnown,
-		},
-		{
-			name:        "should return error if ICSNodeSet fetch fails",
-			clusterInfo: clusterInfo,
-			selfID:      networkID,
-			tesseractsParams: &createTesseractParams{
-				address: address,
-			},
-			expectedError: errors.New("failed to fetch ICSNodeSet"),
-		},
-		{
-			name:             "should return error if tesseract validation failed",
-			clusterInfo:      clusterInfo,
-			selfID:           networkID,
-			tesseractsParams: tesseractParamsWithContextHash(t, address, ctxHash, invalidCommitSign),
-			smCallBack: func(sm *MockStateManager) {
-				sm.insertContextNodes(ctxHash, kramaIDs[:2], kramaIDs[2])
-				sm.insertPublicKeys(kramaIDs, publicKeys)
-			},
-			expectedError: types.ErrInvalidSeal,
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			ts := createTesseract(t, test.tesseractsParams)
-
-			chainParams := &CreateChainParams{
-				db:         mockDB(),
-				sm:         mockStateManager(),
-				smCallBack: test.smCallBack,
-				networkCallback: func(network *MockNetwork) {
-					network.kramaID = test.selfID
-				},
-			}
-
-			c := createTestChainManager(t, chainParams)
-
-			if test.preTestFn != nil {
-				test.preTestFn(c, ts)
-			}
-
-			syncSub := c.mux.Subscribe(utils.TesseractSyncEvent{})
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-
-			go handleMuxEvents(ctx, syncSub, respChan)
-
-			err := c.AddTesseractWithOutState(ts, networkID, test.clusterInfo)
-			if test.expectedError != nil {
-				require.ErrorContains(t, err, test.expectedError.Error())
-
-				return
-			}
-
-			require.NoError(t, err)
-			validateTSSyncEvent(t, c, ts, respChan, test.clusterInfo)
-		})
-	}
-}
-
-func TestAddTesseractWithOutState_ExecuteScenarios(t *testing.T) {
-	var (
-		address        = tests.RandomAddress(t)
-		accType        = types.LogicAccount
-		stateHash      = tests.RandomHash(t)
-		contextHash    = tests.RandomHash(t)
-		kramaIDs       = tests.GetTestKramaIDs(t, 5)
-		publicKeys     = getPublicKeys(t, 5)
-		networkID      = tests.GetTestKramaIDs(t, 1)[0]
-		ixns, receipts = getIxAndReceiptsWithStateHash(t, map[types.Address]types.Hash{address: stateHash}, 1)
-		clusterInfo    = getTestClusterInfoWithRandomSet(t, kramaIDs[2:], 1)
-	)
-
-	tesseractsParams := tesseractParamsForExecution(
-		t,
-		address,
-		contextHash,
-		stateHash,
-		ixns,
-		receipts,
-		clusterInfo,
-		1,
-	)
-
-	ts := createTesseract(t, tesseractsParams)
-
-	db := mockDB()
-	sm := mockStateManager()
-
-	chainParams := &CreateChainParams{
-		db: db,
-		sm: sm,
-		networkCallback: func(network *MockNetwork) {
-			network.kramaID = networkID
-		},
-		execCallback: func(exec *MockExec) {
-			exec.executeInteractionsHook = func() (types.Receipts, error) {
-				return receipts, nil
-			}
-		},
-		smCallBack: func(sm *MockStateManager) {
-			sm.insertContextNodes(contextHash, kramaIDs[:2], kramaIDs[2])
-			sm.insertPublicKeys(kramaIDs, publicKeys)
-			sm.insertRegisteredAcc(address)
-			sm.setAccType(address, accType)
-		},
-		chainManagerCallback: func(c *ChainManager) {
-			c.cfg.ShouldExecute = true
-		},
-	}
-
-	c := createTestChainManager(t, chainParams)
-
-	sender := signTesseract(t, sm, ts)
-
-	err := c.AddTesseractWithOutState(ts, sender, clusterInfo)
-	require.NoError(t, err)
-
-	// check if acc meta info inserted
-	checkIfTesseractsAdded(
-		t,
-		accType,
-		false,
-		true,
-		db,
-		ts,
-	)
-}
-
-
-func TestTesseractHandler_SkipScenarios(t *testing.T) {
-	var (
-		nodes        = tests.GetTestKramaIDs(t, 2)
-		chainManager = createTestChainManager(t, &CreateChainParams{
-			networkCallback: func(network *MockNetwork) {
-				network.kramaID = nodes[0]
-			},
-		})
-	)
-
-	testcases := []struct {
-		name            string
-		tesseractParams *createTesseractParams
-		info            *types.ICSClusterInfo
-		preTestFn       func(c *ChainManager, ts *types.Tesseract)
-		expectedError   error
-	}{
-		{
-			name: "should skip tesseract if the handling node is operator",
-			tesseractParams: &createTesseractParams{
-				headerCallback: func(header *types.TesseractHeader) {
-					header.Operator = string(nodes[0])
-				},
-			},
-			expectedError: errors.New("node is the operator of tesseract"),
-		},
-		{
-			name: "should return error if AddTesseractWithOutState fails",
-			info: getTestClusterInfo(t, 2),
-			// passing an invalid clusterInfo
-			tesseractParams: tesseractParamsWithICSClusterInfo(t, nil, getTestClusterInfo(t, 1)),
-			expectedError:   errors.New("failed to fetch ICSNodeSet"),
-		},
-		{
-			name: "should skip if tesseract is already available in db",
-			preTestFn: func(c *ChainManager, ts *types.Tesseract) {
-				insertTesseractsInDB(t, c.db, ts)
-			},
-			expectedError: types.ErrAlreadyKnown,
-		},
-		{
-			name: "should skip if tesseract is already available in cache",
-			info: getTestClusterInfo(t, 2),
-			tesseractParams: &createTesseractParams{
-				bodyCallback: func(body *types.TesseractBody) {
-					body.ConsensusProof.ICSHash = tests.RandomHash(t)
-				},
-			},
-			preTestFn: func(c *ChainManager, ts *types.Tesseract) {
-				c.knownTesseracts.Add(ts.Hash())
-			},
-			expectedError: types.ErrAlreadyKnown,
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			ts := createTesseract(t, test.tesseractParams)
-			msg := getPubSubMsg(t, ts, nodes[0], test.info)
-
-			if test.preTestFn != nil {
-				test.preTestFn(chainManager, ts)
-			}
-
-			err := chainManager.tesseractHandler(msg)
-			require.ErrorContains(t, err, test.expectedError.Error())
-		})
-	}
-}
-
-*/
-
 func TestValidateAccountCreationInfo(t *testing.T) {
 	var (
 		c             = createTestChainManager(t, nil)
-		walletContext = utils.KramaIDToString(tests.GetTestKramaIDs(t, 4))
-		address       = tests.RandomAddress(t).Hex()
+		walletContext = tests.GetTestKramaIDs(t, 4)
+		address       = tests.RandomAddress(t)
 	)
 
 	testcases := []struct {
 		name          string
-		accountInfo   AccountInfo
+		accountInfo   *types.AccountSetupArgs
 		expectedError error
 	}{
 		{
-			name: "should fail for invalid address",
-			accountInfo: getAccountInfo(
-				t,
-				"0xa6ba9853f131679d0da0f033516a3efe9cd53c3d54e1f9a6e60e9077e9f9384",
-				types.LogicAccount,
-				"moi-id",
-				walletContext[:2],
-				walletContext[2:4],
-				[]*AssetInfo{},
-				[]*BalanceInfo{},
-			),
-			expectedError: types.ErrInvalidAddress,
-		},
-		{
 			name: "should fail for invalid account type",
-			accountInfo: getAccountInfo(
+			accountInfo: getAccountSetupArgs(
 				t,
 				address,
 				tests.InvalidAccount,
 				"moi-id",
 				walletContext[:2],
 				walletContext[2:4],
-				[]*AssetInfo{},
-				[]*BalanceInfo{},
 			),
 			expectedError: types.ErrInvalidAccountType,
-		},
-		{
-			name: "should fail for invalid asset id",
-			accountInfo: getAccountInfo(
-				t,
-				address,
-				types.LogicAccount,
-				"moi-id",
-				walletContext[:2],
-				walletContext[2:4],
-				[]*AssetInfo{},
-				[]*BalanceInfo{
-					getBalanceInfo(
-						"0xa6ba9853f131679d0da0f033516a2efe9cd53c3d54e1f9a6e60e977e9f9384",
-						1000,
-					),
-				},
-			),
-			expectedError: types.ErrInvalidAssetID,
-		},
-		{
-			name: " should fail for invalid balance",
-			accountInfo: getAccountInfo(
-				t,
-				address,
-				types.LogicAccount,
-				"moi-id",
-				walletContext[:2],
-				walletContext[2:4],
-				[]*AssetInfo{},
-				[]*BalanceInfo{
-					getBalanceInfo(
-						"0xA6Ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384abcd",
-						-1,
-					),
-				},
-			),
-			expectedError: errors.New("invalid balance"),
-		},
-		{
-			name: "should fail for invalid asset details",
-			accountInfo: getAccountInfo(
-				t,
-				address,
-				types.LogicAccount,
-				"moi-id",
-				walletContext[:2],
-				walletContext[2:4],
-				[]*AssetInfo{
-					getAssetInfo(t, "btc", 4),
-				},
-				[]*BalanceInfo{},
-			),
-			expectedError: errors.New("invalid asset details"),
-		},
-		{
-			name:        "should pass for valid asset info",
-			accountInfo: getTestAccountWithAccType(t, types.LogicAccount),
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			accSetupArgs, err := c.validateAccountCreationInfo(test.accountInfo)
+			err := c.validateAccountCreationInfo(*test.accountInfo)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -2024,21 +1623,16 @@ func TestValidateAccountCreationInfo(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-
-			checkForAccountCreation(t, test.accountInfo, accSetupArgs)
 		})
 	}
 }
 
 func TestAddGenesisTesseract(t *testing.T) {
 	var (
-		address      = tests.RandomAddress(t)
-		stateHash    = tests.RandomHash(t)
-		contextHash  = tests.RandomHash(t)
-		accType      = types.LogicAccount
-		contextDelta = map[types.Address]*types.DeltaGroup{
-			address: getDeltaGroup(t, 2, 5, 3),
-		}
+		address     = tests.RandomAddress(t)
+		stateHash   = tests.RandomHash(t)
+		contextHash = tests.RandomHash(t)
+		accType     = types.LogicAccount
 	)
 
 	testcases := []struct {
@@ -2066,7 +1660,7 @@ func TestAddGenesisTesseract(t *testing.T) {
 
 			c := createTestChainManager(t, chainParams)
 
-			err := c.AddGenesisTesseract(address, stateHash, contextHash, contextDelta)
+			err := c.AddGenesisTesseract(address, stateHash, contextHash)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -2080,7 +1674,6 @@ func TestAddGenesisTesseract(t *testing.T) {
 				address,
 				stateHash,
 				contextHash,
-				contextDelta,
 			)
 		},
 		)
@@ -2089,14 +1682,14 @@ func TestAddGenesisTesseract(t *testing.T) {
 
 func TestParseGenesisFile_InvalidPath(t *testing.T) {
 	c := createTestChainManager(t, nil)
-	_, _, _, err := c.ParseGenesisFile("test2/3647663731config.json")
+	_, _, _, _, err := c.ParseGenesisFile("test2/3647663731config.json") //nolint
 
 	require.ErrorContains(t, err, "failed to open genesis file")
 }
 
 func TestParseGenesisFile(t *testing.T) {
 	c := createTestChainManager(t, nil)
-
+	addr := tests.RandomAddress(t)
 	dir, err := os.MkdirTemp(os.TempDir(), " ")
 	require.NoError(t, err)
 
@@ -2106,13 +1699,14 @@ func TestParseGenesisFile(t *testing.T) {
 	})
 
 	testcases := []struct {
-		name              string
-		path              string
-		sargaAccount      AccountInfo
-		genesisAccounts   []AccountInfo
-		genesisLogics     []GenesisLogic
-		invalidAccPayload bool
-		expectedError     error
+		name                 string
+		path                 string
+		sargaAccount         types.AccountSetupArgs
+		genesisAccounts      []types.AccountSetupArgs
+		genesisLogics        []types.GenesisLogic
+		genesisAssetAccounts []types.AssetAccountSetupArgs
+		invalidAccPayload    bool
+		expectedError        error
 	}{
 		{
 			name:              "should return error for invalid genesis payload",
@@ -2123,21 +1717,21 @@ func TestParseGenesisFile(t *testing.T) {
 		{
 			name:            "should return error if sarga account info is invalid",
 			sargaAccount:    getTestAccountWithAccType(t, tests.InvalidAccount),
-			genesisAccounts: []AccountInfo{},
+			genesisAccounts: []types.AccountSetupArgs{},
 			expectedError:   errors.New("invalid sarga account info"),
 		},
 		{
 			name:         "should return error if genesis account info is invalid",
 			sargaAccount: getTestAccountWithAccType(t, types.SargaAccount),
-			genesisAccounts: []AccountInfo{
+			genesisAccounts: []types.AccountSetupArgs{
 				getTestAccountWithAccType(t, tests.InvalidAccount),
 			},
-			expectedError: errors.New("invalid genesis account info"),
+			expectedError: errors.New("invalid genesis account creation info"),
 		},
 		{
 			name:         "should succeed for valid genesis data without contract paths",
 			sargaAccount: getTestAccountWithAccType(t, types.SargaAccount),
-			genesisAccounts: []AccountInfo{
+			genesisAccounts: []types.AccountSetupArgs{
 				getTestAccountWithAccType(t, types.RegularAccount),
 				getTestAccountWithAccType(t, types.LogicAccount),
 			},
@@ -2145,20 +1739,43 @@ func TestParseGenesisFile(t *testing.T) {
 		{
 			name:         "should succeed for valid genesis data with contract paths",
 			sargaAccount: getTestAccountWithAccType(t, types.SargaAccount),
-			genesisAccounts: []AccountInfo{
+			genesisAccounts: []types.AccountSetupArgs{
 				getTestAccountWithAccType(t, types.RegularAccount),
 				getTestAccountWithAccType(t, types.LogicAccount),
 			},
-			genesisLogics: generateTestGenesisLogics(t),
+			genesisLogics: getTestGenesisLogics(t),
+		},
+		{
+			name:         "should succeed for valid genesis asset account with invalid allocations",
+			sargaAccount: getTestAccountWithAccType(t, types.SargaAccount),
+			genesisAccounts: []types.AccountSetupArgs{
+				getTestAccountWithAccType(t, types.RegularAccount),
+				getTestAccountWithAccType(t, types.LogicAccount),
+			},
+			genesisAssetAccounts: []types.AssetAccountSetupArgs{
+				// using nilAddress for allocations
+				getTestAssetAccountSetupArgs(t, getTestAssetCreationArgs(t, types.NilAddress)),
+			},
+		},
+		{
+			name:         "should succeed for valid genesis asset account with valid allocations",
+			sargaAccount: getTestAccountWithAccType(t, types.SargaAccount),
+			genesisAccounts: []types.AccountSetupArgs{
+				getTestAccountWithAddress(t, addr),
+				getTestAccountWithAccType(t, types.LogicAccount),
+			},
+			genesisAssetAccounts: []types.AssetAccountSetupArgs{
+				getTestAssetAccountSetupArgs(t, getTestAssetCreationArgs(t, addr)),
+			},
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			path := createMockGenesisFile(t, dir, test.invalidAccPayload, test.sargaAccount,
-				test.genesisAccounts, test.genesisLogics)
+				test.genesisAccounts, test.genesisAssetAccounts, test.genesisLogics)
 
-			sargaAccount, genesisAccounts, genesisLogics, err := c.ParseGenesisFile(path)
+			sargaAccount, genesisAccounts, assetAccounts, genesisLogics, err := c.ParseGenesisFile(path)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -2166,15 +1783,17 @@ func TestParseGenesisFile(t *testing.T) {
 			}
 			require.NoError(t, err)
 
-			checkForAccountCreation(t, test.sargaAccount, sargaAccount)
+			// check for sarga account
+			require.Equal(t, test.sargaAccount, *sargaAccount)
 
+			// check for genesis accounts
 			for i, genesisAccount := range test.genesisAccounts {
-				checkForAccountCreation(t, genesisAccount, genesisAccounts[i]) // TODO: rename funcs
+				require.Equal(t, genesisAccount, genesisAccounts[i])
 			}
 
-			require.Equal(t, len(test.genesisLogics), len(genesisLogics))
+			checkForLogicAccounts(t, test.genesisLogics, genesisLogics)
 
-			validateGenesisLogics(t, test.genesisLogics, genesisLogics)
+			checkForAssetAccounts(t, test.genesisAssetAccounts, assetAccounts)
 		})
 	}
 }
@@ -2182,8 +1801,7 @@ func TestParseGenesisFile(t *testing.T) {
 func TestSetupGenesis(t *testing.T) {
 	var (
 		sargaAccount    = getTestAccountWithAccType(t, types.SargaAccount)
-		sargaAddress    = types.HexToAddress(sargaAccount.Address)
-		genesisAccounts = []AccountInfo{
+		genesisAccounts = []types.AccountSetupArgs{
 			getTestAccountWithAccType(t, types.RegularAccount),
 			getTestAccountWithAccType(t, types.LogicAccount),
 		}
@@ -2205,7 +1823,7 @@ func TestSetupGenesis(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	path := createMockGenesisFile(t, dir, false, sargaAccount, genesisAccounts, nil)
+	path := createMockGenesisFile(t, dir, false, sargaAccount, genesisAccounts, nil, nil)
 
 	testcases := []struct {
 		name          string
@@ -2215,16 +1833,16 @@ func TestSetupGenesis(t *testing.T) {
 		{
 			name: "should return error if failed to add genesis tesseract",
 			smCallBack: func(sm *MockStateManager) {
-				sm.setAccType(sargaAddress, sargaAccount.AccountType)
+				sm.setAccType(types.SargaAddress, sargaAccount.AccType)
 			},
 			expectedError: errors.New("error adding genesis tesseract"),
 		},
 		{
 			name: "should succeed for valid genesis info",
 			smCallBack: func(sm *MockStateManager) {
-				sm.setAccType(sargaAddress, sargaAccount.AccountType)
+				sm.setAccType(types.SargaAddress, sargaAccount.AccType)
 				for _, genesisAccount := range genesisAccounts {
-					sm.setAccType(types.HexToAddress(genesisAccount.Address), genesisAccount.AccountType)
+					sm.setAccType(genesisAccount.Address, genesisAccount.AccType)
 				}
 
 				sm.newAccountHook = func() (types.Hash, types.Hash, error) {
@@ -2255,32 +1873,18 @@ func TestSetupGenesis(t *testing.T) {
 			checkForGenesisTesseract(
 				t,
 				c,
-				sargaAddress,
+				types.SargaAddress,
 				sargaAccountHashes.stateHash,
 				sargaAccountHashes.contextHash,
-				map[types.Address]*types.DeltaGroup{
-					sargaAddress: {
-						BehaviouralNodes: utils.KramaIDFromString(sargaAccount.BehaviourContext),
-						RandomNodes:      utils.KramaIDFromString(sargaAccount.RandomContext),
-					},
-				},
 			)
 
 			for _, genesisAccount := range genesisAccounts {
-				genesisAddress := types.HexToAddress(genesisAccount.Address)
-
 				checkForGenesisTesseract(
 					t,
 					c,
-					genesisAddress,
+					genesisAccount.Address,
 					genesisAccountHashes.stateHash,
 					genesisAccountHashes.contextHash,
-					map[types.Address]*types.DeltaGroup{
-						genesisAddress: {
-							BehaviouralNodes: utils.KramaIDFromString(genesisAccount.BehaviourContext),
-							RandomNodes:      utils.KramaIDFromString(genesisAccount.RandomContext),
-						},
-					},
 				)
 			}
 		})
@@ -2290,22 +1894,19 @@ func TestSetupGenesis(t *testing.T) {
 func getAccountSetupArgs(
 	t *testing.T,
 	address types.Address,
+	accType types.AccountType,
+	moiID string,
 	behNodes []id.KramaID,
 	randNodes []id.KramaID,
-	accType int,
-	assetDetails []*types.AssetDescriptor,
-	balanceInfo map[types.AssetID]*big.Int,
-) *gtypes.AccountSetupArgs {
+) *types.AccountSetupArgs {
 	t.Helper()
 
-	return &gtypes.AccountSetupArgs{
+	return &types.AccountSetupArgs{
 		Address:            address,
-		MoiID:              tests.RandomAddress(t).Hex(),
+		MoiID:              moiID,
 		BehaviouralContext: behNodes,
 		RandomContext:      randNodes,
-		AccType:            types.AccountType(accType),
-		Assets:             assetDetails,
-		Balances:           balanceInfo,
+		AccType:            accType,
 	}
 }
 
@@ -2317,61 +1918,47 @@ func TestSetupSargaAcc(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		sarga         *gtypes.AccountSetupArgs
-		accounts      []*gtypes.AccountSetupArgs
-		logics        []GenesisLogic
+		sarga         *types.AccountSetupArgs
+		accounts      []types.AccountSetupArgs
 		expectedError error
 	}{
 		{
 			name: "behavioural nodes and random nodes are empty",
 			sarga: getAccountSetupArgs(t,
 				types.SargaAddress,
-				emptyNodes,
-				emptyNodes,
 				2,
-				nil,
-				nil,
+				"moi-id",
+				emptyNodes,
+				emptyNodes,
 			),
 			expectedError: errors.New("context initiation failed in genesis"),
 		},
 		{
-			name: "invalid sarga account address",
-			sarga: getAccountSetupArgs(t,
-				tests.RandomAddress(t),
-				emptyNodes,
-				emptyNodes,
-				2,
-				nil,
-				nil,
-			),
-			expectedError: errors.New("invalid sarga account address"),
-		},
-		{
 			name: "other accounts added to sarga account",
-			sarga: getAccountSetupArgs(t,
+			sarga: getAccountSetupArgs(
+				t,
 				types.SargaAddress,
+				2,
+				"moi-id",
 				nodes[:2],
 				nodes[2:4],
-				2,
-				nil,
-				nil,
 			),
-			accounts: []*gtypes.AccountSetupArgs{
-				getAccountSetupArgs(t,
+			accounts: []types.AccountSetupArgs{
+				*getAccountSetupArgs(
+					t,
 					tests.RandomAddress(t),
+					3,
+					"moi-id",
 					nodes[4:6],
 					nodes[6:8],
-					3,
-					nil,
-					nil,
 				),
-				getAccountSetupArgs(t,
+				*getAccountSetupArgs(
+					t,
 					tests.RandomAddress(t),
+					9,
+					"moi-id",
 					nodes[8:10],
 					nodes[10:12],
-					9,
-					nil,
-					nil,
 				),
 			},
 		},
@@ -2379,7 +1966,7 @@ func TestSetupSargaAcc(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			_, contextHash, err := cm.SetupSargaAccount(test.sarga, test.accounts, test.logics)
+			obj, err := cm.SetupSargaAccount(test.sarga, test.accounts, nil, nil)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -2388,9 +1975,16 @@ func TestSetupSargaAcc(t *testing.T) {
 
 			require.NoError(t, err)
 
-			validateContextInitialization(t, cm.sm, types.SargaAddress, contextHash)
+			validateContextInitialization(
+				t,
+				cm.sm,
+				types.SargaAddress,
+				test.sarga.BehaviouralContext,
+				test.sarga.RandomContext,
+				obj.ContextHash(),
+			)
 
-			obj, _ := cm.sm.GetDirtyObject(types.SargaAddress)
+			obj, _ = cm.sm.GetDirtyObject(types.SargaAddress)
 
 			checkSargaObjectAccounts(t, obj, test.accounts)
 		})
@@ -2401,70 +1995,40 @@ func TestSetupNewAccount(t *testing.T) {
 	cm := createTestChainManager(t, nil)
 	nodes := tests.GetTestKramaIDs(t, 12)
 
-	var emptyNodes []id.KramaID
-
 	testcases := []struct {
-		name          string
-		newAcc        *gtypes.AccountSetupArgs
-		expectedError error
+		name               string
+		newAcc             *types.AccountSetupArgs
+		expectedError      error
+		behaviouralContext []id.KramaID
+		randomContext      []id.KramaID
 	}{
 		{
 			name: "behavioural nodes and random nodes are empty",
 			newAcc: getAccountSetupArgs(t,
 				tests.RandomAddress(t),
-				emptyNodes,
-				emptyNodes,
 				3,
+				"moi-id",
 				nil,
 				nil,
 			),
 			expectedError: errors.New("context initiation failed in genesis"),
 		},
 		{
-			name: "account with assets and balances",
+			name: "behavioural nodes and random nodes are set",
 			newAcc: getAccountSetupArgs(t,
 				tests.RandomAddress(t),
-				nodes[:2],
-				nodes[2:4],
-				2,
-				[]*types.AssetDescriptor{
-					getAsset(
-						1,
-						10000,
-						"MOI",
-						true,
-						true,
-					),
-					getAsset(
-						1,
-						10000,
-						"BTC",
-						true,
-						true,
-					),
-				},
-				map[types.AssetID]*big.Int{
-					"MOI": big.NewInt(12000),
-					"BTC": big.NewInt(18000),
-				},
+				3,
+				"moi-id",
+				nodes[:6],
+				nodes[6:],
 			),
-		},
-		{
-			name: "account without assets and balances",
-			newAcc: getAccountSetupArgs(t,
-				tests.RandomAddress(t),
-				nodes[:2],
-				nodes[2:4],
-				2,
-				make([]*types.AssetDescriptor, 0),
-				make(map[types.AssetID]*big.Int),
-			),
+			expectedError: nil,
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			_, contextHash, err := cm.SetupNewAccount(test.newAcc)
+			stateObject, err := cm.SetupNewAccount(*test.newAcc)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -2473,23 +2037,14 @@ func TestSetupNewAccount(t *testing.T) {
 
 			require.NoError(t, err)
 
-			validateContextInitialization(t, cm.sm, test.newAcc.Address, contextHash)
-
-			obj, _ := cm.sm.GetDirtyObject(test.newAcc.Address)
-
-			// check if balances are added
-			for assetID, balance := range test.newAcc.Balances {
-				bal, err := obj.BalanceOf(assetID)
-				require.NoError(t, err)
-
-				require.Equal(t, bal, balance)
-			}
-
-			journalIndex := 3 // index is 3 as there will be 3 entries before asset creation
-			for _, asset := range test.newAcc.Assets {
-				CheckAssetCreation(t, obj, asset)
-				journalIndex++
-			}
+			validateContextInitialization(
+				t,
+				cm.sm,
+				test.newAcc.Address,
+				test.behaviouralContext,
+				test.randomContext,
+				stateObject.ContextHash(),
+			)
 		})
 	}
 }
@@ -2499,16 +2054,16 @@ func TestExecuteGenesisContracts(t *testing.T) {
 
 	ids := tests.GetTestKramaIDs(t, 1)
 	nodes := utils.KramaIDToString(ids)
-
+	objectsMap := make(map[types.Address]*guna.StateObject)
 	testcases := []struct {
 		name          string
-		logics        []GenesisLogic
+		logics        []types.GenesisLogic
 		smCallBack    func(sm *MockStateManager)
 		expectedError string
 	}{
 		{
 			name: "invalid logic name",
-			logics: []GenesisLogic{{
+			logics: []types.GenesisLogic{{
 				Name:               "test",
 				BehaviouralContext: nodes,
 			}},
@@ -2519,7 +2074,7 @@ func TestExecuteGenesisContracts(t *testing.T) {
 		},
 		{
 			name: "missing behaviour context",
-			logics: []GenesisLogic{{
+			logics: []types.GenesisLogic{{
 				Name:               "staking-contract",
 				BehaviouralContext: nil,
 			}},
@@ -2533,7 +2088,7 @@ func TestExecuteGenesisContracts(t *testing.T) {
 			smCallBack: func(sm *MockStateManager) {
 				sm.setAccType(logicID.Address(), types.LogicAccount)
 			},
-			logics: generateTestGenesisLogics(t),
+			logics: getTestGenesisLogics(t),
 		},
 	}
 
@@ -2546,7 +2101,7 @@ func TestExecuteGenesisContracts(t *testing.T) {
 			}
 
 			cm := createTestChainManager(t, chainParams)
-			_, err := cm.ExecuteGenesisLogics(test.logics)
+			_, err := cm.SetupGenesisLogics(objectsMap, test.logics)
 
 			if test.expectedError != "" {
 				require.ErrorContains(t, err, test.expectedError)
@@ -2559,26 +2114,26 @@ func TestExecuteGenesisContracts(t *testing.T) {
 	}
 }
 
-func CheckAssetCreation(
-	t *testing.T,
-	s *guna.StateObject,
-	assetDescriptor *types.AssetDescriptor,
-) {
-	t.Helper()
-
-	expectedAssetID, expectedAssetHash, expectedData, err := getTestAssetID(assetDescriptor)
-	require.NoError(t, err)
-
-	actualData, err := s.GetDirtyEntry(expectedAssetHash.String()) // check if asset data inserted in dirty entries
-	require.NoError(t, err)
-	require.Equal(t, expectedData, actualData)
-
-	actualSupply, err := s.BalanceOf(expectedAssetID)
-	require.NoError(t, err)
-	require.Equal(t, assetDescriptor.Supply, actualSupply) // check total supply is stored in balances
-
-	require.Equal(t, s.Address(), assetDescriptor.Owner) // check if address is assigned to owner
-}
+// func CheckAssetCreation(
+//	t *testing.T,
+//	s *guna.StateObject,
+//	assetDescriptor *types.AssetDescriptor,
+// ) {
+//	t.Helper()
+//
+//	expectedAssetID, expectedAssetHash, expectedData, err := getTestAssetID(assetDescriptor)
+//	require.NoError(t, err)
+//
+//	actualData, err := s.GetDirtyEntry(expectedAssetHash.String()) // check if asset data inserted in dirty entries
+//	require.NoError(t, err)
+//	require.Equal(t, expectedData, actualData)
+//
+//	actualSupply, err := s.BalanceOf(expectedAssetID)
+//	require.NoError(t, err)
+//	require.Equal(t, assetDescriptor.Supply, actualSupply) // check total supply is stored in balances
+//
+//	require.Equal(t, s.Address(), assetDescriptor.Owner) // check if address is assigned to owner
+//}
 
 func TestGetTesseractPartsByGridHash(t *testing.T) {
 	var (

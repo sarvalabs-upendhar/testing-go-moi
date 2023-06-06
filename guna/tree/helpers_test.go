@@ -1,6 +1,7 @@
 package tree
 
 import (
+	"encoding/hex"
 	"reflect"
 	"testing"
 
@@ -110,7 +111,7 @@ func checkForPreImage(t *testing.T, key []byte, hashTree *KramaHashTree, shouldE
 func checkForDeltaNodes(t *testing.T, key, value []byte, hashTree *KramaHashTree, shouldExist bool) {
 	t.Helper()
 
-	v, ok := hashTree.root.HashTable[string(key)]
+	v, ok := hashTree.root.HashTable[hex.EncodeToString(key)]
 	if !shouldExist {
 		require.False(t, ok)
 

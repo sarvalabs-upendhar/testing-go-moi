@@ -1,8 +1,9 @@
 package mudra
 
 import (
-	"github.com/pkg/errors"
+	"encoding/hex"
 
+	"github.com/pkg/errors"
 	"github.com/sarvalabs/moichain/mudra/common"
 	"github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/mudra/poi"
@@ -11,6 +12,10 @@ import (
 	"github.com/sarvalabs/moichain/mudra/signature/ecdsa"
 	"github.com/sarvalabs/moichain/mudra/signature/schnorr"
 	"github.com/sarvalabs/moichain/types"
+)
+
+const (
+	DefaultMOIWalletPath = "m/44'/6174'/0'/0/1"
 )
 
 type KramaVault struct {
@@ -26,6 +31,7 @@ type VaultConfig struct {
 	SeedPhrase   string
 	Mode         int8   // 0: Server, 1: Register/User mode
 	NodeIndex    uint32 // Requires only in Register mode
+	InMemory     bool
 }
 
 func loadVault(signingAndNetworkKeys []byte,
@@ -106,10 +112,12 @@ func NewVault(cfg *VaultConfig, validatorType moinode.MoiNodeType, kramaIDVersio
 				return nil, err
 			}
 
-			if err := poi.SetupKeystore(currentKID,
-				bothSignAndCommPrivBytes, validatorType, cfg.DataDir, cfg.NodePassword,
-			); err != nil {
-				return nil, err
+			if !cfg.InMemory {
+				if err := poi.SetupKeystore(currentKID,
+					bothSignAndCommPrivBytes, validatorType, cfg.DataDir, cfg.NodePassword,
+				); err != nil {
+					return nil, err
+				}
 			}
 
 			signingAndNetworkKeys = bothSignAndCommPrivBytes
@@ -290,4 +298,25 @@ func VerifyAggregateSignature(data []byte, aggSignature []byte, multiplePubKeys 
 	}
 
 	return bls.VerifyAggregateSignature(data, aggSignature, multiplePubKeys)
+}
+
+// GetSignature generates EcdsaSecp256k1 signature using DefaultMOIWallet IGCPath
+func GetSignature(bz []byte, mnemonic string) (string, error) {
+	cfg := &VaultConfig{
+		SeedPhrase: mnemonic,
+		Mode:       1,
+		InMemory:   true,
+	}
+
+	vault, err := NewVault(cfg, moinode.MoiFullNode, 1)
+	if err != nil {
+		return "", err
+	}
+
+	sign, err := vault.Sign(bz, common.EcdsaSecp256k1, UsingIgcPath(DefaultMOIWalletPath))
+	if err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(sign), nil
 }

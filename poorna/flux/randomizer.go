@@ -424,8 +424,6 @@ func (r *Randomizer) Close() {
 }
 
 func (r *Randomizer) SendFluxMessage(peerID peer.ID, msgType ptypes.MsgType, msg interface{}) error {
-	r.logger.Debug("Sending flux message", peerID)
-
 	rawData, err := polo.Polorize(msg)
 	if err != nil {
 		return errors.Wrap(err, "failed to polorize message payload")

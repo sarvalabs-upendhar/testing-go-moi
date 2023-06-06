@@ -33,9 +33,10 @@ const (
 	File            Prefix = 0x03
 	Storage         Prefix = 0x04
 	Balance         Prefix = 0x05
-	Approvals       Prefix = 0x06
-	PreImage        Prefix = 0x07
-	TesseractHeight Prefix = 0x08
+	Registry        Prefix = 0x06
+	Approvals       Prefix = 0x07
+	PreImage        Prefix = 0x08
+	TesseractHeight Prefix = 0x09
 )
 
 func (p Prefix) Byte() byte {
@@ -72,6 +73,10 @@ func AccSyncStatusKey(addrs types.Address) []byte {
 
 func ContextObjectKey(address types.Address, contextHash types.Hash) []byte {
 	return dbKey(address, Context, contextHash.Bytes())
+}
+
+func RegistryObjectKey(address types.Address, registryHash types.Hash) []byte {
+	return dbKey(address, Registry, registryHash.Bytes())
 }
 
 func BalanceObjectKey(address types.Address, balanceHash types.Hash) []byte {

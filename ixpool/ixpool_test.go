@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/common"
@@ -19,7 +21,7 @@ func TestIxPool_AddInteractions_checkIx(t *testing.T) {
 	ixPool, _ := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 		c.Mode = 0
 		c.PriceLimit = big.NewInt(100)
-	})
+	}, true)
 
 	testcases := []struct {
 		name        string
@@ -106,7 +108,7 @@ func TestIxPool_AddInteractions(t *testing.T) {
 			ixPool, _ := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 				c.Mode = 0
 				c.PriceLimit = big.NewInt(100)
-			})
+			}, true)
 
 			wg.Add(1)
 
@@ -197,7 +199,7 @@ func TestIxPool_handleEnqueueRequest(t *testing.T) {
 			ixPool, _ := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 				c.Mode = 0
 				c.PriceLimit = big.NewInt(100)
-			})
+			}, true)
 			senderAddress := testcase.ixs[0].Sender()
 
 			if testcase.testFn != nil {
@@ -216,7 +218,7 @@ func TestIxPool_handlePromoteRequest(t *testing.T) {
 	ixPool, _ := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 		c.Mode = 0
 		c.PriceLimit = big.NewInt(100)
-	})
+	}, true)
 
 	testcases := []struct {
 		name     string
@@ -282,7 +284,7 @@ func TestIxPool_createAccountOnce(t *testing.T) {
 	ixPool, mockStateManager := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 		c.Mode = 0
 		c.PriceLimit = big.NewInt(100)
-	})
+	}, true)
 
 	testcases := []struct {
 		name          string
@@ -326,7 +328,7 @@ func TestIxPool_ResetWithHeaders(t *testing.T) {
 	ixPool, _ := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 		c.Mode = 0
 		c.PriceLimit = big.NewInt(100)
-	})
+	}, true)
 
 	testcases := []struct {
 		name               string
@@ -387,7 +389,7 @@ func TestIxPool_resetAccount_enqueued(t *testing.T) {
 	ixPool, _ := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 		c.Mode = 0
 		c.PriceLimit = big.NewInt(100)
-	})
+	}, true)
 
 	testcases := []struct {
 		name             string
@@ -444,7 +446,7 @@ func TestIxPool_resetAccount_promoted(t *testing.T) {
 	ixPool, _ := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 		c.Mode = 0
 		c.PriceLimit = big.NewInt(100)
-	})
+	}, true)
 
 	testcases := []struct {
 		name               string
@@ -562,7 +564,7 @@ func TestIxPool_resetAccount(t *testing.T) {
 			ixPool, _ := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 				c.Mode = 0
 				c.PriceLimit = big.NewInt(100)
-			})
+			}, true)
 
 			senderAddress := testcase.ixs[0].Sender()
 
@@ -596,7 +598,7 @@ func TestIxPool_Pop(t *testing.T) {
 	ixPool, _ := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 		c.Mode = 0
 		c.PriceLimit = big.NewInt(100)
-	})
+	}, true)
 
 	testcases := []struct {
 		name               string
@@ -631,7 +633,7 @@ func TestIxPool_Drop(t *testing.T) {
 	ixPool, _ := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 		c.Mode = 0
 		c.PriceLimit = big.NewInt(100)
-	})
+	}, true)
 
 	testcases := []struct {
 		name string
@@ -664,7 +666,7 @@ func TestIxPool_IncrementWaitTime_InvalidAccount(t *testing.T) {
 	ixPool, _ := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 		c.Mode = 0
 		c.PriceLimit = big.NewInt(100)
-	})
+	}, false)
 
 	err := ixPool.IncrementWaitTime(types.Address{0x0}, 1500*time.Millisecond)
 	require.Error(t, err)
@@ -705,7 +707,7 @@ func TestIxPool_IncrementWaitTime(t *testing.T) {
 	ixPool, _ := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 		c.Mode = 0
 		c.PriceLimit = big.NewInt(100)
-	})
+	}, false)
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
@@ -744,7 +746,7 @@ func TestIxPool_validateIx(t *testing.T) {
 	ixPool, mockStateManager := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 		c.Mode = 0
 		c.PriceLimit = big.NewInt(100)
-	})
+	}, true)
 
 	testcases := []struct {
 		name        string
@@ -793,7 +795,7 @@ func TestIxPool_validateIx(t *testing.T) {
 					"assetID1": big.NewInt(20),
 				}
 			}),
-			expectedErr: types.ErrAssetNotFound,
+			expectedErr: types.ErrFetchingBalance,
 		},
 		{
 			name: "Ix with insufficient funds",
@@ -819,7 +821,268 @@ func TestIxPool_validateIx(t *testing.T) {
 			}
 
 			err := ixPool.validateIx(testcase.ix)
-			require.Equal(t, testcase.expectedErr, err)
+
+			if testcase.expectedErr != nil {
+				require.ErrorContains(t, err, testcase.expectedErr.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestIxPool_validateIx_WithSign(t *testing.T) {
+	ixPool, mockStateManager := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
+		c.Mode = 0
+		c.PriceLimit = big.NewInt(100)
+	}, false)
+
+	address, mnemonic := tests.RandomAddressWithMnemonic(t)
+
+	ixArgs := types.SendIXArgs{
+		Sender:    address,
+		Type:      types.IxValueTransfer,
+		FuelPrice: big.NewInt(100),
+		TransferValues: map[types.AssetID]*big.Int{
+			"assetID1": big.NewInt(5),
+		},
+	}
+
+	rawSign := tests.GetIXSignature(t, &ixArgs, mnemonic)
+
+	ix := tests.CreateIX(t, getIXParams(
+		address,
+		types.IxValueTransfer,
+		big.NewInt(100),
+		map[types.AssetID]*big.Int{
+			"assetID1": big.NewInt(5),
+		},
+		rawSign,
+	))
+
+	testcases := []struct {
+		name        string
+		ix          *types.Interaction
+		testFn      func(interaction *types.Interaction)
+		expectedErr error
+	}{
+		{
+			name: "invalid signature",
+			ix: newTestInteraction(t, types.IxValueTransfer, 0, tests.RandomAddress(t), func(ixData *types.IxData) {
+				ixData.Input.TransferValues = map[types.AssetID]*big.Int{
+					"assetID1": big.NewInt(5),
+				}
+			}),
+			testFn: func(interaction *types.Interaction) {
+				mockStateManager.balance[interaction.Sender()] = map[types.AssetID]*big.Int{
+					"assetID1": big.NewInt(10),
+				}
+			},
+			expectedErr: types.ErrInvalidIXSignature,
+		},
+		{
+			name: "valid signature",
+			ix:   ix,
+			testFn: func(interaction *types.Interaction) {
+				mockStateManager.balance[interaction.Sender()] = map[types.AssetID]*big.Int{
+					"assetID1": big.NewInt(10),
+				}
+			},
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			if testcase.testFn != nil {
+				testcase.testFn(testcase.ix)
+			}
+
+			err := ixPool.validateIx(testcase.ix)
+			if testcase.expectedErr != nil {
+				require.ErrorContains(t, err, testcase.expectedErr.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestIxPool_ValidateAssetMint(t *testing.T) {
+	ixPool, mockStateManager := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
+		c.Mode = 0
+		c.PriceLimit = big.NewInt(100)
+	}, false)
+
+	address := tests.RandomAddress(t)
+	assetID := tests.GetRandomAssetID(t, address)
+	assetPayload := types.AssetMintOrBurnPayload{
+		Asset: assetID,
+	}
+
+	rawAssetPayload, err := assetPayload.Bytes()
+	require.NoError(t, err)
+
+	testcases := []struct {
+		name        string
+		ix          *types.Interaction
+		testFn      func(interaction *types.Interaction)
+		expectedErr error
+	}{
+		{
+			name: "asset not found",
+			ix: newTestInteraction(t, types.IxAssetMint, 0, address, func(ixData *types.IxData) {
+				ixData.Input.Payload = rawAssetPayload
+			}),
+			expectedErr: types.ErrAssetNotFound,
+		},
+		{
+			name: "Owner address mismatch",
+			ix: newTestInteraction(t, types.IxAssetMint, 0, address, func(ixData *types.IxData) {
+				ixData.Input.Payload = rawAssetPayload
+			}),
+			testFn: func(interaction *types.Interaction) {
+				mockStateManager.setAssetInfo(assetID, &types.AssetDescriptor{
+					Owner: tests.RandomAddress(t),
+				})
+			},
+			expectedErr: errors.New("Owner address mismatch"),
+		},
+		{
+			name: "valid asset mint data",
+			ix: newTestInteraction(t, types.IxAssetMint, 0, address, func(ixData *types.IxData) {
+				ixData.Input.Payload = rawAssetPayload
+			}),
+			testFn: func(interaction *types.Interaction) {
+				mockStateManager.setAssetInfo(assetID, &types.AssetDescriptor{
+					Owner: interaction.Sender(),
+				})
+			},
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			if testcase.testFn != nil {
+				testcase.testFn(testcase.ix)
+			}
+
+			err := ixPool.validateAssetMint(testcase.ix)
+			if testcase.expectedErr != nil {
+				require.ErrorContains(t, err, testcase.expectedErr.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestIxPool_ValidateAssetBurn(t *testing.T) {
+	address := tests.RandomAddress(t)
+	assetID := tests.GetRandomAssetID(t, address)
+	assetPayload := types.AssetMintOrBurnPayload{
+		Asset:  assetID,
+		Amount: big.NewInt(100),
+	}
+
+	rawAssetPayload, err := assetPayload.Bytes()
+	require.NoError(t, err)
+
+	testcases := []struct {
+		name        string
+		ix          *types.Interaction
+		testFn      func(interaction *types.Interaction, msm *MockStateManager)
+		expectedErr error
+	}{
+		{
+			name: "asset not found",
+			ix: newTestInteraction(t, types.IxAssetMint, 0, address, func(ixData *types.IxData) {
+				ixData.Input.Payload = rawAssetPayload
+			}),
+			expectedErr: types.ErrAssetNotFound,
+		},
+		{
+			name: "balance not found",
+			ix: newTestInteraction(t, types.IxAssetMint, 0, address, func(ixData *types.IxData) {
+				ixData.Input.Payload = rawAssetPayload
+			}),
+			testFn: func(interaction *types.Interaction, mockStateManager *MockStateManager) {
+				mockStateManager.setAssetInfo(assetID, &types.AssetDescriptor{
+					Owner: interaction.Sender(),
+				})
+			},
+			expectedErr: types.ErrFetchingBalance,
+		},
+		{
+			name: "insufficient funds",
+			ix: newTestInteraction(t, types.IxAssetMint, 0, address, func(ixData *types.IxData) {
+				ixData.Input.Payload = rawAssetPayload
+			}),
+			testFn: func(interaction *types.Interaction, mockStateManager *MockStateManager) {
+				mockStateManager.balance[interaction.Sender()] = map[types.AssetID]*big.Int{
+					assetID: big.NewInt(10),
+				}
+				mockStateManager.setAssetInfo(assetID, &types.AssetDescriptor{
+					Owner: interaction.Sender(),
+				})
+			},
+			expectedErr: types.ErrInsufficientFunds,
+		},
+		{
+			name: "owner address mismatch",
+			ix: newTestInteraction(t, types.IxAssetMint, 0, address, func(ixData *types.IxData) {
+				ixData.Input.Payload = rawAssetPayload
+			}),
+			testFn: func(interaction *types.Interaction, mockStateManager *MockStateManager) {
+				mockStateManager.balance[interaction.Sender()] = map[types.AssetID]*big.Int{
+					assetID: big.NewInt(1000),
+				}
+				mockStateManager.setAssetInfo(assetID, &types.AssetDescriptor{
+					Owner: tests.RandomAddress(t),
+				})
+			},
+			expectedErr: errors.New("Owner address mismatch"),
+		},
+		{
+			name: "valid asset burn data",
+			ix: newTestInteraction(t, types.IxAssetMint, 0, address, func(ixData *types.IxData) {
+				ixData.Input.Payload = rawAssetPayload
+			}),
+			testFn: func(interaction *types.Interaction, mockStateManager *MockStateManager) {
+				mockStateManager.balance[interaction.Sender()] = map[types.AssetID]*big.Int{
+					assetID: big.NewInt(1000),
+				}
+				mockStateManager.setAssetInfo(assetID, &types.AssetDescriptor{
+					Owner: interaction.Sender(),
+				})
+			},
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			ixPool, mockStateManager := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
+				c.Mode = 0
+				c.PriceLimit = big.NewInt(100)
+			}, false)
+
+			if testcase.testFn != nil {
+				testcase.testFn(testcase.ix, mockStateManager)
+			}
+
+			err := ixPool.validateAssetBurn(testcase.ix)
+			if testcase.expectedErr != nil {
+				require.ErrorContains(t, err, testcase.expectedErr.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
 		})
 	}
 }
@@ -904,7 +1167,7 @@ func TestIxPool_Executables_Wait_Mode(t *testing.T) {
 			ixPool, _ := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 				c.Mode = 0
 				c.PriceLimit = big.NewInt(0)
-			})
+			}, true)
 
 			ixPool.Start()
 			defer ixPool.Close()
@@ -1002,7 +1265,7 @@ func TestIxPool_Executables_Cost_Mode(t *testing.T) {
 			ixPool, _ := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 				c.Mode = 1
 				c.PriceLimit = big.NewInt(0)
-			})
+			}, true)
 
 			ixPool.Start()
 			defer ixPool.Close()
@@ -1093,7 +1356,7 @@ func TestIxPool_Executables_Wait_Time(t *testing.T) {
 			ixPool, _ := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 				c.Mode = 0
 				c.PriceLimit = big.NewInt(0)
-			})
+			}, true)
 
 			ixPool.Start()
 			defer ixPool.Close()

@@ -1,7 +1,6 @@
 package types
 
 import (
-	"encoding/hex"
 	"math/big"
 
 	"github.com/pkg/errors"
@@ -34,29 +33,42 @@ type AssetDescriptor struct {
 	Owner  Address   `json:"owner"`
 	Supply *big.Int  `json:"supply"`
 
-	Dimension uint8 `json:"dimension"`
-	Decimals  uint8 `json:"decimals"`
-
-	IsFungible     bool `json:"is_fungible"`
-	IsMintable     bool `json:"is_mintable"`
-	IsTransferable bool `json:"is_transferable"`
+	Dimension  uint8  `json:"dimension"`
+	Standard   uint16 `json:"standard"`
+	IsLogical  bool   `json:"is_logical"`
+	IsStateFul bool   `json:"is_stateful"`
 
 	LogicID LogicID `json:"logic_id"`
 }
 
 func NewAssetDescriptor(owner Address, asset AssetCreatePayload) *AssetDescriptor {
 	return &AssetDescriptor{
-		Owner:          owner,
-		Type:           asset.Type,
-		Symbol:         asset.Symbol,
-		Supply:         asset.Supply,
-		Dimension:      asset.Dimension,
-		Decimals:       asset.Decimals,
-		IsFungible:     asset.IsFungible,
-		IsMintable:     asset.IsMintable,
-		IsTransferable: asset.IsTransferable,
-		LogicID:        asset.LogicID,
+		Owner:      owner,
+		Type:       asset.Type,
+		Symbol:     asset.Symbol,
+		Supply:     asset.Supply,
+		Dimension:  asset.Dimension,
+		Standard:   asset.Standard,
+		IsStateFul: asset.IsStateFul,
+		IsLogical:  asset.IsLogical,
 	}
+}
+
+func (ad *AssetDescriptor) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(ad)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize asset descriptor")
+	}
+
+	return rawData, nil
+}
+
+func (ad *AssetDescriptor) FromBytes(data []byte) error {
+	if err := polo.Depolorize(ad, data); err != nil {
+		return errors.Wrap(err, "failed to depolorize asset descriptor")
+	}
+
+	return nil
 }
 
 type AssetDimension byte
@@ -87,62 +99,4 @@ func StringToDimensionID(str string) AssetDimension {
 	}
 
 	return 0
-}
-
-type AssetObject struct {
-	Symbol   string
-	Supply   *big.Int
-	Decimals uint8
-
-	Owner   Address
-	LogicID LogicID
-	Extra   []byte
-}
-
-func (ad *AssetObject) FromBytes(bytes []byte) error {
-	if err := polo.Depolorize(ad, bytes); err != nil {
-		return errors.Wrap(err, "failed to depolorize asset data")
-	}
-
-	return nil
-}
-
-// GetAssetID returns ...
-// WARNING: THIS FUNCTION IS STAGED FOR DEPRECATION [LEGACY CODE]
-func GetAssetID(asset *AssetDescriptor) (AssetID, Hash, []byte, error) {
-	assetObject := AssetObject{
-		Owner:    asset.Owner,
-		Symbol:   asset.Symbol,
-		Decimals: asset.Decimals,
-		Extra:    make([]byte, 8),
-	}
-
-	var (
-		buf  []byte
-		info uint8 = 0x00
-	)
-
-	if asset.IsMintable {
-		info |= 0x01
-	} else {
-		assetObject.Supply = asset.Supply
-	}
-
-	if asset.IsFungible {
-		info |= 0x80
-	}
-
-	buf = append(buf, asset.Dimension)
-	buf = append(buf, info)
-
-	data, err := polo.Polorize(assetObject)
-	if err != nil {
-		return "", NilHash, nil, err
-	}
-
-	assetCID := GetHash(data)
-	buf = append(buf, assetCID.Bytes()...)
-	assetID := AssetID(hex.EncodeToString(buf))
-
-	return assetID, assetCID, data, nil
 }

@@ -1,12 +1,9 @@
 package api
 
 import (
-	"encoding/hex"
 	"encoding/json"
-	"math/big"
 
 	"github.com/pkg/errors"
-
 	"github.com/sarvalabs/moichain/common/hexutil"
 	"github.com/sarvalabs/moichain/jug/engineio"
 	"github.com/sarvalabs/moichain/lattice"
@@ -115,17 +112,12 @@ func (p *PublicCoreAPI) GetContextInfo(args *ptypes.ContextInfoArgs) ([]string, 
 // Accepts the address and asset for which to retrieve the balance.
 // Returns the balance as a big Integer and any error that occurs.
 func (p *PublicCoreAPI) GetBalance(args *ptypes.BalArgs) (*hexutil.Big, error) {
-	assetID, err := utils.ValidateAssetID(args.AssetID)
-	if err != nil {
-		return nil, types.ErrInvalidAssetID
-	}
-
 	ts, err := p.getTesseract(getTesseractArgs(args.Address, args.Options))
 	if err != nil {
 		return nil, err
 	}
 
-	balance, err := p.sm.GetBalance(ts.Address(), assetID, ts.StateHash())
+	balance, err := p.sm.GetBalance(ts.Address(), args.AssetID, ts.StateHash())
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +126,7 @@ func (p *PublicCoreAPI) GetBalance(args *ptypes.BalArgs) (*hexutil.Big, error) {
 }
 
 // GetTDU will return the total digital utility associated with address
-func (p *PublicCoreAPI) GetTDU(args *ptypes.TesseractArgs) (map[types.AssetID]*hexutil.Big, error) {
+func (p *PublicCoreAPI) GetTDU(args *ptypes.QueryArgs) (map[types.AssetID]*hexutil.Big, error) {
 	ts, err := p.getTesseract(getTesseractArgs(args.Address, args.Options))
 	if err != nil {
 		return nil, err
@@ -154,6 +146,34 @@ func (p *PublicCoreAPI) GetTDU(args *ptypes.TesseractArgs) (map[types.AssetID]*h
 	}
 
 	return rpcAssetMap, nil
+}
+
+func (p *PublicCoreAPI) GetRegistry(args *ptypes.QueryArgs) ([]ptypes.RPCRegistry, error) {
+	ts, err := p.getTesseract(getTesseractArgs(args.Address, args.Options))
+	if err != nil {
+		return nil, err
+	}
+
+	registry, err := p.sm.GetRegistry(args.Address, ts.StateHash())
+	if err != nil {
+		return nil, err
+	}
+
+	entries := make([]ptypes.RPCRegistry, 0, len(registry))
+
+	for assetID, rawInfo := range registry {
+		ad := new(types.AssetDescriptor)
+		if err = ad.FromBytes(rawInfo); err != nil {
+			return nil, err
+		}
+
+		entries = append(entries, ptypes.RPCRegistry{
+			AssetID:   assetID,
+			AssetInfo: ptypes.GetRPCAssetDescriptor(ad),
+		})
+	}
+
+	return entries, nil
 }
 
 // GetInteractionByTesseract returns the interaction for the given tesseract hash
@@ -283,6 +303,7 @@ func (p *PublicCoreAPI) GetAccountState(args *ptypes.GetAccountArgs) (map[string
 		"nonce":           hexutil.Uint64(account.Nonce),
 		"acc_type":        account.AccType,
 		"balance":         account.Balance,
+		"asset_registry":  account.AssetRegistry,
 		"asset_approvals": account.AssetApprovals,
 		"context_hash":    account.ContextHash,
 		"storage_root":    account.StorageRoot,
@@ -295,17 +316,12 @@ func (p *PublicCoreAPI) GetAccountState(args *ptypes.GetAccountArgs) (map[string
 
 // GetLogicManifest returns the manifest associated with the given logic id
 func (p *PublicCoreAPI) GetLogicManifest(args *ptypes.LogicManifestArgs) (hexutil.Bytes, error) {
-	logicID, err := utils.ValidateLogicID(args.LogicID)
+	ts, err := p.getTesseract(getTesseractArgs(args.LogicID.Address(), args.Options))
 	if err != nil {
 		return nil, err
 	}
 
-	ts, err := p.getTesseract(getTesseractArgs(logicID.Address(), args.Options))
-	if err != nil {
-		return nil, err
-	}
-
-	logicManifest, err := p.sm.GetLogicManifest(logicID, ts.StateHash())
+	logicManifest, err := p.sm.GetLogicManifest(args.LogicID, ts.StateHash())
 	if err != nil {
 		return nil, err
 	}
@@ -358,40 +374,30 @@ func (p *PublicCoreAPI) GetStorageAt(args *ptypes.GetStorageArgs) (hexutil.Bytes
 }
 
 // GetAssetInfoByAssetID returns the asset info associated with the given asset id
-func (p *PublicCoreAPI) GetAssetInfoByAssetID(id string) (map[string]interface{}, error) {
-	_, err := utils.ValidateAssetID(id)
+func (p *PublicCoreAPI) GetAssetInfoByAssetID(args *ptypes.GetAssetInfoArgs) (map[string]interface{}, error) {
+	ts, err := p.getTesseract(getTesseractArgs(args.AssetID.Address(), args.Options))
 	if err != nil {
 		return nil, err
 	}
 
-	aID, err := hex.DecodeString(id)
+	info, err := p.sm.GetAssetInfo(args.AssetID, ts.StateHash())
 	if err != nil {
 		return nil, err
 	}
-
-	assetInfo := parseAssetMetaInfo(aID)
-
-	assetData, err := p.chain.GetAssetDataByAssetHash(aID[2:])
-	if err != nil {
-		return nil, err
-	}
-
-	assetInfo.Symbol = assetData.Symbol
-	assetInfo.Supply = assetData.Supply
-	assetInfo.Owner = assetData.Owner
-	assetInfo.LogicID = assetData.LogicID
 
 	rpcAssetInfo := map[string]interface{}{
-		"type":            assetInfo.Type,
-		"symbol":          assetInfo.Symbol,
-		"owner":           assetInfo.Owner,
-		"supply":          (*hexutil.Big)(assetInfo.Supply),
-		"dimension":       hexutil.Uint8(assetInfo.Dimension),
-		"decimals":        hexutil.Uint8(assetInfo.Decimals),
-		"is_fungible":     assetInfo.IsFungible,
-		"is_mintable":     assetInfo.IsMintable,
-		"is_transferable": assetInfo.IsTransferable,
-		"logic_id":        assetInfo.LogicID,
+		"type":        info.Type,
+		"symbol":      info.Symbol,
+		"owner":       info.Owner,
+		"supply":      (*hexutil.Big)(info.Supply),
+		"standard":    hexutil.Uint16(info.Standard),
+		"dimension":   hexutil.Uint8(info.Dimension),
+		"is_logical":  info.IsLogical,
+		"is_stateful": info.IsStateFul,
+	}
+
+	if info.LogicID.String() != "" {
+		rpcAssetInfo["logic_id"] = info.LogicID
 	}
 
 	return rpcAssetInfo, nil
@@ -418,34 +424,6 @@ func (p *PublicCoreAPI) AccountMetaInfo(args *ptypes.GetAccountArgs) (map[string
 	}
 
 	return rpcAccMetaInfo, nil
-}
-
-// helper functions
-func parseAssetMetaInfo(aID []byte) *types.AssetDescriptor {
-	var dimension, info uint8
-
-	assetInfo := new(types.AssetDescriptor)
-
-	dimension = uint8(big.NewInt(0).SetBytes(aID[:1]).Uint64())
-	info = uint8(big.NewInt(0).SetBytes(aID[1:2]).Uint64())
-
-	// extract most significant bit
-	if 0x80&info == 0x80 {
-		assetInfo.IsFungible = true
-	} else {
-		assetInfo.IsFungible = false
-	}
-
-	// extract least significant bit
-	if 0x01&info == 1 {
-		assetInfo.IsMintable = true
-	} else {
-		assetInfo.IsMintable = false
-	}
-
-	assetInfo.Dimension = dimension
-
-	return assetInfo
 }
 
 // createRPCInteraction creates an RPC Interaction by copying all fields of the interaction into the RPC Interaction,
@@ -506,25 +484,39 @@ func createRPCInteraction(
 	switch ix.Type() {
 	case types.IxValueTransfer:
 		break
+
+	case types.IxAssetBurn, types.IxAssetMint:
+		assetPayload := new(types.AssetMintOrBurnPayload)
+		if err = assetPayload.FromBytes(ix.Payload()); err != nil {
+			return nil, err
+		}
+
+		rpcPayload := ptypes.RPCAssetMintOrBurn{
+			AssetID: assetPayload.Asset,
+			Amount:  (*hexutil.Big)(assetPayload.Amount),
+		}
+
+		rpcIX.Payload, err = json.Marshal(rpcPayload)
+		if err != nil {
+			return nil, err
+		}
+
 	case types.IxAssetCreate:
-		assetPayload := new(types.AssetPayload)
+		assetPayload := new(types.AssetCreatePayload)
 		if err = assetPayload.FromBytes(ix.Payload()); err != nil {
 			return nil, err
 		}
 
 		rpcAssetPayload := ptypes.RPCAssetCreation{
-			Type:   assetPayload.Create.Type,
-			Symbol: assetPayload.Create.Symbol,
-			Supply: (*hexutil.Big)(assetPayload.Create.Supply),
+			Type:      assetPayload.Type,
+			Symbol:    assetPayload.Symbol,
+			Supply:    (*hexutil.Big)(assetPayload.Supply),
+			Dimension: (*hexutil.Uint8)(&assetPayload.Dimension),
+			Standard:  (*hexutil.Uint16)(&assetPayload.Standard),
 
-			Dimension: (*hexutil.Uint8)(&assetPayload.Create.Dimension),
-			Decimals:  (*hexutil.Uint8)(&assetPayload.Create.Decimals),
-
-			IsFungible:     assetPayload.Create.IsFungible,
-			IsMintable:     assetPayload.Create.IsMintable,
-			IsTransferable: assetPayload.Create.IsTransferable,
-
-			LogicID: assetPayload.Create.LogicID.String(),
+			IsLogical:  assetPayload.IsLogical,
+			IsStateful: assetPayload.IsStateFul,
+			Logic:      ptypes.RPClogicPayloadFromLogicPayload(assetPayload.LogicPayload),
 		}
 
 		rpcIX.Payload, err = json.Marshal(rpcAssetPayload)
@@ -539,14 +531,7 @@ func createRPCInteraction(
 			return nil, err
 		}
 
-		rpcLogicPayload := &ptypes.RPCLogicPayload{
-			Manifest: (hexutil.Bytes)(logicPayload.Manifest),
-			LogicID:  logicPayload.Logic.String(),
-			Callsite: logicPayload.Callsite,
-			Calldata: (hexutil.Bytes)(logicPayload.Calldata),
-		}
-
-		rpcIX.Payload, err = json.Marshal(rpcLogicPayload)
+		rpcIX.Payload, err = json.Marshal(ptypes.RPClogicPayloadFromLogicPayload(logicPayload))
 		if err != nil {
 			return nil, err
 		}

@@ -2,14 +2,12 @@ package lattice
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"reflect"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -24,7 +22,6 @@ import (
 	"github.com/sarvalabs/moichain/dhruva"
 	db2 "github.com/sarvalabs/moichain/dhruva/db"
 	"github.com/sarvalabs/moichain/guna"
-	gtypes "github.com/sarvalabs/moichain/guna/types"
 	"github.com/sarvalabs/moichain/jug"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/types"
@@ -61,6 +58,11 @@ type MockDB struct {
 	setTesseractHeightEntryHook func() error
 	createEntryHook             func() error
 	setTSGridLookupHook         func() error
+}
+
+func (m *MockDB) GetAssetRegistry(addr types.Address, registryHash types.Hash) ([]byte, error) {
+	// TODO implement me
+	panic("implement me")
 }
 
 func (m *MockDB) GetAccountMetaInfo(id types.Address) (*types.AccountMetaInfo, error) {
@@ -765,7 +767,8 @@ func createIX(t *testing.T, params *CreateIxParams) *types.Interaction {
 		params.ixDataCallback(data)
 	}
 
-	ix := types.NewInteraction(*data, []byte{})
+	ix, err := types.NewInteraction(*data, []byte{})
+	require.NoError(t, err)
 
 	return ix
 }
@@ -791,6 +794,7 @@ func getIxParamsWithAddress(from types.Address, to types.Address) *CreateIxParam
 		ixDataCallback: func(ix *types.IxData) {
 			ix.Input.Sender = from
 			ix.Input.Receiver = to
+			ix.Input.Type = types.IxValueTransfer
 		},
 	}
 }
@@ -1420,12 +1424,12 @@ func insertTesseractByHeight(t *testing.T, db db, ts *types.Tesseract) {
 	require.NoError(t, err)
 }
 
-func insertAssetDataByAssetHashInDB(t *testing.T, db db, assetHash types.Hash, assetData []byte) {
-	t.Helper()
-
-	err := db.CreateEntry(assetHash.Bytes(), assetData)
-	require.NoError(t, err)
-}
+// func insertAssetDataByAssetHashInDB(t *testing.T, db db, assetHash types.Hash, assetData []byte) {
+//	t.Helper()
+//
+//	err := db.CreateEntry(assetHash.Bytes(), assetData)
+//	require.NoError(t, err)
+//}
 
 func getICSNodeset(t *testing.T, count int) *types.ICSNodeSet {
 	t.Helper()
@@ -1612,33 +1616,6 @@ func setAccountType(sm *MockStateManager, accType types.AccountType, tesseracts 
 	}
 }
 
-func getAssetInfo(t *testing.T, symbol string, assetKind int) *AssetInfo {
-	t.Helper()
-
-	return &AssetInfo{
-		Type:        assetKind,
-		Symbol:      symbol,
-		Owner:       tests.RandomAddress(t).Hex(),
-		TotalSupply: 10000,
-
-		Dimension: 1,
-		Decimals:  2,
-
-		IsFungible:     true,
-		IsMintable:     true,
-		IsTransferable: true,
-
-		LogicID: "abcd",
-	}
-}
-
-func getBalanceInfo(assetID string, amount int64) *BalanceInfo {
-	return &BalanceInfo{
-		AssetID: assetID,
-		Amount:  amount,
-	}
-}
-
 // waitForResponse waits for response on respChannel
 // and checks if datatype of data received on channel is equal to datatype of data received as argument
 func waitForResponse(t *testing.T, respChan chan result, data interface{}) interface{} {
@@ -1671,18 +1648,6 @@ func handleMuxEvents(ctx context.Context, s *utils.Subscription, resp chan resul
 	}
 }
 
-/*
-// getTesseractSyncEvent extracts TesseractSyncEvent from interface
-func getTesseractSyncEvent(t *testing.T, data interface{}) utils.TesseractSyncEvent {
-	t.Helper()
-
-	event, ok := data.(utils.TesseractSyncEvent)
-	require.True(t, ok)
-
-	return event
-}
-*/
-
 // getTesseractAddedEvent extracts TesseractAddedEvent from interface
 func getTesseractAddedEvent(t *testing.T, data interface{}) utils.TesseractAddedEvent {
 	t.Helper()
@@ -1693,71 +1658,53 @@ func getTesseractAddedEvent(t *testing.T, data interface{}) utils.TesseractAdded
 	return event
 }
 
-/*
-func getPubSubMsg(t *testing.T, ts *types.Tesseract, sender id.KramaID, info *types.ICSClusterInfo) *pubsub.Message {
-	t.Helper()
-
-	msg := &ptypes.TesseractMessage{
-		Delta: make(map[types.Hash][]byte),
-	}
-
-	msg.Tesseract = ts.Canonical()
-	msg.Sender = sender
-
-	rawIxns, err := ts.Interactions().Bytes()
-	require.NoError(t, err)
-	//FIXME: Add sealer
-	msg.Ixns = rawIxns
-
-	msg.Receipts, err = ts.Receipts().Bytes()
-	require.NoError(t, err)
-
-	rawInfo, err := info.Bytes()
-	require.NoError(t, err)
-
-	msg.Delta[ts.ICSHash()] = rawInfo
-
-	tsMsg, err := msg.Bytes()
-	require.NoError(t, err)
-
-	message := &pb.Message{Data: tsMsg}
-	pub := &pubsub.Message{Message: message}
-
-	return pub
-}
-*/
-
-func getAccountInfo(
+func getTestAssetAccountSetupArgs(
 	t *testing.T,
-	address string,
-	accType types.AccountType,
-	moiID string,
-	behaviourContext []string,
-	randomContext []string,
-	assetDetails []*AssetInfo,
-	balances []*BalanceInfo,
-) AccountInfo {
+	assetDetails types.AssetCreationArgs,
+) types.AssetAccountSetupArgs {
 	t.Helper()
 
-	return AccountInfo{
-		Address:          address,
-		AccountType:      accType,
-		MOIId:            moiID,
-		BehaviourContext: behaviourContext,
-		RandomContext:    randomContext,
-		AssetDetails:     assetDetails,
-		Balances:         balances,
+	return types.AssetAccountSetupArgs{
+		BehaviouralContext: tests.GetTestKramaIDs(t, 1),
+		RandomContext:      tests.GetTestKramaIDs(t, 2),
+		AssetInfo:          &assetDetails,
 	}
 }
 
-func generateTestGenesisLogics(t *testing.T) []GenesisLogic {
+func getTestAssetCreationArgs(t *testing.T, allocationAddr types.Address) types.AssetCreationArgs {
+	t.Helper()
+
+	info := tests.GetRandomAssetInfo(t, types.NilAddress)
+
+	if allocationAddr == types.NilAddress {
+		allocationAddr = tests.RandomAddress(t)
+	}
+
+	return types.AssetCreationArgs{
+		Type:       info.Type,
+		Symbol:     info.Symbol,
+		Dimension:  hexutil.Uint8(info.Dimension),
+		Standard:   hexutil.Uint16(info.Standard),
+		IsLogical:  info.IsLogical,
+		IsStateful: info.IsStateFul,
+		Owner:      info.Owner,
+		Allocations: []types.Allocation{
+			{
+				Address: allocationAddr,
+				Amount:  (*hexutil.Big)(big.NewInt(rand.Int63())),
+			},
+		},
+	}
+}
+
+func getTestGenesisLogics(t *testing.T) []types.GenesisLogic {
 	t.Helper()
 
 	manifest := "0x" + types.BytesToHex(tests.ReadManifest(t, "./../jug/manifests/erc20.json"))
 	calldata := "0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd8ee6a29e" +
 		"c442dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49"
 
-	logic := GenesisLogic{
+	logic := types.GenesisLogic{
 		Name: "staking-contract",
 
 		Callsite: "Seeder!",
@@ -1768,7 +1715,7 @@ func generateTestGenesisLogics(t *testing.T) []GenesisLogic {
 		RandomContext:      nil,
 	}
 
-	return []GenesisLogic{logic}
+	return []types.GenesisLogic{logic}
 }
 
 // createMockGenesisFile is a mock function used to create genesis file
@@ -1776,9 +1723,10 @@ func createMockGenesisFile(
 	t *testing.T,
 	dir string,
 	invalidData bool,
-	sarga AccountInfo,
-	accounts []AccountInfo,
-	logics []GenesisLogic,
+	sarga types.AccountSetupArgs,
+	accounts []types.AccountSetupArgs,
+	assetAccounts []types.AssetAccountSetupArgs,
+	logics []types.GenesisLogic,
 ) string {
 	t.Helper()
 
@@ -1787,10 +1735,11 @@ func createMockGenesisFile(
 		err  error
 	)
 
-	genesis := &Genesis{
-		SargaAccount: sarga,
-		Accounts:     accounts,
-		Logics:       logics,
+	genesis := &types.GenesisFile{
+		SargaAccount:  sarga,
+		Accounts:      accounts,
+		AssetAccounts: assetAccounts,
+		Logics:        logics,
 	}
 
 	if invalidData {
@@ -1809,38 +1758,39 @@ func createMockGenesisFile(
 	return file.Name()
 }
 
-func getTestAccountWithAccType(t *testing.T, accType types.AccountType) AccountInfo {
+func getTestAccountWithAccType(t *testing.T, accType types.AccountType) types.AccountSetupArgs {
 	t.Helper()
 
 	ids := tests.GetTestKramaIDs(t, 4)
-	ctx := utils.KramaIDToString(ids)
-	address := tests.RandomAddress(t).Hex()
+
+	address := tests.RandomAddress(t)
 
 	if accType == types.SargaAccount {
-		address = types.SargaAddress.String()
+		address = types.SargaAddress
 	}
 
-	return getAccountInfo(
+	return *getAccountSetupArgs(
 		t,
 		address,
 		accType,
 		"moi-id",
-		ctx[:2],
-		ctx[2:4],
-		[]*AssetInfo{
-			getAssetInfo(t, "btc", 1),
-			getAssetInfo(t, "eth", 1),
-		},
-		[]*BalanceInfo{
-			getBalanceInfo(
-				"0xA6Ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9f9384abcd",
-				8333300,
-			),
-			getBalanceInfo(
-				"0xA6Ba9853f131679d00da0f033516a2efe9cd53c3d54e1f9a6e60e9077e9fcd84abca",
-				1222100,
-			),
-		},
+		ids[:2],
+		ids[2:4],
+	)
+}
+
+func getTestAccountWithAddress(t *testing.T, address types.Address) types.AccountSetupArgs {
+	t.Helper()
+
+	ids := tests.GetTestKramaIDs(t, 4)
+
+	return *getAccountSetupArgs(
+		t,
+		address,
+		types.RegularAccount,
+		"moi-id",
+		ids[:2],
+		ids[2:4],
 	)
 }
 
@@ -2152,7 +2102,9 @@ func checkIfTesseractsAdded(
 	}
 }
 
-func checkForAccountCreation(t *testing.T, accountInfo AccountInfo, accSetupArgs *gtypes.AccountSetupArgs) {
+/*
+
+func checkForAccountCreation(t *testing.T, accountInfo AccountInfo, accSetupArgs gtypes.AccountSetupArgs) {
 	t.Helper()
 
 	require.Equal(t, accountInfo.AccountType, accSetupArgs.AccType)
@@ -2180,17 +2132,25 @@ func checkForAccountCreation(t *testing.T, accountInfo AccountInfo, accSetupArgs
 		require.Equal(t, balance.Amount, amount.Int64())
 	}
 }
+*/
 
-func validateGenesisLogics(t *testing.T, expected []GenesisLogic, actual []GenesisLogic) {
+func checkForAssetAccounts(t *testing.T, expected, actual []types.AssetAccountSetupArgs) {
 	t.Helper()
 
+	require.Equal(t, len(expected), len(actual))
+
+	for i := range expected {
+		require.Equal(t, expected[i], actual[i])
+	}
+}
+
+func checkForLogicAccounts(t *testing.T, expected, actual []types.GenesisLogic) {
+	t.Helper()
+
+	require.Equal(t, len(expected), len(actual))
+
 	for i := range actual {
-		require.Equal(t, expected[i].Name, actual[i].Name)
-		require.Equal(t, expected[i].Manifest, actual[i].Manifest)
-		require.Equal(t, expected[i].Callsite, actual[i].Callsite)
-		require.Equal(t, expected[i].Calldata, actual[i].Calldata)
-		require.Equal(t, expected[i].BehaviouralContext, actual[i].BehaviouralContext)
-		require.Equal(t, expected[i].RandomContext, actual[i].RandomContext)
+		require.Equal(t, expected[i], actual[i])
 	}
 }
 
@@ -2201,7 +2161,6 @@ func checkForGenesisTesseract(
 	address types.Address,
 	stateHash types.Hash,
 	contextHash types.Hash,
-	contextDelta types.ContextDelta,
 ) {
 	t.Helper()
 
@@ -2220,29 +2179,12 @@ func checkForGenesisTesseract(
 	require.Equal(t, address, ts.Address())
 	require.NotNil(t, stateHash)
 	require.NotNil(t, contextHash)
-	require.Equal(t, contextDelta, ts.ContextDelta())
-}
-
-func getAsset(
-	dimension int,
-	totalSupply int,
-	symbol string,
-	isFungible bool,
-	isMintable bool,
-) *types.AssetDescriptor {
-	return &types.AssetDescriptor{
-		Dimension:  uint8(dimension),
-		Supply:     big.NewInt(int64(totalSupply)),
-		Symbol:     symbol,
-		IsFungible: isFungible,
-		IsMintable: isMintable,
-	}
 }
 
 func checkSargaObjectAccounts(
 	t *testing.T,
 	obj *guna.StateObject,
-	accounts []*gtypes.AccountSetupArgs,
+	accounts []types.AccountSetupArgs,
 ) {
 	t.Helper()
 
@@ -2264,7 +2206,13 @@ func checkSargaObjectAccounts(
 	}
 }
 
-func validateContextInitialization(t *testing.T, sm stateManager, address types.Address, contextHash types.Hash) {
+func validateContextInitialization(
+	t *testing.T,
+	sm stateManager,
+	address types.Address,
+	behavioural, random []id.KramaID,
+	contextHash types.Hash,
+) {
 	t.Helper()
 
 	// check if dirty object created
@@ -2274,42 +2222,4 @@ func validateContextInitialization(t *testing.T, sm stateManager, address types.
 	// check if context created
 	_, err = obj.GetDirtyEntry(types.BytesToHex(dhruva.ContextObjectKey(address, contextHash)))
 	require.NoError(t, err)
-}
-
-func getTestAssetID(asset *types.AssetDescriptor) (types.AssetID, types.Hash, []byte, error) {
-	assetObject := types.AssetObject{
-		Owner:    asset.Owner,
-		Symbol:   asset.Symbol,
-		Decimals: asset.Decimals,
-		Extra:    make([]byte, 8),
-	}
-
-	var (
-		buf  []byte
-		info uint8 = 0x00
-	)
-
-	if asset.IsMintable {
-		info |= 0x01
-	} else {
-		assetObject.Supply = asset.Supply
-	}
-
-	if asset.IsFungible {
-		info |= 0x80
-	}
-
-	buf = append(buf, asset.Dimension)
-	buf = append(buf, info)
-
-	data, err := polo.Polorize(assetObject)
-	if err != nil {
-		return "", types.NilHash, nil, err
-	}
-
-	assetCID := types.GetHash(data)
-	buf = append(buf, assetCID.Bytes()...)
-	assetID := types.AssetID(hex.EncodeToString(buf))
-
-	return assetID, assetCID, data, nil
 }

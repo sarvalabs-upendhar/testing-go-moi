@@ -3,11 +3,13 @@ package moiclient
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"math/big"
 	"testing"
 
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/common"
@@ -142,45 +144,81 @@ func TestMoiClient(t *testing.T) {
 func setupChain(t *testing.T, client *Client, addrs []types.Address, addrsMap StrMap) {
 	var i int64 = 0
 
+	accs, err := tests.GetAccountMnemonicsFromFile("../accounts.json")
+	require.NoError(t, err)
+
 	t.Run("DeployLogic", func(t *testing.T) {
-		deployLogic(t, client, addrs[i])
+		acc, exists := GetMnemonicFromAccounts(addrs[i], accs)
+		require.True(t, exists)
+
+		t.Log(addrs[i])
+
+		deployLogic(t, client, addrs[i], acc.Mnemonic)
 		addrsMap["deployAddr"] = addrs[i]
 	})
 	i++
 
 	t.Run("ExecuteLogic", func(t *testing.T) {
+		acc, exists := GetMnemonicFromAccounts(addrs[i], accs)
+		require.True(t, exists)
+
 		t.Log(addrs[i])
-		executeLogic(t, client, addrsMap["deployAddr"], addrs[i])
+
+		executeLogic(t, client, addrsMap["deployAddr"], addrs[i], acc.Mnemonic)
 		addrsMap["executeAddr"] = addrs[i]
 	})
 	i++
 
 	t.Run("CreateAsset", func(t *testing.T) {
+		acc, exists := GetMnemonicFromAccounts(addrs[i], accs)
+		require.True(t, exists)
+
 		t.Log(addrs[i])
-		createAsset(t, client, addrs[i])
+
+		createAsset(t, client, addrs[i], acc.Mnemonic)
 		addrsMap["assetAddr"] = addrs[i]
 	})
 	i++
 
 	t.Run("TransferTokens", func(t *testing.T) {
-		t.Log(addrs[i])
-		transferTokens(t, client, addrsMap["assetAddr"], addrs[i])
+		acc, exists := GetMnemonicFromAccounts(addrsMap["assetAddr"], accs)
+		require.True(t, exists)
+
+		t.Log(addrsMap["assetAddr"])
+
+		transferTokens(t, client, addrsMap["assetAddr"], addrs[i], acc.Mnemonic)
 		addrsMap["receiverAddr"] = addrs[i]
+	})
+	i++
+
+	t.Run("Send IX invalid signature", func(t *testing.T) {
+		acc, exists := GetMnemonicFromAccounts(addrs[i], accs)
+		require.True(t, exists)
+
+		t.Log(addrsMap["deployAddr"])
+
+		SendIxWithInvalidSign(t, client, addrsMap["deployAddr"], acc.Mnemonic)
 	})
 
 	i += 2
 
 	t.Run("IXPoolAPI", func(t *testing.T) {
-		fillIXPool(t, client, addrs[i])
+		acc, exists := GetMnemonicFromAccounts(addrs[i], accs)
+		require.True(t, exists)
+
+		t.Log(addrs[i])
+
+		fillIXPool(t, client, addrs[i], acc.Mnemonic)
 		addrsMap["dumpAddr"] = addrs[i]
 	})
 }
 
 // deployLogic deploys logic manifest
-func deployLogic(t *testing.T, client *Client, addr types.Address) {
-	ixArgs := getIXArgsForLogicDeployment(t, addr)
+func deployLogic(t *testing.T, client *Client, addr types.Address, mnemonic string) {
+	sendIXArgs := getIXArgsForLogicDeployment(t, addr)
+	sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
 
-	ixHash, err := client.SendInteractions(ixArgs)
+	ixHash, err := client.SendInteractions(sendIX)
 	require.NoError(t, err)
 
 	// make sure interaction executed successfully
@@ -191,30 +229,32 @@ func deployLogic(t *testing.T, client *Client, addr types.Address) {
 }
 
 // executeLogic executes the transfer method on deployed logic
-func executeLogic(t *testing.T, client *Client, deployAddr, addr types.Address) {
+func executeLogic(t *testing.T, client *Client, deployAddr, addr types.Address, mnemonic string) {
 	calldata := "0x0daf010665a601e501f6059506616d6f756e74030f424066726f6d06ffcd8ee6a29ec442dbbf9c6124dd3aeb833ef58" +
 		"052237d521654740857716b34746f060fafe52ec42a85db644d5cceba2bb89cf5b0166cc9158211f44ed1e60b06032c"
 
-	logicPayload := &ptypes.RPCLogicPayload{
-		LogicID:  getLogicID(t, client, deployAddr, &deployLogicHeight),
+	logicPayload := &types.LogicPayload{
+		Logic:    getLogicID(t, client, deployAddr, &deployLogicHeight),
 		Callsite: "Transfer!",
-		Calldata: hexutil.Bytes(types.Hex2Bytes(calldata)),
+		Calldata: types.Hex2Bytes(calldata),
 	}
 
-	payload, err := json.Marshal(logicPayload)
+	payload, err := polo.Polorize(logicPayload)
 	require.NoError(t, err)
 
 	fuelprice, _ := new(big.Int).SetString("130D41", 16)
 
-	ixArgs := &ptypes.SendIXArgs{
-		Type:      9,
-		FuelPrice: (*hexutil.Big)(fuelprice),
-		FuelLimit: (*hexutil.Big)(fuelprice),
+	sendIXArgs := &types.SendIXArgs{
+		Type:      types.IxLogicInvoke,
+		FuelPrice: fuelprice,
+		FuelLimit: fuelprice,
 		Sender:    addr,
 		Payload:   payload,
 	}
 
-	ixHash, err := client.SendInteractions(ixArgs)
+	sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
+
+	ixHash, err := client.SendInteractions(sendIX)
 	require.NoError(t, err)
 
 	// make sure interaction executed successfully
@@ -225,26 +265,29 @@ func executeLogic(t *testing.T, client *Client, deployAddr, addr types.Address) 
 }
 
 // createAsset creates asset named "MOI"
-func createAsset(t *testing.T, client *Client, addr types.Address) {
+func createAsset(t *testing.T, client *Client, addr types.Address, mnemonic string) {
 	supply, _ := new(big.Int).SetString("130D41", 16)
 
-	RPCAssetCreation := ptypes.RPCAssetCreation{
-		Type:   3,
+	assetCreationPayload := &types.AssetCreatePayload{
+		Type:   types.AssetKindContext,
 		Symbol: "MOI",
-		Supply: (*hexutil.Big)(supply),
+		Supply: supply,
 	}
-	payload, err := json.Marshal(RPCAssetCreation)
+
+	payload, err := polo.Polorize(assetCreationPayload)
 	require.NoError(t, err)
 
-	ixArgs := &ptypes.SendIXArgs{
-		Type:      3,
+	sendIXArgs := &types.SendIXArgs{
+		Type:      types.IxAssetCreate,
 		Sender:    addr,
-		FuelPrice: (*hexutil.Big)(supply),
-		FuelLimit: (*hexutil.Big)(supply),
+		FuelPrice: supply,
+		FuelLimit: supply,
 		Payload:   payload,
 	}
 
-	ixHash, err := client.SendInteractions(ixArgs)
+	sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
+
+	ixHash, err := client.SendInteractions(sendIX)
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), IxnTimeout)
@@ -254,22 +297,25 @@ func createAsset(t *testing.T, client *Client, addr types.Address) {
 }
 
 // transferTokens transfers tokens from senderAddr to receiver
-func transferTokens(t *testing.T, client *Client, sender, receiver types.Address) {
+func transferTokens(t *testing.T, client *Client, sender, receiver types.Address, mnemonic string) {
 	assetID := getAssetID(t, client, sender, &createAssetHeight)
 	fuelprice, _ := new(big.Int).SetString("130D40", 16)
 
-	ixArgs := &ptypes.SendIXArgs{
-		Type:     1,
+	sendIXArgs := &types.SendIXArgs{
+		Type:     types.IxValueTransfer,
+		Nonce:    1,
 		Sender:   sender,
 		Receiver: receiver,
-		TransferValues: map[types.AssetID]*hexutil.Big{
-			types.AssetID(assetID): (*hexutil.Big)(new(big.Int).SetUint64(16)),
+		TransferValues: map[types.AssetID]*big.Int{
+			assetID: big.NewInt(16),
 		},
-		FuelPrice: (*hexutil.Big)(fuelprice),
-		FuelLimit: (*hexutil.Big)(fuelprice),
+		FuelPrice: fuelprice,
+		FuelLimit: fuelprice,
 	}
 
-	ixHash, err := client.SendInteractions(ixArgs)
+	sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
+
+	ixHash, err := client.SendInteractions(sendIX)
 	require.NoError(t, err)
 
 	// make sure interaction executed successfully
@@ -279,18 +325,47 @@ func transferTokens(t *testing.T, client *Client, sender, receiver types.Address
 	retryFetchReceipt(t, ctx, client, ixHash)
 }
 
+// SendIxWithInvalidSign sends ix with invalid sign
+func SendIxWithInvalidSign(t *testing.T, client *Client, addr types.Address, mnemonic string) {
+	supply, _ := new(big.Int).SetString("130D41", 16)
+
+	assetCreationPayload := &types.AssetCreatePayload{
+		Type:   3,
+		Symbol: "MOI",
+		Supply: supply,
+	}
+
+	payload, err := polo.Polorize(assetCreationPayload)
+	require.NoError(t, err)
+
+	sendIXArgs := &types.SendIXArgs{
+		Type:      types.IxAssetCreate,
+		Nonce:     1,
+		Sender:    addr,
+		FuelPrice: big.NewInt(11),
+		FuelLimit: big.NewInt(100),
+		Payload:   payload,
+	}
+
+	sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
+
+	_, err = client.SendInteractions(sendIX)
+	require.ErrorContains(t, err, types.ErrInvalidIXSignature.Error())
+}
+
 // fillIXPool sends ixnPendingCount number of deploy interactions
-func fillIXPool(t *testing.T, client *Client, addr types.Address) {
-	ixArgs := getIXArgsForLogicDeployment(t, addr)
-	nonce := hexutil.Uint64(0)
-	increment := hexutil.Uint64(1)
-	ixArgs.Nonce = &nonce
+func fillIXPool(t *testing.T, client *Client, addr types.Address, mnemonic string) {
+	sendIXArgs := getIXArgsForLogicDeployment(t, addr)
+	sendIXArgs.Nonce = uint64(0)
+	increment := uint64(1)
 
 	for i := 0; i < ixnPendingCount; i++ { // send ixns just to fill ixpool with some data
-		_, err := client.SendInteractions(ixArgs)
+		sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
+
+		_, err := client.SendInteractions(sendIX)
 		require.NoError(t, err, "sending interaction failed")
 
-		*ixArgs.Nonce += increment // increment nonce to avoid ix already known error
+		sendIXArgs.Nonce += increment // increment nonce to avoid ix already known error
 	}
 }
 
@@ -423,9 +498,10 @@ func testDBGet(t *testing.T, client *Client) {
 }
 
 func testGetAssetInfoByAssetID(t *testing.T, client *Client, addr types.Address) {
+	tsHeight := int64(-1)
 	testcases := []struct {
 		name          string
-		assetID       string
+		assetID       types.AssetID
 		expectedError error
 	}{
 		{
@@ -434,14 +510,20 @@ func testGetAssetInfoByAssetID(t *testing.T, client *Client, addr types.Address)
 		},
 		{
 			name:          "fetch asset info for non-existing assetID",
-			assetID:       string(tests.GetRandomAssetID(t, tests.RandomAddress(t))),
-			expectedError: types.ErrKeyNotFound,
+			assetID:       tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+			expectedError: types.ErrAccountNotFound,
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			assetInfo, err := client.AssetInfoByAssetID(test.assetID)
+			args := &ptypes.GetAssetInfoArgs{
+				AssetID: test.assetID,
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &tsHeight,
+				},
+			}
+			assetInfo, err := client.AssetInfoByAssetID(args)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -451,7 +533,7 @@ func testGetAssetInfoByAssetID(t *testing.T, client *Client, addr types.Address)
 
 			require.NoError(t, err)
 
-			httpAssetInfo := httpGetAssetInfoByAssetID(t, test.assetID)
+			httpAssetInfo := httpGetAssetInfoByAssetID(t, args)
 			require.Equal(t, *httpAssetInfo, *assetInfo)
 		})
 	}
@@ -510,7 +592,7 @@ func testGetBalance(t *testing.T, client *Client, addrsMap StrMap) {
 			name: "get balance returns error for unknown asset ID",
 			balanceArgs: &ptypes.BalArgs{
 				Address: sender,
-				AssetID: "0000aa7ce9806f914c3fe732d76f920d6d56f0bac776a78157ca91cbe85b20f969c9",
+				AssetID: tests.GetRandomAssetID(t, tests.RandomAddress(t)),
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
@@ -543,12 +625,12 @@ func testTDU(t *testing.T, client *Client, addr types.Address) {
 
 	testcases := []struct {
 		name          string
-		tesseractArgs *ptypes.TesseractArgs
+		queryArgs     *ptypes.QueryArgs
 		expectedError error
 	}{
 		{
 			name: "fetch TDU for existing address",
-			tesseractArgs: &ptypes.TesseractArgs{
+			queryArgs: &ptypes.QueryArgs{
 				Address: addr,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &createAssetHeight,
@@ -557,7 +639,7 @@ func testTDU(t *testing.T, client *Client, addr types.Address) {
 		},
 		{
 			name: "fetch TDU for non-existing address",
-			tesseractArgs: &ptypes.TesseractArgs{
+			queryArgs: &ptypes.QueryArgs{
 				Address: tests.RandomAddress(t),
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
@@ -569,7 +651,7 @@ func testTDU(t *testing.T, client *Client, addr types.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			tdu, err := client.TDU(test.tesseractArgs)
+			tdu, err := client.TDU(test.queryArgs)
 
 			t.Log(addr)
 			if test.expectedError != nil {
@@ -580,11 +662,11 @@ func testTDU(t *testing.T, client *Client, addr types.Address) {
 
 			require.NoError(t, err)
 
-			_, ok := tdu[types.AssetID(assetID)]
+			_, ok := tdu[assetID]
 			require.True(t, ok)
 			require.Equal(t, 1, len(tdu))
 
-			httpTDU := httpTDU(t, test.tesseractArgs)
+			httpTDU := httpTDU(t, test.queryArgs)
 			require.Equal(t, httpTDU, tdu)
 		})
 	}
@@ -782,7 +864,7 @@ func testStorage(t *testing.T, client *Client, addr types.Address) {
 		{
 			name: "fetch storage value for existing logic ID",
 			interactionCountArgs: &ptypes.GetStorageArgs{
-				LogicID:    logicID,
+				LogicID:    logicID.String(),
 				StorageKey: "e88bd757ad5b9bedf372d8d3f0cf6c962a469db61a265f6418e1ffed86da29ec",
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
@@ -1250,22 +1332,32 @@ func testVersion(t *testing.T, client *Client) {
 func testSendInteraction(t *testing.T, client *Client) {
 	testcases := []struct {
 		name          string
-		ixPoolArgs    *ptypes.SendIXArgs
+		ixPoolArgs    *types.SendIXArgs
 		expectedError error
 	}{
 		{
-			name: "invalid senderAddr address",
-			ixPoolArgs: &ptypes.SendIXArgs{
-				Sender: tests.RandomAddress(t),
+			name: "invalid account",
+			ixPoolArgs: &types.SendIXArgs{
+				Type:      types.IxValueTransfer,
+				Sender:    tests.RandomAddress(t),
+				FuelPrice: big.NewInt(1),
+				FuelLimit: big.NewInt(1),
 			},
-			expectedError: types.ErrAccountNotFound,
+			expectedError: types.ErrUnderpriced,
 		},
-		// TODO: add valid case here
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := client.SendInteractions(test.ixPoolArgs)
+			bz, err := polo.Polorize(test.ixPoolArgs)
+			require.NoError(t, err)
+
+			sendIx := &ptypes.SendIX{
+				IXArgs:    hex.EncodeToString(bz),
+				Signature: "",
+			}
+
+			_, err = client.SendInteractions(sendIx)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())

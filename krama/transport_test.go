@@ -3,7 +3,6 @@ package krama
 import (
 	"context"
 	"fmt"
-	"log"
 	"math/big"
 	"testing"
 	"time"
@@ -35,20 +34,16 @@ func CreateInteractions(t *testing.T, sender types.Address) *types.Interactions 
 	t.Helper()
 
 	payload, err := polo.Polorize(types.AssetCreatePayload{
-		Type:           types.AssetKindValue,
-		Symbol:         "GR",
-		Supply:         big.NewInt(100),
-		Dimension:      1,
-		Decimals:       0,
-		IsFungible:     true,
-		IsMintable:     false,
-		IsTransferable: true,
+		Type:       types.AssetKindValue,
+		Symbol:     "GR",
+		Supply:     big.NewInt(100),
+		Dimension:  1,
+		IsLogical:  false,
+		IsStateFul: false,
 	})
-	if err != nil {
-		log.Panic(err)
-	}
+	require.NoError(t, err)
 
-	ixn := types.NewInteraction(types.IxData{
+	ixn, err := types.NewInteraction(types.IxData{
 		Input: types.IxInput{
 			Type:      types.IxAssetCreate,
 			Nonce:     0,
@@ -57,6 +52,7 @@ func CreateInteractions(t *testing.T, sender types.Address) *types.Interactions 
 			Payload:   payload,
 		},
 	}, nil)
+	require.NoError(t, err)
 
 	return &types.Interactions{ixn}
 }

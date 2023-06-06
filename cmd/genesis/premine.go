@@ -5,10 +5,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/sarvalabs/moichain/common/hexutil"
+	"github.com/sarvalabs/moichain/utils"
+
 	"github.com/sarvalabs/moichain/cmd/common"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/moichain/lattice"
 	"github.com/sarvalabs/moichain/types"
 	"github.com/spf13/cobra"
 )
@@ -44,6 +46,18 @@ func parsePremineFlags(cmd *cobra.Command) {
 		[]string{},
 		"format: <address:balance,address:balance...>",
 	)
+	cmd.Flags().StringSliceVar(
+		&behaviourNodes,
+		"behaviour-nodes",
+		[]string{},
+		"list of krama ids format<kramaID1,kramaID2,...>",
+	)
+	cmd.Flags().StringSliceVar(
+		&randomNodes,
+		"random-nodes",
+		[]string{},
+		"list of krama ids format<kramaID1,kramaID2,...>",
+	)
 
 	if err := cobra.MarkFlagRequired(cmd.Flags(), "asset-info"); err != nil {
 		common.Err(err)
@@ -60,12 +74,20 @@ func addAsset() {
 		common.Err(err)
 	}
 
-	assetInfo, err := parseAssetInfoAndAllocations(assetInfo, allocations)
+	info, err := parseAssetInfoAndAllocations(assetInfo, allocations)
 	if err != nil {
 		common.Err(err)
 	}
 
-	genesis.AddAssetInfo(*assetInfo)
+	if len(behaviourNodes) == 0 && len(randomNodes) == 0 {
+		behaviourNodes, randomNodes = getContextNodes(instancesFilePath, DefaultBehaviouralCount, DefaultRandomCount)
+	}
+
+	genesis.AddAssetInfo(types.AssetAccountSetupArgs{
+		AssetInfo:          info,
+		BehaviouralContext: utils.KramaIDFromString(behaviourNodes),
+		RandomContext:      utils.KramaIDFromString(randomNodes),
+	})
 
 	if err = WriteToGenesisFile(genesisFilePath, genesis); err != nil {
 		common.Err(err)
@@ -73,7 +95,7 @@ func addAsset() {
 }
 
 // parseAssetInfo decodes an asset information string into an asset information struct using the delimiter `:`
-func parseAssetInfoAndAllocations(assetInfo string, allocations []string) (*lattice.AssetInfoV1, error) {
+func parseAssetInfoAndAllocations(assetInfo string, allocations []string) (*types.AssetCreationArgs, error) {
 	params := strings.Split(assetInfo, ":")
 	if len(params) != AssetInfoParamsNumber {
 		return nil, errors.New("invalid asset info params")
@@ -99,7 +121,7 @@ func parseAssetInfoAndAllocations(assetInfo string, allocations []string) (*latt
 		return nil, types.ErrInvalidAssetInfoParams
 	}
 
-	isMintable, err := strconv.ParseBool(strings.TrimSpace(params[4]))
+	isStateFul, err := strconv.ParseBool(strings.TrimSpace(params[4]))
 	if err != nil {
 		return nil, types.ErrInvalidAssetInfoParams
 	}
@@ -109,14 +131,14 @@ func parseAssetInfoAndAllocations(assetInfo string, allocations []string) (*latt
 		return nil, types.ErrInvalidAssetInfoParams
 	}
 
-	info := &lattice.AssetInfoV1{
+	info := &types.AssetCreationArgs{
 		Symbol:      symbol,
-		Dimension:   uint8(dimension),
-		Standard:    uint16(standard),
+		Dimension:   hexutil.Uint8(dimension),
+		Standard:    hexutil.Uint16(standard),
 		IsLogical:   isLogical,
-		IsMintable:  isMintable,
-		Owner:       owner,
-		Allocations: make([]lattice.AllocationV1, 0),
+		IsStateful:  isStateFul,
+		Owner:       types.HexToAddress(owner),
+		Allocations: make([]types.Allocation, 0),
 	}
 
 	for _, alloc := range allocations {
@@ -127,7 +149,7 @@ func parseAssetInfoAndAllocations(assetInfo string, allocations []string) (*latt
 }
 
 // parseAllocation decodes allocation string into allocation struct using delimiter `:`
-func parseAllocation(allocation string) *lattice.AllocationV1 {
+func parseAllocation(allocation string) *types.Allocation {
 	if delimiterIdx := strings.Index(allocation, ":"); delimiterIdx != -1 {
 		// <address>:<balance>
 		valueRaw := allocation[delimiterIdx+1:]
@@ -137,9 +159,9 @@ func parseAllocation(allocation string) *lattice.AllocationV1 {
 			common.Err(errors.Wrapf(err, "failed to parse amount"))
 		}
 
-		return &lattice.AllocationV1{
-			Address: allocation[:delimiterIdx],
-			Balance: balance.Uint64(),
+		return &types.Allocation{
+			Address: types.HexToAddress(allocation[:delimiterIdx]),
+			Amount:  (*hexutil.Big)(balance),
 		}
 	}
 

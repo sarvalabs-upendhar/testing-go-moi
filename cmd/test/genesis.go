@@ -4,12 +4,15 @@ import (
 	"crypto/rand"
 	"errors"
 
+	id "github.com/sarvalabs/moichain/mudra/kramaid"
+
 	"github.com/sarvalabs/moichain/cmd/genesis"
+	"github.com/sarvalabs/moichain/common/tests"
+
+	"github.com/spf13/cobra"
 
 	"github.com/sarvalabs/moichain/cmd/common"
-	"github.com/sarvalabs/moichain/lattice"
 	"github.com/sarvalabs/moichain/types"
-	"github.com/spf13/cobra"
 )
 
 func GetGenesisCommand() *cobra.Command {
@@ -93,21 +96,21 @@ func createTestGenesisFile() {
 	}
 
 	// fetch krama ids in round robin manner
-	getKramaIDs := func(count int) []string {
-		ids := make([]string, 0, count)
+	getKramaIDs := func(count int) []id.KramaID {
+		ids := make([]id.KramaID, 0, count)
 
 		for i := 0; i < count; i++ {
-			id := kramaIDs[kidTracker]
+			kid := kramaIDs[kidTracker]
 			kidTracker = (kidTracker + 1) % totalIDs
 
-			ids = append(ids, id)
+			ids = append(ids, id.KramaID(kid))
 		}
 
 		return ids
 	}
 
 	if len(accAddresses) == 0 {
-		accAddresses, err = GetAddressFromAccountsFile(accountsFilePath)
+		accAddresses, err = tests.GetAddressFromAccountsFile(accountsFilePath)
 		if err != nil {
 			common.Err(err)
 		}
@@ -115,13 +118,13 @@ func createTestGenesisFile() {
 
 	accCount := len(accAddresses)
 
-	g := &lattice.GenesisV1{
-		Accounts: make([]lattice.AccountInfoV1, 0, accCount),
+	g := &types.GenesisFile{
+		Accounts: make([]types.AccountSetupArgs, 0, accCount),
 	}
 
-	g.AddSargaAccount(lattice.AccountInfoV1{
-		Address:            types.SargaAddress.Hex(),
-		AccountType:        types.SargaAccount,
+	g.AddSargaAccount(types.AccountSetupArgs{
+		Address:            types.SargaAddress,
+		AccType:            types.SargaAccount,
 		MoiID:              types.BytesToHex(getRandomMOIID()),
 		BehaviouralContext: getKramaIDs(behaviouralNodesCount),
 		RandomContext:      getKramaIDs(randomNodesCount),
@@ -129,9 +132,9 @@ func createTestGenesisFile() {
 
 	for i := 0; i < accCount; i++ {
 		g.AddAccount(
-			lattice.AccountInfoV1{
-				Address:            accAddresses[i],
-				AccountType:        types.RegularAccount,
+			types.AccountSetupArgs{
+				Address:            types.HexToAddress(accAddresses[i]),
+				AccType:            types.RegularAccount,
 				MoiID:              types.BytesToHex(getRandomMOIID()),
 				BehaviouralContext: getKramaIDs(behaviouralNodesCount),
 				RandomContext:      getKramaIDs(randomNodesCount),
