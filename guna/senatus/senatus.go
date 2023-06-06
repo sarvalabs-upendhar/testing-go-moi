@@ -408,10 +408,6 @@ func (r *ReputationEngine) GetPublicKey(kramaID id.KramaID) ([]byte, error) {
 	return info.PublicKey, nil
 }
 
-func (r *ReputationEngine) getPublicKeyFromContract(ids ...id.KramaID) (keys [][]byte, err error) {
-	return RetrievePublicKeys(ids, r.client, r.logger)
-}
-
 func (r *ReputationEngine) StreamPeerInfos(ctx context.Context) (chan *ptypes.PeerInfo, error) {
 	ch := make(chan *ptypes.PeerInfo)
 
@@ -484,48 +480,55 @@ func (r *ReputationEngine) senatusHandler(msg *pubsub.Message) error {
 	return nil
 }
 
+func (r *ReputationEngine) verifyHelloMsg(msg *gtypes.NodeMetaInfoMsg) error {
+	rawData, err := msg.HelloMessageBytes()
+	if err != nil {
+		return errors.Wrapf(err, "Failed to fetch hello message bytes")
+	}
+
+	peerID, err := msg.KramaID.DecodedPeerID()
+	if err != nil {
+		return errors.Wrapf(err, "Failed to get peer id from krama id")
+	}
+
+	pk, err := peerID.ExtractPublicKey()
+	if err != nil {
+		return errors.Wrapf(err, "Failed to get public key from peer id")
+	}
+
+	rawPK, err := pk.Raw()
+	if err != nil {
+		return errors.Wrapf(err, "Failed to get raw public key from public key")
+	}
+
+	verified, err := mudra.Verify(rawData, msg.PeerSignature, rawPK)
+	if !verified || err != nil {
+		return errors.Wrapf(err, "Signature verification failed")
+	}
+
+	return nil
+}
+
 func (r *ReputationEngine) handleMessages(msgs []*gtypes.NodeMetaInfoMsg) {
 	if len(msgs) == 0 {
 		return
 	}
 
-	kramaIDs := make([]id.KramaID, len(msgs))
-
-	for index, msg := range msgs {
-		if msg.KramaID != "" {
-			kramaIDs[index] = msg.KramaID
+	for _, msg := range msgs {
+		if msg.KramaID == "" {
+			continue
 		}
-	}
 
-	publicKeys, err := r.getPublicKeyFromContract(kramaIDs...)
-	if err != nil {
-		r.logger.Error("Error fetching public key", "error", err)
-
-		return
-	}
-
-	for index, publicKey := range publicKeys {
-		msg := msgs[index]
-
-		rawData, err := msg.HelloMessageBytes()
-		if err != nil {
-			r.logger.Error("Failed to fetch address bytes from message", "error", err)
+		if err := r.verifyHelloMsg(msg); err != nil {
+			r.logger.Error("Failed to verify hello message ", "error", err)
 
 			continue
 		}
 
-		verified, err := mudra.Verify(rawData, msg.PeerSignature, publicKey)
-		if !verified || err != nil {
-			r.logger.Error("Signature verification failed", "error", err)
-
-			continue
-		}
-
-		if err = r.UpdatePeer(msg.KramaID, &gtypes.NodeMetaInfo{
+		if err := r.UpdatePeer(msg.KramaID, &gtypes.NodeMetaInfo{
 			Addrs:         msg.Address,
 			NTQ:           msg.NTQ,
 			WalletCount:   msg.WalletCount,
-			PublicKey:     publicKey,
 			PeerSignature: msg.PeerSignature,
 		}); err != nil {
 			r.logger.Error("Failed to add node meta info", "error", err, "krama id", msg.KramaID)

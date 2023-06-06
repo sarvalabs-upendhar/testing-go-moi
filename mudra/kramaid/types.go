@@ -44,7 +44,8 @@ type MetaInfoV0 struct {
 type KramaID string
 
 // NewKramaID generates KramaID with given version
-func NewKramaID(commPrivBytes []byte,
+func NewKramaID(
+	commPrivBytes []byte,
 	nthValidator uint32,
 	moiIDAddress string,
 	version int,

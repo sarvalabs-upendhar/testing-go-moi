@@ -143,8 +143,6 @@ func TestKramaVaultRegisterMode(t *testing.T) {
 
 	kramaIDFromSetup := vault.KramaID()
 
-	require.NoError(t, err)
-
 	config1 := &VaultConfig{
 		DataDir:      datadir,
 		NodePassword: "nodepass1",
@@ -157,8 +155,6 @@ func TestKramaVaultRegisterMode(t *testing.T) {
 	require.NoError(t, err)
 
 	kramaIDFromStart := vault1.KramaID()
-
-	require.NoError(t, err)
 
 	require.Equal(t, moiIDStringFromSetup, moiIDStringFromStart)
 	require.Equal(t, kramaIDFromSetup, kramaIDFromStart)

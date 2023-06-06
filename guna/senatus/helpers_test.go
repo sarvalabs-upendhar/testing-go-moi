@@ -3,7 +3,14 @@ package senatus
 import (
 	"bytes"
 	"context"
+	"os"
 	"testing"
+
+	"github.com/sarvalabs/moichain/mudra"
+	mudracommon "github.com/sarvalabs/moichain/mudra/common"
+	"github.com/sarvalabs/moichain/mudra/poi"
+	"github.com/sarvalabs/moichain/mudra/poi/moinode"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
 	"github.com/hashicorp/go-hclog"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -154,4 +161,47 @@ func getHelloMessage(t *testing.T, addr string) []byte {
 	require.NoError(t, err)
 
 	return data
+}
+
+func createSignedHelloMsg(t *testing.T) ptypes.HelloMsg {
+	t.Helper()
+
+	err := os.Mkdir("test", os.ModePerm)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		err := os.RemoveAll("./test")
+		require.NoError(t, err)
+	})
+
+	// create keystore.json in current directory
+	dataDir := "./test"
+	password := "test123"
+
+	_, _, err = poi.RandGenKeystore(dataDir, password)
+	require.NoError(t, err)
+
+	config := &mudra.VaultConfig{
+		DataDir:      dataDir,
+		NodePassword: password,
+	}
+
+	vault, err := mudra.NewVault(config, moinode.MoiFullNode, 1)
+	require.NoError(t, err)
+
+	msg := ptypes.HelloMsg{
+		KramaID:   vault.KramaID(),
+		Address:   []string{tests.RandomAddress(t).String()},
+		Signature: nil,
+	}
+
+	rawMsg, err := msg.Bytes()
+	require.NoError(t, err)
+
+	signature, err := vault.Sign(rawMsg, mudracommon.EcdsaSecp256k1, mudra.UsingNetworkKey())
+	require.NoError(t, err)
+
+	msg.Signature = signature
+
+	return msg
 }

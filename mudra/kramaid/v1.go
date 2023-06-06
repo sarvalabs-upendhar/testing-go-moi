@@ -9,7 +9,8 @@ import (
 )
 
 // generateKramaIDV1 used to generate KramaID of version 1, takes MOI id extended Private Key(m/44'/6174')
-func generateKramaIDV1(nthValidator uint32,
+func generateKramaIDV1(
+	nthValidator uint32,
 	moiIDAddress string,
 	privKeyBytesOfValidator []byte,
 	isNode bool,

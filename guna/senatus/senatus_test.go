@@ -984,3 +984,52 @@ func TestReputationEngine_CleanUpDirtyStorage(t *testing.T) {
 		})
 	}
 }
+
+func TestVerifyHelloMsg(t *testing.T) {
+	reputationEngine, _, _ := CreateTestReputationEngine(t)
+
+	helloMsg := createSignedHelloMsg(t)
+
+	testcases := []struct {
+		name          string
+		msg           *gtypes.NodeMetaInfoMsg
+		expectedError error
+	}{
+		{
+			name: "invalid krama id",
+			msg: &gtypes.NodeMetaInfoMsg{
+				KramaID: "",
+			},
+			expectedError: errors.New("Failed to get peer id from krama id"),
+		},
+		{
+			name: "Signature verification failed",
+			msg: &gtypes.NodeMetaInfoMsg{
+				KramaID: tests.GetTestKramaID(t, 1),
+			},
+			expectedError: errors.New("Signature verification failed"),
+		},
+		{
+			name: "Signature verification successful",
+			msg: &gtypes.NodeMetaInfoMsg{
+				KramaID:       helloMsg.KramaID,
+				Address:       helloMsg.Address,
+				PeerSignature: helloMsg.Signature,
+			},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			err := reputationEngine.verifyHelloMsg(test.msg)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}

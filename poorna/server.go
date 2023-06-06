@@ -972,7 +972,7 @@ func (s *Server) SendHelloMessage() {
 			panic(err)
 		}
 
-		signature, err := s.vault.Sign(rawMsg, mcommon.BlsBLST)
+		signature, err := s.vault.Sign(rawMsg, mcommon.EcdsaSecp256k1, mudra.UsingNetworkKey())
 		if err != nil {
 			s.logger.Error("Error signing message", "error", err)
 			panic(err)
