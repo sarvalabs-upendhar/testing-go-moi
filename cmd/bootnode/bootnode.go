@@ -132,6 +132,10 @@ func startBootNode() {
 	peerInfoList := make([]peer.AddrInfo, 0, len(peerAddresses))
 
 	for _, addr := range peerAddresses {
+		if addr == "" {
+			continue
+		}
+
 		maddr, err := multiaddr.NewMultiaddr(addr)
 		if err != nil {
 			log.Printf("Invalid peer address: %s", err)
