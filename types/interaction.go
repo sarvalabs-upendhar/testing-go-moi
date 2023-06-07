@@ -372,7 +372,12 @@ func (ix Interaction) PerceivedValues() map[AssetID]*big.Int {
 
 // TransferValues returns the map of AssetID to transfer values
 func (ix Interaction) TransferValues() map[AssetID]*big.Int {
-	return ix.inner.Input.TransferValues
+	transferValues := make(map[AssetID]*big.Int)
+	for assetID, amount := range ix.inner.Input.TransferValues {
+		transferValues[assetID] = new(big.Int).Set(amount)
+	}
+
+	return transferValues
 }
 
 // Payload returns the interaction payload
@@ -399,11 +404,11 @@ func (ix *Interaction) GetLogicPayload() (*LogicPayload, error) {
 }
 
 func (ix Interaction) FuelPrice() *big.Int {
-	return ix.inner.Input.Copy().FuelPrice
+	return new(big.Int).Set(ix.inner.Input.FuelPrice)
 }
 
 func (ix Interaction) FuelLimit() *big.Int {
-	return ix.inner.Input.Copy().FuelLimit
+	return new(big.Int).Set(ix.inner.Input.FuelLimit)
 }
 
 func (ix Interaction) FuelPriceCmp(other *Interaction) int {
