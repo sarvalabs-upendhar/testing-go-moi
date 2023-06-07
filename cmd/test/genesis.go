@@ -3,6 +3,9 @@ package test
 import (
 	"crypto/rand"
 	"errors"
+	"math/big"
+
+	"github.com/sarvalabs/moichain/common/hexutil"
 
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 
@@ -55,6 +58,12 @@ func parseGenesisTestFlags(genesisTestCmd *cobra.Command) {
 		"addresses",
 		[]string{},
 		"list of account address",
+	)
+	genesisTestCmd.Flags().Uint64Var(
+		&premineAmount,
+		"premine-amount",
+		0,
+		"amount of moi tokens that need to credited for each account",
 	)
 	genesisTestCmd.Flags().IntVar(
 		&behaviouralNodesCount,
@@ -130,6 +139,20 @@ func createTestGenesisFile() {
 		RandomContext:      getKramaIDs(randomNodesCount),
 	})
 
+	assetInfo := types.AssetAccountSetupArgs{
+		AssetInfo: &types.AssetCreationArgs{
+			Symbol:      types.MOITokenSymbol,
+			Dimension:   0,
+			Standard:    0,
+			IsLogical:   false,
+			IsStateful:  false,
+			Owner:       types.NilAddress,
+			Allocations: make([]types.Allocation, 0, accCount),
+		},
+		BehaviouralContext: getKramaIDs(behaviouralNodesCount),
+		RandomContext:      getKramaIDs(randomNodesCount),
+	}
+
 	for i := 0; i < accCount; i++ {
 		g.AddAccount(
 			types.AccountSetupArgs{
@@ -140,7 +163,16 @@ func createTestGenesisFile() {
 				RandomContext:      getKramaIDs(randomNodesCount),
 			},
 		)
+
+		if premineAmount > 0 {
+			assetInfo.AssetInfo.Allocations = append(assetInfo.AssetInfo.Allocations, types.Allocation{
+				Address: types.HexToAddress(accAddresses[i]),
+				Amount:  (*hexutil.Big)(new(big.Int).SetUint64(premineAmount)),
+			})
+		}
 	}
+
+	g.AddAssetInfo(assetInfo)
 
 	if err = genesis.WriteToGenesisFile(genesisFilePath, g); err != nil {
 		common.Err(err)

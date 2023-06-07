@@ -8,7 +8,10 @@ import (
 	"github.com/sarvalabs/moichain/types"
 )
 
-var DefaultIxPriceLimit = big.NewInt(10)
+var (
+	DefaultFuelLimit    = big.NewInt(5000)
+	DefaultIxPriceLimit = big.NewInt(1)
+)
 
 // Network defaults
 const (
@@ -35,12 +38,6 @@ const (
 const (
 	DefaultDBDirectory = "/db"
 	DefaultSnapSize    = 1024 * 1024 * 1024
-)
-
-// Execution defaults
-
-const (
-	DefaultFuelLimit = 1000
 )
 
 const (

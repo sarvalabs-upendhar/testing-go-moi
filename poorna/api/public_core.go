@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"math/big"
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/moichain/common/hexutil"
@@ -610,11 +611,23 @@ func createRPCContextLockInfos(contextLockInfos map[types.Address]types.ContextL
 // createRPCHeader creates rpc header from header
 func createRPCHeader(h types.TesseractHeader) ptypes.RPCHeader {
 	rpcHeader := ptypes.RPCHeader{
-		Address:     h.Address,
-		PrevHash:    h.PrevHash,
-		Height:      hexutil.Uint64(h.Height),
-		FuelUsed:    hexutil.Uint64(h.FuelUsed),
-		FuelLimit:   hexutil.Uint64(h.FuelLimit),
+		Address:  h.Address,
+		PrevHash: h.PrevHash,
+		Height:   hexutil.Uint64(h.Height),
+		FuelUsed: func() hexutil.Big {
+			if h.FuelUsed == nil {
+				return hexutil.Big(*big.NewInt(0))
+			}
+
+			return hexutil.Big(*h.FuelUsed)
+		}(),
+		FuelLimit: func() hexutil.Big {
+			if h.FuelLimit == nil {
+				return hexutil.Big(*big.NewInt(0))
+			}
+
+			return hexutil.Big(*h.FuelLimit)
+		}(),
 		BodyHash:    h.BodyHash,
 		GridHash:    h.GroupHash,
 		Operator:    h.Operator,
@@ -754,7 +767,7 @@ func createRPCReceipt(
 		IxType:        hexutil.Uint64(receipt.IxType),
 		IxHash:        receipt.IxHash,
 		Status:        receipt.Status,
-		FuelUsed:      hexutil.Uint64(receipt.FuelUsed),
+		FuelUsed:      hexutil.Big(*receipt.FuelUsed),
 		StateHashes:   createRPCStateHashes(receipt.StateHashes),
 		ContextHashes: createRPCContextHashes(receipt.ContextHashes),
 		ExtraData:     receipt.ExtraData,

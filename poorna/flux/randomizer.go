@@ -396,12 +396,6 @@ func (r *Randomizer) GetRandomNodes(
 			s1 := rand.NewSource(time.Now().UnixNano())
 			reg := rand.New(s1)
 			slotNo := reg.Intn(SLOTCOUNT)
-			r.logger.Debug(
-				"querying for peers",
-				"slot-no", slotNo,
-				"required-count", requiredNo,
-				"available-count", len(randomPeers),
-			)
 
 			peers := r.getPeers(slotNo, requiredNo, avoidPeers)
 			if len(peers) == 0 {

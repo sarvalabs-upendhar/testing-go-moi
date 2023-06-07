@@ -1,9 +1,16 @@
 package engineio
 
-import "sync"
+import (
+	"math/big"
+	"sync"
+)
 
 // Fuel represents some execution effort points
-type Fuel uint64
+type Fuel = *big.Int
+
+func NewFuel(fuel uint64) Fuel {
+	return big.NewInt(int64(fuel))
+}
 
 // FuelTank is a simple thread-safe bounded effort counter.
 // The tank has some capacity (bound) which can be incrementally consumed until it is exhausted.
@@ -14,12 +21,16 @@ type FuelTank struct {
 
 // NewFuelTank generates a new FuelTank with the given capacity
 func NewFuelTank(capacity Fuel) *FuelTank {
-	return &FuelTank{Mutex: &sync.Mutex{}, Capacity: capacity}
+	return &FuelTank{
+		Mutex:    &sync.Mutex{},
+		Capacity: capacity,
+		Consumed: NewFuel(0),
+	}
 }
 
 // Level returns the current amount of unconsumed fuel in the tank
 func (tank *FuelTank) Level() Fuel {
-	return tank.Capacity - tank.Consumed
+	return new(big.Int).Sub(tank.Capacity, tank.Consumed)
 }
 
 // Exhaust consumes the given amount of fuel from tank's capacity.
@@ -28,8 +39,8 @@ func (tank *FuelTank) Exhaust(fuel Fuel) bool {
 	tank.Lock()
 	defer tank.Unlock()
 
-	if tank.Level() >= fuel {
-		tank.Consumed += fuel
+	if tank.Level().Cmp(fuel) >= 0 {
+		tank.Consumed = new(big.Int).Add(tank.Consumed, fuel)
 
 		return true
 	}

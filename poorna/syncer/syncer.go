@@ -379,7 +379,6 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 			if !s.db.HasTesseract(tsInfo.tesseract.Hash()) {
 				initial, err := s.lattice.IsInitialTesseract(tsInfo.tesseract)
 				if err != nil {
-					log.Println(err)
 					jobState = Sleep
 
 					return nil

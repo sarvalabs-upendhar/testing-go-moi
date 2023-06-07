@@ -5,6 +5,7 @@ import (
 )
 
 var (
+	premineAmount         uint64
 	accAddresses          []string
 	behaviouralNodesCount int
 	randomNodesCount      int

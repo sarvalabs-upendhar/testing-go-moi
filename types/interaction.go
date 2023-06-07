@@ -380,6 +380,17 @@ func (ix Interaction) TransferValues() map[AssetID]*big.Int {
 	return transferValues
 }
 
+func (ix Interaction) MOITokenValue() *big.Int {
+	// Retrieve the transfer values
+	values := ix.TransferValues()
+	// Return the value for the MOI Token if it exists in the transfer values
+	if value, ok := values[MOITokenAssetID]; ok {
+		return value
+	}
+	// Return a 0 value for no MOI Token in transfer values
+	return big.NewInt(0)
+}
+
 // Payload returns the interaction payload
 func (ix Interaction) Payload() []byte {
 	return ix.inner.Input.Payload
@@ -424,7 +435,7 @@ func (ix Interaction) Cost() *big.Int {
 }
 
 func (ix Interaction) IsUnderpriced(priceLimit *big.Int) bool {
-	return ix.FuelPrice().Cmp(priceLimit) < 0
+	return ix.FuelPrice().Cmp(priceLimit) != 0
 }
 
 func (ix *Interaction) Hash() Hash {
@@ -556,6 +567,17 @@ func (ixs Interactions) Hash() (Hash, error) {
 	}
 
 	return GetHash(data), nil
+}
+
+func (ixs Interactions) FuelLimit() *big.Int {
+	limit := new(big.Int)
+
+	// Aggregate the fuel limit for all interactions
+	for _, ix := range ixs {
+		limit = new(big.Int).Add(limit, ix.inner.Input.FuelLimit)
+	}
+
+	return limit
 }
 
 type IxByNonce Interactions

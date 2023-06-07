@@ -19,7 +19,7 @@ func TestManifestCompiler(t *testing.T) {
 		manifest, err := engineio.ReadManifestFile("../manifests/erc20.yaml")
 		require.NoError(t, err)
 
-		compiler, err := newManifestCompiler(500, manifest, runtime.instructs)
+		compiler, err := newManifestCompiler(engineio.NewFuel(500), manifest, runtime.instructs)
 		require.NoError(t, err)
 
 		descriptor, err := compiler.compile()
@@ -53,7 +53,7 @@ func TestManifestCompiler(t *testing.T) {
 		manifest, err := engineio.ReadManifestFile("../manifests/person.yaml")
 		require.NoError(t, err)
 
-		compiler, err := newManifestCompiler(500, manifest, runtime.instructs)
+		compiler, err := newManifestCompiler(engineio.NewFuel(500), manifest, runtime.instructs)
 		require.NoError(t, err)
 
 		descriptor, err := compiler.compile()
@@ -88,7 +88,7 @@ func TestManifestCompiler(t *testing.T) {
 			},
 		}
 
-		_, err := newManifestCompiler(500, manifest, runtime.instructs)
+		_, err := newManifestCompiler(engineio.NewFuel(500), manifest, runtime.instructs)
 		assert.EqualError(t, err, "invalid manifest: duplicate element pointer [0x0]")
 	})
 
@@ -102,7 +102,7 @@ func TestManifestCompiler(t *testing.T) {
 			},
 		}
 
-		_, err := newManifestCompiler(500, manifest, runtime.instructs)
+		_, err := newManifestCompiler(engineio.NewFuel(500), manifest, runtime.instructs)
 		assert.EqualError(t, err, "invalid manifest: element pointer gaps detected")
 	})
 
@@ -116,7 +116,7 @@ func TestManifestCompiler(t *testing.T) {
 			},
 		}
 
-		compiler, err := newManifestCompiler(500, manifest, runtime.instructs)
+		compiler, err := newManifestCompiler(engineio.NewFuel(500), manifest, runtime.instructs)
 		require.NoError(t, err)
 
 		_, err = compiler.compile()
@@ -133,7 +133,7 @@ func TestManifestCompiler(t *testing.T) {
 			},
 		}
 
-		compiler, err := newManifestCompiler(500, manifest, runtime.instructs)
+		compiler, err := newManifestCompiler(engineio.NewFuel(500), manifest, runtime.instructs)
 		require.NoError(t, err)
 
 		_, err = compiler.compile()
@@ -150,7 +150,7 @@ func TestManifestCompiler(t *testing.T) {
 			},
 		}
 
-		compiler, err := newManifestCompiler(20, manifest, runtime.instructs)
+		compiler, err := newManifestCompiler(engineio.NewFuel(20), manifest, runtime.instructs)
 		require.NoError(t, err)
 
 		_, err = compiler.compile()
@@ -171,7 +171,7 @@ func TestManifestCompiler(t *testing.T) {
 			},
 		}
 
-		compiler, err := newManifestCompiler(70, manifest, runtime.instructs)
+		compiler, err := newManifestCompiler(engineio.NewFuel(70), manifest, runtime.instructs)
 		require.NoError(t, err)
 
 		_, err = compiler.compile()

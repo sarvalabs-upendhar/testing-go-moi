@@ -24,6 +24,12 @@ type MockStateManager struct {
 	assetInfo map[types.AssetID]*types.AssetDescriptor
 }
 
+func (ms *MockStateManager) setTestMOIBalance(addrs ...types.Address) {
+	for _, addr := range addrs {
+		ms.setBalance(addr, types.MOITokenAssetID, big.NewInt(1000))
+	}
+}
+
 func (ms *MockStateManager) GetAssetInfo(assetID types.AssetID, stateHash types.Hash) (*types.AssetDescriptor, error) {
 	info, ok := ms.assetInfo[assetID]
 	if !ok {
@@ -55,17 +61,33 @@ func (ms *MockStateManager) GetBalance(
 	return va, nil
 }
 
+func (ms *MockStateManager) setBalance(
+	addrs types.Address,
+	assetID types.AssetID,
+	amount *big.Int,
+) {
+	if _, ok := ms.balance[addrs]; !ok {
+		ms.balance[addrs] = make(map[types.AssetID]*big.Int)
+	}
+
+	ms.balance[addrs][assetID] = amount
+}
+
 // CreateTestIxpool returns a new instance of IxPool
 func CreateTestIxpool(
 	t *testing.T,
 	cfgCallback func(cfg *common.IxPoolConfig),
 	skipSignatureVerification bool,
-) (*IxPool, *MockStateManager) {
+	sm *MockStateManager,
+) *IxPool {
 	t.Helper()
 
 	verifier := mudra.Verify
 	cfg := new(common.IxPoolConfig)
-	sm := NewMockStateManager(t)
+
+	if sm == nil {
+		sm = NewMockStateManager(t)
+	}
 
 	if cfgCallback != nil {
 		cfgCallback(cfg)
@@ -77,8 +99,7 @@ func CreateTestIxpool(
 		}
 	}
 
-	return NewIxPool(context.Background(), hclog.NewNullLogger(), new(utils.TypeMux), sm, cfg, NilMetrics(), verifier),
-		sm
+	return NewIxPool(context.Background(), hclog.NewNullLogger(), new(utils.TypeMux), sm, cfg, NilMetrics(), verifier)
 }
 
 // GetLatestNonce returns the latest nonce from the mock account
@@ -128,6 +149,7 @@ func getIXParams(
 			ix.Input.Type = ixType
 			ix.Input.Sender = address
 			ix.Input.FuelPrice = fuelPrice
+			ix.Input.FuelLimit = big.NewInt(1)
 			ix.Input.TransferValues = transferValues
 		},
 		Sign: sign,
@@ -140,7 +162,6 @@ func newTestInteraction(
 	ixType types.IxType,
 	nonce int,
 	address types.Address,
-
 	cb func(ixData *types.IxData),
 ) *types.Interaction {
 	t.Helper()
@@ -154,7 +175,8 @@ func newTestInteraction(
 			Type:      ixType,
 			Sender:    address,
 			Nonce:     uint64(nonce),
-			FuelPrice: big.NewInt(1000),
+			FuelPrice: big.NewInt(1),
+			FuelLimit: big.NewInt(1),
 		},
 	}
 
@@ -311,8 +333,12 @@ func addAndPromoteIxs(t *testing.T, ixPool *IxPool, ixs types.Interactions, send
 }
 
 // addAndProcessIxs enqueues and promotes the ixs based on nonce
-func addAndProcessIxs(t *testing.T, ixPool *IxPool, ixs types.Interactions) {
+func addAndProcessIxs(t *testing.T, sm *MockStateManager, ixPool *IxPool, ixs types.Interactions) {
 	t.Helper()
+
+	for _, v := range ixs {
+		sm.setTestMOIBalance(v.Sender())
+	}
 
 	go func() {
 		errs := ixPool.AddInteractions(ixs)

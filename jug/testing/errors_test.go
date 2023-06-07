@@ -29,14 +29,14 @@ func (suite *ErrorsTestSuite) SetupSuite() {
 	address := randomAddress()
 	logicID := types.NewLogicIDv0(false, false, false, false, 0, address)
 
-	consumed := suite.Initialize(manifest, logicID, address, 5000)
-	suite.Equal(engineio.Fuel(100), consumed)
+	consumed := suite.Initialize(manifest, logicID, address, engineio.NewFuel(5000))
+	suite.Equal(engineio.NewFuel(100), consumed)
 }
 
 func (suite *ErrorsTestSuite) TestGetThrownError() {
 	consumed, output, except := suite.Call("GetThrownError", nil)
 	suite.Nil(output)
-	suite.Equal(engineio.Fuel(60), consumed)
+	suite.Equal(engineio.NewFuel(60), consumed)
 	suite.Equal(except, must(polo.Polorize(pisa.Exception{
 		Class: "string",
 		Error: "hello!",
@@ -50,7 +50,7 @@ func (suite *ErrorsTestSuite) TestGetThrownError() {
 func (suite *ErrorsTestSuite) TestGetSystemError() {
 	consumed, output, except := suite.Call("GetSystemError", map[string]any{"a": "foo", "b": "bar"})
 	suite.Nil(output)
-	suite.Equal(engineio.Fuel(10), consumed)
+	suite.Equal(engineio.NewFuel(10), consumed)
 	suite.Equal(except, must(polo.Polorize(pisa.Exception{
 		Class: "builtin.ValueError",
 		Error: "cannot add with string registers",
@@ -64,7 +64,7 @@ func (suite *ErrorsTestSuite) TestGetSystemError() {
 func (suite *ErrorsTestSuite) TestGetOverflowError() {
 	consumed, output, except := suite.Call("GetOverflowError", map[string]any{"value": 10})
 	suite.Nil(output)
-	suite.Equal(engineio.Fuel(75), consumed)
+	suite.Equal(engineio.NewFuel(75), consumed)
 	suite.Equal(except, must(polo.Polorize(pisa.Exception{
 		Class: "builtin.OverflowError",
 		Error: "subtraction overflow",
@@ -78,12 +78,12 @@ func (suite *ErrorsTestSuite) TestGetOverflowError() {
 func (suite *ErrorsTestSuite) TestGetConditionalError() {
 	consumed, output, except := suite.Call("GetConditionalError", map[string]any{"fail": false})
 	suite.Equal(output, map[string]any{})
-	suite.Equal(engineio.Fuel(56), consumed)
+	suite.Equal(engineio.NewFuel(56), consumed)
 	suite.Nil(except)
 
 	consumed, output, except = suite.Call("GetConditionalError", map[string]any{"fail": true})
 	suite.Nil(output)
-	suite.Equal(engineio.Fuel(105), consumed)
+	suite.Equal(engineio.NewFuel(105), consumed)
 	suite.Equal(except, must(polo.Polorize(pisa.Exception{
 		Class: "string",
 		Error: "failed!",

@@ -16,6 +16,9 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/common/hexutil"
 	"github.com/sarvalabs/moichain/common/tests"
@@ -26,8 +29,6 @@ import (
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/types"
 	"github.com/sarvalabs/moichain/utils"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 const GenesisFile = "genesis_test"
@@ -392,10 +393,10 @@ type MockExec struct {
 	executeInteractionsHook func() (types.Receipts, error)
 }
 
-func (e *MockExec) SpawnExecutor(fuelLimit uint64) *jug.IxExecutor {
+func (e *MockExec) SpawnExecutor() *jug.IxExecutor {
 	sm := mockStateManager()
 
-	return jug.NewExecutionManager(sm, hclog.NewNullLogger(), nil).SpawnExecutor(fuelLimit)
+	return jug.NewExecutionManager(sm, hclog.NewNullLogger(), nil).SpawnExecutor()
 }
 
 func mockExec(t *testing.T) *MockExec {
@@ -1487,7 +1488,7 @@ func getReceipt(ixHash types.Hash) *types.Receipt {
 	return &types.Receipt{
 		IxType:        1,
 		IxHash:        ixHash,
-		FuelUsed:      rand.Uint64(),
+		FuelUsed:      big.NewInt(rand.Int63()),
 		StateHashes:   make(map[types.Address]types.Hash),
 		ContextHashes: make(map[types.Address]types.Hash),
 		ExtraData:     make(json.RawMessage, 0),

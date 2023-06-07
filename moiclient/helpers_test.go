@@ -114,8 +114,8 @@ func getIXArgsForLogicDeployment(t *testing.T, addr types.Address) *types.SendIX
 	payload, err := polo.Polorize(logicPayload)
 	require.NoError(t, err)
 
-	fuelPrice, _ := new(big.Int).SetString("130D41", 16)
-	fuelLimit, _ := new(big.Int).SetString("130D41", 16)
+	fuelPrice := new(big.Int).SetUint64(1)
+	fuelLimit := new(big.Int).SetUint64(1000)
 
 	ixArgs := &types.SendIXArgs{
 		Type:      types.IxLogicDeploy,

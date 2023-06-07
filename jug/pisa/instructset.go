@@ -358,7 +358,7 @@ func opLDPTR(scope *callscope, operands []byte) Continue {
 	// Set the register value
 	scope.memory.Set(target, PtrValue(value))
 
-	return continueOk{8 + engineio.Fuel(len(ptr)*2)}
+	return continueOk{8 + uint64(len(ptr)*2)}
 }
 
 func opISNULL(scope *callscope, operands []byte) Continue {
@@ -515,7 +515,7 @@ func opVMAKE(scope *callscope, operands []byte) Continue {
 	// Set the register value
 	scope.memory.Set(out, varray)
 
-	return continueOk{10 + engineio.Fuel(5*size)}
+	return continueOk{10 + uint64(5*size)}
 }
 
 func opTHROW(scope *callscope, operands []byte) Continue {
@@ -870,7 +870,7 @@ func opGROW(scope *callscope, operands []byte) Continue {
 
 	scope.memory.Set(reg, varray)
 
-	return continueOk{5 + engineio.Fuel(5*size)}
+	return continueOk{5 + uint64(5*size)}
 }
 
 func opSLICE(scope *callscope, operands []byte) Continue {

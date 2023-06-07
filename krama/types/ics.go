@@ -1,6 +1,7 @@
 package types
 
 import (
+	"math/big"
 	"sync"
 	"time"
 
@@ -336,12 +337,14 @@ func (cs *ClusterState) GetStateHash(ixHash types.Hash, addr types.Address) type
 	return receipt.StateHashes[addr]
 }
 
-func (cs *ClusterState) GetFuelUsed() (fuelUsed uint64) {
+func (cs *ClusterState) GetFuelUsed() *big.Int {
+	fuelUsed := new(big.Int)
+
 	for _, receipt := range cs.Receipts {
-		fuelUsed += receipt.FuelUsed
+		fuelUsed = new(big.Int).Add(fuelUsed, receipt.FuelUsed)
 	}
 
-	return
+	return fuelUsed
 }
 
 func (cs *ClusterState) SetReceipts(r types.Receipts) {

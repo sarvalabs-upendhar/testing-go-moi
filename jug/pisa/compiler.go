@@ -88,7 +88,7 @@ func (compiler *ManifestCompiler) compile() (*engineio.LogicDescriptor, error) {
 	}
 
 	// Exhaust some fuel for the dependency resolution
-	if !compiler.fueltank.Exhaust(50) {
+	if !compiler.fueltank.Exhaust(engineio.NewFuel(50)) {
 		return nil, errors.New("insufficient fuel for manifest compile")
 	}
 
@@ -136,7 +136,7 @@ func (compiler *ManifestCompiler) compile() (*engineio.LogicDescriptor, error) {
 	}
 
 	// Exhaust some fuel for the compilation
-	if !compiler.fueltank.Exhaust(50) {
+	if !compiler.fueltank.Exhaust(engineio.NewFuel(50)) {
 		return nil, errors.New("insufficient fuel for manifest compile")
 	}
 

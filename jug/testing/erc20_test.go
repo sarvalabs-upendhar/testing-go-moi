@@ -46,8 +46,8 @@ func (suite *ERC20TestSuite) SetupSuite() {
 	address := randomAddress()
 	logicID := types.NewLogicIDv0(true, false, false, false, 0, address)
 
-	consumed := suite.Initialize(manifest, logicID, address, 5000)
-	suite.Equal(engineio.Fuel(100), consumed)
+	consumed := suite.Initialize(manifest, logicID, address, engineio.NewFuel(5000))
+	suite.Equal(engineio.NewFuel(100), consumed)
 
 	consumed, _, errdata := suite.Call("Seeder!", map[string]any{
 		"name":   "MOI-Token",
@@ -57,28 +57,28 @@ func (suite *ERC20TestSuite) SetupSuite() {
 	})
 
 	suite.Nil(errdata)
-	suite.Equal(engineio.Fuel(490), consumed)
+	suite.Equal(engineio.NewFuel(490), consumed)
 }
 
 func (suite *ERC20TestSuite) TestReadMethods() {
 	consumed, outputs, except := suite.Call("Name", nil)
 	suite.Equal("MOI-Token", outputs["name"])
-	suite.Equal(engineio.Fuel(55), consumed)
+	suite.Equal(engineio.NewFuel(55), consumed)
 	suite.Nil(except)
 
 	consumed, outputs, except = suite.Call("Symbol", nil)
 	suite.Equal("MOI", outputs["symbol"])
-	suite.Equal(engineio.Fuel(55), consumed)
+	suite.Equal(engineio.NewFuel(55), consumed)
 	suite.Nil(except)
 
 	consumed, outputs, except = suite.Call("Decimals", nil)
 	suite.Equal(uint64(10), outputs["decimals"])
-	suite.Equal(engineio.Fuel(35), consumed)
+	suite.Equal(engineio.NewFuel(35), consumed)
 	suite.Nil(except)
 
 	consumed, outputs, except = suite.Call("TotalSupply", nil)
 	suite.Equal(uint64(100000000), outputs["supply"])
-	suite.Equal(engineio.Fuel(55), consumed)
+	suite.Equal(engineio.NewFuel(55), consumed)
 	suite.Nil(except)
 }
 
@@ -90,7 +90,7 @@ func (suite *ERC20TestSuite) TestApproval() {
 		"amount":  500,
 	})
 	suite.Equal(true, output["ok"])
-	suite.Equal(engineio.Fuel(306), consumed)
+	suite.Equal(engineio.NewFuel(306), consumed)
 	suite.Nil(except)
 
 	// Check allowance of Addr2 on Addr1 tokens (must be 500)
@@ -99,7 +99,7 @@ func (suite *ERC20TestSuite) TestApproval() {
 		"spender": types.HexToAddress(erc20Addr2),
 	})
 	suite.Equal(uint64(500), output["allowance"])
-	suite.Equal(engineio.Fuel(85), consumed)
+	suite.Equal(engineio.NewFuel(85), consumed)
 	suite.Nil(except)
 
 	// Check allowance of Addr3 on Addr2 tokens (must be 0)
@@ -108,7 +108,7 @@ func (suite *ERC20TestSuite) TestApproval() {
 		"spender": types.HexToAddress(erc20Addr3),
 	})
 	suite.Equal(uint64(0), output["allowance"])
-	suite.Equal(engineio.Fuel(85), consumed)
+	suite.Equal(engineio.NewFuel(85), consumed)
 	suite.Nil(except)
 }
 
@@ -116,7 +116,7 @@ func (suite *ERC20TestSuite) TestTransfer() {
 	// Check balance of Addr1 (must be initial seed amount of 100000000)
 	consumed, output, except := suite.Call("BalanceOf", map[string]any{"addr": types.HexToAddress(erc20Addr1)})
 	suite.Equal(uint64(100000000), output["balance"])
-	suite.Equal(engineio.Fuel(70), consumed)
+	suite.Equal(engineio.NewFuel(70), consumed)
 	suite.Nil(except)
 
 	// Transfer 1000 tokens from Addr1 to Addr4
@@ -126,19 +126,19 @@ func (suite *ERC20TestSuite) TestTransfer() {
 		"amount": 1000,
 	})
 	suite.Equal(true, output["ok"])
-	suite.Equal(engineio.Fuel(351), consumed)
+	suite.Equal(engineio.NewFuel(351), consumed)
 	suite.Nil(except)
 
 	// Check balance of Addr1 (must be 100000000 - 1000)
 	consumed, output, except = suite.Call("BalanceOf", map[string]any{"addr": types.HexToAddress(erc20Addr1)})
 	suite.Equal(uint64(99999000), output["balance"])
-	suite.Equal(engineio.Fuel(70), consumed)
+	suite.Equal(engineio.NewFuel(70), consumed)
 	suite.Nil(except)
 
 	// Check balance of Addr4 (must be 1000)
 	consumed, output, except = suite.Call("BalanceOf", map[string]any{"addr": types.HexToAddress(erc20Addr4)})
 	suite.Equal(uint64(1000), output["balance"])
-	suite.Equal(engineio.Fuel(70), consumed)
+	suite.Equal(engineio.NewFuel(70), consumed)
 	suite.Nil(except)
 
 	// Transfer 10000 tokens from Addr4 to Addr5 (must fail due to insufficient balance)
@@ -148,7 +148,7 @@ func (suite *ERC20TestSuite) TestTransfer() {
 		"amount": 10000,
 	})
 	suite.Equal(false, output["ok"])
-	suite.Equal(engineio.Fuel(125), consumed)
+	suite.Equal(engineio.NewFuel(125), consumed)
 	suite.Nil(except)
 }
 
@@ -156,7 +156,7 @@ func (suite *ERC20TestSuite) TestInflation() {
 	// Check total supply of token (must be initial seed amount of 100000000)
 	consumed, output, except := suite.Call("TotalSupply", nil)
 	suite.Equal(uint64(100000000), output["supply"])
-	suite.Equal(engineio.Fuel(55), consumed)
+	suite.Equal(engineio.NewFuel(55), consumed)
 	suite.Nil(except)
 
 	// Burn 10000 tokens from Addr1
@@ -165,19 +165,19 @@ func (suite *ERC20TestSuite) TestInflation() {
 		"amount": 10000,
 	})
 	suite.Equal(true, output["ok"])
-	suite.Equal(engineio.Fuel(466), consumed)
+	suite.Equal(engineio.NewFuel(466), consumed)
 	suite.Nil(except)
 
 	// Check balance of Addr1 (must be 99990000)
 	consumed, output, except = suite.Call("BalanceOf", map[string]any{"addr": types.HexToAddress(erc20Addr1)})
 	suite.Equal(uint64(99990000), output["balance"])
-	suite.Equal(engineio.Fuel(70), consumed)
+	suite.Equal(engineio.NewFuel(70), consumed)
 	suite.Nil(except)
 
 	// Check total supply of token (must be 99990000)
 	consumed, output, except = suite.Call("TotalSupply", nil)
 	suite.Equal(uint64(99990000), output["supply"])
-	suite.Equal(engineio.Fuel(55), consumed)
+	suite.Equal(engineio.NewFuel(55), consumed)
 	suite.Nil(except)
 
 	// Mint 10000 tokens to Addr6
@@ -186,19 +186,19 @@ func (suite *ERC20TestSuite) TestInflation() {
 		"amount": 10000,
 	})
 	suite.Equal(true, output["ok"])
-	suite.Equal(engineio.Fuel(415), consumed)
+	suite.Equal(engineio.NewFuel(415), consumed)
 	suite.Nil(except)
 
 	// Check balance of Addr6 (must be 10000)
 	consumed, output, except = suite.Call("BalanceOf", map[string]any{"addr": types.HexToAddress(erc20Addr6)})
 	suite.Equal(uint64(10000), output["balance"])
-	suite.Equal(engineio.Fuel(70), consumed)
+	suite.Equal(engineio.NewFuel(70), consumed)
 	suite.Nil(except)
 
 	// Check total supply of token (must be 100000000)
 	consumed, output, except = suite.Call("TotalSupply", nil)
 	suite.Equal(uint64(100000000), output["supply"])
-	suite.Equal(engineio.Fuel(55), consumed)
+	suite.Equal(engineio.NewFuel(55), consumed)
 	suite.Nil(except)
 
 	// Burn 1000000 tokens from Addr6 (must fail due to insufficient balance)
@@ -207,6 +207,6 @@ func (suite *ERC20TestSuite) TestInflation() {
 		"amount": 100000,
 	})
 	suite.Equal(false, output["ok"])
-	suite.Equal(engineio.Fuel(125), consumed)
+	suite.Equal(engineio.NewFuel(125), consumed)
 	suite.Nil(except)
 }

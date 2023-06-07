@@ -23,6 +23,7 @@ import (
 var ErrReadingConfig = errors.New("error reading config file")
 
 var (
+	GenesisPath        string
 	Directory          string
 	ConfigPath         string
 	AccountWaitTime    int
@@ -56,12 +57,12 @@ func GetCommand() *cobra.Command {
 }
 
 func runCommand(cmd *cobra.Command, args []string) {
-	log.Println("cors  ", CorsAllowedOrigins, len(CorsAllowedOrigins))
 	SetupNode()
 }
 
 func parseFlags(cmd *cobra.Command) {
-	cmd.PersistentFlags().StringVar(&ConfigPath, "config", "config.json", "Config file name")
+	cmd.PersistentFlags().StringVar(&GenesisPath, "genesis", "genesis.json", "Genesis file path")
+	cmd.PersistentFlags().StringVar(&ConfigPath, "config", "config.json", "Config file path")
 	cmd.PersistentFlags().IntVar(&AccountWaitTime, "wait-time", 0, "WaitTime per account")
 	cmd.PersistentFlags().IntVar(&OperatorSlots, "operator-slots", -1, "Maximum number of operator slots")
 	cmd.PersistentFlags().IntVar(&ValidatorSlots, "validator-slots", -1, "Maximum number of validator slots")
@@ -75,7 +76,7 @@ func parseFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&JaegerAddress, "jaeger-address", "", "Jeager Collector Address")
 	cmd.PersistentFlags().StringVar(&Bootnode, "bootnode", "", "Boot-node MultiAddr")
 	cmd.PersistentFlags().StringVar(&PeerListFilePath, "peer-list", "", "Peer list file path")
-	cmd.PersistentFlags().StringVar(&LogLevel, "log-level", "TRACE", "Logger level")
+	cmd.PersistentFlags().StringVar(&LogLevel, "log-level", "DEBUG", "Logger level")
 	cmd.PersistentFlags().StringSliceVar(
 		&CorsAllowedOrigins,
 		"allow-origins",

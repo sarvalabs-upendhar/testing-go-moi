@@ -15,19 +15,25 @@ import (
 func TestInstructionSet(t *testing.T) {
 	runtime := NewRuntime()
 
-	t.Run("TERM", func(t *testing.T) {
-		scope := &callscope{
-			engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
+	defaultScope := func() *callscope {
+		return &callscope{
+			engine: &Engine{
+				runtime:   &runtime,
+				fueltank:  engineio.NewFuelTank(big.NewInt(1000)),
+				callstack: make(callstack, 0),
+			},
 		}
+	}
+
+	t.Run("TERM", func(t *testing.T) {
+		scope := defaultScope()
 
 		continuity := opTERM(scope, nil)
 		require.Equal(t, continueTerm{}, continuity)
 	})
 
 	t.Run("DEST", func(t *testing.T) {
-		scope := &callscope{
-			engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-		}
+		scope := defaultScope()
 
 		continuity := opDEST(scope, nil)
 		require.Equal(t, continueOk{1}, continuity)
@@ -35,11 +41,9 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("JUMP", func(t *testing.T) {
 		t.Run("valid_pointer", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: PtrValue(5),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: PtrValue(5),
 			}
 
 			continuity := opJUMP(scope, []byte{0})
@@ -47,11 +51,9 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("invalid_pointer", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(5),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(5),
 			}
 
 			continuity := opJUMP(scope, []byte{0})
@@ -65,12 +67,10 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("JUMPI", func(t *testing.T) {
 		t.Run("invalid_condition", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: PtrValue(5),
-					1: PtrValue(10),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: PtrValue(5),
+				1: PtrValue(10),
 			}
 
 			continuity := opJUMPI(scope, []byte{0, 1})
@@ -82,15 +82,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("false_condition", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					runtime: &runtime, callstack: make(callstack, 0),
-					fueltank: engineio.NewFuelTank(1000),
-				},
-				memory: map[byte]RegisterValue{
-					0: PtrValue(5),
-					1: BoolValue(false),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: PtrValue(5),
+				1: BoolValue(false),
 			}
 
 			continuity := opJUMPI(scope, []byte{0, 1})
@@ -98,15 +93,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("true_condition_invalid_pointer", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					runtime: &runtime, callstack: make(callstack, 0),
-					fueltank: engineio.NewFuelTank(1000),
-				},
-				memory: map[byte]RegisterValue{
-					0: U64Value(5),
-					1: BoolValue(true),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(5),
+				1: BoolValue(true),
 			}
 
 			continuity := opJUMPI(scope, []byte{0, 1})
@@ -118,33 +108,26 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("true_condition_valid_pointer", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					runtime: &runtime, callstack: make(callstack, 0),
-					fueltank: engineio.NewFuelTank(1000),
-				},
-				memory: map[byte]RegisterValue{
-					0: PtrValue(5),
-					1: BoolValue(true),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: PtrValue(5),
+				1: BoolValue(true),
 			}
 
 			level := scope.engine.fueltank.Level()
 			continuity := opJUMPI(scope, []byte{0, 1})
 
-			require.Equal(t, level-10, scope.engine.fueltank.Level())
+			require.Equal(t, new(big.Int).Sub(level, big.NewInt(10)), scope.engine.fueltank.Level())
 			require.Equal(t, continueJump{10, uint64(5)}, continuity)
 		})
 	})
 
 	t.Run("OBTAIN", func(t *testing.T) {
 		t.Run("available_accept_data", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{},
-				inputs: map[byte]RegisterValue{
-					0: I64Value(-10),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{}
+			scope.inputs = map[byte]RegisterValue{
+				0: I64Value(-10),
 			}
 
 			continuity := opOBTAIN(scope, []byte{0, 0})
@@ -153,11 +136,9 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("missing_accept_data", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{},
-				inputs: map[byte]RegisterValue{},
-			}
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{}
+			scope.inputs = map[byte]RegisterValue{}
 
 			continuity := opOBTAIN(scope, []byte{0, 0})
 			require.Equal(t, continueOk{5}, continuity)
@@ -167,12 +148,10 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("YIELD", func(t *testing.T) {
 		t.Run("available_data", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: AddressValue{0x10, 0x20},
-				},
-				outputs: map[byte]RegisterValue{},
+			scope := defaultScope()
+			scope.outputs = map[byte]RegisterValue{}
+			scope.memory = map[byte]RegisterValue{
+				0: AddressValue{0x10, 0x20},
 			}
 
 			continuity := opYIELD(scope, []byte{0, 0})
@@ -181,11 +160,9 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("empty_data", func(t *testing.T) {
-			scope := &callscope{
-				engine:  &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory:  map[byte]RegisterValue{},
-				outputs: map[byte]RegisterValue{},
-			}
+			scope := defaultScope()
+			scope.outputs = map[byte]RegisterValue{}
+			scope.memory = map[byte]RegisterValue{}
 
 			continuity := opYIELD(scope, []byte{0, 0})
 			require.Equal(t, continueOk{5}, continuity)
@@ -194,10 +171,8 @@ func TestInstructionSet(t *testing.T) {
 	})
 
 	t.Run("CARGS", func(t *testing.T) {
-		scope := &callscope{
-			engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-			memory: map[byte]RegisterValue{},
-		}
+		scope := defaultScope()
+		scope.memory = map[byte]RegisterValue{}
 
 		continuity := opCARGS(scope, []byte{0})
 		require.Equal(t, continueOk{5}, continuity)
@@ -236,11 +211,10 @@ func TestInstructionSet(t *testing.T) {
 		}
 
 		t.Run("invalid_pointer", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					1: I64Value(0),
-				},
+			scope := defaultScope()
+			scope.outputs = map[byte]RegisterValue{}
+			scope.memory = map[byte]RegisterValue{
+				1: I64Value(0),
 			}
 
 			continuity := opCALLR(scope, []byte{2, 1, 0})
@@ -255,17 +229,13 @@ func TestInstructionSet(t *testing.T) {
 		// t.Run("missing_element", func(t *testing.T) {}
 
 		t.Run("invalid_args", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					callstack: make(callstack, 0), runtime: &runtime,
-					elements: map[engineio.ElementPtr]any{
-						0: sampleRoutine,
-					},
-				},
-				memory: map[byte]RegisterValue{
-					0: I64Value(10),
-					1: PtrValue(0),
-				},
+			scope := defaultScope()
+			scope.engine.elements = map[engineio.ElementPtr]any{
+				0: sampleRoutine,
+			}
+			scope.memory = map[byte]RegisterValue{
+				0: I64Value(10),
+				1: PtrValue(0),
 			}
 
 			continuity := opCALLR(scope, []byte{2, 1, 0})
@@ -277,24 +247,19 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("exception_thrown", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					callstack: make(callstack, 0), runtime: &runtime,
-					fueltank: engineio.NewFuelTank(1000),
-					elements: map[engineio.ElementPtr]any{
-						0: errorRoutine,
-					},
-				},
-				memory: map[byte]RegisterValue{
-					0: CargsValue{0: StringValue("foo")},
-					1: PtrValue(0),
-				},
+			scope := defaultScope()
+			scope.engine.elements = map[engineio.ElementPtr]any{
+				0: errorRoutine,
+			}
+			scope.memory = map[byte]RegisterValue{
+				0: CargsValue{0: StringValue("foo")},
+				1: PtrValue(0),
 			}
 
 			level := scope.engine.fueltank.Level()
 			continuity := opCALLR(scope, []byte{2, 1, 0})
 
-			require.Equal(t, level-5, scope.engine.fueltank.Level())
+			require.Equal(t, new(big.Int).Sub(level, big.NewInt(5)), scope.engine.fueltank.Level())
 			require.Equal(t, continueException{50, &Exception{
 				Class: "builtin.ValueError",
 				Error: "cannot add with string registers",
@@ -305,24 +270,19 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					callstack: make(callstack, 0), runtime: &runtime,
-					fueltank: engineio.NewFuelTank(1000),
-					elements: map[engineio.ElementPtr]any{
-						0: sampleRoutine,
-					},
-				},
-				memory: map[byte]RegisterValue{
-					0: CargsValue{0: U64Value(50)},
-					1: PtrValue(0),
-				},
+			scope := defaultScope()
+			scope.engine.elements = map[engineio.ElementPtr]any{
+				0: sampleRoutine,
+			}
+			scope.memory = map[byte]RegisterValue{
+				0: CargsValue{0: U64Value(50)},
+				1: PtrValue(0),
 			}
 
 			level := scope.engine.fueltank.Level()
 			continuity := opCALLR(scope, []byte{2, 1, 0})
 
-			require.Equal(t, level-30, scope.engine.fueltank.Level())
+			require.Equal(t, new(big.Int).Sub(level, big.NewInt(30)), scope.engine.fueltank.Level())
 			require.Equal(t, continueOk{50}, continuity)
 			require.Equal(t, CargsValue{0: U64Value(100)}, scope.memory[2])
 		})
@@ -330,11 +290,9 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("CALLM", func(t *testing.T) {
 		t.Run("invalid_args", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
 			}
 
 			continuity := opCALLM(scope, []byte{1, 0x3, 0}) // Call __join__
@@ -346,11 +304,9 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("missing_method_register", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: CargsValue{},
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: CargsValue{},
 			}
 
 			continuity := opCALLM(scope, []byte{1, 0x3, 0}) // Call __join__
@@ -362,13 +318,11 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("not_implemented", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: CargsValue{
-						0: StringValue("foo"),
-						1: StringValue("bar"),
-					},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: CargsValue{
+					0: StringValue("foo"),
+					1: StringValue("bar"),
 				},
 			}
 
@@ -381,23 +335,18 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					callstack: make(callstack, 0), runtime: &runtime,
-					fueltank: engineio.NewFuelTank(1000),
-				},
-				memory: map[byte]RegisterValue{
-					0: CargsValue{
-						0: StringValue("foo"),
-						1: StringValue("bar"),
-					},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: CargsValue{
+					0: StringValue("foo"),
+					1: StringValue("bar"),
 				},
 			}
 
 			level := scope.engine.fueltank.Level()
 			continuity := opCALLM(scope, []byte{1, 0x3, 0}) // Call __join__
 
-			require.Equal(t, level-20, scope.engine.fueltank.Level())
+			require.Equal(t, new(big.Int).Sub(level, big.NewInt(20)), scope.engine.fueltank.Level())
 			require.Equal(t, continueOk{30}, continuity)
 			require.Equal(t, CargsValue{0: StringValue("foobar")}, scope.memory[1])
 		})
@@ -405,11 +354,9 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("CONST", func(t *testing.T) {
 		t.Run("invalid_pointer", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: I64Value(0),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: I64Value(0),
 			}
 
 			continuity := opCONST(scope, []byte{1, 0})
@@ -442,17 +389,12 @@ func TestInstructionSet(t *testing.T) {
 		// })
 
 		t.Run("malformed_value", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					runtime:   &runtime,
-					callstack: make(callstack, 0),
-					elements: map[engineio.ElementPtr]any{
-						0: &Constant{Type: PrimitiveU64, Data: []byte{0x6, 0xa, 0xb}},
-					},
-				},
-				memory: map[byte]RegisterValue{
-					0: PtrValue(0),
-				},
+			scope := defaultScope()
+			scope.engine.elements = map[engineio.ElementPtr]any{
+				0: &Constant{Type: PrimitiveU64, Data: []byte{0x6, 0xa, 0xb}},
+			}
+			scope.memory = map[byte]RegisterValue{
+				0: PtrValue(0),
 			}
 
 			continuity := opCONST(scope, []byte{1, 0})
@@ -464,17 +406,12 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					runtime:   &runtime,
-					callstack: make(callstack, 0),
-					elements: map[engineio.ElementPtr]any{
-						0: &Constant{Type: PrimitiveU64, Data: []byte{0x3, 0xa, 0xb}},
-					},
-				},
-				memory: map[byte]RegisterValue{
-					0: PtrValue(0),
-				},
+			scope := defaultScope()
+			scope.engine.elements = map[engineio.ElementPtr]any{
+				0: &Constant{Type: PrimitiveU64, Data: []byte{0x3, 0xa, 0xb}},
+			}
+			scope.memory = map[byte]RegisterValue{
+				0: PtrValue(0),
 			}
 
 			continuity := opCONST(scope, []byte{1, 0})
@@ -485,10 +422,8 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("LDPTR", func(t *testing.T) {
 		t.Run("overflow", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{},
-			}
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{}
 
 			continuity := opLDPTR(scope, []byte{0, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10})
 			require.Equal(t, continueException{0, &Exception{
@@ -499,10 +434,8 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("8bit", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{},
-			}
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{}
 
 			continuity := opLDPTR(scope, []byte{0, 0x10})
 			require.Equal(t, continueOk{10}, continuity)
@@ -510,10 +443,8 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("32bit", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{},
-			}
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{}
 
 			continuity := opLDPTR(scope, []byte{0, 0x10, 0x10, 0x10, 0x10})
 			require.Equal(t, continueOk{16}, continuity)
@@ -521,10 +452,8 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("64bit", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{},
-			}
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{}
 
 			continuity := opLDPTR(scope, []byte{0, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10})
 			require.Equal(t, continueOk{24}, continuity)
@@ -534,10 +463,8 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("ISNULL", func(t *testing.T) {
 		t.Run("null_value", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{},
-			}
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{}
 
 			continuity := opISNULL(scope, []byte{1, 0})
 			require.Equal(t, continueOk{5}, continuity)
@@ -545,11 +472,9 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("reg_value", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(1000),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(1000),
 			}
 
 			continuity := opISNULL(scope, []byte{1, 0})
@@ -559,11 +484,9 @@ func TestInstructionSet(t *testing.T) {
 	})
 
 	t.Run("ZERO", func(t *testing.T) {
-		scope := &callscope{
-			engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-			memory: map[byte]RegisterValue{
-				0: U64Value(1000),
-			},
+		scope := defaultScope()
+		scope.memory = map[byte]RegisterValue{
+			0: U64Value(1000),
 		}
 
 		continuity := opZERO(scope, []byte{0})
@@ -572,11 +495,9 @@ func TestInstructionSet(t *testing.T) {
 	})
 
 	t.Run("CLEAR", func(t *testing.T) {
-		scope := &callscope{
-			engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-			memory: map[byte]RegisterValue{
-				0: U64Value(1000),
-			},
+		scope := defaultScope()
+		scope.memory = map[byte]RegisterValue{
+			0: U64Value(1000),
 		}
 
 		continuity := opCLEAR(scope, []byte{0})
@@ -586,12 +507,10 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("SAME", func(t *testing.T) {
 		t.Run("same_type", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(1000),
-					1: U64Value(1000),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(1000),
+				1: U64Value(1000),
 			}
 
 			continuity := opSAME(scope, []byte{2, 0, 1})
@@ -600,12 +519,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("diff_type", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(1000),
-					1: I64Value(1000),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(1000),
+				1: I64Value(1000),
 			}
 
 			continuity := opSAME(scope, []byte{2, 0, 1})
@@ -615,11 +532,9 @@ func TestInstructionSet(t *testing.T) {
 	})
 
 	t.Run("COPY", func(t *testing.T) {
-		scope := &callscope{
-			engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-			memory: map[byte]RegisterValue{
-				0: U64Value(1000),
-			},
+		scope := defaultScope()
+		scope.memory = map[byte]RegisterValue{
+			0: U64Value(1000),
 		}
 
 		continuity := opCOPY(scope, []byte{1, 0})
@@ -629,12 +544,10 @@ func TestInstructionSet(t *testing.T) {
 	})
 
 	t.Run("SWAP", func(t *testing.T) {
-		scope := &callscope{
-			engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-			memory: map[byte]RegisterValue{
-				0: U64Value(1000),
-				1: StringValue("foo"),
-			},
+		scope := defaultScope()
+		scope.memory = map[byte]RegisterValue{
+			0: U64Value(1000),
+			1: StringValue("foo"),
 		}
 
 		continuity := opSWAP(scope, []byte{1, 0})
@@ -645,11 +558,9 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("MAKE", func(t *testing.T) {
 		t.Run("invalid_pointer", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: I64Value(0),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: I64Value(0),
 			}
 
 			continuity := opMAKE(scope, []byte{1, 0})
@@ -664,17 +575,12 @@ func TestInstructionSet(t *testing.T) {
 		// t.Run("missing_typedef", func(t *testing.T) {})
 
 		t.Run("success", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					runtime:   &runtime,
-					callstack: make(callstack, 0),
-					elements: map[engineio.ElementPtr]any{
-						0: ArrayDatatype{PrimitiveU64, 32},
-					},
-				},
-				memory: map[byte]RegisterValue{
-					0: PtrValue(0),
-				},
+			scope := defaultScope()
+			scope.engine.elements = map[engineio.ElementPtr]any{
+				0: ArrayDatatype{PrimitiveU64, 32},
+			}
+			scope.memory = map[byte]RegisterValue{
+				0: PtrValue(0),
 			}
 
 			continuity := opMAKE(scope, []byte{1, 0})
@@ -685,10 +591,8 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("PMAKE", func(t *testing.T) {
 		t.Run("invalid_typeID", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{},
-			}
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{}
 
 			continuity := opPMAKE(scope, []byte{0, 0x20})
 			require.Equal(t, continueException{0, &Exception{
@@ -699,10 +603,8 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{},
-			}
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{}
 
 			continuity := opPMAKE(scope, []byte{0, 3})
 			require.Equal(t, continueOk{10}, continuity)
@@ -712,11 +614,9 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("VMAKE", func(t *testing.T) {
 		t.Run("invalid_pointer", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: I64Value(0),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: I64Value(0),
 			}
 
 			continuity := opVMAKE(scope, []byte{2, 0, 1})
@@ -731,18 +631,13 @@ func TestInstructionSet(t *testing.T) {
 		// t.Run("missing_typedef", func(t *testing.T) {})
 
 		t.Run("not_a_varray", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					runtime:   &runtime,
-					callstack: make(callstack, 0),
-					elements: map[engineio.ElementPtr]any{
-						0: ArrayDatatype{PrimitiveU64, 32},
-					},
-				},
-				memory: map[byte]RegisterValue{
-					0: PtrValue(0),
-					1: U64Value(4),
-				},
+			scope := defaultScope()
+			scope.engine.elements = map[engineio.ElementPtr]any{
+				0: ArrayDatatype{PrimitiveU64, 32},
+			}
+			scope.memory = map[byte]RegisterValue{
+				0: PtrValue(0),
+				1: U64Value(4),
 			}
 
 			continuity := opVMAKE(scope, []byte{2, 0, 1})
@@ -754,18 +649,13 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("invalid_length", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					runtime:   &runtime,
-					callstack: make(callstack, 0),
-					elements: map[engineio.ElementPtr]any{
-						0: VarrayDatatype{PrimitiveU64},
-					},
-				},
-				memory: map[byte]RegisterValue{
-					0: PtrValue(0),
-					1: I64Value(4),
-				},
+			scope := defaultScope()
+			scope.engine.elements = map[engineio.ElementPtr]any{
+				0: VarrayDatatype{PrimitiveU64},
+			}
+			scope.memory = map[byte]RegisterValue{
+				0: PtrValue(0),
+				1: I64Value(4),
 			}
 
 			continuity := opVMAKE(scope, []byte{2, 0, 1})
@@ -777,18 +667,13 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					runtime:   &runtime,
-					callstack: make(callstack, 0),
-					elements: map[engineio.ElementPtr]any{
-						0: VarrayDatatype{PrimitiveU64},
-					},
-				},
-				memory: map[byte]RegisterValue{
-					0: PtrValue(0),
-					1: U64Value(4),
-				},
+			scope := defaultScope()
+			scope.engine.elements = map[engineio.ElementPtr]any{
+				0: VarrayDatatype{PrimitiveU64},
+			}
+			scope.memory = map[byte]RegisterValue{
+				0: PtrValue(0),
+				1: U64Value(4),
 			}
 
 			continuity := opVMAKE(scope, []byte{2, 0, 1})
@@ -802,14 +687,9 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("THROW", func(t *testing.T) {
 		t.Run("not_implemented", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					runtime: &runtime, callstack: make(callstack, 0),
-					fueltank: engineio.NewFuelTank(1000),
-				},
-				memory: map[byte]RegisterValue{
-					0: I64Value(0),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: I64Value(0),
 			}
 
 			continuity := opTHROW(scope, []byte{0})
@@ -821,20 +701,15 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("str_exception", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					runtime: &runtime, callstack: make(callstack, 0),
-					fueltank: engineio.NewFuelTank(1000),
-				},
-				memory: map[byte]RegisterValue{
-					0: StringValue("FAIL!"),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("FAIL!"),
 			}
 
 			level := scope.engine.fueltank.Level()
 			continuity := opTHROW(scope, []byte{0})
 
-			require.Equal(t, level-20, scope.engine.fueltank.Level())
+			require.Equal(t, new(big.Int).Sub(level, big.NewInt(20)), scope.engine.fueltank.Level())
 			require.Equal(t, continueException{10, &Exception{
 				Class: "string",
 				Error: "FAIL!",
@@ -845,12 +720,10 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("JOIN", func(t *testing.T) {
 		t.Run("non_symmetric_values", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(99),
-					1: I64Value(66),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(99),
+				1: I64Value(66),
 			}
 
 			continuity := opJOIN(scope, []byte{2, 0, 1})
@@ -862,12 +735,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("not_implemented", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: randomAddressValue(t),
-					1: randomAddressValue(t),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: randomAddressValue(t),
+				1: randomAddressValue(t),
 			}
 
 			continuity := opJOIN(scope, []byte{2, 0, 1})
@@ -879,101 +750,76 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("uint64", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					callstack: make(callstack, 0), runtime: &runtime,
-					fueltank: engineio.NewFuelTank(1000),
-				},
-				memory: map[byte]RegisterValue{
-					0: U64Value(66),
-					1: U64Value(99),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(66),
+				1: U64Value(99),
 			}
 
 			level := scope.engine.fueltank.Level()
 			continuity := opJOIN(scope, []byte{2, 0, 1})
 
-			require.Equal(t, level-20, scope.engine.fueltank.Level())
+			require.Equal(t, new(big.Int).Sub(level, big.NewInt(20)), scope.engine.fueltank.Level())
 			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, U64Value(165), scope.memory[2])
 		})
 
 		t.Run("int64", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					callstack: make(callstack, 0), runtime: &runtime,
-					fueltank: engineio.NewFuelTank(1000),
-				},
-				memory: map[byte]RegisterValue{
-					0: I64Value(-66),
-					1: I64Value(99),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: I64Value(-66),
+				1: I64Value(99),
 			}
 
 			level := scope.engine.fueltank.Level()
 			continuity := opJOIN(scope, []byte{2, 0, 1})
 
-			require.Equal(t, level-20, scope.engine.fueltank.Level())
+			require.Equal(t, new(big.Int).Sub(level, big.NewInt(20)), scope.engine.fueltank.Level())
 			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, I64Value(33), scope.memory[2])
 		})
 
 		t.Run("bool", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					callstack: make(callstack, 0), runtime: &runtime,
-					fueltank: engineio.NewFuelTank(1000),
-				},
-				memory: map[byte]RegisterValue{
-					0: BoolValue(true),
-					1: BoolValue(false),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: BoolValue(true),
+				1: BoolValue(false),
 			}
 
 			level := scope.engine.fueltank.Level()
 			continuity := opJOIN(scope, []byte{2, 0, 1})
 
-			require.Equal(t, level-20, scope.engine.fueltank.Level())
+			require.Equal(t, new(big.Int).Sub(level, big.NewInt(20)), scope.engine.fueltank.Level())
 			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, BoolValue(false), scope.memory[2])
 		})
 
 		t.Run("string", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					callstack: make(callstack, 0), runtime: &runtime,
-					fueltank: engineio.NewFuelTank(1000),
-				},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-					1: StringValue("bar"),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
+				1: StringValue("bar"),
 			}
 
 			level := scope.engine.fueltank.Level()
 			continuity := opJOIN(scope, []byte{2, 0, 1})
 
-			require.Equal(t, level-20, scope.engine.fueltank.Level())
+			require.Equal(t, new(big.Int).Sub(level, big.NewInt(20)), scope.engine.fueltank.Level())
 			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, StringValue("foobar"), scope.memory[2])
 		})
 
 		t.Run("bytes", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					callstack: make(callstack, 0), runtime: &runtime,
-					fueltank: engineio.NewFuelTank(1000),
-				},
-				memory: map[byte]RegisterValue{
-					0: BytesValue{0x01, 0x78},
-					1: BytesValue{0x75, 0x54},
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: BytesValue{0x01, 0x78},
+				1: BytesValue{0x75, 0x54},
 			}
 
 			level := scope.engine.fueltank.Level()
 			continuity := opJOIN(scope, []byte{2, 0, 1})
 
-			require.Equal(t, level-20, scope.engine.fueltank.Level())
+			require.Equal(t, new(big.Int).Sub(level, big.NewInt(20)), scope.engine.fueltank.Level())
 			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, BytesValue{0x01, 0x78, 0x75, 0x54}, scope.memory[2])
 		})
@@ -982,12 +828,10 @@ func TestInstructionSet(t *testing.T) {
 	//nolint:dupl
 	t.Run("LT", func(t *testing.T) {
 		t.Run("non_symmetric_values", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(99),
-					1: I64Value(66),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(99),
+				1: I64Value(66),
 			}
 
 			continuity := opLT(scope, []byte{2, 0, 1})
@@ -999,12 +843,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("not_implemented", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: randomAddressValue(t),
-					1: randomAddressValue(t),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: randomAddressValue(t),
+				1: randomAddressValue(t),
 			}
 
 			continuity := opLT(scope, []byte{2, 0, 1})
@@ -1016,21 +858,16 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					callstack: make(callstack, 0), runtime: &runtime,
-					fueltank: engineio.NewFuelTank(1000),
-				},
-				memory: map[byte]RegisterValue{
-					0: U64Value(66),
-					1: U64Value(99),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(66),
+				1: U64Value(99),
 			}
 
 			level := scope.engine.fueltank.Level()
 			continuity := opLT(scope, []byte{2, 0, 1})
 
-			require.Equal(t, level-10, scope.engine.fueltank.Level())
+			require.Equal(t, new(big.Int).Sub(level, big.NewInt(10)), scope.engine.fueltank.Level())
 			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, BoolValue(true), scope.memory[2])
 		})
@@ -1039,12 +876,10 @@ func TestInstructionSet(t *testing.T) {
 	//nolint:dupl
 	t.Run("GT", func(t *testing.T) {
 		t.Run("non_symmetric_values", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(99),
-					1: I64Value(66),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(99),
+				1: I64Value(66),
 			}
 
 			continuity := opGT(scope, []byte{2, 0, 1})
@@ -1056,12 +891,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("not_implemented", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: randomAddressValue(t),
-					1: randomAddressValue(t),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: randomAddressValue(t),
+				1: randomAddressValue(t),
 			}
 
 			continuity := opGT(scope, []byte{2, 0, 1})
@@ -1073,21 +906,16 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					callstack: make(callstack, 0), runtime: &runtime,
-					fueltank: engineio.NewFuelTank(1000),
-				},
-				memory: map[byte]RegisterValue{
-					0: U64Value(66),
-					1: U64Value(99),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(66),
+				1: U64Value(99),
 			}
 
 			level := scope.engine.fueltank.Level()
 			continuity := opGT(scope, []byte{2, 0, 1})
 
-			require.Equal(t, level-10, scope.engine.fueltank.Level())
+			require.Equal(t, new(big.Int).Sub(level, big.NewInt(10)), scope.engine.fueltank.Level())
 			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, BoolValue(false), scope.memory[2])
 		})
@@ -1095,12 +923,10 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("EQ", func(t *testing.T) {
 		t.Run("non_symmetric_values", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(99),
-					1: I64Value(66),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(99),
+				1: I64Value(66),
 			}
 
 			continuity := opEQ(scope, []byte{2, 0, 1})
@@ -1112,12 +938,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("not_implemented", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: PtrValue(0),
-					1: PtrValue(10),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: PtrValue(0),
+				1: PtrValue(10),
 			}
 
 			continuity := opEQ(scope, []byte{2, 0, 1})
@@ -1129,21 +953,16 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					callstack: make(callstack, 0), runtime: &runtime,
-					fueltank: engineio.NewFuelTank(1000),
-				},
-				memory: map[byte]RegisterValue{
-					0: U64Value(66),
-					1: U64Value(99),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(66),
+				1: U64Value(99),
 			}
 
 			level := scope.engine.fueltank.Level()
 			continuity := opEQ(scope, []byte{2, 0, 1})
 
-			require.Equal(t, level-10, scope.engine.fueltank.Level())
+			require.Equal(t, new(big.Int).Sub(level, big.NewInt(10)), scope.engine.fueltank.Level())
 			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, BoolValue(false), scope.memory[2])
 		})
@@ -1151,30 +970,23 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("BOOL", func(t *testing.T) {
 		t.Run("implemented", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					callstack: make(callstack, 0), runtime: &runtime,
-					fueltank: engineio.NewFuelTank(1000),
-				},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
 			}
 
 			level := scope.engine.fueltank.Level()
 			continuity := opBOOL(scope, []byte{1, 0})
 
-			require.Equal(t, level-10, scope.engine.fueltank.Level())
+			require.Equal(t, new(big.Int).Sub(level, big.NewInt(10)), scope.engine.fueltank.Level())
 			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, BoolValue(true), scope.memory[1])
 		})
 
 		t.Run("not_implemented", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: PtrValue(0),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: PtrValue(0),
 			}
 
 			continuity := opBOOL(scope, []byte{1, 0})
@@ -1189,30 +1001,23 @@ func TestInstructionSet(t *testing.T) {
 	//nolint:dupl
 	t.Run("STR", func(t *testing.T) {
 		t.Run("implemented", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					callstack: make(callstack, 0), runtime: &runtime,
-					fueltank: engineio.NewFuelTank(1000),
-				},
-				memory: map[byte]RegisterValue{
-					0: U64Value(757),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(757),
 			}
 
 			level := scope.engine.fueltank.Level()
 			continuity := opSTR(scope, []byte{1, 0})
 
-			require.Equal(t, level-10, scope.engine.fueltank.Level())
+			require.Equal(t, new(big.Int).Sub(level, big.NewInt(10)), scope.engine.fueltank.Level())
 			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, StringValue("757"), scope.memory[1])
 		})
 
 		t.Run("not_implemented", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: PtrValue(757),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: PtrValue(757),
 			}
 
 			continuity := opSTR(scope, []byte{1, 0})
@@ -1228,30 +1033,23 @@ func TestInstructionSet(t *testing.T) {
 		t.Run("implemented", func(t *testing.T) {
 			addr := randomAddressValue(t)
 
-			scope := &callscope{
-				engine: &Engine{
-					callstack: make(callstack, 0), runtime: &runtime,
-					fueltank: engineio.NewFuelTank(1000),
-				},
-				memory: map[byte]RegisterValue{
-					0: addr,
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: addr,
 			}
 
 			level := scope.engine.fueltank.Level()
 			continuity := opADDR(scope, []byte{1, 0})
 
-			require.Equal(t, level-10, scope.engine.fueltank.Level())
+			require.Equal(t, new(big.Int).Sub(level, big.NewInt(10)), scope.engine.fueltank.Level())
 			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, addr, scope.memory[1])
 		})
 
 		t.Run("not_implemented", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: PtrValue(757),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: PtrValue(757),
 			}
 
 			continuity := opADDR(scope, []byte{1, 0})
@@ -1266,30 +1064,23 @@ func TestInstructionSet(t *testing.T) {
 	//nolint:dupl
 	t.Run("LEN", func(t *testing.T) {
 		t.Run("implemented", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					callstack: make(callstack, 0), runtime: &runtime,
-					fueltank: engineio.NewFuelTank(1000),
-				},
-				memory: map[byte]RegisterValue{
-					0: StringValue("hello!"),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("hello!"),
 			}
 
 			level := scope.engine.fueltank.Level()
 			continuity := opLEN(scope, []byte{1, 0})
 
-			require.Equal(t, level-10, scope.engine.fueltank.Level())
+			require.Equal(t, new(big.Int).Sub(level, big.NewInt(10)), scope.engine.fueltank.Level())
 			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, U64Value(6), scope.memory[1])
 		})
 
 		t.Run("not_implemented", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(757),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(757),
 			}
 
 			continuity := opLEN(scope, []byte{1, 0})
@@ -1303,11 +1094,9 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("SIZEOF", func(t *testing.T) {
 		t.Run("unsupported", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(757),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(757),
 			}
 
 			continuity := opSIZEOF(scope, []byte{1, 0})
@@ -1319,10 +1108,8 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("empty_reg", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{},
-			}
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{}
 
 			continuity := opSIZEOF(scope, []byte{1, 0})
 			require.Equal(t, continueException{0, &Exception{
@@ -1333,11 +1120,9 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("array", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: must(newArrayValue(ArrayDatatype{PrimitiveU64, 10}, nil)),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: must(newArrayValue(ArrayDatatype{PrimitiveU64, 10}, nil)),
 			}
 
 			continuity := opSIZEOF(scope, []byte{1, 0})
@@ -1346,11 +1131,9 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("varray", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: newVarrayWithSize(VarrayDatatype{PrimitiveBool}, 8),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: newVarrayWithSize(VarrayDatatype{PrimitiveBool}, 8),
 			}
 
 			continuity := opSIZEOF(scope, []byte{1, 0})
@@ -1359,11 +1142,9 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("mapping", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: must(newMapValue(MapDatatype{PrimitiveString, PrimitiveString}, nil)),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: must(newMapValue(MapDatatype{PrimitiveString, PrimitiveString}, nil)),
 			}
 
 			continuity := opSIZEOF(scope, []byte{1, 0})
@@ -1372,17 +1153,15 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("class", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: must(newClassValue(ClassDatatype{
-						name: "Person",
-						fields: makefields([]*TypeField{
-							{"Name", PrimitiveString},
-							{"Age", PrimitiveU64},
-						}),
-					}, nil)),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: must(newClassValue(ClassDatatype{
+					name: "Person",
+					fields: makefields([]*TypeField{
+						{"Name", PrimitiveString},
+						{"Age", PrimitiveU64},
+					}),
+				}, nil)),
 			}
 
 			continuity := opSIZEOF(scope, []byte{1, 0})
@@ -1393,12 +1172,10 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("GROW", func(t *testing.T) {
 		t.Run("not_varray", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-					1: StringValue("hello"),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
+				1: StringValue("hello"),
 			}
 
 			continuity := opGROW(scope, []byte{0, 1})
@@ -1410,12 +1187,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("invalid_length", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
-					1: I64Value(4),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
+				1: I64Value(4),
 			}
 
 			continuity := opGROW(scope, []byte{0, 1})
@@ -1427,12 +1202,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: newVarrayWithSize(VarrayDatatype{PrimitiveU64}, 4),
-					1: U64Value(6),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: newVarrayWithSize(VarrayDatatype{PrimitiveU64}, 4),
+				1: U64Value(6),
 			}
 
 			continuity := opGROW(scope, []byte{0, 1})
@@ -1443,13 +1216,11 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("SLICE", func(t *testing.T) {
 		t.Run("invalid_type", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-					1: U64Value(1),
-					2: U64Value(2),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
+				1: U64Value(1),
+				2: U64Value(2),
 			}
 
 			continuity := opSLICE(scope, []byte{3, 0, 1, 2})
@@ -1461,13 +1232,11 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("invalid_index_type", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-					1: StringValue("foo"),
-					2: U64Value(2),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
+				1: StringValue("foo"),
+				2: U64Value(2),
 			}
 
 			continuity := opSLICE(scope, []byte{3, 0, 1, 2})
@@ -1479,16 +1248,14 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("invalid_index_type2", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: must(newArrayFromValues(
-						ArrayDatatype{PrimitiveString, 4},
-						StringValue("foo"), StringValue("bar"), StringValue("car"), StringValue("bat"),
-					)),
-					1: U64Value(2),
-					2: StringValue("foo"),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: must(newArrayFromValues(
+					ArrayDatatype{PrimitiveString, 4},
+					StringValue("foo"), StringValue("bar"), StringValue("car"), StringValue("bat"),
+				)),
+				1: U64Value(2),
+				2: StringValue("foo"),
 			}
 
 			continuity := opSLICE(scope, []byte{3, 0, 1, 2})
@@ -1500,16 +1267,14 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("index_out_of_range", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: must(newArrayFromValues(
-						ArrayDatatype{PrimitiveString, 4},
-						StringValue("foo"), StringValue("bar"), StringValue("car"), StringValue("bat"),
-					)),
-					1: U64Value(2),
-					2: U64Value(6),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: must(newArrayFromValues(
+					ArrayDatatype{PrimitiveString, 4},
+					StringValue("foo"), StringValue("bar"), StringValue("car"), StringValue("bat"),
+				)),
+				1: U64Value(2),
+				2: U64Value(6),
 			}
 
 			continuity := opSLICE(scope, []byte{3, 0, 1, 2})
@@ -1521,17 +1286,16 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success_varray", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: must(newVarrayFromValues(
-						VarrayDatatype{PrimitiveString},
-						StringValue("foo"), StringValue("bar"), StringValue("car"), StringValue("bat"),
-					)),
-					1: U64Value(0),
-					2: U64Value(2),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: must(newVarrayFromValues(
+					VarrayDatatype{PrimitiveString},
+					StringValue("foo"), StringValue("bar"), StringValue("car"), StringValue("bat"),
+				)),
+				1: U64Value(0),
+				2: U64Value(2),
 			}
+
 			res := must(newVarrayFromValues(VarrayDatatype{PrimitiveString}, StringValue("foo"), StringValue("bar")))
 			continuity := opSLICE(scope, []byte{3, 0, 1, 2})
 			require.Equal(t, continueOk{30}, continuity)
@@ -1539,17 +1303,16 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success_array", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: must(newArrayFromValues(
-						ArrayDatatype{PrimitiveString, 4},
-						StringValue("foo"), StringValue("bar"), StringValue("car"), StringValue("bat"),
-					)),
-					1: U64Value(0),
-					2: U64Value(2),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: must(newArrayFromValues(
+					ArrayDatatype{PrimitiveString, 4},
+					StringValue("foo"), StringValue("bar"), StringValue("car"), StringValue("bat"),
+				)),
+				1: U64Value(0),
+				2: U64Value(2),
 			}
+
 			res := must(newVarrayFromValues(VarrayDatatype{PrimitiveString}, StringValue("foo"), StringValue("bar")))
 			continuity := opSLICE(scope, []byte{3, 0, 1, 2})
 			require.Equal(t, continueOk{30}, continuity)
@@ -1559,12 +1322,10 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("APPEND", func(t *testing.T) {
 		t.Run("not_varray", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-					1: StringValue("hello"),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
+				1: StringValue("hello"),
 			}
 
 			continuity := opAPPEND(scope, []byte{0, 1})
@@ -1576,12 +1337,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("invalid_value", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
-					1: U64Value(0),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
+				1: U64Value(0),
 			}
 
 			continuity := opAPPEND(scope, []byte{0, 1})
@@ -1593,12 +1352,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
-					1: StringValue("hello"),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
+				1: StringValue("hello"),
 			}
 
 			continuity := opAPPEND(scope, []byte{0, 1})
@@ -1609,11 +1366,9 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("POPEND", func(t *testing.T) {
 		t.Run("not_varray", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: must(newArrayFromValues(ArrayDatatype{PrimitiveString, 2}, StringValue("foo"), StringValue("bar"))),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: must(newArrayFromValues(ArrayDatatype{PrimitiveString, 2}, StringValue("foo"), StringValue("bar"))),
 			}
 
 			continuity := opPOPEND(scope, []byte{1, 0})
@@ -1625,11 +1380,9 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("empty_varray", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
 			}
 
 			continuity := opPOPEND(scope, []byte{1, 0})
@@ -1641,11 +1394,9 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: must(newVarrayFromValues(VarrayDatatype{PrimitiveString}, StringValue("foo"), StringValue("bar"))),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: must(newVarrayFromValues(VarrayDatatype{PrimitiveString}, StringValue("foo"), StringValue("bar"))),
 			}
 
 			continuity := opPOPEND(scope, []byte{1, 0})
@@ -1658,12 +1409,10 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("HASKEY", func(t *testing.T) {
 		t.Run("not_mapping", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: must(newArrayFromValues(ArrayDatatype{PrimitiveString, 2}, StringValue("foo"), StringValue("bar"))),
-					1: StringValue("foo"),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: must(newArrayFromValues(ArrayDatatype{PrimitiveString, 2}, StringValue("foo"), StringValue("bar"))),
+				1: StringValue("foo"),
 			}
 
 			continuity := opHASKEY(scope, []byte{2, 0, 1})
@@ -1675,12 +1424,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("invalid_key", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: must(newMapValue(MapDatatype{PrimitiveString, PrimitiveString}, nil)),
-					1: BoolValue(true),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: must(newMapValue(MapDatatype{PrimitiveString, PrimitiveString}, nil)),
+				1: BoolValue(true),
 			}
 
 			continuity := opHASKEY(scope, []byte{2, 0, 1})
@@ -1692,12 +1439,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: must(newMapValue(MapDatatype{PrimitiveString, PrimitiveString}, nil)),
-					1: StringValue("hello"),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: must(newMapValue(MapDatatype{PrimitiveString, PrimitiveString}, nil)),
+				1: StringValue("hello"),
 			}
 
 			continuity := opHASKEY(scope, []byte{2, 0, 1})
@@ -1708,13 +1453,11 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("MERGE", func(t *testing.T) {
 		t.Run("non_symmetric", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("hoo"),
-					1: StringValue("foo"),
-					2: U64Value(56),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("hoo"),
+				1: StringValue("foo"),
+				2: U64Value(56),
 			}
 
 			continuity := opMERGE(scope, []byte{0, 1, 2})
@@ -1726,13 +1469,11 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("invalid_type", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("hoo"),
-					1: StringValue("foo"),
-					2: StringValue("too"),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("hoo"),
+				1: StringValue("foo"),
+				2: StringValue("too"),
 			}
 
 			continuity := opMERGE(scope, []byte{0, 1, 2})
@@ -1744,13 +1485,11 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("empty_varray", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
-					1: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
-					2: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
+				1: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
+				2: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
 			}
 
 			continuity := opMERGE(scope, []byte{0, 1, 2})
@@ -1759,13 +1498,11 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success_varray", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
-					1: must(newVarrayFromValues(VarrayDatatype{PrimitiveString}, StringValue("foo"), StringValue("bar"))),
-					2: must(newVarrayFromValues(VarrayDatatype{PrimitiveString}, StringValue("koo"), StringValue("car"))),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
+				1: must(newVarrayFromValues(VarrayDatatype{PrimitiveString}, StringValue("foo"), StringValue("bar"))),
+				2: must(newVarrayFromValues(VarrayDatatype{PrimitiveString}, StringValue("koo"), StringValue("car"))),
 			}
 
 			continuity := opMERGE(scope, []byte{0, 1, 2})
@@ -1776,23 +1513,21 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success_maps", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					1: must(newMapFromValues(
-						MapDatatype{PrimitiveString, PrimitiveString},
-						map[RegisterValue]RegisterValue{
-							StringValue("I"): StringValue("am"),
-						},
-					)),
-					2: must(newMapFromValues(
-						MapDatatype{PrimitiveString, PrimitiveString},
-						map[RegisterValue]RegisterValue{
-							StringValue("hello"): StringValue("yes"),
-							StringValue("yo"):    StringValue("you"),
-						},
-					)),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				1: must(newMapFromValues(
+					MapDatatype{PrimitiveString, PrimitiveString},
+					map[RegisterValue]RegisterValue{
+						StringValue("I"): StringValue("am"),
+					},
+				)),
+				2: must(newMapFromValues(
+					MapDatatype{PrimitiveString, PrimitiveString},
+					map[RegisterValue]RegisterValue{
+						StringValue("hello"): StringValue("yes"),
+						StringValue("yo"):    StringValue("you"),
+					},
+				)),
 			}
 
 			continuity := opMERGE(scope, []byte{0, 1, 2})
@@ -1808,24 +1543,22 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success_maps_overwrite", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
-					1: must(newMapFromValues(
-						MapDatatype{PrimitiveString, PrimitiveString},
-						map[RegisterValue]RegisterValue{
-							StringValue("I"): StringValue("am"),
-						},
-					)),
-					2: must(newMapFromValues(
-						MapDatatype{PrimitiveString, PrimitiveString},
-						map[RegisterValue]RegisterValue{
-							StringValue("I"):  StringValue("am"),
-							StringValue("yo"): StringValue("you"),
-						},
-					)),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: must(newVarrayValue(VarrayDatatype{PrimitiveString}, nil)),
+				1: must(newMapFromValues(
+					MapDatatype{PrimitiveString, PrimitiveString},
+					map[RegisterValue]RegisterValue{
+						StringValue("I"): StringValue("am"),
+					},
+				)),
+				2: must(newMapFromValues(
+					MapDatatype{PrimitiveString, PrimitiveString},
+					map[RegisterValue]RegisterValue{
+						StringValue("I"):  StringValue("am"),
+						StringValue("yo"): StringValue("you"),
+					},
+				)),
 			}
 
 			continuity := opMERGE(scope, []byte{0, 1, 2})
@@ -1843,12 +1576,10 @@ func TestInstructionSet(t *testing.T) {
 	//nolint:dupl
 	t.Run("AND", func(t *testing.T) {
 		t.Run("non_symmetric", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-					1: U64Value(56),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
+				1: U64Value(56),
 			}
 
 			continuity := opAND(scope, []byte{2, 0, 1})
@@ -1860,12 +1591,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("unimplemented", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: PtrValue(0),
-					1: PtrValue(12),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: PtrValue(0),
+				1: PtrValue(12),
 			}
 
 			continuity := opAND(scope, []byte{2, 0, 1})
@@ -1877,21 +1606,16 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					callstack: make(callstack, 0), runtime: &runtime,
-					fueltank: engineio.NewFuelTank(1000),
-				},
-				memory: map[byte]RegisterValue{
-					0: BoolValue(true),
-					1: BoolValue(true),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: BoolValue(true),
+				1: BoolValue(true),
 			}
 
 			level := scope.engine.fueltank.Level()
 			continuity := opAND(scope, []byte{2, 0, 1})
 
-			require.Equal(t, level-20, scope.engine.fueltank.Level())
+			require.Equal(t, new(big.Int).Sub(level, big.NewInt(20)), scope.engine.fueltank.Level())
 			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, BoolValue(true), scope.memory[2])
 		})
@@ -1900,12 +1624,10 @@ func TestInstructionSet(t *testing.T) {
 	//nolint:dupl
 	t.Run("OR", func(t *testing.T) {
 		t.Run("non_symmetric", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-					1: U64Value(56),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
+				1: U64Value(56),
 			}
 
 			continuity := opOR(scope, []byte{2, 0, 1})
@@ -1917,12 +1639,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("unimplemented", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: PtrValue(0),
-					1: PtrValue(12),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: PtrValue(0),
+				1: PtrValue(12),
 			}
 
 			continuity := opOR(scope, []byte{2, 0, 1})
@@ -1934,21 +1654,16 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					callstack: make(callstack, 0), runtime: &runtime,
-					fueltank: engineio.NewFuelTank(1000),
-				},
-				memory: map[byte]RegisterValue{
-					0: BoolValue(true),
-					1: BoolValue(false),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: BoolValue(true),
+				1: BoolValue(false),
 			}
 
 			level := scope.engine.fueltank.Level()
 			continuity := opOR(scope, []byte{2, 0, 1})
 
-			require.Equal(t, level-20, scope.engine.fueltank.Level())
+			require.Equal(t, new(big.Int).Sub(level, engineio.NewFuel(20)), scope.engine.fueltank.Level())
 			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, BoolValue(true), scope.memory[2])
 		})
@@ -1956,11 +1671,9 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("NOT", func(t *testing.T) {
 		t.Run("unimplemented", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: PtrValue(0),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: PtrValue(0),
 			}
 
 			continuity := opNOT(scope, []byte{1, 0})
@@ -1972,20 +1685,15 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{
-					callstack: make(callstack, 0), runtime: &runtime,
-					fueltank: engineio.NewFuelTank(1000),
-				},
-				memory: map[byte]RegisterValue{
-					0: BoolValue(true),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: BoolValue(true),
 			}
 
 			level := scope.engine.fueltank.Level()
 			continuity := opNOT(scope, []byte{1, 0})
 
-			require.Equal(t, level-10, scope.engine.fueltank.Level())
+			require.Equal(t, new(big.Int).Sub(level, big.NewInt(10)), scope.engine.fueltank.Level())
 			require.Equal(t, continueOk{10}, continuity)
 			require.Equal(t, BoolValue(false), scope.memory[1])
 		})
@@ -1994,11 +1702,9 @@ func TestInstructionSet(t *testing.T) {
 	//nolint:dupl
 	t.Run("INCR", func(t *testing.T) {
 		t.Run("non_numeric", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
 			}
 
 			continuity := opINCR(scope, []byte{0})
@@ -2010,11 +1716,9 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("overflow", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(math.MaxUint64),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(math.MaxUint64),
 			}
 
 			continuity := opINCR(scope, []byte{0})
@@ -2026,11 +1730,9 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(500),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(500),
 			}
 
 			continuity := opINCR(scope, []byte{0})
@@ -2042,11 +1744,9 @@ func TestInstructionSet(t *testing.T) {
 	//nolint:dupl
 	t.Run("DECR", func(t *testing.T) {
 		t.Run("non_numeric", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
 			}
 
 			continuity := opDECR(scope, []byte{0})
@@ -2058,11 +1758,9 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("overflow", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: I64Value(math.MinInt64),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: I64Value(math.MinInt64),
 			}
 
 			continuity := opDECR(scope, []byte{0})
@@ -2074,11 +1772,9 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(500),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(500),
 			}
 
 			continuity := opDECR(scope, []byte{0})
@@ -2090,12 +1786,10 @@ func TestInstructionSet(t *testing.T) {
 	//nolint:dupl
 	t.Run("ADD", func(t *testing.T) {
 		t.Run("non_symmetric", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-					1: U64Value(56),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
+				1: U64Value(56),
 			}
 
 			continuity := opADD(scope, []byte{2, 0, 1})
@@ -2107,12 +1801,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("non_numeric", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-					1: StringValue("bar"),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
+				1: StringValue("bar"),
 			}
 
 			continuity := opADD(scope, []byte{2, 0, 1})
@@ -2124,12 +1816,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("overflow", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(math.MaxUint64),
-					1: U64Value(10),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(math.MaxUint64),
+				1: U64Value(10),
 			}
 
 			continuity := opADD(scope, []byte{2, 0, 1})
@@ -2141,12 +1831,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(100),
-					1: U64Value(10),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(100),
+				1: U64Value(10),
 			}
 
 			continuity := opADD(scope, []byte{2, 0, 1})
@@ -2155,12 +1843,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success_u256", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: &U256Value{uint256.NewInt(56)},
-					1: &U256Value{uint256.NewInt(11)},
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: &U256Value{uint256.NewInt(56)},
+				1: &U256Value{uint256.NewInt(11)},
 			}
 
 			continuity := opADD(scope, []byte{2, 0, 1})
@@ -2172,12 +1858,10 @@ func TestInstructionSet(t *testing.T) {
 			ip1 := big.NewInt(-56)
 			res := big.NewInt(-45)
 
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: &I256Value{uint256.MustFromBig(ip1)},
-					1: &I256Value{uint256.NewInt(11)},
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: &I256Value{uint256.MustFromBig(ip1)},
+				1: &I256Value{uint256.NewInt(11)},
 			}
 
 			continuity := opADD(scope, []byte{2, 0, 1})
@@ -2188,12 +1872,10 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("SUB", func(t *testing.T) {
 		t.Run("non_symmetric", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-					1: U64Value(56),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
+				1: U64Value(56),
 			}
 
 			continuity := opSUB(scope, []byte{2, 0, 1})
@@ -2205,12 +1887,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("non_numeric", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-					1: StringValue("bar"),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
+				1: StringValue("bar"),
 			}
 
 			continuity := opSUB(scope, []byte{2, 0, 1})
@@ -2222,12 +1902,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("overflow", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(10),
-					1: U64Value(11),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(10),
+				1: U64Value(11),
 			}
 
 			continuity := opSUB(scope, []byte{2, 0, 1})
@@ -2239,12 +1917,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(100),
-					1: U64Value(10),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(100),
+				1: U64Value(10),
 			}
 
 			continuity := opSUB(scope, []byte{2, 0, 1})
@@ -2253,12 +1929,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success_u256", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: &U256Value{uint256.NewInt(56)},
-					1: &U256Value{uint256.NewInt(11)},
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: &U256Value{uint256.NewInt(56)},
+				1: &U256Value{uint256.NewInt(11)},
 			}
 
 			continuity := opSUB(scope, []byte{2, 0, 1})
@@ -2270,12 +1944,10 @@ func TestInstructionSet(t *testing.T) {
 			ip1 := big.NewInt(-56)
 			res := big.NewInt(-67)
 
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: &I256Value{uint256.MustFromBig(ip1)},
-					1: &I256Value{uint256.NewInt(11)},
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: &I256Value{uint256.MustFromBig(ip1)},
+				1: &I256Value{uint256.NewInt(11)},
 			}
 
 			continuity := opSUB(scope, []byte{2, 0, 1})
@@ -2287,12 +1959,10 @@ func TestInstructionSet(t *testing.T) {
 	//nolint:dupl
 	t.Run("MUL", func(t *testing.T) {
 		t.Run("non_symmetric", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-					1: U64Value(56),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
+				1: U64Value(56),
 			}
 
 			continuity := opMUL(scope, []byte{2, 0, 1})
@@ -2304,12 +1974,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("non_numeric", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-					1: StringValue("bar"),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
+				1: StringValue("bar"),
 			}
 
 			continuity := opMUL(scope, []byte{2, 0, 1})
@@ -2321,12 +1989,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("overflow", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(math.MaxUint64),
-					1: U64Value(100),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(math.MaxUint64),
+				1: U64Value(100),
 			}
 
 			continuity := opMUL(scope, []byte{2, 0, 1})
@@ -2338,12 +2004,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(100),
-					1: U64Value(10),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(100),
+				1: U64Value(10),
 			}
 
 			continuity := opMUL(scope, []byte{2, 0, 1})
@@ -2352,12 +2016,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success_u256", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: &U256Value{uint256.NewInt(20)},
-					1: &U256Value{uint256.NewInt(2)},
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: &U256Value{uint256.NewInt(20)},
+				1: &U256Value{uint256.NewInt(2)},
 			}
 
 			continuity := opMUL(scope, []byte{2, 0, 1})
@@ -2369,12 +2031,10 @@ func TestInstructionSet(t *testing.T) {
 			ip1 := big.NewInt(-5)
 			res := big.NewInt(-55)
 
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: &I256Value{uint256.MustFromBig(ip1)},
-					1: &I256Value{uint256.NewInt(11)},
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: &I256Value{uint256.MustFromBig(ip1)},
+				1: &I256Value{uint256.NewInt(11)},
 			}
 
 			continuity := opMUL(scope, []byte{2, 0, 1})
@@ -2386,12 +2046,10 @@ func TestInstructionSet(t *testing.T) {
 	//nolint:dupl
 	t.Run("DIV", func(t *testing.T) {
 		t.Run("non_symmetric", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-					1: U64Value(56),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
+				1: U64Value(56),
 			}
 
 			continuity := opDIV(scope, []byte{2, 0, 1})
@@ -2403,12 +2061,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("non_numeric", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-					1: StringValue("bar"),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
+				1: StringValue("bar"),
 			}
 
 			continuity := opDIV(scope, []byte{2, 0, 1})
@@ -2420,12 +2076,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("overflow", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: I64Value(math.MinInt64),
-					1: I64Value(-1),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: I64Value(math.MinInt64),
+				1: I64Value(-1),
 			}
 
 			continuity := opDIV(scope, []byte{2, 0, 1})
@@ -2437,12 +2091,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("div_by_zero", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(math.MaxUint64),
-					1: U64Value(0),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(math.MaxUint64),
+				1: U64Value(0),
 			}
 
 			continuity := opDIV(scope, []byte{2, 0, 1})
@@ -2454,12 +2106,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(100),
-					1: U64Value(10),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(100),
+				1: U64Value(10),
 			}
 
 			continuity := opDIV(scope, []byte{2, 0, 1})
@@ -2468,12 +2118,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success_u256", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: &U256Value{uint256.NewInt(20)},
-					1: &U256Value{uint256.NewInt(2)},
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: &U256Value{uint256.NewInt(20)},
+				1: &U256Value{uint256.NewInt(2)},
 			}
 
 			continuity := opDIV(scope, []byte{2, 0, 1})
@@ -2484,12 +2132,11 @@ func TestInstructionSet(t *testing.T) {
 		t.Run("success_i256", func(t *testing.T) {
 			ip1 := big.NewInt(-10)
 			res := big.NewInt(-5)
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: &I256Value{uint256.MustFromBig(ip1)},
-					1: &I256Value{uint256.NewInt(2)},
-				},
+
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: &I256Value{uint256.MustFromBig(ip1)},
+				1: &I256Value{uint256.NewInt(2)},
 			}
 
 			continuity := opDIV(scope, []byte{2, 0, 1})
@@ -2501,12 +2148,10 @@ func TestInstructionSet(t *testing.T) {
 	//nolint:dupl
 	t.Run("MOD", func(t *testing.T) {
 		t.Run("non_symmetric", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-					1: U64Value(56),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
+				1: U64Value(56),
 			}
 
 			continuity := opMOD(scope, []byte{2, 0, 1})
@@ -2518,12 +2163,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("non_numeric", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-					1: StringValue("bar"),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
+				1: StringValue("bar"),
 			}
 
 			continuity := opMOD(scope, []byte{2, 0, 1})
@@ -2535,12 +2178,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("overflow", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: I64Value(math.MinInt64),
-					1: I64Value(-1),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: I64Value(math.MinInt64),
+				1: I64Value(-1),
 			}
 
 			continuity := opMOD(scope, []byte{2, 0, 1})
@@ -2552,12 +2193,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("div_by_zero", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(math.MaxUint64),
-					1: U64Value(0),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(math.MaxUint64),
+				1: U64Value(0),
 			}
 
 			continuity := opMOD(scope, []byte{2, 0, 1})
@@ -2569,12 +2208,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(56),
-					1: U64Value(11),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(56),
+				1: U64Value(11),
 			}
 
 			continuity := opMOD(scope, []byte{2, 0, 1})
@@ -2583,12 +2220,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success_u256", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: &U256Value{uint256.NewInt(20)},
-					1: &U256Value{uint256.NewInt(2)},
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: &U256Value{uint256.NewInt(20)},
+				1: &U256Value{uint256.NewInt(2)},
 			}
 
 			continuity := opMOD(scope, []byte{2, 0, 1})
@@ -2600,12 +2235,10 @@ func TestInstructionSet(t *testing.T) {
 			ip1 := big.NewInt(-10)
 			res := big.NewInt(-3)
 
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: &I256Value{uint256.MustFromBig(ip1)},
-					1: &I256Value{uint256.NewInt(7)},
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: &I256Value{uint256.MustFromBig(ip1)},
+				1: &I256Value{uint256.NewInt(7)},
 			}
 
 			continuity := opMOD(scope, []byte{2, 0, 1})
@@ -2617,12 +2250,10 @@ func TestInstructionSet(t *testing.T) {
 	//nolint:dupl
 	t.Run("BXOR", func(t *testing.T) {
 		t.Run("non_symmetric", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-					1: U64Value(56),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
+				1: U64Value(56),
 			}
 
 			continuity := opBXOR(scope, []byte{2, 0, 1})
@@ -2634,12 +2265,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("non_numeric", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-					1: StringValue("bar"),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
+				1: StringValue("bar"),
 			}
 
 			continuity := opBXOR(scope, []byte{2, 0, 1})
@@ -2651,12 +2280,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success_u64", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(56),
-					1: U64Value(11),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(56),
+				1: U64Value(11),
 			}
 
 			continuity := opBXOR(scope, []byte{2, 0, 1})
@@ -2665,12 +2292,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success_i64", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: I64Value(-56),
-					1: I64Value(11),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: I64Value(-56),
+				1: I64Value(11),
 			}
 
 			continuity := opBXOR(scope, []byte{2, 0, 1})
@@ -2679,12 +2304,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success_u256", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: &U256Value{uint256.NewInt(56)},
-					1: &U256Value{uint256.NewInt(11)},
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: &U256Value{uint256.NewInt(56)},
+				1: &U256Value{uint256.NewInt(11)},
 			}
 
 			continuity := opBXOR(scope, []byte{2, 0, 1})
@@ -2695,12 +2318,11 @@ func TestInstructionSet(t *testing.T) {
 		t.Run("success_i256", func(t *testing.T) {
 			ip1 := big.NewInt(-56)
 			res := big.NewInt(-61)
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: &I256Value{uint256.MustFromBig(ip1)},
-					1: &I256Value{uint256.NewInt(11)},
-				},
+
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: &I256Value{uint256.MustFromBig(ip1)},
+				1: &I256Value{uint256.NewInt(11)},
 			}
 
 			continuity := opBXOR(scope, []byte{2, 0, 1})
@@ -2711,12 +2333,10 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("BAND", func(t *testing.T) {
 		t.Run("non_symmetric", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-					1: U64Value(56),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
+				1: U64Value(56),
 			}
 
 			continuity := opBAND(scope, []byte{2, 0, 1})
@@ -2728,12 +2348,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("non_numeric", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-					1: StringValue("bar"),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
+				1: StringValue("bar"),
 			}
 
 			continuity := opBAND(scope, []byte{2, 0, 1})
@@ -2745,12 +2363,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success_u64", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(56),
-					1: U64Value(11),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(56),
+				1: U64Value(11),
 			}
 
 			continuity := opBAND(scope, []byte{2, 0, 1})
@@ -2759,12 +2375,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success_i64", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: I64Value(-56),
-					1: I64Value(11),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: I64Value(-56),
+				1: I64Value(11),
 			}
 
 			continuity := opBAND(scope, []byte{2, 0, 1})
@@ -2773,12 +2387,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success_u256", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: &U256Value{uint256.NewInt(56)},
-					1: &U256Value{uint256.NewInt(11)},
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: &U256Value{uint256.NewInt(56)},
+				1: &U256Value{uint256.NewInt(11)},
 			}
 
 			continuity := opBAND(scope, []byte{2, 0, 1})
@@ -2788,12 +2400,11 @@ func TestInstructionSet(t *testing.T) {
 
 		t.Run("success_i256", func(t *testing.T) {
 			ip1 := big.NewInt(-56)
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: &I256Value{uint256.MustFromBig(ip1)},
-					1: &I256Value{uint256.NewInt(11)},
-				},
+
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: &I256Value{uint256.MustFromBig(ip1)},
+				1: &I256Value{uint256.NewInt(11)},
 			}
 
 			continuity := opBAND(scope, []byte{2, 0, 1})
@@ -2805,12 +2416,10 @@ func TestInstructionSet(t *testing.T) {
 	//nolint:dupl
 	t.Run("BOR", func(t *testing.T) {
 		t.Run("non_symmetric", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-					1: U64Value(56),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
+				1: U64Value(56),
 			}
 
 			continuity := opBOR(scope, []byte{2, 0, 1})
@@ -2822,12 +2431,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("non_numeric", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-					1: StringValue("bar"),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
+				1: StringValue("bar"),
 			}
 
 			continuity := opBOR(scope, []byte{2, 0, 1})
@@ -2839,12 +2446,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success_u64", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(56),
-					1: U64Value(11),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(56),
+				1: U64Value(11),
 			}
 
 			continuity := opBOR(scope, []byte{2, 0, 1})
@@ -2853,12 +2458,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success_i64", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: I64Value(-56),
-					1: I64Value(11),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: I64Value(-56),
+				1: I64Value(11),
 			}
 
 			continuity := opBOR(scope, []byte{2, 0, 1})
@@ -2867,12 +2470,10 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success_u256", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: &U256Value{uint256.NewInt(56)},
-					1: &U256Value{uint256.NewInt(11)},
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: &U256Value{uint256.NewInt(56)},
+				1: &U256Value{uint256.NewInt(11)},
 			}
 
 			continuity := opBOR(scope, []byte{2, 0, 1})
@@ -2884,12 +2485,10 @@ func TestInstructionSet(t *testing.T) {
 			ip1 := big.NewInt(-56)
 			res := big.NewInt(-53)
 
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: &I256Value{uint256.MustFromBig(ip1)},
-					1: &I256Value{uint256.NewInt(11)},
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: &I256Value{uint256.MustFromBig(ip1)},
+				1: &I256Value{uint256.NewInt(11)},
 			}
 
 			continuity := opBOR(scope, []byte{2, 0, 1})
@@ -2900,11 +2499,9 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("BNOT", func(t *testing.T) {
 		t.Run("non_numeric", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: StringValue("foo"),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: StringValue("foo"),
 			}
 
 			continuity := opBNOT(scope, []byte{2, 0})
@@ -2916,11 +2513,9 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success_u64", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: U64Value(56),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: U64Value(56),
 			}
 
 			continuity := opBNOT(scope, []byte{2, 0})
@@ -2929,11 +2524,9 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success_i64", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: I64Value(-56),
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: I64Value(-56),
 			}
 
 			continuity := opBNOT(scope, []byte{2, 0})
@@ -2942,11 +2535,9 @@ func TestInstructionSet(t *testing.T) {
 		})
 
 		t.Run("success_u256", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: &U256Value{uint256.NewInt(56)},
-				},
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: &U256Value{uint256.NewInt(56)},
 			}
 
 			continuity := opBNOT(scope, []byte{2, 0, 1})
@@ -2956,11 +2547,10 @@ func TestInstructionSet(t *testing.T) {
 
 		t.Run("success_i256", func(t *testing.T) {
 			ip1 := big.NewInt(-56)
-			scope := &callscope{
-				engine: &Engine{callstack: make(callstack, 0), runtime: &runtime},
-				memory: map[byte]RegisterValue{
-					0: &I256Value{uint256.MustFromBig(ip1)},
-				},
+
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{
+				0: &I256Value{uint256.MustFromBig(ip1)},
 			}
 
 			continuity := opBNOT(scope, []byte{2, 0, 1})
@@ -2971,10 +2561,8 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("LOGIC", func(t *testing.T) {
 		t.Run("unavailable", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{runtime: &runtime, callstack: make(callstack, 0)},
-				memory: map[byte]RegisterValue{},
-			}
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{}
 
 			continuity := opLOGIC(scope, []byte{0})
 			require.Equal(t, continueException{0, &Exception{
@@ -2988,13 +2576,9 @@ func TestInstructionSet(t *testing.T) {
 			logicAddress := types.Address(randomAddressValue(t))
 			logicID := types.NewLogicIDv0(true, false, false, false, 0, logicAddress)
 
-			scope := &callscope{
-				engine: &Engine{
-					runtime: &runtime, callstack: make(callstack, 0),
-					persistent: engineio.NewDebugContextDriver(logicAddress, logicID),
-				},
-				memory: map[byte]RegisterValue{},
-			}
+			scope := defaultScope()
+			scope.engine.persistent = engineio.NewDebugContextDriver(logicAddress, logicID)
+			scope.memory = map[byte]RegisterValue{}
 
 			continuity := opLOGIC(scope, []byte{0})
 			require.Equal(t, continueOk{30}, continuity)
@@ -3004,10 +2588,8 @@ func TestInstructionSet(t *testing.T) {
 
 	t.Run("SENDER", func(t *testing.T) {
 		t.Run("unavailable", func(t *testing.T) {
-			scope := &callscope{
-				engine: &Engine{runtime: &runtime, callstack: make(callstack, 0)},
-				memory: map[byte]RegisterValue{},
-			}
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{}
 
 			continuity := opSENDER(scope, []byte{0})
 			require.Equal(t, continueException{0, &Exception{
@@ -3022,13 +2604,9 @@ func TestInstructionSet(t *testing.T) {
 			senderAddress := types.Address(randomAddressValue(t))
 			logicID := types.NewLogicIDv0(false, false, false, false, 0, logicAddress)
 
-			scope := &callscope{
-				engine: &Engine{
-					runtime: &runtime, callstack: make(callstack, 0),
-					sephemeral: engineio.NewDebugContextDriver(senderAddress, logicID),
-				},
-				memory: map[byte]RegisterValue{},
-			}
+			scope := defaultScope()
+			scope.engine.sephemeral = engineio.NewDebugContextDriver(senderAddress, logicID)
+			scope.memory = map[byte]RegisterValue{}
 
 			continuity := opSENDER(scope, []byte{0})
 			require.Equal(t, continueOk{30}, continuity)

@@ -64,7 +64,7 @@ func (exec *ExecutionManager) ExecuteInteractions(
 	types.Receipts, error,
 ) {
 	// Spawn a new IxExecutor instance
-	executor := exec.SpawnExecutor(exec.config.FuelLimit)
+	executor := exec.SpawnExecutor()
 	// Execute all the given interactions
 	if err := executor.Execute(ixs, delta); err != nil {
 		if err := executor.Revert(); err != nil {
@@ -81,11 +81,12 @@ func (exec *ExecutionManager) ExecuteInteractions(
 }
 
 // SpawnExecutor generates a new IxExecutor instance with a given fuel limit.
-func (exec *ExecutionManager) SpawnExecutor(fuelLimit uint64) *IxExecutor {
+func (exec *ExecutionManager) SpawnExecutor() *IxExecutor {
 	return &IxExecutor{
 		exec:  exec,
 		state: exec.state,
-		tank:  engineio.NewFuelTank(engineio.Fuel(fuelLimit)),
+
+		// tank:  engineio.NewFuelTank(engineio.Fuel(fuelLimit)),
 
 		objects:   make(map[types.Address]*guna.StateObject),
 		snapshots: make(map[types.Address]*guna.StateObject),
@@ -117,4 +118,15 @@ func (exec *ExecutionManager) Revert(cluster types.ClusterID) error {
 // Cleanup removes the executor instance for the given Cluster ID, if one exists.
 func (exec *ExecutionManager) Cleanup(cluster types.ClusterID) {
 	exec.executors.Delete(cluster)
+}
+
+func (exec *ExecutionManager) createFuelTank(ix *types.Interaction) *engineio.FuelTank {
+	switch ix.FuelLimit().Cmp(exec.config.FuelLimit) {
+	case -1:
+		// If Ix Fuel Limit < Node Fuel Limit
+		return engineio.NewFuelTank(ix.FuelLimit())
+	default:
+		// If Ix Fuel Limit >= Node Fuel Limit
+		return engineio.NewFuelTank(exec.config.FuelLimit)
+	}
 }

@@ -2,6 +2,7 @@ package pisa
 
 import (
 	"crypto/sha256"
+	"math/big"
 
 	"github.com/holiman/uint256"
 
@@ -89,24 +90,24 @@ func (bmethod BuiltinMethod) run(engine *Engine, inputs RegisterSet) (RegisterSe
 }
 
 func makeBuiltinMethod(
-	name string, datatype Datatype, code MethodCode, cost engineio.Fuel,
+	name string, datatype Datatype, code MethodCode, cost uint64,
 	inputs, outputs *TypeFields, runner BuiltinRunner,
 ) *BuiltinMethod {
 	return &BuiltinMethod{
 		Datatype: datatype, Code: code,
 		Builtin: Builtin{
-			Name: name, runner: runner, Cost: cost,
+			Name: name, runner: runner, Cost: big.NewInt(int64(cost)),
 			CallFields: CallFields{Inputs: inputs, Outputs: outputs},
 		},
 	}
 }
 
 func makeBuiltin(
-	name string, ptr uint64, cost engineio.Fuel,
+	name string, ptr uint64, cost uint64,
 	inputs, outputs *TypeFields, runner BuiltinRunner,
 ) *Builtin {
 	return &Builtin{
-		Name: name, Ptr: ptr, runner: runner, Cost: cost,
+		Name: name, Ptr: ptr, runner: runner, Cost: big.NewInt(int64(cost)),
 		CallFields: CallFields{Inputs: inputs, Outputs: outputs},
 	}
 }

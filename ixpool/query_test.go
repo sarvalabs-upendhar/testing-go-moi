@@ -15,10 +15,15 @@ import (
 )
 
 func TestIxPool_GetNonce(t *testing.T) {
-	ixPool, mockStateManager := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
+	sm := NewMockStateManager(t)
+	addr1 := tests.RandomAddress(t)
+	addr2 := tests.RandomAddress(t)
+
+	sm.setTestMOIBalance(addr1, addr2)
+	ixPool := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 		c.Mode = 0
-		c.PriceLimit = big.NewInt(100)
-	}, true)
+		c.PriceLimit = big.NewInt(1)
+	}, true, sm)
 
 	testcases := []struct {
 		name          string
@@ -30,7 +35,7 @@ func TestIxPool_GetNonce(t *testing.T) {
 			name:    "IxPool accounts without interaction sender state",
 			address: tests.RandomAddress(t),
 			testFn: func(addr types.Address) {
-				mockStateManager.setLatestNonce(addr, 4)
+				sm.setLatestNonce(addr, 4)
 			},
 			expectedNonce: 4,
 		},
@@ -107,12 +112,13 @@ func TestIxPool_GetIxs(t *testing.T) {
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			ixPool, _ := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
+			sm := NewMockStateManager(t)
+			ixPool := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 				c.Mode = 0
-				c.PriceLimit = big.NewInt(100)
-			}, true)
+				c.PriceLimit = big.NewInt(1)
+			}, true, sm)
 
-			addAndProcessIxs(t, ixPool, testcase.ixs)
+			addAndProcessIxs(t, sm, ixPool, testcase.ixs)
 
 			pendingIxs, queuedIxs := ixPool.GetIxs(testcase.address, testcase.inclQueued)
 
@@ -191,13 +197,14 @@ func TestIxPool_GetAllIxs(t *testing.T) {
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			ixPool, _ := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
+			sm := NewMockStateManager(t)
+			ixPool := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 				c.Mode = 0
-				c.PriceLimit = big.NewInt(100)
-			}, true)
+				c.PriceLimit = big.NewInt(1)
+			}, true, sm)
 
 			for _, ixs := range testcase.accounts {
-				addAndProcessIxs(t, ixPool, ixs)
+				addAndProcessIxs(t, sm, ixPool, ixs)
 			}
 
 			pendingIxs, queuedIxs := ixPool.GetAllIxs(testcase.inclQueued)
@@ -211,10 +218,11 @@ func TestIxPool_GetAllIxs(t *testing.T) {
 }
 
 func TestIxPool_GetAccountWaitTime(t *testing.T) {
-	ixPool, _ := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
+	sm := NewMockStateManager(t)
+	ixPool := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 		c.Mode = 0
-		c.PriceLimit = big.NewInt(100)
-	}, true)
+		c.PriceLimit = big.NewInt(1)
+	}, true, sm)
 
 	testcases := []struct {
 		name        string
@@ -268,10 +276,11 @@ func TestIxPool_GetAccountWaitTime(t *testing.T) {
 
 func TestIxPool_GetAllAccountsWaitTime(t *testing.T) {
 	addressList := tests.GetRandomAddressList(t, 4)
-	ixPool, _ := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
+	sm := NewMockStateManager(t)
+	ixPool := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 		c.Mode = 0
-		c.PriceLimit = big.NewInt(100)
-	}, true)
+		c.PriceLimit = big.NewInt(1)
+	}, true, sm)
 
 	testcases := []struct {
 		name     string

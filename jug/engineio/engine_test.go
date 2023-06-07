@@ -57,7 +57,7 @@ func (m *mockEngineRuntime) SpawnEngine(_ Fuel, _ LogicDriver, _ CtxDriver, _ En
 }
 
 func (m *mockEngineRuntime) CompileManifest(_ Fuel, _ *Manifest) (*LogicDescriptor, Fuel, error) {
-	return nil, 0, nil
+	return nil, NewFuel(0), nil
 }
 
 func (m *mockEngineRuntime) ValidateCalldata(_ LogicDriver, _ *IxnObject) error {

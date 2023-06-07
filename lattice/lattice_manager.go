@@ -89,7 +89,7 @@ type ixpool interface {
 type executor interface {
 	ExecuteInteractions(types.ClusterID, types.Interactions, types.ContextDelta) (types.Receipts, error)
 	Revert(types.ClusterID) error
-	SpawnExecutor(fuelLimit uint64) *jug.IxExecutor
+	SpawnExecutor() *jug.IxExecutor
 }
 
 type AggregatedSignatureVerifier func(data []byte, aggSignature []byte, multiplePubKeys [][]byte) (bool, error)
@@ -767,10 +767,6 @@ func (c *ChainManager) validateSargaAccountCreationInfo(acc types.AccountSetupAr
 
 func (c *ChainManager) validateAssetAccountCreationArgs(assetAccounts ...types.AssetAccountSetupArgs) error {
 	for _, acc := range assetAccounts {
-		if acc.AssetInfo.Owner.IsNil() {
-			return errors.New(fmt.Sprintf("invalid owner %s", acc.AssetInfo.Owner))
-		}
-
 		if len(acc.AssetInfo.Allocations) == 0 {
 			return errors.New("empty allocations")
 		}
@@ -900,13 +896,15 @@ func (c *ChainManager) SetupAssetAccounts(
 			return err
 		}
 
-		if _, ok := stateObjects[assetAccount.AssetInfo.Owner]; !ok {
-			return errors.New("owner account not found")
-		}
+		if assetAccount.AssetInfo.Owner != types.NilAddress {
+			if _, ok := stateObjects[assetAccount.AssetInfo.Owner]; !ok {
+				return errors.New("owner account not found")
+			}
 
-		_, err = stateObjects[assetAccount.AssetInfo.Owner].CreateAsset(accAddress, assetAccount.AssetInfo.AssetDescriptor())
-		if err != nil {
-			return err
+			_, err = stateObjects[assetAccount.AssetInfo.Owner].CreateAsset(accAddress, assetAccount.AssetInfo.AssetDescriptor())
+			if err != nil {
+				return err
+			}
 		}
 
 		for _, allocation := range assetAccount.AssetInfo.Allocations {

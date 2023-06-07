@@ -25,18 +25,18 @@ func (executor IxExecutor) ValueTransfer(
 ) {
 	// Check if given transfer amount is valid
 	if amount.Sign() <= 0 {
-		return 0, errors.New("invalid transfer amount")
+		return nil, errors.New("invalid transfer amount")
 	}
 
 	// Fetch sender balance object
 	senderBalance, err := sender.BalanceOf(assetID)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	// Check if sender has sufficient balance
 	if senderBalance.Cmp(amount) == -1 {
-		return 0, errors.New("insufficient balance")
+		return nil, errors.New("insufficient balance")
 	}
 
 	// Remove amount from sender balance for asset
@@ -66,14 +66,14 @@ func (executor IxExecutor) CreateAsset(
 	// Create a new asset on the creator state object and get the asset ID
 	assetID, err := creator.CreateAsset(assetAccount.Address(), asset)
 	if err != nil {
-		return 0, nil, err
+		return nil, nil, err
 	}
 
 	creator.AddBalance(assetID, asset.Supply)
 
 	_, err = assetAccount.CreateAsset(assetAccount.Address(), asset)
 	if err != nil {
-		return 0, nil, err
+		return nil, nil, err
 	}
 
 	// Return the string form of the asset ID
@@ -88,12 +88,12 @@ func (executor IxExecutor) MintAsset(
 ) {
 	registry, err := assetAccount.GetRegistryEntry(payload.Asset.String())
 	if err != nil {
-		return 0, nil, err
+		return nil, nil, err
 	}
 
 	ad := new(types.AssetDescriptor)
 	if err = ad.FromBytes(registry); err != nil {
-		return 0, nil, err
+		return nil, nil, err
 	}
 
 	// update the supply and asset registry
@@ -101,17 +101,17 @@ func (executor IxExecutor) MintAsset(
 
 	rawData, err := ad.Bytes()
 	if err != nil {
-		return 0, nil, err
+		return nil, nil, err
 	}
 
 	if err = assetAccount.UpdateRegistryEntry(payload.Asset.String(), rawData); err != nil {
-		return 0, nil, err
+		return nil, nil, err
 	}
 
 	// add minted tokens to assetOwner account
 	assetOwner.AddBalance(payload.Asset, payload.Amount)
 
-	return FuelAssetMint, &types.AssetMintOrBurnReceipt{TotalSupply: (hexutil.Big)(*ad.Supply)}, nil
+	return FuelSimpleValueTransfer, &types.AssetMintOrBurnReceipt{TotalSupply: (hexutil.Big)(*ad.Supply)}, nil
 }
 
 func (executor IxExecutor) BurnAsset(
@@ -122,11 +122,11 @@ func (executor IxExecutor) BurnAsset(
 ) {
 	bal, err := assetOwner.BalanceOf(payload.Asset)
 	if err != nil {
-		return 0, nil, err
+		return nil, nil, err
 	}
 
 	if bal.Cmp(payload.Amount) < 0 {
-		return 0, nil, types.ErrInsufficientFunds
+		return nil, nil, types.ErrInsufficientFunds
 	}
 
 	// burn tokens from assetOwner account
@@ -134,12 +134,12 @@ func (executor IxExecutor) BurnAsset(
 
 	registry, err := assetAccount.GetRegistryEntry(payload.Asset.String())
 	if err != nil {
-		return 0, nil, err
+		return nil, nil, err
 	}
 
 	ad := new(types.AssetDescriptor)
 	if err = ad.FromBytes(registry); err != nil {
-		return 0, nil, err
+		return nil, nil, err
 	}
 
 	// update the supply and asset registry
@@ -147,20 +147,21 @@ func (executor IxExecutor) BurnAsset(
 
 	rawData, err := ad.Bytes()
 	if err != nil {
-		return 0, nil, err
+		return nil, nil, err
 	}
 
 	if err = assetAccount.UpdateRegistryEntry(payload.Asset.String(), rawData); err != nil {
-		return 0, nil, err
+		return nil, nil, err
 	}
 
-	return FuelAssetMint, &types.AssetMintOrBurnReceipt{TotalSupply: (hexutil.Big)(*ad.Supply)}, nil
+	return FuelSimpleAssetMint, &types.AssetMintOrBurnReceipt{TotalSupply: (hexutil.Big)(*ad.Supply)}, nil
 }
 
 // LogicDeploy performs the IxLogicDeploy interaction on the given logic state.
 // The given logic deployment payload is used to create a logic which is then
 // inserted into the state object. The logic is then initialised (if stateful)
 func (executor IxExecutor) LogicDeploy(
+	tank *engineio.FuelTank,
 	logicstate, deployer *guna.StateObject,
 	payload *types.LogicPayload,
 ) (
@@ -170,7 +171,7 @@ func (executor IxExecutor) LogicDeploy(
 	options := make([]LogicDeployOption, 0, 3)
 	// Append deploy options for deployer state and fuel limit
 	options = append(options, DeployerState(deployer))
-	options = append(options, DeployFuelLimit(executor.tank.Level()))
+	options = append(options, DeployFuelLimit(tank.Level()))
 
 	// If no callsite is provided, do not append an option for the deployment call
 	if payload.Callsite != "" {
@@ -183,39 +184,37 @@ func (executor IxExecutor) LogicDeploy(
 // LogicInvoke performs the IxLogicInvoke interface on the given state (logic account).
 // The given logic payload describes the callsite and calldata for the execution.
 func (executor IxExecutor) LogicInvoke(
+	tank *engineio.FuelTank,
 	logicstate, deployer *guna.StateObject,
 	payload *types.LogicPayload,
 ) (
 	engineio.Fuel, *types.LogicInvokeReceipt, error,
 ) {
-	// Get the current tank level
-	available := executor.tank.Level()
-
 	// Fetch the logic object from the state object
 	logicObject, err := logicstate.FetchLogicObject(payload.Logic)
 	if err != nil {
-		return 0, nil, errors.Wrap(err, "could not fetch logic object")
+		return nil, nil, errors.Wrap(err, "could not fetch logic object")
 	}
 
 	// Check that the logic contains the payload callsite
 	if _, ok := logicObject.GetCallsite(payload.Callsite); !ok {
-		return 0, nil, errors.Wrap(err, "callsite does not exists for logic")
+		return nil, nil, errors.Wrap(err, "callsite does not exists for logic")
 	}
 
 	// Obtain the runtime for the logic engine of the logic object
 	runtime, ok := engineio.FetchEngineRuntime(logicObject.Engine())
 	if !ok {
-		return 0, nil, errors.Errorf("missing engine factory: %v", logicObject.Engine())
+		return nil, nil, errors.Errorf("missing engine factory: %v", logicObject.Engine())
 	}
 
 	// Create a new engine for the execution
 	engine, err := runtime.SpawnEngine(
-		available, logicObject,
+		tank.Level(), logicObject,
 		logicstate.GenerateLogicContextObject(logicObject.LogicID()),
 		engineio.NewEnvDriver(),
 	)
 	if err != nil {
-		return 0, nil, errors.Wrap(err, "could not bootstrap engine")
+		return nil, nil, errors.Wrap(err, "could not bootstrap engine")
 	}
 
 	// Create an IxnObject
@@ -223,7 +222,7 @@ func (executor IxExecutor) LogicInvoke(
 	// Perform an Invokable Call
 	result, err := engine.Call(context.Background(), ixn, deployer.GenerateLogicContextObject(logicObject.LogicID()))
 	if err != nil {
-		return 0, nil, errors.Wrap(err, "could not perform call")
+		return nil, nil, errors.Wrap(err, "could not perform call")
 	}
 
 	// Check the execution result

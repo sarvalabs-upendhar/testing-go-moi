@@ -27,20 +27,20 @@ func (suite *EnvCodesTestSuite) SetupSuite() {
 	address := randomAddress()
 	logicID := types.NewLogicIDv0(false, false, false, false, 0, address)
 
-	consumed := suite.Initialize(manifest, logicID, address, 5000)
-	suite.Equal(engineio.Fuel(100), consumed)
+	consumed := suite.Initialize(manifest, logicID, address, engineio.NewFuel(5000))
+	suite.Equal(engineio.NewFuel(100), consumed)
 }
 
 func (suite *EnvCodesTestSuite) TestGetLogicAddress() {
 	consumed, output, except := suite.Call("GetLogicAddress", nil)
 	suite.Equal(map[string]any{"addr": [32]byte(suite.logic.LogicID().Address())}, output)
-	suite.Equal(engineio.Fuel(55), consumed)
+	suite.Equal(engineio.NewFuel(55), consumed)
 	suite.Nil(except)
 }
 
 func (suite *EnvCodesTestSuite) TestGetSenderAddress() {
 	consumed, output, except := suite.Call("GetSenderAddress", nil)
 	suite.Equal(map[string]any{"addr": [32]byte(suite.sender.Address())}, output)
-	suite.Equal(engineio.Fuel(55), consumed)
+	suite.Equal(engineio.NewFuel(55), consumed)
 	suite.Nil(except)
 }

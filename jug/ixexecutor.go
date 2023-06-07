@@ -1,10 +1,12 @@
 package jug
 
 import (
+	"log"
+	"math/big"
+
 	"github.com/pkg/errors"
 
 	"github.com/sarvalabs/moichain/guna"
-	"github.com/sarvalabs/moichain/jug/engineio"
 	"github.com/sarvalabs/moichain/types"
 )
 
@@ -16,7 +18,7 @@ type IxExecutor struct {
 
 	state state
 	exec  *ExecutionManager
-	tank  *engineio.FuelTank
+	// tank  *engineio.FuelTank
 
 	objects   map[types.Address]*guna.StateObject
 	snapshots map[types.Address]*guna.StateObject
@@ -36,6 +38,22 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 		// Retrieve the state objects for interaction participants
 		if err := executor.fetchStateObjects(ix); err != nil {
 			return errors.Wrap(err, "execution failed")
+		}
+
+		// Create a fuel tank for the interaction
+		tank := executor.exec.createFuelTank(ix)
+
+		// Determine the required balance for MOI Token.
+		// Must be the sum of the fuel limit for the ix and the transfer value for the MOI Token
+		requiredBalance := new(big.Int).Add(tank.Level(), ix.MOITokenValue())
+		// Check that the sender has sufficient balance of MOI Tokens
+		ok, err := executor.getStateObject(ix.Sender()).HasFuel(requiredBalance)
+		if err != nil {
+			return errors.Wrap(err, "execution failed: fuel check")
+		}
+
+		if !ok {
+			return errors.Errorf("execution failed: insufficient fuel")
 		}
 
 		if ix.Sender() != types.NilAddress {
@@ -60,10 +78,10 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 					return errors.Wrapf(err, "execution failed (%v)", ixtype)
 				}
 
-				// Update fuel consumption
-				receipt.FuelUsed += uint64(fuelConsumed)
+				// Update fuel consumption on the receipt
+				receipt.IncreaseFuelUsed(fuelConsumed)
 				// Exhaust fuel from tank
-				if !executor.tank.Exhaust(fuelConsumed) {
+				if !tank.Exhaust(fuelConsumed) {
 					return errors.Wrapf(types.ErrInsufficientFuel, "execution failed (%v)", ixtype)
 				}
 			}
@@ -89,10 +107,10 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 				return errors.Wrapf(err, "execution failed (%v)", ixtype)
 			}
 
-			// Update fuel consumption
-			receipt.FuelUsed += uint64(fuelConsumed)
+			// Update fuel consumption on the receipt
+			receipt.IncreaseFuelUsed(fuelConsumed)
 			// Exhaust fuel from tank
-			if !executor.tank.Exhaust(fuelConsumed) {
+			if !tank.Exhaust(fuelConsumed) {
 				return errors.Wrapf(types.ErrInsufficientFuel, "execution failed (%v)", ixtype)
 			}
 
@@ -121,9 +139,9 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 			}
 
 			// Update fuel consumption
-			receipt.FuelUsed += uint64(fuelConsumed)
+			receipt.IncreaseFuelUsed(fuelConsumed)
 			// Exhaust fuel from tank
-			if !executor.tank.Exhaust(fuelConsumed) {
+			if !tank.Exhaust(fuelConsumed) {
 				return errors.Wrapf(types.ErrInsufficientFuel, "execution failed (%v)", ixtype)
 			}
 
@@ -152,9 +170,9 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 			}
 
 			// Update fuel consumption
-			receipt.FuelUsed += uint64(fuelConsumed)
+			receipt.IncreaseFuelUsed(fuelConsumed)
 			// Exhaust fuel from tank
-			if !executor.tank.Exhaust(fuelConsumed) {
+			if !tank.Exhaust(fuelConsumed) {
 				return errors.Wrapf(types.ErrInsufficientFuel, "execution failed (%v)", ixtype)
 			}
 
@@ -177,6 +195,7 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 
 			// Perform logic deploy and record fuel consumed
 			fuelConsumed, deployReceipt, err := executor.LogicDeploy(
+				tank,
 				executor.getStateObject(logicAddress),
 				executor.getStateObject(ix.Sender()),
 				payload,
@@ -185,14 +204,16 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 				return errors.Wrapf(err, "execution failed (%v)", ixtype)
 			}
 
+			log.Println("******", deployReceipt.LogicID)
+
 			if deployReceipt.Error != nil {
 				receipt.Status = types.ReceiptFailed
 			}
 
-			// Update fuel consumption
-			receipt.FuelUsed += uint64(fuelConsumed)
+			// Update fuel consumption on the receipt
+			receipt.IncreaseFuelUsed(fuelConsumed)
 			// Exhaust fuel from tank
-			if !executor.tank.Exhaust(fuelConsumed) {
+			if !tank.Exhaust(fuelConsumed) {
 				return errors.Wrapf(types.ErrInsufficientFuel, "execution failed (%v)", ixtype)
 			}
 
@@ -209,6 +230,7 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 
 			// Perform logic invoke and record fuel consumed
 			fuelConsumed, invokeReceipt, err := executor.LogicInvoke(
+				tank,
 				executor.getStateObject(payload.Logic.Address()),
 				executor.getStateObject(ix.Sender()),
 				payload,
@@ -221,11 +243,11 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 				receipt.Status = types.ReceiptFailed
 			}
 
-			// Update fuel consumption
-			receipt.FuelUsed += uint64(fuelConsumed)
+			// Update fuel consumption on the receipt
+			receipt.IncreaseFuelUsed(fuelConsumed)
 			// Exhaust fuel from tank
-			if !executor.tank.Exhaust(fuelConsumed) {
-				errors.Wrapf(types.ErrInvalidInteractionType, "execution failed (%v)", ixtype)
+			if !tank.Exhaust(fuelConsumed) {
+				return errors.Wrapf(types.ErrInvalidInteractionType, "execution failed (%v)", ixtype)
 			}
 
 			if err = receipt.SetExtraData(invokeReceipt); err != nil {
@@ -236,9 +258,12 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 			return errors.Wrapf(types.ErrInvalidInteractionType, "execution failed (%v)", ixtype)
 		}
 
+		// Deduct fuel for the ix execution from the sender
+		executor.getStateObject(ix.Sender()).DeductFuel(tank.Consumed)
+
 		// Update Sarga state if the interaction receiver if it is an unregistered (new) account
 		if err := executor.updateSargaState(ix); err != nil {
-			return err
+			return errors.Wrap(err, "execution failed")
 		}
 
 		// Update the context for all interaction participants and update
@@ -413,6 +438,7 @@ func (executor *IxExecutor) getReceipt(ix *types.Interaction) *types.Receipt {
 		IxType:        ix.Type(),
 		StateHashes:   make(map[types.Address]types.Hash),
 		ContextHashes: make(map[types.Address]types.Hash),
+		FuelUsed:      new(big.Int),
 	}
 
 	// Set the created receipt into the executor

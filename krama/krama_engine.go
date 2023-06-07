@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"math"
+	"math/big"
 	"sync"
 	"time"
 
@@ -492,12 +493,12 @@ func (k *Engine) joinCluster(ctx context.Context, slot *ktypes.Slot) error {
 			}
 		}
 
-		if contextHashes[addr] != info.ContextHash {
-			return types.ErrHashMismatch
-		}
-
 		if slot.ClusterState().AccountInfos.GetHeight(addr) != info.Height {
 			return types.ErrHeightMismatch
+		}
+
+		if info.TesseractHash != slot.ClusterState().AccountInfos.GetLatestHash(addr) {
+			return types.ErrHashMismatch
 		}
 	}
 
@@ -1323,7 +1324,7 @@ func generateTesseract(
 	state *ktypes.ClusterState,
 	body types.TesseractBody,
 	tsBodyHash, gridHash types.Hash,
-	fuelUsed, fuelLimit uint64,
+	fuelUsed, fuelLimit *big.Int,
 	sealer id.KramaID,
 ) *types.Tesseract {
 	header := types.TesseractHeader{
@@ -1416,7 +1417,7 @@ func GenerateTesseracts(state *ktypes.ClusterState) ([]*types.Tesseract, error) 
 				senderBodyHash,
 				groupHash,
 				fuelUsed,
-				1000,
+				big.NewInt(1000),
 				state.SelfKramaID()),
 		)
 	}
@@ -1430,7 +1431,7 @@ func GenerateTesseracts(state *ktypes.ClusterState) ([]*types.Tesseract, error) 
 				receiverBodyHash,
 				groupHash,
 				fuelUsed,
-				1000,
+				big.NewInt(1000),
 				state.SelfKramaID()),
 		)
 
@@ -1442,7 +1443,7 @@ func GenerateTesseracts(state *ktypes.ClusterState) ([]*types.Tesseract, error) 
 					genesisBodyHash,
 					groupHash,
 					fuelUsed,
-					1000,
+					big.NewInt(1000),
 					state.SelfKramaID(),
 				))
 		}
@@ -1510,6 +1511,20 @@ func (k *Engine) IsIxValid(ix *types.Interaction) error {
 
 	if accountRegistered, err := k.state.IsAccountRegistered(ix.Sender()); err != nil || !accountRegistered {
 		return errors.New("account not found")
+	}
+
+	senderObject, err := k.state.GetLatestStateObject(ix.Sender())
+	if err != nil {
+		return err
+	}
+
+	fuelAvailable, err := senderObject.HasFuel(new(big.Int).Add(ix.MOITokenValue(), ix.FuelLimit()))
+	if err != nil {
+		k.logger.Error("failed to fetch fuel", "error", err)
+	}
+
+	if !fuelAvailable {
+		return types.ErrInsufficientFunds
 	}
 
 	switch ix.Type() {

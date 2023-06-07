@@ -3,8 +3,9 @@ package server
 import (
 	"encoding/json"
 	"errors"
-	"math/big"
 	"os"
+
+	"github.com/sarvalabs/moichain/common/hexutil"
 )
 
 var ErrReadingPeerList = errors.New("error reading peer list file")
@@ -17,6 +18,7 @@ type Config struct {
 	Network        NetworkConfig   `json:"network"`
 	Ixpool         IxPoolConfig    `json:"ixpool"`
 	Consensus      ConsensusConfig `json:"consensus"`
+	Execution      ExecutionConfig `json:"execution"`
 	DB             DBConfig        `json:"database"`
 	Telemetry      Telemetry       `json:"telemetry"`
 	LogFilePath    string          `json:"logfile"`
@@ -33,8 +35,8 @@ type NetworkConfig struct {
 }
 
 type IxPoolConfig struct {
-	Mode       int      `json:"mode"`
-	PriceLimit *big.Int `json:"price_limit"`
+	Mode       int         `json:"mode"`
+	PriceLimit hexutil.Big `json:"price_limit"`
 }
 
 type DBConfig struct {
@@ -59,6 +61,10 @@ type ConsensusConfig struct {
 	OperatorSlots         int   `json:"operator_slots"`
 	ValidatorSlots        int   `json:"validator_slots"`
 	AccountWaitTime       int   `json:"wait_time"`
+}
+
+type ExecutionConfig struct {
+	FuelLimit hexutil.Big `json:"fuel_limit"`
 }
 
 type VaultConfig struct {

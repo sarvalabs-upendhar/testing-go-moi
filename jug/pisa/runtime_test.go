@@ -125,7 +125,7 @@ func testThrowMethodIntegrity(t *testing.T, method *BuiltinMethod) {
 	// Code must be MethodThrow [0x1]
 	require.Equal(t, MethodThrow, method.code())
 	// Cost must be 20 FUEL
-	require.Equal(t, engineio.Fuel(20), method.Cost)
+	require.Equal(t, engineio.NewFuel(20), method.Cost)
 
 	// Must have exactly 1 input
 	require.Equal(t, uint8(1), method.callfields().Inputs.Size())
@@ -167,7 +167,7 @@ func testJoinMethodIntegrity(t *testing.T, method *BuiltinMethod) {
 	// Code must be MethodJoin [0x3]
 	require.Equal(t, MethodJoin, method.code())
 	// Cost must be 20 FUEL
-	require.Equal(t, engineio.Fuel(20), method.Cost)
+	require.Equal(t, engineio.NewFuel(20), method.Cost)
 
 	// Must have exactly 2 inputs
 	require.Equal(t, uint8(2), method.callfields().Inputs.Size())
@@ -190,7 +190,7 @@ func testLtMethodIntegrity(t *testing.T, method *BuiltinMethod) {
 	// Code must be MethodLt [0x4]
 	require.Equal(t, MethodLt, method.code())
 	// Cost must be 10 FUEL
-	require.Equal(t, engineio.Fuel(10), method.Cost)
+	require.Equal(t, engineio.NewFuel(10), method.Cost)
 
 	// Must have exactly 2 inputs
 	require.Equal(t, uint8(2), method.callfields().Inputs.Size())
@@ -213,7 +213,7 @@ func testGtMethodIntegrity(t *testing.T, method *BuiltinMethod) {
 	// Code must be MethodGt [0x5]
 	require.Equal(t, MethodGt, method.code())
 	// Cost must be 10 FUEL
-	require.Equal(t, engineio.Fuel(10), method.Cost)
+	require.Equal(t, engineio.NewFuel(10), method.Cost)
 
 	// Must have exactly 2 inputs
 	require.Equal(t, uint8(2), method.callfields().Inputs.Size())
@@ -236,7 +236,7 @@ func testEqMethodIntegrity(t *testing.T, method *BuiltinMethod) {
 	// Code must be MethodEq [0x6]
 	require.Equal(t, MethodEq, method.code())
 	// Cost must be 10 FUEL
-	require.Equal(t, engineio.Fuel(10), method.Cost)
+	require.Equal(t, engineio.NewFuel(10), method.Cost)
 
 	// Must have exactly 2 inputs
 	require.Equal(t, uint8(2), method.callfields().Inputs.Size())
@@ -259,7 +259,7 @@ func testBoolMethodIntegrity(t *testing.T, method *BuiltinMethod) {
 	// Code must be MethodBool [0x7]
 	require.Equal(t, MethodBool, method.code())
 	// Cost must be 10 FUEL
-	require.Equal(t, engineio.Fuel(10), method.Cost)
+	require.Equal(t, engineio.NewFuel(10), method.Cost)
 
 	// Must have exactly 1 input
 	require.Equal(t, uint8(1), method.callfields().Inputs.Size())
@@ -281,7 +281,7 @@ func testStrMethodIntegrity(t *testing.T, method *BuiltinMethod) {
 	// Code must be MethodStr [0x8]
 	require.Equal(t, MethodStr, method.code())
 	// Cost must be 10 FUEL
-	require.Equal(t, engineio.Fuel(10), method.Cost)
+	require.Equal(t, engineio.NewFuel(10), method.Cost)
 
 	// Must have exactly 1 input
 	require.Equal(t, uint8(1), method.callfields().Inputs.Size())
@@ -303,7 +303,7 @@ func testAddrMethodIntegrity(t *testing.T, method *BuiltinMethod) {
 	// Code must be MethodAddr [0x9]
 	require.Equal(t, MethodAddr, method.code())
 	// Cost must be 10 FUEL
-	require.Equal(t, engineio.Fuel(10), method.Cost)
+	require.Equal(t, engineio.NewFuel(10), method.Cost)
 
 	// Must have exactly 1 input
 	require.Equal(t, uint8(1), method.callfields().Inputs.Size())
@@ -325,7 +325,7 @@ func testLenMethodIntegrity(t *testing.T, method *BuiltinMethod) {
 	// Code must be MethodLen [0xA]
 	require.Equal(t, MethodLen, method.code())
 	// Cost must be 10 FUEL
-	require.Equal(t, engineio.Fuel(10), method.Cost)
+	require.Equal(t, engineio.NewFuel(10), method.Cost)
 
 	// Must have exactly 1 input
 	require.Equal(t, uint8(1), method.callfields().Inputs.Size())

@@ -138,13 +138,13 @@ func CompileManifestFile(file, name string, fuel engineio.Fuel) (engineio.Fuel, 
 	// Read manifest file from path
 	manifest, err := engineio.ReadManifestFile(file)
 	if err != nil {
-		return 0, nil, err
+		return nil, nil, err
 	}
 
 	// Obtain the runtime for the logic engine in the header
 	runtime, ok := engineio.FetchEngineRuntime(manifest.Header().LogicEngine())
 	if !ok {
-		return 0, nil, errors.Errorf("unsupported manifest engine: %v", manifest.Header().LogicEngine())
+		return nil, nil, errors.Errorf("unsupported manifest engine: %v", manifest.Header().LogicEngine())
 	}
 
 	// Compile the manifest into a LogicDescriptor

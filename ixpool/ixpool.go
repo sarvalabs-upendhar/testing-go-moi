@@ -437,6 +437,17 @@ func (i *IxPool) validateIx(ix *types.Interaction) error {
 		}
 	*/
 
+	moiBal, err := i.sm.GetBalance(ix.Sender(), types.MOITokenAssetID, types.NilHash)
+	if err != nil {
+		i.logger.Error("error fetching balance", "error", err)
+
+		return types.ErrInsufficientFunds
+	}
+
+	if moiBal.Cmp(new(big.Int).Add(ix.MOITokenValue(), ix.FuelLimit())) < 0 {
+		return types.ErrInsufficientFunds
+	}
+
 	rawPayload, err := ix.PayloadForSignature()
 	if err != nil {
 		return err

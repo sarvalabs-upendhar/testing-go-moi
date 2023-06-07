@@ -11,6 +11,7 @@ import (
 	cmdCommon "github.com/sarvalabs/moichain/cmd/common"
 	"github.com/sarvalabs/moichain/cmd/server"
 	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/common/hexutil"
 
 	"github.com/sarvalabs/moichain/types"
 
@@ -103,7 +104,10 @@ func CreateConfigFile(datadir string, index int) []byte {
 		},
 		Ixpool: server.IxPoolConfig{
 			Mode:       common.DefaultIxPoolMode,
-			PriceLimit: common.DefaultIxPriceLimit,
+			PriceLimit: hexutil.Big(*common.DefaultIxPriceLimit),
+		},
+		Execution: server.ExecutionConfig{
+			FuelLimit: hexutil.Big(*common.DefaultFuelLimit),
 		},
 		Telemetry: server.Telemetry{
 			PrometheusAddr: ":" + strconv.Itoa(common.DefaultPrometheusPort+index),

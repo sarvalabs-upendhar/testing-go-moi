@@ -2,7 +2,7 @@ package jug
 
 import (
 	"context"
-	"math"
+	"math/big"
 
 	"github.com/pkg/errors"
 
@@ -73,26 +73,30 @@ func DeployLogic(manifest []byte, state *guna.StateObject, opts ...LogicDeployOp
 	deployer := &logicDeployer{
 		manifest:   manifest,
 		logicState: state,
-		fueltank:   engineio.NewFuelTank(math.MaxUint64),
+		fueltank: engineio.NewFuelTank(func() engineio.Fuel {
+			fuel, _ := new(big.Int).SetString("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 0)
+
+			return fuel
+		}()),
 	}
 
 	// Apply all deployment options on the config
 	for _, opt := range opts {
 		if err := opt(deployer); err != nil {
-			return 0, nil, err
+			return nil, nil, err
 		}
 	}
 
 	// Compile the manifest bytes into a LogicDescriptor
 	descriptor, err := deployer.compileManifest()
 	if err != nil {
-		return 0, nil, err
+		return nil, nil, err
 	}
 
 	// Generate the logic object and deploy it to state
 	logicObject, err := deployer.deployLogicObject(descriptor)
 	if err != nil {
-		return 0, nil, err
+		return nil, nil, err
 	}
 
 	// No deployment call defined -> return the logic ID and fuel consumption
@@ -103,7 +107,7 @@ func DeployLogic(manifest []byte, state *guna.StateObject, opts ...LogicDeployOp
 	// Call the logic deployer to set up logic state
 	result, err := deployer.callDeployer(logicObject)
 	if err != nil {
-		return 0, nil, err
+		return nil, nil, err
 	}
 
 	// Check the execution result

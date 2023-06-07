@@ -465,16 +465,18 @@ func CreateTesseract(t *testing.T, params *CreateTesseractParams) *types.Tessera
 
 	var interactionHash types.Hash
 
+	header := &types.TesseractHeader{
+		Address:   params.Address,
+		Height:    params.Height,
+		FuelUsed:  big.NewInt(100),
+		FuelLimit: big.NewInt(100),
+	}
+
 	if params.Ixns != nil {
 		hash, err := params.Ixns.Hash()
 		require.NoError(t, err)
 
 		interactionHash = hash
-	}
-
-	header := &types.TesseractHeader{
-		Address: params.Address,
-		Height:  params.Height,
 	}
 
 	body := &types.TesseractBody{
@@ -701,8 +703,8 @@ func CreateHeaderWithTestData(t *testing.T) types.TesseractHeader {
 		Address:     RandomAddress(t),
 		PrevHash:    RandomHash(t),
 		Height:      4444,
-		FuelUsed:    5,
-		FuelLimit:   6,
+		FuelUsed:    big.NewInt(5),
+		FuelLimit:   big.NewInt(6),
 		BodyHash:    RandomHash(t),
 		GroupHash:   RandomHash(t),
 		Operator:    "operator",
@@ -843,7 +845,7 @@ func CreateIXInputWithTestData(
 		PerceivedProofs: perceivedProofs,
 
 		FuelLimit: new(big.Int).SetUint64(1043),
-		FuelPrice: new(big.Int).SetUint64(1088),
+		FuelPrice: new(big.Int).SetUint64(1),
 
 		Payload: payload,
 	}
@@ -880,7 +882,7 @@ func CreateReceiptWithTestData(t *testing.T) *types.Receipt {
 	receipt := &types.Receipt{
 		IxType:        2,
 		IxHash:        RandomHash(t),
-		FuelUsed:      99,
+		FuelUsed:      big.NewInt(99),
 		StateHashes:   make(map[types.Address]types.Hash),
 		ContextHashes: make(map[types.Address]types.Hash),
 		ExtraData:     []byte{1, 2},

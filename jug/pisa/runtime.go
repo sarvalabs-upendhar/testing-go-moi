@@ -96,13 +96,13 @@ func (runtime Runtime) CompileManifest(
 ) {
 	// Check that the Manifest Engine is PISA
 	if manifest.Header().LogicEngine() != engineio.PISA {
-		return nil, 0, errors.New("invalid manifest: manifest engine is not PISA")
+		return nil, nil, errors.New("invalid manifest: manifest engine is not PISA")
 	}
 
 	// Create a ManifestCompiler instance
 	compiler, err := newManifestCompiler(fuel, manifest, runtime.instructs)
 	if err != nil {
-		return nil, 0, errors.Wrap(err, "")
+		return nil, nil, errors.Wrap(err, "failed to initialise manifest compiler")
 	}
 
 	// Compile the manifest

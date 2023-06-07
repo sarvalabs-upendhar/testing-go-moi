@@ -142,7 +142,7 @@ func TestCallScopeRaise(t *testing.T) {
 
 		require.NotNil(t, continuity)
 		assert.Equal(t, continueModeExcept, continuity.mode())
-		assert.Equal(t, engineio.Fuel(0), continuity.fuel())
+		assert.Equal(t, engineio.NewFuel(0), continuity.fuel())
 		assert.Equal(t, except, continuity.exception)
 	})
 
@@ -158,7 +158,7 @@ func TestCallScopeRaise(t *testing.T) {
 
 		require.NotNil(t, continuity)
 		assert.Equal(t, continueModeExcept, continuity.mode())
-		assert.Equal(t, engineio.Fuel(42), continuity.fuel())
+		assert.Equal(t, engineio.NewFuel(42), continuity.fuel())
 		assert.Equal(t, except, continuity.exception)
 	})
 }

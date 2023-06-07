@@ -27,31 +27,31 @@ func (suite *FlipperTestSuite) SetupSuite() {
 	address := randomAddress()
 	logicID := types.NewLogicIDv0(true, false, false, false, 0, address)
 
-	consumed := suite.Initialize(manifest, logicID, address, 5000)
-	suite.Equal(engineio.Fuel(100), consumed)
+	consumed := suite.Initialize(manifest, logicID, address, engineio.NewFuel(5000))
+	suite.Equal(engineio.NewFuel(100), consumed)
 }
 
 func (suite *FlipperTestSuite) TestFlipping() {
 	consumed, output, except := suite.Call("Mode", nil)
 	suite.Equal(false, output["value"])
-	suite.Equal(engineio.Fuel(55), consumed)
+	suite.Equal(engineio.NewFuel(55), consumed)
 	suite.Nil(except)
 
 	consumed, _, except = suite.Call("Set!", map[string]any{"value": true})
-	suite.Equal(engineio.Fuel(105), consumed)
+	suite.Equal(engineio.NewFuel(105), consumed)
 	suite.Nil(except)
 
 	consumed, output, except = suite.Call("Mode", nil)
 	suite.Equal(true, output["value"])
-	suite.Equal(engineio.Fuel(55), consumed)
+	suite.Equal(engineio.NewFuel(55), consumed)
 	suite.Nil(except)
 
 	consumed, _, except = suite.Call("Flip!", nil)
-	suite.Equal(engineio.Fuel(170), consumed)
+	suite.Equal(engineio.NewFuel(170), consumed)
 	suite.Nil(except)
 
 	consumed, output, except = suite.Call("Mode", nil)
 	suite.Equal(false, output["value"])
-	suite.Equal(engineio.Fuel(55), consumed)
+	suite.Equal(engineio.NewFuel(55), consumed)
 	suite.Nil(except)
 }

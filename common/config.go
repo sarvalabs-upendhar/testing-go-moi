@@ -52,7 +52,7 @@ type DBConfig struct {
 }
 
 type ExecutionConfig struct {
-	FuelLimit uint64
+	FuelLimit *big.Int
 }
 
 type IxPoolConfig struct {
@@ -139,7 +139,7 @@ func DefaultConfig(path string) *Config {
 			Precision:             1000 * time.Nanosecond,
 			MessageDelay:          5500 * time.Millisecond,
 			AccountWaitTime:       1500 * time.Millisecond,
-			OperatorSlotCount:     2,
+			OperatorSlotCount:     -1,
 			ValidatorSlotCount:    3,
 		},
 		DB: &DBConfig{

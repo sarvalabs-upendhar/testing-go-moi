@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"log"
 	"math/big"
 	"testing"
 
@@ -122,6 +123,9 @@ func TestMoiClient(t *testing.T) {
 		"testAccountMetaInfo": {
 			test: func(t *testing.T) { testAccountMetaInfo(t, client) },
 		},
+		"testFuelDeduction": {
+			test: func(t *testing.T) { testFuelDeduction(t, client, addrsMap) },
+		},
 	}
 
 	t.Parallel()
@@ -144,7 +148,7 @@ func TestMoiClient(t *testing.T) {
 func setupChain(t *testing.T, client *Client, addrs []types.Address, addrsMap StrMap) {
 	var i int64 = 0
 
-	accs, err := tests.GetAccountMnemonicsFromFile("../accounts.json")
+	accs, err := tests.GetAccountMnemonicsFromFile("../playground/accounts.json")
 	require.NoError(t, err)
 
 	t.Run("DeployLogic", func(t *testing.T) {
@@ -221,6 +225,8 @@ func deployLogic(t *testing.T, client *Client, addr types.Address, mnemonic stri
 	ixHash, err := client.SendInteractions(sendIX)
 	require.NoError(t, err)
 
+	log.Println("Logic Deploy Interaction hash", ixHash)
+
 	// make sure interaction executed successfully
 	ctx, cancel := context.WithTimeout(context.Background(), IxnTimeout)
 	defer cancel()
@@ -242,12 +248,10 @@ func executeLogic(t *testing.T, client *Client, deployAddr, addr types.Address, 
 	payload, err := polo.Polorize(logicPayload)
 	require.NoError(t, err)
 
-	fuelprice, _ := new(big.Int).SetString("130D41", 16)
-
 	sendIXArgs := &types.SendIXArgs{
 		Type:      types.IxLogicInvoke,
-		FuelPrice: fuelprice,
-		FuelLimit: fuelprice,
+		FuelPrice: big.NewInt(1),
+		FuelLimit: big.NewInt(200),
 		Sender:    addr,
 		Payload:   payload,
 	}
@@ -256,6 +260,8 @@ func executeLogic(t *testing.T, client *Client, deployAddr, addr types.Address, 
 
 	ixHash, err := client.SendInteractions(sendIX)
 	require.NoError(t, err)
+
+	log.Println("Hello", ixHash)
 
 	// make sure interaction executed successfully
 	ctx, cancel := context.WithTimeout(context.Background(), IxnTimeout)
@@ -280,8 +286,8 @@ func createAsset(t *testing.T, client *Client, addr types.Address, mnemonic stri
 	sendIXArgs := &types.SendIXArgs{
 		Type:      types.IxAssetCreate,
 		Sender:    addr,
-		FuelPrice: supply,
-		FuelLimit: supply,
+		FuelPrice: big.NewInt(1),
+		FuelLimit: big.NewInt(200),
 		Payload:   payload,
 	}
 
@@ -299,7 +305,6 @@ func createAsset(t *testing.T, client *Client, addr types.Address, mnemonic stri
 // transferTokens transfers tokens from senderAddr to receiver
 func transferTokens(t *testing.T, client *Client, sender, receiver types.Address, mnemonic string) {
 	assetID := getAssetID(t, client, sender, &createAssetHeight)
-	fuelprice, _ := new(big.Int).SetString("130D40", 16)
 
 	sendIXArgs := &types.SendIXArgs{
 		Type:     types.IxValueTransfer,
@@ -309,8 +314,8 @@ func transferTokens(t *testing.T, client *Client, sender, receiver types.Address
 		TransferValues: map[types.AssetID]*big.Int{
 			assetID: big.NewInt(16),
 		},
-		FuelPrice: fuelprice,
-		FuelLimit: fuelprice,
+		FuelPrice: big.NewInt(1),
+		FuelLimit: big.NewInt(200),
 	}
 
 	sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
@@ -342,7 +347,7 @@ func SendIxWithInvalidSign(t *testing.T, client *Client, addr types.Address, mne
 		Type:      types.IxAssetCreate,
 		Nonce:     1,
 		Sender:    addr,
-		FuelPrice: big.NewInt(11),
+		FuelPrice: big.NewInt(1),
 		FuelLimit: big.NewInt(100),
 		Payload:   payload,
 	}
@@ -664,7 +669,7 @@ func testTDU(t *testing.T, client *Client, addr types.Address) {
 
 			_, ok := tdu[assetID]
 			require.True(t, ok)
-			require.Equal(t, 1, len(tdu))
+			require.Equal(t, 2, len(tdu))
 
 			httpTDU := httpTDU(t, test.queryArgs)
 			require.Equal(t, httpTDU, tdu)
@@ -1341,9 +1346,9 @@ func testSendInteraction(t *testing.T, client *Client) {
 				Type:      types.IxValueTransfer,
 				Sender:    tests.RandomAddress(t),
 				FuelPrice: big.NewInt(1),
-				FuelLimit: big.NewInt(1),
+				FuelLimit: big.NewInt(200),
 			},
-			expectedError: types.ErrUnderpriced,
+			expectedError: types.ErrInsufficientFunds,
 		},
 	}
 
@@ -1437,6 +1442,59 @@ func testAccountMetaInfo(t *testing.T, client *Client) {
 			require.Equal(t, httpAccountMetaInfo, accountMetaInfoResponse)
 			require.Equal(t, types.SargaAddress, accountMetaInfoResponse.Address)
 			require.Equal(t, types.SargaAccount, accountMetaInfoResponse.Type)
+		})
+	}
+}
+
+func testFuelDeduction(t *testing.T, client *Client, addrs map[string]types.Address) {
+	testcases := []struct {
+		name    string
+		address types.Address
+		height  int64
+	}{
+		{"deploy logic", addrs["deployAddr"], deployLogicHeight},
+		{"value transfer", addrs["assetAddr"], transferTokensHeight},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			// Get tesseract for the height
+			ts := getTesseract(t, client, test.address, &test.height)
+			// Get the interaction receipt
+			receipt, err := client.InteractionReceipt(&ptypes.ReceiptArgs{
+				Hash: ts.Ixns[0].Hash,
+			})
+			require.NoError(t, err)
+
+			// Determine the expected deduction of MOI Token Balance
+			var deducted *big.Int
+			// If there are MOI Tokens in the transferred values, add that to the total deductions
+			// else, only fuel consumed on the receipt is the expected deduction
+			if transferValue, ok := ts.Ixns[0].TransferValues[types.MOITokenAssetID]; !ok {
+				deducted = receipt.FuelUsed.ToInt()
+			} else {
+				deducted = new(big.Int).Add(receipt.FuelUsed.ToInt(), transferValue.ToInt())
+			}
+
+			// Determine balance of MOI Tokens BEFORE the interaction
+			preHeight := test.height - 1
+			preBalance, err := client.Balance(&ptypes.BalArgs{
+				Address: test.address,
+				AssetID: types.MOITokenAssetID,
+				Options: ptypes.TesseractNumberOrHash{TesseractNumber: &preHeight},
+			})
+			require.NoError(t, err)
+
+			// Determine balance of MOI Tokens AFTER the interaction
+			postBalance, err := client.Balance(&ptypes.BalArgs{
+				Address: test.address,
+				AssetID: types.MOITokenAssetID,
+				Options: ptypes.TesseractNumberOrHash{TesseractNumber: &test.height},
+			})
+			require.NoError(t, err)
+
+			// Verify that post balance == (pre balance - deducted fuel - transfer values of MOI)
+			require.Zero(t, postBalance.ToInt().Cmp(new(big.Int).Sub(preBalance.ToInt(), deducted)))
 		})
 	}
 }

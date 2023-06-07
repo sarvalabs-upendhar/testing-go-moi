@@ -48,7 +48,7 @@ func CreateInteractions(t *testing.T, sender types.Address) *types.Interactions 
 			Type:      types.IxAssetCreate,
 			Nonce:     0,
 			Sender:    sender,
-			FuelPrice: big.NewInt(1000),
+			FuelPrice: big.NewInt(1),
 			Payload:   payload,
 		},
 	}, nil)

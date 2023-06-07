@@ -538,8 +538,8 @@ func createHeaderCallbackWithTestData(t *testing.T) func(header *types.Tesseract
 		header.Address = tests.RandomAddress(t)
 		header.PrevHash = tests.RandomHash(t)
 		header.Height = 4
-		header.FuelUsed = 88
-		header.FuelLimit = 99
+		header.FuelUsed = big.NewInt(88)
+		header.FuelLimit = big.NewInt(99)
 		header.BodyHash = tests.RandomHash(t)
 		header.GroupHash = tests.RandomHash(t)
 		header.Operator = "operator"
@@ -1037,8 +1037,8 @@ func checkForRPCHeader(t *testing.T, header types.TesseractHeader, rpcHeader pty
 	require.Equal(t, header.Address, rpcHeader.Address)
 	require.Equal(t, header.PrevHash, rpcHeader.PrevHash)
 	require.Equal(t, header.Height, rpcHeader.Height.ToUint64())
-	require.Equal(t, header.FuelUsed, rpcHeader.FuelUsed.ToUint64())
-	require.Equal(t, header.FuelLimit, rpcHeader.FuelLimit.ToUint64())
+	require.Equal(t, header.FuelUsed, rpcHeader.FuelUsed.ToInt())
+	require.Equal(t, header.FuelLimit, rpcHeader.FuelLimit.ToInt())
 	require.Equal(t, header.BodyHash, rpcHeader.BodyHash)
 	require.Equal(t, header.GroupHash, rpcHeader.GridHash)
 	require.Equal(t, header.Operator, rpcHeader.Operator)
@@ -1149,7 +1149,7 @@ func checkForRPCReceipt(
 	checkForRPCTesseractParts(t, grid, rpcReceipt.Parts)
 	require.Equal(t, uint64(receipt.IxType), rpcReceipt.IxType.ToUint64())
 	require.Equal(t, receipt.IxHash, rpcReceipt.IxHash)
-	require.Equal(t, receipt.FuelUsed, rpcReceipt.FuelUsed.ToUint64())
+	require.Equal(t, receipt.FuelUsed, rpcReceipt.FuelUsed.ToInt())
 	checkForRPCStateHashes(t, receipt.StateHashes, rpcReceipt.StateHashes)
 	checkForRPCContextHashes(t, receipt.ContextHashes, rpcReceipt.ContextHashes)
 	require.Equal(t, receipt.ExtraData, rpcReceipt.ExtraData)

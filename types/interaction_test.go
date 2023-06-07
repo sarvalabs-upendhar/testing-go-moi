@@ -31,7 +31,7 @@ func createTestIXInput(t *testing.T, ixType types.IxType, payload []byte) types.
 			tests.GetRandomAssetID(t, tests.RandomAddress(t)): big.NewInt(99),
 			tests.GetRandomAssetID(t, tests.RandomAddress(t)): big.NewInt(111),
 		},
-		FuelPrice: big.NewInt(12),
+		FuelPrice: big.NewInt(1),
 		FuelLimit: big.NewInt(23),
 		Payload:   payload,
 	}

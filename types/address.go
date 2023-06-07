@@ -6,21 +6,24 @@ import (
 	"fmt"
 )
 
-const (
-	AddressLength = 32
-)
+const MOITokenSymbol = "MOI-TOKEN"
 
 var (
-	NilAddress    Address
-	SargaLogicID  = NewLogicIDv0(true, false, false, false, 0, SargaAddress)
-	GenesisIxHash = GetHash([]byte("Genesis Interaction"))
+	GenesisIxHash   = GetHash([]byte("Genesis Interaction"))
+	SargaLogicID    = NewLogicIDv0(true, false, false, false, 0, SargaAddress)
+	MOITokenAssetID = NewAssetIDv0(false, false, 0, 0, MOITokenAddress)
 )
 
 var (
 	SargaAddress        = CreateAddressFromString("sargaAccount")
 	StakingContractAddr = CreateAddressFromString("staking-contract")
+	MOITokenAddress     = CreateAddressFromString(MOITokenSymbol)
 	GenesisLogicAddrs   = []Address{StakingContractAddr}
 )
+
+const AddressLength = 32
+
+var NilAddress Address
 
 // Address represents the 32 byte address of an MOI account.
 type Address [AddressLength]byte

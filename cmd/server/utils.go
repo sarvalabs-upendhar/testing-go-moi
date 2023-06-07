@@ -9,6 +9,7 @@ import (
 
 	maddr "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/mudra/kramaid"
 )
@@ -58,7 +59,9 @@ func BuildConfig(dataDir string, fileCfg *Config) (*common.Config, error) {
 }
 
 func buildChainConfig(nodeCfg *common.Config, fileCfg *Config) {
-	if fileCfg.Genesis != "" {
+	if GenesisPath != "" {
+		nodeCfg.Chain.GenesisFilePath = GenesisPath
+	} else if fileCfg.Genesis != "" {
 		nodeCfg.Chain.GenesisFilePath = fileCfg.Genesis
 	}
 }
@@ -108,8 +111,8 @@ func buildConsensusConfig(nodeCfg *common.Config, fileCfg *Config) {
 }
 
 func buildIxPoolConfig(nodeCfg *common.Config, fileCfg *Config) {
-	if fileCfg.Ixpool.PriceLimit.Cmp(big.NewInt(0)) == 1 {
-		nodeCfg.IxPool.PriceLimit = fileCfg.Ixpool.PriceLimit
+	if fileCfg.Ixpool.PriceLimit.ToInt().Cmp(big.NewInt(0)) == 1 {
+		nodeCfg.IxPool.PriceLimit = fileCfg.Ixpool.PriceLimit.ToInt()
 	}
 
 	if fileCfg.Ixpool.Mode != 0 {

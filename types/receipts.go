@@ -2,6 +2,7 @@ package types
 
 import (
 	"encoding/json"
+	"math/big"
 
 	"github.com/sarvalabs/moichain/common/hexutil"
 
@@ -21,7 +22,7 @@ type Receipt struct {
 	IxHash Hash          `json:"ix_hash"`
 	Status ReceiptStatus `json:"status"`
 
-	FuelUsed      uint64           `json:"fuel_used"`
+	FuelUsed      *big.Int         `json:"fuel_used"`
 	StateHashes   map[Address]Hash `json:"state_hashes"`
 	ContextHashes map[Address]Hash `json:"context_hashes"`
 	ExtraData     json.RawMessage  `json:"extra_data"`
@@ -47,6 +48,10 @@ func (r *Receipt) Copy() *Receipt {
 	}
 
 	return &receipt
+}
+
+func (r *Receipt) IncreaseFuelUsed(fuel *big.Int) {
+	r.FuelUsed = new(big.Int).Add(r.FuelUsed, fuel)
 }
 
 func (r *Receipt) SetExtraData(data interface{}) error {
@@ -116,11 +121,11 @@ type AssetCreationReceipt struct {
 }
 
 type AssetMintOrBurnReceipt struct {
-	TotalSupply hexutil.Big `json:"total-supply"`
+	TotalSupply hexutil.Big `json:"total_supply"`
 }
 
 type LogicDeployReceipt struct {
-	LogicID LogicID       `json:"logic_id"`
+	LogicID LogicID       `json:"logic_id,omitempty"`
 	Error   hexutil.Bytes `json:"error"`
 }
 

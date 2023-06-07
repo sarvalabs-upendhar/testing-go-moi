@@ -319,11 +319,17 @@ func TestPublicCoreAPI_CreateRPCTesseract(t *testing.T) {
 			name: "create rpc tesseract for genesis tesseract",
 			tsParams: createTesseractParams(func(header *types.TesseractHeader) {
 				header.ClusterID = lattice.GenesisIdentifier
+				header.FuelLimit = big.NewInt(0)
+				header.FuelUsed = big.NewInt(0)
 			}),
 		},
 		{
 			name:     "nil interactions",
 			ixParams: nil,
+			tsParams: createTesseractParams(func(header *types.TesseractHeader) {
+				header.FuelLimit = big.NewInt(0)
+				header.FuelUsed = big.NewInt(0)
+			}),
 		},
 	}
 

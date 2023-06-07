@@ -104,10 +104,6 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 	n.setupTelemetry()
 	n.loadLatestActiveTimeStamp()
 
-	if err = n.newGenesisCheck(); err != nil {
-		return nil, err
-	}
-
 	if err = n.setupReputationEngine(); err != nil {
 		return nil, err
 	}
@@ -198,15 +194,6 @@ func (n *Node) startJSONRPCServer() {
 func (n *Node) setupCacheStore() (err error) {
 	if n.cache, err = lru.New(lruSize); err != nil {
 		return err
-	}
-
-	return nil
-}
-
-// newGenesisCheck checks if a genesis file path is present in config and cleans the db if genesis file path is passed
-func (n *Node) newGenesisCheck() error {
-	if n.cfg.Chain.GenesisFilePath == "nil" {
-		return nil
 	}
 
 	return nil

@@ -1,6 +1,7 @@
 package types
 
 import (
+	"math/big"
 	"sync"
 	"sync/atomic"
 
@@ -86,8 +87,8 @@ type TesseractHeader struct {
 	Address     Address
 	PrevHash    Hash
 	Height      uint64
-	FuelUsed    uint64
-	FuelLimit   uint64
+	FuelUsed    *big.Int
+	FuelLimit   *big.Int
 	BodyHash    Hash
 	GroupHash   Hash
 	Operator    string

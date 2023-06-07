@@ -926,3 +926,27 @@ func (s *StateObject) FetchLogicObject(logicID types.LogicID) (*gtypes.LogicObje
 func (s *StateObject) GenerateLogicContextObject(logicID types.LogicID) *gtypes.LogicContextObject {
 	return gtypes.NewLogicContextObject(logicID, s)
 }
+
+func (s *StateObject) HasFuel(amount *big.Int) (bool, error) {
+	if amount.Sign() == -1 {
+		return false, errors.New("invalid transfer amount")
+	}
+
+	// Fetch sender balance object
+	balances, err := s.BalanceOf(types.MOITokenAssetID)
+	if err != nil {
+		return false, err
+	}
+
+	// Check if sender has sufficient balance
+	if balances.Cmp(amount) == -1 {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func (s *StateObject) DeductFuel(amount *big.Int) {
+	// Remove amount from sender balance for asset
+	s.SubBalance(types.MOITokenAssetID, amount)
+}

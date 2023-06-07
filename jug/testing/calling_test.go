@@ -30,14 +30,14 @@ func (suite *CallingTestSuite) SetupSuite() {
 	address := randomAddress()
 	logicID := types.NewLogicIDv0(false, false, false, false, 0, address)
 
-	consumed := suite.Initialize(manifest, logicID, address, 5000)
-	suite.Equal(engineio.Fuel(100), consumed)
+	consumed := suite.Initialize(manifest, logicID, address, engineio.NewFuel(5000))
+	suite.Equal(engineio.NewFuel(100), consumed)
 }
 
 func (suite *CallingTestSuite) TestExceptionDepth() {
 	consumed, output, except := suite.Call("OuterFunc", nil)
 	suite.Nil(output)
-	suite.Equal(engineio.Fuel(190), consumed)
+	suite.Equal(engineio.NewFuel(190), consumed)
 	suite.NotNil(except)
 
 	exception := new(pisa.Exception)
@@ -59,13 +59,13 @@ func (suite *CallingTestSuite) TestExceptionDepth() {
 func (suite *CallingTestSuite) TestMethodJoin() {
 	consumed, output, except := suite.Call("CombineStrings", map[string]any{"a": "FOO", "b": "BOO"})
 	suite.Equal(map[string]any{"result": "FOOBOO"}, output)
-	suite.Equal(engineio.Fuel(120), consumed)
+	suite.Equal(engineio.NewFuel(120), consumed)
 	suite.Nil(except)
 }
 
 func (suite *CallingTestSuite) TestBuiltinSHA256() {
 	consumed, output, except := suite.Call("Sha256", map[string]any{"data": []byte{0xab, 0xcd}})
 	suite.Equal(map[string]any{"hash": uint256.MustFromDecimal("8249936900697619105054612752331407201215506680094776679256130082075110804075").ToBig()}, output) //nolint:lll
-	suite.Equal(engineio.Fuel(135), consumed)
+	suite.Equal(engineio.NewFuel(135), consumed)
 	suite.Nil(except)
 }

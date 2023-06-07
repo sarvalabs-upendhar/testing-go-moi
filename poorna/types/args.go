@@ -266,7 +266,7 @@ type RPCReceipt struct {
 	IxType        hexutil.Uint64      `json:"ix_type"`
 	IxHash        types.Hash          `json:"ix_hash"`
 	Status        types.ReceiptStatus `json:"status"`
-	FuelUsed      hexutil.Uint64      `json:"fuel_used"`
+	FuelUsed      hexutil.Big         `json:"fuel_used"`
 	StateHashes   RPCStateHashes      `json:"state_hashes"`
 	ContextHashes RPCContextHashes    `json:"context_hashes"`
 	ExtraData     json.RawMessage     `json:"extra_data"`
@@ -371,8 +371,8 @@ type RPCHeader struct {
 	Address     types.Address       `json:"address"`
 	PrevHash    types.Hash          `json:"prev_hash"`
 	Height      hexutil.Uint64      `json:"height"`
-	FuelUsed    hexutil.Uint64      `json:"fuel_used"`
-	FuelLimit   hexutil.Uint64      `json:"fuel_limit"`
+	FuelUsed    hexutil.Big         `json:"fuel_used"`
+	FuelLimit   hexutil.Big         `json:"fuel_limit"`
 	BodyHash    types.Hash          `json:"body_hash"`
 	GridHash    types.Hash          `json:"grid_hash"`
 	Operator    string              `json:"operator"`

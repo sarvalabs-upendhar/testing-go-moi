@@ -1,6 +1,8 @@
 package lattice
 
 import (
+	"math/big"
+
 	"github.com/sarvalabs/moichain/types"
 )
 
@@ -33,8 +35,8 @@ func createGenesisTesseract(
 		Address:   addr,
 		PrevHash:  types.NilHash,
 		Height:    0,
-		FuelUsed:  0,
-		FuelLimit: 0,
+		FuelUsed:  big.NewInt(0),
+		FuelLimit: big.NewInt(0),
 		BodyHash:  tsBodyHash,
 		GroupHash: types.NilHash,
 		ClusterID: GenesisIdentifier,
