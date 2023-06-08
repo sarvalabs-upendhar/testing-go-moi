@@ -364,6 +364,7 @@ func (n *Node) setupSyncer() (err error) {
 		n.nodeMetrics.agora,
 		n.consensusSlots,
 		n.lastActiveTimestamp,
+		n.nodeMetrics.syncer,
 	); err != nil {
 		return err
 	}

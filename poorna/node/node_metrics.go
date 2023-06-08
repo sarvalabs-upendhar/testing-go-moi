@@ -7,6 +7,7 @@ import (
 	"github.com/sarvalabs/moichain/lattice"
 	"github.com/sarvalabs/moichain/poorna/agora"
 	"github.com/sarvalabs/moichain/poorna/flux"
+	"github.com/sarvalabs/moichain/poorna/syncer"
 )
 
 type nodeMetrics struct {
@@ -16,6 +17,7 @@ type nodeMetrics struct {
 	guna   *guna.Metrics
 	ixpool *ixpool.Metrics
 	krama  *krama.Metrics
+	syncer *syncer.Metrics
 }
 
 func metricProvider(nameSpace string, chainID string, metricsRequired bool) *nodeMetrics {
@@ -27,6 +29,7 @@ func metricProvider(nameSpace string, chainID string, metricsRequired bool) *nod
 			guna:   guna.GetPrometheusMetrics(nameSpace, "chain_id", chainID),
 			ixpool: ixpool.GetPrometheusMetrics(nameSpace, "chain_id", chainID),
 			krama:  krama.GetPrometheusMetrics(nameSpace, "chain_id", chainID),
+			syncer: syncer.GetPrometheusMetrics(nameSpace, "chain_id", chainID),
 		}
 	}
 
@@ -37,5 +40,6 @@ func metricProvider(nameSpace string, chainID string, metricsRequired bool) *nod
 		guna:   guna.NilMetrics(),
 		ixpool: ixpool.NilMetrics(),
 		krama:  krama.NilMetrics(),
+		syncer: syncer.NilMetrics(),
 	}
 }

@@ -137,6 +137,7 @@ type Syncer struct {
 	lastActiveTimeStamp uint64
 	accountsLock        sync.RWMutex
 	lockedAccounts      map[types.Address]types.Hash
+	metrics             *Metrics
 }
 
 func NewSyncer(
@@ -151,6 +152,7 @@ func NewSyncer(
 	metrics *agora.Metrics,
 	slots *ktypes.Slots,
 	lastActiveTimeStamp uint64,
+	syncerMetrics *Metrics,
 ) (*Syncer, error) {
 	agoraInstance, err := agora.NewAgora(ctx, logger, db, node, metrics)
 	if err != nil {
@@ -177,6 +179,7 @@ func NewSyncer(
 		consensusSlots:      slots,
 		lastActiveTimeStamp: lastActiveTimeStamp,
 		lockedAccounts:      make(map[types.Address]types.Hash, 0),
+		metrics:             syncerMetrics,
 	}
 
 	return s, nil
@@ -255,6 +258,8 @@ func (s *Syncer) NewSyncRequest(
 			return err
 		}
 
+		s.metrics.captureTotalJobs(float64(len(s.jobQueue.jobs)))
+
 		if err = job.commitJob(); err != nil {
 			return errors.Wrap(err, "failed to commit job")
 		}
@@ -282,13 +287,20 @@ func (s *Syncer) worker() {
 		}
 
 		job := s.jobQueue.NextJob()
+
+		s.metrics.captureTotalJobs(float64(len(s.jobQueue.jobs)))
+
 		if job == nil {
 			continue
 		}
 
+		requestTime := time.Now()
+
 		if err := s.jobProcessor(job); err != nil {
 			s.logger.Error("Error from sync job processor", "error", err)
 		}
+
+		s.metrics.captureJobProcessingTime(requestTime)
 	}
 }
 
@@ -328,6 +340,12 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 
 		return nil
 	}
+
+	s.metrics.captureActiveJobs(1)
+
+	defer func() {
+		s.metrics.captureActiveJobs(-1)
+	}()
 
 	if len(job.bestPeers) > 0 {
 		randSource := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -677,12 +695,17 @@ func (s *Syncer) syncBucketsWithMaxAttempts(bestPeers []id.KramaID, maxAttempts 
 
 	for i := 1; i < maxAttempts; i++ {
 		bestPeer := bestPeers[randomNumber.Intn(len(bestPeers))]
+
+		requestTime := time.Now()
+
 		if err := s.syncBuckets(bestPeer, i); err != nil {
 			s.logger.Error("failed to sync buckets, retrying...!!!", "error", err)
+			s.metrics.captureBucketSyncTime(requestTime)
 
 			continue
 		}
 
+		s.metrics.captureBucketSyncTime(requestTime)
 		s.logger.Info("Bucket Sync Successful")
 
 		return nil
@@ -801,6 +824,8 @@ func (s *Syncer) loadSyncJobsFromDB() error {
 		if err = s.jobQueue.AddJob(syncJob); err != nil {
 			return err
 		}
+
+		s.metrics.captureTotalJobs(float64(len(s.jobQueue.jobs)))
 	}
 
 	return nil
