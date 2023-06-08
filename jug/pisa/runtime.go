@@ -259,5 +259,8 @@ func (runtime *Runtime) setupBuiltinClasses() {
 func (runtime *Runtime) setupBuiltinLibrary() {
 	runtime.builtinLibrary = map[uint64]*Builtin{
 		0: builtinSHA256(),
+		1: builtinKeccak256(),
+		2: builtinBLAKE2b(),
+		3: builtinSignatureVerify(),
 	}
 }

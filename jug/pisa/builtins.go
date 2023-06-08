@@ -5,8 +5,11 @@ import (
 	"math/big"
 
 	"github.com/holiman/uint256"
+	"golang.org/x/crypto/blake2b"
+	"golang.org/x/crypto/sha3"
 
 	"github.com/sarvalabs/moichain/jug/engineio"
+	"github.com/sarvalabs/moichain/mudra"
 )
 
 // BuiltinRunner is the executor function for a builtin executable
@@ -126,6 +129,64 @@ func builtinSHA256() *Builtin {
 			u256 := new(uint256.Int).SetBytes(hash[:])
 
 			return RegisterSet{0: &U256Value{u256}}, nil
+		},
+	)
+}
+
+//nolint:forcetypeassert
+func builtinKeccak256() *Builtin {
+	return makeBuiltin(
+		"Keccak256", 1, 50,
+		makefields([]*TypeField{{"data", PrimitiveBytes}}),
+		makefields([]*TypeField{{"hash", PrimitiveU256}}),
+		func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+			data := inputs[0].(BytesValue)
+
+			// Hash the data and create a u256 value from it
+			hash := sha3.Sum256(data)
+			u256 := new(uint256.Int).SetBytes(hash[:])
+
+			return RegisterSet{0: &U256Value{u256}}, nil
+		},
+	)
+}
+
+//nolint:forcetypeassert
+func builtinBLAKE2b() *Builtin {
+	return makeBuiltin(
+		"BLAKE2b", 2, 50,
+		makefields([]*TypeField{{"data", PrimitiveBytes}}),
+		makefields([]*TypeField{{"hash", PrimitiveU256}}),
+		func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+			data := inputs[0].(BytesValue)
+
+			// Hash the data and create a u256 value from it
+			hash, err := blake2b.New256(data)
+			if err != nil {
+				return RegisterSet{0: &U256Value{}}, exception(CallError, err.Error())
+			}
+			u256 := new(uint256.Int).SetBytes(hash.Sum([]byte(nil)))
+
+			return RegisterSet{0: &U256Value{u256}}, nil
+		},
+	)
+}
+
+//nolint:forcetypeassert
+func builtinSignatureVerify() *Builtin {
+	return makeBuiltin(
+		"builtinSignatureVerify", 3, 50,
+		makefields([]*TypeField{{"data", PrimitiveBytes}, {"signature", PrimitiveBytes}, {"pubkey", PrimitiveBytes}}),
+		makefields([]*TypeField{{"ok", PrimitiveBool}}),
+		func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+			data, sig, pubBytes := inputs[0].(BytesValue), inputs[1].(BytesValue), inputs[2].(BytesValue)
+
+			ok, err := mudra.Verify(data, sig, pubBytes)
+			if err != nil {
+				return RegisterSet{0: BoolValue(ok)}, exception(CallError, err.Error())
+			}
+
+			return RegisterSet{0: BoolValue(ok)}, nil
 		},
 	)
 }

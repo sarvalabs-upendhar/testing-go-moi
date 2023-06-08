@@ -97,3 +97,85 @@ elements:
           0x51, 0x00, 0x02, 0x00, # getfld $0 $2 &0
           0x05, 0x00, 0x00,       # yield $0 &0
         ]
+
+  - ptr : 6
+    kind: routine
+    data:
+      name    : Keccak256
+      kind    : invokable
+      accepts :
+        - slot : 0
+          label: data
+          type : bytes
+      returns :
+        - slot : 0
+          label: hash
+          type : u256
+      executes:
+        bin: [
+          0x0A, 0x00,             # cargs $0
+          0x04, 0x01, 0x00,       # obtain $1 &0
+          0x52, 0x00, 0x00, 0x01, # setfld $0 &0 $1
+          0x11, 0x01, 0x01,       # ldptr1 $1 0x01
+          0x0B, 0x02, 0x01, 0x00, # callb $2 $1 $0   // $2 = builtins1($0) ||  $2 = Keccak256($0.&0)
+          0x51, 0x00, 0x02, 0x00, # getfld $0 $2 &0
+          0x05, 0x00, 0x00,       # yield $0 &0
+        ]
+  
+  - ptr : 7
+    kind: routine
+    data:
+      name    : Blake2b
+      kind    : invokable
+      accepts :
+        - slot : 0
+          label: data
+          type : bytes
+      returns :
+        - slot : 0
+          label: hash
+          type : u256
+      executes:
+        bin: [
+          0x0A, 0x00,             # cargs $0
+          0x04, 0x01, 0x00,       # obtain $1 &0
+          0x52, 0x00, 0x00, 0x01, # setfld $0 &0 $1
+          0x11, 0x01, 0x02,       # ldptr1 $1 0x02
+          0x0B, 0x02, 0x01, 0x00, # callb $2 $1 $0   // $2 = builtins2($0) || $2 = BLAKE2b($0.&2)
+          0x51, 0x00, 0x02, 0x00, # getfld $0 $2 &0
+          0x05, 0x00, 0x00,       # yield $0 &0
+        ]
+
+  - ptr : 8
+    kind: routine
+    data:
+      name    : Verify
+      kind    : invokable
+      accepts :
+        - slot : 0
+          label: data
+          type : bytes
+        - slot : 1
+          label: signature
+          type : bytes
+        - slot : 2
+          label: pubkey
+          type : bytes
+      returns :
+        - slot : 0
+          label: ok
+          type : bool
+      executes:
+        bin: [
+          0x0A, 0x00,             # cargs $0
+          0x04, 0x01, 0x00,       # obtain $1 &0
+          0x04, 0x04, 0x01,       # obtain $1 &1
+          0x04, 0x05, 0x02,       # obtain $1 &2
+          0x52, 0x00, 0x00, 0x01, # setfld $0 &0 $1
+          0x52, 0x00, 0x01, 0x04, # setfld $0 &1 $4
+          0x52, 0x00, 0x02, 0x05, # setfld $0 &2 $5
+          0x11, 0x01, 0x03,       # ldptr1 $1 0x03
+          0x0B, 0x02, 0x01, 0x00, # callb $2 $1 $0   // $2 = builtins3($0) || $2 = Verify($0.&0)
+          0x51, 0x00, 0x02, 0x00, # getfld $0 $2 &0
+          0x05, 0x00, 0x00,       # yield $0 &0
+        ]
