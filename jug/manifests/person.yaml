@@ -28,6 +28,13 @@ elements:
         - slot : 2
           label: gender
           type : string
+      methods:
+        - ptr: 6
+          code: 0x10
+        - ptr: 8
+          code: 0x11
+        - ptr: 11
+          code: 0x12
 
   - ptr : 2
     kind: routine
@@ -115,3 +122,167 @@ elements:
           0x05, 0x00, 0x00,         # yield $0 &0
         ]
 
+  - ptr: 6
+    kind: method
+    deps: [ 1 ]
+    data:
+      name: Rename
+      class: Person
+      accepts:
+        - slot: 0
+          label: self
+          type: Person
+        - slot: 1
+          label: name
+          type: string
+      returns:
+        - slot: 0
+          label: out
+          type: Person
+      executes:
+        bin: [
+          0x04, 0x00, 0x00,         # obtain $0 &0
+          0x04, 0x01, 0x01,         # obtain $1 &1
+          0x52, 0x00, 0x00, 0x01,   # setfld $0 &0 $1
+          0x05, 0x00, 0x00,         # yield $1 &0
+        ]
+
+  - ptr: 7
+    kind: routine
+    deps: [ 1, 6 ]
+    data:
+      name: RenamePerson
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: person
+          type: Person
+        - slot: 1
+          label: name
+          type: string
+      returns:
+        - slot: 0
+          label: res
+          type: Person
+      executes:
+        bin: [
+          0x04, 0x00, 0x00,         # obtain $0 &0
+          0x04, 0x01, 0x01,         # obtain $1 &1
+          0x0A, 0x02,               # cargs $2
+          0x52, 0x02, 0x00, 0x00,   # setfld $2 &0 $0
+          0x52, 0x02, 0x01, 0x01,   # setfld $2 &1 $1
+          0x0D, 0x03, 0x10, 0x02,   # callm $3 &16 $2     // $3 = $2.&16($2)
+          0x51, 0x04, 0x03, 0x00,   # getfld $4 $3 &0
+          0x05, 0x04, 0x00,         # yield $4 &0
+        ]
+
+  - ptr: 8
+    kind: method
+    deps: [ 1 ]
+    data:
+      name: nameisalpha
+      class: Person
+      accepts:
+        - slot: 0
+          label: self
+          type: Person
+      returns:
+        - slot: 0
+          label: ok
+          type: bool
+      executes:
+        bin: [
+          0x04, 0x00, 0x00,         # obtain $0 &0
+          0x51, 0x01, 0x00, 0x00,   # getfld $1 $0 &0
+          0x0A, 0x02,               # cargs $2
+          0x52, 0x02, 0x00, 0x01,   # setfld $2.0 = $1
+          0x0D, 0x03, 0x12, 0x02,   # callm $3 &18 $2     // $3 = $2.&18($2)
+          0x51, 0x04, 0x03, 0x00,   # getfld $4 $3 &0
+          0x05, 0x04, 0x00,         # yield $4 &0
+        ]
+
+  - ptr: 9
+    kind: routine
+    deps: [ 1, 8 ]
+    data:
+      name: CheckNameAlpha
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: person
+          type: Person
+      returns:
+        - slot: 0
+          label: ok
+          type: bool
+      executes:
+        bin: [
+          0x04, 0x00, 0x00,         # obtain $0 &0
+          0x0A, 0x02,               # cargs $2
+          0x52, 0x02, 0x00, 0x00,   # setfld $2.0 = $0
+          0x0D, 0x03, 0x11, 0x02,   # callm $3 &17 $2     // $3 = $2.&18($2)
+          0x51, 0x04, 0x03, 0x00,   # getfld $4 $3 &0
+          0x05, 0x04, 0x00,         # yield $4 &0
+        ]
+
+  - ptr: 10
+    kind: routine
+    deps: [ 0 ]
+    data:
+      name: Setup!
+      kind: deployer
+      executes:
+        bin: []
+
+  - ptr: 11
+    kind: method
+    deps: [ 1, 13 ]
+    data:
+      name: olderthan12
+      class: Person
+      accepts:
+        - slot: 0
+          label: self
+          type: Person
+      returns:
+        - slot: 0
+          label: ok
+          type: bool
+      executes:
+        bin: [
+          0x04, 0x00, 0x00,         # obtain $0 &0
+          0x51, 0x01, 0x00, 0x01,   # getfld $1 = $0.2
+          0x11, 0x02, 0x0d,         # ldptr $2 = 0x0d
+          0x10, 0x02, 0x02,         # const $2
+          0x45, 0x03, 0x01, 0x02,   # $3 = $1>$2
+          0x05, 0x03, 0x00,         # yield $3 &0
+        ]
+  - ptr: 12
+    kind: routine
+    deps: [ 1, 11 ]
+    data:
+      name: CheckPersonAge
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: person
+          type: Person
+      returns:
+        - slot: 0
+          label: ok
+          type: bool
+      executes:
+        bin: [
+          0x04, 0x00, 0x00,         # obtain $0 &0
+          0x0A, 0x02,               # cargs $2
+          0x52, 0x02, 0x00, 0x00,   # setfld $2.0 = $0
+          0x0D, 0X03, 0X012, 0X02,  # callm $3 = $2.12
+          0x51, 0x04, 0x03, 0x00,   # getfld $4 = $3.0
+          0x05, 0x04, 0x00,         # yield $4 &0
+        ]
+
+  - ptr : 13
+    kind: constant
+    data:
+      type : u64
+      value: 0x030c

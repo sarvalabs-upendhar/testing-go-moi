@@ -1,6 +1,8 @@
 package pisa
 
 import (
+	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-polo"
 	"github.com/sarvalabs/moichain/jug/engineio"
 )
 
@@ -78,12 +80,103 @@ func (routine Routine) run(engine *Engine, inputs RegisterSet) (RegisterSet, *Ex
 // RoutineMethod represents a method executable of PISA Bytecode
 // Implements the Runnable & Method interfaces.
 type RoutineMethod struct {
-	// Routine embeds all Routine properties
-	Routine
+	// CallFields embeds the input and output
+	// symbols for the Routine calling interface.
+	CallFields
+
+	// Name represents the name of the routine
+	Name string
+	// Ptr represents the pointer reference of the routine
+	Ptr engineio.ElementPtr
 	// Code represents the method code of the method
 	Code MethodCode
 	// Datatype represents the type that the method belongs to.
 	Datatype Datatype
+
+	// Instructs represents the set of logic instructions to
+	// execute when the Routine is invoked/called.
+	Instructs Instructions
+	// catches represents the exception catch table specifying the
+	// exceptions to catch between code points and their handling
+	// Catches CatchTable
+}
+
+func (rmethod RoutineMethod) Polorize() (*polo.Polorizer, error) {
+	polorizer := polo.NewPolorizer()
+
+	if err := polorizer.Polorize(rmethod.CallFields); err != nil {
+		return nil, err
+	}
+
+	if err := polorizer.Polorize(rmethod.Name); err != nil {
+		return nil, err
+	}
+
+	if err := polorizer.Polorize(rmethod.Ptr); err != nil {
+		return nil, err
+	}
+
+	if err := polorizer.Polorize(rmethod.Code); err != nil {
+		return nil, err
+	}
+
+	encoded, err := EncodeDatatype(rmethod.Datatype)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := polorizer.Polorize(rmethod.Instructs); err != nil {
+		return nil, err
+	}
+
+	if err := polorizer.PolorizeAny(encoded); err != nil {
+		return nil, err
+	}
+
+	return polorizer, nil
+}
+
+func (rmethod *RoutineMethod) Depolorize(depolorizer *polo.Depolorizer) (err error) {
+	depolorizer, err = depolorizer.DepolorizePacked()
+	if errors.Is(err, polo.ErrNullPack) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	if err = depolorizer.Depolorize(&rmethod.CallFields); err != nil {
+		return err
+	}
+
+	if err = depolorizer.Depolorize(&rmethod.Name); err != nil {
+		return err
+	}
+
+	if err = depolorizer.Depolorize(&rmethod.Ptr); err != nil {
+		return err
+	}
+
+	if err = depolorizer.Depolorize(&rmethod.Code); err != nil {
+		return err
+	}
+
+	if err = depolorizer.Depolorize(&rmethod.Instructs); err != nil {
+		return err
+	}
+
+	wire, err := depolorizer.DepolorizeAny()
+	if err != nil {
+		return err
+	}
+
+	datatype, err := DecodeDatatype(wire)
+	if err != nil {
+		return err
+	}
+
+	rmethod.Datatype = datatype
+
+	return nil
 }
 
 // code returns the method code of the RoutineMethod.
@@ -93,6 +186,20 @@ func (rmethod RoutineMethod) code() MethodCode { return rmethod.Code }
 // datatype returns the Datatype of the RoutineMethod.
 // Implements the Method interface for RoutineMethod.
 func (rmethod RoutineMethod) datatype() Datatype { return rmethod.Datatype }
+
+// name returns the Name of the RoutineMethod.
+// Implements the Method interface for RoutineMethod.
+func (rmethod RoutineMethod) name() string { return rmethod.Name }
+
+// ptr returns the Pointer of the RoutineMethod.
+// Implements the Method interface for RoutineMethod.
+func (rmethod RoutineMethod) ptr() engineio.ElementPtr { return rmethod.Ptr }
+
+// callfields returns the CallFields of the RoutineMethod.
+// Implements the Method interface for RoutineMethod.
+func (rmethod RoutineMethod) callfields() CallFields {
+	return rmethod.CallFields
+}
 
 // run performs the execution of the RoutineMethod for the given engine and some input registers.
 // Implements the Runnable interface for RoutineMethod

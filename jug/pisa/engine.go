@@ -206,6 +206,25 @@ func (engine *Engine) lookupMethod(dt Datatype, mtcode MethodCode) (Method, bool
 				return method, true
 			}
 		}
+
+	case Class:
+		class, _ := dt.(ClassDatatype)
+
+		methodptr := class.methods[mtcode]
+
+		element, exists := engine.logic.GetElement(methodptr)
+		if !exists {
+			return nil, false
+		}
+
+		method := new(RoutineMethod)
+		if err := polo.Depolorize(method, element.Data); err != nil {
+			return nil, false
+		}
+
+		engine.elements[methodptr] = method
+
+		return method, true
 	}
 
 	return nil, false
@@ -275,6 +294,28 @@ func (engine *Engine) GetRoutine(ptr engineio.ElementPtr) (*Routine, error) {
 	engine.elements[ptr] = routine
 
 	return routine, nil
+}
+
+func (engine *Engine) GetMethod(ptr engineio.ElementPtr) (*Method, error) {
+	if item, cached := engine.elements[ptr]; cached {
+		method, _ := item.(*Method)
+
+		return method, nil
+	}
+
+	element, ok := engine.logic.GetElement(ptr)
+	if !ok {
+		return nil, errors.Errorf("could not find element at %#x", ptr)
+	}
+
+	method := new(Method)
+	if err := polo.Depolorize(method, element.Data); err != nil {
+		return nil, err
+	}
+
+	engine.elements[ptr] = method
+
+	return method, nil
 }
 
 func (engine *Engine) GetStateFields(kind engineio.ContextStateKind) (*StateFields, error) {
@@ -360,6 +401,14 @@ func (engine *Engine) loadLogicElement(ptr engineio.ElementPtr, element *enginei
 		}
 
 		engine.elements[ptr] = constant
+
+	case MethodElement:
+		method := new(RoutineMethod)
+		if err := polo.Depolorize(method, element.Data); err != nil {
+			return err
+		}
+
+		engine.elements[ptr] = method
 
 	default:
 		return errors.Errorf("cannot load element [%#x] into engine: invalid element kind: %v", ptr, element.Kind)

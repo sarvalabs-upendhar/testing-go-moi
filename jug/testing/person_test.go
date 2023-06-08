@@ -91,3 +91,53 @@ func (suite *PersonTestSuite) TestPersonStorage() {
 	suite.Equal(engineio.NewFuel(70), consumed)
 	suite.Nil(except)
 }
+
+func (suite *PersonTestSuite) TestRenamePerson() {
+	consumed, output, except := suite.Call("RenamePerson", map[string]any{
+		"person": map[string]any{"name": "Marco", "age": 26, "gender": "male"},
+		"name":   "Carlo",
+	})
+	suite.Equal(map[string]any{"name": "Carlo", "age": uint64(26), "gender": "male"}, output["res"])
+	suite.Equal(engineio.NewFuel(135), consumed)
+	suite.Nil(except)
+
+	consumed, output, except = suite.Call("RenamePerson", map[string]any{
+		"person": map[string]any{"name": "Linda", "age": 45, "gender": "female"},
+		"name":   "Elle",
+	})
+	suite.Equal(map[string]any{"name": "Elle", "age": uint64(45), "gender": "female"}, output["res"])
+	suite.Equal(engineio.NewFuel(135), consumed)
+	suite.Nil(except)
+}
+
+func (suite *PersonTestSuite) TestCheckNameAlpha() {
+	consumed, output, except := suite.Call("CheckNameAlpha", map[string]any{
+		"person": map[string]any{"name": "Marco", "age": 26, "gender": "male"},
+	})
+	suite.Equal(true, output["ok"])
+	suite.Equal(engineio.NewFuel(170), consumed)
+	suite.Nil(except)
+
+	consumed, output, except = suite.Call("CheckNameAlpha", map[string]any{
+		"person": map[string]any{"name": "Sam1", "age": 26, "gender": "male"},
+	})
+	suite.Equal(false, output["ok"])
+	suite.Equal(engineio.NewFuel(170), consumed)
+	suite.Nil(except)
+}
+
+func (suite *PersonTestSuite) TestCheckPersonAge() {
+	consumed, output, except := suite.Call("CheckPersonAge", map[string]any{
+		"person": map[string]any{"name": "Marco", "age": 26, "gender": "male"},
+	})
+	suite.Equal(true, output["ok"])
+	suite.Equal(engineio.NewFuel(145), consumed)
+	suite.Nil(except)
+
+	consumed, output, except = suite.Call("CheckPersonAge", map[string]any{
+		"person": map[string]any{"name": "Sam1", "age": 10, "gender": "male"},
+	})
+	suite.Equal(false, output["ok"])
+	suite.Equal(engineio.NewFuel(145), consumed)
+	suite.Nil(except)
+}

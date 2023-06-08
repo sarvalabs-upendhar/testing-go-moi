@@ -14,6 +14,7 @@ const (
 	StateElement    engineio.ElementKind = "state"
 	ConstantElement engineio.ElementKind = "constant"
 	RoutineElement  engineio.ElementKind = "routine"
+	MethodElement   engineio.ElementKind = "method"
 	TypedefElement  engineio.ElementKind = "typedef"
 	ClassElement    engineio.ElementKind = "class"
 )
@@ -23,6 +24,7 @@ var elementGenerators = map[engineio.ElementKind]engineio.ManifestElementGenerat
 	TypedefElement:  func() engineio.ManifestElementObject { return new(TypedefSchema) },
 	ConstantElement: func() engineio.ManifestElementObject { return new(ConstantSchema) },
 	RoutineElement:  func() engineio.ManifestElementObject { return new(RoutineSchema) },
+	MethodElement:   func() engineio.ManifestElementObject { return new(MethodSchema) },
 	ClassElement:    func() engineio.ManifestElementObject { return new(ClassSchema) },
 }
 
@@ -65,8 +67,9 @@ func (state *StateSchema) Depolorize(depolorizer *polo.Depolorizer) (err error) 
 }
 
 type ClassSchema struct {
-	Name   string            `yaml:"name" json:"name"`
-	Fields []TypefieldSchema `yaml:"fields" json:"fields"`
+	Name    string              `yaml:"name" json:"name"`
+	Fields  []TypefieldSchema   `yaml:"fields" json:"fields"`
+	Methods []MethodFieldSchema `yaml:"methods" json:"methods"`
 }
 
 func (class ClassSchema) Polorize() (*polo.Polorizer, error) {
@@ -77,6 +80,10 @@ func (class ClassSchema) Polorize() (*polo.Polorizer, error) {
 	}
 
 	if err := polorizer.Polorize(class.Fields); err != nil {
+		return nil, err
+	}
+
+	if err := polorizer.Polorize(class.Methods); err != nil {
 		return nil, err
 	}
 
@@ -96,6 +103,10 @@ func (class *ClassSchema) Depolorize(depolorizer *polo.Depolorizer) (err error) 
 	}
 
 	if err = depolorizer.Depolorize(&class.Fields); err != nil {
+		return err
+	}
+
+	if err = depolorizer.Depolorize(&class.Methods); err != nil {
 		return err
 	}
 
@@ -176,6 +187,80 @@ func (routine *RoutineSchema) Depolorize(depolorizer *polo.Depolorizer) (err err
 	return nil
 }
 
+type MethodSchema struct {
+	Name  string `yaml:"name" json:"name"`
+	Class string `yaml:"class" json:"class"`
+
+	Accepts []TypefieldSchema `yaml:"accepts" json:"accepts"`
+	Returns []TypefieldSchema `yaml:"returns" json:"returns"`
+
+	Executes InstructionsSchema `yaml:"executes" json:"executes"`
+	Catches  []string           `yaml:"catches" json:"catches"`
+}
+
+func (method MethodSchema) Polorize() (*polo.Polorizer, error) {
+	polorizer := polo.NewPolorizer()
+	polorizer.PolorizeString(method.Name)
+
+	if err := polorizer.Polorize(method.Class); err != nil {
+		return nil, err
+	}
+
+	if err := polorizer.Polorize(method.Accepts); err != nil {
+		return nil, err
+	}
+
+	if err := polorizer.Polorize(method.Returns); err != nil {
+		return nil, err
+	}
+
+	if err := polorizer.Polorize(method.Executes); err != nil {
+		return nil, err
+	}
+
+	if err := polorizer.Polorize(method.Catches); err != nil {
+		return nil, err
+	}
+
+	return polorizer, nil
+}
+
+func (method *MethodSchema) Depolorize(depolorizer *polo.Depolorizer) (err error) {
+	depolorizer, err = depolorizer.DepolorizePacked()
+	if errors.Is(err, polo.ErrNullPack) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	method.Name, err = depolorizer.DepolorizeString()
+	if err != nil {
+		return err
+	}
+
+	if err = depolorizer.Depolorize(&method.Class); err != nil {
+		return err
+	}
+
+	if err = depolorizer.Depolorize(&method.Accepts); err != nil {
+		return err
+	}
+
+	if err = depolorizer.Depolorize(&method.Returns); err != nil {
+		return err
+	}
+
+	if err = depolorizer.Depolorize(&method.Executes); err != nil {
+		return err
+	}
+
+	if err = depolorizer.Depolorize(&method.Catches); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 type TypedefSchema string
 
 func (symbolic TypedefSchema) Polorize() (*polo.Polorizer, error) {
@@ -234,6 +319,11 @@ type TypefieldSchema struct {
 	Slot  uint8  `yaml:"slot" json:"slot"`
 	Label string `yaml:"label" json:"label"`
 	Type  string `yaml:"type" json:"type"`
+}
+
+type MethodFieldSchema struct {
+	Ptr  uint64 `yaml:"ptr" json:"ptr"`
+	Code uint64 `yaml:"code" json:"code"`
 }
 
 type InstructionsSchema struct {

@@ -221,62 +221,6 @@ func DecodeDatatype(data []byte) (Datatype, error) {
 	}
 }
 
-// Method is extension of the Runnable interface and
-// represents runnable methods on primitive and class types.
-type Method interface {
-	Runnable
-
-	code() MethodCode
-	datatype() Datatype
-}
-
-// MethodCode represents a unique byte identifier for the method of a type.
-// The first 16 bytes (0x00 - 0x0F) are reserved as special method codes.
-type MethodCode byte
-
-const (
-	MethodBuild MethodCode = 0x0
-	MethodThrow MethodCode = 0x1
-	MethodEmit  MethodCode = 0x2
-	MethodJoin  MethodCode = 0x3
-
-	MethodLt MethodCode = 0x4
-	MethodGt MethodCode = 0x5
-	MethodEq MethodCode = 0x6
-
-	MethodBool MethodCode = 0x7
-	MethodStr  MethodCode = 0x8
-	MethodAddr MethodCode = 0x9
-	MethodLen  MethodCode = 0xA
-)
-
-var methodCodeToString = map[MethodCode]string{
-	MethodBuild: "__build__",
-	MethodThrow: "__throw__",
-	MethodEmit:  "__emit__",
-	MethodJoin:  "__join__",
-
-	MethodLt: "__lt__",
-	MethodGt: "__gt__",
-	MethodEq: "__eq__",
-
-	MethodBool: "__bool__",
-	MethodStr:  "__str__",
-	MethodAddr: "__addr__",
-	MethodLen:  "__len__",
-}
-
-// String returns a string representation of the primitive.
-// It implements the Stringer interface for primitive
-func (method MethodCode) String() string {
-	str, ok := methodCodeToString[method]
-	if !ok {
-		return fmt.Sprintf("method(%#x)", int(method))
-	}
-
-	return str
-}
-
 // BuiltinDatatype defines the datatype for a builtin class type.
 // Implements the Datatype interface
 type BuiltinDatatype struct {

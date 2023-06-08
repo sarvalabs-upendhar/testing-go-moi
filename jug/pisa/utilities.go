@@ -6,6 +6,7 @@ import (
 	"unicode"
 
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/moichain/jug/engineio"
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/exp/constraints"
 )
@@ -52,6 +53,17 @@ func ptrdecode(ptr []byte) (uint64, error) {
 func hasGaps[U constraints.Unsigned](indices map[U]struct{}) bool {
 	for i := U(0); i < U(len(indices)); i++ {
 		if _, exists := indices[i]; !exists {
+			return true
+		}
+	}
+
+	return false
+}
+
+// contains returns if the elementptr is present in the array of pointers
+func contains(array []engineio.ElementPtr, check engineio.ElementPtr) bool {
+	for _, ptr := range array {
+		if ptr == check {
 			return true
 		}
 	}

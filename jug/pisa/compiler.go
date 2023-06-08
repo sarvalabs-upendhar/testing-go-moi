@@ -130,6 +130,12 @@ func (compiler *ManifestCompiler) compile() (*engineio.LogicDescriptor, error) {
 				return nil, errors.Wrapf(err, "routine element [%#v] compile failed", ptr)
 			}
 
+		case MethodElement:
+			// Compile the element as a MethodElement
+			if err := compiler.compileMethodElement(ptr); err != nil {
+				return nil, errors.Wrapf(err, "method element [%#v] compile failed", ptr)
+			}
+
 		default:
 			return nil, errors.Errorf("invalid element kind [%#v]: %v", ptr, kind)
 		}
@@ -252,8 +258,11 @@ func (compiler *ManifestCompiler) compileClassElement(ptr engineio.ElementPtr) e
 		return errors.Errorf("invalid class element: invalid fields: %v", err)
 	}
 
+	// Create new method table from class methods
+	methods := compiler.compileMethodTable(classSchema.Methods)
+
 	// Create a new Class Typedef
-	classType := ClassDatatype{name: classSchema.Name, fields: fields}
+	classType := ClassDatatype{name: classSchema.Name, fields: fields, methods: methods}
 	// Register the class with the compiler
 	compiler.classdefs[classSchema.Name] = &engineio.Classdef{Ptr: ptr}
 
@@ -400,6 +409,46 @@ func (compiler *ManifestCompiler) compileRoutineElement(ptr engineio.ElementPtr)
 	return nil
 }
 
+func (compiler *ManifestCompiler) compileMethodElement(ptr engineio.ElementPtr) error {
+	// Get the element from the compiler
+	element := compiler.elements[ptr]
+
+	// Convert element into a MethodSchema
+	methodSchema, ok := element.Data.(*MethodSchema)
+	if !ok {
+		return errors.New("invalid element data for 'routine' kind")
+	}
+
+	classPtr, ok := compiler.classdefs[methodSchema.Class]
+	if !ok {
+		return errors.Errorf("class ptr not found")
+	}
+
+	if !contains(element.Deps, classPtr.Ptr) {
+		return errors.Errorf("class dependency not assigned")
+	}
+
+	// Create a Method object
+	method, err := compiler.compileMethod(ptr, methodSchema)
+	if err != nil {
+		return errors.Wrapf(err, "invalid method element")
+	}
+
+	// Generate the compiled element
+	encoded, err := polo.Polorize(method)
+	if err != nil {
+		return errors.Wrapf(err, "failed to polorize method")
+	}
+
+	compiler.compiled[ptr] = &engineio.LogicElement{
+		Kind: MethodElement,
+		Data: encoded,
+		Deps: element.Deps,
+	}
+
+	return nil
+}
+
 // compileRoutine compiles a RoutineSchema object into a runtime.Routine.
 func (compiler *ManifestCompiler) compileRoutine(ptr engineio.ElementPtr, schema *RoutineSchema) (*Routine, error) {
 	// Create a new FieldSet from the schema 'accepts'
@@ -431,6 +480,93 @@ func (compiler *ManifestCompiler) compileRoutine(ptr engineio.ElementPtr, schema
 			Outputs: outputs,
 		},
 	}, nil
+}
+
+func (compiler *ManifestCompiler) compileMethod(ptr engineio.ElementPtr, schema *MethodSchema) (*RoutineMethod, error) {
+	// Create a new FieldSet from the schema 'accepts'
+	inputs, err := compiler.compileTypeFields(schema.Accepts)
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid accept fields")
+	}
+
+	// Create a new FieldSet from the schema 'returns'
+	outputs, err := compiler.compileTypeFields(schema.Returns)
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid return fields")
+	}
+
+	// Compile the instructions for the routine logic
+	instructions, err := compiler.compileInstructions(schema.Executes)
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid instructions")
+	}
+
+	// Determine the pointer to the method's class
+	classPtr, ok := compiler.classdefs[schema.Class]
+	if !ok {
+		return nil, errors.Errorf("invalid class '%v': does not exist", schema.Class)
+	}
+
+	// Get the pointer the class def element
+	classDef := compiler.compiled[classPtr.Ptr]
+	// Decode the class element into a Datatype
+	datatype, err := DecodeDatatype(classDef.Data)
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid datatype")
+	}
+
+	// Cast the datatype into a ClassDatatype
+	class, _ := datatype.(ClassDatatype)
+	// Confirm that class describes a method at the expected slot
+	methodCode := func() *MethodCode {
+		for code, mptr := range class.methods {
+			// Return the method code only if the method element pointer matches
+			// the defined element pointer in the class type's method table
+			if mptr == ptr {
+				return &code
+			}
+		}
+
+		return nil
+	}()
+
+	// If method code did not match or was not found, return an error
+	if methodCode == nil {
+		return nil, errors.Errorf("method not declared on class '%v'", schema.Class)
+	}
+
+	// Create a routine for the compiled method
+	method := &RoutineMethod{
+		CallFields: CallFields{
+			Inputs:  inputs,
+			Outputs: outputs,
+		},
+		Name:      schema.Name,
+		Ptr:       ptr,
+		Datatype:  datatype,
+		Code:      *methodCode,
+		Instructs: instructions,
+	}
+
+	// Verify that the first field of the method is 'self' with the dataype of the method
+	if err := validateMethodFieldSelf(method); err != nil {
+		return nil, err
+	}
+
+	// If the method code is in the reserved special method set,
+	// validate the signature of the method to conform to that special method
+	if *methodCode < MaxSpecialMethod {
+		validator, ok := methodValidators[*methodCode]
+		if !ok {
+			return nil, errors.Errorf("unsupported special method %v", *methodCode)
+		}
+
+		if err := validator(method); err != nil {
+			return nil, errors.Wrap(err, "invalid special method")
+		}
+	}
+
+	return method, nil
 }
 
 // compileInstructions compiles an InstructionsSchema into some runtime.Instructions.
@@ -590,6 +726,16 @@ func (compiler *ManifestCompiler) compileTypefield(schema TypefieldSchema) (*Typ
 
 	// Create a Symbol with the name and type data
 	return &TypeField{Name: schema.Label, Type: dt}, nil
+}
+
+func (compiler *ManifestCompiler) compileMethodTable(schema []MethodFieldSchema) map[MethodCode]engineio.ElementPtr {
+	table := make(map[MethodCode]engineio.ElementPtr)
+
+	for _, method := range schema {
+		table[MethodCode(method.Code)] = engineio.ElementPtr(method.Ptr)
+	}
+
+	return table
 }
 
 func (compiler *ManifestCompiler) GetClassDatatype(name string) (ClassDatatype, bool) {

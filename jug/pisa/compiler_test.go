@@ -61,20 +61,27 @@ func TestManifestCompiler(t *testing.T) {
 
 		assert.Equal(t, engineio.PISA, descriptor.Engine)
 		assert.Equal(t, must(manifest.Hash()), descriptor.Manifest)
-		assert.Equal(t, false, descriptor.Interactive)
 
+		assert.Equal(t, false, descriptor.Interactive)
 		assert.Equal(t, true, descriptor.StateMatrix.Persistent())
 		assert.Equal(t, false, descriptor.StateMatrix.Ephemeral())
 		assert.Equal(t, engineio.ElementPtr(0), descriptor.StateMatrix[engineio.PersistentState])
 
-		assert.Equal(t, map[string]*engineio.Classdef{
-			"Person": {Ptr: 1},
-		}, descriptor.Classdefs)
+		assert.Equal(t,
+			map[string]*engineio.Classdef{
+				"Person": {Ptr: 1},
+			},
+			descriptor.Classdefs,
+		)
 		assert.Equal(t, map[string]*engineio.Callsite{
-			"StorePerson!": {Ptr: 2, Kind: engineio.InvokableCallsite},
-			"GetPerson":    {Ptr: 3, Kind: engineio.InvokableCallsite},
-			"GetNameOf":    {Ptr: 4, Kind: engineio.InvokableCallsite},
-			"DoubleAge":    {Ptr: 5, Kind: engineio.InvokableCallsite},
+			"Setup!":         {Ptr: 10, Kind: engineio.DeployerCallsite},
+			"StorePerson!":   {Ptr: 2, Kind: engineio.InvokableCallsite},
+			"GetPerson":      {Ptr: 3, Kind: engineio.InvokableCallsite},
+			"GetNameOf":      {Ptr: 4, Kind: engineio.InvokableCallsite},
+			"DoubleAge":      {Ptr: 5, Kind: engineio.InvokableCallsite},
+			"RenamePerson":   {Ptr: 7, Kind: engineio.InvokableCallsite},
+			"CheckNameAlpha": {Ptr: 9, Kind: engineio.InvokableCallsite},
+			"CheckPersonAge": {Ptr: 12, Kind: engineio.InvokableCallsite},
 		}, descriptor.Callsites)
 	})
 
