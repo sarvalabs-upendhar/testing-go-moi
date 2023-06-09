@@ -327,17 +327,17 @@ func httpGetBalance(t *testing.T, args *ptypes.BalArgs) *hexutil.Big {
 }
 
 // httpTDU retrieves the TDU of the queried address
-func httpTDU(t *testing.T, args *ptypes.QueryArgs) map[types.AssetID]string {
+func httpTDU(t *testing.T, args *ptypes.QueryArgs) []api.TDU {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.TDU", args)
 
-	var assetMap map[types.AssetID]string
+	var tdu []api.TDU
 
-	err := json.Unmarshal(resp.Data, &assetMap)
+	err := json.Unmarshal(resp.Data, &tdu)
 	require.NoError(t, err)
 
-	return assetMap
+	return tdu
 }
 
 // httpGetContextInfo returns the context Info of the queried address.

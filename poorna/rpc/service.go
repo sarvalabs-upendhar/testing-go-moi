@@ -148,14 +148,14 @@ func (r *Service) TDU(req *http.Request, args *ptypes.QueryArgs, resp *ptypes.Re
 		return types.ErrInvalidAPI
 	}
 
-	assetMap, err := coreAPI.GetTDU(args)
+	tdu, err := coreAPI.GetTDU(args)
 	if err != nil {
 		resp.Error = &ptypes.JSONError{Message: err.Error()}
 
 		return nil
 	}
 
-	resp.Data, err = json.Marshal(assetMap)
+	resp.Data, err = json.Marshal(tdu)
 	if err != nil {
 		resp.Error = &ptypes.JSONError{Message: err.Error()}
 

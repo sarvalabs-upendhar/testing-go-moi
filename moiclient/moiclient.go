@@ -261,7 +261,7 @@ func (c *Client) Balance(args *ptypes.BalArgs) (*hexutil.Big, error) {
 }
 
 // TDU retrieves the TDU of the queried address
-func (c *Client) TDU(args *ptypes.QueryArgs) (map[types.AssetID]string, error) {
+func (c *Client) TDU(args *ptypes.QueryArgs) ([]api.TDU, error) {
 	var resp ptypes.Response
 
 	err := c.Call(&resp, "moi.TDU", args)
@@ -273,15 +273,15 @@ func (c *Client) TDU(args *ptypes.QueryArgs) (map[types.AssetID]string, error) {
 		return nil, resp.Error
 	}
 
-	var assetMap map[types.AssetID]string
+	var tdu []api.TDU
 
-	err = json.Unmarshal(resp.Data, &assetMap)
+	err = json.Unmarshal(resp.Data, &tdu)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return assetMap, nil
+	return tdu, nil
 }
 
 // ContextInfo returns the context Info of the queried address.

@@ -13,6 +13,11 @@ import (
 	"github.com/sarvalabs/moichain/utils"
 )
 
+type TDU struct {
+	AssetID types.AssetID `json:"asset_id"`
+	Amount  *hexutil.Big  `json:"amount"`
+}
+
 // PublicCoreAPI is a struct that represents a wrapper for the core public core APIs
 type PublicCoreAPI struct {
 	// Represents the API backend
@@ -127,7 +132,7 @@ func (p *PublicCoreAPI) GetBalance(args *ptypes.BalArgs) (*hexutil.Big, error) {
 }
 
 // GetTDU will return the total digital utility associated with address
-func (p *PublicCoreAPI) GetTDU(args *ptypes.QueryArgs) (map[types.AssetID]*hexutil.Big, error) {
+func (p *PublicCoreAPI) GetTDU(args *ptypes.QueryArgs) ([]TDU, error) {
 	ts, err := p.getTesseract(getTesseractArgs(args.Address, args.Options))
 	if err != nil {
 		return nil, err
@@ -140,13 +145,16 @@ func (p *PublicCoreAPI) GetTDU(args *ptypes.QueryArgs) (map[types.AssetID]*hexut
 
 	data, _ := object.TDU()
 
-	rpcAssetMap := make(map[types.AssetID]*hexutil.Big)
+	tdu := make([]TDU, 0, len(data))
 
 	for key, value := range data {
-		rpcAssetMap[key] = (*hexutil.Big)(value)
+		tdu = append(tdu, TDU{
+			key,
+			(*hexutil.Big)(value),
+		})
 	}
 
-	return rpcAssetMap, nil
+	return tdu, nil
 }
 
 func (p *PublicCoreAPI) GetRegistry(args *ptypes.QueryArgs) ([]ptypes.RPCRegistry, error) {

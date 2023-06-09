@@ -667,8 +667,7 @@ func testTDU(t *testing.T, client *Client, addr types.Address) {
 
 			require.NoError(t, err)
 
-			_, ok := tdu[assetID]
-			require.True(t, ok)
+			require.True(t, assetID == tdu[0].AssetID)
 			require.Equal(t, 2, len(tdu))
 
 			httpTDU := httpTDU(t, test.queryArgs)

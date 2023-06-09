@@ -858,8 +858,8 @@ func TestPublicCoreAPI_GetTDU(t *testing.T) {
 
 			require.NoError(t, err)
 
-			for expectedAsset, expectedAmount := range test.expectedTDU {
-				amount := tdu[expectedAsset]
+			for _, expectedAmount := range test.expectedTDU {
+				amount := tdu[0].Amount
 				require.Equal(t, expectedAmount, amount.ToInt())
 			}
 		})
