@@ -95,6 +95,11 @@ type GetAccountArgs struct {
 	Options TesseractNumberOrHash `json:"options"`
 }
 
+type GetLogicIDArgs struct {
+	Address types.Address         `json:"address"`
+	Options TesseractNumberOrHash `json:"options"`
+}
+
 type LogicManifestArgs struct {
 	LogicID  types.LogicID         `json:"logic_id"`
 	Encoding string                `json:"encoding"`

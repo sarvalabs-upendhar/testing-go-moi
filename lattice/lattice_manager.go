@@ -73,6 +73,7 @@ type stateManager interface {
 	FetchContextLock(ts *types.Tesseract) (*types.ICSNodeSet, error)
 	FetchTesseractFromDB(hash types.Hash, withInteractions bool) (*types.Tesseract, error)
 	GetNodeSet(ids []id.KramaID) (*types.NodeSet, error)
+	GetLogicIDs(addr types.Address, hash types.Hash) ([]types.LogicID, error)
 }
 
 type server interface {

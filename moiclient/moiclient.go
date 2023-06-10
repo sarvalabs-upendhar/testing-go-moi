@@ -468,6 +468,29 @@ func (c *Client) AccountState(args *ptypes.GetAccountArgs) (*ptypes.RPCAccount, 
 	return &account, nil
 }
 
+// LogicIDs returns the logic IDs of the given address
+func (c *Client) LogicIDs(args *ptypes.GetLogicIDArgs) ([]types.LogicID, error) {
+	var resp ptypes.Response
+
+	err := c.Call(&resp, "moi.LogicIDs", args)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+
+	var logicIDs []types.LogicID
+
+	err = json.Unmarshal(resp.Data, &logicIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	return logicIDs, nil
+}
+
 // LogicManifest returns the manifest associated with the given logic id
 func (c *Client) LogicManifest(args *ptypes.LogicManifestArgs) (hexutil.Bytes, error) {
 	var resp ptypes.Response

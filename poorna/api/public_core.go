@@ -382,6 +382,21 @@ func (p *PublicCoreAPI) GetStorageAt(args *ptypes.GetStorageArgs) (hexutil.Bytes
 	return p.sm.GetStorageEntry(logicID, types.FromHex(args.StorageKey), ts.StateHash())
 }
 
+// GetLogicIDs will fetch the logic IDs from the logic tree
+func (p *PublicCoreAPI) GetLogicIDs(args *ptypes.GetAccountArgs) ([]types.LogicID, error) {
+	ts, err := p.getTesseract(getTesseractArgs(args.Address, args.Options))
+	if err != nil {
+		return nil, err
+	}
+
+	logicIDs, err := p.sm.GetLogicIDs(ts.Address(), ts.StateHash())
+	if err != nil {
+		return nil, err
+	}
+
+	return logicIDs, nil
+}
+
 // GetAssetInfoByAssetID returns the asset info associated with the given asset id
 func (p *PublicCoreAPI) GetAssetInfoByAssetID(args *ptypes.GetAssetInfoArgs) (map[string]interface{}, error) {
 	ts, err := p.getTesseract(getTesseractArgs(args.AssetID.Address(), args.Options))

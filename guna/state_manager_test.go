@@ -1488,6 +1488,102 @@ func TestGetBalance(t *testing.T) {
 	}
 }
 
+func TestGetLogicIDs(t *testing.T) {
+	var err error
+
+	expectedLogicIDs := make([]types.LogicID, 0)
+	db := mockDB()
+	address := tests.RandomAddress(t)
+	so := NewStateObject(address, mockCache(t), mockJournal(), db, types.Account{})
+
+	for i := 0; i < 3; i++ {
+		logicID := getLogicID(t, tests.RandomAddress(t))
+		logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
+
+		err := so.InsertNewLogicObject(logicID, logicObject)
+		require.NoError(t, err)
+
+		expectedLogicIDs = append(expectedLogicIDs, logicID)
+	}
+
+	rootHash, err := so.commitLogics()
+	require.NoError(t, err)
+
+	err = so.flushLogicTree()
+	require.NoError(t, err)
+
+	acc, stateHash := tests.GetTestAccount(t, func(acc *types.Account) {
+		acc.LogicRoot = rootHash
+	})
+
+	accWithInvalidLogicRoot, stateHashWithInvalidLogicRoot := tests.GetTestAccount(t, func(acc *types.Account) {
+		acc.LogicRoot = tests.RandomHash(t)
+	})
+
+	smParams := &createStateManagerParams{
+		db: db,
+		dbCallback: func(db *MockDB) {
+			insertAccountsInDB(t, db, []types.Hash{stateHash}, acc)
+			insertAccountsInDB(t, db, []types.Hash{stateHashWithInvalidLogicRoot}, accWithInvalidLogicRoot)
+		},
+	}
+
+	sm := createTestStateManager(t, smParams)
+
+	testcases := []struct {
+		name             string
+		addr             types.Address
+		stateHash        types.Hash
+		expectedLogicIDs []types.LogicID
+		expectedError    error
+	}{
+		{
+			name:          "failed to fetch state object",
+			addr:          address,
+			stateHash:     tests.RandomHash(t),
+			expectedError: types.ErrStateNotFound,
+		},
+		{
+			name:          "failed to fetch meta logic tree",
+			addr:          address,
+			stateHash:     stateHashWithInvalidLogicRoot,
+			expectedError: errors.New("failed to load meta logic tree"),
+		},
+		{
+			name:             "logic IDs fetched successfully",
+			addr:             address,
+			expectedLogicIDs: expectedLogicIDs,
+			stateHash:        stateHash,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			logicIDs, err := sm.GetLogicIDs(test.addr, test.stateHash)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			// check if logic ids match
+			for _, expectedLogicID := range expectedLogicIDs {
+				found := false
+
+				for _, logicID := range logicIDs {
+					if expectedLogicID.String() == logicID.String() {
+						found = true
+					}
+				}
+
+				require.True(t, found)
+			}
+		})
+	}
+}
+
 func TestFetchLatestParticipantContext(t *testing.T) {
 	kramaIDs, pk := tests.GetTestKramaIdsWithPublicKeys(t, 12)
 	contract := NewMockContract(t, append(kramaIDs[:3], kramaIDs[7:10]...), append(pk[:3], pk[7:10]...))

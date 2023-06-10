@@ -192,6 +192,7 @@ type MockStateManager struct {
 	logicManifests map[string][]byte
 	logicStorage   map[string]map[string]string // first key denotes logic id, second key denotes storage key
 	accMetaInfo    map[types.Address]*types.AccountMetaInfo
+	logicIDs       map[types.Address][]types.LogicID
 }
 
 func (s *MockStateManager) GetRegistry(addr types.Address, stateHash types.Hash) (map[string][]byte, error) {
@@ -224,6 +225,7 @@ func NewMockStateManager(t *testing.T) *MockStateManager {
 	mockState.logicManifests = make(map[string][]byte)
 	mockState.logicStorage = make(map[string]map[string]string, 0)
 	mockState.accMetaInfo = make(map[types.Address]*types.AccountMetaInfo)
+	mockState.logicIDs = make(map[types.Address][]types.LogicID)
 
 	return mockState
 }
@@ -235,6 +237,25 @@ func (s *MockStateManager) GetLogicManifest(logicID types.LogicID, stateHash typ
 	}
 
 	return logicManifest, nil
+}
+
+func (s *MockStateManager) setLogicIDs(
+	t *testing.T,
+	addr types.Address,
+	logicIDs []types.LogicID,
+) {
+	t.Helper()
+
+	s.logicIDs[addr] = logicIDs
+}
+
+func (s *MockStateManager) GetLogicIDs(addr types.Address, stateHash types.Hash) ([]types.LogicID, error) {
+	logicIDs, ok := s.logicIDs[addr]
+	if !ok {
+		return logicIDs, errors.New("logic IDs not found")
+	}
+
+	return logicIDs, nil
 }
 
 func (s *MockStateManager) setAccountMetaInfo(

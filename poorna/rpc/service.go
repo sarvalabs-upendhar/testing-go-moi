@@ -279,6 +279,34 @@ func (r *Service) InteractionReceipt(req *http.Request, args *ptypes.ReceiptArgs
 	return nil
 }
 
+// LogicIDs returns the logic IDs from the logic tree for the given address
+func (r *Service) LogicIDs(
+	req *http.Request,
+	args *ptypes.GetAccountArgs,
+	resp *ptypes.Response,
+) error {
+	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
+	if !ok {
+		return types.ErrInvalidAPI
+	}
+
+	logicIDs, err := coreAPI.GetLogicIDs(args)
+	if err != nil {
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	resp.Data, err = json.Marshal(logicIDs)
+	if err != nil {
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	return nil
+}
+
 // InteractionCount returns the number of interactions sent for the given address
 func (r *Service) InteractionCount(
 	req *http.Request,

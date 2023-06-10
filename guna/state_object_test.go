@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/moichain/dhruva"
 	"github.com/sarvalabs/moichain/guna/tree"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
@@ -1020,6 +1021,7 @@ func TestGetMetaStorageTree(t *testing.T) {
 	storageTree, storageRoot := createTestKramaHashTree(t,
 		db,
 		address,
+		dhruva.Storage,
 		keys,
 		values,
 	)
@@ -1114,6 +1116,7 @@ func TestGetStorageTree(t *testing.T) {
 						t,
 						so.db,
 						so.address,
+						dhruva.Storage,
 						[][]byte{types.SargaLogicID.Bytes()},
 						[][]byte{tests.RandomHash(t).Bytes()},
 					)
@@ -1227,6 +1230,7 @@ func TestGetMetaLogicTree(t *testing.T) {
 	logicTree, logicRoot := createTestKramaHashTree(t,
 		db,
 		address,
+		dhruva.Storage,
 		keys,
 		values,
 	)
@@ -1307,6 +1311,7 @@ func TestGetLogicObject(t *testing.T) {
 					_, so.data.LogicRoot = createTestKramaHashTree(t,
 						so.db,
 						so.address,
+						dhruva.Storage,
 						[][]byte{logicID.Bytes()},
 						[][]byte{rawData},
 					)

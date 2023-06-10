@@ -204,6 +204,35 @@ func (sm *StateManager) GetLatestTesseract(addr types.Address, withInteractions 
 	return sm.getTesseractByHash(tesseractHash, withInteractions)
 }
 
+func (sm *StateManager) GetLogicIDs(addr types.Address, stateHash types.Hash) ([]types.LogicID, error) {
+	obj, err := sm.getStateObject(addr, stateHash)
+	if err != nil {
+		return nil, err
+	}
+
+	logicIDs := make([]types.LogicID, 0)
+
+	logicTree, err := obj.getMetaLogicTree()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to load meta logic tree")
+	}
+
+	it := logicTree.NewIterator()
+
+	for it.Next() {
+		if it.Leaf() {
+			logicID, err := obj.logicTree.GetPreImageKey(types.BytesToHash(it.LeafKey()))
+			if err != nil {
+				return nil, err
+			}
+
+			logicIDs = append(logicIDs, types.BytesToLogicID(logicID))
+		}
+	}
+
+	return logicIDs, nil
+}
+
 func (sm *StateManager) FetchTesseractFromDB(hash types.Hash, withInteractions bool) (*types.Tesseract, error) {
 	// Fetch Tesseract from DB
 	rawTesseract, err := sm.db.GetTesseract(hash)

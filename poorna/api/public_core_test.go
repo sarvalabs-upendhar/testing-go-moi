@@ -1059,6 +1059,83 @@ func TestPublicCoreAPI_GetAccountState(t *testing.T) {
 	}
 }
 
+func TestPublicCoreAPI_GetLogicIDs(t *testing.T) {
+	ts := tests.CreateTesseracts(t, 2, nil)
+
+	c := NewMockChainManager(t)
+	s := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(nil, c, s)
+
+	c.setTesseractByHash(t, ts[0])
+	c.setTesseractByHash(t, ts[1])
+
+	address := ts[0].Address()
+	randomHash := tests.RandomHash(t)
+	tsHash := getTesseractsHashes(t, ts)
+
+	logicIDs := make([]types.LogicID, 0, 3)
+
+	for i := 0; i < 3; i++ {
+		logicID := types.NewLogicIDv0(true, false, false, false, uint16(i), address)
+
+		logicIDs = append(logicIDs, logicID)
+	}
+
+	s.setLogicIDs(t, ts[0].Address(), logicIDs)
+
+	testcases := []struct {
+		name             string
+		args             ptypes.GetAccountArgs
+		expectedLogicIDs []types.LogicID
+		expectedError    error
+	}{
+		{
+			name: "should return error if tesseract not found",
+			args: ptypes.GetAccountArgs{
+				Address: address,
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractHash: &randomHash,
+				},
+			},
+			expectedError: types.ErrFetchingTesseract,
+		},
+		{
+			name: "should return error if logicIDs not found",
+			args: ptypes.GetAccountArgs{
+				Address: address,
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractHash: &tsHash[1],
+				},
+			},
+			expectedError: errors.New("logic IDs not found"),
+		},
+		{
+			name: "fetched logicIDs successfully",
+			args: ptypes.GetAccountArgs{
+				Address: address,
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractHash: &tsHash[0],
+				},
+			},
+			expectedLogicIDs: logicIDs,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			logicIDs, err := coreAPI.GetLogicIDs(&test.args)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedLogicIDs, logicIDs)
+		})
+	}
+}
+
 func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 	ts := tests.CreateTesseract(t, nil)
 

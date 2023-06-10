@@ -39,6 +39,7 @@ type StateManager interface {
 	GetLogicManifest(logicID types.LogicID, stateHash types.Hash) ([]byte, error)
 	GetStorageEntry(logicID types.LogicID, slot []byte, stateHash types.Hash) ([]byte, error)
 	GetAccountMetaInfo(addr types.Address) (*types.AccountMetaInfo, error)
+	GetLogicIDs(addr types.Address, stateHash types.Hash) ([]types.LogicID, error)
 	GetAssetInfo(assetID types.AssetID, stateHash types.Hash) (*types.AssetDescriptor, error)
 	GetRegistry(addr types.Address, stateHash types.Hash) (map[string][]byte, error)
 }

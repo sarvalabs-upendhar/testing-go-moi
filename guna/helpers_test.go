@@ -197,7 +197,7 @@ func (m *MockDB) WritePreImages(address types.Address, entries map[types.Hash][]
 
 func (m *MockDB) GetPreImage(address types.Address, hash types.Hash) ([]byte, error) {
 	preImage, ok := m.preImages[hash]
-	if ok {
+	if !ok {
 		return nil, types.ErrKeyNotFound
 	}
 
@@ -1353,21 +1353,28 @@ func createMetaStorageTree(
 ) (*tree.KramaHashTree, types.Hash) {
 	t.Helper()
 
-	_, storageRoot := createTestKramaHashTree(t, db, address, storageKeys, storageValues)
+	_, storageRoot := createTestKramaHashTree(t, db, address, dhruva.Storage, storageKeys, storageValues)
 
-	return createTestKramaHashTree(t, db, address, [][]byte{logicID.Bytes()}, [][]byte{storageRoot.Bytes()})
+	return createTestKramaHashTree(
+		t,
+		db,
+		address,
+		dhruva.Storage,
+		[][]byte{logicID.Bytes()},
+		[][]byte{storageRoot.Bytes()})
 }
 
 func createTestKramaHashTree(
 	t *testing.T,
 	db Store,
 	address types.Address,
+	prefix dhruva.Prefix,
 	keys [][]byte,
 	values [][]byte,
 ) (*tree.KramaHashTree, types.Hash) {
 	t.Helper()
 
-	kt, err := tree.NewKramaHashTree(address, types.NilHash, db, blakeHasher, dhruva.Storage)
+	kt, err := tree.NewKramaHashTree(address, types.NilHash, db, blakeHasher, prefix)
 	require.NoError(t, err)
 
 	for i := 0; i < len(keys); i++ {

@@ -84,6 +84,9 @@ func TestMoiClient(t *testing.T) {
 		"AccountState": {
 			test: func(t *testing.T) { testAccountState(t, client, addrsMap["deployAddr"]) },
 		},
+		"LogicIDs": {
+			test: func(t *testing.T) { testLogics(t, client, addrsMap["deployAddr"]) },
+		},
 		"LogicManifest": {
 			test: func(t *testing.T) { testLogicManifest(t, client, addrsMap["deployAddr"]) },
 		},
@@ -858,7 +861,7 @@ func testPendingInteractionCount(t *testing.T, client *Client, addr types.Addres
 }
 
 func testStorage(t *testing.T, client *Client, addr types.Address) {
-	logicID := getLogicID(t, client, addr, &deployLogicHeight)
+	logicID := getLogicID(t, client, addr, &deployLogicHeight).String()
 
 	testcases := []struct {
 		name                 string
@@ -868,7 +871,7 @@ func testStorage(t *testing.T, client *Client, addr types.Address) {
 		{
 			name: "fetch storage value for existing logic ID",
 			interactionCountArgs: &ptypes.GetStorageArgs{
-				LogicID:    logicID.String(),
+				LogicID:    logicID,
 				StorageKey: "e88bd757ad5b9bedf372d8d3f0cf6c962a469db61a265f6418e1ffed86da29ec",
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
@@ -949,6 +952,57 @@ func testAccountState(t *testing.T, client *Client, addr types.Address) {
 
 			httpAccountState := httpAccountState(t, test.accountArgs)
 			require.Equal(t, *httpAccountState, *accountState)
+		})
+	}
+}
+
+func testLogics(t *testing.T, client *Client, addr types.Address) {
+	logicID := getLogicID(t, client, addr, &deployLogicHeight)
+
+	testcases := []struct {
+		name             string
+		LogicIDArgs      *ptypes.GetLogicIDArgs
+		expectedLogicIDs []types.LogicID
+		expectedError    error
+	}{
+		{
+			name: "fetch logicIDs for existing address",
+			LogicIDArgs: &ptypes.GetLogicIDArgs{
+				Address: logicID.Address(),
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &createAssetHeight,
+				},
+			},
+			expectedLogicIDs: []types.LogicID{logicID},
+		},
+		{
+			name: "fetch logicIDs for non-existing address",
+			LogicIDArgs: &ptypes.GetLogicIDArgs{
+				Address: tests.RandomAddress(t),
+				Options: ptypes.TesseractNumberOrHash{
+					TesseractNumber: &LatestTesseractNumber,
+				},
+			},
+			expectedError: errors.New("account not found"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			logicIDs, err := client.LogicIDs(test.LogicIDArgs)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			httpLogicIDs := httpLogicIDs(t, test.LogicIDArgs)
+			require.Equal(t, httpLogicIDs, logicIDs)
+
+			require.Equal(t, test.expectedLogicIDs, logicIDs)
 		})
 	}
 }

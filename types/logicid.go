@@ -13,6 +13,10 @@ import (
 // It contains information about the nature of the logic and its deployed address.
 type LogicID string
 
+func BytesToLogicID(data []byte) LogicID {
+	return LogicID(BytesToHex(data))
+}
+
 // NewLogicIDv0 generates a new LogicID with the v0 form. The LogicID v0 Form is defined as follows:
 // [version(4bits)|persistent(1bit)|ephemeral(1bit)|interactive(1bit)|asset(1bit)][edition(16bits)][address(256bits)]
 func NewLogicIDv0(persistent, ephemeral, interactive, assetlogic bool, edition uint16, addr Address) LogicID {

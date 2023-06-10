@@ -452,6 +452,20 @@ func httpAccountState(t *testing.T, args *ptypes.GetAccountArgs) *ptypes.RPCAcco
 	return &account
 }
 
+// httpLogicIDs returns the logic IDs of the given address
+func httpLogicIDs(t *testing.T, args *ptypes.GetLogicIDArgs) []types.LogicID {
+	t.Helper()
+
+	resp := makeHTTPRequest(t, "moi.LogicIDs", args)
+
+	var logicIDs []types.LogicID
+
+	err := json.Unmarshal(resp.Data, &logicIDs)
+	require.NoError(t, err)
+
+	return logicIDs
+}
+
 // httpLogicManifest returns the manifest associated with the given logic id
 func httpLogicManifest(t *testing.T, args *ptypes.LogicManifestArgs) hexutil.Bytes {
 	t.Helper()

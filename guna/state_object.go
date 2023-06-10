@@ -475,7 +475,7 @@ func (s *StateObject) commitStorage() (types.Hash, error) {
 	return s.commitMetaStorageTree()
 }
 
-// commitLogics commits and the logic tree and flushes the changes to db
+// commitLogics commits the logic tree and flushes the changes to db
 func (s *StateObject) commitLogics() (types.Hash, error) {
 	if s.logicTree == nil {
 		return s.data.LogicRoot, nil
