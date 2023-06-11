@@ -223,13 +223,13 @@ func (s *Server) connectToTrustedNodes() {
 	for _, trustedPeer := range s.cfg.TrustedPeers {
 		peerInfo, err := peer.AddrInfoFromP2pAddr(trustedPeer.Address)
 		if err != nil {
-			s.logger.Error("invalid trusted peer address", "error", err)
+			s.logger.Error("Invalid trusted peer address", "error", err)
 
 			continue
 		}
 
 		if err := s.ConnectAndRegisterPeer(*peerInfo); err != nil {
-			s.logger.Error("failed to establish connection with trusted peer", "error", err)
+			s.logger.Error("Failed to establish connection with trusted peer", "error", err)
 		}
 	}
 }
@@ -445,7 +445,7 @@ func (s *Server) streamHandlerFunc(stream network.Stream) {
 
 	// Post the event to the registered receivers for NewPeerEvents
 	if err := s.postNewPeerEvent(kPeer.networkID); err != nil {
-		s.logger.Error("streamHandlerFunc", "error", err)
+		s.logger.Error("StreamHandlerFunc", "error", err)
 
 		return
 	}
@@ -481,7 +481,7 @@ func (s *Server) discover() {
 		}
 
 		if err = s.handleDiscovery(); err != nil {
-			s.logger.Error("handle discovery", "error", err)
+			s.logger.Error("Handle discovery", "error", err)
 		}
 	}
 }
@@ -520,7 +520,7 @@ func (s *Server) handleDiscovery() error {
 				NTQ:   senatus.DefaultPeerNTQ,
 			})
 			if err != nil && !errors.Is(err, types.ErrAlreadyKnown) {
-				s.logger.Error("failed to add peer information to senatus", err)
+				s.logger.Error("Failed to add peer information to senatus", "error", err)
 
 				continue
 			}
@@ -580,14 +580,14 @@ func (s *Server) ConnectAndRegisterPeer(peerInfo peer.AddrInfo) error {
 
 	// Post the event to the registered receivers for NewPeerEvents
 	if err = s.postNewPeerEvent(kPeer.networkID); err != nil {
-		s.logger.Error("Failed to post new peer event", err)
+		s.logger.Error("Failed to post new peer event", "error", err)
 
 		return err
 	}
 
 	// Post the event to the registered receivers for Syncer
 	if err = s.postPeerDiscoveredEvent(kPeer.networkID); err != nil {
-		s.logger.Error("Failed to post peer discovery event", err)
+		s.logger.Error("Failed to post peer discovery event", "error", err)
 
 		return err
 	}
@@ -696,7 +696,7 @@ func (s *Server) DisconnectPeer(kramaID id.KramaID) error {
 	// Retrieve the libp2pID from the KramaID
 	libp2pID, err := kramaID.PeerID()
 	if err != nil {
-		s.logger.Error("Error parsing krama libp2pID", err)
+		s.logger.Error("Error parsing krama libp2pID", "error", err)
 
 		return err
 	}
@@ -704,7 +704,7 @@ func (s *Server) DisconnectPeer(kramaID id.KramaID) error {
 	// Decode the encoded PeerID
 	peerID, err := peer.Decode(libp2pID)
 	if err != nil {
-		s.logger.Error("Error decoding peerID", err)
+		s.logger.Error("Error decoding peerID", "error", err)
 
 		return err
 	}
@@ -815,7 +815,7 @@ func (s *Server) routeSubscriptionMessages(
 		// an error because it is being invoked as a goroutine
 		if err := handler(msg); err != nil {
 			if !errors.Is(err, types.ErrAlreadyKnown) {
-				s.logger.Error("subcHandlerPipeline", "error calling handler method", err)
+				s.logger.Error("SubcHandlerPipeline", "error calling handler method", err)
 			}
 
 			return

@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -132,14 +131,14 @@ func SetupNode() {
 
 	tp, err := tracing.NewTracerProvider(ctx, EnableTracing, cfg.Metrics.JaegerAddr, n.GetKramaID())
 	if err != nil {
-		fmt.Println("error starting tp")
+		log.Println("Error starting tp", "error", err)
 	}
 
 	defer func() {
-		fmt.Println("Shutting down trace provider")
+		log.Println("Shutting down trace provider")
 
 		if err := tp.Shutdown(ctx); err != nil {
-			fmt.Println("error shutting down trace provider")
+			log.Println("Error shutting down trace provider", "error", err)
 		}
 	}()
 

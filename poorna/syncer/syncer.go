@@ -2,7 +2,6 @@ package syncer
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"math/rand"
 	"sync"
@@ -407,6 +406,7 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 						"missing tesseract ",
 						"addr", tsInfo.tesseract.Address(),
 						"at", tsInfo.tesseract.Height(),
+						"error", err,
 					)
 
 					jobState = Sleep
@@ -486,7 +486,7 @@ func (s *Syncer) signalNewJob() {
 	select {
 	case s.workerSignal <- struct{}{}:
 	default:
-		fmt.Println("Failed to signal new job")
+		s.logger.Error("Failed to signal new job")
 	}
 }
 
@@ -684,7 +684,7 @@ func (s *Syncer) initSync() error {
 	}
 
 	if err = s.loadSyncJobsFromDB(); err != nil {
-		s.logger.Error("failed to load sync jobs from db", "error", err)
+		s.logger.Error("Failed to load sync jobs from db", "error", err)
 	}
 
 	return s.syncBucketsWithMaxAttempts(bestPeers, MaxBucketSyncAttempts)
@@ -839,7 +839,7 @@ func (s *Syncer) syncBuckets(kramaID id.KramaID, attempts int) error {
 
 	peerID, err := kramaID.DecodedPeerID()
 	if err != nil {
-		s.logger.Error("failed to decode peer id", "error", err)
+		s.logger.Error("Failed to decode peer id", "error", err)
 
 		return err
 	}
@@ -848,7 +848,7 @@ func (s *Syncer) syncBuckets(kramaID id.KramaID, attempts int) error {
 
 	errGrp.Go(func() error {
 		if err = s.rpcClient.Stream(grpCtx, peerID, "SYNCRPC", "SyncBuckets", argsChan, respChan); err != nil {
-			s.logger.Error("failed to sync buckets", "error", err)
+			s.logger.Error("Failed to sync buckets", "error", err)
 
 			return err
 		}
@@ -877,7 +877,7 @@ func (s *Syncer) syncBuckets(kramaID id.KramaID, attempts int) error {
 						}
 
 						if i != respMsg.BucketID {
-							s.logger.Error("Invalid bucket")
+							s.logger.Error("Invalid bucket", "error", err)
 
 							return errors.New("invalid bucket id")
 						}
@@ -892,7 +892,7 @@ func (s *Syncer) syncBuckets(kramaID id.KramaID, attempts int) error {
 
 						// send the data to meta info handler
 						if err = s.handleAccountMetaInfo(respMsg.AccountMetaInfos, types.FullSync); err != nil {
-							s.logger.Error("failed to create sync jobs from accMetaInfo", "error", err)
+							s.logger.Error("Failed to create sync jobs from accMetaInfo", "error", err)
 
 							return err
 						}
@@ -1187,7 +1187,7 @@ func (s *Syncer) syncLattice(
 
 				tsInfo, err := s.tesseractInfoFromTesseractMsg(msg)
 				if err != nil {
-					s.logger.Error("failed to parse tesseract info from msg", "error", err)
+					s.logger.Error("Failed to parse tesseract info from msg", "error", err)
 
 					continue
 				}
@@ -1250,7 +1250,7 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo, job *SyncJob) (bool, error) {
 	if msg.icsNodeSet == nil {
 		msg.icsNodeSet, err = s.lattice.FetchICSNodeSet(msg.tesseract, msg.clusterInfo)
 		if err != nil {
-			s.logger.Error("failed to fetch node set", "error", err)
+			s.logger.Error("Failed to fetch node set", "error", err)
 
 			return false, nil
 		}
@@ -1710,7 +1710,7 @@ func (s *Syncer) startSyncEventHandler() {
 				types.LatestSync,
 				[]id.KramaID{req.BestPeer},
 			); err != nil {
-				s.logger.Error("failed to handle sync request from krama engine", "error", err)
+				s.logger.Error("Failed to handle sync request from krama engine", "error", err)
 			}
 		}
 	}

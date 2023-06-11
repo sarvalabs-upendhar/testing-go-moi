@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"math/big"
 	"os"
 	"strings"
@@ -71,7 +72,7 @@ func WriteToGenesisFile(path string, genesis *types.GenesisFile) error {
 		return err
 	}
 
-	fmt.Println("Genesis file created or updated")
+	log.Println("Genesis file created or updated")
 
 	return nil
 }

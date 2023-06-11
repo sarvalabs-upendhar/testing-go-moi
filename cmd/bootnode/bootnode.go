@@ -168,9 +168,9 @@ func startBootNode() {
 	var input string
 
 	for {
-		fmt.Println("Please enter your input:")
-		fmt.Println("1: DHT stats")
-		fmt.Println("2: Exit")
+		log.Println("Please enter your input:")
+		log.Println("1: DHT stats")
+		log.Println("2: Exit")
 
 		if _, err := fmt.Scanf("%s", &input); err != nil {
 			cmdcommon.Err(err)

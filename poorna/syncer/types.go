@@ -2,7 +2,7 @@ package syncer
 
 import (
 	"container/heap"
-	"fmt"
+	"log"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -144,7 +144,7 @@ func NewTesseractQueue() *TesseractQueue {
 func (s *TesseractQueue) Push(ts ...*TesseractInfo) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
-	fmt.Println("Adding tesseract to queue")
+	log.Println("Adding tesseract to queue")
 
 	for _, t := range ts {
 		if _, ok := s.set[t.tesseract.Height()]; !ok {
