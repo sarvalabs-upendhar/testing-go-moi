@@ -646,6 +646,5 @@ func checkForRPCReceipt(
 	require.Equal(t, expectedRPCReceipt.IXIndex, actualRPCReceipt.IXIndex)
 	require.Equal(t, expectedRPCReceipt.Parts, actualRPCReceipt.Parts)
 
-	require.True(t, reflect.DeepEqual(expectedRPCReceipt.StateHashes, actualRPCReceipt.StateHashes))
-	require.True(t, reflect.DeepEqual(expectedRPCReceipt.ContextHashes, actualRPCReceipt.ContextHashes))
+	require.True(t, reflect.DeepEqual(expectedRPCReceipt.Hashes, actualRPCReceipt.Hashes))
 }

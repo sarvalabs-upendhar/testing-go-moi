@@ -1446,7 +1446,7 @@ func TestIsReceiptAndGroupHashValid(t *testing.T) {
 func TestAreStateHashesValid(t *testing.T) {
 	address := tests.RandomAddress(t)
 	stateHash := tests.RandomHash(t)
-	ixs, receipts := getIxAndReceiptsWithStateHash(t, map[types.Address]types.Hash{address: stateHash}, 1)
+	ixs, receipts := getIxAndReceiptsWithStateHash(t, types.ReceiptAccHashes{address: {StateHash: stateHash}}, 1)
 
 	testcases := []struct {
 		name     string
@@ -1496,7 +1496,7 @@ func TestExecuteAndValidate(t *testing.T) {
 		tsParamsMap    = getTSParamsMapWithStateHash(t, 1)
 		address        = tests.RandomAddress(t)
 		stateHash      = tests.RandomHash(t)
-		ixns, receipts = getIxAndReceiptsWithStateHash(t, map[types.Address]types.Hash{address: stateHash}, 1)
+		ixns, receipts = getIxAndReceiptsWithStateHash(t, types.ReceiptAccHashes{address: {StateHash: stateHash}}, 1)
 	)
 
 	testcases := []struct {

@@ -1491,12 +1491,11 @@ func MockAggregateSignVerifier(data []byte, aggSignature []byte, multiplePubKeys
 
 func getReceipt(ixHash types.Hash) *types.Receipt {
 	return &types.Receipt{
-		IxType:        1,
-		IxHash:        ixHash,
-		FuelUsed:      big.NewInt(rand.Int63()),
-		StateHashes:   make(map[types.Address]types.Hash),
-		ContextHashes: make(map[types.Address]types.Hash),
-		ExtraData:     make(json.RawMessage, 0),
+		IxType:    1,
+		IxHash:    ixHash,
+		FuelUsed:  big.NewInt(rand.Int63()),
+		Hashes:    make(types.ReceiptAccHashes),
+		ExtraData: make(json.RawMessage, 0),
 	}
 }
 
@@ -1534,7 +1533,7 @@ func getIxAndReceipts(t *testing.T, ixCount int) ([]*types.Interaction, types.Re
 
 func getIxAndReceiptsWithStateHash(
 	t *testing.T,
-	stateHash map[types.Address]types.Hash,
+	hashes types.ReceiptAccHashes,
 	ixCount int,
 ) ([]*types.Interaction, types.Receipts) {
 	t.Helper()
@@ -1546,7 +1545,7 @@ func getIxAndReceiptsWithStateHash(
 
 	for i := 0; i < ixCount; i++ {
 		ix, r := getIxAndReceipt(t)
-		r.StateHashes = stateHash
+		r.Hashes = hashes
 
 		ixs = append(ixs, ix)
 

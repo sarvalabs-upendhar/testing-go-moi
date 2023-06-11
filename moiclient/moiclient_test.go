@@ -7,7 +7,10 @@ import (
 	"encoding/json"
 	"log"
 	"math/big"
+	"sort"
 	"testing"
+
+	"github.com/sarvalabs/moichain/poorna/api"
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
@@ -151,7 +154,7 @@ func TestMoiClient(t *testing.T) {
 func setupChain(t *testing.T, client *Client, addrs []types.Address, addrsMap StrMap) {
 	var i int64 = 0
 
-	accs, err := tests.GetAccountMnemonicsFromFile("../playground/accounts.json")
+	accs, err := tests.GetAccountMnemonicsFromFile("../accounts.json")
 	require.NoError(t, err)
 
 	t.Run("DeployLogic", func(t *testing.T) {
@@ -630,6 +633,11 @@ func testGetBalance(t *testing.T, client *Client, addrsMap StrMap) {
 
 func testTDU(t *testing.T, client *Client, addr types.Address) {
 	assetID := getAssetID(t, client, addr, &createAssetHeight)
+	sortTDU := func(tdu []api.TDU) {
+		sort.Slice(tdu, func(i, j int) bool {
+			return tdu[i].AssetID < tdu[j].AssetID
+		})
+	}
 
 	testcases := []struct {
 		name          string
@@ -670,10 +678,22 @@ func testTDU(t *testing.T, client *Client, addr types.Address) {
 
 			require.NoError(t, err)
 
-			require.True(t, assetID == tdu[0].AssetID)
+			isAssetFound := false
+
+			for i := 0; i < len(tdu); i++ {
+				if assetID == tdu[i].AssetID {
+					isAssetFound = true
+				}
+			}
+
+			require.True(t, isAssetFound)
 			require.Equal(t, 2, len(tdu))
 
 			httpTDU := httpTDU(t, test.queryArgs)
+
+			sortTDU(httpTDU)
+			sortTDU(tdu)
+
 			require.Equal(t, httpTDU, tdu)
 		})
 	}

@@ -1115,45 +1115,25 @@ func checkForRPCTesseract(
 	}
 }
 
-func checkForRPCStateHashes(
+func checkForRPCHashes(
 	t *testing.T,
-	expectedRPCStateHashes map[types.Address]types.Hash,
-	rpcStateHashes ptypes.RPCStateHashes,
+	expectedRPCHashes types.ReceiptAccHashes,
+	rpcHashes ptypes.RPCHashes,
 ) {
 	t.Helper()
 
-	require.Equal(t, len(expectedRPCStateHashes), len(rpcStateHashes))
+	require.Equal(t, len(expectedRPCHashes), len(rpcHashes))
 
-	for _, rpcStateHash := range rpcStateHashes {
-		hash, ok := expectedRPCStateHashes[rpcStateHash.Address]
-		require.True(t, ok)
+	for _, rpcHash := range rpcHashes {
+		stateHash := expectedRPCHashes.StateHash(rpcHash.Address)
+		contextHash := expectedRPCHashes.ContextHash(rpcHash.Address)
 
-		require.Equal(t, hash, rpcStateHash.Hash)
+		require.Equal(t, stateHash, rpcHash.StateHash)
+		require.Equal(t, contextHash, rpcHash.ContextHash)
 	}
 
-	for i := 1; i < len(rpcStateHashes); i++ {
-		require.True(t, rpcStateHashes[i-1].Address.Hex() < rpcStateHashes[i].Address.Hex())
-	}
-}
-
-func checkForRPCContextHashes(
-	t *testing.T,
-	expectedRPCStateHashes map[types.Address]types.Hash,
-	rpcContextHashes ptypes.RPCContextHashes,
-) {
-	t.Helper()
-
-	require.Equal(t, len(expectedRPCStateHashes), len(rpcContextHashes))
-
-	for _, rpcStateHash := range rpcContextHashes {
-		hash, ok := expectedRPCStateHashes[rpcStateHash.Address]
-		require.True(t, ok)
-
-		require.Equal(t, hash, rpcStateHash.Hash)
-	}
-
-	for i := 1; i < len(rpcContextHashes); i++ {
-		require.True(t, rpcContextHashes[i-1].Address.Hex() < rpcContextHashes[i].Address.Hex())
+	for i := 1; i < len(rpcHashes); i++ {
+		require.True(t, rpcHashes[i-1].Address.Hex() < rpcHashes[i].Address.Hex())
 	}
 }
 
@@ -1171,8 +1151,7 @@ func checkForRPCReceipt(
 	require.Equal(t, uint64(receipt.IxType), rpcReceipt.IxType.ToUint64())
 	require.Equal(t, receipt.IxHash, rpcReceipt.IxHash)
 	require.Equal(t, receipt.FuelUsed, rpcReceipt.FuelUsed.ToInt())
-	checkForRPCStateHashes(t, receipt.StateHashes, rpcReceipt.StateHashes)
-	checkForRPCContextHashes(t, receipt.ContextHashes, rpcReceipt.ContextHashes)
+	checkForRPCHashes(t, receipt.Hashes, rpcReceipt.Hashes)
 	require.Equal(t, receipt.ExtraData, rpcReceipt.ExtraData)
 	require.Equal(t, ix.Sender(), rpcReceipt.From)
 	require.Equal(t, ix.Receiver(), rpcReceipt.To)

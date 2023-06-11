@@ -325,7 +325,7 @@ func (cs *ClusterState) GetContextHash(ixHash types.Hash, addr types.Address) ty
 		return types.NilHash
 	}
 
-	return receipt.ContextHashes[addr]
+	return receipt.Hashes.ContextHash(addr)
 }
 
 func (cs *ClusterState) GetStateHash(ixHash types.Hash, addr types.Address) types.Hash {
@@ -334,7 +334,7 @@ func (cs *ClusterState) GetStateHash(ixHash types.Hash, addr types.Address) type
 		return types.NilHash
 	}
 
-	return receipt.StateHashes[addr]
+	return receipt.Hashes.StateHash(addr)
 }
 
 func (cs *ClusterState) GetFuelUsed() *big.Int {

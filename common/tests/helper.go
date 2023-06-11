@@ -880,17 +880,18 @@ func CreateReceiptWithTestData(t *testing.T) *types.Receipt {
 	t.Helper()
 
 	receipt := &types.Receipt{
-		IxType:        2,
-		IxHash:        RandomHash(t),
-		FuelUsed:      big.NewInt(99),
-		StateHashes:   make(map[types.Address]types.Hash),
-		ContextHashes: make(map[types.Address]types.Hash),
-		ExtraData:     []byte{1, 2},
+		IxType:    2,
+		IxHash:    RandomHash(t),
+		FuelUsed:  big.NewInt(99),
+		Hashes:    make(types.ReceiptAccHashes),
+		ExtraData: []byte{1, 2},
 	}
 
 	for i := 0; i < 3; i++ {
-		receipt.StateHashes[RandomAddress(t)] = RandomHash(t)
-		receipt.ContextHashes[RandomAddress(t)] = RandomHash(t)
+		receipt.Hashes[RandomAddress(t)] = &types.Hashes{
+			StateHash:   RandomHash(t),
+			ContextHash: RandomHash(t),
+		}
 	}
 
 	return receipt

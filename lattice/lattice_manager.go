@@ -1210,7 +1210,7 @@ func areStateHashesValid(tesseracts []*types.Tesseract, receipts types.Receipts)
 		}
 
 		for _, ts := range tesseracts {
-			if receipt.StateHashes[ts.Address()] != ts.StateHash() {
+			if receipt.Hashes.StateHash(ts.Address()) != ts.StateHash() {
 				return false
 			}
 		}

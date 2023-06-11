@@ -241,44 +241,31 @@ type RPCAccountMetaInfo struct {
 	StateExists   bool       `json:"state_exists"`
 }
 
-type RPCStateHash struct {
-	Address types.Address `json:"address"`
-	Hash    types.Hash    `json:"hash"`
+type Hashes struct {
+	Address     types.Address `json:"address"`
+	StateHash   types.Hash    `json:"state_hash"`
+	ContextHash types.Hash    `json:"context_hash"`
 }
 
-type RPCStateHashes []RPCStateHash
+type RPCHashes []Hashes
 
-func (stateHashes RPCStateHashes) Sort() {
-	sort.Slice(stateHashes, func(i, j int) bool {
-		return stateHashes[i].Address.Hex() < stateHashes[j].Address.Hex()
-	})
-}
-
-type RPCContextHash struct {
-	Address types.Address `json:"address"`
-	Hash    types.Hash    `json:"hash"`
-}
-
-type RPCContextHashes []RPCContextHash
-
-func (contextHashes RPCContextHashes) Sort() {
-	sort.Slice(contextHashes, func(i, j int) bool {
-		return contextHashes[i].Address.Hex() < contextHashes[j].Address.Hex()
+func (hashes RPCHashes) Sort() {
+	sort.Slice(hashes, func(i, j int) bool {
+		return hashes[i].Address.Hex() < hashes[j].Address.Hex()
 	})
 }
 
 type RPCReceipt struct {
-	IxType        hexutil.Uint64      `json:"ix_type"`
-	IxHash        types.Hash          `json:"ix_hash"`
-	Status        types.ReceiptStatus `json:"status"`
-	FuelUsed      hexutil.Big         `json:"fuel_used"`
-	StateHashes   RPCStateHashes      `json:"state_hashes"`
-	ContextHashes RPCContextHashes    `json:"context_hashes"`
-	ExtraData     json.RawMessage     `json:"extra_data"`
-	From          types.Address       `json:"from"`
-	To            types.Address       `json:"to"`
-	IXIndex       hexutil.Uint64      `json:"ix_index"`
-	Parts         RPCTesseractParts   `json:"parts"`
+	IxType    hexutil.Uint64      `json:"ix_type"`
+	IxHash    types.Hash          `json:"ix_hash"`
+	Status    types.ReceiptStatus `json:"status"`
+	FuelUsed  hexutil.Big         `json:"fuel_used"`
+	Hashes    RPCHashes           `json:"hashes"`
+	ExtraData json.RawMessage     `json:"extra_data"`
+	From      types.Address       `json:"from"`
+	To        types.Address       `json:"to"`
+	IXIndex   hexutil.Uint64      `json:"ix_index"`
+	Parts     RPCTesseractParts   `json:"parts"`
 }
 
 type RPCInteraction struct {

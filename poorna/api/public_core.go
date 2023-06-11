@@ -735,48 +735,24 @@ func CreateRPCTesseract(ts *types.Tesseract) (*ptypes.RPCTesseract, error) {
 	}, nil
 }
 
-func createRPCStateHashes(stateHashes map[types.Address]types.Hash) ptypes.RPCStateHashes {
-	if len(stateHashes) == 0 {
+func createRPCHashes(hashes types.ReceiptAccHashes) ptypes.RPCHashes {
+	if len(hashes) == 0 {
 		return nil
 	}
 
-	rpcStateHashes := make(ptypes.RPCStateHashes, 0, len(stateHashes))
+	rpcHashes := make(ptypes.RPCHashes, 0, len(hashes))
 
-	for address, hash := range stateHashes {
-		rpcStateHashes = append(
-			rpcStateHashes,
-			ptypes.RPCStateHash{
-				Address: address,
-				Hash:    hash,
-			},
-		)
+	for addr, hash := range hashes {
+		rpcHashes = append(rpcHashes, ptypes.Hashes{
+			Address:     addr,
+			StateHash:   hash.StateHash,
+			ContextHash: hash.ContextHash,
+		})
 	}
 
-	rpcStateHashes.Sort()
+	rpcHashes.Sort()
 
-	return rpcStateHashes
-}
-
-func createRPCContextHashes(contextHashes map[types.Address]types.Hash) ptypes.RPCContextHashes {
-	if len(contextHashes) == 0 {
-		return nil
-	}
-
-	rpcContextHashes := make(ptypes.RPCContextHashes, 0, len(contextHashes))
-
-	for address, hash := range contextHashes {
-		rpcContextHashes = append(
-			rpcContextHashes,
-			ptypes.RPCContextHash{
-				Address: address,
-				Hash:    hash,
-			},
-		)
-	}
-
-	rpcContextHashes.Sort()
-
-	return rpcContextHashes
+	return rpcHashes
 }
 
 // createRPCReceipt creates rpc receipt from receipt, interaction, grid, interaction index
@@ -787,17 +763,16 @@ func createRPCReceipt(
 	ixIndex int,
 ) *ptypes.RPCReceipt {
 	return &ptypes.RPCReceipt{
-		IxType:        hexutil.Uint64(receipt.IxType),
-		IxHash:        receipt.IxHash,
-		Status:        receipt.Status,
-		FuelUsed:      hexutil.Big(*receipt.FuelUsed),
-		StateHashes:   createRPCStateHashes(receipt.StateHashes),
-		ContextHashes: createRPCContextHashes(receipt.ContextHashes),
-		ExtraData:     receipt.ExtraData,
-		From:          ix.Sender(),
-		To:            ix.Receiver(),
-		IXIndex:       hexutil.Uint64(ixIndex),
-		Parts:         getRPCTesseractPartsFromGrid(grid),
+		IxType:    hexutil.Uint64(receipt.IxType),
+		IxHash:    receipt.IxHash,
+		Status:    receipt.Status,
+		FuelUsed:  hexutil.Big(*receipt.FuelUsed),
+		Hashes:    createRPCHashes(receipt.Hashes),
+		ExtraData: receipt.ExtraData,
+		From:      ix.Sender(),
+		To:        ix.Receiver(),
+		IXIndex:   hexutil.Uint64(ixIndex),
+		Parts:     getRPCTesseractPartsFromGrid(grid),
 	}
 }
 

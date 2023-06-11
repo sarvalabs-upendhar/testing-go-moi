@@ -17,30 +17,89 @@ const (
 	ReceiptFailed
 )
 
+type Hashes struct {
+	StateHash   Hash `json:"state_hash"`
+	ContextHash Hash `json:"context_hash"`
+}
+
+type ReceiptAccHashes map[Address]*Hashes
+
+func (h ReceiptAccHashes) SetContextHash(addr Address, contextHash Hash) {
+	hashes, ok := h[addr]
+	if !ok {
+		h[addr] = &Hashes{ContextHash: contextHash}
+
+		return
+	}
+
+	hashes.ContextHash = contextHash
+}
+
+func (h ReceiptAccHashes) SetStateHash(addr Address, stateHash Hash) {
+	hashes, ok := h[addr]
+
+	if !ok {
+		h[addr] = &Hashes{StateHash: stateHash}
+
+		return
+	}
+
+	hashes.StateHash = stateHash
+}
+
+func (h ReceiptAccHashes) ContextHash(addr Address) Hash {
+	ctxHash, ok := h[addr]
+	if !ok {
+		return NilHash
+	}
+
+	return ctxHash.ContextHash
+}
+
+func (h ReceiptAccHashes) StateHash(addr Address) Hash {
+	ctxHash, ok := h[addr]
+	if !ok {
+		return NilHash
+	}
+
+	return ctxHash.StateHash
+}
+
 type Receipt struct {
 	IxType IxType        `json:"ix_type"`
 	IxHash Hash          `json:"ix_hash"`
 	Status ReceiptStatus `json:"status"`
 
-	FuelUsed      *big.Int         `json:"fuel_used"`
-	StateHashes   map[Address]Hash `json:"state_hashes"`
-	ContextHashes map[Address]Hash `json:"context_hashes"`
-	ExtraData     json.RawMessage  `json:"extra_data"`
+	FuelUsed  *big.Int         `json:"fuel_used"`
+	Hashes    ReceiptAccHashes `json:"hashes"`
+	ExtraData json.RawMessage  `json:"extra_data"`
+}
+
+func (h ReceiptAccHashes) Copy() ReceiptAccHashes {
+	if len(h) == 0 {
+		return nil
+	}
+
+	hashmap := make(ReceiptAccHashes)
+
+	for key, value := range h {
+		hashmap[key] = &Hashes{
+			StateHash:   value.StateHash,
+			ContextHash: value.ContextHash,
+		}
+	}
+
+	return hashmap
 }
 
 func (r *Receipt) Copy() *Receipt {
 	receipt := *r
 
-	receipt.StateHashes = make(map[Address]Hash)
-	receipt.ContextHashes = make(map[Address]Hash)
-
-	for key, value := range r.StateHashes {
-		receipt.StateHashes[key] = value
+	if receipt.FuelUsed != nil {
+		receipt.FuelUsed = new(big.Int).Set(r.FuelUsed)
 	}
 
-	for key, value := range r.ContextHashes {
-		receipt.ContextHashes[key] = value
-	}
+	receipt.Hashes = r.Hashes.Copy()
 
 	if len(r.ExtraData) > 0 {
 		receipt.ExtraData = make(json.RawMessage, len(r.ExtraData))

@@ -312,7 +312,7 @@ func (executor *IxExecutor) UpdateContext(ix *types.Interaction, contextDelta ty
 				}
 
 				// Update the execution receipt for the interaction with the new context hash for the receiver
-				receipt.ContextHashes[addr] = hash
+				receipt.Hashes.SetContextHash(addr, hash)
 
 				continue
 			}
@@ -330,7 +330,7 @@ func (executor *IxExecutor) UpdateContext(ix *types.Interaction, contextDelta ty
 			}
 
 			// Update the execution receipt for the interaction with the new context hash for the sender
-			receipt.ContextHashes[addr] = hash
+			receipt.Hashes.SetContextHash(addr, hash)
 		}
 	}
 
@@ -350,7 +350,7 @@ func (executor *IxExecutor) CommitStateObjects(ix *types.Interaction) error {
 			return err
 		}
 
-		receipt.StateHashes[ix.Sender()] = senderHash
+		receipt.Hashes.SetStateHash(ix.Sender(), senderHash)
 	}
 
 	// Commit the receiver state object (if it exists)
@@ -360,7 +360,7 @@ func (executor *IxExecutor) CommitStateObjects(ix *types.Interaction) error {
 			return err
 		}
 
-		receipt.StateHashes[ix.Receiver()] = receiverHash
+		receipt.Hashes.SetStateHash(ix.Receiver(), receiverHash)
 	}
 
 	// Check if the receiver account is registered
@@ -377,7 +377,7 @@ func (executor *IxExecutor) CommitStateObjects(ix *types.Interaction) error {
 			return err
 		}
 
-		receipt.StateHashes[types.SargaAddress] = genesisHash
+		receipt.Hashes.SetStateHash(types.SargaAddress, genesisHash)
 	}
 
 	return nil
@@ -434,11 +434,10 @@ func (executor *IxExecutor) getReceipt(ix *types.Interaction) *types.Receipt {
 
 	// Create new receipt for interaction hash if it does not exist
 	receipt := &types.Receipt{
-		IxHash:        ix.Hash(),
-		IxType:        ix.Type(),
-		StateHashes:   make(map[types.Address]types.Hash),
-		ContextHashes: make(map[types.Address]types.Hash),
-		FuelUsed:      new(big.Int),
+		IxHash:   ix.Hash(),
+		IxType:   ix.Type(),
+		Hashes:   make(types.ReceiptAccHashes),
+		FuelUsed: new(big.Int),
 	}
 
 	// Set the created receipt into the executor
