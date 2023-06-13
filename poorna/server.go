@@ -1023,6 +1023,21 @@ func (s *Server) GetPeers() []id.KramaID {
 	return peers
 }
 
+func (s *Server) GetBootstrapPeerIDs() (map[peer.ID]bool, error) {
+	addrInfo, err := peer.AddrInfosFromP2pAddrs(s.cfg.BootstrapPeers...)
+	if err != nil {
+		return nil, errors.Wrap(err, "unable to extract addr-info from multiaddr for bootstrap nodes")
+	}
+
+	peerIDs := make(map[peer.ID]bool)
+
+	for _, info := range addrInfo {
+		peerIDs[info.ID] = true
+	}
+
+	return peerIDs, nil
+}
+
 func (s *Server) GetVersion() string {
 	return common.ProtocolVersion
 }

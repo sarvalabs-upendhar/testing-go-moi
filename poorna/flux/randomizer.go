@@ -35,6 +35,7 @@ const (
 type Randomizer struct {
 	ctx        context.Context
 	ctxCancel  context.CancelFunc
+	bootNodes  map[peer.ID]bool
 	peers      []*PeerList
 	requestIDs []int64
 	topic      string
@@ -68,6 +69,8 @@ func NewRandomizer(
 		metrics:    metrics,
 	}
 
+	r.bootNodes, _ = p2pServer.GetBootstrapPeerIDs()
+
 	for i := 0; i < SLOTCOUNT; i++ {
 		r.peers[i] = &PeerList{
 			updatePending: true,
@@ -82,6 +85,12 @@ func NewRandomizer(
 	r.server.SetupStreamHandler(common.FluxProtocolStream, r.messageHandler)
 
 	return r
+}
+
+func (r *Randomizer) isBootstrapNode(peerID peer.ID) bool {
+	_, ok := r.bootNodes[peerID]
+
+	return ok
 }
 
 func (r *Randomizer) messageHandler(stream network.Stream) {
@@ -255,7 +264,8 @@ func (r *Randomizer) HandleReqMsg(reqMsg *ptypes.RandomWalkReq) error {
 	for {
 		randomPeer := r.server.GetRandomNode()
 
-		if randomPeer == peer.ID(peerID) {
+		// if the random peer is either request or bootstrap node, don't send request
+		if randomPeer == peer.ID(peerID) || r.isBootstrapNode(randomPeer) {
 			continue
 		}
 
@@ -361,6 +371,10 @@ func (r *Randomizer) PopulatePool(slotID int) {
 	// Step 1: Select some random peer from random table and
 	for {
 		randomPeer := r.server.GetRandomNode()
+
+		if r.isBootstrapNode(randomPeer) {
+			continue
+		}
 
 		if err := r.SendFluxMessage(randomPeer, ptypes.RANDOMWALKREQ, msg); err != nil {
 			continue
