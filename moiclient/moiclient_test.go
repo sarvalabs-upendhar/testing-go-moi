@@ -881,7 +881,7 @@ func testPendingInteractionCount(t *testing.T, client *Client, addr types.Addres
 }
 
 func testStorage(t *testing.T, client *Client, addr types.Address) {
-	logicID := getLogicID(t, client, addr, &deployLogicHeight).String()
+	logicID := getLogicID(t, client, addr, &deployLogicHeight)
 
 	testcases := []struct {
 		name                 string
@@ -892,7 +892,7 @@ func testStorage(t *testing.T, client *Client, addr types.Address) {
 			name: "fetch storage value for existing logic ID",
 			interactionCountArgs: &ptypes.GetStorageArgs{
 				LogicID:    logicID,
-				StorageKey: "e88bd757ad5b9bedf372d8d3f0cf6c962a469db61a265f6418e1ffed86da29ec",
+				StorageKey: types.Hex2Bytes("e88bd757ad5b9bedf372d8d3f0cf6c962a469db61a265f6418e1ffed86da29ec"),
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
@@ -902,12 +902,12 @@ func testStorage(t *testing.T, client *Client, addr types.Address) {
 			name: "fetch storage value for non-existing logic ID",
 			interactionCountArgs: &ptypes.GetStorageArgs{
 				LogicID:    "",
-				StorageKey: "e88bd757ad5b9bedf372d8d3f0cf6c962a469db61a265f6418e1ffed86da29ec",
+				StorageKey: types.Hex2Bytes("e88bd757ad5b9bedf372d8d3f0cf6c962a469db61a265f6418e1ffed86da29ec"),
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
-			expectedError: errors.New("invalid logic id"),
+			expectedError: errors.New("invalid logic ID"),
 		},
 	}
 

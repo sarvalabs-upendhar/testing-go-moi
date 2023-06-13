@@ -1702,25 +1702,25 @@ func getTestAssetCreationArgs(t *testing.T, allocationAddr types.Address) types.
 	}
 }
 
-func getTestGenesisLogics(t *testing.T) []types.GenesisLogic {
+func getTestGenesisLogics(t *testing.T) []types.LogicSetupArgs {
 	t.Helper()
 
 	manifest := "0x" + types.BytesToHex(tests.ReadManifest(t, "./../jug/manifests/erc20.json"))
 	calldata := "0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd8ee6a29e" +
 		"c442dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49"
 
-	logic := types.GenesisLogic{
+	logic := types.LogicSetupArgs{
 		Name: "staking-contract",
 
 		Callsite: "Seeder!",
 		Calldata: hexutil.Bytes(types.Hex2Bytes(calldata)),
 		Manifest: hexutil.Bytes(types.Hex2Bytes(manifest)),
 
-		BehaviouralContext: utils.KramaIDToString(tests.GetTestKramaIDs(t, 1)),
+		BehaviouralContext: tests.GetTestKramaIDs(t, 1),
 		RandomContext:      nil,
 	}
 
-	return []types.GenesisLogic{logic}
+	return []types.LogicSetupArgs{logic}
 }
 
 // createMockGenesisFile is a mock function used to create genesis file
@@ -1731,7 +1731,7 @@ func createMockGenesisFile(
 	sarga types.AccountSetupArgs,
 	accounts []types.AccountSetupArgs,
 	assetAccounts []types.AssetAccountSetupArgs,
-	logics []types.GenesisLogic,
+	logics []types.LogicSetupArgs,
 ) string {
 	t.Helper()
 
@@ -2149,7 +2149,7 @@ func checkForAssetAccounts(t *testing.T, expected, actual []types.AssetAccountSe
 	}
 }
 
-func checkForLogicAccounts(t *testing.T, expected, actual []types.GenesisLogic) {
+func checkForLogicAccounts(t *testing.T, expected, actual []types.LogicSetupArgs) {
 	t.Helper()
 
 	require.Equal(t, len(expected), len(actual))

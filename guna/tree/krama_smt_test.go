@@ -176,7 +176,7 @@ func TestNewKramaHashTree_Flush(t *testing.T) {
 	// create an iterator to iterate over all nodes
 	it := hashTree.NewIterator()
 	for it.Next() {
-		nodes[hashTree.HashKey(it.NodeBlob())] = it.NodeBlob()
+		nodes[HashKey(it.NodeBlob())] = it.NodeBlob()
 	}
 
 	// flush the tree changes
@@ -186,7 +186,7 @@ func TestNewKramaHashTree_Flush(t *testing.T) {
 	require.False(t, hashTree.IsDirty())
 
 	// check for pre-image in persistent db
-	preImage, err := db.GetPreImage(address, hashTree.HashKey(key))
+	preImage, err := db.GetPreImage(address, HashKey(key))
 	require.NoError(t, err, "pre-image not found in persistent db")
 
 	require.Equal(t, key, preImage)

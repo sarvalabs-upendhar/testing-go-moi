@@ -477,6 +477,10 @@ func (i *IxPool) validateIx(ix *types.Interaction) error {
 }
 
 func (i *IxPool) validateValueTransfer(ix *types.Interaction) error {
+	if len(ix.TransferValues()) == 0 {
+		return errors.New("empty transfer values")
+	}
+
 	for assetID, v := range ix.TransferValues() {
 		if v.Sign() < 0 {
 			return types.ErrInvalidValue

@@ -19,6 +19,7 @@ var (
 	genesisFilePath       string
 	instancesFilePath     string
 	accountsFilePath      string
+	GuardianLogicPath     string
 	port                  int
 	peerList              *server.PeerList
 )

@@ -3,7 +3,6 @@ package guna
 import (
 	"context"
 	"math/big"
-	"net/http"
 	"reflect"
 	"sync"
 	"testing"
@@ -616,6 +615,14 @@ func mockSenatus(t *testing.T) *MockSenatus {
 	}
 }
 
+func (m *MockSenatus) AddPublicKeys(ids []id.KramaID, publicKeys [][]byte) error {
+	for index, kramaID := range ids {
+		m.publicKeys[kramaID] = publicKeys[index]
+	}
+
+	return nil
+}
+
 func (m *MockSenatus) UpdatePublicKey(key id.KramaID, pk []byte) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
@@ -652,25 +659,6 @@ func NewMockContract(t *testing.T, kramaIDs []id.KramaID, publicKeys [][]byte) *
 	}
 
 	return mockContract
-}
-
-func retrievePublicKeys(t *testing.T, contract *MockContract) {
-	t.Helper()
-
-	RetrievePublicKeys = func(ids []id.KramaID, client *http.Client, logger hclog.Logger) (keys [][]byte, err error) {
-		publicKeys := make([][]byte, 0)
-		for _, kramaID := range ids {
-			if publicKey, ok := contract.publicKeys[kramaID]; ok {
-				publicKeys = append(publicKeys, publicKey)
-
-				continue
-			}
-
-			return nil, types.ErrPublicKeyNotFound
-		}
-
-		return publicKeys, nil
-	}
 }
 
 type createLogicObjectParams struct {

@@ -407,6 +407,12 @@ func (p *PersistenceManager) HasTesseract(tsHash types.Hash) bool {
 	return exists
 }
 
+func (p *PersistenceManager) HasTesseractAt(addr types.Address, height uint64) bool {
+	_, err := p.GetTesseractHeightEntry(addr, height)
+
+	return err == nil
+}
+
 func (p *PersistenceManager) GetTesseractHeightEntry(addr types.Address, height uint64) ([]byte, error) {
 	return p.ReadEntry(tesseractHeightKey(addr, height))
 }

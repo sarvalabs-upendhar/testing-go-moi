@@ -163,9 +163,10 @@ func (c *Client) Call(
 // The kramaID parameter represents the unique ID given to each p2p host node
 // The args parameter represents the service's method args and must be of
 // exported or builtin type. The reply type will be used to provide a response
-// and must be a pointer to an exported or builtin type. Otherwise a panic
+// and must be a pointer to an exported or builtin type. Otherwise, a panic
 // will occur.
 func (c *Client) MoiCall(
+	ctx context.Context,
 	kramaID id.KramaID,
 	svcName, svcMethod string,
 	args, reply interface{},
@@ -204,8 +205,6 @@ func (c *Client) MoiCall(
 			c.logger.Warn("by-passing senatus")
 		}
 	}
-
-	ctx := context.Background()
 
 	return c.CallContext(ctx, p, svcName, svcMethod, args, reply, ttl)
 }

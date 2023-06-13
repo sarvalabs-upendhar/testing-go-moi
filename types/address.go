@@ -11,14 +11,16 @@ const MOITokenSymbol = "MOI-TOKEN"
 var (
 	GenesisIxHash   = GetHash([]byte("Genesis Interaction"))
 	SargaLogicID    = NewLogicIDv0(true, false, false, false, 0, SargaAddress)
+	GuardianLogicID = NewLogicIDv0(true, false, false, false, 0, GuardianLogicAddr)
 	MOITokenAssetID = NewAssetIDv0(false, false, 0, 0, MOITokenAddress)
 )
 
 var (
 	SargaAddress        = CreateAddressFromString("sargaAccount")
 	StakingContractAddr = CreateAddressFromString("staking-contract")
+	GuardianLogicAddr   = CreateAddressFromString("guardian-contract")
 	MOITokenAddress     = CreateAddressFromString(MOITokenSymbol)
-	GenesisLogicAddrs   = []Address{StakingContractAddr}
+	GenesisLogicAddrs   = []Address{StakingContractAddr, GuardianLogicAddr}
 )
 
 const AddressLength = 32

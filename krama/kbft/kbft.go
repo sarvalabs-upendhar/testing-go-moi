@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	MaxBFTimeout = 20 * time.Second
+	MaxBFTimeout = 15 * time.Second
 )
 
 type vault interface {
@@ -175,14 +175,14 @@ func (kbft *KBFT) handler(maxSteps int) error {
 			return kbft.ctx.Err()
 
 		case msg := <-kbft.inboundMsgChan:
-			kbft.logger.Trace("Handling external Msg", "sender", msg.PeerID)
+			kbft.logger.Debug("Handling external Msg", "sender", msg.PeerID)
 
 			if err := kbft.handleMsg(msg); err != nil {
 				kbft.logger.Error("Error handling external message", "sender", msg.PeerID)
 			}
 
 		case msg := <-kbft.selfMsgChan:
-			kbft.logger.Debug("Handling internal Msg", msg.Message)
+			kbft.logger.Debug("Handling internal Msg")
 
 			if err := kbft.wal.WriteSync(msg, kbft.ics.ClusterID); err != nil {
 				kbft.logger.Error("Error Writing to WAL")

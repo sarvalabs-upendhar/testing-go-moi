@@ -91,9 +91,9 @@ func (m *MockServer) GetKramaID() id.KramaID {
 	panic("implement me")
 }
 
-func (m *MockServer) getPeers() []id.KramaID {
-	m.peersLock.RLock()
-	defer m.peersLock.RUnlock()
-
-	return m.peers
-}
+// func (m *MockServer) getPeers() []id.KramaID {
+//	m.peersLock.RLock()
+//	defer m.peersLock.RUnlock()
+//
+//	return m.peers
+// }

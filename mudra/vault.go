@@ -16,6 +16,9 @@ import (
 
 const (
 	DefaultMOIWalletPath = "m/44'/6174'/0'/0/1"
+	DefaultMOIIDPath     = "m/44'/6174'/0'/0/0"
+	GuardianMode         = 0
+	UserMode             = 1
 )
 
 type KramaVault struct {
@@ -25,6 +28,7 @@ type KramaVault struct {
 	Address       types.Address
 	mnemonic      poi.Mnemonic
 }
+
 type VaultConfig struct {
 	DataDir      string
 	NodePassword string
@@ -78,7 +82,7 @@ func NewVault(cfg *VaultConfig, validatorType moinode.MoiNodeType, kramaIDVersio
 
 	mnemonic := poi.Mnemonic{}
 
-	if cfg.Mode == 0 {
+	if cfg.Mode == GuardianMode {
 		nodeKeystore, err := poi.GetKeystore(cfg.DataDir)
 		if err != nil {
 			return nil, err
@@ -157,6 +161,15 @@ func (vault *KramaVault) SetKramaID(id kramaid.KramaID) {
 
 func (vault *KramaVault) MOiID() (string, error) {
 	return vault.kramaID.MoiID()
+}
+
+func (vault *KramaVault) GetPublicKeyAt(path string) ([]byte, error) {
+	_, publicKey, err := poi.GetPrivateKeyAtPath(vault.mnemonic.String(), path)
+	if err != nil {
+		return nil, err
+	}
+
+	return publicKey, nil
 }
 
 func (vault *KramaVault) Sign(data []byte, sigType common.SigType, signOptions ...SignOption) ([]byte, error) {
@@ -308,7 +321,7 @@ func GetSignature(bz []byte, mnemonic string) (string, error) {
 		InMemory:   true,
 	}
 
-	vault, err := NewVault(cfg, moinode.MoiFullNode, 1)
+	vault, err := NewVault(cfg, moinode.MoiFullNode, UserMode)
 	if err != nil {
 		return "", err
 	}

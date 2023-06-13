@@ -111,7 +111,7 @@ func (i *ICSNodeSet) GetIndex(peerID kramaid.KramaID) (int32, bool) {
 		}
 
 		for j, kramaID := range set.Ids {
-			if kramaID == peerID {
+			if kramaID == peerID && set.Responses.GetIndex(j) {
 				return int32(offset + j), set.Responses.GetIndex(j)
 			}
 		}

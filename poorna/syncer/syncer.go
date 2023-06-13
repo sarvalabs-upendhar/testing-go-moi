@@ -110,6 +110,7 @@ type store interface {
 		address types.Address,
 		sinceTS uint64,
 	) (*types.Snapshot, error)
+	HasTesseractAt(addr types.Address, height uint64) bool
 }
 
 type Syncer struct {
@@ -566,6 +567,7 @@ func (s *Syncer) findLatestHeightAndBestPeers(addr types.Address, localHeight ui
 	for _, kramaID := range s.network.GetPeers() {
 		resp := new(LatestAccountInfo)
 		if err := s.rpcClient.MoiCall(
+			context.Background(),
 			kramaID,
 			"SYNCRPC",
 			"GetLatestAccountInfo",
@@ -611,6 +613,7 @@ func (s *Syncer) chooseBestSyncPeer(job *SyncJob) (id.KramaID, error) {
 	for _, kramaID := range s.network.GetPeers() {
 		resp := new(LatestAccountInfo)
 		if err := s.rpcClient.MoiCall(
+			context.Background(),
 			kramaID,
 			"SYNCRPC",
 			"GetLatestAccountInfo",
@@ -634,29 +637,42 @@ func (s *Syncer) chooseBestSyncPeer(job *SyncJob) (id.KramaID, error) {
 
 // syncSystemAccount sends a sync request for the specified address and waits for it to complete within a given time.
 // If the sync does not complete within the specified time, an error is returned.
-func (s *Syncer) syncSystemAccount(address types.Address) ([]id.KramaID, error) {
-	bestHeight, bestPeers, err := s.findLatestHeightAndBestPeers(address, 0)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to fetch best peers and height")
-	}
+func (s *Syncer) syncSystemAccount(address ...types.Address) ([]id.KramaID, error) {
+	var (
+		bestPeers  []id.KramaID
+		bestHeight uint64
+		err        error
+	)
 
-	if err = s.NewSyncRequest(address, bestHeight, types.FullSync, bestPeers); err != nil {
-		return nil, err
-	}
-
-	ctx, cancel := context.WithTimeout(s.ctx, time.Duration(5000+(bestHeight*2000))*time.Millisecond)
-	defer cancel()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(200 * time.Millisecond):
+	for _, addr := range address {
+		bestHeight, bestPeers, err = s.findLatestHeightAndBestPeers(addr, 0)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to fetch best peers and height")
 		}
 
-		metaInfo, err := s.db.GetAccountMetaInfo(types.SargaAddress)
-		if err == nil && metaInfo.Height == bestHeight {
-			break
+		if err = s.NewSyncRequest(addr, bestHeight, types.FullSync, bestPeers); err != nil {
+			return nil, err
+		}
+
+		err = func() error {
+			ctx, cancel := context.WithTimeout(s.ctx, time.Duration(5000+(bestHeight*2000))*time.Millisecond)
+			defer cancel()
+
+			for {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(200 * time.Millisecond):
+				}
+
+				metaInfo, err := s.db.GetAccountMetaInfo(addr)
+				if err == nil && metaInfo.Height == bestHeight {
+					return nil
+				}
+			}
+		}()
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -676,7 +692,7 @@ func (s *Syncer) initSync() error {
 	}
 
 	// Sync all system accounts
-	bestPeers, err := s.syncSystemAccount(types.SargaAddress)
+	bestPeers, err := s.syncSystemAccount(types.GuardianLogicAddr, types.SargaAddress)
 	if err != nil {
 		s.logger.Error("Failed to sync sarga account", "error", err)
 
@@ -1106,8 +1122,11 @@ func (s *Syncer) syncLattice(
 	)
 
 	if nextTS != nil {
-		if int64(nextTS.tesseract.Height()-(startHeight+1)) <= 0 {
-			return nil
+		// check if we have tesseract for start height, if not sync from the start height
+		if s.db.HasTesseractAt(job.address, startHeight) || nextTS.tesseract.Height() == startHeight {
+			if int64(nextTS.tesseract.Height()-(startHeight+1)) <= 0 {
+				return nil
+			}
 		}
 
 		endHeight = nextTS.tesseract.Height() - 1
@@ -1177,18 +1196,18 @@ func (s *Syncer) syncLattice(
 					return errors.New("receiver channel closed")
 				}
 
-				if msg.Tesseract.Height() >= startHeight && msg.Tesseract.Height() <= endHeight {
-					requiredTesseractCount--
-				}
-
-				if job.tesseractQueue.Has(msg.Tesseract.Height()) {
-					continue
-				}
-
 				tsInfo, err := s.tesseractInfoFromTesseractMsg(msg)
 				if err != nil {
 					s.logger.Error("Failed to parse tesseract info from msg", "error", err)
 
+					continue
+				}
+
+				if tsInfo.tesseract.Height() >= startHeight && tsInfo.tesseract.Height() <= endHeight {
+					requiredTesseractCount--
+				}
+
+				if job.tesseractQueue.Has(tsInfo.tesseract.Height()) {
 					continue
 				}
 
@@ -1596,14 +1615,14 @@ func (s *Syncer) tesseractHandler(msg *pubsub.Message) error {
 		return err
 	}
 
-	exists := s.db.HasTesseract(tsMsg.Tesseract.Hash())
-	if exists {
-		return types.ErrAlreadyKnown
-	}
-
 	ts, err := tsMsg.GetTesseract()
 	if err != nil {
 		return err
+	}
+
+	exists := s.db.HasTesseract(ts.Hash())
+	if exists {
+		return types.ErrAlreadyKnown
 	}
 
 	if !s.tesseractRegistry.Contains(ts.Hash()) {

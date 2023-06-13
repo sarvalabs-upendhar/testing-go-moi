@@ -1249,19 +1249,9 @@ func TestPublicCoreAPI_GetStorageAt(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name: "returns error if logic id is invalid",
-			args: &ptypes.GetStorageArgs{
-				LogicID: types.LogicID(tests.RandomHash(t).String()).String(),
-				Options: ptypes.TesseractNumberOrHash{
-					TesseractHash: &randomHash,
-				},
-			},
-			expectedError: types.ErrInvalidLogicID,
-		},
-		{
 			name: "returns error if failed to fetch logic manifest",
 			args: &ptypes.GetStorageArgs{
-				LogicID: logicIDWithoutState.String(),
+				LogicID: logicIDWithoutState,
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
 				},
@@ -1271,8 +1261,8 @@ func TestPublicCoreAPI_GetStorageAt(t *testing.T) {
 		{
 			name: "fetched logic manifest successfully",
 			args: &ptypes.GetStorageArgs{
-				LogicID:    logicID.String(),
-				StorageKey: keys[0],
+				LogicID:    logicID,
+				StorageKey: types.Hex2Bytes(keys[0]),
 				Options: ptypes.TesseractNumberOrHash{
 					TesseractHash: &tsHash,
 				},

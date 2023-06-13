@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -95,29 +96,7 @@ func StoreKeystore(privKeyBytesOfValidator []byte, nodePassPhrase, dataDir strin
 
 	path := filepath.Join(dataDir, "/keystore.json")
 
-	f, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-
-	bytesWritten, err := f.Write(ksPayloadInBytes)
-	if err != nil {
-		err := f.Close()
-		if err != nil {
-			return errors.New("error closing the file " + err.Error())
-		}
-
-		return err
-	}
-
-	if bytesWritten > 0 {
-		err = f.Close()
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return ioutil.WriteFile(path, ksPayloadInBytes, os.ModePerm)
 }
 
 // mParseInt is to parse the int/float64 to int, helps in KDF

@@ -42,6 +42,12 @@ func parseGenesisTestFlags(genesisTestCmd *cobra.Command) {
 		"path to genesis file",
 	)
 	genesisTestCmd.Flags().StringVar(
+		&GuardianLogicPath,
+		"guardian-path",
+		"artifact.json",
+		"path to guardian-logic file",
+	)
+	genesisTestCmd.Flags().StringVar(
 		&accountsFilePath,
 		"accounts-path",
 		"accounts.json",
@@ -130,6 +136,21 @@ func createTestGenesisFile() {
 	g := &types.GenesisFile{
 		Accounts: make([]types.AccountSetupArgs, 0, accCount),
 	}
+
+	guardianArtifact, err := genesis.ReadArtifactFile(GuardianLogicPath)
+	if err != nil {
+		common.Err(err)
+	}
+
+	g.AddLogic(
+		types.LogicSetupArgs{
+			Name:               guardianArtifact.Name,
+			Callsite:           guardianArtifact.Callsite,
+			Calldata:           guardianArtifact.Calldata,
+			Manifest:           guardianArtifact.Manifest,
+			BehaviouralContext: getKramaIDs(behaviouralNodesCount),
+			RandomContext:      getKramaIDs(randomNodesCount),
+		})
 
 	g.AddSargaAccount(types.AccountSetupArgs{
 		Address:            types.SargaAddress,

@@ -10,14 +10,14 @@ import (
 
 	maddr "github.com/multiformats/go-multiaddr"
 
-	kcrypto "github.com/sarvalabs/moichain/mudra"
+	"github.com/sarvalabs/moichain/mudra"
 	"github.com/sarvalabs/moichain/mudra/kramaid"
 )
 
 type Config struct {
 	NodeType       int
 	KramaIDVersion int
-	Vault          *kcrypto.VaultConfig
+	Vault          *mudra.VaultConfig
 	Network        *NetworkConfig
 	Chain          *ChainConfig
 	Consensus      *ConsensusConfig
@@ -107,10 +107,10 @@ func DefaultConfig(path string) *Config {
 	c := &Config{
 		NodeType:       7,
 		KramaIDVersion: 1,
-		Vault: &kcrypto.VaultConfig{
+		Vault: &mudra.VaultConfig{
 			DataDir: path,
+			Mode:    mudra.GuardianMode,
 		},
-
 		Network: &NetworkConfig{
 			ListenAddresses:   make([]maddr.Multiaddr, 0),
 			BootstrapPeers:    make([]maddr.Multiaddr, 0),

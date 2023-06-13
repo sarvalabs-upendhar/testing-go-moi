@@ -42,4 +42,5 @@ const (
 
 const (
 	DefaultMoiWalletPath = mudra.DefaultMOIWalletPath
+	DefaultMOIIDPath     = mudra.DefaultMOIIDPath
 )

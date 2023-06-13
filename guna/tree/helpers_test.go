@@ -97,7 +97,7 @@ func checkForReferences(t *testing.T, kht, copiedKHT *KramaHashTree) {
 func checkForPreImage(t *testing.T, key []byte, hashTree *KramaHashTree, shouldExist bool) {
 	t.Helper()
 
-	v, ok := hashTree.preImages[hashTree.HashKey(key)]
+	v, ok := hashTree.preImages[HashKey(key)]
 	if !shouldExist {
 		require.False(t, ok)
 
@@ -125,7 +125,7 @@ func checkForDeltaNodes(t *testing.T, key, value []byte, hashTree *KramaHashTree
 func checkForEntry(t *testing.T, key, value []byte, hashTree *KramaHashTree, shouldExist bool) {
 	t.Helper()
 
-	dbValue, err := hashTree.tree.GetDescend(hashTree.HashKey(key).Bytes())
+	dbValue, err := hashTree.tree.GetDescend(HashKey(key).Bytes())
 	if !shouldExist {
 		require.Empty(t, dbValue)
 

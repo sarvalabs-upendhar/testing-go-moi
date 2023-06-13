@@ -135,7 +135,7 @@ func ReadManifest(filePath string) ([]byte, error) {
 	return encoded, nil
 }
 
-func readArtifactFile(path string) (*Artifact, error) {
+func ReadArtifactFile(path string) (*Artifact, error) {
 	ar := new(Artifact)
 
 	file, err := os.ReadFile(path)

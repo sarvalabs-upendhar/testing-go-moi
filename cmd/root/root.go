@@ -3,6 +3,8 @@ package root
 import (
 	"os"
 
+	"github.com/sarvalabs/moichain/cmd/register"
+
 	"github.com/spf13/cobra"
 
 	"github.com/sarvalabs/moichain/cmd/bootnode"
@@ -31,11 +33,12 @@ func NewRootCommand() *Command {
 
 func (rc *Command) RegisterSubCommands() {
 	rc.baseCmd.AddCommand(
-		server.GetCommand(),
+		server.GetServerCommand(),
 		bootnode.GetCommand(),
 		test.GetCommand(),
 		logiclab.GetCommand(),
 		genesis.GetCommand(),
+		register.GetCommand(),
 	)
 }
 

@@ -3,6 +3,7 @@ package krama
 import (
 	"context"
 	"crypto/rand"
+	"fmt"
 	"math"
 	"math/big"
 	"sync"
@@ -43,7 +44,7 @@ const (
 
 	ObserverNodesDelta float64 = 0.2
 
-	ICSTimeOutDuration = 4500 * time.Millisecond
+	ICSTimeOutDuration = 3500 * time.Millisecond
 
 	BehaviouralContextSize = 1
 	RandomContextSize      = 1
@@ -57,7 +58,7 @@ type lattice interface {
 type transport interface {
 	InitClusterCommunication(ctx context.Context, slot *ktypes.Slot) error
 	RegisterRPCService(serviceID protocol.ID, serviceName string, service interface{}) error
-	Call(kramaID id.KramaID, svcName, svcMethod string, args, response interface{}) error
+	Call(ctx context.Context, kramaID id.KramaID, svcName, svcMethod string, args, response interface{}) error
 	BroadcastTesseract(msg *ptypes.TesseractMessage) error
 }
 
@@ -361,12 +362,12 @@ func (k *Engine) acquireContextLock(ctx context.Context, slot *ktypes.Slot) erro
 
 	observerKeys, err := k.state.GetPublicKeys(observerNodes...)
 	if err != nil {
-		return types.ErrKramaIDNotFound
+		return errors.Wrap(err, "failed to fetch public key")
 	}
 
 	randomKeys, err := k.state.GetPublicKeys(operatorRandomNodes...)
 	if err != nil {
-		return types.ErrKramaIDNotFound
+		return errors.Wrap(err, "failed to fetch public key")
 	}
 
 	go k.sendICSRequestWithBound(
@@ -525,14 +526,14 @@ func (k *Engine) handleReq(req Request) {
 	)
 	defer span.End()
 
-	if !k.slots.AreSlotsAvailable(req.slotType) {
-		sendResponse(req, types.ErrSlotsFull)
+	if slot := k.slots.GetSlot(clusterID); slot != nil {
+		sendResponse(req, nil)
 
 		return
 	}
 
-	if slot := k.slots.GetSlot(clusterID); slot != nil {
-		sendResponse(req, nil)
+	if !k.slots.AreSlotsAvailable(req.slotType) {
+		sendResponse(req, types.ErrSlotsFull)
 
 		return
 	}
@@ -778,7 +779,7 @@ func (k *Engine) fetchIxAccounts(ctx context.Context, ix *types.Interaction) (kt
 }
 
 func (k *Engine) sendICSRequestWithBound(
-	ctx context.Context,
+	parentContext context.Context,
 	setType types.IcsSetType,
 	requiredCount int,
 	finalWaitGroup *sync.WaitGroup,
@@ -787,7 +788,7 @@ func (k *Engine) sendICSRequestWithBound(
 	keys [][]byte,
 	msg ptypes.ICSRequest,
 ) {
-	_, span := tracing.Span(ctx, "Krama.KramaEngine", "sendICSRequestWithBound")
+	ctx, span := tracing.Span(parentContext, "KramaEngine", fmt.Sprintf("ics request set-type %d", setType))
 	defer span.End()
 
 	var wg sync.WaitGroup
@@ -842,6 +843,7 @@ func (k *Engine) sendICSRequestWithBound(
 			requestTS := time.Now()
 
 			if err := k.transport.Call(
+				ctx,
 				kramaID,
 				"ICSRPC",
 				"ICSRequest",
@@ -898,7 +900,7 @@ func (k *Engine) sendICSRequest(
 	msg ptypes.ICSRequest,
 	randomNodes chan []id.KramaID,
 ) {
-	_, span := tracing.Span(ctx, "Krama.KramaEngine", "sendICSRequest")
+	_, span := tracing.Span(ctx, "KramaEngine", fmt.Sprintf("ics request set-type %d", setType))
 	defer func() {
 		span.End()
 		finalWaitGroup.Done()
@@ -952,6 +954,7 @@ func (k *Engine) sendICSRequest(
 			requestTS := time.Now()
 
 			if err := k.transport.Call(
+				ctx,
 				kramaID,
 				"ICSRPC",
 				"ICSRequest",
@@ -1283,13 +1286,18 @@ func (k *Engine) finalizedTesseractHandler(tesseracts []*types.Tesseract) error 
 
 	for _, ts := range tesseracts {
 		msg := &ptypes.TesseractMessage{
-			Tesseract: ts.Canonical(),
-			Sender:    k.selfID,
-			Ixns:      rawIxns,
-			Receipts:  rawReceipts,
+			RawTesseract: make([]byte, 0),
+			Sender:       k.selfID,
+			Ixns:         rawIxns,
+			Receipts:     rawReceipts,
 			Delta: map[types.Hash][]byte{
 				ts.ICSHash(): clusterInfo.GetDirty()[ts.ICSHash()],
 			},
+		}
+
+		msg.RawTesseract, err = ts.Canonical().Bytes()
+		if err != nil {
+			return err
 		}
 
 		if err = k.transport.BroadcastTesseract(msg); err != nil {

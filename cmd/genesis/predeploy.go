@@ -3,6 +3,7 @@ package genesis
 import (
 	"github.com/sarvalabs/moichain/cmd/common"
 	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -20,7 +21,7 @@ func GetPreDeployCommand() *cobra.Command {
 }
 
 func runPreDeployCommand(cmd *cobra.Command, args []string) {
-	artifact, err := readArtifactFile(artifact)
+	artifact, err := ReadArtifactFile(artifact)
 	if err != nil {
 		common.Err(err)
 	}
@@ -70,13 +71,13 @@ func addGenesisLogic(artifact *Artifact) {
 		behaviourNodes, randomNodes = getContextNodes(instancesFilePath, DefaultBehaviouralCount, DefaultRandomCount)
 	}
 
-	genesis.AddLogic(types.GenesisLogic{
+	genesis.AddLogic(types.LogicSetupArgs{
 		Name:               artifact.Name,
 		Callsite:           artifact.Callsite,
 		Calldata:           artifact.Calldata,
 		Manifest:           artifact.Manifest,
-		BehaviouralContext: behaviourNodes,
-		RandomContext:      randomNodes,
+		BehaviouralContext: utils.KramaIDFromString(behaviourNodes),
+		RandomContext:      utils.KramaIDFromString(randomNodes),
 	})
 
 	if err = WriteToGenesisFile(genesisFilePath, genesis); err != nil {

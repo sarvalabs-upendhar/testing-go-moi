@@ -1,15 +1,14 @@
 package guna
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
-	"encoding/json"
-	"io/ioutil"
-	"log"
 	"math/big"
 	"net/http"
 	"sync"
+
+	"github.com/sarvalabs/go-polo"
+	"github.com/sarvalabs/moichain/jug/pisa"
 
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
@@ -23,7 +22,6 @@ import (
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/telemetry/tracing"
 	"github.com/sarvalabs/moichain/types"
-	"github.com/sarvalabs/moichain/utils"
 )
 
 const (
@@ -943,6 +941,8 @@ func (sm *StateManager) GetPublicKeys(ids ...id.KramaID) ([][]byte, error) {
 					if err != nil {
 						keys, err := sm.GetPublicKeyFromContract(id)
 						if err != nil {
+							sm.logger.Error("Failed to fetch public key", "id", id)
+
 							return err
 						}
 
@@ -974,7 +974,33 @@ func (sm *StateManager) GetPublicKeys(ids ...id.KramaID) ([][]byte, error) {
 }
 
 func (sm *StateManager) GetPublicKeyFromContract(ids ...id.KramaID) (keys [][]byte, err error) {
-	return RetrievePublicKeys(ids, sm.client, sm.logger)
+	pk := make([][]byte, 0, len(ids))
+
+	object, err := sm.getStateObject(types.GuardianLogicAddr, types.NilHash)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := object.GetStorageEntry(types.GuardianLogicID, pisa.SlotHash(gtypes.GuardianSLot))
+	if err != nil {
+		return nil, err
+	}
+
+	var guardians gtypes.Guardians
+	if err = polo.Depolorize(&guardians, data); err != nil {
+		return nil, errors.Wrap(err, "failed to depolorize guardians")
+	}
+
+	for _, kramaID := range ids {
+		guardian, ok := guardians[string(kramaID)]
+		if !ok {
+			return nil, errors.New("public key not found")
+		}
+
+		pk = append(pk, guardian.PublicKey)
+	}
+
+	return pk, nil
 }
 
 // IsLogicRegistered checks if the logicID is registered with the account.
@@ -1147,55 +1173,6 @@ func (sm *StateManager) GetLogicManifest(logicID types.LogicID, stateHash types.
 	}
 
 	return logicManifest, nil
-}
-
-var RetrievePublicKeys = func(ids []id.KramaID, client *http.Client, logger hclog.Logger) (keys [][]byte, err error) {
-	data, err := json.Marshal(Request{utils.KramaIDToString(ids)})
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("POST", "http://91.107.196.74/api/fetchPublicKeys", bytes.NewBuffer(data))
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", "application/json")
-
-	response, err := client.Do(req)
-	if err != nil {
-		logger.Error("Api fetch failed", "error", err, "kramaIDs", ids)
-
-		return nil, err
-	}
-
-	body, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		log.Panicln(err)
-	}
-
-	defer response.Body.Close()
-
-	if response.StatusCode != 200 {
-		logger.Error("Http request failed", response.StatusCode, string(body))
-	}
-
-	data1 := new(Response)
-
-	if err = json.Unmarshal(body, data1); err != nil {
-		log.Panicln(err)
-	}
-
-	for _, v := range data1.Data {
-		str, err := hex.DecodeString(v)
-		if err != nil {
-			return nil, err
-		}
-
-		keys = append(keys, str)
-	}
-
-	return keys, nil
 }
 
 func doesRootMatch(root1 types.RootNode, root2 types.RootNode) (bool, error) {

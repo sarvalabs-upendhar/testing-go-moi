@@ -21,7 +21,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	cmdCommon "github.com/sarvalabs/moichain/cmd/common"
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/jug/engineio"
 	"github.com/sarvalabs/moichain/jug/pisa"
@@ -55,7 +54,7 @@ func RandomAddressWithMnemonic(t *testing.T) (types.Address, string) {
 
 	_, publicKey, err := poi.GetPrivateKeyAtPath(mnemonic, common.DefaultMoiWalletPath)
 	if err != nil {
-		cmdCommon.Err(err)
+		require.NoError(t, err)
 	}
 
 	return types.BytesToAddress(publicKey), mnemonic
@@ -548,6 +547,9 @@ func CreateIX(t *testing.T, params *CreateIxParams) *types.Interaction {
 	data := &types.IxData{
 		Input: types.IxInput{
 			Type: types.IxValueTransfer,
+			TransferValues: map[types.AssetID]*big.Int{
+				types.AssetID("add"): big.NewInt(1),
+			},
 		},
 	}
 

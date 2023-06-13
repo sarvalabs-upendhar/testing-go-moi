@@ -80,8 +80,8 @@ type DebugArgs struct {
 }
 
 type GetStorageArgs struct {
-	LogicID    string                `json:"logic_id"`
-	StorageKey string                `json:"storage_key"`
+	LogicID    types.LogicID         `json:"logic_id"`
+	StorageKey hexutil.Bytes         `json:"storage_key"`
 	Options    TesseractNumberOrHash `json:"options"`
 }
 

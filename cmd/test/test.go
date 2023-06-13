@@ -19,4 +19,5 @@ func setupSubCommands(cmd *cobra.Command) {
 	cmd.AddCommand(GetInitCommand())
 	cmd.AddCommand(GetAccountCommand())
 	cmd.AddCommand(GetGenesisCommand())
+	cmd.AddCommand(GetFaucetCommand())
 }

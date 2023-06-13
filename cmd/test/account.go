@@ -1,13 +1,14 @@
 package test
 
 import (
-	"github.com/spf13/cobra"
+	"log"
 
 	cmdCommon "github.com/sarvalabs/moichain/cmd/common"
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/mudra/poi"
 	"github.com/sarvalabs/moichain/types"
+	"github.com/spf13/cobra"
 )
 
 func GetAccountCommand() *cobra.Command {
@@ -45,7 +46,16 @@ func runAccountCommand(cmd *cobra.Command, args []string) {
 	for i := 0; i < count; i++ {
 		mnemonic := poi.GenerateRandMnemonic().String()
 
-		_, publicKey, err := poi.GetPrivateKeyAtPath(mnemonic, common.DefaultMoiWalletPath)
+		_, publicKey, err := poi.GetPrivateKeyAtPath(mnemonic, common.DefaultMOIIDPath)
+		if err != nil {
+			cmdCommon.Err(err)
+		}
+
+		log.Println(publicKey)
+
+		log.Println("MOIID address", types.BytesToAddress(publicKey))
+
+		_, publicKey, err = poi.GetPrivateKeyAtPath(mnemonic, common.DefaultMoiWalletPath)
 		if err != nil {
 			cmdCommon.Err(err)
 		}

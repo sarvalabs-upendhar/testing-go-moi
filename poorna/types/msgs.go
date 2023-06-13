@@ -313,11 +313,11 @@ type SyncReputationInfo struct {
 }
 
 type TesseractMessage struct {
-	Sender    kramaid.KramaID
-	Tesseract *types.CanonicalTesseract
-	Ixns      []byte
-	Receipts  []byte
-	Delta     map[types.Hash][]byte
+	Sender       kramaid.KramaID
+	RawTesseract []byte
+	Ixns         []byte
+	Receipts     []byte
+	Delta        map[types.Hash][]byte
 }
 
 func (tm *TesseractMessage) Bytes() ([]byte, error) {
@@ -341,7 +341,13 @@ func (tm *TesseractMessage) GetTesseract() (*types.Tesseract, error) {
 	ixns := new(types.Interactions)
 	receipts := new(types.Receipts)
 
-	if tm.Ixns != nil && !tm.Tesseract.InteractionHash().IsNil() {
+	ts := new(types.CanonicalTesseract)
+
+	if err := ts.FromBytes(tm.RawTesseract); err != nil {
+		return nil, err
+	}
+
+	if tm.Ixns != nil && !ts.InteractionHash().IsNil() {
 		if err := ixns.FromBytes(tm.Ixns); err != nil {
 			if !errors.Is(err, polo.ErrNullPack) {
 				return nil, err
@@ -349,7 +355,7 @@ func (tm *TesseractMessage) GetTesseract() (*types.Tesseract, error) {
 		}
 	}
 
-	if tm.Receipts != nil && !tm.Tesseract.ReceiptHash().IsNil() {
+	if tm.Receipts != nil && !ts.ReceiptHash().IsNil() {
 		if err := receipts.FromBytes(tm.Receipts); err != nil {
 			if !errors.Is(err, polo.ErrNullPack) {
 				return nil, err
@@ -358,12 +364,12 @@ func (tm *TesseractMessage) GetTesseract() (*types.Tesseract, error) {
 	}
 
 	return types.NewTesseract(
-		tm.Tesseract.Header,
-		tm.Tesseract.Body,
+		ts.Header,
+		ts.Body,
 		*ixns,
 		*receipts,
-		tm.Tesseract.Seal,
-		tm.Tesseract.Sealer,
+		ts.Seal,
+		ts.Sealer,
 	), nil
 }
 

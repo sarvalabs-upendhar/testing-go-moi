@@ -48,21 +48,21 @@ func (h ReceiptAccHashes) SetStateHash(addr Address, stateHash Hash) {
 }
 
 func (h ReceiptAccHashes) ContextHash(addr Address) Hash {
-	ctxHash, ok := h[addr]
+	hashes, ok := h[addr]
 	if !ok {
 		return NilHash
 	}
 
-	return ctxHash.ContextHash
+	return hashes.ContextHash
 }
 
 func (h ReceiptAccHashes) StateHash(addr Address) Hash {
-	ctxHash, ok := h[addr]
+	hashes, ok := h[addr]
 	if !ok {
 		return NilHash
 	}
 
-	return ctxHash.StateHash
+	return hashes.StateHash
 }
 
 type Receipt struct {

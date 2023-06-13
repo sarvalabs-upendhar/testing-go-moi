@@ -10,7 +10,7 @@ import (
 	"github.com/sarvalabs/moichain/utils"
 )
 
-const MaxWaitCounter = 20
+const MaxWaitCounter = 10
 
 var (
 	ErrNonceTooLow   = errors.New("nonce too low")

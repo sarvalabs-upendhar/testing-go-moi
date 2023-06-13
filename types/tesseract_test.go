@@ -27,7 +27,6 @@ func TestCopyHeader(t *testing.T) {
 			expectedHeader := test.header
 
 			header := test.header.Copy()
-
 			require.Equal(t, expectedHeader, header)
 			require.NotEqual(t,
 				reflect.ValueOf(test.header.Extra.CommitSignature).Pointer(),

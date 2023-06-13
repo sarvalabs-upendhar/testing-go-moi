@@ -2,9 +2,10 @@ package krama
 
 import (
 	"context"
+	"fmt"
 	"log"
-	"math/rand"
-	"time"
+
+	"github.com/sarvalabs/moichain/telemetry/tracing"
 
 	"github.com/hashicorp/go-hclog"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -15,7 +16,6 @@ import (
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/poorna/moirpc"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
-	"github.com/sarvalabs/moichain/types"
 )
 
 const (
@@ -78,10 +78,13 @@ func (t *Transport) InitClusterCommunication(ctx context.Context, slot *ktypes.S
 		return errors.Wrap(err, "failed to subscribe")
 	}
 
-	// Check whether the slot is a validator slot
-	if slot.SlotType == ktypes.ValidatorSlot {
-		randomICSNodes = t.connectRandomPeers(slot)
-	}
+	/*
+	   TODO: This is causing delay in ICS creation, need to improve this
+	   // Check whether the slot is a validator slot
+	   	if slot.SlotType == ktypes.ValidatorSlot {
+	   		randomICSNodes = t.connectRandomPeers(ctx, slot)
+	   	}
+	*/
 
 	go func() {
 		for {
@@ -121,12 +124,22 @@ func (t *Transport) InitClusterCommunication(ctx context.Context, slot *ktypes.S
 	return nil
 }
 
-func (t *Transport) Call(kramaID id.KramaID, svcName, svcMethod string, args, response interface{}) error {
+func (t *Transport) Call(
+	ctx context.Context,
+	kramaID id.KramaID,
+	svcName, svcMethod string,
+	args, response interface{},
+) error {
 	if t.rpcClient == nil {
 		return errors.New("rpc client not initiated")
 	}
 
-	return t.rpcClient.MoiCall(kramaID, svcName, svcMethod, args, response, kramaMoirpcStreamTTL)
+	_, span := tracing.Span(ctx, "KramaEngine", fmt.Sprintf("RPC call to %s", kramaID))
+	defer func() {
+		span.End()
+	}()
+
+	return t.rpcClient.MoiCall(ctx, kramaID, svcName, svcMethod, args, response, kramaMoirpcStreamTTL)
 }
 
 func (t *Transport) BroadcastTesseract(msg *ptypes.TesseractMessage) error {
@@ -138,7 +151,11 @@ func (t *Transport) BroadcastTesseract(msg *ptypes.TesseractMessage) error {
 	return t.network.Broadcast(TesseractTopic, rawData)
 }
 
-func (t *Transport) connectRandomPeers(slot *ktypes.Slot) []id.KramaID {
+/*
+func (t *Transport) connectRandomPeers(ctx context.Context, slot *ktypes.Slot) []id.KramaID {
+	_, span := tracing.Span(ctx, "Krama.KramaEngine", "connectRandomPeers")
+	defer span.End()
+
 	var randomICSNodes []id.KramaID
 
 	clusterInfo := slot.ClusterState()
@@ -149,7 +166,7 @@ func (t *Transport) connectRandomPeers(slot *ktypes.Slot) []id.KramaID {
 	/* If the icsNodes slice is not empty, then connect to the random ics nodes. Break the loop
 	either on successfully establishing a connection with three random ics nodes or on failure to
 	connect three random ics nodes even after looping through the entire icsNodes slice. In case
-	if the size of the icsNodes is less than three, then connect to the available nodes. */
+	if the size of the icsNodes is less than three, then connect to the available nodes.
 	counter := 0
 	for len(visitedNodes) < len(icsNodes) && counter < MinimumConnectionCount {
 		source := rand.NewSource(time.Now().UnixNano())
@@ -180,6 +197,7 @@ func (t *Transport) connectRandomPeers(slot *ktypes.Slot) []id.KramaID {
 
 	return randomICSNodes
 }
+*/
 
 func (t *Transport) disconnectRandomPeers(randomICSNodes []id.KramaID) {
 	// Disconnect the random peers which got connected while subscribing to the network

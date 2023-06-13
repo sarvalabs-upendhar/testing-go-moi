@@ -776,10 +776,10 @@ func (c *ChainManager) validateAssetAccountCreationArgs(assetAccounts ...types.A
 	return nil
 }
 
-func (c *ChainManager) validateLogicCreationArgs(logicAccounts ...types.GenesisLogic) error {
+func (c *ChainManager) validateLogicCreationArgs(logicAccounts ...types.LogicSetupArgs) error {
 	for _, acc := range logicAccounts {
 		if len(acc.Manifest) == 0 {
-			return errors.New("invalid call data")
+			return errors.New("invalid manifest")
 		}
 	}
 
@@ -924,7 +924,7 @@ func (c *ChainManager) ParseGenesisFile(path string) (
 	*types.AccountSetupArgs,
 	[]types.AccountSetupArgs,
 	[]types.AssetAccountSetupArgs,
-	[]types.GenesisLogic,
+	[]types.LogicSetupArgs,
 	error,
 ) {
 	genesisData := new(types.GenesisFile)
@@ -1099,7 +1099,7 @@ func (c *ChainManager) SetupSargaAccount(
 	sarga *types.AccountSetupArgs,
 	accounts []types.AccountSetupArgs,
 	assets []types.AssetAccountSetupArgs,
-	logics []types.GenesisLogic,
+	logics []types.LogicSetupArgs,
 ) (*guna.StateObject, error) {
 	stateObject := c.sm.CreateDirtyObject(types.SargaAddress, types.SargaAccount)
 
@@ -1152,7 +1152,7 @@ func (c *ChainManager) SetupNewAccount(info types.AccountSetupArgs) (*guna.State
 
 func (c *ChainManager) SetupGenesisLogics(
 	dirtyObjects map[types.Address]*guna.StateObject,
-	logics []types.GenesisLogic,
+	logics []types.LogicSetupArgs,
 ) ([]types.Hash, error) {
 	hashes := make([]types.Hash, len(logics))
 
@@ -1162,7 +1162,7 @@ func (c *ChainManager) SetupGenesisLogics(
 		payload := &types.LogicPayload{
 			Callsite: logic.Callsite,
 			Calldata: logic.Calldata,
-			Manifest: logic.Manifest,
+			Manifest: logic.Manifest.Bytes(),
 		}
 
 		if !types.Contains(types.GenesisLogicAddrs, logicAddr) {
@@ -1174,8 +1174,8 @@ func (c *ChainManager) SetupGenesisLogics(
 		// Create state object for the logic
 		stateObj := c.sm.CreateDirtyObject(logicAddr, types.LogicAccount)
 
-		behaviouralCtx := utils.KramaIDFromString(logic.BehaviouralContext)
-		randomCtx := utils.KramaIDFromString(logic.RandomContext)
+		behaviouralCtx := logic.BehaviouralContext
+		randomCtx := logic.RandomContext
 
 		_, err := stateObj.CreateContext(behaviouralCtx, randomCtx)
 		if err != nil {

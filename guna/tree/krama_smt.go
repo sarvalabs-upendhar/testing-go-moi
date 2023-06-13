@@ -91,7 +91,7 @@ func (kht *KramaHashTree) Get(key []byte) ([]byte, error) {
 	kht.mtx.RLock()
 	defer kht.mtx.RUnlock()
 
-	value, err := kht.tree.GetDescend(kht.HashKey(key).Bytes())
+	value, err := kht.tree.GetDescend(HashKey(key).Bytes())
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ func (kht *KramaHashTree) Set(key, value []byte) error {
 		return types.ErrInvalidValue
 	}
 
-	hashKey := kht.HashKey(key)
+	hashKey := HashKey(key)
 
 	if _, err := kht.tree.Update(hashKey.Bytes(), value); err != nil {
 		return err
@@ -134,7 +134,7 @@ func (kht *KramaHashTree) Delete(key []byte) error {
 	kht.mtx.Lock()
 	defer kht.mtx.Unlock()
 
-	hashKey := kht.HashKey(key)
+	hashKey := HashKey(key)
 
 	if _, err := kht.tree.Delete(hashKey.Bytes()); err != nil {
 		return err
@@ -241,7 +241,7 @@ func (kht *KramaHashTree) IsDirty() bool {
 	return kht.db.IsDirty()
 }
 
-func (kht *KramaHashTree) HashKey(key []byte) types.Hash {
+func HashKey(key []byte) types.Hash {
 	hasher := blake256.New()
 
 	hasher.Write(key)

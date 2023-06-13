@@ -11,7 +11,7 @@ import (
 type GenesisFile struct {
 	SargaAccount  AccountSetupArgs        `json:"sarga_account"`
 	Accounts      []AccountSetupArgs      `json:"accounts"`
-	Logics        []GenesisLogic          `json:"logics"`
+	Logics        []LogicSetupArgs        `json:"logics"`
 	AssetAccounts []AssetAccountSetupArgs `json:"asset_accounts"`
 }
 
@@ -64,7 +64,7 @@ func (g *GenesisFile) AddAccount(info AccountSetupArgs) {
 	g.Accounts = append(g.Accounts, info)
 }
 
-func (g *GenesisFile) AddLogic(logic GenesisLogic) {
+func (g *GenesisFile) AddLogic(logic LogicSetupArgs) {
 	g.Logics = append(g.Logics, logic)
 }
 
@@ -72,14 +72,14 @@ func (g *GenesisFile) AddAssetInfo(info AssetAccountSetupArgs) {
 	g.AssetAccounts = append(g.AssetAccounts, info)
 }
 
-type GenesisLogic struct {
+type LogicSetupArgs struct {
 	Name     string        `json:"name"`
 	Callsite string        `json:"callsite"`
 	Calldata hexutil.Bytes `json:"calldata"`
 	Manifest hexutil.Bytes `json:"manifest"`
 
-	BehaviouralContext []string `json:"behaviour_context"`
-	RandomContext      []string `json:"random_context"`
+	BehaviouralContext []kramaid.KramaID `json:"behaviour_context"`
+	RandomContext      []kramaid.KramaID `json:"random_context"`
 }
 
 type AccountSetupArgs struct {

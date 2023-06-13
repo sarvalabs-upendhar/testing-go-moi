@@ -177,6 +177,9 @@ func newTestInteraction(
 			Nonce:     uint64(nonce),
 			FuelPrice: big.NewInt(1),
 			FuelLimit: big.NewInt(1),
+			TransferValues: map[types.AssetID]*big.Int{
+				types.MOITokenAssetID: big.NewInt(1),
+			},
 		},
 	}
 

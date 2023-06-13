@@ -369,17 +369,12 @@ func (p *PublicCoreAPI) GetLogicManifest(args *ptypes.LogicManifestArgs) (hexuti
 
 // GetStorageAt returns the data associated with the given storage slot
 func (p *PublicCoreAPI) GetStorageAt(args *ptypes.GetStorageArgs) (hexutil.Bytes, error) {
-	logicID, err := utils.ValidateLogicID(args.LogicID)
+	ts, err := p.getTesseract(getTesseractArgs(args.LogicID.Address(), args.Options))
 	if err != nil {
 		return nil, err
 	}
 
-	ts, err := p.getTesseract(getTesseractArgs(logicID.Address(), args.Options))
-	if err != nil {
-		return nil, err
-	}
-
-	return p.sm.GetStorageEntry(logicID, types.FromHex(args.StorageKey), ts.StateHash())
+	return p.sm.GetStorageEntry(args.LogicID, args.StorageKey, ts.StateHash())
 }
 
 // GetLogicIDs will fetch the logic IDs from the logic tree

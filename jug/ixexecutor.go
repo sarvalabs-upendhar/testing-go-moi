@@ -1,7 +1,6 @@
 package jug
 
 import (
-	"log"
 	"math/big"
 
 	"github.com/pkg/errors"
@@ -203,8 +202,6 @@ func (executor *IxExecutor) Execute(ixs types.Interactions, delta types.ContextD
 			if err != nil {
 				return errors.Wrapf(err, "execution failed (%v)", ixtype)
 			}
-
-			log.Println("******", deployReceipt.LogicID)
 
 			if deployReceipt.Error != nil {
 				receipt.Status = types.ReceiptFailed

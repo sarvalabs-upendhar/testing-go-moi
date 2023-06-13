@@ -1703,7 +1703,7 @@ func TestParseGenesisFile(t *testing.T) {
 		path                 string
 		sargaAccount         types.AccountSetupArgs
 		genesisAccounts      []types.AccountSetupArgs
-		genesisLogics        []types.GenesisLogic
+		genesisLogics        []types.LogicSetupArgs
 		genesisAssetAccounts []types.AssetAccountSetupArgs
 		invalidAccPayload    bool
 		expectedError        error
@@ -2053,19 +2053,19 @@ func TestExecuteGenesisContracts(t *testing.T) {
 	logicID := types.NewLogicIDv0(true, false, false, false, 0, types.StakingContractAddr)
 
 	ids := tests.GetTestKramaIDs(t, 1)
-	nodes := utils.KramaIDToString(ids)
+
 	objectsMap := make(map[types.Address]*guna.StateObject)
 	testcases := []struct {
 		name          string
-		logics        []types.GenesisLogic
+		logics        []types.LogicSetupArgs
 		smCallBack    func(sm *MockStateManager)
 		expectedError string
 	}{
 		{
 			name: "invalid logic name",
-			logics: []types.GenesisLogic{{
+			logics: []types.LogicSetupArgs{{
 				Name:               "test",
-				BehaviouralContext: nodes,
+				BehaviouralContext: ids,
 			}},
 			smCallBack: func(sm *MockStateManager) {
 				sm.setAccType(logicID.Address(), types.LogicAccount)
@@ -2074,7 +2074,7 @@ func TestExecuteGenesisContracts(t *testing.T) {
 		},
 		{
 			name: "missing behaviour context",
-			logics: []types.GenesisLogic{{
+			logics: []types.LogicSetupArgs{{
 				Name:               "staking-contract",
 				BehaviouralContext: nil,
 			}},

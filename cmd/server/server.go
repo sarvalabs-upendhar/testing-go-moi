@@ -43,7 +43,7 @@ var (
 	CorsAllowedOrigins []string
 )
 
-func GetCommand() *cobra.Command {
+func GetServerCommand() *cobra.Command {
 	serverCmd := &cobra.Command{
 		Use:   "server",
 		Short: "Starts the moi-chain server",

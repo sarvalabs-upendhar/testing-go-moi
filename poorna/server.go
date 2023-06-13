@@ -789,7 +789,7 @@ func (s *Server) Subscribe(ctx context.Context, topicName string, handler func(m
 	}
 
 	// Subscribe to the topic and get a subscription handle
-	subcHandle, err := topicHandle.Subscribe()
+	subcHandle, err := topicHandle.Subscribe(pubsub.WithBufferSize(60))
 	if err != nil {
 		// Return the error
 		return err

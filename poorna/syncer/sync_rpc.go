@@ -217,10 +217,15 @@ func (service *SYNCRPCService) FetchLattice(
 		}
 
 		msg := &ptypes.TesseractMessage{
-			Tesseract: ts.Canonical(),
-			Ixns:      ixns,
-			Receipts:  receipts,
-			Delta:     make(map[types.Hash][]byte, 0),
+			RawTesseract: make([]byte, 0),
+			Ixns:         ixns,
+			Receipts:     receipts,
+			Delta:        make(map[types.Hash][]byte, 0),
+		}
+
+		msg.RawTesseract, err = ts.Canonical().Bytes()
+		if err != nil {
+			return err
 		}
 
 		if ts.ICSHash() != types.NilHash {

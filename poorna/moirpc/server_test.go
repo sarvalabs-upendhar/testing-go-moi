@@ -305,7 +305,7 @@ func testCall(t *testing.T, servNode, clientNode host.Host, dest peer.ID) {
 	testLogger.Info("#####1########calling Moi-Call for the first time ")
 
 	var q Quotient
-	err = c.MoiCall(id.KramaID(getKramaID(dest)), "Arith", "Divide", &Args{20, 6}, &q, 0)
+	err = c.MoiCall(context.Background(), id.KramaID(getKramaID(dest)), "Arith", "Divide", &Args{20, 6}, &q, 0)
 
 	if err != nil {
 		t.Fatal(err)
@@ -332,7 +332,15 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, servNode, clientNo
 	testLogger.Info("#####1########calling Moi-Call for the first time ")
 
 	var q Quotient
-	err = c.MoiCall(id.KramaID(getKramaID(dest)), "Arith", "Divide", &Args{20, 6}, &q, 300*time.Millisecond)
+	err = c.MoiCall(
+		context.Background(),
+		id.KramaID(getKramaID(dest)),
+		"Arith",
+		"Divide",
+		&Args{20, 6},
+		&q,
+		300*time.Millisecond,
+	)
 
 	if err != nil {
 		t.Fatal(err)
@@ -344,7 +352,15 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, servNode, clientNo
 
 	testLogger.Info("#####2#####calling Moi-Call for the second time ")
 
-	err = c.MoiCall(id.KramaID(getKramaID(dest)), "Arith", "Divide", &Args{20, 6}, &q, 300*time.Millisecond)
+	err = c.MoiCall(
+		context.Background(),
+		id.KramaID(getKramaID(dest)),
+		"Arith",
+		"Divide",
+		&Args{20, 6},
+		&q,
+		300*time.Millisecond,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -355,7 +371,15 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, servNode, clientNo
 
 	testLogger.Info("##### 3 #####calling Moi-Call for the Third time ")
 
-	err = c.MoiCall(id.KramaID(getKramaID(dest)), "Arith", "Divide", &Args{20, 6}, &q, 300*time.Millisecond)
+	err = c.MoiCall(
+		context.Background(),
+		id.KramaID(getKramaID(dest)),
+		"Arith",
+		"Divide",
+		&Args{20, 6},
+		&q,
+		300*time.Millisecond,
+	)
 
 	if err != nil {
 		t.Fatal(err)
@@ -367,7 +391,15 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, servNode, clientNo
 
 	testLogger.Info("##### 4 #####calling Moi-Call for the fourth time ")
 
-	err = c.MoiCall(id.KramaID(getKramaID(dest)), "Arith", "Divide", &Args{20, 6}, &q, 300*time.Millisecond)
+	err = c.MoiCall(
+		context.Background(),
+		id.KramaID(getKramaID(dest)),
+		"Arith",
+		"Divide",
+		&Args{20, 6},
+		&q,
+		300*time.Millisecond,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -379,7 +411,15 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, servNode, clientNo
 	time.Sleep(1 * time.Second)
 	testLogger.Info("##### 5 #####calling Moi-Call for the fourth time ")
 
-	err = c.MoiCall(id.KramaID(getKramaID(dest)), "Arith", "Divide", &Args{20, 6}, &q, 300*time.Millisecond)
+	err = c.MoiCall(
+		context.Background(),
+		id.KramaID(getKramaID(dest)),
+		"Arith",
+		"Divide",
+		&Args{20, 6},
+		&q,
+		300*time.Millisecond,
+	)
 
 	if err != nil {
 		t.Fatal(err)
@@ -415,6 +455,7 @@ func testCallWithSenatus(t *testing.T, servNode, clientNode host.Host, dest peer
 	var q Quotient
 
 	err = c.MoiCall(
+		context.Background(),
 		id.KramaID(getKramaID(dest)),
 		"Arith",
 		"Divide",
