@@ -329,8 +329,8 @@ var opcodeMetadataTable = map[OpCode]*opcodeMetadata{
 	COPY:   {"COPY", 2},
 	SWAP:   {"SWAP", 2},
 
-	// SERIAL:   nil,
-	// DESERIAL: nil,
+	SERIAL:   {"SERIAL", 2},
+	DESERIAL: {"DESERIAL", 2},
 
 	MAKE:  {"MAKE", 2},
 	PMAKE: {"PMAKE", 2},

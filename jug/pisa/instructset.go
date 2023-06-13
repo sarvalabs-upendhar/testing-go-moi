@@ -74,8 +74,8 @@ func BaseInstructionSet() InstructionSet {
 		COPY:   opCOPY,
 		SWAP:   opSWAP,
 
-		// SERIAL: opSERIAL,
-		// DESERIAL: opDESERIAL,
+		SERIAL:   opSERIAL,
+		DESERIAL: opDESERIAL,
 
 		MAKE:  opMAKE,
 		PMAKE: opPMAKE,
@@ -438,6 +438,46 @@ func opSWAP(scope *callscope, operands []byte) Continue {
 	return continueOk{5}
 }
 
+func opSERIAL(scope *callscope, operands []byte) Continue {
+	// SERIAL [$X][$Y]
+	out, reg := operands[0], operands[1]
+
+	// Retrieve the register reg
+	regVal := scope.memory.Get(reg)
+	// Serialize the register data and set it the output register as a BytesValue
+	scope.memory.Set(out, BytesValue(regVal.Data()))
+
+	return continueOk{20}
+}
+
+func opDESERIAL(scope *callscope, operands []byte) Continue {
+	// DESERIAL [$X][$Y][$Z]
+	out, reg := operands[0], operands[1]
+
+	// Retrieve the register reg (must be BytesValue)
+	regData, regOut := scope.memory.Get(reg), scope.memory.Get(out)
+	if !regData.Type().Equals(PrimitiveBytes) {
+		return scope.raise(exceptionInvalidDatatype(PrimitiveBytes, reg))
+	}
+
+	// Check that output register is not null
+	if IsNullValue(regOut) {
+		return scope.raise(exceptionNullRegister(out))
+	}
+
+	// Convert the register into bytes
+	data, _ := regData.(BytesValue)
+	// Attempt to create a new register with the type in the output register
+	register, err := NewRegisterValue(regOut.Type(), data)
+	if err != nil {
+		return scope.raise(exceptionf(TypeError, "register value not created %v", err))
+	}
+
+	scope.memory.Set(out, register)
+
+	return continueOk{20}
+}
+
 func opMAKE(scope *callscope, operands []byte) Continue {
 	// MAKE [$X][$Y: ptr]
 	out, reg := operands[0], operands[1]
@@ -474,6 +514,8 @@ func opPMAKE(scope *callscope, operands []byte) Continue {
 	datatype := PrimitiveDatatype(typeID)
 	// Create a value for the datatype
 	value, _ := NewRegisterValue(datatype, nil)
+
+	fmt.Println("Pmake: ", value.Type(), typeID)
 
 	// Set the register value
 	scope.memory.Set(out, value)

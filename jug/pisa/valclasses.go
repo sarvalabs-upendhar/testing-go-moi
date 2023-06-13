@@ -43,13 +43,13 @@ func newClassValue(dt ClassDatatype, data []byte) (*ClassValue, error) {
 
 // Type returns the Datatype of ClassValue, which is some class Datatype.
 // Implements the RegisterValue interface for ClassValue.
-func (class ClassValue) Type() Datatype { return class.datatype }
+func (class *ClassValue) Type() Datatype { return class.datatype }
 
 // Copy returns a copy of ClassValue as a RegisterValue.
 // Implements the RegisterValue interface for ClassValue.
-func (class ClassValue) Copy() RegisterValue {
+func (class *ClassValue) Copy() RegisterValue {
 	//nolint:forcetypeassert
-	clone := ClassValue{
+	clone := &ClassValue{
 		datatype: class.datatype.Copy().(ClassDatatype),
 		values:   make(map[byte]RegisterValue, len(class.values)),
 	}
@@ -63,7 +63,7 @@ func (class ClassValue) Copy() RegisterValue {
 
 // Data returns the POLO encoded bytes of ClassValue.
 // Implements the Value interface for ClassValue.
-func (class ClassValue) Data() []byte {
+func (class *ClassValue) Data() []byte {
 	doc := make(polo.Document)
 
 	for slot, value := range class.values {
@@ -76,7 +76,7 @@ func (class ClassValue) Data() []byte {
 
 // Norm returns the normalized value of ClassValue as a map[string]any.
 // Implements the Value interface for ClassValue.
-func (class ClassValue) Norm() any {
+func (class *ClassValue) Norm() any {
 	norm := make(map[string]any, len(class.values))
 
 	for slot, val := range class.values {
@@ -88,7 +88,7 @@ func (class ClassValue) Norm() any {
 }
 
 // Size returns the number of fields in the ClassValue
-func (class ClassValue) Size() U64Value {
+func (class *ClassValue) Size() U64Value {
 	return U64Value(class.datatype.fields.Size())
 }
 

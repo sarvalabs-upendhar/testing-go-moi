@@ -60,9 +60,9 @@ func newVarrayWithSize(datatype VarrayDatatype, size uint64) *VarrayValue {
 	return varray
 }
 
-func (varray VarrayValue) Type() Datatype { return varray.datatype }
+func (varray *VarrayValue) Type() Datatype { return varray.datatype }
 
-func (varray VarrayValue) Copy() RegisterValue {
+func (varray *VarrayValue) Copy() RegisterValue {
 	//nolint:forcetypeassert
 	clone := &VarrayValue{datatype: varray.datatype.Copy().(VarrayDatatype)}
 	// Skip value cloning if values are empty
@@ -85,7 +85,7 @@ func (varray VarrayValue) Copy() RegisterValue {
 	return clone
 }
 
-func (varray VarrayValue) Data() []byte {
+func (varray *VarrayValue) Data() []byte {
 	polorizer := polo.NewPolorizer()
 
 	for _, val := range varray.values {
@@ -99,7 +99,7 @@ func (varray VarrayValue) Data() []byte {
 	return polorizer.Packed()
 }
 
-func (varray VarrayValue) Norm() any {
+func (varray *VarrayValue) Norm() any {
 	norm := make([]any, 0, len(varray.values))
 
 	for _, v := range varray.values {
@@ -109,7 +109,7 @@ func (varray VarrayValue) Norm() any {
 	return norm
 }
 
-func (varray VarrayValue) Get(index RegisterValue) (RegisterValue, *Exception) {
+func (varray *VarrayValue) Get(index RegisterValue) (RegisterValue, *Exception) {
 	if !index.Type().Equals(PrimitiveU64) {
 		return nil, exception(TypeError, "invalid varray index: not a uint64")
 	}
@@ -129,7 +129,7 @@ func (varray VarrayValue) Get(index RegisterValue) (RegisterValue, *Exception) {
 	return value, nil
 }
 
-func (varray VarrayValue) Set(index RegisterValue, element RegisterValue) *Exception {
+func (varray *VarrayValue) Set(index RegisterValue, element RegisterValue) *Exception {
 	if !index.Type().Equals(PrimitiveU64) {
 		return exceptionf(TypeError, "invalid varray index: not a uint64")
 	}
@@ -148,7 +148,7 @@ func (varray VarrayValue) Set(index RegisterValue, element RegisterValue) *Excep
 	return nil
 }
 
-func (varray VarrayValue) Size() U64Value {
+func (varray *VarrayValue) Size() U64Value {
 	return U64Value(len(varray.values))
 }
 

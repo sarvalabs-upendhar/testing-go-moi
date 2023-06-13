@@ -240,6 +240,35 @@ func (str StringValue) methods() [256]*BuiltinMethod {
 			},
 		),
 
+		// string.__addr__() -> address
+		MethodAddr: makeBuiltinMethod(
+			MethodAddr.String(),
+			PrimitiveString, MethodAddr, 10,
+			makefields([]*TypeField{{"self", PrimitiveString}}),
+			makefields([]*TypeField{{"result", PrimitiveAddress}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				// Remove the 0x prefix on the string if it exists
+				trimmed := strings.TrimPrefix(string(inputs[0].(StringValue)), "0x")
+				// Decode the string as hex encoded data
+				decoded, err := hex.DecodeString(trimmed)
+				if err != nil {
+					return nil, exception(ValueError, "string hex decode failed")
+				}
+
+				// Check size of bytes value (must be less than 32)
+				if len(decoded) > 32 {
+					return RegisterSet{}, exception(ValueError, "data too long for address")
+				}
+
+				// Create a new AddressValue and set the bytes
+				addr := new(AddressValue)
+				addr.SetBytes(decoded)
+
+				// Return address
+				return RegisterSet{0: *addr}, nil
+			},
+		),
+
 		// string.__len__() -> u64
 		MethodLen: makeBuiltinMethod(
 			MethodLen.String(),
@@ -488,6 +517,20 @@ func (str StringValue) methods() [256]*BuiltinMethod {
 				return RegisterSet{0: StringValue(res)}, nil
 			},
 		),
+
+		// string.ToBytes() -> bytes
+		0x1D: makeBuiltinMethod(
+			"ToBytes",
+			PrimitiveString, 0x1D, 10,
+			makefields([]*TypeField{{"self", PrimitiveString}}),
+			makefields([]*TypeField{{"result", PrimitiveBytes}}),
+			func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self := inputs[0]
+				result := BytesValue(self.(StringValue))
+
+				return RegisterSet{0: result}, nil
+			},
+		),
 	}
 }
 
@@ -612,6 +655,27 @@ func (bytesval BytesValue) methods() [256]*BuiltinMethod {
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				// Return bytes converted into a string
 				return RegisterSet{0: StringValue(inputs[0].(BytesValue))}, nil
+			},
+		),
+
+		// bytes.__addr__() -> addr
+		MethodAddr: makeBuiltinMethod(
+			MethodAddr.String(),
+			PrimitiveBytes, MethodAddr, 10,
+			makefields([]*TypeField{{"self", PrimitiveBytes}}),
+			makefields([]*TypeField{{"address", PrimitiveAddress}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				// Check size of bytes value (must be less than 32)
+				if len(inputs[0].(BytesValue)) > 32 {
+					return RegisterSet{}, exception(ValueError, "data too long for address")
+				}
+
+				// Create a new AddressValue and set the bytes
+				addr := new(AddressValue)
+				addr.SetBytes(inputs[0].(BytesValue))
+
+				// Return address
+				return RegisterSet{0: *addr}, nil
 			},
 		),
 
@@ -771,6 +835,14 @@ func (addr AddressValue) ToHex() StringValue {
 	return StringValue(hex.EncodeToString(addr[:]))
 }
 
+func (addr *AddressValue) SetBytes(b []byte) {
+	if len(b) > 32 {
+		b = b[len(b)-32:]
+	}
+
+	copy(addr[32-len(b):], b)
+}
+
 //nolint:forcetypeassert
 func (addr AddressValue) methods() [256]*BuiltinMethod {
 	return [256]*BuiltinMethod{
@@ -836,6 +908,20 @@ func (addr AddressValue) methods() [256]*BuiltinMethod {
 			makefields([]*TypeField{{"length", PrimitiveU64}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				return RegisterSet{0: U64Value(32)}, nil
+			},
+		),
+
+		// address.ToBytes() -> bytes
+		0x10: makeBuiltinMethod(
+			"ToBytes",
+			PrimitiveAddress, 0x10, 10,
+			makefields([]*TypeField{{"self", PrimitiveAddress}}),
+			makefields([]*TypeField{{"result", PrimitiveBytes}}),
+			func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self := inputs[0]
+				bytesval := [32]byte(self.(AddressValue))
+
+				return RegisterSet{0: BytesValue(bytesval[:])}, nil
 			},
 		),
 	}

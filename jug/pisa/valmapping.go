@@ -57,11 +57,11 @@ func newMapFromValues(datatype MapDatatype, maps map[RegisterValue]RegisterValue
 
 // Type returns the Datatype of MapValue, which is some Mapping Datatype.
 // Implements the RegisterValue interface for MapValue.
-func (mapping MapValue) Type() Datatype { return mapping.datatype }
+func (mapping *MapValue) Type() Datatype { return mapping.datatype }
 
 // Copy returns a copy of MapValue as a RegisterValue.
 // Implements the RegisterValue interface for MapValue.
-func (mapping MapValue) Copy() RegisterValue {
+func (mapping *MapValue) Copy() RegisterValue {
 	mcopy := &MapValue{values: make(map[RegisterValue]RegisterValue, len(mapping.values))}
 	mcopy.datatype, _ = mapping.datatype.Copy().(MapDatatype)
 
@@ -74,7 +74,7 @@ func (mapping MapValue) Copy() RegisterValue {
 
 // Norm returns the normalized value of MapValue as a map[any]any.
 // Implements the RegisterValue interface for MapValue.
-func (mapping MapValue) Norm() any {
+func (mapping *MapValue) Norm() any {
 	norm := make(map[any]any, len(mapping.values))
 	for k, v := range mapping.values {
 		norm[k.Norm()] = v.Norm()
@@ -85,7 +85,7 @@ func (mapping MapValue) Norm() any {
 
 // Data returns the POLO encoded bytes of MapValue.
 // Implements the RegisterValue interface for MapValue.
-func (mapping MapValue) Data() []byte {
+func (mapping *MapValue) Data() []byte {
 	polorizer := polo.NewPolorizer()
 	v := reflect.ValueOf(mapping.values)
 

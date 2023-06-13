@@ -59,9 +59,9 @@ func newArrayFromValues(datatype ArrayDatatype, values ...RegisterValue) (*Array
 	return array, nil
 }
 
-func (array ArrayValue) Type() Datatype { return array.datatype }
+func (array *ArrayValue) Type() Datatype { return array.datatype }
 
-func (array ArrayValue) Copy() RegisterValue {
+func (array *ArrayValue) Copy() RegisterValue {
 	//nolint:forcetypeassert
 	clone := &ArrayValue{datatype: array.datatype.Copy().(ArrayDatatype)}
 	// Skip value cloning if values are empty
@@ -84,7 +84,7 @@ func (array ArrayValue) Copy() RegisterValue {
 	return clone
 }
 
-func (array ArrayValue) Data() []byte {
+func (array *ArrayValue) Data() []byte {
 	polorizer := polo.NewPolorizer()
 
 	for _, val := range array.values {
@@ -98,7 +98,7 @@ func (array ArrayValue) Data() []byte {
 	return polorizer.Packed()
 }
 
-func (array ArrayValue) Norm() any {
+func (array *ArrayValue) Norm() any {
 	norm := make([]any, 0, len(array.values))
 
 	for _, v := range array.values {
@@ -108,7 +108,7 @@ func (array ArrayValue) Norm() any {
 	return norm
 }
 
-func (array ArrayValue) Get(index RegisterValue) (RegisterValue, *Exception) {
+func (array *ArrayValue) Get(index RegisterValue) (RegisterValue, *Exception) {
 	if !index.Type().Equals(PrimitiveU64) {
 		return nil, exception(TypeError, "invalid array index: not a u64")
 	}
@@ -147,7 +147,7 @@ func (array *ArrayValue) Set(index RegisterValue, element RegisterValue) *Except
 	return nil
 }
 
-func (array ArrayValue) Size() U64Value {
+func (array *ArrayValue) Size() U64Value {
 	return U64Value(array.datatype.size)
 }
 

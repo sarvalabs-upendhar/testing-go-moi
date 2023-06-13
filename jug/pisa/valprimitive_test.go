@@ -1,6 +1,7 @@
 package pisa
 
 import (
+	"encoding/hex"
 	"math/rand"
 	"testing"
 
@@ -216,6 +217,55 @@ func TestStringValue(t *testing.T) {
 				} else {
 					assert.Nil(t, except)
 					assert.Equal(t, test.res, outputs.Get(0))
+				}
+			}
+		})
+
+		t.Run("__addr__ [0x9]", func(t *testing.T) {
+			method := runtime.primitiveMethods[PrimitiveString][0x9]
+
+			tests := []struct {
+				input  StringValue
+				output AddressValue
+				except *Exception
+			}{
+				{
+					"62dbd666303ff4dfa7bf390e1eaf1d6be58df23ab6ac5adc0de54fada389acaa",
+					AddressValue(types.BytesToAddress(must(hex.DecodeString("62dbd666303ff4dfa7bf390e1eaf1d6be58df23ab6ac5adc0de54fada389acaa")))), //nolint:lll
+					nil,
+				},
+				{
+					"0x62dbd666303ff4dfa7bf390e1eaf1d6be58df23ab6ac5adc0de54fada389acaa",
+					AddressValue(types.BytesToAddress(must(hex.DecodeString("62dbd666303ff4dfa7bf390e1eaf1d6be58df23ab6ac5adc0de54fada389acaa")))), //nolint:lll
+					nil,
+				},
+				{
+					"62dbd666303ff4dfa7bf390e1eaf1d6be58df23ab6ac5adc0de54fada389acaaf6",
+					ZeroAddress,
+					exception(ValueError, "data too long for address"),
+				},
+				{
+					"0x62dbd666303ff4dfa7bf390e1eaf1d6be58df23ab6ac5adc0de54fada389acaaf6",
+					ZeroAddress,
+					exception(ValueError, "data too long for address"),
+				},
+				{
+					"62db",
+					AddressValue(types.BytesToAddress([]byte{0x62, 0xdb})),
+					nil,
+				},
+			}
+
+			for _, test := range tests {
+				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}
+				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: test.input})
+
+				if test.except == nil {
+					assert.Nil(t, except)
+					assert.Equal(t, test.output, outputs.Get(0))
+				} else {
+					assert.Equal(t, test.except, except)
+					assert.Equal(t, RegisterSet{}, outputs)
 				}
 			}
 		})
@@ -649,6 +699,34 @@ func TestStringValue(t *testing.T) {
 				}
 			}
 		})
+
+		t.Run("ToBytes [0x1D]", func(t *testing.T) {
+			method := runtime.primitiveMethods[PrimitiveString][0x1D]
+
+			tests := []struct {
+				str StringValue
+				res BytesValue
+				err *Exception
+			}{
+				{"hello", BytesValue("hello"), nil},
+				{"abcd1", BytesValue("abcd1"), nil},
+				{"abc", BytesValue("abc"), nil},
+				{"--", BytesValue("--"), nil},
+				{"A", BytesValue("A"), nil},
+			}
+
+			for _, test := range tests {
+				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}
+				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: test.str})
+
+				if test.err != nil {
+					assert.Equal(t, test.err, except)
+				} else {
+					assert.Nil(t, except)
+					assert.Equal(t, test.res, outputs.Get(0))
+				}
+			}
+		})
 	})
 }
 
@@ -697,6 +775,45 @@ func TestBytesValue(t *testing.T) {
 
 				assert.Nil(t, except)
 				assert.Equal(t, test.z, outputs.Get(0), "%v, %v", test.x, test.y)
+			}
+		})
+
+		t.Run("__addr__ [0x9]", func(t *testing.T) {
+			method := runtime.primitiveMethods[PrimitiveBytes][MethodAddr]
+
+			tests := []struct {
+				input  BytesValue
+				output AddressValue
+				except *Exception
+			}{
+				{
+					BytesValue(must(hex.DecodeString("62dbd666303ff4dfa7bf390e1eaf1d6be58df23ab6ac5adc0de54fada389acaa"))),
+					AddressValue(types.BytesToAddress(must(hex.DecodeString("62dbd666303ff4dfa7bf390e1eaf1d6be58df23ab6ac5adc0de54fada389acaa")))), //nolint:lll
+					nil,
+				},
+				{
+					BytesValue(must(hex.DecodeString("62dbd666303ff4dfa7bf390e1eaf1d6be58df23ab6ac5adc0de54fada389acaaf6"))),
+					ZeroAddress,
+					exception(ValueError, "data too long for address"),
+				},
+				{
+					BytesValue(must(hex.DecodeString("62db"))),
+					AddressValue(types.BytesToAddress([]byte{0x62, 0xdb})),
+					nil,
+				},
+			}
+
+			for _, test := range tests {
+				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}
+				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: test.input})
+
+				if test.except == nil {
+					assert.Nil(t, except)
+					assert.Equal(t, test.output, outputs.Get(0))
+				} else {
+					assert.Equal(t, test.except, except)
+					assert.Equal(t, RegisterSet{}, outputs)
+				}
 			}
 		})
 
@@ -975,6 +1092,35 @@ func TestAddressValue(t *testing.T) {
 
 				assert.Nil(t, except)
 				assert.Equal(t, test.z, outputs.Get(0), "%v, %v", test.x, test.y)
+			}
+		})
+
+		t.Run("__eq__ [0x3]", func(t *testing.T) {
+			method := runtime.primitiveMethods[PrimitiveAddress][0x10]
+
+			tests := []struct {
+				input  AddressValue
+				result BytesValue
+				err    *Exception
+			}{
+				{
+					AddressValue(types.BytesToAddress(must(hex.DecodeString("62dbd666303ff4dfa7bf390e1eaf1d6be58df23ab6ac5adc0de54fada389acaa")))), //nolint:lll
+					BytesValue(must(hex.DecodeString("62dbd666303ff4dfa7bf390e1eaf1d6be58df23ab6ac5adc0de54fada389acaa"))),
+					nil,
+				},
+				{
+					AddressValue(types.BytesToAddress([]byte{0x62, 0xdb})),
+					BytesValue(must(hex.DecodeString("00000000000000000000000000000000000000000000000000000000000062db"))),
+					nil,
+				},
+			}
+
+			for _, test := range tests {
+				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}
+				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: test.input})
+
+				assert.Nil(t, except)
+				assert.Equal(t, test.result, outputs.Get(0))
 			}
 		})
 	})
