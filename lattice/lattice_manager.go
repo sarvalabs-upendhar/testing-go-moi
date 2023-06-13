@@ -91,6 +91,7 @@ type executor interface {
 	ExecuteInteractions(types.ClusterID, types.Interactions, types.ContextDelta) (types.Receipts, error)
 	Revert(types.ClusterID) error
 	SpawnExecutor() *jug.IxExecutor
+	Cleanup(cluster types.ClusterID)
 }
 
 type AggregatedSignatureVerifier func(data []byte, aggSignature []byte, multiplePubKeys [][]byte) (bool, error)
@@ -968,6 +969,8 @@ func (c *ChainManager) Close() {
 }
 
 func (c *ChainManager) ExecuteAndValidate(tesseracts ...*types.Tesseract) error {
+	defer c.exec.Cleanup(tesseracts[0].ClusterID())
+
 	c.logger.Debug(
 		"Executing interactions of grid",
 		tesseracts[0].GridHash(),

@@ -1410,24 +1410,24 @@ func TestIsReceiptAndGroupHashValid(t *testing.T) {
 		{
 			name: "receipt hashes doesn't match",
 			paramsMap: map[int]*createTesseractParams{
-				0: tesseractParamsWithReceiptHash(t, receiptRoot, groupHash),
-				1: tesseractParamsWithReceiptHash(t, tests.RandomHash(t), groupHash),
+				0: tesseractParamsWithReceiptHash(t, receiptRoot, groupHash, ""),
+				1: tesseractParamsWithReceiptHash(t, tests.RandomHash(t), groupHash, ""),
 			},
 			isValid: false,
 		},
 		{
 			name: "grid hashes doesn't match",
 			paramsMap: map[int]*createTesseractParams{
-				0: tesseractParamsWithReceiptHash(t, receiptRoot, groupHash),
-				1: tesseractParamsWithReceiptHash(t, receiptRoot, tests.RandomHash(t)),
+				0: tesseractParamsWithReceiptHash(t, receiptRoot, groupHash, ""),
+				1: tesseractParamsWithReceiptHash(t, receiptRoot, tests.RandomHash(t), ""),
 			},
 			isValid: false,
 		},
 		{
 			name: "valid receipt hash and groupHash",
 			paramsMap: map[int]*createTesseractParams{
-				0: tesseractParamsWithReceiptHash(t, receiptRoot, groupHash),
-				1: tesseractParamsWithReceiptHash(t, receiptRoot, groupHash),
+				0: tesseractParamsWithReceiptHash(t, receiptRoot, groupHash, ""),
+				1: tesseractParamsWithReceiptHash(t, receiptRoot, groupHash, ""),
 			},
 			isValid: true,
 		},
@@ -1462,7 +1462,7 @@ func TestAreStateHashesValid(t *testing.T) {
 		},
 		{
 			name:     "state hash in receipt and tesseract doesn't match",
-			params:   tesseractParamsWithStateHash(t, tests.RandomHash(t)),
+			params:   tesseractParamsWithStateHash(t, tests.RandomHash(t), ""),
 			receipts: receipts,
 			isValid:  false,
 		},
@@ -1517,7 +1517,7 @@ func TestExecuteAndValidate(t *testing.T) {
 		{
 			name: "should return error if receipt validation fails",
 			paramsMap: map[int]*createTesseractParams{
-				0: tesseractParamsWithReceiptHash(t, tests.RandomHash(t), types.NilHash),
+				0: tesseractParamsWithReceiptHash(t, tests.RandomHash(t), types.NilHash, "cluster-0"),
 			},
 			executeInteractionsHook: func() (types.Receipts, error) {
 				var emptyReceipts types.Receipts
@@ -1529,7 +1529,7 @@ func TestExecuteAndValidate(t *testing.T) {
 		{
 			name: "should return error if state hash validation fails",
 			paramsMap: map[int]*createTesseractParams{
-				0: tesseractParamsWithStateHash(t, tests.RandomHash(t)),
+				0: tesseractParamsWithStateHash(t, tests.RandomHash(t), "cluster-0"),
 			},
 			executeInteractionsHook: func() (types.Receipts, error) {
 				var emptyReceipts types.Receipts
@@ -1552,12 +1552,12 @@ func TestExecuteAndValidate(t *testing.T) {
 		{
 			name: "receipts should be added to dirty storage",
 			paramsMap: map[int]*createTesseractParams{
-				0: tesseractParamsWithGridInfo(t, address, stateHash, getReceiptHash(t, receipts), nil, ixns, 1),
+				0: tesseractParamsWithGridInfo(t, address, stateHash,
+					getReceiptHash(t, receipts), nil, ixns, 1, "cluster-0"),
 			},
 			executeInteractionsHook: func() (types.Receipts, error) {
 				return receipts, nil
 			},
-			expectedError: nil,
 		},
 	}
 
@@ -1575,6 +1575,9 @@ func TestExecuteAndValidate(t *testing.T) {
 			c := createTestChainManager(t, chainParams)
 
 			err := c.ExecuteAndValidate(ts...)
+
+			checkForExecutionCleanup(t, c, "cluster-0")
+
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 

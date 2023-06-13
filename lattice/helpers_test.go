@@ -391,6 +391,11 @@ type MockExec struct {
 	receipts                map[types.Hash]types.Receipts
 	revertHook              func() error
 	executeInteractionsHook func() (types.Receipts, error)
+	clusterID               types.ClusterID
+}
+
+func (e *MockExec) Cleanup(clusterID types.ClusterID) {
+	e.clusterID = clusterID
 }
 
 func (e *MockExec) SpawnExecutor() *jug.IxExecutor {
@@ -1013,6 +1018,7 @@ func tesseractParamsWithGridInfo(
 	clusterInfo *types.ICSClusterInfo,
 	ixns []*types.Interaction,
 	gridSize int32,
+	clusterID types.ClusterID,
 ) *createTesseractParams {
 	t.Helper()
 
@@ -1025,6 +1031,7 @@ func tesseractParamsWithGridInfo(
 		headerCallback: func(header *types.TesseractHeader) {
 			header.Extra.GridID = getTestTesseractGrid(t)
 			header.Extra.GridID.Parts.Total = gridSize
+			header.ClusterID = clusterID.String()
 		},
 		bodyCallback: func(body *types.TesseractBody) {
 			body.ConsensusProof.ICSHash = types.GetHash(rawBytes)
@@ -1108,12 +1115,18 @@ func tesseractParamsWithContextHash(
 }
 */
 
-func tesseractParamsWithReceiptHash(t *testing.T, receiptHash types.Hash, groupHash types.Hash) *createTesseractParams {
+func tesseractParamsWithReceiptHash(
+	t *testing.T,
+	receiptHash types.Hash,
+	groupHash types.Hash,
+	clusterID types.ClusterID,
+) *createTesseractParams {
 	t.Helper()
 
 	return &createTesseractParams{
 		headerCallback: func(header *types.TesseractHeader) {
 			header.GroupHash = groupHash
+			header.ClusterID = clusterID.String()
 		},
 		bodyCallback: func(body *types.TesseractBody) {
 			body.ReceiptHash = receiptHash
@@ -1121,10 +1134,17 @@ func tesseractParamsWithReceiptHash(t *testing.T, receiptHash types.Hash, groupH
 	}
 }
 
-func tesseractParamsWithStateHash(t *testing.T, stateHash types.Hash) *createTesseractParams {
+func tesseractParamsWithStateHash(
+	t *testing.T,
+	stateHash types.Hash,
+	clusterID types.ClusterID,
+) *createTesseractParams {
 	t.Helper()
 
 	return &createTesseractParams{
+		headerCallback: func(header *types.TesseractHeader) {
+			header.ClusterID = clusterID.String()
+		},
 		bodyCallback: func(body *types.TesseractBody) {
 			body.StateHash = stateHash
 		},
@@ -1137,7 +1157,11 @@ func getTSParamsMapWithStateHash(t *testing.T, paramsCount int) map[int]*createT
 	tsParamsMap := make(map[int]*createTesseractParams)
 
 	for i := 0; i < paramsCount; i++ {
+		j := i // we initialize new variable every time, to persist the value of cluster id when call back is called
 		tsParamsMap[i] = &createTesseractParams{
+			headerCallback: func(header *types.TesseractHeader) {
+				header.ClusterID = "cluster-" + strconv.Itoa(j)
+			},
 			bodyCallback: func(body *types.TesseractBody) {
 				body.StateHash = tests.RandomHash(t)
 			},
@@ -2227,4 +2251,13 @@ func validateContextInitialization(
 	// check if context created
 	_, err = obj.GetDirtyEntry(types.BytesToHex(dhruva.ContextObjectKey(address, contextHash)))
 	require.NoError(t, err)
+}
+
+func checkForExecutionCleanup(t *testing.T, c *ChainManager, expectedClusterID types.ClusterID) {
+	t.Helper()
+
+	mockExec, ok := c.exec.(*MockExec)
+	require.True(t, ok)
+
+	require.Equal(t, expectedClusterID, mockExec.clusterID)
 }
