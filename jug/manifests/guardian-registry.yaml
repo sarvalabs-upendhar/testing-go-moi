@@ -125,7 +125,7 @@ elements:
     kind: constant
     data:
       type : string
-      value: 0x0654686973206b72616d614944206973206e6f7420617070726f766564206f7220696e766f6b657220646f65736e2774206d61746368207769746820617070726f766572206164647265737320666f7220746865206b72616d6149442e # String: This kramaID is not approved or invoker doesn't match with approver address for the kramaID.
+      value: 0x0654686973206b72616d614944206973206e6f7420617070726f766564 # String: This kramaID is not approved.
   
   - ptr : 7
     kind: constant
@@ -376,6 +376,29 @@ elements:
           type: Verification
       executes:
         bin: [
+          0x80, 0x00, 0x0f,               # $0 = storage::approvers
+          0x72, 0x01,                     # $1 = sender
+          0x49, 0x01, 0x01,               # $1 = addr(sender)
+          0x50, 0x02, 0x00,               # $2 = size($0)
+          0x11, 0x03, 0x05,               # $3 = ldptr1(5)
+          0x10, 0x03, 0x03,               # const $3 = 0
+          0x11, 0x04, 0x0b,               # $4 = ldptr1(11)
+          0x10, 0x04, 0x04,               # const $4 = 1
+          0x11, 0x05, 0x0a,               # $5 = lbptr1(line 10)
+          0x11, 0x06, 0x15,               # $6 = lbptr1(line 21)
+          0x01,                           # line 10
+          0x53, 0x07, 0x00, 0x03,         # $7 = approvers[$3]
+          0x46, 0x08, 0x01, 0x07,         # $8 = sender == approvers[$3]
+          0x03, 0x06, 0x08,               # jumpi $6 if $8
+          0x65, 0x03, 0x03, 0x04,         # $3 = $3 + $4
+          0x46, 0x08, 0x03, 0x02,         # $8 = $3 == $2
+          0x62, 0x08, 0x08,               # $8 = !$8
+          0x03, 0x05, 0x08,               # jumpi $5 if $8
+          0x11, 0x00, 0x20,               # ldptr1 $0 &32
+          0x10, 0x00, 0x00,               # const $6 $6
+          0x41, 0x00,                     # throw $6
+          0x01,                           # line 21
+
           0x04, 0x00, 0x00,               # obtain $0 = accepts:operatorMOIId
           0x04, 0x01, 0x01,               # obtain $1 = accepts:verificationDetails
           0x11, 0x02, 0x01,               # ldptr $2 &1
@@ -396,13 +419,6 @@ elements:
     data: 
       name: GetOperators
       kind: invokable
-      # accepts: 
-      #   - slot: 0
-      #     label: offset
-      #     type: u64
-      #   - slot: 1
-      #     label: limit
-      #     type: u64
       returns: 
         - slot: 0
           label: operators
@@ -498,7 +514,7 @@ elements:
           0x10, 0x09, 0x09,         # const $9 = 0
           0x11, 0x0a, 0x0b,         # $10 = ldptr1(11)
           0x10, 0x0a, 0x0a,         # const $10 = 1
-          0x11, 0x0b, 0x22,         # $5 = ldptr1(line 34)
+          0x11, 0x0b, 0x22,         # $11 = ldptr1(line 34)
           0x01,                     # line 34
           0x53, 0x0d, 0x06, 0x09,   # $7 = approvers[$3]
           0x46, 0x0c, 0x07, 0x0d,   # $8 = sender == approvers[$3]
@@ -636,6 +652,29 @@ elements:
           type: u64
       executes: 
         bin: [
+          0x80, 0x00, 0x0f,               # $0 = storage::approvers
+          0x72, 0x01,                     # $1 = sender
+          0x49, 0x01, 0x01,               # $1 = addr(sender)
+          0x50, 0x02, 0x00,               # $2 = size($0)
+          0x11, 0x03, 0x05,               # $3 = ldptr1(5)
+          0x10, 0x03, 0x03,               # const $3 = 0
+          0x11, 0x04, 0x0b,               # $4 = ldptr1(11)
+          0x10, 0x04, 0x04,               # const $4 = 1
+          0x11, 0x05, 0x0a,               # $5 = lbptr1(line 10)
+          0x11, 0x06, 0x15,               # $6 = lbptr1(line 21)
+          0x01,                           # line 10
+          0x53, 0x07, 0x00, 0x03,         # $7 = approvers[$3]
+          0x46, 0x08, 0x01, 0x07,         # $8 = sender == approvers[$3]
+          0x03, 0x06, 0x08,               # jumpi $6 if $8
+          0x65, 0x03, 0x03, 0x04,         # $3 = $3 + $4
+          0x46, 0x08, 0x03, 0x02,         # $8 = $3 == $2
+          0x62, 0x08, 0x08,               # $8 = !$8
+          0x03, 0x05, 0x08,               # jumpi $5 if $8
+          0x11, 0x00, 0x20,               # ldptr1 $0 &32
+          0x10, 0x00, 0x00,               # const $6 $6
+          0x41, 0x00,                     # throw $6
+          0x01,                           # line 21
+          
           0x04, 0x00, 0x00,
           0x11, 0x01, 0x16,
           0x10, 0x01, 0x01,
@@ -822,3 +861,10 @@ elements:
     data:
       type : string
       value: 0x064163636573732044656e69656421204e6f7420616e20617574686f72697a656420617070726f766572 # String: Access Denied! Not an authorized approver
+    
+  - ptr: 32
+    kind : constant
+    data: 
+      type: string
+      value: 064163636573732064656e6965642120596f7520617265206e6f7420617574686f72697a656420746f206d616b65207468697320726571756573742e # String: Access denied! You are not authorized to make this request.
+      

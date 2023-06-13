@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/mudra/common"
+	"github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/mudra/poi"
 	"github.com/sarvalabs/moichain/mudra/poi/moinode"
 )
@@ -23,7 +24,13 @@ const (
 
 	ecdsaSignSample = "01473045022100e6823cc24ea8ab0dff424efc35c1a58fa7a5d7f744dca0848ecfcabd11b43" +
 		"c550220115ec0005a878b5c2de44e5e90458ee89e18720f33636929d89b238131179d0503"
+
+	testMnemonic = "unlock element young void mass casino suffer twin earth drill aerobic tooth"
+	testMoiID    = "03e0c762f9f5e47395559346f4f780329c49eebd0a53cbb69c3cb3117ff4e0e24f"
 )
+
+var testKramaID = kramaid.KramaID("3WzFwwvSz7ZwiU3cDwk7uZtc9gX4d5h18MhsmXaT1XVqa3Bv16pP" +
+	"." + "16Uiu2HAkzBJTbFo1FXxvLy9qBWeP3z5zP6bkkPheXzk7HVgdW4xR")
 
 func TestBLSSignAgg(t *testing.T) {
 	// Validator 1 DataDir
@@ -130,7 +137,7 @@ func TestKramaVaultRegisterMode(t *testing.T) {
 		DataDir:      datadir,
 		NodePassword: "nodepass1",
 		Mode:         1,
-		SeedPhrase:   "unlock element young void mass casino suffer twin earth drill aerobic tooth",
+		SeedPhrase:   testMnemonic,
 	}
 
 	vault, err := NewVault(config, moinode.MoiFullNode, 1)
@@ -140,8 +147,18 @@ func TestKramaVaultRegisterMode(t *testing.T) {
 
 	moiIDStringFromSetup, err := vault.MOiID()
 	require.NoError(t, err)
+	require.Equal(t, moiIDStringFromSetup, testMoiID)
+
+	moiIDPubKey, err := vault.MoiIDPublicKey()
+	require.NoError(t, err)
+
+	_, derivedMoiIDPubKey, err := poi.GetPrivateKeyAtPath(testMnemonic, DefaultMOIIDPath)
+	require.NoError(t, err)
+
+	require.Equal(t, moiIDPubKey, derivedMoiIDPubKey)
 
 	kramaIDFromSetup := vault.KramaID()
+	require.Equal(t, kramaIDFromSetup, testKramaID)
 
 	config1 := &VaultConfig{
 		DataDir:      datadir,

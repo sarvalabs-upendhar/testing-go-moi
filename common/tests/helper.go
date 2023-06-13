@@ -174,19 +174,6 @@ func GetPrivKeysForTest(seed []byte) ([]byte, []byte, error) {
 		return nil, nil, err
 	}
 
-	/* Deriving MOI id address */
-	masPubKey, err := masterKey.Neuter()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	moiIDPubInSecp256k1, err := masPubKey.ECPubKey()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	moiIDPubBytes := moiIDPubInSecp256k1.SerializeCompressed()
-
 	// Hardened keys index starts from 2147483648 (2^31)
 	// So.,
 	// 44 = 2147483648 + 44 = 2147483692
@@ -202,8 +189,35 @@ func GetPrivKeysForTest(seed []byte) ([]byte, []byte, error) {
 	}
 	// Now tempKey points to extended private key at path: m/44'/6174'
 
-	var aggPrivKey []byte // to concat both private keys
+	// Deriving MOI Id at m/44'/6174'/0'/0/0
+	moiIDPrivKey := tempKey
 
+	moiIDPath := new([3]uint32)
+	moiIDPath[0] = id.HardenedStartIndex + 0 // m/44'/6174'/0'
+	moiIDPath[1] = 0                         // m/44'/6174'/0'/0 ie., external
+	moiIDPath[2] = 0                         // m/44'/6174'/0'/0/0
+
+	for _, n := range moiIDPath {
+		moiIDPrivKey, err = moiIDPrivKey.Derive(n)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	moiPubKeyPoint, err := moiIDPrivKey.Neuter()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	moiIDPubInSecp256k1, err := moiPubKeyPoint.ECPubKey()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	moiIDPubBytes := moiIDPubInSecp256k1.SerializeCompressed()
+
+	// to persist consensus and network private keys
+	var aggPrivKey []byte
 	// Let's derive PrivateKey for signing, so load keyPair at path: m/44'/6174'/5020'/0/n
 	validatorPrivKey := tempKey
 

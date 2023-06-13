@@ -113,7 +113,7 @@ func (kid KramaID) MoiID() (string, error) {
 	switch v {
 	case 1:
 		{
-			metaInV1, err := unMarshalV1Meta(kramaIDMetaDecoded[1:])
+			metaInV1, err := unMarshalV1Meta(kramaIDMetaDecoded)
 			if err != nil {
 				return "", errors.Wrap(common.ErrParsingKramaID, err.Error())
 			}
@@ -149,7 +149,7 @@ func (kid KramaID) NodeIndex() (uint32, error) {
 	switch v {
 	case 1:
 		{
-			metaInV1, err := unMarshalV1Meta(kramaIDMetaDecoded[1:])
+			metaInV1, err := unMarshalV1Meta(kramaIDMetaDecoded)
 			if err != nil {
 				return HardenedStartIndex, err
 			}

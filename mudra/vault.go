@@ -163,6 +163,20 @@ func (vault *KramaVault) MOiID() (string, error) {
 	return vault.kramaID.MoiID()
 }
 
+func (vault *KramaVault) MoiIDPublicKey() ([]byte, error) {
+	moiIDInString, err := vault.kramaID.MoiID()
+	if err != nil {
+		return nil, err
+	}
+
+	moiIDInBytes, err := hex.DecodeString(moiIDInString)
+	if err != nil {
+		return nil, err
+	}
+
+	return moiIDInBytes[1:], nil
+}
+
 func (vault *KramaVault) GetPublicKeyAt(path string) ([]byte, error) {
 	_, publicKey, err := poi.GetPrivateKeyAtPath(vault.mnemonic.String(), path)
 	if err != nil {

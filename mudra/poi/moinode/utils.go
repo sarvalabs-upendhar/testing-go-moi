@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -82,7 +82,7 @@ func (mnR *MoiNodeRegistry) GetNodes(optArgs map[string]interface{}) ([]MoiNode,
 		return nil, 0, err
 	}
 
-	allNodesResponseInBytes, err := ioutil.ReadAll(allNodesResponse.Body)
+	allNodesResponseInBytes, err := io.ReadAll(allNodesResponse.Body)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -136,7 +136,7 @@ func (mnR *MoiNodeRegistry) UpdateNode(upgradeBool bool,
 		return false, err
 	}
 
-	ipInfoInBytes, err := ioutil.ReadAll(ipInfo.Body)
+	ipInfoInBytes, err := io.ReadAll(ipInfo.Body)
 	if err != nil {
 		return false, err
 	}
@@ -183,7 +183,7 @@ func (mnR *MoiNodeRegistry) UpdateNode(upgradeBool bool,
 	defer resp.Body.Close()
 
 	// Read the response body
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return false, err
 	}
@@ -229,7 +229,7 @@ func (mnR *MoiNodeRegistry) GetNodePublicKey(nodeKramaID kramaid.KramaID) ([]byt
 	defer resp.Body.Close()
 
 	// Read the response body
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
