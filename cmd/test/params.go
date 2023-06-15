@@ -10,6 +10,7 @@ var (
 	behaviouralNodesCount int
 	randomNodesCount      int
 	directoryIndex        int
+	accountCount          int
 	count                 int
 	bootnode              string
 	jaegerAddress         string

@@ -25,7 +25,7 @@ func GetAccountCommand() *cobra.Command {
 
 func parseAccountFlags(cmd *cobra.Command) {
 	cmd.Flags().IntVar(
-		&count,
+		&accountCount,
 		"count",
 		0,
 		"No.of accounts",
@@ -41,9 +41,9 @@ func parseAccountFlags(cmd *cobra.Command) {
 }
 
 func runAccountCommand(cmd *cobra.Command, args []string) {
-	accounts := make([]tests.AccountWithMnemonic, 0, count)
+	accounts := make([]tests.AccountWithMnemonic, 0, accountCount)
 
-	for i := 0; i < count; i++ {
+	for i := 0; i < accountCount; i++ {
 		mnemonic := poi.GenerateRandMnemonic().String()
 
 		_, publicKey, err := poi.GetPrivateKeyAtPath(mnemonic, common.DefaultMOIIDPath)
