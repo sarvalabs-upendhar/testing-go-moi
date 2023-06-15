@@ -22,7 +22,7 @@ const (
 func GetPremineCommand() *cobra.Command {
 	premineCmd := &cobra.Command{
 		Use:   "premine",
-		Short: "allocates given asset info to given addresses with respective balances",
+		Short: "Allocates given asset info to given addresses with respective balances.",
 		Run: func(cmd *cobra.Command, args []string) {
 			addAsset()
 		},
@@ -38,25 +38,25 @@ func parsePremineFlags(cmd *cobra.Command) {
 		&assetInfo,
 		"asset-info",
 		"",
-		"format: <symbol:dimension:standard:isLogical:isMintable:owner>",
+		"Asset information. Format: <symbol:dimension:standard:isLogical:isMintable:owner>",
 	)
 	cmd.Flags().StringSliceVar(
 		&allocations,
 		"allocations",
 		[]string{},
-		"format: <address:balance,address:balance...>",
+		"Balance allocation of addresses. Format: <address:balance,address:balance...>",
 	)
 	cmd.Flags().StringSliceVar(
 		&behaviourNodes,
 		"behaviour-nodes",
 		[]string{},
-		"list of krama ids format<kramaID1,kramaID2,...>",
+		"List of krama ids. Format: <kramaID1,kramaID2,...>",
 	)
 	cmd.Flags().StringSliceVar(
 		&randomNodes,
 		"random-nodes",
 		[]string{},
-		"list of krama ids format<kramaID1,kramaID2,...>",
+		"List of krama ids. Format: <kramaID1,kramaID2,...>",
 	)
 
 	if err := cobra.MarkFlagRequired(cmd.Flags(), "asset-info"); err != nil {

@@ -22,7 +22,7 @@ func NewRootCommand() *Command {
 	rc := &Command{
 		baseCmd: &cobra.Command{
 			Use:   "moichain",
-			Short: "Moichain is a context aware blockchain protocol",
+			Short: "Moichain is a context aware blockchain protocol.",
 		},
 	}
 

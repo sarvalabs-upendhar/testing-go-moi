@@ -33,7 +33,7 @@ var (
 func GetFaucetCommand() *cobra.Command {
 	serverCmd := &cobra.Command{
 		Use:   "faucet",
-		Short: "faucet to get fee token",
+		Short: "Faucet to get fee token.",
 		Run:   runFaucetCommand,
 	}
 
@@ -43,10 +43,11 @@ func GetFaucetCommand() *cobra.Command {
 }
 
 func parseFaucetFlags(cmd *cobra.Command) {
-	cmd.PersistentFlags().Uint64Var(&amount, "amount", 1000, "amount to moi tokens")
-	cmd.PersistentFlags().StringVar(&rpcURL, "rpc-url", "http://localhost:1600/", "json rpc end point")
-	cmd.PersistentFlags().StringVar(&keystorePath, "keystore-path", "./keystore", "path to keystore file")
-	cmd.PersistentFlags().StringVar(&walletAddress, "wallet-address", "", "wallet address to credit moi tokens")
+	cmd.PersistentFlags().Uint64Var(&amount, "amount", 1000, "Amount to MOI tokens reuired from faucet.")
+	cmd.PersistentFlags().StringVar(&rpcURL, "rpc-url", "http://localhost:1600/", "JSON RPC end point.")
+	cmd.PersistentFlags().StringVar(&keystorePath, "keystore-path", "./keystore", "Path to keystore file.")
+	cmd.PersistentFlags().StringVar(&walletAddress, "wallet-address", "",
+		"Wallet address to credit MOI tokens.")
 
 	_ = cmd.MarkPersistentFlagRequired("keystore-path")
 	_ = cmd.MarkPersistentFlagRequired("rpc-url")

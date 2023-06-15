@@ -21,7 +21,7 @@ import (
 func GetGenesisCommand() *cobra.Command {
 	genesisTestCmd := &cobra.Command{
 		Use:   "genesis",
-		Short: "create genesis file with accounts and their context nodes",
+		Short: "Create genesis file with accounts and their context nodes.",
 		Run:   runGenesisTestCommand,
 	}
 
@@ -39,49 +39,49 @@ func parseGenesisTestFlags(genesisTestCmd *cobra.Command) {
 		&genesisFilePath,
 		"genesis-path",
 		"genesis.json",
-		"path to genesis file",
+		"Path to genesis.json file.",
 	)
 	genesisTestCmd.Flags().StringVar(
 		&GuardianLogicPath,
 		"guardian-path",
 		"artifact.json",
-		"path to guardian-logic file",
+		"Path to guardian-logic file, i.e artifact.json file.",
 	)
 	genesisTestCmd.Flags().StringVar(
 		&accountsFilePath,
 		"accounts-path",
 		"accounts.json",
-		"path to accounts file",
+		"Path to accounts.json file.",
 	)
 	genesisTestCmd.Flags().StringVar(
 		&instancesFilePath,
 		"instances-path",
 		"instances.json",
-		"path to instances file",
+		"Path to instances.json file.",
 	)
 	genesisTestCmd.Flags().StringSliceVar(
 		&accAddresses,
-		"addresses",
+		"address-list",
 		[]string{},
-		"list of account address",
+		"List of account address.",
 	)
 	genesisTestCmd.Flags().Uint64Var(
 		&premineAmount,
 		"premine-amount",
 		0,
-		"amount of moi tokens that need to credited for each account",
+		"Amount of MOI Fuel tokens that need to be credited to each account.",
 	)
 	genesisTestCmd.Flags().IntVar(
 		&behaviouralNodesCount,
 		"behavioural-count",
 		genesis.DefaultBehaviouralCount,
-		"Number of behavioural krama ids per account/logic",
+		"Number of behavioural krama ids per account.",
 	)
 	genesisTestCmd.Flags().IntVar(
 		&randomNodesCount,
 		"random-count",
 		genesis.DefaultRandomCount,
-		"Number of random krama ids per account/logic",
+		"Number of random krama ids per account.",
 	)
 }
 

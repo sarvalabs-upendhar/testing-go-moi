@@ -15,7 +15,7 @@ var (
 func GetInitAccountCommand() *cobra.Command {
 	initAccountCmd := &cobra.Command{
 		Use:   "init-account",
-		Short: "initialize account",
+		Short: "Initializes the account.",
 		Run: func(cmd *cobra.Command, args []string) {
 			initAccount()
 		},
@@ -31,31 +31,31 @@ func parseInitAccountFlags(cmd *cobra.Command) {
 		&address,
 		"address",
 		"",
-		"address of the account",
+		"Address of the account.",
 	)
 	cmd.Flags().IntVar(
 		&accountType,
 		"account-type",
 		int(types.RegularAccount),
-		"address of the account",
+		"Type of account. SargaAccount = 1, RegularAccount = 2, LogicAccount = 3, AssetAccount = 4",
 	)
 	cmd.Flags().StringVar(
 		&moiID,
 		"moi-id",
 		"",
-		"moi-id of the participant",
+		"Moi-id of the participant.",
 	)
 	cmd.Flags().StringSliceVar(
 		&behaviourNodes,
 		"behaviour-nodes",
 		[]string{},
-		"list of krama ids format<kramaID1,kramaID2,...>",
+		"List of krama ids. Format: <kramaID1,kramaID2,...>",
 	)
 	cmd.Flags().StringSliceVar(
 		&randomNodes,
 		"random-nodes",
 		[]string{},
-		"list of krama ids format<kramaID1,kramaID2,...>",
+		"List of krama ids. Format: <kramaID1,kramaID2,...>",
 	)
 
 	if err := cobra.MarkFlagRequired(cmd.Flags(), "address"); err != nil {

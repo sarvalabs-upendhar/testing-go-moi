@@ -10,7 +10,7 @@ import (
 func GetPreDeployCommand() *cobra.Command {
 	preDeployCmd := &cobra.Command{
 		Use:   "predeploy",
-		Short: "add genesis logics",
+		Short: "Add genesis logics.",
 		Run:   runPreDeployCommand,
 	}
 
@@ -38,25 +38,25 @@ func parsePreDeployFlags(cmd *cobra.Command) {
 		&artifact,
 		"artifact-path",
 		"artifact.json",
-		"path to logic artifact json file",
+		"Path to logic artifact.json file.",
 	)
 	cmd.Flags().StringVar(
 		&moiID,
 		"moi-id",
 		"",
-		"moi-id of the participant",
+		"Moi-id of the participant.",
 	)
 	cmd.Flags().StringSliceVar(
 		&behaviourNodes,
 		"behaviour-nodes",
 		[]string{},
-		"list of krama ids format<kramaID1,kramaID2,...>",
+		"List of krama ids. Format: <kramaID1,kramaID2,...>",
 	)
 	cmd.Flags().StringSliceVar(
 		&randomNodes,
 		"random-nodes",
 		[]string{},
-		"list of krama ids format<kramaID1,kramaID2,...>",
+		"List of krama ids. Format: <kramaID1,kramaID2,...>",
 	)
 }
 

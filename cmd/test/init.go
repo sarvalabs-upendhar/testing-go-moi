@@ -40,12 +40,12 @@ func parseFlags(initcmd *cobra.Command) {
 	initcmd.PersistentFlags().IntVar(
 		&port,
 		"port",
-		0,
+		6000,
 		"Provide the starting port number",
 	)
 	initcmd.PersistentFlags().IntVar(
 		&count,
-		"count",
+		"dir-count",
 		10,
 		"Number of test directories",
 	)
@@ -55,33 +55,42 @@ func parseFlags(initcmd *cobra.Command) {
 		0,
 		"Directory Index",
 	)
-	initcmd.PersistentFlags().StringVar(&bootnode, "bootnode",
-		"/ip4/139.59.73.20/tcp/4001/p2p/16Uiu2HAmVFp1xtDsokTWuCTkThQSDetjqTx7W9EwcCSxrXqH33Dm",
-		"Bootnode MultiAddr",
+	initcmd.PersistentFlags().StringVar(
+		&bootnode,
+		"bootnode",
+		"",
+		"Bootnode Multi-Address",
 	)
-	initcmd.PersistentFlags().StringVar(&jaegerAddress, "jaegerAddress",
+	initcmd.PersistentFlags().StringVar(
+		&jaegerAddress,
+		"jaeger-address",
 		"",
 		"Jeager Address",
 	)
-	initcmd.PersistentFlags().StringVar(&password,
+	initcmd.PersistentFlags().StringVar(
+		&password,
 		"password",
 		"test123",
-		"password to unlock key store",
+		"Password to unlock key store.",
 	)
 	initcmd.PersistentFlags().StringVar(
 		&logFilePath,
-		"logfile",
+		"logfile-path",
 		"",
-		"path at which you'd like to store the logs file",
+		"Path at which you'd like to store the logs file.",
 	)
 	initcmd.PersistentFlags().StringVar(
 		&peerListFilePath,
 		"peer-list",
 		"",
-		"peer list file path",
+		"Peer list file path.",
 	)
 
 	if err := cobra.MarkFlagRequired(initcmd.PersistentFlags(), "port"); err != nil {
+		cmdCommon.Err(err)
+	}
+
+	if err := cobra.MarkFlagRequired(initcmd.PersistentFlags(), "bootnode"); err != nil {
 		cmdCommon.Err(err)
 	}
 }

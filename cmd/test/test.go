@@ -7,7 +7,7 @@ import (
 func GetCommand() *cobra.Command {
 	testnetCmd := &cobra.Command{
 		Use:   "test",
-		Short: "Creates the test directories and configurations required to start a test network",
+		Short: "Creates the test directories and configurations required to start a test network.",
 	}
 
 	setupSubCommands(testnetCmd)

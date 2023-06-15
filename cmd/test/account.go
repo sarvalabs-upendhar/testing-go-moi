@@ -14,7 +14,7 @@ import (
 func GetAccountCommand() *cobra.Command {
 	testAccountCmd := &cobra.Command{
 		Use:   "account",
-		Short: "create test accounts",
+		Short: "Creates test accounts.",
 		Run:   runAccountCommand,
 	}
 
@@ -28,13 +28,13 @@ func parseAccountFlags(cmd *cobra.Command) {
 		&accountCount,
 		"count",
 		0,
-		"No.of accounts",
+		"Count gives number of test accounts.",
 	)
 	cmd.Flags().StringVar(
 		&accountsFilePath,
 		"accounts-path",
 		"accounts.json",
-		"path to accounts file",
+		"Path to accounts.json file.",
 	)
 
 	_ = cmd.MarkFlagRequired("count")

@@ -24,7 +24,7 @@ import (
 	"github.com/multiformats/go-multiaddr"
 	"github.com/spf13/cobra"
 
-	cmdcommon "github.com/sarvalabs/moichain/cmd/common"
+	cmdCommon "github.com/sarvalabs/moichain/cmd/common"
 	"github.com/sarvalabs/moichain/common"
 )
 
@@ -41,7 +41,7 @@ var (
 func GetCommand() *cobra.Command {
 	bootnodeCmd := &cobra.Command{
 		Use:   "bootnode",
-		Short: "A command to initialize moichain bootnode",
+		Short: "A command to initialize moichain bootnode.",
 		Run:   runCommand,
 	}
 
@@ -51,13 +51,18 @@ func GetCommand() *cobra.Command {
 }
 
 func parseFlags(cmd *cobra.Command) {
-	cmd.PersistentFlags().IntVar(&portNumber, "port", 4001, "Provide the port number")
-	cmd.PersistentFlags().StringVar(&ipAddress, "ip-addr", "0.0.0.0", "Provide the listener ip address")
-	cmd.PersistentFlags().StringVar(&keyFile, "key", "file.key", "Provide the key file path")
-	cmd.PersistentFlags().IntVar(&minConnReq, "min-conn-req", 200, "max number of connections allowed")
-	cmd.PersistentFlags().IntVar(&maxConnReq, "max-conn-req", 400, "max number of connections allowed")
-	cmd.PersistentFlags().StringVar(&dataStorePath, "data-store-path", "", "path to store bootnode data")
-	cmd.PersistentFlags().StringVar(&peers, "peers", "", "comma-separated list of peers to connect")
+	cmd.PersistentFlags().IntVar(&portNumber, "port", 4001, "Provide the port number.")
+	cmd.PersistentFlags().StringVar(&ipAddress, "ip-address", "0.0.0.0", "Provide the listener IP address.")
+	cmd.PersistentFlags().StringVar(&keyFile, "key-path", "file.key", "Path to keystore file.")
+	cmd.PersistentFlags().IntVar(&minConnReq, "min-conn", 200, "Min number of connections allowed.")
+	cmd.PersistentFlags().IntVar(&maxConnReq, "max-conn", 400, "Max number of connections allowed.")
+	cmd.PersistentFlags().StringVar(&dataStorePath, "store-path", "", "Path to store bootnode data.")
+	cmd.PersistentFlags().StringVar(
+		&peers,
+		"peer-list",
+		"",
+		"Comma-separated list of peers to connect. Format: <peerAddress1,peerAddress2,...>",
+	)
 }
 
 func runCommand(cmd *cobra.Command, args []string) {
@@ -173,7 +178,7 @@ func startBootNode() {
 		log.Println("2: Exit")
 
 		if _, err := fmt.Scanf("%s", &input); err != nil {
-			cmdcommon.Err(err)
+			cmdCommon.Err(err)
 		}
 
 		if input == "1" {

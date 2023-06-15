@@ -41,7 +41,7 @@ var (
 func GetCommand() *cobra.Command {
 	registerCmd := &cobra.Command{
 		Use:   "register",
-		Short: "Register the guardian information with the protocol",
+		Short: "Register the guardian information with the protocol.",
 		Run:   runCommand,
 	}
 
@@ -51,12 +51,13 @@ func GetCommand() *cobra.Command {
 }
 
 func parseFlags(cmd *cobra.Command) {
-	cmd.PersistentFlags().StringVar(&rpcURL, "rpc-url", "http://localhost:1600/", "json rpc end point")
-	cmd.PersistentFlags().StringVar(&keystorePath, "keystore-path", "", "path to keystore")
-	cmd.PersistentFlags().StringVar(&nodeDataDir, "data-dir", "./test-dir", "path to node data dir")
-	cmd.PersistentFlags().StringVar(&walletAddress, "wallet-address", "", "incentive wallet address")
-	cmd.PersistentFlags().Int32Var(&nodeIndex, "node-index", -1, "validator node index")
-	cmd.PersistentFlags().StringVar(&nodePassword, "node-password", "", "passcode to encrypt the node keystore")
+	cmd.PersistentFlags().StringVar(&rpcURL, "rpc-url", "http://localhost:1600/", "JSON RPC end point.")
+	cmd.PersistentFlags().StringVar(&keystorePath, "keystore-path", "", "Path to keystore.")
+	cmd.PersistentFlags().StringVar(&nodeDataDir, "data-dir", "./test-dir", "Path to node data directory.")
+	cmd.PersistentFlags().StringVar(&walletAddress, "wallet-address", "",
+		"Incentive wallet address.")
+	cmd.PersistentFlags().Int32Var(&nodeIndex, "node-index", -1, "Validator node index.")
+	cmd.PersistentFlags().StringVar(&nodePassword, "node-password", "", "Passcode to encrypt the node keystore.")
 
 	_ = cmd.MarkPersistentFlagRequired("keystore-path")
 	_ = cmd.MarkPersistentFlagRequired("node-index")
