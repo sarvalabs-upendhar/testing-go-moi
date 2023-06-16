@@ -8,6 +8,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/sarvalabs/moichain/jug/engineio"
+	"github.com/sarvalabs/moichain/types"
 )
 
 const (
@@ -607,6 +608,14 @@ func parseKeyedValues(input string, delim symbolizer.TokenKind) (map[any]any, sy
 			key, err = parseValue(parser)
 			if err != nil {
 				return nil, detected, errors.Wrapf(err, "malformed value for key")
+			}
+
+			if raw, ok := key.([]byte); ok {
+				if len(raw) != 32 {
+					return nil, detected, errors.New("malformed value for key: cannot use bytes")
+				}
+
+				key = types.BytesToAddress(raw)
 			}
 		}
 
