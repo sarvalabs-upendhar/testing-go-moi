@@ -73,27 +73,25 @@ func (jq *JobQueue) NextJob() *SyncJob {
 		jq.mtx.Unlock()
 	}()
 
+	updateJob := func(jb *SyncJob) *SyncJob {
+		if jb.getJobState() == Pending ||
+			(jb.getJobState() == Sleep && time.Since(jb.lastModifiedAt) > time.Millisecond*200) {
+			jb.updateJobState(Active)
+
+			return jb
+		}
+
+		if jb.getJobState() == Done && jb.tesseractQueue.Len() == 0 {
+			if err := jq.RemoveJob(jb); err != nil {
+				log.Panicln(err)
+			}
+		}
+
+		return nil
+	}
+
 	for _, syncJob := range jq.jobs {
-		job := syncJob
-
-		j := func(jb *SyncJob) *SyncJob {
-			if jb.getJobState() == Pending ||
-				(jb.getJobState() == Sleep && time.Since(jb.lastModifiedAt) > time.Millisecond*200) {
-				jb.updateJobState(Active)
-
-				return jb
-			}
-
-			if jb.getJobState() == Done && jb.tesseractQueue.Len() == 0 {
-				if err := jq.RemoveJob(jb); err != nil {
-					log.Panicln(err)
-				}
-			}
-
-			return nil
-		}(job)
-
-		if j != nil {
+		if j := updateJob(syncJob); j != nil {
 			return j
 		}
 	}
