@@ -89,6 +89,15 @@ func (m *MockDB) GetAssetRegistry(addr types.Address, registryHash types.Hash) (
 	return data, nil
 }
 
+func (m *MockDB) setAssetRegistry(t *testing.T, registryHash types.Hash, registry *gtypes.RegistryObject) {
+	t.Helper()
+
+	rawData, err := registry.Bytes()
+	require.NoError(t, err)
+
+	m.assetRegistry[registryHash] = rawData
+}
+
 func (m *MockDB) CreateEntry(key, value []byte) error {
 	if m.createEntryHook != nil {
 		return m.createEntryHook()
@@ -338,6 +347,16 @@ func insertBalancesInDB(t *testing.T, db Store, hashes []types.Hash, balances ..
 
 	for i, bal := range balances {
 		mDB.setBalance(t, hashes[i], bal)
+	}
+}
+
+func insertAssetRegistryInDB(t *testing.T, db Store, hashes []types.Hash, registry ...*gtypes.RegistryObject) {
+	t.Helper()
+
+	mDB := getMockDB(t, db)
+
+	for i, bal := range registry {
+		mDB.setAssetRegistry(t, hashes[i], bal)
 	}
 }
 

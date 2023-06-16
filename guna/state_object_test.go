@@ -959,43 +959,145 @@ func TestUpdateContext(t *testing.T) {
 	}
 }
 
-/*
-func TestGetBalanceObject(t *testing.T) {
-	assetIDs, bal := getAssetIDsAndBalances(t, 2)
+func TestLoadBalanceObject(t *testing.T) {
+	assetIDs, bal := getAssetIDsAndBalances(t, 1)
 	balance, balanceHash := getTestBalances(t, getAssetMaps(assetIDs, bal, 1), 1)
-
-	soParams := &createStateObjectParams{
-		soCallback: func(so *StateObject) {
-			insertBalancesInDB(t, so.db, balanceHash, balance...)
-		},
-	}
-	sObj := createTestStateObject(t, soParams)
 
 	testcases := []struct {
 		name            string
-		hash            types.Hash
+		soParams        *createStateObjectParams
 		expectedBalance *gtypes.BalanceObject
 		expectedError   error
 	}{
 		{
-			name: "hash is nil",
-			hash: types.NilHash,
+			name: "should return success if balance loaded using balance hash",
+			soParams: &createStateObjectParams{
+				soCallback: func(so *StateObject) {
+					insertBalancesInDB(t, so.db, balanceHash, balance...)
+					so.data.Balance = balanceHash[0]
+				},
+			},
+			expectedBalance: balance[0],
 		},
 		{
-			name:          "should return error if balance object doesn't exist",
-			hash:          tests.RandomHash(t),
+			name: "should return error if failed to load balance",
+			soParams: &createStateObjectParams{
+				soCallback: func(so *StateObject) {
+					so.data.Balance = tests.RandomHash(t)
+				},
+			},
 			expectedError: types.ErrKeyNotFound,
 		},
 		{
-			name:            "fetched balance object successfully",
-			hash:            balanceHash[0],
-			expectedBalance: balance[0],
+			name: "should load empty balance object for nil balance hash",
+			expectedBalance: &gtypes.BalanceObject{
+				AssetMap: make(map[types.AssetID]*big.Int),
+			},
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			actualBalance, err := load(sObj.address, test.hash, sObj.db)
+			sObj := createTestStateObject(t, test.soParams)
+			err := sObj.loadBalanceObject()
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedBalance, sObj.balance)
+		})
+	}
+}
+
+func TestLoadRegistryObject(t *testing.T) {
+	registryObject, registryHash := getTestRegistryObject(t, map[string][]byte{
+		"MOI": {1, 2},
+		"BTR": {3, 4},
+	})
+
+	testcases := []struct {
+		name                   string
+		soParams               *createStateObjectParams
+		expectedRegistryObject *gtypes.RegistryObject
+		expectedError          error
+	}{
+		{
+			name: "should successfully load registry using registry hash",
+			soParams: &createStateObjectParams{
+				soCallback: func(so *StateObject) {
+					insertAssetRegistryInDB(t, so.db, []types.Hash{registryHash}, registryObject)
+					so.data.AssetRegistry = registryHash
+				},
+			},
+			expectedRegistryObject: registryObject,
+		},
+		{
+			name: "should return error if failed to load registry",
+			soParams: &createStateObjectParams{
+				soCallback: func(so *StateObject) {
+					so.data.AssetRegistry = tests.RandomHash(t)
+				},
+			},
+			expectedError: types.ErrKeyNotFound,
+		},
+		{
+			name: "should return empty registry object for nil registry hash",
+			expectedRegistryObject: &gtypes.RegistryObject{
+				Entries: make(map[string][]byte),
+			},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			sObj := createTestStateObject(t, test.soParams)
+			err := sObj.loadRegistryObject()
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedRegistryObject, sObj.registry)
+		})
+	}
+}
+
+func TestUpdateRegistryEntry(t *testing.T) {
+	testcases := []struct {
+		name          string
+		key           string
+		info          []byte
+		soParams      *createStateObjectParams
+		expectedError error
+	}{
+		{
+			name: "should return success if registry updated",
+			key:  "asset",
+			info: []byte{1, 2},
+		},
+		{
+			name: "should return error if failed to load registry",
+			soParams: &createStateObjectParams{
+				soCallback: func(so *StateObject) {
+					so.data.AssetRegistry = tests.RandomHash(t)
+				},
+			},
+			expectedError: types.ErrKeyNotFound,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			sObj := createTestStateObject(t, test.soParams)
+			err := sObj.UpdateRegistryEntry(test.key, test.info)
+
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -1004,13 +1106,86 @@ func TestGetBalanceObject(t *testing.T) {
 
 			require.NoError(t, err)
 
-			if !test.hash.IsNil() {
-				require.Equal(t, test.expectedBalance, actualBalance)
-			}
+			object, err := sObj.Registry()
+			require.NoError(t, err)
+
+			info, ok := object.Entries[test.key]
+			require.True(t, ok)
+
+			require.Equal(t, test.info, info)
 		})
 	}
 }
-*/
+
+func TestHasFuel(t *testing.T) {
+	testcases := []struct {
+		name          string
+		amount        *big.Int
+		soParams      *createStateObjectParams
+		hasFuel       bool
+		expectedError error
+	}{
+		{
+			name:   "has enough fuel",
+			amount: big.NewInt(200),
+			soParams: &createStateObjectParams{
+				soCallback: func(so *StateObject) {
+					so.balance = &gtypes.BalanceObject{
+						AssetMap: map[types.AssetID]*big.Int{
+							types.MOITokenAssetID: big.NewInt(1000),
+						},
+					}
+				},
+			},
+			hasFuel: true,
+		},
+		{
+			name:   "insufficient fuel",
+			amount: big.NewInt(200),
+			soParams: &createStateObjectParams{
+				soCallback: func(so *StateObject) {
+					so.balance = &gtypes.BalanceObject{
+						AssetMap: map[types.AssetID]*big.Int{
+							types.MOITokenAssetID: big.NewInt(100),
+						},
+					}
+				},
+			},
+			hasFuel: false,
+		},
+		{
+			name:          "invalid transfer amount",
+			amount:        big.NewInt(-122),
+			expectedError: errors.New("invalid transfer amount"),
+		},
+		{
+			name:   "failed to load balance",
+			amount: big.NewInt(200),
+			soParams: &createStateObjectParams{
+				soCallback: func(so *StateObject) {
+					so.data.Balance = tests.RandomHash(t)
+				},
+			},
+			expectedError: errors.New("failed to load balance object"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			sObj := createTestStateObject(t, test.soParams)
+			hasFuel, err := sObj.HasFuel(test.amount)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.hasFuel, hasFuel)
+		})
+	}
+}
 
 //nolint:dupl
 func TestGetMetaStorageTree(t *testing.T) {
@@ -1181,6 +1356,46 @@ func TestSetStorageEntry(t *testing.T) {
 			require.True(t, ok)
 
 			checkForEntryInMerkleTree(t, storageTree, keys[1], values[1])
+		})
+	}
+}
+
+func TestAddAccountGenesisInfo(t *testing.T) {
+	keys, values := getEntries(t, 1)
+
+	testcases := []struct {
+		name          string
+		address       types.Address
+		ixHash        types.Hash
+		soParams      *createStateObjectParams
+		expectedError error
+	}{
+		{
+			name:     "should succeed if account genesis info added",
+			address:  tests.RandomAddress(t),
+			ixHash:   tests.RandomHash(t),
+			soParams: stateObjectParamsWithAST(t, getActiveStorageTrees(t, []types.LogicID{types.SargaLogicID}, keys, values)),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			sObj := createTestStateObject(t, test.soParams)
+
+			err := sObj.AddAccountGenesisInfo(test.address, test.ixHash)
+			require.NoError(t, err)
+
+			accInfo := types.AccountGenesisInfo{
+				IxHash: test.ixHash,
+			}
+
+			expectedValue, err := accInfo.Bytes()
+			require.NoError(t, err)
+
+			actualValue, err := sObj.GetStorageEntry(types.SargaLogicID, test.address.Bytes())
+			require.NoError(t, err)
+
+			require.Equal(t, expectedValue, actualValue)
 		})
 	}
 }
