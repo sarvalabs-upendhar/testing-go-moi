@@ -3,10 +3,9 @@ package lattice
 import (
 	"math/big"
 
+	gtypes "github.com/sarvalabs/moichain/guna/types"
 	"github.com/sarvalabs/moichain/types"
 )
-
-const GenesisIdentifier = "genesis"
 
 func createGenesisTesseract(
 	addr types.Address,
@@ -39,8 +38,8 @@ func createGenesisTesseract(
 		FuelLimit: big.NewInt(0),
 		BodyHash:  tsBodyHash,
 		GroupHash: types.NilHash,
-		ClusterID: GenesisIdentifier,
-		Operator:  GenesisIdentifier,
+		ClusterID: gtypes.GenesisIdentifier,
+		Operator:  gtypes.GenesisIdentifier,
 		Extra: types.CommitData{
 			CommitSignature: nil,
 			Round:           0,

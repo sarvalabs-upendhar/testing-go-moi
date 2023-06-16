@@ -1142,6 +1142,7 @@ func (k *Engine) createProposalGrid(slot *ktypes.Slot) ([]*types.Tesseract, erro
 	}
 	// store the receipts
 	clusterState.SetReceipts(receipts)
+
 	k.logger.Debug("Generating tesseracts", "cluster-id", slot.ClusterID())
 
 	return GenerateTesseracts(clusterState)

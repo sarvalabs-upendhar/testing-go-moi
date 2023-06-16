@@ -459,6 +459,7 @@ type CreateTesseractParams struct {
 	Receipts       types.Receipts
 	Sealer         id.KramaID
 	Seal           []byte
+	ClusterID      string
 	HeaderCallback func(header *types.TesseractHeader)
 	BodyCallback   func(body *types.TesseractBody)
 }
@@ -483,6 +484,7 @@ func CreateTesseract(t *testing.T, params *CreateTesseractParams) *types.Tessera
 		Height:    params.Height,
 		FuelUsed:  big.NewInt(100),
 		FuelLimit: big.NewInt(100),
+		ClusterID: params.ClusterID,
 	}
 
 	if params.Ixns != nil {

@@ -15,9 +15,9 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/moby/locker"
 	"github.com/pkg/errors"
-
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/guna"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
 	ktypes "github.com/sarvalabs/moichain/krama/types"
 	"github.com/sarvalabs/moichain/mudra"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
@@ -572,7 +572,7 @@ func (c *ChainManager) addTesseract(
 		return err
 	}
 
-	if t.ClusterID() != GenesisIdentifier {
+	if t.ClusterID() != gtypes.GenesisIdentifier {
 		gridHash := t.GridHash()
 
 		if err := c.db.SetTSGridLookup(t.Hash(), gridHash); err != nil {

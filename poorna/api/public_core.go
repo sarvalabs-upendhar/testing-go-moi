@@ -6,8 +6,8 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/moichain/common/hexutil"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
 	"github.com/sarvalabs/moichain/jug/engineio"
-	"github.com/sarvalabs/moichain/lattice"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 	"github.com/sarvalabs/moichain/utils"
@@ -700,7 +700,7 @@ func createRPCBody(body types.TesseractBody) ptypes.RPCBody {
 func CreateRPCTesseract(ts *types.Tesseract) (*ptypes.RPCTesseract, error) {
 	var rpcIxns []*ptypes.RPCInteraction
 
-	if ts.ClusterID() != lattice.GenesisIdentifier && len(ts.Interactions()) > 0 {
+	if ts.ClusterID() != gtypes.GenesisIdentifier && len(ts.Interactions()) > 0 {
 		rpcIxns = make([]*ptypes.RPCInteraction, len(ts.Interactions()))
 
 		parts, err := ts.Parts()

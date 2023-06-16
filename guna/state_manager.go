@@ -247,7 +247,7 @@ func (sm *StateManager) FetchTesseractFromDB(hash types.Hash, withInteractions b
 
 	interactions := new(types.Interactions)
 
-	if withInteractions && canonicalTesseract.Header.Height > 0 {
+	if withInteractions && canonicalTesseract.Header.ClusterID != gtypes.GenesisIdentifier {
 		// Fetch interactions from DB
 		gridHash, err := canonicalTesseract.GridHash()
 		if err != nil {

@@ -117,8 +117,11 @@ func TestGetLatestTesseractHash(t *testing.T) {
 
 func TestFetchTesseractFromDB(t *testing.T) {
 	tesseractParams := tests.GetTesseractParamsMapWithIxns(t, 2, 2)
-	tesseracts := tests.CreateTesseracts(t, 3, tesseractParams)
 
+	// Set the clusterID to genesis identifier to avoid fetching interactions
+	tesseractParams[0].ClusterID = gtypes.GenesisIdentifier
+
+	tesseracts := tests.CreateTesseracts(t, 3, tesseractParams)
 	tsParams := &tests.CreateTesseractParams{
 		Height:         3,
 		HeaderCallback: tests.HeaderCallbackWithGridHash(t),
@@ -129,7 +132,7 @@ func TestFetchTesseractFromDB(t *testing.T) {
 	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
 			insertTesseractsInDB(t, db, tesseracts...)
-			db.insertTesseract(t, ts)
+			insertTesseractsInDB(t, db, ts)
 		},
 	}
 
@@ -192,6 +195,8 @@ func TestFetchTesseractFromDB(t *testing.T) {
 				return
 			}
 
+			require.NoError(t, err)
+
 			validateTesseract(t, ts, test.expectedTS, test.withInteractions)
 		})
 	}
@@ -234,9 +239,9 @@ func TestGetTesseractByHash(t *testing.T) {
 		},
 		{
 			name:             "with interactions",
-			hash:             tesseracts[0].Hash(),
+			hash:             tesseracts[1].Hash(),
 			withInteractions: true,
-			expectedTS:       tesseracts[0],
+			expectedTS:       tesseracts[1],
 			expectedError:    nil,
 		},
 		{
@@ -256,6 +261,8 @@ func TestGetTesseractByHash(t *testing.T) {
 
 				return
 			}
+
+			require.NoError(t, err)
 
 			validateTesseract(t, ts, test.expectedTS, test.withInteractions)
 			checkForTesseractInSMCache(t, sm, ts, test.withInteractions)

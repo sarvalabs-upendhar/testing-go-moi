@@ -13,6 +13,8 @@ const (
 	MaxRandomContextSize    = 7
 )
 
+const GenesisIdentifier = "genesis"
+
 type Context interface {
 	Bytes() ([]byte, error)
 	FromBytes(bytes []byte) error

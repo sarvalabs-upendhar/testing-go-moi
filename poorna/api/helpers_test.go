@@ -20,7 +20,6 @@ import (
 	"github.com/sarvalabs/moichain/common/tests"
 	"github.com/sarvalabs/moichain/guna"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
-	"github.com/sarvalabs/moichain/lattice"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
@@ -1097,7 +1096,7 @@ func checkForRPCTesseract(
 
 	require.Equal(t, ts.Hash(), rpcTS.Hash)
 
-	if ts.ClusterID() == lattice.GenesisIdentifier {
+	if ts.ClusterID() == gtypes.GenesisIdentifier {
 		for _, ix := range rpcTS.Ixns {
 			require.Nil(t, ix)
 		}

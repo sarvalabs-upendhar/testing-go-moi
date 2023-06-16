@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/common/tests"
-	"github.com/sarvalabs/moichain/lattice"
+	gtypes "github.com/sarvalabs/moichain/guna/types"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
 )
@@ -318,7 +318,7 @@ func TestPublicCoreAPI_CreateRPCTesseract(t *testing.T) {
 		{
 			name: "create rpc tesseract for genesis tesseract",
 			tsParams: createTesseractParams(func(header *types.TesseractHeader) {
-				header.ClusterID = lattice.GenesisIdentifier
+				header.ClusterID = gtypes.GenesisIdentifier
 				header.FuelLimit = big.NewInt(0)
 				header.FuelUsed = big.NewInt(0)
 			}),
