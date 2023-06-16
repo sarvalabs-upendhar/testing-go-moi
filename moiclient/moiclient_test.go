@@ -10,8 +10,6 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/sarvalabs/moichain/poorna/api"
-
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
@@ -194,7 +192,7 @@ func setupChain(t *testing.T, client *Client, addrs []types.Address, addrsMap St
 		acc, exists := GetMnemonicFromAccounts(addrsMap["assetAddr"], accs)
 		require.True(t, exists)
 
-		t.Log(addrsMap["assetAddr"])
+		t.Log(addrs[i])
 
 		transferTokens(t, client, addrsMap["assetAddr"], addrs[i], acc.Mnemonic)
 		addrsMap["receiverAddr"] = addrs[i]
@@ -633,7 +631,7 @@ func testGetBalance(t *testing.T, client *Client, addrsMap StrMap) {
 
 func testTDU(t *testing.T, client *Client, addr types.Address) {
 	assetID := getAssetID(t, client, addr, &createAssetHeight)
-	sortTDU := func(tdu []api.TDU) {
+	sortTDU := func(tdu []ptypes.TDU) {
 		sort.Slice(tdu, func(i, j int) bool {
 			return tdu[i].AssetID < tdu[j].AssetID
 		})

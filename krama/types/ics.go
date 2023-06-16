@@ -33,7 +33,7 @@ type ClusterState struct {
 	ICSReqTime               time.Time
 	operatorIncluded         bool
 	CurrentRole              types.IcsSetType
-	RequestMsg               *ptypes.ICSRequest
+	RequestMsg               *ptypes.CanonicalICSRequest
 	SuccessMsg               *ICSMSG
 }
 
@@ -41,7 +41,7 @@ type ClusterState struct {
 
 func NewICS(
 	size int,
-	icsReqMsg *ptypes.ICSRequest,
+	icsReqMsg *ptypes.CanonicalICSRequest,
 	ixs types.Interactions,
 	clusterID types.ClusterID,
 	operator id.KramaID,

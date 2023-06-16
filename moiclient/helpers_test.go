@@ -327,12 +327,12 @@ func httpGetBalance(t *testing.T, args *ptypes.BalArgs) *hexutil.Big {
 }
 
 // httpTDU retrieves the TDU of the queried address
-func httpTDU(t *testing.T, args *ptypes.QueryArgs) []api.TDU {
+func httpTDU(t *testing.T, args *ptypes.QueryArgs) []ptypes.TDU {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.TDU", args)
 
-	var tdu []api.TDU
+	var tdu []ptypes.TDU
 
 	err := json.Unmarshal(resp.Data, &tdu)
 	require.NoError(t, err)

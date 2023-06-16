@@ -13,11 +13,6 @@ import (
 	"github.com/sarvalabs/moichain/utils"
 )
 
-type TDU struct {
-	AssetID types.AssetID `json:"asset_id"`
-	Amount  *hexutil.Big  `json:"amount"`
-}
-
 // PublicCoreAPI is a struct that represents a wrapper for the core public core APIs
 type PublicCoreAPI struct {
 	// Represents the API backend
@@ -132,7 +127,7 @@ func (p *PublicCoreAPI) GetBalance(args *ptypes.BalArgs) (*hexutil.Big, error) {
 }
 
 // GetTDU will return the total digital utility associated with address
-func (p *PublicCoreAPI) GetTDU(args *ptypes.QueryArgs) ([]TDU, error) {
+func (p *PublicCoreAPI) GetTDU(args *ptypes.QueryArgs) ([]ptypes.TDU, error) {
 	ts, err := p.getTesseract(getTesseractArgs(args.Address, args.Options))
 	if err != nil {
 		return nil, err
@@ -145,12 +140,12 @@ func (p *PublicCoreAPI) GetTDU(args *ptypes.QueryArgs) ([]TDU, error) {
 
 	data, _ := object.TDU()
 
-	tdu := make([]TDU, 0, len(data))
+	tdu := make([]ptypes.TDU, 0, len(data))
 
 	for key, value := range data {
-		tdu = append(tdu, TDU{
-			key,
-			(*hexutil.Big)(value),
+		tdu = append(tdu, ptypes.TDU{
+			AssetID: key,
+			Amount:  (*hexutil.Big)(value),
 		})
 	}
 

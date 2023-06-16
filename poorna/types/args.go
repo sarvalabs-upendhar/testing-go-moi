@@ -437,3 +437,8 @@ func GetRPCAssetDescriptor(ad *types.AssetDescriptor) RPCAssetDescriptor {
 		LogicID:    ad.LogicID,
 	}
 }
+
+type TDU struct {
+	AssetID types.AssetID `json:"asset_id"`
+	Amount  *hexutil.Big  `json:"amount"`
+}

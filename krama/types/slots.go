@@ -78,7 +78,7 @@ func (info *Slot) ClusterState() *ClusterState {
 	return info.clusterState
 }
 
-func (info *Slot) ICSRequestMsg() *ptypes.ICSRequest {
+func (info *Slot) ICSRequestMsg() *ptypes.CanonicalICSRequest {
 	return info.clusterState.RequestMsg
 }
 

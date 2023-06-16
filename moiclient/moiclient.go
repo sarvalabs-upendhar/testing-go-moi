@@ -261,7 +261,7 @@ func (c *Client) Balance(args *ptypes.BalArgs) (*hexutil.Big, error) {
 }
 
 // TDU retrieves the TDU of the queried address
-func (c *Client) TDU(args *ptypes.QueryArgs) ([]api.TDU, error) {
+func (c *Client) TDU(args *ptypes.QueryArgs) ([]ptypes.TDU, error) {
 	var resp ptypes.Response
 
 	err := c.Call(&resp, "moi.TDU", args)
@@ -273,7 +273,7 @@ func (c *Client) TDU(args *ptypes.QueryArgs) ([]api.TDU, error) {
 		return nil, resp.Error
 	}
 
-	var tdu []api.TDU
+	var tdu []ptypes.TDU
 
 	err = json.Unmarshal(resp.Data, &tdu)
 

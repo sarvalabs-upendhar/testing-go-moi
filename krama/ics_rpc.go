@@ -2,11 +2,11 @@ package krama
 
 import (
 	"context"
-	"errors"
 	"time"
 
-	"github.com/sarvalabs/go-polo"
+	"github.com/sarvalabs/moichain/mudra"
 
+	"github.com/pkg/errors"
 	ktypes "github.com/sarvalabs/moichain/krama/types"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
@@ -28,32 +28,51 @@ func NewICSRPCService(k *Engine) *ICSRPCService {
 // ICSRequest is a method of ICSRPCService that sends an ICS join request
 func (icsrpc *ICSRPCService) ICSRequest(
 	ctx context.Context,
-	req *ptypes.ICSRequest,
+	icsReq *ptypes.ICSRequest,
 	response *ptypes.ICSResponse,
 ) error {
 	var (
-		respChan     = make(chan Response)
-		interactions = new(types.Interactions)
+		canonicalICSReq = new(ptypes.CanonicalICSRequest)
+		respChan        = make(chan Response)
+		interactions    = new(types.Interactions)
 	)
 
-	if err := interactions.FromBytes(req.IxData); err != nil {
-		if !errors.Is(err, polo.ErrNullPack) {
-			return errors.New("ixs decode error")
-		}
+	response.StatusCode = ptypes.InternalError
+
+	if err := canonicalICSReq.FromBytes(icsReq.ReqData); err != nil {
+		icsrpc.engine.logger.Error("failed to depolorize canonical ics request ", err)
+
+		return err
+	}
+
+	if err := interactions.FromBytes(canonicalICSReq.IxData); err != nil {
+		icsrpc.engine.logger.Error("failed to depolorize interactions ", err)
+
+		return err
+	}
+
+	if err := mudra.VerifySignatureUsingKramaID(
+		id.KramaID(canonicalICSReq.Operator),
+		icsReq.ReqData,
+		icsReq.Signature,
+	); err != nil {
+		icsrpc.engine.logger.Error("failed to verify ics request signature ", err)
+
+		return errors.Wrap(err, "failed to verify ics request signature")
 	}
 
 	kramaRequest := Request{
 		slotType:     ktypes.ValidatorSlot,
-		operator:     id.KramaID(req.Operator),
-		msg:          req,
+		operator:     id.KramaID(canonicalICSReq.Operator),
+		msg:          canonicalICSReq,
 		responseChan: respChan,
 		ixs:          *interactions,
-		reqTime:      time.Unix(0, req.Timestamp),
+		reqTime:      time.Unix(0, canonicalICSReq.Timestamp),
 	}
 
 	icsrpc.engine.requests <- kramaRequest
 	// Wait for response from krama engine
-	response.ClusterID = req.ClusterID
+	response.ClusterID = canonicalICSReq.ClusterID
 
 	if resp := <-respChan; resp.err != nil {
 		switch resp.err.Error() {

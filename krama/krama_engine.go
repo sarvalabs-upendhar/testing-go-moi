@@ -20,12 +20,14 @@ import (
 	"golang.org/x/crypto/blake2b"
 
 	"github.com/sarvalabs/moichain/common"
+
 	"github.com/sarvalabs/moichain/guna"
 	"github.com/sarvalabs/moichain/ixpool"
 	"github.com/sarvalabs/moichain/krama/kbft"
 	"github.com/sarvalabs/moichain/krama/observer"
 	ktypes "github.com/sarvalabs/moichain/krama/types"
 	"github.com/sarvalabs/moichain/mudra"
+	mudraCommon "github.com/sarvalabs/moichain/mudra/common"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/poorna/flux"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
@@ -97,7 +99,7 @@ type Response struct {
 
 type Request struct {
 	ixs          types.Interactions
-	msg          *ptypes.ICSRequest
+	msg          *ptypes.CanonicalICSRequest
 	operator     id.KramaID
 	slotType     ktypes.SlotType
 	reqTime      time.Time
@@ -252,7 +254,7 @@ func (k *Engine) acquireContextLock(ctx context.Context, slot *ktypes.Slot) erro
 
 	slot.ClusterState().ICSReqTime = utils.Now()
 	// Construct ICS_Request
-	reqMsg, err := k.getICSReqMsg(slot.ClusterState())
+	reqMsg, err := k.getCanonicalICSReqMsg(slot.ClusterState())
 	if err != nil {
 		return err
 	}
@@ -786,7 +788,7 @@ func (k *Engine) sendICSRequestWithBound(
 	cID types.ClusterID,
 	nodes []id.KramaID,
 	keys [][]byte,
-	msg ptypes.ICSRequest,
+	msg ptypes.CanonicalICSRequest,
 ) {
 	ctx, span := tracing.Span(parentContext, "KramaEngine", fmt.Sprintf("ics request set-type %d", setType))
 	defer span.End()
@@ -802,6 +804,22 @@ func (k *Engine) sendICSRequestWithBound(
 	nodeResponses := make([]bool, len(nodes))
 	rcount := 0
 	msg.ContextType = int32(setType)
+
+	rawCanonicalICSReq, err := msg.Bytes()
+	if err != nil {
+		k.logger.Error("failed to send ics request : ", err)
+
+		return
+	}
+
+	signature, err := k.vault.Sign(rawCanonicalICSReq, mudraCommon.EcdsaSecp256k1, mudra.UsingNetworkKey())
+	if err != nil {
+		k.logger.Error("failed to sign ics request : ", err)
+
+		return
+	}
+
+	icsRequest := ptypes.NewICSRequest(rawCanonicalICSReq, signature)
 
 	for index, kramaID := range nodes {
 		// Check if the counter has reached the min number of required random nodes
@@ -847,7 +865,7 @@ func (k *Engine) sendICSRequestWithBound(
 				kramaID,
 				"ICSRPC",
 				"ICSRequest",
-				msg,
+				icsRequest,
 				icsResponse,
 			); err == nil {
 				if icsResponse.StatusCode == ptypes.Success {
@@ -897,7 +915,7 @@ func (k *Engine) sendICSRequest(
 	finalWaitGroup *sync.WaitGroup,
 	cID types.ClusterID,
 	nodesSet *types.NodeSet,
-	msg ptypes.ICSRequest,
+	msg ptypes.CanonicalICSRequest,
 	randomNodes chan []id.KramaID,
 ) {
 	_, span := tracing.Span(ctx, "KramaEngine", fmt.Sprintf("ics request set-type %d", setType))
@@ -921,6 +939,22 @@ func (k *Engine) sendICSRequest(
 	wg.Add(len(nodesSet.Ids))
 
 	msg.ContextType = int32(setType)
+
+	rawCanonicalICSReq, err := msg.Bytes()
+	if err != nil {
+		k.logger.Error("failed to send ics request : ", err)
+
+		return
+	}
+
+	signature, err := k.vault.Sign(rawCanonicalICSReq, mudraCommon.EcdsaSecp256k1, mudra.UsingNetworkKey())
+	if err != nil {
+		k.logger.Error("failed to sign ics request : ", err)
+
+		return
+	}
+
+	icsRequest := ptypes.NewICSRequest(rawCanonicalICSReq, signature)
 
 	for index, kramaID := range nodesSet.Ids {
 		if kramaID == slot.ClusterState().Operator {
@@ -958,7 +992,7 @@ func (k *Engine) sendICSRequest(
 				kramaID,
 				"ICSRPC",
 				"ICSRequest",
-				msg,
+				icsRequest,
 				icsResponse,
 			); err == nil && icsResponse.StatusCode == ptypes.Success {
 				// Update the nodeResponses array to capture the success response
@@ -992,23 +1026,23 @@ func (k *Engine) sendICSRequest(
 	slot.ClusterState().UpdateNodeSet(setType, nodesSet)
 }
 
-func (k *Engine) getICSReqMsg(
+func (k *Engine) getCanonicalICSReqMsg(
 	cs *ktypes.ClusterState,
-) (ptypes.ICSRequest, error) {
-	icsReqMsg := new(ptypes.ICSRequest)
+) (ptypes.CanonicalICSRequest, error) {
+	canonicalICSReqMsg := new(ptypes.CanonicalICSRequest)
 
 	rawData, err := cs.Ixs.Bytes()
 	if err != nil {
-		return *icsReqMsg, err
+		return *canonicalICSReqMsg, err
 	}
 
-	icsReqMsg.IxData = rawData
-	icsReqMsg.ClusterID = string(cs.ClusterID)
-	icsReqMsg.Operator = string(k.selfID)
-	icsReqMsg.ContextLock = cs.ContextLock()
-	icsReqMsg.Timestamp = cs.ICSReqTime.UnixNano()
+	canonicalICSReqMsg.IxData = rawData
+	canonicalICSReqMsg.ClusterID = string(cs.ClusterID)
+	canonicalICSReqMsg.Operator = string(k.selfID)
+	canonicalICSReqMsg.ContextLock = cs.ContextLock()
+	canonicalICSReqMsg.Timestamp = cs.ICSReqTime.UnixNano()
 
-	return *icsReqMsg, nil
+	return *canonicalICSReqMsg, nil
 }
 
 func (k *Engine) getRandomNodes(ctx context.Context, count int, exemptedNodes []id.KramaID) ([]id.KramaID, error) {

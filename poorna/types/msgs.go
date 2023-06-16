@@ -70,7 +70,7 @@ func (m *Message) FromBytes(bytes []byte) error {
 	return nil
 }
 
-type ICSRequest struct {
+type CanonicalICSRequest struct {
 	ClusterID            string
 	Operator             string
 	ContextLock          map[types.Address]types.ContextLockInfo
@@ -79,6 +79,35 @@ type ICSRequest struct {
 	Timestamp            int64
 	StakingContractState types.Hash
 	ContextType          int32
+}
+
+func (ics CanonicalICSRequest) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(ics)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize canonical ics request")
+	}
+
+	return rawData, nil
+}
+
+func (ics *CanonicalICSRequest) FromBytes(bytes []byte) error {
+	if err := polo.Depolorize(ics, bytes); err != nil {
+		return errors.Wrap(err, "failed to depolorize canonical ics request")
+	}
+
+	return nil
+}
+
+type ICSRequest struct {
+	ReqData   []byte
+	Signature []byte
+}
+
+func NewICSRequest(rawICSReqData []byte, signature []byte) ICSRequest {
+	return ICSRequest{
+		ReqData:   rawICSReqData,
+		Signature: signature,
+	}
 }
 
 type ICSResponse struct {

@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sarvalabs/moichain/mudra"
+
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -21,7 +23,6 @@ import (
 	"github.com/sarvalabs/moichain/dhruva"
 	"github.com/sarvalabs/moichain/dhruva/db"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
-	"github.com/sarvalabs/moichain/mudra"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 	"github.com/sarvalabs/moichain/types"
@@ -486,24 +487,8 @@ func (r *ReputationEngine) verifyHelloMsg(msg *gtypes.NodeMetaInfoMsg) error {
 		return errors.Wrapf(err, "Failed to fetch hello message bytes")
 	}
 
-	peerID, err := msg.KramaID.DecodedPeerID()
-	if err != nil {
-		return errors.Wrapf(err, "Failed to get peer id from krama id")
-	}
-
-	pk, err := peerID.ExtractPublicKey()
-	if err != nil {
-		return errors.Wrapf(err, "Failed to get public key from peer id")
-	}
-
-	rawPK, err := pk.Raw()
-	if err != nil {
-		return errors.Wrapf(err, "Failed to get raw public key from public key")
-	}
-
-	verified, err := mudra.Verify(rawData, msg.PeerSignature, rawPK)
-	if !verified || err != nil {
-		return errors.Wrapf(err, "Signature verification failed")
+	if err := mudra.VerifySignatureUsingKramaID(msg.KramaID, rawData, msg.PeerSignature); err != nil {
+		return errors.Wrap(err, "failed to verify hello msg signature")
 	}
 
 	return nil

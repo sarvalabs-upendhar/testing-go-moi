@@ -166,23 +166,22 @@ func getHelloMessage(t *testing.T, addr string) []byte {
 func createSignedHelloMsg(t *testing.T) ptypes.HelloMsg {
 	t.Helper()
 
-	err := os.Mkdir("test", os.ModePerm)
+	dir, err := os.MkdirTemp(os.TempDir(), " ")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
-		err := os.RemoveAll("./test")
+		err = os.RemoveAll(dir)
 		require.NoError(t, err)
 	})
 
 	// create keystore.json in current directory
-	dataDir := "./test"
 	password := "test123"
 
-	_, _, err = poi.RandGenKeystore(dataDir, password)
+	_, _, err = poi.RandGenKeystore(dir, password)
 	require.NoError(t, err)
 
 	config := &mudra.VaultConfig{
-		DataDir:      dataDir,
+		DataDir:      dir,
 		NodePassword: password,
 	}
 
