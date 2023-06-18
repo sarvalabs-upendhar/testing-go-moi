@@ -45,6 +45,7 @@ const (
 	MaxICSSize float64 = 10
 
 	ObserverNodesDelta float64 = 0.2
+	RandomNodesDelta   float64 = 0.3
 
 	ICSTimeOutDuration = 3500 * time.Millisecond
 
@@ -410,7 +411,7 @@ func (k *Engine) acquireContextLock(ctx context.Context, slot *ktypes.Slot) erro
 }
 
 func (k *Engine) randomNodeDelta(setSize int) int {
-	return (setSize / 2) + 1
+	return int(math.Ceil(RandomNodesDelta * float64(setSize)))
 }
 
 func (k *Engine) observerNodeDelta(setSize int) int {
@@ -791,18 +792,19 @@ func (k *Engine) sendICSRequestWithBound(
 	msg ptypes.CanonicalICSRequest,
 ) {
 	ctx, span := tracing.Span(parentContext, "KramaEngine", fmt.Sprintf("ics request set-type %d", setType))
-	defer span.End()
+	defer func() {
+		span.End()
+		finalWaitGroup.Done()
+	}()
 
-	var wg sync.WaitGroup
+	var (
+		wg            sync.WaitGroup
+		nodeResponses = make([]bool, len(nodes))
+		slot          = k.slots.GetSlot(cID)
+	)
 
 	wg.Add(len(nodes))
 
-	currentSlot := k.slots.GetSlot(cID)
-
-	clusterState := currentSlot.ClusterState()
-
-	nodeResponses := make([]bool, len(nodes))
-	rcount := 0
 	msg.ContextType = int32(setType)
 
 	rawCanonicalICSReq, err := msg.Bytes()
@@ -822,18 +824,8 @@ func (k *Engine) sendICSRequestWithBound(
 	icsRequest := ptypes.NewICSRequest(rawCanonicalICSReq, signature)
 
 	for index, kramaID := range nodes {
-		// Check if the counter has reached the min number of required random nodes
-		if rcount == requiredCount {
-			// Determine the number of un queried nodes and decrement the wait group by that count
-			x := len(nodes) - rcount
-			wg.Add(-x)
-
-			break
-		}
-
-		if kramaID == clusterState.Operator {
+		if kramaID == slot.ClusterState().Operator {
 			nodeResponses[index] = true
-			rcount++
 
 			wg.Done()
 
@@ -860,7 +852,7 @@ func (k *Engine) sendICSRequestWithBound(
 			icsResponse := new(ptypes.ICSResponse)
 			requestTS := time.Now()
 
-			if err := k.transport.Call(
+			if err = k.transport.Call(
 				ctx,
 				kramaID,
 				"ICSRPC",
@@ -871,7 +863,6 @@ func (k *Engine) sendICSRequestWithBound(
 				if icsResponse.StatusCode == ptypes.Success {
 					// Add the nodeResponses array to capture the success response
 					nodeResponses[index] = true
-					rcount++
 				} else {
 					k.logger.Debug(
 						"ICS Random nodes request failed",
@@ -904,9 +895,7 @@ func (k *Engine) sendICSRequestWithBound(
 
 	idSet.QuorumSize = requiredCount
 
-	clusterState.UpdateNodeSet(setType, idSet)
-	//	currentSlot.clusterState.IncrementClusterSize(len(nodes))
-	finalWaitGroup.Done()
+	slot.ClusterState().UpdateNodeSet(setType, idSet)
 }
 
 func (k *Engine) sendICSRequest(
