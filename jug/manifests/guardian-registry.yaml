@@ -279,9 +279,6 @@ elements:
         - slot: 0
           label: approvedKramaIDs
           type: "[]string"
-        - slot: 1
-          label: approvals
-          type: "map[string]address"
       returns: 
         - slot: 0
           label: countOfAccountsApproved
@@ -299,6 +296,7 @@ elements:
           0x11, 0x05, 0x0a,               # $5 = ldptr1(line 10)
           0x11, 0x06, 0x15,               # $6 = ldptr1(line 21)
           0x01,                           # line 10
+
           0x53, 0x07, 0x00, 0x03,         # $7 = approvers[$3]
           0x46, 0x08, 0x07, 0x01,         # $8 = sender == approvers[$3]
           0x03, 0x06, 0x08,               # jumpi $6 if $8
@@ -310,19 +308,19 @@ elements:
           0x10, 0x06, 0x06,               # const $6 $6
           0x41, 0x06,                     # throw $6
           0x01,                           # line 21
+
           0x04, 0x00, 0x00,               # obtain $0 = accepts:approvedKramaIDs
-          0x04, 0x01, 0x01,               # obtain $1 = accepts:approvals
           0x50, 0x02, 0x00,               # $2 = size($0)
           0x11, 0x03, 0x05,               # $3 = ldptr1(5)
           0x10, 0x03, 0x03,               # $3 = $3 ie.,= 0
           0x11, 0x04, 0x0b,               # $4 = ldptr1(11)
           0x10, 0x04, 0x04,               # const $4 $4 = 1
           0x80, 0x05, 0x04,               # pload $5 = &4
-          0x11, 0x09, 0x1f,               # ldptr1 $9 &0x1f = line 31
-          0x01,                           # line 31
+          0x11, 0x09, 0x1e,               # ldptr1 $9 &0x1d = line 30
+          0x01,                           # line 30
+
           0x53, 0x06, 0x00, 0x03,         # $6 = $0[$3]
-          0x53, 0x07, 0x01, 0x06,         # $7 = $1[$6]
-          0x54, 0x05, 0x06, 0x07,         # $5[$6] = $7
+          0x54, 0x05, 0x06, 0x01,         # $5[$6] = $1
           0x65, 0x03, 0x03, 0x04,         # $3 = $3 + $4
           0x46, 0x08, 0x03, 0x02,         # $3 == $2
           0x62, 0x08, 0x08,               # $8 = !$8
@@ -488,7 +486,8 @@ elements:
           0x51, 0x03, 0x02, 0x01,   # $3 = kramaID
           0x51, 0x04, 0x02, 0x02,   # $4 = deviceID
           0x80, 0x05, 0x06,         # $5 = masterOperator
-          0x11, 0x10, 0x56,         # $16 = ldptr1(line86)
+          0x11, 0x10, 0x5d,         # $16 = ldptr1(line 93)
+
           0x46, 0x07, 0x01, 0x05,   # $7 = operator == masterOperator
           0x03, 0x10, 0x07,         # jump to $16 if $7
           0x51, 0x06, 0x00, 0x00,   # $6 = currentOperator.OperatorID
@@ -496,13 +495,22 @@ elements:
           0x10, 0x07, 0x07,         # const $7 = $7 = Empty string
           0x46, 0x08, 0x06, 0x07,   # $8 = currentOperator.OperatorID == ""
           0x62, 0x08, 0x08,         # $8 = !$8
-          0x11, 0x07, 0x14,         # $7 = ldptr(line20)
+          0x11, 0x07, 0x14,         # $7 = ldptr(line 20)
           0x03, 0x07, 0x08,         # jump to $7 if $8
           0x11, 0x06, 0x04,         # ldptr1 $6 &4
           0x10, 0x06, 0x06,         # const $6 $6
           0x41, 0x06,               # throw $6
           0x1,                      # line 20
-          0x11, 0x0e, 0x2d,         # $e = ldptr1(line45)
+
+          0x0A, 0x06,               # cargs $0
+          0x72, 0x07,               # $7 = Fetch participant context
+          0x49, 0x07, 0x07,         # $7 = addr(sender)
+          0x52, 0x06, 0x00, 0x01,   # setfld $6 &0 $1
+          0x52, 0x06, 0x01, 0x07,   # setfld $6 &1 $7
+          0x11, 0x07, 0x21,         # $7 = ldptr1(routine 33)
+          0x0C, 0x06, 0x07, 0x06,   # $6 = ValidateSenderWithMoiID($6)
+
+          0x11, 0x0e, 0x34,         # $e = ldptr1(line 52)
           0x80, 0x07, 0x0d,         # $7 = storage::EnforceApprovals
           0x62, 0x07, 0x07,         # #7 = !$7
           0x03, 0x0e, 0x07,         # jump to $e if $7
@@ -514,8 +522,9 @@ elements:
           0x10, 0x09, 0x09,         # const $9 = 0
           0x11, 0x0a, 0x0b,         # $10 = ldptr1(11)
           0x10, 0x0a, 0x0a,         # const $10 = 1
-          0x11, 0x0b, 0x22,         # $11 = ldptr1(line 34)
-          0x01,                     # line 34
+          0x11, 0x0b, 0x29,         # $11 = ldptr1(line 41)
+          0x01,                     # line 41
+
           0x53, 0x0d, 0x06, 0x09,   # $7 = approvers[$3]
           0x46, 0x0c, 0x07, 0x0d,   # $8 = sender == approvers[$3]
           0x03, 0x0e, 0x0c,         # jumpi $6 if $8
@@ -526,8 +535,9 @@ elements:
           0x11, 0x06, 0x1f,         # ldptr1 $6 &31
           0x10, 0x06, 0x06,         # const $6 $6
           0x41, 0x06,               # throw $6
-          0x01,                     # line 45
-          0x11, 0x0e, 0x49,         # $e = ldptr1(line73)
+          0x01,                     # line 52 
+
+          0x11, 0x0e, 0x50,         # $e = ldptr1(line 80)
           0x80, 0x07, 0x0c,         # $7 = storage::EnforceNodeLimits
           0x62, 0x07, 0x07,         # #7 = !$7
           0x03, 0x0e, 0x07,         # jump to $14 if $7
@@ -539,7 +549,7 @@ elements:
           0x80, 0x06, 0x01,         # $6 = storage::OperatorToGuardians
           0x53, 0x06, 0x06, 0x01,   # $6 = storage::OperatorToGuardians[operator]
           0x50, 0x06, 0x06,         # $6 = size(storage::OperatorToGuardians)
-          0x11, 0x07, 0x42,         # $7 = ldptr(line66)
+          0x11, 0x07, 0x49,         # $7 = ldptr(line 73)
           0x03, 0x07, 0x08,         # jumpi to $7 if $8,
           0x80, 0x07, 0x08,         # $7 = storage::NodeLimitKYB
           0x44, 0x08, 0x06, 0x07,   # $8 = $6 < $7
@@ -547,14 +557,15 @@ elements:
           0x11, 0x06, 0x08,         # ldptr1 $6 &8
           0x10, 0x06, 0x06,         # const $6 $6
           0x41, 0x06,               # throw $6
-          0x1,                      # line 66
+          0x1,                      # line 73 
           0x80, 0x07, 0x07,         # $7 = storage::NodeLimitKYC
           0x44, 0x08, 0x06, 0x07,   # $8 = $6 < $7
           0x03, 0x0e, 0x08,         # jump to $9 if $8,
           0x11, 0x06, 0x07,         # ldptr1 $6 &7
           0x10, 0x06, 0x06,         # const $6 $6
           0x41, 0x06,               # throw $6
-          0x1,                      # line 73
+          0x1,                      # line 80
+
           0x80, 0x06, 0x0d,         # $5 = storage::EnforceDeviceLimits
           0x62, 0x06, 0x06,         # #5 = !$5
           0x03, 0x10, 0x06,         # jump to $16 if $5
@@ -567,7 +578,8 @@ elements:
           0x11, 0x06, 0x09,         # ldptr1 $6 &9
           0x10, 0x06, 0x06,         # const $6 $6
           0x41, 0x06,               # throw $6
-          0x01,                     # line 86
+
+          0x01,                     # line 93
           0x80, 0x05, 0x01,         # $5 = storage::OperatorToGuardians
           0x53, 0x06, 0x05, 0x01,   # $6 = OperatorToGuardians[operator]
           0x57, 0x06, 0x03,         # temp = append(OperatorToGuardians[operator], kramaID)
@@ -678,12 +690,12 @@ elements:
           0x04, 0x00, 0x00,
           0x11, 0x01, 0x16,
           0x10, 0x01, 0x01,
-          0x46, 0x02, 0x01, 0x00, # $2 = accepts::kind == "kyc"
-          0x04, 0x00, 0x01,       # $0 = accepts::delta
-          0x11, 0x01, 0x08,
+          0x46, 0x02, 0x01, 0x00,         # $2 = accepts::kind == "kyc"
+          0x04, 0x00, 0x01,               # $0 = accepts::delta
+          0x11, 0x01, 0x1e,
           0x03, 0x01, 0x02,
           0x81, 0x00, 0x08,
-          0x1,
+          0x1,                            # line 30
           0x81, 0x00, 0x07
         ]
   
@@ -868,3 +880,173 @@ elements:
       type: string
       value: 064163636573732064656e6965642120596f7520617265206e6f7420617574686f72697a656420746f206d616b65207468697320726571756573742e # String: Access denied! You are not authorized to make this request.
       
+  - ptr: 33
+    kind: routine
+    data: 
+      name: ValidateSenderWithMoiID # throws error and 
+      kind: invokable
+      accepts: 
+        - slot: 0
+          label: operator
+          type: string
+        - slot: 1
+          label: currentSender
+          type: address
+      executes: 
+        bin: [
+          0x0A, 0x00,                    # cargs $0
+          0x04, 0x03, 0x00,              # obtain $3 &0
+          0x11, 0x01, 0x22,              # $1 = ldptr1(&34)
+          0x10, 0x01, 0x01,              # $1 = const &1
+          0x4a, 0x02, 0x03,              # $2 = len($3)
+          0x05, 0x01, 0x00,              # yield $0 &0
+          0x05, 0x02, 0x01,              # yield $0 &0
+          0x52, 0x00, 0x00, 0x03,        # setfld $0 &0 $3
+          0x52, 0x00, 0x01, 0x01,        # setfld $0 &1 $1
+          0x52, 0x00, 0x02, 0x02,        # setfld $0 &2 $2
+          0x0D, 0x03, 0x1A, 0x00,        # $3 = 0x1A($0)
+          0x51, 0x03, 0x03, 0x00,        # getfld $3 $3 &0
+          0x0A, 0x00,                    # cargs $0
+          0x04, 0x01, 0x01,              # obtain $1 &1
+          0x52, 0x00, 0x00, 0x01,        # setfld $0 &0 $1
+          0x0D, 0x01, 0x08, 0x00,        # $1 = 0x08($0)
+          0x51, 0x01, 0x01, 0x00,        # getfld $0 $1 &0
+          0x11, 0x02, 0x17,              # $2 =  ldptr1(line 23)
+          0x46, 0x00, 0x03, 0x01,        # $0 = $3 == $1
+          0x03, 0x02, 0x00,              # jump $2 if $0
+          0x11, 0x01, 0x23,              # ldptr1 $1 &35
+          0x10, 0x01, 0x01,              # const $1 $1
+          0x41, 0x01,                    # throw $1
+          0x01,                          # line 23
+          0x00
+        ]
+
+  - ptr: 34
+    kind: constant
+    data:
+      type: u64
+      value: 0x0302
+  
+  - ptr: 35
+    kind: constant
+    data: 
+      type: string
+      value: 0641757468656e7469636174696f6e206661696c65642e204f70657261746f7220646f65736e2774206d6174636820776974682073656e646572
+  
+  - ptr: 36
+    kind: routine
+    data: 
+      name: RemoveString
+      kind: invokable
+      accepts: 
+        - slot: 0
+          label: strArray
+          type: "[]string"
+        - slot: 1
+          label: strToBeRemoved
+          type: string
+      returns: 
+        - slot: 0
+          label: updatedArray
+          type: "[]string"
+      executes: 
+        bin: [
+          0x04, 0x00, 0x00,         # obtain $0 &0
+          0x04, 0x06, 0x01,         # obtain $6 &1
+          0x50, 0x01, 0x00,         # sizeof $1 $0
+          0x11, 0x02, 0x05,         # ldptr1 $2 &5 = 0
+          0x10, 0x02, 0x02,         # const $2 $2
+          0x11, 0x03, 0x0b,         # ldptr1 $3 &11 = 1
+          0x10, 0x03, 0x03,         # const $3 $3
+          0x11, 0x04, 0x25,         # ldptr $4 &37
+          0x28, 0x04, 0x04,         # make $4 $4
+          0x11, 0x08, 0x0b,         # ldptr1 $8 &0x0a= line 11
+          0x11, 0x09, 0x10,         # ldptr1 $9 &0x0a= line 16
+          0x1,                      # line 11
+          0x45, 0x07, 0x01, 0x02,   # $7 = $1 > $2
+          0x03, 0x09, 0x07,         # jumpi $9 if $7
+          0x05, 0x04, 0x00,
+          0x0,
+          0x01,                     # line 16
+          0x53, 0x05, 0x00, 0x02,
+          0x65, 0x02, 0x02, 0x03,
+          0x46, 0x07, 0x05, 0x06,
+          0x03, 0x08, 0x07,
+          0x57, 0x04, 0x05,
+          0x02, 0x08
+        ]
+  
+  - ptr : 37
+    kind: typedef
+    data: "[]string"
+
+  - ptr: 38
+    kind: routine
+    deps: [0, 3, 33, 36]
+    data: 
+      name: UpdateGuardianDetails!
+      kind: invokable
+      accepts: 
+        - slot: 0
+          label: kramaID  
+          type: string
+        - slot: 1
+          label: updatedGurdnDetails
+          type: Guardian
+      executes: 
+        bin: [
+          0x04, 0x00, 0x00,           # $0 = kramaID
+          0x04, 0x01, 0x01,           # $1 = updatedGurdnDetails
+          0x72, 0x02,                 # $2 = Fetch participant context
+          0x49, 0x02, 0x02,           # $2 = addr(sender)
+          0x80, 0x03, 0x02,           # $3 = persistent::Guardians
+          0x53, 0x03, 0x03, 0x00,     # $3 = getidx $3 $0 or persistent::Guardians[kramaID]
+
+          0x51, 0x06, 0x03, 0x00,     # $6 = getfld $3 &0 persistent::Guardians[kramaID].GuardianOperator
+          
+          0x0A, 0x04,                 # cargs $4
+          0x52, 0x04, 0x00, 0x06,     # setfld $4 &0 $3
+          0x52, 0x04, 0x01, 0x02,     # setfld $4 &1 $2
+          0x11, 0x05, 0x21,           # $5 = ldptr1(routine 33)
+          0x0C, 0x06, 0x05, 0x04,     # $6 = ValidateSenderWithMoiID($6)
+
+          0x80, 0x04, 0x02,           # $4 = persistent::Guardians
+          0x54, 0x04, 0x00, 0x01,     # $4 = setidx $4 &0 $1 or persistent::Guardians[kramaID] = updatedGurdnDetails 
+          0x81, 0x04, 0x02,           # psave $4 -> &2
+
+          0x51, 0x04, 0x03, 0x02,     # $4 = getfld $3 &2 or oldDeviceID
+          0x51, 0x05, 0x01, 0x02,     # $5 = getfld $1 &2 or newDeviceID
+
+          0x11, 0x03, 0x16,           # $3 = ldptr1(line 22)
+          0x46, 0x06, 0x04, 0x05,     # $6 = oldDeviceID == newDeviceID
+          0x62, 0x06, 0x06,           # $6 = !$6
+          0x03, 0x03, 0x06,           # jumpi $3 if $6
+          0x0,
+          0x1,                        # line 22
+          
+          0x80, 0x03, 0x03,           # $3 = persistent::Devices
+
+          0x53, 0x06, 0x03, 0x04,     # $4 = $3[&4] or persistent::Devices[oldDeviceID]
+          0x0A, 0x07,                 # cargs $5
+          0x52, 0x07, 0x00, 0x06,     # setfld $5 &0 $4
+          0x52, 0x07, 0x01, 0x00,     # setfld $5 &1 $0
+          0x11, 0x08, 0x24,           # $6 = ldptr1(routine 36)
+          0x0C, 0x06, 0x08, 0x07,     # $6 = RemoveString($5)
+          0x51, 0x06, 0x06, 0x00,     # $6 = getfld $6 &0 or updatedDeviceKramaIDArr
+
+          0x53, 0x07, 0x03, 0x05,     # $7 = persistent::Devices[newDeviceID]
+          0x57, 0x07, 0x00,           # $7 = append($7, $0)
+
+          0x54, 0x03, 0x05, 0x07,     # setidx $3 &5 $7
+          0x54, 0x03, 0x04, 0x06,     # setidx $3 &4 $6
+          0x81, 0x03, 0x03,           # psave $3 -> &3
+
+          0x05, 0x06, 0x00,
+          0x05, 0x07, 0x01
+        ]
+
+  - ptr: 39
+    kind: constant
+    data: 
+      type: string
+      value: 0x06476976656e204b72616d61204944206e6f7420666f756e6420756e6465722074686973206f70657261746f72
