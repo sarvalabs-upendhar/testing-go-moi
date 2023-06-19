@@ -34,6 +34,7 @@ const (
 	TesseractTopic        = "MOI_PUBSUB_TESSERACT"
 	MaxBucketSyncAttempts = 3
 	ChannelBufferSize     = 10
+	MaxPeersToDial        = 8
 	TesseractFetchTimeOut = 15 * time.Second
 )
 
@@ -119,6 +120,7 @@ type Syncer struct {
 	network             *poorna.Server
 	mux                 *utils.TypeMux
 	gridStore           *GridStore
+	execLock            sync.RWMutex
 	agora               *agora.Agora
 	db                  store
 	tesseractRegistry   *types.HashRegistry
@@ -138,6 +140,11 @@ type Syncer struct {
 	accountsLock        sync.RWMutex
 	lockedAccounts      map[types.Address]types.Hash
 	metrics             *Metrics
+	isInitialSyncDone   bool
+	pendingMsgChan      chan *TesseractInfo
+	pendingMsgQueue     []*TesseractInfo
+	init                sync.Once
+	execGrid            map[types.Hash]types.Address
 }
 
 func NewSyncer(
@@ -180,6 +187,9 @@ func NewSyncer(
 		lastActiveTimeStamp: lastActiveTimeStamp,
 		lockedAccounts:      make(map[types.Address]types.Hash, 0),
 		metrics:             syncerMetrics,
+		pendingMsgQueue:     make([]*TesseractInfo, 0),
+		pendingMsgChan:      make(chan *TesseractInfo, 10),
+		execGrid:            make(map[types.Hash]types.Address),
 	}
 
 	return s, nil
@@ -357,15 +367,14 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 		}
 	}
 
-	if job.mode == types.FullSync {
-		if !job.snapDownloaded && s.isSnapSyncRequired(job.address) {
-			if err = s.fetchAndStoreSnap(bestPeer, job); err != nil {
-				return err
-			}
+	tsInfo := job.tesseractQueue.Peek()
+
+	if !job.snapDownloaded && s.isSnapSyncRequired(job.address) && job.mode != types.LatestSync {
+		if err = s.fetchAndStoreSnap(bestPeer, job); err != nil {
+			return err
 		}
 	}
 
-	tsInfo := job.tesseractQueue.Peek()
 	group, groupCtx := errgroup.WithContext(context.Background())
 
 	group.Go(func() error {
@@ -560,11 +569,14 @@ func (s *Syncer) releasePendingJob(job *SyncJob, ts *types.Tesseract) error {
 */
 
 func (s *Syncer) findLatestHeightAndBestPeers(addr types.Address, localHeight uint64) (uint64, []id.KramaID, error) {
-	//	responses := make([]*LatestAccountInfo, 0)
 	bestPeers := make([]id.KramaID, 0)
 	maxHeight := localHeight
 
-	for _, kramaID := range s.network.GetPeers() {
+	for index, kramaID := range s.network.GetPeers() {
+		if index == MaxPeersToDial {
+			break
+		}
+
 		resp := new(LatestAccountInfo)
 		if err := s.rpcClient.MoiCall(
 			context.Background(),
@@ -666,7 +678,7 @@ func (s *Syncer) syncSystemAccount(address ...types.Address) ([]id.KramaID, erro
 				}
 
 				metaInfo, err := s.db.GetAccountMetaInfo(addr)
-				if err == nil && metaInfo.Height == bestHeight {
+				if err == nil && metaInfo.Height >= bestHeight {
 					return nil
 				}
 			}
@@ -682,10 +694,6 @@ func (s *Syncer) syncSystemAccount(address ...types.Address) ([]id.KramaID, erro
 func (s *Syncer) initSync() error {
 	var principalSyncTimeStamp int64
 
-	for s.network.Peers.Len() < 10 {
-		time.Sleep(2 * time.Second)
-	}
-
 	s.isPrincipalSyncDone, principalSyncTimeStamp = s.db.IsPrincipalSyncDone()
 	if s.isPrincipalSyncDone {
 		s.logger.Info("Principal sync was finished at", "unix-time", principalSyncTimeStamp)
@@ -694,10 +702,12 @@ func (s *Syncer) initSync() error {
 	// Sync all system accounts
 	bestPeers, err := s.syncSystemAccount(types.GuardianLogicAddr, types.SargaAddress)
 	if err != nil {
-		s.logger.Error("Failed to sync sarga account", "error", err)
+		s.logger.Error("Failed to sync system  account", "error", err)
 
 		return err
 	}
+
+	s.logger.Info("System accounts sync successful")
 
 	if err = s.loadSyncJobsFromDB(); err != nil {
 		s.logger.Error("Failed to load sync jobs from db", "error", err)
@@ -819,22 +829,20 @@ func (s *Syncer) syncBucketSince(kramaID id.KramaID, sinceTs uint64) error {
 */
 
 func (s *Syncer) loadSyncJobsFromDB() error {
-	var localHeight uint64
-
 	accountSyncInfos, err := s.db.GetAccountsSyncStatus()
 	if err != nil {
 		return err
 	}
 
 	for _, v := range accountSyncInfos {
-		accountMetaInfo, err := s.db.GetAccountMetaInfo(v.Address)
-		if err == nil {
-			localHeight = accountMetaInfo.Height
-		}
-
-		syncJob, err := SyncJobFromCanonicalInfo(s.logger, s.db, localHeight, v)
+		syncJob, err := SyncJobFromCanonicalInfo(s.logger, s.db, v)
 		if err != nil {
 			return err
+		}
+
+		accountMetaInfo, err := s.db.GetAccountMetaInfo(v.Address)
+		if err == nil {
+			syncJob.updateCurrentHeight(accountMetaInfo.Height)
 		}
 
 		if err = s.jobQueue.AddJob(syncJob); err != nil {
@@ -905,6 +913,8 @@ func (s *Syncer) syncBuckets(kramaID id.KramaID, attempts int) error {
 						if totalEntriesInBucket == 0 {
 							totalEntriesInBucket = respMsg.BucketCount
 						}
+
+						s.logger.Debug("Bucket info", respMsg.BucketID, respMsg.BucketCount)
 
 						// send the data to meta info handler
 						if err = s.handleAccountMetaInfo(respMsg.AccountMetaInfos, types.FullSync); err != nil {
@@ -986,10 +996,14 @@ func (s *Syncer) fetchAndStoreSnap(bestPeer id.KramaID, job *SyncJob) error {
 	)
 	defer cancel()
 
+	s.logger.Debug("Initiating snap sync request", "address", job.address)
+
 	snap, err := s.fetchSnapShort(ctx, bestPeer, job.address, job.expectedHeight)
 	if err != nil {
 		return errors.Wrap(err, "failed to fetch snapshot")
 	}
+
+	s.logger.Debug("Snap fetch successful", "address", job.address)
 
 	storeErr := func() error {
 		if err = s.db.StoreAccountSnapShot(snap); err != nil {
@@ -1002,6 +1016,7 @@ func (s *Syncer) fetchAndStoreSnap(bestPeer id.KramaID, job *SyncJob) error {
 
 		return nil
 	}()
+
 	if storeErr != nil {
 		err = s.db.DropPrefix(job.address.Bytes())
 		if err != nil {
@@ -1137,12 +1152,7 @@ func (s *Syncer) syncLattice(
 		return errors.Wrap(err, "failed to decode peerID")
 	}
 
-	s.logger.Debug("Sending lattice sync request", job.address)
-
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(endHeight+10)*time.Second)
-	defer func() {
-		cancel()
-	}()
+	s.logger.Debug("Sending lattice sync request", "address", job.address)
 
 	fromGenesis := s.fromGenesis(job.address, job.getCurrentHeight())
 	if !fromGenesis {
@@ -1156,6 +1166,11 @@ func (s *Syncer) syncLattice(
 		StartHeight: startHeight,
 		EndHeight:   endHeight,
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(endHeight-startHeight+5)*time.Second)
+	defer func() {
+		cancel()
+	}()
 
 	grp, grpCtx := errgroup.WithContext(ctx)
 
@@ -1220,7 +1235,7 @@ func (s *Syncer) syncLattice(
 				job.tesseractQueue.Push(tsInfo)
 				job.signalNewTesseract()
 
-				if job.getCurrentHeight() == endHeight {
+				if job.getCurrentHeight() >= endHeight {
 					return nil
 				}
 			}
@@ -1263,6 +1278,20 @@ func (s *Syncer) tesseractInfoFromTesseractMsg(msg *ptypes.TesseractMessage) (*T
 	return info, nil
 }
 
+func (s *Syncer) areGridTesseractsStored(msg *TesseractInfo) bool {
+	if s.db.HasTesseractAt(msg.tesseract.Address(), msg.tesseract.Height()) {
+		return false
+	}
+
+	for addr, tsHashAndNumber := range msg.tesseract.Header().Extra.GridID.Parts.Grid {
+		if s.db.HasTesseractAt(addr, tsHashAndNumber.Height) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (s *Syncer) syncTesseract(msg *TesseractInfo, job *SyncJob) (bool, error) {
 	var err error
 
@@ -1275,7 +1304,13 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo, job *SyncJob) (bool, error) {
 		}
 	}
 
-	if !msg.shouldExecute {
+	var execInProgress bool
+
+	s.execLock.RLock()
+	_, execInProgress = s.execGrid[msg.tesseract.GridHash()]
+	s.execLock.RUnlock()
+
+	if (!execInProgress && s.areGridTesseractsStored(msg)) || !msg.shouldExecute {
 		err = s.lattice.ValidateTesseract(msg.tesseract, msg.icsNodeSet)
 		if err != nil {
 			return false, errors.Wrap(err, "failed to validate tesseract")
@@ -1290,6 +1325,10 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo, job *SyncJob) (bool, error) {
 		}
 
 		return true, nil
+	}
+
+	if execInProgress {
+		return false, nil
 	}
 
 	grid := s.gridStore.GetGrid(msg.tesseract.GridHash())
@@ -1309,6 +1348,22 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo, job *SyncJob) (bool, error) {
 	if !grid.IsGridComplete(msg.tesseract.GridLength()) {
 		return false, nil
 	}
+
+	s.execLock.Lock()
+	if _, ok := s.execGrid[msg.tesseract.GridHash()]; ok {
+		s.execLock.Unlock()
+
+		return false, nil
+	}
+
+	s.execGrid[msg.tesseract.GridHash()] = msg.tesseract.Address()
+	s.execLock.Unlock()
+
+	defer func() {
+		s.execLock.Lock()
+		delete(s.execGrid, msg.tesseract.GridHash())
+		s.execLock.Unlock()
+	}()
 
 	s.accountsLock.Lock()
 	for _, ts := range grid.ts {
@@ -1363,6 +1418,7 @@ func (s *Syncer) fetchTesseractState(tesseract *types.Tesseract, fetchContext []
 	if err != nil {
 		return err
 	}
+	defer newSession.Close()
 	defer newSession.Close()
 
 	islocal, acc, block, err := s.fetchAccount(ctx, newSession, tesseract.StateHash())
@@ -1605,7 +1661,7 @@ func (s *Syncer) syncLogicTree(ctx context.Context, session *session.Session, ne
 	return s.state.SyncLogicTree(session.ID(), metaLogicRoot)
 }
 
-func (s *Syncer) tesseractHandler(msg *pubsub.Message) error {
+func (s *Syncer) msgHandler(msg *pubsub.Message) error {
 	var (
 		tsMsg = new(ptypes.TesseractMessage)
 		err   error
@@ -1628,7 +1684,7 @@ func (s *Syncer) tesseractHandler(msg *pubsub.Message) error {
 	if !s.tesseractRegistry.Contains(ts.Hash()) {
 		s.tesseractRegistry.Add(ts.Hash())
 
-		s.logger.Trace(
+		s.logger.Debug(
 			"Tesseract Received from",
 			"Sender", tsMsg.Sender,
 			"Sealer", ts.Sealer(),
@@ -1641,19 +1697,36 @@ func (s *Syncer) tesseractHandler(msg *pubsub.Message) error {
 			return err
 		}
 
-		if err = s.NewSyncRequest(
-			ts.Address(),
-			ts.Height(),
-			types.LatestSync,
-			clusterInfo.RandomSet,
-			&TesseractInfo{
-				tesseract:     ts,
-				clusterInfo:   clusterInfo,
-				icsNodeSet:    nil,
-				shouldExecute: s.cfg.ShouldExecute,
-				delta:         tsMsg.Delta,
-			}); err != nil {
-			s.logger.Error("Error adding sync request", "error", err)
+		tsInfo := &TesseractInfo{
+			tesseract:     ts,
+			clusterInfo:   clusterInfo,
+			icsNodeSet:    nil,
+			shouldExecute: s.cfg.ShouldExecute,
+			delta:         tsMsg.Delta,
+		}
+
+		select {
+		case <-s.ctx.Done():
+			return s.ctx.Err()
+		default:
+			if !s.isInitialSyncDone {
+				s.pendingMsgChan <- tsInfo
+
+				return nil
+			}
+
+			if err = s.NewSyncRequest(
+				tsInfo.tesseract.Address(),
+				tsInfo.tesseract.Height(),
+				types.LatestSync,
+				tsInfo.clusterInfo.RandomSet,
+				tsInfo); err != nil {
+				s.logger.Error("Error adding sync request", "error", err)
+			}
+
+			s.init.Do(func() {
+				close(s.pendingMsgChan)
+			})
 		}
 	}
 
@@ -1695,8 +1768,14 @@ func (s *Syncer) Start() error {
 		return err
 	}
 
-	if err := s.network.Subscribe(s.ctx, TesseractTopic, s.tesseractHandler); err != nil {
+	if err := s.network.Subscribe(s.ctx, TesseractTopic, s.msgHandler); err != nil {
 		return err
+	}
+
+	go s.queueHandler()
+
+	for s.network.Peers.Len() < 10 {
+		time.Sleep(2 * time.Second)
 	}
 
 	s.startWorkers()
@@ -1708,6 +1787,7 @@ func (s *Syncer) Start() error {
 			return
 		}
 
+		s.isInitialSyncDone = true // TODO: This is not thread safe
 		s.logger.Info("Initial sync successful")
 	}()
 
@@ -1723,6 +1803,10 @@ func (s *Syncer) startSyncEventHandler() {
 	for event := range sub.Chan() {
 		req, ok := event.Data.(utils.SyncRequestEvent)
 		if ok {
+			if !s.isInitialSyncDone {
+				continue
+			}
+
 			if err := s.NewSyncRequest(
 				req.Address,
 				req.Height,
@@ -1744,4 +1828,33 @@ func (s *Syncer) startWorkers() {
 
 func (s *Syncer) Close() {
 	log.Println("Closing syncer")
+}
+
+func (s *Syncer) queueHandler() {
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+
+		case msg, ok := <-s.pendingMsgChan:
+			if !ok {
+				for _, tsInfo := range s.pendingMsgQueue {
+					if err := s.NewSyncRequest(
+						tsInfo.tesseract.Address(),
+						tsInfo.tesseract.Height(),
+						types.LatestSync,
+						tsInfo.clusterInfo.RandomSet,
+						tsInfo); err != nil {
+						s.logger.Error("Error adding sync request", "error", err)
+					}
+				}
+
+				s.pendingMsgQueue = nil
+
+				return
+			}
+
+			s.pendingMsgQueue = append(s.pendingMsgQueue, msg)
+		}
+	}
 }

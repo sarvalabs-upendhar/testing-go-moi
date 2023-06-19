@@ -127,7 +127,6 @@ type SyncJob struct {
 func SyncJobFromCanonicalInfo(
 	logger hclog.Logger,
 	db store,
-	currentHeight uint64,
 	data *types.AccountSyncStatus,
 ) (*SyncJob, error) {
 	modifiedTime := new(time.Time)
@@ -138,16 +137,16 @@ func SyncJobFromCanonicalInfo(
 	}
 
 	return &SyncJob{
-		db:             db,
-		logger:         logger,
-		address:        data.Address,
-		snapDownloaded: data.SnapshotDownloaded,
-		mode:           data.Mode,
-		expectedHeight: data.ExpectedHeight,
-		lastModifiedAt: *modifiedTime,
-		tesseractQueue: NewTesseractQueue(),
-		hash:           data.CurrentHash,
-		currentHeight:  currentHeight,
+		db:              db,
+		logger:          logger,
+		address:         data.Address,
+		snapDownloaded:  data.SnapshotDownloaded,
+		mode:            data.Mode,
+		expectedHeight:  data.ExpectedHeight,
+		lastModifiedAt:  *modifiedTime,
+		tesseractQueue:  NewTesseractQueue(),
+		hash:            data.CurrentHash,
+		tesseractSignal: make(chan struct{}, 1),
 	}, nil
 }
 
@@ -269,5 +268,8 @@ func (j *SyncJob) signalNewTesseract() {
 	select {
 	case j.tesseractSignal <- struct{}{}:
 	default:
+		go func() {
+			j.tesseractSignal <- struct{}{}
+		}()
 	}
 }

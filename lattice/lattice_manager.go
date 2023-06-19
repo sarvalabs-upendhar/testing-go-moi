@@ -1114,6 +1114,10 @@ func (c *ChainManager) SetupSargaAccount(
 		return nil, errors.Wrap(err, "failed to create storage tree")
 	}
 
+	if err := stateObject.AddAccountGenesisInfo(types.SargaAddress, types.GenesisIxHash); err != nil {
+		return nil, err
+	}
+
 	for _, account := range accounts {
 		// Add account to sarga storage tree
 		if err := stateObject.AddAccountGenesisInfo(account.Address, types.GenesisIxHash); err != nil {
