@@ -46,7 +46,7 @@ jobs:
   cd:
     name: Continuous Deployment
     needs: stop
-    uses: ./.github/workflows/docker.yml
+    uses: ./.github/workflows/moipod-docker.yml
     secrets:
       ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
 
