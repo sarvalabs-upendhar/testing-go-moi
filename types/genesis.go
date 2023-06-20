@@ -27,7 +27,7 @@ type AssetCreationArgs struct {
 	Standard    hexutil.Uint16 `json:"standard"`
 	IsLogical   bool           `json:"is_logical"`
 	IsStateful  bool           `json:"is_stateful"`
-	Owner       Address        `json:"owner"`
+	Operator    Address        `json:"operator"`
 	Allocations []Allocation   `json:"allocations"`
 }
 
@@ -40,7 +40,7 @@ func (ac *AssetCreationArgs) AssetDescriptor() *AssetDescriptor {
 
 	return &AssetDescriptor{
 		Symbol:     ac.Symbol,
-		Owner:      ac.Owner,
+		Operator:   ac.Operator,
 		Supply:     totalSupply,
 		Dimension:  ac.Dimension.ToInt(),
 		Standard:   AssetStandard(ac.Standard.ToInt()),

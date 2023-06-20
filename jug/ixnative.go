@@ -81,7 +81,7 @@ func (executor IxExecutor) CreateAsset(
 }
 
 func (executor IxExecutor) MintAsset(
-	assetOwner, assetAccount *guna.StateObject,
+	assetOperator, assetAccount *guna.StateObject,
 	payload types.AssetMintOrBurnPayload,
 ) (
 	engineio.Fuel, *types.AssetMintOrBurnReceipt, error,
@@ -108,19 +108,19 @@ func (executor IxExecutor) MintAsset(
 		return nil, nil, err
 	}
 
-	// add minted tokens to assetOwner account
-	assetOwner.AddBalance(payload.Asset, payload.Amount)
+	// add minted tokens to assetOperator account
+	assetOperator.AddBalance(payload.Asset, payload.Amount)
 
 	return FuelSimpleValueTransfer, &types.AssetMintOrBurnReceipt{TotalSupply: (hexutil.Big)(*ad.Supply)}, nil
 }
 
 func (executor IxExecutor) BurnAsset(
-	assetOwner, assetAccount *guna.StateObject,
+	assetOperator, assetAccount *guna.StateObject,
 	payload types.AssetMintOrBurnPayload,
 ) (
 	engineio.Fuel, *types.AssetMintOrBurnReceipt, error,
 ) {
-	bal, err := assetOwner.BalanceOf(payload.Asset)
+	bal, err := assetOperator.BalanceOf(payload.Asset)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -129,8 +129,8 @@ func (executor IxExecutor) BurnAsset(
 		return nil, nil, types.ErrInsufficientFunds
 	}
 
-	// burn tokens from assetOwner account
-	assetOwner.SubBalance(payload.Asset, payload.Amount)
+	// burn tokens from assetOperator account
+	assetOperator.SubBalance(payload.Asset, payload.Amount)
 
 	registry, err := assetAccount.GetRegistryEntry(payload.Asset.String())
 	if err != nil {

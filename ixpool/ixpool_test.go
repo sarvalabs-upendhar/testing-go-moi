@@ -1078,16 +1078,16 @@ func TestIxPool_ValidateAssetMint(t *testing.T) {
 			expectedErr: types.ErrAssetNotFound,
 		},
 		{
-			name: "should return error if Owner address mismatch",
+			name: "should return error if operator address mismatch",
 			ix: newTestInteraction(t, types.IxAssetMint, 0, address, func(ixData *types.IxData) {
 				ixData.Input.Payload = rawAssetPayload
 			}),
 			testFn: func(interaction *types.Interaction) {
 				sm.setAssetInfo(assetID, &types.AssetDescriptor{
-					Owner: tests.RandomAddress(t),
+					Operator: tests.RandomAddress(t),
 				})
 			},
-			expectedErr: errors.New("Owner address mismatch"),
+			expectedErr: errors.New("Operator address mismatch"),
 		},
 		{
 			name: "should return success if asset mint data is valid",
@@ -1096,7 +1096,7 @@ func TestIxPool_ValidateAssetMint(t *testing.T) {
 			}),
 			testFn: func(interaction *types.Interaction) {
 				sm.setAssetInfo(assetID, &types.AssetDescriptor{
-					Owner: interaction.Sender(),
+					Operator: interaction.Sender(),
 				})
 			},
 		},
@@ -1107,7 +1107,7 @@ func TestIxPool_ValidateAssetMint(t *testing.T) {
 			}),
 			testFn: func(interaction *types.Interaction) {
 				sm.setAssetInfo(assetID, &types.AssetDescriptor{
-					Owner: interaction.Sender(),
+					Operator: interaction.Sender(),
 				})
 			},
 			expectedErr: types.ErrMintNonFungibleToken,
@@ -1163,7 +1163,7 @@ func TestIxPool_ValidateAssetBurn(t *testing.T) {
 			}),
 			testFn: func(interaction *types.Interaction, mockStateManager *MockStateManager) {
 				mockStateManager.setAssetInfo(assetID, &types.AssetDescriptor{
-					Owner: interaction.Sender(),
+					Operator: interaction.Sender(),
 				})
 			},
 			expectedErr: types.ErrFetchingBalance,
@@ -1178,13 +1178,13 @@ func TestIxPool_ValidateAssetBurn(t *testing.T) {
 					assetID: big.NewInt(10),
 				}
 				mockStateManager.setAssetInfo(assetID, &types.AssetDescriptor{
-					Owner: interaction.Sender(),
+					Operator: interaction.Sender(),
 				})
 			},
 			expectedErr: types.ErrInsufficientFunds,
 		},
 		{
-			name: "owner address mismatch",
+			name: "operator address mismatch",
 			ix: newTestInteraction(t, types.IxAssetMint, 0, address, func(ixData *types.IxData) {
 				ixData.Input.Payload = rawAssetPayload
 			}),
@@ -1193,10 +1193,10 @@ func TestIxPool_ValidateAssetBurn(t *testing.T) {
 					assetID: big.NewInt(1000),
 				}
 				mockStateManager.setAssetInfo(assetID, &types.AssetDescriptor{
-					Owner: tests.RandomAddress(t),
+					Operator: tests.RandomAddress(t),
 				})
 			},
-			expectedErr: errors.New("Owner address mismatch"),
+			expectedErr: errors.New("Operator address mismatch"),
 		},
 		{
 			name: "valid asset burn data",
@@ -1208,7 +1208,7 @@ func TestIxPool_ValidateAssetBurn(t *testing.T) {
 					assetID: big.NewInt(1000),
 				}
 				mockStateManager.setAssetInfo(assetID, &types.AssetDescriptor{
-					Owner: interaction.Sender(),
+					Operator: interaction.Sender(),
 				})
 			},
 		},

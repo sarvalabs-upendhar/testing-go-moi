@@ -541,9 +541,9 @@ func (i *IxPool) validateAssetMint(ix *types.Interaction) error {
 		return types.ErrAssetNotFound
 	}
 
-	// only owner can mint asset
-	if assetInfo.Owner != ix.Sender() {
-		return errors.New("Owner address mismatch")
+	// only operator can mint asset
+	if assetInfo.Operator != ix.Sender() {
+		return errors.New("Operator address mismatch")
 	}
 
 	return nil
@@ -571,9 +571,9 @@ func (i *IxPool) validateAssetBurn(ix *types.Interaction) error {
 		return types.ErrInsufficientFunds
 	}
 
-	// only owner can burn asset
-	if assetInfo.Owner != ix.Sender() {
-		return errors.New("Owner address mismatch")
+	// only operator can burn asset
+	if assetInfo.Operator != ix.Sender() {
+		return errors.New("Operator address mismatch")
 	}
 
 	return nil

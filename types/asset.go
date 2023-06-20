@@ -19,9 +19,9 @@ func (assets AssetMap) Copy() AssetMap {
 }
 
 type AssetDescriptor struct {
-	Symbol string   `json:"symbol"`
-	Owner  Address  `json:"owner"`
-	Supply *big.Int `json:"supply"`
+	Symbol   string   `json:"symbol"`
+	Operator Address  `json:"operator"`
+	Supply   *big.Int `json:"supply"`
 
 	Dimension  uint8         `json:"dimension"`
 	Standard   AssetStandard `json:"standard"`
@@ -31,9 +31,9 @@ type AssetDescriptor struct {
 	LogicID LogicID `json:"logic_id"`
 }
 
-func NewAssetDescriptor(owner Address, asset AssetCreatePayload) *AssetDescriptor {
+func NewAssetDescriptor(operator Address, asset AssetCreatePayload) *AssetDescriptor {
 	return &AssetDescriptor{
-		Owner:      owner,
+		Operator:   operator,
 		Symbol:     asset.Symbol,
 		Supply:     asset.Supply,
 		Dimension:  asset.Dimension,

@@ -1335,12 +1335,12 @@ func mockContextLock() map[types.Address]types.ContextLockInfo {
 	return make(map[types.Address]types.ContextLockInfo)
 }
 
-func getTestAssetDescriptor(t *testing.T, owner types.Address, symbol string) *types.AssetDescriptor {
+func getTestAssetDescriptor(t *testing.T, operator types.Address, symbol string) *types.AssetDescriptor {
 	t.Helper()
 
 	return &types.AssetDescriptor{
 		Symbol:     symbol,
-		Owner:      owner,
+		Operator:   operator,
 		Supply:     big.NewInt(10000),
 		Dimension:  4,
 		IsStateFul: false,
@@ -2157,7 +2157,7 @@ func CheckAssetCreation(
 	require.NoError(t, err)
 
 	require.Equal(t, actualRegistryData, expectedRegistryData)
-	require.Equal(t, s.Address(), assetDescriptor.Owner) // check if address is assigned to owner
+	require.Equal(t, s.Address(), assetDescriptor.Operator) // check if address is assigned to operator
 }
 
 func getTestAssetID(addr types.Address, asset *types.AssetDescriptor) types.AssetID {

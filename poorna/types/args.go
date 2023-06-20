@@ -202,9 +202,9 @@ type RPCRegistry struct {
 }
 
 type RPCAssetDescriptor struct {
-	Symbol string        `json:"symbol"`
-	Owner  types.Address `json:"owner"`
-	Supply hexutil.Big   `json:"supply"`
+	Symbol   string        `json:"symbol"`
+	Operator types.Address `json:"operator"`
+	Supply   hexutil.Big   `json:"supply"`
 
 	Dimension hexutil.Uint8  `json:"dimension"`
 	Standard  hexutil.Uint16 `json:"standard"`
@@ -424,7 +424,7 @@ func NewInteractionResponse(ix *types.Interaction) *InteractionResponse {
 func GetRPCAssetDescriptor(ad *types.AssetDescriptor) RPCAssetDescriptor {
 	return RPCAssetDescriptor{
 		Symbol:     ad.Symbol,
-		Owner:      ad.Owner,
+		Operator:   ad.Operator,
 		Dimension:  hexutil.Uint8(ad.Dimension),
 		Standard:   hexutil.Uint16(ad.Standard),
 		Supply:     (hexutil.Big)(*ad.Supply),

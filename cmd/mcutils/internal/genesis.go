@@ -167,7 +167,7 @@ func createTestGenesisFile() {
 			Standard:    0,
 			IsLogical:   false,
 			IsStateful:  false,
-			Owner:       types.NilAddress,
+			Operator:    types.NilAddress,
 			Allocations: make([]types.Allocation, 0, accCount),
 		},
 		BehaviouralContext: getKramaIDs(behaviouralNodesCount),

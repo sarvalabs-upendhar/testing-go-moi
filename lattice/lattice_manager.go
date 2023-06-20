@@ -898,12 +898,13 @@ func (c *ChainManager) SetupAssetAccounts(
 			return err
 		}
 
-		if assetAccount.AssetInfo.Owner != types.NilAddress {
-			if _, ok := stateObjects[assetAccount.AssetInfo.Owner]; !ok {
-				return errors.New("owner account not found")
+		if assetAccount.AssetInfo.Operator != types.NilAddress {
+			if _, ok := stateObjects[assetAccount.AssetInfo.Operator]; !ok {
+				return errors.New("operator account not found")
 			}
 
-			_, err = stateObjects[assetAccount.AssetInfo.Owner].CreateAsset(accAddress, assetAccount.AssetInfo.AssetDescriptor())
+			_, err = stateObjects[assetAccount.AssetInfo.Operator].CreateAsset(
+				accAddress, assetAccount.AssetInfo.AssetDescriptor())
 			if err != nil {
 				return err
 			}

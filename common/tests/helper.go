@@ -300,7 +300,7 @@ func GetRandomAssetInfo(t *testing.T, addr types.Address) *types.AssetDescriptor
 	}
 
 	asset := &types.AssetDescriptor{
-		Owner:      addr,
+		Operator:   addr,
 		Dimension:  1,
 		Supply:     big.NewInt(1000),
 		Symbol:     symbol,

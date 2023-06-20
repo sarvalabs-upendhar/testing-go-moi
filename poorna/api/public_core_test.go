@@ -1638,7 +1638,7 @@ func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Equal(t, test.expectedAssetDescriptor.Symbol, fetchedAssetInfo["symbol"])
-			require.Equal(t, test.expectedAssetDescriptor.Owner, fetchedAssetInfo["owner"])
+			require.Equal(t, test.expectedAssetDescriptor.Operator, fetchedAssetInfo["operator"])
 			require.Equal(t, (*hexutil.Big)(test.expectedAssetDescriptor.Supply), fetchedAssetInfo["supply"])
 			require.Equal(t, hexutil.Uint8(test.expectedAssetDescriptor.Dimension), fetchedAssetInfo["dimension"])
 			require.Equal(t, hexutil.Uint16(test.expectedAssetDescriptor.Standard), fetchedAssetInfo["standard"])

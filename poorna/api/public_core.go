@@ -401,7 +401,7 @@ func (p *PublicCoreAPI) GetAssetInfoByAssetID(args *ptypes.GetAssetInfoArgs) (ma
 
 	rpcAssetInfo := map[string]interface{}{
 		"symbol":      info.Symbol,
-		"owner":       info.Owner,
+		"operator":    info.Operator,
 		"supply":      (*hexutil.Big)(info.Supply),
 		"standard":    hexutil.Uint16(info.Standard),
 		"dimension":   hexutil.Uint8(info.Dimension),

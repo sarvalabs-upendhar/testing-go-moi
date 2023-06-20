@@ -38,7 +38,7 @@ func parsePremineFlags(cmd *cobra.Command) {
 		&assetInfo,
 		"asset-info",
 		"",
-		"Asset information. Format: <symbol:dimension:standard:isLogical:isMintable:owner>",
+		"Asset information. Format: <symbol:dimension:standard:isLogical:isMintable:operator>",
 	)
 	cmd.Flags().StringSliceVar(
 		&allocations,
@@ -130,8 +130,8 @@ func parseAssetInfoAndAllocations(assetInfo string, allocations []string) (*type
 		return nil, types.ErrInvalidAssetInfoParams
 	}
 
-	owner := strings.TrimSpace(params[5])
-	if owner == "" {
+	operator := strings.TrimSpace(params[5])
+	if operator == "" {
 		return nil, types.ErrInvalidAssetInfoParams
 	}
 
@@ -141,7 +141,7 @@ func parseAssetInfoAndAllocations(assetInfo string, allocations []string) (*type
 		Standard:    hexutil.Uint16(standard),
 		IsLogical:   isLogical,
 		IsStateful:  isStateFul,
-		Owner:       types.HexToAddress(owner),
+		Operator:    types.HexToAddress(operator),
 		Allocations: make([]types.Allocation, 0),
 	}
 

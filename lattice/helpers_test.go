@@ -1715,7 +1715,7 @@ func getTestAssetCreationArgs(t *testing.T, allocationAddr types.Address) types.
 		Standard:   hexutil.Uint16(info.Standard),
 		IsLogical:  info.IsLogical,
 		IsStateful: info.IsStateFul,
-		Owner:      info.Owner,
+		Operator:   info.Operator,
 		Allocations: []types.Allocation{
 			{
 				Address: allocationAddr,
