@@ -28,7 +28,7 @@ func TestAssetIDv0(t *testing.T) {
 		f.Fuzz(&x)
 
 		// Create new AssetID
-		assetID := NewAssetIDv0(x.Logical, x.Stateful, x.Dimension, x.Standard, x.Address)
+		assetID := NewAssetIDv0(x.Logical, x.Stateful, x.Dimension, AssetStandard(x.Standard), x.Address)
 		require.Equal(t, x.Address, assetID.Address())
 
 		// Check type conversions
@@ -47,7 +47,7 @@ func TestAssetIDv0(t *testing.T) {
 		require.Equal(t, x.Stateful, identifier.Stateful())
 
 		require.Equal(t, AssetDimension(x.Dimension), identifier.Dimension())
-		require.Equal(t, x.Standard, identifier.Standard())
+		require.Equal(t, AssetStandard(x.Standard), identifier.Standard())
 		require.Equal(t, x.Address, identifier.Address())
 
 		// Check serialization

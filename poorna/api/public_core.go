@@ -400,7 +400,6 @@ func (p *PublicCoreAPI) GetAssetInfoByAssetID(args *ptypes.GetAssetInfoArgs) (ma
 	}
 
 	rpcAssetInfo := map[string]interface{}{
-		"type":        info.Type,
 		"symbol":      info.Symbol,
 		"owner":       info.Owner,
 		"supply":      (*hexutil.Big)(info.Supply),
@@ -522,7 +521,6 @@ func createRPCInteraction(
 		}
 
 		rpcAssetPayload := ptypes.RPCAssetCreation{
-			Type:      assetPayload.Type,
 			Symbol:    assetPayload.Symbol,
 			Supply:    (*hexutil.Big)(assetPayload.Supply),
 			Dimension: (*hexutil.Uint8)(&assetPayload.Dimension),

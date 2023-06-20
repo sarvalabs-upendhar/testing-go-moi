@@ -88,4 +88,8 @@ var (
 	ErrInvalidIXSignature          = errors.New("failed to verify ix signature")
 	ErrFuelPriceNotFound           = errors.New("fuel price not found")
 	ErrFuelLimitNotFound           = errors.New("fuel limit not found")
+	ErrEmptyCallSite               = errors.New("empty call site")
+	ErrMintNonFungibleToken        = errors.New("can not mint non fungible token")
+	ErrInvalidAssetStandard        = errors.New("invalid asset standard")
+	ErrInvalidAssetSupply          = errors.New("asset supply should be one")
 )

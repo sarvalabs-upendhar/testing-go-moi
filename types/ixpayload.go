@@ -27,11 +27,10 @@ type AssetPayload struct {
 }
 
 type AssetCreatePayload struct {
-	Type   AssetKind
 	Symbol string
 	Supply *big.Int
 
-	Standard  uint16
+	Standard  AssetStandard
 	Dimension uint8
 
 	IsStateFul bool

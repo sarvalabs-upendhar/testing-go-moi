@@ -15,7 +15,7 @@ type AssetID string
 
 // NewAssetIDv0 generates a new AssetID with the v0 form. The NewAssetIDv0 v0 Form is defined as follows:
 // [version(4bits)|logical(1bit)|stateful(1bit)|reserved(2bits)][dimension(8bits)][standard(16bits)][address(256bits)]
-func NewAssetIDv0(logical, stateful bool, dimension uint8, standard uint16, addr Address) AssetID {
+func NewAssetIDv0(logical, stateful bool, dimension uint8, standard AssetStandard, addr Address) AssetID {
 	// The 4 MSB bits of the head are set the
 	// version of the Asset ID Form (v0)
 	var head uint8 = 0x00 << 4
@@ -32,7 +32,7 @@ func NewAssetIDv0(logical, stateful bool, dimension uint8, standard uint16, addr
 
 	// Encode the 16-bit standard into its BigEndian bytes
 	standardBuf := make([]byte, 2)
-	binary.BigEndian.PutUint16(standardBuf, standard)
+	binary.BigEndian.PutUint16(standardBuf, uint16(standard))
 
 	// Order the asset ID buffer [head][dimension][standard][address]
 	buf := make([]byte, 0, 36)
@@ -136,12 +136,20 @@ type AssetIdentifier interface {
 	Version() int
 	AssetID() AssetID
 	Address() Address
-	Standard() uint16
+	Standard() AssetStandard
 	Dimension() AssetDimension
 
 	Logical() bool
 	Stateful() bool
 }
+
+type AssetStandard uint16
+
+// MAS is moi asset standard
+const (
+	MAS0 AssetStandard = iota
+	MAS1
+)
 
 const AssetIDV0Length = 36
 
@@ -180,11 +188,11 @@ func (asset AssetIdentifierV0) Dimension() AssetDimension {
 }
 
 // Standard returns the standard of the AssetIdentifierV0.
-func (asset AssetIdentifierV0) Standard() uint16 {
+func (asset AssetIdentifierV0) Standard() AssetStandard {
 	// Standard data is in the third and fourth byte of the LogicID (v0)
 	standard := asset[2:4]
 	// Decode into 16-bit number
-	return binary.BigEndian.Uint16(standard)
+	return AssetStandard(binary.BigEndian.Uint16(standard))
 }
 
 // Address returns the Asset Address of the AssetIdentifier.

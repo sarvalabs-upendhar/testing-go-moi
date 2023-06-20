@@ -279,7 +279,6 @@ func createAsset(t *testing.T, client *Client, addr types.Address, mnemonic stri
 	supply, _ := new(big.Int).SetString("130D41", 16)
 
 	assetCreationPayload := &types.AssetCreatePayload{
-		Type:   types.AssetKindContext,
 		Symbol: "MOI",
 		Supply: supply,
 	}
@@ -339,7 +338,6 @@ func SendIxWithInvalidSign(t *testing.T, client *Client, addr types.Address, mne
 	supply, _ := new(big.Int).SetString("130D41", 16)
 
 	assetCreationPayload := &types.AssetCreatePayload{
-		Type:   3,
 		Symbol: "MOI",
 		Supply: supply,
 	}

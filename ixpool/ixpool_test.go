@@ -970,6 +970,77 @@ func TestIxPool_validateIx_WithSign(t *testing.T) {
 	}
 }
 
+func TestIxPool_ValidateAssetCreate(t *testing.T) {
+	ixPool := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
+		c.Mode = 0
+		c.PriceLimit = big.NewInt(1)
+	}, false, nil)
+
+	address := tests.RandomAddress(t)
+	validAssetPayload := types.AssetCreatePayload{
+		Standard: types.MAS1,
+		Supply:   big.NewInt(1),
+	}
+
+	invalidAssetStandardPayload := types.AssetCreatePayload{
+		Standard: 2,
+	}
+
+	invalidAssetSupplyPayload := types.AssetCreatePayload{
+		Standard: types.MAS1,
+		Supply:   big.NewInt(33),
+	}
+
+	rawValidAssetPayload, err := validAssetPayload.Bytes()
+	require.NoError(t, err)
+
+	rawInValidAssetStandardPayload, err := invalidAssetStandardPayload.Bytes()
+	require.NoError(t, err)
+
+	rawInvalidAssetSupplyPayload, err := invalidAssetSupplyPayload.Bytes()
+	require.NoError(t, err)
+
+	testcases := []struct {
+		name        string
+		ix          *types.Interaction
+		expectedErr error
+	}{
+		{
+			name: "should return error if asset standard is invalid",
+			ix: newTestInteraction(t, types.IxAssetCreate, 0, address, func(ixData *types.IxData) {
+				ixData.Input.Payload = rawInValidAssetStandardPayload
+			}),
+			expectedErr: types.ErrInvalidAssetStandard,
+		},
+		{
+			name: "should return error if asset supply is invalid",
+			ix: newTestInteraction(t, types.IxAssetCreate, 0, address, func(ixData *types.IxData) {
+				ixData.Input.Payload = rawInvalidAssetSupplyPayload
+			}),
+			expectedErr: types.ErrInvalidAssetSupply,
+		},
+		{
+			name: "should return success if asset standard is valid",
+			ix: newTestInteraction(t, types.IxAssetCreate, 0, address, func(ixData *types.IxData) {
+				ixData.Input.Payload = rawValidAssetPayload
+			}),
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			err := ixPool.validateAssetCreate(testcase.ix)
+			if testcase.expectedErr != nil {
+				require.ErrorContains(t, err, testcase.expectedErr.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
 func TestIxPool_ValidateAssetMint(t *testing.T) {
 	sm := NewMockStateManager(t)
 	ixPool := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
@@ -986,6 +1057,13 @@ func TestIxPool_ValidateAssetMint(t *testing.T) {
 	rawAssetPayload, err := assetPayload.Bytes()
 	require.NoError(t, err)
 
+	NFTAssetPayload := types.AssetMintOrBurnPayload{
+		Asset: types.NewAssetIDv0(false, false, 1, types.MAS1, address),
+	}
+
+	rawNFTAssetPayload, err := NFTAssetPayload.Bytes()
+	require.NoError(t, err)
+
 	testcases := []struct {
 		name        string
 		ix          *types.Interaction
@@ -993,14 +1071,14 @@ func TestIxPool_ValidateAssetMint(t *testing.T) {
 		expectedErr error
 	}{
 		{
-			name: "asset not found",
+			name: "should return error if asset not found",
 			ix: newTestInteraction(t, types.IxAssetMint, 0, address, func(ixData *types.IxData) {
 				ixData.Input.Payload = rawAssetPayload
 			}),
 			expectedErr: types.ErrAssetNotFound,
 		},
 		{
-			name: "Owner address mismatch",
+			name: "should return error if Owner address mismatch",
 			ix: newTestInteraction(t, types.IxAssetMint, 0, address, func(ixData *types.IxData) {
 				ixData.Input.Payload = rawAssetPayload
 			}),
@@ -1012,7 +1090,7 @@ func TestIxPool_ValidateAssetMint(t *testing.T) {
 			expectedErr: errors.New("Owner address mismatch"),
 		},
 		{
-			name: "valid asset mint data",
+			name: "should return success if asset mint data is valid",
 			ix: newTestInteraction(t, types.IxAssetMint, 0, address, func(ixData *types.IxData) {
 				ixData.Input.Payload = rawAssetPayload
 			}),
@@ -1021,6 +1099,18 @@ func TestIxPool_ValidateAssetMint(t *testing.T) {
 					Owner: interaction.Sender(),
 				})
 			},
+		},
+		{
+			name: "should return error if non fungible token minted",
+			ix: newTestInteraction(t, types.IxAssetMint, 0, address, func(ixData *types.IxData) {
+				ixData.Input.Payload = rawNFTAssetPayload
+			}),
+			testFn: func(interaction *types.Interaction) {
+				sm.setAssetInfo(assetID, &types.AssetDescriptor{
+					Owner: interaction.Sender(),
+				})
+			},
+			expectedErr: types.ErrMintNonFungibleToken,
 		},
 	}
 
@@ -1137,6 +1227,136 @@ func TestIxPool_ValidateAssetBurn(t *testing.T) {
 			}
 
 			err := ixPool.validateAssetBurn(testcase.ix)
+			if testcase.expectedErr != nil {
+				require.ErrorContains(t, err, testcase.expectedErr.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestIxPool_ValidateLogicDeployPayload(t *testing.T) {
+	address := tests.RandomAddress(t)
+	invalidLogicPayload := types.LogicPayload{}
+	validLogicPayload := types.LogicPayload{
+		Manifest: []byte{1, 2},
+	}
+
+	invalidRawLogicPayload, err := invalidLogicPayload.Bytes()
+	require.NoError(t, err)
+
+	validRawLogicPayload, err := validLogicPayload.Bytes()
+	require.NoError(t, err)
+
+	testcases := []struct {
+		name        string
+		ix          *types.Interaction
+		testFn      func(interaction *types.Interaction, msm *MockStateManager)
+		expectedErr error
+	}{
+		{
+			name: "should return error if manifest is empty",
+			ix: newTestInteraction(t, types.IxLogicDeploy, 0, address, func(ixData *types.IxData) {
+				ixData.Input.Payload = invalidRawLogicPayload
+			}),
+			expectedErr: types.ErrEmptyManifest,
+		},
+		{
+			name: "should return error if receiver account is already registered",
+			ix: newTestInteraction(t, types.IxLogicDeploy, 0, address, func(ixData *types.IxData) {
+				ixData.Input.Payload = invalidRawLogicPayload
+			}),
+			testFn: func(interaction *types.Interaction, msm *MockStateManager) {
+				msm.registerAccount(interaction.Receiver())
+			},
+			expectedErr: errors.New("account registered"),
+		},
+		{
+			name: "should return success if logic payload is valid",
+			ix: newTestInteraction(t, types.IxLogicDeploy, 0, address, func(ixData *types.IxData) {
+				ixData.Input.Payload = validRawLogicPayload
+			}),
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			sm := NewMockStateManager(t)
+			ixPool := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
+				c.Mode = 0
+				c.PriceLimit = big.NewInt(1)
+			}, false, sm)
+
+			if testcase.testFn != nil {
+				testcase.testFn(testcase.ix, sm)
+			}
+
+			err := ixPool.validateLogicDeployPayload(testcase.ix)
+			if testcase.expectedErr != nil {
+				require.ErrorContains(t, err, testcase.expectedErr.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestIxPool_ValidateLogicInvokePayload(t *testing.T) {
+	address := tests.RandomAddress(t)
+	invalidLogicPayload := types.LogicPayload{}
+	validLogicPayload := types.LogicPayload{
+		Logic:    "logicID-1",
+		Callsite: "seeder!",
+	}
+
+	invalidRawLogicPayload, err := invalidLogicPayload.Bytes()
+	require.NoError(t, err)
+
+	validRawLogicPayload, err := validLogicPayload.Bytes()
+	require.NoError(t, err)
+
+	testcases := []struct {
+		name        string
+		ix          *types.Interaction
+		testFn      func(interaction *types.Interaction, msm *MockStateManager)
+		expectedErr error
+	}{
+		{
+			name: "should return error if call site is empty",
+			ix: newTestInteraction(t, types.IxLogicInvoke, 0, address, func(ixData *types.IxData) {
+				ixData.Input.Payload = invalidRawLogicPayload
+			}),
+			expectedErr: types.ErrEmptyCallSite,
+		},
+		{
+			name: "should return success if logic payload is valid",
+			ix: newTestInteraction(t, types.IxLogicInvoke, 0, address, func(ixData *types.IxData) {
+				ixData.Input.Payload = validRawLogicPayload
+			}),
+			testFn: func(interaction *types.Interaction, msm *MockStateManager) {
+				msm.registerLogicID("logicID-1")
+			},
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			sm := NewMockStateManager(t)
+			ixPool := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
+				c.Mode = 0
+				c.PriceLimit = big.NewInt(1)
+			}, false, sm)
+
+			if testcase.testFn != nil {
+				testcase.testFn(testcase.ix, sm)
+			}
+
+			err := ixPool.validateLogicInvokePayload(testcase.ix)
 			if testcase.expectedErr != nil {
 				require.ErrorContains(t, err, testcase.expectedErr.Error())
 

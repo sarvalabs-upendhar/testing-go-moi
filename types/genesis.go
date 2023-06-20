@@ -22,7 +22,6 @@ type AssetAccountSetupArgs struct {
 }
 
 type AssetCreationArgs struct {
-	Type        AssetKind      `json:"type"`
 	Symbol      string         `json:"symbol"`
 	Dimension   hexutil.Uint8  `json:"dimension"`
 	Standard    hexutil.Uint16 `json:"standard"`
@@ -40,12 +39,11 @@ func (ac *AssetCreationArgs) AssetDescriptor() *AssetDescriptor {
 	}
 
 	return &AssetDescriptor{
-		Type:       ac.Type,
 		Symbol:     ac.Symbol,
 		Owner:      ac.Owner,
 		Supply:     totalSupply,
 		Dimension:  ac.Dimension.ToInt(),
-		Standard:   ac.Standard.ToInt(),
+		Standard:   AssetStandard(ac.Standard.ToInt()),
 		IsLogical:  ac.IsLogical,
 		IsStateFul: ac.IsStateful,
 	}

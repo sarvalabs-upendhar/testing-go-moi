@@ -618,7 +618,6 @@ func GetTestIxCreationPayload(t *testing.T, callBack func(args *ptypes.RPCAssetC
 	t.Helper()
 
 	payloadArgs := &ptypes.RPCAssetCreation{
-		Type:   1,
 		Symbol: "rahul",
 		Supply: (*hexutil.Big)(big.NewInt(78)),
 	}
@@ -631,9 +630,7 @@ func GetTestIxCreationPayload(t *testing.T, callBack func(args *ptypes.RPCAssetC
 	assert.NoError(t, err)
 
 	createPayload := &types.AssetCreatePayload{
-		Type:   payloadArgs.Type,
-		Symbol: payloadArgs.Symbol,
-
+		Symbol:     payloadArgs.Symbol,
 		IsLogical:  payloadArgs.IsLogical,
 		IsStateFul: payloadArgs.IsStateful,
 	}
@@ -643,7 +640,7 @@ func GetTestIxCreationPayload(t *testing.T, callBack func(args *ptypes.RPCAssetC
 	}
 
 	if payloadArgs.Standard != nil {
-		createPayload.Standard = payloadArgs.Standard.ToInt()
+		createPayload.Standard = types.AssetStandard(payloadArgs.Standard.ToInt())
 	}
 
 	if payloadArgs.Supply != nil {
@@ -892,10 +889,8 @@ func checkForRPCIxn(
 		require.NoError(t, err)
 
 		rpcAssetCreationPayload := ptypes.RPCAssetCreation{
-			Type:   assetCreationPayload.Type,
-			Symbol: assetCreationPayload.Symbol,
-			Supply: (*hexutil.Big)(assetCreationPayload.Supply),
-
+			Symbol:     assetCreationPayload.Symbol,
+			Supply:     (*hexutil.Big)(assetCreationPayload.Supply),
 			Dimension:  (*hexutil.Uint8)(&assetCreationPayload.Dimension),
 			Standard:   (*hexutil.Uint16)(&assetCreationPayload.Standard),
 			IsLogical:  assetCreationPayload.IsLogical,

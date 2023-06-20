@@ -7,15 +7,6 @@ import (
 	"github.com/sarvalabs/go-polo"
 )
 
-type AssetKind int
-
-const (
-	AssetKindValue AssetKind = iota
-	AssetKindFile
-	AssetKindLogic
-	AssetKindContext
-)
-
 type AssetMap map[AssetID]*big.Int
 
 func (assets AssetMap) Copy() AssetMap {
@@ -28,15 +19,14 @@ func (assets AssetMap) Copy() AssetMap {
 }
 
 type AssetDescriptor struct {
-	Type   AssetKind `json:"type"`
-	Symbol string    `json:"symbol"`
-	Owner  Address   `json:"owner"`
-	Supply *big.Int  `json:"supply"`
+	Symbol string   `json:"symbol"`
+	Owner  Address  `json:"owner"`
+	Supply *big.Int `json:"supply"`
 
-	Dimension  uint8  `json:"dimension"`
-	Standard   uint16 `json:"standard"`
-	IsLogical  bool   `json:"is_logical"`
-	IsStateFul bool   `json:"is_stateful"`
+	Dimension  uint8         `json:"dimension"`
+	Standard   AssetStandard `json:"standard"`
+	IsLogical  bool          `json:"is_logical"`
+	IsStateFul bool          `json:"is_stateful"`
 
 	LogicID LogicID `json:"logic_id"`
 }
@@ -44,7 +34,6 @@ type AssetDescriptor struct {
 func NewAssetDescriptor(owner Address, asset AssetCreatePayload) *AssetDescriptor {
 	return &AssetDescriptor{
 		Owner:      owner,
-		Type:       asset.Type,
 		Symbol:     asset.Symbol,
 		Supply:     asset.Supply,
 		Dimension:  asset.Dimension,

@@ -1710,7 +1710,6 @@ func getTestAssetCreationArgs(t *testing.T, allocationAddr types.Address) types.
 	}
 
 	return types.AssetCreationArgs{
-		Type:       info.Type,
 		Symbol:     info.Symbol,
 		Dimension:  hexutil.Uint8(info.Dimension),
 		Standard:   hexutil.Uint16(info.Standard),

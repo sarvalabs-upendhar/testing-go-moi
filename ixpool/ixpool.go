@@ -460,7 +460,7 @@ func (i *IxPool) validateIx(ix *types.Interaction) error {
 
 	switch ix.Type() {
 	case types.IxAssetCreate:
-		return nil
+		return i.validateAssetCreate(ix)
 	case types.IxValueTransfer:
 		return i.validateValueTransfer(ix)
 	case types.IxAssetMint:
@@ -474,6 +474,27 @@ func (i *IxPool) validateIx(ix *types.Interaction) error {
 	default:
 		return types.ErrInvalidInteractionType
 	}
+}
+
+func (i *IxPool) validateAssetCreate(ix *types.Interaction) error {
+	payload, err := ix.GetAssetPayload()
+	if err != nil {
+		return err
+	}
+
+	// asset standard should be mas1 or mas2
+	if payload.Create.Standard != types.MAS1 && payload.Create.Standard != types.MAS0 {
+		return types.ErrInvalidAssetStandard
+	}
+
+	// supply should be one if asset standard is mas1
+	if payload.Create.Standard == types.MAS1 {
+		if payload.Create.Supply == nil || payload.Create.Supply.Uint64() != 1 {
+			return types.ErrInvalidAssetSupply
+		}
+	}
+
+	return nil
 }
 
 func (i *IxPool) validateValueTransfer(ix *types.Interaction) error {
@@ -505,11 +526,22 @@ func (i *IxPool) validateAssetMint(ix *types.Interaction) error {
 		return err
 	}
 
+	assetID, err := assetPayload.Mint.Asset.Identifier()
+	if err != nil {
+		return err
+	}
+
+	// can not mint asset standard mas1
+	if assetID.Standard() == types.MAS1 {
+		return types.ErrMintNonFungibleToken
+	}
+
 	assetInfo, err := i.sm.GetAssetInfo(assetPayload.Mint.Asset, types.NilHash)
 	if err != nil {
 		return types.ErrAssetNotFound
 	}
 
+	// only owner can mint asset
 	if assetInfo.Owner != ix.Sender() {
 		return errors.New("Owner address mismatch")
 	}
@@ -523,6 +555,7 @@ func (i *IxPool) validateAssetBurn(ix *types.Interaction) error {
 		return err
 	}
 
+	// make sure asset exists
 	assetInfo, err := i.sm.GetAssetInfo(assetPayload.Mint.Asset, types.NilHash)
 	if err != nil {
 		return types.ErrAssetNotFound
@@ -533,10 +566,12 @@ func (i *IxPool) validateAssetBurn(ix *types.Interaction) error {
 		return err
 	}
 
+	// cannot burn amount greater than current balance
 	if currentBal.Cmp(assetPayload.Mint.Amount) < 0 {
 		return types.ErrInsufficientFunds
 	}
 
+	// only owner can burn asset
 	if assetInfo.Owner != ix.Sender() {
 		return errors.New("Owner address mismatch")
 	}
@@ -545,8 +580,24 @@ func (i *IxPool) validateAssetBurn(ix *types.Interaction) error {
 }
 
 func (i *IxPool) validateLogicDeployPayload(ix *types.Interaction) error {
-	if accountRegistered, err := i.sm.IsAccountRegistered(ix.Receiver()); err != nil || accountRegistered {
-		return errors.Wrap(err, fmt.Sprintf("account registered %s", ix.Receiver()))
+	// make sure logic isn't created previously
+	accountRegistered, err := i.sm.IsAccountRegistered(ix.Receiver())
+	if err != nil {
+		return err
+	}
+
+	if accountRegistered {
+		return errors.New(fmt.Sprintf("account registered %s", ix.Receiver()))
+	}
+
+	payload, err := ix.GetLogicPayload()
+	if err != nil {
+		return err
+	}
+
+	// manifest cannot be empty
+	if len(payload.Manifest) == 0 {
+		return types.ErrEmptyManifest
 	}
 
 	return nil
@@ -558,6 +609,12 @@ func (i *IxPool) validateLogicInvokePayload(ix *types.Interaction) error {
 		return err
 	}
 
+	// callsite cannot be empty
+	if len(payload.Callsite) == 0 {
+		return types.ErrEmptyCallSite
+	}
+
+	// make sure logic is registered
 	return i.sm.IsLogicRegistered(payload.Logic)
 }
 

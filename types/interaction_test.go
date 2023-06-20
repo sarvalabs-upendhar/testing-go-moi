@@ -38,9 +38,7 @@ func createTestIXInput(t *testing.T, ixType types.IxType, payload []byte) types.
 }
 
 func TestNewInteraction(t *testing.T) {
-	assetPayload := types.AssetCreatePayload{
-		Type: types.AssetKindFile,
-	}
+	assetPayload := types.AssetCreatePayload{}
 
 	rawAssetPayload, err := assetPayload.Bytes()
 	require.NoError(t, err)

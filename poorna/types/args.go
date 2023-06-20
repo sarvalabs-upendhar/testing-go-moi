@@ -119,8 +119,6 @@ type SendIX struct {
 }
 
 type RPCAssetCreation struct {
-	Type types.AssetKind `json:"type"`
-
 	Symbol string       `json:"symbol"`
 	Supply *hexutil.Big `json:"supply"`
 
@@ -204,10 +202,9 @@ type RPCRegistry struct {
 }
 
 type RPCAssetDescriptor struct {
-	Type   types.AssetKind `json:"type"`
-	Symbol string          `json:"symbol"`
-	Owner  types.Address   `json:"owner"`
-	Supply hexutil.Big     `json:"supply"`
+	Symbol string        `json:"symbol"`
+	Owner  types.Address `json:"owner"`
+	Supply hexutil.Big   `json:"supply"`
 
 	Dimension hexutil.Uint8  `json:"dimension"`
 	Standard  hexutil.Uint16 `json:"standard"`
@@ -426,7 +423,6 @@ func NewInteractionResponse(ix *types.Interaction) *InteractionResponse {
 
 func GetRPCAssetDescriptor(ad *types.AssetDescriptor) RPCAssetDescriptor {
 	return RPCAssetDescriptor{
-		Type:       ad.Type,
 		Symbol:     ad.Symbol,
 		Owner:      ad.Owner,
 		Dimension:  hexutil.Uint8(ad.Dimension),

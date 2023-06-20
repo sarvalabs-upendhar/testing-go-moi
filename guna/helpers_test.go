@@ -1339,7 +1339,6 @@ func getTestAssetDescriptor(t *testing.T, owner types.Address, symbol string) *t
 	t.Helper()
 
 	return &types.AssetDescriptor{
-		Type:       types.AssetKindLogic,
 		Symbol:     symbol,
 		Owner:      owner,
 		Supply:     big.NewInt(10000),

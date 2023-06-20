@@ -19,9 +19,24 @@ import (
 )
 
 type MockStateManager struct {
-	nonce     map[types.Address]uint64
-	balance   map[types.Address]map[types.AssetID]*big.Int
-	assetInfo map[types.AssetID]*types.AssetDescriptor
+	nonce               map[types.Address]uint64
+	balance             map[types.Address]map[types.AssetID]*big.Int
+	assetInfo           map[types.AssetID]*types.AssetDescriptor
+	accountRegistration map[types.Address]bool
+	logicRegistration   map[types.LogicID]bool
+}
+
+// NewMockStateManager returns a new instance of MockStateManager
+func NewMockStateManager(t *testing.T) *MockStateManager {
+	t.Helper()
+
+	return &MockStateManager{
+		nonce:               make(map[types.Address]uint64, 0),
+		balance:             map[types.Address]map[types.AssetID]*big.Int{},
+		assetInfo:           map[types.AssetID]*types.AssetDescriptor{},
+		accountRegistration: make(map[types.Address]bool),
+		logicRegistration:   make(map[types.LogicID]bool),
+	}
 }
 
 func (ms *MockStateManager) setTestMOIBalance(addrs ...types.Address) {
@@ -112,29 +127,30 @@ func (ms *MockStateManager) GetNonce(addr types.Address, stateHash types.Hash) (
 }
 
 func (ms *MockStateManager) IsAccountRegistered(addr types.Address) (bool, error) {
-	// TODO implement me
-	panic("implement me")
+	_, ok := ms.accountRegistration[addr]
+
+	return ok, nil
+}
+
+func (ms *MockStateManager) registerAccount(addr types.Address) {
+	ms.accountRegistration[addr] = true
 }
 
 func (ms *MockStateManager) IsLogicRegistered(logicID types.LogicID) error {
-	// TODO implement me
-	panic("implement me")
+	if _, ok := ms.logicRegistration[logicID]; !ok {
+		return errors.New("logic id is not registered")
+	}
+
+	return nil
+}
+
+func (ms *MockStateManager) registerLogicID(logicID types.LogicID) {
+	ms.logicRegistration[logicID] = true
 }
 
 // setLatestNonce updates the mock account with the latest nonce
 func (ms *MockStateManager) setLatestNonce(addr types.Address, nonce uint64) {
 	ms.nonce[addr] = nonce
-}
-
-// NewMockStateManager returns a new instance of MockStateManager
-func NewMockStateManager(t *testing.T) *MockStateManager {
-	t.Helper()
-
-	return &MockStateManager{
-		nonce:     make(map[types.Address]uint64, 0),
-		balance:   map[types.Address]map[types.AssetID]*big.Int{},
-		assetInfo: map[types.AssetID]*types.AssetDescriptor{},
-	}
 }
 
 func getIXParams(
