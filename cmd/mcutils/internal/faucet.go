@@ -99,7 +99,7 @@ func runFaucetCommand(cmd *cobra.Command, args []string) {
 		FuelPrice: big.NewInt(1),
 		FuelLimit: big.NewInt(1000),
 		TransferValues: map[types.AssetID]*big.Int{
-			types.MOITokenAssetID: new(big.Int).SetUint64(amount),
+			types.KMOITokenAssetID: new(big.Int).SetUint64(amount),
 		},
 	}
 

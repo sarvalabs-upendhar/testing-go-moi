@@ -933,7 +933,7 @@ func (s *StateObject) HasFuel(amount *big.Int) (bool, error) {
 	}
 
 	// Fetch sender balance object
-	balances, err := s.BalanceOf(types.MOITokenAssetID)
+	balances, err := s.BalanceOf(types.KMOITokenAssetID)
 	if err != nil {
 		return false, err
 	}
@@ -948,5 +948,5 @@ func (s *StateObject) HasFuel(amount *big.Int) (bool, error) {
 
 func (s *StateObject) DeductFuel(amount *big.Int) {
 	// Remove amount from sender balance for asset
-	s.SubBalance(types.MOITokenAssetID, amount)
+	s.SubBalance(types.KMOITokenAssetID, amount)
 }

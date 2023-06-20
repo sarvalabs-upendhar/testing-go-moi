@@ -6,20 +6,20 @@ import (
 	"fmt"
 )
 
-const MOITokenSymbol = "MOI-TOKEN"
+const KMOITokenSymbol = "KMOI"
 
 var (
-	GenesisIxHash   = GetHash([]byte("Genesis Interaction"))
-	SargaLogicID    = NewLogicIDv0(true, false, false, false, 0, SargaAddress)
-	GuardianLogicID = NewLogicIDv0(true, false, false, false, 0, GuardianLogicAddr)
-	MOITokenAssetID = NewAssetIDv0(false, false, 0, 0, MOITokenAddress)
+	GenesisIxHash    = GetHash([]byte("Genesis Interaction"))
+	SargaLogicID     = NewLogicIDv0(true, false, false, false, 0, SargaAddress)
+	GuardianLogicID  = NewLogicIDv0(true, false, false, false, 0, GuardianLogicAddr)
+	KMOITokenAssetID = NewAssetIDv0(false, false, 0, 0, KMOITokenAddress)
 )
 
 var (
 	SargaAddress        = CreateAddressFromString("sargaAccount")
 	StakingContractAddr = CreateAddressFromString("staking-contract")
 	GuardianLogicAddr   = CreateAddressFromString("guardian-contract")
-	MOITokenAddress     = CreateAddressFromString(MOITokenSymbol)
+	KMOITokenAddress    = CreateAddressFromString(KMOITokenSymbol)
 	GenesisLogicAddrs   = []Address{StakingContractAddr, GuardianLogicAddr}
 )
 

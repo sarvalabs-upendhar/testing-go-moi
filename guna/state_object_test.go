@@ -1132,7 +1132,7 @@ func TestHasFuel(t *testing.T) {
 				soCallback: func(so *StateObject) {
 					so.balance = &gtypes.BalanceObject{
 						AssetMap: map[types.AssetID]*big.Int{
-							types.MOITokenAssetID: big.NewInt(1000),
+							types.KMOITokenAssetID: big.NewInt(1000),
 						},
 					}
 				},
@@ -1146,7 +1146,7 @@ func TestHasFuel(t *testing.T) {
 				soCallback: func(so *StateObject) {
 					so.balance = &gtypes.BalanceObject{
 						AssetMap: map[types.AssetID]*big.Int{
-							types.MOITokenAssetID: big.NewInt(100),
+							types.KMOITokenAssetID: big.NewInt(100),
 						},
 					}
 				},

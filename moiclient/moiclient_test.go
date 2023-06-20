@@ -1539,7 +1539,7 @@ func testFuelDeduction(t *testing.T, client *Client, addrs map[string]types.Addr
 			var deducted *big.Int
 			// If there are MOI Tokens in the transferred values, add that to the total deductions
 			// else, only fuel consumed on the receipt is the expected deduction
-			if transferValue, ok := ts.Ixns[0].TransferValues[types.MOITokenAssetID]; !ok {
+			if transferValue, ok := ts.Ixns[0].TransferValues[types.KMOITokenAssetID]; !ok {
 				deducted = receipt.FuelUsed.ToInt()
 			} else {
 				deducted = new(big.Int).Add(receipt.FuelUsed.ToInt(), transferValue.ToInt())
@@ -1549,7 +1549,7 @@ func testFuelDeduction(t *testing.T, client *Client, addrs map[string]types.Addr
 			preHeight := test.height - 1
 			preBalance, err := client.Balance(&ptypes.BalArgs{
 				Address: test.address,
-				AssetID: types.MOITokenAssetID,
+				AssetID: types.KMOITokenAssetID,
 				Options: ptypes.TesseractNumberOrHash{TesseractNumber: &preHeight},
 			})
 			require.NoError(t, err)
@@ -1557,7 +1557,7 @@ func testFuelDeduction(t *testing.T, client *Client, addrs map[string]types.Addr
 			// Determine balance of MOI Tokens AFTER the interaction
 			postBalance, err := client.Balance(&ptypes.BalArgs{
 				Address: test.address,
-				AssetID: types.MOITokenAssetID,
+				AssetID: types.KMOITokenAssetID,
 				Options: ptypes.TesseractNumberOrHash{TesseractNumber: &test.height},
 			})
 			require.NoError(t, err)

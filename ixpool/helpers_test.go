@@ -41,7 +41,7 @@ func NewMockStateManager(t *testing.T) *MockStateManager {
 
 func (ms *MockStateManager) setTestMOIBalance(addrs ...types.Address) {
 	for _, addr := range addrs {
-		ms.setBalance(addr, types.MOITokenAssetID, big.NewInt(1000))
+		ms.setBalance(addr, types.KMOITokenAssetID, big.NewInt(1000))
 	}
 }
 
@@ -194,7 +194,7 @@ func newTestInteraction(
 			FuelPrice: big.NewInt(1),
 			FuelLimit: big.NewInt(1),
 			TransferValues: map[types.AssetID]*big.Int{
-				types.MOITokenAssetID: big.NewInt(1),
+				types.KMOITokenAssetID: big.NewInt(1),
 			},
 		},
 	}

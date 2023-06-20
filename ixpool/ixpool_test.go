@@ -22,8 +22,8 @@ func TestIxPool_AddInteractions_checkIx(t *testing.T) {
 	addr1 := tests.RandomAddress(t)
 	addr2 := tests.RandomAddress(t)
 
-	sm.setBalance(addr1, types.MOITokenAssetID, big.NewInt(1000))
-	sm.setBalance(addr2, types.MOITokenAssetID, big.NewInt(1000))
+	sm.setBalance(addr1, types.KMOITokenAssetID, big.NewInt(1000))
+	sm.setBalance(addr2, types.KMOITokenAssetID, big.NewInt(1000))
 
 	ixPool := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 		c.Mode = 0
@@ -72,9 +72,9 @@ func TestIxPool_AddInteractions_checkIx(t *testing.T) {
 func TestIxPool_AddInteractions(t *testing.T) {
 	sm := NewMockStateManager(t)
 	addr1 := tests.RandomAddress(t)
-	sm.setBalance(addr1, types.MOITokenAssetID, big.NewInt(1000))
+	sm.setBalance(addr1, types.KMOITokenAssetID, big.NewInt(1000))
 	// set some MOI balance for fuel checks
-	sm.setBalance(addr1, types.MOITokenAssetID, big.NewInt(1000))
+	sm.setBalance(addr1, types.KMOITokenAssetID, big.NewInt(1000))
 
 	testcases := []struct {
 		name         string
@@ -158,7 +158,7 @@ type expectedResult struct {
 func TestIxPool_handleEnqueueRequest(t *testing.T) {
 	address := tests.RandomAddress(t)
 	sm := NewMockStateManager(t)
-	sm.setBalance(address, types.MOITokenAssetID, big.NewInt(1000))
+	sm.setBalance(address, types.KMOITokenAssetID, big.NewInt(1000))
 
 	testcases := []struct {
 		name     string

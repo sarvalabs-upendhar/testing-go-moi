@@ -384,7 +384,7 @@ func (ix Interaction) MOITokenValue() *big.Int {
 	// Retrieve the transfer values
 	values := ix.TransferValues()
 	// Return the value for the MOI Token if it exists in the transfer values
-	if value, ok := values[MOITokenAssetID]; ok {
+	if value, ok := values[KMOITokenAssetID]; ok {
 		return value
 	}
 	// Return a 0 value for no MOI Token in transfer values

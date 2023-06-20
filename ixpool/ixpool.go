@@ -437,7 +437,7 @@ func (i *IxPool) validateIx(ix *types.Interaction) error {
 		}
 	*/
 
-	moiBal, err := i.sm.GetBalance(ix.Sender(), types.MOITokenAssetID, types.NilHash)
+	moiBal, err := i.sm.GetBalance(ix.Sender(), types.KMOITokenAssetID, types.NilHash)
 	if err != nil {
 		i.logger.Error("error fetching balance", "error", err)
 

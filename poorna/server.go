@@ -826,7 +826,7 @@ func (s *Server) routeSubscriptionMessages(
 		// Retrieve the next message from the subscription
 		msg, err := subcHandle.Next(ctx)
 		if err != nil {
-			s.logger.Error("Topic subscription closed", "topic", topicName)
+			s.logger.Debug("Topic subscription closed", "topic", topicName)
 
 			return
 		}

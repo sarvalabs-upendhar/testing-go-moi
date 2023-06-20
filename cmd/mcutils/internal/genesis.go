@@ -162,7 +162,7 @@ func createTestGenesisFile() {
 
 	assetInfo := types.AssetAccountSetupArgs{
 		AssetInfo: &types.AssetCreationArgs{
-			Symbol:      types.MOITokenSymbol,
+			Symbol:      types.KMOITokenSymbol,
 			Dimension:   0,
 			Standard:    0,
 			IsLogical:   false,
