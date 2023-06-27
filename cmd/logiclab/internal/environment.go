@@ -124,8 +124,9 @@ func (env *Environment) StartREPL(in io.Reader, out io.Writer) {
 	rl, err := readline.New(">> ")
 	if err != nil {
 		env.write(fmt.Sprintf("Failed to initialize readline: %v", err))
-		return // nolint:nlreturn
+		return //nolint:nlreturn
 	}
+
 	defer func() {
 		err := rl.Close()
 		if err != nil {
