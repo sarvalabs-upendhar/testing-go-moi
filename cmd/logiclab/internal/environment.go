@@ -55,9 +55,6 @@ type Environment struct {
 	inventory *Inventory
 	// directory is the path to the directory containing all saved lab items
 	directory string
-
-	// history contains the command history
-	history string
 }
 
 // LoadEnvironment loads an existing LogicLab environment.
@@ -124,23 +121,17 @@ func (env *Environment) StartREPL(in io.Reader, out io.Writer) {
 	// Set up the IO buffers
 	env.input, env.output = in, out
 
-	historyFile := ".artifacts/logiclab/history"
-	readline.SetHistoryPath(historyFile)
-
-	hist, err := os.ReadFile(historyFile)
-	if err != nil {
-		fmt.Print(err)
-	}
-	str := string(hist)
-
 	rl, err := readline.New(">> ")
 	if err != nil {
-		// handle err
-		return
+		env.write(fmt.Sprintf("Failed to initialize readline: %v", err))
+		return // nolint:nlreturn
 	}
-	defer rl.Close()
-
-	rl.SaveHistory(str)
+	defer func() {
+		err := rl.Close()
+		if err != nil {
+			env.write(fmt.Sprintf("Failed to initialize readline: %v", err))
+		}
+	}()
 
 	// Launch Sequence
 	env.write(replFiglet)
@@ -176,8 +167,6 @@ REPL:
 
 			break REPL
 		}
-
-		readline.AddHistory(line)
 
 		// Write the output of the command run
 		env.write(result)
