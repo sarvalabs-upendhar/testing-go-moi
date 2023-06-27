@@ -79,6 +79,10 @@ var methodValidators = map[MethodCode]func(Method) error{
 }
 
 func validateMethodFieldSelf(method Method) error {
+	if method.callfields().Inputs.Size() == 0 {
+		return errors.New("invalid method inputs: missing 'self' field")
+	}
+
 	if method.callfields().Inputs.Get(0).Name != "self" {
 		return errors.New("invalid method inputs: first field must be 'self'")
 	}
