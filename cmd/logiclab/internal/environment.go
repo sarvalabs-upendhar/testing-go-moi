@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"math/big"
@@ -9,6 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/chzyer/readline"
 	"github.com/pkg/errors"
 	"go.uber.org/atomic"
 
@@ -55,6 +55,9 @@ type Environment struct {
 	inventory *Inventory
 	// directory is the path to the directory containing all saved lab items
 	directory string
+
+	// history contains the command history
+	history string
 }
 
 // LoadEnvironment loads an existing LogicLab environment.
@@ -120,7 +123,24 @@ func (env *Environment) StartREPL(in io.Reader, out io.Writer) {
 
 	// Set up the IO buffers
 	env.input, env.output = in, out
-	scanner := bufio.NewScanner(env.input)
+
+	historyFile := ".artifacts/logiclab/history"
+	readline.SetHistoryPath(historyFile)
+
+	hist, err := os.ReadFile(historyFile)
+	if err != nil {
+		fmt.Print(err)
+	}
+	str := string(hist)
+
+	rl, err := readline.New(">> ")
+	if err != nil {
+		// handle err
+		return
+	}
+	defer rl.Close()
+
+	rl.SaveHistory(str)
 
 	// Launch Sequence
 	env.write(replFiglet)
@@ -136,18 +156,18 @@ REPL:
 		// Write line prompt
 		_, _ = fmt.Fprint(env.output, replPrompt)
 		// Scan user input
-		scanned := scanner.Scan()
-		if !scanned {
-			return
+		line, err := rl.Readline()
+		if err != nil {
+			fmt.Println("Failed to initialize readline", err)
 		}
 
 		// Continue for empty line
-		if scanner.Text() == "" {
+		if line == "" {
 			continue
 		}
 
 		// Collect the scanned text and parse into a command
-		command := ParseCommand(scanner.Text())
+		command := ParseCommand(line)
 		// Perform the command
 		result := command(env)
 		// If abort is detected, close the lab and break from REPL
@@ -156,6 +176,8 @@ REPL:
 
 			break REPL
 		}
+
+		readline.AddHistory(line)
 
 		// Write the output of the command run
 		env.write(result)
