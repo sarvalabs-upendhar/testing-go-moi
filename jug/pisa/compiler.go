@@ -342,7 +342,7 @@ func (compiler *ManifestCompiler) compileRoutineElement(ptr engineio.ElementPtr)
 
 	// Check type of RoutineElement
 	switch routineSchema.Kind {
-	case engineio.InvokableCallsite:
+	case engineio.LocalCallsite, engineio.InvokableCallsite:
 		// Supported with no checks (all dependencies supported)
 
 	case engineio.DeployerCallsite:
@@ -394,7 +394,8 @@ func (compiler *ManifestCompiler) compileRoutineElement(ptr engineio.ElementPtr)
 		return errors.Wrapf(err, "invalid routine element")
 	}
 
-	if routine.exported() {
+	// If the routine callsite is not local, add it to the callsites
+	if routine.Kind != engineio.LocalCallsite {
 		compiler.callsites[routine.Name] = &engineio.Callsite{Ptr: ptr, Kind: routine.Kind}
 	}
 

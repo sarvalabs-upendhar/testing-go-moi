@@ -260,7 +260,7 @@ func TestInstructionSet(t *testing.T) {
 			continuity := opCALLR(scope, []byte{2, 1, 0})
 
 			require.Equal(t, new(big.Int).Sub(level, big.NewInt(5)), scope.engine.fueltank.Level())
-			require.Equal(t, continueException{50, &Exception{
+			require.Equal(t, continueException{30, &Exception{
 				Class: "builtin.ValueError",
 				Error: "cannot add with string registers",
 				Trace: []string{
@@ -283,7 +283,7 @@ func TestInstructionSet(t *testing.T) {
 			continuity := opCALLR(scope, []byte{2, 1, 0})
 
 			require.Equal(t, new(big.Int).Sub(level, big.NewInt(30)), scope.engine.fueltank.Level())
-			require.Equal(t, continueOk{50}, continuity)
+			require.Equal(t, continueOk{30}, continuity)
 			require.Equal(t, CargsValue{0: U64Value(100)}, scope.memory[2])
 		})
 	})

@@ -14,7 +14,6 @@ elements:
     kind: routine
     data:
       name    : InnerFunc
-      kind    : invokable
       executes:
         bin: [
           0x11, 0x00, 0x00, # ldptr1 $0 0x0
@@ -26,7 +25,7 @@ elements:
     kind: routine
     data:
       name    : MidFunc
-      kind    : invokable
+      kind    : local
       executes:
         bin: [
           0x0A, 0x00,              # cargs $0
@@ -121,7 +120,7 @@ elements:
           0x51, 0x00, 0x02, 0x00, # getfld $0 $2 &0
           0x05, 0x00, 0x00,       # yield $0 &0
         ]
-  
+
   - ptr : 7
     kind: routine
     data:

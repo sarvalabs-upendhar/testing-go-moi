@@ -38,7 +38,7 @@ func (suite *CallingTestSuite) SetupSuite() {
 func (suite *CallingTestSuite) TestExceptionDepth() {
 	consumed, output, except := suite.Call("OuterFunc", nil)
 	suite.Nil(output)
-	suite.Equal(engineio.NewFuel(190), consumed)
+	suite.Equal(engineio.NewFuel(150), consumed)
 	suite.NotNil(except)
 
 	exception := new(pisa.Exception)

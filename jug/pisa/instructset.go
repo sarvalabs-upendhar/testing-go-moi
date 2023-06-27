@@ -246,7 +246,7 @@ func opCALLB(scope *callscope, operands []byte) Continue {
 	// Call the routine with the inputs
 	outputs, except := scope.engine.run(builtin, inputs)
 	if except != nil {
-		return scope.propagate(except).withConsumption(50)
+		return scope.propagate(except).withConsumption(30)
 	}
 
 	// Cast the outputs into CargsValue and set it
@@ -271,6 +271,11 @@ func opCALLR(scope *callscope, operands []byte) Continue {
 		return scope.raise(exceptionf(ReferenceError, "routine %#v not found: %v", pointer, err))
 	}
 
+	// Check that the routine is local (cannot call non-local routines)
+	if routine.Kind != engineio.LocalCallsite {
+		scope.raise(exceptionf(CallError, "cannot call a non-inert routine"))
+	}
+
 	// Retrieve the input call args and check the type
 	registerInputs := scope.memory.Get(in)
 	if registerInputs.Type() != PrimitiveCargs {
@@ -283,13 +288,13 @@ func opCALLR(scope *callscope, operands []byte) Continue {
 	// Call the routine with the inputs
 	outputs, except := scope.engine.run(routine, inputs)
 	if except != nil {
-		return scope.propagate(except).withConsumption(50)
+		return scope.propagate(except).withConsumption(30)
 	}
 
 	// Cast the outputs into CargsValue and set it
 	scope.memory.Set(out, CargsValue(outputs))
 
-	return continueOk{50}
+	return continueOk{30}
 }
 
 func opCALLM(scope *callscope, operands []byte) Continue {

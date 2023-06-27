@@ -3,6 +3,7 @@ package pisa
 import (
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
+
 	"github.com/sarvalabs/moichain/jug/engineio"
 )
 
@@ -35,18 +36,6 @@ type Routine struct {
 	// catches represents the exception catch table specifying the
 	// exceptions to catch between code points and their handling
 	// Catches CatchTable
-}
-
-func (routine Routine) exported() bool {
-	return isExportedName(routine.Name)
-}
-
-func (routine Routine) mutable() bool {
-	return isMutableName(routine.Name)
-}
-
-func (routine Routine) payable() bool {
-	return isPayableName(routine.Name)
 }
 
 // name returns the name of the Routine.

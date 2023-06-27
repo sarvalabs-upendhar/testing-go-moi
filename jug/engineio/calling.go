@@ -21,13 +21,15 @@ type Callsite struct {
 type CallsiteKind int
 
 const (
-	InvokableCallsite CallsiteKind = iota
+	LocalCallsite CallsiteKind = iota
+	InvokableCallsite
 	InteractableCallsite
 	DeployerCallsite
 	EnlisterCallsite
 )
 
 var callsiteKindToString = map[CallsiteKind]string{
+	LocalCallsite:        "local",
 	InvokableCallsite:    "invokable",
 	InteractableCallsite: "interactable",
 	DeployerCallsite:     "deployer",
@@ -35,6 +37,7 @@ var callsiteKindToString = map[CallsiteKind]string{
 }
 
 var callsiteKindFromString = map[string]CallsiteKind{
+	"local":        LocalCallsite,
 	"invokable":    InvokableCallsite,
 	"interactable": InteractableCallsite,
 	"deployer":     DeployerCallsite,
@@ -54,6 +57,8 @@ func (callsite CallsiteKind) String() string {
 // IxnType returns the appropriate types.IxType variant for the CallsiteKind
 func (callsite CallsiteKind) IxnType() types.IxType {
 	switch callsite {
+	case LocalCallsite:
+		return types.IxInvalid
 	case InvokableCallsite:
 		return types.IxLogicInvoke
 	case DeployerCallsite:

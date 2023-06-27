@@ -3,35 +3,10 @@ package pisa
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/jug/engineio"
 )
-
-func TestRoutine_exported(t *testing.T) {
-	r := Routine{Name: "PublicRoutine"}
-	assert.True(t, r.exported())
-
-	r = Routine{Name: "privateRoutine"}
-	assert.False(t, r.exported())
-}
-
-func TestRoutine_mutable(t *testing.T) {
-	r := Routine{Name: "MutableRoutine!"}
-	assert.True(t, r.mutable())
-
-	r = Routine{Name: "PureRoutine"}
-	assert.False(t, r.mutable())
-}
-
-func TestRoutine_payable(t *testing.T) {
-	r := Routine{Name: "Expensive$"}
-	assert.True(t, r.payable())
-
-	r = Routine{Name: "Free"}
-	assert.False(t, r.payable())
-}
 
 func TestRoutine_name(t *testing.T) {
 	r := Routine{Name: "testRoutine"}
