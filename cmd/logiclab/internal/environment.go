@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"math/big"
@@ -9,6 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/chzyer/readline"
 	"github.com/pkg/errors"
 	"go.uber.org/atomic"
 
@@ -120,7 +120,19 @@ func (env *Environment) StartREPL(in io.Reader, out io.Writer) {
 
 	// Set up the IO buffers
 	env.input, env.output = in, out
-	scanner := bufio.NewScanner(env.input)
+
+	rl, err := readline.New(">> ")
+	if err != nil {
+		env.write(fmt.Sprintf("Failed to initialize readline: %v", err))
+		return //nolint:nlreturn
+	}
+
+	defer func() {
+		err := rl.Close()
+		if err != nil {
+			env.write(fmt.Sprintf("Failed to initialize readline: %v", err))
+		}
+	}()
 
 	// Launch Sequence
 	env.write(replFiglet)
@@ -136,18 +148,18 @@ REPL:
 		// Write line prompt
 		_, _ = fmt.Fprint(env.output, replPrompt)
 		// Scan user input
-		scanned := scanner.Scan()
-		if !scanned {
-			return
+		line, err := rl.Readline()
+		if err != nil {
+			fmt.Println("Failed to initialize readline", err)
 		}
 
 		// Continue for empty line
-		if scanner.Text() == "" {
+		if line == "" {
 			continue
 		}
 
 		// Collect the scanned text and parse into a command
-		command := ParseCommand(scanner.Text())
+		command := ParseCommand(line)
 		// Perform the command
 		result := command(env)
 		// If abort is detected, close the lab and break from REPL
