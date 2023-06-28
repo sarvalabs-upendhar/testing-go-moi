@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/chzyer/readline"
@@ -172,6 +173,71 @@ REPL:
 		// Write the output of the command run
 		env.write(result)
 	}
+}
+
+func (env *Environment) RunScript(scriptPath string, suppress bool) error {
+	file, err := os.Open(scriptPath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	reader := io.Reader(file)
+	buffer := make([]byte, 2024) // Buffer to read the file content
+
+	var lastOutput string // Store the output of the last executed command
+
+	for {
+		n, err := reader.Read(buffer)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+
+			return err
+		}
+
+		content := string(buffer[:n])
+		lines := strings.Split(content, "\n")
+
+		for _, line := range lines {
+			line = strings.TrimSpace(line) // Trim leading and trailing whitespace
+
+			// Skip empty lines
+			if line == "" {
+				continue
+			} else if !suppress {
+				fmt.Println(">> ", line)
+			}
+
+			// Check if the abort flag is set
+			if env == nil {
+				return errors.New("environment is nil")
+			}
+
+			command := ParseCommand(line)
+			result := command(env)
+
+			if env.abort.Load() {
+				_ = env.close()
+
+				break
+			}
+
+			if !suppress {
+				fmt.Println(result)
+			}
+
+			lastOutput = result
+		}
+	}
+
+	// Print the last executed command's output
+	if suppress && lastOutput != "" {
+		fmt.Println(lastOutput)
+	}
+
+	return nil
 }
 
 // GetReference implements the engineio.ReferenceVal
