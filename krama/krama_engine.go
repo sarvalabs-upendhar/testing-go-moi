@@ -1222,7 +1222,8 @@ func (k *Engine) updateContextDelta(slot *ktypes.Slot) error {
 				genesisDeltaGroup.ReplacedNodes = append(genesisDeltaGroup.ReplacedNodes, replacedRandomDelta...)
 				seenAccounts[types.SargaAddress] = true
 				deltaMap[types.SargaAddress] = genesisDeltaGroup
-			} else if clusterState.AccountInfos[receiverAddr].AccType == types.LogicAccount {
+			} else if clusterState.AccountInfos[receiverAddr].AccType == types.LogicAccount ||
+				clusterState.AccountInfos[receiverAddr].AccType == types.AssetAccount {
 				receiverBehaviourDelta, replacedNodes := clusterState.GetBehaviouralContextDelta(
 					types.ReceiverBehaviourSet,
 				)

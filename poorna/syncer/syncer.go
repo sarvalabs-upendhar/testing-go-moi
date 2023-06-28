@@ -1605,11 +1605,21 @@ func (s *Syncer) syncStorageTree(ctx context.Context, session *session.Session, 
 	)
 
 	for logicID, storageRoot := range metaStorageRoot.HashTable {
-		rootCID := storageCID(types.BytesToHash(storageRoot))
+		storageHash := types.BytesToHash(storageRoot)
+
+		if storageHash == types.NilHash {
+			continue
+		}
+
+		rootCID := storageCID(storageHash)
 
 		storageCIDs = append(storageCIDs, rootCID)
 
 		rootHashToLogicID[rootCID] = logicID
+	}
+
+	if len(storageCIDs) == 0 {
+		return nil
 	}
 
 	ch := session.GetBlocks(ctx, storageCIDs)
