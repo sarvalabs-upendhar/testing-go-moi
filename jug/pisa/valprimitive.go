@@ -3,8 +3,12 @@ package pisa
 import (
 	"bytes"
 	"encoding/hex"
+	"math/big"
+	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/holiman/uint256"
 
 	"github.com/sarvalabs/go-polo"
 )
@@ -100,7 +104,7 @@ func (boolean BoolValue) methods() [256]*BuiltinMethod {
 					return RegisterSet{0: StringValue("true")}, nil
 				}
 
-				return RegisterSet{0: StringValue("true")}, nil
+				return RegisterSet{0: StringValue("false")}, nil
 			},
 		),
 	}
@@ -135,10 +139,6 @@ func (str StringValue) Data() []byte {
 
 func (str StringValue) Concat(other StringValue) StringValue {
 	return str + other
-}
-
-func (str StringValue) HasPrefix(prefix StringValue) BoolValue {
-	return BoolValue(strings.HasPrefix(string(str), string(prefix)))
 }
 
 func (str StringValue) Get(idx U64Value) (StringValue, *Exception) {
@@ -531,6 +531,74 @@ func (str StringValue) methods() [256]*BuiltinMethod {
 				return RegisterSet{0: result}, nil
 			},
 		),
+
+		// string.ToU64(string) -> U64
+		0x1E: makeBuiltinMethod("ToU64",
+			PrimitiveString, 0x1E, 10,
+			makefields([]*TypeField{{"self", PrimitiveString}}),
+			makefields([]*TypeField{{"result", PrimitiveU64}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self := inputs[0]
+
+				res, err := strconv.ParseUint(string(self.(StringValue)), 0, 64)
+				if err != nil {
+					return nil, exception(ValueError, err.Error())
+				}
+
+				return RegisterSet{0: U64Value(res)}, nil
+			},
+		),
+
+		// string.ToI64(string) -> I64
+		0x1F: makeBuiltinMethod("ToI64",
+			PrimitiveString, 0x1F, 10,
+			makefields([]*TypeField{{"self", PrimitiveString}}),
+			makefields([]*TypeField{{"result", PrimitiveI64}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self := inputs[0]
+
+				res, err := strconv.ParseUint(string(self.(StringValue)), 0, 64)
+				if err != nil {
+					return nil, exception(ValueError, err.Error())
+				}
+
+				return RegisterSet{0: I64Value(res)}, nil
+			},
+		),
+
+		// string.ToU256(string) -> U256
+		0x20: makeBuiltinMethod("ToU256",
+			PrimitiveString, 0x20, 10,
+			makefields([]*TypeField{{"self", PrimitiveString}}),
+			makefields([]*TypeField{{"result", PrimitiveU256}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self := inputs[0]
+
+				res, err := uint256.FromHex(string(self.(StringValue)))
+				if err != nil {
+					return nil, exception(ValueError, err.Error())
+				}
+
+				return RegisterSet{0: &U256Value{value: res}}, nil
+			},
+		),
+
+		// string.ToI256(string) -> I256
+		0x21: makeBuiltinMethod("ToI256",
+			PrimitiveString, 0x21, 10,
+			makefields([]*TypeField{{"self", PrimitiveString}}),
+			makefields([]*TypeField{{"result", PrimitiveI256}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self := inputs[0]
+
+				res, err := uint256.FromHex(string(self.(StringValue)))
+				if err != nil {
+					return nil, exception(ValueError, err.Error())
+				}
+
+				return RegisterSet{0: &I256Value{value: res}}, nil
+			},
+		),
 	}
 }
 
@@ -798,6 +866,76 @@ func (bytesval BytesValue) methods() [256]*BuiltinMethod {
 				return RegisterSet{0: res}, nil
 			},
 		),
+
+		// byte.ToU64(byte) -> U64
+		0x17: makeBuiltinMethod("ToU64",
+			PrimitiveBytes, 0x17, 10,
+			makefields([]*TypeField{{"self", PrimitiveBytes}}),
+			makefields([]*TypeField{{"result", PrimitiveU64}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self := inputs[0]
+				if len(self.Data()) > 8 {
+					return nil, exception(OverflowError, "U64 size overflow")
+				}
+				res := int(big.NewInt(0).SetBytes(self.(BytesValue)).Uint64())
+
+				return RegisterSet{0: U64Value(res)}, nil
+			},
+		),
+
+		// byte.ToI64(byte) -> I64
+		0x18: makeBuiltinMethod("ToI64",
+			PrimitiveBytes, 0x18, 10,
+			makefields([]*TypeField{{"self", PrimitiveBytes}}),
+			makefields([]*TypeField{{"result", PrimitiveI64}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self := inputs[0]
+				if len(self.(BytesValue)) > 8 {
+					return nil, exception(OverflowError, "I64 size overflow")
+				}
+				res := int(big.NewInt(0).SetBytes(self.(BytesValue)).Int64())
+
+				return RegisterSet{0: I64Value(res)}, nil
+			},
+		),
+
+		// byte.ToU256(byte) -> U256
+		0x19: makeBuiltinMethod("ToU256",
+			PrimitiveBytes, 0x19, 10,
+			makefields([]*TypeField{{"self", PrimitiveBytes}}),
+			makefields([]*TypeField{{"result", PrimitiveU256}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self := inputs[0]
+
+				res, err := uint256.FromBig(big.NewInt(0).SetBytes(self.(BytesValue)))
+				if err {
+					return nil, exception(OverflowError, "U256 size overflow")
+				}
+
+				return RegisterSet{0: &U256Value{value: res}}, nil
+			},
+		),
+
+		// byte.ToI256(byte) -> I256
+		0x20: makeBuiltinMethod("ToI256",
+			PrimitiveBytes, 0x20, 10,
+			makefields([]*TypeField{{"self", PrimitiveBytes}}),
+			makefields([]*TypeField{{"result", PrimitiveI256}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self := inputs[0]
+				bigint := big.NewInt(0).SetBytes(self.(BytesValue))
+				sign := bigint.Sign()
+				res, err := uint256.FromBig(new(big.Int).Abs(bigint))
+				if err || res.Gt(MaxI256.value) {
+					return nil, exception(OverflowError, "I256 size overflow")
+				}
+				if sign == -1 {
+					res = new(uint256.Int).Neg(res)
+				}
+
+				return RegisterSet{0: &I256Value{value: res}}, nil
+			},
+		),
 	}
 }
 
@@ -919,9 +1057,26 @@ func (addr AddressValue) methods() [256]*BuiltinMethod {
 			makefields([]*TypeField{{"result", PrimitiveBytes}}),
 			func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				self := inputs[0]
-				bytesval := [32]byte(self.(AddressValue))
+				b := [32]byte(self.(AddressValue))
 
-				return RegisterSet{0: BytesValue(bytesval[:])}, nil
+				return RegisterSet{0: BytesValue(b[:])}, nil
+			},
+		),
+
+		// address.ToU256(address) -> U256
+		0x11: makeBuiltinMethod("ToU256",
+			PrimitiveAddress, 0x11, 10,
+			makefields([]*TypeField{{"self", PrimitiveAddress}}),
+			makefields([]*TypeField{{"result", PrimitiveU256}}),
+			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
+				self := inputs[0].(AddressValue)
+				byteval := self[:]
+				res, err := uint256.FromBig(big.NewInt(0).SetBytes(byteval))
+				if err {
+					return nil, exception(OverflowError, "U256 size overflow")
+				}
+
+				return RegisterSet{0: &U256Value{value: res}}, nil
 			},
 		),
 	}

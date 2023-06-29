@@ -2,8 +2,11 @@ package pisa
 
 import (
 	"encoding/hex"
+	"math/big"
 	"math/rand"
 	"testing"
+
+	"github.com/holiman/uint256"
 
 	"github.com/stretchr/testify/assert"
 
@@ -94,21 +97,6 @@ func TestStringValue(t *testing.T) {
 		data := value.Data()
 		expectedData := []byte{0x6, 0x66, 0x6f, 0x6f, 0x62, 0x61, 0x72}
 		assert.Equal(t, expectedData, data, "POLO encoded bytes of StringValue should match expected value")
-	})
-
-	t.Run("Helpers", func(t *testing.T) {
-		// Create a new BoolValue
-		value := StringValue("boofar")
-		value2 := StringValue("-")
-
-		// Test Concat()
-		assert.Equal(t, StringValue("boofar-boofar"), value.Concat(value2).Concat(value))
-
-		// Test HasPrefix()
-		prefix1 := StringValue("boo")
-		assert.True(t, bool(value.HasPrefix(prefix1)))
-		prefix2 := StringValue("hello")
-		assert.False(t, bool(value.HasPrefix(prefix2)))
 	})
 
 	t.Run("Methods", func(t *testing.T) {
@@ -727,6 +715,115 @@ func TestStringValue(t *testing.T) {
 				}
 			}
 		})
+
+		t.Run("ToU64 [0x1E]", func(t *testing.T) {
+			method := runtime.primitiveMethods[PrimitiveString][0x1E]
+
+			tests := []struct {
+				str StringValue
+				res U64Value
+				err *Exception
+			}{
+				{"0x0", U64Value(0), nil},
+				{"0x64", U64Value(100), nil},
+				{"0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF", U64Value(0), exception(ValueError, "strconv.ParseUint: parsing \"0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF\": value out of range")}, //nolint:lll
+				{"0xFFFFFFFFFFFFFFFF", U64Value(18446744073709551615), nil},
+			}
+
+			for _, test := range tests {
+				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}
+				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: test.str})
+
+				if test.err != nil {
+					assert.Equal(t, test.err, except)
+				} else {
+					assert.Nil(t, except)
+					assert.Equal(t, test.res, outputs.Get(0))
+				}
+			}
+		})
+
+		t.Run("ToI64 [0x1F]", func(t *testing.T) {
+			method := runtime.primitiveMethods[PrimitiveString][0x1F]
+
+			tests := []struct {
+				str StringValue
+				res I64Value
+				err *Exception
+			}{
+				{"0x0", I64Value(0), nil},
+				{"0x64", I64Value(100), nil},
+				{"0xFFFFFFFFFFFFFFFF", I64Value(-1), nil},
+				{"0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF", I64Value(0), exception(ValueError, "strconv.ParseUint: parsing \"0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF\": value out of range")}, //nolint:lll
+			}
+
+			for _, test := range tests {
+				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}
+				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: test.str})
+
+				if test.err != nil {
+					assert.Equal(t, test.err, except)
+				} else {
+					assert.Nil(t, except)
+					assert.Equal(t, test.res, outputs.Get(0))
+				}
+			}
+		})
+
+		t.Run("ToU256 [0x20]", func(t *testing.T) {
+			method := runtime.primitiveMethods[PrimitiveString][0x20]
+
+			tests := []struct {
+				str StringValue
+				res *U256Value
+				err *Exception
+			}{
+				{"0x0", &U256Value{value: uint256.NewInt(0)}, nil},
+				{"0x64", &U256Value{value: uint256.NewInt(100)}, nil},
+				{"0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe", &U256Value{uint256.MustFromHex("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe")}, nil},               //nolint:lll
+				{"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe", &U256Value{uint256.NewInt(0)}, exception(ValueError, "hex number > 256 bits")}, //nolint:lll
+			}
+
+			for _, test := range tests {
+				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}
+				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: test.str})
+
+				if test.err != nil {
+					assert.Equal(t, test.err, except)
+				} else {
+					assert.Nil(t, except)
+					assert.Equal(t, test.res, outputs.Get(0))
+				}
+			}
+		})
+
+		t.Run("ToI256 [0x21]", func(t *testing.T) {
+			method := runtime.primitiveMethods[PrimitiveString][0x21]
+
+			tests := []struct {
+				str StringValue
+				res *I256Value
+				err *Exception
+			}{
+				{"0x0", &I256Value{value: uint256.NewInt(0)}, nil},
+				{"0x64", &I256Value{value: uint256.NewInt(100)}, nil},
+				{"0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe", &I256Value{uint256.MustFromHex("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe")}, nil},               //nolint:lll
+				{"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe", &I256Value{uint256.NewInt(0)}, exception(ValueError, "hex number > 256 bits")}, //nolint:lll
+				{"0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF", &I256Value{value: uint256.MustFromBig(big.NewInt(-1))}, nil},                                                              //nolint:lll
+			}
+
+			for _, test := range tests {
+				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}
+				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: test.str})
+
+				if test.err != nil {
+					assert.Equal(t, test.err, except)
+				} else {
+					assert.Nil(t, except)
+					assert.Equal(t, test.res, outputs.Get(0))
+				}
+			}
+		})
 	})
 }
 
@@ -1035,6 +1132,159 @@ func TestBytesValue(t *testing.T) {
 				}
 			}
 		})
+
+		t.Run("ToU64 [0x17]", func(t *testing.T) {
+			method := runtime.primitiveMethods[PrimitiveBytes][0x17]
+
+			tests := []struct {
+				byt BytesValue
+				res U64Value
+				err *Exception
+			}{
+				{
+					[]byte{100},
+					U64Value(100),
+					nil,
+				},
+				{
+					[]byte{0xFF},
+					U64Value(255),
+					nil,
+				},
+				{
+					[]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+					U64Value(0),
+					exception(OverflowError, "U64 size overflow"),
+				},
+			}
+
+			for _, test := range tests {
+				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}
+				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: test.byt})
+				expected := test.res
+
+				if test.err != nil {
+					assert.Equal(t, test.err, except)
+				} else {
+					assert.Nil(t, except)
+					assert.Equal(t, expected, outputs.Get(0))
+				}
+			}
+		})
+
+		t.Run("ToI64 [0x18]", func(t *testing.T) {
+			method := runtime.primitiveMethods[PrimitiveBytes][0x18]
+
+			tests := []struct {
+				byt BytesValue
+				res I64Value
+				err *Exception
+			}{
+				{
+					[]byte{100},
+					I64Value(100),
+					nil,
+				},
+				{
+					[]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+					I64Value(-1),
+					nil,
+				},
+			}
+
+			for _, test := range tests {
+				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}
+				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: test.byt})
+				expected := test.res
+
+				if test.err != nil {
+					assert.Equal(t, test.err, except)
+				} else {
+					assert.Nil(t, except)
+					assert.Equal(t, expected, outputs.Get(0))
+				}
+			}
+		})
+
+		//nolint:dupl
+		t.Run("ToU256 [0x19]", func(t *testing.T) {
+			method := runtime.primitiveMethods[PrimitiveBytes][0x19]
+
+			tests := []struct {
+				byt BytesValue
+				res *U256Value
+				err *Exception
+			}{
+				{
+					[]byte{100},
+					&U256Value{value: uint256.NewInt(100)},
+					nil,
+				},
+				{
+					[]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+					&U256Value{value: uint256.NewInt(18446744073709551615)},
+					nil,
+				},
+				{
+					[]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, //nolint:lll
+					&U256Value{value: uint256.NewInt(0)},
+					exception(OverflowError, "U256 size overflow"),
+				},
+			}
+
+			for _, test := range tests {
+				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}
+				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: test.byt})
+				expected := test.res
+
+				if test.err != nil {
+					assert.Equal(t, test.err, except)
+				} else {
+					assert.Nil(t, except)
+					assert.Equal(t, expected, outputs.Get(0))
+				}
+			}
+		})
+
+		//nolint:dupl
+		t.Run("ToI256 [0x20]", func(t *testing.T) {
+			method := runtime.primitiveMethods[PrimitiveBytes][0x20]
+
+			tests := []struct {
+				byt BytesValue
+				res *I256Value
+				err *Exception
+			}{
+				{
+					[]byte{100},
+					&I256Value{value: uint256.NewInt(100)},
+					nil,
+				},
+				{
+					[]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+					&I256Value{value: uint256.MustFromHex("0xFFFFFFFFFFFFFFFF")},
+					nil,
+				},
+				{
+					[]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, //nolint:lll
+					&I256Value{value: uint256.NewInt(0)},
+					exception(OverflowError, "I256 size overflow"),
+				},
+			}
+
+			for _, test := range tests {
+				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}
+				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: test.byt})
+				expected := test.res
+
+				if test.err != nil {
+					assert.Equal(t, test.err, except)
+				} else {
+					assert.Nil(t, except)
+					assert.Equal(t, expected, outputs.Get(0))
+				}
+			}
+		})
 	})
 }
 
@@ -1095,7 +1345,7 @@ func TestAddressValue(t *testing.T) {
 			}
 		})
 
-		t.Run("__eq__ [0x3]", func(t *testing.T) {
+		t.Run("ToBytes [0x10]", func(t *testing.T) {
 			method := runtime.primitiveMethods[PrimitiveAddress][0x10]
 
 			tests := []struct {
@@ -1111,6 +1361,35 @@ func TestAddressValue(t *testing.T) {
 				{
 					AddressValue(types.BytesToAddress([]byte{0x62, 0xdb})),
 					BytesValue(must(hex.DecodeString("00000000000000000000000000000000000000000000000000000000000062db"))),
+					nil,
+				},
+			}
+
+			for _, test := range tests {
+				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}
+				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: test.input})
+
+				assert.Nil(t, except)
+				assert.Equal(t, test.result, outputs.Get(0))
+			}
+		})
+
+		t.Run("ToU256 [0x11]", func(t *testing.T) {
+			method := runtime.primitiveMethods[PrimitiveAddress][0x11]
+
+			tests := []struct {
+				input  AddressValue
+				result *U256Value
+				err    *Exception
+			}{
+				{
+					AddressValue(types.BytesToAddress(must(hex.DecodeString("62dbd666303ff4dfa7bf390e1eaf1d6be58df23ab6ac5adc0de54fada389acaa")))), //nolint:lll
+					&U256Value{uint256.MustFromHex("0x62dbd666303ff4dfa7bf390e1eaf1d6be58df23ab6ac5adc0de54fada389acaa")},
+					nil,
+				},
+				{
+					AddressValue(types.BytesToAddress([]byte{0x62, 0xdb})),
+					&U256Value{uint256.MustFromHex("0x62db")},
 					nil,
 				},
 			}

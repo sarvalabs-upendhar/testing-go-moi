@@ -2,6 +2,7 @@ package pisa
 
 import (
 	"encoding/binary"
+	"math/bits"
 	"strings"
 	"unicode"
 
@@ -69,4 +70,11 @@ func contains(array []engineio.ElementPtr, check engineio.ElementPtr) bool {
 	}
 
 	return false
+}
+
+// trimBytes returns trimmed []byte as variable sized []byte for the size required by the uint64
+func trimBytes(bytearr []byte, n uint64) []byte {
+	size := (bits.Len64(n) + 8 - 1) / 8
+
+	return bytearr[8-size:]
 }
