@@ -23,6 +23,9 @@ const (
 	TokenBig
 	TokenManifest
 
+	TokenConfig
+	TokenConfigParam
+
 	TokenEngine
 	TokenEncoding
 
@@ -40,7 +43,6 @@ const (
 	TokenErrDecode
 
 	TokenLogic
-
 	TokenParticipant
 )
 
@@ -66,6 +68,11 @@ var keywords = map[string]symbolizer.TokenKind{
 
 	"set": TokenMemoryAction,
 	"get": TokenMemoryAction,
+
+	"config":   TokenConfig,
+	"basefuel": TokenConfigParam,
+	"hexbig":   TokenConfigParam,
+	"hexbytes": TokenConfigParam,
 
 	"POLO": TokenEncoding,
 	"JSON": TokenEncoding,
@@ -277,25 +284,56 @@ func parseCallActionCommand(parser *symbolizer.Parser) Command {
 }
 
 func parseMemoryActionCommand(parser *symbolizer.Parser) Command {
-	action := parser.Cursor().Literal
+	action := parser.Cursor().Literal // set/get
 
-	if !parser.ExpectPeek(symbolizer.TokenIdent) {
-		return InvalidCommandErrorf("invalid '%v' command: missing identifier", action)
-	}
+	parser.Advance()
+	ident := parser.Cursor().Literal // config or identifier
 
-	ident := parser.Cursor().Literal
-	if action == "get" {
-		return GetValueCommand(ident)
+	switch action {
+	case "get":
+		if ident == "config" {
+			return parseConfigCommand(parser, false)
+		} else {
+			return GetValueCommand(ident)
+		}
+	case "set":
+		if ident == "config" {
+			return parseConfigCommand(parser, true)
+		}
 	}
 
 	parser.Advance()
 
-	argument, err := parseValue(parser)
+	argument, err := parseValue(parser) // value for non config calls
 	if err != nil {
 		return InvalidCommandErrorf("invalid '%v' command: invalid argument value: %v", action, err)
 	}
 
-	return SetValueCommand(ident, argument)
+	return SetValueCommand(ident, argument) // all non config set calls
+}
+
+func parseConfigCommand(parser *symbolizer.Parser, set bool) Command {
+	if !parser.ExpectPeek(symbolizer.TokenKind('.')) {
+		return InvalidCommandErrorf("invalid 'config' command: missing . after config identifier")
+	}
+
+	if !parser.ExpectPeek(TokenConfigParam) {
+		return InvalidCommandErrorf("invalid 'config' command: missing valid config parameter")
+	}
+
+	option := parser.Cursor().Literal // keyword after [.]
+	parser.Advance()
+
+	if !set {
+		return GetConfigCommand(option)
+	}
+
+	value, err := parseValue(parser) // value to set config
+	if err != nil {                  // throw error if value is not present to set
+		return InvalidCommandErrorf("invalid set command: invalid argument value %v", err)
+	}
+
+	return SetConfigCommand(option, value)
 }
 
 func parseSlothashCommand(parser *symbolizer.Parser) Command {

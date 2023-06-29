@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -308,6 +309,67 @@ func GetValueCommand(ident string) Command {
 		}
 
 		return fmt.Sprintf("'%v' is set to %v", ident, env.formatValue(value))
+	}
+}
+
+func SetConfigCommand(param string, value any) Command {
+	return func(env *Environment) string {
+		switch param {
+		case "basefuel":
+			test := env.formatValue(value)
+			n := new(big.Int)
+			n, err := n.SetString(test, 10)
+
+			if !err {
+				return fmt.Sprintf("error converting '%v' has not been set to %v", param, env.formatValue(value))
+			}
+
+			env.inventory.Config.BaseFuel.Set(n)
+
+			return fmt.Sprintf("'%v' has been set to %v", param, env.formatValue(value))
+
+		case "hexbig":
+			test := env.formatValue(value)
+
+			b, err := strconv.ParseBool(test)
+			if err != nil {
+				return fmt.Sprintf("error converting '%v' has not been set to %v", param, env.formatValue(value))
+			}
+
+			env.inventory.Config.HexBig = b
+
+			return fmt.Sprintf("'%v' has been set to %v", param, env.formatValue(value))
+
+		case "hexbytes":
+			test := env.formatValue(value)
+
+			b, err := strconv.ParseBool(test)
+			if err != nil {
+				return fmt.Sprintf("error converting '%v' has not been set to %v", param, env.formatValue(value))
+			}
+
+			env.inventory.Config.HexBytes = b
+
+			return fmt.Sprintf("'%v' has been set to %v", param, env.formatValue(value))
+
+		default:
+			return fmt.Sprintf("unsupported config param: %v", param)
+		}
+	}
+}
+
+func GetConfigCommand(param string) Command {
+	return func(env *Environment) string {
+		switch param {
+		case "basefuel":
+			return env.inventory.Config.BaseFuel.String()
+		case "hexbig":
+			return env.formatValue(env.inventory.Config.HexBig)
+		case "hexbytes":
+			return env.formatValue(env.inventory.Config.HexBytes)
+		default:
+			return fmt.Sprintf("unsupported config param: %v", param)
+		}
 	}
 }
 
