@@ -1,7 +1,6 @@
 package jug
 
 import (
-	"context"
 	"math/big"
 
 	"github.com/sarvalabs/moichain/common/hexutil"
@@ -185,51 +184,17 @@ func (executor IxExecutor) LogicDeploy(
 // The given logic payload describes the callsite and calldata for the execution.
 func (executor IxExecutor) LogicInvoke(
 	tank *engineio.FuelTank,
-	logicstate, deployer *guna.StateObject,
+	logicstate, sender *guna.StateObject,
 	payload *types.LogicPayload,
 ) (
 	engineio.Fuel, *types.LogicInvokeReceipt, error,
 ) {
-	// Fetch the logic object from the state object
-	logicObject, err := logicstate.FetchLogicObject(payload.Logic)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "could not fetch logic object")
-	}
+	// Create an options chain
+	options := make([]LogicInvokeOption, 0, 3)
+	// Append invoker options for invoker state and fuel limit
+	options = append(options, InvokerState(sender))
+	options = append(options, InvokeFuelLimit(tank.Level()))
+	options = append(options, InvokeCall(payload.Callsite, payload.Calldata))
 
-	// Check that the logic contains the payload callsite
-	if _, ok := logicObject.GetCallsite(payload.Callsite); !ok {
-		return nil, nil, errors.Wrap(err, "callsite does not exists for logic")
-	}
-
-	// Obtain the runtime for the logic engine of the logic object
-	runtime, ok := engineio.FetchEngineRuntime(logicObject.Engine())
-	if !ok {
-		return nil, nil, errors.Errorf("missing engine factory: %v", logicObject.Engine())
-	}
-
-	// Create a new engine for the execution
-	engine, err := runtime.SpawnEngine(
-		tank.Level(), logicObject,
-		logicstate.GenerateLogicContextObject(logicObject.LogicID()),
-		engineio.NewEnvDriver(),
-	)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "could not bootstrap engine")
-	}
-
-	// Create an IxnObject
-	ixn := engineio.NewIxnObject(types.IxLogicInvoke, payload.Callsite, payload.Calldata)
-	// Perform an Invokable Call
-	result, err := engine.Call(context.Background(), ixn, deployer.GenerateLogicContextObject(logicObject.LogicID()))
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "could not perform call")
-	}
-
-	// Check the execution result
-	if !result.Ok() {
-		return result.Consumed, &types.LogicInvokeReceipt{Error: result.Error}, nil
-	}
-
-	// Return the total fuel consumed and the return data
-	return result.Consumed, &types.LogicInvokeReceipt{Outputs: result.Outputs}, nil
+	return InvokeLogic(payload.Logic, logicstate, options...)
 }

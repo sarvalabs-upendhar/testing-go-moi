@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/moichain/common/hexutil"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
 	"github.com/sarvalabs/moichain/jug/engineio"
@@ -18,14 +19,15 @@ type PublicCoreAPI struct {
 	// Represents the API backend
 	ixpool IxPool
 	chain  ChainManager
+	exec   ExecutionManager
 	sm     StateManager
 }
 
 // NewPublicCoreAPI is a constructor function that generates and returns a new
 // PublicCoreAPI object for a given API backend object.
-func NewPublicCoreAPI(ixpool IxPool, chain ChainManager, sm StateManager) *PublicCoreAPI {
+func NewPublicCoreAPI(ixpool IxPool, chain ChainManager, sm StateManager, exec ExecutionManager) *PublicCoreAPI {
 	// Create the core public API wrapper and return it
-	return &PublicCoreAPI{ixpool, chain, sm}
+	return &PublicCoreAPI{ixpool, chain, exec, sm}
 }
 
 func getTesseractArgs(address types.Address, options ptypes.TesseractNumberOrHash) *ptypes.TesseractArgs {
@@ -437,6 +439,22 @@ func (p *PublicCoreAPI) AccountMetaInfo(args *ptypes.GetAccountArgs) (map[string
 	}
 
 	return rpcAccMetaInfo, nil
+}
+
+// LogicCall supports call to logics that do not transition state
+func (p *PublicCoreAPI) LogicCall(args *ptypes.LogicCallArgs) (*ptypes.LogicCallResult, error) {
+	consumed, receipt, err := p.exec.LogicCall(args.LogicID, args.Invoker, args.Callsite, args.Calldata)
+	if err != nil {
+		return nil, err
+	}
+
+	logicCallResult := &ptypes.LogicCallResult{
+		Consumed: (hexutil.Big)(*consumed),
+		Outputs:  receipt.Outputs,
+		Error:    receipt.Error,
+	}
+
+	return logicCallResult, nil
 }
 
 // createRPCInteraction creates an RPC Interaction by copying all fields of the interaction into the RPC Interaction,

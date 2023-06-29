@@ -514,6 +514,29 @@ func (c *Client) LogicManifest(args *ptypes.LogicManifestArgs) (hexutil.Bytes, e
 	return res, nil
 }
 
+// LogicCall supports call to logics that do not transition state
+func (c *Client) LogicCall(args *ptypes.LogicCallArgs) (*ptypes.LogicCallResult, error) {
+	var resp ptypes.Response
+
+	err := c.Call(&resp, "moi.LogicCall", args)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+
+	var res *ptypes.LogicCallResult
+
+	err = json.Unmarshal(resp.Data, &res)
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
 // SendInteractions sends given Interactions
 func (c *Client) SendInteractions(args *ptypes.SendIX) (types.Hash, error) {
 	var resp ptypes.Response

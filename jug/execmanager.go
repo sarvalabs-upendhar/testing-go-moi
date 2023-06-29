@@ -38,6 +38,8 @@ type state interface {
 	GetDirtyObject(types.Address) (*guna.StateObject, error)
 	// CreateDirtyObject must generate a new dirty guna.StateObject for the given types.Address
 	CreateDirtyObject(types.Address, types.AccountType) *guna.StateObject
+	// GetLatestStateObject must return the latest guna.StateObject for the given types.Address
+	GetLatestStateObject(addr types.Address) (*guna.StateObject, error)
 }
 
 // NewExecutionManager creates a new ExecutionManager instance
@@ -86,8 +88,6 @@ func (exec *ExecutionManager) SpawnExecutor() *IxExecutor {
 		exec:  exec,
 		state: exec.state,
 
-		// tank:  engineio.NewFuelTank(engineio.Fuel(fuelLimit)),
-
 		objects:   make(map[types.Address]*guna.StateObject),
 		snapshots: make(map[types.Address]*guna.StateObject),
 
@@ -118,6 +118,30 @@ func (exec *ExecutionManager) Revert(cluster types.ClusterID) error {
 // Cleanup removes the executor instance for the given Cluster ID, if one exists.
 func (exec *ExecutionManager) Cleanup(cluster types.ClusterID) {
 	exec.executors.Delete(cluster)
+}
+
+func (exec *ExecutionManager) LogicCall(
+	logicID types.LogicID,
+	sender types.Address,
+	callsite string,
+	calldata []byte,
+) (engineio.Fuel, *types.LogicInvokeReceipt, error) {
+	logicStateObject, err := exec.state.GetLatestStateObject(logicID.Address())
+	if err != nil {
+		return nil, nil, err
+	}
+
+	senderStateObject, err := exec.state.GetLatestStateObject(sender)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	options := make([]LogicInvokeOption, 0, 3)
+	// Append invoker options for invoker state and fuel limit
+	options = append(options, InvokerState(senderStateObject))
+	options = append(options, InvokeCall(callsite, calldata))
+
+	return InvokeLogic(logicID, logicStateObject, options...)
 }
 
 func (exec *ExecutionManager) createFuelTank(ix *types.Interaction) *engineio.FuelTank {

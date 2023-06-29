@@ -6,6 +6,7 @@ import (
 	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/guna"
 	gtypes "github.com/sarvalabs/moichain/guna/types"
+	"github.com/sarvalabs/moichain/jug/engineio"
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/types"
 )
@@ -44,6 +45,10 @@ type StateManager interface {
 	GetRegistry(addr types.Address, stateHash types.Hash) (map[string][]byte, error)
 }
 
+type ExecutionManager interface {
+	LogicCall(types.LogicID, types.Address, string, []byte) (engineio.Fuel, *types.LogicInvokeReceipt, error)
+}
+
 type Network interface {
 	GetPeers() []id.KramaID
 	GetVersion() string
@@ -58,19 +63,16 @@ type DB interface {
 type Backend struct {
 	// Represents the API interaction pool
 	ixpool IxPool
-
 	// Represents the API chain manager
 	chain ChainManager
-
+	// Represents the API execution manager
+	exec ExecutionManager
 	// Represents the API state manager
 	sm StateManager
-
 	// Represents the API network
 	net Network
-
 	// Represents the API database
 	db DB
-
 	// Represents the node config
 	cfg *common.IxPoolConfig
 }
@@ -79,11 +81,12 @@ type Backend struct {
 func NewBackend(
 	ixpool IxPool,
 	chain ChainManager,
+	exec ExecutionManager,
 	sm StateManager,
 	net Network,
 	db DB,
 	cfg *common.IxPoolConfig,
 ) *Backend {
 	// Create a new API Backend object and return it
-	return &Backend{ixpool, chain, sm, net, db, cfg}
+	return &Backend{ixpool, chain, exec, sm, net, db, cfg}
 }

@@ -205,7 +205,6 @@ func (deployer logicDeployer) callDeployer(logic *gtypes.LogicObject) (*engineio
 
 	// Create an IxnObject
 	ixn := engineio.NewIxnObject(types.IxLogicDeploy, deployer.deployment.callsite, deployer.deployment.calldata)
-	// Perform a Deployer Call
 
 	// Declare context driver
 	var deployerCtx engineio.CtxDriver

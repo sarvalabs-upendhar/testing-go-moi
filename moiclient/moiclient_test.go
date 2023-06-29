@@ -91,6 +91,9 @@ func TestMoiClient(t *testing.T) {
 		"LogicManifest": {
 			test: func(t *testing.T) { testLogicManifest(t, client, addrsMap["deployAddr"]) },
 		},
+		"LogicCall": {
+			test: func(t *testing.T) { testLogicCall(t, client, addrsMap["deployAddr"]) },
+		},
 		"Content": {
 			test: func(t *testing.T) { testContent(t, client) },
 		},
@@ -1099,6 +1102,56 @@ func testLogicManifest(t *testing.T, client *Client, addr types.Address) {
 
 			httpLogicManifest := httpLogicManifest(t, test.logicManifestArgs)
 			require.Equal(t, httpLogicManifest, logicManifest)
+		})
+	}
+}
+
+func testLogicCall(t *testing.T, client *Client, addr types.Address) {
+	logicID := getLogicID(t, client, addr, &deployLogicHeight)
+	calldata := "0x0daf010665a601e501f6059506616d6f756e74030f424066726f6d06ffcd8ee6a29ec442dbbf9c6124dd3aeb833ef58" +
+		"052237d521654740857716b34746f060fafe52ec42a85db644d5cceba2bb89cf5b0166cc9158211f44ed1e60b06032c"
+
+	testcases := []struct {
+		name              string
+		logicCallArgs     *ptypes.LogicCallArgs
+		expectedLogicCall *ptypes.LogicCallResult
+		expectedError     error
+	}{
+		{
+			name: "fetched logic call result successfully",
+			logicCallArgs: &ptypes.LogicCallArgs{
+				Invoker:  logicID.Address(),
+				LogicID:  logicID,
+				Callsite: "Transfer!",
+				Calldata: types.Hex2Bytes(calldata),
+			},
+		},
+		{
+			name: "fetch logic call result for non-existing address and logicID",
+			logicCallArgs: &ptypes.LogicCallArgs{
+				Invoker:  tests.RandomAddress(t),
+				LogicID:  "0200000070c34ed6ec4384c75d469894052647a078b33ac0f08db0d3751c1fce29a49f",
+				Callsite: "Transfer!",
+				Calldata: types.Hex2Bytes(calldata),
+			},
+			expectedError: types.ErrAccountNotFound,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			logicCall, err := client.LogicCall(test.logicCallArgs)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			httpLogicCall := httpLogicCall(t, test.logicCallArgs)
+			require.Equal(t, httpLogicCall, logicCall)
 		})
 	}
 }

@@ -475,6 +475,34 @@ func (r *Service) AccountMetaInfo(
 	return nil
 }
 
+// LogicCall supports call to logics that do not transition state
+func (r *Service) LogicCall(
+	req *http.Request,
+	args *ptypes.LogicCallArgs,
+	resp *ptypes.Response,
+) error {
+	coreAPI, ok := r.apis["core"].(*api.PublicCoreAPI)
+	if !ok {
+		return types.ErrInvalidAPI
+	}
+
+	logicCallResult, err := coreAPI.LogicCall(args)
+	if err != nil {
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	resp.Data, err = json.Marshal(logicCallResult)
+	if err != nil {
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	return nil
+}
+
 /* RPC methods that are associated with the ix namespace. */
 
 // SendInteractions is a method of Service that sends Interactions

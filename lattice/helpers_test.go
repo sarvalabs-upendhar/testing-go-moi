@@ -465,6 +465,11 @@ type MockStateManager struct {
 	createDirtyObjectHook   func() *guna.StateObject
 }
 
+func (sm *MockStateManager) GetLatestStateObject(addr types.Address) (*guna.StateObject, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (sm *MockStateManager) GetLogicIDs(addr types.Address, hash types.Hash) ([]types.LogicID, error) {
 	// TODO implement me
 	panic("implement me")

@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/sarvalabs/moichain/jug/engineio"
 	"github.com/sarvalabs/moichain/mudra"
 
 	"github.com/sarvalabs/go-polo"
@@ -384,6 +385,37 @@ func (s *MockStateManager) getTDU(addr types.Address, stateHash types.Hash) type
 
 func (s *MockStateManager) setLogicManifest(logicID string, logicManifest []byte) {
 	s.logicManifests[logicID] = logicManifest
+}
+
+type MockExecutionManager struct {
+	logicCall map[types.Address]*ptypes.LogicCallResult
+}
+
+func NewMockExecutionManager(t *testing.T) *MockExecutionManager {
+	t.Helper()
+
+	exec := new(MockExecutionManager)
+	exec.logicCall = make(map[types.Address]*ptypes.LogicCallResult)
+
+	return exec
+}
+
+func (exec *MockExecutionManager) setLogicCall(addr types.Address, logicCallResult *ptypes.LogicCallResult) {
+	exec.logicCall[addr] = logicCallResult
+}
+
+func (exec *MockExecutionManager) LogicCall(
+	logicID types.LogicID,
+	addr types.Address,
+	callsite string,
+	calldata []byte,
+) (engineio.Fuel, *types.LogicInvokeReceipt, error) {
+	logicCall, ok := exec.logicCall[addr]
+	if !ok {
+		return nil, nil, types.ErrAccountNotFound
+	}
+
+	return logicCall.Consumed.ToInt(), &types.LogicInvokeReceipt{Outputs: logicCall.Outputs, Error: logicCall.Error}, nil
 }
 
 type MockIxPool struct {

@@ -65,6 +65,19 @@ type IxPoolArgs struct {
 	Address types.Address `json:"address"`
 }
 
+type LogicCallResult struct {
+	Consumed hexutil.Big   `json:"consumed"`
+	Outputs  hexutil.Bytes `json:"outputs"`
+	Error    hexutil.Bytes `json:"error"`
+}
+
+type LogicCallArgs struct {
+	Invoker  types.Address `json:"invoker"`
+	LogicID  types.LogicID `json:"logic_id"`
+	Callsite string        `json:"callsite"`
+	Calldata hexutil.Bytes `json:"calldata"`
+}
+
 type InspectArgs struct{}
 
 type StatusArgs struct{}
