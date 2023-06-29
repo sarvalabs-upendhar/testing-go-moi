@@ -161,11 +161,8 @@ func builtinBLAKE2b() *Builtin {
 			data := inputs[0].(BytesValue)
 
 			// Hash the data and create a u256 value from it
-			hash, err := blake2b.New256(data)
-			if err != nil {
-				return RegisterSet{0: &U256Value{}}, exception(CallError, err.Error())
-			}
-			u256 := new(uint256.Int).SetBytes(hash.Sum([]byte(nil)))
+			hash := blake2b.Sum256(data)
+			u256 := new(uint256.Int).SetBytes(hash[:])
 
 			return RegisterSet{0: &U256Value{u256}}, nil
 		},
@@ -175,15 +172,19 @@ func builtinBLAKE2b() *Builtin {
 //nolint:forcetypeassert
 func builtinSignatureVerify() *Builtin {
 	return makeBuiltin(
-		"builtinSignatureVerify", 3, 50,
+		"SignatureVerify", 3, 50,
 		makefields([]*TypeField{{"data", PrimitiveBytes}, {"signature", PrimitiveBytes}, {"pubkey", PrimitiveBytes}}),
 		makefields([]*TypeField{{"ok", PrimitiveBool}}),
 		func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 			data, sig, pubBytes := inputs[0].(BytesValue), inputs[1].(BytesValue), inputs[2].(BytesValue)
 
+			if !mudra.ValidateSignature(sig) {
+				return nil, exception(CallError, "insufficient length for signature")
+			}
+
 			ok, err := mudra.Verify(data, sig, pubBytes)
 			if err != nil {
-				return RegisterSet{0: BoolValue(ok)}, exception(CallError, err.Error())
+				return nil, exception(RuntimeError, err.Error())
 			}
 
 			return RegisterSet{0: BoolValue(ok)}, nil

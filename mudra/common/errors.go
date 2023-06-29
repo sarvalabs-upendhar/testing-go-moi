@@ -17,6 +17,7 @@ var (
 	ErrZeroKey                         = errors.New("received secret key is zero")
 	ErrInvalidBLSPublicKeyLength       = errors.New("invalid length for BLS public key")
 	ErrEmpty                           = errors.New("given data is empty")
+	ErrInsufficientSigLength           = errors.New("signature length is insufficient")
 	ErrInvalidBLSSignature             = errors.New("invalid BLS Signature")
 	ErrUnsupportedAggSignature         = errors.New("invalid signature type for aggregation")
 	ErrUnsupportedSig                  = errors.New("currently this Signature type is not supported")

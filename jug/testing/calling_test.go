@@ -80,7 +80,7 @@ func (suite *CallingTestSuite) TestBuiltinKeccak256() {
 
 func (suite *CallingTestSuite) TestBuiltinBLAKE2b() {
 	consumed, output, except := suite.Call("Blake2b", map[string]any{"data": []byte{0xab, 0xcd}})
-	suite.Equal(map[string]any{"hash": uint256.MustFromDecimal("43342608640890626942959998274643398215420039872969203983281099225379390800164").ToBig()}, output) //nolint:lll
+	suite.Equal(map[string]any{"hash": uint256.MustFromDecimal("67859110136991185311493348371284861541977304781806664142055349856124235179253").ToBig()}, output) //nolint:lll
 	suite.Equal(engineio.NewFuel(135), consumed)
 	suite.Nil(except)
 }

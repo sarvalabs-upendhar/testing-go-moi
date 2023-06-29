@@ -40,12 +40,25 @@ func IsZeroBytes(key []byte) bool {
 	return subtle.ConstantTimeByteEq(b, 0) == 1
 }
 
+// CanUnmarshalSignature returns whether the given bytes can be unmarshalled as a Signature.
+func CanUnmarshalSignature(hexBytes []byte) bool {
+	if len(hexBytes) < 2 {
+		return false
+	}
+
+	if len(hexBytes) < int(hexBytes[1])+2 {
+		return false
+	}
+
+	return true
+}
+
 // UnmarshalSignature unmarshalls the hex bytes into signature which further can be type cast to different SignatureType
 func UnmarshalSignature(hexBytes []byte) (Signature, error) {
 	var unParsedSignature Signature
 
-	if len(hexBytes) == 0 {
-		return unParsedSignature, ErrEmpty
+	if !CanUnmarshalSignature(hexBytes) {
+		return unParsedSignature, ErrInsufficientSigLength
 	}
 
 	unParsedSignature.SigPrefix = [2]byte{hexBytes[0], hexBytes[1]}

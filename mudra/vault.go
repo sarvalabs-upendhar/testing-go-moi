@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 
 	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/moichain/mudra/common"
 	"github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/mudra/poi"
@@ -370,4 +371,8 @@ func VerifySignatureUsingKramaID(id kramaid.KramaID, rawData []byte, signature [
 	}
 
 	return nil
+}
+
+func ValidateSignature(sig []byte) bool {
+	return common.CanUnmarshalSignature(sig)
 }
