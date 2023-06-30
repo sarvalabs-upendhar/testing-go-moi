@@ -7,7 +7,11 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strconv"
 
+	"github.com/sarvalabs/moichain/mudra"
+
+	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/moiclient"
 	ptypes "github.com/sarvalabs/moichain/poorna/types"
 
@@ -36,6 +40,7 @@ type Config struct {
 	KramaIDVersion int             `json:"ḭd_version"`
 	Vault          VaultConfig     `json:"vault"`
 	Network        NetworkConfig   `json:"network"`
+	Syncer         SyncerConfig    `json:"syncer"`
 	Ixpool         IxPoolConfig    `json:"ixpool"`
 	Consensus      ConsensusConfig `json:"consensus"`
 	Execution      ExecutionConfig `json:"execution"`
@@ -44,14 +49,143 @@ type Config struct {
 	LogFilePath    string          `json:"logfile"`
 }
 
+func DefaultBabylonConfig(path string) *Config {
+	return &Config{
+		Genesis:        path + "/genesis.json",
+		NodeType:       7,
+		KramaIDVersion: 1,
+		Vault: VaultConfig{
+			DataDir: path,
+			Mode:    mudra.GuardianMode,
+		},
+		Network: NetworkConfig{
+			Libp2pAddr: []string{"/ip4/0.0.0.0/tcp/" + strconv.Itoa(common.DefaultListenerPort)},
+			BootStrapPeers: []string{
+				"/ip4/65.109.138.198/tcp/5000/p2p/16Uiu2HAmNPceqBKGNWXGTKTtWDPty4UhncdhB84VbDEPpn1H11Cb",
+				"/ip4/135.181.206.93/tcp/5000/p2p/16Uiu2HAmFXiKHS3GWgdS1V36uUBDUjigf3RZRJCrjDFFMjexR3V8",
+			},
+			MaxPeers:           0, // current we don't limit the no.of peers
+			InboundConnLimit:   common.DefaultInboundConnLimit,
+			OutboundConnLimit:  common.DefaultOutboundConnLimit,
+			JSONRPCAddr:        "0.0.0.0:" + strconv.Itoa(common.DefaultJSONRPCPort),
+			CorsAllowedOrigins: []string{"*"},
+			RefreshSenatus:     true,
+		},
+		Syncer: SyncerConfig{
+			ShouldExecute:  true,
+			SyncMode:       int(common.DefaultSyncMode),
+			EnableSnapSync: true,
+		},
+		Consensus: ConsensusConfig{
+			TimeoutPropose:        30000,
+			TimeoutProposeDelta:   50000,
+			TimeoutPrevote:        10000,
+			TimeoutPrevoteDelta:   50000,
+			TimeoutPrecommit:      10000,
+			TimeoutPrecommitDelta: 50000,
+			TimeoutCommit:         10000,
+			Precision:             1000,
+			MessageDelay:          5500,
+			AccountWaitTime:       1500,
+			OperatorSlots:         -1,
+			ValidatorSlots:        5,
+		},
+		DB: DBConfig{
+			CleanDB:     false,
+			DBFolder:    path + common.DefaultDBDirectory,
+			MaxSnapSize: common.DefaultSnapSize, // 1GB limit
+		},
+		Execution: ExecutionConfig{
+			FuelLimit: hexutil.Big(*common.DefaultFuelLimit),
+		},
+		Ixpool: IxPoolConfig{
+			Mode:       common.DefaultIxPoolMode,
+			PriceLimit: hexutil.Big(*common.DefaultIxPriceLimit),
+		},
+		Telemetry: Telemetry{
+			PrometheusAddr: "",
+		},
+	}
+}
+
+func DefaultDevnetConfig(path string) *Config {
+	return &Config{
+		Genesis:        path + "/genesis.json",
+		NodeType:       7,
+		KramaIDVersion: 1,
+		Vault: VaultConfig{
+			DataDir: path,
+			Mode:    mudra.GuardianMode,
+		},
+		Network: NetworkConfig{
+			Libp2pAddr:         []string{"/ip4/0.0.0.0/tcp/" + strconv.Itoa(common.DefaultListenerPort)},
+			BootStrapPeers:     make([]string, 0),
+			MaxPeers:           0, // current we don't limit the no.of peers
+			InboundConnLimit:   common.DefaultInboundConnLimit,
+			OutboundConnLimit:  common.DefaultOutboundConnLimit,
+			JSONRPCAddr:        "0.0.0.0:" + strconv.Itoa(common.DefaultJSONRPCPort),
+			CorsAllowedOrigins: []string{"*"},
+			RefreshSenatus:     true,
+		},
+		Syncer: SyncerConfig{
+			ShouldExecute:  true,
+			SyncMode:       int(common.DefaultSyncMode),
+			EnableSnapSync: true,
+		},
+		Consensus: ConsensusConfig{
+			TimeoutPropose:        30000,
+			TimeoutProposeDelta:   50000,
+			TimeoutPrevote:        10000,
+			TimeoutPrevoteDelta:   50000,
+			TimeoutPrecommit:      10000,
+			TimeoutPrecommitDelta: 50000,
+			TimeoutCommit:         10000,
+			Precision:             1000,
+			MessageDelay:          5500,
+			AccountWaitTime:       1500,
+			OperatorSlots:         -1,
+			ValidatorSlots:        3,
+		},
+		DB: DBConfig{
+			CleanDB:     false,
+			DBFolder:    path + common.DefaultDBDirectory,
+			MaxSnapSize: common.DefaultSnapSize, // 1GB limit
+		},
+		Execution: ExecutionConfig{
+			FuelLimit: hexutil.Big(*common.DefaultFuelLimit),
+		},
+		Ixpool: IxPoolConfig{
+			Mode:       common.DefaultIxPoolMode,
+			PriceLimit: hexutil.Big(*common.DefaultIxPriceLimit),
+		},
+		Telemetry: Telemetry{
+			PrometheusAddr: "",
+		},
+	}
+}
+
 type NetworkConfig struct {
-	Libp2pAddr        []string   `json:"libp2p_addr"`
-	JSONRPCAddr       string     `json:"jsonrpc_addr"`
-	BootStrapPeers    []string   `json:"bootnodes"`
-	TrustedPeers      []PeerInfo `json:"trusted_peers"`
-	StaticPeers       []PeerInfo `json:"static_peers"`
-	InboundConnLimit  int64      `json:"inbound_conn_limit"`
-	OutboundConnLimit int64      `json:"outbound_conn_limit"`
+	BootStrapPeers     []string   `json:"bootnodes"`
+	TrustedPeers       []PeerInfo `json:"trusted_peers"`
+	StaticPeers        []PeerInfo `json:"static_peers"`
+	MaxPeers           uint       `json:"max_peers"`
+	RelayNodeAddr      string     `json:"relay_node_addr"`
+	Libp2pAddr         []string   `json:"libp2p_addr"`
+	JSONRPCAddr        string     `json:"jsonrpc_addr"`
+	MTQ                float64    `json:"mtq"`
+	CorsAllowedOrigins []string   `json:"cors_allowed_origins"`
+	NetworkSize        uint64     `json:"network_size"`
+	NoDiscovery        bool       `json:"no_discovery"`
+	RefreshSenatus     bool       `json:"refresh_senatus"`
+	InboundConnLimit   int64      `json:"inbound_conn_limit"`
+	OutboundConnLimit  int64      `json:"outbound_conn_limit"`
+}
+
+type SyncerConfig struct {
+	ShouldExecute  bool
+	TrustedPeers   []string
+	EnableSnapSync bool
+	SyncMode       int
 }
 
 type IxPoolConfig struct {
@@ -60,7 +194,9 @@ type IxPoolConfig struct {
 }
 
 type DBConfig struct {
-	DBFolder string `json:"db_folder"`
+	DBFolder    string `json:"db_folder"`
+	CleanDB     bool   `json:"clean_db"`
+	MaxSnapSize uint64 `json:"max_snap_size"`
 }
 
 type Telemetry struct {
@@ -77,10 +213,11 @@ type ConsensusConfig struct {
 	TimeoutPrecommitDelta int64 `json:"timeout_precommit_delta"`
 	TimeoutCommit         int64 `json:"timeout_commit"`
 	SkipTimeoutCommit     bool  `json:"skip_timeout_commit"`
-	MaxSlots              int   `json:"max_slots"`
+	AccountWaitTime       int   `json:"wait_time"`
+	MessageDelay          int64 `json:"message_delay"`
+	Precision             int64 `json:"precision"`
 	OperatorSlots         int   `json:"operator_slots"`
 	ValidatorSlots        int   `json:"validator_slots"`
-	AccountWaitTime       int   `json:"wait_time"`
 }
 
 type ExecutionConfig struct {
@@ -88,11 +225,12 @@ type ExecutionConfig struct {
 }
 
 type VaultConfig struct {
-	DataDir       string
-	MoiIDUsername string
-	MoiIDPassword string
-	MoiIDURL      string
-	NodePassword  string
+	DataDir      string
+	NodePassword string
+	SeedPhrase   string
+	Mode         int8   // 0: Server, 1: Register/User mode
+	NodeIndex    uint32 // Requires only in Register mode
+	InMemory     bool
 }
 
 type PeerInfo struct {

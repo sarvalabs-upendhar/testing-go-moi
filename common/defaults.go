@@ -15,6 +15,7 @@ var (
 
 // Network defaults
 const (
+	DefaultListenerPort      = 6000
 	DefaultJSONRPCPort       = 1600
 	DefaultPrometheusPort    = 30000
 	DefaultInboundConnLimit  = 80

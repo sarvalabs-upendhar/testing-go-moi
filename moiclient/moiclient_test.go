@@ -142,6 +142,33 @@ func TestMoiClient(t *testing.T) {
 	}
 }
 
+// chooseAcc chooses an account which is neither logic nor asset, as we don't have mnemonic for those accounts
+func chooseAcc(
+	t *testing.T,
+	client *Client,
+	i int,
+	addrs []types.Address,
+	accs []tests.AccountWithMnemonic,
+) (int, tests.AccountWithMnemonic) {
+	for j := i; j < len(addrs); j++ {
+		acc, exists := GetMnemonicFromAccounts(addrs[j], accs)
+		if exists {
+			return j, acc
+		}
+
+		accMetaInfo, err := client.AccountMetaInfo(&ptypes.GetAccountArgs{
+			Address: addrs[j],
+		})
+		require.NoError(t, err)
+
+		require.True(t, (accMetaInfo.Type == types.LogicAccount) || (accMetaInfo.Type == types.AssetAccount))
+	}
+
+	require.Error(t, errors.New("insufficient accounts on chain"))
+
+	return 0, tests.AccountWithMnemonic{}
+}
+
 // setupChain runs these functions in order as tests use heights for identifying the event happened
 // Every function is an interaction, and we only proceed to the next one after receiving the receipt for the current one
 // We are testing interaction execution and receipt generation for every function
@@ -153,14 +180,16 @@ func TestMoiClient(t *testing.T) {
 // Logic Address account :
 // At height 1, transfer call is made to contract by senderAddr
 func setupChain(t *testing.T, client *Client, addrs []types.Address, addrsMap StrMap) {
-	var i int64 = 0
+	var (
+		i   = 0
+		acc tests.AccountWithMnemonic
+	)
 
 	accs, err := tests.GetAccountMnemonicsFromFile("../accounts.json")
 	require.NoError(t, err)
 
 	t.Run("DeployLogic", func(t *testing.T) {
-		acc, exists := GetMnemonicFromAccounts(addrs[i], accs)
-		require.True(t, exists)
+		i, acc = chooseAcc(t, client, i, addrs, accs)
 
 		t.Log(addrs[i])
 
@@ -170,8 +199,7 @@ func setupChain(t *testing.T, client *Client, addrs []types.Address, addrsMap St
 	i++
 
 	t.Run("ExecuteLogic", func(t *testing.T) {
-		acc, exists := GetMnemonicFromAccounts(addrs[i], accs)
-		require.True(t, exists)
+		i, acc = chooseAcc(t, client, i, addrs, accs)
 
 		t.Log(addrs[i])
 
@@ -181,8 +209,7 @@ func setupChain(t *testing.T, client *Client, addrs []types.Address, addrsMap St
 	i++
 
 	t.Run("CreateAsset", func(t *testing.T) {
-		acc, exists := GetMnemonicFromAccounts(addrs[i], accs)
-		require.True(t, exists)
+		i, acc = chooseAcc(t, client, i, addrs, accs)
 
 		t.Log(addrs[i])
 
@@ -203,8 +230,7 @@ func setupChain(t *testing.T, client *Client, addrs []types.Address, addrsMap St
 	i++
 
 	t.Run("Send IX invalid signature", func(t *testing.T) {
-		acc, exists := GetMnemonicFromAccounts(addrs[i], accs)
-		require.True(t, exists)
+		i, acc = chooseAcc(t, client, i, addrs, accs)
 
 		t.Log(addrsMap["deployAddr"])
 
@@ -214,8 +240,7 @@ func setupChain(t *testing.T, client *Client, addrs []types.Address, addrsMap St
 	i += 2
 
 	t.Run("IXPoolAPI", func(t *testing.T) {
-		acc, exists := GetMnemonicFromAccounts(addrs[i], accs)
-		require.True(t, exists)
+		i, acc = chooseAcc(t, client, i, addrs, accs)
 
 		t.Log(addrs[i])
 

@@ -362,7 +362,7 @@ func createServer(
 	t.Helper()
 
 	ctx := context.Background()
-	cfg := common.DefaultConfig("test")
+	cfg := common.DefaultDevnetConfig("test")
 	cfg.Network.ListenAddresses = tests.GetListenAddresses(t, 1)
 
 	if params == nil {

@@ -8,11 +8,11 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/sarvalabs/moichain/common/hexutil"
+
 	cmdCommon "github.com/sarvalabs/moichain/cmd/common"
 
 	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/hexutil"
-
 	"github.com/sarvalabs/moichain/types"
 
 	"github.com/spf13/cobra"
@@ -114,15 +114,41 @@ func CreateConfigFile(datadir string, index int) []byte {
 			BootStrapPeers: []string{
 				bootnode,
 			},
-			TrustedPeers: peerList.TrustedPeers,
-			StaticPeers:  peerList.StaticPeers,
+			TrustedPeers:       peerList.TrustedPeers,
+			StaticPeers:        peerList.StaticPeers,
+			InboundConnLimit:   common.DefaultInboundConnLimit,
+			OutboundConnLimit:  common.DefaultOutboundConnLimit,
+			CorsAllowedOrigins: []string{"*"},
+		},
+		Syncer: cmdCommon.SyncerConfig{
+			ShouldExecute:  true,
+			SyncMode:       int(common.DefaultSyncMode),
+			EnableSnapSync: true,
+		},
+		Consensus: cmdCommon.ConsensusConfig{
+			TimeoutPropose:        30000,
+			TimeoutProposeDelta:   50000,
+			TimeoutPrevote:        10000,
+			TimeoutPrevoteDelta:   50000,
+			TimeoutPrecommit:      10000,
+			TimeoutPrecommitDelta: 50000,
+			TimeoutCommit:         10000,
+			Precision:             1000,
+			MessageDelay:          5500,
+			AccountWaitTime:       1500,
+			OperatorSlots:         -1,
+			ValidatorSlots:        3,
+		},
+		DB: cmdCommon.DBConfig{
+			CleanDB:     false,
+			MaxSnapSize: common.DefaultSnapSize, // 1GB limit
+		},
+		Execution: cmdCommon.ExecutionConfig{
+			FuelLimit: hexutil.Big(*common.DefaultFuelLimit),
 		},
 		Ixpool: cmdCommon.IxPoolConfig{
 			Mode:       common.DefaultIxPoolMode,
 			PriceLimit: hexutil.Big(*common.DefaultIxPriceLimit),
-		},
-		Execution: cmdCommon.ExecutionConfig{
-			FuelLimit: hexutil.Big(*common.DefaultFuelLimit),
 		},
 		Telemetry: cmdCommon.Telemetry{
 			PrometheusAddr: ":" + strconv.Itoa(common.DefaultPrometheusPort+index),

@@ -103,7 +103,7 @@ type ConsensusConfig struct {
 	OperatorSlotCount     int
 }
 
-func DefaultConfig(path string) *Config {
+func DefaultDevnetConfig(path string) *Config {
 	c := &Config{
 		NodeType:       7,
 		KramaIDVersion: 1,
