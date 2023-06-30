@@ -26,6 +26,9 @@ const (
 	// YIELD [2] Yield a value in the register $X to the return slot &Y
 	// - YIELD [$X][&Y]
 	YIELD OpCode = 0x5
+	// REVERT [1] Throw an exception with a revert flag.
+	// - REVERT [$X: __throw__]
+	REVERT OpCode = 0x6
 
 	// CARGS [1] Create a call args object in register $X
 	// - CARGS [$X: callargs]
@@ -275,13 +278,19 @@ const (
 const (
 	// IXN [1] Obtain the interaction object and set it to $X
 	// - IXN [$X]
-	IXN OpCode = 0x0
-	// LOGIC [1] Obtain the context object of the logic and set it to $X
+	IXN OpCode = 0x70
+	// ENV [1] Obtain the environment object and set it to $X
+	// - ENV [$X]
+	ENV OpCode = 0x71
+	// LOGIC [1] Obtain the context object of the logic and set it to $X. $X is of type LogicContext
 	// - LOGIC [$X]
-	LOGIC OpCode = 0x71
-	// SENDER [1] Obtain the context object of the sender and set it to $X
+	LOGIC OpCode = 0x72
+	// SENDER [1] Obtain the context object of the sender and set it to $X. $X is of type ParticipantContext
 	// - SENDER [$X]
-	SENDER OpCode = 0x72
+	SENDER OpCode = 0x73
+	// RECEIVER [1] Obtain the context object of the receiver and set it to $X. $X is of type ParticipantContext
+	// - RECEIVER [$X]
+	RECEIVER OpCode = 0x74
 )
 
 // Persistent Context Handling Opcodes
@@ -306,6 +315,7 @@ var opcodeMetadataTable = map[OpCode]*opcodeMetadata{
 	JUMPI:  {"JUMPI", 2},
 	OBTAIN: {"OBTAIN", 2},
 	YIELD:  {"YIELD", 2},
+	// REVERT: {"REVERT", 1},
 
 	CARGS: {"CARGS", 1},
 	CALLB: {"CALLB", 3},
@@ -382,9 +392,11 @@ var opcodeMetadataTable = map[OpCode]*opcodeMetadata{
 	BOR:  {"BOR", 3},
 	BNOT: {"BNOT", 2},
 
-	// IXN: {"IXN", 1}
+	// IXN: {"IXN", 1},
+	// ENV: {"ENV", 1},
 	LOGIC:  {"LOGIC", 1},
 	SENDER: {"SENDER", 1},
+	// RECEIVER: {"RECEIVER", 1}
 
 	PLOAD: {"PLOAD", 2},
 	PSAVE: {"PSAVE", 2},
@@ -421,6 +433,7 @@ var stringToOpCode = map[string]OpCode{
 
 	"OBTAIN": OBTAIN,
 	"YIELD":  YIELD,
+	"REVERT": REVERT,
 
 	"CARGS": CARGS,
 	"CALLB": CALLB,
@@ -497,9 +510,11 @@ var stringToOpCode = map[string]OpCode{
 	"BOR":  BOR,
 	"BNOT": BNOT,
 
-	"IXN":    IXN,
-	"LOGIC":  LOGIC,
-	"SENDER": SENDER,
+	"IXN":      IXN,
+	"ENV":      ENV,
+	"LOGIC":    LOGIC,
+	"SENDER":   SENDER,
+	"RECEIVER": RECEIVER,
 
 	"PLOAD": PLOAD,
 	"PSAVE": PSAVE,
