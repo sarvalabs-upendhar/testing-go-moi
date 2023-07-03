@@ -27,7 +27,8 @@ const (
 	TokenConfigParam
 
 	TokenEngine
-	TokenEncoding
+	TokenFileEncoding
+	TokenInstructFormat
 
 	TokenPrepositionAs
 	TokenPrepositionFrom
@@ -74,9 +75,12 @@ var keywords = map[string]symbolizer.TokenKind{
 	"hexbig":   TokenConfigParam,
 	"hexbytes": TokenConfigParam,
 
-	"POLO": TokenEncoding,
-	"JSON": TokenEncoding,
-	"YAML": TokenEncoding,
+	"POLO": TokenFileEncoding,
+	"JSON": TokenFileEncoding,
+	"YAML": TokenFileEncoding,
+
+	"BIN": TokenInstructFormat,
+	"HEX": TokenInstructFormat,
 
 	"PISA": TokenEngine,
 
@@ -192,17 +196,24 @@ func parseManifestCommand(parser *symbolizer.Parser) Command {
 		return InvalidCommandError(err.Error())
 	}
 
-	if parser.Cursor().Literal != "as" {
-		return InvalidCommandError("invalid 'manifest' command: missing encoding")
+	switch {
+	case parser.IsCursor(TokenPrepositionAs):
+		if !parser.ExpectPeek(TokenFileEncoding) {
+			return InvalidCommandError("invalid 'manifest' command: missing encoding format for conversion")
+		}
+
+		return ManifestFileConvertCommand(path, parser.Cursor().Literal)
+
+	case parser.IsCursor(TokenPrepositionInto):
+		if !parser.ExpectPeek(TokenInstructFormat) {
+			return InvalidCommandError("invalid 'manifest' command: missing instruction format for conversion")
+		}
+
+		return ManifestInstructionConvertCommand(path, parser.Cursor().Literal)
+
+	default:
+		return InvalidCommandError("invalid 'manifest' command: missing valid preposition after manifest expression")
 	}
-
-	if !parser.ExpectPeek(TokenEncoding) {
-		return InvalidCommandError("invalid 'manifest' command: invalid syntax")
-	}
-
-	encoding := parser.Cursor().Literal
-
-	return ManifestPrintCommand(path, encoding)
 }
 
 func parseDesignateCommand(parser *symbolizer.Parser) Command {

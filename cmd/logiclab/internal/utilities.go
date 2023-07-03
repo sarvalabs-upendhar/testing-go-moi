@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"path/filepath"
 	"strings"
 
 	"github.com/sarvalabs/go-polo"
@@ -15,55 +16,80 @@ import (
 	"github.com/sarvalabs/moichain/jug/pisa"
 )
 
-// ManifestPrintCommand generates a command runner to print a
+// ManifestFileConvertCommand generates a command runner to print a
 // manifest file at the given path in the expected output encoding.
 // - POLO: POLO Hex String
 // - JSON: JSON Indented String
 // - YAML: YAML Indented String
-func ManifestPrintCommand(path, encoding string) Command {
+func ManifestFileConvertCommand(path, encoding string) Command {
 	return func(env *Environment) string {
-		// Read manifest file from path
 		manifest, err := engineio.ReadManifestFile(path)
 		if err != nil {
 			return fmt.Sprintf("unable to read manifest: %v", err)
 		}
 
-		switch encoding {
-		case "POLO":
-			// Generate POLO data
-			data, err := manifest.Encode(engineio.POLO)
-			if err != nil {
-				return fmt.Sprintf("unable to polo serialize manifest: %v", err)
+		return printManifestAs(manifest, encoding)
+	}
+}
+
+func ManifestInstructionConvertCommand(path, format string) Command {
+	return func(env *Environment) string {
+		manifest, err := engineio.ReadManifestFile(path)
+		if err != nil {
+			return fmt.Sprintf("unable to read manifest: %v", err)
+		}
+
+		extension := strings.TrimPrefix(filepath.Ext(path), ".")
+		encoding := strings.ToUpper(extension)
+
+		switch format {
+		case "BIN":
+			// Generate BIN data of opcodes
+			for _, element := range manifest.Elements {
+				if element.Kind == "routine" {
+					routine, ok := element.Data.(*pisa.RoutineSchema)
+					if !ok {
+						return "unable to extract element data"
+					}
+
+					if routine.Executes.Hex != "" {
+						// Remove the "0x" prefix from the HEX string
+						hexString := strings.TrimPrefix(routine.Executes.Hex, "0x")
+
+						// Decode the HEX string
+						bin, err := hex.DecodeString(hexString)
+						if err != nil {
+							return fmt.Sprintf("unable to decode HEX string: %v", err)
+						}
+
+						routine.Executes.Bin = bin
+						routine.Executes.Hex = ""
+					}
+				}
 			}
 
-			// Encode as hex string and attach the 0x prefix
-			return "0x" + hex.EncodeToString(data)
+			return printManifestAs(manifest, encoding)
 
-		case "JSON":
-			// Generate the indented JSON data
-			data, err := json.MarshalIndent(manifest, "", "  ")
-			if err != nil {
-				return fmt.Sprintf("unable to json marshal manifest: %v", err)
+		case "HEX":
+			// Generate HEX data of opcodes
+			for _, element := range manifest.Elements {
+				if element.Kind == "routine" {
+					routine, ok := element.Data.(*pisa.RoutineSchema)
+					if !ok {
+						return "unable to extract element data"
+					}
+
+					if !bytes.Equal(routine.Executes.Bin, []byte{}) {
+						routine.Executes.Hex = "0x" + hex.EncodeToString(routine.Executes.Bin)
+						routine.Executes.Bin = []byte("")
+					}
+				}
 			}
 
-			return string(data)
-
-		case "YAML":
-			// Create an encoding buffer
-			var b bytes.Buffer
-			// Create a new YAML encoder and set indent level
-			encoder := yaml.NewEncoder(&b)
-			encoder.SetIndent(2)
-
-			// Generate the indented YAML data
-			if err = encoder.Encode(manifest); err != nil {
-				return fmt.Sprintf("unable to yaml marshal manifest: %v", err)
-			}
-
-			return b.String()
+			return printManifestAs(manifest, encoding)
 
 		default:
-			panic("unhandled manifest print encoding")
+			panic("unhandled manifest binhex encoding")
 		}
 	}
 }
@@ -208,5 +234,46 @@ func CallgenValueCommand(value any) Command {
 		}
 
 		return "0x" + hex.EncodeToString(doc.Bytes())
+	}
+}
+
+func printManifestAs(manifest *engineio.Manifest, encoding string) string {
+	switch encoding {
+	case "POLO":
+		// Generate POLO data
+		data, err := manifest.Encode(engineio.POLO)
+		if err != nil {
+			return fmt.Sprintf("unable to polo serialize manifest: %v", err)
+		}
+
+		// Encode as hex string and attach the 0x prefix
+		return "0x" + hex.EncodeToString(data)
+
+	case "JSON":
+		// Generate the indented JSON data
+		data, err := json.MarshalIndent(manifest, "", "  ")
+		if err != nil {
+			return fmt.Sprintf("unable to json marshal manifest: %v", err)
+		}
+
+		return string(data)
+
+	case "YAML":
+		// Create an encoding buffer
+		var b bytes.Buffer
+		// Create a new YAML encoder and set indent level
+		encoder := yaml.NewEncoder(&b)
+		encoder.SetIndent(2)
+
+		// Generate the indented YAML data
+		if err := encoder.Encode(manifest); err != nil {
+			return fmt.Sprintf("unable to yaml marshal manifest: %v", err)
+		}
+
+		return b.String()
+
+	default:
+		fmt.Println(encoding)
+		panic("unhandled manifest print encoding")
 	}
 }
