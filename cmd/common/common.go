@@ -106,6 +106,7 @@ func DefaultBabylonConfig(path string) *Config {
 		Telemetry: Telemetry{
 			PrometheusAddr: "",
 		},
+		LogFilePath: path + common.DefaultLogDirectory,
 	}
 }
 
@@ -162,6 +163,7 @@ func DefaultDevnetConfig(path string) *Config {
 		Telemetry: Telemetry{
 			PrometheusAddr: "",
 		},
+		LogFilePath: path + common.DefaultLogDirectory,
 	}
 }
 

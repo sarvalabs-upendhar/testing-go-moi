@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 	"time"
 
 	maddr "github.com/multiformats/go-multiaddr"
@@ -176,6 +175,10 @@ func (p *Params) applyFlags(cmd *cobra.Command, path string) error {
 
 	if isNodePasswordSet(cmd) {
 		p.rawCfg.Vault.NodePassword = NodePassword
+	}
+
+	if isLogPathSet(cmd) {
+		p.rawCfg.LogFilePath = LogDirPath
 	}
 
 	if EnableTracing && p.rawCfg.Telemetry.JaegerAddr == "" {
@@ -346,6 +349,10 @@ func isConfigPathSet(cmd *cobra.Command) bool {
 	return cmd.Flags().Changed(configFlag)
 }
 
+func isLogPathSet(cmd *cobra.Command) bool {
+	return cmd.Flags().Changed(LogDirPathFlag)
+}
+
 func isGenesisSet(cmd *cobra.Command) bool {
 	return cmd.Flags().Changed(genesisFlag)
 }
@@ -400,7 +407,7 @@ func BuildNodeConfig(cmd *cobra.Command, dataDir string) (*common.Config, error)
 	}
 
 	if isConfigPathSet(cmd) {
-		params.rawCfg, err = ReadConfig(filepath.Join(Directory, ConfigPath))
+		params.rawCfg, err = ReadConfig(ConfigPath)
 		if err != nil {
 			cmdCommon.Err(err)
 		}

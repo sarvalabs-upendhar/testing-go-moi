@@ -38,8 +38,9 @@ const (
 // DB defaults
 
 const (
-	DefaultDBDirectory = "/db"
-	DefaultSnapSize    = 1024 * 1024 * 1024
+	DefaultDBDirectory  = "/db"
+	DefaultLogDirectory = "/log"
+	DefaultSnapSize     = 1024 * 1024 * 1024
 )
 
 const (

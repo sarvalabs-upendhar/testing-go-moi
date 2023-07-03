@@ -2,9 +2,11 @@ package node
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/hashicorp/go-hclog"
@@ -396,7 +398,13 @@ func (n *Node) setLogger(logLevel string) error {
 		return nil
 	}
 
-	logFileName := n.cfg.LogFilePath + string(n.vault.KramaID())
+	err := utils.EnsureDir(n.cfg.LogFilePath, 0o700)
+	if err != nil {
+		return fmt.Errorf("failed to ensure log path is in place: %w", err)
+	}
+
+	// make sure paths are combined properly regardless of extra slash
+	logFileName := filepath.Join(n.cfg.LogFilePath, string(n.vault.KramaID()))
 
 	fileName, err := os.OpenFile(logFileName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
 	if err != nil {

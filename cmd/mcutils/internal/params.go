@@ -15,7 +15,6 @@ var (
 	bootnode               string
 	jaegerAddress          string
 	password               string
-	logFilePath            string
 	peerListFilePath       string
 	genesisFilePath        string
 	writeInstancesFilePath string

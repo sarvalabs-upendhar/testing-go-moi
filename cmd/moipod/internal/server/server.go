@@ -24,6 +24,7 @@ var (
 	GenesisPath        string
 	Directory          string
 	ConfigPath         string
+	LogDirPath         string
 	OperatorSlots      int
 	ValidatorSlots     int
 	EnableTracing      bool
@@ -38,6 +39,7 @@ var (
 const (
 	genesisFlag       = "genesis-path"
 	configFlag        = "config-path"
+	LogDirPathFlag    = "log-dir"
 	operatorSlotFlag  = "operator-slots"
 	validatorSlotFlag = "validator-slots"
 	dataDirFlag       = "data-dir"
@@ -69,6 +71,7 @@ func runCommand(cmd *cobra.Command, args []string) {
 func parseFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&GenesisPath, genesisFlag, "genesis.json", "Path to genesis.json file.")
 	cmd.PersistentFlags().StringVar(&ConfigPath, configFlag, "", "Path to config.json file.")
+	cmd.PersistentFlags().StringVar(&LogDirPath, LogDirPathFlag, "", "Path to log directory.")
 	cmd.PersistentFlags().IntVar(&OperatorSlots, operatorSlotFlag, -1, "Maximum number of operator slots.")
 	cmd.PersistentFlags().IntVar(&ValidatorSlots, validatorSlotFlag, -1, "Maximum number of validator slots.")
 	cmd.PersistentFlags().StringVar(&Directory, dataDirFlag, "", "Data directory location.")

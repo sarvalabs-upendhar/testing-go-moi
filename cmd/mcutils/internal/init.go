@@ -74,12 +74,6 @@ func parseFlags(initcmd *cobra.Command) {
 		"Password to unlock key store.",
 	)
 	initcmd.PersistentFlags().StringVar(
-		&logFilePath,
-		"logfile-path",
-		"",
-		"Path at which you'd like to store the logs file.",
-	)
-	initcmd.PersistentFlags().StringVar(
 		&peerListFilePath,
 		"peer-list",
 		"",
@@ -158,7 +152,7 @@ func CreateConfigFile(datadir string, index int) []byte {
 			DataDir:      datadir,
 			NodePassword: password,
 		},
-		LogFilePath: logFilePath,
+		LogFilePath: datadir + common.DefaultLogDirectory,
 	}
 
 	file, err := json.MarshalIndent(data, "", "\t")
