@@ -145,7 +145,7 @@ func TestKramaVaultRegisterMode(t *testing.T) {
 
 	testECDSASignWithOptions(t, vault)
 
-	moiIDStringFromSetup, err := vault.MOiID()
+	moiIDStringFromSetup, err := vault.MoiID()
 	require.NoError(t, err)
 	require.Equal(t, moiIDStringFromSetup, testMoiID)
 
@@ -168,7 +168,7 @@ func TestKramaVaultRegisterMode(t *testing.T) {
 	vault1, err := NewVault(config1, moinode.MoiFullNode, 1)
 	require.NoError(t, err)
 
-	moiIDStringFromStart, err := vault1.MOiID()
+	moiIDStringFromStart, err := vault1.MoiID()
 	require.NoError(t, err)
 
 	kramaIDFromStart := vault1.KramaID()

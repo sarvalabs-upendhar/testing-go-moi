@@ -264,3 +264,17 @@ func AreSlicesOfStringEqual(addr []string, addr1 []string) bool {
 
 	return true
 }
+
+// ResolveAddr resolves the passed in TCP address
+func ResolveAddr(raw string) (*net.TCPAddr, error) {
+	addr, err := net.ResolveTCPAddr("tcp", raw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse addr '%s': %w", raw, err)
+	}
+
+	if addr.IP == nil {
+		addr.IP = net.ParseIP("0.0.0.0")
+	}
+
+	return addr, nil
+}

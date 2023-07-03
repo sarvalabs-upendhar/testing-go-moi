@@ -172,7 +172,7 @@ func CreateConfigFile(datadir string, index int) []byte {
 func setupTestEnv() {
 	instances := make([]cmdCommon.Instance, count)
 
-	ip, err := getThisNodeIP()
+	ip, err := cmdCommon.GetThisNodeIP()
 	if err != nil {
 		cmdCommon.Err(err)
 	}
@@ -188,10 +188,6 @@ func setupTestEnv() {
 
 		publicKey, kramaID, err := poi.RandGenKeystore(fmt.Sprintf("test_%d", directoryIndex+i), password)
 		if err != nil {
-			cmdCommon.Err(err)
-		}
-
-		if err = StoreKey(kramaID, publicKey); err != nil {
 			cmdCommon.Err(err)
 		}
 

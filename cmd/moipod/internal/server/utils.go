@@ -11,16 +11,16 @@ import (
 	"path/filepath"
 	"time"
 
+	maddr "github.com/multiformats/go-multiaddr"
+	"github.com/pkg/errors"
+	"github.com/spf13/cobra"
+
 	cmdCommon "github.com/sarvalabs/moichain/cmd/common"
+	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/mudra"
 	"github.com/sarvalabs/moichain/mudra/kramaid"
 	"github.com/sarvalabs/moichain/types"
-	"github.com/spf13/cobra"
-
-	maddr "github.com/multiformats/go-multiaddr"
-	"github.com/pkg/errors"
-
-	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/utils"
 )
 
 const genesisURL = "https://moichain-pub.s3.amazonaws.com/genesis.json"
@@ -38,7 +38,7 @@ type Params struct {
 
 func (p *Params) buildTelemetryConfig() (err error) {
 	if p.rawCfg.Telemetry.PrometheusAddr != "" {
-		p.PrometheusAddr, err = common.ResolveAddr(p.rawCfg.Telemetry.PrometheusAddr)
+		p.PrometheusAddr, err = utils.ResolveAddr(p.rawCfg.Telemetry.PrometheusAddr)
 		if err != nil {
 			return errors.New("invalid prometheus address")
 		}
@@ -138,7 +138,7 @@ func (p *Params) assignNetworkJSONRPCAddr() (err error) {
 		return errors.New("empty json address")
 	}
 
-	p.JSONRPCAddr, err = common.ResolveAddr(p.rawCfg.Network.JSONRPCAddr)
+	p.JSONRPCAddr, err = utils.ResolveAddr(p.rawCfg.Network.JSONRPCAddr)
 	if err != nil {
 		return errors.New("invalid json-rpc address")
 	}

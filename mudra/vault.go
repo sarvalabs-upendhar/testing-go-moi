@@ -160,7 +160,7 @@ func (vault *KramaVault) SetKramaID(id kramaid.KramaID) {
 	vault.kramaID = id
 }
 
-func (vault *KramaVault) MOiID() (string, error) {
+func (vault *KramaVault) MoiID() (string, error) {
 	return vault.kramaID.MoiID()
 }
 

@@ -1,7 +1,6 @@
 package common
 
 import (
-	"fmt"
 	"math/big"
 	"net"
 	"time"
@@ -160,20 +159,6 @@ func DefaultDevnetConfig(path string) *Config {
 	}
 
 	return c
-}
-
-// ResolveAddr resolves the passed in TCP address
-func ResolveAddr(raw string) (*net.TCPAddr, error) {
-	addr, err := net.ResolveTCPAddr("tcp", raw)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse addr '%s': %w", raw, err)
-	}
-
-	if addr.IP == nil {
-		addr.IP = net.ParseIP("0.0.0.0")
-	}
-
-	return addr, nil
 }
 
 // PrevoteWaitDuration returns the amount of time to wait for straggler votes after receiving any +2/3 prevotes

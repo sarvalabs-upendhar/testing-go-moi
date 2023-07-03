@@ -20,6 +20,7 @@ const (
 	DefaultPrometheusPort    = 30000
 	DefaultInboundConnLimit  = 80
 	DefaultOutboundConnLimit = 20
+	DefaultWatchDogURL       = "https://babylon-watchdog.moi.techbology/add"
 )
 
 // IxPool defaults

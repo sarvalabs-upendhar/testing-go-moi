@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"strconv"
 
@@ -356,4 +357,27 @@ func WriteToGenesisFile(path string, genesis *types.GenesisFile) error {
 	log.Println("Genesis file created or updated")
 
 	return nil
+}
+
+func GetThisNodeIP() (string, error) {
+	// Retrieve the network interface addresses of the host machine
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		// Return the error
+		return "", err
+	}
+
+	// Iterate over the network interface addresses
+	for _, a := range addrs {
+		// Check that the address is an IP address and not a loopback address
+		if ipnet, ok := a.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			// Check if the IP address is an IPv4 address
+			if ipnet.IP.To4() != nil {
+				// Convert into a string IP address and store to variable
+				return ipnet.IP.String(), nil
+			}
+		}
+	}
+
+	return "", errors.New("this node's ip not found")
 }
