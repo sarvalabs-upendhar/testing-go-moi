@@ -758,12 +758,6 @@ func (c *ChainManager) validateSargaAccountCreationInfo(acc types.AccountSetupAr
 		return types.ErrInvalidAddress
 	}
 
-	// check for address validity
-	err := utils.ValidateAccountType(acc.AccType)
-	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("invalid genesis account creation info %s", acc.Address))
-	}
-
 	return nil
 }
 
@@ -829,7 +823,7 @@ func (c *ChainManager) SetupGenesis(path string) error {
 
 	sargaAccount, genesisAccounts, assetAccounts, logics, err := c.ParseGenesisFile(path)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to parse genesis file")
 	}
 
 	if _, err = c.db.GetAccountMetaInfo(sargaAccount.Address); err == nil {
@@ -846,18 +840,17 @@ func (c *ChainManager) SetupGenesis(path string) error {
 	dirtyObjects[sargaObject.Address()] = sargaObject
 
 	for _, v := range genesisAccounts {
-		dirtyObjects[v.Address], err = c.SetupNewAccount(v)
-		if err != nil {
-			return err
+		if dirtyObjects[v.Address], err = c.SetupNewAccount(v); err != nil {
+			return errors.Wrap(err, "failed to setup genesis account")
 		}
 	}
 
 	if _, err = c.SetupGenesisLogics(dirtyObjects, logics); err != nil {
-		return err
+		return errors.Wrap(err, "failed to setup genesis logic")
 	}
 
 	if err = c.SetupAssetAccounts(dirtyObjects, assetAccounts); err != nil {
-		return err
+		return errors.Wrap(err, "failed to setup asset accounts")
 	}
 
 	for _, stateObject := range dirtyObjects {
@@ -866,12 +859,7 @@ func (c *ChainManager) SetupGenesis(path string) error {
 			return err
 		}
 
-		err = c.AddGenesisTesseract(
-			stateObject.Address(),
-			stateHash,
-			stateObject.ContextHash(),
-		)
-		if err != nil {
+		if err = c.AddGenesisTesseract(stateObject.Address(), stateHash, stateObject.ContextHash()); err != nil {
 			return err
 		}
 	}
@@ -912,7 +900,7 @@ func (c *ChainManager) SetupAssetAccounts(
 
 		for _, allocation := range assetAccount.AssetInfo.Allocations {
 			if _, ok := stateObjects[allocation.Address]; !ok {
-				return errors.New("invalid allocation address")
+				return errors.New("allocation address not found in state objects")
 			}
 
 			stateObjects[allocation.Address].AddBalance(assetID, allocation.Amount.ToInt())

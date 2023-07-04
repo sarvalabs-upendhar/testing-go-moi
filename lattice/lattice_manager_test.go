@@ -2,9 +2,12 @@ package lattice
 
 import (
 	"context"
+	"math/big"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/sarvalabs/moichain/common/hexutil"
 
 	"github.com/sarvalabs/moichain/guna"
 
@@ -1675,8 +1678,6 @@ func TestAddGenesisTesseract(t *testing.T) {
 				t,
 				c,
 				address,
-				stateHash,
-				contextHash,
 			)
 		},
 		)
@@ -1693,6 +1694,7 @@ func TestParseGenesisFile_InvalidPath(t *testing.T) {
 func TestParseGenesisFile(t *testing.T) {
 	c := createTestChainManager(t, nil)
 	addr := tests.RandomAddress(t)
+	nodes := tests.GetTestKramaIDs(t, 4)
 	dir, err := os.MkdirTemp(os.TempDir(), " ")
 	require.NoError(t, err)
 
@@ -1757,7 +1759,7 @@ func TestParseGenesisFile(t *testing.T) {
 			},
 			genesisAssetAccounts: []types.AssetAccountSetupArgs{
 				// using nilAddress for allocations
-				getTestAssetAccountSetupArgs(t, getTestAssetCreationArgs(t, types.NilAddress)),
+				getAssetAccountSetupArgs(t, getTestAssetCreationArgs(t, types.NilAddress), nodes[:2], nodes[2:]),
 			},
 		},
 		{
@@ -1768,7 +1770,7 @@ func TestParseGenesisFile(t *testing.T) {
 				getTestAccountWithAccType(t, types.LogicAccount),
 			},
 			genesisAssetAccounts: []types.AssetAccountSetupArgs{
-				getTestAssetAccountSetupArgs(t, getTestAssetCreationArgs(t, addr)),
+				getAssetAccountSetupArgs(t, getTestAssetCreationArgs(t, addr), nodes[:2], nodes[2:]),
 			},
 		},
 	}
@@ -1808,14 +1810,22 @@ func TestSetupGenesis(t *testing.T) {
 			getTestAccountWithAccType(t, types.RegularAccount),
 			getTestAccountWithAccType(t, types.LogicAccount),
 		}
-		sargaAccountHashes = AccHash{
-			contextHash: tests.RandomHash(t),
-			stateHash:   tests.RandomHash(t),
-		}
 		genesisAccountHashes = AccHash{
 			contextHash: tests.RandomHash(t),
 			stateHash:   tests.RandomHash(t),
 		}
+		assetSetupArgs = []types.AssetAccountSetupArgs{
+			{
+				AssetInfo: getAssetCreationArgs(
+					"MOI",
+					genesisAccounts[0].Address,
+					[]types.Address{genesisAccounts[1].Address},
+					[]*big.Int{big.NewInt(12)},
+				),
+				BehaviouralContext: tests.GetTestKramaIDs(t, 1),
+			},
+		}
+		logics = getTestGenesisLogics(t)
 	)
 
 	dir, err := os.MkdirTemp(os.TempDir(), " ")
@@ -1826,24 +1836,25 @@ func TestSetupGenesis(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	path := createMockGenesisFile(t, dir, false, sargaAccount, genesisAccounts, nil, nil)
+	path := createMockGenesisFile(t, dir, false, sargaAccount, genesisAccounts, assetSetupArgs, logics)
+
+	assetAccAddr := types.CreateAddressFromString(assetSetupArgs[0].AssetInfo.Symbol)
+	logicAddr := types.CreateAddressFromString(logics[0].Name)
 
 	testcases := []struct {
 		name          string
+		path          string
 		smCallBack    func(sm *MockStateManager)
 		expectedError error
 	}{
 		{
-			name: "should return error if failed to add genesis tesseract",
-			smCallBack: func(sm *MockStateManager) {
-				sm.setAccType(types.SargaAddress, sargaAccount.AccType)
-			},
-			expectedError: errors.New("error adding genesis tesseract"),
-		},
-		{
 			name: "should succeed for valid genesis info",
+			path: path,
 			smCallBack: func(sm *MockStateManager) {
 				sm.setAccType(types.SargaAddress, sargaAccount.AccType)
+				sm.setAccType(assetAccAddr, types.AssetAccount)
+				sm.setAccType(logicAddr, types.LogicAccount)
+
 				for _, genesisAccount := range genesisAccounts {
 					sm.setAccType(genesisAccount.Address, genesisAccount.AccType)
 				}
@@ -1852,6 +1863,72 @@ func TestSetupGenesis(t *testing.T) {
 					return genesisAccountHashes.stateHash, genesisAccountHashes.contextHash, nil
 				}
 			},
+		},
+		{
+			name: "should return error if failed to add genesis tesseract",
+			path: path,
+			smCallBack: func(sm *MockStateManager) {
+				sm.setAccType(types.SargaAddress, sargaAccount.AccType)
+			},
+			expectedError: errors.New("error adding genesis tesseract"),
+		},
+		{
+			name: "should return error if failed to parse genesis file",
+			path: createMockGenesisFile(t, dir, true, sargaAccount, genesisAccounts,
+				nil, nil),
+			expectedError: errors.New("failed to parse genesis file"),
+		},
+		{
+			name: "should return error if failed to setup sarga account",
+			path: createMockGenesisFile(t, dir, false,
+				*getAccountSetupArgs(
+					t,
+					types.SargaAddress,
+					types.SargaAccount,
+					"moi-id",
+					nil,
+					nil,
+				), genesisAccounts, nil, nil),
+			expectedError: errors.New("failed to setup sarga account"),
+		},
+		{
+			name: "should return error if failed to setup genesis account",
+			path: createMockGenesisFile(t, dir, false, sargaAccount,
+				[]types.AccountSetupArgs{*getAccountSetupArgs(
+					t,
+					tests.RandomAddress(t),
+					types.RegularAccount,
+					"moi-id",
+					nil,
+					nil,
+				)}, nil, nil),
+			expectedError: errors.New("failed to setup genesis account"),
+		},
+		{
+			name: "should return error if failed to setup genesis logic",
+			path: createMockGenesisFile(t, dir, false, sargaAccount, genesisAccounts,
+				nil,
+				[]types.LogicSetupArgs{
+					{
+						Name:               "staking-contract",
+						Manifest:           hexutil.Bytes{0, 1},
+						BehaviouralContext: tests.GetTestKramaIDs(t, 1),
+					},
+				}),
+			expectedError: errors.New("failed to setup genesis logic"),
+		},
+		{
+			name: "should return error if failed to setup assets",
+			path: createMockGenesisFile(t, dir, false, sargaAccount, genesisAccounts,
+				[]types.AssetAccountSetupArgs{
+					getAssetAccountSetupArgs(t, *getAssetCreationArgs(
+						"MOI",
+						tests.RandomAddress(t),
+						[]types.Address{tests.RandomAddress(t)},
+						[]*big.Int{big.NewInt(12)},
+					), nil, nil),
+				}, nil),
+			expectedError: errors.New("failed to setup asset accounts"),
 		},
 	}
 
@@ -1865,7 +1942,7 @@ func TestSetupGenesis(t *testing.T) {
 
 			c := createTestChainManager(t, chainParams)
 
-			err = c.SetupGenesis(path)
+			err = c.SetupGenesis(test.path)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -1877,8 +1954,6 @@ func TestSetupGenesis(t *testing.T) {
 				t,
 				c,
 				types.SargaAddress,
-				sargaAccountHashes.stateHash,
-				sargaAccountHashes.contextHash,
 			)
 
 			for _, genesisAccount := range genesisAccounts {
@@ -1886,34 +1961,25 @@ func TestSetupGenesis(t *testing.T) {
 					t,
 					c,
 					genesisAccount.Address,
-					genesisAccountHashes.stateHash,
-					genesisAccountHashes.contextHash,
 				)
 			}
+
+			checkForGenesisTesseract(
+				t,
+				c,
+				assetAccAddr, // asset account address
+			)
+
+			checkForGenesisTesseract(
+				t,
+				c,
+				logicAddr, // logic account address
+			)
 		})
 	}
 }
 
-func getAccountSetupArgs(
-	t *testing.T,
-	address types.Address,
-	accType types.AccountType,
-	moiID string,
-	behNodes []id.KramaID,
-	randNodes []id.KramaID,
-) *types.AccountSetupArgs {
-	t.Helper()
-
-	return &types.AccountSetupArgs{
-		Address:            address,
-		MoiID:              moiID,
-		BehaviouralContext: behNodes,
-		RandomContext:      randNodes,
-		AccType:            accType,
-	}
-}
-
-func TestSetupSargaAcc(t *testing.T) {
+func TestSetupSargaAccount(t *testing.T) {
 	cm := createTestChainManager(t, nil)
 	nodes := tests.GetTestKramaIDs(t, 12)
 
@@ -1923,6 +1989,8 @@ func TestSetupSargaAcc(t *testing.T) {
 		name          string
 		sarga         *types.AccountSetupArgs
 		accounts      []types.AccountSetupArgs
+		assets        []types.AssetAccountSetupArgs
+		logics        []types.LogicSetupArgs
 		expectedError error
 	}{
 		{
@@ -1964,12 +2032,28 @@ func TestSetupSargaAcc(t *testing.T) {
 					nodes[10:12],
 				),
 			},
+			assets: []types.AssetAccountSetupArgs{
+				getAssetAccountSetupArgs(
+					t,
+					getTestAssetCreationArgs(t, types.NilAddress), nil, nil),
+				getAssetAccountSetupArgs(
+					t,
+					getTestAssetCreationArgs(t, types.NilAddress), nil, nil),
+			},
+			logics: []types.LogicSetupArgs{
+				{
+					Name: "staking",
+				},
+				{
+					Name: "DEX",
+				},
+			},
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			obj, err := cm.SetupSargaAccount(test.sarga, test.accounts, nil, nil)
+			obj, err := cm.SetupSargaAccount(test.sarga, test.accounts, test.assets, test.logics)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -1990,6 +2074,170 @@ func TestSetupSargaAcc(t *testing.T) {
 			obj, _ = cm.sm.GetDirtyObject(types.SargaAddress)
 
 			checkSargaObjectAccounts(t, obj, test.accounts)
+			checkSargaObjectLogicAccounts(t, obj, test.logics)
+			checkSargaObjectAssetAccounts(t, obj, test.assets)
+		})
+	}
+}
+
+func TestSetupAssetAccounts(t *testing.T) {
+	nodes := tests.GetTestKramaIDs(t, 8)
+	owner := tests.RandomAddress(t)
+	address := tests.GetAddresses(t, 2)
+	amount := []*big.Int{big.NewInt(100), big.NewInt(200)}
+
+	MOIAssetInfo := getAssetCreationArgs(
+		"MOI",
+		owner,
+		address,
+		amount,
+	)
+
+	MOIAssetSetupArgs := types.AssetAccountSetupArgs{
+		AssetInfo:          MOIAssetInfo,
+		BehaviouralContext: nodes[:2],
+		RandomContext:      nodes[2:4],
+	}
+
+	testcases := []struct {
+		name          string
+		assetAccs     []types.AssetAccountSetupArgs
+		smCallback    func(sm *MockStateManager, stateObjects map[types.Address]*guna.StateObject)
+		expectedError error
+	}{
+		{
+			name: "should succeed for valid asset info",
+			assetAccs: []types.AssetAccountSetupArgs{
+				MOIAssetSetupArgs,
+				getAssetAccountSetupArgs(
+					t,
+					*getAssetCreationArgs(
+						"WILL",
+						owner,
+						address,
+						amount,
+					),
+					nodes[4:6],
+					nodes[6:8],
+				),
+			},
+			smCallback: func(sm *MockStateManager, stateObjects map[types.Address]*guna.StateObject) {
+				stateObjects[owner] = sm.CreateDirtyObject(owner, types.RegularAccount)
+
+				for i := 0; i < len(address); i++ {
+					stateObjects[address[i]] = sm.CreateDirtyObject(address[i], types.RegularAccount)
+				}
+			},
+		},
+		{
+			name: "should return error if failed to create context",
+			assetAccs: []types.AssetAccountSetupArgs{
+				getAssetAccountSetupArgs(t, *MOIAssetInfo, nil, nil),
+			},
+			expectedError: errors.New("liveliness size not met"),
+		},
+		{
+			name: "should return error if owner account not found",
+			assetAccs: []types.AssetAccountSetupArgs{
+				MOIAssetSetupArgs,
+			},
+			expectedError: errors.New("operator account not found"),
+		},
+		{
+			name: "should return error if asset already registered in asset account",
+			assetAccs: []types.AssetAccountSetupArgs{
+				MOIAssetSetupArgs,
+			},
+			smCallback: func(sm *MockStateManager, stateObjects map[types.Address]*guna.StateObject) {
+				accAddress := types.CreateAddressFromString(MOIAssetInfo.Symbol)
+				stateObjects[accAddress] = sm.CreateDirtyObject(accAddress, types.AssetAccount)
+				_, err := stateObjects[accAddress].CreateAsset(accAddress, MOIAssetInfo.AssetDescriptor())
+				require.NoError(t, err)
+			},
+			expectedError: types.ErrAssetAlreadyRegistered,
+		},
+		{
+			name: "should return error if asset already registered in owner account",
+			assetAccs: []types.AssetAccountSetupArgs{
+				MOIAssetSetupArgs,
+			},
+			smCallback: func(sm *MockStateManager, stateObjects map[types.Address]*guna.StateObject) {
+				stateObjects[owner] = sm.CreateDirtyObject(owner, types.RegularAccount)
+				accAddress := types.CreateAddressFromString(MOIAssetInfo.Symbol)
+				_, err := stateObjects[MOIAssetInfo.Operator].CreateAsset(accAddress, MOIAssetInfo.AssetDescriptor())
+				require.NoError(t, err)
+			},
+			expectedError: types.ErrAssetAlreadyRegistered,
+		},
+		{
+			name: "should return error if allocation address not found in state objects",
+			assetAccs: []types.AssetAccountSetupArgs{
+				MOIAssetSetupArgs,
+			},
+			smCallback: func(sm *MockStateManager, stateObjects map[types.Address]*guna.StateObject) {
+				stateObjects[owner] = sm.CreateDirtyObject(owner, types.RegularAccount)
+			},
+			expectedError: errors.New("allocation address not found in state objects"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			stateObjects := make(map[types.Address]*guna.StateObject)
+			sm := mockStateManager()
+			chainParams := &CreateChainParams{
+				sm: sm,
+			}
+
+			if test.smCallback != nil {
+				test.smCallback(sm, stateObjects)
+			}
+
+			cm := createTestChainManager(t, chainParams)
+
+			err := cm.SetupAssetAccounts(stateObjects, test.assetAccs)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			for i := 0; i < len(test.assetAccs); i++ {
+				assetInfo := test.assetAccs[i].AssetInfo
+				expectedAssetDescriptor, err := assetInfo.AssetDescriptor().Bytes()
+				require.NoError(t, err)
+
+				assetAccAddress := types.CreateAddressFromString(assetInfo.Symbol)
+				assetSO, ok := stateObjects[assetAccAddress]
+				require.True(t, ok)
+
+				assetID := types.NewAssetIDv0(
+					assetInfo.IsLogical,
+					assetInfo.IsStateful,
+					assetInfo.Dimension.ToInt(),
+					types.AssetStandard(assetInfo.Standard.ToInt()),
+					assetAccAddress,
+				)
+
+				validateContextInitialization(
+					t,
+					cm.sm,
+					assetAccAddress,
+					test.assetAccs[i].BehaviouralContext,
+					test.assetAccs[i].RandomContext,
+					assetSO.ContextHash(),
+				)
+
+				checkForAssetRegistry(t, assetSO, assetID, expectedAssetDescriptor)
+
+				ownerSO, ok := stateObjects[assetInfo.Operator]
+				require.True(t, ok)
+
+				checkForAssetRegistry(t, ownerSO, assetID, expectedAssetDescriptor)
+				checkForAllocations(t, stateObjects, assetInfo, assetID)
+			}
 		})
 	}
 }
@@ -2058,6 +2306,7 @@ func TestExecuteGenesisContracts(t *testing.T) {
 	ids := tests.GetTestKramaIDs(t, 1)
 
 	objectsMap := make(map[types.Address]*guna.StateObject)
+
 	testcases := []struct {
 		name          string
 		logics        []types.LogicSetupArgs
@@ -2092,6 +2341,19 @@ func TestExecuteGenesisContracts(t *testing.T) {
 				sm.setAccType(logicID.Address(), types.LogicAccount)
 			},
 			logics: getTestGenesisLogics(t),
+		},
+		{
+			name: "unable to deploy logic for contract",
+			smCallBack: func(sm *MockStateManager) {
+				sm.setAccType(logicID.Address(), types.LogicAccount)
+			},
+			logics: []types.LogicSetupArgs{
+				{
+					Name:               "staking-contract",
+					BehaviouralContext: tests.GetTestKramaIDs(t, 1),
+				},
+			},
+			expectedError: "unable to deploy logic for contract",
 		},
 	}
 

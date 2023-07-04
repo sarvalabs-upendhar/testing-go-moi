@@ -523,6 +523,10 @@ func (sm *MockStateManager) CreateDirtyObject(addr types.Address, accType types.
 		return sm.createDirtyObjectHook()
 	}
 
+	if obj, ok := sm.dirtyObjects[addr]; ok {
+		return obj
+	}
+
 	obj := guna.NewStateObject(addr, mockCache(), new(guna.Journal), mockDB(), types.Account{AccType: accType})
 	sm.dirtyObjects[addr] = obj.Copy()
 
@@ -1692,15 +1696,17 @@ func getTesseractAddedEvent(t *testing.T, data interface{}) utils.TesseractAdded
 	return event
 }
 
-func getTestAssetAccountSetupArgs(
+func getAssetAccountSetupArgs(
 	t *testing.T,
 	assetDetails types.AssetCreationArgs,
+	behaviouralContext []id.KramaID,
+	randomContext []id.KramaID,
 ) types.AssetAccountSetupArgs {
 	t.Helper()
 
 	return types.AssetAccountSetupArgs{
-		BehaviouralContext: tests.GetTestKramaIDs(t, 1),
-		RandomContext:      tests.GetTestKramaIDs(t, 2),
+		BehaviouralContext: behaviouralContext,
+		RandomContext:      randomContext,
 		AssetInfo:          &assetDetails,
 	}
 }
@@ -1825,6 +1831,47 @@ func getTestAccountWithAddress(t *testing.T, address types.Address) types.Accoun
 		ids[:2],
 		ids[2:4],
 	)
+}
+
+func getAssetCreationArgs(
+	symbol string,
+	owner types.Address,
+	address []types.Address,
+	amount []*big.Int,
+) *types.AssetCreationArgs {
+	alloc := make([]types.Allocation, len(address))
+
+	for i, addr := range address {
+		alloc[i] = types.Allocation{
+			Address: addr,
+			Amount:  (*hexutil.Big)(amount[i]),
+		}
+	}
+
+	return &types.AssetCreationArgs{
+		Symbol:      symbol,
+		Operator:    owner,
+		Allocations: alloc,
+	}
+}
+
+func getAccountSetupArgs(
+	t *testing.T,
+	address types.Address,
+	accType types.AccountType,
+	moiID string,
+	behNodes []id.KramaID,
+	randNodes []id.KramaID,
+) *types.AccountSetupArgs {
+	t.Helper()
+
+	return &types.AccountSetupArgs{
+		Address:            address,
+		MoiID:              moiID,
+		BehaviouralContext: behNodes,
+		RandomContext:      randNodes,
+		AccType:            accType,
+	}
 }
 
 // validation
@@ -2192,8 +2239,6 @@ func checkForGenesisTesseract(
 	t *testing.T,
 	c *ChainManager,
 	address types.Address,
-	stateHash types.Hash,
-	contextHash types.Hash,
 ) {
 	t.Helper()
 
@@ -2210,8 +2255,21 @@ func checkForGenesisTesseract(
 	require.NoError(t, err)
 
 	require.Equal(t, address, ts.Address())
-	require.NotNil(t, stateHash)
-	require.NotNil(t, contextHash)
+}
+
+func checkSargaStorageEntry(t *testing.T, obj *guna.StateObject, addr types.Address) {
+	t.Helper()
+
+	val, err := obj.GetStorageEntry(types.SargaLogicID, addr.Bytes())
+	require.NoError(t, err)
+
+	genesisInfo := types.AccountGenesisInfo{
+		IxHash: types.GenesisIxHash,
+	}
+	rawGenesisInfo, err := polo.Polorize(genesisInfo)
+	assert.NoError(t, err)
+
+	require.Equal(t, val, rawGenesisInfo)
 }
 
 func checkSargaObjectAccounts(
@@ -2223,19 +2281,33 @@ func checkSargaObjectAccounts(
 
 	// check if other accounts address inserted in to sarga account storage
 	for _, info := range accounts {
-		val, err := obj.GetStorageEntry(
-			types.SargaLogicID,
-			info.Address.Bytes(),
-		)
-		require.NoError(t, err)
+		checkSargaStorageEntry(t, obj, info.Address)
+	}
+}
 
-		genesisInfo := types.AccountGenesisInfo{
-			IxHash: types.GenesisIxHash,
-		}
-		rawGenesisInfo, err := polo.Polorize(genesisInfo)
-		assert.NoError(t, err)
+func checkSargaObjectLogicAccounts(
+	t *testing.T,
+	obj *guna.StateObject,
+	logics []types.LogicSetupArgs,
+) {
+	t.Helper()
 
-		require.Equal(t, val, rawGenesisInfo)
+	// check if logics address inserted in to sarga account storage
+	for _, logic := range logics {
+		checkSargaStorageEntry(t, obj, types.CreateAddressFromString(logic.Name))
+	}
+}
+
+func checkSargaObjectAssetAccounts(
+	t *testing.T,
+	obj *guna.StateObject,
+	assets []types.AssetAccountSetupArgs,
+) {
+	t.Helper()
+
+	// check if assert address inserted in to sarga account storage
+	for _, asset := range assets {
+		checkSargaStorageEntry(t, obj, types.CreateAddressFromString(asset.AssetInfo.Symbol))
 	}
 }
 
@@ -2255,6 +2327,40 @@ func validateContextInitialization(
 	// check if context created
 	_, err = obj.GetDirtyEntry(types.BytesToHex(dhruva.ContextObjectKey(address, contextHash)))
 	require.NoError(t, err)
+}
+
+func checkForAssetRegistry(t *testing.T, so *guna.StateObject, assetID types.AssetID, expectedAssetDescriptor []byte) {
+	t.Helper()
+
+	registry, err := so.Registry()
+	require.NoError(t, err)
+
+	actualAssetDescriptor, ok := registry.Entries[assetID.String()]
+	require.True(t, ok)
+
+	require.Equal(t, expectedAssetDescriptor, actualAssetDescriptor)
+}
+
+func checkForAllocations(
+	t *testing.T,
+	stateObjects map[types.Address]*guna.StateObject,
+	assetInfo *types.AssetCreationArgs,
+	assetID types.AssetID,
+) {
+	t.Helper()
+
+	for _, allocation := range assetInfo.Allocations {
+		so, ok := stateObjects[allocation.Address]
+		require.True(t, ok)
+
+		balances, err := so.Balances()
+		require.NoError(t, err)
+
+		bal, ok := balances.AssetMap[assetID]
+		require.True(t, ok)
+
+		require.Equal(t, allocation.Amount.ToInt(), bal)
+	}
 }
 
 func checkForExecutionCleanup(t *testing.T, c *ChainManager, expectedClusterID types.ClusterID) {
