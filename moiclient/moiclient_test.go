@@ -115,6 +115,9 @@ func TestMoiClient(t *testing.T) {
 		"Version": {
 			test: func(t *testing.T) { testVersion(t, client) },
 		},
+		"Info": {
+			test: func(t *testing.T) { testInfo(t, client) },
+		},
 		"SendInteraction": {
 			test: func(t *testing.T) { testSendInteraction(t, client) },
 		},
@@ -1433,22 +1436,22 @@ func testWaitTime(t *testing.T, client *Client, addr types.Address) {
 
 func testPeers(t *testing.T, client *Client) {
 	testcases := []struct {
-		name       string
-		ixPoolArgs *ptypes.NetArgs
+		name    string
+		netArgs *ptypes.NetArgs
 	}{
 		{
-			name:       "fetch peers",
-			ixPoolArgs: &ptypes.NetArgs{},
+			name:    "fetch peers",
+			netArgs: &ptypes.NetArgs{},
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			clientPeers, err := client.Peers(test.ixPoolArgs)
+			clientPeers, err := client.Peers(test.netArgs)
 			require.NoError(t, err)
 
 			// check if client peers and http peers are same
-			httpPeers := httpPeers(t, test.ixPoolArgs)
+			httpPeers := httpPeers(t, test.netArgs)
 			for _, id := range *httpPeers {
 				require.True(t, utils.ContainsKramaID(clientPeers, id))
 			}
@@ -1459,24 +1462,46 @@ func testPeers(t *testing.T, client *Client) {
 func testVersion(t *testing.T, client *Client) {
 	testcases := []struct {
 		name          string
-		ixPoolArgs    *ptypes.NetArgs
+		netArgs       *ptypes.NetArgs
 		expectedValue string
 	}{
 		{
 			name:          "fetch version",
-			ixPoolArgs:    &ptypes.NetArgs{},
+			netArgs:       &ptypes.NetArgs{},
 			expectedValue: common.ProtocolVersion,
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			version, err := client.Version(test.ixPoolArgs)
+			version, err := client.Version(test.netArgs)
 			require.NoError(t, err)
 
 			// check if client peers and http peers are same
-			httpVersion := httpVersion(t, test.ixPoolArgs)
+			httpVersion := httpVersion(t, test.netArgs)
 			require.Equal(t, httpVersion, version)
+		})
+	}
+}
+
+func testInfo(t *testing.T, client *Client) {
+	testcases := []struct {
+		name    string
+		netArgs *ptypes.NetArgs
+	}{
+		{
+			name:    "fetch krama id",
+			netArgs: &ptypes.NetArgs{},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			nodeInfo, err := client.Info(test.netArgs)
+			require.NoError(t, err)
+
+			httpNodeInfo := httpInfo(t, test.netArgs)
+			require.Equal(t, httpNodeInfo.KramaID, nodeInfo.KramaID)
 		})
 	}
 }

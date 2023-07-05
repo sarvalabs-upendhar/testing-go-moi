@@ -701,7 +701,7 @@ func (r *Service) Peers(
 	return nil
 }
 
-// Version is an RPC Method that returns an the version of the protocol
+// Version is an RPC Method that returns the version of the protocol
 func (r *Service) Version(
 	req *http.Request,
 	args *ptypes.NetArgs,
@@ -720,6 +720,34 @@ func (r *Service) Version(
 	}
 
 	resp.Data, err = json.Marshal(version)
+	if err != nil {
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	return nil
+}
+
+// Info is an RPC Method that returns the kramaID of the node
+func (r *Service) Info(
+	req *http.Request,
+	args *ptypes.NetArgs,
+	resp *ptypes.Response,
+) error {
+	NetAPI, ok := r.apis["net"].(*api.PublicNetAPI)
+	if !ok {
+		return types.ErrInvalidAPI
+	}
+
+	info, err := NetAPI.Info()
+	if err != nil {
+		resp.Error = &ptypes.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	resp.Data, err = json.Marshal(info)
 	if err != nil {
 		resp.Error = &ptypes.JSONError{Message: err.Error()}
 

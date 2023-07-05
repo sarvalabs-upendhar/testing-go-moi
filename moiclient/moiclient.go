@@ -744,6 +744,29 @@ func (c *Client) Version(args *ptypes.NetArgs) (string, error) {
 	return response, nil
 }
 
+// Info returns the kramaID of the node
+func (c *Client) Info(args *ptypes.NetArgs) (*ptypes.NodeInfoResponse, error) {
+	var resp ptypes.Response
+
+	err := c.Call(&resp, "net.Info", args)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+
+	var response ptypes.NodeInfoResponse
+
+	err = json.Unmarshal(resp.Data, &response)
+	if err != nil {
+		return nil, err
+	}
+
+	return &response, nil
+}
+
 // DBGet returns raw value of the key stored in the database
 func (c *Client) DBGet(args *ptypes.DebugArgs) (string, error) {
 	var resp ptypes.Response

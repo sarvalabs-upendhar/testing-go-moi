@@ -521,6 +521,10 @@ type MockNetwork struct {
 	version string
 }
 
+func (mn *MockNetwork) GetKramaID() id.KramaID {
+	panic("implement me")
+}
+
 func NewMockNetwork(t *testing.T) *MockNetwork {
 	t.Helper()
 

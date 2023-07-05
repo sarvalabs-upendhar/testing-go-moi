@@ -451,3 +451,7 @@ type TDU struct {
 	AssetID types.AssetID `json:"asset_id"`
 	Amount  *hexutil.Big  `json:"amount"`
 }
+
+type NodeInfoResponse struct {
+	KramaID kramaid.KramaID `json:"krama_id"`
+}

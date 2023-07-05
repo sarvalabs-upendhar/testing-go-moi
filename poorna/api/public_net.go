@@ -2,6 +2,7 @@ package api
 
 import (
 	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	ptypes "github.com/sarvalabs/moichain/poorna/types"
 )
 
 // PublicNetAPI is a struct that represents a wrapper for the public Net APIs.
@@ -22,4 +23,11 @@ func (p *PublicNetAPI) Peers() ([]id.KramaID, error) {
 // Version returns the protocol version
 func (p *PublicNetAPI) Version() (string, error) {
 	return p.network.GetVersion(), nil
+}
+
+// Info returns krama id of the node
+func (p *PublicNetAPI) Info() (ptypes.NodeInfoResponse, error) {
+	return ptypes.NodeInfoResponse{
+		KramaID: p.network.GetKramaID(),
+	}, nil
 }

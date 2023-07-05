@@ -592,6 +592,20 @@ func httpVersion(t *testing.T, args *ptypes.NetArgs) string {
 	return response
 }
 
+// httpInfo returns the kramaID of the node
+func httpInfo(t *testing.T, args *ptypes.NetArgs) *ptypes.NodeInfoResponse {
+	t.Helper()
+
+	resp := makeHTTPRequest(t, "net.Info", args)
+
+	var response ptypes.NodeInfoResponse
+
+	err := json.Unmarshal(resp.Data, &response)
+	require.NoError(t, err)
+
+	return &response
+}
+
 // httpDBGet returns raw value of the key stored in the database
 func httpDBGet(t *testing.T, args *ptypes.DebugArgs) string {
 	t.Helper()

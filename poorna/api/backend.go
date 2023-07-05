@@ -52,6 +52,7 @@ type ExecutionManager interface {
 type Network interface {
 	GetPeers() []id.KramaID
 	GetVersion() string
+	GetKramaID() id.KramaID
 }
 
 type DB interface {
