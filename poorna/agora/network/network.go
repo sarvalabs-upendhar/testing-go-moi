@@ -127,23 +127,27 @@ func (an *AgoraNetwork) SendAgoraMessage(id id.KramaID, msgType ptypes.MsgType, 
 		return err
 	}
 
-	peer, ok := an.peers.Load(peerID)
+	abstractPeer, ok := an.peers.Load(peerID)
 	if !ok {
+		if _, err := an.server.GetPeerInfo(peerID); err != nil {
+			return err
+		}
+
 		stream, err := an.server.NewStream(context.Background(), peerID, common.AgoraProtocolStream)
 		if err != nil {
 			return err
 		}
 
-		peer = &AgoraPeer{
+		abstractPeer = &AgoraPeer{
 			activeSessions: map[types.Address]struct{}{msg.GetSessionID(): {}},
 			id:             peerID,
 			stream:         stream,
 			connected:      true,
 		}
 
-		an.peers.Store(peerID, peer)
+		an.peers.Store(peerID, abstractPeer)
 
-		agoraPeer, ok := peer.(*AgoraPeer)
+		agoraPeer, ok := abstractPeer.(*AgoraPeer)
 		if !ok {
 			return types.ErrInterfaceConversion
 		}
@@ -151,7 +155,7 @@ func (an *AgoraNetwork) SendAgoraMessage(id id.KramaID, msgType ptypes.MsgType, 
 		go an.handlePeerMessages(agoraPeer)
 	}
 
-	agoraPeer, ok := peer.(*AgoraPeer)
+	agoraPeer, ok := abstractPeer.(*AgoraPeer)
 	if !ok {
 		return types.ErrInterfaceConversion
 	}

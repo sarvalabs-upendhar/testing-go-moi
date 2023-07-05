@@ -621,7 +621,7 @@ func (s *Server) connectPeer(peerID peer.ID) error {
 	}
 
 	// get the peer info from peer store
-	peerInfo, err := s.getPeerInfo(peerID)
+	peerInfo, err := s.GetPeerInfo(peerID)
 	if err != nil {
 		return err
 	}
@@ -655,8 +655,8 @@ func (s *Server) isConnectedToPeer(peerID peer.ID) bool {
 	return s.host.Network().Connectedness(peerID) == network.Connected
 }
 
-// getPeerInfo retrieves and returns peer information from the peer store, or from senatus if not found in the store.
-func (s *Server) getPeerInfo(peerID peer.ID) (*peer.AddrInfo, error) {
+// GetPeerInfo retrieves and returns peer information from the peer store, or from senatus if not found in the store.
+func (s *Server) GetPeerInfo(peerID peer.ID) (*peer.AddrInfo, error) {
 	// get the peer info from peer store
 	peerInfo := s.getFromPeerStore(peerID)
 	// retrieves peer information from senatus and adds it to the peer store if it is not present in the store.

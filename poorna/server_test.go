@@ -727,7 +727,7 @@ func TestServer_GetPeerInfo(t *testing.T) {
 				test.testFn(test.peerInfo)
 			}
 
-			peerInfo, err := server.getPeerInfo(test.peerInfo.ID)
+			peerInfo, err := server.GetPeerInfo(test.peerInfo.ID)
 
 			if test.expectedErr != nil {
 				require.Error(t, err)
