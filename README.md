@@ -1,67 +1,42 @@
-# MOI Chain
-### Official Go Implementation of the MOI Protocol.
-![banner](./moichain-banner.png)
-[![codecov](https://codecov.io/gh/sarvalabs/moichain/branch/develop/graph/badge.svg?token=7EKUYID0LM)](https://codecov.io/gh/sarvalabs/moichain)
+![banner](./banner.png)
 
-**MOI** is the **World's First Personalized Global Value Network.**  
-www.moi.technology
+[moitech]: https://moi.technology/
+[moidocs]: https://docs.moi.technology/
 
-### What is MOI?
-- Enables Complete User Ownership and Control
-- Empowers the **New Internet of Value**
-- Integrates **Context** as a foundational computational dimension of P2P Networks
-- Introduces a new personalized multidimensional value structure for participants, measured using **Total Digital Utility (TDU)**
+[![moi](https://img.shields.io/badge/moi-WEBSITE-purple?style=for-the-badge&color=%234B17E5)][moitech]
+[![docs](https://img.shields.io/badge/moi-Documentation-purple?style=for-the-badge&color=%234B17E5)][moidocs]
+![release](https://img.shields.io/badge/release-Babylon-blue?style=for-the-badge)
+![codecov](https://img.shields.io/codecov/c/github/sarvalabs/moichain?token=7EKUYID0LM&style=for-the-badge)
 
-## MOI Bird View
-![birdview](./moichain-components.png)
+# go-moi
+Official Go Implementation of the MOI Protocol.
 
-### VARNA
-VARNA is a MOI-native toolchain and an ecosystem for application developers offering tools to develop, deploy and maintain
-apps on the MOI network (called MOIApps). It also provides an accurate fee metering mechanism for different execution types
-and offers a series of tools for code analysis and network simulation.
+## Installing from the source
+Installing `moipod` requires both a Go (version 1.18) and a C compiler. You can install
+them using your favourite package manager. Once the dependencies are installed, run
 
-### KOSHA
-KOSHA is an application middleware that can be used by clients to communicate with MOI infrastructure. It will also be made
-available as mobile and web SDKs.
+```shell
+make moipod
+```
 
-### LEYPA
-LEYPA is the network middleware that connects business logic across traditional infrastructure and peer-to-peer networks. It
-acts as a hub for achieving interoperability between hybrid environments.
+or, to install the full suite of utilities:
 
-### POORNA
-POORNA is a context-aware peer-to-peer overlay network that facilitates fast and reliable communication among nodes in the
-network. Context-driven capabilities of POORNA also help to achieve Modulated Trust by creating personalized clusters in
-an optimized manner. It is also responsible for facilitating multi-party computation clusters.
+```shell
+make install
+```
 
-### JUG
-JUG is a context-aware compute engine to facilitate computation on an open network across heterogenous personalized execution
-environments. It is a pioneer in Context Unified Compute Architecture (CUCA) for all eligible devices.
+## Executables
+The go-moi project comes bundled with multiple executables and tools found in the `cmd` directory.
 
-### KRAMA
-KRAMA is a family of intelligent consensus algorithms required to achieve contextual singularity using Modulated Trust 5 in any
-open or closed network. It facilitates personalized context-aware consensus and establishes verifiable trust in open networks,
-thereby providing high throughput without compromising the benefits of decentralization.
+|   Command    | Description                                                                                                                                | Documentation                                                                |
+|:------------:|--------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------|
+| **`moipod`** | Our main MOI CLI client. It is the entry point into the MOI network, capable of running as a full Guardian Node or a Bootstrap Node.       | [MOIPod CLI Docs](https://docs.moi.technology/docs/guard/moipod-cli)         |
+|  `mcutils`   | Utility tool for testing, generating genesis files and test directories.                                                                   | n/a                                                                          |
+|  `logiclab`  | Sandbox playground environment for compiling manifest into logics, simulating logic calls and participant interactions with logics on MOI. | [LogicLab CLI Docs](https://docs.moi.technology/docs/build/develop/logiclab) |
 
-### GUNA
-GUNA is a context-aware state manager responsible for managing value states in the MOI network. It handles the state of participants,
-interactions, and applications along with their context and value. Apart from handling state, Guna also supports analytical representations
-of data in the value space using Coalescence to form patterns out of contextual singularities in the form of Tesseract Lattice or a Tesseract Grid.
 
-### DHRUVA
-DHRUVA is a context-aware storage engine for handling object and block storage of data used in the MOI network. It supports a pluggable interface
-for multiple key-value databases and enables the persistence of network-wide content-addressable data.
-
-## Documentation 📝
-If you'd like to learn more about the Moichain, how it works and how you can use it for your project, 
-please check out the **[Moichain Documentation](https://moichain-docs.pages.dev/)**.
-
-## Code Owner
-- Rahul Lenkala
-- Manish Meganathan
-- Sahith Narahari 
-
-## Contributors
-- Ganesh Prasad Kumble
-- Sudheer Singam Reddy
-- Karthik Nallabolu
-- Gokul R
+## MOI Pod Docker Image
+`moipod` can be installed and run by pulling the Docker image,
+```shell
+docker pull sarvalabs/moipod
+```
