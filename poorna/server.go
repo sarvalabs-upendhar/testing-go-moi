@@ -8,6 +8,9 @@ import (
 	"sync"
 	"time"
 
+	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
+	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
+
 	"github.com/libp2p/go-msgio"
 
 	"github.com/hashicorp/go-hclog"
@@ -39,7 +42,8 @@ import (
 
 const (
 	SenatusTopic            = "MOI_PUBSUB_SENATUS"
-	MinimumPeerCount        = 3
+	MinimumConnReq          = 100
+	MaximumConnReq          = 300
 	MinimumBootNodeConn int = 1
 )
 
@@ -275,6 +279,16 @@ func (s *Server) getLibp2pHostOptions() (libp2p.Option, error) {
 		return nil, err
 	}
 
+	mgr, err := connmgr.NewConnManager(MinimumConnReq, MaximumConnReq)
+	if err != nil {
+		panic(err)
+	}
+
+	resourceManager, err := rcmgr.NewResourceManager(rcmgr.NewFixedLimiter(rcmgr.InfiniteLimits))
+	if err != nil {
+		panic(err)
+	}
+
 	return libp2p.ChainOptions(
 		// Enable UPnP and hole punching
 		s.getSelfRouting(),
@@ -282,6 +296,8 @@ func (s *Server) getLibp2pHostOptions() (libp2p.Option, error) {
 		libp2p.EnableNATService(),
 		libp2p.Identity(prvKey),
 		libp2p.ListenAddrs(s.cfg.ListenAddresses...),
+		libp2p.ConnectionManager(mgr),
+		libp2p.ResourceManager(resourceManager),
 	), nil
 }
 
@@ -547,7 +563,7 @@ func (s *Server) ConnectAndRegisterPeer(peerInfo peer.AddrInfo) error {
 		return errAlreadyRegistered
 	}
 
-	if err = s.connectPeer(peerInfo.ID); err != nil && !errors.Is(err, types.ErrConnectionExists) {
+	if err = s.connectPeer(peerInfo); err != nil && !errors.Is(err, types.ErrConnectionExists) {
 		return err
 	}
 
@@ -614,20 +630,14 @@ func (s *Server) postPeerDiscoveredEvent(peerID peer.ID) error {
 	return nil
 }
 
-func (s *Server) connectPeer(peerID peer.ID) error {
+func (s *Server) connectPeer(peerInfo peer.AddrInfo) error {
 	// check if the host is already connected to the peer
-	if s.isConnectedToPeer(peerID) {
+	if s.isConnectedToPeer(peerInfo.ID) {
 		return types.ErrConnectionExists
 	}
 
-	// get the peer info from peer store
-	peerInfo, err := s.GetPeerInfo(peerID)
-	if err != nil {
-		return err
-	}
-
 	// attempt to connect the node host to the peer
-	if err := s.host.Connect(s.ctx, *peerInfo); err != nil {
+	if err := s.host.Connect(s.ctx, peerInfo); err != nil {
 		return err
 	}
 
@@ -643,7 +653,13 @@ func (s *Server) ConnectPeer(kramaID id.KramaID) error {
 		return err
 	}
 
-	err = s.connectPeer(peerID)
+	// get the peer info from peer store
+	peerInfo, err := s.GetPeerInfo(peerID)
+	if err != nil {
+		return err
+	}
+
+	err = s.connectPeer(*peerInfo)
 	if err != nil {
 		return err
 	}
