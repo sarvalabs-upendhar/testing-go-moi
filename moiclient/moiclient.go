@@ -9,6 +9,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"reflect"
 	"strconv"
 	"sync/atomic"
@@ -112,10 +113,18 @@ func (c *Client) doRequest(ctx context.Context, msg interface{}) (io.ReadCloser,
 		return nil, err
 	}
 
+	_, err = url.Parse(c.url)
+	if err != nil {
+		return nil, err
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url, io.NopCloser(bytes.NewReader(body)))
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Set("content-type", "application/json")
+	req.Header.Set("accept", "application/json")
 
 	req.ContentLength = int64(len(body))
 	req.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(body)), nil }

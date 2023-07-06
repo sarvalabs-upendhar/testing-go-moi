@@ -59,7 +59,7 @@ func makeHTTPRequest(t *testing.T, method string, args interface{}) *ptypes.Resp
 	jsonData, err := json.Marshal(values)
 	require.NoError(t, err)
 
-	httpResponse, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	httpResponse, err := http.Post(localURL, "application/json", bytes.NewBuffer(jsonData))
 	require.NoError(t, err)
 
 	// status should be >= 200 && < 300

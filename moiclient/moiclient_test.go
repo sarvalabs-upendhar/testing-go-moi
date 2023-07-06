@@ -26,7 +26,7 @@ import (
 type StrMap map[string]types.Address
 
 // url of the node to be used by moiclient.
-const url = "http://0.0.0.0:1601"
+const localURL = "http://0.0.0.0:1601"
 
 // Need to run minimum 20 fresh nodes for this test to run successfully
 // Ensure chain is set up to run individual tests
@@ -38,7 +38,7 @@ func TestMoiClient(t *testing.T) {
 
 	addrsMap := make(StrMap)
 
-	client, err := NewClient(url)
+	client, err := NewClient(localURL)
 	require.NoError(t, err)
 
 	accs, err := client.Accounts()

@@ -28,11 +28,11 @@ make install
 ## Executables
 The go-moi project comes bundled with multiple executables and tools found in the `cmd` directory.
 
-|   Command    | Description                                                                                                                                | Documentation                                                                |
-|:------------:|--------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------|
-| **`moipod`** | Our main MOI CLI client. It is the entry point into the MOI network, capable of running as a full Guardian Node or a Bootstrap Node.       | [MOIPod CLI Docs](https://docs.moi.technology/docs/guard/moipod-cli)         |
-|  `mcutils`   | Utility tool for testing, generating genesis files and test directories.                                                                   | n/a                                                                          |
-|  `logiclab`  | Sandbox playground environment for compiling manifest into logics, simulating logic calls and participant interactions with logics on MOI. | [LogicLab CLI Docs](https://docs.moi.technology/docs/build/develop/logiclab) |
+|   Command    | Description                                                                                                                                | Documentation                                                         |
+|:------------:|--------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------|
+| **`moipod`** | Our main MOI CLI client. It is the entry point into the MOI network, capable of running as a full Guardian Node or a Bootstrap Node.       | [MOIPod CLI Docs](https://docs.moi.technology/docs/guard/moipod-cli)  |
+|  `mcutils`   | Utility tool for testing, generating genesis files and test directories.                                                                   | n/a                                                                   |
+|  `logiclab`  | Sandbox playground environment for compiling manifest into logics, simulating logic calls and participant interactions with logics on MOI. | [LogicLab CLI Docs](https://docs.moi.technology/docs/build/logiclab)  |
 
 
 ## MOI Pod Docker Image

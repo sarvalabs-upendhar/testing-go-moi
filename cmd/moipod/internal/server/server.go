@@ -10,7 +10,6 @@ import (
 	cmdCommon "github.com/sarvalabs/moichain/cmd/common"
 
 	"github.com/pkg/errors"
-	"github.com/pkg/profile"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/otel"
 
@@ -109,10 +108,7 @@ func parseFlags(cmd *cobra.Command) {
 }
 
 func SetupNode(cmd *cobra.Command) {
-	profiling := profile.Start(profile.BlockProfile, profile.MutexProfile, profile.ProfilePath(Directory))
 	closeCh := make(chan os.Signal, 1)
-
-	defer profiling.Stop()
 
 	cfg, err := BuildNodeConfig(cmd, Directory)
 	if err != nil {

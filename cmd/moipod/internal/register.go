@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math/big"
 	"net/http"
 	"net/url"
@@ -185,8 +184,7 @@ func registerGuardian(vault *mudra.KramaVault) {
 		cmdCommon.Err(err)
 	}
 
-	// FIXME: kramaID.moiID is not returning the corr
-	log.Println(types.HexToAddress(moiID), types.BytesToAddress(moiIDpublicKey).Hex())
+	fmt.Printf("Krama-ID %s", vault.KramaID())
 
 	nonce, err := client.InteractionCount(&ptypes.InteractionCountArgs{
 		Address: types.BytesToAddress(moiIDpublicKey),
@@ -259,7 +257,7 @@ func registerGuardian(vault *mudra.KramaVault) {
 	}
 
 	fmt.Println("Registration successful")
-	fmt.Printf("Registered guardian details %+v", g)
+	fmt.Println("Registered guardian details")
 }
 
 func isGuardianRegistered(kramaID id.KramaID, client *moiclient.Client) bool {
