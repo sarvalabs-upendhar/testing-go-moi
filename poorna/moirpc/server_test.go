@@ -302,7 +302,7 @@ func testCall(t *testing.T, servNode, clientNode host.Host, dest peer.ID) {
 		t.Fatal(err)
 	}
 
-	testLogger.Info("#####1########calling Moi-Call for the first time ")
+	t.Log("##### 1 ##### Calling MOI-call for the first time")
 
 	var q Quotient
 	err = c.MoiCall(context.Background(), id.KramaID(getKramaID(dest)), "Arith", "Divide", &Args{20, 6}, &q, 0)
@@ -329,7 +329,7 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, servNode, clientNo
 		t.Fatal(err)
 	}
 
-	testLogger.Info("#####1########calling Moi-Call for the first time ")
+	t.Log("##### 1 ##### Calling MOI-call for the first time")
 
 	var q Quotient
 	err = c.MoiCall(
@@ -350,7 +350,7 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, servNode, clientNo
 		t.Error("bad division")
 	}
 
-	testLogger.Info("#####2#####calling Moi-Call for the second time ")
+	t.Log("##### 2 ##### Calling MOI-call for the second time")
 
 	err = c.MoiCall(
 		context.Background(),
@@ -369,7 +369,7 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, servNode, clientNo
 		t.Error("bad division")
 	}
 
-	testLogger.Info("##### 3 #####calling Moi-Call for the Third time ")
+	t.Log("##### 3 ##### Calling MOI-call for the third time")
 
 	err = c.MoiCall(
 		context.Background(),
@@ -389,7 +389,7 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, servNode, clientNo
 		t.Error("bad division")
 	}
 
-	testLogger.Info("##### 4 #####calling Moi-Call for the fourth time ")
+	t.Log("##### 4 ##### Calling MOI-call for the fourth time")
 
 	err = c.MoiCall(
 		context.Background(),
@@ -409,7 +409,7 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, servNode, clientNo
 	}
 
 	time.Sleep(1 * time.Second)
-	testLogger.Info("##### 5 #####calling Moi-Call for the fourth time ")
+	t.Log("##### 5 ##### Calling MOI-call for the fifth time")
 
 	err = c.MoiCall(
 		context.Background(),
@@ -571,24 +571,24 @@ func testStreamReusewithTTL(t *testing.T, servNode, clientNode host.Host, dest p
 	call1 := newCall(testLogger, ctx, dest, "Arith", "Divide", &Args{20, 6}, &q, done)
 	// create a libp2p stream to the destination peer id.
 
-	testLogger.Info("##### 1 ########calling send the first time ")
+	t.Log("##### 1 ##### Calling send the first time")
 
 	stream1, err := c.send(call1, time.Millisecond*300)
 	assert.NoError(t, err)
 
 	streamID1 := stream1.ID()
 
-	testLogger.Info("[testStreamReusewithTTL]", "stream ID 1 : ", streamID1)
+	t.Log("[testStreamReusewithTTL]", "stream-ID 1", streamID1)
 
 	call2 := newCall(testLogger, ctx, dest, "Arith", "Divide", &Args{20, 6}, &q, done)
 
-	testLogger.Info("##### 2 ########calling send the second time ")
+	t.Log("##### 2 ##### Calling send the second time")
 
 	stream2, err := c.send(call2, time.Millisecond*300)
 	assert.NoError(t, err)
 
 	streamID2 := stream2.ID()
-	testLogger.Info("stream ID 2 : ", streamID2)
+	t.Log("[testStreamReusewithTTL]", "stream-ID 2", streamID2)
 
 	assert.Equal(t, streamID1, streamID2)
 	t.Cleanup(func() {
@@ -634,26 +634,26 @@ func testNewStreamAfterTTLTimeout(t *testing.T, servNode, clientNode host.Host, 
 	call1 := newCall(testLogger, ctx, dest, "Arith", "Divide", &Args{20, 6}, &q, done)
 	// create a libp2p stream to the destination peer id.
 
-	testLogger.Info("##### 1 ########calling send the first time ")
+	t.Log("##### 1 ##### Calling send the first time")
 
 	stream1, err := c.send(call1, time.Millisecond*300)
 	assert.NoError(t, err)
 
 	streamID1 := stream1.ID()
-	testLogger.Info("[testNewStreamAfterTTLTimeout]", "stream ID 1 : ", streamID1)
+	t.Log("[testNewStreamAfterTTLTimeout]", "stream-ID 1", streamID1)
 
 	// sleeping for enough time so that stream1 TTL time out
 	time.Sleep(time.Second)
 
 	call2 := newCall(testLogger, ctx, dest, "Arith", "Divide", &Args{20, 6}, &q, done)
 
-	testLogger.Info("##### 2 ########calling send the second time ")
+	t.Log("##### 2 ##### Calling send the second time")
 
 	stream2, err := c.send(call2, time.Millisecond*300)
 	assert.NoError(t, err)
 
 	streamID2 := stream2.ID()
-	testLogger.Info(" stream ID 2 : ", streamID2)
+	t.Log("[testNewStreamAfterTTLTimeout]", "stream-ID 2", streamID2)
 
 	assert.NotEqual(t, streamID1, streamID2)
 	t.Cleanup(func() {
@@ -706,7 +706,7 @@ func testStreamwithZeroTTL(t *testing.T, servNode, clientNode host.Host, dest pe
 	assert.NoError(t, err)
 
 	streamID1 := stream1.ID()
-	testLogger.Info("[testStreamwithZeroTTL]", " stream ID 1 : ", streamID1)
+	t.Log("[testStreamwithZeroTTL]", " stream-ID 1", streamID1)
 	<-done
 
 	_, err = c.streamMap.Get(dest.Pretty())
@@ -744,7 +744,7 @@ func testStreamwithNonZeroTTL(t *testing.T, servNode, clientNode host.Host, dest
 	assert.NoError(t, err)
 
 	streamID := stream.ID()
-	testLogger.Info("[testStreamwithNonZeroTTL]", "stream ID 1 : ", streamID)
+	t.Log("[testStreamwithNonZeroTTL]", "stream-ID 1", streamID)
 
 	<-done
 
@@ -796,13 +796,13 @@ func createDht(nodehost host.Host, protocolID string) (*dht.IpfsDHT, error) {
 	dhtmode := dht.Mode(dht.ModeServer)
 
 	// Trace log
-	testLogger.Debug("Generated DHT Configuration")
+	testLogger.Trace("Generated DHT configuration")
 
 	// Start a Kademlia DHT on the host in server mode
 	kaddht, err := dht.New(context.Background(), nodehost, dhtmode, dht.ProtocolPrefix(protocol.ID(protocolID)))
 	// Handle any potential error
 	if err != nil {
-		testLogger.Error("Failed to Create the Kademlia DHT", " : ", err)
+		testLogger.Error("Failed to create the Kademlia DHT", "err", err)
 		log.Fatal(err)
 
 		return nil, err
@@ -1005,7 +1005,7 @@ func TestCallContext(t *testing.T) {
 
 	t.Run("local", func(t *testing.T) {
 		testCallContext(t, h1, h2, h2.ID())
-		testLogger.Info("***DONE LOCAL")
+		t.Log("***DONE LOCAL")
 	})
 
 	// t.Run("remote", func(t *testing.T) {
@@ -1014,7 +1014,7 @@ func TestCallContext(t *testing.T) {
 	// })
 
 	t.Run("async", func(t *testing.T) {
-		testLogger.Info("***STARTING ASYNC")
+		t.Log("***STARTING ASYNC")
 		s := NewServer(testLogger, h1, "rpc")
 		c := NewClientWithServer(testLogger, h2, "rpc", nil, s)
 

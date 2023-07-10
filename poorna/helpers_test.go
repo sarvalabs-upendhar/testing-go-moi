@@ -459,11 +459,11 @@ func initDiscoveryAndAdvertise(t *testing.T, servers ...*Server) {
 		s.discovery = discovery.NewRoutingDiscovery(s.kadDHT)
 
 		// Advertise the rendezvous string to the discovery service
-		s.logger.Info("Announcing ourselves")
+		t.Log("Announcing ourselves")
 
 		_, err := s.discovery.Advertise(s.ctx, string(common.MOIProtocolStream))
 		if err != nil {
-			s.logger.Error("Failed to advertise the rendezvous string to the discovery service", "error", err)
+			t.Error("Failed to advertise the rendezvous string to the discovery service", "err", err)
 		}
 	}
 }

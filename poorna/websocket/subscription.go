@@ -40,7 +40,7 @@ type SubscriptionManager struct {
 
 func NewSubscriptionManager(logger hclog.Logger, eventMux *utils.TypeMux) *SubscriptionManager {
 	subscriptionManager := &SubscriptionManager{
-		logger:            logger.Named("subscription"),
+		logger:            logger.Named("Websocket-Subscription"),
 		timeout:           DefaultTimeout,
 		subscriptions:     make(map[string]subscription),
 		timeouts:          Timeouts{},
@@ -92,14 +92,14 @@ func (f *SubscriptionManager) Run() {
 		select {
 		case event := <-watchCh:
 			if err := f.dispatchEvent(event); err != nil {
-				f.logger.Error("failed to dispatch event", "err", err)
+				f.logger.Error("Failed to dispatch event", "err", err)
 			}
 
 		case <-timeoutCh:
 			// timeout for subscription
 			// if subscription still exists
 			if subscriptionBase != nil && !f.Uninstall(subscriptionBase.id) {
-				f.logger.Error("failed to uninstall subscription", "id", subscriptionBase.id)
+				f.logger.Error("Failed to uninstall subscription", "subscription-ID", subscriptionBase.id)
 			}
 
 		case <-f.updateCh:
@@ -235,12 +235,12 @@ func (f *SubscriptionManager) flushWsSubscriptions(data interface{}) error {
 			if errors.Is(err, websocket.ErrCloseSent) || errors.Is(err, net.ErrClosed) {
 				closedSubscriptionIDs = append(closedSubscriptionIDs, id)
 
-				f.logger.Warn(fmt.Sprintf("Subscription %s has been closed", id))
+				f.logger.Warn("Subscription ID has been closed", "subscription-ID", id)
 
 				continue
 			}
 
-			f.logger.Error(fmt.Sprintf("Failed to send update, %v", err))
+			f.logger.Error("Failed to send update", "err", err)
 		}
 	}
 
@@ -253,10 +253,8 @@ func (f *SubscriptionManager) flushWsSubscriptions(data interface{}) error {
 		}
 
 		f.logger.Info(
-			fmt.Sprintf(
-				"Removed %d subscriptions due to closed connections",
-				len(closedSubscriptionIDs),
-			),
+			"Removed subscriptions due to closed connections",
+			"count", len(closedSubscriptionIDs),
 		)
 	}
 

@@ -79,7 +79,7 @@ func (s *Session) HandleMessage(id id.KramaID, msg *atypes.AgoraResponseMsg) {
 	}
 
 	if err := s.pm.Signal(id, msg.Status); err != nil {
-		s.logger.Error("Error signaling the routine", "error", err)
+		s.logger.Error("Error signaling the routine", "err", err)
 	}
 }
 
@@ -114,7 +114,7 @@ func (s *Session) getBlocks(
 	out chan *atypes.Block,
 	idSet *atypes.CIDSet,
 ) error {
-	s.logger.Debug("Fetching data from ", "peer", peerID, "count", idSet.Len())
+	s.logger.Debug("Fetching data from", "peer-ID", peerID, "count", idSet.Len())
 
 	//	requestCtx, cancelFn := context.WithTimeout(ctx, 3*time.Second)
 
@@ -207,7 +207,7 @@ func (s *Session) GetBlocks(ctx context.Context, cids []atypes.CID) chan *atypes
 
 			peerID, err := s.ChooseBestPeer(ctx, attemptedPeers)
 			if err != nil {
-				s.logger.Error("Error finding best peer", "error", err)
+				s.logger.Error("Error finding best peer", "err", err)
 
 				attempt++
 
@@ -217,7 +217,7 @@ func (s *Session) GetBlocks(ctx context.Context, cids []atypes.CID) chan *atypes
 			attemptedPeers[peerID] = true
 
 			if err = s.getBlocks(ctx, peerID, out, idSet); err != nil {
-				s.logger.Error("Error fetching blocks", "error", err)
+				s.logger.Error("Error fetching blocks", "err", err)
 
 				s.pm.UpdateFailedAttempts(peerID, 1)
 				attempt++

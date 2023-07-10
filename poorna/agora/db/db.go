@@ -83,7 +83,7 @@ func (ds *DataStore) GetData(
 		blk, err := ds.db.ReadEntry(db.DBKey(address, db.Prefix(c.ContentType()), c.Key()))
 		if err != nil {
 			if errors.Is(err, types.ErrKeyNotFound) {
-				ds.logger.Error("Key not found", "id", c)
+				ds.logger.Error("Key not found", "CID", c)
 			}
 		} else {
 			lk.Lock()
@@ -96,7 +96,7 @@ func (ds *DataStore) GetData(
 func (ds *DataStore) DoesStateExists(address types.Address, stateHash atypes.CID) bool {
 	keyExists, err := ds.db.Contains(db.AccountKey(address, types.BytesToHash(stateHash.Key())))
 	if err != nil {
-		ds.logger.Error("Error fetching state info from db", "error", err)
+		ds.logger.Error("Error fetching state info from DB", "err", err)
 	}
 
 	return keyExists

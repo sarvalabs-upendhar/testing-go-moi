@@ -91,7 +91,7 @@ func NewWAL(
 	wal := &BaseWAL{
 		ctx:           ctx,
 		ctxCancel:     cancelFn,
-		logger:        logger,
+		logger:        logger.Named("Base-WAL"),
 		group:         group,
 		enc:           NewWALEncoder(group),
 		flushInterval: DefaultFlushInterval,
@@ -157,7 +157,7 @@ func (wal *BaseWAL) Close() {
 	wal.flushTicker.Stop()
 
 	if err := wal.FlushAndSync(); err != nil {
-		wal.logger.Error("error on flush data to disk", "error", err)
+		wal.logger.Error("Error on flush data to disk", "err", err)
 	}
 
 	wal.group.Stop()
@@ -196,11 +196,11 @@ func (wal *BaseWAL) Write(msg ktypes.ConsensusMessage, clusterID types.ClusterID
 		Message:   walMsg,
 	}); err != nil {
 		wal.logger.Error(
-			"error writing msg to consensus wal."+
-				" WARNING: recover may not be possible for the current height",
+			"Error writing message to consensus WAL."+
+				"WARNING: Recover may not be possible for the current height",
 			"err", err,
 			"msg", msg,
-			"msgType", walMsg.MsgType,
+			"msg-type", walMsg.MsgType,
 		)
 
 		return err
@@ -222,8 +222,8 @@ func (wal *BaseWAL) WriteSync(msg ktypes.ConsensusMessage, clusterID types.Clust
 	}
 
 	if err := wal.FlushAndSync(); err != nil {
-		wal.logger.Error(`WriteSync failed to flush consensus wal.
-		WARNING: may result in creating alternative proposals / votes for the current height iff the node restarted`,
+		wal.logger.Error("WriteSync failed to flush consensus WAL."+
+			"WARNING: May result in creating alternative proposals/votes for the current height if the node restarted",
 			"err", err)
 
 		return err
@@ -255,7 +255,7 @@ func (wal *BaseWAL) SearchForClusterID(
 	// NOTE: starting from the last file in the group because we're usually
 	// searching for the last height. See replay.go
 	min, max := wal.group.MinIndex(), wal.group.MaxIndex()
-	wal.logger.Info("Searching for cluster id", "cluster-id", clusterID, "min", min, "max", max)
+	wal.logger.Info("Searching for cluster ID", "cluster-ID", clusterID, "min", min, "max", max)
 
 	for index := max; index >= min; index-- {
 		gr, err = wal.group.NewReader(index)
@@ -291,7 +291,7 @@ func (wal *BaseWAL) SearchForClusterID(
 			}
 
 			if string(msg.ClusterID) == clusterID { // found
-				wal.logger.Info("Found", "cluster-id", clusterID, "index", index)
+				wal.logger.Info("Found", "cluster-ID", clusterID, "index", index)
 
 				return gr, true, nil
 			}

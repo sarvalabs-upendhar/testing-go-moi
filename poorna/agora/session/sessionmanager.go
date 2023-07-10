@@ -38,7 +38,7 @@ type Manager struct {
 
 func NewSessionManager(logger hclog.Logger, im interestManager, notifier atypes.PubSub, engine engine) *Manager {
 	return &Manager{
-		logger:   logger,
+		logger:   logger.Named("Session-Manager"),
 		im:       im,
 		notifier: notifier,
 		engine:   engine,
@@ -84,7 +84,7 @@ func (s *Manager) HandlePeerMessage(id id.KramaID, msg interface{}) {
 	case *atypes.AgoraResponseMsg:
 		s.handleAgoraResponseMsg(id, msg)
 	default:
-		s.logger.Error("invalid message type")
+		s.logger.Error("Invalid message type")
 	}
 }
 
@@ -102,7 +102,7 @@ func (s *Manager) handleAgoraResponseMsg(id id.KramaID, msg *atypes.AgoraRespons
 	if !msg.Status {
 		session, err := s.GetSession(msg.SessionID)
 		if err != nil {
-			s.logger.Error("Error session not found", "error", err)
+			s.logger.Error("Error session not found", "err", err)
 
 			return
 		}

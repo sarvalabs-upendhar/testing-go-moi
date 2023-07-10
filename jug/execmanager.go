@@ -52,7 +52,7 @@ func NewExecutionManager(
 	return &ExecutionManager{
 		state:  state,
 		config: config,
-		logger: logger.Named("Execution"),
+		logger: logger.Named("Execution-Manager"),
 	}
 }
 

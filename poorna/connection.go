@@ -34,7 +34,7 @@ func (ci *ConnectionInfo) getOutboundConnCount() int64 {
 	return atomic.LoadInt64(&ci.outboundConnCount)
 }
 
-// getMaxOutboundConnCount returns the maximum number of inbound connections.
+// getMaxInboundConnCount returns the maximum number of inbound connections.
 func (ci *ConnectionInfo) getMaxInboundConnCount() int64 {
 	return ci.maxInboundConnCount
 }

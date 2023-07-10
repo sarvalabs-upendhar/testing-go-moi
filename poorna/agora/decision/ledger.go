@@ -181,7 +181,7 @@ func (l *Ledger) worker() {
 	for {
 		select {
 		case <-l.ctx.Done():
-			l.logger.Info("Context expired closing worker")
+			l.logger.Info("Context expired, closing worker")
 
 			return
 		case <-time.After(2 * time.Second):
@@ -195,13 +195,13 @@ func (l *Ledger) worker() {
 			for _, job := range jobs {
 				rawData, err := job.value.Bytes()
 				if err != nil {
-					l.logger.Error("Failed to polorize peer list")
+					l.logger.Error("Failed to polorize peer list", "err", err)
 
 					continue
 				}
 
 				if err := dbWriter.Set(job.key, rawData); err != nil {
-					l.logger.Error("Error adding associated peer list to db")
+					l.logger.Error("Error adding associated peer list to DB", "err", err)
 
 					continue
 				}

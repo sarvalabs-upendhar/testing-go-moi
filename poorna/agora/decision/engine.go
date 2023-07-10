@@ -122,7 +122,7 @@ func (e *Engine) nextTask() (*atypes.Response, error) {
 
 		blocks, err := e.db.GetData(context.Background(), req.SessionID, ids)
 		if err != nil {
-			e.logger.Error("Error fetching blocks from db", "error", err)
+			e.logger.Error("Error fetching blocks from DB", "err", err)
 
 			continue
 		}
@@ -190,7 +190,7 @@ func (e *Engine) HandleRequest(req *Request) {
 
 		peerSet, err := e.ledger.GetAssociatedPeers(req.SessionID, req.StateHash)
 		if err != nil {
-			e.logger.Error("Error fetching associated peers")
+			e.logger.Error("Error fetching associated peers", "err", err)
 		}
 
 		e.sendResponse(req.PeerID, address, stateHash, false, peerSet)
@@ -245,13 +245,13 @@ func (e *Engine) responseWorker() {
 			}
 
 			if err := e.network.SendAgoraMessage(resp.PeerID, ptypes.AGORARESP, resp.GetAgoraMsg()); err != nil {
-				e.logger.Error("Error sending response message", "peer", resp.PeerID)
+				e.logger.Error("Error sending response message", "peer-ID", resp.PeerID)
 
 				continue
 			}
 
 			if err := e.ledger.UpdateAssociatedPeers(resp.SessionID, resp.StateHash, resp.PeerID); err != nil {
-				e.logger.Error("Error updating associated peers info", "error", err)
+				e.logger.Error("Error updating associated peers information", "err", err)
 			}
 		}
 	}

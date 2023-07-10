@@ -215,7 +215,7 @@ func (k *Engine) acquireContextLock(ctx context.Context, slot *ktypes.Slot) erro
 	ctx, span := tracing.Span(ctx, "Krama.KramaEngine", "acquireContextLock")
 	defer span.End()
 	// Create cluster id using operatorID and IxHash
-	k.logger.Debug("Creating cluster", "Cluster id", slot.ClusterID())
+	k.logger.Debug("Creating cluster", "cluster-ID", slot.ClusterID())
 
 	finalWaitGroup := new(sync.WaitGroup)
 
@@ -356,7 +356,7 @@ func (k *Engine) acquireContextLock(ctx context.Context, slot *ktypes.Slot) erro
 
 	observerNodes, err = k.getObserverNodes(ctx, observerNodesQueryCount, exemptedNodes)
 	if err != nil {
-		k.logger.Error("error fetching observer nodes", "error", err)
+		k.logger.Error("Error fetching observer nodes", "err", err)
 
 		return errors.New("unable to retrieve observer nodes")
 	}
@@ -365,12 +365,12 @@ func (k *Engine) acquireContextLock(ctx context.Context, slot *ktypes.Slot) erro
 
 	observerKeys, err := k.state.GetPublicKeys(observerNodes...)
 	if err != nil {
-		return errors.Wrap(err, "failed to fetch public key")
+		return errors.Wrap(err, "Failed to fetch the public key of observer nodes.")
 	}
 
 	randomKeys, err := k.state.GetPublicKeys(operatorRandomNodes...)
 	if err != nil {
-		return errors.Wrap(err, "failed to fetch public key")
+		return errors.Wrap(err, "Failed to fetch the public key of random nodes.")
 	}
 
 	go k.sendICSRequestWithBound(
@@ -437,7 +437,7 @@ func (k *Engine) Start() {
 		for {
 			select {
 			case <-k.ctx.Done():
-				k.logger.Info("Closing Krama engine", "reason", "context-closed")
+				k.logger.Info("Closing Krama engine. Reason: context-closed")
 
 				return
 			case req := <-k.requests:
@@ -466,8 +466,8 @@ func (k *Engine) joinCluster(ctx context.Context, slot *ktypes.Slot) error {
 		"Received an ICS join request",
 		"from", slot.ClusterState().Operator,
 		"timestamp", slot.ClusterState().RequestMsg.Timestamp,
-		"cluster-id", slot.ClusterID(),
-		"ixHash", slot.ClusterState().Ixs[0].Hash(),
+		"cluster-ID", slot.ClusterID(),
+		"ix-hash", slot.ClusterState().Ixs[0].Hash(),
 	)
 
 	reqTime := utils.Canonical(time.Unix(0, slot.ICSRequestMsg().Timestamp))
@@ -493,7 +493,7 @@ func (k *Engine) joinCluster(ctx context.Context, slot *ktypes.Slot) error {
 				Height:   info.Height,
 				BestPeer: slot.ClusterState().Operator,
 			}); err != nil {
-				k.logger.Error("failed to post sync request")
+				k.logger.Error("Failed to post sync request", "err", err)
 			}
 		}
 
@@ -583,7 +583,7 @@ func (k *Engine) handleReq(req Request) {
 	}
 
 	if err = k.validateInteractions(req.ixs); err != nil {
-		k.logger.Error("Invalid Interaction", "error", err)
+		k.logger.Error("Invalid interaction", "err", err)
 
 		sendResponse(req, types.ErrInvalidInteractions)
 
@@ -597,13 +597,13 @@ func (k *Engine) handleReq(req Request) {
 		sendResponse(req, err)
 
 		if err != nil {
-			k.logger.Debug("Error acquiring context lock ", "error", err, "cluster-id", clusterID)
+			k.logger.Debug("Error acquiring context lock", "err", err, "cluster-ID", clusterID)
 			k.metrics.captureICSCreationFailureCount(1)
 
 			return
 		}
 
-		k.logger.Info("Cluster creation successful", clusterID)
+		k.logger.Info("Cluster creation successful", "cluster-ID", clusterID)
 
 	case ktypes.ValidatorSlot:
 		requestTime := time.Now()
@@ -612,7 +612,7 @@ func (k *Engine) handleReq(req Request) {
 		sendResponse(req, err)
 
 		if err != nil {
-			k.logger.Info("Error joining cluster", "error", err, "cluster-id", clusterID)
+			k.logger.Info("Error joining cluster", "err", err, "cluster-ID", clusterID)
 			k.metrics.captureICSParticipationFailureCount(1)
 
 			return
@@ -631,7 +631,7 @@ func (k *Engine) handleReq(req Request) {
 				k.metrics.captureICSJoiningTime(requestTime)
 			}
 		case <-time.After(ICSTimeOutDuration):
-			k.logger.Info("ICS success timeout", "cluster-id", req.msg.ClusterID)
+			k.logger.Info("ICS success timeout", "cluster-ID", req.msg.ClusterID)
 			k.metrics.captureICSParticipationFailureCount(1)
 
 			return
@@ -642,7 +642,7 @@ func (k *Engine) handleReq(req Request) {
 	// Send execution request
 	slot := k.slots.GetSlot(clusterID)
 	if slot == nil {
-		k.logger.Info("nil slot", "cluster-id", req.msg.ClusterID)
+		k.logger.Info("Nil slot", "cluster-ID", req.msg.ClusterID)
 
 		return
 	}
@@ -654,7 +654,7 @@ func (k *Engine) handleReq(req Request) {
 		if hash := cs.ClusterID.Hash(); !hash.IsNil() {
 			proofs, err := wg.GenerateProofs()
 			if err != nil {
-				k.logger.Error("Failed to generate watchdog proofs")
+				k.logger.Error("Failed to generate watchdog proofs", "err", err)
 
 				return
 			}
@@ -672,7 +672,7 @@ func (k *Engine) handleReq(req Request) {
 		// Wait for execution response
 		execResp := <-slot.ExecutionResp
 		if execResp.Err != nil {
-			k.logger.Info("Error executing interactions ", "error", execResp.Err, "cluster-id", clusterID)
+			k.logger.Info("Error executing interactions", "err", execResp.Err, "cluster-ID", clusterID)
 			k.metrics.captureAgreementFailureCount(1)
 
 			for _, interaction := range cs.Ixs {
@@ -706,16 +706,16 @@ func (k *Engine) handleReq(req Request) {
 			k.vault,
 			cs,
 			k.finalizedTesseractHandler,
-			kbft.WithLogger(k.logger.With("cluster-id", clusterID)),
+			kbft.WithLogger(k.logger.With("cluster-ID", clusterID)),
 			kbft.WithWal(k.wal),
 			kbft.WithEvidence(icsEvidence),
 		)
 
 		if err = bft.Start(); err != nil {
-			k.logger.Error("Error consensus failed", "error", err, "cluster-id", cs.ClusterID)
+			k.logger.Error("Consensus failed", "err", err, "cluster-ID", cs.ClusterID)
 			k.metrics.captureAgreementFailureCount(1)
 			if err := k.exec.Revert(cs.ClusterID); err != nil {
-				k.logger.Error("failed to revert the execution changes", "error", err)
+				k.logger.Error("Failed to revert the execution changes", "err", err)
 			}
 
 			return
@@ -724,7 +724,7 @@ func (k *Engine) handleReq(req Request) {
 		k.metrics.captureAgreementTime(consensusInitTS)
 	}
 
-	k.logger.Info("Interaction finalized", "cluster-id", cs.ClusterID)
+	k.logger.Info("Interaction finalized", "cluster-ID", cs.ClusterID)
 }
 
 func (k *Engine) fetchIxAccounts(ctx context.Context, ix *types.Interaction) (ktypes.AccountInfos, error) {
@@ -809,14 +809,14 @@ func (k *Engine) sendICSRequestWithBound(
 
 	rawCanonicalICSReq, err := msg.Bytes()
 	if err != nil {
-		k.logger.Error("failed to send ics request : ", err)
+		k.logger.Error("Failed to send ICS request", "err", err)
 
 		return
 	}
 
 	signature, err := k.vault.Sign(rawCanonicalICSReq, mudraCommon.EcdsaSecp256k1, mudra.UsingNetworkKey())
 	if err != nil {
-		k.logger.Error("failed to sign ics request : ", err)
+		k.logger.Error("Failed to sign ICS request", "err", err)
 
 		return
 	}
@@ -834,7 +834,7 @@ func (k *Engine) sendICSRequestWithBound(
 		// Retrieve the peerID from the node's Krama id
 		networkID, err := kramaID.PeerID()
 		if err != nil {
-			k.logger.Error("Error decoding network id from krama id", "error", err)
+			k.logger.Error("Error decoding network ID from krama ID", "err", err)
 			wg.Done()
 
 			continue
@@ -842,7 +842,7 @@ func (k *Engine) sendICSRequestWithBound(
 
 		peerID, err := peer.Decode(networkID)
 		if err != nil {
-			k.logger.Error("Unable to decode peer id", "error", err)
+			k.logger.Error("Unable to decode peer ID", "err", err)
 			wg.Done()
 
 			continue
@@ -865,14 +865,14 @@ func (k *Engine) sendICSRequestWithBound(
 					nodeResponses[index] = true
 				} else {
 					k.logger.Debug(
-						"ICS Random nodes request failed",
-						"error", err,
+						"ICS random nodes request failed",
+						"err", err,
 						"status", icsResponse.StatusCode,
-						"peer id", peerID,
+						"peer-ID", peerID,
 					)
 				}
 			} else {
-				k.logger.Error("ICS Random nodes request failed", "error", err)
+				k.logger.Error("ICS random nodes request failed", "err", err)
 			}
 
 			//	clusterState.updateResponseTimeMetric(reqTimeStamp)
@@ -914,7 +914,7 @@ func (k *Engine) sendICSRequest(
 	}()
 
 	if nodesSet == nil {
-		k.logger.Trace("Returning from ICSRequest routine", "set-type", setType)
+		k.logger.Trace("Returning from ICS request routine", "set-type", setType)
 
 		return
 	}
@@ -931,14 +931,14 @@ func (k *Engine) sendICSRequest(
 
 	rawCanonicalICSReq, err := msg.Bytes()
 	if err != nil {
-		k.logger.Error("failed to send ics request : ", err)
+		k.logger.Error("Failed to send ICS request", "err", err)
 
 		return
 	}
 
 	signature, err := k.vault.Sign(rawCanonicalICSReq, mudraCommon.EcdsaSecp256k1, mudra.UsingNetworkKey())
 	if err != nil {
-		k.logger.Error("failed to sign ics request : ", err)
+		k.logger.Error("Failed to sign ICS request", "err", err)
 
 		return
 	}
@@ -958,7 +958,7 @@ func (k *Engine) sendICSRequest(
 
 		networkID, err := kramaID.PeerID()
 		if err != nil {
-			k.logger.Error("Error decoding network id from krama id", "error", err)
+			k.logger.Error("Error decoding network ID from krama ID", "err", err)
 			wg.Done()
 
 			continue
@@ -966,7 +966,7 @@ func (k *Engine) sendICSRequest(
 
 		peerID, err := peer.Decode(networkID)
 		if err != nil {
-			k.logger.Error("Unable to decode peer id", "error", err)
+			k.logger.Error("Unable to decode peer ID", "err", err)
 			wg.Done()
 
 			continue
@@ -989,10 +989,10 @@ func (k *Engine) sendICSRequest(
 				randomNodes <- utils.KramaIDFromString(icsResponse.RandomNodes)
 			} else {
 				k.logger.Info(
-					"ICSRequest failed",
-					"error", err,
+					"ICS request failed",
+					"err", err,
 					"status", icsResponse.StatusCode,
-					"peer-id", peerID)
+					"peer-ID", peerID)
 			}
 
 			//	clusterState.updateResponseTimeMetric(reqTimeStamp)
@@ -1087,7 +1087,7 @@ func (k *Engine) sendICSSuccess(id types.ClusterID) error {
 
 	icsMsg := ktypes.NewICSMsg(ptypes.ICSSUCCESS, string(id), rawData)
 
-	k.logger.Trace("Sending clusterState success message", "cluster id", id)
+	k.logger.Trace("Sending cluster state success message", "cluster-ID", id)
 
 	slot.OutboundChan <- icsMsg
 
@@ -1131,8 +1131,7 @@ func (k *Engine) createProposalGrid(slot *ktypes.Slot) ([]*types.Tesseract, erro
 	}
 	// store the receipts
 	clusterState.SetReceipts(receipts)
-
-	k.logger.Debug("Generating tesseracts", "cluster-id", slot.ClusterID())
+	k.logger.Debug("Generating tesseracts", "cluster-ID", slot.ClusterID())
 
 	return GenerateTesseracts(clusterState)
 }
@@ -1326,7 +1325,7 @@ func (k *Engine) finalizedTesseractHandler(tesseracts []*types.Tesseract) error 
 		}
 
 		if err = k.transport.BroadcastTesseract(msg); err != nil {
-			k.logger.Error("Failed to broadcast tesseract", "error", err, "cluster-id", clusterID)
+			k.logger.Error("Failed to broadcast tesseract", "err", err, "cluster-ID", clusterID)
 		}
 	}
 
@@ -1506,11 +1505,11 @@ func (k *Engine) validateInteractions(ixs types.Interactions) error {
 		ixHash := ix.Hash()
 
 		k.logger.Debug(
-			"Validating Interaction",
-			"Hash", ixHash,
-			"Nonce", ix.Nonce(),
-			"From", ix.Sender().Hex(),
-			"Type", ix.Type(),
+			"Validating interaction",
+			"ix-hash", ixHash,
+			"nonce", ix.Nonce(),
+			"from", ix.Sender().Hex(),
+			"type", ix.Type(),
 		)
 		/*
 			Checks to perform
@@ -1553,7 +1552,7 @@ func (k *Engine) IsIxValid(ix *types.Interaction) error {
 
 	fuelAvailable, err := senderObject.HasFuel(new(big.Int).Add(ix.MOITokenValue(), ix.FuelLimit()))
 	if err != nil {
-		k.logger.Error("failed to fetch fuel", "error", err)
+		k.logger.Error("Failed to fetch fuel", "err", err)
 	}
 
 	if !fuelAvailable {
@@ -1564,7 +1563,7 @@ func (k *Engine) IsIxValid(ix *types.Interaction) error {
 	case types.IxValueTransfer:
 		stateObject, err := k.state.GetLatestStateObject(ix.Sender())
 		if err != nil {
-			k.logger.Error("Error fetching stateObject", "addr", ix.Sender().Hex())
+			k.logger.Error("Error fetching state object", "addr", ix.Sender().Hex())
 
 			return err
 		}
@@ -1578,7 +1577,7 @@ func (k *Engine) IsIxValid(ix *types.Interaction) error {
 	case types.IxAssetCreate:
 		payload, err := ix.GetAssetPayload()
 		if err != nil {
-			k.logger.Error("error fetching asset payload")
+			k.logger.Error("Error fetching asset payload", "err", err)
 
 			return err
 		}

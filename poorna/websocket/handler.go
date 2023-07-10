@@ -34,7 +34,7 @@ var wsUpgrader = websocket.Upgrader{
 
 func NewHandler(logger hclog.Logger, eventMux *utils.TypeMux) *Handler {
 	return &Handler{
-		logger:     logger.Named("websocket-handler"),
+		logger:     logger.Named("Websocket-Handler"),
 		dispatcher: NewDispatcher(logger, eventMux),
 	}
 }
@@ -48,7 +48,7 @@ func (h *Handler) HandleWsRequests(w http.ResponseWriter, req *http.Request) {
 	// Upgrade the HTTP connection to the WebSocket protocol
 	currentWSConn, err := wsUpgrader.Upgrade(w, req, nil)
 	if err != nil {
-		h.logger.Error("Failed to upgrade to a websocket connection", "error", err)
+		h.logger.Error("Failed to upgrade to a websocket connection", "err", err)
 
 		return
 	}
@@ -56,7 +56,7 @@ func (h *Handler) HandleWsRequests(w http.ResponseWriter, req *http.Request) {
 	// Handle websocket connection closure
 	defer func() {
 		if err := currentWSConn.Close(); err != nil {
-			h.logger.Error("Failed to gracefully close websocket connection", "error", err)
+			h.logger.Error("Failed to gracefully close websocket connection", "err", err)
 		}
 	}()
 
@@ -77,7 +77,7 @@ func (h *Handler) HandleWsRequests(w http.ResponseWriter, req *http.Request) {
 			) {
 				h.logger.Info("Closing websocket connection")
 			} else {
-				h.logger.Error("Failed to read websocket message", "error", err)
+				h.logger.Error("Failed to read websocket message", "err", err)
 				h.logger.Info("Closing websocket connection with error")
 			}
 
@@ -90,7 +90,7 @@ func (h *Handler) HandleWsRequests(w http.ResponseWriter, req *http.Request) {
 			go func() {
 				resp, handleErr := h.dispatcher.handleRequests(message, connManager)
 				if handleErr != nil {
-					h.logger.Error("Failed to handle websocket request", "error", handleErr)
+					h.logger.Error("Failed to handle websocket request", "err", handleErr)
 
 					writeErr := connManager.WriteMessage(
 						messageType,
@@ -98,7 +98,7 @@ func (h *Handler) HandleWsRequests(w http.ResponseWriter, req *http.Request) {
 					)
 
 					if writeErr != nil {
-						h.logger.Error("Failed to send the response to client", "error", writeErr)
+						h.logger.Error("Failed to send the response to client", "err", writeErr)
 					}
 
 					return
@@ -106,7 +106,7 @@ func (h *Handler) HandleWsRequests(w http.ResponseWriter, req *http.Request) {
 
 				writeErr := connManager.WriteMessage(messageType, resp)
 				if writeErr != nil {
-					h.logger.Error("Failed to send the response to client", "error", writeErr)
+					h.logger.Error("Failed to send the response to client", "err", writeErr)
 				}
 			}()
 		}

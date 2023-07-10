@@ -154,7 +154,7 @@ func (g *Group) Stop() {
 	g.ticker.Stop()
 
 	if err := g.FlushAndSync(); err != nil {
-		g.logger.Error("error flushing to disk", "err", err)
+		g.logger.Error("Error flushing to disk", "err", err)
 	}
 }
 
@@ -168,7 +168,7 @@ func (g *Group) Wait() {
 // Close closes the head file. The group must be stopped by this moment.
 func (g *Group) Close() {
 	if err := g.FlushAndSync(); err != nil {
-		g.logger.Error("error flushing to disk", "err", err)
+		g.logger.Error("Error flushing to disk", "err", err)
 	}
 
 	g.mtx.Lock()
@@ -329,13 +329,13 @@ func (g *Group) checkTotalSizeLimit(ctx context.Context) error {
 
 		fInfo, err := os.Stat(pathToRemove)
 		if err != nil {
-			g.logger.Error("Failed to fetch info for file", "file", pathToRemove)
+			g.logger.Error("Failed to fetch information for file", "file", pathToRemove)
 
 			continue
 		}
 
 		if err = os.Remove(pathToRemove); err != nil {
-			g.logger.Error("Failed to remove path", "path", pathToRemove, "error", err)
+			g.logger.Error("Failed to remove path", "path", pathToRemove, "err", err)
 
 			return fmt.Errorf("failed to remove path, path: %s, error: %w", pathToRemove, err)
 		}

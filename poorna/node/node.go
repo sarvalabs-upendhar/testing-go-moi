@@ -191,7 +191,7 @@ func (n *Node) Start() (err error) {
 // startJsonRPCServer start JSON-RPC server and stops node when JSON-RPC server stops
 func (n *Node) startJSONRPCServer() {
 	err := n.rpc.Start()
-	n.logger.Error("JSON RPC server stopped", "error", err)
+	n.logger.Error("JSON RPC server stopped", "err", err)
 }
 
 // setupCacheStore creates new lru cache store and setups it to node
@@ -455,7 +455,7 @@ func (n *Node) setupRPC() error {
 
 // startHandlers starts syncer, core and flux(randomizer)
 func (n *Node) startHandlers() {
-	n.logger.Info("Starting Sub-Handlers")
+	n.logger.Info("Starting sub-handlers")
 
 	go n.handlers.core.Start()
 
@@ -499,7 +499,7 @@ func (n *Node) stopTelemetry() {
 	}
 
 	if err := n.prometheusServer.Shutdown(context.Background()); err != nil {
-		n.logger.Error("Prometheus server shutdown error", err)
+		n.logger.Error("Prometheus server shutdown error", "err", err)
 	}
 }
 
@@ -516,7 +516,7 @@ func (n *Node) startPrometheusServer(listenAddr *net.TCPAddr) *http.Server {
 	}
 
 	go func() {
-		n.logger.Info("Prometheus server started", "addr=", listenAddr.String())
+		n.logger.Info("Prometheus server started", "addr", listenAddr.String())
 
 		if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 			n.logger.Error("Prometheus HTTP server ListenAndServe", "err", err)

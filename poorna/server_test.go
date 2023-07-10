@@ -251,7 +251,7 @@ func TestConnectToTrustedNodes(t *testing.T) {
 	servers := createMultipleServers(t, 5, paramsMap)
 
 	for index, server := range servers {
-		testLogger.Debug("TestConnectPeer", "index", index, "id", server.id)
+		t.Log("Test connect peer", "index", index, "id", server.id)
 	}
 
 	t.Cleanup(func() {
@@ -761,7 +761,7 @@ func TestConnectPeer(t *testing.T) {
 	servers := createMultipleServers(t, 4, paramsMap)
 
 	for index, server := range servers {
-		testLogger.Debug("TestConnectPeer", "index", index, "id", server.id)
+		t.Log("Test connect peer", "index", index, "id", server.id)
 	}
 
 	t.Cleanup(func() {

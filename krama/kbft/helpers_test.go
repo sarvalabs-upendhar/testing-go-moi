@@ -175,7 +175,7 @@ func handleOutboundMsgChannel(kbft *KBFT, ctx context.Context, out <-chan ktypes
 				return
 			case _, ok := <-out:
 				if !ok {
-					kbft.logger.Debug("outbound msg channel close")
+					kbft.logger.Debug("Outbound message channel close")
 
 					return
 				}

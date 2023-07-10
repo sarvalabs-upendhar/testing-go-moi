@@ -399,7 +399,7 @@ func (sm *StateManager) fetchParticipantContextByHash(addr types.Address, hash t
 ) {
 	behaviouralContext, randomContext, err := sm.getContext(addr, hash)
 	if err != nil {
-		sm.logger.Error("failed to retrieve sender context nodes", "error", err)
+		sm.logger.Error("Failed to retrieve the sender context nodes", "err", err)
 
 		return nil, nil, err
 	}
@@ -408,7 +408,7 @@ func (sm *StateManager) fetchParticipantContextByHash(addr types.Address, hash t
 		behaviouralSet = types.NewNodeSet(behaviouralContext, nil)
 
 		if behaviouralSet.PublicKeys, err = sm.GetPublicKeys(behaviouralContext...); err != nil {
-			sm.logger.Error("failed to retrieve public Key", "error", err)
+			sm.logger.Error("Failed to retrieve the public key of behavioural set", "err", err)
 
 			return nil, nil, types.ErrPublicKeyNotFound
 		}
@@ -418,7 +418,7 @@ func (sm *StateManager) fetchParticipantContextByHash(addr types.Address, hash t
 		randomSet = types.NewNodeSet(randomContext, nil)
 
 		if randomSet.PublicKeys, err = sm.GetPublicKeys(randomContext...); err != nil {
-			sm.logger.Error("failed to retrieve public Key", "error", err)
+			sm.logger.Error("Failed to retrieve the public key of random set", "err", err)
 
 			return nil, nil, types.ErrPublicKeyNotFound
 		}
@@ -446,7 +446,7 @@ func (sm *StateManager) fetchLatestParticipantContext(addr types.Address) (
 		behaviouralSet = types.NewNodeSet(behaviouralContext, nil)
 
 		if behaviouralSet.PublicKeys, err = sm.GetPublicKeys(behaviouralContext...); err != nil {
-			sm.logger.Error("failed to retrieve public Key", "error", err)
+			sm.logger.Error("Failed to retrieve the public key of behavioural set", "err", err)
 
 			return types.NilHash, nil, nil, types.ErrPublicKeyNotFound
 		}
@@ -456,7 +456,7 @@ func (sm *StateManager) fetchLatestParticipantContext(addr types.Address) (
 		randomSet = types.NewNodeSet(randomContext, nil)
 
 		if randomSet.PublicKeys, err = sm.GetPublicKeys(randomContext...); err != nil {
-			sm.logger.Error("failed to retrieve public Key", "error", err)
+			sm.logger.Error("Failed to retrieve the public key of random set", "err", err)
 
 			return types.NilHash, nil, nil, types.ErrPublicKeyNotFound
 		}
@@ -941,7 +941,7 @@ func (sm *StateManager) GetPublicKeys(ids ...id.KramaID) ([][]byte, error) {
 					if err != nil {
 						keys, err := sm.GetPublicKeyFromContract(id)
 						if err != nil {
-							sm.logger.Error("Failed to fetch public key", "id", id)
+							sm.logger.Error("Failed to fetch the public key", "krama-ID", id)
 
 							return err
 						}
@@ -953,7 +953,7 @@ func (sm *StateManager) GetPublicKeys(ids ...id.KramaID) ([][]byte, error) {
 						pk = keys[0]
 
 						if err := sm.senatus.UpdatePublicKey(id, pk); err != nil {
-							sm.logger.Error("Error updating public key", "error", err)
+							sm.logger.Error("Error updating the public key", "err", err)
 
 							return err
 						}

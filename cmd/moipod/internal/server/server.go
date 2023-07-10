@@ -132,14 +132,14 @@ func SetupNode(cmd *cobra.Command) {
 
 	tp, err := tracing.NewTracerProvider(ctx, EnableTracing, cfg.Metrics.JaegerAddr, n.GetKramaID())
 	if err != nil {
-		log.Println("Error starting tp", "error", err)
+		log.Println("Error starting tp", "err", err)
 	}
 
 	defer func() {
 		log.Println("Shutting down trace provider")
 
 		if err := tp.Shutdown(ctx); err != nil {
-			log.Println("Error shutting down trace provider", "error", err)
+			log.Println("Error shutting down trace provider", "err", err)
 		}
 	}()
 

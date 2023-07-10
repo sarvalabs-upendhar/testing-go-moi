@@ -64,7 +64,7 @@ func (t *Transport) InitClusterCommunication(ctx context.Context, slot *ktypes.S
 		}
 
 		if slot == nil {
-			t.logger.Error("slot not available for give cluster id", icsMsg.ClusterID)
+			t.logger.Error("Slot not available for give cluster ID", "cluster-ID", icsMsg.ClusterID)
 
 			return errors.New("invalid cluster id")
 		}
@@ -99,7 +99,7 @@ func (t *Transport) InitClusterCommunication(ctx context.Context, slot *ktypes.S
 					t.disconnectRandomPeers(randomICSNodes)
 				}
 
-				t.logger.Info("Closing cluster communication channels", "cluster-id", slot.ClusterID())
+				t.logger.Info("Closing cluster communication channels", "cluster-ID", slot.ClusterID())
 
 				return
 			case msg, ok := <-slot.OutboundChan:
@@ -109,12 +109,12 @@ func (t *Transport) InitClusterCommunication(ctx context.Context, slot *ktypes.S
 
 				rawData, err := msg.Bytes()
 				if err != nil {
-					t.logger.Error("Failed to polorize cluster message", "cluster-id", slot.ClusterID())
+					t.logger.Error("Failed to polorize cluster message", "cluster-ID", slot.ClusterID())
 					panic(err)
 				}
 
 				if err := t.network.Broadcast(string(slot.ClusterID()), rawData); err != nil {
-					t.logger.Error("Failed to broadcast cluster message", "cluster-id", slot.ClusterID())
+					t.logger.Error("Failed to broadcast cluster message", "cluster-ID", slot.ClusterID())
 					panic(err)
 				}
 			}

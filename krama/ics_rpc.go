@@ -40,13 +40,13 @@ func (icsrpc *ICSRPCService) ICSRequest(
 	response.StatusCode = ptypes.InternalError
 
 	if err := canonicalICSReq.FromBytes(icsReq.ReqData); err != nil {
-		icsrpc.engine.logger.Error("failed to depolorize canonical ics request ", err)
+		icsrpc.engine.logger.Error("Failed to depolorize canonical ICS request", "err", err)
 
 		return err
 	}
 
 	if err := interactions.FromBytes(canonicalICSReq.IxData); err != nil {
-		icsrpc.engine.logger.Error("failed to depolorize interactions ", err)
+		icsrpc.engine.logger.Error("Failed to depolorize interactions", "err", err)
 
 		return err
 	}
@@ -56,9 +56,9 @@ func (icsrpc *ICSRPCService) ICSRequest(
 		icsReq.ReqData,
 		icsReq.Signature,
 	); err != nil {
-		icsrpc.engine.logger.Error("failed to verify ics request signature ", err)
+		icsrpc.engine.logger.Error("Failed to verify ICS request signature", "err", err)
 
-		return errors.Wrap(err, "failed to verify ics request signature")
+		return errors.Wrap(err, "failed to verify ICS request signature")
 	}
 
 	kramaRequest := Request{

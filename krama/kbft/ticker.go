@@ -40,7 +40,7 @@ type Ticker struct {
 // NewTicker is a constructor function that generates and returns a new Ticker
 func NewTicker(logger hclog.Logger) *Ticker {
 	t := &Ticker{
-		logger: logger,
+		logger: logger.Named("Ticker"),
 		timer:  time.NewTimer(0),
 		tick:   make(chan timeoutInfo, 15),
 		tock:   make(chan timeoutInfo, 15),
@@ -79,12 +79,12 @@ func (t *Ticker) Stop() {
 		// Drain the channel
 		case <-t.timer.C:
 		default:
-			t.logger.Debug("ticker cannot be stopped. not running")
+			t.logger.Debug("Ticker cannot be stopped. Not running")
 		}
 	}
 
 	// Log the ticker stop
-	t.logger.Debug("ticker stopped")
+	t.logger.Trace("Ticker stopped")
 }
 
 // ScheduleTimeout is a method of Ticker that schedules a new timeout.
@@ -140,6 +140,6 @@ func (t *Ticker) timeoutRoutine() {
 // Close is a method of Ticker that closes all ticker routines.
 // Discards all scheduled timeouts as well.
 func (t *Ticker) Close() {
-	t.logger.Debug("closing timer")
+	t.logger.Trace("Closing timer")
 	close(t.quit)
 }

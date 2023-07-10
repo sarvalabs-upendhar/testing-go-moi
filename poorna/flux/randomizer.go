@@ -94,12 +94,15 @@ func (r *Randomizer) isBootstrapNode(peerID peer.ID) bool {
 }
 
 func (r *Randomizer) messageHandler(stream network.Stream) {
-	// r.logger.Debug("Got a new flux Stream", stream.Protocol(), stream.Conn().RemotePeer())
+	// r.logger.Trace(
+	//	"Got a new flux stream.",
+	//	"protocol-ID", stream.Protocol(),
+	//	"remotepeer-ID", stream.Conn().RemotePeer())
 	r.metrics.captureNumOfRequests(1)
 
 	defer func() {
 		if err := stream.Close(); err != nil {
-			r.logger.Error("Error closing flux stream", "error", err)
+			r.logger.Error("Error closing flux stream", "err", err)
 		}
 	}()
 	// Create a new read/write buffer
@@ -181,7 +184,7 @@ func (r *Randomizer) updatePeerListStatus(slot int) {
 func (r *Randomizer) Start() {
 	r.topic = utils.RandString(64)
 	if err := r.server.Subscribe(r.ctx, r.topic, r.pubSubHandler); err != nil {
-		r.logger.Error("Error subscribing to flux topic", err)
+		r.logger.Error("Error subscribing to flux topic", "err", err)
 
 		log.Panic(err)
 	}
@@ -256,7 +259,7 @@ func (r *Randomizer) HandleReqMsg(reqMsg *ptypes.RandomWalkReq) error {
 
 	peerID, err := requesterID.PeerID()
 	if err != nil {
-		r.logger.Error("Error parsing krama peerID", "error", err)
+		r.logger.Error("Error parsing krama peer ID", "err", err)
 
 		return err
 	}
@@ -281,7 +284,7 @@ func (r *Randomizer) HandleReqMsg(reqMsg *ptypes.RandomWalkReq) error {
 			if err = r.SendFluxMessage(randomPeer, ptypes.RANDOMWALKREQ, msg); err != nil {
 				r.logger.Error(
 					"Unable to forward the random walk request",
-					"error", err,
+					"err", err,
 					"peer", randomPeer.String(),
 				)
 
@@ -308,7 +311,7 @@ func (r *Randomizer) HandleReqMsg(reqMsg *ptypes.RandomWalkReq) error {
 
 		err = r.server.Broadcast(reqMsg.Topic, rawData)
 		if err != nil {
-			r.logger.Error("Failed to broadcast", "error", err)
+			r.logger.Error("Failed to broadcast", "err", err)
 		}
 
 		return nil
@@ -320,7 +323,7 @@ func (r *Randomizer) pubSubHandler(msg *pubsub.Message) error {
 	randomPeerMsg := new(ptypes.RandomWalkResp)
 
 	if err := randomPeerMsg.FromBytes(data); err != nil {
-		r.logger.Error("Error depolarising randomWalk Request", "error", err)
+		r.logger.Error("Error depolarising random walk request", "err", err)
 
 		return err
 	}
@@ -452,7 +455,7 @@ func (r *Randomizer) SendFluxMessage(peerID peer.ID, msgType ptypes.MsgType, msg
 
 	defer func() {
 		if err := stream.Close(); err != nil {
-			r.logger.Error("Error closing flux stream")
+			r.logger.Error("Error closing flux stream", "err", err)
 		}
 	}()
 

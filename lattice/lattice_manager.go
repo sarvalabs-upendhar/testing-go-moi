@@ -327,7 +327,7 @@ func (c *ChainManager) GetLatestTesseract(addr types.Address, withInteractions b
 func (c *ChainManager) getReceipt(ixHash, gridHash types.Hash) (*types.Receipt, error) {
 	rawData, err := c.db.GetReceipts(gridHash)
 	if err != nil {
-		c.logger.Error("Error fetching receipts ", "error", err.Error(), gridHash, ixHash)
+		c.logger.Error("Error fetching receipts", "err", err.Error(), "grid-hash", gridHash, "ix-hash", ixHash)
 
 		return nil, err
 	}
@@ -358,7 +358,7 @@ func (c *ChainManager) GetReceiptByIxHash(ixHash types.Hash) (*types.Receipt, er
 func (c *ChainManager) isSealValid(ts *types.Tesseract) (bool, error) {
 	publicKey, err := c.sm.GetPublicKeys(ts.Sealer())
 	if err != nil {
-		c.logger.Error("Error fetching public key", "err", err)
+		c.logger.Error("Error fetching the public key", "err", err)
 
 		return false, err
 	}
@@ -437,7 +437,7 @@ func (c *ChainManager) verifyHeaders(ts *types.Tesseract) error {
 	if !initial {
 		parent, err := c.GetTesseract(ts.PrevHash(), false)
 		if err != nil {
-			c.logger.Error("Failed to fetch parent tesseract", "error", err, ts.Address())
+			c.logger.Error("Failed to fetch parent tesseract", "err", err, "addr", ts.Address())
 
 			return types.ErrPreviousTesseractNotFound
 		}
@@ -502,8 +502,8 @@ func (c *ChainManager) storeInteractions(ts *types.Tesseract) error {
 
 			for _, ix := range ts.Interactions() {
 				c.logger.Debug(
-					"Storing ix grid lookup",
-					"address", ts.Address(),
+					"Storing interaction grid lookup",
+					"addr", ts.Address(),
 					"ix-hash", ix.Hash(),
 					"grid-hash", gridHash)
 
@@ -609,7 +609,7 @@ func (c *ChainManager) addTesseract(
 	}
 
 	if err = c.mux.Post(utils.TesseractAddedEvent{Tesseract: t}); err != nil {
-		c.logger.Error("error sending tesseract added event", "err", err)
+		c.logger.Error("Error sending tesseract added event", "err", err)
 	}
 
 	// update peer occupancy metrics
@@ -622,7 +622,7 @@ func (c *ChainManager) addTesseract(
 		c.tesseracts.Add(t.Hash(), t.GetTesseractWithoutIxns())
 	}
 
-	c.logger.Info("Tesseract Added", "addr", addr, "hash", t.Hash(), "sealer", t.Sealer())
+	c.logger.Info("Tesseract added", "addr", addr, "ts-hash", t.Hash(), "sealer", t.Sealer())
 
 	c.ixpool.ResetWithHeaders(t)
 
@@ -651,7 +651,7 @@ func (c *ChainManager) addTesseractsWithState(
 
 			defer func() {
 				if err := c.latticeLocks.Unlock(tsHash.Hex()); err != nil {
-					c.logger.Error("failed to unlock lattice", "error", err, "addr", addr)
+					c.logger.Error("Failed to unlock lattice", "err", err, "addr", addr)
 				}
 			}()
 
@@ -687,7 +687,7 @@ func (c *ChainManager) ValidateTesseract(ts *types.Tesseract, ics *types.ICSNode
 	c.latticeLocks.Lock(tsHash.Hex())
 	defer func() {
 		if err := c.latticeLocks.Unlock(tsHash.Hex()); err != nil {
-			c.logger.Error("failed to unlock lattice", "error", err, "addr", ts.Address())
+			c.logger.Error("Failed to unlock lattice", "err", err, "addr", ts.Address())
 		}
 	}()
 
@@ -697,7 +697,7 @@ func (c *ChainManager) ValidateTesseract(ts *types.Tesseract, ics *types.ICSNode
 
 	validSeal, err := c.isSealValid(ts)
 	if !validSeal {
-		c.logger.Error("Error validating tesseract seal ", "err", err)
+		c.logger.Error("Error validating tesseract seal", "err", err)
 
 		return types.ErrInvalidSeal
 	}
@@ -793,8 +793,8 @@ func (c *ChainManager) IsInitialTesseract(ts *types.Tesseract) (bool, error) {
 		c.logger.Debug(
 			"Checking for new account",
 			"addr", ts.Address(),
-			"at height", info.Height,
-			"hash", info.TesseractHash,
+			"height", info.Height,
+			"ts-hash", info.TesseractHash,
 		)
 		accountRegistered, err = c.sm.IsAccountRegisteredAt(ts.Address(), info.TesseractHash)
 	}
@@ -954,7 +954,7 @@ func (c *ChainManager) Start() error {
 }
 
 func (c *ChainManager) Close() {
-	log.Println("Closing Chain manager")
+	log.Println("Closing chain manager.")
 }
 
 func (c *ChainManager) ExecuteAndValidate(tesseracts ...*types.Tesseract) error {
@@ -962,7 +962,7 @@ func (c *ChainManager) ExecuteAndValidate(tesseracts ...*types.Tesseract) error 
 
 	c.logger.Debug(
 		"Executing interactions of grid",
-		tesseracts[0].GridHash(),
+		"grid-hash", tesseracts[0].GridHash(),
 		"lock", tesseracts[0].Header().ContextLock,
 	)
 
@@ -977,7 +977,7 @@ func (c *ChainManager) ExecuteAndValidate(tesseracts ...*types.Tesseract) error 
 
 	if !isReceiptAndGroupHashValid(tesseracts, receipts) || !areStateHashesValid(tesseracts, receipts) {
 		if err = c.exec.Revert(tesseracts[0].ClusterID()); err != nil {
-			c.logger.Error("Failed to revert the execution changes", "cluster-id", tesseracts[0].ClusterID())
+			c.logger.Error("Failed to revert the execution changes", "cluster-ID", tesseracts[0].ClusterID())
 
 			return errors.Wrap(err, "failed to revert the execution changes")
 		}
@@ -1162,7 +1162,7 @@ func (c *ChainManager) SetupGenesisLogics(
 		}
 
 		if !types.Contains(types.GenesisLogicAddrs, logicAddr) {
-			c.logger.Error("mismatch of contract address for contract %d", logic.Name)
+			c.logger.Error("Mismatch of contract address", "logic-name", logic.Name)
 
 			return nil, errors.New("generated address does not exist in predefined contract address")
 		}
@@ -1181,14 +1181,14 @@ func (c *ChainManager) SetupGenesisLogics(
 		// Deploy the genesis logic on that state
 		logicID, err := jug.DeployGenesisLogic(stateObj, payload)
 		if err != nil {
-			c.logger.Error("unable to deploy logic for contract %s", logic.Name)
+			c.logger.Error("Unable to deploy logic for", "logic-name", logic.Name)
 
 			return nil, errors.Wrap(err, "unable to deploy logic for contract")
 		}
 
 		dirtyObjects[stateObj.Address()] = stateObj
 
-		c.logger.Info("deployed genesis contract", "name", logic.Name, "logicID", logicID.String())
+		c.logger.Info("Deployed genesis contract", "logic-name", logic.Name, "logic-ID", logicID.String())
 	}
 
 	return hashes, nil

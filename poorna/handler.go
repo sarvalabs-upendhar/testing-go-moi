@@ -105,7 +105,7 @@ func (eh *SubHandler) newPeerLoop() {
 				// Defer the peer unregister from the handler working set
 				defer func() {
 					if err := eh.peers.Unregister(peer); err != nil {
-						eh.logger.Error("Error unregistering peer", "error", err)
+						eh.logger.Error("Error unregistering peer", "err", err)
 
 						return
 					}
@@ -113,13 +113,13 @@ func (eh *SubHandler) newPeerLoop() {
 					// Update inbound/outbound connection count based on the peer stream's direction
 					eh.server.connInfo.updateConnCount(peer.stream.Stat().Direction, -1)
 
-					eh.logger.Info("Peer Disconnected", "id", peer.kramaID)
+					eh.logger.Info("Peer disconnected", "peer-ID", peer.kramaID)
 				}()
 
 				// Handle messages from the peer
 				for {
 					if err := eh.handlePeerMessage(peer); err != nil {
-						eh.logger.Error("Error handling peer message", err)
+						eh.logger.Error("Error handling peer message", "err", err)
 
 						eh.sendDisconnectRequest(peer, err)
 
@@ -163,7 +163,7 @@ func (eh *SubHandler) handlePeerMessage(p *Peer) error {
 
 		// Mark the interactions in the message as 'known' by the peer
 		for _, v := range *ixns {
-			eh.logger.Info("Received Interactions from", "id", p.kramaID, v.Hash())
+			eh.logger.Info("Received interactions from", "peer-ID", p.kramaID, "ix-hash", v.Hash())
 
 			p.markInteraction(v.Hash())
 		}
@@ -178,14 +178,14 @@ func (eh *SubHandler) handlePeerMessage(p *Peer) error {
 
 				ixnss := *ixns
 
-				eh.logger.Error("Unable to add Interaction ", "hash", ixnss[index].Hash(), "error", err)
+				eh.logger.Error("Unable to add interaction", "ix-hash", ixnss[index].Hash(), "err", err)
 
 				return nil
 			}
 		}
 
 	case ptypes.RANDOMWALKREQ:
-		eh.logger.Info("Received a random-walk request", "from", message.Sender)
+		eh.logger.Info("Received a random-walk request from", "msg-sender", message.Sender)
 
 	case ptypes.DISCONNECTREQ:
 		eh.handleDisconnectRequest(p, message)
@@ -200,14 +200,14 @@ func (eh *SubHandler) handleDisconnectRequest(peer *Peer, msg *ptypes.Message) {
 	var disconnectMsg ptypes.DisconnectReq
 
 	if err := disconnectMsg.FromBytes(msg.Payload); err != nil {
-		eh.logger.Error("Decode disconnect req", "from", msg.Sender, "error", err)
+		eh.logger.Error("Decode disconnect request.", "from", msg.Sender, "err", err)
 
 		peer.stream.Conn().Close()
 
 		return
 	}
 
-	eh.logger.Info("Received disconnect request", "from", msg.Sender, "reason", disconnectMsg.Reason)
+	eh.logger.Info("Received disconnect request from", "msg-sender", msg.Sender, "reason", disconnectMsg.Reason)
 }
 
 func (eh *SubHandler) sendDisconnectRequest(peer *Peer, err error) {
@@ -226,7 +226,7 @@ func (eh *SubHandler) ixBroadcastLoop() {
 		// Assert event as a NewIxsEvent
 		if event, ok := obj.Data.(utils.NewIxsEvent); ok {
 			if err := eh.broadcastIXs(event.Ixs); err != nil {
-				eh.logger.Error("Failed to broadcast interactions", "error", err)
+				eh.logger.Error("Failed to broadcast interactions", "err", err)
 			}
 		}
 	}
@@ -256,7 +256,7 @@ func (eh *SubHandler) broadcastIXs(ixs []*types.Interaction) error {
 	for peer, ixs := range peerIxSet {
 		go func(peer *Peer, ixs []*types.Interaction) {
 			if err := peer.SendIXs(eh.id, ixs); err != nil {
-				eh.logger.Error("Error sending interaction", "error", err)
+				eh.logger.Error("Error sending interaction", "err", err)
 			}
 		}(peer, ixs)
 	}

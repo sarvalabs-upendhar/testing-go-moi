@@ -206,7 +206,7 @@ func NewServer(logger hclog.Logger, h host.Host, p protocol.ID, opts ...ServerOp
 	s := &Server{
 		host:     h,
 		protocol: p,
-		logger:   logger.Named("moirpc"),
+		logger:   logger.Named("MOIRPC-Server"),
 	}
 
 	for _, opt := range opts {
@@ -235,9 +235,10 @@ func (server *Server) ID() peer.ID {
 
 func (server *Server) handle(s *streamWrap) {
 	for {
-		server.logger.Debug("[handle]",
+		server.logger.Trace(
 			"Handling remote RPC from",
-			s.stream.Conn().RemotePeer())
+			"peer-ID", s.stream.Conn().RemotePeer(),
+		)
 
 		var svcID ServiceID
 
@@ -252,12 +253,16 @@ func (server *Server) handle(s *streamWrap) {
 				return
 			}
 
-			server.logger.Error("[handle]", " server error , failed to decode service ID : ", err)
+			server.logger.Error(
+				"Server error, failed to decode service ID",
+				"service-ID", svcID,
+				"err", err,
+			)
 
 			sendErr := sendError(server.logger, s, ServiceID{}, newServerError(fmt.Errorf("error reading service ID: %w", err)))
 
 			if sendErr != nil {
-				server.logger.Error("[handle]", "sendError", sendErr)
+				server.logger.Error("Send error", "err", sendErr)
 			}
 
 			return
@@ -290,11 +295,11 @@ func (server *Server) handle(s *streamWrap) {
 		// The service needs to have been registered with us.
 		service, mtype, err := server.getService(svcID)
 		if err != nil {
-			server.logger.Error(" server : failed to get service and method type:  ", err)
+			server.logger.Error("Server failed to get service and method type", "err", err)
 			sendErr := sendError(server.logger, s, svcID, newServerError(err))
 
 			if sendErr != nil {
-				server.logger.Error("[handle]", "sendError", sendErr)
+				server.logger.Error("Send error", "err", sendErr)
 			}
 
 			return
@@ -304,11 +309,11 @@ func (server *Server) handle(s *streamWrap) {
 		remotePeer := s.stream.Conn().RemotePeer()
 		if server.authorize != nil && !server.authorize(remotePeer, svcID.Name, svcID.Method) {
 			errMsg := fmt.Sprintf("client does not have permissions to call %s", svcID)
-			server.logger.Error(" server : failed to authorize client : ", errMsg)
+			server.logger.Error("Server failed to authorize client", "err", errMsg)
 			sendErr := sendError(server.logger, s, svcID, newAuthorizationError(errors.New(errMsg)))
 
 			if sendErr != nil {
-				server.logger.Error("[handle]", "sendError", sendErr)
+				server.logger.Error("Send error", "err", sendErr)
 			}
 
 			return
@@ -323,11 +328,11 @@ func (server *Server) handle(s *streamWrap) {
 
 		err = service.methodCall(ctx, s, mtype, svcID)
 		if err != nil {
-			server.logger.Error(" server : MethodCall failed : ", err)
+			server.logger.Error("Server method call failed", "err", err)
 			sendErr := sendError(server.logger, s, svcID, err)
 
 			if sendErr != nil {
-				server.logger.Error("[handle]", "sendError", sendErr)
+				server.logger.Error("Send error", "err", sendErr)
 			}
 
 			return
@@ -345,7 +350,11 @@ func (s *service) methodCall(ctx context.Context, sw *streamWrap, mtype *methodT
 
 	argv, err := readArgFromStream(sw, mtype.ArgType)
 	if err != nil {
-		s.logger.Error("[methodCall]", " server : failed to read argument from the stream ", sw.stream.ID(), " err : ", err)
+		s.logger.Error(
+			"Server failed to read argument from the stream",
+			"stream-ID", sw.stream.ID(),
+			"err", err,
+		)
 
 		return err
 	}
@@ -387,7 +396,7 @@ func (s *service) methodCall(ctx context.Context, sw *streamWrap, mtype *methodT
 	errmsg := ""
 
 	if errInter != nil {
-		s.logger.Error("[methodCall]", " server : received error from function call :", errInter, svcID)
+		s.logger.Error("Server received error from function call", "err", errInter, "service-ID", svcID)
 
 		err, ok := errInter.(error)
 		if !ok {
@@ -427,7 +436,7 @@ func (s *service) streamCall(ctx context.Context, sw *streamWrap, mtype *methodT
 		defer func() {
 			closeReadErr := sw.stream.CloseRead()
 			if closeReadErr != nil {
-				s.logger.Error("[streamCall]", "error closing read stream", closeReadErr)
+				s.logger.Error("Error closing read stream", "err", closeReadErr)
 			}
 		}()
 
@@ -436,7 +445,7 @@ func (s *service) streamCall(ctx context.Context, sw *streamWrap, mtype *methodT
 			// context is cancelled.
 			select {
 			case <-ctx.Done():
-				s.logger.Warn("[streamCall]", "svcID", svcID, "reading arguments cancelled", ctx.Err())
+				s.logger.Error("Reading arguments cancelled", "service-ID", svcID, "err", ctx.Err())
 				argsChan.Close()
 
 				return
@@ -449,7 +458,7 @@ func (s *service) streamCall(ctx context.Context, sw *streamWrap, mtype *methodT
 
 				return
 			} else if err != nil { // abort
-				s.logger.Warn("[streamCall]", err)
+				s.logger.Error("Error closing stream", "err", err)
 				cancel() // signal everyone to abort.
 				argsChan.Close()
 
@@ -471,7 +480,7 @@ func (s *service) streamCall(ctx context.Context, sw *streamWrap, mtype *methodT
 				},
 			})
 			if chosen == 0 {
-				s.logger.Warn("[streamCall]", "svcID", svcID, "reading arguments cancelled", ctx.Err())
+				s.logger.Error("Reading arguments cancelled", "service-ID", svcID, "err", ctx.Err())
 				argsChan.Close()
 
 				return
@@ -499,7 +508,7 @@ func (s *service) streamCall(ctx context.Context, sw *streamWrap, mtype *methodT
 			})
 
 			if chosen == 0 { // context cancelled
-				s.logger.Warn("[streamCall]", "svcID", svcID, "reading replies cancelled", ctx.Err())
+				s.logger.Error("Reading replies cancelled", "service-ID", svcID, "err", ctx.Err())
 
 				go drainChannel(repliesChan)
 
@@ -507,7 +516,7 @@ func (s *service) streamCall(ctx context.Context, sw *streamWrap, mtype *methodT
 			}
 
 			if !ok { // repliesChanClosed
-				s.logger.Debug("[streamCall]", "reply channel closed", svcID)
+				s.logger.Debug("Reply channel closed", "service-ID", svcID)
 
 				return
 			}
@@ -516,7 +525,7 @@ func (s *service) streamCall(ctx context.Context, sw *streamWrap, mtype *methodT
 			// on the wire if the context is cancelled.
 			select {
 			case <-ctx.Done():
-				s.logger.Warn("[streamCall]", "svcID", svcID, "%s: reading replies cancelled", ctx.Err())
+				s.logger.Error("Reading replies cancelled", "service-ID", svcID, "err", ctx.Err())
 
 				go drainChannel(repliesChan)
 
@@ -529,7 +538,7 @@ func (s *service) streamCall(ctx context.Context, sw *streamWrap, mtype *methodT
 				Data:    v.Interface(),
 			})
 			if err != nil {
-				s.logger.Warn("[streamCall]", err)
+				s.logger.Error("Error in sending response", "err", err)
 				cancel() // signal everyone to abort
 
 				go drainChannel(repliesChan)
@@ -556,12 +565,12 @@ func (s *service) streamCall(ctx context.Context, sw *streamWrap, mtype *methodT
 			err = types.ErrInterfaceConversion
 		}
 
-		s.logger.Debug("[streamCall]", "svcID", svcID, "attempt to send error", err)
+		s.logger.Debug("Attempt to send error", "service-ID", svcID, "err", err)
 
 		sendErr := sendError(s.logger, sw, svcID, err)
 
 		if sendErr != nil {
-			s.logger.Error("[streamCall]", "sendError", sendErr)
+			s.logger.Error("Send error", "err", sendErr)
 		}
 
 		sw.stream.Close()
@@ -569,7 +578,7 @@ func (s *service) streamCall(ctx context.Context, sw *streamWrap, mtype *methodT
 		return
 	}
 
-	s.logger.Debug("[streamCall]", "function call finished cleanly", svcID)
+	s.logger.Trace("Function call finished cleanly", "service-ID", svcID)
 
 	// This means everything went well, OR an error happened with the
 	// stream, the receiving or sending goroutines Reseted it, closed the
@@ -615,31 +624,31 @@ func sendResponse(logger hclog.Logger, s *streamWrap, resp Response) error {
 		resetErr := s.stream.Reset()
 
 		if resetErr != nil {
-			logger.Error("[sendResponse]", "error closing stream", resetErr)
+			logger.Error("Error closing stream", "err", resetErr)
 		}
 
 		return fmt.Errorf("error encoding response: %w", err)
 	}
 
 	if err := s.enc.Encode(resp.Data); err != nil {
-		logger.Error("[sendResponse]", " server : error while sending response : respose.Data : ", err)
+		logger.Error("Server error while sending response", "response-data", resp.Data, "err", err)
 
 		resetErr := s.stream.Reset()
 
 		if resetErr != nil {
-			logger.Error("[sendResponse]", "error closing stream", resetErr)
+			logger.Error("Error closing stream", "err", resetErr)
 		}
 
 		return fmt.Errorf("error encoding body: %w", err)
 	}
 
 	if err := s.w.Flush(); err != nil {
-		logger.Error("[sendResponse]", " server : error while sending response : Flush : ", err)
+		logger.Error("Server error while sending flush response", "err", err)
 
 		resetErr := s.stream.Reset()
 
 		if resetErr != nil {
-			logger.Error("[sendResponse]", "error closing stream", resetErr)
+			logger.Error("Error closing stream", "err", resetErr)
 		}
 
 		return fmt.Errorf("error flushing response/body: %w", err)
@@ -754,7 +763,7 @@ func (server *Server) serverCall(call *Call) error {
 	if errInter != nil {
 		err, ok := errInter.(error)
 		if !ok {
-			server.logger.Error("[serverCall]", "force assertion failed")
+			server.logger.Error("Force assertion failed", "err", err)
 		}
 
 		return err
@@ -901,13 +910,13 @@ func (server *Server) register(rcvr interface{}, name string, useName bool) erro
 	}
 
 	if sname == "" {
-		server.logger.Error("no service name for type ", s.typ.String())
+		server.logger.Error("No service name for type", "err", s.typ.String())
 
 		return errors.New("no service name for type " + s.typ.String())
 	}
 
 	if !isExported(sname) && !useName {
-		server.logger.Error("type is not exported", sname)
+		server.logger.Error("Type is not exported", "err", sname)
 
 		return errors.New("type is not exported" + sname)
 	}
@@ -922,7 +931,7 @@ func (server *Server) register(rcvr interface{}, name string, useName bool) erro
 	s.method = suitableMethods(s.logger, s.name, s.typ, true)
 
 	if len(s.method) == 0 {
-		server.logger.Error("no exported methods")
+		server.logger.Error("No exported methods")
 		// To help the user, see if a pointer receiver would work.
 		// method := suitableMethods(s.logger, s.name, reflect.PtrTo(s.typ), false)
 		// if len(method) != 0 {
@@ -957,7 +966,11 @@ func suitableMethods(logger hclog.Logger, sname string, typ reflect.Type, report
 		// Method needs four ins: receiver, context.Context, *args, *reply.
 		if mtype.NumIn() != 4 {
 			if reportErr {
-				logger.Error("[suitableMethods]", "method ", mname, " has wrong number of ins: ", mtype.NumIn())
+				logger.Error(
+					"Method error, input is not 4",
+					"method ", mname,
+					"has wrong number of inputs: ", mtype.NumIn(),
+				)
 			}
 
 			continue
@@ -969,7 +982,7 @@ func suitableMethods(logger hclog.Logger, sname string, typ reflect.Type, report
 
 		if !ctxType.Implements(ctxIntType) {
 			if reportErr {
-				logger.Error("[suitableMethods]", mname, "first argument is not a context.Context: ", ctxType)
+				logger.Error("First argument is not a context.Context", "method", mname, "context-type", ctxType)
 			}
 
 			continue
@@ -985,7 +998,7 @@ func suitableMethods(logger hclog.Logger, sname string, typ reflect.Type, report
 			aElem := argType.Elem()
 			if !isExportedOrBuiltinType(aElem) {
 				if reportErr {
-					logger.Error("[suitableMethods]", mname, " argument channel type not exported: ", aElem)
+					logger.Error("Argument channel type not exported", "method", mname, "element-type", aElem)
 				}
 
 				continue
@@ -993,7 +1006,7 @@ func suitableMethods(logger hclog.Logger, sname string, typ reflect.Type, report
 
 			if argType.ChanDir() != reflect.RecvDir {
 				if reportErr {
-					logger.Error("[suitableMethods]", "method ", mname, " argument channel is not a receive-only channel")
+					logger.Error("Argument channel is not a receive-only channel", "method", mname)
 				}
 
 				continue
@@ -1004,7 +1017,7 @@ func suitableMethods(logger hclog.Logger, sname string, typ reflect.Type, report
 		default:
 			if !isExportedOrBuiltinType(argType) {
 				if reportErr {
-					logger.Error("[suitableMethods]", mname, " argument type not exported: ", argType)
+					logger.Error("Argument type not exported", "method", mname, "argument-type", argType)
 				}
 
 				continue
@@ -1020,7 +1033,7 @@ func suitableMethods(logger hclog.Logger, sname string, typ reflect.Type, report
 			rElem := replyType.Elem()
 			if !isExportedOrBuiltinType(rElem) {
 				if reportErr {
-					logger.Error("[suitableMethods]", "method ", mname, " reply channel type not exported: ", rElem)
+					logger.Error("Reply channel type not exported", "method ", mname, "element-type", rElem)
 				}
 
 				continue
@@ -1028,7 +1041,7 @@ func suitableMethods(logger hclog.Logger, sname string, typ reflect.Type, report
 
 			if replyType.ChanDir() != reflect.SendDir {
 				if reportErr {
-					logger.Error("[suitableMethods]", "method ", mname, " reply channel is not a send-only channel")
+					logger.Error("Reply channel is not a send-only channel", "method", mname)
 				}
 
 				continue
@@ -1039,14 +1052,14 @@ func suitableMethods(logger hclog.Logger, sname string, typ reflect.Type, report
 		case reflect.Ptr:
 			if !isExportedOrBuiltinType(replyType) {
 				if reportErr {
-					logger.Error("[suitableMethods]", "method ", mname, " reply type not exported: ", replyType)
+					logger.Error("Reply type not exported", "method", mname, "reply-type", replyType)
 				}
 
 				continue
 			}
 		default:
 			if reportErr {
-				logger.Error("[suitableMethods]", "method ", mname, " reply type not a pointer or channel: ", replyType)
+				logger.Error("Reply type not a pointer or channel", "method", mname, "reply-type", replyType)
 			}
 
 			continue
@@ -1055,7 +1068,7 @@ func suitableMethods(logger hclog.Logger, sname string, typ reflect.Type, report
 		// If one argument is a streaming argument but not both, then complain
 		if (streamingArg || streamingReply) && streamingArg != streamingReply {
 			if reportErr {
-				logger.Error("[suitableMethods]", "method ", mname, " argument and reply must both be channels")
+				logger.Error("Argument and reply must both be channels", "method", mname)
 			}
 
 			continue
@@ -1064,7 +1077,7 @@ func suitableMethods(logger hclog.Logger, sname string, typ reflect.Type, report
 		// Method needs one out.
 		if mtype.NumOut() != 1 {
 			if reportErr {
-				logger.Error("[suitableMethods]", "method ", mname, " has wrong number of outs: ", mtype.NumOut())
+				logger.Error("Method has wrong number of outputs", "method", mname, "output-count", mtype.NumOut())
 			}
 
 			continue
@@ -1072,7 +1085,7 @@ func suitableMethods(logger hclog.Logger, sname string, typ reflect.Type, report
 		// The return type of the method must be error.
 		if returnType := mtype.Out(0); returnType != typeOfError {
 			if reportErr {
-				logger.Error("[suitableMethods]", "method ", mname, " returns ", returnType.String(), ", not error")
+				logger.Error("Return type of method is not an error", "method", mname, "returns", returnType.String())
 			}
 
 			continue
@@ -1080,13 +1093,11 @@ func suitableMethods(logger hclog.Logger, sname string, typ reflect.Type, report
 
 		if len(sname)+len(mname) > MaxServiceIDLength {
 			if reportErr {
-				logger.Error("[suitableMethods]",
-					"The service ID ",
-					sname,
-					".",
-					mname,
-					" is longer than allowed limit: ",
-					MaxServiceIDLength)
+				logger.Error("Count of sum of service ID and methods is longer than allowed limit",
+					"service-ID ", sname,
+					"method ", mname,
+					"limit", MaxServiceIDLength,
+				)
 			}
 
 			continue

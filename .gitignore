@@ -12,6 +12,8 @@ file.key
 genesis.json
 peer-list.json
 .scripts
+envs
+artifact.json
 accounts.json
 artifact.json
 instances.json

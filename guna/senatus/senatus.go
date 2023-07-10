@@ -76,7 +76,7 @@ func NewReputationEngine(
 
 	r := &ReputationEngine{
 		ctx:     ctx,
-		logger:  logger,
+		logger:  logger.Named("Reputation-Engine"),
 		kramaID: selfID,
 		db:      db,
 		network: network,
@@ -172,7 +172,7 @@ func (r *ReputationEngine) AddNewPeerWithPeerID(peerID peer.ID, data *gtypes.Nod
 
 	r.cache.Add(dhruva.NtqCacheKey(peerID), info)
 
-	r.logger.Debug("Added peer to NTQ table", "id", peerID)
+	r.logger.Trace("Added peer to the NTQ table", "peer-ID", peerID)
 
 	return nil
 }
@@ -467,7 +467,7 @@ func (r *ReputationEngine) senatusHandler(msg *pubsub.Message) error {
 		return err
 	}
 
-	r.logger.Debug("Received Hello Message", "Peer id", helloMsg.KramaID)
+	r.logger.Trace("Received hello message", "krama-ID", helloMsg.KramaID)
 
 	if err := r.pendingMessageQueue.Push(&gtypes.NodeMetaInfoMsg{
 		KramaID:       helloMsg.KramaID,
@@ -505,7 +505,7 @@ func (r *ReputationEngine) handleMessages(msgs []*gtypes.NodeMetaInfoMsg) {
 		}
 
 		if err := r.verifyHelloMsg(msg); err != nil {
-			r.logger.Error("Failed to verify hello message ", "error", err)
+			r.logger.Error("Failed to verify hello message", "err", err)
 
 			continue
 		}
@@ -516,7 +516,7 @@ func (r *ReputationEngine) handleMessages(msgs []*gtypes.NodeMetaInfoMsg) {
 			WalletCount:   msg.WalletCount,
 			PeerSignature: msg.PeerSignature,
 		}); err != nil {
-			r.logger.Error("Failed to add node meta info", "error", err, "krama id", msg.KramaID)
+			r.logger.Error("Failed to add node meta information", "err", err, "krama-ID", msg.KramaID)
 
 			continue
 		}
@@ -550,7 +550,7 @@ func (r *ReputationEngine) dbWorker() {
 		}
 
 		if err := r.flushDirtyEntries(); err != nil {
-			r.logger.Error("Error flushing dirty entries", "error", err)
+			r.logger.Error("Error flushing dirty entries from the database", "err", err)
 
 			continue
 		}
@@ -599,7 +599,7 @@ var RetrievePublicKeys = func(ids []id.KramaID, client *http.Client, logger hclo
 
 	response, err := client.Do(req)
 	if err != nil {
-		logger.Error("Api fetch failed", "error", err, "kramaIDs", ids)
+		logger.Error("Api fetch failed", "err", err, "krama-IDs", ids)
 
 		return nil, err
 	}
@@ -612,7 +612,7 @@ var RetrievePublicKeys = func(ids []id.KramaID, client *http.Client, logger hclo
 	defer response.Body.Close()
 
 	if response.StatusCode != 200 {
-		logger.Error("Http request failed", response.StatusCode, string(body))
+		logger.Error("Http request failed", "status-code", response.StatusCode, "response-body", string(body))
 	}
 
 	data1 := new(Response)

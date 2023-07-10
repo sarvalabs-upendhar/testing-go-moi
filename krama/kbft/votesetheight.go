@@ -58,7 +58,7 @@ func NewHeightVoteSet(
 ) *HeightVoteSet {
 	// Create a new HeightVoteSet with the lattice IDs
 	hvs := &HeightVoteSet{
-		logger:            logger,
+		logger:            logger.Named("Height-VoteSet"),
 		chainIDs:          chainIDs,
 		mtx:               sync.Mutex{},
 		peerCatchupRounds: make(map[id.KramaID][]int32),

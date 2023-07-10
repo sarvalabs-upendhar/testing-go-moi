@@ -24,13 +24,13 @@ func (k *Engine) icsInboundMessageHandler(ctx context.Context, slot *ktypes.Slot
 			return
 		case inboundMsg, ok := <-slot.InboundChan:
 			if !ok {
-				k.logger.Debug("inbound msg channel close")
+				k.logger.Debug("Inbound message channel close")
 
 				return
 			}
 
 			if err := k.handleInboundMsg(slot, inboundMsg); err != nil {
-				k.logger.Error("Error handling inbound message", "cluster-id", slot.InboundChan)
+				k.logger.Error("Error handling inbound message", "cluster-ID", slot.InboundChan)
 			}
 		}
 	}
@@ -45,13 +45,13 @@ func (k *Engine) icsOutboundMessageHandler(ctx context.Context, slot *ktypes.Slo
 			return
 		case outboundMsg, ok := <-slot.BftOutboundChan:
 			if !ok {
-				k.logger.Debug("outbound msg channel close")
+				k.logger.Debug("Outbound message channel close")
 
 				return
 			}
 
 			if err := k.handleOutboundMsg(slot, outboundMsg); err != nil {
-				k.logger.Error("Error handling outbound message", "cluster-id", slot.InboundChan)
+				k.logger.Error("Error handling outbound message.", "cluster-ID", slot.InboundChan)
 			}
 		}
 	}
@@ -140,8 +140,8 @@ func (k *Engine) handleInboundMsg(slot *ktypes.Slot, msg *ktypes.ICSMSG) error {
 		}
 
 		k.logger.Info(
-			"Received ics_success msg",
-			"Cluster id", successMsg.ClusterID,
+			"Received ICS success message",
+			"cluster-ID", successMsg.ClusterID,
 		)
 
 		clusterState.SuccessMsg = msg

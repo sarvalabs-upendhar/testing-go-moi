@@ -79,7 +79,7 @@ func NewClient(logger hclog.Logger, h host.Host, p protocol.ID, senatus senatus,
 		host:     h,
 		protocol: p,
 		senatus:  senatus,
-		logger:   logger.Named("moirpc-client"),
+		logger:   logger.Named("MOIRPC-Client"),
 	}
 
 	for _, opt := range opts {
@@ -96,11 +96,11 @@ func NewClient(logger hclog.Logger, h host.Host, p protocol.ID, senatus senatus,
 		OnWillEvict: func(key string, item ttlmap.Item) {
 			s, ok := (item.Value()).(network.Stream)
 			if !ok {
-				c.logger.Error("type assertion failed")
+				c.logger.Error("Type assertion failed")
 			}
-			c.logger.Debug("evicted:", "key", key, "stream", s, "protocol", s.Protocol())
+			c.logger.Debug("Evicted", "key", key, "stream", s, "protocol", s.Protocol())
 			// closing the stream
-			logger.Warn("[NewClient]", "closing stream ID", s.ID())
+			logger.Warn("Closing stream ID", "stream-ID", s.ID())
 			s.Close()
 		},
 	}
@@ -178,7 +178,7 @@ func (c *Client) MoiCall(
 	// if we find this, add it to peerstore and  make the rpc call.
 	destPeerID, err := kramaID.PeerID()
 	if err != nil {
-		c.logger.Error(" failed to get peer id from the kramaID : ", kramaID, " err : ", err)
+		c.logger.Error("Failed to get peer ID from krama ID", "krama-ID", kramaID, "err", err)
 
 		return types.ErrInvalidKramaID
 	}
@@ -191,18 +191,18 @@ func (c *Client) MoiCall(
 	}
 
 	if len(addrsInPeerStore) == 0 {
-		c.logger.Warn(" entry not present in peer store , checking senatus...")
+		c.logger.Warn("Entry not present in peer store, checking senatus...")
 		// check in senatus
 		if c.senatus != nil {
 			mAddr, err := c.senatus.GetAddress(kramaID)
 			if err != nil {
-				c.logger.Warn(" failed to find address in senatus : ", err)
+				c.logger.Error("Failed to find address in senatus", "err", err)
 			} else {
-				c.logger.Info(" entry found in senatus, adding to peer store")
+				c.logger.Info("Entry found in senatus, adding to peer store")
 				c.host.Peerstore().AddAddrs(p, mAddr, peerstore.RecentlyConnectedAddrTTL)
 			}
 		} else {
-			c.logger.Warn("by-passing senatus")
+			c.logger.Warn("By-passing senatus")
 		}
 	}
 
@@ -390,7 +390,7 @@ func (c *Client) MultiGo(
 			dones[i],
 		)
 		if err != nil {
-			c.logger.Error("error in GoContext", err)
+			c.logger.Error("Error in Go-context", "err", err)
 		}
 	}
 
@@ -637,11 +637,11 @@ func checkMatchingLengths(l ...int) bool {
 // makeCall decides if a call can be performed. If it's a local
 // call it will use the configured server if set.
 func (c *Client) makeCall(call *Call, ttl time.Duration) {
-	c.logger.Debug("makeCall", call.SvcID)
+	c.logger.Trace("Make call", "service-ID", call.SvcID)
 
 	// Handle local RPC calls
 	if call.Dest == "" || c.host == nil || call.Dest == c.host.ID() {
-		c.logger.Debug("local call:", call.SvcID)
+		c.logger.Debug("Local call", "service-ID", call.SvcID)
 
 		if c.server == nil {
 			err := &clientError{"Cannot make local calls: server not set"}
@@ -666,7 +666,7 @@ func (c *Client) makeCall(call *Call, ttl time.Duration) {
 	}
 
 	if _, err := c.send(call, ttl); err != nil {
-		c.logger.Error("error in send", err)
+		c.logger.Error("Error in send", "err", err)
 	}
 }
 
@@ -689,7 +689,7 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 	} else {
 		s, ok := (item.Value()).(network.Stream)
 		if !ok {
-			c.logger.Error("[send]", "network.Stream type assertion failed")
+			c.logger.Error("network.Stream type assertion failed")
 		}
 		stream = s
 	}
@@ -700,10 +700,14 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 
 	if err := sWrap.enc.Encode(call.SvcID); err != nil {
 		call.doneWithError(newClientError(err))
-		c.logger.Error("[send]", " client error : encode svc ID  : ", err)
+		c.logger.Error(
+			"Client error related to encode service ID",
+			"err", err,
+			"service-ID", call.SvcID,
+		)
 
 		if resetErr := stream.Reset(); resetErr != nil {
-			call.logger.Error("[send]", "failed to close Stream", resetErr)
+			call.logger.Error("Failed to close stream", "err", resetErr)
 		}
 
 		return nil, err
@@ -712,12 +716,16 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 	// In this case, we have a single argument in the channel.
 	if err := sWrap.enc.Encode(call.Args); err != nil {
 		call.doneWithError(newClientError(err))
-		c.logger.Error("[send]", " client error : encoding argument : ", err)
+		c.logger.Error(
+			"Client error related to encoding argument",
+			"err", err,
+			"encode-args", call.Args,
+		)
 
 		resetErr := stream.Reset()
 
 		if resetErr != nil {
-			call.logger.Error("[send]", "failed to Close Stream", resetErr)
+			call.logger.Error("Failed to close stream", "err", resetErr)
 		}
 
 		return nil, err
@@ -727,12 +735,12 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 
 	if err := sWrap.w.Flush(); err != nil {
 		call.doneWithError(newClientError(err))
-		c.logger.Error("[send]", " client error : encoding flush : ", err)
+		c.logger.Error("Client error related to encoding flush", "err", err)
 
 		resetErr := stream.Reset()
 
 		if resetErr != nil {
-			c.logger.Error("[send]", "failed to Close Stream", resetErr)
+			c.logger.Error("Failed to close stream", "err", resetErr)
 		}
 
 		return nil, err
@@ -741,12 +749,12 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 	err = receiveResponse(c.logger, sWrap, call)
 
 	if err != nil {
-		c.logger.Error("[send]", " Client : received response error ", sWrap.stream.ID(), " err : ", err)
+		c.logger.Error("Client received response error", "stream-ID", sWrap.stream.ID(), "err", err)
 
 		resetErr := stream.Reset()
 
 		if resetErr != nil {
-			call.logger.Error("[send]", "failed to Close Stream", resetErr)
+			call.logger.Error("Failed to close stream", "err", resetErr)
 		}
 
 		return nil, err
@@ -761,11 +769,11 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 	if ttl != 0 {
 		_, err = c.streamMap.Get(call.Dest.String())
 		if err != nil {
-			c.logger.Warn("[send]", " adding peer id in the ttl map ", call.Dest.String())
+			c.logger.Warn("Adding peer ID in the TTL map", "ID", call.Dest.String())
 			setErr := c.streamMap.Set(call.Dest.String(), ttlmap.NewItem(stream, ttlmap.WithTTL(ttl)), nil)
 
 			if setErr != nil {
-				call.logger.Error("[send]", "failed to Set", setErr)
+				call.logger.Error("Failed to set error", "err", setErr)
 			}
 		}
 	} else {
@@ -780,14 +788,14 @@ func receiveResponse(logger hclog.Logger, s *streamWrap, call *Call) error {
 	var resp Response
 
 	if err := s.dec.Decode(&resp); err != nil {
-		logger.Error("client : error while decoding response  : ", err)
+		logger.Error("Client error while decoding response", "err", err)
 		call.doneWithError(newClientError(err))
 
 		return err
 	}
 
 	if e := resp.Error; e != "" {
-		logger.Error("[receiveResponse]", "client : error in response  : ")
+		logger.Error("Client error in response", "response-error", resp.Error)
 
 		err := responseError(resp.ErrType, e)
 		// we still try to read the body if possible
@@ -795,7 +803,7 @@ func receiveResponse(logger hclog.Logger, s *streamWrap, call *Call) error {
 	}
 
 	if err := s.dec.Decode(call.Reply); err != nil && !errors.Is(err, io.EOF) {
-		logger.Error("[receiveResponse]", "client : error while decoding reply  : ", err)
+		logger.Error("Client error while decoding reply", "err", err)
 		call.doneWithError(newClientError(err))
 
 		return err
@@ -808,11 +816,11 @@ func receiveResponse(logger hclog.Logger, s *streamWrap, call *Call) error {
 
 // makeSteram performs a streaming call, either local or remote.
 func (c *Client) makeStream(call *Call) {
-	c.logger.Debug("[makeStream]", "stream", call.SvcID)
+	c.logger.Trace("Streaming call service ID", "service-ID", call.SvcID)
 
 	// Handle local RPC calls
 	if call.Dest == "" || c.host == nil || call.Dest == c.host.ID() {
-		c.logger.Debug("[makeStream]", "local call", call.SvcID)
+		c.logger.Debug("Handling local RPC call", "service-ID", call.SvcID)
 
 		if c.server == nil {
 			err := &clientError{"Cannot make local calls: server not set"}
@@ -862,7 +870,7 @@ func (c *Client) stream(call *Call) {
 
 	// Send the service ID first. This may return an authorization error
 	// for example.
-	c.logger.Debug("[stream]", "sending stream-RPC", call.SvcID, "to", call.Dest)
+	c.logger.Debug("Sending stream-RPC with", "service-ID", call.SvcID, "dest", call.Dest)
 
 	if err := sWrap.enc.Encode(call.SvcID); err != nil {
 		call.doneWithError(newClientError(err))
@@ -870,7 +878,7 @@ func (c *Client) stream(call *Call) {
 		resetErr := s.Reset()
 
 		if resetErr != nil {
-			call.logger.Error("[stream]", "failed to Close Stream", resetErr)
+			call.logger.Error("Failed to close stream", "err", resetErr)
 		}
 
 		go drainChannel(call.StreamArgs)
@@ -886,7 +894,7 @@ func (c *Client) stream(call *Call) {
 		resetErr := s.Reset()
 
 		if resetErr != nil {
-			call.logger.Error("[stream]", "failed to Close Stream", resetErr)
+			call.logger.Error("Failed to close stream", "err", resetErr)
 		}
 
 		go drainChannel(call.StreamArgs)
@@ -912,7 +920,7 @@ func (c *Client) stream(call *Call) {
 		defer func() {
 			closeWriteErr := s.CloseWrite()
 			if closeWriteErr != nil {
-				c.logger.Error("[stream]", "failed to close write stream", closeWriteErr)
+				c.logger.Error("Failed to close write stream", "err", closeWriteErr)
 			}
 		}()
 
@@ -928,7 +936,7 @@ func (c *Client) stream(call *Call) {
 				// of the sender.
 				resetErr := s.Reset()
 				if resetErr != nil {
-					call.logger.Error("[stream]", "failed to Close Stream", resetErr)
+					call.logger.Error("Failed to close stream", "err", resetErr)
 				}
 
 				go drainChannel(call.StreamArgs)
@@ -943,7 +951,7 @@ func (c *Client) stream(call *Call) {
 				resetErr := s.Reset()
 
 				if resetErr != nil {
-					call.logger.Error("[stream]", "failed to Close Stream", resetErr)
+					call.logger.Error("Failed to close stream", "err", resetErr)
 				}
 
 				go drainChannel(call.StreamArgs)
@@ -963,7 +971,7 @@ func (c *Client) stream(call *Call) {
 		defer func() {
 			closeReadErr := s.CloseRead()
 			if closeReadErr != nil {
-				c.logger.Error("[stream]", "error closing read stream", closeReadErr)
+				c.logger.Error("Error closing read stream", "err", closeReadErr)
 			}
 		}()
 
@@ -981,7 +989,7 @@ func (c *Client) stream(call *Call) {
 				resetErr := s.Reset()
 
 				if resetErr != nil {
-					call.logger.Error("[stream]", "failed to Close Stream", resetErr)
+					call.logger.Error("Failed to close stream", "err", resetErr)
 				}
 
 				return
@@ -993,7 +1001,7 @@ func (c *Client) stream(call *Call) {
 				resetErr := s.Reset()
 
 				if resetErr != nil {
-					call.logger.Error("[stream]", "failed to Close Stream", resetErr)
+					call.logger.Error("Failed to close stream", "err", resetErr)
 				}
 
 				return
@@ -1009,7 +1017,7 @@ func (c *Client) stream(call *Call) {
 				resetErr := s.Reset()
 
 				if resetErr != nil {
-					call.logger.Error("[stream]", "failed to Close Stream", resetErr)
+					call.logger.Error("Failed to close stream", "err", resetErr)
 				}
 
 				return

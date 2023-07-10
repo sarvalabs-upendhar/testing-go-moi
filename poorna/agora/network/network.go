@@ -40,7 +40,7 @@ type AgoraNetwork struct {
 func NewAgoraNetwork(ctx context.Context, logger hclog.Logger, server *poorna.Server, metrics *Metrics) *AgoraNetwork {
 	an := &AgoraNetwork{
 		ctx:     ctx,
-		logger:  logger.Named("Network"),
+		logger:  logger.Named("Agora-Network"),
 		server:  server,
 		metrics: metrics,
 	}
@@ -66,7 +66,7 @@ func (an *AgoraNetwork) streamHandler(stream network.Stream) {
 func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 	defer func() {
 		if err := peer.stream.Reset(); err != nil {
-			an.logger.Info("Closed stream", "peer", peer.id)
+			an.logger.Info("Closed stream", "peer-ID", peer.id)
 		}
 
 		an.peers.Delete(peer.id)
@@ -78,7 +78,7 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 	for {
 		buffer, err := reader.ReadMsg()
 		if err != nil {
-			an.logger.Error("Error reading data from stream", "error", err)
+			an.logger.Error("Error reading data from stream", "err", err)
 
 			return
 		}
@@ -86,7 +86,7 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 		// Unmarshal the buffer into a proto message
 		message := new(ptypes.Message)
 		if err := message.FromBytes(buffer); err != nil {
-			an.logger.Error("Error reading data from stream", "error", err)
+			an.logger.Error("Error reading data from stream", "err", err)
 
 			return
 		}
@@ -99,7 +99,7 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 		case ptypes.AGORAREQ:
 			reqMsg := new(atypes.AgoraRequestMsg)
 			if err := reqMsg.FromBytes(message.Payload); err != nil {
-				an.logger.Error("Error depolarising agora message")
+				an.logger.Error("Error depolarising agora message", "err", err)
 
 				continue
 			}
@@ -109,7 +109,7 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 		case ptypes.AGORARESP:
 			respMsg := new(atypes.AgoraResponseMsg)
 			if err := respMsg.FromBytes(message.Payload); err != nil {
-				an.logger.Error("Error depolarising agora message")
+				an.logger.Error("Error depolarising agora message", "err", err)
 
 				continue
 			}
@@ -122,7 +122,7 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 func (an *AgoraNetwork) SendAgoraMessage(id id.KramaID, msgType ptypes.MsgType, msg atypes.Message) error {
 	peerID, err := utils.GetNetworkID(id)
 	if err != nil {
-		an.logger.Error("Unable to decode peer id", "error", err)
+		an.logger.Error("Unable to decode peer ID", "err", err)
 
 		return err
 	}
@@ -194,7 +194,7 @@ func (an *AgoraNetwork) pruneInactivePeers() {
 			defer agoraPeer.mtx.Unlock()
 
 			if len(agoraPeer.activeSessions) == 0 && time.Since(agoraPeer.lastActiveTime) > 1*time.Second {
-				an.logger.Info("Pruning Inactive peer ", "id", agoraPeer.id)
+				an.logger.Info("Pruning inactive peer", "peer-ID", agoraPeer.id)
 
 				// cancel the receiving routine
 				agoraPeer.Close()
@@ -211,7 +211,7 @@ func (an *AgoraNetwork) pruneInactivePeers() {
 func (an *AgoraNetwork) ClosePeerSession(kramaID id.KramaID, sessionID types.Address) error {
 	peerID, err := utils.GetNetworkID(kramaID)
 	if err != nil {
-		an.logger.Error("Error parsing krama id", kramaID)
+		an.logger.Error("Error parsing krama ID", "krama-ID", kramaID)
 
 		return err
 	}

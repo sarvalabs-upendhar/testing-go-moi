@@ -15,13 +15,13 @@ func (k *Engine) minter() {
 		for interactionQueue.Len() > 0 && k.slots.AvailableOperatorSlots() > 0 {
 			ix, ok := interactionQueue.Pop().(*types.Interaction)
 			if !ok {
-				k.logger.Error("Error interaction type assertion failed", "hash", ix.Hash())
+				k.logger.Error("Error interaction type assertion failed", "ix-hash", ix.Hash())
 
 				continue
 			}
 
 			go func() {
-				k.logger.Debug("Forwarding ix to krama engine", "ixHash", ix.Hash())
+				k.logger.Debug("Forwarding interaction to krama engine", "ix-hash", ix.Hash())
 
 				respChan := make(chan Response)
 				ixs := types.Interactions{ix}
@@ -41,13 +41,13 @@ func (k *Engine) minter() {
 					default:
 						if !errors.Is(resp.err, types.ErrSlotsFull) {
 							if err := k.pool.IncrementWaitTime(ix.Sender(), k.avgICSTime); err != nil {
-								k.logger.Error("Error incrementing wait time", "error", err)
+								k.logger.Error("Error incrementing wait time", "err", err)
 							}
 
 							return
 						}
 
-						k.logger.Error("ICS creation failed", resp.err)
+						k.logger.Error("ICS creation failed", "err", resp.err)
 					}
 				}
 			}()

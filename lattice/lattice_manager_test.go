@@ -2322,7 +2322,7 @@ func TestExecuteGenesisContracts(t *testing.T) {
 			smCallBack: func(sm *MockStateManager) {
 				sm.setAccType(logicID.Address(), types.LogicAccount)
 			},
-			expectedError: "generated address does not exist",
+			expectedError: "generated address does not exist in predefined contract address",
 		},
 		{
 			name: "missing behaviour context",

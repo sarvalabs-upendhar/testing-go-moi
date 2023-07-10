@@ -69,7 +69,7 @@ func newCall(
 		Reply:  reply,
 		Error:  nil,
 		Done:   done,
-		logger: logger,
+		logger: logger.Named("MOIRPC-NewCall"),
 	}
 }
 
@@ -100,7 +100,7 @@ func newStreamingCall(
 		StreamReplies: streamReplies,
 		Error:         nil,
 		Done:          done,
-		logger:        logger,
+		logger:        logger.Named("MOIRPC-NewStreamingCall"),
 	}
 }
 
@@ -114,15 +114,14 @@ func (call *Call) done() {
 	case call.Done <- call:
 		// ok
 	default:
-		call.logger.Debug("[done]", "discarding %s call reply", call.SvcID)
+		call.logger.Debug("Discarding call reply", "service-ID", call.SvcID)
 	}
 	call.cancel()
 }
 
 func (call *Call) doneWithError(err error) {
 	if err != nil {
-		call.logger.Error("[done]", "Call: err : ", err)
-		call.logger.Warn("[done]", "error", err)
+		call.logger.Error("Setting call error", "err", err)
 		call.setError(err)
 	}
 
@@ -142,14 +141,14 @@ func (call *Call) watchContextWithStream(s network.Stream) {
 	<-call.ctx.Done()
 
 	if !call.isFinished() { // context was cancelled not by us
-		call.logger.Debug("call context is done before finishing")
+		call.logger.Debug("Call context is done before finishing")
 		call.doneWithError(call.ctx.Err())
 		// This used to be s.Close() But for streaming we definitely
 		// need to signal an abnormal finalization of the call when a
 		// context is cancelled.
 		err := s.Reset()
 		if err != nil {
-			call.logger.Error("failed to Close Stream", err)
+			call.logger.Error("Failed to close stream", "err", err)
 		}
 	}
 }

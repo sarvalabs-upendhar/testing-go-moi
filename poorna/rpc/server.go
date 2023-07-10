@@ -1,7 +1,6 @@
 package rpc
 
 import (
-	"fmt"
 	"net"
 	"net/http"
 	"time"
@@ -48,7 +47,7 @@ type Server struct {
 func NewRPCServer(path string, logger hclog.Logger, cfg *common.NetworkConfig, eventMux *utils.TypeMux) *Server {
 	// Create a new Server object and return it
 	return &Server{
-		logger:             logger.Named("json-rpc"),
+		logger:             logger.Named("JSON-RPC-Server"),
 		router:             mux.NewRouter(),
 		server:             rpc.NewServer(),
 		url:                path,
@@ -80,7 +79,7 @@ func (s *Server) Start() error {
 	s.addCORSMiddleware()
 
 	// Print the server start message
-	s.logger.Info(fmt.Sprintf("RPC Server started on %s:%s", s.url, s.addr))
+	s.logger.Info("RPC Server started on", "server-URL", s.url, "server-addr", s.addr)
 
 	// Start the RPC server
 	server := &http.Server{
@@ -90,7 +89,7 @@ func (s *Server) Start() error {
 	}
 
 	if err := server.ListenAndServe(); err != nil {
-		s.logger.Error("JSON RPC server stopped", "error", err)
+		s.logger.Error("JSON RPC server stopped", "err", err)
 
 		return err
 	}

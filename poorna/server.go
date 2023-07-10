@@ -125,7 +125,7 @@ func NewServer(
 		id:         id,
 		ctx:        ctx,
 		ctxCancel:  ctxCancel,
-		logger:     logger.Named("Poorna"),
+		logger:     logger.Named("Poorna-Server"),
 		cfg:        config,
 		mux:        mux,
 		Peers:      newPeerSet(),
@@ -147,7 +147,7 @@ func (s *Server) SetupServer() error {
 		return fmt.Errorf("setup PubSub: %w", err)
 	}
 
-	s.logger.Info("[StartServer]", "Krama-ID", s.id, "Address", s.host.Addrs())
+	s.logger.Info("Starting server", "krama-ID", s.id, "addr", s.host.Addrs())
 
 	if err := s.connectToBootStrapNodes(); err != nil {
 		return fmt.Errorf("bootstrap nodes connection: %w", err)
@@ -190,11 +190,11 @@ func (s *Server) connectToBootStrapNodes() error {
 
 	var bootstrapConnections int8
 
-	s.logger.Info("BootNodes", s.cfg.BootstrapPeers)
+	s.logger.Info("Bootnodes", "bootstrap-peers", s.cfg.BootstrapPeers)
 
 	for _, bootstrapPeer := range s.cfg.BootstrapPeers {
 		if err := s.connectToMaddr(bootstrapPeer); err != nil {
-			s.logger.Error("Bootstrap connection failed", "peer", bootstrapPeer, "error", err)
+			s.logger.Error("Bootstrap connection failed", "peer", bootstrapPeer, "err", err)
 
 			continue
 		}
@@ -231,13 +231,13 @@ func (s *Server) connectToTrustedNodes() {
 	for _, trustedPeer := range s.cfg.TrustedPeers {
 		peerInfo, err := peer.AddrInfoFromP2pAddr(trustedPeer.Address)
 		if err != nil {
-			s.logger.Error("Invalid trusted peer address", "error", err)
+			s.logger.Error("Invalid trusted peer address", "err", err)
 
 			continue
 		}
 
 		if err := s.ConnectAndRegisterPeer(*peerInfo); err != nil {
-			s.logger.Error("Failed to establish connection with trusted peer", "error", err)
+			s.logger.Error("Failed to establish connection with trusted peer", "err", err)
 		}
 	}
 }
@@ -245,7 +245,7 @@ func (s *Server) connectToTrustedNodes() {
 // StartNewRPCServer starts a new MOI-RPC server & client with the given ProtocolID
 // adds the server to map of poorna-server's rpcServers map and returns Client
 func (s *Server) StartNewRPCServer(protocol protocol.ID) *moirpc.Client {
-	s.logger.Debug("starting new moirpc server", "protocol", protocol)
+	s.logger.Trace("Starting new MOI-RPC server", "protocol", protocol)
 
 	s.rpcServers[protocol] = moirpc.NewServer(s.logger.Named(string(protocol)), s.host, protocol)
 
@@ -428,19 +428,19 @@ func (s *Server) streamHandlerFunc(stream network.Stream) {
 		s.logger.Error("Closing peer connection", stream.Conn().RemotePeer())
 
 		if err := stream.Reset(); err != nil {
-			s.logger.Error("Failed to reset stream", "error", err)
+			s.logger.Error("Failed to reset stream", "err", err)
 		}
 
 		return
 	}
 
-	s.logger.Trace("new stream", "protocol", stream.Protocol(), "kPeer", stream.Conn().RemotePeer())
+	s.logger.Trace("New stream", "protocol", stream.Protocol(), "kPeer", stream.Conn().RemotePeer())
 
 	kPeer := newPeer(stream, s.logger)
 
 	if err := kPeer.handleHandshakeMessage(); err != nil {
 		if err := kPeer.sendHandshakeErrorResp(s.id, err); err != nil {
-			s.logger.Error("Handle Handshake", "error", err)
+			s.logger.Error("Handle handshake", "err", err)
 		}
 
 		return
@@ -449,7 +449,7 @@ func (s *Server) streamHandlerFunc(stream network.Stream) {
 	// Register the kPeer to the handler working set
 	if err := s.Peers.Register(kPeer); err != nil {
 		if err := kPeer.sendHandshakeErrorResp(s.id, err); err != nil {
-			s.logger.Error("Handshake err response", "error", err)
+			s.logger.Error("Handshake error response", "err", err)
 		}
 
 		return
@@ -459,14 +459,14 @@ func (s *Server) streamHandlerFunc(stream network.Stream) {
 	s.connInfo.updateInboundConnCount(1)
 
 	if err := kPeer.SendHandshakeMessage(s); err != nil {
-		s.logger.Error("SendHandshakeMessage", "error", err)
+		s.logger.Error("Send hand shake message", "err", err)
 
 		return
 	}
 
 	// Post the event to the registered receivers for NewPeerEvents
 	if err := s.postNewPeerEvent(kPeer.networkID); err != nil {
-		s.logger.Error("StreamHandlerFunc", "error", err)
+		s.logger.Error("Stream handler function", "err", err)
 
 		return
 	}
@@ -488,7 +488,7 @@ func (s *Server) discover() {
 	// TODO: explore about how many times to advertise
 	_, err := s.discovery.Advertise(s.ctx, string(common.MOIProtocolStream))
 	if err != nil {
-		s.logger.Error("Failed to advertise the rendezvous string to the discovery service", "error", err)
+		s.logger.Error("Failed to advertise the rendezvous string to the discovery service", "err", err)
 	}
 
 	// discover other peers that are advertising themselves
@@ -502,7 +502,7 @@ func (s *Server) discover() {
 		}
 
 		if err = s.handleDiscovery(); err != nil {
-			s.logger.Error("Handle discovery", "error", err)
+			s.logger.Error("Handle discovery", "err", err)
 		}
 	}
 }
@@ -541,7 +541,7 @@ func (s *Server) handleDiscovery() error {
 				NTQ:   senatus.DefaultPeerNTQ,
 			})
 			if err != nil && !errors.Is(err, types.ErrAlreadyKnown) {
-				s.logger.Error("Failed to add peer information to senatus", "error", err)
+				s.logger.Error("Failed to add peer information to senatus", "err", err)
 
 				continue
 			}
@@ -574,7 +574,7 @@ func (s *Server) ConnectAndRegisterPeer(peerInfo peer.AddrInfo) error {
 
 	// create a new stream to the kPeer over the MOI protocol
 	if stream, err = s.host.NewStream(s.ctx, peerInfo.ID, common.MOIProtocolStream); err != nil {
-		s.logger.Error("Failed to open NewStream", "error", err)
+		s.logger.Error("Failed to open new stream", "err", err)
 		// return error if stream setup fails
 		return err
 	}
@@ -583,7 +583,7 @@ func (s *Server) ConnectAndRegisterPeer(peerInfo peer.AddrInfo) error {
 
 	if err = kPeer.InitHandshake(s); err != nil {
 		if !errors.Is(err, types.ErrStreamReset) {
-			s.logger.Error("Handshake Failed", "kPeer", peerInfo.ID, "error", err)
+			s.logger.Error("Handshake failed", "kPeer", peerInfo.ID, "err", err)
 		}
 
 		return err
@@ -591,7 +591,7 @@ func (s *Server) ConnectAndRegisterPeer(peerInfo peer.AddrInfo) error {
 
 	// Register the kPeer to the handler working set
 	if err = s.Peers.Register(kPeer); err != nil {
-		s.logger.Error("Failed to Register", "kPeer", peerInfo.ID, "error", err)
+		s.logger.Error("Failed to register", "kPeer", peerInfo.ID, "err", err)
 
 		return err
 	}
@@ -601,19 +601,19 @@ func (s *Server) ConnectAndRegisterPeer(peerInfo peer.AddrInfo) error {
 
 	// Post the event to the registered receivers for NewPeerEvents
 	if err = s.postNewPeerEvent(kPeer.networkID); err != nil {
-		s.logger.Error("Failed to post new peer event", "error", err)
+		s.logger.Error("Failed to post new peer event", "err", err)
 
 		return err
 	}
 
 	// Post the event to the registered receivers for Syncer
 	if err = s.postPeerDiscoveredEvent(kPeer.networkID); err != nil {
-		s.logger.Error("Failed to post peer discovery event", "error", err)
+		s.logger.Error("Failed to post peer discovery event", "err", err)
 
 		return err
 	}
 
-	s.logger.Info("Connected and registered kPeer successfully ", "id", kPeer.kramaID)
+	s.logger.Info("Connected and registered kPeer successfully", "peer-ID", kPeer.kramaID)
 
 	// Return a nil error
 	return nil
@@ -646,7 +646,7 @@ func (s *Server) connectPeer(peerInfo peer.AddrInfo) error {
 		return err
 	}
 
-	//	s.logger.Debug("connect peer success", "from", s.id, "to", peerID)
+	//	s.logger.Trace("Connect peer success", "from", s.id, "to", peerID)
 
 	return nil
 }
@@ -717,7 +717,7 @@ func (s *Server) DisconnectPeer(kramaID id.KramaID) error {
 	// Retrieve the libp2pID from the KramaID
 	libp2pID, err := kramaID.PeerID()
 	if err != nil {
-		s.logger.Error("Error parsing krama libp2pID", "error", err)
+		s.logger.Error("Error parsing krama libp2p ID", "err", err)
 
 		return err
 	}
@@ -725,7 +725,7 @@ func (s *Server) DisconnectPeer(kramaID id.KramaID) error {
 	// Decode the encoded PeerID
 	peerID, err := peer.Decode(libp2pID)
 	if err != nil {
-		s.logger.Error("Error decoding peerID", "error", err)
+		s.logger.Error("Error decoding peer ID", "err", err)
 
 		return err
 	}
@@ -765,7 +765,7 @@ func (s *Server) Broadcast(topicName string, data []byte) error {
 
 	// Attempt to publish the message to the pubsub topic
 	if err := topicSet.topicHandle.Publish(s.ctx, data); err != nil {
-		s.logger.Error("PubSub Topic Publish", "topic", topicName, "error", err)
+		s.logger.Error("Pub-Sub topic publish", "topic", topicName, "err", err)
 		// Return the error
 		return err
 	}
@@ -836,7 +836,7 @@ func (s *Server) routeSubscriptionMessages(
 		// an error because it is being invoked as a goroutine
 		if err := handler(msg); err != nil {
 			if !errors.Is(err, types.ErrAlreadyKnown) {
-				s.logger.Error("SubcHandlerPipeline", "error calling handler method", err)
+				s.logger.Error("Subcription handler pipeline. Error calling handler method", "err", err)
 			}
 
 			return
@@ -989,13 +989,13 @@ func (s *Server) SendHelloMessage() {
 
 		rawMsg, err := msg.Bytes()
 		if err != nil {
-			s.logger.Error("Error polorising message", "error", err)
+			s.logger.Error("Error polorising message", "err", err)
 			panic(err)
 		}
 
 		signature, err := s.vault.Sign(rawMsg, mcommon.EcdsaSecp256k1, mudra.UsingNetworkKey())
 		if err != nil {
-			s.logger.Error("Error signing message", "error", err)
+			s.logger.Error("Error signing message", "err", err)
 			panic(err)
 		}
 
@@ -1003,12 +1003,12 @@ func (s *Server) SendHelloMessage() {
 
 		rawData, err := msg.Bytes()
 		if err != nil {
-			s.logger.Error("Error serializing hello message", "error", err)
+			s.logger.Error("Error serializing hello message", "err", err)
 			panic(err)
 		}
 
 		if err = s.Broadcast(SenatusTopic, rawData); err != nil {
-			s.logger.Error("Error broadcasting hello message", "error", err)
+			s.logger.Error("Error broadcasting hello message", "err", err)
 			panic(err)
 		}
 	})

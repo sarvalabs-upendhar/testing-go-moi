@@ -162,7 +162,7 @@ func (i *IxPool) AddInteractions(ixs types.Interactions) []error {
 	i.enqueueReqCh <- enqueueRequest{ixs: newIxs}
 
 	if err := i.mux.Post(utils.NewIxsEvent{Ixs: newIxs}); err != nil {
-		i.logger.Error("Error posting event", "error", err)
+		i.logger.Error("Error posting event", "err", err)
 	}
 
 	return errs
@@ -174,7 +174,7 @@ func (i *IxPool) handleEnqueueRequest(req enqueueRequest) {
 	for _, ixn := range req.ixs {
 		senderAcc := i.accounts.get(ixn.Sender())
 		if senderAcc == nil {
-			i.logger.Error("Queue for account is nil", ixn.Sender(), ixn)
+			i.logger.Error("Queue for account is nil", "sender", ixn.Sender(), "interaction", ixn)
 		}
 
 		if err := senderAcc.enqueue(ixn); err != nil {
@@ -253,7 +253,7 @@ func (i *IxPool) ResetWithInteractions(ixs types.Interactions) {
 			latestNonce = ix.Nonce() + 1
 		}
 
-		i.logger.Debug("Latest nonce in pool", latestNonce)
+		i.logger.Debug("Latest nonce in the ixpool", "nonce", latestNonce)
 		// update the result map
 		updatedNonces[from] = latestNonce
 	}
@@ -327,7 +327,7 @@ func (i *IxPool) resetAccount(addr types.Address, nonce uint64) {
 		cleanup(pruned)
 	}
 
-	i.logger.Info("Pruned Interactions", pruned)
+	i.logger.Info("Pruned interactions", "pruned-interactions", pruned)
 
 	if ixSize, err := GetIxsSize(pruned); err == nil {
 		i.metrics.captureIxPoolSize(-1 * float64(ixSize))
@@ -422,7 +422,7 @@ func (i *IxPool) Drop(ix *types.Interaction) {
 		// drop the account
 		// i.accounts.remove(ix.Sender()) FIXME: Issue(https://github.com/sarvalabs/moichain/issues/256)
 
-		i.logger.Debug("Dropped ixs", "count", noOfDroppedIxs, "next-nonce", nonce, "address", ix.Sender())
+		i.logger.Debug("Dropped interactions", "count", noOfDroppedIxs, "next-nonce", nonce, "addr", ix.Sender())
 	}
 }
 
@@ -482,7 +482,7 @@ func (i *IxPool) validateIx(ix *types.Interaction) error {
 
 	moiBal, err := i.sm.GetBalance(ix.Sender(), types.KMOITokenAssetID, types.NilHash)
 	if err != nil {
-		i.logger.Error("error fetching balance", "sender", ix.Sender(), "error", err)
+		i.logger.Error("Error fetching balance", "sender", ix.Sender(), "err", err)
 
 		return types.ErrInsufficientFunds
 	}

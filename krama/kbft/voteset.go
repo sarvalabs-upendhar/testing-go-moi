@@ -66,10 +66,10 @@ func NewVoteSet(
 	logger hclog.Logger,
 ) *VoteSet {
 	// Log the creation and the set of validators
-	logger.Info("creating new vote set with validators", "size", validatorSet.Size())
+	logger.Info("Creating new vote set with validators.", "size", validatorSet.Size())
 
 	return &VoteSet{
-		logger:           logger,
+		logger:           logger.Named("Vote-Set"),
 		heights:          heights,
 		round:            round,
 		votetype:         voteType,
@@ -298,7 +298,7 @@ func (vs *VoteSet) addVerifiedVote(
 	tesseractVotes.addVerifiedVote(sumIndex, vote, votePower)
 	postVoteSum := tesseractVotes.sum
 
-	vs.logger.Debug("%%% printing quorum %%%", "quorum", quorum, "gridID:", gridID.Hex(), "sum", postVoteSum)
+	vs.logger.Debug("### Printing quorum ###", "quorum", quorum, "grid-ID", gridID.Hex(), "sum", postVoteSum)
 
 	if vs.maj23 == nil {
 		// Check if the quorum threshold was just crossed. Only the first quorum reach is considered

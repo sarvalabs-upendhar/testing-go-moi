@@ -27,7 +27,7 @@ type Dispatcher struct {
 
 func NewDispatcher(logger hclog.Logger, eventMux *utils.TypeMux) Dispatcher {
 	dispatcher := &Dispatcher{
-		logger: logger.Named("wsDispatcher"),
+		logger: logger.Named("Websocket-Dispatcher"),
 		sm:     NewSubscriptionManager(logger, eventMux),
 	}
 

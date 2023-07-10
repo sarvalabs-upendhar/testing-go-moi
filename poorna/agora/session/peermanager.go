@@ -34,7 +34,7 @@ type PeerInfo struct {
 func NewSessionPeerManager(addr types.Address, logger hclog.Logger, network sessionNetwork) *PeerManager {
 	return &PeerManager{
 		sessionID:      addr,
-		logger:         logger,
+		logger:         logger.Named("Peer-Manager"),
 		peers:          make(map[id.KramaID]*PeerInfo),
 		connectedPeers: make(map[id.KramaID]interface{}),
 		network:        network,
@@ -222,7 +222,7 @@ func (spm *PeerManager) SendWantReq(peer id.KramaID, msg *atypes.AgoraRequestMsg
 func (spm *PeerManager) Close() {
 	for kramaID := range spm.connectedPeers {
 		if err := spm.network.ClosePeerSession(kramaID, spm.sessionID); err != nil {
-			spm.logger.Error("Error closing peer session")
+			spm.logger.Error("Error closing peer session", "err", err)
 		}
 	}
 }

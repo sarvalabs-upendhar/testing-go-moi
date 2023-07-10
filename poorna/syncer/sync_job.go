@@ -138,7 +138,7 @@ func SyncJobFromCanonicalInfo(
 
 	return &SyncJob{
 		db:              db,
-		logger:          logger,
+		logger:          logger.Named("Sync-Job"),
 		address:         data.Address,
 		snapDownloaded:  data.SnapshotDownloaded,
 		mode:            data.Mode,
@@ -215,7 +215,7 @@ func (j *SyncJob) updateJobState(newState JobState) {
 	j.mtx.Lock()
 	defer j.mtx.Unlock()
 
-	j.logger.Debug("Updating job state", "address", j.address, "status", newState)
+	j.logger.Debug("Updating job state", "addr", j.address, "state", newState)
 
 	j.jobState = newState
 	j.lastModifiedAt = time.Now()

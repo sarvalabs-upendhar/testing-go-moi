@@ -42,7 +42,7 @@ func (service *SYNCRPCService) SyncSnap(
 	for snapReq := range req {
 		snap, err := service.syncer.db.GetAccountSnapshot(ctx, snapReq.Address, 0)
 		if err != nil {
-			service.syncer.logger.Error("failed to fetch account snap shot", "for", snapReq.Address)
+			service.syncer.logger.Error("Failed to fetch account snap shot", "addr", snapReq.Address)
 
 			return err
 		}
@@ -167,7 +167,11 @@ func (service *SYNCRPCService) GetLatestAccountInfo(
 ) error {
 	metaInfo, err := service.syncer.db.GetAccountMetaInfo(addr)
 	if err != nil {
-		service.syncer.logger.Error("Failed to fetch account meta info", "addr", addr, "err", err)
+		service.syncer.logger.Error(
+			"Failed to fetch account meta information",
+			"addr", addr,
+			"err", err,
+		)
 
 		return errors.New("failed to fetch account info")
 	}
@@ -298,7 +302,10 @@ func (service *SYNCRPCService) SyncBuckets(
 
 		go func() {
 			if err = service.syncer.db.StreamAccountMetaInfosRaw(ctx, req.BucketID, dbResponse); err != nil {
-				service.syncer.logger.Error("failed to stream account meta infos from db", "error", err)
+				service.syncer.logger.Error(
+					"Failed to stream account meta information from DB",
+					"err", err,
+				)
 			}
 		}()
 

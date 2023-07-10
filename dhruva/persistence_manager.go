@@ -53,7 +53,7 @@ func NewPersistenceManager(
 		ctx:       ctx,
 		ctxCancel: ctxCancel,
 		config:    config,
-		logger:    logger.Named("Dhruva"),
+		logger:    logger.Named("Persistence-Manager"),
 		db:        badgerDB,
 	}
 
@@ -209,11 +209,11 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 
 // Close shutdowns the database
 func (p *PersistenceManager) Close() {
-	p.logger.Info("Closing the database")
+	p.logger.Trace("Closing the database")
 	// close the channels
 
 	if err := p.db.Close(); err != nil {
-		p.logger.Error("Error closing the local BadgerDB instance", "error", err)
+		p.logger.Error("Error closing the local BadgerDB instance", "err", err)
 	}
 }
 
@@ -338,7 +338,7 @@ func (p *PersistenceManager) GetEntriesWithPrefix(ctx context.Context, prefix []
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			dbEntry, err := it.GetNext()
 			if err != nil {
-				p.logger.Error("Prefix iteration failed", "error")
+				p.logger.Error("Prefix iteration failed", "err", err)
 
 				break
 			}
@@ -401,7 +401,7 @@ func (p *PersistenceManager) HasTesseract(tsHash types.Hash) bool {
 
 	exists, err := p.db.Has(key)
 	if err != nil {
-		p.logger.Error("Failed to check for tesseract", "error", err)
+		p.logger.Error("Failed to check for tesseract", "err", err)
 	}
 
 	return exists
@@ -685,7 +685,7 @@ func (p *PersistenceManager) UpdatePrimarySyncStatus(address types.Address) erro
 func (p *PersistenceManager) IsAccountPrimarySyncDone(address types.Address) bool {
 	isSynced, err := p.db.Has(AccSyncStatusKey(address))
 	if err != nil {
-		p.logger.Error("Error checking account sync status", "error", err)
+		p.logger.Error("Error checking the account sync status", "err", err)
 	}
 
 	return isSynced
