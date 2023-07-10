@@ -279,6 +279,7 @@ func (p *Params) getIXPoolConfig() *common.IxPoolConfig {
 	return &common.IxPoolConfig{
 		Mode:       p.rawCfg.Ixpool.Mode,
 		PriceLimit: p.rawCfg.Ixpool.PriceLimit.ToInt(),
+		MaxSlots:   p.rawCfg.Ixpool.MaxSlots,
 	}
 }
 

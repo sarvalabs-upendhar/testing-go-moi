@@ -21,7 +21,9 @@ const (
 )
 
 const (
-	ixMaxSize = 128 * 1024 // 128Kb
+	ixSlotSize      = 1 * 1024   // ixSlotSize chosen as 1kB as minimum ixn sizes are around 500 bytes
+	ixMaxSize       = 128 * 1024 // 128Kb
+	pruningCooldown = 5000 * time.Millisecond
 )
 
 type stateManager interface {
@@ -48,6 +50,8 @@ type IxPool struct {
 	sealing      bool
 	mux          *utils.TypeMux
 	accounts     *accountsMap
+	gauge        slotGauge // gauge for measuring pool capacity
+	pruneCh      chan struct{}
 	metrics      *Metrics
 	enqueueReqCh chan enqueueRequest
 	promoteReqCh chan promoteRequest
@@ -65,15 +69,21 @@ func NewIxPool(
 ) *IxPool {
 	ctx, ctxCancel := context.WithCancel(ctx)
 	i := &IxPool{
-		ctx:          ctx,
-		ctxCancel:    ctxCancel,
-		cfg:          cfg,
-		mux:          mux,
-		sm:           sm,
-		allIxs:       NewLookupMap(),
-		close:        make(chan struct{}),
-		sealing:      false,
-		accounts:     new(accountsMap),
+		ctx:       ctx,
+		ctxCancel: ctxCancel,
+		cfg:       cfg,
+		mux:       mux,
+		sm:        sm,
+		allIxs:    NewLookupMap(),
+		close:     make(chan struct{}),
+		sealing:   false,
+		accounts:  new(accountsMap),
+		gauge: slotGauge{
+			total:   0,
+			max:     cfg.MaxSlots,
+			metrics: metrics,
+		},
+		pruneCh:      make(chan struct{}),
 		metrics:      metrics,
 		logger:       logger.Named("Ix-Pool"),
 		enqueueReqCh: make(chan enqueueRequest),
@@ -89,10 +99,31 @@ func (i *IxPool) GetPendingIx(ixHash types.Hash) (*types.Interaction, bool) {
 	return i.allIxs.get(ixHash)
 }
 
+func (i *IxPool) signalPruning() {
+	select {
+	case i.pruneCh <- struct{}{}:
+	default: // pruning handler is in active or cooldown
+	}
+}
+
+// isSlotAvailable checks if there are sufficient slots in ixpool for ixn to be added
+func (i *IxPool) isSlotAvailable(ix *types.Interaction) bool {
+	return slotsRequired(ix) <= i.gauge.max-i.gauge.read()
+}
+
 func (i *IxPool) checkIx(ix *types.Interaction) error {
 	// validate incoming ix
 	if err := i.validateIx(ix); err != nil {
 		return err
+	}
+
+	// checks if the current gauge size has reached the pressure mark and signals for account pruning if it has
+	if i.gauge.highPressure() {
+		i.signalPruning()
+	}
+
+	if !i.isSlotAvailable(ix) {
+		return types.ErrIXPoolOverFlow
 	}
 
 	// TODO: check for overflow
@@ -151,6 +182,9 @@ func (i *IxPool) handleEnqueueRequest(req enqueueRequest) {
 
 			continue
 		}
+
+		// increase gauge as we successfully enqueued ixn
+		i.gauge.increase(slotsRequired(ixn))
 
 		if ixSize, err := ixn.Size(); err == nil {
 			i.metrics.captureIxPoolSize(float64(ixSize))
@@ -242,6 +276,12 @@ func (i *IxPool) resetAccounts(nonces map[types.Address]uint64) {
 }
 
 func (i *IxPool) resetAccount(addr types.Address, nonce uint64) {
+	cleanup := func(ixns types.Interactions) {
+		// update pool state
+		i.allIxs.remove(ixns)
+		i.gauge.decrease(slotsRequired(ixns...))
+	}
+
 	account := i.accounts.get(addr)
 
 	// lock promoted
@@ -252,6 +292,7 @@ func (i *IxPool) resetAccount(addr types.Address, nonce uint64) {
 	pruned := account.promoted.prune(nonce)
 
 	if len(pruned) > 0 {
+		cleanup(pruned)
 		account.waitLock.Lock()
 		i.metrics.captureAccountWaitTime(account.requestTime, account.waitTime)
 		account.requestTime = time.Now()
@@ -259,9 +300,6 @@ func (i *IxPool) resetAccount(addr types.Address, nonce uint64) {
 		// update the account waitTime and counter
 		account.resetWaitTimeAndCounter()
 	}
-
-	// update pool state
-	i.allIxs.remove(pruned)
 
 	// lock enqueued
 	account.enqueued.lock(true)
@@ -285,11 +323,11 @@ func (i *IxPool) resetAccount(addr types.Address, nonce uint64) {
 
 	// prune enqueued
 	pruned = account.enqueued.prune(nonce)
+	if len(pruned) > 0 {
+		cleanup(pruned)
+	}
 
 	i.logger.Info("Pruned Interactions", pruned)
-
-	// update pool state
-	i.allIxs.remove(pruned)
 
 	if ixSize, err := GetIxsSize(pruned); err == nil {
 		i.metrics.captureIxPoolSize(-1 * float64(ixSize))
@@ -337,7 +375,11 @@ func (i *IxPool) Pop(ix *types.Interaction) {
 				i.executableQueue = append(i.executableQueue, ix)
 			}
 	*/
-	account.promoted.pop()
+
+	ix = account.promoted.pop()
+	if ix != nil {
+		i.gauge.decrease(slotsRequired(ix))
+	}
 }
 
 func (i *IxPool) Drop(ix *types.Interaction) {
@@ -356,9 +398,10 @@ func (i *IxPool) Drop(ix *types.Interaction) {
 
 		noOfDroppedIxs := 0
 
-		// remove the dropped ixs from the allIxs lookup map
-		cleanAllIxs := func(ixs types.Interactions) {
+		// remove the dropped ixs from the allIxs lookup map and decreases gauge
+		cleanup := func(ixs types.Interactions) {
 			i.allIxs.remove(ixs)
+			i.gauge.decrease(slotsRequired(ixs...))
 
 			noOfDroppedIxs += len(ixs)
 		}
@@ -368,13 +411,13 @@ func (i *IxPool) Drop(ix *types.Interaction) {
 
 		// drop promoted
 		dropped := account.promoted.clear()
-		cleanAllIxs(dropped)
+		cleanup(dropped)
 
 		i.metrics.capturePendingIxs(float64(-1 * len(dropped)))
 
 		// drop enqueued
 		dropped = account.enqueued.clear()
-		cleanAllIxs(dropped)
+		cleanup(dropped)
 
 		// drop the account
 		// i.accounts.remove(ix.Sender()) FIXME: Issue(https://github.com/sarvalabs/moichain/issues/256)
@@ -618,6 +661,49 @@ func (i *IxPool) validateLogicInvokePayload(ix *types.Interaction) error {
 	return i.sm.IsLogicRegistered(payload.Logic)
 }
 
+func (i *IxPool) removeNonceHoleAccounts() {
+	i.accounts.Range(
+		func(key, value any) bool {
+			acc, _ := value.(*account)
+
+			// apply RW lock on enqueue
+			acc.enqueued.lock(true)
+			defer acc.enqueued.unlock()
+
+			ixn := acc.enqueued.peek()
+			if ixn == nil {
+				return true
+			}
+
+			// check if the account "enqueue" possesses a nonce hole,
+			// and if so, remove all transactions from "enqueue" and all associated transactions in allixns map.
+
+			if ixn.Nonce() == acc.getNonce() {
+				return true
+			}
+
+			dropped := acc.enqueued.clear()
+
+			i.allIxs.remove(dropped)
+			i.gauge.decrease(slotsRequired(dropped...))
+
+			return true
+		})
+}
+
+func (i *IxPool) handleGaugePruning() {
+	for {
+		select {
+		case <-i.ctx.Done():
+			return
+		case <-i.pruneCh:
+			i.removeNonceHoleAccounts()
+		}
+
+		time.Sleep(pruningCooldown)
+	}
+}
+
 func (i *IxPool) handleRequests() {
 	for {
 		select {
@@ -639,6 +725,7 @@ func (i *IxPool) Close() {
 func (i *IxPool) Start() {
 	i.metrics.initMetrics()
 
+	go i.handleGaugePruning()
 	go i.handleRequests()
 }
 

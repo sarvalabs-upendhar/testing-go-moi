@@ -92,4 +92,5 @@ var (
 	ErrMintNonFungibleToken        = errors.New("can not mint non fungible token")
 	ErrInvalidAssetStandard        = errors.New("invalid asset standard")
 	ErrInvalidAssetSupply          = errors.New("asset supply should be one")
+	ErrIXPoolOverFlow              = errors.New("ixpool is full")
 )

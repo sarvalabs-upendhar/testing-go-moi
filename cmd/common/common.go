@@ -102,6 +102,7 @@ func DefaultBabylonConfig(path string) *Config {
 		Ixpool: IxPoolConfig{
 			Mode:       common.DefaultIxPoolMode,
 			PriceLimit: hexutil.Big(*common.DefaultIxPriceLimit),
+			MaxSlots:   common.DefaultMaxIXPoolSlots,
 		},
 		Telemetry: Telemetry{
 			PrometheusAddr: "",
@@ -159,6 +160,7 @@ func DefaultDevnetConfig(path string) *Config {
 		Ixpool: IxPoolConfig{
 			Mode:       common.DefaultIxPoolMode,
 			PriceLimit: hexutil.Big(*common.DefaultIxPriceLimit),
+			MaxSlots:   common.DefaultMaxIXPoolSlots,
 		},
 		Telemetry: Telemetry{
 			PrometheusAddr: "",
@@ -194,6 +196,7 @@ type SyncerConfig struct {
 type IxPoolConfig struct {
 	Mode       int         `json:"mode"`
 	PriceLimit hexutil.Big `json:"price_limit"`
+	MaxSlots   uint64      `json:"max_slots"`
 }
 
 type DBConfig struct {

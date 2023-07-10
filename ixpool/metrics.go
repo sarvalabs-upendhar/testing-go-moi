@@ -12,6 +12,7 @@ import (
 type Metrics struct {
 	PendingIxs      metrics.Gauge
 	IxPoolSize      metrics.Gauge
+	SlotsUsed       metrics.Gauge
 	AccountWaitTime metrics.Histogram
 }
 
@@ -35,6 +36,12 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 			Name:      "interaction_pool_size",
 			Help:      "Sum of all the transaction sizes in the pool",
 		}, labels).With(labelsWithValues...),
+		SlotsUsed: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: "ixpool",
+			Name:      "slots_used",
+			Help:      "Number of slots consumed in the pool",
+		}, labels).With(labelsWithValues...),
 		AccountWaitTime: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
 			Namespace: namespace,
 			Subsystem: "ixpool",
@@ -49,6 +56,7 @@ func NilMetrics() *Metrics {
 	return &Metrics{
 		PendingIxs:      discard.NewGauge(),
 		IxPoolSize:      discard.NewGauge(),
+		SlotsUsed:       discard.NewGauge(),
 		AccountWaitTime: discard.NewHistogram(),
 	}
 }
@@ -59,6 +67,8 @@ func (metrics *Metrics) initMetrics() {
 	metrics.PendingIxs.Set(0)
 	// set default value of ixpool size gauge
 	metrics.IxPoolSize.Set(0)
+	// set default value of slots used
+	metrics.SlotsUsed.Set(0)
 }
 
 func (metrics *Metrics) capturePendingIxs(delta float64) {
@@ -67,6 +77,10 @@ func (metrics *Metrics) capturePendingIxs(delta float64) {
 
 func (metrics *Metrics) captureIxPoolSize(delta float64) {
 	metrics.IxPoolSize.Add(delta)
+}
+
+func (metrics *Metrics) captureSlotsUsed(delta float64) {
+	metrics.SlotsUsed.Set(delta)
 }
 
 func (metrics *Metrics) captureAccountWaitTime(requestTime time.Time, waitTime time.Time) {

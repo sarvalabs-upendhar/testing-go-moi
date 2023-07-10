@@ -116,6 +116,7 @@ func TestIxPool_GetIxs(t *testing.T) {
 			ixPool := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 				c.Mode = 0
 				c.PriceLimit = big.NewInt(1)
+				c.MaxSlots = common.DefaultMaxIXPoolSlots
 			}, true, sm)
 
 			addAndProcessIxs(t, sm, ixPool, testcase.ixs)
@@ -201,6 +202,7 @@ func TestIxPool_GetAllIxs(t *testing.T) {
 			ixPool := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
 				c.Mode = 0
 				c.PriceLimit = big.NewInt(1)
+				c.MaxSlots = common.DefaultMaxIXPoolSlots
 			}, true, sm)
 
 			for _, ixs := range testcase.accounts {

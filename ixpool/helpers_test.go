@@ -385,6 +385,22 @@ func addAndEnqueueIxsWithoutPromoting(t *testing.T, ixPool *IxPool, ixs types.In
 	require.Equal(t, uint64(len(ixs)), ixPool.accounts.get(senderAddr).enqueued.length())
 }
 
+// createNonceHolesInEnqueue adds interactions to enqueue and
+// doesn't wait on promote channel as ixns have nonce that's greater than expected nonce
+func createNonceHolesInEnqueue(t *testing.T, ixPool *IxPool, ixs types.Interactions, senderAddr types.Address) {
+	t.Helper()
+
+	go func() {
+		errs := ixPool.AddInteractions(ixs)
+		require.Len(t, errs, 0)
+	}()
+
+	req := <-ixPool.enqueueReqCh
+	ixPool.handleEnqueueRequest(req)
+
+	require.Equal(t, uint64(len(ixs)), ixPool.accounts.get(senderAddr).enqueued.length())
+}
+
 // getPromotedAccounts adds the interactions and returns the promoted accounts after enqueuing
 func getPromotedAccounts(
 	t *testing.T,

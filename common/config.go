@@ -57,6 +57,7 @@ type ExecutionConfig struct {
 type IxPoolConfig struct {
 	Mode       int
 	PriceLimit *big.Int
+	MaxSlots   uint64
 }
 
 type NodeInfo struct {

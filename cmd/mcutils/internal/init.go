@@ -143,6 +143,7 @@ func CreateConfigFile(datadir string, index int) []byte {
 		Ixpool: cmdCommon.IxPoolConfig{
 			Mode:       common.DefaultIxPoolMode,
 			PriceLimit: hexutil.Big(*common.DefaultIxPriceLimit),
+			MaxSlots:   common.DefaultMaxIXPoolSlots,
 		},
 		Telemetry: cmdCommon.Telemetry{
 			PrometheusAddr: ":" + strconv.Itoa(common.DefaultPrometheusPort+index),

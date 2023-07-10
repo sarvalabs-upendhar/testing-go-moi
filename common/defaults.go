@@ -21,6 +21,7 @@ const (
 	DefaultInboundConnLimit  = 80
 	DefaultOutboundConnLimit = 20
 	DefaultWatchDogURL       = "https://babylon-watchdog.moi.techbology/add"
+	DefaultMaxIXPoolSlots    = 60000
 )
 
 // IxPool defaults
