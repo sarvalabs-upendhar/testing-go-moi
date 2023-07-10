@@ -19,6 +19,7 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
+	libp2pMetrics "github.com/libp2p/go-libp2p/core/metrics"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
@@ -104,7 +105,8 @@ type Server struct {
 
 	mux *utils.TypeMux // typemux of the node
 
-	init sync.Once
+	init    sync.Once
+	metrics *Metrics
 }
 
 // NewServer is a constructor function that generates, configures and returns a Server.
@@ -116,6 +118,7 @@ func NewServer(
 	mux *utils.TypeMux,
 	config *common.NetworkConfig,
 	vault Vault,
+	metrics *Metrics,
 ) *Server {
 	ctx, ctxCancel := context.WithCancel(parentCtx)
 	server := &Server{
@@ -129,6 +132,7 @@ func NewServer(
 		connInfo:   NewConnectionInfo(config.InboundConnLimit, config.OutboundConnLimit),
 		rpcServers: make(map[protocol.ID]*moirpc.Server),
 		vault:      vault,
+		metrics:    metrics,
 	}
 
 	return server
@@ -296,6 +300,7 @@ func (s *Server) getLibp2pHostOptions() (libp2p.Option, error) {
 		libp2p.EnableNATService(),
 		libp2p.Identity(prvKey),
 		libp2p.ListenAddrs(s.cfg.ListenAddresses...),
+		libp2p.BandwidthReporter(newBandwidthReporter(s.metrics, libp2pMetrics.NewBandwidthCounter())),
 		libp2p.ConnectionManager(mgr),
 		libp2p.ResourceManager(resourceManager),
 	), nil
@@ -893,7 +898,7 @@ func (s *Server) GetRandomNode() peer.ID {
 	return peers[index]
 }
 
-// SendMessage sends message of Poorna MsgType's to a given given libp2p id
+// SendMessage sends message of Poorna MsgType's to a given libp2p id
 func (s *Server) SendMessage(peerID peer.ID, msgType ptypes.MsgType, msg ptypes.MessagePayload) error {
 	var (
 		stream  network.Stream

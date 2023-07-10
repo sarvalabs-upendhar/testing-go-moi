@@ -98,12 +98,14 @@ func NewNode(logLevel string, cfg *common.Config) (n *Node, err error) {
 		return nil, err
 	}
 
+	n.setupTelemetry()
+
 	if err = n.setupNetwork(); err != nil {
 		return nil, err
 	}
 
 	n.setupConsensusSlots()
-	n.setupTelemetry()
+
 	n.loadLatestActiveTimeStamp()
 
 	if err = n.setupReputationEngine(); err != nil {
@@ -227,7 +229,15 @@ func (n *Node) setupConsensusSlots() {
 
 // setupServer creates new server object and setups it to node
 func (n *Node) setupNetwork() error {
-	n.network = poorna.NewServer(n.ctx, n.logger, n.vault.KramaID(), n.eventMux, n.cfg.Network, n.vault)
+	n.network = poorna.NewServer(
+		n.ctx,
+		n.logger,
+		n.vault.KramaID(),
+		n.eventMux,
+		n.cfg.Network,
+		n.vault,
+		n.nodeMetrics.server,
+	)
 
 	return n.network.SetupServer()
 }

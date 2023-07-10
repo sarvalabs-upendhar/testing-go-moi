@@ -351,6 +351,7 @@ func createServerWithoutHost(t *testing.T) *Server {
 		nil,
 		defaultConfig,
 		vault,
+		NilMetrics(),
 	)
 }
 
@@ -385,7 +386,7 @@ func createServer(
 	vault.networkPrivateKey = nPriv
 
 	// Create a new server instance
-	server := NewServer(ctx, params.Logger, kramaID, params.EventMux, cfg.Network, vault)
+	server := NewServer(ctx, params.Logger, kramaID, params.EventMux, cfg.Network, vault, NilMetrics())
 
 	if params.ServerCallback != nil {
 		params.ServerCallback(server)
