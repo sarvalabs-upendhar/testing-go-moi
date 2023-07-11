@@ -13,8 +13,9 @@ genesis.json
 peer-list.json
 .scripts
 envs
-artifact.json
 accounts.json
 artifact.json
 instances.json
-envs
+guardian.json
+push.sh
+run.sh

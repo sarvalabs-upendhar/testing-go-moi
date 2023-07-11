@@ -85,6 +85,12 @@ func parseFlags(initcmd *cobra.Command) {
 		"instances.json",
 		"Path to instances.json file.",
 	)
+	initcmd.PersistentFlags().BoolVar(
+		&writeLogsToFile,
+		"writeLogsToFile",
+		false,
+		"Enabling this flag will save logs to the logfile located in data-dir/log/.",
+	)
 
 	if err := cobra.MarkFlagRequired(initcmd.PersistentFlags(), "port"); err != nil {
 		cmdCommon.Err(err)
@@ -153,7 +159,10 @@ func CreateConfigFile(datadir string, index int) []byte {
 			DataDir:      datadir,
 			NodePassword: password,
 		},
-		LogFilePath: datadir + common.DefaultLogDirectory,
+	}
+
+	if writeLogsToFile {
+		data.LogFilePath = datadir + common.DefaultLogDirectory
 	}
 
 	file, err := json.MarshalIndent(data, "", "\t")

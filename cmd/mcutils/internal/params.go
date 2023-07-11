@@ -22,6 +22,7 @@ var (
 	writeAccountsFilePath  string
 	readAccountsFilePath   string
 	GuardianLogicPath      string
+	writeLogsToFile        bool
 	port                   int
 	peerList               *common.PeerList
 )
