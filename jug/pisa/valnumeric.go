@@ -1005,7 +1005,7 @@ func (x *U256Value) methods() [256]*BuiltinMethod {
 			"ToI256",
 			PrimitiveU256, 0x14, 10,
 			makefields([]*TypeField{{Name: "self", Type: PrimitiveU256}}),
-			makefields([]*TypeField{{Name: "result", Type: PrimitiveU64}}),
+			makefields([]*TypeField{{Name: "result", Type: PrimitiveI256}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				x := inputs[0].(*U256Value).value
 				if x.Gt(MaxI256.value) {
