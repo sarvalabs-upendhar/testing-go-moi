@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -96,10 +95,10 @@ func StoreKeystore(privKeyBytesOfValidator []byte, nodePassPhrase, dataDir strin
 
 	path := filepath.Join(dataDir, "/keystore.json")
 
-	return ioutil.WriteFile(path, ksPayloadInBytes, os.ModePerm)
+	return os.WriteFile(path, ksPayloadInBytes, os.ModePerm)
 }
 
-// mParseInt is to parse the int/float64 to int, helps in KDF
+// mParseInt helper for `getKDFKeyForKeystore` to parse the int/float64 to int
 func mParseInt(m interface{}) int {
 	assertedVal, ok := m.(float64)
 	if !ok {
@@ -144,7 +143,7 @@ func decryptKeystore(cryptoJSON cryptoParams, auth string) ([]byte, error) {
 
 	var targetedInitVector string
 
-	// This is to handle Indus version's POI keystor, in new version the key `IV param`` is all caps
+	// This is to handle Indus version's POI keystore, in new version the key `IV param`` is all caps
 	if cryptoJSON.CipherParams["IV"] != "" {
 		targetedInitVector = cryptoJSON.CipherParams["IV"]
 	} else {

@@ -21,7 +21,7 @@ func NewRootCommand() *Command {
 	rc := &Command{
 		baseCmd: &cobra.Command{
 			Use:   "moipod",
-			Short: "Moipod is a golang client implementation of MOI protocol.",
+			Short: "MOI Pod is a golang client implementation of MOI protocol.",
 		},
 	}
 

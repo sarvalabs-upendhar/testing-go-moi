@@ -1,16 +1,13 @@
 package poi
 
-import (
-	"errors"
-	"strings"
-)
-
 // poi constants
 const (
-	ALPHABET     = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz" // Alphabet set for base 58 encoding
-	ZeroAddress  = "0x0000000000000000000000000000000000000000"                 // ZERO ADDRESS STRING
-	keyHeaderKDF = "scrypt"                                                     // Algorithm used in KDF
-	SrpdkLen     = 64                                                           // KeyLength in KDF
+	ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdef" +
+		"ghijkmnopqrstuvwxyz" // Alphabet set for base 58 encoding
+	ZeroAddress          = "0x0000000000000000000000000000000000000000" // ZERO ADDRESS STRING
+	keyHeaderKDF         = "scrypt"                                     // Algorithm used in KDF
+	SrpdkLen             = 64                                           // KeyLength in KDF
+	MnemonicKeystorePath = "mnemonic.keystore.json"                     // File name of Mnemonic keystore
 )
 
 var NodeIGCPath = [3]uint32{6174, 5020, 0}
@@ -57,19 +54,3 @@ type nodeKeystore struct {
 }
 
 type Mnemonic [12]string
-
-func (seed *Mnemonic) FromString(seedPhrase string) error {
-	twelvePhrases := strings.Split(seedPhrase, " ")
-
-	if len(twelvePhrases) == 12 {
-		copy(seed[:], twelvePhrases)
-	} else {
-		return errors.New("invalid length for mnemonic")
-	}
-
-	return nil
-}
-
-func (seed Mnemonic) String() string {
-	return strings.Join(seed[:], " ")
-}

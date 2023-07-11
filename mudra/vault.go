@@ -31,12 +31,14 @@ type KramaVault struct {
 }
 
 type VaultConfig struct {
-	DataDir      string
-	NodePassword string
-	SeedPhrase   string
-	Mode         int8   // 0: Server, 1: Register/User mode
-	NodeIndex    uint32 // Requires only in Register mode
-	InMemory     bool
+	DataDir                  string
+	NodePassword             string
+	SeedPhrase               string // Should be loaded from keystore
+	Mode                     int8   // 0: Server, 1: Register/User mode
+	NodeIndex                uint32 // Requires only in Register mode
+	InMemory                 bool
+	MnemonicKeystorePath     string // Absolute directory path to mnemonic keystore
+	MnemonicKeystorePassword string // MnemonicKeystorePassword to decrypt keystore
 }
 
 func loadVault(signingAndNetworkKeys []byte,
@@ -96,41 +98,53 @@ func NewVault(cfg *VaultConfig, validatorType moinode.MoiNodeType, kramaIDVersio
 		}
 	} else {
 		if cfg.SeedPhrase != "" {
-			var err error
-			if err = mnemonic.FromString(cfg.SeedPhrase); err != nil {
+			if err := mnemonic.FromString(cfg.SeedPhrase); err != nil {
 				return nil, err
 			}
-
-			bothSignAndCommPrivBytes, moiID, err := poi.GetPrivateKeysForSigningAndNetwork(mnemonic.String(), cfg.NodeIndex)
-			if err != nil {
-				return nil, err
-			}
-
-			currentKID, err := kramaid.NewKramaID(
-				bothSignAndCommPrivBytes[32:],
-				cfg.NodeIndex,
-				moiID,
-				kramaIDVersion,
-				true,
-			)
-			if err != nil {
-				return nil, err
-			}
-
-			if !cfg.InMemory {
-				if err := poi.SetupKeystore(currentKID,
-					bothSignAndCommPrivBytes, validatorType, cfg.DataDir, cfg.NodePassword,
-				); err != nil {
-					return nil, err
-				}
-			}
-
-			signingAndNetworkKeys = bothSignAndCommPrivBytes
-			moiIDAddress = moiID
-			nodeIgcPath = cfg.NodeIndex
-		} else {
-			return nil, common.ErrMnemonicMandatory
 		}
+
+		if cfg.MnemonicKeystorePath != "" {
+			mnemonicKsBytes, err := poi.GetMnemonicKeystore(cfg.MnemonicKeystorePath)
+			if err != nil {
+				return nil, err
+			}
+
+			if err := mnemonic.FromKeystore(mnemonicKsBytes, cfg.MnemonicKeystorePassword); err != nil {
+				return nil, err
+			}
+		}
+
+		if mnemonic[0] == "" {
+			return nil, common.ErrMnemonicKeystorePasswordAndPathMandatory
+		}
+
+		bothSignAndCommPrivBytes, moiID, err := poi.GetPrivateKeysForSigningAndNetwork(mnemonic.String(), cfg.NodeIndex)
+		if err != nil {
+			return nil, err
+		}
+
+		currentKID, err := kramaid.NewKramaID(
+			bothSignAndCommPrivBytes[32:],
+			cfg.NodeIndex,
+			moiID,
+			kramaIDVersion,
+			true,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		if !cfg.InMemory {
+			if err := poi.SetupKeystore(currentKID,
+				bothSignAndCommPrivBytes, validatorType, cfg.DataDir, cfg.NodePassword,
+			); err != nil {
+				return nil, err
+			}
+		}
+
+		signingAndNetworkKeys = bothSignAndCommPrivBytes
+		moiIDAddress = moiID
+		nodeIgcPath = cfg.NodeIndex
 	}
 
 	return loadVault(signingAndNetworkKeys, moiIDAddress, nodeIgcPath, kramaIDVersion, mnemonic)

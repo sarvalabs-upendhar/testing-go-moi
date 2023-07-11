@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -25,8 +26,14 @@ const (
 	ecdsaSignSample = "01473045022100e6823cc24ea8ab0dff424efc35c1a58fa7a5d7f744dca0848ecfcabd11b43" +
 		"c550220115ec0005a878b5c2de44e5e90458ee89e18720f33636929d89b238131179d0503"
 
-	testMnemonic = "unlock element young void mass casino suffer twin earth drill aerobic tooth"
-	testMoiID    = "03e0c762f9f5e47395559346f4f780329c49eebd0a53cbb69c3cb3117ff4e0e24f"
+	testMnemonic         = "unlock element young void mass casino suffer twin earth drill aerobic tooth"
+	testMoiID            = "03e0c762f9f5e47395559346f4f780329c49eebd0a53cbb69c3cb3117ff4e0e24f"
+	testMnemonicKeystore = `{"version":1,"authenticity":{"cipher":{"algorithm":"aes-128-ctr",
+	"iv":"d627f08032c992a64e1bf3499026ecf9",
+	"ciphertext":"0ee76a00726616607379e2a3edb55b1077873906feb60ab0b414d2dfe2ca8149"},
+	"kdf":{"algorithm":"scrypt","dfparams":{"salt":"1f210c8b125c7415a5e3c4e49841f51e967e39f66af7a6592460f7e8dfd8848f",
+	"n":4096, "dklen":32,"p":1,"r":8}}},"mac":"9d5b32bb9d18811a68b3c8d15274e2887d87d5fcc115720179edd2771a0dd968",
+	"mnemonicCiphertext":"4100bcf00dbbda70f238ad072940cb5d"}`
 )
 
 var testKramaID = kramaid.KramaID("3WzFwwvSz7ZwiU3cDwk7uZtc9gX4d5h18MhsmXaT1XVqa3Bv16pP" +
@@ -122,11 +129,15 @@ func TestRegisterModeWithoutMnemomic(t *testing.T) {
 	}
 
 	_, err = NewVault(config, moinode.MoiFullNode, 1)
-	require.ErrorIs(t, common.ErrMnemonicMandatory, err)
+	require.ErrorIs(t, common.ErrMnemonicKeystorePasswordAndPathMandatory, err)
 }
 
 func TestKramaVaultRegisterMode(t *testing.T) {
 	datadir, err := ioutil.TempDir("", "moichain")
+	require.NoError(t, err)
+
+	mnemonicKsPath := strings.Join([]string{datadir, poi.MnemonicKeystorePath}, "/")
+	err = os.WriteFile(mnemonicKsPath, []byte(testMnemonicKeystore), os.ModePerm)
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -137,7 +148,9 @@ func TestKramaVaultRegisterMode(t *testing.T) {
 		DataDir:      datadir,
 		NodePassword: "nodepass1",
 		Mode:         1,
-		SeedPhrase:   testMnemonic,
+		// SeedPhrase:   testMnemonic,
+		MnemonicKeystorePath:     datadir,
+		MnemonicKeystorePassword: "_kSpassword__",
 	}
 
 	vault, err := NewVault(config, moinode.MoiFullNode, 1)
