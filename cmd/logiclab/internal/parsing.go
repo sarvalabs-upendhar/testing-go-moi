@@ -1,7 +1,10 @@
 package internal
 
 import (
+	"encoding/hex"
+	"fmt"
 	"math/big"
+	"path/filepath"
 	"strings"
 
 	"github.com/manishmeganathan/symbolizer"
@@ -126,12 +129,12 @@ func parseLogicCommand(parser *symbolizer.Parser) Command {
 			return InvalidCommandError("invalid 'logic compile' command: missing manifest expression")
 		}
 
-		path, err := parseManifestExpression(parser)
+		manifest, _, err := parseManifestExpression(parser)
 		if err != nil {
 			return InvalidCommandError(err.Error())
 		}
 
-		return LogicCompileFromManifestCommand(ident, path)
+		return LogicCompileFromManifestCommand(ident, manifest)
 
 	case "inspect":
 		if !parser.ExpectPeek(symbolizer.TokenIdent) {
@@ -211,8 +214,39 @@ func parseParticipantCommand(parser *symbolizer.Parser) Command {
 	}
 }
 
+func parserManifestFilePath(parser *symbolizer.Parser) (*symbolizer.Parser, string, error) {
+	if !parser.ExpectPeek(symbolizer.TokenKind('(')) {
+		return nil, "", fmt.Errorf("invalid manifest expression: missing '('")
+	}
+
+	args, err := parser.Unwrap(symbolizer.EnclosureParens())
+	if err != nil {
+		return nil, "", fmt.Errorf("%w invalid 'manifest' expression", err)
+	}
+
+	argParser := symbolizer.NewParser(args)
+
+	pathPOLO, err := argParser.Cursor().Value()
+	if err != nil {
+		return nil, "", fmt.Errorf("invalid raw manifest expression %w", err)
+	}
+
+	value, ok := pathPOLO.(string)
+	if ok {
+		return argParser, value, nil
+	} else {
+		pathPOLOBytes, ok := pathPOLO.([]uint8)
+		if !ok {
+			return nil, "", fmt.Errorf("invalid 'pathPOLO' value: not []uint8")
+		}
+		pathPOLOStr := string(pathPOLOBytes)
+
+		return argParser, pathPOLOStr, nil
+	}
+}
+
 func parseManifestCommand(parser *symbolizer.Parser) Command {
-	path, err := parseManifestExpression(parser)
+	manifest, path, err := parseManifestExpression(parser)
 	if err != nil {
 		return InvalidCommandError(err.Error())
 	}
@@ -223,14 +257,21 @@ func parseManifestCommand(parser *symbolizer.Parser) Command {
 			return InvalidCommandError("invalid 'manifest' command: missing encoding format for conversion")
 		}
 
-		return ManifestFileConvertCommand(path, parser.Cursor().Literal)
+		return ManifestFileConvertCommand(manifest, parser.Cursor().Literal)
 
 	case parser.IsCursor(TokenPrepositionInto):
 		if !parser.ExpectPeek(TokenInstructFormat) {
 			return InvalidCommandError("invalid 'manifest' command: missing instruction format for conversion")
 		}
 
-		return ManifestInstructionConvertCommand(path, parser.Cursor().Literal)
+		extension := strings.TrimPrefix(filepath.Ext(path), ".")
+		encoding := strings.ToUpper(extension)
+
+		if encoding == "" {
+			encoding = "POLO"
+		}
+
+		return ManifestInstructionConvertCommand(manifest, encoding, parser.Cursor().Literal)
 
 	default:
 		return InvalidCommandError("invalid 'manifest' command: missing valid preposition after manifest expression")
@@ -472,24 +513,37 @@ func parseErrDecodeCommand(parser *symbolizer.Parser) Command {
 	}
 }
 
-func parseManifestExpression(parser *symbolizer.Parser) (string, error) {
-	if !parser.ExpectPeek(symbolizer.TokenKind('(')) {
-		return "", errors.New("invalid manifest expression: missing '('")
-	}
-
-	args, err := parser.Unwrap(symbolizer.EnclosureParens())
+func parseManifestExpression(parser *symbolizer.Parser) (*engineio.Manifest, string, error) {
+	argParser, pathPOLO, err := parserManifestFilePath(parser)
 	if err != nil {
-		return "", errors.Wrap(err, "invalid 'manifest' expression")
+		return nil, "", err
 	}
 
-	argParser := symbolizer.NewParser(args)
-	if argParser.Cursor().Kind != symbolizer.TokenString {
-		return "", errors.New("invalid 'manifest' expression: missing file path")
+	switch argParser.Cursor().Kind {
+	case symbolizer.TokenString:
+		manifest, err := engineio.ReadManifestFile(pathPOLO)
+		if err != nil {
+			return nil, "", fmt.Errorf("unable to read manifest: %w", err)
+		}
+
+		return manifest, pathPOLO, nil
+
+	case symbolizer.TokenHexNumber:
+		bytes, err := hex.DecodeString(fmt.Sprintf("%x", pathPOLO))
+		if err != nil {
+			return nil, "", errors.New("Error decoding manifest POLO")
+		}
+
+		manifest, err := ManifestPOLOConverter(bytes)
+		if err != nil {
+			return nil, "", fmt.Errorf("%w", err)
+		}
+
+		return manifest, "", nil
+
+	default:
+		return nil, "", errors.New("invalid missing path or polo string")
 	}
-
-	path, _ := argParser.Cursor().Value()
-
-	return path.(string), nil //nolint:forcetypeassert
 }
 
 func parseBigExpression(parser *symbolizer.Parser) (number *big.Int, err error) {

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"path/filepath"
 	"strings"
 
 	"github.com/sarvalabs/go-polo"
@@ -21,27 +20,25 @@ import (
 // - POLO: POLO Hex String
 // - JSON: JSON Indented String
 // - YAML: YAML Indented String
-func ManifestFileConvertCommand(path, encoding string) Command {
+func ManifestFileConvertCommand(manifest *engineio.Manifest, encoding string) Command {
 	return func(env *Environment) string {
-		manifest, err := engineio.ReadManifestFile(path)
-		if err != nil {
-			return fmt.Sprintf("unable to read manifest: %v", err)
-		}
-
 		return printManifestAs(manifest, encoding)
 	}
 }
 
-func ManifestInstructionConvertCommand(path, format string) Command {
+func ManifestPOLOConverter(bytes []byte) (*engineio.Manifest, error) {
+	manifest := new(engineio.Manifest)
+
+	err := polo.Depolorize(manifest, bytes)
+	if err != nil {
+		return nil, fmt.Errorf("invalid POLO bytes: %w", err)
+	}
+
+	return manifest, nil
+}
+
+func ManifestInstructionConvertCommand(manifest *engineio.Manifest, encoding, format string) Command {
 	return func(env *Environment) string {
-		manifest, err := engineio.ReadManifestFile(path)
-		if err != nil {
-			return fmt.Sprintf("unable to read manifest: %v", err)
-		}
-
-		extension := strings.TrimPrefix(filepath.Ext(path), ".")
-		encoding := strings.ToUpper(extension)
-
 		switch format {
 		case "BIN":
 			// Generate BIN data of opcodes

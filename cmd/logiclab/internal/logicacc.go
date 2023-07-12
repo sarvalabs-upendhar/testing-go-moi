@@ -58,7 +58,7 @@ func (logic LogicAccountState) String() string {
 
 // LogicCompileFromManifestCommand generates a Command runner to
 // compile a new Logic with the given name and manifest file path
-func LogicCompileFromManifestCommand(name, file string) Command {
+func LogicCompileFromManifestCommand(name string, manifest *engineio.Manifest) Command {
 	return func(env *Environment) string {
 		// Check if a logic with name already exists
 		if _, exists := env.inventory.LogicAccounts[name]; exists {
@@ -66,7 +66,7 @@ func LogicCompileFromManifestCommand(name, file string) Command {
 		}
 
 		// Compile the manifest into a Logic
-		fuel, logic, err := CompileManifestFile(file, name, env.inventory.Config.BaseFuel)
+		fuel, logic, err := CompileManifestFile(manifest, name, env.inventory.Config.BaseFuel)
 		if err != nil {
 			return fmt.Sprintf("logic could not be compiled: %v", err)
 		}
@@ -134,13 +134,9 @@ func LogicListCommand() Command {
 }
 
 // CompileManifestFile reads and compiles a manifest file at the given path into a Logic with the given name.
-func CompileManifestFile(file, name string, fuel engineio.Fuel) (engineio.Fuel, *LogicAccountState, error) {
-	// Read manifest file from path
-	manifest, err := engineio.ReadManifestFile(file)
-	if err != nil {
-		return nil, nil, err
-	}
-
+func CompileManifestFile(manifest *engineio.Manifest, name string, fuel engineio.Fuel) (
+	engineio.Fuel, *LogicAccountState, error,
+) {
 	// Obtain the runtime for the logic engine in the header
 	runtime, ok := engineio.FetchEngineRuntime(manifest.Header().LogicEngine())
 	if !ok {
