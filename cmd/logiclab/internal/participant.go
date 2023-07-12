@@ -20,15 +20,26 @@ type ParticipantState struct {
 
 // NewParticipantState generates a new ParticipantState for a given
 // username. The address of the participant is generated randomly
-func NewParticipantState(name string) *ParticipantState {
-	// Generate a random address
-	addr := randomAddress()
+func NewParticipantState(name string, addr string) *ParticipantState {
+	if addr == "" {
+		// Generate a random address
+		addr1 := randomAddress()
+		// Generate and return a ParticipantState with the new
+		// address a new StateObject generated from that address
+		return &ParticipantState{
+			Username: name,
+			Address:  addr1,
+			CtxState: NewStateObject(addr1),
+		}
+	}
+
+	addr1 := common.BytesToAddress([]byte(addr))
 	// Generate and return a ParticipantState with the new
 	// address a new StateObject generated from that address
 	return &ParticipantState{
 		Username: name,
-		Address:  addr,
-		CtxState: NewStateObject(addr),
+		Address:  addr1,
+		CtxState: NewStateObject(addr1),
 	}
 }
 
@@ -40,7 +51,7 @@ func (participant ParticipantState) String() string {
 
 // ParticipantRegisterCommand generates a Command runner
 // to register a new Participant with the given username
-func ParticipantRegisterCommand(username string) Command {
+func ParticipantRegisterCommand(username string, addr string) Command {
 	return func(env *Environment) string {
 		// Check if a participant with username already exists
 		if exists := env.inventory.ParticipantExists(username); exists {
@@ -48,7 +59,7 @@ func ParticipantRegisterCommand(username string) Command {
 		}
 
 		// Generate a new Participant state for the username
-		participant := NewParticipantState(username)
+		participant := NewParticipantState(username, addr)
 		// Add the participant to the inventory
 		env.inventory.AddParticipant(participant)
 

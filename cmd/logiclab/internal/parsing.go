@@ -167,7 +167,28 @@ func parseParticipantCommand(parser *symbolizer.Parser) Command {
 			return InvalidCommandError("invalid 'participant register' command: missing username")
 		}
 
-		return ParticipantRegisterCommand(parser.Cursor().Literal)
+		user := parser.Cursor().Literal
+		parser.Advance()
+
+		if parser.IsCursor(TokenPrepositionAs) {
+			parser.Advance()
+
+			address, err := parser.Cursor().Value()
+			if err != nil {
+				return InvalidCommandError("missing address")
+			}
+
+			value, ok := address.([]uint8)
+			if !ok {
+				return InvalidCommandError("invalid format not []uint8 ")
+			}
+
+			valueStr := string(value)
+
+			return ParticipantRegisterCommand(user, valueStr)
+		}
+
+		return ParticipantRegisterCommand(user, "")
 
 	case "inspect":
 		if !parser.ExpectPeek(symbolizer.TokenIdent) {
