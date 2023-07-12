@@ -5,16 +5,16 @@ import (
 	"sync"
 	"time"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
-	"github.com/sarvalabs/moichain/network/message"
-	gtypes "github.com/sarvalabs/moichain/state"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-moi/network/message"
+	gtypes "github.com/sarvalabs/go-moi/state"
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 	"golang.org/x/crypto/blake2b"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/utils"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/utils"
 )
 
 type ClusterState struct {

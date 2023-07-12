@@ -3,7 +3,7 @@ package internal
 import (
 	"encoding/hex"
 
-	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/go-moi/common"
 )
 
 // StateObject is a state object implementation that

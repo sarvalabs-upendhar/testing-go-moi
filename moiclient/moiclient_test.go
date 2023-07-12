@@ -10,18 +10,18 @@ import (
 	"sort"
 	"testing"
 
-	rpcargs "github.com/sarvalabs/moichain/jsonrpc/args"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
+	"github.com/sarvalabs/go-polo"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/config"
-	"github.com/sarvalabs/moichain/common/hexutil"
-	"github.com/sarvalabs/moichain/common/tests"
-	"github.com/sarvalabs/moichain/common/utils"
-	"github.com/sarvalabs/moichain/storage"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/common/hexutil"
+	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/sarvalabs/go-moi/storage"
 )
 
 type StrMap map[string]common.Address

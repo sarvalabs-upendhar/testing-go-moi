@@ -5,9 +5,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
-	"github.com/sarvalabs/moichain/common/tests"
-	rpcargs "github.com/sarvalabs/moichain/jsonrpc/args"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-moi/common/tests"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 )
 
 // Net Api Testcases

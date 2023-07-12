@@ -1,7 +1,7 @@
 package compute
 
 import (
-	"github.com/sarvalabs/moichain/compute/engineio"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
 var (

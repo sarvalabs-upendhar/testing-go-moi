@@ -6,15 +6,15 @@ import (
 	"math/rand"
 	"sync"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
-	networkmsg "github.com/sarvalabs/moichain/network/message"
-	"github.com/sarvalabs/moichain/syncer/agora/message"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
+	networkmsg "github.com/sarvalabs/go-moi/network/message"
+	"github.com/sarvalabs/go-moi/syncer/agora/message"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/peer"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/utils"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/utils"
 )
 
 type PeerManager struct {

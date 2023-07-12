@@ -5,15 +5,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/hexutil"
-	"github.com/sarvalabs/moichain/common/utils"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/hexutil"
+	"github.com/sarvalabs/go-moi/common/utils"
 
 	"github.com/gorilla/websocket"
 	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/go-moi/common/tests"
 )
 
 type Result struct {

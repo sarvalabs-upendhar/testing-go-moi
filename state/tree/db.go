@@ -3,8 +3,8 @@ package tree
 import (
 	"sync"
 
-	"github.com/sarvalabs/moichain/common"
-	db "github.com/sarvalabs/moichain/storage"
+	"github.com/sarvalabs/go-moi/common"
+	db "github.com/sarvalabs/go-moi/storage"
 )
 
 // persistentDB defines all methods that need to be implemented by persistent DB to handle tree data

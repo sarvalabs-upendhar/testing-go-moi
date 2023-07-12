@@ -6,7 +6,7 @@ import (
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/moichain/compute/engineio"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
 func TestElementSerialization(t *testing.T) {

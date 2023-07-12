@@ -11,25 +11,25 @@ import (
 	"testing"
 	"time"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
-
 	"github.com/hashicorp/go-hclog"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-polo"
+
 	lru "github.com/hashicorp/golang-lru"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/config"
-	"github.com/sarvalabs/moichain/common/hexutil"
-	"github.com/sarvalabs/moichain/common/tests"
-	"github.com/sarvalabs/moichain/common/utils"
-	"github.com/sarvalabs/moichain/compute"
-	"github.com/sarvalabs/moichain/state"
-	"github.com/sarvalabs/moichain/storage"
-	"github.com/sarvalabs/moichain/storage/db"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/common/hexutil"
+	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/sarvalabs/go-moi/compute"
+	"github.com/sarvalabs/go-moi/state"
+	"github.com/sarvalabs/go-moi/storage"
+	"github.com/sarvalabs/go-moi/storage/db"
 )
 
 var (

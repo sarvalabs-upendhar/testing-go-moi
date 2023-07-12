@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"

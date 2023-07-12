@@ -2,11 +2,11 @@ package kbft
 
 import (
 	"github.com/pkg/errors"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-polo"
-	id "github.com/sarvalabs/moichain/common/kramaid"
 
-	"github.com/sarvalabs/moichain/common"
-	ktypes "github.com/sarvalabs/moichain/consensus/types"
+	"github.com/sarvalabs/go-moi/common"
+	ktypes "github.com/sarvalabs/go-moi/consensus/types"
 )
 
 type EvidenceEngine struct {

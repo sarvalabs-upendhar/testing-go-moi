@@ -9,8 +9,8 @@ import (
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/moichain/common"
-	db "github.com/sarvalabs/moichain/storage"
+	"github.com/sarvalabs/go-moi/common"
+	db "github.com/sarvalabs/go-moi/storage"
 )
 
 type mockDB struct {

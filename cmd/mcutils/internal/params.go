@@ -1,7 +1,7 @@
 package internal
 
 import (
-	"github.com/sarvalabs/moichain/cmd/common"
+	"github.com/sarvalabs/go-moi/cmd/common"
 )
 
 var (

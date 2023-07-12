@@ -5,7 +5,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 
-	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/go-moi/common"
 )
 
 // timeoutInfo is a struct that represents some timeout information that are emitted by the Ticker struct

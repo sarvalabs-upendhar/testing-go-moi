@@ -73,7 +73,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 
-	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/go-moi/common"
 )
 
 // ContextKey is special type for using as a key with context.Context

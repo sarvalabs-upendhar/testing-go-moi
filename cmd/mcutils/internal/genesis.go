@@ -5,15 +5,11 @@ import (
 	"errors"
 	"math/big"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
-
-	"github.com/sarvalabs/moichain/cmd/common"
-	common2 "github.com/sarvalabs/moichain/common"
-
-	"github.com/sarvalabs/moichain/common/hexutil"
-
-	"github.com/sarvalabs/moichain/common/tests"
-
+	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/hexutil"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/spf13/cobra"
 )
 
@@ -73,13 +69,13 @@ func parseGenesisTestFlags(genesisTestCmd *cobra.Command) {
 	genesisTestCmd.Flags().IntVar(
 		&behaviouralNodesCount,
 		"behavioural-count",
-		common.DefaultBehaviouralCount,
+		cmdcommon.DefaultBehaviouralCount,
 		"Number of behavioural krama ids per account.",
 	)
 	genesisTestCmd.Flags().IntVar(
 		&randomNodesCount,
 		"random-count",
-		common.DefaultRandomCount,
+		cmdcommon.DefaultRandomCount,
 		"Number of random krama ids per account.",
 	)
 }
@@ -89,7 +85,7 @@ func getRandomMOIID() []byte {
 
 	_, err := rand.Read(randomMoiID)
 	if err != nil {
-		common.Err(err)
+		cmdcommon.Err(err)
 	}
 
 	return randomMoiID
@@ -98,15 +94,15 @@ func getRandomMOIID() []byte {
 func createTestGenesisFile() {
 	var kidTracker int
 
-	kramaIDs, err := common.ReadKramaIDsFromInstancesFile(readInstancesFilePath)
+	kramaIDs, err := cmdcommon.ReadKramaIDsFromInstancesFile(readInstancesFilePath)
 	if err != nil {
-		common.Err(err)
+		cmdcommon.Err(err)
 	}
 
 	totalIDs := len(kramaIDs)
 
 	if behaviouralNodesCount+randomNodesCount > totalIDs {
-		common.Err(errors.New("insufficient krama IDs in instances file"))
+		cmdcommon.Err(errors.New("insufficient krama IDs in instances file"))
 	}
 
 	// fetch krama ids in round robin manner
@@ -126,23 +122,23 @@ func createTestGenesisFile() {
 	if len(accAddresses) == 0 {
 		accAddresses, err = tests.GetAddressFromAccountsFile(readAccountsFilePath)
 		if err != nil {
-			common.Err(err)
+			cmdcommon.Err(err)
 		}
 	}
 
 	accCount := len(accAddresses)
 
-	g := &common2.GenesisFile{
-		Accounts: make([]common2.AccountSetupArgs, 0, accCount),
+	g := &common.GenesisFile{
+		Accounts: make([]common.AccountSetupArgs, 0, accCount),
 	}
 
-	guardianArtifact, err := common.ReadArtifactFile(GuardianLogicPath)
+	guardianArtifact, err := cmdcommon.ReadArtifactFile(GuardianLogicPath)
 	if err != nil {
-		common.Err(err)
+		cmdcommon.Err(err)
 	}
 
 	g.AddLogic(
-		common2.LogicSetupArgs{
+		common.LogicSetupArgs{
 			Name:               guardianArtifact.Name,
 			Callsite:           guardianArtifact.Callsite,
 			Calldata:           guardianArtifact.Calldata,
@@ -151,23 +147,23 @@ func createTestGenesisFile() {
 			RandomContext:      getKramaIDs(randomNodesCount),
 		})
 
-	g.AddSargaAccount(common2.AccountSetupArgs{
-		Address:            common2.SargaAddress,
-		AccType:            common2.SargaAccount,
-		MoiID:              common2.BytesToHex(getRandomMOIID()),
+	g.AddSargaAccount(common.AccountSetupArgs{
+		Address:            common.SargaAddress,
+		AccType:            common.SargaAccount,
+		MoiID:              common.BytesToHex(getRandomMOIID()),
 		BehaviouralContext: getKramaIDs(behaviouralNodesCount),
 		RandomContext:      getKramaIDs(randomNodesCount),
 	})
 
-	assetInfo := common2.AssetAccountSetupArgs{
-		AssetInfo: &common2.AssetCreationArgs{
-			Symbol:      common2.KMOITokenSymbol,
+	assetInfo := common.AssetAccountSetupArgs{
+		AssetInfo: &common.AssetCreationArgs{
+			Symbol:      common.KMOITokenSymbol,
 			Dimension:   0,
 			Standard:    0,
 			IsLogical:   false,
 			IsStateful:  false,
-			Operator:    common2.NilAddress,
-			Allocations: make([]common2.Allocation, 0, accCount),
+			Operator:    common.NilAddress,
+			Allocations: make([]common.Allocation, 0, accCount),
 		},
 		BehaviouralContext: getKramaIDs(behaviouralNodesCount),
 		RandomContext:      getKramaIDs(randomNodesCount),
@@ -175,18 +171,18 @@ func createTestGenesisFile() {
 
 	for i := 0; i < accCount; i++ {
 		g.AddAccount(
-			common2.AccountSetupArgs{
-				Address:            common2.HexToAddress(accAddresses[i]),
-				AccType:            common2.RegularAccount,
-				MoiID:              common2.BytesToHex(getRandomMOIID()),
+			common.AccountSetupArgs{
+				Address:            common.HexToAddress(accAddresses[i]),
+				AccType:            common.RegularAccount,
+				MoiID:              common.BytesToHex(getRandomMOIID()),
 				BehaviouralContext: getKramaIDs(behaviouralNodesCount),
 				RandomContext:      getKramaIDs(randomNodesCount),
 			},
 		)
 
 		if premineAmount > 0 {
-			assetInfo.AssetInfo.Allocations = append(assetInfo.AssetInfo.Allocations, common2.Allocation{
-				Address: common2.HexToAddress(accAddresses[i]),
+			assetInfo.AssetInfo.Allocations = append(assetInfo.AssetInfo.Allocations, common.Allocation{
+				Address: common.HexToAddress(accAddresses[i]),
 				Amount:  (*hexutil.Big)(new(big.Int).SetUint64(premineAmount)),
 			})
 		}
@@ -194,7 +190,7 @@ func createTestGenesisFile() {
 
 	g.AddAssetInfo(assetInfo)
 
-	if err = common.WriteToGenesisFile(genesisFilePath, g); err != nil {
-		common.Err(err)
+	if err = cmdcommon.WriteToGenesisFile(genesisFilePath, g); err != nil {
+		cmdcommon.Err(err)
 	}
 }

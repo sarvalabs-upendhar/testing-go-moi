@@ -3,7 +3,7 @@ package badger
 import (
 	"github.com/dgraph-io/badger/v3"
 
-	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/go-moi/common"
 )
 
 // Iterator is a prefix enable badger key-value iterator

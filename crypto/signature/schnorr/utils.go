@@ -7,7 +7,7 @@ import (
 
 	sr25519In "github.com/oasisprotocol/curve25519-voi/primitives/sr25519"
 
-	"github.com/sarvalabs/moichain/crypto/common"
+	"github.com/sarvalabs/go-moi/crypto/common"
 )
 
 type Sr25519PrivKey struct {

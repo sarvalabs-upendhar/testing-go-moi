@@ -12,25 +12,25 @@ import (
 	"os"
 	"time"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
-	mudraCommon "github.com/sarvalabs/moichain/crypto/common"
-	rpcargs "github.com/sarvalabs/moichain/jsonrpc/args"
-	gtypes "github.com/sarvalabs/moichain/state"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
+	mudraCommon "github.com/sarvalabs/go-moi/crypto/common"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
+	gtypes "github.com/sarvalabs/go-moi/state"
+	"github.com/sarvalabs/go-polo"
 
-	cmdCommon "github.com/sarvalabs/moichain/cmd/common"
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/config"
+	cmdCommon "github.com/sarvalabs/go-moi/cmd/common"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/config"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-polo"
 	"github.com/spf13/cobra"
 
-	"github.com/sarvalabs/moichain/compute/pisa"
+	"github.com/sarvalabs/go-moi/compute/pisa"
 
-	"github.com/sarvalabs/moichain/common/tests"
-	"github.com/sarvalabs/moichain/crypto"
-	"github.com/sarvalabs/moichain/crypto/poi/moinode"
-	"github.com/sarvalabs/moichain/moiclient"
+	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/crypto"
+	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
+	"github.com/sarvalabs/go-moi/moiclient"
 )
 
 var (

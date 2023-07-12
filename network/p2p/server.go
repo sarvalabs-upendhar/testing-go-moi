@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
-	mcommon "github.com/sarvalabs/moichain/crypto/common"
-	networkmsg "github.com/sarvalabs/moichain/network/message"
-	"github.com/sarvalabs/moichain/senatus"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
+	mcommon "github.com/sarvalabs/go-moi/crypto/common"
+	networkmsg "github.com/sarvalabs/go-moi/network/message"
+	"github.com/sarvalabs/go-moi/senatus"
 
 	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
@@ -34,11 +34,11 @@ import (
 	maddr "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/config"
-	"github.com/sarvalabs/moichain/common/utils"
-	"github.com/sarvalabs/moichain/crypto"
-	"github.com/sarvalabs/moichain/network/rpc"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/sarvalabs/go-moi/crypto"
+	"github.com/sarvalabs/go-moi/network/rpc"
 )
 
 const (

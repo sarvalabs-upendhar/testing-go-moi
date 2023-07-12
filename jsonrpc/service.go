@@ -5,10 +5,10 @@ import (
 	"errors"
 	"net/http"
 
-	rpcargs "github.com/sarvalabs/moichain/jsonrpc/args"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 
-	"github.com/sarvalabs/moichain/common"
-	api2 "github.com/sarvalabs/moichain/jsonrpc/api"
+	"github.com/sarvalabs/go-moi/common"
+	api2 "github.com/sarvalabs/go-moi/jsonrpc/api"
 )
 
 // Service is a struct that represents a mapping of RPC service APIs

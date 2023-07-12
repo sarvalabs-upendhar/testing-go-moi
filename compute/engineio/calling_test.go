@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
-	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/go-moi/common"
 )
 
 func TestCallsiteKind_String(t *testing.T) {

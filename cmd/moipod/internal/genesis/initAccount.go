@@ -1,11 +1,11 @@
 package genesis
 
 import (
+	"github.com/sarvalabs/go-moi/common"
 	"github.com/spf13/cobra"
 
-	"github.com/sarvalabs/moichain/cmd/common"
-	common2 "github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/utils"
+	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"
+	"github.com/sarvalabs/go-moi/common/utils"
 )
 
 var (
@@ -37,7 +37,7 @@ func parseInitAccountFlags(cmd *cobra.Command) {
 	cmd.Flags().IntVar(
 		&accountType,
 		"account-type",
-		int(common2.RegularAccount),
+		int(common.RegularAccount),
 		"Type of account. SargaAccount = 1, RegularAccount = 2, LogicAccount = 3, AssetAccount = 4",
 	)
 	cmd.Flags().StringVar(
@@ -60,33 +60,33 @@ func parseInitAccountFlags(cmd *cobra.Command) {
 	)
 
 	if err := cobra.MarkFlagRequired(cmd.Flags(), "address"); err != nil {
-		common.Err(err)
+		cmdcommon.Err(err)
 	}
 }
 
 func initAccount() {
 	genesis, err := readGenesisFile()
 	if err != nil {
-		common.Err(err)
+		cmdcommon.Err(err)
 	}
 
 	if len(behaviourNodes) == 0 && len(randomNodes) == 0 {
 		behaviourNodes, randomNodes = getContextNodes(
 			instancesFilePath,
-			common.DefaultBehaviouralCount,
-			common.DefaultRandomCount,
+			cmdcommon.DefaultBehaviouralCount,
+			cmdcommon.DefaultRandomCount,
 		)
 	}
 
-	genesis.AddAccount(common2.AccountSetupArgs{
-		Address:            common2.HexToAddress(address),
-		AccType:            common2.AccountType(accountType),
+	genesis.AddAccount(common.AccountSetupArgs{
+		Address:            common.HexToAddress(address),
+		AccType:            common.AccountType(accountType),
 		MoiID:              moiID,
 		BehaviouralContext: utils.KramaIDFromString(behaviourNodes),
 		RandomContext:      utils.KramaIDFromString(randomNodes),
 	})
 
-	if err = common.WriteToGenesisFile(genesisFilePath, genesis); err != nil {
-		common.Err(err)
+	if err = cmdcommon.WriteToGenesisFile(genesisFilePath, genesis); err != nil {
+		cmdcommon.Err(err)
 	}
 }

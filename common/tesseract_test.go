@@ -4,12 +4,12 @@ import (
 	"reflect"
 	"testing"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/tests"
 )
 
 func TestCopyHeader(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/hashicorp/go-hclog"
@@ -23,7 +23,7 @@ import (
 	"github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/go-moi/common"
 )
 
 var testLogger = hclog.NewNullLogger()

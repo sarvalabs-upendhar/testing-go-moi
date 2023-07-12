@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/moichain/compute/engineio"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
 func TestRoutine_name(t *testing.T) {

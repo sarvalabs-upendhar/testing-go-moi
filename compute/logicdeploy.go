@@ -6,9 +6,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/compute/engineio"
-	"github.com/sarvalabs/moichain/state"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/compute/engineio"
+	"github.com/sarvalabs/go-moi/state"
 )
 
 // LogicDeployOption is an option for DeployLogic and modifies the logic deployment behaviour

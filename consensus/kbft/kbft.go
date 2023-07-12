@@ -6,19 +6,19 @@ import (
 	"sync"
 	"time"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
-	mudracommon "github.com/sarvalabs/moichain/crypto/common"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
+	mudracommon "github.com/sarvalabs/go-moi/crypto/common"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/config"
-	"github.com/sarvalabs/moichain/common/utils"
-	"github.com/sarvalabs/moichain/crypto"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/sarvalabs/go-moi/crypto"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 
-	ktypes "github.com/sarvalabs/moichain/consensus/types"
-	"github.com/sarvalabs/moichain/telemetry/tracing"
+	ktypes "github.com/sarvalabs/go-moi/consensus/types"
+	"github.com/sarvalabs/go-moi/telemetry/tracing"
 )
 
 const (

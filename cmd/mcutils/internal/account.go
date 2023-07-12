@@ -3,14 +3,14 @@ package internal
 import (
 	"log"
 
-	cmdCommon "github.com/sarvalabs/moichain/cmd/common"
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/config"
+	cmdCommon "github.com/sarvalabs/go-moi/cmd/common"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/config"
 
 	"github.com/spf13/cobra"
 
-	"github.com/sarvalabs/moichain/common/tests"
-	"github.com/sarvalabs/moichain/crypto/poi"
+	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/crypto/poi"
 )
 
 func GetAccountCommand() *cobra.Command {

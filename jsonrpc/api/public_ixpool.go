@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/hexutil"
-	rpcargs "github.com/sarvalabs/moichain/jsonrpc/args"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/hexutil"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 )
 
 type ContentResponse struct {

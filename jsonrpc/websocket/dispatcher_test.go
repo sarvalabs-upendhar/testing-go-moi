@@ -10,8 +10,8 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/moichain/common/tests"
-	"github.com/sarvalabs/moichain/common/utils"
+	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/common/utils"
 )
 
 func Test_handleRequest_Subscribe(t *testing.T) {

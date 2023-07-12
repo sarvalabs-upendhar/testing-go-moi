@@ -1,7 +1,7 @@
 package pisa
 
 import (
-	"github.com/sarvalabs/moichain/compute/engineio"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
 // Continue represents an interface for managing execution continuity and flow.

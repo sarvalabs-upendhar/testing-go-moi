@@ -3,8 +3,8 @@ package types
 import (
 	"sync"
 
-	"github.com/sarvalabs/moichain/common"
-	networkmsg "github.com/sarvalabs/moichain/network/message"
+	"github.com/sarvalabs/go-moi/common"
+	networkmsg "github.com/sarvalabs/go-moi/network/message"
 )
 
 type ExecutionResponse struct {

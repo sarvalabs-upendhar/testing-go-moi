@@ -4,8 +4,8 @@ import (
 	"bufio"
 	"sync"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
-	networkmsg "github.com/sarvalabs/moichain/network/message"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
+	networkmsg "github.com/sarvalabs/go-moi/network/message"
 
 	"github.com/libp2p/go-msgio"
 
@@ -15,7 +15,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 
-	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/go-moi/common"
 )
 
 // Peer is a struct that represents a peer on the network

@@ -7,8 +7,8 @@ import (
 
 	"github.com/sarvalabs/go-polo"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/tests"
 
 	"github.com/stretchr/testify/require"
 )

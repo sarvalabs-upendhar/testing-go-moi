@@ -1,9 +1,9 @@
 package kbft
 
 import (
-	"github.com/sarvalabs/moichain/common"
-	ktypes "github.com/sarvalabs/moichain/consensus/types"
-	"github.com/sarvalabs/moichain/crypto"
+	"github.com/sarvalabs/go-moi/common"
+	ktypes "github.com/sarvalabs/go-moi/consensus/types"
+	"github.com/sarvalabs/go-moi/crypto"
 )
 
 // tesseractVoteSet is a struct that represents a set of votes for a Tesseract

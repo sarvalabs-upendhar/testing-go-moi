@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/moichain/common/kramaid"
-	mudracommon "github.com/sarvalabs/moichain/crypto/common"
-	networkmsg "github.com/sarvalabs/moichain/network/message"
-	"github.com/sarvalabs/moichain/senatus"
+	"github.com/sarvalabs/go-moi/common/kramaid"
+	mudracommon "github.com/sarvalabs/go-moi/crypto/common"
+	networkmsg "github.com/sarvalabs/go-moi/network/message"
+	"github.com/sarvalabs/go-moi/senatus"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p"
@@ -33,11 +33,11 @@ import (
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/config"
-	"github.com/sarvalabs/moichain/common/tests"
-	"github.com/sarvalabs/moichain/common/utils"
-	"github.com/sarvalabs/moichain/crypto"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/sarvalabs/go-moi/crypto"
 )
 
 var (

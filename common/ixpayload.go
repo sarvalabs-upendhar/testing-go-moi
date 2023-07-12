@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"math/big"
 
-	"github.com/sarvalabs/moichain/common/kramaid"
+	"github.com/sarvalabs/go-moi/common/kramaid"
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"

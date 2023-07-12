@@ -4,8 +4,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/compute/engineio"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
 // Runtime represents the engine runtime for PISA. It holds the base instruction

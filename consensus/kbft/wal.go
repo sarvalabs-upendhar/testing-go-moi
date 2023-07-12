@@ -12,9 +12,9 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/utils"
-	ktypes "github.com/sarvalabs/moichain/consensus/types"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/utils"
+	ktypes "github.com/sarvalabs/go-moi/consensus/types"
 )
 
 const (

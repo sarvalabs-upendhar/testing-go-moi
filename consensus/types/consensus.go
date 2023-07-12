@@ -3,13 +3,13 @@ package types
 import (
 	"bytes"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
-	networkmsgs "github.com/sarvalabs/moichain/network/message"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
+	networkmsgs "github.com/sarvalabs/go-moi/network/message"
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
-	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/go-moi/common"
 )
 
 type (

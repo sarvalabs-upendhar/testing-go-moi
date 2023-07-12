@@ -6,15 +6,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/config"
-	"github.com/sarvalabs/moichain/storage/db/badger"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/storage/db/badger"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/moichain/common/tests"
-	"github.com/sarvalabs/moichain/storage/db"
+	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/storage/db"
 )
 
 // mockDB is an in-memory key-value database used for testing purposes

@@ -1,9 +1,9 @@
 package node
 
 import (
-	"github.com/sarvalabs/moichain/flux"
-	"github.com/sarvalabs/moichain/network/p2p"
-	"github.com/sarvalabs/moichain/syncer/forage"
+	"github.com/sarvalabs/go-moi/flux"
+	"github.com/sarvalabs/go-moi/network/p2p"
+	"github.com/sarvalabs/go-moi/syncer/forage"
 )
 
 type SubHandlers struct {

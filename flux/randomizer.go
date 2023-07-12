@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
-	networkmsg "github.com/sarvalabs/moichain/network/message"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
+	networkmsg "github.com/sarvalabs/go-moi/network/message"
 
 	"github.com/libp2p/go-msgio"
 
@@ -21,11 +21,11 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/config"
-	"github.com/sarvalabs/moichain/common/utils"
-	"github.com/sarvalabs/moichain/network/p2p"
-	"github.com/sarvalabs/moichain/telemetry/tracing"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/sarvalabs/go-moi/network/p2p"
+	"github.com/sarvalabs/go-moi/telemetry/tracing"
 )
 
 const (

@@ -3,7 +3,7 @@ package lattice
 import (
 	"math/big"
 
-	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/go-moi/common"
 )
 
 func createGenesisTesseract(

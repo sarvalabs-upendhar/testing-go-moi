@@ -9,7 +9,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/go-moi/common/tests"
 )
 
 type RequestArgs struct {

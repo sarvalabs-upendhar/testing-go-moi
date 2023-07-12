@@ -3,7 +3,7 @@ package kbft
 import (
 	"github.com/hashicorp/go-hclog"
 
-	"github.com/sarvalabs/moichain/common/utils"
+	"github.com/sarvalabs/go-moi/common/utils"
 )
 
 type Option = func(kbft *KBFT)

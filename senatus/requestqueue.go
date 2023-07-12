@@ -6,7 +6,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 )
 
 type RequestQueue struct {

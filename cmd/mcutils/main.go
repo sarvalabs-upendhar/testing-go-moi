@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/sarvalabs/moichain/cmd/mcutils/internal"
+	"github.com/sarvalabs/go-moi/cmd/mcutils/internal"
 	"github.com/spf13/cobra"
 )
 

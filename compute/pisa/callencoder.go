@@ -4,7 +4,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
-	"github.com/sarvalabs/moichain/compute/engineio"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
 // CallEncoder implements the engineio.CallEncoder interface for PISA

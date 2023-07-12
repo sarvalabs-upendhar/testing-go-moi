@@ -9,8 +9,8 @@ import (
 	"github.com/munna0908/smt"
 	"github.com/pkg/errors"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/storage"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/storage"
 )
 
 // DB wraps access to trie data

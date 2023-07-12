@@ -9,19 +9,19 @@ import (
 	"os"
 	"time"
 
-	mudraCommon "github.com/sarvalabs/moichain/crypto/common"
-	rpcargs "github.com/sarvalabs/moichain/jsonrpc/args"
+	cryptocommon "github.com/sarvalabs/go-moi/crypto/common"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 
-	"github.com/sarvalabs/moichain/cmd/common"
-	common2 "github.com/sarvalabs/moichain/common"
+	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"
+	"github.com/sarvalabs/go-moi/common"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	"github.com/sarvalabs/moichain/common/tests"
-	"github.com/sarvalabs/moichain/crypto"
-	"github.com/sarvalabs/moichain/crypto/poi/moinode"
-	"github.com/sarvalabs/moichain/moiclient"
+	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/crypto"
+	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
+	"github.com/sarvalabs/go-moi/moiclient"
 )
 
 var (
@@ -59,11 +59,11 @@ func parseFaucetFlags(cmd *cobra.Command) {
 func runFaucetCommand(cmd *cobra.Command, args []string) {
 	file, err := os.ReadFile(keystorePath)
 	if err != nil {
-		common.Err(err)
+		cmdcommon.Err(err)
 	}
 
 	if err = json.Unmarshal(file, &accounts); err != nil {
-		common.Err(err)
+		cmdcommon.Err(err)
 	}
 
 	client, _ := moiclient.NewClient(rpcURL)
@@ -74,44 +74,44 @@ func runFaucetCommand(cmd *cobra.Command, args []string) {
 		InMemory:   true,
 	}, moinode.MoiFullNode, 1)
 	if err != nil {
-		common.Err(err)
+		cmdcommon.Err(err)
 	}
 
 	faucetWalletPublicKey, err := vault.GetPublicKeyAt(crypto.DefaultMOIWalletPath)
 	if err != nil {
-		common.Err(err)
+		cmdcommon.Err(err)
 	}
 
 	nonce, err := client.InteractionCount(&rpcargs.InteractionCountArgs{
-		Address: common2.BytesToAddress(faucetWalletPublicKey),
+		Address: common.BytesToAddress(faucetWalletPublicKey),
 		Options: rpcargs.TesseractNumberOrHash{
 			TesseractNumber: &rpcargs.LatestTesseractHeight,
 		},
 	})
 	if err != nil {
-		common.Err(errors.Wrap(err, "failed to fetch nonce"))
+		cmdcommon.Err(errors.Wrap(err, "failed to fetch nonce"))
 	}
 
-	ixArgs := common2.SendIXArgs{
-		Type:      common2.IxValueTransfer,
-		Sender:    common2.BytesToAddress(faucetWalletPublicKey),
-		Receiver:  common2.HexToAddress(walletAddress),
+	ixArgs := common.SendIXArgs{
+		Type:      common.IxValueTransfer,
+		Sender:    common.BytesToAddress(faucetWalletPublicKey),
+		Receiver:  common.HexToAddress(walletAddress),
 		Nonce:     nonce.ToUint64(),
 		FuelPrice: big.NewInt(1),
 		FuelLimit: big.NewInt(1000),
-		TransferValues: map[common2.AssetID]*big.Int{
-			common2.KMOITokenAssetID: new(big.Int).SetUint64(amount),
+		TransferValues: map[common.AssetID]*big.Int{
+			common.KMOITokenAssetID: new(big.Int).SetUint64(amount),
 		},
 	}
 
 	rawArgs, err := ixArgs.Bytes()
 	if err != nil {
-		common.Err(err)
+		cmdcommon.Err(err)
 	}
 
-	signature, err := vault.Sign(rawArgs, mudraCommon.EcdsaSecp256k1, crypto.UsingIgcPath(crypto.DefaultMOIWalletPath))
+	signature, err := vault.Sign(rawArgs, cryptocommon.EcdsaSecp256k1, crypto.UsingIgcPath(crypto.DefaultMOIWalletPath))
 	if err != nil {
-		common.Err(err)
+		cmdcommon.Err(err)
 	}
 
 	ixHash, err := client.SendInteractions(&rpcargs.SendIX{
@@ -119,18 +119,18 @@ func runFaucetCommand(cmd *cobra.Command, args []string) {
 		Signature: hex.EncodeToString(signature),
 	})
 	if err != nil {
-		common.Err(err)
+		cmdcommon.Err(err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
-	rpcReceipt, err := common.WaitForReceipts(ctx, client, ixHash)
+	rpcReceipt, err := cmdcommon.WaitForReceipts(ctx, client, ixHash)
 	if err != nil {
-		common.Err(err)
+		cmdcommon.Err(err)
 	}
 
-	if rpcReceipt.Status == common2.ReceiptOk {
+	if rpcReceipt.Status == common.ReceiptOk {
 		fmt.Printf(" %d Gas tokens credited to %s \n", amount, walletAddress)
 
 		return

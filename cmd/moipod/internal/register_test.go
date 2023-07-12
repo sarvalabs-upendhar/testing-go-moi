@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/sarvalabs/moichain/moiclient"
+	"github.com/sarvalabs/go-moi/moiclient"
 	"github.com/stretchr/testify/assert"
 )
 

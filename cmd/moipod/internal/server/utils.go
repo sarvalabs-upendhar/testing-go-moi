@@ -10,17 +10,17 @@ import (
 	"os"
 	"time"
 
-	"github.com/sarvalabs/moichain/common/kramaid"
+	"github.com/sarvalabs/go-moi/common/kramaid"
 
 	maddr "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	cmdCommon "github.com/sarvalabs/moichain/cmd/common"
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/config"
-	"github.com/sarvalabs/moichain/common/utils"
-	"github.com/sarvalabs/moichain/crypto"
+	cmdCommon "github.com/sarvalabs/go-moi/cmd/common"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/sarvalabs/go-moi/crypto"
 )
 
 const genesisURL = "https://moichain-pub.s3.amazonaws.com/genesis.json"

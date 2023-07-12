@@ -8,12 +8,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
-	networkmsg "github.com/sarvalabs/moichain/network/message"
-	agora2 "github.com/sarvalabs/moichain/syncer/agora"
-	"github.com/sarvalabs/moichain/syncer/agora/block"
-	"github.com/sarvalabs/moichain/syncer/agora/session"
-	"github.com/sarvalabs/moichain/syncer/cid"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
+	networkmsg "github.com/sarvalabs/go-moi/network/message"
+	agora2 "github.com/sarvalabs/go-moi/syncer/agora"
+	"github.com/sarvalabs/go-moi/syncer/agora/block"
+	"github.com/sarvalabs/go-moi/syncer/agora/session"
+	"github.com/sarvalabs/go-moi/syncer/cid"
 
 	"github.com/hashicorp/go-hclog"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -21,15 +21,15 @@ import (
 	"github.com/sarvalabs/go-polo"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/config"
-	"github.com/sarvalabs/moichain/common/utils"
-	ktypes "github.com/sarvalabs/moichain/consensus/types"
-	"github.com/sarvalabs/moichain/network/p2p"
-	"github.com/sarvalabs/moichain/network/rpc"
-	"github.com/sarvalabs/moichain/state"
-	"github.com/sarvalabs/moichain/storage"
-	"github.com/sarvalabs/moichain/storage/db"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/common/utils"
+	ktypes "github.com/sarvalabs/go-moi/consensus/types"
+	"github.com/sarvalabs/go-moi/network/p2p"
+	"github.com/sarvalabs/go-moi/network/rpc"
+	"github.com/sarvalabs/go-moi/state"
+	"github.com/sarvalabs/go-moi/storage"
+	"github.com/sarvalabs/go-moi/storage/db"
 )
 
 const (

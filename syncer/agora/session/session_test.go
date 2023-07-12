@@ -5,13 +5,13 @@ import (
 	"testing"
 	"time"
 
-	atypes "github.com/sarvalabs/moichain/syncer/agora/block"
-	"github.com/sarvalabs/moichain/syncer/agora/message"
+	atypes "github.com/sarvalabs/go-moi/syncer/agora/block"
+	"github.com/sarvalabs/go-moi/syncer/agora/message"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/moichain/common/tests"
-	"github.com/sarvalabs/moichain/storage"
+	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/storage"
 )
 
 func TestHandleMessage_UpdatePeerStatus(t *testing.T) {

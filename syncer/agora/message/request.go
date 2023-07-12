@@ -4,8 +4,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/syncer/cid"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/syncer/cid"
 )
 
 type AgoraRequestMsg struct {

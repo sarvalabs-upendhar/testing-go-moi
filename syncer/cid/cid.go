@@ -3,8 +3,8 @@ package cid
 import (
 	"encoding/hex"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/storage"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/storage"
 )
 
 var nilCID CID

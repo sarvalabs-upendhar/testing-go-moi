@@ -5,7 +5,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 )
 
 // ClusterID ...

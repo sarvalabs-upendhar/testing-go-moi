@@ -5,10 +5,10 @@ import (
 	"sync"
 	"time"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
-	"github.com/sarvalabs/moichain/syncer/cid"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-moi/syncer/cid"
 
-	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/go-moi/common"
 )
 
 type Request struct {

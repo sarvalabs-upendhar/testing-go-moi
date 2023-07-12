@@ -7,8 +7,8 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/sarvalabs/moichain/compute/engineio"
-	gtypes "github.com/sarvalabs/moichain/state"
+	"github.com/sarvalabs/go-moi/compute/engineio"
+	gtypes "github.com/sarvalabs/go-moi/state"
 )
 
 // LogicAccountState is a container for

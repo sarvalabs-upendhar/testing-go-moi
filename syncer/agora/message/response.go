@@ -4,10 +4,10 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/kramaid"
-	"github.com/sarvalabs/moichain/syncer/agora/block"
-	"github.com/sarvalabs/moichain/syncer/cid"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-moi/syncer/agora/block"
+	"github.com/sarvalabs/go-moi/syncer/cid"
 )
 
 type Response struct {

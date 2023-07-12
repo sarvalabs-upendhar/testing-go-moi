@@ -5,14 +5,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sarvalabs/moichain/cmd/common"
-	common2 "github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/utils"
+	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/utils"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	"github.com/sarvalabs/moichain/common/hexutil"
+	"github.com/sarvalabs/go-moi/common/hexutil"
 )
 
 const (
@@ -60,46 +60,46 @@ func parsePremineFlags(cmd *cobra.Command) {
 	)
 
 	if err := cobra.MarkFlagRequired(cmd.Flags(), "asset-info"); err != nil {
-		common.Err(err)
+		cmdcommon.Err(err)
 	}
 
 	if err := cobra.MarkFlagRequired(cmd.Flags(), "allocations"); err != nil {
-		common.Err(err)
+		cmdcommon.Err(err)
 	}
 }
 
 func addAsset() {
 	genesis, err := readGenesisFile()
 	if err != nil {
-		common.Err(err)
+		cmdcommon.Err(err)
 	}
 
 	info, err := parseAssetInfoAndAllocations(assetInfo, allocations)
 	if err != nil {
-		common.Err(err)
+		cmdcommon.Err(err)
 	}
 
 	if len(behaviourNodes) == 0 && len(randomNodes) == 0 {
 		behaviourNodes, randomNodes = getContextNodes(
 			instancesFilePath,
-			common.DefaultBehaviouralCount,
-			common.DefaultRandomCount,
+			cmdcommon.DefaultBehaviouralCount,
+			cmdcommon.DefaultRandomCount,
 		)
 	}
 
-	genesis.AddAssetInfo(common2.AssetAccountSetupArgs{
+	genesis.AddAssetInfo(common.AssetAccountSetupArgs{
 		AssetInfo:          info,
 		BehaviouralContext: utils.KramaIDFromString(behaviourNodes),
 		RandomContext:      utils.KramaIDFromString(randomNodes),
 	})
 
-	if err = common.WriteToGenesisFile(genesisFilePath, genesis); err != nil {
-		common.Err(err)
+	if err = cmdcommon.WriteToGenesisFile(genesisFilePath, genesis); err != nil {
+		cmdcommon.Err(err)
 	}
 }
 
 // parseAssetInfo decodes an asset information string into an asset information struct using the delimiter `:`
-func parseAssetInfoAndAllocations(assetInfo string, allocations []string) (*common2.AssetCreationArgs, error) {
+func parseAssetInfoAndAllocations(assetInfo string, allocations []string) (*common.AssetCreationArgs, error) {
 	params := strings.Split(assetInfo, ":")
 	if len(params) != AssetInfoParamsNumber {
 		return nil, errors.New("invalid asset info params")
@@ -107,42 +107,42 @@ func parseAssetInfoAndAllocations(assetInfo string, allocations []string) (*comm
 
 	symbol := strings.TrimSpace(params[0])
 	if symbol == "" {
-		return nil, common2.ErrInvalidAssetInfoParams
+		return nil, common.ErrInvalidAssetInfoParams
 	}
 
 	dimension, err := strconv.ParseUint(strings.TrimSpace(params[1]), 10, 8)
 	if err != nil || dimension > math.MaxUint8 {
-		return nil, common2.ErrInvalidAssetInfoParams
+		return nil, common.ErrInvalidAssetInfoParams
 	}
 
 	standard, err := strconv.ParseUint(strings.TrimSpace(params[2]), 10, 16)
 	if err != nil || standard > math.MaxUint16 {
-		return nil, common2.ErrInvalidAssetInfoParams
+		return nil, common.ErrInvalidAssetInfoParams
 	}
 
 	isLogical, err := strconv.ParseBool(strings.TrimSpace(params[3]))
 	if err != nil {
-		return nil, common2.ErrInvalidAssetInfoParams
+		return nil, common.ErrInvalidAssetInfoParams
 	}
 
 	isStateFul, err := strconv.ParseBool(strings.TrimSpace(params[4]))
 	if err != nil {
-		return nil, common2.ErrInvalidAssetInfoParams
+		return nil, common.ErrInvalidAssetInfoParams
 	}
 
 	operator := strings.TrimSpace(params[5])
 	if operator == "" {
-		return nil, common2.ErrInvalidAssetInfoParams
+		return nil, common.ErrInvalidAssetInfoParams
 	}
 
-	info := &common2.AssetCreationArgs{
+	info := &common.AssetCreationArgs{
 		Symbol:      symbol,
 		Dimension:   hexutil.Uint8(dimension),
 		Standard:    hexutil.Uint16(standard),
 		IsLogical:   isLogical,
 		IsStateful:  isStateFul,
-		Operator:    common2.HexToAddress(operator),
-		Allocations: make([]common2.Allocation, 0),
+		Operator:    common.HexToAddress(operator),
+		Allocations: make([]common.Allocation, 0),
 	}
 
 	for _, alloc := range allocations {
@@ -153,23 +153,23 @@ func parseAssetInfoAndAllocations(assetInfo string, allocations []string) (*comm
 }
 
 // parseAllocation decodes allocation string into allocation struct using delimiter `:`
-func parseAllocation(allocation string) *common2.Allocation {
+func parseAllocation(allocation string) *common.Allocation {
 	if delimiterIdx := strings.Index(allocation, ":"); delimiterIdx != -1 {
 		// <address>:<balance>
 		valueRaw := allocation[delimiterIdx+1:]
 
 		balance, err := parseUint256orHex(&valueRaw)
 		if err != nil {
-			common.Err(errors.Wrapf(err, "failed to parse amount"))
+			cmdcommon.Err(errors.Wrapf(err, "failed to parse amount"))
 		}
 
-		return &common2.Allocation{
-			Address: common2.HexToAddress(allocation[:delimiterIdx]),
+		return &common.Allocation{
+			Address: common.HexToAddress(allocation[:delimiterIdx]),
 			Amount:  (*hexutil.Big)(balance),
 		}
 	}
 
-	common.Err(errors.New("failed to parse allocation"))
+	cmdcommon.Err(errors.New("failed to parse allocation"))
 
 	return nil
 }

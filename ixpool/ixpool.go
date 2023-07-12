@@ -11,9 +11,9 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/config"
-	"github.com/sarvalabs/moichain/common/utils"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/common/utils"
 )
 
 const (
@@ -323,7 +323,7 @@ func (i *IxPool) resetAccount(addr common.Address, nonce uint64) {
 
 	defer func() {
 		// update accountsMap
-		// i.accounts.remove(addr) FIXME: Issue(https://github.com/sarvalabs/moichain/issues/256)
+		// i.accounts.remove(addr) FIXME: Issue(https://github.com/sarvalabs/go-moi/issues/256)
 		account.enqueued.unlock()
 	}()
 
@@ -437,7 +437,7 @@ func (i *IxPool) Drop(ix *common.Interaction) {
 		cleanup(dropped)
 
 		// drop the account
-		// i.accounts.remove(ix.Sender()) FIXME: Issue(https://github.com/sarvalabs/moichain/issues/256)
+		// i.accounts.remove(ix.Sender()) FIXME: Issue(https://github.com/sarvalabs/go-moi/issues/256)
 
 		i.logger.Debug("Dropped interactions", "count", noOfDroppedIxs, "next-nonce", nonce, "addr", ix.Sender())
 	}

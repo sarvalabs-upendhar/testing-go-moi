@@ -9,18 +9,18 @@ import (
 	"github.com/hashicorp/go-hclog"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/sarvalabs/moichain/common"
-	id "github.com/sarvalabs/moichain/common/kramaid"
-	"github.com/sarvalabs/moichain/crypto"
-	mudracommon "github.com/sarvalabs/moichain/crypto/common"
-	"github.com/sarvalabs/moichain/crypto/poi"
-	"github.com/sarvalabs/moichain/crypto/poi/moinode"
-	networkmsg "github.com/sarvalabs/moichain/network/message"
+	"github.com/sarvalabs/go-moi/common"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-moi/crypto"
+	mudracommon "github.com/sarvalabs/go-moi/crypto/common"
+	"github.com/sarvalabs/go-moi/crypto/poi"
+	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
+	networkmsg "github.com/sarvalabs/go-moi/network/message"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/moichain/common/tests"
-	"github.com/sarvalabs/moichain/storage"
-	"github.com/sarvalabs/moichain/storage/db"
+	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/storage"
+	"github.com/sarvalabs/go-moi/storage/db"
 )
 
 type MockDB struct {

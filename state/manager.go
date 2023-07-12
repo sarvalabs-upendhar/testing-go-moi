@@ -7,22 +7,22 @@ import (
 	"net/http"
 	"sync"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 
 	"github.com/sarvalabs/go-polo"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/compute/pisa"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/compute/pisa"
 
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/sarvalabs/moichain/state/tree"
-	"github.com/sarvalabs/moichain/storage"
-	"github.com/sarvalabs/moichain/storage/db"
-	"github.com/sarvalabs/moichain/telemetry/tracing"
+	"github.com/sarvalabs/go-moi/state/tree"
+	"github.com/sarvalabs/go-moi/storage"
+	"github.com/sarvalabs/go-moi/storage/db"
+	"github.com/sarvalabs/go-moi/telemetry/tracing"
 )
 
 const (

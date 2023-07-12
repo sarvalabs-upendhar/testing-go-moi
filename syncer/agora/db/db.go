@@ -8,11 +8,11 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 
-	"github.com/sarvalabs/moichain/syncer/cid"
+	"github.com/sarvalabs/go-moi/syncer/cid"
 
-	"github.com/sarvalabs/moichain/common"
-	db "github.com/sarvalabs/moichain/storage"
-	dhruva "github.com/sarvalabs/moichain/storage/db"
+	"github.com/sarvalabs/go-moi/common"
+	db "github.com/sarvalabs/go-moi/storage"
+	dhruva "github.com/sarvalabs/go-moi/storage/db"
 )
 
 const (

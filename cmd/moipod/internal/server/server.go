@@ -7,14 +7,14 @@ import (
 	"os/signal"
 	"syscall"
 
-	cmdCommon "github.com/sarvalabs/moichain/cmd/common"
-	"github.com/sarvalabs/moichain/node"
+	cmdCommon "github.com/sarvalabs/go-moi/cmd/common"
+	"github.com/sarvalabs/go-moi/node"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/otel"
 
-	"github.com/sarvalabs/moichain/telemetry/tracing"
+	"github.com/sarvalabs/go-moi/telemetry/tracing"
 )
 
 var ErrReadingConfig = errors.New("error reading config file")

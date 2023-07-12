@@ -3,7 +3,7 @@ package tree
 import (
 	"github.com/munna0908/smt"
 
-	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/go-moi/common"
 )
 
 type MerkleTree interface {

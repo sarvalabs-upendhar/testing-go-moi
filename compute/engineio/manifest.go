@@ -11,7 +11,7 @@ import (
 	"github.com/sarvalabs/go-polo"
 	"gopkg.in/yaml.v3"
 
-	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/go-moi/common"
 )
 
 // ManifestEncoding is an enum with variants that describe

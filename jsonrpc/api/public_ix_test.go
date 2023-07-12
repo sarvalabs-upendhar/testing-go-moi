@@ -9,10 +9,10 @@ import (
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/tests"
-	"github.com/sarvalabs/moichain/crypto"
-	rpcargs "github.com/sarvalabs/moichain/jsonrpc/args"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/crypto"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 )
 
 // Interaction Api Testcases

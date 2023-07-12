@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/sarvalabs/moichain/syncer/agora/block"
-	"github.com/sarvalabs/moichain/syncer/cid"
+	"github.com/sarvalabs/go-moi/syncer/agora/block"
+	"github.com/sarvalabs/go-moi/syncer/cid"
 
 	"github.com/cskr/pubsub"
 )

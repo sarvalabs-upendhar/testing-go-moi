@@ -1,7 +1,7 @@
 package block
 
 import (
-	"github.com/sarvalabs/moichain/syncer/cid"
+	"github.com/sarvalabs/go-moi/syncer/cid"
 	"golang.org/x/crypto/blake2b"
 )
 

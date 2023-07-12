@@ -8,12 +8,12 @@ import (
 	"os"
 	"time"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/config"
-	"github.com/sarvalabs/moichain/common/utils"
-	"github.com/sarvalabs/moichain/compute"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/sarvalabs/go-moi/compute"
 
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
@@ -21,9 +21,9 @@ import (
 	"github.com/moby/locker"
 	"github.com/pkg/errors"
 
-	ktypes "github.com/sarvalabs/moichain/consensus/types"
-	"github.com/sarvalabs/moichain/crypto"
-	"github.com/sarvalabs/moichain/state"
+	ktypes "github.com/sarvalabs/go-moi/consensus/types"
+	"github.com/sarvalabs/go-moi/crypto"
+	"github.com/sarvalabs/go-moi/state"
 )
 
 type store interface {

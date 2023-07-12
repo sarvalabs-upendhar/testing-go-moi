@@ -3,10 +3,10 @@ package forage
 import (
 	"sync"
 
-	"github.com/sarvalabs/moichain/syncer/cid"
+	"github.com/sarvalabs/go-moi/syncer/cid"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/storage"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/storage"
 )
 
 func dbKeyFromCID(address common.Address, cid cid.CID) []byte {

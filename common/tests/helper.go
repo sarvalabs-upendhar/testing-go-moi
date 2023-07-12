@@ -14,23 +14,23 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/moichain/common/kramaid"
-	mudracommon "github.com/sarvalabs/moichain/crypto/common"
+	"github.com/multiformats/go-multiaddr"
+	"github.com/sarvalabs/go-moi/common/kramaid"
+	mudracommon "github.com/sarvalabs/go-moi/crypto/common"
 
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/config"
-	"github.com/sarvalabs/moichain/compute/engineio"
-	"github.com/sarvalabs/moichain/compute/pisa"
-	"github.com/sarvalabs/moichain/crypto"
-	"github.com/sarvalabs/moichain/crypto/poi"
-	"github.com/sarvalabs/moichain/crypto/poi/moinode"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/compute/engineio"
+	"github.com/sarvalabs/go-moi/compute/pisa"
+	"github.com/sarvalabs/go-moi/crypto"
+	"github.com/sarvalabs/go-moi/crypto/poi"
+	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
 )
 
 const InvalidAccount common.AccountType = 9999

@@ -5,16 +5,16 @@ import (
 	"sync"
 	"time"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
-	message2 "github.com/sarvalabs/moichain/network/message"
-	"github.com/sarvalabs/moichain/syncer/agora/block"
-	"github.com/sarvalabs/moichain/syncer/agora/db"
-	"github.com/sarvalabs/moichain/syncer/agora/message"
-	"github.com/sarvalabs/moichain/syncer/cid"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
+	message2 "github.com/sarvalabs/go-moi/network/message"
+	"github.com/sarvalabs/go-moi/syncer/agora/block"
+	"github.com/sarvalabs/go-moi/syncer/agora/db"
+	"github.com/sarvalabs/go-moi/syncer/agora/message"
+	"github.com/sarvalabs/go-moi/syncer/cid"
 
 	"github.com/hashicorp/go-hclog"
 
-	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/go-moi/common"
 )
 
 const (

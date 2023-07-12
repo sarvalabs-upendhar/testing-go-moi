@@ -3,7 +3,7 @@ package moiclient
 import (
 	"encoding/json"
 
-	"github.com/sarvalabs/moichain/jsonrpc/args"
+	"github.com/sarvalabs/go-moi/jsonrpc/args"
 )
 
 const (

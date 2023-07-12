@@ -14,12 +14,12 @@ import (
 	"strconv"
 	"sync/atomic"
 
-	"github.com/sarvalabs/moichain/common/kramaid"
-	rpcargs "github.com/sarvalabs/moichain/jsonrpc/args"
+	"github.com/sarvalabs/go-moi/common/kramaid"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/hexutil"
-	"github.com/sarvalabs/moichain/jsonrpc/api"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/hexutil"
+	"github.com/sarvalabs/go-moi/jsonrpc/api"
 )
 
 type Client struct {

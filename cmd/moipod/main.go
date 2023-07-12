@@ -3,9 +3,9 @@ package main
 import (
 	"os"
 
-	"github.com/sarvalabs/moichain/cmd/moipod/internal"
-	"github.com/sarvalabs/moichain/cmd/moipod/internal/genesis"
-	"github.com/sarvalabs/moichain/cmd/moipod/internal/server"
+	"github.com/sarvalabs/go-moi/cmd/moipod/internal"
+	"github.com/sarvalabs/go-moi/cmd/moipod/internal/genesis"
+	"github.com/sarvalabs/go-moi/cmd/moipod/internal/server"
 	"github.com/spf13/cobra"
 )
 

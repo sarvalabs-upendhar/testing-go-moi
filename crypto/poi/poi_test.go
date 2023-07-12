@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/moichain/crypto/common"
+	"github.com/sarvalabs/go-moi/crypto/common"
 )
 
 func TestGetKeystore(t *testing.T) {

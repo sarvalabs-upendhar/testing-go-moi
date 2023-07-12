@@ -15,7 +15,7 @@ import (
 
 	"golang.org/x/crypto/scrypt"
 
-	"github.com/sarvalabs/moichain/crypto/common"
+	"github.com/sarvalabs/go-moi/crypto/common"
 )
 
 // aesCTRXOR Standard CTR Mode of AES

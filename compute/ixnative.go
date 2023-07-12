@@ -3,13 +3,13 @@ package compute
 import (
 	"math/big"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/hexutil"
-	"github.com/sarvalabs/moichain/state"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/hexutil"
+	"github.com/sarvalabs/go-moi/state"
 
 	"github.com/pkg/errors"
 
-	"github.com/sarvalabs/moichain/compute/engineio"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
 // ValueTransfer performs the IxValueTransfer interaction on the given sender and receiver StateObjects.

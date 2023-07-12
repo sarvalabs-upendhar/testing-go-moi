@@ -5,14 +5,14 @@ import (
 
 	"github.com/pkg/errors"
 
-	common2 "github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/kramaid"
-	"github.com/sarvalabs/moichain/crypto/common"
-	"github.com/sarvalabs/moichain/crypto/poi"
-	"github.com/sarvalabs/moichain/crypto/poi/moinode"
-	"github.com/sarvalabs/moichain/crypto/signature/bls"
-	"github.com/sarvalabs/moichain/crypto/signature/ecdsa"
-	"github.com/sarvalabs/moichain/crypto/signature/schnorr"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/kramaid"
+	cryptocommon "github.com/sarvalabs/go-moi/crypto/common"
+	"github.com/sarvalabs/go-moi/crypto/poi"
+	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
+	"github.com/sarvalabs/go-moi/crypto/signature/bls"
+	"github.com/sarvalabs/go-moi/crypto/signature/ecdsa"
+	"github.com/sarvalabs/go-moi/crypto/signature/schnorr"
 )
 
 const (
@@ -26,7 +26,7 @@ type KramaVault struct {
 	consensusPriv PrivateKey      // Private Key used in consensus for signing etc
 	networkPriv   PrivateKey      // Private key used in p2p communication
 	kramaID       kramaid.KramaID // KramaID of the user or node
-	Address       common2.Address
+	Address       common.Address
 	mnemonic      poi.Mnemonic
 }
 
@@ -115,7 +115,7 @@ func NewVault(cfg *VaultConfig, validatorType moinode.MoiNodeType, kramaIDVersio
 		}
 
 		if mnemonic[0] == "" {
-			return nil, common.ErrMnemonicKeystorePasswordAndPathMandatory
+			return nil, cryptocommon.ErrMnemonicKeystorePasswordAndPathMandatory
 		}
 
 		bothSignAndCommPrivBytes, moiID, err := poi.GetPrivateKeysForSigningAndNetwork(mnemonic.String(), cfg.NodeIndex)
@@ -201,7 +201,7 @@ func (vault *KramaVault) GetPublicKeyAt(path string) ([]byte, error) {
 	return publicKey, nil
 }
 
-func (vault *KramaVault) Sign(data []byte, sigType common.SigType, signOptions ...SignOption) ([]byte, error) {
+func (vault *KramaVault) Sign(data []byte, sigType cryptocommon.SigType, signOptions ...SignOption) ([]byte, error) {
 	var (
 		signingKey     []byte
 		err            error
@@ -231,7 +231,7 @@ func (vault *KramaVault) Sign(data []byte, sigType common.SigType, signOptions .
 	}
 
 	switch sigType {
-	case common.BlsBLST:
+	case cryptocommon.BlsBLST:
 		{
 			if signingKeyType == SECP256K1 {
 				blsPrivKey := new(BLSPrivKey)
@@ -241,85 +241,85 @@ func (vault *KramaVault) Sign(data []byte, sigType common.SigType, signOptions .
 
 			blsSigWithBlst := bls.BlsWithBlstSignature{}
 			if err := blsSigWithBlst.Sign(data, signingKey, vault.kramaID); err != nil {
-				return nil, errors.Wrap(common.ErrSigningFailed, err.Error())
+				return nil, errors.Wrap(cryptocommon.ErrSigningFailed, err.Error())
 			}
 
-			return common.MarshalSignature(common.Signature(blsSigWithBlst)), nil
+			return cryptocommon.MarshalSignature(cryptocommon.Signature(blsSigWithBlst)), nil
 		}
-	case common.SchnorrSecp256k1:
+	case cryptocommon.SchnorrSecp256k1:
 		{
 			schnorrSig := schnorr.SchnorrSignature{}
 			if err := schnorrSig.Sign(data, signingKey, vault.kramaID); err != nil {
-				return nil, errors.Wrap(common.ErrSigningFailed, err.Error())
+				return nil, errors.Wrap(cryptocommon.ErrSigningFailed, err.Error())
 			}
 
-			return common.MarshalSignature(common.Signature(schnorrSig)), nil
+			return cryptocommon.MarshalSignature(cryptocommon.Signature(schnorrSig)), nil
 		}
-	case common.EcdsaSecp256k1:
+	case cryptocommon.EcdsaSecp256k1:
 		{
 			if signingKeyType == SECP256K1 {
 				ecdsaSig := ecdsa.EcdsaSecp256k1Signature{}
 				if err := ecdsaSig.Sign(data, signingKey, vault.kramaID); err != nil {
-					return nil, errors.Wrap(common.ErrSigningFailed, err.Error())
+					return nil, errors.Wrap(cryptocommon.ErrSigningFailed, err.Error())
 				}
 
-				return common.MarshalSignature(common.Signature(ecdsaSig)), nil
+				return cryptocommon.MarshalSignature(cryptocommon.Signature(ecdsaSig)), nil
 			} else {
-				return nil, common.ErrSignOptionsNotPassed
+				return nil, cryptocommon.ErrSignOptionsNotPassed
 			}
 		}
 	default:
 		{
-			return nil, common.ErrUnsupportedSigType
+			return nil, cryptocommon.ErrUnsupportedSigType
 		}
 	}
 }
 
 func Verify(data, signature, pubBytes []byte) (bool, error) {
-	sig, err := common.UnmarshalSignature(signature)
+	sig, err := cryptocommon.UnmarshalSignature(signature)
 	if err != nil {
 		return false, err
 	}
 
 	switch sig.SigPrefix[0] {
-	case common.BlsBLST.Byte():
+	case cryptocommon.BlsBLST.Byte():
 		{
 			blsSigWithBlst := bls.BlsWithBlstSignature(sig)
 
 			return blsSigWithBlst.Verify(data, pubBytes)
 		}
-	case common.EcdsaSecp256k1.Byte():
+	case cryptocommon.EcdsaSecp256k1.Byte():
 		{
 			s256Sig := ecdsa.EcdsaSecp256k1Signature(sig)
 
 			return s256Sig.Verify(data, pubBytes)
 		}
-	case common.SchnorrSecp256k1.Byte():
+	case cryptocommon.SchnorrSecp256k1.Byte():
 		{
 			schSig := schnorr.SchnorrSignature(sig)
 
 			return schSig.Verify(data, pubBytes)
 		}
 	default:
-		return false, common.ErrUnsupportedSigType
+		return false, cryptocommon.ErrUnsupportedSigType
 	}
 }
 
 func AggregateSignatures(multipleSignatures [][]byte) ([]byte, error) {
 	if len(multipleSignatures) == 0 {
-		return nil, common.ErrEmpty
+		return nil, cryptocommon.ErrEmpty
 	}
 
 	blsBlstSigs := make([]bls.BlsWithBlstSignature, len(multipleSignatures))
 
 	for i := 0; i < len(multipleSignatures); i++ {
-		tempSigInBls, err := common.UnmarshalSignature(multipleSignatures[i])
+		tempSigInBls, err := cryptocommon.UnmarshalSignature(multipleSignatures[i])
 		if err != nil {
 			return nil, err
 		}
 
 		if tempSigInBls.SigPrefix[0] != 0x04 {
-			return nil, common.ErrUnsupportedAggSignature
+			return nil, cryptocommon.ErrUnsupportedAggSignature
 		}
 
 		blsBlstSigs[i] = bls.BlsWithBlstSignature(tempSigInBls)
@@ -330,12 +330,12 @@ func AggregateSignatures(multipleSignatures [][]byte) ([]byte, error) {
 
 func VerifyAggregateSignature(data []byte, aggSignature []byte, multiplePubKeys [][]byte) (bool, error) {
 	if len(multiplePubKeys) == 0 {
-		return false, common.ErrEmpty
+		return false, cryptocommon.ErrEmpty
 	}
 
 	for i := 0; i < len(multiplePubKeys); i++ {
 		if len(multiplePubKeys[i]) != 48 {
-			return false, common.ErrInvalidBLSPublicKeyLength
+			return false, cryptocommon.ErrInvalidBLSPublicKeyLength
 		}
 	}
 
@@ -355,7 +355,7 @@ func GetSignature(bz []byte, mnemonic string) (string, error) {
 		return "", err
 	}
 
-	sign, err := vault.Sign(bz, common.EcdsaSecp256k1, UsingIgcPath(DefaultMOIWalletPath))
+	sign, err := vault.Sign(bz, cryptocommon.EcdsaSecp256k1, UsingIgcPath(DefaultMOIWalletPath))
 	if err != nil {
 		return "", err
 	}
@@ -388,5 +388,5 @@ func VerifySignatureUsingKramaID(id kramaid.KramaID, rawData []byte, signature [
 }
 
 func ValidateSignature(sig []byte) bool {
-	return common.CanUnmarshalSignature(sig)
+	return cryptocommon.CanUnmarshalSignature(sig)
 }

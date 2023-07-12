@@ -7,9 +7,9 @@ import (
 
 	"github.com/gorilla/handlers"
 
-	"github.com/sarvalabs/moichain/common/config"
-	"github.com/sarvalabs/moichain/common/utils"
-	"github.com/sarvalabs/moichain/jsonrpc/websocket"
+	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2"

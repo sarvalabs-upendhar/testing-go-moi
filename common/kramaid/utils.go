@@ -5,7 +5,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/sarvalabs/moichain/crypto/common"
+	"github.com/sarvalabs/go-moi/crypto/common"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/libp2p/go-libp2p/core/crypto"

@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	networkmsg "github.com/sarvalabs/moichain/network/message"
+	networkmsg "github.com/sarvalabs/go-moi/network/message"
 
-	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/go-moi/common"
 )
 
 const (

@@ -7,18 +7,18 @@ import (
 	"testing"
 	"time"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/hexutil"
-	"github.com/sarvalabs/moichain/common/utils"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/hexutil"
+	"github.com/sarvalabs/go-moi/common/utils"
 
-	"github.com/sarvalabs/moichain/state"
+	"github.com/sarvalabs/go-moi/state"
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/go-moi/common/tests"
 )
 
 func TestHasTesseract(t *testing.T) {

@@ -6,19 +6,19 @@ import (
 	"log"
 	"testing"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
-	networkmsg "github.com/sarvalabs/moichain/network/message"
-	"github.com/sarvalabs/moichain/syncer/agora/block"
-	"github.com/sarvalabs/moichain/syncer/agora/message"
-	"github.com/sarvalabs/moichain/syncer/agora/notifications"
-	"github.com/sarvalabs/moichain/syncer/cid"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
+	networkmsg "github.com/sarvalabs/go-moi/network/message"
+	"github.com/sarvalabs/go-moi/syncer/agora/block"
+	"github.com/sarvalabs/go-moi/syncer/agora/message"
+	"github.com/sarvalabs/go-moi/syncer/agora/notifications"
+	"github.com/sarvalabs/go-moi/syncer/cid"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/tests"
 )
 
 func NewTestPeerManager(sessionID common.Address, network sessionNetwork) *PeerManager {

@@ -10,7 +10,7 @@ import (
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/exp/constraints"
 
-	"github.com/sarvalabs/moichain/compute/engineio"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
 func SlotHash(slot uint8) []byte {

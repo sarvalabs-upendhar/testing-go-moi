@@ -12,7 +12,7 @@ import (
 	"github.com/tyler-smith/go-bip39"
 	"golang.org/x/crypto/scrypt"
 
-	"github.com/sarvalabs/moichain/crypto/common"
+	"github.com/sarvalabs/go-moi/crypto/common"
 )
 
 type authParams struct {

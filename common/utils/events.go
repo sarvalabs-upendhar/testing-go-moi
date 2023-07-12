@@ -2,9 +2,9 @@ package utils
 
 import (
 	"github.com/libp2p/go-libp2p/core/peer"
-	id "github.com/sarvalabs/moichain/common/kramaid"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 
-	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/go-moi/common"
 )
 
 // NewIxsEvent occurs when new transactions enter the transaction pool

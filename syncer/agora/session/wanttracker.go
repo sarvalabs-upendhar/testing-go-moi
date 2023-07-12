@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sarvalabs/moichain/syncer/cid"
+	"github.com/sarvalabs/go-moi/syncer/cid"
 )
 
 type WantTracker struct {

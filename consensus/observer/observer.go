@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/sarvalabs/moichain/consensus/types"
+	"github.com/sarvalabs/go-moi/consensus/types"
 )
 
 type WatchDog struct {

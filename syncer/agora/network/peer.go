@@ -7,8 +7,8 @@ import (
 	"time"
 
 	p2pnet "github.com/libp2p/go-libp2p/core/network"
-	id "github.com/sarvalabs/moichain/common/kramaid"
-	"github.com/sarvalabs/moichain/network/message"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-moi/network/message"
 
 	"github.com/libp2p/go-msgio"
 
@@ -16,7 +16,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
-	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/go-moi/common"
 )
 
 type AgoraPeer struct {

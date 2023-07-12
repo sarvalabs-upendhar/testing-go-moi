@@ -4,14 +4,14 @@ import (
 	"context"
 	"time"
 
-	"github.com/sarvalabs/moichain/common"
-	id "github.com/sarvalabs/moichain/common/kramaid"
-	"github.com/sarvalabs/moichain/crypto"
-	networkmsg "github.com/sarvalabs/moichain/network/message"
+	"github.com/sarvalabs/go-moi/common"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-moi/crypto"
+	networkmsg "github.com/sarvalabs/go-moi/network/message"
 
 	"github.com/pkg/errors"
 
-	ktypes "github.com/sarvalabs/moichain/consensus/types"
+	ktypes "github.com/sarvalabs/go-moi/consensus/types"
 )
 
 // ICSRPCService is a struct that represents an ICS RPC Service

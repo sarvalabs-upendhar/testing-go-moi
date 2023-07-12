@@ -1,8 +1,8 @@
 package api
 
 import (
-	"github.com/sarvalabs/moichain/common"
-	rpcargs "github.com/sarvalabs/moichain/jsonrpc/args"
+	"github.com/sarvalabs/go-moi/common"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 )
 
 // PublicDebugAPI is the collection of APIs exposed over the public debugging endpoint

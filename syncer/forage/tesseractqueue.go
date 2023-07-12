@@ -5,7 +5,7 @@ import (
 	"log"
 	"sync"
 
-	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/go-moi/common"
 )
 
 type TesseractInfo struct {

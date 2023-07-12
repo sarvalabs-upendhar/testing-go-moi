@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
-	message2 "github.com/sarvalabs/moichain/network/message"
-	"github.com/sarvalabs/moichain/syncer/agora/message"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
+	message2 "github.com/sarvalabs/go-moi/network/message"
+	"github.com/sarvalabs/go-moi/syncer/agora/message"
 
 	"github.com/sarvalabs/go-polo"
 
@@ -17,10 +17,10 @@ import (
 	"github.com/hashicorp/go-hclog"
 	p2pnet "github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/config"
-	"github.com/sarvalabs/moichain/common/utils"
-	"github.com/sarvalabs/moichain/network/p2p"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/sarvalabs/go-moi/network/p2p"
 )
 
 type SessionManager interface {

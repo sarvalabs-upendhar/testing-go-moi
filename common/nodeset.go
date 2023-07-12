@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"log"
 
-	"github.com/sarvalabs/moichain/common/kramaid"
+	"github.com/sarvalabs/go-moi/common/kramaid"
 )
 
 type IcsSetType int

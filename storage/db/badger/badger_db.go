@@ -7,8 +7,8 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	"github.com/pkg/errors"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/storage/db"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/storage/db"
 )
 
 // BadgerDB is a LSM based key-value store, It implements db.DB interface

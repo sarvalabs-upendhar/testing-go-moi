@@ -1,6 +1,6 @@
 package forage
 
-import "github.com/sarvalabs/moichain/common"
+import "github.com/sarvalabs/go-moi/common"
 
 type BucketSyncRequest struct {
 	BucketID  uint64

@@ -4,7 +4,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
-	"github.com/sarvalabs/moichain/common/kramaid"
+	"github.com/sarvalabs/go-moi/common/kramaid"
 )
 
 type MsgType int64

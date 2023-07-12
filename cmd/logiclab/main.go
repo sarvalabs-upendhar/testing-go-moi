@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/sarvalabs/moichain/cmd/logiclab/internal"
+	"github.com/sarvalabs/go-moi/cmd/logiclab/internal"
 )
 
 // LogicLabCommandDocWebsite represents the link to the LogicLab Web Documentation

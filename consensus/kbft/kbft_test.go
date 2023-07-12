@@ -8,9 +8,9 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/tests"
-	ktypes "github.com/sarvalabs/moichain/consensus/types"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/tests"
+	ktypes "github.com/sarvalabs/go-moi/consensus/types"
 )
 
 // common format for all tests

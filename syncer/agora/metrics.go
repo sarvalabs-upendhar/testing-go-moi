@@ -1,8 +1,8 @@
 package agora
 
 import (
-	"github.com/sarvalabs/moichain/syncer/agora/decision"
-	"github.com/sarvalabs/moichain/syncer/agora/network"
+	"github.com/sarvalabs/go-moi/syncer/agora/decision"
+	"github.com/sarvalabs/go-moi/syncer/agora/network"
 )
 
 type Metrics struct {

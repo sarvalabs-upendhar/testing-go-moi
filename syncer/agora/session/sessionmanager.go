@@ -8,15 +8,15 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/sarvalabs/moichain/syncer/agora/block"
-	"github.com/sarvalabs/moichain/syncer/agora/decision"
-	"github.com/sarvalabs/moichain/syncer/agora/message"
-	"github.com/sarvalabs/moichain/syncer/agora/network"
-	"github.com/sarvalabs/moichain/syncer/agora/notifications"
-	"github.com/sarvalabs/moichain/syncer/cid"
+	"github.com/sarvalabs/go-moi/syncer/agora/block"
+	"github.com/sarvalabs/go-moi/syncer/agora/decision"
+	"github.com/sarvalabs/go-moi/syncer/agora/message"
+	"github.com/sarvalabs/go-moi/syncer/agora/network"
+	"github.com/sarvalabs/go-moi/syncer/agora/notifications"
+	"github.com/sarvalabs/go-moi/syncer/cid"
 
-	"github.com/sarvalabs/moichain/common"
-	id "github.com/sarvalabs/moichain/common/kramaid"
+	"github.com/sarvalabs/go-moi/common"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 )
 
 const MaxRounds = 3

@@ -5,12 +5,12 @@ import (
 	"log"
 	"sync"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 
 	"github.com/hashicorp/go-hclog"
 
-	"github.com/sarvalabs/moichain/common"
-	ktypes "github.com/sarvalabs/moichain/consensus/types"
+	"github.com/sarvalabs/go-moi/common"
+	ktypes "github.com/sarvalabs/go-moi/consensus/types"
 )
 
 // RoundVoteSet is a struct that represents a set for a votes for a single round.

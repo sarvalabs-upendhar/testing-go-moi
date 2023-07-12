@@ -5,8 +5,8 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/state"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/state"
 )
 
 // IxExecutor represents an executor instance that handles the

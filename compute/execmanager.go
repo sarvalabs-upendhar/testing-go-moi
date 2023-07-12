@@ -6,11 +6,11 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/config"
-	"github.com/sarvalabs/moichain/compute/engineio"
-	"github.com/sarvalabs/moichain/compute/pisa"
-	"github.com/sarvalabs/moichain/state"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/compute/engineio"
+	"github.com/sarvalabs/go-moi/compute/pisa"
+	"github.com/sarvalabs/go-moi/state"
 )
 
 func init() {

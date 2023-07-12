@@ -7,18 +7,18 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sarvalabs/moichain/cmd/common"
-	common2 "github.com/sarvalabs/moichain/common"
+	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"
+	"github.com/sarvalabs/go-moi/common"
 
 	"github.com/pkg/errors"
 )
 
-func readGenesisFile() (*common2.GenesisFile, error) {
+func readGenesisFile() (*common.GenesisFile, error) {
 	if _, err := os.Stat(genesisFilePath); os.IsNotExist(err) {
-		return &common2.GenesisFile{}, nil
+		return &common.GenesisFile{}, nil
 	}
 
-	genesis := new(common2.GenesisFile)
+	genesis := new(common.GenesisFile)
 
 	file, err := os.ReadFile(genesisFilePath)
 	if err != nil {
@@ -56,13 +56,13 @@ func parseUint256orHex(val *string) (*big.Int, error) {
 }
 
 func getContextNodes(instancesFile string, behaviourCount, randomCount int) ([]string, []string) {
-	kramaIDs, err := common.ReadKramaIDsFromInstancesFile(instancesFile)
+	kramaIDs, err := cmdcommon.ReadKramaIDsFromInstancesFile(instancesFile)
 	if err != nil {
-		common.Err(err)
+		cmdcommon.Err(err)
 	}
 
 	if behaviourCount+randomCount > len(kramaIDs) {
-		common.Err(errors.New("insufficient krama IDs"))
+		cmdcommon.Err(errors.New("insufficient krama IDs"))
 	}
 
 	return kramaIDs[0:behaviourCount],

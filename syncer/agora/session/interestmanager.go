@@ -3,9 +3,9 @@ package session
 import (
 	"sync"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/syncer/agora/block"
-	"github.com/sarvalabs/moichain/syncer/cid"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/syncer/agora/block"
+	"github.com/sarvalabs/go-moi/syncer/cid"
 )
 
 type InterestManager struct {

@@ -1,8 +1,8 @@
 package api
 
 import (
-	id "github.com/sarvalabs/moichain/common/kramaid"
-	rpcargs "github.com/sarvalabs/moichain/jsonrpc/args"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 )
 
 // PublicNetAPI is a struct that represents a wrapper for the public Net APIs.

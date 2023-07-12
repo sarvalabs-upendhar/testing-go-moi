@@ -3,9 +3,9 @@ package common
 import (
 	"math/big"
 
-	"github.com/sarvalabs/moichain/common/kramaid"
+	"github.com/sarvalabs/go-moi/common/kramaid"
 
-	"github.com/sarvalabs/moichain/common/hexutil"
+	"github.com/sarvalabs/go-moi/common/hexutil"
 )
 
 const GenesisIdentifier = "genesis"

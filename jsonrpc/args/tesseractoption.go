@@ -1,6 +1,6 @@
 package args
 
-import "github.com/sarvalabs/moichain/common"
+import "github.com/sarvalabs/go-moi/common"
 
 var LatestTesseractHeight int64 = -1
 

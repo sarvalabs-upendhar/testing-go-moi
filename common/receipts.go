@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"math/big"
 
-	"github.com/sarvalabs/moichain/common/hexutil"
+	"github.com/sarvalabs/go-moi/common/hexutil"
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"

@@ -7,7 +7,7 @@ import (
 	"github.com/sarvalabs/go-polo"
 	"gopkg.in/yaml.v3"
 
-	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/go-moi/common"
 )
 
 // CtxDriver represents an interface for accessing and manipulating

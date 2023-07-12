@@ -1,4 +1,4 @@
-module github.com/sarvalabs/moichain
+module github.com/sarvalabs/go-moi
 
 go 1.18
 

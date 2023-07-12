@@ -6,16 +6,16 @@ import (
 	"log"
 
 	"github.com/libp2p/go-msgio"
-	id "github.com/sarvalabs/moichain/common/kramaid"
-	networkmsg "github.com/sarvalabs/moichain/network/message"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
+	networkmsg "github.com/sarvalabs/go-moi/network/message"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/sarvalabs/go-polo"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/utils"
-	"github.com/sarvalabs/moichain/ixpool"
-	"github.com/sarvalabs/moichain/lattice"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/sarvalabs/go-moi/ixpool"
+	"github.com/sarvalabs/go-moi/lattice"
 )
 
 // Struct that represents the network event handler

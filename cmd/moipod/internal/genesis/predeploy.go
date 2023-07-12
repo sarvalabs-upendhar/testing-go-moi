@@ -3,9 +3,9 @@ package genesis
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/sarvalabs/moichain/cmd/common"
-	common2 "github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/utils"
+	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/utils"
 )
 
 func GetPreDeployCommand() *cobra.Command {
@@ -22,9 +22,9 @@ func GetPreDeployCommand() *cobra.Command {
 }
 
 func runPreDeployCommand(cmd *cobra.Command, args []string) {
-	artifact, err := common.ReadArtifactFile(artifact)
+	artifact, err := cmdcommon.ReadArtifactFile(artifact)
 	if err != nil {
-		common.Err(err)
+		cmdcommon.Err(err)
 	}
 
 	addGenesisLogic(artifact)
@@ -56,21 +56,21 @@ func parsePreDeployFlags(cmd *cobra.Command) {
 }
 
 // addGenesisLogic takes path to logic file and appends it to current set of logics
-func addGenesisLogic(artifact *common.Artifact) {
+func addGenesisLogic(artifact *cmdcommon.Artifact) {
 	genesis, err := readGenesisFile()
 	if err != nil {
-		common.Err(err)
+		cmdcommon.Err(err)
 	}
 
 	if len(behaviourNodes) == 0 && len(randomNodes) == 0 {
 		behaviourNodes, randomNodes = getContextNodes(
 			instancesFilePath,
-			common.DefaultBehaviouralCount,
-			common.DefaultRandomCount,
+			cmdcommon.DefaultBehaviouralCount,
+			cmdcommon.DefaultRandomCount,
 		)
 	}
 
-	genesis.AddLogic(common2.LogicSetupArgs{
+	genesis.AddLogic(common.LogicSetupArgs{
 		Name:               artifact.Name,
 		Callsite:           artifact.Callsite,
 		Calldata:           artifact.Calldata,
@@ -79,8 +79,8 @@ func addGenesisLogic(artifact *common.Artifact) {
 		RandomContext:      utils.KramaIDFromString(randomNodes),
 	})
 
-	if err = common.WriteToGenesisFile(genesisFilePath, genesis); err != nil {
-		common.Err(err)
+	if err = cmdcommon.WriteToGenesisFile(genesisFilePath, genesis); err != nil {
+		cmdcommon.Err(err)
 	}
 }
 
@@ -94,7 +94,7 @@ func addGenesisLogic(artifact *common.Artifact) {
 //
 //		m, err := ReadManifest("./jug/manifests/erc20.json")
 //		if err != nil {
-//			common.Err(err)
+//			cmdcommon.Err(err)
 //		}
 //
 //		manifest := "0x" + types.BytesToHex(m)

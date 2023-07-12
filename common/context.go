@@ -1,6 +1,6 @@
 package common
 
-import id "github.com/sarvalabs/moichain/common/kramaid"
+import id "github.com/sarvalabs/go-moi/common/kramaid"
 
 type ParticipantRole int
 

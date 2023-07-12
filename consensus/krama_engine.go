@@ -19,22 +19,22 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/crypto/blake2b"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
-	mudraCommon "github.com/sarvalabs/moichain/crypto/common"
-	networkmsg "github.com/sarvalabs/moichain/network/message"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
+	mudraCommon "github.com/sarvalabs/go-moi/crypto/common"
+	networkmsg "github.com/sarvalabs/go-moi/network/message"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/config"
-	"github.com/sarvalabs/moichain/common/utils"
-	"github.com/sarvalabs/moichain/flux"
-	"github.com/sarvalabs/moichain/state"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/sarvalabs/go-moi/flux"
+	"github.com/sarvalabs/go-moi/state"
 
-	"github.com/sarvalabs/moichain/consensus/kbft"
-	"github.com/sarvalabs/moichain/consensus/observer"
-	ktypes "github.com/sarvalabs/moichain/consensus/types"
-	"github.com/sarvalabs/moichain/crypto"
-	"github.com/sarvalabs/moichain/ixpool"
-	"github.com/sarvalabs/moichain/telemetry/tracing"
+	"github.com/sarvalabs/go-moi/consensus/kbft"
+	"github.com/sarvalabs/go-moi/consensus/observer"
+	ktypes "github.com/sarvalabs/go-moi/consensus/types"
+	"github.com/sarvalabs/go-moi/crypto"
+	"github.com/sarvalabs/go-moi/ixpool"
+	"github.com/sarvalabs/go-moi/telemetry/tracing"
 )
 
 const (

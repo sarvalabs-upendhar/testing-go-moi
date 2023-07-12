@@ -8,16 +8,16 @@ import (
 	"sync"
 	"time"
 
-	rpcargs "github.com/sarvalabs/moichain/jsonrpc/args"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/utils"
-	"github.com/sarvalabs/moichain/jsonrpc/api"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/sarvalabs/go-moi/jsonrpc/api"
 )
 
 const (

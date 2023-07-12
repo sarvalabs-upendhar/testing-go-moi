@@ -4,13 +4,13 @@ import (
 	"context"
 	"sync"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/protocol"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/network/rpc"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/network/rpc"
 )
 
 type MockServer struct {

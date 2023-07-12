@@ -6,8 +6,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
-	"github.com/sarvalabs/moichain/common"
-	rpcargs "github.com/sarvalabs/moichain/jsonrpc/args"
+	"github.com/sarvalabs/go-moi/common"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 )
 
 var ErrGenesisAccount = errors.New("genesis account interactions forbidden")

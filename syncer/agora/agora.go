@@ -3,18 +3,18 @@ package agora
 import (
 	"context"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
-	"github.com/sarvalabs/moichain/syncer/agora/db"
-	"github.com/sarvalabs/moichain/syncer/agora/decision"
-	"github.com/sarvalabs/moichain/syncer/agora/network"
-	"github.com/sarvalabs/moichain/syncer/agora/notifications"
-	"github.com/sarvalabs/moichain/syncer/agora/session"
-	"github.com/sarvalabs/moichain/syncer/cid"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-moi/syncer/agora/db"
+	"github.com/sarvalabs/go-moi/syncer/agora/decision"
+	"github.com/sarvalabs/go-moi/syncer/agora/network"
+	"github.com/sarvalabs/go-moi/syncer/agora/notifications"
+	"github.com/sarvalabs/go-moi/syncer/agora/session"
+	"github.com/sarvalabs/go-moi/syncer/cid"
 
 	"github.com/hashicorp/go-hclog"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/network/p2p"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/network/p2p"
 )
 
 const (

@@ -3,8 +3,8 @@ package config
 import (
 	"math/big"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/crypto"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/crypto"
 )
 
 var (

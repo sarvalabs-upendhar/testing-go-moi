@@ -11,9 +11,9 @@ import (
 	blst "github.com/supranational/blst/bindings/go"
 	"github.com/tyler-smith/go-bip39"
 
-	"github.com/sarvalabs/moichain/common/kramaid"
-	"github.com/sarvalabs/moichain/crypto/common"
-	"github.com/sarvalabs/moichain/crypto/poi/moinode"
+	"github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-moi/crypto/common"
+	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
 )
 
 // GetKeystore returns keystore of node that persists private key required for consensus and p2p network communication

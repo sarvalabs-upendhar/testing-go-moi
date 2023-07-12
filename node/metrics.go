@@ -1,14 +1,14 @@
 package node
 
 import (
-	"github.com/sarvalabs/moichain/consensus"
-	"github.com/sarvalabs/moichain/flux"
-	"github.com/sarvalabs/moichain/ixpool"
-	"github.com/sarvalabs/moichain/lattice"
-	"github.com/sarvalabs/moichain/network/p2p"
-	"github.com/sarvalabs/moichain/state"
-	"github.com/sarvalabs/moichain/syncer/agora"
-	"github.com/sarvalabs/moichain/syncer/forage"
+	"github.com/sarvalabs/go-moi/consensus"
+	"github.com/sarvalabs/go-moi/flux"
+	"github.com/sarvalabs/go-moi/ixpool"
+	"github.com/sarvalabs/go-moi/lattice"
+	"github.com/sarvalabs/go-moi/network/p2p"
+	"github.com/sarvalabs/go-moi/state"
+	"github.com/sarvalabs/go-moi/syncer/agora"
+	"github.com/sarvalabs/go-moi/syncer/forage"
 )
 
 type nodeMetrics struct {

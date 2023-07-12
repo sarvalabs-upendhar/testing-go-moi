@@ -5,13 +5,13 @@ import (
 	"net"
 	"time"
 
-	"github.com/sarvalabs/moichain/common/kramaid"
+	"github.com/sarvalabs/go-moi/common/kramaid"
 
 	maddr "github.com/multiformats/go-multiaddr"
 
-	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/go-moi/common"
 
-	"github.com/sarvalabs/moichain/crypto"
+	"github.com/sarvalabs/go-moi/crypto"
 )
 
 type Config struct {

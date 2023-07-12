@@ -5,7 +5,7 @@ import (
 
 	"github.com/dgraph-io/ristretto/z"
 
-	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/go-moi/common"
 )
 
 type Collector interface {

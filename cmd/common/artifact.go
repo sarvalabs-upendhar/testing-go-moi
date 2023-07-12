@@ -7,7 +7,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/sarvalabs/moichain/common/hexutil"
+	"github.com/sarvalabs/go-moi/common/hexutil"
 )
 
 type Artifact struct {

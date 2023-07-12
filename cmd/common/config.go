@@ -3,9 +3,9 @@ package common
 import (
 	"strconv"
 
-	"github.com/sarvalabs/moichain/common/config"
-	"github.com/sarvalabs/moichain/common/hexutil"
-	"github.com/sarvalabs/moichain/crypto"
+	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/common/hexutil"
+	"github.com/sarvalabs/go-moi/crypto"
 )
 
 type Config struct {

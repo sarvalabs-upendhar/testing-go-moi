@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-moi/syncer/agora/block"
 	"github.com/sarvalabs/go-polo"
-	"github.com/sarvalabs/moichain/common/kramaid"
-	"github.com/sarvalabs/moichain/syncer/agora/block"
 )
 
 type PeerList struct {

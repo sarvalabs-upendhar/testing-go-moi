@@ -11,9 +11,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/jsonrpc/args"
-	"github.com/sarvalabs/moichain/moiclient"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/jsonrpc/args"
+	"github.com/sarvalabs/go-moi/moiclient"
 )
 
 const (

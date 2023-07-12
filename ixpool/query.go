@@ -4,7 +4,7 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/go-moi/common"
 )
 
 // GetNonce returns the next nonce from the IxPool if the account is initialized in-memory.

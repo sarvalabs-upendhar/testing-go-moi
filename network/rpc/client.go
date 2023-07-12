@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	id "github.com/sarvalabs/moichain/common/kramaid"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p-gorpc/stats"
@@ -19,8 +19,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-multiaddr"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/network/rpc/ttlmap"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/network/rpc/ttlmap"
 )
 
 // ClientOption allows for functional setting of options on a Client.

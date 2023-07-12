@@ -13,19 +13,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/moichain/common/kramaid"
-	rpcargs "github.com/sarvalabs/moichain/jsonrpc/args"
-
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/crypto"
-	"github.com/sarvalabs/moichain/jsonrpc/api"
-
+	"github.com/sarvalabs/go-moi/common/kramaid"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-polo"
+
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/crypto"
+	"github.com/sarvalabs/go-moi/jsonrpc/api"
+
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/moichain/common/hexutil"
-	"github.com/sarvalabs/moichain/common/tests"
-	"github.com/sarvalabs/moichain/compute/engineio"
+	"github.com/sarvalabs/go-moi/common/hexutil"
+	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
 var LatestTesseractNumber = int64(-1)

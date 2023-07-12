@@ -10,13 +10,14 @@ import (
 	"strings"
 	"time"
 
-	cmdCommon "github.com/sarvalabs/moichain/cmd/common"
-	"github.com/sarvalabs/moichain/common/config"
+	"github.com/libp2p/go-libp2p"
+	"github.com/multiformats/go-multiaddr"
+	cmdCommon "github.com/sarvalabs/go-moi/cmd/common"
+	"github.com/sarvalabs/go-moi/common/config"
 
 	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
 
 	badger "github.com/ipfs/go-ds-badger"
-	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -24,7 +25,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/routing"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
-	"github.com/multiformats/go-multiaddr"
 	"github.com/spf13/cobra"
 )
 

@@ -1,7 +1,7 @@
 package state
 
 import (
-	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/go-moi/common"
 )
 
 const GuardianSLot = 2

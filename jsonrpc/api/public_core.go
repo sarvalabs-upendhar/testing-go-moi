@@ -6,11 +6,11 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/hexutil"
-	"github.com/sarvalabs/moichain/common/utils"
-	"github.com/sarvalabs/moichain/compute/engineio"
-	rpcargs "github.com/sarvalabs/moichain/jsonrpc/args"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/hexutil"
+	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/sarvalabs/go-moi/compute/engineio"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 )
 
 // PublicCoreAPI is a struct that represents a wrapper for the core public core APIs

@@ -6,15 +6,15 @@ import (
 	"log"
 	"time"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/config"
-	"github.com/sarvalabs/moichain/common/utils"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/common/utils"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 
-	"github.com/sarvalabs/moichain/storage/db"
-	"github.com/sarvalabs/moichain/storage/db/badger"
+	"github.com/sarvalabs/go-moi/storage/db"
+	"github.com/sarvalabs/go-moi/storage/db/badger"
 )
 
 // MaxBucketCount tells the no of buckets , accounts can be classified into

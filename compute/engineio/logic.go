@@ -1,7 +1,7 @@
 package engineio
 
 import (
-	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/go-moi/common"
 )
 
 // LogicDriver is an interface that defines a logic driver for an ExecutionEngine
