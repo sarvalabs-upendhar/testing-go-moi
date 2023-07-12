@@ -41,7 +41,6 @@ require (
 	github.com/munna0908/smt v0.3.1-0.20221216160339-b2e832948125
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20210609091139-0a56a4bca00b
 	github.com/pkg/errors v0.9.1
-	github.com/pkg/profile v1.6.0
 	github.com/prometheus/client_golang v1.14.0
 	github.com/sarvalabs/go-polo v0.3.4
 	github.com/spf13/cobra v1.5.0
