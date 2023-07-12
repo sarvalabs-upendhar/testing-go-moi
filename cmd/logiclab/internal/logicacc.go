@@ -7,8 +7,8 @@ import (
 
 	"github.com/pkg/errors"
 
-	gtypes "github.com/sarvalabs/moichain/guna/types"
-	"github.com/sarvalabs/moichain/jug/engineio"
+	"github.com/sarvalabs/moichain/compute/engineio"
+	gtypes "github.com/sarvalabs/moichain/state"
 )
 
 // LogicAccountState is a container for
@@ -153,7 +153,7 @@ func CompileManifestFile(file, name string, fuel engineio.Fuel) (engineio.Fuel, 
 		return consumed, nil, err
 	}
 
-	// Create a new StateObject
+	// Create a new Object
 	logicCtxState := NewStateObject(randomAddress())
 	// Create a new LogicObject from the LogicDescriptor
 	logicObject := gtypes.NewLogicObject(logicCtxState.Address, descriptor)

@@ -7,14 +7,14 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/common"
 )
 
 // ParticipantState is a container for all contents
 // related to a Participant entity in the LogicLab
 type ParticipantState struct {
 	Username string
-	Address  types.Address
+	Address  common.Address
 	CtxState *StateObject
 }
 
@@ -141,9 +141,9 @@ func DesignatedReceiverCommand() Command {
 }
 
 // randomAddress generates a random types.Address.
-func randomAddress() types.Address {
+func randomAddress() common.Address {
 	address := make([]byte, 32)
 	_, _ = rand.Read(address)
 
-	return types.BytesToAddress(address)
+	return common.BytesToAddress(address)
 }

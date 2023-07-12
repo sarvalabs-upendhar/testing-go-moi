@@ -3,8 +3,8 @@ package internal
 import (
 	"github.com/pkg/errors"
 
-	"github.com/sarvalabs/moichain/jug/engineio"
-	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/compute/engineio"
 )
 
 // Inventory represents an inventory manager
@@ -19,8 +19,8 @@ type Inventory struct {
 	Sender   string
 	Receiver string
 
-	Participants  map[string]types.Address
-	LogicAccounts map[string]types.LogicID
+	Participants  map[string]common.Address
+	LogicAccounts map[string]common.LogicID
 }
 
 type LabConfig struct {

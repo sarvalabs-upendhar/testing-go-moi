@@ -1,10 +1,11 @@
 package genesis
 
 import (
-	"github.com/sarvalabs/moichain/cmd/common"
-	"github.com/sarvalabs/moichain/types"
-	"github.com/sarvalabs/moichain/utils"
 	"github.com/spf13/cobra"
+
+	"github.com/sarvalabs/moichain/cmd/common"
+	common2 "github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/common/utils"
 )
 
 var (
@@ -36,7 +37,7 @@ func parseInitAccountFlags(cmd *cobra.Command) {
 	cmd.Flags().IntVar(
 		&accountType,
 		"account-type",
-		int(types.RegularAccount),
+		int(common2.RegularAccount),
 		"Type of account. SargaAccount = 1, RegularAccount = 2, LogicAccount = 3, AssetAccount = 4",
 	)
 	cmd.Flags().StringVar(
@@ -77,9 +78,9 @@ func initAccount() {
 		)
 	}
 
-	genesis.AddAccount(types.AccountSetupArgs{
-		Address:            types.HexToAddress(address),
-		AccType:            types.AccountType(accountType),
+	genesis.AddAccount(common2.AccountSetupArgs{
+		Address:            common2.HexToAddress(address),
+		AccType:            common2.AccountType(accountType),
 		MoiID:              moiID,
 		BehaviouralContext: utils.KramaIDFromString(behaviourNodes),
 		RandomContext:      utils.KramaIDFromString(randomNodes),

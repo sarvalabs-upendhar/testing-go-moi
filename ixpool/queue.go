@@ -5,18 +5,18 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/common"
 )
 
 type InteractionQueue interface {
 	Pop() interface{}
-	Peek() *types.Interaction
+	Peek() *common.Interaction
 	Len() int
 }
 
 type WaitInteractions struct {
 	waitCounter int32
-	ix          *types.Interaction
+	ix          *common.Interaction
 }
 
 // A thread-safe wrapper of a minNonceQueue.
@@ -58,7 +58,7 @@ func (q *accountQueue) unlock() {
 
 // prune removes all Interactions from the queue
 // with nonce lower than given.
-func (q *accountQueue) prune(nonce uint64) (pruned []*types.Interaction) {
+func (q *accountQueue) prune(nonce uint64) (pruned []*common.Interaction) {
 	for {
 		ix := q.peek()
 		if ix == nil ||
@@ -73,7 +73,7 @@ func (q *accountQueue) prune(nonce uint64) (pruned []*types.Interaction) {
 	return
 }
 
-func (q *accountQueue) clear() (dropped []*types.Interaction) {
+func (q *accountQueue) clear() (dropped []*common.Interaction) {
 	// copy ixs
 	dropped = q.queue
 
@@ -84,12 +84,12 @@ func (q *accountQueue) clear() (dropped []*types.Interaction) {
 }
 
 // push pushes the given Interactions onto the queue.
-func (q *accountQueue) push(ix *types.Interaction) {
+func (q *accountQueue) push(ix *common.Interaction) {
 	heap.Push(&q.queue, ix)
 }
 
 // peek returns the first Interaction from the queue without removing it.
-func (q *accountQueue) peek() *types.Interaction {
+func (q *accountQueue) peek() *common.Interaction {
 	if q.length() == 0 {
 		return nil
 	}
@@ -98,12 +98,12 @@ func (q *accountQueue) peek() *types.Interaction {
 }
 
 // pop removes the first Interactions from the queue and returns it.
-func (q *accountQueue) pop() *types.Interaction {
+func (q *accountQueue) pop() *common.Interaction {
 	if q.length() == 0 {
 		return nil
 	}
 
-	return heap.Pop(&q.queue).(*types.Interaction) //nolint
+	return heap.Pop(&q.queue).(*common.Interaction) //nolint
 }
 
 // length returns the number of Interactions in the queue.
@@ -112,11 +112,11 @@ func (q *accountQueue) length() uint64 {
 }
 
 // Interactions sorted by nonce (ascending)
-type minNonceQueue []*types.Interaction
+type minNonceQueue []*common.Interaction
 
 /* Queue methods required by the heap interface */
 
-func (q *minNonceQueue) Peek() *types.Interaction {
+func (q *minNonceQueue) Peek() *common.Interaction {
 	if q.Len() == 0 {
 		return nil
 	}
@@ -137,7 +137,7 @@ func (q *minNonceQueue) Less(i, j int) bool {
 }
 
 func (q *minNonceQueue) Push(x interface{}) {
-	ix, ok := x.(*types.Interaction)
+	ix, ok := x.(*common.Interaction)
 	if !ok {
 		return
 	}
@@ -169,7 +169,7 @@ func newPricedQueue() *pricedQueue {
 }
 
 // Push the given Interactions onto the queue.
-func (q *pricedQueue) Push(ix *types.Interaction) {
+func (q *pricedQueue) Push(ix *common.Interaction) {
 	heap.Push(&q.queue, ix)
 }
 
@@ -180,12 +180,12 @@ func (q *pricedQueue) Pop() interface{} {
 		return nil
 	}
 
-	return heap.Pop(&q.queue).(*types.Interaction) //nolint
+	return heap.Pop(&q.queue).(*common.Interaction) //nolint
 }
 
 // Peek returns the first Interaction from the queue
 // or nil if the queue is empty.
-func (q *pricedQueue) Peek() *types.Interaction {
+func (q *pricedQueue) Peek() *common.Interaction {
 	if q.Len() == 0 {
 		return nil
 	}
@@ -199,11 +199,11 @@ func (q *pricedQueue) Len() int {
 }
 
 // Interactions sorted by gas price (descending)
-type maxPriceQueue []*types.Interaction
+type maxPriceQueue []*common.Interaction
 
 /* Queue methods required by the heap interface */
 
-func (q *maxPriceQueue) Peek() *types.Interaction {
+func (q *maxPriceQueue) Peek() *common.Interaction {
 	if q.Len() == 0 {
 		return nil
 	}
@@ -224,7 +224,7 @@ func (q *maxPriceQueue) Less(i, j int) bool {
 }
 
 func (q *maxPriceQueue) Push(x interface{}) {
-	*q = append(*q, x.(*types.Interaction)) //nolint
+	*q = append(*q, x.(*common.Interaction)) //nolint
 }
 
 func (q *maxPriceQueue) Pop() interface{} {
@@ -262,12 +262,12 @@ func (q *waitQueue) Pop() interface{} {
 		return nil
 	}
 
-	return heap.Pop(&q.queue).(*types.Interaction) //nolint
+	return heap.Pop(&q.queue).(*common.Interaction) //nolint
 }
 
 // Peek returns the first Interaction from the queue
 // or nil if the queue is empty.
-func (q *waitQueue) Peek() *types.Interaction {
+func (q *waitQueue) Peek() *common.Interaction {
 	if q.Len() == 0 {
 		return nil
 	}
@@ -285,7 +285,7 @@ type maxWaitQueue []*WaitInteractions
 
 // Queue methods required by the heap interface
 
-func (wq *maxWaitQueue) Peek() *types.Interaction {
+func (wq *maxWaitQueue) Peek() *common.Interaction {
 	if wq.Len() == 0 {
 		return nil
 	}

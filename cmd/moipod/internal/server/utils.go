@@ -10,16 +10,17 @@ import (
 	"os"
 	"time"
 
+	"github.com/sarvalabs/moichain/common/kramaid"
+
 	maddr "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
 	cmdCommon "github.com/sarvalabs/moichain/cmd/common"
 	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/mudra"
-	"github.com/sarvalabs/moichain/mudra/kramaid"
-	"github.com/sarvalabs/moichain/types"
-	"github.com/sarvalabs/moichain/utils"
+	"github.com/sarvalabs/moichain/common/config"
+	"github.com/sarvalabs/moichain/common/utils"
+	"github.com/sarvalabs/moichain/crypto"
 )
 
 const genesisURL = "https://moichain-pub.s3.amazonaws.com/genesis.json"
@@ -27,8 +28,8 @@ const genesisURL = "https://moichain-pub.s3.amazonaws.com/genesis.json"
 // Params holds raw config and also custom types which will be extracted from raw config
 type Params struct {
 	rawCfg          *cmdCommon.Config
-	TrustedPeers    []common.NodeInfo
-	StaticPeers     []common.NodeInfo
+	TrustedPeers    []config.NodeInfo
+	StaticPeers     []config.NodeInfo
 	BootstrapPeers  []maddr.Multiaddr
 	ListenAddresses []maddr.Multiaddr
 	JSONRPCAddr     *net.TCPAddr
@@ -71,7 +72,7 @@ func (p *Params) assignNetworkTrustedNodes() error {
 			return errors.New("invalid trusted node address")
 		}
 
-		p.TrustedPeers = append(p.TrustedPeers, common.NodeInfo{
+		p.TrustedPeers = append(p.TrustedPeers, config.NodeInfo{
 			ID:      kramaid.KramaID(trustedNode.ID),
 			Address: addr,
 		})
@@ -87,7 +88,7 @@ func (p *Params) assignNetworkStaticNodes() error {
 			return errors.New("invalid static node address")
 		}
 
-		p.StaticPeers = append(p.StaticPeers, common.NodeInfo{
+		p.StaticPeers = append(p.StaticPeers, config.NodeInfo{
 			ID:      kramaid.KramaID(staticNode.ID),
 			Address: addr,
 		})
@@ -197,8 +198,8 @@ func (p *Params) applyFlags(cmd *cobra.Command, path string) error {
 	return nil
 }
 
-func (p *Params) getVaultConfig() *mudra.VaultConfig {
-	return &mudra.VaultConfig{
+func (p *Params) getVaultConfig() *crypto.VaultConfig {
+	return &crypto.VaultConfig{
 		DataDir:      p.rawCfg.Vault.DataDir,
 		NodePassword: p.rawCfg.Vault.NodePassword,
 		SeedPhrase:   p.rawCfg.Vault.SeedPhrase,
@@ -208,8 +209,8 @@ func (p *Params) getVaultConfig() *mudra.VaultConfig {
 	}
 }
 
-func (p *Params) getNetworkConfig() *common.NetworkConfig {
-	return &common.NetworkConfig{
+func (p *Params) getNetworkConfig() *config.NetworkConfig {
+	return &config.NetworkConfig{
 		BootstrapPeers:     p.BootstrapPeers,
 		TrustedPeers:       p.TrustedPeers,
 		StaticPeers:        p.StaticPeers,
@@ -227,8 +228,8 @@ func (p *Params) getNetworkConfig() *common.NetworkConfig {
 	}
 }
 
-func (p *Params) getConsensusConfig(path string) *common.ConsensusConfig {
-	return &common.ConsensusConfig{
+func (p *Params) getConsensusConfig(path string) *config.ConsensusConfig {
+	return &config.ConsensusConfig{
 		DirectoryPath:         path + "/consensus",
 		TimeoutPropose:        time.Duration(p.rawCfg.Consensus.TimeoutPropose) * time.Millisecond,
 		TimeoutProposeDelta:   time.Duration(p.rawCfg.Consensus.TimeoutProposeDelta) * time.Millisecond,
@@ -246,45 +247,45 @@ func (p *Params) getConsensusConfig(path string) *common.ConsensusConfig {
 	}
 }
 
-func (p *Params) getSyncerConfig() *common.SyncerConfig {
-	return &common.SyncerConfig{
+func (p *Params) getSyncerConfig() *config.SyncerConfig {
+	return &config.SyncerConfig{
 		ShouldExecute:  p.rawCfg.Syncer.ShouldExecute,
 		TrustedPeers:   p.rawCfg.Syncer.TrustedPeers,
 		EnableSnapSync: p.rawCfg.Syncer.EnableSnapSync,
-		SyncMode:       types.SyncMode(p.rawCfg.Syncer.SyncMode),
+		SyncMode:       common.SyncMode(p.rawCfg.Syncer.SyncMode),
 	}
 }
 
-func (p *Params) getChainConfig() *common.ChainConfig {
-	return &common.ChainConfig{
+func (p *Params) getChainConfig() *config.ChainConfig {
+	return &config.ChainConfig{
 		GenesisFilePath: p.rawCfg.Genesis,
 	}
 }
 
-func (p *Params) getDBConfig(path string) *common.DBConfig {
-	return &common.DBConfig{
+func (p *Params) getDBConfig(path string) *config.DBConfig {
+	return &config.DBConfig{
 		CleanDB:      p.rawCfg.DB.CleanDB,
-		DBFolderPath: path + common.DefaultDBDirectory,
+		DBFolderPath: path + config.DefaultDBDirectory,
 		MaxSnapSize:  p.rawCfg.DB.MaxSnapSize,
 	}
 }
 
-func (p *Params) getExecutionConfig() *common.ExecutionConfig {
-	return &common.ExecutionConfig{
+func (p *Params) getExecutionConfig() *config.ExecutionConfig {
+	return &config.ExecutionConfig{
 		FuelLimit: p.rawCfg.Execution.FuelLimit.ToInt(),
 	}
 }
 
-func (p *Params) getIXPoolConfig() *common.IxPoolConfig {
-	return &common.IxPoolConfig{
+func (p *Params) getIXPoolConfig() *config.IxPoolConfig {
+	return &config.IxPoolConfig{
 		Mode:       p.rawCfg.Ixpool.Mode,
 		PriceLimit: p.rawCfg.Ixpool.PriceLimit.ToInt(),
 		MaxSlots:   p.rawCfg.Ixpool.MaxSlots,
 	}
 }
 
-func (p *Params) getTelemetryConfig() *common.Telemetry {
-	return &common.Telemetry{
+func (p *Params) getTelemetryConfig() *config.Telemetry {
+	return &config.Telemetry{
 		PrometheusAddr: p.PrometheusAddr,
 		JaegerAddr:     p.rawCfg.Telemetry.JaegerAddr,
 	}
@@ -312,8 +313,8 @@ func (p *Params) processRawParams() error {
 }
 
 // generateNodeConfig generates node config using params
-func (p *Params) generateNodeConfig(dataDir string) *common.Config {
-	return &common.Config{
+func (p *Params) generateNodeConfig(dataDir string) *config.Config {
+	return &config.Config{
 		NodeType:       p.rawCfg.NodeType,
 		KramaIDVersion: p.rawCfg.KramaIDVersion,
 		Vault:          p.getVaultConfig(),
@@ -389,13 +390,13 @@ func isNodePasswordSet(cmd *cobra.Command) bool {
 // 3. Any provided flags overwrite the previous state of the configuration.
 // 4. The raw configuration is converted to custom types and stored in params.
 // 5. The final node configuration is generated from the params.
-func BuildNodeConfig(cmd *cobra.Command, dataDir string) (*common.Config, error) {
+func BuildNodeConfig(cmd *cobra.Command, dataDir string) (*config.Config, error) {
 	var (
 		err    error
 		params = Params{
 			rawCfg:          &cmdCommon.Config{},
-			TrustedPeers:    make([]common.NodeInfo, 0),
-			StaticPeers:     make([]common.NodeInfo, 0),
+			TrustedPeers:    make([]config.NodeInfo, 0),
+			StaticPeers:     make([]config.NodeInfo, 0),
 			BootstrapPeers:  make([]maddr.Multiaddr, 0),
 			ListenAddresses: make([]maddr.Multiaddr, 0),
 		}

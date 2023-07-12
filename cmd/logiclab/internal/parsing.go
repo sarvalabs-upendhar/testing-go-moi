@@ -7,8 +7,8 @@ import (
 	"github.com/manishmeganathan/symbolizer"
 	"github.com/pkg/errors"
 
-	"github.com/sarvalabs/moichain/jug/engineio"
-	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/compute/engineio"
 )
 
 const (
@@ -664,7 +664,7 @@ func parseKeyedValues(input string, delim symbolizer.TokenKind) (map[any]any, sy
 					return nil, detected, errors.New("malformed value for key: cannot use bytes")
 				}
 
-				key = types.BytesToAddress(raw)
+				key = common.BytesToAddress(raw)
 			}
 		}
 

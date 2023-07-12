@@ -4,12 +4,13 @@ import (
 	"log"
 
 	cmdCommon "github.com/sarvalabs/moichain/cmd/common"
-
 	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/common/tests"
-	"github.com/sarvalabs/moichain/mudra/poi"
-	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/common/config"
+
 	"github.com/spf13/cobra"
+
+	"github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/moichain/crypto/poi"
 )
 
 func GetAccountCommand() *cobra.Command {
@@ -47,23 +48,23 @@ func runAccountCommand(cmd *cobra.Command, args []string) {
 	for i := 0; i < accountCount; i++ {
 		mnemonic := poi.GenerateRandMnemonic().String()
 
-		_, publicKey, err := poi.GetPrivateKeyAtPath(mnemonic, common.DefaultMOIIDPath)
+		_, publicKey, err := poi.GetPrivateKeyAtPath(mnemonic, config.DefaultMOIIDPath)
 		if err != nil {
 			cmdCommon.Err(err)
 		}
 
 		log.Println(publicKey)
 
-		log.Println("MOIID address", types.BytesToAddress(publicKey))
+		log.Println("MOIID address", common.BytesToAddress(publicKey))
 
-		_, publicKey, err = poi.GetPrivateKeyAtPath(mnemonic, common.DefaultMoiWalletPath)
+		_, publicKey, err = poi.GetPrivateKeyAtPath(mnemonic, config.DefaultMoiWalletPath)
 		if err != nil {
 			cmdCommon.Err(err)
 		}
 
 		accounts = append(accounts,
 			tests.AccountWithMnemonic{
-				Addr:     types.BytesToAddress(publicKey),
+				Addr:     common.BytesToAddress(publicKey),
 				Mnemonic: mnemonic,
 			})
 	}

@@ -13,18 +13,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/moichain/mudra"
+	"github.com/sarvalabs/moichain/common/kramaid"
+	rpcargs "github.com/sarvalabs/moichain/jsonrpc/args"
+
+	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/crypto"
+	"github.com/sarvalabs/moichain/jsonrpc/api"
 
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/common/hexutil"
 	"github.com/sarvalabs/moichain/common/tests"
-	"github.com/sarvalabs/moichain/jug/engineio"
-	"github.com/sarvalabs/moichain/mudra/kramaid"
-	"github.com/sarvalabs/moichain/poorna/api"
-	ptypes "github.com/sarvalabs/moichain/poorna/types"
-	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/compute/engineio"
 )
 
 var LatestTesseractNumber = int64(-1)
@@ -43,7 +44,7 @@ var (
 
 // makeHTTPRequest takes method, args and makes an HTTP POST request to node specified by url constant
 // returning a response with data, status, and error.
-func makeHTTPRequest(t *testing.T, method string, args interface{}) *ptypes.Response {
+func makeHTTPRequest(t *testing.T, method string, args interface{}) *rpcargs.Response {
 	t.Helper()
 
 	params, err := json.Marshal(args)
@@ -72,7 +73,7 @@ func makeHTTPRequest(t *testing.T, method string, args interface{}) *ptypes.Resp
 	require.NoError(t, err)
 	require.Nil(t, jsonResp.Error)
 
-	var resp ptypes.Response
+	var resp rpcargs.Response
 
 	err = json.Unmarshal(jsonResp.Result, &resp)
 	require.NoError(t, err)
@@ -81,34 +82,34 @@ func makeHTTPRequest(t *testing.T, method string, args interface{}) *ptypes.Resp
 	return &resp
 }
 
-func createSendIXFromSendIXArgs(t *testing.T, sendIxArgs *types.SendIXArgs, mnemonic string) *ptypes.SendIX {
+func createSendIXFromSendIXArgs(t *testing.T, sendIxArgs *common.SendIXArgs, mnemonic string) *rpcargs.SendIX {
 	t.Helper()
 
 	bz, err := polo.Polorize(sendIxArgs)
 	require.NoError(t, err)
 
-	sign, err := mudra.GetSignature(bz, mnemonic)
+	sign, err := crypto.GetSignature(bz, mnemonic)
 	require.NoError(t, err)
 
-	return &ptypes.SendIX{
+	return &rpcargs.SendIX{
 		IXArgs:    hex.EncodeToString(bz),
 		Signature: sign,
 	}
 }
 
 // getIXArgsForLogicDeployment returns interaction args for logic deployment
-func getIXArgsForLogicDeployment(t *testing.T, addr types.Address) *types.SendIXArgs {
+func getIXArgsForLogicDeployment(t *testing.T, addr common.Address) *common.SendIXArgs {
 	t.Helper()
 
 	calldata := "0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd8ee6a29ec4" +
 		"42dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49"
 
-	manifest := "0x" + types.BytesToHex(tests.ReadManifest(t, "./../jug/manifests/erc20.json"))
+	manifest := "0x" + common.BytesToHex(tests.ReadManifest(t, "./../jug/manifests/erc20.json"))
 
-	logicPayload := &types.LogicPayload{
-		Manifest: hexutil.Bytes(types.Hex2Bytes(manifest)),
+	logicPayload := &common.LogicPayload{
+		Manifest: hexutil.Bytes(common.Hex2Bytes(manifest)),
 		Callsite: "Seeder!",
-		Calldata: hexutil.Bytes(types.Hex2Bytes(calldata)),
+		Calldata: hexutil.Bytes(common.Hex2Bytes(calldata)),
 	}
 
 	payload, err := polo.Polorize(logicPayload)
@@ -117,8 +118,8 @@ func getIXArgsForLogicDeployment(t *testing.T, addr types.Address) *types.SendIX
 	fuelPrice := new(big.Int).SetUint64(1)
 	fuelLimit := new(big.Int).SetUint64(1000)
 
-	ixArgs := &types.SendIXArgs{
-		Type:      types.IxLogicDeploy,
+	ixArgs := &common.SendIXArgs{
+		Type:      common.IxLogicDeploy,
 		FuelPrice: fuelPrice,
 		FuelLimit: fuelLimit,
 		Sender:    addr,
@@ -129,13 +130,13 @@ func getIXArgsForLogicDeployment(t *testing.T, addr types.Address) *types.SendIX
 }
 
 // getTesseract returns tesseract for the given senderAddr and height
-func getTesseract(t *testing.T, client *Client, addr types.Address, height *int64) *ptypes.RPCTesseract {
+func getTesseract(t *testing.T, client *Client, addr common.Address, height *int64) *rpcargs.RPCTesseract {
 	t.Helper()
 
-	args := &ptypes.TesseractArgs{
+	args := &rpcargs.TesseractArgs{
 		Address:          addr,
 		WithInteractions: true,
-		Options: ptypes.TesseractNumberOrHash{
+		Options: rpcargs.TesseractNumberOrHash{
 			TesseractNumber: height,
 		},
 	}
@@ -147,19 +148,19 @@ func getTesseract(t *testing.T, client *Client, addr types.Address, height *int6
 }
 
 // getAssetID returns assetID for the given senderAddr and height
-func getAssetID(t *testing.T, client *Client, addr types.Address, height *int64) types.AssetID {
+func getAssetID(t *testing.T, client *Client, addr common.Address, height *int64) common.AssetID {
 	t.Helper()
 
 	ts := getTesseract(t, client, addr, height)
 
-	receiptArgs := &ptypes.ReceiptArgs{
+	receiptArgs := &rpcargs.ReceiptArgs{
 		Hash: ts.Ixns[0].Hash,
 	}
 
 	receipt, err := client.InteractionReceipt(receiptArgs)
 	require.NoError(t, err)
 
-	var assetReceipt types.AssetCreationReceipt
+	var assetReceipt common.AssetCreationReceipt
 
 	err = json.Unmarshal(receipt.ExtraData, &assetReceipt)
 	require.NoError(t, err)
@@ -168,19 +169,19 @@ func getAssetID(t *testing.T, client *Client, addr types.Address, height *int64)
 }
 
 // getLogicID returns logicID for the given senderAddr and height
-func getLogicID(t *testing.T, client *Client, addr types.Address, height *int64) types.LogicID {
+func getLogicID(t *testing.T, client *Client, addr common.Address, height *int64) common.LogicID {
 	t.Helper()
 
 	ts := getTesseract(t, client, addr, height)
 
-	receiptArgs := &ptypes.ReceiptArgs{
+	receiptArgs := &rpcargs.ReceiptArgs{
 		Hash: ts.Ixns[0].Hash,
 	}
 
 	receipt, err := client.InteractionReceipt(receiptArgs)
 	require.NoError(t, err)
 
-	var logicReceipt types.LogicDeployReceipt
+	var logicReceipt common.LogicDeployReceipt
 
 	err = json.Unmarshal(receipt.ExtraData, &logicReceipt)
 	require.NoError(t, err)
@@ -191,10 +192,10 @@ func getLogicID(t *testing.T, client *Client, addr types.Address, height *int64)
 // retryFetchReceipt keeps trying to fetch receipt for given ixHash until it is timed out
 // and also checks if moi client response matches with http response
 // Use this to check if interaction is successful on the chain.
-func retryFetchReceipt(t *testing.T, ctx context.Context, client *Client, ixHash types.Hash) *ptypes.RPCReceipt {
+func retryFetchReceipt(t *testing.T, ctx context.Context, client *Client, ixHash common.Hash) *rpcargs.RPCReceipt {
 	t.Helper()
 
-	receiptArgs := &ptypes.ReceiptArgs{
+	receiptArgs := &rpcargs.ReceiptArgs{
 		Hash: ixHash,
 	}
 
@@ -221,7 +222,7 @@ func retryFetchReceipt(t *testing.T, ctx context.Context, client *Client, ixHash
 func getLogicManifestByEncodingType(
 	t *testing.T,
 	res hexutil.Bytes,
-	args *ptypes.LogicManifestArgs,
+	args *rpcargs.LogicManifestArgs,
 ) (hexutil.Bytes, error) {
 	t.Helper()
 
@@ -262,19 +263,19 @@ func getLogicManifestByEncodingType(
 }
 
 // SetupAddrs sanitises the given addrs array and validates it
-func SetupAddrs(addrs []types.Address) ([]types.Address, error) {
+func SetupAddrs(addrs []common.Address) ([]common.Address, error) {
 	if len(addrs) < 12 {
 		return nil, errors.New("not sufficient genesis accounts to run moiclient tests")
 	}
 
-	temp := make([]types.Address, 0)
+	temp := make([]common.Address, 0)
 
 	for _, addr := range addrs {
-		if addr == types.SargaAddress {
+		if addr == common.SargaAddress {
 			continue
 		}
 
-		if types.Contains(types.GenesisLogicAddrs, addr) {
+		if common.ContainsAddress(common.GenesisLogicAddrs, addr) {
 			continue
 		}
 
@@ -285,12 +286,12 @@ func SetupAddrs(addrs []types.Address) ([]types.Address, error) {
 }
 
 // httpTesseract returns RPCTesseract based on the given arguments
-func httpTesseract(t *testing.T, args interface{}) *ptypes.RPCTesseract {
+func httpTesseract(t *testing.T, args interface{}) *rpcargs.RPCTesseract {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.Tesseract", args)
 
-	var tess ptypes.RPCTesseract
+	var tess rpcargs.RPCTesseract
 
 	err := json.Unmarshal(resp.Data, &tess)
 	require.NoError(t, err)
@@ -299,12 +300,12 @@ func httpTesseract(t *testing.T, args interface{}) *ptypes.RPCTesseract {
 }
 
 // httpGetAssetInfoByAssetID returns asset description for the given assetID
-func httpGetAssetInfoByAssetID(t *testing.T, args *ptypes.GetAssetInfoArgs) *ptypes.RPCAssetDescriptor {
+func httpGetAssetInfoByAssetID(t *testing.T, args *rpcargs.GetAssetInfoArgs) *rpcargs.RPCAssetDescriptor {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.AssetInfoByAssetID", args)
 
-	var assetInfo ptypes.RPCAssetDescriptor
+	var assetInfo rpcargs.RPCAssetDescriptor
 
 	err := json.Unmarshal(resp.Data, &assetInfo)
 	require.NoError(t, err)
@@ -313,7 +314,7 @@ func httpGetAssetInfoByAssetID(t *testing.T, args *ptypes.GetAssetInfoArgs) *pty
 }
 
 // httpGetBalance returns the balance of assetID for given BalArgs
-func httpGetBalance(t *testing.T, args *ptypes.BalArgs) *hexutil.Big {
+func httpGetBalance(t *testing.T, args *rpcargs.BalArgs) *hexutil.Big {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.Balance", args)
@@ -327,12 +328,12 @@ func httpGetBalance(t *testing.T, args *ptypes.BalArgs) *hexutil.Big {
 }
 
 // httpTDU retrieves the TDU of the queried address
-func httpTDU(t *testing.T, args *ptypes.QueryArgs) []ptypes.TDU {
+func httpTDU(t *testing.T, args *rpcargs.QueryArgs) []rpcargs.TDU {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.TDU", args)
 
-	var tdu []ptypes.TDU
+	var tdu []rpcargs.TDU
 
 	err := json.Unmarshal(resp.Data, &tdu)
 	require.NoError(t, err)
@@ -341,12 +342,12 @@ func httpTDU(t *testing.T, args *ptypes.QueryArgs) []ptypes.TDU {
 }
 
 // httpGetContextInfo returns the context Info of the queried address.
-func httpGetContextInfo(t *testing.T, args *ptypes.ContextInfoArgs) *ptypes.ContextResponse {
+func httpGetContextInfo(t *testing.T, args *rpcargs.ContextInfoArgs) *rpcargs.ContextResponse {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.ContextInfo", args)
 
-	var contextResp ptypes.ContextResponse
+	var contextResp rpcargs.ContextResponse
 
 	err := json.Unmarshal(resp.Data, &contextResp)
 	require.NoError(t, err)
@@ -355,12 +356,12 @@ func httpGetContextInfo(t *testing.T, args *ptypes.ContextInfoArgs) *ptypes.Cont
 }
 
 // httpInteractionReceipt returns the receipt of the interaction for given hash
-func httpInteractionReceipt(t *testing.T, args *ptypes.ReceiptArgs) *ptypes.RPCReceipt {
+func httpInteractionReceipt(t *testing.T, args *rpcargs.ReceiptArgs) *rpcargs.RPCReceipt {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.InteractionReceipt", args)
 
-	var receipt ptypes.RPCReceipt
+	var receipt rpcargs.RPCReceipt
 
 	err := json.Unmarshal(resp.Data, &receipt)
 	require.NoError(t, err)
@@ -369,12 +370,12 @@ func httpInteractionReceipt(t *testing.T, args *ptypes.ReceiptArgs) *ptypes.RPCR
 }
 
 // httpInteractionByHash returns the interaction for given ix hash
-func httpInteractionByHash(t *testing.T, args *ptypes.InteractionByHashArgs) ptypes.RPCInteraction {
+func httpInteractionByHash(t *testing.T, args *rpcargs.InteractionByHashArgs) rpcargs.RPCInteraction {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.InteractionByHash", args)
 
-	var ix ptypes.RPCInteraction
+	var ix rpcargs.RPCInteraction
 
 	err := json.Unmarshal(resp.Data, &ix)
 	require.NoError(t, err)
@@ -383,12 +384,12 @@ func httpInteractionByHash(t *testing.T, args *ptypes.InteractionByHashArgs) pty
 }
 
 // httpInteractionByTesseract returns the interaction for the given tesseract hash
-func httpInteractionByTesseract(t *testing.T, args *ptypes.InteractionByTesseract) ptypes.RPCInteraction {
+func httpInteractionByTesseract(t *testing.T, args *rpcargs.InteractionByTesseract) rpcargs.RPCInteraction {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.InteractionByTesseract", args)
 
-	var ix ptypes.RPCInteraction
+	var ix rpcargs.RPCInteraction
 
 	err := json.Unmarshal(resp.Data, &ix)
 	require.NoError(t, err)
@@ -397,7 +398,7 @@ func httpInteractionByTesseract(t *testing.T, args *ptypes.InteractionByTesserac
 }
 
 // httpInteractionCount returns the number of interactions sent for the given address
-func httpInteractionCount(t *testing.T, args *ptypes.InteractionCountArgs) *hexutil.Uint64 {
+func httpInteractionCount(t *testing.T, args *rpcargs.InteractionCountArgs) *hexutil.Uint64 {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.InteractionCount", args)
@@ -411,7 +412,7 @@ func httpInteractionCount(t *testing.T, args *ptypes.InteractionCountArgs) *hexu
 }
 
 // httpPendingInteractionCount returns the number of interactions sent for the given address.
-func httpPendingInteractionCount(t *testing.T, args *ptypes.InteractionCountArgs) *hexutil.Uint64 {
+func httpPendingInteractionCount(t *testing.T, args *rpcargs.InteractionCountArgs) *hexutil.Uint64 {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.PendingInteractionCount", args)
@@ -425,7 +426,7 @@ func httpPendingInteractionCount(t *testing.T, args *ptypes.InteractionCountArgs
 }
 
 // httpStorage returns the data associated with the given httpStorage slot
-func httpStorage(t *testing.T, args *ptypes.GetStorageArgs) hexutil.Bytes {
+func httpStorage(t *testing.T, args *rpcargs.GetStorageArgs) hexutil.Bytes {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.Storage", args)
@@ -439,12 +440,12 @@ func httpStorage(t *testing.T, args *ptypes.GetStorageArgs) hexutil.Bytes {
 }
 
 // httpAccountState returns the account state of the given address
-func httpAccountState(t *testing.T, args *ptypes.GetAccountArgs) *ptypes.RPCAccount {
+func httpAccountState(t *testing.T, args *rpcargs.GetAccountArgs) *rpcargs.RPCAccount {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.AccountState", args)
 
-	var account ptypes.RPCAccount
+	var account rpcargs.RPCAccount
 
 	err := json.Unmarshal(resp.Data, &account)
 	require.NoError(t, err)
@@ -453,12 +454,12 @@ func httpAccountState(t *testing.T, args *ptypes.GetAccountArgs) *ptypes.RPCAcco
 }
 
 // httpLogicIDs returns the logic IDs of the given address
-func httpLogicIDs(t *testing.T, args *ptypes.GetLogicIDArgs) []types.LogicID {
+func httpLogicIDs(t *testing.T, args *rpcargs.GetLogicIDArgs) []common.LogicID {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.LogicIDs", args)
 
-	var logicIDs []types.LogicID
+	var logicIDs []common.LogicID
 
 	err := json.Unmarshal(resp.Data, &logicIDs)
 	require.NoError(t, err)
@@ -467,12 +468,12 @@ func httpLogicIDs(t *testing.T, args *ptypes.GetLogicIDArgs) []types.LogicID {
 }
 
 // httpLogicCall returns the LogicCallResult of the given address
-func httpLogicCall(t *testing.T, args *ptypes.LogicCallArgs) *ptypes.LogicCallResult {
+func httpLogicCall(t *testing.T, args *rpcargs.LogicCallArgs) *rpcargs.LogicCallResult {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.LogicCall", args)
 
-	var logicCall *ptypes.LogicCallResult
+	var logicCall *rpcargs.LogicCallResult
 
 	err := json.Unmarshal(resp.Data, &logicCall)
 	require.NoError(t, err)
@@ -481,7 +482,7 @@ func httpLogicCall(t *testing.T, args *ptypes.LogicCallArgs) *ptypes.LogicCallRe
 }
 
 // httpLogicManifest returns the manifest associated with the given logic id
-func httpLogicManifest(t *testing.T, args *ptypes.LogicManifestArgs) hexutil.Bytes {
+func httpLogicManifest(t *testing.T, args *rpcargs.LogicManifestArgs) hexutil.Bytes {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.LogicManifest", args)
@@ -495,7 +496,7 @@ func httpLogicManifest(t *testing.T, args *ptypes.LogicManifestArgs) hexutil.Byt
 }
 
 // httpContent returns the interactions present in the given IxPool.
-func httpContent(t *testing.T, args *ptypes.ContentArgs) *api.ContentResponse {
+func httpContent(t *testing.T, args *rpcargs.ContentArgs) *api.ContentResponse {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "ixpool.Content", args)
@@ -509,7 +510,7 @@ func httpContent(t *testing.T, args *ptypes.ContentArgs) *api.ContentResponse {
 }
 
 // httpContentFrom returns the interactions present in IxPool for the queried address.
-func httpContentFrom(t *testing.T, args *ptypes.IxPoolArgs) *api.ContentFromResponse {
+func httpContentFrom(t *testing.T, args *rpcargs.IxPoolArgs) *api.ContentFromResponse {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "ixpool.ContentFrom", args)
@@ -523,7 +524,7 @@ func httpContentFrom(t *testing.T, args *ptypes.IxPoolArgs) *api.ContentFromResp
 }
 
 // httpStatus returns the number of pending and queued interactions in the IxPool.
-func httpStatus(t *testing.T, args *ptypes.StatusArgs) *api.StatusResponse {
+func httpStatus(t *testing.T, args *rpcargs.StatusArgs) *api.StatusResponse {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "ixpool.Status", args)
@@ -537,7 +538,7 @@ func httpStatus(t *testing.T, args *ptypes.StatusArgs) *api.StatusResponse {
 }
 
 // httpInspect returns the interactions present in the IxPool in a clear and easy-to-read format,
-func httpInspect(t *testing.T, args *ptypes.InspectArgs) *api.InspectResponse {
+func httpInspect(t *testing.T, args *rpcargs.InspectArgs) *api.InspectResponse {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "ixpool.Inspect", args)
@@ -551,7 +552,7 @@ func httpInspect(t *testing.T, args *ptypes.InspectArgs) *api.InspectResponse {
 }
 
 // httpWaitTime returns the wait time for an account in IxPool, based on the queried address.
-func httpWaitTime(t *testing.T, args *ptypes.IxPoolArgs) *api.WaitTimeResponse {
+func httpWaitTime(t *testing.T, args *rpcargs.IxPoolArgs) *api.WaitTimeResponse {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "ixpool.WaitTime", args)
@@ -565,7 +566,7 @@ func httpWaitTime(t *testing.T, args *ptypes.IxPoolArgs) *api.WaitTimeResponse {
 }
 
 // httpPeers returns an array of Krama IDs connected to a client
-func httpPeers(t *testing.T, args *ptypes.NetArgs) *[]kramaid.KramaID {
+func httpPeers(t *testing.T, args *rpcargs.NetArgs) *[]kramaid.KramaID {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "net.Peers", args)
@@ -579,7 +580,7 @@ func httpPeers(t *testing.T, args *ptypes.NetArgs) *[]kramaid.KramaID {
 }
 
 // httpPeers returns an array of Krama IDs connected to a client
-func httpVersion(t *testing.T, args *ptypes.NetArgs) string {
+func httpVersion(t *testing.T, args *rpcargs.NetArgs) string {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "net.Version", args)
@@ -593,12 +594,12 @@ func httpVersion(t *testing.T, args *ptypes.NetArgs) string {
 }
 
 // httpInfo returns the kramaID of the node
-func httpInfo(t *testing.T, args *ptypes.NetArgs) *ptypes.NodeInfoResponse {
+func httpInfo(t *testing.T, args *rpcargs.NetArgs) *rpcargs.NodeInfoResponse {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "net.Info", args)
 
-	var response ptypes.NodeInfoResponse
+	var response rpcargs.NodeInfoResponse
 
 	err := json.Unmarshal(resp.Data, &response)
 	require.NoError(t, err)
@@ -607,7 +608,7 @@ func httpInfo(t *testing.T, args *ptypes.NetArgs) *ptypes.NodeInfoResponse {
 }
 
 // httpDBGet returns raw value of the key stored in the database
-func httpDBGet(t *testing.T, args *ptypes.DebugArgs) string {
+func httpDBGet(t *testing.T, args *rpcargs.DebugArgs) string {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "debug.DBGet", args)
@@ -621,12 +622,12 @@ func httpDBGet(t *testing.T, args *ptypes.DebugArgs) string {
 }
 
 // httpAccounts returns the addresses of all the accounts
-func httpAccounts(t *testing.T, args *ptypes.AccountArgs) []types.Address {
+func httpAccounts(t *testing.T, args *rpcargs.AccountArgs) []common.Address {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "debug.Accounts", args)
 
-	var addrs []types.Address
+	var addrs []common.Address
 
 	err := json.Unmarshal(resp.Data, &addrs)
 	require.NoError(t, err)
@@ -635,12 +636,12 @@ func httpAccounts(t *testing.T, args *ptypes.AccountArgs) []types.Address {
 }
 
 // httpAccountMetaInfo returns the account meta info associated with the given address
-func httpAccountMetaInfo(t *testing.T, args *ptypes.GetAccountArgs) *ptypes.RPCAccountMetaInfo {
+func httpAccountMetaInfo(t *testing.T, args *rpcargs.GetAccountArgs) *rpcargs.RPCAccountMetaInfo {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "moi.AccountMetaInfo", args)
 
-	var info ptypes.RPCAccountMetaInfo
+	var info rpcargs.RPCAccountMetaInfo
 
 	err := json.Unmarshal(resp.Data, &info)
 	require.NoError(t, err)
@@ -648,7 +649,7 @@ func httpAccountMetaInfo(t *testing.T, args *ptypes.GetAccountArgs) *ptypes.RPCA
 	return &info
 }
 
-func GetMnemonicFromAccounts(addr types.Address, accs []tests.AccountWithMnemonic) (tests.AccountWithMnemonic, bool) {
+func GetMnemonicFromAccounts(addr common.Address, accs []tests.AccountWithMnemonic) (tests.AccountWithMnemonic, bool) {
 	for _, acc := range accs {
 		if acc.Addr == addr {
 			return acc, true
@@ -660,8 +661,8 @@ func GetMnemonicFromAccounts(addr types.Address, accs []tests.AccountWithMnemoni
 
 func checkForRPCReceipt(
 	t *testing.T,
-	expectedRPCReceipt *ptypes.RPCReceipt,
-	actualRPCReceipt *ptypes.RPCReceipt,
+	expectedRPCReceipt *rpcargs.RPCReceipt,
+	actualRPCReceipt *rpcargs.RPCReceipt,
 ) {
 	t.Helper()
 

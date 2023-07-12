@@ -3,7 +3,7 @@ package moiclient
 import (
 	"encoding/json"
 
-	"github.com/sarvalabs/moichain/poorna/types"
+	"github.com/sarvalabs/moichain/jsonrpc/args"
 )
 
 const (
@@ -13,12 +13,12 @@ const (
 // A value of this type can a JSON-RPC request, notification, successful response or
 // error response.
 type jsonrpcMessage struct {
-	Version string           `json:"jsonrpc,omitempty"`
-	ID      json.RawMessage  `json:"id,omitempty"`
-	Method  string           `json:"method,omitempty"`
-	Params  json.RawMessage  `json:"params,omitempty"`
-	Error   *types.JSONError `json:"error,omitempty"`
-	Result  json.RawMessage  `json:"result,omitempty"`
+	Version string          `json:"jsonrpc,omitempty"`
+	ID      json.RawMessage `json:"id,omitempty"`
+	Method  string          `json:"method,omitempty"`
+	Params  json.RawMessage `json:"params,omitempty"`
+	Error   *args.JSONError `json:"error,omitempty"`
+	Result  json.RawMessage `json:"result,omitempty"`
 }
 
 func (msg *jsonrpcMessage) String() string {

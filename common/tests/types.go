@@ -1,8 +1,10 @@
 package tests
 
-import "github.com/sarvalabs/moichain/types"
+import (
+	"github.com/sarvalabs/moichain/common"
+)
 
 type AccountWithMnemonic struct {
-	Addr     types.Address `json:"address"`
-	Mnemonic string        `json:"mnemonic"`
+	Addr     common.Address `json:"address"`
+	Mnemonic string         `json:"mnemonic"`
 }

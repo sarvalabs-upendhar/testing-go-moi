@@ -1,0 +1,25 @@
+FROM golang@sha256:ab5685692564e027aa84e2980855775b2e48f8fc82c1590c0e1e8cbc2e716542 AS build
+RUN apk add --no-cache git gcc g++ ca-certificates tzdata && update-ca-certificates
+
+ENV GO111MODULE=auto
+ENV CGO_ENABLED=1
+ARG TARGET_ARCH
+
+WORKDIR /go/src/github/sarvalabs/moichain
+COPY go.mod /go/src/github/sarvalabs/moichain
+COPY go.sum /go/src/github/sarvalabs/moichain
+
+RUN --mount=type=cache,id=linux-${TARGET_ARCH}-go-build,target=/root/.cache/gobuild --mount=type=cache,id=linux-${TARGET_ARCH}-go-package,target=/go/pkg go mod download -x
+COPY . /go/src/github/sarvalabs/moichain
+RUN --mount=type=cache,id=linux-${TARGET_ARCH}-go-build,target=/root/.cache/gobuild --mount=type=cache,id=linux-${TARGET_ARCH}-go-package,target=/go/pkg go build -trimpath -o /bin/moipod ./cmd/moipod/
+
+FROM alpine@sha256:25fad2a32ad1f6f510e528448ae1ec69a28ef81916a004d3629874104f8a7f70
+VOLUME /data
+ARG GIT_COMMIT
+ENV GIT_COMMIT="${GIT_COMMIT}"
+
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=build /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=build /bin/moipod /bin/moipod
+
+ENTRYPOINT [ "/bin/moipod" ]

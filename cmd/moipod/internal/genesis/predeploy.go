@@ -1,10 +1,11 @@
 package genesis
 
 import (
-	"github.com/sarvalabs/moichain/cmd/common"
-	"github.com/sarvalabs/moichain/types"
-	"github.com/sarvalabs/moichain/utils"
 	"github.com/spf13/cobra"
+
+	"github.com/sarvalabs/moichain/cmd/common"
+	common2 "github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/common/utils"
 )
 
 func GetPreDeployCommand() *cobra.Command {
@@ -69,7 +70,7 @@ func addGenesisLogic(artifact *common.Artifact) {
 		)
 	}
 
-	genesis.AddLogic(types.LogicSetupArgs{
+	genesis.AddLogic(common2.LogicSetupArgs{
 		Name:               artifact.Name,
 		Callsite:           artifact.Callsite,
 		Calldata:           artifact.Calldata,

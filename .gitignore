@@ -9,13 +9,13 @@ file.key
 /test_*
 /build
 .artifacts
-genesis.json
-peer-list.json
 .scripts
 envs
+
+# MCUtil Artifacts
 accounts.json
+genesis.json
+peer-list.json
 artifact.json
 instances.json
 guardian.json
-push.sh
-run.sh

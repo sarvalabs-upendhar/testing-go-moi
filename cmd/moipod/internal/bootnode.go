@@ -11,6 +11,7 @@ import (
 	"time"
 
 	cmdCommon "github.com/sarvalabs/moichain/cmd/common"
+	"github.com/sarvalabs/moichain/common/config"
 
 	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
 
@@ -25,8 +26,6 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/spf13/cobra"
-
-	"github.com/sarvalabs/moichain/common"
 )
 
 var (
@@ -96,7 +95,7 @@ func startBootNode() {
 	}
 
 	dhtOptions = append(dhtOptions, dht.Mode(dht.ModeServer))
-	dhtOptions = append(dhtOptions, dht.ProtocolPrefix(common.MOIProtocolStream))
+	dhtOptions = append(dhtOptions, dht.ProtocolPrefix(config.MOIProtocolStream))
 
 	selfRouting := libp2p.Routing(func(h host.Host) (routing.PeerRouting, error) {
 		Dht, err := dht.New(context.Background(), h, dhtOptions...)

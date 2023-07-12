@@ -10,20 +10,21 @@ import (
 	"sort"
 	"testing"
 
+	rpcargs "github.com/sarvalabs/moichain/jsonrpc/args"
+
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/common/config"
 	"github.com/sarvalabs/moichain/common/hexutil"
 	"github.com/sarvalabs/moichain/common/tests"
-	"github.com/sarvalabs/moichain/dhruva"
-	ptypes "github.com/sarvalabs/moichain/poorna/types"
-	"github.com/sarvalabs/moichain/types"
-	"github.com/sarvalabs/moichain/utils"
+	"github.com/sarvalabs/moichain/common/utils"
+	"github.com/sarvalabs/moichain/storage"
 )
 
-type StrMap map[string]types.Address
+type StrMap map[string]common.Address
 
 // url of the node to be used by moiclient.
 const localURL = "http://0.0.0.0:1601"
@@ -150,7 +151,7 @@ func chooseAcc(
 	t *testing.T,
 	client *Client,
 	i int,
-	addrs []types.Address,
+	addrs []common.Address,
 	accs []tests.AccountWithMnemonic,
 ) (int, tests.AccountWithMnemonic) {
 	for j := i; j < len(addrs); j++ {
@@ -159,12 +160,12 @@ func chooseAcc(
 			return j, acc
 		}
 
-		accMetaInfo, err := client.AccountMetaInfo(&ptypes.GetAccountArgs{
+		accMetaInfo, err := client.AccountMetaInfo(&rpcargs.GetAccountArgs{
 			Address: addrs[j],
 		})
 		require.NoError(t, err)
 
-		require.True(t, (accMetaInfo.Type == types.LogicAccount) || (accMetaInfo.Type == types.AssetAccount))
+		require.True(t, (accMetaInfo.Type == common.LogicAccount) || (accMetaInfo.Type == common.AssetAccount))
 	}
 
 	require.Error(t, errors.New("insufficient accounts on chain"))
@@ -182,7 +183,7 @@ func chooseAcc(
 // At height 3, tokens are transferred
 // Logic Address account :
 // At height 1, transfer call is made to contract by senderAddr
-func setupChain(t *testing.T, client *Client, addrs []types.Address, addrsMap StrMap) {
+func setupChain(t *testing.T, client *Client, addrs []common.Address, addrsMap StrMap) {
 	var (
 		i   = 0
 		acc tests.AccountWithMnemonic
@@ -253,7 +254,7 @@ func setupChain(t *testing.T, client *Client, addrs []types.Address, addrsMap St
 }
 
 // deployLogic deploys logic manifest
-func deployLogic(t *testing.T, client *Client, addr types.Address, mnemonic string) {
+func deployLogic(t *testing.T, client *Client, addr common.Address, mnemonic string) {
 	sendIXArgs := getIXArgsForLogicDeployment(t, addr)
 	sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
 
@@ -270,21 +271,21 @@ func deployLogic(t *testing.T, client *Client, addr types.Address, mnemonic stri
 }
 
 // executeLogic executes the transfer method on deployed logic
-func executeLogic(t *testing.T, client *Client, deployAddr, addr types.Address, mnemonic string) {
+func executeLogic(t *testing.T, client *Client, deployAddr, addr common.Address, mnemonic string) {
 	calldata := "0x0daf010665a601e501f6059506616d6f756e74030f424066726f6d06ffcd8ee6a29ec442dbbf9c6124dd3aeb833ef58" +
 		"052237d521654740857716b34746f060fafe52ec42a85db644d5cceba2bb89cf5b0166cc9158211f44ed1e60b06032c"
 
-	logicPayload := &types.LogicPayload{
+	logicPayload := &common.LogicPayload{
 		Logic:    getLogicID(t, client, deployAddr, &deployLogicHeight),
 		Callsite: "Transfer!",
-		Calldata: types.Hex2Bytes(calldata),
+		Calldata: common.Hex2Bytes(calldata),
 	}
 
 	payload, err := polo.Polorize(logicPayload)
 	require.NoError(t, err)
 
-	sendIXArgs := &types.SendIXArgs{
-		Type:      types.IxLogicInvoke,
+	sendIXArgs := &common.SendIXArgs{
+		Type:      common.IxLogicInvoke,
 		FuelPrice: big.NewInt(1),
 		FuelLimit: big.NewInt(200),
 		Sender:    addr,
@@ -306,10 +307,10 @@ func executeLogic(t *testing.T, client *Client, deployAddr, addr types.Address, 
 }
 
 // createAsset creates asset named "MOI"
-func createAsset(t *testing.T, client *Client, addr types.Address, mnemonic string) {
+func createAsset(t *testing.T, client *Client, addr common.Address, mnemonic string) {
 	supply, _ := new(big.Int).SetString("130D41", 16)
 
-	assetCreationPayload := &types.AssetCreatePayload{
+	assetCreationPayload := &common.AssetCreatePayload{
 		Symbol: "MOI",
 		Supply: supply,
 	}
@@ -317,8 +318,8 @@ func createAsset(t *testing.T, client *Client, addr types.Address, mnemonic stri
 	payload, err := polo.Polorize(assetCreationPayload)
 	require.NoError(t, err)
 
-	sendIXArgs := &types.SendIXArgs{
-		Type:      types.IxAssetCreate,
+	sendIXArgs := &common.SendIXArgs{
+		Type:      common.IxAssetCreate,
 		Sender:    addr,
 		FuelPrice: big.NewInt(1),
 		FuelLimit: big.NewInt(200),
@@ -337,15 +338,15 @@ func createAsset(t *testing.T, client *Client, addr types.Address, mnemonic stri
 }
 
 // transferTokens transfers tokens from senderAddr to receiver
-func transferTokens(t *testing.T, client *Client, sender, receiver types.Address, mnemonic string) {
+func transferTokens(t *testing.T, client *Client, sender, receiver common.Address, mnemonic string) {
 	assetID := getAssetID(t, client, sender, &createAssetHeight)
 
-	sendIXArgs := &types.SendIXArgs{
-		Type:     types.IxValueTransfer,
+	sendIXArgs := &common.SendIXArgs{
+		Type:     common.IxValueTransfer,
 		Nonce:    1,
 		Sender:   sender,
 		Receiver: receiver,
-		TransferValues: map[types.AssetID]*big.Int{
+		TransferValues: map[common.AssetID]*big.Int{
 			assetID: big.NewInt(16),
 		},
 		FuelPrice: big.NewInt(1),
@@ -365,10 +366,10 @@ func transferTokens(t *testing.T, client *Client, sender, receiver types.Address
 }
 
 // SendIxWithInvalidSign sends ix with invalid sign
-func SendIxWithInvalidSign(t *testing.T, client *Client, addr types.Address, mnemonic string) {
+func SendIxWithInvalidSign(t *testing.T, client *Client, addr common.Address, mnemonic string) {
 	supply, _ := new(big.Int).SetString("130D41", 16)
 
-	assetCreationPayload := &types.AssetCreatePayload{
+	assetCreationPayload := &common.AssetCreatePayload{
 		Symbol: "MOI",
 		Supply: supply,
 	}
@@ -376,8 +377,8 @@ func SendIxWithInvalidSign(t *testing.T, client *Client, addr types.Address, mne
 	payload, err := polo.Polorize(assetCreationPayload)
 	require.NoError(t, err)
 
-	sendIXArgs := &types.SendIXArgs{
-		Type:      types.IxAssetCreate,
+	sendIXArgs := &common.SendIXArgs{
+		Type:      common.IxAssetCreate,
 		Nonce:     1,
 		Sender:    addr,
 		FuelPrice: big.NewInt(1),
@@ -388,11 +389,11 @@ func SendIxWithInvalidSign(t *testing.T, client *Client, addr types.Address, mne
 	sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
 
 	_, err = client.SendInteractions(sendIX)
-	require.ErrorContains(t, err, types.ErrInvalidIXSignature.Error())
+	require.ErrorContains(t, err, common.ErrInvalidIXSignature.Error())
 }
 
 // fillIXPool sends ixnPendingCount number of deploy interactions
-func fillIXPool(t *testing.T, client *Client, addr types.Address, mnemonic string) {
+func fillIXPool(t *testing.T, client *Client, addr common.Address, mnemonic string) {
 	sendIXArgs := getIXArgsForLogicDeployment(t, addr)
 	sendIXArgs.Nonce = uint64(0)
 	increment := uint64(1)
@@ -407,50 +408,50 @@ func fillIXPool(t *testing.T, client *Client, addr types.Address, mnemonic strin
 	}
 }
 
-func testTesseract(t *testing.T, client *Client, addr types.Address) {
+func testTesseract(t *testing.T, client *Client, addr common.Address) {
 	invalidHeight := int64(100000)
 
 	testcases := []struct {
 		name          string
-		tesseractArgs *ptypes.TesseractArgs
+		tesseractArgs *rpcargs.TesseractArgs
 		expectedError error
 	}{
 		{
 			name: "fetch tesseract with interactions",
-			tesseractArgs: &ptypes.TesseractArgs{
+			tesseractArgs: &rpcargs.TesseractArgs{
 				Address:          addr,
 				WithInteractions: true,
-				Options: ptypes.TesseractNumberOrHash{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &deployLogicHeight,
 				},
 			},
 		},
 		{
 			name: "fetch tesseract without interactions",
-			tesseractArgs: &ptypes.TesseractArgs{
+			tesseractArgs: &rpcargs.TesseractArgs{
 				Address:          addr,
 				WithInteractions: false,
-				Options: ptypes.TesseractNumberOrHash{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &deployLogicHeight,
 				},
 			},
 		},
 		{
 			name: "fetch genesis tesseract",
-			tesseractArgs: &ptypes.TesseractArgs{
+			tesseractArgs: &rpcargs.TesseractArgs{
 				Address:          addr,
 				WithInteractions: false,
-				Options: ptypes.TesseractNumberOrHash{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &genesisHeight,
 				},
 			},
 		},
 		{
 			name: "invalid tesseract number",
-			tesseractArgs: &ptypes.TesseractArgs{
+			tesseractArgs: &rpcargs.TesseractArgs{
 				Address:          addr,
 				WithInteractions: false,
-				Options: ptypes.TesseractNumberOrHash{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &invalidHeight,
 				},
 			},
@@ -490,25 +491,25 @@ func testTesseract(t *testing.T, client *Client, addr types.Address) {
 
 func testDBGet(t *testing.T, client *Client) {
 	// key and value belongs to genesis tesseract account meta info
-	key, _ := dhruva.BucketKeyAndID(types.SargaAddress)
+	key, _ := storage.BucketKeyAndID(common.SargaAddress)
 
 	testcases := []struct {
 		name          string
-		debugArgs     *ptypes.DebugArgs
+		debugArgs     *rpcargs.DebugArgs
 		expectedError error
 	}{
 		{
 			name: "fetch value for existing key in db",
-			debugArgs: &ptypes.DebugArgs{
-				Key: types.BytesToHex(key),
+			debugArgs: &rpcargs.DebugArgs{
+				Key: common.BytesToHex(key),
 			},
 		},
 		{
 			name: "fetch value for non-existing key in db",
-			debugArgs: &ptypes.DebugArgs{
+			debugArgs: &rpcargs.DebugArgs{
 				Key: "822c978f24933d17d4a6d8e40459c30ba9ba12d4d958ab2dc80d1720e39fa73ae5",
 			},
-			expectedError: types.ErrKeyNotFound,
+			expectedError: common.ErrKeyNotFound,
 		},
 	}
 
@@ -527,19 +528,19 @@ func testDBGet(t *testing.T, client *Client) {
 			httpValue := httpDBGet(t, test.debugArgs)
 			require.Equal(t, httpValue, value)
 
-			accMetaInfo := new(types.AccountMetaInfo)
-			require.NoError(t, accMetaInfo.FromBytes(types.Hex2Bytes(httpValue)))
-			require.Equal(t, types.SargaAddress, accMetaInfo.Address)
-			require.Equal(t, types.SargaAccount, accMetaInfo.Type)
+			accMetaInfo := new(common.AccountMetaInfo)
+			require.NoError(t, accMetaInfo.FromBytes(common.Hex2Bytes(httpValue)))
+			require.Equal(t, common.SargaAddress, accMetaInfo.Address)
+			require.Equal(t, common.SargaAccount, accMetaInfo.Type)
 		})
 	}
 }
 
-func testGetAssetInfoByAssetID(t *testing.T, client *Client, addr types.Address) {
+func testGetAssetInfoByAssetID(t *testing.T, client *Client, addr common.Address) {
 	tsHeight := int64(-1)
 	testcases := []struct {
 		name          string
-		assetID       types.AssetID
+		assetID       common.AssetID
 		expectedError error
 	}{
 		{
@@ -549,15 +550,15 @@ func testGetAssetInfoByAssetID(t *testing.T, client *Client, addr types.Address)
 		{
 			name:          "fetch asset info for non-existing assetID",
 			assetID:       tests.GetRandomAssetID(t, tests.RandomAddress(t)),
-			expectedError: types.ErrAccountNotFound,
+			expectedError: common.ErrAccountNotFound,
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			args := &ptypes.GetAssetInfoArgs{
+			args := &rpcargs.GetAssetInfoArgs{
 				AssetID: test.assetID,
-				Options: ptypes.TesseractNumberOrHash{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &tsHeight,
 				},
 			}
@@ -589,16 +590,16 @@ func testGetBalance(t *testing.T, client *Client, addrsMap StrMap) {
 
 	testcases := []struct {
 		name            string
-		balanceArgs     *ptypes.BalArgs
+		balanceArgs     *rpcargs.BalArgs
 		expectedBalance *hexutil.Big
 		expectedError   error
 	}{
 		{
 			name: "fetch senderAddr balance at create asset height",
-			balanceArgs: &ptypes.BalArgs{
+			balanceArgs: &rpcargs.BalArgs{
 				Address: sender,
 				AssetID: assetID,
-				Options: ptypes.TesseractNumberOrHash{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &createAssetHeight,
 				},
 			},
@@ -606,10 +607,10 @@ func testGetBalance(t *testing.T, client *Client, addrsMap StrMap) {
 		},
 		{
 			name: "fetch sender balance at transfer token height",
-			balanceArgs: &ptypes.BalArgs{
+			balanceArgs: &rpcargs.BalArgs{
 				Address: sender,
 				AssetID: assetID,
-				Options: ptypes.TesseractNumberOrHash{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &transferTokensHeight,
 				},
 			},
@@ -617,10 +618,10 @@ func testGetBalance(t *testing.T, client *Client, addrsMap StrMap) {
 		},
 		{
 			name: "fetch receiver balance at receiver transfer token height",
-			balanceArgs: &ptypes.BalArgs{
+			balanceArgs: &rpcargs.BalArgs{
 				Address: receiver,
 				AssetID: assetID,
-				Options: ptypes.TesseractNumberOrHash{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &receiverTokenTransferHeight,
 				},
 			},
@@ -628,10 +629,10 @@ func testGetBalance(t *testing.T, client *Client, addrsMap StrMap) {
 		},
 		{
 			name: "get balance returns error for unknown asset ID",
-			balanceArgs: &ptypes.BalArgs{
+			balanceArgs: &rpcargs.BalArgs{
 				Address: sender,
 				AssetID: tests.GetRandomAssetID(t, tests.RandomAddress(t)),
-				Options: ptypes.TesseractNumberOrHash{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
@@ -658,9 +659,9 @@ func testGetBalance(t *testing.T, client *Client, addrsMap StrMap) {
 	}
 }
 
-func testTDU(t *testing.T, client *Client, addr types.Address) {
+func testTDU(t *testing.T, client *Client, addr common.Address) {
 	assetID := getAssetID(t, client, addr, &createAssetHeight)
-	sortTDU := func(tdu []ptypes.TDU) {
+	sortTDU := func(tdu []rpcargs.TDU) {
 		sort.Slice(tdu, func(i, j int) bool {
 			return tdu[i].AssetID < tdu[j].AssetID
 		})
@@ -668,23 +669,23 @@ func testTDU(t *testing.T, client *Client, addr types.Address) {
 
 	testcases := []struct {
 		name          string
-		queryArgs     *ptypes.QueryArgs
+		queryArgs     *rpcargs.QueryArgs
 		expectedError error
 	}{
 		{
 			name: "fetch TDU for existing address",
-			queryArgs: &ptypes.QueryArgs{
+			queryArgs: &rpcargs.QueryArgs{
 				Address: addr,
-				Options: ptypes.TesseractNumberOrHash{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &createAssetHeight,
 				},
 			},
 		},
 		{
 			name: "fetch TDU for non-existing address",
-			queryArgs: &ptypes.QueryArgs{
+			queryArgs: &rpcargs.QueryArgs{
 				Address: tests.RandomAddress(t),
-				Options: ptypes.TesseractNumberOrHash{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
@@ -726,26 +727,26 @@ func testTDU(t *testing.T, client *Client, addr types.Address) {
 	}
 }
 
-func testGetContextInfo(t *testing.T, client *Client, addr types.Address) {
+func testGetContextInfo(t *testing.T, client *Client, addr common.Address) {
 	testcases := []struct {
 		name            string
-		contextInfoArgs *ptypes.ContextInfoArgs
+		contextInfoArgs *rpcargs.ContextInfoArgs
 		expectedError   error
 	}{
 		{
 			name: "fetch context info for existing address",
-			contextInfoArgs: &ptypes.ContextInfoArgs{
+			contextInfoArgs: &rpcargs.ContextInfoArgs{
 				Address: addr,
-				Options: ptypes.TesseractNumberOrHash{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
 		},
 		{
 			name: "fetch context info for non-existing address",
-			contextInfoArgs: &ptypes.ContextInfoArgs{
+			contextInfoArgs: &rpcargs.ContextInfoArgs{
 				Address: tests.RandomAddress(t),
-				Options: ptypes.TesseractNumberOrHash{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
@@ -772,26 +773,26 @@ func testGetContextInfo(t *testing.T, client *Client, addr types.Address) {
 	}
 }
 
-func testInteractionReceipt(t *testing.T, client *Client, addr types.Address) {
+func testInteractionReceipt(t *testing.T, client *Client, addr common.Address) {
 	ts := getTesseract(t, client, addr, &executeLogicHeight)
 
 	testcases := []struct {
 		name          string
-		receiptArgs   *ptypes.ReceiptArgs
+		receiptArgs   *rpcargs.ReceiptArgs
 		expectedError error
 	}{
 		{
 			name: "fetch receipt for existing hash",
-			receiptArgs: &ptypes.ReceiptArgs{
+			receiptArgs: &rpcargs.ReceiptArgs{
 				Hash: ts.Ixns[0].Hash,
 			},
 		},
 		{
 			name: "fetch receipt for non-existing hash",
-			receiptArgs: &ptypes.ReceiptArgs{
+			receiptArgs: &rpcargs.ReceiptArgs{
 				Hash: tests.RandomHash(t),
 			},
-			expectedError: types.ErrGridHashNotFound,
+			expectedError: common.ErrGridHashNotFound,
 		},
 	}
 
@@ -814,26 +815,26 @@ func testInteractionReceipt(t *testing.T, client *Client, addr types.Address) {
 	}
 }
 
-func testInteractionCount(t *testing.T, client *Client, addr types.Address) {
+func testInteractionCount(t *testing.T, client *Client, addr common.Address) {
 	testcases := []struct {
 		name                 string
-		interactionCountArgs *ptypes.InteractionCountArgs
+		interactionCountArgs *rpcargs.InteractionCountArgs
 		expectedError        error
 	}{
 		{
 			name: "fetch interaction count for existing address",
-			interactionCountArgs: &ptypes.InteractionCountArgs{
+			interactionCountArgs: &rpcargs.InteractionCountArgs{
 				Address: addr,
-				Options: ptypes.TesseractNumberOrHash{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &transferTokensHeight,
 				},
 			},
 		},
 		{
 			name: "fetch interaction count for non-existing address",
-			interactionCountArgs: &ptypes.InteractionCountArgs{
+			interactionCountArgs: &rpcargs.InteractionCountArgs{
 				Address: tests.RandomAddress(t),
-				Options: ptypes.TesseractNumberOrHash{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
@@ -860,17 +861,17 @@ func testInteractionCount(t *testing.T, client *Client, addr types.Address) {
 	}
 }
 
-func testPendingInteractionCount(t *testing.T, client *Client, addr types.Address) {
+func testPendingInteractionCount(t *testing.T, client *Client, addr common.Address) {
 	testcases := []struct {
 		name                 string
-		interactionCountArgs *ptypes.InteractionCountArgs
+		interactionCountArgs *rpcargs.InteractionCountArgs
 		expectedError        error
 	}{
 		{
 			name: "fetch pending interaction count for non-existing address",
-			interactionCountArgs: &ptypes.InteractionCountArgs{
+			interactionCountArgs: &rpcargs.InteractionCountArgs{
 				Address: tests.RandomAddress(t),
-				Options: ptypes.TesseractNumberOrHash{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
@@ -878,9 +879,9 @@ func testPendingInteractionCount(t *testing.T, client *Client, addr types.Addres
 		},
 		{
 			name: "fetch pending interaction count for existing address",
-			interactionCountArgs: &ptypes.InteractionCountArgs{
+			interactionCountArgs: &rpcargs.InteractionCountArgs{
 				Address: addr,
-				Options: ptypes.TesseractNumberOrHash{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
@@ -907,30 +908,30 @@ func testPendingInteractionCount(t *testing.T, client *Client, addr types.Addres
 	}
 }
 
-func testStorage(t *testing.T, client *Client, addr types.Address) {
+func testStorage(t *testing.T, client *Client, addr common.Address) {
 	logicID := getLogicID(t, client, addr, &deployLogicHeight)
 
 	testcases := []struct {
 		name                 string
-		interactionCountArgs *ptypes.GetStorageArgs
+		interactionCountArgs *rpcargs.GetStorageArgs
 		expectedError        error
 	}{
 		{
 			name: "fetch storage value for existing logic ID",
-			interactionCountArgs: &ptypes.GetStorageArgs{
+			interactionCountArgs: &rpcargs.GetStorageArgs{
 				LogicID:    logicID,
-				StorageKey: types.Hex2Bytes("e88bd757ad5b9bedf372d8d3f0cf6c962a469db61a265f6418e1ffed86da29ec"),
-				Options: ptypes.TesseractNumberOrHash{
+				StorageKey: common.Hex2Bytes("e88bd757ad5b9bedf372d8d3f0cf6c962a469db61a265f6418e1ffed86da29ec"),
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
 		},
 		{
 			name: "fetch storage value for non-existing logic ID",
-			interactionCountArgs: &ptypes.GetStorageArgs{
+			interactionCountArgs: &rpcargs.GetStorageArgs{
 				LogicID:    "",
-				StorageKey: types.Hex2Bytes("e88bd757ad5b9bedf372d8d3f0cf6c962a469db61a265f6418e1ffed86da29ec"),
-				Options: ptypes.TesseractNumberOrHash{
+				StorageKey: common.Hex2Bytes("e88bd757ad5b9bedf372d8d3f0cf6c962a469db61a265f6418e1ffed86da29ec"),
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
@@ -956,26 +957,26 @@ func testStorage(t *testing.T, client *Client, addr types.Address) {
 	}
 }
 
-func testAccountState(t *testing.T, client *Client, addr types.Address) {
+func testAccountState(t *testing.T, client *Client, addr common.Address) {
 	testcases := []struct {
 		name          string
-		accountArgs   *ptypes.GetAccountArgs
+		accountArgs   *rpcargs.GetAccountArgs
 		expectedError error
 	}{
 		{
 			name: "fetch account state for existing address",
-			accountArgs: &ptypes.GetAccountArgs{
+			accountArgs: &rpcargs.GetAccountArgs{
 				Address: addr,
-				Options: ptypes.TesseractNumberOrHash{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &createAssetHeight,
 				},
 			},
 		},
 		{
 			name: "fetch account state for non-existing address",
-			accountArgs: &ptypes.GetAccountArgs{
+			accountArgs: &rpcargs.GetAccountArgs{
 				Address: tests.RandomAddress(t),
-				Options: ptypes.TesseractNumberOrHash{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
@@ -1003,30 +1004,30 @@ func testAccountState(t *testing.T, client *Client, addr types.Address) {
 	}
 }
 
-func testLogics(t *testing.T, client *Client, addr types.Address) {
+func testLogics(t *testing.T, client *Client, addr common.Address) {
 	logicID := getLogicID(t, client, addr, &deployLogicHeight)
 
 	testcases := []struct {
 		name             string
-		LogicIDArgs      *ptypes.GetLogicIDArgs
-		expectedLogicIDs []types.LogicID
+		LogicIDArgs      *rpcargs.GetLogicIDArgs
+		expectedLogicIDs []common.LogicID
 		expectedError    error
 	}{
 		{
 			name: "fetch logicIDs for existing address",
-			LogicIDArgs: &ptypes.GetLogicIDArgs{
+			LogicIDArgs: &rpcargs.GetLogicIDArgs{
 				Address: logicID.Address(),
-				Options: ptypes.TesseractNumberOrHash{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &createAssetHeight,
 				},
 			},
-			expectedLogicIDs: []types.LogicID{logicID},
+			expectedLogicIDs: []common.LogicID{logicID},
 		},
 		{
 			name: "fetch logicIDs for non-existing address",
-			LogicIDArgs: &ptypes.GetLogicIDArgs{
+			LogicIDArgs: &rpcargs.GetLogicIDArgs{
 				Address: tests.RandomAddress(t),
-				Options: ptypes.TesseractNumberOrHash{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
@@ -1054,56 +1055,56 @@ func testLogics(t *testing.T, client *Client, addr types.Address) {
 	}
 }
 
-func testLogicManifest(t *testing.T, client *Client, addr types.Address) {
+func testLogicManifest(t *testing.T, client *Client, addr common.Address) {
 	logicID := getLogicID(t, client, addr, &deployLogicHeight)
 	ts := getTesseract(t, client, addr, &deployLogicHeight)
 
-	var logic *ptypes.RPCLogicPayload
+	var logic *rpcargs.RPCLogicPayload
 
 	err := json.Unmarshal(ts.Ixns[0].Payload, &logic)
 	require.NoError(t, err)
 
 	testcases := []struct {
 		name              string
-		logicManifestArgs *ptypes.LogicManifestArgs
+		logicManifestArgs *rpcargs.LogicManifestArgs
 		expectedError     error
 	}{
 		{
 			name: "fetch json logic manifest for existing logicID",
-			logicManifestArgs: &ptypes.LogicManifestArgs{
+			logicManifestArgs: &rpcargs.LogicManifestArgs{
 				LogicID:  logicID,
 				Encoding: "JSON",
-				Options: ptypes.TesseractNumberOrHash{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
 		},
 		{
 			name: "fetch polo logic manifest for existing logicID",
-			logicManifestArgs: &ptypes.LogicManifestArgs{
+			logicManifestArgs: &rpcargs.LogicManifestArgs{
 				LogicID:  logicID,
 				Encoding: "POLO",
-				Options: ptypes.TesseractNumberOrHash{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
 		},
 		{
 			name: "fetch yaml logic manifest for existing logicID",
-			logicManifestArgs: &ptypes.LogicManifestArgs{
+			logicManifestArgs: &rpcargs.LogicManifestArgs{
 				LogicID:  logicID,
 				Encoding: "YAML",
-				Options: ptypes.TesseractNumberOrHash{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
 		},
 		{
 			name: "fetch logic manifest for non-existing logicID",
-			logicManifestArgs: &ptypes.LogicManifestArgs{
+			logicManifestArgs: &rpcargs.LogicManifestArgs{
 				LogicID:  "0200000070c34ed6ec4384c75d469894052647a078b33ac0f08db0d3751c1fce29a49f",
 				Encoding: "JSON",
-				Options: ptypes.TesseractNumberOrHash{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
@@ -1134,35 +1135,35 @@ func testLogicManifest(t *testing.T, client *Client, addr types.Address) {
 	}
 }
 
-func testLogicCall(t *testing.T, client *Client, addr types.Address) {
+func testLogicCall(t *testing.T, client *Client, addr common.Address) {
 	logicID := getLogicID(t, client, addr, &deployLogicHeight)
 	calldata := "0x0daf010665a601e501f6059506616d6f756e74030f424066726f6d06ffcd8ee6a29ec442dbbf9c6124dd3aeb833ef58" +
 		"052237d521654740857716b34746f060fafe52ec42a85db644d5cceba2bb89cf5b0166cc9158211f44ed1e60b06032c"
 
 	testcases := []struct {
 		name              string
-		logicCallArgs     *ptypes.LogicCallArgs
-		expectedLogicCall *ptypes.LogicCallResult
+		logicCallArgs     *rpcargs.LogicCallArgs
+		expectedLogicCall *rpcargs.LogicCallResult
 		expectedError     error
 	}{
 		{
 			name: "fetched logic call result successfully",
-			logicCallArgs: &ptypes.LogicCallArgs{
+			logicCallArgs: &rpcargs.LogicCallArgs{
 				Invoker:  logicID.Address(),
 				LogicID:  logicID,
 				Callsite: "Transfer!",
-				Calldata: types.Hex2Bytes(calldata),
+				Calldata: common.Hex2Bytes(calldata),
 			},
 		},
 		{
 			name: "fetch logic call result for non-existing address and logicID",
-			logicCallArgs: &ptypes.LogicCallArgs{
+			logicCallArgs: &rpcargs.LogicCallArgs{
 				Invoker:  tests.RandomAddress(t),
 				LogicID:  "0200000070c34ed6ec4384c75d469894052647a078b33ac0f08db0d3751c1fce29a49f",
 				Callsite: "Transfer!",
-				Calldata: types.Hex2Bytes(calldata),
+				Calldata: common.Hex2Bytes(calldata),
 			},
-			expectedError: types.ErrAccountNotFound,
+			expectedError: common.ErrAccountNotFound,
 		},
 	}
 
@@ -1187,12 +1188,12 @@ func testLogicCall(t *testing.T, client *Client, addr types.Address) {
 func testContent(t *testing.T, client *Client) {
 	testcases := []struct {
 		name          string
-		contentArgs   *ptypes.ContentArgs
+		contentArgs   *rpcargs.ContentArgs
 		expectedError error
 	}{
 		{
 			name:        "fetch content from ixpool",
-			contentArgs: &ptypes.ContentArgs{},
+			contentArgs: &rpcargs.ContentArgs{},
 		},
 	}
 
@@ -1215,22 +1216,22 @@ func testContent(t *testing.T, client *Client) {
 	}
 }
 
-func testContentFrom(t *testing.T, client *Client, addr types.Address) {
+func testContentFrom(t *testing.T, client *Client, addr common.Address) {
 	testcases := []struct {
 		name          string
-		ixPoolArgs    *ptypes.IxPoolArgs
+		ixPoolArgs    *rpcargs.IxPoolArgs
 		expectedCount int
 	}{
 		{
 			name: "fetch content from for existing address",
-			ixPoolArgs: &ptypes.IxPoolArgs{
+			ixPoolArgs: &rpcargs.IxPoolArgs{
 				Address: addr,
 			},
 			expectedCount: 1,
 		},
 		{
 			name: "fetch  content from for non-existing address",
-			ixPoolArgs: &ptypes.IxPoolArgs{
+			ixPoolArgs: &rpcargs.IxPoolArgs{
 				Address: tests.RandomAddress(t),
 			},
 			expectedCount: 0,
@@ -1252,11 +1253,11 @@ func testContentFrom(t *testing.T, client *Client, addr types.Address) {
 func testStatus(t *testing.T, client *Client) {
 	testcases := []struct {
 		name       string
-		ixPoolArgs *ptypes.StatusArgs
+		ixPoolArgs *rpcargs.StatusArgs
 	}{
 		{
 			name:       "fetch status of ixpool",
-			ixPoolArgs: &ptypes.StatusArgs{},
+			ixPoolArgs: &rpcargs.StatusArgs{},
 		},
 	}
 
@@ -1275,12 +1276,12 @@ func testStatus(t *testing.T, client *Client) {
 func testInspect(t *testing.T, client *Client) {
 	testcases := []struct {
 		name          string
-		inspectArgs   *ptypes.InspectArgs
+		inspectArgs   *rpcargs.InspectArgs
 		expectedError error
 	}{
 		{
 			name:        "inspect ixpool",
-			inspectArgs: &ptypes.InspectArgs{},
+			inspectArgs: &rpcargs.InspectArgs{},
 		},
 	}
 
@@ -1303,26 +1304,26 @@ func testInspect(t *testing.T, client *Client) {
 	}
 }
 
-func testInteractionByHash(t *testing.T, client *Client, addr types.Address) {
+func testInteractionByHash(t *testing.T, client *Client, addr common.Address) {
 	ts := getTesseract(t, client, addr, &deployLogicHeight)
 
 	testcases := []struct {
 		name          string
-		ixArgs        *ptypes.InteractionByHashArgs
+		ixArgs        *rpcargs.InteractionByHashArgs
 		expectedError error
 	}{
 		{
 			name: "fetch interaction for existing ix hash",
-			ixArgs: &ptypes.InteractionByHashArgs{
+			ixArgs: &rpcargs.InteractionByHashArgs{
 				Hash: ts.Ixns[0].Hash,
 			},
 		},
 		{
 			name: "fetch interaction for non-existing ix hash",
-			ixArgs: &ptypes.InteractionByHashArgs{
+			ixArgs: &rpcargs.InteractionByHashArgs{
 				Hash: tests.RandomHash(t),
 			},
-			expectedError: types.ErrFetchingInteraction,
+			expectedError: common.ErrFetchingInteraction,
 		},
 	}
 
@@ -1345,20 +1346,20 @@ func testInteractionByHash(t *testing.T, client *Client, addr types.Address) {
 	}
 }
 
-func testInteractionByTesseract(t *testing.T, client *Client, addr types.Address) {
+func testInteractionByTesseract(t *testing.T, client *Client, addr common.Address) {
 	ts := getTesseract(t, client, addr, &deployLogicHeight)
 	randomHash := tests.RandomHash(t)
 	ixIndex := uint64(0)
 
 	testcases := []struct {
 		name          string
-		ixArgs        *ptypes.InteractionByTesseract
+		ixArgs        *rpcargs.InteractionByTesseract
 		expectedError error
 	}{
 		{
 			name: "fetch interaction for existing tesseract hash",
-			ixArgs: &ptypes.InteractionByTesseract{
-				Options: ptypes.TesseractNumberOrHash{
+			ixArgs: &rpcargs.InteractionByTesseract{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractHash: &ts.Ixns[0].Parts[0].Hash,
 				},
 				IxIndex: (*hexutil.Uint64)(&ixIndex),
@@ -1366,8 +1367,8 @@ func testInteractionByTesseract(t *testing.T, client *Client, addr types.Address
 		},
 		{
 			name: "fetch interaction for non-existing tesseract hash",
-			ixArgs: &ptypes.InteractionByTesseract{
-				Options: ptypes.TesseractNumberOrHash{
+			ixArgs: &rpcargs.InteractionByTesseract{
+				Options: rpcargs.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
 				},
 				IxIndex: (*hexutil.Uint64)(&ixIndex),
@@ -1395,21 +1396,21 @@ func testInteractionByTesseract(t *testing.T, client *Client, addr types.Address
 	}
 }
 
-func testWaitTime(t *testing.T, client *Client, addr types.Address) {
+func testWaitTime(t *testing.T, client *Client, addr common.Address) {
 	testcases := []struct {
 		name          string
-		ixPoolArgs    *ptypes.IxPoolArgs
+		ixPoolArgs    *rpcargs.IxPoolArgs
 		expectedError error
 	}{
 		{
 			name: "fetch wait time for existing address",
-			ixPoolArgs: &ptypes.IxPoolArgs{
+			ixPoolArgs: &rpcargs.IxPoolArgs{
 				Address: addr,
 			},
 		},
 		{
 			name: "fetch wait time for non-existing address",
-			ixPoolArgs: &ptypes.IxPoolArgs{
+			ixPoolArgs: &rpcargs.IxPoolArgs{
 				Address: tests.RandomAddress(t),
 			},
 			expectedError: errors.New("account not found"),
@@ -1437,11 +1438,11 @@ func testWaitTime(t *testing.T, client *Client, addr types.Address) {
 func testPeers(t *testing.T, client *Client) {
 	testcases := []struct {
 		name    string
-		netArgs *ptypes.NetArgs
+		netArgs *rpcargs.NetArgs
 	}{
 		{
 			name:    "fetch peers",
-			netArgs: &ptypes.NetArgs{},
+			netArgs: &rpcargs.NetArgs{},
 		},
 	}
 
@@ -1462,13 +1463,13 @@ func testPeers(t *testing.T, client *Client) {
 func testVersion(t *testing.T, client *Client) {
 	testcases := []struct {
 		name          string
-		netArgs       *ptypes.NetArgs
+		netArgs       *rpcargs.NetArgs
 		expectedValue string
 	}{
 		{
 			name:          "fetch version",
-			netArgs:       &ptypes.NetArgs{},
-			expectedValue: common.ProtocolVersion,
+			netArgs:       &rpcargs.NetArgs{},
+			expectedValue: config.ProtocolVersion,
 		},
 	}
 
@@ -1487,11 +1488,11 @@ func testVersion(t *testing.T, client *Client) {
 func testInfo(t *testing.T, client *Client) {
 	testcases := []struct {
 		name    string
-		netArgs *ptypes.NetArgs
+		netArgs *rpcargs.NetArgs
 	}{
 		{
 			name:    "fetch krama id",
-			netArgs: &ptypes.NetArgs{},
+			netArgs: &rpcargs.NetArgs{},
 		},
 	}
 
@@ -1509,18 +1510,18 @@ func testInfo(t *testing.T, client *Client) {
 func testSendInteraction(t *testing.T, client *Client) {
 	testcases := []struct {
 		name          string
-		ixPoolArgs    *types.SendIXArgs
+		ixPoolArgs    *common.SendIXArgs
 		expectedError error
 	}{
 		{
 			name: "invalid account",
-			ixPoolArgs: &types.SendIXArgs{
-				Type:      types.IxValueTransfer,
+			ixPoolArgs: &common.SendIXArgs{
+				Type:      common.IxValueTransfer,
 				Sender:    tests.RandomAddress(t),
 				FuelPrice: big.NewInt(1),
 				FuelLimit: big.NewInt(200),
 			},
-			expectedError: types.ErrInsufficientFunds,
+			expectedError: common.ErrInsufficientFunds,
 		},
 	}
 
@@ -1529,7 +1530,7 @@ func testSendInteraction(t *testing.T, client *Client) {
 			bz, err := polo.Polorize(test.ixPoolArgs)
 			require.NoError(t, err)
 
-			sendIx := &ptypes.SendIX{
+			sendIx := &rpcargs.SendIX{
 				IXArgs:    hex.EncodeToString(bz),
 				Signature: "",
 			}
@@ -1550,11 +1551,11 @@ func testSendInteraction(t *testing.T, client *Client) {
 func testAccounts(t *testing.T, client *Client) {
 	testcases := []struct {
 		name    string
-		accArgs *ptypes.AccountArgs
+		accArgs *rpcargs.AccountArgs
 	}{
 		{
 			name:    "fetch accounts",
-			accArgs: &ptypes.AccountArgs{},
+			accArgs: &rpcargs.AccountArgs{},
 		},
 	}
 
@@ -1567,7 +1568,7 @@ func testAccounts(t *testing.T, client *Client) {
 			require.Equal(t, httpAccounts, accountsResponse)
 
 			for _, account := range accountsResponse {
-				if account == types.SargaAddress {
+				if account == common.SargaAddress {
 					return
 				}
 			}
@@ -1580,21 +1581,21 @@ func testAccounts(t *testing.T, client *Client) {
 func testAccountMetaInfo(t *testing.T, client *Client) {
 	testcases := []struct {
 		name          string
-		accArgs       *ptypes.GetAccountArgs
+		accArgs       *rpcargs.GetAccountArgs
 		expectedError error
 	}{
 		{
 			name: "fetch account meta info for sarga address",
-			accArgs: &ptypes.GetAccountArgs{
-				Address: types.SargaAddress,
+			accArgs: &rpcargs.GetAccountArgs{
+				Address: common.SargaAddress,
 			},
 		},
 		{
 			name: "fetch account meta info for random address",
-			accArgs: &ptypes.GetAccountArgs{
+			accArgs: &rpcargs.GetAccountArgs{
 				Address: tests.RandomAddress(t),
 			},
-			expectedError: types.ErrAccountNotFound,
+			expectedError: common.ErrAccountNotFound,
 		},
 	}
 
@@ -1612,16 +1613,16 @@ func testAccountMetaInfo(t *testing.T, client *Client) {
 
 			httpAccountMetaInfo := httpAccountMetaInfo(t, test.accArgs)
 			require.Equal(t, httpAccountMetaInfo, accountMetaInfoResponse)
-			require.Equal(t, types.SargaAddress, accountMetaInfoResponse.Address)
-			require.Equal(t, types.SargaAccount, accountMetaInfoResponse.Type)
+			require.Equal(t, common.SargaAddress, accountMetaInfoResponse.Address)
+			require.Equal(t, common.SargaAccount, accountMetaInfoResponse.Type)
 		})
 	}
 }
 
-func testFuelDeduction(t *testing.T, client *Client, addrs map[string]types.Address) {
+func testFuelDeduction(t *testing.T, client *Client, addrs map[string]common.Address) {
 	testcases := []struct {
 		name    string
-		address types.Address
+		address common.Address
 		height  int64
 	}{
 		{"deploy logic", addrs["deployAddr"], deployLogicHeight},
@@ -1633,7 +1634,7 @@ func testFuelDeduction(t *testing.T, client *Client, addrs map[string]types.Addr
 			// Get tesseract for the height
 			ts := getTesseract(t, client, test.address, &test.height)
 			// Get the interaction receipt
-			receipt, err := client.InteractionReceipt(&ptypes.ReceiptArgs{
+			receipt, err := client.InteractionReceipt(&rpcargs.ReceiptArgs{
 				Hash: ts.Ixns[0].Hash,
 			})
 			require.NoError(t, err)
@@ -1642,7 +1643,7 @@ func testFuelDeduction(t *testing.T, client *Client, addrs map[string]types.Addr
 			var deducted *big.Int
 			// If there are MOI Tokens in the transferred values, add that to the total deductions
 			// else, only fuel consumed on the receipt is the expected deduction
-			if transferValue, ok := ts.Ixns[0].TransferValues[types.KMOITokenAssetID]; !ok {
+			if transferValue, ok := ts.Ixns[0].TransferValues[common.KMOITokenAssetID]; !ok {
 				deducted = receipt.FuelUsed.ToInt()
 			} else {
 				deducted = new(big.Int).Add(receipt.FuelUsed.ToInt(), transferValue.ToInt())
@@ -1650,18 +1651,18 @@ func testFuelDeduction(t *testing.T, client *Client, addrs map[string]types.Addr
 
 			// Determine balance of MOI Tokens BEFORE the interaction
 			preHeight := test.height - 1
-			preBalance, err := client.Balance(&ptypes.BalArgs{
+			preBalance, err := client.Balance(&rpcargs.BalArgs{
 				Address: test.address,
-				AssetID: types.KMOITokenAssetID,
-				Options: ptypes.TesseractNumberOrHash{TesseractNumber: &preHeight},
+				AssetID: common.KMOITokenAssetID,
+				Options: rpcargs.TesseractNumberOrHash{TesseractNumber: &preHeight},
 			})
 			require.NoError(t, err)
 
 			// Determine balance of MOI Tokens AFTER the interaction
-			postBalance, err := client.Balance(&ptypes.BalArgs{
+			postBalance, err := client.Balance(&rpcargs.BalArgs{
 				Address: test.address,
-				AssetID: types.KMOITokenAssetID,
-				Options: ptypes.TesseractNumberOrHash{TesseractNumber: &test.height},
+				AssetID: common.KMOITokenAssetID,
+				Options: rpcargs.TesseractNumberOrHash{TesseractNumber: &test.height},
 			})
 			require.NoError(t, err)
 

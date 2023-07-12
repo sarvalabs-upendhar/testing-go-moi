@@ -12,8 +12,8 @@ import (
 	"github.com/sarvalabs/go-polo"
 	"gopkg.in/yaml.v3"
 
-	"github.com/sarvalabs/moichain/jug/engineio"
-	"github.com/sarvalabs/moichain/jug/pisa"
+	"github.com/sarvalabs/moichain/compute/engineio"
+	"github.com/sarvalabs/moichain/compute/pisa"
 )
 
 // ManifestFileConvertCommand generates a command runner to print a

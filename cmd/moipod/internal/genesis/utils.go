@@ -8,18 +8,17 @@ import (
 	"strings"
 
 	"github.com/sarvalabs/moichain/cmd/common"
-
-	"github.com/sarvalabs/moichain/types"
+	common2 "github.com/sarvalabs/moichain/common"
 
 	"github.com/pkg/errors"
 )
 
-func readGenesisFile() (*types.GenesisFile, error) {
+func readGenesisFile() (*common2.GenesisFile, error) {
 	if _, err := os.Stat(genesisFilePath); os.IsNotExist(err) {
-		return &types.GenesisFile{}, nil
+		return &common2.GenesisFile{}, nil
 	}
 
-	genesis := new(types.GenesisFile)
+	genesis := new(common2.GenesisFile)
 
 	file, err := os.ReadFile(genesisFilePath)
 	if err != nil {

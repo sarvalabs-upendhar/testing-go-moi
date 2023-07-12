@@ -8,12 +8,12 @@ import (
 	"syscall"
 
 	cmdCommon "github.com/sarvalabs/moichain/cmd/common"
+	"github.com/sarvalabs/moichain/node"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/otel"
 
-	"github.com/sarvalabs/moichain/poorna/node"
 	"github.com/sarvalabs/moichain/telemetry/tracing"
 )
 

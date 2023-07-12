@@ -3,25 +3,24 @@ package lattice
 import (
 	"math/big"
 
-	gtypes "github.com/sarvalabs/moichain/guna/types"
-	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/common"
 )
 
 func createGenesisTesseract(
-	addr types.Address,
-	stateHash, contextHash types.Hash,
-) (*types.Tesseract, error) {
-	ixHash := types.GetHash([]byte("Genesis" + stateHash.Hex()))
+	addr common.Address,
+	stateHash, contextHash common.Hash,
+) (*common.Tesseract, error) {
+	ixHash := common.GetHash([]byte("Genesis" + stateHash.Hex()))
 
-	body := types.TesseractBody{
+	body := common.TesseractBody{
 		StateHash:       stateHash,
 		ContextHash:     contextHash,
 		ContextDelta:    nil,
-		ReceiptHash:     types.Hash{},
+		ReceiptHash:     common.Hash{},
 		InteractionHash: ixHash,
-		ConsensusProof: types.PoXCData{
-			IdentityHash: types.NilHash,
-			BinaryHash:   types.NilHash,
+		ConsensusProof: common.PoXtData{
+			IdentityHash: common.NilHash,
+			BinaryHash:   common.NilHash,
 		},
 	}
 
@@ -30,22 +29,22 @@ func createGenesisTesseract(
 		return nil, err
 	}
 
-	header := types.TesseractHeader{
+	header := common.TesseractHeader{
 		Address:   addr,
-		PrevHash:  types.NilHash,
+		PrevHash:  common.NilHash,
 		Height:    0,
 		FuelUsed:  big.NewInt(0),
 		FuelLimit: big.NewInt(0),
 		BodyHash:  tsBodyHash,
-		GroupHash: types.NilHash,
-		ClusterID: gtypes.GenesisIdentifier,
-		Operator:  gtypes.GenesisIdentifier,
-		Extra: types.CommitData{
+		GroupHash: common.NilHash,
+		ClusterID: common.GenesisIdentifier,
+		Operator:  common.GenesisIdentifier,
+		Extra: common.CommitData{
 			CommitSignature: nil,
 			Round:           0,
 			VoteSet:         nil,
 		},
 	}
 
-	return types.NewTesseract(header, body, nil, nil, nil, ""), nil
+	return common.NewTesseract(header, body, nil, nil, nil, ""), nil
 }

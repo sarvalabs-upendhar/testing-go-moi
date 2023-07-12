@@ -3,25 +3,25 @@ package ixpool
 import (
 	"sync"
 
-	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/common"
 )
 
 // Lookup map used to find transactions present in the pool
 type lookupMap struct {
 	sync.RWMutex
-	all map[types.Hash]*types.Interaction
+	all map[common.Hash]*common.Interaction
 }
 
 func NewLookupMap() *lookupMap {
 	l := &lookupMap{
-		all: make(map[types.Hash]*types.Interaction, 0),
+		all: make(map[common.Hash]*common.Interaction, 0),
 	}
 
 	return l
 }
 
 // add inserts the given Interaction into the map. [thread-safe]
-func (m *lookupMap) add(ixs ...*types.Interaction) {
+func (m *lookupMap) add(ixs ...*common.Interaction) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -31,7 +31,7 @@ func (m *lookupMap) add(ixs ...*types.Interaction) {
 }
 
 // remove deletes the given Interactions from the map. [thread-safe]
-func (m *lookupMap) remove(ixs types.Interactions) {
+func (m *lookupMap) remove(ixs common.Interactions) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -41,7 +41,7 @@ func (m *lookupMap) remove(ixs types.Interactions) {
 }
 
 // get returns the Interaction associated with the given hash. [thread-safe]
-func (m *lookupMap) get(hash types.Hash) (*types.Interaction, bool) {
+func (m *lookupMap) get(hash common.Hash) (*common.Interaction, bool) {
 	m.RLock()
 	defer m.RUnlock()
 

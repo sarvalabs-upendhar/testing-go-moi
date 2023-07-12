@@ -32,9 +32,10 @@ jobs:
       - name: Build mcutils Image
         uses: docker/build-push-action@2eb1c1961a95fc15694676618e422e8ba1d63825
         with:
-          file: ./Dockerfile-mcutils
+          context: .
+          file: ./docker/mcutils-dockerfile.amd64
           push: true
           tags: 'ghcr.io/sarvalabs/mcutils:latest'
           build-args: |
-            ACCESS_TOKEN=${{ secrets.ACCESS_TOKEN }}
             GIT_COMMIT=${{ github.sha }}
+            TARGET_ARCH=amd64

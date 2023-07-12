@@ -8,16 +8,15 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/common/config"
 	"github.com/sarvalabs/moichain/common/hexutil"
 
 	cmdCommon "github.com/sarvalabs/moichain/cmd/common"
 
-	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/types"
-
 	"github.com/spf13/cobra"
 
-	"github.com/sarvalabs/moichain/mudra/poi"
+	"github.com/sarvalabs/moichain/crypto/poi"
 )
 
 func GetInitCommand() *cobra.Command {
@@ -110,19 +109,19 @@ func CreateConfigFile(datadir string, index int) []byte {
 			Libp2pAddr: []string{
 				"/ip4/0.0.0.0/tcp/" + strconv.Itoa(port+index),
 			},
-			JSONRPCAddr: "0.0.0.0:" + strconv.Itoa(common.DefaultJSONRPCPort+index),
+			JSONRPCAddr: "0.0.0.0:" + strconv.Itoa(config.DefaultJSONRPCPort+index),
 			BootStrapPeers: []string{
 				bootnode,
 			},
 			TrustedPeers:       peerList.TrustedPeers,
 			StaticPeers:        peerList.StaticPeers,
-			InboundConnLimit:   common.DefaultInboundConnLimit,
-			OutboundConnLimit:  common.DefaultOutboundConnLimit,
+			InboundConnLimit:   config.DefaultInboundConnLimit,
+			OutboundConnLimit:  config.DefaultOutboundConnLimit,
 			CorsAllowedOrigins: []string{"*"},
 		},
 		Syncer: cmdCommon.SyncerConfig{
 			ShouldExecute:  true,
-			SyncMode:       int(common.DefaultSyncMode),
+			SyncMode:       int(config.DefaultSyncMode),
 			EnableSnapSync: true,
 		},
 		Consensus: cmdCommon.ConsensusConfig{
@@ -141,18 +140,18 @@ func CreateConfigFile(datadir string, index int) []byte {
 		},
 		DB: cmdCommon.DBConfig{
 			CleanDB:     false,
-			MaxSnapSize: common.DefaultSnapSize, // 1GB limit
+			MaxSnapSize: config.DefaultSnapSize, // 1GB limit
 		},
 		Execution: cmdCommon.ExecutionConfig{
-			FuelLimit: hexutil.Big(*common.DefaultFuelLimit),
+			FuelLimit: hexutil.Big(*config.DefaultFuelLimit),
 		},
 		Ixpool: cmdCommon.IxPoolConfig{
-			Mode:       common.DefaultIxPoolMode,
-			PriceLimit: hexutil.Big(*common.DefaultIxPriceLimit),
-			MaxSlots:   common.DefaultMaxIXPoolSlots,
+			Mode:       config.DefaultIxPoolMode,
+			PriceLimit: hexutil.Big(*config.DefaultIxPriceLimit),
+			MaxSlots:   config.DefaultMaxIXPoolSlots,
 		},
 		Telemetry: cmdCommon.Telemetry{
-			PrometheusAddr: ":" + strconv.Itoa(common.DefaultPrometheusPort+index),
+			PrometheusAddr: ":" + strconv.Itoa(config.DefaultPrometheusPort+index),
 			JaegerAddr:     jaegerAddress,
 		},
 		Vault: cmdCommon.VaultConfig{
@@ -162,7 +161,7 @@ func CreateConfigFile(datadir string, index int) []byte {
 	}
 
 	if writeLogsToFile {
-		data.LogFilePath = datadir + common.DefaultLogDirectory
+		data.LogFilePath = datadir + config.DefaultLogDirectory
 	}
 
 	file, err := json.MarshalIndent(data, "", "\t")
@@ -208,7 +207,7 @@ func setupTestEnv() {
 
 		instances[i].KramaID = string(kramaID)
 		instances[i].RPCUrl = ip + ":" + strconv.Itoa(1600+directoryIndex+i)
-		instances[i].ConsensusKey = types.BytesToHex(publicKey)
+		instances[i].ConsensusKey = common.BytesToHex(publicKey)
 	}
 
 	instancesFile, err := json.MarshalIndent(instances, "", "\t")

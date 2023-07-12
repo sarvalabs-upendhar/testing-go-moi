@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/common"
 )
 
 func TestPricedQueue_Push(t *testing.T) {
@@ -13,14 +13,14 @@ func TestPricedQueue_Push(t *testing.T) {
 
 	testcases := []struct {
 		name     string
-		ixs      types.Interactions
+		ixs      common.Interactions
 		expected []uint64
 	}{
 		{
 			name: "Push ixs into the priced queue",
-			ixs: types.Interactions{
-				newIxWithFuelPrice(t, 0, types.NilAddress, 8),
-				newIxWithFuelPrice(t, 0, types.NilAddress, 2),
+			ixs: common.Interactions{
+				newIxWithFuelPrice(t, 0, common.NilAddress, 8),
+				newIxWithFuelPrice(t, 0, common.NilAddress, 2),
 			},
 			expected: []uint64{8, 2},
 		},
@@ -35,7 +35,7 @@ func TestPricedQueue_Push(t *testing.T) {
 			require.Len(t, pricedQueue.queue, len(testcase.ixs))
 
 			for _, expectedPrice := range testcase.expected {
-				ix, ok := pricedQueue.Pop().(*types.Interaction)
+				ix, ok := pricedQueue.Pop().(*common.Interaction)
 				require.True(t, ok)
 				require.Equal(t, expectedPrice, ix.FuelPrice().Uint64())
 			}
@@ -46,24 +46,24 @@ func TestPricedQueue_Push(t *testing.T) {
 func TestPricedQueue_Pop(t *testing.T) {
 	testcases := []struct {
 		name     string
-		ixs      types.Interactions
-		testFn   func(pq *pricedQueue, ixs types.Interactions)
+		ixs      common.Interactions
+		testFn   func(pq *pricedQueue, ixs common.Interactions)
 		expected []uint64
 	}{
 		{
 			name: "Empty priced queue",
-			ixs:  types.Interactions{},
+			ixs:  common.Interactions{},
 		},
 		{
 			name: "Pop the ixs by highest cost in order",
-			ixs: types.Interactions{
-				newIxWithFuelPrice(t, 0, types.NilAddress, 8),
-				newIxWithFuelPrice(t, 0, types.NilAddress, 2),
-				newIxWithFuelPrice(t, 0, types.NilAddress, 4),
-				newIxWithFuelPrice(t, 0, types.NilAddress, 12),
-				newIxWithFuelPrice(t, 0, types.NilAddress, 8),
+			ixs: common.Interactions{
+				newIxWithFuelPrice(t, 0, common.NilAddress, 8),
+				newIxWithFuelPrice(t, 0, common.NilAddress, 2),
+				newIxWithFuelPrice(t, 0, common.NilAddress, 4),
+				newIxWithFuelPrice(t, 0, common.NilAddress, 12),
+				newIxWithFuelPrice(t, 0, common.NilAddress, 8),
 			},
-			testFn: func(pq *pricedQueue, ixs types.Interactions) {
+			testFn: func(pq *pricedQueue, ixs common.Interactions) {
 				for _, ix := range ixs {
 					pq.Push(ix)
 				}
@@ -88,7 +88,7 @@ func TestPricedQueue_Pop(t *testing.T) {
 			}
 
 			for _, expectedPrice := range testcase.expected {
-				ix, ok := pricedQueue.Pop().(*types.Interaction)
+				ix, ok := pricedQueue.Pop().(*common.Interaction)
 				require.True(t, ok)
 				require.Equal(t, expectedPrice, ix.FuelPrice().Uint64())
 			}
@@ -101,24 +101,24 @@ func TestPricedQueue_Pop(t *testing.T) {
 func TestPricedQueue_Peek(t *testing.T) {
 	testcases := []struct {
 		name     string
-		ixs      types.Interactions
-		testFn   func(pq *pricedQueue, ixs types.Interactions)
+		ixs      common.Interactions
+		testFn   func(pq *pricedQueue, ixs common.Interactions)
 		expected []uint64
 	}{
 		{
 			name: "Empty priced queue",
-			ixs:  types.Interactions{},
+			ixs:  common.Interactions{},
 		},
 		{
 			name: "Peek the ixs by highest cost in order",
-			ixs: types.Interactions{
-				newIxWithFuelPrice(t, 0, types.NilAddress, 8),
-				newIxWithFuelPrice(t, 0, types.NilAddress, 2),
-				newIxWithFuelPrice(t, 0, types.NilAddress, 4),
-				newIxWithFuelPrice(t, 0, types.NilAddress, 12),
-				newIxWithFuelPrice(t, 0, types.NilAddress, 8),
+			ixs: common.Interactions{
+				newIxWithFuelPrice(t, 0, common.NilAddress, 8),
+				newIxWithFuelPrice(t, 0, common.NilAddress, 2),
+				newIxWithFuelPrice(t, 0, common.NilAddress, 4),
+				newIxWithFuelPrice(t, 0, common.NilAddress, 12),
+				newIxWithFuelPrice(t, 0, common.NilAddress, 8),
 			},
-			testFn: func(pq *pricedQueue, ixs types.Interactions) {
+			testFn: func(pq *pricedQueue, ixs common.Interactions) {
 				for _, ix := range ixs {
 					pq.Push(ix)
 				}
@@ -154,22 +154,22 @@ func TestPricedQueue_Peek(t *testing.T) {
 func TestPricedQueue_Len(t *testing.T) {
 	testcases := []struct {
 		name     string
-		ixs      types.Interactions
-		testFn   func(pq *pricedQueue, ixs types.Interactions)
+		ixs      common.Interactions
+		testFn   func(pq *pricedQueue, ixs common.Interactions)
 		expected int
 	}{
 		{
 			name:     "Empty priced queue",
-			ixs:      types.Interactions{},
+			ixs:      common.Interactions{},
 			expected: 0,
 		},
 		{
 			name: "should return the expected length",
-			ixs: types.Interactions{
-				newIxWithFuelPrice(t, 0, types.NilAddress, 8),
-				newIxWithFuelPrice(t, 0, types.NilAddress, 2),
+			ixs: common.Interactions{
+				newIxWithFuelPrice(t, 0, common.NilAddress, 8),
+				newIxWithFuelPrice(t, 0, common.NilAddress, 2),
 			},
-			testFn: func(pq *pricedQueue, ixs types.Interactions) {
+			testFn: func(pq *pricedQueue, ixs common.Interactions) {
 				for _, ix := range ixs {
 					pq.Push(ix)
 				}
@@ -200,9 +200,9 @@ func TestWaitQueue_Push(t *testing.T) {
 		{
 			name: "Push ixs into the wait queue",
 			ixs: []*WaitInteractions{
-				newIxWithWaitCounter(t, 2, types.NilAddress, 2),
-				newIxWithWaitCounter(t, 1, types.NilAddress, 1),
-				newIxWithWaitCounter(t, 4, types.NilAddress, 4),
+				newIxWithWaitCounter(t, 2, common.NilAddress, 2),
+				newIxWithWaitCounter(t, 1, common.NilAddress, 1),
+				newIxWithWaitCounter(t, 4, common.NilAddress, 4),
 			},
 			expected: []uint64{4, 2, 1},
 		},
@@ -219,7 +219,7 @@ func TestWaitQueue_Push(t *testing.T) {
 			require.Len(t, waitQueue.queue, len(testcase.ixs))
 
 			for _, expectedNonce := range testcase.expected {
-				ix, ok := waitQueue.Pop().(*types.Interaction)
+				ix, ok := waitQueue.Pop().(*common.Interaction)
 				require.True(t, ok)
 				require.Equal(t, expectedNonce, ix.Nonce())
 			}
@@ -241,11 +241,11 @@ func TestWaitQueue_Pop(t *testing.T) {
 		{
 			name: "Pop the ixs by highest wait time in order",
 			ixs: []*WaitInteractions{
-				newIxWithWaitCounter(t, 2, types.NilAddress, 2),
-				newIxWithWaitCounter(t, 5, types.NilAddress, 5),
-				newIxWithWaitCounter(t, 1, types.NilAddress, 1),
-				newIxWithWaitCounter(t, 8, types.NilAddress, 8),
-				newIxWithWaitCounter(t, 5, types.NilAddress, 5),
+				newIxWithWaitCounter(t, 2, common.NilAddress, 2),
+				newIxWithWaitCounter(t, 5, common.NilAddress, 5),
+				newIxWithWaitCounter(t, 1, common.NilAddress, 1),
+				newIxWithWaitCounter(t, 8, common.NilAddress, 8),
+				newIxWithWaitCounter(t, 5, common.NilAddress, 5),
 			},
 			testFn: func(wq *waitQueue, ixs []*WaitInteractions) {
 				for _, ix := range ixs {
@@ -272,7 +272,7 @@ func TestWaitQueue_Pop(t *testing.T) {
 			}
 
 			for _, expectedNonce := range testcase.expected {
-				ix, ok := waitQueue.Pop().(*types.Interaction)
+				ix, ok := waitQueue.Pop().(*common.Interaction)
 				require.True(t, ok)
 				require.Equal(t, expectedNonce, ix.Nonce())
 			}
@@ -296,11 +296,11 @@ func TestWaitQueue_Peek(t *testing.T) {
 		{
 			name: "Peek the ixs by highest wait time in order",
 			ixs: []*WaitInteractions{
-				newIxWithWaitCounter(t, 4, types.NilAddress, 4),
-				newIxWithWaitCounter(t, 2, types.NilAddress, 2),
-				newIxWithWaitCounter(t, 4, types.NilAddress, 4),
-				newIxWithWaitCounter(t, 10, types.NilAddress, 10),
-				newIxWithWaitCounter(t, 4, types.NilAddress, 4),
+				newIxWithWaitCounter(t, 4, common.NilAddress, 4),
+				newIxWithWaitCounter(t, 2, common.NilAddress, 2),
+				newIxWithWaitCounter(t, 4, common.NilAddress, 4),
+				newIxWithWaitCounter(t, 10, common.NilAddress, 10),
+				newIxWithWaitCounter(t, 4, common.NilAddress, 4),
 			},
 			testFn: func(wq *waitQueue, ixs []*WaitInteractions) {
 				for _, ix := range ixs {
@@ -350,8 +350,8 @@ func TestWaitQueue_Len(t *testing.T) {
 		{
 			name: "should return the expected length",
 			ixs: []*WaitInteractions{
-				newIxWithWaitCounter(t, 0, types.NilAddress, 8),
-				newIxWithWaitCounter(t, 0, types.NilAddress, 2),
+				newIxWithWaitCounter(t, 0, common.NilAddress, 8),
+				newIxWithWaitCounter(t, 0, common.NilAddress, 2),
 			},
 			testFn: func(wq *waitQueue, ixs []*WaitInteractions) {
 				for _, ix := range ixs {

@@ -8,7 +8,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/sarvalabs/moichain/jug/engineio"
+	"github.com/sarvalabs/moichain/compute/engineio"
 )
 
 // LogicCallCommand generates a Command runner to execute a given callsite

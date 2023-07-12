@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	id "github.com/sarvalabs/moichain/common/kramaid"
+
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/jaeger"
@@ -11,8 +13,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	traceapi "go.opentelemetry.io/otel/trace"
-
-	id "github.com/sarvalabs/moichain/mudra/kramaid"
 )
 
 // shutdownTracerProvider adds a shutdown method for tracer providers.

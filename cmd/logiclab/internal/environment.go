@@ -14,9 +14,9 @@ import (
 	"github.com/pkg/errors"
 	"go.uber.org/atomic"
 
-	"github.com/sarvalabs/moichain/jug/engineio"
-	"github.com/sarvalabs/moichain/jug/pisa"
-	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/compute/engineio"
+	"github.com/sarvalabs/moichain/compute/pisa"
 )
 
 func init() {
@@ -99,8 +99,8 @@ func InitEnvironment(dirpath string) error {
 			HexBytes: true,
 		},
 
-		Participants:  make(map[string]types.Address),
-		LogicAccounts: make(map[string]types.LogicID),
+		Participants:  make(map[string]common.Address),
+		LogicAccounts: make(map[string]common.LogicID),
 	}
 
 	if err := inventory.save(); err != nil {

@@ -12,23 +12,25 @@ import (
 	"os"
 	"time"
 
-	cmdCommon "github.com/sarvalabs/moichain/cmd/common"
+	id "github.com/sarvalabs/moichain/common/kramaid"
+	mudraCommon "github.com/sarvalabs/moichain/crypto/common"
+	rpcargs "github.com/sarvalabs/moichain/jsonrpc/args"
+	gtypes "github.com/sarvalabs/moichain/state"
 
+	cmdCommon "github.com/sarvalabs/moichain/cmd/common"
 	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/jug/pisa"
-	id "github.com/sarvalabs/moichain/mudra/kramaid"
+	"github.com/sarvalabs/moichain/common/config"
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
-	"github.com/sarvalabs/moichain/common/tests"
-	gtypes "github.com/sarvalabs/moichain/guna/types"
-	"github.com/sarvalabs/moichain/moiclient"
-	"github.com/sarvalabs/moichain/mudra"
-	mudraCommon "github.com/sarvalabs/moichain/mudra/common"
-	"github.com/sarvalabs/moichain/mudra/poi/moinode"
-	ptypes "github.com/sarvalabs/moichain/poorna/types"
-	"github.com/sarvalabs/moichain/types"
 	"github.com/spf13/cobra"
+
+	"github.com/sarvalabs/moichain/compute/pisa"
+
+	"github.com/sarvalabs/moichain/common/tests"
+	"github.com/sarvalabs/moichain/crypto"
+	"github.com/sarvalabs/moichain/crypto/poi/moinode"
+	"github.com/sarvalabs/moichain/moiclient"
 )
 
 var (
@@ -128,10 +130,10 @@ func runRegisterCommand(cmd *cobra.Command, args []string) {
 		cmdCommon.Err(err)
 	}
 
-	vault, err := mudra.NewVault(&mudra.VaultConfig{
+	vault, err := crypto.NewVault(&crypto.VaultConfig{
 		DataDir:      nodeDataDir,
 		NodeIndex:    uint32(nodeIndex),
-		Mode:         mudra.UserMode,
+		Mode:         crypto.UserMode,
 		SeedPhrase:   accounts[0].Mnemonic,
 		NodePassword: nodePassword,
 		InMemory:     false,
@@ -143,7 +145,7 @@ func runRegisterCommand(cmd *cobra.Command, args []string) {
 	registerGuardian(vault)
 }
 
-func registerGuardian(vault *mudra.KramaVault) {
+func registerGuardian(vault *crypto.KramaVault) {
 	client, err := moiclient.NewClient(networkRPC)
 	if err != nil {
 		cmdCommon.Err(errors.Wrap(err, "failed to create moi-client"))
@@ -162,7 +164,7 @@ func registerGuardian(vault *mudra.KramaVault) {
 		GuardianOperator: moiID,
 		KramaID:          string(vault.KramaID()),
 		PublicKey:        vault.GetConsensusPrivateKey().GetPublicKeyInBytes(),
-		IncentiveWallet:  types.HexToAddress(walletAddress),
+		IncentiveWallet:  common.HexToAddress(walletAddress),
 	}
 
 	dc := make(polo.Document)
@@ -179,25 +181,25 @@ func registerGuardian(vault *mudra.KramaVault) {
 		cmdCommon.Err(err)
 	}
 
-	moiIDpublicKey, err := vault.GetPublicKeyAt(common.DefaultMOIIDPath)
+	moiIDpublicKey, err := vault.GetPublicKeyAt(config.DefaultMOIIDPath)
 	if err != nil {
 		cmdCommon.Err(err)
 	}
 
 	fmt.Printf("Krama-ID %s", vault.KramaID())
 
-	nonce, err := client.InteractionCount(&ptypes.InteractionCountArgs{
-		Address: types.BytesToAddress(moiIDpublicKey),
-		Options: ptypes.TesseractNumberOrHash{
-			TesseractNumber: &ptypes.LatestTesseractHeight,
+	nonce, err := client.InteractionCount(&rpcargs.InteractionCountArgs{
+		Address: common.BytesToAddress(moiIDpublicKey),
+		Options: rpcargs.TesseractNumberOrHash{
+			TesseractNumber: &rpcargs.LatestTesseractHeight,
 		},
 	})
 	if err != nil {
 		cmdCommon.Err(errors.Wrap(err, "failed to fetch nonce"))
 	}
 
-	logicPayload := &types.LogicPayload{
-		Logic:    types.GuardianLogicID,
+	logicPayload := &common.LogicPayload{
+		Logic:    common.GuardianLogicID,
 		Callsite: "Register!",
 		Calldata: dc.Bytes(),
 	}
@@ -207,9 +209,9 @@ func registerGuardian(vault *mudra.KramaVault) {
 		cmdCommon.Err(err)
 	}
 
-	ixArgs := types.SendIXArgs{
-		Type:      types.IxLogicInvoke,
-		Sender:    types.BytesToAddress(moiIDpublicKey),
+	ixArgs := common.SendIXArgs{
+		Type:      common.IxLogicInvoke,
+		Sender:    common.BytesToAddress(moiIDpublicKey),
 		Nonce:     nonce.ToUint64(),
 		FuelPrice: big.NewInt(1),
 		FuelLimit: big.NewInt(10000),
@@ -221,12 +223,12 @@ func registerGuardian(vault *mudra.KramaVault) {
 		cmdCommon.Err(err)
 	}
 
-	signature, err := vault.Sign(rawArgs, mudraCommon.EcdsaSecp256k1, mudra.UsingIgcPath(mudra.DefaultMOIIDPath))
+	signature, err := vault.Sign(rawArgs, mudraCommon.EcdsaSecp256k1, crypto.UsingIgcPath(crypto.DefaultMOIIDPath))
 	if err != nil {
 		cmdCommon.Err(err)
 	}
 
-	ixHash, err := client.SendInteractions(&ptypes.SendIX{
+	ixHash, err := client.SendInteractions(&rpcargs.SendIX{
 		IXArgs:    hex.EncodeToString(rawArgs),
 		Signature: hex.EncodeToString(signature),
 	})
@@ -244,7 +246,7 @@ func registerGuardian(vault *mudra.KramaVault) {
 		cmdCommon.Err(err)
 	}
 
-	if rpcReceipt.Status != types.ReceiptOk {
+	if rpcReceipt.Status != common.ReceiptOk {
 		fmt.Println("Registration failed err", string(rpcReceipt.ExtraData))
 
 		return
@@ -261,11 +263,11 @@ func registerGuardian(vault *mudra.KramaVault) {
 }
 
 func isGuardianRegistered(kramaID id.KramaID, client *moiclient.Client) bool {
-	storageData, err := client.Storage(&ptypes.GetStorageArgs{
-		LogicID:    types.GuardianLogicID,
+	storageData, err := client.Storage(&rpcargs.GetStorageArgs{
+		LogicID:    common.GuardianLogicID,
 		StorageKey: pisa.SlotHash(gtypes.GuardianSLot),
-		Options: ptypes.TesseractNumberOrHash{
-			TesseractNumber: &ptypes.LatestTesseractHeight,
+		Options: rpcargs.TesseractNumberOrHash{
+			TesseractNumber: &rpcargs.LatestTesseractHeight,
 		},
 	})
 	if err != nil {
@@ -291,7 +293,7 @@ func registerWithWatchDog(kramaID id.KramaID, rpcURL string) error {
 			return err
 		}
 
-		rpcURL = fmt.Sprintf("%s%s:%d", "http://", ipAddr, common.DefaultJSONRPCPort)
+		rpcURL = fmt.Sprintf("%s%s:%d", "http://", ipAddr, config.DefaultJSONRPCPort)
 	}
 
 	parsedURL, err := url.Parse(rpcURL)

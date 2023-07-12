@@ -1,4 +1,4 @@
-![banner](./banner.png)
+![banner](.github/banner.png)
 
 [moitech]: https://moi.technology/
 [moidocs]: https://docs.moi.technology/

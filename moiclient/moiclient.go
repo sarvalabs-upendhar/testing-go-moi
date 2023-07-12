@@ -14,11 +14,12 @@ import (
 	"strconv"
 	"sync/atomic"
 
+	"github.com/sarvalabs/moichain/common/kramaid"
+	rpcargs "github.com/sarvalabs/moichain/jsonrpc/args"
+
+	"github.com/sarvalabs/moichain/common"
 	"github.com/sarvalabs/moichain/common/hexutil"
-	"github.com/sarvalabs/moichain/mudra/kramaid"
-	"github.com/sarvalabs/moichain/poorna/api"
-	ptypes "github.com/sarvalabs/moichain/poorna/types"
-	"github.com/sarvalabs/moichain/types"
+	"github.com/sarvalabs/moichain/jsonrpc/api"
 )
 
 type Client struct {
@@ -177,8 +178,8 @@ func (c *Client) nextID() json.RawMessage {
 }
 
 // Registry returns the asset registry info for the given address and tesseract options
-func (c *Client) Registry(args *ptypes.QueryArgs) ([]ptypes.RPCRegistry, error) {
-	var resp ptypes.Response
+func (c *Client) Registry(args *rpcargs.QueryArgs) ([]rpcargs.RPCRegistry, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "moi.Registry", args)
 	if err != nil {
@@ -189,7 +190,7 @@ func (c *Client) Registry(args *ptypes.QueryArgs) ([]ptypes.RPCRegistry, error) 
 		return nil, resp.Error
 	}
 
-	var entries []ptypes.RPCRegistry
+	var entries []rpcargs.RPCRegistry
 
 	err = json.Unmarshal(resp.Data, &entries)
 	if err != nil {
@@ -200,8 +201,8 @@ func (c *Client) Registry(args *ptypes.QueryArgs) ([]ptypes.RPCRegistry, error) 
 }
 
 // Tesseract returns RPCTesseract based on the given arguments
-func (c *Client) Tesseract(args *ptypes.TesseractArgs) (*ptypes.RPCTesseract, error) {
-	var resp ptypes.Response
+func (c *Client) Tesseract(args *rpcargs.TesseractArgs) (*rpcargs.RPCTesseract, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "moi.Tesseract", args)
 	if err != nil {
@@ -212,7 +213,7 @@ func (c *Client) Tesseract(args *ptypes.TesseractArgs) (*ptypes.RPCTesseract, er
 		return nil, resp.Error
 	}
 
-	var tess ptypes.RPCTesseract
+	var tess rpcargs.RPCTesseract
 
 	err = json.Unmarshal(resp.Data, &tess)
 	if err != nil {
@@ -223,8 +224,8 @@ func (c *Client) Tesseract(args *ptypes.TesseractArgs) (*ptypes.RPCTesseract, er
 }
 
 // AssetInfoByAssetID returns asset description for the given assetID
-func (c *Client) AssetInfoByAssetID(args *ptypes.GetAssetInfoArgs) (*ptypes.RPCAssetDescriptor, error) {
-	var resp ptypes.Response
+func (c *Client) AssetInfoByAssetID(args *rpcargs.GetAssetInfoArgs) (*rpcargs.RPCAssetDescriptor, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "moi.AssetInfoByAssetID", args)
 	if err != nil {
@@ -235,7 +236,7 @@ func (c *Client) AssetInfoByAssetID(args *ptypes.GetAssetInfoArgs) (*ptypes.RPCA
 		return nil, resp.Error
 	}
 
-	var assetInfo ptypes.RPCAssetDescriptor
+	var assetInfo rpcargs.RPCAssetDescriptor
 	err = json.Unmarshal(resp.Data, &assetInfo)
 
 	if err != nil {
@@ -246,8 +247,8 @@ func (c *Client) AssetInfoByAssetID(args *ptypes.GetAssetInfoArgs) (*ptypes.RPCA
 }
 
 // Balance returns the balance of assetID for given api.BalArgs
-func (c *Client) Balance(args *ptypes.BalArgs) (*hexutil.Big, error) {
-	var resp ptypes.Response
+func (c *Client) Balance(args *rpcargs.BalArgs) (*hexutil.Big, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "moi.Balance", args)
 	if err != nil {
@@ -270,8 +271,8 @@ func (c *Client) Balance(args *ptypes.BalArgs) (*hexutil.Big, error) {
 }
 
 // TDU retrieves the TDU of the queried address
-func (c *Client) TDU(args *ptypes.QueryArgs) ([]ptypes.TDU, error) {
-	var resp ptypes.Response
+func (c *Client) TDU(args *rpcargs.QueryArgs) ([]rpcargs.TDU, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "moi.TDU", args)
 	if err != nil {
@@ -282,7 +283,7 @@ func (c *Client) TDU(args *ptypes.QueryArgs) ([]ptypes.TDU, error) {
 		return nil, resp.Error
 	}
 
-	var tdu []ptypes.TDU
+	var tdu []rpcargs.TDU
 
 	err = json.Unmarshal(resp.Data, &tdu)
 
@@ -294,8 +295,8 @@ func (c *Client) TDU(args *ptypes.QueryArgs) ([]ptypes.TDU, error) {
 }
 
 // ContextInfo returns the context Info of the queried address.
-func (c *Client) ContextInfo(args *ptypes.ContextInfoArgs) (*ptypes.ContextResponse, error) {
-	var resp ptypes.Response
+func (c *Client) ContextInfo(args *rpcargs.ContextInfoArgs) (*rpcargs.ContextResponse, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "moi.ContextInfo", args)
 	if err != nil {
@@ -306,7 +307,7 @@ func (c *Client) ContextInfo(args *ptypes.ContextInfoArgs) (*ptypes.ContextRespo
 		return nil, resp.Error
 	}
 
-	var contextResp ptypes.ContextResponse
+	var contextResp rpcargs.ContextResponse
 
 	err = json.Unmarshal(resp.Data, &contextResp)
 	if err != nil {
@@ -317,8 +318,8 @@ func (c *Client) ContextInfo(args *ptypes.ContextInfoArgs) (*ptypes.ContextRespo
 }
 
 // InteractionByTesseract returns the interaction for the given tesseract hash
-func (c *Client) InteractionByTesseract(args *ptypes.InteractionByTesseract) (*ptypes.RPCInteraction, error) {
-	var resp ptypes.Response
+func (c *Client) InteractionByTesseract(args *rpcargs.InteractionByTesseract) (*rpcargs.RPCInteraction, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "moi.InteractionByTesseract", args)
 	if err != nil {
@@ -329,7 +330,7 @@ func (c *Client) InteractionByTesseract(args *ptypes.InteractionByTesseract) (*p
 		return nil, resp.Error
 	}
 
-	var ix ptypes.RPCInteraction
+	var ix rpcargs.RPCInteraction
 
 	err = json.Unmarshal(resp.Data, &ix)
 	if err != nil {
@@ -340,8 +341,8 @@ func (c *Client) InteractionByTesseract(args *ptypes.InteractionByTesseract) (*p
 }
 
 // InteractionByHash returns the interaction for given ix hash
-func (c *Client) InteractionByHash(args *ptypes.InteractionByHashArgs) (*ptypes.RPCInteraction, error) {
-	var resp ptypes.Response
+func (c *Client) InteractionByHash(args *rpcargs.InteractionByHashArgs) (*rpcargs.RPCInteraction, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "moi.InteractionByHash", args)
 	if err != nil {
@@ -352,7 +353,7 @@ func (c *Client) InteractionByHash(args *ptypes.InteractionByHashArgs) (*ptypes.
 		return nil, resp.Error
 	}
 
-	var ix ptypes.RPCInteraction
+	var ix rpcargs.RPCInteraction
 
 	err = json.Unmarshal(resp.Data, &ix)
 	if err != nil {
@@ -363,8 +364,8 @@ func (c *Client) InteractionByHash(args *ptypes.InteractionByHashArgs) (*ptypes.
 }
 
 // InteractionReceipt returns the receipt of the interaction for given hash
-func (c *Client) InteractionReceipt(args *ptypes.ReceiptArgs) (*ptypes.RPCReceipt, error) {
-	var resp ptypes.Response
+func (c *Client) InteractionReceipt(args *rpcargs.ReceiptArgs) (*rpcargs.RPCReceipt, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "moi.InteractionReceipt", args)
 	if err != nil {
@@ -375,7 +376,7 @@ func (c *Client) InteractionReceipt(args *ptypes.ReceiptArgs) (*ptypes.RPCReceip
 		return nil, resp.Error
 	}
 
-	var receipt ptypes.RPCReceipt
+	var receipt rpcargs.RPCReceipt
 
 	err = json.Unmarshal(resp.Data, &receipt)
 	if err != nil {
@@ -386,8 +387,8 @@ func (c *Client) InteractionReceipt(args *ptypes.ReceiptArgs) (*ptypes.RPCReceip
 }
 
 // InteractionCount returns the number of interactions sent for the given address
-func (c *Client) InteractionCount(args *ptypes.InteractionCountArgs) (*hexutil.Uint64, error) {
-	var resp ptypes.Response
+func (c *Client) InteractionCount(args *rpcargs.InteractionCountArgs) (*hexutil.Uint64, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "moi.InteractionCount", args)
 	if err != nil {
@@ -409,8 +410,8 @@ func (c *Client) InteractionCount(args *ptypes.InteractionCountArgs) (*hexutil.U
 }
 
 // PendingInteractionCount returns the number of interactions sent for the given address.
-func (c *Client) PendingInteractionCount(args *ptypes.InteractionCountArgs) (*hexutil.Uint64, error) {
-	var resp ptypes.Response
+func (c *Client) PendingInteractionCount(args *rpcargs.InteractionCountArgs) (*hexutil.Uint64, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "moi.PendingInteractionCount", args)
 	if err != nil {
@@ -432,8 +433,8 @@ func (c *Client) PendingInteractionCount(args *ptypes.InteractionCountArgs) (*he
 }
 
 // Storage returns the data associated with the given storage slot
-func (c *Client) Storage(args *ptypes.GetStorageArgs) (hexutil.Bytes, error) {
-	var resp ptypes.Response
+func (c *Client) Storage(args *rpcargs.GetStorageArgs) (hexutil.Bytes, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "moi.Storage", args)
 	if err != nil {
@@ -455,8 +456,8 @@ func (c *Client) Storage(args *ptypes.GetStorageArgs) (hexutil.Bytes, error) {
 }
 
 // AccountState returns the account state of the given address
-func (c *Client) AccountState(args *ptypes.GetAccountArgs) (*ptypes.RPCAccount, error) {
-	var resp ptypes.Response
+func (c *Client) AccountState(args *rpcargs.GetAccountArgs) (*rpcargs.RPCAccount, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "moi.AccountState", args)
 	if err != nil {
@@ -467,7 +468,7 @@ func (c *Client) AccountState(args *ptypes.GetAccountArgs) (*ptypes.RPCAccount, 
 		return nil, resp.Error
 	}
 
-	var account ptypes.RPCAccount
+	var account rpcargs.RPCAccount
 
 	err = json.Unmarshal(resp.Data, &account)
 	if err != nil {
@@ -478,8 +479,8 @@ func (c *Client) AccountState(args *ptypes.GetAccountArgs) (*ptypes.RPCAccount, 
 }
 
 // LogicIDs returns the logic IDs of the given address
-func (c *Client) LogicIDs(args *ptypes.GetLogicIDArgs) ([]types.LogicID, error) {
-	var resp ptypes.Response
+func (c *Client) LogicIDs(args *rpcargs.GetLogicIDArgs) ([]common.LogicID, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "moi.LogicIDs", args)
 	if err != nil {
@@ -490,7 +491,7 @@ func (c *Client) LogicIDs(args *ptypes.GetLogicIDArgs) ([]types.LogicID, error) 
 		return nil, resp.Error
 	}
 
-	var logicIDs []types.LogicID
+	var logicIDs []common.LogicID
 
 	err = json.Unmarshal(resp.Data, &logicIDs)
 	if err != nil {
@@ -501,8 +502,8 @@ func (c *Client) LogicIDs(args *ptypes.GetLogicIDArgs) ([]types.LogicID, error) 
 }
 
 // LogicManifest returns the manifest associated with the given logic id
-func (c *Client) LogicManifest(args *ptypes.LogicManifestArgs) (hexutil.Bytes, error) {
-	var resp ptypes.Response
+func (c *Client) LogicManifest(args *rpcargs.LogicManifestArgs) (hexutil.Bytes, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "moi.LogicManifest", args)
 	if err != nil {
@@ -524,8 +525,8 @@ func (c *Client) LogicManifest(args *ptypes.LogicManifestArgs) (hexutil.Bytes, e
 }
 
 // LogicCall supports call to logics that do not transition state
-func (c *Client) LogicCall(args *ptypes.LogicCallArgs) (*ptypes.LogicCallResult, error) {
-	var resp ptypes.Response
+func (c *Client) LogicCall(args *rpcargs.LogicCallArgs) (*rpcargs.LogicCallResult, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "moi.LogicCall", args)
 	if err != nil {
@@ -536,7 +537,7 @@ func (c *Client) LogicCall(args *ptypes.LogicCallArgs) (*ptypes.LogicCallResult,
 		return nil, resp.Error
 	}
 
-	var res *ptypes.LogicCallResult
+	var res *rpcargs.LogicCallResult
 
 	err = json.Unmarshal(resp.Data, &res)
 	if err != nil {
@@ -547,31 +548,31 @@ func (c *Client) LogicCall(args *ptypes.LogicCallArgs) (*ptypes.LogicCallResult,
 }
 
 // SendInteractions sends given Interactions
-func (c *Client) SendInteractions(args *ptypes.SendIX) (types.Hash, error) {
-	var resp ptypes.Response
+func (c *Client) SendInteractions(args *rpcargs.SendIX) (common.Hash, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "moi.SendInteractions", args)
 	if err != nil {
-		return types.NilHash, err
+		return common.NilHash, err
 	}
 
 	if resp.Error != nil {
-		return types.NilHash, resp.Error
+		return common.NilHash, resp.Error
 	}
 
-	var res types.Hash
+	var res common.Hash
 
 	err = json.Unmarshal(resp.Data, &res)
 	if err != nil {
-		return types.NilHash, err
+		return common.NilHash, err
 	}
 
 	return res, nil
 }
 
 // AccountMetaInfo returns the account meta info associated with the given address
-func (c *Client) AccountMetaInfo(args *ptypes.GetAccountArgs) (*ptypes.RPCAccountMetaInfo, error) {
-	var resp ptypes.Response
+func (c *Client) AccountMetaInfo(args *rpcargs.GetAccountArgs) (*rpcargs.RPCAccountMetaInfo, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "moi.AccountMetaInfo", args)
 	if err != nil {
@@ -582,7 +583,7 @@ func (c *Client) AccountMetaInfo(args *ptypes.GetAccountArgs) (*ptypes.RPCAccoun
 		return nil, resp.Error
 	}
 
-	var accMetaInfo ptypes.RPCAccountMetaInfo
+	var accMetaInfo rpcargs.RPCAccountMetaInfo
 
 	err = json.Unmarshal(resp.Data, &accMetaInfo)
 	if err != nil {
@@ -593,8 +594,8 @@ func (c *Client) AccountMetaInfo(args *ptypes.GetAccountArgs) (*ptypes.RPCAccoun
 }
 
 // Content returns the interactions present in the given IxPool.
-func (c *Client) Content(args *ptypes.ContentArgs) (*api.ContentResponse, error) {
-	var resp ptypes.Response
+func (c *Client) Content(args *rpcargs.ContentArgs) (*api.ContentResponse, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "ixpool.Content", args)
 	if err != nil {
@@ -616,8 +617,8 @@ func (c *Client) Content(args *ptypes.ContentArgs) (*api.ContentResponse, error)
 }
 
 // ContentFrom returns the interactions present in IxPool for the queried address.
-func (c *Client) ContentFrom(args *ptypes.IxPoolArgs) (*api.ContentFromResponse, error) {
-	var resp ptypes.Response
+func (c *Client) ContentFrom(args *rpcargs.IxPoolArgs) (*api.ContentFromResponse, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "ixpool.ContentFrom", args)
 	if err != nil {
@@ -639,8 +640,8 @@ func (c *Client) ContentFrom(args *ptypes.IxPoolArgs) (*api.ContentFromResponse,
 }
 
 // Status returns the number of pending and queued interactions in the IxPool.
-func (c *Client) Status(args *ptypes.StatusArgs) (*api.StatusResponse, error) {
-	var resp ptypes.Response
+func (c *Client) Status(args *rpcargs.StatusArgs) (*api.StatusResponse, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "ixpool.Status", args)
 	if err != nil {
@@ -662,8 +663,8 @@ func (c *Client) Status(args *ptypes.StatusArgs) (*api.StatusResponse, error) {
 }
 
 // Inspect returns the interactions present in the IxPool in a clear and easy-to-read format,
-func (c *Client) Inspect(args *ptypes.InspectArgs) (*api.InspectResponse, error) {
-	var resp ptypes.Response
+func (c *Client) Inspect(args *rpcargs.InspectArgs) (*api.InspectResponse, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "ixpool.Inspect", args)
 	if err != nil {
@@ -685,8 +686,8 @@ func (c *Client) Inspect(args *ptypes.InspectArgs) (*api.InspectResponse, error)
 }
 
 // WaitTime returns the wait time for an account in IxPool, based on the queried address.
-func (c *Client) WaitTime(args *ptypes.IxPoolArgs) (*api.WaitTimeResponse, error) {
-	var resp ptypes.Response
+func (c *Client) WaitTime(args *rpcargs.IxPoolArgs) (*api.WaitTimeResponse, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "ixpool.WaitTime", args)
 	if err != nil {
@@ -708,8 +709,8 @@ func (c *Client) WaitTime(args *ptypes.IxPoolArgs) (*api.WaitTimeResponse, error
 }
 
 // Peers returns an array of Krama IDs connected to a client
-func (c *Client) Peers(args *ptypes.NetArgs) ([]kramaid.KramaID, error) {
-	var resp ptypes.Response
+func (c *Client) Peers(args *rpcargs.NetArgs) ([]kramaid.KramaID, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "net.Peers", args)
 	if err != nil {
@@ -731,8 +732,8 @@ func (c *Client) Peers(args *ptypes.NetArgs) ([]kramaid.KramaID, error) {
 }
 
 // Version returns the protocol version
-func (c *Client) Version(args *ptypes.NetArgs) (string, error) {
-	var resp ptypes.Response
+func (c *Client) Version(args *rpcargs.NetArgs) (string, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "net.Version", args)
 	if err != nil {
@@ -754,8 +755,8 @@ func (c *Client) Version(args *ptypes.NetArgs) (string, error) {
 }
 
 // Info returns the kramaID of the node
-func (c *Client) Info(args *ptypes.NetArgs) (*ptypes.NodeInfoResponse, error) {
-	var resp ptypes.Response
+func (c *Client) Info(args *rpcargs.NetArgs) (*rpcargs.NodeInfoResponse, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "net.Info", args)
 	if err != nil {
@@ -766,7 +767,7 @@ func (c *Client) Info(args *ptypes.NetArgs) (*ptypes.NodeInfoResponse, error) {
 		return nil, resp.Error
 	}
 
-	var response ptypes.NodeInfoResponse
+	var response rpcargs.NodeInfoResponse
 
 	err = json.Unmarshal(resp.Data, &response)
 	if err != nil {
@@ -777,8 +778,8 @@ func (c *Client) Info(args *ptypes.NetArgs) (*ptypes.NodeInfoResponse, error) {
 }
 
 // DBGet returns raw value of the key stored in the database
-func (c *Client) DBGet(args *ptypes.DebugArgs) (string, error) {
-	var resp ptypes.Response
+func (c *Client) DBGet(args *rpcargs.DebugArgs) (string, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "debug.DBGet", args)
 	if err != nil {
@@ -800,8 +801,8 @@ func (c *Client) DBGet(args *ptypes.DebugArgs) (string, error) {
 }
 
 // Accounts returns the address of all the accounts
-func (c *Client) Accounts() ([]types.Address, error) {
-	var resp ptypes.Response
+func (c *Client) Accounts() ([]common.Address, error) {
+	var resp rpcargs.Response
 
 	err := c.Call(&resp, "debug.Accounts", nil)
 	if err != nil {
@@ -812,7 +813,7 @@ func (c *Client) Accounts() ([]types.Address, error) {
 		return nil, resp.Error
 	}
 
-	var addrs []types.Address
+	var addrs []common.Address
 
 	err = json.Unmarshal(resp.Data, &addrs)
 	if err != nil {

@@ -2,6 +2,7 @@ package ixpool
 
 import (
 	"context"
+	errors2 "errors"
 	"fmt"
 	"log"
 	"math/big"
@@ -11,8 +12,8 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/sarvalabs/moichain/common"
-	"github.com/sarvalabs/moichain/types"
-	"github.com/sarvalabs/moichain/utils"
+	"github.com/sarvalabs/moichain/common/config"
+	"github.com/sarvalabs/moichain/common/utils"
 )
 
 const (
@@ -26,12 +27,28 @@ const (
 	pruningCooldown = 5000 * time.Millisecond
 )
 
+const MaxWaitCounter = 10
+
+var (
+	ErrNonceTooLow   = errors2.New("nonce too low")
+	ErrAlreadyKnown  = errors2.New("already known")
+	ErrOversizedData = errors2.New("over sized data")
+)
+
+type promoteRequest struct {
+	account map[common.Address]interface{}
+}
+
+type enqueueRequest struct {
+	ixs common.Interactions
+}
+
 type stateManager interface {
-	GetNonce(addr types.Address, stateHash types.Hash) (uint64, error)
-	IsAccountRegistered(addr types.Address) (bool, error)
-	IsLogicRegistered(logicID types.LogicID) error
-	GetBalance(addrs types.Address, assetID types.AssetID, stateHash types.Hash) (*big.Int, error)
-	GetAssetInfo(assetID types.AssetID, hash types.Hash) (*types.AssetDescriptor, error)
+	GetNonce(addr common.Address, stateHash common.Hash) (uint64, error)
+	IsAccountRegistered(addr common.Address) (bool, error)
+	IsLogicRegistered(logicID common.LogicID) error
+	GetBalance(addrs common.Address, assetID common.AssetID, stateHash common.Hash) (*big.Int, error)
+	GetAssetInfo(assetID common.AssetID, hash common.Hash) (*common.AssetDescriptor, error)
 }
 
 type IxConfig struct {
@@ -43,7 +60,7 @@ type IxPool struct {
 	ctx          context.Context
 	ctxCancel    context.CancelFunc
 	logger       hclog.Logger
-	cfg          *common.IxPoolConfig
+	cfg          *config.IxPoolConfig
 	sm           stateManager
 	allIxs       *lookupMap
 	close        chan struct{}
@@ -63,7 +80,7 @@ func NewIxPool(
 	logger hclog.Logger,
 	mux *utils.TypeMux,
 	sm stateManager,
-	cfg *common.IxPoolConfig,
+	cfg *config.IxPoolConfig,
 	metrics *Metrics,
 	verifier func(data, signature, pubBytes []byte) (bool, error),
 ) *IxPool {
@@ -95,7 +112,7 @@ func NewIxPool(
 }
 
 // GetPendingIx returns the interaction in ixpool for the given interaction hash
-func (i *IxPool) GetPendingIx(ixHash types.Hash) (*types.Interaction, bool) {
+func (i *IxPool) GetPendingIx(ixHash common.Hash) (*common.Interaction, bool) {
 	return i.allIxs.get(ixHash)
 }
 
@@ -107,11 +124,11 @@ func (i *IxPool) signalPruning() {
 }
 
 // isSlotAvailable checks if there are sufficient slots in ixpool for ixn to be added
-func (i *IxPool) isSlotAvailable(ix *types.Interaction) bool {
+func (i *IxPool) isSlotAvailable(ix *common.Interaction) bool {
 	return slotsRequired(ix) <= i.gauge.max-i.gauge.read()
 }
 
-func (i *IxPool) checkIx(ix *types.Interaction) error {
+func (i *IxPool) checkIx(ix *common.Interaction) error {
 	// validate incoming ix
 	if err := i.validateIx(ix); err != nil {
 		return err
@@ -123,14 +140,14 @@ func (i *IxPool) checkIx(ix *types.Interaction) error {
 	}
 
 	if !i.isSlotAvailable(ix) {
-		return types.ErrIXPoolOverFlow
+		return common.ErrIXPoolOverFlow
 	}
 
 	// TODO: check for overflow
 
 	// check if already known
 	if _, ok := i.allIxs.get(ix.Hash()); ok {
-		return types.ErrAlreadyKnown
+		return common.ErrAlreadyKnown
 	}
 
 	i.allIxs.add(ix)
@@ -143,8 +160,8 @@ func (i *IxPool) checkIx(ix *types.Interaction) error {
 	return nil
 }
 
-func (i *IxPool) AddInteractions(ixs types.Interactions) []error {
-	newIxs := make(types.Interactions, 0, len(ixs))
+func (i *IxPool) AddInteractions(ixs common.Interactions) []error {
+	newIxs := make(common.Interactions, 0, len(ixs))
 	errs := make([]error, 0, len(ixs))
 
 	for _, ix := range ixs {
@@ -169,7 +186,7 @@ func (i *IxPool) AddInteractions(ixs types.Interactions) []error {
 }
 
 func (i *IxPool) handleEnqueueRequest(req enqueueRequest) {
-	dirtyAccounts := make(map[types.Address]interface{}, 0)
+	dirtyAccounts := make(map[common.Address]interface{}, 0)
 
 	for _, ixn := range req.ixs {
 		senderAcc := i.accounts.get(ixn.Sender())
@@ -178,7 +195,7 @@ func (i *IxPool) handleEnqueueRequest(req enqueueRequest) {
 		}
 
 		if err := senderAcc.enqueue(ixn); err != nil {
-			i.allIxs.remove([]*types.Interaction{ixn})
+			i.allIxs.remove([]*common.Interaction{ixn})
 
 			continue
 		}
@@ -216,9 +233,9 @@ func (i *IxPool) handlePromoteRequest(req promoteRequest) {
 
 // createAccountOnce creates an account and
 // ensures it is only initialized once.
-func (i *IxPool) createAccountOnce(newAddr types.Address, nonce uint64) *account {
+func (i *IxPool) createAccountOnce(newAddr common.Address, nonce uint64) *account {
 	// fetch nonce from the latest state
-	stateNonce, err := i.sm.GetNonce(newAddr, types.NilHash)
+	stateNonce, err := i.sm.GetNonce(newAddr, common.NilHash)
 	if err != nil {
 		stateNonce = nonce
 	}
@@ -228,15 +245,15 @@ func (i *IxPool) createAccountOnce(newAddr types.Address, nonce uint64) *account
 	return account
 }
 
-func (i *IxPool) ResetWithHeaders(ts *types.Tesseract) {
+func (i *IxPool) ResetWithHeaders(ts *common.Tesseract) {
 	if ts != nil && len(ts.Interactions()) > 0 {
 		i.logger.Info("Reset interactions", "size", len(ts.Interactions()))
 		i.ResetWithInteractions(ts.Interactions())
 	}
 }
 
-func (i *IxPool) ResetWithInteractions(ixs types.Interactions) {
-	updatedNonces := make(map[types.Address]uint64)
+func (i *IxPool) ResetWithInteractions(ixs common.Interactions) {
+	updatedNonces := make(map[common.Address]uint64)
 	// cleanup the lookup queue
 	i.allIxs.remove(ixs)
 
@@ -248,7 +265,7 @@ func (i *IxPool) ResetWithInteractions(ixs types.Interactions) {
 		}
 
 		// fetch the latest nonce from the state
-		latestNonce, err := i.sm.GetNonce(from, types.NilHash)
+		latestNonce, err := i.sm.GetNonce(from, common.NilHash)
 		if err != nil {
 			latestNonce = ix.Nonce() + 1
 		}
@@ -265,7 +282,7 @@ func (i *IxPool) ResetWithInteractions(ixs types.Interactions) {
 	i.resetAccounts(updatedNonces)
 }
 
-func (i *IxPool) resetAccounts(nonces map[types.Address]uint64) {
+func (i *IxPool) resetAccounts(nonces map[common.Address]uint64) {
 	for addr, nonce := range nonces {
 		if !i.accounts.exists(addr) {
 			continue
@@ -275,8 +292,8 @@ func (i *IxPool) resetAccounts(nonces map[types.Address]uint64) {
 	}
 }
 
-func (i *IxPool) resetAccount(addr types.Address, nonce uint64) {
-	cleanup := func(ixns types.Interactions) {
+func (i *IxPool) resetAccount(addr common.Address, nonce uint64) {
+	cleanup := func(ixns common.Interactions) {
 		// update pool state
 		i.allIxs.remove(ixns)
 		i.gauge.decrease(slotsRequired(ixns...))
@@ -339,7 +356,7 @@ func (i *IxPool) resetAccount(addr types.Address, nonce uint64) {
 	if first := account.enqueued.peek(); first != nil &&
 		first.Nonce() == nonce {
 		// first enqueued ix is expected -> signal promotion
-		req := promoteRequest{account: make(map[types.Address]interface{})}
+		req := promoteRequest{account: make(map[common.Address]interface{})}
 		req.account[addr] = nil
 		i.promoteReqCh <- req
 	}
@@ -359,7 +376,7 @@ func (i *IxPool) Executables() InteractionQueue {
 // associated promoted queue (account).
 // Will update executables with the next primary
 // from that account (if any).
-func (i *IxPool) Pop(ix *types.Interaction) {
+func (i *IxPool) Pop(ix *common.Interaction) {
 	// fetch the associated account
 	account := i.accounts.get(ix.Sender())
 
@@ -382,7 +399,7 @@ func (i *IxPool) Pop(ix *types.Interaction) {
 	}
 }
 
-func (i *IxPool) Drop(ix *types.Interaction) {
+func (i *IxPool) Drop(ix *common.Interaction) {
 	// fetch the associated account
 	account := i.accounts.get(ix.Sender())
 
@@ -399,7 +416,7 @@ func (i *IxPool) Drop(ix *types.Interaction) {
 		noOfDroppedIxs := 0
 
 		// remove the dropped ixs from the allIxs lookup map and decreases gauge
-		cleanup := func(ixs types.Interactions) {
+		cleanup := func(ixs common.Interactions) {
 			i.allIxs.remove(ixs)
 			i.gauge.decrease(slotsRequired(ixs...))
 
@@ -427,10 +444,10 @@ func (i *IxPool) Drop(ix *types.Interaction) {
 }
 
 // IncrementWaitTime updates the waitTime for the given account
-func (i *IxPool) IncrementWaitTime(addr types.Address, baseTime time.Duration) error {
+func (i *IxPool) IncrementWaitTime(addr common.Address, baseTime time.Duration) error {
 	acc := i.accounts.get(addr)
 	if acc == nil {
-		return types.ErrAccountNotFound
+		return common.ErrAccountNotFound
 	}
 
 	if acc.getDelayCounter()+1 <= MaxWaitCounter {
@@ -442,7 +459,7 @@ func (i *IxPool) IncrementWaitTime(addr types.Address, baseTime time.Duration) e
 	return nil
 }
 
-func (i *IxPool) validateIx(ix *types.Interaction) error {
+func (i *IxPool) validateIx(ix *common.Interaction) error {
 	// Check the interaction size to overcome DOS Attacks
 	ixSize, err := ix.Size()
 	if err != nil {
@@ -454,18 +471,18 @@ func (i *IxPool) validateIx(ix *types.Interaction) error {
 	}
 
 	if ix.Sender().IsNil() {
-		return types.ErrInvalidAddress
+		return common.ErrInvalidAddress
 	}
 
 	// TODO: Check the signature
 
 	// Reject underpriced interactions
 	if ix.IsUnderpriced(i.cfg.PriceLimit) {
-		return types.ErrUnderpriced
+		return common.ErrUnderpriced
 	}
 
 	// Check nonce ordering
-	if n, _ := i.sm.GetNonce(ix.Sender(), types.NilHash); n > ix.Nonce() {
+	if n, _ := i.sm.GetNonce(ix.Sender(), common.NilHash); n > ix.Nonce() {
 		return ErrNonceTooLow
 	}
 	/*
@@ -480,15 +497,15 @@ func (i *IxPool) validateIx(ix *types.Interaction) error {
 		}
 	*/
 
-	moiBal, err := i.sm.GetBalance(ix.Sender(), types.KMOITokenAssetID, types.NilHash)
+	moiBal, err := i.sm.GetBalance(ix.Sender(), common.KMOITokenAssetID, common.NilHash)
 	if err != nil {
 		i.logger.Error("Error fetching balance", "sender", ix.Sender(), "err", err)
 
-		return types.ErrInsufficientFunds
+		return common.ErrInsufficientFunds
 	}
 
 	if moiBal.Cmp(new(big.Int).Add(ix.MOITokenValue(), ix.FuelLimit())) < 0 {
-		return types.ErrInsufficientFunds
+		return common.ErrInsufficientFunds
 	}
 
 	rawPayload, err := ix.PayloadForSignature()
@@ -498,72 +515,72 @@ func (i *IxPool) validateIx(ix *types.Interaction) error {
 
 	isVerified, err := i.verifier(rawPayload, ix.Signature(), ix.Sender().Bytes())
 	if !isVerified || err != nil {
-		return types.ErrInvalidIXSignature
+		return common.ErrInvalidIXSignature
 	}
 
 	switch ix.Type() {
-	case types.IxAssetCreate:
+	case common.IxAssetCreate:
 		return i.validateAssetCreate(ix)
-	case types.IxValueTransfer:
+	case common.IxValueTransfer:
 		return i.validateValueTransfer(ix)
-	case types.IxAssetMint:
+	case common.IxAssetMint:
 		return i.validateAssetMint(ix)
-	case types.IxAssetBurn:
+	case common.IxAssetBurn:
 		return i.validateAssetBurn(ix)
-	case types.IxLogicDeploy:
+	case common.IxLogicDeploy:
 		return i.validateLogicDeployPayload(ix)
-	case types.IxLogicInvoke:
+	case common.IxLogicInvoke:
 		return i.validateLogicInvokePayload(ix)
 	default:
-		return types.ErrInvalidInteractionType
+		return common.ErrInvalidInteractionType
 	}
 }
 
-func (i *IxPool) validateAssetCreate(ix *types.Interaction) error {
+func (i *IxPool) validateAssetCreate(ix *common.Interaction) error {
 	payload, err := ix.GetAssetPayload()
 	if err != nil {
 		return err
 	}
 
 	// asset standard should be mas1 or mas2
-	if payload.Create.Standard != types.MAS1 && payload.Create.Standard != types.MAS0 {
-		return types.ErrInvalidAssetStandard
+	if payload.Create.Standard != common.MAS1 && payload.Create.Standard != common.MAS0 {
+		return common.ErrInvalidAssetStandard
 	}
 
 	// supply should be one if asset standard is mas1
-	if payload.Create.Standard == types.MAS1 {
+	if payload.Create.Standard == common.MAS1 {
 		if payload.Create.Supply == nil || payload.Create.Supply.Uint64() != 1 {
-			return types.ErrInvalidAssetSupply
+			return common.ErrInvalidAssetSupply
 		}
 	}
 
 	return nil
 }
 
-func (i *IxPool) validateValueTransfer(ix *types.Interaction) error {
+func (i *IxPool) validateValueTransfer(ix *common.Interaction) error {
 	if len(ix.TransferValues()) == 0 {
 		return errors.New("empty transfer values")
 	}
 
 	for assetID, v := range ix.TransferValues() {
 		if v.Sign() < 0 {
-			return types.ErrInvalidValue
+			return common.ErrInvalidValue
 		}
 
-		currentBalance, err := i.sm.GetBalance(ix.Sender(), assetID, types.NilHash)
+		currentBalance, err := i.sm.GetBalance(ix.Sender(), assetID, common.NilHash)
 		if err != nil {
 			return err
 		}
 
 		if currentBalance.Cmp(v) < 0 {
-			return types.ErrInsufficientFunds
+			return common.ErrInsufficientFunds
 		}
 	}
 
 	return nil
 }
 
-func (i *IxPool) validateAssetMint(ix *types.Interaction) error {
+func (i *IxPool) validateAssetMint(ix *common.Interaction) error {
 	assetPayload, err := ix.GetAssetPayload()
 	if err != nil {
 		return err
@@ -575,13 +592,13 @@ func (i *IxPool) validateAssetMint(ix *types.Interaction) error {
 	}
 
 	// can not mint asset standard mas1
-	if assetID.Standard() == types.MAS1 {
-		return types.ErrMintNonFungibleToken
+	if assetID.Standard() == common.MAS1 {
+		return common.ErrMintNonFungibleToken
 	}
 
-	assetInfo, err := i.sm.GetAssetInfo(assetPayload.Mint.Asset, types.NilHash)
+	assetInfo, err := i.sm.GetAssetInfo(assetPayload.Mint.Asset, common.NilHash)
 	if err != nil {
-		return types.ErrAssetNotFound
+		return common.ErrAssetNotFound
 	}
 
 	// only operator can mint asset
@@ -592,26 +609,26 @@ func (i *IxPool) validateAssetMint(ix *types.Interaction) error {
 	return nil
 }
 
-func (i *IxPool) validateAssetBurn(ix *types.Interaction) error {
+func (i *IxPool) validateAssetBurn(ix *common.Interaction) error {
 	assetPayload, err := ix.GetAssetPayload()
 	if err != nil {
 		return err
 	}
 
 	// make sure asset exists
-	assetInfo, err := i.sm.GetAssetInfo(assetPayload.Mint.Asset, types.NilHash)
+	assetInfo, err := i.sm.GetAssetInfo(assetPayload.Mint.Asset, common.NilHash)
 	if err != nil {
-		return types.ErrAssetNotFound
+		return common.ErrAssetNotFound
 	}
 
-	currentBal, err := i.sm.GetBalance(ix.Sender(), assetPayload.Mint.Asset, types.NilHash)
+	currentBal, err := i.sm.GetBalance(ix.Sender(), assetPayload.Mint.Asset, common.NilHash)
 	if err != nil {
 		return err
 	}
 
 	// cannot burn amount greater than current balance
 	if currentBal.Cmp(assetPayload.Mint.Amount) < 0 {
-		return types.ErrInsufficientFunds
+		return common.ErrInsufficientFunds
 	}
 
 	// only operator can burn asset
@@ -622,7 +639,7 @@ func (i *IxPool) validateAssetBurn(ix *types.Interaction) error {
 	return nil
 }
 
-func (i *IxPool) validateLogicDeployPayload(ix *types.Interaction) error {
+func (i *IxPool) validateLogicDeployPayload(ix *common.Interaction) error {
 	// make sure logic isn't created previously
 	accountRegistered, err := i.sm.IsAccountRegistered(ix.Receiver())
 	if err != nil {
@@ -640,13 +657,13 @@ func (i *IxPool) validateLogicDeployPayload(ix *types.Interaction) error {
 
 	// manifest cannot be empty
 	if len(payload.Manifest) == 0 {
-		return types.ErrEmptyManifest
+		return common.ErrEmptyManifest
 	}
 
 	return nil
 }
 
-func (i *IxPool) validateLogicInvokePayload(ix *types.Interaction) error {
+func (i *IxPool) validateLogicInvokePayload(ix *common.Interaction) error {
 	payload, err := ix.GetLogicPayload()
 	if err != nil {
 		return err
@@ -654,7 +671,7 @@ func (i *IxPool) validateLogicInvokePayload(ix *types.Interaction) error {
 
 	// callsite cannot be empty
 	if len(payload.Callsite) == 0 {
-		return types.ErrEmptyCallSite
+		return common.ErrEmptyCallSite
 	}
 
 	// make sure logic is registered
@@ -731,7 +748,7 @@ func (i *IxPool) Start() {
 
 // helper functions
 
-func GetIxsSize(ixs types.Interactions) (uint64, error) {
+func GetIxsSize(ixs common.Interactions) (uint64, error) {
 	var ixsSize uint64
 
 	for _, ix := range ixs {

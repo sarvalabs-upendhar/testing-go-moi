@@ -9,9 +9,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/common/config"
 	"github.com/sarvalabs/moichain/common/tests"
-	"github.com/sarvalabs/moichain/types"
-	"github.com/sarvalabs/moichain/utils"
+	"github.com/sarvalabs/moichain/common/utils"
 )
 
 func TestIxPool_GetNonce(t *testing.T) {
@@ -20,21 +20,21 @@ func TestIxPool_GetNonce(t *testing.T) {
 	addr2 := tests.RandomAddress(t)
 
 	sm.setTestMOIBalance(addr1, addr2)
-	ixPool := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
+	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = 0
 		c.PriceLimit = big.NewInt(1)
 	}, true, sm)
 
 	testcases := []struct {
 		name          string
-		address       types.Address
-		testFn        func(addr types.Address)
+		address       common.Address
+		testFn        func(addr common.Address)
 		expectedNonce uint64
 	}{
 		{
 			name:    "IxPool accounts without interaction sender state",
 			address: tests.RandomAddress(t),
-			testFn: func(addr types.Address) {
+			testFn: func(addr common.Address) {
 				sm.setLatestNonce(addr, 4)
 			},
 			expectedNonce: 4,
@@ -42,7 +42,7 @@ func TestIxPool_GetNonce(t *testing.T) {
 		{
 			name:    "IxPool accounts with interaction sender state",
 			address: tests.RandomAddress(t),
-			testFn: func(addr types.Address) {
+			testFn: func(addr common.Address) {
 				ixPool.accounts.initOnce(addr, 5)
 			},
 			expectedNonce: 5,
@@ -73,8 +73,8 @@ func TestIxPool_GetIxs(t *testing.T) {
 
 	testcases := []struct {
 		name            string
-		address         types.Address
-		ixs             types.Interactions
+		address         common.Address
+		ixs             common.Interactions
 		inclQueued      bool
 		expectedIxQueue expectedIxQueue
 	}{
@@ -83,9 +83,9 @@ func TestIxPool_GetIxs(t *testing.T) {
 			address: address,
 			ixs: append(
 				// promoted
-				createTestIxs(t, types.IxValueTransfer, 6, 8, address),
+				createTestIxs(t, common.IxValueTransfer, 6, 8, address),
 				// enqueued
-				createTestIxs(t, types.IxValueTransfer, 10, 13, address)...,
+				createTestIxs(t, common.IxValueTransfer, 10, 13, address)...,
 			),
 			inclQueued: false,
 			expectedIxQueue: expectedIxQueue{
@@ -98,9 +98,9 @@ func TestIxPool_GetIxs(t *testing.T) {
 			address: address,
 			ixs: append(
 				// promoted
-				createTestIxs(t, types.IxValueTransfer, 6, 8, address),
+				createTestIxs(t, common.IxValueTransfer, 6, 8, address),
 				// enqueued
-				createTestIxs(t, types.IxValueTransfer, 10, 13, address)...,
+				createTestIxs(t, common.IxValueTransfer, 10, 13, address)...,
 			),
 			inclQueued: true,
 			expectedIxQueue: expectedIxQueue{
@@ -113,10 +113,10 @@ func TestIxPool_GetIxs(t *testing.T) {
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
 			sm := NewMockStateManager(t)
-			ixPool := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
+			ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 				c.Mode = 0
 				c.PriceLimit = big.NewInt(1)
-				c.MaxSlots = common.DefaultMaxIXPoolSlots
+				c.MaxSlots = config.DefaultMaxIXPoolSlots
 			}, true, sm)
 
 			addAndProcessIxs(t, sm, ixPool, testcase.ixs)
@@ -134,28 +134,28 @@ func TestIxPool_GetAllIxs(t *testing.T) {
 
 	testcases := []struct {
 		name            string
-		accounts        map[types.Address]types.Interactions
+		accounts        map[common.Address]common.Interactions
 		inclQueued      bool
-		expectedIxQueue map[types.Address]expectedIxQueue
+		expectedIxQueue map[common.Address]expectedIxQueue
 	}{
 		{
 			name: "Without queued interactions",
-			accounts: map[types.Address]types.Interactions{
+			accounts: map[common.Address]common.Interactions{
 				addresses[0]: append(
 					// promoted
-					createTestIxs(t, types.IxValueTransfer, 1, 3, addresses[0]),
+					createTestIxs(t, common.IxValueTransfer, 1, 3, addresses[0]),
 					// enqueued
-					createTestIxs(t, types.IxValueTransfer, 7, 10, addresses[0])...,
+					createTestIxs(t, common.IxValueTransfer, 7, 10, addresses[0])...,
 				),
 				addresses[1]: append(
 					// promoted
-					createTestIxs(t, types.IxValueTransfer, 6, 8, addresses[1]),
+					createTestIxs(t, common.IxValueTransfer, 6, 8, addresses[1]),
 					// enqueued
-					createTestIxs(t, types.IxValueTransfer, 10, 13, addresses[1])...,
+					createTestIxs(t, common.IxValueTransfer, 10, 13, addresses[1])...,
 				),
 			},
 			inclQueued: false,
-			expectedIxQueue: map[types.Address]expectedIxQueue{
+			expectedIxQueue: map[common.Address]expectedIxQueue{
 				addresses[0]: {
 					pending: 2,
 					queued:  0,
@@ -168,22 +168,22 @@ func TestIxPool_GetAllIxs(t *testing.T) {
 		},
 		{
 			name: "With queued interactions",
-			accounts: map[types.Address]types.Interactions{
+			accounts: map[common.Address]common.Interactions{
 				addresses[0]: append(
 					// promoted
-					createTestIxs(t, types.IxValueTransfer, 1, 3, addresses[0]),
+					createTestIxs(t, common.IxValueTransfer, 1, 3, addresses[0]),
 					// enqueued
-					createTestIxs(t, types.IxValueTransfer, 7, 10, addresses[0])...,
+					createTestIxs(t, common.IxValueTransfer, 7, 10, addresses[0])...,
 				),
 				addresses[1]: append(
 					// promoted
-					createTestIxs(t, types.IxValueTransfer, 6, 8, addresses[1]),
+					createTestIxs(t, common.IxValueTransfer, 6, 8, addresses[1]),
 					// enqueued
-					createTestIxs(t, types.IxValueTransfer, 10, 13, addresses[1])...,
+					createTestIxs(t, common.IxValueTransfer, 10, 13, addresses[1])...,
 				),
 			},
 			inclQueued: true,
-			expectedIxQueue: map[types.Address]expectedIxQueue{
+			expectedIxQueue: map[common.Address]expectedIxQueue{
 				addresses[0]: {
 					pending: 2,
 					queued:  3,
@@ -199,10 +199,10 @@ func TestIxPool_GetAllIxs(t *testing.T) {
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
 			sm := NewMockStateManager(t)
-			ixPool := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
+			ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 				c.Mode = 0
 				c.PriceLimit = big.NewInt(1)
-				c.MaxSlots = common.DefaultMaxIXPoolSlots
+				c.MaxSlots = config.DefaultMaxIXPoolSlots
 			}, true, sm)
 
 			for _, ixs := range testcase.accounts {
@@ -221,26 +221,26 @@ func TestIxPool_GetAllIxs(t *testing.T) {
 
 func TestIxPool_GetAccountWaitTime(t *testing.T) {
 	sm := NewMockStateManager(t)
-	ixPool := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
+	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = 0
 		c.PriceLimit = big.NewInt(1)
 	}, true, sm)
 
 	testcases := []struct {
 		name        string
-		address     types.Address
-		testFn      func(addr types.Address, waitTime time.Duration)
+		address     common.Address
+		testFn      func(addr common.Address, waitTime time.Duration)
 		expectedErr error
 	}{
 		{
 			name:        "Account without state",
 			address:     tests.RandomAddress(t),
-			expectedErr: types.ErrAccountNotFound,
+			expectedErr: common.ErrAccountNotFound,
 		},
 		{
 			name:    "Account with state",
 			address: tests.RandomAddress(t),
-			testFn: func(addr types.Address, baseTime time.Duration) {
+			testFn: func(addr common.Address, baseTime time.Duration) {
 				ixPool.createAccountOnce(addr, 0)
 				err := ixPool.IncrementWaitTime(addr, baseTime)
 				require.NoError(t, err)
@@ -279,18 +279,18 @@ func TestIxPool_GetAccountWaitTime(t *testing.T) {
 func TestIxPool_GetAllAccountsWaitTime(t *testing.T) {
 	addressList := tests.GetRandomAddressList(t, 4)
 	sm := NewMockStateManager(t)
-	ixPool := CreateTestIxpool(t, func(c *common.IxPoolConfig) {
+	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = 0
 		c.PriceLimit = big.NewInt(1)
 	}, true, sm)
 
 	testcases := []struct {
 		name     string
-		accounts map[types.Address]int
+		accounts map[common.Address]int
 	}{
 		{
 			name: "Accounts with different delay count",
-			accounts: map[types.Address]int{
+			accounts: map[common.Address]int{
 				addressList[0]: 1,
 				addressList[1]: 5,
 				addressList[2]: 10,

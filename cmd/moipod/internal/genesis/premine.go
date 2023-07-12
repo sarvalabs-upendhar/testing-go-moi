@@ -6,13 +6,13 @@ import (
 	"strings"
 
 	"github.com/sarvalabs/moichain/cmd/common"
-
-	"github.com/sarvalabs/moichain/common/hexutil"
-	"github.com/sarvalabs/moichain/utils"
+	common2 "github.com/sarvalabs/moichain/common"
+	"github.com/sarvalabs/moichain/common/utils"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/moichain/types"
 	"github.com/spf13/cobra"
+
+	"github.com/sarvalabs/moichain/common/hexutil"
 )
 
 const (
@@ -87,7 +87,7 @@ func addAsset() {
 		)
 	}
 
-	genesis.AddAssetInfo(types.AssetAccountSetupArgs{
+	genesis.AddAssetInfo(common2.AssetAccountSetupArgs{
 		AssetInfo:          info,
 		BehaviouralContext: utils.KramaIDFromString(behaviourNodes),
 		RandomContext:      utils.KramaIDFromString(randomNodes),
@@ -99,7 +99,7 @@ func addAsset() {
 }
 
 // parseAssetInfo decodes an asset information string into an asset information struct using the delimiter `:`
-func parseAssetInfoAndAllocations(assetInfo string, allocations []string) (*types.AssetCreationArgs, error) {
+func parseAssetInfoAndAllocations(assetInfo string, allocations []string) (*common2.AssetCreationArgs, error) {
 	params := strings.Split(assetInfo, ":")
 	if len(params) != AssetInfoParamsNumber {
 		return nil, errors.New("invalid asset info params")
@@ -107,42 +107,42 @@ func parseAssetInfoAndAllocations(assetInfo string, allocations []string) (*type
 
 	symbol := strings.TrimSpace(params[0])
 	if symbol == "" {
-		return nil, types.ErrInvalidAssetInfoParams
+		return nil, common2.ErrInvalidAssetInfoParams
 	}
 
 	dimension, err := strconv.ParseUint(strings.TrimSpace(params[1]), 10, 8)
 	if err != nil || dimension > math.MaxUint8 {
-		return nil, types.ErrInvalidAssetInfoParams
+		return nil, common2.ErrInvalidAssetInfoParams
 	}
 
 	standard, err := strconv.ParseUint(strings.TrimSpace(params[2]), 10, 16)
 	if err != nil || standard > math.MaxUint16 {
-		return nil, types.ErrInvalidAssetInfoParams
+		return nil, common2.ErrInvalidAssetInfoParams
 	}
 
 	isLogical, err := strconv.ParseBool(strings.TrimSpace(params[3]))
 	if err != nil {
-		return nil, types.ErrInvalidAssetInfoParams
+		return nil, common2.ErrInvalidAssetInfoParams
 	}
 
 	isStateFul, err := strconv.ParseBool(strings.TrimSpace(params[4]))
 	if err != nil {
-		return nil, types.ErrInvalidAssetInfoParams
+		return nil, common2.ErrInvalidAssetInfoParams
 	}
 
 	operator := strings.TrimSpace(params[5])
 	if operator == "" {
-		return nil, types.ErrInvalidAssetInfoParams
+		return nil, common2.ErrInvalidAssetInfoParams
 	}
 
-	info := &types.AssetCreationArgs{
+	info := &common2.AssetCreationArgs{
 		Symbol:      symbol,
 		Dimension:   hexutil.Uint8(dimension),
 		Standard:    hexutil.Uint16(standard),
 		IsLogical:   isLogical,
 		IsStateful:  isStateFul,
-		Operator:    types.HexToAddress(operator),
-		Allocations: make([]types.Allocation, 0),
+		Operator:    common2.HexToAddress(operator),
+		Allocations: make([]common2.Allocation, 0),
 	}
 
 	for _, alloc := range allocations {
@@ -153,7 +153,7 @@ func parseAssetInfoAndAllocations(assetInfo string, allocations []string) (*type
 }
 
 // parseAllocation decodes allocation string into allocation struct using delimiter `:`
-func parseAllocation(allocation string) *types.Allocation {
+func parseAllocation(allocation string) *common2.Allocation {
 	if delimiterIdx := strings.Index(allocation, ":"); delimiterIdx != -1 {
 		// <address>:<balance>
 		valueRaw := allocation[delimiterIdx+1:]
@@ -163,8 +163,8 @@ func parseAllocation(allocation string) *types.Allocation {
 			common.Err(errors.Wrapf(err, "failed to parse amount"))
 		}
 
-		return &types.Allocation{
-			Address: types.HexToAddress(allocation[:delimiterIdx]),
+		return &common2.Allocation{
+			Address: common2.HexToAddress(allocation[:delimiterIdx]),
 			Amount:  (*hexutil.Big)(balance),
 		}
 	}
