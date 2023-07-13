@@ -7,12 +7,11 @@ var (
 	ErrUnsupportedNodeType  = errors.New("invalid node option")
 	ErrMOIIDBaseURLNotFound = errors.New(
 		"MOI_ID_BASE_URL NOT FOUND: MOI id Base URL not found in given environment")
-	ErrAuthFailed            = errors.New("authentication failed with given credentials")
-	ErrInvalidKramaID        = errors.New("invalid Krama id")
-	ErrInvalidKramaIDVersion = errors.New("invalid Krama id Version")
-	ErrNoKeystore            = errors.New("no keystore at given datadir")
-	ErrNoMnemonicKeystore    = errors.New("no mnemonic keystore at given path. " +
-		"Make sure you name keystore as `mnemonic.keystore.json`")
+	ErrAuthFailed                               = errors.New("authentication failed with given credentials")
+	ErrInvalidKramaID                           = errors.New("invalid Krama id")
+	ErrInvalidKramaIDVersion                    = errors.New("invalid Krama id Version")
+	ErrNoKeystore                               = errors.New("no keystore at given datadir")
+	ErrNoMnemonicKeystore                       = errors.New("no mnemonic keystore at given path")
 	ErrUnsupportedSigTypeForPrivateKey          = errors.New("unsupported Signature type for given private key type")
 	ErrUnsupportedSigType                       = errors.New("unsupported Signature type")
 	ErrInvalidUsername                          = errors.New("invalid username")

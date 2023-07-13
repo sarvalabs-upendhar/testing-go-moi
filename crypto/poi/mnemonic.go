@@ -47,10 +47,8 @@ func (seed *MnemonicKeystore) Unmarshall(mkeystoreBytes []byte) error {
 	return nil
 }
 
-func GetMnemonicKeystore(dataDir string) ([]byte, error) {
-	mksFilePath := strings.Join([]string{dataDir, MnemonicKeystorePath}, "/")
-
-	mksContent, err := os.ReadFile(mksFilePath)
+func GetMnemonicKeystore(mnemonicKsPath string) ([]byte, error) {
+	mksContent, err := os.ReadFile(mnemonicKsPath)
 	if err != nil {
 		if strings.Contains(err.Error(), "no such file or directory") {
 			return nil, common.ErrNoMnemonicKeystore

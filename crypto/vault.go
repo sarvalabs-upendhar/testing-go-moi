@@ -37,8 +37,8 @@ type VaultConfig struct {
 	Mode                     int8   // 0: Server, 1: Register/User mode
 	NodeIndex                uint32 // Requires only in Register mode
 	InMemory                 bool
-	MnemonicKeystorePath     string // Absolute directory path to mnemonic keystore
-	MnemonicKeystorePassword string // MnemonicKeystorePassword to decrypt keystore
+	MnemonicKeystorePath     string // Absolute path to the mnemonic keystore
+	MnemonicKeystorePassword string // Password to decrypt mnemonic keystore
 }
 
 func loadVault(signingAndNetworkKeys []byte,

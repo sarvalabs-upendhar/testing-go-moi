@@ -136,7 +136,7 @@ func TestKramaVaultRegisterMode(t *testing.T) {
 	datadir, err := ioutil.TempDir("", "moichain")
 	require.NoError(t, err)
 
-	mnemonicKsPath := strings.Join([]string{datadir, poi.MnemonicKeystorePath}, "/")
+	mnemonicKsPath := strings.Join([]string{datadir, "mnemonic.keystore.json"}, "/")
 	err = os.WriteFile(mnemonicKsPath, []byte(testMnemonicKeystore), os.ModePerm)
 	require.NoError(t, err)
 
@@ -145,11 +145,10 @@ func TestKramaVaultRegisterMode(t *testing.T) {
 	})
 
 	config := &VaultConfig{
-		DataDir:      datadir,
-		NodePassword: "nodepass1",
-		Mode:         1,
-		// SeedPhrase:   testMnemonic,
-		MnemonicKeystorePath:     datadir,
+		DataDir:                  datadir,
+		NodePassword:             "nodepass1",
+		Mode:                     1,
+		MnemonicKeystorePath:     mnemonicKsPath,
 		MnemonicKeystorePassword: "_kSpassword__",
 	}
 
