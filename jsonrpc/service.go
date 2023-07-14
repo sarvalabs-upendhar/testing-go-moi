@@ -364,10 +364,10 @@ func (r *Service) PendingInteractionCount(
 	return nil
 }
 
-// Storage returns the data associated with the given storage slot
-func (r *Service) Storage(
+// LogicStorage returns the data associated with the given storage slot
+func (r *Service) LogicStorage(
 	req *http.Request,
-	args *rpcargs.GetStorageArgs,
+	args *rpcargs.GetLogicStorageArgs,
 	resp *rpcargs.Response,
 ) error {
 	coreAPI, ok := r.apis["core"].(*api2.PublicCoreAPI)
@@ -375,14 +375,14 @@ func (r *Service) Storage(
 		return common.ErrInvalidAPI
 	}
 
-	storageData, err := coreAPI.GetStorageAt(args)
+	logicStorageData, err := coreAPI.GetLogicStorage(args)
 	if err != nil {
 		resp.Error = &rpcargs.JSONError{Message: err.Error()}
 
 		return nil
 	}
 
-	resp.Data, err = json.Marshal(storageData)
+	resp.Data, err = json.Marshal(logicStorageData)
 	if err != nil {
 		resp.Error = &rpcargs.JSONError{Message: err.Error()}
 

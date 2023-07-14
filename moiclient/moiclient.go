@@ -432,11 +432,11 @@ func (c *Client) PendingInteractionCount(args *rpcargs.InteractionCountArgs) (*h
 	return count, nil
 }
 
-// Storage returns the data associated with the given storage slot
-func (c *Client) Storage(args *rpcargs.GetStorageArgs) (hexutil.Bytes, error) {
+// LogicStorage returns the data associated with the given storage slot
+func (c *Client) LogicStorage(args *rpcargs.GetLogicStorageArgs) (hexutil.Bytes, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "moi.Storage", args)
+	err := c.Call(&resp, "moi.LogicStorage", args)
 	if err != nil {
 		return nil, err
 	}

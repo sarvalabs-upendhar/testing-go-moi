@@ -366,8 +366,8 @@ func (p *PublicCoreAPI) GetLogicManifest(args *rpcargs.LogicManifestArgs) (hexut
 	}
 }
 
-// GetStorageAt returns the data associated with the given storage slot
-func (p *PublicCoreAPI) GetStorageAt(args *rpcargs.GetStorageArgs) (hexutil.Bytes, error) {
+// GetLogicStorage returns the data associated with the given storage slot
+func (p *PublicCoreAPI) GetLogicStorage(args *rpcargs.GetLogicStorageArgs) (hexutil.Bytes, error) {
 	ts, err := p.getTesseract(getTesseractArgs(args.LogicID.Address(), args.Options))
 	if err != nil {
 		return nil, err

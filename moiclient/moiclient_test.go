@@ -80,8 +80,8 @@ func TestMoiClient(t *testing.T) {
 		"PendingInteractionCount": {
 			test: func(t *testing.T) { testPendingInteractionCount(t, client, addrsMap["assetAddr"]) },
 		},
-		"Storage": {
-			test: func(t *testing.T) { testStorage(t, client, addrsMap["deployAddr"]) },
+		"LogicStorage": {
+			test: func(t *testing.T) { testLogicStorage(t, client, addrsMap["deployAddr"]) },
 		},
 		"AccountState": {
 			test: func(t *testing.T) { testAccountState(t, client, addrsMap["deployAddr"]) },
@@ -908,17 +908,17 @@ func testPendingInteractionCount(t *testing.T, client *Client, addr common.Addre
 	}
 }
 
-func testStorage(t *testing.T, client *Client, addr common.Address) {
+func testLogicStorage(t *testing.T, client *Client, addr common.Address) {
 	logicID := getLogicID(t, client, addr, &deployLogicHeight)
 
 	testcases := []struct {
 		name                 string
-		interactionCountArgs *rpcargs.GetStorageArgs
+		interactionCountArgs *rpcargs.GetLogicStorageArgs
 		expectedError        error
 	}{
 		{
 			name: "fetch storage value for existing logic ID",
-			interactionCountArgs: &rpcargs.GetStorageArgs{
+			interactionCountArgs: &rpcargs.GetLogicStorageArgs{
 				LogicID:    logicID,
 				StorageKey: common.Hex2Bytes("e88bd757ad5b9bedf372d8d3f0cf6c962a469db61a265f6418e1ffed86da29ec"),
 				Options: rpcargs.TesseractNumberOrHash{
@@ -928,7 +928,7 @@ func testStorage(t *testing.T, client *Client, addr common.Address) {
 		},
 		{
 			name: "fetch storage value for non-existing logic ID",
-			interactionCountArgs: &rpcargs.GetStorageArgs{
+			interactionCountArgs: &rpcargs.GetLogicStorageArgs{
 				LogicID:    "",
 				StorageKey: common.Hex2Bytes("e88bd757ad5b9bedf372d8d3f0cf6c962a469db61a265f6418e1ffed86da29ec"),
 				Options: rpcargs.TesseractNumberOrHash{
@@ -941,7 +941,7 @@ func testStorage(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			storageValue, err := client.Storage(test.interactionCountArgs)
+			logicStorageValue, err := client.LogicStorage(test.interactionCountArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -951,8 +951,8 @@ func testStorage(t *testing.T, client *Client, addr common.Address) {
 
 			require.NoError(t, err)
 
-			httpStorageValue := httpStorage(t, test.interactionCountArgs)
-			require.Equal(t, httpStorageValue, storageValue)
+			httpLogicStorageValue := httpLogicStorage(t, test.interactionCountArgs)
+			require.Equal(t, httpLogicStorageValue, logicStorageValue)
 		})
 	}
 }

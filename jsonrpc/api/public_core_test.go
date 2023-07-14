@@ -1288,7 +1288,7 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 	}
 }
 
-func TestPublicCoreAPI_GetStorageAt(t *testing.T) {
+func TestPublicCoreAPI_GetLogicStorageAt(t *testing.T) {
 	ts := tests.CreateTesseract(t, nil)
 
 	c := NewMockChainManager(t)
@@ -1310,13 +1310,13 @@ func TestPublicCoreAPI_GetStorageAt(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		args          *rpcargs.GetStorageArgs
+		args          *rpcargs.GetLogicStorageArgs
 		expectedValue []byte
 		expectedError error
 	}{
 		{
 			name: "returns error if failed to fetch logic manifest",
-			args: &rpcargs.GetStorageArgs{
+			args: &rpcargs.GetLogicStorageArgs{
 				LogicID: logicIDWithoutState,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
@@ -1326,7 +1326,7 @@ func TestPublicCoreAPI_GetStorageAt(t *testing.T) {
 		},
 		{
 			name: "fetched logic manifest successfully",
-			args: &rpcargs.GetStorageArgs{
+			args: &rpcargs.GetLogicStorageArgs{
 				LogicID:    logicID,
 				StorageKey: common.Hex2Bytes(keys[0]),
 				Options: rpcargs.TesseractNumberOrHash{
@@ -1339,7 +1339,7 @@ func TestPublicCoreAPI_GetStorageAt(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			value, err := coreAPI.GetStorageAt(test.args)
+			value, err := coreAPI.GetLogicStorage(test.args)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())

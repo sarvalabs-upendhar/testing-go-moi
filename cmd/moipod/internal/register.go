@@ -151,7 +151,7 @@ func registerGuardian(vault *crypto.KramaVault) {
 		cmdCommon.Err(errors.Wrap(err, "failed to create moi-client"))
 	}
 
-	if isGuardianRegistered(vault.KramaID(), client) {
+	if isGuardianRegistered(client, vault.KramaID()) {
 		cmdCommon.Err(errors.New("Guardian already registered"))
 	}
 
@@ -262,8 +262,8 @@ func registerGuardian(vault *crypto.KramaVault) {
 	fmt.Println("Registered guardian details")
 }
 
-func isGuardianRegistered(kramaID id.KramaID, client *moiclient.Client) bool {
-	storageData, err := client.Storage(&rpcargs.GetStorageArgs{
+func isGuardianRegistered(client *moiclient.Client, kramaID id.KramaID) bool {
+	storageData, err := client.LogicStorage(&rpcargs.GetLogicStorageArgs{
 		LogicID:    common.GuardianLogicID,
 		StorageKey: pisa.SlotHash(gtypes.GuardianSLot),
 		Options: rpcargs.TesseractNumberOrHash{

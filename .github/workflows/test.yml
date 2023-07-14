@@ -40,7 +40,7 @@ jobs:
         run: git config --global url.https://$ACCESS_TOKEN@github.com/.insteadOf https://github.com/
 
       - name: Run tests
-        run: go test -v -race -coverprofile coverage.out -timeout 10m $(go list ./... | grep -v /moiclient)
+        run: go test -v -race -short -coverprofile coverage.out -timeout 10m ./...
 
       - name: Upload coverage file to codecov
         uses: codecov/codecov-action@eaaf4bedf32dbdc6b720b63067d99c4d77d6047d

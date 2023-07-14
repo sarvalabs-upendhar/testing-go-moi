@@ -9,14 +9,18 @@ import (
 )
 
 func TestIsGuardianRegistered(t *testing.T) {
-	client, err := moiclient.NewClient("https://app-voyage.moibit.io/babylon/")
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	client, err := moiclient.NewClient("http://localhost:1600/")
 	if err != nil {
 		assert.NoError(t, err)
 	}
 
 	ok := isGuardianRegistered(
-		"3WwV4BpYNzfAQatstXKYV3EfxM32Kmj9wapqSp8ERRgnP1ugN3Ls.16Uiu2HAmFqM8E9v3AAeaMP5cQVLnsD7Ej4PtG7ybfgGBFubj6td7",
 		client,
+		"3WxrHRPGwn5HykA6J78BYtkMVMwURiYeGjZmSmtSZXpfdtTAEExX.16Uiu2HAmVfbjVwvwGTJvbZAjdEeuz5fQQ2CpJ3dFbYteXEvYVjBh",
 	)
 	fmt.Print(ok)
 }

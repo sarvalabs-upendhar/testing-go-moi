@@ -60,7 +60,7 @@ type DebugArgs struct {
 	Key string `json:"storage_key"`
 }
 
-type GetStorageArgs struct {
+type GetLogicStorageArgs struct {
 	LogicID    common.LogicID        `json:"logic_id"`
 	StorageKey hexutil.Bytes         `json:"storage_key"`
 	Options    TesseractNumberOrHash `json:"options"`
