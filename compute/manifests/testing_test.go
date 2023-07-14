@@ -46,6 +46,7 @@ func (suite *LogicTestSuite) Initialize(
 	expectedLogicID common.LogicID,
 	logicAddress common.Address,
 	fuel engineio.Fuel,
+	sender common.Address,
 ) engineio.Fuel {
 	runtime, _ := engineio.FetchEngineRuntime(manifest.Header().LogicEngine())
 	// Compile the Manifest into a LogicDescriptor
@@ -61,7 +62,11 @@ func (suite *LogicTestSuite) Initialize(
 
 	// Generate a new storage object
 	logicCtx := engineio.NewDebugContextDriver(logicAddress, logicObject.LogicID())
-	senderCtx := engineio.NewDebugContextDriver(randomAddress(), logicObject.LogicID())
+
+	senderCtx := engineio.NewDebugContextDriver(sender, logicObject.LogicID())
+	if common.Address.IsNil(sender) {
+		senderCtx = engineio.NewDebugContextDriver(randomAddress(), logicObject.LogicID())
+	}
 
 	suite.fuel = fuel
 	suite.runtime = runtime
@@ -71,6 +76,21 @@ func (suite *LogicTestSuite) Initialize(
 	suite.sender = senderCtx
 
 	return consumed
+}
+
+func (suite *LogicTestSuite) CallRaw(kind engineio.CallsiteKind, callsite string, calldata []byte) (engineio.Fuel, []byte, []byte) { //nolint:lll
+	ixn := engineio.NewIxnObject(kind.IxnType(), callsite, calldata)
+
+	result, err := suite.Run(ixn)
+	if err != nil {
+		suite.T().Fatalf("Call Failed! Error: %v\n", err)
+	}
+
+	if !result.Ok() {
+		return result.Consumed, nil, result.Error
+	}
+
+	return result.Consumed, result.Outputs, nil
 }
 
 func (suite *LogicTestSuite) Call(callsite string, inputs map[string]any) (engineio.Fuel, map[string]any, []byte) {

@@ -27,7 +27,7 @@ func (suite *PersonTestSuite) SetupSuite() {
 	address := randomAddress()
 	logicID := common.NewLogicIDv0(true, false, false, false, 0, address)
 
-	consumed := suite.Initialize(manifest, logicID, address, engineio.NewFuel(5000))
+	consumed := suite.Initialize(manifest, logicID, address, engineio.NewFuel(5000), common.NilAddress)
 	suite.Equal(engineio.NewFuel(100), consumed)
 }
 

@@ -520,8 +520,6 @@ func opPMAKE(scope *callscope, operands []byte) Continue {
 	// Create a value for the datatype
 	value, _ := NewRegisterValue(datatype, nil)
 
-	fmt.Println("Pmake: ", value.Type(), typeID)
-
 	// Set the register value
 	scope.memory.Set(out, value)
 
