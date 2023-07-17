@@ -1,7 +1,9 @@
 package manifests
 
 import (
+	"math/big"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/suite"
 
@@ -42,5 +44,19 @@ func (suite *EnvCodesTestSuite) TestGetSenderAddress() {
 	consumed, output, except := suite.Call("GetSenderAddress", nil)
 	suite.Equal(map[string]any{"addr": [32]byte(suite.sender.Address())}, output)
 	suite.Equal(engineio.NewFuel(55), consumed)
+	suite.Nil(except)
+}
+
+func (suite *EnvCodesTestSuite) TestGetTimeStamp() {
+	consumed, output, except := suite.Call("GetTimeStamp", nil)
+	suite.Equal(time.Now().Unix(), output["time"])
+	suite.Equal(engineio.NewFuel(110), consumed)
+	suite.Nil(except)
+}
+
+func (suite *EnvCodesTestSuite) TestGetFuelPrice() {
+	consumed, output, except := suite.Call("GetFuelPrice", nil)
+	suite.Equal(big.NewInt(1), output["fuel"])
+	suite.Equal(engineio.NewFuel(110), consumed)
 	suite.Nil(except)
 }

@@ -393,7 +393,7 @@ var opcodeMetadataTable = map[OpCode]*opcodeMetadata{
 	BNOT: {"BNOT", 2},
 
 	// IXN: {"IXN", 1},
-	// ENV: {"ENV", 1},
+	ENV:    {"ENV", 1},
 	LOGIC:  {"LOGIC", 1},
 	SENDER: {"SENDER", 1},
 	// RECEIVER: {"RECEIVER", 1}

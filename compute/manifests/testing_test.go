@@ -2,7 +2,9 @@ package manifests
 
 import (
 	"context"
+	"math/big"
 	"math/rand"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/suite"
@@ -20,9 +22,10 @@ func init() {
 type LogicTestSuite struct {
 	suite.Suite
 
-	fuel    engineio.Fuel
-	logic   engineio.LogicDriver
-	runtime engineio.EngineRuntime
+	fuel        engineio.Fuel
+	logic       engineio.LogicDriver
+	runtime     engineio.EngineRuntime
+	environment engineio.EnvDriver
 
 	internal         *engineio.DebugContextDriver
 	internalSnapshot *engineio.DebugContextDriver
@@ -74,6 +77,7 @@ func (suite *LogicTestSuite) Initialize(
 
 	suite.internal = logicCtx
 	suite.sender = senderCtx
+	suite.environment = engineio.NewEnvObject(time.Now().Unix(), big.NewInt(1))
 
 	return consumed
 }
@@ -109,7 +113,7 @@ func (suite *LogicTestSuite) Call(callsite string, inputs map[string]any) (engin
 
 func (suite *LogicTestSuite) Run(ixn *engineio.IxnObject) (*engineio.CallResult, error) {
 	// Create a PISA Engine for the executor
-	executor, err := suite.runtime.SpawnEngine(suite.fuel, suite.logic, suite.internal, nil)
+	executor, err := suite.runtime.SpawnEngine(suite.fuel, suite.logic, suite.internal, suite.environment)
 	if err != nil {
 		suite.T().Fatalf("Bootstrap Failed: %v", err)
 	}

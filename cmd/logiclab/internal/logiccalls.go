@@ -62,7 +62,7 @@ func LogicCallCommand(kind engineio.CallsiteKind, name, callsite, args string) C
 		engine, err := runtime.SpawnEngine(
 			env.inventory.Config.BaseFuel, logic.Object,
 			logic.CtxState.GenerateLogicContextObject(logic.Object.LogicID()),
-			engineio.NewEnvDriver(),
+			env.Driver(),
 		)
 		if err != nil {
 			return fmt.Sprintf("failed to bootstrap engine: %v", err)

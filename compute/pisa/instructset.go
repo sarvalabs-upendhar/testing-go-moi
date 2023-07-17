@@ -128,6 +128,7 @@ func BaseInstructionSet() InstructionSet {
 		BNOT: opBNOT,
 
 		// IXN: opIXN,
+		ENV:    opENV,
 		LOGIC:  opLOGIC,
 		SENDER: opSENDER,
 
@@ -1606,6 +1607,18 @@ func opBNOT(scope *callscope, operands []byte) Continue {
 	scope.memory.Set(out, result)
 
 	return continueOk{20}
+}
+
+func opENV(scope *callscope, operands []byte) Continue {
+	// ENV [$X]
+	reg := operands[0]
+
+	// Set the register with a LogicContextValue
+	scope.memory.Set(reg, EnvironmentValue{
+		driver: scope.engine.environment,
+	})
+
+	return continueOk{30}
 }
 
 func opLOGIC(scope *callscope, operands []byte) Continue {

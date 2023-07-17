@@ -3,6 +3,7 @@ package compute
 import (
 	"context"
 	"math/big"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -95,7 +96,7 @@ func InvokeLogic(logicID common.LogicID, state *state.Object, opts ...LogicInvok
 	engine, err := runtime.SpawnEngine(
 		invoker.fueltank.Level(), invoker.logicObject,
 		invoker.logicState.GenerateLogicContextObject(invoker.logicObject.LogicID()),
-		engineio.NewEnvDriver(),
+		engineio.NewEnvObject(time.Now().Unix(), big.NewInt(1)),
 	)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not bootstrap engine")

@@ -20,6 +20,9 @@ type CtxDriver interface {
 
 	GetStorageEntry([]byte) ([]byte, bool)
 	SetStorageEntry([]byte, []byte) bool
+
+	// Height() -> U256
+	// Hash() -> U256
 }
 
 // ContextStateMatrix is matrix indicating the use of different

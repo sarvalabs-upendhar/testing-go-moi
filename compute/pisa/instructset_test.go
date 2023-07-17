@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
@@ -18,9 +19,10 @@ func TestInstructionSet(t *testing.T) {
 	defaultScope := func() *callscope {
 		return &callscope{
 			engine: &Engine{
-				runtime:   &runtime,
-				fueltank:  engineio.NewFuelTank(big.NewInt(1000)),
-				callstack: make(callstack, 0),
+				runtime:     &runtime,
+				fueltank:    engineio.NewFuelTank(big.NewInt(1000)),
+				callstack:   make(callstack, 0),
+				environment: engineio.NewEnvObject(time.Now().Unix(), big.NewInt(1)),
 			},
 		}
 	}
@@ -2556,6 +2558,17 @@ func TestInstructionSet(t *testing.T) {
 			continuity := opBNOT(scope, []byte{2, 0, 1})
 			require.Equal(t, continueOk{20}, continuity)
 			require.Equal(t, &I256Value{uint256.MustFromDecimal("55")}, scope.memory[2])
+		})
+	})
+
+	t.Run("ENV", func(t *testing.T) {
+		t.Run("success", func(t *testing.T) {
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{}
+
+			continuity := opENV(scope, []byte{0})
+			require.Equal(t, continueOk{30}, continuity)
+			require.Equal(t, EnvironmentValue{driver: engineio.NewEnvObject(time.Now().Unix(), big.NewInt(1))}, scope.memory[0])
 		})
 	})
 

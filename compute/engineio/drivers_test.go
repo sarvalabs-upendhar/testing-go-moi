@@ -28,8 +28,8 @@ func TestIxnObject(t *testing.T) {
 	assert.Equal(t, calldata, ixnObj.Calldata(), "Calldata function should return the correct calldata")
 }
 
-func TestEnvDriver(t *testing.T) {
-	// Test NewEnvDriver function
-	envDriver := NewEnvDriver()
-	assert.Nil(t, envDriver, "NewEnvDriver should return a nil object")
-}
+// func TestEnvDriver(t *testing.T) {
+//	// Test NewEnvDriver function
+//	envDriver := NewEnvOb()
+//	assert.Nil(t, envDriver, "NewEnvDriver should return a nil object")
+//}

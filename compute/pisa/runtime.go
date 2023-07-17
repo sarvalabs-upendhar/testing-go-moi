@@ -238,6 +238,7 @@ func (runtime *Runtime) setupPrimitiveMethods() {
 
 func (runtime *Runtime) setupBuiltinClasses() {
 	builtins := []RegisterObject{
+		EnvironmentValue{},
 		LogicContextValue{},
 		ParticipantContextValue{},
 	}

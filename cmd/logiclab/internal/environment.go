@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/chzyer/readline"
 	"github.com/pkg/errors"
@@ -411,4 +412,8 @@ func (env *Environment) formatValue(value any) string {
 	default:
 		return fmt.Sprintf("%v", data)
 	}
+}
+
+func (env *Environment) Driver() engineio.EnvDriver {
+	return engineio.NewEnvObject(time.Now().Unix(), big.NewInt(1))
 }

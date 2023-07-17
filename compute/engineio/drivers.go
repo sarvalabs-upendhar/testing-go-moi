@@ -1,6 +1,8 @@
 package engineio
 
 import (
+	"math/big"
+
 	"github.com/sarvalabs/go-moi/common"
 )
 
@@ -30,9 +32,28 @@ func (ixn IxnObject) Calldata() []byte      { return ixn.calldata }
 // EnvDriver represents an interface that exposes access to environment
 // information such as the cluster data, timestamps and fuel prices
 // along with capabilities to make external logic invocations
-type EnvDriver interface{}
+type EnvDriver interface {
+	Timestamp() int64
+	FuelPrice() *big.Int
+	// ClusterInfo() *Cluster
+}
 
-// NewEnvDriver generates a blank EnvDriver object
-func NewEnvDriver() EnvDriver {
-	return nil
+// EnvObject represents an environment object which contains values
+// obtained from the environment such as timestamp and fuel prices
+type EnvObject struct {
+	timestamp int64
+	fuelPrice *big.Int
+}
+
+func (env EnvObject) Timestamp() int64 {
+	return env.timestamp
+}
+
+func (env EnvObject) FuelPrice() *big.Int {
+	return env.fuelPrice
+}
+
+// NewEnvObject generates a blank EnvDriver object
+func NewEnvObject(timestamp int64, fuelprice *big.Int) *EnvObject {
+	return &EnvObject{timestamp: timestamp, fuelPrice: fuelprice}
 }
