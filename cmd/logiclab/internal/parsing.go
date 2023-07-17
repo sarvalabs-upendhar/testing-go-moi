@@ -84,6 +84,7 @@ var keywords = map[string]symbolizer.TokenKind{
 
 	"BIN": TokenInstructFormat,
 	"HEX": TokenInstructFormat,
+	"ASM": TokenInstructFormat,
 
 	"PISA": TokenEngine,
 

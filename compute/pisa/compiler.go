@@ -573,12 +573,14 @@ func (compiler *ManifestCompiler) compileMethod(ptr engineio.ElementPtr, schema 
 // compileInstructions compiles an InstructionsSchema into some runtime.Instructions.
 func (compiler *ManifestCompiler) compileInstructions(schema InstructionsSchema) (Instructions, error) {
 	switch {
-	case schema.Bin != nil:
+	case len(schema.Bin) > 0:
 		return compiler.compileBinInstructions(schema.Bin)
 	case schema.Hex != "":
 		return compiler.compileHexInstructions(schema.Hex)
 	case schema.Asm != nil:
 		return compiler.compileAsmInstructions(schema.Asm)
+	case schema.Bin != nil:
+		return nil, nil
 	default:
 		return nil, errors.New("no instructions found")
 	}
@@ -638,8 +640,13 @@ func (compiler *ManifestCompiler) compileHexInstructions(instructions string) (I
 }
 
 // compileAsmInstructions compiles an InstructionsSchema with assembly instructions into runtime.Instructions.
-func (compiler *ManifestCompiler) compileAsmInstructions(_ []string) (Instructions, error) {
-	return nil, errors.New("cannot compile assembly instructions (yet!)")
+func (compiler *ManifestCompiler) compileAsmInstructions(asm []string) (Instructions, error) {
+	binary, err := Asm2Bin(asm)
+	if err != nil {
+		return nil, err
+	}
+
+	return compiler.compileBinInstructions(binary)
 }
 
 // compileConstant compiles a ConstantSchema object into a register.Constant.

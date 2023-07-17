@@ -1,7 +1,11 @@
 package pisa
 
 import (
+	"encoding/hex"
 	"fmt"
+	"strings"
+
+	"github.com/pkg/errors"
 )
 
 // OpCode represents a PISA Opcode
@@ -304,102 +308,113 @@ const (
 )
 
 type opcodeMetadata struct {
-	str  string
-	args int
+	str     string
+	args    int
+	asmexpr string
 }
 
 var opcodeMetadataTable = map[OpCode]*opcodeMetadata{
-	TERM:   {"TERM", 0},
-	DEST:   {"DEST", 0},
-	JUMP:   {"JUMP", 1},
-	JUMPI:  {"JUMPI", 2},
-	OBTAIN: {"OBTAIN", 2},
-	YIELD:  {"YIELD", 2},
+	TERM:   {"TERM", 0, ""},
+	DEST:   {"DEST", 0, ""},
+	JUMP:   {"JUMP", 1, ""},
+	JUMPI:  {"JUMPI", 2, "$$"},
+	OBTAIN: {"OBTAIN", 2, "$&"},
+	YIELD:  {"YIELD", 2, "$&"},
 	// REVERT: {"REVERT", 1},
 
-	CARGS: {"CARGS", 1},
-	CALLB: {"CALLB", 3},
-	CALLR: {"CALLR", 3},
-	CALLM: {"CALLM", 3},
+	CARGS: {"CARGS", 1, "$"},
+	CALLB: {"CALLB", 3, "$$"},
+	CALLR: {"CALLR", 3, "$$"},
+	CALLM: {"CALLM", 3, "$H$"},
 
-	CONST:  {"CONST", 2},
-	LDPTR1: {"LDPTR1", 2},
-	LDPTR2: {"LDPTR2", 3},
-	LDPTR3: {"LDPTR3", 4},
-	LDPTR4: {"LDPTR4", 5},
-	LDPTR5: {"LDPTR5", 6},
-	LDPTR6: {"LDPTR6", 7},
-	LDPTR7: {"LDPTR7", 8},
-	LDPTR8: {"LDPTR8", 9},
+	CONST:  {"CONST", 2, "$$"},
+	LDPTR1: {"LDPTR1", 2, "$H"},
+	LDPTR2: {"LDPTR2", 3, "$H"},
+	LDPTR3: {"LDPTR3", 4, "$H"},
+	LDPTR4: {"LDPTR4", 5, "$H"},
+	LDPTR5: {"LDPTR5", 6, "$H"},
+	LDPTR6: {"LDPTR6", 7, "$H"},
+	LDPTR7: {"LDPTR7", 8, "$H"},
+	LDPTR8: {"LDPTR8", 9, "$H"},
 
-	ISNULL: {"ISNULL", 2},
-	ZERO:   {"ZERO", 1},
-	CLEAR:  {"CLEAR", 1},
-	SAME:   {"SAME", 3},
-	COPY:   {"COPY", 2},
-	SWAP:   {"SWAP", 2},
+	ISNULL: {"ISNULL", 2, "$$"},
+	ZERO:   {"ZERO", 1, "$"},
+	CLEAR:  {"CLEAR", 1, "$"},
+	SAME:   {"SAME", 3, "$$"},
+	COPY:   {"COPY", 2, "$$"},
+	SWAP:   {"SWAP", 2, "$$"},
 
-	SERIAL:   {"SERIAL", 2},
-	DESERIAL: {"DESERIAL", 2},
+	SERIAL:   {"SERIAL", 2, "$$"},
+	DESERIAL: {"DESERIAL", 2, "$$$"},
 
-	MAKE:  {"MAKE", 2},
-	PMAKE: {"PMAKE", 2},
-	VMAKE: {"VMAKE", 3},
+	MAKE:  {"MAKE", 2, "$H"},
+	PMAKE: {"PMAKE", 2, "$H"},
+	VMAKE: {"VMAKE", 3, "$$"},
 	// BMAKE: nil,
 
 	// BUILD: nil,
-	THROW: {"THROW", 1},
+	THROW: {"THROW", 1, "$"},
 	// EMIT:  nil,
-	JOIN: {"JOIN", 3},
+	JOIN: {"JOIN", 3, "$$$"},
 
-	LT: {"LT", 3},
-	GT: {"GT", 3},
-	EQ: {"EQ", 3},
+	LT: {"LT", 3, "$$$"},
+	GT: {"GT", 3, "$$$"},
+	EQ: {"EQ", 3, "$$$"},
 
-	BOOL: {"BOOL", 2},
-	STR:  {"STR", 2},
-	ADDR: {"ADDR", 2},
-	LEN:  {"LEN", 2},
+	BOOL: {"BOOL", 2, "$$"},
+	STR:  {"STR", 2, "$$"},
+	ADDR: {"ADDR", 2, "$$"},
+	LEN:  {"LEN", 2, "$$"},
 
-	SIZEOF: {"SIZEOF", 2},
-	GETFLD: {"GETFLD", 3},
-	SETFLD: {"SETFLD", 3},
-	GETIDX: {"GETIDX", 3},
-	SETIDX: {"SETIDX", 3},
+	SIZEOF: {"SIZEOF", 2, "$$"},
+	GETFLD: {"GETFLD", 3, "$$$"},
+	SETFLD: {"SETFLD", 3, "$&$"},
+	GETIDX: {"GETIDX", 3, "$$$"},
+	SETIDX: {"SETIDX", 3, "$$$"},
 
-	GROW:   {"GROW", 2},
-	SLICE:  {"SLICE", 4},
-	APPEND: {"APPEND", 2},
-	POPEND: {"POPEND", 2},
-	HASKEY: {"HASKEY", 3},
-	MERGE:  {"MERGE", 3},
+	GROW:   {"GROW", 2, "$$"},
+	SLICE:  {"SLICE", 4, "$$$$"},
+	APPEND: {"APPEND", 2, "$$"},
+	POPEND: {"POPEND", 2, "$$"},
+	HASKEY: {"HASKEY", 3, "$$$"},
+	MERGE:  {"MERGE", 3, "$$"},
 
-	AND: {"AND", 3},
-	OR:  {"OR", 3},
-	NOT: {"NOT", 2},
+	AND: {"AND", 3, "$$$"},
+	OR:  {"OR", 3, "$$$"},
+	NOT: {"NOT", 2, "$$"},
 
-	INCR: {"INCR", 1},
-	DECR: {"DECR", 1},
+	INCR: {"INCR", 1, "$"},
+	DECR: {"DECR", 1, "$"},
 
-	ADD: {"ADD", 3},
-	SUB: {"SUB", 3},
-	MUL: {"MUL", 3},
-	DIV: {"DIV", 3},
-	MOD: {"MOD", 3},
+	ADD: {"ADD", 3, "$$$"},
+	SUB: {"SUB", 3, "$$$"},
+	MUL: {"MUL", 3, "$$$"},
+	DIV: {"DIV", 3, "$$$"},
+	MOD: {"MOD", 3, "$$$"},
 
-	BXOR: {"BXOR", 3},
-	BAND: {"BAND", 3},
-	BOR:  {"BOR", 3},
-	BNOT: {"BNOT", 2},
+	BXOR: {"BXOR", 3, "$$$"},
+	BAND: {"BAND", 3, "$$$"},
+	BOR:  {"BOR", 3, "$$$"},
+	BNOT: {"BNOT", 2, "$$"},
 
 	// IXN: {"IXN", 1},
-	ENV:    {"ENV", 1},
-	LOGIC:  {"LOGIC", 1},
-	SENDER: {"SENDER", 1},
+	ENV:    {"ENV", 1, "$"},
+	LOGIC:  {"LOGIC", 1, "$"},
+	SENDER: {"SENDER", 1, "$"},
 	// RECEIVER: {"RECEIVER", 1}
 
-	PLOAD: {"PLOAD", 2},
-	PSAVE: {"PSAVE", 2},
+	PLOAD: {"PLOAD", 2, "$&"},
+	PSAVE: {"PSAVE", 2, "$&"},
+}
+
+// AsmExpression returns string expression of an OpCode.
+func (op OpCode) AsmExpression() string {
+	opcode := opcodeMetadataTable[op]
+	if opcode == nil {
+		return fmt.Sprintf("undefined opcode [%#x]", int(op))
+	}
+
+	return opcode.asmexpr
 }
 
 // String returns the string representation of OpCode.
@@ -522,5 +537,119 @@ var stringToOpCode = map[string]OpCode{
 
 // StringToOpCode finds the opcode whose name is stored in str.
 func StringToOpCode(str string) OpCode {
-	return stringToOpCode[str]
+	opcode, found := stringToOpCode[str]
+	if !found && str != "TERM" {
+		panic("undefined opcode: " + str)
+	}
+
+	return opcode
+}
+
+func Bin2Hex(data []byte) string {
+	if len(data) == 0 {
+		return ""
+	}
+
+	return "0x" + hex.EncodeToString(data)
+}
+
+func Hex2Bin(data string) ([]byte, error) {
+	bin, err := hex.DecodeString(strings.TrimPrefix(data, "0x"))
+	if err != nil {
+		return []byte{}, fmt.Errorf("unable to decode hex string %w", err)
+	}
+
+	return bin, nil
+}
+
+func Bin2Asm(data []byte) ([]string, error) {
+	asm := make([]string, 0, len(data)/3)
+
+	for i := 0; i < len(data); {
+		opcode := data[i]
+		asmexpr := OpCode(opcode).AsmExpression()
+		operands := ""
+		p := 0
+		j, ok := OpCode(opcode).Operands()
+
+		if !ok {
+			return []string{}, fmt.Errorf("invalid opcode: %v", opcode)
+		}
+		// extract operands and append asmexpr prefix
+		for k := i; k < i+j; {
+			bytes := data[k+1]
+			k += 1
+
+			end := p + 1
+			if end > len(asmexpr) {
+				end = len(asmexpr)
+			}
+
+			prefix := asmexpr[p:end]
+			if prefix == "H" {
+				prefix = "0x"
+			}
+
+			p += 1
+
+			operands += " " + prefix + fmt.Sprintf("%X", bytes)
+		}
+
+		i += j + 1
+
+		asm = append(asm, OpCode(opcode).String()+operands)
+	}
+
+	return asm, nil
+}
+
+func Asm2Bin(asm []string) ([]byte, error) {
+	binary := []byte{}
+
+	for _, line := range asm {
+		// extract opcode and there operands per array index
+		words := strings.Split(line, " ")
+		opcode := strings.ToUpper(words[0])
+		operands := words[1:]
+
+		opcodeBin := byte(StringToOpCode(opcode))
+		binary = append(binary, opcodeBin)
+
+		var expression string
+
+		for index, operand := range operands {
+			if strings.HasPrefix(operand, "0x") {
+				expression += "H"
+			} else {
+				expression += operand[:1]
+			}
+
+			operand := strings.TrimPrefix(strings.ToLower(operand), "0x")
+			operand = strings.TrimLeft(operand, "$&")
+
+			if len(operand) < 2 {
+				operand = "0" + operand
+			}
+
+			operandHex, err := hex.DecodeString(operand)
+			if err != nil {
+				return nil, err
+			}
+
+			if index == 1 && (opcodeBin >= 0x11 && opcodeBin <= 0x18) { // check for ldptr max input size
+				opcodeBin = (opcodeBin - 0x10) * 2
+				if len(operand) > int(opcodeBin) {
+					return nil, errors.Errorf("LDPTR excessive ptr size [line %v]", line)
+				}
+			}
+
+			binary = append(binary, operandHex...)
+		}
+
+		if expression != StringToOpCode(opcode).AsmExpression() {
+			return nil, fmt.Errorf("wrong prefix of opcode: %v", opcode)
+		}
+	}
+
+	return binary, nil
 }

@@ -36,6 +36,12 @@ func TestERC20TestSuiteYAML(t *testing.T) {
 	suite.Run(t, erc20)
 }
 
+func TestERC20TestSuiteASM(t *testing.T) {
+	erc20 := new(ERC20TestSuite)
+	erc20.filename = "./../manifests/erc20ASM.yaml"
+	suite.Run(t, erc20)
+}
+
 func (suite *ERC20TestSuite) SetupSuite() {
 	// Read manifest file
 	manifest, err := engineio.ReadManifestFile(suite.filename)

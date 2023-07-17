@@ -42,45 +42,27 @@ func ManifestInstructionConvertCommand(manifest *engineio.Manifest, encoding, fo
 		switch format {
 		case "BIN":
 			// Generate BIN data of opcodes
-			for _, element := range manifest.Elements {
-				if element.Kind == "routine" {
-					routine, ok := element.Data.(*pisa.RoutineSchema)
-					if !ok {
-						return "unable to extract element data"
-					}
-
-					if routine.Executes.Hex != "" {
-						// Remove the "0x" prefix from the HEX string
-						hexString := strings.TrimPrefix(routine.Executes.Hex, "0x")
-
-						// Decode the HEX string
-						bin, err := hex.DecodeString(hexString)
-						if err != nil {
-							return fmt.Sprintf("unable to decode HEX string: %v", err)
-						}
-
-						routine.Executes.Bin = bin
-						routine.Executes.Hex = ""
-					}
-				}
+			manifest, err := BinConverter(manifest)
+			if err != nil {
+				return fmt.Sprintf("%v", err)
 			}
 
 			return printManifestAs(manifest, encoding)
 
 		case "HEX":
 			// Generate HEX data of opcodes
-			for _, element := range manifest.Elements {
-				if element.Kind == "routine" {
-					routine, ok := element.Data.(*pisa.RoutineSchema)
-					if !ok {
-						return "unable to extract element data"
-					}
+			manifest, err := HexConverter(manifest)
+			if err != nil {
+				return fmt.Sprintf("%v", err)
+			}
 
-					if !bytes.Equal(routine.Executes.Bin, []byte{}) {
-						routine.Executes.Hex = "0x" + hex.EncodeToString(routine.Executes.Bin)
-						routine.Executes.Bin = []byte("")
-					}
-				}
+			return printManifestAs(manifest, encoding)
+
+		case "ASM":
+			// Generate ASM data of opcodes
+			manifest, err := AsmConverter(manifest)
+			if err != nil {
+				return fmt.Sprintf("%v", err)
 			}
 
 			return printManifestAs(manifest, encoding)
@@ -89,6 +71,162 @@ func ManifestInstructionConvertCommand(manifest *engineio.Manifest, encoding, fo
 			panic("unhandled manifest binhex encoding")
 		}
 	}
+}
+
+func BinConverter(manifest *engineio.Manifest) (*engineio.Manifest, error) {
+	for _, element := range manifest.Elements {
+		switch element.Kind {
+		case pisa.RoutineElement:
+			routine, ok := element.Data.(*pisa.RoutineSchema)
+			if !ok {
+				return manifest, fmt.Errorf("unable to extract element data")
+			}
+
+			if routine.Executes.Hex != "" {
+				bin, err := pisa.Hex2Bin(routine.Executes.Hex)
+				if err != nil {
+					return nil, err
+				}
+
+				routine.Executes.Bin = bin
+				routine.Executes.Hex = ""
+			}
+
+			if len(routine.Executes.Asm) != 0 {
+				bin, err := pisa.Asm2Bin(routine.Executes.Asm)
+				if err != nil {
+					return nil, err
+				}
+
+				routine.Executes.Bin = bin
+				routine.Executes.Hex = ""
+				routine.Executes.Asm = nil
+			}
+
+		case pisa.MethodElement:
+			method, ok := element.Data.(*pisa.MethodSchema)
+			if !ok {
+				return manifest, fmt.Errorf("unable to extract element data")
+			}
+
+			if method.Executes.Hex != "" {
+				bin, err := pisa.Hex2Bin(method.Executes.Hex)
+				if err != nil {
+					return nil, err
+				}
+
+				method.Executes.Bin = bin
+				method.Executes.Hex = ""
+			}
+
+			if len(method.Executes.Asm) != 0 {
+				bin, err := pisa.Asm2Bin(method.Executes.Asm)
+				if err != nil {
+					return nil, err
+				}
+
+				method.Executes.Bin = bin
+				method.Executes.Hex = ""
+				method.Executes.Asm = nil
+			}
+		}
+	}
+
+	return manifest, nil
+}
+
+func AsmConverter(manifest *engineio.Manifest) (*engineio.Manifest, error) {
+	for _, element := range manifest.Elements {
+		switch element.Kind {
+		case pisa.RoutineElement:
+			routine, ok := element.Data.(*pisa.RoutineSchema)
+			if !ok {
+				return manifest, fmt.Errorf("unable to extract element data")
+			}
+
+			if routine.Executes.Hex != "" {
+				manifest, err := BinConverter(manifest)
+				if err != nil {
+					return manifest, fmt.Errorf("error: %w", err)
+				}
+			}
+
+			if !bytes.Equal(routine.Executes.Bin, []byte{}) {
+				asm, err := pisa.Bin2Asm(routine.Executes.Bin)
+				if err != nil {
+					return manifest, err
+				}
+
+				routine.Executes.Bin = []byte("")
+				routine.Executes.Hex = ""
+				routine.Executes.Asm = asm
+			}
+		case pisa.MethodElement:
+			method, ok := element.Data.(*pisa.MethodSchema)
+			if !ok {
+				return manifest, fmt.Errorf("unable to extract element data")
+			}
+
+			if method.Executes.Hex != "" {
+				manifest, err := BinConverter(manifest)
+				if err != nil {
+					return manifest, fmt.Errorf("error: %w", err)
+				}
+			}
+
+			if !bytes.Equal(method.Executes.Bin, []byte{}) {
+				asm, err := pisa.Bin2Asm(method.Executes.Bin)
+				if err != nil {
+					return manifest, err
+				}
+
+				method.Executes.Bin = []byte("")
+				method.Executes.Hex = ""
+				method.Executes.Asm = asm
+			}
+		}
+	}
+
+	return manifest, nil
+}
+
+func HexConverter(manifest *engineio.Manifest) (*engineio.Manifest, error) {
+	for _, element := range manifest.Elements {
+		switch element.Kind {
+		case pisa.RoutineElement:
+			routine, ok := element.Data.(*pisa.RoutineSchema)
+			if !ok {
+				return manifest, fmt.Errorf("unable to extract element data")
+			}
+
+			if !bytes.Equal(routine.Executes.Bin, []byte{}) {
+				hex := pisa.Bin2Hex(routine.Executes.Bin)
+				if hex == "" {
+					return manifest, fmt.Errorf("error: failed to encode hex string")
+				}
+
+				routine.Executes.Bin = []byte("")
+				routine.Executes.Hex = hex
+			}
+		case pisa.MethodElement:
+			method, ok := element.Data.(*pisa.MethodSchema)
+			if !ok {
+				return manifest, fmt.Errorf("unable to extract element data")
+			}
+
+			if !bytes.Equal(method.Executes.Bin, []byte{}) {
+				hex := pisa.Bin2Hex(method.Executes.Bin)
+				if hex == "" {
+					return manifest, fmt.Errorf("error: failed to encode hex string")
+				}
+
+				method.Executes.Bin = []byte("")
+				method.Executes.Hex = hex
+			}
+		}
+	}
+
+	return manifest, nil
 }
 
 // SlothashCommand generates a command runner to generate
