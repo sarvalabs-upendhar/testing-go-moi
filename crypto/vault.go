@@ -381,7 +381,7 @@ func VerifySignatureUsingKramaID(id kramaid.KramaID, rawData []byte, signature [
 
 	verified, err := Verify(rawData, signature, rawPK)
 	if !verified || err != nil {
-		return errors.Wrap(err, "Signature verification failed")
+		return errors.New("Signature verification failed")
 	}
 
 	return nil

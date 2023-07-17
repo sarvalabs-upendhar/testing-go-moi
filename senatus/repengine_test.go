@@ -1005,7 +1005,8 @@ func TestVerifyHelloMsg(t *testing.T) {
 		{
 			name: "Signature verification failed",
 			msg: &NodeMetaInfoMsg{
-				KramaID: tests.GetTestKramaID(t, 1),
+				KramaID:       tests.GetTestKramaID(t, 1),
+				PeerSignature: helloMsg.Signature,
 			},
 			expectedError: errors.New("Signature verification failed"),
 		},

@@ -9,8 +9,9 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
-	"os"
 	"time"
+
+	"github.com/peterh/liner"
 
 	id "github.com/sarvalabs/go-moi/common/kramaid"
 	mudraCommon "github.com/sarvalabs/go-moi/crypto/common"
@@ -27,22 +28,20 @@ import (
 
 	"github.com/sarvalabs/go-moi/compute/pisa"
 
-	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/crypto"
 	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
 	"github.com/sarvalabs/go-moi/moiclient"
 )
 
 var (
-	networkRPC    string
-	keystorePath  string
-	nodeDataDir   string
-	nodeIndex     int32
-	walletAddress string
-	nodePassword  string
-	localRPC      string
-	watchDogURL   string
-	accounts      []tests.AccountWithMnemonic
+	networkRPC           string
+	nodeDataDir          string
+	nodeIndex            int32
+	walletAddress        string
+	nodePassword         string
+	localRPC             string
+	watchDogURL          string
+	mnemonicKeystorePath string
 )
 
 func GetRegisterCommand() *cobra.Command {
@@ -58,7 +57,12 @@ func GetRegisterCommand() *cobra.Command {
 }
 
 func parseRegisterFlags(cmd *cobra.Command) {
-	cmd.PersistentFlags().StringVar(&keystorePath, "keystore-path", "", "Path to keystore.")
+	cmd.PersistentFlags().StringVar(
+		&mnemonicKeystorePath,
+		"mnemonic-keystore-path",
+		"",
+		"Path to mnemonic keystore.",
+	)
 	cmd.PersistentFlags().StringVar(&watchDogURL, "watchdog-url", "", "WatchDog service url")
 	cmd.PersistentFlags().StringVar(&nodeDataDir, "data-dir", "", "Path to node data directory.")
 	cmd.PersistentFlags().StringVar(
@@ -93,16 +97,16 @@ func parseRegisterFlags(cmd *cobra.Command) {
 	)
 
 	_ = cmd.MarkPersistentFlagRequired("watchdog-url")
-	_ = cmd.MarkPersistentFlagRequired("keystore-path")
 	_ = cmd.MarkPersistentFlagRequired("data-dir")
 	_ = cmd.MarkPersistentFlagRequired("wallet-address")
 	_ = cmd.MarkPersistentFlagRequired("node-index")
 	_ = cmd.MarkPersistentFlagRequired("node-password")
+	_ = cmd.MarkPersistentFlagRequired("mnemonic-keystore-path")
 }
 
 func validateFlags() error {
-	if keystorePath == "" {
-		return errors.New("invalid key store path")
+	if mnemonicKeystorePath == "" {
+		return errors.New("invalid mnemonic key store path")
 	}
 
 	if walletAddress == "" {
@@ -117,26 +121,25 @@ func validateFlags() error {
 }
 
 func runRegisterCommand(cmd *cobra.Command, args []string) {
+	line := liner.NewLiner()
+
+	masterPassword, err := line.PasswordPrompt("Enter mnemonic key store password :")
+	if err != nil {
+		cmdCommon.Err(err)
+	}
+
 	if err := validateFlags(); err != nil {
 		cmdCommon.Err(err)
 	}
 
-	file, err := os.ReadFile(keystorePath)
-	if err != nil {
-		cmdCommon.Err(errors.Wrap(err, "failed to read keystore file"))
-	}
-
-	if err = json.Unmarshal(file, &accounts); err != nil {
-		cmdCommon.Err(err)
-	}
-
 	vault, err := crypto.NewVault(&crypto.VaultConfig{
-		DataDir:      nodeDataDir,
-		NodeIndex:    uint32(nodeIndex),
-		Mode:         crypto.UserMode,
-		SeedPhrase:   accounts[0].Mnemonic,
-		NodePassword: nodePassword,
-		InMemory:     false,
+		DataDir:                  nodeDataDir,
+		NodeIndex:                uint32(nodeIndex),
+		Mode:                     crypto.UserMode,
+		NodePassword:             nodePassword,
+		InMemory:                 false,
+		MnemonicKeystorePath:     mnemonicKeystorePath,
+		MnemonicKeystorePassword: masterPassword,
 	}, moinode.MoiFullNode, 1)
 	if err != nil {
 		cmdCommon.Err(err)
@@ -186,7 +189,7 @@ func registerGuardian(vault *crypto.KramaVault) {
 		cmdCommon.Err(err)
 	}
 
-	fmt.Printf("Krama-ID %s", vault.KramaID())
+	fmt.Printf("Krama-ID %s \n", vault.KramaID())
 
 	nonce, err := client.InteractionCount(&rpcargs.InteractionCountArgs{
 		Address: common.BytesToAddress(moiIDpublicKey),
@@ -252,7 +255,7 @@ func registerGuardian(vault *crypto.KramaVault) {
 		return
 	}
 
-	if err = registerWithWatchDog(vault.KramaID(), localRPC); err != nil {
+	if err = registerWithWatchDog(localRPC, vault); err != nil {
 		cmdCommon.Err(err)
 
 		return
@@ -286,7 +289,7 @@ func isGuardianRegistered(client *moiclient.Client, kramaID id.KramaID) bool {
 	return ok
 }
 
-func registerWithWatchDog(kramaID id.KramaID, rpcURL string) error {
+func registerWithWatchDog(rpcURL string, vault *crypto.KramaVault) error {
 	if rpcURL == "" {
 		ipAddr, err := cmdCommon.GetThisNodeIP()
 		if err != nil {
@@ -307,8 +310,24 @@ func registerWithWatchDog(kramaID id.KramaID, rpcURL string) error {
 
 	reqParams := make(map[string]interface{})
 
-	reqParams["krama_id"] = kramaID
+	req := cmdCommon.KramaIDReq{
+		KramaID: string(vault.KramaID()),
+		RPCUrl:  parsedURL.String(),
+	}
+
+	rawData, err := req.Bytes()
+	if err != nil {
+		return nil
+	}
+
+	signature, err := vault.Sign(rawData, mudraCommon.EcdsaSecp256k1, crypto.UsingNetworkKey())
+	if err != nil {
+		return err
+	}
+
+	reqParams["krama_id"] = vault.KramaID()
 	reqParams["rpc_url"] = parsedURL.String()
+	reqParams["signature"] = hex.EncodeToString(signature)
 
 	jsonData, err := json.Marshal(reqParams)
 	if err != nil {
