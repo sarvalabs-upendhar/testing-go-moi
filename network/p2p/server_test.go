@@ -1015,7 +1015,7 @@ func TestSendMessage_CheckMsgHandler(t *testing.T) {
 				t, servers[test.index+1],
 				config.MOIProtocolStream,
 				servers[test.index].id,
-				handShakeMsg,
+				*handShakeMsg,
 				response,
 			)
 
@@ -1025,7 +1025,7 @@ func TestSendMessage_CheckMsgHandler(t *testing.T) {
 			}
 
 			// send message from first server to second server
-			err = servers[test.index].SendMessage(servers[test.index+1].host.ID(), networkmsg.HANDSHAKEMSG, &handShakeMsg)
+			err = servers[test.index].SendMessage(servers[test.index+1].host.ID(), networkmsg.HANDSHAKEMSG, handShakeMsg)
 			require.NoError(t, err)
 
 			// wait till handler completes

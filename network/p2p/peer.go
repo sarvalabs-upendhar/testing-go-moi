@@ -20,19 +20,13 @@ import (
 
 // Peer is a struct that represents a peer on the network
 type Peer struct {
-	kramaID id.KramaID // Represents the KramaID of the peer
-
-	networkID peer.ID // Represents the libp2p-peer-id of the peer
-
-	stream network.Stream // Represents peer's stream
-
-	rw bufio.ReadWriter // Represents the peer's read/write buffer
-
-	knownIXs mapset.Set // Represents the set of interactions known to the peer
-
-	logger hclog.Logger
-
-	mtxLock sync.RWMutex
+	kramaID   id.KramaID       // Represents the KramaID of the peer
+	networkID peer.ID          // Represents the libp2p-peer-id of the peer
+	stream    network.Stream   // Represents peer's stream
+	rw        bufio.ReadWriter // Represents the peer's read/write buffer
+	knownIXs  mapset.Set       // Represents the set of interactions known to the peer
+	logger    hclog.Logger
+	mtxLock   sync.RWMutex
 }
 
 // newPeer is a constructor function that generates and returns a Peer
@@ -54,16 +48,16 @@ func (p *Peer) SendHandshakeMessage(s *Server) error {
 		return err
 	}
 	// Convert to a polo message and send it to the network
-	return p.Send(s.GetKramaID(), networkmsg.HANDSHAKEMSG, &msg)
+	return p.Send(s.GetKramaID(), networkmsg.HANDSHAKEMSG, msg)
 }
 
 func (p *Peer) handleHandshakeMessage() error {
-	message, err := p.decodeHandshakeMessage()
+	msg, err := p.decodeHandshakeMessage()
 	if err != nil {
 		return err
 	}
 	// HashSet the id of the peer based on the message
-	p.setKramaID(message.Sender)
+	p.setKramaID(msg.Sender)
 
 	return nil
 }
@@ -90,18 +84,17 @@ func (p *Peer) decodePeerMessage() (networkmsg.Message, error) {
 		return networkmsg.NilMessage, err
 	}
 
-	var message networkmsg.Message
+	var msg networkmsg.Message
 
-	err = message.FromBytes(buffer)
+	err = msg.FromBytes(buffer)
 	if err != nil {
 		return networkmsg.NilMessage, err
 	}
 
-	return message, nil
+	return msg, nil
 }
 
-// SetID is a method of Peer that sets the KramaID of the Peer.
-// Accepts NewPeer proto from which the KramaID is generated.
+// setKramaID is a method of Peer that sets the KramaID of the Peer.
 func (p *Peer) setKramaID(id id.KramaID) {
 	p.mtxLock.Lock()
 	defer p.mtxLock.Unlock()
@@ -155,8 +148,7 @@ func (p *Peer) sendHandshakeErrorResp(id id.KramaID, err error) error {
 	return p.Send(id, networkmsg.HANDSHAKEMSG, msg)
 }
 
-// SendIXs is a method of Peer that emits interactions to the network.
-// Accepts a slice of Interactions to emit.
+// SendIXs ships the ixn to the peer and  marks as know
 func (p *Peer) SendIXs(id id.KramaID, ixs common.Interactions) error {
 	// Mark the given Interactions as 'known'
 	for _, ix := range ixs {
@@ -166,9 +158,8 @@ func (p *Peer) SendIXs(id id.KramaID, ixs common.Interactions) error {
 	return p.Send(id, networkmsg.NEWIXSMSG, &ixs)
 }
 
-// Send is a method of Peer that writes a proto message to the respective peer's stream
-// Accepts the sender id, the message type and message itself.
-func (p *Peer) Send(id id.KramaID, code networkmsg.MsgType, msg networkmsg.MessagePayload) error {
+// Send bundles the given payload into a network message and ship it to the peer
+func (p *Peer) Send(id id.KramaID, code networkmsg.MsgType, msg networkmsg.Payload) error {
 	p.mtxLock.Lock()
 	defer p.mtxLock.Unlock()
 
@@ -181,8 +172,6 @@ func (p *Peer) Send(id id.KramaID, code networkmsg.MsgType, msg networkmsg.Messa
 }
 
 // markInteraction is a method of Peer that 'marks' an Interaction as known.
-// Accepts the Hash of an Interaction and adds it to set of known interaction hashes.
-//
 // Maintains 150 known interactions in the set at any point.
 func (p *Peer) markInteraction(hash common.Hash) {
 	p.mtxLock.Lock()

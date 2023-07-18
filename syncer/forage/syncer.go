@@ -1646,7 +1646,7 @@ func (s *Syncer) syncStorageTree(ctx context.Context, session *session.Session, 
 		return errors.New("failed to fetch storage tree info")
 	}
 
-	if err := s.state.SyncStorageTrees(session.ID(), metaStorageRoot, storageTreeRoots); err != nil {
+	if err = s.state.SyncStorageTrees(session.ID(), metaStorageRoot, storageTreeRoots); err != nil {
 		s.logger.Error("Failed to sync storage tree", "addr", session.ID())
 
 		return err

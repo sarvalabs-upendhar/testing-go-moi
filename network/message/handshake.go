@@ -12,15 +12,13 @@ type HandshakeMSG struct {
 	Error   string
 }
 
-var NilHandshakeMSG HandshakeMSG
-
 func ConstructHandshakeMSG(
 	address []string,
 	ntq float32,
 	degree int32,
 	err string,
-) HandshakeMSG {
-	return HandshakeMSG{
+) *HandshakeMSG {
+	return &HandshakeMSG{
 		Address: address,
 		NTQ:     ntq,
 		Degree:  degree,

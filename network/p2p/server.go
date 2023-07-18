@@ -126,7 +126,7 @@ func NewServer(
 		id:         id,
 		ctx:        ctx,
 		ctxCancel:  ctxCancel,
-		logger:     logger.Named("Poorna-Server"),
+		logger:     logger.Named("P2P-Server"),
 		cfg:        config,
 		mux:        mux,
 		Peers:      newPeerSet(),
@@ -191,8 +191,6 @@ func (s *Server) connectToBootStrapNodes() error {
 
 	var bootstrapConnections int8
 
-	s.logger.Info("Bootnodes", "bootstrap-peers", s.cfg.BootstrapPeers)
-
 	for _, bootstrapPeer := range s.cfg.BootstrapPeers {
 		if err := s.connectToMaddr(bootstrapPeer); err != nil {
 			s.logger.Error("Bootstrap connection failed", "peer", bootstrapPeer, "err", err)
@@ -246,7 +244,7 @@ func (s *Server) connectToTrustedNodes() {
 // StartNewRPCServer starts a new MOI-RPC server & client with the given ProtocolID
 // adds the server to map of poorna-server's rpcServers map and returns Client
 func (s *Server) StartNewRPCServer(protocol protocol.ID) *rpc.Client {
-	s.logger.Trace("Starting new MOI-RPC server", "protocol", protocol)
+	s.logger.Trace("Starting new MOI-RPC server", "protocol-ID", protocol)
 
 	s.rpcServers[protocol] = rpc.NewServer(s.logger.Named(string(protocol)), s.host, protocol)
 
@@ -426,8 +424,6 @@ func (s *Server) setupPubSub() (err error) {
 // to the network for all receivers registered to receive the event.
 func (s *Server) streamHandlerFunc(stream network.Stream) {
 	if s.connInfo.isInboundConnLimitReached() {
-		s.logger.Error("Closing peer connection", stream.Conn().RemotePeer())
-
 		if err := stream.Reset(); err != nil {
 			s.logger.Error("Failed to reset stream", "err", err)
 		}
@@ -435,7 +431,7 @@ func (s *Server) streamHandlerFunc(stream network.Stream) {
 		return
 	}
 
-	s.logger.Trace("New stream", "protocol", stream.Protocol(), "kPeer", stream.Conn().RemotePeer())
+	s.logger.Trace("Handling new stream", "protocol", stream.Protocol(), "peer-ID", stream.Conn().RemotePeer())
 
 	kPeer := newPeer(stream, s.logger)
 
@@ -472,7 +468,7 @@ func (s *Server) streamHandlerFunc(stream network.Stream) {
 		return
 	}
 
-	s.logger.Info("Handled stream, connected and registered", "kPeer", kPeer.kramaID)
+	s.logger.Info("Handled stream, connected and registered", "krama-ID", kPeer.kramaID)
 }
 
 // discover is a method of Server that starts a discovery routine using a libp2p routing
@@ -542,7 +538,7 @@ func (s *Server) handleDiscovery() error {
 				NTQ:   senatus.DefaultPeerNTQ,
 			})
 			if err != nil && !errors.Is(err, common.ErrAlreadyKnown) {
-				s.logger.Error("Failed to add peer information to senatus", "err", err)
+				s.logger.Error("Failed to add peer info to senatus", "err", err)
 
 				continue
 			}
@@ -584,7 +580,7 @@ func (s *Server) ConnectAndRegisterPeer(peerInfo peer.AddrInfo) error {
 
 	if err = kPeer.InitHandshake(s); err != nil {
 		if !errors.Is(err, common.ErrStreamReset) {
-			s.logger.Error("Handshake failed", "kPeer", peerInfo.ID, "err", err)
+			s.logger.Error("Handshake failed", "krama-ID", peerInfo.ID, "err", err)
 		}
 
 		return err
@@ -592,7 +588,7 @@ func (s *Server) ConnectAndRegisterPeer(peerInfo peer.AddrInfo) error {
 
 	// Register the kPeer to the handler working set
 	if err = s.Peers.Register(kPeer); err != nil {
-		s.logger.Error("Failed to register", "kPeer", peerInfo.ID, "err", err)
+		s.logger.Error("Failed to register", "krama-ID", peerInfo.ID, "err", err)
 
 		return err
 	}
@@ -614,7 +610,7 @@ func (s *Server) ConnectAndRegisterPeer(peerInfo peer.AddrInfo) error {
 		return err
 	}
 
-	s.logger.Info("Connected and registered kPeer successfully", "peer-ID", kPeer.kramaID)
+	s.logger.Info("Peer Connected", "krama-ID", kPeer.kramaID)
 
 	// Return a nil error
 	return nil
@@ -718,7 +714,7 @@ func (s *Server) DisconnectPeer(kramaID id.KramaID) error {
 	// Retrieve the libp2pID from the KramaID
 	libp2pID, err := kramaID.PeerID()
 	if err != nil {
-		s.logger.Error("Error parsing krama libp2p ID", "err", err)
+		s.logger.Error("Error parsing libp2p ID from kramaID", "err", err)
 
 		return err
 	}
@@ -737,7 +733,7 @@ func (s *Server) DisconnectPeer(kramaID id.KramaID) error {
 			return err
 		}
 		// Log the successful connection closure to the peer
-		s.logger.Info("Disconnected", "peer", peerID)
+		s.logger.Info("Peer Disconnected", "peer-ID", peerID)
 	}
 
 	// Remove the peer information from peer store
@@ -766,7 +762,7 @@ func (s *Server) Broadcast(topicName string, data []byte) error {
 
 	// Attempt to publish the message to the pubsub topic
 	if err := topicSet.topicHandle.Publish(s.ctx, data); err != nil {
-		s.logger.Error("Pub-Sub topic publish", "topic", topicName, "err", err)
+		s.logger.Error("Failed to publish message", "topic", topicName, "err", err)
 		// Return the error
 		return err
 	}
@@ -837,7 +833,7 @@ func (s *Server) routeSubscriptionMessages(
 		// an error because it is being invoked as a goroutine
 		if err := handler(msg); err != nil {
 			if !errors.Is(err, common.ErrAlreadyKnown) {
-				s.logger.Error("Subcription handler pipeline. Error calling handler method", "err", err)
+				s.logger.Error("Error handling pubsub message", "err", err)
 			}
 
 			return
@@ -900,7 +896,7 @@ func (s *Server) GetRandomNode() peer.ID {
 }
 
 // SendMessage sends message of Poorna MsgType's to a given libp2p id
-func (s *Server) SendMessage(peerID peer.ID, msgType networkmsg.MsgType, msg networkmsg.MessagePayload) error {
+func (s *Server) SendMessage(peerID peer.ID, msgType networkmsg.MsgType, msg networkmsg.Payload) error {
 	var (
 		stream  network.Stream
 		rw      *bufio.ReadWriter
@@ -941,7 +937,7 @@ func shipMessage(rw *bufio.ReadWriter, data []byte) error {
 func generateWireMessage(
 	senderKramaID id.KramaID,
 	msgType networkmsg.MsgType,
-	msg networkmsg.MessagePayload,
+	msg networkmsg.Payload,
 ) ([]byte, error) {
 	payloadRawData, err := msg.Bytes()
 	if err != nil {
@@ -995,39 +991,41 @@ func (s *Server) SendHelloMessage() {
 		rawMsg, err := msg.Bytes()
 		if err != nil {
 			s.logger.Error("Error polorising message", "err", err)
-			panic(err)
+
+			return
 		}
 
 		signature, err := s.vault.Sign(rawMsg, mcommon.EcdsaSecp256k1, crypto.UsingNetworkKey())
 		if err != nil {
-			s.logger.Error("Error signing message", "err", err)
-			panic(err)
+			s.logger.Error("Failed to sign hello message", "err", err)
+
+			return
 		}
 
 		msg.Signature = signature
 
 		rawData, err := msg.Bytes()
 		if err != nil {
-			s.logger.Error("Error serializing hello message", "err", err)
-			panic(err)
+			s.logger.Error("Failed to serialize hello message", "err", err)
+
+			return
 		}
 
 		if err = s.Broadcast(SenatusTopic, rawData); err != nil {
-			s.logger.Error("Error broadcasting hello message", "err", err)
-			panic(err)
+			s.logger.Error("Failed to broadcast hello message", "err", err)
+
+			return
 		}
 	})
 }
 
-func (s *Server) constructHandshakeMSG() (networkmsg.HandshakeMSG, error) {
+func (s *Server) constructHandshakeMSG() (*networkmsg.HandshakeMSG, error) {
 	ntq, err := s.Senatus.GetNTQ(s.GetKramaID())
 	if err != nil {
-		return networkmsg.NilHandshakeMSG, fmt.Errorf("get NTQ %w", err)
+		return nil, errors.Wrap(err, "failed to fetch ntq")
 	}
 
-	handShakeMessage := networkmsg.ConstructHandshakeMSG(utils.MultiAddrToString(s.host.Addrs()...), ntq, 0, "")
-
-	return handShakeMessage, nil
+	return networkmsg.ConstructHandshakeMSG(utils.MultiAddrToString(s.host.Addrs()...), ntq, 0, ""), nil
 }
 
 func (s *Server) MinimumPeersCount() uint32 {

@@ -3,7 +3,6 @@ package p2p
 import (
 	"context"
 	"errors"
-	"log"
 
 	"github.com/libp2p/go-msgio"
 	id "github.com/sarvalabs/go-moi/common/kramaid"
@@ -14,34 +13,25 @@ import (
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/utils"
-	"github.com/sarvalabs/go-moi/ixpool"
 	"github.com/sarvalabs/go-moi/lattice"
 )
 
-// Struct that represents the network event handler
+type ixPool interface {
+	AddInteractions(ixs common.Interactions) []error
+}
+
 type SubHandler struct {
-	ctx context.Context // Context for handler life cycle
-
-	ctxCancel context.CancelFunc // Context cancel function
-
-	id id.KramaID // KramaID of the node running the handler
-
-	peers *peerSet // working set of peers of the handler
-
-	ixpool *ixpool.IxPool // Interaction pool of the handler
-
-	// Represents the chain manager of the handler
-	chain *lattice.ChainManager
-
-	mux *utils.TypeMux // event type mux of the handler
-
-	ixSub *utils.Subscription // interactions event subscription
-
-	newPeerSub *utils.Subscription // newpeer event subscription
-
-	server *Server
-
-	logger hclog.Logger
+	ctx        context.Context
+	ctxCancel  context.CancelFunc
+	id         id.KramaID
+	peers      *peerSet
+	ixpool     ixPool
+	chain      *lattice.ChainManager
+	mux        *utils.TypeMux
+	ixSub      *utils.Subscription
+	newPeerSub *utils.Subscription
+	server     *Server
+	logger     hclog.Logger
 }
 
 // NewSubHandler is a constructor function generates and returns a new subHandle object.
@@ -53,7 +43,7 @@ func NewSubHandler(
 	server *Server,
 	peerSet *peerSet,
 	mux *utils.TypeMux,
-	pool *ixpool.IxPool,
+	pool ixPool,
 	chain *lattice.ChainManager,
 ) *SubHandler {
 	ctx, ctxCancel := context.WithCancel(ctx)
@@ -74,14 +64,11 @@ func NewSubHandler(
 // Start is a method of SubHandler that start the handler.
 // Initializes it TypeMux subscriptions and handler loops.
 func (eh *SubHandler) Start() {
-	log.Println("Handler started")
 	// Subscribe the TypeMux to NewIxsEvent and NewPeerEvent events
 	eh.ixSub = eh.mux.Subscribe(utils.NewIxsEvent{})
 	eh.newPeerSub = eh.mux.Subscribe(utils.NewPeerEvent{})
 
-	// Start the handler loops for new peers, broadcasting
-	// interactions and handling ICS events
-
+	// Start the handler loops for new peers, broadcasting interactions
 	go eh.newPeerLoop()
 	go eh.ixBroadcastLoop()
 }
@@ -113,7 +100,7 @@ func (eh *SubHandler) newPeerLoop() {
 					// Update inbound/outbound connection count based on the peer stream's direction
 					eh.server.connInfo.updateConnCount(peer.stream.Stat().Direction, -1)
 
-					eh.logger.Info("Peer disconnected", "peer-ID", peer.kramaID)
+					eh.logger.Info("Peer Disconnected", "krama-ID", peer.kramaID)
 				}()
 
 				// Handle messages from the peer
@@ -163,7 +150,7 @@ func (eh *SubHandler) handlePeerMessage(p *Peer) error {
 
 		// Mark the interactions in the message as 'known' by the peer
 		for _, v := range *ixns {
-			eh.logger.Info("Received interactions from", "peer-ID", p.kramaID, "ix-hash", v.Hash())
+			eh.logger.Info("Received interactions from", "krama-ID", p.kramaID, "ix-hash", v.Hash())
 
 			p.markInteraction(v.Hash())
 		}
@@ -183,9 +170,6 @@ func (eh *SubHandler) handlePeerMessage(p *Peer) error {
 				return nil
 			}
 		}
-
-	case networkmsg.RANDOMWALKREQ:
-		eh.logger.Info("Received a random-walk request from", "msg-sender", message.Sender)
 
 	case networkmsg.DISCONNECTREQ:
 		eh.handleDisconnectRequest(p, message)
@@ -207,13 +191,14 @@ func (eh *SubHandler) handleDisconnectRequest(peer *Peer, msg *networkmsg.Messag
 		return
 	}
 
-	eh.logger.Info("Received disconnect request from", "msg-sender", msg.Sender, "reason", disconnectMsg.Reason)
+	eh.logger.Info("Handled disconnect request from", "krama-ID", msg.Sender, "reason", disconnectMsg.Reason)
 }
 
 func (eh *SubHandler) sendDisconnectRequest(peer *Peer, err error) {
 	disconnectMsg := &networkmsg.DisconnectReq{
 		Reason: err.Error(),
 	}
+
 	peer.Send(eh.server.GetKramaID(), networkmsg.DISCONNECTREQ, disconnectMsg)
 }
 
@@ -249,9 +234,6 @@ func (eh *SubHandler) broadcastIXs(ixs []*common.Interaction) error {
 		}
 	}
 
-	// FIXME: Include the following line of code
-	// peers = peers[:int(math.Sqrt(float64(len(peers))))]
-
 	// Emit the Interaction
 	for peer, ixs := range peerIxSet {
 		go func(peer *Peer, ixs []*common.Interaction) {
@@ -267,5 +249,4 @@ func (eh *SubHandler) broadcastIXs(ixs []*common.Interaction) error {
 func (eh *SubHandler) Close() {
 	eh.ixSub.Unsubscribe()
 	eh.newPeerSub.Unsubscribe()
-	eh.ctxCancel()
 }

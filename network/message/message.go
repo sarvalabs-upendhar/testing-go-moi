@@ -29,7 +29,9 @@ const (
 	DISCONNECTREQ
 )
 
-type MessagePayload interface {
+var NilMessage Message
+
+type Payload interface {
 	Bytes() ([]byte, error)
 	FromBytes(bytes []byte) error
 }
@@ -39,8 +41,6 @@ type Message struct {
 	Sender  kramaid.KramaID
 	Payload []byte
 }
-
-var NilMessage Message
 
 func (m *Message) Bytes() ([]byte, error) {
 	rawData, err := polo.Polorize(m)

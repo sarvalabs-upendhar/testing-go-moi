@@ -256,16 +256,14 @@ func (n *Node) setupRPC() error {
 
 	backend := api.NewBackend(n.ixpool, n.chain, n.exec, n.state, n.network, n.db, n.cfg.IxPool)
 
-	publicApis := api.GetPublicAPIs(backend)
-
-	for _, api := range publicApis {
+	for _, publicAPI := range api.GetPublicAPIs(backend) {
 		rpcService := jsonrpc.NewRPCService()
 
-		if err := rpcService.RegisterAPIs(api.Services); err != nil {
+		if err := rpcService.RegisterAPIs(publicAPI.Services); err != nil {
 			return err
 		}
 
-		if err := n.rpc.RegisterService(api.Namespace, rpcService); err != nil {
+		if err := n.rpc.RegisterService(publicAPI.Namespace, rpcService); err != nil {
 			return err
 		}
 	}
