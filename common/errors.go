@@ -78,7 +78,6 @@ var (
 	ErrEmptyHeight                 = errors.New("empty height")
 	ErrFetchingTesseract           = errors.New("failed to fetch tesseract")
 	ErrEmptyOptions                = errors.New("empty options")
-	ErrStreamReset                 = errors.New("stream reset")
 	ErrGridHashNotFound            = errors.New("grid hash not found")
 	ErrGridIDNotFound              = errors.New("grid id not found")
 	ErrIndexOutOfRange             = errors.New("index out of range")

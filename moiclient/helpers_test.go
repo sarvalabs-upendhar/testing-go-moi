@@ -425,11 +425,11 @@ func httpPendingInteractionCount(t *testing.T, args *rpcargs.InteractionCountArg
 	return count
 }
 
-// httpLogicStorage returns the data associated with the given httpLogicStorage slot
-func httpLogicStorage(t *testing.T, args *rpcargs.GetLogicStorageArgs) hexutil.Bytes {
+// httpStorage returns the data associated with the given httpStorage slot
+func httpStorage(t *testing.T, args *rpcargs.GetLogicStorageArgs) hexutil.Bytes {
 	t.Helper()
 
-	resp := makeHTTPRequest(t, "moi.LogicStorage", args)
+	resp := makeHTTPRequest(t, "moi.Storage", args)
 
 	var res hexutil.Bytes
 

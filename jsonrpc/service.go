@@ -364,8 +364,8 @@ func (r *Service) PendingInteractionCount(
 	return nil
 }
 
-// LogicStorage returns the data associated with the given storage slot
-func (r *Service) LogicStorage(
+// Storage returns the data associated with the given storage slot
+func (r *Service) Storage(
 	req *http.Request,
 	args *rpcargs.GetLogicStorageArgs,
 	resp *rpcargs.Response,

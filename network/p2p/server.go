@@ -579,7 +579,7 @@ func (s *Server) ConnectAndRegisterPeer(peerInfo peer.AddrInfo) error {
 	kPeer = newPeer(stream, s.logger)
 
 	if err = kPeer.InitHandshake(s); err != nil {
-		if !errors.Is(err, common.ErrStreamReset) {
+		if !errors.Is(err, network.ErrReset) {
 			s.logger.Error("Handshake failed", "krama-ID", peerInfo.ID, "err", err)
 		}
 
