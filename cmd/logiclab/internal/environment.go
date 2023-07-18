@@ -185,7 +185,7 @@ func (env *Environment) RunScript(scriptPath string, suppress bool) error {
 	defer file.Close()
 
 	reader := io.Reader(file)
-	buffer := make([]byte, 2024) // Buffer to read the file content
+	buffer := make([]byte, 1024*1024) // Buffer to read the file content
 
 	var lastOutput string // Store the output of the last executed command
 
