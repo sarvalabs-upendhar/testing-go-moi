@@ -1253,8 +1253,9 @@ func (s *Syncer) tesseractInfoFromTesseractMsg(msg *networkmsg.TesseractMessage)
 	var err error
 
 	info := &TesseractInfo{
-		delta:         make(map[common.Hash][]byte),
+		delta:         msg.Delta,
 		shouldExecute: false,
+		clusterInfo:   new(common.ICSClusterInfo),
 	}
 
 	info.tesseract, err = msg.GetTesseract()
@@ -1262,19 +1263,10 @@ func (s *Syncer) tesseractInfoFromTesseractMsg(msg *networkmsg.TesseractMessage)
 		return nil, err
 	}
 
-	clusterInfo := new(common.ICSClusterInfo)
-
 	if !info.tesseract.ICSHash().IsNil() {
-		info.delta[info.tesseract.ICSHash()] = msg.Delta[info.tesseract.ICSHash()]
-
-		if err = polo.Depolorize(clusterInfo, info.delta[info.tesseract.ICSHash()]); err != nil {
+		if err = polo.Depolorize(info.clusterInfo, info.delta[info.tesseract.ICSHash()]); err != nil {
 			return nil, err
 		}
-	}
-
-	info.icsNodeSet, err = s.state.GetICSNodeSetFromRawContext(info.tesseract, msg.Delta, clusterInfo)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to load ICSNodeSet")
 	}
 
 	return info, nil
@@ -1298,7 +1290,7 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo, job *SyncJob) (bool, error) {
 	var err error
 
 	if msg.icsNodeSet == nil {
-		msg.icsNodeSet, err = s.lattice.FetchICSNodeSet(msg.tesseract, msg.clusterInfo)
+		msg.icsNodeSet, err = s.state.GetICSNodeSetFromRawContext(msg.tesseract, msg.delta, msg.clusterInfo)
 		if err != nil {
 			s.logger.Error("Failed to fetch node set", "err", err)
 
@@ -1488,6 +1480,32 @@ func (s *Syncer) getBlock(ctx context.Context, session *session.Session, cid cid
 	return false, nil, err
 }
 
+func (s *Syncer) getBlocks(ctx context.Context, session *session.Session, cids ...cid.CID) []block.Block {
+	blks := make([]block.Block, 0, len(cids))
+	keySet := cid.NewHashSet()
+
+	for _, cID := range cids {
+		if !cID.IsNil() {
+			data, err := s.db.ReadEntry(dbKeyFromCID(session.ID(), cID))
+			if err == nil {
+				blks = append(blks, *block.NewBlock(cID, data))
+			} else {
+				keySet.Add(cID)
+			}
+		}
+	}
+
+	if keySet.Len() == 0 {
+		return blks
+	}
+
+	for blk := range session.GetBlocks(ctx, keySet.Keys()) {
+		blks = append(blks, *blk)
+	}
+
+	return blks
+}
+
 // fetchAccount retrieves the account data for a given state hash from either the local database or the session,
 // and returns the account data, along with the block that contains it.
 // This also returns a bool value, indicating whether the data was found in the local database (true) or not (false).
@@ -1528,8 +1546,6 @@ func (s *Syncer) fetchData(ctx context.Context, session *session.Session, ids ..
 	}
 
 	if keySet.Len() == 0 {
-		s.logger.Debug("Returning from get blocks: keySet is empty")
-
 		return nil
 	}
 
@@ -1624,15 +1640,15 @@ func (s *Syncer) syncStorageTree(ctx context.Context, session *session.Session, 
 		return nil
 	}
 
-	ch := session.GetBlocks(ctx, storageCIDs)
+	s.logger.Debug("Syncing storage tree", "address", session.ID())
 
-	for blk := range ch {
+	for _, b := range s.getBlocks(ctx, session, storageCIDs...) {
 		rootNode := new(common.RootNode)
-		if err = polo.Depolorize(&rootNode, blk.GetData()); err != nil {
+		if err = polo.Depolorize(&rootNode, b.GetData()); err != nil {
 			return err
 		}
 
-		logicID, ok := rootHashToLogicID[blk.GetCid()]
+		logicID, ok := rootHashToLogicID[b.GetCid()]
 		if !ok {
 			s.logger.Error("Received unwanted block")
 

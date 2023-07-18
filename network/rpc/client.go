@@ -99,9 +99,9 @@ func NewClient(logger hclog.Logger, h host.Host, p protocol.ID, senatus senatus,
 			if !ok {
 				c.logger.Error("Type assertion failed")
 			}
-			c.logger.Debug("Evicted", "key", key, "stream", s, "protocol", s.Protocol())
+			c.logger.Trace("Evicted", "key", key, "stream", s, "protocol", s.Protocol())
 			// closing the stream
-			logger.Warn("Closing stream ID", "stream-ID", s.ID())
+
 			s.Close()
 		},
 	}
@@ -770,7 +770,8 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 	if ttl != 0 {
 		_, err = c.streamMap.Get(call.Dest.String())
 		if err != nil {
-			c.logger.Warn("Adding peer ID in the TTL map", "ID", call.Dest.String())
+			c.logger.Trace("Adding peer ID in the TTL map", "ID", call.Dest.String())
+
 			setErr := c.streamMap.Set(call.Dest.String(), ttlmap.NewItem(stream, ttlmap.WithTTL(ttl)), nil)
 
 			if setErr != nil {

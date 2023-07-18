@@ -7,7 +7,7 @@ import (
 	"time"
 
 	id "github.com/sarvalabs/go-moi/common/kramaid"
-	message2 "github.com/sarvalabs/go-moi/network/message"
+	networkmsg "github.com/sarvalabs/go-moi/network/message"
 	"github.com/sarvalabs/go-moi/syncer/agora/message"
 
 	"github.com/sarvalabs/go-polo"
@@ -78,15 +78,13 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 	for {
 		buffer, err := reader.ReadMsg()
 		if err != nil {
-			an.logger.Error("Error reading data from stream", "err", err)
-
 			return
 		}
 
 		// Unmarshal the buffer into a proto message
-		msg := new(message2.Message)
-		if err := msg.FromBytes(buffer); err != nil {
-			an.logger.Error("Error reading data from stream", "err", err)
+		msg := new(networkmsg.Message)
+		if err = msg.FromBytes(buffer); err != nil {
+			an.logger.Error("Failed to decode message", "err", err)
 
 			return
 		}
@@ -96,20 +94,20 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 		an.metrics.captureInboundDataSize(float64(len(msg.Payload)))
 
 		switch msg.MsgType {
-		case message2.AGORAREQ:
+		case networkmsg.AGORAREQ:
 			reqMsg := new(message.AgoraRequestMsg)
-			if err := reqMsg.FromBytes(msg.Payload); err != nil {
-				an.logger.Error("Error depolarising agora message", "err", err)
+			if err = reqMsg.FromBytes(msg.Payload); err != nil {
+				an.logger.Error("Failed to depolorize agora request message", "err", err)
 
 				continue
 			}
 
 			an.sm.HandlePeerMessage(msg.Sender, reqMsg)
 
-		case message2.AGORARESP:
+		case networkmsg.AGORARESP:
 			respMsg := new(message.AgoraResponseMsg)
-			if err := respMsg.FromBytes(msg.Payload); err != nil {
-				an.logger.Error("Error depolarising agora message", "err", err)
+			if err = respMsg.FromBytes(msg.Payload); err != nil {
+				an.logger.Error("Failed to depolorize agora response message", "err", err)
 
 				continue
 			}
@@ -119,7 +117,7 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 	}
 }
 
-func (an *AgoraNetwork) SendAgoraMessage(id id.KramaID, msgType message2.MsgType, msg message.Message) error {
+func (an *AgoraNetwork) SendAgoraMessage(id id.KramaID, msgType networkmsg.MsgType, msg message.Message) error {
 	peerID, err := utils.GetNetworkID(id)
 	if err != nil {
 		an.logger.Error("Unable to decode peer ID", "err", err)
@@ -193,7 +191,7 @@ func (an *AgoraNetwork) pruneInactivePeers() {
 			agoraPeer.mtx.Lock()
 			defer agoraPeer.mtx.Unlock()
 
-			if len(agoraPeer.activeSessions) == 0 && time.Since(agoraPeer.lastActiveTime) > 1*time.Second {
+			if len(agoraPeer.activeSessions) == 0 && time.Since(agoraPeer.lastActiveTime) > 3*time.Second {
 				an.logger.Info("Pruning inactive peer", "peer-ID", agoraPeer.id)
 
 				// cancel the receiving routine

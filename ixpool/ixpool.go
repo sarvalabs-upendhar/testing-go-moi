@@ -247,7 +247,6 @@ func (i *IxPool) createAccountOnce(newAddr common.Address, nonce uint64) *accoun
 
 func (i *IxPool) ResetWithHeaders(ts *common.Tesseract) {
 	if ts != nil && len(ts.Interactions()) > 0 {
-		i.logger.Info("Reset interactions", "size", len(ts.Interactions()))
 		i.ResetWithInteractions(ts.Interactions())
 	}
 }

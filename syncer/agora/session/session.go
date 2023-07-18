@@ -159,7 +159,7 @@ func (s *Session) getBlocks(
 			out <- &blk
 
 			if idSet.Len() == 0 {
-				s.logger.Info("All keys received returning from getBlocks")
+				s.logger.Debug("All keys received returning from getBlocks")
 
 				return nil
 			}
