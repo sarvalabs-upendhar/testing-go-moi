@@ -1,0 +1,1183 @@
+syntax: 0.1.0
+engine:
+  kind: PISA
+  flags: []
+elements:
+  - ptr: 0
+    deps: []
+    kind: constant
+    data:
+      type: string
+      value: 0x066163636573732064656e69656421206e6f7420616e20617574686f72697a656420617070726f766572
+  - ptr: 1
+    deps: []
+    kind: constant
+    data:
+      type: string
+      value: 0x066f70657261746f7220646f6573206e6f7420657869737421
+  - ptr: 2
+    deps: []
+    kind: constant
+    data:
+      type: string
+      value: 0x0654686973206b72616d614944206973206e6f7420617070726f76656420796574
+  - ptr: 3
+    deps: []
+    kind: constant
+    data:
+      type: string
+      value: "0x066b7963"
+  - ptr: 4
+    deps: []
+    kind: constant
+    data:
+      type: string
+      value: 0x064e6f6465206c696d69742065786861757374656420666f722074686973206f70657261746f72206f66206b696e64204b5943
+  - ptr: 5
+    deps: []
+    kind: constant
+    data:
+      type: string
+      value: 0x064e6f6465206c696d69742065786861757374656420666f722074686973206f70657261746f72206f66206b696e64204b5942
+  - ptr: 6
+    deps: []
+    kind: constant
+    data:
+      type: string
+      value: 0x06446576696365206c696d69742065786861757374656420666f722074686520676976656e20446576696365204944
+  - ptr: 7
+    deps: []
+    kind: constant
+    data:
+      type: string
+      value: "0x066b7962"
+  - ptr: 8
+    deps: []
+    kind: constant
+    data:
+      type: string
+      value: 0x06696e76616c696420766572696669636174696f6e206b696e64
+  - ptr: 9
+    deps: []
+    kind: constant
+    data:
+      type: u64
+      value: "0x0302"
+  - ptr: 10
+    deps: []
+    kind: constant
+    data:
+      type: string
+      value: 0x0641757468656e7469636174696f6e206661696c65642e204f70657261746f7220646f65736e2774206d6174636820776974682073656e646572
+  - ptr: 11
+    deps: []
+    kind: typedef
+    data: '[]string'
+  - ptr: 12
+    deps:
+      - 19
+    kind: typedef
+    data: map[string]Operator
+  - ptr: 13
+    deps: []
+    kind: typedef
+    data: map[string][]string
+  - ptr: 14
+    deps:
+      - 21
+    kind: typedef
+    data: map[string]Guardian
+  - ptr: 15
+    deps: []
+    kind: typedef
+    data: map[string]address
+  - ptr: 16
+    deps: []
+    kind: typedef
+    data: map[string]u64
+  - ptr: 17
+    deps: []
+    kind: typedef
+    data: '[]address'
+  - ptr: 18
+    deps: []
+    kind: typedef
+    data: u64
+  - ptr: 19
+    deps:
+      - 20
+    kind: class
+    data:
+      name: Operator
+      fields:
+        - slot: 0
+          label: OperatorID
+          type: string
+        - slot: 1
+          label: VerDetails
+          type: Verification
+      methods: []
+  - ptr: 20
+    deps: []
+    kind: class
+    data:
+      name: Verification
+      fields:
+        - slot: 0
+          label: Kind
+          type: string
+        - slot: 1
+          label: Proof
+          type: bytes
+      methods: []
+  - ptr: 21
+    deps: []
+    kind: class
+    data:
+      name: Guardian
+      fields:
+        - slot: 0
+          label: Operator
+          type: string
+        - slot: 1
+          label: KramaID
+          type: string
+        - slot: 2
+          label: DeviceID
+          type: string
+        - slot: 3
+          label: PublicKey
+          type: bytes
+        - slot: 4
+          label: IncentiveWallet
+          type: address
+        - slot: 5
+          label: ExtraData
+          type: bytes
+      methods: []
+  - ptr: 22
+    deps:
+      - 19
+      - 21
+    kind: state
+    data:
+      kind: persistent
+      fields:
+        - slot: 0
+          label: Operators
+          type: map[string]Operator
+        - slot: 1
+          label: OperatorToGuardians
+          type: map[string][]string
+        - slot: 2
+          label: Guardians
+          type: map[string]Guardian
+        - slot: 3
+          label: Devices
+          type: map[string][]string
+        - slot: 4
+          label: Approved
+          type: map[string]address
+        - slot: 5
+          label: Incentives
+          type: map[string]u64
+        - slot: 6
+          label: AllGuardiansKramaIDs
+          type: '[]string'
+        - slot: 7
+          label: UniqueOperators
+          type: '[]string'
+        - slot: 8
+          label: NodeLimitKYC
+          type: u64
+        - slot: 9
+          label: NodeLimitKYB
+          type: u64
+        - slot: 10
+          label: DeviceLimit
+          type: u64
+        - slot: 11
+          label: EnforceNodeLimits
+          type: bool
+        - slot: 12
+          label: EnforceApprovals
+          type: bool
+        - slot: 13
+          label: EnforceDeviceLimits
+          type: bool
+        - slot: 14
+          label: MasterOperator
+          type: string
+        - slot: 15
+          label: ApproverSet
+          type: '[]address'
+  - ptr: 23
+    deps:
+      - 22
+    kind: routine
+    data:
+      name: Setup!
+      kind: deployer
+      accepts:
+        - slot: 0
+          label: enforceApprovals
+          type: bool
+        - slot: 1
+          label: enforceNodeLimits
+          type: bool
+        - slot: 2
+          label: enforceDeviceLimits
+          type: bool
+        - slot: 3
+          label: limitKYC
+          type: u64
+        - slot: 4
+          label: limitKYB
+          type: u64
+        - slot: 5
+          label: limitDevice
+          type: u64
+        - slot: 6
+          label: master
+          type: string
+        - slot: 7
+          label: guardians
+          type: '[]Guardian'
+        - slot: 8
+          label: preApprovedKramaIDs
+          type: '[]string'
+        - slot: 9
+          label: preApprovedAddresses
+          type: '[]address'
+        - slot: 10
+          label: approvers
+          type: '[]address'
+      returns: []
+      executes:
+        bin: []
+        hex: ""
+        asm:
+          - OBTAIN $0 &0
+          - PSAVE $0 &C
+          - OBTAIN $1 &1
+          - PSAVE $1 &B
+          - OBTAIN $2 &2
+          - PSAVE $2 &D
+          - OBTAIN $3 &3
+          - PSAVE $3 &8
+          - OBTAIN $4 &4
+          - PSAVE $4 &9
+          - OBTAIN $5 &5
+          - PSAVE $5 &A
+          - OBTAIN $6 &6
+          - PSAVE $6 &E
+          - OBTAIN $7 &A
+          - PSAVE $7 &F
+          - OBTAIN $8 &7
+          - COPY $9 $8
+          - PMAKE $A 0x5
+          - SIZEOF $B $9
+          - DEST
+          - LT $C $A $B
+          - NOT $C $C
+          - LDPTR1 $D 0x2A
+          - JUMPI $D $C
+          - GETIDX $C $9 $A
+          - GETFLD $E $C $1
+          - PLOAD $F &1
+          - GETIDX $10 $F $6
+          - APPEND $10 $E
+          - SETIDX $F $6 $10
+          - PSAVE $F &1
+          - PLOAD $F &2
+          - SETIDX $F $E $C
+          - PSAVE $F &2
+          - PLOAD $F &6
+          - APPEND $F $E
+          - PSAVE $F &6
+          - DEST
+          - INCR $A
+          - LDPTR1 $D 0x14
+          - JUMP $D
+          - DEST
+          - PLOAD $9 &4
+          - OBTAIN $A &8
+          - COPY $B $A
+          - PMAKE $C 0x5
+          - SIZEOF $D $B
+          - DEST
+          - LT $E $C $D
+          - NOT $E $E
+          - LDPTR1 $F 0x3D
+          - JUMPI $F $E
+          - GETIDX $E $B $C
+          - OBTAIN $10 &9
+          - GETIDX $10 $10 $C
+          - SETIDX $9 $E $10
+          - DEST
+          - INCR $C
+          - LDPTR1 $F 0x30
+          - JUMP $F
+          - DEST
+          - PSAVE $9 &4
+      catches: []
+  - ptr: 24
+    deps:
+      - 25
+      - 22
+    kind: routine
+    data:
+      name: Approve!
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: approvedKramaIDs
+          type: '[]string'
+      returns: []
+      executes:
+        bin: []
+        hex: ""
+        asm:
+          - CARGS $0
+          - LDPTR1 $1 0x19
+          - CALLR $0 $1 $0
+          - PLOAD $0 &4
+          - OBTAIN $1 &0
+          - COPY $2 $1
+          - PMAKE $3 0x5
+          - SIZEOF $4 $2
+          - DEST
+          - LT $5 $3 $4
+          - NOT $5 $5
+          - LDPTR1 $6 0x15
+          - JUMPI $6 $5
+          - GETIDX $5 $2 $3
+          - SENDER $7
+          - ADDR $7 $7
+          - SETIDX $0 $5 $7
+          - DEST
+          - INCR $3
+          - LDPTR1 $6 0x8
+          - JUMP $6
+          - DEST
+          - PSAVE $0 &4
+      catches: []
+  - ptr: 25
+    deps:
+      - 0
+      - 22
+    kind: routine
+    data:
+      name: CheckSender
+      kind: local
+      accepts: []
+      returns: []
+      executes:
+        bin: []
+        hex: ""
+        asm:
+          - PLOAD $0 &F
+          - PMAKE $1 0x1
+          - COPY $2 $0
+          - PMAKE $3 0x5
+          - SIZEOF $4 $2
+          - DEST
+          - LT $5 $3 $4
+          - NOT $5 $5
+          - LDPTR1 $6 0x19
+          - JUMPI $6 $5
+          - GETIDX $5 $2 $3
+          - SENDER $7
+          - ADDR $7 $7
+          - EQ $7 $5 $7
+          - NOT $7 $7
+          - LDPTR1 $8 0x14
+          - JUMPI $8 $7
+          - PMAKE $7 0x1
+          - NOT $7 $7
+          - COPY $1 $7
+          - DEST
+          - DEST
+          - INCR $3
+          - LDPTR1 $6 0x5
+          - JUMP $6
+          - DEST
+          - NOT $2 $1
+          - NOT $2 $2
+          - LDPTR1 $4 0x21
+          - JUMPI $4 $2
+          - LDPTR1 $2 0x0
+          - CONST $2 $2
+          - THROW $2
+          - DEST
+      catches: []
+  - ptr: 26
+    deps:
+      - 22
+    kind: routine
+    data:
+      name: IsApproved
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: kramaID
+          type: string
+      returns:
+        - slot: 0
+          label: approverAddress
+          type: address
+        - slot: 1
+          label: isPresent
+          type: bool
+      executes:
+        bin: []
+        hex: ""
+        asm:
+          - PLOAD $0 &4
+          - OBTAIN $1 &0
+          - GETIDX $0 $0 $1
+          - PMAKE $1 0x4
+          - EQ $1 $0 $1
+          - YIELD $0 &0
+          - NOT $0 $1
+          - YIELD $0 &1
+      catches: []
+  - ptr: 27
+    deps:
+      - 19
+      - 25
+      - 22
+    kind: routine
+    data:
+      name: AddOperator!
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: operatorMOIId
+          type: string
+        - slot: 1
+          label: verificationDetails
+          type: Verification
+      returns: []
+      executes:
+        bin: []
+        hex: ""
+        asm:
+          - CARGS $0
+          - LDPTR1 $1 0x19
+          - CALLR $0 $1 $0
+          - LDPTR1 $0 0x13
+          - MAKE $0 0x0
+          - OBTAIN $1 &0
+          - SETFLD $0 &0 $1
+          - OBTAIN $2 &1
+          - SETFLD $0 &1 $2
+          - PLOAD $2 &0
+          - SETIDX $2 $1 $0
+          - PSAVE $2 &0
+          - PLOAD $0 &7
+          - APPEND $0 $1
+          - PSAVE $0 &7
+      catches: []
+  - ptr: 28
+    deps:
+      - 22
+    kind: routine
+    data:
+      name: IsVerified
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: moiID
+          type: string
+      returns:
+        - slot: 0
+          label: operator
+          type: Operator
+        - slot: 1
+          label: verified
+          type: bool
+      executes:
+        bin: []
+        hex: ""
+        asm:
+          - PLOAD $0 &0
+          - OBTAIN $1 &0
+          - GETIDX $0 $0 $1
+          - YIELD $0 &0
+          - GETFLD $0 $0 $0
+          - BOOL $0 $0
+          - YIELD $0 &1
+      catches: []
+  - ptr: 29
+    deps:
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      - 6
+      - 43
+      - 22
+    kind: routine
+    data:
+      name: Register!
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: operatorID
+          type: string
+        - slot: 1
+          label: guardian
+          type: Guardian
+      returns: []
+      executes:
+        bin: []
+        hex: ""
+        asm:
+          - LDPTR1 $0 0x13
+          - MAKE $0 0x0
+          - PLOAD $1 &0
+          - OBTAIN $2 &0
+          - GETIDX $3 $1 $2
+          - COPY $0 $3
+          - GETFLD $3 $0 $0
+          - NOT $3 $3
+          - NOT $3 $3
+          - LDPTR1 $4 0xE
+          - JUMPI $4 $3
+          - LDPTR1 $3 0x1
+          - CONST $3 $3
+          - THROW $3
+          - DEST
+          - CARGS $3
+          - GETFLD $4 $0 $0
+          - SETFLD $3 &0 $4
+          - LDPTR1 $4 0x2B
+          - CALLR $3 $4 $3
+          - OBTAIN $3 &1
+          - GETFLD $4 $3 $1
+          - GETFLD $5 $3 $2
+          - PMAKE $6 0x3
+          - PLOAD $6 &E
+          - GETFLD $7 $0 $0
+          - EQ $7 $7 $6
+          - NOT $7 $7
+          - NOT $7 $7
+          - LDPTR1 $8 0x7A
+          - JUMPI $8 $7
+          - PLOAD $7 &C
+          - NOT $7 $7
+          - LDPTR1 $8 0x2F
+          - JUMPI $8 $7
+          - PMAKE $8 0x5
+          - PLOAD $9 &4
+          - GETIDX $A $9 $4
+          - PMAKE $B 0x4
+          - EQ $A $A $B
+          - NOT $A $A
+          - LDPTR1 $B 0x2E
+          - JUMPI $B $A
+          - LDPTR1 $A 0x2
+          - CONST $A $A
+          - THROW $A
+          - DEST
+          - DEST
+          - PLOAD $8 &B
+          - NOT $8 $8
+          - LDPTR1 $9 0x57
+          - JUMPI $9 $8
+          - PLOAD $9 &1
+          - GETFLD $A $0 $1
+          - GETFLD $A $A $0
+          - LDPTR1 $B 0x3
+          - CONST $B $B
+          - EQ $A $A $B
+          - NOT $A $A
+          - LDPTR1 $B 0x4A
+          - JUMPI $B $A
+          - PLOAD $A &8
+          - GETIDX $C $9 $6
+          - SIZEOF $C $C
+          - GT $C $C $A
+          - NOT $C $C
+          - LDPTR1 $D 0x47
+          - JUMPI $D $C
+          - LDPTR1 $C 0x4
+          - CONST $C $C
+          - THROW $C
+          - DEST
+          - LDPTR1 $B 0x56
+          - JUMP $B
+          - DEST
+          - PLOAD $A &9
+          - GETIDX $B $9 $6
+          - SIZEOF $B $B
+          - GT $B $B $A
+          - NOT $B $B
+          - LDPTR1 $C 0x55
+          - JUMPI $C $B
+          - LDPTR1 $B 0x5
+          - CONST $B $B
+          - THROW $B
+          - DEST
+          - DEST
+          - DEST
+          - PLOAD $9 &D
+          - NOT $9 $9
+          - LDPTR1 $A 0x69
+          - JUMPI $A $9
+          - PLOAD $A &A
+          - PLOAD $B &3
+          - GETIDX $C $B $5
+          - SIZEOF $C $C
+          - LT $C $C $A
+          - NOT $C $C
+          - NOT $C $C
+          - LDPTR1 $D 0x68
+          - JUMPI $D $C
+          - LDPTR1 $C 0x6
+          - CONST $C $C
+          - THROW $C
+          - DEST
+          - DEST
+          - PLOAD $7 &1
+          - GETIDX $8 $7 $6
+          - APPEND $8 $4
+          - SETIDX $7 $6 $8
+          - PSAVE $7 &1
+          - PLOAD $7 &2
+          - SETIDX $7 $4 $3
+          - PSAVE $7 &2
+          - PLOAD $7 &3
+          - GETIDX $8 $7 $5
+          - APPEND $8 $4
+          - SETIDX $7 $5 $8
+          - PSAVE $7 &3
+          - PLOAD $7 &6
+          - APPEND $7 $4
+          - PSAVE $7 &6
+          - DEST
+      catches: []
+  - ptr: 30
+    deps:
+      - 3
+      - 7
+      - 8
+      - 25
+      - 22
+    kind: routine
+    data:
+      name: IncreaseNodeLimit!
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: kind
+          type: string
+        - slot: 1
+          label: delta
+          type: u64
+      returns: []
+      executes:
+        bin: []
+        hex: ""
+        asm:
+          - CARGS $0
+          - LDPTR1 $1 0x19
+          - CALLR $0 $1 $0
+          - OBTAIN $0 &0
+          - LDPTR1 $1 0x3
+          - CONST $1 $1
+          - EQ $1 $0 $1
+          - NOT $1 $1
+          - LDPTR1 $2 0xE
+          - JUMPI $2 $1
+          - OBTAIN $1 &1
+          - PSAVE $1 &8
+          - LDPTR1 $2 0x1E
+          - JUMP $2
+          - DEST
+          - LDPTR1 $1 0x7
+          - CONST $1 $1
+          - EQ $1 $0 $1
+          - NOT $1 $1
+          - LDPTR1 $2 0x19
+          - JUMPI $2 $1
+          - OBTAIN $1 &1
+          - PSAVE $1 &9
+          - LDPTR1 $2 0x1D
+          - JUMP $2
+          - DEST
+          - LDPTR1 $1 0x8
+          - CONST $1 $1
+          - THROW $1
+          - DEST
+          - DEST
+      catches: []
+  - ptr: 31
+    deps:
+      - 25
+      - 22
+    kind: routine
+    data:
+      name: AddIncentives!
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: kramaIDs
+          type: '[]string'
+        - slot: 1
+          label: amounts
+          type: '[]u64'
+      returns: []
+      executes:
+        bin: []
+        hex: ""
+        asm:
+          - CARGS $0
+          - LDPTR1 $1 0x19
+          - CALLR $0 $1 $0
+          - PLOAD $0 &5
+          - OBTAIN $1 &0
+          - COPY $2 $1
+          - PMAKE $3 0x5
+          - SIZEOF $4 $2
+          - DEST
+          - LT $5 $3 $4
+          - NOT $5 $5
+          - LDPTR1 $6 0x17
+          - JUMPI $6 $5
+          - GETIDX $5 $2 $3
+          - GETIDX $7 $0 $5
+          - OBTAIN $8 &1
+          - GETIDX $8 $8 $3
+          - ADD $7 $7 $8
+          - SETIDX $0 $5 $7
+          - DEST
+          - INCR $3
+          - LDPTR1 $6 0x8
+          - JUMP $6
+          - DEST
+          - PSAVE $0 &5
+      catches: []
+  - ptr: 32
+    deps:
+      - 22
+    kind: routine
+    data:
+      name: GetIncentives
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: kramaID
+          type: string
+      returns:
+        - slot: 0
+          label: incentive
+          type: u64
+      executes:
+        bin: []
+        hex: ""
+        asm:
+          - PLOAD $0 &5
+          - OBTAIN $1 &0
+          - GETIDX $0 $0 $1
+          - YIELD $0 &0
+      catches: []
+  - ptr: 33
+    deps:
+      - 11
+      - 22
+    kind: routine
+    data:
+      name: GetOperatorGuardians
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: moiID
+          type: string
+      returns:
+        - slot: 0
+          label: guardians
+          type: '[]string'
+      executes:
+        bin: []
+        hex: ""
+        asm:
+          - LDPTR1 $0 0xB
+          - MAKE $0 0x0
+          - PLOAD $0 &1
+          - OBTAIN $1 &0
+          - GETIDX $0 $0 $1
+          - YIELD $0 &0
+      catches: []
+  - ptr: 34
+    deps:
+      - 22
+    kind: routine
+    data:
+      name: GetGuardianByKramaID
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: kramaID
+          type: string
+      returns:
+        - slot: 0
+          label: guardian
+          type: Guardian
+      executes:
+        bin: []
+        hex: ""
+        asm:
+          - PLOAD $0 &2
+          - OBTAIN $1 &0
+          - GETIDX $0 $0 $1
+          - YIELD $0 &0
+      catches: []
+  - ptr: 35
+    deps:
+      - 11
+      - 22
+    kind: routine
+    data:
+      name: GetGuardiansByDeviceID
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: deviceID
+          type: string
+      returns:
+        - slot: 0
+          label: kramaIDs
+          type: '[]string'
+      executes:
+        bin: []
+        hex: ""
+        asm:
+          - LDPTR1 $0 0xB
+          - MAKE $0 0x0
+          - PLOAD $0 &3
+          - OBTAIN $1 &0
+          - GETIDX $0 $0 $1
+          - YIELD $0 &0
+      catches: []
+  - ptr: 36
+    deps:
+      - 22
+    kind: routine
+    data:
+      name: GetOperatorGuardiansCount
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: moiID
+          type: string
+      returns:
+        - slot: 0
+          label: count
+          type: u64
+      executes:
+        bin: []
+        hex: ""
+        asm:
+          - PLOAD $0 &1
+          - OBTAIN $1 &0
+          - GETIDX $0 $0 $1
+          - SIZEOF $0 $0
+          - YIELD $0 &0
+      catches: []
+  - ptr: 37
+    deps:
+      - 22
+    kind: routine
+    data:
+      name: GetTotalGuardiansCount
+      kind: invokable
+      accepts: []
+      returns:
+        - slot: 0
+          label: count
+          type: u64
+      executes:
+        bin: []
+        hex: ""
+        asm:
+          - PLOAD $0 &6
+          - SIZEOF $0 $0
+          - YIELD $0 &0
+      catches: []
+  - ptr: 38
+    deps:
+      - 22
+    kind: routine
+    data:
+      name: GetOperatorsCount
+      kind: invokable
+      accepts: []
+      returns:
+        - slot: 0
+          label: count
+          type: u64
+      executes:
+        bin: []
+        hex: ""
+        asm:
+          - PLOAD $0 &7
+          - SIZEOF $0 $0
+          - YIELD $0 &0
+      catches: []
+  - ptr: 39
+    deps:
+      - 11
+      - 22
+    kind: routine
+    data:
+      name: GetKramaIDs
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: offset
+          type: u64
+        - slot: 1
+          label: limit
+          type: u64
+      returns:
+        - slot: 0
+          label: kramaIDs
+          type: '[]string'
+      executes:
+        bin: []
+        hex: ""
+        asm:
+          - LDPTR1 $0 0xB
+          - MAKE $0 0x0
+          - PLOAD $1 &6
+          - OBTAIN $2 &0
+          - COPY $3 $2
+          - OBTAIN $4 &1
+          - ADD $5 $2 $4
+          - SIZEOF $6 $1
+          - GT $7 $5 $6
+          - NOT $7 $7
+          - LDPTR1 $8 0xD
+          - JUMPI $8 $7
+          - COPY $5 $6
+          - DEST
+          - SLICE $0 $1 $3 $5
+          - YIELD $0 &0
+      catches: []
+  - ptr: 40
+    deps:
+      - 11
+      - 22
+    kind: routine
+    data:
+      name: GetOperators
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: offset
+          type: u64
+        - slot: 1
+          label: limit
+          type: u64
+      returns:
+        - slot: 0
+          label: moiIDs
+          type: '[]string'
+      executes:
+        bin: []
+        hex: ""
+        asm:
+          - LDPTR1 $0 0xB
+          - MAKE $0 0x0
+          - PLOAD $1 &7
+          - OBTAIN $2 &0
+          - COPY $3 $2
+          - OBTAIN $4 &1
+          - ADD $5 $2 $4
+          - SIZEOF $6 $1
+          - GT $7 $5 $6
+          - NOT $7 $7
+          - LDPTR1 $8 0xD
+          - JUMPI $8 $7
+          - COPY $5 $6
+          - DEST
+          - SLICE $0 $1 $3 $5
+          - YIELD $0 &0
+      catches: []
+  - ptr: 41
+    deps:
+      - 22
+    kind: routine
+    data:
+      name: GetNodeLimits
+      kind: invokable
+      accepts: []
+      returns:
+        - slot: 0
+          label: NodeLimitKYC
+          type: u64
+        - slot: 1
+          label: NodeLimitKYB
+          type: u64
+      executes:
+        bin: []
+        hex: ""
+        asm:
+          - PLOAD $0 &8
+          - YIELD $0 &0
+          - PLOAD $0 &9
+          - YIELD $0 &1
+      catches: []
+  - ptr: 42
+    deps:
+      - 43
+      - 44
+      - 22
+    kind: routine
+    data:
+      name: UpdateGuardianDetails!
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: kramaID
+          type: string
+        - slot: 1
+          label: updatedGuardiansDetails
+          type: Guardian
+      returns: []
+      executes:
+        bin: []
+        hex: ""
+        asm:
+          - PLOAD $0 &2
+          - OBTAIN $1 &0
+          - GETIDX $2 $0 $1
+          - GETFLD $3 $2 $0
+          - CARGS $4
+          - SETFLD $4 &0 $3
+          - LDPTR1 $5 0x2B
+          - CALLR $4 $5 $4
+          - PLOAD $4 &2
+          - OBTAIN $5 &1
+          - SETIDX $4 $1 $5
+          - GETFLD $6 $5 $2
+          - GETFLD $7 $2 $2
+          - EQ $8 $7 $6
+          - NOT $8 $8
+          - NOT $8 $8
+          - LDPTR1 $9 0x20
+          - JUMPI $9 $8
+          - PLOAD $8 &3
+          - PLOAD $9 &3
+          - GETIDX $9 $9 $7
+          - GETIDX $A $8 $6
+          - APPEND $A $1
+          - SETIDX $8 $6 $A
+          - CARGS $A
+          - SETFLD $A &0 $9
+          - SETFLD $A &1 $1
+          - LDPTR1 $9 0x2C
+          - CALLR $9 $9 $A
+          - GETFLD $9 $9 $0
+          - SETIDX $8 $7 $9
+          - PSAVE $8 &3
+          - DEST
+          - PSAVE $4 &2
+      catches: []
+  - ptr: 43
+    deps:
+      - 9
+      - 10
+    kind: routine
+    data:
+      name: ValidateSenderWithMoiID
+      kind: local
+      accepts:
+        - slot: 0
+          label: operator
+          type: string
+      returns: []
+      executes:
+        bin: []
+        hex: ""
+        asm:
+          - OBTAIN $0 &0
+          - LDPTR1 $1 0x9
+          - CONST $1 $1
+          - LEN $2 $0
+          - CARGS $3
+          - SETFLD $3 &0 $0
+          - SETFLD $3 &1 $1
+          - SETFLD $3 &2 $2
+          - CALLM $1 0x1A $3
+          - GETFLD $1 $1 $0
+          - SENDER $2
+          - ADDR $2 $2
+          - STR $2 $2
+          - EQ $3 $1 $2
+          - NOT $3 $3
+          - NOT $3 $3
+          - LDPTR1 $4 0x15
+          - JUMPI $4 $3
+          - LDPTR1 $3 0xA
+          - CONST $3 $3
+          - THROW $3
+          - DEST
+      catches: []
+  - ptr: 44
+    deps:
+      - 11
+      - 18
+    kind: routine
+    data:
+      name: RemoveString
+      kind: local
+      accepts:
+        - slot: 0
+          label: strArray
+          type: '[]string'
+        - slot: 1
+          label: strToBeRemoved
+          type: string
+      returns:
+        - slot: 0
+          label: updated
+          type: '[]string'
+      executes:
+        bin: []
+        hex: ""
+        asm:
+          - LDPTR1 $0 0xB
+          - MAKE $0 0x0
+          - LDPTR1 $1 0x12
+          - MAKE $1 0x1
+          - LDPTR1 $2 0xB
+          - VMAKE $1 $2 $1
+          - OBTAIN $2 &0
+          - COPY $3 $2
+          - PMAKE $4 0x5
+          - SIZEOF $5 $3
+          - DEST
+          - LT $6 $4 $5
+          - NOT $6 $6
+          - LDPTR1 $7 0x1C
+          - JUMPI $7 $6
+          - GETIDX $6 $3 $4
+          - OBTAIN $8 &1
+          - EQ $9 $6 $8
+          - NOT $9 $9
+          - NOT $9 $9
+          - LDPTR1 $A 0x17
+          - JUMPI $A $9
+          - APPEND $1 $6
+          - DEST
+          - DEST
+          - INCR $4
+          - LDPTR1 $7 0xA
+          - JUMP $7
+          - DEST
+          - YIELD $1 &0
+      catches: []

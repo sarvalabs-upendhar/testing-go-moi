@@ -316,7 +316,7 @@ type opcodeMetadata struct {
 var opcodeMetadataTable = map[OpCode]*opcodeMetadata{
 	TERM:   {"TERM", 0, ""},
 	DEST:   {"DEST", 0, ""},
-	JUMP:   {"JUMP", 1, ""},
+	JUMP:   {"JUMP", 1, "$"},
 	JUMPI:  {"JUMPI", 2, "$$"},
 	OBTAIN: {"OBTAIN", 2, "$&"},
 	YIELD:  {"YIELD", 2, "$&"},
@@ -324,7 +324,7 @@ var opcodeMetadataTable = map[OpCode]*opcodeMetadata{
 
 	CARGS: {"CARGS", 1, "$"},
 	CALLB: {"CALLB", 3, "$$"},
-	CALLR: {"CALLR", 3, "$$"},
+	CALLR: {"CALLR", 3, "$$$"},
 	CALLM: {"CALLM", 3, "$H$"},
 
 	CONST:  {"CONST", 2, "$$"},
@@ -349,7 +349,7 @@ var opcodeMetadataTable = map[OpCode]*opcodeMetadata{
 
 	MAKE:  {"MAKE", 2, "$H"},
 	PMAKE: {"PMAKE", 2, "$H"},
-	VMAKE: {"VMAKE", 3, "$$"},
+	VMAKE: {"VMAKE", 3, "$$$"},
 	// BMAKE: nil,
 
 	// BUILD: nil,

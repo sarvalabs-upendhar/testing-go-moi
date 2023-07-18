@@ -31,6 +31,12 @@ func TestGuardianTestSuiteYAML(t *testing.T) {
 	suite.Run(t, guardian)
 }
 
+func TestGuardianTestSuiteASM(t *testing.T) {
+	guardian := new(GuardianTestSuite)
+	guardian.filename = "./../manifests/guardian-registry/guardianASM.yaml"
+	suite.Run(t, guardian)
+}
+
 type Guardian struct {
 	Operator        string
 	KramaID         string
