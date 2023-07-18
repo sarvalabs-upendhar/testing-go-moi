@@ -2595,7 +2595,7 @@ func TestInstructionSet(t *testing.T) {
 
 			continuity := opLOGIC(scope, []byte{0})
 			require.Equal(t, continueOk{30}, continuity)
-			require.Equal(t, LogicContextValue{addr: AddressValue(logicAddress)}, scope.memory[0])
+			require.Equal(t, LogicContextValue{scope.engine.persistent}, scope.memory[0])
 		})
 	})
 
@@ -2623,7 +2623,7 @@ func TestInstructionSet(t *testing.T) {
 
 			continuity := opSENDER(scope, []byte{0})
 			require.Equal(t, continueOk{30}, continuity)
-			require.Equal(t, ParticipantContextValue{addr: AddressValue(senderAddress)}, scope.memory[0])
+			require.Equal(t, ParticipantContextValue{scope.engine.sephemeral}, scope.memory[0])
 		})
 	})
 }

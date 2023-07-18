@@ -3,7 +3,6 @@ package pisa
 import (
 	"github.com/holiman/uint256"
 	"github.com/sarvalabs/go-moi/compute/engineio"
-	"github.com/sarvalabs/go-polo"
 )
 
 var EnvironmentType = EnvironmentValue{}.Type()
@@ -15,11 +14,8 @@ type EnvironmentValue struct {
 
 func (env EnvironmentValue) Type() Datatype {
 	return BuiltinDatatype{
-		name: "Environment",
-		fields: makefields([]*TypeField{
-			{"timestamp", PrimitiveI64},
-			{"fuelprice", PrimitiveU256},
-		}),
+		name:   "Environment",
+		fields: makefields([]*TypeField{}),
 	}
 }
 
@@ -30,15 +26,7 @@ func (env EnvironmentValue) Copy() RegisterValue {
 }
 
 func (env EnvironmentValue) Data() []byte {
-	doc := make(polo.Document)
-
-	polorizedTime, _ := polo.Polorize(env.driver.Timestamp())
-	doc.SetRaw("timestamp", polorizedTime)
-
-	polorizedFuel, _ := polo.Polorize(env.driver.FuelPrice())
-	doc.SetRaw("fuelprice", polorizedFuel)
-
-	return doc.Bytes()
+	return []byte{}
 }
 
 func (env EnvironmentValue) Norm() any {

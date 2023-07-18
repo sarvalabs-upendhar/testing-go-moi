@@ -1631,7 +1631,7 @@ func opLOGIC(scope *callscope, operands []byte) Continue {
 
 	// Set the register with a LogicContextValue
 	scope.memory.Set(reg, LogicContextValue{
-		addr: AddressValue(scope.engine.persistent.Address()),
+		ctx: scope.engine.persistent,
 	})
 
 	return continueOk{30}
@@ -1647,7 +1647,7 @@ func opSENDER(scope *callscope, operands []byte) Continue {
 
 	// Set the register with a LogicContextValue
 	scope.memory.Set(reg, ParticipantContextValue{
-		addr: AddressValue(scope.engine.sephemeral.Address()),
+		ctx: scope.engine.sephemeral,
 	})
 
 	return continueOk{30}
