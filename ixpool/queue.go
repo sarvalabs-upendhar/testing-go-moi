@@ -90,10 +90,6 @@ func (q *accountQueue) push(ix *common.Interaction) {
 
 // peek returns the first Interaction from the queue without removing it.
 func (q *accountQueue) peek() *common.Interaction {
-	if q.length() == 0 {
-		return nil
-	}
-
 	return q.queue.Peek()
 }
 
@@ -186,10 +182,6 @@ func (q *pricedQueue) Pop() interface{} {
 // Peek returns the first Interaction from the queue
 // or nil if the queue is empty.
 func (q *pricedQueue) Peek() *common.Interaction {
-	if q.Len() == 0 {
-		return nil
-	}
-
 	return q.queue.Peek()
 }
 
@@ -268,10 +260,6 @@ func (q *waitQueue) Pop() interface{} {
 // Peek returns the first Interaction from the queue
 // or nil if the queue is empty.
 func (q *waitQueue) Peek() *common.Interaction {
-	if q.Len() == 0 {
-		return nil
-	}
-
 	return q.queue.Peek()
 }
 
