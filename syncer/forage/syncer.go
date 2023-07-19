@@ -50,10 +50,6 @@ type lattice interface {
 		withInteractions bool,
 	) (*common.Tesseract, error)
 	ValidateTesseract(ts *common.Tesseract, ics *common.ICSNodeSet) error
-	FetchICSNodeSet(
-		ts *common.Tesseract,
-		info *common.ICSClusterInfo,
-	) (*common.ICSNodeSet, error)
 	IsInitialTesseract(ts *common.Tesseract) (bool, error)
 }
 
@@ -76,6 +72,10 @@ type stateManager interface {
 		hash common.Hash,
 		rawContext map[common.Hash][]byte,
 	) error
+	FetchICSNodeSet(
+		ts *common.Tesseract,
+		info *common.ICSClusterInfo,
+	) (*common.ICSNodeSet, error)
 	GetICSNodeSetFromRawContext(
 		ts *common.Tesseract,
 		rawContext map[common.Hash][]byte,
@@ -426,7 +426,7 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 					return nil
 				}
 
-				isTesseractAdded, err := s.syncTesseract(tsInfo, job)
+				isTesseractAdded, err := s.syncTesseract(tsInfo)
 				if err != nil {
 					job.tesseractQueue.Pop()
 
@@ -1286,15 +1286,32 @@ func (s *Syncer) areGridTesseractsStored(msg *TesseractInfo) bool {
 	return false
 }
 
-func (s *Syncer) syncTesseract(msg *TesseractInfo, job *SyncJob) (bool, error) {
+func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 	var err error
 
 	if msg.icsNodeSet == nil {
-		msg.icsNodeSet, err = s.state.GetICSNodeSetFromRawContext(msg.tesseract, msg.delta, msg.clusterInfo)
-		if err != nil {
-			s.logger.Error("Failed to fetch node set", "err", err)
+		for _, contextLock := range msg.tesseract.ContextLock() {
+			if contextLock.ContextHash.IsNil() {
+				continue
+			}
 
-			return false, nil
+			if _, ok := msg.delta[contextLock.ContextHash]; !ok {
+				msg.icsNodeSet, err = s.state.FetchICSNodeSet(msg.tesseract, msg.clusterInfo)
+				if err != nil {
+					s.logger.Error("Failed to fetch node set", "err", err)
+
+					return false, nil
+				}
+			} else {
+				msg.icsNodeSet, err = s.state.GetICSNodeSetFromRawContext(msg.tesseract, msg.delta, msg.clusterInfo)
+				if err != nil {
+					s.logger.Error("Failed to fetch node set", "err", err)
+
+					return false, nil
+				}
+			}
+
+			break
 		}
 	}
 

@@ -163,6 +163,7 @@ func TestFetchContextForAgora(t *testing.T) {
 	}
 }
 
+/*
 func TestFetchICSNodeSet(t *testing.T) {
 	address := tests.RandomAddress(t)
 	ctxHash := tests.RandomHash(t)
@@ -250,6 +251,8 @@ func TestFetchICSNodeSet(t *testing.T) {
 		})
 	}
 }
+
+*/
 
 func TestAddKnownHashes(t *testing.T) {
 	tesseracts := createTesseracts(t, 3, nil)

@@ -204,42 +204,6 @@ func (c *ChainManager) fetchContextForAgora(ts common.Tesseract) ([]id.KramaID, 
 	return peers, nil
 }
 
-func (c *ChainManager) FetchICSNodeSet(
-	ts *common.Tesseract,
-	info *common.ICSClusterInfo,
-) (*common.ICSNodeSet, error) {
-	icsNodeSets, err := c.sm.FetchContextLock(ts)
-	if err != nil {
-		return nil, err
-	}
-
-	if info.Responses == nil {
-		return nil, errors.New("nil responses slice")
-	}
-
-	for index, set := range icsNodeSets.Nodes {
-		if set != nil && info.Responses[index] != nil {
-			set.Responses = info.Responses[index]
-		}
-	}
-
-	randomSet, err := c.sm.GetNodeSet(info.RandomSet)
-	if err != nil {
-		return nil, err
-	}
-
-	icsNodeSets.UpdateNodeSet(common.RandomSet, randomSet)
-
-	observerSet, err := c.sm.GetNodeSet(info.ObserverSet)
-	if err != nil {
-		return nil, err
-	}
-
-	icsNodeSets.UpdateNodeSet(common.ObserverSet, observerSet)
-
-	return icsNodeSets, nil
-}
-
 func (c *ChainManager) AddKnownHashes(tesseracts []*common.Tesseract) {
 	for _, v := range tesseracts {
 		c.knownTesseracts.Add(v.Hash())

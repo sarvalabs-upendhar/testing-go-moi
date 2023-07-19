@@ -629,12 +629,6 @@ func (sm *MockStateManager) GetPublicKeys(id ...id.KramaID) ([][]byte, error) {
 	return keys, nil
 }
 
-func (sm *MockStateManager) insertPublicKeys(nodes []id.KramaID, pk [][]byte) {
-	for i, kramaID := range nodes {
-		sm.publicKeys[kramaID] = pk[i]
-	}
-}
-
 func (sm *MockStateManager) Cleanup(addrs common.Address) {
 	sm.cleanUp[addrs] = true
 }
@@ -1439,35 +1433,12 @@ func getPublicKeys(t *testing.T, count int) [][]byte {
 	return pk
 }
 
-// if randomSet is empty random set is filled with random nodes
-func getTestClusterInfoWithRandomSet(t *testing.T, randomSet []id.KramaID, idCount int) *common.ICSClusterInfo {
-	t.Helper()
-
-	info := new(common.ICSClusterInfo)
-	info.Responses = make([]*common.ArrayOfBits, 6)
-
-	if len(randomSet) == 0 {
-		info.RandomSet = tests.GetTestKramaIDs(t, idCount)
-	} else {
-		info.RandomSet = randomSet
-	}
-
-	return info
-}
-
 func insertTesseractByHeight(t *testing.T, db store, ts *common.Tesseract) {
 	t.Helper()
 
 	err := db.SetTesseractHeightEntry(ts.Address(), ts.Height(), ts.Hash())
 	require.NoError(t, err)
 }
-
-// func insertAssetDataByAssetHashInDB(t *testing.T, db db, assetHash types.Hash, assetData []byte) {
-//	t.Helper()
-//
-//	err := db.CreateEntry(assetHash.Bytes(), assetData)
-//	require.NoError(t, err)
-//}
 
 func getICSNodeset(t *testing.T, count int) *common.ICSNodeSet {
 	t.Helper()
@@ -2013,6 +1984,7 @@ func checkIfTesseractAdded(
 	require.True(t, ixPool.IsReset(ts.Hash()))  // check if interactions are reset
 }
 
+/*
 func checkIfICSNodeSetMatches(
 	t *testing.T,
 	ics *common.ICSNodeSet,
@@ -2035,6 +2007,7 @@ func checkIfICSNodeSetMatches(
 		randomSet,
 	)
 }
+*/
 
 func checkIfTesseractCachedInCM(t *testing.T, c *ChainManager, withInteractions bool, tsHash common.Hash) {
 	t.Helper()
