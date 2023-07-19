@@ -155,7 +155,14 @@ func registerGuardian(vault *crypto.KramaVault) {
 	}
 
 	if isGuardianRegistered(client, vault.KramaID()) {
-		cmdCommon.Err(errors.New("Guardian already registered"))
+		fmt.Println("Guardian already registered, updating details")
+
+		err = registerWithWatchDog(localRPC, vault)
+		if err != nil {
+			cmdCommon.Err(err)
+		}
+
+		return
 	}
 
 	moiID, err := vault.MoiID()
