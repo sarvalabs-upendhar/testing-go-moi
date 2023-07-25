@@ -570,6 +570,29 @@ func (c *Client) AccountMetaInfo(args *rpcargs.GetAccountArgs) (*rpcargs.RPCAcco
 	return &accMetaInfo, nil
 }
 
+// FuelEstimate returns an estimate of the fuel that is required for executing an interaction
+func (c *Client) FuelEstimate(args *rpcargs.IxArgs) (*hexutil.Big, error) {
+	var resp rpcargs.Response
+
+	err := c.Call(&resp, "moi.FuelEstimate", args)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+
+	var fuelUsed *hexutil.Big
+
+	err = json.Unmarshal(resp.Data, &fuelUsed)
+	if err != nil {
+		return nil, err
+	}
+
+	return fuelUsed, nil
+}
+
 // InteractionCall returns stateless version of an interaction submit
 func (c *Client) InteractionCall(args *rpcargs.IxArgs) (*rpcargs.RPCReceipt, error) {
 	var resp rpcargs.Response

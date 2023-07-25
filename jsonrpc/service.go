@@ -476,6 +476,30 @@ func (r *Service) AccountMetaInfo(
 	return nil
 }
 
+// FuelEstimate returns an estimate of the fuel that is required for executing an interaction
+func (r *Service) FuelEstimate(req *http.Request, args *rpcargs.IxArgs, resp *rpcargs.Response) error {
+	coreAPI, ok := r.apis["core"].(*api2.PublicCoreAPI)
+	if !ok {
+		return common.ErrInvalidAPI
+	}
+
+	fuelConsumed, err := coreAPI.FuelEstimate(args)
+	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	resp.Data, err = json.Marshal(fuelConsumed)
+	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	return nil
+}
+
 /* RPC methods that are associated with the ix namespace. */
 
 // SendInteractions is a method of Service that sends Interactions

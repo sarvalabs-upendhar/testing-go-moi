@@ -65,6 +65,9 @@ func TestMoiClient(t *testing.T) {
 		"GetBalance": {
 			test: func(t *testing.T) { testGetBalance(t, client, addrsMap) },
 		},
+		"FuelEstimate": {
+			test: func(t *testing.T) { testFuelEstimate(t, client, addrsMap["assetAddr"]) },
+		},
 		"TDU": {
 			test: func(t *testing.T) { testTDU(t, client, addrsMap["assetAddr"]) },
 		},
@@ -655,6 +658,53 @@ func testGetBalance(t *testing.T, client *Client, addrsMap StrMap) {
 
 			httpBalance := httpGetBalance(t, test.balanceArgs)
 			require.Equal(t, httpBalance, balance)
+		})
+	}
+}
+
+func testFuelEstimate(t *testing.T, client *Client, addr common.Address) {
+	ts := getTesseract(t, client, addr, &createAssetHeight)
+	supply, _ := new(big.Int).SetString("130D52", 16)
+
+	assetCreationPayload := &common.AssetCreatePayload{
+		Symbol: "ASSETCREATE",
+		Supply: supply,
+	}
+
+	assetCreatePayload, err := polo.Polorize(assetCreationPayload)
+	require.NoError(t, err)
+
+	testcases := []struct {
+		name                 string
+		IxArgs               *rpcargs.IxArgs
+		expectedFuelConsumed *hexutil.Big
+		expectedError        error
+	}{
+		{
+			name: "retrieved fuel used in asset create interaction",
+			IxArgs: &rpcargs.IxArgs{
+				Type:      common.IxAssetCreate,
+				Sender:    ts.Address(),
+				Nonce:     hexutil.Uint64(5),
+				FuelPrice: (*hexutil.Big)(big.NewInt(1)),
+				FuelLimit: (*hexutil.Big)(big.NewInt(200)),
+				Payload:   (hexutil.Bytes)(assetCreatePayload),
+			},
+			expectedFuelConsumed: (*hexutil.Big)(big.NewInt(100)),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			fuelConsumed, err := client.FuelEstimate(test.IxArgs)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, fuelConsumed, test.expectedFuelConsumed)
 		})
 	}
 }

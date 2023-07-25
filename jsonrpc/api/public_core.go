@@ -19,13 +19,14 @@ type PublicCoreAPI struct {
 	ixpool IxPool
 	chain  ChainManager
 	sm     StateManager
+	exec   ExecutionManager
 }
 
 // NewPublicCoreAPI is a constructor function that generates and returns a new
 // PublicCoreAPI object for a given API backend object.
-func NewPublicCoreAPI(ixpool IxPool, chain ChainManager, sm StateManager) *PublicCoreAPI {
+func NewPublicCoreAPI(ixpool IxPool, chain ChainManager, sm StateManager, exec ExecutionManager) *PublicCoreAPI {
 	// Create the core public API wrapper and return it
-	return &PublicCoreAPI{ixpool, chain, sm}
+	return &PublicCoreAPI{ixpool, chain, sm, exec}
 }
 
 func getTesseractArgs(address common.Address, options rpcargs.TesseractNumberOrHash) *rpcargs.TesseractArgs {
@@ -440,6 +441,26 @@ func (p *PublicCoreAPI) AccountMetaInfo(args *rpcargs.GetAccountArgs) (map[strin
 	}
 
 	return rpcAccMetaInfo, nil
+}
+
+// FuelEstimate returns an estimate of the fuel that is required for executing an interaction
+func (p *PublicCoreAPI) FuelEstimate(args *rpcargs.IxArgs) (*hexutil.Big, error) {
+	sendIXArgs, err := createSendIXArgs(args)
+	if err != nil {
+		return nil, err
+	}
+
+	ix, err := constructInteraction(sendIXArgs, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	receipt, err := p.exec.InteractionCall(ix)
+	if err != nil {
+		return nil, err
+	}
+
+	return (*hexutil.Big)(receipt.FuelUsed), nil
 }
 
 // createRPCInteraction creates an RPC Interaction by copying all fields of the interaction into the RPC Interaction,
