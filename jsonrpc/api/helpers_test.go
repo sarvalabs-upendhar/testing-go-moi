@@ -15,7 +15,6 @@ import (
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/utils"
-	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/crypto"
 
 	"github.com/sarvalabs/go-polo"
@@ -395,34 +394,29 @@ func (s *MockStateManager) setLogicManifest(logicID string, logicManifest []byte
 }
 
 type MockExecutionManager struct {
-	logicCall map[common.Address]*rpcargs.LogicCallResult
+	call map[common.Hash]*common.Receipt
 }
 
 func NewMockExecutionManager(t *testing.T) *MockExecutionManager {
 	t.Helper()
 
 	exec := new(MockExecutionManager)
-	exec.logicCall = make(map[common.Address]*rpcargs.LogicCallResult)
+	exec.call = make(map[common.Hash]*common.Receipt)
 
 	return exec
 }
 
-func (exec *MockExecutionManager) setLogicCall(addr common.Address, logicCallResult *rpcargs.LogicCallResult) {
-	exec.logicCall[addr] = logicCallResult
+func (exec *MockExecutionManager) setInteractionCall(ix *common.Interaction, receipt *common.Receipt) {
+	exec.call[ix.Hash()] = receipt
 }
 
-func (exec *MockExecutionManager) LogicCall(
-	logicID common.LogicID,
-	addr common.Address,
-	callsite string,
-	calldata []byte,
-) (engineio.Fuel, *common.LogicInvokeReceipt, error) {
-	logicCall, ok := exec.logicCall[addr]
+func (exec *MockExecutionManager) InteractionCall(ix *common.Interaction) (*common.Receipt, error) {
+	receipt, ok := exec.call[ix.Hash()]
 	if !ok {
-		return nil, nil, common.ErrAccountNotFound
+		return nil, common.ErrAccountNotFound
 	}
 
-	return logicCall.Consumed.ToInt(), &common.LogicInvokeReceipt{Outputs: logicCall.Outputs, Error: logicCall.Error}, nil
+	return receipt, nil
 }
 
 type MockIxPool struct {

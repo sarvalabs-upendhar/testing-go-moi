@@ -524,29 +524,6 @@ func (c *Client) LogicManifest(args *rpcargs.LogicManifestArgs) (hexutil.Bytes, 
 	return res, nil
 }
 
-// LogicCall supports call to logics that do not transition state
-func (c *Client) LogicCall(args *rpcargs.LogicCallArgs) (*rpcargs.LogicCallResult, error) {
-	var resp rpcargs.Response
-
-	err := c.Call(&resp, "moi.LogicCall", args)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.Error != nil {
-		return nil, resp.Error
-	}
-
-	var res *rpcargs.LogicCallResult
-
-	err = json.Unmarshal(resp.Data, &res)
-	if err != nil {
-		return nil, err
-	}
-
-	return res, nil
-}
-
 // SendInteractions sends given Interactions
 func (c *Client) SendInteractions(args *rpcargs.SendIX) (common.Hash, error) {
 	var resp rpcargs.Response
@@ -591,6 +568,29 @@ func (c *Client) AccountMetaInfo(args *rpcargs.GetAccountArgs) (*rpcargs.RPCAcco
 	}
 
 	return &accMetaInfo, nil
+}
+
+// InteractionCall returns stateless version of an interaction submit
+func (c *Client) InteractionCall(args *rpcargs.IxArgs) (*rpcargs.RPCReceipt, error) {
+	var resp rpcargs.Response
+
+	err := c.Call(&resp, "moi.Call", args)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+
+	var receipt rpcargs.RPCReceipt
+
+	err = json.Unmarshal(resp.Data, &receipt)
+	if err != nil {
+		return nil, err
+	}
+
+	return &receipt, nil
 }
 
 // Content returns the interactions present in the given IxPool.

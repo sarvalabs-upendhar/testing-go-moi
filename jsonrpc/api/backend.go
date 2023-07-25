@@ -6,7 +6,6 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	id "github.com/sarvalabs/go-moi/common/kramaid"
-	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/state"
 )
 
@@ -45,7 +44,7 @@ type StateManager interface {
 }
 
 type ExecutionManager interface {
-	LogicCall(common.LogicID, common.Address, string, []byte) (engineio.Fuel, *common.LogicInvokeReceipt, error)
+	InteractionCall(ix *common.Interaction) (*common.Receipt, error)
 }
 
 type Network interface {

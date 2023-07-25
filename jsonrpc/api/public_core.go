@@ -18,15 +18,14 @@ type PublicCoreAPI struct {
 	// Represents the API backend
 	ixpool IxPool
 	chain  ChainManager
-	exec   ExecutionManager
 	sm     StateManager
 }
 
 // NewPublicCoreAPI is a constructor function that generates and returns a new
 // PublicCoreAPI object for a given API backend object.
-func NewPublicCoreAPI(ixpool IxPool, chain ChainManager, sm StateManager, exec ExecutionManager) *PublicCoreAPI {
+func NewPublicCoreAPI(ixpool IxPool, chain ChainManager, sm StateManager) *PublicCoreAPI {
 	// Create the core public API wrapper and return it
-	return &PublicCoreAPI{ixpool, chain, exec, sm}
+	return &PublicCoreAPI{ixpool, chain, sm}
 }
 
 func getTesseractArgs(address common.Address, options rpcargs.TesseractNumberOrHash) *rpcargs.TesseractArgs {
@@ -441,22 +440,6 @@ func (p *PublicCoreAPI) AccountMetaInfo(args *rpcargs.GetAccountArgs) (map[strin
 	}
 
 	return rpcAccMetaInfo, nil
-}
-
-// LogicCall supports call to logics that do not transition state
-func (p *PublicCoreAPI) LogicCall(args *rpcargs.LogicCallArgs) (*rpcargs.LogicCallResult, error) {
-	consumed, receipt, err := p.exec.LogicCall(args.LogicID, args.Invoker, args.Callsite, args.Calldata)
-	if err != nil {
-		return nil, err
-	}
-
-	logicCallResult := &rpcargs.LogicCallResult{
-		Consumed: (hexutil.Big)(*consumed),
-		Outputs:  receipt.Outputs,
-		Error:    receipt.Error,
-	}
-
-	return logicCallResult, nil
 }
 
 // createRPCInteraction creates an RPC Interaction by copying all fields of the interaction into the RPC Interaction,

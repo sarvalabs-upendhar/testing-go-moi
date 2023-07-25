@@ -476,34 +476,6 @@ func (r *Service) AccountMetaInfo(
 	return nil
 }
 
-// LogicCall supports call to logics that do not transition state
-func (r *Service) LogicCall(
-	req *http.Request,
-	args *rpcargs.LogicCallArgs,
-	resp *rpcargs.Response,
-) error {
-	coreAPI, ok := r.apis["core"].(*api2.PublicCoreAPI)
-	if !ok {
-		return common.ErrInvalidAPI
-	}
-
-	logicCallResult, err := coreAPI.LogicCall(args)
-	if err != nil {
-		resp.Error = &rpcargs.JSONError{Message: err.Error()}
-
-		return nil
-	}
-
-	resp.Data, err = json.Marshal(logicCallResult)
-	if err != nil {
-		resp.Error = &rpcargs.JSONError{Message: err.Error()}
-
-		return nil
-	}
-
-	return nil
-}
-
 /* RPC methods that are associated with the ix namespace. */
 
 // SendInteractions is a method of Service that sends Interactions
@@ -522,6 +494,31 @@ func (r *Service) SendInteractions(req *http.Request, args *rpcargs.SendIX, resp
 	}
 
 	resp.Data, err = json.Marshal(ix.Hash())
+	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	return nil
+}
+
+// Call supports call to logics that do not transition state
+func (r *Service) Call(req *http.Request, args *rpcargs.IxArgs, resp *rpcargs.Response) error {
+	// Retrieve the public ix API
+	ixAPI, ok := r.apis["ix"].(*api2.PublicIXAPI)
+	if !ok {
+		return common.ErrInvalidAPI
+	}
+
+	data, err := ixAPI.Call(args)
+	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	resp.Data, err = json.Marshal(data)
 	if err != nil {
 		resp.Error = &rpcargs.JSONError{Message: err.Error()}
 

@@ -112,7 +112,7 @@ func (manager *Manager) InteractionCall(ix *common.Interaction) (*common.Receipt
 	}
 
 	// Run the interaction and return the receipt
-	return manager.runInteraction(ix, objects, false)
+	return manager.runInteraction(ix, objects, true)
 }
 
 func (manager *Manager) runInteraction(

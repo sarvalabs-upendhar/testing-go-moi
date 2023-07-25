@@ -467,20 +467,6 @@ func httpLogicIDs(t *testing.T, args *rpcargs.GetLogicIDArgs) []common.LogicID {
 	return logicIDs
 }
 
-// httpLogicCall returns the LogicCallResult of the given address
-func httpLogicCall(t *testing.T, args *rpcargs.LogicCallArgs) *rpcargs.LogicCallResult {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "moi.LogicCall", args)
-
-	var logicCall *rpcargs.LogicCallResult
-
-	err := json.Unmarshal(resp.Data, &logicCall)
-	require.NoError(t, err)
-
-	return logicCall
-}
-
 // httpLogicManifest returns the manifest associated with the given logic id
 func httpLogicManifest(t *testing.T, args *rpcargs.LogicManifestArgs) hexutil.Bytes {
 	t.Helper()

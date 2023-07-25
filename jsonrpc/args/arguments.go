@@ -33,19 +33,6 @@ type IxPoolArgs struct {
 	Address common.Address `json:"address"`
 }
 
-type LogicCallResult struct {
-	Consumed hexutil.Big   `json:"consumed"`
-	Outputs  hexutil.Bytes `json:"outputs"`
-	Error    hexutil.Bytes `json:"error"`
-}
-
-type LogicCallArgs struct {
-	Invoker  common.Address `json:"invoker"`
-	LogicID  common.LogicID `json:"logic_id"`
-	Callsite string         `json:"callsite"`
-	Calldata hexutil.Bytes  `json:"calldata"`
-}
-
 type InspectArgs struct{}
 
 type StatusArgs struct{}
@@ -97,6 +84,23 @@ type BalArgs struct {
 type SendIX struct {
 	IXArgs    string `json:"ix_args"`
 	Signature string `json:"signature"`
+}
+
+type IxArgs struct {
+	Type  common.IxType  `json:"type"`
+	Nonce hexutil.Uint64 `json:"nonce"`
+
+	Sender   common.Address `json:"sender"`
+	Receiver common.Address `json:"receiver"`
+	Payer    common.Address `json:"payer"`
+
+	TransferValues  map[common.AssetID]*hexutil.Big `json:"transfer_values"`
+	PerceivedValues map[common.AssetID]*hexutil.Big `json:"perceived_values"`
+
+	FuelPrice *hexutil.Big `json:"fuel_price"`
+	FuelLimit *hexutil.Big `json:"fuel_limit"`
+
+	Payload hexutil.Bytes `json:"payload"`
 }
 
 type RPCAssetCreation struct {

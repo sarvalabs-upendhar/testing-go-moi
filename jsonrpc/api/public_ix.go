@@ -2,6 +2,9 @@ package api
 
 import (
 	"encoding/hex"
+	"math/big"
+
+	"github.com/sarvalabs/go-moi/common/hexutil"
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
@@ -17,11 +20,12 @@ type PublicIXAPI struct {
 	// Represents the API backend
 	ixpool IxPool
 	sm     StateManager
+	exec   ExecutionManager
 }
 
-func NewPublicIXAPI(ixpool IxPool, sm StateManager) *PublicIXAPI {
+func NewPublicIXAPI(ixpool IxPool, sm StateManager, exec ExecutionManager) *PublicIXAPI {
 	// Create the public interaction API wrapper and return it
-	return &PublicIXAPI{ixpool, sm}
+	return &PublicIXAPI{ixpool, sm, exec}
 }
 
 // SendInteraction is a method of PublicIXAPI that stores the interaction
@@ -48,6 +52,31 @@ func (p *PublicIXAPI) SendInteraction(sendIx *rpcargs.SendIX) (*common.Interacti
 	}
 
 	return ixn, nil
+}
+
+// Call is a method of PublicIXAPI that is a stateless version of an interaction submit
+func (p *PublicIXAPI) Call(sendIx *rpcargs.IxArgs) (*rpcargs.RPCReceipt, error) {
+	sendIXArgs, err := createSendIXArgs(sendIx)
+	if err != nil {
+		return nil, err
+	}
+
+	ix, err := constructInteraction(sendIXArgs, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	receipt, err := p.exec.InteractionCall(ix)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &rpcargs.RPCReceipt{
+		FuelUsed:  hexutil.Big(*receipt.FuelUsed),
+		ExtraData: receipt.ExtraData,
+	}
+
+	return result, nil
 }
 
 // helper function
@@ -115,4 +144,33 @@ func validateArgumentsWithSign(args *rpcargs.SendIX) (*common.SendIXArgs, error)
 	// TODO: Add more checks to validate inputs
 
 	return ixArgs, nil
+}
+
+func createSendIXArgs(sendIx *rpcargs.IxArgs) (*common.SendIXArgs, error) {
+	sendIXArgs := &common.SendIXArgs{
+		Type:      sendIx.Type,
+		Nonce:     sendIx.Nonce.ToUint64(),
+		Sender:    sendIx.Sender,
+		Receiver:  sendIx.Receiver,
+		Payer:     sendIx.Payer,
+		FuelPrice: sendIx.FuelPrice.ToInt(),
+		FuelLimit: sendIx.FuelLimit.ToInt(),
+		Payload:   sendIx.Payload.Bytes(),
+	}
+
+	if len(sendIx.TransferValues) > 0 {
+		sendIXArgs.TransferValues = make(map[common.AssetID]*big.Int)
+		for asset, amount := range sendIx.TransferValues {
+			sendIXArgs.TransferValues[asset] = amount.ToInt()
+		}
+	}
+
+	if len(sendIx.PerceivedValues) > 0 {
+		sendIXArgs.PerceivedValues = make(map[common.AssetID]*big.Int)
+		for asset, amount := range sendIx.PerceivedValues {
+			sendIXArgs.PerceivedValues[asset] = amount.ToInt()
+		}
+	}
+
+	return sendIXArgs, nil
 }

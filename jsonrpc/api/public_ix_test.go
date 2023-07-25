@@ -6,6 +6,9 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/sarvalabs/go-moi/common/hexutil"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 
@@ -109,7 +112,7 @@ func TestIx_SendInteraction(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ixpool := NewMockIxPool(t)
 			stateManager := NewMockStateManager(t)
-			ixAPI := NewPublicIXAPI(ixpool, stateManager)
+			ixAPI := NewPublicIXAPI(ixpool, stateManager, nil)
 
 			if test.preTestFn != nil {
 				test.preTestFn(ixpool, stateManager)
@@ -133,6 +136,84 @@ func TestIx_SendInteraction(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, test.expected, ixn)
 			require.Equal(t, len(ixpool.interactions), 1)
+		})
+	}
+}
+
+func TestIx_Call(t *testing.T) {
+	addr := tests.RandomAddress(t)
+	assetPayload := common.AssetCreatePayload{}
+	rawAssetPayload, err := assetPayload.Bytes()
+	require.NoError(t, err)
+
+	exec := NewMockExecutionManager(t)
+	ixAPI := NewPublicIXAPI(nil, nil, exec)
+
+	IxArgs := &common.SendIXArgs{
+		Type:      common.IxAssetCreate,
+		Sender:    addr,
+		Nonce:     4,
+		FuelPrice: big.NewInt(1),
+		FuelLimit: big.NewInt(100),
+		Payload:   rawAssetPayload,
+	}
+
+	ix, err := constructInteraction(IxArgs, nil)
+	assert.NoError(t, err)
+
+	receipt := &common.Receipt{
+		FuelUsed:  big.NewInt(100),
+		ExtraData: rawAssetPayload,
+	}
+
+	exec.setInteractionCall(ix, receipt)
+
+	testcases := []struct {
+		name            string
+		sendIXArgs      *rpcargs.IxArgs
+		expectedReceipt *rpcargs.RPCReceipt
+		expectedErr     error
+	}{
+		{
+			name: "failed to construct interaction",
+			sendIXArgs: &rpcargs.IxArgs{
+				Type:      common.IxInvalid,
+				Sender:    addr,
+				Nonce:     hexutil.Uint64(3),
+				FuelPrice: (*hexutil.Big)(big.NewInt(1)),
+				FuelLimit: (*hexutil.Big)(big.NewInt(100)),
+				Payload:   (hexutil.Bytes)(rawAssetPayload),
+			},
+			expectedErr: errors.New("invalid interaction type"),
+		},
+		{
+			name: "rpc receipt fetched successfully",
+			sendIXArgs: &rpcargs.IxArgs{
+				Type:      common.IxAssetCreate,
+				Sender:    addr,
+				Nonce:     hexutil.Uint64(4),
+				FuelPrice: (*hexutil.Big)(big.NewInt(1)),
+				FuelLimit: (*hexutil.Big)(big.NewInt(100)),
+				Payload:   (hexutil.Bytes)(rawAssetPayload),
+			},
+			expectedReceipt: &rpcargs.RPCReceipt{
+				FuelUsed:  hexutil.Big(*big.NewInt(100)),
+				ExtraData: rawAssetPayload,
+			},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			ixn, err := ixAPI.Call(test.sendIXArgs)
+			if test.expectedErr != nil {
+				require.ErrorContains(t, err, test.expectedErr.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedReceipt, ixn)
 		})
 	}
 }

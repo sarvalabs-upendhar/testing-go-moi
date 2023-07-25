@@ -92,9 +92,6 @@ func TestMoiClient(t *testing.T) {
 		"LogicManifest": {
 			test: func(t *testing.T) { testLogicManifest(t, client, addrsMap["deployAddr"]) },
 		},
-		"LogicCall": {
-			test: func(t *testing.T) { testLogicCall(t, client, addrsMap["deployAddr"]) },
-		},
 		"Content": {
 			test: func(t *testing.T) { testContent(t, client) },
 		},
@@ -121,6 +118,9 @@ func TestMoiClient(t *testing.T) {
 		},
 		"SendInteraction": {
 			test: func(t *testing.T) { testSendInteraction(t, client) },
+		},
+		"Call": {
+			test: func(t *testing.T) { testCall(t, client, addrsMap["assetAddr"]) },
 		},
 		"ixByHash": {
 			test: func(t *testing.T) { testInteractionByHash(t, client, addrsMap["deployAddr"]) },
@@ -1135,56 +1135,6 @@ func testLogicManifest(t *testing.T, client *Client, addr common.Address) {
 	}
 }
 
-func testLogicCall(t *testing.T, client *Client, addr common.Address) {
-	logicID := getLogicID(t, client, addr, &deployLogicHeight)
-	calldata := "0x0daf010665a601e501f6059506616d6f756e74030f424066726f6d06ffcd8ee6a29ec442dbbf9c6124dd3aeb833ef58" +
-		"052237d521654740857716b34746f060fafe52ec42a85db644d5cceba2bb89cf5b0166cc9158211f44ed1e60b06032c"
-
-	testcases := []struct {
-		name              string
-		logicCallArgs     *rpcargs.LogicCallArgs
-		expectedLogicCall *rpcargs.LogicCallResult
-		expectedError     error
-	}{
-		{
-			name: "fetched logic call result successfully",
-			logicCallArgs: &rpcargs.LogicCallArgs{
-				Invoker:  logicID.Address(),
-				LogicID:  logicID,
-				Callsite: "Transfer!",
-				Calldata: common.Hex2Bytes(calldata),
-			},
-		},
-		{
-			name: "fetch logic call result for non-existing address and logicID",
-			logicCallArgs: &rpcargs.LogicCallArgs{
-				Invoker:  tests.RandomAddress(t),
-				LogicID:  "0200000070c34ed6ec4384c75d469894052647a078b33ac0f08db0d3751c1fce29a49f",
-				Callsite: "Transfer!",
-				Calldata: common.Hex2Bytes(calldata),
-			},
-			expectedError: common.ErrAccountNotFound,
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			logicCall, err := client.LogicCall(test.logicCallArgs)
-
-			if test.expectedError != nil {
-				require.ErrorContains(t, err, test.expectedError.Error())
-
-				return
-			}
-
-			require.NoError(t, err)
-
-			httpLogicCall := httpLogicCall(t, test.logicCallArgs)
-			require.Equal(t, httpLogicCall, logicCall)
-		})
-	}
-}
-
 func testContent(t *testing.T, client *Client) {
 	testcases := []struct {
 		name          string
@@ -1615,6 +1565,73 @@ func testAccountMetaInfo(t *testing.T, client *Client) {
 			require.Equal(t, httpAccountMetaInfo, accountMetaInfoResponse)
 			require.Equal(t, common.SargaAddress, accountMetaInfoResponse.Address)
 			require.Equal(t, common.SargaAccount, accountMetaInfoResponse.Type)
+		})
+	}
+}
+
+func testCall(t *testing.T, client *Client, addr common.Address) {
+	ts := getTesseract(t, client, addr, &createAssetHeight)
+	supply, _ := new(big.Int).SetString("130D46", 16)
+
+	assetCreationPayload := &common.AssetCreatePayload{
+		Symbol: "MOITOKEN",
+		Supply: supply,
+	}
+
+	assetCreatePayload, err := polo.Polorize(assetCreationPayload)
+	require.NoError(t, err)
+
+	expectedAssetAddr := common.NewAccountAddress(4, ts.Address())
+	expectedAssetID := common.NewAssetIDv0(false, false, 0, 0, expectedAssetAddr)
+
+	extraData := &common.AssetCreationReceipt{
+		AssetID:      expectedAssetID,
+		AssetAccount: expectedAssetAddr,
+	}
+
+	expectedReceipt := common.Receipt{
+		FuelUsed: big.NewInt(100),
+	}
+
+	err = expectedReceipt.SetExtraData(extraData)
+	if err != nil {
+		return
+	}
+
+	testcases := []struct {
+		name            string
+		sendIxArgs      *rpcargs.IxArgs
+		expectedReceipt *rpcargs.RPCReceipt
+		expectedError   error
+	}{
+		{
+			name: "fetched rpc receipt successfully",
+			sendIxArgs: &rpcargs.IxArgs{
+				Type:      common.IxAssetCreate,
+				Sender:    ts.Address(),
+				Nonce:     hexutil.Uint64(4),
+				FuelPrice: (*hexutil.Big)(big.NewInt(1)),
+				FuelLimit: (*hexutil.Big)(big.NewInt(200)),
+				Payload:   (hexutil.Bytes)(assetCreatePayload),
+			},
+			expectedReceipt: &rpcargs.RPCReceipt{
+				FuelUsed:  (hexutil.Big)(*expectedReceipt.FuelUsed),
+				ExtraData: expectedReceipt.ExtraData,
+			},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			receipt, err := client.InteractionCall(test.sendIxArgs)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedReceipt, receipt)
 		})
 	}
 }
