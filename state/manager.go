@@ -1204,7 +1204,7 @@ func (sm *StateManager) GetLogicManifest(logicID common.LogicID, stateHash commo
 		return nil, errors.Wrap(err, "failed to fetch logic object")
 	}
 
-	logicManifest, err := sm.db.ReadEntry(common.FromHex(logicObject.ManifestHash.Hex()))
+	logicManifest, err := sm.db.ReadEntry(storage.LogicManifestKey(logicID.Address(), logicObject.ManifestHash))
 	if err != nil {
 		return nil, errors.Wrap(err, common.ErrFetchingLogicManifest.Error())
 	}

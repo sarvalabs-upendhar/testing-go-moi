@@ -41,8 +41,10 @@ type LogicDriver interface {
 // LogicDescriptor represents an object that describes the internal
 // components and characteristics of a Logic implementation
 type LogicDescriptor struct {
-	Engine   EngineKind
-	Manifest common.Hash
+	Engine EngineKind
+
+	ManifestRaw  []byte
+	ManifestHash common.Hash
 
 	Interactive bool
 	StateMatrix ContextStateMatrix

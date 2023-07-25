@@ -48,7 +48,7 @@ func NewLogicObject(address common.Address, descriptor *engineio.LogicDescriptor
 	return &LogicObject{
 		ID:           logicID,
 		EngineKind:   descriptor.Engine,
-		ManifestHash: descriptor.Manifest,
+		ManifestHash: descriptor.ManifestHash,
 
 		Sealed:      false,
 		AssetLogic:  false,

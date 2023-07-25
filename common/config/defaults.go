@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	DefaultFuelLimit    = big.NewInt(5000)
+	DefaultFuelLimit    = big.NewInt(10000)
 	DefaultIxPriceLimit = big.NewInt(1)
 )
 

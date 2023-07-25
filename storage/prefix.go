@@ -17,6 +17,7 @@ const (
 	Approvals       Prefix = 0x07
 	PreImage        Prefix = 0x08
 	TesseractHeight Prefix = 0x09
+	LogicManifest   Prefix = 0x0A
 )
 
 // Non-Account Based Key Prefixes

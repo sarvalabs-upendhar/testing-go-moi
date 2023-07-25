@@ -17,6 +17,25 @@ const (
 	ReceiptFailed
 )
 
+type Receipt struct {
+	IxType IxType        `json:"ix_type"`
+	IxHash Hash          `json:"ix_hash"`
+	Status ReceiptStatus `json:"status"`
+
+	FuelUsed  *big.Int         `json:"fuel_used"`
+	Hashes    ReceiptAccHashes `json:"hashes"`
+	ExtraData json.RawMessage  `json:"extra_data"`
+}
+
+func NewReceipt(ix *Interaction) *Receipt {
+	return &Receipt{
+		IxType:   ix.Type(),
+		IxHash:   ix.Hash(),
+		Hashes:   make(ReceiptAccHashes),
+		FuelUsed: new(big.Int),
+	}
+}
+
 type Hashes struct {
 	StateHash   Hash `json:"state_hash"`
 	ContextHash Hash `json:"context_hash"`
@@ -65,16 +84,6 @@ func (h ReceiptAccHashes) StateHash(addr Address) Hash {
 	return hashes.StateHash
 }
 
-type Receipt struct {
-	IxType IxType        `json:"ix_type"`
-	IxHash Hash          `json:"ix_hash"`
-	Status ReceiptStatus `json:"status"`
-
-	FuelUsed  *big.Int         `json:"fuel_used"`
-	Hashes    ReceiptAccHashes `json:"hashes"`
-	ExtraData json.RawMessage  `json:"extra_data"`
-}
-
 func (h ReceiptAccHashes) Copy() ReceiptAccHashes {
 	if len(h) == 0 {
 		return nil
@@ -109,8 +118,8 @@ func (r *Receipt) Copy() *Receipt {
 	return &receipt
 }
 
-func (r *Receipt) IncreaseFuelUsed(fuel *big.Int) {
-	r.FuelUsed = new(big.Int).Add(r.FuelUsed, fuel)
+func (r *Receipt) SetFuelUsed(fuel *big.Int) {
+	r.FuelUsed = fuel
 }
 
 func (r *Receipt) SetExtraData(data interface{}) error {

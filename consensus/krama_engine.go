@@ -89,7 +89,7 @@ type ixPool interface {
 }
 
 type execution interface {
-	ExecuteInteractions(common.ClusterID, common.Interactions, common.ContextDelta) (common.Receipts, error)
+	ExecuteInteractions(common.Interactions, common.ClusterID, common.ContextDelta) (common.Receipts, error)
 	Revert(common.ClusterID) error
 	Cleanup(common.ClusterID)
 }
@@ -1123,8 +1123,8 @@ func (k *Engine) createProposalGrid(slot *ktypes.Slot) ([]*common.Tesseract, err
 	}
 
 	receipts, err := k.exec.ExecuteInteractions(
-		clusterState.ClusterID,
 		clusterState.Ixs,
+		clusterState.ClusterID,
 		clusterState.GetContextDelta(),
 	)
 	if err != nil {

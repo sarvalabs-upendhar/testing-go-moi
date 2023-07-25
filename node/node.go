@@ -47,7 +47,7 @@ type Node struct {
 	state               *state.StateManager
 	chain               *lattice.ChainManager
 	senatus             *senatus.ReputationEngine
-	exec                *compute.ExecutionManager
+	exec                *compute.Manager
 	kramaEngine         *consensus.Engine
 	db                  *storage.PersistenceManager
 	ixpool              *ixpool.IxPool

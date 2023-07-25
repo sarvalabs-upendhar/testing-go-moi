@@ -95,7 +95,7 @@ func InitEnvironment(dirpath string) error {
 		labdir: dirpath,
 
 		Config: LabConfig{
-			BaseFuel: engineio.NewFuel(5000),
+			BaseFuel: engineio.NewFuel(10000),
 			HexBig:   true,
 			HexBytes: true,
 		},

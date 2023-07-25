@@ -5,11 +5,12 @@ import (
 	"math/big"
 
 	"github.com/decred/dcrd/crypto/blake256"
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
 
 	"github.com/sarvalabs/go-moi/common"
 	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"
 )
@@ -545,6 +546,27 @@ func (object *Object) CreateAsset(addr common.Address, descriptor *common.AssetD
 	}
 
 	return assetID, nil
+}
+
+func (object *Object) CreateLogic(descriptor *engineio.LogicDescriptor) (common.LogicID, error) {
+	// Generate the key for the LogicManifest from its hash
+	key := common.BytesToHex(storage.LogicManifestKey(object.Address(), descriptor.ManifestHash))
+	// Write the manifest into the dirty entries
+	object.SetDirtyEntry(key, descriptor.ManifestRaw)
+
+	// Create a new LogicObject from the LogicDescriptor
+	logicObject := NewLogicObject(object.Address(), descriptor)
+	// Insert the LogicObject into the state object
+	if err := object.InsertNewLogicObject(logicObject.LogicID(), logicObject); err != nil {
+		return "", errors.Wrap(err, "could not insert logic object into state object")
+	}
+
+	// Initialize a storage tree for the LogicID on the state object
+	if err := object.CreateStorageTreeForLogic(logicObject.LogicID()); err != nil {
+		return "", errors.Wrap(err, "could not init storage tree for logic")
+	}
+
+	return logicObject.LogicID(), nil
 }
 
 func (object *Object) AddAccountGenesisInfo(address common.Address, ixHash common.Hash) error {
