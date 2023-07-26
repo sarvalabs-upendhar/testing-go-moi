@@ -60,3 +60,10 @@ func (suite *EnvCodesTestSuite) TestGetFuelPrice() {
 	suite.Equal(engineio.NewFuel(110), consumed)
 	suite.Nil(except)
 }
+
+func (suite *EnvCodesTestSuite) TestGetIxnType() {
+	consumed, output, except := suite.Call("GetIxnType", nil)
+	suite.Equal("IxLogicInvoke", output["ixnType"])
+	suite.Equal(engineio.NewFuel(110), consumed)
+	suite.Nil(except)
+}

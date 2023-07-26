@@ -12,22 +12,49 @@ type Classdef struct {
 	Ptr ElementPtr
 }
 
+// IxnDriver represents an interface that exposes access to interaction
+// information such as the fuel price, fuel limit and interaction type
+// along with capabilities to make external logic invocations
+type IxnDriver interface {
+	FuelPrice() *big.Int
+	FuelLimit() *big.Int
+	IxnType() common.IxType
+	Callsite() string
+	Calldata() []byte
+}
+
 // IxnObject represents a container for Interaction such as its type
 // as well as the calldata and callsite information for logic calls
 type IxnObject struct {
-	ixtype   common.IxType
-	callsite string
-	calldata []byte
+	data    common.IxData
+	payload *common.LogicPayload
 }
 
-// NewIxnObject generates a new IxnObject from the given types.IxnType, Calldata and Callsite.
-func NewIxnObject(kind common.IxType, callsite string, calldata []byte) *IxnObject {
-	return &IxnObject{ixtype: kind, callsite: callsite, calldata: calldata}
+func (ixn IxnObject) FuelPrice() *big.Int {
+	return ixn.data.Input.FuelPrice
 }
 
-func (ixn IxnObject) IxType() common.IxType { return ixn.ixtype }
-func (ixn IxnObject) Callsite() string      { return ixn.callsite }
-func (ixn IxnObject) Calldata() []byte      { return ixn.calldata }
+func (ixn IxnObject) FuelLimit() *big.Int {
+	return ixn.data.Input.FuelLimit
+}
+
+func (ixn IxnObject) IxnType() common.IxType {
+	return ixn.data.Input.Type
+}
+
+// NewIxnObject generates a new IxnObject from a common.Interaction value.
+func NewIxnObject(ix common.Interaction) *IxnObject {
+	logicPayload, err := ix.GetLogicPayload()
+	if err != nil {
+		return &IxnObject{data: ix.IXData(), payload: &common.LogicPayload{}}
+	}
+
+	return &IxnObject{data: ix.IXData(), payload: logicPayload}
+}
+
+func (ixn IxnObject) IxType() common.IxType { return ixn.data.Input.Type }
+func (ixn IxnObject) Callsite() string      { return ixn.payload.Callsite }
+func (ixn IxnObject) Calldata() []byte      { return ixn.payload.Calldata }
 
 // EnvDriver represents an interface that exposes access to environment
 // information such as the cluster data, timestamps and fuel prices

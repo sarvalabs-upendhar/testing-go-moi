@@ -24,10 +24,10 @@ func TestEnvironmentValue(t *testing.T) {
 
 		// Test Norm()
 		norm := value.Norm()
-		assert.Equal(t, map[string]any{}, norm, "Normalized value of Environment should be equal to mpa[string]->any")
+		assert.Equal(t, map[string]any{}, norm, "Normalized value of Environment should be equal to map[string]->any")
 
 		// Test Data()
-		assert.Equal(t, []byte{}, value.Data(), "POLO encoded bytes of StringValue should match expected value")
+		assert.Equal(t, []byte{}, value.Data(), "POLO encoded bytes of EnvironmentValue should match expected value")
 	})
 
 	t.Run("Methods", func(t *testing.T) {

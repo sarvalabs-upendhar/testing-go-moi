@@ -15,7 +15,8 @@ func TestIxnObject(t *testing.T) {
 	callsite := "TestCallsite"
 	calldata := []byte{1, 2, 3}
 
-	ixnObj := NewIxnObject(kind, callsite, calldata)
+	ixn := common.NewLogicInteraction(kind, callsite, calldata, nil)
+	ixnObj := NewIxnObject(*ixn)
 	require.NotNil(t, ixnObj, "NewIxnObject should return a non-nil object")
 
 	// Test IxType function

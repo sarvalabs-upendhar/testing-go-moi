@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sarvalabs/go-moi/common"
+
 	"github.com/pkg/errors"
 
 	"github.com/sarvalabs/go-moi/compute/engineio"
@@ -58,6 +60,11 @@ func LogicCallCommand(kind engineio.CallsiteKind, name, callsite, args string) C
 			return err.Error()
 		}
 
+		manifest, err := logic.Manifest.Encode(engineio.POLO)
+		if err != nil {
+			return err.Error()
+		}
+
 		// Spawn an engine for the runtime
 		engine, err := runtime.SpawnEngine(
 			env.inventory.Config.BaseFuel, logic.Object,
@@ -76,8 +83,10 @@ func LogicCallCommand(kind engineio.CallsiteKind, name, callsite, args string) C
 
 		// Generate the context object for the sender
 		senderContext := sender.CtxState.GenerateLogicContextObject(logic.Object.LogicID())
+		// Generate an interaction from the kind, callsite, calldata and manifest
+		interaction := common.NewLogicInteraction(kind.IxnType(), callsite, calldata, manifest)
 		// Generate the interaction object
-		ixn := engineio.NewIxnObject(kind.IxnType(), callsite, calldata)
+		ixn := engineio.NewIxnObject(*interaction)
 
 		// Execute the function
 		result, err := engine.Call(context.Background(), ixn, senderContext)

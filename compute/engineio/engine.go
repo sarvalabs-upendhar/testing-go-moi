@@ -65,5 +65,5 @@ type Engine interface {
 	// Call calls a logic function of a specified callsite kind.
 	// The callsite and calldata are provided within the IxnObject.
 	// Requires EngineDriver to be Bootstrapped with a Logic.
-	Call(context.Context, *IxnObject, ...CtxDriver) (*CallResult, error)
+	Call(context.Context, IxnDriver, ...CtxDriver) (*CallResult, error)
 }

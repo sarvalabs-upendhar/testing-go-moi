@@ -153,8 +153,11 @@ func InvokeLogic(logicID common.LogicID, state *state.Object, opts ...LogicInvok
 		return nil, nil, errors.Wrap(err, "could not bootstrap engine")
 	}
 
+	// Create an interaction from kind, callsite and calldata
+	interaction := common.NewLogicInteraction(common.IxLogicInvoke, invoker.callsite, invoker.calldata, nil)
+
 	// Create an IxnObject
-	ixn := engineio.NewIxnObject(common.IxLogicInvoke, invoker.callsite, invoker.calldata)
+	ixn := engineio.NewIxnObject(*interaction)
 
 	// Declare sender context driver
 	var senderCtx engineio.CtxDriver

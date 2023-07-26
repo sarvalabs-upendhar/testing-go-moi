@@ -22,6 +22,7 @@ func TestInstructionSet(t *testing.T) {
 				runtime:     &runtime,
 				fueltank:    engineio.NewFuelTank(big.NewInt(1000)),
 				callstack:   make(callstack, 0),
+				interaction: engineio.NewIxnObject(*common.NewLogicInteraction(common.IxLogicInvoke, "Test", []byte{0, 1, 2, 3}, nil)), //nolint:lll
 				environment: engineio.NewEnvObject(time.Now().Unix(), big.NewInt(1)),
 			},
 		}
@@ -2558,6 +2559,17 @@ func TestInstructionSet(t *testing.T) {
 			continuity := opBNOT(scope, []byte{2, 0, 1})
 			require.Equal(t, continueOk{20}, continuity)
 			require.Equal(t, &I256Value{uint256.MustFromDecimal("55")}, scope.memory[2])
+		})
+	})
+
+	t.Run("IXN", func(t *testing.T) {
+		t.Run("success", func(t *testing.T) {
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{}
+
+			continuity := opIXN(scope, []byte{0})
+			require.Equal(t, continueOk{30}, continuity)
+			require.Equal(t, InteractionValue{driver: engineio.NewIxnObject(*common.NewLogicInteraction(common.IxLogicInvoke, "Test", []byte{0, 1, 2, 3}, nil))}, scope.memory[0]) //nolint:lll
 		})
 	})
 

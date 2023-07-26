@@ -83,7 +83,8 @@ func (suite *LogicTestSuite) Initialize(
 }
 
 func (suite *LogicTestSuite) CallRaw(kind engineio.CallsiteKind, callsite string, calldata []byte) (engineio.Fuel, []byte, []byte) { //nolint:lll
-	ixn := engineio.NewIxnObject(kind.IxnType(), callsite, calldata)
+	interaction := common.NewLogicInteraction(kind.IxnType(), callsite, calldata, suite.logic.Manifest().Bytes())
+	ixn := engineio.NewIxnObject(*interaction)
 
 	result, err := suite.Run(ixn)
 	if err != nil {
@@ -155,7 +156,7 @@ func (suite *LogicTestSuite) EncodeInputs(callsite string, inputs map[string]any
 	}
 
 	if len(inputs) == 0 {
-		return engineio.NewIxnObject(common.IxLogicInvoke, callsite, nil), encoder, nil
+		return engineio.NewIxnObject(*common.NewLogicInteraction(common.IxLogicInvoke, callsite, nil, nil)), encoder, nil //nolint:lll
 	}
 
 	calldata, err := encoder.EncodeInputs(inputs, nil)
@@ -163,7 +164,7 @@ func (suite *LogicTestSuite) EncodeInputs(callsite string, inputs map[string]any
 		return nil, nil, errors.Wrapf(err, "failed to encode calldata from inputs for callsite '%v'", callsite)
 	}
 
-	return engineio.NewIxnObject(site.Kind.IxnType(), callsite, calldata), encoder, nil
+	return engineio.NewIxnObject(*common.NewLogicInteraction(site.Kind.IxnType(), callsite, calldata, suite.logic.Manifest().Bytes())), encoder, nil //nolint:lll
 }
 
 // randomAddress generates a random types.Address.

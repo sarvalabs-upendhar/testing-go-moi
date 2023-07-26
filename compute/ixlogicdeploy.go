@@ -258,8 +258,9 @@ func (deployer logicDeployer) callDeployer(logic *state.LogicObject) (*engineio.
 		return nil, errors.Wrap(err, "could not bootstrap engine")
 	}
 
+	interaction := common.NewLogicInteraction(common.IxLogicDeploy, deployer.deployment.callsite, deployer.deployment.calldata, deployer.manifest) //nolint:lll
 	// Create an IxnObject
-	ixn := engineio.NewIxnObject(common.IxLogicDeploy, deployer.deployment.callsite, deployer.deployment.calldata)
+	ixn := engineio.NewIxnObject(*interaction)
 
 	// Declare context driver
 	var deployerCtx engineio.CtxDriver
