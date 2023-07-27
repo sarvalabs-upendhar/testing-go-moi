@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/peterh/liner"
@@ -117,18 +118,26 @@ func validateFlags() error {
 		return errors.New("invalid node index")
 	}
 
+	if _, err := os.Stat(mnemonicKeystorePath); err != nil {
+		if os.IsNotExist(err) {
+			return mudraCommon.ErrNoMnemonicKeystore
+		}
+
+		return err
+	}
+
 	return nil
 }
 
 func runRegisterCommand(cmd *cobra.Command, args []string) {
+	if err := validateFlags(); err != nil {
+		cmdCommon.Err(err)
+	}
+
 	line := liner.NewLiner()
 
 	masterPassword, err := line.PasswordPrompt("Enter mnemonic key store password :")
 	if err != nil {
-		cmdCommon.Err(err)
-	}
-
-	if err := validateFlags(); err != nil {
 		cmdCommon.Err(err)
 	}
 
