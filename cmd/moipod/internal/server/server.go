@@ -33,6 +33,7 @@ var (
 	Babylon            bool
 	Bootnodes          []string
 	NodePassword       string
+	P2pHostIP          string
 )
 
 const (
@@ -49,6 +50,7 @@ const (
 	babylonFlag       = "babylon"
 	bootNodesFlag     = "bootnodes"
 	nodePasswordFlag  = "node-password"
+	p2pHostIPFlag     = "p2p-host-ip"
 )
 
 func GetServerCommand() *cobra.Command {
@@ -69,6 +71,7 @@ func runCommand(cmd *cobra.Command, args []string) {
 
 func parseFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&GenesisPath, genesisFlag, "genesis.json", "Path to genesis.json file.")
+	cmd.PersistentFlags().StringVar(&P2pHostIP, p2pHostIPFlag, "0.0.0.0", "The ipv4 address used for p2p host.")
 	cmd.PersistentFlags().StringVar(&ConfigPath, configFlag, "", "Path to config.json file.")
 	cmd.PersistentFlags().StringVar(&LogDirPath, LogDirPathFlag, "", "Path to log directory.")
 	cmd.PersistentFlags().IntVar(&OperatorSlots, operatorSlotFlag, -1, "Maximum number of operator slots.")

@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/sarvalabs/go-moi/common/kramaid"
@@ -152,6 +153,13 @@ func (p *Params) assignNetworkJSONRPCAddr() (err error) {
 func (p *Params) applyFlags(cmd *cobra.Command, path string) error {
 	if isGenesisSet(cmd) {
 		p.rawCfg.Genesis = GenesisPath
+	}
+
+	if isP2PHostIPSet(cmd) {
+		p.rawCfg.Network.Libp2pAddr = []string{
+			fmt.Sprintf(
+				"/ip4/%s/tcp/%s", P2pHostIP, strconv.Itoa(config.DefaultListenerPort)),
+		}
 	}
 
 	if isOperatorSlotSet(cmd) {
@@ -381,6 +389,10 @@ func isBootnodesSet(cmd *cobra.Command) bool {
 
 func isNodePasswordSet(cmd *cobra.Command) bool {
 	return cmd.Flags().Changed(nodePasswordFlag)
+}
+
+func isP2PHostIPSet(cmd *cobra.Command) bool {
+	return cmd.Flags().Changed(p2pHostIPFlag)
 }
 
 // BuildNodeConfig function creates a node configuration by combining a default configuration, a configuration file,
