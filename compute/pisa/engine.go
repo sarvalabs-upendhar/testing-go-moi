@@ -155,8 +155,8 @@ func (engine Engine) OkResult(values polo.Document) *engineio.CallResult {
 }
 
 func (engine *Engine) run(runnable Runnable, inputs RegisterSet) (RegisterSet, *Exception) {
-	// Perform input validation
-	if err := inputs.Validate(runnable.callfields().Inputs); err != nil {
+	// Perform input validation (no filling nulls)
+	if err := inputs.Validate(runnable.callfields().Inputs, false); err != nil {
 		return nil, exceptionf(CallError, "invalid inputs: %v", err).traced(engine.callstack.trace())
 	}
 
@@ -165,8 +165,8 @@ func (engine *Engine) run(runnable Runnable, inputs RegisterSet) (RegisterSet, *
 		return nil, except
 	}
 
-	// Perform output validation
-	if err := outputs.Validate(runnable.callfields().Outputs); err != nil {
+	// Perform output validation (fill nulls)
+	if err := outputs.Validate(runnable.callfields().Outputs, true); err != nil {
 		return nil, exceptionf(CallError, "invalid outputs: %v", err).traced(engine.callstack.trace())
 	}
 

@@ -58,17 +58,29 @@ func (registers RegisterSet) Unset(id byte) {
 	delete(registers, id)
 }
 
-func (registers RegisterSet) Validate(fields *TypeFields) error {
-	for idx, field := range fields.Table {
-		value := registers.Get(idx)
+func (registers RegisterSet) Validate(fields *TypeFields, fillNulls bool) (err error) {
+	for slot, field := range fields.Table {
+		value := registers.Get(slot)
 		if value.Type() == PrimitiveNull {
-			return errors.Errorf("missing value for field &%v '%v'", idx, field.Name)
+			// If fill nulls flag is not set, we assert the missing value
+			if !fillNulls {
+				return errors.Errorf("missing value for field &%v '%v'", slot, field.Name)
+			}
+
+			// Create a zero value for the type
+			value, err = NewRegisterValue(field.Type, nil)
+			if err != nil {
+				return errors.Wrapf(err, "failed to fill value for &%v '%v'", slot, field.Name)
+			}
+
+			// Update the zero value to register set
+			registers.Set(slot, value)
 		}
 
 		if !value.Type().Equals(field.Type) {
 			return errors.Errorf(
 				"type mismatch for field &%v '%v'. expected: %v. got: %v",
-				idx, field.Name, field.Type, value.Type(),
+				slot, field.Name, field.Type, value.Type(),
 			)
 		}
 	}
