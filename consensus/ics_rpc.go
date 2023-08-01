@@ -4,25 +4,23 @@ import (
 	"context"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi/common"
 	id "github.com/sarvalabs/go-moi/common/kramaid"
+	ktypes "github.com/sarvalabs/go-moi/consensus/types"
 	"github.com/sarvalabs/go-moi/crypto"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
-
-	"github.com/pkg/errors"
-
-	ktypes "github.com/sarvalabs/go-moi/consensus/types"
 )
 
 // ICSRPCService is a struct that represents an ICS RPC Service
 type ICSRPCService struct {
 	// Represents the ICS backend for the service
-	engine *Engine
+	engine KramaEngine
 }
 
 // NewICSRPCService is a constructor that generates and returns a new ICSRPCService
 // object for a given ICS object
-func NewICSRPCService(k *Engine) *ICSRPCService {
+func NewICSRPCService(k KramaEngine) *ICSRPCService {
 	return &ICSRPCService{k}
 }
 
@@ -41,13 +39,13 @@ func (icsrpc *ICSRPCService) ICSRequest(
 	response.StatusCode = networkmsg.InternalError
 
 	if err := canonicalICSReq.FromBytes(icsReq.ReqData); err != nil {
-		icsrpc.engine.logger.Error("Failed to depolorize canonical ICS request", "err", err)
+		icsrpc.engine.Logger().Error("Failed to depolorize canonical ICS request", "err", err)
 
 		return err
 	}
 
 	if err := interactions.FromBytes(canonicalICSReq.IxData); err != nil {
-		icsrpc.engine.logger.Error("Failed to depolorize interactions", "err", err)
+		icsrpc.engine.Logger().Error("Failed to depolorize interactions", "err", err)
 
 		return err
 	}
@@ -57,9 +55,21 @@ func (icsrpc *ICSRPCService) ICSRequest(
 		icsReq.ReqData,
 		icsReq.Signature,
 	); err != nil {
-		icsrpc.engine.logger.Error("Failed to verify ICS request signature", "err", err)
+		icsrpc.engine.Logger().Error("Failed to verify ICS request signature", "err", err)
 
 		return errors.Wrap(err, "failed to verify ICS request signature")
+	}
+
+	for _, ix := range *interactions {
+		rawPayload, err := ix.PayloadForSignature()
+		if err != nil {
+			return err
+		}
+
+		isVerified, err := crypto.Verify(rawPayload, ix.Signature(), ix.Sender().Bytes())
+		if !isVerified || err != nil {
+			return common.ErrInvalidIXSignature
+		}
 	}
 
 	kramaRequest := Request{
@@ -71,7 +81,7 @@ func (icsrpc *ICSRPCService) ICSRequest(
 		reqTime:      time.Unix(0, canonicalICSReq.Timestamp),
 	}
 
-	icsrpc.engine.requests <- kramaRequest
+	icsrpc.engine.Requests() <- kramaRequest
 	// Wait for response from krama engine
 	response.ClusterID = canonicalICSReq.ClusterID
 
