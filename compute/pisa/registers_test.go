@@ -149,3 +149,35 @@ func TestRegisterSet_Unset(t *testing.T) {
 	assert.Equal(t, 1, len(registers))
 	assert.Equal(t, NullValue{}, registers.Get(0))
 }
+
+func TestRegisterSet_Validate(t *testing.T) {
+	tests := []struct {
+		registers RegisterSet
+		fields    *TypeFields
+		fillnull  RegisterSet
+		expected  error
+	}{
+		{
+			RegisterSet{0: StringValue("foo")},
+			makefields([]*TypeField{{"a", PrimitiveString}}),
+			nil, nil,
+		},
+		{
+			RegisterSet{0: StringValue("foo")},
+			makefields([]*TypeField{{"a", PrimitiveString}, {"b", PrimitiveU64}}),
+			RegisterSet{0: StringValue("foo"), 1: U64Value(0)},
+			nil,
+		},
+	}
+
+	for _, test := range tests {
+		fillnull := test.fillnull != nil
+
+		err := test.registers.Validate(test.fields, fillnull)
+		assert.Equal(t, test.expected, err)
+
+		if fillnull {
+			assert.Equal(t, test.fillnull, test.registers)
+		}
+	}
+}
