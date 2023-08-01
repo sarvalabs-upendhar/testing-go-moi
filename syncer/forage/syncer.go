@@ -33,7 +33,6 @@ import (
 )
 
 const (
-	TesseractTopic        = "MOI_PUBSUB_TESSERACT"
 	MaxBucketSyncAttempts = 3
 	ChannelBufferSize     = 10
 	MaxPeersToDial        = 8
@@ -1430,14 +1429,13 @@ func (s *Syncer) fetchTesseractState(tesseract *common.Tesseract, fetchContext [
 		return err
 	}
 	defer newSession.Close()
-	defer newSession.Close()
 
 	islocal, acc, block, err := s.fetchAccount(ctx, newSession, tesseract.StateHash())
 	if err != nil {
 		return err
 	}
 
-	if err = s.fetchData(
+	if err = s.fetchAndStoreData(
 		ctx,
 		newSession,
 		cid.BalanceCID(acc.Balance),
@@ -1549,9 +1547,9 @@ func (s *Syncer) fetchAccount(
 	return islocal, acc, blk, nil
 }
 
-// fetchData retrieves data blocks from the given session object and writes them to the database,
+// fetchAndStoreData retrieves data blocks from the given session object and writes them to the database,
 // using the specified CID values as keys.
-func (s *Syncer) fetchData(ctx context.Context, session *session.Session, ids ...cid.CID) error {
+func (s *Syncer) fetchAndStoreData(ctx context.Context, session *session.Session, ids ...cid.CID) error {
 	keySet := cid.NewHashSet()
 
 	for _, cID := range ids {
@@ -1598,7 +1596,7 @@ func (s *Syncer) syncContextData(ctx context.Context, session *session.Session, 
 		return err
 	}
 
-	if err = s.fetchData(
+	if err = s.fetchAndStoreData(
 		ctx,
 		session,
 		cid.ContextCID(metaContextObject.RandomContext),
@@ -1813,7 +1811,7 @@ func (s *Syncer) Start() error {
 		return err
 	}
 
-	if err := s.network.Subscribe(s.ctx, TesseractTopic, s.msgHandler); err != nil {
+	if err := s.network.Subscribe(s.ctx, common.TesseractTopic, s.msgHandler); err != nil {
 		return err
 	}
 

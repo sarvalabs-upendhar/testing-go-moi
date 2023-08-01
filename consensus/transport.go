@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/sarvalabs/go-moi/common"
+
 	id "github.com/sarvalabs/go-moi/common/kramaid"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
 	"github.com/sarvalabs/go-moi/telemetry/tracing"
@@ -21,7 +23,6 @@ import (
 const (
 	MinimumConnectionCount = 3
 	kramaMoirpcStreamTTL   = 0
-	TesseractTopic         = "MOI_PUBSUB_TESSERACT"
 )
 
 type network interface {
@@ -148,7 +149,7 @@ func (t *Transport) BroadcastTesseract(msg *networkmsg.TesseractMessage) error {
 		return err
 	}
 
-	return t.network.Broadcast(TesseractTopic, rawData)
+	return t.network.Broadcast(common.TesseractTopic, rawData)
 }
 
 /*
