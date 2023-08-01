@@ -678,7 +678,7 @@ func (c *ChainManager) ValidateTesseract(ts *common.Tesseract, ics *common.ICSNo
 
 	verified, err := c.verifySignatures(ts, ics)
 	if !verified || err != nil {
-		return errors.Wrap(err, "failed to verify signatures")
+		return errors.New("failed to verify signatures")
 	}
 
 	return nil

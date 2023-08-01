@@ -847,7 +847,9 @@ func (s *Syncer) loadSyncJobsFromDB() error {
 		}
 
 		if err = s.jobQueue.AddJob(syncJob); err != nil {
-			return err
+			s.logger.Error("Failed to add job in job queue", "err", err)
+
+			continue
 		}
 
 		s.metrics.captureTotalJobs(float64(len(s.jobQueue.jobs)))
