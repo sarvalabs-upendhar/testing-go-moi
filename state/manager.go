@@ -562,12 +562,6 @@ func (sm *StateManager) FetchICSNodeSet(
 		return nil, errors.New("nil responses slice")
 	}
 
-	for index, set := range icsNodeSets.Nodes {
-		if set != nil && info.Responses[index] != nil {
-			set.Responses = info.Responses[index]
-		}
-	}
-
 	randomSet, err := sm.GetNodeSet(info.RandomSet)
 	if err != nil {
 		return nil, err
@@ -581,6 +575,12 @@ func (sm *StateManager) FetchICSNodeSet(
 	}
 
 	icsNodeSets.UpdateNodeSet(common.ObserverSet, observerSet)
+
+	for index, set := range icsNodeSets.Nodes {
+		if set != nil && info.Responses[index] != nil {
+			set.Responses = info.Responses[index]
+		}
+	}
 
 	return icsNodeSets, nil
 }
