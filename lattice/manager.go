@@ -89,7 +89,7 @@ type ixpool interface {
 }
 
 type executor interface {
-	ExecuteInteractions(common.ClusterID, common.Interactions, common.ContextDelta) (common.Receipts, error)
+	ExecuteInteractions(common.Interactions, common.ClusterID, common.ContextDelta) (common.Receipts, error)
 	Revert(common.ClusterID) error
 	SpawnExecutor() *compute.IxExecutor
 	Cleanup(cluster common.ClusterID)
@@ -932,8 +932,8 @@ func (c *ChainManager) ExecuteAndValidate(tesseracts ...*common.Tesseract) error
 	)
 
 	receipts, err := c.exec.ExecuteInteractions(
-		tesseracts[0].ClusterID(),
 		tesseracts[0].Interactions(),
+		tesseracts[0].ClusterID(),
 		tesseracts[0].ContextDelta(),
 	)
 	if err != nil {

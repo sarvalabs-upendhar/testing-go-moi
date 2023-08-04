@@ -3,7 +3,6 @@ package compute
 import (
 	"context"
 	"math/big"
-	"time"
 
 	"github.com/pkg/errors"
 
@@ -11,6 +10,57 @@ import (
 	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/state"
 )
+
+// RunLogicInvoke performs the given IxLogicInvoke interaction.
+// The stateObjectRetriever must contain state objects for the sender and receiver of the Interaction.
+//
+// The Interaction must have a LogicPayload and the output receipt will have a LogicInvokeReceipt.
+// The logic call is verified and executed with the output/error being returned in the receipt.
+func RunLogicInvoke(ix *common.Interaction, tank *engineio.FuelTank, objects state.ObjectMap) (*common.Receipt, error) {
+	payload, err := ix.GetLogicPayload()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not find logic payload")
+	}
+
+	// Generate the address of the target logic account from the LogicID
+	logicAddress := payload.Logic.Address()
+	// Obtain the invoker and logic account state objects
+	invoker := objects.GetObject(ix.Sender())
+	logicacc := objects.GetObject(logicAddress)
+
+	// Create an options chain
+	options := make([]LogicInvokeOption, 0, 3)
+	// Append invoker options for invoker state and fuel limit
+	options = append(options, InvokerState(invoker))
+	options = append(options, InvokeFuelLimit(tank.Level()))
+	options = append(options, InvokeCall(payload.Callsite, payload.Calldata))
+
+	consumption, receiptPayload, err := InvokeLogic(payload.Logic, logicacc, options...)
+	if err != nil {
+		return nil, err
+	}
+
+	// Exhaust fuel from tank
+	if !tank.Exhaust(consumption) {
+		return nil, common.ErrInsufficientFuel
+	}
+
+	// Generate a new receipt and set the fuel consumption
+	receipt := common.NewReceipt(ix)
+	receipt.SetFuelUsed(tank.Consumed)
+
+	// Set the status of the receipt
+	if receiptPayload.Error != nil {
+		receipt.Status = common.ReceiptFailed
+	}
+
+	// Set the extra data of the receipt
+	if err = receipt.SetExtraData(receiptPayload); err != nil {
+		return nil, err
+	}
+
+	return receipt, nil
+}
 
 // LogicInvokeOption is an option for InvokeLogic and modifies the logic invoke behaviour
 type LogicInvokeOption func(invoker *logicInvoker) error
@@ -96,14 +146,21 @@ func InvokeLogic(logicID common.LogicID, state *state.Object, opts ...LogicInvok
 	engine, err := runtime.SpawnEngine(
 		invoker.fueltank.Level(), invoker.logicObject,
 		invoker.logicState.GenerateLogicContextObject(invoker.logicObject.LogicID()),
-		engineio.NewEnvObject(time.Now().Unix(), big.NewInt(1)),
+		envObject{},
 	)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not bootstrap engine")
 	}
 
 	// Create an IxnObject
-	ixn := engineio.NewIxnObject(common.IxLogicInvoke, invoker.callsite, invoker.calldata)
+	// todo: we should pass the raw ixn somehow
+	ixn := ixnObject{
+		kind:     common.IxLogicInvoke,
+		price:    big.NewInt(1),
+		limit:    invoker.fueltank.Capacity,
+		callsite: invoker.callsite,
+		calldata: invoker.calldata,
+	}
 
 	// Declare sender context driver
 	var senderCtx engineio.CtxDriver

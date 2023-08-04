@@ -26,7 +26,7 @@ func TestManifestCompiler(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, engineio.PISA, descriptor.Engine)
-		assert.Equal(t, must(manifest.Hash()), descriptor.Manifest)
+		assert.Equal(t, must(manifest.Hash()), descriptor.ManifestHash)
 		assert.Equal(t, false, descriptor.Interactive)
 
 		assert.Equal(t, true, descriptor.StateMatrix.Persistent())
@@ -60,7 +60,7 @@ func TestManifestCompiler(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, engineio.PISA, descriptor.Engine)
-		assert.Equal(t, must(manifest.Hash()), descriptor.Manifest)
+		assert.Equal(t, must(manifest.Hash()), descriptor.ManifestHash)
 
 		assert.Equal(t, false, descriptor.Interactive)
 		assert.Equal(t, true, descriptor.StateMatrix.Persistent())

@@ -44,6 +44,10 @@ func BalanceObjectKey(address common.Address, balanceHash common.Hash) []byte {
 	return dbKey(address, Balance, balanceHash.Bytes())
 }
 
+func LogicManifestKey(address common.Address, manifestHash common.Hash) []byte {
+	return dbKey(address, LogicManifest, manifestHash.Bytes())
+}
+
 func AccountKey(address common.Address, stateHash common.Hash) []byte {
 	return dbKey(address, Account, stateHash.Bytes())
 }

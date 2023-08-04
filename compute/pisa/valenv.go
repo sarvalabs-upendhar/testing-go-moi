@@ -1,7 +1,6 @@
 package pisa
 
 import (
-	"github.com/holiman/uint256"
 	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
@@ -48,21 +47,17 @@ func (env EnvironmentValue) methods() [256]*BuiltinMethod {
 				return RegisterSet{0: I64Value(envObj.driver.Timestamp())}, nil
 			},
 		),
-		// EnvironmentValue.FuelPrice() -> int64
+
+		// EnvironmentValue.ClusterID() -> string
 		0x11: makeBuiltinMethod(
-			"FuelPrice",
+			"ClusterID",
 			EnvironmentType, 0x11, 10,
 			makefields([]*TypeField{{"self", EnvironmentType}}),
-			makefields([]*TypeField{{"result", PrimitiveU256}}),
+			makefields([]*TypeField{{"result", PrimitiveString}}),
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				envObj := inputs[0].(EnvironmentValue)
 
-				val, overflow := uint256.FromBig(envObj.driver.FuelPrice())
-				if overflow {
-					return nil, exception(OverflowError, "conversion overflow error")
-				}
-
-				return RegisterSet{0: &U256Value{value: val}}, nil
+				return RegisterSet{0: StringValue(envObj.driver.ClusterID())}, nil
 			},
 		),
 	}

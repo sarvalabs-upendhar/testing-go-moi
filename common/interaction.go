@@ -6,10 +6,11 @@ import (
 	"math/big"
 	"sync/atomic"
 
+	"github.com/sarvalabs/go-polo"
+
 	"github.com/sarvalabs/go-moi/common/kramaid"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-polo"
 )
 
 type IxType int
@@ -535,6 +536,24 @@ func (ix *Interaction) FromBytes(data []byte) error {
 
 func (ix *Interaction) PayloadForSignature() ([]byte, error) {
 	return polo.Polorize(SendIxArgsFromIxData(ix.inner))
+}
+
+func (ix *Interaction) Callsite() string {
+	payload, err := ix.GetLogicPayload()
+	if err != nil {
+		return ""
+	}
+
+	return payload.Callsite
+}
+
+func (ix *Interaction) Calldata() []byte {
+	payload, err := ix.GetLogicPayload()
+	if err != nil {
+		return nil
+	}
+
+	return payload.Calldata
 }
 
 // Interactions are array of Transactions

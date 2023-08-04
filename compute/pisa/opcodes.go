@@ -397,7 +397,7 @@ var opcodeMetadataTable = map[OpCode]*opcodeMetadata{
 	BOR:  {"BOR", 3, "$$$"},
 	BNOT: {"BNOT", 2, "$$"},
 
-	// IXN: {"IXN", 1},
+	IXN:    {"IXN", 1, "$"},
 	ENV:    {"ENV", 1, "$"},
 	LOGIC:  {"LOGIC", 1, "$"},
 	SENDER: {"SENDER", 1, "$"},

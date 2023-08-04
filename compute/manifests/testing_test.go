@@ -19,6 +19,8 @@ func init() {
 	engineio.RegisterEngineRuntime(pisa.NewRuntime())
 }
 
+var SuiteFuelPrice = big.NewInt(1)
+
 type LogicTestSuite struct {
 	suite.Suite
 
@@ -27,11 +29,11 @@ type LogicTestSuite struct {
 	runtime     engineio.EngineRuntime
 	environment engineio.EnvDriver
 
-	internal         *engineio.DebugContextDriver
-	internalSnapshot *engineio.DebugContextDriver
+	internal         *pisa.DebugContextDriver
+	internalSnapshot *pisa.DebugContextDriver
 
-	sender         *engineio.DebugContextDriver
-	senderSnapshot *engineio.DebugContextDriver
+	sender         *pisa.DebugContextDriver
+	senderSnapshot *pisa.DebugContextDriver
 }
 
 func (suite *LogicTestSuite) SetupTest() {
@@ -64,11 +66,11 @@ func (suite *LogicTestSuite) Initialize(
 	suite.Equal(expectedLogicID, logicObject.LogicID(), "unexpected logic id")
 
 	// Generate a new storage object
-	logicCtx := engineio.NewDebugContextDriver(logicAddress, logicObject.LogicID())
+	logicCtx := pisa.NewDebugContextDriver(logicAddress, logicObject.LogicID())
 
-	senderCtx := engineio.NewDebugContextDriver(sender, logicObject.LogicID())
+	senderCtx := pisa.NewDebugContextDriver(sender, logicObject.LogicID())
 	if common.Address.IsNil(sender) {
-		senderCtx = engineio.NewDebugContextDriver(randomAddress(), logicObject.LogicID())
+		senderCtx = pisa.NewDebugContextDriver(randomAddress(), logicObject.LogicID())
 	}
 
 	suite.fuel = fuel
@@ -77,13 +79,18 @@ func (suite *LogicTestSuite) Initialize(
 
 	suite.internal = logicCtx
 	suite.sender = senderCtx
-	suite.environment = engineio.NewEnvObject(time.Now().Unix(), big.NewInt(1))
+	suite.environment = pisa.NewDebugEnvDriver(time.Now().Unix(), "Test")
 
 	return consumed
 }
 
-func (suite *LogicTestSuite) CallRaw(kind engineio.CallsiteKind, callsite string, calldata []byte) (engineio.Fuel, []byte, []byte) { //nolint:lll
-	ixn := engineio.NewIxnObject(kind.IxnType(), callsite, calldata)
+func (suite *LogicTestSuite) CallRaw(
+	kind engineio.CallsiteKind,
+	callsite string, calldata []byte,
+) (
+	engineio.Fuel, []byte, []byte,
+) {
+	ixn := pisa.NewDebugIxnDriver(kind.IxnType(), SuiteFuelPrice, suite.fuel, callsite, calldata)
 
 	result, err := suite.Run(ixn)
 	if err != nil {
@@ -111,7 +118,7 @@ func (suite *LogicTestSuite) Call(callsite string, inputs map[string]any) (engin
 	return suite.DecodeOutputs(result, encoder)
 }
 
-func (suite *LogicTestSuite) Run(ixn *engineio.IxnObject) (*engineio.CallResult, error) {
+func (suite *LogicTestSuite) Run(ixn engineio.IxnDriver) (*engineio.CallResult, error) {
 	// Create a PISA Engine for the executor
 	executor, err := suite.runtime.SpawnEngine(suite.fuel, suite.logic, suite.internal, suite.environment)
 	if err != nil {
@@ -141,8 +148,10 @@ func (suite *LogicTestSuite) DecodeOutputs(result *engineio.CallResult, encoder 
 	return result.Consumed, decoded, nil
 }
 
-func (suite *LogicTestSuite) EncodeInputs(callsite string, inputs map[string]any) (
-	*engineio.IxnObject, engineio.CallEncoder, error,
+func (suite *LogicTestSuite) EncodeInputs(
+	callsite string, inputs map[string]any,
+) (
+	engineio.IxnDriver, engineio.CallEncoder, error,
 ) {
 	site, ok := suite.logic.GetCallsite(callsite)
 	if !ok {
@@ -155,7 +164,7 @@ func (suite *LogicTestSuite) EncodeInputs(callsite string, inputs map[string]any
 	}
 
 	if len(inputs) == 0 {
-		return engineio.NewIxnObject(common.IxLogicInvoke, callsite, nil), encoder, nil
+		return pisa.NewDebugIxnDriver(common.IxLogicInvoke, SuiteFuelPrice, suite.fuel, callsite, nil), encoder, nil //nolint:lll
 	}
 
 	calldata, err := encoder.EncodeInputs(inputs, nil)
@@ -163,7 +172,7 @@ func (suite *LogicTestSuite) EncodeInputs(callsite string, inputs map[string]any
 		return nil, nil, errors.Wrapf(err, "failed to encode calldata from inputs for callsite '%v'", callsite)
 	}
 
-	return engineio.NewIxnObject(site.Kind.IxnType(), callsite, calldata), encoder, nil
+	return pisa.NewDebugIxnDriver(site.Kind.IxnType(), SuiteFuelPrice, suite.fuel, callsite, calldata), encoder, nil
 }
 
 // randomAddress generates a random types.Address.

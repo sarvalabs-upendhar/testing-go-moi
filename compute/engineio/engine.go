@@ -46,7 +46,7 @@ type EngineRuntime interface {
 
 	// ValidateCalldata verifies the calldata and callsite in an IxnObject.
 	// The LogicDriver must describe a callsite which accepts the calldata.
-	ValidateCalldata(LogicDriver, *IxnObject) error
+	ValidateCalldata(LogicDriver, IxnDriver) error
 
 	// GetElementGenerator returns a generator function for an element schema with the
 	// given ElementKind. Returns false, if no such element is defined by the runtime
@@ -65,5 +65,18 @@ type Engine interface {
 	// Call calls a logic function of a specified callsite kind.
 	// The callsite and calldata are provided within the IxnObject.
 	// Requires EngineDriver to be Bootstrapped with a Logic.
-	Call(context.Context, *IxnObject, ...CtxDriver) (*CallResult, error)
+	Call(context.Context, IxnDriver, ...CtxDriver) (*CallResult, error)
+}
+
+// CallResult is the output emitted by Engine when making function calls.
+// It contains the amount of fuel expended for the call along with either output value or returned error.
+type CallResult struct {
+	Consumed Fuel
+	Outputs  []byte
+	Error    []byte
+}
+
+// Ok returns whether the CallResult has some error data
+func (result CallResult) Ok() bool {
+	return result.Error == nil
 }

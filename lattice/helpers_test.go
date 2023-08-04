@@ -400,7 +400,7 @@ func (e *MockExec) Cleanup(clusterID common.ClusterID) {
 func (e *MockExec) SpawnExecutor() *compute.IxExecutor {
 	sm := mockStateManager()
 
-	return compute.NewExecutionManager(sm, hclog.NewNullLogger(), nil).SpawnExecutor()
+	return compute.NewManager(sm, hclog.NewNullLogger(), nil).SpawnExecutor()
 }
 
 func mockExec(t *testing.T) *MockExec {
@@ -413,8 +413,8 @@ func mockExec(t *testing.T) *MockExec {
 
 // mock execution implementation
 func (e *MockExec) ExecuteInteractions(
-	clusterID common.ClusterID,
 	ixs common.Interactions,
+	clusterID common.ClusterID,
 	contextDelta common.ContextDelta,
 ) (common.Receipts, error) {
 	if e.executeInteractionsHook != nil {

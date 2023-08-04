@@ -3,7 +3,6 @@ package compute
 import (
 	"context"
 	"math/big"
-	"time"
 
 	"github.com/pkg/errors"
 
@@ -11,6 +10,65 @@ import (
 	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/state"
 )
+
+// RunLogicDeploy performs the given IxLogicDeploy interaction.
+// The stateObjectRetriever must contain state objects for the sender and receiver of the Interaction.
+//
+// The Interaction must have a LogicPayload with a Manifest and the output receipt will have a LogicDeployReceipt.
+// The logic manifest is verified, compiled and deployed on to a new account and any deployer call is executed.
+func RunLogicDeploy(ix *common.Interaction, tank *engineio.FuelTank, objects state.ObjectMap) (*common.Receipt, error) {
+	payload, err := ix.GetLogicPayload()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not find logic payload")
+	}
+
+	if payload.Manifest == nil {
+		return nil, errors.New("missing manifest for logic deploy")
+	}
+
+	// Generate the address of the target logic account
+	logicAddress := common.NewAccountAddress(ix.Nonce(), ix.Sender())
+	// Obtain the deployer and logic account state objects
+	deployer := objects.GetObject(ix.Sender())
+	logicacc := objects.GetObject(logicAddress)
+
+	// Create an options chain
+	options := make([]LogicDeployOption, 0, 3)
+	// Append deploy options for deployer state and fuel limit
+	options = append(options, DeployerState(deployer))
+	options = append(options, DeployFuelLimit(tank.Level()))
+
+	// If no callsite is provided, do not append an option for the deployment call
+	if payload.Callsite != "" {
+		options = append(options, DeploymentCall(payload.Callsite, payload.Calldata))
+	}
+
+	consumption, receiptPayload, err := DeployLogic(payload.Manifest, logicacc, options...)
+	if err != nil {
+		return nil, err
+	}
+
+	// Exhaust fuel from tank
+	if !tank.Exhaust(consumption) {
+		return nil, common.ErrInsufficientFuel
+	}
+
+	// Generate a new receipt and set the fuel consumption
+	receipt := common.NewReceipt(ix)
+	receipt.SetFuelUsed(tank.Consumed)
+
+	// Set the status of the receipt
+	if receiptPayload.Error != nil {
+		receipt.Status = common.ReceiptFailed
+	}
+
+	// Set the extra data of the receipt
+	if err = receipt.SetExtraData(receiptPayload); err != nil {
+		return nil, err
+	}
+
+	return receipt, nil
+}
 
 // LogicDeployOption is an option for DeployLogic and modifies the logic deployment behaviour
 type LogicDeployOption func(*logicDeployer) error
@@ -160,20 +218,16 @@ func (deployer logicDeployer) compileManifest() (*engineio.LogicDescriptor, erro
 }
 
 func (deployer logicDeployer) deployLogicObject(descriptor *engineio.LogicDescriptor) (*state.LogicObject, error) {
-	// Set the manifest data into the state object dirty entries.
-	// This manifest will now be content addressed with its hash.
-	deployer.logicState.SetDirtyEntry(descriptor.Manifest.Hex(), deployer.manifest)
-
-	// Create a new LogicObject from the LogicDescriptor
-	logicObject := state.NewLogicObject(deployer.logicState.Address(), descriptor)
-	// Insert the LogicObject into the state object of the logic
-	if err := deployer.logicState.InsertNewLogicObject(logicObject.LogicID(), logicObject); err != nil {
-		return nil, errors.Wrap(err, "could not insert logic object into state object")
+	// Create a logic object and attach it to the state object
+	logicID, err := deployer.logicState.CreateLogic(descriptor)
+	if err != nil {
+		return nil, err
 	}
 
-	// Initialize a storage tree for the LogicID on the state object
-	if err := deployer.logicState.CreateStorageTreeForLogic(logicObject.LogicID()); err != nil {
-		return nil, errors.Wrap(err, "could not init storage tree for logic")
+	// Fetch the logic object from the state object
+	logicObject, err := deployer.logicState.FetchLogicObject(logicID)
+	if err != nil {
+		return nil, err
 	}
 
 	// Exhaust fuel for state deploy
@@ -195,16 +249,21 @@ func (deployer logicDeployer) callDeployer(logic *state.LogicObject) (*engineio.
 
 	// Create a new engine for the execution
 	engine, err := runtime.SpawnEngine(
-		deployer.fueltank.Level(),
-		logic, deployer.logicState.GenerateLogicContextObject(logic.LogicID()),
-		engineio.NewEnvObject(time.Now().Unix(), big.NewInt(1)),
+		deployer.fueltank.Level(), logic, deployer.logicState.GenerateLogicContextObject(logic.LogicID()), envObject{},
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not bootstrap engine")
 	}
 
 	// Create an IxnObject
-	ixn := engineio.NewIxnObject(common.IxLogicDeploy, deployer.deployment.callsite, deployer.deployment.calldata)
+	// todo: we should accept the raw interaction somehow
+	ixn := ixnObject{
+		kind:     common.IxLogicDeploy,
+		price:    big.NewInt(1),
+		limit:    deployer.fueltank.Capacity,
+		callsite: deployer.deployment.callsite,
+		calldata: deployer.deployment.calldata,
+	}
 
 	// Declare context driver
 	var deployerCtx engineio.CtxDriver

@@ -8,6 +8,13 @@ import (
 	"github.com/sarvalabs/go-polo"
 )
 
+// CallEncoder is an interface with capabilities to encode inputs and decode outputs for a specific callable site.
+// It can be generated from either a Manifest or LogicDriver.
+type CallEncoder interface {
+	EncodeInputs(map[string]any, ReferenceProvider) ([]byte, error)
+	DecodeOutputs([]byte) (map[string]any, error)
+}
+
 // ReferenceVal is a reference identifier
 // that resolves to an encodable value
 type ReferenceVal string

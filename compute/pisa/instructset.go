@@ -127,7 +127,7 @@ func BaseInstructionSet() InstructionSet {
 		BOR:  opBOR,
 		BNOT: opBNOT,
 
-		// IXN: opIXN,
+		IXN:    opIXN,
 		ENV:    opENV,
 		LOGIC:  opLOGIC,
 		SENDER: opSENDER,
@@ -1607,6 +1607,18 @@ func opBNOT(scope *callscope, operands []byte) Continue {
 	scope.memory.Set(out, result)
 
 	return continueOk{20}
+}
+
+func opIXN(scope *callscope, operands []byte) Continue {
+	// IXN [$X]
+	reg := operands[0]
+
+	// Set the register with a InteractionValue
+	scope.memory.Set(reg, InteractionValue{
+		driver: scope.engine.interaction,
+	})
+
+	return continueOk{30}
 }
 
 func opENV(scope *callscope, operands []byte) Continue {

@@ -52,24 +52,43 @@ elements:
           0x52, 0x01, 0x00, 0x00, # setfld $1 &0 $0
           0x0D, 0x02, 0x10, 0x01, # callm $2 &10 $1
           0x51, 0x03, 0x02, 0x00, # getfld $3 $2 &0
-          0x05, 0x03, 0x00,  # yield $1 &0
+          0x05, 0x03, 0x00,  # yield $3 &0
         ]
 
   - ptr: 3
     kind: routine
     data:
-      name: GetFuelPrice
+      name: GetCluster
       kind: invokable
       returns:
         - slot: 0
-          label: fuel
-          type: u256
+          label: cluster
+          type: string
       executes:
         bin: [
           0x71, 0x00,        # env $0
           0x0A, 0x01,        # cargs $1
           0x52, 0x01, 0x00, 0x00, # setfld $1 &0 $0
           0x0D, 0x02, 0x11, 0x01, # callm $2 &11 $1
+          0x51, 0x03, 0x02, 0x00, # getfld $3 $2 &0
+          0x05, 0x03, 0x00,  # yield $3 &0
+        ]
+
+  - ptr: 4
+    kind: routine
+    data:
+      name: GetIxnType
+      kind: invokable
+      returns:
+        - slot: 0
+          label: ixnType
+          type: string
+      executes:
+        bin: [
+          0x70, 0x00,        # ixn $0
+          0x0A, 0x01,        # cargs $1
+          0x52, 0x01, 0x00, 0x00, # setfld $1 &0 $0
+          0x0D, 0x02, 0x12, 0x01, # callm $2 &12 $1
           0x51, 0x03, 0x02, 0x00, # getfld $3 $2 &0
           0x05, 0x03, 0x00,  # yield $1 &0
         ]

@@ -117,7 +117,7 @@ func (runtime Runtime) CompileManifest(
 // ValidateCalldata verifies the IxnObject's callsite and calldata for a given engineio.LogicDriver.
 // Returns an error if the logic is not supported by PISA or if the callsite does not exist or if
 // the callsite is not compatible with the ixn type or if the calldata is invalid for the callsite.
-func (runtime Runtime) ValidateCalldata(logic engineio.LogicDriver, ixn *engineio.IxnObject) error {
+func (runtime Runtime) ValidateCalldata(logic engineio.LogicDriver, ixn engineio.IxnDriver) error {
 	// Check logic driver engine
 	if logic.Engine() != engineio.PISA {
 		return errors.New("incompatible logic driver: not a PISA logic")
@@ -132,12 +132,12 @@ func (runtime Runtime) ValidateCalldata(logic engineio.LogicDriver, ixn *enginei
 	// Check that the callsite kind and ixn type of the IxnObject are compatible
 	switch callsite.Kind {
 	case engineio.InvokableCallsite:
-		if ixn.IxType() != common.IxLogicInvoke {
+		if ixn.Type() != common.IxLogicInvoke {
 			return errors.Errorf("invalid callsite '%v' for IxnLogicInvoke", ixn.Callsite())
 		}
 
 	case engineio.DeployerCallsite:
-		if ixn.IxType() != common.IxLogicDeploy {
+		if ixn.Type() != common.IxLogicDeploy {
 			return errors.Errorf("invalid callsite '%v' for IxnLogicDeploy", ixn.Callsite())
 		}
 
@@ -238,6 +238,7 @@ func (runtime *Runtime) setupPrimitiveMethods() {
 
 func (runtime *Runtime) setupBuiltinClasses() {
 	builtins := []RegisterObject{
+		InteractionValue{},
 		EnvironmentValue{},
 		LogicContextValue{},
 		ParticipantContextValue{},

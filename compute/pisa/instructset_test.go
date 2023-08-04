@@ -4,7 +4,6 @@ import (
 	"math"
 	"math/big"
 	"testing"
-	"time"
 
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
@@ -19,10 +18,15 @@ func TestInstructionSet(t *testing.T) {
 	defaultScope := func() *callscope {
 		return &callscope{
 			engine: &Engine{
-				runtime:     &runtime,
-				fueltank:    engineio.NewFuelTank(big.NewInt(1000)),
-				callstack:   make(callstack, 0),
-				environment: engineio.NewEnvObject(time.Now().Unix(), big.NewInt(1)),
+				runtime:   &runtime,
+				fueltank:  engineio.NewFuelTank(big.NewInt(1000)),
+				callstack: make(callstack, 0),
+				interaction: NewDebugIxnDriver(
+					common.IxLogicInvoke,
+					big.NewInt(1), big.NewInt(1000),
+					"Test", []byte{0, 1, 2, 3},
+				),
+				environment: NewDebugEnvDriver(0, "Test"),
 			},
 		}
 	}
@@ -2561,6 +2565,17 @@ func TestInstructionSet(t *testing.T) {
 		})
 	})
 
+	t.Run("IXN", func(t *testing.T) {
+		t.Run("success", func(t *testing.T) {
+			scope := defaultScope()
+			scope.memory = map[byte]RegisterValue{}
+
+			continuity := opIXN(scope, []byte{0})
+			require.Equal(t, continueOk{30}, continuity)
+			require.Equal(t, InteractionValue{driver: scope.engine.interaction}, scope.memory[0])
+		})
+	})
+
 	t.Run("ENV", func(t *testing.T) {
 		t.Run("success", func(t *testing.T) {
 			scope := defaultScope()
@@ -2568,7 +2583,7 @@ func TestInstructionSet(t *testing.T) {
 
 			continuity := opENV(scope, []byte{0})
 			require.Equal(t, continueOk{30}, continuity)
-			require.Equal(t, EnvironmentValue{driver: engineio.NewEnvObject(time.Now().Unix(), big.NewInt(1))}, scope.memory[0])
+			require.Equal(t, EnvironmentValue{driver: scope.engine.environment}, scope.memory[0])
 		})
 	})
 
@@ -2590,7 +2605,7 @@ func TestInstructionSet(t *testing.T) {
 			logicID := common.NewLogicIDv0(true, false, false, false, 0, logicAddress)
 
 			scope := defaultScope()
-			scope.engine.persistent = engineio.NewDebugContextDriver(logicAddress, logicID)
+			scope.engine.persistent = NewDebugContextDriver(logicAddress, logicID)
 			scope.memory = map[byte]RegisterValue{}
 
 			continuity := opLOGIC(scope, []byte{0})
@@ -2618,7 +2633,7 @@ func TestInstructionSet(t *testing.T) {
 			logicID := common.NewLogicIDv0(false, false, false, false, 0, logicAddress)
 
 			scope := defaultScope()
-			scope.engine.sephemeral = engineio.NewDebugContextDriver(senderAddress, logicID)
+			scope.engine.sephemeral = NewDebugContextDriver(senderAddress, logicID)
 			scope.memory = map[byte]RegisterValue{}
 
 			continuity := opSENDER(scope, []byte{0})

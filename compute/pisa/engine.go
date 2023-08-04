@@ -34,7 +34,7 @@ type Engine struct {
 	rephemeral engineio.CtxDriver //nolint:unused
 
 	// ixn driver
-	interaction *engineio.IxnObject
+	interaction engineio.IxnDriver
 	// env driver
 	environment engineio.EnvDriver
 }
@@ -49,7 +49,7 @@ func (engine Engine) Kind() engineio.EngineKind { return engineio.PISA }
 // It implements the engineio.EngineDriver interface.
 func (engine *Engine) Call(
 	ctx context.Context,
-	ixn *engineio.IxnObject,
+	ixn engineio.IxnDriver,
 	participants ...engineio.CtxDriver,
 ) (*engineio.CallResult, error) {
 	engine.callstack.push(&callframe{scope: "root", label: "start"})
@@ -65,8 +65,8 @@ func (engine *Engine) Call(
 
 	switch kind := callsite.Kind; kind {
 	case engineio.InvokableCallsite, engineio.DeployerCallsite:
-		if ixn.IxType() != callsite.Kind.IxnType() {
-			return nil, errors.Errorf("callsite kind '%v' is not appropriate for %v", kind, ixn.IxType())
+		if ixn.Type() != callsite.Kind.IxnType() {
+			return nil, errors.Errorf("callsite kind '%v' is not appropriate for %v", kind, ixn.Type())
 		}
 
 		if len(participants) != 1 {

@@ -148,9 +148,13 @@ func (compiler *ManifestCompiler) compile() (*engineio.LogicDescriptor, error) {
 
 	// Generate the hash of the manifest
 	manifestHash, _ := compiler.manifest.Hash()
+	manifestRaw, _ := compiler.manifest.Encode(engineio.POLO)
+
 	// Generate a LogicDescriptor from the compiler data
 	return &engineio.LogicDescriptor{
-		Manifest:    manifestHash,
+		ManifestRaw:  manifestRaw,
+		ManifestHash: manifestHash,
+
 		Engine:      engineio.PISA,
 		Interactive: false,
 
