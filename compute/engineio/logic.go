@@ -38,6 +38,10 @@ type LogicDriver interface {
 	GetClassdef(string) (*Classdef, bool)
 }
 
+// LogicImplSchema represents a schematic for verifying that a
+// LogicDriver implements some specific interfaces and callpoints.
+type LogicImplSchema interface{}
+
 // LogicDescriptor represents an object that describes the internal
 // components and characteristics of a Logic implementation
 type LogicDescriptor struct {
@@ -56,13 +60,6 @@ type LogicDescriptor struct {
 	Classdefs map[string]*Classdef
 }
 
-type (
-	// ElementKind is a type alias for an element kind string
-	ElementKind string
-	// ElementPtr is a type alias for an element pointer
-	ElementPtr uint64
-)
-
 // LogicElement represents a generic container for a logic Element.
 // It is uniquely identified with a group name and an index pointer.
 // Engine implementations are responsible for handling
@@ -76,6 +73,15 @@ type LogicElement struct {
 	Data []byte
 }
 
-// LogicImplSchema represents a schematic for verifying that a
-// LogicDriver implements some specific interfaces and callpoints.
-type LogicImplSchema interface{}
+type (
+	// ElementKind is a type alias for an element kind string
+	ElementKind string
+	// ElementPtr is a type alias for an element pointer
+	ElementPtr uint64
+)
+
+// Classdef represents a class definition in a Logic.
+// It can be resolved from a string by looking it up on the LogicDriver
+type Classdef struct {
+	Ptr ElementPtr
+}

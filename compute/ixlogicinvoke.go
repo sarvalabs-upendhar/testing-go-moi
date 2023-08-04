@@ -3,7 +3,6 @@ package compute
 import (
 	"context"
 	"math/big"
-	"time"
 
 	"github.com/pkg/errors"
 
@@ -147,17 +146,21 @@ func InvokeLogic(logicID common.LogicID, state *state.Object, opts ...LogicInvok
 	engine, err := runtime.SpawnEngine(
 		invoker.fueltank.Level(), invoker.logicObject,
 		invoker.logicState.GenerateLogicContextObject(invoker.logicObject.LogicID()),
-		engineio.NewEnvObject(time.Now().Unix(), big.NewInt(1)),
+		envObject{},
 	)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not bootstrap engine")
 	}
 
-	// Create an interaction from kind, callsite and calldata
-	interaction := common.NewLogicInteraction(common.IxLogicInvoke, invoker.callsite, invoker.calldata, nil)
-
 	// Create an IxnObject
-	ixn := engineio.NewIxnObject(*interaction)
+	// todo: we should pass the raw ixn somehow
+	ixn := ixnObject{
+		kind:     common.IxLogicInvoke,
+		price:    big.NewInt(1),
+		limit:    invoker.fueltank.Capacity,
+		callsite: invoker.callsite,
+		calldata: invoker.calldata,
+	}
 
 	// Declare sender context driver
 	var senderCtx engineio.CtxDriver

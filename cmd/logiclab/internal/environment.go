@@ -13,11 +13,10 @@ import (
 
 	"github.com/chzyer/readline"
 	"github.com/pkg/errors"
-	"go.uber.org/atomic"
-
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/compute/pisa"
+	"go.uber.org/atomic"
 )
 
 func init() {
@@ -39,6 +38,8 @@ const (
 		"             d8888P                                   \n" +
 		replDivider + "\n"
 )
+
+var LabFuelPrice = big.NewInt(1)
 
 // Environment represents the logic lab runtime environment
 type Environment struct {
@@ -249,6 +250,19 @@ func (env *Environment) GetReference(ref engineio.ReferenceVal) (any, bool) {
 	return val, ok
 }
 
+// ClusterID implements the engineio.EnvDriver for Environment.
+// Returns the "LogicLab" constant.
+// todo: read this from the config
+func (env *Environment) ClusterID() string {
+	return "LogicLab"
+}
+
+// Timestamp implements the engineio.EnvDriver for Environment.
+// Returns the current unix timestamp.
+func (env *Environment) Timestamp() int64 {
+	return time.Now().Unix()
+}
+
 // write outputs the given content to the environment output buffer.
 // The given output is always suffixed with a new line character.
 func (env *Environment) write(s string) {
@@ -412,8 +426,4 @@ func (env *Environment) formatValue(value any) string {
 	default:
 		return fmt.Sprintf("%v", data)
 	}
-}
-
-func (env *Environment) Driver() engineio.EnvDriver {
-	return engineio.NewEnvObject(time.Now().Unix(), big.NewInt(1))
 }

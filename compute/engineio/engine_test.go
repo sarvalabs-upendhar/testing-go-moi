@@ -60,7 +60,7 @@ func (m *mockEngineRuntime) CompileManifest(_ Fuel, _ *Manifest) (*LogicDescript
 	return nil, NewFuel(0), nil
 }
 
-func (m *mockEngineRuntime) ValidateCalldata(_ LogicDriver, _ *IxnObject) error {
+func (m *mockEngineRuntime) ValidateCalldata(_ LogicDriver, _ IxnDriver) error {
 	return nil
 }
 

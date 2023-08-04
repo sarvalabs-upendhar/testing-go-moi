@@ -140,24 +140,3 @@ func (callsite *CallsiteKind) UnmarshalYAML(node *yaml.Node) error {
 
 	return nil
 }
-
-// CallEncoder is an interface with capabilities to encode
-// inputs and decode outputs for a specific callable site.
-// It can be generated from either a Manifest or LogicDriver.
-type CallEncoder interface {
-	EncodeInputs(map[string]any, ReferenceProvider) ([]byte, error)
-	DecodeOutputs([]byte) (map[string]any, error)
-}
-
-// CallResult is the output emitted by Engine when making function calls.
-// It contains the amount of fuel expended for the call along with either output value or returned error.
-type CallResult struct {
-	Consumed Fuel
-	Outputs  []byte
-	Error    []byte
-}
-
-// Ok returns whether the CallResult has some error data
-func (result CallResult) Ok() bool {
-	return result.Error == nil
-}

@@ -58,12 +58,12 @@ elements:
   - ptr: 3
     kind: routine
     data:
-      name: GetFuelPrice
+      name: GetCluster
       kind: invokable
       returns:
         - slot: 0
-          label: fuel
-          type: u256
+          label: cluster
+          type: string
       executes:
         bin: [
           0x71, 0x00,        # env $0

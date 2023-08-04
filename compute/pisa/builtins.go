@@ -9,7 +9,6 @@ import (
 	"golang.org/x/crypto/sha3"
 
 	"github.com/sarvalabs/go-moi/compute/engineio"
-	"github.com/sarvalabs/go-moi/crypto"
 )
 
 // BuiltinRunner is the executor function for a builtin executable
@@ -178,11 +177,11 @@ func builtinSignatureVerify() *Builtin {
 		func(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 			data, sig, pubBytes := inputs[0].(BytesValue), inputs[1].(BytesValue), inputs[2].(BytesValue)
 
-			if !crypto.ValidateSignature(sig) {
+			if !engineio.ValidateSignature(sig) {
 				return nil, exception(CallError, "insufficient length for signature")
 			}
 
-			ok, err := crypto.Verify(data, sig, pubBytes)
+			ok, err := engineio.VerifySignature(data, sig, pubBytes)
 			if err != nil {
 				return nil, exception(RuntimeError, err.Error())
 			}

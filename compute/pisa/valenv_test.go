@@ -1,22 +1,24 @@
 package pisa
 
 import (
-	"math/big"
 	"testing"
 	"time"
 
-	"github.com/holiman/uint256"
-	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestEnvironmentValue(t *testing.T) {
-	t.Run("RegisterValue Implementation", func(t *testing.T) {
-		// Create a new EnvironmentValue
-		value := EnvironmentValue{engineio.NewEnvObject(time.Now().Unix(), big.NewInt(1))}
+	// Create a new EnvironmentValue
+	value := EnvironmentValue{NewDebugEnvDriver(time.Now().Unix(), "Test")}
 
+	t.Run("RegisterValue Implementation", func(t *testing.T) {
 		// Test Type()
-		assert.Equal(t, BuiltinDatatype{name: "Environment", fields: makefields([]*TypeField{})}, value.Type(), "EnvironmentValue Type should be TypeEnvironment") //nolint:lll
+		assert.Equal(t, BuiltinDatatype{
+			name:   "Environment",
+			fields: makefields([]*TypeField{}),
+		}, value.Type(),
+			"EnvironmentValue Type should be TypeEnvironment",
+		)
 
 		// Test Copy()
 		clone := value.Copy()
@@ -44,8 +46,8 @@ func TestEnvironmentValue(t *testing.T) {
 			}
 
 			for _, test := range tests {
-				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}                                                                    //nolint:lll
-				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: EnvironmentValue{driver: engineio.NewEnvObject(time.Now().Unix(), big.NewInt(1))}}) //nolint:lll
+				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}
+				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: value})
 
 				if test.err != nil {
 					assert.Equal(t, test.err, except)
@@ -56,19 +58,19 @@ func TestEnvironmentValue(t *testing.T) {
 			}
 		})
 
-		t.Run("FuelPrice [0x11]", func(t *testing.T) {
+		t.Run("ClusterID [0x11]", func(t *testing.T) {
 			method := runtime.builtinClasses["Environment"].methods[0x11]
 
 			tests := []struct {
-				res *U256Value
+				res StringValue
 				err *Exception
 			}{
-				{res: &U256Value{value: uint256.NewInt(1)}, err: nil},
+				{StringValue("Test"), nil},
 			}
 
 			for _, test := range tests {
-				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}                                                                    //nolint:lll
-				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: EnvironmentValue{driver: engineio.NewEnvObject(time.Now().Unix(), big.NewInt(1))}}) //nolint:lll
+				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}
+				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: value})
 
 				if test.err != nil {
 					assert.Equal(t, test.err, except)

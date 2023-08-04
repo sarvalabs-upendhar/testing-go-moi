@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"math/big"
 	"strings"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -60,16 +61,10 @@ func LogicCallCommand(kind engineio.CallsiteKind, name, callsite, args string) C
 			return err.Error()
 		}
 
-		manifest, err := logic.Manifest.Encode(engineio.POLO)
-		if err != nil {
-			return err.Error()
-		}
-
 		// Spawn an engine for the runtime
 		engine, err := runtime.SpawnEngine(
 			env.inventory.Config.BaseFuel, logic.Object,
-			logic.CtxState.GenerateLogicContextObject(logic.Object.LogicID()),
-			env.Driver(),
+			logic.CtxState.GenerateLogicContextObject(logic.Object.LogicID()), env,
 		)
 		if err != nil {
 			return fmt.Sprintf("failed to bootstrap engine: %v", err)
@@ -83,10 +78,15 @@ func LogicCallCommand(kind engineio.CallsiteKind, name, callsite, args string) C
 
 		// Generate the context object for the sender
 		senderContext := sender.CtxState.GenerateLogicContextObject(logic.Object.LogicID())
+
 		// Generate an interaction from the kind, callsite, calldata and manifest
-		interaction := common.NewLogicInteraction(kind.IxnType(), callsite, calldata, manifest)
-		// Generate the interaction object
-		ixn := engineio.NewIxnObject(*interaction)
+		ixn := LogicInteraction{
+			kind:     kind.IxnType(),
+			price:    LabFuelPrice,
+			limit:    env.inventory.Config.BaseFuel,
+			callsite: callsite,
+			calldata: calldata,
+		}
 
 		// Execute the function
 		result, err := engine.Call(context.Background(), ixn, senderContext)
@@ -101,6 +101,20 @@ func LogicCallCommand(kind engineio.CallsiteKind, name, callsite, args string) C
 		return formatResult(env, result, encoder)
 	}
 }
+
+type LogicInteraction struct {
+	kind     common.IxType
+	price    *big.Int
+	limit    *big.Int
+	callsite string
+	calldata []byte
+}
+
+func (ixn LogicInteraction) Type() common.IxType { return ixn.kind }
+func (ixn LogicInteraction) FuelPrice() *big.Int { return ixn.price }
+func (ixn LogicInteraction) FuelLimit() *big.Int { return ixn.limit }
+func (ixn LogicInteraction) Callsite() string    { return ixn.callsite }
+func (ixn LogicInteraction) Calldata() []byte    { return ixn.calldata }
 
 func formatArguments(env *Environment, args string, encoder engineio.CallEncoder) ([]byte, error) {
 	// Check if args begins with 0x -> Assume raw calldata provided instead of keyed parameters

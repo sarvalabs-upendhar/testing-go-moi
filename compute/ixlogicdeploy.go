@@ -3,7 +3,6 @@ package compute
 import (
 	"context"
 	"math/big"
-	"time"
 
 	"github.com/pkg/errors"
 
@@ -250,17 +249,21 @@ func (deployer logicDeployer) callDeployer(logic *state.LogicObject) (*engineio.
 
 	// Create a new engine for the execution
 	engine, err := runtime.SpawnEngine(
-		deployer.fueltank.Level(),
-		logic, deployer.logicState.GenerateLogicContextObject(logic.LogicID()),
-		engineio.NewEnvObject(time.Now().Unix(), big.NewInt(1)),
+		deployer.fueltank.Level(), logic, deployer.logicState.GenerateLogicContextObject(logic.LogicID()), envObject{},
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not bootstrap engine")
 	}
 
-	interaction := common.NewLogicInteraction(common.IxLogicDeploy, deployer.deployment.callsite, deployer.deployment.calldata, deployer.manifest) //nolint:lll
 	// Create an IxnObject
-	ixn := engineio.NewIxnObject(*interaction)
+	// todo: we should accept the raw interaction somehow
+	ixn := ixnObject{
+		kind:     common.IxLogicDeploy,
+		price:    big.NewInt(1),
+		limit:    deployer.fueltank.Capacity,
+		callsite: deployer.deployment.callsite,
+		calldata: deployer.deployment.calldata,
+	}
 
 	// Declare context driver
 	var deployerCtx engineio.CtxDriver

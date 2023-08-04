@@ -79,7 +79,7 @@ func (ixn InteractionValue) methods() [256]*BuiltinMethod {
 			func(_ *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 				ixnObj := inputs[0].(InteractionValue)
 
-				return RegisterSet{0: StringValue(ixnObj.driver.IxnType().String())}, nil
+				return RegisterSet{0: StringValue(ixnObj.driver.Type().String())}, nil
 			},
 		),
 	}

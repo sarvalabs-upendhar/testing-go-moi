@@ -1,7 +1,6 @@
 package manifests
 
 import (
-	"math/big"
 	"testing"
 	"time"
 
@@ -54,9 +53,9 @@ func (suite *EnvCodesTestSuite) TestGetTimeStamp() {
 	suite.Nil(except)
 }
 
-func (suite *EnvCodesTestSuite) TestGetFuelPrice() {
-	consumed, output, except := suite.Call("GetFuelPrice", nil)
-	suite.Equal(big.NewInt(1), output["fuel"])
+func (suite *EnvCodesTestSuite) TestClusterID() {
+	consumed, output, except := suite.Call("GetCluster", nil)
+	suite.Equal("Test", output["cluster"])
 	suite.Equal(engineio.NewFuel(110), consumed)
 	suite.Nil(except)
 }

@@ -386,7 +386,3 @@ func VerifySignatureUsingKramaID(id kramaid.KramaID, rawData []byte, signature [
 
 	return nil
 }
-
-func ValidateSignature(sig []byte) bool {
-	return cryptocommon.CanUnmarshalSignature(sig)
-}

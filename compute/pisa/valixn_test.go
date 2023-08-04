@@ -6,33 +6,17 @@ import (
 
 	"github.com/holiman/uint256"
 	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestInteractionValue(t *testing.T) {
-	ixpayload := &common.LogicPayload{
-		Callsite: "Hello",
-		Calldata: []byte{0, 1, 2, 3},
-	}
-
-	payload, _ := ixpayload.Bytes()
-
-	ixData := common.IxData{
-		Input: common.IxInput{
-			Type:      common.IxLogicInvoke,
-			Payload:   payload,
-			FuelPrice: big.NewInt(1),
-			FuelLimit: big.NewInt(1000),
-		},
-	}
-
-	ixn, _ := common.NewInteraction(ixData, nil)
+	value := InteractionValue{driver: NewDebugIxnDriver(
+		common.IxLogicInvoke,
+		big.NewInt(1), big.NewInt(1000),
+		"Hello", []byte{0, 1, 2, 3},
+	)}
 
 	t.Run("RegisterValue Implementation", func(t *testing.T) {
-		// Create a new InteractionValue
-		value := InteractionValue{driver: engineio.NewIxnObject(*ixn)}
-
 		// Test Type()
 		assert.Equal(t, BuiltinDatatype{
 			name:   "Interaction",
@@ -65,8 +49,8 @@ func TestInteractionValue(t *testing.T) {
 			}
 
 			for _, test := range tests {
-				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}                                //nolint:lll
-				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: InteractionValue{engineio.NewIxnObject(*ixn)}}) //nolint:lll
+				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}
+				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: value})
 
 				if test.err != nil {
 					assert.Equal(t, test.err, except)
@@ -88,8 +72,8 @@ func TestInteractionValue(t *testing.T) {
 			}
 
 			for _, test := range tests {
-				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}                                //nolint:lll
-				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: InteractionValue{engineio.NewIxnObject(*ixn)}}) //nolint:lll
+				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}
+				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: value})
 
 				if test.err != nil {
 					assert.Equal(t, test.err, except)
@@ -111,8 +95,8 @@ func TestInteractionValue(t *testing.T) {
 			}
 
 			for _, test := range tests {
-				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}                                //nolint:lll
-				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: InteractionValue{engineio.NewIxnObject(*ixn)}}) //nolint:lll
+				scope := &callscope{engine: &Engine{callstack: make(callstack, 0), runtime: &runtime}}
+				outputs, except := method.Builtin.runner(scope.engine, RegisterSet{0: value})
 
 				if test.err != nil {
 					assert.Equal(t, test.err, except)

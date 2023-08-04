@@ -562,6 +562,24 @@ func (ix *Interaction) PayloadForSignature() ([]byte, error) {
 	return polo.Polorize(SendIxArgsFromIxData(ix.inner))
 }
 
+func (ix *Interaction) Callsite() string {
+	payload, err := ix.GetLogicPayload()
+	if err != nil {
+		return ""
+	}
+
+	return payload.Callsite
+}
+
+func (ix *Interaction) Calldata() []byte {
+	payload, err := ix.GetLogicPayload()
+	if err != nil {
+		return nil
+	}
+
+	return payload.Calldata
+}
+
 // Interactions are array of Transactions
 type Interactions []*Interaction
 

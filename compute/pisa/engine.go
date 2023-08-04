@@ -65,8 +65,8 @@ func (engine *Engine) Call(
 
 	switch kind := callsite.Kind; kind {
 	case engineio.InvokableCallsite, engineio.DeployerCallsite:
-		if ixn.IxnType() != callsite.Kind.IxnType() {
-			return nil, errors.Errorf("callsite kind '%v' is not appropriate for %v", kind, ixn.IxnType())
+		if ixn.Type() != callsite.Kind.IxnType() {
+			return nil, errors.Errorf("callsite kind '%v' is not appropriate for %v", kind, ixn.Type())
 		}
 
 		if len(participants) != 1 {
