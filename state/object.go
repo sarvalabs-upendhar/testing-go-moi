@@ -549,10 +549,15 @@ func (object *Object) CreateAsset(addr common.Address, descriptor *common.AssetD
 }
 
 func (object *Object) CreateLogic(descriptor *engineio.LogicDescriptor) (common.LogicID, error) {
-	// Generate the key for the LogicManifest from its hash
-	key := common.BytesToHex(storage.LogicManifestKey(object.Address(), descriptor.ManifestHash))
-	// Write the manifest into the dirty entries
-	object.SetDirtyEntry(key, descriptor.ManifestRaw)
+	//// Generate the key for the LogicManifest from its hash
+	//key := common.BytesToHex(storage.LogicManifestKey(object.Address(), descriptor.ManifestHash))
+	//// Write the manifest into the dirty entries
+	//object.SetDirtyEntry(key, descriptor.ManifestRaw)
+
+	// Set the manifest data into the state object dirty entries.
+	// This manifest will now be content addressed with its hash.
+	// todo: the following line should be replaced with code above
+	object.SetDirtyEntry(descriptor.ManifestHash.Hex(), descriptor.ManifestRaw)
 
 	// Create a new LogicObject from the LogicDescriptor
 	logicObject := NewLogicObject(object.Address(), descriptor)
