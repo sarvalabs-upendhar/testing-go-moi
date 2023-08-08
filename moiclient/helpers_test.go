@@ -133,6 +133,8 @@ func getIXArgsForLogicDeployment(t *testing.T, addr common.Address) *common.Send
 func getTesseract(t *testing.T, client *Client, addr common.Address, height *int64) *rpcargs.RPCTesseract {
 	t.Helper()
 
+	ctx := context.Background()
+
 	args := &rpcargs.TesseractArgs{
 		Address:          addr,
 		WithInteractions: true,
@@ -141,7 +143,7 @@ func getTesseract(t *testing.T, client *Client, addr common.Address, height *int
 		},
 	}
 
-	ts, err := client.Tesseract(args)
+	ts, err := client.Tesseract(ctx, args)
 	require.NoError(t, err)
 
 	return ts
@@ -151,13 +153,15 @@ func getTesseract(t *testing.T, client *Client, addr common.Address, height *int
 func getAssetID(t *testing.T, client *Client, addr common.Address, height *int64) common.AssetID {
 	t.Helper()
 
+	ctx := context.Background()
+
 	ts := getTesseract(t, client, addr, height)
 
 	receiptArgs := &rpcargs.ReceiptArgs{
 		Hash: ts.Ixns[0].Hash,
 	}
 
-	receipt, err := client.InteractionReceipt(receiptArgs)
+	receipt, err := client.InteractionReceipt(ctx, receiptArgs)
 	require.NoError(t, err)
 
 	var assetReceipt common.AssetCreationReceipt
@@ -172,13 +176,15 @@ func getAssetID(t *testing.T, client *Client, addr common.Address, height *int64
 func getLogicID(t *testing.T, client *Client, addr common.Address, height *int64) common.LogicID {
 	t.Helper()
 
+	ctx := context.Background()
+
 	ts := getTesseract(t, client, addr, height)
 
 	receiptArgs := &rpcargs.ReceiptArgs{
 		Hash: ts.Ixns[0].Hash,
 	}
 
-	receipt, err := client.InteractionReceipt(receiptArgs)
+	receipt, err := client.InteractionReceipt(ctx, receiptArgs)
 	require.NoError(t, err)
 
 	var logicReceipt common.LogicDeployReceipt
@@ -205,7 +211,7 @@ func retryFetchReceipt(t *testing.T, ctx context.Context, client *Client, ixHash
 			require.FailNow(t, "ix receipt not found,"+
 				" as forming the ICS took more time, so try running tests again", ixHash)
 		default:
-			receipt, err := client.InteractionReceipt(receiptArgs)
+			receipt, err := client.InteractionReceipt(ctx, receiptArgs)
 			if err == nil {
 				httpReceipt := httpInteractionReceipt(t, receiptArgs)
 				checkForRPCReceipt(t, httpReceipt, receipt)

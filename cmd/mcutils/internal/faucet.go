@@ -82,7 +82,7 @@ func runFaucetCommand(cmd *cobra.Command, args []string) {
 		cmdcommon.Err(err)
 	}
 
-	nonce, err := client.InteractionCount(&rpcargs.InteractionCountArgs{
+	nonce, err := client.InteractionCount(context.Background(), &rpcargs.InteractionCountArgs{
 		Address: common.BytesToAddress(faucetWalletPublicKey),
 		Options: rpcargs.TesseractNumberOrHash{
 			TesseractNumber: &rpcargs.LatestTesseractHeight,
@@ -114,7 +114,7 @@ func runFaucetCommand(cmd *cobra.Command, args []string) {
 		cmdcommon.Err(err)
 	}
 
-	ixHash, err := client.SendInteractions(&rpcargs.SendIX{
+	ixHash, err := client.SendInteractions(context.Background(), &rpcargs.SendIX{
 		IXArgs:    hex.EncodeToString(rawArgs),
 		Signature: hex.EncodeToString(signature),
 	})

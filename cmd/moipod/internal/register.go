@@ -207,7 +207,7 @@ func registerGuardian(vault *crypto.KramaVault) {
 
 	fmt.Printf("Krama-ID %s \n", vault.KramaID())
 
-	nonce, err := client.InteractionCount(&rpcargs.InteractionCountArgs{
+	nonce, err := client.InteractionCount(context.Background(), &rpcargs.InteractionCountArgs{
 		Address: common.BytesToAddress(moiIDpublicKey),
 		Options: rpcargs.TesseractNumberOrHash{
 			TesseractNumber: &rpcargs.LatestTesseractHeight,
@@ -247,7 +247,7 @@ func registerGuardian(vault *crypto.KramaVault) {
 		cmdCommon.Err(err)
 	}
 
-	ixHash, err := client.SendInteractions(&rpcargs.SendIX{
+	ixHash, err := client.SendInteractions(context.Background(), &rpcargs.SendIX{
 		IXArgs:    hex.EncodeToString(rawArgs),
 		Signature: hex.EncodeToString(signature),
 	})
@@ -282,7 +282,7 @@ func registerGuardian(vault *crypto.KramaVault) {
 }
 
 func isGuardianRegistered(client *moiclient.Client, kramaID id.KramaID) bool {
-	storageData, err := client.Storage(&rpcargs.GetLogicStorageArgs{
+	storageData, err := client.Storage(context.Background(), &rpcargs.GetLogicStorageArgs{
 		LogicID:    common.GuardianLogicID,
 		StorageKey: pisa.SlotHash(gtypes.GuardianSLot),
 		Options: rpcargs.TesseractNumberOrHash{

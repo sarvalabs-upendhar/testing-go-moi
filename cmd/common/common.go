@@ -36,7 +36,7 @@ func WaitForReceipts(ctx context.Context, client *moiclient.Client, ixHash commo
 
 			return nil, ctx.Err()
 		default:
-			rpcReceipt, err := client.InteractionReceipt(&args.ReceiptArgs{
+			rpcReceipt, err := client.InteractionReceipt(ctx, &args.ReceiptArgs{
 				Hash: ixHash,
 			})
 			if err != nil {

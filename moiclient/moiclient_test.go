@@ -37,12 +37,14 @@ func TestMoiClient(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
+	ctx := context.Background()
+
 	addrsMap := make(StrMap)
 
 	client, err := NewClient(localURL)
 	require.NoError(t, err)
 
-	accs, err := client.Accounts()
+	accs, err := client.Accounts(ctx)
 	require.NoError(t, err)
 
 	addrs, err := SetupAddrs(accs)
@@ -157,13 +159,15 @@ func chooseAcc(
 	addrs []common.Address,
 	accs []tests.AccountWithMnemonic,
 ) (int, tests.AccountWithMnemonic) {
+	ctx := context.Background()
+
 	for j := i; j < len(addrs); j++ {
 		acc, exists := GetMnemonicFromAccounts(addrs[j], accs)
 		if exists {
 			return j, acc
 		}
 
-		accMetaInfo, err := client.AccountMetaInfo(&rpcargs.GetAccountArgs{
+		accMetaInfo, err := client.AccountMetaInfo(ctx, &rpcargs.GetAccountArgs{
 			Address: addrs[j],
 		})
 		require.NoError(t, err)
@@ -261,7 +265,9 @@ func deployLogic(t *testing.T, client *Client, addr common.Address, mnemonic str
 	sendIXArgs := getIXArgsForLogicDeployment(t, addr)
 	sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
 
-	ixHash, err := client.SendInteractions(sendIX)
+	ctx := context.Background()
+
+	ixHash, err := client.SendInteractions(ctx, sendIX)
 	require.NoError(t, err)
 
 	log.Println("Logic Deploy Interaction hash", ixHash)
@@ -297,7 +303,7 @@ func executeLogic(t *testing.T, client *Client, deployAddr, addr common.Address,
 
 	sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
 
-	ixHash, err := client.SendInteractions(sendIX)
+	ixHash, err := client.SendInteractions(context.Background(), sendIX)
 	require.NoError(t, err)
 
 	log.Println("Hello", ixHash)
@@ -331,7 +337,7 @@ func createAsset(t *testing.T, client *Client, addr common.Address, mnemonic str
 
 	sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
 
-	ixHash, err := client.SendInteractions(sendIX)
+	ixHash, err := client.SendInteractions(context.Background(), sendIX)
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), IxnTimeout)
@@ -358,7 +364,7 @@ func transferTokens(t *testing.T, client *Client, sender, receiver common.Addres
 
 	sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
 
-	ixHash, err := client.SendInteractions(sendIX)
+	ixHash, err := client.SendInteractions(context.Background(), sendIX)
 	require.NoError(t, err)
 
 	// make sure interaction executed successfully
@@ -391,7 +397,7 @@ func SendIxWithInvalidSign(t *testing.T, client *Client, addr common.Address, mn
 
 	sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
 
-	_, err = client.SendInteractions(sendIX)
+	_, err = client.SendInteractions(context.Background(), sendIX)
 	require.ErrorContains(t, err, common.ErrInvalidIXSignature.Error())
 }
 
@@ -404,7 +410,7 @@ func fillIXPool(t *testing.T, client *Client, addr common.Address, mnemonic stri
 	for i := 0; i < ixnPendingCount; i++ { // send ixns just to fill ixpool with some data
 		sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
 
-		_, err := client.SendInteractions(sendIX)
+		_, err := client.SendInteractions(context.Background(), sendIX)
 		require.NoError(t, err, "sending interaction failed")
 
 		sendIXArgs.Nonce += increment // increment nonce to avoid ix already known error
@@ -413,7 +419,7 @@ func fillIXPool(t *testing.T, client *Client, addr common.Address, mnemonic stri
 
 func testTesseract(t *testing.T, client *Client, addr common.Address) {
 	invalidHeight := int64(100000)
-
+	ctx := context.Background()
 	testcases := []struct {
 		name          string
 		tesseractArgs *rpcargs.TesseractArgs
@@ -464,7 +470,7 @@ func testTesseract(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			ts, err := client.Tesseract(test.tesseractArgs)
+			ts, err := client.Tesseract(ctx, test.tesseractArgs)
 
 			t.Log(addr)
 			if test.expectedError != nil {
@@ -495,7 +501,7 @@ func testTesseract(t *testing.T, client *Client, addr common.Address) {
 func testDBGet(t *testing.T, client *Client) {
 	// key and value belongs to genesis tesseract account meta info
 	key, _ := storage.BucketKeyAndID(common.SargaAddress)
-
+	ctx := context.Background()
 	testcases := []struct {
 		name          string
 		debugArgs     *rpcargs.DebugArgs
@@ -518,7 +524,7 @@ func testDBGet(t *testing.T, client *Client) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			value, err := client.DBGet(test.debugArgs)
+			value, err := client.DBGet(ctx, test.debugArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -541,6 +547,7 @@ func testDBGet(t *testing.T, client *Client) {
 
 func testGetAssetInfoByAssetID(t *testing.T, client *Client, addr common.Address) {
 	tsHeight := int64(-1)
+	ctx := context.Background()
 	testcases := []struct {
 		name          string
 		assetID       common.AssetID
@@ -565,7 +572,7 @@ func testGetAssetInfoByAssetID(t *testing.T, client *Client, addr common.Address
 					TesseractNumber: &tsHeight,
 				},
 			}
-			assetInfo, err := client.AssetInfoByAssetID(args)
+			assetInfo, err := client.AssetInfoByAssetID(ctx, args)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -586,6 +593,7 @@ func testGetBalance(t *testing.T, client *Client, addrsMap StrMap) {
 	sender := addrsMap["assetAddr"]
 	receiver := addrsMap["receiverAddr"]
 	assetID := getAssetID(t, client, sender, &createAssetHeight)
+	ctx := context.Background()
 
 	createAssetBalance := new(big.Int).SetUint64(1248577)
 	senderTransferTokenBalance := new(big.Int).SetUint64(1248561)
@@ -645,7 +653,7 @@ func testGetBalance(t *testing.T, client *Client, addrsMap StrMap) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			balance, err := client.Balance(test.balanceArgs)
+			balance, err := client.Balance(ctx, test.balanceArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -665,6 +673,8 @@ func testGetBalance(t *testing.T, client *Client, addrsMap StrMap) {
 func testFuelEstimate(t *testing.T, client *Client, addr common.Address) {
 	ts := getTesseract(t, client, addr, &createAssetHeight)
 	supply, _ := new(big.Int).SetString("130D52", 16)
+
+	ctx := context.Background()
 
 	assetCreationPayload := &common.AssetCreatePayload{
 		Symbol: "ASSETCREATE",
@@ -696,7 +706,7 @@ func testFuelEstimate(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			fuelConsumed, err := client.FuelEstimate(test.IxArgs)
+			fuelConsumed, err := client.FuelEstimate(ctx, test.IxArgs)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -711,6 +721,7 @@ func testFuelEstimate(t *testing.T, client *Client, addr common.Address) {
 
 func testTDU(t *testing.T, client *Client, addr common.Address) {
 	assetID := getAssetID(t, client, addr, &createAssetHeight)
+	ctx := context.Background()
 	sortTDU := func(tdu []rpcargs.TDU) {
 		sort.Slice(tdu, func(i, j int) bool {
 			return tdu[i].AssetID < tdu[j].AssetID
@@ -745,7 +756,7 @@ func testTDU(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			tdu, err := client.TDU(test.queryArgs)
+			tdu, err := client.TDU(ctx, test.queryArgs)
 
 			t.Log(addr)
 			if test.expectedError != nil {
@@ -778,6 +789,7 @@ func testTDU(t *testing.T, client *Client, addr common.Address) {
 }
 
 func testGetContextInfo(t *testing.T, client *Client, addr common.Address) {
+	ctx := context.Background()
 	testcases := []struct {
 		name            string
 		contextInfoArgs *rpcargs.ContextInfoArgs
@@ -806,7 +818,7 @@ func testGetContextInfo(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			contextInfo, err := client.ContextInfo(test.contextInfoArgs)
+			contextInfo, err := client.ContextInfo(ctx, test.contextInfoArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -825,7 +837,7 @@ func testGetContextInfo(t *testing.T, client *Client, addr common.Address) {
 
 func testInteractionReceipt(t *testing.T, client *Client, addr common.Address) {
 	ts := getTesseract(t, client, addr, &executeLogicHeight)
-
+	ctx := context.Background()
 	testcases := []struct {
 		name          string
 		receiptArgs   *rpcargs.ReceiptArgs
@@ -848,7 +860,7 @@ func testInteractionReceipt(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			receipt, err := client.InteractionReceipt(test.receiptArgs)
+			receipt, err := client.InteractionReceipt(ctx, test.receiptArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -866,6 +878,7 @@ func testInteractionReceipt(t *testing.T, client *Client, addr common.Address) {
 }
 
 func testInteractionCount(t *testing.T, client *Client, addr common.Address) {
+	ctx := context.Background()
 	testcases := []struct {
 		name                 string
 		interactionCountArgs *rpcargs.InteractionCountArgs
@@ -894,7 +907,7 @@ func testInteractionCount(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			interactionCount, err := client.InteractionCount(test.interactionCountArgs)
+			interactionCount, err := client.InteractionCount(ctx, test.interactionCountArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -912,6 +925,7 @@ func testInteractionCount(t *testing.T, client *Client, addr common.Address) {
 }
 
 func testPendingInteractionCount(t *testing.T, client *Client, addr common.Address) {
+	ctx := context.Background()
 	testcases := []struct {
 		name                 string
 		interactionCountArgs *rpcargs.InteractionCountArgs
@@ -940,7 +954,7 @@ func testPendingInteractionCount(t *testing.T, client *Client, addr common.Addre
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			pendingInteractionCount, err := client.PendingInteractionCount(test.interactionCountArgs)
+			pendingInteractionCount, err := client.PendingInteractionCount(ctx, test.interactionCountArgs)
 
 			t.Log(addr)
 			if test.expectedError != nil {
@@ -960,7 +974,7 @@ func testPendingInteractionCount(t *testing.T, client *Client, addr common.Addre
 
 func testLogicStorage(t *testing.T, client *Client, addr common.Address) {
 	logicID := getLogicID(t, client, addr, &deployLogicHeight)
-
+	ctx := context.Background()
 	testcases := []struct {
 		name                 string
 		interactionCountArgs *rpcargs.GetLogicStorageArgs
@@ -991,7 +1005,7 @@ func testLogicStorage(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			logicStorageValue, err := client.Storage(test.interactionCountArgs)
+			logicStorageValue, err := client.Storage(ctx, test.interactionCountArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1008,6 +1022,7 @@ func testLogicStorage(t *testing.T, client *Client, addr common.Address) {
 }
 
 func testAccountState(t *testing.T, client *Client, addr common.Address) {
+	ctx := context.Background()
 	testcases := []struct {
 		name          string
 		accountArgs   *rpcargs.GetAccountArgs
@@ -1036,7 +1051,7 @@ func testAccountState(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			accountState, err := client.AccountState(test.accountArgs)
+			accountState, err := client.AccountState(ctx, test.accountArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1056,7 +1071,7 @@ func testAccountState(t *testing.T, client *Client, addr common.Address) {
 
 func testLogics(t *testing.T, client *Client, addr common.Address) {
 	logicID := getLogicID(t, client, addr, &deployLogicHeight)
-
+	ctx := context.Background()
 	testcases := []struct {
 		name             string
 		LogicIDArgs      *rpcargs.GetLogicIDArgs
@@ -1087,7 +1102,7 @@ func testLogics(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			logicIDs, err := client.LogicIDs(test.LogicIDArgs)
+			logicIDs, err := client.LogicIDs(ctx, test.LogicIDArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1108,6 +1123,7 @@ func testLogics(t *testing.T, client *Client, addr common.Address) {
 func testLogicManifest(t *testing.T, client *Client, addr common.Address) {
 	logicID := getLogicID(t, client, addr, &deployLogicHeight)
 	ts := getTesseract(t, client, addr, &deployLogicHeight)
+	ctx := context.Background()
 
 	var logic *rpcargs.RPCLogicPayload
 
@@ -1164,7 +1180,7 @@ func testLogicManifest(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			logicManifest, err := client.LogicManifest(test.logicManifestArgs)
+			logicManifest, err := client.LogicManifest(ctx, test.logicManifestArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1186,6 +1202,7 @@ func testLogicManifest(t *testing.T, client *Client, addr common.Address) {
 }
 
 func testContent(t *testing.T, client *Client) {
+	ctx := context.Background()
 	testcases := []struct {
 		name          string
 		contentArgs   *rpcargs.ContentArgs
@@ -1199,7 +1216,7 @@ func testContent(t *testing.T, client *Client) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			contentResponse, err := client.Content(test.contentArgs)
+			contentResponse, err := client.Content(ctx, test.contentArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1217,6 +1234,7 @@ func testContent(t *testing.T, client *Client) {
 }
 
 func testContentFrom(t *testing.T, client *Client, addr common.Address) {
+	ctx := context.Background()
 	testcases := []struct {
 		name          string
 		ixPoolArgs    *rpcargs.IxPoolArgs
@@ -1240,7 +1258,7 @@ func testContentFrom(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			contentFromResponse, err := client.ContentFrom(test.ixPoolArgs)
+			contentFromResponse, err := client.ContentFrom(ctx, test.ixPoolArgs)
 			require.NoError(t, err)
 			require.GreaterOrEqual(t, len(contentFromResponse.Pending), test.expectedCount)
 
@@ -1251,6 +1269,7 @@ func testContentFrom(t *testing.T, client *Client, addr common.Address) {
 }
 
 func testStatus(t *testing.T, client *Client) {
+	ctx := context.Background()
 	testcases := []struct {
 		name       string
 		ixPoolArgs *rpcargs.StatusArgs
@@ -1263,7 +1282,7 @@ func testStatus(t *testing.T, client *Client) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			statusResponse, err := client.Status(test.ixPoolArgs)
+			statusResponse, err := client.Status(ctx, test.ixPoolArgs)
 			require.NoError(t, err)
 			require.GreaterOrEqual(t, statusResponse.Pending.ToUint64(), uint64(0))
 
@@ -1274,6 +1293,7 @@ func testStatus(t *testing.T, client *Client) {
 }
 
 func testInspect(t *testing.T, client *Client) {
+	ctx := context.Background()
 	testcases := []struct {
 		name          string
 		inspectArgs   *rpcargs.InspectArgs
@@ -1287,7 +1307,7 @@ func testInspect(t *testing.T, client *Client) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			inspectResponse, err := client.Inspect(test.inspectArgs)
+			inspectResponse, err := client.Inspect(ctx, test.inspectArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1306,7 +1326,7 @@ func testInspect(t *testing.T, client *Client) {
 
 func testInteractionByHash(t *testing.T, client *Client, addr common.Address) {
 	ts := getTesseract(t, client, addr, &deployLogicHeight)
-
+	ctx := context.Background()
 	testcases := []struct {
 		name          string
 		ixArgs        *rpcargs.InteractionByHashArgs
@@ -1329,7 +1349,7 @@ func testInteractionByHash(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			rpcIxn, err := client.InteractionByHash(test.ixArgs)
+			rpcIxn, err := client.InteractionByHash(ctx, test.ixArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1350,6 +1370,7 @@ func testInteractionByTesseract(t *testing.T, client *Client, addr common.Addres
 	ts := getTesseract(t, client, addr, &deployLogicHeight)
 	randomHash := tests.RandomHash(t)
 	ixIndex := uint64(0)
+	ctx := context.Background()
 
 	testcases := []struct {
 		name          string
@@ -1379,7 +1400,7 @@ func testInteractionByTesseract(t *testing.T, client *Client, addr common.Addres
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			rpcIxn, err := client.InteractionByTesseract(test.ixArgs)
+			rpcIxn, err := client.InteractionByTesseract(ctx, test.ixArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1397,6 +1418,7 @@ func testInteractionByTesseract(t *testing.T, client *Client, addr common.Addres
 }
 
 func testWaitTime(t *testing.T, client *Client, addr common.Address) {
+	ctx := context.Background()
 	testcases := []struct {
 		name          string
 		ixPoolArgs    *rpcargs.IxPoolArgs
@@ -1419,7 +1441,7 @@ func testWaitTime(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := client.WaitTime(test.ixPoolArgs)
+			_, err := client.WaitTime(ctx, test.ixPoolArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1448,7 +1470,7 @@ func testPeers(t *testing.T, client *Client) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			clientPeers, err := client.Peers(test.netArgs)
+			clientPeers, err := client.Peers(context.Background(), test.netArgs)
 			require.NoError(t, err)
 
 			// check if client peers and http peers are same
@@ -1475,7 +1497,7 @@ func testVersion(t *testing.T, client *Client) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			version, err := client.Version(test.netArgs)
+			version, err := client.Version(context.Background(), test.netArgs)
 			require.NoError(t, err)
 
 			// check if client peers and http peers are same
@@ -1498,7 +1520,7 @@ func testInfo(t *testing.T, client *Client) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			nodeInfo, err := client.Info(test.netArgs)
+			nodeInfo, err := client.Info(context.Background(), test.netArgs)
 			require.NoError(t, err)
 
 			httpNodeInfo := httpInfo(t, test.netArgs)
@@ -1535,7 +1557,7 @@ func testSendInteraction(t *testing.T, client *Client) {
 				Signature: "",
 			}
 
-			_, err = client.SendInteractions(sendIx)
+			_, err = client.SendInteractions(context.Background(), sendIx)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1561,7 +1583,7 @@ func testAccounts(t *testing.T, client *Client) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			accountsResponse, err := client.Accounts()
+			accountsResponse, err := client.Accounts(context.Background())
 			require.NoError(t, err)
 
 			httpAccounts := httpAccounts(t, test.accArgs)
@@ -1579,6 +1601,7 @@ func testAccounts(t *testing.T, client *Client) {
 }
 
 func testAccountMetaInfo(t *testing.T, client *Client) {
+	ctx := context.Background()
 	testcases := []struct {
 		name          string
 		accArgs       *rpcargs.GetAccountArgs
@@ -1601,7 +1624,7 @@ func testAccountMetaInfo(t *testing.T, client *Client) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			accountMetaInfoResponse, err := client.AccountMetaInfo(test.accArgs)
+			accountMetaInfoResponse, err := client.AccountMetaInfo(ctx, test.accArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1622,6 +1645,8 @@ func testAccountMetaInfo(t *testing.T, client *Client) {
 func testCall(t *testing.T, client *Client, addr common.Address) {
 	ts := getTesseract(t, client, addr, &createAssetHeight)
 	supply, _ := new(big.Int).SetString("130D46", 16)
+
+	ctx := context.Background()
 
 	assetCreationPayload := &common.AssetCreatePayload{
 		Symbol: "MOITOKEN",
@@ -1673,7 +1698,7 @@ func testCall(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			receipt, err := client.InteractionCall(test.sendIxArgs)
+			receipt, err := client.InteractionCall(ctx, test.sendIxArgs)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -1687,6 +1712,7 @@ func testCall(t *testing.T, client *Client, addr common.Address) {
 }
 
 func testFuelDeduction(t *testing.T, client *Client, addrs map[string]common.Address) {
+	ctx := context.Background()
 	testcases := []struct {
 		name    string
 		address common.Address
@@ -1701,7 +1727,7 @@ func testFuelDeduction(t *testing.T, client *Client, addrs map[string]common.Add
 			// Get tesseract for the height
 			ts := getTesseract(t, client, test.address, &test.height)
 			// Get the interaction receipt
-			receipt, err := client.InteractionReceipt(&rpcargs.ReceiptArgs{
+			receipt, err := client.InteractionReceipt(ctx, &rpcargs.ReceiptArgs{
 				Hash: ts.Ixns[0].Hash,
 			})
 			require.NoError(t, err)
@@ -1718,7 +1744,7 @@ func testFuelDeduction(t *testing.T, client *Client, addrs map[string]common.Add
 
 			// Determine balance of MOI Tokens BEFORE the interaction
 			preHeight := test.height - 1
-			preBalance, err := client.Balance(&rpcargs.BalArgs{
+			preBalance, err := client.Balance(ctx, &rpcargs.BalArgs{
 				Address: test.address,
 				AssetID: common.KMOITokenAssetID,
 				Options: rpcargs.TesseractNumberOrHash{TesseractNumber: &preHeight},
@@ -1726,7 +1752,7 @@ func testFuelDeduction(t *testing.T, client *Client, addrs map[string]common.Add
 			require.NoError(t, err)
 
 			// Determine balance of MOI Tokens AFTER the interaction
-			postBalance, err := client.Balance(&rpcargs.BalArgs{
+			postBalance, err := client.Balance(ctx, &rpcargs.BalArgs{
 				Address: test.address,
 				AssetID: common.KMOITokenAssetID,
 				Options: rpcargs.TesseractNumberOrHash{TesseractNumber: &test.height},

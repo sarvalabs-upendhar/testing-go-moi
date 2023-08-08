@@ -67,9 +67,7 @@ func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg interface{}) e
 
 // Call performs a JSON-RPC call with the given arguments and unmarshals into
 // result if no error occurred.
-func (c *Client) Call(result interface{}, method string, args ...interface{}) error {
-	ctx := context.Background()
-
+func (c *Client) Call(ctx context.Context, result interface{}, method string, args ...interface{}) error {
 	return c.CallContext(ctx, result, method, args...)
 }
 
@@ -178,10 +176,10 @@ func (c *Client) nextID() json.RawMessage {
 }
 
 // Registry returns the asset registry info for the given address and tesseract options
-func (c *Client) Registry(args *rpcargs.QueryArgs) ([]rpcargs.RPCRegistry, error) {
+func (c *Client) Registry(ctx context.Context, args *rpcargs.QueryArgs) ([]rpcargs.RPCRegistry, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "moi.Registry", args)
+	err := c.Call(ctx, &resp, "moi.Registry", args)
 	if err != nil {
 		return nil, err
 	}
@@ -201,10 +199,10 @@ func (c *Client) Registry(args *rpcargs.QueryArgs) ([]rpcargs.RPCRegistry, error
 }
 
 // Tesseract returns RPCTesseract based on the given arguments
-func (c *Client) Tesseract(args *rpcargs.TesseractArgs) (*rpcargs.RPCTesseract, error) {
+func (c *Client) Tesseract(ctx context.Context, args *rpcargs.TesseractArgs) (*rpcargs.RPCTesseract, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "moi.Tesseract", args)
+	err := c.Call(ctx, &resp, "moi.Tesseract", args)
 	if err != nil {
 		return nil, err
 	}
@@ -224,10 +222,13 @@ func (c *Client) Tesseract(args *rpcargs.TesseractArgs) (*rpcargs.RPCTesseract, 
 }
 
 // AssetInfoByAssetID returns asset description for the given assetID
-func (c *Client) AssetInfoByAssetID(args *rpcargs.GetAssetInfoArgs) (*rpcargs.RPCAssetDescriptor, error) {
+func (c *Client) AssetInfoByAssetID(
+	ctx context.Context,
+	args *rpcargs.GetAssetInfoArgs,
+) (*rpcargs.RPCAssetDescriptor, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "moi.AssetInfoByAssetID", args)
+	err := c.Call(ctx, &resp, "moi.AssetInfoByAssetID", args)
 	if err != nil {
 		return nil, err
 	}
@@ -247,10 +248,10 @@ func (c *Client) AssetInfoByAssetID(args *rpcargs.GetAssetInfoArgs) (*rpcargs.RP
 }
 
 // Balance returns the balance of assetID for given api.BalArgs
-func (c *Client) Balance(args *rpcargs.BalArgs) (*hexutil.Big, error) {
+func (c *Client) Balance(ctx context.Context, args *rpcargs.BalArgs) (*hexutil.Big, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "moi.Balance", args)
+	err := c.Call(ctx, &resp, "moi.Balance", args)
 	if err != nil {
 		return nil, err
 	}
@@ -271,10 +272,10 @@ func (c *Client) Balance(args *rpcargs.BalArgs) (*hexutil.Big, error) {
 }
 
 // TDU retrieves the TDU of the queried address
-func (c *Client) TDU(args *rpcargs.QueryArgs) ([]rpcargs.TDU, error) {
+func (c *Client) TDU(ctx context.Context, args *rpcargs.QueryArgs) ([]rpcargs.TDU, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "moi.TDU", args)
+	err := c.Call(ctx, &resp, "moi.TDU", args)
 	if err != nil {
 		return nil, err
 	}
@@ -295,10 +296,10 @@ func (c *Client) TDU(args *rpcargs.QueryArgs) ([]rpcargs.TDU, error) {
 }
 
 // ContextInfo returns the context Info of the queried address.
-func (c *Client) ContextInfo(args *rpcargs.ContextInfoArgs) (*rpcargs.ContextResponse, error) {
+func (c *Client) ContextInfo(ctx context.Context, args *rpcargs.ContextInfoArgs) (*rpcargs.ContextResponse, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "moi.ContextInfo", args)
+	err := c.Call(ctx, &resp, "moi.ContextInfo", args)
 	if err != nil {
 		return nil, err
 	}
@@ -318,10 +319,13 @@ func (c *Client) ContextInfo(args *rpcargs.ContextInfoArgs) (*rpcargs.ContextRes
 }
 
 // InteractionByTesseract returns the interaction for the given tesseract hash
-func (c *Client) InteractionByTesseract(args *rpcargs.InteractionByTesseract) (*rpcargs.RPCInteraction, error) {
+func (c *Client) InteractionByTesseract(
+	ctx context.Context,
+	args *rpcargs.InteractionByTesseract,
+) (*rpcargs.RPCInteraction, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "moi.InteractionByTesseract", args)
+	err := c.Call(ctx, &resp, "moi.InteractionByTesseract", args)
 	if err != nil {
 		return nil, err
 	}
@@ -341,10 +345,13 @@ func (c *Client) InteractionByTesseract(args *rpcargs.InteractionByTesseract) (*
 }
 
 // InteractionByHash returns the interaction for given ix hash
-func (c *Client) InteractionByHash(args *rpcargs.InteractionByHashArgs) (*rpcargs.RPCInteraction, error) {
+func (c *Client) InteractionByHash(
+	ctx context.Context,
+	args *rpcargs.InteractionByHashArgs,
+) (*rpcargs.RPCInteraction, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "moi.InteractionByHash", args)
+	err := c.Call(ctx, &resp, "moi.InteractionByHash", args)
 	if err != nil {
 		return nil, err
 	}
@@ -364,10 +371,10 @@ func (c *Client) InteractionByHash(args *rpcargs.InteractionByHashArgs) (*rpcarg
 }
 
 // InteractionReceipt returns the receipt of the interaction for given hash
-func (c *Client) InteractionReceipt(args *rpcargs.ReceiptArgs) (*rpcargs.RPCReceipt, error) {
+func (c *Client) InteractionReceipt(ctx context.Context, args *rpcargs.ReceiptArgs) (*rpcargs.RPCReceipt, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "moi.InteractionReceipt", args)
+	err := c.Call(ctx, &resp, "moi.InteractionReceipt", args)
 	if err != nil {
 		return nil, err
 	}
@@ -387,10 +394,10 @@ func (c *Client) InteractionReceipt(args *rpcargs.ReceiptArgs) (*rpcargs.RPCRece
 }
 
 // InteractionCount returns the number of interactions sent for the given address
-func (c *Client) InteractionCount(args *rpcargs.InteractionCountArgs) (*hexutil.Uint64, error) {
+func (c *Client) InteractionCount(ctx context.Context, args *rpcargs.InteractionCountArgs) (*hexutil.Uint64, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "moi.InteractionCount", args)
+	err := c.Call(ctx, &resp, "moi.InteractionCount", args)
 	if err != nil {
 		return nil, err
 	}
@@ -410,10 +417,13 @@ func (c *Client) InteractionCount(args *rpcargs.InteractionCountArgs) (*hexutil.
 }
 
 // PendingInteractionCount returns the number of interactions sent for the given address.
-func (c *Client) PendingInteractionCount(args *rpcargs.InteractionCountArgs) (*hexutil.Uint64, error) {
+func (c *Client) PendingInteractionCount(
+	ctx context.Context,
+	args *rpcargs.InteractionCountArgs,
+) (*hexutil.Uint64, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "moi.PendingInteractionCount", args)
+	err := c.Call(ctx, &resp, "moi.PendingInteractionCount", args)
 	if err != nil {
 		return nil, err
 	}
@@ -433,10 +443,10 @@ func (c *Client) PendingInteractionCount(args *rpcargs.InteractionCountArgs) (*h
 }
 
 // Storage returns the data associated with the given storage slot
-func (c *Client) Storage(args *rpcargs.GetLogicStorageArgs) (hexutil.Bytes, error) {
+func (c *Client) Storage(ctx context.Context, args *rpcargs.GetLogicStorageArgs) (hexutil.Bytes, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "moi.Storage", args)
+	err := c.Call(ctx, &resp, "moi.Storage", args)
 	if err != nil {
 		return nil, err
 	}
@@ -456,10 +466,10 @@ func (c *Client) Storage(args *rpcargs.GetLogicStorageArgs) (hexutil.Bytes, erro
 }
 
 // AccountState returns the account state of the given address
-func (c *Client) AccountState(args *rpcargs.GetAccountArgs) (*rpcargs.RPCAccount, error) {
+func (c *Client) AccountState(ctx context.Context, args *rpcargs.GetAccountArgs) (*rpcargs.RPCAccount, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "moi.AccountState", args)
+	err := c.Call(ctx, &resp, "moi.AccountState", args)
 	if err != nil {
 		return nil, err
 	}
@@ -479,10 +489,10 @@ func (c *Client) AccountState(args *rpcargs.GetAccountArgs) (*rpcargs.RPCAccount
 }
 
 // LogicIDs returns the logic IDs of the given address
-func (c *Client) LogicIDs(args *rpcargs.GetLogicIDArgs) ([]common.LogicID, error) {
+func (c *Client) LogicIDs(ctx context.Context, args *rpcargs.GetLogicIDArgs) ([]common.LogicID, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "moi.LogicIDs", args)
+	err := c.Call(ctx, &resp, "moi.LogicIDs", args)
 	if err != nil {
 		return nil, err
 	}
@@ -502,10 +512,10 @@ func (c *Client) LogicIDs(args *rpcargs.GetLogicIDArgs) ([]common.LogicID, error
 }
 
 // LogicManifest returns the manifest associated with the given logic id
-func (c *Client) LogicManifest(args *rpcargs.LogicManifestArgs) (hexutil.Bytes, error) {
+func (c *Client) LogicManifest(ctx context.Context, args *rpcargs.LogicManifestArgs) (hexutil.Bytes, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "moi.LogicManifest", args)
+	err := c.Call(ctx, &resp, "moi.LogicManifest", args)
 	if err != nil {
 		return nil, err
 	}
@@ -525,10 +535,10 @@ func (c *Client) LogicManifest(args *rpcargs.LogicManifestArgs) (hexutil.Bytes, 
 }
 
 // SendInteractions sends given Interactions
-func (c *Client) SendInteractions(args *rpcargs.SendIX) (common.Hash, error) {
+func (c *Client) SendInteractions(ctx context.Context, args *rpcargs.SendIX) (common.Hash, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "moi.SendInteractions", args)
+	err := c.Call(ctx, &resp, "moi.SendInteractions", args)
 	if err != nil {
 		return common.NilHash, err
 	}
@@ -548,10 +558,13 @@ func (c *Client) SendInteractions(args *rpcargs.SendIX) (common.Hash, error) {
 }
 
 // AccountMetaInfo returns the account meta info associated with the given address
-func (c *Client) AccountMetaInfo(args *rpcargs.GetAccountArgs) (*rpcargs.RPCAccountMetaInfo, error) {
+func (c *Client) AccountMetaInfo(
+	ctx context.Context,
+	args *rpcargs.GetAccountArgs,
+) (*rpcargs.RPCAccountMetaInfo, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "moi.AccountMetaInfo", args)
+	err := c.Call(ctx, &resp, "moi.AccountMetaInfo", args)
 	if err != nil {
 		return nil, err
 	}
@@ -571,10 +584,10 @@ func (c *Client) AccountMetaInfo(args *rpcargs.GetAccountArgs) (*rpcargs.RPCAcco
 }
 
 // FuelEstimate returns an estimate of the fuel that is required for executing an interaction
-func (c *Client) FuelEstimate(args *rpcargs.IxArgs) (*hexutil.Big, error) {
+func (c *Client) FuelEstimate(ctx context.Context, args *rpcargs.IxArgs) (*hexutil.Big, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "moi.FuelEstimate", args)
+	err := c.Call(ctx, &resp, "moi.FuelEstimate", args)
 	if err != nil {
 		return nil, err
 	}
@@ -594,10 +607,10 @@ func (c *Client) FuelEstimate(args *rpcargs.IxArgs) (*hexutil.Big, error) {
 }
 
 // InteractionCall returns stateless version of an interaction submit
-func (c *Client) InteractionCall(args *rpcargs.IxArgs) (*rpcargs.RPCReceipt, error) {
+func (c *Client) InteractionCall(ctx context.Context, args *rpcargs.IxArgs) (*rpcargs.RPCReceipt, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "moi.Call", args)
+	err := c.Call(ctx, &resp, "moi.Call", args)
 	if err != nil {
 		return nil, err
 	}
@@ -617,10 +630,10 @@ func (c *Client) InteractionCall(args *rpcargs.IxArgs) (*rpcargs.RPCReceipt, err
 }
 
 // Content returns the interactions present in the given IxPool.
-func (c *Client) Content(args *rpcargs.ContentArgs) (*api.ContentResponse, error) {
+func (c *Client) Content(ctx context.Context, args *rpcargs.ContentArgs) (*api.ContentResponse, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "ixpool.Content", args)
+	err := c.Call(ctx, &resp, "ixpool.Content", args)
 	if err != nil {
 		return nil, err
 	}
@@ -640,10 +653,10 @@ func (c *Client) Content(args *rpcargs.ContentArgs) (*api.ContentResponse, error
 }
 
 // ContentFrom returns the interactions present in IxPool for the queried address.
-func (c *Client) ContentFrom(args *rpcargs.IxPoolArgs) (*api.ContentFromResponse, error) {
+func (c *Client) ContentFrom(ctx context.Context, args *rpcargs.IxPoolArgs) (*api.ContentFromResponse, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "ixpool.ContentFrom", args)
+	err := c.Call(ctx, &resp, "ixpool.ContentFrom", args)
 	if err != nil {
 		return nil, err
 	}
@@ -663,10 +676,10 @@ func (c *Client) ContentFrom(args *rpcargs.IxPoolArgs) (*api.ContentFromResponse
 }
 
 // Status returns the number of pending and queued interactions in the IxPool.
-func (c *Client) Status(args *rpcargs.StatusArgs) (*api.StatusResponse, error) {
+func (c *Client) Status(ctx context.Context, args *rpcargs.StatusArgs) (*api.StatusResponse, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "ixpool.Status", args)
+	err := c.Call(ctx, &resp, "ixpool.Status", args)
 	if err != nil {
 		return nil, err
 	}
@@ -686,10 +699,10 @@ func (c *Client) Status(args *rpcargs.StatusArgs) (*api.StatusResponse, error) {
 }
 
 // Inspect returns the interactions present in the IxPool in a clear and easy-to-read format,
-func (c *Client) Inspect(args *rpcargs.InspectArgs) (*api.InspectResponse, error) {
+func (c *Client) Inspect(ctx context.Context, args *rpcargs.InspectArgs) (*api.InspectResponse, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "ixpool.Inspect", args)
+	err := c.Call(ctx, &resp, "ixpool.Inspect", args)
 	if err != nil {
 		return nil, err
 	}
@@ -709,10 +722,10 @@ func (c *Client) Inspect(args *rpcargs.InspectArgs) (*api.InspectResponse, error
 }
 
 // WaitTime returns the wait time for an account in IxPool, based on the queried address.
-func (c *Client) WaitTime(args *rpcargs.IxPoolArgs) (*api.WaitTimeResponse, error) {
+func (c *Client) WaitTime(ctx context.Context, args *rpcargs.IxPoolArgs) (*api.WaitTimeResponse, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "ixpool.WaitTime", args)
+	err := c.Call(ctx, &resp, "ixpool.WaitTime", args)
 	if err != nil {
 		return nil, err
 	}
@@ -732,10 +745,10 @@ func (c *Client) WaitTime(args *rpcargs.IxPoolArgs) (*api.WaitTimeResponse, erro
 }
 
 // Peers returns an array of Krama IDs connected to a client
-func (c *Client) Peers(args *rpcargs.NetArgs) ([]kramaid.KramaID, error) {
+func (c *Client) Peers(ctx context.Context, args *rpcargs.NetArgs) ([]kramaid.KramaID, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "net.Peers", args)
+	err := c.Call(ctx, &resp, "net.Peers", args)
 	if err != nil {
 		return nil, err
 	}
@@ -755,10 +768,10 @@ func (c *Client) Peers(args *rpcargs.NetArgs) ([]kramaid.KramaID, error) {
 }
 
 // Version returns the protocol version
-func (c *Client) Version(args *rpcargs.NetArgs) (string, error) {
+func (c *Client) Version(ctx context.Context, args *rpcargs.NetArgs) (string, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "net.Version", args)
+	err := c.Call(ctx, &resp, "net.Version", args)
 	if err != nil {
 		return "", err
 	}
@@ -778,10 +791,10 @@ func (c *Client) Version(args *rpcargs.NetArgs) (string, error) {
 }
 
 // Info returns the kramaID of the node
-func (c *Client) Info(args *rpcargs.NetArgs) (*rpcargs.NodeInfoResponse, error) {
+func (c *Client) Info(ctx context.Context, args *rpcargs.NetArgs) (*rpcargs.NodeInfoResponse, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "net.Info", args)
+	err := c.Call(ctx, &resp, "net.Info", args)
 	if err != nil {
 		return nil, err
 	}
@@ -801,10 +814,10 @@ func (c *Client) Info(args *rpcargs.NetArgs) (*rpcargs.NodeInfoResponse, error) 
 }
 
 // DBGet returns raw value of the key stored in the database
-func (c *Client) DBGet(args *rpcargs.DebugArgs) (string, error) {
+func (c *Client) DBGet(ctx context.Context, args *rpcargs.DebugArgs) (string, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "debug.DBGet", args)
+	err := c.Call(ctx, &resp, "debug.DBGet", args)
 	if err != nil {
 		return "", err
 	}
@@ -824,10 +837,10 @@ func (c *Client) DBGet(args *rpcargs.DebugArgs) (string, error) {
 }
 
 // Accounts returns the address of all the accounts
-func (c *Client) Accounts() ([]common.Address, error) {
+func (c *Client) Accounts(ctx context.Context) ([]common.Address, error) {
 	var resp rpcargs.Response
 
-	err := c.Call(&resp, "debug.Accounts", nil)
+	err := c.Call(ctx, &resp, "debug.Accounts", nil)
 	if err != nil {
 		return nil, err
 	}
