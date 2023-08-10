@@ -132,7 +132,7 @@ func (vs *VoteSet) HasMajorityAny() bool {
 
 	for index, sumVal := range vs.sum {
 		// If sumVal for a given index has 2/3 majority, return true
-		if sumVal < vs.valset.GetTotalVotingPower()[index]*2/3+1 {
+		if sumVal < vs.valset.GetQuorum()[index] {
 			return false
 		}
 	}
