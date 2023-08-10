@@ -90,7 +90,7 @@ func NewReputationEngine(
 		pendingMessageQueue: NewRequestQueue(MaxQueueSize), // Max message queue limit is 200
 	}
 
-	return r, r.AddNewPeer(selfID, selfInfo)
+	return r, r.UpdatePeer(selfID, selfInfo)
 }
 
 func (r *ReputationEngine) nodeMetaInfo(peerID peer.ID) (*NodeMetaInfo, error) {
@@ -126,7 +126,7 @@ func (r *ReputationEngine) nodeMetaInfo(peerID peer.ID) (*NodeMetaInfo, error) {
 	return info, nil
 }
 
-func (r *ReputationEngine) AddNewPeer(kramaID id.KramaID, data *NodeMetaInfo) error {
+func (r *ReputationEngine) UpdatePeer(kramaID id.KramaID, data *NodeMetaInfo) error {
 	peerID, err := kramaID.DecodedPeerID()
 	if err != nil {
 		return common.ErrInvalidKramaID
@@ -173,61 +173,6 @@ func (r *ReputationEngine) AddNewPeerWithPeerID(peerID peer.ID, data *NodeMetaIn
 	r.cache.Add(storage.NtqCacheKey(peerID), info)
 
 	r.logger.Trace("Added peer to the NTQ table", "peer-ID", peerID)
-
-	return nil
-}
-
-func (r *ReputationEngine) hasRequiredNodeMetaInfo(info *NodeMetaInfo) bool {
-	if info.NTQ != 0 && len(info.Addrs) != 0 && len(info.PublicKey) != 0 && len(info.PeerSignature) != 0 {
-		return true
-	}
-
-	return false
-}
-
-func (r *ReputationEngine) UpdatePeer(kramaID id.KramaID, data *NodeMetaInfo) error {
-	peerID, err := kramaID.DecodedPeerID()
-	if err != nil {
-		return common.ErrInvalidKramaID
-	}
-
-	info, err := r.nodeMetaInfo(peerID)
-	if err != nil && !errors.Is(err, common.ErrKramaIDNotFound) {
-		return err
-	}
-
-	if info != nil {
-		if r.hasRequiredNodeMetaInfo(info) {
-			return common.ErrAlreadyKnown
-		}
-
-		if data.NTQ == 0 || data.NTQ == DefaultPeerNTQ {
-			data.NTQ = info.NTQ
-		}
-
-		if data.WalletCount == 0 {
-			data.WalletCount = info.WalletCount
-		}
-
-		if len(data.Addrs) == 0 {
-			data.Addrs = info.Addrs
-		}
-
-		if len(data.PeerSignature) == 0 {
-			data.PeerSignature = info.PeerSignature
-		}
-
-		if len(data.PublicKey) == 0 {
-			data.PublicKey = info.PublicKey
-		}
-	}
-
-	r.dirtyLock.Lock()
-	defer r.dirtyLock.Unlock()
-
-	r.dirtyEntries[peerID] = data
-
-	r.cache.Add(storage.NtqCacheKey(peerID), data)
 
 	return nil
 }

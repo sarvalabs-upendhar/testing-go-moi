@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -9,6 +10,13 @@ import (
 	"strconv"
 	"sync/atomic"
 	"testing"
+
+	libp2pCrypto "github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/peer"
+	libp2pTest "github.com/libp2p/go-libp2p/core/test"
+	"github.com/multiformats/go-multiaddr"
+
+	"github.com/libp2p/go-libp2p/core/network"
 
 	id "github.com/sarvalabs/go-moi/common/kramaid"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
@@ -526,20 +534,30 @@ func (mc *MockIxPool) setIxs(addr common.Address, pending, queued []*common.Inte
 type MockNetwork struct {
 	peers   []id.KramaID
 	version string
-}
-
-func (mn *MockNetwork) GetKramaID() id.KramaID {
-	panic("implement me")
+	conns   []network.Conn
 }
 
 func NewMockNetwork(t *testing.T) *MockNetwork {
 	t.Helper()
 
-	network := new(MockNetwork)
-	network.peers = make([]id.KramaID, 0)
-	network.version = ""
+	mn := new(MockNetwork)
+	mn.peers = make([]id.KramaID, 0)
+	mn.version = ""
+	mn.conns = make([]network.Conn, 0)
 
-	return network
+	return mn
+}
+
+func (mn *MockNetwork) setConns(conns []network.Conn) {
+	mn.conns = conns
+}
+
+func (mn *MockNetwork) GetConns() []network.Conn {
+	return mn.conns
+}
+
+func (mn *MockNetwork) GetKramaID() id.KramaID {
+	panic("implement me")
 }
 
 func (mn *MockNetwork) setPeers(peersList []id.KramaID) {
@@ -556,6 +574,88 @@ func (mn *MockNetwork) setVersion(version string) {
 
 func (mn *MockNetwork) GetVersion() string {
 	return mn.version
+}
+
+type mockConn struct {
+	remotePeerID peer.ID
+	streams      []network.Stream
+}
+
+func (m mockConn) Close() error {
+	panic("implement me")
+}
+
+func (m mockConn) LocalPeer() peer.ID {
+	panic("implement me")
+}
+
+func (m mockConn) LocalPrivateKey() libp2pCrypto.PrivKey {
+	panic("implement me")
+}
+
+func (m *mockConn) SetRemotePeer(id peer.ID) {
+	m.remotePeerID = id
+}
+
+func (m mockConn) RemotePeer() peer.ID {
+	return m.remotePeerID
+}
+
+func (m mockConn) RemotePublicKey() libp2pCrypto.PubKey {
+	panic("implement me")
+}
+
+func (m mockConn) ConnState() network.ConnectionState {
+	panic("implement me")
+}
+
+func (m mockConn) LocalMultiaddr() multiaddr.Multiaddr {
+	panic("implement me")
+}
+
+func (m mockConn) RemoteMultiaddr() multiaddr.Multiaddr {
+	panic("implement me")
+}
+
+func (m mockConn) Stat() network.ConnStats {
+	panic("implement me")
+}
+
+func (m mockConn) Scope() network.ConnScope {
+	panic("implement me")
+}
+
+func (m mockConn) ID() string {
+	panic("implement me")
+}
+
+func (m mockConn) NewStream(ctx context.Context) (network.Stream, error) {
+	panic("implement me")
+}
+
+func (m *mockConn) SetStreams(streams []network.Stream) {
+	m.streams = streams
+}
+
+func (m mockConn) GetStreams() []network.Stream {
+	return m.streams
+}
+
+func createConns(t *testing.T, connCount int, streamCount int) []network.Conn {
+	t.Helper()
+
+	peerID, err := libp2pTest.RandPeerID()
+	require.NoError(t, err)
+
+	conns := make([]network.Conn, connCount)
+	for i := 0; i < connCount; i++ {
+		conns[i] = mockConn{
+			remotePeerID: peerID,
+			streams:      make([]network.Stream, streamCount),
+		}
+	}
+
+	return conns
 }
 
 type MockDatabase struct {

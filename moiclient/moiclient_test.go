@@ -137,6 +137,9 @@ func TestMoiClient(t *testing.T) {
 		"testFuelDeduction": {
 			test: func(t *testing.T) { testFuelDeduction(t, client, addrsMap) },
 		},
+		"testConnections": {
+			test: func(t *testing.T) { testConnections(t, client) },
+		},
 	}
 
 	t.Parallel()
@@ -1574,6 +1577,31 @@ func testAccounts(t *testing.T, client *Client) {
 			}
 
 			require.FailNow(t, "sarga address not found in list of accounts")
+		})
+	}
+}
+
+func testConnections(t *testing.T, client *Client) {
+	testcases := []struct {
+		name    string
+		accArgs *rpcargs.ConnArgs
+	}{
+		{
+			name:    "fetch connections",
+			accArgs: &rpcargs.ConnArgs{},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			connections, err := client.Connections()
+			require.NoError(t, err)
+
+			httpConns := httpConnections(t, test.accArgs)
+			require.Equal(t, len(httpConns), len(connections))
+			require.ElementsMatch(t, httpConns, connections)
+
+			require.Greater(t, len(connections), 0)
 		})
 	}
 }

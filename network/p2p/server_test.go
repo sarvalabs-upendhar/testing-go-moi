@@ -559,11 +559,11 @@ func TestDiscover_CheckEvents(t *testing.T) {
 	PeerEventSub := servers[0].mux.Subscribe(utils.NewPeerEvent{}) // subscribe to server-1 events
 	PeerDiscoveredEventSub := servers[0].mux.Subscribe(utils.PeerDiscoveredEvent{})
 
-	go servers[0].discover()
-	time.Sleep(8 * time.Second)
+	go servers[0].discover(1 * time.Second)
+	time.Sleep(3 * time.Second)
 
-	go servers[1].discover()
-	time.Sleep(5 * time.Second)
+	go servers[1].discover(1 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	// check if server-0,1 are able to discover each other after 10 seconds
 	checkForPeerRegistration(t, servers[0], servers[1], true)

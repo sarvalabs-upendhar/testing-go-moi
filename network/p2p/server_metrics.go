@@ -9,8 +9,11 @@ import (
 )
 
 type Metrics struct {
-	BandwidthOut metrics.Counter
-	BandwidthIn  metrics.Counter
+	BandwidthOut      metrics.Counter
+	BandwidthIn       metrics.Counter
+	InBoundConnLimit  metrics.Gauge
+	OutBoundConnLimit metrics.Gauge
+	TotalConnections  metrics.Gauge
 }
 
 func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics {
@@ -33,14 +36,47 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 			Name:      "incoming_bandwidth",
 			Help:      "Current network incoming bandwidth",
 		}, labels).With(labelsWithValues...),
+		InBoundConnLimit: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: "server",
+			Name:      "inbound_conn",
+			Help:      "Number of inbound connections",
+		}, labels).With(labelsWithValues...),
+		OutBoundConnLimit: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: "server",
+			Name:      "outbound_conn",
+			Help:      "Number of outbound connections",
+		}, labels).With(labelsWithValues...),
+		TotalConnections: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: "server",
+			Name:      "total_connections",
+			Help:      "Total no of connections",
+		}, labels).With(labelsWithValues...),
 	}
 }
 
 func NilMetrics() *Metrics {
 	return &Metrics{
-		BandwidthOut: discard.NewCounter(),
-		BandwidthIn:  discard.NewCounter(),
+		BandwidthOut:      discard.NewCounter(),
+		BandwidthIn:       discard.NewCounter(),
+		InBoundConnLimit:  discard.NewGauge(),
+		OutBoundConnLimit: discard.NewGauge(),
+		TotalConnections:  discard.NewGauge(),
 	}
+}
+
+func (metrics *Metrics) CaptureInboundConn(count float64) {
+	metrics.InBoundConnLimit.Add(count)
+}
+
+func (metrics *Metrics) CaptureOutboundConn(count float64) {
+	metrics.OutBoundConnLimit.Add(count)
+}
+
+func (metrics *Metrics) CaptureTotalConn(total float64) {
+	metrics.TotalConnections.Set(total)
 }
 
 type BandwidthReporter struct {

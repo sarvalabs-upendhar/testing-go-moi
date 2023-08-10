@@ -20,7 +20,7 @@ func NewPublicAPI(backend *Backend) *PublicAPI {
 		IxPoolAPI: NewPublicIXPoolAPI(backend.ixpool),
 		CoreAPI:   NewPublicCoreAPI(backend.ixpool, backend.chain, backend.sm, backend.exec),
 		NetAPI:    NewPublicNetAPI(backend.net),
-		DebugAPI:  NewPublicDebugAPI(backend.db),
+		DebugAPI:  NewPublicDebugAPI(backend.db, backend.net),
 	}
 }
 

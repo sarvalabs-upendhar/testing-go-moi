@@ -133,7 +133,7 @@ func (n *Node) setupSenatusToNetwork() error {
 	n.network.Senatus = n.senatus
 
 	for _, staticPeer := range n.cfg.Network.StaticPeers {
-		err := n.network.Senatus.AddNewPeer(staticPeer.ID, &senatus.NodeMetaInfo{
+		err := n.network.Senatus.UpdatePeer(staticPeer.ID, &senatus.NodeMetaInfo{
 			Addrs: utils.MultiAddrToString(staticPeer.Address),
 			NTQ:   senatus.DefaultPeerNTQ,
 		})

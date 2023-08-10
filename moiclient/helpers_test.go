@@ -635,6 +635,20 @@ func httpAccounts(t *testing.T, args *rpcargs.AccountArgs) []common.Address {
 	return addrs
 }
 
+// httpConnections returns the connections of this node
+func httpConnections(t *testing.T, args *rpcargs.ConnArgs) []rpcargs.Connection {
+	t.Helper()
+
+	resp := makeHTTPRequest(t, "debug.Connections", args)
+
+	var conns []rpcargs.Connection
+
+	err := json.Unmarshal(resp.Data, &conns)
+	require.NoError(t, err)
+
+	return conns
+}
+
 // httpAccountMetaInfo returns the account meta info associated with the given address
 func httpAccountMetaInfo(t *testing.T, args *rpcargs.GetAccountArgs) *rpcargs.RPCAccountMetaInfo {
 	t.Helper()
