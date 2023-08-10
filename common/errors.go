@@ -59,6 +59,7 @@ var (
 	ErrConnectionExists            = errors.New("peer already connected")
 	ErrEmptyHashAndAddress         = errors.New("empty hash and address")
 	ErrInvalidLogicID              = errors.New("invalid logic id")
+	ErrMissingLogicID              = errors.New("missing logic id")
 	ErrLogicStorageTreeNotFound    = errors.New("logic storage tree not found")
 	ErrInvalidKey                  = errors.New("invalid key")
 	ErrInvalidValue                = errors.New("invalid value")

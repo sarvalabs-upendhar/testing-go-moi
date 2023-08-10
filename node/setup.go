@@ -125,7 +125,16 @@ func (n *Node) setupExecEngine() {
 
 // setupIxPool creates new InteractionPool object and setups it to node
 func (n *Node) setupIxPool() {
-	n.ixpool = ixpool.NewIxPool(n.ctx, n.logger, n.eventMux, n.state, n.cfg.IxPool, n.nodeMetrics.ixpool, crypto.Verify)
+	n.ixpool = ixpool.NewIxPool(
+		n.ctx,
+		n.logger,
+		n.eventMux,
+		n.state,
+		n.exec,
+		n.cfg.IxPool,
+		n.nodeMetrics.ixpool,
+		crypto.Verify,
+	)
 }
 
 // setupSenatusToNetwork fetches Senatus from state and setups it to node's network manager(poorna server)

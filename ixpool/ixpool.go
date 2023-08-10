@@ -3,7 +3,6 @@ package ixpool
 import (
 	"context"
 	errors2 "errors"
-	"fmt"
 	"log"
 	"math/big"
 	"time"
@@ -51,6 +50,11 @@ type stateManager interface {
 	GetAssetInfo(assetID common.AssetID, hash common.Hash) (*common.AssetDescriptor, error)
 }
 
+type executionManager interface {
+	ValidateLogicInvoke(ix *common.Interaction) error
+	ValidateLogicDeploy(ix *common.Interaction, manifest []byte) error
+}
+
 type IxConfig struct {
 	Mode       int
 	PriceLimit uint64
@@ -62,6 +66,7 @@ type IxPool struct {
 	logger       hclog.Logger
 	cfg          *config.IxPoolConfig
 	sm           stateManager
+	exec         executionManager
 	allIxs       *lookupMap
 	close        chan struct{}
 	sealing      bool
@@ -80,6 +85,7 @@ func NewIxPool(
 	logger hclog.Logger,
 	mux *utils.TypeMux,
 	sm stateManager,
+	exec executionManager,
 	cfg *config.IxPoolConfig,
 	metrics *Metrics,
 	verifier func(data, signature, pubBytes []byte) (bool, error),
@@ -91,6 +97,7 @@ func NewIxPool(
 		cfg:       cfg,
 		mux:       mux,
 		sm:        sm,
+		exec:      exec,
 		allIxs:    NewLookupMap(),
 		close:     make(chan struct{}),
 		sealing:   false,
@@ -639,16 +646,6 @@ func (i *IxPool) validateAssetBurn(ix *common.Interaction) error {
 }
 
 func (i *IxPool) validateLogicDeployPayload(ix *common.Interaction) error {
-	// make sure logic isn't created previously
-	accountRegistered, err := i.sm.IsAccountRegistered(ix.Receiver())
-	if err != nil {
-		return err
-	}
-
-	if accountRegistered {
-		return errors.New(fmt.Sprintf("account registered %s", ix.Receiver()))
-	}
-
 	payload, err := ix.GetLogicPayload()
 	if err != nil {
 		return err
@@ -657,6 +654,10 @@ func (i *IxPool) validateLogicDeployPayload(ix *common.Interaction) error {
 	// manifest cannot be empty
 	if len(payload.Manifest) == 0 {
 		return common.ErrEmptyManifest
+	}
+
+	if err := i.exec.ValidateLogicDeploy(ix, payload.Manifest); err != nil {
+		return errors.Wrap(err, "failed to validate logic deploy")
 	}
 
 	return nil
@@ -671,6 +672,15 @@ func (i *IxPool) validateLogicInvokePayload(ix *common.Interaction) error {
 	// callsite cannot be empty
 	if len(payload.Callsite) == 0 {
 		return common.ErrEmptyCallSite
+	}
+
+	// logicID cannot be empty
+	if len(payload.Logic) == 0 {
+		return common.ErrMissingLogicID
+	}
+
+	if err := i.exec.ValidateLogicInvoke(ix); err != nil {
+		return errors.Wrap(err, "failed to validate logic invoke")
 	}
 
 	// make sure logic is registered

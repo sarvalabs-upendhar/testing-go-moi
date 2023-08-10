@@ -580,6 +580,15 @@ func (ix *Interaction) Calldata() []byte {
 	return payload.Calldata
 }
 
+func (ix *Interaction) LogicID() LogicID {
+	payload, err := ix.GetLogicPayload()
+	if err != nil {
+		return ""
+	}
+
+	return payload.Logic
+}
+
 // Interactions are array of Transactions
 type Interactions []*Interaction
 
