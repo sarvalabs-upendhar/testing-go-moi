@@ -114,7 +114,10 @@ func TestUpdateInboundConnCount(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ci := &ConnectionInfo{inboundConnCount: test.inboundConnCount}
+			ci := &ConnectionInfo{
+				server:           createServer(t, 0, nil),
+				inboundConnCount: test.inboundConnCount,
+			}
 			ci.updateInboundConnCount(test.delta)
 			require.Equal(t, test.expectedConnCount, ci.inboundConnCount)
 		})
@@ -150,7 +153,10 @@ func TestUpdateOutboundConnCount(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ci := &ConnectionInfo{outboundConnCount: test.outboundConnCount}
+			ci := &ConnectionInfo{
+				server:            createServer(t, 0, nil),
+				outboundConnCount: test.outboundConnCount,
+			}
 			ci.updateOutboundConnCount(test.delta)
 			require.Equal(t, test.expectedConnCount, ci.outboundConnCount)
 		})
@@ -199,6 +205,7 @@ func TestUpdateConnCount(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ci := &ConnectionInfo{
+				server:            createServer(t, 0, nil),
 				inboundConnCount:  test.inboundConnCount,
 				outboundConnCount: test.outboundConnCount,
 			}

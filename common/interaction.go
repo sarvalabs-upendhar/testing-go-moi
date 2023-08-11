@@ -6,11 +6,10 @@ import (
 	"math/big"
 	"sync/atomic"
 
+	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common/kramaid"
-
-	"github.com/pkg/errors"
 )
 
 type IxType int
@@ -279,30 +278,6 @@ func NewInteraction(ixData IxData, signature []byte) (*Interaction, error) {
 	ix.size.Store(uint64(len(data) + len(signature)))
 
 	return ix, nil
-}
-
-func NewLogicInteraction(kind IxType, callsite string, calldata []byte, manifest []byte) *Interaction {
-	ixpayload := &LogicPayload{
-		Callsite: callsite,
-		Calldata: calldata,
-	}
-
-	if kind == IxLogicDeploy {
-		ixpayload.Manifest = manifest
-	}
-
-	payload, _ := ixpayload.Bytes()
-
-	ixData := IxData{
-		Input: IxInput{
-			Type:    kind,
-			Payload: payload,
-		},
-	}
-
-	ixnInteraction, _ := NewInteraction(ixData, nil)
-
-	return ixnInteraction
 }
 
 func NewRandomHashInteraction() *Interaction {

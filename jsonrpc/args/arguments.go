@@ -43,6 +43,8 @@ type NetArgs struct{}
 
 type AccountArgs struct{}
 
+type ConnArgs struct{}
+
 type DebugArgs struct {
 	Key string `json:"storage_key"`
 }

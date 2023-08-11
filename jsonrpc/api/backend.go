@@ -3,6 +3,8 @@ package api
 import (
 	"math/big"
 
+	"github.com/libp2p/go-libp2p/core/network"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	id "github.com/sarvalabs/go-moi/common/kramaid"
@@ -51,6 +53,7 @@ type Network interface {
 	GetPeers() []id.KramaID
 	GetVersion() string
 	GetKramaID() id.KramaID
+	GetConns() []network.Conn
 }
 
 type DB interface {

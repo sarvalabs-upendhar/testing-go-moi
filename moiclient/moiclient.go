@@ -858,3 +858,26 @@ func (c *Client) Accounts(ctx context.Context) ([]common.Address, error) {
 
 	return addrs, nil
 }
+
+// Connections returns the total connections of the node
+func (c *Client) Connections(ctx context.Context) ([]rpcargs.Connection, error) {
+	var resp rpcargs.Response
+
+	err := c.Call(ctx, &resp, "debug.Connections", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+
+	var conns []rpcargs.Connection
+
+	err = json.Unmarshal(resp.Data, &conns)
+	if err != nil {
+		return nil, err
+	}
+
+	return conns, nil
+}

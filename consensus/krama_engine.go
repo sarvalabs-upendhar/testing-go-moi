@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/moby/locker"
 	"github.com/mr-tron/base58/base58"
@@ -837,54 +836,44 @@ func (k *Engine) sendICSRequestWithBound(
 
 			continue
 		}
-		// Retrieve the peerID from the node's Krama id
-		networkID, err := kramaID.PeerID()
-		if err != nil {
-			k.logger.Error("Error decoding network ID from krama ID", "err", err)
-			wg.Done()
-
-			continue
-		}
-
-		peerID, err := peer.Decode(networkID)
-		if err != nil {
-			k.logger.Error("Unable to decode peer ID", "err", err)
-			wg.Done()
-
-			continue
-		}
 
 		go func(index int, kramaID id.KramaID) {
 			icsResponse := new(networkmsg.ICSResponse)
 			requestTS := time.Now()
 
-			if err = k.transport.Call(
-				ctx,
+			reqCtx, cancelFn := context.WithTimeout(ctx, config.DefaultICSRequestTimeout)
+			defer func() {
+				k.metrics.captureRequestTurnaroundTime(requestTS)
+				cancelFn()
+				wg.Done()
+			}()
+
+			err := k.transport.Call(
+				reqCtx,
 				kramaID,
 				"ICSRPC",
 				"ICSRequest",
 				icsRequest,
 				icsResponse,
-			); err == nil {
-				if icsResponse.StatusCode == networkmsg.Success {
-					// Add the nodeResponses array to capture the success response
-					nodeResponses[index] = true
-				} else {
-					k.logger.Debug(
-						"ICS random nodes request failed",
-						"err", err,
-						"status", icsResponse.StatusCode,
-						"peer-ID", peerID,
-					)
-				}
-			} else {
-				k.logger.Error("ICS random nodes request failed", "err", err)
+			)
+			if err != nil {
+				k.logger.Error("ICS request failed", "err", err, "krama-ID", kramaID)
+
+				return
 			}
 
-			//	clusterState.updateResponseTimeMetric(reqTimeStamp)
-			k.metrics.captureRequestTurnaroundTime(requestTS)
-			// Decrement the wait group
-			wg.Done()
+			if icsResponse.StatusCode == networkmsg.Success {
+				// Add the nodeResponses array to capture the success response
+				nodeResponses[index] = true
+
+				return
+			}
+
+			k.logger.Debug(
+				"ICS response",
+				"status", icsResponse.StatusCode,
+				"krama-ID", kramaID,
+			)
 		}(index, kramaID)
 	}
 
@@ -962,50 +951,44 @@ func (k *Engine) sendICSRequest(
 			continue
 		}
 
-		networkID, err := kramaID.PeerID()
-		if err != nil {
-			k.logger.Error("Error decoding network ID from krama ID", "err", err)
-			wg.Done()
-
-			continue
-		}
-
-		peerID, err := peer.Decode(networkID)
-		if err != nil {
-			k.logger.Error("Unable to decode peer ID", "err", err)
-			wg.Done()
-
-			continue
-		}
-
 		go func(index int, kramaID id.KramaID) {
 			icsResponse := new(networkmsg.ICSResponse)
 			requestTS := time.Now()
 
-			if err := k.transport.Call(
-				ctx,
+			reqCtx, cancelFn := context.WithTimeout(ctx, config.DefaultICSRequestTimeout)
+			defer func() {
+				k.metrics.captureRequestTurnaroundTime(requestTS)
+
+				cancelFn()
+				wg.Done()
+			}()
+
+			err := k.transport.Call(
+				reqCtx,
 				kramaID,
 				"ICSRPC",
 				"ICSRequest",
 				icsRequest,
 				icsResponse,
-			); err == nil && icsResponse.StatusCode == networkmsg.Success {
+			)
+			if err != nil {
+				k.logger.Error("ICS request failed", "err", err, "krama-ID", kramaID)
+
+				return
+			}
+
+			if icsResponse.StatusCode == networkmsg.Success {
 				// Update the nodeResponses array to capture the success response
 				nodeResponses[index] = true
 				randomNodes <- utils.KramaIDFromString(icsResponse.RandomNodes)
-			} else {
-				k.logger.Info(
-					"ICS request failed",
-					"err", err,
-					"status", icsResponse.StatusCode,
-					"peer-ID", peerID)
+
+				return
 			}
 
-			//	clusterState.updateResponseTimeMetric(reqTimeStamp)
-			k.metrics.captureRequestTurnaroundTime(requestTS)
-
-			// Decrement the wait group
-			wg.Done()
+			k.logger.Debug(
+				"ICS Response",
+				"status", icsResponse.StatusCode,
+				"krama-ID", kramaID)
 		}(index, kramaID)
 	}
 

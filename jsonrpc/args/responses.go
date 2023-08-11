@@ -276,3 +276,8 @@ type TDU struct {
 type NodeInfoResponse struct {
 	KramaID kramaid.KramaID `json:"krama_id"`
 }
+
+type Connection struct {
+	PeerID      string `json:"peer_id"`
+	StreamCount uint64 `json:"stream_count"`
+}

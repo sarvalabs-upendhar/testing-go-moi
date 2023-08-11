@@ -8,6 +8,7 @@ import (
 
 // ConnectionInfo maintains information about current and maximum inbound and outbound connections.
 type ConnectionInfo struct {
+	server               *Server
 	inboundConnCount     int64
 	outboundConnCount    int64
 	maxInboundConnCount  int64
@@ -15,8 +16,9 @@ type ConnectionInfo struct {
 }
 
 // NewConnectionInfo returns a new instance of ConnectionInfo with the given max inbound and max outbound connections.
-func NewConnectionInfo(maxInboundConnCount int64, maxOutboundConnCount int64) *ConnectionInfo {
+func NewConnectionInfo(server *Server, maxInboundConnCount int64, maxOutboundConnCount int64) *ConnectionInfo {
 	return &ConnectionInfo{
+		server:               server,
 		inboundConnCount:     0,
 		outboundConnCount:    0,
 		maxInboundConnCount:  maxInboundConnCount,
@@ -57,11 +59,15 @@ func (ci *ConnectionInfo) isOutboundConnLimitReached() bool {
 // updateInboundConnCount increments the inbound connection count by the specified delta value.
 func (ci *ConnectionInfo) updateInboundConnCount(delta int64) {
 	atomic.AddInt64(&ci.inboundConnCount, delta)
+	ci.server.metrics.CaptureInboundConn(float64(delta))
+	ci.server.metrics.CaptureTotalConn(float64(len(ci.server.GetConns())))
 }
 
 // updateOutboundConnCount increments the outbound connection count by the specified delta value.
 func (ci *ConnectionInfo) updateOutboundConnCount(delta int64) {
 	atomic.AddInt64(&ci.outboundConnCount, delta)
+	ci.server.metrics.CaptureOutboundConn(float64(delta))
+	ci.server.metrics.CaptureTotalConn(float64(len(ci.server.GetConns())))
 }
 
 // updateConnCount updates the inbound and outbound connection counts by the specified delta,

@@ -834,3 +834,28 @@ func (r *Service) Accounts(
 
 	return nil
 }
+
+// Accounts is an RPC Method that returns the address of all the accounts
+func (r *Service) Connections(
+	req *http.Request,
+	args *rpcargs.ConnArgs,
+	resp *rpcargs.Response,
+) error {
+	var err error
+
+	DebugAPI, ok := r.apis["debug"].(*api2.PublicDebugAPI)
+	if !ok {
+		return common.ErrInvalidAPI
+	}
+
+	keys := DebugAPI.GetConnections()
+
+	resp.Data, err = json.Marshal(keys)
+	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	return nil
+}

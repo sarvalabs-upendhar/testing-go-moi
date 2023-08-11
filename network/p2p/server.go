@@ -44,7 +44,7 @@ import (
 const (
 	SenatusTopic            = "MOI_PUBSUB_SENATUS"
 	MinimumConnReq          = 100
-	MaximumConnReq          = 300
+	MaximumConnReq          = 500
 	MinimumBootNodeConn int = 1
 )
 
@@ -63,7 +63,7 @@ type Senatus interface {
 	GetNTQ(peerID id.KramaID) (float32, error)
 	GetAddress(key id.KramaID) ([]maddr.Multiaddr, error)
 	GetAddressByPeerID(peerID peer.ID) ([]maddr.Multiaddr, error)
-	AddNewPeer(key id.KramaID, data *senatus.NodeMetaInfo) error
+	UpdatePeer(key id.KramaID, data *senatus.NodeMetaInfo) error
 	AddNewPeerWithPeerID(key peer.ID, data *senatus.NodeMetaInfo) error
 }
 
@@ -130,11 +130,12 @@ func NewServer(
 		cfg:        config,
 		mux:        mux,
 		Peers:      newPeerSet(),
-		connInfo:   NewConnectionInfo(config.InboundConnLimit, config.OutboundConnLimit),
 		rpcServers: make(map[protocol.ID]*rpc.Server),
 		vault:      vault,
 		metrics:    metrics,
 	}
+
+	server.connInfo = NewConnectionInfo(server, config.InboundConnLimit, config.OutboundConnLimit)
 
 	return server
 }
@@ -170,7 +171,7 @@ func (s *Server) StartServer() error {
 		}
 	}
 
-	go s.discover()
+	go s.discover(config.DefaultDiscoveryInterval)
 
 	return nil
 }
@@ -324,6 +325,10 @@ func (s *Server) getSelfRouting() libp2p.Option {
 	})
 }
 
+func (s *Server) GetConns() []network.Conn {
+	return s.host.Network().Conns()
+}
+
 // GetKramaID returns the KramaID of node
 func (s *Server) GetKramaID() id.KramaID {
 	return s.id
@@ -475,8 +480,7 @@ func (s *Server) streamHandlerFunc(stream network.Stream) {
 // discovery mechanism that uses the Kad DHT of the node.
 //
 // Advertises the protocol rendezvous and discovers other peers that are advertising it.
-// The peer discovery process is repeated every 5 seconds.
-func (s *Server) discover() {
+func (s *Server) discover(interval time.Duration) {
 	s.discovery = discovery.NewRoutingDiscovery(s.kadDHT)
 
 	// Advertise the rendezvous string to the discovery service
@@ -493,7 +497,7 @@ func (s *Server) discover() {
 
 	for {
 		select {
-		case <-time.After(3 * time.Second):
+		case <-time.After(interval):
 		case <-s.ctx.Done():
 			return
 		}

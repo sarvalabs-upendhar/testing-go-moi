@@ -61,7 +61,7 @@ func NewMockReputationEngine() *MockReputationEngine {
 	}
 }
 
-func (m *MockReputationEngine) AddNewPeer(key kramaid.KramaID, data *senatus.NodeMetaInfo) error {
+func (m *MockReputationEngine) UpdatePeer(key kramaid.KramaID, data *senatus.NodeMetaInfo) error {
 	peerID, err := key.DecodedPeerID()
 	if err != nil {
 		return common.ErrInvalidKramaID
@@ -452,7 +452,7 @@ func startDiscovery(t *testing.T, servers ...*Server) {
 
 	for _, s := range servers {
 		// s.setStreamHandler()
-		go s.discover()
+		go s.discover(2 * time.Second)
 	}
 }
 

@@ -95,14 +95,17 @@ func TestReputationEngine_NodeMetaInfo(t *testing.T) {
 func TestReputationEngine_AddNewPeerwithPeerID(t *testing.T) {
 	reputationEngine, _, _ := CreateTestReputationEngine(t)
 	metaInfo := &NodeMetaInfo{
-		NTQ:         2,
-		WalletCount: 1,
+		Addrs:         utils.MultiAddrToString(tests.GetListenAddresses(t, 1)...),
+		NTQ:           2,
+		WalletCount:   1,
+		PublicKey:     tests.GetTestPublicKey(t),
+		PeerSignature: []byte{0x05, 0x80},
 	}
 
 	testcases := []struct {
 		name         string
 		peerID       peer.ID
-		testFn       func(peerID peer.ID, metaInfo *NodeMetaInfo)
+		testFn       func(peerID peer.ID)
 		nodeMetaInfo *NodeMetaInfo
 		expectedErr  error
 	}{
@@ -110,22 +113,41 @@ func TestReputationEngine_AddNewPeerwithPeerID(t *testing.T) {
 			name:   "node meta info found in cache",
 			peerID: tests.GetTestPeerID(t),
 			nodeMetaInfo: &NodeMetaInfo{
-				NTQ:         1,
-				WalletCount: 2,
+				Addrs:         utils.MultiAddrToString(tests.GetListenAddresses(t, 1)...),
+				PublicKey:     tests.GetTestPublicKey(t),
+				PeerSignature: []byte{0x05, 0x80},
+				NTQ:           1,
+				WalletCount:   2,
 			},
-			testFn: func(peerID peer.ID, nodeMetaInfo *NodeMetaInfo) {
-				reputationEngine.cache.Add(storage.NtqCacheKey(peerID), nodeMetaInfo)
+			testFn: func(peerID peer.ID) {
+				reputationEngine.cache.Add(storage.NtqCacheKey(peerID), metaInfo)
+				_, ok := reputationEngine.cache.Get(storage.NtqCacheKey(peerID))
+				require.True(t, ok)
+			},
+		},
+		{
+			name:   "peer id not found in db",
+			peerID: tests.GetTestPeerID(t),
+			nodeMetaInfo: &NodeMetaInfo{
+				Addrs:         utils.MultiAddrToString(tests.GetListenAddresses(t, 1)...),
+				PublicKey:     tests.GetTestPublicKey(t),
+				PeerSignature: []byte{0x05, 0x80},
+				NTQ:           3,
+				WalletCount:   4,
 			},
 		},
 		{
 			name:   "node meta info found in dirty entries",
 			peerID: tests.GetTestPeerID(t),
 			nodeMetaInfo: &NodeMetaInfo{
-				NTQ:         3,
-				WalletCount: 1,
+				Addrs:         utils.MultiAddrToString(tests.GetListenAddresses(t, 1)...),
+				PublicKey:     tests.GetTestPublicKey(t),
+				PeerSignature: []byte{0x05, 0x80},
+				NTQ:           3,
+				WalletCount:   1,
 			},
-			testFn: func(peerID peer.ID, nodeMetaInfo *NodeMetaInfo) {
-				reputationEngine.dirtyEntries[peerID] = nodeMetaInfo
+			testFn: func(peerID peer.ID) {
+				reputationEngine.dirtyEntries[peerID] = metaInfo
 			},
 			expectedErr: nil,
 		},
@@ -134,17 +156,11 @@ func TestReputationEngine_AddNewPeerwithPeerID(t *testing.T) {
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			if test.testFn != nil {
-				test.testFn(test.peerID, test.nodeMetaInfo)
+				test.testFn(test.peerID)
 			}
 
-			err := reputationEngine.AddNewPeerWithPeerID(test.peerID, metaInfo)
-
-			if test.expectedErr != nil {
-				require.Error(t, err)
-				require.Equal(t, test.expectedErr, err)
-
-				return
-			}
+			err := reputationEngine.AddNewPeerWithPeerID(test.peerID, test.nodeMetaInfo)
+			require.NoError(t, err)
 
 			nodeInfo, err := reputationEngine.nodeMetaInfo(test.peerID)
 			require.NoError(t, err)
@@ -153,7 +169,7 @@ func TestReputationEngine_AddNewPeerwithPeerID(t *testing.T) {
 	}
 }
 
-func TestReputationEngine_AddNewPeer(t *testing.T) {
+func TestReputationEngine_UpdatePeer(t *testing.T) {
 	reputationEngine, mockDB, _ := CreateTestReputationEngine(t)
 
 	testcases := []struct {
@@ -202,7 +218,7 @@ func TestReputationEngine_AddNewPeer(t *testing.T) {
 				test.testFn(test.kramaID, test.nodeMetaInfo)
 			}
 
-			err := reputationEngine.AddNewPeer(test.kramaID, test.nodeMetaInfo)
+			err := reputationEngine.UpdatePeer(test.kramaID, test.nodeMetaInfo)
 
 			if test.expectedErr != nil {
 				require.Error(t, err)
@@ -217,96 +233,6 @@ func TestReputationEngine_AddNewPeer(t *testing.T) {
 				require.True(t, ok)
 				require.Equal(t, test.nodeMetaInfo, nodeInfo)
 			}
-		})
-	}
-}
-
-func TestReputationEngine_UpdatePeer(t *testing.T) {
-	reputationEngine, mockDB, _ := CreateTestReputationEngine(t)
-	testcases := []struct {
-		name         string
-		kramaID      id.KramaID
-		testFn       func(kramaID id.KramaID)
-		nodeMetaInfo *NodeMetaInfo
-		expectedErr  error
-	}{
-		{
-			name:    "invalid krama id",
-			kramaID: "",
-			nodeMetaInfo: &NodeMetaInfo{
-				NTQ:         DefaultPeerNTQ,
-				WalletCount: 0,
-			},
-			expectedErr: common.ErrInvalidKramaID,
-		},
-		{
-			name:    "krama id without state",
-			kramaID: tests.GetTestKramaID(t, 1),
-			nodeMetaInfo: &NodeMetaInfo{
-				NTQ:         DefaultPeerNTQ,
-				WalletCount: 1,
-			},
-		},
-		{
-			name:    "krama id with state",
-			kramaID: tests.GetTestKramaID(t, 1),
-			testFn: func(kramaID id.KramaID) {
-				mockDB.setNodeInfo(
-					t,
-					tests.DecodePeerIDFromKramaID(t, kramaID),
-					&NodeMetaInfo{
-						NTQ: DefaultPeerNTQ,
-					},
-				)
-			},
-			nodeMetaInfo: &NodeMetaInfo{
-				Addrs:         utils.MultiAddrToString(tests.GetListenAddresses(t, 1)...),
-				NTQ:           2,
-				WalletCount:   1,
-				PublicKey:     tests.GetTestPublicKey(t),
-				PeerSignature: []byte{0x05, 0x80},
-			},
-		},
-		{
-			name:    "krama id with required node meta info",
-			kramaID: tests.GetTestKramaID(t, 1),
-			testFn: func(kramaID id.KramaID) {
-				mockDB.setNodeInfo(
-					t,
-					tests.DecodePeerIDFromKramaID(t, kramaID),
-					&NodeMetaInfo{
-						Addrs:         utils.MultiAddrToString(tests.GetListenAddresses(t, 1)...),
-						NTQ:           2,
-						WalletCount:   1,
-						PublicKey:     tests.GetTestPublicKey(t),
-						PeerSignature: []byte{0x05, 0x80},
-					},
-				)
-			},
-			expectedErr: common.ErrAlreadyKnown,
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			if test.testFn != nil {
-				test.testFn(test.kramaID)
-			}
-
-			err := reputationEngine.UpdatePeer(test.kramaID, test.nodeMetaInfo)
-
-			if test.expectedErr != nil {
-				require.Error(t, err)
-				require.Equal(t, test.expectedErr, err)
-
-				return
-			}
-
-			peerID := tests.DecodePeerIDFromKramaID(t, test.kramaID)
-			nodeInfo, ok := reputationEngine.dirtyEntries[peerID]
-
-			require.True(t, ok)
-			require.Equal(t, test.nodeMetaInfo, nodeInfo)
 		})
 	}
 }

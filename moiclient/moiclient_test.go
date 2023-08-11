@@ -10,8 +10,9 @@ import (
 	"sort"
 	"testing"
 
-	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-polo"
+
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -141,6 +142,9 @@ func TestMoiClient(t *testing.T) {
 		},
 		"testFuelDeduction": {
 			test: func(t *testing.T) { testFuelDeduction(t, client, addrsMap) },
+		},
+		"testConnections": {
+			test: func(t *testing.T) { testConnections(t, client) },
 		},
 	}
 
@@ -1596,6 +1600,33 @@ func testAccounts(t *testing.T, client *Client) {
 			}
 
 			require.FailNow(t, "sarga address not found in list of accounts")
+		})
+	}
+}
+
+func testConnections(t *testing.T, client *Client) {
+	ctx := context.Background()
+
+	testcases := []struct {
+		name    string
+		accArgs *rpcargs.ConnArgs
+	}{
+		{
+			name:    "fetch connections",
+			accArgs: &rpcargs.ConnArgs{},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			connections, err := client.Connections(ctx)
+			require.NoError(t, err)
+
+			httpConns := httpConnections(t, test.accArgs)
+			require.Equal(t, len(httpConns), len(connections))
+			require.ElementsMatch(t, httpConns, connections)
+
+			require.Greater(t, len(connections), 0)
 		})
 	}
 }
