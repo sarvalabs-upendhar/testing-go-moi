@@ -36,13 +36,13 @@ func (builtin Builtin) name() string { return builtin.Name }
 
 func (builtin Builtin) callfields() CallFields { return builtin.CallFields }
 
-func (builtin Builtin) ptr() engineio.ElementPtr { return engineio.ElementPtr(builtin.Ptr) }
+func (builtin Builtin) ptr() engineio.ElementPtr { return builtin.Ptr }
 
 func (builtin Builtin) run(engine *Engine, inputs RegisterSet) (RegisterSet, *Exception) {
 	if !engine.callstack.push(&callframe{
 		scope: "builtin",
 		label: builtin.name(),
-		point: uint64(builtin.ptr()),
+		point: builtin.ptr(),
 	}) {
 		return nil, exception(RuntimeError, "max call depth reached").traced(engine.callstack.trace())
 	}

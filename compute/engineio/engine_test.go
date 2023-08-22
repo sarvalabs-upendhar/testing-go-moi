@@ -71,3 +71,11 @@ func (m *mockEngineRuntime) GetElementGenerator(_ ElementKind) (ManifestElementG
 func (m *mockEngineRuntime) GetCallEncoder(_ *Callsite, _ LogicDriver) (CallEncoder, error) {
 	return nil, nil
 }
+
+func (m *mockEngineRuntime) DecodeDepDriver(_ []byte) (DepDriver, error) {
+	return nil, nil
+}
+
+func (m *mockEngineRuntime) DecodeErrorResult(_ []byte) (ErrorResult, error) {
+	return nil, nil
+}

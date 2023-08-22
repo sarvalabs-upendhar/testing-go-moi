@@ -16,7 +16,7 @@ import (
 //
 // The Interaction must have a LogicPayload with a Manifest and the output receipt will have a LogicDeployReceipt.
 // The logic manifest is verified, compiled and deployed on to a new account and any deployer call is executed.
-func RunLogicDeploy(ix *common.Interaction, tank *engineio.FuelTank, objects state.ObjectMap) (*common.Receipt, error) {
+func RunLogicDeploy(ix *common.Interaction, tank *FuelTank, objects state.ObjectMap) (*common.Receipt, error) {
 	payload, err := ix.GetLogicPayload()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not find logic payload")
@@ -97,7 +97,7 @@ func DeploymentCall(callsite string, calldata []byte) LogicDeployOption {
 // DeployFuelLimit returns a LogicDeployOption to provide the fuel limit for logic deployment.
 func DeployFuelLimit(limit engineio.Fuel) LogicDeployOption {
 	return func(config *logicDeployer) error {
-		config.fueltank = engineio.NewFuelTank(limit)
+		config.fueltank = NewFuelTank(limit)
 
 		return nil
 	}
@@ -131,7 +131,7 @@ func DeployLogic(manifest []byte, state *state.Object, opts ...LogicDeployOption
 	deployer := &logicDeployer{
 		manifest:   manifest,
 		logicState: state,
-		fueltank: engineio.NewFuelTank(func() engineio.Fuel {
+		fueltank: NewFuelTank(func() engineio.Fuel {
 			fuel, _ := new(big.Int).SetString("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 0)
 
 			return fuel
@@ -180,7 +180,7 @@ func DeployLogic(manifest []byte, state *state.Object, opts ...LogicDeployOption
 type logicDeployer struct {
 	manifest []byte
 
-	fueltank      *engineio.FuelTank
+	fueltank      *FuelTank
 	logicState    *state.Object
 	deployerState *state.Object
 

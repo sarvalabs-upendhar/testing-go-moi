@@ -26,8 +26,8 @@ type LogicObject struct {
 
 	// Represents the usage of different type of context states by the logic
 	StateMatrix engineio.ContextStateMatrix
-	// Represents the dependency graph between logic elements
-	Dependencies *engineio.DependencyGraph
+	// Represents the dependency driver for managing logic elements relationships
+	Dependencies engineio.DepDriver
 	// Represents the collection of all LogicElement objects
 	Elements map[engineio.ElementPtr]*engineio.LogicElement
 	// Represents mapping of string names to LogicCallsite pointers
@@ -41,8 +41,8 @@ func NewLogicObject(address common.Address, descriptor *engineio.LogicDescriptor
 	logicID := common.NewLogicIDv0(
 		descriptor.StateMatrix.Persistent(),
 		descriptor.StateMatrix.Ephemeral(),
-		descriptor.Interactive,
-		false, 0, address,
+		descriptor.Interactive, false,
+		0, address,
 	)
 
 	return &LogicObject{
@@ -55,7 +55,7 @@ func NewLogicObject(address common.Address, descriptor *engineio.LogicDescriptor
 		Interactive: descriptor.Interactive,
 
 		StateMatrix:  descriptor.StateMatrix,
-		Dependencies: descriptor.DepGraph,
+		Dependencies: descriptor.Dependency,
 		Elements:     descriptor.Elements,
 
 		Callsites: descriptor.Callsites,
@@ -100,7 +100,7 @@ func (logic LogicObject) GetClassdef(name string) (*engineio.Classdef, bool) {
 }
 
 func (logic LogicObject) GetElementDeps(ptr engineio.ElementPtr) []engineio.ElementPtr {
-	return logic.Dependencies.AllDependencies(ptr)
+	return logic.Dependencies.Dependencies(ptr)
 }
 
 func (logic LogicObject) GetElement(index engineio.ElementPtr) (*engineio.LogicElement, bool) {
@@ -120,8 +120,84 @@ func (logic *LogicObject) Bytes() ([]byte, error) {
 
 func (logic *LogicObject) FromBytes(bytes []byte) error {
 	if err := polo.Depolorize(logic, bytes); err != nil {
-		return errors.New("failed to depolorize logic object")
+		return errors.Wrap(err, "failed to depolorize logic object")
 	}
+
+	return nil
+}
+
+func (logic *LogicObject) Depolorize(depolorizer *polo.Depolorizer) (err error) {
+	depolorizer, err = depolorizer.DepolorizePacked()
+	if errors.Is(err, polo.ErrNullPack) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	if err = depolorizer.Depolorize(&logic.ID); err != nil {
+		return err
+	}
+
+	if err = depolorizer.Depolorize(&logic.EngineKind); err != nil {
+		return err
+	}
+
+	if err = depolorizer.Depolorize(&logic.ManifestHash); err != nil {
+		return err
+	}
+
+	if err = depolorizer.Depolorize(&logic.Sealed); err != nil {
+		return err
+	}
+
+	if err = depolorizer.Depolorize(&logic.AssetLogic); err != nil {
+		return err
+	}
+
+	if err = depolorizer.Depolorize(&logic.Interactive); err != nil {
+		return err
+	}
+
+	if err = depolorizer.Depolorize(&logic.StateMatrix); err != nil {
+		return err
+	}
+
+	if err = logic.decodeDepDriver(depolorizer); err != nil {
+		return err
+	}
+
+	if err = depolorizer.Depolorize(&logic.Elements); err != nil {
+		return err
+	}
+
+	if err = depolorizer.Depolorize(&logic.Callsites); err != nil {
+		return err
+	}
+
+	if err = depolorizer.Depolorize(&logic.Classdefs); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (logic *LogicObject) decodeDepDriver(depolorizer *polo.Depolorizer) error {
+	runtime, ok := engineio.FetchEngineRuntime(logic.EngineKind)
+	if !ok {
+		return errors.New("unidentified engine runtime")
+	}
+
+	data, err := depolorizer.DepolorizeAny()
+	if err != nil {
+		return err
+	}
+
+	driver, err := runtime.DecodeDepDriver(data)
+	if err != nil {
+		return err
+	}
+
+	logic.Dependencies = driver
 
 	return nil
 }

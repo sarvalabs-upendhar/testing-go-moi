@@ -242,24 +242,25 @@ func SlothashCommand(slot uint64) Command {
 	}
 }
 
-// ErrDecodePISAValueCommand generates a command runner to
-// decode the error object for PISA from the given error bytes data.
-func ErrDecodePISAValueCommand(errdata []byte) Command {
+// ErrDecodeValueCommand generates a command runner to
+// decode the error object from the given error bytes data.
+func ErrDecodeValueCommand(errdata []byte, engine engineio.EngineKind) Command {
 	return func(env *Environment) string {
-		exception := new(pisa.Exception)
+		runtime, _ := engineio.FetchEngineRuntime(engine)
 
-		if err := polo.Depolorize(exception, errdata); err != nil {
-			return fmt.Sprintf("failed to decode error data into pisa.Exception: %v", err)
+		errorObject, err := runtime.DecodeErrorResult(errdata)
+		if err != nil {
+			return fmt.Sprintf("failed to decode error data into ErrorResult: %v", err)
 		}
 
-		return exception.String()
+		return errorObject.String()
 	}
 }
 
-// ErrDecodePISAMemoryCommand generates a command runner to
-// decode the error object for PISA from the error bytes data
-// at the given identifier in the lab memory
-func ErrDecodePISAMemoryCommand(ident string) Command {
+// ErrDecodeMemoryCommand generates a command runner
+// to decode the error object from the error bytes
+// data at the given identifier in the lab memory
+func ErrDecodeMemoryCommand(ident string, engine engineio.EngineKind) Command {
 	return func(env *Environment) string {
 		value, ok := env.memory[ident]
 		if !ok {
@@ -271,7 +272,7 @@ func ErrDecodePISAMemoryCommand(ident string) Command {
 			return fmt.Sprintf("'%v' is not an hex value", ident)
 		}
 
-		return ErrDecodePISAValueCommand(errdata)(env)
+		return ErrDecodeValueCommand(errdata, engine)(env)
 	}
 }
 

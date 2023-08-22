@@ -35,6 +35,7 @@ require (
 	github.com/libp2p/go-libp2p-kad-dht v0.20.0
 	github.com/libp2p/go-libp2p-pubsub v0.8.1
 	github.com/libp2p/go-msgio v0.2.0
+	github.com/manishmeganathan/depgraph v0.1.0
 	github.com/manishmeganathan/symbolizer v0.2.1
 	github.com/moby/locker v1.0.1
 	github.com/mr-tron/base58 v1.2.0
@@ -45,7 +46,7 @@ require (
 	github.com/prometheus/client_golang v1.14.0
 	github.com/sarvalabs/go-polo v0.3.4
 	github.com/spf13/cobra v1.5.0
-	github.com/stretchr/testify v1.8.1
+	github.com/stretchr/testify v1.8.4
 	github.com/supranational/blst v0.3.7
 	github.com/tyler-smith/go-bip39 v1.1.0
 	github.com/ugorji/go/codec v1.2.6

@@ -53,8 +53,8 @@ type LogicDescriptor struct {
 	Interactive bool
 	StateMatrix ContextStateMatrix
 
-	DepGraph *DependencyGraph
-	Elements map[ElementPtr]*LogicElement
+	Dependency DepDriver
+	Elements   map[ElementPtr]*LogicElement
 
 	Callsites map[string]*Callsite
 	Classdefs map[string]*Classdef
@@ -77,7 +77,7 @@ type (
 	// ElementKind is a type alias for an element kind string
 	ElementKind string
 	// ElementPtr is a type alias for an element pointer
-	ElementPtr uint64
+	ElementPtr = uint64
 )
 
 // Classdef represents a class definition in a Logic.

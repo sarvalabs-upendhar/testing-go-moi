@@ -2,7 +2,6 @@ package manifests
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/suite"
 
@@ -48,7 +47,7 @@ func (suite *EnvCodesTestSuite) TestGetSenderAddress() {
 
 func (suite *EnvCodesTestSuite) TestGetTimeStamp() {
 	consumed, output, except := suite.Call("GetTimeStamp", nil)
-	suite.Equal(time.Now().Unix(), output["time"])
+	suite.Equal(suite.environment.Timestamp(), output["time"])
 	suite.Equal(engineio.NewFuel(110), consumed)
 	suite.Nil(except)
 }

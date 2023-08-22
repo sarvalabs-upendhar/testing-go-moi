@@ -8,8 +8,10 @@ import (
 	"testing"
 
 	"github.com/decred/dcrd/crypto/blake256"
+	"github.com/manishmeganathan/depgraph"
 
 	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
@@ -20,7 +22,6 @@ import (
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
-	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"
 	"github.com/sarvalabs/go-moi/storage/db"
@@ -694,7 +695,7 @@ func createLogicObject(t *testing.T, params *createLogicObjectParams) *LogicObje
 		params = &createLogicObjectParams{}
 	}
 
-	logicObject := &LogicObject{ID: params.id}
+	logicObject := &LogicObject{ID: params.id, EngineKind: engineio.PISA}
 	if params.logicCallback != nil {
 		params.logicCallback(logicObject)
 	}
@@ -706,7 +707,7 @@ func getLogicObjectParamsWithLogicID(logicID common.LogicID) *createLogicObjectP
 	return &createLogicObjectParams{
 		id: logicID,
 		logicCallback: func(object *LogicObject) {
-			object.Dependencies = engineio.NewDependencyGraph()
+			object.Dependencies = depgraph.NewDependencyGraph()
 		},
 	}
 }
