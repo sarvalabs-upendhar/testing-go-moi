@@ -39,49 +39,63 @@ func (service *SYNCRPCService) SyncSnap(
 ) error {
 	defer close(resp)
 
-	for snapReq := range req {
-		snap, err := service.syncer.db.GetAccountSnapshot(ctx, snapReq.Address, 0)
-		if err != nil {
-			service.syncer.logger.Error("Failed to fetch account snap shot", "addr", snapReq.Address)
+	var (
+		snapReq *SnapRequest
+		ok      bool
+	)
 
-			return err
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case snapReq, ok = <-req:
+		if !ok {
+			log.Println("request channel closed")
+
+			return nil
+		}
+	}
+
+	snap, err := service.syncer.db.GetAccountSnapshot(ctx, snapReq.Address, 0)
+	if err != nil {
+		service.syncer.logger.Error("Failed to fetch account snap shot", "addr", snapReq.Address)
+
+		return err
+	}
+
+	createdAt := time.Now().UnixNano()
+	noOfMessages := int(snap.Size / maxMessageSize)
+
+	if snap.Size%maxMessageSize != 0 {
+		noOfMessages++
+	}
+
+	start := 0
+	for i := 0; i < noOfMessages; i++ {
+		end := start + maxMessageSize
+		if end > len(snap.Entries) {
+			end = len(snap.Entries)
 		}
 
-		createdAt := time.Now().UnixNano()
-		noOfMessages := int(snap.Size / maxMessageSize)
-
-		if snap.Size%maxMessageSize != 0 {
-			noOfMessages++
+		respMsg := &SnapResponse{
+			Data: make([]byte, 0, maxMessageSize),
 		}
 
-		start := 0
-		for i := 0; i < noOfMessages; i++ {
-			end := start + maxMessageSize
-			if end > len(snap.Entries) {
-				end = len(snap.Entries)
+		if i == 0 {
+			respMsg.MetaInfo = &SnapMetaInfo{
+				CreatedAt:     createdAt,
+				TotalSnapSize: snap.Size,
 			}
+		}
 
-			respMsg := &SnapResponse{
-				Data: make([]byte, 0, maxMessageSize),
-			}
+		respMsg.Data = snap.Entries[start:end]
 
-			if i == 0 {
-				respMsg.MetaInfo = &SnapMetaInfo{
-					CreatedAt:     createdAt,
-					TotalSnapSize: snap.Size,
-				}
-			}
+		start = end
 
-			respMsg.Data = snap.Entries[start:end]
-
-			start = end
-
-			select {
-			case resp <- respMsg:
-				break
-			case <-ctx.Done():
-				return ctx.Err()
-			}
+		select {
+		case resp <- respMsg:
+			break
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
 

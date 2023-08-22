@@ -720,7 +720,7 @@ func (s *Syncer) initSync() error {
 func (s *Syncer) syncBucketsWithMaxAttempts(bestPeers []id.KramaID, maxAttempts int) error {
 	randomNumber := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	for i := 1; i < maxAttempts; i++ {
+	for i := 1; i < maxAttempts+1; i++ {
 		bestPeer := bestPeers[randomNumber.Intn(len(bestPeers))]
 
 		requestTime := time.Now()
