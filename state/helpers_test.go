@@ -394,8 +394,10 @@ type MockMerkleTree struct {
 }
 
 func (m *MockMerkleTree) Root() common.RootNode {
-	// TODO implement me
-	panic("implement me")
+	return common.RootNode{
+		MerkleRoot: m.merkleRoot,
+		HashTable:  m.dirty,
+	}
 }
 
 func mockMerkleTreeWithDB() *MockMerkleTree {
@@ -479,14 +481,14 @@ func (m *MockMerkleTree) Set(key []byte, value []byte) error {
 		m.dirty = make(map[string][]byte)
 	}
 
-	m.dirty[string(key)] = value
+	m.dirty[common.BytesToHex(key)] = value
 
 	return nil
 }
 
 func (m *MockMerkleTree) Delete(key []byte) error {
 	if exists, _ := m.Has(key); exists {
-		delete(m.dbStorage, string(key))
+		delete(m.dbStorage, common.BytesToHex(key))
 
 		return nil
 	}
@@ -496,7 +498,7 @@ func (m *MockMerkleTree) Delete(key []byte) error {
 
 func (m *MockMerkleTree) Get(key []byte) ([]byte, error) {
 	if exists, _ := m.Has(key); exists {
-		val := m.dirty[string(key)]
+		val := m.dirty[common.BytesToHex(key)]
 
 		return val, nil
 	}
@@ -505,7 +507,7 @@ func (m *MockMerkleTree) Get(key []byte) ([]byte, error) {
 }
 
 func (m *MockMerkleTree) Has(key []byte) (bool, error) {
-	_, ok := m.dirty[string(key)]
+	_, ok := m.dirty[common.BytesToHex(key)]
 
 	return ok, nil
 }

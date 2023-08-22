@@ -2130,6 +2130,106 @@ func TestGetAccTypeUsingStateObject(t *testing.T) {
 	}
 }
 
+func TestStateManager_SyncTree(t *testing.T) {
+	keys, values := getEntries(t, 2)
+
+	syncedMerkleTree := getMerkleTreeWithEntries(t, [][]byte{keys[0]}, [][]byte{values[0]})
+	err := syncedMerkleTree.Commit()
+	require.NoError(t, err)
+
+	merkleTree := getMerkleTreeWithEntries(t, [][]byte{keys[0]}, [][]byte{values[1]})
+	err = merkleTree.Commit()
+	require.NoError(t, err)
+
+	sm := createTestStateManager(t, nil)
+
+	testcases := []struct {
+		name          string
+		tree          *MockMerkleTree
+		newRoot       common.RootNode
+		expectedError error
+	}{
+		{
+			name:    "tree root and new root are same so tree is already synced",
+			tree:    syncedMerkleTree,
+			newRoot: syncedMerkleTree.Root(),
+		},
+		{
+			name: "tree is synced successfully with the new root",
+			tree: syncedMerkleTree,
+			newRoot: common.RootNode{
+				MerkleRoot: merkleTree.Root().MerkleRoot,
+				HashTable:  map[string][]byte{common.BytesToHex(keys[0]): values[1]},
+			},
+		},
+		{
+			name: "tree is not synced properly with the new root",
+			tree: syncedMerkleTree,
+			newRoot: common.RootNode{
+				MerkleRoot: tests.RandomHash(t),
+				HashTable:  map[string][]byte{common.BytesToHex(keys[0]): values[1]},
+			},
+			expectedError: errors.New("updated root doesn't match"),
+		},
+		{
+			name: "failed to set entry of the tree root with the new root",
+			tree: getMerkleTreeWithSetHook(t, [][]byte{keys[0]}, [][]byte{values[0]}, func() error {
+				return errors.New("failed to set entry")
+			}),
+			newRoot: common.RootNode{
+				MerkleRoot: merkleTree.Root().MerkleRoot,
+				HashTable:  map[string][]byte{common.BytesToHex(keys[0]): values[1]},
+			},
+			expectedError: errors.New("failed to set entry"),
+		},
+		{
+			name: "tree synced with the new root but failed to commit",
+			tree: getMerkleTreeWithCommitHook(t, [][]byte{keys[0]}, [][]byte{values[0]}, func() error {
+				return errors.New("failed to commit")
+			}),
+			newRoot: common.RootNode{
+				MerkleRoot: merkleTree.Root().MerkleRoot,
+				HashTable:  map[string][]byte{common.BytesToHex(keys[0]): values[1]},
+			},
+			expectedError: errors.New("failed to commit"),
+		},
+		{
+			name: "tree synced with the new root but failed to flush",
+			tree: getMerkleTreeWithFlushHook(t, [][]byte{keys[0]}, [][]byte{values[0]}, func() error {
+				return errors.New("failed to flush")
+			}),
+			newRoot: common.RootNode{
+				MerkleRoot: merkleTree.Root().MerkleRoot,
+				HashTable:  map[string][]byte{common.BytesToHex(keys[0]): values[1]},
+			},
+			expectedError: errors.New("failed to flush"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			err := sm.syncTree(test.tree, &test.newRoot)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			root := test.tree.Root()
+			require.Equal(t, test.newRoot.MerkleRoot, root.MerkleRoot)
+
+			for key, expectedValue := range root.HashTable {
+				actualValue, err := test.tree.Get(common.Hex2Bytes(key))
+				require.NoError(t, err)
+
+				require.Equal(t, expectedValue, actualValue)
+			}
+		})
+	}
+}
+
 func TestFlushDirtyObject(t *testing.T) {
 	db := mockDB()
 	dirtyEntries := getDirtyEntries(t, 5)
@@ -2223,7 +2323,7 @@ func TestFlushDirtyObject(t *testing.T) {
 
 			// check if meta storage tree entries flushed to db
 			for i := 0; i < len(keys); i += 1 {
-				val, err := merkle.dbStorage[string(keys[i])]
+				val, err := merkle.dbStorage[common.BytesToHex(keys[i])]
 				require.True(t, err)
 				require.Equal(t, values[i], val)
 			}
