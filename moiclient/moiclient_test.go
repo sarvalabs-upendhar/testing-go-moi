@@ -266,8 +266,8 @@ func setupChain(t *testing.T, client *Client, addrs []common.Address, addrsMap S
 
 // deployLogic deploys logic manifest
 func deployLogic(t *testing.T, client *Client, addr common.Address, mnemonic string) {
-	sendIXArgs := getIXArgsForLogicDeployment(t, addr)
-	sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
+	sendIXArgs := getIXArgsForLogicDeployment(t, client, addr)
+	sendIX := CreateSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
 
 	ctx := context.Background()
 
@@ -280,7 +280,7 @@ func deployLogic(t *testing.T, client *Client, addr common.Address, mnemonic str
 	ctx, cancel := context.WithTimeout(context.Background(), IxnTimeout)
 	defer cancel()
 
-	retryFetchReceipt(t, ctx, client, ixHash)
+	moiclientRetryFetchReceipt(t, ctx, client, ixHash)
 }
 
 // executeLogic executes the transfer method on deployed logic
@@ -289,7 +289,7 @@ func executeLogic(t *testing.T, client *Client, deployAddr, addr common.Address,
 		"052237d521654740857716b34746f060fafe52ec42a85db644d5cceba2bb89cf5b0166cc9158211f44ed1e60b06032c"
 
 	logicPayload := &common.LogicPayload{
-		Logic:    getLogicID(t, client, deployAddr, &deployLogicHeight),
+		Logic:    GetLogicID(t, client, deployAddr, deployLogicHeight),
 		Callsite: "Transfer!",
 		Calldata: common.Hex2Bytes(calldata),
 	}
@@ -299,13 +299,14 @@ func executeLogic(t *testing.T, client *Client, deployAddr, addr common.Address,
 
 	sendIXArgs := &common.SendIXArgs{
 		Type:      common.IxLogicInvoke,
+		Nonce:     GetLatestNonce(t, client, addr),
 		FuelPrice: big.NewInt(1),
-		FuelLimit: big.NewInt(200),
+		FuelLimit: big.NewInt(500),
 		Sender:    addr,
 		Payload:   payload,
 	}
 
-	sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
+	sendIX := CreateSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
 
 	ixHash, err := client.SendInteractions(context.Background(), sendIX)
 	require.NoError(t, err)
@@ -316,7 +317,7 @@ func executeLogic(t *testing.T, client *Client, deployAddr, addr common.Address,
 	ctx, cancel := context.WithTimeout(context.Background(), IxnTimeout)
 	defer cancel()
 
-	retryFetchReceipt(t, ctx, client, ixHash)
+	moiclientRetryFetchReceipt(t, ctx, client, ixHash)
 }
 
 // createAsset creates asset named "MOI"
@@ -333,13 +334,14 @@ func createAsset(t *testing.T, client *Client, addr common.Address, mnemonic str
 
 	sendIXArgs := &common.SendIXArgs{
 		Type:      common.IxAssetCreate,
+		Nonce:     GetLatestNonce(t, client, addr),
 		Sender:    addr,
 		FuelPrice: big.NewInt(1),
 		FuelLimit: big.NewInt(200),
 		Payload:   payload,
 	}
 
-	sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
+	sendIX := CreateSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
 
 	ixHash, err := client.SendInteractions(context.Background(), sendIX)
 	require.NoError(t, err)
@@ -347,16 +349,16 @@ func createAsset(t *testing.T, client *Client, addr common.Address, mnemonic str
 	ctx, cancel := context.WithTimeout(context.Background(), IxnTimeout)
 	defer cancel()
 
-	retryFetchReceipt(t, ctx, client, ixHash)
+	moiclientRetryFetchReceipt(t, ctx, client, ixHash)
 }
 
 // transferTokens transfers tokens from senderAddr to receiver
 func transferTokens(t *testing.T, client *Client, sender, receiver common.Address, mnemonic string) {
-	assetID := getAssetID(t, client, sender, &createAssetHeight)
+	assetID := getAssetID(t, client, sender, createAssetHeight)
 
 	sendIXArgs := &common.SendIXArgs{
 		Type:     common.IxValueTransfer,
-		Nonce:    1,
+		Nonce:    GetLatestNonce(t, client, sender),
 		Sender:   sender,
 		Receiver: receiver,
 		TransferValues: map[common.AssetID]*big.Int{
@@ -366,7 +368,7 @@ func transferTokens(t *testing.T, client *Client, sender, receiver common.Addres
 		FuelLimit: big.NewInt(200),
 	}
 
-	sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
+	sendIX := CreateSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
 
 	ixHash, err := client.SendInteractions(context.Background(), sendIX)
 	require.NoError(t, err)
@@ -375,7 +377,7 @@ func transferTokens(t *testing.T, client *Client, sender, receiver common.Addres
 	ctx, cancel := context.WithTimeout(context.Background(), IxnTimeout)
 	defer cancel()
 
-	retryFetchReceipt(t, ctx, client, ixHash)
+	moiclientRetryFetchReceipt(t, ctx, client, ixHash)
 }
 
 // SendIxWithInvalidSign sends ix with invalid sign
@@ -399,7 +401,7 @@ func SendIxWithInvalidSign(t *testing.T, client *Client, addr common.Address, mn
 		Payload:   payload,
 	}
 
-	sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
+	sendIX := CreateSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
 
 	_, err = client.SendInteractions(context.Background(), sendIX)
 	require.ErrorContains(t, err, common.ErrInvalidIXSignature.Error())
@@ -407,12 +409,12 @@ func SendIxWithInvalidSign(t *testing.T, client *Client, addr common.Address, mn
 
 // fillIXPool sends ixnPendingCount number of deploy interactions
 func fillIXPool(t *testing.T, client *Client, addr common.Address, mnemonic string) {
-	sendIXArgs := getIXArgsForLogicDeployment(t, addr)
+	sendIXArgs := getIXArgsForLogicDeployment(t, client, addr)
 	sendIXArgs.Nonce = uint64(0)
 	increment := uint64(1)
 
 	for i := 0; i < ixnPendingCount; i++ { // send ixns just to fill ixpool with some data
-		sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
+		sendIX := CreateSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
 
 		_, err := client.SendInteractions(context.Background(), sendIX)
 		require.NoError(t, err, "sending interaction failed")
@@ -559,7 +561,7 @@ func testGetAssetInfoByAssetID(t *testing.T, client *Client, addr common.Address
 	}{
 		{
 			name:    "fetch asset info for existing assetID",
-			assetID: getAssetID(t, client, addr, &createAssetHeight),
+			assetID: getAssetID(t, client, addr, createAssetHeight),
 		},
 		{
 			name:          "fetch asset info for non-existing assetID",
@@ -596,7 +598,7 @@ func testGetBalance(t *testing.T, client *Client, addrsMap StrMap) {
 	receiverTokenTransferHeight := int64(1)
 	sender := addrsMap["assetAddr"]
 	receiver := addrsMap["receiverAddr"]
-	assetID := getAssetID(t, client, sender, &createAssetHeight)
+	assetID := getAssetID(t, client, sender, createAssetHeight)
 	ctx := context.Background()
 
 	createAssetBalance := new(big.Int).SetUint64(1248577)
@@ -675,7 +677,7 @@ func testGetBalance(t *testing.T, client *Client, addrsMap StrMap) {
 }
 
 func testFuelEstimate(t *testing.T, client *Client, addr common.Address) {
-	ts := getTesseract(t, client, addr, &createAssetHeight)
+	ts := GetTesseract(t, client, addr, createAssetHeight)
 	supply, _ := new(big.Int).SetString("130D52", 16)
 
 	ctx := context.Background()
@@ -724,7 +726,7 @@ func testFuelEstimate(t *testing.T, client *Client, addr common.Address) {
 }
 
 func testTDU(t *testing.T, client *Client, addr common.Address) {
-	assetID := getAssetID(t, client, addr, &createAssetHeight)
+	assetID := getAssetID(t, client, addr, createAssetHeight)
 	ctx := context.Background()
 	sortTDU := func(tdu []rpcargs.TDU) {
 		sort.Slice(tdu, func(i, j int) bool {
@@ -840,7 +842,7 @@ func testGetContextInfo(t *testing.T, client *Client, addr common.Address) {
 }
 
 func testInteractionReceipt(t *testing.T, client *Client, addr common.Address) {
-	ts := getTesseract(t, client, addr, &executeLogicHeight)
+	ts := GetTesseract(t, client, addr, executeLogicHeight)
 	ctx := context.Background()
 	testcases := []struct {
 		name          string
@@ -977,7 +979,7 @@ func testPendingInteractionCount(t *testing.T, client *Client, addr common.Addre
 }
 
 func testLogicStorage(t *testing.T, client *Client, addr common.Address) {
-	logicID := getLogicID(t, client, addr, &deployLogicHeight)
+	logicID := getLogicID(t, client, addr, deployLogicHeight)
 	ctx := context.Background()
 	testcases := []struct {
 		name                 string
@@ -1074,7 +1076,7 @@ func testAccountState(t *testing.T, client *Client, addr common.Address) {
 }
 
 func testLogics(t *testing.T, client *Client, addr common.Address) {
-	logicID := getLogicID(t, client, addr, &deployLogicHeight)
+	logicID := getLogicID(t, client, addr, deployLogicHeight)
 	ctx := context.Background()
 	testcases := []struct {
 		name             string
@@ -1125,8 +1127,8 @@ func testLogics(t *testing.T, client *Client, addr common.Address) {
 }
 
 func testLogicManifest(t *testing.T, client *Client, addr common.Address) {
-	logicID := getLogicID(t, client, addr, &deployLogicHeight)
-	ts := getTesseract(t, client, addr, &deployLogicHeight)
+	logicID := getLogicID(t, client, addr, deployLogicHeight)
+	ts := GetTesseract(t, client, addr, deployLogicHeight)
 	ctx := context.Background()
 
 	var logic *rpcargs.RPCLogicPayload
@@ -1194,7 +1196,7 @@ func testLogicManifest(t *testing.T, client *Client, addr common.Address) {
 
 			require.NoError(t, err)
 
-			manifest, err := getLogicManifestByEncodingType(t, logic.Manifest, test.logicManifestArgs)
+			manifest, err := GetLogicManifestByEncodingType(t, logic.Manifest, test.logicManifestArgs.Encoding)
 			require.NoError(t, err)
 
 			require.Equal(t, manifest, logicManifest)
@@ -1329,7 +1331,7 @@ func testInspect(t *testing.T, client *Client) {
 }
 
 func testInteractionByHash(t *testing.T, client *Client, addr common.Address) {
-	ts := getTesseract(t, client, addr, &deployLogicHeight)
+	ts := GetTesseract(t, client, addr, deployLogicHeight)
 	ctx := context.Background()
 	testcases := []struct {
 		name          string
@@ -1371,7 +1373,7 @@ func testInteractionByHash(t *testing.T, client *Client, addr common.Address) {
 }
 
 func testInteractionByTesseract(t *testing.T, client *Client, addr common.Address) {
-	ts := getTesseract(t, client, addr, &deployLogicHeight)
+	ts := GetTesseract(t, client, addr, deployLogicHeight)
 	randomHash := tests.RandomHash(t)
 	ixIndex := uint64(0)
 	ctx := context.Background()
@@ -1674,7 +1676,7 @@ func testAccountMetaInfo(t *testing.T, client *Client) {
 }
 
 func testCall(t *testing.T, client *Client, addr common.Address) {
-	ts := getTesseract(t, client, addr, &createAssetHeight)
+	ts := GetTesseract(t, client, addr, createAssetHeight)
 	supply, _ := new(big.Int).SetString("130D46", 16)
 
 	ctx := context.Background()
@@ -1756,7 +1758,7 @@ func testFuelDeduction(t *testing.T, client *Client, addrs map[string]common.Add
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			// Get tesseract for the height
-			ts := getTesseract(t, client, test.address, &test.height)
+			ts := GetTesseract(t, client, test.address, test.height)
 			// Get the interaction receipt
 			receipt, err := client.InteractionReceipt(ctx, &rpcargs.ReceiptArgs{
 				Hash: ts.Ixns[0].Hash,

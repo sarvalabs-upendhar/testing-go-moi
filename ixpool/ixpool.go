@@ -565,7 +565,7 @@ func (i *IxPool) validateAssetCreate(ix *common.Interaction) error {
 
 func (i *IxPool) validateValueTransfer(ix *common.Interaction) error {
 	if len(ix.TransferValues()) == 0 {
-		return errors.New("empty transfer values")
+		return common.ErrEmptyTransferValues
 	}
 
 	for assetID, v := range ix.TransferValues() {
@@ -609,7 +609,7 @@ func (i *IxPool) validateAssetMint(ix *common.Interaction) error {
 
 	// only operator can mint asset
 	if assetInfo.Operator != ix.Sender() {
-		return errors.New("Operator address mismatch")
+		return common.ErrOperatorMismatch
 	}
 
 	return nil
@@ -639,7 +639,7 @@ func (i *IxPool) validateAssetBurn(ix *common.Interaction) error {
 
 	// only operator can burn asset
 	if assetInfo.Operator != ix.Sender() {
-		return errors.New("Operator address mismatch")
+		return common.ErrOperatorMismatch
 	}
 
 	return nil

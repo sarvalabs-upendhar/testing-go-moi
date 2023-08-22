@@ -3,7 +3,6 @@ package moiclient
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"math/big"
@@ -13,25 +12,21 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/go-moi/common/kramaid"
-	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
-	"github.com/sarvalabs/go-polo"
-
 	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/crypto"
+	"github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/jsonrpc/api"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/tests"
-	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
 var LatestTesseractNumber = int64(-1)
 
 // IxnTimeout is the max time to wait for an ixn to be completed
-const IxnTimeout = 5 * time.Minute
+const IxnTimeout = 1 * time.Minute
 
 var (
 	genesisHeight        = int64(0)
@@ -82,23 +77,8 @@ func makeHTTPRequest(t *testing.T, method string, args interface{}) *rpcargs.Res
 	return &resp
 }
 
-func createSendIXFromSendIXArgs(t *testing.T, sendIxArgs *common.SendIXArgs, mnemonic string) *rpcargs.SendIX {
-	t.Helper()
-
-	bz, err := polo.Polorize(sendIxArgs)
-	require.NoError(t, err)
-
-	sign, err := crypto.GetSignature(bz, mnemonic)
-	require.NoError(t, err)
-
-	return &rpcargs.SendIX{
-		IXArgs:    hex.EncodeToString(bz),
-		Signature: sign,
-	}
-}
-
 // getIXArgsForLogicDeployment returns interaction args for logic deployment
-func getIXArgsForLogicDeployment(t *testing.T, addr common.Address) *common.SendIXArgs {
+func getIXArgsForLogicDeployment(t *testing.T, client *Client, addr common.Address) *common.SendIXArgs {
 	t.Helper()
 
 	calldata := "0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd8ee6a29ec4" +
@@ -112,7 +92,7 @@ func getIXArgsForLogicDeployment(t *testing.T, addr common.Address) *common.Send
 		Calldata: hexutil.Bytes(common.Hex2Bytes(calldata)),
 	}
 
-	payload, err := polo.Polorize(logicPayload)
+	payload, err := logicPayload.Bytes()
 	require.NoError(t, err)
 
 	fuelPrice := new(big.Int).SetUint64(1)
@@ -120,6 +100,7 @@ func getIXArgsForLogicDeployment(t *testing.T, addr common.Address) *common.Send
 
 	ixArgs := &common.SendIXArgs{
 		Type:      common.IxLogicDeploy,
+		Nonce:     GetLatestNonce(t, client, addr),
 		FuelPrice: fuelPrice,
 		FuelLimit: fuelLimit,
 		Sender:    addr,
@@ -129,33 +110,13 @@ func getIXArgsForLogicDeployment(t *testing.T, addr common.Address) *common.Send
 	return ixArgs
 }
 
-// getTesseract returns tesseract for the given senderAddr and height
-func getTesseract(t *testing.T, client *Client, addr common.Address, height *int64) *rpcargs.RPCTesseract {
-	t.Helper()
-
-	ctx := context.Background()
-
-	args := &rpcargs.TesseractArgs{
-		Address:          addr,
-		WithInteractions: true,
-		Options: rpcargs.TesseractNumberOrHash{
-			TesseractNumber: height,
-		},
-	}
-
-	ts, err := client.Tesseract(ctx, args)
-	require.NoError(t, err)
-
-	return ts
-}
-
 // getAssetID returns assetID for the given senderAddr and height
-func getAssetID(t *testing.T, client *Client, addr common.Address, height *int64) common.AssetID {
+func getAssetID(t *testing.T, client *Client, addr common.Address, height int64) common.AssetID {
 	t.Helper()
 
 	ctx := context.Background()
 
-	ts := getTesseract(t, client, addr, height)
+	ts := GetTesseract(t, client, addr, height)
 
 	receiptArgs := &rpcargs.ReceiptArgs{
 		Hash: ts.Ixns[0].Hash,
@@ -173,12 +134,12 @@ func getAssetID(t *testing.T, client *Client, addr common.Address, height *int64
 }
 
 // getLogicID returns logicID for the given senderAddr and height
-func getLogicID(t *testing.T, client *Client, addr common.Address, height *int64) common.LogicID {
+func getLogicID(t *testing.T, client *Client, addr common.Address, height int64) common.LogicID {
 	t.Helper()
 
 	ctx := context.Background()
 
-	ts := getTesseract(t, client, addr, height)
+	ts := GetTesseract(t, client, addr, height)
 
 	receiptArgs := &rpcargs.ReceiptArgs{
 		Hash: ts.Ixns[0].Hash,
@@ -195,10 +156,15 @@ func getLogicID(t *testing.T, client *Client, addr common.Address, height *int64
 	return logicReceipt.LogicID
 }
 
-// retryFetchReceipt keeps trying to fetch receipt for given ixHash until it is timed out
+// moiclientRetryFetchReceipt keeps trying to fetch receipt for given ixHash until it is timed out
 // and also checks if moi client response matches with http response
 // Use this to check if interaction is successful on the chain.
-func retryFetchReceipt(t *testing.T, ctx context.Context, client *Client, ixHash common.Hash) *rpcargs.RPCReceipt {
+func moiclientRetryFetchReceipt(
+	t *testing.T,
+	ctx context.Context,
+	client *Client,
+	ixHash common.Hash,
+) *rpcargs.RPCReceipt {
 	t.Helper()
 
 	receiptArgs := &rpcargs.ReceiptArgs{
@@ -213,6 +179,8 @@ func retryFetchReceipt(t *testing.T, ctx context.Context, client *Client, ixHash
 		default:
 			receipt, err := client.InteractionReceipt(ctx, receiptArgs)
 			if err == nil {
+				require.Equal(t, common.ReceiptOk, receipt.Status)
+
 				httpReceipt := httpInteractionReceipt(t, receiptArgs)
 				checkForRPCReceipt(t, httpReceipt, receipt)
 
@@ -221,50 +189,6 @@ func retryFetchReceipt(t *testing.T, ctx context.Context, client *Client, ixHash
 
 			time.Sleep(time.Second)
 		}
-	}
-}
-
-// getLogicManifestByEncodingType returns the manifest according to the given encoding type POLO, JSON or YAML
-func getLogicManifestByEncodingType(
-	t *testing.T,
-	res hexutil.Bytes,
-	args *rpcargs.LogicManifestArgs,
-) (hexutil.Bytes, error) {
-	t.Helper()
-
-	switch args.Encoding {
-	case "POLO", "":
-		return res, nil
-	case "JSON":
-		logicManifest := res.Bytes()
-
-		depolorizedManifest, err := engineio.NewManifest(logicManifest, engineio.POLO)
-		if err != nil {
-			return nil, err
-		}
-
-		manifest, err := depolorizedManifest.Encode(engineio.JSON)
-		if err != nil {
-			return nil, err
-		}
-
-		return manifest, nil
-	case "YAML":
-		logicManifest := res.Bytes()
-
-		depolorizedManifest, err := engineio.NewManifest(logicManifest, engineio.POLO)
-		if err != nil {
-			return nil, err
-		}
-
-		manifest, err := depolorizedManifest.Encode(engineio.YAML)
-		if err != nil {
-			return nil, err
-		}
-
-		return manifest, nil
-	default:
-		return nil, errors.New("invalid encoding type")
 	}
 }
 

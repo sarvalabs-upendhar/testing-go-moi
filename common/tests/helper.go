@@ -14,13 +14,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/multiformats/go-multiaddr"
-	"github.com/sarvalabs/go-moi/common/kramaid"
-	mudracommon "github.com/sarvalabs/go-moi/crypto/common"
-
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/multiformats/go-multiaddr"
+	"github.com/sarvalabs/go-moi/common/kramaid"
+	mudracommon "github.com/sarvalabs/go-moi/crypto/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 

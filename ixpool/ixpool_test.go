@@ -1169,7 +1169,7 @@ func TestIxPool_ValidateAssetMint(t *testing.T) {
 					Operator: tests.RandomAddress(t),
 				})
 			},
-			expectedErr: errors.New("Operator address mismatch"),
+			expectedErr: common.ErrOperatorMismatch,
 		},
 		{
 			name: "should return success if asset mint data is valid",
@@ -1278,7 +1278,7 @@ func TestIxPool_ValidateAssetBurn(t *testing.T) {
 					Operator: tests.RandomAddress(t),
 				})
 			},
-			expectedErr: errors.New("Operator address mismatch"),
+			expectedErr: common.ErrOperatorMismatch,
 		},
 		{
 			name: "valid asset burn data",
