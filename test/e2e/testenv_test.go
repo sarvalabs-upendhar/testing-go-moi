@@ -106,8 +106,6 @@ func (te *TestEnvironment) configureBattleGround() error {
 	te.bgConfig = newBattleGroundConfig(StandAlone, "TRACE", bgURL)
 
 	bgConfig := sdk.DefaultBattlegroundConfig()
-	bgConfig.NoOfInstances = 10
-	bgConfig.NoOfPodsPerNode = 10
 
 	// initialize bg client
 	te.bgClient = sdk.New(sdk.Config{

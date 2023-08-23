@@ -36,5 +36,6 @@ jobs:
           push: true
           tags: 'ghcr.io/sarvalabs/moipod:latest'
           build-args: |
-            GIT_COMMIT=${{ github.sha }}
             TARGET_ARCH=amd64
+            GIT_COMMIT=${{ github.sha }}
+            ACCESS_TOKEN=${{ secrets.ACCESS_TOKEN }}
