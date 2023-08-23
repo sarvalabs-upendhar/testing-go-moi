@@ -20,9 +20,7 @@ type LogicObject struct {
 	// Represents the CID of the Logic Manifest
 	ManifestHash common.Hash
 
-	Sealed      bool
-	AssetLogic  bool
-	Interactive bool
+	Sealed bool
 
 	// Represents the usage of different type of context states by the logic
 	StateMatrix engineio.ContextStateMatrix
@@ -50,9 +48,7 @@ func NewLogicObject(address common.Address, descriptor *engineio.LogicDescriptor
 		EngineKind:   descriptor.Engine,
 		ManifestHash: descriptor.ManifestHash,
 
-		Sealed:      false,
-		AssetLogic:  false,
-		Interactive: descriptor.Interactive,
+		Sealed: false,
 
 		StateMatrix:  descriptor.StateMatrix,
 		Dependencies: descriptor.DepGraph,
@@ -71,9 +67,23 @@ func (logic LogicObject) Manifest() common.Hash { return logic.ManifestHash }
 
 func (logic LogicObject) IsSealed() bool { return logic.Sealed }
 
-func (logic LogicObject) IsAssetLogic() bool { return logic.AssetLogic }
+func (logic LogicObject) IsAssetLogic() bool {
+	logicIdentifier, err := logic.LogicID().Identifier()
+	if err != nil {
+		panic("failed to fetch logic identifier")
+	}
 
-func (logic LogicObject) AllowsInteractions() bool { return logic.Interactive }
+	return logicIdentifier.AssetLogic()
+}
+
+func (logic LogicObject) AllowsInteractions() bool {
+	logicIdentifier, err := logic.LogicID().Identifier()
+	if err != nil {
+		panic("failed to fetch logic identifier")
+	}
+
+	return logicIdentifier.Interactive()
+}
 
 func (logic LogicObject) PersistentState() (engineio.ElementPtr, bool) {
 	ptr, exists := logic.StateMatrix[engineio.PersistentState]
