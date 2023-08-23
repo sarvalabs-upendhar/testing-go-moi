@@ -1984,31 +1984,6 @@ func checkIfTesseractAdded(
 	require.True(t, ixPool.IsReset(ts.Hash()))  // check if interactions are reset
 }
 
-/*
-func checkIfICSNodeSetMatches(
-	t *testing.T,
-	ics *common.ICSNodeSet,
-	senderBehaviourSet *common.NodeSet,
-	senderRandomSet *common.NodeSet,
-	randomSet *common.NodeSet,
-) {
-	t.Helper()
-
-	require.Equal(t,
-		ics.Nodes[common.SenderBehaviourSet],
-		senderBehaviourSet,
-	)
-	require.Equal(t,
-		ics.Nodes[common.SenderRandomSet],
-		senderRandomSet,
-	)
-	require.Equal(t,
-		ics.Nodes[common.RandomSet],
-		randomSet,
-	)
-}
-*/
-
 func checkIfTesseractCachedInCM(t *testing.T, c *ChainManager, withInteractions bool, tsHash common.Hash) {
 	t.Helper()
 

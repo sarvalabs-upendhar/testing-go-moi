@@ -494,7 +494,7 @@ func (sm *StateManager) getContext(addr common.Address, hash common.Hash) ([]id.
 	return behaviourContext.Ids, randomContext.Ids, nil
 }
 
-// GetParticipantContextRaw loads the context info of a participant into the give map
+// GetParticipantContextRaw loads the context info of a participant into the given map
 func (sm *StateManager) GetParticipantContextRaw(
 	address common.Address,
 	hash common.Hash,
@@ -524,7 +524,7 @@ func (sm *StateManager) GetParticipantContextRaw(
 	if !metaObject.RandomContext.IsNil() {
 		random, err := sm.db.GetContext(address, metaObject.RandomContext)
 		if err != nil {
-			return errors.Wrap(err, "failed to fetch behavioural context")
+			return errors.Wrap(err, "failed to fetch random context")
 		}
 
 		rawContext[metaObject.RandomContext] = random
