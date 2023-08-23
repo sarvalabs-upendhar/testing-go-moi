@@ -34,55 +34,22 @@ func (im *InterestManager) RecordSessionInterest(addr common.Address, ids ...cid
 	}
 }
 
-func (im *InterestManager) RemoveSession(addr common.Address) []cid.CID {
-	im.mutex.Lock()
-	defer im.mutex.Unlock()
-
-	// The keys that no session is interested in
-	deletedKeys := make([]cid.CID, 0)
-
-	// For each known key
-	for c := range im.wants {
-		// Remove the session from the list of sessions that want the key
-		delete(im.wants[c], addr)
-
-		// If there are no more sessions that want the key
-		if len(im.wants[c]) == 0 {
-			// Clean up the list memory
-			delete(im.wants, c)
-			// Add the key to the list of keys that no session is interested in
-			deletedKeys = append(deletedKeys, c)
-		}
-	}
-
-	return deletedKeys
-}
-
 func (im *InterestManager) RemoveSessionInterest(addr common.Address, ids ...cid.CID) []cid.CID {
 	im.mutex.Lock()
 	defer im.mutex.Unlock()
 
 	// The keys that no session is interested in
-	deletedKs := make([]cid.CID, 0, len(ids))
+	deletedKeys := make([]cid.CID, 0, len(ids))
 
 	// For each key
 	for _, c := range ids {
 		// If there is a list of sessions that want the key
 		if _, ok := im.wants[c]; ok {
-			// Remove the session from the list of sessions that want the key
-			delete(im.wants[c], addr)
-
-			// If there are no more sessions that want the key
-			if len(im.wants[c]) == 0 {
-				// Clean up the list memory
-				delete(im.wants, c)
-				// Add the key to the list of keys that no session is interested in
-				deletedKs = append(deletedKs, c)
-			}
+			deleteSession(c, im.wants, addr, &deletedKeys)
 		}
 	}
 
-	return deletedKs
+	return deletedKeys
 }
 
 func (im *InterestManager) InterestedSessions(
@@ -106,4 +73,18 @@ func (im *InterestManager) InterestedSessions(
 	}
 
 	return sessions, orphans
+}
+
+func deleteSession(c cid.CID, wants map[cid.CID]map[common.Address]bool, addr common.Address, deletedKeys *[]cid.CID) {
+	// Remove the session from the list of sessions that want the key
+	delete(wants[c], addr)
+
+	// If there are no more sessions that want the key
+	if len(wants[c]) == 0 {
+		// Clean up the list memory
+		delete(wants, c)
+
+		// Add the key to the list of keys that no session is interested in
+		*deletedKeys = append(*deletedKeys, c)
+	}
 }
