@@ -20,13 +20,20 @@ type PublicCoreAPI struct {
 	chain  ChainManager
 	sm     StateManager
 	exec   ExecutionManager
+	syncer Syncer
 }
 
 // NewPublicCoreAPI is a constructor function that generates and returns a new
 // PublicCoreAPI object for a given API backend object.
-func NewPublicCoreAPI(ixpool IxPool, chain ChainManager, sm StateManager, exec ExecutionManager) *PublicCoreAPI {
+func NewPublicCoreAPI(
+	ixpool IxPool,
+	chain ChainManager,
+	sm StateManager,
+	exec ExecutionManager,
+	syncer Syncer,
+) *PublicCoreAPI {
 	// Create the core public API wrapper and return it
-	return &PublicCoreAPI{ixpool, chain, sm, exec}
+	return &PublicCoreAPI{ixpool, chain, sm, exec, syncer}
 }
 
 func getTesseractArgs(address common.Address, options rpcargs.TesseractNumberOrHash) *rpcargs.TesseractArgs {
@@ -461,6 +468,26 @@ func (p *PublicCoreAPI) FuelEstimate(args *rpcargs.IxArgs) (*hexutil.Big, error)
 	}
 
 	return (*hexutil.Big)(receipt.FuelUsed), nil
+}
+
+// Syncing returns the sync status of an account if address is given else returns the node sync status
+func (p *PublicCoreAPI) Syncing(args *rpcargs.SyncStatusRequest) (*rpcargs.SyncStatusResponse, error) {
+	if args.Address.IsNil() {
+		nodeSyncStatus := p.syncer.GetNodeSyncStatus()
+
+		return &rpcargs.SyncStatusResponse{
+			NodeSyncResp: nodeSyncStatus,
+		}, nil
+	}
+
+	accSyncStatus, err := p.syncer.GetAccountSyncStatus(args.Address)
+	if err != nil {
+		return nil, errors.Wrap(err, "error fetching account sync status")
+	}
+
+	return &rpcargs.SyncStatusResponse{
+		AccSyncResp: accSyncStatus,
+	}, nil
 }
 
 // createRPCInteraction creates an RPC Interaction by copying all fields of the interaction into the RPC Interaction,

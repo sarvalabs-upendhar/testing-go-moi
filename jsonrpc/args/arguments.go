@@ -161,3 +161,25 @@ type InteractionByTesseract struct {
 	Options TesseractNumberOrHash `json:"options"`
 	IxIndex *hexutil.Uint64       `json:"ix_index"`
 }
+
+type SyncStatusRequest struct {
+	Address common.Address `json:"address"`
+}
+
+type AccSyncStatus struct {
+	CurrentHeight     hexutil.Uint64 `json:"current_height"`
+	ExpectedHeight    hexutil.Uint64 `json:"expected_height"`
+	IsPrimarySyncDone bool           `json:"is_primary_sync_done"`
+}
+
+type NodeSyncStatus struct {
+	TotalPendingAccounts  hexutil.Uint64 `json:"total_pending_accounts"`
+	IsPrincipalSyncDone   bool           `json:"is_principal_sync_done"`
+	PrincipalSyncDoneTime hexutil.Uint64 `json:"principal_sync_done_time"`
+	IsInitialSyncDone     bool           `json:"is_initial_sync_done"`
+}
+
+type SyncStatusResponse struct {
+	AccSyncResp  *AccSyncStatus  `json:"acc_sync_status"`
+	NodeSyncResp *NodeSyncStatus `json:"node_sync_status"`
+}

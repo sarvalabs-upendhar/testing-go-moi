@@ -53,3 +53,9 @@ type SyncRequestEvent struct {
 	Height   uint64
 	BestPeer id.KramaID
 }
+
+// PendingAccountEvent is fired to update the pending accounts variable in SyncStatusTracker
+type PendingAccountEvent struct {
+	Address common.Address
+	Count   int64
+}

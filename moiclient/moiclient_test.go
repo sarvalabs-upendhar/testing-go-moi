@@ -71,6 +71,9 @@ func TestMoiClient(t *testing.T) {
 		"FuelEstimate": {
 			test: func(t *testing.T) { testFuelEstimate(t, client, addrsMap["assetAddr"]) },
 		},
+		"Syncing": {
+			test: func(t *testing.T) { testSyncing(t, client, addrsMap["assetAddr"]) },
+		},
 		"TDU": {
 			test: func(t *testing.T) { testTDU(t, client, addrsMap["assetAddr"]) },
 		},
@@ -721,6 +724,46 @@ func testFuelEstimate(t *testing.T, client *Client, addr common.Address) {
 
 			require.NoError(t, err)
 			require.Equal(t, fuelConsumed, test.expectedFuelConsumed)
+		})
+	}
+}
+
+func testSyncing(t *testing.T, client *Client, addr common.Address) {
+	ctx := context.Background()
+	testcases := []struct {
+		name          string
+		StatusArgs    *rpcargs.SyncStatusRequest
+		expectedError error
+	}{
+		{
+			name: "account sync status fetched successfully",
+			StatusArgs: &rpcargs.SyncStatusRequest{
+				Address: addr,
+			},
+		},
+		{
+			name: "should return error if failed to fetch account sync status",
+			StatusArgs: &rpcargs.SyncStatusRequest{
+				Address: tests.RandomAddress(t),
+			},
+			expectedError: common.ErrAccSyncStatusNotFound,
+		},
+		{
+			name:       "node sync status fetched successfully",
+			StatusArgs: &rpcargs.SyncStatusRequest{},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := client.Syncing(ctx, test.StatusArgs)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
 		})
 	}
 }

@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/utils"
+
 	id "github.com/sarvalabs/go-moi/common/kramaid"
 
 	"github.com/hashicorp/go-hclog"
@@ -39,7 +41,15 @@ const (
 
 type JobQueue struct {
 	mtx  sync.RWMutex
+	mux  *utils.TypeMux
 	jobs map[common.Address]*SyncJob
+}
+
+func NewJobQueue(mux *utils.TypeMux) *JobQueue {
+	return &JobQueue{
+		jobs: make(map[common.Address]*SyncJob),
+		mux:  mux,
+	}
 }
 
 func (jq *JobQueue) getJob(address common.Address) (*SyncJob, bool) {
@@ -65,6 +75,10 @@ func (jq *JobQueue) AddJob(job *SyncJob) error {
 	}
 
 	jq.jobs[job.address] = job
+
+	if err := jq.mux.Post(utils.PendingAccountEvent{Address: job.address, Count: 1}); err != nil {
+		log.Println("Error sending pending account event", "err", err)
+	}
 
 	return nil
 }
@@ -102,11 +116,17 @@ func (jq *JobQueue) NextJob() *SyncJob {
 }
 
 func (jq *JobQueue) RemoveJob(job *SyncJob) error {
-	defer func() {
-		delete(jq.jobs, job.address)
-	}()
+	if err := job.done(); err != nil {
+		return err
+	}
 
-	return job.done()
+	delete(jq.jobs, job.address)
+
+	if err := jq.mux.Post(utils.PendingAccountEvent{Address: job.address, Count: -1}); err != nil {
+		log.Println("Error sending pending account event", "err", err)
+	}
+
+	return nil
 }
 
 type SyncJob struct {

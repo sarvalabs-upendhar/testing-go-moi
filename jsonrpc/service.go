@@ -8,7 +8,7 @@ import (
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 
 	"github.com/sarvalabs/go-moi/common"
-	api2 "github.com/sarvalabs/go-moi/jsonrpc/api"
+	jsonApi "github.com/sarvalabs/go-moi/jsonrpc/api"
 )
 
 // Service is a struct that represents a mapping of RPC service APIs
@@ -43,7 +43,7 @@ func (r *Service) RegisterAPIs(apis map[string]interface{}) error {
 // Expects a GetTesseract argument and returns types.Tesseract wrapped in a Response.
 func (r *Service) Tesseract(req *http.Request, args *rpcargs.TesseractArgs, resp *rpcargs.Response) error {
 	// Retrieve the public core API and call the method to get the latest Tesseract
-	coreAPI, ok := r.apis["core"].(*api2.PublicCoreAPI)
+	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -69,7 +69,7 @@ func (r *Service) Tesseract(req *http.Request, args *rpcargs.TesseractArgs, resp
 
 // AssetInfoByAssetID returns the asset information associated with the assetID
 func (r *Service) AssetInfoByAssetID(req *http.Request, args *rpcargs.GetAssetInfoArgs, resp *rpcargs.Response) error {
-	coreAPI, ok := r.apis["core"].(*api2.PublicCoreAPI)
+	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -93,7 +93,7 @@ func (r *Service) AssetInfoByAssetID(req *http.Request, args *rpcargs.GetAssetIn
 
 func (r *Service) Registry(req *http.Request, args *rpcargs.QueryArgs, resp *rpcargs.Response) error {
 	// Retrieve the public core API and call the method to get the balance for the asset
-	coreAPI, ok := r.apis["core"].(*api2.PublicCoreAPI)
+	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -119,7 +119,7 @@ func (r *Service) Registry(req *http.Request, args *rpcargs.QueryArgs, resp *rpc
 // Expects BalArgs as argument and returns an uint64 wrapped in a Response.
 func (r *Service) Balance(req *http.Request, args *rpcargs.BalArgs, resp *rpcargs.Response) error {
 	// Retrieve the public core API and call the method to get the balance for the asset
-	coreAPI, ok := r.apis["core"].(*api2.PublicCoreAPI)
+	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -144,7 +144,7 @@ func (r *Service) Balance(req *http.Request, args *rpcargs.BalArgs, resp *rpcarg
 
 // TDU is an RPC method that returns the TDU of the queried address
 func (r *Service) TDU(req *http.Request, args *rpcargs.QueryArgs, resp *rpcargs.Response) error {
-	coreAPI, ok := r.apis["core"].(*api2.PublicCoreAPI)
+	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -172,7 +172,7 @@ func (r *Service) ContextInfo(
 	args *rpcargs.ContextInfoArgs,
 	resp *rpcargs.Response,
 ) error {
-	coreAPI, ok := r.apis["core"].(*api2.PublicCoreAPI)
+	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -206,7 +206,7 @@ func (r *Service) InteractionByTesseract(
 	args *rpcargs.InteractionByTesseract,
 	resp *rpcargs.Response,
 ) error {
-	coreAPI, ok := r.apis["core"].(*api2.PublicCoreAPI)
+	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -234,7 +234,7 @@ func (r *Service) InteractionByHash(
 	args *rpcargs.InteractionByHashArgs,
 	resp *rpcargs.Response,
 ) error {
-	coreAPI, ok := r.apis["core"].(*api2.PublicCoreAPI)
+	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -258,7 +258,7 @@ func (r *Service) InteractionByHash(
 
 // InteractionReceipt returns the receipt of the interaction
 func (r *Service) InteractionReceipt(req *http.Request, args *rpcargs.ReceiptArgs, resp *rpcargs.Response) error {
-	coreAPI, ok := r.apis["core"].(*api2.PublicCoreAPI)
+	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -286,7 +286,7 @@ func (r *Service) LogicIDs(
 	args *rpcargs.GetAccountArgs,
 	resp *rpcargs.Response,
 ) error {
-	coreAPI, ok := r.apis["core"].(*api2.PublicCoreAPI)
+	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -314,7 +314,7 @@ func (r *Service) InteractionCount(
 	args *rpcargs.InteractionCountArgs,
 	resp *rpcargs.Response,
 ) error {
-	coreAPI, ok := r.apis["core"].(*api2.PublicCoreAPI)
+	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -342,7 +342,7 @@ func (r *Service) PendingInteractionCount(
 	args *rpcargs.InteractionCountArgs,
 	resp *rpcargs.Response,
 ) error {
-	coreAPI, ok := r.apis["core"].(*api2.PublicCoreAPI)
+	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -370,7 +370,7 @@ func (r *Service) Storage(
 	args *rpcargs.GetLogicStorageArgs,
 	resp *rpcargs.Response,
 ) error {
-	coreAPI, ok := r.apis["core"].(*api2.PublicCoreAPI)
+	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -398,7 +398,7 @@ func (r *Service) AccountState(
 	args *rpcargs.GetAccountArgs,
 	resp *rpcargs.Response,
 ) error {
-	coreAPI, ok := r.apis["core"].(*api2.PublicCoreAPI)
+	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -426,7 +426,7 @@ func (r *Service) LogicManifest(
 	args *rpcargs.LogicManifestArgs,
 	resp *rpcargs.Response,
 ) error {
-	coreAPI, ok := r.apis["core"].(*api2.PublicCoreAPI)
+	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -454,7 +454,7 @@ func (r *Service) AccountMetaInfo(
 	args *rpcargs.GetAccountArgs,
 	resp *rpcargs.Response,
 ) error {
-	coreAPI, ok := r.apis["core"].(*api2.PublicCoreAPI)
+	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -478,7 +478,7 @@ func (r *Service) AccountMetaInfo(
 
 // FuelEstimate returns an estimate of the fuel that is required for executing an interaction
 func (r *Service) FuelEstimate(req *http.Request, args *rpcargs.IxArgs, resp *rpcargs.Response) error {
-	coreAPI, ok := r.apis["core"].(*api2.PublicCoreAPI)
+	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -500,12 +500,36 @@ func (r *Service) FuelEstimate(req *http.Request, args *rpcargs.IxArgs, resp *rp
 	return nil
 }
 
+// Syncing returns the sync status of an account if address is given else returns the node sync status
+func (r *Service) Syncing(req *http.Request, args *rpcargs.SyncStatusRequest, resp *rpcargs.Response) error {
+	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
+	if !ok {
+		return common.ErrInvalidAPI
+	}
+
+	syncStatus, err := coreAPI.Syncing(args)
+	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	resp.Data, err = json.Marshal(syncStatus)
+	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	return nil
+}
+
 /* RPC methods that are associated with the ix namespace. */
 
 // SendInteractions is a method of Service that sends Interactions
 func (r *Service) SendInteractions(req *http.Request, args *rpcargs.SendIX, resp *rpcargs.Response) error {
 	// Retrieve the public ix API
-	ixAPI, ok := r.apis["ix"].(*api2.PublicIXAPI)
+	ixAPI, ok := r.apis["ix"].(*jsonApi.PublicIXAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -530,7 +554,7 @@ func (r *Service) SendInteractions(req *http.Request, args *rpcargs.SendIX, resp
 // Call supports call to logics that do not transition state
 func (r *Service) Call(req *http.Request, args *rpcargs.IxArgs, resp *rpcargs.Response) error {
 	// Retrieve the public ix API
-	ixAPI, ok := r.apis["ix"].(*api2.PublicIXAPI)
+	ixAPI, ok := r.apis["ix"].(*jsonApi.PublicIXAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -560,7 +584,7 @@ func (r *Service) Content(
 	args *rpcargs.ContentArgs,
 	resp *rpcargs.Response,
 ) error {
-	ixPoolAPI, ok := r.apis["ixpool"].(*api2.PublicIXPoolAPI)
+	ixPoolAPI, ok := r.apis["ixpool"].(*jsonApi.PublicIXPoolAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -588,7 +612,7 @@ func (r *Service) ContentFrom(
 	args *rpcargs.IxPoolArgs,
 	resp *rpcargs.Response,
 ) error {
-	ixPoolAPI, ok := r.apis["ixpool"].(*api2.PublicIXPoolAPI)
+	ixPoolAPI, ok := r.apis["ixpool"].(*jsonApi.PublicIXPoolAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -616,7 +640,7 @@ func (r *Service) Status(
 	args *rpcargs.StatusArgs,
 	resp *rpcargs.Response,
 ) error {
-	ixPoolAPI, ok := r.apis["ixpool"].(*api2.PublicIXPoolAPI)
+	ixPoolAPI, ok := r.apis["ixpool"].(*jsonApi.PublicIXPoolAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -645,7 +669,7 @@ func (r *Service) Inspect(
 	args *rpcargs.InspectArgs,
 	resp *rpcargs.Response,
 ) error {
-	ixPoolAPI, ok := r.apis["ixpool"].(*api2.PublicIXPoolAPI)
+	ixPoolAPI, ok := r.apis["ixpool"].(*jsonApi.PublicIXPoolAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -673,7 +697,7 @@ func (r *Service) WaitTime(
 	args *rpcargs.IxPoolArgs,
 	resp *rpcargs.Response,
 ) error {
-	ixPoolAPI, ok := r.apis["ixpool"].(*api2.PublicIXPoolAPI)
+	ixPoolAPI, ok := r.apis["ixpool"].(*jsonApi.PublicIXPoolAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -701,7 +725,7 @@ func (r *Service) Peers(
 	args *rpcargs.NetArgs,
 	resp *rpcargs.Response,
 ) error {
-	NetAPI, ok := r.apis["net"].(*api2.PublicNetAPI)
+	NetAPI, ok := r.apis["net"].(*jsonApi.PublicNetAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -729,7 +753,7 @@ func (r *Service) Version(
 	args *rpcargs.NetArgs,
 	resp *rpcargs.Response,
 ) error {
-	NetAPI, ok := r.apis["net"].(*api2.PublicNetAPI)
+	NetAPI, ok := r.apis["net"].(*jsonApi.PublicNetAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -757,7 +781,7 @@ func (r *Service) Info(
 	args *rpcargs.NetArgs,
 	resp *rpcargs.Response,
 ) error {
-	NetAPI, ok := r.apis["net"].(*api2.PublicNetAPI)
+	NetAPI, ok := r.apis["net"].(*jsonApi.PublicNetAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -785,7 +809,7 @@ func (r *Service) DBGet(
 	args *rpcargs.DebugArgs,
 	resp *rpcargs.Response,
 ) error {
-	DebugAPI, ok := r.apis["debug"].(*api2.PublicDebugAPI)
+	DebugAPI, ok := r.apis["debug"].(*jsonApi.PublicDebugAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -813,7 +837,7 @@ func (r *Service) Accounts(
 	args *rpcargs.AccountArgs,
 	resp *rpcargs.Response,
 ) error {
-	DebugAPI, ok := r.apis["debug"].(*api2.PublicDebugAPI)
+	DebugAPI, ok := r.apis["debug"].(*jsonApi.PublicDebugAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
@@ -835,7 +859,7 @@ func (r *Service) Accounts(
 	return nil
 }
 
-// Accounts is an RPC Method that returns the address of all the accounts
+// Connections is an RPC Method that returns a list of connections
 func (r *Service) Connections(
 	req *http.Request,
 	args *rpcargs.ConnArgs,
@@ -843,7 +867,7 @@ func (r *Service) Connections(
 ) error {
 	var err error
 
-	DebugAPI, ok := r.apis["debug"].(*api2.PublicDebugAPI)
+	DebugAPI, ok := r.apis["debug"].(*jsonApi.PublicDebugAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}

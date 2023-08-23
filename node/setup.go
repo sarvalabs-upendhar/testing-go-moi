@@ -207,7 +207,7 @@ func (n *Node) setupKramaEngine() (err error) {
 
 // setupSyncer creates new Syncer object and setups it to node
 func (n *Node) setupSyncer() (err error) {
-	if n.handlers.syncer, err = forage.NewSyncer(
+	if n.syncer, err = forage.NewSyncer(
 		n.ctx,
 		n.cfg.Syncer,
 		n.logger,
@@ -263,7 +263,7 @@ func (n *Node) setLogger(logLevel string) error {
 func (n *Node) setupRPC() error {
 	n.rpc = jsonrpc.NewRPCServer("/", n.logger, n.cfg.Network, n.eventMux)
 
-	backend := api.NewBackend(n.ixpool, n.chain, n.exec, n.state, n.network, n.db, n.cfg.IxPool)
+	backend := api.NewBackend(n.ixpool, n.chain, n.exec, n.state, n.syncer, n.network, n.db, n.cfg.IxPool)
 
 	for _, publicAPI := range api.GetPublicAPIs(backend) {
 		rpcService := jsonrpc.NewRPCService()

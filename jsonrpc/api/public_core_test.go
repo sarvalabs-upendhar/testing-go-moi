@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -385,7 +386,7 @@ func TestPublicCoreAPI_GetRPCTesseract(t *testing.T) {
 	ts := tests.CreateTesseract(t, tesseractParams)
 
 	c := NewMockChainManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, nil, nil)
+	coreAPI := NewPublicCoreAPI(nil, c, nil, nil, nil)
 
 	c.setTesseractByHash(t, ts)
 	hash := getTesseractHash(t, ts)
@@ -435,7 +436,7 @@ func TestPublicCoreAPI_GetTesseractByHash(t *testing.T) {
 	ts := tests.CreateTesseracts(t, 1, tesseractParams)
 
 	c := NewMockChainManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, nil, nil)
+	coreAPI := NewPublicCoreAPI(nil, c, nil, nil, nil)
 
 	c.setTesseractByHash(t, ts[0])
 
@@ -481,7 +482,7 @@ func TestPublicCoreAPI_GetTesseractByHash(t *testing.T) {
 func TestPublicCoreAPI_GetTesseractHashByHeight(t *testing.T) {
 	c := NewMockChainManager(t)
 	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, s, nil)
+	coreAPI := NewPublicCoreAPI(nil, c, s, nil, nil)
 	acc := tests.GetRandomAccMetaInfo(t, 8)
 
 	s.setAccountMetaInfo(t, acc.Address, acc)
@@ -547,7 +548,7 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 	require.NoError(t, err)
 
 	exec := NewMockExecutionManager(t)
-	coreAPI := NewPublicCoreAPI(nil, nil, nil, exec)
+	coreAPI := NewPublicCoreAPI(nil, nil, nil, exec, nil)
 
 	IxArgs := &common.SendIXArgs{
 		Type:      common.IxAssetCreate,
@@ -624,7 +625,7 @@ func TestPublicCoreAPI_GetTesseract(t *testing.T) {
 
 	c := NewMockChainManager(t)
 	sm := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, sm, nil)
+	coreAPI := NewPublicCoreAPI(nil, c, sm, nil, nil)
 
 	c.SetTesseractHeightEntry(ts[0].Address(), ts[0].Height(), getTesseractHash(t, ts[0]))
 
@@ -742,7 +743,7 @@ func TestPublicCoreAPI_GetBalance(t *testing.T) {
 
 	c := NewMockChainManager(t)
 	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, s, nil)
+	coreAPI := NewPublicCoreAPI(nil, c, s, nil, nil)
 
 	c.setTesseractByHash(t, ts)
 
@@ -803,7 +804,7 @@ func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
 
 	c := NewMockChainManager(t)
 	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, s, nil)
+	coreAPI := NewPublicCoreAPI(nil, c, s, nil, nil)
 
 	context := getContext(t, 2)
 	s.setContext(t, ts[0].Address(), context)
@@ -871,7 +872,7 @@ func TestPublicCoreAPI_GetTDU(t *testing.T) {
 
 	c := NewMockChainManager(t)
 	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, s, nil)
+	coreAPI := NewPublicCoreAPI(nil, c, s, nil, nil)
 
 	c.setTesseractByHash(t, ts[0])
 	c.setTesseractByHash(t, ts[1])
@@ -945,7 +946,7 @@ func TestPublicCoreAPI_GetInteractionCount(t *testing.T) {
 
 	c := NewMockChainManager(t)
 	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, s, nil)
+	coreAPI := NewPublicCoreAPI(nil, c, s, nil, nil)
 
 	c.setTesseractByHash(t, ts)
 
@@ -1007,7 +1008,7 @@ func TestPublicIXPoolAPI_GetPendingInteractionCount(t *testing.T) {
 
 	ixpool.setNonce(address, 5)
 
-	coreAPI := NewPublicCoreAPI(ixpool, nil, nil, nil)
+	coreAPI := NewPublicCoreAPI(ixpool, nil, nil, nil, nil)
 
 	testcases := []struct {
 		name            string
@@ -1062,7 +1063,7 @@ func TestPublicCoreAPI_GetAccountState(t *testing.T) {
 
 	c := NewMockChainManager(t)
 	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, s, nil)
+	coreAPI := NewPublicCoreAPI(nil, c, s, nil, nil)
 
 	c.setTesseractByHash(t, ts)
 
@@ -1138,7 +1139,7 @@ func TestPublicCoreAPI_GetLogicIDs(t *testing.T) {
 
 	c := NewMockChainManager(t)
 	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, s, nil)
+	coreAPI := NewPublicCoreAPI(nil, c, s, nil, nil)
 
 	c.setTesseractByHash(t, ts[0])
 	c.setTesseractByHash(t, ts[1])
@@ -1215,7 +1216,7 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 
 	c := NewMockChainManager(t)
 	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, s, nil)
+	coreAPI := NewPublicCoreAPI(nil, c, s, nil, nil)
 
 	randomHash := tests.RandomHash(t)
 	tsHash := tests.GetTesseractHash(t, ts)
@@ -1301,7 +1302,7 @@ func TestPublicCoreAPI_GetLogicStorageAt(t *testing.T) {
 
 	c := NewMockChainManager(t)
 	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, s, nil)
+	coreAPI := NewPublicCoreAPI(nil, c, s, nil, nil)
 
 	randomHash := tests.RandomHash(t)
 	tsHash := tests.GetTesseractHash(t, ts)
@@ -1364,7 +1365,7 @@ func TestPublicCoreAPI_GetLogicStorageAt(t *testing.T) {
 func TestPublicCoreAPI_GetInteractionByTSHash(t *testing.T) {
 	chainManager := NewMockChainManager(t)
 	sm := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(nil, chainManager, sm, nil)
+	coreAPI := NewPublicCoreAPI(nil, chainManager, sm, nil, nil)
 
 	ixParams := tests.GetIxParamsWithAddress(tests.RandomAddress(t), tests.RandomAddress(t))
 	ix := tests.CreateIX(t, ixParams)
@@ -1569,7 +1570,7 @@ func TestPublicCoreAPI_GetInteractionByHash(t *testing.T) {
 
 			chainManager.SetInteractionDataByIxHash(ixns[0], parts, ixIndex)
 
-			coreAPI := NewPublicCoreAPI(ixpool, chainManager, nil, nil)
+			coreAPI := NewPublicCoreAPI(ixpool, chainManager, nil, nil, nil)
 
 			rpcIX, err := coreAPI.GetInteractionByHash(&test.args)
 			if test.expectedError != nil {
@@ -1604,7 +1605,7 @@ func TestPublicCoreAPI_GetInteractionReceipt(t *testing.T) {
 	receipt.IxHash = ix.Hash()
 	chainManager.setReceiptByIXHash(receipt.IxHash, receipt)
 	chainManager.setReceiptByIXHash(ixHashWithoutParts, receipt)
-	coreAPI := NewPublicCoreAPI(nil, chainManager, nil, nil)
+	coreAPI := NewPublicCoreAPI(nil, chainManager, nil, nil, nil)
 
 	testcases := []struct {
 		name            string
@@ -1674,7 +1675,7 @@ func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
 	c.setTesseractByHash(t, ts)
 	sm.addAsset(assetID, assetInfo)
 
-	coreAPI := NewPublicCoreAPI(nil, c, sm, nil)
+	coreAPI := NewPublicCoreAPI(nil, c, sm, nil, nil)
 
 	testcases := []struct {
 		name                    string
@@ -1728,7 +1729,7 @@ func TestPublicCoreAPI_GetAccountMetaInfo(t *testing.T) {
 
 	c := NewMockChainManager(t)
 	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, s, nil)
+	coreAPI := NewPublicCoreAPI(nil, c, s, nil, nil)
 
 	c.setTesseractByHash(t, ts)
 
@@ -1779,6 +1780,74 @@ func TestPublicCoreAPI_GetAccountMetaInfo(t *testing.T) {
 			require.Equal(t, test.expectedAccMetaInfo.TesseractHash, fetchedAccMetaInfo["tesseract_hash"])
 			require.Equal(t, test.expectedAccMetaInfo.LatticeExists, fetchedAccMetaInfo["lattice_exists"])
 			require.Equal(t, test.expectedAccMetaInfo.StateExists, fetchedAccMetaInfo["state_exists"])
+		})
+	}
+}
+
+func TestPublicCoreAPI_Syncing(t *testing.T) {
+	addr := tests.RandomAddress(t)
+
+	syncer := NewMockSyncer(t)
+	coreAPI := NewPublicCoreAPI(nil, nil, nil, nil, syncer)
+
+	accSyncStatus := &rpcargs.AccSyncStatus{
+		CurrentHeight:     2,
+		ExpectedHeight:    4,
+		IsPrimarySyncDone: true,
+	}
+
+	nodeSyncStatus := &rpcargs.NodeSyncStatus{
+		TotalPendingAccounts:  2,
+		PrincipalSyncDoneTime: hexutil.Uint64(time.Now().UnixNano()),
+		IsPrincipalSyncDone:   true,
+		IsInitialSyncDone:     false,
+	}
+
+	syncer.setAccountSyncStatus(addr, accSyncStatus)
+	syncer.setNodeSyncStatus(nodeSyncStatus)
+
+	testcases := []struct {
+		name                       string
+		args                       *rpcargs.SyncStatusRequest
+		expectedSyncStatusResponse *rpcargs.SyncStatusResponse
+		expectedError              error
+	}{
+		{
+			name: "account sync status fetched successfully",
+			args: &rpcargs.SyncStatusRequest{
+				Address: addr,
+			},
+			expectedSyncStatusResponse: &rpcargs.SyncStatusResponse{
+				AccSyncResp: accSyncStatus,
+			},
+		},
+		{
+			name: "node sync status fetched successfully",
+			args: &rpcargs.SyncStatusRequest{},
+			expectedSyncStatusResponse: &rpcargs.SyncStatusResponse{
+				NodeSyncResp: nodeSyncStatus,
+			},
+		},
+		{
+			name: "should return error if failed to fetch account sync status",
+			args: &rpcargs.SyncStatusRequest{
+				Address: tests.RandomAddress(t),
+			},
+			expectedError: common.ErrAccSyncStatusNotFound,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			syncStatus, err := coreAPI.Syncing(test.args)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedSyncStatusResponse, syncStatus)
 		})
 	}
 }

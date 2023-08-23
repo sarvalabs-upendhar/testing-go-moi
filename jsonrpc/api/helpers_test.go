@@ -427,6 +427,40 @@ func (exec *MockExecutionManager) InteractionCall(ix *common.Interaction) (*comm
 	return receipt, nil
 }
 
+type MockSyncer struct {
+	accSyncStatus  map[common.Address]*rpcargs.AccSyncStatus
+	nodeSyncStatus *rpcargs.NodeSyncStatus
+}
+
+func NewMockSyncer(t *testing.T) *MockSyncer {
+	t.Helper()
+
+	syncer := new(MockSyncer)
+	syncer.accSyncStatus = make(map[common.Address]*rpcargs.AccSyncStatus)
+
+	return syncer
+}
+
+func (syncer *MockSyncer) setAccountSyncStatus(addr common.Address, accSyncStatus *rpcargs.AccSyncStatus) {
+	syncer.accSyncStatus[addr] = accSyncStatus
+}
+
+func (syncer *MockSyncer) GetAccountSyncStatus(addr common.Address) (*rpcargs.AccSyncStatus, error) {
+	if accSyncStatus, ok := syncer.accSyncStatus[addr]; ok {
+		return accSyncStatus, nil
+	}
+
+	return nil, common.ErrAccSyncStatusNotFound
+}
+
+func (syncer *MockSyncer) setNodeSyncStatus(nodeSyncStatus *rpcargs.NodeSyncStatus) {
+	syncer.nodeSyncStatus = nodeSyncStatus
+}
+
+func (syncer *MockSyncer) GetNodeSyncStatus() *rpcargs.NodeSyncStatus {
+	return syncer.nodeSyncStatus
+}
+
 type MockIxPool struct {
 	interactions       map[common.Hash]*common.Interaction
 	nextNonce          map[common.Address]uint64

@@ -95,4 +95,5 @@ var (
 	ErrInvalidAssetStandard        = errors.New("invalid asset standard")
 	ErrInvalidAssetSupply          = errors.New("asset supply should be one")
 	ErrIXPoolOverFlow              = errors.New("ixpool is full")
+	ErrAccSyncStatusNotFound       = errors.New("error fetching account sync status")
 )

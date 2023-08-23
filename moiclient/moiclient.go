@@ -606,6 +606,29 @@ func (c *Client) FuelEstimate(ctx context.Context, args *rpcargs.IxArgs) (*hexut
 	return fuelUsed, nil
 }
 
+// Syncing returns the sync status of an account if address is given else returns the node sync status
+func (c *Client) Syncing(ctx context.Context, args *rpcargs.SyncStatusRequest) (*rpcargs.SyncStatusResponse, error) {
+	var resp rpcargs.Response
+
+	err := c.Call(ctx, &resp, "moi.Syncing", args)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+
+	var syncStatus *rpcargs.SyncStatusResponse
+
+	err = json.Unmarshal(resp.Data, &syncStatus)
+	if err != nil {
+		return nil, err
+	}
+
+	return syncStatus, nil
+}
+
 // InteractionCall returns stateless version of an interaction submit
 func (c *Client) InteractionCall(ctx context.Context, args *rpcargs.IxArgs) (*rpcargs.RPCReceipt, error) {
 	var resp rpcargs.Response

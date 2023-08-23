@@ -3,6 +3,8 @@ package api
 import (
 	"math/big"
 
+	"github.com/sarvalabs/go-moi/jsonrpc/args"
+
 	"github.com/libp2p/go-libp2p/core/network"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -49,6 +51,11 @@ type ExecutionManager interface {
 	InteractionCall(ix *common.Interaction) (*common.Receipt, error)
 }
 
+type Syncer interface {
+	GetAccountSyncStatus(addr common.Address) (*args.AccSyncStatus, error)
+	GetNodeSyncStatus() *args.NodeSyncStatus
+}
+
 type Network interface {
 	GetPeers() []id.KramaID
 	GetVersion() string
@@ -71,6 +78,8 @@ type Backend struct {
 	exec ExecutionManager
 	// Represents the API state manager
 	sm StateManager
+	// Represents the API syncer
+	syncer Syncer
 	// Represents the API network
 	net Network
 	// Represents the API database
@@ -85,10 +94,11 @@ func NewBackend(
 	chain ChainManager,
 	exec ExecutionManager,
 	sm StateManager,
+	syncer Syncer,
 	net Network,
 	db DB,
 	cfg *config.IxPoolConfig,
 ) *Backend {
 	// Create a new API Backend object and return it
-	return &Backend{ixpool, chain, exec, sm, net, db, cfg}
+	return &Backend{ixpool, chain, exec, sm, syncer, net, db, cfg}
 }
