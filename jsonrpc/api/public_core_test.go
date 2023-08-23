@@ -1297,7 +1297,7 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 	}
 }
 
-func TestPublicCoreAPI_GetLogicStorageAt(t *testing.T) {
+func TestPublicCoreAPI_GetLogicStorage(t *testing.T) {
 	ts := tests.CreateTesseract(t, nil)
 
 	c := NewMockChainManager(t)

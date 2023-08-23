@@ -282,7 +282,7 @@ func registerGuardian(vault *crypto.KramaVault) {
 }
 
 func isGuardianRegistered(client *moiclient.Client, kramaID id.KramaID) bool {
-	storageData, err := client.Storage(context.Background(), &rpcargs.GetLogicStorageArgs{
+	storageData, err := client.LogicStorage(context.Background(), &rpcargs.GetLogicStorageArgs{
 		LogicID:    common.GuardianLogicID,
 		StorageKey: pisa.SlotHash(gtypes.GuardianSLot),
 		Options: rpcargs.TesseractNumberOrHash{

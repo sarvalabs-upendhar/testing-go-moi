@@ -175,7 +175,7 @@ func GetERC20State(t *testing.T, moiClient *Client, logicID common.LogicID) ERC2
 	t.Helper()
 
 	getLatestStorage := func(slot uint8) hexutil.Bytes {
-		s, err := moiClient.Storage(context.Background(), &rpcargs.GetLogicStorageArgs{
+		s, err := moiClient.LogicStorage(context.Background(), &rpcargs.GetLogicStorageArgs{
 			LogicID:    logicID,
 			StorageKey: pisa.SlotHash(slot),
 			Options: rpcargs.TesseractNumberOrHash{

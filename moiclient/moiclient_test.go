@@ -89,7 +89,7 @@ func TestMoiClient(t *testing.T) {
 		"PendingInteractionCount": {
 			test: func(t *testing.T) { testPendingInteractionCount(t, client, addrsMap["assetAddr"]) },
 		},
-		"Storage": {
+		"LogicStorage": {
 			test: func(t *testing.T) { testLogicStorage(t, client, addrsMap["deployAddr"]) },
 		},
 		"AccountState": {
@@ -1054,7 +1054,7 @@ func testLogicStorage(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			logicStorageValue, err := client.Storage(ctx, test.interactionCountArgs)
+			logicStorageValue, err := client.LogicStorage(ctx, test.interactionCountArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1064,7 +1064,7 @@ func testLogicStorage(t *testing.T, client *Client, addr common.Address) {
 
 			require.NoError(t, err)
 
-			httpLogicStorageValue := httpStorage(t, test.interactionCountArgs)
+			httpLogicStorageValue := httpLogicStorage(t, test.interactionCountArgs)
 			require.Equal(t, httpLogicStorageValue, logicStorageValue)
 		})
 	}
