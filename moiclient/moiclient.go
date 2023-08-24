@@ -883,7 +883,7 @@ func (c *Client) Accounts(ctx context.Context) ([]common.Address, error) {
 }
 
 // Connections returns the total connections of the node
-func (c *Client) Connections(ctx context.Context) ([]rpcargs.Connection, error) {
+func (c *Client) Connections(ctx context.Context) (*rpcargs.ConnectionsResponse, error) {
 	var resp rpcargs.Response
 
 	err := c.Call(ctx, &resp, "debug.Connections", nil)
@@ -895,12 +895,12 @@ func (c *Client) Connections(ctx context.Context) ([]rpcargs.Connection, error) 
 		return nil, resp.Error
 	}
 
-	var conns []rpcargs.Connection
+	var connResp rpcargs.ConnectionsResponse
 
-	err = json.Unmarshal(resp.Data, &conns)
+	err = json.Unmarshal(resp.Data, &connResp)
 	if err != nil {
 		return nil, err
 	}
 
-	return conns, nil
+	return &connResp, nil
 }

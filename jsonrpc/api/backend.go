@@ -61,6 +61,9 @@ type Network interface {
 	GetVersion() string
 	GetKramaID() id.KramaID
 	GetConns() []network.Conn
+	GetInboundConnCount() int64
+	GetOutboundConnCount() int64
+	GetSubscribedTopics() map[string]int
 }
 
 type DB interface {

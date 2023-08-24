@@ -13,6 +13,7 @@ import (
 
 	libp2pCrypto "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	libp2pTest "github.com/libp2p/go-libp2p/core/test"
 	"github.com/multiformats/go-multiaddr"
 
@@ -560,9 +561,12 @@ func (mc *MockIxPool) setIxs(addr common.Address, pending, queued []*common.Inte
 }
 
 type MockNetwork struct {
-	peers   []id.KramaID
-	version string
-	conns   []network.Conn
+	peers             []id.KramaID
+	version           string
+	conns             []network.Conn
+	inboundConnCount  int64
+	outboundConnCount int64
+	pubsubTopics      map[string]int
 }
 
 func NewMockNetwork(t *testing.T) *MockNetwork {
@@ -602,6 +606,71 @@ func (mn *MockNetwork) setVersion(version string) {
 
 func (mn *MockNetwork) GetVersion() string {
 	return mn.version
+}
+
+func (mn *MockNetwork) setInboundConnCount(inboundConnCount int64) {
+	mn.inboundConnCount = inboundConnCount
+}
+
+func (mn *MockNetwork) GetInboundConnCount() int64 {
+	return mn.inboundConnCount
+}
+
+func (mn *MockNetwork) setOutboundConnCount(outboundConnCount int64) {
+	mn.outboundConnCount = outboundConnCount
+}
+
+func (mn *MockNetwork) GetOutboundConnCount() int64 {
+	return mn.outboundConnCount
+}
+
+func (mn *MockNetwork) setSubscribedTopics(pubsubTopics map[string]int) {
+	mn.pubsubTopics = pubsubTopics
+}
+
+func (mn *MockNetwork) GetSubscribedTopics() map[string]int {
+	return mn.pubsubTopics
+}
+
+type mockStream struct {
+	network.MuxedStream
+	protocol  protocol.ID
+	direction int
+}
+
+func (ms *mockStream) ID() string {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (ms *mockStream) Protocol() protocol.ID {
+	return ms.protocol
+}
+
+func (ms *mockStream) SetProtocol(id protocol.ID) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (ms *mockStream) Conn() network.Conn {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (ms *mockStream) Scope() network.StreamScope {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (ms *mockStream) ProtocolID() protocol.ID {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (ms *mockStream) Stat() network.Stats {
+	return network.Stats{
+		Direction: 1,
+	}
 }
 
 type mockConn struct {
@@ -669,6 +738,19 @@ func (m mockConn) GetStreams() []network.Stream {
 	return m.streams
 }
 
+func createStreams(streamCount int) []network.Stream {
+	streams := make([]network.Stream, streamCount)
+
+	for i := 0; i < streamCount; i++ {
+		streams[i] = &mockStream{
+			protocol:  "/meshsub/1.1.0",
+			direction: 1,
+		}
+	}
+
+	return streams
+}
+
 func createConns(t *testing.T, connCount int, streamCount int) []network.Conn {
 	t.Helper()
 
@@ -679,7 +761,7 @@ func createConns(t *testing.T, connCount int, streamCount int) []network.Conn {
 	for i := 0; i < connCount; i++ {
 		conns[i] = mockConn{
 			remotePeerID: peerID,
-			streams:      make([]network.Stream, streamCount),
+			streams:      createStreams(streamCount),
 		}
 	}
 

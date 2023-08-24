@@ -552,17 +552,17 @@ func httpAccounts(t *testing.T, args *rpcargs.AccountArgs) []common.Address {
 }
 
 // httpConnections returns the connections of this node
-func httpConnections(t *testing.T, args *rpcargs.ConnArgs) []rpcargs.Connection {
+func httpConnections(t *testing.T, args *rpcargs.ConnArgs) *rpcargs.ConnectionsResponse {
 	t.Helper()
 
 	resp := makeHTTPRequest(t, "debug.Connections", args)
 
-	var conns []rpcargs.Connection
+	var connResponse rpcargs.ConnectionsResponse
 
-	err := json.Unmarshal(resp.Data, &conns)
+	err := json.Unmarshal(resp.Data, &connResponse)
 	require.NoError(t, err)
 
-	return conns
+	return &connResponse
 }
 
 // httpAccountMetaInfo returns the account meta info associated with the given address

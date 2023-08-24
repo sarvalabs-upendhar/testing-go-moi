@@ -102,25 +102,38 @@ func TestPublicDebugAPI_GetConns(t *testing.T) {
 
 	conns := createConns(t, 3, 3)
 	mn.setConns(conns)
+	mn.setInboundConnCount(1)
+	mn.setOutboundConnCount(2)
+	mn.setSubscribedTopics(map[string]int{"topic1": 1, "topic2": 2})
 
 	testcases := []struct {
-		name          string
-		expectedConns []network.Conn
+		name                      string
+		expectedConns             []network.Conn
+		expectedInboundConnCount  int64
+		expectedOutboundConnCount int64
+		expectedPubSubTopics      map[string]int
 	}{
 		{
-			name:          "fetch connections",
-			expectedConns: conns,
+			name:                      "fetch connections",
+			expectedConns:             conns,
+			expectedInboundConnCount:  1,
+			expectedOutboundConnCount: 2,
+			expectedPubSubTopics:      map[string]int{"topic1": 1, "topic2": 2},
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			conns := debugAPI.GetConnections()
+			connResp := debugAPI.GetConnections()
 
 			for i, expectedConn := range test.expectedConns {
-				require.Equal(t, expectedConn.RemotePeer().String(), conns[i].PeerID)
-				require.Equal(t, uint64(len(expectedConn.GetStreams())), conns[i].StreamCount)
+				require.Equal(t, expectedConn.RemotePeer().String(), connResp.Conns[i].PeerID)
+				require.Equal(t, len(expectedConn.GetStreams()), len(connResp.Conns[i].Streams))
 			}
+
+			require.Equal(t, test.expectedInboundConnCount, connResp.InboundConnCount)
+			require.Equal(t, test.expectedOutboundConnCount, connResp.OutboundConnCount)
+			require.Equal(t, test.expectedPubSubTopics, connResp.ActivePubSubTopics)
 		})
 	}
 }

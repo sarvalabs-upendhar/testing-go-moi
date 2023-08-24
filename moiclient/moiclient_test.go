@@ -1664,14 +1664,16 @@ func testConnections(t *testing.T, client *Client) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			connections, err := client.Connections(ctx)
+			connResp, err := client.Connections(ctx)
 			require.NoError(t, err)
 
-			httpConns := httpConnections(t, test.accArgs)
-			require.Equal(t, len(httpConns), len(connections))
-			require.ElementsMatch(t, httpConns, connections)
+			httpConnResp := httpConnections(t, test.accArgs)
+			require.Equal(t, len(httpConnResp.Conns), len(connResp.Conns))
+			require.Equal(t, httpConnResp.InboundConnCount, connResp.InboundConnCount)
+			require.Equal(t, httpConnResp.OutboundConnCount, connResp.OutboundConnCount)
+			require.Equal(t, httpConnResp.ActivePubSubTopics, connResp.ActivePubSubTopics)
 
-			require.Greater(t, len(connections), 0)
+			require.Greater(t, len(connResp.Conns), 0)
 		})
 	}
 }
