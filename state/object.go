@@ -879,7 +879,7 @@ func (object *Object) isLogicRegistered(logicID common.LogicID) error {
 	return nil
 }
 
-func (object *Object) getMetaLogicTree() (tree.MerkleTree, error) {
+func (object *Object) getLogicTree() (tree.MerkleTree, error) {
 	if object.logicTree != nil {
 		return object.logicTree, nil
 	}
@@ -901,7 +901,7 @@ func (object *Object) getMetaLogicTree() (tree.MerkleTree, error) {
 }
 
 func (object *Object) getLogicObject(logicID common.LogicID) (*LogicObject, error) {
-	logicTree, err := object.getMetaLogicTree()
+	logicTree, err := object.getLogicTree()
 	if err != nil {
 		return nil, err
 	}
@@ -927,7 +927,7 @@ func (object *Object) InsertNewLogicObject(logicID common.LogicID, logicObject *
 		return errors.New("logic already registered")
 	}
 
-	logicTree, err := object.getMetaLogicTree()
+	logicTree, err := object.getLogicTree()
 	if err != nil {
 		return errors.Wrap(err, "failed to load logic tree")
 	}

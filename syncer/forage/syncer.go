@@ -1691,12 +1691,41 @@ func (s *Syncer) syncStorageTree(ctx context.Context, session *session.Session, 
 	return nil
 }
 
-func (s *Syncer) syncLogicTree(ctx context.Context, session *session.Session, newRoot common.Hash) error {
+func (s *Syncer) syncLogicManifests(ctx context.Context, as *session.Session, root *common.RootNode) error {
+	cids := make([]cid.CID, 0)
+
+	for _, rawLogicObject := range root.HashTable {
+		manifestHash, err := state.GetManifestHashFromRawLogicObject(rawLogicObject)
+		if err != nil {
+			return err
+		}
+
+		cids = append(cids, cid.ManifestCID(manifestHash))
+	}
+
+	for _, blck := range s.getBlocks(ctx, as, cids...) {
+		if err := s.db.CreateEntry(dbKeyFromCID(as.ID(), blck.GetCid()), blck.GetData()); err != nil {
+			return err
+		}
+	}
+
+	for _, cID := range cids {
+		if stored, err := s.db.Contains(dbKeyFromCID(as.ID(), cID)); err != nil || !stored {
+			s.logger.Error("failed to fetch logic manifest", as.ID(), "manifest-hash", cID.String())
+
+			return errors.New("failed to fetch logic manifest")
+		}
+	}
+
+	return nil
+}
+
+func (s *Syncer) syncLogicTree(ctx context.Context, as *session.Session, newRoot common.Hash) error {
 	if newRoot.IsNil() {
 		return nil
 	}
 
-	_, blk, err := s.getBlock(ctx, session, cid.LogicCID(newRoot))
+	_, blk, err := s.getBlock(ctx, as, cid.LogicCID(newRoot))
 	if err != nil {
 		return nil
 	}
@@ -1706,7 +1735,11 @@ func (s *Syncer) syncLogicTree(ctx context.Context, session *session.Session, ne
 		return err
 	}
 
-	return s.state.SyncLogicTree(session.ID(), metaLogicRoot)
+	if err = s.syncLogicManifests(ctx, as, metaLogicRoot); err != nil {
+		return err
+	}
+
+	return s.state.SyncLogicTree(as.ID(), metaLogicRoot)
 }
 
 func (s *Syncer) msgHandler(msg *pubsub.Message) error {

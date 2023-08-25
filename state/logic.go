@@ -136,6 +136,37 @@ func (logic *LogicObject) FromBytes(bytes []byte) error {
 	return nil
 }
 
+func GetManifestHashFromRawLogicObject(raw []byte) (common.Hash, error) {
+	depolorizer, err := polo.NewDepolorizer(raw)
+	if err != nil {
+		return common.NilHash, err
+	}
+
+	depolorizer, err = depolorizer.DepolorizePacked()
+	if errors.Is(err, polo.ErrNullPack) {
+		return common.NilHash, nil
+	} else if err != nil {
+		return common.NilHash, err
+	}
+
+	// Skip the first field
+	if _, err = depolorizer.DepolorizeAny(); err != nil {
+		return common.NilHash, err
+	}
+
+	// Skip the second field
+	if _, err = depolorizer.DepolorizeAny(); err != nil {
+		return common.NilHash, err
+	}
+
+	var ManifestHash common.Hash
+	if err = depolorizer.Depolorize(&ManifestHash); err != nil {
+		return common.NilHash, err
+	}
+
+	return ManifestHash, nil
+}
+
 type LogicContextObject struct {
 	state *Object
 	logic common.LogicID

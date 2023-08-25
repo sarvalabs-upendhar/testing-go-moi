@@ -1474,7 +1474,7 @@ func TestGetMetaLogicTree(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			sObj := createTestStateObject(t, test.soParams)
 
-			actualLogicTree, err := sObj.getMetaLogicTree()
+			actualLogicTree, err := sObj.getLogicTree()
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 

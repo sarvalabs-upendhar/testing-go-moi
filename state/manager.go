@@ -211,7 +211,7 @@ func (sm *StateManager) GetLogicIDs(addr common.Address, stateHash common.Hash) 
 
 	logicIDs := make([]common.LogicID, 0)
 
-	logicTree, err := obj.getMetaLogicTree()
+	logicTree, err := obj.getLogicTree()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to load meta logic tree")
 	}
@@ -1174,7 +1174,7 @@ func (sm *StateManager) SyncLogicTree(
 		return err
 	}
 
-	logicTree, err := so.getMetaLogicTree()
+	logicTree, err := so.getLogicTree()
 	if err != nil {
 		return err
 	}
