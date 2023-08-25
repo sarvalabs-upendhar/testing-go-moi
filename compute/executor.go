@@ -31,8 +31,8 @@ func (executor *IxExecutor) Execute(ixs common.Interactions, delta common.Contex
 	executor.contextDelta = delta
 
 	for _, ix := range executor.Interactions {
-		// Load the state objects for interaction accounts
-		if err := loadStateObjects(ix, executor.state, executor.objects, executor.snapshots, true); err != nil {
+		// Load the state objects for interaction participants
+		if err := executor.LoadStateObjects(ix); err != nil {
 			return errors.Wrap(err, "execution failed")
 		}
 
@@ -40,6 +40,11 @@ func (executor *IxExecutor) Execute(ixs common.Interactions, delta common.Contex
 		receipt, err := executor.mgr.runInteraction(ix, executor.objects, true)
 		if err != nil {
 			return err
+		}
+
+		// Increment the nonce of the sender address
+		if ix.Sender() != common.NilAddress {
+			executor.objects.GetObject(ix.Sender()).IncrementNonce(1)
 		}
 
 		// Set the receipt to the executor
@@ -247,6 +252,58 @@ func (executor *IxExecutor) CommitStateObjects(ix *common.Interaction) error {
 		}
 
 		receipt.Hashes.SetStateHash(common.SargaAddress, genesisHash)
+	}
+
+	return nil
+}
+
+func (executor *IxExecutor) LoadStateObjects(ix *common.Interaction) error {
+	// Fetch state object for sender if valid and not already available in the executor
+	if sender := ix.Sender(); !sender.IsNil() && executor.objects.GetObject(sender) == nil {
+		// Retrieve the dirty object for the sender from the state manager
+		senderObject, err := executor.state.GetDirtyObject(sender)
+		if err != nil {
+			return errors.Wrap(err, "state object fetch failed")
+		}
+
+		// Add sender state object and its snapshot to the executor
+		executor.objects[sender] = senderObject
+		executor.snapshots[sender] = senderObject.Copy()
+	}
+
+	// Fetch state object for receiver if valid
+	if receiver := ix.Receiver(); !receiver.IsNil() {
+		var receiverObject *state.Object
+
+		// Check if the receiver address is an already registered account
+		accountRegistered, err := executor.state.IsAccountRegistered(ix.Receiver())
+		if err != nil {
+			return errors.Wrap(err, "state object fetch failed")
+		}
+
+		if !accountRegistered {
+			// Retrieve the dirty object for genesis (sarga) address
+			genesisObject, err := executor.state.GetDirtyObject(common.SargaAddress)
+			if err != nil {
+				return errors.Wrap(err, "state object fetch failed")
+			}
+
+			// Add genesis state object and its snapshot to the executor
+			executor.objects[common.SargaAddress] = genesisObject
+			executor.snapshots[common.SargaAddress] = genesisObject.Copy()
+
+			// Create a new dirty state object for the account
+			receiverObject = executor.state.CreateDirtyObject(receiver, common.AccTypeFromIxType(ix.Type()))
+		} else {
+			// Retrieve the dirty object for the receiver from the state manager
+			if receiverObject, err = executor.state.GetDirtyObject(receiver); err != nil {
+				return errors.Wrap(err, "state object fetch failed")
+			}
+		}
+
+		// Add receiver state object and its snapshot to the executor
+		executor.objects[receiver] = receiverObject
+		executor.snapshots[receiver] = receiverObject.Copy()
 	}
 
 	return nil

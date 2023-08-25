@@ -4,8 +4,6 @@ import (
 	"encoding/hex"
 	"math/big"
 
-	"github.com/sarvalabs/go-moi/common/hexutil"
-
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
@@ -20,12 +18,11 @@ type PublicIXAPI struct {
 	// Represents the API backend
 	ixpool IxPool
 	sm     StateManager
-	exec   ExecutionManager
 }
 
-func NewPublicIXAPI(ixpool IxPool, sm StateManager, exec ExecutionManager) *PublicIXAPI {
+func NewPublicIXAPI(ixpool IxPool, sm StateManager) *PublicIXAPI {
 	// Create the public interaction API wrapper and return it
-	return &PublicIXAPI{ixpool, sm, exec}
+	return &PublicIXAPI{ixpool, sm}
 }
 
 // SendInteraction is a method of PublicIXAPI that stores the interaction
@@ -52,31 +49,6 @@ func (p *PublicIXAPI) SendInteraction(sendIx *rpcargs.SendIX) (*common.Interacti
 	}
 
 	return ixn, nil
-}
-
-// Call is a method of PublicIXAPI that is a stateless version of an interaction submit
-func (p *PublicIXAPI) Call(sendIx *rpcargs.IxArgs) (*rpcargs.RPCReceipt, error) {
-	sendIXArgs, err := createSendIXArgs(sendIx)
-	if err != nil {
-		return nil, err
-	}
-
-	ix, err := constructInteraction(sendIXArgs, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	receipt, err := p.exec.InteractionCall(ix)
-	if err != nil {
-		return nil, err
-	}
-
-	result := &rpcargs.RPCReceipt{
-		FuelUsed:  hexutil.Big(*receipt.FuelUsed),
-		ExtraData: receipt.ExtraData,
-	}
-
-	return result, nil
 }
 
 // helper function

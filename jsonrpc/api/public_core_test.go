@@ -542,17 +542,22 @@ func TestPublicCoreAPI_GetTesseractHashByHeight(t *testing.T) {
 }
 
 func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
-	addr := tests.RandomAddress(t)
 	assetPayload := common.AssetCreatePayload{}
 	rawAssetPayload, err := assetPayload.Bytes()
 	require.NoError(t, err)
 
 	exec := NewMockExecutionManager(t)
-	coreAPI := NewPublicCoreAPI(nil, nil, nil, exec, nil)
+	chain := NewMockChainManager(t)
+	coreAPI := NewPublicCoreAPI(nil, chain, nil, exec, nil)
+
+	ts := tests.CreateTesseracts(t, 1, nil)
+	chain.setTesseractByHash(t, ts[0])
+
+	tsHash := getTesseractHash(t, ts[0])
 
 	IxArgs := &common.SendIXArgs{
 		Type:      common.IxAssetCreate,
-		Sender:    addr,
+		Sender:    ts[0].Address(),
 		Nonce:     4,
 		FuelPrice: big.NewInt(1),
 		FuelLimit: big.NewInt(100),
@@ -570,31 +575,78 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 
 	testcases := []struct {
 		name                 string
-		sendIXArgs           *rpcargs.IxArgs
+		callArgs             *rpcargs.CallArgs
 		expectedFuelConsumed *hexutil.Big
 		expectedErr          error
 	}{
 		{
 			name: "failed to construct interaction",
-			sendIXArgs: &rpcargs.IxArgs{
-				Type:      common.IxInvalid,
-				Sender:    addr,
-				Nonce:     hexutil.Uint64(3),
-				FuelPrice: (*hexutil.Big)(big.NewInt(1)),
-				FuelLimit: (*hexutil.Big)(big.NewInt(100)),
-				Payload:   (hexutil.Bytes)(rawAssetPayload),
+			callArgs: &rpcargs.CallArgs{
+				IxArgs: &rpcargs.IxArgs{
+					Type:      common.IxInvalid,
+					Sender:    tests.RandomAddress(t),
+					Nonce:     hexutil.Uint64(3),
+					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
+					FuelLimit: (*hexutil.Big)(big.NewInt(100)),
+					Payload:   (hexutil.Bytes)(rawAssetPayload),
+				},
 			},
 			expectedErr: errors.New("invalid interaction type"),
 		},
 		{
+			name: "failed to retrieve stateHashes as options are empty",
+			callArgs: &rpcargs.CallArgs{
+				IxArgs: &rpcargs.IxArgs{
+					Type:      common.IxAssetCreate,
+					Sender:    tests.RandomAddress(t),
+					Nonce:     hexutil.Uint64(3),
+					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
+					FuelLimit: (*hexutil.Big)(big.NewInt(100)),
+					Payload:   (hexutil.Bytes)(rawAssetPayload),
+				},
+				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+					ts[0].Address(): {
+						TesseractNumber: nil,
+					},
+				},
+			},
+			expectedErr: common.ErrEmptyOptions,
+		},
+		{
+			name: "should return error as rpc receipt fetch failed",
+			callArgs: &rpcargs.CallArgs{
+				IxArgs: &rpcargs.IxArgs{
+					Type:      common.IxAssetCreate,
+					Sender:    tests.RandomAddress(t),
+					Nonce:     hexutil.Uint64(4),
+					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
+					FuelLimit: (*hexutil.Big)(big.NewInt(100)),
+					Payload:   (hexutil.Bytes)(rawAssetPayload),
+				},
+				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+					ts[0].Address(): {
+						TesseractHash: &tsHash,
+					},
+				},
+			},
+			expectedErr: common.ErrAccountNotFound,
+		},
+		{
 			name: "rpc receipt fetched successfully",
-			sendIXArgs: &rpcargs.IxArgs{
-				Type:      common.IxAssetCreate,
-				Sender:    addr,
-				Nonce:     hexutil.Uint64(4),
-				FuelPrice: (*hexutil.Big)(big.NewInt(1)),
-				FuelLimit: (*hexutil.Big)(big.NewInt(100)),
-				Payload:   (hexutil.Bytes)(rawAssetPayload),
+			callArgs: &rpcargs.CallArgs{
+				IxArgs: &rpcargs.IxArgs{
+					Type:      common.IxAssetCreate,
+					Sender:    ts[0].Address(),
+					Nonce:     hexutil.Uint64(4),
+					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
+					FuelLimit: (*hexutil.Big)(big.NewInt(100)),
+					Payload:   (hexutil.Bytes)(rawAssetPayload),
+				},
+				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+					ts[0].Address(): {
+						TesseractHash: &tsHash,
+					},
+				},
 			},
 			expectedFuelConsumed: (*hexutil.Big)(big.NewInt(100)),
 		},
@@ -602,7 +654,7 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			fuelConsumed, err := coreAPI.FuelEstimate(test.sendIXArgs)
+			fuelConsumed, err := coreAPI.FuelEstimate(test.callArgs)
 			if test.expectedErr != nil {
 				require.ErrorContains(t, err, test.expectedErr.Error())
 
@@ -611,6 +663,136 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Equal(t, test.expectedFuelConsumed, fuelConsumed)
+		})
+	}
+}
+
+func TestIx_Call(t *testing.T) {
+	assetPayload := common.AssetCreatePayload{}
+	rawAssetPayload, err := assetPayload.Bytes()
+	require.NoError(t, err)
+
+	exec := NewMockExecutionManager(t)
+	chain := NewMockChainManager(t)
+	coreAPI := NewPublicCoreAPI(nil, chain, nil, exec, nil)
+
+	ts := tests.CreateTesseracts(t, 1, nil)
+	chain.setTesseractByHash(t, ts[0])
+
+	tsHash := getTesseractHash(t, ts[0])
+
+	IxArgs := &common.SendIXArgs{
+		Type:      common.IxAssetCreate,
+		Sender:    ts[0].Address(),
+		Nonce:     4,
+		FuelPrice: big.NewInt(1),
+		FuelLimit: big.NewInt(100),
+		Payload:   rawAssetPayload,
+	}
+
+	ix, err := constructInteraction(IxArgs, nil)
+	assert.NoError(t, err)
+
+	receipt := &common.Receipt{
+		FuelUsed:  big.NewInt(100),
+		ExtraData: rawAssetPayload,
+	}
+
+	exec.setInteractionCall(ix, receipt)
+
+	testcases := []struct {
+		name            string
+		callArgs        *rpcargs.CallArgs
+		expectedReceipt *rpcargs.RPCReceipt
+		expectedErr     error
+	}{
+		{
+			name: "failed to construct interaction",
+			callArgs: &rpcargs.CallArgs{
+				IxArgs: &rpcargs.IxArgs{
+					Type:      common.IxInvalid,
+					Sender:    tests.RandomAddress(t),
+					Nonce:     hexutil.Uint64(3),
+					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
+					FuelLimit: (*hexutil.Big)(big.NewInt(100)),
+					Payload:   (hexutil.Bytes)(rawAssetPayload),
+				},
+			},
+			expectedErr: errors.New("invalid interaction type"),
+		},
+		{
+			name: "failed to retrieve stateHashes as options are empty",
+			callArgs: &rpcargs.CallArgs{
+				IxArgs: &rpcargs.IxArgs{
+					Type:      common.IxAssetCreate,
+					Sender:    tests.RandomAddress(t),
+					Nonce:     hexutil.Uint64(4),
+					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
+					FuelLimit: (*hexutil.Big)(big.NewInt(100)),
+					Payload:   (hexutil.Bytes)(rawAssetPayload),
+				},
+				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+					ts[0].Address(): {
+						TesseractNumber: nil,
+					},
+				},
+			},
+			expectedErr: common.ErrEmptyOptions,
+		},
+		{
+			name: "should return error as rpc receipt fetch failed",
+			callArgs: &rpcargs.CallArgs{
+				IxArgs: &rpcargs.IxArgs{
+					Type:      common.IxAssetCreate,
+					Sender:    tests.RandomAddress(t),
+					Nonce:     hexutil.Uint64(4),
+					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
+					FuelLimit: (*hexutil.Big)(big.NewInt(100)),
+					Payload:   (hexutil.Bytes)(rawAssetPayload),
+				},
+				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+					ts[0].Address(): {
+						TesseractHash: &tsHash,
+					},
+				},
+			},
+			expectedErr: common.ErrAccountNotFound,
+		},
+		{
+			name: "rpc receipt fetched successfully",
+			callArgs: &rpcargs.CallArgs{
+				IxArgs: &rpcargs.IxArgs{
+					Type:      common.IxAssetCreate,
+					Sender:    ts[0].Address(),
+					Nonce:     hexutil.Uint64(4),
+					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
+					FuelLimit: (*hexutil.Big)(big.NewInt(100)),
+					Payload:   (hexutil.Bytes)(rawAssetPayload),
+				},
+				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+					ts[0].Address(): {
+						TesseractHash: &tsHash,
+					},
+				},
+			},
+			expectedReceipt: &rpcargs.RPCReceipt{
+				FuelUsed:  hexutil.Big(*big.NewInt(100)),
+				ExtraData: rawAssetPayload,
+			},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			ixn, err := coreAPI.Call(test.callArgs)
+			if test.expectedErr != nil {
+				require.ErrorContains(t, err, test.expectedErr.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedReceipt, ixn)
 		})
 	}
 }
@@ -1875,6 +2057,73 @@ func TestPublicCoreAPI_CreateRPCReceipt(t *testing.T) {
 			receipt := createRPCReceipt(test.receipt, test.ix, test.grid, test.ixIndex)
 
 			checkForRPCReceipt(t, test.grid, test.ix, test.receipt, receipt, test.ixIndex)
+		})
+	}
+}
+
+func TestPublicCoreAPI_normalizeOptions(t *testing.T) {
+	invalidHeight := int64(-2)
+	validHeight := int64(8)
+
+	tesseractParams := tests.GetTesseractParamsMapWithIxns(t, 2, 2)
+	tesseractParams[0].Height = uint64(validHeight)
+
+	ts := tests.CreateTesseracts(t, 2, tesseractParams)
+
+	c := NewMockChainManager(t)
+	sm := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(nil, c, sm, nil, nil)
+
+	c.SetTesseractHeightEntry(ts[0].Address(), ts[0].Height(), getTesseractHash(t, ts[0]))
+
+	c.setTesseractByHash(t, ts[1])
+	c.setTesseractByHash(t, ts[0])
+
+	tsHash := tests.GetTesseractHash(t, ts[1])
+
+	testcases := []struct {
+		name                string
+		options             map[common.Address]*rpcargs.TesseractNumberOrHash
+		expectedStateHashes map[common.Address]common.Hash
+		expectedError       error
+	}{
+		{
+			name: "state hashes fetched successfully from tesseract hashes",
+			options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+				ts[0].Address(): {
+					TesseractNumber: &validHeight,
+				},
+				ts[1].Address(): {
+					TesseractHash: &tsHash,
+				},
+			},
+			expectedStateHashes: map[common.Address]common.Hash{
+				ts[0].Address(): ts[0].StateHash(),
+				ts[1].Address(): ts[1].StateHash(),
+			},
+		},
+		{
+			name: "should return error as tesseract height is invalid",
+			options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+				ts[0].Address(): {
+					TesseractNumber: &invalidHeight,
+				},
+			},
+			expectedError: errors.New("invalid options"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			stateHashes, err := coreAPI.normalizeOptions(test.options)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedStateHashes, stateHashes)
 		})
 	}
 }

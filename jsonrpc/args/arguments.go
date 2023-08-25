@@ -83,6 +83,11 @@ type BalArgs struct {
 	Options TesseractNumberOrHash `json:"options"`
 }
 
+type CallArgs struct {
+	IxArgs  *IxArgs                                   `json:"ix_args"`
+	Options map[common.Address]*TesseractNumberOrHash `json:"options"`
+}
+
 type SendIX struct {
 	IXArgs    string `json:"ix_args"`
 	Signature string `json:"signature"`

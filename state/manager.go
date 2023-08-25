@@ -98,7 +98,7 @@ func NewStateManager(
 	return sm, nil
 }
 
-func (sm *StateManager) createStateObject(addr common.Address, accType common.AccountType) *Object {
+func (sm *StateManager) CreateStateObject(addr common.Address, accType common.AccountType) *Object {
 	journal := new(Journal)
 	stateObject := NewStateObject(addr, sm.cache, journal, sm.db, common.Account{AccType: accType})
 
@@ -117,7 +117,7 @@ func (sm *StateManager) CreateDirtyObject(addr common.Address, accType common.Ac
 	sm.dirtyObjectsLock.Lock()
 	defer sm.dirtyObjectsLock.Unlock()
 
-	obj := sm.createStateObject(addr, accType)
+	obj := sm.CreateStateObject(addr, accType)
 
 	sm.dirtyObjects[addr] = obj.Copy()
 	sm.metrics.captureActiveStateObjects(float64(len(sm.dirtyObjects)))

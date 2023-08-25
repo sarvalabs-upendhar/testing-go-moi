@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/decred/dcrd/crypto/blake256"
+
 	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"
@@ -24,7 +25,7 @@ func TestStateManager_CreateStateObject(t *testing.T) {
 	accType := common.LogicAccount
 
 	sm := createTestStateManager(t, nil)
-	so := sm.createStateObject(address, accType)
+	so := sm.CreateStateObject(address, accType)
 
 	validateStateObject(t, so, accType, address)
 }

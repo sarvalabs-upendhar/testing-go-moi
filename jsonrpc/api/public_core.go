@@ -451,8 +451,8 @@ func (p *PublicCoreAPI) AccountMetaInfo(args *rpcargs.GetAccountArgs) (map[strin
 }
 
 // FuelEstimate returns an estimate of the fuel that is required for executing an interaction
-func (p *PublicCoreAPI) FuelEstimate(args *rpcargs.IxArgs) (*hexutil.Big, error) {
-	sendIXArgs, err := createSendIXArgs(args)
+func (p *PublicCoreAPI) FuelEstimate(args *rpcargs.CallArgs) (*hexutil.Big, error) {
+	sendIXArgs, err := createSendIXArgs(args.IxArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -462,7 +462,12 @@ func (p *PublicCoreAPI) FuelEstimate(args *rpcargs.IxArgs) (*hexutil.Big, error)
 		return nil, err
 	}
 
-	receipt, err := p.exec.InteractionCall(ix)
+	stateHashes, err := p.normalizeOptions(args.Options)
+	if err != nil {
+		return nil, err
+	}
+
+	receipt, err := p.exec.InteractionCall(ix, stateHashes)
 	if err != nil {
 		return nil, err
 	}
@@ -488,6 +493,53 @@ func (p *PublicCoreAPI) Syncing(args *rpcargs.SyncStatusRequest) (*rpcargs.SyncS
 	return &rpcargs.SyncStatusResponse{
 		AccSyncResp: accSyncStatus,
 	}, nil
+}
+
+// Call is a method of PublicCoreAPI that is a stateless version of an interaction submit
+func (p *PublicCoreAPI) Call(args *rpcargs.CallArgs) (*rpcargs.RPCReceipt, error) {
+	sendIXArgs, err := createSendIXArgs(args.IxArgs)
+	if err != nil {
+		return nil, err
+	}
+
+	ix, err := constructInteraction(sendIXArgs, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	stateHashes, err := p.normalizeOptions(args.Options)
+	if err != nil {
+		return nil, err
+	}
+
+	receipt, err := p.exec.InteractionCall(ix, stateHashes)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &rpcargs.RPCReceipt{
+		FuelUsed:  hexutil.Big(*receipt.FuelUsed),
+		ExtraData: receipt.ExtraData,
+	}
+
+	return result, nil
+}
+
+func (p *PublicCoreAPI) normalizeOptions(
+	options map[common.Address]*rpcargs.TesseractNumberOrHash,
+) (map[common.Address]common.Hash, error) {
+	stateHashes := make(map[common.Address]common.Hash)
+
+	for addr, value := range options {
+		ts, err := p.getTesseract(getTesseractArgs(addr, *value))
+		if err != nil {
+			return nil, err
+		}
+
+		stateHashes[addr] = ts.StateHash()
+	}
+
+	return stateHashes, nil
 }
 
 // createRPCInteraction creates an RPC Interaction by copying all fields of the interaction into the RPC Interaction,

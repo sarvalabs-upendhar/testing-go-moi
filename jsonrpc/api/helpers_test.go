@@ -419,7 +419,10 @@ func (exec *MockExecutionManager) setInteractionCall(ix *common.Interaction, rec
 	exec.call[ix.Hash()] = receipt
 }
 
-func (exec *MockExecutionManager) InteractionCall(ix *common.Interaction) (*common.Receipt, error) {
+func (exec *MockExecutionManager) InteractionCall(
+	ix *common.Interaction,
+	stateHashes map[common.Address]common.Hash,
+) (*common.Receipt, error) {
 	receipt, ok := exec.call[ix.Hash()]
 	if !ok {
 		return nil, common.ErrAccountNotFound

@@ -695,27 +695,53 @@ func testFuelEstimate(t *testing.T, client *Client, addr common.Address) {
 
 	testcases := []struct {
 		name                 string
-		IxArgs               *rpcargs.IxArgs
+		callArgs             *rpcargs.CallArgs
 		expectedFuelConsumed *hexutil.Big
 		expectedError        error
 	}{
 		{
 			name: "retrieved fuel used in asset create interaction",
-			IxArgs: &rpcargs.IxArgs{
-				Type:      common.IxAssetCreate,
-				Sender:    ts.Address(),
-				Nonce:     hexutil.Uint64(5),
-				FuelPrice: (*hexutil.Big)(big.NewInt(1)),
-				FuelLimit: (*hexutil.Big)(big.NewInt(200)),
-				Payload:   (hexutil.Bytes)(assetCreatePayload),
+			callArgs: &rpcargs.CallArgs{
+				IxArgs: &rpcargs.IxArgs{
+					Type:      common.IxAssetCreate,
+					Sender:    ts.Address(),
+					Nonce:     hexutil.Uint64(5),
+					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
+					FuelLimit: (*hexutil.Big)(big.NewInt(200)),
+					Payload:   (hexutil.Bytes)(assetCreatePayload),
+				},
+				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+					ts.Address(): {
+						TesseractNumber: &createAssetHeight,
+					},
+				},
 			},
 			expectedFuelConsumed: (*hexutil.Big)(big.NewInt(100)),
+		},
+		{
+			name: "failed to retrieve stateHashes as options are empty",
+			callArgs: &rpcargs.CallArgs{
+				IxArgs: &rpcargs.IxArgs{
+					Type:      common.IxAssetCreate,
+					Sender:    addr,
+					Nonce:     hexutil.Uint64(3),
+					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
+					FuelLimit: (*hexutil.Big)(big.NewInt(100)),
+					Payload:   (hexutil.Bytes)(assetCreatePayload),
+				},
+				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+					ts.Address(): {
+						TesseractNumber: nil,
+					},
+				},
+			},
+			expectedError: common.ErrEmptyOptions,
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			fuelConsumed, err := client.FuelEstimate(ctx, test.IxArgs)
+			fuelConsumed, err := client.FuelEstimate(ctx, test.callArgs)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -1721,6 +1747,7 @@ func testAccountMetaInfo(t *testing.T, client *Client) {
 }
 
 func testCall(t *testing.T, client *Client, addr common.Address) {
+	invalidHeight := int64(-2)
 	ts := GetTesseract(t, client, addr, createAssetHeight)
 	supply, _ := new(big.Int).SetString("130D46", 16)
 
@@ -1753,30 +1780,56 @@ func testCall(t *testing.T, client *Client, addr common.Address) {
 
 	testcases := []struct {
 		name            string
-		sendIxArgs      *rpcargs.IxArgs
+		callArgs        *rpcargs.CallArgs
 		expectedReceipt *rpcargs.RPCReceipt
 		expectedError   error
 	}{
 		{
 			name: "fetched rpc receipt successfully",
-			sendIxArgs: &rpcargs.IxArgs{
-				Type:      common.IxAssetCreate,
-				Sender:    ts.Address(),
-				Nonce:     hexutil.Uint64(4),
-				FuelPrice: (*hexutil.Big)(big.NewInt(1)),
-				FuelLimit: (*hexutil.Big)(big.NewInt(200)),
-				Payload:   (hexutil.Bytes)(assetCreatePayload),
+			callArgs: &rpcargs.CallArgs{
+				IxArgs: &rpcargs.IxArgs{
+					Type:      common.IxAssetCreate,
+					Sender:    ts.Address(),
+					Nonce:     hexutil.Uint64(4),
+					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
+					FuelLimit: (*hexutil.Big)(big.NewInt(200)),
+					Payload:   (hexutil.Bytes)(assetCreatePayload),
+				},
+				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+					ts.Address(): {
+						TesseractNumber: &createAssetHeight,
+					},
+				},
 			},
 			expectedReceipt: &rpcargs.RPCReceipt{
 				FuelUsed:  (hexutil.Big)(*expectedReceipt.FuelUsed),
 				ExtraData: expectedReceipt.ExtraData,
 			},
 		},
+		{
+			name: "failed to retrieve stateHashes as options are empty",
+			callArgs: &rpcargs.CallArgs{
+				IxArgs: &rpcargs.IxArgs{
+					Type:      common.IxAssetCreate,
+					Sender:    addr,
+					Nonce:     hexutil.Uint64(3),
+					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
+					FuelLimit: (*hexutil.Big)(big.NewInt(100)),
+					Payload:   (hexutil.Bytes)(assetCreatePayload),
+				},
+				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+					ts.Address(): {
+						TesseractNumber: &invalidHeight,
+					},
+				},
+			},
+			expectedError: errors.New("invalid options"),
+		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			receipt, err := client.InteractionCall(ctx, test.sendIxArgs)
+			receipt, err := client.InteractionCall(ctx, test.callArgs)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 

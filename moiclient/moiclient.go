@@ -584,7 +584,7 @@ func (c *Client) AccountMetaInfo(
 }
 
 // FuelEstimate returns an estimate of the fuel that is required for executing an interaction
-func (c *Client) FuelEstimate(ctx context.Context, args *rpcargs.IxArgs) (*hexutil.Big, error) {
+func (c *Client) FuelEstimate(ctx context.Context, args *rpcargs.CallArgs) (*hexutil.Big, error) {
 	var resp rpcargs.Response
 
 	err := c.Call(ctx, &resp, "moi.FuelEstimate", args)
@@ -630,7 +630,7 @@ func (c *Client) Syncing(ctx context.Context, args *rpcargs.SyncStatusRequest) (
 }
 
 // InteractionCall returns stateless version of an interaction submit
-func (c *Client) InteractionCall(ctx context.Context, args *rpcargs.IxArgs) (*rpcargs.RPCReceipt, error) {
+func (c *Client) InteractionCall(ctx context.Context, args *rpcargs.CallArgs) (*rpcargs.RPCReceipt, error) {
 	var resp rpcargs.Response
 
 	err := c.Call(ctx, &resp, "moi.Call", args)

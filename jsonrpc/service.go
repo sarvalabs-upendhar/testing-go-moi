@@ -477,7 +477,7 @@ func (r *Service) AccountMetaInfo(
 }
 
 // FuelEstimate returns an estimate of the fuel that is required for executing an interaction
-func (r *Service) FuelEstimate(req *http.Request, args *rpcargs.IxArgs, resp *rpcargs.Response) error {
+func (r *Service) FuelEstimate(req *http.Request, args *rpcargs.CallArgs, resp *rpcargs.Response) error {
 	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
 	if !ok {
 		return common.ErrInvalidAPI
@@ -524,6 +524,30 @@ func (r *Service) Syncing(req *http.Request, args *rpcargs.SyncStatusRequest, re
 	return nil
 }
 
+func (r *Service) Call(req *http.Request, args *rpcargs.CallArgs, resp *rpcargs.Response) error {
+	// Retrieve the public core API
+	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
+	if !ok {
+		return common.ErrInvalidAPI
+	}
+
+	data, err := coreAPI.Call(args)
+	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	resp.Data, err = json.Marshal(data)
+	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	return nil
+}
+
 /* RPC methods that are associated with the ix namespace. */
 
 // SendInteractions is a method of Service that sends Interactions
@@ -542,31 +566,6 @@ func (r *Service) SendInteractions(req *http.Request, args *rpcargs.SendIX, resp
 	}
 
 	resp.Data, err = json.Marshal(ix.Hash())
-	if err != nil {
-		resp.Error = &rpcargs.JSONError{Message: err.Error()}
-
-		return nil
-	}
-
-	return nil
-}
-
-// Call supports call to logics that do not transition state
-func (r *Service) Call(req *http.Request, args *rpcargs.IxArgs, resp *rpcargs.Response) error {
-	// Retrieve the public ix API
-	ixAPI, ok := r.apis["ix"].(*jsonApi.PublicIXAPI)
-	if !ok {
-		return common.ErrInvalidAPI
-	}
-
-	data, err := ixAPI.Call(args)
-	if err != nil {
-		resp.Error = &rpcargs.JSONError{Message: err.Error()}
-
-		return nil
-	}
-
-	resp.Data, err = json.Marshal(data)
 	if err != nil {
 		resp.Error = &rpcargs.JSONError{Message: err.Error()}
 

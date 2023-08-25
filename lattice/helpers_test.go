@@ -12,8 +12,9 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-polo"
+
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 
 	lru "github.com/hashicorp/golang-lru"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -464,7 +465,17 @@ type MockStateManager struct {
 	createDirtyObjectHook   func() *state.Object
 }
 
+func (sm *MockStateManager) CreateStateObject(address common.Address, accountType common.AccountType) *state.Object {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (sm *MockStateManager) GetLatestStateObject(addr common.Address) (*state.Object, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (sm *MockStateManager) GetStateObjectByHash(addr common.Address, hash common.Hash) (*state.Object, error) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -576,7 +587,7 @@ func (sm *MockStateManager) GetLatestTesseract(addr common.Address, withInteract
 		return nil, common.ErrFetchingTesseract
 	}
 
-	copyTS := *ts // copy, so that stored tesseract wont't be modified
+	copyTS := *ts // copy, so that stored tesseract won't be modified
 
 	if !withInteractions {
 		copyTS = *copyTS.GetTesseractWithoutIxns()

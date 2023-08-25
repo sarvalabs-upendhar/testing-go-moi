@@ -79,11 +79,13 @@ func (manager *Manager) ExecuteInteractions(
 	return executor.Receipts(), nil
 }
 
-func (manager *Manager) InteractionCall(ix *common.Interaction) (*common.Receipt, error) {
-	// Create a map of state objects
-	objects := make(state.ObjectMap)
-	// Load objects into the map without snapshotting
-	if err := loadStateObjects(ix, manager.state, objects, nil, false); err != nil {
+func (manager *Manager) InteractionCall(
+	ix *common.Interaction,
+	hashes map[common.Address]common.Hash,
+) (*common.Receipt, error) {
+	// Fetch state objects for the interaction
+	objects, err := FetchIxStateObjects(manager.state, ix, hashes)
+	if err != nil {
 		return nil, err
 	}
 
@@ -118,11 +120,6 @@ func (manager *Manager) runInteraction(
 
 	if !ok {
 		return nil, errors.Errorf("execution failed: insufficient fuel")
-	}
-
-	// Increment the nonce of the sender address
-	if ix.Sender() != common.NilAddress {
-		objects.GetObject(ix.Sender()).IncrementNonce(1)
 	}
 
 	ixtype := ix.Type()
