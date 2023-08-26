@@ -2,11 +2,10 @@ package compute
 
 import (
 	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/state"
-
-	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
 // RunAssetTransfer performs the given IxAssetTransfer interaction.
@@ -17,7 +16,7 @@ import (
 //
 // Returns an error if any of given amounts are invalid (negative)
 // or if the sender does not have enough balance for that asset ID
-func RunAssetTransfer(ix *common.Interaction, tank *engineio.FuelTank, objects state.ObjectMap) (
+func RunAssetTransfer(ix *common.Interaction, tank *FuelTank, objects state.ObjectMap) (
 	*common.Receipt, error,
 ) {
 	// Obtain the sender and receiver state objects
@@ -66,7 +65,7 @@ func RunAssetTransfer(ix *common.Interaction, tank *engineio.FuelTank, objects s
 // The Interaction must have an AssetCreatePayload and the output receipt will have a AssetCreationReceipt.
 // The asset is created and an entry is registered on the registry of both the creator and target accounts.
 // The created supply of the asset is credited to the balances of the asset creator.
-func RunAssetCreate(ix *common.Interaction, tank *engineio.FuelTank, objects state.ObjectMap) (*common.Receipt, error) {
+func RunAssetCreate(ix *common.Interaction, tank *FuelTank, objects state.ObjectMap) (*common.Receipt, error) {
 	// Obtain the Asset Payload from the Interaction
 	payload, err := ix.GetAssetPayload()
 	if err != nil {
@@ -125,7 +124,7 @@ func RunAssetCreate(ix *common.Interaction, tank *engineio.FuelTank, objects sta
 	return receipt, nil
 }
 
-func RunAssetMint(ix *common.Interaction, tank *engineio.FuelTank, objects state.ObjectMap) (*common.Receipt, error) {
+func RunAssetMint(ix *common.Interaction, tank *FuelTank, objects state.ObjectMap) (*common.Receipt, error) {
 	// Obtain the Asset Payload from the Interaction
 	assetPayload, err := ix.GetAssetPayload()
 	if err != nil {
@@ -195,7 +194,7 @@ func RunAssetMint(ix *common.Interaction, tank *engineio.FuelTank, objects state
 	return receipt, nil
 }
 
-func RunAssetBurn(ix *common.Interaction, tank *engineio.FuelTank, objects state.ObjectMap) (*common.Receipt, error) {
+func RunAssetBurn(ix *common.Interaction, tank *FuelTank, objects state.ObjectMap) (*common.Receipt, error) {
 	// Obtain the Asset Payload from the Interaction
 	assetPayload, err := ix.GetAssetPayload()
 	if err != nil {

@@ -1,7 +1,11 @@
 package engineio
 
 import (
+	"encoding/json"
+	"fmt"
 	"math/big"
+
+	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"
 )
@@ -25,4 +29,24 @@ type IxnDriver interface {
 type EnvDriver interface {
 	Timestamp() int64
 	ClusterID() string
+}
+
+// DepDriver represents an interface for an
+// engine's element dependency manager.
+type DepDriver interface {
+	fmt.Stringer
+	json.Marshaler
+	json.Unmarshaler
+
+	polo.Polorizable
+	polo.Depolorizable
+
+	Insert(uint64, ...uint64)
+	Remove(uint64)
+
+	Size() uint64
+	Iter() <-chan uint64
+	Contains(uint64) bool
+	Edges(uint64) []uint64
+	Dependencies(uint64) []uint64
 }

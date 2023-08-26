@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/sarvalabs/go-polo"
+
+	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
 // ExceptionClass is denotes the Exception group
@@ -35,6 +37,8 @@ func (except *Exception) traced(trace []string) *Exception {
 		Trace: trace,
 	}
 }
+
+func (except Exception) Engine() engineio.EngineKind { return engineio.PISA }
 
 func (except Exception) Bytes() []byte {
 	data, _ := polo.Polorize(except)

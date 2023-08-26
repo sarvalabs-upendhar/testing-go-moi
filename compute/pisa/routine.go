@@ -56,7 +56,7 @@ func (routine Routine) run(engine *Engine, inputs RegisterSet) (RegisterSet, *Ex
 	if !engine.callstack.push(&callframe{
 		scope: "root",
 		label: routine.name(),
-		point: uint64(routine.ptr()),
+		point: routine.ptr(),
 	}) {
 		return nil, exception(RuntimeError, "max call depth reached").traced(engine.callstack.trace())
 	}
@@ -196,7 +196,7 @@ func (rmethod RoutineMethod) run(engine *Engine, inputs RegisterSet) (RegisterSe
 	if !engine.callstack.push(&callframe{
 		scope: rmethod.datatype().String(),
 		label: rmethod.name(),
-		point: uint64(rmethod.ptr()),
+		point: rmethod.ptr(),
 	}) {
 		return nil, exception(RuntimeError, "max call depth reached").traced(engine.callstack.trace())
 	}

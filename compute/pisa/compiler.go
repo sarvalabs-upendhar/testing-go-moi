@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"strings"
 
+	"github.com/manishmeganathan/depgraph"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
@@ -15,13 +16,13 @@ import (
 // an engineio.Manifest object into an engineio.LogicDescriptor which can
 // in turn be used to construct an engineio.LogicDriver implementation.
 type ManifestCompiler struct {
-	fueltank  *engineio.FuelTank
+	fueltank  *FuelTank
 	instructs InstructionSet
 	manifest  *engineio.Manifest
 
 	elements map[engineio.ElementPtr]engineio.ManifestElement
 	kindmap  map[engineio.ElementPtr]engineio.ElementKind
-	depgraph *engineio.DependencyGraph
+	depgraph *depgraph.DependencyGraph
 
 	callsites map[string]*engineio.Callsite
 	classdefs map[string]*engineio.Classdef
@@ -43,8 +44,8 @@ func newManifestCompiler(
 	compiler := &ManifestCompiler{
 		instructs: instructs,
 		manifest:  manifest,
-		fueltank:  engineio.NewFuelTank(fuel),
-		depgraph:  engineio.NewDependencyGraph(),
+		fueltank:  NewFuelTank(fuel),
+		depgraph:  depgraph.NewDependencyGraph(),
 		state:     make(engineio.ContextStateMatrix, 2),
 		kindmap:   make(map[engineio.ElementPtr]engineio.ElementKind, len(manifest.Elements)),
 		elements:  make(map[engineio.ElementPtr]engineio.ManifestElement, len(manifest.Elements)),
@@ -159,7 +160,7 @@ func (compiler *ManifestCompiler) compile() (*engineio.LogicDescriptor, error) {
 		Interactive: false,
 
 		StateMatrix: compiler.state,
-		DepGraph:    compiler.depgraph,
+		Dependency:  compiler.depgraph,
 		Elements:    compiler.compiled,
 		Callsites:   compiler.callsites,
 		Classdefs:   compiler.classdefs,
@@ -744,7 +745,7 @@ func (compiler *ManifestCompiler) compileMethodTable(schema []MethodFieldSchema)
 	table := make(map[MethodCode]engineio.ElementPtr)
 
 	for _, method := range schema {
-		table[MethodCode(method.Code)] = engineio.ElementPtr(method.Ptr)
+		table[MethodCode(method.Code)] = method.Ptr
 	}
 
 	return table

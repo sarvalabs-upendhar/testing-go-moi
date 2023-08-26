@@ -14,18 +14,16 @@ type StateManager interface {
 
 	// IsAccountRegistered must return whether an address has an existing, registered account
 	IsAccountRegistered(common.Address) (bool, error)
-
+	// CreateStateObject must create a new state.Object for the given address and account type
 	CreateStateObject(common.Address, common.AccountType) *state.Object
 
 	// GetDirtyObject must retrieve the state.Object for a given types.Address
 	GetDirtyObject(common.Address) (*state.Object, error)
-
 	// CreateDirtyObject must generate a new dirty state.Object for the given types.Address
 	CreateDirtyObject(common.Address, common.AccountType) *state.Object
 
 	// GetLatestStateObject must return the latest state.Object for the given types.Address
 	GetLatestStateObject(addr common.Address) (*state.Object, error)
-
 	// GetStateObjectByHash must return the latest state.Object for the given hash
 	GetStateObjectByHash(addr common.Address, hash common.Hash) (*state.Object, error)
 }

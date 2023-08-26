@@ -141,14 +141,14 @@ func (manager *Manager) runInteraction(
 // createFuelTank creates a new engineio.FuelTank for a given fuel limit.
 // If no limit is provided (limit == nil), then the `execution.fuel_limit`
 // parameter from the node configuration will be used as the fuel limit
-func (manager *Manager) createFuelTank(limit *big.Int) *engineio.FuelTank {
+func (manager *Manager) createFuelTank(limit *big.Int) *FuelTank {
 	// If no limit is provided, determine limit from execution config
 	if limit == nil {
-		return engineio.NewFuelTank(manager.config.FuelLimit)
+		return NewFuelTank(manager.config.FuelLimit)
 	}
 
 	// Return fuel tank with given limit
-	return engineio.NewFuelTank(limit)
+	return NewFuelTank(limit)
 }
 
 // Revert reverts any state transition performed by an executor for a given Cluster ID.

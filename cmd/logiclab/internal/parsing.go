@@ -493,24 +493,28 @@ func parseErrDecodeCommand(parser *symbolizer.Parser) Command {
 		return InvalidCommandError("invalid 'errdecode' command: missing valid engine")
 	}
 
+	var engineKind engineio.EngineKind
+
 	switch engine := parser.Cursor().Literal; engine {
 	case "PISA":
-		switch errdata.Kind {
-		case symbolizer.TokenIdent:
-			return ErrDecodePISAMemoryCommand(errdata.Literal)
-
-		case symbolizer.TokenHexNumber:
-			value, _ := errdata.Value()
-
-			//nolint:forcetypeassert
-			return ErrDecodePISAValueCommand(value.([]byte))
-
-		default:
-			return InvalidCommandError("invalid 'errdecode' command: invalid errdata")
-		}
+		engineKind = engineio.PISA
 
 	default:
 		return InvalidCommandErrorf("invalid 'errdecode' command: invalid engine '%v'", engine)
+	}
+
+	switch errdata.Kind {
+	case symbolizer.TokenIdent:
+		return ErrDecodeMemoryCommand(errdata.Literal, engineKind)
+
+	case symbolizer.TokenHexNumber:
+		value, _ := errdata.Value()
+
+		//nolint:forcetypeassert
+		return ErrDecodeValueCommand(value.([]byte), engineKind)
+
+	default:
+		return InvalidCommandError("invalid 'errdecode' command: invalid errdata")
 	}
 }
 

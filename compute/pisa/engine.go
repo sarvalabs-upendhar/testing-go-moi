@@ -17,7 +17,7 @@ type Engine struct {
 	// callstack represents the callstack of the engine
 	callstack callstack
 	// fueltank represents the fuel tank of the engine
-	fueltank *engineio.FuelTank
+	fueltank *FuelTank
 
 	// logic represents the logic driver
 	logic engineio.LogicDriver

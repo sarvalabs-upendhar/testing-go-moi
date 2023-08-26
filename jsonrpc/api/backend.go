@@ -3,9 +3,9 @@ package api
 import (
 	"math/big"
 
-	"github.com/sarvalabs/go-moi/jsonrpc/args"
-
 	"github.com/libp2p/go-libp2p/core/network"
+
+	"github.com/sarvalabs/go-moi/jsonrpc/args"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"

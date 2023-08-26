@@ -19,7 +19,7 @@ func TestInstructionSet(t *testing.T) {
 		return &callscope{
 			engine: &Engine{
 				runtime:   &runtime,
-				fueltank:  engineio.NewFuelTank(big.NewInt(1000)),
+				fueltank:  NewFuelTank(big.NewInt(1000)),
 				callstack: make(callstack, 0),
 				interaction: NewDebugIxnDriver(
 					common.IxLogicInvoke,

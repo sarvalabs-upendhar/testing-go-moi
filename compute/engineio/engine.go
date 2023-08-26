@@ -55,6 +55,14 @@ type EngineRuntime interface {
 	// GetCallEncoder returns a CallEncoder object for a given
 	// callsite element pointer from a LogicDriver object
 	GetCallEncoder(*Callsite, LogicDriver) (CallEncoder, error)
+
+	// DecodeDepDriver decodes the given bytes into a
+	// DepDriver that is supported by the engine runtime
+	DecodeDepDriver([]byte) (DepDriver, error)
+
+	// DecodeErrorResult decodes the given bytes into an
+	// ErrorResult that is used by the engine runtime
+	DecodeErrorResult([]byte) (ErrorResult, error)
 }
 
 // Engine is an interface that defines an execution engine
@@ -66,17 +74,4 @@ type Engine interface {
 	// The callsite and calldata are provided within the IxnObject.
 	// Requires EngineDriver to be Bootstrapped with a Logic.
 	Call(context.Context, IxnDriver, ...CtxDriver) (*CallResult, error)
-}
-
-// CallResult is the output emitted by Engine when making function calls.
-// It contains the amount of fuel expended for the call along with either output value or returned error.
-type CallResult struct {
-	Consumed Fuel
-	Outputs  []byte
-	Error    []byte
-}
-
-// Ok returns whether the CallResult has some error data
-func (result CallResult) Ok() bool {
-	return result.Error == nil
 }

@@ -2,6 +2,7 @@ package api
 
 import (
 	"github.com/libp2p/go-libp2p/core/network"
+
 	"github.com/sarvalabs/go-moi/common"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 )

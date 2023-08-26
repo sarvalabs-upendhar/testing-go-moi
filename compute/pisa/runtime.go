@@ -1,6 +1,7 @@
 package pisa
 
 import (
+	"github.com/manishmeganathan/depgraph"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
@@ -74,7 +75,7 @@ func (runtime Runtime) SpawnEngine(
 	return &Engine{
 		runtime:   &runtime,
 		callstack: make(callstack, 0),
-		fueltank:  engineio.NewFuelTank(fuel),
+		fueltank:  NewFuelTank(fuel),
 
 		classes:  make(map[string]engineio.ElementPtr),
 		elements: make(map[engineio.ElementPtr]any),
@@ -214,6 +215,32 @@ func (runtime Runtime) GetCallEncoder(
 
 	// Return the routine callfields as a CallEncoder
 	return CallEncoder(routine.callfields()), nil
+}
+
+// DecodeDepDriver attempts to decode the given raw bytes into an engineio.DepDriver used by PISA.
+// It implements the engineio.EngineRuntime interface for pisa.Runtime.
+func (runtime Runtime) DecodeDepDriver(data []byte) (engineio.DepDriver, error) {
+	// Create a new DependencyGraph object
+	deps := new(depgraph.DependencyGraph)
+	// Attempt to decode the data into the object
+	if err := polo.Depolorize(deps, data); err != nil {
+		return nil, err
+	}
+
+	return deps, nil
+}
+
+// DecodeErrorResult attempts to decode the given raw bytes into an engineio.ErrorResult used by PISA.
+// It implements the engineio.EngineRuntime interface for pisa.Runtime.
+func (runtime Runtime) DecodeErrorResult(data []byte) (engineio.ErrorResult, error) {
+	// Create a new Exception object
+	except := new(Exception)
+	// Attempt to decode the data into the exception object
+	if err := polo.Depolorize(except, data); err != nil {
+		return nil, err
+	}
+
+	return except, nil
 }
 
 func (runtime *Runtime) setupPrimitiveMethods() {

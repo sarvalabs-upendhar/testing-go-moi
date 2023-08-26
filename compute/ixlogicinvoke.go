@@ -16,7 +16,7 @@ import (
 //
 // The Interaction must have a LogicPayload and the output receipt will have a LogicInvokeReceipt.
 // The logic call is verified and executed with the output/error being returned in the receipt.
-func RunLogicInvoke(ix *common.Interaction, tank *engineio.FuelTank, objects state.ObjectMap) (*common.Receipt, error) {
+func RunLogicInvoke(ix *common.Interaction, tank *FuelTank, objects state.ObjectMap) (*common.Receipt, error) {
 	payload, err := ix.GetLogicPayload()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not find logic payload")
@@ -87,7 +87,7 @@ func InvokeCall(callsite string, calldata []byte) LogicInvokeOption {
 // InvokeFuelLimit returns a LogicInvokeOption to provide the fuel limit for logic deployment.
 func InvokeFuelLimit(limit engineio.Fuel) LogicInvokeOption {
 	return func(config *logicInvoker) error {
-		config.fueltank = engineio.NewFuelTank(limit)
+		config.fueltank = NewFuelTank(limit)
 
 		return nil
 	}
@@ -104,7 +104,7 @@ func InvokeLogic(logicID common.LogicID, state *state.Object, opts ...LogicInvok
 	invoker := &logicInvoker{
 		logicID:    logicID,
 		logicState: state,
-		fueltank: engineio.NewFuelTank(func() engineio.Fuel {
+		fueltank: NewFuelTank(func() engineio.Fuel {
 			fuel, _ := new(big.Int).SetString("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 0)
 
 			return fuel
@@ -196,7 +196,7 @@ type logicInvoker struct {
 	callsite string
 	calldata []byte
 
-	fueltank    *engineio.FuelTank
+	fueltank    *FuelTank
 	logicState  *state.Object
 	senderState *state.Object
 }

@@ -4,9 +4,11 @@ import (
 	"math/big"
 	"testing"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-
 	"github.com/stretchr/testify/assert"
+
+	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-moi/compute/engineio"
+	"github.com/sarvalabs/go-moi/compute/pisa"
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -1495,6 +1497,9 @@ func TestGetLogicObject(t *testing.T) {
 	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
 	rawData, err := logicObject.Bytes()
 	require.NoError(t, err)
+
+	// seed the engine runtimes
+	engineio.RegisterEngineRuntime(pisa.NewRuntime())
 
 	testcases := []struct {
 		name          string

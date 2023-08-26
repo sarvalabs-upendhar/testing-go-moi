@@ -676,6 +676,19 @@ func (ms *mockStream) Stat() network.Stats {
 	}
 }
 
+func createStreams(streamCount int) []network.Stream {
+	streams := make([]network.Stream, streamCount)
+
+	for i := 0; i < streamCount; i++ {
+		streams[i] = &mockStream{
+			protocol:  "/meshsub/1.1.0",
+			direction: 1,
+		}
+	}
+
+	return streams
+}
+
 type mockConn struct {
 	remotePeerID peer.ID
 	streams      []network.Stream
@@ -739,19 +752,6 @@ func (m *mockConn) SetStreams(streams []network.Stream) {
 
 func (m mockConn) GetStreams() []network.Stream {
 	return m.streams
-}
-
-func createStreams(streamCount int) []network.Stream {
-	streams := make([]network.Stream, streamCount)
-
-	for i := 0; i < streamCount; i++ {
-		streams[i] = &mockStream{
-			protocol:  "/meshsub/1.1.0",
-			direction: 1,
-		}
-	}
-
-	return streams
 }
 
 func createConns(t *testing.T, connCount int, streamCount int) []network.Conn {
