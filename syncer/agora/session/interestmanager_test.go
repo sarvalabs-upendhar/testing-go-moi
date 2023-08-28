@@ -3,6 +3,10 @@ package session
 import (
 	"testing"
 
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/syncer/agora/block"
+	"github.com/sarvalabs/go-moi/syncer/cid"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common/tests"
@@ -44,7 +48,7 @@ func TestRemoveSession_SingleAddress(t *testing.T) {
 	// record hashes with address1
 	im.RecordSessionInterest(address, keys...)
 
-	im.RemoveSession(address)
+	removeSession(im, address)
 
 	for _, hash := range keys {
 		_, ok := im.wants[hash]
@@ -69,7 +73,7 @@ func TestRemoveSession_MultipleAddress(t *testing.T) {
 	im.RecordSessionInterest(address2, keys...)
 
 	// remove keys associated with address1
-	im.RemoveSession(address1)
+	removeSession(im, address1)
 
 	for _, hash := range keys {
 		addresses, ok := im.wants[hash]
@@ -105,5 +109,57 @@ func TestInterestedSessions(t *testing.T) {
 
 	for _, block := range blocks {
 		require.True(t, set1.Has(block.GetCid()), "few blocks missing")
+	}
+}
+
+func TestDeleteSession(t *testing.T) {
+	cid1 := block.NewBlockFromRawData(0x00, []byte{1}).GetCid()
+	addr1 := tests.RandomAddress(t)
+	addr2 := tests.RandomAddress(t)
+
+	testcases := []struct {
+		name                string
+		cid                 cid.CID
+		wants               map[cid.CID]map[common.Address]bool
+		addr                common.Address
+		deletedKeys         []cid.CID
+		expectedDeletedKeys []cid.CID
+		expectedWantsLength int
+	}{
+		{
+			name: "delete the last session that wants key",
+			cid:  cid1,
+			wants: map[cid.CID]map[common.Address]bool{
+				cid1: {
+					addr1: true,
+				},
+			},
+			addr:                addr1,
+			deletedKeys:         []cid.CID{},
+			expectedDeletedKeys: []cid.CID{cid1},
+			expectedWantsLength: 0,
+		},
+		{
+			name: "delete the session that wants key",
+			cid:  cid1,
+			wants: map[cid.CID]map[common.Address]bool{
+				cid1: {
+					addr1: true,
+					addr2: true,
+				},
+			},
+			addr:                addr1,
+			deletedKeys:         []cid.CID{},
+			expectedDeletedKeys: []cid.CID{},
+			expectedWantsLength: 1,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			deleteSession(test.cid, test.wants, test.addr, &test.deletedKeys)
+			require.Equal(t, test.expectedDeletedKeys, test.deletedKeys)
+			require.Equal(t, test.expectedWantsLength, len(test.wants))
+		})
 	}
 }

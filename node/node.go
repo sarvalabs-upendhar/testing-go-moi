@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/sarvalabs/go-moi/syncer/forage"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
@@ -51,6 +53,7 @@ type Node struct {
 	kramaEngine         *consensus.Engine
 	db                  *storage.PersistenceManager
 	ixpool              *ixpool.IxPool
+	syncer              *forage.Syncer
 	handlers            *SubHandlers
 	cache               *lru.Cache
 	rpc                 *jsonrpc.Server
@@ -125,13 +128,13 @@ func NewNode(logLevel string, cfg *config.Config) (n *Node, err error) {
 		return nil, err
 	}
 
+	if err = n.setupSyncer(); err != nil {
+		return nil, errors.New("unable to create and setup syncer")
+	}
+
 	// setup JSON-RPC
 	if err = n.setupRPC(); err != nil {
 		return nil, common.ErrRPCFailed
-	}
-
-	if err = n.setupSyncer(); err != nil {
-		return nil, errors.New("unable to create and setup syncer")
 	}
 
 	n.setupSubHandler()
@@ -156,6 +159,8 @@ func (n *Node) loadLatestActiveTimeStamp() {
 // returns any error invoked
 func (n *Node) Start() (err error) {
 	n.startHandlers()
+
+	go n.syncer.Start()
 
 	n.ixpool.Start()
 
@@ -186,6 +191,7 @@ func (n *Node) Stop() {
 	n.logger.Info("Gracefully shutting down...!!!!")
 	n.network.Stop()
 	n.ixpool.Close()
+	n.syncer.Close()
 	n.chain.Close()
 	n.stopHandlers()
 	n.stopTelemetry()

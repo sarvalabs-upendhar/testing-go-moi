@@ -97,6 +97,7 @@ func CreateTestIxpool(
 	cfgCallback func(cfg *config.IxPoolConfig),
 	skipSignatureVerification bool,
 	sm *MockStateManager,
+	exec *MockExecutionManager,
 ) *IxPool {
 	t.Helper()
 
@@ -117,7 +118,16 @@ func CreateTestIxpool(
 		}
 	}
 
-	return NewIxPool(context.Background(), hclog.NewNullLogger(), new(utils.TypeMux), sm, cfg, NilMetrics(), verifier)
+	return NewIxPool(
+		context.Background(),
+		hclog.NewNullLogger(),
+		new(utils.TypeMux),
+		sm,
+		exec,
+		cfg,
+		NilMetrics(),
+		verifier,
+	)
 }
 
 // GetLatestNonce returns the latest nonce from the mock account
@@ -135,10 +145,6 @@ func (ms *MockStateManager) IsAccountRegistered(addr common.Address) (bool, erro
 	return ok, nil
 }
 
-func (ms *MockStateManager) registerAccount(addr common.Address) {
-	ms.accountRegistration[addr] = true
-}
-
 func (ms *MockStateManager) IsLogicRegistered(logicID common.LogicID) error {
 	if _, ok := ms.logicRegistration[logicID]; !ok {
 		return errors.New("logic id is not registered")
@@ -154,6 +160,35 @@ func (ms *MockStateManager) registerLogicID(logicID common.LogicID) {
 // setLatestNonce updates the mock account with the latest nonce
 func (ms *MockStateManager) setLatestNonce(addr common.Address, nonce uint64) {
 	ms.nonce[addr] = nonce
+}
+
+type MockExecutionManager struct {
+	validateLogicDeployHook func() error
+	validateLogicInvokeHook func() error
+}
+
+func NewMockExecutionManager(t *testing.T) *MockExecutionManager {
+	t.Helper()
+
+	exec := new(MockExecutionManager)
+
+	return exec
+}
+
+func (ms *MockExecutionManager) ValidateLogicDeploy(ix *common.Interaction, data []byte) error {
+	if ms.validateLogicDeployHook != nil {
+		return ms.validateLogicDeployHook()
+	}
+
+	return nil
+}
+
+func (ms *MockExecutionManager) ValidateLogicInvoke(ix *common.Interaction) error {
+	if ms.validateLogicInvokeHook != nil {
+		return ms.validateLogicInvokeHook()
+	}
+
+	return nil
 }
 
 func getIXParams(

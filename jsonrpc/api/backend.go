@@ -5,10 +5,11 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/network"
 
+	"github.com/sarvalabs/go-moi/jsonrpc/args"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	id "github.com/sarvalabs/go-moi/common/kramaid"
-	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/state"
 )
 
@@ -47,7 +48,12 @@ type StateManager interface {
 }
 
 type ExecutionManager interface {
-	LogicCall(common.LogicID, common.Address, string, []byte) (engineio.Fuel, *common.LogicInvokeReceipt, error)
+	InteractionCall(ix *common.Interaction, stateHashes map[common.Address]common.Hash) (*common.Receipt, error)
+}
+
+type Syncer interface {
+	GetAccountSyncStatus(addr common.Address) (*args.AccSyncStatus, error)
+	GetNodeSyncStatus() *args.NodeSyncStatus
 }
 
 type Network interface {
@@ -55,6 +61,9 @@ type Network interface {
 	GetVersion() string
 	GetKramaID() id.KramaID
 	GetConns() []network.Conn
+	GetInboundConnCount() int64
+	GetOutboundConnCount() int64
+	GetSubscribedTopics() map[string]int
 }
 
 type DB interface {
@@ -72,6 +81,8 @@ type Backend struct {
 	exec ExecutionManager
 	// Represents the API state manager
 	sm StateManager
+	// Represents the API syncer
+	syncer Syncer
 	// Represents the API network
 	net Network
 	// Represents the API database
@@ -86,10 +97,11 @@ func NewBackend(
 	chain ChainManager,
 	exec ExecutionManager,
 	sm StateManager,
+	syncer Syncer,
 	net Network,
 	db DB,
 	cfg *config.IxPoolConfig,
 ) *Backend {
 	// Create a new API Backend object and return it
-	return &Backend{ixpool, chain, exec, sm, net, db, cfg}
+	return &Backend{ixpool, chain, exec, sm, syncer, net, db, cfg}
 }

@@ -10,8 +10,9 @@ import (
 	"sort"
 	"testing"
 
-	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-polo"
+
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -37,12 +38,14 @@ func TestMoiClient(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
+	ctx := context.Background()
+
 	addrsMap := make(StrMap)
 
 	client, err := NewClient(localURL)
 	require.NoError(t, err)
 
-	accs, err := client.Accounts()
+	accs, err := client.Accounts(ctx)
 	require.NoError(t, err)
 
 	addrs, err := SetupAddrs(accs)
@@ -65,6 +68,12 @@ func TestMoiClient(t *testing.T) {
 		"GetBalance": {
 			test: func(t *testing.T) { testGetBalance(t, client, addrsMap) },
 		},
+		"FuelEstimate": {
+			test: func(t *testing.T) { testFuelEstimate(t, client, addrsMap["assetAddr"]) },
+		},
+		"Syncing": {
+			test: func(t *testing.T) { testSyncing(t, client, addrsMap["assetAddr"]) },
+		},
 		"TDU": {
 			test: func(t *testing.T) { testTDU(t, client, addrsMap["assetAddr"]) },
 		},
@@ -80,7 +89,7 @@ func TestMoiClient(t *testing.T) {
 		"PendingInteractionCount": {
 			test: func(t *testing.T) { testPendingInteractionCount(t, client, addrsMap["assetAddr"]) },
 		},
-		"Storage": {
+		"LogicStorage": {
 			test: func(t *testing.T) { testLogicStorage(t, client, addrsMap["deployAddr"]) },
 		},
 		"AccountState": {
@@ -91,9 +100,6 @@ func TestMoiClient(t *testing.T) {
 		},
 		"LogicManifest": {
 			test: func(t *testing.T) { testLogicManifest(t, client, addrsMap["deployAddr"]) },
-		},
-		"LogicCall": {
-			test: func(t *testing.T) { testLogicCall(t, client, addrsMap["deployAddr"]) },
 		},
 		"Content": {
 			test: func(t *testing.T) { testContent(t, client) },
@@ -121,6 +127,9 @@ func TestMoiClient(t *testing.T) {
 		},
 		"SendInteraction": {
 			test: func(t *testing.T) { testSendInteraction(t, client) },
+		},
+		"Call": {
+			test: func(t *testing.T) { testCall(t, client, addrsMap["assetAddr"]) },
 		},
 		"ixByHash": {
 			test: func(t *testing.T) { testInteractionByHash(t, client, addrsMap["deployAddr"]) },
@@ -157,13 +166,15 @@ func chooseAcc(
 	addrs []common.Address,
 	accs []tests.AccountWithMnemonic,
 ) (int, tests.AccountWithMnemonic) {
+	ctx := context.Background()
+
 	for j := i; j < len(addrs); j++ {
 		acc, exists := GetMnemonicFromAccounts(addrs[j], accs)
 		if exists {
 			return j, acc
 		}
 
-		accMetaInfo, err := client.AccountMetaInfo(&rpcargs.GetAccountArgs{
+		accMetaInfo, err := client.AccountMetaInfo(ctx, &rpcargs.GetAccountArgs{
 			Address: addrs[j],
 		})
 		require.NoError(t, err)
@@ -258,10 +269,12 @@ func setupChain(t *testing.T, client *Client, addrs []common.Address, addrsMap S
 
 // deployLogic deploys logic manifest
 func deployLogic(t *testing.T, client *Client, addr common.Address, mnemonic string) {
-	sendIXArgs := getIXArgsForLogicDeployment(t, addr)
-	sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
+	sendIXArgs := getIXArgsForLogicDeployment(t, client, addr)
+	sendIX := CreateSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
 
-	ixHash, err := client.SendInteractions(sendIX)
+	ctx := context.Background()
+
+	ixHash, err := client.SendInteractions(ctx, sendIX)
 	require.NoError(t, err)
 
 	log.Println("Logic Deploy Interaction hash", ixHash)
@@ -270,7 +283,7 @@ func deployLogic(t *testing.T, client *Client, addr common.Address, mnemonic str
 	ctx, cancel := context.WithTimeout(context.Background(), IxnTimeout)
 	defer cancel()
 
-	retryFetchReceipt(t, ctx, client, ixHash)
+	moiclientRetryFetchReceipt(t, ctx, client, ixHash)
 }
 
 // executeLogic executes the transfer method on deployed logic
@@ -279,7 +292,7 @@ func executeLogic(t *testing.T, client *Client, deployAddr, addr common.Address,
 		"052237d521654740857716b34746f060fafe52ec42a85db644d5cceba2bb89cf5b0166cc9158211f44ed1e60b06032c"
 
 	logicPayload := &common.LogicPayload{
-		Logic:    getLogicID(t, client, deployAddr, &deployLogicHeight),
+		Logic:    GetLogicID(t, client, deployAddr, deployLogicHeight),
 		Callsite: "Transfer!",
 		Calldata: common.Hex2Bytes(calldata),
 	}
@@ -289,15 +302,16 @@ func executeLogic(t *testing.T, client *Client, deployAddr, addr common.Address,
 
 	sendIXArgs := &common.SendIXArgs{
 		Type:      common.IxLogicInvoke,
+		Nonce:     GetLatestNonce(t, client, addr),
 		FuelPrice: big.NewInt(1),
-		FuelLimit: big.NewInt(200),
+		FuelLimit: big.NewInt(500),
 		Sender:    addr,
 		Payload:   payload,
 	}
 
-	sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
+	sendIX := CreateSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
 
-	ixHash, err := client.SendInteractions(sendIX)
+	ixHash, err := client.SendInteractions(context.Background(), sendIX)
 	require.NoError(t, err)
 
 	log.Println("Hello", ixHash)
@@ -306,7 +320,7 @@ func executeLogic(t *testing.T, client *Client, deployAddr, addr common.Address,
 	ctx, cancel := context.WithTimeout(context.Background(), IxnTimeout)
 	defer cancel()
 
-	retryFetchReceipt(t, ctx, client, ixHash)
+	moiclientRetryFetchReceipt(t, ctx, client, ixHash)
 }
 
 // createAsset creates asset named "MOI"
@@ -323,30 +337,31 @@ func createAsset(t *testing.T, client *Client, addr common.Address, mnemonic str
 
 	sendIXArgs := &common.SendIXArgs{
 		Type:      common.IxAssetCreate,
+		Nonce:     GetLatestNonce(t, client, addr),
 		Sender:    addr,
 		FuelPrice: big.NewInt(1),
 		FuelLimit: big.NewInt(200),
 		Payload:   payload,
 	}
 
-	sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
+	sendIX := CreateSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
 
-	ixHash, err := client.SendInteractions(sendIX)
+	ixHash, err := client.SendInteractions(context.Background(), sendIX)
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), IxnTimeout)
 	defer cancel()
 
-	retryFetchReceipt(t, ctx, client, ixHash)
+	moiclientRetryFetchReceipt(t, ctx, client, ixHash)
 }
 
 // transferTokens transfers tokens from senderAddr to receiver
 func transferTokens(t *testing.T, client *Client, sender, receiver common.Address, mnemonic string) {
-	assetID := getAssetID(t, client, sender, &createAssetHeight)
+	assetID := getAssetID(t, client, sender, createAssetHeight)
 
 	sendIXArgs := &common.SendIXArgs{
 		Type:     common.IxValueTransfer,
-		Nonce:    1,
+		Nonce:    GetLatestNonce(t, client, sender),
 		Sender:   sender,
 		Receiver: receiver,
 		TransferValues: map[common.AssetID]*big.Int{
@@ -356,16 +371,16 @@ func transferTokens(t *testing.T, client *Client, sender, receiver common.Addres
 		FuelLimit: big.NewInt(200),
 	}
 
-	sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
+	sendIX := CreateSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
 
-	ixHash, err := client.SendInteractions(sendIX)
+	ixHash, err := client.SendInteractions(context.Background(), sendIX)
 	require.NoError(t, err)
 
 	// make sure interaction executed successfully
 	ctx, cancel := context.WithTimeout(context.Background(), IxnTimeout)
 	defer cancel()
 
-	retryFetchReceipt(t, ctx, client, ixHash)
+	moiclientRetryFetchReceipt(t, ctx, client, ixHash)
 }
 
 // SendIxWithInvalidSign sends ix with invalid sign
@@ -389,22 +404,22 @@ func SendIxWithInvalidSign(t *testing.T, client *Client, addr common.Address, mn
 		Payload:   payload,
 	}
 
-	sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
+	sendIX := CreateSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
 
-	_, err = client.SendInteractions(sendIX)
+	_, err = client.SendInteractions(context.Background(), sendIX)
 	require.ErrorContains(t, err, common.ErrInvalidIXSignature.Error())
 }
 
 // fillIXPool sends ixnPendingCount number of deploy interactions
 func fillIXPool(t *testing.T, client *Client, addr common.Address, mnemonic string) {
-	sendIXArgs := getIXArgsForLogicDeployment(t, addr)
+	sendIXArgs := getIXArgsForLogicDeployment(t, client, addr)
 	sendIXArgs.Nonce = uint64(0)
 	increment := uint64(1)
 
 	for i := 0; i < ixnPendingCount; i++ { // send ixns just to fill ixpool with some data
-		sendIX := createSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
+		sendIX := CreateSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
 
-		_, err := client.SendInteractions(sendIX)
+		_, err := client.SendInteractions(context.Background(), sendIX)
 		require.NoError(t, err, "sending interaction failed")
 
 		sendIXArgs.Nonce += increment // increment nonce to avoid ix already known error
@@ -413,7 +428,7 @@ func fillIXPool(t *testing.T, client *Client, addr common.Address, mnemonic stri
 
 func testTesseract(t *testing.T, client *Client, addr common.Address) {
 	invalidHeight := int64(100000)
-
+	ctx := context.Background()
 	testcases := []struct {
 		name          string
 		tesseractArgs *rpcargs.TesseractArgs
@@ -464,7 +479,7 @@ func testTesseract(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			ts, err := client.Tesseract(test.tesseractArgs)
+			ts, err := client.Tesseract(ctx, test.tesseractArgs)
 
 			t.Log(addr)
 			if test.expectedError != nil {
@@ -495,7 +510,7 @@ func testTesseract(t *testing.T, client *Client, addr common.Address) {
 func testDBGet(t *testing.T, client *Client) {
 	// key and value belongs to genesis tesseract account meta info
 	key, _ := storage.BucketKeyAndID(common.SargaAddress)
-
+	ctx := context.Background()
 	testcases := []struct {
 		name          string
 		debugArgs     *rpcargs.DebugArgs
@@ -518,7 +533,7 @@ func testDBGet(t *testing.T, client *Client) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			value, err := client.DBGet(test.debugArgs)
+			value, err := client.DBGet(ctx, test.debugArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -541,6 +556,7 @@ func testDBGet(t *testing.T, client *Client) {
 
 func testGetAssetInfoByAssetID(t *testing.T, client *Client, addr common.Address) {
 	tsHeight := int64(-1)
+	ctx := context.Background()
 	testcases := []struct {
 		name          string
 		assetID       common.AssetID
@@ -548,7 +564,7 @@ func testGetAssetInfoByAssetID(t *testing.T, client *Client, addr common.Address
 	}{
 		{
 			name:    "fetch asset info for existing assetID",
-			assetID: getAssetID(t, client, addr, &createAssetHeight),
+			assetID: getAssetID(t, client, addr, createAssetHeight),
 		},
 		{
 			name:          "fetch asset info for non-existing assetID",
@@ -565,7 +581,7 @@ func testGetAssetInfoByAssetID(t *testing.T, client *Client, addr common.Address
 					TesseractNumber: &tsHeight,
 				},
 			}
-			assetInfo, err := client.AssetInfoByAssetID(args)
+			assetInfo, err := client.AssetInfoByAssetID(ctx, args)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -585,7 +601,8 @@ func testGetBalance(t *testing.T, client *Client, addrsMap StrMap) {
 	receiverTokenTransferHeight := int64(1)
 	sender := addrsMap["assetAddr"]
 	receiver := addrsMap["receiverAddr"]
-	assetID := getAssetID(t, client, sender, &createAssetHeight)
+	assetID := getAssetID(t, client, sender, createAssetHeight)
+	ctx := context.Background()
 
 	createAssetBalance := new(big.Int).SetUint64(1248577)
 	senderTransferTokenBalance := new(big.Int).SetUint64(1248561)
@@ -645,7 +662,7 @@ func testGetBalance(t *testing.T, client *Client, addrsMap StrMap) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			balance, err := client.Balance(test.balanceArgs)
+			balance, err := client.Balance(ctx, test.balanceArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -662,8 +679,124 @@ func testGetBalance(t *testing.T, client *Client, addrsMap StrMap) {
 	}
 }
 
+func testFuelEstimate(t *testing.T, client *Client, addr common.Address) {
+	ts := GetTesseract(t, client, addr, createAssetHeight)
+	supply, _ := new(big.Int).SetString("130D52", 16)
+
+	ctx := context.Background()
+
+	assetCreationPayload := &common.AssetCreatePayload{
+		Symbol: "ASSETCREATE",
+		Supply: supply,
+	}
+
+	assetCreatePayload, err := polo.Polorize(assetCreationPayload)
+	require.NoError(t, err)
+
+	testcases := []struct {
+		name                 string
+		callArgs             *rpcargs.CallArgs
+		expectedFuelConsumed *hexutil.Big
+		expectedError        error
+	}{
+		{
+			name: "retrieved fuel used in asset create interaction",
+			callArgs: &rpcargs.CallArgs{
+				IxArgs: &rpcargs.IxArgs{
+					Type:      common.IxAssetCreate,
+					Sender:    ts.Address(),
+					Nonce:     hexutil.Uint64(5),
+					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
+					FuelLimit: (*hexutil.Big)(big.NewInt(200)),
+					Payload:   (hexutil.Bytes)(assetCreatePayload),
+				},
+				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+					ts.Address(): {
+						TesseractNumber: &createAssetHeight,
+					},
+				},
+			},
+			expectedFuelConsumed: (*hexutil.Big)(big.NewInt(100)),
+		},
+		{
+			name: "failed to retrieve stateHashes as options are empty",
+			callArgs: &rpcargs.CallArgs{
+				IxArgs: &rpcargs.IxArgs{
+					Type:      common.IxAssetCreate,
+					Sender:    addr,
+					Nonce:     hexutil.Uint64(3),
+					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
+					FuelLimit: (*hexutil.Big)(big.NewInt(100)),
+					Payload:   (hexutil.Bytes)(assetCreatePayload),
+				},
+				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+					ts.Address(): {
+						TesseractNumber: nil,
+					},
+				},
+			},
+			expectedError: common.ErrEmptyOptions,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			fuelConsumed, err := client.FuelEstimate(ctx, test.callArgs)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, fuelConsumed, test.expectedFuelConsumed)
+		})
+	}
+}
+
+func testSyncing(t *testing.T, client *Client, addr common.Address) {
+	ctx := context.Background()
+	testcases := []struct {
+		name          string
+		StatusArgs    *rpcargs.SyncStatusRequest
+		expectedError error
+	}{
+		{
+			name: "account sync status fetched successfully",
+			StatusArgs: &rpcargs.SyncStatusRequest{
+				Address: addr,
+			},
+		},
+		{
+			name: "should return error if failed to fetch account sync status",
+			StatusArgs: &rpcargs.SyncStatusRequest{
+				Address: tests.RandomAddress(t),
+			},
+			expectedError: common.ErrAccSyncStatusNotFound,
+		},
+		{
+			name:       "node sync status fetched successfully",
+			StatusArgs: &rpcargs.SyncStatusRequest{},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := client.Syncing(ctx, test.StatusArgs)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
 func testTDU(t *testing.T, client *Client, addr common.Address) {
-	assetID := getAssetID(t, client, addr, &createAssetHeight)
+	assetID := getAssetID(t, client, addr, createAssetHeight)
+	ctx := context.Background()
 	sortTDU := func(tdu []rpcargs.TDU) {
 		sort.Slice(tdu, func(i, j int) bool {
 			return tdu[i].AssetID < tdu[j].AssetID
@@ -698,7 +831,7 @@ func testTDU(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			tdu, err := client.TDU(test.queryArgs)
+			tdu, err := client.TDU(ctx, test.queryArgs)
 
 			t.Log(addr)
 			if test.expectedError != nil {
@@ -731,6 +864,7 @@ func testTDU(t *testing.T, client *Client, addr common.Address) {
 }
 
 func testGetContextInfo(t *testing.T, client *Client, addr common.Address) {
+	ctx := context.Background()
 	testcases := []struct {
 		name            string
 		contextInfoArgs *rpcargs.ContextInfoArgs
@@ -759,7 +893,7 @@ func testGetContextInfo(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			contextInfo, err := client.ContextInfo(test.contextInfoArgs)
+			contextInfo, err := client.ContextInfo(ctx, test.contextInfoArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -777,8 +911,8 @@ func testGetContextInfo(t *testing.T, client *Client, addr common.Address) {
 }
 
 func testInteractionReceipt(t *testing.T, client *Client, addr common.Address) {
-	ts := getTesseract(t, client, addr, &executeLogicHeight)
-
+	ts := GetTesseract(t, client, addr, executeLogicHeight)
+	ctx := context.Background()
 	testcases := []struct {
 		name          string
 		receiptArgs   *rpcargs.ReceiptArgs
@@ -801,7 +935,7 @@ func testInteractionReceipt(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			receipt, err := client.InteractionReceipt(test.receiptArgs)
+			receipt, err := client.InteractionReceipt(ctx, test.receiptArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -819,6 +953,7 @@ func testInteractionReceipt(t *testing.T, client *Client, addr common.Address) {
 }
 
 func testInteractionCount(t *testing.T, client *Client, addr common.Address) {
+	ctx := context.Background()
 	testcases := []struct {
 		name                 string
 		interactionCountArgs *rpcargs.InteractionCountArgs
@@ -847,7 +982,7 @@ func testInteractionCount(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			interactionCount, err := client.InteractionCount(test.interactionCountArgs)
+			interactionCount, err := client.InteractionCount(ctx, test.interactionCountArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -865,6 +1000,7 @@ func testInteractionCount(t *testing.T, client *Client, addr common.Address) {
 }
 
 func testPendingInteractionCount(t *testing.T, client *Client, addr common.Address) {
+	ctx := context.Background()
 	testcases := []struct {
 		name                 string
 		interactionCountArgs *rpcargs.InteractionCountArgs
@@ -893,7 +1029,7 @@ func testPendingInteractionCount(t *testing.T, client *Client, addr common.Addre
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			pendingInteractionCount, err := client.PendingInteractionCount(test.interactionCountArgs)
+			pendingInteractionCount, err := client.PendingInteractionCount(ctx, test.interactionCountArgs)
 
 			t.Log(addr)
 			if test.expectedError != nil {
@@ -912,8 +1048,8 @@ func testPendingInteractionCount(t *testing.T, client *Client, addr common.Addre
 }
 
 func testLogicStorage(t *testing.T, client *Client, addr common.Address) {
-	logicID := getLogicID(t, client, addr, &deployLogicHeight)
-
+	logicID := getLogicID(t, client, addr, deployLogicHeight)
+	ctx := context.Background()
 	testcases := []struct {
 		name                 string
 		interactionCountArgs *rpcargs.GetLogicStorageArgs
@@ -944,7 +1080,7 @@ func testLogicStorage(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			logicStorageValue, err := client.Storage(test.interactionCountArgs)
+			logicStorageValue, err := client.LogicStorage(ctx, test.interactionCountArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -954,13 +1090,14 @@ func testLogicStorage(t *testing.T, client *Client, addr common.Address) {
 
 			require.NoError(t, err)
 
-			httpLogicStorageValue := httpStorage(t, test.interactionCountArgs)
+			httpLogicStorageValue := httpLogicStorage(t, test.interactionCountArgs)
 			require.Equal(t, httpLogicStorageValue, logicStorageValue)
 		})
 	}
 }
 
 func testAccountState(t *testing.T, client *Client, addr common.Address) {
+	ctx := context.Background()
 	testcases := []struct {
 		name          string
 		accountArgs   *rpcargs.GetAccountArgs
@@ -989,7 +1126,7 @@ func testAccountState(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			accountState, err := client.AccountState(test.accountArgs)
+			accountState, err := client.AccountState(ctx, test.accountArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1008,8 +1145,8 @@ func testAccountState(t *testing.T, client *Client, addr common.Address) {
 }
 
 func testLogics(t *testing.T, client *Client, addr common.Address) {
-	logicID := getLogicID(t, client, addr, &deployLogicHeight)
-
+	logicID := getLogicID(t, client, addr, deployLogicHeight)
+	ctx := context.Background()
 	testcases := []struct {
 		name             string
 		LogicIDArgs      *rpcargs.GetLogicIDArgs
@@ -1040,7 +1177,7 @@ func testLogics(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			logicIDs, err := client.LogicIDs(test.LogicIDArgs)
+			logicIDs, err := client.LogicIDs(ctx, test.LogicIDArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1059,8 +1196,9 @@ func testLogics(t *testing.T, client *Client, addr common.Address) {
 }
 
 func testLogicManifest(t *testing.T, client *Client, addr common.Address) {
-	logicID := getLogicID(t, client, addr, &deployLogicHeight)
-	ts := getTesseract(t, client, addr, &deployLogicHeight)
+	logicID := getLogicID(t, client, addr, deployLogicHeight)
+	ts := GetTesseract(t, client, addr, deployLogicHeight)
+	ctx := context.Background()
 
 	var logic *rpcargs.RPCLogicPayload
 
@@ -1117,7 +1255,7 @@ func testLogicManifest(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			logicManifest, err := client.LogicManifest(test.logicManifestArgs)
+			logicManifest, err := client.LogicManifest(ctx, test.logicManifestArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1127,7 +1265,7 @@ func testLogicManifest(t *testing.T, client *Client, addr common.Address) {
 
 			require.NoError(t, err)
 
-			manifest, err := getLogicManifestByEncodingType(t, logic.Manifest, test.logicManifestArgs)
+			manifest, err := GetLogicManifestByEncodingType(t, logic.Manifest, test.logicManifestArgs.Encoding)
 			require.NoError(t, err)
 
 			require.Equal(t, manifest, logicManifest)
@@ -1138,57 +1276,8 @@ func testLogicManifest(t *testing.T, client *Client, addr common.Address) {
 	}
 }
 
-func testLogicCall(t *testing.T, client *Client, addr common.Address) {
-	logicID := getLogicID(t, client, addr, &deployLogicHeight)
-	calldata := "0x0daf010665a601e501f6059506616d6f756e74030f424066726f6d06ffcd8ee6a29ec442dbbf9c6124dd3aeb833ef58" +
-		"052237d521654740857716b34746f060fafe52ec42a85db644d5cceba2bb89cf5b0166cc9158211f44ed1e60b06032c"
-
-	testcases := []struct {
-		name              string
-		logicCallArgs     *rpcargs.LogicCallArgs
-		expectedLogicCall *rpcargs.LogicCallResult
-		expectedError     error
-	}{
-		{
-			name: "fetched logic call result successfully",
-			logicCallArgs: &rpcargs.LogicCallArgs{
-				Invoker:  logicID.Address(),
-				LogicID:  logicID,
-				Callsite: "Transfer!",
-				Calldata: common.Hex2Bytes(calldata),
-			},
-		},
-		{
-			name: "fetch logic call result for non-existing address and logicID",
-			logicCallArgs: &rpcargs.LogicCallArgs{
-				Invoker:  tests.RandomAddress(t),
-				LogicID:  "0200000070c34ed6ec4384c75d469894052647a078b33ac0f08db0d3751c1fce29a49f",
-				Callsite: "Transfer!",
-				Calldata: common.Hex2Bytes(calldata),
-			},
-			expectedError: common.ErrAccountNotFound,
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			logicCall, err := client.LogicCall(test.logicCallArgs)
-
-			if test.expectedError != nil {
-				require.ErrorContains(t, err, test.expectedError.Error())
-
-				return
-			}
-
-			require.NoError(t, err)
-
-			httpLogicCall := httpLogicCall(t, test.logicCallArgs)
-			require.Equal(t, httpLogicCall, logicCall)
-		})
-	}
-}
-
 func testContent(t *testing.T, client *Client) {
+	ctx := context.Background()
 	testcases := []struct {
 		name          string
 		contentArgs   *rpcargs.ContentArgs
@@ -1202,7 +1291,7 @@ func testContent(t *testing.T, client *Client) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			contentResponse, err := client.Content(test.contentArgs)
+			contentResponse, err := client.Content(ctx, test.contentArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1220,6 +1309,7 @@ func testContent(t *testing.T, client *Client) {
 }
 
 func testContentFrom(t *testing.T, client *Client, addr common.Address) {
+	ctx := context.Background()
 	testcases := []struct {
 		name          string
 		ixPoolArgs    *rpcargs.IxPoolArgs
@@ -1243,7 +1333,7 @@ func testContentFrom(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			contentFromResponse, err := client.ContentFrom(test.ixPoolArgs)
+			contentFromResponse, err := client.ContentFrom(ctx, test.ixPoolArgs)
 			require.NoError(t, err)
 			require.GreaterOrEqual(t, len(contentFromResponse.Pending), test.expectedCount)
 
@@ -1254,6 +1344,7 @@ func testContentFrom(t *testing.T, client *Client, addr common.Address) {
 }
 
 func testStatus(t *testing.T, client *Client) {
+	ctx := context.Background()
 	testcases := []struct {
 		name       string
 		ixPoolArgs *rpcargs.StatusArgs
@@ -1266,7 +1357,7 @@ func testStatus(t *testing.T, client *Client) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			statusResponse, err := client.Status(test.ixPoolArgs)
+			statusResponse, err := client.Status(ctx, test.ixPoolArgs)
 			require.NoError(t, err)
 			require.GreaterOrEqual(t, statusResponse.Pending.ToUint64(), uint64(0))
 
@@ -1277,6 +1368,7 @@ func testStatus(t *testing.T, client *Client) {
 }
 
 func testInspect(t *testing.T, client *Client) {
+	ctx := context.Background()
 	testcases := []struct {
 		name          string
 		inspectArgs   *rpcargs.InspectArgs
@@ -1290,7 +1382,7 @@ func testInspect(t *testing.T, client *Client) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			inspectResponse, err := client.Inspect(test.inspectArgs)
+			inspectResponse, err := client.Inspect(ctx, test.inspectArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1308,8 +1400,8 @@ func testInspect(t *testing.T, client *Client) {
 }
 
 func testInteractionByHash(t *testing.T, client *Client, addr common.Address) {
-	ts := getTesseract(t, client, addr, &deployLogicHeight)
-
+	ts := GetTesseract(t, client, addr, deployLogicHeight)
+	ctx := context.Background()
 	testcases := []struct {
 		name          string
 		ixArgs        *rpcargs.InteractionByHashArgs
@@ -1332,7 +1424,7 @@ func testInteractionByHash(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			rpcIxn, err := client.InteractionByHash(test.ixArgs)
+			rpcIxn, err := client.InteractionByHash(ctx, test.ixArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1350,9 +1442,10 @@ func testInteractionByHash(t *testing.T, client *Client, addr common.Address) {
 }
 
 func testInteractionByTesseract(t *testing.T, client *Client, addr common.Address) {
-	ts := getTesseract(t, client, addr, &deployLogicHeight)
+	ts := GetTesseract(t, client, addr, deployLogicHeight)
 	randomHash := tests.RandomHash(t)
 	ixIndex := uint64(0)
+	ctx := context.Background()
 
 	testcases := []struct {
 		name          string
@@ -1382,7 +1475,7 @@ func testInteractionByTesseract(t *testing.T, client *Client, addr common.Addres
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			rpcIxn, err := client.InteractionByTesseract(test.ixArgs)
+			rpcIxn, err := client.InteractionByTesseract(ctx, test.ixArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1400,6 +1493,7 @@ func testInteractionByTesseract(t *testing.T, client *Client, addr common.Addres
 }
 
 func testWaitTime(t *testing.T, client *Client, addr common.Address) {
+	ctx := context.Background()
 	testcases := []struct {
 		name          string
 		ixPoolArgs    *rpcargs.IxPoolArgs
@@ -1422,7 +1516,7 @@ func testWaitTime(t *testing.T, client *Client, addr common.Address) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := client.WaitTime(test.ixPoolArgs)
+			_, err := client.WaitTime(ctx, test.ixPoolArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1451,7 +1545,7 @@ func testPeers(t *testing.T, client *Client) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			clientPeers, err := client.Peers(test.netArgs)
+			clientPeers, err := client.Peers(context.Background(), test.netArgs)
 			require.NoError(t, err)
 
 			// check if client peers and http peers are same
@@ -1478,7 +1572,7 @@ func testVersion(t *testing.T, client *Client) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			version, err := client.Version(test.netArgs)
+			version, err := client.Version(context.Background(), test.netArgs)
 			require.NoError(t, err)
 
 			// check if client peers and http peers are same
@@ -1501,7 +1595,7 @@ func testInfo(t *testing.T, client *Client) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			nodeInfo, err := client.Info(test.netArgs)
+			nodeInfo, err := client.Info(context.Background(), test.netArgs)
 			require.NoError(t, err)
 
 			httpNodeInfo := httpInfo(t, test.netArgs)
@@ -1538,7 +1632,7 @@ func testSendInteraction(t *testing.T, client *Client) {
 				Signature: "",
 			}
 
-			_, err = client.SendInteractions(sendIx)
+			_, err = client.SendInteractions(context.Background(), sendIx)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1564,7 +1658,7 @@ func testAccounts(t *testing.T, client *Client) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			accountsResponse, err := client.Accounts()
+			accountsResponse, err := client.Accounts(context.Background())
 			require.NoError(t, err)
 
 			httpAccounts := httpAccounts(t, test.accArgs)
@@ -1582,6 +1676,8 @@ func testAccounts(t *testing.T, client *Client) {
 }
 
 func testConnections(t *testing.T, client *Client) {
+	ctx := context.Background()
+
 	testcases := []struct {
 		name    string
 		accArgs *rpcargs.ConnArgs
@@ -1594,19 +1690,22 @@ func testConnections(t *testing.T, client *Client) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			connections, err := client.Connections()
+			connResp, err := client.Connections(ctx)
 			require.NoError(t, err)
 
-			httpConns := httpConnections(t, test.accArgs)
-			require.Equal(t, len(httpConns), len(connections))
-			require.ElementsMatch(t, httpConns, connections)
+			httpConnResp := httpConnections(t, test.accArgs)
+			require.Equal(t, len(httpConnResp.Conns), len(connResp.Conns))
+			require.Equal(t, httpConnResp.InboundConnCount, connResp.InboundConnCount)
+			require.Equal(t, httpConnResp.OutboundConnCount, connResp.OutboundConnCount)
+			require.Equal(t, httpConnResp.ActivePubSubTopics, connResp.ActivePubSubTopics)
 
-			require.Greater(t, len(connections), 0)
+			require.Greater(t, len(connResp.Conns), 0)
 		})
 	}
 }
 
 func testAccountMetaInfo(t *testing.T, client *Client) {
+	ctx := context.Background()
 	testcases := []struct {
 		name          string
 		accArgs       *rpcargs.GetAccountArgs
@@ -1629,7 +1728,7 @@ func testAccountMetaInfo(t *testing.T, client *Client) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			accountMetaInfoResponse, err := client.AccountMetaInfo(test.accArgs)
+			accountMetaInfoResponse, err := client.AccountMetaInfo(ctx, test.accArgs)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1647,7 +1746,104 @@ func testAccountMetaInfo(t *testing.T, client *Client) {
 	}
 }
 
+func testCall(t *testing.T, client *Client, addr common.Address) {
+	invalidHeight := int64(-2)
+	ts := GetTesseract(t, client, addr, createAssetHeight)
+	supply, _ := new(big.Int).SetString("130D46", 16)
+
+	ctx := context.Background()
+
+	assetCreationPayload := &common.AssetCreatePayload{
+		Symbol: "MOITOKEN",
+		Supply: supply,
+	}
+
+	assetCreatePayload, err := polo.Polorize(assetCreationPayload)
+	require.NoError(t, err)
+
+	expectedAssetAddr := common.NewAccountAddress(4, ts.Address())
+	expectedAssetID := common.NewAssetIDv0(false, false, 0, 0, expectedAssetAddr)
+
+	extraData := &common.AssetCreationReceipt{
+		AssetID:      expectedAssetID,
+		AssetAccount: expectedAssetAddr,
+	}
+
+	expectedReceipt := common.Receipt{
+		FuelUsed: big.NewInt(100),
+	}
+
+	err = expectedReceipt.SetExtraData(extraData)
+	if err != nil {
+		return
+	}
+
+	testcases := []struct {
+		name            string
+		callArgs        *rpcargs.CallArgs
+		expectedReceipt *rpcargs.RPCReceipt
+		expectedError   error
+	}{
+		{
+			name: "fetched rpc receipt successfully",
+			callArgs: &rpcargs.CallArgs{
+				IxArgs: &rpcargs.IxArgs{
+					Type:      common.IxAssetCreate,
+					Sender:    ts.Address(),
+					Nonce:     hexutil.Uint64(4),
+					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
+					FuelLimit: (*hexutil.Big)(big.NewInt(200)),
+					Payload:   (hexutil.Bytes)(assetCreatePayload),
+				},
+				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+					ts.Address(): {
+						TesseractNumber: &createAssetHeight,
+					},
+				},
+			},
+			expectedReceipt: &rpcargs.RPCReceipt{
+				FuelUsed:  (hexutil.Big)(*expectedReceipt.FuelUsed),
+				ExtraData: expectedReceipt.ExtraData,
+			},
+		},
+		{
+			name: "failed to retrieve stateHashes as options are empty",
+			callArgs: &rpcargs.CallArgs{
+				IxArgs: &rpcargs.IxArgs{
+					Type:      common.IxAssetCreate,
+					Sender:    addr,
+					Nonce:     hexutil.Uint64(3),
+					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
+					FuelLimit: (*hexutil.Big)(big.NewInt(100)),
+					Payload:   (hexutil.Bytes)(assetCreatePayload),
+				},
+				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+					ts.Address(): {
+						TesseractNumber: &invalidHeight,
+					},
+				},
+			},
+			expectedError: errors.New("invalid options"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			receipt, err := client.InteractionCall(ctx, test.callArgs)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedReceipt, receipt)
+		})
+	}
+}
+
 func testFuelDeduction(t *testing.T, client *Client, addrs map[string]common.Address) {
+	ctx := context.Background()
 	testcases := []struct {
 		name    string
 		address common.Address
@@ -1660,9 +1856,9 @@ func testFuelDeduction(t *testing.T, client *Client, addrs map[string]common.Add
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			// Get tesseract for the height
-			ts := getTesseract(t, client, test.address, &test.height)
+			ts := GetTesseract(t, client, test.address, test.height)
 			// Get the interaction receipt
-			receipt, err := client.InteractionReceipt(&rpcargs.ReceiptArgs{
+			receipt, err := client.InteractionReceipt(ctx, &rpcargs.ReceiptArgs{
 				Hash: ts.Ixns[0].Hash,
 			})
 			require.NoError(t, err)
@@ -1679,7 +1875,7 @@ func testFuelDeduction(t *testing.T, client *Client, addrs map[string]common.Add
 
 			// Determine balance of MOI Tokens BEFORE the interaction
 			preHeight := test.height - 1
-			preBalance, err := client.Balance(&rpcargs.BalArgs{
+			preBalance, err := client.Balance(ctx, &rpcargs.BalArgs{
 				Address: test.address,
 				AssetID: common.KMOITokenAssetID,
 				Options: rpcargs.TesseractNumberOrHash{TesseractNumber: &preHeight},
@@ -1687,7 +1883,7 @@ func testFuelDeduction(t *testing.T, client *Client, addrs map[string]common.Add
 			require.NoError(t, err)
 
 			// Determine balance of MOI Tokens AFTER the interaction
-			postBalance, err := client.Balance(&rpcargs.BalArgs{
+			postBalance, err := client.Balance(ctx, &rpcargs.BalArgs{
 				Address: test.address,
 				AssetID: common.KMOITokenAssetID,
 				Options: rpcargs.TesseractNumberOrHash{TesseractNumber: &test.height},

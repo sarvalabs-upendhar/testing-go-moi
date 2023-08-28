@@ -6,11 +6,10 @@ import (
 	"math/big"
 	"sync/atomic"
 
+	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common/kramaid"
-
-	"github.com/pkg/errors"
 )
 
 type IxType int
@@ -554,6 +553,15 @@ func (ix *Interaction) Calldata() []byte {
 	}
 
 	return payload.Calldata
+}
+
+func (ix *Interaction) LogicID() LogicID {
+	payload, err := ix.GetLogicPayload()
+	if err != nil {
+		return ""
+	}
+
+	return payload.Logic
 }
 
 // Interactions are array of Transactions

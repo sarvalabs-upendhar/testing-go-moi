@@ -83,6 +83,21 @@ func GetDummyBlocks(t *testing.T, count int) (*cid.CIDSet, map[cid.CID]block.Blo
 	return set, blocks
 }
 
+func removeSession(im *InterestManager, addr common.Address) []cid.CID {
+	im.mutex.Lock()
+	defer im.mutex.Unlock()
+
+	// The keys that no session is interested in
+	deletedKeys := make([]cid.CID, 0)
+
+	// For each known key
+	for c := range im.wants {
+		deleteSession(c, im.wants, addr, &deletedKeys)
+	}
+
+	return deletedKeys
+}
+
 func AreSessionInterestRecorded(
 	ctx context.Context,
 	im *InterestManager,

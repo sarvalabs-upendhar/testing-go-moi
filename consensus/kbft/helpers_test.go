@@ -117,6 +117,38 @@ func createTestNodeSet(t *testing.T, n int) (*common.NodeSet, []*crypto.KramaVau
 	return nodeset, valset
 }
 
+// createTestRandomSet return nodeset and vaults
+// nodeset has nodes info like krama ID and public key
+// vaults has node info like krama ID and private key which can be used to sign votes during consensus
+// total tells number of nodes which also includes nodes that are not part of ics
+// and actual tells the number of nodes in ics
+func createTestRandomSet(t *testing.T, total, actual int) (*common.NodeSet, []*crypto.KramaVault) {
+	t.Helper()
+
+	publicKeys := make([][]byte, total)
+	kramaIDs := make([]id.KramaID, total)
+	valset := make([]*crypto.KramaVault, total)
+
+	for i := 0; i < total; i++ {
+		kramaID, privateKey := createKramaIDAndPrivateKey(t, 0)
+		publicKeys[i] = privateKey.GetPublicKeyInBytes()
+		kramaIDs[i] = kramaID
+
+		valset[i] = new(crypto.KramaVault)
+		valset[i].SetKramaID(kramaID)
+		valset[i].SetConsensusPrivateKey(privateKey)
+	}
+
+	nodeset := common.NewNodeSet(kramaIDs, publicKeys)
+	nodeset.QuorumSize = actual
+
+	for i := 0; i < actual; i++ {
+		nodeset.Responses.SetIndex(i, true)
+	}
+
+	return nodeset, valset
+}
+
 // createICSNodes returns ICSNodes and vaults of given count of specific nodes
 func createICSNodes(
 	t *testing.T,
@@ -133,7 +165,8 @@ func createICSNodes(
 	senderRandomSet, senderRandomValSet := createTestNodeSet(t, senderRandomSetCount)
 	receiverBehaviourSet, receiverBehaviourValSet := createTestNodeSet(t, receiverBehaviourSetCount)
 	receiverRandomSet, receiverRandomValSet := createTestNodeSet(t, receiverRandomSetCount)
-	randomSet, randomValSet := createTestNodeSet(t, randomSetCount)
+	// create some grace nodes for random set but quorum field will have nodes that are only part of ICS
+	randomSet, randomValSet := createTestRandomSet(t, 2*randomSetCount, randomSetCount)
 	observerSet, observerValSet := createTestNodeSet(t, observerSetCount)
 
 	testNodeSets := []*common.NodeSet{

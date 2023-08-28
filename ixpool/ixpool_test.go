@@ -69,7 +69,7 @@ func TestIxPool_AddInteractions_checkIx(t *testing.T) {
 				c.Mode = WaitMode
 				c.PriceLimit = config.DefaultIxPriceLimit
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm)
+			}, true, sm, nil)
 
 			if test.preTestFn != nil {
 				test.preTestFn(ixPool, test.ix)
@@ -115,7 +115,7 @@ func TestIxPool_AddInteractions_HighPressure(t *testing.T) {
 				c.Mode = WaitMode
 				c.PriceLimit = config.DefaultIxPriceLimit
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm)
+			}, true, sm, nil)
 
 			if test.preTestFn != nil {
 				test.preTestFn(ixPool, test.ix)
@@ -185,7 +185,7 @@ func TestIxPool_AddInteractions(t *testing.T) {
 				c.Mode = WaitMode
 				c.PriceLimit = big.NewInt(1)
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm)
+			}, true, sm, nil)
 
 			wg.Add(1)
 
@@ -279,7 +279,7 @@ func TestIxPool_handleEnqueueRequest(t *testing.T) {
 				c.Mode = WaitMode
 				c.PriceLimit = big.NewInt(1)
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm)
+			}, true, sm, nil)
 			senderAddress := testcase.ixs[0].Sender()
 
 			if testcase.testFn != nil {
@@ -308,7 +308,7 @@ func TestIxPool_handlePromoteRequest(t *testing.T) {
 		c.Mode = WaitMode
 		c.PriceLimit = big.NewInt(1)
 		c.MaxSlots = config.DefaultMaxIXPoolSlots
-	}, true, sm)
+	}, true, sm, nil)
 
 	testcases := []struct {
 		name     string
@@ -375,7 +375,7 @@ func TestIxPool_createAccountOnce(t *testing.T) {
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = WaitMode
 		c.PriceLimit = big.NewInt(1)
-	}, true, sm)
+	}, true, sm, nil)
 
 	testcases := []struct {
 		name          string
@@ -427,7 +427,7 @@ func TestIxPool_ResetWithHeaders(t *testing.T) {
 		c.Mode = WaitMode
 		c.PriceLimit = big.NewInt(1)
 		c.MaxSlots = config.DefaultMaxIXPoolSlots
-	}, true, sm)
+	}, true, sm, nil)
 
 	testcases := []struct {
 		name               string
@@ -496,7 +496,7 @@ func TestIxPool_resetAccount_enqueued(t *testing.T) {
 		c.Mode = WaitMode
 		c.PriceLimit = big.NewInt(1)
 		c.MaxSlots = config.DefaultMaxIXPoolSlots
-	}, true, sm)
+	}, true, sm, nil)
 
 	testcases := []struct {
 		name             string
@@ -561,7 +561,7 @@ func TestIxPool_resetAccount_promoted(t *testing.T) {
 		c.Mode = WaitMode
 		c.PriceLimit = big.NewInt(1)
 		c.MaxSlots = config.DefaultMaxIXPoolSlots
-	}, true, sm)
+	}, true, sm, nil)
 
 	testcases := []struct {
 		name               string
@@ -681,7 +681,7 @@ func TestIxPool_resetAccount(t *testing.T) {
 				c.Mode = WaitMode
 				c.PriceLimit = big.NewInt(1)
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm)
+			}, true, sm, nil)
 
 			senderAddress := testcase.ixs[0].Sender()
 
@@ -722,7 +722,7 @@ func TestIxPool_Pop(t *testing.T) {
 		c.Mode = WaitMode
 		c.PriceLimit = big.NewInt(1)
 		c.MaxSlots = config.DefaultMaxIXPoolSlots
-	}, true, sm)
+	}, true, sm, nil)
 
 	testcases := []struct {
 		name               string
@@ -763,7 +763,7 @@ func TestIxPool_Drop(t *testing.T) {
 		c.Mode = WaitMode
 		c.PriceLimit = big.NewInt(1)
 		c.MaxSlots = config.DefaultMaxIXPoolSlots
-	}, true, sm)
+	}, true, sm, nil)
 
 	testcases := []struct {
 		name string
@@ -800,7 +800,7 @@ func TestIxPool_IncrementWaitTime_InvalidAccount(t *testing.T) {
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = WaitMode
 		c.PriceLimit = big.NewInt(1)
-	}, false, sm)
+	}, false, sm, nil)
 
 	err := ixPool.IncrementWaitTime(common.Address{0x0}, 1500*time.Millisecond)
 	require.Error(t, err)
@@ -842,7 +842,7 @@ func TestIxPool_IncrementWaitTime(t *testing.T) {
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = WaitMode
 		c.PriceLimit = big.NewInt(1)
-	}, false, sm)
+	}, false, sm, nil)
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
@@ -886,7 +886,7 @@ func TestIxPool_validateIx(t *testing.T) {
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = WaitMode
 		c.PriceLimit = big.NewInt(1)
-	}, true, sm)
+	}, true, sm, nil)
 
 	testcases := []struct {
 		name        string
@@ -978,7 +978,7 @@ func TestIxPool_validateIx_WithSign(t *testing.T) {
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = WaitMode
 		c.PriceLimit = big.NewInt(1)
-	}, false, sm)
+	}, false, sm, nil)
 
 	address, mnemonic := tests.RandomAddressWithMnemonic(t)
 	addr2 := tests.RandomAddress(t)
@@ -1056,7 +1056,7 @@ func TestIxPool_ValidateAssetCreate(t *testing.T) {
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = WaitMode
 		c.PriceLimit = big.NewInt(1)
-	}, false, nil)
+	}, false, nil, nil)
 
 	address := tests.RandomAddress(t)
 	validAssetPayload := common.AssetCreatePayload{
@@ -1128,7 +1128,7 @@ func TestIxPool_ValidateAssetMint(t *testing.T) {
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = WaitMode
 		c.PriceLimit = big.NewInt(1)
-	}, false, sm)
+	}, false, sm, nil)
 
 	address := tests.RandomAddress(t)
 	assetID := tests.GetRandomAssetID(t, address)
@@ -1169,7 +1169,7 @@ func TestIxPool_ValidateAssetMint(t *testing.T) {
 					Operator: tests.RandomAddress(t),
 				})
 			},
-			expectedErr: errors.New("Operator address mismatch"),
+			expectedErr: common.ErrOperatorMismatch,
 		},
 		{
 			name: "should return success if asset mint data is valid",
@@ -1278,7 +1278,7 @@ func TestIxPool_ValidateAssetBurn(t *testing.T) {
 					Operator: tests.RandomAddress(t),
 				})
 			},
-			expectedErr: errors.New("Operator address mismatch"),
+			expectedErr: common.ErrOperatorMismatch,
 		},
 		{
 			name: "valid asset burn data",
@@ -1302,7 +1302,7 @@ func TestIxPool_ValidateAssetBurn(t *testing.T) {
 			ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 				c.Mode = WaitMode
 				c.PriceLimit = big.NewInt(1)
-			}, false, sm)
+			}, false, sm, nil)
 
 			if testcase.testFn != nil {
 				testcase.testFn(testcase.ix, sm)
@@ -1336,7 +1336,7 @@ func TestIxPool_ValidateLogicDeployPayload(t *testing.T) {
 	testcases := []struct {
 		name        string
 		ix          *common.Interaction
-		testFn      func(interaction *common.Interaction, msm *MockStateManager)
+		setHook     func(c *MockExecutionManager)
 		expectedErr error
 	}{
 		{
@@ -1347,34 +1347,37 @@ func TestIxPool_ValidateLogicDeployPayload(t *testing.T) {
 			expectedErr: common.ErrEmptyManifest,
 		},
 		{
-			name: "should return error if receiver account is already registered",
-			ix: newTestInteraction(t, common.IxLogicDeploy, 0, address, func(ixData *common.IxData) {
-				ixData.Input.Payload = invalidRawLogicPayload
-			}),
-			testFn: func(interaction *common.Interaction, msm *MockStateManager) {
-				msm.registerAccount(interaction.Receiver())
-			},
-			expectedErr: errors.New("account registered"),
-		},
-		{
 			name: "should return success if logic payload is valid",
 			ix: newTestInteraction(t, common.IxLogicDeploy, 0, address, func(ixData *common.IxData) {
 				ixData.Input.Payload = validRawLogicPayload
 			}),
+		},
+		{
+			name: "should return error if callsite is invalid",
+			ix: newTestInteraction(t, common.IxLogicDeploy, 0, address, func(ixData *common.IxData) {
+				ixData.Input.Payload = validRawLogicPayload
+			}),
+			setHook: func(exec *MockExecutionManager) {
+				exec.validateLogicDeployHook = func() error {
+					return errors.New("invalid callsite")
+				}
+			},
+			expectedErr: errors.New("failed to validate logic deploy"),
 		},
 	}
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
 			sm := NewMockStateManager(t)
+			exec := NewMockExecutionManager(t)
+			if testcase.setHook != nil {
+				testcase.setHook(exec)
+			}
+
 			ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 				c.Mode = WaitMode
 				c.PriceLimit = big.NewInt(1)
-			}, false, sm)
-
-			if testcase.testFn != nil {
-				testcase.testFn(testcase.ix, sm)
-			}
+			}, false, sm, exec)
 
 			err := ixPool.validateLogicDeployPayload(testcase.ix)
 			if testcase.expectedErr != nil {
@@ -1390,13 +1393,19 @@ func TestIxPool_ValidateLogicDeployPayload(t *testing.T) {
 
 func TestIxPool_ValidateLogicInvokePayload(t *testing.T) {
 	address := tests.RandomAddress(t)
-	invalidLogicPayload := common.LogicPayload{}
+	payloadWithoutCallsite := common.LogicPayload{}
+	payloadWithoutLogicID := common.LogicPayload{
+		Callsite: "seeder!",
+	}
 	validLogicPayload := common.LogicPayload{
 		Logic:    "logicID-1",
 		Callsite: "seeder!",
 	}
 
-	invalidRawLogicPayload, err := invalidLogicPayload.Bytes()
+	rawPayloadWithoutCallsite, err := payloadWithoutCallsite.Bytes()
+	require.NoError(t, err)
+
+	rawPayloadWithoutLogicID, err := payloadWithoutLogicID.Bytes()
 	require.NoError(t, err)
 
 	validRawLogicPayload, err := validLogicPayload.Bytes()
@@ -1406,14 +1415,22 @@ func TestIxPool_ValidateLogicInvokePayload(t *testing.T) {
 		name        string
 		ix          *common.Interaction
 		testFn      func(interaction *common.Interaction, msm *MockStateManager)
+		setHook     func(c *MockExecutionManager)
 		expectedErr error
 	}{
 		{
 			name: "should return error if call site is empty",
 			ix: newTestInteraction(t, common.IxLogicInvoke, 0, address, func(ixData *common.IxData) {
-				ixData.Input.Payload = invalidRawLogicPayload
+				ixData.Input.Payload = rawPayloadWithoutCallsite
 			}),
 			expectedErr: common.ErrEmptyCallSite,
+		},
+		{
+			name: "should return error if logicID is empty",
+			ix: newTestInteraction(t, common.IxLogicInvoke, 0, address, func(ixData *common.IxData) {
+				ixData.Input.Payload = rawPayloadWithoutLogicID
+			}),
+			expectedErr: common.ErrMissingLogicID,
 		},
 		{
 			name: "should return success if logic payload is valid",
@@ -1424,15 +1441,32 @@ func TestIxPool_ValidateLogicInvokePayload(t *testing.T) {
 				msm.registerLogicID("logicID-1")
 			},
 		},
+		{
+			name: "should return error if callsite is invalid",
+			ix: newTestInteraction(t, common.IxLogicInvoke, 0, address, func(ixData *common.IxData) {
+				ixData.Input.Payload = validRawLogicPayload
+			}),
+			setHook: func(exec *MockExecutionManager) {
+				exec.validateLogicInvokeHook = func() error {
+					return errors.New("invalid callsite")
+				}
+			},
+			expectedErr: errors.New("failed to validate logic invoke"),
+		},
 	}
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
 			sm := NewMockStateManager(t)
+			exec := NewMockExecutionManager(t)
+			if testcase.setHook != nil {
+				testcase.setHook(exec)
+			}
+
 			ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 				c.Mode = WaitMode
 				c.PriceLimit = big.NewInt(1)
-			}, false, sm)
+			}, false, sm, exec)
 
 			if testcase.testFn != nil {
 				testcase.testFn(testcase.ix, sm)
@@ -1533,7 +1567,7 @@ func TestIxPool_Executables_Wait_Mode(t *testing.T) {
 				c.Mode = WaitMode
 				c.PriceLimit = big.NewInt(1)
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm)
+			}, true, sm, nil)
 
 			ixPool.Start()
 			defer ixPool.Close()
@@ -1731,7 +1765,7 @@ func TestIxPool_Executables_Wait_Time(t *testing.T) {
 				c.Mode = WaitMode
 				c.PriceLimit = big.NewInt(1)
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm)
+			}, true, sm, nil)
 
 			ixPool.Start()
 			defer ixPool.Close()
@@ -1798,7 +1832,7 @@ func TestIxPool_RemoveNonceHoleAccounts(t *testing.T) {
 				c.Mode = WaitMode
 				c.PriceLimit = big.NewInt(1)
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm)
+			}, true, sm, nil)
 
 			if test.ixPoolCallback != nil {
 				test.ixPoolCallback(ixPool)
@@ -1857,7 +1891,7 @@ func TestIxPool_RemoveNonceHoleAccounts_WithEmptyEnqueues(t *testing.T) {
 				c.Mode = WaitMode
 				c.PriceLimit = big.NewInt(1)
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm)
+			}, true, sm, nil)
 
 			if test.ixPoolCallback != nil {
 				test.ixPoolCallback(ixPool)

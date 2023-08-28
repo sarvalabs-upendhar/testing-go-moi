@@ -170,10 +170,11 @@ func (spm *PeerManager) chooseBestPeer(
 								rejectedPeer[peerID] = true
 							}
 						}
-						r--
 					} else {
 						rejectedPeer[peerID] = true
 					}
+
+					r--
 				}
 			}
 		}

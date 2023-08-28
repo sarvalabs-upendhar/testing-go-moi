@@ -3,9 +3,12 @@ package state
 import (
 	"context"
 	"math/big"
+	"math/rand"
 	"reflect"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/decred/dcrd/crypto/blake256"
 	"github.com/manishmeganathan/depgraph"
@@ -395,8 +398,10 @@ type MockMerkleTree struct {
 }
 
 func (m *MockMerkleTree) Root() common.RootNode {
-	// TODO implement me
-	panic("implement me")
+	return common.RootNode{
+		MerkleRoot: m.merkleRoot,
+		HashTable:  m.dirty,
+	}
 }
 
 func mockMerkleTreeWithDB() *MockMerkleTree {
@@ -480,14 +485,14 @@ func (m *MockMerkleTree) Set(key []byte, value []byte) error {
 		m.dirty = make(map[string][]byte)
 	}
 
-	m.dirty[string(key)] = value
+	m.dirty[common.BytesToHex(key)] = value
 
 	return nil
 }
 
 func (m *MockMerkleTree) Delete(key []byte) error {
 	if exists, _ := m.Has(key); exists {
-		delete(m.dbStorage, string(key))
+		delete(m.dbStorage, common.BytesToHex(key))
 
 		return nil
 	}
@@ -497,7 +502,7 @@ func (m *MockMerkleTree) Delete(key []byte) error {
 
 func (m *MockMerkleTree) Get(key []byte) ([]byte, error) {
 	if exists, _ := m.Has(key); exists {
-		val := m.dirty[string(key)]
+		val := m.dirty[common.BytesToHex(key)]
 
 		return val, nil
 	}
@@ -506,7 +511,7 @@ func (m *MockMerkleTree) Get(key []byte) ([]byte, error) {
 }
 
 func (m *MockMerkleTree) Has(key []byte) (bool, error) {
-	_, ok := m.dirty[string(key)]
+	_, ok := m.dirty[common.BytesToHex(key)]
 
 	return ok, nil
 }
@@ -1313,6 +1318,51 @@ func getMetaContextObjects(t *testing.T, hashes []common.Hash) ([]*MetaContextOb
 	return mObj, mHashes
 }
 
+func getRawMetaObjects(t *testing.T, mObj []*MetaContextObject) [][]byte {
+	t.Helper()
+
+	rawMetaObjects := make([][]byte, len(mObj))
+
+	for i := 0; i < len(mObj); i++ {
+		rawMetaObject, err := polo.Polorize(mObj[i])
+		assert.NoError(t, err)
+
+		rawMetaObjects[i] = rawMetaObject
+	}
+
+	return rawMetaObjects
+}
+
+func getRawContextObjects(t *testing.T, obj []*ContextObject) [][]byte {
+	t.Helper()
+
+	rawContextObjects := make([][]byte, len(obj))
+
+	for i := 0; i < len(obj); i++ {
+		rawContextObject, err := polo.Polorize(obj[i])
+		assert.NoError(t, err)
+
+		rawContextObjects[i] = rawContextObject
+	}
+
+	return rawContextObjects
+}
+
+func getStateHashes(t *testing.T, so []*Object) []common.Hash {
+	t.Helper()
+
+	stateHashes := make([]common.Hash, 0)
+
+	for i := 0; i < len(so); i++ {
+		stateHash, err := so[i].Commit()
+		assert.NoError(t, err)
+
+		stateHashes = append(stateHashes, stateHash)
+	}
+
+	return stateHashes
+}
+
 type ICSNodes struct {
 	senderBeh    *common.NodeSet
 	senderRand   *common.NodeSet
@@ -1401,6 +1451,40 @@ func createTestKramaHashTree(
 	require.NoError(t, err)
 
 	return kt, storageRoot
+}
+
+func getTesseractParams(
+	address common.Address,
+	ixns common.Interactions,
+	hash common.Hash,
+) *tests.CreateTesseractParams {
+	return &tests.CreateTesseractParams{
+		Ixns: ixns,
+		HeaderCallback: func(header *common.TesseractHeader) {
+			header.ContextLock = mockContextLock()
+			insertInContextLock(header, address, hash)
+		},
+		BodyCallback: func(body *common.TesseractBody) {
+			body.ContextHash = hash
+		},
+	}
+}
+
+func createRandomArrayOfBits(t *testing.T, count int) []*common.ArrayOfBits {
+	t.Helper()
+
+	arrayOfBits := make([]*common.ArrayOfBits, 0)
+
+	for i := 0; i < count; i++ {
+		arrayOfBit := common.ArrayOfBits{
+			Size:     1,
+			Elements: []uint64{uint64(rand.Intn(256))},
+		}
+
+		arrayOfBits = append(arrayOfBits, &arrayOfBit)
+	}
+
+	return arrayOfBits
 }
 
 func getCopiedAST(ast map[string]tree.MerkleTree) map[string]tree.MerkleTree {

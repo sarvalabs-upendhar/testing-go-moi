@@ -4,17 +4,15 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-	"github.com/sarvalabs/go-moi/compute/engineio"
-	"github.com/sarvalabs/go-moi/compute/pisa"
-
 	"github.com/pkg/errors"
+	pisa "github.com/sarvalabs/go-pisa/moi"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"
 )
@@ -1476,7 +1474,7 @@ func TestGetMetaLogicTree(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			sObj := createTestStateObject(t, test.soParams)
 
-			actualLogicTree, err := sObj.getMetaLogicTree()
+			actualLogicTree, err := sObj.getLogicTree()
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 

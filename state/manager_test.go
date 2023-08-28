@@ -5,6 +5,14 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/decred/dcrd/crypto/blake256"
+	pisa "github.com/sarvalabs/go-pisa/moi"
+
+	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-moi/compute/engineio"
+	"github.com/sarvalabs/go-moi/state/tree"
+	"github.com/sarvalabs/go-moi/storage"
+
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/stretchr/testify/assert"
 
@@ -14,17 +22,17 @@ import (
 	"github.com/sarvalabs/go-moi/common/tests"
 )
 
-func TestCreateStateObject(t *testing.T) {
+func TestStateManager_CreateStateObject(t *testing.T) {
 	address := tests.RandomAddress(t)
 	accType := common.LogicAccount
 
 	sm := createTestStateManager(t, nil)
-	so := sm.createStateObject(address, accType)
+	so := sm.CreateStateObject(address, accType)
 
 	validateStateObject(t, so, accType, address)
 }
 
-func TestCleanupDirtyObject(t *testing.T) {
+func TestStateManager_CleanupDirtyObject(t *testing.T) {
 	stateObject := createTestStateObject(t, nil)
 
 	smParams := &createStateManagerParams{
@@ -40,7 +48,7 @@ func TestCleanupDirtyObject(t *testing.T) {
 	checkForDirtyObject(t, sm, stateObject.address, false)
 }
 
-func TestCreateDirtyObject(t *testing.T) {
+func TestStateManager_CreateDirtyObject(t *testing.T) {
 	sm := createTestStateManager(t, nil)
 
 	address := tests.RandomAddress(t)
@@ -53,7 +61,7 @@ func TestCreateDirtyObject(t *testing.T) {
 	require.Equal(t, do, dirtyObject)
 }
 
-func TestGetLatestTesseractHash(t *testing.T) {
+func TestStateManager_GetLatestTesseractHash(t *testing.T) {
 	accMetaInfo := getAccMetaInfos(t, 2)
 
 	smParams := &createStateManagerParams{
@@ -114,7 +122,7 @@ func TestGetLatestTesseractHash(t *testing.T) {
 	}
 }
 
-func TestFetchTesseractFromDB(t *testing.T) {
+func TestStateManager_FetchTesseractFromDB(t *testing.T) {
 	tesseractParams := tests.GetTesseractParamsMapWithIxns(t, 2, 2)
 
 	// Set the clusterID to genesis identifier to avoid fetching interactions
@@ -201,7 +209,7 @@ func TestFetchTesseractFromDB(t *testing.T) {
 	}
 }
 
-func TestGetTesseractByHash(t *testing.T) {
+func TestStateManager_GetTesseractByHash(t *testing.T) {
 	tesseractParams := tests.GetTesseractParamsMapWithIxns(t, 2, 2)
 	tesseracts := tests.CreateTesseracts(t, 3, tesseractParams)
 
@@ -269,7 +277,7 @@ func TestGetTesseractByHash(t *testing.T) {
 	}
 }
 
-func TestGetStateObjectByHash(t *testing.T) {
+func TestStateManager_GetStateObjectByHash(t *testing.T) {
 	assetIDs, bal := getAssetIDsAndBalances(t, 2)
 	balances, balanceHashes := getTestBalances(t, getAssetMaps(assetIDs, bal, 1), 2)
 	accounts, stateHashes := getTestAccounts(t, balanceHashes, 2)
@@ -327,7 +335,7 @@ func TestGetStateObjectByHash(t *testing.T) {
 	}
 }
 
-func TestGetLatestStateObject(t *testing.T) {
+func TestStateManager_GetLatestStateObject(t *testing.T) {
 	assetIDs, bal := getAssetIDsAndBalances(t, 2)
 	balances, balanceHashes := getTestBalances(t, getAssetMaps(assetIDs, bal, 1), 2)
 	accounts, stateHashes := getTestAccounts(t, balanceHashes, 2)
@@ -400,7 +408,7 @@ func TestGetLatestStateObject(t *testing.T) {
 	}
 }
 
-func TestGetStateObject(t *testing.T) {
+func TestStateManager_GetStateObject(t *testing.T) {
 	account, stateHash := getTestAccounts(t, []common.Hash{tests.RandomHash(t), tests.RandomHash(t)}, 2)
 
 	so := NewStateObject(tests.RandomAddress(t), nil, mockJournal(), mockDB(), *account[0])
@@ -450,7 +458,7 @@ func TestGetStateObject(t *testing.T) {
 	}
 }
 
-func TestGetLatestTesseract(t *testing.T) {
+func TestStateManager_GetLatestTesseract(t *testing.T) {
 	tesseracts := tests.CreateTesseracts(t,
 		2,
 		tests.GetTesseractParamsMapWithIxns(
@@ -521,22 +529,37 @@ func TestGetLatestTesseract(t *testing.T) {
 	}
 }
 
-func TestGetDirtyObject(t *testing.T) {
+func TestStateManager_GetDirtyObject(t *testing.T) {
 	soParams := map[int]*createStateObjectParams{
 		0: {
 			address: tests.RandomAddress(t),
 			account: &common.Account{
 				Nonce: 2,
 			},
-		}, // Add balance as we validate it
-
+		},
+		1: {
+			address: tests.RandomAddress(t),
+			account: &common.Account{
+				Nonce: 4,
+			},
+		},
 	}
 
 	so := createTestStateObjects(t, 2, soParams)
 
+	stateHash, err := so[1].Commit()
+	assert.NoError(t, err)
+
+	ts := tests.CreateTesseract(t, getTesseractParamsWithStateHash(so[1].address, stateHash))
+
 	smParams := &createStateManagerParams{
+		dbCallback: func(db *MockDB) {
+			insertTesseractsInDB(t, db, ts)
+			insertAccountsInDB(t, db, []common.Hash{stateHash}, so[1].Data())
+		},
 		smCallBack: func(sm *StateManager) {
 			insertDirtyObject(sm, so[0])
+			storeTesseractHashInCache(t, sm.cache, ts)
 		},
 	}
 
@@ -549,9 +572,14 @@ func TestGetDirtyObject(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name:    "address in state manager's dirty object",
+			name:    "should retrieve state object from dirty object",
 			address: so[0].address,
 			sObj:    so[0],
+		},
+		{
+			name:    "should retrieve state object from db",
+			address: ts.Address(),
+			sObj:    so[1],
 		},
 		{
 			name:          "should fail if state object not found",
@@ -575,7 +603,7 @@ func TestGetDirtyObject(t *testing.T) {
 	}
 }
 
-func TestCleanup(t *testing.T) {
+func TestStateManager_Cleanup(t *testing.T) {
 	so := createTestStateObject(t, nil)
 
 	smParams := &createStateManagerParams{
@@ -590,7 +618,7 @@ func TestCleanup(t *testing.T) {
 	checkForDirtyObject(t, sm, so.address, false)
 }
 
-func TestRevert(t *testing.T) {
+func TestStateManager_Revert(t *testing.T) {
 	address := tests.RandomAddress(t)
 	getStateObjectParams := func() *createStateObjectParams {
 		return &createStateObjectParams{
@@ -640,7 +668,7 @@ func TestRevert(t *testing.T) {
 	}
 }
 
-func TestGetContextObject(t *testing.T) {
+func TestStateManager_GetContextObject(t *testing.T) {
 	kramaIDs, _ := tests.GetTestKramaIdsWithPublicKeys(t, 4)
 	obj, cHash := getContextObjects(t, kramaIDs, 2, 2)
 
@@ -698,7 +726,7 @@ func TestGetContextObject(t *testing.T) {
 	}
 }
 
-func TestGetMetaContextObject(t *testing.T) {
+func TestStateManager_GetMetaContextObject(t *testing.T) {
 	kramaIDs, _ := tests.GetTestKramaIdsWithPublicKeys(t, 8)
 	_, hashes := getContextObjects(t, kramaIDs, 2, 4)
 	mObj, hashes := getMetaContextObjects(t, hashes)
@@ -756,7 +784,7 @@ func TestGetMetaContextObject(t *testing.T) {
 	}
 }
 
-func TestGetContext(t *testing.T) {
+func TestStateManager_GetContext(t *testing.T) {
 	mObj := make([]*MetaContextObject, 3)
 	mHash := make([]common.Hash, 3)
 
@@ -825,7 +853,7 @@ func TestGetContext(t *testing.T) {
 	}
 }
 
-func TestGetContextByHash(t *testing.T) {
+func TestStateManager_GetContextByHash(t *testing.T) {
 	kramaIDs, _ := tests.GetTestKramaIdsWithPublicKeys(t, 8)
 	obj, cHash := getContextObjects(t, kramaIDs, 2, 4)
 	mObj, mHash := getMetaContextObjects(t, cHash)
@@ -896,7 +924,7 @@ func TestGetContextByHash(t *testing.T) {
 	}
 }
 
-func TestFetchParticipantContextByHash(t *testing.T) {
+func TestStateManager_FetchParticipantContextByHash(t *testing.T) {
 	kramaIDs, pk := tests.GetTestKramaIdsWithPublicKeys(t, 12)
 	obj, cHash := getContextObjects(t, kramaIDs, 2, 6)
 	mObj, mHash := getMetaContextObjects(t, cHash)
@@ -975,7 +1003,7 @@ func TestFetchParticipantContextByHash(t *testing.T) {
 	}
 }
 
-func TestGetCommittedContextHash(t *testing.T) {
+func TestStateManager_GetCommittedContextHash(t *testing.T) {
 	ts := tests.CreateTesseract(t, getTesseractParamsWithContextHash(tests.RandomAddress(t), tests.RandomHash(t)))
 
 	smParams := &createStateManagerParams{
@@ -1022,7 +1050,7 @@ func TestGetCommittedContextHash(t *testing.T) {
 	}
 }
 
-func TestFetchContextLock(t *testing.T) {
+func TestStateManager_FetchContextLock(t *testing.T) {
 	kramaIDs, pk := tests.GetTestKramaIdsWithPublicKeys(t, 8)
 	mocksenatus := mockSenatus(t)
 	mocksenatus.AddPublicKeys(kramaIDs, pk)
@@ -1174,7 +1202,7 @@ func TestFetchContextLock(t *testing.T) {
 	}
 }
 
-func TestIsAccountRegistered_With_SargaObject(t *testing.T) {
+func TestStateManager_IsAccountRegistered_With_SargaObject(t *testing.T) {
 	db := mockDB()
 	address := tests.RandomAddress(t)
 
@@ -1255,7 +1283,7 @@ func TestIsAccountRegistered_With_SargaObject(t *testing.T) {
 	}
 }
 
-func TestGetNonce(t *testing.T) {
+func TestStateManager_GetNonce(t *testing.T) {
 	accounts0 := &common.Account{
 		Nonce: 12,
 	}
@@ -1335,7 +1363,7 @@ func TestGetNonce(t *testing.T) {
 	}
 }
 
-func TestGetBalances(t *testing.T) {
+func TestStateManager_GetBalances(t *testing.T) {
 	assets, bal := getAssetIDsAndBalances(t, 2)
 	balances, balanceHashes := getTestBalances(t, getAssetMaps(assets, bal, 1), 2)
 
@@ -1417,7 +1445,7 @@ func TestGetBalances(t *testing.T) {
 	}
 }
 
-func TestGetBalance(t *testing.T) {
+func TestStateManager_GetBalance(t *testing.T) {
 	assetIDs, bal := getAssetIDsAndBalances(t, 2)
 	balances, balanceHashes := getTestBalances(t, getAssetMaps(assetIDs, bal, 1), 2)
 	accounts, stateHashes := getTestAccounts(t, balanceHashes, 1)
@@ -1491,7 +1519,918 @@ func TestGetBalance(t *testing.T) {
 	}
 }
 
-func TestGetLogicIDs(t *testing.T) {
+func TestStateManager_SyncLogicStorageTree(t *testing.T) {
+	logicIDs := getLogicIDs(t, 3)
+	storageTrees := make([]tree.MerkleTree, 3)
+
+	soParams := map[int]*createStateObjectParams{
+		0: {
+			address: logicIDs[0].Address(),
+		},
+		1: {
+			address: logicIDs[1].Address(),
+		},
+		2: {
+			address: logicIDs[2].Address(),
+		},
+	}
+
+	so := createTestStateObjects(t, 3, soParams)
+
+	for i := 0; i < 3; i++ {
+		storageTree, err := so[i].createStorageTreeForLogic(logicIDs[i])
+		assert.NoError(t, err)
+
+		storageTrees[i] = storageTree
+	}
+
+	err := so[0].SetStorageEntry(logicIDs[0], logicIDs[0].Bytes(), []byte{0x01})
+	assert.NoError(t, err)
+
+	err = so[1].SetStorageEntry(logicIDs[1], logicIDs[0].Bytes(), []byte{0x02})
+	assert.NoError(t, err)
+
+	err = so[2].SetStorageEntry(logicIDs[2], logicIDs[2].Bytes(), []byte{0x02})
+	assert.NoError(t, err)
+
+	getStateHashes(t, so)
+
+	newRoot := storageTrees[0].Root()
+
+	sm := createTestStateManager(t, nil)
+
+	testcases := []struct {
+		name          string
+		stateObject   *Object
+		logicID       common.LogicID
+		newRoot       *common.RootNode
+		expectedError error
+	}{
+		{
+			name:        "logic tree root and new root are same",
+			stateObject: so[0],
+			logicID:     logicIDs[0],
+			newRoot:     &newRoot,
+		},
+		{
+			name:        "tree is synced successfully with the new root",
+			stateObject: so[1],
+			logicID:     logicIDs[1],
+			newRoot:     &newRoot,
+		},
+		{
+			name:          "tree is not synced properly",
+			stateObject:   so[2],
+			logicID:       logicIDs[2],
+			newRoot:       &newRoot,
+			expectedError: errors.New("updated root doesn't match"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			err := sm.syncLogicStorageTree(test.stateObject, test.logicID, test.newRoot)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			root := test.stateObject.activeStorageTrees[test.logicID.String()].Root()
+			require.Equal(t, test.newRoot, &root)
+		})
+	}
+}
+
+func TestStateManager_SyncStorageTrees(t *testing.T) {
+	db := mockDB()
+	logicIDs := getLogicIDs(t, 3)
+
+	soParams := map[int]*createStateObjectParams{
+		0: {
+			address: logicIDs[1].Address(),
+		},
+		1: {
+			address: logicIDs[2].Address(),
+		},
+	}
+
+	so := createTestStateObjects(t, 2, soParams)
+
+	stateObject := NewStateObject(logicIDs[0].Address(), mockCache(t), mockJournal(), db, common.Account{})
+
+	storageTree, err := stateObject.createStorageTreeForLogic(logicIDs[0])
+	assert.NoError(t, err)
+
+	_, err = so[0].createStorageTreeForLogic(logicIDs[1])
+	assert.NoError(t, err)
+
+	err = stateObject.SetStorageEntry(logicIDs[0], logicIDs[0].Bytes(), []byte{0x01})
+	assert.NoError(t, err)
+
+	err = so[0].SetStorageEntry(logicIDs[1], logicIDs[0].Bytes(), []byte{0x02})
+	assert.NoError(t, err)
+
+	_, err = stateObject.Commit()
+	assert.NoError(t, err)
+
+	smParams := &createStateManagerParams{
+		db: db,
+		smCallBack: func(sm *StateManager) {
+			sm.dirtyObjects[stateObject.address] = stateObject
+			sm.dirtyObjects[so[0].address] = so[0]
+		},
+	}
+
+	sm := createTestStateManager(t, smParams)
+
+	newRoot := storageTree.Root()
+
+	testcases := []struct {
+		name                  string
+		addr                  common.Address
+		newRoot               *common.RootNode
+		logicID               common.LogicID
+		logicStorageTreeRoots map[string]*common.RootNode
+		stateObject           *Object
+		expectedError         error
+	}{
+		{
+			name:    "failed to fetch state object",
+			addr:    so[1].address,
+			newRoot: &newRoot,
+			logicStorageTreeRoots: map[string]*common.RootNode{
+				logicIDs[0].String(): &newRoot,
+			},
+			expectedError: errors.New("failed to fetch latest tesseract hash"),
+		},
+		{
+			name:    "tree is synced successfully with the new root",
+			addr:    stateObject.address,
+			newRoot: &newRoot,
+			logicID: logicIDs[0],
+			logicStorageTreeRoots: map[string]*common.RootNode{
+				logicIDs[0].String(): &newRoot,
+			},
+			stateObject: stateObject,
+		},
+		{
+			name:    "tree is not synced properly",
+			addr:    so[0].address,
+			newRoot: &newRoot,
+			logicID: logicIDs[1],
+			logicStorageTreeRoots: map[string]*common.RootNode{
+				logicIDs[1].String(): {
+					MerkleRoot: newRoot.MerkleRoot,
+					HashTable:  map[string][]byte{logicIDs[0].String(): {0x03}},
+				},
+			},
+			stateObject:   so[0],
+			expectedError: errors.New("updated root doesn't match"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			err := sm.SyncStorageTrees(test.addr, test.newRoot, test.logicStorageTreeRoots)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			root := test.stateObject.activeStorageTrees[test.logicID.String()].Root()
+			require.Equal(t, test.newRoot, &root)
+		})
+	}
+}
+
+func TestStateManager_SyncLogicTree(t *testing.T) {
+	db := mockDB()
+	logicID := getLogicID(t, tests.RandomAddress(t))
+	rawData := logicID.Bytes()
+
+	logicTree, err := tree.NewKramaHashTree(logicID.Address(), common.NilHash, db, blake256.New(), storage.Logic)
+	require.NoError(t, err)
+
+	err = logicTree.Set(logicID.Bytes(), rawData)
+	require.NoError(t, err)
+
+	soParams := map[int]*createStateObjectParams{
+		0: stateObjectParamsWithLogicTree(t, logicID.Address(), db, logicTree, common.NilHash),
+		1: {
+			address: tests.RandomAddress(t),
+		},
+	}
+
+	so := createTestStateObjects(t, 2, soParams)
+
+	smParams := &createStateManagerParams{
+		db: db,
+		smCallBack: func(sm *StateManager) {
+			sm.dirtyObjects[so[0].address] = so[0]
+		},
+	}
+
+	sm := createTestStateManager(t, smParams)
+
+	newRoot := so[0].logicTree.Root()
+
+	testcases := []struct {
+		name          string
+		addr          common.Address
+		newRoot       *common.RootNode
+		logicTree     tree.MerkleTree
+		expectedError error
+	}{
+		{
+			name:      "logic tree synced successfully",
+			addr:      so[0].address,
+			newRoot:   &newRoot,
+			logicTree: so[0].logicTree,
+		},
+		{
+			name: "failed to fetch state object",
+			addr: so[1].address,
+			newRoot: &common.RootNode{
+				MerkleRoot: tests.RandomHash(t),
+				HashTable:  map[string][]byte{tests.RandomHash(t).String(): tests.RandomHash(t).Bytes()},
+			},
+			expectedError: errors.New("failed to fetch latest tesseract hash"),
+		},
+		{
+			name: "tree is not synced properly",
+			addr: so[0].address,
+			newRoot: &common.RootNode{
+				MerkleRoot: tests.RandomHash(t),
+				HashTable:  map[string][]byte{tests.RandomHash(t).String(): tests.RandomHash(t).Bytes()},
+			},
+			logicTree:     so[0].logicTree,
+			expectedError: errors.New("updated root doesn't match"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			err := sm.SyncLogicTree(test.addr, test.newRoot)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			root := test.logicTree.Root()
+			require.Equal(t, test.newRoot, &root)
+		})
+	}
+}
+
+func TestStateManager_GetNodeSet(t *testing.T) {
+	mocksenatus := mockSenatus(t)
+	kramaIDs, pk := tests.GetTestKramaIdsWithPublicKeys(t, 4)
+	mocksenatus.AddPublicKeys(kramaIDs[:2], pk[:2])
+
+	smParams := &createStateManagerParams{
+		smCallBack: func(sm *StateManager) {
+			sm.senatus = mocksenatus
+		},
+	}
+
+	sm := createTestStateManager(t, smParams)
+
+	testcases := []struct {
+		name          string
+		ids           []id.KramaID
+		publicKeys    [][]byte
+		expectedError error
+	}{
+		{
+			name:       "fetched new node set as kramaIDs are present",
+			ids:        kramaIDs[:2],
+			publicKeys: pk[:2],
+		},
+		{
+			name:          "should return error as the public keys are not present in senatus",
+			ids:           kramaIDs[2:4],
+			publicKeys:    pk[2:4],
+			expectedError: errors.New("failed to fetch latest tesseract hash"),
+		},
+		{
+			name:       "fetched empty node set as no kramaIDs are present",
+			ids:        nil,
+			publicKeys: nil,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			nodeSet, err := sm.GetNodeSet(test.ids)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.Equal(t, test.ids, nodeSet.Ids)
+			require.Equal(t, test.publicKeys, nodeSet.PublicKeys)
+		})
+	}
+}
+
+func TestStateManager_GetICSNodeSetFromRawContext(t *testing.T) {
+	addrs := getAddresses(t, 2)
+	kramaIDs, pk := tests.GetTestKramaIdsWithPublicKeys(t, 12)
+	mocksenatus := mockSenatus(t)
+	mocksenatus.AddPublicKeys(kramaIDs, pk)
+
+	obj, cHash := getContextObjects(t, kramaIDs, 2, 6)
+	mObj, mHash := getMetaContextObjects(t, cHash)
+
+	ixParams := map[int]*tests.CreateIxParams{
+		0: tests.GetIxParamsWithAddress(addrs[0], common.NilAddress),
+		1: tests.GetIxParamsWithAddress(tests.RandomAddress(t), addrs[1]),
+		2: tests.GetIxParamsWithAddress(tests.RandomAddress(t), common.SargaAddress),
+	}
+
+	ixs := tests.CreateIxns(t, 3, ixParams)
+
+	tesseractParams := map[int]*tests.CreateTesseractParams{
+		0: getTesseractParams(addrs[0], common.Interactions{ixs[0]}, mHash[0]),
+		1: getTesseractParams(addrs[1], common.Interactions{ixs[1]}, mHash[1]),
+		2: getTesseractParams(common.SargaAddress, common.Interactions{ixs[2]}, mHash[1]),
+	}
+
+	ts := tests.CreateTesseracts(t, 3, tesseractParams)
+
+	rawMetaObjects := getRawMetaObjects(t, mObj)
+	rawContextObjects := getRawContextObjects(t, obj)
+
+	smParams := &createStateManagerParams{
+		smCallBack: func(sm *StateManager) {
+			sm.senatus = mocksenatus
+		},
+	}
+
+	sm := createTestStateManager(t, smParams)
+
+	testcases := []struct {
+		name            string
+		ts              *common.Tesseract
+		rawContext      map[common.Hash][]byte
+		expectedNodeSet map[common.IcsSetType][]id.KramaID
+		expectedError   error
+	}{
+		{
+			name: "fetched ics node set when context address is equal to ix sender address",
+			ts:   ts[0],
+			rawContext: map[common.Hash][]byte{
+				mHash[0]:                   rawMetaObjects[0],
+				mObj[0].BehaviouralContext: rawContextObjects[0],
+				mObj[0].RandomContext:      rawContextObjects[1],
+			},
+			expectedNodeSet: map[common.IcsSetType][]id.KramaID{
+				common.SenderBehaviourSet: obj[0].Ids,
+				common.SenderRandomSet:    obj[1].Ids,
+				common.RandomSet:          obj[4].Ids,
+				common.ObserverSet:        obj[5].Ids,
+			},
+		},
+		{
+			name: "fetched ics node set when context address is equal to ix receiver address",
+			ts:   ts[1],
+			rawContext: map[common.Hash][]byte{
+				mHash[1]:                   rawMetaObjects[1],
+				mObj[1].BehaviouralContext: rawContextObjects[2],
+				mObj[1].RandomContext:      rawContextObjects[3],
+			},
+			expectedNodeSet: map[common.IcsSetType][]id.KramaID{
+				common.ReceiverBehaviourSet: obj[2].Ids,
+				common.ReceiverRandomSet:    obj[3].Ids,
+				common.RandomSet:            obj[4].Ids,
+				common.ObserverSet:          obj[5].Ids,
+			},
+		},
+		{
+			name: "fetched ics node set when context address is equal to ix sarga address",
+			ts:   ts[2],
+			rawContext: map[common.Hash][]byte{
+				mHash[1]:                   rawMetaObjects[1],
+				mObj[1].BehaviouralContext: rawContextObjects[2],
+				mObj[1].RandomContext:      rawContextObjects[3],
+			},
+			expectedNodeSet: map[common.IcsSetType][]id.KramaID{
+				common.ReceiverBehaviourSet: obj[2].Ids,
+				common.ReceiverRandomSet:    obj[3].Ids,
+				common.RandomSet:            obj[4].Ids,
+				common.ObserverSet:          obj[5].Ids,
+			},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			clusterInfo := &common.ICSClusterInfo{
+				RandomSet:   obj[4].Ids,
+				ObserverSet: obj[5].Ids,
+				Responses:   createRandomArrayOfBits(t, 6),
+			}
+
+			nodeSet, err := sm.GetICSNodeSetFromRawContext(test.ts, test.rawContext, clusterInfo)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			count := 0
+
+			for setType, kramaIDs := range test.expectedNodeSet {
+				count += len(kramaIDs)
+				require.Equal(t, kramaIDs, nodeSet.Nodes[setType].Ids)
+			}
+
+			for index, set := range nodeSet.Nodes {
+				if set != nil && clusterInfo.Responses[index] != nil {
+					require.Equal(t, set.Responses, clusterInfo.Responses[index])
+				}
+			}
+
+			require.Equal(t, count, nodeSet.Size)
+		})
+	}
+}
+
+func TestStateManager_GetParticipantContextRaw(t *testing.T) {
+	mObj := make([]*MetaContextObject, 5)
+	mHash := make([]common.Hash, 5)
+
+	kramaIDs := tests.GetTestKramaIDs(t, 12)
+	obj, cHash := getContextObjects(t, kramaIDs, 2, 6)
+	mObj[0], mHash[0] = getMetaContextObject(t, cHash[0], cHash[1])
+	mObj[1], mHash[1] = getMetaContextObject(t, cHash[2], common.NilHash)
+	mObj[2], mHash[2] = getMetaContextObject(t, common.NilHash, cHash[3])
+	mObj[3], mHash[3] = getMetaContextObject(t, cHash[4], common.NilHash)
+	mObj[4], mHash[4] = getMetaContextObject(t, common.NilHash, cHash[5])
+
+	rawMetaObjects := getRawMetaObjects(t, mObj)
+	rawContextObjects := getRawContextObjects(t, obj)
+
+	smParams := &createStateManagerParams{
+		db: mockDB(),
+		dbCallback: func(db *MockDB) {
+			insertMetaContextsInDB(t, db, mObj...)
+			insertContextsInDB(t, db, obj[0:4]...)
+		},
+	}
+
+	sm := createTestStateManager(t, smParams)
+
+	testcases := []struct {
+		name               string
+		addr               common.Address
+		hash               common.Hash
+		expectedRawContext map[common.Hash][]byte
+		expectedError      error
+	}{
+		{
+			name:          "failed to fetch meta context object",
+			addr:          tests.RandomAddress(t),
+			hash:          tests.RandomHash(t),
+			expectedError: errors.New("context state not found"),
+		},
+		{
+			name:          "failed to fetch participant context info with random context",
+			addr:          tests.RandomAddress(t),
+			hash:          mHash[4],
+			expectedError: errors.New("failed to fetch random context"),
+		},
+		{
+			name:          "failed to fetch participant context info with behavioral context",
+			addr:          tests.RandomAddress(t),
+			hash:          mHash[3],
+			expectedError: errors.New("failed to fetch behavioural context"),
+		},
+		{
+			name: "participant context info with random context fetched successfully",
+			addr: tests.RandomAddress(t),
+			hash: mHash[2],
+			expectedRawContext: map[common.Hash][]byte{
+				mHash[2]:              rawMetaObjects[2],
+				mObj[2].RandomContext: rawContextObjects[3],
+			},
+		},
+		{
+			name: "participant context info with behavioural context fetched successfully",
+			addr: tests.RandomAddress(t),
+			hash: mHash[1],
+			expectedRawContext: map[common.Hash][]byte{
+				mHash[1]:                   rawMetaObjects[1],
+				mObj[1].BehaviouralContext: rawContextObjects[2],
+			},
+		},
+		{
+			name: "participant context info with behavioral and random context fetched successfully",
+			addr: tests.RandomAddress(t),
+			hash: mHash[0],
+			expectedRawContext: map[common.Hash][]byte{
+				mHash[0]:                   rawMetaObjects[0],
+				mObj[0].BehaviouralContext: rawContextObjects[0],
+				mObj[0].RandomContext:      rawContextObjects[1],
+			},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			rawContext := make(map[common.Hash][]byte)
+
+			err := sm.GetParticipantContextRaw(test.addr, test.hash, rawContext)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedRawContext, rawContext)
+		})
+	}
+}
+
+func TestStateManager_GetStorageEntry(t *testing.T) {
+	db := mockDB()
+	logicID := getLogicID(t, tests.RandomAddress(t))
+
+	so := NewStateObject(logicID.Address(), mockCache(t), mockJournal(), db, common.Account{})
+
+	_, err := so.createStorageTreeForLogic(logicID)
+	assert.NoError(t, err)
+
+	err = so.SetStorageEntry(logicID, logicID.Bytes(), []byte{0x01})
+	assert.NoError(t, err)
+
+	stateHash, err := so.Commit()
+	assert.NoError(t, err)
+	assert.NoError(t, so.flush())
+
+	smParams := &createStateManagerParams{
+		db: db,
+		dbCallback: func(db *MockDB) {
+			insertAccountsInDB(t, db, []common.Hash{stateHash}, so.Data())
+		},
+	}
+
+	sm := createTestStateManager(t, smParams)
+
+	testcases := []struct {
+		name                 string
+		logicID              common.LogicID
+		slot                 []byte
+		stateHash            common.Hash
+		expectedStorageEntry []byte
+		expectedError        error
+	}{
+		{
+			name:          "should return an error if state object not found",
+			logicID:       getLogicID(t, tests.RandomAddress(t)),
+			slot:          logicID.Bytes(),
+			stateHash:     tests.RandomHash(t),
+			expectedError: errors.New("failed to fetch state object"),
+		},
+		{
+			name:          "should return an error if logic storage tree not found",
+			logicID:       getLogicID(t, tests.RandomAddress(t)),
+			slot:          logicID.Bytes(),
+			stateHash:     stateHash,
+			expectedError: common.ErrLogicStorageTreeNotFound,
+		},
+		{
+			name:                 "should fetch storage data successfully",
+			logicID:              logicID,
+			slot:                 logicID.Bytes(),
+			stateHash:            stateHash,
+			expectedStorageEntry: []byte{0x01},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			storageEntry, err := sm.GetStorageEntry(test.logicID, test.slot, test.stateHash)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedStorageEntry, storageEntry)
+		})
+	}
+}
+
+func TestStateManager_IsLogicRegistered(t *testing.T) {
+	db := mockDB()
+	logicID := getLogicID(t, tests.RandomAddress(t))
+	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
+
+	engineio.RegisterEngineRuntime(pisa.NewRuntime())
+
+	so := NewStateObject(logicID.Address(), mockCache(t), mockJournal(), db, common.Account{})
+
+	err := so.InsertNewLogicObject(logicID, logicObject)
+	require.NoError(t, err)
+
+	rootHash, err := so.commitLogics()
+	require.NoError(t, err)
+
+	err = so.flushLogicTree()
+	require.NoError(t, err)
+
+	acc, stateHash := tests.GetTestAccount(t, func(acc *common.Account) {
+		acc.LogicRoot = rootHash
+	})
+
+	ts := tests.CreateTesseract(t, &tests.CreateTesseractParams{
+		Address: logicID.Address(),
+		BodyCallback: func(body *common.TesseractBody) {
+			body.StateHash = stateHash
+		},
+	})
+
+	smParams := &createStateManagerParams{
+		db: db,
+		dbCallback: func(db *MockDB) {
+			insertAccountsInDB(t, db, []common.Hash{stateHash}, acc)
+			insertTesseractsInDB(t, db, ts)
+		},
+		smCallBack: func(sm *StateManager) {
+			sm.cache.Add(ts.Address(), tests.GetTesseractHash(t, ts))
+		},
+	}
+
+	sm := createTestStateManager(t, smParams)
+
+	testcases := []struct {
+		name          string
+		logicID       common.LogicID
+		expectedError error
+	}{
+		{
+			name:          "should return error if logic is not registered",
+			logicID:       getLogicID(t, tests.RandomAddress(t)),
+			expectedError: common.ErrKeyNotFound,
+		},
+		{
+			name:    "should register logic successfully",
+			logicID: logicID,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			err = sm.IsLogicRegistered(test.logicID)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedError, err)
+		})
+	}
+}
+
+func TestStateManager_GetAssetInfo(t *testing.T) {
+	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
+	assetInfo := tests.GetRandomAssetInfo(t, assetID.Address())
+
+	rawAssetInfo, err := assetInfo.Bytes()
+	assert.NoError(t, err)
+
+	registry, registryHash := getTestRegistryObject(
+		t,
+		map[string][]byte{assetID.String(): rawAssetInfo},
+	)
+
+	sObj := createTestStateObject(t, stateObjectParamsWithRegistry(t, registryHash, registry))
+
+	stateHash, err := sObj.commitRegistryObject()
+	assert.NoError(t, err)
+
+	smParams := &createStateManagerParams{
+		dbCallback: func(db *MockDB) {
+			insertAccountsInDB(t, db, []common.Hash{stateHash}, sObj.Data())
+			insertAssetRegistryInDB(t, db, []common.Hash{registryHash}, registry)
+		},
+	}
+
+	sm := createTestStateManager(t, smParams)
+
+	testcases := []struct {
+		name              string
+		assetID           common.AssetID
+		stateHash         common.Hash
+		expectedAssetInfo *common.AssetDescriptor
+		expectedError     error
+	}{
+		{
+			name:          "failed to fetch assetInfo as state object not found",
+			assetID:       tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+			expectedError: errors.New("failed to fetch state object"),
+		},
+		{
+			name:              "asset info fetched successfully",
+			assetID:           assetID,
+			stateHash:         stateHash,
+			expectedAssetInfo: assetInfo,
+		},
+		{
+			name:          "should return error as asset not found because of invalid assetID",
+			assetID:       tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+			stateHash:     stateHash,
+			expectedError: common.ErrAssetNotFound,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			assetInfo, err := sm.GetAssetInfo(test.assetID, test.stateHash)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedAssetInfo, assetInfo)
+		})
+	}
+}
+
+func TestStateManager_GetRegistry(t *testing.T) {
+	registry, registryHash := getTestRegistryObject(
+		t,
+		map[string][]byte{tests.RandomHash(t).String(): tests.RandomHash(t).Bytes()},
+	)
+
+	soParams := map[int]*createStateObjectParams{
+		0: stateObjectParamsWithRegistry(t, registryHash, registry),
+		1: {
+			address: tests.RandomAddress(t),
+		},
+	}
+
+	so := createTestStateObjects(t, 2, soParams)
+
+	stateHashes := getStateHashes(t, so)
+
+	smParams := &createStateManagerParams{
+		dbCallback: func(db *MockDB) {
+			insertAssetRegistryInDB(t, db, []common.Hash{registryHash}, registry)
+			insertAccountsInDB(t, db, []common.Hash{stateHashes[0]}, so[0].Data())
+			insertAccountsInDB(t, db, []common.Hash{stateHashes[1]}, so[1].Data())
+		},
+	}
+
+	sm := createTestStateManager(t, smParams)
+
+	testcases := []struct {
+		name                    string
+		address                 common.Address
+		stateHash               common.Hash
+		expectedRegistryEntries *RegistryObject
+		expectedError           error
+	}{
+		{
+			name:          "failed to fetch state object",
+			address:       tests.RandomAddress(t),
+			stateHash:     tests.RandomHash(t),
+			expectedError: errors.New("failed to fetch state object"),
+		},
+		{
+			name:                    "fetched registry entries successfully",
+			address:                 so[0].Address(),
+			stateHash:               stateHashes[0],
+			expectedRegistryEntries: registry,
+		},
+		{
+			name:      "fetched empty registry object as it was not present in state object",
+			address:   so[1].Address(),
+			stateHash: stateHashes[1],
+			expectedRegistryEntries: &RegistryObject{
+				Entries: make(map[string][]byte),
+			},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			registryEntries, err := sm.GetRegistry(test.address, test.stateHash)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedRegistryEntries, &RegistryObject{
+				Entries: registryEntries,
+			})
+		})
+	}
+}
+
+func TestStateManager_GetLogicManifest(t *testing.T) {
+	db := mockDB()
+	manifest, _, _ := tests.GetManifests(t, "../compute/manifests/ledger.yaml")
+	manifestHash := common.GetHash(manifest)
+
+	logicID := getLogicID(t, tests.RandomAddress(t))
+	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
+	logicObject.ManifestHash = manifestHash
+
+	so := NewStateObject(logicID.Address(), mockCache(t), mockJournal(), db, common.Account{})
+
+	err := so.InsertNewLogicObject(logicID, logicObject)
+	require.NoError(t, err)
+
+	rootHash, err := so.commitLogics()
+	require.NoError(t, err)
+
+	err = so.flushLogicTree()
+	require.NoError(t, err)
+
+	acc, stateHash := tests.GetTestAccount(t, func(acc *common.Account) {
+		acc.LogicRoot = rootHash
+	})
+
+	accWithInvalidLogicRoot, stateHashWithInvalidLogicRoot := tests.GetTestAccount(t, func(acc *common.Account) {
+		acc.LogicRoot = tests.RandomHash(t)
+	})
+
+	err = db.CreateEntry(storage.LogicManifestKey(logicID.Address(), logicObject.ManifestHash), manifest)
+	require.NoError(t, err)
+
+	smParams := &createStateManagerParams{
+		db: db,
+		dbCallback: func(db *MockDB) {
+			insertAccountsInDB(t, db, []common.Hash{stateHash}, acc)
+			insertAccountsInDB(t, db, []common.Hash{stateHashWithInvalidLogicRoot}, accWithInvalidLogicRoot)
+		},
+	}
+
+	sm := createTestStateManager(t, smParams)
+
+	testcases := []struct {
+		name             string
+		logicID          common.LogicID
+		stateHash        common.Hash
+		expectedManifest []byte
+		expectedError    error
+	}{
+		{
+			name:          "failed to fetch state object",
+			logicID:       logicID,
+			stateHash:     tests.RandomHash(t),
+			expectedError: common.ErrStateNotFound,
+		},
+		{
+			name:          "failed to fetch logic tree",
+			logicID:       logicID,
+			stateHash:     stateHashWithInvalidLogicRoot,
+			expectedError: errors.New("failed to fetch logic object"),
+		},
+		{
+			name:             "logic manifest fetched successfully",
+			logicID:          logicID,
+			stateHash:        stateHash,
+			expectedManifest: manifest,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			manifest, err := sm.GetLogicManifest(test.logicID, test.stateHash)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedManifest, manifest)
+		})
+	}
+}
+
+func TestStateManager_GetLogicIDs(t *testing.T) {
 	var err error
 
 	expectedLogicIDs := make([]common.LogicID, 0)
@@ -1587,7 +2526,45 @@ func TestGetLogicIDs(t *testing.T) {
 	}
 }
 
-func TestFetchLatestParticipantContext(t *testing.T) {
+func TestStateManager_doesRootMatch(t *testing.T) {
+	root := common.RootNode{
+		MerkleRoot: tests.RandomHash(t),
+		HashTable:  map[string][]byte{tests.RandomHash(t).String(): tests.RandomHash(t).Bytes()},
+	}
+
+	testcases := []struct {
+		name           string
+		root1          common.RootNode
+		root2          common.RootNode
+		expectedResult bool
+	}{
+		{
+			name:  "roots shouldn't match",
+			root1: root,
+			root2: common.RootNode{
+				MerkleRoot: tests.RandomHash(t),
+				HashTable:  map[string][]byte{tests.RandomHash(t).String(): tests.RandomHash(t).Bytes()},
+			},
+			expectedResult: false,
+		},
+		{
+			name:           "roots should match",
+			root1:          root,
+			root2:          root,
+			expectedResult: true,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			match, err := doesRootMatch(test.root1, test.root2)
+			require.NoError(t, err)
+			require.Equal(t, test.expectedResult, match)
+		})
+	}
+}
+
+func TestStateManager_FetchLatestParticipantContext(t *testing.T) {
 	kramaIDs, pk := tests.GetTestKramaIdsWithPublicKeys(t, 12)
 	mocksenatus := mockSenatus(t)
 	mocksenatus.AddPublicKeys(kramaIDs[:4], pk[:4])
@@ -1671,7 +2648,7 @@ func TestFetchLatestParticipantContext(t *testing.T) {
 	}
 }
 
-func TestGetReceiverContext_RegisteredAccount(t *testing.T) {
+func TestStateManager_GetReceiverContext_RegisteredAccount(t *testing.T) {
 	db := mockDB()
 	mocksenatus := mockSenatus(t)
 	kramaIDs, pk := tests.GetTestKramaIdsWithPublicKeys(t, 4)
@@ -1789,7 +2766,7 @@ func TestGetReceiverContext_RegisteredAccount(t *testing.T) {
 	}
 }
 
-func TestGetReceiverContext_Non_RegisteredAccount(t *testing.T) {
+func TestStateManager_GetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 	db := mockDB()
 	mocksenatus := mockSenatus(t)
 	kramaIDs, pk := tests.GetTestKramaIdsWithPublicKeys(t, 4)
@@ -1898,7 +2875,120 @@ func TestGetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 	}
 }
 
-func TestFetchInteractionContext(t *testing.T) {
+func TestStateManager_FetchICSNodeSet(t *testing.T) {
+	addr := tests.RandomAddress(t)
+	kramaIDs, pk := tests.GetTestKramaIdsWithPublicKeys(t, 12)
+	mocksenatus := mockSenatus(t)
+	mocksenatus.AddPublicKeys(kramaIDs[:8], pk[:8])
+
+	obj, cHash := getContextObjects(t, kramaIDs, 2, 6)
+	mObj, mHash := getMetaContextObjects(t, cHash)
+
+	ixParams := map[int]*tests.CreateIxParams{
+		0: tests.GetIxParamsWithAddress(addr, tests.RandomAddress(t)),
+	}
+
+	ixs := tests.CreateIxns(t, 1, ixParams)
+
+	tesseractParams := map[int]*tests.CreateTesseractParams{
+		0: getTesseractParams(addr, common.Interactions{ixs[0]}, mHash[0]),
+	}
+
+	ts := tests.CreateTesseracts(t, 1, tesseractParams)
+
+	smParams := &createStateManagerParams{
+		dbCallback: func(db *MockDB) {
+			insertTesseractsInDB(t, db, ts...)
+			insertContextsInDB(t, db, obj...)
+			insertMetaContextsInDB(t, db, mObj...)
+		},
+		smCallBack: func(sm *StateManager) {
+			sm.senatus = mocksenatus
+			storeTesseractHashInCache(t, sm.cache, ts...)
+		},
+	}
+
+	sm := createTestStateManager(t, smParams)
+
+	testcases := []struct {
+		name            string
+		ts              *common.Tesseract
+		clusterInfo     *common.ICSClusterInfo
+		expectedNodeSet map[common.IcsSetType][]id.KramaID
+		expectedError   error
+	}{
+		{
+			name: "updated ics node set fetched successfully",
+			ts:   ts[0],
+			clusterInfo: &common.ICSClusterInfo{
+				RandomSet:   obj[2].Ids,
+				ObserverSet: obj[3].Ids,
+				Responses:   createRandomArrayOfBits(t, 6),
+			},
+			expectedNodeSet: map[common.IcsSetType][]id.KramaID{
+				common.SenderBehaviourSet: obj[0].Ids,
+				common.SenderRandomSet:    obj[1].Ids,
+				common.RandomSet:          obj[2].Ids,
+				common.ObserverSet:        obj[3].Ids,
+			},
+		},
+		{
+			name: "cluster info responses slice is empty",
+			ts:   ts[0],
+			clusterInfo: &common.ICSClusterInfo{
+				RandomSet:   tests.GetTestKramaIDs(t, 2),
+				ObserverSet: tests.GetTestKramaIDs(t, 2),
+				Responses:   nil,
+			},
+			expectedError: errors.New("nil responses slice"),
+		},
+		{
+			name: "failed to fetch updated ics node set as public keys of random set not present in senatus",
+			ts:   ts[0],
+			clusterInfo: &common.ICSClusterInfo{
+				RandomSet:   obj[4].Ids,
+				ObserverSet: obj[5].Ids,
+				Responses:   createRandomArrayOfBits(t, 6),
+			},
+			expectedError: errors.New("failed to fetch latest tesseract hash"),
+		},
+		{
+			name: "failed to fetch updated ics node set as public keys of observer set not present in senatus",
+			ts:   ts[0],
+			clusterInfo: &common.ICSClusterInfo{
+				RandomSet:   obj[2].Ids,
+				ObserverSet: obj[5].Ids,
+				Responses:   createRandomArrayOfBits(t, 6),
+			},
+			expectedError: errors.New("failed to fetch latest tesseract hash"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			icsNodes, err := sm.FetchICSNodeSet(test.ts, test.clusterInfo)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			for setType, kramaIDs := range test.expectedNodeSet {
+				require.Equal(t, kramaIDs, icsNodes.Nodes[setType].Ids)
+			}
+
+			for index, set := range icsNodes.Nodes {
+				if set != nil && test.clusterInfo.Responses[index] != nil {
+					require.Equal(t, set.Responses, test.clusterInfo.Responses[index])
+				}
+			}
+		})
+	}
+}
+
+func TestStateManager_FetchInteractionContext(t *testing.T) {
 	db := mockDB()
 	mocksenatus := mockSenatus(t)
 	addrs := getAddresses(t, 2)
@@ -2033,7 +3123,7 @@ func TestFetchInteractionContext(t *testing.T) {
 	}
 }
 
-func TestGetAccountInfo(t *testing.T) {
+func TestStateManager_GetAccountInfo(t *testing.T) {
 	hash := tests.RandomHash(t)
 	acc := &common.Account{
 		Balance: tests.RandomHash(t),
@@ -2081,7 +3171,7 @@ func TestGetAccountInfo(t *testing.T) {
 	}
 }
 
-func TestGetAccTypeUsingStateObject(t *testing.T) {
+func TestStateManager_GetAccTypeUsingStateObject(t *testing.T) {
 	soParams := &createStateObjectParams{
 		journal: mockJournal(),
 		account: &common.Account{AccType: common.LogicAccount},
@@ -2130,7 +3220,107 @@ func TestGetAccTypeUsingStateObject(t *testing.T) {
 	}
 }
 
-func TestFlushDirtyObject(t *testing.T) {
+func TestStateManager_SyncTree(t *testing.T) {
+	keys, values := getEntries(t, 2)
+
+	syncedMerkleTree := getMerkleTreeWithEntries(t, [][]byte{keys[0]}, [][]byte{values[0]})
+	err := syncedMerkleTree.Commit()
+	require.NoError(t, err)
+
+	merkleTree := getMerkleTreeWithEntries(t, [][]byte{keys[0]}, [][]byte{values[1]})
+	err = merkleTree.Commit()
+	require.NoError(t, err)
+
+	sm := createTestStateManager(t, nil)
+
+	testcases := []struct {
+		name          string
+		tree          *MockMerkleTree
+		newRoot       common.RootNode
+		expectedError error
+	}{
+		{
+			name:    "tree root and new root are same so tree is already synced",
+			tree:    syncedMerkleTree,
+			newRoot: syncedMerkleTree.Root(),
+		},
+		{
+			name: "tree is synced successfully with the new root",
+			tree: syncedMerkleTree,
+			newRoot: common.RootNode{
+				MerkleRoot: merkleTree.Root().MerkleRoot,
+				HashTable:  map[string][]byte{common.BytesToHex(keys[0]): values[1]},
+			},
+		},
+		{
+			name: "tree is not synced properly with the new root",
+			tree: syncedMerkleTree,
+			newRoot: common.RootNode{
+				MerkleRoot: tests.RandomHash(t),
+				HashTable:  map[string][]byte{common.BytesToHex(keys[0]): values[1]},
+			},
+			expectedError: errors.New("updated root doesn't match"),
+		},
+		{
+			name: "failed to set entry of the tree root with the new root",
+			tree: getMerkleTreeWithSetHook(t, [][]byte{keys[0]}, [][]byte{values[0]}, func() error {
+				return errors.New("failed to set entry")
+			}),
+			newRoot: common.RootNode{
+				MerkleRoot: merkleTree.Root().MerkleRoot,
+				HashTable:  map[string][]byte{common.BytesToHex(keys[0]): values[1]},
+			},
+			expectedError: errors.New("failed to set entry"),
+		},
+		{
+			name: "tree synced with the new root but failed to commit",
+			tree: getMerkleTreeWithCommitHook(t, [][]byte{keys[0]}, [][]byte{values[0]}, func() error {
+				return errors.New("failed to commit")
+			}),
+			newRoot: common.RootNode{
+				MerkleRoot: merkleTree.Root().MerkleRoot,
+				HashTable:  map[string][]byte{common.BytesToHex(keys[0]): values[1]},
+			},
+			expectedError: errors.New("failed to commit"),
+		},
+		{
+			name: "tree synced with the new root but failed to flush",
+			tree: getMerkleTreeWithFlushHook(t, [][]byte{keys[0]}, [][]byte{values[0]}, func() error {
+				return errors.New("failed to flush")
+			}),
+			newRoot: common.RootNode{
+				MerkleRoot: merkleTree.Root().MerkleRoot,
+				HashTable:  map[string][]byte{common.BytesToHex(keys[0]): values[1]},
+			},
+			expectedError: errors.New("failed to flush"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			err := sm.syncTree(test.tree, &test.newRoot)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			root := test.tree.Root()
+			require.Equal(t, test.newRoot.MerkleRoot, root.MerkleRoot)
+
+			for key, expectedValue := range root.HashTable {
+				actualValue, err := test.tree.Get(common.Hex2Bytes(key))
+				require.NoError(t, err)
+
+				require.Equal(t, expectedValue, actualValue)
+			}
+		})
+	}
+}
+
+func TestStateManager_FlushDirtyObject(t *testing.T) {
 	db := mockDB()
 	dirtyEntries := getDirtyEntries(t, 5)
 	keys, values := getEntries(t, 4)
@@ -2223,7 +3413,7 @@ func TestFlushDirtyObject(t *testing.T) {
 
 			// check if meta storage tree entries flushed to db
 			for i := 0; i < len(keys); i += 1 {
-				val, err := merkle.dbStorage[string(keys[i])]
+				val, err := merkle.dbStorage[common.BytesToHex(keys[i])]
 				require.True(t, err)
 				require.Equal(t, values[i], val)
 			}
@@ -2238,7 +3428,7 @@ func TestFlushDirtyObject(t *testing.T) {
 	}
 }
 
-func TestIsAccountRegisteredAt(t *testing.T) {
+func TestStateManager_IsAccountRegisteredAt(t *testing.T) {
 	addresses := getAddresses(t, 3)
 	db := mockDB()
 	_, storageRoot := createMetaStorageTree(

@@ -18,15 +18,22 @@ type PublicCoreAPI struct {
 	// Represents the API backend
 	ixpool IxPool
 	chain  ChainManager
-	exec   ExecutionManager
 	sm     StateManager
+	exec   ExecutionManager
+	syncer Syncer
 }
 
 // NewPublicCoreAPI is a constructor function that generates and returns a new
 // PublicCoreAPI object for a given API backend object.
-func NewPublicCoreAPI(ixpool IxPool, chain ChainManager, sm StateManager, exec ExecutionManager) *PublicCoreAPI {
+func NewPublicCoreAPI(
+	ixpool IxPool,
+	chain ChainManager,
+	sm StateManager,
+	exec ExecutionManager,
+	syncer Syncer,
+) *PublicCoreAPI {
 	// Create the core public API wrapper and return it
-	return &PublicCoreAPI{ixpool, chain, exec, sm}
+	return &PublicCoreAPI{ixpool, chain, sm, exec, syncer}
 }
 
 func getTesseractArgs(address common.Address, options rpcargs.TesseractNumberOrHash) *rpcargs.TesseractArgs {
@@ -443,20 +450,96 @@ func (p *PublicCoreAPI) AccountMetaInfo(args *rpcargs.GetAccountArgs) (map[strin
 	return rpcAccMetaInfo, nil
 }
 
-// LogicCall supports call to logics that do not transition state
-func (p *PublicCoreAPI) LogicCall(args *rpcargs.LogicCallArgs) (*rpcargs.LogicCallResult, error) {
-	consumed, receipt, err := p.exec.LogicCall(args.LogicID, args.Invoker, args.Callsite, args.Calldata)
+// FuelEstimate returns an estimate of the fuel that is required for executing an interaction
+func (p *PublicCoreAPI) FuelEstimate(args *rpcargs.CallArgs) (*hexutil.Big, error) {
+	sendIXArgs, err := createSendIXArgs(args.IxArgs)
 	if err != nil {
 		return nil, err
 	}
 
-	logicCallResult := &rpcargs.LogicCallResult{
-		Consumed: (hexutil.Big)(*consumed),
-		Outputs:  receipt.Outputs,
-		Error:    receipt.Error,
+	ix, err := constructInteraction(sendIXArgs, nil)
+	if err != nil {
+		return nil, err
 	}
 
-	return logicCallResult, nil
+	stateHashes, err := p.normalizeOptions(args.Options)
+	if err != nil {
+		return nil, err
+	}
+
+	receipt, err := p.exec.InteractionCall(ix, stateHashes)
+	if err != nil {
+		return nil, err
+	}
+
+	return (*hexutil.Big)(receipt.FuelUsed), nil
+}
+
+// Syncing returns the sync status of an account if address is given else returns the node sync status
+func (p *PublicCoreAPI) Syncing(args *rpcargs.SyncStatusRequest) (*rpcargs.SyncStatusResponse, error) {
+	if args.Address.IsNil() {
+		nodeSyncStatus := p.syncer.GetNodeSyncStatus()
+
+		return &rpcargs.SyncStatusResponse{
+			NodeSyncResp: nodeSyncStatus,
+		}, nil
+	}
+
+	accSyncStatus, err := p.syncer.GetAccountSyncStatus(args.Address)
+	if err != nil {
+		return nil, errors.Wrap(err, "error fetching account sync status")
+	}
+
+	return &rpcargs.SyncStatusResponse{
+		AccSyncResp: accSyncStatus,
+	}, nil
+}
+
+// Call is a method of PublicCoreAPI that is a stateless version of an interaction submit
+func (p *PublicCoreAPI) Call(args *rpcargs.CallArgs) (*rpcargs.RPCReceipt, error) {
+	sendIXArgs, err := createSendIXArgs(args.IxArgs)
+	if err != nil {
+		return nil, err
+	}
+
+	ix, err := constructInteraction(sendIXArgs, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	stateHashes, err := p.normalizeOptions(args.Options)
+	if err != nil {
+		return nil, err
+	}
+
+	receipt, err := p.exec.InteractionCall(ix, stateHashes)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &rpcargs.RPCReceipt{
+		FuelUsed:  hexutil.Big(*receipt.FuelUsed),
+		ExtraData: receipt.ExtraData,
+	}
+
+	return result, nil
+}
+
+func (p *PublicCoreAPI) normalizeOptions(
+	options map[common.Address]*rpcargs.TesseractNumberOrHash,
+) (map[common.Address]common.Hash, error) {
+	stateHashes := make(map[common.Address]common.Hash)
+
+	for addr, value := range options {
+		ts, err := p.getTesseract(getTesseractArgs(addr, *value))
+		if err != nil {
+			return nil, err
+		}
+
+		stateHashes[addr] = ts.StateHash()
+	}
+
+	return stateHashes, nil
 }
 
 // createRPCInteraction creates an RPC Interaction by copying all fields of the interaction into the RPC Interaction,

@@ -53,6 +53,11 @@ const (
 	RandomContextSize      = 1
 )
 
+type KramaEngine interface {
+	Requests() chan Request
+	Logger() hclog.Logger
+}
+
 type lattice interface {
 	AddKnownHashes(tesseracts []*common.Tesseract)
 	AddTesseracts(dirtyStorage map[common.Hash][]byte, tesseracts ...*common.Tesseract) error
@@ -1517,6 +1522,16 @@ func (k *Engine) validateInteractions(ixs common.Interactions) error {
 	}
 
 	return nil
+}
+
+// Requests returns the request channel of the engine
+func (k *Engine) Requests() chan Request {
+	return k.requests
+}
+
+// Logger returns the logger of the engine
+func (k *Engine) Logger() hclog.Logger {
+	return k.logger
 }
 
 // IsIxValid performs validity checks based on the type of interaction

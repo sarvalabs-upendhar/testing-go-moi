@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"sort"
 
+	"github.com/libp2p/go-libp2p/core/protocol"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/kramaid"
@@ -277,7 +279,19 @@ type NodeInfoResponse struct {
 	KramaID kramaid.KramaID `json:"krama_id"`
 }
 
+type Stream struct {
+	Protocol  protocol.ID `json:"protocol"`
+	Direction int         `json:"direction"`
+}
+
 type Connection struct {
-	PeerID      string `json:"peer_id"`
-	StreamCount uint64 `json:"stream_count"`
+	PeerID  string   `json:"peer_id"`
+	Streams []Stream `json:"streams"`
+}
+
+type ConnectionsResponse struct {
+	Conns              []Connection   `json:"connections"`
+	InboundConnCount   int64          `json:"inbound_conn_count"`
+	OutboundConnCount  int64          `json:"outbound_conn_count"`
+	ActivePubSubTopics map[string]int `json:"active_pub_sub_topics"`
 }

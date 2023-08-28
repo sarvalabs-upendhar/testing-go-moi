@@ -296,18 +296,6 @@ func (cs *ClusterState) GetRandomNodes() []id.KramaID {
 	return cs.NodeSet.Nodes[common.RandomSet].Ids
 }
 
-func (cs *ClusterState) GetTotalVotingPower() []int32 {
-	cs.mtx.Lock()
-	defer cs.mtx.Unlock()
-
-	quorum := make([]int32, 3)
-	quorum[0] = int32(cs.NodeSet.SenderSetSize())
-	quorum[1] = int32(cs.NodeSet.ReceiverSetSize())
-	quorum[2] = int32(cs.NodeSet.RandomSetSize())
-
-	return quorum
-}
-
 func (cs *ClusterState) GetQuorum() []int32 {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()

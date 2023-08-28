@@ -135,6 +135,10 @@ func BalanceCID(hash common.Hash) CID {
 	return ContentID(storage.Balance.Byte(), hash)
 }
 
+func ManifestCID(hash common.Hash) CID {
+	return ContentID(storage.LogicManifest.Byte(), hash)
+}
+
 func RegistryCID(hash common.Hash) CID {
 	return ContentID(storage.Registry.Byte(), hash)
 }

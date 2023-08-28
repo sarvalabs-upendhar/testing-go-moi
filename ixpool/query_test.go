@@ -23,7 +23,7 @@ func TestIxPool_GetNonce(t *testing.T) {
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = 0
 		c.PriceLimit = big.NewInt(1)
-	}, true, sm)
+	}, true, sm, nil)
 
 	testcases := []struct {
 		name          string
@@ -117,7 +117,7 @@ func TestIxPool_GetIxs(t *testing.T) {
 				c.Mode = 0
 				c.PriceLimit = big.NewInt(1)
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm)
+			}, true, sm, nil)
 
 			addAndProcessIxs(t, sm, ixPool, testcase.ixs)
 
@@ -203,7 +203,7 @@ func TestIxPool_GetAllIxs(t *testing.T) {
 				c.Mode = 0
 				c.PriceLimit = big.NewInt(1)
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm)
+			}, true, sm, nil)
 
 			for _, ixs := range testcase.accounts {
 				addAndProcessIxs(t, sm, ixPool, ixs)
@@ -224,7 +224,7 @@ func TestIxPool_GetAccountWaitTime(t *testing.T) {
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = 0
 		c.PriceLimit = big.NewInt(1)
-	}, true, sm)
+	}, true, sm, nil)
 
 	testcases := []struct {
 		name        string
@@ -282,7 +282,7 @@ func TestIxPool_GetAllAccountsWaitTime(t *testing.T) {
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = 0
 		c.PriceLimit = big.NewInt(1)
-	}, true, sm)
+	}, true, sm, nil)
 
 	testcases := []struct {
 		name     string

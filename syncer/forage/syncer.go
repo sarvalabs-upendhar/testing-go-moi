@@ -8,6 +8,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/hexutil"
+	"github.com/sarvalabs/go-moi/jsonrpc/args"
+
 	id "github.com/sarvalabs/go-moi/common/kramaid"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
 	agora2 "github.com/sarvalabs/go-moi/syncer/agora"
@@ -33,7 +36,6 @@ import (
 )
 
 const (
-	TesseractTopic        = "MOI_PUBSUB_TESSERACT"
 	MaxBucketSyncAttempts = 3
 	ChannelBufferSize     = 10
 	MaxPeersToDial        = 8
@@ -147,6 +149,7 @@ type Syncer struct {
 	pendingMsgQueue     []*TesseractInfo
 	init                sync.Once
 	execGrid            map[common.Hash]common.Address
+	tracker             *SyncStatusTracker
 }
 
 func NewSyncer(
@@ -169,18 +172,16 @@ func NewSyncer(
 	}
 
 	s := &Syncer{
-		ctx:            ctx,
-		network:        node,
-		cfg:            cfg,
-		mux:            mux,
-		agora:          agoraInstance,
-		db:             db,
-		lattice:        lattice,
-		state:          sm,
-		jobWorkerCount: 10,
-		jobQueue: &JobQueue{
-			jobs: make(map[common.Address]*SyncJob),
-		},
+		ctx:                 ctx,
+		network:             node,
+		cfg:                 cfg,
+		mux:                 mux,
+		agora:               agoraInstance,
+		db:                  db,
+		lattice:             lattice,
+		state:               sm,
+		jobWorkerCount:      10,
+		jobQueue:            NewJobQueue(mux),
 		gridStore:           NewGridStore(),
 		logger:              logger.Named("Syncer"),
 		workerSignal:        make(chan struct{}),
@@ -192,6 +193,7 @@ func NewSyncer(
 		pendingMsgQueue:     make([]*TesseractInfo, 0),
 		pendingMsgChan:      make(chan *TesseractInfo, 10),
 		execGrid:            make(map[common.Hash]common.Address),
+		tracker:             NewSyncStatusTracker(0),
 	}
 
 	return s, nil
@@ -721,7 +723,7 @@ func (s *Syncer) initSync() error {
 func (s *Syncer) syncBucketsWithMaxAttempts(bestPeers []id.KramaID, maxAttempts int) error {
 	randomNumber := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	for i := 1; i < maxAttempts; i++ {
+	for i := 1; i < maxAttempts+1; i++ {
 		bestPeer := bestPeers[randomNumber.Intn(len(bestPeers))]
 
 		requestTime := time.Now()
@@ -848,7 +850,9 @@ func (s *Syncer) loadSyncJobsFromDB() error {
 		}
 
 		if err = s.jobQueue.AddJob(syncJob); err != nil {
-			return err
+			s.logger.Error("Failed to add job in job queue", "err", err)
+
+			continue
 		}
 
 		s.metrics.captureTotalJobs(float64(len(s.jobQueue.jobs)))
@@ -1430,14 +1434,13 @@ func (s *Syncer) fetchTesseractState(tesseract *common.Tesseract, fetchContext [
 		return err
 	}
 	defer newSession.Close()
-	defer newSession.Close()
 
 	islocal, acc, block, err := s.fetchAccount(ctx, newSession, tesseract.StateHash())
 	if err != nil {
 		return err
 	}
 
-	if err = s.fetchData(
+	if err = s.fetchAndStoreData(
 		ctx,
 		newSession,
 		cid.BalanceCID(acc.Balance),
@@ -1549,9 +1552,9 @@ func (s *Syncer) fetchAccount(
 	return islocal, acc, blk, nil
 }
 
-// fetchData retrieves data blocks from the given session object and writes them to the database,
+// fetchAndStoreData retrieves data blocks from the given session object and writes them to the database,
 // using the specified CID values as keys.
-func (s *Syncer) fetchData(ctx context.Context, session *session.Session, ids ...cid.CID) error {
+func (s *Syncer) fetchAndStoreData(ctx context.Context, session *session.Session, ids ...cid.CID) error {
 	keySet := cid.NewHashSet()
 
 	for _, cID := range ids {
@@ -1598,7 +1601,7 @@ func (s *Syncer) syncContextData(ctx context.Context, session *session.Session, 
 		return err
 	}
 
-	if err = s.fetchData(
+	if err = s.fetchAndStoreData(
 		ctx,
 		session,
 		cid.ContextCID(metaContextObject.RandomContext),
@@ -1688,12 +1691,41 @@ func (s *Syncer) syncStorageTree(ctx context.Context, session *session.Session, 
 	return nil
 }
 
-func (s *Syncer) syncLogicTree(ctx context.Context, session *session.Session, newRoot common.Hash) error {
+func (s *Syncer) syncLogicManifests(ctx context.Context, as *session.Session, root *common.RootNode) error {
+	cids := make([]cid.CID, 0)
+
+	for _, rawLogicObject := range root.HashTable {
+		manifestHash, err := state.GetManifestHashFromRawLogicObject(rawLogicObject)
+		if err != nil {
+			return err
+		}
+
+		cids = append(cids, cid.ManifestCID(manifestHash))
+	}
+
+	for _, blck := range s.getBlocks(ctx, as, cids...) {
+		if err := s.db.CreateEntry(dbKeyFromCID(as.ID(), blck.GetCid()), blck.GetData()); err != nil {
+			return err
+		}
+	}
+
+	for _, cID := range cids {
+		if stored, err := s.db.Contains(dbKeyFromCID(as.ID(), cID)); err != nil || !stored {
+			s.logger.Error("failed to fetch logic manifest", as.ID(), "manifest-hash", cID.String())
+
+			return errors.New("failed to fetch logic manifest")
+		}
+	}
+
+	return nil
+}
+
+func (s *Syncer) syncLogicTree(ctx context.Context, as *session.Session, newRoot common.Hash) error {
 	if newRoot.IsNil() {
 		return nil
 	}
 
-	_, blk, err := s.getBlock(ctx, session, cid.LogicCID(newRoot))
+	_, blk, err := s.getBlock(ctx, as, cid.LogicCID(newRoot))
 	if err != nil {
 		return nil
 	}
@@ -1703,7 +1735,11 @@ func (s *Syncer) syncLogicTree(ctx context.Context, session *session.Session, ne
 		return err
 	}
 
-	return s.state.SyncLogicTree(session.ID(), metaLogicRoot)
+	if err = s.syncLogicManifests(ctx, as, metaLogicRoot); err != nil {
+		return err
+	}
+
+	return s.state.SyncLogicTree(as.ID(), metaLogicRoot)
 }
 
 func (s *Syncer) msgHandler(msg *pubsub.Message) error {
@@ -1813,7 +1849,7 @@ func (s *Syncer) Start() error {
 		return err
 	}
 
-	if err := s.network.Subscribe(s.ctx, TesseractTopic, s.msgHandler); err != nil {
+	if err := s.network.Subscribe(s.ctx, common.TesseractTopic, s.msgHandler); err != nil {
 		return err
 	}
 
@@ -1824,6 +1860,8 @@ func (s *Syncer) Start() error {
 	}
 
 	s.startWorkers()
+
+	go s.startPendingAccountEventHandler()
 
 	go func() {
 		if err := s.initSync(); err != nil {
@@ -1839,6 +1877,12 @@ func (s *Syncer) Start() error {
 	go s.startSyncEventHandler()
 
 	return nil
+}
+
+func (s *Syncer) startPendingAccountEventHandler() {
+	sub := s.mux.Subscribe(utils.PendingAccountEvent{})
+
+	s.tracker.StartSyncStatusTracker(s.ctx, sub)
 }
 
 func (s *Syncer) startSyncEventHandler() {
@@ -1861,6 +1905,46 @@ func (s *Syncer) startSyncEventHandler() {
 				s.logger.Error("Failed to handle sync request from krama engine", "err", err)
 			}
 		}
+	}
+}
+
+// GetAccountSyncStatus returns the sync status of an account
+func (s *Syncer) GetAccountSyncStatus(addr common.Address) (*args.AccSyncStatus, error) {
+	var currentHeight, expectedHeight uint64
+
+	job, ok := s.jobQueue.getJob(addr)
+	if !ok {
+		accountInfo, err := s.db.GetAccountMetaInfo(addr)
+		if err != nil {
+			return nil, err
+		}
+
+		currentHeight = accountInfo.Height
+		expectedHeight = 0
+	} else {
+		currentHeight = job.currentHeight
+		expectedHeight = job.expectedHeight
+	}
+
+	isPrimarySyncDone := s.db.IsAccountPrimarySyncDone(addr)
+
+	return &args.AccSyncStatus{
+		CurrentHeight:     hexutil.Uint64(currentHeight),
+		ExpectedHeight:    hexutil.Uint64(expectedHeight),
+		IsPrimarySyncDone: isPrimarySyncDone,
+	}, nil
+}
+
+// GetNodeSyncStatus returns the node sync status
+func (s *Syncer) GetNodeSyncStatus() *args.NodeSyncStatus {
+	isPrincipalSyncDone, principalSyncTimeStamp := s.db.IsPrincipalSyncDone()
+	totalPendingAccounts := s.tracker.ReadPendingAccounts()
+
+	return &args.NodeSyncStatus{
+		TotalPendingAccounts:  hexutil.Uint64(totalPendingAccounts),
+		IsPrincipalSyncDone:   isPrincipalSyncDone,
+		PrincipalSyncDoneTime: hexutil.Uint64(principalSyncTimeStamp),
+		IsInitialSyncDone:     s.isInitialSyncDone,
 	}
 }
 

@@ -9,28 +9,25 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/peterh/liner"
-
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-	mudraCommon "github.com/sarvalabs/go-moi/crypto/common"
-	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
-	gtypes "github.com/sarvalabs/go-moi/state"
+	"github.com/pkg/errors"
+	pisa "github.com/sarvalabs/go-pisa/moi"
 	"github.com/sarvalabs/go-polo"
+	"github.com/spf13/cobra"
 
 	cmdCommon "github.com/sarvalabs/go-moi/cmd/common"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
-
-	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
-
-	"github.com/sarvalabs/go-moi/compute/pisa"
-
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/crypto"
+	mudraCommon "github.com/sarvalabs/go-moi/crypto/common"
 	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/moiclient"
+	gtypes "github.com/sarvalabs/go-moi/state"
 )
 
 var (
@@ -117,18 +114,26 @@ func validateFlags() error {
 		return errors.New("invalid node index")
 	}
 
+	if _, err := os.Stat(mnemonicKeystorePath); err != nil {
+		if os.IsNotExist(err) {
+			return mudraCommon.ErrNoMnemonicKeystore
+		}
+
+		return err
+	}
+
 	return nil
 }
 
 func runRegisterCommand(cmd *cobra.Command, args []string) {
+	if err := validateFlags(); err != nil {
+		cmdCommon.Err(err)
+	}
+
 	line := liner.NewLiner()
 
 	masterPassword, err := line.PasswordPrompt("Enter mnemonic key store password :")
 	if err != nil {
-		cmdCommon.Err(err)
-	}
-
-	if err := validateFlags(); err != nil {
 		cmdCommon.Err(err)
 	}
 
@@ -198,7 +203,7 @@ func registerGuardian(vault *crypto.KramaVault) {
 
 	fmt.Printf("Krama-ID %s \n", vault.KramaID())
 
-	nonce, err := client.InteractionCount(&rpcargs.InteractionCountArgs{
+	nonce, err := client.InteractionCount(context.Background(), &rpcargs.InteractionCountArgs{
 		Address: common.BytesToAddress(moiIDpublicKey),
 		Options: rpcargs.TesseractNumberOrHash{
 			TesseractNumber: &rpcargs.LatestTesseractHeight,
@@ -238,7 +243,7 @@ func registerGuardian(vault *crypto.KramaVault) {
 		cmdCommon.Err(err)
 	}
 
-	ixHash, err := client.SendInteractions(&rpcargs.SendIX{
+	ixHash, err := client.SendInteractions(context.Background(), &rpcargs.SendIX{
 		IXArgs:    hex.EncodeToString(rawArgs),
 		Signature: hex.EncodeToString(signature),
 	})
@@ -273,9 +278,9 @@ func registerGuardian(vault *crypto.KramaVault) {
 }
 
 func isGuardianRegistered(client *moiclient.Client, kramaID id.KramaID) bool {
-	storageData, err := client.Storage(&rpcargs.GetLogicStorageArgs{
+	storageData, err := client.LogicStorage(context.Background(), &rpcargs.GetLogicStorageArgs{
 		LogicID:    common.GuardianLogicID,
-		StorageKey: pisa.SlotHash(gtypes.GuardianSLot),
+		StorageKey: pisa.Slothash(gtypes.GuardianSLot),
 		Options: rpcargs.TesseractNumberOrHash{
 			TesseractNumber: &rpcargs.LatestTesseractHeight,
 		},

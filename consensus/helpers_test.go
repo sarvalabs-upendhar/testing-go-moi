@@ -3,13 +3,19 @@ package consensus
 import (
 	"context"
 	"sync"
+	"testing"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-moi/crypto"
+	mudraCommon "github.com/sarvalabs/go-moi/crypto/common"
+	networkmsg "github.com/sarvalabs/go-moi/network/message"
+	"github.com/sarvalabs/go-polo"
+	"github.com/stretchr/testify/require"
 
+	"github.com/hashicorp/go-hclog"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/protocol"
-
 	"github.com/sarvalabs/go-moi/common"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/network/rpc"
 )
 
@@ -98,3 +104,54 @@ func (m *MockServer) GetKramaID() id.KramaID {
 //
 //	return m.peers
 // }
+
+type MockEngine struct {
+	logger   hclog.Logger
+	requests chan Request
+}
+
+func processRequests(requestsChan <-chan Request) {
+	go func() {
+		request := <-requestsChan
+		request.responseChan <- Response{}
+	}()
+}
+
+func (k *MockEngine) Requests() chan Request {
+	processRequests(k.requests)
+
+	return k.requests
+}
+
+func (k *MockEngine) Logger() hclog.Logger {
+	return k.logger
+}
+
+func getRawInteraction(t *testing.T, ixData common.IxData, sign []byte) []byte {
+	t.Helper()
+
+	ix, err := common.NewInteraction(ixData, sign)
+	require.NoError(t, err)
+
+	rawInteractions, err := polo.Polorize([]*common.Interaction{ix})
+	require.NoError(t, err)
+
+	return rawInteractions
+}
+
+func getSignature(t *testing.T, kramaID id.KramaID, rawInteractions []byte, vault *crypto.KramaVault) ([]byte, []byte) {
+	t.Helper()
+
+	canonicalICSReq := networkmsg.CanonicalICSRequest{
+		Operator: string(kramaID),
+		IxData:   rawInteractions,
+	}
+
+	rawCanonicalICSReq, err := polo.Polorize(canonicalICSReq)
+	require.NoError(t, err)
+
+	icsReqSign, err := vault.Sign(rawCanonicalICSReq, mudraCommon.EcdsaSecp256k1, crypto.UsingNetworkKey())
+	require.NoError(t, err)
+
+	return rawCanonicalICSReq, icsReqSign
+}

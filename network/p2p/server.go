@@ -329,6 +329,14 @@ func (s *Server) GetConns() []network.Conn {
 	return s.host.Network().Conns()
 }
 
+func (s *Server) GetInboundConnCount() int64 {
+	return s.connInfo.inboundConnCount
+}
+
+func (s *Server) GetOutboundConnCount() int64 {
+	return s.connInfo.outboundConnCount
+}
+
 // GetKramaID returns the KramaID of node
 func (s *Server) GetKramaID() id.KramaID {
 	return s.id
@@ -1068,6 +1076,16 @@ func (s *Server) GetBootstrapPeerIDs() (map[peer.ID]bool, error) {
 
 func (s *Server) GetVersion() string {
 	return config.ProtocolVersion
+}
+
+func (s *Server) GetSubscribedTopics() map[string]int {
+	topics := make(map[string]int)
+
+	for _, topic := range s.psRouter.GetTopics() {
+		topics[topic] = len(s.psRouter.ListPeers(topic))
+	}
+
+	return topics
 }
 
 func (pst *pubSubTopics) addTopicSet(topicName string, topicSet *TopicSet) {

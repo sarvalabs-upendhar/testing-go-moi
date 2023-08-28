@@ -549,14 +549,10 @@ func (object *Object) CreateAsset(addr common.Address, descriptor *common.AssetD
 }
 
 func (object *Object) CreateLogic(descriptor *engineio.LogicDescriptor) (common.LogicID, error) {
-	//// Generate the key for the LogicManifest from its hash
-	// key := common.BytesToHex(storage.LogicManifestKey(object.Address(), descriptor.ManifestHash))
-	//// Write the manifest into the dirty entries
-	// object.SetDirtyEntry(key, descriptor.ManifestRaw)
-	// Set the manifest data into the state object dirty entries.
-	// This manifest will now be content addressed with its hash.
-	// todo: the following line should be replaced with code above
-	object.SetDirtyEntry(descriptor.ManifestHash.Hex(), descriptor.ManifestRaw)
+	// Generate the key for the LogicManifest from its hash
+	key := common.BytesToHex(storage.LogicManifestKey(object.Address(), descriptor.ManifestHash))
+	// Write the manifest into the dirty entries
+	object.SetDirtyEntry(key, descriptor.ManifestRaw)
 
 	// Create a new LogicObject from the LogicDescriptor
 	logicObject := NewLogicObject(object.Address(), descriptor)
@@ -883,7 +879,7 @@ func (object *Object) isLogicRegistered(logicID common.LogicID) error {
 	return nil
 }
 
-func (object *Object) getMetaLogicTree() (tree.MerkleTree, error) {
+func (object *Object) getLogicTree() (tree.MerkleTree, error) {
 	if object.logicTree != nil {
 		return object.logicTree, nil
 	}
@@ -905,7 +901,7 @@ func (object *Object) getMetaLogicTree() (tree.MerkleTree, error) {
 }
 
 func (object *Object) getLogicObject(logicID common.LogicID) (*LogicObject, error) {
-	logicTree, err := object.getMetaLogicTree()
+	logicTree, err := object.getLogicTree()
 	if err != nil {
 		return nil, err
 	}
@@ -931,7 +927,7 @@ func (object *Object) InsertNewLogicObject(logicID common.LogicID, logicObject *
 		return errors.New("logic already registered")
 	}
 
-	logicTree, err := object.getMetaLogicTree()
+	logicTree, err := object.getLogicTree()
 	if err != nil {
 		return errors.Wrap(err, "failed to load logic tree")
 	}

@@ -7,11 +7,11 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
+	pisa "github.com/sarvalabs/go-pisa/moi"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/compute/engineio"
-	"github.com/sarvalabs/go-moi/compute/pisa"
 	"github.com/sarvalabs/go-moi/state"
 )
 
@@ -79,40 +79,18 @@ func (manager *Manager) ExecuteInteractions(
 	return executor.Receipts(), nil
 }
 
-func (manager *Manager) LogicCall(
-	logicID common.LogicID,
-	sender common.Address,
-	callsite string,
-	calldata []byte,
-) (engineio.Fuel, *common.LogicInvokeReceipt, error) {
-	logicStateObject, err := manager.state.GetLatestStateObject(logicID.Address())
+func (manager *Manager) InteractionCall(
+	ix *common.Interaction,
+	hashes map[common.Address]common.Hash,
+) (*common.Receipt, error) {
+	// Fetch state objects for the interaction
+	objects, err := FetchIxStateObjects(manager.state, ix, hashes)
 	if err != nil {
-		return nil, nil, err
-	}
-
-	senderStateObject, err := manager.state.GetLatestStateObject(sender)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	options := make([]LogicInvokeOption, 0, 3)
-	// Append invoker options for invoker state and fuel limit
-	options = append(options, InvokerState(senderStateObject))
-	options = append(options, InvokeCall(callsite, calldata))
-
-	return InvokeLogic(logicID, logicStateObject, options...)
-}
-
-func (manager *Manager) InteractionCall(ix *common.Interaction) (*common.Receipt, error) {
-	// Create a map of state objects
-	objects := make(state.ObjectMap)
-	// Load objects into the map without snapshotting
-	if err := loadStateObjects(ix, manager.state, objects, nil, false); err != nil {
 		return nil, err
 	}
 
 	// Run the interaction and return the receipt
-	return manager.runInteraction(ix, objects, false)
+	return manager.runInteraction(ix, objects, true)
 }
 
 func (manager *Manager) runInteraction(
@@ -142,11 +120,6 @@ func (manager *Manager) runInteraction(
 
 	if !ok {
 		return nil, errors.Errorf("execution failed: insufficient fuel")
-	}
-
-	// Increment the nonce of the sender address
-	if ix.Sender() != common.NilAddress {
-		objects.GetObject(ix.Sender()).IncrementNonce(1)
 	}
 
 	ixtype := ix.Type()
@@ -200,4 +173,48 @@ func (manager *Manager) Revert(cluster common.ClusterID) error {
 // Cleanup removes the executor instance for the given Cluster ID, if one exists.
 func (manager *Manager) Cleanup(cluster common.ClusterID) {
 	manager.executors.Delete(cluster)
+}
+
+func (manager *Manager) ValidateLogicDeploy(ix *common.Interaction, data []byte) error {
+	manifest, err := engineio.NewManifest(data, engineio.POLO)
+	if err != nil {
+		return err
+	}
+
+	runtime, ok := engineio.FetchEngineRuntime(manifest.Header().LogicEngine())
+	if !ok {
+		return errors.New("failed to get runtime for logic")
+	}
+
+	logicDescriptor, _, err := runtime.CompileManifest(ix.FuelLimit(), manifest)
+	if err != nil {
+		return err
+	}
+
+	logicObject := state.NewLogicObject(ix.Receiver(), logicDescriptor)
+
+	if ix.Callsite() == "" {
+		return nil
+	}
+
+	return runtime.ValidateCalldata(logicObject, ix)
+}
+
+func (manager *Manager) ValidateLogicInvoke(ix *common.Interaction) error {
+	stateObject, err := manager.state.GetLatestStateObject(ix.Receiver())
+	if err != nil {
+		return err
+	}
+
+	logicObject, err := stateObject.FetchLogicObject(ix.LogicID())
+	if err != nil {
+		return err
+	}
+
+	runtime, ok := engineio.FetchEngineRuntime(logicObject.Engine())
+	if !ok {
+		return errors.New("failed to get runtime for logic")
+	}
+
+	return runtime.ValidateCalldata(logicObject, ix)
 }

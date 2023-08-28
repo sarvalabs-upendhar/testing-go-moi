@@ -125,7 +125,16 @@ func (n *Node) setupExecEngine() {
 
 // setupIxPool creates new InteractionPool object and setups it to node
 func (n *Node) setupIxPool() {
-	n.ixpool = ixpool.NewIxPool(n.ctx, n.logger, n.eventMux, n.state, n.cfg.IxPool, n.nodeMetrics.ixpool, crypto.Verify)
+	n.ixpool = ixpool.NewIxPool(
+		n.ctx,
+		n.logger,
+		n.eventMux,
+		n.state,
+		n.exec,
+		n.cfg.IxPool,
+		n.nodeMetrics.ixpool,
+		crypto.Verify,
+	)
 }
 
 // setupSenatusToNetwork fetches Senatus from state and setups it to node's network manager(poorna server)
@@ -198,7 +207,7 @@ func (n *Node) setupKramaEngine() (err error) {
 
 // setupSyncer creates new Syncer object and setups it to node
 func (n *Node) setupSyncer() (err error) {
-	if n.handlers.syncer, err = forage.NewSyncer(
+	if n.syncer, err = forage.NewSyncer(
 		n.ctx,
 		n.cfg.Syncer,
 		n.logger,
@@ -254,7 +263,7 @@ func (n *Node) setLogger(logLevel string) error {
 func (n *Node) setupRPC() error {
 	n.rpc = jsonrpc.NewRPCServer("/", n.logger, n.cfg.Network, n.eventMux)
 
-	backend := api.NewBackend(n.ixpool, n.chain, n.exec, n.state, n.network, n.db, n.cfg.IxPool)
+	backend := api.NewBackend(n.ixpool, n.chain, n.exec, n.state, n.syncer, n.network, n.db, n.cfg.IxPool)
 
 	for _, publicAPI := range api.GetPublicAPIs(backend) {
 		rpcService := jsonrpc.NewRPCService()

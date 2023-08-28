@@ -9,6 +9,10 @@ import (
 	"net"
 	"os"
 
+	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/crypto/poi"
+
 	"github.com/pkg/errors"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -36,7 +40,7 @@ func WaitForReceipts(ctx context.Context, client *moiclient.Client, ixHash commo
 
 			return nil, ctx.Err()
 		default:
-			rpcReceipt, err := client.InteractionReceipt(&args.ReceiptArgs{
+			rpcReceipt, err := client.InteractionReceipt(ctx, &args.ReceiptArgs{
 				Hash: ixHash,
 			})
 			if err != nil {
@@ -85,4 +89,25 @@ func GetThisNodeIP() (string, error) {
 	}
 
 	return "", errors.New("this node's ip not found")
+}
+
+func GetAccountsWithMnemonic(accountCount int) ([]tests.AccountWithMnemonic, error) {
+	accounts := make([]tests.AccountWithMnemonic, 0, accountCount)
+
+	for i := 0; i < accountCount; i++ {
+		mnemonic := poi.GenerateRandMnemonic().String()
+
+		_, publicKey, err := poi.GetPrivateKeyAtPath(mnemonic, config.DefaultMoiWalletPath)
+		if err != nil {
+			return nil, err
+		}
+
+		accounts = append(accounts,
+			tests.AccountWithMnemonic{
+				Addr:     common.BytesToAddress(publicKey),
+				Mnemonic: mnemonic,
+			})
+	}
+
+	return accounts, nil
 }

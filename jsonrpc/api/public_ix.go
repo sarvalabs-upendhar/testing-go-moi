@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/hex"
+	"math/big"
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
@@ -115,4 +116,33 @@ func validateArgumentsWithSign(args *rpcargs.SendIX) (*common.SendIXArgs, error)
 	// TODO: Add more checks to validate inputs
 
 	return ixArgs, nil
+}
+
+func createSendIXArgs(sendIx *rpcargs.IxArgs) (*common.SendIXArgs, error) {
+	sendIXArgs := &common.SendIXArgs{
+		Type:      sendIx.Type,
+		Nonce:     sendIx.Nonce.ToUint64(),
+		Sender:    sendIx.Sender,
+		Receiver:  sendIx.Receiver,
+		Payer:     sendIx.Payer,
+		FuelPrice: sendIx.FuelPrice.ToInt(),
+		FuelLimit: sendIx.FuelLimit.ToInt(),
+		Payload:   sendIx.Payload.Bytes(),
+	}
+
+	if len(sendIx.TransferValues) > 0 {
+		sendIXArgs.TransferValues = make(map[common.AssetID]*big.Int)
+		for asset, amount := range sendIx.TransferValues {
+			sendIXArgs.TransferValues[asset] = amount.ToInt()
+		}
+	}
+
+	if len(sendIx.PerceivedValues) > 0 {
+		sendIXArgs.PerceivedValues = make(map[common.AssetID]*big.Int)
+		for asset, amount := range sendIx.PerceivedValues {
+			sendIXArgs.PerceivedValues[asset] = amount.ToInt()
+		}
+	}
+
+	return sendIXArgs, nil
 }

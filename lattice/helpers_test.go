@@ -12,18 +12,17 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-	"github.com/sarvalabs/go-polo"
-
-	lru "github.com/hashicorp/golang-lru"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/hashicorp/golang-lru"
+	"github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/hexutil"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/compute"
@@ -464,7 +463,17 @@ type MockStateManager struct {
 	createDirtyObjectHook   func() *state.Object
 }
 
+func (sm *MockStateManager) CreateStateObject(address common.Address, accountType common.AccountType) *state.Object {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (sm *MockStateManager) GetLatestStateObject(addr common.Address) (*state.Object, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (sm *MockStateManager) GetStateObjectByHash(addr common.Address, hash common.Hash) (*state.Object, error) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -576,7 +585,7 @@ func (sm *MockStateManager) GetLatestTesseract(addr common.Address, withInteract
 		return nil, common.ErrFetchingTesseract
 	}
 
-	copyTS := *ts // copy, so that stored tesseract wont't be modified
+	copyTS := *ts // copy, so that stored tesseract won't be modified
 
 	if !withInteractions {
 		copyTS = *copyTS.GetTesseractWithoutIxns()
@@ -1709,7 +1718,7 @@ func getTestAssetCreationArgs(t *testing.T, allocationAddr common.Address) commo
 func getTestGenesisLogics(t *testing.T) []common.LogicSetupArgs {
 	t.Helper()
 
-	manifest := "0x" + common.BytesToHex(tests.ReadManifest(t, "./../compute/manifests/erc20.json"))
+	manifest := "0x" + common.BytesToHex(tests.ReadManifest(t, "./../compute/manifests/ledger.yaml"))
 	calldata := "0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd8ee6a29e" +
 		"c442dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49"
 
@@ -1983,31 +1992,6 @@ func checkIfTesseractAdded(
 	require.True(t, sm.isCleanup(ts.Address())) // check if dirty objects cleaned up
 	require.True(t, ixPool.IsReset(ts.Hash()))  // check if interactions are reset
 }
-
-/*
-func checkIfICSNodeSetMatches(
-	t *testing.T,
-	ics *common.ICSNodeSet,
-	senderBehaviourSet *common.NodeSet,
-	senderRandomSet *common.NodeSet,
-	randomSet *common.NodeSet,
-) {
-	t.Helper()
-
-	require.Equal(t,
-		ics.Nodes[common.SenderBehaviourSet],
-		senderBehaviourSet,
-	)
-	require.Equal(t,
-		ics.Nodes[common.SenderRandomSet],
-		senderRandomSet,
-	)
-	require.Equal(t,
-		ics.Nodes[common.RandomSet],
-		randomSet,
-	)
-}
-*/
 
 func checkIfTesseractCachedInCM(t *testing.T, c *ChainManager, withInteractions bool, tsHash common.Hash) {
 	t.Helper()

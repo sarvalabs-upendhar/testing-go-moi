@@ -7,18 +7,15 @@ import (
 	"net/http"
 	"sync"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-
-	"github.com/sarvalabs/go-polo"
-
-	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/compute/pisa"
-
 	"github.com/hashicorp/go-hclog"
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
+	pisa "github.com/sarvalabs/go-pisa/moi"
+	"github.com/sarvalabs/go-polo"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/sarvalabs/go-moi/common"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"
 	"github.com/sarvalabs/go-moi/storage/db"
@@ -98,7 +95,7 @@ func NewStateManager(
 	return sm, nil
 }
 
-func (sm *StateManager) createStateObject(addr common.Address, accType common.AccountType) *Object {
+func (sm *StateManager) CreateStateObject(addr common.Address, accType common.AccountType) *Object {
 	journal := new(Journal)
 	stateObject := NewStateObject(addr, sm.cache, journal, sm.db, common.Account{AccType: accType})
 
@@ -117,7 +114,7 @@ func (sm *StateManager) CreateDirtyObject(addr common.Address, accType common.Ac
 	sm.dirtyObjectsLock.Lock()
 	defer sm.dirtyObjectsLock.Unlock()
 
-	obj := sm.createStateObject(addr, accType)
+	obj := sm.CreateStateObject(addr, accType)
 
 	sm.dirtyObjects[addr] = obj.Copy()
 	sm.metrics.captureActiveStateObjects(float64(len(sm.dirtyObjects)))
@@ -211,7 +208,7 @@ func (sm *StateManager) GetLogicIDs(addr common.Address, stateHash common.Hash) 
 
 	logicIDs := make([]common.LogicID, 0)
 
-	logicTree, err := obj.getMetaLogicTree()
+	logicTree, err := obj.getLogicTree()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to load meta logic tree")
 	}
@@ -494,7 +491,7 @@ func (sm *StateManager) getContext(addr common.Address, hash common.Hash) ([]id.
 	return behaviourContext.Ids, randomContext.Ids, nil
 }
 
-// GetParticipantContextRaw loads the context info of a participant into the give map
+// GetParticipantContextRaw loads the context info of a participant into the given map
 func (sm *StateManager) GetParticipantContextRaw(
 	address common.Address,
 	hash common.Hash,
@@ -524,7 +521,7 @@ func (sm *StateManager) GetParticipantContextRaw(
 	if !metaObject.RandomContext.IsNil() {
 		random, err := sm.db.GetContext(address, metaObject.RandomContext)
 		if err != nil {
-			return errors.Wrap(err, "failed to fetch behavioural context")
+			return errors.Wrap(err, "failed to fetch random context")
 		}
 
 		rawContext[metaObject.RandomContext] = random
@@ -562,12 +559,6 @@ func (sm *StateManager) FetchICSNodeSet(
 		return nil, errors.New("nil responses slice")
 	}
 
-	for index, set := range icsNodeSets.Nodes {
-		if set != nil && info.Responses[index] != nil {
-			set.Responses = info.Responses[index]
-		}
-	}
-
 	randomSet, err := sm.GetNodeSet(info.RandomSet)
 	if err != nil {
 		return nil, err
@@ -581,6 +572,12 @@ func (sm *StateManager) FetchICSNodeSet(
 	}
 
 	icsNodeSets.UpdateNodeSet(common.ObserverSet, observerSet)
+
+	for index, set := range icsNodeSets.Nodes {
+		if set != nil && info.Responses[index] != nil {
+			set.Responses = info.Responses[index]
+		}
+	}
 
 	return icsNodeSets, nil
 }
@@ -1018,7 +1015,7 @@ func (sm *StateManager) GetPublicKeyFromContract(ids ...id.KramaID) (keys [][]by
 		return nil, err
 	}
 
-	data, err := object.GetStorageEntry(common.GuardianLogicID, pisa.SlotHash(GuardianSLot))
+	data, err := object.GetStorageEntry(common.GuardianLogicID, pisa.Slothash(GuardianSLot))
 	if err != nil {
 		return nil, err
 	}
@@ -1174,7 +1171,7 @@ func (sm *StateManager) SyncLogicTree(
 		return err
 	}
 
-	logicTree, err := so.getMetaLogicTree()
+	logicTree, err := so.getLogicTree()
 	if err != nil {
 		return err
 	}
@@ -1204,9 +1201,7 @@ func (sm *StateManager) GetLogicManifest(logicID common.LogicID, stateHash commo
 		return nil, errors.Wrap(err, "failed to fetch logic object")
 	}
 
-	// logicManifest, err := sm.db.ReadEntry(storage.LogicManifestKey(logicID.Address(), logicObject.ManifestHash))
-	// todo: replace the following line with above line
-	logicManifest, err := sm.db.ReadEntry(common.FromHex(logicObject.ManifestHash.Hex()))
+	logicManifest, err := sm.db.ReadEntry(storage.LogicManifestKey(logicID.Address(), logicObject.ManifestHash))
 	if err != nil {
 		return nil, errors.Wrap(err, common.ErrFetchingLogicManifest.Error())
 	}

@@ -13,6 +13,7 @@ import (
 
 	libp2pCrypto "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	libp2pTest "github.com/libp2p/go-libp2p/core/test"
 	"github.com/multiformats/go-multiaddr"
 
@@ -23,7 +24,6 @@ import (
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/utils"
-	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/crypto"
 
 	"github.com/sarvalabs/go-polo"
@@ -403,34 +403,66 @@ func (s *MockStateManager) setLogicManifest(logicID string, logicManifest []byte
 }
 
 type MockExecutionManager struct {
-	logicCall map[common.Address]*rpcargs.LogicCallResult
+	call map[common.Hash]*common.Receipt
 }
 
 func NewMockExecutionManager(t *testing.T) *MockExecutionManager {
 	t.Helper()
 
 	exec := new(MockExecutionManager)
-	exec.logicCall = make(map[common.Address]*rpcargs.LogicCallResult)
+	exec.call = make(map[common.Hash]*common.Receipt)
 
 	return exec
 }
 
-func (exec *MockExecutionManager) setLogicCall(addr common.Address, logicCallResult *rpcargs.LogicCallResult) {
-	exec.logicCall[addr] = logicCallResult
+func (exec *MockExecutionManager) setInteractionCall(ix *common.Interaction, receipt *common.Receipt) {
+	exec.call[ix.Hash()] = receipt
 }
 
-func (exec *MockExecutionManager) LogicCall(
-	logicID common.LogicID,
-	addr common.Address,
-	callsite string,
-	calldata []byte,
-) (engineio.Fuel, *common.LogicInvokeReceipt, error) {
-	logicCall, ok := exec.logicCall[addr]
+func (exec *MockExecutionManager) InteractionCall(
+	ix *common.Interaction,
+	stateHashes map[common.Address]common.Hash,
+) (*common.Receipt, error) {
+	receipt, ok := exec.call[ix.Hash()]
 	if !ok {
-		return nil, nil, common.ErrAccountNotFound
+		return nil, common.ErrAccountNotFound
 	}
 
-	return logicCall.Consumed.ToInt(), &common.LogicInvokeReceipt{Outputs: logicCall.Outputs, Error: logicCall.Error}, nil
+	return receipt, nil
+}
+
+type MockSyncer struct {
+	accSyncStatus  map[common.Address]*rpcargs.AccSyncStatus
+	nodeSyncStatus *rpcargs.NodeSyncStatus
+}
+
+func NewMockSyncer(t *testing.T) *MockSyncer {
+	t.Helper()
+
+	syncer := new(MockSyncer)
+	syncer.accSyncStatus = make(map[common.Address]*rpcargs.AccSyncStatus)
+
+	return syncer
+}
+
+func (syncer *MockSyncer) setAccountSyncStatus(addr common.Address, accSyncStatus *rpcargs.AccSyncStatus) {
+	syncer.accSyncStatus[addr] = accSyncStatus
+}
+
+func (syncer *MockSyncer) GetAccountSyncStatus(addr common.Address) (*rpcargs.AccSyncStatus, error) {
+	if accSyncStatus, ok := syncer.accSyncStatus[addr]; ok {
+		return accSyncStatus, nil
+	}
+
+	return nil, common.ErrAccSyncStatusNotFound
+}
+
+func (syncer *MockSyncer) setNodeSyncStatus(nodeSyncStatus *rpcargs.NodeSyncStatus) {
+	syncer.nodeSyncStatus = nodeSyncStatus
+}
+
+func (syncer *MockSyncer) GetNodeSyncStatus() *rpcargs.NodeSyncStatus {
+	return syncer.nodeSyncStatus
 }
 
 type MockIxPool struct {
@@ -532,9 +564,12 @@ func (mc *MockIxPool) setIxs(addr common.Address, pending, queued []*common.Inte
 }
 
 type MockNetwork struct {
-	peers   []id.KramaID
-	version string
-	conns   []network.Conn
+	peers             []id.KramaID
+	version           string
+	conns             []network.Conn
+	inboundConnCount  int64
+	outboundConnCount int64
+	pubsubTopics      map[string]int
 }
 
 func NewMockNetwork(t *testing.T) *MockNetwork {
@@ -574,6 +609,84 @@ func (mn *MockNetwork) setVersion(version string) {
 
 func (mn *MockNetwork) GetVersion() string {
 	return mn.version
+}
+
+func (mn *MockNetwork) setInboundConnCount(inboundConnCount int64) {
+	mn.inboundConnCount = inboundConnCount
+}
+
+func (mn *MockNetwork) GetInboundConnCount() int64 {
+	return mn.inboundConnCount
+}
+
+func (mn *MockNetwork) setOutboundConnCount(outboundConnCount int64) {
+	mn.outboundConnCount = outboundConnCount
+}
+
+func (mn *MockNetwork) GetOutboundConnCount() int64 {
+	return mn.outboundConnCount
+}
+
+func (mn *MockNetwork) setSubscribedTopics(pubsubTopics map[string]int) {
+	mn.pubsubTopics = pubsubTopics
+}
+
+func (mn *MockNetwork) GetSubscribedTopics() map[string]int {
+	return mn.pubsubTopics
+}
+
+type mockStream struct {
+	network.MuxedStream
+	protocol  protocol.ID
+	direction int
+}
+
+func (ms *mockStream) ID() string {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (ms *mockStream) Protocol() protocol.ID {
+	return ms.protocol
+}
+
+func (ms *mockStream) SetProtocol(id protocol.ID) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (ms *mockStream) Conn() network.Conn {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (ms *mockStream) Scope() network.StreamScope {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (ms *mockStream) ProtocolID() protocol.ID {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (ms *mockStream) Stat() network.Stats {
+	return network.Stats{
+		Direction: 1,
+	}
+}
+
+func createStreams(streamCount int) []network.Stream {
+	streams := make([]network.Stream, streamCount)
+
+	for i := 0; i < streamCount; i++ {
+		streams[i] = &mockStream{
+			protocol:  "/meshsub/1.1.0",
+			direction: 1,
+		}
+	}
+
+	return streams
 }
 
 type mockConn struct {
@@ -651,7 +764,7 @@ func createConns(t *testing.T, connCount int, streamCount int) []network.Conn {
 	for i := 0; i < connCount; i++ {
 		conns[i] = mockConn{
 			remotePeerID: peerID,
-			streams:      make([]network.Stream, streamCount),
+			streams:      createStreams(streamCount),
 		}
 	}
 
