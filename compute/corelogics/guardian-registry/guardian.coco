@@ -1,0 +1,367 @@
+coco GuardianRegistry
+
+state persistent:
+    // mapping of operator MOI ID to Operator details
+    Operators Map[String]Operator
+    // mapping of operator MOI ID to Guardian KramaIDs
+    OperatorToGuardians Map[String][]String
+    // mapping of Krama ID to its Guardian object
+    Guardians Map[String]Guardian
+    // mapping of Device ID to node Krama IDs
+    Devices Map[String][]String
+    // mapping of Krama ID to approved wallet address
+    Approved Map[String]Address
+    // mapping of Krama ID to its current incentive amount
+    Incentives Map[String]I64
+    // List of guardians in the system
+    AllGuardiansKramaIDs []String
+    // List of guardians in the system
+    UniqueOperators []String
+    // max limit of guardian nodes for KYC Verified operator
+    NodeLimitKYC U64
+    // max limit of guardian nodes for KYB Verified operator
+    NodeLimitKYB U64
+    // max limit of guardian nodes for a particular Device ID
+    DeviceLimit U64
+    // whether to enforce node limit for operator based on verification type
+    EnforceNodeLimits Bool
+    // whether to enforce approval check during the guardian onboarding
+    EnforceApprovals Bool
+    // whether to enforce device ID limits for guardians on shared hardware
+    EnforceDeviceLimits Bool
+    // master operator for whom, node limits and verification does not apply
+    MasterOperator String
+    // list of approvers
+    ApproverSet []Address
+
+class Operator:
+    field OperatorID String
+    field VerDetails Verification
+
+class Verification:
+    field Kind String
+    field Proof Bytes
+
+class Guardian:
+    field Operator String
+    field KramaID String
+    field DeviceID String
+    field PublicKey Bytes
+    field IncentiveWallet Address
+    field ExtraData Bytes
+
+endpoint deployer Redeploy!(operators Map[String]Operator, operatorToGuardians Map[String][]String, guardians Map[String]Guardian, approved Map[String]Address, incentives Map[String]I64, allGuardianKramaIDs []String, uniqueOperators []String, nodeLimitKYC U64, nodeLimitKYB U64, deviceLimit U64, enforceNodeLimits Bool, enforceApprovals Bool, enforceDeviceLimits Bool, masterOperator String, approverSet []Address):
+    mutate operators -> GuardianRegistry.State.Operators
+    mutate operatorToGuardians -> GuardianRegistry.State.OperatorToGuardians
+    mutate guardians -> GuardianRegistry.State.Guardians
+    mutate approved -> GuardianRegistry.State.Approved
+    mutate incentives -> GuardianRegistry.State.Incentives
+    mutate allGuardianKramaIDs -> GuardianRegistry.State.AllGuardiansKramaIDs
+    mutate uniqueOperators -> GuardianRegistry.State.UniqueOperators
+    mutate nodeLimitKYC -> GuardianRegistry.State.NodeLimitKYC
+    mutate nodeLimitKYB -> GuardianRegistry.State.NodeLimitKYB
+    mutate deviceLimit -> GuardianRegistry.State.DeviceLimit
+    mutate enforceNodeLimits -> GuardianRegistry.State.EnforceNodeLimits
+    mutate enforceApprovals -> GuardianRegistry.State.EnforceApprovals
+    mutate enforceDeviceLimits -> GuardianRegistry.State.EnforceDeviceLimits
+    mutate masterOperator -> GuardianRegistry.State.MasterOperator
+    mutate approverSet -> GuardianRegistry.State.ApproverSet
+
+// Setup! is the deployment constructor and sets up the registry behaviour.
+// - enforceApprovals: determines if guardian and operator verification is to be performed
+// - enforceNodeLimits: determines whether node limits based on operator verification mode must be performed.
+// - enforceDeviceLimits: determines whether the limits for the number of device IDs shared by guardians must be enforced.
+// - kycLimit, kybLimit: determines the node limits for KYC and KYB verified operators
+// - deviceLimit: determines the number of guardians that exists for the same device ID.
+// - master: operator MOI ID for genesis set of guardians and others
+// - preApprovedKramaIDs: list of kramaIDs pre-Approved
+// - preApprovals: list of addresses pre-approved for corresponding preApprovedKramaIDs
+// - guardians: All genesis guardian nodes
+// - approvers: List of authorized approvers
+endpoint deployer Setup!(enforceApprovals, enforceNodeLimits, enforceDeviceLimits Bool, limitKYC, limitKYB, limitDevice U64, master String, guardians []Guardian, preApprovedKramaIDs []String, preApprovedAddresses []Address, approvers []Address):
+    // Set all the values to the logic state
+    mutate enforceApprovals -> GuardianRegistry.State.EnforceApprovals
+    mutate enforceNodeLimits -> GuardianRegistry.State.EnforceNodeLimits
+    mutate enforceDeviceLimits -> GuardianRegistry.State.EnforceDeviceLimits
+    mutate limitKYC -> GuardianRegistry.State.NodeLimitKYC
+    mutate limitKYB -> GuardianRegistry.State.NodeLimitKYB
+    mutate limitDevice -> GuardianRegistry.State.DeviceLimit
+    mutate master -> GuardianRegistry.State.MasterOperator
+    mutate approvers -> GuardianRegistry.State.ApproverSet
+
+    // For each provided pre-registered guardian
+    for _, guardian in guardians:
+        // Obtain guardian's Krama ID
+        var kramaID = guardian.KramaID
+        
+        // Append the guardian krama ID to the master operator's list of guardians
+        mutate operatorToGuardians <- GuardianRegistry.State.OperatorToGuardians:
+            operatorToGuardians[master] = append(operatorToGuardians[master], kramaID)
+
+        // Add the guardian object to the full set of guardians
+        mutate guardianstate <- GuardianRegistry.State.Guardians:
+            guardianstate[kramaID] = guardian
+
+        // Append the guardian krama ID to the full set of guardian krama IDs
+        mutate allGuardiansKramaIDs <- GuardianRegistry.State.AllGuardiansKramaIDs:
+            allGuardiansKramaIDs = append(allGuardiansKramaIDs, kramaID)
+
+    mutate approved <- GuardianRegistry.State.Approved:
+        // Add each approved krama ID and address to the approved set
+        for idx, kramaID in preApprovedKramaIDs:
+            approved[kramaID] = preApprovedAddresses[idx]
+
+// Approve! accepts a varray of Approval objects and adds each one as an
+// entry to the Approved state. Overwrites an entry if it already exists.
+endpoint invokable Approve!(approvedKramaIDs []String):
+    CheckSender()
+
+    // Open a mutate context for the set approved operators
+    mutate approved <- GuardianRegistry.State.Approved:
+        // Set each of the approved krama IDs as approved by the sender
+        for _, approvedKramaID in approvedKramaIDs:
+            approved[approvedKramaID] = Address(Sender)
+
+// IsApproved returns the wallet address and a boolean indicating if the given Krama ID has been approved.
+// The returned wallet address is the expected address for registering the Guardian node
+endpoint invokable IsApproved(kramaID String) -> (approverAddress Address, isPresent Bool):
+    observe approved <- GuardianRegistry.State.Approved:
+        var approver = approved[kramaID]
+        var check = (approver == Address(0))
+
+        yield approverAddress approver
+        yield isPresent !check
+
+endpoint invokable AddOperator!(operatorMOIId String, verificationDetails Verification):
+
+    CheckSender()
+
+    var operator =  Operator{OperatorID: operatorMOIId, VerDetails: verificationDetails}
+
+    mutate operators <- GuardianRegistry.State.Operators:
+        operators[operatorMOIId] = operator
+
+    mutate uniqueOperators <- GuardianRegistry.State.UniqueOperators:
+        var check = {output} <- CheckMoiIDOperators(moiID: operatorMOIId)
+        if !check:
+            uniqueOperators = append(uniqueOperators, operatorMOIId)
+
+
+// IsVerified returns the verification object a boolean indicating if the given MOI ID has been verified.
+endpoint invokable IsVerified(moiID String) -> (operator Operator, verified Bool):
+    observe operators <- GuardianRegistry.State.Operators:
+        var accessed = operators[moiID]
+        yield operator accessed
+        yield verified accessed.OperatorID.__bool__()
+
+// Register! registers a Guardian for an Operator.
+// Checks if Operator MOI ID is verified. The guardian Krama ID must be approved. The invoker of this must be
+// the approved address for the Krama ID. Operator must have an available slot for the node. DeviceLimit should be checked.
+// All above checks will be executed only if EnforceApprovals, EnforceVerificationLimits and EnforceDeviceLimits set to true
+endpoint invokable Register!(operatorID String, guardian Guardian):
+    var operator Operator
+    observe operators <- GuardianRegistry.State.Operators:
+        // Retrieve the operator for the given moi ID
+        operator = operators[operatorID]
+        // Check if the operator exists
+        if !operator.OperatorID:
+            throw "operator does not exist!"
+        
+        ValidateSenderWithMoiID(operator.OperatorID)
+        var kramaID = guardian.KramaID
+        var deviceID = guardian.DeviceID
+        var masterOperator String
+        observe masterOperator <- GuardianRegistry.State.MasterOperator
+        if operator.OperatorID != masterOperator:
+            observe enforceApprovals <- GuardianRegistry.State.EnforceApprovals:
+                if enforceApprovals:
+                    var a U64
+                    observe approved <- GuardianRegistry.State.Approved:
+                        if approved[kramaID] == Address(0):
+                            throw "This kramaID is not approved yet"
+            observe enforceNodeLimits <- GuardianRegistry.State.EnforceNodeLimits:              
+                if enforceNodeLimits:
+                    observe operatorToGuardians <- GuardianRegistry.State.OperatorToGuardians:
+                        if operator.VerDetails.Kind == "kyc":
+                            observe nodeLimitKYC <- GuardianRegistry.State.NodeLimitKYC:
+                                if operatorToGuardians[masterOperator].__len__() > nodeLimitKYC:
+                                    throw "Node limit exhausted for this operator of kind KYC"
+                        else:
+                            observe nodeLimitKYB <- GuardianRegistry.State.NodeLimitKYB:
+                                if operatorToGuardians[masterOperator].__len__() > nodeLimitKYB:
+                                    throw "Node limit exhausted for this operator of kind KYB"
+            observe enforceDeviceLimits <- GuardianRegistry.State.EnforceDeviceLimits:
+                if enforceDeviceLimits:
+                    observe deviceLimit <- GuardianRegistry.State.DeviceLimit:
+                        observe devices <- GuardianRegistry.State.Devices:
+                            if len(devices[deviceID]) >= deviceLimit:
+                                throw "Device limit exhausted for the given Device ID"
+
+        mutate operatorToGuardians <- GuardianRegistry.State.OperatorToGuardians:
+            operatorToGuardians[masterOperator] = append(operatorToGuardians[masterOperator], kramaID)
+
+        mutate guardians <- GuardianRegistry.State.Guardians:
+            guardians[kramaID] = guardian
+
+        var present = false
+        observe devices <- GuardianRegistry.State.Devices:
+            for _, device in devices[deviceID]:
+                if device == kramaID:
+                    present = true
+        if !present:
+            mutate devices <- GuardianRegistry.State.Devices:
+                devices[deviceID] = append(devices[deviceID], kramaID)
+
+        present = false
+        observe guardians <- GuardianRegistry.State.AllGuardiansKramaIDs:
+            for _, kramaid in guardians:
+                if kramaid == kramaID:
+                    present = true       
+        if !present:     
+            mutate allGuardiansKramaIDs <- GuardianRegistry.State.AllGuardiansKramaIDs:
+                allGuardiansKramaIDs = append(allGuardiansKramaIDs, kramaID)
+
+// IncreaseNodeLimit increases the node limit for a verification kind ("KYC" or "KYB")
+endpoint invokable IncreaseNodeLimit!(kind String, delta U64):
+    CheckSender()
+    
+    if kind == "kyc":
+        mutate delta -> GuardianRegistry.State.NodeLimitKYC
+
+    else if kind == "kyb":
+        mutate delta -> GuardianRegistry.State.NodeLimitKYB
+
+    else:
+        throw "invalid verification kind"
+
+// Addincentives! add/update the incentives count for the given Krama IDs
+endpoint invokable AddIncentives!(kramaIDs []String, amounts []I64):
+    CheckSender()
+
+    mutate incentives <- GuardianRegistry.State.Incentives:
+        for index, kramaID in kramaIDs:
+            incentives[kramaID] = incentives[kramaID] + amounts[index]
+
+// GetIncentive returns the total accrued incentives for the the given Krama ID
+endpoint invokable GetIncentives(kramaID String) -> (incentive I64):
+    observe incentives <- GuardianRegistry.State.Incentives:
+        yield incentive incentives[kramaID]
+
+// GetOperatorGuardians returns all registered Krama IDs for an Operator
+endpoint invokable GetOperatorGuardians(moiID String) -> (guardians []String):
+    observe operatorGuardians <- GuardianRegistry.State.OperatorToGuardians:
+        yield guardians operatorGuardians[moiID]
+
+// GetGuardianByKramaID returns the Guardian details for a given Krama ID
+endpoint invokable GetGuardianByKramaID(kramaID String) -> (guardian Guardian):
+    observe guardians <- GuardianRegistry.State.Guardians:
+        yield guardian guardians[kramaID]
+
+// GetGuardiansByDeviceID returns the Guardian details for a given Device ID
+endpoint invokable GetGuardiansByDeviceID(deviceID String) -> (kramaIDs []String):
+    observe devices <- GuardianRegistry.State.Devices:
+        yield kramaIDs devices[deviceID]
+
+// GetOperatorGuardiansCount returns the number of nodes registered for a given operator MOI ID.
+endpoint invokable GetOperatorGuardiansCount(moiID String) -> (count U64):
+    observe operatorGuardians <- GuardianRegistry.State.OperatorToGuardians:
+        yield count len(operatorGuardians[moiID])
+
+// GetTotalGuardiansCount returns the total number of guardians registered in the system
+endpoint invokable GetTotalGuardiansCount() -> (count U64):
+    observe guardians <- GuardianRegistry.State.AllGuardiansKramaIDs:
+        yield count len(guardians)
+
+// GetOperatorsCount returns the total number of unique operators registered in the system
+endpoint invokable GetOperatorsCount() -> (count U64):
+    observe operators <- GuardianRegistry.State.UniqueOperators:
+        yield count len(operators)
+
+// GetGuardians returns a set of unique guardian krama IDs ranging from [offset:offset+limit]
+endpoint invokable GetKramaIDs(offset, limit U64) -> (kramaIDs []String):
+    observe guardians <- GuardianRegistry.State.AllGuardiansKramaIDs:
+        var lower = offset
+        var upper = offset + limit
+        var count = len(guardians)
+
+        if upper > count:
+            upper = count
+
+        yield kramaIDs guardians[lower:upper]
+
+// GetOperators returns a set of unique operator moi IDs ranging from [offset:offset+limit]
+endpoint invokable GetOperators(offset, limit U64) -> (moiIDs []String):
+    observe operators <- GuardianRegistry.State.UniqueOperators:
+        var lower = offset
+        var upper = offset + limit
+        var count = len(operators)
+
+        if upper > count:
+            upper = count
+
+        yield moiIDs operators[lower:upper]
+
+// GetNodeLimits returns the KYC and KYB node limits
+endpoint invokable GetNodeLimits() -> (NodeLimitKYC, NodeLimitKYB U64):
+    observe NodeLimitKYC <- GuardianRegistry.State.NodeLimitKYC
+    observe NodeLimitKYB <- GuardianRegistry.State.NodeLimitKYB
+
+// UpdateGuardianDetails can be used  
+// when node is imported in another machine or
+// when incentiveWallet is changed and etc.
+endpoint invokable UpdateGuardianDetails!(kramaID String, updatedGuardiansDetails Guardian):
+    observe guardianDetails <- GuardianRegistry.State.Guardians:
+        var currentGuardianDetails = guardianDetails[kramaID]
+        var currentOperator = currentGuardianDetails.Operator
+        ValidateSenderWithMoiID(currentOperator)
+
+        mutate guardiansState <- GuardianRegistry.State.Guardians:
+            guardiansState[kramaID] = updatedGuardiansDetails
+            var upDevId = updatedGuardiansDetails.DeviceID
+            var oldDeviceID = currentGuardianDetails.DeviceID
+
+            if oldDeviceID != upDevId:
+                mutate devicesState <- GuardianRegistry.State.Devices:
+                    observe deviceToKramaIDs <- GuardianRegistry.State.Devices:
+                        var allNodesInOldDevice = deviceToKramaIDs[oldDeviceID]
+                        devicesState[upDevId] = append(devicesState[upDevId], kramaID)
+                        devicesState[oldDeviceID] = {updated} <- RemoveString(strArray: allNodesInOldDevice, strToBeRemoved: kramaID)            
+
+func ValidateSenderWithMoiID(operator String):
+    var pubKeyOfOperator = operator[2:]
+    var senderInString = Address(Sender).__str__()
+    if pubKeyOfOperator != senderInString:
+        throw "Authentication failed. Operator doesn't match with sender"
+
+func RemoveString(strArray []String, strToBeRemoved String) -> (updated []String):
+    var updatedStrArray []String
+
+    for _, currStr in strArray:
+        if currStr != strToBeRemoved:
+            updatedStrArray = append(updatedStrArray, currStr)
+        
+
+    yield updated updatedStrArray
+
+func CheckSender():
+    // Observe the approver set from the registry state
+    observe approvers <- GuardianRegistry.State.ApproverSet:
+        var validApprover Bool
+
+        // If the Sender is in the approver set, mark as valid approver
+        for _, approver in approvers:
+            if approver == Address(Sender):
+                validApprover = true       
+
+        // If Sender is not a valid approver, throw exception
+        if !validApprover:
+            throw "access denied! not an authorized approver"
+
+func CheckMoiIDOperators(moiID String) -> (output Bool):
+    var present = false
+    observe operators <- GuardianRegistry.State.UniqueOperators:
+        for _, operator in operators:
+            if operator == moiID:
+                present = true
+    
+    yield output present

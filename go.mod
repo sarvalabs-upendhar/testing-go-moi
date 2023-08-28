@@ -43,7 +43,7 @@ require (
 	github.com/peterh/liner v1.2.2
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.14.0
-	github.com/sarvalabs/battleground v0.1.0
+	github.com/sarvalabs/battleground v0.1.1
 	github.com/sarvalabs/go-pisa v0.1.0
 	github.com/sarvalabs/go-polo v0.3.4
 	github.com/spf13/cobra v1.5.0
