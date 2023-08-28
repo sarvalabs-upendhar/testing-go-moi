@@ -11,15 +11,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/go-moi/compute/pisa"
+	pisa "github.com/sarvalabs/go-pisa/moi"
+	"github.com/sarvalabs/go-polo"
+	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/crypto"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
-	"github.com/sarvalabs/go-polo"
-	"github.com/stretchr/testify/require"
 )
 
 func CreateSendIXFromSendIXArgs(t *testing.T, sendIxArgs *common.SendIXArgs, mnemonic string) *rpcargs.SendIX {
@@ -164,20 +164,20 @@ func GetLogicManifestByEncodingType(
 	}
 }
 
-type ERC20State struct {
+type TokenLedgerState struct {
 	Name     string
 	Symbol   string
 	Supply   *big.Int
 	Balances map[common.Address]*big.Int
 }
 
-func GetERC20State(t *testing.T, moiClient *Client, logicID common.LogicID) ERC20State {
+func GetTokenLedgerState(t *testing.T, moiClient *Client, logicID common.LogicID) TokenLedgerState {
 	t.Helper()
 
 	getLatestStorage := func(slot uint8) hexutil.Bytes {
 		s, err := moiClient.LogicStorage(context.Background(), &rpcargs.GetLogicStorageArgs{
 			LogicID:    logicID,
-			StorageKey: pisa.SlotHash(slot),
+			StorageKey: pisa.Slothash(slot),
 			Options: rpcargs.TesseractNumberOrHash{
 				TesseractNumber: &rpcargs.LatestTesseractHeight,
 			},
@@ -187,7 +187,7 @@ func GetERC20State(t *testing.T, moiClient *Client, logicID common.LogicID) ERC2
 		return s
 	}
 
-	state := ERC20State{}
+	state := TokenLedgerState{}
 
 	rawName := getLatestStorage(0)
 	rawSymbol := getLatestStorage(1)
@@ -206,7 +206,7 @@ func GetERC20State(t *testing.T, moiClient *Client, logicID common.LogicID) ERC2
 	err = polo.Depolorize(&state.Balances, rawBalances)
 	require.NoError(t, err)
 
-	fmt.Printf("erc20 state : %+v\n", state)
+	fmt.Printf("token ledger state : %+v\n", state)
 
 	return state
 }

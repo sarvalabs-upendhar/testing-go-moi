@@ -13,25 +13,21 @@ import (
 	"time"
 
 	"github.com/peterh/liner"
-
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-	mudraCommon "github.com/sarvalabs/go-moi/crypto/common"
-	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
-	gtypes "github.com/sarvalabs/go-moi/state"
+	"github.com/pkg/errors"
+	pisa "github.com/sarvalabs/go-pisa/moi"
 	"github.com/sarvalabs/go-polo"
+	"github.com/spf13/cobra"
 
 	cmdCommon "github.com/sarvalabs/go-moi/cmd/common"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
-
-	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
-
-	"github.com/sarvalabs/go-moi/compute/pisa"
-
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/crypto"
+	mudraCommon "github.com/sarvalabs/go-moi/crypto/common"
 	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/moiclient"
+	gtypes "github.com/sarvalabs/go-moi/state"
 )
 
 var (
@@ -284,7 +280,7 @@ func registerGuardian(vault *crypto.KramaVault) {
 func isGuardianRegistered(client *moiclient.Client, kramaID id.KramaID) bool {
 	storageData, err := client.LogicStorage(context.Background(), &rpcargs.GetLogicStorageArgs{
 		LogicID:    common.GuardianLogicID,
-		StorageKey: pisa.SlotHash(gtypes.GuardianSLot),
+		StorageKey: pisa.Slothash(gtypes.GuardianSLot),
 		Options: rpcargs.TesseractNumberOrHash{
 			TesseractNumber: &rpcargs.LatestTesseractHeight,
 		},

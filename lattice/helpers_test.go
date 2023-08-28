@@ -12,19 +12,17 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/sarvalabs/go-polo"
-
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-
-	lru "github.com/hashicorp/golang-lru"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/hashicorp/golang-lru"
+	"github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/hexutil"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/compute"
@@ -1720,7 +1718,7 @@ func getTestAssetCreationArgs(t *testing.T, allocationAddr common.Address) commo
 func getTestGenesisLogics(t *testing.T) []common.LogicSetupArgs {
 	t.Helper()
 
-	manifest := "0x" + common.BytesToHex(tests.ReadManifest(t, "./../compute/manifests/erc20.json"))
+	manifest := "0x" + common.BytesToHex(tests.ReadManifest(t, "./../compute/manifests/ledger.yaml"))
 	calldata := "0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd8ee6a29e" +
 		"c442dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49"
 

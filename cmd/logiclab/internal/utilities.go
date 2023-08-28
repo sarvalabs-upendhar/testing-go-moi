@@ -8,11 +8,12 @@ import (
 	"math"
 	"strings"
 
+	pisa "github.com/sarvalabs/go-pisa/moi"
+	"github.com/sarvalabs/go-pisa/opcode"
 	"github.com/sarvalabs/go-polo"
 	"gopkg.in/yaml.v3"
 
 	"github.com/sarvalabs/go-moi/compute/engineio"
-	"github.com/sarvalabs/go-moi/compute/pisa"
 )
 
 // ManifestFileConvertCommand generates a command runner to print a
@@ -83,7 +84,7 @@ func BinConverter(manifest *engineio.Manifest) (*engineio.Manifest, error) {
 			}
 
 			if routine.Executes.Hex != "" {
-				bin, err := pisa.Hex2Bin(routine.Executes.Hex)
+				bin, err := opcode.Hex2Bin(routine.Executes.Hex)
 				if err != nil {
 					return nil, err
 				}
@@ -93,7 +94,7 @@ func BinConverter(manifest *engineio.Manifest) (*engineio.Manifest, error) {
 			}
 
 			if len(routine.Executes.Asm) != 0 {
-				bin, err := pisa.Asm2Bin(routine.Executes.Asm)
+				bin, err := opcode.Asm2Bin(routine.Executes.Asm)
 				if err != nil {
 					return nil, err
 				}
@@ -110,7 +111,7 @@ func BinConverter(manifest *engineio.Manifest) (*engineio.Manifest, error) {
 			}
 
 			if method.Executes.Hex != "" {
-				bin, err := pisa.Hex2Bin(method.Executes.Hex)
+				bin, err := opcode.Hex2Bin(method.Executes.Hex)
 				if err != nil {
 					return nil, err
 				}
@@ -120,7 +121,7 @@ func BinConverter(manifest *engineio.Manifest) (*engineio.Manifest, error) {
 			}
 
 			if len(method.Executes.Asm) != 0 {
-				bin, err := pisa.Asm2Bin(method.Executes.Asm)
+				bin, err := opcode.Asm2Bin(method.Executes.Asm)
 				if err != nil {
 					return nil, err
 				}
@@ -152,7 +153,7 @@ func AsmConverter(manifest *engineio.Manifest) (*engineio.Manifest, error) {
 			}
 
 			if !bytes.Equal(routine.Executes.Bin, []byte{}) {
-				asm, err := pisa.Bin2Asm(routine.Executes.Bin)
+				asm, err := opcode.Bin2Asm(routine.Executes.Bin)
 				if err != nil {
 					return manifest, err
 				}
@@ -175,7 +176,7 @@ func AsmConverter(manifest *engineio.Manifest) (*engineio.Manifest, error) {
 			}
 
 			if !bytes.Equal(method.Executes.Bin, []byte{}) {
-				asm, err := pisa.Bin2Asm(method.Executes.Bin)
+				asm, err := opcode.Bin2Asm(method.Executes.Bin)
 				if err != nil {
 					return manifest, err
 				}
@@ -200,7 +201,7 @@ func HexConverter(manifest *engineio.Manifest) (*engineio.Manifest, error) {
 			}
 
 			if !bytes.Equal(routine.Executes.Bin, []byte{}) {
-				hex := pisa.Bin2Hex(routine.Executes.Bin)
+				hex := opcode.Bin2Hex(routine.Executes.Bin)
 				if hex == "" {
 					return manifest, fmt.Errorf("error: failed to encode hex string")
 				}
@@ -215,7 +216,7 @@ func HexConverter(manifest *engineio.Manifest) (*engineio.Manifest, error) {
 			}
 
 			if !bytes.Equal(method.Executes.Bin, []byte{}) {
-				hex := pisa.Bin2Hex(method.Executes.Bin)
+				hex := opcode.Bin2Hex(method.Executes.Bin)
 				if hex == "" {
 					return manifest, fmt.Errorf("error: failed to encode hex string")
 				}
@@ -238,7 +239,7 @@ func SlothashCommand(slot uint64) Command {
 			return "slot number is too large"
 		}
 
-		return hex.EncodeToString(pisa.SlotHash(uint8(slot)))
+		return hex.EncodeToString(pisa.Slothash(uint8(slot)))
 	}
 }
 

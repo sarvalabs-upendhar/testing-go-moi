@@ -12,15 +12,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/kramaid"
-	"github.com/sarvalabs/go-moi/jsonrpc/api"
-	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
-
 	"github.com/stretchr/testify/require"
 
+	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
+	"github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/jsonrpc/api"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 )
 
 var LatestTesseractNumber = int64(-1)
@@ -84,7 +83,7 @@ func getIXArgsForLogicDeployment(t *testing.T, client *Client, addr common.Addre
 	calldata := "0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd8ee6a29ec4" +
 		"42dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49"
 
-	manifest := "0x" + common.BytesToHex(tests.ReadManifest(t, "./../compute/manifests/erc20.json"))
+	manifest := "0x" + common.BytesToHex(tests.ReadManifest(t, "./../compute/manifests/ledger.yaml"))
 
 	logicPayload := &common.LogicPayload{
 		Manifest: hexutil.Bytes(common.Hex2Bytes(manifest)),

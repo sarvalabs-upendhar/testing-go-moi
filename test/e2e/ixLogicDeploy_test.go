@@ -5,14 +5,13 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
-
 	"github.com/sarvalabs/go-polo"
+	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/moiclient"
-	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -20,9 +19,10 @@ var (
 	transferAmount      = uint64(1000000)
 	seeder              = common.HexToAddress("0xffcd8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34")
 	receiver            = common.HexToAddress("0x0fafe52ec42a85db644d5cceba2bb89cf5b0166cc9158211f44ed1e60b06032c")
-	erc20Manifest       = "0x" +
-		common.BytesToHex(tests.ReadManifest(&testing.T{}, "./../../compute/manifests/erc20.json"))
-	deployCalldata = "0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd8ee6a29ec4" +
+
+	ledgerManifestFile = "./../../compute/manifests/ledger.yaml"
+	ledgerManifest     = "0x" + common.BytesToHex(tests.ReadManifest(&testing.T{}, ledgerManifestFile))
+	deployCalldata     = "0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd8ee6a29ec4" +
 		"42dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49"
 )
 
@@ -55,8 +55,8 @@ func (te *TestEnvironment) deployLogic(
 // 2. encode expected manifest to be of type JSON
 // 3. fetch actual logic manifest of deployed logic
 // 4. make sure expected logic manifest and actual logic manifest matches
-// 5. fetch ERC20 state and ensure it matches call data of logic payload
-func validateERC20LogicDeploy(
+// 5. fetch ledger state and ensure it matches call data of logic payload
+func validateTokenLedgerLogicDeploy(
 	te *TestEnvironment,
 	sender common.Address,
 	payload *common.LogicPayload,
@@ -80,7 +80,7 @@ func validateERC20LogicDeploy(
 
 	require.Equal(te.T(), expectedManifest, actualManifest)
 
-	state := moiclient.GetERC20State(te.T(), te.moiClient, logicID)
+	state := moiclient.GetTokenLedgerState(te.T(), te.moiClient, logicID)
 
 	require.Equal(te.T(), "MOI-Token", state.Name)
 	require.Equal(te.T(), "MOI", state.Symbol)
@@ -114,16 +114,16 @@ func (te *TestEnvironment) TestLogicDeploy() {
 			logicPayload: &common.LogicPayload{
 				Callsite: "Seeder!",
 				Calldata: common.Hex2Bytes(deployCalldata),
-				Manifest: common.Hex2Bytes(erc20Manifest),
+				Manifest: common.Hex2Bytes(ledgerManifest),
 			},
-			postTest: validateERC20LogicDeploy,
+			postTest: validateTokenLedgerLogicDeploy,
 		},
 		{
 			name:   "empty manifest",
 			sender: sender,
 			logicPayload: &common.LogicPayload{
 				Callsite: "Seeder!",
-				Calldata: common.Hex2Bytes(erc20Manifest),
+				Calldata: common.Hex2Bytes(ledgerManifest),
 				Manifest: []byte{},
 			},
 			expectedError: common.ErrEmptyManifest,
@@ -134,7 +134,7 @@ func (te *TestEnvironment) TestLogicDeploy() {
 			logicPayload: &common.LogicPayload{
 				Callsite: "",
 				Calldata: common.Hex2Bytes(deployCalldata),
-				Manifest: common.Hex2Bytes(erc20Manifest),
+				Manifest: common.Hex2Bytes(ledgerManifest),
 			},
 			checkReceiptSuccess: checkForReceiptSuccess, // TODO check if this can be structured in better way
 		},
@@ -144,7 +144,7 @@ func (te *TestEnvironment) TestLogicDeploy() {
 			logicPayload: &common.LogicPayload{
 				Callsite: "Seeder!",
 				Calldata: make(polo.Document).Bytes(),
-				Manifest: common.Hex2Bytes(erc20Manifest),
+				Manifest: common.Hex2Bytes(ledgerManifest),
 			},
 			expectedError: errors.New("failed to validate logic deploy"),
 		},
@@ -154,7 +154,7 @@ func (te *TestEnvironment) TestLogicDeploy() {
 			logicPayload: &common.LogicPayload{
 				Callsite: "random!",
 				Calldata: common.Hex2Bytes(deployCalldata),
-				Manifest: common.Hex2Bytes(erc20Manifest),
+				Manifest: common.Hex2Bytes(ledgerManifest),
 			},
 			expectedError: errors.New("failed to validate logic deploy"),
 		},
@@ -164,7 +164,7 @@ func (te *TestEnvironment) TestLogicDeploy() {
 			logicPayload: &common.LogicPayload{
 				Callsite: "Seeder!",
 				Calldata: []byte{1, 2, 3},
-				Manifest: common.Hex2Bytes(erc20Manifest),
+				Manifest: common.Hex2Bytes(ledgerManifest),
 			},
 			expectedError: errors.New("failed to validate logic deploy"),
 		},

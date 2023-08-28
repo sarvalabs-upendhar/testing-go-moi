@@ -83,29 +83,3 @@ func addGenesisLogic(artifact *cmdcommon.Artifact) {
 		cmdcommon.Err(err)
 	}
 }
-
-//
-// var stakingCmd = &cobra.Command{
-//	Use:   "staking-contract",
-//	Short: "Updates genesis logic with the staking contract",
-//	Run: func(cmd *cobra.Command, args []string) {
-//		calldata := "0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd8ee6a29ec4" +
-//			"42dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49"
-//
-//		m, err := ReadManifest("./jug/manifests/erc20.json")
-//		if err != nil {
-//			cmdcommon.Err(err)
-//		}
-//
-//		manifest := "0x" + types.BytesToHex(m)
-//
-//		artifact := &Artifact{
-//			Name:     "staking-contract",
-//			Callsite: "Seeder!",
-//			Calldata: hexutil.Bytes(types.Hex2Bytes(calldata)),
-//			Manifest: hexutil.Bytes(types.Hex2Bytes(manifest)),
-//		}
-//
-//		addGenesisLogic(artifact)
-//	},
-//}

@@ -5,14 +5,13 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
-
-	"github.com/sarvalabs/go-moi/jsonrpc/args"
+	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/moiclient"
-	"github.com/stretchr/testify/require"
 )
 
 func (te *TestEnvironment) logicInvoke(
@@ -41,7 +40,7 @@ func (te *TestEnvironment) logicInvoke(
 }
 
 // 1. check if receipt generated for ix successfully
-// 2. fetch ERC20 state of logic
+// 2. fetch ledger state of logic
 // 3. Ensure the sender's balance is decreased by the transfer amount.
 // 4. Ensure the receiver's balance is increased by the transfer amount.
 func validateLogicInvoke(
@@ -57,7 +56,7 @@ func validateLogicInvoke(
 
 	logicID := moiclient.GetLogicID(te.T(), te.moiClient, sender, int64(senderHeight-1))
 
-	state := moiclient.GetERC20State(te.T(), te.moiClient, logicID)
+	state := moiclient.GetTokenLedgerState(te.T(), te.moiClient, logicID)
 	senderBalance, ok := state.Balances[seeder]
 	require.True(te.T(), ok)
 
@@ -80,7 +79,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 		&common.LogicPayload{
 			Callsite: "Seeder!",
 			Calldata: common.Hex2Bytes(deployCalldata),
-			Manifest: common.Hex2Bytes(erc20Manifest),
+			Manifest: common.Hex2Bytes(ledgerManifest),
 		},
 	)
 	require.NoError(te.T(), err)

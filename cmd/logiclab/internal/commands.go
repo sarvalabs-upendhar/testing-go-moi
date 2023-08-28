@@ -89,11 +89,11 @@ logic compile [name] from manifest([filepath]) - Compile a logic from a Manifest
 encoding is inferred from the file extension (.polo for POLO). The compiled logic is indexed by the given name
 
 Examples:
->> logic compile ERC20 from manifest("./jug/manifests/erc20.json")     
-logic 'ERC20' [0800007140e42388a825992f5f07c7711718384b0ef228b36f46511503295e1dc38931] compiled with 100 FUEL
+>> logic compile Ledger from manifest("./jug/manifests/ledger.yaml")     
+logic 'Ledger' [0800007140e42388a825992f5f07c7711718384b0ef228b36f46511503295e1dc38931] compiled with 100 FUEL
 
 >> logic
-1] ERC20 [080000204d61aca8d5562d71ead8162fc9eb6de57bae3ab2cbb5513e61b0eb39ffa11f]
+1] Ledger [080000204d61aca8d5562d71ead8162fc9eb6de57bae3ab2cbb5513e61b0eb39ffa11f]
 2] Flipper [080000df4824f93ea1ce70f8540840817e4231c2af219bb99b048a5165c6e60f36a599]
 
 >> logic inspect Flipper
@@ -111,8 +111,8 @@ logic 'ERC20' [0800007140e42388a825992f5f07c7711718384b0ef228b36f46511503295e1dc
 03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314: 02
 ====
 
->> logic delete ERC20
-logic 'ERC20' removed
+>> logic delete Ledger
+logic 'Ledger' removed
 
 ==== Logic Function Calls
 Logic functions can called with several commands depending on the nature of function callsite 
@@ -134,18 +134,18 @@ Similarly, if they have been deployed already, deploy calls cannot be performed 
 
 Examples:
 >> set addr1 0xf6cd8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34
->> deploy ERC20.Seeder!(name: "MOI-Token", symbol: "MOI", supply: 100000000, seeder: addr1)
+>> deploy Ledger.Seeder!(name: "MOI-Token", symbol: "MOI", supply: 100000000, seeder: addr1)
 Execution Complete! [150 FUEL]
 
->> invoke ERC20.Name()
+>> invoke Ledger.Name()
 Execution Complete! [70 FUEL]
 Execution Outputs ||| name: MOI-Token
 
->> invoke ERC20.BalanceOf(addr: 0xf6cd8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34)
+>> invoke Ledger.BalanceOf(addr: 0xf6cd8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34)
 Execution Complete! [90 FUEL]
 Execution Outputs ||| balance: 100000000
 
->> invoke ERC20.BalanceOf(0x0d2f06456164647206f6cd8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34)
+>> invoke Ledger.BalanceOf(0x0d2f06456164647206f6cd8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34)
 Execution Complete! [90 FUEL]
 Execution Outputs ||| balance: 100000000
 
@@ -200,10 +200,10 @@ calldecode [object] from [name].[callsite]
 
 Examples:
 >> set A 0x0d2f06256f6b02
->> calldecode A from ERC20.Mint!
+>> calldecode A from Ledger.Mint!
 // Outputs ||| ok: true 
 
->> calldecode 0x0d2f06256f6b02 from ERC20.Mint!
+>> calldecode 0x0d2f06256f6b02 from Ledger.Mint!
 // Outputs ||| ok: true 
 
 ==== Manifest Utility
@@ -214,13 +214,13 @@ Returns indented and formatted data for JSON and YAML, and hex string for POLO.
 manifest([filepath]) as [encoding]
 
 Example:
->> manifest("./jug/manifests/erc20.json") as JSON
+>> manifest("./jug/manifests/ledger.yaml") as JSON
 // prints JSON object 
 
->> manifest("./jug/manifests/erc20.json") as YAML
+>> manifest("./jug/manifests/ledger.yaml") as YAML
 // prints YAML object
 
->> manifest("./jug/manifests/erc20.json") as POLO
+>> manifest("./jug/manifests/ledger.yaml") as POLO
 // prints hex encoded string of POLO bytes
 
 ==== Error Decoding Utility

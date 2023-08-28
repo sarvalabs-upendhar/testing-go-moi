@@ -29,7 +29,6 @@ require (
 	github.com/gorilla/rpc v1.2.0
 	github.com/gorilla/websocket v1.5.0
 	github.com/hashicorp/go-hclog v1.3.1
-	github.com/holiman/uint256 v1.2.2
 	github.com/ipfs/go-ds-badger v0.3.0
 	github.com/libp2p/go-libp2p v0.24.0
 	github.com/libp2p/go-libp2p-kad-dht v0.20.0
@@ -45,6 +44,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.14.0
 	github.com/sarvalabs/battleground v0.1.0
+	github.com/sarvalabs/go-pisa v0.1.0
 	github.com/sarvalabs/go-polo v0.3.4
 	github.com/spf13/cobra v1.5.0
 	github.com/stretchr/testify v1.8.4
@@ -57,7 +57,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.11.0
 	go.uber.org/atomic v1.10.0
 	golang.org/x/crypto v0.3.0
-	golang.org/x/exp v0.0.0-20221205204356-47842c84f3db
 	golang.org/x/sync v0.1.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -95,6 +94,7 @@ require (
 	github.com/google/pprof v0.0.0-20221203041831-ce31453925ec // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
+	github.com/holiman/uint256 v1.2.2 // indirect
 	github.com/huin/goupnp v1.0.3 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/ipfs/go-cid v0.3.2 // indirect
@@ -169,6 +169,7 @@ require (
 	go.uber.org/fx v1.18.2 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.24.0 // indirect
+	golang.org/x/exp v0.0.0-20221205204356-47842c84f3db // indirect
 	golang.org/x/mod v0.7.0 // indirect
 	golang.org/x/net v0.5.0 // indirect
 	golang.org/x/sys v0.9.0 // indirect

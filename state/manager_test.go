@@ -6,8 +6,10 @@ import (
 	"testing"
 
 	"github.com/decred/dcrd/crypto/blake256"
+	pisa "github.com/sarvalabs/go-pisa/moi"
 
 	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"
 
@@ -2137,6 +2139,8 @@ func TestStateManager_IsLogicRegistered(t *testing.T) {
 	logicID := getLogicID(t, tests.RandomAddress(t))
 	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
 
+	engineio.RegisterEngineRuntime(pisa.NewRuntime())
+
 	so := NewStateObject(logicID.Address(), mockCache(t), mockJournal(), db, common.Account{})
 
 	err := so.InsertNewLogicObject(logicID, logicObject)
@@ -2345,7 +2349,7 @@ func TestStateManager_GetRegistry(t *testing.T) {
 
 func TestStateManager_GetLogicManifest(t *testing.T) {
 	db := mockDB()
-	manifest, _, _ := tests.GetManifests(t, "../compute/manifests/erc20.json")
+	manifest, _, _ := tests.GetManifests(t, "../compute/manifests/ledger.yaml")
 	manifestHash := common.GetHash(manifest)
 
 	logicID := getLogicID(t, tests.RandomAddress(t))

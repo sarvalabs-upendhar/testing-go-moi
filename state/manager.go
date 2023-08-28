@@ -7,18 +7,15 @@ import (
 	"net/http"
 	"sync"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-
-	"github.com/sarvalabs/go-polo"
-
-	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/compute/pisa"
-
 	"github.com/hashicorp/go-hclog"
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
+	pisa "github.com/sarvalabs/go-pisa/moi"
+	"github.com/sarvalabs/go-polo"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/sarvalabs/go-moi/common"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"
 	"github.com/sarvalabs/go-moi/storage/db"
@@ -1018,7 +1015,7 @@ func (sm *StateManager) GetPublicKeyFromContract(ids ...id.KramaID) (keys [][]by
 		return nil, err
 	}
 
-	data, err := object.GetStorageEntry(common.GuardianLogicID, pisa.SlotHash(GuardianSLot))
+	data, err := object.GetStorageEntry(common.GuardianLogicID, pisa.Slothash(GuardianSLot))
 	if err != nil {
 		return nil, err
 	}

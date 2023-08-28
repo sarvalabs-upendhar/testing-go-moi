@@ -4,17 +4,15 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-	"github.com/sarvalabs/go-moi/compute/engineio"
-	"github.com/sarvalabs/go-moi/compute/pisa"
-
 	"github.com/pkg/errors"
+	pisa "github.com/sarvalabs/go-pisa/moi"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"
 )

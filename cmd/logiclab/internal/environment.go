@@ -13,10 +13,11 @@ import (
 
 	"github.com/chzyer/readline"
 	"github.com/pkg/errors"
+	pisa "github.com/sarvalabs/go-pisa/moi"
+	"go.uber.org/atomic"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/compute/engineio"
-	"github.com/sarvalabs/go-moi/compute/pisa"
-	"go.uber.org/atomic"
 )
 
 func init() {

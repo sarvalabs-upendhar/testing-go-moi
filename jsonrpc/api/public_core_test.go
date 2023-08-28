@@ -6,10 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -1406,7 +1405,7 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 	logicID := getLogicID(t, ts.Address())
 	logicIDWithoutState := getLogicID(t, tests.RandomAddress(t))
 
-	poloManifest, jsonManifest, yamlManifest := tests.GetManifests(t, "./../../compute/manifests/erc20.json")
+	poloManifest, jsonManifest, yamlManifest := tests.GetManifests(t, "./../../compute/manifests/ledger.yaml")
 
 	s.setLogicManifest(logicID.String(), poloManifest)
 	c.setTesseractByHash(t, ts)
