@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"math/big"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -467,7 +468,13 @@ func (p *PublicCoreAPI) FuelEstimate(args *rpcargs.CallArgs) (*hexutil.Big, erro
 		return nil, err
 	}
 
-	receipt, err := p.exec.InteractionCall(ix, stateHashes)
+	ctx := &common.ExecutionContext{
+		CtxDelta: nil,
+		Cluster:  "moi.FuelEstimate",
+		Time:     time.Now().Unix(),
+	}
+
+	receipt, err := p.exec.InteractionCall(ctx, ix, stateHashes)
 	if err != nil {
 		return nil, err
 	}
@@ -512,7 +519,13 @@ func (p *PublicCoreAPI) Call(args *rpcargs.CallArgs) (*rpcargs.RPCReceipt, error
 		return nil, err
 	}
 
-	receipt, err := p.exec.InteractionCall(ix, stateHashes)
+	ctx := &common.ExecutionContext{
+		CtxDelta: nil,
+		Cluster:  "moi.Call",
+		Time:     time.Now().Unix(),
+	}
+
+	receipt, err := p.exec.InteractionCall(ctx, ix, stateHashes)
 	if err != nil {
 		return nil, err
 	}

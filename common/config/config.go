@@ -42,7 +42,8 @@ type SyncerConfig struct {
 }
 
 type ChainConfig struct {
-	GenesisFilePath string
+	GenesisFilePath  string
+	GenesisTimestamp int64
 }
 
 type DBConfig struct {

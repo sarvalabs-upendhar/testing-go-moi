@@ -57,15 +57,14 @@ func (manager *Manager) SpawnExecutor() *IxExecutor {
 // The generated executor instances is indexed by the given Cluster ID.
 func (manager *Manager) ExecuteInteractions(
 	ixs common.Interactions,
-	cluster common.ClusterID,
-	delta common.ContextDelta,
+	ctx *common.ExecutionContext,
 ) (
 	common.Receipts, error,
 ) {
 	// Spawn a new IxExecutor instance
 	executor := manager.SpawnExecutor()
 	// Execute all the given interactions
-	if err := executor.Execute(ixs, delta); err != nil {
+	if err := executor.Execute(ixs, ctx); err != nil {
 		if err := executor.Revert(); err != nil {
 			log.Fatal(err) // todo: this should not happen
 		}
@@ -74,12 +73,13 @@ func (manager *Manager) ExecuteInteractions(
 	}
 
 	// Store the executor into the execution instances indexed by the cluster ID
-	manager.executors.Store(cluster, executor)
+	manager.executors.Store(ctx.Cluster, executor)
 	// Generate the execution receipts and return
 	return executor.Receipts(), nil
 }
 
 func (manager *Manager) InteractionCall(
+	ctx *common.ExecutionContext,
 	ix *common.Interaction,
 	hashes map[common.Address]common.Hash,
 ) (*common.Receipt, error) {
@@ -90,11 +90,12 @@ func (manager *Manager) InteractionCall(
 	}
 
 	// Run the interaction and return the receipt
-	return manager.runInteraction(ix, objects, true)
+	return manager.runInteraction(ix, ctx, objects, true)
 }
 
 func (manager *Manager) runInteraction(
 	ix *common.Interaction,
+	ctx *common.ExecutionContext,
 	objects state.ObjectMap,
 	useIxFuelLimit bool,
 ) (
@@ -130,7 +131,7 @@ func (manager *Manager) runInteraction(
 	}
 
 	// Call the interaction runner and get the receipt
-	receipt, err := runner(ix, tank, objects)
+	receipt, err := runner(ix, ctx, tank, objects)
 	if err != nil {
 		return nil, errors.Wrapf(err, "execution failed (%v)", ixtype)
 	}

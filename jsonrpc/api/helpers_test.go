@@ -420,6 +420,7 @@ func (exec *MockExecutionManager) setInteractionCall(ix *common.Interaction, rec
 }
 
 func (exec *MockExecutionManager) InteractionCall(
+	ctx *common.ExecutionContext,
 	ix *common.Interaction,
 	stateHashes map[common.Address]common.Hash,
 ) (*common.Receipt, error) {

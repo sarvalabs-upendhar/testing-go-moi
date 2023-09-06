@@ -345,6 +345,14 @@ func (t *Tesseract) Hash() Hash {
 	return hash
 }
 
+func (t *Tesseract) ExecutionContext() *ExecutionContext {
+	return &ExecutionContext{
+		CtxDelta: t.ContextDelta(),
+		Cluster:  t.ClusterID(),
+		Time:     t.Timestamp(),
+	}
+}
+
 func (t *Tesseract) Bytes() ([]byte, error) {
 	c := t.CanonicalWithoutSeal()
 

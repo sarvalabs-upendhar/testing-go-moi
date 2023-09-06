@@ -439,6 +439,17 @@ func (cs *ClusterState) UpdateClusterSize() {
 	}
 }
 
+func (cs *ClusterState) ExecutionContext() *common.ExecutionContext {
+	cs.mtx.Lock()
+	defer cs.mtx.Unlock()
+
+	return &common.ExecutionContext{
+		CtxDelta: cs.contextDelta,
+		Cluster:  cs.ClusterID,
+		Time:     cs.ICSReqTime.Unix(),
+	}
+}
+
 func (cs *ClusterState) GetDirty() map[common.Hash][]byte {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()

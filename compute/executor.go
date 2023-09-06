@@ -25,10 +25,10 @@ type IxExecutor struct {
 
 // Execute executes all the given Interactions with their context delta.
 // Returns an error if the execution of any interaction fails.
-func (executor *IxExecutor) Execute(ixs common.Interactions, delta common.ContextDelta) error {
+func (executor *IxExecutor) Execute(ixs common.Interactions, ctx *common.ExecutionContext) error {
 	// Update the interaction and the context delta into the executor
 	executor.Interactions = ixs
-	executor.contextDelta = delta
+	executor.contextDelta = ctx.ContextDelta()
 
 	for _, ix := range executor.Interactions {
 		// Load the state objects for interaction participants
@@ -37,7 +37,7 @@ func (executor *IxExecutor) Execute(ixs common.Interactions, delta common.Contex
 		}
 
 		// Run the interaction
-		receipt, err := executor.mgr.runInteraction(ix, executor.objects, true)
+		receipt, err := executor.mgr.runInteraction(ix, ctx, executor.objects, true)
 		if err != nil {
 			return err
 		}

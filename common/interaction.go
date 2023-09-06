@@ -537,6 +537,15 @@ func (ix *Interaction) PayloadForSignature() ([]byte, error) {
 	return polo.Polorize(SendIxArgsFromIxData(ix.inner))
 }
 
+func (ix *Interaction) Manifest() []byte {
+	payload, err := ix.GetLogicPayload()
+	if err != nil {
+		return nil
+	}
+
+	return payload.Manifest
+}
+
 func (ix *Interaction) Callsite() string {
 	payload, err := ix.GetLogicPayload()
 	if err != nil {

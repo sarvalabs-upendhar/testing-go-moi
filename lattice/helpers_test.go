@@ -413,8 +413,7 @@ func mockExec(t *testing.T) *MockExec {
 // mock execution implementation
 func (e *MockExec) ExecuteInteractions(
 	ixs common.Interactions,
-	clusterID common.ClusterID,
-	contextDelta common.ContextDelta,
+	ctx *common.ExecutionContext,
 ) (common.Receipts, error) {
 	if e.executeInteractionsHook != nil {
 		return e.executeInteractionsHook()

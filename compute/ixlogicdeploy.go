@@ -16,7 +16,12 @@ import (
 //
 // The Interaction must have a LogicPayload with a Manifest and the output receipt will have a LogicDeployReceipt.
 // The logic manifest is verified, compiled and deployed on to a new account and any deployer call is executed.
-func RunLogicDeploy(ix *common.Interaction, tank *FuelTank, objects state.ObjectMap) (*common.Receipt, error) {
+func RunLogicDeploy(
+	ix *common.Interaction,
+	ctx *common.ExecutionContext,
+	tank *FuelTank,
+	objects state.ObjectMap,
+) (*common.Receipt, error) {
 	payload, err := ix.GetLogicPayload()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not find logic payload")
@@ -38,12 +43,7 @@ func RunLogicDeploy(ix *common.Interaction, tank *FuelTank, objects state.Object
 	options = append(options, DeployerState(deployer))
 	options = append(options, DeployFuelLimit(tank.Level()))
 
-	// If no callsite is provided, do not append an option for the deployment call
-	if payload.Callsite != "" {
-		options = append(options, DeploymentCall(payload.Callsite, payload.Calldata))
-	}
-
-	consumption, receiptPayload, err := DeployLogic(payload.Manifest, logicacc, options...)
+	consumption, receiptPayload, err := DeployLogic(ix, ctx, logicacc, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -82,18 +82,6 @@ func DeployerState(deployer *state.Object) LogicDeployOption {
 	}
 }
 
-// DeploymentCall returns a LogicDeployOption to provide the deployer callsite and calldata for state setup
-func DeploymentCall(callsite string, calldata []byte) LogicDeployOption {
-	return func(config *logicDeployer) error {
-		config.deployment = &struct {
-			callsite string
-			calldata []byte
-		}{callsite, calldata}
-
-		return nil
-	}
-}
-
 // DeployFuelLimit returns a LogicDeployOption to provide the fuel limit for logic deployment.
 func DeployFuelLimit(limit engineio.Fuel) LogicDeployOption {
 	return func(config *logicDeployer) error {
@@ -106,8 +94,19 @@ func DeployFuelLimit(limit engineio.Fuel) LogicDeployOption {
 // DeployGenesisLogic deploys the manifest from the given payload into the given state object.
 // The deployer call is performed with the callsite and calldata in the payload.
 // Deployment occurs without a fuel limit.
-func DeployGenesisLogic(state *state.Object, payload *common.LogicPayload) (common.LogicID, error) {
-	_, receipt, err := DeployLogic(payload.Manifest, state, DeploymentCall(payload.Callsite, payload.Calldata))
+func DeployGenesisLogic(
+	ctx *common.ExecutionContext,
+	state *state.Object,
+	payload *common.LogicPayload,
+) (common.LogicID, error) {
+	// Serialize the logic payload
+	inner, _ := payload.Bytes()
+	// Create a new IxLogicDeploy interaction with the logic payload
+	ix, _ := common.NewInteraction(common.IxData{
+		Input: common.IxInput{Type: common.IxLogicDeploy, Payload: inner},
+	}, nil)
+
+	_, receipt, err := DeployLogic(ix, ctx, state)
 	if err != nil {
 		return "", errors.Wrap(err, "deployment failed")
 	}
@@ -124,12 +123,12 @@ func DeployGenesisLogic(state *state.Object, payload *common.LogicPayload) (comm
 // limit for the deployment or provide deployer state or deployment call parameters.
 // Uses unlimited fuel limit unless otherwise specified with the DeployFuelLimit option.
 // Does not perform a call to deployer callsite unless specified with DeploymentCall.
-func DeployLogic(manifest []byte, state *state.Object, opts ...LogicDeployOption) (
+func DeployLogic(ix *common.Interaction, ctx *common.ExecutionContext, state *state.Object, opts ...LogicDeployOption) (
 	engineio.Fuel, *common.LogicDeployReceipt, error,
 ) {
 	// Generate basic deployment config
 	deployer := &logicDeployer{
-		manifest:   manifest,
+		manifest:   ix.Manifest(),
 		logicState: state,
 		fueltank: NewFuelTank(func() engineio.Fuel {
 			fuel, _ := new(big.Int).SetString("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 0)
@@ -157,13 +156,13 @@ func DeployLogic(manifest []byte, state *state.Object, opts ...LogicDeployOption
 		return nil, nil, err
 	}
 
-	// No deployment call defined -> return the logic ID and fuel consumption
-	if deployer.deployment == nil {
+	// If no callsite is provided -> return the logic ID and fuel consumption
+	if ix.Callsite() == "" {
 		return deployer.fueltank.Consumed, &common.LogicDeployReceipt{LogicID: logicObject.LogicID()}, nil
 	}
 
 	// Call the logic deployer to set up logic state
-	result, err := deployer.callDeployer(logicObject)
+	result, err := deployer.callDeployer(ix, ctx, logicObject)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -183,11 +182,6 @@ type logicDeployer struct {
 	fueltank      *FuelTank
 	logicState    *state.Object
 	deployerState *state.Object
-
-	deployment *struct {
-		callsite string
-		calldata []byte
-	}
 }
 
 func (deployer logicDeployer) compileManifest() (*engineio.LogicDescriptor, error) {
@@ -238,7 +232,11 @@ func (deployer logicDeployer) deployLogicObject(descriptor *engineio.LogicDescri
 	return logicObject, nil
 }
 
-func (deployer logicDeployer) callDeployer(logic *state.LogicObject) (*engineio.CallResult, error) {
+func (deployer logicDeployer) callDeployer(
+	ixn *common.Interaction,
+	ctx *common.ExecutionContext,
+	logic *state.LogicObject,
+) (*engineio.CallResult, error) {
 	// Check if logic has a persistent state
 	if ok := logic.StateMatrix.Persistent(); !ok {
 		return nil, errors.New("cannot call deployer for logic without persistent state")
@@ -249,20 +247,10 @@ func (deployer logicDeployer) callDeployer(logic *state.LogicObject) (*engineio.
 
 	// Create a new engine for the execution
 	engine, err := runtime.SpawnEngine(
-		deployer.fueltank.Level(), logic, deployer.logicState.GenerateLogicContextObject(logic.LogicID()), envObject{},
+		deployer.fueltank.Level(), logic, deployer.logicState.GenerateLogicContextObject(logic.LogicID()), ctx,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not bootstrap engine")
-	}
-
-	// Create an IxnObject
-	// todo: we should accept the raw interaction somehow
-	ixn := ixnObject{
-		kind:     common.IxLogicDeploy,
-		price:    big.NewInt(1),
-		limit:    deployer.fueltank.Capacity,
-		callsite: deployer.deployment.callsite,
-		calldata: deployer.deployment.calldata,
 	}
 
 	// Declare context driver

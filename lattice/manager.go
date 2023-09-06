@@ -89,7 +89,7 @@ type ixpool interface {
 }
 
 type executor interface {
-	ExecuteInteractions(common.Interactions, common.ClusterID, common.ContextDelta) (common.Receipts, error)
+	ExecuteInteractions(common.Interactions, *common.ExecutionContext) (common.Receipts, error)
 	Revert(common.ClusterID) error
 	SpawnExecutor() *compute.IxExecutor
 	Cleanup(cluster common.ClusterID)
@@ -933,8 +933,7 @@ func (c *ChainManager) ExecuteAndValidate(tesseracts ...*common.Tesseract) error
 
 	receipts, err := c.exec.ExecuteInteractions(
 		tesseracts[0].Interactions(),
-		tesseracts[0].ClusterID(),
-		tesseracts[0].ContextDelta(),
+		tesseracts[0].ExecutionContext(),
 	)
 	if err != nil {
 		return err
@@ -1143,8 +1142,14 @@ func (c *ChainManager) SetupGenesisLogics(
 			return nil, errors.Wrap(err, "context initiation failed in genesis")
 		}
 
+		ctx := &common.ExecutionContext{
+			CtxDelta: nil,
+			Cluster:  "genesis",
+			Time:     c.cfg.GenesisTimestamp,
+		}
+
 		// Deploy the genesis logic on that state
-		logicID, err := compute.DeployGenesisLogic(stateObj, payload)
+		logicID, err := compute.DeployGenesisLogic(ctx, stateObj, payload)
 		if err != nil {
 			c.logger.Error("Unable to deploy logic for", "logic-name", logic.Name)
 
