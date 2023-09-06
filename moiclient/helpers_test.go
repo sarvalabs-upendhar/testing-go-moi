@@ -606,3 +606,17 @@ func checkForRPCReceipt(
 
 	require.True(t, reflect.DeepEqual(expectedRPCReceipt.Hashes, actualRPCReceipt.Hashes))
 }
+
+func checkForCallReceipt(
+	t *testing.T,
+	expectedReceipt *rpcargs.RPCReceipt,
+	actualReceipt *rpcargs.RPCReceipt,
+) {
+	t.Helper()
+
+	require.Equal(t, expectedReceipt.IxType, actualReceipt.IxType)
+	require.Equal(t, expectedReceipt.FuelUsed, actualReceipt.FuelUsed)
+	require.Equal(t, expectedReceipt.ExtraData, actualReceipt.ExtraData)
+	require.Equal(t, expectedReceipt.From, actualReceipt.From)
+	require.Equal(t, expectedReceipt.To, actualReceipt.To)
+}

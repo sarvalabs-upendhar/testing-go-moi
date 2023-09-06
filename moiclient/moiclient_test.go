@@ -1770,6 +1770,7 @@ func testCall(t *testing.T, client *Client, addr common.Address) {
 	}
 
 	expectedReceipt := common.Receipt{
+		IxType:   common.IxAssetCreate,
 		FuelUsed: big.NewInt(100),
 	}
 
@@ -1802,8 +1803,11 @@ func testCall(t *testing.T, client *Client, addr common.Address) {
 				},
 			},
 			expectedReceipt: &rpcargs.RPCReceipt{
+				IxType:    hexutil.Uint64(common.IxAssetCreate),
 				FuelUsed:  (hexutil.Big)(*expectedReceipt.FuelUsed),
 				ExtraData: expectedReceipt.ExtraData,
+				From:      addr,
+				To:        expectedAssetAddr,
 			},
 		},
 		{
@@ -1837,7 +1841,7 @@ func testCall(t *testing.T, client *Client, addr common.Address) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, test.expectedReceipt, receipt)
+			checkForCallReceipt(t, test.expectedReceipt, receipt)
 		})
 	}
 }

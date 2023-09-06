@@ -517,12 +517,7 @@ func (p *PublicCoreAPI) Call(args *rpcargs.CallArgs) (*rpcargs.RPCReceipt, error
 		return nil, err
 	}
 
-	result := &rpcargs.RPCReceipt{
-		FuelUsed:  hexutil.Big(*receipt.FuelUsed),
-		ExtraData: receipt.ExtraData,
-	}
-
-	return result, nil
+	return createCallReceipt(receipt, ix), nil
 }
 
 func (p *PublicCoreAPI) normalizeOptions(
@@ -864,6 +859,21 @@ func createRPCReceipt(
 		To:        ix.Receiver(),
 		IXIndex:   hexutil.Uint64(ixIndex),
 		Parts:     getRPCTesseractPartsFromGrid(grid),
+	}
+}
+
+func createCallReceipt(
+	receipt *common.Receipt,
+	ix *common.Interaction,
+) *rpcargs.RPCReceipt {
+	return &rpcargs.RPCReceipt{
+		IxType:    hexutil.Uint64(receipt.IxType),
+		IxHash:    receipt.IxHash,
+		Status:    receipt.Status,
+		FuelUsed:  hexutil.Big(*receipt.FuelUsed),
+		ExtraData: receipt.ExtraData,
+		From:      ix.Sender(),
+		To:        ix.Receiver(),
 	}
 }
 

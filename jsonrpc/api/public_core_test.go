@@ -693,6 +693,8 @@ func TestIx_Call(t *testing.T) {
 	assert.NoError(t, err)
 
 	receipt := &common.Receipt{
+		IxType:    common.IxAssetCreate,
+		IxHash:    ix.Hash(),
 		FuelUsed:  big.NewInt(100),
 		ExtraData: rawAssetPayload,
 	}
@@ -775,8 +777,12 @@ func TestIx_Call(t *testing.T) {
 				},
 			},
 			expectedReceipt: &rpcargs.RPCReceipt{
+				IxType:    hexutil.Uint64(common.IxAssetCreate),
+				IxHash:    ix.Hash(),
 				FuelUsed:  hexutil.Big(*big.NewInt(100)),
 				ExtraData: rawAssetPayload,
+				From:      ix.Sender(),
+				To:        ix.Receiver(),
 			},
 		},
 	}
