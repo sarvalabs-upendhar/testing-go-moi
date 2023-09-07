@@ -5,13 +5,10 @@ lint:
 build:
 	go build -o ./build/ ./cmd/moichain
 
-install: moipod logiclab mcutils
+install: moipod mcutils
 
 moipod:
 	go install ./cmd/moipod
-
-logiclab:
-	go install ./cmd/logiclab
 
 mcutils:
 	go install ./cmd/mcutils
