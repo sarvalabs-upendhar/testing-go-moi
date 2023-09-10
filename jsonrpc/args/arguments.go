@@ -104,8 +104,8 @@ type IxArgs struct {
 	TransferValues  map[common.AssetID]*hexutil.Big `json:"transfer_values"`
 	PerceivedValues map[common.AssetID]*hexutil.Big `json:"perceived_values"`
 
-	FuelPrice *hexutil.Big `json:"fuel_price"`
-	FuelLimit *hexutil.Big `json:"fuel_limit"`
+	FuelPrice *hexutil.Big   `json:"fuel_price"`
+	FuelLimit hexutil.Uint64 `json:"fuel_limit"`
 
 	Payload hexutil.Bytes `json:"payload"`
 }

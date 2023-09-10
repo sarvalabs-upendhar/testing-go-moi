@@ -94,14 +94,11 @@ func getIXArgsForLogicDeployment(t *testing.T, client *Client, addr common.Addre
 	payload, err := logicPayload.Bytes()
 	require.NoError(t, err)
 
-	fuelPrice := new(big.Int).SetUint64(1)
-	fuelLimit := new(big.Int).SetUint64(1000)
-
 	ixArgs := &common.SendIXArgs{
 		Type:      common.IxLogicDeploy,
 		Nonce:     GetLatestNonce(t, client, addr),
-		FuelPrice: fuelPrice,
-		FuelLimit: fuelLimit,
+		FuelPrice: new(big.Int).SetUint64(1),
+		FuelLimit: 1000,
 		Sender:    addr,
 		Payload:   payload,
 	}

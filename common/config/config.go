@@ -53,7 +53,7 @@ type DBConfig struct {
 }
 
 type ExecutionConfig struct {
-	FuelLimit *big.Int
+	FuelLimit uint64
 }
 
 type IxPoolConfig struct {

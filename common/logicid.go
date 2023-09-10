@@ -112,6 +112,11 @@ func (logic LogicID) Address() Address {
 	return HexToAddress(string(logic[len(logic)-64:]))
 }
 
+// Address32 returns the Logic Address of the LogicID as a [32]byte
+func (logic LogicID) Address32() [32]byte {
+	return logic.Address()
+}
+
 // Identifier returns a LogicIdentifier for the LogicID
 func (logic LogicID) Identifier() (LogicIdentifier, error) {
 	idbytes := Hex2Bytes(string(logic))

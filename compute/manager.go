@@ -2,21 +2,21 @@ package compute
 
 import (
 	"log"
-	"math/big"
 	"sync"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi-engineio"
 	pisa "github.com/sarvalabs/go-pisa/moi"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
-	"github.com/sarvalabs/go-moi/compute/engineio"
+	"github.com/sarvalabs/go-moi/crypto"
 	"github.com/sarvalabs/go-moi/state"
 )
 
 func init() {
-	engineio.RegisterEngineRuntime(pisa.NewRuntime())
+	engineio.RegisterRuntime(pisa.NewRuntime(), crypto.Cryptographer(0))
 }
 
 // Manager represents a type for managing interaction execution across multiple consensus clusters.
@@ -101,20 +101,18 @@ func (manager *Manager) runInteraction(
 ) (
 	*common.Receipt, error,
 ) {
-	// Determine the fuel limit
-	var limit *big.Int
+	var tank *FuelTank
+
 	if useIxFuelLimit {
-		limit = ix.FuelLimit()
+		// Determine the tank limit from the interaction
+		tank = NewFuelTank(ix.FuelLimit())
+	} else {
+		// Determine the tank limit from the node configuration
+		tank = NewFuelTank(manager.config.FuelLimit)
 	}
 
-	// Create a fuel tank for the interaction
-	tank := manager.createFuelTank(limit)
-
-	// Determine the required balance for MOI Token.
-	// Must be the sum of the fuel limit for the ix and the transfer value for the MOI Token
-	requiredBalance := new(big.Int).Add(tank.Level(), ix.MOITokenValue())
-	// Check that the sender has sufficient balance of MOI Tokens
-	ok, err := objects.GetObject(ix.Sender()).HasFuel(requiredBalance)
+	// Check that the sender has sufficient balance
+	ok, err := objects.GetObject(ix.Sender()).HasSufficientFuel(ix.Cost())
 	if err != nil {
 		return nil, errors.Wrap(err, "execution failed: fuel check")
 	}
@@ -137,19 +135,6 @@ func (manager *Manager) runInteraction(
 	}
 
 	return receipt, nil
-}
-
-// createFuelTank creates a new engineio.FuelTank for a given fuel limit.
-// If no limit is provided (limit == nil), then the `execution.fuel_limit`
-// parameter from the node configuration will be used as the fuel limit
-func (manager *Manager) createFuelTank(limit *big.Int) *FuelTank {
-	// If no limit is provided, determine limit from execution config
-	if limit == nil {
-		return NewFuelTank(manager.config.FuelLimit)
-	}
-
-	// Return fuel tank with given limit
-	return NewFuelTank(limit)
 }
 
 // Revert reverts any state transition performed by an executor for a given Cluster ID.

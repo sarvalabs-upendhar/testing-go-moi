@@ -98,7 +98,7 @@ func runFaucetCommand(cmd *cobra.Command, args []string) {
 		Receiver:  common.HexToAddress(walletAddress),
 		Nonce:     nonce.ToUint64(),
 		FuelPrice: big.NewInt(1),
-		FuelLimit: big.NewInt(1000),
+		FuelLimit: 1000,
 		TransferValues: map[common.AssetID]*big.Int{
 			common.KMOITokenAssetID: new(big.Int).SetUint64(amount),
 		},

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/utils"
@@ -203,7 +204,7 @@ func getIXParams(
 			ix.Input.Type = ixType
 			ix.Input.Sender = address
 			ix.Input.FuelPrice = fuelPrice
-			ix.Input.FuelLimit = big.NewInt(1)
+			ix.Input.FuelLimit = 1
 			ix.Input.TransferValues = transferValues
 		},
 		Sign: sign,
@@ -230,7 +231,7 @@ func newTestInteraction(
 			Sender:    address,
 			Nonce:     uint64(nonce),
 			FuelPrice: big.NewInt(1),
-			FuelLimit: big.NewInt(1),
+			FuelLimit: 1,
 			TransferValues: map[common.AssetID]*big.Int{
 				common.KMOITokenAssetID: big.NewInt(1),
 			},

@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"testing"
 
-	pisatest "github.com/sarvalabs/go-pisa/moi/testing"
+	"github.com/sarvalabs/go-moi-engineio"
+	pisatestlib "github.com/sarvalabs/go-pisa/moi/testlib"
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
 const (
@@ -22,7 +22,7 @@ const (
 )
 
 type GuardianTestSuite struct {
-	pisatest.LogicTestSuite
+	pisatestlib.LogicTestSuite
 }
 
 func TestGuardianTestSuite(t *testing.T) {
@@ -41,7 +41,7 @@ func (suite *GuardianTestSuite) SetupSuite() {
 	logicID := common.NewLogicIDv0(true, false, false, false, 0, address)
 
 	consumed := suite.Initialize(logicID, manifest, address, common.HexToAddress(approverAddr1))
-	suite.Equal(engineio.NewFuel(100), consumed)
+	suite.Equal(uint64(100), consumed)
 
 	calldata := make(polo.Document)
 	_ = calldata.Set("enforceApprovals", true)

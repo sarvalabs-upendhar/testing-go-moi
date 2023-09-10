@@ -510,7 +510,7 @@ func (i *IxPool) validateIx(ix *common.Interaction) error {
 		return common.ErrInsufficientFunds
 	}
 
-	if moiBal.Cmp(new(big.Int).Add(ix.MOITokenValue(), ix.FuelLimit())) < 0 {
+	if moiBal.Cmp(ix.Cost()) < 0 {
 		return common.ErrInsufficientFunds
 	}
 

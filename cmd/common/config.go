@@ -70,7 +70,7 @@ func DefaultBabylonConfig(path string) *Config {
 			MaxSnapSize: config.DefaultSnapSize, // 1GB limit
 		},
 		Execution: ExecutionConfig{
-			FuelLimit: hexutil.Big(*config.DefaultFuelLimit),
+			FuelLimit: hexutil.Uint64(config.DefaultFuelLimit),
 		},
 		Ixpool: IxPoolConfig{
 			Mode:       config.DefaultIxPoolMode,
@@ -128,7 +128,7 @@ func DefaultDevnetConfig(path string) *Config {
 			MaxSnapSize: config.DefaultSnapSize, // 1GB limit
 		},
 		Execution: ExecutionConfig{
-			FuelLimit: hexutil.Big(*config.DefaultFuelLimit),
+			FuelLimit: hexutil.Uint64(config.DefaultFuelLimit),
 		},
 		Ixpool: IxPoolConfig{
 			Mode:       config.DefaultIxPoolMode,
@@ -200,7 +200,7 @@ type ConsensusConfig struct {
 }
 
 type ExecutionConfig struct {
-	FuelLimit hexutil.Big `json:"fuel_limit"`
+	FuelLimit hexutil.Uint64 `json:"fuel_limit"`
 }
 
 type VaultConfig struct {

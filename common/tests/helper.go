@@ -18,6 +18,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/sarvalabs/go-moi-engineio"
 	pisa "github.com/sarvalabs/go-pisa/moi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,7 +26,6 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/kramaid"
-	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/crypto"
 	mudracommon "github.com/sarvalabs/go-moi/crypto/common"
 	"github.com/sarvalabs/go-moi/crypto/poi"
@@ -481,8 +481,8 @@ func CreateTesseract(t *testing.T, params *CreateTesseractParams) *common.Tesser
 	header := &common.TesseractHeader{
 		Address:   params.Address,
 		Height:    params.Height,
-		FuelUsed:  big.NewInt(100),
-		FuelLimit: big.NewInt(100),
+		FuelUsed:  100,
+		FuelLimit: 100,
 		ClusterID: params.ClusterID,
 	}
 
@@ -720,8 +720,8 @@ func CreateHeaderWithTestData(t *testing.T) common.TesseractHeader {
 		Address:     RandomAddress(t),
 		PrevHash:    RandomHash(t),
 		Height:      4444,
-		FuelUsed:    big.NewInt(5),
-		FuelLimit:   big.NewInt(6),
+		FuelUsed:    5,
+		FuelLimit:   6,
 		BodyHash:    RandomHash(t),
 		GroupHash:   RandomHash(t),
 		Operator:    "operator",
@@ -789,7 +789,7 @@ func ReadManifest(t *testing.T, filePath string) []byte {
 	t.Helper()
 
 	// Register the PISA element registry with the EngineIO package
-	engineio.RegisterEngineRuntime(pisa.NewRuntime())
+	engineio.RegisterRuntime(pisa.NewRuntime(), nil)
 
 	// Decode the manifest into a Manifest object
 	manifest, err := engineio.ReadManifestFile(filePath)
@@ -806,7 +806,7 @@ func GetManifests(t *testing.T, filepath string) (poloEncoded, jsonEncoded, yaml
 	t.Helper()
 
 	// Register the PISA element registry with the EngineIO package
-	engineio.RegisterEngineRuntime(pisa.NewRuntime())
+	engineio.RegisterRuntime(pisa.NewRuntime(), nil)
 
 	// Read manifest at file path
 	manifest, err := engineio.ReadManifestFile(filepath)
@@ -853,7 +853,7 @@ func CreateIXInputWithTestData(
 		},
 		PerceivedProofs: perceivedProofs,
 
-		FuelLimit: new(big.Int).SetUint64(1043),
+		FuelLimit: 1043,
 		FuelPrice: new(big.Int).SetUint64(1),
 
 		Payload: payload,
@@ -891,7 +891,7 @@ func CreateReceiptWithTestData(t *testing.T) *common.Receipt {
 	receipt := &common.Receipt{
 		IxType:    2,
 		IxHash:    RandomHash(t),
-		FuelUsed:  big.NewInt(99),
+		FuelUsed:  99,
 		Hashes:    make(common.ReceiptAccHashes),
 		ExtraData: []byte{1, 2},
 	}

@@ -1,6 +1,8 @@
 package compute
 
 import (
+	"math/big"
+
 	"github.com/pkg/errors"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -50,7 +52,7 @@ func (executor *IxExecutor) Execute(ixs common.Interactions, ctx *common.Executi
 		// Set the receipt to the executor
 		executor.setReceipt(ix.Hash(), receipt)
 		// Deduct fuel for the ix execution from the sender
-		executor.objects.GetObject(ix.Sender()).DeductFuel(receipt.FuelUsed)
+		executor.objects.GetObject(ix.Sender()).DeductFuel(new(big.Int).SetUint64(receipt.FuelUsed))
 
 		// Update Sarga state if the interaction receiver if it is an unregistered (new) account
 		if err := executor.updateSargaState(ix); err != nil {

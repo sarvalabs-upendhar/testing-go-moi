@@ -44,7 +44,6 @@ func TestCopyHashes(t *testing.T) {
 func TestCopyReceipt(t *testing.T) {
 	receiptWithNilExtraData := tests.CreateReceiptWithTestData(t)
 	receiptWithNilExtraData.ExtraData = nil
-	receiptWithNilExtraData.FuelUsed = nil
 
 	testcases := []struct {
 		name           string
@@ -73,13 +72,6 @@ func TestCopyReceipt(t *testing.T) {
 				reflect.ValueOf(expectedReceipt.Hashes).Pointer(),
 				reflect.ValueOf(copiedReceipt.Hashes).Pointer(),
 			)
-
-			if test.receipt.FuelUsed != nil {
-				require.NotEqual(t,
-					reflect.ValueOf(expectedReceipt.FuelUsed).Pointer(),
-					reflect.ValueOf(copiedReceipt.FuelUsed).Pointer(),
-				)
-			}
 
 			if !test.isExtraDataNil {
 				require.NotEqual(t,

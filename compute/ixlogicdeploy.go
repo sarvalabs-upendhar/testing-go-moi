@@ -2,12 +2,12 @@ package compute
 
 import (
 	"context"
-	"math/big"
+	"math"
 
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi-engineio"
 
 	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/state"
 )
 
@@ -83,7 +83,7 @@ func DeployerState(deployer *state.Object) LogicDeployOption {
 }
 
 // DeployFuelLimit returns a LogicDeployOption to provide the fuel limit for logic deployment.
-func DeployFuelLimit(limit engineio.Fuel) LogicDeployOption {
+func DeployFuelLimit(limit uint64) LogicDeployOption {
 	return func(config *logicDeployer) error {
 		config.fueltank = NewFuelTank(limit)
 
@@ -124,56 +124,52 @@ func DeployGenesisLogic(
 // Uses unlimited fuel limit unless otherwise specified with the DeployFuelLimit option.
 // Does not perform a call to deployer callsite unless specified with DeploymentCall.
 func DeployLogic(ix *common.Interaction, ctx *common.ExecutionContext, state *state.Object, opts ...LogicDeployOption) (
-	engineio.Fuel, *common.LogicDeployReceipt, error,
+	uint64, *common.LogicDeployReceipt, error,
 ) {
 	// Generate basic deployment config
 	deployer := &logicDeployer{
 		manifest:   ix.Manifest(),
 		logicState: state,
-		fueltank: NewFuelTank(func() engineio.Fuel {
-			fuel, _ := new(big.Int).SetString("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 0)
-
-			return fuel
-		}()),
+		fueltank:   NewFuelTank(math.MaxUint64),
 	}
 
 	// Apply all deployment options on the config
 	for _, opt := range opts {
 		if err := opt(deployer); err != nil {
-			return nil, nil, err
+			return 0, nil, err
 		}
 	}
 
 	// Compile the manifest bytes into a LogicDescriptor
 	descriptor, err := deployer.compileManifest()
 	if err != nil {
-		return nil, nil, err
+		return 0, nil, err
 	}
 
 	// Generate the logic object and deploy it to state
 	logicObject, err := deployer.deployLogicObject(descriptor)
 	if err != nil {
-		return nil, nil, err
+		return 0, nil, err
 	}
 
 	// If no callsite is provided -> return the logic ID and fuel consumption
 	if ix.Callsite() == "" {
-		return deployer.fueltank.Consumed, &common.LogicDeployReceipt{LogicID: logicObject.LogicID()}, nil
+		return deployer.fueltank.Consumed, &common.LogicDeployReceipt{LogicID: logicObject.ID}, nil
 	}
 
 	// Call the logic deployer to set up logic state
 	result, err := deployer.callDeployer(ix, ctx, logicObject)
 	if err != nil {
-		return nil, nil, err
+		return 0, nil, err
 	}
 
 	// Check the execution result
 	if !result.Ok() {
-		return deployer.fueltank.Consumed, &common.LogicDeployReceipt{Error: result.Error}, nil
+		return deployer.fueltank.Consumed, &common.LogicDeployReceipt{Error: result.Error()}, nil
 	}
 
 	// Return the total fuel consumed and the logic ID
-	return deployer.fueltank.Consumed, &common.LogicDeployReceipt{LogicID: logicObject.LogicID()}, nil
+	return deployer.fueltank.Consumed, &common.LogicDeployReceipt{LogicID: logicObject.ID}, nil
 }
 
 type logicDeployer struct {
@@ -236,7 +232,7 @@ func (deployer logicDeployer) callDeployer(
 	ixn *common.Interaction,
 	ctx *common.ExecutionContext,
 	logic *state.LogicObject,
-) (*engineio.CallResult, error) {
+) (engineio.CallResult, error) {
 	// Check if logic has a persistent state
 	if ok := logic.StateMatrix.Persistent(); !ok {
 		return nil, errors.New("cannot call deployer for logic without persistent state")
@@ -247,7 +243,7 @@ func (deployer logicDeployer) callDeployer(
 
 	// Create a new engine for the execution
 	engine, err := runtime.SpawnEngine(
-		deployer.fueltank.Level(), logic, deployer.logicState.GenerateLogicContextObject(logic.LogicID()), ctx,
+		deployer.fueltank.Level(), logic, deployer.logicState.GenerateLogicContextObject(logic.ID), ctx,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not bootstrap engine")
@@ -257,7 +253,7 @@ func (deployer logicDeployer) callDeployer(
 	var deployerCtx engineio.CtxDriver
 	// Create the deployer context driver if not nil
 	if deployer.deployerState != nil {
-		deployerCtx = deployer.deployerState.GenerateLogicContextObject(logic.LogicID())
+		deployerCtx = deployer.deployerState.GenerateLogicContextObject(logic.ID)
 	}
 
 	// Perform execution call on the engine
@@ -267,7 +263,7 @@ func (deployer logicDeployer) callDeployer(
 	}
 
 	// Exhaust fuel for deployer call
-	if !deployer.fueltank.Exhaust(result.Consumed) {
+	if !deployer.fueltank.Exhaust(result.Fuel()) {
 		return nil, errors.New("insufficient fuel: could not call logic deployer")
 	}
 

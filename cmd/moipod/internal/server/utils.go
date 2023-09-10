@@ -280,7 +280,7 @@ func (p *Params) getDBConfig(path string) *config.DBConfig {
 
 func (p *Params) getExecutionConfig() *config.ExecutionConfig {
 	return &config.ExecutionConfig{
-		FuelLimit: p.rawCfg.Execution.FuelLimit.ToInt(),
+		FuelLimit: uint64(p.rawCfg.Execution.FuelLimit),
 	}
 }
 

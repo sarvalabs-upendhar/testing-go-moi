@@ -229,7 +229,7 @@ func registerGuardian(vault *crypto.KramaVault) {
 		Sender:    common.BytesToAddress(moiIDpublicKey),
 		Nonce:     nonce.ToUint64(),
 		FuelPrice: big.NewInt(1),
-		FuelLimit: big.NewInt(10000),
+		FuelLimit: 10000,
 		Payload:   rawPayload,
 	}
 

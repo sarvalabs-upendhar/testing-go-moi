@@ -57,7 +57,7 @@ func constructInteraction(args *common.SendIXArgs, sign []byte) (ix *common.Inte
 		return nil, common.ErrFuelPriceNotFound
 	}
 
-	if args.FuelLimit == nil {
+	if args.FuelLimit == 0 {
 		return nil, common.ErrFuelLimitNotFound
 	}
 
@@ -126,7 +126,7 @@ func createSendIXArgs(sendIx *rpcargs.IxArgs) (*common.SendIXArgs, error) {
 		Receiver:  sendIx.Receiver,
 		Payer:     sendIx.Payer,
 		FuelPrice: sendIx.FuelPrice.ToInt(),
-		FuelLimit: sendIx.FuelLimit.ToInt(),
+		FuelLimit: uint64(sendIx.FuelLimit),
 		Payload:   sendIx.Payload.Bytes(),
 	}
 

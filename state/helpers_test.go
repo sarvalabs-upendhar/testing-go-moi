@@ -8,22 +8,19 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/decred/dcrd/crypto/blake256"
-	"github.com/manishmeganathan/depgraph"
-
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-	"github.com/sarvalabs/go-moi/compute/engineio"
-
 	"github.com/hashicorp/go-hclog"
-	lru "github.com/hashicorp/golang-lru"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/hashicorp/golang-lru"
+	"github.com/libp2p/go-libp2p-pubsub"
+	"github.com/manishmeganathan/depgraph"
 	"github.com/munna0908/smt"
+	"github.com/sarvalabs/go-moi-engineio"
 	"github.com/sarvalabs/go-polo"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"

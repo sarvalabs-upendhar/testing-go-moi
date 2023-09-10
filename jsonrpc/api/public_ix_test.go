@@ -31,7 +31,7 @@ func TestIx_SendInteraction(t *testing.T) {
 		Sender:    address,
 		Nonce:     2,
 		FuelPrice: big.NewInt(1),
-		FuelLimit: big.NewInt(1),
+		FuelLimit: 1,
 		Payload:   rawAssetPayload,
 	}
 
@@ -41,7 +41,7 @@ func TestIx_SendInteraction(t *testing.T) {
 			Sender:    address,
 			Nonce:     acc.Nonce,
 			FuelPrice: big.NewInt(1),
-			FuelLimit: big.NewInt(1),
+			FuelLimit: 1,
 			Payload:   rawAssetPayload,
 		},
 		getSignatureBytes(t, &validIXArgs, mnemonic),
@@ -61,7 +61,7 @@ func TestIx_SendInteraction(t *testing.T) {
 				Type:      common.IxValueTransfer,
 				Sender:    common.SargaAddress,
 				FuelPrice: big.NewInt(1),
-				FuelLimit: big.NewInt(1),
+				FuelLimit: 1,
 			},
 			expectedErr: ErrGenesisAccount,
 		},
@@ -71,7 +71,7 @@ func TestIx_SendInteraction(t *testing.T) {
 				Type:      common.IxInvalid,
 				Nonce:     3,
 				FuelPrice: big.NewInt(1),
-				FuelLimit: big.NewInt(1),
+				FuelLimit: 1,
 				Sender:    address,
 			},
 			expectedErr: errors.New("invalid interaction type"),
@@ -83,7 +83,7 @@ func TestIx_SendInteraction(t *testing.T) {
 				Nonce:     3,
 				Sender:    address,
 				FuelPrice: big.NewInt(1),
-				FuelLimit: big.NewInt(1),
+				FuelLimit: 1,
 			},
 			preTestFn: func(ixPool *MockIxPool, sm *MockStateManager) {
 				ixPool.addInteractionHook = func() []error {
@@ -163,7 +163,7 @@ func TestIx_ConstructInteraction(t *testing.T) {
 					tests.GetRandomAssetID(t, tests.RandomAddress(t)): big.NewInt(111),
 				},
 				FuelPrice: big.NewInt(1),
-				FuelLimit: big.NewInt(23),
+				FuelLimit: 23,
 				Payload:   []byte{2, 3, 3},
 			},
 		},

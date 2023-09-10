@@ -2,12 +2,12 @@ package compute
 
 import (
 	"context"
-	"math/big"
+	"math"
 
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi-engineio"
 
 	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/state"
 )
 
@@ -83,7 +83,7 @@ func InvokerState(invoker *state.Object) LogicInvokeOption {
 }
 
 // InvokeFuelLimit returns a LogicInvokeOption to provide the fuel limit for logic deployment.
-func InvokeFuelLimit(limit engineio.Fuel) LogicInvokeOption {
+func InvokeFuelLimit(limit uint64) LogicInvokeOption {
 	return func(config *logicInvoker) error {
 		config.fueltank = NewFuelTank(limit)
 
@@ -101,29 +101,25 @@ func InvokeLogic(
 	state *state.Object,
 	opts ...LogicInvokeOption,
 ) (
-	engineio.Fuel, *common.LogicInvokeReceipt, error,
+	uint64, *common.LogicInvokeReceipt, error,
 ) {
 	// Generate basic invoke config
 	invoker := &logicInvoker{
-		logicID:    ixn.LogicID(),
 		logicState: state,
-		fueltank: NewFuelTank(func() engineio.Fuel {
-			fuel, _ := new(big.Int).SetString("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 0)
-
-			return fuel
-		}()),
+		logicID:    ixn.LogicID(),
+		fueltank:   NewFuelTank(math.MaxUint64),
 	}
 
 	// Apply all invoke options on the config
 	for _, opt := range opts {
 		if err := opt(invoker); err != nil {
-			return nil, nil, err
+			return 0, nil, err
 		}
 	}
 
 	// Verify that the callsite is not empty
 	if ixn.Callsite() == "" {
-		return nil, nil, errors.New("callsite cannot be empty")
+		return 0, nil, errors.New("callsite cannot be empty")
 	}
 
 	var err error
@@ -131,54 +127,54 @@ func InvokeLogic(
 	// Fetch the logic object from the state object
 	invoker.logicObject, err = invoker.logicState.FetchLogicObject(invoker.logicID)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "could not fetch logic object")
+		return 0, nil, errors.Wrap(err, "could not fetch logic object")
 	}
 
 	// Check that the logic contains the payload callsite
 	if _, ok := invoker.logicObject.GetCallsite(ixn.Callsite()); !ok {
-		return nil, nil, errors.Errorf("callsite '%v' does not exist for logic", ixn.Callsite())
+		return 0, nil, errors.Errorf("callsite '%v' does not exist for logic", ixn.Callsite())
 	}
 
 	// Obtain the runtime for the logic engine of the logic object
 	runtime, ok := engineio.FetchEngineRuntime(invoker.logicObject.Engine())
 	if !ok {
-		return nil, nil, errors.Errorf("missing engine factory: %v", invoker.logicObject.Engine())
+		return 0, nil, errors.Errorf("missing engine factory: %v", invoker.logicObject.Engine())
 	}
 
 	// Create a new engine for the execution
 	engine, err := runtime.SpawnEngine(
 		invoker.fueltank.Level(), invoker.logicObject,
-		invoker.logicState.GenerateLogicContextObject(invoker.logicObject.LogicID()), ctx,
+		invoker.logicState.GenerateLogicContextObject(invoker.logicObject.ID), ctx,
 	)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "could not bootstrap engine")
+		return 0, nil, errors.Wrap(err, "could not bootstrap engine")
 	}
 
 	// Declare sender context driver
 	var senderCtx engineio.CtxDriver
 	// Create the deployer context driver if not nil
 	if invoker.senderState != nil {
-		senderCtx = invoker.senderState.GenerateLogicContextObject(invoker.logicObject.LogicID())
+		senderCtx = invoker.senderState.GenerateLogicContextObject(invoker.logicObject.ID)
 	}
 
 	// Perform execution call on the engine
 	result, err := engine.Call(context.Background(), ixn, senderCtx)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "could not perform call")
+		return 0, nil, errors.Wrap(err, "could not perform call")
 	}
 
 	// Exhaust fuel for deployer call
-	if !invoker.fueltank.Exhaust(result.Consumed) {
-		return nil, nil, errors.New("insufficient fuel: could not call logic deployer")
+	if !invoker.fueltank.Exhaust(result.Fuel()) {
+		return 0, nil, errors.New("insufficient fuel: could not call logic deployer")
 	}
 
 	// Check the execution result
 	if !result.Ok() {
-		return invoker.fueltank.Consumed, &common.LogicInvokeReceipt{Error: result.Error}, nil
+		return invoker.fueltank.Consumed, &common.LogicInvokeReceipt{Error: result.Error()}, nil
 	}
 
 	// Return the total fuel consumed and the return data
-	return invoker.fueltank.Consumed, &common.LogicInvokeReceipt{Outputs: result.Outputs}, nil
+	return invoker.fueltank.Consumed, &common.LogicInvokeReceipt{Outputs: result.Outputs()}, nil
 }
 
 type logicInvoker struct {

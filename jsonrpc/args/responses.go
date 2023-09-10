@@ -92,7 +92,7 @@ type RPCReceipt struct {
 	IxType    hexutil.Uint64       `json:"ix_type"`
 	IxHash    common.Hash          `json:"ix_hash"`
 	Status    common.ReceiptStatus `json:"status"`
-	FuelUsed  hexutil.Big          `json:"fuel_used"`
+	FuelUsed  hexutil.Uint64       `json:"fuel_used"`
 	Hashes    RPCHashes            `json:"hashes"`
 	ExtraData json.RawMessage      `json:"extra_data"`
 	From      common.Address       `json:"from"`
@@ -113,8 +113,8 @@ type RPCInteraction struct {
 	PerceivedValues map[common.AssetID]*hexutil.Big `json:"perceived_values"`
 	PerceivedProofs hexutil.Bytes                   `json:"perceived_proofs"`
 
-	FuelPrice *hexutil.Big `json:"fuel_price"`
-	FuelLimit *hexutil.Big `json:"fuel_limit"`
+	FuelPrice *hexutil.Big   `json:"fuel_price"`
+	FuelLimit hexutil.Uint64 `json:"fuel_limit"`
 
 	Payload json.RawMessage `json:"payload"`
 
@@ -196,8 +196,8 @@ type RPCHeader struct {
 	Address     common.Address      `json:"address"`
 	PrevHash    common.Hash         `json:"prev_hash"`
 	Height      hexutil.Uint64      `json:"height"`
-	FuelUsed    hexutil.Big         `json:"fuel_used"`
-	FuelLimit   hexutil.Big         `json:"fuel_limit"`
+	FuelUsed    hexutil.Uint64      `json:"fuel_used"`
+	FuelLimit   hexutil.Uint64      `json:"fuel_limit"`
 	BodyHash    common.Hash         `json:"body_hash"`
 	GridHash    common.Hash         `json:"grid_hash"`
 	Operator    string              `json:"operator"`
@@ -236,7 +236,7 @@ type InteractionResponse struct {
 	Receiver  common.Address `json:"receiver"`
 	Cost      *hexutil.Big   `json:"cost"`
 	FuelPrice *hexutil.Big   `json:"fuel_price"`
-	FuelLimit *hexutil.Big   `json:"fuel_limit"`
+	FuelLimit hexutil.Uint64 `json:"fuel_limit"`
 	Input     string         `json:"input"`
 	Hash      common.Hash    `json:"hash"`
 }
@@ -251,7 +251,7 @@ func NewInteractionResponse(ix *common.Interaction) *InteractionResponse {
 		Receiver:  ix.Receiver(),
 		Cost:      (*hexutil.Big)(ix.Cost()),
 		FuelPrice: (*hexutil.Big)(ix.FuelPrice()),
-		FuelLimit: (*hexutil.Big)(ix.FuelLimit()),
+		FuelLimit: hexutil.Uint64(ix.FuelLimit()),
 		Input:     common.BytesToHex(ix.Payload()),
 		Hash:      ix.Hash(),
 	}

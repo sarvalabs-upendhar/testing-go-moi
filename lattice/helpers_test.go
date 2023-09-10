@@ -1504,7 +1504,7 @@ func getReceipt(ixHash common.Hash) *common.Receipt {
 	return &common.Receipt{
 		IxType:    1,
 		IxHash:    ixHash,
-		FuelUsed:  big.NewInt(rand.Int63()),
+		FuelUsed:  rand.Uint64(),
 		Hashes:    make(common.ReceiptAccHashes),
 		ExtraData: make(json.RawMessage, 0),
 	}
