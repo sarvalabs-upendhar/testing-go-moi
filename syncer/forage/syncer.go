@@ -1849,7 +1849,7 @@ func (s *Syncer) Start() error {
 		return err
 	}
 
-	if err := s.network.Subscribe(s.ctx, common.TesseractTopic, s.msgHandler); err != nil {
+	if err := s.network.Subscribe(s.ctx, config.TesseractTopic, s.msgHandler); err != nil {
 		return err
 	}
 

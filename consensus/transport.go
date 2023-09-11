@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/config"
 
 	id "github.com/sarvalabs/go-moi/common/kramaid"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
@@ -149,7 +149,7 @@ func (t *Transport) BroadcastTesseract(msg *networkmsg.TesseractMessage) error {
 		return err
 	}
 
-	return t.network.Broadcast(common.TesseractTopic, rawData)
+	return t.network.Broadcast(config.TesseractTopic, rawData)
 }
 
 /*

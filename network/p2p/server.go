@@ -42,7 +42,6 @@ import (
 )
 
 const (
-	SenatusTopic            = "MOI_PUBSUB_SENATUS"
 	MinimumConnReq          = 100
 	MaximumConnReq          = 500
 	MinimumBootNodeConn int = 1
@@ -1023,7 +1022,7 @@ func (s *Server) SendHelloMessage() {
 			return
 		}
 
-		if err = s.Broadcast(SenatusTopic, rawData); err != nil {
+		if err = s.Broadcast(config.SenatusTopic, rawData); err != nil {
 			s.logger.Error("Failed to broadcast hello message", "err", err)
 
 			return

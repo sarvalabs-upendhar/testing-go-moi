@@ -10,8 +10,6 @@ import (
 	"github.com/sarvalabs/go-polo"
 )
 
-const TesseractTopic = "MOI_PUBSUB_TESSERACT"
-
 type Tesseract struct {
 	header   TesseractHeader
 	body     TesseractBody

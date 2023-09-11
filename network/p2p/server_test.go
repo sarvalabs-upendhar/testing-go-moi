@@ -1267,8 +1267,8 @@ func TestSendHelloMessage_CheckMsgOnTopic(t *testing.T) {
 	})
 
 	startDiscovery(t, servers...)
-	registerEmptySubscriptionHandler(t, servers[0], SenatusTopic, true)
-	subscribeHelloMsg(t, servers[1], SenatusTopic, servers[0], response)
+	registerEmptySubscriptionHandler(t, servers[0], config.SenatusTopic, true)
+	subscribeHelloMsg(t, servers[1], config.SenatusTopic, servers[0], response)
 	time.Sleep(5 * time.Second) // give time for discovery and subscription
 
 	servers[0].SendHelloMessage()
