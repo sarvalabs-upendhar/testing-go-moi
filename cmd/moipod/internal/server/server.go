@@ -6,6 +6,9 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
+
+	"github.com/sarvalabs/go-moi/common/config"
 
 	cmdCommon "github.com/sarvalabs/go-moi/cmd/common"
 	"github.com/sarvalabs/go-moi/node"
@@ -34,23 +37,25 @@ var (
 	Bootnodes          []string
 	NodePassword       string
 	P2pHostIP          string
+	DiscoveryInterval  time.Duration
 )
 
 const (
-	genesisFlag       = "genesis-path"
-	configFlag        = "config-path"
-	LogDirPathFlag    = "log-dir"
-	operatorSlotFlag  = "operator-slots"
-	validatorSlotFlag = "validator-slots"
-	dataDirFlag       = "data-dir"
-	cleanDBFlag       = "clean-db"
-	enableTracingFlag = "enable-tracing"
-	logLevelFlag      = "log-level"
-	allowOriginsFlag  = "allow-origins"
-	babylonFlag       = "babylon"
-	bootNodesFlag     = "bootnodes"
-	nodePasswordFlag  = "node-password"
-	p2pHostIPFlag     = "p2p-host-ip"
+	genesisFlag           = "genesis-path"
+	configFlag            = "config-path"
+	LogDirPathFlag        = "log-dir"
+	operatorSlotFlag      = "operator-slots"
+	validatorSlotFlag     = "validator-slots"
+	dataDirFlag           = "data-dir"
+	cleanDBFlag           = "clean-db"
+	enableTracingFlag     = "enable-tracing"
+	logLevelFlag          = "log-level"
+	allowOriginsFlag      = "allow-origins"
+	babylonFlag           = "babylon"
+	bootNodesFlag         = "bootnodes"
+	nodePasswordFlag      = "node-password"
+	p2pHostIPFlag         = "p2p-host-ip"
+	discoveryIntervalFlag = "discovery-interval"
 )
 
 func GetServerCommand() *cobra.Command {
@@ -80,6 +85,12 @@ func parseFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().BoolVar(&CleanDB, cleanDBFlag, false, "Deletes the data stored in database.")
 	cmd.PersistentFlags().BoolVar(&EnableTracing, enableTracingFlag, false, "Enables tracing.")
 	cmd.PersistentFlags().StringVar(&LogLevel, logLevelFlag, "INFO", "Logger level.")
+	cmd.PersistentFlags().DurationVar(
+		&DiscoveryInterval,
+		discoveryIntervalFlag,
+		config.DefaultDiscoveryInterval,
+		"Time interval for discovering nodes.",
+	)
 	cmd.PersistentFlags().StringSliceVar(
 		&CorsAllowedOrigins,
 		allowOriginsFlag,

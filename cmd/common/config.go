@@ -2,6 +2,7 @@ package common
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/hexutil"
@@ -41,6 +42,7 @@ func DefaultBabylonConfig(path string) *Config {
 			MaxPeers:           0, // current we don't limit the no.of peers
 			InboundConnLimit:   config.DefaultInboundConnLimit,
 			OutboundConnLimit:  config.DefaultOutboundConnLimit,
+			DiscoveryInterval:  config.DefaultDiscoveryInterval,
 			JSONRPCAddr:        "0.0.0.0:" + strconv.Itoa(config.DefaultJSONRPCPort),
 			CorsAllowedOrigins: []string{"*"},
 			RefreshSenatus:     true,
@@ -99,6 +101,7 @@ func DefaultDevnetConfig(path string) *Config {
 			MaxPeers:           0, // current we don't limit the no.of peers
 			InboundConnLimit:   config.DefaultInboundConnLimit,
 			OutboundConnLimit:  config.DefaultOutboundConnLimit,
+			DiscoveryInterval:  config.DefaultDiscoveryInterval,
 			JSONRPCAddr:        "0.0.0.0:" + strconv.Itoa(config.DefaultJSONRPCPort),
 			CorsAllowedOrigins: []string{"*"},
 			RefreshSenatus:     true,
@@ -143,20 +146,21 @@ func DefaultDevnetConfig(path string) *Config {
 }
 
 type NetworkConfig struct {
-	BootStrapPeers     []string   `json:"bootnodes"`
-	TrustedPeers       []PeerInfo `json:"trusted_peers"`
-	StaticPeers        []PeerInfo `json:"static_peers"`
-	MaxPeers           uint       `json:"max_peers"`
-	RelayNodeAddr      string     `json:"relay_node_addr"`
-	Libp2pAddr         []string   `json:"libp2p_addr"`
-	JSONRPCAddr        string     `json:"jsonrpc_addr"`
-	MTQ                float64    `json:"mtq"`
-	CorsAllowedOrigins []string   `json:"cors_allowed_origins"`
-	NetworkSize        uint64     `json:"network_size"`
-	NoDiscovery        bool       `json:"no_discovery"`
-	RefreshSenatus     bool       `json:"refresh_senatus"`
-	InboundConnLimit   int64      `json:"inbound_conn_limit"`
-	OutboundConnLimit  int64      `json:"outbound_conn_limit"`
+	BootStrapPeers     []string      `json:"bootnodes"`
+	TrustedPeers       []PeerInfo    `json:"trusted_peers"`
+	StaticPeers        []PeerInfo    `json:"static_peers"`
+	MaxPeers           uint          `json:"max_peers"`
+	RelayNodeAddr      string        `json:"relay_node_addr"`
+	Libp2pAddr         []string      `json:"libp2p_addr"`
+	JSONRPCAddr        string        `json:"jsonrpc_addr"`
+	MTQ                float64       `json:"mtq"`
+	CorsAllowedOrigins []string      `json:"cors_allowed_origins"`
+	NetworkSize        uint64        `json:"network_size"`
+	NoDiscovery        bool          `json:"no_discovery"`
+	RefreshSenatus     bool          `json:"refresh_senatus"`
+	InboundConnLimit   int64         `json:"inbound_conn_limit"`
+	OutboundConnLimit  int64         `json:"outbound_conn_limit"`
+	DiscoveryInterval  time.Duration `json:"discovery_interval"`
 }
 
 type SyncerConfig struct {

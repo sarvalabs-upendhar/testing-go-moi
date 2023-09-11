@@ -171,7 +171,7 @@ func (s *Server) StartServer() error {
 		}
 	}
 
-	go s.discover(config.DefaultDiscoveryInterval)
+	go s.discover(s.cfg.DiscoveryInterval)
 
 	return nil
 }

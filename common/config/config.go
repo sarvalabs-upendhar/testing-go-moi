@@ -86,6 +86,7 @@ type NetworkConfig struct {
 	RefreshSenatus    bool
 	InboundConnLimit  int64
 	OutboundConnLimit int64
+	DiscoveryInterval time.Duration
 }
 
 type ConsensusConfig struct {
@@ -119,6 +120,7 @@ func DefaultDevnetConfig(path string) *Config {
 			MaxPeers:          0, // current we don't limit the no.of peers
 			InboundConnLimit:  DefaultInboundConnLimit,
 			OutboundConnLimit: DefaultOutboundConnLimit,
+			DiscoveryInterval: DefaultDiscoveryInterval,
 		},
 		Chain: &ChainConfig{
 			GenesisFilePath: path + "/genesis.json",
