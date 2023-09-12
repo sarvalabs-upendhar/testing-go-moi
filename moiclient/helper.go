@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/sarvalabs/go-moi-engineio"
-	pisa "github.com/sarvalabs/go-pisa/moi"
+	"github.com/sarvalabs/go-pisa"
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 

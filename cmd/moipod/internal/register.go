@@ -14,7 +14,7 @@ import (
 
 	"github.com/peterh/liner"
 	"github.com/pkg/errors"
-	pisa "github.com/sarvalabs/go-pisa/moi"
+	"github.com/sarvalabs/go-pisa"
 	"github.com/sarvalabs/go-polo"
 	"github.com/spf13/cobra"
 

@@ -1,6 +1,8 @@
 package state
 
 import (
+	"encoding/json"
+
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi-engineio"
 	"github.com/sarvalabs/go-polo"
@@ -164,7 +166,7 @@ func (logic *LogicObject) Depolorize(depolorizer *polo.Depolorizer) (err error) 
 		return err
 	}
 
-	if err = logic.decodeDepDriver(depolorizer); err != nil {
+	if err = logic.decodePOLODepDriver(depolorizer); err != nil {
 		return err
 	}
 
@@ -183,7 +185,7 @@ func (logic *LogicObject) Depolorize(depolorizer *polo.Depolorizer) (err error) 
 	return nil
 }
 
-func (logic *LogicObject) decodeDepDriver(depolorizer *polo.Depolorizer) error {
+func (logic *LogicObject) decodePOLODepDriver(depolorizer *polo.Depolorizer) error {
 	runtime, ok := engineio.FetchEngineRuntime(logic.EngineKind)
 	if !ok {
 		return errors.New("unidentified engine runtime")
@@ -194,12 +196,64 @@ func (logic *LogicObject) decodeDepDriver(depolorizer *polo.Depolorizer) error {
 		return err
 	}
 
-	driver, err := runtime.DecodeDependencyDriver(data)
+	driver, err := runtime.DecodeDependencyDriver(data, engineio.POLO)
 	if err != nil {
 		return err
 	}
 
 	logic.Dependencies = driver
+
+	return nil
+}
+
+func (logic *LogicObject) decodeJSONDepDriver(data []byte) error {
+	runtime, ok := engineio.FetchEngineRuntime(logic.EngineKind)
+	if !ok {
+		return errors.New("unidentified engine runtime")
+	}
+
+	driver, err := runtime.DecodeDependencyDriver(data, engineio.JSON)
+	if err != nil {
+		return err
+	}
+
+	logic.Dependencies = driver
+
+	return nil
+}
+
+func (logic *LogicObject) UnmarshalJSON(data []byte) error {
+	type temp struct {
+		ID           common.LogicID
+		EngineKind   engineio.EngineKind
+		ManifestHash common.Hash
+		Sealed       bool
+
+		Dependencies json.RawMessage
+
+		StateMatrix engineio.ContextStateMatrix
+		Elements    map[engineio.ElementPtr]*engineio.LogicElement
+		Callsites   map[string]*engineio.Callsite
+		Classdefs   map[string]*engineio.Classdef
+	}
+
+	tempObject := new(temp)
+	if err := json.Unmarshal(data, tempObject); err != nil {
+		return err
+	}
+
+	logic.ID = tempObject.ID
+	logic.EngineKind = tempObject.EngineKind
+	logic.ManifestHash = tempObject.ManifestHash
+	logic.Sealed = tempObject.Sealed
+	logic.StateMatrix = tempObject.StateMatrix
+	logic.Elements = tempObject.Elements
+	logic.Callsites = tempObject.Callsites
+	logic.Classdefs = tempObject.Classdefs
+
+	if err := logic.decodeJSONDepDriver(tempObject.Dependencies); err != nil {
+		return err
+	}
 
 	return nil
 }

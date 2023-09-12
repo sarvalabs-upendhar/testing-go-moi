@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/sarvalabs/go-moi-engineio"
-	pisatestlib "github.com/sarvalabs/go-pisa/moi/testlib"
+	pisatestlib "github.com/sarvalabs/go-pisa/testlib"
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/suite"
 

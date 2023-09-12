@@ -8,7 +8,7 @@ import (
 	"github.com/decred/dcrd/crypto/blake256"
 	"github.com/hashicorp/golang-lru"
 	"github.com/sarvalabs/go-moi-engineio"
-	pisa "github.com/sarvalabs/go-pisa/moi"
+	"github.com/sarvalabs/go-pisa"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
