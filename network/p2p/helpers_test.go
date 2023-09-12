@@ -2,10 +2,7 @@ package p2p
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
-	"math/big"
 	mrand "math/rand"
 	"testing"
 	"time"
@@ -23,7 +20,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/core/routing"
 	discovery "github.com/libp2p/go-libp2p/p2p/discovery/routing"
@@ -166,7 +162,7 @@ func getParamsToCreateMultipleServers(
 			},
 			ServerCallback: func(s *Server) {
 				m := NewMockReputationEngine()
-				m.SetNTQ(s.GetKramaID(), getRandomNumber(t, 27))
+				m.SetNTQ(s.GetKramaID(), tests.GetRandomNumber(t, 27))
 				s.Senatus = m
 			},
 			Logger: testLogger,
@@ -301,33 +297,6 @@ func getBootstrapNodes(t *testing.T, count int) []host.Host {
 	return nodes
 }
 
-// getKramaIDAndNetworkKey returns kramaID and network key pair
-func getKramaIDAndNetworkKey(t *testing.T, nthValidator uint32) (kramaid.KramaID, []byte) {
-	t.Helper()
-
-	var signKey [32]byte
-
-	_, err := rand.Read(signKey[:]) // fill sign key with random bytes
-	require.NoError(t, err)
-
-	// get private key and public key
-	privKeyBytes, moiPubBytes, err := tests.GetPrivKeysForTest(signKey[:])
-	require.NoError(t, err)
-
-	networkKey := privKeyBytes[32:]
-
-	kramaID, err := kramaid.NewKramaID( // Create kramaID from private key , public key
-		networkKey,
-		nthValidator,
-		hex.EncodeToString(moiPubBytes),
-		1,
-		true,
-	)
-	require.NoError(t, err)
-
-	return kramaID, networkKey
-}
-
 func defaultNetworkConfig() *config.NetworkConfig {
 	return &config.NetworkConfig{
 		ListenAddresses: make([]multiaddr.Multiaddr, 0),
@@ -341,7 +310,7 @@ func createServerWithoutHost(t *testing.T) *Server {
 
 	defaultConfig := defaultNetworkConfig()
 
-	kramaID, networkKey := getKramaIDAndNetworkKey(t, 0)
+	kramaID, networkKey := tests.GetKramaIDAndNetworkKey(t, 0)
 	vault := &MockVault{}
 
 	nPriv := new(crypto.SECP256K1PrivKey)
@@ -382,7 +351,7 @@ func createServer(
 		params.Logger = hclog.NewNullLogger()
 	}
 
-	kramaID, networkKey := getKramaIDAndNetworkKey(t, uint32(nthValidator))
+	kramaID, networkKey := tests.GetKramaIDAndNetworkKey(t, uint32(nthValidator))
 	vault := &MockVault{}
 
 	nPriv := new(crypto.SECP256K1PrivKey)
@@ -472,15 +441,6 @@ func initDiscoveryAndAdvertise(t *testing.T, servers ...*Server) {
 	}
 }
 
-func getRandomNumber(t *testing.T, max int) int {
-	t.Helper()
-
-	nBig, err := rand.Int(rand.Reader, big.NewInt(int64(max)))
-	require.NoError(t, err)
-
-	return int(nBig.Int64())
-}
-
 func getNTQ(t *testing.T, s *Server) float32 {
 	t.Helper()
 
@@ -536,11 +496,6 @@ func sendMessage(t *testing.T, p *Peer, msg []byte) {
 
 	err = p.rw.Writer.Flush()
 	require.NoError(t, err)
-}
-
-func addPeerInfo(t *testing.T, s *Server, info *peer.AddrInfo) {
-	t.Helper()
-	s.host.Peerstore().AddAddrs(info.ID, info.Addrs, peerstore.PermanentAddrTTL)
 }
 
 func connectTo(t *testing.T, source *Server, destinations ...*Server) {

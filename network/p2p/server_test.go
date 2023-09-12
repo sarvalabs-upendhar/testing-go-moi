@@ -92,8 +92,7 @@ func TestServer_ConnectAndRegisterPeer(t *testing.T) {
 		t.Run(testcase.name, func(t *testing.T) {
 			info := getPeerInfo(t, testcase.destination)
 
-			// add peer info to peer store
-			addPeerInfo(t, testcase.server, info)
+			testcase.server.AddPeerInfo(info)
 
 			err := testcase.server.ConnectAndRegisterPeer(*info)
 			require.Equal(t, testcase.expected, err)
@@ -296,7 +295,7 @@ func TestConnectToTrustedNodes(t *testing.T) {
 					info := getPeerInfo(t, destination)
 
 					// add peer info to peer store
-					addPeerInfo(t, servers[i], info)
+					servers[i].AddPeerInfo(info)
 
 					servers[i].cfg.TrustedPeers = append(servers[i].cfg.TrustedPeers, config.NodeInfo{
 						ID:      destination.id,
@@ -684,7 +683,7 @@ func TestServer_GetPeerInfo(t *testing.T) {
 				Addrs: tests.GetListenAddresses(t, 1),
 			},
 			testFn: func(peerInfo *peer.AddrInfo) {
-				server.addToPeerStore(peerInfo)
+				server.AddToPeerStore(peerInfo)
 			},
 			expectedErr: nil,
 		},
@@ -813,7 +812,7 @@ func TestConnectPeer(t *testing.T) {
 					info := getPeerInfo(t, destination)
 
 					// add peer info to peer store
-					addPeerInfo(t, servers[i], info)
+					servers[i].AddPeerInfo(info)
 
 					err := servers[i].ConnectPeer(test.kramaID)
 
@@ -877,7 +876,6 @@ func TestDisconnectPeer(t *testing.T) {
 			expectedError:  nil,
 		},
 	}
-
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			// connect servers
@@ -1294,7 +1292,7 @@ func TestGetRandomNode_CheckInRoutingTable(t *testing.T) {
 			},
 			ServerCallback: func(s *Server) {
 				m := NewMockReputationEngine()
-				m.SetNTQ(s.GetKramaID(), getRandomNumber(t, 27))
+				m.SetNTQ(s.GetKramaID(), tests.GetRandomNumber(t, 27))
 				s.Senatus = m
 			},
 		}

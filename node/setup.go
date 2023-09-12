@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
+	agora2 "github.com/sarvalabs/go-moi/syncer/agora"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
@@ -207,6 +209,11 @@ func (n *Node) setupKramaEngine() (err error) {
 
 // setupSyncer creates new Syncer object and setups it to node
 func (n *Node) setupSyncer() (err error) {
+	agoraInstance, err := agora2.NewAgora(n.ctx, n.logger, n.db, n.network, n.nodeMetrics.agora)
+	if err != nil {
+		return errors.Wrap(err, "error initiating agora")
+	}
+
 	if n.syncer, err = forage.NewSyncer(
 		n.ctx,
 		n.cfg.Syncer,
@@ -216,10 +223,10 @@ func (n *Node) setupSyncer() (err error) {
 		n.db,
 		n.chain,
 		n.state,
-		n.nodeMetrics.agora,
 		n.consensusSlots,
 		n.lastActiveTimestamp,
 		n.nodeMetrics.syncer,
+		agoraInstance,
 	); err != nil {
 		return err
 	}

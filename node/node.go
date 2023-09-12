@@ -114,10 +114,6 @@ func NewNode(logLevel string, cfg *config.Config) (n *Node, err error) {
 		return nil, err
 	}
 
-	if err = n.network.StartServer(); err != nil {
-		return nil, errors.Wrap(err, "failed to start the p2p server")
-	}
-
 	n.setupRandomizer()
 
 	if err = n.setupChainManager(); err != nil {
@@ -160,7 +156,11 @@ func (n *Node) loadLatestActiveTimeStamp() {
 func (n *Node) Start() (err error) {
 	n.startHandlers()
 
-	go n.syncer.Start()
+	if err = n.network.StartServer(); err != nil {
+		return errors.Wrap(err, "failed to start the p2p server")
+	}
+
+	go n.syncer.Start(forage.DefaultMinConnectedPeers)
 
 	n.ixpool.Start()
 

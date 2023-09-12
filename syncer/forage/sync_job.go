@@ -2,6 +2,7 @@ package forage
 
 import (
 	"log"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -50,6 +51,15 @@ func NewJobQueue(mux *utils.TypeMux) *JobQueue {
 		jobs: make(map[common.Address]*SyncJob),
 		mux:  mux,
 	}
+}
+
+func (jq *JobQueue) len() int {
+	jq.mtx.RLock()
+	defer func() {
+		jq.mtx.RUnlock()
+	}()
+
+	return len(jq.jobs)
 }
 
 func (jq *JobQueue) getJob(address common.Address) (*SyncJob, bool) {
@@ -143,7 +153,7 @@ type SyncJob struct {
 	hash            common.Hash
 	tesseractQueue  *TesseractQueue
 	tesseractSignal chan struct{}
-	bestPeers       []id.KramaID
+	bestPeers       map[id.KramaID]struct{}
 }
 
 func SyncJobFromCanonicalInfo(
@@ -172,15 +182,45 @@ func SyncJobFromCanonicalInfo(
 	}, nil
 }
 
+func (j *SyncJob) bestPeerLen() int {
+	j.mtx.Lock()
+	defer j.mtx.Unlock()
+
+	return len(j.bestPeers)
+}
+
 func (j *SyncJob) updateBestPeers(peers []id.KramaID) {
 	j.mtx.Lock()
 	defer j.mtx.Unlock()
 
-	if len(peers) == 0 {
-		return
+	for _, peer := range peers {
+		j.bestPeers[peer] = struct{}{}
+	}
+}
+
+func (j *SyncJob) deleteBestPeer(peer id.KramaID) {
+	j.mtx.Lock()
+	defer j.mtx.Unlock()
+
+	delete(j.bestPeers, peer)
+}
+
+func (j *SyncJob) chooseRandomBestPeer() id.KramaID {
+	j.mtx.Lock()
+	defer j.mtx.Unlock()
+
+	randSource := rand.New(rand.NewSource(time.Now().UnixNano()))
+	num := randSource.Intn(len(j.bestPeers))
+
+	for peer := range j.bestPeers {
+		if num == 0 {
+			return peer
+		}
+
+		num--
 	}
 
-	j.bestPeers = append(j.bestPeers, peers...)
+	return ""
 }
 
 func (j *SyncJob) getJobState() JobState {
@@ -293,5 +333,11 @@ func (j *SyncJob) signalNewTesseract() {
 		go func() {
 			j.tesseractSignal <- struct{}{}
 		}()
+	}
+}
+
+func (j *SyncJob) jobStateEvent() eventDataJobState {
+	return eventDataJobState{
+		address: j.address,
 	}
 }

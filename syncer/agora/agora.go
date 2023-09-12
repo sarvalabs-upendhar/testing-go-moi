@@ -3,12 +3,15 @@ package agora
 import (
 	"context"
 
+	"github.com/sarvalabs/go-moi/syncer"
+
+	"github.com/sarvalabs/go-moi/syncer/agora/session"
+
 	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/syncer/agora/db"
 	"github.com/sarvalabs/go-moi/syncer/agora/decision"
 	"github.com/sarvalabs/go-moi/syncer/agora/network"
 	"github.com/sarvalabs/go-moi/syncer/agora/notifications"
-	"github.com/sarvalabs/go-moi/syncer/agora/session"
 	"github.com/sarvalabs/go-moi/syncer/cid"
 
 	"github.com/hashicorp/go-hclog"
@@ -68,7 +71,7 @@ func NewAgora(
 
 	sessionManager := session.NewSessionManager(logger, interestManager, notifier, engine)
 
-	ag := &Agora{
+	ag := Agora{
 		ctx:      ctx,
 		engine:   engine,
 		ledger:   ledger,
@@ -79,7 +82,7 @@ func NewAgora(
 		notifier: notifier,
 	}
 
-	return ag, nil
+	return &ag, nil
 }
 
 func (ag *Agora) NewSession(
@@ -87,7 +90,7 @@ func (ag *Agora) NewSession(
 	contextPeers []id.KramaID,
 	address common.Address,
 	stateHash cid.CID,
-) (*session.Session, error) {
+) (syncer.Session, error) {
 	return ag.sm.NewSession(ctx, address, stateHash, ag.network, contextPeers)
 }
 

@@ -671,6 +671,8 @@ func (c *ChainManager) ValidateTesseract(ts *common.Tesseract, ics *common.ICSNo
 		switch {
 		case errors.Is(err, common.ErrPreviousTesseractNotFound):
 			c.orphanTesseracts.Add(tsHash, ts)
+
+			return common.ErrPreviousTesseractNotFound
 		default:
 			return err
 		}

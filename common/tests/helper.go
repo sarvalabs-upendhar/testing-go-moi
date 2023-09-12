@@ -993,3 +993,39 @@ func GetIXSignature(t *testing.T, ixArgs *common.SendIXArgs, mnemonic string) []
 
 	return rawSign
 }
+
+// GetKramaIDAndNetworkKey returns kramaID and network key pair
+func GetKramaIDAndNetworkKey(t *testing.T, nthValidator uint32) (kramaid.KramaID, []byte) {
+	t.Helper()
+
+	var signKey [32]byte
+
+	_, err := rand.Read(signKey[:]) // fill sign key with random bytes
+	require.NoError(t, err)
+
+	// get private key and public key
+	privKeyBytes, moiPubBytes, err := GetPrivKeysForTest(signKey[:])
+	require.NoError(t, err)
+
+	networkKey := privKeyBytes[32:]
+
+	kramaID, err := kramaid.NewKramaID( // Create kramaID from private key , public key
+		networkKey,
+		nthValidator,
+		hex.EncodeToString(moiPubBytes),
+		1,
+		true,
+	)
+	require.NoError(t, err)
+
+	return kramaID, networkKey
+}
+
+func GetRandomNumber(t *testing.T, max int) int {
+	t.Helper()
+
+	nBig, err := rand.Int(rand.Reader, big.NewInt(int64(max)))
+	require.NoError(t, err)
+
+	return int(nBig.Int64())
+}
