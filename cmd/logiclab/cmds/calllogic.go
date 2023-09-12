@@ -110,7 +110,7 @@ func parseLogicCall(parser *symbolizer.Parser, kind engineio.CallsiteKind) Comma
 		// Get the callsite from the logic, error if not found
 		callsite, ok := logic.Logic.GetCallsite(site)
 		if !ok {
-			return fmt.Sprintf("logic '%v' does not have callsite '%v'", name, callsite)
+			return fmt.Sprintf("logic '%v' does not have callsite '%v'", name, site)
 		}
 
 		// Perform deploy gating

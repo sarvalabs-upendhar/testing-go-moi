@@ -105,7 +105,7 @@ func RunFormula(env *Environment, fpath string, suppress bool) error {
 
 	// Print the last executed command's output
 	// Suppression is only applied for intermediary commands
-	if result != "" {
+	if suppress && result != "" {
 		fmt.Println(result)
 	}
 

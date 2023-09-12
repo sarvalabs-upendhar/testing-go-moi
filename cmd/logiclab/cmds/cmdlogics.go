@@ -119,6 +119,10 @@ func parseGetLogic(parser *symbolizer.Parser) Command {
 
 	name := parser.Cursor().Literal
 
+	if !parser.ExpectPeek(symbolizer.TokenEoF) {
+		return InvalidCommandError("malformed")
+	}
+
 	return func(env *Environment) string {
 		// Find the logic in the inventory
 		logic, exists := env.inventory.FindLogic(name)

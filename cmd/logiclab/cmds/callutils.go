@@ -132,7 +132,7 @@ func CalldecodeValueCommand(data []byte, name, site string) Command {
 		// Get the callsite from the logic, error if not found
 		callsite, ok := logic.Logic.GetCallsite(site)
 		if !ok {
-			return fmt.Sprintf("logic '%v' does not have callsite '%v'", name, callsite)
+			return fmt.Sprintf("logic '%v' does not have callsite '%v'", name, site)
 		}
 
 		// Obtain the runtime for the logic engine in the header

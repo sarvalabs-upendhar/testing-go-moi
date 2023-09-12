@@ -127,7 +127,7 @@ func (logic LogicAccount) generateCallsiteSignature(site string, object *enginei
 	outputs := make([]string, 0, len(routine.Returns))
 
 	for _, field := range routine.Returns {
-		inputs = append(inputs, fmt.Sprintf("%v %v", field.Label, field.Type))
+		outputs = append(outputs, fmt.Sprintf("%v %v", field.Label, field.Type))
 	}
 
 	signature := fmt.Sprintf("(%v) -> (%v)", strings.Join(inputs, ", "), strings.Join(outputs, ", "))
