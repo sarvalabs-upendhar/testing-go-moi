@@ -1500,7 +1500,7 @@ func (s *Syncer) getBlock(ctx context.Context, session *session.Session, cid cid
 	return false, nil, err
 }
 
-func (s *Syncer) getBlocks(ctx context.Context, session *session.Session, cids ...cid.CID) []block.Block {
+func (s *Syncer) getBlocks(ctx context.Context, session *session.Session, cids ...cid.CID) ([]block.Block, error) {
 	blks := make([]block.Block, 0, len(cids))
 	keySet := cid.NewHashSet()
 
@@ -1516,14 +1516,25 @@ func (s *Syncer) getBlocks(ctx context.Context, session *session.Session, cids .
 	}
 
 	if keySet.Len() == 0 {
-		return blks
+		return blks, nil
 	}
 
 	for blk := range session.GetBlocks(ctx, keySet.Keys()) {
 		blks = append(blks, *blk)
 	}
 
-	return blks
+	for _, blk := range blks {
+		cID := blk.GetCid()
+		if keySet.Has(cID) {
+			keySet.Remove(cID)
+		}
+	}
+
+	if keySet.Len() != 0 {
+		return nil, errors.New("missing blocks in syncer")
+	}
+
+	return blks, nil
 }
 
 // fetchAccount retrieves the account data for a given state hash from either the local database or the session,
@@ -1662,7 +1673,12 @@ func (s *Syncer) syncStorageTree(ctx context.Context, session *session.Session, 
 
 	s.logger.Debug("Syncing storage tree", "address", session.ID())
 
-	for _, b := range s.getBlocks(ctx, session, storageCIDs...) {
+	blks, err := s.getBlocks(ctx, session, storageCIDs...)
+	if err != nil {
+		return err
+	}
+
+	for _, b := range blks {
 		rootNode := new(common.RootNode)
 		if err = polo.Depolorize(&rootNode, b.GetData()); err != nil {
 			return err
@@ -1703,7 +1719,12 @@ func (s *Syncer) syncLogicManifests(ctx context.Context, as *session.Session, ro
 		cids = append(cids, cid.ManifestCID(manifestHash))
 	}
 
-	for _, blck := range s.getBlocks(ctx, as, cids...) {
+	blks, err := s.getBlocks(ctx, as, cids...)
+	if err != nil {
+		return err
+	}
+
+	for _, blck := range blks {
 		if err := s.db.CreateEntry(dbKeyFromCID(as.ID(), blck.GetCid()), blck.GetData()); err != nil {
 			return err
 		}
@@ -1711,7 +1732,7 @@ func (s *Syncer) syncLogicManifests(ctx context.Context, as *session.Session, ro
 
 	for _, cID := range cids {
 		if stored, err := s.db.Contains(dbKeyFromCID(as.ID(), cID)); err != nil || !stored {
-			s.logger.Error("failed to fetch logic manifest", as.ID(), "manifest-hash", cID.String())
+			s.logger.Error("Failed to fetch logic manifest", "addr", as.ID(), "manifest-hash", cID.String())
 
 			return errors.New("failed to fetch logic manifest")
 		}
