@@ -57,7 +57,7 @@ func parseGetDesignated(parser *symbolizer.Parser) Command {
 			return fmt.Sprintf("invalid designated parameter: %v", actor.Literal)
 		}
 
-		return fmt.Sprintf("designated.%v: %v", actor, username)
+		return fmt.Sprintf("designated.%v: %v", actor.Literal, username)
 	}
 }
 
@@ -91,7 +91,7 @@ func parseSetDesignated(parser *symbolizer.Parser) Command {
 			return fmt.Sprintf("invalid designated parameter: %v", actor.Literal)
 		}
 
-		return fmt.Sprintf("designated.%v: %v", actor, username)
+		return fmt.Sprintf("designated.%v: %v", actor.Literal, username)
 	}
 }
 
@@ -113,7 +113,7 @@ func parseWipeDesignated(parser *symbolizer.Parser) Command {
 			return fmt.Sprintf("invalid designated parameter: %v", actor.Literal)
 		}
 
-		return fmt.Sprintf("wiped designated.%v", actor)
+		return fmt.Sprintf("wiped designated.%v", actor.Literal)
 	}
 }
 

@@ -42,7 +42,7 @@ require (
 	github.com/prometheus/client_golang v1.14.0
 	github.com/sarvalabs/battleground v0.1.1
 	github.com/sarvalabs/go-moi-engineio v0.1.1
-	github.com/sarvalabs/go-pisa v0.1.3
+	github.com/sarvalabs/go-pisa v0.1.4
 	github.com/sarvalabs/go-polo v0.3.4
 	github.com/spf13/cobra v1.5.0
 	github.com/stretchr/testify v1.8.4
