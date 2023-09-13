@@ -2,12 +2,12 @@ package compute
 
 import (
 	"context"
-	"math/big"
+	"math"
 
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi-engineio"
 
 	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/state"
 )
 
@@ -16,10 +16,19 @@ import (
 //
 // The Interaction must have a LogicPayload and the output receipt will have a LogicInvokeReceipt.
 // The logic call is verified and executed with the output/error being returned in the receipt.
-func RunLogicInvoke(ix *common.Interaction, tank *FuelTank, objects state.ObjectMap) (*common.Receipt, error) {
+func RunLogicInvoke(
+	ix *common.Interaction,
+	ctx *common.ExecutionContext,
+	tank *FuelTank,
+	objects state.ObjectMap,
+) (*common.Receipt, error) {
 	payload, err := ix.GetLogicPayload()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not find logic payload")
+	}
+
+	if payload.Logic == "" {
+		return nil, errors.New("missing logic ID for logic invoke")
 	}
 
 	// Generate the address of the target logic account from the LogicID
@@ -33,9 +42,8 @@ func RunLogicInvoke(ix *common.Interaction, tank *FuelTank, objects state.Object
 	// Append invoker options for invoker state and fuel limit
 	options = append(options, InvokerState(invoker))
 	options = append(options, InvokeFuelLimit(tank.Level()))
-	options = append(options, InvokeCall(payload.Callsite, payload.Calldata))
 
-	consumption, receiptPayload, err := InvokeLogic(payload.Logic, logicacc, options...)
+	consumption, receiptPayload, err := InvokeLogic(ix, ctx, logicacc, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -74,18 +82,8 @@ func InvokerState(invoker *state.Object) LogicInvokeOption {
 	}
 }
 
-// InvokeCall returns a LogicInvokeOption to provide the invokable callsite and calldata for state setup
-func InvokeCall(callsite string, calldata []byte) LogicInvokeOption {
-	return func(config *logicInvoker) error {
-		config.callsite = callsite
-		config.calldata = calldata
-
-		return nil
-	}
-}
-
 // InvokeFuelLimit returns a LogicInvokeOption to provide the fuel limit for logic deployment.
-func InvokeFuelLimit(limit engineio.Fuel) LogicInvokeOption {
+func InvokeFuelLimit(limit uint64) LogicInvokeOption {
 	return func(config *logicInvoker) error {
 		config.fueltank = NewFuelTank(limit)
 
@@ -97,30 +95,31 @@ func InvokeFuelLimit(limit engineio.Fuel) LogicInvokeOption {
 // Invocation behavior can be extended with LogicInvokeOption functions to set fuel
 // limit for the invocation or provide invoker state or invoke call parameters.
 // Uses unlimited fuel limit unless otherwise specified with the InvokeFuelLimit option.
-func InvokeLogic(logicID common.LogicID, state *state.Object, opts ...LogicInvokeOption) (
-	engineio.Fuel, *common.LogicInvokeReceipt, error,
+func InvokeLogic(
+	ixn *common.Interaction,
+	ctx *common.ExecutionContext,
+	state *state.Object,
+	opts ...LogicInvokeOption,
+) (
+	uint64, *common.LogicInvokeReceipt, error,
 ) {
 	// Generate basic invoke config
 	invoker := &logicInvoker{
-		logicID:    logicID,
 		logicState: state,
-		fueltank: NewFuelTank(func() engineio.Fuel {
-			fuel, _ := new(big.Int).SetString("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 0)
-
-			return fuel
-		}()),
+		logicID:    ixn.LogicID(),
+		fueltank:   NewFuelTank(math.MaxUint64),
 	}
 
 	// Apply all invoke options on the config
 	for _, opt := range opts {
 		if err := opt(invoker); err != nil {
-			return nil, nil, err
+			return 0, nil, err
 		}
 	}
 
 	// Verify that the callsite is not empty
-	if invoker.callsite == "" {
-		return nil, nil, errors.New("callsite cannot be empty")
+	if ixn.Callsite() == "" {
+		return 0, nil, errors.New("callsite cannot be empty")
 	}
 
 	var err error
@@ -128,73 +127,59 @@ func InvokeLogic(logicID common.LogicID, state *state.Object, opts ...LogicInvok
 	// Fetch the logic object from the state object
 	invoker.logicObject, err = invoker.logicState.FetchLogicObject(invoker.logicID)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "could not fetch logic object")
+		return 0, nil, errors.Wrap(err, "could not fetch logic object")
 	}
 
 	// Check that the logic contains the payload callsite
-	if _, ok := invoker.logicObject.GetCallsite(invoker.callsite); !ok {
-		return nil, nil, errors.Errorf("callsite '%v' does not exist for logic", invoker.callsite)
+	if _, ok := invoker.logicObject.GetCallsite(ixn.Callsite()); !ok {
+		return 0, nil, errors.Errorf("callsite '%v' does not exist for logic", ixn.Callsite())
 	}
 
 	// Obtain the runtime for the logic engine of the logic object
 	runtime, ok := engineio.FetchEngineRuntime(invoker.logicObject.Engine())
 	if !ok {
-		return nil, nil, errors.Errorf("missing engine factory: %v", invoker.logicObject.Engine())
+		return 0, nil, errors.Errorf("missing engine factory: %v", invoker.logicObject.Engine())
 	}
 
 	// Create a new engine for the execution
 	engine, err := runtime.SpawnEngine(
 		invoker.fueltank.Level(), invoker.logicObject,
-		invoker.logicState.GenerateLogicContextObject(invoker.logicObject.LogicID()),
-		envObject{},
+		invoker.logicState.GenerateLogicContextObject(invoker.logicObject.ID), ctx,
 	)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "could not bootstrap engine")
-	}
-
-	// Create an IxnObject
-	// todo: we should pass the raw ixn somehow
-	ixn := ixnObject{
-		kind:     common.IxLogicInvoke,
-		price:    big.NewInt(1),
-		limit:    invoker.fueltank.Capacity,
-		callsite: invoker.callsite,
-		calldata: invoker.calldata,
+		return 0, nil, errors.Wrap(err, "could not bootstrap engine")
 	}
 
 	// Declare sender context driver
 	var senderCtx engineio.CtxDriver
 	// Create the deployer context driver if not nil
 	if invoker.senderState != nil {
-		senderCtx = invoker.senderState.GenerateLogicContextObject(invoker.logicObject.LogicID())
+		senderCtx = invoker.senderState.GenerateLogicContextObject(invoker.logicObject.ID)
 	}
 
 	// Perform execution call on the engine
 	result, err := engine.Call(context.Background(), ixn, senderCtx)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "could not perform call")
+		return 0, nil, errors.Wrap(err, "could not perform call")
 	}
 
 	// Exhaust fuel for deployer call
-	if !invoker.fueltank.Exhaust(result.Consumed) {
-		return nil, nil, errors.New("insufficient fuel: could not call logic deployer")
+	if !invoker.fueltank.Exhaust(result.Fuel()) {
+		return 0, nil, errors.New("insufficient fuel: could not call logic deployer")
 	}
 
 	// Check the execution result
 	if !result.Ok() {
-		return invoker.fueltank.Consumed, &common.LogicInvokeReceipt{Error: result.Error}, nil
+		return invoker.fueltank.Consumed, &common.LogicInvokeReceipt{Error: result.Error()}, nil
 	}
 
 	// Return the total fuel consumed and the return data
-	return invoker.fueltank.Consumed, &common.LogicInvokeReceipt{Outputs: result.Outputs}, nil
+	return invoker.fueltank.Consumed, &common.LogicInvokeReceipt{Outputs: result.Outputs()}, nil
 }
 
 type logicInvoker struct {
 	logicID     common.LogicID
 	logicObject *state.LogicObject
-
-	callsite string
-	calldata []byte
 
 	fueltank    *FuelTank
 	logicState  *state.Object

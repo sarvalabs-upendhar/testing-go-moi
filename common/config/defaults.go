@@ -8,10 +8,9 @@ import (
 	"github.com/sarvalabs/go-moi/crypto"
 )
 
-var (
-	DefaultFuelLimit    = big.NewInt(10000)
-	DefaultIxPriceLimit = big.NewInt(1)
-)
+const DefaultFuelLimit uint64 = 10000
+
+var DefaultIxPriceLimit = big.NewInt(1)
 
 // Network defaults
 const (

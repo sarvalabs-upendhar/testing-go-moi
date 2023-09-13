@@ -42,7 +42,6 @@ import (
 )
 
 const (
-	SenatusTopic            = "MOI_PUBSUB_SENATUS"
 	MinimumConnReq          = 100
 	MaximumConnReq          = 500
 	MinimumBootNodeConn int = 1
@@ -140,6 +139,18 @@ func NewServer(
 	return server
 }
 
+func (s *Server) Close() error {
+	if err := s.host.Close(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Server) AddPeerInfo(info *peer.AddrInfo) {
+	s.host.Peerstore().AddAddrs(info.ID, info.Addrs, peerstore.ConnectedAddrTTL)
+}
+
 func (s *Server) SetupServer() error {
 	if err := s.setupHost(); err != nil {
 		return fmt.Errorf("setup host: %w", err)
@@ -151,8 +162,10 @@ func (s *Server) SetupServer() error {
 
 	s.logger.Info("Starting server", "krama-ID", s.id, "addr", s.host.Addrs())
 
-	if err := s.connectToBootStrapNodes(); err != nil {
-		return fmt.Errorf("bootstrap nodes connection: %w", err)
+	if !s.cfg.NoDiscovery {
+		if err := s.connectToBootStrapNodes(); err != nil {
+			return fmt.Errorf("bootstrap nodes connection: %w", err)
+		}
 	}
 
 	return nil
@@ -171,12 +184,12 @@ func (s *Server) StartServer() error {
 		}
 	}
 
-	go s.discover(config.DefaultDiscoveryInterval)
+	go s.discover(s.cfg.DiscoveryInterval)
 
 	return nil
 }
 
-// Attempts connecting to all the bootstrap nodes in config
+// connectToBootStrapNodes Attempts connecting to all the bootstrap nodes in config
 // returns error if
 // --boostrap nodes in config is Nil
 // --boostrap nodes count in config is Zero
@@ -698,7 +711,7 @@ func (s *Server) GetPeerInfo(peerID peer.ID) (*peer.AddrInfo, error) {
 
 		peerInfo = &peer.AddrInfo{ID: peerID, Addrs: addr}
 
-		s.addToPeerStore(peerInfo)
+		s.AddToPeerStore(peerInfo)
 	}
 
 	return peerInfo, nil
@@ -711,8 +724,8 @@ func (s *Server) getFromPeerStore(peerID peer.ID) *peer.AddrInfo {
 	return &peerInfo
 }
 
-// addToPeerStore adds peer information to the node's peer store
-func (s *Server) addToPeerStore(peerInfo *peer.AddrInfo) {
+// AddToPeerStore adds peer information to the node's peer store
+func (s *Server) AddToPeerStore(peerInfo *peer.AddrInfo) {
 	s.host.Peerstore().AddAddr(peerInfo.ID, peerInfo.Addrs[0], peerstore.PermanentAddrTTL)
 }
 
@@ -1023,7 +1036,7 @@ func (s *Server) SendHelloMessage() {
 			return
 		}
 
-		if err = s.Broadcast(SenatusTopic, rawData); err != nil {
+		if err = s.Broadcast(config.SenatusTopic, rawData); err != nil {
 			s.logger.Error("Failed to broadcast hello message", "err", err)
 
 			return

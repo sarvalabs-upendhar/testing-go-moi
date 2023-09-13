@@ -10,7 +10,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
-	pisa "github.com/sarvalabs/go-pisa/moi"
+	"github.com/sarvalabs/go-pisa"
 	"github.com/sarvalabs/go-polo"
 	"golang.org/x/sync/errgroup"
 

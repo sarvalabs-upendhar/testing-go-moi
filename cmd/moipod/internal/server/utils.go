@@ -190,6 +190,10 @@ func (p *Params) applyFlags(cmd *cobra.Command, path string) error {
 		p.rawCfg.LogFilePath = LogDirPath
 	}
 
+	if isDiscoveryIntervalSet(cmd) {
+		p.rawCfg.Network.DiscoveryInterval = DiscoveryInterval
+	}
+
 	if EnableTracing && p.rawCfg.Telemetry.JaegerAddr == "" {
 		return errors.New("tracing is enabled but a valid JaegerCollector address is not passed")
 	}
@@ -233,6 +237,7 @@ func (p *Params) getNetworkConfig() *config.NetworkConfig {
 		RefreshSenatus:     p.rawCfg.Network.RefreshSenatus,
 		InboundConnLimit:   p.rawCfg.Network.InboundConnLimit,
 		OutboundConnLimit:  p.rawCfg.Network.OutboundConnLimit,
+		DiscoveryInterval:  p.rawCfg.Network.DiscoveryInterval,
 	}
 }
 
@@ -280,7 +285,7 @@ func (p *Params) getDBConfig(path string) *config.DBConfig {
 
 func (p *Params) getExecutionConfig() *config.ExecutionConfig {
 	return &config.ExecutionConfig{
-		FuelLimit: p.rawCfg.Execution.FuelLimit.ToInt(),
+		FuelLimit: uint64(p.rawCfg.Execution.FuelLimit),
 	}
 }
 
@@ -361,6 +366,10 @@ func isConfigPathSet(cmd *cobra.Command) bool {
 
 func isLogPathSet(cmd *cobra.Command) bool {
 	return cmd.Flags().Changed(LogDirPathFlag)
+}
+
+func isDiscoveryIntervalSet(cmd *cobra.Command) bool {
+	return cmd.Flags().Changed(discoveryIntervalFlag)
 }
 
 func isGenesisSet(cmd *cobra.Command) bool {

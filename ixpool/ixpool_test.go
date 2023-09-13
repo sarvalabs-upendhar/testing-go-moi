@@ -989,7 +989,7 @@ func TestIxPool_validateIx_WithSign(t *testing.T) {
 		Sender:    address,
 		Type:      common.IxValueTransfer,
 		FuelPrice: big.NewInt(1),
-		FuelLimit: big.NewInt(1),
+		FuelLimit: 1,
 		TransferValues: map[common.AssetID]*big.Int{
 			"assetID1": big.NewInt(5),
 		},

@@ -1,11 +1,13 @@
 package state
 
 import (
+	"encoding/json"
+
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi-engineio"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
 // LogicObject is a generic container for representing an executable logic. It contains fields
@@ -25,7 +27,7 @@ type LogicObject struct {
 	// Represents the usage of different type of context states by the logic
 	StateMatrix engineio.ContextStateMatrix
 	// Represents the dependency driver for managing logic elements relationships
-	Dependencies engineio.DepDriver
+	Dependencies engineio.DependencyDriver
 	// Represents the collection of all LogicElement objects
 	Elements map[engineio.ElementPtr]*engineio.LogicElement
 	// Represents mapping of string names to LogicCallsite pointers
@@ -37,8 +39,8 @@ type LogicObject struct {
 func NewLogicObject(address common.Address, descriptor *engineio.LogicDescriptor) *LogicObject {
 	// Generate the LogicID from the payload
 	logicID := common.NewLogicIDv0(
-		descriptor.StateMatrix.Persistent(),
-		descriptor.StateMatrix.Ephemeral(),
+		descriptor.CtxState.Persistent(),
+		descriptor.CtxState.Ephemeral(),
 		descriptor.Interactive, false,
 		0, address,
 	)
@@ -50,7 +52,7 @@ func NewLogicObject(address common.Address, descriptor *engineio.LogicDescriptor
 
 		Sealed: false,
 
-		StateMatrix:  descriptor.StateMatrix,
+		StateMatrix:  descriptor.CtxState,
 		Dependencies: descriptor.Dependency,
 		Elements:     descriptor.Elements,
 
@@ -59,16 +61,16 @@ func NewLogicObject(address common.Address, descriptor *engineio.LogicDescriptor
 	}
 }
 
-func (logic LogicObject) LogicID() common.LogicID { return logic.ID }
+func (logic LogicObject) LogicID() engineio.LogicID { return logic.ID }
 
 func (logic LogicObject) Engine() engineio.EngineKind { return logic.EngineKind }
 
-func (logic LogicObject) Manifest() common.Hash { return logic.ManifestHash }
+func (logic LogicObject) Manifest() [32]byte { return logic.ManifestHash }
 
 func (logic LogicObject) IsSealed() bool { return logic.Sealed }
 
 func (logic LogicObject) IsAssetLogic() bool {
-	logicIdentifier, err := logic.LogicID().Identifier()
+	logicIdentifier, err := logic.ID.Identifier()
 	if err != nil {
 		panic("failed to fetch logic identifier")
 	}
@@ -76,8 +78,8 @@ func (logic LogicObject) IsAssetLogic() bool {
 	return logicIdentifier.AssetLogic()
 }
 
-func (logic LogicObject) AllowsInteractions() bool {
-	logicIdentifier, err := logic.LogicID().Identifier()
+func (logic LogicObject) IsInteractive() bool {
+	logicIdentifier, err := logic.ID.Identifier()
 	if err != nil {
 		panic("failed to fetch logic identifier")
 	}
@@ -164,7 +166,7 @@ func (logic *LogicObject) Depolorize(depolorizer *polo.Depolorizer) (err error) 
 		return err
 	}
 
-	if err = logic.decodeDepDriver(depolorizer); err != nil {
+	if err = logic.decodePOLODepDriver(depolorizer); err != nil {
 		return err
 	}
 
@@ -183,7 +185,7 @@ func (logic *LogicObject) Depolorize(depolorizer *polo.Depolorizer) (err error) 
 	return nil
 }
 
-func (logic *LogicObject) decodeDepDriver(depolorizer *polo.Depolorizer) error {
+func (logic *LogicObject) decodePOLODepDriver(depolorizer *polo.Depolorizer) error {
 	runtime, ok := engineio.FetchEngineRuntime(logic.EngineKind)
 	if !ok {
 		return errors.New("unidentified engine runtime")
@@ -194,12 +196,64 @@ func (logic *LogicObject) decodeDepDriver(depolorizer *polo.Depolorizer) error {
 		return err
 	}
 
-	driver, err := runtime.DecodeDepDriver(data)
+	driver, err := runtime.DecodeDependencyDriver(data, engineio.POLO)
 	if err != nil {
 		return err
 	}
 
 	logic.Dependencies = driver
+
+	return nil
+}
+
+func (logic *LogicObject) decodeJSONDepDriver(data []byte) error {
+	runtime, ok := engineio.FetchEngineRuntime(logic.EngineKind)
+	if !ok {
+		return errors.New("unidentified engine runtime")
+	}
+
+	driver, err := runtime.DecodeDependencyDriver(data, engineio.JSON)
+	if err != nil {
+		return err
+	}
+
+	logic.Dependencies = driver
+
+	return nil
+}
+
+func (logic *LogicObject) UnmarshalJSON(data []byte) error {
+	type temp struct {
+		ID           common.LogicID
+		EngineKind   engineio.EngineKind
+		ManifestHash common.Hash
+		Sealed       bool
+
+		Dependencies json.RawMessage
+
+		StateMatrix engineio.ContextStateMatrix
+		Elements    map[engineio.ElementPtr]*engineio.LogicElement
+		Callsites   map[string]*engineio.Callsite
+		Classdefs   map[string]*engineio.Classdef
+	}
+
+	tempObject := new(temp)
+	if err := json.Unmarshal(data, tempObject); err != nil {
+		return err
+	}
+
+	logic.ID = tempObject.ID
+	logic.EngineKind = tempObject.EngineKind
+	logic.ManifestHash = tempObject.ManifestHash
+	logic.Sealed = tempObject.Sealed
+	logic.StateMatrix = tempObject.StateMatrix
+	logic.Elements = tempObject.Elements
+	logic.Callsites = tempObject.Callsites
+	logic.Classdefs = tempObject.Classdefs
+
+	if err := logic.decodeJSONDepDriver(tempObject.Dependencies); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -244,11 +298,11 @@ func NewLogicContextObject(logic common.LogicID, state *Object) *LogicContextObj
 	return &LogicContextObject{state: state, logic: logic}
 }
 
-func (ctx LogicContextObject) Address() common.Address {
+func (ctx LogicContextObject) Address() engineio.Address {
 	return ctx.state.Address()
 }
 
-func (ctx LogicContextObject) LogicID() common.LogicID {
+func (ctx LogicContextObject) LogicID() engineio.LogicID {
 	return ctx.logic
 }
 

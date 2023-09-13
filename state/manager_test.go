@@ -6,20 +6,17 @@ import (
 	"testing"
 
 	"github.com/decred/dcrd/crypto/blake256"
-	pisa "github.com/sarvalabs/go-pisa/moi"
-
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-	"github.com/sarvalabs/go-moi/compute/engineio"
-	"github.com/sarvalabs/go-moi/state/tree"
-	"github.com/sarvalabs/go-moi/storage"
-
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/hashicorp/golang-lru"
+	"github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-pisa"
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/state/tree"
+	"github.com/sarvalabs/go-moi/storage"
 )
 
 func TestStateManager_CreateStateObject(t *testing.T) {
@@ -2139,7 +2136,7 @@ func TestStateManager_IsLogicRegistered(t *testing.T) {
 	logicID := getLogicID(t, tests.RandomAddress(t))
 	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
 
-	engineio.RegisterEngineRuntime(pisa.NewRuntime())
+	engineio.RegisterRuntime(pisa.NewRuntime(), nil)
 
 	so := NewStateObject(logicID.Address(), mockCache(t), mockJournal(), db, common.Account{})
 

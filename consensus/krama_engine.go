@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math"
-	"math/big"
 	"sync"
 	"time"
 
@@ -93,7 +92,7 @@ type ixPool interface {
 }
 
 type execution interface {
-	ExecuteInteractions(common.Interactions, common.ClusterID, common.ContextDelta) (common.Receipts, error)
+	ExecuteInteractions(common.Interactions, *common.ExecutionContext) (common.Receipts, error)
 	Revert(common.ClusterID) error
 	Cleanup(common.ClusterID)
 }
@@ -1112,8 +1111,7 @@ func (k *Engine) createProposalGrid(slot *ktypes.Slot) ([]*common.Tesseract, err
 
 	receipts, err := k.exec.ExecuteInteractions(
 		clusterState.Ixs,
-		clusterState.ClusterID,
-		clusterState.GetContextDelta(),
+		clusterState.ExecutionContext(),
 	)
 	if err != nil {
 		return nil, err
@@ -1345,7 +1343,7 @@ func generateTesseract(
 	state *ktypes.ClusterState,
 	body common.TesseractBody,
 	tsBodyHash, gridHash common.Hash,
-	fuelUsed, fuelLimit *big.Int,
+	fuelUsed, fuelLimit uint64,
 	sealer id.KramaID,
 ) *common.Tesseract {
 	header := common.TesseractHeader{
@@ -1371,7 +1369,10 @@ func generateTesseract(
 
 func GenerateTesseracts(state *ktypes.ClusterState) ([]*common.Tesseract, error) {
 	ix := state.Ixs[0] // TODO: Improve this
+
 	fuelUsed := state.GetFuelUsed()
+	fuelLimit := uint64(1000)
+
 	groupBuffer := make([]byte, 0)
 	tesseractGroup := make([]*common.Tesseract, 0)
 
@@ -1438,7 +1439,7 @@ func GenerateTesseracts(state *ktypes.ClusterState) ([]*common.Tesseract, error)
 				senderBodyHash,
 				groupHash,
 				fuelUsed,
-				big.NewInt(1000),
+				fuelLimit,
 				state.SelfKramaID()),
 		)
 	}
@@ -1452,7 +1453,7 @@ func GenerateTesseracts(state *ktypes.ClusterState) ([]*common.Tesseract, error)
 				receiverBodyHash,
 				groupHash,
 				fuelUsed,
-				big.NewInt(1000),
+				fuelLimit,
 				state.SelfKramaID()),
 		)
 
@@ -1464,7 +1465,7 @@ func GenerateTesseracts(state *ktypes.ClusterState) ([]*common.Tesseract, error)
 					genesisBodyHash,
 					groupHash,
 					fuelUsed,
-					big.NewInt(1000),
+					fuelLimit,
 					state.SelfKramaID(),
 				))
 		}
@@ -1549,7 +1550,7 @@ func (k *Engine) IsIxValid(ix *common.Interaction) error {
 		return err
 	}
 
-	fuelAvailable, err := senderObject.HasFuel(new(big.Int).Add(ix.MOITokenValue(), ix.FuelLimit()))
+	fuelAvailable, err := senderObject.HasSufficientFuel(ix.Cost())
 	if err != nil {
 		k.logger.Error("Failed to fetch fuel", "err", err)
 	}

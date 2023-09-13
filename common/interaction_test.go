@@ -31,7 +31,7 @@ func createTestIXInput(t *testing.T, ixType common.IxType, payload []byte) commo
 			tests.GetRandomAssetID(t, tests.RandomAddress(t)): big.NewInt(111),
 		},
 		FuelPrice: big.NewInt(1),
-		FuelLimit: big.NewInt(23),
+		FuelLimit: 23,
 		Payload:   payload,
 	}
 }
@@ -178,11 +178,6 @@ func TestCopyIxInput(t *testing.T) {
 			)
 
 			require.NotEqual(t,
-				reflect.ValueOf(expectedIxInput.FuelLimit).Pointer(),
-				reflect.ValueOf(inputCopy.FuelLimit).Pointer(),
-			)
-
-			require.NotEqual(t,
 				reflect.ValueOf(test.input.FuelPrice).Pointer(),
 				reflect.ValueOf(inputCopy.FuelPrice).Pointer(),
 			)
@@ -280,11 +275,6 @@ func TestCopyIxData(t *testing.T) {
 			dataCopy := test.ixData.Copy()
 
 			require.Equal(t, expectedIxData, dataCopy)
-
-			require.NotEqual(t,
-				reflect.ValueOf(expectedIxData.Input.FuelLimit).Pointer(),
-				reflect.ValueOf(dataCopy.Input.FuelLimit).Pointer(),
-			)
 
 			require.NotEqual(t,
 				reflect.ValueOf(expectedIxData.Input.TransferValues).Pointer(),

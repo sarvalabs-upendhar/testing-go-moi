@@ -1163,10 +1163,11 @@ func TestValidateTesseract(t *testing.T) {
 			expectedError: errors.New("Sarga account not found"),
 		},
 		{
-			name:       "should be added to orphans if previous tesseract not found",
-			smCallback: smCallbackWithRegisteredAcc(address),
-			ts:         ts[3],
-			isOrphanTS: true,
+			name:          "should be added to orphans if previous tesseract not found",
+			smCallback:    smCallbackWithRegisteredAcc(address),
+			ts:            ts[3],
+			isOrphanTS:    true,
+			expectedError: common.ErrPreviousTesseractNotFound,
 		},
 		{
 			name: "should return error if tesseract already exits",
@@ -1204,14 +1205,15 @@ func TestValidateTesseract(t *testing.T) {
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
+				// check for orphan tesseracts in orphans cache
+				if test.isOrphanTS {
+					checkForOrphanTSInCache(t, c, test.ts)
+				}
+
 				return
 			}
 
 			require.NoError(t, err)
-			// check for orphan tesseracts in orphans cache
-			if test.isOrphanTS {
-				checkForOrphanTSInCache(t, c, test.ts)
-			}
 		})
 	}
 }

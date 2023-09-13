@@ -5,14 +5,14 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
-	pisa "github.com/sarvalabs/go-pisa/moi"
+	"github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-pisa"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
 	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/common/tests"
-	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"
 )
@@ -1173,7 +1173,7 @@ func TestHasFuel(t *testing.T) {
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			sObj := createTestStateObject(t, test.soParams)
-			hasFuel, err := sObj.HasFuel(test.amount)
+			hasFuel, err := sObj.HasSufficientFuel(test.amount)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1497,7 +1497,7 @@ func TestGetLogicObject(t *testing.T) {
 	require.NoError(t, err)
 
 	// seed the engine runtimes
-	engineio.RegisterEngineRuntime(pisa.NewRuntime())
+	engineio.RegisterRuntime(pisa.NewRuntime(), nil)
 
 	testcases := []struct {
 		name          string

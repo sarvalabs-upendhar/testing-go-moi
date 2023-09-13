@@ -1,7 +1,6 @@
 package common
 
 import (
-	"math/big"
 	"sync"
 	"sync/atomic"
 
@@ -10,8 +9,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 )
-
-const TesseractTopic = "MOI_PUBSUB_TESSERACT"
 
 type Tesseract struct {
 	header   TesseractHeader
@@ -27,8 +24,8 @@ type TesseractHeader struct {
 	Address     Address
 	PrevHash    Hash
 	Height      uint64
-	FuelUsed    *big.Int
-	FuelLimit   *big.Int
+	FuelUsed    uint64
+	FuelLimit   uint64
 	BodyHash    Hash
 	GroupHash   Hash
 	Operator    string
@@ -343,6 +340,14 @@ func (t *Tesseract) Hash() Hash {
 	t.hash.Store(hash)
 
 	return hash
+}
+
+func (t *Tesseract) ExecutionContext() *ExecutionContext {
+	return &ExecutionContext{
+		CtxDelta: t.ContextDelta(),
+		Cluster:  t.ClusterID(),
+		Time:     t.Timestamp(),
+	}
 }
 
 func (t *Tesseract) Bytes() ([]byte, error) {

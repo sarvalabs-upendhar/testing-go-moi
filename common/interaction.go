@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 
 	"github.com/pkg/errors"
+	engineio "github.com/sarvalabs/go-moi-engineio"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common/kramaid"
@@ -54,6 +55,10 @@ func (ixtype IxType) String() string {
 	return str
 }
 
+func (ixtype IxType) IxnID() int {
+	return int(ixtype)
+}
+
 // SendIXArgs is an argument wrapper for sending Interactions to the pool
 type SendIXArgs struct {
 	Type  IxType `json:"type"`
@@ -67,7 +72,7 @@ type SendIXArgs struct {
 	PerceivedValues map[AssetID]*big.Int `json:"perceived_values"`
 
 	FuelPrice *big.Int `json:"fuel_price"`
-	FuelLimit *big.Int `json:"fuel_limit"`
+	FuelLimit uint64   `json:"fuel_limit"`
 
 	Payload []byte `json:"payload"`
 }
@@ -116,7 +121,7 @@ type IxInput struct {
 	PerceivedValues map[AssetID]*big.Int `json:"perceived_values"`
 	PerceivedProofs []byte               `json:"perceived_proofs"`
 
-	FuelLimit *big.Int `json:"fuel_limit"`
+	FuelLimit uint64   `json:"fuel_limit"`
 	FuelPrice *big.Int `json:"fuel_price"`
 
 	Payload []byte `json:"payload"`
@@ -140,9 +145,7 @@ func SendIxArgsFromIxData(ixData IxData) SendIXArgs {
 func (ixInput *IxInput) Copy() IxInput {
 	input := *ixInput
 
-	if ixInput.FuelLimit != nil {
-		input.FuelLimit = new(big.Int).Set(ixInput.FuelLimit)
-	}
+	input.FuelLimit = ixInput.FuelLimit
 
 	if ixInput.FuelPrice != nil {
 		input.FuelPrice = new(big.Int).Set(ixInput.FuelPrice)
@@ -322,6 +325,10 @@ func (ix Interaction) Type() IxType {
 	return ix.inner.Input.Type
 }
 
+func (ix Interaction) IxnType() engineio.IxnType {
+	return ix.Type()
+}
+
 // Sender returns the Address of the Interaction sender
 func (ix Interaction) Sender() Address {
 	return ix.inner.Input.Sender
@@ -380,7 +387,7 @@ func (ix Interaction) TransferValues() map[AssetID]*big.Int {
 	return transferValues
 }
 
-func (ix Interaction) MOITokenValue() *big.Int {
+func (ix Interaction) KMOITokenValue() *big.Int {
 	// Retrieve the transfer values
 	values := ix.TransferValues()
 	// Return the value for the MOI Token if it exists in the transfer values
@@ -418,8 +425,8 @@ func (ix Interaction) FuelPrice() *big.Int {
 	return new(big.Int).Set(ix.inner.Input.FuelPrice)
 }
 
-func (ix Interaction) FuelLimit() *big.Int {
-	return new(big.Int).Set(ix.inner.Input.FuelLimit)
+func (ix Interaction) FuelLimit() uint64 {
+	return ix.inner.Input.FuelLimit
 }
 
 func (ix Interaction) FuelPriceCmp(other *Interaction) int {
@@ -431,7 +438,10 @@ func (ix Interaction) FuelPriceIntCmp(other *big.Int) int {
 }
 
 func (ix Interaction) Cost() *big.Int {
-	return new(big.Int).Mul(ix.FuelPrice(), ix.FuelLimit())
+	total := new(big.Int).Mul(ix.FuelPrice(), new(big.Int).SetUint64(ix.FuelLimit()))
+	total.Add(total, ix.KMOITokenValue())
+
+	return total
 }
 
 func (ix Interaction) IsUnderpriced(priceLimit *big.Int) bool {
@@ -537,6 +547,15 @@ func (ix *Interaction) PayloadForSignature() ([]byte, error) {
 	return polo.Polorize(SendIxArgsFromIxData(ix.inner))
 }
 
+func (ix *Interaction) Manifest() []byte {
+	payload, err := ix.GetLogicPayload()
+	if err != nil {
+		return nil
+	}
+
+	return payload.Manifest
+}
+
 func (ix *Interaction) Callsite() string {
 	payload, err := ix.GetLogicPayload()
 	if err != nil {
@@ -596,12 +615,10 @@ func (ixs Interactions) Hash() (Hash, error) {
 	return GetHash(data), nil
 }
 
-func (ixs Interactions) FuelLimit() *big.Int {
-	limit := new(big.Int)
-
+func (ixs Interactions) FuelLimit() (limit uint64) {
 	// Aggregate the fuel limit for all interactions
 	for _, ix := range ixs {
-		limit = new(big.Int).Add(limit, ix.inner.Input.FuelLimit)
+		limit += ix.FuelLimit()
 	}
 
 	return limit

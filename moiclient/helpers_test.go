@@ -94,14 +94,11 @@ func getIXArgsForLogicDeployment(t *testing.T, client *Client, addr common.Addre
 	payload, err := logicPayload.Bytes()
 	require.NoError(t, err)
 
-	fuelPrice := new(big.Int).SetUint64(1)
-	fuelLimit := new(big.Int).SetUint64(1000)
-
 	ixArgs := &common.SendIXArgs{
 		Type:      common.IxLogicDeploy,
 		Nonce:     GetLatestNonce(t, client, addr),
-		FuelPrice: fuelPrice,
-		FuelLimit: fuelLimit,
+		FuelPrice: new(big.Int).SetUint64(1),
+		FuelLimit: 1000,
 		Sender:    addr,
 		Payload:   payload,
 	}
@@ -605,4 +602,18 @@ func checkForRPCReceipt(
 	require.Equal(t, expectedRPCReceipt.Parts, actualRPCReceipt.Parts)
 
 	require.True(t, reflect.DeepEqual(expectedRPCReceipt.Hashes, actualRPCReceipt.Hashes))
+}
+
+func checkForCallReceipt(
+	t *testing.T,
+	expectedReceipt *rpcargs.RPCReceipt,
+	actualReceipt *rpcargs.RPCReceipt,
+) {
+	t.Helper()
+
+	require.Equal(t, expectedReceipt.IxType, actualReceipt.IxType)
+	require.Equal(t, expectedReceipt.FuelUsed, actualReceipt.FuelUsed)
+	require.Equal(t, expectedReceipt.ExtraData, actualReceipt.ExtraData)
+	require.Equal(t, expectedReceipt.From, actualReceipt.From)
+	require.Equal(t, expectedReceipt.To, actualReceipt.To)
 }

@@ -13,9 +13,8 @@ import (
 
 	id "github.com/sarvalabs/go-moi/common/kramaid"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
-	agora2 "github.com/sarvalabs/go-moi/syncer/agora"
+	"github.com/sarvalabs/go-moi/syncer"
 	"github.com/sarvalabs/go-moi/syncer/agora/block"
-	"github.com/sarvalabs/go-moi/syncer/agora/session"
 	"github.com/sarvalabs/go-moi/syncer/cid"
 
 	"github.com/hashicorp/go-hclog"
@@ -41,6 +40,8 @@ const (
 	MaxPeersToDial        = 8
 	TesseractFetchTimeOut = 15 * time.Second
 )
+
+var DefaultMinConnectedPeers = 10
 
 type lattice interface {
 	ExecuteAndValidate(ts ...*common.Tesseract) error
@@ -93,6 +94,7 @@ type store interface {
 	Contains([]byte) (bool, error)
 	DeleteEntry([]byte) error
 	SetAccount(addr common.Address, stateHash common.Hash, data []byte) error
+	SetInteractions(gridHash common.Hash, data []byte) error
 	GetInteractions(gridHash common.Hash) ([]byte, error)
 	GetAccountMetaInfo(id common.Address) (*common.AccountMetaInfo, error)
 	UpdateTesseractStatus(addr common.Address, height uint64, tsHash common.Hash, status bool) error
@@ -116,6 +118,14 @@ type store interface {
 		sinceTS uint64,
 	) (*common.Snapshot, error)
 	HasTesseractAt(addr common.Address, height uint64) bool
+	UpdateAccMetaInfo(
+		id common.Address,
+		height uint64,
+		tesseractHash common.Hash,
+		accType common.AccountType,
+		latticeExists, stateExists bool,
+	) (int32, bool, error)
+	SetTesseractHeightEntry(addr common.Address, height uint64, tsHash common.Hash) error
 }
 
 type Syncer struct {
@@ -123,9 +133,10 @@ type Syncer struct {
 	ctx                 context.Context
 	network             *p2p.Server
 	mux                 *utils.TypeMux
+	testMux             *utils.TypeMux
 	gridStore           *GridStore
 	execLock            sync.RWMutex
-	agora               *agora2.Agora
+	agora               syncer.BlockSync
 	db                  store
 	tesseractRegistry   *common.HashRegistry
 	jobQueue            *JobQueue
@@ -161,22 +172,17 @@ func NewSyncer(
 	db store,
 	lattice lattice,
 	sm stateManager,
-	metrics *agora2.Metrics,
 	slots *ktypes.Slots,
 	lastActiveTimeStamp uint64,
 	syncerMetrics *Metrics,
+	blockSync syncer.BlockSync,
 ) (*Syncer, error) {
-	agoraInstance, err := agora2.NewAgora(ctx, logger, db, node, metrics)
-	if err != nil {
-		return nil, errors.Wrap(err, "error initiating agora")
-	}
-
 	s := &Syncer{
 		ctx:                 ctx,
 		network:             node,
 		cfg:                 cfg,
 		mux:                 mux,
-		agora:               agoraInstance,
+		agora:               blockSync,
 		db:                  db,
 		lattice:             lattice,
 		state:               sm,
@@ -215,9 +221,11 @@ func (s *Syncer) NewSyncRequest(
 			mode:            syncMode,
 			tesseractQueue:  NewTesseractQueue(),
 			jobState:        Pending,
-			bestPeers:       bestPeers,
 			tesseractSignal: make(chan struct{}, 1),
+			bestPeers:       make(map[id.KramaID]struct{}),
 		}
+
+		job.updateBestPeers(bestPeers)
 
 		metaInfo, err := s.db.GetAccountMetaInfo(addr)
 		if err == nil {
@@ -255,9 +263,18 @@ func (s *Syncer) NewSyncRequest(
 	}
 
 	if syncMode == common.FullSync && len(job.bestPeers) == 0 && len(bestPeers) == 0 {
-		_, bestPeers, err = s.findLatestHeightAndBestPeers(addr, expectedHeight)
+		var height uint64
+
+		height, bestPeers, err = s.findLatestHeightAndBestPeers(addr)
 		if err != nil {
 			return errors.Wrap(err, "failed to find best peers for sync")
+		}
+
+		// if system account best peers doesn't have latest height then it will be updated here
+		if job.expectedHeight < height {
+			if err := job.updateExpectedHeight(height); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -302,7 +319,7 @@ func (s *Syncer) worker() {
 
 		job := s.jobQueue.NextJob()
 
-		s.metrics.captureTotalJobs(float64(len(s.jobQueue.jobs)))
+		s.metrics.captureTotalJobs(float64(s.jobQueue.len()))
 
 		if job == nil {
 			continue
@@ -362,8 +379,7 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 	}()
 
 	if len(job.bestPeers) > 0 {
-		randSource := rand.New(rand.NewSource(time.Now().UnixNano()))
-		bestPeer = job.bestPeers[randSource.Intn(len(job.bestPeers))]
+		bestPeer = job.chooseRandomBestPeer()
 	} else {
 		bestPeer, err = s.chooseBestSyncPeer(job)
 		if err != nil {
@@ -375,7 +391,13 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 
 	if !job.snapDownloaded && s.isSnapSyncRequired(job.address) && job.mode != common.LatestSync {
 		if err = s.fetchAndStoreSnap(bestPeer, job); err != nil {
+			job.deleteBestPeer(bestPeer)
+
 			return err
+		}
+
+		if err := s.publishEventSnapSync(job.jobStateEvent()); err != nil {
+			s.logger.Error("failed to publish event bucket sync", "err", err)
 		}
 	}
 
@@ -383,6 +405,8 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 
 	group.Go(func() error {
 		if err = s.syncLattice(groupCtx, tsInfo, job, bestPeer); err != nil {
+			job.deleteBestPeer(bestPeer)
+
 			return errors.Wrap(err, "failed to sync lattice")
 		}
 
@@ -390,6 +414,8 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 	})
 
 	group.Go(func() error {
+		var tsInfo *TesseractInfo
+
 		for job.getCurrentHeight() <= job.getExpectedHeight() {
 			select {
 			case <-groupCtx.Done():
@@ -440,6 +466,10 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 
 					return nil
 				}
+
+				if err := s.publishEventTesseractSync(job.address, tsInfo.tesseract.Height()); err != nil {
+					s.logger.Error("failed to publish event lattice sync", "err", err)
+				}
 			}
 
 			job.tesseractQueue.Pop()
@@ -447,6 +477,12 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 			shouldExit, err := s.postAdditionHook(job, tsInfo.tesseract.Height())
 			if err != nil || shouldExit {
 				jobState = Done
+
+				if shouldExit {
+					if err := s.publishEventJobDone(job.jobStateEvent()); err != nil {
+						s.logger.Error("failed to publish event lattice sync", "err", err)
+					}
+				}
 
 				return err
 			}
@@ -572,11 +608,33 @@ func (s *Syncer) releasePendingJob(job *SyncJob, ts *types.Tesseract) error {
 
 */
 
-func (s *Syncer) findLatestHeightAndBestPeers(addr common.Address, localHeight uint64) (uint64, []id.KramaID, error) {
-	bestPeers := make([]id.KramaID, 0)
-	maxHeight := localHeight
+func getBestPeers(heightPeersMap map[uint64][]id.KramaID) (uint64, []id.KramaID, error) {
+	maxFrequencyHeight := uint64(0)
+	maxFrequencyNodes := 0
 
-	for index, kramaID := range s.network.GetPeers() {
+	for h, nodes := range heightPeersMap {
+		if len(nodes) > maxFrequencyNodes {
+			maxFrequencyNodes = len(nodes)
+			maxFrequencyHeight = h
+		}
+	}
+
+	bestPeers, ok := heightPeersMap[maxFrequencyHeight]
+	if !ok || len(bestPeers) == 0 {
+		return maxFrequencyHeight, nil, errors.New("best peer not found")
+	}
+
+	return maxFrequencyHeight, bestPeers, nil
+}
+
+// findLatestHeightAndBestPeers returns the height reported from majority of peers as best height
+func (s *Syncer) findLatestHeightAndBestPeers(addr common.Address) (uint64, []id.KramaID, error) {
+	heightPeersMap := make(map[uint64][]id.KramaID)
+
+	// index tracks the no of peers responded
+	index := 0
+
+	for _, kramaID := range s.network.GetPeers() {
 		if index == MaxPeersToDial {
 			break
 		}
@@ -596,25 +654,21 @@ func (s *Syncer) findLatestHeightAndBestPeers(addr common.Address, localHeight u
 			continue
 		}
 
-		// TODO: Check if we need this
-		// responses = append(responses, resp)
+		index++
 
-		if resp.Height >= maxHeight {
-			maxHeight = resp.Height
-
-			bestPeers = append(bestPeers, kramaID)
+		nodes, ok := heightPeersMap[resp.Height]
+		if !ok {
+			heightPeersMap[resp.Height] = make([]id.KramaID, 0)
 		}
+
+		nodes = append(nodes, kramaID)
+		heightPeersMap[resp.Height] = nodes
 	}
 
-	return maxHeight, bestPeers, nil
+	return getBestPeers(heightPeersMap)
 }
 
 func (s *Syncer) chooseBestSyncPeer(job *SyncJob) (id.KramaID, error) {
-	var (
-		maxHeight  = job.expectedHeight
-		bestPeerID id.KramaID
-	)
-
 	if job.mode == common.LatestSync && job.tesseractQueue.Peek() != nil {
 		randomSource := rand.New(rand.NewSource(time.Now().UnixNano()))
 		randNumber := randomSource.Intn(len(job.tesseractQueue.Peek().clusterInfo.RandomSet))
@@ -622,33 +676,12 @@ func (s *Syncer) chooseBestSyncPeer(job *SyncJob) (id.KramaID, error) {
 		return job.tesseractQueue.Peek().clusterInfo.RandomSet[randNumber], nil
 	}
 
-	if len(s.network.GetPeers()) == 0 {
-		return "", errors.New("empty peers list")
+	_, bestPeers, err := s.findLatestHeightAndBestPeers(job.address)
+	if err != nil {
+		return "", err
 	}
 
-	for _, kramaID := range s.network.GetPeers() {
-		resp := new(LatestAccountInfo)
-		if err := s.rpcClient.MoiCall(
-			context.Background(),
-			kramaID,
-			"SYNCRPC",
-			"GetLatestAccountInfo",
-			job.address,
-			resp,
-			time.Minute*2,
-		); err != nil {
-			s.logger.Error("Failed to fetch account latest status", "RPC-error.", err)
-
-			continue
-		}
-
-		if resp.Height >= maxHeight {
-			maxHeight = resp.Height
-			bestPeerID = kramaID
-		}
-	}
-
-	return bestPeerID, nil
+	return bestPeers[0], nil
 }
 
 // syncSystemAccount sends a sync request for the specified address and waits for it to complete within a given time.
@@ -661,7 +694,7 @@ func (s *Syncer) syncSystemAccount(address ...common.Address) ([]id.KramaID, err
 	)
 
 	for _, addr := range address {
-		bestHeight, bestPeers, err = s.findLatestHeightAndBestPeers(addr, 0)
+		bestHeight, bestPeers, err = s.findLatestHeightAndBestPeers(addr)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to fetch best peers and height")
 		}
@@ -711,10 +744,16 @@ func (s *Syncer) initSync() error {
 		return err
 	}
 
+	if err := s.publishEventSystemAccounts(); err != nil {
+		s.logger.Error("failed to publish event system accounts sync", "err", err)
+	}
+
 	s.logger.Info("System accounts sync successful")
 
 	if err = s.loadSyncJobsFromDB(); err != nil {
 		s.logger.Error("Failed to load sync jobs from DB", "err", err)
+	} else if err = s.publishEventLoadSyncJobsDB(); err != nil {
+		s.logger.Error("failed to publish event load sync jobs from DB", "err", err)
 	}
 
 	return s.syncBucketsWithMaxAttempts(bestPeers, MaxBucketSyncAttempts)
@@ -737,6 +776,10 @@ func (s *Syncer) syncBucketsWithMaxAttempts(bestPeers []id.KramaID, maxAttempts 
 
 		s.metrics.captureBucketSyncTime(requestTime)
 		s.logger.Info("Bucket sync successful")
+
+		if err := s.publishEventBucketSync(); err != nil {
+			s.logger.Error("failed to publish event bucket sync", "err", err)
+		}
 
 		return nil
 	}
@@ -1173,6 +1216,8 @@ func (s *Syncer) syncLattice(
 		EndHeight:   endHeight,
 	}
 
+	close(reqChan)
+
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(endHeight-startHeight+5)*time.Second)
 	defer func() {
 		cancel()
@@ -1206,7 +1251,6 @@ func (s *Syncer) syncLattice(
 	})
 
 	grp.Go(func() error {
-		defer close(reqChan)
 		for requiredTesseractCount > 0 {
 			select {
 			case <-grpCtx.Done():
@@ -1214,7 +1258,7 @@ func (s *Syncer) syncLattice(
 
 			case msg, ok := <-respChan:
 				if !ok {
-					return errors.New("receiver channel closed")
+					return errors.New("response channel closed")
 				}
 
 				tsInfo, err := s.tesseractInfoFromTesseractMsg(msg)
@@ -1250,7 +1294,15 @@ func (s *Syncer) syncLattice(
 		return nil
 	})
 
-	return grp.Wait()
+	if err := grp.Wait(); err != nil {
+		return err
+	}
+
+	if err := s.publishEventLatticeSync(job.jobStateEvent()); err != nil {
+		s.logger.Error("failed to publish event lattice sync", "err", err)
+	}
+
+	return nil
 }
 
 func (s *Syncer) tesseractInfoFromTesseractMsg(msg *networkmsg.TesseractMessage) (*TesseractInfo, error) {
@@ -1485,7 +1537,7 @@ func (s *Syncer) fetchTesseractState(tesseract *common.Tesseract, fetchContext [
 // - found: a boolean value indicating whether the block was found in the database (true) or not (false).
 // - block: pointer to the retrieved block
 // - err: error if any
-func (s *Syncer) getBlock(ctx context.Context, session *session.Session, cid cid.CID) (bool, *block.Block, error) {
+func (s *Syncer) getBlock(ctx context.Context, session syncer.Session, cid cid.CID) (bool, *block.Block, error) {
 	data, err := s.db.ReadEntry(dbKeyFromCID(session.ID(), cid))
 	if err == nil {
 		return true, block.NewBlock(cid, data), nil
@@ -1500,7 +1552,7 @@ func (s *Syncer) getBlock(ctx context.Context, session *session.Session, cid cid
 	return false, nil, err
 }
 
-func (s *Syncer) getBlocks(ctx context.Context, session *session.Session, cids ...cid.CID) []block.Block {
+func (s *Syncer) getBlocks(ctx context.Context, session syncer.Session, cids ...cid.CID) ([]block.Block, error) {
 	blks := make([]block.Block, 0, len(cids))
 	keySet := cid.NewHashSet()
 
@@ -1516,14 +1568,25 @@ func (s *Syncer) getBlocks(ctx context.Context, session *session.Session, cids .
 	}
 
 	if keySet.Len() == 0 {
-		return blks
+		return blks, nil
 	}
 
 	for blk := range session.GetBlocks(ctx, keySet.Keys()) {
 		blks = append(blks, *blk)
 	}
 
-	return blks
+	for _, blk := range blks {
+		cID := blk.GetCid()
+		if keySet.Has(cID) {
+			keySet.Remove(cID)
+		}
+	}
+
+	if keySet.Len() != 0 {
+		return nil, errors.New("missing blocks in syncer")
+	}
+
+	return blks, nil
 }
 
 // fetchAccount retrieves the account data for a given state hash from either the local database or the session,
@@ -1531,7 +1594,7 @@ func (s *Syncer) getBlocks(ctx context.Context, session *session.Session, cids .
 // This also returns a bool value, indicating whether the data was found in the local database (true) or not (false).
 func (s *Syncer) fetchAccount(
 	ctx context.Context,
-	session *session.Session,
+	session syncer.Session,
 	stateHash common.Hash,
 ) (
 	bool,
@@ -1554,7 +1617,7 @@ func (s *Syncer) fetchAccount(
 
 // fetchAndStoreData retrieves data blocks from the given session object and writes them to the database,
 // using the specified CID values as keys.
-func (s *Syncer) fetchAndStoreData(ctx context.Context, session *session.Session, ids ...cid.CID) error {
+func (s *Syncer) fetchAndStoreData(ctx context.Context, session syncer.Session, ids ...cid.CID) error {
 	keySet := cid.NewHashSet()
 
 	for _, cID := range ids {
@@ -1590,7 +1653,7 @@ func (s *Syncer) fetchAndStoreData(ctx context.Context, session *session.Session
 }
 
 // syncContextData fetches the behavioural context and random context associated with the given hash using agora
-func (s *Syncer) syncContextData(ctx context.Context, session *session.Session, cID cid.CID) error {
+func (s *Syncer) syncContextData(ctx context.Context, session syncer.Session, cID cid.CID) error {
 	islocal, blk, err := s.getBlock(ctx, session, cID)
 	if err != nil {
 		return err
@@ -1619,7 +1682,7 @@ func (s *Syncer) syncContextData(ctx context.Context, session *session.Session, 
 	return nil
 }
 
-func (s *Syncer) syncStorageTree(ctx context.Context, session *session.Session, newRoot common.Hash) error {
+func (s *Syncer) syncStorageTree(ctx context.Context, session syncer.Session, newRoot common.Hash) error {
 	if newRoot.IsNil() {
 		return nil
 	}
@@ -1662,7 +1725,12 @@ func (s *Syncer) syncStorageTree(ctx context.Context, session *session.Session, 
 
 	s.logger.Debug("Syncing storage tree", "address", session.ID())
 
-	for _, b := range s.getBlocks(ctx, session, storageCIDs...) {
+	blks, err := s.getBlocks(ctx, session, storageCIDs...)
+	if err != nil {
+		return err
+	}
+
+	for _, b := range blks {
 		rootNode := new(common.RootNode)
 		if err = polo.Depolorize(&rootNode, b.GetData()); err != nil {
 			return err
@@ -1691,7 +1759,7 @@ func (s *Syncer) syncStorageTree(ctx context.Context, session *session.Session, 
 	return nil
 }
 
-func (s *Syncer) syncLogicManifests(ctx context.Context, as *session.Session, root *common.RootNode) error {
+func (s *Syncer) syncLogicManifests(ctx context.Context, as syncer.Session, root *common.RootNode) error {
 	cids := make([]cid.CID, 0)
 
 	for _, rawLogicObject := range root.HashTable {
@@ -1703,7 +1771,12 @@ func (s *Syncer) syncLogicManifests(ctx context.Context, as *session.Session, ro
 		cids = append(cids, cid.ManifestCID(manifestHash))
 	}
 
-	for _, blck := range s.getBlocks(ctx, as, cids...) {
+	blks, err := s.getBlocks(ctx, as, cids...)
+	if err != nil {
+		return err
+	}
+
+	for _, blck := range blks {
 		if err := s.db.CreateEntry(dbKeyFromCID(as.ID(), blck.GetCid()), blck.GetData()); err != nil {
 			return err
 		}
@@ -1711,7 +1784,7 @@ func (s *Syncer) syncLogicManifests(ctx context.Context, as *session.Session, ro
 
 	for _, cID := range cids {
 		if stored, err := s.db.Contains(dbKeyFromCID(as.ID(), cID)); err != nil || !stored {
-			s.logger.Error("failed to fetch logic manifest", as.ID(), "manifest-hash", cID.String())
+			s.logger.Error("Failed to fetch logic manifest", "addr", as.ID(), "manifest-hash", cID.String())
 
 			return errors.New("failed to fetch logic manifest")
 		}
@@ -1720,7 +1793,7 @@ func (s *Syncer) syncLogicManifests(ctx context.Context, as *session.Session, ro
 	return nil
 }
 
-func (s *Syncer) syncLogicTree(ctx context.Context, as *session.Session, newRoot common.Hash) error {
+func (s *Syncer) syncLogicTree(ctx context.Context, as syncer.Session, newRoot common.Hash) error {
 	if newRoot.IsNil() {
 		return nil
 	}
@@ -1842,20 +1915,20 @@ func (s *Syncer) getTesseractWithRawIxnsAndReceipts(
 }
 
 // Start starts all event handlers and workers associated with sync sub protocol
-func (s *Syncer) Start() error {
+func (s *Syncer) Start(minConnectedPeers int) error {
 	s.agora.Start()
 
 	if err := s.registerRPCService(); err != nil {
 		return err
 	}
 
-	if err := s.network.Subscribe(s.ctx, common.TesseractTopic, s.msgHandler); err != nil {
+	if err := s.network.Subscribe(s.ctx, config.TesseractTopic, s.msgHandler); err != nil {
 		return err
 	}
 
 	go s.queueHandler()
 
-	for s.network.Peers.Len() < 10 {
+	for s.network.Peers.Len() < minConnectedPeers {
 		time.Sleep(2 * time.Second)
 	}
 
@@ -1986,4 +2059,46 @@ func (s *Syncer) queueHandler() {
 			s.pendingMsgQueue = append(s.pendingMsgQueue, msg)
 		}
 	}
+}
+
+func (s *Syncer) post(ev interface{}) error {
+	if s.testMux != nil {
+		return s.testMux.Post(ev)
+	}
+
+	return nil
+}
+
+func (s *Syncer) publishEventLoadSyncJobsDB() error {
+	return s.post(eventLoadSyncJobsDB{})
+}
+
+func (s *Syncer) publishEventBucketSync() error {
+	return s.post(eventBucketSync{})
+}
+
+func (s *Syncer) publishEventSystemAccounts() error {
+	return s.post(eventSystemAccounts{})
+}
+
+func (s *Syncer) publishEventSnapSync(state eventDataJobState) error {
+	return s.post(eventSnapSync{state})
+}
+
+func (s *Syncer) publishEventLatticeSync(state eventDataJobState) error {
+	return s.post(eventLatticeSync{state})
+}
+
+func (s *Syncer) publishEventTesseractSync(addr common.Address, height uint64) error {
+	return s.post(
+		eventTesseractSync{
+			eventDataJobState{
+				address: addr,
+				height:  height,
+			},
+		})
+}
+
+func (s *Syncer) publishEventJobDone(state eventDataJobState) error {
+	return s.post(eventJobDone{state})
 }

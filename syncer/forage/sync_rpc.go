@@ -2,6 +2,7 @@ package forage
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -210,6 +211,8 @@ func (service *SYNCRPCService) FetchLattice(
 
 	select {
 	case <-ctx.Done():
+		close(respChan)
+
 		return ctx.Err()
 	case req, ok = <-reqChan:
 		if !ok {
@@ -231,7 +234,7 @@ func (service *SYNCRPCService) FetchLattice(
 			true,
 		)
 		if err != nil {
-			return errors.Wrap(err, "failed to fetch tesseract")
+			return errors.Wrap(err, fmt.Sprintf("failed to fetch tesseract %d", height))
 		}
 
 		msg := &networkmsg.TesseractMessage{

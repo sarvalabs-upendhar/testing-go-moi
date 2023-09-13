@@ -1,7 +1,6 @@
 package types
 
 import (
-	"math/big"
 	"sync"
 	"time"
 
@@ -326,11 +325,9 @@ func (cs *ClusterState) GetStateHash(ixHash common.Hash, addr common.Address) co
 	return receipt.Hashes.StateHash(addr)
 }
 
-func (cs *ClusterState) GetFuelUsed() *big.Int {
-	fuelUsed := new(big.Int)
-
+func (cs *ClusterState) GetFuelUsed() (fuelUsed uint64) {
 	for _, receipt := range cs.Receipts {
-		fuelUsed = new(big.Int).Add(fuelUsed, receipt.FuelUsed)
+		fuelUsed += receipt.FuelUsed
 	}
 
 	return fuelUsed
@@ -436,6 +433,17 @@ func (cs *ClusterState) UpdateClusterSize() {
 		if idSet != nil {
 			cs.NodeSet.Size += len(idSet.Ids)
 		}
+	}
+}
+
+func (cs *ClusterState) ExecutionContext() *common.ExecutionContext {
+	cs.mtx.Lock()
+	defer cs.mtx.Unlock()
+
+	return &common.ExecutionContext{
+		CtxDelta: cs.contextDelta,
+		Cluster:  cs.ClusterID,
+		Time:     cs.ICSReqTime.Unix(),
 	}
 }
 

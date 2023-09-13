@@ -319,16 +319,16 @@ func TestPublicCoreAPI_CreateRPCTesseract(t *testing.T) {
 			name: "create rpc tesseract for genesis tesseract",
 			tsParams: createTesseractParams(func(header *common.TesseractHeader) {
 				header.ClusterID = common.GenesisIdentifier
-				header.FuelLimit = big.NewInt(0)
-				header.FuelUsed = big.NewInt(0)
+				header.FuelLimit = 0
+				header.FuelUsed = 0
 			}),
 		},
 		{
 			name:     "nil interactions",
 			ixParams: nil,
 			tsParams: createTesseractParams(func(header *common.TesseractHeader) {
-				header.FuelLimit = big.NewInt(0)
-				header.FuelUsed = big.NewInt(0)
+				header.FuelLimit = 0
+				header.FuelUsed = 0
 			}),
 		},
 	}
@@ -559,7 +559,7 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 		Sender:    ts[0].Address(),
 		Nonce:     4,
 		FuelPrice: big.NewInt(1),
-		FuelLimit: big.NewInt(100),
+		FuelLimit: 100,
 		Payload:   rawAssetPayload,
 	}
 
@@ -567,7 +567,7 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 	assert.NoError(t, err)
 
 	receipt := &common.Receipt{
-		FuelUsed: big.NewInt(100),
+		FuelUsed: 100,
 	}
 
 	exec.setInteractionCall(ix, receipt)
@@ -586,7 +586,7 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 					Sender:    tests.RandomAddress(t),
 					Nonce:     hexutil.Uint64(3),
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
-					FuelLimit: (*hexutil.Big)(big.NewInt(100)),
+					FuelLimit: hexutil.Uint64(100),
 					Payload:   (hexutil.Bytes)(rawAssetPayload),
 				},
 			},
@@ -600,7 +600,7 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 					Sender:    tests.RandomAddress(t),
 					Nonce:     hexutil.Uint64(3),
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
-					FuelLimit: (*hexutil.Big)(big.NewInt(100)),
+					FuelLimit: hexutil.Uint64(100),
 					Payload:   (hexutil.Bytes)(rawAssetPayload),
 				},
 				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
@@ -619,7 +619,7 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 					Sender:    tests.RandomAddress(t),
 					Nonce:     hexutil.Uint64(4),
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
-					FuelLimit: (*hexutil.Big)(big.NewInt(100)),
+					FuelLimit: hexutil.Uint64(100),
 					Payload:   (hexutil.Bytes)(rawAssetPayload),
 				},
 				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
@@ -638,7 +638,7 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 					Sender:    ts[0].Address(),
 					Nonce:     hexutil.Uint64(4),
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
-					FuelLimit: (*hexutil.Big)(big.NewInt(100)),
+					FuelLimit: hexutil.Uint64(100),
 					Payload:   (hexutil.Bytes)(rawAssetPayload),
 				},
 				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
@@ -685,7 +685,7 @@ func TestIx_Call(t *testing.T) {
 		Sender:    ts[0].Address(),
 		Nonce:     4,
 		FuelPrice: big.NewInt(1),
-		FuelLimit: big.NewInt(100),
+		FuelLimit: 100,
 		Payload:   rawAssetPayload,
 	}
 
@@ -693,7 +693,9 @@ func TestIx_Call(t *testing.T) {
 	assert.NoError(t, err)
 
 	receipt := &common.Receipt{
-		FuelUsed:  big.NewInt(100),
+		IxType:    common.IxAssetCreate,
+		IxHash:    ix.Hash(),
+		FuelUsed:  100,
 		ExtraData: rawAssetPayload,
 	}
 
@@ -713,7 +715,7 @@ func TestIx_Call(t *testing.T) {
 					Sender:    tests.RandomAddress(t),
 					Nonce:     hexutil.Uint64(3),
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
-					FuelLimit: (*hexutil.Big)(big.NewInt(100)),
+					FuelLimit: hexutil.Uint64(100),
 					Payload:   (hexutil.Bytes)(rawAssetPayload),
 				},
 			},
@@ -727,7 +729,7 @@ func TestIx_Call(t *testing.T) {
 					Sender:    tests.RandomAddress(t),
 					Nonce:     hexutil.Uint64(4),
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
-					FuelLimit: (*hexutil.Big)(big.NewInt(100)),
+					FuelLimit: hexutil.Uint64(100),
 					Payload:   (hexutil.Bytes)(rawAssetPayload),
 				},
 				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
@@ -746,7 +748,7 @@ func TestIx_Call(t *testing.T) {
 					Sender:    tests.RandomAddress(t),
 					Nonce:     hexutil.Uint64(4),
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
-					FuelLimit: (*hexutil.Big)(big.NewInt(100)),
+					FuelLimit: hexutil.Uint64(100),
 					Payload:   (hexutil.Bytes)(rawAssetPayload),
 				},
 				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
@@ -765,7 +767,7 @@ func TestIx_Call(t *testing.T) {
 					Sender:    ts[0].Address(),
 					Nonce:     hexutil.Uint64(4),
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
-					FuelLimit: (*hexutil.Big)(big.NewInt(100)),
+					FuelLimit: hexutil.Uint64(100),
 					Payload:   (hexutil.Bytes)(rawAssetPayload),
 				},
 				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
@@ -775,8 +777,12 @@ func TestIx_Call(t *testing.T) {
 				},
 			},
 			expectedReceipt: &rpcargs.RPCReceipt{
-				FuelUsed:  hexutil.Big(*big.NewInt(100)),
+				IxType:    hexutil.Uint64(common.IxAssetCreate),
+				IxHash:    ix.Hash(),
+				FuelUsed:  hexutil.Uint64(100),
 				ExtraData: rawAssetPayload,
+				From:      ix.Sender(),
+				To:        ix.Receiver(),
 			},
 		},
 	}

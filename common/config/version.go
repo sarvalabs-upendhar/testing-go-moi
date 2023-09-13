@@ -9,7 +9,7 @@ import (
 const (
 	VersionMajor = 0 // Major version component of the current release
 	VersionMinor = 2 // Minor version component of the current release
-	VersionPatch = 0 // Patch version component of the current release
+	VersionPatch = 1 // Patch version component of the current release
 )
 
 var ProtocolVersion = func() string {
@@ -39,4 +39,9 @@ var (
 var (
 	MOIProtocolStream = protocol.ID("moi/core/stream/" + ProtocolVersion)
 	MOIProtocolRPC    = protocol.ID("moi/core/rpc/" + ProtocolVersion)
+)
+
+var (
+	SenatusTopic   = fmt.Sprintf("MOI_PUBSUB_SENATUS_%s", ProtocolVersion)
+	TesseractTopic = fmt.Sprintf("MOI_PUBSUB_TESSERACT_%s", ProtocolVersion)
 )

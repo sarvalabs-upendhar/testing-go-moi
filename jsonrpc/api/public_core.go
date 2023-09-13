@@ -3,13 +3,14 @@ package api
 import (
 	"encoding/json"
 	"math/big"
+	"time"
 
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi-engineio"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/utils"
-	"github.com/sarvalabs/go-moi/compute/engineio"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 )
 
@@ -467,12 +468,18 @@ func (p *PublicCoreAPI) FuelEstimate(args *rpcargs.CallArgs) (*hexutil.Big, erro
 		return nil, err
 	}
 
-	receipt, err := p.exec.InteractionCall(ix, stateHashes)
+	ctx := &common.ExecutionContext{
+		CtxDelta: nil,
+		Cluster:  "moi.FuelEstimate",
+		Time:     time.Now().Unix(),
+	}
+
+	receipt, err := p.exec.InteractionCall(ctx, ix, stateHashes)
 	if err != nil {
 		return nil, err
 	}
 
-	return (*hexutil.Big)(receipt.FuelUsed), nil
+	return (*hexutil.Big)(new(big.Int).SetUint64(receipt.FuelUsed)), nil
 }
 
 // Syncing returns the sync status of an account if address is given else returns the node sync status
@@ -512,17 +519,18 @@ func (p *PublicCoreAPI) Call(args *rpcargs.CallArgs) (*rpcargs.RPCReceipt, error
 		return nil, err
 	}
 
-	receipt, err := p.exec.InteractionCall(ix, stateHashes)
+	ctx := &common.ExecutionContext{
+		CtxDelta: nil,
+		Cluster:  "moi.Call",
+		Time:     time.Now().Unix(),
+	}
+
+	receipt, err := p.exec.InteractionCall(ctx, ix, stateHashes)
 	if err != nil {
 		return nil, err
 	}
 
-	result := &rpcargs.RPCReceipt{
-		FuelUsed:  hexutil.Big(*receipt.FuelUsed),
-		ExtraData: receipt.ExtraData,
-	}
-
-	return result, nil
+	return createCallReceipt(receipt, ix), nil
 }
 
 func (p *PublicCoreAPI) normalizeOptions(
@@ -564,7 +572,7 @@ func createRPCInteraction(
 		Payer:    input.Payer,
 
 		FuelPrice: (*hexutil.Big)(input.FuelPrice),
-		FuelLimit: (*hexutil.Big)(input.FuelLimit),
+		FuelLimit: hexutil.Uint64(input.FuelLimit),
 
 		Mode:         hexutil.Uint64(compute.Mode),
 		ComputeHash:  compute.Hash,
@@ -727,27 +735,18 @@ func createRPCHeader(h common.TesseractHeader) rpcargs.RPCHeader {
 	rpcHeader := rpcargs.RPCHeader{
 		Address:  h.Address,
 		PrevHash: h.PrevHash,
-		Height:   hexutil.Uint64(h.Height),
-		FuelUsed: func() hexutil.Big {
-			if h.FuelUsed == nil {
-				return hexutil.Big(*big.NewInt(0))
-			}
 
-			return hexutil.Big(*h.FuelUsed)
-		}(),
-		FuelLimit: func() hexutil.Big {
-			if h.FuelLimit == nil {
-				return hexutil.Big(*big.NewInt(0))
-			}
+		Height:    hexutil.Uint64(h.Height),
+		FuelUsed:  hexutil.Uint64(h.FuelUsed),
+		FuelLimit: hexutil.Uint64(h.FuelLimit),
 
-			return hexutil.Big(*h.FuelLimit)
-		}(),
 		BodyHash:    h.BodyHash,
 		GridHash:    h.GroupHash,
 		Operator:    h.Operator,
 		ClusterID:   h.ClusterID,
 		Timestamp:   hexutil.Uint64(h.Timestamp),
 		ContextLock: createRPCContextLockInfos(h.ContextLock),
+
 		Extra: rpcargs.RPCCommitData{
 			Round:           hexutil.Uint64(h.Extra.Round),
 			CommitSignature: h.Extra.CommitSignature,
@@ -857,13 +856,28 @@ func createRPCReceipt(
 		IxType:    hexutil.Uint64(receipt.IxType),
 		IxHash:    receipt.IxHash,
 		Status:    receipt.Status,
-		FuelUsed:  hexutil.Big(*receipt.FuelUsed),
+		FuelUsed:  hexutil.Uint64(receipt.FuelUsed),
 		Hashes:    createRPCHashes(receipt.Hashes),
 		ExtraData: receipt.ExtraData,
 		From:      ix.Sender(),
 		To:        ix.Receiver(),
 		IXIndex:   hexutil.Uint64(ixIndex),
 		Parts:     getRPCTesseractPartsFromGrid(grid),
+	}
+}
+
+func createCallReceipt(
+	receipt *common.Receipt,
+	ix *common.Interaction,
+) *rpcargs.RPCReceipt {
+	return &rpcargs.RPCReceipt{
+		IxType:    hexutil.Uint64(receipt.IxType),
+		IxHash:    receipt.IxHash,
+		Status:    receipt.Status,
+		FuelUsed:  hexutil.Uint64(receipt.FuelUsed),
+		ExtraData: receipt.ExtraData,
+		From:      ix.Sender(),
+		To:        ix.Receiver(),
 	}
 }
 

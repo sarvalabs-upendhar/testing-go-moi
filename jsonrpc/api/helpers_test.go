@@ -420,6 +420,7 @@ func (exec *MockExecutionManager) setInteractionCall(ix *common.Interaction, rec
 }
 
 func (exec *MockExecutionManager) InteractionCall(
+	ctx *common.ExecutionContext,
 	ix *common.Interaction,
 	stateHashes map[common.Address]common.Hash,
 ) (*common.Receipt, error) {
@@ -814,8 +815,8 @@ func createHeaderCallbackWithTestData(t *testing.T) func(header *common.Tesserac
 		header.Address = tests.RandomAddress(t)
 		header.PrevHash = tests.RandomHash(t)
 		header.Height = 4
-		header.FuelUsed = big.NewInt(88)
-		header.FuelLimit = big.NewInt(99)
+		header.FuelUsed = 88
+		header.FuelLimit = 99
 		header.BodyHash = tests.RandomHash(t)
 		header.GroupHash = tests.RandomHash(t)
 		header.Operator = "operator"
@@ -1051,7 +1052,7 @@ func newTestInteraction(
 	ixData := &common.IxData{
 		Input: common.IxInput{
 			Type:      ixType,
-			FuelLimit: big.NewInt(10000),
+			FuelLimit: 10000,
 		},
 	}
 
@@ -1125,7 +1126,7 @@ func checkForRPCIxn(
 
 	require.Equal(t, input.PerceivedProofs, rpcIxn.PerceivedProofs.Bytes())
 
-	require.Equal(t, input.FuelLimit, rpcIxn.FuelLimit.ToInt())
+	require.Equal(t, input.FuelLimit, uint64(rpcIxn.FuelLimit))
 	require.Equal(t, input.FuelPrice, rpcIxn.FuelPrice.ToInt())
 
 	require.Equal(t, compute.Mode, rpcIxn.Mode.ToUint64())
@@ -1316,8 +1317,8 @@ func checkForRPCHeader(t *testing.T, header common.TesseractHeader, rpcHeader rp
 	require.Equal(t, header.Address, rpcHeader.Address)
 	require.Equal(t, header.PrevHash, rpcHeader.PrevHash)
 	require.Equal(t, header.Height, rpcHeader.Height.ToUint64())
-	require.Equal(t, header.FuelUsed, rpcHeader.FuelUsed.ToInt())
-	require.Equal(t, header.FuelLimit, rpcHeader.FuelLimit.ToInt())
+	require.Equal(t, header.FuelUsed, rpcHeader.FuelUsed.ToUint64())
+	require.Equal(t, header.FuelLimit, rpcHeader.FuelLimit.ToUint64())
 	require.Equal(t, header.BodyHash, rpcHeader.BodyHash)
 	require.Equal(t, header.GroupHash, rpcHeader.GridHash)
 	require.Equal(t, header.Operator, rpcHeader.Operator)
@@ -1408,7 +1409,7 @@ func checkForRPCReceipt(
 	checkForRPCTesseractParts(t, grid, rpcReceipt.Parts)
 	require.Equal(t, uint64(receipt.IxType), rpcReceipt.IxType.ToUint64())
 	require.Equal(t, receipt.IxHash, rpcReceipt.IxHash)
-	require.Equal(t, receipt.FuelUsed, rpcReceipt.FuelUsed.ToInt())
+	require.Equal(t, receipt.FuelUsed, uint64(rpcReceipt.FuelUsed))
 	checkForRPCHashes(t, receipt.Hashes, rpcReceipt.Hashes)
 	require.Equal(t, receipt.ExtraData, rpcReceipt.ExtraData)
 	require.Equal(t, ix.Sender(), rpcReceipt.From)

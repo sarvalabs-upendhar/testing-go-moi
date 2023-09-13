@@ -1,9 +1,8 @@
-package internal
+package core
 
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -19,9 +18,9 @@ func inventoryFilename(labdir string) string {
 	return filepath.Join(labdir, "inventory.json")
 }
 
-// participantFilename generates the filename for a participant object
-func participantFilename(labdir, username string) string {
-	return filepath.Join(labdir, fmt.Sprintf("participant-%v.json", username))
+// userFilename generates the filename for a participant object
+func userFilename(labdir, username string) string {
+	return filepath.Join(labdir, fmt.Sprintf("user-%v.json", username))
 }
 
 // logicFilename generates the filename for a logic object
@@ -29,16 +28,16 @@ func logicFilename(labdir, name string) string {
 	return filepath.Join(labdir, fmt.Sprintf("logic-%v.json", name))
 }
 
-// pathExists confirms if a directory/file exists at the given path
-func pathExists(path string) bool {
+// PathExists confirms if a directory/file exists at the given path
+func PathExists(path string) bool {
 	_, err := os.Stat(path)
 
 	return !os.IsNotExist(err)
 }
 
-// createDir creates a directory at the given path.
+// CreateDir creates a directory at the given path.
 // It is a no-op if the directory already exists.
-func createDir(dirpath string) error {
+func CreateDir(dirpath string) error {
 	return os.MkdirAll(dirpath, 0o755)
 }
 
@@ -50,7 +49,7 @@ func deleteFile(filename string) error {
 // Storable is type constraint for objects that
 // can be stored and retrieved from a file
 type Storable interface {
-	*Inventory | *ParticipantState | *LogicAccountState
+	*Inventory | *UserAccount | *LogicAccount
 }
 
 // loadFile stores a Storable object to a file at the given path
@@ -61,7 +60,7 @@ func loadFile[S Storable](filename string, object S) error {
 	}
 
 	// Read the contents of the file
-	encoded, err := ioutil.ReadFile(filename)
+	encoded, err := os.ReadFile(filename)
 	if err != nil {
 		return errors.Wrap(err, "failed to read file")
 	}
@@ -80,7 +79,7 @@ func saveFile[S Storable](filename string, object S) error {
 	encoded, _ := json.MarshalIndent(object, "", "\t")
 
 	// Write the encoded data to the file location.
-	if err := ioutil.WriteFile(filename, encoded, 0o600); err != nil {
+	if err := os.WriteFile(filename, encoded, 0o600); err != nil {
 		return errors.Wrap(err, "failed to write file")
 	}
 

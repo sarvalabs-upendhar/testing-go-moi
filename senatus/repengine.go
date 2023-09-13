@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/config"
+
 	id "github.com/sarvalabs/go-moi/common/kramaid"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
 
@@ -33,7 +35,6 @@ const (
 	MaxQueueSize   = 200
 	DefaultPeerNTQ = 0.5
 	MsgsPerWorker  = 1
-	GossipTopic    = "MOI_PUBSUB_SENATUS"
 )
 
 type senatusStore interface {
@@ -512,7 +513,7 @@ func (r *ReputationEngine) cleanUpDirtyStorage() {
 }
 
 func (r *ReputationEngine) Start() error {
-	if err := r.network.Subscribe(r.ctx, GossipTopic, r.senatusHandler); err != nil {
+	if err := r.network.Subscribe(r.ctx, config.SenatusTopic, r.senatusHandler); err != nil {
 		return errors.Wrap(err, "failed to subscribe senatus topic")
 	}
 

@@ -304,7 +304,7 @@ func executeLogic(t *testing.T, client *Client, deployAddr, addr common.Address,
 		Type:      common.IxLogicInvoke,
 		Nonce:     GetLatestNonce(t, client, addr),
 		FuelPrice: big.NewInt(1),
-		FuelLimit: big.NewInt(500),
+		FuelLimit: 500,
 		Sender:    addr,
 		Payload:   payload,
 	}
@@ -340,7 +340,7 @@ func createAsset(t *testing.T, client *Client, addr common.Address, mnemonic str
 		Nonce:     GetLatestNonce(t, client, addr),
 		Sender:    addr,
 		FuelPrice: big.NewInt(1),
-		FuelLimit: big.NewInt(200),
+		FuelLimit: 200,
 		Payload:   payload,
 	}
 
@@ -368,7 +368,7 @@ func transferTokens(t *testing.T, client *Client, sender, receiver common.Addres
 			assetID: big.NewInt(16),
 		},
 		FuelPrice: big.NewInt(1),
-		FuelLimit: big.NewInt(200),
+		FuelLimit: 200,
 	}
 
 	sendIX := CreateSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
@@ -400,7 +400,7 @@ func SendIxWithInvalidSign(t *testing.T, client *Client, addr common.Address, mn
 		Nonce:     1,
 		Sender:    addr,
 		FuelPrice: big.NewInt(1),
-		FuelLimit: big.NewInt(100),
+		FuelLimit: 100,
 		Payload:   payload,
 	}
 
@@ -707,7 +707,7 @@ func testFuelEstimate(t *testing.T, client *Client, addr common.Address) {
 					Sender:    ts.Address(),
 					Nonce:     hexutil.Uint64(5),
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
-					FuelLimit: (*hexutil.Big)(big.NewInt(200)),
+					FuelLimit: hexutil.Uint64(200),
 					Payload:   (hexutil.Bytes)(assetCreatePayload),
 				},
 				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
@@ -726,7 +726,7 @@ func testFuelEstimate(t *testing.T, client *Client, addr common.Address) {
 					Sender:    addr,
 					Nonce:     hexutil.Uint64(3),
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
-					FuelLimit: (*hexutil.Big)(big.NewInt(100)),
+					FuelLimit: hexutil.Uint64(100),
 					Payload:   (hexutil.Bytes)(assetCreatePayload),
 				},
 				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
@@ -1616,7 +1616,7 @@ func testSendInteraction(t *testing.T, client *Client) {
 				Type:      common.IxValueTransfer,
 				Sender:    tests.RandomAddress(t),
 				FuelPrice: big.NewInt(1),
-				FuelLimit: big.NewInt(200),
+				FuelLimit: 200,
 			},
 			expectedError: common.ErrInsufficientFunds,
 		},
@@ -1770,7 +1770,8 @@ func testCall(t *testing.T, client *Client, addr common.Address) {
 	}
 
 	expectedReceipt := common.Receipt{
-		FuelUsed: big.NewInt(100),
+		IxType:   common.IxAssetCreate,
+		FuelUsed: 100,
 	}
 
 	err = expectedReceipt.SetExtraData(extraData)
@@ -1792,7 +1793,7 @@ func testCall(t *testing.T, client *Client, addr common.Address) {
 					Sender:    ts.Address(),
 					Nonce:     hexutil.Uint64(4),
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
-					FuelLimit: (*hexutil.Big)(big.NewInt(200)),
+					FuelLimit: hexutil.Uint64(200),
 					Payload:   (hexutil.Bytes)(assetCreatePayload),
 				},
 				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
@@ -1802,8 +1803,11 @@ func testCall(t *testing.T, client *Client, addr common.Address) {
 				},
 			},
 			expectedReceipt: &rpcargs.RPCReceipt{
-				FuelUsed:  (hexutil.Big)(*expectedReceipt.FuelUsed),
+				IxType:    hexutil.Uint64(common.IxAssetCreate),
+				FuelUsed:  hexutil.Uint64(expectedReceipt.FuelUsed),
 				ExtraData: expectedReceipt.ExtraData,
+				From:      addr,
+				To:        expectedAssetAddr,
 			},
 		},
 		{
@@ -1814,7 +1818,7 @@ func testCall(t *testing.T, client *Client, addr common.Address) {
 					Sender:    addr,
 					Nonce:     hexutil.Uint64(3),
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
-					FuelLimit: (*hexutil.Big)(big.NewInt(100)),
+					FuelLimit: hexutil.Uint64(100),
 					Payload:   (hexutil.Bytes)(assetCreatePayload),
 				},
 				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
@@ -1837,7 +1841,7 @@ func testCall(t *testing.T, client *Client, addr common.Address) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, test.expectedReceipt, receipt)
+			checkForCallReceipt(t, test.expectedReceipt, receipt)
 		})
 	}
 }
@@ -1868,9 +1872,9 @@ func testFuelDeduction(t *testing.T, client *Client, addrs map[string]common.Add
 			// If there are MOI Tokens in the transferred values, add that to the total deductions
 			// else, only fuel consumed on the receipt is the expected deduction
 			if transferValue, ok := ts.Ixns[0].TransferValues[common.KMOITokenAssetID]; !ok {
-				deducted = receipt.FuelUsed.ToInt()
+				deducted = new(big.Int).SetUint64(uint64(receipt.FuelUsed))
 			} else {
-				deducted = new(big.Int).Add(receipt.FuelUsed.ToInt(), transferValue.ToInt())
+				deducted = new(big.Int).Add(new(big.Int).SetUint64(uint64(receipt.FuelUsed)), transferValue.ToInt())
 			}
 
 			// Determine balance of MOI Tokens BEFORE the interaction

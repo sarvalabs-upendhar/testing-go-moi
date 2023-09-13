@@ -14,7 +14,7 @@ import (
 
 	"github.com/peterh/liner"
 	"github.com/pkg/errors"
-	pisa "github.com/sarvalabs/go-pisa/moi"
+	"github.com/sarvalabs/go-pisa"
 	"github.com/sarvalabs/go-polo"
 	"github.com/spf13/cobra"
 
@@ -229,7 +229,7 @@ func registerGuardian(vault *crypto.KramaVault) {
 		Sender:    common.BytesToAddress(moiIDpublicKey),
 		Nonce:     nonce.ToUint64(),
 		FuelPrice: big.NewInt(1),
-		FuelLimit: big.NewInt(10000),
+		FuelLimit: 10000,
 		Payload:   rawPayload,
 	}
 

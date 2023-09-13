@@ -7,10 +7,10 @@ import (
 	"github.com/decred/dcrd/crypto/blake256"
 	"github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi-engineio"
 
 	"github.com/sarvalabs/go-moi/common"
 	id "github.com/sarvalabs/go-moi/common/kramaid"
-	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"
 )
@@ -557,16 +557,16 @@ func (object *Object) CreateLogic(descriptor *engineio.LogicDescriptor) (common.
 	// Create a new LogicObject from the LogicDescriptor
 	logicObject := NewLogicObject(object.Address(), descriptor)
 	// Insert the LogicObject into the state object
-	if err := object.InsertNewLogicObject(logicObject.LogicID(), logicObject); err != nil {
+	if err := object.InsertNewLogicObject(logicObject.ID, logicObject); err != nil {
 		return "", errors.Wrap(err, "could not insert logic object into state object")
 	}
 
 	// Initialize a storage tree for the LogicID on the state object
-	if err := object.CreateStorageTreeForLogic(logicObject.LogicID()); err != nil {
+	if err := object.CreateStorageTreeForLogic(logicObject.ID); err != nil {
 		return "", errors.Wrap(err, "could not init storage tree for logic")
 	}
 
-	return logicObject.LogicID(), nil
+	return logicObject.ID, nil
 }
 
 func (object *Object) AddAccountGenesisInfo(address common.Address, ixHash common.Hash) error {
@@ -955,7 +955,7 @@ func (object *Object) GenerateLogicContextObject(logicID common.LogicID) *LogicC
 	return NewLogicContextObject(logicID, object)
 }
 
-func (object *Object) HasFuel(amount *big.Int) (bool, error) {
+func (object *Object) HasSufficientFuel(amount *big.Int) (bool, error) {
 	if amount.Sign() == -1 {
 		return false, errors.New("invalid transfer amount")
 	}

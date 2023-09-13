@@ -117,6 +117,7 @@ func CreateConfigFile(datadir string, index int) []byte {
 			StaticPeers:        peerList.StaticPeers,
 			InboundConnLimit:   config.DefaultInboundConnLimit,
 			OutboundConnLimit:  config.DefaultOutboundConnLimit,
+			DiscoveryInterval:  config.DefaultDiscoveryInterval,
 			CorsAllowedOrigins: []string{"*"},
 		},
 		Syncer: cmdCommon.SyncerConfig{
@@ -143,7 +144,7 @@ func CreateConfigFile(datadir string, index int) []byte {
 			MaxSnapSize: config.DefaultSnapSize, // 1GB limit
 		},
 		Execution: cmdCommon.ExecutionConfig{
-			FuelLimit: hexutil.Big(*config.DefaultFuelLimit),
+			FuelLimit: hexutil.Uint64(config.DefaultFuelLimit),
 		},
 		Ixpool: cmdCommon.IxPoolConfig{
 			Mode:       config.DefaultIxPoolMode,

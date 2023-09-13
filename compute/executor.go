@@ -1,6 +1,8 @@
 package compute
 
 import (
+	"math/big"
+
 	"github.com/pkg/errors"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -25,10 +27,10 @@ type IxExecutor struct {
 
 // Execute executes all the given Interactions with their context delta.
 // Returns an error if the execution of any interaction fails.
-func (executor *IxExecutor) Execute(ixs common.Interactions, delta common.ContextDelta) error {
+func (executor *IxExecutor) Execute(ixs common.Interactions, ctx *common.ExecutionContext) error {
 	// Update the interaction and the context delta into the executor
 	executor.Interactions = ixs
-	executor.contextDelta = delta
+	executor.contextDelta = ctx.ContextDelta()
 
 	for _, ix := range executor.Interactions {
 		// Load the state objects for interaction participants
@@ -37,7 +39,7 @@ func (executor *IxExecutor) Execute(ixs common.Interactions, delta common.Contex
 		}
 
 		// Run the interaction
-		receipt, err := executor.mgr.runInteraction(ix, executor.objects, true)
+		receipt, err := executor.mgr.runInteraction(ix, ctx, executor.objects, true)
 		if err != nil {
 			return err
 		}
@@ -50,7 +52,7 @@ func (executor *IxExecutor) Execute(ixs common.Interactions, delta common.Contex
 		// Set the receipt to the executor
 		executor.setReceipt(ix.Hash(), receipt)
 		// Deduct fuel for the ix execution from the sender
-		executor.objects.GetObject(ix.Sender()).DeductFuel(receipt.FuelUsed)
+		executor.objects.GetObject(ix.Sender()).DeductFuel(new(big.Int).SetUint64(receipt.FuelUsed))
 
 		// Update Sarga state if the interaction receiver if it is an unregistered (new) account
 		if err := executor.updateSargaState(ix); err != nil {

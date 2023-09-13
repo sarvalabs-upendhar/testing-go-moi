@@ -3,9 +3,8 @@ package common
 import (
 	"github.com/mr-tron/base58"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-polo"
-
 	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-polo"
 )
 
 // ClusterID ...
@@ -22,6 +21,24 @@ func (c ClusterID) Hash() Hash {
 	}
 
 	return BytesToHash(rawHash)
+}
+
+type ExecutionContext struct {
+	CtxDelta ContextDelta
+	Cluster  ClusterID
+	Time     int64
+}
+
+func (ctx ExecutionContext) Timestamp() int64 {
+	return ctx.Time
+}
+
+func (ctx ExecutionContext) ClusterID() string {
+	return ctx.Cluster.String()
+}
+
+func (ctx ExecutionContext) ContextDelta() ContextDelta {
+	return ctx.CtxDelta
 }
 
 type ICSClusterInfo struct {

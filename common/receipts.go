@@ -2,7 +2,6 @@ package common
 
 import (
 	"encoding/json"
-	"math/big"
 
 	"github.com/sarvalabs/go-moi/common/hexutil"
 
@@ -22,7 +21,7 @@ type Receipt struct {
 	IxHash Hash          `json:"ix_hash"`
 	Status ReceiptStatus `json:"status"`
 
-	FuelUsed  *big.Int         `json:"fuel_used"`
+	FuelUsed  uint64           `json:"fuel_used"`
 	Hashes    ReceiptAccHashes `json:"hashes"`
 	ExtraData json.RawMessage  `json:"extra_data"`
 }
@@ -32,7 +31,7 @@ func NewReceipt(ix *Interaction) *Receipt {
 		IxType:   ix.Type(),
 		IxHash:   ix.Hash(),
 		Hashes:   make(ReceiptAccHashes),
-		FuelUsed: new(big.Int),
+		FuelUsed: 0,
 	}
 }
 
@@ -104,10 +103,7 @@ func (h ReceiptAccHashes) Copy() ReceiptAccHashes {
 func (r *Receipt) Copy() *Receipt {
 	receipt := *r
 
-	if receipt.FuelUsed != nil {
-		receipt.FuelUsed = new(big.Int).Set(r.FuelUsed)
-	}
-
+	receipt.FuelUsed = r.FuelUsed
 	receipt.Hashes = r.Hashes.Copy()
 
 	if len(r.ExtraData) > 0 {
@@ -118,7 +114,7 @@ func (r *Receipt) Copy() *Receipt {
 	return &receipt
 }
 
-func (r *Receipt) SetFuelUsed(fuel *big.Int) {
+func (r *Receipt) SetFuelUsed(fuel uint64) {
 	r.FuelUsed = fuel
 }
 

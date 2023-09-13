@@ -11,13 +11,13 @@ import (
 	"testing"
 	"time"
 
-	pisa "github.com/sarvalabs/go-pisa/moi"
+	"github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-pisa"
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
-	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/crypto"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 )

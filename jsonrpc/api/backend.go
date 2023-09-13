@@ -48,7 +48,11 @@ type StateManager interface {
 }
 
 type ExecutionManager interface {
-	InteractionCall(ix *common.Interaction, stateHashes map[common.Address]common.Hash) (*common.Receipt, error)
+	InteractionCall(
+		ctx *common.ExecutionContext,
+		ix *common.Interaction,
+		stateHashes map[common.Address]common.Hash,
+	) (*common.Receipt, error)
 }
 
 type Syncer interface {

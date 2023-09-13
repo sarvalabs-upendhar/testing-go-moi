@@ -15,13 +15,15 @@ import (
 
 	"github.com/sarvalabs/battleground/infrastructure"
 	"github.com/sarvalabs/battleground/sdk"
+
 	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"
 	"github.com/sarvalabs/go-moi/common"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 
+	"github.com/stretchr/testify/suite"
+
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/moiclient"
-	"github.com/stretchr/testify/suite"
 )
 
 type ClusterType byte
@@ -43,7 +45,7 @@ var (
 	bgURL = "http://85.239.245.54:7000/api"
 
 	DefaulFuelPrice  = big.NewInt(1)
-	DefaultFuelLimit = big.NewInt(10000)
+	DefaultFuelLimit = uint64(10000)
 )
 
 type BattleGroundConfig struct {

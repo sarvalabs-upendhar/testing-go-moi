@@ -60,6 +60,19 @@
           "hex": "0x040000810000"
         }
       }
+    },
+
+    {
+      "ptr": 4,
+      "kind": "routine",
+      "deps": [0],
+      "data": {
+        "name": "Init!",
+        "kind": "deployer",
+        "executes": {
+          "hex": "0x"
+        }
+      }
     }
   ]
 }
