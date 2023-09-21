@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"sync"
@@ -550,7 +550,7 @@ var RetrievePublicKeys = func(ids []id.KramaID, client *http.Client, logger hclo
 		return nil, err
 	}
 
-	body, err := ioutil.ReadAll(response.Body)
+	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		log.Panicln(err)
 	}

@@ -3,9 +3,9 @@ package lattice
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
 	"math/big"
 	"math/rand"
+	"os"
 	"reflect"
 	"strconv"
 	"testing"
@@ -1766,7 +1766,7 @@ func createMockGenesisFile(
 		require.NoError(t, err)
 	}
 
-	file, err := ioutil.TempFile(dir, "*config.json")
+	file, err := os.CreateTemp(dir, "*config.json")
 	require.NoError(t, err)
 
 	_, err = file.Write(data)

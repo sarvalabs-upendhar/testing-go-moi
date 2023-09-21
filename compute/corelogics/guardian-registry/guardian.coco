@@ -27,6 +27,7 @@ state persistent:
     EnforceNodeLimits Bool
     // whether to enforce approval check during the guardian onboarding
     EnforceApprovals Bool
+    EnforceApprovals Bool
     // whether to enforce device ID limits for guardians on shared hardware
     EnforceDeviceLimits Bool
     // master operator for whom, node limits and verification does not apply
@@ -142,7 +143,7 @@ endpoint invokable AddOperator!(operatorMOIId String, verificationDetails Verifi
         operators[operatorMOIId] = operator
 
     mutate uniqueOperators <- GuardianRegistry.State.UniqueOperators:
-        var check = {output} <- CheckMoiIDOperators(moiID: operatorMOIId)
+        var check = (output) <- CheckMoiIDOperators(moiID: operatorMOIId)
         if !check:
             uniqueOperators = append(uniqueOperators, operatorMOIId)
 
@@ -167,10 +168,12 @@ endpoint invokable Register!(operatorID String, guardian Guardian):
         if !operator.OperatorID:
             throw "operator does not exist!"
         
-        ValidateSenderWithMoiID(operator.OperatorID)
+        ValidateSenderWithMoiID(operator: operator.OperatorID)
+
         var kramaID = guardian.KramaID
         var deviceID = guardian.DeviceID
         var masterOperator String
+
         observe masterOperator <- GuardianRegistry.State.MasterOperator
         if operator.OperatorID != masterOperator:
             observe enforceApprovals <- GuardianRegistry.State.EnforceApprovals:
@@ -313,7 +316,7 @@ endpoint invokable UpdateGuardianDetails!(kramaID String, updatedGuardiansDetail
     observe guardianDetails <- GuardianRegistry.State.Guardians:
         var currentGuardianDetails = guardianDetails[kramaID]
         var currentOperator = currentGuardianDetails.Operator
-        ValidateSenderWithMoiID(currentOperator)
+        ValidateSenderWithMoiID(operator: currentOperator)
 
         mutate guardiansState <- GuardianRegistry.State.Guardians:
             guardiansState[kramaID] = updatedGuardiansDetails
@@ -325,7 +328,7 @@ endpoint invokable UpdateGuardianDetails!(kramaID String, updatedGuardiansDetail
                     observe deviceToKramaIDs <- GuardianRegistry.State.Devices:
                         var allNodesInOldDevice = deviceToKramaIDs[oldDeviceID]
                         devicesState[upDevId] = append(devicesState[upDevId], kramaID)
-                        devicesState[oldDeviceID] = {updated} <- RemoveString(strArray: allNodesInOldDevice, strToBeRemoved: kramaID)            
+                        devicesState[oldDeviceID] = (updated) <- RemoveString(strArray: allNodesInOldDevice, strToBeRemoved: kramaID)
 
 func ValidateSenderWithMoiID(operator String):
     var pubKeyOfOperator = operator[2:]

@@ -8,6 +8,7 @@ on:
       - opened
       - synchronize
       - ready_for_review
+      - edited
     paths:
       - "**.go"
       - "**.mod"

@@ -3,7 +3,7 @@ package poi
 import (
 	"encoding/hex"
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	"strings"
 
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
@@ -20,7 +20,7 @@ import (
 func GetKeystore(dataDir string) ([]byte, error) {
 	ksFilePath := strings.Join([]string{dataDir, "keystore.json"}, "/")
 
-	ksContent, err := ioutil.ReadFile(ksFilePath)
+	ksContent, err := os.ReadFile(ksFilePath)
 	if err != nil {
 		if strings.Contains(err.Error(), "no such file or directory") {
 			return nil, common.ErrNoKeystore

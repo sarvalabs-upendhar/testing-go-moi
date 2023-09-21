@@ -88,20 +88,22 @@ func (t *Transport) InitClusterCommunication(ctx context.Context, slot *ktypes.S
 	*/
 
 	go func() {
+		defer func() {
+			if err := t.network.Unsubscribe(string(slot.ClusterID())); err != nil {
+				log.Println(err)
+			}
+
+			// Check whether the slot is a validator slot and the randomICSNodes is not empty
+			if slot.SlotType == ktypes.ValidatorSlot && len(randomICSNodes) != 0 {
+				t.disconnectRandomPeers(randomICSNodes)
+			}
+
+			t.logger.Info("Closing cluster communication channels", "cluster-ID", slot.ClusterID())
+		}()
+
 		for {
 			select {
 			case <-ctx.Done():
-				if err := t.network.Unsubscribe(string(slot.ClusterID())); err != nil {
-					log.Println(err)
-				}
-
-				// Check whether the slot is a validator slot and the randomICSNodes is not empty
-				if slot.SlotType == ktypes.ValidatorSlot && len(randomICSNodes) != 0 {
-					t.disconnectRandomPeers(randomICSNodes)
-				}
-
-				t.logger.Info("Closing cluster communication channels", "cluster-ID", slot.ClusterID())
-
 				return
 			case msg, ok := <-slot.OutboundChan:
 				if !ok {

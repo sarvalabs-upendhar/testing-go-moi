@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -59,7 +58,7 @@ func WriteToGenesisFile(path string, genesis *common.GenesisFile) error {
 		return err
 	}
 
-	if err := ioutil.WriteFile(path, file, os.ModePerm); err != nil {
+	if err := os.WriteFile(path, file, os.ModePerm); err != nil {
 		return err
 	}
 
