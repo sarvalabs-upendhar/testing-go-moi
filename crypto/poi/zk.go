@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -67,7 +67,7 @@ func Authenticate(defAddr, passPhrase, moiIDBaseURL string) (bool, *zkAuthProof,
 	}
 	defer zkChallengeResp.Body.Close()
 
-	zkChallengeRespInBytes, err := ioutil.ReadAll(zkChallengeResp.Body)
+	zkChallengeRespInBytes, err := io.ReadAll(zkChallengeResp.Body)
 	if err != nil {
 		return false, nil, err
 	}

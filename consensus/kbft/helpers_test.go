@@ -2,9 +2,9 @@ package kbft
 
 import (
 	"context"
+	crand "crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"math/rand"
 	"testing"
 	"time"
 
@@ -65,7 +65,7 @@ func createKramaIDAndPrivateKey(t *testing.T, nthValidator uint32) (id.KramaID, 
 
 	var signKey [32]byte
 
-	_, err := rand.Read(signKey[:]) // fill sign key with random bytes
+	_, err := crand.Read(signKey[:]) // fill sign key with random bytes
 	require.NoError(t, err)
 
 	// get private key and public key

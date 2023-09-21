@@ -2,11 +2,11 @@ package api
 
 import (
 	"context"
+	crand "crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"math/big"
-	"math/rand"
 	"strconv"
 	"sync/atomic"
 	"testing"
@@ -695,6 +695,10 @@ type mockConn struct {
 	streams      []network.Stream
 }
 
+func (m mockConn) IsClosed() bool {
+	panic("implement me")
+}
+
 func (m mockConn) Close() error {
 	panic("implement me")
 }
@@ -834,7 +838,7 @@ func GenerateRandomIXPayload(t *testing.T, size uint32) []byte {
 	t.Helper()
 
 	randomBytes := make([]byte, size)
-	_, err := rand.Read(randomBytes)
+	_, err := crand.Read(randomBytes)
 	assert.NoError(t, err)
 
 	return randomBytes

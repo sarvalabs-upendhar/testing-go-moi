@@ -3,7 +3,6 @@ package crypto
 import (
 	hexutil "encoding/hex"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
@@ -41,11 +40,11 @@ var testKramaID = kramaid.KramaID("3WzFwwvSz7ZwiU3cDwk7uZtc9gX4d5h18MhsmXaT1XVqa
 
 func TestBLSSignAgg(t *testing.T) {
 	// Validator 1 DataDir
-	datadir1, err := ioutil.TempDir("", "testDataDir")
+	datadir1, err := os.MkdirTemp("", "testDataDir")
 	require.NoError(t, err)
 
 	// Validator 2 DataDir
-	datadir2, err := ioutil.TempDir("", "testDataDir")
+	datadir2, err := os.MkdirTemp("", "testDataDir")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -106,7 +105,7 @@ func TestBLSSignAgg(t *testing.T) {
 }
 
 func TestKramaVaultWithoutAnyMode(t *testing.T) {
-	datadir1, err := ioutil.TempDir("", "random")
+	datadir1, err := os.MkdirTemp("", "random")
 	require.NoError(t, err)
 
 	config := &VaultConfig{
@@ -119,7 +118,7 @@ func TestKramaVaultWithoutAnyMode(t *testing.T) {
 }
 
 func TestRegisterModeWithoutMnemomic(t *testing.T) {
-	datadir, err := ioutil.TempDir("", "moichain")
+	datadir, err := os.MkdirTemp("", "moichain")
 	require.NoError(t, err)
 
 	config := &VaultConfig{
@@ -133,7 +132,7 @@ func TestRegisterModeWithoutMnemomic(t *testing.T) {
 }
 
 func TestKramaVaultRegisterMode(t *testing.T) {
-	datadir, err := ioutil.TempDir("", "moichain")
+	datadir, err := os.MkdirTemp("", "moichain")
 	require.NoError(t, err)
 
 	mnemonicKsPath := strings.Join([]string{datadir, "mnemonic.keystore.json"}, "/")
@@ -222,7 +221,7 @@ func testECDSASignWithOptions(t *testing.T, vault *KramaVault) {
 }
 
 func TestSignWithNetworkKey(t *testing.T) {
-	datadir1, err := ioutil.TempDir("", "testDataDir")
+	datadir1, err := os.MkdirTemp("", "testDataDir")
 	require.NoError(t, err)
 
 	_, _, err = poi.RandGenKeystore(datadir1, "nodepass1")

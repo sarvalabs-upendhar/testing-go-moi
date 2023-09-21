@@ -3,7 +3,6 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -202,7 +201,7 @@ func setupTestEnv() {
 
 		configData := CreateConfigFile(fmt.Sprintf("test_%d", directoryIndex+i), directoryIndex+i)
 
-		if err := ioutil.WriteFile(fmt.Sprintf("test_%d/config.json", directoryIndex+i), configData, 0o600); err != nil {
+		if err := os.WriteFile(fmt.Sprintf("test_%d/config.json", directoryIndex+i), configData, 0o600); err != nil {
 			cmdCommon.Err(err)
 		}
 
@@ -216,7 +215,7 @@ func setupTestEnv() {
 		cmdCommon.Err(err)
 	}
 
-	if err = ioutil.WriteFile(writeInstancesFilePath, instancesFile, os.ModePerm); err != nil {
+	if err = os.WriteFile(writeInstancesFilePath, instancesFile, os.ModePerm); err != nil {
 		cmdCommon.Err(err)
 	}
 }

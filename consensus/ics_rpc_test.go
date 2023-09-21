@@ -2,7 +2,7 @@ package consensus
 
 import (
 	"context"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/pkg/errors"
@@ -43,7 +43,7 @@ func TestICSRequest(t *testing.T) {
 		},
 	}
 
-	dir, err := ioutil.TempDir("", "testDir")
+	dir, err := os.MkdirTemp("", "testDir")
 	require.NoError(t, err)
 
 	_, kramaID, err := poi.RandGenKeystore(dir, "nodepass")

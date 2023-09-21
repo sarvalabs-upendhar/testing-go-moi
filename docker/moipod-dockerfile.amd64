@@ -1,6 +1,11 @@
-FROM golang@sha256:ab5685692564e027aa84e2980855775b2e48f8fc82c1590c0e1e8cbc2e716542 AS build
+# amd64 arch
+# golang:1.20.8-alpine3.18
+# sha256:90246ec31bcf460ff3dbe8a4a63e8997bc36781a2eba9e0419e9b53e0bd36a0d
+
+FROM golang@sha256:90246ec31bcf460ff3dbe8a4a63e8997bc36781a2eba9e0419e9b53e0bd36a0d AS build
 RUN apk add --no-cache git gcc g++ ca-certificates tzdata && update-ca-certificates
 RUN go env -w GOPRIVATE=github.com/sarvalabs/battleground
+RUN go env -w GOPRIVATE=github.com/sarvalabs/go-pisa
 
 ARG ACCESS_TOKEN
 ENV GO111MODULE=auto
@@ -16,7 +21,11 @@ RUN --mount=type=cache,id=linux-${TARGET_ARCH}-go-build,target=/root/.cache/gobu
 COPY . /go/src/github/sarvalabs/moichain
 RUN --mount=type=cache,id=linux-${TARGET_ARCH}-go-build,target=/root/.cache/gobuild --mount=type=cache,id=linux-${TARGET_ARCH}-go-package,target=/go/pkg go build -trimpath -o /bin/moipod ./cmd/moipod/
 
-FROM alpine@sha256:25fad2a32ad1f6f510e528448ae1ec69a28ef81916a004d3629874104f8a7f70
+# amd64 arch
+# alpine:3.18.3
+# sha256:c5c5fda71656f28e49ac9c5416b3643eaa6a108a8093151d6d1afc9463be8e33
+
+FROM alpine@sha256:c5c5fda71656f28e49ac9c5416b3643eaa6a108a8093151d6d1afc9463be8e33
 VOLUME /data
 ARG GIT_COMMIT
 ENV GIT_COMMIT="${GIT_COMMIT}"

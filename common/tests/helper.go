@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"net"
 	"os"
@@ -935,7 +934,7 @@ func WriteToAccountsFile(filePath string, accounts []AccountWithMnemonic) error 
 		return err
 	}
 
-	if err := ioutil.WriteFile(filePath, file, os.ModePerm); err != nil {
+	if err := os.WriteFile(filePath, file, os.ModePerm); err != nil {
 		return err
 	}
 

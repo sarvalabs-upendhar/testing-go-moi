@@ -4,7 +4,6 @@ import (
 	"context"
 	crand "crypto/rand"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -209,7 +208,7 @@ func getPrivateKey(keyfile string) (crypto.PrivKey, error) {
 }
 
 func loadExistingKey(keyfile string) (crypto.PrivKey, error) {
-	data, err := ioutil.ReadFile(keyfile)
+	data, err := os.ReadFile(keyfile)
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +234,7 @@ func generateAndStoreNewKey(keyfile string) (crypto.PrivKey, error) {
 		return nil, fmt.Errorf("failed to marshal private key: %w", err)
 	}
 
-	if err := ioutil.WriteFile(keyfile, data, 0o600); err != nil {
+	if err := os.WriteFile(keyfile, data, 0o600); err != nil {
 		return nil, fmt.Errorf("failed to write key to file: %w", err)
 	}
 
