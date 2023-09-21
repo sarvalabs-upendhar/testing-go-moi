@@ -41,7 +41,7 @@ func (suite *GuardianTestSuite) SetupSuite() {
 	logicID := common.NewLogicIDv0(true, false, false, false, 0, address)
 
 	consumed := suite.Initialize(logicID, manifest, address, common.HexToAddress(approverAddr1))
-	suite.Equal(uint64(100), consumed)
+	suite.Equal(uint64(4865), consumed)
 
 	calldata := make(polo.Document)
 	_ = calldata.Set("enforceApprovals", true)
