@@ -395,7 +395,7 @@ func pubsubGossipParam() pubsub.GossipSubParams {
 	gParams := pubsub.DefaultGossipSubParams()
 	gParams.Dlo = 6
 	gParams.D = 8
-	gParams.Dhi = 16
+	gParams.Dhi = 12
 	gParams.HeartbeatInterval = 500 * time.Millisecond
 
 	return gParams
