@@ -36,6 +36,7 @@ func (rc *Command) RegisterSubCommands() {
 		server.GetServerCommand(),
 		internal.GetRegisterCommand(),
 		internal.GetBootNodeCommand(),
+		internal.GetVersionCommand(),
 	)
 }
 
