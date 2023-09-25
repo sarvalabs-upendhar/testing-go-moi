@@ -2192,17 +2192,6 @@ func getLogicIDs(t *testing.T, count int) []common.LogicID {
 	return logicIDs
 }
 
-func getAddresses(t *testing.T, count int) []common.Address {
-	t.Helper()
-
-	addresses := make([]common.Address, count)
-	for i := 0; i < count; i++ {
-		addresses[i] = tests.RandomAddress(t)
-	}
-
-	return addresses
-}
-
 func getHashes(t *testing.T, count int) []common.Hash {
 	t.Helper()
 

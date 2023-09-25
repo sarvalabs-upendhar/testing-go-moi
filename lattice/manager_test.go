@@ -778,7 +778,7 @@ func TestVerifyHeaders(t *testing.T) {
 
 func TestAddTesseract(t *testing.T) {
 	address := tests.RandomAddress(t)
-	addresses := getAddresses(t, 4)
+	addresses := tests.GetAddresses(t, 4)
 	ixns := createIxns(t, 2, getIxParamsMapWithAddresses(addresses[:2], addresses[2:]))
 	_, receipts := getIxAndReceipts(t, 1)
 
@@ -1024,7 +1024,7 @@ func TestAddTesseract(t *testing.T) {
 func TestAddTesseractsWithState(t *testing.T) {
 	var (
 		accType   = common.LogicAccount
-		addresses = getAddresses(t, 4)
+		addresses = tests.GetAddresses(t, 4)
 		ixns      = createIxns(t, 2, getIxParamsMapWithAddresses(addresses[:2], addresses[2:]))
 	)
 

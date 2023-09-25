@@ -1054,7 +1054,7 @@ func TestStateManager_FetchContextLock(t *testing.T) {
 	obj, cHash := getContextObjects(t, kramaIDs, 2, 4)
 	mObj, mHash := getMetaContextObjects(t, cHash)
 
-	addresses := getAddresses(t, 10)
+	addresses := tests.GetAddresses(t, 10)
 	ixns := tests.CreateIxns(t, 5, tests.GetIxParamsMapWithAddresses(addresses[:5], addresses[5:10]))
 
 	getTesseractParams := func(
@@ -1841,7 +1841,7 @@ func TestStateManager_GetNodeSet(t *testing.T) {
 }
 
 func TestStateManager_GetICSNodeSetFromRawContext(t *testing.T) {
-	addrs := getAddresses(t, 2)
+	addrs := tests.GetAddresses(t, 2)
 	kramaIDs, pk := tests.GetTestKramaIdsWithPublicKeys(t, 12)
 	mocksenatus := mockSenatus(t)
 	mocksenatus.AddPublicKeys(kramaIDs, pk)
@@ -2988,7 +2988,7 @@ func TestStateManager_FetchICSNodeSet(t *testing.T) {
 func TestStateManager_FetchInteractionContext(t *testing.T) {
 	db := mockDB()
 	mocksenatus := mockSenatus(t)
-	addrs := getAddresses(t, 2)
+	addrs := tests.GetAddresses(t, 2)
 	kramaIDs, pk := tests.GetTestKramaIdsWithPublicKeys(t, 8)
 	obj, cHash := getContextObjects(t, kramaIDs, 2, 4)
 	mObj, mHash := getMetaContextObjects(t, cHash)
@@ -3426,7 +3426,7 @@ func TestStateManager_FlushDirtyObject(t *testing.T) {
 }
 
 func TestStateManager_IsAccountRegisteredAt(t *testing.T) {
-	addresses := getAddresses(t, 3)
+	addresses := tests.GetAddresses(t, 3)
 	db := mockDB()
 	_, storageRoot := createMetaStorageTree(
 		t,

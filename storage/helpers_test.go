@@ -309,18 +309,6 @@ func insertTestEntries(t *testing.T, pm *PersistenceManager) (map[string]string,
 	return insertedEntries, prefixes
 }
 
-func getAddresses(t *testing.T, count int) []common.Address {
-	t.Helper()
-
-	var addresses []common.Address
-
-	for i := 0; i < count; i++ {
-		addresses = append(addresses, tests.RandomAddress(t))
-	}
-
-	return addresses
-}
-
 func getHashes(t *testing.T, count int) []common.Hash {
 	t.Helper()
 
