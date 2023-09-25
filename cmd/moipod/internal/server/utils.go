@@ -28,13 +28,14 @@ const genesisURL = "https://moichain-pub.s3.amazonaws.com/genesis.json"
 
 // Params holds raw config and also custom types which will be extracted from raw config
 type Params struct {
-	rawCfg          *cmdCommon.Config
-	TrustedPeers    []config.NodeInfo
-	StaticPeers     []config.NodeInfo
-	BootstrapPeers  []maddr.Multiaddr
-	ListenAddresses []maddr.Multiaddr
-	JSONRPCAddr     *net.TCPAddr
-	PrometheusAddr  *net.TCPAddr
+	rawCfg             *cmdCommon.Config
+	TrustedPeers       []config.NodeInfo
+	StaticPeers        []config.NodeInfo
+	BootstrapPeers     []maddr.Multiaddr
+	ListenAddresses    []maddr.Multiaddr
+	PublicP2pAddresses []maddr.Multiaddr
+	JSONRPCAddr        *net.TCPAddr
+	PrometheusAddr     *net.TCPAddr
 }
 
 func (p *Params) buildTelemetryConfig() (err error) {
@@ -133,6 +134,19 @@ func (p *Params) assignNetworkLibp2pListenAddress() error {
 	return nil
 }
 
+func (p *Params) assignNetworkLibp2pPublicAddress() error {
+	for _, v := range p.rawCfg.Network.PublicP2pAddr {
+		addr, err := maddr.NewMultiaddr(v)
+		if err != nil {
+			return errors.New("invalid libp2p address")
+		}
+
+		p.PublicP2pAddresses = append(p.PublicP2pAddresses, addr)
+	}
+
+	return nil
+}
+
 func (p *Params) assignNetworkJSONRPCAddr() (err error) {
 	// validate json-rpc address
 	if p.rawCfg.Network.JSONRPCAddr == "" {
@@ -156,7 +170,7 @@ func (p *Params) applyFlags(cmd *cobra.Command, path string) error {
 	}
 
 	if isP2PHostIPSet(cmd) {
-		p.rawCfg.Network.Libp2pAddr = []string{
+		p.rawCfg.Network.PublicP2pAddr = []string{
 			fmt.Sprintf(
 				"/ip4/%s/tcp/%s", P2pHostIP, strconv.Itoa(config.DefaultListenerPort)),
 		}
@@ -229,6 +243,7 @@ func (p *Params) getNetworkConfig() *config.NetworkConfig {
 		MaxPeers:           p.rawCfg.Network.MaxPeers,
 		RelayNodeAddr:      p.rawCfg.Network.RelayNodeAddr,
 		ListenAddresses:    p.ListenAddresses,
+		PublicP2pAddresses: p.PublicP2pAddresses,
 		JSONRPCAddr:        p.JSONRPCAddr,
 		MTQ:                p.rawCfg.Network.MTQ,
 		CorsAllowedOrigins: p.rawCfg.Network.CorsAllowedOrigins,
@@ -311,6 +326,10 @@ func (p *Params) processRawParams() error {
 	}
 
 	if err := p.assignNetworkLibp2pListenAddress(); err != nil {
+		return err
+	}
+
+	if err := p.assignNetworkLibp2pPublicAddress(); err != nil {
 		return err
 	}
 

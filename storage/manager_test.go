@@ -124,7 +124,7 @@ func TestUpdateAccMetaInfo_AddNewAccount(t *testing.T) {
 func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 	pm := NewTestPersistenceManager(t)
 
-	addresses := getAddresses(t, 3)
+	addresses := tests.GetAddresses(t, 3)
 	height := uint64(30)
 	hash := tests.RandomHash(t)
 
@@ -434,7 +434,7 @@ func TestUpdateTesseractStatus_CheckHeight(t *testing.T) {
 		status  bool
 	}
 
-	addresses := getAddresses(t, 3)
+	addresses := tests.GetAddresses(t, 3)
 	hashes := getHashes(t, 3)
 	height := uint64(30)
 	testcases := []struct {

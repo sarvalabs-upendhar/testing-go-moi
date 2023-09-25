@@ -9,7 +9,7 @@ import (
 const (
 	VersionMajor = 0 // Major version component of the current release
 	VersionMinor = 2 // Minor version component of the current release
-	VersionPatch = 2 // Patch version component of the current release
+	VersionPatch = 3 // Patch version component of the current release
 )
 
 var ProtocolVersion = func() string {

@@ -989,18 +989,6 @@ func createTesseractsWithChain(t *testing.T, count int, paramsMap map[int]*creat
 	return tesseracts
 }
 
-// FIXME: move this method
-func getAddresses(t *testing.T, count int) []common.Address {
-	t.Helper()
-
-	addresses := make([]common.Address, count)
-	for i := 0; i < count; i++ {
-		addresses[i] = tests.RandomAddress(t)
-	}
-
-	return addresses
-}
-
 func tesseractParamsWithICSClusterInfo(
 	t *testing.T,
 	ixns common.Interactions,
@@ -1211,7 +1199,7 @@ func getTesseractParamsMapWithIxns(t *testing.T, tsCount int) map[int]*createTes
 	t.Helper()
 
 	tesseractParams := make(map[int]*createTesseractParams, tsCount)
-	addresses := getAddresses(t, 4*tsCount) // for each interaction, sender and receiver addresses needed
+	addresses := tests.GetAddresses(t, 4*tsCount) // for each interaction, sender and receiver addresses needed
 	ixns := createIxns(t, 2*tsCount, getIxParamsMapWithAddresses(addresses[:2*tsCount], addresses[2*tsCount:]))
 
 	for i := 0; i < tsCount; i++ {

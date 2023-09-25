@@ -1156,8 +1156,10 @@ func (k *Engine) updateContextDelta(slot *ktypes.Slot) error {
 				1,
 				clusterState.Operator,
 			)
+
 			senderDeltaGroup.RandomNodes = append(senderDeltaGroup.RandomNodes, senderRandomDelta...)
 			senderDeltaGroup.ReplacedNodes = append(senderDeltaGroup.ReplacedNodes, replacedRandomDelta...)
+
 			seenAccounts[senderAddr] = true
 			deltaMap[senderAddr] = senderDeltaGroup
 		}
@@ -1203,9 +1205,12 @@ func (k *Engine) updateContextDelta(slot *ktypes.Slot) error {
 				genesisRandomDelta, replacedRandomDelta := clusterState.GetRandomContextDelta(
 					common.ReceiverRandomSet,
 					1,
+					clusterState.Operator,
 				)
+
 				genesisDeltaGroup.RandomNodes = append(genesisDeltaGroup.RandomNodes, genesisRandomDelta...)
 				genesisDeltaGroup.ReplacedNodes = append(genesisDeltaGroup.ReplacedNodes, replacedRandomDelta...)
+
 				seenAccounts[common.SargaAddress] = true
 				deltaMap[common.SargaAddress] = genesisDeltaGroup
 			} else if clusterState.AccountInfos[receiverAddr].AccType == common.LogicAccount ||
@@ -1213,17 +1218,21 @@ func (k *Engine) updateContextDelta(slot *ktypes.Slot) error {
 				receiverBehaviourDelta, replacedNodes := clusterState.GetBehaviouralContextDelta(
 					common.ReceiverBehaviourSet,
 				)
+
 				if receiverBehaviourDelta != "" {
 					receiverDeltaGroup.BehaviouralNodes = append(receiverDeltaGroup.BehaviouralNodes, receiverBehaviourDelta)
 				}
+
 				if replacedNodes != "" {
 					receiverDeltaGroup.ReplacedNodes = append(receiverDeltaGroup.ReplacedNodes, replacedNodes)
 				}
+
 				receiverRandomDelta, replacedRandomDelta := clusterState.GetRandomContextDelta(
 					common.ReceiverRandomSet,
 					1,
 					clusterState.Operator,
 				)
+
 				receiverDeltaGroup.RandomNodes = append(receiverDeltaGroup.RandomNodes, receiverRandomDelta...)
 				receiverDeltaGroup.ReplacedNodes = append(receiverDeltaGroup.ReplacedNodes, replacedRandomDelta...)
 			}
