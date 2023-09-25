@@ -3,35 +3,45 @@
 # sha256:90246ec31bcf460ff3dbe8a4a63e8997bc36781a2eba9e0419e9b53e0bd36a0d
 
 FROM golang@sha256:90246ec31bcf460ff3dbe8a4a63e8997bc36781a2eba9e0419e9b53e0bd36a0d AS build
-RUN apk add --no-cache git gcc g++ ca-certificates tzdata && update-ca-certificates
-RUN go env -w GOPRIVATE=github.com/sarvalabs/battleground
+
+# essential packages for build-dep
+ENV pkgs "git gcc g++ ca-certificates tzdata"
+RUN apk add --no-cache $pkgs && update-ca-certificates
+
+# importing private go-packages
 RUN go env -w GOPRIVATE=github.com/sarvalabs/go-pisa
+RUN go env -w GOPRIVATE=github.com/sarvalabs/battleground
 
 ARG ACCESS_TOKEN
-ENV GO111MODULE=auto
 ENV CGO_ENABLED=1
-ARG TARGET_ARCH
+ENV GO111MODULE=auto
 
-RUN git config --global url."https://golang:${ACCESS_TOKEN}@github.com".insteadOf "https://github.com"
+# for private go-packages
+RUN git config --global url."https://sarvalabs:${ACCESS_TOKEN}@github.com".insteadOf "https://github.com"
 
+# go module download
 WORKDIR /go/src/github/sarvalabs/moichain
 COPY go.mod /go/src/github/sarvalabs/moichain
 COPY go.sum /go/src/github/sarvalabs/moichain
-RUN --mount=type=cache,id=linux-${TARGET_ARCH}-go-build,target=/root/.cache/gobuild --mount=type=cache,id=linux-${TARGET_ARCH}-go-package,target=/go/pkg go mod download -x
+RUN go mod download -x
 COPY . /go/src/github/sarvalabs/moichain
-RUN --mount=type=cache,id=linux-${TARGET_ARCH}-go-build,target=/root/.cache/gobuild --mount=type=cache,id=linux-${TARGET_ARCH}-go-package,target=/go/pkg go build -trimpath -o /bin/moipod ./cmd/moipod/
+RUN go build -trimpath -o /bin/moipod ./cmd/moipod/
+
+# second-stage
 
 # amd64 arch
 # alpine:3.18.3
 # sha256:c5c5fda71656f28e49ac9c5416b3643eaa6a108a8093151d6d1afc9463be8e33
 
 FROM alpine@sha256:c5c5fda71656f28e49ac9c5416b3643eaa6a108a8093151d6d1afc9463be8e33
+
 VOLUME /data
 ARG GIT_COMMIT
 ENV GIT_COMMIT="${GIT_COMMIT}"
 
-COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
 COPY --from=build /bin/moipod /bin/moipod
 
 ENTRYPOINT [ "/bin/moipod" ]

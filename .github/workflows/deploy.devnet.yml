@@ -8,6 +8,7 @@ on:
 
 jobs:
   ci:
+    if: github.event.pull_request.merged == true
     name: Continuous Integration
     uses: ./.github/workflows/ci.yml
     secrets:
@@ -15,6 +16,7 @@ jobs:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
   
   stop:
+    if: github.event.pull_request.merged == true
     name: Stop Containers
     needs: ci
     uses: ./.github/workflows/stop.yml
@@ -43,13 +45,15 @@ jobs:
       PROXY_PORT: ${{ secrets.PROXY_PORT }}
 
   cd:
-    name: Continuous Deployment
+    if: github.event.pull_request.merged == true
+    name: push to ghcr
     needs: stop
-    uses: ./.github/workflows/moipod-docker.yml
+    uses: ./.github/workflows/ghcr.yml
     secrets:
       ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
 
   start:
+    if: github.event.pull_request.merged == true
     name: Start Containers
     needs: cd
     uses: ./.github/workflows/start.yml
