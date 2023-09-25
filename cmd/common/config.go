@@ -152,6 +152,7 @@ type NetworkConfig struct {
 	MaxPeers           uint          `json:"max_peers"`
 	RelayNodeAddr      string        `json:"relay_node_addr"`
 	Libp2pAddr         []string      `json:"libp2p_addr"`
+	PublicP2pAddr      []string      `json:"public_p2p_addr"`
 	JSONRPCAddr        string        `json:"jsonrpc_addr"`
 	MTQ                float64       `json:"mtq"`
 	CorsAllowedOrigins []string      `json:"cors_allowed_origins"`

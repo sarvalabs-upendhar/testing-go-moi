@@ -75,6 +75,7 @@ type NetworkConfig struct {
 	MaxPeers           uint
 	RelayNodeAddr      string
 	ListenAddresses    []maddr.Multiaddr
+	PublicP2pAddresses []maddr.Multiaddr
 	JSONRPCAddr        *net.TCPAddr
 	MTQ                float64
 	CorsAllowedOrigins []string
@@ -115,12 +116,13 @@ func DefaultDevnetConfig(path string) *Config {
 			Mode:    crypto.GuardianMode,
 		},
 		Network: &NetworkConfig{
-			ListenAddresses:   make([]maddr.Multiaddr, 0),
-			BootstrapPeers:    make([]maddr.Multiaddr, 0),
-			MaxPeers:          0, // current we don't limit the no.of peers
-			InboundConnLimit:  DefaultInboundConnLimit,
-			OutboundConnLimit: DefaultOutboundConnLimit,
-			DiscoveryInterval: DefaultDiscoveryInterval,
+			ListenAddresses:    make([]maddr.Multiaddr, 0),
+			PublicP2pAddresses: make([]maddr.Multiaddr, 0),
+			BootstrapPeers:     make([]maddr.Multiaddr, 0),
+			MaxPeers:           0, // current we don't limit the no.of peers
+			InboundConnLimit:   DefaultInboundConnLimit,
+			OutboundConnLimit:  DefaultOutboundConnLimit,
+			DiscoveryInterval:  DefaultDiscoveryInterval,
 		},
 		Chain: &ChainConfig{
 			GenesisFilePath: path + "/genesis.json",

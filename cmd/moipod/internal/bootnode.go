@@ -77,7 +77,7 @@ func startBootNode() {
 	}
 
 	// 0.0.0.0 will listen on any interface device.
-	sourceMultiAddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", ipAddress, portNumber))
+	sourceMultiAddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", "0.0.0.0", portNumber))
 	if err != nil {
 		panic(err)
 	}
@@ -116,6 +116,19 @@ func startBootNode() {
 		panic(err)
 	}
 
+	addrsFactory := func(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
+		if ipAddress != "0.0.0.0" {
+			addr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", ipAddress, portNumber))
+			if err != nil {
+				panic(err)
+			}
+
+			addrs = append(addrs, addr)
+		}
+
+		return addrs
+	}
+
 	// libp2p.New constructs a new libp2p Host.
 	// Other options can be added here.
 	p2pHost, err := libp2p.New(
@@ -127,6 +140,7 @@ func startBootNode() {
 		libp2p.ConnectionManager(mgr),
 		selfRouting,
 		libp2p.ResourceManager(resourceManager),
+		libp2p.AddrsFactory(addrsFactory),
 	)
 	if err != nil {
 		panic(err)

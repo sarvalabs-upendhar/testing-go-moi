@@ -306,6 +306,14 @@ func (s *Server) getLibp2pHostOptions() (libp2p.Option, error) {
 		panic(err)
 	}
 
+	addrsFactory := func(addrs []maddr.Multiaddr) []maddr.Multiaddr {
+		if len(s.cfg.PublicP2pAddresses) > 0 {
+			addrs = append(addrs, s.cfg.PublicP2pAddresses...)
+		}
+
+		return addrs
+	}
+
 	return libp2p.ChainOptions(
 		// Enable UPnP and hole punching
 		s.getSelfRouting(),
@@ -316,6 +324,7 @@ func (s *Server) getLibp2pHostOptions() (libp2p.Option, error) {
 		libp2p.BandwidthReporter(newBandwidthReporter(s.metrics, libp2pMetrics.NewBandwidthCounter())),
 		libp2p.ConnectionManager(mgr),
 		libp2p.ResourceManager(resourceManager),
+		libp2p.AddrsFactory(addrsFactory),
 	), nil
 }
 
