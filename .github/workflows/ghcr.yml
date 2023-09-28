@@ -7,18 +7,18 @@ on:
       ACCESS_TOKEN:
         required: true
 
-  workflow_dispatch:
-    inputs:
-      buildImage: 
-        description: |-
-          which image you want to build?
-        required: true
-        type: choice
-        default: "moipod"
-        options:
-          - moipod
-          - mcutils
-          - logiclab
+  workflow_dispatch: {}
+    # inputs:
+    #   buildImage: 
+    #     description: |-
+    #       which image you want to build?
+    #     required: true
+    #     type: choice
+    #     default: "moipod"
+    #     options:
+    #       - moipod
+    #       - mcutils
+    #       - logiclab
           
 
 jobs:
@@ -39,21 +39,21 @@ jobs:
           password: ${{ secrets.ACCESS_TOKEN }}
           logout: true
 
-      - name: Build, & Push ${{ github.event.inputs.buildImage }} container image ( dispatch_event )
-        if: github.event.pull_request.merged != true  && github.event_name == 'workflow_dispatch'
-        # https://github.com/docker/build-push-action/releases/tag/v5.0.0
-        uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09 # v5.0.0
-        with:
-          context: .
-          push: true
-          file: ./docker/${{ github.event.inputs.buildImage }}/internal.amd64
-          tags: "ghcr.io/sarvalabs/${{ github.event.inputs.buildImage }}:latest"
-          build-args: |
-            GIT_COMMIT=${{ github.sha }}
-            ACCESS_TOKEN=${{ secrets.ACCESS_TOKEN }}
+      # - name: Build, & Push ${{ github.event.inputs.buildImage }} container image ( dispatch_event )
+      #   if: github.event.pull_request.merged != true  && github.event_name == 'workflow_dispatch'
+      #   # https://github.com/docker/build-push-action/releases/tag/v5.0.0
+      #   uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09 # v5.0.0
+      #   with:
+      #     context: .
+      #     push: true
+      #     file: ./docker/${{ github.event.inputs.buildImage }}/internal.amd64
+      #     tags: "ghcr.io/sarvalabs/${{ github.event.inputs.buildImage }}:latest"
+      #     build-args: |
+      #       GIT_COMMIT=${{ github.sha }}
+      #       ACCESS_TOKEN=${{ secrets.ACCESS_TOKEN }}
 
       - name: Build, & Push moipod container image ( pr_merge_event )
-        if: (github.event.pull_request.merged == true  || github.event.push == true) && github.event_name == 'workflow_call'
+        # if: (github.event.pull_request.merged == true  || github.event.push == true) && github.event_name == 'workflow_call'
         # https://github.com/docker/build-push-action/releases/tag/v5.0.0
         uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09 # v5.0.0
         with:
