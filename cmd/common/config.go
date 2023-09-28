@@ -22,6 +22,7 @@ type Config struct {
 	DB             DBConfig        `json:"database"`
 	Telemetry      Telemetry       `json:"telemetry"`
 	LogFilePath    string          `json:"logfile"`
+	NetworkID      string          `json:"network_id"`
 }
 
 func DefaultBabylonConfig(path string) *Config {
@@ -81,8 +82,11 @@ func DefaultBabylonConfig(path string) *Config {
 		},
 		Telemetry: Telemetry{
 			PrometheusAddr: "",
+			OtlpAddress:    "",
+			Token:          "",
 		},
 		LogFilePath: path + config.DefaultLogDirectory,
+		NetworkID:   strconv.Itoa(config.BabylonID),
 	}
 }
 
@@ -140,8 +144,11 @@ func DefaultDevnetConfig(path string) *Config {
 		},
 		Telemetry: Telemetry{
 			PrometheusAddr: "",
+			OtlpAddress:    "",
+			Token:          "",
 		},
 		LogFilePath: path + config.DefaultLogDirectory,
+		NetworkID:   strconv.Itoa(config.DevnetID),
 	}
 }
 
@@ -185,7 +192,8 @@ type DBConfig struct {
 
 type Telemetry struct {
 	PrometheusAddr string `json:"prometheus_addr"`
-	JaegerAddr     string `json:"jaeger_addr"`
+	OtlpAddress    string `json:"otlp_addr"`
+	Token          string `json:"token"`
 }
 
 type ConsensusConfig struct {

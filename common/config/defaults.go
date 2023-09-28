@@ -22,6 +22,9 @@ const (
 	DefaultWatchDogURL       = "https://babylon-watchdog.moi.techbology/add"
 	DefaultICSRequestTimeout = 2500 * time.Millisecond
 	DefaultDiscoveryInterval = 60 * time.Second
+	LocalID                  = 111
+	DevnetID                 = 112
+	BabylonID                = 113
 )
 
 // IxPool defaults

@@ -13,7 +13,8 @@ var (
 	accountCount           int
 	count                  int
 	bootnode               string
-	jaegerAddress          string
+	otlpAddress            string
+	token                  string
 	password               string
 	peerListFilePath       string
 	genesisFilePath        string

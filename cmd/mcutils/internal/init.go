@@ -60,10 +60,16 @@ func parseFlags(initcmd *cobra.Command) {
 		"Bootnode Multi-Address",
 	)
 	initcmd.PersistentFlags().StringVar(
-		&jaegerAddress,
-		"jaeger-address",
+		&otlpAddress,
+		"otlp-address",
 		"",
-		"Jaeger Address",
+		"OTLP Address",
+	)
+	initcmd.PersistentFlags().StringVar(
+		&token,
+		"token",
+		"",
+		"Token",
 	)
 	initcmd.PersistentFlags().StringVar(
 		&password,
@@ -152,12 +158,14 @@ func CreateConfigFile(datadir string, index int) []byte {
 		},
 		Telemetry: cmdCommon.Telemetry{
 			PrometheusAddr: ":" + strconv.Itoa(config.DefaultPrometheusPort+index),
-			JaegerAddr:     jaegerAddress,
+			OtlpAddress:    otlpAddress,
+			Token:          token,
 		},
 		Vault: cmdCommon.VaultConfig{
 			DataDir:      datadir,
 			NodePassword: password,
 		},
+		NetworkID: strconv.Itoa(config.LocalID),
 	}
 
 	if writeLogsToFile {
