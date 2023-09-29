@@ -136,7 +136,19 @@ func (jq *JobQueue) RemoveJob(job *SyncJob) error {
 		log.Println("Error sending pending account event", "err", err)
 	}
 
+	if err := jq.publishEventJobDone(job.jobStateEvent()); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+func (jq *JobQueue) post(ev interface{}) error {
+	return jq.mux.Post(ev)
+}
+
+func (jq *JobQueue) publishEventJobDone(state eventDataJobState) error {
+	return jq.post(eventJobDone{state})
 }
 
 type SyncJob struct {
