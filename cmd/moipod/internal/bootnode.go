@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
+
 	"github.com/libp2p/go-libp2p"
 	"github.com/multiformats/go-multiaddr"
 	cmdCommon "github.com/sarvalabs/go-moi/cmd/common"
@@ -24,6 +26,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/routing"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
+	quic "github.com/libp2p/go-libp2p/p2p/transport/quic"
 	"github.com/spf13/cobra"
 )
 
@@ -133,6 +136,10 @@ func startBootNode() {
 	// Other options can be added here.
 	p2pHost, err := libp2p.New(
 		libp2p.ListenAddrs(sourceMultiAddr),
+		libp2p.ChainOptions(
+			libp2p.Transport(tcp.NewTCPTransport),
+			libp2p.Transport(quic.NewTransport),
+		),
 		libp2p.NATPortMap(),
 		libp2p.ForceReachabilityPublic(),
 		libp2p.EnableNATService(),

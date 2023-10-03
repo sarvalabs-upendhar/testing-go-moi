@@ -35,7 +35,12 @@ func DefaultBabylonConfig(path string) *Config {
 			Mode:    crypto.GuardianMode,
 		},
 		Network: NetworkConfig{
-			Libp2pAddr: []string{"/ip4/0.0.0.0/tcp/" + strconv.Itoa(config.DefaultListenerPort)},
+			Libp2pAddr: []string{
+				"/ip4/0.0.0.0/tcp/" + strconv.Itoa(config.DefaultListenerPort),
+				"/ip4/0.0.0.0/udp/" + strconv.Itoa(config.DefaultListenerPort) + "/quic-v1",
+				"/ip6/::/tcp/" + strconv.Itoa(config.DefaultListenerPort),
+				"/ip6/::/udp/" + strconv.Itoa(config.DefaultListenerPort) + "/quic-v1",
+			},
 			BootStrapPeers: []string{
 				"/ip4/65.109.138.198/tcp/5000/p2p/16Uiu2HAmNPceqBKGNWXGTKTtWDPty4UhncdhB84VbDEPpn1H11Cb",
 				"/ip4/135.181.206.93/tcp/5000/p2p/16Uiu2HAmFXiKHS3GWgdS1V36uUBDUjigf3RZRJCrjDFFMjexR3V8",
@@ -100,7 +105,12 @@ func DefaultDevnetConfig(path string) *Config {
 			Mode:    crypto.GuardianMode,
 		},
 		Network: NetworkConfig{
-			Libp2pAddr:         []string{"/ip4/0.0.0.0/tcp/" + strconv.Itoa(config.DefaultListenerPort)},
+			Libp2pAddr: []string{
+				"/ip4/0.0.0.0/tcp/" + strconv.Itoa(config.DefaultListenerPort),
+				"/ip4/0.0.0.0/udp/" + strconv.Itoa(config.DefaultListenerPort) + "/quic-v1",
+				"/ip6/::/tcp/" + strconv.Itoa(config.DefaultListenerPort),
+				"/ip6/::/udp/" + strconv.Itoa(config.DefaultListenerPort) + "/quic-v1",
+			},
 			BootStrapPeers:     make([]string, 0),
 			MaxPeers:           0, // current we don't limit the no.of peers
 			InboundConnLimit:   config.DefaultInboundConnLimit,

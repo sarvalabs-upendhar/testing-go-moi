@@ -113,6 +113,9 @@ func CreateConfigFile(datadir string, index int) []byte {
 		Network: cmdCommon.NetworkConfig{
 			Libp2pAddr: []string{
 				"/ip4/0.0.0.0/tcp/" + strconv.Itoa(port+index),
+				"/ip4/0.0.0.0/udp/" + strconv.Itoa(port+index) + "/quic-v1",
+				"/ip6/::/tcp/" + strconv.Itoa(port+index),
+				"/ip6/::/udp/" + strconv.Itoa(port+index) + "/quic-v1",
 			},
 			JSONRPCAddr: "0.0.0.0:" + strconv.Itoa(config.DefaultJSONRPCPort+index),
 			BootStrapPeers: []string{
