@@ -833,9 +833,9 @@ func printEventsReceived(
 	logger.Debug(syncerEvents[SystemAcc], events.SystemAccSync)
 
 	for acc := range events.accounts {
-		logger.Trace("address : ", acc)
+		logger.Debug("address : ", acc)
 
-		logger.Trace("expected events", ":", events.accounts[acc])
+		logger.Debug("expected events", ":", events.accounts[acc])
 	}
 
 	logger.Debug("")
@@ -1009,7 +1009,6 @@ func SubscribeAndListenForSyncEvents(
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Debug("printing received events")
 			printEventsReceived(logger, expectedEvents, bucketSyncCount, systemAccSyncCount, accountLevelSync)
 
 			require.FailNow(t, "timed out waiting for events")

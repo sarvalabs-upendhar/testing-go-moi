@@ -149,14 +149,14 @@ type Syncer struct {
 	jobWorkerCount      uint32
 	workerSignal        chan struct{}
 	isPrincipalSyncDone bool
-	isBucketSyncDone    bool
+	bucketSyncDone      bool
 	pendingAccounts     uint64
 	consensusSlots      *ktypes.Slots
 	lastActiveTimeStamp uint64
 	accountsLock        sync.RWMutex
 	lockedAccounts      map[common.Address]common.Hash
 	metrics             *Metrics
-	isInitialSyncDone   bool
+	initialSyncDone     bool
 	pendingMsgChan      chan *TesseractInfo
 	pendingMsgQueue     []*TesseractInfo
 	init                sync.Once
@@ -348,32 +348,32 @@ func (s *Syncer) jobClosure(job *SyncJob) error {
 	return nil
 }
 
-func (s *Syncer) getIsInitialSyncDone() bool {
+func (s *Syncer) isInitialSyncDone() bool {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
-	return s.isInitialSyncDone
+	return s.initialSyncDone
 }
 
-func (s *Syncer) setIsInitialSyncDone(val bool) {
+func (s *Syncer) setInitialSyncDone(val bool) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	s.isInitialSyncDone = val
+	s.initialSyncDone = val
 }
 
-func (s *Syncer) getIsBucketSyncDone() bool {
+func (s *Syncer) isBucketSyncDone() bool {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
-	return s.isBucketSyncDone
+	return s.bucketSyncDone
 }
 
-func (s *Syncer) setIsBucketSyncDone(val bool) {
+func (s *Syncer) setBucketSyncDone(val bool) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	s.isBucketSyncDone = val
+	s.bucketSyncDone = val
 }
 
 func (s *Syncer) jobProcessor(job *SyncJob) error {
@@ -432,6 +432,8 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 		}
 	}
 
+	job.setLatticeSyncInProgress(true)
+
 	group, groupCtx := errgroup.WithContext(context.Background())
 
 	group.Go(func() error {
@@ -440,6 +442,8 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 
 			return errors.Wrap(err, "failed to sync lattice")
 		}
+
+		job.setLatticeSyncInProgress(false)
 
 		return nil
 	})
@@ -455,6 +459,13 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 			}
 
 			tsInfo = job.tesseractQueue.Peek()
+
+			// If the sync lattice routine has finished and the tesseract queue is empty,
+			// exit this routine because there is no one to fill the tesseract queue.
+			if tsInfo == nil && !job.isLatticeSyncInProgress() {
+				return nil
+			}
+
 			for tsInfo == nil {
 				select {
 				case <-groupCtx.Done():
@@ -574,7 +585,7 @@ func (s *Syncer) updatePrincipalSyncStatus() error {
 		atomic.AddUint64(&s.pendingAccounts, ^uint64(0))
 	}
 
-	if atomic.LoadUint64(&s.pendingAccounts) <= uint64(0) && s.getIsBucketSyncDone() {
+	if atomic.LoadUint64(&s.pendingAccounts) <= uint64(0) && s.isBucketSyncDone() {
 		s.isPrincipalSyncDone = true
 
 		return s.db.UpdatePrincipalSyncStatus()
@@ -761,7 +772,7 @@ func (s *Syncer) initSync() error {
 		s.logger.Info("Principal sync was finished at", "unix-time", principalSyncTimeStamp)
 	}
 
-	if s.getIsInitialSyncDone() {
+	if s.isInitialSyncDone() {
 		s.logger.Info("Initial sync is already done")
 
 		return nil
@@ -1019,7 +1030,7 @@ func (s *Syncer) syncBuckets(kramaID id.KramaID, attempts int) error {
 			}
 		}
 
-		s.setIsBucketSyncDone(true)
+		s.setBucketSyncDone(true)
 
 		return nil
 	})
@@ -1896,7 +1907,7 @@ func (s *Syncer) msgHandler(msg *pubsub.Message) error {
 		case <-s.ctx.Done():
 			return s.ctx.Err()
 		default:
-			if !s.getIsInitialSyncDone() {
+			if !s.isInitialSyncDone() {
 				s.pendingMsgChan <- tsInfo
 
 				return nil
@@ -1976,7 +1987,7 @@ func (s *Syncer) Start(minConnectedPeers int) error {
 			return
 		}
 
-		s.setIsInitialSyncDone(true)
+		s.setInitialSyncDone(true)
 
 		s.logger.Info("Initial sync successful")
 	}()
@@ -1999,7 +2010,7 @@ func (s *Syncer) startSyncEventHandler() {
 	for event := range sub.Chan() {
 		req, ok := event.Data.(utils.SyncRequestEvent)
 		if ok {
-			if !s.getIsInitialSyncDone() {
+			if !s.isInitialSyncDone() {
 				continue
 			}
 
@@ -2051,7 +2062,7 @@ func (s *Syncer) GetNodeSyncStatus() *args.NodeSyncStatus {
 		TotalPendingAccounts:  hexutil.Uint64(totalPendingAccounts),
 		IsPrincipalSyncDone:   isPrincipalSyncDone,
 		PrincipalSyncDoneTime: hexutil.Uint64(principalSyncTimeStamp),
-		IsInitialSyncDone:     s.getIsInitialSyncDone(),
+		IsInitialSyncDone:     s.isInitialSyncDone(),
 	}
 }
 

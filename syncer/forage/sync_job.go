@@ -152,20 +152,20 @@ func (jq *JobQueue) publishEventJobDone(state eventDataJobState) error {
 }
 
 type SyncJob struct {
-	mtx             sync.RWMutex
-	logger          hclog.Logger
-	db              store
-	address         common.Address
-	mode            common.SyncMode
-	snapDownloaded  bool
-	expectedHeight  uint64
-	currentHeight   uint64
-	jobState        JobState
-	lastModifiedAt  time.Time
-	hash            common.Hash
-	tesseractQueue  *TesseractQueue
-	tesseractSignal chan struct{}
-	bestPeers       map[id.KramaID]struct{}
+	mtx                   sync.RWMutex
+	logger                hclog.Logger
+	db                    store
+	address               common.Address
+	mode                  common.SyncMode
+	snapDownloaded        bool
+	expectedHeight        uint64
+	currentHeight         uint64
+	jobState              JobState
+	lastModifiedAt        time.Time
+	tesseractQueue        *TesseractQueue
+	tesseractSignal       chan struct{}
+	bestPeers             map[id.KramaID]struct{}
+	latticeSyncInProgress bool
 }
 
 func SyncJobFromCanonicalInfo(
@@ -189,9 +189,22 @@ func SyncJobFromCanonicalInfo(
 		expectedHeight:  data.ExpectedHeight,
 		lastModifiedAt:  *modifiedTime,
 		tesseractQueue:  NewTesseractQueue(),
-		hash:            data.CurrentHash,
 		tesseractSignal: make(chan struct{}, 1),
 	}, nil
+}
+
+func (j *SyncJob) isLatticeSyncInProgress() bool {
+	j.mtx.RLock()
+	defer j.mtx.RUnlock()
+
+	return j.latticeSyncInProgress
+}
+
+func (j *SyncJob) setLatticeSyncInProgress(val bool) {
+	j.mtx.Lock()
+	defer j.mtx.Unlock()
+
+	j.latticeSyncInProgress = val
 }
 
 func (j *SyncJob) bestPeerLen() int {
@@ -331,7 +344,6 @@ func (j *SyncJob) canonicalJob() (*common.AccountSyncStatus, error) {
 		Address:            j.address,
 		SnapshotDownloaded: j.snapDownloaded,
 		Mode:               j.mode,
-		CurrentHash:        j.hash,
 		State:              int32(j.jobState),
 		LastModifiedAt:     rawTime,
 		ExpectedHeight:     j.expectedHeight,
@@ -351,5 +363,6 @@ func (j *SyncJob) signalNewTesseract() {
 func (j *SyncJob) jobStateEvent() eventDataJobState {
 	return eventDataJobState{
 		address: j.address,
+		height:  j.getCurrentHeight(),
 	}
 }

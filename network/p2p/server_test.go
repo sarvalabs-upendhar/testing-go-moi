@@ -535,6 +535,8 @@ func TestStreamHandler_Already_RegisteredPeer(t *testing.T) {
 }
 
 func TestDiscover_CheckEvents(t *testing.T) {
+	t.Parallel()
+
 	bootNodes := getBootstrapNodes(t, 2)
 	defaultConfig := getParamsToCreateMultipleServers(
 		t,
@@ -1063,6 +1065,8 @@ func TestSubscribe_Twice_OnSameTopic(t *testing.T) {
 }
 
 func TestSubscribe_CheckMsgOnTopic(t *testing.T) {
+	t.Parallel()
+
 	// used to wait until handler executes message published on topic
 	response := make(chan int)
 
@@ -1140,6 +1144,8 @@ func TestBroadcast_UnSubscribedTopic(t *testing.T) {
 }
 
 func TestBroadcast_CheckMsgOnTopic(t *testing.T) {
+	t.Parallel()
+
 	response := make(chan int)
 
 	bootNodes := getBootstrapNodes(t, 2)
@@ -1240,6 +1246,8 @@ func TestJoinPubSubTopic(t *testing.T) {
 }
 
 func TestSendHelloMessage_CheckMsgOnTopic(t *testing.T) {
+	t.Parallel()
+
 	// used to wait until handler executes message published on topic
 	response := make(chan int)
 
@@ -1280,6 +1288,8 @@ func TestSendHelloMessage_CheckMsgOnTopic(t *testing.T) {
 }
 
 func TestGetRandomNode_CheckInRoutingTable(t *testing.T) {
+	t.Parallel()
+
 	bootNodes := getBootstrapNodes(t, 2)
 	addresses := getMultiAddresses(t, bootNodes)
 	paramsMap := map[int]*CreateServerParams{}
