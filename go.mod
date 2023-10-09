@@ -42,7 +42,7 @@ require (
 	github.com/prometheus/client_golang v1.16.0
 	github.com/sarvalabs/battleground v0.1.1
 	github.com/sarvalabs/go-moi-engineio v0.1.1
-	github.com/sarvalabs/go-pisa v0.1.5
+	github.com/sarvalabs/go-pisa v0.1.6
 	github.com/sarvalabs/go-polo v0.3.4
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.8.4
@@ -95,7 +95,7 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.5 // indirect
-	github.com/holiman/uint256 v1.2.2 // indirect
+	github.com/holiman/uint256 v1.2.3 // indirect
 	github.com/huin/goupnp v1.2.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/ipfs/boxo v0.10.0 // indirect
@@ -156,7 +156,6 @@ require (
 	github.com/quic-go/webtransport-go v0.5.3 // indirect
 	github.com/raulk/go-watchdog v1.3.0 // indirect
 	github.com/rivo/uniseg v0.4.4 // indirect
-	github.com/rogpeppe/go-internal v1.11.0 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1 // indirect
