@@ -460,18 +460,19 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 
 			tsInfo = job.tesseractQueue.Peek()
 
-			// If the sync lattice routine has finished and the tesseract queue is empty,
-			// exit this routine because there is no one to fill the tesseract queue.
-			if tsInfo == nil && !job.isLatticeSyncInProgress() {
-				return nil
-			}
-
 			for tsInfo == nil {
+				// If the sync lattice routine has finished and the tesseract queue is empty,
+				// exit this routine because there is no one to fill the tesseract queue.
+				if !job.isLatticeSyncInProgress() {
+					return nil
+				}
+
 				select {
 				case <-groupCtx.Done():
 					return groupCtx.Err()
 				case <-job.tesseractSignal:
 					tsInfo = job.tesseractQueue.Peek()
+				case <-time.After(50 * time.Millisecond):
 				}
 			}
 
@@ -1443,6 +1444,13 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 
 	grid := s.gridStore.GetGrid(msg.tesseract.GridHash())
 	if grid == nil {
+		// in case if other job already executed, added tesseracts,
+		// and removed them from grid store then send this job to sleep state
+		// so that this job updates its current height next time
+		if s.db.HasTesseract(msg.tesseract.Hash()) {
+			return false, nil
+		}
+
 		grid = s.gridStore.NewGrid(msg.tesseract.GridHash())
 	}
 
