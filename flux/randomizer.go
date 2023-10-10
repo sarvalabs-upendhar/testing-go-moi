@@ -102,12 +102,12 @@ func (r *Randomizer) messageHandler(stream network.Stream) {
 	r.metrics.captureNumOfRequests(1)
 
 	defer func() {
-		if err := stream.Close(); err != nil {
-			r.logger.Error("Error closing flux stream", "err", err)
+		if err := stream.Reset(); err != nil {
+			r.logger.Error("Error closing flux stream from receiver", "err", err)
 		}
 	}()
-	// Create a new read/write buffer
 
+	// Create a new read/write buffer
 	reader := msgio.NewReader(stream)
 
 	buffer, err := reader.ReadMsg()
@@ -456,7 +456,7 @@ func (r *Randomizer) SendFluxMessage(peerID peer.ID, msgType networkmsg.MsgType,
 
 	defer func() {
 		if err := stream.Close(); err != nil {
-			r.logger.Error("Error closing flux stream", "err", err)
+			r.logger.Error("Error closing flux stream from sender", "err", err)
 		}
 	}()
 

@@ -2,10 +2,11 @@ package forage
 
 import (
 	"context"
-	"fmt"
 	"strconv"
+	"sync"
 	"testing"
-	"time"
+
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/sarvalabs/go-moi/common/config"
@@ -33,10 +34,12 @@ import (
 // TestFullSync checks if client syncs system accounts, normal accounts through system account sync,
 // bucket sync, snap sync, tesseract sync and jobs are done
 func TestFullSync(t *testing.T) {
-	clientCtx, clientCancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	t.Parallel()
+
+	clientCtx, clientCancel := context.WithTimeout(context.Background(), maxTimeout)
 	defer clientCancel()
 
-	serverCtx, serverCancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	serverCtx, serverCancel := context.WithTimeout(context.Background(), maxTimeout)
 	defer serverCancel()
 
 	defaultConfig := getParamsToCreateMultipleServers(
@@ -65,14 +68,12 @@ func TestFullSync(t *testing.T) {
 		defaultSyncerConfig(),
 		servers[0],
 		&utils.TypeMux{},
-		&utils.TypeMux{},
 		&MockAgora{
 			newSession: func(address common.Address) (syncer.Session, error) {
 				return newMockSession(address), nil
 			},
 		},
 		clientPM,
-		newMockLattice(clientPM),
 		newMockStateManager(),
 		types.NewSlots(2, 3),
 		"CLIENT",
@@ -84,10 +85,8 @@ func TestFullSync(t *testing.T) {
 		defaultSyncerConfig(),
 		servers[1],
 		&utils.TypeMux{},
-		&utils.TypeMux{},
 		newMockAgora(),
 		serverPM,
-		newMockLattice(serverPM),
 		newMockStateManager(),
 		types.NewSlots(2, 3),
 		"SERVER",
@@ -97,22 +96,24 @@ func TestFullSync(t *testing.T) {
 	addresses := tests.GetAddresses(t, 2)
 
 	accountsToSync := map[common.Address]int{
-		common.GuardianLogicAddr: 100,
-		common.SargaAddress:      100,
-		addresses[0]:             100,
-		addresses[1]:             100,
+		common.GuardianLogicAddr: 4,
+		common.SargaAddress:      4,
+		addresses[0]:             4,
+		addresses[1]:             4,
 	}
 
 	ts := generateTesseractsByMap(t, accountsToSync)
 	storeTesseractsInDB(t, serverSyncer, ts...)
 
-	fmt.Println("CLIENT  ", servers[0].GetKramaID())
-	fmt.Println("SERVER  ", servers[1].GetKramaID())
+	clientSyncer.logger.Info(string(servers[0].GetKramaID()))
+	serverSyncer.logger.Info(string(servers[1].GetKramaID()))
 
-	err := clientSyncer.Start(1)
+	serverSyncer.setInitialSyncDone(true)
+
+	err := serverSyncer.Start(1)
 	require.NoError(t, err)
 
-	err = serverSyncer.Start(1)
+	err = clientSyncer.Start(1)
 	require.NoError(t, err)
 
 	expectedEvents := SyncEvents{
@@ -125,14 +126,16 @@ func TestFullSync(t *testing.T) {
 		expectedEvents.accounts[addr] = newAccountSpecificEvents(1, 1, 0, height)
 	}
 
-	SubscribeAndListenForSyncEvents(t, clientCtx, clientSyncer.testMux, expectedEvents)
+	SubscribeAndListenForSyncEvents(t, clientCtx, testingLogger(t.Name()), clientSyncer.mux, expectedEvents)
 	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, false, ts...)
 }
 
 // TestFullSync_ChooseBestPeer, makes sure that the client syncs to the highest heights for all accounts,
 // even when not all servers have the latest state of all accounts.
 func TestFullSync_ChooseBestPeer(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), maxTimeout)
 	defer cancel()
 
 	defaultConfig := getParamsToCreateMultipleServers(
@@ -167,14 +170,12 @@ func TestFullSync_ChooseBestPeer(t *testing.T) {
 		defaultSyncerConfig(),
 		servers[3],
 		&utils.TypeMux{},
-		&utils.TypeMux{},
 		&MockAgora{
 			newSession: func(address common.Address) (syncer.Session, error) {
 				return newMockSession(address), nil
 			},
 		},
 		pm[3],
-		newMockLattice(pm[3]),
 		newMockStateManager(),
 		types.NewSlots(2, 3),
 		"CLIENT",
@@ -187,10 +188,8 @@ func TestFullSync_ChooseBestPeer(t *testing.T) {
 			defaultSyncerConfig(),
 			servers[i],
 			&utils.TypeMux{},
-			&utils.TypeMux{},
 			newMockAgora(),
 			pm[i],
-			newMockLattice(pm[i]),
 			newMockStateManager(),
 			types.NewSlots(2, 3),
 			"SERVER"+"-"+strconv.Itoa(i),
@@ -201,9 +200,9 @@ func TestFullSync_ChooseBestPeer(t *testing.T) {
 	addr := tests.RandomAddress(t)
 
 	accountsToSync := map[common.Address]int{
-		common.GuardianLogicAddr: 100,
-		common.SargaAddress:      100,
-		addr:                     100,
+		common.GuardianLogicAddr: 10,
+		common.SargaAddress:      10,
+		addr:                     10,
 	}
 
 	ts1 := generateTesseracts(t, common.GuardianLogicAddr, 0, accountsToSync[common.GuardianLogicAddr], common.NilHash)
@@ -212,28 +211,30 @@ func TestFullSync_ChooseBestPeer(t *testing.T) {
 
 	storeTesseractsInDB(t, serverSyncers[0], ts1...)
 	storeTesseractsInDB(t, serverSyncers[0], ts2...)
-	storeTesseractsInDB(t, serverSyncers[0], ts3[0:75]...)
+	storeTesseractsInDB(t, serverSyncers[0], ts3[0:7]...)
 
-	storeTesseractsInDB(t, serverSyncers[1], ts1[0:25]...)
+	storeTesseractsInDB(t, serverSyncers[1], ts1[0:3]...)
 	storeTesseractsInDB(t, serverSyncers[1], ts2...)
 	storeTesseractsInDB(t, serverSyncers[1], ts3...)
 
 	storeTesseractsInDB(t, serverSyncers[2], ts1...)
-	storeTesseractsInDB(t, serverSyncers[2], ts2[0:20]...)
+	storeTesseractsInDB(t, serverSyncers[2], ts2[0:2]...)
 	storeTesseractsInDB(t, serverSyncers[2], ts3...)
 
-	fmt.Println("CLIENT  ", servers[3].GetKramaID())
-	fmt.Println("SERVER  0 ", servers[0].GetKramaID())
-	fmt.Println("SERVER  1 ", servers[1].GetKramaID())
-	fmt.Println("SERVER  2 ", servers[2].GetKramaID())
-
-	err := clientSyncer.Start(1)
-	require.NoError(t, err)
+	clientSyncer.logger.Info(string(servers[3].GetKramaID()))
+	serverSyncers[0].logger.Info(string(servers[0].GetKramaID()))
+	serverSyncers[1].logger.Info(string(servers[1].GetKramaID()))
+	serverSyncers[2].logger.Info(string(servers[2].GetKramaID()))
 
 	for i := 0; i < 3; i++ {
+		serverSyncers[i].setInitialSyncDone(true)
+
 		err := serverSyncers[i].Start(1)
 		require.NoError(t, err)
 	}
+
+	err := clientSyncer.Start(1)
+	require.NoError(t, err)
 
 	expectedEvents := SyncEvents{
 		bucketSync:    1,
@@ -245,7 +246,7 @@ func TestFullSync_ChooseBestPeer(t *testing.T) {
 		expectedEvents.accounts[addr] = newAccountSpecificEvents(1, 1, 0, height)
 	}
 
-	SubscribeAndListenForSyncEvents(t, ctx, clientSyncer.testMux, expectedEvents)
+	SubscribeAndListenForSyncEvents(t, ctx, testingLogger(t.Name()), clientSyncer.mux, expectedEvents)
 	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, false, ts1...)
 	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, false, ts2...)
 	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, false, ts3...)
@@ -254,7 +255,9 @@ func TestFullSync_ChooseBestPeer(t *testing.T) {
 // TestSync_FromBroadcastedTesseract checks if client can sync from tesseract broadcast by server
 // without executing tesseract using agora
 func TestSync_FromBroadcastedTesseract(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), maxTimeout)
 	defer cancel()
 
 	defaultConfig := getParamsToCreateMultipleServers(
@@ -282,14 +285,12 @@ func TestSync_FromBroadcastedTesseract(t *testing.T) {
 		defaultSyncerConfig(),
 		servers[0],
 		&utils.TypeMux{},
-		&utils.TypeMux{},
 		&MockAgora{
 			newSession: func(address common.Address) (syncer.Session, error) {
 				return newMockSession(address), nil
 			},
 		},
 		pm[0],
-		newMockLattice(pm[0]),
 		newMockStateManager(),
 		types.NewSlots(2, 3),
 		"CLIENT",
@@ -301,10 +302,8 @@ func TestSync_FromBroadcastedTesseract(t *testing.T) {
 		defaultSyncerConfig(),
 		servers[1],
 		&utils.TypeMux{},
-		&utils.TypeMux{},
 		newMockAgora(),
 		pm[1],
-		newMockLattice(pm[1]),
 		newMockStateManager(),
 		types.NewSlots(2, 3),
 		"SERVER",
@@ -314,22 +313,27 @@ func TestSync_FromBroadcastedTesseract(t *testing.T) {
 	addresses := tests.GetAddresses(t, 3)
 
 	accountsToSync := map[common.Address]int{
-		common.GuardianLogicAddr: 100,
-		common.SargaAddress:      100,
-		addresses[0]:             100,
-		addresses[1]:             100,
+		common.GuardianLogicAddr: 4,
+		common.SargaAddress:      4,
+		addresses[0]:             4,
+		addresses[1]:             4,
 	}
 
 	ts := generateTesseractsByMap(t, accountsToSync)
 	storeTesseractsInDB(t, serverSyncer, ts...)
 
-	fmt.Println("CLIENT  ", servers[0].GetKramaID())
-	fmt.Println("SERVER  ", servers[1].GetKramaID())
+	clientSyncer.logger.Info(string(servers[0].GetKramaID()))
+	serverSyncer.logger.Info(string(servers[1].GetKramaID()))
 
-	err := clientSyncer.Start(1)
+	clientSyncer.logger.Info(string(servers[0].GetKramaID()))
+	serverSyncer.logger.Info(string(servers[1].GetKramaID()))
+
+	serverSyncer.setInitialSyncDone(true)
+
+	err := serverSyncer.Start(1)
 	require.NoError(t, err)
 
-	err = serverSyncer.Start(1)
+	err = clientSyncer.Start(1)
 	require.NoError(t, err)
 
 	expectedEvents := SyncEvents{
@@ -342,14 +346,14 @@ func TestSync_FromBroadcastedTesseract(t *testing.T) {
 		expectedEvents.accounts[addr] = newAccountSpecificEvents(1, 1, 0, height)
 	}
 
-	SubscribeAndListenForSyncEvents(t, ctx, clientSyncer.testMux, expectedEvents)
+	SubscribeAndListenForSyncEvents(t, ctx, testingLogger(t.Name()), clientSyncer.mux, expectedEvents)
 	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, false, ts...)
 
 	accountsToSync = map[common.Address]int{
-		addresses[2]: 5,
+		addresses[2]: 3,
 	}
 
-	newTesseracts := generateTesseracts(t, addresses[2], 0, 5, common.NilHash)
+	newTesseracts := generateTesseracts(t, addresses[2], 0, 3, common.NilHash)
 
 	clientSyncer.agora = newMockAgora()
 	storeTesseractsInSession(t, clientSyncer, newTesseracts...)
@@ -365,16 +369,18 @@ func TestSync_FromBroadcastedTesseract(t *testing.T) {
 		expectedEvents.accounts[addr] = newAccountSpecificEvents(0, 0, 0, height)
 	}
 
-	SubscribeAndListenForSyncEvents(t, ctx, clientSyncer.testMux, expectedEvents)
+	SubscribeAndListenForSyncEvents(t, ctx, testingLogger(t.Name()), clientSyncer.mux, expectedEvents)
 	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, false, newTesseracts...)
 }
 
 // TestSync_FromRejoining checks When client restarted, sarga tesseracts should sync through agora
 // and normal account tesseracts should sync through snap sync
 func TestSync_FromRejoining(t *testing.T) {
-	clientCtx, clientCancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	t.Parallel()
 
-	serverCtx, serverCancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	clientCtx, clientCancel := context.WithTimeout(context.Background(), maxTimeout)
+
+	serverCtx, serverCancel := context.WithTimeout(context.Background(), maxTimeout)
 	defer serverCancel()
 
 	defaultConfig := getParamsToCreateMultipleServers(
@@ -403,14 +409,12 @@ func TestSync_FromRejoining(t *testing.T) {
 		defaultSyncerConfig(),
 		servers[0],
 		&utils.TypeMux{},
-		&utils.TypeMux{},
 		&MockAgora{
 			newSession: func(address common.Address) (syncer.Session, error) {
 				return newMockSession(address), nil
 			},
 		},
 		clientPM[0],
-		newMockLattice(clientPM[0]),
 		newMockStateManager(),
 		types.NewSlots(2, 3),
 		"CLIENT",
@@ -422,14 +426,12 @@ func TestSync_FromRejoining(t *testing.T) {
 		defaultSyncerConfig(),
 		servers[1],
 		&utils.TypeMux{},
-		&utils.TypeMux{},
 		&MockAgora{
 			newSession: func(address common.Address) (syncer.Session, error) {
 				return newMockSession(address), nil
 			},
 		},
 		serverPM[0],
-		newMockLattice(serverPM[0]),
 		newMockStateManager(),
 		types.NewSlots(2, 3),
 		"SERVER",
@@ -438,22 +440,24 @@ func TestSync_FromRejoining(t *testing.T) {
 
 	addresses := tests.GetAddresses(t, 3)
 	accountsToSync := map[common.Address]int{
-		common.GuardianLogicAddr: 100,
-		common.SargaAddress:      100,
-		addresses[0]:             100,
-		addresses[1]:             100,
+		common.GuardianLogicAddr: 4,
+		common.SargaAddress:      4,
+		addresses[0]:             4,
+		addresses[1]:             4,
 	}
 
 	ts := generateTesseractsByMap(t, accountsToSync)
 	storeTesseractsInDB(t, serverSyncer, ts...)
 
-	fmt.Println("CLIENT  ", servers[0].GetKramaID())
-	fmt.Println("SERVER  ", servers[1].GetKramaID())
+	clientSyncer.logger.Info(string(servers[0].GetKramaID()))
+	serverSyncer.logger.Info(string(servers[1].GetKramaID()))
 
-	err := clientSyncer.Start(1)
+	serverSyncer.setInitialSyncDone(true)
+
+	err := serverSyncer.Start(1)
 	require.NoError(t, err)
 
-	err = serverSyncer.Start(1)
+	err = clientSyncer.Start(1)
 	require.NoError(t, err)
 
 	expectedEvents := SyncEvents{
@@ -466,7 +470,7 @@ func TestSync_FromRejoining(t *testing.T) {
 		expectedEvents.accounts[addr] = newAccountSpecificEvents(1, 1, 0, height)
 	}
 
-	SubscribeAndListenForSyncEvents(t, clientCtx, clientSyncer.testMux, expectedEvents)
+	SubscribeAndListenForSyncEvents(t, clientCtx, testingLogger(t.Name()), clientSyncer.mux, expectedEvents)
 	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, false, ts...)
 
 	clientCancel()
@@ -475,20 +479,20 @@ func TestSync_FromRejoining(t *testing.T) {
 	err = clientSyncer.network.Unsubscribe(config.TesseractTopic)
 	require.NoError(t, err)
 
-	clientCtx, clientCancel = context.WithTimeout(context.Background(), 1*time.Minute)
+	clientCtx, clientCancel = context.WithTimeout(context.Background(), maxTimeout)
 	defer clientCancel()
 
 	accountsToSync = map[common.Address]int{
-		addresses[2]:        5,
-		common.SargaAddress: 110,
+		addresses[2]:        4,
+		common.SargaAddress: 8,
 	}
 
 	metaInfo, err := serverSyncer.db.GetAccountMetaInfo(common.SargaAddress)
 	require.NoError(t, err)
 
-	sargaTesseracts := generateTesseracts(t, common.SargaAddress, int(metaInfo.Height+1), 110, metaInfo.TesseractHash)
+	sargaTesseracts := generateTesseracts(t, common.SargaAddress, int(metaInfo.Height+1), 8, metaInfo.TesseractHash)
 
-	newTesseracts := generateTesseracts(t, addresses[2], 0, 5, common.NilHash)
+	newTesseracts := generateTesseracts(t, addresses[2], 0, 4, common.NilHash)
 	storeTesseractsInDB(t, serverSyncer, newTesseracts...)
 	storeTesseractsInDB(t, serverSyncer, sargaTesseracts...)
 
@@ -507,10 +511,8 @@ func TestSync_FromRejoining(t *testing.T) {
 		defaultSyncerConfig(),
 		client[0],
 		&utils.TypeMux{},
-		&utils.TypeMux{},
 		newMockAgora(),
 		clientDB,
-		newMockLattice(clientDB),
 		newMockStateManager(),
 		types.NewSlots(2, 3),
 		"CLIENT-RESTART",
@@ -534,12 +536,12 @@ func TestSync_FromRejoining(t *testing.T) {
 		bucketSync:    1,
 		SystemAccSync: 1,
 		accounts: map[common.Address]AccountSpecificEvents{
-			common.SargaAddress: newAccountSpecificEvents(0, 1, 101, 110),
-			addresses[2]:        newAccountSpecificEvents(1, 1, 0, 5),
+			common.SargaAddress: newAccountSpecificEvents(0, 1, 5, 8),
+			addresses[2]:        newAccountSpecificEvents(1, 1, 0, 4),
 		},
 	}
 
-	SubscribeAndListenForSyncEvents(t, clientCtx, clientSyncer.testMux, expectedEvents)
+	SubscribeAndListenForSyncEvents(t, clientCtx, testingLogger(t.Name()), clientSyncer.mux, expectedEvents)
 
 	newTesseracts = append(newTesseracts, sargaTesseracts...)
 	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, false, newTesseracts...)
@@ -548,7 +550,9 @@ func TestSync_FromRejoining(t *testing.T) {
 // TestSync_ThroughExecution checks if client can sync from tesseract broadcast by server
 // by executing tesseract
 func TestSync_ThroughExecution(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), maxTimeout)
 	defer cancel()
 
 	defaultConfig := getParamsToCreateMultipleServers(
@@ -580,14 +584,12 @@ func TestSync_ThroughExecution(t *testing.T) {
 		},
 		servers[0],
 		&utils.TypeMux{},
-		&utils.TypeMux{},
 		&MockAgora{
 			newSession: func(address common.Address) (syncer.Session, error) {
 				return newMockSession(address), nil
 			},
 		},
 		pm[0],
-		newMockLattice(pm[0]),
 		newMockStateManager(),
 		types.NewSlots(2, 3),
 		"CLIENT",
@@ -599,10 +601,8 @@ func TestSync_ThroughExecution(t *testing.T) {
 		defaultSyncerConfig(),
 		servers[1],
 		&utils.TypeMux{},
-		&utils.TypeMux{},
 		newMockAgora(),
 		pm[1],
-		newMockLattice(pm[1]),
 		newMockStateManager(),
 		types.NewSlots(2, 3),
 		"SERVER",
@@ -612,22 +612,24 @@ func TestSync_ThroughExecution(t *testing.T) {
 	addresses := tests.GetAddresses(t, 3)
 
 	accountsToSync := map[common.Address]int{
-		common.GuardianLogicAddr: 100,
-		common.SargaAddress:      100,
-		addresses[0]:             100,
-		addresses[1]:             100,
+		common.GuardianLogicAddr: 4,
+		common.SargaAddress:      4,
+		addresses[0]:             4,
+		addresses[1]:             4,
 	}
 
 	ts := generateTesseractsByMap(t, accountsToSync)
 	storeTesseractsInDB(t, serverSyncer, ts...)
 
-	fmt.Println("CLIENT  ", servers[0].GetKramaID())
-	fmt.Println("SERVER  ", servers[1].GetKramaID())
+	clientSyncer.logger.Info(string(servers[0].GetKramaID()))
+	serverSyncer.logger.Info(string(servers[1].GetKramaID()))
 
-	err := clientSyncer.Start(1)
+	serverSyncer.setInitialSyncDone(true)
+
+	err := serverSyncer.Start(1)
 	require.NoError(t, err)
 
-	err = serverSyncer.Start(1)
+	err = clientSyncer.Start(1)
 	require.NoError(t, err)
 
 	expectedEvents := SyncEvents{
@@ -640,7 +642,7 @@ func TestSync_ThroughExecution(t *testing.T) {
 		expectedEvents.accounts[addr] = newAccountSpecificEvents(1, 1, 0, height)
 	}
 
-	SubscribeAndListenForSyncEvents(t, ctx, clientSyncer.testMux, expectedEvents)
+	SubscribeAndListenForSyncEvents(t, ctx, testingLogger(t.Name()), clientSyncer.mux, expectedEvents)
 	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, false, ts...)
 
 	accountsToSync = map[common.Address]int{
@@ -660,14 +662,16 @@ func TestSync_ThroughExecution(t *testing.T) {
 		expectedEvents.accounts[addr] = newAccountSpecificEvents(0, 0, 0, height)
 	}
 
-	SubscribeAndListenForSyncEvents(t, ctx, clientSyncer.testMux, expectedEvents)
+	SubscribeAndListenForSyncEvents(t, ctx, testingLogger(t.Name()), clientSyncer.mux, expectedEvents)
 	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, true, newTesseracts...)
 }
 
 // TestFullSync_RemoveBestPeer, makes sure that the client syncs to the highest heights for all accounts,
 // even when two server doesn't have lattice even though it has the latest account meta info and snap data
 func TestFullSync_RemoveBestPeer(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), maxTimeout)
 	defer cancel()
 
 	defaultConfig := getParamsToCreateMultipleServers(
@@ -680,22 +684,21 @@ func TestFullSync_RemoveBestPeer(t *testing.T) {
 		0: defaultConfig[0],
 		1: defaultConfig[1],
 		2: defaultConfig[2],
-		3: defaultConfig[3],
 	}
 
-	servers := createMultipleServers(t, 4, paramsMap)
+	servers := createMultipleServers(t, 3, paramsMap)
 
-	for i := 0; i < 3; i++ {
-		connectClientToServers(t, servers[3], servers[i])
+	for i := 0; i < 2; i++ {
+		connectClientToServers(t, servers[2], servers[i])
 	}
 
-	pm, _ := createPersistenceManagers(t, ctx, 4)
+	pm, _ := createPersistenceManagers(t, ctx, 3)
 
 	t.Cleanup(func() {
 		closeTestServers(t, servers...)
 	})
 
-	serverSyncers := make([]*Syncer, 3)
+	serverSyncers := make([]*Syncer, 2)
 
 	mux := &utils.TypeMux{}
 	jq := &JobQueue{
@@ -706,16 +709,14 @@ func TestFullSync_RemoveBestPeer(t *testing.T) {
 	clientSyncer := NewTestSyncer(
 		ctx,
 		defaultSyncerConfig(),
-		servers[3],
+		servers[2],
 		mux,
-		&utils.TypeMux{},
 		&MockAgora{
 			newSession: func(address common.Address) (syncer.Session, error) {
 				return newMockSession(address), nil
 			},
 		},
-		pm[3],
-		newMockLattice(pm[3]),
+		pm[2],
 		newMockStateManager(),
 		types.NewSlots(2, 3),
 		"CLIENT",
@@ -724,16 +725,14 @@ func TestFullSync_RemoveBestPeer(t *testing.T) {
 		},
 	)
 
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 2; i++ {
 		serverSyncers[i] = NewTestSyncer(
 			ctx,
 			defaultSyncerConfig(),
 			servers[i],
 			&utils.TypeMux{},
-			&utils.TypeMux{},
 			newMockAgora(),
 			pm[i],
-			newMockLattice(pm[i]),
 			newMockStateManager(),
 			types.NewSlots(2, 3),
 			"SERVER"+"-"+strconv.Itoa(i),
@@ -754,46 +753,184 @@ func TestFullSync_RemoveBestPeer(t *testing.T) {
 	storeTesseractsInDB(t, serverSyncers[0], ts...)
 
 	storeAccountMetaInfosAndSnapInDB(t, serverSyncers[1], ts...)
-	storeAccountMetaInfosAndSnapInDB(t, serverSyncers[2], ts...)
 
-	fmt.Println("CLIENT  ", servers[3].GetKramaID())
-	fmt.Println("SERVER  0 ", servers[0].GetKramaID())
-	fmt.Println("SERVER  1 ", servers[1].GetKramaID())
-	fmt.Println("SERVER  2 ", servers[2].GetKramaID())
+	clientSyncer.logger.Info(string(servers[2].GetKramaID()))
+	serverSyncers[0].logger.Info(string(servers[0].GetKramaID()))
+	serverSyncers[1].logger.Info(string(servers[1].GetKramaID()))
 
-	err := clientSyncer.Start(1)
+	serverSyncers[1].setInitialSyncDone(true)
+
+	err := serverSyncers[1].Start(1)
 	require.NoError(t, err)
 
-	for i := 1; i < 3; i++ {
+	err = clientSyncer.Start(1)
+	require.NoError(t, err)
+
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+
+		expectedEvents := SyncEvents{
+			bucketSync:    1,
+			SystemAccSync: 1,
+			accounts:      make(map[common.Address]AccountSpecificEvents),
+		}
+
+		for addr, height := range accountsToSync {
+			expectedEvents.accounts[addr] = newAccountSpecificEvents(1, 1, 0, height)
+		}
+
+		SubscribeAndListenForSyncEvents(t, ctx, testingLogger(t.Name()), clientSyncer.mux, expectedEvents)
+	}()
+
+	// start the server that has lattices later as we need to simulate removal of best peers in client
+	// and when this is started, lattices will be available on this and client should complete accounts syncing
+	_, err = tests.RetryUntilTimeout(ctx, func() (interface{}, bool) {
+		job, ok := jq.getJob(common.GuardianLogicAddr)
+		if !ok {
+			return nil, true
+		}
+
+		if job.bestPeerLen() != 0 {
+			return nil, true
+		}
+
+		return nil, false
+	})
+	require.NoError(t, err)
+
+	serverSyncers[0].setInitialSyncDone(true)
+
+	// start the server-0 and it has lattices
+	err = serverSyncers[0].Start(1)
+	require.NoError(t, err)
+
+	wg.Wait()
+
+	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, false, ts...)
+}
+
+// TestJobProcessor makes sure sync tesseract routine not blocked
+// server-0 has tesseracts for address-a1 from 0-7
+// server-1 has tesseracts for address-a1 from 0-11
+// create new sync job on client for address-a1 with best peer as server-0
+// client syncs from server-0 for tesseracts(0-7)
+// server-0 throws error that it doesn't have other tesseracts (8-11)
+// so client still has some tesseracts to add and it returns early from lattice sync
+// so job shouldn't be blocked here on client instead it should make progress and sync from server-1
+func TestJobProcessor_checkSyncTesseractNotBlocked(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), maxTimeout)
+	defer cancel()
+
+	defaultConfig := getParamsToCreateMultipleServers(
+		t,
+		3,
+		true,
+	)
+
+	paramsMap := map[int]*CreateServerParams{
+		0: defaultConfig[0],
+		1: defaultConfig[1],
+		2: defaultConfig[2],
+	}
+
+	servers := createMultipleServers(t, 3, paramsMap)
+
+	for i := 0; i < 2; i++ {
+		connectClientToServers(t, servers[2], servers[i])
+	}
+
+	pm, _ := createPersistenceManagers(t, ctx, 3)
+
+	t.Cleanup(func() {
+		closeTestServers(t, servers...)
+	})
+
+	serverSyncers := make([]*Syncer, 2)
+
+	clientSyncer := NewTestSyncer(
+		ctx,
+		defaultSyncerConfig(),
+		servers[2],
+		&utils.TypeMux{},
+		&MockAgora{
+			newSession: func(address common.Address) (syncer.Session, error) {
+				return newMockSession(address), nil
+			},
+		},
+		pm[2],
+		newMockStateManager(),
+		types.NewSlots(2, 3),
+		"CLIENT",
+		nil,
+	)
+
+	for i := 0; i < 2; i++ {
+		serverSyncers[i] = NewTestSyncer(
+			ctx,
+			defaultSyncerConfig(),
+			servers[i],
+			&utils.TypeMux{},
+			newMockAgora(),
+			pm[i],
+			newMockStateManager(),
+			types.NewSlots(2, 3),
+			"SERVER"+"-"+strconv.Itoa(i),
+			nil,
+		)
+	}
+
+	addr := tests.RandomAddress(t)
+	expectedHeight := 12
+	accountsToSync := map[common.Address]int{
+		addr: expectedHeight,
+	}
+
+	ts := generateTesseracts(t, addr, 0, accountsToSync[addr], common.NilHash)
+
+	storeTesseractsInDB(t, serverSyncers[0], ts[:8]...)
+	storeTesseractsInDB(t, serverSyncers[1], ts...)
+
+	clientSyncer.agora = newMockAgora()
+	storeTesseractsInSession(t, clientSyncer, ts...)
+
+	clientSyncer.logger.Info(string(servers[2].GetKramaID()))
+	serverSyncers[0].logger.Info(string(servers[0].GetKramaID()))
+	serverSyncers[1].logger.Info(string(servers[1].GetKramaID()))
+
+	clientSyncer.setInitialSyncDone(true)
+
+	for i := 0; i < 2; i++ {
+		serverSyncers[i].setInitialSyncDone(true)
+
 		err := serverSyncers[i].Start(1)
 		require.NoError(t, err)
 	}
 
-	// start the server that has lattices later as we need to simulate removal of best peers in client
-	// and when this is started lattices will be available on this and client should complete accounts syncing
-	go func() {
-		time.Sleep(2 * time.Second)
+	err := clientSyncer.Start(1)
+	require.NoError(t, err)
 
-		// make sure best peers are empty as they don't have lattices
-		job, ok := jq.getJob(common.GuardianLogicAddr)
-		require.True(t, ok)
-		require.Equal(t, 0, job.bestPeerLen())
-
-		// start the server-0 and it has lattices
-		err = serverSyncers[0].Start(1)
-		require.NoError(t, err)
-	}()
+	err = clientSyncer.NewSyncRequest(
+		addr,
+		uint64(expectedHeight),
+		common.FullSync,
+		[]id.KramaID{servers[0].GetKramaID()},
+	)
+	require.NoError(t, err)
 
 	expectedEvents := SyncEvents{
-		bucketSync:    1,
-		SystemAccSync: 1,
-		accounts:      make(map[common.Address]AccountSpecificEvents),
+		accounts: make(map[common.Address]AccountSpecificEvents),
 	}
 
 	for addr, height := range accountsToSync {
 		expectedEvents.accounts[addr] = newAccountSpecificEvents(1, 1, 0, height)
 	}
 
-	SubscribeAndListenForSyncEvents(t, ctx, clientSyncer.testMux, expectedEvents)
+	SubscribeAndListenForSyncEvents(t, ctx, testingLogger(t.Name()), clientSyncer.mux, expectedEvents)
 	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, false, ts...)
 }

@@ -27,11 +27,13 @@ type Config struct {
 	Syncer         *SyncerConfig
 	Metrics        Telemetry
 	LogFilePath    string
+	NetworkID      string
 }
 
 type Telemetry struct {
 	PrometheusAddr *net.TCPAddr
-	JaegerAddr     string
+	OtlpAddress    string
+	Token          string
 }
 
 type SyncerConfig struct {
@@ -162,6 +164,8 @@ func DefaultDevnetConfig(path string) *Config {
 		},
 		Metrics: Telemetry{
 			PrometheusAddr: nil,
+			OtlpAddress:    "",
+			Token:          "",
 		},
 	}
 

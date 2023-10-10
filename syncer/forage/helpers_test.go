@@ -57,6 +57,8 @@ const (
 	JobDone
 )
 
+const maxTimeout = 20 * time.Second
+
 type AccountSpecificEvents struct {
 	snapSync    int
 	latticeSync int
@@ -87,35 +89,31 @@ func NewTestSyncer(
 	cfg *config.SyncerConfig,
 	node *p2p.Server,
 	mux *utils.TypeMux,
-	testMux *utils.TypeMux,
 	agora syncer.BlockSync,
 	db store,
-	lattice lattice,
 	sm stateManager,
 	slots *ktypes.Slots,
 	logName string,
 	callback func(s *Syncer),
 ) *Syncer {
+	logger := hclog.NewNullLogger()
+
 	s := &Syncer{
 		ctx:            ctx,
 		network:        node,
 		cfg:            cfg,
 		mux:            mux,
-		testMux:        testMux,
 		agora:          agora,
 		db:             db,
-		lattice:        lattice,
+		lattice:        newMockLattice(db, logger),
 		state:          sm,
-		jobWorkerCount: 1,
+		jobWorkerCount: 5,
 		jobQueue: &JobQueue{
 			jobs: make(map[common.Address]*SyncJob),
 			mux:  mux,
 		},
-		gridStore: NewGridStore(),
-		logger: hclog.New(&hclog.LoggerOptions{
-			Name:  logName,
-			Level: hclog.LevelFromString("trace"),
-		}),
+		gridStore:         NewGridStore(),
+		logger:            logger,
 		workerSignal:      make(chan struct{}),
 		tesseractRegistry: common.NewHashRegistry(60),
 		consensusSlots:    slots,
@@ -125,6 +123,7 @@ func NewTestSyncer(
 		pendingMsgChan:    make(chan *TesseractInfo, 10),
 		execGrid:          make(map[common.Hash]common.Address),
 		tracker:           NewSyncStatusTracker(0),
+		workerWaitTime:    10 * time.Millisecond,
 	}
 
 	if callback != nil {
@@ -136,13 +135,15 @@ func NewTestSyncer(
 
 type MockLattice struct {
 	lock               sync.RWMutex
+	logger             hclog.Logger
 	tesseracts         map[string]*common.Tesseract
 	db                 store
 	executedTesseracts map[string]*common.Tesseract
 }
 
-func newMockLattice(db store) *MockLattice {
+func newMockLattice(db store, logger hclog.Logger) *MockLattice {
 	return &MockLattice{
+		logger:             logger,
 		tesseracts:         make(map[string]*common.Tesseract),
 		db:                 db,
 		executedTesseracts: make(map[string]*common.Tesseract),
@@ -161,7 +162,7 @@ func (m *MockLattice) ExecuteAndValidate(ts ...*common.Tesseract) error {
 
 func (m *MockLattice) AddTesseracts(dirtyStorage map[common.Hash][]byte, tesseracts ...*common.Tesseract) error {
 	for _, ts := range tesseracts {
-		fmt.Println("adding tesseract ", ts.Height())
+		m.logger.Trace("adding tesseract ", "addr", ts.Address(), "height", ts.Height())
 
 		if _, _, err := m.db.UpdateAccMetaInfo(
 			ts.Address(),
@@ -196,7 +197,7 @@ func (m *MockLattice) AddTesseracts(dirtyStorage map[common.Hash][]byte, tessera
 
 func (m *MockLattice) AddAccountMetaInfo(tesseracts ...*common.Tesseract) error {
 	for _, ts := range tesseracts {
-		fmt.Println("adding account meta info ", ts.Height())
+		m.logger.Trace("adding account meta info ", "height", ts.Height())
 
 		if _, _, err := m.db.UpdateAccMetaInfo(
 			ts.Address(),
@@ -249,6 +250,14 @@ func (m *MockLattice) GetTesseractByHeight(
 }
 
 func (m *MockLattice) ValidateTesseract(ts *common.Tesseract, ics *common.ICSNodeSet) error {
+	if ts.Height() != 0 {
+		if ok := m.db.HasTesseractAt(ts.Address(), ts.Height()-1); !ok {
+			m.logger.Trace("prev  tesseract not found ", ts.Address(), ts.Height())
+
+			return common.ErrPreviousTesseractNotFound
+		}
+	}
+
 	return nil
 }
 
@@ -771,10 +780,13 @@ func broadcastTesseracts(t *testing.T, serverSyncer *Syncer, tesseracts ...*comm
 	t.Helper()
 
 	go func() {
-		for _, ts := range tesseracts {
+		for i := 0; i < len(tesseracts); i++ {
 			var err error
 
-			rawIxns, err := ts.Interactions().Bytes()
+			serverSyncer.logger.Info("broadcast tesseract ", "addr", tesseracts[i].Address(),
+				"height", tesseracts[i].Height(), t.Name())
+
+			rawIxns, err := tesseracts[i].Interactions().Bytes()
 			require.NoError(t, err)
 
 			info := common.ICSClusterInfo{
@@ -790,11 +802,11 @@ func broadcastTesseracts(t *testing.T, serverSyncer *Syncer, tesseracts ...*comm
 				Ixns:         rawIxns,
 				Receipts:     nil,
 				Delta: map[common.Hash][]byte{
-					ts.ICSHash(): rawInfo,
+					tesseracts[i].ICSHash(): rawInfo,
 				},
 			}
 
-			msg.RawTesseract, err = ts.Canonical().Bytes()
+			msg.RawTesseract, err = tesseracts[i].Canonical().Bytes()
 			require.NoError(t, err)
 
 			rawData, err := msg.Bytes()
@@ -802,28 +814,47 @@ func broadcastTesseracts(t *testing.T, serverSyncer *Syncer, tesseracts ...*comm
 
 			err = serverSyncer.network.Broadcast(config.TesseractTopic, rawData)
 			require.NoError(t, err)
+
+			// introduce delay to send tesseracts in order
+			time.Sleep(10 * time.Millisecond)
 		}
 	}()
 }
 
 func printEventsReceived(
+	logger hclog.Logger,
 	events SyncEvents,
+	bucketSyncCount,
+	systemAccSyncCount int,
 	accountLevelSync map[common.Address]map[SyncEventType]int,
 ) {
-	fmt.Println("")
-	fmt.Println("printing received events")
-	fmt.Println(syncerEvents[BucketSync], events.bucketSync)
-	fmt.Println(syncerEvents[SystemAcc], events.SystemAccSync)
+	logger.Debug("printing expected events")
+	logger.Debug(syncerEvents[BucketSync], events.bucketSync)
+	logger.Debug(syncerEvents[SystemAcc], events.SystemAccSync)
 
 	for acc := range events.accounts {
-		fmt.Println("address : ", acc)
+		logger.Debug("address : ", acc)
+
+		logger.Debug("expected events", ":", events.accounts[acc])
+	}
+
+	logger.Debug("")
+	logger.Debug("")
+
+	logger.Debug("printing received events")
+
+	logger.Debug(syncerEvents[BucketSync], bucketSyncCount)
+	logger.Debug(syncerEvents[SystemAcc], systemAccSyncCount)
+
+	for acc := range events.accounts {
+		logger.Debug("address : ", acc)
 
 		for i := SnapSync; i <= JobDone; i++ {
-			fmt.Println(syncerEvents[SyncEventType(i)], ":", accountLevelSync[acc][SyncEventType(i)])
+			logger.Debug(syncerEvents[SyncEventType(i)], ":", accountLevelSync[acc][SyncEventType(i)])
 		}
 	}
 
-	fmt.Println("")
+	logger.Debug("")
 }
 
 func defaultSyncerConfig() *config.SyncerConfig {
@@ -927,9 +958,21 @@ func createPersistenceManagers(t *testing.T, ctx context.Context, count int) ([]
 	return pm, dirs
 }
 
+func testingLogger(name string) hclog.Logger {
+	if testing.Verbose() {
+		return hclog.New(&hclog.LoggerOptions{
+			Name:  name,
+			Level: hclog.LevelFromString("DEBUG"),
+		})
+	}
+
+	return hclog.NewNullLogger()
+}
+
 func SubscribeAndListenForSyncEvents(
 	t *testing.T,
 	ctx context.Context,
+	logger hclog.Logger,
 	mux *utils.TypeMux,
 	expectedEvents SyncEvents,
 ) {
@@ -966,8 +1009,7 @@ func SubscribeAndListenForSyncEvents(
 	for {
 		select {
 		case <-ctx.Done():
-			fmt.Println("printing received events")
-			printEventsReceived(expectedEvents, accountLevelSync)
+			printEventsReceived(logger, expectedEvents, bucketSyncCount, systemAccSyncCount, accountLevelSync)
 
 			require.FailNow(t, "timed out waiting for events")
 
@@ -995,7 +1037,7 @@ func SubscribeAndListenForSyncEvents(
 
 			// verify heights are in order
 			accountLevelSync[e.address][TesseractSync] += 1
-			require.Equal(t, accountLevelSync[e.address][TesseractSync], int(e.height))
+			require.Equal(t, accountLevelSync[e.address][TesseractSync], int(e.height), e.address)
 
 		case event := <-jobDone.Chan():
 			e, ok := event.Data.(eventJobDone)
@@ -1003,7 +1045,7 @@ func SubscribeAndListenForSyncEvents(
 
 			accountLevelSync[e.address][JobDone] += 1
 
-		case <-time.After(1 * time.Second):
+		case <-time.After(10 * time.Millisecond):
 			eventsReceived := true
 
 			// as of now job done event is not emitted when it is removed
@@ -1032,11 +1074,11 @@ func SubscribeAndListenForSyncEvents(
 				eventsReceived = false
 			}
 
-			// printEventsReceived(events, accountLevelSync)
-
 			if eventsReceived {
-				fmt.Println("All events received")
-				printEventsReceived(expectedEvents, accountLevelSync)
+				if logger.IsTrace() {
+					logger.Trace("All events received")
+					printEventsReceived(logger, expectedEvents, bucketSyncCount, systemAccSyncCount, accountLevelSync)
+				}
 
 				return
 			}

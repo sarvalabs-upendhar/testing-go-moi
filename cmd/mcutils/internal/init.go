@@ -60,10 +60,16 @@ func parseFlags(initcmd *cobra.Command) {
 		"Bootnode Multi-Address",
 	)
 	initcmd.PersistentFlags().StringVar(
-		&jaegerAddress,
-		"jaeger-address",
+		&otlpAddress,
+		"otlp-address",
 		"",
-		"Jaeger Address",
+		"OTLP Address",
+	)
+	initcmd.PersistentFlags().StringVar(
+		&token,
+		"token",
+		"",
+		"Token",
 	)
 	initcmd.PersistentFlags().StringVar(
 		&password,
@@ -107,6 +113,9 @@ func CreateConfigFile(datadir string, index int) []byte {
 		Network: cmdCommon.NetworkConfig{
 			Libp2pAddr: []string{
 				"/ip4/0.0.0.0/tcp/" + strconv.Itoa(port+index),
+				"/ip4/0.0.0.0/udp/" + strconv.Itoa(port+index) + "/quic-v1",
+				"/ip6/::/tcp/" + strconv.Itoa(port+index),
+				"/ip6/::/udp/" + strconv.Itoa(port+index) + "/quic-v1",
 			},
 			JSONRPCAddr: "0.0.0.0:" + strconv.Itoa(config.DefaultJSONRPCPort+index),
 			BootStrapPeers: []string{
@@ -152,12 +161,14 @@ func CreateConfigFile(datadir string, index int) []byte {
 		},
 		Telemetry: cmdCommon.Telemetry{
 			PrometheusAddr: ":" + strconv.Itoa(config.DefaultPrometheusPort+index),
-			JaegerAddr:     jaegerAddress,
+			OtlpAddress:    otlpAddress,
+			Token:          token,
 		},
 		Vault: cmdCommon.VaultConfig{
 			DataDir:      datadir,
 			NodePassword: password,
 		},
+		NetworkID: strconv.Itoa(config.LocalID),
 	}
 
 	if writeLogsToFile {

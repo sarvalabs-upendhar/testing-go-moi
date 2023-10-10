@@ -39,6 +39,7 @@ const (
 	ChannelBufferSize     = 10
 	MaxPeersToDial        = 8
 	TesseractFetchTimeOut = 15 * time.Second
+	DefaultWorkerWaitTime = 500 * time.Millisecond
 )
 
 var DefaultMinConnectedPeers = 10
@@ -129,11 +130,11 @@ type store interface {
 }
 
 type Syncer struct {
+	lock                sync.RWMutex
 	cfg                 *config.SyncerConfig
 	ctx                 context.Context
 	network             *p2p.Server
 	mux                 *utils.TypeMux
-	testMux             *utils.TypeMux
 	gridStore           *GridStore
 	execLock            sync.RWMutex
 	agora               syncer.BlockSync
@@ -148,19 +149,20 @@ type Syncer struct {
 	jobWorkerCount      uint32
 	workerSignal        chan struct{}
 	isPrincipalSyncDone bool
-	isBucketSyncDone    bool
+	bucketSyncDone      bool
 	pendingAccounts     uint64
 	consensusSlots      *ktypes.Slots
 	lastActiveTimeStamp uint64
 	accountsLock        sync.RWMutex
 	lockedAccounts      map[common.Address]common.Hash
 	metrics             *Metrics
-	isInitialSyncDone   bool
+	initialSyncDone     bool
 	pendingMsgChan      chan *TesseractInfo
 	pendingMsgQueue     []*TesseractInfo
 	init                sync.Once
 	execGrid            map[common.Hash]common.Address
 	tracker             *SyncStatusTracker
+	workerWaitTime      time.Duration
 }
 
 func NewSyncer(
@@ -187,6 +189,7 @@ func NewSyncer(
 		lattice:             lattice,
 		state:               sm,
 		jobWorkerCount:      10,
+		workerWaitTime:      DefaultWorkerWaitTime,
 		jobQueue:            NewJobQueue(mux),
 		gridStore:           NewGridStore(),
 		logger:              logger.Named("Syncer"),
@@ -312,7 +315,7 @@ func (s *Syncer) worker() {
 	for {
 		select {
 		case <-s.workerSignal:
-		case <-time.After(1 * time.Second):
+		case <-time.After(s.workerWaitTime):
 		case <-s.ctx.Done():
 			return
 		}
@@ -343,6 +346,34 @@ func (s *Syncer) jobClosure(job *SyncJob) error {
 	job.updateJobState(Pending)
 
 	return nil
+}
+
+func (s *Syncer) isInitialSyncDone() bool {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
+	return s.initialSyncDone
+}
+
+func (s *Syncer) setInitialSyncDone(val bool) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	s.initialSyncDone = val
+}
+
+func (s *Syncer) isBucketSyncDone() bool {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
+	return s.bucketSyncDone
+}
+
+func (s *Syncer) setBucketSyncDone(val bool) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	s.bucketSyncDone = val
 }
 
 func (s *Syncer) jobProcessor(job *SyncJob) error {
@@ -401,6 +432,8 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 		}
 	}
 
+	job.setLatticeSyncInProgress(true)
+
 	group, groupCtx := errgroup.WithContext(context.Background())
 
 	group.Go(func() error {
@@ -409,6 +442,8 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 
 			return errors.Wrap(err, "failed to sync lattice")
 		}
+
+		job.setLatticeSyncInProgress(false)
 
 		return nil
 	})
@@ -424,12 +459,20 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 			}
 
 			tsInfo = job.tesseractQueue.Peek()
+
 			for tsInfo == nil {
+				// If the sync lattice routine has finished and the tesseract queue is empty,
+				// exit this routine because there is no one to fill the tesseract queue.
+				if !job.isLatticeSyncInProgress() {
+					return nil
+				}
+
 				select {
 				case <-groupCtx.Done():
 					return groupCtx.Err()
 				case <-job.tesseractSignal:
 					tsInfo = job.tesseractQueue.Peek()
+				case <-time.After(50 * time.Millisecond):
 				}
 			}
 
@@ -477,12 +520,6 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 			shouldExit, err := s.postAdditionHook(job, tsInfo.tesseract.Height())
 			if err != nil || shouldExit {
 				jobState = Done
-
-				if shouldExit {
-					if err := s.publishEventJobDone(job.jobStateEvent()); err != nil {
-						s.logger.Error("failed to publish event lattice sync", "err", err)
-					}
-				}
 
 				return err
 			}
@@ -549,7 +586,7 @@ func (s *Syncer) updatePrincipalSyncStatus() error {
 		atomic.AddUint64(&s.pendingAccounts, ^uint64(0))
 	}
 
-	if atomic.LoadUint64(&s.pendingAccounts) <= uint64(0) && s.isBucketSyncDone {
+	if atomic.LoadUint64(&s.pendingAccounts) <= uint64(0) && s.isBucketSyncDone() {
 		s.isPrincipalSyncDone = true
 
 		return s.db.UpdatePrincipalSyncStatus()
@@ -649,7 +686,7 @@ func (s *Syncer) findLatestHeightAndBestPeers(addr common.Address) (uint64, []id
 			resp,
 			time.Minute*2,
 		); err != nil {
-			s.logger.Error("Failed to fetch account latest status", "RPC-error", err)
+			s.logger.Error("Failed to fetch account latest status", "RPC-error", err, kramaID)
 
 			continue
 		}
@@ -734,6 +771,12 @@ func (s *Syncer) initSync() error {
 	s.isPrincipalSyncDone, principalSyncTimeStamp = s.db.IsPrincipalSyncDone()
 	if s.isPrincipalSyncDone {
 		s.logger.Info("Principal sync was finished at", "unix-time", principalSyncTimeStamp)
+	}
+
+	if s.isInitialSyncDone() {
+		s.logger.Info("Initial sync is already done")
+
+		return nil
 	}
 
 	// Sync all system accounts
@@ -988,7 +1031,7 @@ func (s *Syncer) syncBuckets(kramaID id.KramaID, attempts int) error {
 			}
 		}
 
-		s.isBucketSyncDone = true
+		s.setBucketSyncDone(true)
 
 		return nil
 	})
@@ -1140,7 +1183,8 @@ func (s *Syncer) fetchSnapShort(
 				currentSnap.Size += uint64(len(snapMsg.Data))
 				currentSnap.Entries = append(currentSnap.Entries, snapMsg.Data...)
 
-				log.Println("Current Snap Size", snapInfo.TotalSnapSize, currentSnap.Size)
+				s.logger.Info("Snap info ", "total snap size ", snapInfo.TotalSnapSize,
+					"current snap size", currentSnap.Size)
 				if snapInfo != nil && currentSnap.Size == snapInfo.TotalSnapSize {
 					return nil
 				}
@@ -1400,6 +1444,13 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 
 	grid := s.gridStore.GetGrid(msg.tesseract.GridHash())
 	if grid == nil {
+		// in case if other job already executed, added tesseracts,
+		// and removed them from grid store then send this job to sleep state
+		// so that this job updates its current height next time
+		if s.db.HasTesseract(msg.tesseract.Hash()) {
+			return false, nil
+		}
+
 		grid = s.gridStore.NewGrid(msg.tesseract.GridHash())
 	}
 
@@ -1844,6 +1895,7 @@ func (s *Syncer) msgHandler(msg *pubsub.Message) error {
 			"sealer", ts.Sealer(),
 			"ts-hash", ts.Hash(),
 			"addr", ts.Address(),
+			"height", ts.Height(),
 		)
 
 		clusterInfo := new(common.ICSClusterInfo)
@@ -1863,7 +1915,7 @@ func (s *Syncer) msgHandler(msg *pubsub.Message) error {
 		case <-s.ctx.Done():
 			return s.ctx.Err()
 		default:
-			if !s.isInitialSyncDone {
+			if !s.isInitialSyncDone() {
 				s.pendingMsgChan <- tsInfo
 
 				return nil
@@ -1943,7 +1995,8 @@ func (s *Syncer) Start(minConnectedPeers int) error {
 			return
 		}
 
-		s.isInitialSyncDone = true // TODO: This is not thread safe
+		s.setInitialSyncDone(true)
+
 		s.logger.Info("Initial sync successful")
 	}()
 
@@ -1965,7 +2018,7 @@ func (s *Syncer) startSyncEventHandler() {
 	for event := range sub.Chan() {
 		req, ok := event.Data.(utils.SyncRequestEvent)
 		if ok {
-			if !s.isInitialSyncDone {
+			if !s.isInitialSyncDone() {
 				continue
 			}
 
@@ -2017,7 +2070,7 @@ func (s *Syncer) GetNodeSyncStatus() *args.NodeSyncStatus {
 		TotalPendingAccounts:  hexutil.Uint64(totalPendingAccounts),
 		IsPrincipalSyncDone:   isPrincipalSyncDone,
 		PrincipalSyncDoneTime: hexutil.Uint64(principalSyncTimeStamp),
-		IsInitialSyncDone:     s.isInitialSyncDone,
+		IsInitialSyncDone:     s.isInitialSyncDone(),
 	}
 }
 
@@ -2062,11 +2115,7 @@ func (s *Syncer) queueHandler() {
 }
 
 func (s *Syncer) post(ev interface{}) error {
-	if s.testMux != nil {
-		return s.testMux.Post(ev)
-	}
-
-	return nil
+	return s.mux.Post(ev)
 }
 
 func (s *Syncer) publishEventLoadSyncJobsDB() error {
@@ -2097,8 +2146,4 @@ func (s *Syncer) publishEventTesseractSync(addr common.Address, height uint64) e
 				height:  height,
 			},
 		})
-}
-
-func (s *Syncer) publishEventJobDone(state eventDataJobState) error {
-	return s.post(eventJobDone{state})
 }

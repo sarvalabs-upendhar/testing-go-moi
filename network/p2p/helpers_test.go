@@ -428,6 +428,8 @@ func startDiscovery(t *testing.T, servers ...*Server) {
 func initDiscoveryAndAdvertise(t *testing.T, servers ...*Server) {
 	t.Helper()
 
+	time.Sleep(1 * time.Second)
+
 	for _, s := range servers {
 		s.discovery = discovery.NewRoutingDiscovery(s.kadDHT)
 

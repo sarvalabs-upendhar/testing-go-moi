@@ -252,7 +252,8 @@ func (service *SYNCRPCService) FetchLattice(
 		if ts.ICSHash() != common.NilHash {
 			icsClusterInfoRaw, err := service.syncer.db.ReadEntry(ts.ICSHash().Bytes())
 			if err != nil {
-				return err
+				return errors.Wrap(err, fmt.Sprintf("failed to fetch ics cluster info %v for address %v ",
+					ts.ICSHash(), ts.Address()))
 			}
 
 			msg.Delta[ts.ICSHash()] = icsClusterInfoRaw
@@ -264,7 +265,7 @@ func (service *SYNCRPCService) FetchLattice(
 			}
 
 			if err = service.syncer.state.GetParticipantContextRaw(addr, lockInfo.ContextHash, msg.Delta); err != nil {
-				return err
+				return errors.Wrap(err, fmt.Sprintf("failed to fetch participant context for %v", addr))
 			}
 		}
 

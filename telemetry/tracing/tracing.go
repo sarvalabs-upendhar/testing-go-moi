@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-moi/common/config"
 
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/jaeger"
+
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
@@ -26,7 +28,7 @@ type noopShutdownTracerProvider struct{ traceapi.TracerProvider }
 
 func (n *noopShutdownTracerProvider) Shutdown(ctx context.Context) error { return nil }
 
-func buildExporters(ctx context.Context, jaegerAddress string) ([]trace.SpanExporter, error) {
+func buildExporters(ctx context.Context, otlpAddress, token string) ([]trace.SpanExporter, error) {
 	var exporters []trace.SpanExporter
 	// *** File Exporter
 	// filePath := ""
@@ -43,13 +45,23 @@ func buildExporters(ctx context.Context, jaegerAddress string) ([]trace.SpanExpo
 	// }
 	// exporters = append(exporters, exporter)
 
-	// ** Jaeger Exporter
-	jaegerExporter, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(jaegerAddress)))
-	if err != nil {
-		return nil, fmt.Errorf("building Jaeger exporter: %w", err)
+	// ** OTLP Exporter
+	otlpExporterOpts := []otlptracehttp.Option{
+		otlptracehttp.WithEndpoint(otlpAddress),
 	}
 
-	exporters = append(exporters, jaegerExporter)
+	if token != "" {
+		otlpExporterOpts = append(otlpExporterOpts, otlptracehttp.WithHeaders(map[string]string{
+			"Authorization": fmt.Sprintf("Bearer %s", token),
+		}))
+	}
+
+	otlpExporter, err := otlptracehttp.New(ctx, otlpExporterOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("building OTLP exporter: %w", err)
+	}
+
+	exporters = append(exporters, otlpExporter)
 
 	return exporters, nil
 }
@@ -60,14 +72,14 @@ func buildExporters(ctx context.Context, jaegerAddress string) ([]trace.SpanExpo
 func NewTracerProvider(
 	ctx context.Context,
 	enableTracing bool,
-	jaegerAddress string,
+	otlpAddress, token, networkID string,
 	kramaID id.KramaID,
 ) (shutdownTracerProvider, error) {
 	if !enableTracing {
 		return &noopShutdownTracerProvider{TracerProvider: traceapi.NewNoopTracerProvider()}, nil
 	}
 
-	exporters, err := buildExporters(ctx, jaegerAddress)
+	exporters, err := buildExporters(ctx, otlpAddress, token)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +93,7 @@ func NewTracerProvider(
 	r, err := resource.Merge(
 		resource.Default(),
 		resource.NewSchemaless(
-			semconv.ServiceNameKey.String("moi-chain"),
+			semconv.ServiceNameKey.String("moi-chain-"+config.ProtocolVersion+"-"+networkID),
 			semconv.ServiceVersionKey.String("0.0.1"),
 			attribute.String("krama-id", string(kramaID)),
 		),

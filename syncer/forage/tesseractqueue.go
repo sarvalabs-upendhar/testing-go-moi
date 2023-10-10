@@ -2,7 +2,6 @@ package forage
 
 import (
 	"container/heap"
-	"log"
 	"sync"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -32,7 +31,6 @@ func NewTesseractQueue() *TesseractQueue {
 func (s *TesseractQueue) Push(ts ...*TesseractInfo) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
-	log.Println("Adding tesseract to queue")
 
 	for _, t := range ts {
 		if _, ok := s.set[t.tesseract.Height()]; !ok {

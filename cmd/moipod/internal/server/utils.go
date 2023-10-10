@@ -162,7 +162,7 @@ func (p *Params) assignNetworkJSONRPCAddr() (err error) {
 }
 
 // applyFlags sets raw config flags accordingly if flags are provided explicitly
-// if enable tracing is true and jaegar address isn't provided then error will be thrown
+// if enable tracing is true and OTLP address isn't provided then error will be thrown
 // if babylon flag is provided genesis file will be downloaded at path/genesis.json and raw config path is set
 func (p *Params) applyFlags(cmd *cobra.Command, path string) error {
 	if isGenesisSet(cmd) {
@@ -208,8 +208,8 @@ func (p *Params) applyFlags(cmd *cobra.Command, path string) error {
 		p.rawCfg.Network.DiscoveryInterval = DiscoveryInterval
 	}
 
-	if EnableTracing && p.rawCfg.Telemetry.JaegerAddr == "" {
-		return errors.New("tracing is enabled but a valid JaegerCollector address is not passed")
+	if EnableTracing && p.rawCfg.Telemetry.OtlpAddress == "" {
+		return errors.New("tracing is enabled but a valid OtlpCollector address is not passed")
 	}
 
 	if Babylon {
@@ -315,7 +315,8 @@ func (p *Params) getIXPoolConfig() *config.IxPoolConfig {
 func (p *Params) getTelemetryConfig() *config.Telemetry {
 	return &config.Telemetry{
 		PrometheusAddr: p.PrometheusAddr,
-		JaegerAddr:     p.rawCfg.Telemetry.JaegerAddr,
+		OtlpAddress:    p.rawCfg.Telemetry.OtlpAddress,
+		Token:          p.rawCfg.Telemetry.Token,
 	}
 }
 
@@ -359,6 +360,7 @@ func (p *Params) generateNodeConfig(dataDir string) *config.Config {
 		Syncer:         p.getSyncerConfig(),
 		Metrics:        *p.getTelemetryConfig(),
 		LogFilePath:    p.rawCfg.LogFilePath,
+		NetworkID:      p.rawCfg.NetworkID,
 	}
 }
 

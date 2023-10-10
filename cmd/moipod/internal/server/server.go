@@ -144,7 +144,13 @@ func SetupNode(cmd *cobra.Command) {
 	// init trace provider
 	ctx := context.Background()
 
-	tp, err := tracing.NewTracerProvider(ctx, EnableTracing, cfg.Metrics.JaegerAddr, n.GetKramaID())
+	tp, err := tracing.NewTracerProvider(
+		ctx, EnableTracing,
+		cfg.Metrics.OtlpAddress,
+		cfg.Metrics.Token,
+		cfg.NetworkID,
+		n.GetKramaID(),
+	)
 	if err != nil {
 		log.Println("Error starting tp", "err", err)
 	}

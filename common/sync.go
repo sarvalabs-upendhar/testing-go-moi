@@ -17,7 +17,6 @@ type AccountSyncStatus struct {
 	ExpectedHeight     uint64
 	SnapshotDownloaded bool
 	Mode               SyncMode
-	CurrentHash        Hash
 	State              int32
 	LastModifiedAt     []byte
 }
