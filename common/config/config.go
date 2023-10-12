@@ -107,6 +107,7 @@ type ConsensusConfig struct {
 	Precision             time.Duration
 	ValidatorSlotCount    int
 	OperatorSlotCount     int
+	EnableDebugMode       bool
 }
 
 func DefaultDevnetConfig(path string) *Config {

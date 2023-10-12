@@ -1128,6 +1128,10 @@ func (k *Engine) updateContextDelta(slot *ktypes.Slot) error {
 		return errors.New("nil slot")
 	}
 
+	if k.cfg.EnableDebugMode {
+		return k.partiallyUpdateContextDelta(slot)
+	}
+
 	clusterState := slot.ClusterState()
 	seenAccounts := make(map[common.Address]bool)
 	deltaMap := make(common.ContextDelta)
@@ -1235,6 +1239,63 @@ func (k *Engine) updateContextDelta(slot *ktypes.Slot) error {
 
 				receiverDeltaGroup.RandomNodes = append(receiverDeltaGroup.RandomNodes, receiverRandomDelta...)
 				receiverDeltaGroup.ReplacedNodes = append(receiverDeltaGroup.ReplacedNodes, replacedRandomDelta...)
+			}
+
+			seenAccounts[receiverAddr] = true
+			deltaMap[receiverAddr] = receiverDeltaGroup
+		}
+	}
+
+	clusterState.UpdateContextDelta(deltaMap)
+
+	return nil
+}
+
+// Updates the context delta for the receiver if the receiver account is not registered, and retains the context
+// of other participants.
+func (k *Engine) partiallyUpdateContextDelta(slot *ktypes.Slot) error {
+	clusterState := slot.ClusterState()
+	seenAccounts := make(map[common.Address]bool)
+	deltaMap := make(common.ContextDelta)
+
+	for _, ix := range clusterState.Ixs {
+		senderAddr := ix.Sender()
+		receiverAddr := ix.Receiver()
+
+		if !senderAddr.IsNil() && !seenAccounts[senderAddr] {
+			senderDeltaGroup := new(common.DeltaGroup)
+			senderDeltaGroup.Role = common.Sender
+			seenAccounts[senderAddr] = true
+			deltaMap[senderAddr] = senderDeltaGroup
+		}
+
+		if !receiverAddr.IsNil() && !seenAccounts[receiverAddr] {
+			receiverDeltaGroup := new(common.DeltaGroup)
+			receiverDeltaGroup.Role = common.Receiver
+
+			accountRegistered, err := k.state.IsAccountRegistered(receiverAddr)
+			if err != nil {
+				return err
+			}
+
+			if !accountRegistered {
+				// Fetch new nodes for receiver account
+				behaviouralNodes, randomNodes, err := k.GetNodes(
+					clusterState,
+					RandomContextSize,
+					BehaviouralContextSize,
+				)
+				if err != nil {
+					return err
+				}
+
+				receiverDeltaGroup.RandomNodes = append(receiverDeltaGroup.RandomNodes, randomNodes...)
+				receiverDeltaGroup.BehaviouralNodes = append(receiverDeltaGroup.BehaviouralNodes, behaviouralNodes...)
+
+				genesisDeltaGroup := new(common.DeltaGroup)
+				genesisDeltaGroup.Role = common.Genesis
+				seenAccounts[common.SargaAddress] = true
+				deltaMap[common.SargaAddress] = genesisDeltaGroup
 			}
 
 			seenAccounts[receiverAddr] = true

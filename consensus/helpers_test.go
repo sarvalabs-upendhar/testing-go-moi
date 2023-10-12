@@ -184,12 +184,18 @@ func createTestConsensusConfig() *config.ConsensusConfig {
 	}
 }
 
-func createTestKramaEngine(t *testing.T, sm *MockStateManager) *Engine {
+func createTestKramaEngine(t *testing.T, sm *MockStateManager, cfgCallback func(cfg *config.ConsensusConfig)) *Engine {
 	t.Helper()
+
+	cfg := createTestConsensusConfig()
+
+	if cfgCallback != nil {
+		cfgCallback(cfg)
+	}
 
 	engine, err := NewKramaEngine(
 		context.Background(),
-		createTestConsensusConfig(),
+		cfg,
 		hclog.NewNullLogger(),
 		nil,
 		sm,
