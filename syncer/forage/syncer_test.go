@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/sarvalabs/go-moi/storage/db"
+
 	id "github.com/sarvalabs/go-moi/common/kramaid"
 
 	"github.com/hashicorp/go-hclog"
@@ -500,7 +502,7 @@ func TestSync_FromRejoining(t *testing.T) {
 		CleanDB:      false,
 		DBFolderPath: clientDir[0],
 		MaxSnapSize:  1073741824,
-	})
+	}, db.NilMetrics())
 	require.NoError(t, err)
 
 	client := createMultipleServers(t, 1, paramsMap)

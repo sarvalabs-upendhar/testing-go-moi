@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/go-moi/storage/db"
+
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
 
 	"github.com/sarvalabs/go-moi/storage"
@@ -935,7 +937,7 @@ func createPersistenceManager(t *testing.T, ctx context.Context) (*storage.Persi
 		CleanDB:      true,
 		DBFolderPath: dir,
 		MaxSnapSize:  1073741824,
-	})
+	}, db.NilMetrics())
 	require.NoError(t, err)
 
 	t.Cleanup(func() {

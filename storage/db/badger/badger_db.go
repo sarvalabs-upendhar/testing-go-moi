@@ -11,9 +11,10 @@ import (
 	"github.com/sarvalabs/go-moi/storage/db"
 )
 
-// BadgerDB is a LSM based key-value store, It implements db.DB interface
+// BadgerDB is an LSM based key-value store, It implements db.Database interface
 type BadgerDB struct {
-	db *badger.DB
+	db      *badger.DB
+	metrics *db.Metrics
 }
 
 // initBadgerInstance initiates BadgerDB at give path
@@ -25,13 +26,15 @@ func initBadgerInstance(path string) (*badger.DB, error) {
 }
 
 // NewBadgerDB returns a badger db instance which implements DB interface
-func NewBadgerDB(path string) (db.DB, error) {
+func NewBadgerDB(path string, metrics *db.Metrics) (db.Database, error) {
 	database, err := initBadgerInstance(path)
 	if err != nil {
 		return nil, errors.Wrap(common.ErrDBInit, err.Error())
 	}
 
-	return &BadgerDB{db: database}, nil
+	metrics.InitMetrics()
+
+	return &BadgerDB{db: database, metrics: metrics}, nil
 }
 
 // NewIterator returns badger iterator which implements db.Iterator interface
@@ -44,18 +47,21 @@ func (b *BadgerDB) NewIterator() (db.Iterator, error) {
 
 	it := txn.NewIterator(badger.DefaultIteratorOptions)
 
-	return &Iterator{it: it, txn: txn}, nil
+	return &Iterator{it: it, txn: txn, metrics: b.metrics}, nil
 }
 
 // NewBatchWriter returns a badger write batch instance
 func (b *BadgerDB) NewBatchWriter() db.BatchWriter {
 	return &BatchWriter{
-		bw: b.db.NewWriteBatch(),
+		bw:      b.db.NewWriteBatch(),
+		metrics: b.metrics,
 	}
 }
 
 // Insert stores the give key-value to badger DB, entries are not synced to disk immediately
 func (b *BadgerDB) Insert(key []byte, value []byte) error {
+	b.metrics.CaptureDBReads(1)
+
 	// 1. Check if key already exists
 	data, err := b.Get(key)
 	if err == nil {
@@ -65,6 +71,8 @@ func (b *BadgerDB) Insert(key []byte, value []byte) error {
 
 		return common.ErrKeyExists
 	} else if errors.Is(err, common.ErrKeyNotFound) {
+		b.metrics.CaptureDBWrites(1)
+
 		// Create a new entry in Badger DB and store the k-v data
 		if err = b.db.Update(func(txn *badger.Txn) error {
 			return txn.Set(key, value)
@@ -80,6 +88,8 @@ func (b *BadgerDB) Insert(key []byte, value []byte) error {
 
 // Has check's for the given key in the database
 func (b *BadgerDB) Has(key []byte) (bool, error) {
+	b.metrics.CaptureDBReads(1)
+
 	// 1. Assume by default that key does not exist
 	var entryExists bool
 
@@ -107,7 +117,9 @@ func (b *BadgerDB) Has(key []byte) (bool, error) {
 }
 
 func (b *BadgerDB) Update(key []byte, value []byte) error {
-	// 4. If key exists try to update the entry
+	b.metrics.CaptureDBWrites(1)
+
+	// 1. If key exists try to update the entry
 	err := b.db.Update(func(txn *badger.Txn) error {
 		return txn.Set(key, value)
 	})
@@ -119,6 +131,8 @@ func (b *BadgerDB) Update(key []byte, value []byte) error {
 }
 
 func (b *BadgerDB) Delete(key []byte) error {
+	b.metrics.CaptureDBWrites(1)
+
 	err := b.db.Update(func(txn *badger.Txn) error {
 		// Delete the entry and commit the update transaction
 		return txn.Delete(key)
@@ -132,6 +146,8 @@ func (b *BadgerDB) Delete(key []byte) error {
 
 // Get returns the value for the given key. It returns ErrKeyNotFound if the database does not contain the key
 func (b *BadgerDB) Get(key []byte) ([]byte, error) {
+	b.metrics.CaptureDBReads(1)
+
 	var value []byte
 
 	// 1. Check if the entry for requested CID already exists in the local Badger DB instance. Return data if found.
@@ -153,8 +169,8 @@ func (b *BadgerDB) Get(key []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	// 2. Return the value
 
+	// 2. Return the value
 	return value, nil
 }
 
