@@ -421,7 +421,7 @@ func startDiscovery(t *testing.T, servers ...*Server) {
 
 	for _, s := range servers {
 		// s.setStreamHandler()
-		go s.discover(2 * time.Second)
+		go s.discover(300 * time.Millisecond)
 	}
 }
 

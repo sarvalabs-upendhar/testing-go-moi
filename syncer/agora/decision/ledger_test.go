@@ -13,6 +13,8 @@ import (
 )
 
 func TestGetAssociatedPeers_FetchFromCache(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -33,6 +35,8 @@ func TestGetAssociatedPeers_FetchFromCache(t *testing.T) {
 }
 
 func TestGetAssociatedPeers_FetchFromDB(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -58,6 +62,8 @@ func TestGetAssociatedPeers_FetchFromDB(t *testing.T) {
 }
 
 func TestUpdateAssociatedPeers_EntryAlreadyExists(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -82,7 +88,7 @@ func TestUpdateAssociatedPeers_EntryAlreadyExists(t *testing.T) {
 	err = ledger.UpdateAssociatedPeers(address, stateHash, ids[1])
 	require.NoError(t, err)
 
-	time.Sleep(3 * time.Second) // wait for 3 seconds
+	time.Sleep(1 * time.Second) // wait for 3 seconds
 
 	peerList, err := ledger.fetchFromDB(address, stateHash)
 	require.NoError(t, err)
@@ -99,6 +105,8 @@ func TestUpdateAssociatedPeers_EntryAlreadyExists(t *testing.T) {
 }
 
 func TestUpdateAssociatedPeers_NewEntry(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -112,7 +120,7 @@ func TestUpdateAssociatedPeers_NewEntry(t *testing.T) {
 	err := ledger.UpdateAssociatedPeers(address, stateHash, ids[0])
 	require.NoError(t, err)
 
-	time.Sleep(3 * time.Second) // wait for 3 seconds
+	time.Sleep(1 * time.Second) // wait for 1 seconds
 
 	// fetch peer list from db
 	peerList, err := ledger.fetchFromDB(address, stateHash)

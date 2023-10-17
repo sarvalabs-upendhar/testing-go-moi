@@ -537,6 +537,8 @@ func TestGetBucketSizes(t *testing.T) {
 
 // here we insert 10000 random accounts and check if inserted accounts and fetched accounts match
 func TestGetAccounts(t *testing.T) {
+	t.Parallel()
+
 	pm := NewTestPersistenceManager(t)
 
 	insertedAccounts := insertTestAccMetaInfo(t, pm)
@@ -561,6 +563,8 @@ func TestGetAccounts(t *testing.T) {
 
 // here we insert 10000 entries and check if inserted entries and fetched entries match
 func TestGetEntriesWithPrefix(t *testing.T) {
+	t.Parallel()
+
 	pm := NewTestPersistenceManager(t)
 	insertedEntries, prefixes := insertTestEntries(t, pm)
 

@@ -133,6 +133,7 @@ func (t *Arith) Sleep(ctx context.Context, secs int, res *struct{}) error {
 
 func (t *Arith) PrintHelloWorld(ctx context.Context, args struct{}, res *struct{}) error {
 	t.ctxTracker.setCtx(ctx)
+
 	fmt.Print("hello world!")
 
 	return nil
@@ -263,6 +264,8 @@ func createP2PHosts(t *testing.T) (h1, h2 host.Host) {
 }
 
 func TestRegister(t *testing.T) {
+	t.Parallel()
+
 	h1, h2 := makeRandomNodes()
 
 	defer h1.Close()
@@ -303,8 +306,6 @@ func testCall(t *testing.T, servNode, clientNode host.Host, dest peer.ID) {
 		t.Fatal(err)
 	}
 
-	t.Log("##### 1 ##### Calling MOI-call for the first time")
-
 	var q Quotient
 	err = c.MoiCall(context.Background(), id.KramaID(getKramaID(dest)), "Arith", "Divide", &Args{20, 6}, &q, 0)
 
@@ -330,8 +331,6 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, servNode, clientNo
 		t.Fatal(err)
 	}
 
-	t.Log("##### 1 ##### Calling MOI-call for the first time")
-
 	var q Quotient
 	err = c.MoiCall(
 		context.Background(),
@@ -340,7 +339,7 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, servNode, clientNo
 		"Divide",
 		&Args{20, 6},
 		&q,
-		300*time.Millisecond,
+		200*time.Millisecond,
 	)
 
 	if err != nil {
@@ -351,8 +350,6 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, servNode, clientNo
 		t.Error("bad division")
 	}
 
-	t.Log("##### 2 ##### Calling MOI-call for the second time")
-
 	err = c.MoiCall(
 		context.Background(),
 		id.KramaID(getKramaID(dest)),
@@ -360,7 +357,7 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, servNode, clientNo
 		"Divide",
 		&Args{20, 6},
 		&q,
-		300*time.Millisecond,
+		200*time.Millisecond,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -370,8 +367,6 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, servNode, clientNo
 		t.Error("bad division")
 	}
 
-	t.Log("##### 3 ##### Calling MOI-call for the third time")
-
 	err = c.MoiCall(
 		context.Background(),
 		id.KramaID(getKramaID(dest)),
@@ -379,7 +374,7 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, servNode, clientNo
 		"Divide",
 		&Args{20, 6},
 		&q,
-		300*time.Millisecond,
+		200*time.Millisecond,
 	)
 
 	if err != nil {
@@ -390,8 +385,6 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, servNode, clientNo
 		t.Error("bad division")
 	}
 
-	t.Log("##### 4 ##### Calling MOI-call for the fourth time")
-
 	err = c.MoiCall(
 		context.Background(),
 		id.KramaID(getKramaID(dest)),
@@ -399,7 +392,7 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, servNode, clientNo
 		"Divide",
 		&Args{20, 6},
 		&q,
-		300*time.Millisecond,
+		200*time.Millisecond,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -409,8 +402,7 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, servNode, clientNo
 		t.Error("bad division")
 	}
 
-	time.Sleep(1 * time.Second)
-	t.Log("##### 5 ##### Calling MOI-call for the fifth time")
+	time.Sleep(500 * time.Millisecond)
 
 	err = c.MoiCall(
 		context.Background(),
@@ -419,7 +411,7 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, servNode, clientNo
 		"Divide",
 		&Args{20, 6},
 		&q,
-		300*time.Millisecond,
+		200*time.Millisecond,
 	)
 
 	if err != nil {
@@ -1006,7 +998,6 @@ func TestCallContext(t *testing.T) {
 
 	t.Run("local", func(t *testing.T) {
 		testCallContext(t, h1, h2, h2.ID())
-		t.Log("***DONE LOCAL")
 	})
 
 	// t.Run("remote", func(t *testing.T) {
@@ -1015,7 +1006,6 @@ func TestCallContext(t *testing.T) {
 	// })
 
 	t.Run("async", func(t *testing.T) {
-		t.Log("***STARTING ASYNC")
 		s := NewServer(testLogger, h1, "rpc")
 		c := NewClientWithServer(testLogger, h2, "rpc", nil, s)
 
@@ -1395,6 +1385,7 @@ func TestStream(t *testing.T) {
 
 func testStreamError(t *testing.T, servHost, clientHost host.Host, dest peer.ID) {
 	t.Helper()
+	t.Parallel()
 
 	s := NewServer(testLogger, servHost, "rpc")
 	c := NewClientWithServer(testLogger, clientHost, "rpc", nil, s)
@@ -1450,9 +1441,14 @@ func testStreamError(t *testing.T, servHost, clientHost host.Host, dest peer.ID)
 }
 
 func TestStreamError(t *testing.T) {
+	t.Parallel()
+
 	h1, h2 := makeRandomNodes()
-	defer h1.Close()
-	defer h2.Close()
+
+	t.Cleanup(func() {
+		h1.Close()
+		h2.Close()
+	})
 
 	t.Run("local", func(t *testing.T) {
 		testStreamError(t, h1, h2, h2.ID())
@@ -1465,6 +1461,7 @@ func TestStreamError(t *testing.T) {
 
 func testStreamCancel(t *testing.T, servHost, clientHost host.Host, dest peer.ID) {
 	t.Helper()
+	t.Parallel()
 
 	s := NewServer(testLogger, servHost, "rpc")
 	c := NewClientWithServer(testLogger, clientHost, "rpc", nil, s)
@@ -1528,9 +1525,14 @@ func testStreamCancel(t *testing.T, servHost, clientHost host.Host, dest peer.ID
 }
 
 func TestStreamCancel(t *testing.T) {
+	t.Parallel()
+
 	h1, h2 := makeRandomNodes()
-	defer h1.Close()
-	defer h2.Close()
+
+	t.Cleanup(func() {
+		h1.Close()
+		h2.Close()
+	})
 
 	t.Run("local", func(t *testing.T) {
 		testStreamCancel(t, h1, h2, h2.ID())
@@ -1542,6 +1544,8 @@ func TestStreamCancel(t *testing.T) {
 }
 
 func TestMultiStream(t *testing.T) {
+	t.Parallel()
+
 	h1, h2 := makeRandomNodes()
 	defer h1.Close()
 	defer h2.Close()
@@ -1594,6 +1598,8 @@ func TestMultiStream(t *testing.T) {
 }
 
 func TestMultiStreamErrors(t *testing.T) {
+	t.Parallel()
+
 	h1, h2 := makeRandomNodes()
 	defer h1.Close()
 	defer h2.Close()
@@ -1636,6 +1642,8 @@ func TestMultiStreamErrors(t *testing.T) {
 }
 
 func TestMultiStreamCancel(t *testing.T) {
+	t.Parallel()
+
 	h1, h2 := makeRandomNodes()
 	defer h1.Close()
 	defer h2.Close()
@@ -1733,8 +1741,11 @@ func testStreamClientMisbehave(t *testing.T, servHost, clientHost host.Host, des
 
 func TestStreamClientMisbehave(t *testing.T) {
 	h1, h2 := makeRandomNodes()
-	defer h1.Close()
-	defer h2.Close()
+
+	t.Cleanup(func() {
+		h1.Close()
+		h2.Close()
+	})
 
 	t.Run("local", func(t *testing.T) {
 		testStreamClientMisbehave(t, h1, h2, h2.ID())

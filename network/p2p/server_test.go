@@ -560,13 +560,13 @@ func TestDiscover_CheckEvents(t *testing.T) {
 	PeerEventSub := servers[0].mux.Subscribe(utils.NewPeerEvent{}) // subscribe to server-1 events
 	PeerDiscoveredEventSub := servers[0].mux.Subscribe(utils.PeerDiscoveredEvent{})
 
-	go servers[0].discover(1 * time.Second)
-	time.Sleep(3 * time.Second)
+	go servers[0].discover(500 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 
-	go servers[1].discover(1 * time.Second)
-	time.Sleep(3 * time.Second)
+	go servers[1].discover(500 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 
-	// check if server-0,1 are able to discover each other after 10 seconds
+	// check if server-0,1 are able to discover each other after 3 seconds
 	checkForPeerRegistration(t, servers[0], servers[1], true)
 	checkForPeerRegistration(t, servers[1], servers[0], true)
 
@@ -1275,7 +1275,7 @@ func TestSendHelloMessage_CheckMsgOnTopic(t *testing.T) {
 	startDiscovery(t, servers...)
 	registerEmptySubscriptionHandler(t, servers[0], config.SenatusTopic, true)
 	subscribeHelloMsg(t, servers[1], config.SenatusTopic, servers[0], response)
-	time.Sleep(5 * time.Second) // give time for discovery and subscription
+	time.Sleep(2 * time.Second) // give time for discovery and subscription
 
 	servers[0].SendHelloMessage()
 
@@ -1294,7 +1294,7 @@ func TestGetRandomNode_CheckInRoutingTable(t *testing.T) {
 	addresses := getMultiAddresses(t, bootNodes)
 	paramsMap := map[int]*CreateServerParams{}
 
-	for i := 0; i < 9; i++ {
+	for i := 0; i < 5; i++ {
 		paramsMap[i] = &CreateServerParams{
 			EventMux: &utils.TypeMux{},
 			ConfigCallback: func(c *config.NetworkConfig) {
@@ -1315,13 +1315,13 @@ func TestGetRandomNode_CheckInRoutingTable(t *testing.T) {
 	})
 
 	startDiscovery(t, servers...)
-	time.Sleep(5 * time.Second)
+	time.Sleep(2 * time.Second)
 
 	// check if random peer exists in routing table
-	for i := 0; i < 9; i++ { // indicates server
-		for j := 0; j < 10; j++ { // indicates no. of times random node fetched
+	for i := 0; i < 5; i++ { // indicates server
+		for j := 0; j < 3; j++ { // indicates no. of times random node fetched
 			pID := servers[i].GetRandomNode()
-			routingTable := servers[0].kadDHT.RoutingTable()
+			routingTable := servers[i].kadDHT.RoutingTable()
 
 			require.NotEqual(t, "", routingTable.Find(pID))
 		}

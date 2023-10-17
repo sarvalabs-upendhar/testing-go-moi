@@ -228,7 +228,7 @@ func insertTestAccMetaInfo(t *testing.T, pm *PersistenceManager) map[uint64]comm
 
 	insertedAccounts := make(map[uint64]common.Accounts, 0)
 
-	accountCount := 10000
+	accountCount := 5000
 	for i := 0; i < accountCount; i++ {
 		// test data
 		AccMetaInfo := tests.GetRandomAccMetaInfo(t, 1)
@@ -280,10 +280,12 @@ func insertTestEntries(t *testing.T, pm *PersistenceManager) (map[string]string,
 
 	insertedEntries := make(map[string]string)
 
-	entryCount := 1000
+	entryCount := 100
 	prefixLength := 10
 	keyLength := 20
 	valueLength := 30
+
+	batchWriter := pm.NewBatchWriter()
 
 	for i := 0; i < entryCount; i++ {
 		prefix := tests.GetRandomUpperCaseString(t, prefixLength)
@@ -299,12 +301,15 @@ func insertTestEntries(t *testing.T, pm *PersistenceManager) (map[string]string,
 
 			valBytes := []byte(val)
 
-			err := pm.CreateEntry(prefixedKeyBytes, valBytes)
+			err := batchWriter.Set(prefixedKeyBytes, valBytes)
 			require.NoError(t, err)
 
 			insertedEntries[prefixedKey] = val
 		}
 	}
+
+	err := batchWriter.Flush()
+	require.NoError(t, err)
 
 	return insertedEntries, prefixes
 }

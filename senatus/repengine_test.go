@@ -837,9 +837,9 @@ func TestReputationEngine_DBWorker(t *testing.T) {
 		defer wg.Done()
 		reputationEngine.dbWorker()
 	}()
-
+	reputationEngine.signalChan <- struct{}{}
 	// Wait for a short time to let the worker handle messages
-	time.Sleep(6 * time.Second)
+	time.Sleep(1 * time.Second)
 
 	reputationEngine.dirtyLock.RLock()
 	defer reputationEngine.dirtyLock.RUnlock()

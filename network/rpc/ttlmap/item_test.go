@@ -9,7 +9,7 @@ import (
 const itemName = "foo"
 
 func TestNewItemWithExpiration(t *testing.T) {
-	ttl := 1 * time.Second
+	ttl := 500 * time.Millisecond
 	expiration := time.Now().Add(ttl)
 
 	item := NewItem(itemName, WithExpiration(expiration))
@@ -47,7 +47,7 @@ func TestNewItemWithExpiration(t *testing.T) {
 }
 
 func TestNewItemWithTTL(t *testing.T) {
-	ttl := 10 * time.Second
+	ttl := 2 * time.Second
 	item := NewItem(itemName, WithTTL(ttl))
 
 	if item.Value() != itemName {
@@ -77,7 +77,7 @@ func TestNewItemWithoutExpiration(t *testing.T) {
 		t.Fatalf("Not expecting TTL")
 	}
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(100 * time.Millisecond)
 
 	if item.TTL() != time.Duration(math.MaxInt64) {
 		t.Fatalf("Not expecting TTL")
