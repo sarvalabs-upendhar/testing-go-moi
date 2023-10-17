@@ -703,6 +703,7 @@ func (k *Engine) handleReq(req Request) {
 
 		bft := kbft.NewKBFTService(
 			ctx,
+			kbft.MaxBFTimeout,
 			k.selfID,
 			k.cfg,
 			slot.BftOutboundChan,

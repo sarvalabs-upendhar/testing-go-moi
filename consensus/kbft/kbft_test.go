@@ -57,6 +57,7 @@ func TestFullRound_WithMultipleNodes(t *testing.T) {
 
 	kbft := NewKBFTService(
 		ctx,
+		TestBFTimeout,
 		thisNode.KramaID(),
 		createTestConsensusConfig(),
 		out,
@@ -144,6 +145,7 @@ func TestFullRound_WithNonRegisteredReceiver(t *testing.T) {
 
 	kbft := NewKBFTService(
 		ctx,
+		TestBFTimeout,
 		thisNode.KramaID(),
 		createTestConsensusConfig(),
 		out,
@@ -228,6 +230,7 @@ func TestFullRound_WithNilReceiverAddress(t *testing.T) {
 
 	kbft := NewKBFTService(
 		ctx,
+		TestBFTimeout,
 		thisNode.KramaID(),
 		createTestConsensusConfig(),
 		out,
@@ -315,6 +318,7 @@ func TestFullRound_WithLessThan23rdPrevotes(t *testing.T) {
 
 	kbft := NewKBFTService(
 		ctx,
+		TestBFTimeout,
 		thisNode.KramaID(),
 		createTestConsensusConfig(),
 		out,
@@ -388,6 +392,7 @@ func TestFullRound_WithLessThan23rdPrecommit(t *testing.T) {
 
 	kbft := NewKBFTService(
 		ctx,
+		TestBFTimeout,
 		thisNode.KramaID(),
 		createTestConsensusConfig(),
 		out,
@@ -467,6 +472,7 @@ func TestFullRound_WithAny23rdPrevote_Any23rdPrecommit(t *testing.T) {
 
 	kbft := NewKBFTService(
 		ctx,
+		TestBFTimeout,
 		thisNode.KramaID(),
 		createTestConsensusConfig(),
 		out,
@@ -552,6 +558,7 @@ func TestFullRound_With23rdNilPrecommit(t *testing.T) {
 
 	kbft := NewKBFTService(
 		ctx,
+		TestBFTimeout,
 		thisNode.KramaID(),
 		createTestConsensusConfig(),
 		out,
@@ -639,6 +646,7 @@ func TestSignVote(t *testing.T) {
 
 	kbft := NewKBFTService(
 		ctx,
+		TestBFTimeout,
 		thisNode.KramaID(),
 		createTestConsensusConfig(),
 		out,
@@ -690,6 +698,7 @@ func TestConflictPrevote(t *testing.T) {
 
 	kbft := NewKBFTService(
 		ctx,
+		TestBFTimeout,
 		thisNode.KramaID(),
 		createTestConsensusConfig(),
 		out,
@@ -761,6 +770,7 @@ func TestConflictPrecommit(t *testing.T) {
 
 	kbft := NewKBFTService(
 		ctx,
+		TestBFTimeout,
 		thisNode.KramaID(),
 		createTestConsensusConfig(),
 		out,
@@ -847,6 +857,7 @@ func TestRandomValidatorPreVote(t *testing.T) {
 
 	kbft := NewKBFTService(
 		ctx,
+		TestBFTimeout,
 		thisNode.KramaID(),
 		createTestConsensusConfig(),
 		out,
@@ -917,6 +928,7 @@ func TestRandomValidatorPrecommit(t *testing.T) {
 
 	kbft := NewKBFTService(
 		ctx,
+		TestBFTimeout,
 		thisNode.KramaID(),
 		createTestConsensusConfig(),
 		out,
@@ -1001,6 +1013,7 @@ func TestReceivePrevoteDuringPrevoteWait(t *testing.T) {
 
 	kbft := NewKBFTService(
 		ctx,
+		TestBFTimeout,
 		thisNode.KramaID(),
 		createTestConsensusConfig(),
 		out,
@@ -1078,6 +1091,7 @@ func TestReceivePrecommitDuringPrecommmitWait(t *testing.T) {
 
 	kbft := NewKBFTService(
 		ctx,
+		TestBFTimeout,
 		thisNode.KramaID(),
 		createTestConsensusConfig(),
 		out,
