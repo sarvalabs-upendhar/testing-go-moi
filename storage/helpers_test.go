@@ -89,7 +89,7 @@ func NewTestPersistenceManagerWithBadger(t *testing.T, badgerPath string) *Persi
 
 	ctx, ctxCancel := context.WithCancel(context.Background())
 
-	bg, err := badger.NewBadgerDB(badgerPath, db.NilMetrics())
+	bg, err := badger.NewBadgerDB(badgerPath, db.NilMetrics(), hclog.NewNullLogger())
 	require.NoError(t, err)
 
 	return &PersistenceManager{

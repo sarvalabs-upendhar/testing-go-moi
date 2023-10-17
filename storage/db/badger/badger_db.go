@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 
+	"github.com/hashicorp/go-hclog"
+
 	"github.com/dgraph-io/badger/v3"
 	"github.com/pkg/errors"
 
@@ -18,16 +20,20 @@ type BadgerDB struct {
 }
 
 // initBadgerInstance initiates BadgerDB at give path
-func initBadgerInstance(path string) (*badger.DB, error) {
-	opts := badger.DefaultOptions(path) // Add .WithInMemory(true) for in-memory mode
-	opts.IndexCacheSize = 100 << 20     // For better performance and encryption support
+func initBadgerInstance(path string, logger *BadgerLogger) (*badger.DB, error) {
+	opts := badger.DefaultOptions(path).WithLogger(logger) // Add .WithInMemory(true) for in-memory mode
+	opts.IndexCacheSize = 100 << 20                        // For better performance and encryption support
 
 	return badger.Open(opts)
 }
 
 // NewBadgerDB returns a badger db instance which implements DB interface
-func NewBadgerDB(path string, metrics *db.Metrics) (db.Database, error) {
-	database, err := initBadgerInstance(path)
+func NewBadgerDB(path string, metrics *db.Metrics, logger hclog.Logger) (db.Database, error) {
+	badgerLogger := &BadgerLogger{
+		logger: logger.Named("Badger-DB"),
+	}
+
+	database, err := initBadgerInstance(path, badgerLogger)
 	if err != nil {
 		return nil, errors.Wrap(common.ErrDBInit, err.Error())
 	}

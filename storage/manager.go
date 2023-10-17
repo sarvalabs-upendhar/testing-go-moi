@@ -38,7 +38,7 @@ func NewPersistenceManager(
 	config *config.DBConfig,
 	metrics *db.Metrics,
 ) (*PersistenceManager, error) {
-	badgerDB, err := badger.NewBadgerDB(config.DBFolderPath, metrics)
+	badgerDB, err := badger.NewBadgerDB(config.DBFolderPath, metrics, hclog.NewNullLogger())
 	if err != nil {
 		return nil, errors.Wrap(common.ErrDBInit, err.Error())
 	}
