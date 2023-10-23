@@ -766,7 +766,7 @@ func (c *ChainManager) IsInitialTesseract(ts *common.Tesseract) (bool, error) {
 		accountRegistered, err = c.sm.IsAccountRegisteredAt(ts.Address(), info.TesseractHash)
 	}
 
-	return !accountRegistered, err
+	return !accountRegistered && ts.Height() == 0, err
 }
 
 func (c *ChainManager) AddGenesisTesseract(
