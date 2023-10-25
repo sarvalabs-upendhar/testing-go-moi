@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/peterh/liner"
+
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-pisa"
 	"github.com/sarvalabs/go-polo"
@@ -31,14 +32,15 @@ import (
 )
 
 var (
-	networkRPC           string
-	nodeDataDir          string
-	nodeIndex            int32
-	walletAddress        string
-	nodePassword         string
-	localRPC             string
-	watchDogURL          string
-	mnemonicKeystorePath string
+	networkRPC               string
+	nodeDataDir              string
+	nodeIndex                int32
+	walletAddress            string
+	nodePassword             string
+	localRPC                 string
+	watchDogURL              string
+	mnemonicKeystorePath     string
+	mnemonicKeystorePassword string
 )
 
 func GetRegisterCommand() *cobra.Command {
@@ -59,6 +61,12 @@ func parseRegisterFlags(cmd *cobra.Command) {
 		"mnemonic-keystore-path",
 		"",
 		"Path to mnemonic keystore.",
+	)
+	cmd.PersistentFlags().StringVar(
+		&mnemonicKeystorePassword,
+		"mnemonic-keystore-password",
+		os.Getenv("MNEMONIC_KEYSTORE_PASSWORD"),
+		"Password to decrypt mnemonic keystore.",
 	)
 	cmd.PersistentFlags().StringVar(&watchDogURL, "watchdog-url", "", "WatchDog service url")
 	cmd.PersistentFlags().StringVar(&nodeDataDir, "data-dir", "", "Path to node data directory.")
@@ -89,7 +97,7 @@ func parseRegisterFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(
 		&nodePassword,
 		"node-password",
-		"",
+		os.Getenv("NODE_PASSWORD"),
 		"Passcode to encrypt the node keystore.",
 	)
 
@@ -97,7 +105,6 @@ func parseRegisterFlags(cmd *cobra.Command) {
 	_ = cmd.MarkPersistentFlagRequired("data-dir")
 	_ = cmd.MarkPersistentFlagRequired("wallet-address")
 	_ = cmd.MarkPersistentFlagRequired("node-index")
-	_ = cmd.MarkPersistentFlagRequired("node-password")
 	_ = cmd.MarkPersistentFlagRequired("mnemonic-keystore-path")
 }
 
@@ -132,9 +139,22 @@ func runRegisterCommand(cmd *cobra.Command, args []string) {
 
 	line := liner.NewLiner()
 
-	masterPassword, err := line.PasswordPrompt("Enter mnemonic key store password :")
-	if err != nil {
-		cmdCommon.Err(err)
+	if mnemonicKeystorePassword == "" {
+		password, err := line.PasswordPrompt("Enter mnemonic key store password :")
+		if err != nil {
+			cmdCommon.Err(err)
+		}
+
+		mnemonicKeystorePassword = password
+	}
+
+	if nodePassword == "" {
+		password, err := line.PasswordPrompt("Enter node password :")
+		if err != nil {
+			cmdCommon.Err(err)
+		}
+
+		nodePassword = password
 	}
 
 	vault, err := crypto.NewVault(&crypto.VaultConfig{
@@ -144,7 +164,7 @@ func runRegisterCommand(cmd *cobra.Command, args []string) {
 		NodePassword:             nodePassword,
 		InMemory:                 false,
 		MnemonicKeystorePath:     mnemonicKeystorePath,
-		MnemonicKeystorePassword: masterPassword,
+		MnemonicKeystorePassword: mnemonicKeystorePassword,
 	}, moinode.MoiFullNode, 1)
 	if err != nil {
 		cmdCommon.Err(err)

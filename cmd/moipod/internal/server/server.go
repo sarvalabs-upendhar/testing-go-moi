@@ -125,7 +125,7 @@ func parseFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(
 		&NodePassword,
 		nodePasswordFlag,
-		"",
+		os.Getenv("NODE_PASSWORD"),
 		"Node password which is used to decrypt keystore.",
 	)
 
