@@ -595,7 +595,7 @@ func TestSync_ThroughExecution(t *testing.T) {
 	err = clientSyncer.Start(1)
 	require.NoError(t, err)
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(600 * time.Millisecond)
 
 	addresses := tests.GetAddresses(t, 3)
 	accountsToSync := map[common.Address]int{
