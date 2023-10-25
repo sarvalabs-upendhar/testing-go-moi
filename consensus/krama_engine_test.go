@@ -16,34 +16,37 @@ import (
 )
 
 func TestUpdateContextDelta(t *testing.T) {
-	addrs := tests.GetAddresses(t, 3)
+	addrs := tests.GetAddresses(t, 4)
 	kramaIDs := tests.GetTestKramaIDs(t, 2)
+	operator := kramaIDs[0]
+	nodeset := createNodeSet(t, 1, 1, 1, 1, 2, 0)
 
-	registeredReceiverSlot := createSlot(
+	createSlot := func(clusterState *ktypes.ClusterState) *ktypes.Slot {
+		return ktypes.NewSlot(ktypes.OperatorSlot, clusterState)
+	}
+
+	registeredReceiverAddr := addrs[1]
+	assetMintIx := createAssetMintIx(t, addrs[0], registeredReceiverAddr)
+	clusterState := createTestClusterState(
 		t,
-		kramaIDs[0],
+		operator,
 		kramaIDs[1],
-		addrs[0],
-		common.NilAddress,
-		ktypes.OperatorSlot,
-		false,
+		nodeset,
+		common.Interactions{assetMintIx},
+		func(clusterState *ktypes.ClusterState) {
+			clusterState.AccountInfos[registeredReceiverAddr] = &ktypes.AccountInfo{
+				AccType: common.AssetAccount,
+			}
+		},
 	)
+	assetMintSlot := createSlot(clusterState)
+	assetMintRandomNodes := assetMintSlot.ClusterState().NodeSet.Nodes[common.RandomSet].Ids
 
-	unregisteredReceiverSlot := createSlot(
-		t,
-		kramaIDs[0],
-		kramaIDs[1],
-		addrs[1],
-		addrs[2],
-		ktypes.OperatorSlot,
-		true,
-	)
-
-	registeredReceiverRandomNodes := registeredReceiverSlot.ClusterState().NodeSet.Nodes[common.RandomSet].Ids
-	registeredReceiverAddr := registeredReceiverSlot.ClusterState().Ixs[0].Receiver()
-
-	unregisteredReceiverRandomNodes := unregisteredReceiverSlot.ClusterState().NodeSet.Nodes[common.RandomSet].Ids
-	unregisteredReceiverAddr := unregisteredReceiverSlot.ClusterState().Ixs[0].Receiver()
+	unregisteredReceiverAddr := addrs[3]
+	assetTransferIx := createAssetTransferIx(t, addrs[2], unregisteredReceiverAddr)
+	clusterState = createTestClusterState(t, operator, kramaIDs[1], nodeset, assetTransferIx, nil)
+	assetTransferSlot := createSlot(clusterState)
+	assetTransferRandomNodes := assetTransferSlot.ClusterState().NodeSet.Nodes[common.RandomSet].Ids
 
 	sm := NewMockStateManager()
 	sm.registerAccount(registeredReceiverAddr)
@@ -64,24 +67,24 @@ func TestUpdateContextDelta(t *testing.T) {
 		},
 		{
 			name:     "Should update context delta if the receiver account is not registered",
-			sender:   addrs[1],
-			receiver: addrs[2],
-			slot:     unregisteredReceiverSlot,
+			sender:   addrs[2],
+			receiver: unregisteredReceiverAddr,
+			slot:     assetTransferSlot,
 			expectedContextDelta: map[common.Address]*common.DeltaGroup{
-				addrs[1]: {
-					Role:             common.Sender,
-					BehaviouralNodes: []id.KramaID{kramaIDs[0]},
-					RandomNodes:      []id.KramaID{unregisteredReceiverRandomNodes[0]},
-				},
 				addrs[2]: {
+					Role:             common.Sender,
+					BehaviouralNodes: []id.KramaID{operator},
+					RandomNodes:      []id.KramaID{assetTransferRandomNodes[0]},
+				},
+				unregisteredReceiverAddr: {
 					Role:             common.Receiver,
-					BehaviouralNodes: []id.KramaID{unregisteredReceiverRandomNodes[0]},
-					RandomNodes:      []id.KramaID{unregisteredReceiverRandomNodes[1]},
+					BehaviouralNodes: []id.KramaID{assetTransferRandomNodes[0]},
+					RandomNodes:      []id.KramaID{assetTransferRandomNodes[1]},
 				},
 				common.SargaAddress: {
 					Role:             common.Genesis,
-					BehaviouralNodes: []id.KramaID{kramaIDs[0]},
-					RandomNodes:      []id.KramaID{unregisteredReceiverRandomNodes[0]},
+					BehaviouralNodes: []id.KramaID{operator},
+					RandomNodes:      []id.KramaID{assetTransferRandomNodes[0]},
 				},
 			},
 		},
@@ -89,34 +92,34 @@ func TestUpdateContextDelta(t *testing.T) {
 			name:     "Should update context delta if the receiver account is registered",
 			sender:   addrs[0],
 			receiver: registeredReceiverAddr,
-			slot:     registeredReceiverSlot,
+			slot:     assetMintSlot,
 			expectedContextDelta: map[common.Address]*common.DeltaGroup{
 				addrs[0]: {
 					Role:             common.Sender,
-					BehaviouralNodes: []id.KramaID{kramaIDs[0]},
-					RandomNodes:      []id.KramaID{registeredReceiverRandomNodes[0]},
+					BehaviouralNodes: []id.KramaID{operator},
+					RandomNodes:      []id.KramaID{assetMintRandomNodes[0]},
 				},
 				registeredReceiverAddr: {
 					Role:             common.Receiver,
-					BehaviouralNodes: []id.KramaID{kramaIDs[0]},
-					RandomNodes:      []id.KramaID{registeredReceiverRandomNodes[0]},
+					BehaviouralNodes: []id.KramaID{operator},
+					RandomNodes:      []id.KramaID{assetMintRandomNodes[0]},
 				},
 			},
 		},
 		{
 			name:            "Should update context delta partially if the receiver account is not registered",
-			sender:          addrs[1],
+			sender:          addrs[2],
 			receiver:        unregisteredReceiverAddr,
-			slot:            unregisteredReceiverSlot,
+			slot:            assetTransferSlot,
 			enableDebugMode: true,
 			expectedContextDelta: map[common.Address]*common.DeltaGroup{
-				addrs[1]: {
+				addrs[2]: {
 					Role: common.Sender,
 				},
 				unregisteredReceiverAddr: {
 					Role:             common.Receiver,
-					BehaviouralNodes: []id.KramaID{unregisteredReceiverRandomNodes[0]},
-					RandomNodes:      []id.KramaID{unregisteredReceiverRandomNodes[1]},
+					BehaviouralNodes: []id.KramaID{assetTransferRandomNodes[0]},
+					RandomNodes:      []id.KramaID{assetTransferRandomNodes[1]},
 				},
 				common.SargaAddress: {
 					Role: common.Genesis,
@@ -127,9 +130,14 @@ func TestUpdateContextDelta(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			engine := createTestKramaEngine(t, sm, func(cfg *config.ConsensusConfig) {
-				cfg.EnableDebugMode = test.enableDebugMode
-			})
+			engineParams := &createKramaEngineParams{
+				sm: sm,
+				cfgCallback: func(cfg *config.ConsensusConfig) {
+					cfg.EnableDebugMode = test.enableDebugMode
+				},
+			}
+
+			engine := createTestKramaEngine(t, engineParams)
 
 			err := engine.updateContextDelta(test.slot)
 			if test.expectedError != nil {
@@ -141,45 +149,50 @@ func TestUpdateContextDelta(t *testing.T) {
 			require.NoError(t, err)
 
 			actualContextDelta := test.slot.ClusterState().GetContextDelta()
-
-			require.Equal(t, test.expectedContextDelta[test.sender], actualContextDelta[test.sender])
-			require.Equal(t, test.expectedContextDelta[test.receiver], actualContextDelta[test.receiver])
-			require.Equal(t, test.expectedContextDelta[common.SargaAddress], actualContextDelta[common.SargaAddress])
+			checkContextDelta(t, test.sender, test.receiver, test.expectedContextDelta, actualContextDelta)
 		})
 	}
 }
 
 func TestPartiallyUpdateContextDelta(t *testing.T) {
-	addrs := tests.GetAddresses(t, 3)
+	addrs := tests.GetAddresses(t, 4)
 	kramaIDs := tests.GetTestKramaIDs(t, 2)
+	operator := kramaIDs[0]
+	nodeset := createNodeSet(t, 1, 1, 1, 1, 2, 0)
 
-	registeredReceiverSlot := createSlot(t,
-		kramaIDs[0],
-		kramaIDs[1],
-		addrs[0],
-		common.NilAddress,
-		ktypes.OperatorSlot,
-		false,
-	)
+	createSlot := func(clusterState *ktypes.ClusterState) *ktypes.Slot {
+		return ktypes.NewSlot(ktypes.OperatorSlot, clusterState)
+	}
 
-	unregisteredReceiverSlot := createSlot(
+	registeredReceiverAddr := addrs[1]
+	assetMintIx := createAssetMintIx(t, addrs[0], registeredReceiverAddr)
+	clusterState := createTestClusterState(
 		t,
-		kramaIDs[0],
+		operator,
 		kramaIDs[1],
-		addrs[1],
-		addrs[2],
-		ktypes.OperatorSlot,
-		true,
+		nodeset,
+		common.Interactions{assetMintIx},
+		func(clusterState *ktypes.ClusterState) {
+			clusterState.AccountInfos[registeredReceiverAddr] = &ktypes.AccountInfo{
+				AccType: common.AssetAccount,
+			}
+		},
 	)
+	assetMintSlot := createSlot(clusterState)
 
-	registeredReceiverAddr := registeredReceiverSlot.ClusterState().Ixs[0].Receiver()
-	unregisteredReceiverAddr := unregisteredReceiverSlot.ClusterState().Ixs[0].Receiver()
-	unregisteredReceiverRandomNodes := unregisteredReceiverSlot.ClusterState().NodeSet.Nodes[common.RandomSet].Ids
+	unregisteredReceiverAddr := addrs[3]
+	assetTransferIx := createAssetTransferIx(t, addrs[2], unregisteredReceiverAddr)
+	clusterState = createTestClusterState(t, operator, kramaIDs[1], nodeset, assetTransferIx, nil)
+	assetTransferSlot := createSlot(clusterState)
+	assetTransferRandomNodes := assetTransferSlot.ClusterState().NodeSet.Nodes[common.RandomSet].Ids
 
-	sm := NewMockStateManager()
-	sm.registerAccount(registeredReceiverAddr)
+	engineParams := &createKramaEngineParams{
+		smCallback: func(sm *MockStateManager) {
+			sm.registerAccount(registeredReceiverAddr)
+		},
+	}
 
-	engine := createTestKramaEngine(t, sm, nil)
+	engine := createTestKramaEngine(t, engineParams)
 
 	testcases := []struct {
 		name                 string
@@ -191,8 +204,9 @@ func TestPartiallyUpdateContextDelta(t *testing.T) {
 	}{
 		{
 			name:     "Should not update context delta if the receiver account is registered",
+			sender:   addrs[0],
 			receiver: registeredReceiverAddr,
-			slot:     registeredReceiverSlot,
+			slot:     assetMintSlot,
 			expectedContextDelta: map[common.Address]*common.DeltaGroup{
 				addrs[0]: {
 					Role: common.Sender,
@@ -204,16 +218,17 @@ func TestPartiallyUpdateContextDelta(t *testing.T) {
 		},
 		{
 			name:     "Should update context delta partially if the receiver account is not registered",
+			sender:   addrs[2],
 			receiver: unregisteredReceiverAddr,
-			slot:     unregisteredReceiverSlot,
+			slot:     assetTransferSlot,
 			expectedContextDelta: map[common.Address]*common.DeltaGroup{
-				addrs[1]: {
+				addrs[2]: {
 					Role: common.Sender,
 				},
 				unregisteredReceiverAddr: {
 					Role:             common.Receiver,
-					BehaviouralNodes: []id.KramaID{unregisteredReceiverRandomNodes[0]},
-					RandomNodes:      []id.KramaID{unregisteredReceiverRandomNodes[1]},
+					BehaviouralNodes: []id.KramaID{assetTransferRandomNodes[0]},
+					RandomNodes:      []id.KramaID{assetTransferRandomNodes[1]},
 				},
 				common.SargaAddress: {
 					Role: common.Genesis,
@@ -234,10 +249,7 @@ func TestPartiallyUpdateContextDelta(t *testing.T) {
 			require.NoError(t, err)
 
 			actualContextDelta := test.slot.ClusterState().GetContextDelta()
-
-			require.Equal(t, test.expectedContextDelta[test.sender], actualContextDelta[test.sender])
-			require.Equal(t, test.expectedContextDelta[test.receiver], actualContextDelta[test.receiver])
-			require.Equal(t, test.expectedContextDelta[common.SargaAddress], actualContextDelta[common.SargaAddress])
+			checkContextDelta(t, test.sender, test.receiver, test.expectedContextDelta, actualContextDelta)
 		})
 	}
 }

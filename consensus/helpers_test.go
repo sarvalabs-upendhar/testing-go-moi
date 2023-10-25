@@ -184,13 +184,46 @@ func createTestConsensusConfig() *config.ConsensusConfig {
 	}
 }
 
-func createTestKramaEngine(t *testing.T, sm *MockStateManager, cfgCallback func(cfg *config.ConsensusConfig)) *Engine {
+type createKramaEngineParams struct {
+	sm             *MockStateManager
+	cfg            *config.ConsensusConfig
+	smCallback     func(sm *MockStateManager)
+	cfgCallback    func(cfg *config.ConsensusConfig)
+	serverCallback func(n *MockServer)
+	engineCallBack func(k *Engine)
+}
+
+func createTestKramaEngine(t *testing.T, params *createKramaEngineParams) *Engine {
 	t.Helper()
 
-	cfg := createTestConsensusConfig()
+	var (
+		sm     = NewMockStateManager()
+		cfg    = createTestConsensusConfig()
+		server = NewMockServer()
+	)
 
-	if cfgCallback != nil {
-		cfgCallback(cfg)
+	if params == nil {
+		params = &createKramaEngineParams{}
+	}
+
+	if params.sm != nil {
+		sm = params.sm
+	}
+
+	if params.smCallback != nil {
+		params.smCallback(sm)
+	}
+
+	if params.cfg != nil {
+		cfg = params.cfg
+	}
+
+	if params.cfgCallback != nil {
+		params.cfgCallback(cfg)
+	}
+
+	if params.serverCallback != nil {
+		params.serverCallback(server)
 	}
 
 	engine, err := NewKramaEngine(
@@ -199,7 +232,7 @@ func createTestKramaEngine(t *testing.T, sm *MockStateManager, cfgCallback func(
 		hclog.NewNullLogger(),
 		nil,
 		sm,
-		NewMockServer(),
+		server,
 		nil,
 		nil,
 		nil,
@@ -210,31 +243,46 @@ func createTestKramaEngine(t *testing.T, sm *MockStateManager, cfgCallback func(
 	)
 	require.NoError(t, err)
 
+	if params.engineCallBack != nil {
+		params.engineCallBack(engine)
+	}
+
 	return engine
 }
 
-func createAssetIx(t *testing.T, sender common.Address) common.Interactions {
+func createAssetMintIx(t *testing.T, sender, receiver common.Address) *common.Interaction {
 	t.Helper()
 
-	payload, err := polo.Polorize(common.AssetCreatePayload{
-		Symbol:    "Consensus-Test",
-		Supply:    big.NewInt(100),
-		Dimension: 1,
-	})
+	assetMintPayload := common.AssetMintOrBurnPayload{
+		Asset: tests.GetRandomAssetID(t, receiver),
+	}
+
+	rawAssetMintPayload, err := assetMintPayload.Bytes()
 	require.NoError(t, err)
 
-	ixn, err := common.NewInteraction(common.IxData{
-		Input: common.IxInput{
-			Type:      common.IxAssetCreate,
-			Nonce:     0,
-			Sender:    sender,
-			FuelPrice: big.NewInt(1),
-			Payload:   payload,
+	ixParams := &tests.CreateIxParams{
+		IxDataCallback: func(ix *common.IxData) {
+			ix.Input = common.IxInput{
+				Type:      common.IxAssetMint,
+				Nonce:     0,
+				Sender:    sender,
+				FuelPrice: big.NewInt(1),
+				Payload:   rawAssetMintPayload,
+			}
 		},
-	}, nil)
-	require.NoError(t, err)
+	}
 
-	return common.Interactions{ixn}
+	return tests.CreateIX(t, ixParams)
+}
+
+func createAssetTransferIx(t *testing.T, sender, receiver common.Address) common.Interactions {
+	t.Helper()
+
+	ixParams := map[int]*tests.CreateIxParams{
+		0: tests.GetIxParamsWithAddress(sender, receiver),
+	}
+
+	return tests.CreateIxns(t, 1, ixParams)
 }
 
 func createTestNodeSet(t *testing.T, n int) *common.NodeSet {
@@ -297,17 +345,17 @@ func createNodeSet(
 	return testNodeSets
 }
 
-func createTestClusterInfo(
+func createTestClusterState(
 	t *testing.T,
 	operator id.KramaID,
 	selfID id.KramaID,
 	nodeset []*common.NodeSet,
 	ixs common.Interactions,
-	nonRegisteredReceiver bool,
+	callback func(clusterState *ktypes.ClusterState),
 ) *ktypes.ClusterState {
 	t.Helper()
 
-	clusterInfo := ktypes.NewICS(
+	clusterState := ktypes.NewICS(
 		6,
 		nil,
 		ixs,
@@ -317,46 +365,27 @@ func createTestClusterInfo(
 		selfID,
 	)
 
-	func(clusterInfo *ktypes.ClusterState) {
-		clusterInfo.NodeSet.Nodes = nodeset
-		clusterInfo.AccountInfos = make(map[common.Address]*ktypes.AccountInfo)
+	clusterState.NodeSet.Nodes = nodeset
 
-		if !nonRegisteredReceiver && !ixs[0].Receiver().IsNil() {
-			clusterInfo.AccountInfos[ixs[0].Receiver()] = &ktypes.AccountInfo{
-				Address: ixs[0].Receiver(),
-				AccType: common.AccTypeFromIxType(ixs[0].Type()),
-			}
-		}
-	}(clusterInfo)
-
-	return clusterInfo
-}
-
-func createSlot(
-	t *testing.T,
-	operator id.KramaID,
-	selfID id.KramaID,
-	sender common.Address,
-	receiver common.Address,
-	slotType ktypes.SlotType,
-	nonRegisteredReceiver bool,
-) *ktypes.Slot {
-	t.Helper()
-
-	var ixs common.Interactions
-
-	if nonRegisteredReceiver {
-		ixParams := tests.GetIxParamsWithAddress(sender, receiver)
-		ixs = append(ixs, tests.CreateIX(t, ixParams))
-	} else {
-		ixs = createAssetIx(t, sender)
+	if callback != nil {
+		callback(clusterState)
 	}
 
-	nodeset := createNodeSet(t, 1, 1, 1, 1, 2, 0)
-	clusterInfo := createTestClusterInfo(t, operator, selfID, nodeset, ixs, nonRegisteredReceiver)
-	slot := ktypes.NewSlot(slotType, clusterInfo)
+	return clusterState
+}
 
-	return slot
+func checkContextDelta(
+	t *testing.T,
+	sender common.Address,
+	receiver common.Address,
+	expectedContextDelta common.ContextDelta,
+	actualContextDelta common.ContextDelta,
+) {
+	t.Helper()
+
+	require.Equal(t, expectedContextDelta[sender], actualContextDelta[sender])
+	require.Equal(t, expectedContextDelta[receiver], actualContextDelta[receiver])
+	require.Equal(t, expectedContextDelta[common.SargaAddress], actualContextDelta[common.SargaAddress])
 }
 
 func getRawInteraction(t *testing.T, ixData common.IxData, sign []byte) []byte {

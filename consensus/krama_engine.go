@@ -1124,11 +1124,14 @@ func (k *Engine) createProposalGrid(slot *ktypes.Slot) ([]*common.Tesseract, err
 	return GenerateTesseracts(clusterState)
 }
 
+// Updates the context delta for sender and for the receiver depending on whether the
+// receiver account is registered or not
 func (k *Engine) updateContextDelta(slot *ktypes.Slot) error {
 	if slot == nil {
 		return errors.New("nil slot")
 	}
 
+	// if debug mode is on, partially update the context delta
 	if k.cfg.EnableDebugMode {
 		return k.partiallyUpdateContextDelta(slot)
 	}
@@ -1141,6 +1144,7 @@ func (k *Engine) updateContextDelta(slot *ktypes.Slot) error {
 		senderAddr := ix.Sender()
 		receiverAddr := ix.Receiver()
 
+		// update context delta for sender
 		if !senderAddr.IsNil() && !seenAccounts[senderAddr] {
 			senderDeltaGroup := new(common.DeltaGroup)
 			senderDeltaGroup.Role = common.Sender
@@ -1169,6 +1173,7 @@ func (k *Engine) updateContextDelta(slot *ktypes.Slot) error {
 			deltaMap[senderAddr] = senderDeltaGroup
 		}
 
+		// update context delta for receiver
 		if !receiverAddr.IsNil() && !seenAccounts[receiverAddr] {
 			receiverDeltaGroup := new(common.DeltaGroup)
 			receiverDeltaGroup.Role = common.Receiver
@@ -1178,6 +1183,7 @@ func (k *Engine) updateContextDelta(slot *ktypes.Slot) error {
 				return err
 			}
 
+			// if receiver account is not registered, update context delta for genesis as well as receiver address
 			if !accountRegistered {
 				// Fetch new nodes for receiver account
 				behaviouralNodes, randomNodes, err := k.GetNodes(
@@ -1220,6 +1226,7 @@ func (k *Engine) updateContextDelta(slot *ktypes.Slot) error {
 				deltaMap[common.SargaAddress] = genesisDeltaGroup
 			} else if clusterState.AccountInfos[receiverAddr].AccType == common.LogicAccount ||
 				clusterState.AccountInfos[receiverAddr].AccType == common.AssetAccount {
+				// update context delta for only receiver address if receiver account is registered
 				receiverBehaviourDelta, replacedNodes := clusterState.GetBehaviouralContextDelta(
 					common.ReceiverBehaviourSet,
 				)
