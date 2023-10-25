@@ -330,7 +330,7 @@ func TestSync_FromBroadcastedTesseract(t *testing.T) {
 	err = clientSyncer.Start(1)
 	require.NoError(t, err)
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(600 * time.Millisecond)
 
 	accountsToSync := map[common.Address]int{
 		addresses[2]: 3,
@@ -445,7 +445,7 @@ func TestSync_FromRejoining(t *testing.T) {
 	err = clientSyncer.Start(1)
 	require.NoError(t, err)
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(600 * time.Millisecond)
 
 	clientCancel()
 	clientPM[0].Close()

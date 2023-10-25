@@ -43,7 +43,7 @@ import (
 
 const (
 	MinimumConnReq          = 100
-	MaximumConnReq          = 500
+	MaximumConnReq          = 1000
 	MinimumBootNodeConn int = 1
 )
 
@@ -405,7 +405,8 @@ func pubsubGossipParam() pubsub.GossipSubParams {
 	gParams.Dlo = 6
 	gParams.D = 8
 	gParams.Dhi = 12
-	gParams.HeartbeatInterval = 500 * time.Millisecond
+	gParams.GossipFactor = 0.15
+	gParams.HeartbeatInterval = 600 * time.Millisecond
 
 	return gParams
 }
