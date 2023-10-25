@@ -435,7 +435,7 @@ func TestUpdateTesseractStatus_CheckHeight(t *testing.T) {
 	}
 
 	addresses := tests.GetAddresses(t, 3)
-	hashes := getHashes(t, 3)
+	hashes := tests.GetHashes(t, 3)
 	height := uint64(30)
 	testcases := []struct {
 		name          string

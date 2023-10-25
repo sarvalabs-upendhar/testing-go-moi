@@ -728,7 +728,7 @@ func TestCreateAsset(t *testing.T) {
 }
 
 func TestGetMetaContextObjectCopy(t *testing.T) {
-	hashes := getHashes(t, 4)
+	hashes := tests.GetHashes(t, 4)
 	mObj, mHash := getMetaContextObjects(t, hashes)
 
 	testcases := []struct {

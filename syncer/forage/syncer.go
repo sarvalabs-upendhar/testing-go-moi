@@ -108,6 +108,7 @@ type store interface {
 	UpdatePrimarySyncStatus(address common.Address) error
 	IsAccountPrimarySyncDone(address common.Address) bool
 	HasTesseract(tsHash common.Hash) bool
+	SetTesseract(tsHash common.Hash, data []byte) error
 	UpdatePrincipalSyncStatus() error
 	GetBucketCount(bucketNumber uint64) (uint64, error)
 	StreamAccountMetaInfosRaw(ctx context.Context, bucketNumber uint64, response chan []byte) error
@@ -508,10 +509,6 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 					jobState = Sleep
 
 					return nil
-				}
-
-				if err := s.publishEventTesseractSync(job.address, tsInfo.tesseract.Height()); err != nil {
-					s.logger.Error("failed to publish event lattice sync", "err", err)
 				}
 			}
 
@@ -1435,6 +1432,10 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 			return false, errors.Wrap(err, "failed to add synced tesseract")
 		}
 
+		if err := s.publishEventTesseractSync(msg.tesseract.Address(), msg.tesseract.Height()); err != nil {
+			s.logger.Error("failed to publish event lattice sync", "err", err)
+		}
+
 		return true, nil
 	}
 
@@ -1522,6 +1523,12 @@ func (s *Syncer) executeAndAdd(dirty map[common.Hash][]byte, grid *Grid) error {
 
 	if err := s.lattice.AddTesseracts(dirty, grid.Tesseracts()...); err != nil {
 		return err
+	}
+
+	for _, ts := range grid.Tesseracts() {
+		if err := s.publishEventTesseractSync(ts.Address(), ts.Height()); err != nil {
+			s.logger.Error("failed to publish event lattice sync", "err", err)
+		}
 	}
 
 	return nil
