@@ -220,6 +220,7 @@ type ConsensusConfig struct {
 	Precision             int64 `json:"precision"`
 	OperatorSlots         int   `json:"operator_slots"`
 	ValidatorSlots        int   `json:"validator_slots"`
+	EnableDebugMode       bool  `json:"enable_debug_mode"`
 }
 
 type ExecutionConfig struct {

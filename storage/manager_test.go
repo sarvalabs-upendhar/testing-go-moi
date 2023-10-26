@@ -435,7 +435,7 @@ func TestUpdateTesseractStatus_CheckHeight(t *testing.T) {
 	}
 
 	addresses := tests.GetAddresses(t, 3)
-	hashes := getHashes(t, 3)
+	hashes := tests.GetHashes(t, 3)
 	height := uint64(30)
 	testcases := []struct {
 		name          string
@@ -537,6 +537,8 @@ func TestGetBucketSizes(t *testing.T) {
 
 // here we insert 10000 random accounts and check if inserted accounts and fetched accounts match
 func TestGetAccounts(t *testing.T) {
+	t.Parallel()
+
 	pm := NewTestPersistenceManager(t)
 
 	insertedAccounts := insertTestAccMetaInfo(t, pm)
@@ -561,6 +563,8 @@ func TestGetAccounts(t *testing.T) {
 
 // here we insert 10000 entries and check if inserted entries and fetched entries match
 func TestGetEntriesWithPrefix(t *testing.T) {
+	t.Parallel()
+
 	pm := NewTestPersistenceManager(t)
 	insertedEntries, prefixes := insertTestEntries(t, pm)
 

@@ -5,14 +5,18 @@ import (
 	"github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi/storage/db"
 )
 
 // BatchWriter is used to perform batch writes to badger database, It implements db.BatchWriter interface
 type BatchWriter struct {
-	bw *badger.WriteBatch
+	bw      *badger.WriteBatch
+	metrics *db.Metrics
 }
 
 func (b *BatchWriter) Set(key, value []byte) error {
+	b.metrics.CaptureDBWrites(1)
+
 	return b.bw.Set(key, value)
 }
 

@@ -184,6 +184,10 @@ func (p *Params) applyFlags(cmd *cobra.Command, path string) error {
 		p.rawCfg.Consensus.ValidatorSlots = ValidatorSlots
 	}
 
+	if isEnableDebugModeSet(cmd) {
+		p.rawCfg.Consensus.EnableDebugMode = enableDebugMode
+	}
+
 	if isCleanDBSet(cmd) {
 		p.rawCfg.DB.CleanDB = CleanDB
 	}
@@ -272,6 +276,7 @@ func (p *Params) getConsensusConfig(path string) *config.ConsensusConfig {
 		Precision:             time.Duration(p.rawCfg.Consensus.Precision) * time.Nanosecond,
 		ValidatorSlotCount:    p.rawCfg.Consensus.ValidatorSlots,
 		OperatorSlotCount:     p.rawCfg.Consensus.OperatorSlots,
+		EnableDebugMode:       p.rawCfg.Consensus.EnableDebugMode,
 	}
 }
 
@@ -403,6 +408,10 @@ func isOperatorSlotSet(cmd *cobra.Command) bool {
 
 func isValidatorSlotSet(cmd *cobra.Command) bool {
 	return cmd.Flags().Changed(validatorSlotFlag)
+}
+
+func isEnableDebugModeSet(cmd *cobra.Command) bool {
+	return cmd.Flags().Changed(enableDebugModeFlag)
 }
 
 func isCleanDBSet(cmd *cobra.Command) bool {

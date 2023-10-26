@@ -2192,17 +2192,6 @@ func getLogicIDs(t *testing.T, count int) []common.LogicID {
 	return logicIDs
 }
 
-func getHashes(t *testing.T, count int) []common.Hash {
-	t.Helper()
-
-	hashes := make([]common.Hash, count)
-	for i := 0; i < count; i++ {
-		hashes[i] = tests.RandomHash(t)
-	}
-
-	return hashes
-}
-
 func getDirtyEntries(t *testing.T, count int) LogicStorageObject {
 	t.Helper()
 

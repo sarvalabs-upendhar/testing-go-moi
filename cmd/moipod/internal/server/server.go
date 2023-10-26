@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -38,6 +39,7 @@ var (
 	NodePassword       string
 	P2pHostIP          string
 	DiscoveryInterval  time.Duration
+	enableDebugMode    bool
 )
 
 const (
@@ -56,6 +58,7 @@ const (
 	nodePasswordFlag      = "node-password"
 	p2pHostIPFlag         = "p2p-host-ip"
 	discoveryIntervalFlag = "discovery-interval"
+	enableDebugModeFlag   = "enable-debug-mode"
 )
 
 func GetServerCommand() *cobra.Command {
@@ -71,6 +74,10 @@ func GetServerCommand() *cobra.Command {
 }
 
 func runCommand(cmd *cobra.Command, args []string) {
+	if enableDebugMode {
+		fmt.Println("WARNING: Debug mode is enabled. Do not use in production environment.")
+	}
+
 	SetupNode(cmd)
 }
 
@@ -98,6 +105,12 @@ func parseFlags(cmd *cobra.Command) {
 		"The CORS header determines if the specified origin is allowed to receive any JSON-RPC response.",
 	)
 	cmd.PersistentFlags().BoolVar(
+		&enableDebugMode,
+		enableDebugModeFlag,
+		false,
+		"Enable debug mode for troubleshooting and debugging purposes. WARNING: Do not use in production environment.",
+	)
+	cmd.PersistentFlags().BoolVar(
 		&Babylon,
 		babylonFlag,
 		false,
@@ -107,12 +120,12 @@ func parseFlags(cmd *cobra.Command) {
 		&Bootnodes,
 		bootNodesFlag,
 		[]string{},
-		"list of bootnode multi-address.",
+		"List of bootnode multi-address.",
 	)
 	cmd.PersistentFlags().StringVar(
 		&NodePassword,
 		nodePasswordFlag,
-		"",
+		os.Getenv("NODE_PASSWORD"),
 		"Node password which is used to decrypt keystore.",
 	)
 

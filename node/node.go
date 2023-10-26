@@ -84,11 +84,11 @@ func NewNode(logLevel string, cfg *config.Config) (n *Node, err error) {
 		return nil, err
 	}
 
+	n.setupTelemetry()
+
 	if err = n.setupPersistenceManager(); err != nil {
 		return nil, err
 	}
-
-	n.setupTelemetry()
 
 	if err = n.setupNetwork(); err != nil {
 		return nil, err

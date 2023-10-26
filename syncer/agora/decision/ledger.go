@@ -185,7 +185,7 @@ func (l *Ledger) worker() {
 			l.logger.Info("Context expired, closing worker")
 
 			return
-		case <-time.After(2 * time.Second):
+		case <-time.After(500 * time.Millisecond):
 		}
 
 		jobs := l.scoopJobs()

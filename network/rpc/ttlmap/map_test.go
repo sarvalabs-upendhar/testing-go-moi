@@ -266,7 +266,7 @@ func TestMapPersistency(t *testing.T) {
 		t.Fatalf("Invalid item=%v err=%v", item, err)
 	}
 
-	bar := NewItem("bar", WithTTL(500*time.Millisecond))
+	bar := NewItem("bar", WithTTL(100*time.Millisecond))
 
 	if err := m.Set("bar", bar, nil); err != nil {
 		t.Fatal(err)
@@ -300,7 +300,7 @@ func TestMapPersistency(t *testing.T) {
 		t.Fatalf("Invalid item=%v err=%v", item, err)
 	}
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(200 * time.Millisecond)
 
 	if item, err := m.Get("foo"); err != nil || item != foo {
 		t.Fatalf("Invalid item=%v err=%v", item, err)
@@ -346,11 +346,11 @@ func TestMapWaitExpired(t *testing.T) {
 	defer m.Drain()
 
 	start := time.Now()
-	n, min := 100, 500
+	n, min := 10, 100
 
 	testMapSetNIncreasing(t, m, n, min, start)
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(500 * time.Millisecond)
 
 	if m.Len() != 0 {
 		t.Fatalf("Invalid length")

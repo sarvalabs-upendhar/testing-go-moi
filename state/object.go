@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-pisa"
 
 	"github.com/sarvalabs/go-moi/common"
 	id "github.com/sarvalabs/go-moi/common/kramaid"
@@ -901,6 +902,8 @@ func (object *Object) getLogicTree() (tree.MerkleTree, error) {
 }
 
 func (object *Object) getLogicObject(logicID common.LogicID) (*LogicObject, error) {
+	engineio.RegisterRuntime(pisa.NewRuntime(), nil)
+
 	logicTree, err := object.getLogicTree()
 	if err != nil {
 		return nil, err

@@ -1028,3 +1028,15 @@ func GetRandomNumber(t *testing.T, max int) int {
 
 	return int(nBig.Int64())
 }
+
+func GetHashes(t *testing.T, count int) []common.Hash {
+	t.Helper()
+
+	var hashes []common.Hash
+
+	for i := 0; i < count; i++ {
+		hashes = append(hashes, RandomHash(t))
+	}
+
+	return hashes
+}

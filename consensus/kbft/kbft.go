@@ -22,7 +22,8 @@ import (
 )
 
 const (
-	MaxBFTimeout = 10 * time.Second
+	TestBFTimeout = 1 * time.Second
+	MaxBFTimeout  = 10 * time.Second
 )
 
 type vault interface {
@@ -58,6 +59,7 @@ type KBFT struct {
 // receive consensus messages, a PrivateValidator object, an execution engine and a lattice manager.
 func NewKBFTService(
 	ctx context.Context,
+	timeout time.Duration,
 	kid id.KramaID,
 	config *config.ConsensusConfig,
 	outboundChan, inboundChan chan ktypes.ConsensusMessage,
@@ -82,7 +84,7 @@ func NewKBFTService(
 		opt(k)
 	}
 
-	k.ctx, k.ctxCancel = context.WithTimeout(ctx, MaxBFTimeout)
+	k.ctx, k.ctxCancel = context.WithTimeout(ctx, timeout)
 	k.updateToState(ics)
 
 	return k

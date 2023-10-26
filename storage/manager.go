@@ -27,7 +27,7 @@ type PersistenceManager struct {
 	ctx       context.Context
 	ctxCancel context.CancelFunc
 	config    *config.DBConfig
-	db        db.DB
+	db        db.Database
 	logger    hclog.Logger
 }
 
@@ -36,8 +36,9 @@ func NewPersistenceManager(
 	ctx context.Context,
 	logger hclog.Logger,
 	config *config.DBConfig,
+	metrics *db.Metrics,
 ) (*PersistenceManager, error) {
-	badgerDB, err := badger.NewBadgerDB(config.DBFolderPath)
+	badgerDB, err := badger.NewBadgerDB(config.DBFolderPath, metrics, hclog.NewNullLogger())
 	if err != nil {
 		return nil, errors.Wrap(common.ErrDBInit, err.Error())
 	}

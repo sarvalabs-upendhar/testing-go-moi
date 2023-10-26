@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	maxMessageSize              = 1024 // Bytes
+	maxMessageSize              = 4 * 1024 // 4KB
 	maxAccMetaInfoEntriesPerMsg = 50
 )
 

@@ -1,0 +1,68 @@
+name: Build moipod binaries
+
+on:
+  release:
+    types: [released]
+  workflow_dispatch: {}
+
+jobs:
+  publish:
+    strategy:
+      matrix:
+          os: [ubuntu, windows, macos]
+    
+    runs-on: ${{ matrix.os }}-latest
+    
+    env:
+      ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+      GOPRIVATE: github.com/sarvalabs/*
+    
+    steps:
+      - name: Checkout go-moi code
+        # https://github.com/actions/checkout/releases/tag/v4.0.0
+        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.0.0
+        with:
+          repository: sarvalabs-sarvagya/moi-rel
+          token: ${{ secrets.ACCESS_TOKEN }}
+          
+      - name: Install and setup go
+        # https://github.com/actions/setup-go/releases/tag/v4.1.0
+        uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe # v4.1.0
+        with:
+          go-version: 1.20.8
+
+      - name: Configure git
+        run: git config --global url.https://sarvalabs:${{secrets.ACCESS_TOKEN}}@github.com/.insteadOf https://github.com/
+        
+      - name: Build moipod linux binary
+        if: ${{ matrix.os == 'ubuntu' }}
+        run: go build -o moipod-${{github.ref_name}}-linux-amd64 ./cmd/moipod/
+      - name: Upload the linux binary to CloudFlare R2
+        if: ${{ matrix.os == 'ubuntu' }}
+        run: |
+            npm -g install wrangler
+            CLOUDFLARE_API_TOKEN=${{ secrets.CF_API }} CLOUDFLARE_ACCOUNT_ID=${{ secrets.CF_ACCOUNT }} \
+              wrangler r2 object put moichain/moipod-${{github.ref_name}}-linux-amd64 --file=./moipod-${{github.ref_name}}-linux-amd64
+        shell: bash
+          
+      - name: Build moipod darwin binary
+        if: ${{ matrix.os == 'macos' }}
+        run: go build -o moipod-${{github.ref_name}}-darwin-amd64 ./cmd/moipod/
+      - name: Upload the darwin binary to CloudFlare R2
+        if: ${{ matrix.os == 'macos' }}
+        run: |
+            npm -g install wrangler
+            CLOUDFLARE_API_TOKEN=${{ secrets.CF_API }} CLOUDFLARE_ACCOUNT_ID=${{ secrets.CF_ACCOUNT }} \
+              wrangler r2 object put moichain/moipod-${{github.ref_name}}-darwin-amd64 --file=./moipod-${{github.ref_name}}-darwin-amd64
+        shell: bash
+        
+      - name: Build moipod windows executable
+        if: ${{ matrix.os == 'windows' }}
+        run: go build -o moipod-${{github.ref_name}}-windows-amd64 ./cmd/moipod/
+      - name: Upload the windows executable to CloudFlare R2
+        if: ${{ matrix.os == 'windows' }}
+        run: |
+            npm -g install wrangler
+            CLOUDFLARE_API_TOKEN=${{ secrets.CF_API }} CLOUDFLARE_ACCOUNT_ID=${{ secrets.CF_ACCOUNT }} \
+              wrangler r2 object put moichain/moipod-${{github.ref_name}}-windows-amd64 --file=./moipod-${{github.ref_name}}-windows-amd64
+        shell: bash

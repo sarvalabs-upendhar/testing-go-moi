@@ -80,7 +80,7 @@ func (n *Node) setupNetwork() error {
 
 // setupPersistenceManager creates new dhruva(db) object and setups it to node
 func (n *Node) setupPersistenceManager() (err error) {
-	n.db, err = storage.NewPersistenceManager(n.ctx, n.logger, n.cfg.DB)
+	n.db, err = storage.NewPersistenceManager(n.ctx, n.logger, n.cfg.DB, n.nodeMetrics.storage)
 	if err != nil {
 		return err
 	}

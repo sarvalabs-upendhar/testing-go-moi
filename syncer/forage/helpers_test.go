@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/go-moi/storage/db"
+
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
 
 	"github.com/sarvalabs/go-moi/storage"
@@ -186,6 +188,15 @@ func (m *MockLattice) AddTesseracts(dirtyStorage map[common.Hash][]byte, tessera
 		}
 
 		m.setTesseractByHeight(ts)
+
+		rawTS, err := ts.Canonical().Bytes()
+		if err != nil {
+			return err
+		}
+
+		if err := m.db.SetTesseract(ts.Hash(), rawTS); err != nil {
+			return err
+		}
 
 		if err = m.db.SetTesseractHeightEntry(ts.Address(), ts.Height(), ts.Hash()); err != nil {
 			return err
@@ -674,6 +685,9 @@ func storeTesseractInDB(t *testing.T, ts *common.Tesseract, syncers ...*Syncer) 
 
 		err = s.db.CreateEntry(ts.ICSHash().Bytes(), rawInfo)
 		require.NoError(t, err)
+
+		err = s.db.UpdatePrimarySyncStatus(ts.Address())
+		require.NoError(t, err)
 	}
 }
 
@@ -865,12 +879,23 @@ func defaultSyncerConfig() *config.SyncerConfig {
 	}
 }
 
-func generateTesseracts(t *testing.T, addr common.Address,
-	startHeight, endHeight int, prevHash common.Hash,
+func generateTesseracts(
+	t *testing.T,
+	addr common.Address,
+	startHeight, endHeight int,
+	prevHash common.Hash,
+	totalParts int32,
+	gridHashes ...common.Hash,
 ) []*common.Tesseract {
 	t.Helper()
 
 	tesseracts := make([]*common.Tesseract, 0)
+
+	if len(gridHashes) == 0 {
+		gridHashes = tests.GetHashes(t, endHeight-startHeight+1)
+	}
+
+	index := 0
 
 	for i := startHeight; i <= endHeight; i++ {
 		tesseractParams := &tests.CreateTesseractParams{
@@ -887,9 +912,9 @@ func generateTesseracts(t *testing.T, addr common.Address,
 				header.PrevHash = prevHash
 				header.Extra = common.CommitData{
 					GridID: &common.TesseractGridID{
-						Hash: tests.RandomHash(t), // used to fetch interactions
+						Hash: gridHashes[index], // used to fetch interactions
 						Parts: &common.TesseractParts{
-							Total: 1,
+							Total: totalParts,
 						},
 					},
 				}
@@ -908,6 +933,31 @@ func generateTesseracts(t *testing.T, addr common.Address,
 		ts := tests.CreateTesseract(t, tesseractParams)
 		tesseracts = append(tesseracts, ts)
 		prevHash = ts.Hash()
+
+		index++
+	}
+
+	return tesseracts
+}
+
+func generateTesseractsGridByMap(t *testing.T, addrHeights map[common.Address]int) []*common.Tesseract {
+	t.Helper()
+
+	height := 0
+
+	for _, h := range addrHeights {
+		height = h
+
+		break
+	}
+
+	tesseracts := make([]*common.Tesseract, 0)
+	totalParts := int32(len(addrHeights))
+	gridHashes := tests.GetHashes(t, height+1)
+
+	for addr, height := range addrHeights {
+		tesseracts = append(tesseracts,
+			generateTesseracts(t, addr, 0, height, common.NilHash, totalParts, gridHashes...)...)
 	}
 
 	return tesseracts
@@ -919,7 +969,7 @@ func generateTesseractsByMap(t *testing.T, addrHeights map[common.Address]int) [
 	tesseracts := make([]*common.Tesseract, 0)
 
 	for addr, height := range addrHeights {
-		tesseracts = append(tesseracts, generateTesseracts(t, addr, 0, height, common.NilHash)...)
+		tesseracts = append(tesseracts, generateTesseracts(t, addr, 0, height, common.NilHash, 1)...)
 	}
 
 	return tesseracts
@@ -935,7 +985,7 @@ func createPersistenceManager(t *testing.T, ctx context.Context) (*storage.Persi
 		CleanDB:      true,
 		DBFolderPath: dir,
 		MaxSnapSize:  1073741824,
-	})
+	}, db.NilMetrics())
 	require.NoError(t, err)
 
 	t.Cleanup(func() {

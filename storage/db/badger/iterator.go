@@ -2,14 +2,16 @@ package badger
 
 import (
 	"github.com/dgraph-io/badger/v3"
+	"github.com/sarvalabs/go-moi/storage/db"
 
 	"github.com/sarvalabs/go-moi/common"
 )
 
 // Iterator is a prefix enable badger key-value iterator
 type Iterator struct {
-	it  *badger.Iterator
-	txn *badger.Txn
+	it      *badger.Iterator
+	txn     *badger.Txn
+	metrics *db.Metrics
 }
 
 // Close closes the iterator and discards the transaction
@@ -35,6 +37,8 @@ func (b *Iterator) ValidForPrefix(prefix []byte) bool {
 
 // GetNext returns the next entry
 func (b *Iterator) GetNext() (*common.DBEntry, error) {
+	b.metrics.CaptureDBReads(1)
+
 	var entry *common.DBEntry
 
 	item := b.it.Item()

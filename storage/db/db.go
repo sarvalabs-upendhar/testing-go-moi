@@ -12,8 +12,8 @@ type Collector interface {
 	Send(buf *z.Buffer) error
 }
 
-// DB defines a common interface implemented by all key-value database
-type DB interface {
+// Database defines a common interface implemented by all key-value database
+type Database interface {
 	Insert(key []byte, value []byte) error
 	Update(key []byte, value []byte) error
 	Delete(key []byte) error
