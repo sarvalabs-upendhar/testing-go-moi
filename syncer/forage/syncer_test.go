@@ -889,3 +889,52 @@ func TestJobProcessor_checkSyncTesseractNotBlocked(t *testing.T) {
 	SubscribeAndListenForSyncEvents(t, ctx, testingLogger(t.Name()), clientSyncer.mux, expectedEvents)
 	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, false, ts...)
 }
+
+func TestSyncJobFromCanonicalInfo(t *testing.T) {
+	pm, _ := createPersistenceManager(t, context.Background())
+	j := &SyncJob{
+		db:                    pm,
+		address:               tests.RandomAddress(t),
+		mode:                  common.LatestSync,
+		snapDownloaded:        false,
+		expectedHeight:        8,
+		currentHeight:         2,
+		jobState:              Sleep,
+		lastModifiedAt:        time.Now(),
+		tesseractQueue:        NewTesseractQueue(),
+		latticeSyncInProgress: true,
+	}
+
+	err := j.commitJob()
+	require.NoError(t, err)
+
+	testcases := []struct {
+		name        string
+		expectedJob *SyncJob
+	}{
+		{
+			name:        "fetch sync job from db successfully",
+			expectedJob: j,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			accountSyncInfos, err := pm.GetAccountsSyncStatus()
+			require.NoError(t, err)
+
+			syncJob, err := SyncJobFromCanonicalInfo(hclog.NewNullLogger(), pm, accountSyncInfos[0])
+			require.NoError(t, err)
+
+			require.Equal(t, test.expectedJob.db, syncJob.db)
+			require.Equal(t, test.expectedJob.address, syncJob.address)
+			require.Equal(t, test.expectedJob.expectedHeight, syncJob.expectedHeight)
+			require.Equal(t, test.expectedJob.snapDownloaded, syncJob.snapDownloaded)
+			require.Equal(t, test.expectedJob.mode, syncJob.mode)
+			require.Equal(t, test.expectedJob.jobState, syncJob.jobState)
+			require.True(t, test.expectedJob.lastModifiedAt.Equal(syncJob.lastModifiedAt))
+			require.NotNil(t, syncJob.bestPeers)
+			require.NotNil(t, syncJob.tesseractQueue)
+		})
+	}
+}

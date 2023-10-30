@@ -187,9 +187,11 @@ func SyncJobFromCanonicalInfo(
 		snapDownloaded:  data.SnapshotDownloaded,
 		mode:            data.Mode,
 		expectedHeight:  data.ExpectedHeight,
+		jobState:        JobState(data.State),
 		lastModifiedAt:  *modifiedTime,
 		tesseractQueue:  NewTesseractQueue(),
 		tesseractSignal: make(chan struct{}, 1),
+		bestPeers:       make(map[id.KramaID]struct{}),
 	}, nil
 }
 
