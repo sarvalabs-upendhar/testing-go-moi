@@ -29,7 +29,7 @@ RUN go build -trimpath -o /bin/moipod ./cmd/moipod/
 # second-stage
 # alpine:3.18.3
 
-FROM alpine:3.18.3
+FROM alpine:latest
 
 VOLUME /data
 ARG GIT_COMMIT

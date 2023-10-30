@@ -1556,6 +1556,9 @@ func TestGetLogicObject(t *testing.T) {
 }
 
 func TestIsLogicRegistered(t *testing.T) {
+	// seed the engine runtimes
+	engineio.RegisterRuntime(pisa.NewRuntime(), nil)
+
 	logicID := getLogicID(t, tests.RandomAddress(t))
 	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
 	rawData, err := logicObject.Bytes()
@@ -1597,7 +1600,10 @@ func TestIsLogicRegistered(t *testing.T) {
 }
 
 func TestInsertNewLogicObject(t *testing.T) {
+	engineio.RegisterRuntime(pisa.NewRuntime(), nil)
+
 	logicID := getLogicID(t, tests.RandomAddress(t))
+
 	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
 	rawData, err := logicObject.Bytes()
 	require.NoError(t, err)
