@@ -7,11 +7,6 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 )
 
-// NewIxsEvent occurs when new transactions enter the transaction pool
-type NewIxsEvent struct {
-	Ixs []*common.Interaction
-}
-
 // NewPeerEvent occurs when a new peer is discovered in KIP network
 type NewPeerEvent struct {
 	PeerID peer.ID
@@ -58,4 +53,34 @@ type SyncRequestEvent struct {
 type PendingAccountEvent struct {
 	Address common.Address
 	Count   int64
+}
+
+// AddedInteractionEvent emits added interactions in the account queue
+type AddedInteractionEvent struct {
+	Ixs common.Interactions
+}
+
+// EnqueuedInteractionEvent emits enqueued interactions in the account queue
+type EnqueuedInteractionEvent struct {
+	Ixs common.Interactions
+}
+
+// PromotedInteractionEvent emits promoted interactions in the account queue
+type PromotedInteractionEvent struct {
+	Ixs common.Interactions
+}
+
+// PrunedEnqueuedInteractionEvent emits pruned enqueue in the account queue
+type PrunedEnqueuedInteractionEvent struct {
+	Ixs common.Interactions
+}
+
+// PrunedPromotedInteractionEvent emits pruned promoted interactions in the account queue
+type PrunedPromotedInteractionEvent struct {
+	Ixs common.Interactions
+}
+
+// DroppedInteractionEvent emits dropped interactions in the account queue
+type DroppedInteractionEvent struct {
+	Ixs common.Interactions
 }

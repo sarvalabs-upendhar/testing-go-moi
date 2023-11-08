@@ -6,10 +6,8 @@ import (
 	"math/big"
 	"math/rand"
 	"os"
-	"reflect"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/golang-lru"
@@ -35,11 +33,6 @@ var (
 	validCommitSign   = []byte{1}
 	invalidCommitSign = []byte{0}
 )
-
-type result struct {
-	data interface{}
-	err  error
-}
 
 // MockDB is an in-memory key-value database used for testing purposes
 type MockDB struct {
@@ -1620,38 +1613,6 @@ func setAccountType(sm *MockStateManager, accType common.AccountType, tesseracts
 	}
 }
 
-// waitForResponse waits for response on respChannel
-// and checks if datatype of data received on channel is equal to datatype of data received as argument
-func waitForResponse(t *testing.T, respChan chan result, data interface{}) interface{} {
-	t.Helper()
-
-	res := <-respChan
-	require.NoError(t, res.err)
-
-	require.Equal(t, reflect.TypeOf(res.data), reflect.TypeOf(data))
-
-	return res.data
-}
-
-// handleMuxEvents sends the data to resp channel if it receives data on subscription channel
-// sends time out error when context is closed
-func handleMuxEvents(ctx context.Context, s *utils.Subscription, resp chan result) {
-	for {
-		select {
-		case <-ctx.Done():
-			resp <- result{data: nil, err: common.ErrTimeOut}
-
-			return
-		case data := <-s.Chan():
-			resp <- result{data: data.Data, err: nil}
-
-			return
-		default:
-			time.Sleep(500 * time.Millisecond)
-		}
-	}
-}
-
 // getTesseractAddedEvent extracts TesseractAddedEvent from interface
 func getTesseractAddedEvent(t *testing.T, data interface{}) utils.TesseractAddedEvent {
 	t.Helper()
@@ -2077,12 +2038,12 @@ func validateTSSyncEvent(
 	t *testing.T,
 	c *ChainManager,
 	ts *types.Tesseract,
-	resp chan result,
+	resp chan Result,
 	info *types.ICSClusterInfo,
 ) {
 	t.Helper()
 
-	eventData := waitForResponse(t, resp, utils.TesseractSyncEvent{}) // waits for eventData from goroutine
+	eventData := WaitForResponse(t, resp, utils.TesseractSyncEvent{}) // waits for eventData from goroutine
 	checkIfTSSyncEventsMatch(
 		t,
 		ts,
@@ -2092,11 +2053,11 @@ func validateTSSyncEvent(
 }
 */
 
-func validateTSAddedEvent(t *testing.T, tsAddedResp chan result, ts *common.Tesseract) {
+func validateTSAddedEvent(t *testing.T, tsAddedResp chan tests.Result, ts *common.Tesseract) {
 	t.Helper()
 
-	data := waitForResponse(t, tsAddedResp, utils.TesseractAddedEvent{}) // waits for data from goroutine
-	event := getTesseractAddedEvent(t, data)                             // convert interface type to concrete type
+	data := tests.WaitForResponse(t, tsAddedResp, utils.TesseractAddedEvent{}) // waits for data from goroutine
+	event := getTesseractAddedEvent(t, data)                                   // convert interface type to concrete type
 	require.Equal(t, ts, event.Tesseract)
 }
 

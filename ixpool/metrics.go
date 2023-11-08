@@ -28,13 +28,13 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 			Namespace: namespace,
 			Subsystem: "ixpool",
 			Name:      "pending_transactions",
-			Help:      "Pending transactions in the pool",
+			Help:      "Pending interactions in the pool",
 		}, labels).With(labelsWithValues...),
 		IxPoolSize: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
 			Namespace: namespace,
 			Subsystem: "ixpool",
 			Name:      "interaction_pool_size",
-			Help:      "Sum of all the transaction sizes in the pool",
+			Help:      "Sum of all the interaction sizes in the pool",
 		}, labels).With(labelsWithValues...),
 		SlotsUsed: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
 			Namespace: namespace,
@@ -46,7 +46,7 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 			Namespace: namespace,
 			Subsystem: "ixpool",
 			Name:      "account_wait_time",
-			Help:      "Time taken by a transaction associated with an account to process and complete",
+			Help:      "Time taken by an interaction associated with an account to process and complete",
 			Buckets:   []float64{500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000},
 		}, labels).With(labelsWithValues...),
 	}
@@ -63,7 +63,7 @@ func NilMetrics() *Metrics {
 
 // methods to capture telemetry metrics
 func (metrics *Metrics) initMetrics() {
-	// set default value of ixpool pending transactions gauge
+	// set default value of ixpool pending interactions gauge
 	metrics.PendingIxs.Set(0)
 	// set default value of ixpool size gauge
 	metrics.IxPoolSize.Set(0)

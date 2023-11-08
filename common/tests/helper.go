@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"net"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -1039,4 +1040,22 @@ func GetHashes(t *testing.T, count int) []common.Hash {
 	}
 
 	return hashes
+}
+
+// WaitForResponse waits for response on respChannel
+// and checks if datatype of data received on channel is equal to datatype of data received as argument
+func WaitForResponse(t *testing.T, respChan chan Result, data interface{}) interface{} {
+	t.Helper()
+
+	res := <-respChan
+	require.NoError(t, res.Err)
+
+	require.Equal(t, reflect.TypeOf(res.Data), reflect.TypeOf(data))
+
+	return res.Data
+}
+
+type Result struct {
+	Data interface{}
+	Err  error
 }

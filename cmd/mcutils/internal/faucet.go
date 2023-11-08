@@ -45,7 +45,7 @@ func GetFaucetCommand() *cobra.Command {
 }
 
 func parseFaucetFlags(cmd *cobra.Command) {
-	cmd.PersistentFlags().Uint64Var(&amount, "amount", 0, "Amount to MOI tokens reuired from faucet.")
+	cmd.PersistentFlags().Uint64Var(&amount, "amount", 0, "Amount of MOI tokens required from faucet.")
 	cmd.PersistentFlags().StringVar(&rpcURL, "rpc-url", "http://localhost:1600/", "JSON RPC end point.")
 	cmd.PersistentFlags().StringVar(&keystorePath, "keystore-path", "", "Path to keystore file.")
 	cmd.PersistentFlags().StringVar(&walletAddress, "wallet-address", "",

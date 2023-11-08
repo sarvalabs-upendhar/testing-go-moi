@@ -8,7 +8,7 @@ var (
 	ErrKeyNotFound                 = errors.New("key not found")
 	ErrDBCallFailed                = errors.New("db call failed")
 	ErrDBInit                      = errors.New("db initiation failed")
-	ErrUnderpriced                 = errors.New("transaction underpriced")
+	ErrUnderpriced                 = errors.New("interaction underpriced")
 	ErrAccountNotFound             = errors.New("account not found")
 	ErrPublicKeyNotFound           = errors.New("public key not found")
 	ErrRPCFailed                   = errors.New("unable to initiate rpc")

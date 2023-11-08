@@ -1,10 +1,14 @@
 package utils
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"sync"
 	"time"
+
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/tests"
 
 	"github.com/pkg/errors"
 )
@@ -210,5 +214,29 @@ func (s *Subscription) sendAll(event *TypeMuxEvent) {
 	select {
 	case s.postChannel <- event:
 	case <-s.closing:
+	}
+}
+
+// HandleMuxEvents sends the data to resp channel if it receives data on subscription channel
+// sends time out error when context is closed
+func HandleMuxEvents(ctx context.Context, s *Subscription, resp chan tests.Result, expectedEvents int) {
+	defer close(resp) // Ensure the channel is closed when the function exits
+
+	receivedEvents := 0
+
+	for {
+		select {
+		case <-ctx.Done():
+			resp <- tests.Result{Data: nil, Err: common.ErrTimeOut}
+
+			return
+		case data := <-s.Chan():
+			resp <- tests.Result{Data: data.Data, Err: nil}
+			receivedEvents++
+
+			if receivedEvents >= expectedEvents {
+				return // Exit if we have received the expected number of events
+			}
+		}
 	}
 }

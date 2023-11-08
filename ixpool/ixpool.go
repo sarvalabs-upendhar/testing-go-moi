@@ -159,6 +159,11 @@ func (i *IxPool) checkIx(ix *common.Interaction) error {
 
 	i.allIxs.add(ix)
 
+	// emit added interactions event
+	if err := i.postAddedInteractionEvent(common.Interactions{ix}); err != nil {
+		i.logger.Error("Error sending interaction added event", "err", err)
+	}
+
 	// initialize account for this address once
 	if !i.accounts.exists(ix.Sender()) {
 		i.createAccountOnce(ix.Sender(), ix.Nonce())
@@ -185,10 +190,6 @@ func (i *IxPool) AddInteractions(ixs common.Interactions) []error {
 
 	i.enqueueReqCh <- enqueueRequest{ixs: newIxs}
 
-	if err := i.mux.Post(utils.NewIxsEvent{Ixs: newIxs}); err != nil {
-		i.logger.Error("Error posting event", "err", err)
-	}
-
 	return errs
 }
 
@@ -205,6 +206,11 @@ func (i *IxPool) handleEnqueueRequest(req enqueueRequest) {
 			i.allIxs.remove([]*common.Interaction{ixn})
 
 			continue
+		}
+
+		// emit enqueued interactions event
+		if err := i.postEnqueueInteractionEvent(common.Interactions{ixn}); err != nil {
+			i.logger.Error("Error sending interaction enqueued event", "err", err)
 		}
 
 		// increase gauge as we successfully enqueued ixn
@@ -233,8 +239,15 @@ func (i *IxPool) handlePromoteRequest(req promoteRequest) {
 		account := i.accounts.get(addr)
 
 		// promote enqueued ixs
-		promoted, _ := account.promote()
+		promoted, promotedIxns := account.promote()
 		i.metrics.capturePendingIxs(float64(promoted))
+
+		if len(promotedIxns) > 0 {
+			// emit promoted interactions event
+			if err := i.postPromotedInteractionEvent(promotedIxns); err != nil {
+				i.logger.Error("Error sending interaction promoted event", "err", err)
+			}
+		}
 	}
 }
 
@@ -254,11 +267,11 @@ func (i *IxPool) createAccountOnce(newAddr common.Address, nonce uint64) *accoun
 
 func (i *IxPool) ResetWithHeaders(ts *common.Tesseract) {
 	if ts != nil && len(ts.Interactions()) > 0 {
-		i.ResetWithInteractions(ts.Interactions())
+		i.resetWithInteractions(ts.Interactions())
 	}
 }
 
-func (i *IxPool) ResetWithInteractions(ixs common.Interactions) {
+func (i *IxPool) resetWithInteractions(ixs common.Interactions) {
 	updatedNonces := make(map[common.Address]uint64)
 	// cleanup the lookup queue
 	i.allIxs.remove(ixs)
@@ -316,6 +329,12 @@ func (i *IxPool) resetAccount(addr common.Address, nonce uint64) {
 
 	if len(pruned) > 0 {
 		cleanup(pruned)
+
+		// emit pruned promoted interactions event
+		if err := i.postPrunedPromotedInteractionEvent(pruned); err != nil {
+			i.logger.Error("Error sending interaction pruned promoted event", "err", err)
+		}
+
 		account.waitLock.Lock()
 		i.metrics.captureAccountWaitTime(account.requestTime, account.waitTime)
 		account.requestTime = time.Now()
@@ -346,11 +365,15 @@ func (i *IxPool) resetAccount(addr common.Address, nonce uint64) {
 
 	// prune enqueued
 	pruned = account.enqueued.prune(nonce)
+
 	if len(pruned) > 0 {
 		cleanup(pruned)
-	}
 
-	i.logger.Info("Pruned interactions", "pruned-interactions", pruned)
+		// emit pruned enqueued interactions event
+		if err := i.postPrunedEnqueueInteractionEvent(pruned); err != nil {
+			i.logger.Error("Error sending interaction pruned enqueue event", "err", err)
+		}
+	}
 
 	if ixSize, err := GetIxsSize(pruned); err == nil {
 		i.metrics.captureIxPoolSize(-1 * float64(ixSize))
@@ -435,6 +458,13 @@ func (i *IxPool) Drop(ix *common.Interaction) {
 		// drop promoted
 		dropped := account.promoted.clear()
 		cleanup(dropped)
+
+		if len(dropped) > 0 {
+			// emit dropped interactions event
+			if err := i.postDroppedInteractionEvent(dropped); err != nil {
+				i.logger.Error("Error sending interaction dropped event", "err", err)
+			}
+		}
 
 		i.metrics.capturePendingIxs(float64(-1 * len(dropped)))
 
@@ -702,7 +732,7 @@ func (i *IxPool) removeNonceHoleAccounts() {
 			}
 
 			// check if the account "enqueue" possesses a nonce hole,
-			// and if so, remove all transactions from "enqueue" and all associated transactions in allixns map.
+			// and if so, remove all interactions from "enqueue" and all associated interactions in allixns map.
 
 			if ixn.Nonce() == acc.getNonce() {
 				return true
@@ -753,6 +783,38 @@ func (i *IxPool) Start() {
 
 	go i.handleGaugePruning()
 	go i.handleRequests()
+}
+
+func (i *IxPool) post(ev interface{}) error {
+	if i.mux != nil {
+		return i.mux.Post(ev)
+	}
+
+	return nil
+}
+
+func (i *IxPool) postAddedInteractionEvent(ixns common.Interactions) error {
+	return i.post(utils.AddedInteractionEvent{Ixs: ixns})
+}
+
+func (i *IxPool) postEnqueueInteractionEvent(ixns common.Interactions) error {
+	return i.post(utils.EnqueuedInteractionEvent{Ixs: ixns})
+}
+
+func (i *IxPool) postPromotedInteractionEvent(ixns common.Interactions) error {
+	return i.post(utils.PromotedInteractionEvent{Ixs: ixns})
+}
+
+func (i *IxPool) postDroppedInteractionEvent(ixns common.Interactions) error {
+	return i.post(utils.DroppedInteractionEvent{Ixs: ixns})
+}
+
+func (i *IxPool) postPrunedEnqueueInteractionEvent(ixns common.Interactions) error {
+	return i.post(utils.PrunedEnqueuedInteractionEvent{Ixs: ixns})
+}
+
+func (i *IxPool) postPrunedPromotedInteractionEvent(ixns common.Interactions) error {
+	return i.post(utils.PrunedPromotedInteractionEvent{Ixs: ixns})
 }
 
 // helper functions

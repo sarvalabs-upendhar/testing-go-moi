@@ -207,7 +207,7 @@ func (f *SubscriptionManager) nextTimeoutSubscription() *subscriptionBase {
 	return base
 }
 
-// dispatchEvent is a event handler for new block event
+// dispatchEvent is an event handler for new block event
 func (f *SubscriptionManager) dispatchEvent(event *utils.TypeMuxEvent) error {
 	if data, ok := event.Data.(utils.TesseractAddedEvent); ok {
 		// send data to web socket stream
