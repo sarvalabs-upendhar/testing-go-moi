@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"time"
 
@@ -67,7 +66,7 @@ type stateManager interface {
 	GetAccTypeUsingStateObject(address common.Address) (common.AccountType, error)
 	GetLatestTesseract(addr common.Address, withInteractions bool) (*common.Tesseract, error)
 	GetContextByHash(addr common.Address, hash common.Hash) (common.Hash, []id.KramaID, []id.KramaID, error)
-	GetPublicKeys(id ...id.KramaID) (keys [][]byte, err error)
+	GetPublicKeys(ctx context.Context, id ...id.KramaID) (keys [][]byte, err error)
 	Cleanup(addrs common.Address)
 	IsAccountRegistered(addr common.Address) (bool, error)
 	IsAccountRegisteredAt(addr common.Address, tesseractHash common.Hash) (bool, error)
@@ -98,7 +97,6 @@ type executor interface {
 type AggregatedSignatureVerifier func(data []byte, aggSignature []byte, multiplePubKeys [][]byte) (bool, error)
 
 type ChainManager struct {
-	ctx               context.Context
 	cfg               *config.ChainConfig
 	db                store
 	mux               *utils.TypeMux
@@ -117,7 +115,6 @@ type ChainManager struct {
 }
 
 func NewChainManager(
-	ctx context.Context,
 	cfg *config.ChainConfig,
 	db store,
 	sm stateManager,
@@ -137,7 +134,6 @@ func NewChainManager(
 	}
 
 	c := &ChainManager{
-		ctx:               ctx,
 		cfg:               cfg,
 		db:                db,
 		mux:               mux,
@@ -321,7 +317,7 @@ func (c *ChainManager) GetReceiptByIxHash(ixHash common.Hash) (*common.Receipt, 
 }
 
 func (c *ChainManager) isSealValid(ts *common.Tesseract) (bool, error) {
-	publicKey, err := c.sm.GetPublicKeys(ts.Sealer())
+	publicKey, err := c.sm.GetPublicKeys(context.Background(), ts.Sealer())
 	if err != nil {
 		c.logger.Error("Error fetching the public key", "err", err)
 
@@ -921,7 +917,7 @@ func (c *ChainManager) Start() error {
 }
 
 func (c *ChainManager) Close() {
-	log.Println("Closing chain manager.")
+	c.logger.Info("Closing ChainManager.")
 }
 
 func (c *ChainManager) ExecuteAndValidate(tesseracts ...*common.Tesseract) error {

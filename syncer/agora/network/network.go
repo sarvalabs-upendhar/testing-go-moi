@@ -29,20 +29,24 @@ type SessionManager interface {
 }
 
 type AgoraNetwork struct {
-	ctx     context.Context
-	logger  hclog.Logger
-	peers   sync.Map
-	server  *p2p.Server
-	sm      SessionManager
-	metrics *Metrics
+	ctx       context.Context
+	ctxCancel context.CancelFunc
+	logger    hclog.Logger
+	peers     sync.Map
+	server    *p2p.Server
+	sm        SessionManager
+	metrics   *Metrics
 }
 
-func NewAgoraNetwork(ctx context.Context, logger hclog.Logger, server *p2p.Server, metrics *Metrics) *AgoraNetwork {
+func NewAgoraNetwork(logger hclog.Logger, server *p2p.Server, metrics *Metrics) *AgoraNetwork {
+	ctx, cancel := context.WithCancel(context.Background())
+
 	an := &AgoraNetwork{
-		ctx:     ctx,
-		logger:  logger.Named("Agora-Network"),
-		server:  server,
-		metrics: metrics,
+		ctx:       ctx,
+		ctxCancel: cancel,
+		logger:    logger.Named("Agora-Network"),
+		server:    server,
+		metrics:   metrics,
 	}
 
 	server.SetupStreamHandler(config.AgoraProtocolStream, an.streamHandler)
@@ -180,6 +184,7 @@ func (an *AgoraNetwork) pruneInactivePeers() {
 	for {
 		select {
 		case <-an.ctx.Done():
+			return
 		case <-time.After(1 * time.Second):
 		}
 
@@ -236,4 +241,9 @@ func (an *AgoraNetwork) Start(sm SessionManager) {
 	an.metrics.initMetrics()
 
 	go an.pruneInactivePeers()
+}
+
+func (an *AgoraNetwork) Close() {
+	an.logger.Info("Closing Agora-Network")
+	an.ctxCancel()
 }

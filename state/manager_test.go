@@ -1691,7 +1691,7 @@ func TestStateManager_SyncStorageTrees(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			err := sm.SyncStorageTrees(test.addr, test.newRoot, test.logicStorageTreeRoots)
+			err := sm.SyncStorageTrees(context.Background(), test.addr, test.newRoot, test.logicStorageTreeRoots)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 

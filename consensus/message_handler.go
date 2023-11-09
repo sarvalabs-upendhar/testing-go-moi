@@ -114,12 +114,12 @@ func (k *Engine) handleInboundMsg(slot *ktypes.Slot, msg *ktypes.ICSMSG) error {
 			return errors.Wrap(err, fmt.Sprintf("failed to depolarise ics_success message from %s", sender))
 		}
 
-		observerPublicKeys, err := k.state.GetPublicKeys(successMsg.ObserverSet...)
+		observerPublicKeys, err := k.state.GetPublicKeys(context.Background(), successMsg.ObserverSet...)
 		if err != nil {
 			return errors.New("failed to retrieve public keys")
 		}
 
-		randomPublicKeys, err := k.state.GetPublicKeys(successMsg.RandomSet...)
+		randomPublicKeys, err := k.state.GetPublicKeys(context.Background(), successMsg.RandomSet...)
 		if err != nil {
 			return errors.New("failed to retrieve public keys")
 		}

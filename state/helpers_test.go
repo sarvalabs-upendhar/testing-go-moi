@@ -795,7 +795,6 @@ func createTestStateManager(t *testing.T, params *createStateManagerParams) *Sta
 	}
 
 	sm, err := NewStateManager(
-		context.Background(),
 		mDB,
 		hclog.NewNullLogger(),
 		mockCache(t),

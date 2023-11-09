@@ -143,7 +143,7 @@ func (ms *MockStateManager) FetchInteractionContext(
 	panic("implement me")
 }
 
-func (ms *MockStateManager) GetPublicKeys(ids ...id.KramaID) (keys [][]byte, err error) {
+func (ms *MockStateManager) GetPublicKeys(ctx context.Context, ids ...id.KramaID) (keys [][]byte, err error) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -227,7 +227,6 @@ func createTestKramaEngine(t *testing.T, params *createKramaEngineParams) *Engin
 	}
 
 	engine, err := NewKramaEngine(
-		context.Background(),
 		cfg,
 		hclog.NewNullLogger(),
 		nil,

@@ -615,7 +615,7 @@ func (sm *MockStateManager) GetContextByHash(
 	return hash, c.behaviourNodes, c.randomNodes, nil
 }
 
-func (sm *MockStateManager) GetPublicKeys(id ...id.KramaID) ([][]byte, error) {
+func (sm *MockStateManager) GetPublicKeys(ctx context.Context, id ...id.KramaID) ([][]byte, error) {
 	keys := make([][]byte, 0)
 
 	for _, v := range id {
@@ -669,12 +669,12 @@ func (sm *MockStateManager) FetchContextLock(ts *common.Tesseract) (*common.ICSN
 	}
 
 	// fetching public keys
-	behaviouralPK, err := sm.GetPublicKeys(behaviourSet...)
+	behaviouralPK, err := sm.GetPublicKeys(context.Background(), behaviourSet...)
 	if err != nil {
 		return nil, err
 	}
 
-	randomPK, err := sm.GetPublicKeys(randomSet...)
+	randomPK, err := sm.GetPublicKeys(context.Background(), randomSet...)
 	if err != nil {
 		return nil, err
 	}
@@ -1241,8 +1241,6 @@ func mockIXPool(t *testing.T) *MockIXPool {
 func createTestChainManager(t *testing.T, params *CreateChainParams) *ChainManager {
 	t.Helper()
 
-	ctx := context.Background()
-
 	if params == nil {
 		params = &CreateChainParams{}
 	}
@@ -1297,7 +1295,6 @@ func createTestChainManager(t *testing.T, params *CreateChainParams) *ChainManag
 	}
 
 	c, err := NewChainManager(
-		ctx,
 		mockChainConfig(),
 		db,
 		sm,

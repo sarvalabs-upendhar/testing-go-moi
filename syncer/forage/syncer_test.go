@@ -470,7 +470,7 @@ func TestSync_FromRejoining(t *testing.T) {
 	storeTesseractsInDB(t, serverSyncer, newTesseracts...)
 	storeTesseractsInDB(t, serverSyncer, sargaTesseracts...)
 
-	clientDB, err := storage.NewPersistenceManager(clientCtx, hclog.NewNullLogger(), &config.DBConfig{
+	clientDB, err := storage.NewPersistenceManager(hclog.NewNullLogger(), &config.DBConfig{
 		CleanDB:      false,
 		DBFolderPath: clientDir[0],
 		MaxSnapSize:  1073741824,

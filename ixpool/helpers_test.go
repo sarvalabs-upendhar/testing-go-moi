@@ -1,7 +1,6 @@
 package ixpool
 
 import (
-	"context"
 	"errors"
 	"math/big"
 	"testing"
@@ -127,7 +126,6 @@ func CreateTestIxpool(
 	}
 
 	return NewIxPool(
-		context.Background(),
 		hclog.NewNullLogger(),
 		new(utils.TypeMux),
 		sm,

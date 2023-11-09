@@ -35,7 +35,6 @@ func NewTest(t *testing.T,
 	mockNetwork := NewMockNetwork()
 
 	defaultEngine := NewEngine(
-		context.Background(),
 		hclog.NewNullLogger(),
 		0,
 		0,

@@ -140,7 +140,7 @@ func TestUpdateAssociatedPeers_NewEntry(t *testing.T) {
 func NewTestLedger(t *testing.T, ctx context.Context) *Ledger {
 	t.Helper()
 
-	ledger, err := NewLedger(ctx, hclog.NewNullLogger(), 1, NewMockDB())
+	ledger, err := NewLedger(hclog.NewNullLogger(), 1, NewMockDB())
 	require.NoError(t, err)
 
 	return ledger

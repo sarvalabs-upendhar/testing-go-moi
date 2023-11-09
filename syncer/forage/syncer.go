@@ -59,6 +59,7 @@ type lattice interface {
 
 type stateManager interface {
 	SyncStorageTrees(
+		ctx context.Context,
 		address common.Address,
 		newRoot *common.RootNode,
 		logicStorageTreeRoots map[string]*common.RootNode,
@@ -134,6 +135,7 @@ type Syncer struct {
 	lock                sync.RWMutex
 	cfg                 *config.SyncerConfig
 	ctx                 context.Context
+	ctxCancel           context.CancelFunc
 	network             *p2p.Server
 	mux                 *utils.TypeMux
 	gridStore           *GridStore
@@ -167,7 +169,6 @@ type Syncer struct {
 }
 
 func NewSyncer(
-	ctx context.Context,
 	cfg *config.SyncerConfig,
 	logger hclog.Logger,
 	node *p2p.Server,
@@ -180,8 +181,10 @@ func NewSyncer(
 	syncerMetrics *Metrics,
 	blockSync syncer.BlockSync,
 ) (*Syncer, error) {
+	ctx, cancel := context.WithCancel(context.Background())
 	s := &Syncer{
 		ctx:                 ctx,
+		ctxCancel:           cancel,
 		network:             node,
 		cfg:                 cfg,
 		mux:                 mux,
@@ -310,7 +313,7 @@ func (s *Syncer) worker() {
 		s.workerLock.Lock()
 		s.jobWorkerCount--
 		s.workerLock.Unlock()
-		s.logger.Info("Closing syncer worker")
+		s.logger.Debug("Closing syncer worker")
 	}()
 
 	for {
@@ -1808,7 +1811,7 @@ func (s *Syncer) syncStorageTree(ctx context.Context, session syncer.Session, ne
 		return errors.New("failed to fetch storage tree info")
 	}
 
-	if err = s.state.SyncStorageTrees(session.ID(), metaStorageRoot, storageTreeRoots); err != nil {
+	if err = s.state.SyncStorageTrees(ctx, session.ID(), metaStorageRoot, storageTreeRoots); err != nil {
 		s.logger.Error("Failed to sync storage tree", "addr", session.ID())
 
 		return err
@@ -2089,7 +2092,9 @@ func (s *Syncer) startWorkers() {
 }
 
 func (s *Syncer) Close() {
-	log.Println("Closing syncer")
+	s.ctxCancel()
+
+	s.agora.Close()
 }
 
 func (s *Syncer) queueHandler() {

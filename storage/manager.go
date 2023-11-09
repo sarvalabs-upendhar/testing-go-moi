@@ -24,16 +24,13 @@ const (
 
 // PersistenceManager manages all the critical information to perform content-addressed persistence services
 type PersistenceManager struct {
-	ctx       context.Context
-	ctxCancel context.CancelFunc
-	config    *config.DBConfig
-	db        db.Database
-	logger    hclog.Logger
+	config *config.DBConfig
+	db     db.Database
+	logger hclog.Logger
 }
 
 // NewPersistenceManager is used by the caller to instantiate a PersistenceManager
 func NewPersistenceManager(
-	ctx context.Context,
 	logger hclog.Logger,
 	config *config.DBConfig,
 	metrics *db.Metrics,
@@ -49,13 +46,10 @@ func NewPersistenceManager(
 		}
 	}
 
-	ctx, ctxCancel := context.WithCancel(ctx)
 	p := &PersistenceManager{
-		ctx:       ctx,
-		ctxCancel: ctxCancel,
-		config:    config,
-		logger:    logger.Named("Persistence-Manager"),
-		db:        badgerDB,
+		config: config,
+		logger: logger.Named("Persistence-Manager"),
+		db:     badgerDB,
 	}
 
 	return p, nil
@@ -210,8 +204,7 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 
 // Close shutdowns the database
 func (p *PersistenceManager) Close() {
-	p.logger.Trace("Closing the database")
-	// close the channels
+	p.logger.Info("Closing Database")
 
 	if err := p.db.Close(); err != nil {
 		p.logger.Error("Error closing the local BadgerDB instance", "err", err)

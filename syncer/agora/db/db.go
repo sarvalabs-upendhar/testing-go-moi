@@ -33,6 +33,7 @@ type PersistenceManager interface {
 
 type DataStore struct {
 	ctx         context.Context
+	ctxCancel   context.CancelFunc
 	logger      hclog.Logger
 	db          PersistenceManager
 	workerCount int
@@ -40,9 +41,12 @@ type DataStore struct {
 	jobs        chan func()
 }
 
-func NewDataStore(ctx context.Context, logger hclog.Logger, db PersistenceManager) *DataStore {
+func NewDataStore(logger hclog.Logger, db PersistenceManager) *DataStore {
+	ctx, cancel := context.WithCancel(context.Background())
+
 	return &DataStore{
 		ctx:         ctx,
+		ctxCancel:   cancel,
 		logger:      logger.Named("DataStore"),
 		db:          db,
 		workerCount: DefaultWorkerCount,
@@ -60,7 +64,7 @@ func (ds *DataStore) worker() {
 	for {
 		select {
 		case <-ds.ctx.Done():
-			ds.logger.Info("Closing data store worker")
+			ds.logger.Debug("Closing data store worker")
 
 			return
 		case job := <-ds.jobs:
@@ -158,4 +162,9 @@ func (ds *DataStore) Start() {
 	for i := 0; i < ds.workerCount; i++ {
 		go ds.worker()
 	}
+}
+
+func (ds *DataStore) Close() {
+	ds.logger.Info("Closing Agora-DataStore")
+	ds.ctxCancel()
 }

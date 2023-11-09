@@ -134,7 +134,6 @@ func CreateTestReputationEngine(t *testing.T) (*ReputationEngine, *MockDB, *Mock
 	mockDB := NewMockDB()
 	mockState := NewMockState()
 	r, err := NewReputationEngine(
-		context.Background(),
 		hclog.NewNullLogger(),
 		NewMockServer(),
 		mockDB,

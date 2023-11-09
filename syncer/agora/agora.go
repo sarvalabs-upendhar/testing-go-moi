@@ -27,7 +27,6 @@ const (
 )
 
 type Agora struct {
-	ctx      context.Context
 	engine   *decision.Engine
 	ledger   *decision.Ledger
 	db       *db.DataStore
@@ -38,7 +37,6 @@ type Agora struct {
 }
 
 func NewAgora(
-	ctx context.Context,
 	logger hclog.Logger,
 	store db.PersistenceManager,
 	server *p2p.Server,
@@ -46,19 +44,18 @@ func NewAgora(
 ) (*Agora, error) {
 	interestManager := session.NewInterestManager()
 
-	dataStore := db.NewDataStore(ctx, logger, store)
+	dataStore := db.NewDataStore(logger, store)
 
-	ledger, err := decision.NewLedger(ctx, logger, DefaultLedgerWorkerCount, dataStore)
+	ledger, err := decision.NewLedger(logger, DefaultLedgerWorkerCount, dataStore)
 	if err != nil {
 		return nil, err
 	}
 
 	notifier := notifications.NewNotifier()
 
-	agoraNetwork := network.NewAgoraNetwork(ctx, logger, server, metrics.Network)
+	agoraNetwork := network.NewAgoraNetwork(logger, server, metrics.Network)
 
 	engine := decision.NewEngine(
-		ctx,
 		logger.Named("Agora"),
 		DefaultRequestWorkerCount,
 		DefaultResponseWorkerCount,
@@ -72,7 +69,6 @@ func NewAgora(
 	sessionManager := session.NewSessionManager(logger, interestManager, notifier, engine)
 
 	ag := Agora{
-		ctx:      ctx,
 		engine:   engine,
 		ledger:   ledger,
 		db:       dataStore,
@@ -99,4 +95,11 @@ func (ag *Agora) Start() {
 	go ag.engine.Start()
 	go ag.ledger.Start()
 	go ag.network.Start(ag.sm)
+}
+
+func (ag *Agora) Close() {
+	ag.engine.Close()
+	ag.ledger.Close()
+	ag.db.Close()
+	ag.network.Close()
 }

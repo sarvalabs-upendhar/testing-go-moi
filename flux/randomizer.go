@@ -54,12 +54,11 @@ type PeerList struct {
 }
 
 func NewRandomizer(
-	ctx context.Context,
 	logger hclog.Logger,
 	p2pServer *p2p.Server,
 	metrics *Metrics,
 ) *Randomizer {
-	ctx, ctxCancel := context.WithCancel(ctx)
+	ctx, ctxCancel := context.WithCancel(context.Background())
 	r := &Randomizer{
 		ctx:        ctx,
 		ctxCancel:  ctxCancel,
@@ -217,8 +216,6 @@ func (r *Randomizer) Start() {
 }
 
 func (r *Randomizer) getPeers(slotNo int, count int, avoidPeers []id.KramaID) []id.KramaID {
-	// log.Println("Querying for random peers", slotNo, count)
-	//	log.Println("Avoid peers", avoidPeers)
 	counter := 0
 	list := make([]id.KramaID, 0)
 
@@ -432,7 +429,8 @@ func (r *Randomizer) GetRandomNodes(
 }
 
 func (r *Randomizer) Close() {
-	defer r.ctxCancel()
+	r.ctxCancel()
+	r.logger.Info("Closing Flux")
 }
 
 func (r *Randomizer) SendFluxMessage(peerID peer.ID, msgType networkmsg.MsgType, msg interface{}) error {

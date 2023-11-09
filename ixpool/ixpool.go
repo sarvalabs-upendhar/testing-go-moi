@@ -3,7 +3,6 @@ package ixpool
 import (
 	"context"
 	errors2 "errors"
-	"log"
 	"math/big"
 	"time"
 
@@ -81,7 +80,6 @@ type IxPool struct {
 }
 
 func NewIxPool(
-	ctx context.Context,
 	logger hclog.Logger,
 	mux *utils.TypeMux,
 	sm stateManager,
@@ -90,7 +88,7 @@ func NewIxPool(
 	metrics *Metrics,
 	verifier func(data, signature, pubBytes []byte) (bool, error),
 ) *IxPool {
-	ctx, ctxCancel := context.WithCancel(ctx)
+	ctx, ctxCancel := context.WithCancel(context.Background())
 	i := &IxPool{
 		ctx:       ctx,
 		ctxCancel: ctxCancel,
@@ -747,7 +745,7 @@ func (i *IxPool) removeNonceHoleAccounts() {
 		})
 }
 
-func (i *IxPool) handleGaugePruning() {
+func (i *IxPool) handlePruning() {
 	for {
 		select {
 		case <-i.ctx.Done():
@@ -774,14 +772,14 @@ func (i *IxPool) handleRequests() {
 }
 
 func (i *IxPool) Close() {
-	defer i.ctxCancel()
-	log.Println("Closing IxPool")
+	i.logger.Info("Closing IxPool")
+	i.ctxCancel()
 }
 
 func (i *IxPool) Start() {
 	i.metrics.initMetrics()
 
-	go i.handleGaugePruning()
+	go i.handlePruning()
 	go i.handleRequests()
 }
 

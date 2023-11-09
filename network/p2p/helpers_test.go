@@ -318,7 +318,6 @@ func createServerWithoutHost(t *testing.T) *Server {
 	vault.networkPrivateKey = nPriv
 
 	return NewServer(
-		context.Background(),
 		hclog.NewNullLogger(),
 		kramaID,
 		nil,
@@ -335,7 +334,6 @@ func createServer(
 ) *Server {
 	t.Helper()
 
-	ctx := context.Background()
 	cfg := config.DefaultDevnetConfig("test")
 	cfg.Network.ListenAddresses = tests.GetListenAddresses(t, 1)
 
@@ -359,7 +357,7 @@ func createServer(
 	vault.networkPrivateKey = nPriv
 
 	// Create a new server instance
-	server := NewServer(ctx, params.Logger, kramaID, params.EventMux, cfg.Network, vault, NilMetrics())
+	server := NewServer(params.Logger, kramaID, params.EventMux, cfg.Network, vault, NilMetrics())
 
 	if params.ServerCallback != nil {
 		params.ServerCallback(server)

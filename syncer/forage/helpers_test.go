@@ -287,6 +287,7 @@ func newMockStateManager() *MockStateManager {
 }
 
 func (m MockStateManager) SyncStorageTrees(
+	ctx context.Context,
 	address common.Address,
 	newRoot *common.RootNode,
 	logicStorageTreeRoots map[string]*common.RootNode,
@@ -363,6 +364,8 @@ func (m MockAgora) NewSession(ctx context.Context, contextPeers []kramaid.KramaI
 
 func (m MockAgora) Start() {
 }
+
+func (m MockAgora) Close() {}
 
 type MockSession struct {
 	address common.Address
@@ -577,8 +580,6 @@ func createServer(
 		params = &CreateServerParams{}
 	}
 
-	ctx := context.Background()
-
 	cfg := &config.NetworkConfig{
 		MaxPeers:          0, // current we don't limit the no.of peers
 		InboundConnLimit:  50,
@@ -599,7 +600,7 @@ func createServer(
 	vault.networkPrivateKey = nPriv
 
 	// Create a new server instance
-	server := p2p.NewServer(ctx, hclog.NewNullLogger(), kramaID, params.EventMux, cfg, vault, p2p.NilMetrics())
+	server := p2p.NewServer(hclog.NewNullLogger(), kramaID, params.EventMux, cfg, vault, p2p.NilMetrics())
 
 	if params.ServerCallback != nil {
 		params.ServerCallback(server)
@@ -981,7 +982,7 @@ func createPersistenceManager(t *testing.T, ctx context.Context) (*storage.Persi
 	dir, err := os.MkdirTemp(os.TempDir(), "test"+strconv.Itoa(tests.GetRandomNumber(t, 1000)))
 	require.NoError(t, err)
 
-	db, err := storage.NewPersistenceManager(ctx, hclog.NewNullLogger(), &config.DBConfig{
+	db, err := storage.NewPersistenceManager(hclog.NewNullLogger(), &config.DBConfig{
 		CleanDB:      true,
 		DBFolderPath: dir,
 		MaxSnapSize:  1073741824,

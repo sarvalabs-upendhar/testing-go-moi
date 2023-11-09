@@ -112,7 +112,6 @@ type Server struct {
 // NewServer is a constructor function that generates, configures and returns a Server.
 // Accepts lifecycle context for the node along with a typemux and a config.
 func NewServer(
-	parentCtx context.Context,
 	logger hclog.Logger,
 	id id.KramaID,
 	mux *utils.TypeMux,
@@ -120,11 +119,11 @@ func NewServer(
 	vault Vault,
 	metrics *Metrics,
 ) *Server {
-	ctx, ctxCancel := context.WithCancel(parentCtx)
+	ctx, cancel := context.WithCancel(context.Background())
 	server := &Server{
 		id:         id,
 		ctx:        ctx,
-		ctxCancel:  ctxCancel,
+		ctxCancel:  cancel,
 		logger:     logger.Named("P2P-Server"),
 		cfg:        config,
 		mux:        mux,
@@ -143,6 +142,8 @@ func (s *Server) Close() error {
 	if err := s.host.Close(); err != nil {
 		return err
 	}
+
+	s.ctxCancel()
 
 	return nil
 }

@@ -37,7 +37,6 @@ type SubHandler struct {
 // NewSubHandler is a constructor function generates and returns a new subHandle object.
 // Accepts a KramaID, an event TypeMux, an IxPool, an ICS, a BFT engine and a Chain manager.
 func NewSubHandler(
-	ctx context.Context,
 	id id.KramaID,
 	logger hclog.Logger,
 	server *Server,
@@ -46,7 +45,7 @@ func NewSubHandler(
 	pool ixPool,
 	chain *lattice.ChainManager,
 ) *SubHandler {
-	ctx, ctxCancel := context.WithCancel(ctx)
+	ctx, ctxCancel := context.WithCancel(context.Background())
 
 	return &SubHandler{
 		id:        id,

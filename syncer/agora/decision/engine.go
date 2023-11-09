@@ -38,6 +38,7 @@ type net interface {
 
 type Engine struct {
 	ctx                 context.Context
+	ctxCancel           context.CancelFunc
 	logger              hclog.Logger
 	requests            *RequestQueue
 	workerLock          sync.Mutex
@@ -52,7 +53,6 @@ type Engine struct {
 }
 
 func NewEngine(
-	ctx context.Context,
 	logger hclog.Logger,
 	requestWorkerCount,
 	responseWorkerCount int,
@@ -62,8 +62,11 @@ func NewEngine(
 	metrics *Metrics,
 	requestQueueSize int,
 ) *Engine {
+	ctx, cancel := context.WithCancel(context.Background())
+
 	e := &Engine{
 		ctx:                 ctx,
+		ctxCancel:           cancel,
 		logger:              logger.Named("Engine"),
 		requests:            NewRequestQueue(requestQueueSize),
 		requestWorkerCount:  requestWorkerCount,
@@ -239,7 +242,7 @@ func (e *Engine) responseWorker() {
 	for {
 		select {
 		case <-e.ctx.Done():
-			e.logger.Info("Context expired closing response worker")
+			e.logger.Trace("Context expired closing response worker")
 
 			return
 		case resp, ok := <-e.responses:
@@ -265,4 +268,9 @@ func (e *Engine) signalNewWork() {
 	case e.workSignal <- struct{}{}:
 	default:
 	}
+}
+
+func (e *Engine) Close() {
+	e.logger.Info("Closing Agora-Engine")
+	e.ctxCancel()
 }
