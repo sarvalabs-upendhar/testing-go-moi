@@ -6,14 +6,15 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 
 	"github.com/libp2p/go-libp2p"
 	"github.com/multiformats/go-multiaddr"
-	cmdCommon "github.com/sarvalabs/go-moi/cmd/common"
 	"github.com/sarvalabs/go-moi/common/config"
 
 	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
@@ -72,8 +73,6 @@ func runBootNodeCommand(cmd *cobra.Command, args []string) {
 }
 
 func startBootNode() {
-	var KadDHT *dht.IpfsDHT
-
 	privateKey, err := getPrivateKey(keyFile)
 	if err != nil {
 		log.Panic("Failed to get private keys : ", err)
@@ -104,7 +103,6 @@ func startBootNode() {
 		if err != nil {
 			panic(err)
 		}
-		KadDHT = Dht
 
 		return Dht, nil
 	})
@@ -190,27 +188,18 @@ func startBootNode() {
 	fmt.Printf("[*] Your Bootstrap ID Is: /ip4/%s/tcp/%v/p2p/%s\n", ipAddress, portNumber, p2pHost.ID().String())
 	fmt.Println("")
 
-	var input string
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	for {
-		log.Println("Please enter your input:")
-		log.Println("1: DHT stats")
-		log.Println("2: Exit")
+	fmt.Println("Press Ctrl+C to exit the bootnode")
 
-		if _, err := fmt.Scanf("%s", &input); err != nil {
-			cmdCommon.Err(err)
-		}
+	sig := <-sigChan
 
-		if input == "1" {
-			for _, v := range KadDHT.RoutingTable().ListPeers() {
-				protocols, _ := p2pHost.Peerstore().GetProtocols(v)
-				fmt.Println("Peer ID", v, "Supported-Protocols", protocols)
-				fmt.Println("Peer Info", p2pHost.Peerstore().PeerInfo(v))
-			}
-		} else if input == "2" {
-			return
-		}
-	}
+	fmt.Printf("Received signal: %v\n", sig)
+
+	// Perform any necessary cleanup here
+	fmt.Println("Exiting...")
+	os.Exit(0)
 }
 
 func getPrivateKey(keyfile string) (crypto.PrivKey, error) {

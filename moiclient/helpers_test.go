@@ -54,7 +54,7 @@ func makeHTTPRequest(t *testing.T, method string, args interface{}) *rpcargs.Res
 	jsonData, err := json.Marshal(values)
 	require.NoError(t, err)
 
-	httpResponse, err := http.Post(localURL, "application/json", bytes.NewBuffer(jsonData))
+	httpResponse, err := http.Post(localURL, "application/json", bytes.NewBuffer(jsonData)) //nolint
 	require.NoError(t, err)
 
 	// status should be >= 200 && < 300
@@ -188,8 +188,8 @@ func moiclientRetryFetchReceipt(
 	}
 }
 
-// SetupAddrs sanitises the given addrs array and validates it
-func SetupAddrs(addrs []common.Address) ([]common.Address, error) {
+// SanitizeAddrs sanitises the given addrs array and validates it
+func SanitizeAddrs(addrs []common.Address) ([]common.Address, error) {
 	if len(addrs) < 12 {
 		return nil, errors.New("not sufficient genesis accounts to run moiclient tests")
 	}

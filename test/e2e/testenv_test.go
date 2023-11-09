@@ -13,8 +13,10 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/battleground/infrastructure"
-	"github.com/sarvalabs/battleground/sdk"
+	"github.com/sarvalabs/battleground/client"
+	clientTypes "github.com/sarvalabs/battleground/client/types"
+	bgtypes "github.com/sarvalabs/battleground/common/types"
+	"github.com/sarvalabs/battleground/server/warzone/infrastructure"
 
 	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"
 	"github.com/sarvalabs/go-moi/common"
@@ -69,7 +71,7 @@ func newBattleGroundConfig(
 type TestEnvironment struct {
 	suite.Suite
 	bgConfig    BattleGroundConfig
-	bgClient    sdk.Client
+	bgClient    client.Client
 	jsonRPCUrls []string
 	moiClient   *moiclient.Client
 	accounts    []tests.AccountWithMnemonic
@@ -107,11 +109,12 @@ func (te *TestEnvironment) chooseRandomUniqueAccounts(count int) ([]tests.Accoun
 func (te *TestEnvironment) configureBattleGround() error {
 	te.bgConfig = newBattleGroundConfig(StandAlone, "TRACE", bgURL)
 
-	bgConfig := sdk.DefaultBattlegroundConfig()
+	bgConfig := bgtypes.DefaultCloudConfig()
 
 	// initialize bg client
-	te.bgClient = sdk.New(sdk.Config{
-		BattleCfg:   bgConfig,
+	te.bgClient = client.NewClient(&clientTypes.Config{
+		CloudCfg:    bgConfig,
+		Network:     clientTypes.Cloud,
 		EndPoint:    te.bgConfig.rpcEndPoint,
 		DialTimeout: 2 * time.Second,
 	})
@@ -119,7 +122,7 @@ func (te *TestEnvironment) configureBattleGround() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	if err := te.bgClient.Ping(ctx); err != nil {
+	if err := te.bgClient.ServerStatus(ctx); err != nil {
 		return err
 	}
 
@@ -164,7 +167,7 @@ func (te *TestEnvironment) SetupSuite() {
 	te.Suite.NoError(err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	bgStatus, err := te.bgClient.Status(ctx)
+	bgStatus, err := te.bgClient.NetworkStatus(ctx)
 
 	cancel()
 	te.Suite.NoError(err)
@@ -174,7 +177,13 @@ func (te *TestEnvironment) SetupSuite() {
 		te.logger.Info("starting battle ground")
 
 		ctx, cancel = context.WithTimeout(context.Background(), DefaultBGStartTime)
-		registeredAcc, err = te.bgClient.Start(ctx, 20, 5)
+		_, err = te.bgClient.StartNetwork(ctx)
+
+		cancel()
+		te.Suite.NoError(err)
+
+		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+		registeredAcc, err = te.bgClient.Accounts(ctx)
 
 		cancel()
 		te.Suite.NoError(err)
@@ -227,7 +236,7 @@ func (te *TestEnvironment) TearDownSuite() {
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultShutdownTimeout)
 	defer cancel()
 
-	err := te.bgClient.Stop(ctx)
+	err := te.bgClient.DestroyNetwork(ctx, false)
 	te.Suite.NoError(err)
 }
 
