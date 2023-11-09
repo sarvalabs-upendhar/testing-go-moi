@@ -68,16 +68,17 @@ func NewNode(logLevel string, cfg *config.Config) (n *Node, err error) {
 		handlers: new(SubHandlers),
 	}
 
-	if err = n.setLogger(logLevel); err != nil {
-		return nil, err
-	}
-
 	if err = n.setupCacheStore(); err != nil {
 		return nil, err
 	}
 
 	if err = n.setupVault(); err != nil {
 		return nil, errors.Wrap(common.ErrVaultInit, err.Error())
+	}
+
+	// We should setup logger only after setting up the vault, as we need kramaID
+	if err = n.setLogger(logLevel); err != nil {
+		return nil, err
 	}
 
 	n.setupTelemetry()
