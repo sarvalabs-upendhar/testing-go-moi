@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/battleground/client"
-	"github.com/sarvalabs/battleground/client/types"
+	bg "github.com/sarvalabs/battleground"
+	client "github.com/sarvalabs/battleground/client/types"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-polo"
 
@@ -41,13 +41,13 @@ func TestMoiClient(t *testing.T) {
 
 	addrsMap := make(StrMap)
 
-	d := types.DefaultClusterConfig()
+	d := client.DefaultClusterConfig()
 	d.WithLogs = false
 	d.WithStdout = false
 
-	bgClient := client.NewClient(&types.Config{
+	bgClient := bg.NewBGClient(&client.Config{
 		ClusterConfig: d,
-		Network:       types.Local,
+		Network:       client.Local,
 	})
 
 	defer func() {

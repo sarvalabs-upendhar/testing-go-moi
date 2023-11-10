@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"bufio"
+	"context"
 	"sync"
 
 	id "github.com/sarvalabs/go-moi/common/kramaid"
@@ -184,4 +185,29 @@ func (p *Peer) markInteraction(hash common.Hash) {
 
 	// Add the given interaction hash to set of known interactions
 	p.knownIXs.Add(hash)
+}
+
+// peerMsgNonceStore implements PeerMetaDataStore interface, which stores pubsub message sequence number for each peer
+// check https://pkg.go.dev/github.com/libp2p/go-libp2p-pubsub#BasicSeqnoValidator for more info
+// TODO: We should consider using a persistent storage option
+type peerMsgNonceStore struct {
+	meta map[peer.ID][]byte
+}
+
+func newpeerMsgNonceStore() *peerMsgNonceStore {
+	return &peerMsgNonceStore{
+		meta: make(map[peer.ID][]byte),
+	}
+}
+
+func (m *peerMsgNonceStore) Get(ctx context.Context, p peer.ID) ([]byte, error) {
+	v := m.meta[p]
+
+	return v, nil
+}
+
+func (m *peerMsgNonceStore) Put(ctx context.Context, p peer.ID, v []byte) error {
+	m.meta[p] = v
+
+	return nil
 }

@@ -11,18 +11,17 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/battleground/server/types"
 	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 
-	"github.com/sarvalabs/battleground/client"
-	clientTypes "github.com/sarvalabs/battleground/client/types"
-	bgtypes "github.com/sarvalabs/battleground/common/types"
+	bg "github.com/sarvalabs/battleground"
+	client "github.com/sarvalabs/battleground/client/types"
 	"github.com/sarvalabs/battleground/server/warzone/infrastructure"
 
 	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"
 	"github.com/sarvalabs/go-moi/common"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
-
-	"github.com/stretchr/testify/suite"
 
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/moiclient"
@@ -71,7 +70,7 @@ func newBattleGroundConfig(
 type TestEnvironment struct {
 	suite.Suite
 	bgConfig    BattleGroundConfig
-	bgClient    client.Client
+	bgClient    bg.Client
 	jsonRPCUrls []string
 	moiClient   *moiclient.Client
 	accounts    []tests.AccountWithMnemonic
@@ -109,12 +108,12 @@ func (te *TestEnvironment) chooseRandomUniqueAccounts(count int) ([]tests.Accoun
 func (te *TestEnvironment) configureBattleGround() error {
 	te.bgConfig = newBattleGroundConfig(StandAlone, "TRACE", bgURL)
 
-	bgConfig := bgtypes.DefaultCloudConfig()
+	bgConfig := types.DefaultCloudConfig()
 
 	// initialize bg client
-	te.bgClient = client.NewClient(&clientTypes.Config{
+	te.bgClient = bg.NewBGClient(&client.Config{
 		CloudCfg:    bgConfig,
-		Network:     clientTypes.Cloud,
+		Network:     client.Cloud,
 		EndPoint:    te.bgConfig.rpcEndPoint,
 		DialTimeout: 2 * time.Second,
 	})
