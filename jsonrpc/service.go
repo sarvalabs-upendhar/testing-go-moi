@@ -808,12 +808,12 @@ func (r *Service) DBGet(
 	args *rpcargs.DebugArgs,
 	resp *rpcargs.Response,
 ) error {
-	DebugAPI, ok := r.apis["debug"].(*jsonApi.PublicDebugAPI)
+	debugAPI, ok := r.apis["debug"].(*jsonApi.PublicDebugAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
 
-	key, err := DebugAPI.DBGet(args)
+	key, err := debugAPI.DBGet(args)
 	if err != nil {
 		resp.Error = &rpcargs.JSONError{Message: err.Error()}
 
@@ -836,12 +836,12 @@ func (r *Service) Accounts(
 	args *rpcargs.AccountArgs,
 	resp *rpcargs.Response,
 ) error {
-	DebugAPI, ok := r.apis["debug"].(*jsonApi.PublicDebugAPI)
+	debugAPI, ok := r.apis["debug"].(*jsonApi.PublicDebugAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
 
-	key, err := DebugAPI.GetAccounts()
+	key, err := debugAPI.GetAccounts()
 	if err != nil {
 		resp.Error = &rpcargs.JSONError{Message: err.Error()}
 
@@ -866,15 +866,34 @@ func (r *Service) Connections(
 ) error {
 	var err error
 
-	DebugAPI, ok := r.apis["debug"].(*jsonApi.PublicDebugAPI)
+	debugAPI, ok := r.apis["debug"].(*jsonApi.PublicDebugAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
 
-	keys := DebugAPI.GetConnections()
+	keys := debugAPI.GetConnections()
 
 	resp.Data, err = json.Marshal(keys)
 	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	return nil
+}
+
+func (r *Service) Diagnosis(
+	req *http.Request,
+	args *rpcargs.DiagnosisRequest,
+	resp *rpcargs.Response,
+) error {
+	debugAPI, ok := r.apis["debug"].(*jsonApi.PublicDebugAPI)
+	if !ok {
+		return common.ErrInvalidAPI
+	}
+
+	if err := debugAPI.RunDiagnosis(args); err != nil {
 		resp.Error = &rpcargs.JSONError{Message: err.Error()}
 
 		return nil

@@ -188,3 +188,11 @@ type SyncStatusResponse struct {
 	AccSyncResp  *AccSyncStatus  `json:"acc_sync_status"`
 	NodeSyncResp *NodeSyncStatus `json:"node_sync_status"`
 }
+
+type DiagnosisRequest struct {
+	OutputPath           string   `json:"output_path"`
+	Collectors           []string `json:"collectors"`
+	ProfileTime          string   `json:"profile_time"`
+	MutexProfileFraction int      `json:"mutex_profile_fraction"`
+	BlockProfileRate     string   `json:"block_profile_rate"`
+}

@@ -1,7 +1,15 @@
 package api
 
 import (
+	"context"
+	"os"
+	"path/filepath"
+	"time"
+
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/sarvalabs/go-moi/diagnosis"
 
 	"github.com/sarvalabs/go-moi/common"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
@@ -58,6 +66,47 @@ func (p *PublicDebugAPI) GetConnections() rpcargs.ConnectionsResponse {
 		OutboundConnCount:  p.network.GetOutboundConnCount(),
 		ActivePubSubTopics: p.network.GetSubscribedTopics(),
 	}
+}
+
+/*
+RunDiagnosis runs the performance profiler and generate a report in a single zip.
+Report includes:
+- A list of running goroutines.
+- A CPU profile.
+- A heap profile.
+- A mutex profile.
+- A block profile.
+- The version file.
+
+Generated report will be stored at {outpath}/go-moi[timestamp].zip
+These profiles can be monitored using pprof, reference documentation for more help
+*/
+func (p *PublicDebugAPI) RunDiagnosis(args *rpcargs.DiagnosisRequest) error {
+	profileDuration, err := time.ParseDuration(args.ProfileTime)
+	if err != nil {
+		return errors.New("Invalid profile duration")
+	}
+
+	blockProfileDuration, err := time.ParseDuration(args.BlockProfileRate)
+	if err != nil {
+		return errors.New("Invalid block profile rate")
+	}
+
+	if len(args.Collectors) == 0 {
+		args.Collectors = diagnosis.DefaultCollectors
+	}
+
+	if _, err := os.Stat(args.OutputPath); err != nil {
+		return errors.New("Invalid output path")
+	}
+
+	return diagnosis.WriteProfiles(context.Background(),
+		filepath.Join(args.OutputPath, "go-moi"+time.Now().Format(utils.TimeFormat)+".zip"), diagnosis.Options{
+			Collectors:           args.Collectors,
+			ProfileDuration:      profileDuration,
+			MutexProfileFraction: args.MutexProfileFraction,
+			BlockProfileRate:     blockProfileDuration,
+		})
 }
 
 // helper functions
