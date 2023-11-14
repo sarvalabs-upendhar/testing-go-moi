@@ -121,6 +121,14 @@ func validateFlags() error {
 		return errors.New("invalid node index")
 	}
 
+	if _, err := os.Stat(nodeDataDir); err != nil {
+		if os.IsNotExist(err) {
+			return errors.New("no data directory found at the given path")
+		}
+
+		return err
+	}
+
 	if _, err := os.Stat(mnemonicKeystorePath); err != nil {
 		if os.IsNotExist(err) {
 			return mudraCommon.ErrNoMnemonicKeystore
