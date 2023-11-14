@@ -176,6 +176,9 @@ func TestMoiClient(t *testing.T) {
 		"testConnections": {
 			test: func(t *testing.T) { testConnections(t, rpcClient) },
 		},
+		"testNodeMetaInfo": {
+			test: func(t *testing.T) { testNodeMetaInfo(t, rpcClient) },
+		},
 	}
 
 	t.Parallel()
@@ -1726,6 +1729,63 @@ func testConnections(t *testing.T, client *Client) {
 			require.Equal(t, httpConnResp.ActivePubSubTopics, connResp.ActivePubSubTopics)
 
 			require.Greater(t, len(connResp.Conns), 0)
+		})
+	}
+}
+
+func testNodeMetaInfo(t *testing.T, client *Client) {
+	ctx := context.Background()
+	testCases := []struct {
+		name          string
+		nodeArgs      *rpcargs.NodeMetaInfoArgs
+		expectedError error
+	}{
+		{
+			name: "fetch node meta info for peer id",
+			nodeArgs: &rpcargs.NodeMetaInfoArgs{
+				PeerID: GetPeerID(t, client).String(),
+			},
+		},
+		{
+			name: "fetch node meta info for random peer id",
+			nodeArgs: &rpcargs.NodeMetaInfoArgs{
+				PeerID: tests.GetTestPeerID(t).String(),
+			},
+			expectedError: common.ErrKeyNotFound,
+		},
+		{
+			name: "fetch node meta info for krama id",
+			nodeArgs: &rpcargs.NodeMetaInfoArgs{
+				KramaID: GetKramaID(t, client),
+			},
+		},
+		{
+			name: "fetch node meta info for random krama id",
+			nodeArgs: &rpcargs.NodeMetaInfoArgs{
+				KramaID: tests.GetTestKramaID(t, 2),
+			},
+			expectedError: common.ErrKeyNotFound,
+		},
+		{
+			name:     "fetch all node meta info",
+			nodeArgs: &rpcargs.NodeMetaInfoArgs{},
+		},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			nodeMetaInfoResponse, err := client.NodeMetaInfo(ctx, test.nodeArgs)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			httpAccountMetaInfo := httpNodeMetaInfo(t, test.nodeArgs)
+			require.Equal(t, httpAccountMetaInfo, nodeMetaInfoResponse)
 		})
 	}
 }

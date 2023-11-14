@@ -85,11 +85,13 @@ type NetworkConfig struct {
 	// this will be removed
 	NetworkSize uint64
 
-	NoDiscovery       bool
-	RefreshSenatus    bool
-	InboundConnLimit  int64
-	OutboundConnLimit int64
-	DiscoveryInterval time.Duration
+	NoDiscovery        bool
+	RefreshSenatus     bool
+	InboundConnLimit   int64
+	OutboundConnLimit  int64
+	MinimumConnections int
+	MaximumConnections int
+	DiscoveryInterval  time.Duration
 }
 
 type ConsensusConfig struct {
@@ -125,6 +127,8 @@ func DefaultDevnetConfig(path string) *Config {
 			MaxPeers:           0, // current we don't limit the no.of peers
 			InboundConnLimit:   DefaultInboundConnLimit,
 			OutboundConnLimit:  DefaultOutboundConnLimit,
+			MinimumConnections: DefaultMinimumConnections,
+			MaximumConnections: DefaultMaximumConnections,
 			DiscoveryInterval:  DefaultDiscoveryInterval,
 		},
 		Chain: &ChainConfig{

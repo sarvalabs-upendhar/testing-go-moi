@@ -123,6 +123,18 @@ func GetTestPeerID(t *testing.T) peer.ID {
 	return peerID
 }
 
+func GetTestPeerIDs(t *testing.T, count int) []peer.ID {
+	t.Helper()
+
+	peerIDs := make([]peer.ID, 0)
+
+	for i := 0; i < count; i++ {
+		peerIDs = append(peerIDs, GetTestPeerID(t))
+	}
+
+	return peerIDs
+}
+
 func DecodePeerIDFromKramaID(t *testing.T, kramaID kramaid.KramaID) peer.ID {
 	t.Helper()
 

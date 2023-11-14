@@ -30,6 +30,7 @@ var (
 	ErrUpdatingContextObject       = errors.New("unable to update context object ")
 	ErrConflictingVote             = errors.New("conflicting vote")
 	ErrKramaIDNotFound             = errors.New("krama id not found")
+	ErrAddressNotFound             = errors.New("address not found")
 	ErrVaultInit                   = errors.New("vault initialization failed")
 	ErrSignatureVerificationFailed = errors.New("invalid signatures")
 	ErrInvalidBlockTime            = errors.New("invalid block time")

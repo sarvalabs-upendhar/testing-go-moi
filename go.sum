@@ -372,7 +372,6 @@ github.com/mikioh/tcpinfo v0.0.0-20190314235526-30a79bb1804b h1:z78hV3sbSMAUoyUM
 github.com/mikioh/tcpinfo v0.0.0-20190314235526-30a79bb1804b/go.mod h1:lxPUiZwKoFL8DUUmalo2yJJUCxbPKtm8OKfqr2/FTNU=
 github.com/mikioh/tcpopt v0.0.0-20190314235656-172688c1accc h1:PTfri+PuQmWDqERdnNMiD9ZejrlswWrCpBEZgWOiTrc=
 github.com/mikioh/tcpopt v0.0.0-20190314235656-172688c1accc/go.mod h1:cGKTAVKx4SxOuR/czcZ/E2RSJ3sfHs8FpHhQ5CWMf9s=
-github.com/minio/blake2b-simd v0.0.0-20160723061019-3f5f724cb5b1 h1:lYpkrQH5ajf0OXOcUbGjvZxxijuBwbbmlSxLiuofa+g=
 github.com/minio/blake2b-simd v0.0.0-20160723061019-3f5f724cb5b1/go.mod h1:pD8RvIylQ358TN4wwqatJ8rNavkEINozVn9DtGI3dfQ=
 github.com/minio/highwayhash v1.0.2 h1:Aak5U0nElisjDCfPSG79Tgzkn2gl66NxOMspRrKnA/g=
 github.com/minio/highwayhash v1.0.2/go.mod h1:BQskDq+xkJ12lmlUUi7U0M5Swg3EWR+dLTk+kldvVxY=
@@ -483,18 +482,6 @@ github.com/rogpeppe/go-internal v1.11.0 h1:cWPaGQEPrBb5/AsnsZesgZZ9yb1OQ+GOISoDN
 github.com/russross/blackfriday v1.5.2/go.mod h1:JO/DiYxRf+HjHt06OyowR9PTA263kcR/rfWxYHBV53g=
 github.com/russross/blackfriday/v2 v2.0.1/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
-github.com/sarvalabs/battleground v0.1.2-rc1.0.20231110125037-db6b6925502c h1:nGIpRtiP5DGiwuLvbGlwF6Qcxf4q6oOtJxp6i9f90kQ=
-github.com/sarvalabs/battleground v0.1.2-rc1.0.20231110125037-db6b6925502c/go.mod h1:hIc3PcOSAl3vs5/J36dRO2d4l6qPputmfBeu03K9X6s=
-github.com/sarvalabs/battleground v0.1.2-rc1.0.20231110130042-b40d2c97fc6b h1:OcZGiHyjPXp49dNRitgqxzu7peVv7dcwy01Ol08ejog=
-github.com/sarvalabs/battleground v0.1.2-rc1.0.20231110130042-b40d2c97fc6b/go.mod h1:hIc3PcOSAl3vs5/J36dRO2d4l6qPputmfBeu03K9X6s=
-github.com/sarvalabs/battleground v0.1.2-rc1.0.20231110130714-fc46988203a6 h1:Qu0/BpprM0H2HhcPg8MFnptg9/d3gr+OszvUxn9U9W8=
-github.com/sarvalabs/battleground v0.1.2-rc1.0.20231110130714-fc46988203a6/go.mod h1:hIc3PcOSAl3vs5/J36dRO2d4l6qPputmfBeu03K9X6s=
-github.com/sarvalabs/battleground v0.1.2-rc1.0.20231110141848-343264de77da h1:YuuvI9yoibXV5Bdupe/h5Cc0sqMioh7/TBycQHhEJvE=
-github.com/sarvalabs/battleground v0.1.2-rc1.0.20231110141848-343264de77da/go.mod h1:hIc3PcOSAl3vs5/J36dRO2d4l6qPputmfBeu03K9X6s=
-github.com/sarvalabs/battleground v0.1.2-rc1.0.20231110142335-347184114a36 h1:KuEj13xsSTp2gzg+GNhHJXnfh2np4jUt+sgXQodzaWA=
-github.com/sarvalabs/battleground v0.1.2-rc1.0.20231110142335-347184114a36/go.mod h1:hIc3PcOSAl3vs5/J36dRO2d4l6qPputmfBeu03K9X6s=
-github.com/sarvalabs/battleground v0.1.2-rc1.0.20231110145105-1de965537e15 h1:7b3iL0Bvly7EDTH2pJ1OhTzwpKMZlqXViEtXJ2V8a9A=
-github.com/sarvalabs/battleground v0.1.2-rc1.0.20231110145105-1de965537e15/go.mod h1:hIc3PcOSAl3vs5/J36dRO2d4l6qPputmfBeu03K9X6s=
 github.com/sarvalabs/battleground v0.1.2-rc1.0.20231110145449-ca49401d4e11 h1:BTZe/vwtPPW71KLdQu7vRB38fNqFesE3H5LCCFBhKtM=
 github.com/sarvalabs/battleground v0.1.2-rc1.0.20231110145449-ca49401d4e11/go.mod h1:hIc3PcOSAl3vs5/J36dRO2d4l6qPputmfBeu03K9X6s=
 github.com/sarvalabs/go-moi-engineio v0.1.1 h1:8gt0CNdh5wBZbqXxUOufpI/QSe7YhB5WE/AX0wmsSMA=
@@ -827,8 +814,6 @@ google.golang.org/protobuf v1.26.0-rc.1/go.mod h1:jlhhOSvTdKEhbULTjvd4ARK9grFBp0
 google.golang.org/protobuf v1.26.0/go.mod h1:9q0QmTI4eRPtz6boOQmLYwt+qCgq0jsYwAQnmE0givc=
 google.golang.org/protobuf v1.31.0 h1:g0LDEJHgrBl9N9r17Ru3sqWhkIx2NB67okBHPwC7hs8=
 google.golang.org/protobuf v1.31.0/go.mod h1:HV8QOd/L58Z+nl8r43ehVNZIU/HEI6OcFqwMG9pJV4I=
-gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc h1:2gGKlE2+asNV9m7xrywl36YYNnBG5ZQ0r/BOOxqPpmk=
-gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc/go.mod h1:m7x9LTH6d71AHyAX77c9yqWCCa3UKHcVEj9y7hAtKDk=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
@@ -836,8 +821,6 @@ gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c h1:Hei/4ADfdWqJk1ZMxUNpqntN
 gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c/go.mod h1:JHkPIbrfpd72SG/EVd6muEfDQjcINNoR0C8j2r3qZ4Q=
 gopkg.in/errgo.v2 v2.1.0/go.mod h1:hNsd1EY+bozCKY1Ytp96fpM3vjJbqLJn88ws8XvfDNI=
 gopkg.in/fsnotify.v1 v1.4.7/go.mod h1:Tz8NjZHkW78fSQdbUxIjBTcgA1z1m8ZHf0WmKUhAMys=
-gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df h1:n7WqCuqOuCbNr617RXOY0AWRXxgwEyPp2z+p0+hgMuE=
-gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df/go.mod h1:LRQQ+SO6ZHR7tOkpBDuZnXENFzX8qRjMDMyPD6BRkCw=
 gopkg.in/inf.v0 v0.9.1/go.mod h1:cWUDdTG/fYaXco+Dcufb5Vnc6Gp2YChqWtbxRZE0mXw=
 gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7/go.mod h1:dt/ZhP58zS4L8KSrWDmTeBkI65Dw0HsyUHuEVlX15mw=
 gopkg.in/yaml.v2 v2.2.1/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=

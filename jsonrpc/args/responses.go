@@ -295,3 +295,10 @@ type ConnectionsResponse struct {
 	OutboundConnCount  int64          `json:"outbound_conn_count"`
 	ActivePubSubTopics map[string]int `json:"active_pub_sub_topics"`
 }
+
+type NodeMetaInfoResponse struct {
+	Addrs       []string        `json:"addrs"`
+	KramaID     kramaid.KramaID `json:"krama_id"`
+	RTT         hexutil.Uint64  `json:"rtt"`
+	WalletCount hexutil.Uint    `json:"wallet_count"`
+}

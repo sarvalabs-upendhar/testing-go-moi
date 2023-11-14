@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"math/big"
 
 	"github.com/libp2p/go-libp2p/core/network"
@@ -61,10 +62,10 @@ type Syncer interface {
 }
 
 type Network interface {
-	GetPeers() []id.KramaID
 	GetVersion() string
 	GetKramaID() id.KramaID
 	GetConns() []network.Conn
+	GetPeers() []id.KramaID
 	GetInboundConnCount() int64
 	GetOutboundConnCount() int64
 	GetSubscribedTopics() map[string]int
@@ -73,6 +74,7 @@ type Network interface {
 type DB interface {
 	ReadEntry(key []byte) ([]byte, error)
 	GetRegisteredAccounts() ([]common.Address, error)
+	GetEntriesWithPrefix(ctx context.Context, prefix []byte) (chan *common.DBEntry, error)
 }
 
 // Backend is a struct that represents the API backend

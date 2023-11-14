@@ -5,6 +5,8 @@ import (
 	"context"
 	"sync"
 
+	"github.com/pkg/errors"
+
 	id "github.com/sarvalabs/go-moi/common/kramaid"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
 
@@ -14,8 +16,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/pkg/errors"
-
 	"github.com/sarvalabs/go-moi/common"
 )
 
@@ -24,6 +24,7 @@ type Peer struct {
 	kramaID   id.KramaID       // Represents the KramaID of the peer
 	networkID peer.ID          // Represents the libp2p-peer-id of the peer
 	stream    network.Stream   // Represents peer's stream
+	rtt       int64            // Represents the Round trip time of the peer
 	rw        bufio.ReadWriter // Represents the peer's read/write buffer
 	knownIXs  mapset.Set       // Represents the set of interactions known to the peer
 	logger    hclog.Logger
@@ -31,11 +32,13 @@ type Peer struct {
 }
 
 // newPeer is a constructor function that generates and returns a Peer
-// for a given libp2p peerID and a read/write io buffer.
-func newPeer(stream network.Stream, logger hclog.Logger) *Peer {
+// for a given kramaID, libp2p peerID and a read/write io buffer.
+func newPeer(stream network.Stream, kramaID id.KramaID, rtt int64, logger hclog.Logger) *Peer {
 	return &Peer{
+		kramaID:   kramaID,
 		stream:    stream,
 		networkID: stream.Conn().RemotePeer(),
+		rtt:       rtt,
 		rw:        *bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream)),
 		knownIXs:  mapset.NewSet(),
 		logger:    logger.Named("Peer"),
@@ -53,12 +56,10 @@ func (p *Peer) SendHandshakeMessage(s *Server) error {
 }
 
 func (p *Peer) handleHandshakeMessage() error {
-	msg, err := p.decodeHandshakeMessage()
+	_, err := p.decodeHandshakeMessage()
 	if err != nil {
 		return err
 	}
-	// HashSet the id of the peer based on the message
-	p.setKramaID(msg.Sender)
 
 	return nil
 }
@@ -95,19 +96,18 @@ func (p *Peer) decodePeerMessage() (networkmsg.Message, error) {
 	return msg, nil
 }
 
-// setKramaID is a method of Peer that sets the KramaID of the Peer.
-func (p *Peer) setKramaID(id id.KramaID) {
-	p.mtxLock.Lock()
-	defer p.mtxLock.Unlock()
-	// Generate the ID for the peer and assign it to the field
-	p.kramaID = id
-}
-
 func (p *Peer) GetKramaID() id.KramaID {
 	p.mtxLock.Lock()
 	defer p.mtxLock.Unlock()
 
 	return p.kramaID
+}
+
+func (p *Peer) GetRTT() int64 {
+	p.mtxLock.Lock()
+	defer p.mtxLock.Unlock()
+
+	return p.rtt
 }
 
 func (p *Peer) InitHandshake(s *Server) error {
@@ -135,8 +135,6 @@ func (p *Peer) InitHandshake(s *Server) error {
 	if handshakeMsg.Error != "" {
 		return errors.New(handshakeMsg.Error)
 	}
-	// HashSet the KramaID of the peer based on the message
-	p.setKramaID(message.Sender)
 
 	return nil
 }

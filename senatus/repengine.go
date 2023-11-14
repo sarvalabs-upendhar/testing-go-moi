@@ -146,8 +146,16 @@ func (r *ReputationEngine) AddNewPeerWithPeerID(peerID peer.ID, data *NodeMetaIn
 			info.NTQ = data.NTQ
 		}
 
+		if data.RTT != 0 && info.RTT != data.RTT {
+			info.RTT = data.RTT
+		}
+
 		if data.WalletCount != 0 && info.WalletCount != data.WalletCount {
 			info.WalletCount = data.WalletCount
+		}
+
+		if data.KramaID != "" && info.KramaID != data.KramaID {
+			info.KramaID = data.KramaID
 		}
 
 		if len(data.Addrs) != 0 && !utils.AreSlicesOfStringEqual(data.Addrs, info.Addrs) {
@@ -308,6 +316,24 @@ func (r *ReputationEngine) GetAddressByPeerID(peerID peer.ID) ([]multiaddr.Multi
 	return info.GetMultiAddress()
 }
 
+func (r *ReputationEngine) GetRTTByPeerID(peerID peer.ID) (int64, error) {
+	info, err := r.nodeMetaInfo(peerID)
+	if err != nil {
+		return 0, err
+	}
+
+	return info.RTT, nil
+}
+
+func (r *ReputationEngine) GetKramaIDByPeerID(peerID peer.ID) (id.KramaID, error) {
+	info, err := r.nodeMetaInfo(peerID)
+	if err != nil {
+		return "", err
+	}
+
+	return info.KramaID, nil
+}
+
 func (r *ReputationEngine) GetNTQ(kramaID id.KramaID) (float32, error) {
 	peerID, err := kramaID.DecodedPeerID()
 	if err != nil {
@@ -456,6 +482,7 @@ func (r *ReputationEngine) handleMessages(msgs []*NodeMetaInfoMsg) {
 		}
 
 		if err := r.UpdatePeer(msg.KramaID, &NodeMetaInfo{
+			KramaID:       msg.KramaID,
 			Addrs:         msg.Address,
 			NTQ:           msg.NTQ,
 			WalletCount:   msg.WalletCount,

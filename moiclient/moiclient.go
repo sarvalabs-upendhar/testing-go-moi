@@ -859,6 +859,32 @@ func (c *Client) DBGet(ctx context.Context, args *rpcargs.DebugArgs) (string, er
 	return response, nil
 }
 
+// NodeMetaInfo returns the metadata of nodes stored in the database
+func (c *Client) NodeMetaInfo(
+	ctx context.Context,
+	args *rpcargs.NodeMetaInfoArgs,
+) (map[string]rpcargs.NodeMetaInfoResponse, error) {
+	var resp rpcargs.Response
+
+	err := c.Call(ctx, &resp, "debug.NodeMetaInfo", args)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+
+	var response map[string]rpcargs.NodeMetaInfoResponse
+
+	err = json.Unmarshal(resp.Data, &response)
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
+
 // Accounts returns the address of all the accounts
 func (c *Client) Accounts(ctx context.Context) ([]common.Address, error) {
 	var resp rpcargs.Response

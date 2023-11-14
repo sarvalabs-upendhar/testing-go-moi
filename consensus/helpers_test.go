@@ -58,7 +58,7 @@ func (m *MockServer) Subscribe(ctx context.Context, topic string, handler func(m
 	return nil
 }
 
-func (m *MockServer) StartNewRPCServer(protocol protocol.ID) *rpc.Client {
+func (m *MockServer) StartNewRPCServer(protocol protocol.ID, tag string) *rpc.Client {
 	return nil
 }
 
@@ -70,7 +70,7 @@ func (m *MockServer) GetKramaID() id.KramaID {
 	return m.id
 }
 
-func (m *MockServer) ConnectPeer(kramaID id.KramaID) error {
+func (m *MockServer) ConnectPeerByKramaID(kramaID id.KramaID) error {
 	for _, peer := range m.peers {
 		if peer == kramaID {
 			return common.ErrConnectionExists
@@ -82,7 +82,7 @@ func (m *MockServer) ConnectPeer(kramaID id.KramaID) error {
 	return nil
 }
 
-func (m *MockServer) DisconnectPeer(kramaID id.KramaID) error {
+func (m *MockServer) DisconnectPeerByKramaID(kramaID id.KramaID) error {
 	m.peersLock.Lock()
 	defer m.peersLock.Unlock()
 

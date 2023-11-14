@@ -14,17 +14,19 @@ var DefaultIxPriceLimit = big.NewInt(1)
 
 // Network defaults
 const (
-	DefaultListenerPort      = 6000
-	DefaultJSONRPCPort       = 1600
-	DefaultPrometheusPort    = 30000
-	DefaultInboundConnLimit  = 50
-	DefaultOutboundConnLimit = 15
-	DefaultWatchDogURL       = "https://babylon-watchdog.moi.techbology/add"
-	DefaultICSRequestTimeout = 2500 * time.Millisecond
-	DefaultDiscoveryInterval = 60 * time.Second
-	LocalID                  = 111
-	DevnetID                 = 112
-	BabylonID                = 113
+	DefaultListenerPort       = 6000
+	DefaultJSONRPCPort        = 1600
+	DefaultPrometheusPort     = 30000
+	DefaultInboundConnLimit   = 60
+	DefaultOutboundConnLimit  = 25
+	DefaultMinimumConnections = 100
+	DefaultMaximumConnections = 200
+	DefaultWatchDogURL        = "https://babylon-watchdog.moi.techbology/add"
+	DefaultICSRequestTimeout  = 2500 * time.Millisecond
+	DefaultDiscoveryInterval  = 60 * time.Second
+	LocalID                   = 111
+	DevnetID                  = 112
+	BabylonID                 = 113
 )
 
 // IxPool defaults

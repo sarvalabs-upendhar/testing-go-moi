@@ -144,7 +144,7 @@ func (p *PublicIXPoolAPI) Inspect() (*InspectResponse, error) {
 	format := func(ix *common.Interaction) string {
 		if receiver := ix.Receiver(); !receiver.IsNil() {
 			return fmt.Sprintf(
-				"%s: %d wei + %d gas × %d wei",
+				"%s: %d kmoi + %d fuel × %d kmoi",
 				ix.Receiver().Hex(),
 				ix.Cost(),
 				ix.FuelLimit(),
@@ -153,7 +153,7 @@ func (p *PublicIXPoolAPI) Inspect() (*InspectResponse, error) {
 		}
 
 		return fmt.Sprintf(
-			"%d wei + %d gas × %d wei",
+			"%d kmoi + %d fuel × %d kmoi",
 			ix.Cost(),
 			ix.FuelLimit(),
 			ix.FuelPrice(),

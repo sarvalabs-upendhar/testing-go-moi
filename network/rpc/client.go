@@ -12,10 +12,8 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p-gorpc/stats"
-	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-multiaddr"
 
@@ -53,10 +51,21 @@ type senatus interface {
 	GetAddress(key id.KramaID) (multiAddrs []multiaddr.Multiaddr, err error)
 }
 
+type ConnectionManager interface {
+	NewStream(ctx context.Context, id peer.ID, protocol protocol.ID, tag string) (network.Stream, error)
+	SetupStreamHandler(protocolID protocol.ID, tag string, handle func(network.Stream))
+	ResetStream(stream network.Stream, tag string) error
+	CloseStream(stream network.Stream, tag string) error
+	GetAddrsFromPeerStore(peerID peer.ID) []multiaddr.Multiaddr
+	AddToPeerStore(peerInfo *peer.AddrInfo)
+	GetHostPeerID() peer.ID
+}
+
 // Client represents an RPC client which can perform calls to a remote
 // (or local, see below) Server.
 type Client struct {
-	host                  host.Host
+	connManager           ConnectionManager
+	connTag               string
 	protocol              protocol.ID
 	server                *Server
 	statsHandler          stats.Handler
@@ -66,8 +75,8 @@ type Client struct {
 	logger                hclog.Logger
 }
 
-// NewClient returns a new Client which uses the given libp2p host
-// and protocol ID, which must match the one used by the server.
+// NewClient returns a new Client which uses the given p2p connection manager,
+// tag and protocol ID, which must match the one used by the server.
 // The Host must be correctly configured to be able to open streams
 // to the server (addresses and keys in Peerstore etc.).
 //
@@ -75,12 +84,20 @@ type Client struct {
 // own peer ID) if a server is configured with the same Host becase libp2p
 // hosts cannot open streams to themselves. For this, pass the server directly
 // using NewClientWithServer.
-func NewClient(logger hclog.Logger, h host.Host, p protocol.ID, senatus senatus, opts ...ClientOption) *Client {
+func NewClient(
+	logger hclog.Logger,
+	connManager ConnectionManager,
+	connTag string,
+	p protocol.ID,
+	senatus senatus,
+	opts ...ClientOption,
+) *Client {
 	c := &Client{
-		host:     h,
-		protocol: p,
-		senatus:  senatus,
-		logger:   logger.Named("MOIRPC-Client"),
+		connManager: connManager,
+		connTag:     connTag,
+		protocol:    p,
+		senatus:     senatus,
+		logger:      logger.Named("MOIRPC-Client"),
 	}
 
 	for _, opt := range opts {
@@ -118,13 +135,14 @@ func NewClient(logger hclog.Logger, h host.Host, p protocol.ID, senatus senatus,
 // assumed that Client and Server share the same libp2p host in this case.
 func NewClientWithServer(
 	logger hclog.Logger,
-	h host.Host,
+	connManager ConnectionManager,
+	connTag string,
 	p protocol.ID,
 	senatus senatus,
 	s *Server,
 	opts ...ClientOption,
 ) *Client {
-	c := NewClient(logger, h, p, senatus, opts...)
+	c := NewClient(logger, connManager, connTag, p, senatus, opts...)
 	c.server = s
 
 	return c
@@ -132,11 +150,11 @@ func NewClientWithServer(
 
 // ID returns the peer.ID of the host associated with this client.
 func (c *Client) ID() peer.ID {
-	if c.host == nil {
+	if c.connManager == nil {
 		return ""
 	}
 
-	return c.host.ID()
+	return c.connManager.GetHostPeerID()
 }
 
 // Call performs an RPC call to a registered Server service and blocks until
@@ -188,7 +206,7 @@ func (c *Client) MoiCall(
 
 	var addrsInPeerStore []multiaddr.Multiaddr
 	if !peerIsNil(p) {
-		addrsInPeerStore = c.host.Peerstore().Addrs(p)
+		addrsInPeerStore = c.connManager.GetAddrsFromPeerStore(p)
 	}
 
 	if len(addrsInPeerStore) == 0 {
@@ -200,7 +218,7 @@ func (c *Client) MoiCall(
 				c.logger.Error("Failed to find address in senatus", "err", err)
 			} else {
 				c.logger.Info("Entry found in senatus, adding to peer store")
-				c.host.Peerstore().AddAddrs(p, mAddr, peerstore.RecentlyConnectedAddrTTL)
+				c.connManager.AddToPeerStore(&peer.AddrInfo{ID: p, Addrs: mAddr})
 			}
 		} else {
 			c.logger.Warn("By-passing senatus")
@@ -641,7 +659,7 @@ func (c *Client) makeCall(call *Call, ttl time.Duration) {
 	c.logger.Trace("Make call", "service-ID", call.SvcID)
 
 	// Handle local RPC calls
-	if call.Dest == "" || c.host == nil || call.Dest == c.host.ID() {
+	if call.Dest == "" || c.connManager == nil || call.Dest == c.connManager.GetHostPeerID() {
 		c.logger.Debug("Local call", "service-ID", call.SvcID)
 
 		if c.server == nil {
@@ -658,7 +676,7 @@ func (c *Client) makeCall(call *Call, ttl time.Duration) {
 	}
 
 	// Handle remote RPC calls
-	if c.host == nil {
+	if c.connManager == nil {
 		panic("no host set: cannot perform remote call")
 	}
 
@@ -679,7 +697,7 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 	item, err := c.streamMap.Get(call.Dest.String())
 
 	if err != nil {
-		ns, err := c.host.NewStream(call.ctx, call.Dest, c.protocol)
+		ns, err := c.connManager.NewStream(call.ctx, call.Dest, c.protocol, c.connTag)
 		if err != nil {
 			call.doneWithError(newClientError(err))
 
@@ -707,7 +725,7 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 			"service-ID", call.SvcID,
 		)
 
-		if resetErr := stream.Reset(); resetErr != nil {
+		if resetErr := c.connManager.ResetStream(stream, c.connTag); resetErr != nil {
 			call.logger.Error("Failed to close stream", "err", resetErr)
 		}
 
@@ -723,9 +741,7 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 			"encode-args", call.Args,
 		)
 
-		resetErr := stream.Reset()
-
-		if resetErr != nil {
+		if resetErr := c.connManager.ResetStream(stream, c.connTag); resetErr != nil {
 			call.logger.Error("Failed to close stream", "err", resetErr)
 		}
 
@@ -738,9 +754,7 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 		call.doneWithError(newClientError(err))
 		c.logger.Error("Client error related to encoding flush", "err", err)
 
-		resetErr := stream.Reset()
-
-		if resetErr != nil {
+		if resetErr := c.connManager.ResetStream(stream, c.connTag); resetErr != nil {
 			c.logger.Error("Failed to close stream", "err", resetErr)
 		}
 
@@ -752,9 +766,7 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 	if err != nil {
 		c.logger.Error("Client received response error", "stream-ID", sWrap.stream.ID(), "err", err)
 
-		resetErr := stream.Reset()
-
-		if resetErr != nil {
+		if resetErr := c.connManager.ResetStream(stream, c.connTag); resetErr != nil {
 			call.logger.Error("Failed to close stream", "err", resetErr)
 		}
 
@@ -779,7 +791,9 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 			}
 		}
 	} else {
-		stream.Close()
+		if closeErr := c.connManager.CloseStream(stream, c.connTag); closeErr != nil {
+			call.logger.Error("Failed to close stream", "err", closeErr)
+		}
 	}
 
 	return stream, nil
@@ -821,7 +835,7 @@ func (c *Client) makeStream(call *Call) {
 	c.logger.Trace("Streaming call service ID", "service-ID", call.SvcID)
 
 	// Handle local RPC calls
-	if call.Dest == "" || c.host == nil || call.Dest == c.host.ID() {
+	if call.Dest == "" || c.connManager == nil || call.Dest == c.connManager.GetHostPeerID() {
 		c.logger.Debug("Handling local RPC call", "service-ID", call.SvcID)
 
 		if c.server == nil {
@@ -842,7 +856,7 @@ func (c *Client) makeStream(call *Call) {
 	}
 
 	// Handle remote RPC calls
-	if c.host == nil {
+	if c.connManager == nil {
 		panic("no host set: cannot perform remote call")
 	}
 
@@ -857,7 +871,7 @@ func (c *Client) makeStream(call *Call) {
 // the destination, writing argument channel objects to it and reading the
 // replies to the replies channel.
 func (c *Client) stream(call *Call) {
-	s, err := c.host.NewStream(call.ctx, call.Dest, c.protocol)
+	s, err := c.connManager.NewStream(call.ctx, call.Dest, c.protocol, c.connTag)
 	if err != nil {
 		call.doneWithError(newClientError(err))
 
@@ -877,9 +891,7 @@ func (c *Client) stream(call *Call) {
 	if err := sWrap.enc.Encode(call.SvcID); err != nil {
 		call.doneWithError(newClientError(err))
 
-		resetErr := s.Reset()
-
-		if resetErr != nil {
+		if resetErr := c.connManager.ResetStream(s, c.connTag); resetErr != nil {
 			call.logger.Error("Failed to close stream", "err", resetErr)
 		}
 
@@ -893,9 +905,7 @@ func (c *Client) stream(call *Call) {
 	if err := sWrap.w.Flush(); err != nil {
 		call.doneWithError(newClientError(err))
 
-		resetErr := s.Reset()
-
-		if resetErr != nil {
+		if resetErr := c.connManager.ResetStream(s, c.connTag); resetErr != nil {
 			call.logger.Error("Failed to close stream", "err", resetErr)
 		}
 
@@ -936,8 +946,7 @@ func (c *Client) stream(call *Call) {
 				call.doneWithError(newClientError(err))
 				// closing the args channel is responsibility
 				// of the sender.
-				resetErr := s.Reset()
-				if resetErr != nil {
+				if resetErr := c.connManager.ResetStream(s, c.connTag); resetErr != nil {
 					call.logger.Error("Failed to close stream", "err", resetErr)
 				}
 
@@ -950,9 +959,7 @@ func (c *Client) stream(call *Call) {
 			if err := sWrap.w.Flush(); err != nil {
 				call.doneWithError(newClientError(err))
 
-				resetErr := s.Reset()
-
-				if resetErr != nil {
+				if resetErr := c.connManager.ResetStream(s, c.connTag); resetErr != nil {
 					call.logger.Error("Failed to close stream", "err", resetErr)
 				}
 
@@ -988,9 +995,7 @@ func (c *Client) stream(call *Call) {
 			if err != nil {
 				call.setError(newClientError(err))
 
-				resetErr := s.Reset()
-
-				if resetErr != nil {
+				if resetErr := c.connManager.ResetStream(s, c.connTag); resetErr != nil {
 					call.logger.Error("Failed to close stream", "err", resetErr)
 				}
 
@@ -1000,9 +1005,7 @@ func (c *Client) stream(call *Call) {
 			if resp.Error != "" {
 				call.setError(responseError(resp.ErrType, resp.Error))
 
-				resetErr := s.Reset()
-
-				if resetErr != nil {
+				if resetErr := c.connManager.ResetStream(s, c.connTag); resetErr != nil {
 					call.logger.Error("Failed to close stream", "err", resetErr)
 				}
 
@@ -1016,9 +1019,7 @@ func (c *Client) stream(call *Call) {
 			if err != nil {
 				call.setError(newClientError(err))
 
-				resetErr := s.Reset()
-
-				if resetErr != nil {
+				if resetErr := c.connManager.ResetStream(s, c.connTag); resetErr != nil {
 					call.logger.Error("Failed to close stream", "err", resetErr)
 				}
 
@@ -1032,6 +1033,10 @@ func (c *Client) stream(call *Call) {
 	// Wait for send/receive routines to finish, cleanup and then signal
 	// finalization of the Call.
 	wg.Wait()
-	s.Close()
+
+	if closeErr := c.connManager.CloseStream(s, c.connTag); closeErr != nil {
+		call.logger.Error("Failed to close stream", "err", closeErr)
+	}
+
 	call.done()
 }

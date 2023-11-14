@@ -2,9 +2,10 @@ package network
 
 import (
 	"bufio"
-	"log"
 	"sync"
 	"time"
+
+	"github.com/sarvalabs/go-moi/network/p2p"
 
 	p2pnet "github.com/libp2p/go-libp2p/core/network"
 	id "github.com/sarvalabs/go-moi/common/kramaid"
@@ -92,8 +93,10 @@ func (a *AgoraPeer) sendMessage(senderID id.KramaID, msgType message.MsgType, ms
 	return wr.Flush()
 }
 
-func (a *AgoraPeer) Close() {
-	if err := a.stream.Reset(); err != nil {
-		log.Println("Error closing stream")
+func (a *AgoraPeer) Close(connManager *p2p.ConnectionManager) error {
+	if err := connManager.ResetStream(a.stream, p2p.AgoraStreamTag); err != nil {
+		return err
 	}
+
+	return nil
 }

@@ -49,7 +49,7 @@ func NewAgoraNetwork(logger hclog.Logger, server *p2p.Server, metrics *Metrics) 
 		metrics:   metrics,
 	}
 
-	server.SetupStreamHandler(config.AgoraProtocolStream, an.streamHandler)
+	server.ConnManager.SetupStreamHandler(config.AgoraProtocolStream, p2p.AgoraStreamTag, an.streamHandler)
 
 	return an
 }
@@ -69,8 +69,8 @@ func (an *AgoraNetwork) streamHandler(stream p2pnet.Stream) {
 
 func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 	defer func() {
-		if err := peer.stream.Reset(); err != nil {
-			an.logger.Info("Closed stream", "peer-ID", peer.id)
+		if err := an.server.ConnManager.ResetStream(peer.stream, p2p.AgoraStreamTag); err != nil {
+			an.logger.Info("Failed to close stream", "err", err, "peer-id", peer.id)
 		}
 
 		an.peers.Delete(peer.id)
@@ -131,11 +131,16 @@ func (an *AgoraNetwork) SendAgoraMessage(id id.KramaID, msgType networkmsg.MsgTy
 
 	abstractPeer, ok := an.peers.Load(peerID)
 	if !ok {
-		if _, err := an.server.GetPeerInfo(peerID); err != nil {
+		if _, err := an.server.ConnManager.GetPeerInfo(peerID); err != nil {
 			return err
 		}
 
-		stream, err := an.server.NewStream(context.Background(), peerID, config.AgoraProtocolStream)
+		stream, err := an.server.ConnManager.NewStream(
+			context.Background(),
+			peerID,
+			config.AgoraProtocolStream,
+			p2p.AgoraStreamTag,
+		)
 		if err != nil {
 			return err
 		}
@@ -200,7 +205,9 @@ func (an *AgoraNetwork) pruneInactivePeers() {
 				an.logger.Info("Pruning inactive peer", "peer-ID", agoraPeer.id)
 
 				// cancel the receiving routine
-				agoraPeer.Close()
+				if err := agoraPeer.Close(an.server.ConnManager); err != nil {
+					an.logger.Info("Failed to close the stream", "err", err)
+				}
 
 				// cleanup the memory
 				an.peers.Delete(key)

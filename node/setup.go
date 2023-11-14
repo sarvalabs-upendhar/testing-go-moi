@@ -99,6 +99,7 @@ func (n *Node) setupStateManager() (err error) {
 func (n *Node) setupReputationEngine() (err error) {
 	nodeMetaInfo := &senatus.NodeMetaInfo{
 		Addrs:     utils.MultiAddrToString(n.network.GetAddrs()...),
+		KramaID:   n.vault.KramaID(),
 		NTQ:       1,
 		PublicKey: n.vault.GetConsensusPrivateKey().GetPublicKeyInBytes(),
 	}
@@ -141,8 +142,9 @@ func (n *Node) setupSenatusToNetwork() error {
 
 	for _, staticPeer := range n.cfg.Network.StaticPeers {
 		err := n.network.Senatus.UpdatePeer(staticPeer.ID, &senatus.NodeMetaInfo{
-			Addrs: utils.MultiAddrToString(staticPeer.Address),
-			NTQ:   senatus.DefaultPeerNTQ,
+			KramaID: staticPeer.ID,
+			Addrs:   utils.MultiAddrToString(staticPeer.Address),
+			NTQ:     senatus.DefaultPeerNTQ,
 		})
 		if err != nil {
 			return err
@@ -263,7 +265,16 @@ func (n *Node) setLogger(logLevel string) error {
 func (n *Node) setupRPC() error {
 	n.rpc = jsonrpc.NewRPCServer("/", n.logger, n.cfg.Network, n.eventMux)
 
-	backend := api.NewBackend(n.ixpool, n.chain, n.exec, n.state, n.syncer, n.network, n.db, n.cfg.IxPool)
+	backend := api.NewBackend(
+		n.ixpool,
+		n.chain,
+		n.exec,
+		n.state,
+		n.syncer,
+		n.network,
+		n.db,
+		n.cfg.IxPool,
+	)
 
 	for _, publicAPI := range api.GetPublicAPIs(backend) {
 		rpcService := jsonrpc.NewRPCService()

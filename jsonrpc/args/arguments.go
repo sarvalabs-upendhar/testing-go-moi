@@ -3,6 +3,7 @@ package args
 import (
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 )
 
 // RPC args
@@ -47,6 +48,11 @@ type ConnArgs struct{}
 
 type DebugArgs struct {
 	Key string `json:"storage_key"`
+}
+
+type NodeMetaInfoArgs struct {
+	KramaID id.KramaID `json:"krama_id"`
+	PeerID  string     `json:"peer_id"`
 }
 
 type GetLogicStorageArgs struct {

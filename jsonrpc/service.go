@@ -813,14 +813,42 @@ func (r *Service) DBGet(
 		return common.ErrInvalidAPI
 	}
 
-	key, err := debugAPI.DBGet(args)
+	data, err := debugAPI.DBGet(args)
 	if err != nil {
 		resp.Error = &rpcargs.JSONError{Message: err.Error()}
 
 		return nil
 	}
 
-	resp.Data, err = json.Marshal(key)
+	resp.Data, err = json.Marshal(data)
+	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	return nil
+}
+
+// NodeMetaInfo is an RPC method that retrieves and returns the metadata of nodes stored in the database.
+func (r *Service) NodeMetaInfo(
+	req *http.Request,
+	args *rpcargs.NodeMetaInfoArgs,
+	resp *rpcargs.Response,
+) error {
+	DebugAPI, ok := r.apis["debug"].(*jsonApi.PublicDebugAPI)
+	if !ok {
+		return common.ErrInvalidAPI
+	}
+
+	nodeMetaInfo, err := DebugAPI.GetNodeMetaInfo(args)
+	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	resp.Data, err = json.Marshal(nodeMetaInfo)
 	if err != nil {
 		resp.Error = &rpcargs.JSONError{Message: err.Error()}
 
@@ -841,14 +869,14 @@ func (r *Service) Accounts(
 		return common.ErrInvalidAPI
 	}
 
-	key, err := debugAPI.GetAccounts()
+	accounts, err := debugAPI.GetAccounts()
 	if err != nil {
 		resp.Error = &rpcargs.JSONError{Message: err.Error()}
 
 		return nil
 	}
 
-	resp.Data, err = json.Marshal(key)
+	resp.Data, err = json.Marshal(accounts)
 	if err != nil {
 		resp.Error = &rpcargs.JSONError{Message: err.Error()}
 
@@ -871,9 +899,9 @@ func (r *Service) Connections(
 		return common.ErrInvalidAPI
 	}
 
-	keys := debugAPI.GetConnections()
+	connections := debugAPI.GetConnections()
 
-	resp.Data, err = json.Marshal(keys)
+	resp.Data, err = json.Marshal(connections)
 	if err != nil {
 		resp.Error = &rpcargs.JSONError{Message: err.Error()}
 

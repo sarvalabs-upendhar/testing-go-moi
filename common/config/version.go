@@ -41,6 +41,8 @@ var (
 	MOIProtocolRPC    = protocol.ID("moi/core/rpc/" + ProtocolVersion)
 )
 
+var MOIPingStream = protocol.ID("moi/ping/stream/" + ProtocolVersion)
+
 var (
 	SenatusTopic   = fmt.Sprintf("MOI_PUBSUB_SENATUS_%s", ProtocolVersion)
 	TesseractTopic = fmt.Sprintf("MOI_PUBSUB_TESSERACT_%s", ProtocolVersion)

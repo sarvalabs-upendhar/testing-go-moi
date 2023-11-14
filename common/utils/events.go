@@ -12,7 +12,8 @@ type NewPeerEvent struct {
 	PeerID peer.ID
 }
 
-type PeerDiscoveredEvent struct {
+// DiscoverPeerEvent is fired to discover a peer from the p2p network
+type DiscoverPeerEvent struct {
 	ID peer.ID
 }
 

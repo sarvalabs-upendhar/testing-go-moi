@@ -97,7 +97,11 @@ func (eh *SubHandler) newPeerLoop() {
 					}
 
 					// Update inbound/outbound connection count based on the peer stream's direction
-					eh.server.connInfo.updateConnCount(peer.stream.Stat().Direction, -1)
+					eh.server.ConnManager.updateConnCount(peer.stream.Stat().Direction, peer.GetRTT(), -1)
+
+					if err := eh.server.ConnManager.ResetStream(peer.stream, MOIStreamTag); err != nil {
+						eh.server.logger.Trace("Failed to reset connection", "err", err)
+					}
 
 					eh.logger.Info("Peer Disconnected", "krama-ID", peer.kramaID)
 				}()

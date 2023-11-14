@@ -114,6 +114,7 @@ func TestReputationEngine_AddNewPeerwithPeerID(t *testing.T) {
 			peerID: tests.GetTestPeerID(t),
 			nodeMetaInfo: &NodeMetaInfo{
 				Addrs:         utils.MultiAddrToString(tests.GetListenAddresses(t, 1)...),
+				KramaID:       tests.GetTestKramaID(t, 2),
 				PublicKey:     tests.GetTestPublicKey(t),
 				PeerSignature: []byte{0x05, 0x80},
 				NTQ:           1,
@@ -130,6 +131,7 @@ func TestReputationEngine_AddNewPeerwithPeerID(t *testing.T) {
 			peerID: tests.GetTestPeerID(t),
 			nodeMetaInfo: &NodeMetaInfo{
 				Addrs:         utils.MultiAddrToString(tests.GetListenAddresses(t, 1)...),
+				KramaID:       tests.GetTestKramaID(t, 2),
 				PublicKey:     tests.GetTestPublicKey(t),
 				PeerSignature: []byte{0x05, 0x80},
 				NTQ:           3,
@@ -141,6 +143,7 @@ func TestReputationEngine_AddNewPeerwithPeerID(t *testing.T) {
 			peerID: tests.GetTestPeerID(t),
 			nodeMetaInfo: &NodeMetaInfo{
 				Addrs:         utils.MultiAddrToString(tests.GetListenAddresses(t, 1)...),
+				KramaID:       tests.GetTestKramaID(t, 2),
 				PublicKey:     tests.GetTestPublicKey(t),
 				PeerSignature: []byte{0x05, 0x80},
 				NTQ:           3,
@@ -557,6 +560,100 @@ func TestReputationEngine_GetAddressByPeerID(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Equal(t, utils.MultiAddrFromString(test.nodeMetaInfo.Addrs...), addr)
+		})
+	}
+}
+
+func TestReputationEngine_GetRTTByPeerID(t *testing.T) {
+	reputationEngine, mockDB, _ := CreateTestReputationEngine(t)
+	testcases := []struct {
+		name         string
+		peerID       peer.ID
+		nodeMetaInfo *NodeMetaInfo
+		testFn       func(peerID peer.ID, nodeMetaInfo *NodeMetaInfo)
+		expectedErr  error
+	}{
+		{
+			name:   "peer id with state",
+			peerID: tests.GetTestPeerID(t),
+			nodeMetaInfo: &NodeMetaInfo{
+				RTT: 150,
+			},
+			testFn: func(peerID peer.ID, nodeMetaInfo *NodeMetaInfo) {
+				mockDB.setNodeInfo(t, peerID, nodeMetaInfo)
+			},
+		},
+		{
+			name:        "peer id without state",
+			peerID:      tests.GetTestPeerID(t),
+			expectedErr: common.ErrKramaIDNotFound,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			if test.testFn != nil {
+				test.testFn(test.peerID, test.nodeMetaInfo)
+			}
+
+			rtt, err := reputationEngine.GetRTTByPeerID(test.peerID)
+
+			if test.expectedErr != nil {
+				require.Error(t, err)
+				require.Equal(t, test.expectedErr.Error(), err.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.nodeMetaInfo.RTT, rtt)
+		})
+	}
+}
+
+func TestReputationEngine_GetKramaIDByPeerID(t *testing.T) {
+	reputationEngine, mockDB, _ := CreateTestReputationEngine(t)
+	testcases := []struct {
+		name         string
+		peerID       peer.ID
+		nodeMetaInfo *NodeMetaInfo
+		testFn       func(peerID peer.ID, nodeMetaInfo *NodeMetaInfo)
+		expectedErr  error
+	}{
+		{
+			name:   "peer id with state",
+			peerID: tests.GetTestPeerID(t),
+			nodeMetaInfo: &NodeMetaInfo{
+				KramaID: tests.GetTestKramaID(t, 2),
+			},
+			testFn: func(peerID peer.ID, nodeMetaInfo *NodeMetaInfo) {
+				mockDB.setNodeInfo(t, peerID, nodeMetaInfo)
+			},
+		},
+		{
+			name:        "peer id without state",
+			peerID:      tests.GetTestPeerID(t),
+			expectedErr: common.ErrKramaIDNotFound,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			if test.testFn != nil {
+				test.testFn(test.peerID, test.nodeMetaInfo)
+			}
+
+			kramaID, err := reputationEngine.GetKramaIDByPeerID(test.peerID)
+
+			if test.expectedErr != nil {
+				require.Error(t, err)
+				require.Equal(t, test.expectedErr.Error(), err.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.nodeMetaInfo.KramaID, kramaID)
 		})
 	}
 }

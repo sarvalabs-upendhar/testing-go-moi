@@ -533,6 +533,20 @@ func httpDBGet(t *testing.T, args *rpcargs.DebugArgs) string {
 	return response
 }
 
+// httpNodeMetaInfo returns the metadata of nodes stored in database
+func httpNodeMetaInfo(t *testing.T, args *rpcargs.NodeMetaInfoArgs) map[string]rpcargs.NodeMetaInfoResponse {
+	t.Helper()
+
+	resp := makeHTTPRequest(t, "debug.NodeMetaInfo", args)
+
+	var response map[string]rpcargs.NodeMetaInfoResponse
+
+	err := json.Unmarshal(resp.Data, &response)
+	require.NoError(t, err)
+
+	return response
+}
+
 // httpAccounts returns the addresses of all the accounts
 func httpAccounts(t *testing.T, args *rpcargs.AccountArgs) []common.Address {
 	t.Helper()

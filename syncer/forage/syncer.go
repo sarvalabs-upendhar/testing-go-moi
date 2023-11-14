@@ -42,7 +42,7 @@ const (
 	DefaultWorkerWaitTime = 500 * time.Millisecond
 )
 
-var DefaultMinConnectedPeers = 10
+var DefaultMinConnectedPeers = 6
 
 type lattice interface {
 	ExecuteAndValidate(ts ...*common.Tesseract) error
@@ -1200,7 +1200,7 @@ func (s *Syncer) fetchSnapShort(
 }
 
 func (s *Syncer) registerRPCService() error {
-	s.rpcClient = s.network.StartNewRPCServer(config.SyncProtocolRPC)
+	s.rpcClient = s.network.StartNewRPCServer(config.SyncProtocolRPC, "SYNCRPC")
 
 	return s.network.RegisterNewRPCService(config.SyncProtocolRPC, "SYNCRPC", NewSyncRPCService(s))
 }
