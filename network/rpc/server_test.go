@@ -527,7 +527,7 @@ func testStreamReusewithTTL(t *testing.T, serverCM, clientCM *MockConnectionMana
 
 	assert.Equal(t, streamID1, streamID2)
 	t.Cleanup(func() {
-		_, err = c.streamMap.Delete(dest.Pretty())
+		_, err = c.streamMap.Delete(dest.String())
 		if err != nil {
 			t.Fatal("failed to Delete")
 		}
@@ -591,7 +591,7 @@ func testNewStreamAfterTTLTimeout(t *testing.T, serverCM, clientCM *MockConnecti
 
 	assert.NotEqual(t, streamID1, streamID2)
 	t.Cleanup(func() {
-		_, err = c.streamMap.Delete(dest.Pretty())
+		_, err = c.streamMap.Delete(dest.String())
 		if err != nil {
 			t.Fatal("failed to Delete")
 		}
@@ -642,11 +642,11 @@ func testStreamwithZeroTTL(t *testing.T, serverCM, clientCM *MockConnectionManag
 	t.Log("[testStreamwithZeroTTL]", " stream-ID 1", streamID1)
 	<-done
 
-	_, err = c.streamMap.Get(dest.Pretty())
+	_, err = c.streamMap.Get(dest.String())
 	assert.Error(t, err)
 
 	t.Cleanup(func() {
-		_, err = c.streamMap.Delete(dest.Pretty())
+		_, err = c.streamMap.Delete(dest.String())
 		assert.Error(t, err)
 	})
 }
@@ -681,11 +681,11 @@ func testStreamwithNonZeroTTL(t *testing.T, serverCM, clientCM ConnectionManager
 
 	<-done
 
-	_, err = c.streamMap.Get(dest.Pretty())
+	_, err = c.streamMap.Get(dest.String())
 	assert.NoError(t, err)
 
 	t.Cleanup(func() {
-		_, err = c.streamMap.Delete(dest.Pretty())
+		_, err = c.streamMap.Delete(dest.String())
 		if err != nil {
 			t.Error("failed to delete")
 		}
