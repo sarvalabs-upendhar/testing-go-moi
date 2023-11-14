@@ -984,9 +984,9 @@ func TestAddTesseract(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			tsAddedResp := make(chan result, 1)
+			tsAddedResp := make(chan tests.Result, 1)
 
-			go handleMuxEvents(ctx, tsAddedEventSub, tsAddedResp) // keeps checking for event until timeout
+			go utils.HandleMuxEvents(ctx, tsAddedEventSub, tsAddedResp, tsCount) // keeps checking for event until timeout
 
 			err := c.addTesseract(
 				test.args.cache,

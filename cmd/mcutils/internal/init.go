@@ -125,6 +125,8 @@ func CreateConfigFile(datadir string, index int) []byte {
 			StaticPeers:        peerList.StaticPeers,
 			InboundConnLimit:   config.DefaultInboundConnLimit,
 			OutboundConnLimit:  config.DefaultOutboundConnLimit,
+			MinimumConnections: config.DefaultMinimumConnections,
+			MaximumConnections: config.DefaultMaximumConnections,
 			DiscoveryInterval:  config.DefaultDiscoveryInterval,
 			CorsAllowedOrigins: []string{"*"},
 		},

@@ -1,15 +1,20 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	crand "crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"math/big"
+	"math/rand"
 	"strconv"
 	"sync/atomic"
 	"testing"
+
+	"github.com/sarvalabs/go-moi/senatus"
+	"github.com/sarvalabs/go-moi/storage"
 
 	libp2pCrypto "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -790,8 +795,8 @@ func NewMockDatabase(t *testing.T) *MockDatabase {
 	return db
 }
 
-func (d *MockDatabase) setDBEntry(key []byte) {
-	d.database[string(key)] = key
+func (d *MockDatabase) setDBEntry(key []byte, value []byte) {
+	d.database[string(key)] = value
 }
 
 func (d *MockDatabase) ReadEntry(key []byte) ([]byte, error) {
@@ -810,6 +815,64 @@ func (d *MockDatabase) setList(t *testing.T, addressList []common.Address) {
 
 func (d *MockDatabase) GetRegisteredAccounts() ([]common.Address, error) {
 	return d.addrList, nil
+}
+
+func (d *MockDatabase) GetEntriesWithPrefix(ctx context.Context, prefix []byte) (chan *common.DBEntry, error) {
+	ch := make(chan *common.DBEntry)
+
+	go func() {
+		defer close(ch)
+
+		for key, value := range d.database {
+			if bytes.HasPrefix([]byte(key), prefix) {
+				dbEntry := &common.DBEntry{
+					Key:   []byte(key),
+					Value: value,
+				}
+
+				select {
+				case <-ctx.Done():
+					return
+				case ch <- dbEntry:
+				}
+			}
+		}
+	}()
+
+	return ch, nil
+}
+
+func (d *MockDatabase) setNodeMetaInfo(t *testing.T, entries map[peer.ID]*senatus.NodeMetaInfo) {
+	t.Helper()
+
+	for key, entry := range entries {
+		value, err := entry.Bytes()
+		require.NoError(t, err)
+
+		d.setDBEntry(storage.NtqDBKey(key), value)
+	}
+}
+
+func createNodeMetaInfo(t *testing.T, count int) ([]peer.ID, map[peer.ID]*senatus.NodeMetaInfo) {
+	t.Helper()
+
+	peerIDs := make([]peer.ID, 0)
+	kramaIDs := tests.GetTestKramaIDs(t, count)
+	nodeMetaInfo := make(map[peer.ID]*senatus.NodeMetaInfo)
+
+	for _, kramaID := range kramaIDs {
+		peerID, err := kramaID.DecodedPeerID()
+		require.NoError(t, err)
+
+		peerIDs = append(peerIDs, peerID)
+		nodeMetaInfo[peerID] = &senatus.NodeMetaInfo{
+			KramaID:     kramaID,
+			RTT:         int64(rand.Intn(500)),
+			WalletCount: int32(rand.Intn(5)),
+		}
+	}
+
+	return peerIDs, nodeMetaInfo
 }
 
 func createHeaderCallbackWithTestData(t *testing.T) func(header *common.TesseractHeader) {

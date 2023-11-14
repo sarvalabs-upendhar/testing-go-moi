@@ -6,11 +6,10 @@ import (
 	"os"
 	"path/filepath"
 
-	agora2 "github.com/sarvalabs/go-moi/syncer/agora"
-
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi/syncer/agora"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/utils"
@@ -66,7 +65,6 @@ func (n *Node) setupConsensusSlots() {
 // setupServer creates new server object and setups it to node
 func (n *Node) setupNetwork() error {
 	n.network = p2p.NewServer(
-		n.ctx,
 		n.logger,
 		n.vault.KramaID(),
 		n.eventMux,
@@ -80,7 +78,7 @@ func (n *Node) setupNetwork() error {
 
 // setupPersistenceManager creates new dhruva(db) object and setups it to node
 func (n *Node) setupPersistenceManager() (err error) {
-	n.db, err = storage.NewPersistenceManager(n.ctx, n.logger, n.cfg.DB, n.nodeMetrics.storage)
+	n.db, err = storage.NewPersistenceManager(n.logger, n.cfg.DB, n.nodeMetrics.storage)
 	if err != nil {
 		return err
 	}
@@ -90,7 +88,7 @@ func (n *Node) setupPersistenceManager() (err error) {
 
 // setupStateManager creates new StateManager object and setups it to node
 func (n *Node) setupStateManager() (err error) {
-	n.state, err = state.NewStateManager(n.ctx, n.db, n.logger, n.cache, n.nodeMetrics.guna, n.senatus)
+	n.state, err = state.NewStateManager(n.db, n.logger, n.cache, n.nodeMetrics.guna, n.senatus)
 	if err != nil {
 		return err
 	}
@@ -101,12 +99,12 @@ func (n *Node) setupStateManager() (err error) {
 func (n *Node) setupReputationEngine() (err error) {
 	nodeMetaInfo := &senatus.NodeMetaInfo{
 		Addrs:     utils.MultiAddrToString(n.network.GetAddrs()...),
+		KramaID:   n.vault.KramaID(),
 		NTQ:       1,
 		PublicKey: n.vault.GetConsensusPrivateKey().GetPublicKeyInBytes(),
 	}
 
 	n.senatus, err = senatus.NewReputationEngine(
-		n.ctx,
 		n.logger,
 		n.network,
 		n.db,
@@ -128,7 +126,6 @@ func (n *Node) setupExecEngine() {
 // setupIxPool creates new InteractionPool object and setups it to node
 func (n *Node) setupIxPool() {
 	n.ixpool = ixpool.NewIxPool(
-		n.ctx,
 		n.logger,
 		n.eventMux,
 		n.state,
@@ -145,8 +142,9 @@ func (n *Node) setupSenatusToNetwork() error {
 
 	for _, staticPeer := range n.cfg.Network.StaticPeers {
 		err := n.network.Senatus.UpdatePeer(staticPeer.ID, &senatus.NodeMetaInfo{
-			Addrs: utils.MultiAddrToString(staticPeer.Address),
-			NTQ:   senatus.DefaultPeerNTQ,
+			KramaID: staticPeer.ID,
+			Addrs:   utils.MultiAddrToString(staticPeer.Address),
+			NTQ:     senatus.DefaultPeerNTQ,
 		})
 		if err != nil {
 			return err
@@ -158,13 +156,12 @@ func (n *Node) setupSenatusToNetwork() error {
 
 // setupRandomizer creates new Randomizer object and setups it to node
 func (n *Node) setupRandomizer() {
-	n.handlers.flux = flux.NewRandomizer(n.ctx, n.logger, n.network, n.nodeMetrics.flux)
+	n.handlers.flux = flux.NewRandomizer(n.logger, n.network, n.nodeMetrics.flux)
 }
 
 // setupChainManager creates new Chain Manager object and setups it to node
 func (n *Node) setupChainManager() (err error) {
 	if n.chain, err = lattice.NewChainManager(
-		n.ctx,
 		n.cfg.Chain,
 		n.db,
 		n.state,
@@ -187,7 +184,6 @@ func (n *Node) setupChainManager() (err error) {
 // setupKramaEngine creates new Krama Engine object and setups it to node
 func (n *Node) setupKramaEngine() (err error) {
 	if n.kramaEngine, err = consensus.NewKramaEngine(
-		n.ctx,
 		n.cfg.Consensus,
 		n.logger,
 		n.eventMux,
@@ -209,13 +205,12 @@ func (n *Node) setupKramaEngine() (err error) {
 
 // setupSyncer creates new Syncer object and setups it to node
 func (n *Node) setupSyncer() (err error) {
-	agoraInstance, err := agora2.NewAgora(n.ctx, n.logger, n.db, n.network, n.nodeMetrics.agora)
+	agoraInstance, err := agora.NewAgora(n.logger, n.db, n.network, n.nodeMetrics.agora)
 	if err != nil {
 		return errors.Wrap(err, "error initiating agora")
 	}
 
 	if n.syncer, err = forage.NewSyncer(
-		n.ctx,
 		n.cfg.Syncer,
 		n.logger,
 		n.network,
@@ -270,7 +265,16 @@ func (n *Node) setLogger(logLevel string) error {
 func (n *Node) setupRPC() error {
 	n.rpc = jsonrpc.NewRPCServer("/", n.logger, n.cfg.Network, n.eventMux)
 
-	backend := api.NewBackend(n.ixpool, n.chain, n.exec, n.state, n.syncer, n.network, n.db, n.cfg.IxPool)
+	backend := api.NewBackend(
+		n.ixpool,
+		n.chain,
+		n.exec,
+		n.state,
+		n.syncer,
+		n.network,
+		n.db,
+		n.cfg.IxPool,
+	)
 
 	for _, publicAPI := range api.GetPublicAPIs(backend) {
 		rpcService := jsonrpc.NewRPCService()

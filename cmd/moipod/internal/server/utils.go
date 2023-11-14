@@ -256,6 +256,8 @@ func (p *Params) getNetworkConfig() *config.NetworkConfig {
 		RefreshSenatus:     p.rawCfg.Network.RefreshSenatus,
 		InboundConnLimit:   p.rawCfg.Network.InboundConnLimit,
 		OutboundConnLimit:  p.rawCfg.Network.OutboundConnLimit,
+		MinimumConnections: p.rawCfg.Network.MinimumConnections,
+		MaximumConnections: p.rawCfg.Network.MaximumConnections,
 		DiscoveryInterval:  p.rawCfg.Network.DiscoveryInterval,
 	}
 }

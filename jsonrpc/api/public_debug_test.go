@@ -3,7 +3,11 @@ package api
 import (
 	"testing"
 
+	"github.com/sarvalabs/go-moi/common/hexutil"
+
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/sarvalabs/go-moi/senatus"
 
 	"github.com/stretchr/testify/require"
 
@@ -18,8 +22,9 @@ func TestPublicDebugAPI_DBGet(t *testing.T) {
 	db := NewMockDatabase(t)
 	debugAPI := NewPublicDebugAPI(db, nil)
 	key := tests.RandomHash(t)
+	value := tests.RandomHash(t)
 
-	db.setDBEntry(key.Bytes())
+	db.setDBEntry(key.Bytes(), value.Bytes())
 
 	testcases := []struct {
 		name          string
@@ -39,7 +44,7 @@ func TestPublicDebugAPI_DBGet(t *testing.T) {
 			args: rpcargs.DebugArgs{
 				Key: key.String(),
 			},
-			expectedValue: key.String(),
+			expectedValue: value.String(),
 		},
 	}
 
@@ -53,7 +58,96 @@ func TestPublicDebugAPI_DBGet(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, value, test.expectedValue)
+			require.Equal(t, test.expectedValue, value)
+		})
+	}
+}
+
+func TestPublicDebugAPI_GetNodeMetaInfo(t *testing.T) {
+	peerIDs, entries := createNodeMetaInfo(t, 5)
+
+	testcases := []struct {
+		name            string
+		args            rpcargs.NodeMetaInfoArgs
+		entries         map[peer.ID]*senatus.NodeMetaInfo
+		expectedEntries []peer.ID
+		expectedError   error
+	}{
+		{
+			name:            "Returns all the node meta info stored in the database",
+			args:            rpcargs.NodeMetaInfoArgs{},
+			entries:         entries,
+			expectedEntries: peerIDs,
+		},
+		{
+			name:            "Node meta info doesn't exist in the database for any node",
+			args:            rpcargs.NodeMetaInfoArgs{},
+			entries:         make(map[peer.ID]*senatus.NodeMetaInfo),
+			expectedEntries: []peer.ID{},
+		},
+		{
+			name: "Return node meta info for the specific peer id",
+			args: rpcargs.NodeMetaInfoArgs{
+				PeerID: peerIDs[1].String(),
+			},
+			entries:         entries,
+			expectedEntries: []peer.ID{peerIDs[1]},
+		},
+		{
+			name: "Return node meta info for the specific krama id",
+			args: rpcargs.NodeMetaInfoArgs{
+				KramaID: entries[peerIDs[2]].KramaID,
+			},
+			entries:         entries,
+			expectedEntries: []peer.ID{peerIDs[2]},
+		},
+		{
+			name: "Return error if the queried peer id's node meta info doesn't exists",
+			args: rpcargs.NodeMetaInfoArgs{
+				PeerID: tests.GetTestPeerID(t).String(),
+			},
+			entries:       entries,
+			expectedError: common.ErrKeyNotFound,
+		},
+		{
+			name: "Return error if the queried krama id's node meta info doesn't exists",
+			args: rpcargs.NodeMetaInfoArgs{
+				KramaID: tests.GetTestKramaID(t, 2),
+			},
+			entries:       entries,
+			expectedError: common.ErrKeyNotFound,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			db := NewMockDatabase(t)
+			debugAPI := NewPublicDebugAPI(db, nil)
+
+			if test.entries != nil {
+				db.setNodeMetaInfo(t, test.entries)
+			}
+
+			nodeMetaInfo, err := debugAPI.GetNodeMetaInfo(&test.args)
+
+			if test.expectedError != nil {
+				require.Error(t, err)
+				require.Equal(t, err, test.expectedError)
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, len(test.expectedEntries), len(nodeMetaInfo))
+
+			for _, peerID := range test.expectedEntries {
+				nodeInfo := nodeMetaInfo[peerID.String()]
+
+				require.NotNil(t, nodeInfo)
+				require.Equal(t, test.entries[peerID].KramaID, nodeInfo["krama_id"])
+				require.Equal(t, hexutil.Uint64(test.entries[peerID].RTT), nodeInfo["rtt"])
+				require.Equal(t, hexutil.Uint(test.entries[peerID].WalletCount), nodeInfo["wallet_count"])
+			}
 		})
 	}
 }

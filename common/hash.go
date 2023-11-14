@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/minio/highwayhash"
 	"github.com/sarvalabs/go-polo"
 	"golang.org/x/crypto/blake2b"
 )
@@ -135,4 +136,19 @@ func PoloHash(x interface{}) (Hash, error) {
 
 func GetHash(data []byte) Hash {
 	return blake2b.Sum256(data)
+}
+
+// Key used for FastSum64
+var fastSumHashKey = blake2b.Sum256([]byte("hash_fast_sum64_key"))
+
+// FastSum64 returns a hash sum of the input data using highwayhash. This method is not secure, but
+// may be used as a quick identifier for objects where collisions are acceptable.
+func FastSum64(data []byte) uint64 {
+	return highwayhash.Sum64(data, fastSumHashKey[:])
+}
+
+// FastSum256 returns a hash sum of the input data using highwayhash. This method is not secure, but
+// may be used as a quick identifier for objects where collisions are acceptable.
+func FastSum256(data []byte) [32]byte {
+	return highwayhash.Sum(data, fastSumHashKey[:])
 }

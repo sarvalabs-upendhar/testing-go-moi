@@ -73,28 +73,20 @@ func NewMockDB(t *testing.T) *mockDB {
 func NewTestPersistenceManager(t *testing.T) *PersistenceManager {
 	t.Helper()
 
-	ctx, ctxCancel := context.WithCancel(context.Background())
-
 	return &PersistenceManager{
-		ctx:       ctx,
-		ctxCancel: ctxCancel,
-		config:    nil,
-		logger:    hclog.Default(),
-		db:        NewMockDB(t),
+		config: nil,
+		logger: hclog.Default(),
+		db:     NewMockDB(t),
 	}
 }
 
 func NewTestPersistenceManagerWithBadger(t *testing.T, badgerPath string) *PersistenceManager {
 	t.Helper()
 
-	ctx, ctxCancel := context.WithCancel(context.Background())
-
 	bg, err := badger.NewBadgerDB(badgerPath, db.NilMetrics(), hclog.NewNullLogger())
 	require.NoError(t, err)
 
 	return &PersistenceManager{
-		ctx:       ctx,
-		ctxCancel: ctxCancel,
 		config: &config.DBConfig{
 			DBFolderPath: badgerPath,
 			MaxSnapSize:  1024 * 1024 * 1024,

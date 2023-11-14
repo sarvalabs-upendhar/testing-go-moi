@@ -1,7 +1,6 @@
 package node
 
 import (
-	"context"
 	"net"
 	"net/http"
 	"time"
@@ -40,8 +39,6 @@ const (
 )
 
 type Node struct {
-	ctx                 context.Context
-	ctxCancel           context.CancelFunc
 	logger              hclog.Logger
 	cfg                 *config.Config
 	eventMux            *utils.TypeMux
@@ -70,7 +67,6 @@ func NewNode(logLevel string, cfg *config.Config) (n *Node, err error) {
 		eventMux: new(utils.TypeMux),
 		handlers: new(SubHandlers),
 	}
-	n.ctx, n.ctxCancel = context.WithCancel(context.Background())
 
 	if err = n.setupCacheStore(); err != nil {
 		return nil, err
@@ -80,6 +76,7 @@ func NewNode(logLevel string, cfg *config.Config) (n *Node, err error) {
 		return nil, errors.Wrap(common.ErrVaultInit, err.Error())
 	}
 
+	// We should setup logger only after setting up the vault, as we need kramaID
 	if err = n.setLogger(logLevel); err != nil {
 		return nil, err
 	}
@@ -187,12 +184,12 @@ func (n *Node) startJSONRPCServer() {
 }
 
 func (n *Node) Stop() {
-	defer n.ctxCancel()
 	n.logger.Info("Gracefully shutting down...!!!!")
 	n.network.Stop()
 	n.ixpool.Close()
 	n.syncer.Close()
 	n.chain.Close()
+	n.senatus.Close()
 	n.stopHandlers()
 	n.stopTelemetry()
 	n.db.Close()

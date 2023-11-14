@@ -45,7 +45,13 @@ func (s *SyncStatusTracker) UpdatePendingAccounts(count int64) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	s.pendingAccounts += uint64(count)
+	if count < 0 {
+		s.pendingAccounts--
+
+		return
+	}
+
+	s.pendingAccounts++
 }
 
 // ReadPendingAccounts returns the total pending accounts

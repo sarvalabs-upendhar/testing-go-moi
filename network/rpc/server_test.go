@@ -196,68 +196,16 @@ func (t *Arith) DivideMyNumbersPointers(ctx context.Context, args <-chan *Args, 
 	return nil
 }
 
-func makeRandomNodes() (h1, h2 host.Host) {
-	h1, _ = libp2p.New(
-		libp2p.ListenAddrStrings("/ip4/127.0.0.1/tcp/0"),
-	)
-	h2, _ = libp2p.New(
-		libp2p.ListenAddrStrings("/ip4/127.0.0.1/tcp/0"),
-	)
-
-	h1.Peerstore().AddAddrs(h2.ID(), h2.Addrs(), peerstore.PermanentAddrTTL)
-	h2.Peerstore().AddAddrs(h1.ID(), h1.Addrs(), peerstore.PermanentAddrTTL)
-
-	return
-}
-
-func makeRandomNodesX() (h1, h2, h3, h4 host.Host) {
-	h1, _ = libp2p.New(
-		libp2p.ListenAddrStrings("/ip4/127.0.0.1/tcp/0"),
-	)
-	h2, _ = libp2p.New(
-		libp2p.ListenAddrStrings("/ip4/127.0.0.1/tcp/0"),
-	)
-
-	h3, _ = libp2p.New(
-		libp2p.ListenAddrStrings("/ip4/127.0.0.1/tcp/0"),
-	)
-	h4, _ = libp2p.New(
-		libp2p.ListenAddrStrings("/ip4/127.0.0.1/tcp/0"),
-	)
-
-	h1.Peerstore().AddAddrs(h2.ID(), h2.Addrs(), peerstore.PermanentAddrTTL)
-	h1.Peerstore().AddAddrs(h3.ID(), h3.Addrs(), peerstore.PermanentAddrTTL)
-	h1.Peerstore().AddAddrs(h4.ID(), h4.Addrs(), peerstore.PermanentAddrTTL)
-
-	h2.Peerstore().AddAddrs(h1.ID(), h1.Addrs(), peerstore.PermanentAddrTTL)
-	h2.Peerstore().AddAddrs(h3.ID(), h3.Addrs(), peerstore.PermanentAddrTTL)
-	h2.Peerstore().AddAddrs(h4.ID(), h4.Addrs(), peerstore.PermanentAddrTTL)
-
-	h3.Peerstore().AddAddrs(h1.ID(), h1.Addrs(), peerstore.PermanentAddrTTL)
-	h3.Peerstore().AddAddrs(h2.ID(), h2.Addrs(), peerstore.PermanentAddrTTL)
-	h3.Peerstore().AddAddrs(h4.ID(), h4.Addrs(), peerstore.PermanentAddrTTL)
-
-	h4.Peerstore().AddAddrs(h1.ID(), h1.Addrs(), peerstore.PermanentAddrTTL)
-	h4.Peerstore().AddAddrs(h2.ID(), h2.Addrs(), peerstore.PermanentAddrTTL)
-	h4.Peerstore().AddAddrs(h3.ID(), h3.Addrs(), peerstore.PermanentAddrTTL)
-
-	return h1, h2, h3, h4
-}
-
-func createP2PHosts(t *testing.T) (h1, h2 host.Host) {
+func createP2PHosts(t *testing.T) (cm1, cm2 *MockConnectionManager) {
 	t.Helper()
 
-	h1, _ = libp2p.New(
-		libp2p.ListenAddrStrings("/ip4/127.0.0.1/tcp/19998"),
-	)
-	h2, _ = libp2p.New(
-		libp2p.ListenAddrStrings("/ip4/127.0.0.1/tcp/19999"),
-	)
+	cm1 = NewMockConnectionManager("/ip4/127.0.0.1/tcp/19998")
+	cm2 = NewMockConnectionManager("/ip4/127.0.0.1/tcp/19999")
 
-	isH1InH2 := h2.Peerstore().Addrs(h1.ID())
+	isH1InH2 := cm2.host.Peerstore().Addrs(cm1.host.ID())
 	assert.Empty(t, isH1InH2)
 
-	isH2InH1 := h1.Peerstore().Addrs(h2.ID())
+	isH2InH1 := cm1.host.Peerstore().Addrs(cm2.host.ID())
 	assert.Empty(t, isH2InH1)
 
 	return
@@ -266,12 +214,11 @@ func createP2PHosts(t *testing.T) (h1, h2 host.Host) {
 func TestRegister(t *testing.T) {
 	t.Parallel()
 
-	h1, h2 := makeRandomNodes()
+	cm := createConnectionMangers(t, 2)
 
-	defer h1.Close()
-	defer h2.Close()
+	defer stopConnectionManagers(t, cm)
 
-	s := NewServer(testLogger, h1, "rpc")
+	s := NewServer(testLogger, cm[0], "rpc-conn-tag", "rpc")
 
 	var arith Arith
 
@@ -293,11 +240,11 @@ func TestRegister(t *testing.T) {
 	}
 }
 
-func testCall(t *testing.T, servNode, clientNode host.Host, dest peer.ID) {
+func testCall(t *testing.T, serverCM, clientCM *MockConnectionManager, dest peer.ID) {
 	t.Helper()
 
-	s := NewServer(testLogger, servNode, "rpc")
-	c := NewClientWithServer(testLogger, clientNode, "rpc", nil, s)
+	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
+	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
 
 	var arith Arith
 
@@ -318,11 +265,11 @@ func testCall(t *testing.T, servNode, clientNode host.Host, dest peer.ID) {
 	}
 }
 
-func testRPCCallToSameDestinationMultipleSource(t *testing.T, servNode, clientNode host.Host, dest peer.ID) {
+func testRPCCallToSameDestinationMultipleSource(t *testing.T, serverCM, clientCM *MockConnectionManager, dest peer.ID) {
 	t.Helper()
 
-	s := NewServer(testLogger, servNode, "rpc")
-	c := NewClientWithServer(testLogger, clientNode, "rpc", nil, s)
+	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
+	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
 
 	var arith Arith
 
@@ -423,19 +370,19 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, servNode, clientNo
 	}
 }
 
-func testCallWithSenatus(t *testing.T, servNode, clientNode host.Host, dest peer.ID) {
+func testCallWithSenatus(t *testing.T, serverCM, clientCM *MockConnectionManager, dest peer.ID) {
 	t.Helper()
 
-	s := NewServer(testLogger, servNode, "rpc")
+	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
 
 	sm := senatusMock{}
 
-	err := sm.SetAddress(id.KramaID(getKramaID(dest)), servNode.Addrs())
+	err := sm.SetAddress(id.KramaID(getKramaID(dest)), serverCM.host.Addrs())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	c := NewClient(testLogger, clientNode, "rpc", sm)
+	c := NewClient(testLogger, clientCM, "rpc-conn-tag", "rpc", sm)
 
 	var arith Arith
 
@@ -468,7 +415,7 @@ func testCallWithSenatus(t *testing.T, servNode, clientNode host.Host, dest peer
 }
 
 // testing for invalid kramaID
-func testValidKramaID(t *testing.T, servNode, clientNode host.Host, dest peer.ID) {
+func testValidKramaID(t *testing.T, dest peer.ID) {
 	t.Helper()
 
 	kID := id.KramaID(getKramaID(dest))
@@ -476,7 +423,7 @@ func testValidKramaID(t *testing.T, servNode, clientNode host.Host, dest peer.ID
 	assert.NoError(t, err)
 }
 
-func testInValidKramaID(t *testing.T, servNode, clientNode host.Host, dest peer.ID) {
+func testInValidKramaID(t *testing.T, dest peer.ID) {
 	t.Helper()
 
 	kID := id.KramaID(getInValidKramaID(dest))
@@ -501,12 +448,11 @@ func getInValidKramaID(dest peer.ID) string {
 }
 
 func TestCall(t *testing.T) {
-	h1, h2 := makeRandomNodes()
-	defer h1.Close()
-	defer h2.Close()
+	cm := createConnectionMangers(t, 2)
+	defer stopConnectionManagers(t, cm)
 
 	t.Run("remote", func(t *testing.T) {
-		testCall(t, h1, h2, h1.ID())
+		testCall(t, cm[0], cm[1], cm[0].host.ID())
 	})
 }
 
@@ -514,39 +460,35 @@ func TestCall(t *testing.T) {
 // This test tries to make multiple Rpc call (5 ) to same destination
 // from multiple sources (3)
 func TestRpcCallToSameDestinationMultipleSource(t *testing.T) {
-	h1, h2, h3, h4 := makeRandomNodesX()
-	defer h1.Close()
-	defer h2.Close()
-	defer h3.Close()
-	defer h4.Close()
+	cm := createConnectionMangers(t, 4)
+	defer stopConnectionManagers(t, cm)
 
 	t.Run("remote", func(t *testing.T) {
 		// h2 --> h1
-		testRPCCallToSameDestinationMultipleSource(t, h1, h2, h1.ID())
+		testRPCCallToSameDestinationMultipleSource(t, cm[0], cm[1], cm[0].host.ID())
 		// h3 --> h1
-		testRPCCallToSameDestinationMultipleSource(t, h1, h3, h1.ID())
+		testRPCCallToSameDestinationMultipleSource(t, cm[0], cm[2], cm[0].host.ID())
 		// h4 ---> h1
-		testRPCCallToSameDestinationMultipleSource(t, h1, h4, h1.ID())
+		testRPCCallToSameDestinationMultipleSource(t, cm[0], cm[3], cm[0].host.ID())
 	})
 }
 
 // TestStreamReusewithTTL tries to reuse stream to make RCP call
 func TestStreamReusewithTTL(t *testing.T) {
-	h1, h2 := makeRandomNodes()
-	defer h1.Close()
-	defer h2.Close()
+	cm := createConnectionMangers(t, 2)
+	defer stopConnectionManagers(t, cm)
 
 	t.Run("remote", func(t *testing.T) {
 		// h2 --> h1
-		testStreamReusewithTTL(t, h1, h2, h1.ID())
+		testStreamReusewithTTL(t, cm[0], cm[1], cm[0].host.ID())
 	})
 }
 
-func testStreamReusewithTTL(t *testing.T, servNode, clientNode host.Host, dest peer.ID) {
+func testStreamReusewithTTL(t *testing.T, serverCM, clientCM *MockConnectionManager, dest peer.ID) {
 	t.Helper()
 
-	s := NewServer(testLogger, servNode, "rpc")
-	c := NewClientWithServer(testLogger, clientNode, "rpc", nil, s)
+	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
+	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
 
 	var arith Arith
 
@@ -585,7 +527,7 @@ func testStreamReusewithTTL(t *testing.T, servNode, clientNode host.Host, dest p
 
 	assert.Equal(t, streamID1, streamID2)
 	t.Cleanup(func() {
-		_, err = c.streamMap.Delete(dest.Pretty())
+		_, err = c.streamMap.Delete(dest.String())
 		if err != nil {
 			t.Fatal("failed to Delete")
 		}
@@ -596,20 +538,19 @@ func testStreamReusewithTTL(t *testing.T, servNode, clientNode host.Host, dest p
 // so that first stream cache time out and second RPC
 // call creates a new stream to make the RPC call
 func TestNewStreamAfterTTLTimeout(t *testing.T) {
-	h1, h2 := makeRandomNodes()
-	defer h1.Close()
-	defer h2.Close()
+	cm := createConnectionMangers(t, 2)
+	defer stopConnectionManagers(t, cm)
 
 	t.Run("remote", func(t *testing.T) {
-		testNewStreamAfterTTLTimeout(t, h1, h2, h1.ID())
+		testNewStreamAfterTTLTimeout(t, cm[0], cm[1], cm[0].host.ID())
 	})
 }
 
-func testNewStreamAfterTTLTimeout(t *testing.T, servNode, clientNode host.Host, dest peer.ID) {
+func testNewStreamAfterTTLTimeout(t *testing.T, serverCM, clientCM *MockConnectionManager, dest peer.ID) {
 	t.Helper()
 
-	s := NewServer(testLogger, servNode, "rpc")
-	c := NewClientWithServer(testLogger, clientNode, "rpc", nil, s)
+	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
+	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
 
 	var arith Arith
 
@@ -650,7 +591,7 @@ func testNewStreamAfterTTLTimeout(t *testing.T, servNode, clientNode host.Host, 
 
 	assert.NotEqual(t, streamID1, streamID2)
 	t.Cleanup(func() {
-		_, err = c.streamMap.Delete(dest.Pretty())
+		_, err = c.streamMap.Delete(dest.String())
 		if err != nil {
 			t.Fatal("failed to Delete")
 		}
@@ -660,24 +601,23 @@ func testNewStreamAfterTTLTimeout(t *testing.T, servNode, clientNode host.Host, 
 // TestStreamwithZeroTTL
 // This test should create two streams when making two RPC calls
 func TestStreamwithTTL(t *testing.T) {
-	h1, h2 := makeRandomNodes()
-	defer h1.Close()
-	defer h2.Close()
+	cm := createConnectionMangers(t, 2)
+	defer stopConnectionManagers(t, cm)
 
 	t.Run("remote1", func(t *testing.T) {
-		testStreamwithZeroTTL(t, h1, h2, h1.ID())
+		testStreamwithZeroTTL(t, cm[0], cm[1], cm[0].host.ID())
 	})
 
 	t.Run("remote2", func(t *testing.T) {
-		testStreamwithNonZeroTTL(t, h1, h2, h1.ID())
+		testStreamwithNonZeroTTL(t, cm[0], cm[1], cm[0].host.ID())
 	})
 }
 
-func testStreamwithZeroTTL(t *testing.T, servNode, clientNode host.Host, dest peer.ID) {
+func testStreamwithZeroTTL(t *testing.T, serverCM, clientCM *MockConnectionManager, dest peer.ID) {
 	t.Helper()
 
-	s := NewServer(testLogger, servNode, "rpc")
-	c := NewClientWithServer(testLogger, clientNode, "rpc", nil, s)
+	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
+	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
 
 	var arith Arith
 
@@ -702,20 +642,20 @@ func testStreamwithZeroTTL(t *testing.T, servNode, clientNode host.Host, dest pe
 	t.Log("[testStreamwithZeroTTL]", " stream-ID 1", streamID1)
 	<-done
 
-	_, err = c.streamMap.Get(dest.Pretty())
+	_, err = c.streamMap.Get(dest.String())
 	assert.Error(t, err)
 
 	t.Cleanup(func() {
-		_, err = c.streamMap.Delete(dest.Pretty())
+		_, err = c.streamMap.Delete(dest.String())
 		assert.Error(t, err)
 	})
 }
 
-func testStreamwithNonZeroTTL(t *testing.T, servNode, clientNode host.Host, dest peer.ID) {
+func testStreamwithNonZeroTTL(t *testing.T, serverCM, clientCM ConnectionManager, dest peer.ID) {
 	t.Helper()
 
-	s := NewServer(testLogger, servNode, "rpc")
-	c := NewClientWithServer(testLogger, clientNode, "rpc", nil, s)
+	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
+	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
 
 	var arith Arith
 
@@ -741,11 +681,11 @@ func testStreamwithNonZeroTTL(t *testing.T, servNode, clientNode host.Host, dest
 
 	<-done
 
-	_, err = c.streamMap.Get(dest.Pretty())
+	_, err = c.streamMap.Get(dest.String())
 	assert.NoError(t, err)
 
 	t.Cleanup(func() {
-		_, err = c.streamMap.Delete(dest.Pretty())
+		_, err = c.streamMap.Delete(dest.String())
 		if err != nil {
 			t.Error("failed to delete")
 		}
@@ -753,33 +693,30 @@ func testStreamwithNonZeroTTL(t *testing.T, servNode, clientNode host.Host, dest
 }
 
 func TestValidKramaID(t *testing.T) {
-	h1, h2 := makeRandomNodes()
-	defer h1.Close()
-	defer h2.Close()
+	cm := createConnectionMangers(t, 1)
+	defer stopConnectionManagers(t, cm)
 
 	t.Run("remote", func(t *testing.T) {
-		testValidKramaID(t, h1, h2, h1.ID())
+		testValidKramaID(t, cm[0].host.ID())
 	})
 }
 
 func TestInvalidKramaID(t *testing.T) {
-	h1, h2 := makeRandomNodes()
-	defer h1.Close()
-	defer h2.Close()
+	cm := createConnectionMangers(t, 1)
+	defer stopConnectionManagers(t, cm)
 
 	t.Run("remote", func(t *testing.T) {
-		testInValidKramaID(t, h1, h2, h1.ID())
+		testInValidKramaID(t, cm[0].host.ID())
 	})
 }
 
 func TestNonExistingPeerIDInPeerStore(t *testing.T) {
-	h1, h2 := createP2PHosts(t)
-	defer h1.Close()
-	defer h2.Close()
+	cm := createConnectionMangers(t, 2)
+	defer stopConnectionManagers(t, cm)
 
 	t.Run("remote", func(t *testing.T) {
-		testCallWithSenatus(t, h1, h2, h1.ID())
-		isH1InH2 := h2.Peerstore().Addrs(h1.ID())
+		testCallWithSenatus(t, cm[0], cm[1], cm[0].host.ID())
+		isH1InH2 := cm[1].host.Peerstore().Addrs(cm[1].host.ID())
 		assert.NotEmpty(t, isH1InH2)
 	})
 }
@@ -822,45 +759,43 @@ func TestNonExistingPeerIDWithDht(t *testing.T) {
 	_, err := createDht(bootstrapnode, protocolID)
 	assert.NoError(t, err)
 
-	h1, h2 := createP2PHosts(t)
-	defer h1.Close()
-	defer h2.Close()
+	cm1, cm2 := createP2PHosts(t)
+	defer stopConnectionManagers(t, []*MockConnectionManager{cm1, cm2})
 
 	// dht for node 1
-	_, err = createDht(h1, protocolID)
+	_, err = createDht(cm1.host, protocolID)
 	assert.NoError(t, err)
 
 	// dht for node 2
-	_, err = createDht(h2, protocolID)
+	_, err = createDht(cm2.host, protocolID)
 	assert.NoError(t, err)
 
 	t.Run("remote", func(t *testing.T) {
 		// connecting node 1 with bootstrap node
-		err = h1.Connect(context.Background(), *bootstrapnodeAddrInfo)
+		err = cm1.host.Connect(context.Background(), *bootstrapnodeAddrInfo)
 		assert.NoError(t, err)
 
 		// connecting node 2 with bootstrap node
-		err = h2.Connect(context.Background(), *bootstrapnodeAddrInfo)
+		err = cm2.host.Connect(context.Background(), *bootstrapnodeAddrInfo)
 		assert.NoError(t, err)
 
 		time.Sleep(time.Second * 2)
 		// testing if rpc call go through
-		testCall(t, h1, h2, h1.ID())
+		testCall(t, cm1, cm2, cm2.host.ID())
 
-		isH1InH2 := h2.Peerstore().Addrs(h1.ID())
+		isH1InH2 := cm2.host.Peerstore().Addrs(cm1.host.ID())
 		assert.NotEmpty(t, isH1InH2)
 
-		isH2InH1 := h1.Peerstore().Addrs(h2.ID())
+		isH2InH1 := cm1.host.Peerstore().Addrs(cm2.host.ID())
 		assert.NotEmpty(t, isH2InH1)
 	})
 }
 
 func TestErrorResponse(t *testing.T) {
-	h1, h2 := makeRandomNodes()
-	defer h1.Close()
-	defer h2.Close()
+	cm := createConnectionMangers(t, 2)
+	defer stopConnectionManagers(t, cm)
 
-	s := NewServer(testLogger, h1, "rpc")
+	s := NewServer(testLogger, cm[0], "rpc-conn-tag", "rpc")
 
 	var arith Arith
 
@@ -871,8 +806,8 @@ func TestErrorResponse(t *testing.T) {
 
 	t.Run("remote", func(t *testing.T) {
 		var r int
-		c := NewClientWithServer(testLogger, h2, "rpc", nil, s)
-		err := c.Call(h1.ID(), "Arith", "GimmeError", &Args{1, 2}, &r)
+		c := NewClientWithServer(testLogger, cm[1], "rpc-conn-tag", "rpc", nil, s)
+		err := c.Call(cm[0].host.ID(), "Arith", "GimmeError", &Args{1, 2}, &r)
 		if err == nil || err.Error() != "an error" {
 			t.Error("expected different error")
 		}
@@ -883,8 +818,8 @@ func TestErrorResponse(t *testing.T) {
 
 	t.Run("local", func(t *testing.T) {
 		var r int
-		c := NewClientWithServer(testLogger, h1, "rpc", nil, s)
-		err := c.Call(h1.ID(), "Arith", "GimmeError", &Args{1, 2}, &r)
+		c := NewClientWithServer(testLogger, cm[0], "rpc-conn-tag", "rpc", nil, s)
+		err := c.Call(cm[0].host.ID(), "Arith", "GimmeError", &Args{1, 2}, &r)
 		if err == nil || err.Error() != "an error" {
 			t.Error("expected different error")
 		}
@@ -895,11 +830,10 @@ func TestErrorResponse(t *testing.T) {
 }
 
 func TestNonRPCError(t *testing.T) {
-	h1, h2 := makeRandomNodes()
-	defer h1.Close()
-	defer h2.Close()
+	cm := createConnectionMangers(t, 2)
+	defer stopConnectionManagers(t, cm)
 
-	s := NewServer(testLogger, h1, "rpc")
+	s := NewServer(testLogger, cm[0], "rpc-conn-tag", "rpc")
 
 	var arith Arith
 
@@ -910,8 +844,8 @@ func TestNonRPCError(t *testing.T) {
 
 	t.Run("local non rpc error", func(t *testing.T) {
 		var r int
-		c := NewClientWithServer(testLogger, h1, "rpc", nil, s)
-		err := c.Call(h1.ID(), "Arith", "GimmeError", &Args{1, 2}, &r)
+		c := NewClientWithServer(testLogger, cm[0], "rpc-conn-tag", "rpc", nil, s)
+		err := c.Call(cm[0].host.ID(), "Arith", "GimmeError", &Args{1, 2}, &r)
 		if err != nil {
 			if IsRPCError(err) {
 				t.Log(err)
@@ -922,8 +856,8 @@ func TestNonRPCError(t *testing.T) {
 
 	t.Run("local rpc error", func(t *testing.T) {
 		var r int
-		c := NewClientWithServer(testLogger, h1, "rpc", nil, s)
-		err := c.Call(h1.ID(), "Arith", "ThisIsNotAMethod", &Args{1, 2}, &r)
+		c := NewClientWithServer(testLogger, cm[0], "rpc-conn-tag", "rpc", nil, s)
+		err := c.Call(cm[0].host.ID(), "Arith", "ThisIsNotAMethod", &Args{1, 2}, &r)
 		if err != nil {
 			if !IsRPCError(err) {
 				t.Log(err)
@@ -934,8 +868,8 @@ func TestNonRPCError(t *testing.T) {
 
 	t.Run("remote non rpc error", func(t *testing.T) {
 		var r int
-		c := NewClientWithServer(testLogger, h2, "rpc", nil, s)
-		err := c.Call(h1.ID(), "Arith", "GimmeError", &Args{1, 2}, &r)
+		c := NewClientWithServer(testLogger, cm[1], "rpc-conn-tag", "rpc", nil, s)
+		err := c.Call(cm[0].host.ID(), "Arith", "GimmeError", &Args{1, 2}, &r)
 		if err != nil {
 			if IsRPCError(err) {
 				t.Log(err)
@@ -946,8 +880,8 @@ func TestNonRPCError(t *testing.T) {
 
 	t.Run("remote rpc error", func(t *testing.T) {
 		var r int
-		c := NewClientWithServer(testLogger, h2, "rpc", nil, s)
-		err := c.Call(h1.ID(), "Arith", "ThisIsNotAMethod", &Args{1, 2}, &r)
+		c := NewClientWithServer(testLogger, cm[1], "rpc-conn-tag", "rpc", nil, s)
+		err := c.Call(cm[0].host.ID(), "Arith", "ThisIsNotAMethod", &Args{1, 2}, &r)
 		if err != nil {
 			if !IsRPCError(err) {
 				t.Log(err)
@@ -957,11 +891,11 @@ func TestNonRPCError(t *testing.T) {
 	})
 }
 
-func testCallContext(t *testing.T, servHost, clientHost host.Host, dest peer.ID) {
+func testCallContext(t *testing.T, serverCM, clientCM *MockConnectionManager, dest peer.ID) {
 	t.Helper()
 
-	s := NewServer(testLogger, servHost, "rpc")
-	c := NewClientWithServer(testLogger, clientHost, "rpc", nil, s)
+	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
+	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
 
 	var arith Arith
 	arith.ctxTracker = &ctxTracker{}
@@ -992,12 +926,11 @@ func testCallContext(t *testing.T, servHost, clientHost host.Host, dest peer.ID)
 }
 
 func TestCallContext(t *testing.T) {
-	h1, h2 := makeRandomNodes()
-	defer h1.Close()
-	defer h2.Close()
+	cm := createConnectionMangers(t, 2)
+	defer stopConnectionManagers(t, cm)
 
 	t.Run("local", func(t *testing.T) {
-		testCallContext(t, h1, h2, h2.ID())
+		testCallContext(t, cm[0], cm[1], cm[1].host.ID())
 	})
 
 	// t.Run("remote", func(t *testing.T) {
@@ -1006,8 +939,8 @@ func TestCallContext(t *testing.T) {
 	// })
 
 	t.Run("async", func(t *testing.T) {
-		s := NewServer(testLogger, h1, "rpc")
-		c := NewClientWithServer(testLogger, h2, "rpc", nil, s)
+		s := NewServer(testLogger, cm[0], "rpc-conn-tag", "rpc")
+		c := NewClientWithServer(testLogger, cm[1], "rpc-conn-tag", "rpc", nil, s)
 
 		var arith Arith
 		arith.ctxTracker = &ctxTracker{}
@@ -1020,7 +953,7 @@ func TestCallContext(t *testing.T) {
 		defer cancel()
 
 		done := make(chan *Call, 1)
-		err = c.GoContext(ctx, h1.ID(), "Arith", "Sleep", 5, &struct{}{}, done)
+		err = c.GoContext(ctx, cm[0].host.ID(), "Arith", "Sleep", 5, &struct{}{}, done)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1033,12 +966,11 @@ func TestCallContext(t *testing.T) {
 }
 
 func TestMultiCall(t *testing.T) {
-	h1, h2 := makeRandomNodes()
-	defer h1.Close()
-	defer h2.Close()
+	cm := createConnectionMangers(t, 2)
+	defer stopConnectionManagers(t, cm)
 
-	s := NewServer(testLogger, h1, "rpc")
-	c := NewClientWithServer(testLogger, h2, "rpc", nil, s)
+	s := NewServer(testLogger, cm[0], "rpc-conn-tag", "rpc")
+	c := NewClientWithServer(testLogger, cm[1], "rpc-conn-tag", "rpc", nil, s)
 
 	var arith Arith
 
@@ -1058,7 +990,7 @@ func TestMultiCall(t *testing.T) {
 
 	errs := c.MultiCall(
 		ctxs,
-		[]peer.ID{h1.ID(), h2.ID()},
+		[]peer.ID{cm[0].host.ID(), cm[1].host.ID()},
 		"Arith",
 		"Multiply",
 		&Args{2, 3},
@@ -1083,12 +1015,11 @@ func TestMultiCall(t *testing.T) {
 }
 
 func TestMultiGo(t *testing.T) {
-	h1, h2 := makeRandomNodes()
-	defer h1.Close()
-	defer h2.Close()
+	cm := createConnectionMangers(t, 2)
+	defer stopConnectionManagers(t, cm)
 
-	s := NewServer(testLogger, h1, "rpc")
-	c := NewClientWithServer(testLogger, h2, "rpc", nil, s)
+	s := NewServer(testLogger, cm[0], "rpc-conn-tag", "rpc")
+	c := NewClientWithServer(testLogger, cm[1], "rpc-conn-tag", "rpc", nil, s)
 
 	var arith Arith
 
@@ -1110,7 +1041,7 @@ func TestMultiGo(t *testing.T) {
 
 	err = c.MultiGo(
 		ctxs,
-		[]peer.ID{h1.ID(), h2.ID()},
+		[]peer.ID{cm[0].host.ID(), cm[1].host.ID()},
 		"Arith",
 		"Multiply",
 		&Args{2, 3},
@@ -1132,11 +1063,11 @@ func TestMultiGo(t *testing.T) {
 	}
 }
 
-func testDecodeContext(t *testing.T, servHost, clientHost host.Host, dest peer.ID) {
+func testDecodeContext(t *testing.T, serverCM, clientCM *MockConnectionManager, dest peer.ID) {
 	t.Helper()
 
-	s := NewServer(testLogger, servHost, "rpc")
-	c := NewClientWithServer(testLogger, clientHost, "rpc", nil, s)
+	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
+	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
 
 	var arith Arith
 	arith.ctxTracker = &ctxTracker{}
@@ -1157,39 +1088,36 @@ func testDecodeContext(t *testing.T, servHost, clientHost host.Host, dest peer.I
 }
 
 func TestDecodeContext(t *testing.T) {
-	h1, h2 := makeRandomNodes()
-	defer h1.Close()
-	defer h2.Close()
+	cm := createConnectionMangers(t, 2)
+	defer stopConnectionManagers(t, cm)
 
 	t.Run("local", func(t *testing.T) {
-		testDecodeContext(t, h1, h2, h2.ID())
+		testDecodeContext(t, cm[0], cm[1], cm[1].host.ID())
 	})
 
 	t.Run("remote", func(t *testing.T) {
-		testDecodeContext(t, h1, h2, h1.ID())
+		testDecodeContext(t, cm[0], cm[1], cm[0].host.ID())
 	})
 }
 
 func TestAuthorization(t *testing.T) {
-	h1, h2 := makeRandomNodes()
-	defer h1.Close()
-	defer h2.Close()
+	cm := createConnectionMangers(t, 2)
+	defer stopConnectionManagers(t, cm)
 
-	h3, _ := libp2p.New(
-		libp2p.ListenAddrStrings("/ip4/127.0.0.1/tcp/19997"),
-	)
-	h3.Peerstore().AddAddrs(h1.ID(), h1.Addrs(), peerstore.PermanentAddrTTL)
+	cm = append(cm, NewMockConnectionManager("/ip4/127.0.0.1/tcp/19997"))
+
+	cm[2].host.Peerstore().AddAddrs(cm[0].host.ID(), cm[0].host.Addrs(), peerstore.PermanentAddrTTL)
 
 	authorizationFunc := AuthorizeWithMap(
 		map[peer.ID]map[string]bool{
-			h2.ID(): {
+			cm[1].host.ID(): {
 				"Arith.Multiply": true,
 			},
 		},
 	)
 
-	s := NewServer(testLogger, h1, "rpc", WithAuthorizeFunc(authorizationFunc))
-	c := NewClientWithServer(testLogger, h2, "rpc", nil, s)
+	s := NewServer(testLogger, cm[0], "rpc-conn-tag", "rpc", WithAuthorizeFunc(authorizationFunc))
+	c := NewClientWithServer(testLogger, cm[1], "rpc-conn-tag", "rpc", nil, s)
 
 	var arith Arith
 
@@ -1198,7 +1126,7 @@ func TestAuthorization(t *testing.T) {
 		t.Error("failed to Register")
 	}
 
-	dest := h1.ID()
+	dest := cm[0].host.ID()
 
 	var r int
 
@@ -1223,7 +1151,7 @@ func TestAuthorization(t *testing.T) {
 		t.Error("expected authorization error, but found", responseErrorType(err))
 	}
 
-	c1 := NewClientWithServer(testLogger, h3, "rpc", nil, s)
+	c1 := NewClientWithServer(testLogger, cm[2], "rpc-conn-tag", "rpc", nil, s)
 	err = c1.Call(dest, "Arith", "Multiply", &Args{2, 3}, &r)
 
 	if err == nil {
@@ -1237,15 +1165,15 @@ func TestAuthorization(t *testing.T) {
 	// Authorization should not impact while accessing methods locally.
 	// All methods should be allowed locally.
 	t.Run("local", func(t *testing.T) {
-		testCall(t, h1, h2, "")
+		testCall(t, cm[0], cm[1], "")
 	})
 }
 
-func testRequestSenderPeerIDContext(t *testing.T, servHost, clientHost host.Host, dest peer.ID) {
+func testRequestSenderPeerIDContext(t *testing.T, serverCM, clientCM *MockConnectionManager, dest peer.ID) {
 	t.Helper()
 
-	s := NewServer(testLogger, servHost, "rpc")
-	c := NewClientWithServer(testLogger, clientHost, "rpc", nil, s)
+	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
+	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
 
 	var arith Arith
 	arith.ctxTracker = &ctxTracker{}
@@ -1265,36 +1193,35 @@ func testRequestSenderPeerIDContext(t *testing.T, servHost, clientHost host.Host
 		t.Fatal(err)
 	}
 
-	if dest == "" || dest == clientHost.ID() {
-		if p != servHost.ID() {
-			t.Errorf("invalid peer id of request sender on local call: have: %s, want: %s", p, servHost.ID())
+	if dest == "" || dest == clientCM.GetHostPeerID() {
+		if p != serverCM.host.ID() {
+			t.Errorf("invalid peer id of request sender on local call: have: %s, want: %s", p, serverCM.host.ID())
 		}
 	} else {
-		if p != clientHost.ID() {
-			t.Errorf("invalid peer id of request sender on remote call: have: %s, want: %s", p, clientHost.ID())
+		if p != clientCM.GetHostPeerID() {
+			t.Errorf("invalid peer id of request sender on remote call: have: %s, want: %s", p, clientCM.host.ID())
 		}
 	}
 }
 
 func TestRequestSenderPeerIDContext(t *testing.T) {
-	h1, h2 := makeRandomNodes()
-	defer h1.Close()
-	defer h2.Close()
+	cm := createConnectionMangers(t, 2)
+	defer stopConnectionManagers(t, cm)
 
 	t.Run("local", func(t *testing.T) {
-		testRequestSenderPeerIDContext(t, h1, h2, h2.ID())
+		testRequestSenderPeerIDContext(t, cm[0], cm[1], cm[1].host.ID())
 	})
 
 	t.Run("remote", func(t *testing.T) {
-		testRequestSenderPeerIDContext(t, h1, h2, h1.ID())
+		testRequestSenderPeerIDContext(t, cm[0], cm[1], cm[1].host.ID())
 	})
 }
 
-func testStream(t *testing.T, servHost, clientHost host.Host, dest peer.ID) {
+func testStream(t *testing.T, serverCM, clientCM *MockConnectionManager, dest peer.ID) {
 	t.Helper()
 
-	s := NewServer(testLogger, servHost, "rpc")
-	c := NewClientWithServer(testLogger, clientHost, "rpc", nil, s)
+	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
+	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
 
 	var arith Arith
 
@@ -1370,25 +1297,23 @@ func testStream(t *testing.T, servHost, clientHost host.Host, dest peer.ID) {
 }
 
 func TestStream(t *testing.T) {
-	h1, h2 := makeRandomNodes()
-	defer h1.Close()
-	defer h2.Close()
+	cm := createConnectionMangers(t, 2)
 
 	t.Run("local", func(t *testing.T) {
-		testStream(t, h1, h2, h2.ID())
+		testStream(t, cm[0], cm[1], cm[1].host.ID())
 	})
 
 	t.Run("remote", func(t *testing.T) {
-		testStream(t, h1, h2, h1.ID())
+		testStream(t, cm[0], cm[1], cm[0].host.ID())
 	})
 }
 
-func testStreamError(t *testing.T, servHost, clientHost host.Host, dest peer.ID) {
+func testStreamError(t *testing.T, serverCM, clientCM *MockConnectionManager, dest peer.ID) {
 	t.Helper()
 	t.Parallel()
 
-	s := NewServer(testLogger, servHost, "rpc")
-	c := NewClientWithServer(testLogger, clientHost, "rpc", nil, s)
+	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
+	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
 
 	var arith Arith
 
@@ -1443,28 +1368,27 @@ func testStreamError(t *testing.T, servHost, clientHost host.Host, dest peer.ID)
 func TestStreamError(t *testing.T) {
 	t.Parallel()
 
-	h1, h2 := makeRandomNodes()
+	cm := createConnectionMangers(t, 2)
 
 	t.Cleanup(func() {
-		h1.Close()
-		h2.Close()
+		stopConnectionManagers(t, cm)
 	})
 
 	t.Run("local", func(t *testing.T) {
-		testStreamError(t, h1, h2, h2.ID())
+		testStreamError(t, cm[0], cm[1], cm[1].host.ID())
 	})
 
 	t.Run("remote", func(t *testing.T) {
-		testStreamError(t, h1, h2, h1.ID())
+		testStreamError(t, cm[0], cm[1], cm[0].host.ID())
 	})
 }
 
-func testStreamCancel(t *testing.T, servHost, clientHost host.Host, dest peer.ID) {
+func testStreamCancel(t *testing.T, serverCM, clientCM *MockConnectionManager, dest peer.ID) {
 	t.Helper()
 	t.Parallel()
 
-	s := NewServer(testLogger, servHost, "rpc")
-	c := NewClientWithServer(testLogger, clientHost, "rpc", nil, s)
+	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
+	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
 
 	var arith Arith
 
@@ -1527,32 +1451,30 @@ func testStreamCancel(t *testing.T, servHost, clientHost host.Host, dest peer.ID
 func TestStreamCancel(t *testing.T) {
 	t.Parallel()
 
-	h1, h2 := makeRandomNodes()
+	cm := createConnectionMangers(t, 2)
 
 	t.Cleanup(func() {
-		h1.Close()
-		h2.Close()
+		stopConnectionManagers(t, cm)
 	})
 
 	t.Run("local", func(t *testing.T) {
-		testStreamCancel(t, h1, h2, h2.ID())
+		testStreamCancel(t, cm[0], cm[1], cm[1].host.ID())
 	})
 
 	t.Run("remote", func(t *testing.T) {
-		testStreamCancel(t, h1, h2, h1.ID())
+		testStreamCancel(t, cm[0], cm[1], cm[0].host.ID())
 	})
 }
 
 func TestMultiStream(t *testing.T) {
 	t.Parallel()
 
-	h1, h2 := makeRandomNodes()
-	defer h1.Close()
-	defer h2.Close()
+	cm := createConnectionMangers(t, 2)
+	defer stopConnectionManagers(t, cm)
 
-	s := NewServer(testLogger, h1, "rpc")
-	s2 := NewServer(testLogger, h2, "rpc")
-	c := NewClientWithServer(testLogger, h1, "rpc", nil, s)
+	s := NewServer(testLogger, cm[0], "rpc-conn-tag", "rpc")
+	s2 := NewServer(testLogger, cm[1], "rpc-conn-tag", "rpc")
+	c := NewClientWithServer(testLogger, cm[0], "rpc-conn-tag", "rpc", nil, s)
 
 	var arith Arith
 
@@ -1569,8 +1491,8 @@ func TestMultiStream(t *testing.T) {
 
 	ctx := context.Background()
 	dests := make([]peer.ID, 2)
-	dests[0] = h1.ID()
-	dests[1] = h2.ID()
+	dests[0] = cm[0].host.ID()
+	dests[1] = cm[1].host.ID()
 
 	numbers := make(chan Args, 10)
 	quotients := make(chan Quotient, 10)
@@ -1600,13 +1522,12 @@ func TestMultiStream(t *testing.T) {
 func TestMultiStreamErrors(t *testing.T) {
 	t.Parallel()
 
-	h1, h2 := makeRandomNodes()
-	defer h1.Close()
-	defer h2.Close()
+	cm := createConnectionMangers(t, 2)
+	defer stopConnectionManagers(t, cm)
 
-	s := NewServer(testLogger, h1, "rpc")
-	s2 := NewServer(testLogger, h2, "rpc")
-	c := NewClientWithServer(testLogger, h1, "rpc", nil, s)
+	s := NewServer(testLogger, cm[0], "rpc-conn-tag", "rpc")
+	s2 := NewServer(testLogger, cm[1], "rpc-conn-tag", "rpc")
+	c := NewClientWithServer(testLogger, cm[0], "rpc-conn-tag", "rpc", nil, s)
 
 	var arith Arith
 
@@ -1623,8 +1544,8 @@ func TestMultiStreamErrors(t *testing.T) {
 
 	ctx := context.Background()
 	dests := make([]peer.ID, 2)
-	dests[0] = h1.ID()
-	dests[1] = h2.ID()
+	dests[0] = cm[0].host.ID()
+	dests[1] = cm[1].host.ID()
 
 	numbers := make(chan Args, 10)
 	quotients := make(chan Quotient, 10)
@@ -1644,13 +1565,12 @@ func TestMultiStreamErrors(t *testing.T) {
 func TestMultiStreamCancel(t *testing.T) {
 	t.Parallel()
 
-	h1, h2 := makeRandomNodes()
-	defer h1.Close()
-	defer h2.Close()
+	cm := createConnectionMangers(t, 2)
+	defer stopConnectionManagers(t, cm)
 
-	s := NewServer(testLogger, h1, "rpc")
-	s2 := NewServer(testLogger, h2, "rpc")
-	c := NewClientWithServer(testLogger, h1, "rpc", nil, s)
+	s := NewServer(testLogger, cm[0], "rpc-conn-tag", "rpc")
+	s2 := NewServer(testLogger, cm[1], "rpc-conn-tag", "rpc")
+	c := NewClientWithServer(testLogger, cm[0], "rpc-conn-tag", "rpc", nil, s)
 
 	var arith Arith
 
@@ -1669,8 +1589,8 @@ func TestMultiStreamCancel(t *testing.T) {
 	defer cancel()
 
 	dests := make([]peer.ID, 2)
-	dests[0] = h1.ID()
-	dests[1] = h2.ID()
+	dests[0] = cm[0].host.ID()
+	dests[1] = cm[1].host.ID()
 	numbers := make(chan Args, 10)
 	quotients := make(chan Quotient, 10)
 
@@ -1694,11 +1614,11 @@ func TestMultiStreamCancel(t *testing.T) {
 
 // the client cancels the request but does not close the sending channel. Things
 // should return.
-func testStreamClientMisbehave(t *testing.T, servHost, clientHost host.Host, dest peer.ID) {
+func testStreamClientMisbehave(t *testing.T, serverCM, clientCM *MockConnectionManager, dest peer.ID) {
 	t.Helper()
 
-	s := NewServer(testLogger, servHost, "rpc")
-	c := NewClientWithServer(testLogger, clientHost, "rpc", nil, s)
+	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
+	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
 
 	var arith Arith
 
@@ -1740,28 +1660,27 @@ func testStreamClientMisbehave(t *testing.T, servHost, clientHost host.Host, des
 }
 
 func TestStreamClientMisbehave(t *testing.T) {
-	h1, h2 := makeRandomNodes()
+	cm := createConnectionMangers(t, 2)
 
 	t.Cleanup(func() {
-		h1.Close()
-		h2.Close()
+		stopConnectionManagers(t, cm)
 	})
 
 	t.Run("local", func(t *testing.T) {
-		testStreamClientMisbehave(t, h1, h2, h2.ID())
+		testStreamClientMisbehave(t, cm[0], cm[1], cm[1].host.ID())
 	})
 
 	t.Run("remote", func(t *testing.T) {
-		testStreamClientMisbehave(t, h1, h2, h1.ID())
+		testStreamClientMisbehave(t, cm[0], cm[1], cm[0].host.ID())
 	})
 }
 
 // the server errors but does not cancel the reply channel.
-func testStreamServerMisbehave(t *testing.T, servHost, clientHost host.Host, dest peer.ID) {
+func testStreamServerMisbehave(t *testing.T, serverCM, clientCM *MockConnectionManager, dest peer.ID) {
 	t.Helper()
 
-	s := NewServer(testLogger, servHost, "rpc")
-	c := NewClientWithServer(testLogger, clientHost, "rpc", nil, s)
+	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
+	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
 
 	var arith Arith
 
@@ -1795,16 +1714,15 @@ func testStreamServerMisbehave(t *testing.T, servHost, clientHost host.Host, des
 }
 
 func TestStreamServerMisbehave(t *testing.T) {
-	h1, h2 := makeRandomNodes()
-	defer h1.Close()
-	defer h2.Close()
+	cm := createConnectionMangers(t, 2)
+	defer stopConnectionManagers(t, cm)
 
 	t.Run("local", func(t *testing.T) {
-		testStreamServerMisbehave(t, h1, h2, h2.ID())
+		testStreamServerMisbehave(t, cm[0], cm[1], cm[1].host.ID())
 	})
 
 	t.Run("remote", func(t *testing.T) {
-		testStreamServerMisbehave(t, h1, h2, h1.ID())
+		testStreamServerMisbehave(t, cm[0], cm[1], cm[0].host.ID())
 	})
 }
 

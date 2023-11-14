@@ -6,7 +6,7 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 )
 
-// Lookup map used to find transactions present in the pool
+// Lookup map used to find interactions present in the pool
 type lookupMap struct {
 	sync.RWMutex
 	all map[common.Hash]*common.Interaction

@@ -54,12 +54,11 @@ type PeerList struct {
 }
 
 func NewRandomizer(
-	ctx context.Context,
 	logger hclog.Logger,
 	p2pServer *p2p.Server,
 	metrics *Metrics,
 ) *Randomizer {
-	ctx, ctxCancel := context.WithCancel(ctx)
+	ctx, ctxCancel := context.WithCancel(context.Background())
 	r := &Randomizer{
 		ctx:        ctx,
 		ctxCancel:  ctxCancel,
@@ -70,7 +69,7 @@ func NewRandomizer(
 		metrics:    metrics,
 	}
 
-	r.bootNodes, _ = p2pServer.GetBootstrapPeerIDs()
+	r.bootNodes, _ = p2pServer.ConnManager.GetBootstrapPeerIDs()
 
 	for i := 0; i < SLOTCOUNT; i++ {
 		r.peers[i] = &PeerList{
@@ -83,7 +82,7 @@ func NewRandomizer(
 	}
 
 	r.metrics.initMetrics(SLOTCOUNT)
-	r.server.SetupStreamHandler(config.FluxProtocolStream, r.messageHandler)
+	r.server.ConnManager.SetupStreamHandler(config.FluxProtocolStream, p2p.FluxStreamTag, r.messageHandler)
 
 	return r
 }
@@ -102,7 +101,7 @@ func (r *Randomizer) messageHandler(stream network.Stream) {
 	r.metrics.captureNumOfRequests(1)
 
 	defer func() {
-		if err := stream.Reset(); err != nil {
+		if err := r.server.ConnManager.ResetStream(stream, p2p.FluxStreamTag); err != nil {
 			r.logger.Error("Error closing flux stream from receiver", "err", err)
 		}
 	}()
@@ -217,8 +216,6 @@ func (r *Randomizer) Start() {
 }
 
 func (r *Randomizer) getPeers(slotNo int, count int, avoidPeers []id.KramaID) []id.KramaID {
-	// log.Println("Querying for random peers", slotNo, count)
-	//	log.Println("Avoid peers", avoidPeers)
 	counter := 0
 	list := make([]id.KramaID, 0)
 
@@ -266,7 +263,7 @@ func (r *Randomizer) HandleReqMsg(reqMsg *networkmsg.RandomWalkReq) error {
 	}
 
 	for {
-		randomPeer := r.server.GetRandomNode()
+		randomPeer := r.server.ConnManager.GetRandomPeer()
 
 		// if the random peer is either request or bootstrap node, don't send request
 		if randomPeer == peer.ID(peerID) || r.isBootstrapNode(randomPeer) {
@@ -374,7 +371,7 @@ func (r *Randomizer) PopulatePool(slotID int) {
 
 	// Step 1: Select some random peer from random table and
 	for {
-		randomPeer := r.server.GetRandomNode()
+		randomPeer := r.server.ConnManager.GetRandomPeer()
 
 		if r.isBootstrapNode(randomPeer) {
 			continue
@@ -432,7 +429,8 @@ func (r *Randomizer) GetRandomNodes(
 }
 
 func (r *Randomizer) Close() {
-	defer r.ctxCancel()
+	r.ctxCancel()
+	r.logger.Info("Closing Flux")
 }
 
 func (r *Randomizer) SendFluxMessage(peerID peer.ID, msgType networkmsg.MsgType, msg interface{}) error {
@@ -448,14 +446,19 @@ func (r *Randomizer) SendFluxMessage(peerID peer.ID, msgType networkmsg.MsgType,
 		Sender:  r.server.GetKramaID(),
 	}
 
-	stream, err := r.server.NewStream(context.Background(), peerID, config.FluxProtocolStream)
+	stream, err := r.server.ConnManager.NewStream(
+		context.Background(),
+		peerID,
+		config.FluxProtocolStream,
+		p2p.FluxStreamTag,
+	)
 	if err != nil {
 		// Return error if stream setup fails
 		return err
 	}
 
 	defer func() {
-		if err := stream.Close(); err != nil {
+		if err := r.server.ConnManager.CloseStream(stream, p2p.FluxStreamTag); err != nil {
 			r.logger.Error("Error closing flux stream from sender", "err", err)
 		}
 	}()

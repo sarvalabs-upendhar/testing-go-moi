@@ -11,16 +11,17 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/battleground/server/types"
 	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 
-	"github.com/sarvalabs/battleground/infrastructure"
-	"github.com/sarvalabs/battleground/sdk"
+	bg "github.com/sarvalabs/battleground"
+	client "github.com/sarvalabs/battleground/client/types"
+	"github.com/sarvalabs/battleground/server/warzone/infrastructure"
 
 	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"
 	"github.com/sarvalabs/go-moi/common"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
-
-	"github.com/stretchr/testify/suite"
 
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/moiclient"
@@ -33,7 +34,11 @@ const (
 	StandAlone
 	PreExisting
 
-	DefaultBGStartTime      = 25 * time.Minute
+	InitialSyncTime         = 120 * time.Second
+	DefaultQueryTime        = 10 * time.Second
+	DefaultNodeStartTime    = 30 * time.Second
+	DefaultNodeStopTime     = 30 * time.Second
+	DefaultBGStartTime      = 10 * time.Minute
 	DefaultShutdownTimeout  = 10 * time.Minute
 	DefaultConfirmIxTimeout = 1 * time.Minute
 	DefaultAccountCount     = 2
@@ -69,9 +74,10 @@ func newBattleGroundConfig(
 type TestEnvironment struct {
 	suite.Suite
 	bgConfig    BattleGroundConfig
-	bgClient    sdk.Client
+	bgClient    bg.Client
 	jsonRPCUrls []string
 	moiClient   *moiclient.Client
+	moiClients  []*moiclient.Client
 	accounts    []tests.AccountWithMnemonic
 	logger      hclog.Logger
 }
@@ -107,49 +113,74 @@ func (te *TestEnvironment) chooseRandomUniqueAccounts(count int) ([]tests.Accoun
 func (te *TestEnvironment) configureBattleGround() error {
 	te.bgConfig = newBattleGroundConfig(StandAlone, "TRACE", bgURL)
 
-	bgConfig := sdk.DefaultBattlegroundConfig()
+	bgConfig := types.DefaultCloudConfig()
 
 	// initialize bg client
-	te.bgClient = sdk.New(sdk.Config{
-		BattleCfg:   bgConfig,
+	te.bgClient = bg.NewBGClient(&client.Config{
+		CloudCfg:    bgConfig,
+		Network:     client.Cloud,
 		EndPoint:    te.bgConfig.rpcEndPoint,
-		DialTimeout: 2 * time.Second,
+		DialTimeout: 10 * time.Second,
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	if err := te.bgClient.Ping(ctx); err != nil {
+	if err := te.bgClient.ServerStatus(ctx); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (te *TestEnvironment) initializeMOIClient() {
-	for _, url := range te.jsonRPCUrls {
-		client, err := moiclient.NewClient(url)
-		te.Suite.NoError(err)
+func getMoiClient(t *testing.T, url string) (*moiclient.Client, error) {
+	t.Helper()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	client, err := moiclient.NewClient(url)
+	require.NoError(t, err)
 
-		// check if node is up
-		_, err = client.Inspect(ctx, &rpcargs.InspectArgs{})
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+
+	// check if node is up
+	_, err = client.Inspect(ctx, &rpcargs.InspectArgs{})
+	if err != nil {
+		cancel()
+
+		return nil, err
+	}
+
+	cancel()
+
+	return client, nil
+}
+
+func getMoiClients(t *testing.T, urls []string) []*moiclient.Client {
+	t.Helper()
+
+	clients := make([]*moiclient.Client, 0)
+
+	for _, url := range urls {
+		client, err := getMoiClient(t, url)
 		if err != nil {
-			cancel()
-
 			continue
 		}
 
-		cancel()
-		te.logger.Info("JSON RPC url used is ", "url", url)
-
-		te.moiClient = client
-
-		return
+		clients = append(clients, client)
 	}
 
-	commonError("unable to initialize moi client")
+	return clients
+}
+
+func (te *TestEnvironment) initializeMOIClient() {
+	clients := getMoiClients(te.T(), te.jsonRPCUrls)
+	if len(clients) == 0 {
+		commonError("unable to initialize moi client")
+	}
+
+	te.logger.Info("JSON RPC url used is ", "url", clients[0].URL())
+
+	te.moiClient = clients[0]
+	te.moiClients = clients
 }
 
 func (te *TestEnvironment) SetupSuite() {
@@ -164,7 +195,7 @@ func (te *TestEnvironment) SetupSuite() {
 	te.Suite.NoError(err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	bgStatus, err := te.bgClient.Status(ctx)
+	bgStatus, err := te.bgClient.NetworkStatus(ctx)
 
 	cancel()
 	te.Suite.NoError(err)
@@ -174,7 +205,13 @@ func (te *TestEnvironment) SetupSuite() {
 		te.logger.Info("starting battle ground")
 
 		ctx, cancel = context.WithTimeout(context.Background(), DefaultBGStartTime)
-		registeredAcc, err = te.bgClient.Start(ctx, 20, 5)
+		_, err = te.bgClient.StartNetwork(ctx)
+
+		cancel()
+		te.Suite.NoError(err)
+
+		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+		registeredAcc, err = te.bgClient.Accounts(ctx)
 
 		cancel()
 		te.Suite.NoError(err)
@@ -209,7 +246,7 @@ func (te *TestEnvironment) SetupSuite() {
 	te.accounts, err = cmdcommon.GetAccountsWithMnemonic(DefaultAccountCount)
 	te.Suite.NoError(err)
 
-	te.logger.Info("registering accounts", te.accounts)
+	te.logger.Info("registering accounts on chain", te.accounts)
 
 	KMOIAssetID := common.AssetID("000000004cd973c4eb83cdb8870c0de209736270491b7acc99873da1eddced5826c3b548")
 
@@ -227,7 +264,7 @@ func (te *TestEnvironment) TearDownSuite() {
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultShutdownTimeout)
 	defer cancel()
 
-	err := te.bgClient.Stop(ctx)
+	err := te.bgClient.DestroyNetwork(ctx, false)
 	te.Suite.NoError(err)
 }
 

@@ -808,19 +808,47 @@ func (r *Service) DBGet(
 	args *rpcargs.DebugArgs,
 	resp *rpcargs.Response,
 ) error {
-	DebugAPI, ok := r.apis["debug"].(*jsonApi.PublicDebugAPI)
+	debugAPI, ok := r.apis["debug"].(*jsonApi.PublicDebugAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
 
-	key, err := DebugAPI.DBGet(args)
+	data, err := debugAPI.DBGet(args)
 	if err != nil {
 		resp.Error = &rpcargs.JSONError{Message: err.Error()}
 
 		return nil
 	}
 
-	resp.Data, err = json.Marshal(key)
+	resp.Data, err = json.Marshal(data)
+	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	return nil
+}
+
+// NodeMetaInfo is an RPC method that retrieves and returns the metadata of nodes stored in the database.
+func (r *Service) NodeMetaInfo(
+	req *http.Request,
+	args *rpcargs.NodeMetaInfoArgs,
+	resp *rpcargs.Response,
+) error {
+	DebugAPI, ok := r.apis["debug"].(*jsonApi.PublicDebugAPI)
+	if !ok {
+		return common.ErrInvalidAPI
+	}
+
+	nodeMetaInfo, err := DebugAPI.GetNodeMetaInfo(args)
+	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	resp.Data, err = json.Marshal(nodeMetaInfo)
 	if err != nil {
 		resp.Error = &rpcargs.JSONError{Message: err.Error()}
 
@@ -836,19 +864,19 @@ func (r *Service) Accounts(
 	args *rpcargs.AccountArgs,
 	resp *rpcargs.Response,
 ) error {
-	DebugAPI, ok := r.apis["debug"].(*jsonApi.PublicDebugAPI)
+	debugAPI, ok := r.apis["debug"].(*jsonApi.PublicDebugAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
 
-	key, err := DebugAPI.GetAccounts()
+	accounts, err := debugAPI.GetAccounts()
 	if err != nil {
 		resp.Error = &rpcargs.JSONError{Message: err.Error()}
 
 		return nil
 	}
 
-	resp.Data, err = json.Marshal(key)
+	resp.Data, err = json.Marshal(accounts)
 	if err != nil {
 		resp.Error = &rpcargs.JSONError{Message: err.Error()}
 
@@ -866,15 +894,34 @@ func (r *Service) Connections(
 ) error {
 	var err error
 
-	DebugAPI, ok := r.apis["debug"].(*jsonApi.PublicDebugAPI)
+	debugAPI, ok := r.apis["debug"].(*jsonApi.PublicDebugAPI)
 	if !ok {
 		return common.ErrInvalidAPI
 	}
 
-	keys := DebugAPI.GetConnections()
+	connections := debugAPI.GetConnections()
 
-	resp.Data, err = json.Marshal(keys)
+	resp.Data, err = json.Marshal(connections)
 	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	return nil
+}
+
+func (r *Service) Diagnosis(
+	req *http.Request,
+	args *rpcargs.DiagnosisRequest,
+	resp *rpcargs.Response,
+) error {
+	debugAPI, ok := r.apis["debug"].(*jsonApi.PublicDebugAPI)
+	if !ok {
+		return common.ErrInvalidAPI
+	}
+
+	if err := debugAPI.RunDiagnosis(args); err != nil {
 		resp.Error = &rpcargs.JSONError{Message: err.Error()}
 
 		return nil

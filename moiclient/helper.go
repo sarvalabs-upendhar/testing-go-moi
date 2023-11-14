@@ -8,8 +8,12 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/libp2p/go-libp2p/core/peer"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 
 	"github.com/sarvalabs/go-moi-engineio"
 	"github.com/sarvalabs/go-pisa"
@@ -209,4 +213,31 @@ func GetTokenLedgerState(t *testing.T, moiClient *Client, logicID common.LogicID
 	fmt.Printf("token ledger state : %+v\n", state)
 
 	return state
+}
+
+// GetKramaID returns a random Krama ID from the list of connected nodes.
+func GetKramaID(t *testing.T, client *Client) id.KramaID {
+	t.Helper()
+
+	peers, err := client.Peers(context.Background(), &rpcargs.NetArgs{})
+
+	require.NoError(t, err)
+	require.True(t, len(peers) > 0)
+
+	return peers[rand.Intn(len(peers))]
+}
+
+// GetPeerID returns a random Peer ID from the list of connected peers.
+func GetPeerID(t *testing.T, client *Client) peer.ID {
+	t.Helper()
+
+	peers, err := client.Peers(context.Background(), &rpcargs.NetArgs{})
+
+	require.NoError(t, err)
+	require.True(t, len(peers) > 0)
+
+	peerID, err := peers[rand.Intn(len(peers))].DecodedPeerID()
+	require.NoError(t, err)
+
+	return peerID
 }

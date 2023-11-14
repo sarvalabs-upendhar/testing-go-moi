@@ -6,23 +6,14 @@ import (
 )
 
 type HandshakeMSG struct {
-	Address []string
-	NTQ     float32
-	Degree  int32
-	Error   string
+	Data  []byte
+	Error string
 }
 
-func ConstructHandshakeMSG(
-	address []string,
-	ntq float32,
-	degree int32,
-	err string,
-) *HandshakeMSG {
+func ConstructHandshakeMSG(data []byte, err string) *HandshakeMSG {
 	return &HandshakeMSG{
-		Address: address,
-		NTQ:     ntq,
-		Degree:  degree,
-		Error:   err,
+		Data:  data,
+		Error: err,
 	}
 }
 

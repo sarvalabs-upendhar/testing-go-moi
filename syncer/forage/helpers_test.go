@@ -287,6 +287,7 @@ func newMockStateManager() *MockStateManager {
 }
 
 func (m MockStateManager) SyncStorageTrees(
+	ctx context.Context,
 	address common.Address,
 	newRoot *common.RootNode,
 	logicStorageTreeRoots map[string]*common.RootNode,
@@ -364,6 +365,8 @@ func (m MockAgora) NewSession(ctx context.Context, contextPeers []kramaid.KramaI
 func (m MockAgora) Start() {
 }
 
+func (m MockAgora) Close() {}
+
 type MockSession struct {
 	address common.Address
 	blocks  map[cid.CID]*block.Block
@@ -425,6 +428,7 @@ type CreateServerParams struct {
 type MockReputationEngine struct {
 	ntq      map[kramaid.KramaID]float32
 	peerInfo map[peer.ID]*senatus.NodeMetaInfo
+	mutex    sync.RWMutex
 }
 
 func NewMockReputationEngine() *MockReputationEngine {
@@ -444,12 +448,18 @@ func (m *MockReputationEngine) UpdatePeer(key kramaid.KramaID, data *senatus.Nod
 }
 
 func (m *MockReputationEngine) AddNewPeerWithPeerID(peerID peer.ID, data *senatus.NodeMetaInfo) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
 	m.peerInfo[peerID] = data
 
 	return nil
 }
 
 func (m *MockReputationEngine) GetNTQ(id kramaid.KramaID) (float32, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
 	ntq, ok := m.ntq[id]
 	if !ok {
 		return -1, common.ErrKeyNotFound
@@ -459,6 +469,9 @@ func (m *MockReputationEngine) GetNTQ(id kramaid.KramaID) (float32, error) {
 }
 
 func (m *MockReputationEngine) SetNTQ(id kramaid.KramaID, val int) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
 	m.ntq[id] = float32(val)
 }
 
@@ -472,6 +485,9 @@ func (m *MockReputationEngine) GetAddress(key kramaid.KramaID) ([]multiaddr.Mult
 }
 
 func (m *MockReputationEngine) GetAddressByPeerID(peerID peer.ID) ([]multiaddr.Multiaddr, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
 	if peerInfo, ok := m.peerInfo[peerID]; ok {
 		return utils.MultiAddrFromString(peerInfo.Addrs...), nil
 	}
@@ -479,7 +495,32 @@ func (m *MockReputationEngine) GetAddressByPeerID(peerID peer.ID) ([]multiaddr.M
 	return nil, common.ErrKramaIDNotFound
 }
 
+func (m *MockReputationEngine) GetKramaIDByPeerID(peerID peer.ID) (kramaid.KramaID, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	if peerInfo, ok := m.peerInfo[peerID]; ok {
+		return peerInfo.KramaID, nil
+	}
+
+	return "", common.ErrKramaIDNotFound
+}
+
+func (m *MockReputationEngine) GetRTTByPeerID(peerID peer.ID) (int64, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	if peerInfo, ok := m.peerInfo[peerID]; ok {
+		return peerInfo.RTT, nil
+	}
+
+	return 0, common.ErrKramaIDNotFound
+}
+
 func (m *MockReputationEngine) SetPeerInfo(key peer.ID, peerInfo *senatus.NodeMetaInfo) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
 	m.peerInfo[key] = peerInfo
 }
 
@@ -561,7 +602,7 @@ func connectClientToServers(t *testing.T, client *p2p.Server, servers ...*p2p.Se
 
 		client.AddPeerInfo(info)
 
-		err := client.ConnectAndRegisterPeer(*info)
+		err := client.ConnManager.ConnectAndRegisterPeer(*info, s.GetKramaID(), 50)
 		require.NoError(t, err)
 	}
 }
@@ -576,8 +617,6 @@ func createServer(
 	if params == nil {
 		params = &CreateServerParams{}
 	}
-
-	ctx := context.Background()
 
 	cfg := &config.NetworkConfig{
 		MaxPeers:          0, // current we don't limit the no.of peers
@@ -599,7 +638,7 @@ func createServer(
 	vault.networkPrivateKey = nPriv
 
 	// Create a new server instance
-	server := p2p.NewServer(ctx, hclog.NewNullLogger(), kramaID, params.EventMux, cfg, vault, p2p.NilMetrics())
+	server := p2p.NewServer(hclog.NewNullLogger(), kramaID, params.EventMux, cfg, vault, p2p.NilMetrics())
 
 	if params.ServerCallback != nil {
 		params.ServerCallback(server)
@@ -608,7 +647,7 @@ func createServer(
 	err := server.SetupServer()
 	require.NoError(t, err)
 
-	err = server.StartServer()
+	err = server.ConnManager.Start()
 	require.NoError(t, err)
 
 	return server
@@ -981,7 +1020,7 @@ func createPersistenceManager(t *testing.T, ctx context.Context) (*storage.Persi
 	dir, err := os.MkdirTemp(os.TempDir(), "test"+strconv.Itoa(tests.GetRandomNumber(t, 1000)))
 	require.NoError(t, err)
 
-	db, err := storage.NewPersistenceManager(ctx, hclog.NewNullLogger(), &config.DBConfig{
+	db, err := storage.NewPersistenceManager(hclog.NewNullLogger(), &config.DBConfig{
 		CleanDB:      true,
 		DBFolderPath: dir,
 		MaxSnapSize:  1073741824,

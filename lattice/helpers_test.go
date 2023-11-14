@@ -6,10 +6,8 @@ import (
 	"math/big"
 	"math/rand"
 	"os"
-	"reflect"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/golang-lru"
@@ -35,11 +33,6 @@ var (
 	validCommitSign   = []byte{1}
 	invalidCommitSign = []byte{0}
 )
-
-type result struct {
-	data interface{}
-	err  error
-}
 
 // MockDB is an in-memory key-value database used for testing purposes
 type MockDB struct {
@@ -622,7 +615,7 @@ func (sm *MockStateManager) GetContextByHash(
 	return hash, c.behaviourNodes, c.randomNodes, nil
 }
 
-func (sm *MockStateManager) GetPublicKeys(id ...id.KramaID) ([][]byte, error) {
+func (sm *MockStateManager) GetPublicKeys(ctx context.Context, id ...id.KramaID) ([][]byte, error) {
 	keys := make([][]byte, 0)
 
 	for _, v := range id {
@@ -676,12 +669,12 @@ func (sm *MockStateManager) FetchContextLock(ts *common.Tesseract) (*common.ICSN
 	}
 
 	// fetching public keys
-	behaviouralPK, err := sm.GetPublicKeys(behaviourSet...)
+	behaviouralPK, err := sm.GetPublicKeys(context.Background(), behaviourSet...)
 	if err != nil {
 		return nil, err
 	}
 
-	randomPK, err := sm.GetPublicKeys(randomSet...)
+	randomPK, err := sm.GetPublicKeys(context.Background(), randomSet...)
 	if err != nil {
 		return nil, err
 	}
@@ -1248,8 +1241,6 @@ func mockIXPool(t *testing.T) *MockIXPool {
 func createTestChainManager(t *testing.T, params *CreateChainParams) *ChainManager {
 	t.Helper()
 
-	ctx := context.Background()
-
 	if params == nil {
 		params = &CreateChainParams{}
 	}
@@ -1304,7 +1295,6 @@ func createTestChainManager(t *testing.T, params *CreateChainParams) *ChainManag
 	}
 
 	c, err := NewChainManager(
-		ctx,
 		mockChainConfig(),
 		db,
 		sm,
@@ -1617,38 +1607,6 @@ func signTesseract(t *testing.T, sm *MockStateManager, ts *common.Tesseract) {
 func setAccountType(sm *MockStateManager, accType common.AccountType, tesseracts ...*common.Tesseract) {
 	for _, ts := range tesseracts {
 		sm.setAccType(ts.Address(), accType)
-	}
-}
-
-// waitForResponse waits for response on respChannel
-// and checks if datatype of data received on channel is equal to datatype of data received as argument
-func waitForResponse(t *testing.T, respChan chan result, data interface{}) interface{} {
-	t.Helper()
-
-	res := <-respChan
-	require.NoError(t, res.err)
-
-	require.Equal(t, reflect.TypeOf(res.data), reflect.TypeOf(data))
-
-	return res.data
-}
-
-// handleMuxEvents sends the data to resp channel if it receives data on subscription channel
-// sends time out error when context is closed
-func handleMuxEvents(ctx context.Context, s *utils.Subscription, resp chan result) {
-	for {
-		select {
-		case <-ctx.Done():
-			resp <- result{data: nil, err: common.ErrTimeOut}
-
-			return
-		case data := <-s.Chan():
-			resp <- result{data: data.Data, err: nil}
-
-			return
-		default:
-			time.Sleep(500 * time.Millisecond)
-		}
 	}
 }
 
@@ -2077,12 +2035,12 @@ func validateTSSyncEvent(
 	t *testing.T,
 	c *ChainManager,
 	ts *types.Tesseract,
-	resp chan result,
+	resp chan Result,
 	info *types.ICSClusterInfo,
 ) {
 	t.Helper()
 
-	eventData := waitForResponse(t, resp, utils.TesseractSyncEvent{}) // waits for eventData from goroutine
+	eventData := WaitForResponse(t, resp, utils.TesseractSyncEvent{}) // waits for eventData from goroutine
 	checkIfTSSyncEventsMatch(
 		t,
 		ts,
@@ -2092,11 +2050,11 @@ func validateTSSyncEvent(
 }
 */
 
-func validateTSAddedEvent(t *testing.T, tsAddedResp chan result, ts *common.Tesseract) {
+func validateTSAddedEvent(t *testing.T, tsAddedResp chan tests.Result, ts *common.Tesseract) {
 	t.Helper()
 
-	data := waitForResponse(t, tsAddedResp, utils.TesseractAddedEvent{}) // waits for data from goroutine
-	event := getTesseractAddedEvent(t, data)                             // convert interface type to concrete type
+	data := tests.WaitForResponse(t, tsAddedResp, utils.TesseractAddedEvent{}) // waits for data from goroutine
+	event := getTesseractAddedEvent(t, data)                                   // convert interface type to concrete type
 	require.Equal(t, ts, event.Tesseract)
 }
 

@@ -1,6 +1,12 @@
 package utils
 
-import "time"
+import (
+	"strings"
+	"time"
+)
+
+// TimeFormat that works in filenames on windows.
+var TimeFormat = strings.ReplaceAll(time.RFC3339, ":", "_")
 
 // Now returns the current time in UTC with no monotonic component.
 func Now() time.Time {

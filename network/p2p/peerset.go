@@ -106,6 +106,19 @@ func (ps *peerSet) removePeer(peerID peer.ID) {
 	delete(ps.peers, peerID)
 }
 
+func (ps *peerSet) getPeers() map[peer.ID]*Peer {
+	peers := make(map[peer.ID]*Peer)
+
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	for _, p := range ps.peers {
+		peers[p.networkID] = p
+	}
+
+	return peers
+}
+
 // Unregister is a method of peerSet that unregisters a peer by removing it from the working set.
 // Returns an errNotRegistered if the peer is not part of the working set.
 func (ps *peerSet) Unregister(p *Peer) error {
@@ -122,7 +135,7 @@ func (ps *peerSet) Unregister(p *Peer) error {
 	return nil
 }
 
-// PeersWithoutIX is a method of peerSet that returns a slice of Peers that do not
+// PeersWithoutIX is a method of peerSet that returns a slice of active Peers that do not
 // contain a given Interaction hash in its set know Interactions
 func (ps *peerSet) PeersWithoutIX(hash common.Hash) []*Peer {
 	// Read Lock the peerSet

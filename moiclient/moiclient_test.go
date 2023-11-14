@@ -9,26 +9,27 @@ import (
 	"math/big"
 	"sort"
 	"testing"
+	"time"
 
+	bg "github.com/sarvalabs/battleground"
+	client "github.com/sarvalabs/battleground/client/types"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-polo"
 
-	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
-
 	"github.com/pkg/errors"
-	"github.com/stretchr/testify/require"
-
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/storage"
+	"github.com/stretchr/testify/require"
 )
 
 type StrMap map[string]common.Address
 
 // url of the node to be used by moiclient.
-const localURL = "http://0.0.0.0:1601"
+var localURL = ""
 
 // Need to run minimum 20 fresh nodes for this test to run successfully
 // Ensure chain is set up to run individual tests
@@ -38,116 +39,145 @@ func TestMoiClient(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := context.Background()
-
 	addrsMap := make(StrMap)
 
-	client, err := NewClient(localURL)
+	d := client.DefaultClusterConfig()
+	d.WithLogs = false
+	d.WithStdout = false
+
+	bgClient := bg.NewBGClient(&client.Config{
+		ClusterConfig: d,
+		Network:       client.Local,
+	})
+
+	defer func() {
+		err := bgClient.DestroyNetwork(context.Background(), true)
+		require.NoError(t, err)
+	}()
+
+	moipods, err := bgClient.StartNetwork(context.Background())
 	require.NoError(t, err)
 
-	accs, err := client.Accounts(ctx)
+	time.Sleep(5 * time.Second)
+
+	// as first node is always an operator node, it won't be an observer node,
+	// so that we don't need to wait for observer node timeout
+
+	moipods[0].URL = "http://localhost:1600"
+	localURL = moipods[0].URL
+
+	rpcClient, err := NewClient(moipods[0].URL)
 	require.NoError(t, err)
 
-	addrs, err := SetupAddrs(accs)
+	addresses, err := rpcClient.Accounts(context.Background())
 	require.NoError(t, err)
 
-	setupChain(t, client, addrs, addrsMap)
+	addrs, err := SanitizeAddrs(addresses)
+	require.NoError(t, err)
+
+	accs, err := bgClient.Accounts(context.Background())
+	require.NoError(t, err)
+
+	setupChain(t, rpcClient, addrs, accs, addrsMap)
 
 	testcases := map[string]struct {
 		test func(t *testing.T)
 	}{
 		"Tesseract": {
-			test: func(t *testing.T) { testTesseract(t, client, addrsMap["deployAddr"]) },
+			test: func(t *testing.T) { testTesseract(t, rpcClient, addrsMap["deployAddr"]) },
 		},
 		"DBGet": {
-			test: func(t *testing.T) { testDBGet(t, client) },
+			test: func(t *testing.T) { testDBGet(t, rpcClient) },
 		},
 		"GetAssetInfoByAssetID": {
-			test: func(t *testing.T) { testGetAssetInfoByAssetID(t, client, addrsMap["assetAddr"]) },
+			test: func(t *testing.T) { testGetAssetInfoByAssetID(t, rpcClient, addrsMap["assetAddr"]) },
 		},
 		"GetBalance": {
-			test: func(t *testing.T) { testGetBalance(t, client, addrsMap) },
+			test: func(t *testing.T) { testGetBalance(t, rpcClient, addrsMap) },
 		},
 		"FuelEstimate": {
-			test: func(t *testing.T) { testFuelEstimate(t, client, addrsMap["assetAddr"]) },
+			test: func(t *testing.T) { testFuelEstimate(t, rpcClient, addrsMap["assetAddr"]) },
 		},
 		"Syncing": {
-			test: func(t *testing.T) { testSyncing(t, client, addrsMap["assetAddr"]) },
+			test: func(t *testing.T) { testSyncing(t, rpcClient, addrsMap["assetAddr"]) },
 		},
 		"TDU": {
-			test: func(t *testing.T) { testTDU(t, client, addrsMap["assetAddr"]) },
+			test: func(t *testing.T) { testTDU(t, rpcClient, addrsMap["assetAddr"]) },
 		},
 		"GetContextInfo": {
-			test: func(t *testing.T) { testGetContextInfo(t, client, addrsMap["deployAddr"]) },
+			test: func(t *testing.T) { testGetContextInfo(t, rpcClient, addrsMap["deployAddr"]) },
 		},
 		"InteractionReceipt": {
-			test: func(t *testing.T) { testInteractionReceipt(t, client, addrsMap["assetAddr"]) },
+			test: func(t *testing.T) { testInteractionReceipt(t, rpcClient, addrsMap["assetAddr"]) },
 		},
 		"InteractionCount": {
-			test: func(t *testing.T) { testInteractionCount(t, client, addrsMap["assetAddr"]) },
+			test: func(t *testing.T) { testInteractionCount(t, rpcClient, addrsMap["assetAddr"]) },
 		},
 		"PendingInteractionCount": {
-			test: func(t *testing.T) { testPendingInteractionCount(t, client, addrsMap["assetAddr"]) },
+			test: func(t *testing.T) { testPendingInteractionCount(t, rpcClient, addrsMap["assetAddr"]) },
 		},
 		"LogicStorage": {
-			test: func(t *testing.T) { testLogicStorage(t, client, addrsMap["deployAddr"]) },
+			test: func(t *testing.T) { testLogicStorage(t, rpcClient, addrsMap["deployAddr"]) },
 		},
 		"AccountState": {
-			test: func(t *testing.T) { testAccountState(t, client, addrsMap["deployAddr"]) },
+			test: func(t *testing.T) { testAccountState(t, rpcClient, addrsMap["deployAddr"]) },
 		},
 		"LogicIDs": {
-			test: func(t *testing.T) { testLogics(t, client, addrsMap["deployAddr"]) },
+			test: func(t *testing.T) { testLogics(t, rpcClient, addrsMap["deployAddr"]) },
 		},
 		"LogicManifest": {
-			test: func(t *testing.T) { testLogicManifest(t, client, addrsMap["deployAddr"]) },
+			test: func(t *testing.T) { testLogicManifest(t, rpcClient, addrsMap["deployAddr"]) },
 		},
 		"Content": {
-			test: func(t *testing.T) { testContent(t, client) },
+			test: func(t *testing.T) { testContent(t, rpcClient) },
 		},
 		"ContentFrom": {
-			test: func(t *testing.T) { testContentFrom(t, client, addrsMap["dumpAddr"]) },
+			test: func(t *testing.T) { testContentFrom(t, rpcClient, addrsMap["dumpAddr"]) },
 		},
 		"Status": {
-			test: func(t *testing.T) { testStatus(t, client) },
+			test: func(t *testing.T) { testStatus(t, rpcClient) },
 		},
 		"Inspect": {
-			test: func(t *testing.T) { testInspect(t, client) },
+			test: func(t *testing.T) { testInspect(t, rpcClient) },
 		},
 		"WaitTime": {
-			test: func(t *testing.T) { testWaitTime(t, client, addrsMap["dumpAddr"]) },
+			test: func(t *testing.T) { testWaitTime(t, rpcClient, addrsMap["dumpAddr"]) },
 		},
 		"Peers": {
-			test: func(t *testing.T) { testPeers(t, client) },
+			test: func(t *testing.T) { testPeers(t, rpcClient) },
 		},
 		"Version": {
-			test: func(t *testing.T) { testVersion(t, client) },
+			test: func(t *testing.T) { testVersion(t, rpcClient) },
 		},
 		"Info": {
-			test: func(t *testing.T) { testInfo(t, client) },
+			test: func(t *testing.T) { testInfo(t, rpcClient) },
 		},
 		"SendInteraction": {
-			test: func(t *testing.T) { testSendInteraction(t, client) },
+			test: func(t *testing.T) { testSendInteraction(t, rpcClient) },
 		},
 		"Call": {
-			test: func(t *testing.T) { testCall(t, client, addrsMap["assetAddr"]) },
+			test: func(t *testing.T) { testCall(t, rpcClient, addrsMap["assetAddr"]) },
 		},
 		"ixByHash": {
-			test: func(t *testing.T) { testInteractionByHash(t, client, addrsMap["deployAddr"]) },
+			test: func(t *testing.T) { testInteractionByHash(t, rpcClient, addrsMap["deployAddr"]) },
 		},
 		"ixByTesseract": {
-			test: func(t *testing.T) { testInteractionByTesseract(t, client, addrsMap["deployAddr"]) },
+			test: func(t *testing.T) { testInteractionByTesseract(t, rpcClient, addrsMap["deployAddr"]) },
 		},
 		"testAccounts": {
-			test: func(t *testing.T) { testAccounts(t, client) },
+			test: func(t *testing.T) { testAccounts(t, rpcClient) },
 		},
 		"testAccountMetaInfo": {
-			test: func(t *testing.T) { testAccountMetaInfo(t, client) },
+			test: func(t *testing.T) { testAccountMetaInfo(t, rpcClient) },
 		},
 		"testFuelDeduction": {
-			test: func(t *testing.T) { testFuelDeduction(t, client, addrsMap) },
+			test: func(t *testing.T) { testFuelDeduction(t, rpcClient, addrsMap) },
 		},
 		"testConnections": {
-			test: func(t *testing.T) { testConnections(t, client) },
+			test: func(t *testing.T) { testConnections(t, rpcClient) },
+		},
+		"testNodeMetaInfo": {
+			test: func(t *testing.T) { testNodeMetaInfo(t, rpcClient) },
 		},
 	}
 
@@ -197,14 +227,13 @@ func chooseAcc(
 // At height 3, tokens are transferred
 // Logic Address account :
 // At height 1, transfer call is made to contract by senderAddr
-func setupChain(t *testing.T, client *Client, addrs []common.Address, addrsMap StrMap) {
+func setupChain(t *testing.T, client *Client, addrs []common.Address,
+	accs []tests.AccountWithMnemonic, addrsMap StrMap,
+) {
 	var (
 		i   = 0
 		acc tests.AccountWithMnemonic
 	)
-
-	accs, err := tests.GetAccountMnemonicsFromFile("../accounts.json")
-	require.NoError(t, err)
 
 	t.Run("DeployLogic", func(t *testing.T) {
 		i, acc = chooseAcc(t, client, i, addrs, accs)
@@ -1700,6 +1729,63 @@ func testConnections(t *testing.T, client *Client) {
 			require.Equal(t, httpConnResp.ActivePubSubTopics, connResp.ActivePubSubTopics)
 
 			require.Greater(t, len(connResp.Conns), 0)
+		})
+	}
+}
+
+func testNodeMetaInfo(t *testing.T, client *Client) {
+	ctx := context.Background()
+	testCases := []struct {
+		name          string
+		nodeArgs      *rpcargs.NodeMetaInfoArgs
+		expectedError error
+	}{
+		{
+			name: "fetch node meta info for peer id",
+			nodeArgs: &rpcargs.NodeMetaInfoArgs{
+				PeerID: GetPeerID(t, client).String(),
+			},
+		},
+		{
+			name: "fetch node meta info for random peer id",
+			nodeArgs: &rpcargs.NodeMetaInfoArgs{
+				PeerID: tests.GetTestPeerID(t).String(),
+			},
+			expectedError: common.ErrKeyNotFound,
+		},
+		{
+			name: "fetch node meta info for krama id",
+			nodeArgs: &rpcargs.NodeMetaInfoArgs{
+				KramaID: GetKramaID(t, client),
+			},
+		},
+		{
+			name: "fetch node meta info for random krama id",
+			nodeArgs: &rpcargs.NodeMetaInfoArgs{
+				KramaID: tests.GetTestKramaID(t, 2),
+			},
+			expectedError: common.ErrKeyNotFound,
+		},
+		{
+			name:     "fetch all node meta info",
+			nodeArgs: &rpcargs.NodeMetaInfoArgs{},
+		},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			nodeMetaInfoResponse, err := client.NodeMetaInfo(ctx, test.nodeArgs)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			httpAccountMetaInfo := httpNodeMetaInfo(t, test.nodeArgs)
+			require.Equal(t, httpAccountMetaInfo, nodeMetaInfoResponse)
 		})
 	}
 }

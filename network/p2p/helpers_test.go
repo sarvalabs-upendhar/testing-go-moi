@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	mrand "math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -22,7 +23,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/core/routing"
-	discovery "github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	"github.com/libp2p/go-msgio"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
@@ -48,6 +48,7 @@ type MockVault struct {
 type MockReputationEngine struct {
 	ntq      map[kramaid.KramaID]float32
 	peerInfo map[peer.ID]*senatus.NodeMetaInfo
+	mutex    sync.RWMutex
 }
 
 func NewMockReputationEngine() *MockReputationEngine {
@@ -67,12 +68,18 @@ func (m *MockReputationEngine) UpdatePeer(key kramaid.KramaID, data *senatus.Nod
 }
 
 func (m *MockReputationEngine) AddNewPeerWithPeerID(peerID peer.ID, data *senatus.NodeMetaInfo) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
 	m.peerInfo[peerID] = data
 
 	return nil
 }
 
 func (m *MockReputationEngine) GetNTQ(id kramaid.KramaID) (float32, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
 	ntq, ok := m.ntq[id]
 	if !ok {
 		return -1, common.ErrKeyNotFound
@@ -82,6 +89,9 @@ func (m *MockReputationEngine) GetNTQ(id kramaid.KramaID) (float32, error) {
 }
 
 func (m *MockReputationEngine) SetNTQ(id kramaid.KramaID, val int) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
 	m.ntq[id] = float32(val)
 }
 
@@ -95,6 +105,9 @@ func (m *MockReputationEngine) GetAddress(key kramaid.KramaID) ([]multiaddr.Mult
 }
 
 func (m *MockReputationEngine) GetAddressByPeerID(peerID peer.ID) ([]multiaddr.Multiaddr, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
 	if peerInfo, ok := m.peerInfo[peerID]; ok {
 		return utils.MultiAddrFromString(peerInfo.Addrs...), nil
 	}
@@ -102,7 +115,32 @@ func (m *MockReputationEngine) GetAddressByPeerID(peerID peer.ID) ([]multiaddr.M
 	return nil, common.ErrKramaIDNotFound
 }
 
+func (m *MockReputationEngine) GetKramaIDByPeerID(peerID peer.ID) (kramaid.KramaID, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	if peerInfo, ok := m.peerInfo[peerID]; ok {
+		return peerInfo.KramaID, nil
+	}
+
+	return "", common.ErrKramaIDNotFound
+}
+
+func (m *MockReputationEngine) GetRTTByPeerID(peerID peer.ID) (int64, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	if peerInfo, ok := m.peerInfo[peerID]; ok {
+		return peerInfo.RTT, nil
+	}
+
+	return 0, common.ErrKramaIDNotFound
+}
+
 func (m *MockReputationEngine) SetPeerInfo(key peer.ID, peerInfo *senatus.NodeMetaInfo) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
 	m.peerInfo[key] = peerInfo
 }
 
@@ -207,13 +245,11 @@ func (vault *MockVault) SetNetworkPrivateKey(t *testing.T, privKeyBytes []byte) 
 	vault.networkPrivateKey = networkPrivKey
 }
 
-func setServerPeers(t *testing.T, s *Server, peersList []kramaid.KramaID) {
+func setServerPeers(t *testing.T, s *Server, peersList []*Peer) {
 	t.Helper()
 
 	for _, peer := range peersList {
-		peerID, err := peer.DecodedPeerID()
-		require.NoError(t, err)
-		s.Peers.addPeer(&Peer{kramaID: peer, networkID: peerID})
+		s.Peers.addPeer(peer)
 	}
 }
 
@@ -238,11 +274,12 @@ func getPeerInfo(t *testing.T, server *Server) *peer.AddrInfo {
 func getPeer(t *testing.T, s *Server, destServer *Server) *Peer {
 	t.Helper()
 
-	var stream network.Stream
-	stream, err := s.NewStream(s.ctx, destServer.host.ID(), config.MOIProtocolStream)
+	stream, err := s.ConnManager.NewStream(s.ctx, destServer.host.ID(), config.MOIProtocolStream, MOIStreamTag)
 	require.NoError(t, err)
 	// Create new kip peer
-	return newPeer(stream, s.logger)
+	kPeer := newPeer(stream, destServer.id, 50, destServer.logger)
+
+	return kPeer
 }
 
 func getMultiAddresses(t *testing.T, hosts []host.Host) []multiaddr.Multiaddr {
@@ -318,7 +355,6 @@ func createServerWithoutHost(t *testing.T) *Server {
 	vault.networkPrivateKey = nPriv
 
 	return NewServer(
-		context.Background(),
 		hclog.NewNullLogger(),
 		kramaID,
 		nil,
@@ -335,7 +371,6 @@ func createServer(
 ) *Server {
 	t.Helper()
 
-	ctx := context.Background()
 	cfg := config.DefaultDevnetConfig("test")
 	cfg.Network.ListenAddresses = tests.GetListenAddresses(t, 1)
 
@@ -359,7 +394,7 @@ func createServer(
 	vault.networkPrivateKey = nPriv
 
 	// Create a new server instance
-	server := NewServer(ctx, params.Logger, kramaID, params.EventMux, cfg.Network, vault, NilMetrics())
+	server := NewServer(params.Logger, kramaID, params.EventMux, cfg.Network, vault, NilMetrics())
 
 	if params.ServerCallback != nil {
 		params.ServerCallback(server)
@@ -372,12 +407,15 @@ func createServer(
 	err = server.setupPubSub()
 	require.NoError(t, err)
 
+	server.ds = NewDiscoveryService(server)
+	server.ConnManager = NewConnectionManager(server)
+
 	if len(server.cfg.BootstrapPeers) > 0 {
-		err = server.connectToBootStrapNodes()
+		err = server.ConnManager.connectToBootStrapNodes()
 		require.NoError(t, err)
 	}
 
-	server.setStreamHandler()
+	server.ConnManager.setStreamHandler()
 
 	return server
 }
@@ -421,35 +459,33 @@ func startDiscovery(t *testing.T, servers ...*Server) {
 
 	for _, s := range servers {
 		// s.setStreamHandler()
-		go s.discover(300 * time.Millisecond)
+		go s.ds.advertise()
+		go s.ds.discover()
 	}
 }
 
 func initDiscoveryAndAdvertise(t *testing.T, servers ...*Server) {
 	t.Helper()
 
-	time.Sleep(1 * time.Second)
-
 	for _, s := range servers {
-		s.discovery = discovery.NewRoutingDiscovery(s.kadDHT)
+		s.cfg.DiscoveryInterval = 100 * time.Millisecond
 
 		// Advertise the rendezvous string to the discovery service
 		t.Log("Announcing ourselves")
 
-		_, err := s.discovery.Advertise(s.ctx, string(config.MOIProtocolStream))
-		if err != nil {
-			t.Error("Failed to advertise the rendezvous string to the discovery service", "err", err)
-		}
+		s.ds.Start()
 	}
 }
 
-func getNTQ(t *testing.T, s *Server) float32 {
+func findPeer(t *testing.T, server *Server) peer.AddrInfo {
 	t.Helper()
 
-	ntq, err := s.Senatus.GetNTQ(s.GetKramaID())
+	peerchan, err := server.ds.discovery.FindPeers(server.ctx, string(config.MOIProtocolStream))
 	require.NoError(t, err)
 
-	return ntq
+	peerInfo := <-peerchan
+
+	return peerInfo
 }
 
 func getHandShakeMsg(t *testing.T, msg *networkmsg.Message) networkmsg.HandshakeMSG {
@@ -482,10 +518,17 @@ func openStream(t *testing.T, source *Server, destination *Server) *Peer {
 	connectTo(t, source, destination)
 
 	// Setup a new stream to the peer over the MOI protocol
-	stream, err := source.NewStream(source.ctx, destination.host.ID(), config.MOIProtocolStream)
+	stream, err := source.ConnManager.NewStream(
+		source.ctx,
+		destination.host.ID(),
+		config.MOIProtocolStream,
+		MOIStreamTag,
+	)
 	require.NoError(t, err)
 
-	return newPeer(stream, source.logger)
+	kPeer := newPeer(stream, destination.id, 50, source.logger)
+
+	return kPeer
 }
 
 func sendMessage(t *testing.T, p *Peer, msg []byte) {
@@ -553,7 +596,7 @@ func unsubscribeServers(t *testing.T, server *Server, topic string) {
 
 func registerStreamHandler(servers ...*Server) {
 	for _, server := range servers {
-		server.SetupStreamHandler(config.MOIProtocolStream, server.streamHandlerFunc)
+		server.ConnManager.SetupStreamHandler(config.MOIProtocolStream, MOIStreamTag, server.ConnManager.streamHandler)
 	}
 }
 
@@ -618,17 +661,18 @@ func registerEmptySubscriptionHandler(t *testing.T, s *Server, topic string, sho
 func registerMessageHandler(
 	t *testing.T, s *Server,
 	pID protocol.ID,
-	id kramaid.KramaID,
+	destServer *Server,
 	handshakeMessage networkmsg.HandshakeMSG,
 	response chan int,
 ) {
 	t.Helper()
 
 	s.host.SetStreamHandler(pID, func(stream network.Stream) {
-		peer := newPeer(stream, s.logger)
-		msgReceived := readMessageFromBuffer(t, peer)
+		kPeer := newPeer(stream, destServer.id, 50, s.logger)
 
-		validateMessage(t, id, msgReceived)
+		msgReceived := readMessageFromBuffer(t, kPeer)
+
+		validateMessage(t, destServer.id, msgReceived)
 		validatePayload(t, handshakeMessage, msgReceived)
 		response <- 1
 	})
@@ -700,6 +744,36 @@ func checkConnection(t *testing.T, server *Server, peerID peer.ID, connected boo
 	}
 }
 
+func checkConnectionProtection(t *testing.T, server *Server, peerID peer.ID, protected bool) {
+	t.Helper()
+
+	require.Equal(t, protected, server.host.ConnManager().IsProtected(peerID, MOIStreamTag))
+}
+
+func postDiscoverPeerEvent(t *testing.T, source *Server, peerID peer.ID) {
+	t.Helper()
+
+	err := source.mux.Post(utils.DiscoverPeerEvent{
+		ID: peerID,
+	})
+	require.NoError(t, err)
+}
+
+func assertNodeMetaInfoInSenatus(t *testing.T, source *Server, peerID peer.ID, shouldExist bool) {
+	t.Helper()
+
+	kramaID, err := source.Senatus.GetKramaIDByPeerID(peerID)
+
+	if !shouldExist {
+		require.Error(t, err)
+
+		return
+	}
+
+	require.NoError(t, err)
+	require.NotNil(t, kramaID)
+}
+
 func validateMessage(t *testing.T, id kramaid.KramaID, msg *networkmsg.Message) {
 	t.Helper()
 
@@ -717,8 +791,7 @@ func validateHandShakeMsg(t *testing.T, s *Server, msg *networkmsg.Message, expe
 	if expectedError != nil {
 		require.Contains(t, handShake.Error, expectedError.Error())
 	} else {
-		require.Equal(t, getNTQ(t, s), handShake.NTQ)
-		require.Equal(t, s.host.Addrs(), utils.MultiAddrFromString(handShake.Address...))
+		require.Equal(t, []byte("ping"), handShake.Data)
 	}
 }
 
@@ -729,15 +802,6 @@ func validateNewPeerEvent(t *testing.T, newPeerSub *utils.Subscription, s *Serve
 	p, ok := obj.Data.(utils.NewPeerEvent)
 	require.True(t, ok)
 	require.Equal(t, s.host.ID(), p.PeerID)
-}
-
-func validatePeerDiscoveredEvent(t *testing.T, peerDiscoveredSub *utils.Subscription, s *Server) {
-	t.Helper()
-
-	obj := <-peerDiscoveredSub.Chan()
-	p, ok := obj.Data.(utils.PeerDiscoveredEvent)
-	require.True(t, ok)
-	require.Equal(t, s.host.ID(), p.ID)
 }
 
 func validateHelloMessage(t *testing.T, hello networkmsg.HelloMsg, sender *Server) {

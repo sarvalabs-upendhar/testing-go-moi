@@ -98,7 +98,7 @@ func (a *account) enqueue(ix *common.Interaction) error {
 // Eligible Interactions are all sequential in order of nonce
 // and the first one has to have nonce less (or equal) to the account's
 // nextNonce.
-func (a *account) promote() (uint64, []common.Hash) {
+func (a *account) promote() (uint64, common.Interactions) {
 	a.promoted.lock(true)
 	a.enqueued.lock(true)
 
@@ -115,7 +115,7 @@ func (a *account) promote() (uint64, []common.Hash) {
 	}
 
 	promoted := uint64(0)
-	promotedIxnHashes := make([]common.Hash, 0)
+	promotedIxns := make(common.Interactions, 0)
 	nextNonce := a.enqueued.peek().Nonce()
 
 	for {
@@ -130,7 +130,7 @@ func (a *account) promote() (uint64, []common.Hash) {
 
 		// push to promoted
 		a.promoted.push(ix)
-		promotedIxnHashes = append(promotedIxnHashes, ix.Hash())
+		promotedIxns = append(promotedIxns, ix)
 
 		// update counters
 		nextNonce += 1
@@ -143,7 +143,7 @@ func (a *account) promote() (uint64, []common.Hash) {
 		a.setNonce(nextNonce)
 	}
 
-	return promoted, promotedIxnHashes
+	return promoted, promotedIxns
 }
 
 // Thread safe map of all accounts registered by the pool.
@@ -258,7 +258,7 @@ func (m *accountsMap) get(addr common.Address) *account {
 	return account
 }
 
-// promoted returns the number of all promoted transactions.
+// promoted returns the number of all promoted interactions.
 func (m *accountsMap) promoted() (total uint64) { //nolint:unused
 	m.Range(func(key, value interface{}) bool {
 		addressKey, ok := key.(common.Address)

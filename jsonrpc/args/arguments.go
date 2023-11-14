@@ -3,6 +3,7 @@ package args
 import (
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 )
 
 // RPC args
@@ -47,6 +48,11 @@ type ConnArgs struct{}
 
 type DebugArgs struct {
 	Key string `json:"storage_key"`
+}
+
+type NodeMetaInfoArgs struct {
+	KramaID id.KramaID `json:"krama_id"`
+	PeerID  string     `json:"peer_id"`
 }
 
 type GetLogicStorageArgs struct {
@@ -187,4 +193,12 @@ type NodeSyncStatus struct {
 type SyncStatusResponse struct {
 	AccSyncResp  *AccSyncStatus  `json:"acc_sync_status"`
 	NodeSyncResp *NodeSyncStatus `json:"node_sync_status"`
+}
+
+type DiagnosisRequest struct {
+	OutputPath           string   `json:"output_path"`
+	Collectors           []string `json:"collectors"`
+	ProfileTime          string   `json:"profile_time"`
+	MutexProfileFraction int      `json:"mutex_profile_fraction"`
+	BlockProfileRate     string   `json:"block_profile_rate"`
 }

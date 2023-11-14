@@ -140,11 +140,11 @@ func (p *PublicIXPoolAPI) Inspect() (*InspectResponse, error) {
 	pendingIxs, queuedIxs := p.ixpool.GetAllIxs(true)
 	accountWaitTimes := p.ixpool.GetAllAccountsWaitTime()
 
-	// Define a formatter to flatten a transaction into a string
+	// Define a formatter to flatten an interaction into a string
 	format := func(ix *common.Interaction) string {
 		if receiver := ix.Receiver(); !receiver.IsNil() {
 			return fmt.Sprintf(
-				"%s: %d wei + %d gas × %d wei",
+				"%s: %d kmoi + %d fuel × %d kmoi",
 				ix.Receiver().Hex(),
 				ix.Cost(),
 				ix.FuelLimit(),
@@ -153,7 +153,7 @@ func (p *PublicIXPoolAPI) Inspect() (*InspectResponse, error) {
 		}
 
 		return fmt.Sprintf(
-			"%d wei + %d gas × %d wei",
+			"%d kmoi + %d fuel × %d kmoi",
 			ix.Cost(),
 			ix.FuelLimit(),
 			ix.FuelPrice(),

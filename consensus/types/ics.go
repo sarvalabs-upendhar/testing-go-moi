@@ -57,7 +57,7 @@ func NewICS(
 		operatorIncluded: false,
 		AccountInfos:     make(AccountInfos, 0),
 		contextDelta:     make(common.ContextDelta),
-		Receipts:         make(common.Receipts, 1), // This should be changed base on the transactions
+		Receipts:         make(common.Receipts, 1), // This should be changed base on the interactions
 		dirty:            make(map[common.Hash][]byte),
 		ICSReqTime:       reqTime,
 		RequestMsg:       icsReqMsg,

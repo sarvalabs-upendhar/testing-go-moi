@@ -3,6 +3,8 @@ package senatus
 import (
 	"sync"
 
+	"github.com/sarvalabs/go-moi/common"
+
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
@@ -41,7 +43,9 @@ func (miMsg *NodeMetaInfoMsg) NodeMetaInfo() *NodeMetaInfo {
 type NodeMetaInfo struct {
 	mtx           sync.RWMutex
 	Addrs         []string
+	KramaID       id.KramaID
 	NTQ           float32
+	RTT           int64
 	WalletCount   int32
 	PublicKey     []byte
 	PeerSignature []byte
@@ -87,7 +91,7 @@ func (mi *NodeMetaInfo) GetMultiAddress() ([]multiaddr.Multiaddr, error) {
 	defer mi.mtx.RUnlock()
 
 	if len(mi.Addrs) == 0 {
-		return nil, errors.New("address not found")
+		return nil, common.ErrAddressNotFound
 	}
 
 	multiAddrs := make([]multiaddr.Multiaddr, 0, len(mi.Addrs))
@@ -117,9 +121,6 @@ func (mi *NodeMetaInfo) Bytes() ([]byte, error) {
 }
 
 func (mi *NodeMetaInfo) FromBytes(bytes []byte) error {
-	mi.mtx.Lock()
-	// defer mi.mtx.Unlock()
-
 	if err := polo.Depolorize(mi, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize reputation info")
 	}

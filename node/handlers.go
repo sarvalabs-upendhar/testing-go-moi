@@ -13,7 +13,6 @@ type SubHandlers struct {
 // setupSubHandler creates new poorna SubHandler object and setups it to node's handler's core
 func (n *Node) setupSubHandler() {
 	n.handlers.core = p2p.NewSubHandler(
-		n.ctx,
 		n.network.GetKramaID(),
 		n.logger,
 		n.network,
@@ -26,7 +25,7 @@ func (n *Node) setupSubHandler() {
 
 // startHandlers starts syncer, core and flux(randomizer)
 func (n *Node) startHandlers() {
-	n.logger.Info("Starting sub-handlers")
+	n.logger.Info("Starting Sub-Handlers")
 
 	go n.handlers.core.Start()
 	go n.handlers.flux.Start()
@@ -34,6 +33,7 @@ func (n *Node) startHandlers() {
 
 // stopHandlers stops syncer, core and flux(randomizer)
 func (n *Node) stopHandlers() {
+	n.logger.Info("Closing Sub-Handlers")
 	n.handlers.core.Close()
 	n.handlers.flux.Close()
 }

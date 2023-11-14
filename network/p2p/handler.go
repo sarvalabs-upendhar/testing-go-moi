@@ -37,7 +37,6 @@ type SubHandler struct {
 // NewSubHandler is a constructor function generates and returns a new subHandle object.
 // Accepts a KramaID, an event TypeMux, an IxPool, an ICS, a BFT engine and a Chain manager.
 func NewSubHandler(
-	ctx context.Context,
 	id id.KramaID,
 	logger hclog.Logger,
 	server *Server,
@@ -46,7 +45,7 @@ func NewSubHandler(
 	pool ixPool,
 	chain *lattice.ChainManager,
 ) *SubHandler {
-	ctx, ctxCancel := context.WithCancel(ctx)
+	ctx, ctxCancel := context.WithCancel(context.Background())
 
 	return &SubHandler{
 		id:        id,
@@ -64,8 +63,8 @@ func NewSubHandler(
 // Start is a method of SubHandler that start the handler.
 // Initializes it TypeMux subscriptions and handler loops.
 func (eh *SubHandler) Start() {
-	// Subscribe the TypeMux to NewIxsEvent and NewPeerEvent events
-	eh.ixSub = eh.mux.Subscribe(utils.NewIxsEvent{})
+	// Subscribe the TypeMux to EnqueueInteractionEvent and NewPeerEvent events
+	eh.ixSub = eh.mux.Subscribe(utils.EnqueuedInteractionEvent{})
 	eh.newPeerSub = eh.mux.Subscribe(utils.NewPeerEvent{})
 
 	// Start the handler loops for new peers, broadcasting interactions
@@ -98,7 +97,11 @@ func (eh *SubHandler) newPeerLoop() {
 					}
 
 					// Update inbound/outbound connection count based on the peer stream's direction
-					eh.server.connInfo.updateConnCount(peer.stream.Stat().Direction, -1)
+					eh.server.ConnManager.updateConnCount(peer.stream.Stat().Direction, peer.GetRTT(), -1)
+
+					if err := eh.server.ConnManager.ResetStream(peer.stream, MOIStreamTag); err != nil {
+						eh.server.logger.Trace("Failed to reset connection", "err", err)
+					}
 
 					eh.logger.Info("Peer Disconnected", "krama-ID", peer.kramaID)
 				}()
@@ -208,8 +211,8 @@ func (eh *SubHandler) sendDisconnectRequest(peer *Peer, err error) {
 func (eh *SubHandler) ixBroadcastLoop() {
 	// Read events from an ix channel
 	for obj := range eh.ixSub.Chan() {
-		// Assert event as a NewIxsEvent
-		if event, ok := obj.Data.(utils.NewIxsEvent); ok {
+		// Assert event as a EnqueueInteractionEvent
+		if event, ok := obj.Data.(utils.EnqueuedInteractionEvent); ok {
 			if err := eh.broadcastIXs(event.Ixs); err != nil {
 				eh.logger.Error("Failed to broadcast interactions", "err", err)
 			}
@@ -220,7 +223,7 @@ func (eh *SubHandler) ixBroadcastLoop() {
 // broadcastIXs is a method of SubHandler that broadcasts a given slice of Interactions.
 // Only emits it from peers that are not already aware of the interaction.
 func (eh *SubHandler) broadcastIXs(ixs []*common.Interaction) error {
-	// Accumulate a mapping of peers to the the Interaction they do not know about
+	// Accumulate a mapping of peers to the Interaction they do not know about
 	peerIxSet := make(map[*Peer][]*common.Interaction)
 
 	for _, ix := range ixs {

@@ -48,6 +48,8 @@ func DefaultBabylonConfig(path string) *Config {
 			MaxPeers:           0, // current we don't limit the no.of peers
 			InboundConnLimit:   config.DefaultInboundConnLimit,
 			OutboundConnLimit:  config.DefaultOutboundConnLimit,
+			MinimumConnections: config.DefaultMinimumConnections,
+			MaximumConnections: config.DefaultMaximumConnections,
 			DiscoveryInterval:  config.DefaultDiscoveryInterval,
 			JSONRPCAddr:        "0.0.0.0:" + strconv.Itoa(config.DefaultJSONRPCPort),
 			CorsAllowedOrigins: []string{"*"},
@@ -115,6 +117,8 @@ func DefaultDevnetConfig(path string) *Config {
 			MaxPeers:           0, // current we don't limit the no.of peers
 			InboundConnLimit:   config.DefaultInboundConnLimit,
 			OutboundConnLimit:  config.DefaultOutboundConnLimit,
+			MinimumConnections: config.DefaultMinimumConnections,
+			MaximumConnections: config.DefaultMaximumConnections,
 			DiscoveryInterval:  config.DefaultDiscoveryInterval,
 			JSONRPCAddr:        "0.0.0.0:" + strconv.Itoa(config.DefaultJSONRPCPort),
 			CorsAllowedOrigins: []string{"*"},
@@ -178,6 +182,8 @@ type NetworkConfig struct {
 	RefreshSenatus     bool          `json:"refresh_senatus"`
 	InboundConnLimit   int64         `json:"inbound_conn_limit"`
 	OutboundConnLimit  int64         `json:"outbound_conn_limit"`
+	MinimumConnections int           `json:"minimum_connections"`
+	MaximumConnections int           `json:"maximum_connections"`
 	DiscoveryInterval  time.Duration `json:"discovery_interval"`
 }
 

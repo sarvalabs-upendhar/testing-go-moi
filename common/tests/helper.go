@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"net"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -120,6 +121,18 @@ func GetTestPeerID(t *testing.T) peer.ID {
 	require.NoError(t, err)
 
 	return peerID
+}
+
+func GetTestPeerIDs(t *testing.T, count int) []peer.ID {
+	t.Helper()
+
+	peerIDs := make([]peer.ID, 0)
+
+	for i := 0; i < count; i++ {
+		peerIDs = append(peerIDs, GetTestPeerID(t))
+	}
+
+	return peerIDs
 }
 
 func DecodePeerIDFromKramaID(t *testing.T, kramaID kramaid.KramaID) peer.ID {
@@ -1039,4 +1052,22 @@ func GetHashes(t *testing.T, count int) []common.Hash {
 	}
 
 	return hashes
+}
+
+// WaitForResponse waits for response on respChannel
+// and checks if datatype of data received on channel is equal to datatype of data received as argument
+func WaitForResponse(t *testing.T, respChan chan Result, data interface{}) interface{} {
+	t.Helper()
+
+	res := <-respChan
+	require.NoError(t, res.Err)
+
+	require.Equal(t, reflect.TypeOf(res.Data), reflect.TypeOf(data))
+
+	return res.Data
+}
+
+type Result struct {
+	Data interface{}
+	Err  error
 }

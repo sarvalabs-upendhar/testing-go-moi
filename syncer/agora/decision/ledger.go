@@ -46,6 +46,7 @@ type job struct {
 
 type Ledger struct {
 	ctx          context.Context
+	ctxCancel    context.CancelFunc
 	logger       hclog.Logger
 	db           ledgerStore
 	cache        *lru.Cache
@@ -55,14 +56,17 @@ type Ledger struct {
 	dbJobs       []*job
 }
 
-func NewLedger(ctx context.Context, logger hclog.Logger, workersCount int, db ledgerStore) (*Ledger, error) {
+func NewLedger(logger hclog.Logger, workersCount int, db ledgerStore) (*Ledger, error) {
 	cache, err := lru.New(100)
 	if err != nil {
 		return nil, err
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	l := &Ledger{
 		ctx:          ctx,
+		ctxCancel:    cancel,
 		logger:       logger.Named("Ledger"),
 		db:           db,
 		cache:        cache,
@@ -182,7 +186,7 @@ func (l *Ledger) worker() {
 	for {
 		select {
 		case <-l.ctx.Done():
-			l.logger.Info("Context expired, closing worker")
+			l.logger.Debug("Context expired, closing worker")
 
 			return
 		case <-time.After(500 * time.Millisecond):
@@ -209,4 +213,9 @@ func (l *Ledger) worker() {
 			}
 		}
 	}
+}
+
+func (l *Ledger) Close() {
+	l.logger.Info("Closing Agora-Ledger")
+	l.ctxCancel()
 }

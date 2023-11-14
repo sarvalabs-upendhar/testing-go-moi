@@ -3,10 +3,6 @@ package senatus
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
-	"encoding/json"
-	"io"
-	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -50,6 +46,7 @@ type network interface {
 type ReputationEngine struct {
 	kramaID             id.KramaID
 	ctx                 context.Context
+	ctxCancel           context.CancelFunc
 	logger              hclog.Logger
 	db                  senatusStore
 	client              *http.Client
@@ -63,7 +60,6 @@ type ReputationEngine struct {
 }
 
 func NewReputationEngine(
-	ctx context.Context,
 	logger hclog.Logger,
 	network network,
 	db senatusStore,
@@ -75,12 +71,15 @@ func NewReputationEngine(
 		return nil, errors.Wrap(err, "reputation engine failed")
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	r := &ReputationEngine{
-		ctx:     ctx,
-		logger:  logger.Named("Reputation-Engine"),
-		kramaID: selfID,
-		db:      db,
-		network: network,
+		ctx:       ctx,
+		ctxCancel: cancel,
+		logger:    logger.Named("Reputation-Engine"),
+		kramaID:   selfID,
+		db:        db,
+		network:   network,
 		client: &http.Client{Transport: &http.Transport{
 			MaxIdleConns:    1024,
 			MaxConnsPerHost: 1000,
@@ -147,8 +146,16 @@ func (r *ReputationEngine) AddNewPeerWithPeerID(peerID peer.ID, data *NodeMetaIn
 			info.NTQ = data.NTQ
 		}
 
+		if data.RTT != 0 && info.RTT != data.RTT {
+			info.RTT = data.RTT
+		}
+
 		if data.WalletCount != 0 && info.WalletCount != data.WalletCount {
 			info.WalletCount = data.WalletCount
+		}
+
+		if data.KramaID != "" && info.KramaID != data.KramaID {
+			info.KramaID = data.KramaID
 		}
 
 		if len(data.Addrs) != 0 && !utils.AreSlicesOfStringEqual(data.Addrs, info.Addrs) {
@@ -309,6 +316,24 @@ func (r *ReputationEngine) GetAddressByPeerID(peerID peer.ID) ([]multiaddr.Multi
 	return info.GetMultiAddress()
 }
 
+func (r *ReputationEngine) GetRTTByPeerID(peerID peer.ID) (int64, error) {
+	info, err := r.nodeMetaInfo(peerID)
+	if err != nil {
+		return 0, err
+	}
+
+	return info.RTT, nil
+}
+
+func (r *ReputationEngine) GetKramaIDByPeerID(peerID peer.ID) (id.KramaID, error) {
+	info, err := r.nodeMetaInfo(peerID)
+	if err != nil {
+		return "", err
+	}
+
+	return info.KramaID, nil
+}
+
 func (r *ReputationEngine) GetNTQ(kramaID id.KramaID) (float32, error) {
 	peerID, err := kramaID.DecodedPeerID()
 	if err != nil {
@@ -457,6 +482,7 @@ func (r *ReputationEngine) handleMessages(msgs []*NodeMetaInfoMsg) {
 		}
 
 		if err := r.UpdatePeer(msg.KramaID, &NodeMetaInfo{
+			KramaID:       msg.KramaID,
 			Addrs:         msg.Address,
 			NTQ:           msg.NTQ,
 			WalletCount:   msg.WalletCount,
@@ -475,8 +501,6 @@ func (r *ReputationEngine) messageWorker() {
 		case <-time.After(2 * time.Second):
 		case <-r.signalChan:
 		case <-r.ctx.Done():
-			r.logger.Info("Closing reputation worker")
-
 			return
 		}
 
@@ -490,7 +514,7 @@ func (r *ReputationEngine) dbWorker() {
 		case <-time.After(5 * time.Second):
 		case <-r.signalChan:
 		case <-r.ctx.Done():
-			r.logger.Info("Closing reputation worker")
+			r.logger.Debug("Closing reputation worker")
 
 			return
 		}
@@ -523,58 +547,11 @@ func (r *ReputationEngine) Start() error {
 	return nil
 }
 
-type Response struct {
-	Data []string `json:"data"`
-}
-type Request struct {
-	Ids []string `json:"kramaIDs"`
-}
+func (r *ReputationEngine) Close() {
+	r.logger.Info("Closing Senatus")
+	r.ctxCancel()
 
-var RetrievePublicKeys = func(ids []id.KramaID, client *http.Client, logger hclog.Logger) (keys [][]byte, err error) {
-	data, err := json.Marshal(Request{utils.KramaIDToString(ids)})
-	if err != nil {
-		return nil, err
+	if err := r.flushDirtyEntries(); err != nil {
+		r.logger.Error("Failed to flush dirty entries", "error", err)
 	}
-
-	req, err := http.NewRequest("POST", "http://91.107.196.74/api/fetchPublicKeys", bytes.NewBuffer(data))
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", "application/json")
-
-	response, err := client.Do(req)
-	if err != nil {
-		logger.Error("Api fetch failed", "err", err, "krama-IDs", ids)
-
-		return nil, err
-	}
-
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		log.Panicln(err)
-	}
-
-	defer response.Body.Close()
-
-	if response.StatusCode != 200 {
-		logger.Error("Http request failed", "status-code", response.StatusCode, "response-body", string(body))
-	}
-
-	data1 := new(Response)
-
-	if err = json.Unmarshal(body, data1); err != nil {
-		log.Panicln(err)
-	}
-
-	for _, v := range data1.Data {
-		str, err := hex.DecodeString(v)
-		if err != nil {
-			return nil, err
-		}
-
-		keys = append(keys, str)
-	}
-
-	return keys, nil
 }

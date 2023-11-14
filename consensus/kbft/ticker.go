@@ -140,6 +140,6 @@ func (t *Ticker) timeoutRoutine() {
 // Close is a method of Ticker that closes all ticker routines.
 // Discards all scheduled timeouts as well.
 func (t *Ticker) Close() {
-	t.logger.Trace("Closing timer")
+	t.logger.Debug("Closing timer")
 	close(t.quit)
 }

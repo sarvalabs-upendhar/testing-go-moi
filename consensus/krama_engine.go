@@ -78,7 +78,7 @@ type stateManager interface {
 		[]*common.NodeSet,
 		error,
 	)
-	GetPublicKeys(ids ...id.KramaID) (keys [][]byte, err error)
+	GetPublicKeys(context context.Context, ids ...id.KramaID) (keys [][]byte, err error)
 	GetAccountMetaInfo(addr common.Address) (*common.AccountMetaInfo, error)
 	IsAccountRegistered(addr common.Address) (bool, error)
 	GetLatestStateObject(addr common.Address) (*state.Object, error)
@@ -149,7 +149,7 @@ type Engine struct {
 	avgICSTime   time.Duration
 }
 
-func NewKramaEngine(ctx context.Context,
+func NewKramaEngine(
 	cfg *config.ConsensusConfig,
 	logger hclog.Logger,
 	mux *utils.TypeMux,
@@ -163,12 +163,12 @@ func NewKramaEngine(ctx context.Context,
 	metrics *Metrics,
 	slots *ktypes.Slots,
 ) (*Engine, error) {
-	wal, err := kbft.NewWAL(ctx, logger, cfg.DirectoryPath)
+	wal, err := kbft.NewWAL(logger, cfg.DirectoryPath)
 	if err != nil {
 		return nil, errors.Wrap(err, "WAL failed")
 	}
 
-	ctx, ctxCancel := context.WithCancel(ctx)
+	ctx, ctxCancel := context.WithCancel(context.Background())
 	k := &Engine{
 		ctx:          ctx,
 		ctxCancel:    ctxCancel,
@@ -367,12 +367,12 @@ func (k *Engine) acquireContextLock(ctx context.Context, slot *ktypes.Slot) erro
 
 	finalWaitGroup.Add(2)
 
-	observerKeys, err := k.state.GetPublicKeys(observerNodes...)
+	observerKeys, err := k.state.GetPublicKeys(context.Background(), observerNodes...)
 	if err != nil {
 		return errors.Wrap(err, "Failed to fetch the public key of observer nodes.")
 	}
 
-	randomKeys, err := k.state.GetPublicKeys(operatorRandomNodes...)
+	randomKeys, err := k.state.GetPublicKeys(context.Background(), operatorRandomNodes...)
 	if err != nil {
 		return errors.Wrap(err, "Failed to fetch the public key of random nodes.")
 	}
@@ -1565,6 +1565,7 @@ func (k *Engine) executionRoutine() {
 }
 
 func (k *Engine) Close() {
+	k.wal.Close()
 	defer k.ctxCancel()
 }
 

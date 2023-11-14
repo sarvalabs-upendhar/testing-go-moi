@@ -53,7 +53,6 @@ type senatus interface {
 }
 
 type StateManager struct {
-	ctx    context.Context
 	logger hclog.Logger
 	cache  *lru.Cache
 
@@ -69,7 +68,6 @@ type StateManager struct {
 }
 
 func NewStateManager(
-	ctx context.Context,
 	db Store,
 	logger hclog.Logger,
 	cache *lru.Cache,
@@ -77,7 +75,6 @@ func NewStateManager(
 	senatus senatus,
 ) (*StateManager, error) {
 	sm := &StateManager{
-		ctx:     ctx,
 		cache:   cache,
 		db:      db,
 		senatus: senatus,
@@ -405,7 +402,7 @@ func (sm *StateManager) fetchParticipantContextByHash(addr common.Address, hash 
 	if len(behaviouralContext) > 0 {
 		behaviouralSet = common.NewNodeSet(behaviouralContext, nil)
 
-		if behaviouralSet.PublicKeys, err = sm.GetPublicKeys(behaviouralContext...); err != nil {
+		if behaviouralSet.PublicKeys, err = sm.GetPublicKeys(context.Background(), behaviouralContext...); err != nil {
 			sm.logger.Error("Failed to retrieve the public key of behavioural set", "err", err)
 
 			return nil, nil, common.ErrPublicKeyNotFound
@@ -415,7 +412,7 @@ func (sm *StateManager) fetchParticipantContextByHash(addr common.Address, hash 
 	if len(randomContext) > 0 {
 		randomSet = common.NewNodeSet(randomContext, nil)
 
-		if randomSet.PublicKeys, err = sm.GetPublicKeys(randomContext...); err != nil {
+		if randomSet.PublicKeys, err = sm.GetPublicKeys(context.Background(), randomContext...); err != nil {
 			sm.logger.Error("Failed to retrieve the public key of random set", "err", err)
 
 			return nil, nil, common.ErrPublicKeyNotFound
@@ -443,7 +440,7 @@ func (sm *StateManager) fetchLatestParticipantContext(addr common.Address) (
 	if len(behaviouralContext) > 0 {
 		behaviouralSet = common.NewNodeSet(behaviouralContext, nil)
 
-		if behaviouralSet.PublicKeys, err = sm.GetPublicKeys(behaviouralContext...); err != nil {
+		if behaviouralSet.PublicKeys, err = sm.GetPublicKeys(context.Background(), behaviouralContext...); err != nil {
 			sm.logger.Error("Failed to retrieve the public key of behavioural set", "err", err)
 
 			return common.NilHash, nil, nil, common.ErrPublicKeyNotFound
@@ -453,7 +450,7 @@ func (sm *StateManager) fetchLatestParticipantContext(addr common.Address) (
 	if len(randomContext) > 0 {
 		randomSet = common.NewNodeSet(randomContext, nil)
 
-		if randomSet.PublicKeys, err = sm.GetPublicKeys(randomContext...); err != nil {
+		if randomSet.PublicKeys, err = sm.GetPublicKeys(context.Background(), randomContext...); err != nil {
 			sm.logger.Error("Failed to retrieve the public key of random set", "err", err)
 
 			return common.NilHash, nil, nil, common.ErrPublicKeyNotFound
@@ -537,7 +534,7 @@ func (sm *StateManager) GetNodeSet(ids []id.KramaID) (*common.NodeSet, error) {
 	)
 
 	if len(ids) > 0 {
-		publicKeys, err = sm.GetPublicKeys(ids...)
+		publicKeys, err = sm.GetPublicKeys(context.Background(), ids...)
 		if err != nil {
 			return nil, err
 		}
@@ -956,14 +953,14 @@ type Request struct {
 	Ids []string `json:"kramaIDs"`
 }
 
-func (sm *StateManager) GetPublicKeys(ids ...id.KramaID) ([][]byte, error) {
+func (sm *StateManager) GetPublicKeys(ctx context.Context, ids ...id.KramaID) ([][]byte, error) {
 	if len(ids) == 0 {
 		return nil, errors.New("Empty Ids")
 	}
 
 	publicKeys := make([][]byte, len(ids))
 
-	g, _ := errgroup.WithContext(sm.ctx)
+	g, _ := errgroup.WithContext(ctx)
 
 	for index, kramaID := range ids {
 		i, k := index, kramaID
@@ -1049,6 +1046,7 @@ func (sm *StateManager) IsLogicRegistered(logicID common.LogicID) error {
 }
 
 func (sm *StateManager) SyncStorageTrees(
+	ctx context.Context,
 	address common.Address,
 	newRoot *common.RootNode,
 	logicStorageTreeRoots map[string]*common.RootNode,
@@ -1068,7 +1066,7 @@ func (sm *StateManager) SyncStorageTrees(
 		return err
 	}
 
-	g, _ := errgroup.WithContext(sm.ctx)
+	g, _ := errgroup.WithContext(ctx)
 
 	for logic, rootNode := range logicStorageTreeRoots {
 		storageRoot, logicID := rootNode, logic

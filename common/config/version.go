@@ -8,8 +8,8 @@ import (
 
 const (
 	VersionMajor = 0 // Major version component of the current release
-	VersionMinor = 2 // Minor version component of the current release
-	VersionPatch = 6 // Patch version component of the current release
+	VersionMinor = 3 // Minor version component of the current release
+	VersionPatch = 0 // Patch version component of the current release
 )
 
 var ProtocolVersion = func() string {
@@ -40,6 +40,8 @@ var (
 	MOIProtocolStream = protocol.ID("moi/core/stream/" + ProtocolVersion)
 	MOIProtocolRPC    = protocol.ID("moi/core/rpc/" + ProtocolVersion)
 )
+
+var MOIPingStream = protocol.ID("moi/ping/stream/" + ProtocolVersion)
 
 var (
 	SenatusTopic   = fmt.Sprintf("MOI_PUBSUB_SENATUS_%s", ProtocolVersion)

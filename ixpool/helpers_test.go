@@ -1,7 +1,6 @@
 package ixpool
 
 import (
-	"context"
 	"errors"
 	"math/big"
 	"testing"
@@ -18,6 +17,13 @@ import (
 
 	"github.com/sarvalabs/go-moi/common/tests"
 )
+
+type expectedResult struct {
+	nonce            uint64
+	enqueued         uint64
+	promoted         uint64
+	promotedAccounts int
+}
 
 type MockStateManager struct {
 	nonce               map[common.Address]uint64
@@ -120,7 +126,6 @@ func CreateTestIxpool(
 	}
 
 	return NewIxPool(
-		context.Background(),
 		hclog.NewNullLogger(),
 		new(utils.TypeMux),
 		sm,
@@ -261,13 +266,6 @@ func createTestIxs(t *testing.T, ixType common.IxType, start int, end int, addre
 	return ixs
 }
 
-// subscribeToNewIxsEvent creates a subscription for NewIxsEvent and returns it
-func subscribeToNewIxsEvent(t *testing.T, eventMux *utils.TypeMux) *utils.Subscription {
-	t.Helper()
-
-	return eventMux.Subscribe(utils.NewIxsEvent{})
-}
-
 // getTesseractWithIxs returns a new instance of types.Tesseract with interactions
 func getTesseractWithIxs(t *testing.T, address common.Address, nonce int) *common.Tesseract {
 	t.Helper()
@@ -323,25 +321,6 @@ func newIxWithPayload(
 	})
 }
 
-// waitForNewIxs listens for enqueue request and NewIxsEvent.
-// returns the new interactions from enqueue request channel and NewIxsEvent
-func waitForNewIxs(t *testing.T, ixPool *IxPool) (enqueuedIxs common.Interactions, newIxsEvent utils.NewIxsEvent) {
-	t.Helper()
-
-	var ok bool
-
-	subscription := subscribeToNewIxsEvent(t, ixPool.mux)
-	// listen for enqueue request
-	enqueuedIxs = (<-ixPool.enqueueReqCh).ixs
-
-	// listens for new ixs event
-	event := <-subscription.Chan()
-	newIxsEvent, ok = event.Data.(utils.NewIxsEvent)
-	require.True(t, ok)
-
-	return enqueuedIxs, newIxsEvent
-}
-
 // addAndEnqueueIxs adds and enqueues ixs
 // returns the promoted ixs
 func addAndEnqueueIxs(t *testing.T, ixPool *IxPool, ixs common.Interactions, senderAddr common.Address) promoteRequest {
@@ -353,7 +332,6 @@ func addAndEnqueueIxs(t *testing.T, ixPool *IxPool, ixs common.Interactions, sen
 	}()
 
 	go ixPool.handleEnqueueRequest(<-ixPool.enqueueReqCh)
-
 	time.Sleep(100 * time.Millisecond)
 
 	ixPool.accounts.get(senderAddr).enqueued.lock(false)

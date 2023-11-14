@@ -72,7 +72,6 @@ type BaseWAL struct {
 // NewWAL returns a new write-ahead logger based on `baseWAL`, which implements
 // WAL. It's flushed and synced to disk every 2s and once when stopped.
 func NewWAL(
-	ctx context.Context,
 	logger hclog.Logger,
 	walFile string,
 	groupOptions ...func(*utils.Group),
@@ -82,12 +81,15 @@ func NewWAL(
 		return nil, fmt.Errorf("failed to ensure WAL directory is in place: %w", err)
 	}
 
+	ctx, cancelFn := context.WithCancel(context.Background())
+
 	group, err := utils.OpenGroup(ctx, logger, walFile+"/wal", groupOptions...)
 	if err != nil {
+		cancelFn()
+
 		return nil, err
 	}
 
-	ctx, cancelFn := context.WithCancel(ctx)
 	wal := &BaseWAL{
 		ctx:           ctx,
 		ctxCancel:     cancelFn,

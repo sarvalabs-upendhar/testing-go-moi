@@ -140,7 +140,7 @@ func (b *BadgerDB) Delete(key []byte) error {
 	b.metrics.CaptureDBWrites(1)
 
 	err := b.db.Update(func(txn *badger.Txn) error {
-		// Delete the entry and commit the update transaction
+		// Delete the entry and commit the update interaction
 		return txn.Delete(key)
 	})
 	if err != nil {

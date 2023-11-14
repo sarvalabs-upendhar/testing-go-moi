@@ -24,4 +24,5 @@ type BlockSync interface {
 		stateHash cid.CID,
 	) (Session, error)
 	Start()
+	Close()
 }

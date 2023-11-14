@@ -68,7 +68,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p-gorpc/stats"
-	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
@@ -184,7 +183,9 @@ func WithStreamBufferSize(size int) ServerOption {
 // by the client. The LibP2P host must be already correctly configured to
 // be able to handle connections from clients.
 type Server struct {
-	host     host.Host
+	connManager ConnectionManager
+	connTag     string
+
 	protocol protocol.ID
 
 	statsHandler     stats.Handler
@@ -200,23 +201,36 @@ type Server struct {
 	logger hclog.Logger
 }
 
-// NewServer creates a Server object with the given LibP2P host
+// NewServer creates a Server object with the given p2p connection manager, tag
 // and protocol.
-func NewServer(logger hclog.Logger, h host.Host, p protocol.ID, opts ...ServerOption) *Server {
+func NewServer(
+	logger hclog.Logger,
+	connManager ConnectionManager,
+	connTag string,
+	p protocol.ID,
+	opts ...ServerOption,
+) *Server {
 	s := &Server{
-		host:     h,
-		protocol: p,
-		logger:   logger.Named("MOIRPC-Server"),
+		connManager: connManager,
+		connTag:     connTag,
+		protocol:    p,
+		logger:      logger.Named("MOIRPC-Server"),
 	}
 
 	for _, opt := range opts {
 		opt(s)
 	}
 
-	if h != nil {
-		h.SetStreamHandler(p, func(stream network.Stream) {
+	if connManager != nil {
+		connManager.SetupStreamHandler(p, connTag, func(stream network.Stream) {
 			sWrap := wrapStream(stream)
-			defer stream.Close()
+
+			defer func() {
+				if err := connManager.CloseStream(stream, s.connTag); err != nil {
+					s.logger.Error("Failed to close stream", "err", err)
+				}
+			}()
+
 			s.handle(sWrap)
 		})
 	}
@@ -226,11 +240,11 @@ func NewServer(logger hclog.Logger, h host.Host, p protocol.ID, opts ...ServerOp
 
 // ID returns the peer.ID of the host associated with this server.
 func (server *Server) ID() peer.ID {
-	if server.host == nil {
+	if server.connManager == nil {
 		return ""
 	}
 
-	return server.host.ID()
+	return server.connManager.GetHostPeerID()
 }
 
 func (server *Server) handle(s *streamWrap) {
