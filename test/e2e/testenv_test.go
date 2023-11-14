@@ -34,7 +34,11 @@ const (
 	StandAlone
 	PreExisting
 
-	DefaultBGStartTime      = 25 * time.Minute
+	InitialSyncTime         = 120 * time.Second
+	DefaultQueryTime        = 10 * time.Second
+	DefaultNodeStartTime    = 30 * time.Second
+	DefaultNodeStopTime     = 30 * time.Second
+	DefaultBGStartTime      = 10 * time.Minute
 	DefaultShutdownTimeout  = 10 * time.Minute
 	DefaultConfirmIxTimeout = 1 * time.Minute
 	DefaultAccountCount     = 2
@@ -73,6 +77,7 @@ type TestEnvironment struct {
 	bgClient    bg.Client
 	jsonRPCUrls []string
 	moiClient   *moiclient.Client
+	moiClients  []*moiclient.Client
 	accounts    []tests.AccountWithMnemonic
 	logger      hclog.Logger
 }
@@ -115,7 +120,7 @@ func (te *TestEnvironment) configureBattleGround() error {
 		CloudCfg:    bgConfig,
 		Network:     client.Cloud,
 		EndPoint:    te.bgConfig.rpcEndPoint,
-		DialTimeout: 2 * time.Second,
+		DialTimeout: 10 * time.Second,
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -128,30 +133,54 @@ func (te *TestEnvironment) configureBattleGround() error {
 	return nil
 }
 
-func (te *TestEnvironment) initializeMOIClient() {
-	for _, url := range te.jsonRPCUrls {
-		client, err := moiclient.NewClient(url)
-		te.Suite.NoError(err)
+func getMoiClient(t *testing.T, url string) (*moiclient.Client, error) {
+	t.Helper()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	client, err := moiclient.NewClient(url)
+	require.NoError(t, err)
 
-		// check if node is up
-		_, err = client.Inspect(ctx, &rpcargs.InspectArgs{})
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+
+	// check if node is up
+	_, err = client.Inspect(ctx, &rpcargs.InspectArgs{})
+	if err != nil {
+		cancel()
+
+		return nil, err
+	}
+
+	cancel()
+
+	return client, nil
+}
+
+func getMoiClients(t *testing.T, urls []string) []*moiclient.Client {
+	t.Helper()
+
+	clients := make([]*moiclient.Client, 0)
+
+	for _, url := range urls {
+		client, err := getMoiClient(t, url)
 		if err != nil {
-			cancel()
-
 			continue
 		}
 
-		cancel()
-		te.logger.Info("JSON RPC url used is ", "url", url)
-
-		te.moiClient = client
-
-		return
+		clients = append(clients, client)
 	}
 
-	commonError("unable to initialize moi client")
+	return clients
+}
+
+func (te *TestEnvironment) initializeMOIClient() {
+	clients := getMoiClients(te.T(), te.jsonRPCUrls)
+	if len(clients) == 0 {
+		commonError("unable to initialize moi client")
+	}
+
+	te.logger.Info("JSON RPC url used is ", "url", clients[0].URL())
+
+	te.moiClient = clients[0]
+	te.moiClients = clients
 }
 
 func (te *TestEnvironment) SetupSuite() {
@@ -217,7 +246,7 @@ func (te *TestEnvironment) SetupSuite() {
 	te.accounts, err = cmdcommon.GetAccountsWithMnemonic(DefaultAccountCount)
 	te.Suite.NoError(err)
 
-	te.logger.Info("registering accounts", te.accounts)
+	te.logger.Info("registering accounts on chain", te.accounts)
 
 	KMOIAssetID := common.AssetID("000000004cd973c4eb83cdb8870c0de209736270491b7acc99873da1eddced5826c3b548")
 

@@ -33,6 +33,10 @@ func NewClient(url string) (*Client, error) {
 	return &Client{url}, nil
 }
 
+func (c *Client) URL() string {
+	return c.url
+}
+
 type requestOp struct {
 	ids  []json.RawMessage
 	err  error
