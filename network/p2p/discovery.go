@@ -45,6 +45,10 @@ func (ds *DiscoveryService) advertise() {
 		_, err := ds.discovery.Advertise(ds.server.ctx, string(config.MOIProtocolStream))
 		if err != nil {
 			ds.server.logger.Error("Failed to advertise the rendezvous string to the discovery service", "err", err)
+
+			time.Sleep(5 * time.Second) // we should wait until network boots up
+
+			continue
 		}
 
 		select {
