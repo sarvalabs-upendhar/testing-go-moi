@@ -190,6 +190,8 @@ func TestHandlePeers(t *testing.T) {
 
 			go test.source.ds.handleDiscoveredPeers()
 
+			time.Sleep(50 * time.Millisecond)
+
 			test.source.ds.peerChan <- peer.AddrInfo{
 				ID:    test.destination.host.ID(),
 				Addrs: test.destination.host.Addrs(),
@@ -269,7 +271,7 @@ func TestHandlePeers_CheckConfig(t *testing.T) {
 
 			go servers[0].ds.handleDiscoveredPeers()
 
-			time.Sleep(50 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 
 			servers[0].ds.peerChan <- peer.AddrInfo{
 				ID:    servers[1].host.ID(),
