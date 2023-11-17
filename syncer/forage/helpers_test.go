@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+
 	"github.com/sarvalabs/go-moi/storage/db"
 
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
@@ -16,6 +18,7 @@ import (
 	"github.com/sarvalabs/go-moi/storage"
 
 	"github.com/hashicorp/go-hclog"
+	pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
@@ -829,7 +832,8 @@ func storeTesseractsInSession(t *testing.T, s *Syncer, tesseracts ...*common.Tes
 
 // Run this code in a separate goroutine to ensure that event verification is
 // performed without missing any events on the client.
-func broadcastTesseracts(t *testing.T, serverSyncer *Syncer, tesseracts ...*common.Tesseract) {
+// Tesseracts are sent sequentially to the client, appearing as if the server is sending them.
+func broadcastTesseracts(t *testing.T, clientSyncer, serverSyncer *Syncer, tesseracts ...*common.Tesseract) {
 	t.Helper()
 
 	go func() {
@@ -865,11 +869,12 @@ func broadcastTesseracts(t *testing.T, serverSyncer *Syncer, tesseracts ...*comm
 			rawData, err := msg.Bytes()
 			require.NoError(t, err)
 
-			err = serverSyncer.network.Broadcast(config.TesseractTopic, rawData)
+			err = clientSyncer.msgHandler(&pubsub.Message{
+				Message: &pb.Message{
+					Data: rawData,
+				},
+			})
 			require.NoError(t, err)
-
-			// introduce delay to send tesseracts in order
-			time.Sleep(10 * time.Millisecond)
 		}
 	}()
 }

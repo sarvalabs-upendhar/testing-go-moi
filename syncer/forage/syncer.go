@@ -391,7 +391,7 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 		"Processing new job",
 		"addr", job.address,
 		"current-height", job.currentHeight,
-		"expected-height", job.expectedHeight,
+		"expected-height", job.getExpectedHeight(),
 	)
 
 	defer func() {
@@ -413,7 +413,7 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 		s.metrics.captureActiveJobs(-1)
 	}()
 
-	if len(job.bestPeers) > 0 {
+	if job.bestPeerLen() > 0 {
 		bestPeer = job.chooseRandomBestPeer()
 	} else {
 		bestPeer, err = s.chooseBestSyncPeer(job)

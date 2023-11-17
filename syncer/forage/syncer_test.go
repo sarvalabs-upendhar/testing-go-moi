@@ -340,7 +340,7 @@ func TestSync_FromBroadcastedTesseract(t *testing.T) {
 
 	clientSyncer.agora = newMockAgora()
 	storeTesseractsInSession(t, clientSyncer, newTesseracts...)
-	broadcastTesseracts(t, serverSyncer, newTesseracts...)
+	broadcastTesseracts(t, clientSyncer, serverSyncer, newTesseracts...)
 
 	expectedEvents := SyncEvents{
 		bucketSync:    0,
@@ -605,7 +605,7 @@ func TestSync_ThroughExecution(t *testing.T) {
 	}
 
 	newTesseracts := generateTesseractsGridByMap(t, accountsToSync)
-	broadcastTesseracts(t, serverSyncer, newTesseracts...)
+	broadcastTesseracts(t, clientSyncer, serverSyncer, newTesseracts...)
 
 	expectedEvents := SyncEvents{
 		bucketSync:    0,
