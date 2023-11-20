@@ -34,6 +34,23 @@ func (g *slotGauge) highPressure() bool {
 	return g.read() > highPressureMark*g.max/100
 }
 
+// increaseWithinLimit increases the height of the gauge by the specified slots amount only if the increased height is
+// less than max. Returns true if the height is increased.
+func (g *slotGauge) increaseWithinLimit(slots uint64) (updated bool) {
+	for {
+		old := g.read()
+		newHeight := old + slots
+
+		if newHeight > g.max {
+			return false
+		}
+
+		if atomic.CompareAndSwapUint64(&g.total, old, newHeight) {
+			return true
+		}
+	}
+}
+
 func slotsRequired(ixns ...*common.Interaction) uint64 {
 	var (
 		slots = uint64(0)

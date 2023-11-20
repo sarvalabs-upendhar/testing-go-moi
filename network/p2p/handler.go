@@ -63,8 +63,8 @@ func NewSubHandler(
 // Start is a method of SubHandler that start the handler.
 // Initializes it TypeMux subscriptions and handler loops.
 func (eh *SubHandler) Start() {
-	// Subscribe the TypeMux to EnqueueInteractionEvent and NewPeerEvent events
-	eh.ixSub = eh.mux.Subscribe(utils.EnqueuedInteractionEvent{})
+	// Subscribe the TypeMux to AddedInteractionEvent and NewPeerEvent events
+	eh.ixSub = eh.mux.Subscribe(utils.AddedInteractionEvent{})
 	eh.newPeerSub = eh.mux.Subscribe(utils.NewPeerEvent{})
 
 	// Start the handler loops for new peers, broadcasting interactions
@@ -211,8 +211,8 @@ func (eh *SubHandler) sendDisconnectRequest(peer *Peer, err error) {
 func (eh *SubHandler) ixBroadcastLoop() {
 	// Read events from an ix channel
 	for obj := range eh.ixSub.Chan() {
-		// Assert event as a EnqueueInteractionEvent
-		if event, ok := obj.Data.(utils.EnqueuedInteractionEvent); ok {
+		// Assert event as a AddedInteractionEvent
+		if event, ok := obj.Data.(utils.AddedInteractionEvent); ok {
 			if err := eh.broadcastIXs(event.Ixs); err != nil {
 				eh.logger.Error("Failed to broadcast interactions", "err", err)
 			}

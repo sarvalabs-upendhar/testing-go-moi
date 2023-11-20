@@ -61,11 +61,6 @@ type AddedInteractionEvent struct {
 	Ixs common.Interactions
 }
 
-// EnqueuedInteractionEvent emits enqueued interactions in the account queue
-type EnqueuedInteractionEvent struct {
-	Ixs common.Interactions
-}
-
 // PromotedInteractionEvent emits promoted interactions in the account queue
 type PromotedInteractionEvent struct {
 	Ixs common.Interactions

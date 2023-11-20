@@ -34,11 +34,7 @@ var (
 )
 
 type promoteRequest struct {
-	account map[common.Address]interface{}
-}
-
-type enqueueRequest struct {
-	ixs common.Interactions
+	address common.Address
 }
 
 type stateManager interface {
@@ -74,7 +70,6 @@ type IxPool struct {
 	gauge        slotGauge // gauge for measuring pool capacity
 	pruneCh      chan struct{}
 	metrics      *Metrics
-	enqueueReqCh chan enqueueRequest
 	promoteReqCh chan promoteRequest
 	verifier     func(data, signature, pubBytes []byte) (bool, error)
 }
@@ -108,7 +103,6 @@ func NewIxPool(
 		pruneCh:      make(chan struct{}),
 		metrics:      metrics,
 		logger:       logger.Named("Ix-Pool"),
-		enqueueReqCh: make(chan enqueueRequest),
 		promoteReqCh: make(chan promoteRequest),
 		verifier:     verifier,
 	}
@@ -128,123 +122,144 @@ func (i *IxPool) signalPruning() {
 	}
 }
 
-// isSlotAvailable checks if there are sufficient slots in ixpool for ixn to be added
-func (i *IxPool) isSlotAvailable(ix *common.Interaction) bool {
-	return slotsRequired(ix) <= i.gauge.max-i.gauge.read()
+// getOrCreateAccount fetches the account of the sender if it exists;
+// otherwise, it creates a new account and returns it.
+func (i *IxPool) getOrCreateAccount(ix *common.Interaction) *account {
+	if acc := i.accounts.get(ix.Sender()); acc != nil {
+		return acc
+	}
+
+	return i.createAccountOnce(ix.Sender(), ix.Nonce())
 }
 
-func (i *IxPool) checkIx(ix *common.Interaction) error {
+// validateAndEnqueueIx validates the Interaction, performs checks such as assessing pressure in the gauge,
+// and signals for pruning. If the Interaction is a replacement, it is first attempted to be replaced in the
+// enqueued queue; if unsuccessful, it is replaced in the promoted queue. Gauge adjustments are made during replacement.
+// Finally, if the Interaction can be promoted, it is promoted.
+func (i *IxPool) validateAndEnqueueIx(ix *common.Interaction) error {
 	// validate incoming ix
 	if err := i.validateIx(ix); err != nil {
 		return err
 	}
 
+	acc := i.getOrCreateAccount(ix)
+
+	acc.promoted.lock(true)
+	acc.enqueued.lock(true)
+	acc.nonceToIX.lock()
+
+	defer func() {
+		acc.nonceToIX.unlock()
+		acc.enqueued.unlock()
+		acc.promoted.unlock()
+	}()
+
 	// checks if the current gauge size has reached the pressure mark and signals for account pruning if it has
 	if i.gauge.highPressure() {
 		i.signalPruning()
+
+		if ix.Nonce() > acc.getNonce() {
+			return common.ErrRejectFutureIx // reject this ix as it will create nonce hole in enqueue and gets pruned
+		}
 	}
 
-	if !i.isSlotAvailable(ix) {
-		return common.ErrIXPoolOverFlow
+	oldIxWithSameNonce := acc.nonceToIX.get(ix.Nonce())
+	if oldIxWithSameNonce != nil {
+		if oldIxWithSameNonce.Hash() == ix.Hash() {
+			return common.ErrAlreadyKnown
+		}
+
+		// TODO thrown an error if new interaction gas price is lower than equal to older interaction gas price
+		// https://github.com/sarvalabs/go-moi/issues/695
+		if oldIxWithSameNonce.FuelPrice().Cmp(ix.FuelPrice()) > 0 {
+			return common.ErrReplacementUnderpriced
+		}
+	} else if ix.Nonce() < acc.getNonce() {
+		return ErrNonceTooLow
 	}
 
-	// TODO: check for overflow
+	slotsAllocated := slotsRequired(ix)
 
-	// check if already known
-	if _, ok := i.allIxs.get(ix.Hash()); ok {
-		return common.ErrAlreadyKnown
+	var slotsFreed uint64
+
+	if oldIxWithSameNonce != nil {
+		slotsFreed = slotsRequired(oldIxWithSameNonce)
 	}
 
-	i.allIxs.add(ix)
+	var slotsIncreased uint64
+	if slotsAllocated > slotsFreed {
+		slotsIncreased = slotsAllocated - slotsFreed
+		if !i.gauge.increaseWithinLimit(slotsIncreased) {
+			return common.ErrIXPoolOverFlow
+		}
+	}
+
+	if ok := i.allIxs.add(ix); !ok {
+		if slotsIncreased > 0 {
+			i.gauge.decrease(slotsIncreased)
+		}
+
+		return ErrAlreadyKnown
+	}
+
+	if slotsFreed > slotsAllocated {
+		i.gauge.decrease(slotsFreed - slotsAllocated)
+	}
+
+	if oldIxWithSameNonce != nil {
+		i.allIxs.remove(oldIxWithSameNonce)
+
+		oldIxSize, _ := oldIxWithSameNonce.Size()
+		i.metrics.captureIxPoolSize(-1 * float64(oldIxSize))
+	}
+
+	ixSize, _ := ix.Size()
+	i.metrics.captureIxPoolSize(float64(ixSize))
+
+	acc.enqueue(ix, oldIxWithSameNonce != nil)
 
 	// emit added interactions event
 	if err := i.postAddedInteractionEvent(common.Interactions{ix}); err != nil {
 		i.logger.Error("Error sending interaction added event", "err", err)
 	}
 
-	// initialize account for this address once
-	if !i.accounts.exists(ix.Sender()) {
-		i.createAccountOnce(ix.Sender(), ix.Nonce())
-	}
+	go i.invokePromotion(ix.Sender(), ix.Nonce() <= acc.getNonce())
 
 	return nil
 }
 
 func (i *IxPool) AddInteractions(ixs common.Interactions) []error {
-	newIxs := make(common.Interactions, 0, len(ixs))
 	errs := make([]error, 0, len(ixs))
 
 	for _, ix := range ixs {
-		if err := i.checkIx(ix); err != nil {
+		if err := i.validateAndEnqueueIx(ix); err != nil {
 			errs = append(errs, err)
-		} else {
-			newIxs = append(newIxs, ix)
 		}
 	}
-
-	if len(newIxs) == 0 {
-		return errs
-	}
-
-	i.enqueueReqCh <- enqueueRequest{ixs: newIxs}
 
 	return errs
 }
 
-func (i *IxPool) handleEnqueueRequest(req enqueueRequest) {
-	dirtyAccounts := make(map[common.Address]interface{}, 0)
-
-	for _, ixn := range req.ixs {
-		senderAcc := i.accounts.get(ixn.Sender())
-		if senderAcc == nil {
-			i.logger.Error("Queue for account is nil", "sender", ixn.Sender(), "interaction", ixn)
+func (i *IxPool) invokePromotion(address common.Address, callPromote bool) {
+	if callPromote {
+		select {
+		case <-i.ctx.Done():
+		case i.promoteReqCh <- promoteRequest{address: address}: // BLOCKING
 		}
-
-		if err := senderAcc.enqueue(ixn); err != nil {
-			i.allIxs.remove([]*common.Interaction{ixn})
-
-			continue
-		}
-
-		// emit enqueued interactions event
-		if err := i.postEnqueueInteractionEvent(common.Interactions{ixn}); err != nil {
-			i.logger.Error("Error sending interaction enqueued event", "err", err)
-		}
-
-		// increase gauge as we successfully enqueued ixn
-		i.gauge.increase(slotsRequired(ixn))
-
-		if ixSize, err := ixn.Size(); err == nil {
-			i.metrics.captureIxPoolSize(float64(ixSize))
-		}
-
-		if ixn.Nonce() > senderAcc.getNonce() {
-			continue
-		}
-
-		dirtyAccounts[ixn.Sender()] = nil
 	}
-
-	if len(dirtyAccounts) == 0 {
-		return
-	}
-
-	i.promoteReqCh <- promoteRequest{account: dirtyAccounts}
 }
 
 func (i *IxPool) handlePromoteRequest(req promoteRequest) {
-	for addr := range req.account {
-		account := i.accounts.get(addr)
+	account := i.accounts.get(req.address)
 
-		// promote enqueued ixs
-		promoted, promotedIxns := account.promote()
-		i.metrics.capturePendingIxs(float64(promoted))
+	// promote enqueued ixs
+	promoted, promotedIxns := account.promote()
+	i.metrics.capturePendingIxs(float64(promoted))
 
-		if len(promotedIxns) > 0 {
-			// emit promoted interactions event
-			if err := i.postPromotedInteractionEvent(promotedIxns); err != nil {
-				i.logger.Error("Error sending interaction promoted event", "err", err)
-			}
+	if len(promotedIxns) > 0 {
+		// emit promoted interactions event
+		if err := i.postPromotedInteractionEvent(promotedIxns); err != nil {
+			i.logger.Error("Error sending interaction promoted event", "err", err)
 		}
 	}
 }
@@ -257,10 +272,9 @@ func (i *IxPool) createAccountOnce(newAddr common.Address, nonce uint64) *accoun
 	if err != nil {
 		stateNonce = nonce
 	}
-	// initialize the account
-	account := i.accounts.initOnce(newAddr, stateNonce)
 
-	return account
+	// initialize the account
+	return i.accounts.initOnce(newAddr, stateNonce)
 }
 
 func (i *IxPool) ResetWithHeaders(ts *common.Tesseract) {
@@ -272,7 +286,7 @@ func (i *IxPool) ResetWithHeaders(ts *common.Tesseract) {
 func (i *IxPool) resetWithInteractions(ixs common.Interactions) {
 	updatedNonces := make(map[common.Address]uint64)
 	// cleanup the lookup queue
-	i.allIxs.remove(ixs)
+	i.allIxs.remove(ixs...)
 
 	for _, ix := range ixs {
 		from := ix.Sender()
@@ -312,18 +326,26 @@ func (i *IxPool) resetAccounts(nonces map[common.Address]uint64) {
 func (i *IxPool) resetAccount(addr common.Address, nonce uint64) {
 	cleanup := func(ixns common.Interactions) {
 		// update pool state
-		i.allIxs.remove(ixns)
+		i.allIxs.remove(ixns...)
 		i.gauge.decrease(slotsRequired(ixns...))
 	}
 
 	account := i.accounts.get(addr)
 
-	// lock promoted
+	// lock promoted,enqueued,nonceToIx
 	account.promoted.lock(true)
-	defer account.promoted.unlock()
+	account.enqueued.lock(true)
+	account.nonceToIX.lock()
+
+	defer func() {
+		account.nonceToIX.unlock()
+		account.enqueued.unlock()
+		account.promoted.unlock()
+	}()
 
 	// prune promoted
 	pruned := account.promoted.prune(nonce)
+	account.nonceToIX.remove(pruned...)
 
 	if len(pruned) > 0 {
 		cleanup(pruned)
@@ -341,15 +363,6 @@ func (i *IxPool) resetAccount(addr common.Address, nonce uint64) {
 		account.resetWaitTimeAndCounter()
 	}
 
-	// lock enqueued
-	account.enqueued.lock(true)
-
-	defer func() {
-		// update accountsMap
-		// i.accounts.remove(addr) FIXME: Issue(https://github.com/sarvalabs/go-moi/issues/256)
-		account.enqueued.unlock()
-	}()
-
 	i.metrics.capturePendingIxs(float64(-1 * len(pruned)))
 
 	if ixSize, err := GetIxsSize(pruned); err == nil {
@@ -363,6 +376,7 @@ func (i *IxPool) resetAccount(addr common.Address, nonce uint64) {
 
 	// prune enqueued
 	pruned = account.enqueued.prune(nonce)
+	account.nonceToIX.remove(pruned...)
 
 	if len(pruned) > 0 {
 		cleanup(pruned)
@@ -380,11 +394,9 @@ func (i *IxPool) resetAccount(addr common.Address, nonce uint64) {
 	// update next nonce
 	account.setNonce(nonce)
 
-	if first := account.enqueued.peek(); first != nil &&
-		first.Nonce() == nonce {
+	if first := account.enqueued.peek(); first != nil && first.Nonce() == nonce {
 		// first enqueued ix is expected -> signal promotion
-		req := promoteRequest{account: make(map[common.Address]interface{})}
-		req.account[addr] = nil
+		req := promoteRequest{address: addr}
 		i.promoteReqCh <- req
 	}
 }
@@ -410,6 +422,9 @@ func (i *IxPool) Pop(ix *common.Interaction) {
 	account.promoted.lock(true)
 	defer account.promoted.unlock()
 
+	account.nonceToIX.lock()
+	defer account.nonceToIX.unlock()
+
 	// pop the top most promoted ix
 	/*
 		TODO://Need to check whether to move ixs
@@ -424,6 +439,8 @@ func (i *IxPool) Pop(ix *common.Interaction) {
 	if ix != nil {
 		i.gauge.decrease(slotsRequired(ix))
 	}
+
+	account.nonceToIX.remove(ix)
 }
 
 func (i *IxPool) Drop(ix *common.Interaction) {
@@ -434,8 +451,10 @@ func (i *IxPool) Drop(ix *common.Interaction) {
 		// lock enqueued and promoted
 		account.enqueued.lock(true)
 		account.promoted.lock(true)
+		account.nonceToIX.lock()
 
 		defer func() {
+			account.nonceToIX.unlock()
 			account.enqueued.unlock()
 			account.promoted.unlock()
 		}()
@@ -444,7 +463,7 @@ func (i *IxPool) Drop(ix *common.Interaction) {
 
 		// remove the dropped ixs from the allIxs lookup map and decreases gauge
 		cleanup := func(ixs common.Interactions) {
-			i.allIxs.remove(ixs)
+			i.allIxs.remove(ixs...)
 			i.gauge.decrease(slotsRequired(ixs...))
 
 			noOfDroppedIxs += len(ixs)
@@ -452,6 +471,9 @@ func (i *IxPool) Drop(ix *common.Interaction) {
 
 		nonce := ix.Nonce()
 		account.setNonce(nonce)
+
+		// reset nonce to ix
+		account.nonceToIX.reset()
 
 		// drop promoted
 		dropped := account.promoted.clear()
@@ -724,6 +746,9 @@ func (i *IxPool) removeNonceHoleAccounts() {
 			acc.enqueued.lock(true)
 			defer acc.enqueued.unlock()
 
+			acc.nonceToIX.lock()
+			defer acc.nonceToIX.unlock()
+
 			ixn := acc.enqueued.peek()
 			if ixn == nil {
 				return true
@@ -738,7 +763,8 @@ func (i *IxPool) removeNonceHoleAccounts() {
 
 			dropped := acc.enqueued.clear()
 
-			i.allIxs.remove(dropped)
+			acc.nonceToIX.remove(dropped...)
+			i.allIxs.remove(dropped...)
 			i.gauge.decrease(slotsRequired(dropped...))
 
 			return true
@@ -763,8 +789,6 @@ func (i *IxPool) handleRequests() {
 		select {
 		case <-i.ctx.Done():
 			return
-		case req := <-i.enqueueReqCh:
-			go i.handleEnqueueRequest(req)
 		case req := <-i.promoteReqCh:
 			go i.handlePromoteRequest(req)
 		}
@@ -793,10 +817,6 @@ func (i *IxPool) post(ev interface{}) error {
 
 func (i *IxPool) postAddedInteractionEvent(ixns common.Interactions) error {
 	return i.post(utils.AddedInteractionEvent{Ixs: ixns})
-}
-
-func (i *IxPool) postEnqueueInteractionEvent(ixns common.Interactions) error {
-	return i.post(utils.EnqueuedInteractionEvent{Ixs: ixns})
 }
 
 func (i *IxPool) postPromotedInteractionEvent(ixns common.Interactions) error {

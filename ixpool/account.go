@@ -20,9 +20,10 @@ import (
 // a promoteRequest is signaled for this account
 // indicating the account's enqueued Interaction(s)
 // are ready to be moved to the promoted queue.
+// nonce to ix map is helpful in replacement of interaction
 type account struct {
-	init               sync.Once
 	enqueued, promoted *accountQueue
+	nonceToIX          *nonceToIXMap
 	requestTime        time.Time
 	waitTime           time.Time
 	delayCounter       int32
@@ -71,26 +72,40 @@ func (a *account) resetWaitTimeAndCounter() {
 	a.waitTime = time.Now()
 }
 
-// enqueue attempts to push the Interaction onto the enqueued queue.
-func (a *account) enqueue(ix *common.Interaction) error {
-	a.enqueued.lock(true)
-	defer a.enqueued.unlock()
-
-	// only accept low nonce if
-	// ix was demoted
-	if ix.Nonce() < a.getNonce() {
-		return ErrNonceTooLow
-	}
-
+// "enqueue" tries to add the Interaction to the enqueued queue unless it is a replacement.
+// In the case of a replacement, it first attempts to replace in the enqueued queue,
+// and if that fails, it replaces it in the promoted queue.
+func (a *account) enqueue(ix *common.Interaction, replace bool) {
 	// check the counter and reset if required
 	if a.getDelayCounter() >= MaxWaitCounter && time.Now().After(a.getWaitTime()) {
 		a.resetWaitTimeAndCounter()
 	}
 
-	// enqueue ix
-	a.enqueued.push(ix)
+	replaceInQueue := func(queue minNonceQueue) bool {
+		for i, x := range queue {
+			if x.Nonce() == ix.Nonce() {
+				queue[i] = ix // replace
 
-	return nil
+				return true
+			}
+		}
+
+		return false
+	}
+
+	a.nonceToIX.set(ix)
+
+	if !replace {
+		// enqueue ix
+		a.enqueued.push(ix)
+
+		return
+	}
+
+	if !replaceInQueue(a.enqueued.queue) { // first, try to replace in enqueued
+		// then try to replace in promoted
+		replaceInQueue(a.promoted.queue)
+	}
 }
 
 // Promote moves eligible Interactions from enqueued to promoted queue.
@@ -150,31 +165,20 @@ func (a *account) promote() (uint64, common.Interactions) {
 // Each account (value) is bound to one address (key).
 type accountsMap struct {
 	sync.Map
-	count uint64
 }
 
 // Initializes an account for the given address.
 func (m *accountsMap) initOnce(addr common.Address, nonce uint64) *account {
-	a, _ := m.LoadOrStore(addr, &account{})
-	newAccount := a.(*account) //nolint:forcetypeassert
-	// run only once
-	newAccount.init.Do(func() {
-		// create queues
-		newAccount.enqueued = newAccountQueue()
-		newAccount.promoted = newAccountQueue()
-
-		// set the nonce
-		newAccount.setNonce(nonce)
-
-		// set the waitTime to current time
-		newAccount.waitTime = time.Now()
-		newAccount.requestTime = time.Now()
-
-		// update global count
-		atomic.AddUint64(&m.count, 1)
+	a, _ := m.LoadOrStore(addr, &account{
+		enqueued:    newAccountQueue(),
+		promoted:    newAccountQueue(),
+		nonceToIX:   newNonceToIXMap(),
+		nextNonce:   nonce,
+		waitTime:    time.Now(),
+		requestTime: time.Now(),
 	})
 
-	return newAccount
+	return a.(*account) //nolint:forcetypeassert
 }
 
 // exists checks if an account exists within the map.
@@ -337,4 +341,42 @@ func (m *accountsMap) allIxs(includeEnqueued bool) (
 	})
 
 	return allPromoted, allEnqueued
+}
+
+// nonceToIXMap stores nonce to ix key value pairs
+type nonceToIXMap struct {
+	mapping map[uint64]*common.Interaction
+	mutex   sync.Mutex
+}
+
+func newNonceToIXMap() *nonceToIXMap {
+	return &nonceToIXMap{
+		mapping: make(map[uint64]*common.Interaction),
+	}
+}
+
+func (m *nonceToIXMap) lock() {
+	m.mutex.Lock()
+}
+
+func (m *nonceToIXMap) unlock() {
+	m.mutex.Unlock()
+}
+
+func (m *nonceToIXMap) get(nonce uint64) *common.Interaction {
+	return m.mapping[nonce]
+}
+
+func (m *nonceToIXMap) set(ix *common.Interaction) {
+	m.mapping[ix.Nonce()] = ix
+}
+
+func (m *nonceToIXMap) reset() {
+	m.mapping = make(map[uint64]*common.Interaction)
+}
+
+func (m *nonceToIXMap) remove(ixns ...*common.Interaction) {
+	for _, ix := range ixns {
+		delete(m.mapping, ix.Nonce())
+	}
 }
