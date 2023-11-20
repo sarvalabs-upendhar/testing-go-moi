@@ -931,7 +931,7 @@ func TestSyncJobFromCanonicalInfo(t *testing.T) {
 			require.Equal(t, test.expectedJob.expectedHeight, syncJob.expectedHeight)
 			require.Equal(t, test.expectedJob.snapDownloaded, syncJob.snapDownloaded)
 			require.Equal(t, test.expectedJob.mode, syncJob.mode)
-			require.Equal(t, test.expectedJob.jobState, syncJob.jobState)
+			require.Equal(t, Pending, syncJob.jobState)
 			require.True(t, test.expectedJob.lastModifiedAt.Equal(syncJob.lastModifiedAt))
 			require.NotNil(t, syncJob.bestPeers)
 			require.NotNil(t, syncJob.tesseractQueue)

@@ -180,6 +180,9 @@ func SyncJobFromCanonicalInfo(
 		return nil, err
 	}
 
+	// Ensure the job state is set to 'pending' to allow proper creation and progress tracking.
+	// If the state is mistakenly stored as 'active',
+	// workers may misinterpret its status and the job won't make progress.
 	return &SyncJob{
 		db:              db,
 		logger:          logger.Named("Sync-Job"),
@@ -187,7 +190,7 @@ func SyncJobFromCanonicalInfo(
 		snapDownloaded:  data.SnapshotDownloaded,
 		mode:            data.Mode,
 		expectedHeight:  data.ExpectedHeight,
-		jobState:        JobState(data.State),
+		jobState:        Pending,
 		lastModifiedAt:  *modifiedTime,
 		tesseractQueue:  NewTesseractQueue(),
 		tesseractSignal: make(chan struct{}, 1),
