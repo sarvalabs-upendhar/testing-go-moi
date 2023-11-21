@@ -91,6 +91,8 @@ type NetworkConfig struct {
 	OutboundConnLimit  int64
 	MinimumConnections int
 	MaximumConnections int
+	AllowIPv6Addresses bool
+	DisablePrivateIP   bool
 	DiscoveryInterval  time.Duration
 }
 
@@ -129,6 +131,8 @@ func DefaultDevnetConfig(path string) *Config {
 			OutboundConnLimit:  DefaultOutboundConnLimit,
 			MinimumConnections: DefaultMinimumConnections,
 			MaximumConnections: DefaultMaximumConnections,
+			AllowIPv6Addresses: false,
+			DisablePrivateIP:   false,
 			DiscoveryInterval:  DefaultDiscoveryInterval,
 		},
 		Chain: &ChainConfig{

@@ -2,7 +2,6 @@ package p2p
 
 import (
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
@@ -634,12 +633,7 @@ func TestGetPeers(t *testing.T) {
 			name:   "Returns a slice of Krama ID's connected to a client",
 			server: servers[1],
 			testFn: func() {
-				peersList := []*Peer{
-					getPeer(t, servers[1], servers[2]),
-					getPeer(t, servers[1], servers[3]),
-				}
-
-				setServerPeers(t, servers[1], peersList)
+				setServerPeers(t, servers[1], servers[2].id, servers[3].id)
 			},
 			expectedList: []id.KramaID{servers[2].id, servers[3].id},
 		},
@@ -746,11 +740,10 @@ func TestConnectAndRegisterPeer_Connection_Failure(t *testing.T) {
 }
 
 func TestConnectAndRegisterPeer_Connection_Limit(t *testing.T) {
-	bootNodes := getBootstrapNodes(t, 2)
 	params := getParamsToCreateMultipleServers(
 		t,
 		4,
-		bootNodes,
+		nil,
 		1,
 		8,
 		false,
@@ -813,11 +806,13 @@ func TestConnectAndRegisterPeer_Connection_Limit(t *testing.T) {
 
 			info := getPeerInfo(t, test.destination)
 
+			test.source.AddPeerInfo(info)
+
 			err := test.source.ConnManager.ConnectAndRegisterPeer(*info, test.destination.id, test.rtt)
 
 			if test.expectedErr != nil {
 				require.Error(t, err)
-				require.True(t, strings.Contains(err.Error(), test.expectedErr.Error()))
+				require.Equal(t, test.expectedErr, err)
 
 				return
 			}
@@ -1014,20 +1009,20 @@ func TestRetrieveRTTAndRefreshSenatus(t *testing.T) {
 				nodeInfo := &senatus.NodeMetaInfo{
 					KramaID: dest.id,
 					Addrs:   utils.MultiAddrToString(servers[0].host.Addrs()...),
-					RTT:     150,
+					RTT:     900,
 				}
 
 				err := source.Senatus.AddNewPeerWithPeerID(dest.host.ID(), nodeInfo)
 				require.NoError(t, err)
 			},
-			expectedRTT:   50,
+			expectedRTT:   800,
 			expectedError: nil,
 		},
 		{
 			name:          "Peer info not present in senatus",
 			source:        servers[2],
 			destination:   servers[3],
-			expectedRTT:   50,
+			expectedRTT:   800,
 			expectedError: nil,
 		},
 		{
@@ -1055,11 +1050,13 @@ func TestRetrieveRTTAndRefreshSenatus(t *testing.T) {
 
 			if test.expectedError != nil {
 				require.Error(t, test.expectedError)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, test.destination.id, kramaID)
-				require.True(t, rtt <= test.expectedRTT)
+
+				return
 			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.destination.id, kramaID)
+			require.True(t, rtt <= test.expectedRTT)
 		})
 	}
 }

@@ -50,6 +50,8 @@ func DefaultBabylonConfig(path string) *Config {
 			OutboundConnLimit:  config.DefaultOutboundConnLimit,
 			MinimumConnections: config.DefaultMinimumConnections,
 			MaximumConnections: config.DefaultMaximumConnections,
+			AllowIPv6Addresses: false,
+			DisablePrivateIP:   true,
 			DiscoveryInterval:  config.DefaultDiscoveryInterval,
 			JSONRPCAddr:        "0.0.0.0:" + strconv.Itoa(config.DefaultJSONRPCPort),
 			CorsAllowedOrigins: []string{"*"},
@@ -119,6 +121,8 @@ func DefaultDevnetConfig(path string) *Config {
 			OutboundConnLimit:  config.DefaultOutboundConnLimit,
 			MinimumConnections: config.DefaultMinimumConnections,
 			MaximumConnections: config.DefaultMaximumConnections,
+			AllowIPv6Addresses: false,
+			DisablePrivateIP:   false,
 			DiscoveryInterval:  config.DefaultDiscoveryInterval,
 			JSONRPCAddr:        "0.0.0.0:" + strconv.Itoa(config.DefaultJSONRPCPort),
 			CorsAllowedOrigins: []string{"*"},
@@ -184,6 +188,8 @@ type NetworkConfig struct {
 	OutboundConnLimit  int64         `json:"outbound_conn_limit"`
 	MinimumConnections int           `json:"minimum_connections"`
 	MaximumConnections int           `json:"maximum_connections"`
+	AllowIPv6Addresses bool          `json:"allow_ipv6_addresses"`
+	DisablePrivateIP   bool          `json:"disable_private_ip"`
 	DiscoveryInterval  time.Duration `json:"discovery_interval"`
 }
 

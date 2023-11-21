@@ -111,15 +111,22 @@ func (ds *DiscoveryService) handleDiscoveredPeers() {
 	for {
 		select {
 		case peerInfo := <-ds.peerChan:
+			// Skip the iteration if the peer address doesn't exist
+			if len(peerInfo.Addrs) == 0 {
+				continue
+			}
+
 			// Skip iteration if the peer addresses points to self
 			if peerInfo.ID == ds.server.host.ID() {
 				continue
 			}
 
+			// Skip iteration if the peer already exists in the peer set
 			if ds.server.Peers.ContainsPeer(peerInfo.ID) {
 				continue
 			}
 
+			// Skip the iteration if the peer is under cool down period
 			if ds.server.ConnManager.coolDownCache.Has(peerInfo.ID) {
 				continue
 			}

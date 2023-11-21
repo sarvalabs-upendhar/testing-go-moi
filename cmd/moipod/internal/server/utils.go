@@ -208,6 +208,10 @@ func (p *Params) applyFlags(cmd *cobra.Command, path string) error {
 		p.rawCfg.LogFilePath = LogDirPath
 	}
 
+	if isAllowIPv6AddressesSet(cmd) {
+		p.rawCfg.Network.AllowIPv6Addresses = AllowIPv6Addresses
+	}
+
 	if isDiscoveryIntervalSet(cmd) {
 		p.rawCfg.Network.DiscoveryInterval = DiscoveryInterval
 	}
@@ -258,6 +262,8 @@ func (p *Params) getNetworkConfig() *config.NetworkConfig {
 		OutboundConnLimit:  p.rawCfg.Network.OutboundConnLimit,
 		MinimumConnections: p.rawCfg.Network.MinimumConnections,
 		MaximumConnections: p.rawCfg.Network.MaximumConnections,
+		AllowIPv6Addresses: p.rawCfg.Network.AllowIPv6Addresses,
+		DisablePrivateIP:   p.rawCfg.Network.DisablePrivateIP,
 		DiscoveryInterval:  p.rawCfg.Network.DiscoveryInterval,
 	}
 }
@@ -394,6 +400,10 @@ func isConfigPathSet(cmd *cobra.Command) bool {
 
 func isLogPathSet(cmd *cobra.Command) bool {
 	return cmd.Flags().Changed(LogDirPathFlag)
+}
+
+func isAllowIPv6AddressesSet(cmd *cobra.Command) bool {
+	return cmd.Flags().Changed(allowIPv6AddressesFlag)
 }
 
 func isDiscoveryIntervalSet(cmd *cobra.Command) bool {

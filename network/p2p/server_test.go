@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	maddr "github.com/multiformats/go-multiaddr"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -448,4 +450,45 @@ func TestSendHelloMessage_CheckMsgOnTopic(t *testing.T) {
 
 	err := waitForResponse(ctx, response)
 	require.NoError(t, err)
+}
+
+func TestFilterIPv4Addresses(t *testing.T) {
+	testcases := []struct {
+		name           string
+		addresses      []string
+		expectedResult []string
+	}{
+		{
+			name:           "filter valid ip4 addresses",
+			addresses:      []string{"/ip4/192.168.1.1/tcp/80", "/ip6/fe80::1/udp/53", "/ip4/1.1.1.1/udp/53"},
+			expectedResult: []string{"/ip4/192.168.1.1/tcp/80", "/ip4/1.1.1.1/udp/53"},
+		},
+		{
+			name:           "no valid ip4 addresses to filter",
+			addresses:      []string{"/ip6/::1/tcp/80", "/ip6/fe80::1/udp/53"},
+			expectedResult: []string{},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			multiaddrs := make([]maddr.Multiaddr, len(test.addresses))
+
+			for i, addrStr := range test.addresses {
+				multiaddr, err := maddr.NewMultiaddr(addrStr)
+				require.NoError(t, err)
+
+				multiaddrs[i] = multiaddr
+			}
+
+			filteredAddrs := filterIPV4Addresses(multiaddrs)
+			filteredAddrsInStr := make([]string, len(filteredAddrs))
+
+			for i, addr := range filteredAddrs {
+				filteredAddrsInStr[i] = addr.String()
+			}
+
+			require.ElementsMatch(t, test.expectedResult, filteredAddrsInStr)
+		})
+	}
 }
