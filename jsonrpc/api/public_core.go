@@ -167,7 +167,7 @@ func (p *PublicCoreAPI) GetRegistry(args *rpcargs.QueryArgs) ([]rpcargs.RPCRegis
 		return nil, err
 	}
 
-	registry, err := p.sm.GetRegistry(args.Address, ts.StateHash())
+	registry, err := p.sm.GetRegistry(ts.Address(), ts.StateHash())
 	if err != nil {
 		return nil, err
 	}

@@ -326,11 +326,27 @@ func GetRandomAssetInfo(t *testing.T, addr common.Address) *common.AssetDescript
 func CreateTestAsset(t *testing.T, address common.Address) (common.AssetID, *common.AssetDescriptor) {
 	t.Helper()
 
-	asset := GetRandomAssetInfo(t, RandomAddress(t))
+	asset := GetRandomAssetInfo(t, address)
 
 	assetID := common.NewAssetIDv0(asset.IsLogical, asset.IsStateFul, asset.Dimension, asset.Standard, address)
 
 	return assetID, asset
+}
+
+func CreateTestAssets(t *testing.T, count int) ([]common.AssetID, []*common.AssetDescriptor) {
+	t.Helper()
+
+	assetIDs := make([]common.AssetID, 0, count)
+	assetDescriptors := make([]*common.AssetDescriptor, 0, count)
+
+	for i := 0; i < count; i++ {
+		assetID, assetDescriptor := CreateTestAsset(t, RandomAddress(t))
+
+		assetIDs = append(assetIDs, assetID)
+		assetDescriptors = append(assetDescriptors, assetDescriptor)
+	}
+
+	return assetIDs, assetDescriptors
 }
 
 func GetRandomNumbers(t *testing.T, max int, count int) []*big.Int {

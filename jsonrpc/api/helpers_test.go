@@ -9,6 +9,7 @@ import (
 	"errors"
 	"math/big"
 	"math/rand"
+	"sort"
 	"strconv"
 	"sync/atomic"
 	"testing"
@@ -210,11 +211,40 @@ type MockStateManager struct {
 	logicStorage   map[string]map[string]string // first key denotes logic id, second key denotes storage key
 	accMetaInfo    map[common.Address]*common.AccountMetaInfo
 	logicIDs       map[common.Address][]common.LogicID
+	registry       map[common.Address]map[string][]byte
+}
+
+func NewMockStateManager(t *testing.T) *MockStateManager {
+	t.Helper()
+
+	mockState := new(MockStateManager)
+	mockState.assetRegistry = make(map[common.AssetID]*common.AssetDescriptor)
+	mockState.balances = make(map[common.Address]*state.BalanceObject)
+	mockState.storage = make(map[common.Hash][]byte)
+	mockState.accounts = make(map[common.Address]*common.Account)
+	mockState.context = make(map[common.Address]*Context)
+	mockState.logicManifests = make(map[string][]byte)
+	mockState.logicStorage = make(map[string]map[string]string, 0)
+	mockState.accMetaInfo = make(map[common.Address]*common.AccountMetaInfo)
+	mockState.logicIDs = make(map[common.Address][]common.LogicID)
+	mockState.registry = make(map[common.Address]map[string][]byte)
+
+	return mockState
+}
+
+func (s *MockStateManager) setRegistry(t *testing.T, addr common.Address, registry map[string][]byte) {
+	t.Helper()
+
+	s.registry[addr] = registry
 }
 
 func (s *MockStateManager) GetRegistry(addr common.Address, stateHash common.Hash) (map[string][]byte, error) {
-	// TODO implement me
-	panic("implement me")
+	registry, ok := s.registry[addr]
+	if !ok {
+		return nil, errors.New("registry not found")
+	}
+
+	return registry, nil
 }
 
 func (s *MockStateManager) GetAssetInfo(
@@ -231,23 +261,6 @@ func (s *MockStateManager) GetAssetInfo(
 
 func (s *MockStateManager) addAsset(assetID common.AssetID, descriptor *common.AssetDescriptor) {
 	s.assetRegistry[assetID] = descriptor
-}
-
-func NewMockStateManager(t *testing.T) *MockStateManager {
-	t.Helper()
-
-	mockState := new(MockStateManager)
-	mockState.assetRegistry = make(map[common.AssetID]*common.AssetDescriptor)
-	mockState.balances = make(map[common.Address]*state.BalanceObject)
-	mockState.storage = make(map[common.Hash][]byte)
-	mockState.accounts = make(map[common.Address]*common.Account)
-	mockState.context = make(map[common.Address]*Context)
-	mockState.logicManifests = make(map[string][]byte)
-	mockState.logicStorage = make(map[string]map[string]string, 0)
-	mockState.accMetaInfo = make(map[common.Address]*common.AccountMetaInfo)
-	mockState.logicIDs = make(map[common.Address][]common.LogicID)
-
-	return mockState
 }
 
 func (s *MockStateManager) GetLogicManifest(logicID common.LogicID, stateHash common.Hash) ([]byte, error) {
@@ -272,7 +285,7 @@ func (s *MockStateManager) setLogicIDs(
 func (s *MockStateManager) GetLogicIDs(addr common.Address, stateHash common.Hash) ([]common.LogicID, error) {
 	logicIDs, ok := s.logicIDs[addr]
 	if !ok {
-		return logicIDs, errors.New("logic IDs not found")
+		return nil, errors.New("logic IDs not found")
 	}
 
 	return logicIDs, nil
@@ -291,7 +304,7 @@ func (s *MockStateManager) setAccountMetaInfo(
 func (s *MockStateManager) GetAccountMetaInfo(addr common.Address) (*common.AccountMetaInfo, error) {
 	accMetaInfo, ok := s.accMetaInfo[addr]
 	if !ok {
-		return nil, common.ErrKeyNotFound
+		return nil, common.ErrAccountNotFound
 	}
 
 	return accMetaInfo, nil
@@ -1010,6 +1023,34 @@ func getLogicID(t *testing.T, address common.Address) common.LogicID {
 	return common.NewLogicIDv0(true, false, false, false, 0, address)
 }
 
+func getRegistry(
+	t *testing.T,
+	assetIDs []common.AssetID,
+	assetDescriptors []*common.AssetDescriptor,
+) (map[string][]byte, []rpcargs.RPCRegistry) {
+	t.Helper()
+
+	count := len(assetIDs)
+	registryMap := make(map[string][]byte, count)
+	registryEntries := make([]rpcargs.RPCRegistry, 0, count)
+
+	for i := 0; i < count; i++ {
+		assetID := assetIDs[i].String()
+
+		registryEntries = append(registryEntries, rpcargs.RPCRegistry{
+			AssetID:   assetID,
+			AssetInfo: rpcargs.GetRPCAssetDescriptor(assetDescriptors[i]),
+		})
+
+		rawAssetDescriptor, err := assetDescriptors[i].Bytes()
+		require.NoError(t, err)
+
+		registryMap[assetID] = rawAssetDescriptor
+	}
+
+	return registryMap, registryEntries
+}
+
 func getStorageMap(keys []string, values []string) map[string]string {
 	storage := make(map[string]string)
 
@@ -1482,4 +1523,10 @@ func checkForRPCReceipt(
 	require.Equal(t, ix.Sender(), rpcReceipt.From)
 	require.Equal(t, ix.Receiver(), rpcReceipt.To)
 	require.Equal(t, uint64(ixIndex), rpcReceipt.IXIndex.ToUint64())
+}
+
+func sortRegistry(registry []rpcargs.RPCRegistry) {
+	sort.Slice(registry, func(i, j int) bool {
+		return registry[i].AssetID < registry[j].AssetID
+	})
 }

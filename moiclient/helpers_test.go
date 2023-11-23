@@ -267,6 +267,20 @@ func httpTDU(t *testing.T, args *rpcargs.QueryArgs) []rpcargs.TDU {
 	return tdu
 }
 
+// httpRegistry retrieves the asset registry info for the given address and tesseract options
+func httpRegistry(t *testing.T, args *rpcargs.QueryArgs) []rpcargs.RPCRegistry {
+	t.Helper()
+
+	resp := makeHTTPRequest(t, "moi.Registry", args)
+
+	var registry []rpcargs.RPCRegistry
+
+	err := json.Unmarshal(resp.Data, &registry)
+	require.NoError(t, err)
+
+	return registry
+}
+
 // httpGetContextInfo returns the context Info of the queried address.
 func httpGetContextInfo(t *testing.T, args *rpcargs.ContextInfoArgs) *rpcargs.ContextResponse {
 	t.Helper()

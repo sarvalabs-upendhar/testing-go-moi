@@ -104,6 +104,9 @@ func TestMoiClient(t *testing.T) {
 		"TDU": {
 			test: func(t *testing.T) { testTDU(t, rpcClient, addrsMap["assetAddr"]) },
 		},
+		"Registry": {
+			test: func(t *testing.T) { testRegistry(t, rpcClient, addrsMap["assetAddr"]) },
+		},
 		"GetContextInfo": {
 			test: func(t *testing.T) { testGetContextInfo(t, rpcClient, addrsMap["deployAddr"]) },
 		},
@@ -456,15 +459,17 @@ func fillIXPool(t *testing.T, client *Client, addr common.Address, mnemonic stri
 }
 
 func testTesseract(t *testing.T, client *Client, addr common.Address) {
-	invalidHeight := int64(100000)
+	height := int64(100000)
+	invalidHeight := int64(-2)
 	ctx := context.Background()
+
 	testcases := []struct {
 		name          string
 		tesseractArgs *rpcargs.TesseractArgs
 		expectedError error
 	}{
 		{
-			name: "fetch tesseract with interactions",
+			name: "should fetch tesseract with interactions",
 			tesseractArgs: &rpcargs.TesseractArgs{
 				Address:          addr,
 				WithInteractions: true,
@@ -474,7 +479,7 @@ func testTesseract(t *testing.T, client *Client, addr common.Address) {
 			},
 		},
 		{
-			name: "fetch tesseract without interactions",
+			name: "should fetch tesseract without interactions",
 			tesseractArgs: &rpcargs.TesseractArgs{
 				Address:          addr,
 				WithInteractions: false,
@@ -484,7 +489,7 @@ func testTesseract(t *testing.T, client *Client, addr common.Address) {
 			},
 		},
 		{
-			name: "fetch genesis tesseract",
+			name: "should fetch genesis tesseract",
 			tesseractArgs: &rpcargs.TesseractArgs{
 				Address:          addr,
 				WithInteractions: false,
@@ -494,12 +499,43 @@ func testTesseract(t *testing.T, client *Client, addr common.Address) {
 			},
 		},
 		{
-			name: "invalid tesseract number",
+			name: "should return error as address is nil",
+			tesseractArgs: &rpcargs.TesseractArgs{
+				Options: rpcargs.TesseractNumberOrHash{
+					TesseractNumber: &LatestTesseractNumber,
+				},
+			},
+			expectedError: common.ErrInvalidAddress,
+		},
+		{
+			name: "should return error as invalid address",
+			tesseractArgs: &rpcargs.TesseractArgs{
+				Address:          tests.RandomAddress(t),
+				WithInteractions: false,
+				Options: rpcargs.TesseractNumberOrHash{
+					TesseractNumber: &LatestTesseractNumber,
+				},
+			},
+			expectedError: common.ErrAccountNotFound,
+		},
+		{
+			name: "should return error as invalid height",
 			tesseractArgs: &rpcargs.TesseractArgs{
 				Address:          addr,
 				WithInteractions: false,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &invalidHeight,
+				},
+			},
+			expectedError: errors.New("invalid options"),
+		},
+		{
+			name: "should fail to fetch tesseract height entry",
+			tesseractArgs: &rpcargs.TesseractArgs{
+				Address:          addr,
+				WithInteractions: false,
+				Options: rpcargs.TesseractNumberOrHash{
+					TesseractNumber: &height,
 				},
 			},
 			expectedError: errors.New("failed to fetch tesseract height entry"),
@@ -526,7 +562,6 @@ func testTesseract(t *testing.T, client *Client, addr common.Address) {
 
 			if test.tesseractArgs.WithInteractions {
 				require.Greater(t, len(ts.Ixns), 0)
-				// require.Equal(t, types.IxLogicDeploy, ts.Ixns[0].Type)
 
 				return
 			}
@@ -854,7 +889,7 @@ func testTDU(t *testing.T, client *Client, addr common.Address) {
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
-			expectedError: errors.New("account not found"),
+			expectedError: common.ErrAccountNotFound,
 		},
 	}
 
@@ -892,6 +927,71 @@ func testTDU(t *testing.T, client *Client, addr common.Address) {
 	}
 }
 
+func testRegistry(t *testing.T, client *Client, addr common.Address) {
+	ctx := context.Background()
+	assetID := getAssetID(t, client, addr, createAssetHeight)
+	sortRegistry := func(registry []rpcargs.RPCRegistry) {
+		sort.Slice(registry, func(i, j int) bool {
+			return registry[i].AssetID < registry[j].AssetID
+		})
+	}
+
+	testcases := []struct {
+		name          string
+		queryArgs     *rpcargs.QueryArgs
+		expectedError error
+	}{
+		{
+			name: "fetch registry for existing address",
+			queryArgs: &rpcargs.QueryArgs{
+				Address: addr,
+				Options: rpcargs.TesseractNumberOrHash{
+					TesseractNumber: &createAssetHeight,
+				},
+			},
+		},
+		{
+			name: "fetch registry for non-existing address",
+			queryArgs: &rpcargs.QueryArgs{
+				Address: tests.RandomAddress(t),
+				Options: rpcargs.TesseractNumberOrHash{
+					TesseractNumber: &LatestTesseractNumber,
+				},
+			},
+			expectedError: common.ErrAccountNotFound,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			registry, err := client.Registry(ctx, test.queryArgs)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			isAssetFound := false
+			for i := 0; i < len(registry); i++ {
+				if assetID.String() == registry[i].AssetID {
+					isAssetFound = true
+				}
+			}
+
+			require.True(t, isAssetFound)
+			require.Equal(t, 1, len(registry))
+
+			httpRegistry := httpRegistry(t, test.queryArgs)
+			sortRegistry(httpRegistry)
+			sortRegistry(registry)
+
+			require.Equal(t, httpRegistry, registry)
+		})
+	}
+}
+
 func testGetContextInfo(t *testing.T, client *Client, addr common.Address) {
 	ctx := context.Background()
 	testcases := []struct {
@@ -916,7 +1016,7 @@ func testGetContextInfo(t *testing.T, client *Client, addr common.Address) {
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
-			expectedError: errors.New("account not found"),
+			expectedError: common.ErrAccountNotFound,
 		},
 	}
 
@@ -1005,7 +1105,7 @@ func testInteractionCount(t *testing.T, client *Client, addr common.Address) {
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
-			expectedError: errors.New("account not found"),
+			expectedError: common.ErrAccountNotFound,
 		},
 	}
 
@@ -1039,19 +1139,13 @@ func testPendingInteractionCount(t *testing.T, client *Client, addr common.Addre
 			name: "fetch pending interaction count for non-existing address",
 			interactionCountArgs: &rpcargs.InteractionCountArgs{
 				Address: tests.RandomAddress(t),
-				Options: rpcargs.TesseractNumberOrHash{
-					TesseractNumber: &LatestTesseractNumber,
-				},
 			},
-			expectedError: errors.New("account not found"),
+			expectedError: common.ErrAccountNotFound,
 		},
 		{
 			name: "fetch pending interaction count for existing address",
 			interactionCountArgs: &rpcargs.InteractionCountArgs{
 				Address: addr,
-				Options: rpcargs.TesseractNumberOrHash{
-					TesseractNumber: &LatestTesseractNumber,
-				},
 			},
 		},
 	}
@@ -1149,7 +1243,7 @@ func testAccountState(t *testing.T, client *Client, addr common.Address) {
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
-			expectedError: errors.New("account not found"),
+			expectedError: common.ErrAccountNotFound,
 		},
 	}
 
@@ -1200,7 +1294,7 @@ func testLogics(t *testing.T, client *Client, addr common.Address) {
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
-			expectedError: errors.New("account not found"),
+			expectedError: common.ErrAccountNotFound,
 		},
 	}
 
@@ -1278,7 +1372,7 @@ func testLogicManifest(t *testing.T, client *Client, addr common.Address) {
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
-			expectedError: errors.New("account not found"),
+			expectedError: common.ErrAccountNotFound,
 		},
 	}
 
@@ -1539,7 +1633,7 @@ func testWaitTime(t *testing.T, client *Client, addr common.Address) {
 			ixPoolArgs: &rpcargs.IxPoolArgs{
 				Address: tests.RandomAddress(t),
 			},
-			expectedError: errors.New("account not found"),
+			expectedError: common.ErrAccountNotFound,
 		},
 	}
 
