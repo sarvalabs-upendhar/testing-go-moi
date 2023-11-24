@@ -1781,7 +1781,8 @@ func (s *Syncer) syncStorageTree(ctx context.Context, session syncer.Session, ne
 	}
 
 	if len(storageCIDs) == 0 {
-		return nil
+		// sync meta storage tree only
+		return s.state.SyncStorageTrees(ctx, session.ID(), metaStorageRoot, storageTreeRoots)
 	}
 
 	s.logger.Debug("Syncing storage tree", "address", session.ID())
