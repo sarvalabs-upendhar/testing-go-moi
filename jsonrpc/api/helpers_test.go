@@ -871,7 +871,7 @@ func (d *MockDatabase) setNodeMetaInfo(t *testing.T, entries map[peer.ID]*senatu
 		value, err := entry.Bytes()
 		require.NoError(t, err)
 
-		d.setDBEntry(storage.NtqDBKey(key), value)
+		d.setDBEntry(storage.SenatusDBKey(key), value)
 	}
 }
 

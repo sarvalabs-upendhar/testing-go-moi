@@ -98,8 +98,8 @@ func (n *Node) setupStateManager() (err error) {
 
 func (n *Node) setupReputationEngine() (err error) {
 	nodeMetaInfo := &senatus.NodeMetaInfo{
-		Addrs:     utils.MultiAddrToString(n.network.GetAddrs()...),
 		KramaID:   n.vault.KramaID(),
+		Addrs:     utils.MultiAddrToString(n.network.GetAddrs()...),
 		NTQ:       1,
 		PublicKey: n.vault.GetConsensusPrivateKey().GetPublicKeyInBytes(),
 	}
@@ -108,7 +108,6 @@ func (n *Node) setupReputationEngine() (err error) {
 		n.logger,
 		n.network,
 		n.db,
-		n.vault.KramaID(),
 		nodeMetaInfo,
 	)
 	if err != nil {
@@ -141,7 +140,7 @@ func (n *Node) setupSenatusToNetwork() error {
 	n.network.Senatus = n.senatus
 
 	for _, staticPeer := range n.cfg.Network.StaticPeers {
-		err := n.network.Senatus.UpdatePeer(staticPeer.ID, &senatus.NodeMetaInfo{
+		err := n.network.Senatus.UpdatePeer(&senatus.NodeMetaInfo{
 			KramaID: staticPeer.ID,
 			Addrs:   utils.MultiAddrToString(staticPeer.Address),
 			NTQ:     senatus.DefaultPeerNTQ,
@@ -156,7 +155,7 @@ func (n *Node) setupSenatusToNetwork() error {
 
 // setupRandomizer creates new Randomizer object and setups it to node
 func (n *Node) setupRandomizer() {
-	n.handlers.flux = flux.NewRandomizer(n.logger, n.network, n.nodeMetrics.flux)
+	n.handlers.flux = flux.NewRandomizer(n.logger, n.network, n.senatus, n.nodeMetrics.flux)
 }
 
 // setupChainManager creates new Chain Manager object and setups it to node

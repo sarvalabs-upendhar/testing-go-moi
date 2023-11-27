@@ -51,7 +51,7 @@ func (p *PublicDebugAPI) DBGet(args *rpcargs.DebugArgs) (string, error) {
 
 // getNodeMetaInfoByPeerID retrieves and returns node meta information from the database for the given peer id
 func (p *PublicDebugAPI) getNodeMetaInfoByPeerID(peerID peer.ID) (*senatus.NodeMetaInfo, error) {
-	value, err := p.db.ReadEntry(storage.NtqDBKey(peerID))
+	value, err := p.db.ReadEntry(storage.SenatusDBKey(peerID))
 	if err != nil {
 		return nil, err
 	}
@@ -102,13 +102,13 @@ func (p *PublicDebugAPI) GetNodeMetaInfo(args *rpcargs.NodeMetaInfoArgs) (map[st
 		return nodeMetaInfo, nil
 	}
 
-	entriesChan, err := p.db.GetEntriesWithPrefix(context.Background(), []byte{storage.NTQ.Byte()})
+	entriesChan, err := p.db.GetEntriesWithPrefix(context.Background(), []byte{storage.Senatus.Byte()})
 	if err != nil {
 		return nil, err
 	}
 
 	for entry := range entriesChan {
-		peerID := peer.ID(bytes.TrimPrefix(entry.Key, []byte{storage.NTQ.Byte()}))
+		peerID := peer.ID(bytes.TrimPrefix(entry.Key, []byte{storage.Senatus.Byte()}))
 
 		info := new(senatus.NodeMetaInfo)
 		if err = info.FromBytes(entry.Value); err != nil {

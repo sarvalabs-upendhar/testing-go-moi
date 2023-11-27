@@ -47,7 +47,7 @@ type Senatus interface {
 	GetAddressByPeerID(peerID peer.ID) ([]maddr.Multiaddr, error)
 	GetRTTByPeerID(peerID peer.ID) (int64, error)
 	GetKramaIDByPeerID(peerID peer.ID) (id.KramaID, error)
-	UpdatePeer(key id.KramaID, data *senatus.NodeMetaInfo) error
+	UpdatePeer(data *senatus.NodeMetaInfo) error
 	AddNewPeerWithPeerID(key peer.ID, data *senatus.NodeMetaInfo) error
 }
 
@@ -407,6 +407,10 @@ func (s *Server) SendHelloMessage() {
 			return
 		}
 	})
+}
+
+func (s *Server) GetPeersCount() int {
+	return s.Peers.Len()
 }
 
 func (s *Server) GetVersion() string {

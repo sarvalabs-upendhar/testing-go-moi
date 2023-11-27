@@ -23,7 +23,7 @@ const (
 // Non-Account Based Key Prefixes
 const (
 	Interaction         Prefix = 0x80
-	NTQ                 Prefix = 0x81
+	Senatus             Prefix = 0x81
 	Tesseract           Prefix = 0x82
 	TSGridLookup        Prefix = 0x83
 	Receipt             Prefix = 0x84

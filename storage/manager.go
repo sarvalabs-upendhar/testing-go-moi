@@ -314,6 +314,36 @@ func (p *PersistenceManager) Cleanup() error {
 	return p.db.CleanUp()
 }
 
+// UpdatePeerCount updates the total number of peer available in the senatus store
+func (p *PersistenceManager) UpdatePeerCount(count uint64) error {
+	rawCount := make([]byte, 8)
+
+	data, err := p.ReadEntry(SenatusPeerCountKey())
+	if err == nil {
+		count = binary.BigEndian.Uint64(data) + count
+
+		binary.BigEndian.PutUint64(rawCount, count)
+
+		return p.UpdateEntry(SenatusPeerCountKey(), rawCount)
+	} else if errors.Is(err, common.ErrKeyNotFound) {
+		binary.BigEndian.PutUint64(rawCount, count)
+
+		return p.CreateEntry(SenatusPeerCountKey(), rawCount)
+	}
+
+	return err
+}
+
+// TotalPeersCount fetches the total number of peers available in the senatus store
+func (p *PersistenceManager) TotalPeersCount() (uint64, error) {
+	val, err := p.ReadEntry(SenatusPeerCountKey())
+	if err != nil {
+		return 0, err
+	}
+
+	return binary.BigEndian.Uint64(val), nil
+}
+
 // GetEntriesWithPrefix fetches array of k,v pairs with the given prefix
 func (p *PersistenceManager) GetEntriesWithPrefix(ctx context.Context, prefix []byte) (chan *common.DBEntry, error) {
 	ch := make(chan *common.DBEntry)

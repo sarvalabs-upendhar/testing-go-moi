@@ -323,6 +323,13 @@ func insertAccMetaInfo(t *testing.T, pm *PersistenceManager, accMetaInfo common.
 	}
 }
 
+func insertPeerCount(t *testing.T, pm *PersistenceManager, count uint64) {
+	t.Helper()
+
+	err := pm.UpdatePeerCount(count)
+	require.NoError(t, err)
+}
+
 func getRandomPreImageEntries(t *testing.T, count int) map[common.Hash][]byte {
 	t.Helper()
 

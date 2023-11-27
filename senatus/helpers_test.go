@@ -24,7 +24,9 @@ import (
 )
 
 type MockDB struct {
-	data map[string][]byte
+	data          map[string][]byte
+	peerCount     uint64
+	peerCountHook func() error
 }
 
 func (db *MockDB) ReadEntry(key []byte) ([]byte, error) {
@@ -59,6 +61,20 @@ func (db *MockDB) GetEntriesWithPrefix(ctx context.Context, prefix []byte) (chan
 	return entries, nil
 }
 
+func (db *MockDB) TotalPeersCount() (uint64, error) {
+	if db.peerCountHook != nil {
+		return 0, db.peerCountHook()
+	}
+
+	return db.peerCount, nil
+}
+
+func (db *MockDB) UpdatePeerCount(count uint64) error {
+	db.peerCount += count
+
+	return nil
+}
+
 func (db *MockDB) setEntry(key string, value []byte) {
 	db.data[key] = value
 }
@@ -69,7 +85,7 @@ func (db *MockDB) setNodeInfo(t *testing.T, peerID peer.ID, nodeMetaInfo *NodeMe
 	metaInfo, err := nodeMetaInfo.Bytes()
 	require.NoError(t, err)
 
-	db.setEntry(string(storage.NtqDBKey(peerID)), metaInfo)
+	db.setEntry(string(storage.SenatusDBKey(peerID)), metaInfo)
 }
 
 func NewMockDB() *MockDB {
@@ -128,17 +144,20 @@ func (m *mockServer) Subscribe(ctx context.Context, topic string, handler func(m
 	return nil
 }
 
-func CreateTestReputationEngine(t *testing.T) (*ReputationEngine, *MockDB, *MockState) {
+func createTestReputationEngine(t *testing.T) (*ReputationEngine, *MockDB, *MockState) {
 	t.Helper()
 
 	mockDB := NewMockDB()
 	mockState := NewMockState()
+	nodeMetaInfo := &NodeMetaInfo{
+		KramaID: tests.GetTestKramaID(t, 0),
+	}
+
 	r, err := NewReputationEngine(
 		hclog.NewNullLogger(),
 		NewMockServer(),
 		mockDB,
-		tests.GetTestKramaID(t, 0),
-		&NodeMetaInfo{},
+		nodeMetaInfo,
 	)
 
 	require.NoError(t, err)

@@ -58,8 +58,8 @@ func NewMockReputationEngine() *MockReputationEngine {
 	}
 }
 
-func (m *MockReputationEngine) UpdatePeer(key kramaid.KramaID, data *senatus.NodeMetaInfo) error {
-	peerID, err := key.DecodedPeerID()
+func (m *MockReputationEngine) UpdatePeer(data *senatus.NodeMetaInfo) error {
+	peerID, err := data.KramaID.DecodedPeerID()
 	if err != nil {
 		return common.ErrInvalidKramaID
 	}
