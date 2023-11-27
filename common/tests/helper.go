@@ -144,7 +144,7 @@ func DecodePeerIDFromKramaID(t *testing.T, kramaID kramaid.KramaID) peer.ID {
 	return peerID
 }
 
-func RetryUntilTimeout(ctx context.Context, f func() (interface{}, bool)) (interface{}, error) {
+func RetryUntilTimeout(ctx context.Context, delay time.Duration, f func() (interface{}, bool)) (interface{}, error) {
 	type result struct {
 		data interface{}
 		err  error
@@ -169,7 +169,7 @@ func RetryUntilTimeout(ctx context.Context, f func() (interface{}, bool)) (inter
 					return
 				}
 			}
-			time.Sleep(500 * time.Millisecond)
+			time.Sleep(delay)
 		}
 	}()
 

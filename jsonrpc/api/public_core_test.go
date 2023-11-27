@@ -2042,7 +2042,7 @@ func TestPublicCoreAPI_GetAccountMetaInfo(t *testing.T) {
 }
 
 func TestPublicCoreAPI_Syncing(t *testing.T) {
-	addr := tests.RandomAddress(t)
+	addrs := tests.GetAddresses(t, 5)
 
 	syncer := NewMockSyncer(t)
 	coreAPI := NewPublicCoreAPI(nil, nil, nil, nil, syncer)
@@ -2060,27 +2060,53 @@ func TestPublicCoreAPI_Syncing(t *testing.T) {
 		IsInitialSyncDone:     false,
 	}
 
-	syncer.setAccountSyncStatus(addr, accSyncStatus)
-	syncer.setNodeSyncStatus(nodeSyncStatus)
+	pendingNodeSyncStatus := &rpcargs.NodeSyncStatus{
+		TotalPendingAccounts:  5,
+		PendingAccounts:       addrs,
+		PrincipalSyncDoneTime: hexutil.Uint64(time.Now().UnixNano()),
+		IsPrincipalSyncDone:   true,
+		IsInitialSyncDone:     false,
+	}
 
 	testcases := []struct {
 		name                       string
 		args                       *rpcargs.SyncStatusRequest
+		preTestFn                  func()
 		expectedSyncStatusResponse *rpcargs.SyncStatusResponse
 		expectedError              error
 	}{
 		{
 			name: "account sync status fetched successfully",
 			args: &rpcargs.SyncStatusRequest{
-				Address: addr,
+				Address: addrs[0],
+			},
+			preTestFn: func() {
+				syncer.setAccountSyncStatus(addrs[0], accSyncStatus)
 			},
 			expectedSyncStatusResponse: &rpcargs.SyncStatusResponse{
 				AccSyncResp: accSyncStatus,
 			},
 		},
 		{
-			name: "node sync status fetched successfully",
-			args: &rpcargs.SyncStatusRequest{},
+			name: "node sync status with pending accounts fetched successfully",
+			args: &rpcargs.SyncStatusRequest{
+				PendingAccounts: true,
+			},
+			preTestFn: func() {
+				syncer.setPendingNodeSyncStatus(pendingNodeSyncStatus)
+			},
+			expectedSyncStatusResponse: &rpcargs.SyncStatusResponse{
+				NodeSyncResp: pendingNodeSyncStatus,
+			},
+		},
+		{
+			name: "node sync status without pending accounts fetched successfully",
+			args: &rpcargs.SyncStatusRequest{
+				PendingAccounts: false,
+			},
+			preTestFn: func() {
+				syncer.setNodeSyncStatus(nodeSyncStatus)
+			},
 			expectedSyncStatusResponse: &rpcargs.SyncStatusResponse{
 				NodeSyncResp: nodeSyncStatus,
 			},
@@ -2096,6 +2122,10 @@ func TestPublicCoreAPI_Syncing(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
+			if test.preTestFn != nil {
+				test.preTestFn()
+			}
+
 			syncStatus, err := coreAPI.Syncing(test.args)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())

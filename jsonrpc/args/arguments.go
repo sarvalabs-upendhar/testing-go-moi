@@ -174,7 +174,8 @@ type InteractionByTesseract struct {
 }
 
 type SyncStatusRequest struct {
-	Address common.Address `json:"address"`
+	Address         common.Address `json:"address"`
+	PendingAccounts bool           `json:"pending_accounts"`
 }
 
 type AccSyncStatus struct {
@@ -184,10 +185,11 @@ type AccSyncStatus struct {
 }
 
 type NodeSyncStatus struct {
-	TotalPendingAccounts  hexutil.Uint64 `json:"total_pending_accounts"`
-	IsPrincipalSyncDone   bool           `json:"is_principal_sync_done"`
-	PrincipalSyncDoneTime hexutil.Uint64 `json:"principal_sync_done_time"`
-	IsInitialSyncDone     bool           `json:"is_initial_sync_done"`
+	TotalPendingAccounts  hexutil.Uint64   `json:"total_pending_accounts"`
+	PendingAccounts       []common.Address `json:"pending_accounts"`
+	IsPrincipalSyncDone   bool             `json:"is_principal_sync_done"`
+	PrincipalSyncDoneTime hexutil.Uint64   `json:"principal_sync_done_time"`
+	IsInitialSyncDone     bool             `json:"is_initial_sync_done"`
 }
 
 type SyncStatusResponse struct {

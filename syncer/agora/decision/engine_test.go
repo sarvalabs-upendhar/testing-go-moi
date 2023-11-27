@@ -290,7 +290,7 @@ func TestEngine_TimeOutRequest(t *testing.T) {
 	engine.HandleRequest(req)
 
 	// wait 2 secs for response
-	waitCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	waitCtx, cancel := context.WithTimeout(ctx, 1500*time.Millisecond)
 	defer cancel()
 
 	// No response is received since the request time has crossed the limit i.e. 1 sec

@@ -7,9 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/go-moi/storage/db"
-
 	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-moi/storage/db"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/sarvalabs/go-moi/common/config"
@@ -743,7 +742,7 @@ func TestFullSync_RemoveBestPeer(t *testing.T) {
 
 	// start the server that has lattices later as we need to simulate removal of best peers in client
 	// and when this is started, lattices will be available on this and client should complete accounts syncing
-	_, err = tests.RetryUntilTimeout(ctx, func() (interface{}, bool) {
+	_, err = tests.RetryUntilTimeout(ctx, 500*time.Millisecond, func() (interface{}, bool) {
 		job, ok := jq.getJob(common.GuardianLogicAddr)
 		if !ok {
 			return nil, true
@@ -891,50 +890,146 @@ func TestJobProcessor_checkSyncTesseractNotBlocked(t *testing.T) {
 }
 
 func TestSyncJobFromCanonicalInfo(t *testing.T) {
+	t.Parallel()
+
+	count := 1
+	addrs := tests.GetAddresses(t, count)
 	pm, _ := createPersistenceManager(t, context.Background())
-	j := &SyncJob{
-		db:                    pm,
-		address:               tests.RandomAddress(t),
-		mode:                  common.LatestSync,
-		snapDownloaded:        false,
-		expectedHeight:        8,
-		currentHeight:         2,
-		jobState:              Sleep,
-		lastModifiedAt:        time.Now(),
-		tesseractQueue:        NewTesseractQueue(),
-		latticeSyncInProgress: true,
+
+	jobs := createSyncJobs(
+		t,
+		count,
+		addrs,
+		WithDB(pm),
+		WithSnapDownloaded(false),
+		WithExpectedHeight(8),
+		WithCurrentHeight(2),
+		WithJobState(Sleep),
+		WithTesseractQueue(NewTesseractQueue()),
+		WithLatticeSyncInProgress(true),
+	)
+
+	for i := 0; i < count; i++ {
+		err := jobs[i].commitJob()
+		require.NoError(t, err)
 	}
 
-	err := j.commitJob()
+	accountSyncInfos, err := pm.GetAccountsSyncStatus()
 	require.NoError(t, err)
 
-	testcases := []struct {
-		name        string
-		expectedJob *SyncJob
-	}{
-		{
-			name:        "fetch sync job from db successfully",
-			expectedJob: j,
-		},
+	syncJob, err := SyncJobFromCanonicalInfo(hclog.NewNullLogger(), pm, accountSyncInfos[0])
+	require.NoError(t, err)
+
+	checkIfSyncJobMatches(t, jobs[0], syncJob)
+}
+
+func TestPendingAccounts_AddJob(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	mux := utils.TypeMux{}
+	sub := mux.Subscribe(utils.PendingAccountEvent{})
+
+	syncStatusTracker := NewSyncStatusTracker(0)
+	go syncStatusTracker.StartSyncStatusTracker(ctx, sub)
+
+	count := 3
+	addrs := tests.GetAddresses(t, count)
+
+	jobs := createSyncJobs(
+		t,
+		count,
+		addrs,
+		WithJobState(Done),
+	)
+
+	jobQueue := NewJobQueue(&mux)
+
+	for i := 0; i < count; i++ {
+		err := jobQueue.AddJob(jobs[i])
+		require.NoError(t, err)
 	}
 
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			accountSyncInfos, err := pm.GetAccountsSyncStatus()
-			require.NoError(t, err)
+	_, err := tests.RetryUntilTimeout(ctx, 50*time.Millisecond, func() (interface{}, bool) {
+		pendingAccounts := syncStatusTracker.ReadPendingAccounts()
+		if pendingAccounts != uint64(count) {
+			return nil, true
+		}
 
-			syncJob, err := SyncJobFromCanonicalInfo(hclog.NewNullLogger(), pm, accountSyncInfos[0])
-			require.NoError(t, err)
+		pendingAddrs := jobQueue.GetPendingAccounts()
+		sortAddresses(addrs)
+		sortAddresses(pendingAddrs)
 
-			require.Equal(t, test.expectedJob.db, syncJob.db)
-			require.Equal(t, test.expectedJob.address, syncJob.address)
-			require.Equal(t, test.expectedJob.expectedHeight, syncJob.expectedHeight)
-			require.Equal(t, test.expectedJob.snapDownloaded, syncJob.snapDownloaded)
-			require.Equal(t, test.expectedJob.mode, syncJob.mode)
-			require.Equal(t, Pending, syncJob.jobState)
-			require.True(t, test.expectedJob.lastModifiedAt.Equal(syncJob.lastModifiedAt))
-			require.NotNil(t, syncJob.bestPeers)
-			require.NotNil(t, syncJob.tesseractQueue)
-		})
+		require.Equal(t, addrs, pendingAddrs)
+
+		return nil, false
+	})
+	require.NoError(t, err)
+}
+
+func TestPendingAccounts_RemoveJob(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	mux := utils.TypeMux{}
+	sub := mux.Subscribe(utils.PendingAccountEvent{})
+
+	jobQueue := NewJobQueue(&mux)
+
+	syncStatusTracker := NewSyncStatusTracker(0)
+	go syncStatusTracker.StartSyncStatusTracker(ctx, sub)
+
+	count := 3
+	addrs := tests.GetAddresses(t, count)
+
+	jobs := createSyncJobs(
+		t,
+		count,
+		addrs,
+		WithDB(NewMockDB()),
+		WithLogger(hclog.NewNullLogger()),
+		WithJobState(Done),
+		WithTesseractQueue(NewTesseractQueue()),
+	)
+
+	for i := 0; i < count; i++ {
+		err := jobs[i].commitJob()
+		require.NoError(t, err)
 	}
+
+	for i := 0; i < count; i++ {
+		err := jobQueue.AddJob(jobs[i])
+		require.NoError(t, err)
+	}
+
+	_, err := tests.RetryUntilTimeout(ctx, 50*time.Millisecond, func() (interface{}, bool) {
+		pendingAccounts := syncStatusTracker.ReadPendingAccounts()
+		if pendingAccounts != uint64(count) {
+			return nil, true
+		}
+
+		return nil, false
+	})
+	require.NoError(t, err)
+
+	jobQueue.NextJob()
+
+	_, err = tests.RetryUntilTimeout(ctx, 50*time.Millisecond, func() (interface{}, bool) {
+		pendingAccounts := syncStatusTracker.ReadPendingAccounts()
+		if pendingAccounts != uint64(0) {
+			return nil, true
+		}
+
+		pendingAddrs := jobQueue.GetPendingAccounts()
+		if len(pendingAddrs) != 0 {
+			return nil, true
+		}
+
+		return nil, false
+	})
+	require.NoError(t, err)
 }

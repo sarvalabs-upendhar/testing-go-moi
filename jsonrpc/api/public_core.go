@@ -485,7 +485,7 @@ func (p *PublicCoreAPI) FuelEstimate(args *rpcargs.CallArgs) (*hexutil.Big, erro
 // Syncing returns the sync status of an account if address is given else returns the node sync status
 func (p *PublicCoreAPI) Syncing(args *rpcargs.SyncStatusRequest) (*rpcargs.SyncStatusResponse, error) {
 	if args.Address.IsNil() {
-		nodeSyncStatus := p.syncer.GetNodeSyncStatus()
+		nodeSyncStatus := p.syncer.GetNodeSyncStatus(args.PendingAccounts)
 
 		return &rpcargs.SyncStatusResponse{
 			NodeSyncResp: nodeSyncStatus,

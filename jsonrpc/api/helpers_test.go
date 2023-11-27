@@ -451,8 +451,9 @@ func (exec *MockExecutionManager) InteractionCall(
 }
 
 type MockSyncer struct {
-	accSyncStatus  map[common.Address]*rpcargs.AccSyncStatus
-	nodeSyncStatus *rpcargs.NodeSyncStatus
+	accSyncStatus         map[common.Address]*rpcargs.AccSyncStatus
+	nodeSyncStatus        *rpcargs.NodeSyncStatus
+	pendingNodeSyncStatus *rpcargs.NodeSyncStatus
 }
 
 func NewMockSyncer(t *testing.T) *MockSyncer {
@@ -480,7 +481,15 @@ func (syncer *MockSyncer) setNodeSyncStatus(nodeSyncStatus *rpcargs.NodeSyncStat
 	syncer.nodeSyncStatus = nodeSyncStatus
 }
 
-func (syncer *MockSyncer) GetNodeSyncStatus() *rpcargs.NodeSyncStatus {
+func (syncer *MockSyncer) setPendingNodeSyncStatus(pendingNodeSyncStatus *rpcargs.NodeSyncStatus) {
+	syncer.pendingNodeSyncStatus = pendingNodeSyncStatus
+}
+
+func (syncer *MockSyncer) GetNodeSyncStatus(includePendingAccounts bool) *rpcargs.NodeSyncStatus {
+	if includePendingAccounts {
+		return syncer.pendingNodeSyncStatus
+	}
+
 	return syncer.nodeSyncStatus
 }
 

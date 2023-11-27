@@ -143,6 +143,21 @@ func (jq *JobQueue) RemoveJob(job *SyncJob) error {
 	return nil
 }
 
+func (jq *JobQueue) GetPendingAccounts() []common.Address {
+	jq.mtx.RLock()
+	defer func() {
+		jq.mtx.RUnlock()
+	}()
+
+	pendingAccounts := make([]common.Address, 0, len(jq.jobs))
+
+	for _, jb := range jq.jobs {
+		pendingAccounts = append(pendingAccounts, jb.address)
+	}
+
+	return pendingAccounts
+}
+
 func (jq *JobQueue) post(ev interface{}) error {
 	return jq.mux.Post(ev)
 }
