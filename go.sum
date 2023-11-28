@@ -479,12 +479,12 @@ github.com/rogpeppe/go-internal v1.11.0 h1:cWPaGQEPrBb5/AsnsZesgZZ9yb1OQ+GOISoDN
 github.com/russross/blackfriday v1.5.2/go.mod h1:JO/DiYxRf+HjHt06OyowR9PTA263kcR/rfWxYHBV53g=
 github.com/russross/blackfriday/v2 v2.0.1/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
-github.com/sarvalabs/battleground v0.1.2-rc1.0.20231110145449-ca49401d4e11 h1:BTZe/vwtPPW71KLdQu7vRB38fNqFesE3H5LCCFBhKtM=
-github.com/sarvalabs/battleground v0.1.2-rc1.0.20231110145449-ca49401d4e11/go.mod h1:hIc3PcOSAl3vs5/J36dRO2d4l6qPputmfBeu03K9X6s=
+github.com/sarvalabs/battleground v0.1.2-rc1.0.20231115081102-cea9a56bb121 h1:5l3XAFgEYj19SJ2YkYB6WHZ3qw4XCTSDULHD7uGCJ94=
+github.com/sarvalabs/battleground v0.1.2-rc1.0.20231115081102-cea9a56bb121/go.mod h1:hIc3PcOSAl3vs5/J36dRO2d4l6qPputmfBeu03K9X6s=
 github.com/sarvalabs/go-moi-engineio v0.1.1 h1:8gt0CNdh5wBZbqXxUOufpI/QSe7YhB5WE/AX0wmsSMA=
 github.com/sarvalabs/go-moi-engineio v0.1.1/go.mod h1:WuyyB+KmgS0KPek4XSwHEGyIL1unJC7Yr4Pp5UmGcHg=
-github.com/sarvalabs/go-pisa v0.1.6 h1:lpyGfVrPzhvxdAftgybxwIXtfQcTQm+82X16qKEk09o=
-github.com/sarvalabs/go-pisa v0.1.6/go.mod h1:TEh8GurCuVLXCQUfXMkvuj+x18G2BE6DjfGzHesmaIo=
+github.com/sarvalabs/go-pisa v0.1.7 h1:J40NmDIGwBiOxdAZiT9gBExWwaSZr+nT406O9b8o82I=
+github.com/sarvalabs/go-pisa v0.1.7/go.mod h1:TEh8GurCuVLXCQUfXMkvuj+x18G2BE6DjfGzHesmaIo=
 github.com/sarvalabs/go-polo v0.3.4 h1:NOUKlQQpBwAYnMDc79NEcE7hHGcfnePTsajJ5kegAsI=
 github.com/sarvalabs/go-polo v0.3.4/go.mod h1:tLT+u1m3h1HQN05oAOHADHVTx+Q6G1dXJfv1xJFyCuE=
 github.com/sergi/go-diff v1.0.0/go.mod h1:0CfEIISq7TuYL3j771MWULgwwjU+GofnZX9QAmXWZgo=

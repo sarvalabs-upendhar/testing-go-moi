@@ -1,13 +1,17 @@
 package forage
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
+
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 
 	"github.com/sarvalabs/go-moi/storage/db"
 
@@ -16,6 +20,7 @@ import (
 	"github.com/sarvalabs/go-moi/storage"
 
 	"github.com/hashicorp/go-hclog"
+	pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
@@ -438,8 +443,8 @@ func NewMockReputationEngine() *MockReputationEngine {
 	}
 }
 
-func (m *MockReputationEngine) UpdatePeer(key kramaid.KramaID, data *senatus.NodeMetaInfo) error {
-	peerID, err := key.DecodedPeerID()
+func (m *MockReputationEngine) UpdatePeer(data *senatus.NodeMetaInfo) error {
+	peerID, err := data.KramaID.DecodedPeerID()
 	if err != nil {
 		return common.ErrInvalidKramaID
 	}
@@ -829,7 +834,8 @@ func storeTesseractsInSession(t *testing.T, s *Syncer, tesseracts ...*common.Tes
 
 // Run this code in a separate goroutine to ensure that event verification is
 // performed without missing any events on the client.
-func broadcastTesseracts(t *testing.T, serverSyncer *Syncer, tesseracts ...*common.Tesseract) {
+// Tesseracts are sent sequentially to the client, appearing as if the server is sending them.
+func broadcastTesseracts(t *testing.T, clientSyncer, serverSyncer *Syncer, tesseracts ...*common.Tesseract) {
 	t.Helper()
 
 	go func() {
@@ -865,11 +871,12 @@ func broadcastTesseracts(t *testing.T, serverSyncer *Syncer, tesseracts ...*comm
 			rawData, err := msg.Bytes()
 			require.NoError(t, err)
 
-			err = serverSyncer.network.Broadcast(config.TesseractTopic, rawData)
+			err = clientSyncer.msgHandler(&pubsub.Message{
+				Message: &pb.Message{
+					Data: rawData,
+				},
+			})
 			require.NoError(t, err)
-
-			// introduce delay to send tesseracts in order
-			time.Sleep(10 * time.Millisecond)
 		}
 	}()
 }
@@ -1032,6 +1039,50 @@ func createPersistenceManager(t *testing.T, ctx context.Context) (*storage.Persi
 	})
 
 	return db, dir
+}
+
+func checkIfSyncJobMatches(t *testing.T, expectedJob *SyncJob, syncJob *SyncJob) {
+	t.Helper()
+
+	require.Equal(t, expectedJob.db, syncJob.db)
+	require.Equal(t, expectedJob.address, syncJob.address)
+	require.Equal(t, expectedJob.expectedHeight, syncJob.expectedHeight)
+	require.Equal(t, expectedJob.snapDownloaded, syncJob.snapDownloaded)
+	require.Equal(t, expectedJob.mode, syncJob.mode)
+	require.Equal(t, Pending, syncJob.jobState)
+
+	require.True(t, expectedJob.lastModifiedAt.Equal(syncJob.lastModifiedAt))
+
+	require.NotNil(t, syncJob.bestPeers)
+	require.NotNil(t, syncJob.tesseractQueue)
+}
+
+func sortAddresses(addrs []common.Address) {
+	sort.Slice(addrs, func(i, j int) bool {
+		return bytes.Compare(addrs[i][:], addrs[j][:]) < 0
+	})
+}
+
+func createSyncJobs(t *testing.T, count int, addrs []common.Address, opts ...Option) []*SyncJob {
+	t.Helper()
+
+	jobs := make([]*SyncJob, count)
+
+	for i := 0; i < count; i++ {
+		job := &SyncJob{
+			address:        addrs[i],
+			mode:           common.LatestSync,
+			lastModifiedAt: time.Now(),
+		}
+
+		for _, opt := range opts {
+			opt(job)
+		}
+
+		jobs[i] = job
+	}
+
+	return jobs
 }
 
 func createPersistenceManagers(t *testing.T, ctx context.Context, count int) ([]*storage.PersistenceManager, []string) {
@@ -1212,4 +1263,185 @@ func checkIfTesseractsSynced(
 			require.NoError(t, err)
 		}
 	}
+}
+
+type MockDB struct {
+	accountSyncStatus map[common.Address][]byte
+}
+
+func NewMockDB() *MockDB {
+	return &MockDB{
+		accountSyncStatus: make(map[common.Address][]byte),
+	}
+}
+
+func (m MockDB) NewBatchWriter() db.BatchWriter {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) CreateEntry(i []byte, i2 []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) UpdateEntry(i []byte, i2 []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) ReadEntry(i []byte) ([]byte, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) Contains(i []byte) (bool, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) DeleteEntry(i []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) SetAccount(addr common.Address, stateHash common.Hash, data []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) SetInteractions(gridHash common.Hash, data []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) GetInteractions(gridHash common.Hash) ([]byte, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) GetAccountMetaInfo(id common.Address) (*common.AccountMetaInfo, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) UpdateTesseractStatus(addr common.Address, height uint64, tsHash common.Hash, status bool) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) SetAccountSyncStatus(address common.Address, status *common.AccountSyncStatus) error {
+	rawStatus, err := status.Bytes()
+	if err != nil {
+		return err
+	}
+
+	m.accountSyncStatus[address] = rawStatus
+
+	return nil
+}
+
+func (m MockDB) CleanupAccountSyncStatus(address common.Address) error {
+	delete(m.accountSyncStatus, address)
+
+	return nil
+}
+
+func (m MockDB) StoreAccountSnapShot(snap *common.Snapshot) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) GetReceipts(gridHash common.Hash) ([]byte, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) GetAccountsSyncStatus() ([]*common.AccountSyncStatus, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) DropPrefix(prefix []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) UpdatePrimarySyncStatus(address common.Address) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) IsAccountPrimarySyncDone(address common.Address) bool {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) HasTesseract(tsHash common.Hash) bool {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) SetTesseract(tsHash common.Hash, data []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) UpdatePrincipalSyncStatus() error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) GetBucketCount(bucketNumber uint64) (uint64, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) StreamAccountMetaInfosRaw(ctx context.Context, bucketNumber uint64, response chan []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) GetRecentUpdatedAccMetaInfosRaw(
+	ctx context.Context,
+	bucketID uint64,
+	sinceTS uint64,
+) ([][]byte, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) IsPrincipalSyncDone() (bool, int64) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) GetAccountSnapshot(
+	ctx context.Context,
+	address common.Address,
+	sinceTS uint64,
+) (*common.Snapshot, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) HasTesseractAt(addr common.Address, height uint64) bool {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) UpdateAccMetaInfo(
+	id common.Address,
+	height uint64,
+	tesseractHash common.Hash,
+	accType common.AccountType,
+	latticeExists, stateExists bool,
+) (int32, bool, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) SetTesseractHeightEntry(addr common.Address, height uint64, tsHash common.Hash) error {
+	// TODO implement me
+	panic("implement me")
 }

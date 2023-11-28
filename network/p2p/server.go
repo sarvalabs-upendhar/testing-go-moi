@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"regexp"
 	"sync"
 
 	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
@@ -46,7 +47,7 @@ type Senatus interface {
 	GetAddressByPeerID(peerID peer.ID) ([]maddr.Multiaddr, error)
 	GetRTTByPeerID(peerID peer.ID) (int64, error)
 	GetKramaIDByPeerID(peerID peer.ID) (id.KramaID, error)
-	UpdatePeer(key id.KramaID, data *senatus.NodeMetaInfo) error
+	UpdatePeer(data *senatus.NodeMetaInfo) error
 	AddNewPeerWithPeerID(key peer.ID, data *senatus.NodeMetaInfo) error
 }
 
@@ -212,6 +213,10 @@ func (s *Server) getLibp2pHostOptions() (libp2p.Option, error) {
 			addrs = append(addrs, s.cfg.PublicP2pAddresses...)
 		}
 
+		if !s.cfg.AllowIPv6Addresses {
+			return filterIPV4Addresses(addrs)
+		}
+
 		return addrs
 	}
 
@@ -224,6 +229,7 @@ func (s *Server) getLibp2pHostOptions() (libp2p.Option, error) {
 		libp2p.ListenAddrs(s.cfg.ListenAddresses...),
 		libp2p.BandwidthReporter(newBandwidthReporter(s.metrics, libp2pMetrics.NewBandwidthCounter())),
 		libp2p.ConnectionManager(mgr),
+		libp2p.ConnectionGater(NewConnectionGater(s.cfg.DisablePrivateIP)),
 		libp2p.ResourceManager(resourceManager),
 		libp2p.AddrsFactory(addrsFactory),
 	), nil
@@ -403,6 +409,10 @@ func (s *Server) SendHelloMessage() {
 	})
 }
 
+func (s *Server) GetPeersCount() int {
+	return s.Peers.Len()
+}
+
 func (s *Server) GetVersion() string {
 	return config.ProtocolVersion
 }
@@ -425,4 +435,18 @@ func (s *Server) GetOutboundConnCount() int64 {
 
 func (s *Server) constructHandshakeMSG() (*networkmsg.HandshakeMSG, error) {
 	return networkmsg.ConstructHandshakeMSG([]byte("ping"), ""), nil
+}
+
+// helper functions
+func filterIPV4Addresses(addrs []maddr.Multiaddr) []maddr.Multiaddr {
+	filteredAddrs := make([]maddr.Multiaddr, 0)
+	ipv4Regex := regexp.MustCompile(`/ip4/([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)`)
+
+	for _, addr := range addrs {
+		if ipv4Regex.MatchString(addr.String()) {
+			filteredAddrs = append(filteredAddrs, addr)
+		}
+	}
+
+	return filteredAddrs
 }

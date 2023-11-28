@@ -1,10 +1,12 @@
 package api
 
 import (
-	"encoding/json"
+	"log"
 	"math/big"
 	"testing"
 	"time"
+
+	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
@@ -19,343 +21,6 @@ import (
 
 // Core Api Testcases
 
-func TestPublicCoreAPI_CreateRPCInteraction(t *testing.T) {
-	t.Helper()
-
-	assetPayload := &common.AssetCreatePayload{
-		Symbol: "MOI",
-	}
-
-	assetCreatePayloadBytes, err := assetPayload.Bytes()
-	require.NoError(t, err)
-
-	logicPayload := &common.LogicPayload{
-		Callsite: "call site",
-	}
-
-	logicPayloadBytes, err := polo.Polorize(logicPayload)
-	require.NoError(t, err)
-
-	input := tests.CreateIXInputWithTestData(t, common.IxAssetCreate, assetCreatePayloadBytes, nil)
-	input.PerceivedValues = nil
-	input.TransferValues = nil
-
-	ixData := common.IxData{
-		Input:   input,
-		Compute: tests.CreateComputeWithTestData(t, tests.RandomHash(t), tests.GetTestKramaIDs(t, 2)),
-		Trust:   tests.CreateTrustWithTestData(t),
-	}
-
-	ixWithNilFields, err := common.NewInteraction(ixData, tests.RandomHash(t).Bytes())
-	require.NoError(t, err)
-
-	testcases := []struct {
-		name          string
-		grid          map[common.Address]common.TesseractHeightAndHash
-		ix            *common.Interaction
-		expectedError error
-	}{
-		{
-			name: "create rpc interaction for value transfer interaction",
-			ix:   createInteractionWithTestData(t, common.IxValueTransfer, json.RawMessage{}),
-		},
-		{
-			name: "create rpc interaction for asset creation interaction",
-			ix:   createInteractionWithTestData(t, common.IxAssetCreate, assetCreatePayloadBytes),
-		},
-		{
-			name: "create rpc interaction for logic deploy interaction",
-			ix:   createInteractionWithTestData(t, common.IxLogicDeploy, logicPayloadBytes),
-		},
-		{
-			name: "create rpc interaction for logic execute interaction",
-			ix:   createInteractionWithTestData(t, common.IxLogicInvoke, logicPayloadBytes),
-		},
-		{
-			name: "create rpc interaction with nil transfer values,perceived values, perceived proofs, ",
-			ix:   ixWithNilFields,
-		},
-		{
-			name: "create rpc interaction with grid data",
-			ix:   createInteractionWithTestData(t, common.IxValueTransfer, json.RawMessage{}),
-			grid: map[common.Address]common.TesseractHeightAndHash{
-				tests.RandomAddress(t): {
-					Height: 5,
-					Hash:   tests.RandomHash(t),
-				},
-				tests.RandomAddress(t): {
-					Height: 6,
-					Hash:   tests.RandomHash(t),
-				},
-			},
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			rpcIxn, err := createRPCInteraction(test.ix, test.grid, 0)
-
-			if test.expectedError != nil {
-				require.ErrorContains(t, err, test.expectedError.Error())
-
-				return
-			}
-
-			require.NoError(t, err)
-
-			checkForRPCIxn(t, test.ix, rpcIxn, test.grid)
-			checkForRPCTesseractParts(t, test.grid, rpcIxn.Parts)
-		})
-	}
-}
-
-func TestGetRPCTesseractPartsFromGrid(t *testing.T) {
-	testcases := []struct {
-		name string
-		grid map[common.Address]common.TesseractHeightAndHash
-	}{
-		{
-			name: "create rpc tesseract parts from grid",
-			grid: tests.CreateTesseractPartsWithTestData(t).Grid,
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			parts := getRPCTesseractPartsFromGrid(test.grid)
-
-			checkForRPCTesseractParts(t, test.grid, parts)
-		})
-	}
-}
-
-func TestPublicCoreAPI_CreateRPCTesseractGridID(t *testing.T) {
-	testcases := []struct {
-		name   string
-		gridID *common.TesseractGridID
-	}{
-		{
-			name: "create rpc tesseract grid id from tesseract grid id with nil tesseract parts",
-			gridID: &common.TesseractGridID{
-				Hash: tests.RandomHash(t),
-			},
-		},
-		{
-			name: "create rpc tesseract grid id from tesseract grid id",
-			gridID: &common.TesseractGridID{
-				Hash:  tests.RandomHash(t),
-				Parts: tests.CreateTesseractPartsWithTestData(t),
-			},
-		},
-		{
-			name:   "nil grid",
-			gridID: nil,
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			rpcTesseractGridID := createRPCTesseractGridID(test.gridID)
-
-			checkForRPCTesseractGridID(t, test.gridID, rpcTesseractGridID)
-		})
-	}
-}
-
-func TestPublicCoreAPI_CreateRPCContextLockInfos(t *testing.T) {
-	contextLockInfos := make(map[common.Address]common.ContextLockInfo)
-
-	for i := 0; i < 3; i++ {
-		contextLockInfos[tests.RandomAddress(t)] = common.ContextLockInfo{
-			ContextHash:   tests.RandomHash(t),
-			Height:        8,
-			TesseractHash: tests.RandomHash(t),
-		}
-	}
-
-	testcases := []struct {
-		name             string
-		contextLockInfos map[common.Address]common.ContextLockInfo
-	}{
-		{
-			name:             "create rpc context lock infos",
-			contextLockInfos: contextLockInfos,
-		},
-		{
-			name:             "nil context lock infos",
-			contextLockInfos: nil,
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			rpcContextLockInfos := createRPCContextLockInfos(test.contextLockInfos)
-
-			checkForRPCContextLockInfos(t, test.contextLockInfos, rpcContextLockInfos)
-		})
-	}
-}
-
-func TestPublicCoreAPI_CreateRPCDeltaGroups(t *testing.T) {
-	deltaGroups := make(map[common.Address]*common.DeltaGroup)
-
-	for i := 0; i < 3; i++ {
-		deltaGroups[tests.RandomAddress(t)] = &common.DeltaGroup{
-			Role:             4,
-			BehaviouralNodes: tests.GetTestKramaIDs(t, 2),
-			RandomNodes:      tests.GetTestKramaIDs(t, 2),
-			ReplacedNodes:    tests.GetTestKramaIDs(t, 2),
-		}
-	}
-
-	testcases := []struct {
-		name             string
-		contextLockInfos map[common.Address]*common.DeltaGroup
-	}{
-		{
-			name:             "create rpc context lock infos",
-			contextLockInfos: deltaGroups,
-		},
-		{
-			name:             "nil context lock infos",
-			contextLockInfos: nil,
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			rpcContextLockInfos := createRPCDeltaGroups(test.contextLockInfos)
-
-			checkForRPCDeltaGroups(t, test.contextLockInfos, rpcContextLockInfos)
-		})
-	}
-}
-
-func TestPublicCoreAPI_CreateRPCHeader(t *testing.T) {
-	headerWithNilGrid := tests.CreateHeaderWithTestData(t)
-	headerWithNilGrid.Extra.GridID = nil
-
-	testcases := []struct {
-		name   string
-		header common.TesseractHeader
-	}{
-		{
-			name:   "create rpc header from tesseract header with nil tesseract grid id",
-			header: headerWithNilGrid,
-		},
-		{
-			name:   "create rpc header from tesseract header",
-			header: tests.CreateHeaderWithTestData(t),
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			rpcHeader := createRPCHeader(test.header)
-
-			checkForRPCHeader(t, test.header, rpcHeader)
-		})
-	}
-}
-
-func TestPublicCoreAPI_CreateRPCBody(t *testing.T) {
-	headerWithNilGrid := tests.CreateHeaderWithTestData(t)
-	headerWithNilGrid.Extra.GridID = nil
-
-	testcases := []struct {
-		name string
-		body common.TesseractBody
-	}{
-		{
-			name: "create rpc body from tesseract body",
-			body: tests.CreateBodyWithTestData(t),
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			rpcBody := createRPCBody(test.body)
-
-			checkForRPCBody(t, test.body, rpcBody)
-		})
-	}
-}
-
-func TestPublicCoreAPI_CreateRPCTesseract(t *testing.T) {
-	assetPayload := &common.AssetCreatePayload{
-		Symbol: "MOI",
-	}
-
-	assetPayloadBytes, err := polo.Polorize(assetPayload)
-	require.NoError(t, err)
-
-	// make sure to fill at least one field of every field of tesseract so that we can verify that every field is copied
-	createTesseractParams := func(headerCallback func(header *common.TesseractHeader)) *tests.CreateTesseractParams {
-		return &tests.CreateTesseractParams{
-			Address: tests.RandomAddress(t),
-			Receipts: map[common.Hash]*common.Receipt{
-				tests.RandomHash(t): {IxHash: tests.RandomHash(t)},
-			},
-			Seal:           []byte{1, 2},
-			HeaderCallback: headerCallback,
-			BodyCallback: func(body *common.TesseractBody) {
-				body.StateHash = tests.RandomHash(t)
-			},
-		}
-	}
-
-	testcases := []struct {
-		name          string
-		ixParams      *tests.CreateIxParams
-		tsParams      *tests.CreateTesseractParams
-		expectedError error
-	}{
-		{
-			name:     "created rpc tesseract for non-genesis tesseract",
-			ixParams: getIxParamsWithInputComputeTrust(common.IxAssetCreate, assetPayloadBytes, 2, 3),
-			tsParams: createTesseractParams(createHeaderCallbackWithTestData(t)),
-		},
-		{
-			name: "create rpc tesseract for genesis tesseract",
-			tsParams: createTesseractParams(func(header *common.TesseractHeader) {
-				header.ClusterID = common.GenesisIdentifier
-				header.FuelLimit = 0
-				header.FuelUsed = 0
-			}),
-		},
-		{
-			name:     "nil interactions",
-			ixParams: nil,
-			tsParams: createTesseractParams(func(header *common.TesseractHeader) {
-				header.FuelLimit = 0
-				header.FuelUsed = 0
-			}),
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			if test.ixParams != nil {
-				test.tsParams.Ixns = []*common.Interaction{tests.CreateIX(t, test.ixParams)}
-			}
-
-			ts := tests.CreateTesseract(t, test.tsParams)
-
-			rpcTS, err := CreateRPCTesseract(ts)
-
-			if test.expectedError != nil {
-				require.ErrorContains(t, err, test.expectedError.Error())
-
-				return
-			}
-
-			require.NoError(t, err)
-
-			checkForRPCTesseract(t, ts, rpcTS)
-		})
-	}
-}
-
 func TestPublicCoreAPI_GetRPCTesseract(t *testing.T) {
 	height := uint64(8)
 
@@ -366,7 +31,7 @@ func TestPublicCoreAPI_GetRPCTesseract(t *testing.T) {
 	assetPayloadBytes, err := polo.Polorize(assetPayload)
 	require.NoError(t, err)
 
-	ix := tests.CreateIX(t, getIxParamsWithInputComputeTrust(common.IxAssetCreate, assetPayloadBytes, 2, 3))
+	ix := tests.CreateIX(t, rpcargs.GetIxParamsWithInputComputeTrust(common.IxAssetCreate, assetPayloadBytes, 2, 3))
 
 	tesseractParams := &tests.CreateTesseractParams{
 		Address: tests.RandomAddress(t),
@@ -384,10 +49,10 @@ func TestPublicCoreAPI_GetRPCTesseract(t *testing.T) {
 
 	ts := tests.CreateTesseract(t, tesseractParams)
 
-	c := NewMockChainManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, nil, nil, nil)
+	chainManager := NewMockChainManager(t)
+	coreAPI := NewPublicCoreAPI(nil, chainManager, nil, nil, nil, nil)
 
-	c.setTesseractByHash(t, ts)
+	chainManager.setTesseractByHash(t, ts)
 	hash := getTesseractHash(t, ts)
 
 	testcases := []struct {
@@ -425,7 +90,7 @@ func TestPublicCoreAPI_GetRPCTesseract(t *testing.T) {
 
 			require.NoError(t, err)
 
-			checkForRPCTesseract(t, ts, fetchedTesseract)
+			rpcargs.CheckForRPCTesseract(t, ts, fetchedTesseract)
 		})
 	}
 }
@@ -434,10 +99,10 @@ func TestPublicCoreAPI_GetTesseractByHash(t *testing.T) {
 	tesseractParams := tests.GetTesseractParamsMapWithIxns(t, 1, 2)
 	ts := tests.CreateTesseracts(t, 1, tesseractParams)
 
-	c := NewMockChainManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, nil, nil, nil)
+	chainManager := NewMockChainManager(t)
+	coreAPI := NewPublicCoreAPI(nil, chainManager, nil, nil, nil, nil)
 
-	c.setTesseractByHash(t, ts[0])
+	chainManager.setTesseractByHash(t, ts[0])
 
 	tsHash := tests.GetTesseractHash(t, ts[0])
 
@@ -479,18 +144,18 @@ func TestPublicCoreAPI_GetTesseractByHash(t *testing.T) {
 }
 
 func TestPublicCoreAPI_GetTesseractHashByHeight(t *testing.T) {
-	c := NewMockChainManager(t)
-	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, s, nil, nil)
+	chainManager := NewMockChainManager(t)
+	stateManager := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(nil, chainManager, stateManager, nil, nil, nil)
 	acc := tests.GetRandomAccMetaInfo(t, 8)
 
-	s.setAccountMetaInfo(t, acc.Address, acc)
+	stateManager.setAccountMetaInfo(t, acc.Address, acc)
 
 	address := tests.RandomAddress(t)
 	height := uint64(66)
 	hash := tests.RandomHash(t)
 
-	c.SetTesseractHeightEntry(address, height, hash)
+	chainManager.SetTesseractHeightEntry(address, height, hash)
 
 	testcases := []struct {
 		name          string
@@ -508,7 +173,7 @@ func TestPublicCoreAPI_GetTesseractHashByHeight(t *testing.T) {
 			name:          "failed fetch tesseract hash for latest tesseract height",
 			address:       tests.RandomAddress(t),
 			height:        -1,
-			expectedError: common.ErrKeyNotFound,
+			expectedError: common.ErrAccountNotFound,
 		},
 		{
 			name:         "fetch tesseract hash for latest tesseract height",
@@ -546,11 +211,11 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 	require.NoError(t, err)
 
 	exec := NewMockExecutionManager(t)
-	chain := NewMockChainManager(t)
-	coreAPI := NewPublicCoreAPI(nil, chain, nil, exec, nil)
+	chainManager := NewMockChainManager(t)
+	coreAPI := NewPublicCoreAPI(nil, chainManager, nil, exec, nil, nil)
 
 	ts := tests.CreateTesseracts(t, 1, nil)
-	chain.setTesseractByHash(t, ts[0])
+	chainManager.setTesseractByHash(t, ts[0])
 
 	tsHash := getTesseractHash(t, ts[0])
 
@@ -672,11 +337,11 @@ func TestIx_Call(t *testing.T) {
 	require.NoError(t, err)
 
 	exec := NewMockExecutionManager(t)
-	chain := NewMockChainManager(t)
-	coreAPI := NewPublicCoreAPI(nil, chain, nil, exec, nil)
+	chainManager := NewMockChainManager(t)
+	coreAPI := NewPublicCoreAPI(nil, chainManager, nil, exec, nil, nil)
 
 	ts := tests.CreateTesseracts(t, 1, nil)
-	chain.setTesseractByHash(t, ts[0])
+	chainManager.setTesseractByHash(t, ts[0])
 
 	tsHash := getTesseractHash(t, ts[0])
 
@@ -810,14 +475,14 @@ func TestPublicCoreAPI_GetTesseract(t *testing.T) {
 
 	ts := tests.CreateTesseracts(t, 2, tesseractParams)
 
-	c := NewMockChainManager(t)
-	sm := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, sm, nil, nil)
+	chainManager := NewMockChainManager(t)
+	stateManager := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(nil, chainManager, stateManager, nil, nil, nil)
 
-	c.SetTesseractHeightEntry(ts[0].Address(), ts[0].Height(), getTesseractHash(t, ts[0]))
+	chainManager.SetTesseractHeightEntry(ts[0].Address(), ts[0].Height(), getTesseractHash(t, ts[0]))
 
-	c.setTesseractByHash(t, ts[1])
-	c.setTesseractByHash(t, ts[0])
+	chainManager.setTesseractByHash(t, ts[1])
+	chainManager.setTesseractByHash(t, ts[0])
 
 	tsHash := tests.GetTesseractHash(t, ts[1])
 
@@ -845,8 +510,18 @@ func TestPublicCoreAPI_GetTesseract(t *testing.T) {
 			expectedError: common.ErrEmptyOptions,
 		},
 		{
+			name: "should return error if address is nil",
+			args: rpcargs.TesseractArgs{
+				Options: rpcargs.TesseractNumberOrHash{
+					TesseractNumber: &height,
+				},
+			},
+			expectedError: common.ErrInvalidAddress,
+		},
+		{
 			name: "should return error if height is invalid",
 			args: rpcargs.TesseractArgs{
+				Address: ts[0].Address(),
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &invalidHeight,
 				},
@@ -854,7 +529,17 @@ func TestPublicCoreAPI_GetTesseract(t *testing.T) {
 			expectedError: errors.New("invalid options"),
 		},
 		{
-			name: "get Tesseract by height with interactions",
+			name: "should return error if address is invalid",
+			args: rpcargs.TesseractArgs{
+				Address: tests.RandomAddress(t),
+				Options: rpcargs.TesseractNumberOrHash{
+					TesseractNumber: &rpcargs.LatestTesseractHeight,
+				},
+			},
+			expectedError: common.ErrAccountNotFound,
+		},
+		{
+			name: "get tesseract by height with interactions",
 			args: rpcargs.TesseractArgs{
 				Address:          ts[0].Address(),
 				WithInteractions: true,
@@ -863,16 +548,6 @@ func TestPublicCoreAPI_GetTesseract(t *testing.T) {
 				},
 			},
 			expectedTS: ts[0],
-		},
-		{
-			name: "hash not found for given tesseract and height",
-			args: rpcargs.TesseractArgs{
-				WithInteractions: true,
-				Options: rpcargs.TesseractNumberOrHash{
-					TesseractNumber: &height,
-				},
-			},
-			expectedError: common.ErrInvalidAddress,
 		},
 		{
 			name: "get tesseract by height without interactions",
@@ -928,18 +603,17 @@ func TestPublicCoreAPI_GetTesseract(t *testing.T) {
 func TestPublicCoreAPI_GetBalance(t *testing.T) {
 	ts := tests.CreateTesseract(t, nil)
 
-	c := NewMockChainManager(t)
-	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, s, nil, nil)
+	chainManager := NewMockChainManager(t)
+	stateManager := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(nil, chainManager, stateManager, nil, nil, nil)
 
-	c.setTesseractByHash(t, ts)
+	chainManager.setTesseractByHash(t, ts)
 
 	randomHash := tests.RandomHash(t)
 	tsHash := tests.GetTesseractHash(t, ts)
-	assetID, _ := tests.CreateTestAsset(t, ts.Address())
+	assetID, _ := tests.CreateTestAsset(t, tests.RandomAddress(t))
 
-	s.setBalance(ts.Address(), assetID, big.NewInt(300))
-	address := ts.Address()
+	stateManager.setBalance(ts.Address(), assetID, big.NewInt(300))
 
 	testcases := []struct {
 		name            string
@@ -950,7 +624,6 @@ func TestPublicCoreAPI_GetBalance(t *testing.T) {
 		{
 			name: "should return error if failed to fetch balance",
 			args: rpcargs.BalArgs{
-				Address: address,
 				AssetID: assetID,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
@@ -961,7 +634,6 @@ func TestPublicCoreAPI_GetBalance(t *testing.T) {
 		{
 			name: "fetched balance successfully",
 			args: rpcargs.BalArgs{
-				Address: address,
 				AssetID: assetID,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractHash: &tsHash,
@@ -989,16 +661,16 @@ func TestPublicCoreAPI_GetBalance(t *testing.T) {
 func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
 	ts := tests.CreateTesseracts(t, 2, nil)
 
-	c := NewMockChainManager(t)
-	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, s, nil, nil)
+	chainManager := NewMockChainManager(t)
+	stateManager := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(nil, chainManager, stateManager, nil, nil, nil)
+
+	chainManager.setTesseractByHash(t, ts[0])
+	chainManager.setTesseractByHash(t, ts[1])
 
 	context := getContext(t, 2)
-	s.setContext(t, ts[0].Address(), context)
-	c.setTesseractByHash(t, ts[0])
-	c.setTesseractByHash(t, ts[1])
+	stateManager.setContext(t, ts[0].Address(), context)
 
-	address := ts[0].Address()
 	tsHash := getTesseractsHashes(t, ts)
 	randomHash := tests.RandomHash(t)
 
@@ -1011,7 +683,6 @@ func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
 		{
 			name: "fetched context info successfully",
 			args: rpcargs.ContextInfoArgs{
-				Address: address,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractHash: &tsHash[0],
 				},
@@ -1030,7 +701,6 @@ func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
 		{
 			name: "should return error if context not found",
 			args: rpcargs.ContextInfoArgs{
-				Address: ts[1].Address(),
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractHash: &tsHash[1],
 				},
@@ -1057,19 +727,18 @@ func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
 func TestPublicCoreAPI_GetTDU(t *testing.T) {
 	ts := tests.CreateTesseracts(t, 2, nil)
 
-	c := NewMockChainManager(t)
-	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, s, nil, nil)
+	chainManager := NewMockChainManager(t)
+	stateManager := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(nil, chainManager, stateManager, nil, nil, nil)
 
-	c.setTesseractByHash(t, ts[0])
-	c.setTesseractByHash(t, ts[1])
+	chainManager.setTesseractByHash(t, ts[0])
+	chainManager.setTesseractByHash(t, ts[1])
 
 	randomHash := tests.RandomHash(t)
 	tsHash := getTesseractsHashes(t, ts)
-	assetID, _ := tests.CreateTestAsset(t, ts[0].Address())
+	assetID, _ := tests.CreateTestAsset(t, tests.RandomAddress(t))
 
-	s.setBalance(ts[0].Address(), assetID, big.NewInt(300))
-	address := ts[0].Address()
+	stateManager.setBalance(ts[0].Address(), assetID, big.NewInt(300))
 
 	testcases := []struct {
 		name          string
@@ -1080,7 +749,6 @@ func TestPublicCoreAPI_GetTDU(t *testing.T) {
 		{
 			name: "should return error if tesseract not found",
 			args: rpcargs.QueryArgs{
-				Address: address,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
 				},
@@ -1090,7 +758,6 @@ func TestPublicCoreAPI_GetTDU(t *testing.T) {
 		{
 			name: "should return error if TDU not found",
 			args: rpcargs.QueryArgs{
-				Address: address,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractHash: &tsHash[1],
 				},
@@ -1100,12 +767,11 @@ func TestPublicCoreAPI_GetTDU(t *testing.T) {
 		{
 			name: "fetched TDU successfully",
 			args: rpcargs.QueryArgs{
-				Address: address,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractHash: &tsHash[0],
 				},
 			},
-			expectedTDU: s.getTDU(ts[0].Address(), common.NilHash),
+			expectedTDU: stateManager.getTDU(ts[0].Address(), common.NilHash),
 		},
 	}
 
@@ -1131,20 +797,21 @@ func TestPublicCoreAPI_GetTDU(t *testing.T) {
 func TestPublicCoreAPI_GetInteractionCount(t *testing.T) {
 	ts := tests.CreateTesseract(t, nil)
 
-	c := NewMockChainManager(t)
-	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, s, nil, nil)
+	chainManager := NewMockChainManager(t)
+	stateManager := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(nil, chainManager, stateManager, nil, nil, nil)
 
-	c.setTesseractByHash(t, ts)
+	chainManager.setTesseractByHash(t, ts)
 
 	randomHash := tests.RandomHash(t)
 	tsHash := tests.GetTesseractHash(t, ts)
+
 	latestNonce := uint64(5)
 	acc, _ := tests.GetTestAccount(t, func(acc *common.Account) {
 		acc.Nonce = uint64(5)
 	})
 
-	s.setAccount(ts.Address(), *acc)
+	stateManager.setAccount(ts.Address(), *acc)
 
 	testcases := []struct {
 		name          string
@@ -1155,7 +822,6 @@ func TestPublicCoreAPI_GetInteractionCount(t *testing.T) {
 		{
 			name: "interaction count fetched successfully",
 			args: &rpcargs.InteractionCountArgs{
-				Address: ts.Address(),
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractHash: &tsHash,
 				},
@@ -1191,11 +857,11 @@ func TestPublicCoreAPI_GetInteractionCount(t *testing.T) {
 
 func TestPublicIXPoolAPI_GetPendingInteractionCount(t *testing.T) {
 	address := tests.RandomAddress(t)
-	ixpool := NewMockIxPool(t)
 
+	ixpool := NewMockIxPool(t)
 	ixpool.setNonce(address, 5)
 
-	coreAPI := NewPublicCoreAPI(ixpool, nil, nil, nil, nil)
+	coreAPI := NewPublicCoreAPI(ixpool, nil, nil, nil, nil, nil)
 
 	testcases := []struct {
 		name            string
@@ -1209,7 +875,6 @@ func TestPublicIXPoolAPI_GetPendingInteractionCount(t *testing.T) {
 				Address: address,
 			},
 			expectedIxCount: 5,
-			expectedErr:     nil,
 		},
 		{
 			name: "valid address without state",
@@ -1248,14 +913,15 @@ func TestPublicIXPoolAPI_GetPendingInteractionCount(t *testing.T) {
 func TestPublicCoreAPI_GetAccountState(t *testing.T) {
 	ts := tests.CreateTesseract(t, nil)
 
-	c := NewMockChainManager(t)
-	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, s, nil, nil)
+	chainManager := NewMockChainManager(t)
+	stateManager := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(nil, chainManager, stateManager, nil, nil, nil)
 
-	c.setTesseractByHash(t, ts)
+	chainManager.setTesseractByHash(t, ts)
 
 	randomHash := tests.RandomHash(t)
 	tsHash := tests.GetTesseractHash(t, ts)
+
 	acc, _ := tests.GetTestAccount(t, func(acc *common.Account) {
 		acc.Nonce = uint64(5)
 		acc.AccType = common.RegularAccount
@@ -1268,7 +934,7 @@ func TestPublicCoreAPI_GetAccountState(t *testing.T) {
 		acc.FileRoot = tests.RandomHash(t)
 	})
 
-	s.setAccount(ts.Address(), *acc)
+	stateManager.setAccount(ts.Address(), *acc)
 
 	testcases := []struct {
 		name          string
@@ -1279,7 +945,6 @@ func TestPublicCoreAPI_GetAccountState(t *testing.T) {
 		{
 			name: "account state fetched successfully",
 			args: &rpcargs.GetAccountArgs{
-				Address: ts.Address(),
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractHash: &tsHash,
 				},
@@ -1324,26 +989,25 @@ func TestPublicCoreAPI_GetAccountState(t *testing.T) {
 func TestPublicCoreAPI_GetLogicIDs(t *testing.T) {
 	ts := tests.CreateTesseracts(t, 2, nil)
 
-	c := NewMockChainManager(t)
-	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, s, nil, nil)
+	chainManager := NewMockChainManager(t)
+	stateManager := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(nil, chainManager, stateManager, nil, nil, nil)
 
-	c.setTesseractByHash(t, ts[0])
-	c.setTesseractByHash(t, ts[1])
+	chainManager.setTesseractByHash(t, ts[0])
+	chainManager.setTesseractByHash(t, ts[1])
 
-	address := ts[0].Address()
 	randomHash := tests.RandomHash(t)
 	tsHash := getTesseractsHashes(t, ts)
 
 	logicIDs := make([]common.LogicID, 0, 3)
 
 	for i := 0; i < 3; i++ {
-		logicID := common.NewLogicIDv0(true, false, false, false, uint16(i), address)
+		logicID := common.NewLogicIDv0(true, false, false, false, uint16(i), tests.RandomAddress(t))
 
 		logicIDs = append(logicIDs, logicID)
 	}
 
-	s.setLogicIDs(t, ts[0].Address(), logicIDs)
+	stateManager.setLogicIDs(t, ts[0].Address(), logicIDs)
 
 	testcases := []struct {
 		name             string
@@ -1354,7 +1018,6 @@ func TestPublicCoreAPI_GetLogicIDs(t *testing.T) {
 		{
 			name: "should return error if tesseract not found",
 			args: rpcargs.GetAccountArgs{
-				Address: address,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractHash: &randomHash,
 				},
@@ -1364,7 +1027,6 @@ func TestPublicCoreAPI_GetLogicIDs(t *testing.T) {
 		{
 			name: "should return error if logicIDs not found",
 			args: rpcargs.GetAccountArgs{
-				Address: address,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractHash: &tsHash[1],
 				},
@@ -1374,7 +1036,6 @@ func TestPublicCoreAPI_GetLogicIDs(t *testing.T) {
 		{
 			name: "fetched logicIDs successfully",
 			args: rpcargs.GetAccountArgs{
-				Address: address,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractHash: &tsHash[0],
 				},
@@ -1398,23 +1059,95 @@ func TestPublicCoreAPI_GetLogicIDs(t *testing.T) {
 	}
 }
 
-func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
-	ts := tests.CreateTesseract(t, nil)
+func TestPublicCoreAPI_GetRegistry(t *testing.T) {
+	ts := tests.CreateTesseracts(t, 2, nil)
 
 	c := NewMockChainManager(t)
 	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, s, nil, nil)
+	coreAPI := NewPublicCoreAPI(nil, c, s, nil, nil, nil)
+
+	c.setTesseractByHash(t, ts[0])
+	c.setTesseractByHash(t, ts[1])
+
+	randomHash := tests.RandomHash(t)
+	tsHash := getTesseractsHashes(t, ts)
+
+	assetIDs, assetDescriptors := tests.CreateTestAssets(t, 3)
+
+	registryMap, registryEntries := getRegistry(t, assetIDs, assetDescriptors)
+	sortRegistry(registryEntries)
+
+	s.setRegistry(t, ts[0].Address(), registryMap)
+
+	testcases := []struct {
+		name             string
+		args             rpcargs.QueryArgs
+		expectedRegistry []rpcargs.RPCRegistry
+		expectedError    error
+	}{
+		{
+			name: "should return error if tesseract not found",
+			args: rpcargs.QueryArgs{
+				Options: rpcargs.TesseractNumberOrHash{
+					TesseractHash: &randomHash,
+				},
+			},
+			expectedError: common.ErrFetchingTesseract,
+		},
+		{
+			name: "should return error if registry not found",
+			args: rpcargs.QueryArgs{
+				Options: rpcargs.TesseractNumberOrHash{
+					TesseractHash: &tsHash[1],
+				},
+			},
+			expectedError: errors.New("registry not found"),
+		},
+		{
+			name: "should fetch registry successfully",
+			args: rpcargs.QueryArgs{
+				Options: rpcargs.TesseractNumberOrHash{
+					TesseractHash: &tsHash[0],
+				},
+			},
+			expectedRegistry: registryEntries,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			registry, err := coreAPI.GetRegistry(&test.args)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			sortRegistry(registry)
+			require.Equal(t, test.expectedRegistry, registry)
+		})
+	}
+}
+
+func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
+	ts := tests.CreateTesseract(t, nil)
+
+	chainManager := NewMockChainManager(t)
+	stateManager := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(nil, chainManager, stateManager, nil, nil, nil)
 
 	randomHash := tests.RandomHash(t)
 	tsHash := tests.GetTesseractHash(t, ts)
 
-	logicID := getLogicID(t, ts.Address())
-	logicIDWithoutState := getLogicID(t, tests.RandomAddress(t))
+	logicID := tests.GetLogicID(t, ts.Address())
+	logicIDWithoutState := tests.GetLogicID(t, tests.RandomAddress(t))
 
 	poloManifest, jsonManifest, yamlManifest := tests.GetManifests(t, "./../../compute/manifests/ledger.yaml")
 
-	s.setLogicManifest(logicID.String(), poloManifest)
-	c.setTesseractByHash(t, ts)
+	stateManager.setLogicManifest(logicID.String(), poloManifest)
+	chainManager.setTesseractByHash(t, ts)
 
 	testcases := []struct {
 		name                  string
@@ -1487,22 +1220,22 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 func TestPublicCoreAPI_GetLogicStorage(t *testing.T) {
 	ts := tests.CreateTesseract(t, nil)
 
-	c := NewMockChainManager(t)
-	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, s, nil, nil)
+	chainManager := NewMockChainManager(t)
+	stateManager := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(nil, chainManager, stateManager, nil, nil, nil)
 
 	randomHash := tests.RandomHash(t)
 	tsHash := tests.GetTesseractHash(t, ts)
 
-	logicID := getLogicID(t, ts.Address())
-	logicIDWithoutState := getLogicID(t, tests.RandomAddress(t))
+	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
+	logicIDWithoutState := tests.GetLogicID(t, tests.RandomAddress(t))
 
-	c.setTesseractByHash(t, ts)
+	chainManager.setTesseractByHash(t, ts)
 
 	keys := getHexEntries(t, 1)
 	values := getHexEntries(t, 1)
 
-	s.SetStorageEntry(logicID, getStorageMap(keys, values))
+	stateManager.SetStorageEntry(logicID, getStorageMap(keys, values))
 
 	testcases := []struct {
 		name          string
@@ -1551,8 +1284,8 @@ func TestPublicCoreAPI_GetLogicStorage(t *testing.T) {
 
 func TestPublicCoreAPI_GetInteractionByTSHash(t *testing.T) {
 	chainManager := NewMockChainManager(t)
-	sm := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(nil, chainManager, sm, nil, nil)
+	stateManager := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(nil, chainManager, stateManager, nil, nil, nil)
 
 	ixParams := tests.GetIxParamsWithAddress(tests.RandomAddress(t), tests.RandomAddress(t))
 	ix := tests.CreateIX(t, ixParams)
@@ -1668,7 +1401,7 @@ func TestPublicCoreAPI_GetInteractionByTSHash(t *testing.T) {
 
 			require.NoError(t, err)
 
-			checkForRPCIxn(t, test.expectedIX, rpcIX, test.expectedParts.Grid)
+			rpcargs.CheckForRPCIxn(t, test.expectedIX, rpcIX, test.expectedParts.Grid)
 			require.Equal(t, *test.args.IxIndex, rpcIX.IxIndex)
 		})
 	}
@@ -1757,7 +1490,7 @@ func TestPublicCoreAPI_GetInteractionByHash(t *testing.T) {
 
 			chainManager.SetInteractionDataByIxHash(ixns[0], parts, ixIndex)
 
-			coreAPI := NewPublicCoreAPI(ixpool, chainManager, nil, nil, nil)
+			coreAPI := NewPublicCoreAPI(ixpool, chainManager, nil, nil, nil, nil)
 
 			rpcIX, err := coreAPI.GetInteractionByHash(&test.args)
 			if test.expectedError != nil {
@@ -1769,7 +1502,7 @@ func TestPublicCoreAPI_GetInteractionByHash(t *testing.T) {
 			require.NoError(t, err)
 
 			if test.expectedIXData.parts != nil {
-				checkForRPCIxn(t, test.expectedIXData.ix, rpcIX, test.expectedIXData.parts.Grid)
+				rpcargs.CheckForRPCIxn(t, test.expectedIXData.ix, rpcIX, test.expectedIXData.parts.Grid)
 			}
 
 			require.Equal(t, uint64(test.expectedIXData.ixIndex), rpcIX.IxIndex.ToUint64())
@@ -1786,13 +1519,14 @@ func TestPublicCoreAPI_GetInteractionReceipt(t *testing.T) {
 	parts := tests.CreateTesseractPartsWithTestData(t)
 	ixIndex := 8
 
-	chainManager.SetInteractionDataByIxHash(ix, parts, ixIndex)
-
 	receipt := tests.CreateReceiptWithTestData(t)
 	receipt.IxHash = ix.Hash()
+
+	chainManager.SetInteractionDataByIxHash(ix, parts, ixIndex)
 	chainManager.setReceiptByIXHash(receipt.IxHash, receipt)
 	chainManager.setReceiptByIXHash(ixHashWithoutParts, receipt)
-	coreAPI := NewPublicCoreAPI(nil, chainManager, nil, nil, nil)
+
+	coreAPI := NewPublicCoreAPI(nil, chainManager, nil, nil, nil, nil)
 
 	testcases := []struct {
 		name            string
@@ -1846,23 +1580,24 @@ func TestPublicCoreAPI_GetInteractionReceipt(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			checkForRPCReceipt(t, test.grid, test.ix, test.expectedReceipt, receipt, test.ixIndex)
+			rpcargs.CheckForRPCReceipt(t, test.grid, test.ix, test.expectedReceipt, receipt, test.ixIndex)
 		})
 	}
 }
 
 func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
 	address := tests.RandomAddress(t)
-	sm := NewMockStateManager(t)
-	c := NewMockChainManager(t)
-	assetID, assetInfo := tests.CreateTestAsset(t, address)
+	stateManager := NewMockStateManager(t)
+	chainManager := NewMockChainManager(t)
 
 	ts := tests.CreateTesseract(t, nil)
 	tsHash := tests.GetTesseractHash(t, ts)
-	c.setTesseractByHash(t, ts)
-	sm.addAsset(assetID, assetInfo)
+	chainManager.setTesseractByHash(t, ts)
 
-	coreAPI := NewPublicCoreAPI(nil, c, sm, nil, nil)
+	assetID, assetInfo := tests.CreateTestAsset(t, address)
+	stateManager.addAsset(assetID, assetInfo)
+
+	coreAPI := NewPublicCoreAPI(nil, chainManager, stateManager, nil, nil, nil)
 
 	testcases := []struct {
 		name                    string
@@ -1914,16 +1649,16 @@ func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
 func TestPublicCoreAPI_GetAccountMetaInfo(t *testing.T) {
 	ts := tests.CreateTesseract(t, nil)
 
-	c := NewMockChainManager(t)
-	s := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, s, nil, nil)
+	chainManager := NewMockChainManager(t)
+	stateManager := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(nil, chainManager, stateManager, nil, nil, nil)
 
-	c.setTesseractByHash(t, ts)
+	chainManager.setTesseractByHash(t, ts)
 
 	tsHash := tests.GetTesseractHash(t, ts)
 	acc := tests.GetRandomAccMetaInfo(t, 1)
 
-	s.setAccountMetaInfo(t, ts.Address(), acc)
+	stateManager.setAccountMetaInfo(t, ts.Address(), acc)
 
 	testcases := []struct {
 		name                string
@@ -1972,10 +1707,10 @@ func TestPublicCoreAPI_GetAccountMetaInfo(t *testing.T) {
 }
 
 func TestPublicCoreAPI_Syncing(t *testing.T) {
-	addr := tests.RandomAddress(t)
+	addrs := tests.GetAddresses(t, 5)
 
 	syncer := NewMockSyncer(t)
-	coreAPI := NewPublicCoreAPI(nil, nil, nil, nil, syncer)
+	coreAPI := NewPublicCoreAPI(nil, nil, nil, nil, syncer, nil)
 
 	accSyncStatus := &rpcargs.AccSyncStatus{
 		CurrentHeight:     2,
@@ -1990,27 +1725,53 @@ func TestPublicCoreAPI_Syncing(t *testing.T) {
 		IsInitialSyncDone:     false,
 	}
 
-	syncer.setAccountSyncStatus(addr, accSyncStatus)
-	syncer.setNodeSyncStatus(nodeSyncStatus)
+	pendingNodeSyncStatus := &rpcargs.NodeSyncStatus{
+		TotalPendingAccounts:  5,
+		PendingAccounts:       addrs,
+		PrincipalSyncDoneTime: hexutil.Uint64(time.Now().UnixNano()),
+		IsPrincipalSyncDone:   true,
+		IsInitialSyncDone:     false,
+	}
 
 	testcases := []struct {
 		name                       string
 		args                       *rpcargs.SyncStatusRequest
+		preTestFn                  func()
 		expectedSyncStatusResponse *rpcargs.SyncStatusResponse
 		expectedError              error
 	}{
 		{
 			name: "account sync status fetched successfully",
 			args: &rpcargs.SyncStatusRequest{
-				Address: addr,
+				Address: addrs[0],
+			},
+			preTestFn: func() {
+				syncer.setAccountSyncStatus(addrs[0], accSyncStatus)
 			},
 			expectedSyncStatusResponse: &rpcargs.SyncStatusResponse{
 				AccSyncResp: accSyncStatus,
 			},
 		},
 		{
-			name: "node sync status fetched successfully",
-			args: &rpcargs.SyncStatusRequest{},
+			name: "node sync status with pending accounts fetched successfully",
+			args: &rpcargs.SyncStatusRequest{
+				PendingAccounts: true,
+			},
+			preTestFn: func() {
+				syncer.setPendingNodeSyncStatus(pendingNodeSyncStatus)
+			},
+			expectedSyncStatusResponse: &rpcargs.SyncStatusResponse{
+				NodeSyncResp: pendingNodeSyncStatus,
+			},
+		},
+		{
+			name: "node sync status without pending accounts fetched successfully",
+			args: &rpcargs.SyncStatusRequest{
+				PendingAccounts: false,
+			},
+			preTestFn: func() {
+				syncer.setNodeSyncStatus(nodeSyncStatus)
+			},
 			expectedSyncStatusResponse: &rpcargs.SyncStatusResponse{
 				NodeSyncResp: nodeSyncStatus,
 			},
@@ -2026,6 +1787,10 @@ func TestPublicCoreAPI_Syncing(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
+			if test.preTestFn != nil {
+				test.preTestFn()
+			}
+
 			syncStatus, err := coreAPI.Syncing(test.args)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -2039,33 +1804,6 @@ func TestPublicCoreAPI_Syncing(t *testing.T) {
 	}
 }
 
-func TestPublicCoreAPI_CreateRPCReceipt(t *testing.T) {
-	ixParams := tests.GetIxParamsWithAddress(tests.RandomAddress(t), tests.RandomAddress(t))
-	testcases := []struct {
-		name    string
-		receipt *common.Receipt
-		ix      *common.Interaction
-		grid    map[common.Address]common.TesseractHeightAndHash
-		ixIndex int
-	}{
-		{
-			name:    "create rpc receipt",
-			receipt: tests.CreateReceiptWithTestData(t),
-			ix:      tests.CreateIX(t, ixParams),
-			grid:    tests.CreateTesseractPartsWithTestData(t).Grid,
-			ixIndex: 8,
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			receipt := createRPCReceipt(test.receipt, test.ix, test.grid, test.ixIndex)
-
-			checkForRPCReceipt(t, test.grid, test.ix, test.receipt, receipt, test.ixIndex)
-		})
-	}
-}
-
 func TestPublicCoreAPI_normalizeOptions(t *testing.T) {
 	invalidHeight := int64(-2)
 	validHeight := int64(8)
@@ -2075,14 +1813,14 @@ func TestPublicCoreAPI_normalizeOptions(t *testing.T) {
 
 	ts := tests.CreateTesseracts(t, 2, tesseractParams)
 
-	c := NewMockChainManager(t)
-	sm := NewMockStateManager(t)
-	coreAPI := NewPublicCoreAPI(nil, c, sm, nil, nil)
+	chainManager := NewMockChainManager(t)
+	stateManager := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(nil, chainManager, stateManager, nil, nil, nil)
 
-	c.SetTesseractHeightEntry(ts[0].Address(), ts[0].Height(), getTesseractHash(t, ts[0]))
+	chainManager.SetTesseractHeightEntry(ts[0].Address(), ts[0].Height(), getTesseractHash(t, ts[0]))
 
-	c.setTesseractByHash(t, ts[1])
-	c.setTesseractByHash(t, ts[0])
+	chainManager.setTesseractByHash(t, ts[1])
+	chainManager.setTesseractByHash(t, ts[0])
 
 	tsHash := tests.GetTesseractHash(t, ts[1])
 
@@ -2131,4 +1869,176 @@ func TestPublicCoreAPI_normalizeOptions(t *testing.T) {
 			require.Equal(t, test.expectedStateHashes, stateHashes)
 		})
 	}
+}
+
+func TestPublicCoreAPI_NewTesseractFilter(t *testing.T) {
+	filterManager := NewMockFilterManager(t)
+	coreAPI := NewPublicCoreAPI(nil, nil, nil, nil, nil, filterManager)
+
+	filterResponse := coreAPI.NewTesseractFilter()
+	require.NotEmpty(t, filterResponse.FilterID)
+
+	res := filterManager.getTSFilter(filterResponse.FilterID)
+	require.True(t, res)
+}
+
+func TestPublicCoreAPI_NewTesseractsByAccountFilter(t *testing.T) {
+	filterManager := NewMockFilterManager(t)
+	coreAPI := NewPublicCoreAPI(nil, nil, nil, nil, nil, filterManager)
+
+	testcases := []struct {
+		name           string
+		args           *rpcargs.TesseractByAccountFilterArgs
+		expectedResult bool
+		expectedError  error
+	}{
+		{
+			name: "setup ts by account filter successfully",
+			args: &rpcargs.TesseractByAccountFilterArgs{
+				Addr: tests.RandomAddress(t),
+			},
+			expectedResult: true,
+		},
+		{
+			name: "setup ts by account filter with nil address",
+			args: &rpcargs.TesseractByAccountFilterArgs{
+				Addr: common.NilAddress,
+			},
+			expectedError: common.ErrInvalidAddress,
+		},
+	}
+
+	for _, testcase := range testcases {
+		filterResponse, err := coreAPI.NewTesseractsByAccountFilter(testcase.args)
+		if !testcase.expectedResult {
+			require.Equal(t, testcase.expectedError, err)
+
+			return
+		}
+
+		require.NotEmpty(t, filterResponse.FilterID)
+		res, ok := filterManager.getTSByAccFilter(filterResponse.FilterID)
+		require.True(t, ok)
+		require.Equal(t, testcase.args.Addr, res.tsByAccFilterParams)
+	}
+}
+
+func TestPublicCoreAPI_NewLogFilter(t *testing.T) {
+	filterManager := NewMockFilterManager(t)
+	coreAPI := NewPublicCoreAPI(nil, nil, nil, nil, nil, filterManager)
+
+	args := &websocket.LogQuery{}
+
+	hash, err := common.PoloHash(args)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	filterResponse := coreAPI.NewLogFilter(args)
+	require.NotEmpty(t, filterResponse.FilterID)
+
+	res, ok := filterManager.getLogFilter(filterResponse.FilterID)
+	require.True(t, ok)
+	require.Equal(t, hash, res)
+}
+
+func TestPublicCoreAPI_PendingIxnsFilter(t *testing.T) {
+	filterManager := NewMockFilterManager(t)
+	coreAPI := NewPublicCoreAPI(nil, nil, nil, nil, nil, filterManager)
+
+	filterResponse := coreAPI.PendingIxnsFilter()
+	require.NotEmpty(t, filterResponse.FilterID)
+
+	res := filterManager.getIxnsFilter(filterResponse.FilterID)
+	require.True(t, res)
+}
+
+func TestPublicCoreAPI_RemoveFilter(t *testing.T) {
+	filterManager := NewMockFilterManager(t)
+	coreAPI := NewPublicCoreAPI(nil, nil, nil, nil, nil, filterManager)
+
+	reqArgs := &rpcargs.TesseractByAccountFilterArgs{
+		Addr: tests.RandomAddress(t),
+	}
+
+	// add new tesseract by account filter
+	filterResponse, err := coreAPI.NewTesseractsByAccountFilter(reqArgs)
+	require.NoError(t, err)
+
+	respArgs := &rpcargs.FilterArgs{
+		FilterID: filterResponse.FilterID,
+	}
+
+	// remove new tesseract by account filter
+	response := coreAPI.RemoveFilter(respArgs)
+	require.True(t, response.Status)
+
+	// removing already removed filter
+	response = coreAPI.RemoveFilter(respArgs)
+	require.False(t, response.Status)
+}
+
+func TestPublicCoreAPI_GetFilterChanges(t *testing.T) {
+	filterManager := NewMockFilterManager(t)
+	coreAPI := NewPublicCoreAPI(nil, nil, nil, nil, nil, filterManager)
+
+	reqArgs := &rpcargs.TesseractByAccountFilterArgs{
+		Addr: tests.RandomAddress(t),
+	}
+
+	// add new tesseract by account filter
+	filterResponse, err := coreAPI.NewTesseractsByAccountFilter(reqArgs)
+	require.NoError(t, err)
+
+	ts := tests.CreateTesseract(t, nil)
+	rpcTS, err := rpcargs.CreateRPCTesseract(ts)
+	require.NoError(t, err)
+
+	filterManager.setTSByAccFilterChanges(filterResponse.FilterID, []*rpcargs.RPCTesseract{rpcTS})
+
+	args := &rpcargs.FilterArgs{
+		FilterID: filterResponse.FilterID,
+	}
+
+	// get filter changes for new tesseract by account filter
+	respArgs, err := coreAPI.GetFilterChanges(args)
+	require.NoError(t, err)
+
+	resp, ok := respArgs.([]*rpcargs.RPCTesseract)
+	require.True(t, ok)
+	require.Equal(t, []*rpcargs.RPCTesseract{rpcTS}, resp)
+}
+
+func TestPublicCoreAPI_GetLogs(t *testing.T) {
+	filterManager := NewMockFilterManager(t)
+	coreAPI := NewPublicCoreAPI(nil, nil, nil, nil, nil, filterManager)
+
+	addr := tests.RandomAddress(t)
+	args := &websocket.LogQuery{
+		StartHeight: 1,
+		EndHeight:   10,
+		Address:     addr,
+		Topics:      nil,
+	}
+
+	filterResponse := coreAPI.NewLogFilter(args)
+	require.NotEmpty(t, filterResponse.FilterID)
+
+	dummyLogs := []*rpcargs.RPCLog{
+		{
+			Addresses: []common.Address{addr},
+		},
+	}
+
+	filterManager.setLogs(filterResponse.FilterID, dummyLogs)
+
+	query := &rpcargs.FilterQueryArgs{
+		StartHeight: NumPointer(t, 1),
+		EndHeight:   NumPointer(t, 10),
+		Address:     addr,
+		Topics:      nil,
+	}
+	logs, err := coreAPI.GetLogs(query)
+	require.NoError(t, err)
+	require.Equal(t, dummyLogs, logs)
 }

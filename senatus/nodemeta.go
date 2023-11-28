@@ -33,6 +33,7 @@ func (miMsg *NodeMetaInfoMsg) HelloMessageBytes() ([]byte, error) {
 
 func (miMsg *NodeMetaInfoMsg) NodeMetaInfo() *NodeMetaInfo {
 	return &NodeMetaInfo{
+		KramaID:       miMsg.KramaID,
 		Addrs:         miMsg.Address,
 		NTQ:           miMsg.NTQ,
 		WalletCount:   miMsg.WalletCount,
@@ -42,8 +43,8 @@ func (miMsg *NodeMetaInfoMsg) NodeMetaInfo() *NodeMetaInfo {
 
 type NodeMetaInfo struct {
 	mtx           sync.RWMutex
-	Addrs         []string
 	KramaID       id.KramaID
+	Addrs         []string
 	NTQ           float32
 	RTT           int64
 	WalletCount   int32

@@ -67,7 +67,7 @@ func WriteToGenesisFile(path string, genesis *common.GenesisFile) error {
 	return nil
 }
 
-func GetThisNodeIP() (string, error) {
+func GetIP() (string, error) {
 	// Retrieve the network interface addresses of the host machine
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {

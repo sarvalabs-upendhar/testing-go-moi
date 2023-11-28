@@ -41,3 +41,38 @@ func TestSlotRequired(t *testing.T) {
 		})
 	}
 }
+
+func TestIncreaseWithinLimit(t *testing.T) {
+	testcases := []struct {
+		name              string
+		slots             uint64
+		shouldUpdate      bool
+		expectedNewHeight uint64
+	}{
+		{
+			name:              "total slots should be increased",
+			slots:             5,
+			shouldUpdate:      true,
+			expectedNewHeight: 100,
+		},
+		{
+			name:              "total slots shouldn't be increased",
+			slots:             6,
+			shouldUpdate:      false,
+			expectedNewHeight: 95,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			g := slotGauge{
+				total: 95,
+				max:   100,
+			}
+
+			updated := g.increaseWithinLimit(test.slots)
+			require.Equal(t, test.shouldUpdate, updated)
+			require.Equal(t, test.expectedNewHeight, g.read())
+		})
+	}
+}

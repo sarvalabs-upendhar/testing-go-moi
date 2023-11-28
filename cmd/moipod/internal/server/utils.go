@@ -208,6 +208,10 @@ func (p *Params) applyFlags(cmd *cobra.Command, path string) error {
 		p.rawCfg.LogFilePath = LogDirPath
 	}
 
+	if isAllowIPv6AddressesSet(cmd) {
+		p.rawCfg.Network.AllowIPv6Addresses = AllowIPv6Addresses
+	}
+
 	if isDiscoveryIntervalSet(cmd) {
 		p.rawCfg.Network.DiscoveryInterval = DiscoveryInterval
 	}
@@ -258,6 +262,8 @@ func (p *Params) getNetworkConfig() *config.NetworkConfig {
 		OutboundConnLimit:  p.rawCfg.Network.OutboundConnLimit,
 		MinimumConnections: p.rawCfg.Network.MinimumConnections,
 		MaximumConnections: p.rawCfg.Network.MaximumConnections,
+		AllowIPv6Addresses: p.rawCfg.Network.AllowIPv6Addresses,
+		DisablePrivateIP:   p.rawCfg.Network.DisablePrivateIP,
 		DiscoveryInterval:  p.rawCfg.Network.DiscoveryInterval,
 	}
 }
@@ -313,9 +319,9 @@ func (p *Params) getExecutionConfig() *config.ExecutionConfig {
 
 func (p *Params) getIXPoolConfig() *config.IxPoolConfig {
 	return &config.IxPoolConfig{
-		Mode:       p.rawCfg.Ixpool.Mode,
-		PriceLimit: p.rawCfg.Ixpool.PriceLimit.ToInt(),
-		MaxSlots:   p.rawCfg.Ixpool.MaxSlots,
+		Mode:       p.rawCfg.IxPool.Mode,
+		PriceLimit: p.rawCfg.IxPool.PriceLimit.ToInt(),
+		MaxSlots:   p.rawCfg.IxPool.MaxSlots,
 	}
 }
 
@@ -324,6 +330,12 @@ func (p *Params) getTelemetryConfig() *config.Telemetry {
 		PrometheusAddr: p.PrometheusAddr,
 		OtlpAddress:    p.rawCfg.Telemetry.OtlpAddress,
 		Token:          p.rawCfg.Telemetry.Token,
+	}
+}
+
+func (p *Params) getJSONRPCConfig() *config.JSONRPCConfig {
+	return &config.JSONRPCConfig{
+		TesseractRangeLimit: config.DefaultTesseractRangeLimit,
 	}
 }
 
@@ -367,6 +379,7 @@ func (p *Params) generateNodeConfig(dataDir string) *config.Config {
 		Syncer:         p.getSyncerConfig(),
 		Metrics:        *p.getTelemetryConfig(),
 		LogFilePath:    p.rawCfg.LogFilePath,
+		JSONRPC:        p.getJSONRPCConfig(),
 		NetworkID:      p.rawCfg.NetworkID,
 	}
 }
@@ -394,6 +407,10 @@ func isConfigPathSet(cmd *cobra.Command) bool {
 
 func isLogPathSet(cmd *cobra.Command) bool {
 	return cmd.Flags().Changed(LogDirPathFlag)
+}
+
+func isAllowIPv6AddressesSet(cmd *cobra.Command) bool {
+	return cmd.Flags().Changed(allowIPv6AddressesFlag)
 }
 
 func isDiscoveryIntervalSet(cmd *cobra.Command) bool {
@@ -436,7 +453,7 @@ func isP2PHostIPSet(cmd *cobra.Command) bool {
 	return cmd.Flags().Changed(p2pHostIPFlag)
 }
 
-// BuildNodeConfig function creates a node configuration by combining a default configuration, a configuration file,
+// BuildNodeConfig function creates a node configuration by combining default configuration and the configuration file,
 // and any provided flags. Here are the steps involved:
 // 1. Default configuration is selected based on the "babylon" flag.
 // 2. If a configuration file path is provided, it overrides the default configuration.

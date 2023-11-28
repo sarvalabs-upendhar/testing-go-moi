@@ -20,12 +20,12 @@ func dbKey(address common.Address, prefix Prefix, key []byte) []byte {
 	return append(address.Bytes(), append([]byte{prefix.Byte()}, key...)...)
 }
 
-func NtqDBKey(peerID peer.ID) []byte {
-	return append([]byte{NTQ.Byte()}, []byte(peerID)...)
+func SenatusDBKey(peerID peer.ID) []byte {
+	return append([]byte{Senatus.Byte()}, []byte(peerID)...)
 }
 
-func NtqCacheKey(peerID peer.ID) string {
-	return common.BytesToHex([]byte{NTQ.Byte()}) + string(peerID)
+func SenatusCacheKey(peerID peer.ID) string {
+	return common.BytesToHex([]byte{Senatus.Byte()}) + string(peerID)
 }
 
 func AccSyncStatusKey(addrs common.Address) []byte {
@@ -54,6 +54,10 @@ func AccountKey(address common.Address, stateHash common.Hash) []byte {
 
 func PreImageKey(address common.Address, hash common.Hash) []byte {
 	return dbKey(address, PreImage, hash.Bytes())
+}
+
+func SenatusPeerCountKey() []byte {
+	return []byte("senatus_peer_count")
 }
 
 func tesseractHeightKey(addr common.Address, height uint64) []byte {

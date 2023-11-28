@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	id "github.com/sarvalabs/go-moi/common/kramaid"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
@@ -204,7 +205,7 @@ func WaitForResponseMsg(
 	from id.KramaID,
 	network *MockNetwork,
 ) (*message.AgoraResponseMsg, error) {
-	resp, err := tests.RetryUntilTimeout(ctx, func() (interface{}, bool) {
+	resp, err := tests.RetryUntilTimeout(ctx, 500*time.Millisecond, func() (interface{}, bool) {
 		network.mtx.Lock()
 		defer network.mtx.Unlock()
 

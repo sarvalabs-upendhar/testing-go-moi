@@ -2349,7 +2349,7 @@ func TestGetTesseractPartsByGridHash(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			parts, err := c.getTesseractPartsByGridHash(test.gridHash)
+			parts, err := c.GetTesseractPartsByGridHash(test.gridHash)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())

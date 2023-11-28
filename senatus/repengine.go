@@ -3,7 +3,6 @@ package senatus
 import (
 	"bytes"
 	"context"
-	"net/http"
 	"sync"
 	"time"
 
@@ -30,13 +29,15 @@ import (
 const (
 	MaxQueueSize   = 200
 	DefaultPeerNTQ = 0.5
-	MsgsPerWorker  = 1
+	MsgsPerWorker  = 10
 )
 
 type senatusStore interface {
 	ReadEntry(key []byte) ([]byte, error)
 	NewBatchWriter() db.BatchWriter
 	GetEntriesWithPrefix(ctx context.Context, prefix []byte) (chan *common.DBEntry, error)
+	UpdatePeerCount(count uint64) error
+	TotalPeersCount() (uint64, error)
 }
 
 type network interface {
@@ -49,7 +50,6 @@ type ReputationEngine struct {
 	ctxCancel           context.CancelFunc
 	logger              hclog.Logger
 	db                  senatusStore
-	client              *http.Client
 	cache               *lru.Cache
 	dirtyLock           sync.RWMutex
 	dirtyEntries        map[peer.ID]*NodeMetaInfo
@@ -57,13 +57,13 @@ type ReputationEngine struct {
 	msgQueueLock        sync.Mutex //nolint:unused
 	signalChan          chan struct{}
 	pendingMessageQueue *RequestQueue
+	peerCount           uint64
 }
 
 func NewReputationEngine(
 	logger hclog.Logger,
 	network network,
 	db senatusStore,
-	selfID id.KramaID,
 	selfInfo *NodeMetaInfo,
 ) (*ReputationEngine, error) {
 	cache, err := lru.New(100)
@@ -71,30 +71,32 @@ func NewReputationEngine(
 		return nil, errors.Wrap(err, "reputation engine failed")
 	}
 
+	totalPeers, err := db.TotalPeersCount()
+	if err != nil && !errors.Is(err, common.ErrKeyNotFound) {
+		return nil, errors.Wrap(err, "failed to fetch total peers count")
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	r := &ReputationEngine{
-		ctx:       ctx,
-		ctxCancel: cancel,
-		logger:    logger.Named("Reputation-Engine"),
-		kramaID:   selfID,
-		db:        db,
-		network:   network,
-		client: &http.Client{Transport: &http.Transport{
-			MaxIdleConns:    1024,
-			MaxConnsPerHost: 1000,
-		}},
+		ctx:                 ctx,
+		ctxCancel:           cancel,
+		logger:              logger.Named("Reputation-Engine"),
+		kramaID:             selfInfo.KramaID,
+		db:                  db,
+		network:             network,
 		cache:               cache,
 		signalChan:          make(chan struct{}),
 		dirtyEntries:        make(map[peer.ID]*NodeMetaInfo),
 		pendingMessageQueue: NewRequestQueue(MaxQueueSize), // Max message queue limit is 200
+		peerCount:           totalPeers,
 	}
 
-	return r, r.UpdatePeer(selfID, selfInfo)
+	return r, r.UpdatePeer(selfInfo)
 }
 
 func (r *ReputationEngine) nodeMetaInfo(peerID peer.ID) (*NodeMetaInfo, error) {
-	data, exists := r.cache.Get(storage.NtqCacheKey(peerID))
+	data, exists := r.cache.Get(storage.SenatusCacheKey(peerID))
 	if exists {
 		reputationInfo, ok := data.(*NodeMetaInfo)
 		if !ok {
@@ -111,7 +113,7 @@ func (r *ReputationEngine) nodeMetaInfo(peerID peer.ID) (*NodeMetaInfo, error) {
 		return r.dirtyEntries[peerID], nil
 	}
 
-	rawData, err := r.db.ReadEntry(storage.NtqDBKey(peerID))
+	rawData, err := r.db.ReadEntry(storage.SenatusDBKey(peerID))
 	if err != nil {
 		return nil, common.ErrKramaIDNotFound
 	}
@@ -121,13 +123,13 @@ func (r *ReputationEngine) nodeMetaInfo(peerID peer.ID) (*NodeMetaInfo, error) {
 		return nil, err
 	}
 
-	r.cache.Add(storage.NtqCacheKey(peerID), info)
+	r.cache.Add(storage.SenatusCacheKey(peerID), info)
 
 	return info, nil
 }
 
-func (r *ReputationEngine) UpdatePeer(kramaID id.KramaID, data *NodeMetaInfo) error {
-	peerID, err := kramaID.DecodedPeerID()
+func (r *ReputationEngine) UpdatePeer(data *NodeMetaInfo) error {
+	peerID, err := data.KramaID.DecodedPeerID()
 	if err != nil {
 		return common.ErrInvalidKramaID
 	}
@@ -171,6 +173,12 @@ func (r *ReputationEngine) AddNewPeerWithPeerID(peerID peer.ID, data *NodeMetaIn
 		}
 	} else {
 		info = data
+
+		r.peerCount++
+
+		if err = r.db.UpdatePeerCount(1); err != nil {
+			return err
+		}
 	}
 
 	r.dirtyLock.Lock()
@@ -178,7 +186,7 @@ func (r *ReputationEngine) AddNewPeerWithPeerID(peerID peer.ID, data *NodeMetaIn
 
 	r.dirtyEntries[peerID] = info
 
-	r.cache.Add(storage.NtqCacheKey(peerID), info)
+	r.cache.Add(storage.SenatusCacheKey(peerID), info)
 
 	r.logger.Trace("Added peer to the NTQ table", "peer-ID", peerID)
 
@@ -268,7 +276,7 @@ func (r *ReputationEngine) UpdatePublicKey(kramaID id.KramaID, pk []byte) error 
 	if info != nil {
 		info.UpdatePublicKey(pk)
 
-		r.cache.Add(storage.NtqCacheKey(peerID), info)
+		r.cache.Add(storage.SenatusCacheKey(peerID), info)
 
 		r.dirtyLock.Lock()
 		defer r.dirtyLock.Unlock()
@@ -283,7 +291,7 @@ func (r *ReputationEngine) UpdatePublicKey(kramaID id.KramaID, pk []byte) error 
 		NTQ:       DefaultPeerNTQ,
 	}
 
-	r.cache.Add(storage.NtqCacheKey(peerID), info)
+	r.cache.Add(storage.SenatusCacheKey(peerID), info)
 
 	r.dirtyLock.Lock()
 	defer r.dirtyLock.Unlock()
@@ -380,17 +388,26 @@ func (r *ReputationEngine) GetPublicKey(kramaID id.KramaID) ([]byte, error) {
 	return info.PublicKey, nil
 }
 
+func (r *ReputationEngine) TotalPeerCount() uint64 {
+	return r.peerCount
+}
+
 func (r *ReputationEngine) StreamPeerInfos(ctx context.Context) (chan *networkmsg.PeerInfo, error) {
 	ch := make(chan *networkmsg.PeerInfo)
 
-	entriesChan, err := r.db.GetEntriesWithPrefix(ctx, []byte{storage.NTQ.Byte()})
+	entriesChan, err := r.db.GetEntriesWithPrefix(ctx, []byte{storage.Senatus.Byte()})
 	if err != nil {
 		return nil, err
 	}
 
 	go func() {
 		for entry := range entriesChan {
-			peerID := peer.ID(bytes.TrimPrefix(entry.Key, []byte{storage.NTQ.Byte()}))
+			peerID, err := peer.IDFromBytes(bytes.TrimPrefix(entry.Key, []byte{storage.Senatus.Byte()}))
+			if err != nil {
+				r.logger.Error("failed to decode peerID", "error", err)
+
+				continue
+			}
 
 			ch <- &networkmsg.PeerInfo{
 				ID:   peerID,
@@ -416,7 +433,7 @@ func (r *ReputationEngine) flushDirtyEntries() error {
 			return err
 		}
 
-		if err = writer.Set(storage.NtqDBKey(peerID), rawData); err != nil {
+		if err = writer.Set(storage.SenatusDBKey(peerID), rawData); err != nil {
 			return err
 		}
 	}
@@ -481,13 +498,7 @@ func (r *ReputationEngine) handleMessages(msgs []*NodeMetaInfoMsg) {
 			continue
 		}
 
-		if err := r.UpdatePeer(msg.KramaID, &NodeMetaInfo{
-			KramaID:       msg.KramaID,
-			Addrs:         msg.Address,
-			NTQ:           msg.NTQ,
-			WalletCount:   msg.WalletCount,
-			PeerSignature: msg.PeerSignature,
-		}); err != nil {
+		if err := r.UpdatePeer(msg.NodeMetaInfo()); err != nil {
 			r.logger.Error("Failed to add node meta information", "err", err, "krama-ID", msg.KramaID)
 
 			continue
@@ -498,7 +509,7 @@ func (r *ReputationEngine) handleMessages(msgs []*NodeMetaInfoMsg) {
 func (r *ReputationEngine) messageWorker() {
 	for {
 		select {
-		case <-time.After(2 * time.Second):
+		case <-time.After(1 * time.Second):
 		case <-r.signalChan:
 		case <-r.ctx.Done():
 			return

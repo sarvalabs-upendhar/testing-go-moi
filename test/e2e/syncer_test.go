@@ -22,7 +22,7 @@ func checkIfNodeSynced(t *testing.T, nodeToCheck *moiclient.Client) {
 	ctx, cancel := context.WithTimeout(context.Background(), InitialSyncTime)
 	defer cancel()
 
-	_, err := tests.RetryUntilTimeout(ctx, func() (interface{}, bool) {
+	_, err := tests.RetryUntilTimeout(ctx, 500*time.Millisecond, func() (interface{}, bool) {
 		ctx, cancel := context.WithTimeout(context.Background(), DefaultQueryTime)
 		defer cancel()
 

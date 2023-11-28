@@ -391,7 +391,7 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 		"Processing new job",
 		"addr", job.address,
 		"current-height", job.currentHeight,
-		"expected-height", job.expectedHeight,
+		"expected-height", job.getExpectedHeight(),
 	)
 
 	defer func() {
@@ -413,7 +413,7 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 		s.metrics.captureActiveJobs(-1)
 	}()
 
-	if len(job.bestPeers) > 0 {
+	if job.bestPeerLen() > 0 {
 		bestPeer = job.chooseRandomBestPeer()
 	} else {
 		bestPeer, err = s.chooseBestSyncPeer(job)
@@ -1781,7 +1781,8 @@ func (s *Syncer) syncStorageTree(ctx context.Context, session syncer.Session, ne
 	}
 
 	if len(storageCIDs) == 0 {
-		return nil
+		// sync meta storage tree only
+		return s.state.SyncStorageTrees(ctx, session.ID(), metaStorageRoot, storageTreeRoots)
 	}
 
 	s.logger.Debug("Syncing storage tree", "address", session.ID())
@@ -1978,6 +1979,10 @@ func (s *Syncer) getTesseractWithRawIxnsAndReceipts(
 
 // Start starts all event handlers and workers associated with sync sub protocol
 func (s *Syncer) Start(minConnectedPeers int) error {
+	sub := s.mux.Subscribe(utils.PendingAccountEvent{})
+
+	go s.startPendingAccountEventHandler(sub)
+
 	s.agora.Start()
 
 	if err := s.registerRPCService(); err != nil {
@@ -1996,8 +2001,6 @@ func (s *Syncer) Start(minConnectedPeers int) error {
 
 	s.startWorkers()
 
-	go s.startPendingAccountEventHandler()
-
 	go func() {
 		if err := s.initSync(); err != nil {
 			s.logger.Error("Initial sync failed", "err", err)
@@ -2015,9 +2018,7 @@ func (s *Syncer) Start(minConnectedPeers int) error {
 	return nil
 }
 
-func (s *Syncer) startPendingAccountEventHandler() {
-	sub := s.mux.Subscribe(utils.PendingAccountEvent{})
-
+func (s *Syncer) startPendingAccountEventHandler(sub *utils.Subscription) {
 	s.tracker.StartSyncStatusTracker(s.ctx, sub)
 }
 
@@ -2072,16 +2073,22 @@ func (s *Syncer) GetAccountSyncStatus(addr common.Address) (*args.AccSyncStatus,
 }
 
 // GetNodeSyncStatus returns the node sync status
-func (s *Syncer) GetNodeSyncStatus() *args.NodeSyncStatus {
+func (s *Syncer) GetNodeSyncStatus(includePendingAccounts bool) *args.NodeSyncStatus {
 	isPrincipalSyncDone, principalSyncTimeStamp := s.db.IsPrincipalSyncDone()
 	totalPendingAccounts := s.tracker.ReadPendingAccounts()
 
-	return &args.NodeSyncStatus{
+	nodeSyncStatus := &args.NodeSyncStatus{
 		TotalPendingAccounts:  hexutil.Uint64(totalPendingAccounts),
 		IsPrincipalSyncDone:   isPrincipalSyncDone,
 		PrincipalSyncDoneTime: hexutil.Uint64(principalSyncTimeStamp),
 		IsInitialSyncDone:     s.isInitialSyncDone(),
 	}
+
+	if includePendingAccounts {
+		nodeSyncStatus.PendingAccounts = s.jobQueue.GetPendingAccounts()
+	}
+
+	return nodeSyncStatus
 }
 
 // startWorkers will start the sync job workers

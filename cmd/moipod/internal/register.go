@@ -331,7 +331,7 @@ func isGuardianRegistered(client *moiclient.Client, kramaID id.KramaID) bool {
 
 func registerWithWatchDog(rpcURL string, vault *crypto.KramaVault) error {
 	if rpcURL == "" {
-		ipAddr, err := cmdCommon.GetThisNodeIP()
+		ipAddr, err := cmdCommon.GetIP()
 		if err != nil {
 			return err
 		}

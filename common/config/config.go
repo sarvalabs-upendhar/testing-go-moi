@@ -27,6 +27,7 @@ type Config struct {
 	Syncer         *SyncerConfig
 	Metrics        Telemetry
 	LogFilePath    string
+	JSONRPC        *JSONRPCConfig
 	NetworkID      string
 }
 
@@ -91,6 +92,8 @@ type NetworkConfig struct {
 	OutboundConnLimit  int64
 	MinimumConnections int
 	MaximumConnections int
+	AllowIPv6Addresses bool
+	DisablePrivateIP   bool
 	DiscoveryInterval  time.Duration
 }
 
@@ -112,6 +115,10 @@ type ConsensusConfig struct {
 	EnableDebugMode       bool
 }
 
+type JSONRPCConfig struct {
+	TesseractRangeLimit uint8
+}
+
 func DefaultDevnetConfig(path string) *Config {
 	c := &Config{
 		NodeType:       7,
@@ -129,6 +136,8 @@ func DefaultDevnetConfig(path string) *Config {
 			OutboundConnLimit:  DefaultOutboundConnLimit,
 			MinimumConnections: DefaultMinimumConnections,
 			MaximumConnections: DefaultMaximumConnections,
+			AllowIPv6Addresses: false,
+			DisablePrivateIP:   false,
 			DiscoveryInterval:  DefaultDiscoveryInterval,
 		},
 		Chain: &ChainConfig{
@@ -171,6 +180,9 @@ func DefaultDevnetConfig(path string) *Config {
 			PrometheusAddr: nil,
 			OtlpAddress:    "",
 			Token:          "",
+		},
+		JSONRPC: &JSONRPCConfig{
+			TesseractRangeLimit: DefaultTesseractRangeLimit,
 		},
 	}
 

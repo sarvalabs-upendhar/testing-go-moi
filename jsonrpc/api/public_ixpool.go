@@ -7,6 +7,7 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
+	"github.com/sarvalabs/go-moi/jsonrpc/backend"
 )
 
 type ContentResponse struct {
@@ -38,10 +39,10 @@ type WaitTimeResponse struct {
 // PublicIXPoolAPI is a struct that represents a wrapper for the public IxPool APIs.
 type PublicIXPoolAPI struct {
 	// Represents the API backend
-	ixpool IxPool
+	ixpool backend.IxPool
 }
 
-func NewPublicIXPoolAPI(ixpool IxPool) *PublicIXPoolAPI {
+func NewPublicIXPoolAPI(ixpool backend.IxPool) *PublicIXPoolAPI {
 	// Create the public ixpool API wrapper and return it
 	return &PublicIXPoolAPI{ixpool}
 }

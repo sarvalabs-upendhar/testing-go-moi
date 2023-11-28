@@ -32,6 +32,8 @@ var (
 )
 
 func TestBLSSign(t *testing.T) {
+	t.Parallel()
+
 	var bsig BlsWithBlstSignature
 
 	kid := kramaid.KramaID("bvby3pBVU5BEL2jBHJrH23GTb9qe8nL4XHqqKzZVbth7gBZ5c3.16Uiu2HAmGZr9gyQ7fD" +
@@ -45,6 +47,8 @@ func TestBLSSign(t *testing.T) {
 }
 
 func TestBLSVerify(t *testing.T) {
+	t.Parallel()
+
 	sigInHexBytes, err := hex.DecodeString(expectedSig)
 	require.NoError(t, err)
 

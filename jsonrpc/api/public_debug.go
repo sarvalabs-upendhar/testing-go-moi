@@ -16,17 +16,18 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
+	"github.com/sarvalabs/go-moi/jsonrpc/backend"
 	"github.com/sarvalabs/go-moi/senatus"
 	"github.com/sarvalabs/go-moi/storage"
 )
 
 // PublicDebugAPI is the collection of APIs exposed over the public debugging endpoint
 type PublicDebugAPI struct {
-	db      DB
-	network Network
+	db      backend.DB
+	network backend.Network
 }
 
-func NewPublicDebugAPI(db DB, network Network) *PublicDebugAPI {
+func NewPublicDebugAPI(db backend.DB, network backend.Network) *PublicDebugAPI {
 	// Create the public Debug API wrapper and return it
 	return &PublicDebugAPI{
 		db:      db,
@@ -51,7 +52,7 @@ func (p *PublicDebugAPI) DBGet(args *rpcargs.DebugArgs) (string, error) {
 
 // getNodeMetaInfoByPeerID retrieves and returns node meta information from the database for the given peer id
 func (p *PublicDebugAPI) getNodeMetaInfoByPeerID(peerID peer.ID) (*senatus.NodeMetaInfo, error) {
-	value, err := p.db.ReadEntry(storage.NtqDBKey(peerID))
+	value, err := p.db.ReadEntry(storage.SenatusDBKey(peerID))
 	if err != nil {
 		return nil, err
 	}
@@ -102,13 +103,13 @@ func (p *PublicDebugAPI) GetNodeMetaInfo(args *rpcargs.NodeMetaInfoArgs) (map[st
 		return nodeMetaInfo, nil
 	}
 
-	entriesChan, err := p.db.GetEntriesWithPrefix(context.Background(), []byte{storage.NTQ.Byte()})
+	entriesChan, err := p.db.GetEntriesWithPrefix(context.Background(), []byte{storage.Senatus.Byte()})
 	if err != nil {
 		return nil, err
 	}
 
 	for entry := range entriesChan {
-		peerID := peer.ID(bytes.TrimPrefix(entry.Key, []byte{storage.NTQ.Byte()}))
+		peerID := peer.ID(bytes.TrimPrefix(entry.Key, []byte{storage.Senatus.Byte()}))
 
 		info := new(senatus.NodeMetaInfo)
 		if err = info.FromBytes(entry.Value); err != nil {

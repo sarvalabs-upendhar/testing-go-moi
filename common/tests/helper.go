@@ -14,11 +14,12 @@ import (
 	"testing"
 	"time"
 
+	engineio "github.com/sarvalabs/go-moi-engineio"
+
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
-	"github.com/sarvalabs/go-moi-engineio"
 	"github.com/sarvalabs/go-pisa"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -144,7 +145,7 @@ func DecodePeerIDFromKramaID(t *testing.T, kramaID kramaid.KramaID) peer.ID {
 	return peerID
 }
 
-func RetryUntilTimeout(ctx context.Context, f func() (interface{}, bool)) (interface{}, error) {
+func RetryUntilTimeout(ctx context.Context, delay time.Duration, f func() (interface{}, bool)) (interface{}, error) {
 	type result struct {
 		data interface{}
 		err  error
@@ -169,7 +170,7 @@ func RetryUntilTimeout(ctx context.Context, f func() (interface{}, bool)) (inter
 					return
 				}
 			}
-			time.Sleep(500 * time.Millisecond)
+			time.Sleep(delay)
 		}
 	}()
 
@@ -326,11 +327,27 @@ func GetRandomAssetInfo(t *testing.T, addr common.Address) *common.AssetDescript
 func CreateTestAsset(t *testing.T, address common.Address) (common.AssetID, *common.AssetDescriptor) {
 	t.Helper()
 
-	asset := GetRandomAssetInfo(t, RandomAddress(t))
+	asset := GetRandomAssetInfo(t, address)
 
 	assetID := common.NewAssetIDv0(asset.IsLogical, asset.IsStateFul, asset.Dimension, asset.Standard, address)
 
 	return assetID, asset
+}
+
+func CreateTestAssets(t *testing.T, count int) ([]common.AssetID, []*common.AssetDescriptor) {
+	t.Helper()
+
+	assetIDs := make([]common.AssetID, 0, count)
+	assetDescriptors := make([]*common.AssetDescriptor, 0, count)
+
+	for i := 0; i < count; i++ {
+		assetID, assetDescriptor := CreateTestAsset(t, RandomAddress(t))
+
+		assetIDs = append(assetIDs, assetID)
+		assetDescriptors = append(assetDescriptors, assetDescriptor)
+	}
+
+	return assetIDs, assetDescriptors
 }
 
 func GetRandomNumbers(t *testing.T, max int, count int) []*big.Int {
@@ -557,6 +574,17 @@ func GetAddresses(t *testing.T, count int) []common.Address {
 	}
 
 	return addresses
+}
+
+func GetHashes(t *testing.T, count int) []common.Hash {
+	t.Helper()
+
+	hashes := make([]common.Hash, count)
+	for i := 0; i < count; i++ {
+		hashes[i] = RandomHash(t)
+	}
+
+	return hashes
 }
 
 type CreateIxParams struct {
@@ -900,9 +928,19 @@ func CreateTrustWithTestData(t *testing.T) common.IxTrust {
 func CreateReceiptWithTestData(t *testing.T) *common.Receipt {
 	t.Helper()
 
+	// create dummy logs
+	logs := &common.Log{
+		Addresses: GetAddresses(t, 1),
+		LogicID:   GetLogicID(t, RandomAddress(t)),
+		Topics:    GetHashes(t, 1),
+		Data:      []byte{1},
+	}
+
 	receipt := &common.Receipt{
 		IxType:    2,
 		IxHash:    RandomHash(t),
+		Logs:      []*common.Log{logs},
+		Status:    common.ReceiptFailed,
 		FuelUsed:  99,
 		Hashes:    make(common.ReceiptAccHashes),
 		ExtraData: []byte{1, 2},
@@ -1006,6 +1044,24 @@ func GetIXSignature(t *testing.T, ixArgs *common.SendIXArgs, mnemonic string) []
 	return rawSign
 }
 
+func GetLogicID(t *testing.T, address common.Address) common.LogicID {
+	t.Helper()
+
+	return common.NewLogicIDv0(true, false, false, false, 0, address)
+}
+
+func GetLogicIDs(t *testing.T, count int) []common.LogicID {
+	t.Helper()
+
+	logicIDs := make([]common.LogicID, count)
+
+	for i := 0; i < count; i++ {
+		logicIDs[i] = GetLogicID(t, RandomAddress(t))
+	}
+
+	return logicIDs
+}
+
 // GetKramaIDAndNetworkKey returns kramaID and network key pair
 func GetKramaIDAndNetworkKey(t *testing.T, nthValidator uint32) (kramaid.KramaID, []byte) {
 	t.Helper()
@@ -1042,18 +1098,6 @@ func GetRandomNumber(t *testing.T, max int) int {
 	return int(nBig.Int64())
 }
 
-func GetHashes(t *testing.T, count int) []common.Hash {
-	t.Helper()
-
-	var hashes []common.Hash
-
-	for i := 0; i < count; i++ {
-		hashes = append(hashes, RandomHash(t))
-	}
-
-	return hashes
-}
-
 // WaitForResponse waits for response on respChannel
 // and checks if datatype of data received on channel is equal to datatype of data received as argument
 func WaitForResponse(t *testing.T, respChan chan Result, data interface{}) interface{} {
@@ -1062,7 +1106,7 @@ func WaitForResponse(t *testing.T, respChan chan Result, data interface{}) inter
 	res := <-respChan
 	require.NoError(t, res.Err)
 
-	require.Equal(t, reflect.TypeOf(res.Data), reflect.TypeOf(data))
+	require.Equal(t, reflect.TypeOf(data), reflect.TypeOf(res.Data))
 
 	return res.Data
 }

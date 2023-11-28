@@ -103,9 +103,10 @@ func TestCheckEvents(t *testing.T) {
 	PeerEventSub := servers[0].mux.Subscribe(utils.NewPeerEvent{}) // subscribe to server-1 events
 
 	initDiscoveryAndAdvertise(t, servers[0])
-	time.Sleep(200 * time.Millisecond)
 	initDiscoveryAndAdvertise(t, servers[1])
-	time.Sleep(500 * time.Millisecond)
+
+	waitForDiscovery(t, servers[0], 1)
+	waitForDiscovery(t, servers[1], 1)
 
 	// check if server-0,1 are able to discover each other
 	checkForPeerRegistration(t, servers[0], servers[1], true)
@@ -114,7 +115,7 @@ func TestCheckEvents(t *testing.T) {
 	validateNewPeerEvent(t, PeerEventSub, servers[1])
 }
 
-func TestHandlePeers(t *testing.T) {
+func TestHandleDiscoveredPeers(t *testing.T) {
 	bootNodes := getBootstrapNodes(t, 1)
 
 	params := getParamsToCreateMultipleServers(
@@ -140,7 +141,7 @@ func TestHandlePeers(t *testing.T) {
 		closeTestServers(t, servers)
 	})
 
-	tests := []struct {
+	testcases := []struct {
 		name              string
 		source            *Server
 		destination       *Server
@@ -182,7 +183,7 @@ func TestHandlePeers(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
+	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			if test.testFn != nil {
 				test.testFn(test.source, test.destination)
@@ -190,14 +191,12 @@ func TestHandlePeers(t *testing.T) {
 
 			go test.source.ds.handleDiscoveredPeers()
 
-			time.Sleep(50 * time.Millisecond)
-
 			test.source.ds.peerChan <- peer.AddrInfo{
 				ID:    test.destination.host.ID(),
 				Addrs: test.destination.host.Addrs(),
 			}
 
-			time.Sleep(100 * time.Millisecond)
+			waitForDiscovery(t, test.source, test.expectedPeerCount)
 
 			require.Equal(t, test.expectedPeerCount, len(test.source.ConnManager.getPeers()))
 		})
@@ -221,7 +220,7 @@ func TestHandlePeers_CheckConfig(t *testing.T) {
 		1: params[1],
 	}
 
-	tests := []struct {
+	testcases := []struct {
 		name                 string
 		testFn               func()
 		expectedPeerCount    int
@@ -257,7 +256,7 @@ func TestHandlePeers_CheckConfig(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
+	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			if test.testFn != nil {
 				test.testFn()
@@ -270,15 +269,13 @@ func TestHandlePeers_CheckConfig(t *testing.T) {
 			})
 
 			go servers[0].ds.handleDiscoveredPeers()
-
 			time.Sleep(100 * time.Millisecond)
-
 			servers[0].ds.peerChan <- peer.AddrInfo{
 				ID:    servers[1].host.ID(),
 				Addrs: servers[1].host.Addrs(),
 			}
 
-			time.Sleep(100 * time.Millisecond)
+			waitForDiscovery(t, servers[0], test.expectedPeerCount)
 
 			require.Equal(t, test.expectedPeerCount, len(servers[0].ConnManager.getPeers()))
 			assertNodeMetaInfoInSenatus(t, servers[0], servers[1].host.ID(), test.shouldExistInSenatus)
@@ -311,7 +308,7 @@ func TestHandlePeerDiscoveryRequest(t *testing.T) {
 		closeTestServers(t, servers)
 	})
 
-	tests := []struct {
+	testcases := []struct {
 		name                 string
 		source               *Server
 		destination          *Server
@@ -335,7 +332,7 @@ func TestHandlePeerDiscoveryRequest(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
+	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			if test.testFn != nil {
 				test.testFn(test.destination)
@@ -346,8 +343,6 @@ func TestHandlePeerDiscoveryRequest(t *testing.T) {
 			time.Sleep(50 * time.Millisecond)
 
 			postDiscoverPeerEvent(t, test.source, test.destination.host.ID())
-
-			time.Sleep(100 * time.Millisecond)
 
 			assertNodeMetaInfoInSenatus(t, test.source, test.destination.host.ID(), test.shouldExistInSenatus)
 		})

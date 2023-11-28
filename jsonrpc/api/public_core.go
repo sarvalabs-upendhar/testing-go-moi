@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"math/big"
 	"time"
 
@@ -12,29 +11,50 @@ import (
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/utils"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
+	"github.com/sarvalabs/go-moi/jsonrpc/backend"
+	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
 )
+
+type FilterManager interface {
+	NewTesseractFilter(ws websocket.ConnManager) string
+	NewTesseractsByAccountFilter(ws websocket.ConnManager, addr common.Address) string
+	NewLogFilter(ws websocket.ConnManager, logQuery *websocket.LogQuery) string
+	PendingIxnsFilter(ws websocket.ConnManager) string
+	Uninstall(id string) bool
+	GetFilterChanges(id string) (interface{}, error)
+	GetLogsForQuery(query websocket.LogQuery) ([]*rpcargs.RPCLog, error)
+}
 
 // PublicCoreAPI is a struct that represents a wrapper for the core public core APIs
 type PublicCoreAPI struct {
 	// Represents the API backend
-	ixpool IxPool
-	chain  ChainManager
-	sm     StateManager
-	exec   ExecutionManager
-	syncer Syncer
+	ixpool        backend.IxPool
+	chain         backend.ChainManager
+	sm            backend.StateManager
+	exec          backend.ExecutionManager
+	syncer        backend.Syncer
+	filterManager FilterManager
 }
 
 // NewPublicCoreAPI is a constructor function that generates and returns a new
 // PublicCoreAPI object for a given API backend object.
 func NewPublicCoreAPI(
-	ixpool IxPool,
-	chain ChainManager,
-	sm StateManager,
-	exec ExecutionManager,
-	syncer Syncer,
+	ixpool backend.IxPool,
+	chain backend.ChainManager,
+	sm backend.StateManager,
+	exec backend.ExecutionManager,
+	syncer backend.Syncer,
+	filterMan FilterManager,
 ) *PublicCoreAPI {
 	// Create the core public API wrapper and return it
-	return &PublicCoreAPI{ixpool, chain, sm, exec, syncer}
+	return &PublicCoreAPI{
+		ixpool:        ixpool,
+		chain:         chain,
+		sm:            sm,
+		exec:          exec,
+		syncer:        syncer,
+		filterManager: filterMan,
+	}
 }
 
 func getTesseractArgs(address common.Address, options rpcargs.TesseractNumberOrHash) *rpcargs.TesseractArgs {
@@ -100,7 +120,7 @@ func (p *PublicCoreAPI) GetRPCTesseract(args *rpcargs.TesseractArgs) (*rpcargs.R
 		return nil, err
 	}
 
-	return CreateRPCTesseract(ts)
+	return rpcargs.CreateRPCTesseract(ts)
 }
 
 // GetContextInfo will fetch the context associated with the given address
@@ -167,7 +187,7 @@ func (p *PublicCoreAPI) GetRegistry(args *rpcargs.QueryArgs) ([]rpcargs.RPCRegis
 		return nil, err
 	}
 
-	registry, err := p.sm.GetRegistry(args.Address, ts.StateHash())
+	registry, err := p.sm.GetRegistry(ts.Address(), ts.StateHash())
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +228,7 @@ func (p *PublicCoreAPI) GetInteractionByTesseract(args *rpcargs.InteractionByTes
 			return nil, errors.Wrap(err, "interaction not found")
 		}
 
-		return createRPCInteraction(ix, parts.Grid, int(args.IxIndex.ToUint64()))
+		return rpcargs.CreateRPCInteraction(ix, parts.Grid, int(args.IxIndex.ToUint64()))
 	}
 
 	if hash, ok := args.Options.Hash(); ok {
@@ -241,7 +261,7 @@ func (p *PublicCoreAPI) GetInteractionByHash(args *rpcargs.InteractionByHashArgs
 	ix, parts, ixIndex, err := p.chain.GetInteractionAndPartsByIxHash(args.Hash)
 	if err != nil && errors.Is(err, common.ErrGridHashNotFound) {
 		if pendingIX, found := p.ixpool.GetPendingIx(args.Hash); found {
-			return createRPCInteraction(pendingIX, nil, 0)
+			return rpcargs.CreateRPCInteraction(pendingIX, nil, 0)
 		}
 
 		return nil, common.ErrFetchingInteraction
@@ -251,7 +271,7 @@ func (p *PublicCoreAPI) GetInteractionByHash(args *rpcargs.InteractionByHashArgs
 		return nil, err
 	}
 
-	return createRPCInteraction(ix, parts.Grid, ixIndex)
+	return rpcargs.CreateRPCInteraction(ix, parts.Grid, ixIndex)
 }
 
 // GetInteractionReceipt returns the receipt for the given interaction hash
@@ -270,7 +290,7 @@ func (p *PublicCoreAPI) GetInteractionReceipt(args *rpcargs.ReceiptArgs) (*rpcar
 		return nil, err
 	}
 
-	return createRPCReceipt(receipt, ix, parts.Grid, ixIndex), nil
+	return rpcargs.CreateRPCReceipt(receipt, ix, parts.Grid, ixIndex), nil
 }
 
 // GetInteractionCount returns the number of interactions sent for the given address
@@ -485,7 +505,7 @@ func (p *PublicCoreAPI) FuelEstimate(args *rpcargs.CallArgs) (*hexutil.Big, erro
 // Syncing returns the sync status of an account if address is given else returns the node sync status
 func (p *PublicCoreAPI) Syncing(args *rpcargs.SyncStatusRequest) (*rpcargs.SyncStatusResponse, error) {
 	if args.Address.IsNil() {
-		nodeSyncStatus := p.syncer.GetNodeSyncStatus()
+		nodeSyncStatus := p.syncer.GetNodeSyncStatus(args.PendingAccounts)
 
 		return &rpcargs.SyncStatusResponse{
 			NodeSyncResp: nodeSyncStatus,
@@ -550,320 +570,75 @@ func (p *PublicCoreAPI) normalizeOptions(
 	return stateHashes, nil
 }
 
-// createRPCInteraction creates an RPC Interaction by copying all fields of the interaction into the RPC Interaction,
-// depolarizing the payload based on the interaction type, JSON marshalling it, and storing it in the input payload.
-func createRPCInteraction(
-	ix *common.Interaction,
-	grid map[common.Address]common.TesseractHeightAndHash,
-	ixIndex int,
-) (*rpcargs.RPCInteraction, error) {
-	input := ix.Input()
-	compute := ix.Compute()
-	trust := ix.Trust()
+// NewTesseractFilter subscribes to all new tesseract events
+func (p *PublicCoreAPI) NewTesseractFilter() *rpcargs.FilterResponse {
+	id := p.filterManager.NewTesseractFilter(nil)
 
-	rpcIX := &rpcargs.RPCInteraction{
-		Parts:   getRPCTesseractPartsFromGrid(grid),
-		IxIndex: hexutil.Uint64(ixIndex),
-		Type:    input.Type,
-		Nonce:   hexutil.Uint64(input.Nonce),
-
-		Sender:   input.Sender,
-		Receiver: input.Receiver,
-		Payer:    input.Payer,
-
-		FuelPrice: (*hexutil.Big)(input.FuelPrice),
-		FuelLimit: hexutil.Uint64(input.FuelLimit),
-
-		Mode:         hexutil.Uint64(compute.Mode),
-		ComputeHash:  compute.Hash,
-		ComputeNodes: compute.ComputeNodes,
-
-		MTQ:        hexutil.Uint64(trust.MTQ),
-		TrustNodes: trust.TrustNodes,
-
-		Hash:      ix.Hash(),
-		Signature: ix.Signature(),
-	}
-
-	if len(input.TransferValues) > 0 {
-		rpcIX.TransferValues = make(map[common.AssetID]*hexutil.Big)
-		for asset, amount := range input.TransferValues {
-			rpcIX.TransferValues[asset] = (*hexutil.Big)(amount)
-		}
-	}
-
-	if len(input.PerceivedValues) > 0 {
-		rpcIX.PerceivedValues = make(map[common.AssetID]*hexutil.Big)
-		for asset, amount := range input.PerceivedValues {
-			rpcIX.PerceivedValues[asset] = (*hexutil.Big)(amount)
-		}
-	}
-
-	if len(input.PerceivedProofs) > 0 {
-		rpcIX.PerceivedProofs = input.PerceivedProofs
-	}
-
-	var err error
-
-	switch ix.Type() {
-	case common.IxValueTransfer:
-		break
-
-	case common.IxAssetBurn, common.IxAssetMint:
-		assetPayload := new(common.AssetMintOrBurnPayload)
-		if err = assetPayload.FromBytes(ix.Payload()); err != nil {
-			return nil, err
-		}
-
-		rpcPayload := rpcargs.RPCAssetMintOrBurn{
-			AssetID: assetPayload.Asset,
-			Amount:  (*hexutil.Big)(assetPayload.Amount),
-		}
-
-		rpcIX.Payload, err = json.Marshal(rpcPayload)
-		if err != nil {
-			return nil, err
-		}
-
-	case common.IxAssetCreate:
-		assetPayload := new(common.AssetCreatePayload)
-		if err = assetPayload.FromBytes(ix.Payload()); err != nil {
-			return nil, err
-		}
-
-		rpcAssetPayload := rpcargs.RPCAssetCreation{
-			Symbol:    assetPayload.Symbol,
-			Supply:    (*hexutil.Big)(assetPayload.Supply),
-			Dimension: (*hexutil.Uint8)(&assetPayload.Dimension),
-			Standard:  (*hexutil.Uint16)(&assetPayload.Standard),
-
-			IsLogical:  assetPayload.IsLogical,
-			IsStateful: assetPayload.IsStateFul,
-			Logic:      rpcargs.RPClogicPayloadFromLogicPayload(assetPayload.LogicPayload),
-		}
-
-		rpcIX.Payload, err = json.Marshal(rpcAssetPayload)
-		if err != nil {
-			return nil, err
-		}
-
-	case common.IxLogicInvoke, common.IxLogicDeploy:
-		logicPayload := new(common.LogicPayload)
-
-		if err = logicPayload.FromBytes(ix.Payload()); err != nil {
-			return nil, err
-		}
-
-		rpcIX.Payload, err = json.Marshal(rpcargs.RPClogicPayloadFromLogicPayload(logicPayload))
-		if err != nil {
-			return nil, err
-		}
-
-	default:
-		return nil, errors.New("invalid interaction type")
-	}
-
-	return rpcIX, nil
-}
-
-func getRPCTesseractPartsFromGrid(grid map[common.Address]common.TesseractHeightAndHash) rpcargs.RPCTesseractParts {
-	if len(grid) == 0 {
-		return nil
-	}
-
-	parts := make(rpcargs.RPCTesseractParts, 0, len(grid))
-
-	for address, heightAndHash := range grid {
-		parts = append(
-			parts,
-			rpcargs.RPCTesseractPart{
-				Address: address,
-				Height:  hexutil.Uint64(heightAndHash.Height),
-				Hash:    heightAndHash.Hash,
-			},
-		)
-	}
-
-	parts.Sort()
-
-	return parts
-}
-
-func createRPCTesseractGridID(tesseractGridID *common.TesseractGridID) *rpcargs.RPCTesseractGridID {
-	if tesseractGridID == nil {
-		return nil
-	}
-
-	newGrid := &rpcargs.RPCTesseractGridID{
-		Hash: tesseractGridID.Hash,
-	}
-
-	if tesseractGridID.Parts != nil {
-		newGrid.Total = hexutil.Uint64(tesseractGridID.Parts.Total)
-		newGrid.Parts = getRPCTesseractPartsFromGrid(tesseractGridID.Parts.Grid)
-	}
-
-	return newGrid
-}
-
-func createRPCContextLockInfos(contextLockInfos map[common.Address]common.ContextLockInfo) rpcargs.RPCContextLockInfos {
-	if len(contextLockInfos) == 0 {
-		return nil
-	}
-
-	rpcContextLockInfos := make(rpcargs.RPCContextLockInfos, 0, len(contextLockInfos))
-
-	for address, contextLockInfo := range contextLockInfos {
-		rpcContextLockInfos = append(
-			rpcContextLockInfos,
-			rpcargs.RPCContextLockInfo{
-				Address:       address,
-				ContextHash:   contextLockInfo.ContextHash,
-				Height:        hexutil.Uint64(contextLockInfo.Height),
-				TesseractHash: contextLockInfo.TesseractHash,
-			},
-		)
-	}
-
-	rpcContextLockInfos.Sort()
-
-	return rpcContextLockInfos
-}
-
-// createRPCHeader creates rpc header from header
-func createRPCHeader(h common.TesseractHeader) rpcargs.RPCHeader {
-	rpcHeader := rpcargs.RPCHeader{
-		Address:  h.Address,
-		PrevHash: h.PrevHash,
-
-		Height:    hexutil.Uint64(h.Height),
-		FuelUsed:  hexutil.Uint64(h.FuelUsed),
-		FuelLimit: hexutil.Uint64(h.FuelLimit),
-
-		BodyHash:    h.BodyHash,
-		GridHash:    h.GroupHash,
-		Operator:    h.Operator,
-		ClusterID:   h.ClusterID,
-		Timestamp:   hexutil.Uint64(h.Timestamp),
-		ContextLock: createRPCContextLockInfos(h.ContextLock),
-
-		Extra: rpcargs.RPCCommitData{
-			Round:           hexutil.Uint64(h.Extra.Round),
-			CommitSignature: h.Extra.CommitSignature,
-			VoteSet:         h.Extra.VoteSet.String(),
-			EvidenceHash:    h.Extra.EvidenceHash,
-		},
-	}
-
-	rpcHeader.Extra.GridID = createRPCTesseractGridID(h.Extra.GridID)
-
-	return rpcHeader
-}
-
-func createRPCDeltaGroups(deltaGroups map[common.Address]*common.DeltaGroup) rpcargs.RPCDeltaGroups {
-	if len(deltaGroups) == 0 {
-		return nil
-	}
-
-	rpcDeltaGroups := make(rpcargs.RPCDeltaGroups, 0, len(deltaGroups))
-
-	for address, deltaGroup := range deltaGroups {
-		rpcDeltaGroups = append(
-			rpcDeltaGroups,
-			rpcargs.RPCDeltaGroup{
-				Address:          address,
-				Role:             deltaGroup.Role,
-				BehaviouralNodes: deltaGroup.BehaviouralNodes,
-				RandomNodes:      deltaGroup.RandomNodes,
-				ReplacedNodes:    deltaGroup.ReplacedNodes,
-			},
-		)
-	}
-
-	rpcDeltaGroups.Sort()
-
-	return rpcDeltaGroups
-}
-
-func createRPCBody(body common.TesseractBody) rpcargs.RPCBody {
-	return rpcargs.RPCBody{
-		StateHash:       body.StateHash,
-		ContextHash:     body.ContextHash,
-		InteractionHash: body.InteractionHash,
-		ReceiptHash:     body.ReceiptHash,
-		ContextDelta:    createRPCDeltaGroups(body.ContextDelta),
-		ConsensusProof:  body.ConsensusProof,
+	return &rpcargs.FilterResponse{
+		FilterID: id,
 	}
 }
 
-// CreateRPCTesseract creates rpc tesseract from tesseract
-func CreateRPCTesseract(ts *common.Tesseract) (*rpcargs.RPCTesseract, error) {
-	var rpcIxns []*rpcargs.RPCInteraction
-
-	if ts.ClusterID() != common.GenesisIdentifier && len(ts.Interactions()) > 0 {
-		rpcIxns = make([]*rpcargs.RPCInteraction, len(ts.Interactions()))
-
-		parts, err := ts.Parts()
-		if err != nil {
-			return nil, err
-		}
-
-		for ixIndex, ixn := range ts.Interactions() {
-			rpcIxns[ixIndex], err = createRPCInteraction(ixn, parts.Grid, ixIndex)
-			if err != nil {
-				return nil, err
-			}
-		}
+// NewTesseractsByAccountFilter subscribes to all new tesseract events for a given account
+func (p *PublicCoreAPI) NewTesseractsByAccountFilter(
+	args *rpcargs.TesseractByAccountFilterArgs,
+) (*rpcargs.FilterResponse, error) {
+	if args.Addr.IsNil() {
+		return nil, common.ErrInvalidAddress
 	}
 
-	return &rpcargs.RPCTesseract{
-		Header: createRPCHeader(ts.Header()),
-		Body:   createRPCBody(ts.Body()),
-		Ixns:   rpcIxns,
-		Seal:   ts.Seal(),
-		Hash:   ts.Hash(),
+	id := p.filterManager.NewTesseractsByAccountFilter(nil, args.Addr)
+
+	return &rpcargs.FilterResponse{
+		FilterID: id,
 	}, nil
 }
 
-func createRPCHashes(hashes common.ReceiptAccHashes) rpcargs.RPCHashes {
-	if len(hashes) == 0 {
-		return nil
+// NewLogFilter subscribes to all new tesseract log events for a given filter
+func (p *PublicCoreAPI) NewLogFilter(query *websocket.LogQuery) *rpcargs.FilterResponse {
+	id := p.filterManager.NewLogFilter(nil, query)
+
+	return &rpcargs.FilterResponse{
+		FilterID: id,
 	}
-
-	rpcHashes := make(rpcargs.RPCHashes, 0, len(hashes))
-
-	for addr, hash := range hashes {
-		rpcHashes = append(rpcHashes, rpcargs.Hashes{
-			Address:     addr,
-			StateHash:   hash.StateHash,
-			ContextHash: hash.ContextHash,
-		})
-	}
-
-	rpcHashes.Sort()
-
-	return rpcHashes
 }
 
-// createRPCReceipt creates rpc receipt from receipt, interaction, grid, interaction index
-func createRPCReceipt(
-	receipt *common.Receipt,
-	ix *common.Interaction,
-	grid map[common.Address]common.TesseractHeightAndHash,
-	ixIndex int,
-) *rpcargs.RPCReceipt {
-	return &rpcargs.RPCReceipt{
-		IxType:    hexutil.Uint64(receipt.IxType),
-		IxHash:    receipt.IxHash,
-		Status:    receipt.Status,
-		FuelUsed:  hexutil.Uint64(receipt.FuelUsed),
-		Hashes:    createRPCHashes(receipt.Hashes),
-		ExtraData: receipt.ExtraData,
-		From:      ix.Sender(),
-		To:        ix.Receiver(),
-		IXIndex:   hexutil.Uint64(ixIndex),
-		Parts:     getRPCTesseractPartsFromGrid(grid),
+// PendingIxnsFilter subscribes to all new pending interactions.
+func (p *PublicCoreAPI) PendingIxnsFilter() *rpcargs.FilterResponse {
+	id := p.filterManager.PendingIxnsFilter(nil)
+
+	return &rpcargs.FilterResponse{
+		FilterID: id,
 	}
+}
+
+// RemoveFilter uninstalls a filter for given filter ID.
+func (p *PublicCoreAPI) RemoveFilter(
+	args *rpcargs.FilterArgs,
+) *rpcargs.FilterUninstallResponse {
+	status := p.filterManager.Uninstall(args.FilterID)
+
+	return &rpcargs.FilterUninstallResponse{
+		Status: status,
+	}
+}
+
+// GetFilterChanges is a polling method for a filter using a filter ID,
+// which returns an array of events which occurred since last poll.
+func (p *PublicCoreAPI) GetFilterChanges(args *rpcargs.FilterArgs) (interface{}, error) {
+	return p.filterManager.GetFilterChanges(args.FilterID)
+}
+
+// GetLogs returns an array of logs matching the LogQuery
+func (p *PublicCoreAPI) GetLogs(query *rpcargs.FilterQueryArgs) ([]*rpcargs.RPCLog, error) {
+	filterQuery := websocket.LogQuery{
+		StartHeight: *query.StartHeight,
+		EndHeight:   *query.EndHeight,
+		Address:     query.Address,
+		Topics:      query.Topics,
+	}
+
+	return p.filterManager.GetLogsForQuery(filterQuery)
 }
 
 func createCallReceipt(

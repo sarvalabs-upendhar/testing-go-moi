@@ -1621,7 +1621,7 @@ func (k *Engine) IsIxValid(ix *common.Interaction) error {
 	}
 
 	if accountRegistered, err := k.state.IsAccountRegistered(ix.Sender()); err != nil || !accountRegistered {
-		return errors.New("account not found")
+		return common.ErrAccountNotFound
 	}
 
 	senderObject, err := k.state.GetLatestStateObject(ix.Sender())

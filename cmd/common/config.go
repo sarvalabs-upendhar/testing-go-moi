@@ -16,12 +16,13 @@ type Config struct {
 	Vault          VaultConfig     `json:"vault"`
 	Network        NetworkConfig   `json:"network"`
 	Syncer         SyncerConfig    `json:"syncer"`
-	Ixpool         IxPoolConfig    `json:"ixpool"`
+	IxPool         IxPoolConfig    `json:"ixpool"`
 	Consensus      ConsensusConfig `json:"consensus"`
 	Execution      ExecutionConfig `json:"execution"`
 	DB             DBConfig        `json:"database"`
 	Telemetry      Telemetry       `json:"telemetry"`
 	LogFilePath    string          `json:"logfile"`
+	JSONRPC        JSONRPCConfig   `json:"jsonrpc"`
 	NetworkID      string          `json:"network_id"`
 }
 
@@ -50,6 +51,8 @@ func DefaultBabylonConfig(path string) *Config {
 			OutboundConnLimit:  config.DefaultOutboundConnLimit,
 			MinimumConnections: config.DefaultMinimumConnections,
 			MaximumConnections: config.DefaultMaximumConnections,
+			AllowIPv6Addresses: false,
+			DisablePrivateIP:   true,
 			DiscoveryInterval:  config.DefaultDiscoveryInterval,
 			JSONRPCAddr:        "0.0.0.0:" + strconv.Itoa(config.DefaultJSONRPCPort),
 			CorsAllowedOrigins: []string{"*"},
@@ -82,7 +85,7 @@ func DefaultBabylonConfig(path string) *Config {
 		Execution: ExecutionConfig{
 			FuelLimit: hexutil.Uint64(config.DefaultFuelLimit),
 		},
-		Ixpool: IxPoolConfig{
+		IxPool: IxPoolConfig{
 			Mode:       config.DefaultIxPoolMode,
 			PriceLimit: hexutil.Big(*config.DefaultIxPriceLimit),
 			MaxSlots:   config.DefaultMaxIXPoolSlots,
@@ -93,7 +96,10 @@ func DefaultBabylonConfig(path string) *Config {
 			Token:          "",
 		},
 		LogFilePath: path + config.DefaultLogDirectory,
-		NetworkID:   strconv.Itoa(config.BabylonID),
+		JSONRPC: JSONRPCConfig{
+			TesseractRangeLimit: config.DefaultTesseractRangeLimit,
+		},
+		NetworkID: strconv.Itoa(config.BabylonID),
 	}
 }
 
@@ -119,6 +125,8 @@ func DefaultDevnetConfig(path string) *Config {
 			OutboundConnLimit:  config.DefaultOutboundConnLimit,
 			MinimumConnections: config.DefaultMinimumConnections,
 			MaximumConnections: config.DefaultMaximumConnections,
+			AllowIPv6Addresses: false,
+			DisablePrivateIP:   false,
 			DiscoveryInterval:  config.DefaultDiscoveryInterval,
 			JSONRPCAddr:        "0.0.0.0:" + strconv.Itoa(config.DefaultJSONRPCPort),
 			CorsAllowedOrigins: []string{"*"},
@@ -151,7 +159,7 @@ func DefaultDevnetConfig(path string) *Config {
 		Execution: ExecutionConfig{
 			FuelLimit: hexutil.Uint64(config.DefaultFuelLimit),
 		},
-		Ixpool: IxPoolConfig{
+		IxPool: IxPoolConfig{
 			Mode:       config.DefaultIxPoolMode,
 			PriceLimit: hexutil.Big(*config.DefaultIxPriceLimit),
 			MaxSlots:   config.DefaultMaxIXPoolSlots,
@@ -162,7 +170,10 @@ func DefaultDevnetConfig(path string) *Config {
 			Token:          "",
 		},
 		LogFilePath: path + config.DefaultLogDirectory,
-		NetworkID:   strconv.Itoa(config.DevnetID),
+		JSONRPC: JSONRPCConfig{
+			TesseractRangeLimit: config.DefaultTesseractRangeLimit,
+		},
+		NetworkID: strconv.Itoa(config.DevnetID),
 	}
 }
 
@@ -184,6 +195,8 @@ type NetworkConfig struct {
 	OutboundConnLimit  int64         `json:"outbound_conn_limit"`
 	MinimumConnections int           `json:"minimum_connections"`
 	MaximumConnections int           `json:"maximum_connections"`
+	AllowIPv6Addresses bool          `json:"allow_ipv6_addresses"`
+	DisablePrivateIP   bool          `json:"disable_private_ip"`
 	DiscoveryInterval  time.Duration `json:"discovery_interval"`
 }
 
@@ -240,4 +253,8 @@ type VaultConfig struct {
 	Mode         int8   // 0: Server, 1: Register/User mode
 	NodeIndex    uint32 // Requires only in Register mode
 	InMemory     bool
+}
+
+type JSONRPCConfig struct {
+	TesseractRangeLimit uint8 `json:"tesseract_range_limit"`
 }

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"log"
 	"testing"
+	"time"
 
 	id "github.com/sarvalabs/go-moi/common/kramaid"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
@@ -104,7 +105,7 @@ func AreSessionInterestRecorded(
 	sessionID common.Address,
 	keys []cid.CID,
 ) bool {
-	status, err := tests.RetryUntilTimeout(ctx, func() (interface{}, bool) {
+	status, err := tests.RetryUntilTimeout(ctx, 500*time.Millisecond, func() (interface{}, bool) {
 		im.mutex.Lock()
 		defer im.mutex.Unlock()
 
@@ -136,7 +137,7 @@ func AreSessionInterestRemoved(
 	sessionID common.Address,
 	keys []cid.CID,
 ) bool {
-	status, err := tests.RetryUntilTimeout(ctx, func() (interface{}, bool) {
+	status, err := tests.RetryUntilTimeout(ctx, 500*time.Millisecond, func() (interface{}, bool) {
 		im.mutex.Lock()
 		defer im.mutex.Unlock()
 		for _, hash := range keys {

@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
+	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi/cmd/common"
 
 	"github.com/libp2p/go-libp2p"
 	"github.com/multiformats/go-multiaddr"
@@ -54,8 +56,13 @@ func GetBootNodeCommand() *cobra.Command {
 }
 
 func parseBootNodeFlags(cmd *cobra.Command) {
+	ipAddr, err := common.GetIP()
+	if err != nil {
+		common.Err(errors.Wrap(err, "failed to fetch IP addr"))
+	}
+
 	cmd.PersistentFlags().IntVar(&portNumber, "port", 4001, "Provide the port number.")
-	cmd.PersistentFlags().StringVar(&ipAddress, "ip-address", "0.0.0.0", "Provide the listener IP address.")
+	cmd.PersistentFlags().StringVar(&ipAddress, "ip-address", ipAddr, "Provide the listener IP address.")
 	cmd.PersistentFlags().StringVar(&keyFile, "key-path", "file.key", "Path to keystore file.")
 	cmd.PersistentFlags().IntVar(&minConnReq, "min-conn", 200, "Min number of connections allowed.")
 	cmd.PersistentFlags().IntVar(&maxConnReq, "max-conn", 400, "Max number of connections allowed.")
@@ -78,8 +85,7 @@ func startBootNode() {
 		log.Panic("Failed to get private keys : ", err)
 	}
 
-	// 0.0.0.0 will listen on any interface device.
-	sourceMultiAddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", "0.0.0.0", portNumber))
+	sourceMultiAddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", ipAddress, portNumber))
 	if err != nil {
 		panic(err)
 	}

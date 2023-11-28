@@ -16,14 +16,21 @@ const (
 	ReceiptFailed
 )
 
-type Receipt struct {
-	IxType IxType        `json:"ix_type"`
-	IxHash Hash          `json:"ix_hash"`
-	Status ReceiptStatus `json:"status"`
+type Log struct {
+	Addresses []Address
+	LogicID   LogicID
+	Topics    []Hash
+	Data      []byte
+}
 
+type Receipt struct {
+	IxType    IxType           `json:"ix_type"`
+	IxHash    Hash             `json:"ix_hash"`
+	Status    ReceiptStatus    `json:"status"`
 	FuelUsed  uint64           `json:"fuel_used"`
 	Hashes    ReceiptAccHashes `json:"hashes"`
 	ExtraData json.RawMessage  `json:"extra_data"`
+	Logs      []*Log           `polo:"-" json:"logs"`
 }
 
 func NewReceipt(ix *Interaction) *Receipt {
@@ -38,6 +45,27 @@ func NewReceipt(ix *Interaction) *Receipt {
 type Hashes struct {
 	StateHash   Hash `json:"state_hash"`
 	ContextHash Hash `json:"context_hash"`
+}
+
+func (l *Log) Copy() *Log {
+	log := *l
+
+	if len(l.Addresses) > 0 {
+		log.Addresses = make([]Address, len(l.Addresses))
+		copy(log.Addresses, l.Addresses)
+	}
+
+	if len(l.Topics) > 0 {
+		log.Topics = make([]Hash, len(l.Topics))
+		copy(log.Topics, l.Topics)
+	}
+
+	if len(l.Data) > 0 {
+		log.Data = make([]byte, len(l.Data))
+		copy(log.Data, l.Data)
+	}
+
+	return &log
 }
 
 type ReceiptAccHashes map[Address]*Hashes
@@ -109,6 +137,16 @@ func (r *Receipt) Copy() *Receipt {
 	if len(r.ExtraData) > 0 {
 		receipt.ExtraData = make(json.RawMessage, len(r.ExtraData))
 		copy(receipt.ExtraData, r.ExtraData)
+	}
+
+	if len(r.Logs) > 0 {
+		receipt.Logs = make([]*Log, len(r.Logs))
+
+		for i, log := range r.Logs {
+			if log != nil {
+				receipt.Logs[i] = log.Copy()
+			}
+		}
 	}
 
 	return &receipt

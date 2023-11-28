@@ -143,6 +143,21 @@ func (jq *JobQueue) RemoveJob(job *SyncJob) error {
 	return nil
 }
 
+func (jq *JobQueue) GetPendingAccounts() []common.Address {
+	jq.mtx.RLock()
+	defer func() {
+		jq.mtx.RUnlock()
+	}()
+
+	pendingAccounts := make([]common.Address, 0, len(jq.jobs))
+
+	for _, jb := range jq.jobs {
+		pendingAccounts = append(pendingAccounts, jb.address)
+	}
+
+	return pendingAccounts
+}
+
 func (jq *JobQueue) post(ev interface{}) error {
 	return jq.mux.Post(ev)
 }
@@ -180,6 +195,9 @@ func SyncJobFromCanonicalInfo(
 		return nil, err
 	}
 
+	// Ensure the job state is set to 'pending' to allow proper creation and progress tracking.
+	// If the state is mistakenly stored as 'active',
+	// workers may misinterpret its status and the job won't make progress.
 	return &SyncJob{
 		db:              db,
 		logger:          logger.Named("Sync-Job"),
@@ -187,7 +205,7 @@ func SyncJobFromCanonicalInfo(
 		snapDownloaded:  data.SnapshotDownloaded,
 		mode:            data.Mode,
 		expectedHeight:  data.ExpectedHeight,
-		jobState:        JobState(data.State),
+		jobState:        Pending,
 		lastModifiedAt:  *modifiedTime,
 		tesseractQueue:  NewTesseractQueue(),
 		tesseractSignal: make(chan struct{}, 1),

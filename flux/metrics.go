@@ -8,8 +8,7 @@ import (
 )
 
 type Metrics struct {
-	PendingSlots  metrics.Gauge
-	NumOfRequests metrics.Counter
+	PendingSlots metrics.Gauge
 }
 
 func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics {
@@ -26,19 +25,12 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 			Name:      "pending_slots",
 			Help:      "Number of pending slots in the randomizer",
 		}, labels).With(labelsWithValues...),
-		NumOfRequests: prometheus.NewCounterFrom(stdprometheus.CounterOpts{
-			Namespace: namespace,
-			Subsystem: "flux",
-			Name:      "number_of_requests",
-			Help:      "Number of requests received",
-		}, labels).With(labelsWithValues...),
 	}
 }
 
 func NilMetrics() *Metrics {
 	return &Metrics{
-		PendingSlots:  discard.NewGauge(),
-		NumOfRequests: discard.NewCounter(),
+		PendingSlots: discard.NewGauge(),
 	}
 }
 
@@ -50,8 +42,4 @@ func (metrics *Metrics) initMetrics(delta float64) {
 
 func (metrics *Metrics) capturePendingSlots(delta float64) {
 	metrics.PendingSlots.Add(delta)
-}
-
-func (metrics *Metrics) captureNumOfRequests(delta float64) {
-	metrics.NumOfRequests.Add(delta)
 }

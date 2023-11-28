@@ -4,7 +4,6 @@ import (
 	"errors"
 	"math/big"
 	"testing"
-	"time"
 
 	"github.com/hashicorp/go-hclog"
 
@@ -254,12 +253,18 @@ func newTestInteraction(
 }
 
 // createTestIxs creates and returns multiple instances of types.Interactions based on the given range
-func createTestIxs(t *testing.T, ixType common.IxType, start int, end int, address common.Address) common.Interactions {
+func createTestIxs(
+	t *testing.T,
+	ixType common.IxType,
+	startNonce int,
+	endNonce int,
+	address common.Address,
+) common.Interactions {
 	t.Helper()
 
 	ixs := make(common.Interactions, 0)
 
-	for nonce := start; nonce < end; nonce++ {
+	for nonce := startNonce; nonce < endNonce; nonce++ {
 		ixs = append(ixs, newTestInteraction(t, ixType, nonce, address, nil))
 	}
 
@@ -321,47 +326,18 @@ func newIxWithPayload(
 	})
 }
 
-// addAndEnqueueIxs adds and enqueues ixs
-// returns the promoted ixs
-func addAndEnqueueIxs(t *testing.T, ixPool *IxPool, ixs common.Interactions, senderAddr common.Address) promoteRequest {
-	t.Helper()
-
-	go func() {
-		errs := ixPool.AddInteractions(ixs)
-		require.Len(t, errs, 0)
-	}()
-
-	go ixPool.handleEnqueueRequest(<-ixPool.enqueueReqCh)
-	time.Sleep(100 * time.Millisecond)
-
-	ixPool.accounts.get(senderAddr).enqueued.lock(false)
-	defer ixPool.accounts.get(senderAddr).enqueued.unlock()
-
-	// checks whether the ixs are enqueued
-	require.Equal(t, uint64(len(ixs)), ixPool.accounts.get(senderAddr).enqueued.length())
-	require.Equal(t, uint64(0), ixPool.accounts.get(senderAddr).promoted.length())
-
-	return <-ixPool.promoteReqCh
-}
-
 // addAndPromoteIxs adds, enqueues and promotes ixs
 func addAndPromoteIxs(t *testing.T, ixPool *IxPool, ixs common.Interactions, senderAddr common.Address) {
 	t.Helper()
 
-	go func() {
-		errs := ixPool.AddInteractions(ixs)
-		require.Len(t, errs, 0)
-	}()
-
-	go ixPool.handleEnqueueRequest(<-ixPool.enqueueReqCh)
-
-	promoteRequest := <-ixPool.promoteReqCh
+	errs := ixPool.AddInteractions(ixs)
+	require.Len(t, errs, 0)
 
 	// checks whether the ixs are enqueued
 	require.Equal(t, uint64(len(ixs)), ixPool.accounts.get(senderAddr).enqueued.length())
 	require.Equal(t, uint64(0), ixPool.accounts.get(senderAddr).promoted.length())
 
-	ixPool.handlePromoteRequest(promoteRequest)
+	ixPool.handlePromoteRequest(<-ixPool.promoteReqCh)
 
 	// checks whether the ixs are promoted
 	require.Equal(t, uint64(0), ixPool.accounts.get(senderAddr).enqueued.length())
@@ -376,12 +352,8 @@ func addAndProcessIxs(t *testing.T, sm *MockStateManager, ixPool *IxPool, ixs co
 		sm.setTestMOIBalance(v.Sender())
 	}
 
-	go func() {
-		errs := ixPool.AddInteractions(ixs)
-		require.Len(t, errs, 0)
-	}()
-
-	go ixPool.handleEnqueueRequest(<-ixPool.enqueueReqCh)
+	errs := ixPool.AddInteractions(ixs)
+	require.Len(t, errs, 0)
 
 	ixPool.handlePromoteRequest(<-ixPool.promoteReqCh)
 }
@@ -395,30 +367,8 @@ func addAndEnqueueIxsWithoutPromoting(
 ) {
 	t.Helper()
 
-	go func() {
-		errs := ixPool.AddInteractions(ixs)
-		require.Len(t, errs, 0)
-	}()
-
-	go ixPool.handleEnqueueRequest(<-ixPool.enqueueReqCh)
-
-	<-ixPool.promoteReqCh
-
-	require.Equal(t, uint64(len(ixs)), ixPool.accounts.get(senderAddr).enqueued.length())
-}
-
-// createNonceHolesInEnqueue adds interactions to enqueue and
-// doesn't wait on promote channel as ixns have nonce that's greater than expected nonce
-func createNonceHolesInEnqueue(t *testing.T, ixPool *IxPool, ixs common.Interactions, senderAddr common.Address) {
-	t.Helper()
-
-	go func() {
-		errs := ixPool.AddInteractions(ixs)
-		require.Len(t, errs, 0)
-	}()
-
-	req := <-ixPool.enqueueReqCh
-	ixPool.handleEnqueueRequest(req)
+	errs := ixPool.AddInteractions(ixs)
+	require.Len(t, errs, 0)
 
 	require.Equal(t, uint64(len(ixs)), ixPool.accounts.get(senderAddr).enqueued.length())
 }
@@ -429,20 +379,18 @@ func getPromotedAccounts(
 	ixPool *IxPool,
 	ixs common.Interactions,
 	expectedAccounts int,
+	expectedErrors int,
 ) map[common.Address]interface{} {
 	t.Helper()
 
 	promotedAccounts := make(map[common.Address]interface{}, 0)
 
-	go func() {
-		errs := ixPool.AddInteractions(ixs)
-		require.Len(t, errs, 0)
-	}()
+	errs := ixPool.AddInteractions(ixs)
+	require.Equal(t, expectedErrors, len(errs))
 
-	go ixPool.handleEnqueueRequest(<-ixPool.enqueueReqCh)
-
-	if expectedAccounts > 0 {
-		promotedAccounts = (<-ixPool.promoteReqCh).account
+	for expectedAccounts > 0 {
+		promotedAccounts[(<-ixPool.promoteReqCh).address] = struct{}{}
+		expectedAccounts--
 	}
 
 	return promotedAccounts

@@ -2,8 +2,6 @@ package args
 
 import "github.com/sarvalabs/go-moi/common"
 
-var LatestTesseractHeight int64 = -1
-
 type TesseractNumberOrHash struct {
 	TesseractNumber *int64       `json:"tesseract_number"`
 	TesseractHash   *common.Hash `json:"tesseract_hash"`

@@ -21,6 +21,8 @@ import (
 	"github.com/sarvalabs/go-moi/ixpool"
 	"github.com/sarvalabs/go-moi/jsonrpc"
 	"github.com/sarvalabs/go-moi/jsonrpc/api"
+	"github.com/sarvalabs/go-moi/jsonrpc/backend"
+	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
 	"github.com/sarvalabs/go-moi/lattice"
 	"github.com/sarvalabs/go-moi/network/p2p"
 	"github.com/sarvalabs/go-moi/senatus"
@@ -98,8 +100,8 @@ func (n *Node) setupStateManager() (err error) {
 
 func (n *Node) setupReputationEngine() (err error) {
 	nodeMetaInfo := &senatus.NodeMetaInfo{
-		Addrs:     utils.MultiAddrToString(n.network.GetAddrs()...),
 		KramaID:   n.vault.KramaID(),
+		Addrs:     utils.MultiAddrToString(n.network.GetAddrs()...),
 		NTQ:       1,
 		PublicKey: n.vault.GetConsensusPrivateKey().GetPublicKeyInBytes(),
 	}
@@ -108,7 +110,6 @@ func (n *Node) setupReputationEngine() (err error) {
 		n.logger,
 		n.network,
 		n.db,
-		n.vault.KramaID(),
 		nodeMetaInfo,
 	)
 	if err != nil {
@@ -141,7 +142,7 @@ func (n *Node) setupSenatusToNetwork() error {
 	n.network.Senatus = n.senatus
 
 	for _, staticPeer := range n.cfg.Network.StaticPeers {
-		err := n.network.Senatus.UpdatePeer(staticPeer.ID, &senatus.NodeMetaInfo{
+		err := n.network.Senatus.UpdatePeer(&senatus.NodeMetaInfo{
 			KramaID: staticPeer.ID,
 			Addrs:   utils.MultiAddrToString(staticPeer.Address),
 			NTQ:     senatus.DefaultPeerNTQ,
@@ -156,7 +157,7 @@ func (n *Node) setupSenatusToNetwork() error {
 
 // setupRandomizer creates new Randomizer object and setups it to node
 func (n *Node) setupRandomizer() {
-	n.handlers.flux = flux.NewRandomizer(n.logger, n.network, n.nodeMetrics.flux)
+	n.handlers.flux = flux.NewRandomizer(n.logger, n.network, n.senatus, n.nodeMetrics.flux)
 }
 
 // setupChainManager creates new Chain Manager object and setups it to node
@@ -263,20 +264,13 @@ func (n *Node) setLogger(logLevel string) error {
 
 // setupRPC sets JSON-RPC
 func (n *Node) setupRPC() error {
-	n.rpc = jsonrpc.NewRPCServer("/", n.logger, n.cfg.Network, n.eventMux)
+	newBackend := backend.NewBackend(n.ixpool, n.chain, n.exec, n.state, n.syncer, n.network, n.db)
 
-	backend := api.NewBackend(
-		n.ixpool,
-		n.chain,
-		n.exec,
-		n.state,
-		n.syncer,
-		n.network,
-		n.db,
-		n.cfg.IxPool,
-	)
+	filterMan := websocket.NewFilterManager(n.logger, n.eventMux, n.cfg.JSONRPC, newBackend)
 
-	for _, publicAPI := range api.GetPublicAPIs(backend) {
+	n.rpc = jsonrpc.NewRPCServer("/", n.logger, n.cfg.Network, filterMan)
+
+	for _, publicAPI := range api.GetPublicAPIs(newBackend, filterMan) {
 		rpcService := jsonrpc.NewRPCService()
 
 		if err := rpcService.RegisterAPIs(publicAPI.Services); err != nil {

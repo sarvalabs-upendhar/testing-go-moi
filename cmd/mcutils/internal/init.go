@@ -105,15 +105,15 @@ func parseFlags(initcmd *cobra.Command) {
 	}
 }
 
-func CreateConfigFile(datadir string, index int) []byte {
+func CreateConfigFile(datadir string, index int, ipAddr string) []byte {
 	data := cmdCommon.Config{
 		NodeType:       7,
 		KramaIDVersion: 1,
 		Genesis:        "genesis.json",
 		Network: cmdCommon.NetworkConfig{
 			Libp2pAddr: []string{
-				"/ip4/0.0.0.0/tcp/" + strconv.Itoa(port+index),
-				"/ip4/0.0.0.0/udp/" + strconv.Itoa(port+index) + "/quic-v1",
+				fmt.Sprintf("/ip4/%s/tcp/%d", ipAddr, port+index),
+				fmt.Sprintf("/ip4/%s/udp/%d/%s", ipAddr, port+index, "quic-v1"),
 				"/ip6/::/tcp/" + strconv.Itoa(port+index),
 				"/ip6/::/udp/" + strconv.Itoa(port+index) + "/quic-v1",
 			},
@@ -156,7 +156,7 @@ func CreateConfigFile(datadir string, index int) []byte {
 		Execution: cmdCommon.ExecutionConfig{
 			FuelLimit: hexutil.Uint64(config.DefaultFuelLimit),
 		},
-		Ixpool: cmdCommon.IxPoolConfig{
+		IxPool: cmdCommon.IxPoolConfig{
 			Mode:       config.DefaultIxPoolMode,
 			PriceLimit: hexutil.Big(*config.DefaultIxPriceLimit),
 			MaxSlots:   config.DefaultMaxIXPoolSlots,
@@ -169,6 +169,9 @@ func CreateConfigFile(datadir string, index int) []byte {
 		Vault: cmdCommon.VaultConfig{
 			DataDir:      datadir,
 			NodePassword: password,
+		},
+		JSONRPC: cmdCommon.JSONRPCConfig{
+			TesseractRangeLimit: config.DefaultTesseractRangeLimit,
 		},
 		NetworkID: strconv.Itoa(config.LocalID),
 	}
@@ -188,7 +191,7 @@ func CreateConfigFile(datadir string, index int) []byte {
 func setupTestEnv() {
 	instances := make([]cmdCommon.Instance, count)
 
-	ip, err := cmdCommon.GetThisNodeIP()
+	ip, err := cmdCommon.GetIP()
 	if err != nil {
 		cmdCommon.Err(err)
 	}
@@ -212,7 +215,7 @@ func setupTestEnv() {
 			cmdCommon.Err(err)
 		}
 
-		configData := CreateConfigFile(fmt.Sprintf("test_%d", directoryIndex+i), directoryIndex+i)
+		configData := CreateConfigFile(fmt.Sprintf("test_%d", directoryIndex+i), directoryIndex+i, ip)
 
 		if err := os.WriteFile(fmt.Sprintf("test_%d/config.json", directoryIndex+i), configData, 0o600); err != nil {
 			cmdCommon.Err(err)

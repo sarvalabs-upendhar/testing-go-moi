@@ -155,22 +155,6 @@ func (cm *ConnectionManager) GetHostPeerID() peer.ID {
 	return cm.server.host.ID()
 }
 
-// GetBootstrapPeerIDs returns peer IDs of bootstrap peers.
-func (cm *ConnectionManager) GetBootstrapPeerIDs() (map[peer.ID]bool, error) {
-	addrInfo, err := peer.AddrInfosFromP2pAddrs(cm.server.cfg.BootstrapPeers...)
-	if err != nil {
-		return nil, errors.Wrap(err, "unable to extract addr-info from multiaddr for bootstrap nodes")
-	}
-
-	peerIDs := make(map[peer.ID]bool)
-
-	for _, info := range addrInfo {
-		peerIDs[info.ID] = true
-	}
-
-	return peerIDs, nil
-}
-
 // GetRandomPeer returns the libp2p ID of random peer from the server's kDHT routing table
 func (cm *ConnectionManager) GetRandomPeer() peer.ID {
 	peers := cm.server.kadDHT.RoutingTable().ListPeers()

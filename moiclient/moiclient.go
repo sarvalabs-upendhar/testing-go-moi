@@ -14,12 +14,12 @@ import (
 	"strconv"
 	"sync/atomic"
 
-	"github.com/sarvalabs/go-moi/common/kramaid"
-	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
-
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
+	"github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/jsonrpc/api"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
+	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
 )
 
 type Client struct {
@@ -654,6 +654,215 @@ func (c *Client) InteractionCall(ctx context.Context, args *rpcargs.CallArgs) (*
 	}
 
 	return &receipt, nil
+}
+
+// NewTesseractFilter subscribes to all new tesseract events
+func (c *Client) NewTesseractFilter(ctx context.Context,
+	args *rpcargs.TesseractFilterArgs,
+) (*rpcargs.FilterResponse, error) {
+	var resp rpcargs.Response
+
+	err := c.Call(ctx, &resp, "moi.NewTesseractFilter", args)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+
+	var filterResponse rpcargs.FilterResponse
+
+	err = json.Unmarshal(resp.Data, &filterResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	return &filterResponse, nil
+}
+
+// NewTesseractsByAccountFilter subscribes to all new tesseract events for a given account
+func (c *Client) NewTesseractsByAccountFilter(ctx context.Context,
+	args *rpcargs.TesseractByAccountFilterArgs,
+) (*rpcargs.FilterResponse, error) {
+	var resp rpcargs.Response
+
+	err := c.Call(ctx, &resp, "moi.NewTesseractsByAccountFilter", args)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+
+	var filterResponse rpcargs.FilterResponse
+
+	err = json.Unmarshal(resp.Data, &filterResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	return &filterResponse, nil
+}
+
+// NewLogFilter creates a log filter based on LogQuery.
+func (c *Client) NewLogFilter(ctx context.Context,
+	args *websocket.LogQuery,
+) (*rpcargs.FilterResponse, error) {
+	var resp rpcargs.Response
+
+	err := c.Call(ctx, &resp, "moi.NewLogFilter", args)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+
+	var filterResponse rpcargs.FilterResponse
+
+	err = json.Unmarshal(resp.Data, &filterResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	return &filterResponse, nil
+}
+
+// PendingIxnsFilter subscribes to all new pending interactions.
+func (c *Client) PendingIxnsFilter(ctx context.Context,
+	args *rpcargs.PendingIxnsFilterArgs,
+) (*rpcargs.FilterResponse, error) {
+	var resp rpcargs.Response
+
+	err := c.Call(ctx, &resp, "moi.PendingIxnsFilter", args)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+
+	var filterResponse rpcargs.FilterResponse
+
+	err = json.Unmarshal(resp.Data, &filterResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	return &filterResponse, nil
+}
+
+// RemoveFilter uninstalls filter for given filter ID.
+func (c *Client) RemoveFilter(
+	ctx context.Context,
+	args *rpcargs.FilterArgs,
+) (*rpcargs.FilterUninstallResponse, error) {
+	var resp rpcargs.Response
+
+	err := c.Call(ctx, &resp, "moi.RemoveFilter", args)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+
+	var filterUninstallResponse rpcargs.FilterUninstallResponse
+
+	err = json.Unmarshal(resp.Data, &filterUninstallResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	return &filterUninstallResponse, nil
+}
+
+// GetLogs returns an array of logs matching the LogQuery
+func (c *Client) GetLogs(ctx context.Context, args *rpcargs.FilterQueryArgs) ([]*rpcargs.RPCLog, error) {
+	var resp rpcargs.Response
+
+	err := c.Call(ctx, &resp, "moi.GetLogs", args)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+
+	var logs []*rpcargs.RPCLog
+
+	err = json.Unmarshal(resp.Data, &logs)
+	if err != nil {
+		return nil, err
+	}
+
+	return logs, nil
+}
+
+// GetFilterChanges is a polling method for a filter using a filter ID,
+// which returns an array of events which occurred since last poll.
+func (c *Client) GetFilterChanges(
+	ctx context.Context,
+	args *rpcargs.FilterArgs,
+	s rpcargs.SubscriptionType,
+) (interface{}, error) {
+	var resp rpcargs.Response
+
+	err := c.Call(ctx, &resp, "moi.GetFilterChanges", args)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+
+	switch s {
+	case rpcargs.NewTesseract:
+		var ts []*rpcargs.RPCTesseract
+
+		err = json.Unmarshal(resp.Data, &ts)
+		if err != nil {
+			return nil, err
+		}
+
+		return ts, nil
+	case rpcargs.NewTesseractsByAccount:
+		var ts []*rpcargs.RPCTesseract
+
+		err = json.Unmarshal(resp.Data, &ts)
+		if err != nil {
+			return nil, err
+		}
+
+		return ts, nil
+	case rpcargs.NewLogsByFilter:
+		var logs []*rpcargs.RPCLog
+
+		err = json.Unmarshal(resp.Data, &logs)
+		if err != nil {
+			return nil, err
+		}
+
+		return logs, nil
+	case rpcargs.PendingIxns:
+		var ixHashes []common.Hash
+
+		err = json.Unmarshal(resp.Data, &ixHashes)
+		if err != nil {
+			return nil, err
+		}
+
+		return ixHashes, nil
+	default:
+		return nil, errors.New("unknown subscription type")
+	}
 }
 
 // Content returns the interactions present in the given IxPool.

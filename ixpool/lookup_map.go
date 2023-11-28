@@ -20,18 +20,23 @@ func NewLookupMap() *lookupMap {
 	return l
 }
 
-// add inserts the given Interaction into the map. [thread-safe]
-func (m *lookupMap) add(ixs ...*common.Interaction) {
+// add inserts the provided Interaction into the map.
+// It returns true if the insertion is successful, otherwise false. [thread-safe]
+func (m *lookupMap) add(ix *common.Interaction) bool {
 	m.Lock()
 	defer m.Unlock()
 
-	for _, ix := range ixs {
-		m.all[ix.Hash()] = ix
+	if _, exists := m.all[ix.Hash()]; exists {
+		return false
 	}
+
+	m.all[ix.Hash()] = ix
+
+	return true
 }
 
 // remove deletes the given Interactions from the map. [thread-safe]
-func (m *lookupMap) remove(ixs common.Interactions) {
+func (m *lookupMap) remove(ixs ...*common.Interaction) {
 	m.Lock()
 	defer m.Unlock()
 

@@ -903,7 +903,7 @@ func createTesseract(t *testing.T, params *createTesseractParams) *common.Tesser
 		params = &createTesseractParams{}
 	}
 
-	if params.address == common.NilAddress {
+	if params.address.IsNil() {
 		params.address = tests.RandomAddress(t)
 	}
 

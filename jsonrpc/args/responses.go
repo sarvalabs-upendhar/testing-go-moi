@@ -101,6 +101,17 @@ type RPCReceipt struct {
 	Parts     RPCTesseractParts    `json:"parts"`
 }
 
+type RPCLog struct {
+	Addresses []common.Address `json:"addresses"`
+	LogicID   common.LogicID   `json:"logic_id"`
+	Topics    []common.Hash    `json:"topics"`
+	Data      []byte           `json:"data"`
+
+	// Derived fields, avoid serializing these fields while storing to DB
+	IxHash common.Hash       `json:"ix_hash"`
+	Grid   RPCTesseractParts `json:"grid"`
+}
+
 type RPCInteraction struct {
 	Type  common.IxType  `json:"type"`
 	Nonce hexutil.Uint64 `json:"nonce"`
@@ -226,6 +237,10 @@ type RPCTesseract struct {
 
 func (ts *RPCTesseract) Address() common.Address {
 	return ts.Header.Address
+}
+
+func (ts *RPCTesseract) Height() uint64 {
+	return ts.Header.Height.ToUint64()
 }
 
 // InteractionResponse is a struct that represents a single interaction

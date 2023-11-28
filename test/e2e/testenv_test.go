@@ -269,6 +269,10 @@ func (te *TestEnvironment) TearDownSuite() {
 }
 
 func TestInteractions(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping e2e test")
+	}
+
 	bgToken := os.Getenv("BG_TOKEN")
 	if bgToken == "" {
 		fmt.Println("can not run E2E tests")

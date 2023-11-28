@@ -54,3 +54,8 @@ const (
 	DefaultMoiWalletPath = crypto.DefaultMOIWalletPath
 	DefaultMOIIDPath     = crypto.DefaultMOIIDPath
 )
+
+// Subscription defaults
+const (
+	DefaultTesseractRangeLimit = 10
+)
