@@ -94,12 +94,10 @@ func (manager *Manager) InteractionCall(
 }
 
 func (manager *Manager) runInteraction(
-	ix *common.Interaction,
-	ctx *common.ExecutionContext,
-	objects state.ObjectMap,
-	useIxFuelLimit bool,
+	ix *common.Interaction, ctx *common.ExecutionContext,
+	objects state.ObjectMap, useIxFuelLimit bool,
 ) (
-	*common.Receipt, error,
+	receipt *common.Receipt, err error,
 ) {
 	var tank *FuelTank
 
@@ -128,8 +126,18 @@ func (manager *Manager) runInteraction(
 		return nil, errors.Wrapf(common.ErrInvalidInteractionType, "execution failed (%v)", ixtype)
 	}
 
+	// Set up a defer function to recover from any panic
+	// that may occur while executing the interaction
+	defer func() {
+		if recover() != nil {
+			err = errors.New("execution failed: executor panicked!")
+
+			manager.logger.Debug("EXECUTION PANIC OCCURRED", "trace:", recover())
+		}
+	}()
+
 	// Call the interaction runner and get the receipt
-	receipt, err := runner(ix, ctx, tank, objects)
+	receipt, err = runner(ix, ctx, tank, objects)
 	if err != nil {
 		return nil, errors.Wrapf(err, "execution failed (%v)", ixtype)
 	}

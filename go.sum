@@ -483,8 +483,8 @@ github.com/sarvalabs/battleground v0.1.2-rc1.0.20231115081102-cea9a56bb121 h1:5l
 github.com/sarvalabs/battleground v0.1.2-rc1.0.20231115081102-cea9a56bb121/go.mod h1:hIc3PcOSAl3vs5/J36dRO2d4l6qPputmfBeu03K9X6s=
 github.com/sarvalabs/go-moi-engineio v0.1.1 h1:8gt0CNdh5wBZbqXxUOufpI/QSe7YhB5WE/AX0wmsSMA=
 github.com/sarvalabs/go-moi-engineio v0.1.1/go.mod h1:WuyyB+KmgS0KPek4XSwHEGyIL1unJC7Yr4Pp5UmGcHg=
-github.com/sarvalabs/go-pisa v0.1.6 h1:lpyGfVrPzhvxdAftgybxwIXtfQcTQm+82X16qKEk09o=
-github.com/sarvalabs/go-pisa v0.1.6/go.mod h1:TEh8GurCuVLXCQUfXMkvuj+x18G2BE6DjfGzHesmaIo=
+github.com/sarvalabs/go-pisa v0.1.7 h1:J40NmDIGwBiOxdAZiT9gBExWwaSZr+nT406O9b8o82I=
+github.com/sarvalabs/go-pisa v0.1.7/go.mod h1:TEh8GurCuVLXCQUfXMkvuj+x18G2BE6DjfGzHesmaIo=
 github.com/sarvalabs/go-polo v0.3.4 h1:NOUKlQQpBwAYnMDc79NEcE7hHGcfnePTsajJ5kegAsI=
 github.com/sarvalabs/go-polo v0.3.4/go.mod h1:tLT+u1m3h1HQN05oAOHADHVTx+Q6G1dXJfv1xJFyCuE=
 github.com/sergi/go-diff v1.0.0/go.mod h1:0CfEIISq7TuYL3j771MWULgwwjU+GofnZX9QAmXWZgo=
