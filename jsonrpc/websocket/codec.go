@@ -11,7 +11,7 @@ type WSRequest struct {
 	Params json.RawMessage `json:"params,omitempty"`
 }
 
-// TesseractArgs is the jsonrpc request parameter for new tesseracts event subscription
+// TesseractArgs is the jsonrpc request parameter for new tesseracts event filter
 type TesseractArgs struct {
 	Address string `json:"address"`
 }

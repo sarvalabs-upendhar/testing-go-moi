@@ -1,4 +1,4 @@
-package api
+package backend
 
 import (
 	"context"
@@ -9,7 +9,6 @@ import (
 	"github.com/sarvalabs/go-moi/jsonrpc/args"
 
 	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/config"
 	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/state"
 )
@@ -31,6 +30,7 @@ type ChainManager interface {
 	GetInteractionAndPartsByIxHash(ixHash common.Hash) (*common.Interaction, *common.TesseractParts, int, error)
 	GetInteractionAndPartsByTSHash(tsHash common.Hash, ixIndex int) (*common.Interaction, *common.TesseractParts, error)
 	GetTesseractHeightEntry(address common.Address, height uint64) (common.Hash, error)
+	GetTesseractPartsByGridHash(gridHash common.Hash) (*common.TesseractParts, error)
 }
 
 type StateManager interface {
@@ -80,21 +80,19 @@ type DB interface {
 // Backend is a struct that represents the API backend
 type Backend struct {
 	// Represents the API interaction pool
-	ixpool IxPool
+	Ixpool IxPool
 	// Represents the API chain manager
-	chain ChainManager
+	Chain ChainManager
 	// Represents the API execution manager
-	exec ExecutionManager
+	Exec ExecutionManager
 	// Represents the API state manager
-	sm StateManager
+	SM StateManager
 	// Represents the API syncer
-	syncer Syncer
+	Syncer Syncer
 	// Represents the API network
-	net Network
+	Net Network
 	// Represents the API database
-	db DB
-	// Represents the node config
-	cfg *config.IxPoolConfig
+	DB DB
 }
 
 // NewBackend is a constructor function that generates and returns a new API Backend object
@@ -106,8 +104,7 @@ func NewBackend(
 	syncer Syncer,
 	net Network,
 	db DB,
-	cfg *config.IxPoolConfig,
 ) *Backend {
 	// Create a new API Backend object and return it
-	return &Backend{ixpool, chain, exec, sm, syncer, net, db, cfg}
+	return &Backend{ixpool, chain, exec, sm, syncer, net, db}
 }

@@ -191,7 +191,7 @@ func TestCommitContext(t *testing.T) {
 }
 
 func TestCommitActiveStorageTrees(t *testing.T) {
-	logicIDs := getLogicIDs(t, 1)
+	logicIDs := tests.GetLogicIDs(t, 1)
 	keys, values := getEntries(t, 1)
 
 	astWithoutDirtyEntries := getASTWithDefaultFlushedEntries(t, 1, 1)
@@ -342,7 +342,7 @@ func TestCommitMetaStorageTree(t *testing.T) {
 }
 
 func TestCommitStorage(t *testing.T) {
-	logicIds := getLogicIDs(t, 1)
+	logicIds := tests.GetLogicIDs(t, 1)
 	keys, values := getEntries(t, 1)
 
 	astWithDirtyEntries := getASTWithDefaultDirtyEntries(t, 2, 1)
@@ -480,7 +480,7 @@ func TestCommitLogicsTree(t *testing.T) {
 }
 
 func TestCommit(t *testing.T) {
-	logicIds := getLogicIDs(t, 1)
+	logicIds := tests.GetLogicIDs(t, 1)
 	keys, values := getEntries(t, 1)
 
 	balance, _ := getTestBalance(t, getAssetMap(getAssetIDsAndBalances(t, 2)))
@@ -606,7 +606,7 @@ func TestFlushLogicTree(t *testing.T) {
 }
 
 func TestFlushActiveStorageTrees(t *testing.T) {
-	logicIds := getLogicIDs(t, 2)
+	logicIds := tests.GetLogicIDs(t, 2)
 	ast := getActiveStorageTrees(t, logicIds, emptyKeys, emptyValues)
 	mst := mockMerkleTreeWithDB()
 
@@ -1242,7 +1242,7 @@ func TestGetMetaStorageTree(t *testing.T) {
 }
 
 func TestGetStorageTree(t *testing.T) {
-	logicID := getLogicID(t, tests.RandomAddress(t))
+	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
 	keys, values := getEntries(t, 2)
 
 	testcases := []struct {
@@ -1259,12 +1259,12 @@ func TestGetStorageTree(t *testing.T) {
 		{
 			name:          "should return error if failed to get meta storage tree",
 			soParams:      stateObjectParamsWithInvalidMST(t),
-			logicID:       getLogicID(t, tests.RandomAddress(t)),
+			logicID:       tests.GetLogicID(t, tests.RandomAddress(t)),
 			expectedError: errors.New("failed to initiate storage tree"),
 		},
 		{
 			name:          "should return error if logic storage tree not found",
-			logicID:       getLogicID(t, tests.RandomAddress(t)),
+			logicID:       tests.GetLogicID(t, tests.RandomAddress(t)),
 			expectedError: common.ErrLogicStorageTreeNotFound,
 		},
 		{
@@ -1321,7 +1321,7 @@ func TestGetStorageTree(t *testing.T) {
 }
 
 func TestSetStorageEntry(t *testing.T) {
-	logicIDs := getLogicIDs(t, 2)
+	logicIDs := tests.GetLogicIDs(t, 2)
 	keys, values := getEntries(t, 2)
 
 	testcases := []struct {
@@ -1401,7 +1401,7 @@ func TestAddAccountGenesisInfo(t *testing.T) {
 }
 
 func TestGetStorageEntry(t *testing.T) {
-	logicIDs := getLogicIDs(t, 2)
+	logicIDs := tests.GetLogicIDs(t, 2)
 	keys, values := getEntries(t, 1)
 
 	testcases := []struct {
@@ -1491,7 +1491,7 @@ func TestGetMetaLogicTree(t *testing.T) {
 }
 
 func TestGetLogicObject(t *testing.T) {
-	logicID := getLogicID(t, tests.RandomAddress(t))
+	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
 	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
 	rawData, err := logicObject.Bytes()
 	require.NoError(t, err)
@@ -1559,7 +1559,7 @@ func TestIsLogicRegistered(t *testing.T) {
 	// seed the engine runtimes
 	engineio.RegisterRuntime(pisa.NewRuntime(), nil)
 
-	logicID := getLogicID(t, tests.RandomAddress(t))
+	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
 	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
 	rawData, err := logicObject.Bytes()
 	require.NoError(t, err)
@@ -1602,8 +1602,7 @@ func TestIsLogicRegistered(t *testing.T) {
 func TestInsertNewLogicObject(t *testing.T) {
 	engineio.RegisterRuntime(pisa.NewRuntime(), nil)
 
-	logicID := getLogicID(t, tests.RandomAddress(t))
-
+	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
 	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
 	rawData, err := logicObject.Bytes()
 	require.NoError(t, err)
@@ -1630,7 +1629,7 @@ func TestInsertNewLogicObject(t *testing.T) {
 		{
 			name:      "logic object inserted successfully",
 			logicTree: getMerkleTreeWithEntries(t, [][]byte{logicID.Bytes()}, [][]byte{rawData}),
-			logicID:   getLogicID(t, tests.RandomAddress(t)),
+			logicID:   tests.GetLogicID(t, tests.RandomAddress(t)),
 		},
 		{
 			name: "should return error if failed to add logic object to tree",
@@ -1671,7 +1670,7 @@ func TestInsertNewLogicObject(t *testing.T) {
 }
 
 func TestCreateStorageTreeForLogic(t *testing.T) {
-	logicID := getLogicID(t, tests.RandomAddress(t))
+	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
 
 	testcases := []struct {
 		name          string

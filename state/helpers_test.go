@@ -1394,7 +1394,7 @@ func getTestAssetDescriptor(t *testing.T, operator common.Address, symbol string
 		Dimension:  4,
 		IsStateFul: false,
 		IsLogical:  false,
-		LogicID:    getLogicID(t, tests.RandomAddress(t)),
+		LogicID:    tests.GetLogicID(t, tests.RandomAddress(t)),
 	}
 }
 
@@ -1501,7 +1501,7 @@ func getASTWithDefaultFlushedEntries(
 ) map[string]tree.MerkleTree {
 	t.Helper()
 
-	logicIds := getLogicIDs(t, treeCount)
+	logicIds := tests.GetLogicIDs(t, treeCount)
 	keys, values := getEntries(t, entriesPerTree)
 	ast := getActiveStorageTreesWithFlushedEntries(t, logicIds, keys, values)
 
@@ -2171,24 +2171,6 @@ func getEntries(t *testing.T, count int) ([][]byte, [][]byte) {
 	t.Helper()
 
 	return getRandomBytes(t, count), getRandomBytes(t, count)
-}
-
-func getLogicID(t *testing.T, address common.Address) common.LogicID {
-	t.Helper()
-
-	return common.NewLogicIDv0(true, false, false, false, 0, address)
-}
-
-func getLogicIDs(t *testing.T, count int) []common.LogicID {
-	t.Helper()
-
-	logicIDs := make([]common.LogicID, count)
-
-	for i := 0; i < count; i++ {
-		logicIDs[i] = getLogicID(t, tests.RandomAddress(t))
-	}
-
-	return logicIDs
 }
 
 func getDirtyEntries(t *testing.T, count int) LogicStorageObject {

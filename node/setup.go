@@ -21,6 +21,8 @@ import (
 	"github.com/sarvalabs/go-moi/ixpool"
 	"github.com/sarvalabs/go-moi/jsonrpc"
 	"github.com/sarvalabs/go-moi/jsonrpc/api"
+	"github.com/sarvalabs/go-moi/jsonrpc/backend"
+	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
 	"github.com/sarvalabs/go-moi/lattice"
 	"github.com/sarvalabs/go-moi/network/p2p"
 	"github.com/sarvalabs/go-moi/senatus"
@@ -262,20 +264,13 @@ func (n *Node) setLogger(logLevel string) error {
 
 // setupRPC sets JSON-RPC
 func (n *Node) setupRPC() error {
-	n.rpc = jsonrpc.NewRPCServer("/", n.logger, n.cfg.Network, n.eventMux)
+	newBackend := backend.NewBackend(n.ixpool, n.chain, n.exec, n.state, n.syncer, n.network, n.db)
 
-	backend := api.NewBackend(
-		n.ixpool,
-		n.chain,
-		n.exec,
-		n.state,
-		n.syncer,
-		n.network,
-		n.db,
-		n.cfg.IxPool,
-	)
+	filterMan := websocket.NewFilterManager(n.logger, n.eventMux, n.cfg.JSONRPC, newBackend)
 
-	for _, publicAPI := range api.GetPublicAPIs(backend) {
+	n.rpc = jsonrpc.NewRPCServer("/", n.logger, n.cfg.Network, filterMan)
+
+	for _, publicAPI := range api.GetPublicAPIs(newBackend, filterMan) {
 		rpcService := jsonrpc.NewRPCService()
 
 		if err := rpcService.RegisterAPIs(publicAPI.Services); err != nil {

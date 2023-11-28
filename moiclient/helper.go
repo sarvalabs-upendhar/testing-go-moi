@@ -241,3 +241,9 @@ func GetPeerID(t *testing.T, client *Client) peer.ID {
 
 	return peerID
 }
+
+func NumPointer(t *testing.T, input int64) *int64 {
+	t.Helper()
+
+	return &input
+}

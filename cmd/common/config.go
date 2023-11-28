@@ -16,12 +16,13 @@ type Config struct {
 	Vault          VaultConfig     `json:"vault"`
 	Network        NetworkConfig   `json:"network"`
 	Syncer         SyncerConfig    `json:"syncer"`
-	Ixpool         IxPoolConfig    `json:"ixpool"`
+	IxPool         IxPoolConfig    `json:"ixpool"`
 	Consensus      ConsensusConfig `json:"consensus"`
 	Execution      ExecutionConfig `json:"execution"`
 	DB             DBConfig        `json:"database"`
 	Telemetry      Telemetry       `json:"telemetry"`
 	LogFilePath    string          `json:"logfile"`
+	JSONRPC        JSONRPCConfig   `json:"jsonrpc"`
 	NetworkID      string          `json:"network_id"`
 }
 
@@ -84,7 +85,7 @@ func DefaultBabylonConfig(path string) *Config {
 		Execution: ExecutionConfig{
 			FuelLimit: hexutil.Uint64(config.DefaultFuelLimit),
 		},
-		Ixpool: IxPoolConfig{
+		IxPool: IxPoolConfig{
 			Mode:       config.DefaultIxPoolMode,
 			PriceLimit: hexutil.Big(*config.DefaultIxPriceLimit),
 			MaxSlots:   config.DefaultMaxIXPoolSlots,
@@ -95,7 +96,10 @@ func DefaultBabylonConfig(path string) *Config {
 			Token:          "",
 		},
 		LogFilePath: path + config.DefaultLogDirectory,
-		NetworkID:   strconv.Itoa(config.BabylonID),
+		JSONRPC: JSONRPCConfig{
+			TesseractRangeLimit: config.DefaultTesseractRangeLimit,
+		},
+		NetworkID: strconv.Itoa(config.BabylonID),
 	}
 }
 
@@ -155,7 +159,7 @@ func DefaultDevnetConfig(path string) *Config {
 		Execution: ExecutionConfig{
 			FuelLimit: hexutil.Uint64(config.DefaultFuelLimit),
 		},
-		Ixpool: IxPoolConfig{
+		IxPool: IxPoolConfig{
 			Mode:       config.DefaultIxPoolMode,
 			PriceLimit: hexutil.Big(*config.DefaultIxPriceLimit),
 			MaxSlots:   config.DefaultMaxIXPoolSlots,
@@ -166,7 +170,10 @@ func DefaultDevnetConfig(path string) *Config {
 			Token:          "",
 		},
 		LogFilePath: path + config.DefaultLogDirectory,
-		NetworkID:   strconv.Itoa(config.DevnetID),
+		JSONRPC: JSONRPCConfig{
+			TesseractRangeLimit: config.DefaultTesseractRangeLimit,
+		},
+		NetworkID: strconv.Itoa(config.DevnetID),
 	}
 }
 
@@ -246,4 +253,8 @@ type VaultConfig struct {
 	Mode         int8   // 0: Server, 1: Register/User mode
 	NodeIndex    uint32 // Requires only in Register mode
 	InMemory     bool
+}
+
+type JSONRPCConfig struct {
+	TesseractRangeLimit uint8 `json:"tesseract_range_limit"`
 }

@@ -271,10 +271,10 @@ func TestIxPool_addedIxnEvent(t *testing.T) {
 
 			ixAddedEventSub := ixPool.mux.Subscribe(utils.AddedInteractionEvent{})
 
+			ixAddedResp := make(chan tests.Result, 1)
+
 			ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
 			defer cancel()
-
-			ixAddedResp := make(chan tests.Result, 1)
 
 			go utils.HandleMuxEvents(ctx, ixAddedEventSub, ixAddedResp, len(test.ixn))
 
@@ -545,10 +545,10 @@ func TestIxPool_promoteIxnEvent(t *testing.T) {
 
 			ixPromotedEventSub := ixPool.mux.Subscribe(utils.PromotedInteractionEvent{})
 
+			ixPromotedResp := make(chan tests.Result, len(testcase.ixs))
+
 			ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
 			defer cancel()
-
-			ixPromotedResp := make(chan tests.Result, len(testcase.ixs))
 
 			go utils.HandleMuxEvents(ctx, ixPromotedEventSub, ixPromotedResp, len(testcase.ixs))
 
@@ -767,10 +767,10 @@ func TestIxPool_prunedEnqueuedIxnEvent(t *testing.T) {
 
 			ixPrunedEnqueueEventSub := ixPool.mux.Subscribe(utils.PrunedEnqueuedInteractionEvent{})
 
+			ixPrunedEnqueueResp := make(chan tests.Result, 1)
+
 			ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
 			defer cancel()
-
-			ixPrunedEnqueueResp := make(chan tests.Result, 1)
 
 			go utils.HandleMuxEvents(ctx, ixPrunedEnqueueEventSub, ixPrunedEnqueueResp, len(testcase.ixs))
 
@@ -877,10 +877,10 @@ func TestIxPool_prunedPromotedIxnEvent(t *testing.T) {
 
 			ixPrunedPromotedEventSub := ixPool.mux.Subscribe(utils.PrunedPromotedInteractionEvent{})
 
+			ixPrunedPromotedResp := make(chan tests.Result, 1)
+
 			ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
 			defer cancel()
-
-			ixPrunedPromotedResp := make(chan tests.Result, 1)
 
 			go utils.HandleMuxEvents(ctx, ixPrunedPromotedEventSub, ixPrunedPromotedResp, len(testcase.ixs))
 
@@ -1085,10 +1085,10 @@ func TestIxPool_Drop(t *testing.T) {
 		t.Run(testcase.name, func(t *testing.T) {
 			ixDroppedEventSub := ixPool.mux.Subscribe(utils.DroppedInteractionEvent{})
 
+			ixDroppedResp := make(chan tests.Result, 1)
+
 			ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
 			defer cancel()
-
-			ixDroppedResp := make(chan tests.Result, 1)
 
 			go utils.HandleMuxEvents(ctx, ixDroppedEventSub, ixDroppedResp, len(testcase.ixs))
 

@@ -156,7 +156,7 @@ func CreateConfigFile(datadir string, index int, ipAddr string) []byte {
 		Execution: cmdCommon.ExecutionConfig{
 			FuelLimit: hexutil.Uint64(config.DefaultFuelLimit),
 		},
-		Ixpool: cmdCommon.IxPoolConfig{
+		IxPool: cmdCommon.IxPoolConfig{
 			Mode:       config.DefaultIxPoolMode,
 			PriceLimit: hexutil.Big(*config.DefaultIxPriceLimit),
 			MaxSlots:   config.DefaultMaxIXPoolSlots,
@@ -169,6 +169,9 @@ func CreateConfigFile(datadir string, index int, ipAddr string) []byte {
 		Vault: cmdCommon.VaultConfig{
 			DataDir:      datadir,
 			NodePassword: password,
+		},
+		JSONRPC: cmdCommon.JSONRPCConfig{
+			TesseractRangeLimit: config.DefaultTesseractRangeLimit,
 		},
 		NetworkID: strconv.Itoa(config.LocalID),
 	}

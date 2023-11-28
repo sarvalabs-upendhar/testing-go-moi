@@ -9,6 +9,7 @@ import (
 
 	"github.com/sarvalabs/go-moi/common"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
+	"github.com/sarvalabs/go-moi/jsonrpc/backend"
 )
 
 var ErrGenesisAccount = errors.New("genesis account interactions forbidden")
@@ -16,11 +17,11 @@ var ErrGenesisAccount = errors.New("genesis account interactions forbidden")
 // PublicIXAPI is a struct that represents a wrapper for the public interaction APIs.
 type PublicIXAPI struct {
 	// Represents the API backend
-	ixpool IxPool
-	sm     StateManager
+	ixpool backend.IxPool
+	sm     backend.StateManager
 }
 
-func NewPublicIXAPI(ixpool IxPool, sm StateManager) *PublicIXAPI {
+func NewPublicIXAPI(ixpool backend.IxPool, sm backend.StateManager) *PublicIXAPI {
 	// Create the public interaction API wrapper and return it
 	return &PublicIXAPI{ixpool, sm}
 }

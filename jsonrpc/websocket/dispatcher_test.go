@@ -6,18 +6,21 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/sarvalabs/go-moi/common/utils"
+
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common/tests"
-	"github.com/sarvalabs/go-moi/common/utils"
 )
 
 func Test_handleRequest_Subscribe(t *testing.T) {
 	eventMux := new(utils.TypeMux)
+	logger := hclog.NewNullLogger()
+	filterMan := NewFilterManager(logger, eventMux, &mockJSONRPCConfig, nil)
 	// Create a new dispatcher
-	dispatcher := NewDispatcher(hclog.NewNullLogger(), eventMux)
+	dispatcher := NewDispatcher(logger, filterMan)
 	// Create a mock connection manager
 	mockConnManager := NewMockConnectionManager()
 
@@ -30,7 +33,7 @@ func Test_handleRequest_Subscribe(t *testing.T) {
 			name: "Subscription request without address param",
 			message: []byte(`{
 				"method": "moi.subscribe",
-				"params": ["newAccountTesseracts"]
+				"params": ["newTesseractsByAccount"]
 			}`),
 			expectedErr: errors.New("invalid params"),
 		},
@@ -67,7 +70,28 @@ func Test_handleRequest_Subscribe(t *testing.T) {
 				"id": 1,
 				"method": "moi.subscribe",
 				"params": [
-					"newAccountTesseracts", 
+					"newTesseractsByAccount", 
+					{
+						"address": "%s"
+					}
+				]
+			}`, tests.RandomAddress(t))),
+		},
+		{
+			name: "Log subscription request without address param",
+			message: []byte(`{
+				"method": "moi.subscribe",
+				"params": ["newLogs"]
+			}`),
+			expectedErr: errors.New("invalid params"),
+		},
+		{
+			name: "Subscription request with valid params",
+			message: []byte(fmt.Sprintf(`{
+				"id": 1,
+				"method": "moi.subscribe",
+				"params": [
+					"newLogs", 
 					{
 						"address": "%s"
 					}
@@ -103,15 +127,16 @@ func Test_handleRequest_Subscribe(t *testing.T) {
 			require.NoError(t, err)
 
 			// Check if the connection manager's subscription id and dispatcher result is same
-			require.Equal(t, mockConnManager.GetSubscriptionID(), result)
+			require.Equal(t, mockConnManager.GetFilterID(), result)
 		})
 	}
 }
 
 func Test_handleRequest_Unsubscribe(t *testing.T) {
 	eventMux := new(utils.TypeMux)
+	filterMan := NewFilterManager(hclog.NewNullLogger(), eventMux, &mockJSONRPCConfig, nil)
 	// Create a new dispatcher
-	dispatcher := NewDispatcher(hclog.NewNullLogger(), eventMux)
+	dispatcher := NewDispatcher(hclog.NewNullLogger(), filterMan)
 	// Create a mock connection manager
 	mockConnManager := NewMockConnectionManager()
 
@@ -147,7 +172,7 @@ func Test_handleRequest_Unsubscribe(t *testing.T) {
 				"id": 2,
 				"method": "moi.unsubscribe",
 				"params": ["%s"]
-			}`, mockConnManager.GetSubscriptionID())),
+			}`, mockConnManager.GetFilterID())),
 			expected: "true",
 		},
 	}
@@ -185,8 +210,9 @@ func Test_handleRequest_Unsubscribe(t *testing.T) {
 
 func Test_handleRequests_RequestFormats(t *testing.T) {
 	eventMux := new(utils.TypeMux)
+	filterMan := NewFilterManager(hclog.NewNullLogger(), eventMux, &mockJSONRPCConfig, nil)
 	// Create a new dispatcher
-	dispatcher := NewDispatcher(hclog.NewNullLogger(), eventMux)
+	dispatcher := NewDispatcher(hclog.NewNullLogger(), filterMan)
 	// Create a mock connection manager
 	mockConnManager := NewMockConnectionManager()
 
@@ -201,7 +227,7 @@ func Test_handleRequests_RequestFormats(t *testing.T) {
 				"id": "1",
 				"method": "moi.subscribe",
 				"params": [
-					"newAccountTesseracts", 
+					"newTesseractsByAccount", 
 					{
 						"address": "%s"
 					}
@@ -215,7 +241,7 @@ func Test_handleRequests_RequestFormats(t *testing.T) {
 				"id": 2.0,
 				"method": "moi.subscribe",
 				"params": [
-					"newAccountTesseracts", 
+					"newTesseractsByAccount", 
 					{
 						"address": "%s"
 					}
@@ -228,7 +254,7 @@ func Test_handleRequests_RequestFormats(t *testing.T) {
 			message: []byte(fmt.Sprintf(`{
 				"method": "moi.subscribe",
 				"params": [
-					"newAccountTesseracts", 
+					"newTesseractsByAccount", 
 					{
 						"address": "%s"
 					}
@@ -242,7 +268,7 @@ func Test_handleRequests_RequestFormats(t *testing.T) {
 				"id": 2.1,
 				"method": "moi.subscribe",
 				"params": [
-					"newAccountTesseracts", 
+					"newTesseractsByAccount", 
 					{
 						"address": "%s"
 					}
@@ -256,7 +282,7 @@ func Test_handleRequests_RequestFormats(t *testing.T) {
 				"id": null,
 				"method": "moi.subscribe",
 				"params": [
-					"newAccountTesseracts", 
+					"newTesseractsByAccount", 
 					{
 						"address": "%s"
 					}
@@ -291,8 +317,9 @@ func Test_handleRequests_RequestFormats(t *testing.T) {
 
 func Test_RemoveSubscription(t *testing.T) {
 	eventMux := new(utils.TypeMux)
+	filterMan := NewFilterManager(hclog.NewNullLogger(), eventMux, &mockJSONRPCConfig, nil)
 	// Create a new dispatcher
-	dispatcher := NewDispatcher(hclog.NewNullLogger(), eventMux)
+	dispatcher := NewDispatcher(hclog.NewNullLogger(), filterMan)
 	// Create a mock connection manager
 	mockConnManager := NewMockConnectionManager()
 
@@ -310,7 +337,7 @@ func Test_RemoveSubscription(t *testing.T) {
 		},
 		{
 			name:           "should return true, when valid Subscription ID is passed as parameter",
-			subscriptionID: mockConnManager.GetSubscriptionID(),
+			subscriptionID: mockConnManager.GetFilterID(),
 			expected:       false,
 		},
 	}
@@ -331,7 +358,7 @@ func subscribeToNewTesseractEvent(t *testing.T, dispatcher Dispatcher, mockConnM
 		"id": 1,
 		"method": "moi.subscribe",
 		"params": [
-			"newAccountTesseracts", 
+			"newTesseractsByAccount", 
 			{
 				"address": "%s"
 			}
@@ -357,5 +384,5 @@ func subscribeToNewTesseractEvent(t *testing.T, dispatcher Dispatcher, mockConnM
 	require.NoError(t, err)
 
 	// Check whether the connection manager's subscription id and dispatcher result matches
-	require.Equal(t, mockConnManager.GetSubscriptionID(), result)
+	require.Equal(t, mockConnManager.GetFilterID(), result)
 }

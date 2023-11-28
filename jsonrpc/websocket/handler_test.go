@@ -26,7 +26,8 @@ func Test_HandleWsRequests_Upgrader(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusSwitchingProtocols, resp.StatusCode)
 
-	resp.Body.Close()
+	err = resp.Body.Close()
+	require.NoError(t, err)
 }
 
 func Test_HandleWsRequests_Message(t *testing.T) {
@@ -37,7 +38,6 @@ func Test_HandleWsRequests_Message(t *testing.T) {
 	testcases := []struct {
 		name        string
 		args        RequestArgs
-		expected    uint8
 		expectedErr error
 	}{
 		{
@@ -58,12 +58,39 @@ func Test_HandleWsRequests_Message(t *testing.T) {
 					"id": 1,
 					"method": "moi.subscribe",
 					"params": [
-						"newAccountTesseracts", 
+						"newTesseractsByAccount", 
    						{
 							"address": "%s"
 						}
 					]
 				}`, tests.RandomAddress(t))),
+			},
+		},
+		{
+			name: "Log Subscription request message with valid params",
+			args: RequestArgs{
+				MessageType: websocket.TextMessage,
+				Message: []byte(fmt.Sprintf(`{
+					"id": 1,
+					"method": "moi.subscribe",
+					"params": [
+						"newLogs", 
+   						{
+							"address": "%s"
+						}
+					]
+				}`, tests.RandomAddress(t))),
+			},
+		},
+		{
+			name: "Pending Ixns request message with valid params",
+			args: RequestArgs{
+				MessageType: websocket.TextMessage,
+				Message: []byte(`{
+					"id": 1,
+					"method": "moi.subscribe",
+					"params": ["newPendingInteractions"]
+				}`),
 			},
 		},
 	}
@@ -96,5 +123,6 @@ func Test_HandleWsRequests_Message(t *testing.T) {
 		})
 	}
 
-	resp.Body.Close()
+	err := resp.Body.Close()
+	require.NoError(t, err)
 }

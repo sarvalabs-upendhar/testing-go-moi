@@ -7,9 +7,12 @@ import (
 	"encoding/json"
 	"log"
 	"math/big"
+	"reflect"
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
 
 	bg "github.com/sarvalabs/battleground"
 	client "github.com/sarvalabs/battleground/client/types"
@@ -31,8 +34,6 @@ type StrMap map[string]common.Address
 // url of the node to be used by moiclient.
 var localURL = ""
 
-// Need to run minimum 20 fresh nodes for this test to run successfully
-// Ensure chain is set up to run individual tests
 // TestMoiClient tests moi client functions unless short flag is provided
 func TestMoiClient(t *testing.T) {
 	if testing.Short() {
@@ -182,6 +183,27 @@ func TestMoiClient(t *testing.T) {
 		"testNodeMetaInfo": {
 			test: func(t *testing.T) { testNodeMetaInfo(t, rpcClient) },
 		},
+		"testNewTesseractFilter": {
+			test: func(t *testing.T) { testNewTesseractFilter(t, rpcClient) },
+		},
+		"testNewTesseractsByAccountFilter": {
+			test: func(t *testing.T) { testNewTesseractsByAccountFilter(t, rpcClient) },
+		},
+		"testNewLogFilter": {
+			test: func(t *testing.T) { testNewLogFilter(t, rpcClient) },
+		},
+		"testPendingIxnsFilter": {
+			test: func(t *testing.T) { testPendingIxnsFilter(t, rpcClient) },
+		},
+		"testRemoveFilter": {
+			test: func(t *testing.T) { testRemoveFilter(t, rpcClient) },
+		},
+		"testGetLogs": {
+			test: func(t *testing.T) { testGetLogs(t, rpcClient, addrsMap["assetAddr"]) },
+		},
+		"testGetFilterChanges": {
+			test: func(t *testing.T) { testGetFilterChanges(t, rpcClient, addrsMap["assetAddr"]) },
+		},
 	}
 
 	t.Parallel()
@@ -284,7 +306,7 @@ func setupChain(t *testing.T, client *Client, addrs []common.Address,
 
 		t.Log(addrsMap["deployAddr"])
 
-		SendIxWithInvalidSign(t, client, addrsMap["deployAddr"], acc.Mnemonic)
+		sendIxWithInvalidSign(t, client, addrsMap["deployAddr"], acc.Mnemonic)
 	})
 
 	i += 2
@@ -415,8 +437,8 @@ func transferTokens(t *testing.T, client *Client, sender, receiver common.Addres
 	moiclientRetryFetchReceipt(t, ctx, client, ixHash)
 }
 
-// SendIxWithInvalidSign sends ix with invalid sign
-func SendIxWithInvalidSign(t *testing.T, client *Client, addr common.Address, mnemonic string) {
+// sendIxWithInvalidSign sends ix with invalid sign
+func sendIxWithInvalidSign(t *testing.T, client *Client, addr common.Address, mnemonic string) {
 	supply, _ := new(big.Int).SetString("130D41", 16)
 
 	assetCreationPayload := &common.AssetCreatePayload{
@@ -442,7 +464,7 @@ func SendIxWithInvalidSign(t *testing.T, client *Client, addr common.Address, mn
 	require.ErrorContains(t, err, common.ErrInvalidIXSignature.Error())
 }
 
-// fillIXPool sends ixnPendingCount number of deploy interactions
+// fillIXPool sends ixnPendingCount of deploy interactions
 func fillIXPool(t *testing.T, client *Client, addr common.Address, mnemonic string) {
 	sendIXArgs := getIXArgsForLogicDeployment(t, client, addr)
 	sendIXArgs.Nonce = uint64(0)
@@ -1124,6 +1146,256 @@ func testInteractionCount(t *testing.T, client *Client, addr common.Address) {
 
 			httpInteractionCount := httpInteractionCount(t, test.interactionCountArgs)
 			require.Equal(t, httpInteractionCount, interactionCount)
+		})
+	}
+}
+
+func testNewTesseractFilter(t *testing.T, client *Client) {
+	ctx := context.Background()
+	testcases := []struct {
+		name string
+		args *rpcargs.TesseractFilterArgs
+	}{
+		{
+			name: "add tesseract filter successfully",
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			resp, err := client.NewTesseractFilter(ctx, test.args)
+			require.NoError(t, err)
+			require.NotEqual(t, "", resp.FilterID)
+		})
+	}
+}
+
+func testNewTesseractsByAccountFilter(t *testing.T, client *Client) {
+	ctx := context.Background()
+	testcases := []struct {
+		name string
+		args *rpcargs.TesseractByAccountFilterArgs
+	}{
+		{
+			name: "add tesseract by account filter successfully",
+			args: &rpcargs.TesseractByAccountFilterArgs{Addr: tests.RandomAddress(t)},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			resp, err := client.NewTesseractsByAccountFilter(ctx, test.args)
+			require.NoError(t, err)
+			require.NotEqual(t, "", resp.FilterID)
+		})
+	}
+}
+
+func testNewLogFilter(t *testing.T, client *Client) {
+	ctx := context.Background()
+	testcases := []struct {
+		name            string
+		filterQueryArgs *websocket.LogQuery
+		expectedError   error
+	}{
+		{
+			name: "add log filter successfully",
+			filterQueryArgs: &websocket.LogQuery{
+				Address: tests.RandomAddress(t),
+			},
+		},
+		{
+			name:            "failed to add log filter",
+			filterQueryArgs: &websocket.LogQuery{},
+			expectedError:   common.ErrInvalidAddress,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			resp, err := client.NewLogFilter(ctx, test.filterQueryArgs)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotEqual(t, "", resp.FilterID)
+		})
+	}
+}
+
+func testPendingIxnsFilter(t *testing.T, client *Client) {
+	ctx := context.Background()
+	testcases := []struct {
+		name string
+		args *rpcargs.PendingIxnsFilterArgs
+	}{
+		{
+			name: "add pending ixns filter successfully",
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			resp, err := client.PendingIxnsFilter(ctx, test.args)
+			require.NoError(t, err)
+			require.NotEqual(t, "", resp.FilterID)
+		})
+	}
+}
+
+func testRemoveFilter(t *testing.T, client *Client) {
+	ctx := context.Background()
+	testcases := []struct {
+		name string
+	}{
+		{
+			name: "remove filter successfully",
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			filterResp, err := client.NewTesseractFilter(ctx, &rpcargs.TesseractFilterArgs{})
+			require.NoError(t, err)
+
+			resp, err := client.RemoveFilter(ctx, &rpcargs.FilterArgs{
+				FilterID: filterResp.FilterID,
+			})
+			require.NoError(t, err)
+			require.True(t, resp.Status)
+		})
+	}
+}
+
+func testGetLogs(t *testing.T, client *Client, addr common.Address) {
+	ctx := context.Background()
+
+	testcases := []struct {
+		name            string
+		filterQueryArgs *rpcargs.FilterQueryArgs
+		expectedError   error
+	}{
+		{
+			name: "get logs successfully",
+			filterQueryArgs: &rpcargs.FilterQueryArgs{
+				StartHeight: NumPointer(t, 0),
+				EndHeight:   NumPointer(t, 1),
+				Address:     addr,
+			},
+		},
+		{
+			name: "failed to get logs",
+			filterQueryArgs: &rpcargs.FilterQueryArgs{
+				Address: tests.RandomAddress(t),
+			},
+			expectedError: common.ErrAccountNotFound,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			resp, err := client.GetLogs(ctx, test.filterQueryArgs)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, 0, len(resp))
+		})
+	}
+}
+
+func testGetFilterChanges(t *testing.T, client *Client, addr common.Address) {
+	ctx := context.Background()
+
+	tsFilter, err := client.NewTesseractFilter(ctx, &rpcargs.TesseractFilterArgs{})
+	require.NoError(t, err)
+
+	tsByAccFilter, err := client.NewTesseractsByAccountFilter(ctx, &rpcargs.TesseractByAccountFilterArgs{
+		Addr: addr,
+	})
+	require.NoError(t, err)
+
+	logFilter, err := client.NewLogFilter(ctx, &websocket.LogQuery{
+		Address: addr,
+	})
+	require.NoError(t, err)
+
+	ixnsFilter, err := client.PendingIxnsFilter(ctx, &rpcargs.PendingIxnsFilterArgs{})
+	require.NoError(t, err)
+
+	responseTypes := map[rpcargs.SubscriptionType]interface{}{
+		rpcargs.NewTesseract:           []*rpcargs.RPCTesseract{},
+		rpcargs.NewTesseractsByAccount: []*rpcargs.RPCTesseract{},
+		rpcargs.NewLogsByFilter:        []*rpcargs.RPCLog{},
+		rpcargs.PendingIxns:            []common.Hash{},
+	}
+
+	testcases := []struct {
+		name             string
+		filterQueryArgs  *rpcargs.FilterArgs
+		subscriptionType rpcargs.SubscriptionType
+		expectedError    error
+	}{
+		{
+			name: "fetch ts from filter successfully",
+			filterQueryArgs: &rpcargs.FilterArgs{
+				FilterID: tsFilter.FilterID,
+			},
+			subscriptionType: rpcargs.NewTesseract,
+		},
+		{
+			name: "fetch ts by acc from filter successfully",
+			filterQueryArgs: &rpcargs.FilterArgs{
+				FilterID: tsByAccFilter.FilterID,
+			},
+			subscriptionType: rpcargs.NewTesseractsByAccount,
+		},
+		{
+			name: "fetch logs from filter successfully",
+			filterQueryArgs: &rpcargs.FilterArgs{
+				FilterID: logFilter.FilterID,
+			},
+			subscriptionType: rpcargs.NewLogsByFilter,
+		},
+		{
+			name: "fetch ixns from filter successfully",
+			filterQueryArgs: &rpcargs.FilterArgs{
+				FilterID: ixnsFilter.FilterID,
+			},
+			subscriptionType: rpcargs.PendingIxns,
+		},
+		{
+			name: "failed to fetch data as filter does not exist",
+			filterQueryArgs: &rpcargs.FilterArgs{
+				FilterID: "hello",
+			},
+			expectedError: errors.New("filter not found"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			resp, err := client.GetFilterChanges(ctx, test.filterQueryArgs, test.subscriptionType)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			expectedResponse, ok := responseTypes[test.subscriptionType]
+			require.True(t, ok)
+
+			require.NoError(t, err)
+			require.Equal(t, reflect.TypeOf(expectedResponse), reflect.TypeOf(resp))
 		})
 	}
 }

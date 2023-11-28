@@ -16,17 +16,18 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
+	"github.com/sarvalabs/go-moi/jsonrpc/backend"
 	"github.com/sarvalabs/go-moi/senatus"
 	"github.com/sarvalabs/go-moi/storage"
 )
 
 // PublicDebugAPI is the collection of APIs exposed over the public debugging endpoint
 type PublicDebugAPI struct {
-	db      DB
-	network Network
+	db      backend.DB
+	network backend.Network
 }
 
-func NewPublicDebugAPI(db DB, network Network) *PublicDebugAPI {
+func NewPublicDebugAPI(db backend.DB, network backend.Network) *PublicDebugAPI {
 	// Create the public Debug API wrapper and return it
 	return &PublicDebugAPI{
 		db:      db,

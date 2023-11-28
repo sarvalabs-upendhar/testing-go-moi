@@ -1517,7 +1517,7 @@ func TestStateManager_GetBalance(t *testing.T) {
 }
 
 func TestStateManager_SyncLogicStorageTree(t *testing.T) {
-	logicIDs := getLogicIDs(t, 3)
+	logicIDs := tests.GetLogicIDs(t, 3)
 	storageTrees := make([]tree.MerkleTree, 3)
 
 	soParams := map[int]*createStateObjectParams{
@@ -1603,7 +1603,7 @@ func TestStateManager_SyncLogicStorageTree(t *testing.T) {
 
 func TestStateManager_SyncStorageTrees(t *testing.T) {
 	db := mockDB()
-	logicIDs := getLogicIDs(t, 3)
+	logicIDs := tests.GetLogicIDs(t, 3)
 
 	soParams := map[int]*createStateObjectParams{
 		0: {
@@ -1708,7 +1708,7 @@ func TestStateManager_SyncStorageTrees(t *testing.T) {
 
 func TestStateManager_SyncLogicTree(t *testing.T) {
 	db := mockDB()
-	logicID := getLogicID(t, tests.RandomAddress(t))
+	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
 	rawData := logicID.Bytes()
 
 	logicTree, err := tree.NewKramaHashTree(logicID.Address(), common.NilHash, db, blake256.New(), storage.Logic)
@@ -2062,7 +2062,7 @@ func TestStateManager_GetParticipantContextRaw(t *testing.T) {
 
 func TestStateManager_GetStorageEntry(t *testing.T) {
 	db := mockDB()
-	logicID := getLogicID(t, tests.RandomAddress(t))
+	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
 
 	so := NewStateObject(logicID.Address(), mockCache(t), mockJournal(), db, common.Account{})
 
@@ -2095,14 +2095,14 @@ func TestStateManager_GetStorageEntry(t *testing.T) {
 	}{
 		{
 			name:          "should return an error if state object not found",
-			logicID:       getLogicID(t, tests.RandomAddress(t)),
+			logicID:       tests.GetLogicID(t, tests.RandomAddress(t)),
 			slot:          logicID.Bytes(),
 			stateHash:     tests.RandomHash(t),
 			expectedError: errors.New("failed to fetch state object"),
 		},
 		{
 			name:          "should return an error if logic storage tree not found",
-			logicID:       getLogicID(t, tests.RandomAddress(t)),
+			logicID:       tests.GetLogicID(t, tests.RandomAddress(t)),
 			slot:          logicID.Bytes(),
 			stateHash:     stateHash,
 			expectedError: common.ErrLogicStorageTreeNotFound,
@@ -2133,7 +2133,7 @@ func TestStateManager_GetStorageEntry(t *testing.T) {
 
 func TestStateManager_IsLogicRegistered(t *testing.T) {
 	db := mockDB()
-	logicID := getLogicID(t, tests.RandomAddress(t))
+	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
 	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
 
 	engineio.RegisterRuntime(pisa.NewRuntime(), nil)
@@ -2180,7 +2180,7 @@ func TestStateManager_IsLogicRegistered(t *testing.T) {
 	}{
 		{
 			name:          "should return error if logic is not registered",
-			logicID:       getLogicID(t, tests.RandomAddress(t)),
+			logicID:       tests.GetLogicID(t, tests.RandomAddress(t)),
 			expectedError: common.ErrKeyNotFound,
 		},
 		{
@@ -2349,7 +2349,7 @@ func TestStateManager_GetLogicManifest(t *testing.T) {
 	manifest, _, _ := tests.GetManifests(t, "../compute/manifests/ledger.yaml")
 	manifestHash := common.GetHash(manifest)
 
-	logicID := getLogicID(t, tests.RandomAddress(t))
+	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
 	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
 	logicObject.ManifestHash = manifestHash
 
@@ -2436,7 +2436,7 @@ func TestStateManager_GetLogicIDs(t *testing.T) {
 	so := NewStateObject(address, mockCache(t), mockJournal(), db, common.Account{})
 
 	for i := 0; i < 3; i++ {
-		logicID := getLogicID(t, tests.RandomAddress(t))
+		logicID := tests.GetLogicID(t, tests.RandomAddress(t))
 		logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
 
 		err := so.InsertNewLogicObject(logicID, logicObject)

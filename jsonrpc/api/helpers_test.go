@@ -7,12 +7,16 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log"
 	"math/big"
 	"math/rand"
 	"sort"
 	"strconv"
 	"sync/atomic"
 	"testing"
+
+	"github.com/google/uuid"
+	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
 
 	"github.com/sarvalabs/go-moi/senatus"
 	"github.com/sarvalabs/go-moi/storage"
@@ -199,6 +203,11 @@ func (c *MockChainManager) setTesseractByHash(
 	t.Helper()
 
 	c.tesseractsByHash[tests.GetTesseractHash(t, ts)] = ts
+}
+
+func (c *MockChainManager) GetTesseractPartsByGridHash(gridHash common.Hash) (*common.TesseractParts, error) {
+	// TODO implement me
+	panic("implement me")
 }
 
 type MockStateManager struct {
@@ -897,28 +906,6 @@ func createNodeMetaInfo(t *testing.T, count int) ([]peer.ID, map[peer.ID]*senatu
 	return peerIDs, nodeMetaInfo
 }
 
-func createHeaderCallbackWithTestData(t *testing.T) func(header *common.TesseractHeader) {
-	t.Helper()
-
-	return func(header *common.TesseractHeader) {
-		header.Address = tests.RandomAddress(t)
-		header.PrevHash = tests.RandomHash(t)
-		header.Height = 4
-		header.FuelUsed = 88
-		header.FuelLimit = 99
-		header.BodyHash = tests.RandomHash(t)
-		header.GroupHash = tests.RandomHash(t)
-		header.Operator = "operator"
-		header.ClusterID = "cluster-id"
-		header.Timestamp = 3
-		header.ContextLock = make(map[common.Address]common.ContextLockInfo)
-		header.ContextLock[tests.RandomAddress(t)] = common.ContextLockInfo{
-			Height: 4,
-		}
-		header.Extra = tests.CreateCommitDataWithTestData(t)
-	}
-}
-
 func GenerateRandomIXPayload(t *testing.T, size uint32) []byte {
 	t.Helper()
 
@@ -1026,12 +1013,6 @@ func getTesseractHash(t *testing.T, tesseract *common.Tesseract) common.Hash {
 	return tesseract.Hash()
 }
 
-func getLogicID(t *testing.T, address common.Address) common.LogicID {
-	t.Helper()
-
-	return common.NewLogicIDv0(true, false, false, false, 0, address)
-}
-
 func getRegistry(
 	t *testing.T,
 	assetIDs []common.AssetID,
@@ -1082,24 +1063,6 @@ func getHexEntries(t *testing.T, count int) []string {
 	return entries
 }
 
-// getIxParamsWithInputComputeTrust returns ixparams initialized with ixType, payload, mtq, and mode
-// We initialize at least one field in input, compute, and trust.
-func getIxParamsWithInputComputeTrust(
-	ixType common.IxType,
-	payload json.RawMessage,
-	mtq uint,
-	mode uint64,
-) *tests.CreateIxParams {
-	return &tests.CreateIxParams{
-		IxDataCallback: func(ix *common.IxData) {
-			ix.Input.Type = ixType
-			ix.Input.Payload = payload
-			ix.Compute.Mode = mode
-			ix.Trust.MTQ = mtq
-		},
-	}
-}
-
 func getContext(t *testing.T, count int) *Context {
 	t.Helper()
 
@@ -1130,21 +1093,6 @@ func getSignatureBytes(t *testing.T, sendIXArgs *common.SendIXArgs, mnemonic str
 	require.NoError(t, err)
 
 	return signBytes
-}
-
-func createInteractionWithTestData(t *testing.T, ixType common.IxType, payload []byte) *common.Interaction {
-	t.Helper()
-
-	ixData := common.IxData{
-		Input:   tests.CreateIXInputWithTestData(t, ixType, payload, []byte{187, 1, 29, 103}),
-		Compute: tests.CreateComputeWithTestData(t, tests.RandomHash(t), tests.GetTestKramaIDs(t, 2)),
-		Trust:   tests.CreateTrustWithTestData(t),
-	}
-
-	ix, err := common.NewInteraction(ixData, tests.RandomHash(t).Bytes())
-	require.NoError(t, err)
-
-	return ix
 }
 
 func checkForContext(
@@ -1183,355 +1131,176 @@ func newTestInteraction(
 	return ix
 }
 
-// checkForRPCIxn validates a field from input, compute, trust, and verifies payload.
-func checkForRPCIxn(
-	t *testing.T,
-	ix *common.Interaction,
-	rpcIxn *rpcargs.RPCInteraction,
-	grid map[common.Address]common.TesseractHeightAndHash,
-) {
+type tsFilter struct {
+	tsChanges []*rpcargs.RPCTesseract
+}
+
+type tsByAccFilter struct {
+	tsByAccFilterParams common.Address
+	tsByAccChanges      []*rpcargs.RPCTesseract
+}
+
+type pendingIxnsFilter struct {
+	pendingIxnsChanges []common.Hash
+}
+
+type MockFilterManager struct {
+	tsFilter          map[string]tsFilter
+	tsByAccFilter     map[string]tsByAccFilter
+	pendingIxnsFilter map[string]pendingIxnsFilter
+
+	// used for GetLogs and GetFilterChanges methods
+	logFilter map[string]common.Hash
+	logs      map[common.Hash][]*rpcargs.RPCLog
+}
+
+func NewMockFilterManager(t *testing.T) *MockFilterManager {
 	t.Helper()
 
-	if len(grid) != 0 {
-		checkForRPCTesseractParts(t, grid, rpcIxn.Parts)
-	}
+	mockFilter := new(MockFilterManager)
+	mockFilter.tsFilter = make(map[string]tsFilter)
+	mockFilter.tsByAccFilter = make(map[string]tsByAccFilter)
+	mockFilter.pendingIxnsFilter = make(map[string]pendingIxnsFilter)
+	mockFilter.logFilter = make(map[string]common.Hash)
+	mockFilter.logs = make(map[common.Hash][]*rpcargs.RPCLog)
 
-	input := ix.Input()
-	compute := ix.Compute()
-	trust := ix.Trust()
+	return mockFilter
+}
 
-	require.Equal(t, ix.Hash(), rpcIxn.Hash)
-	require.Equal(t, ix.Signature(), rpcIxn.Signature.Bytes())
-
-	require.Equal(t, input.Type, rpcIxn.Type)
-	require.Equal(t, input.Nonce, rpcIxn.Nonce.ToUint64())
-
-	require.Equal(t, input.Sender, rpcIxn.Sender)
-	require.Equal(t, input.Receiver, rpcIxn.Receiver)
-	require.Equal(t, input.Payer, rpcIxn.Payer)
-
-	require.Equal(t, len(input.TransferValues), len(rpcIxn.TransferValues))
-	require.Equal(t, len(input.PerceivedValues), len(rpcIxn.PerceivedValues))
-
-	for assetID, amount := range input.TransferValues {
-		flag := false
-
-		for rpcAssetID, rpcAmount := range rpcIxn.TransferValues {
-			if assetID == rpcAssetID {
-				flag = true
-
-				require.Equal(t, amount, rpcAmount.ToInt())
-			}
-		}
-
-		require.True(t, flag)
-	}
-
-	for assetID, amount := range input.PerceivedValues {
-		flag := false
-
-		for rpcAssetID, rpcAmount := range rpcIxn.PerceivedValues {
-			if assetID == rpcAssetID {
-				flag = true
-
-				require.Equal(t, amount, rpcAmount.ToInt())
-			}
-		}
-
-		require.True(t, flag)
-	}
-
-	require.Equal(t, input.PerceivedProofs, rpcIxn.PerceivedProofs.Bytes())
-
-	require.Equal(t, input.FuelLimit, uint64(rpcIxn.FuelLimit))
-	require.Equal(t, input.FuelPrice, rpcIxn.FuelPrice.ToInt())
-
-	require.Equal(t, compute.Mode, rpcIxn.Mode.ToUint64())
-	require.Equal(t, compute.Hash, rpcIxn.ComputeHash)
-	require.Equal(t, compute.ComputeNodes, rpcIxn.ComputeNodes)
-
-	require.Equal(t, trust.MTQ, uint(rpcIxn.MTQ.ToUint64()))
-	require.Equal(t, trust.TrustNodes, rpcIxn.TrustNodes)
-
-	switch ix.Type() {
-	case common.IxValueTransfer:
-		require.Equal(t, json.RawMessage(nil), rpcIxn.Payload)
-
-	case common.IxAssetCreate:
-		assetCreationPayload := new(common.AssetCreatePayload)
-		err := assetCreationPayload.FromBytes(ix.Payload())
-		require.NoError(t, err)
-
-		rpcAssetCreationPayload := rpcargs.RPCAssetCreation{
-			Symbol:     assetCreationPayload.Symbol,
-			Supply:     (*hexutil.Big)(assetCreationPayload.Supply),
-			Dimension:  (*hexutil.Uint8)(&assetCreationPayload.Dimension),
-			Standard:   (*hexutil.Uint16)(&assetCreationPayload.Standard),
-			IsLogical:  assetCreationPayload.IsLogical,
-			IsStateful: assetCreationPayload.IsStateFul,
-
-			Logic: rpcargs.RPClogicPayloadFromLogicPayload(assetCreationPayload.LogicPayload),
-		}
-
-		expectedPayload, err := json.Marshal(rpcAssetCreationPayload)
-		require.NoError(t, err)
-
-		require.Equal(t, expectedPayload, []byte(rpcIxn.Payload))
-
-	case common.IxLogicDeploy:
-		fallthrough
-
-	case common.IxLogicInvoke:
-		logicPayload := new(common.LogicPayload)
-
-		err := logicPayload.FromBytes(ix.Payload())
-		require.NoError(t, err)
-
-		rpcLogicPayload := &rpcargs.RPCLogicPayload{
-			Manifest: (hexutil.Bytes)(logicPayload.Manifest),
-			LogicID:  logicPayload.Logic.String(),
-			Callsite: logicPayload.Callsite,
-			Calldata: (hexutil.Bytes)(logicPayload.Calldata),
-		}
-
-		expectedPayload, err := json.Marshal(rpcLogicPayload)
-		require.NoError(t, err)
-
-		require.Equal(t, expectedPayload, []byte(rpcIxn.Payload))
-	default:
-		require.FailNow(t, "invalid ix type")
+func (f *MockFilterManager) setTSFilter(id string) {
+	f.tsFilter[id] = tsFilter{
+		tsChanges: nil,
 	}
 }
 
-func checkForRPCTesseractParts(
-	t *testing.T,
-	grid map[common.Address]common.TesseractHeightAndHash,
-	rpcParts rpcargs.RPCTesseractParts,
-) {
-	t.Helper()
+func (f *MockFilterManager) getTSFilter(id string) bool {
+	_, exists := f.tsFilter[id]
 
-	require.Equal(t, len(grid), len(rpcParts))
-
-	for _, rpcPart := range rpcParts {
-		heightAndHash, ok := grid[rpcPart.Address]
-		require.True(t, ok)
-
-		require.Equal(t, heightAndHash.Hash, rpcPart.Hash)
-		require.Equal(t, heightAndHash.Height, rpcPart.Height.ToUint64())
-	}
-
-	CheckIfPartsSorted(t, rpcParts)
+	return exists
 }
 
-func CheckIfPartsSorted(t *testing.T, parts rpcargs.RPCTesseractParts) {
-	t.Helper()
+func (f *MockFilterManager) NewTesseractFilter(ws websocket.ConnManager) string {
+	filterID := uuid.New().String()
 
-	for i := 1; i < len(parts); i++ {
-		require.True(t, parts[i-1].Address.Hex() < parts[i].Address.Hex())
+	f.setTSFilter(filterID)
+
+	return filterID
+}
+
+func (f *MockFilterManager) setTSByAccFilter(id string, addr common.Address) {
+	f.tsByAccFilter[id] = tsByAccFilter{
+		tsByAccFilterParams: addr,
 	}
 }
 
-func checkForRPCTesseractGridID(
-	t *testing.T,
-	tesseractGridID *common.TesseractGridID,
-	rpcTesseractGridID *rpcargs.RPCTesseractGridID,
-) {
-	t.Helper()
-
-	if tesseractGridID == nil {
-		require.Nil(t, rpcTesseractGridID)
-
-		return
+func (f *MockFilterManager) getTSByAccFilter(id string) (tsByAccFilter, bool) {
+	resp, exists := f.tsByAccFilter[id]
+	if !exists {
+		return tsByAccFilter{}, exists
 	}
 
-	require.Equal(t, tesseractGridID.Hash, rpcTesseractGridID.Hash)
-
-	if tesseractGridID.Parts != nil {
-		require.Equal(t, uint64(tesseractGridID.Parts.Total), rpcTesseractGridID.Total.ToUint64())
-		checkForRPCTesseractParts(t, tesseractGridID.Parts.Grid, rpcTesseractGridID.Parts)
-
-		return
-	}
-
-	require.Equal(t, 0, int(rpcTesseractGridID.Total))
+	return resp, exists
 }
 
-func checkForRPCCommitData(t *testing.T, commitData common.CommitData, rpcCommitData rpcargs.RPCCommitData) {
-	t.Helper()
+func (f *MockFilterManager) NewTesseractsByAccountFilter(ws websocket.ConnManager, addr common.Address) string {
+	filterID := uuid.New().String()
 
-	require.Equal(t, uint64(commitData.Round), rpcCommitData.Round.ToUint64())
-	require.Equal(t, commitData.CommitSignature, rpcCommitData.CommitSignature.Bytes())
-	require.Equal(t, commitData.VoteSet.String(), rpcCommitData.VoteSet)
-	require.Equal(t, commitData.EvidenceHash, rpcCommitData.EvidenceHash)
+	f.setTSByAccFilter(filterID, addr)
 
-	if commitData.GridID != nil {
-		checkForRPCTesseractGridID(t, commitData.GridID, rpcCommitData.GridID)
-	}
+	return filterID
 }
 
-func checkForRPCContextLockInfos(
-	t *testing.T,
-	expectedContextLockInfos map[common.Address]common.ContextLockInfo,
-	rpcContextLockInfos rpcargs.RPCContextLockInfos,
-) {
-	t.Helper()
-
-	if len(expectedContextLockInfos) == 0 {
-		require.Nil(t, rpcContextLockInfos)
-
-		return
+func (f *MockFilterManager) setLogFilter(id string, logQuery *websocket.LogQuery) {
+	// use hash of logQuery as key to set and get logs
+	hash, err := common.PoloHash(*logQuery)
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	require.Equal(t, len(expectedContextLockInfos), len(rpcContextLockInfos))
+	f.logFilter[id] = hash
+}
 
-	for _, rpcContextLockInfo := range rpcContextLockInfos {
-		contextLockInfo, ok := expectedContextLockInfos[rpcContextLockInfo.Address]
-		require.True(t, ok)
-
-		require.Equal(t, contextLockInfo.ContextHash, rpcContextLockInfo.ContextHash)
-		require.Equal(t, contextLockInfo.Height, rpcContextLockInfo.Height.ToUint64())
-		require.Equal(t, contextLockInfo.TesseractHash, rpcContextLockInfo.TesseractHash)
+func (f *MockFilterManager) getLogFilter(id string) (common.Hash, bool) {
+	resp, exists := f.logFilter[id]
+	if !exists {
+		return common.NilHash, exists
 	}
 
-	for i := 1; i < len(rpcContextLockInfos); i++ {
-		require.True(t, rpcContextLockInfos[i-1].Address.Hex() < rpcContextLockInfos[i].Address.Hex())
+	return resp, exists
+}
+
+func (f *MockFilterManager) NewLogFilter(ws websocket.ConnManager, logQuery *websocket.LogQuery) string {
+	filterID := uuid.New().String()
+
+	f.setLogFilter(filterID, logQuery)
+
+	return filterID
+}
+
+func (f *MockFilterManager) setIxnsFilter(id string) {
+	f.pendingIxnsFilter[id] = pendingIxnsFilter{
+		pendingIxnsChanges: nil,
 	}
 }
 
-func checkForRPCDeltaGroups(
-	t *testing.T,
-	expectedRPCDeltaGroups map[common.Address]*common.DeltaGroup,
-	rpcDeltaGroups rpcargs.RPCDeltaGroups,
-) {
-	t.Helper()
+func (f *MockFilterManager) getIxnsFilter(id string) bool {
+	_, exists := f.pendingIxnsFilter[id]
 
-	if len(expectedRPCDeltaGroups) == 0 {
-		require.Nil(t, rpcDeltaGroups)
+	return exists
+}
 
-		return
+func (f *MockFilterManager) PendingIxnsFilter(ws websocket.ConnManager) string {
+	filterID := uuid.New().String()
+
+	f.setIxnsFilter(filterID)
+
+	return filterID
+}
+
+func (f *MockFilterManager) Uninstall(id string) bool {
+	_, exists := f.tsByAccFilter[id]
+	if exists {
+		delete(f.tsByAccFilter, id)
+
+		return true
 	}
 
-	require.Equal(t, len(expectedRPCDeltaGroups), len(rpcDeltaGroups))
+	return false
+}
 
-	for _, rpcDeltaGroup := range rpcDeltaGroups {
-		deltaGroup, ok := expectedRPCDeltaGroups[rpcDeltaGroup.Address]
-		require.True(t, ok)
-
-		require.Equal(t, deltaGroup.Role, rpcDeltaGroup.Role)
-		require.Equal(t, deltaGroup.BehaviouralNodes, rpcDeltaGroup.BehaviouralNodes)
-		require.Equal(t, deltaGroup.RandomNodes, rpcDeltaGroup.RandomNodes)
-		require.Equal(t, deltaGroup.ReplacedNodes, rpcDeltaGroup.ReplacedNodes)
-	}
-
-	for i := 1; i < len(rpcDeltaGroups); i++ {
-		require.True(t, rpcDeltaGroups[i-1].Address.Hex() < rpcDeltaGroups[i].Address.Hex())
+func (f *MockFilterManager) setTSByAccFilterChanges(id string, ts []*rpcargs.RPCTesseract) {
+	f.tsByAccFilter[id] = tsByAccFilter{
+		tsByAccChanges: ts,
 	}
 }
 
-func checkForRPCHeader(t *testing.T, header common.TesseractHeader, rpcHeader rpcargs.RPCHeader) {
-	t.Helper()
+func (f *MockFilterManager) GetFilterChanges(id string) (interface{}, error) {
+	resp, exists := f.tsByAccFilter[id]
+	if exists {
+		return resp.tsByAccChanges, nil
+	}
 
-	require.Equal(t, header.Address, rpcHeader.Address)
-	require.Equal(t, header.PrevHash, rpcHeader.PrevHash)
-	require.Equal(t, header.Height, rpcHeader.Height.ToUint64())
-	require.Equal(t, header.FuelUsed, rpcHeader.FuelUsed.ToUint64())
-	require.Equal(t, header.FuelLimit, rpcHeader.FuelLimit.ToUint64())
-	require.Equal(t, header.BodyHash, rpcHeader.BodyHash)
-	require.Equal(t, header.GroupHash, rpcHeader.GridHash)
-	require.Equal(t, header.Operator, rpcHeader.Operator)
-	require.Equal(t, header.ClusterID, rpcHeader.ClusterID)
-	require.Equal(t, uint64(header.Timestamp), rpcHeader.Timestamp.ToUint64())
-	checkForRPCContextLockInfos(t, header.ContextLock, rpcHeader.ContextLock)
-
-	checkForRPCCommitData(t, header.Extra, rpcHeader.Extra)
+	return nil, errors.New("unknown subscription type")
 }
 
-func checkForRPCBody(t *testing.T, body common.TesseractBody, rpcBody rpcargs.RPCBody) {
-	t.Helper()
-
-	require.Equal(t, body.StateHash, rpcBody.StateHash)
-	require.Equal(t, body.ContextHash, rpcBody.ContextHash)
-	require.Equal(t, body.InteractionHash, rpcBody.InteractionHash)
-	require.Equal(t, body.ReceiptHash, rpcBody.ReceiptHash)
-	checkForRPCDeltaGroups(t, body.ContextDelta, rpcBody.ContextDelta)
-	require.Equal(t, body.ConsensusProof, rpcBody.ConsensusProof)
+func (f *MockFilterManager) setLogs(id string, logs []*rpcargs.RPCLog) {
+	f.logs[f.logFilter[id]] = logs
 }
 
-// checkForRPCTesseract validates fields of rpc tesseract
-func checkForRPCTesseract(
-	t *testing.T,
-	ts *common.Tesseract,
-	rpcTS *rpcargs.RPCTesseract,
-) {
-	t.Helper()
-
-	var grid map[common.Address]common.TesseractHeightAndHash
-
-	checkForRPCHeader(t, ts.Header(), rpcTS.Header)
-	checkForRPCBody(t, ts.Body(), rpcTS.Body)
-	require.Equal(t, ts.Seal(), rpcTS.Seal.Bytes())
-
-	require.Equal(t, ts.Hash(), rpcTS.Hash)
-
-	if ts.ClusterID() == common.GenesisIdentifier {
-		for _, ix := range rpcTS.Ixns {
-			require.Nil(t, ix)
-		}
-
-		return
+func (f *MockFilterManager) GetLogsForQuery(query websocket.LogQuery) ([]*rpcargs.RPCLog, error) {
+	// use hash of logQuery as key to set and get logs
+	hash, err := common.PoloHash(query)
+	if err != nil {
+		return nil, err
 	}
 
-	parts, err := ts.Parts()
-	if err == nil {
-		grid = parts.Grid
-	}
-
-	for i, ixn := range ts.Interactions() {
-		checkForRPCIxn(t, ixn, rpcTS.Ixns[i], grid)
-	}
+	return f.logs[hash], nil
 }
 
-func checkForRPCHashes(
-	t *testing.T,
-	expectedRPCHashes common.ReceiptAccHashes,
-	rpcHashes rpcargs.RPCHashes,
-) {
+func NumPointer(t *testing.T, input int64) *int64 {
 	t.Helper()
 
-	require.Equal(t, len(expectedRPCHashes), len(rpcHashes))
-
-	for _, rpcHash := range rpcHashes {
-		stateHash := expectedRPCHashes.StateHash(rpcHash.Address)
-		contextHash := expectedRPCHashes.ContextHash(rpcHash.Address)
-
-		require.Equal(t, stateHash, rpcHash.StateHash)
-		require.Equal(t, contextHash, rpcHash.ContextHash)
-	}
-
-	for i := 1; i < len(rpcHashes); i++ {
-		require.True(t, rpcHashes[i-1].Address.Hex() < rpcHashes[i].Address.Hex())
-	}
-}
-
-func checkForRPCReceipt(
-	t *testing.T,
-	grid map[common.Address]common.TesseractHeightAndHash,
-	ix *common.Interaction,
-	receipt *common.Receipt,
-	rpcReceipt *rpcargs.RPCReceipt,
-	ixIndex int,
-) {
-	t.Helper()
-
-	checkForRPCTesseractParts(t, grid, rpcReceipt.Parts)
-	require.Equal(t, uint64(receipt.IxType), rpcReceipt.IxType.ToUint64())
-	require.Equal(t, receipt.IxHash, rpcReceipt.IxHash)
-	require.Equal(t, receipt.FuelUsed, uint64(rpcReceipt.FuelUsed))
-	checkForRPCHashes(t, receipt.Hashes, rpcReceipt.Hashes)
-	require.Equal(t, receipt.ExtraData, rpcReceipt.ExtraData)
-	require.Equal(t, ix.Sender(), rpcReceipt.From)
-	require.Equal(t, ix.Receiver(), rpcReceipt.To)
-	require.Equal(t, uint64(ixIndex), rpcReceipt.IXIndex.ToUint64())
+	return &input
 }
 
 func sortRegistry(registry []rpcargs.RPCRegistry) {

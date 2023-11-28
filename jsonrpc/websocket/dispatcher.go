@@ -9,29 +9,28 @@ import (
 	"github.com/hashicorp/go-hclog"
 
 	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/utils"
 )
 
 type ConnManager interface {
 	HasConn() bool
-	SetSubscriptionID(subscriptionID string)
-	GetSubscriptionID() string
+	SetFilterID(filterID string)
+	GetFilterID() string
 	WriteMessage(messageType int, data []byte) error
 }
 
 // Dispatcher handles all websocket requests
 type Dispatcher struct {
 	logger hclog.Logger
-	sm     *SubscriptionManager
+	fm     *FilterManager
 }
 
-func NewDispatcher(logger hclog.Logger, eventMux *utils.TypeMux) Dispatcher {
+func NewDispatcher(logger hclog.Logger, filterMan *FilterManager) Dispatcher {
 	dispatcher := &Dispatcher{
 		logger: logger.Named("Websocket-Dispatcher"),
-		sm:     NewSubscriptionManager(logger, eventMux),
+		fm:     filterMan,
 	}
 
-	go dispatcher.sm.Run()
+	go dispatcher.fm.Run()
 
 	return *dispatcher
 }
@@ -128,10 +127,10 @@ func (d *Dispatcher) handleSubscribe(req WSRequest, conn ConnManager) (string, e
 
 	switch event {
 	case "newTesseracts":
-		subscriptionID := d.sm.NewTesseractSubscription(conn)
+		subscriptionID := d.fm.NewTesseractFilter(conn)
 
 		return subscriptionID, nil
-	case "newAccountTesseracts":
+	case "newTesseractsByAccount":
 		if len(params) != 2 {
 			return "", errors.New("invalid params")
 		}
@@ -141,7 +140,24 @@ func (d *Dispatcher) handleSubscribe(req WSRequest, conn ConnManager) (string, e
 			return "", err
 		}
 
-		subscriptionID := d.sm.NewAccountTesseractSubscription(conn, common.HexToAddress(args.Address))
+		subscriptionID := d.fm.NewTesseractsByAccountFilter(conn, common.HexToAddress(args.Address))
+
+		return subscriptionID, nil
+	case "newLogs":
+		if len(params) != 2 {
+			return "", errors.New("invalid params")
+		}
+
+		args, err := decodeFilterQuery(params[1])
+		if err != nil {
+			return "", err
+		}
+
+		subscriptionID := d.fm.NewLogFilter(conn, args)
+
+		return subscriptionID, nil
+	case "newPendingInteractions":
+		subscriptionID := d.fm.PendingIxnsFilter(conn)
 
 		return subscriptionID, nil
 	default:
@@ -165,10 +181,10 @@ func (d *Dispatcher) handleUnsubscribe(req WSRequest) (bool, error) {
 		return false, fmt.Errorf("subscription id %s not found", subscriptionID)
 	}
 
-	return d.sm.Uninstall(subscriptionID), nil
+	return d.fm.Uninstall(subscriptionID), nil
 }
 
-// RemoveSubscription removes a subscription corresponding to the websocket connection from the subscription manager
+// RemoveSubscription removes a filter corresponding to the websocket connection from the filter manager
 func (d *Dispatcher) RemoveSubscription(connManager ConnManager) bool {
-	return d.sm.Uninstall(connManager.GetSubscriptionID())
+	return d.fm.Uninstall(connManager.GetFilterID())
 }

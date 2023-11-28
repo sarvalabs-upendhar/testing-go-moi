@@ -7,11 +7,11 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// ConnectionManager holds the websocket connection and corresponding subscription id
+// ConnectionManager holds the websocket connection and corresponding filter id
 type ConnectionManager struct {
-	connection     *websocket.Conn
-	writeLock      sync.Mutex // writer lock
-	subscriptionID string
+	connection *websocket.Conn
+	writeLock  sync.Mutex // writer lock
+	filterID   string
 }
 
 // NewConnectionManager returns a new connection manager with the websocket connection
@@ -44,12 +44,12 @@ func (cm *ConnectionManager) ReadMessage() (messageType int, p []byte, err error
 	return cm.connection.ReadMessage()
 }
 
-// SetSubscriptionID updates the subscription id to the connection manager
-func (cm *ConnectionManager) SetSubscriptionID(subscriptionID string) {
-	cm.subscriptionID = subscriptionID
+// SetFilterID updates the filter id to the connection manager
+func (cm *ConnectionManager) SetFilterID(filterID string) {
+	cm.filterID = filterID
 }
 
-// GetSubscriptionID returns the subscription id, created while subscribing
-func (cm *ConnectionManager) GetSubscriptionID() string {
-	return cm.subscriptionID
+// GetFilterID returns the filter id
+func (cm *ConnectionManager) GetFilterID() string {
+	return cm.filterID
 }

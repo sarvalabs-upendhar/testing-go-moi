@@ -20,6 +20,8 @@ var (
 )
 
 func TestECDSASignWithSecp256k1(t *testing.T) {
+	t.Parallel()
+
 	var s256 EcdsaSecp256k1Signature
 
 	privateKeyBytes, _ := hex.DecodeString(privateKeyInHex)
@@ -41,6 +43,8 @@ func TestECDSASignWithSecp256k1(t *testing.T) {
 }
 
 func TestECDSAVerifyWithSecp256k1(t *testing.T) {
+	t.Parallel()
+
 	pubKeyBytes, _ := hex.DecodeString(pubKeyInHex)
 	sigInHexBytes, err := hex.DecodeString(expectedSignature)
 	require.NoError(t, err)

@@ -954,7 +954,7 @@ func (c *ChainManager) ExecuteAndValidate(tesseracts ...*common.Tesseract) error
 	return nil
 }
 
-func (c *ChainManager) getTesseractPartsByGridHash(gridHash common.Hash) (*common.TesseractParts, error) {
+func (c *ChainManager) GetTesseractPartsByGridHash(gridHash common.Hash) (*common.TesseractParts, error) {
 	parts := &common.TesseractParts{
 		Grid: make(map[common.Address]common.TesseractHeightAndHash),
 	}
@@ -1008,7 +1008,7 @@ func (c *ChainManager) GetInteractionAndPartsByTSHash(tsHash common.Hash, ixInde
 		return nil, nil, common.ErrIndexOutOfRange
 	}
 
-	parts, err := c.getTesseractPartsByGridHash(gridHash)
+	parts, err := c.GetTesseractPartsByGridHash(gridHash)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1037,7 +1037,7 @@ func (c *ChainManager) GetInteractionAndPartsByIxHash(ixHash common.Hash) (
 
 	for ixIndex, ix := range interactions {
 		if ix.Hash() == ixHash {
-			parts, err := c.getTesseractPartsByGridHash(gridHash)
+			parts, err := c.GetTesseractPartsByGridHash(gridHash)
 			if err != nil {
 				return nil, nil, 0, err
 			}

@@ -1,5 +1,10 @@
 package api
 
+import (
+	"github.com/sarvalabs/go-moi/jsonrpc/backend"
+	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
+)
+
 // API describes the set of methods offered over the RPC interface
 type API struct {
 	Namespace string                 // namespace under which the rpc methods of Service are exposed
@@ -14,18 +19,18 @@ type PublicAPI struct {
 	DebugAPI  *PublicDebugAPI
 }
 
-func NewPublicAPI(backend *Backend) *PublicAPI {
+func NewPublicAPI(backend *backend.Backend, filterMan *websocket.FilterManager) *PublicAPI {
 	return &PublicAPI{
-		IxAPI:     NewPublicIXAPI(backend.ixpool, backend.sm),
-		IxPoolAPI: NewPublicIXPoolAPI(backend.ixpool),
-		CoreAPI:   NewPublicCoreAPI(backend.ixpool, backend.chain, backend.sm, backend.exec, backend.syncer),
-		NetAPI:    NewPublicNetAPI(backend.net),
-		DebugAPI:  NewPublicDebugAPI(backend.db, backend.net),
+		IxAPI:     NewPublicIXAPI(backend.Ixpool, backend.SM),
+		IxPoolAPI: NewPublicIXPoolAPI(backend.Ixpool),
+		CoreAPI:   NewPublicCoreAPI(backend.Ixpool, backend.Chain, backend.SM, backend.Exec, backend.Syncer, filterMan),
+		NetAPI:    NewPublicNetAPI(backend.Net),
+		DebugAPI:  NewPublicDebugAPI(backend.DB, backend.Net),
 	}
 }
 
-func GetPublicAPIs(backend *Backend) []API {
-	publicAPI := NewPublicAPI(backend)
+func GetPublicAPIs(backend *backend.Backend, filterMan *websocket.FilterManager) []API {
+	publicAPI := NewPublicAPI(backend, filterMan)
 
 	return []API{
 		{

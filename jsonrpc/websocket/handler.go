@@ -6,8 +6,6 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/hashicorp/go-hclog"
-
-	"github.com/sarvalabs/go-moi/common/utils"
 )
 
 type Handler struct {
@@ -32,10 +30,10 @@ var wsUpgrader = websocket.Upgrader{
 	},
 }
 
-func NewHandler(logger hclog.Logger, eventMux *utils.TypeMux) *Handler {
+func NewHandler(logger hclog.Logger, filterMan *FilterManager) *Handler {
 	return &Handler{
 		logger:     logger.Named("Websocket-Handler"),
-		dispatcher: NewDispatcher(logger, eventMux),
+		dispatcher: NewDispatcher(logger, filterMan),
 	}
 }
 

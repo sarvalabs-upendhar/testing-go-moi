@@ -27,6 +27,7 @@ type Config struct {
 	Syncer         *SyncerConfig
 	Metrics        Telemetry
 	LogFilePath    string
+	JSONRPC        *JSONRPCConfig
 	NetworkID      string
 }
 
@@ -114,6 +115,10 @@ type ConsensusConfig struct {
 	EnableDebugMode       bool
 }
 
+type JSONRPCConfig struct {
+	TesseractRangeLimit uint8
+}
+
 func DefaultDevnetConfig(path string) *Config {
 	c := &Config{
 		NodeType:       7,
@@ -175,6 +180,9 @@ func DefaultDevnetConfig(path string) *Config {
 			PrometheusAddr: nil,
 			OtlpAddress:    "",
 			Token:          "",
+		},
+		JSONRPC: &JSONRPCConfig{
+			TesseractRangeLimit: DefaultTesseractRangeLimit,
 		},
 	}
 

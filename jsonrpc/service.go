@@ -5,10 +5,10 @@ import (
 	"errors"
 	"net/http"
 
-	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
-
 	"github.com/sarvalabs/go-moi/common"
 	jsonApi "github.com/sarvalabs/go-moi/jsonrpc/api"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
+	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
 )
 
 // Service is a struct that represents a mapping of RPC service APIs
@@ -491,6 +491,183 @@ func (r *Service) FuelEstimate(req *http.Request, args *rpcargs.CallArgs, resp *
 	}
 
 	resp.Data, err = json.Marshal(fuelConsumed)
+	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	return nil
+}
+
+// NewTesseractFilter subscribes to all new tesseract events
+func (r *Service) NewTesseractFilter(
+	req *http.Request,
+	args *rpcargs.TesseractFilterArgs,
+	resp *rpcargs.Response,
+) error {
+	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
+	if !ok {
+		return common.ErrInvalidAPI
+	}
+
+	filterID := coreAPI.NewTesseractFilter()
+
+	var err error
+
+	resp.Data, err = json.Marshal(filterID)
+	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	return nil
+}
+
+// NewTesseractsByAccountFilter subscribes to all new tesseract events for a given account
+func (r *Service) NewTesseractsByAccountFilter(
+	req *http.Request,
+	args *rpcargs.TesseractByAccountFilterArgs,
+	resp *rpcargs.Response,
+) error {
+	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
+	if !ok {
+		return common.ErrInvalidAPI
+	}
+
+	filterID, err := coreAPI.NewTesseractsByAccountFilter(args)
+	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	resp.Data, err = json.Marshal(filterID)
+	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	return nil
+}
+
+// NewLogFilter creates a log filter based on LogQuery.
+func (r *Service) NewLogFilter(req *http.Request, args *websocket.LogQuery, resp *rpcargs.Response) error {
+	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
+	if !ok {
+		return common.ErrInvalidAPI
+	}
+
+	filterID := coreAPI.NewLogFilter(args)
+
+	var err error
+
+	resp.Data, err = json.Marshal(filterID)
+	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	return nil
+}
+
+// PendingIxnsFilter subscribes to all new pending interactions.
+func (r *Service) PendingIxnsFilter(
+	req *http.Request,
+	args *rpcargs.PendingIxnsFilterArgs,
+	resp *rpcargs.Response,
+) error {
+	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
+	if !ok {
+		return common.ErrInvalidAPI
+	}
+
+	filterID := coreAPI.PendingIxnsFilter()
+
+	var err error
+
+	resp.Data, err = json.Marshal(filterID)
+	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	return nil
+}
+
+// RemoveFilter uninstalls filter for given filter ID.
+func (r *Service) RemoveFilter(
+	req *http.Request,
+	args *rpcargs.FilterArgs,
+	resp *rpcargs.Response,
+) error {
+	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
+	if !ok {
+		return common.ErrInvalidAPI
+	}
+
+	receipt := coreAPI.RemoveFilter(args)
+
+	var err error
+
+	resp.Data, err = json.Marshal(receipt)
+	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	return nil
+}
+
+// GetFilterChanges is a polling method for a filter using a filter ID,
+// which returns an array of events which occurred since last poll.
+func (r *Service) GetFilterChanges(
+	req *http.Request,
+	args *rpcargs.FilterArgs,
+	resp *rpcargs.Response,
+) error {
+	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
+	if !ok {
+		return common.ErrInvalidAPI
+	}
+
+	data, err := coreAPI.GetFilterChanges(args)
+	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	resp.Data, err = json.Marshal(data)
+	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	return nil
+}
+
+// GetLogs returns an array of logs matching the LogQuery
+func (r *Service) GetLogs(req *http.Request, args *rpcargs.FilterQueryArgs, resp *rpcargs.Response) error {
+	coreAPI, ok := r.apis["core"].(*jsonApi.PublicCoreAPI)
+	if !ok {
+		return common.ErrInvalidAPI
+	}
+
+	logs, err := coreAPI.GetLogs(args)
+	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	resp.Data, err = json.Marshal(logs)
 	if err != nil {
 		resp.Error = &rpcargs.JSONError{Message: err.Error()}
 

@@ -6,15 +6,13 @@ import (
 	"time"
 
 	"github.com/gorilla/handlers"
-
-	"github.com/sarvalabs/go-moi/common/config"
-	"github.com/sarvalabs/go-moi/common/utils"
-	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
-
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2"
 	"github.com/gorilla/rpc/v2/json2"
 	"github.com/hashicorp/go-hclog"
+
+	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
 )
 
 // Server is a struct that represents a wrapper for a libp2p RPC server
@@ -43,7 +41,12 @@ type Server struct {
 
 // NewRPCServer is a constructor function that generates and returns
 // a new RPC Server for a given URL and addr.
-func NewRPCServer(path string, logger hclog.Logger, cfg *config.NetworkConfig, eventMux *utils.TypeMux) *Server {
+func NewRPCServer(
+	path string,
+	logger hclog.Logger,
+	cfg *config.NetworkConfig,
+	filterMan *websocket.FilterManager,
+) *Server {
 	// Create a new Server object and return it
 	return &Server{
 		logger:             logger.Named("JSON-RPC-Server"),
@@ -52,7 +55,7 @@ func NewRPCServer(path string, logger hclog.Logger, cfg *config.NetworkConfig, e
 		url:                path,
 		addr:               cfg.JSONRPCAddr,
 		corsAllowedOrigins: cfg.CorsAllowedOrigins,
-		wsHandler:          websocket.NewHandler(logger, eventMux),
+		wsHandler:          websocket.NewHandler(logger, filterMan),
 	}
 }
 
