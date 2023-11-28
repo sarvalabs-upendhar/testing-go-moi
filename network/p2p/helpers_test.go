@@ -471,7 +471,7 @@ func initDiscoveryAndAdvertise(t *testing.T, servers ...*Server) {
 	t.Helper()
 
 	for _, s := range servers {
-		s.cfg.DiscoveryInterval = 100 * time.Millisecond
+		s.cfg.DiscoveryInterval = 50 * time.Millisecond
 
 		// Advertise the rendezvous string to the discovery service
 		t.Log("Announcing ourselves")
@@ -696,9 +696,11 @@ func checkForPeerRegistration(t *testing.T, serverList *Server, hasServer *Serve
 
 	if exists {
 		require.True(t, serverList.Peers.ContainsPeer(hasServer.host.ID()))
-	} else {
-		require.False(t, serverList.Peers.ContainsPeer(hasServer.host.ID()))
+
+		return
 	}
+
+	require.False(t, serverList.Peers.ContainsPeer(hasServer.host.ID()))
 }
 
 func checkForHost(t *testing.T, server *Server) {
@@ -765,16 +767,24 @@ func postDiscoverPeerEvent(t *testing.T, source *Server, peerID peer.ID) {
 func assertNodeMetaInfoInSenatus(t *testing.T, source *Server, peerID peer.ID, shouldExist bool) {
 	t.Helper()
 
-	kramaID, err := source.Senatus.GetKramaIDByPeerID(peerID)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
 
-	if !shouldExist {
-		require.Error(t, err)
+	_, err := tests.RetryUntilTimeout(ctx, 50*time.Millisecond, func() (interface{}, bool) {
+		if kramaID, err := source.Senatus.GetKramaIDByPeerID(peerID); err == nil && kramaID != "" {
+			return true, false
+		}
+
+		return nil, true
+	})
+
+	if shouldExist {
+		require.NoError(t, err)
 
 		return
 	}
 
-	require.NoError(t, err)
-	require.NotNil(t, kramaID)
+	require.Error(t, err)
 }
 
 func validateMessage(t *testing.T, id kramaid.KramaID, msg *networkmsg.Message) {
@@ -793,9 +803,11 @@ func validateHandShakeMsg(t *testing.T, s *Server, msg *networkmsg.Message, expe
 
 	if expectedError != nil {
 		require.Contains(t, handShake.Error, expectedError.Error())
-	} else {
-		require.Equal(t, []byte("ping"), handShake.Data)
+
+		return
 	}
+
+	require.Equal(t, []byte("ping"), handShake.Data)
 }
 
 func validateNewPeerEvent(t *testing.T, newPeerSub *utils.Subscription, s *Server) {
@@ -822,4 +834,33 @@ func validatePayload(t *testing.T, handshakeMessage networkmsg.HandshakeMSG, msg
 	err := polo.Depolorize(&payload, msg.Payload)
 	require.NoError(t, err)
 	require.Equal(t, handshakeMessage, payload)
+}
+
+func waitForDiscovery(t *testing.T, server *Server, expectedPeerCount int) {
+	t.Helper()
+
+	waitTime := 150 * time.Millisecond
+
+	if expectedPeerCount > 0 {
+		waitTime = 800 * time.Millisecond
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
+	defer cancel()
+
+	_, err := tests.RetryUntilTimeout(ctx, 50*time.Millisecond, func() (interface{}, bool) {
+		if len(server.ConnManager.getPeers()) > 0 {
+			return true, false
+		}
+
+		return false, true
+	})
+
+	if expectedPeerCount == 0 {
+		require.Error(t, err)
+
+		return
+	}
+
+	require.NoError(t, err)
 }
