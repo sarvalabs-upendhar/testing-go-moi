@@ -43,8 +43,8 @@ func (miMsg *NodeMetaInfoMsg) NodeMetaInfo() *NodeMetaInfo {
 
 type NodeMetaInfo struct {
 	mtx           sync.RWMutex
-	KramaID       id.KramaID
 	Addrs         []string
+	KramaID       id.KramaID
 	NTQ           float32
 	RTT           int64
 	WalletCount   int32

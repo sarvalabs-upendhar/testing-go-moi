@@ -404,7 +404,7 @@ func (r *ReputationEngine) StreamPeerInfos(ctx context.Context) (chan *networkms
 		for entry := range entriesChan {
 			peerID, err := peer.IDFromBytes(bytes.TrimPrefix(entry.Key, []byte{storage.Senatus.Byte()}))
 			if err != nil {
-				r.logger.Error("failed to decode peerID", "error", err)
+				r.logger.Debug("failed to decode peerID", "error", err)
 
 				continue
 			}
