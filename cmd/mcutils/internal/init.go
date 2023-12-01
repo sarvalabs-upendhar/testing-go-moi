@@ -129,6 +129,7 @@ func CreateConfigFile(datadir string, index int, ipAddr string) []byte {
 			MaximumConnections: config.DefaultMaximumConnections,
 			DiscoveryInterval:  config.DefaultDiscoveryInterval,
 			CorsAllowedOrigins: []string{"*"},
+			RefreshSenatus:     true,
 		},
 		Syncer: cmdCommon.SyncerConfig{
 			ShouldExecute:  true,
