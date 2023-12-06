@@ -2,6 +2,7 @@ package args
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
@@ -286,4 +287,20 @@ type DiagnosisRequest struct {
 	ProfileTime          string   `json:"profile_time"`
 	MutexProfileFraction int      `json:"mutex_profile_fraction"`
 	BlockProfileRate     string   `json:"block_profile_rate"`
+}
+
+type SyncJobRequest struct {
+	Address common.Address `json:"address"`
+}
+
+type SyncJobInfo struct {
+	SyncMode              string       `json:"sync_mode"`
+	SnapDownloaded        bool         `json:"snap_downloaded"`
+	ExpectedHeight        uint64       `json:"expected_height"`
+	CurrentHeight         uint64       `json:"current_height"`
+	JobState              string       `json:"job_state"`
+	LastModifiedAt        time.Time    `json:"last_modified_at"`
+	TesseractQueueLen     uint64       `json:"tesseract_queue_length"`
+	BestPeers             []id.KramaID `json:"best_peers"`
+	LatticeSyncInProgress bool         `json:"lattice_sync_in_progress"`
 }

@@ -59,6 +59,7 @@ type ExecutionManager interface {
 type Syncer interface {
 	GetAccountSyncStatus(addr common.Address) (*args.AccSyncStatus, error)
 	GetNodeSyncStatus(includePendingAccounts bool) *args.NodeSyncStatus
+	GetSyncJobInfo(addr common.Address) (*args.SyncJobInfo, error)
 }
 
 type Network interface {

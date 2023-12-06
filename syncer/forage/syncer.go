@@ -264,7 +264,7 @@ func (s *Syncer) NewSyncRequest(
 
 	ts, _ := s.lattice.GetTesseractByHeight(job.address, job.getCurrentHeight(), false)
 	if job.getCurrentHeight() == job.getExpectedHeight() && ts != nil {
-		s.logger.Debug("Tesseract found avoiding new sync request")
+		s.logger.Debug("Tesseract found, avoiding new sync request")
 
 		return nil
 	}
@@ -277,7 +277,7 @@ func (s *Syncer) NewSyncRequest(
 			return errors.Wrap(err, "failed to find best peers for sync")
 		}
 
-		// if system account best peers doesn't have latest height then it will be updated here
+		// if system account best peers doesn't have the latest height then it will be updated here
 		if job.expectedHeight < height {
 			if err := job.updateExpectedHeight(height); err != nil {
 				return err
@@ -664,7 +664,7 @@ func getBestPeers(heightPeersMap map[uint64][]id.KramaID) (uint64, []id.KramaID,
 	return maxFrequencyHeight, bestPeers, nil
 }
 
-// findLatestHeightAndBestPeers returns the height reported from majority of peers as best height
+// findLatestHeightAndBestPeers returns the height reported from the majority of peers as best height
 func (s *Syncer) findLatestHeightAndBestPeers(addr common.Address) (uint64, []id.KramaID, error) {
 	heightPeersMap := make(map[uint64][]id.KramaID)
 
@@ -2069,6 +2069,32 @@ func (s *Syncer) GetAccountSyncStatus(addr common.Address) (*args.AccSyncStatus,
 		CurrentHeight:     hexutil.Uint64(currentHeight),
 		ExpectedHeight:    hexutil.Uint64(expectedHeight),
 		IsPrimarySyncDone: isPrimarySyncDone,
+	}, nil
+}
+
+// GetSyncJobInfo returns the sync job meta info for given address
+func (s *Syncer) GetSyncJobInfo(addr common.Address) (*args.SyncJobInfo, error) {
+	if addr.IsNil() {
+		return nil, common.ErrInvalidAddress
+	}
+
+	job, ok := s.jobQueue.getJob(addr)
+	if !ok {
+		return nil, common.ErrSyncJobNotFound
+	}
+
+	kramaIDs := utils.ConvertMapToSlice(job.bestPeers)
+
+	return &args.SyncJobInfo{
+		SyncMode:              job.mode.String(),
+		SnapDownloaded:        job.snapDownloaded,
+		ExpectedHeight:        job.expectedHeight,
+		CurrentHeight:         job.currentHeight,
+		JobState:              job.jobState.String(),
+		LastModifiedAt:        job.lastModifiedAt,
+		TesseractQueueLen:     job.tesseractQueue.Len(),
+		BestPeers:             kramaIDs,
+		LatticeSyncInProgress: job.latticeSyncInProgress,
 	}, nil
 }
 

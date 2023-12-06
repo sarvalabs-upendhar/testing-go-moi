@@ -279,3 +279,13 @@ func ResolveAddr(raw string) (*net.TCPAddr, error) {
 
 	return addr, nil
 }
+
+func ConvertMapToSlice(m map[id.KramaID]struct{}) []id.KramaID {
+	slice := make([]id.KramaID, 0)
+
+	for k := range m {
+		slice = append(slice, k)
+	}
+
+	return slice
+}

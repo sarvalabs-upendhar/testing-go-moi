@@ -2,6 +2,7 @@ package forage
 
 import (
 	"github.com/hashicorp/go-hclog"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
 )
 
 type Option = func(job *SyncJob)
@@ -51,5 +52,11 @@ func WithLatticeSyncInProgress(latticeSyncInProgress bool) func(*SyncJob) {
 func WithTesseractQueue(tq *TesseractQueue) func(*SyncJob) {
 	return func(job *SyncJob) {
 		job.tesseractQueue = tq
+	}
+}
+
+func WithBestPeers(m map[id.KramaID]struct{}) func(job *SyncJob) {
+	return func(job *SyncJob) {
+		job.bestPeers = m
 	}
 }

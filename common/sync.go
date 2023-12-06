@@ -7,6 +7,17 @@ import (
 
 type SyncMode int
 
+func (m SyncMode) String() string {
+	switch m {
+	case FullSync:
+		return "FullSync"
+	case LatestSync:
+		return "LatestSync"
+	default:
+		return "Invalid Sync Mode"
+	}
+}
+
 const (
 	FullSync SyncMode = iota
 	LatestSync

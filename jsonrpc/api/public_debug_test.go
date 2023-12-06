@@ -20,7 +20,7 @@ import (
 
 func TestPublicDebugAPI_DBGet(t *testing.T) {
 	db := NewMockDatabase(t)
-	debugAPI := NewPublicDebugAPI(db, nil)
+	debugAPI := NewPublicDebugAPI(db, nil, nil)
 	key := tests.RandomHash(t)
 	value := tests.RandomHash(t)
 
@@ -122,7 +122,7 @@ func TestPublicDebugAPI_GetNodeMetaInfo(t *testing.T) {
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			db := NewMockDatabase(t)
-			debugAPI := NewPublicDebugAPI(db, nil)
+			debugAPI := NewPublicDebugAPI(db, nil, nil)
 
 			if test.entries != nil {
 				db.setNodeMetaInfo(t, test.entries)
@@ -176,7 +176,7 @@ func TestPublicDebugAPI_GetAccounts(t *testing.T) {
 	for _, test := range testcases {
 		t.Run(test.name, func(testing *testing.T) {
 			db := NewMockDatabase(t)
-			debugAPI := NewPublicDebugAPI(db, nil)
+			debugAPI := NewPublicDebugAPI(db, nil, nil)
 
 			if test.setAddressFn != nil {
 				test.setAddressFn(db)
@@ -192,7 +192,7 @@ func TestPublicDebugAPI_GetAccounts(t *testing.T) {
 
 func TestPublicDebugAPI_GetConns(t *testing.T) {
 	mn := NewMockNetwork(t)
-	debugAPI := NewPublicDebugAPI(nil, mn)
+	debugAPI := NewPublicDebugAPI(nil, mn, nil)
 
 	conns := createConns(t, 3, 3)
 	mn.setConns(conns)
@@ -228,6 +228,49 @@ func TestPublicDebugAPI_GetConns(t *testing.T) {
 			require.Equal(t, test.expectedInboundConnCount, connResp.InboundConnCount)
 			require.Equal(t, test.expectedOutboundConnCount, connResp.OutboundConnCount)
 			require.Equal(t, test.expectedPubSubTopics, connResp.ActivePubSubTopics)
+		})
+	}
+}
+
+func TestPublicDebugAPI_GetSyncJob(t *testing.T) {
+	syncer := NewMockSyncer(t)
+	debugAPI := NewPublicDebugAPI(nil, nil, syncer)
+
+	addresses := tests.GetAddresses(t, 2)
+	syncJob := &rpcargs.SyncJobInfo{}
+	syncer.setSyncJobInfo(addresses[0], syncJob)
+
+	testcases := []struct {
+		name          string
+		args          *rpcargs.SyncJobRequest
+		expectedError error
+	}{
+		{
+			name: "get sync job for given address",
+			args: &rpcargs.SyncJobRequest{
+				Address: addresses[0],
+			},
+		},
+		{
+			name: "sync job does not exist for given address",
+			args: &rpcargs.SyncJobRequest{
+				Address: addresses[1],
+			},
+			expectedError: common.ErrSyncJobNotFound,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			resp, err := debugAPI.GetSyncJob(test.args)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, syncJob, resp)
 		})
 	}
 }

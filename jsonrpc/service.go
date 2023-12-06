@@ -1106,3 +1106,31 @@ func (r *Service) Diagnosis(
 
 	return nil
 }
+
+// GetSyncJob is an RPC Method that returns the sync job meta info for a given address
+func (r *Service) GetSyncJob(
+	req *http.Request,
+	args *rpcargs.SyncJobRequest,
+	resp *rpcargs.Response,
+) error {
+	debugAPI, ok := r.apis["debug"].(*jsonApi.PublicDebugAPI)
+	if !ok {
+		return common.ErrInvalidAPI
+	}
+
+	syncJob, err := debugAPI.GetSyncJob(args)
+	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	resp.Data, err = json.Marshal(syncJob)
+	if err != nil {
+		resp.Error = &rpcargs.JSONError{Message: err.Error()}
+
+		return nil
+	}
+
+	return nil
+}

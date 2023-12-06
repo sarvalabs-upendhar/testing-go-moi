@@ -463,6 +463,7 @@ type MockSyncer struct {
 	accSyncStatus         map[common.Address]*rpcargs.AccSyncStatus
 	nodeSyncStatus        *rpcargs.NodeSyncStatus
 	pendingNodeSyncStatus *rpcargs.NodeSyncStatus
+	syncJobInfo           map[common.Address]*rpcargs.SyncJobInfo
 }
 
 func NewMockSyncer(t *testing.T) *MockSyncer {
@@ -470,6 +471,7 @@ func NewMockSyncer(t *testing.T) *MockSyncer {
 
 	syncer := new(MockSyncer)
 	syncer.accSyncStatus = make(map[common.Address]*rpcargs.AccSyncStatus)
+	syncer.syncJobInfo = make(map[common.Address]*rpcargs.SyncJobInfo)
 
 	return syncer
 }
@@ -484,6 +486,19 @@ func (syncer *MockSyncer) GetAccountSyncStatus(addr common.Address) (*rpcargs.Ac
 	}
 
 	return nil, common.ErrAccSyncStatusNotFound
+}
+
+func (syncer *MockSyncer) setSyncJobInfo(addr common.Address, syncJobInfo *rpcargs.SyncJobInfo) {
+	syncer.syncJobInfo[addr] = syncJobInfo
+}
+
+func (syncer *MockSyncer) GetSyncJobInfo(addr common.Address) (*rpcargs.SyncJobInfo, error) {
+	syncJobStatus, ok := syncer.syncJobInfo[addr]
+	if !ok {
+		return nil, common.ErrSyncJobNotFound
+	}
+
+	return syncJobStatus, nil
 }
 
 func (syncer *MockSyncer) setNodeSyncStatus(nodeSyncStatus *rpcargs.NodeSyncStatus) {

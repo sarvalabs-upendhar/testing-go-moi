@@ -25,7 +25,7 @@ func NewPublicAPI(backend *backend.Backend, filterMan *websocket.FilterManager) 
 		IxPoolAPI: NewPublicIXPoolAPI(backend.Ixpool),
 		CoreAPI:   NewPublicCoreAPI(backend.Ixpool, backend.Chain, backend.SM, backend.Exec, backend.Syncer, filterMan),
 		NetAPI:    NewPublicNetAPI(backend.Net),
-		DebugAPI:  NewPublicDebugAPI(backend.DB, backend.Net),
+		DebugAPI:  NewPublicDebugAPI(backend.DB, backend.Net, backend.Syncer),
 	}
 }
 

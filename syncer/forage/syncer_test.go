@@ -773,7 +773,7 @@ func TestFullSync_RemoveBestPeer(t *testing.T) {
 // create new sync job on client for address-a1 with best peer as server-0
 // client syncs from server-0 for tesseracts(0-7)
 // server-0 throws error that it doesn't have other tesseracts (8-11)
-// so client still has some tesseracts to add and it returns early from lattice sync
+// so client still has some tesseracts to add, and it returns early from lattice sync
 // so job shouldn't be blocked here on client instead it should make progress and sync from server-1
 func TestJobProcessor_checkSyncTesseractNotBlocked(t *testing.T) {
 	t.Parallel()
@@ -1032,4 +1032,76 @@ func TestPendingAccounts_RemoveJob(t *testing.T) {
 		return nil, false
 	})
 	require.NoError(t, err)
+}
+
+func TestGetSyncJobInfo(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	mux := &utils.TypeMux{}
+	s := NewSyncerWithJobQueue(ctx, mux)
+
+	count := 1
+	addrs := tests.GetAddresses(t, 2)
+	bestPeers := make(map[id.KramaID]struct{})
+	testKramaIDs := tests.GetTestKramaIDs(t, 1)
+	bestPeers[testKramaIDs[0]] = struct{}{}
+
+	jobs := createSyncJobs(
+		t,
+		count,
+		addrs,
+		WithJobState(Done),
+		WithSnapDownloaded(true),
+		WithCurrentHeight(0),
+		WithExpectedHeight(1),
+		WithLatticeSyncInProgress(true),
+		WithTesseractQueue(NewTesseractQueue()),
+		WithBestPeers(bestPeers),
+	)
+
+	err := s.jobQueue.AddJob(jobs[0])
+	require.NoError(t, err)
+
+	testcases := []struct {
+		name          string
+		addr          common.Address
+		expectedError error
+	}{
+		{
+			name: "sync job exits for given address",
+			addr: addrs[0],
+		},
+		{
+			name:          "sync job doesn't exits for given address",
+			addr:          addrs[1],
+			expectedError: common.ErrSyncJobNotFound,
+		},
+		{
+			name:          "nil address, return invalid address error",
+			addr:          common.NilAddress,
+			expectedError: common.ErrInvalidAddress,
+		},
+	}
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			resp, err := s.GetSyncJobInfo(test.addr)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.Equal(t, common.LatestSync.String(), resp.SyncMode)
+			require.Equal(t, true, resp.SnapDownloaded)
+			require.Equal(t, uint64(1), resp.ExpectedHeight)
+			require.Equal(t, uint64(0), resp.CurrentHeight)
+			require.Equal(t, Done.String(), resp.JobState)
+			require.Greater(t, time.Now(), resp.LastModifiedAt)
+			require.Equal(t, uint64(0), resp.TesseractQueueLen)
+			require.Equal(t, true, resp.LatticeSyncInProgress)
+			require.Equal(t, testKramaIDs, resp.BestPeers)
+		})
+	}
 }
