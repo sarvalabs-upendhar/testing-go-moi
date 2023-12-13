@@ -7,6 +7,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/sarvalabs/go-moi/common/utils"
+
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsub_pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/pkg/errors"
@@ -64,7 +67,6 @@ func (s *Server) setPubSubRouter() error {
 		[]pubsub.Option{
 			pubsub.WithGossipSubParams(pubsubGossipParam()),
 			pubsub.WithMessageIdFn(msgIDFunction),
-			pubsub.WithDefaultValidator(pubsub.NewBasicSeqnoValidator(newpeerMsgNonceStore())),
 		}...,
 	)
 	if err != nil {
@@ -139,15 +141,61 @@ func (s *Server) JoinPubSubTopic(topicName string) (*TopicSet, error) {
 	return s.pubSubTopics.getTopicSet(topicName), nil
 }
 
+func (s *Server) wrapAndReportValidation(topic string, v utils.WrappedVal) (string, pubsub.ValidatorEx) {
+	return topic, func(ctx context.Context, pid peer.ID, msg *pubsub.Message) (res pubsub.ValidationResult) {
+		result, err := v(ctx, pid, msg)
+		if err != nil {
+			s.logger.Error("Error validating pubsub message", "err", err)
+		}
+
+		if result != pubsub.ValidationAccept {
+			s.logger.Trace("Validation failed", "topic", topic, "validation-result", result)
+		}
+
+		return result
+	}
+}
+
 // Subscribe subscribes the node to a given PubSub topic.
 // Accepts the topic name to subscribe and handler function to handle messages from that subscription.
 //
 // Creates topic and subscription handles for the topic, wraps it in a TopicSet
 // and adds it to the node's pubsub topicset. Creates a handler pipeline with the
 // given handler function and starts a subscription loop that invokes the pipeline.
-func (s *Server) Subscribe(ctx context.Context, topicName string, handler func(msg *pubsub.Message) error) error {
+func (s *Server) Subscribe(
+	ctx context.Context,
+	topicName string,
+	validator utils.WrappedVal,
+	defaultValidator bool,
+	handler func(msg *pubsub.Message) error,
+) error {
 	s.pubSubTopics.topicSetLock.Lock()
 	defer s.pubSubTopics.topicSetLock.Unlock()
+
+	// custom validation
+	if validator != nil {
+		err := s.psRouter.RegisterTopicValidator(s.wrapAndReportValidation(topicName, validator))
+		if err != nil {
+			return err
+		}
+	}
+
+	// default validation
+	if defaultValidator {
+		err := s.psRouter.RegisterTopicValidator(
+			s.wrapAndReportValidation(
+				topicName,
+				func(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
+					validator := pubsub.NewBasicSeqnoValidator(s.peerMsgNonceStore)
+
+					return validator(ctx, pid, msg), nil
+				},
+			),
+		)
+		if err != nil {
+			return err
+		}
+	}
 
 	// Join pubsub topic and get a topic handle
 	topicHandle, err := s.psRouter.Join(topicName)

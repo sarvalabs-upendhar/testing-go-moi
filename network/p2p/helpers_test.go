@@ -607,7 +607,7 @@ func registerStreamHandler(servers ...*Server) {
 func subscribeHelloMsg(t *testing.T, s *Server, topic string, sender *Server, response chan int) {
 	t.Helper()
 
-	err := s.Subscribe(s.ctx, topic, func(msg *pubsub.Message) error {
+	err := s.Subscribe(s.ctx, topic, nil, true, func(msg *pubsub.Message) error {
 		var hello networkmsg.HelloMsg
 
 		data := msg.GetData()
@@ -627,7 +627,7 @@ func subscribeHelloMsg(t *testing.T, s *Server, topic string, sender *Server, re
 func subscribeMessage(t *testing.T, s *Server, topic string, response chan int) {
 	t.Helper()
 
-	err := s.Subscribe(s.ctx, topic, func(msg *pubsub.Message) error {
+	err := s.Subscribe(s.ctx, topic, nil, true, func(msg *pubsub.Message) error {
 		var name string
 
 		data := msg.GetData()
@@ -646,10 +646,10 @@ func subscribeMessage(t *testing.T, s *Server, topic string, response chan int) 
 //
 // throws error when it receives data on topic if shouldError is true,
 // does nothing when it receives data on topic if shouldError is false
-func registerEmptySubscriptionHandler(t *testing.T, s *Server, topic string, shouldError bool) {
+func registerEmptySubscriptionHandler(t *testing.T, s *Server, topic string, defaultValidator bool, shouldError bool) {
 	t.Helper()
 
-	err := s.Subscribe(s.ctx, topic, func(msg *pubsub.Message) error {
+	err := s.Subscribe(s.ctx, topic, nil, defaultValidator, func(msg *pubsub.Message) error {
 		if shouldError {
 			require.Error(t, nil) // shouldn't receive message
 		}

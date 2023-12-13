@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/peer"
+
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/jsonrpc/args"
 
@@ -55,6 +57,7 @@ type lattice interface {
 	) (*common.Tesseract, error)
 	ValidateTesseract(ts *common.Tesseract, ics *common.ICSNodeSet) error
 	IsInitialTesseract(ts *common.Tesseract) (bool, error)
+	IsSealValid(ts *common.Tesseract) (bool, error)
 }
 
 type stateManager interface {
@@ -1878,73 +1881,39 @@ func (s *Syncer) syncLogicTree(ctx context.Context, as syncer.Session, newRoot c
 }
 
 func (s *Syncer) msgHandler(msg *pubsub.Message) error {
-	var (
-		tsMsg = new(networkmsg.TesseractMessage)
-		err   error
-	)
-
-	if err = tsMsg.FromBytes(msg.GetData()); err != nil {
-		return err
+	if msg.ValidatorData == nil {
+		return errors.New("tesseract info not found")
 	}
 
-	ts, err := tsMsg.GetTesseract()
-	if err != nil {
-		return err
+	data := msg.ValidatorData
+
+	tsInfo, ok := data.(*TesseractInfo)
+	if !ok {
+		return errors.New("failed to type cast validator data to tesseract info")
 	}
 
-	exists := s.db.HasTesseract(ts.Hash())
-	if exists {
-		return common.ErrAlreadyKnown
-	}
+	select {
+	case <-s.ctx.Done():
+		return s.ctx.Err()
+	default:
+		if !s.isInitialSyncDone() {
+			s.pendingMsgChan <- tsInfo
 
-	if !s.tesseractRegistry.Contains(ts.Hash()) {
-		s.tesseractRegistry.Add(ts.Hash())
-
-		s.logger.Debug(
-			"Tesseract received from",
-			"sender", tsMsg.Sender,
-			"sealer", ts.Sealer(),
-			"ts-hash", ts.Hash(),
-			"addr", ts.Address(),
-			"height", ts.Height(),
-		)
-
-		clusterInfo := new(common.ICSClusterInfo)
-		if err = clusterInfo.FromBytes(tsMsg.Delta[ts.ICSHash()]); err != nil {
-			return err
+			return nil
 		}
 
-		tsInfo := &TesseractInfo{
-			tesseract:     ts,
-			clusterInfo:   clusterInfo,
-			icsNodeSet:    nil,
-			shouldExecute: s.cfg.ShouldExecute,
-			delta:         tsMsg.Delta,
+		if err := s.NewSyncRequest(
+			tsInfo.tesseract.Address(),
+			tsInfo.tesseract.Height(),
+			common.LatestSync,
+			tsInfo.clusterInfo.RandomSet,
+			tsInfo); err != nil {
+			s.logger.Error("Error adding sync request", "err", err)
 		}
 
-		select {
-		case <-s.ctx.Done():
-			return s.ctx.Err()
-		default:
-			if !s.isInitialSyncDone() {
-				s.pendingMsgChan <- tsInfo
-
-				return nil
-			}
-
-			if err = s.NewSyncRequest(
-				tsInfo.tesseract.Address(),
-				tsInfo.tesseract.Height(),
-				common.LatestSync,
-				tsInfo.clusterInfo.RandomSet,
-				tsInfo); err != nil {
-				s.logger.Error("Error adding sync request", "err", err)
-			}
-
-			s.init.Do(func() {
-				close(s.pendingMsgChan)
-			})
-		}
+		s.init.Do(func() {
+			close(s.pendingMsgChan)
+		})
 	}
 
 	return nil
@@ -1977,6 +1946,84 @@ func (s *Syncer) getTesseractWithRawIxnsAndReceipts(
 	return ts, ixns, receipts, nil
 }
 
+// TesseractValidator is a custom validation logic to verify tesseract message
+func (s *Syncer) TesseractValidator(
+	ctx context.Context,
+	pid peer.ID,
+	msg *pubsub.Message,
+) (pubsub.ValidationResult, error) {
+	var (
+		tsMsg = new(networkmsg.TesseractMessage)
+		err   error
+	)
+
+	peerID, err := s.network.GetKramaID().DecodedPeerID()
+	if err != nil {
+		return pubsub.ValidationReject, err
+	}
+
+	if msg.GetFrom() == peerID {
+		return pubsub.ValidationAccept, nil
+	}
+
+	// depolorize tesseract message
+	if err = tsMsg.FromBytes(msg.GetData()); err != nil {
+		return pubsub.ValidationReject, err
+	}
+
+	// get tesseract from tesseract message
+	ts, err := tsMsg.GetTesseract()
+	if err != nil {
+		return pubsub.ValidationReject, err
+	}
+
+	// verify if tesseract has valid seal
+	validSeal, err := s.lattice.IsSealValid(ts)
+	if !validSeal || err != nil {
+		return pubsub.ValidationReject, err
+	}
+
+	// check db if tesseract already exists
+	exists := s.db.HasTesseract(ts.Hash())
+	if exists {
+		return pubsub.ValidationIgnore, nil
+	}
+
+	// check cache if teserract already exists
+	if s.tesseractRegistry.Contains(ts.Hash()) {
+		return pubsub.ValidationIgnore, nil
+	}
+
+	// add tesseract to cache
+	s.tesseractRegistry.Add(ts.Hash())
+
+	s.logger.Debug(
+		"Tesseract received from",
+		"sender", tsMsg.Sender,
+		"sealer", ts.Sealer(),
+		"ts-hash", ts.Hash(),
+		"addr", ts.Address(),
+		"height", ts.Height(),
+	)
+
+	clusterInfo := new(common.ICSClusterInfo)
+	if err = clusterInfo.FromBytes(tsMsg.Delta[ts.ICSHash()]); err != nil {
+		return pubsub.ValidationReject, err
+	}
+
+	tsInfo := &TesseractInfo{
+		tesseract:     ts,
+		clusterInfo:   clusterInfo,
+		icsNodeSet:    nil,
+		shouldExecute: s.cfg.ShouldExecute,
+		delta:         tsMsg.Delta,
+	}
+
+	msg.ValidatorData = tsInfo
+
+	return pubsub.ValidationAccept, nil
+}
+
 // Start starts all event handlers and workers associated with sync sub protocol
 func (s *Syncer) Start(minConnectedPeers int) error {
 	sub := s.mux.Subscribe(utils.PendingAccountEvent{})
@@ -1989,7 +2036,7 @@ func (s *Syncer) Start(minConnectedPeers int) error {
 		return err
 	}
 
-	if err := s.network.Subscribe(s.ctx, config.TesseractTopic, s.msgHandler); err != nil {
+	if err := s.network.Subscribe(s.ctx, config.TesseractTopic, s.TesseractValidator, false, s.msgHandler); err != nil {
 		return err
 	}
 

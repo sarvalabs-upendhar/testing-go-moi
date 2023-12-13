@@ -7,7 +7,12 @@ import (
 	"testing"
 	"time"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
+	pb "github.com/libp2p/go-libp2p-pubsub/pb"
+
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/sarvalabs/go-moi/network/message"
+
+	"github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/storage/db"
 
 	"github.com/hashicorp/go-hclog"
@@ -873,7 +878,7 @@ func TestJobProcessor_checkSyncTesseractNotBlocked(t *testing.T) {
 		addr,
 		uint64(expectedHeight),
 		common.FullSync,
-		[]id.KramaID{servers[0].GetKramaID()},
+		[]kramaid.KramaID{servers[0].GetKramaID()},
 	)
 	require.NoError(t, err)
 
@@ -1043,7 +1048,7 @@ func TestGetSyncJobInfo(t *testing.T) {
 
 	count := 1
 	addrs := tests.GetAddresses(t, 2)
-	bestPeers := make(map[id.KramaID]struct{})
+	bestPeers := make(map[kramaid.KramaID]struct{})
 	testKramaIDs := tests.GetTestKramaIDs(t, 1)
 	bestPeers[testKramaIDs[0]] = struct{}{}
 
@@ -1102,6 +1107,175 @@ func TestGetSyncJobInfo(t *testing.T) {
 			require.Equal(t, uint64(0), resp.TesseractQueueLen)
 			require.Equal(t, true, resp.LatticeSyncInProgress)
 			require.Equal(t, testKramaIDs, resp.BestPeers)
+		})
+	}
+}
+
+func TestTesseractValidator(t *testing.T) {
+	ctx, cancelFunc := context.WithTimeout(context.Background(), maxTimeout)
+	defer cancelFunc()
+
+	defaultConfig := getParamsToCreateMultipleServers(
+		t,
+		1,
+		true,
+	)
+
+	paramsMap := map[int]*CreateServerParams{
+		0: defaultConfig[0],
+	}
+
+	server := createMultipleServers(t, 1, paramsMap)
+	testPM, _ := createPersistenceManager(t, ctx)
+	mockLogger := hclog.NewNullLogger()
+	mockLattice := newMockLattice(testPM, mockLogger)
+
+	testSyncer := NewTestSyncerForValidation(
+		ctx,
+		defaultSyncerConfig(),
+		server[0],
+		testPM,
+		mockLogger,
+		mockLattice,
+	)
+
+	testTesseract := tests.CreateTesseract(t, nil)
+
+	// polorize canonical tesseract
+	rawTS, err := testTesseract.Canonical().Bytes()
+	require.NoError(t, err)
+
+	kramaID := testSyncer.network.GetKramaID()
+	peerID, err := kramaID.DecodedPeerID()
+	require.NoError(t, err)
+
+	from, err := peerID.Marshal()
+	require.NoError(t, err)
+
+	// create dummy ICS cluster info
+	info := common.ICSClusterInfo{
+		RandomSet: []kramaid.KramaID{kramaID},
+	}
+
+	// polorize ICS cluster info
+	rawInfo, err := info.Bytes()
+	require.NoError(t, err)
+
+	tsMsg := message.TesseractMessage{
+		RawTesseract: rawTS,
+		Delta: map[common.Hash][]byte{
+			testTesseract.ICSHash(): rawInfo,
+		},
+	}
+
+	// polorize tesseract message
+	rawData, err := tsMsg.Bytes()
+	require.NoError(t, err)
+
+	testcases := []struct {
+		name             string
+		msgData          []byte
+		from             []byte
+		preTestFn        func(tesseract *common.Tesseract)
+		postTestFn       func(tesseract *common.Tesseract)
+		expectedResponse pubsub.ValidationResult
+		expectedError    string
+	}{
+		{
+			name:    "Valid pubsub message",
+			msgData: rawData,
+			preTestFn: func(tessract *common.Tesseract) {
+				mockLattice.setTSSeal(tessract)
+			},
+			postTestFn: func(tesseract *common.Tesseract) {
+				mockLattice.removeTSSeal(tesseract)
+			},
+			expectedResponse: pubsub.ValidationAccept,
+		},
+		{
+			name:             "Local pubsub message",
+			from:             from,
+			expectedResponse: pubsub.ValidationAccept,
+		},
+		{
+			name:             "Nil pubsub message",
+			msgData:          nil,
+			expectedResponse: pubsub.ValidationReject,
+			expectedError:    "failed to depolorize tesseract message",
+		},
+		{
+			name:             "Failed to depolorize tesseract-message",
+			msgData:          []byte{1},
+			expectedResponse: pubsub.ValidationReject,
+			expectedError:    "failed to depolorize tesseract message",
+		},
+		{
+			name:             "Failed to verify tesseract signature",
+			msgData:          rawData,
+			expectedResponse: pubsub.ValidationReject,
+			expectedError:    "tesseract seal does not exist",
+		},
+		{
+			name:    "Message already exists in Tesseract Registry",
+			msgData: rawData,
+			preTestFn: func(tesseract *common.Tesseract) {
+				// set mock tesseract seal
+				mockLattice.setTSSeal(tesseract)
+
+				// Storing tesseract in Cache
+				testSyncer.tesseractRegistry.Add(tesseract.Hash())
+			},
+			postTestFn: func(tesseract *common.Tesseract) {
+				mockLattice.removeTSSeal(tesseract)
+			},
+			expectedResponse: pubsub.ValidationIgnore,
+		},
+		{
+			name:    "Message already exists in DB",
+			msgData: rawData,
+			preTestFn: func(tesseract *common.Tesseract) {
+				// set mock tesseract seal
+				mockLattice.setTSSeal(tesseract)
+
+				// Storing tesseract in DB
+				err = testPM.SetTesseract(tesseract.Hash(), rawTS)
+				require.NoError(t, err)
+			},
+			postTestFn: func(tesseract *common.Tesseract) {
+				mockLattice.removeTSSeal(tesseract)
+			},
+			expectedResponse: pubsub.ValidationIgnore,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			msg := &pubsub.Message{
+				Message: &pb.Message{
+					Data: testcase.msgData,
+					From: testcase.from,
+				},
+			}
+
+			if testcase.preTestFn != nil {
+				testcase.preTestFn(testTesseract)
+			}
+
+			resp, err := testSyncer.TesseractValidator(context.Background(), "", msg)
+
+			if testcase.expectedError != "" {
+				require.ErrorContains(t, err, testcase.expectedError)
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			require.Equal(t, testcase.expectedResponse, resp)
+
+			if testcase.postTestFn != nil {
+				testcase.postTestFn(testTesseract)
+			}
 		})
 	}
 }

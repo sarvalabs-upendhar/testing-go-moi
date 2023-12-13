@@ -373,7 +373,13 @@ func (n *MockNetwork) Unsubscribe(topic string) error {
 	panic("implement me")
 }
 
-func (n *MockNetwork) Subscribe(ctx context.Context, topic string, handler func(msg *pubsub.Message) error) error {
+func (n *MockNetwork) Subscribe(
+	ctx context.Context,
+	topic string,
+	validator utils.WrappedVal,
+	defaultValidator bool,
+	handler func(msg *pubsub.Message) error,
+) error {
 	// TODO implement me
 	panic("implement me")
 }

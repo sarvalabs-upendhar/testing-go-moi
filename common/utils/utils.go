@@ -4,6 +4,7 @@ package utils
 This file has all the utility function required for KIP
 */
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -15,6 +16,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 
 	id "github.com/sarvalabs/go-moi/common/kramaid"
 
@@ -289,3 +292,6 @@ func ConvertMapToSlice(m map[id.KramaID]struct{}) []id.KramaID {
 
 	return slice
 }
+
+// WrappedVal represents a gossip validator which also returns an error along with the result.
+type WrappedVal func(context.Context, peer.ID, *pubsub.Message) (pubsub.ValidationResult, error)

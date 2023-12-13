@@ -204,29 +204,55 @@ func TestSendMessage_CheckMsgHandler(t *testing.T) {
 }
 
 func TestSubscribe_Twice_OnSameTopic(t *testing.T) {
-	bootNodes := getBootstrapNodes(t, 1)
-	params := getParamsToCreateMultipleServers(
-		t,
-		1,
-		bootNodes,
-		2,
-		2,
-		false,
-	)
-	paramsMap := map[int]*CreateServerParams{
-		0: params[0],
+	testcases := []struct {
+		name             string
+		defaultValidator bool
+		containsErrorMsg string
+	}{
+		{
+			// Join method throws error
+			name:             "With nil validator",
+			defaultValidator: false,
+			containsErrorMsg: "topic already exists",
+		},
+		{
+			// RegisterTopicValidator method throws error
+			name:             "With default validator",
+			defaultValidator: true,
+			containsErrorMsg: "duplicate validator for topic",
+		},
 	}
-	servers := createMultipleServers(t, 1, paramsMap)
 
-	t.Cleanup(func() {
-		closeTestServers(t, servers)
-	})
+	for _, testcase := range testcases {
+		bootNodes := getBootstrapNodes(t, 1)
+		params := getParamsToCreateMultipleServers(
+			t,
+			1,
+			bootNodes,
+			2,
+			2,
+			false,
+		)
+		paramsMap := map[int]*CreateServerParams{
+			0: params[0],
+		}
+		servers := createMultipleServers(t, 1, paramsMap)
 
-	registerEmptySubscriptionHandler(t, servers[0], topic, false)
-	err := servers[0].Subscribe(servers[0].ctx, topic, func(msg *pubsub.Message) error { // subscribing again on same topic
-		return nil
-	})
-	require.ErrorContains(t, err, "topic already exists")
+		t.Cleanup(func() {
+			closeTestServers(t, servers)
+		})
+
+		registerEmptySubscriptionHandler(t, servers[0], topic, testcase.defaultValidator, false)
+		err := servers[0].Subscribe(
+			servers[0].ctx,
+			topic,
+			nil,
+			testcase.defaultValidator,
+			func(msg *pubsub.Message) error { // subscribing again on same topic
+				return nil
+			})
+		require.ErrorContains(t, err, testcase.containsErrorMsg)
+	}
 }
 
 func TestSubscribe_CheckMsgOnTopic(t *testing.T) {
@@ -257,7 +283,7 @@ func TestSubscribe_CheckMsgOnTopic(t *testing.T) {
 	})
 
 	startDiscovery(t, servers...)
-	registerEmptySubscriptionHandler(t, servers[0], topic, true) // shouldn't receive self-published message
+	registerEmptySubscriptionHandler(t, servers[0], topic, true, true) // shouldn't receive self-published message
 	subscribeMessage(t, servers[1], topic, response)
 
 	// make sure handlers stored
@@ -295,7 +321,7 @@ func TestUnSubscribe_CheckTopic(t *testing.T) {
 		closeTestServer(t, server)
 	})
 
-	registerEmptySubscriptionHandler(t, server, topic, false)
+	registerEmptySubscriptionHandler(t, server, topic, true, false)
 	unsubscribeServers(t, server, topic)
 	// make sure topic removed
 	checkForTopic(t, server, topic, false)
@@ -334,7 +360,7 @@ func TestBroadcast_CheckMsgOnTopic(t *testing.T) {
 	})
 
 	startDiscovery(t, servers...)
-	registerEmptySubscriptionHandler(t, servers[0], topic, true)
+	registerEmptySubscriptionHandler(t, servers[0], topic, true, true)
 	subscribeMessage(t, servers[1], topic, response)
 	time.Sleep(1 * time.Second) // wait for discovery and subscription
 
@@ -438,7 +464,7 @@ func TestSendHelloMessage_CheckMsgOnTopic(t *testing.T) {
 	})
 
 	startDiscovery(t, servers...)
-	registerEmptySubscriptionHandler(t, servers[0], config.SenatusTopic, true)
+	registerEmptySubscriptionHandler(t, servers[0], config.SenatusTopic, true, true)
 	subscribeHelloMsg(t, servers[1], config.SenatusTopic, servers[0], response)
 	time.Sleep(1 * time.Second) // give time for discovery and subscription
 

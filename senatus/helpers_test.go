@@ -6,6 +6,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/sarvalabs/go-moi/common/utils"
+
 	"github.com/hashicorp/go-hclog"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -140,7 +142,13 @@ func NewMockServer() *mockServer {
 	return &mockServer{}
 }
 
-func (m *mockServer) Subscribe(ctx context.Context, topic string, handler func(msg *pubsub.Message) error) error {
+func (m *mockServer) Subscribe(
+	ctx context.Context,
+	topicName string,
+	validator utils.WrappedVal,
+	defaultValidator bool,
+	handler func(msg *pubsub.Message) error,
+) error {
 	return nil
 }
 

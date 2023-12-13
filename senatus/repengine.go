@@ -41,7 +41,13 @@ type senatusStore interface {
 }
 
 type network interface {
-	Subscribe(ctx context.Context, topic string, handler func(msg *pubsub.Message) error) error
+	Subscribe(
+		ctx context.Context,
+		topic string,
+		validator utils.WrappedVal,
+		defaultValidator bool,
+		handler func(msg *pubsub.Message) error,
+	) error
 }
 
 type ReputationEngine struct {
@@ -548,7 +554,7 @@ func (r *ReputationEngine) cleanUpDirtyStorage() {
 }
 
 func (r *ReputationEngine) Start() error {
-	if err := r.network.Subscribe(r.ctx, config.SenatusTopic, r.senatusHandler); err != nil {
+	if err := r.network.Subscribe(r.ctx, config.SenatusTopic, nil, true, r.senatusHandler); err != nil {
 		return errors.Wrap(err, "failed to subscribe senatus topic")
 	}
 

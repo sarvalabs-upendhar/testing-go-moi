@@ -17,11 +17,6 @@ var ProtocolVersion = func() string {
 }()
 
 var (
-	FluxProtocolStream = protocol.ID("moi/flux/stream/" + ProtocolVersion)
-	FluxProtocolRPC    = protocol.ID("moi/flux/rpc/" + ProtocolVersion)
-)
-
-var (
 	ICSProtocolStream = protocol.ID("moi/ics/stream/" + ProtocolVersion)
 	ICSProtocolRPC    = protocol.ID("moi/ics/rpc/" + ProtocolVersion)
 )
