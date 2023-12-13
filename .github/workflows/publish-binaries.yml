@@ -1,4 +1,4 @@
-name: Build moipod binaries
+name: Build and publish moipod binaries to distribution server
 
 on:
   release:

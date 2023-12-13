@@ -99,4 +99,5 @@ var (
 	ErrRejectFutureIx              = errors.New("reject future ix due to low slots")
 	ErrReplacementUnderpriced      = errors.New("replacement ix underpriced")
 	ErrAccSyncStatusNotFound       = errors.New("error fetching account sync status")
+	ErrSyncJobNotFound             = errors.New("sync job not found")
 )

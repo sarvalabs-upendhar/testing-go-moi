@@ -1143,3 +1143,26 @@ func (c *Client) Connections(ctx context.Context) (*rpcargs.ConnectionsResponse,
 
 	return &connResp, nil
 }
+
+// GetSyncJob returns the sync job meta info for a given address
+func (c *Client) GetSyncJob(ctx context.Context, args *rpcargs.SyncJobRequest) (*rpcargs.SyncJobInfo, error) {
+	var resp rpcargs.Response
+
+	err := c.Call(ctx, &resp, "debug.GetSyncJob", args)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+
+	var syncJob rpcargs.SyncJobInfo
+
+	err = json.Unmarshal(resp.Data, &syncJob)
+	if err != nil {
+		return nil, err
+	}
+
+	return &syncJob, nil
+}

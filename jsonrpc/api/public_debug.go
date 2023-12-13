@@ -25,13 +25,15 @@ import (
 type PublicDebugAPI struct {
 	db      backend.DB
 	network backend.Network
+	syncer  backend.Syncer
 }
 
-func NewPublicDebugAPI(db backend.DB, network backend.Network) *PublicDebugAPI {
+func NewPublicDebugAPI(db backend.DB, network backend.Network, syncer backend.Syncer) *PublicDebugAPI {
 	// Create the public Debug API wrapper and return it
 	return &PublicDebugAPI{
 		db:      db,
 		network: network,
+		syncer:  syncer,
 	}
 }
 
@@ -190,6 +192,16 @@ func (p *PublicDebugAPI) RunDiagnosis(args *rpcargs.DiagnosisRequest) error {
 			MutexProfileFraction: args.MutexProfileFraction,
 			BlockProfileRate:     blockProfileDuration,
 		})
+}
+
+// GetSyncJob returns the sync job meta info for given address
+func (p *PublicDebugAPI) GetSyncJob(args *rpcargs.SyncJobRequest) (*rpcargs.SyncJobInfo, error) {
+	syncJob, err := p.syncer.GetSyncJobInfo(args.Address)
+	if err != nil {
+		return nil, err
+	}
+
+	return syncJob, nil
 }
 
 // helper functions

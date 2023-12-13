@@ -140,6 +140,16 @@ func NewTestSyncer(
 	return s
 }
 
+func NewSyncerWithJobQueue(ctx context.Context, mux *utils.TypeMux) *Syncer {
+	return &Syncer{
+		ctx: ctx,
+		jobQueue: &JobQueue{
+			jobs: make(map[common.Address]*SyncJob),
+			mux:  mux,
+		},
+	}
+}
+
 type MockLattice struct {
 	lock               sync.RWMutex
 	logger             hclog.Logger
