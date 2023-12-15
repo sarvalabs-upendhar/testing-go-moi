@@ -327,7 +327,7 @@ func (cm *ConnectionManager) connectToTrustedNodes() {
 	}
 }
 
-// ConnectAndRegisterPeer connects to a specific peer, establishes a stream and register's the peer to the
+// ConnectAndRegisterPeer connects to a specific peer, establishes a stream and registers the peer to the
 // handler working set.
 func (cm *ConnectionManager) ConnectAndRegisterPeer(peerInfo peer.AddrInfo, kramaID id.KramaID, rtt int64) error {
 	var (
@@ -359,12 +359,16 @@ func (cm *ConnectionManager) ConnectAndRegisterPeer(peerInfo peer.AddrInfo, kram
 			cm.server.logger.Error("Handshake failed", "krama-ID", peerInfo.ID, "err", err)
 		}
 
+		_ = cm.ResetStream(stream, MOIStreamTag)
+
 		return err
 	}
 
 	// Register the kPeer to the handler working set
 	if err := cm.server.Peers.Register(kPeer); err != nil {
 		cm.server.logger.Error("Failed to register", "krama-ID", peerInfo.ID, "err", err)
+
+		_ = cm.ResetStream(stream, MOIStreamTag)
 
 		return err
 	}
@@ -483,6 +487,8 @@ func (cm *ConnectionManager) streamHandler(stream network.Stream) {
 			cm.server.logger.Error("Handle handshake", "err", err)
 		}
 
+		_ = cm.CloseStream(stream, MOIStreamTag)
+
 		return
 	}
 
@@ -491,6 +497,8 @@ func (cm *ConnectionManager) streamHandler(stream network.Stream) {
 		if err := kPeer.sendHandshakeErrorResp(cm.server.id, err); err != nil {
 			cm.server.logger.Error("Failed to send register error response", kPeer.networkID)
 		}
+
+		_ = cm.CloseStream(stream, MOIStreamTag)
 
 		return
 	}
