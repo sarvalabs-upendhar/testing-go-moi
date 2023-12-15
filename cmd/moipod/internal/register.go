@@ -215,7 +215,7 @@ func registerGuardian(vault *crypto.KramaVault) {
 		cmdCommon.Err(err)
 	}
 
-	guardianDoc, err := polo.DocumentEncode(g)
+	guardianDoc, err := polo.PolorizeDocument(g)
 	if err != nil {
 		cmdCommon.Err(err)
 	}
