@@ -879,6 +879,7 @@ func TestJobProcessor_checkSyncTesseractNotBlocked(t *testing.T) {
 		uint64(expectedHeight),
 		common.FullSync,
 		[]kramaid.KramaID{servers[0].GetKramaID()},
+		false,
 	)
 	require.NoError(t, err)
 

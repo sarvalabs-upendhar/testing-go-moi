@@ -220,6 +220,7 @@ func (s *Syncer) NewSyncRequest(
 	expectedHeight uint64,
 	syncMode common.SyncMode,
 	bestPeers []id.KramaID,
+	snapDownloaded bool,
 	tesseracts ...*TesseractInfo,
 ) (err error) {
 	job, ok := s.jobQueue.getJob(addr)
@@ -231,6 +232,7 @@ func (s *Syncer) NewSyncRequest(
 			mode:            syncMode,
 			tesseractQueue:  NewTesseractQueue(),
 			jobState:        Pending,
+			snapDownloaded:  snapDownloaded,
 			tesseractSignal: make(chan struct{}, 1),
 			bestPeers:       make(map[id.KramaID]struct{}),
 		}
@@ -434,7 +436,7 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 			return err
 		}
 
-		if err := s.publishEventSnapSync(job.jobStateEvent()); err != nil {
+		if err = s.publishEventSnapSync(job.jobStateEvent()); err != nil {
 			s.logger.Error("failed to publish event bucket sync", "err", err)
 		}
 	}
@@ -739,7 +741,7 @@ func (s *Syncer) syncSystemAccount(address ...common.Address) ([]id.KramaID, err
 			return nil, errors.Wrap(err, "failed to fetch best peers and height")
 		}
 
-		if err = s.NewSyncRequest(addr, bestHeight, common.FullSync, bestPeers); err != nil {
+		if err = s.NewSyncRequest(addr, bestHeight, common.FullSync, bestPeers, false); err != nil {
 			return nil, err
 		}
 
@@ -928,23 +930,15 @@ func (s *Syncer) loadSyncJobsFromDB() error {
 	}
 
 	for _, v := range accountSyncInfos {
-		syncJob, err := SyncJobFromCanonicalInfo(s.logger, s.db, v)
-		if err != nil {
-			return err
+		if err = s.NewSyncRequest(
+			v.Address,
+			v.ExpectedHeight,
+			v.Mode,
+			nil,
+			v.SnapshotDownloaded,
+		); err != nil {
+			s.logger.Error("Failed to create sync request for job", "error", err, "address", v.Address)
 		}
-
-		accountMetaInfo, err := s.db.GetAccountMetaInfo(v.Address)
-		if err == nil {
-			syncJob.updateCurrentHeight(accountMetaInfo.Height)
-		}
-
-		if err = s.jobQueue.AddJob(syncJob); err != nil {
-			s.logger.Error("Failed to add job in job queue", "err", err)
-
-			continue
-		}
-
-		s.metrics.captureTotalJobs(float64(len(s.jobQueue.jobs)))
 	}
 
 	return nil
@@ -1063,6 +1057,7 @@ func (s *Syncer) handleAccountMetaInfo(data [][]byte, syncMode common.SyncMode) 
 			acc.Height,
 			syncMode,
 			nil,
+			false,
 		); err != nil {
 			s.logger.Error(
 				"Failed to add new sync request",
@@ -1907,7 +1902,9 @@ func (s *Syncer) msgHandler(msg *pubsub.Message) error {
 			tsInfo.tesseract.Height(),
 			common.LatestSync,
 			tsInfo.clusterInfo.RandomSet,
-			tsInfo); err != nil {
+			false,
+			tsInfo,
+		); err != nil {
 			s.logger.Error("Error adding sync request", "err", err)
 		}
 
@@ -2055,9 +2052,24 @@ func (s *Syncer) Start(minConnectedPeers int) error {
 			return
 		}
 
-		s.setInitialSyncDone(true)
+		for {
+			select {
+			case <-s.ctx.Done():
+				s.logger.Error("Initial sync failed", "err", s.ctx.Err())
 
-		s.logger.Info("Initial sync successful")
+				return
+
+			case <-time.After(2000 * time.Millisecond):
+				s.logger.Debug("Sync in progress", "pending jobs", s.jobQueue.len())
+			}
+
+			if s.jobQueue.len() == 0 {
+				s.setInitialSyncDone(true)
+				s.logger.Info("Initial sync successful")
+
+				return
+			}
+		}
 	}()
 
 	go s.startSyncEventHandler()
@@ -2085,6 +2097,7 @@ func (s *Syncer) startSyncEventHandler() {
 				req.Height,
 				common.LatestSync,
 				[]id.KramaID{req.BestPeer},
+				false,
 			); err != nil {
 				s.logger.Error("Failed to handle sync request from krama engine", "err", err)
 			}
@@ -2191,7 +2204,9 @@ func (s *Syncer) queueHandler() {
 						tsInfo.tesseract.Height(),
 						common.LatestSync,
 						tsInfo.clusterInfo.RandomSet,
-						tsInfo); err != nil {
+						false,
+						tsInfo,
+					); err != nil {
 						s.logger.Error("Error adding sync request", "err", err)
 					}
 				}

@@ -725,9 +725,7 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 			"service-ID", call.SvcID,
 		)
 
-		if resetErr := c.connManager.ResetStream(stream, c.connTag); resetErr != nil {
-			call.logger.Error("Failed to close stream", "err", resetErr)
-		}
+		_ = c.connManager.ResetStream(stream, c.connTag)
 
 		return nil, err
 	}
@@ -754,9 +752,7 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 		call.doneWithError(newClientError(err))
 		c.logger.Error("Client error related to encoding flush", "err", err)
 
-		if resetErr := c.connManager.ResetStream(stream, c.connTag); resetErr != nil {
-			c.logger.Error("Failed to close stream", "err", resetErr)
-		}
+		_ = c.connManager.ResetStream(stream, c.connTag)
 
 		return nil, err
 	}
@@ -766,9 +762,7 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 	if err != nil {
 		c.logger.Error("Client received response error", "stream-ID", sWrap.stream.ID(), "err", err)
 
-		if resetErr := c.connManager.ResetStream(stream, c.connTag); resetErr != nil {
-			call.logger.Error("Failed to close stream", "err", resetErr)
-		}
+		_ = c.connManager.ResetStream(stream, c.connTag)
 
 		return nil, err
 	}
@@ -891,9 +885,7 @@ func (c *Client) stream(call *Call) {
 	if err := sWrap.enc.Encode(call.SvcID); err != nil {
 		call.doneWithError(newClientError(err))
 
-		if resetErr := c.connManager.ResetStream(s, c.connTag); resetErr != nil {
-			call.logger.Error("Failed to close stream", "err", resetErr)
-		}
+		_ = c.connManager.ResetStream(s, c.connTag)
 
 		go drainChannel(call.StreamArgs)
 		call.StreamReplies.Close()
@@ -905,9 +897,7 @@ func (c *Client) stream(call *Call) {
 	if err := sWrap.w.Flush(); err != nil {
 		call.doneWithError(newClientError(err))
 
-		if resetErr := c.connManager.ResetStream(s, c.connTag); resetErr != nil {
-			call.logger.Error("Failed to close stream", "err", resetErr)
-		}
+		_ = c.connManager.ResetStream(s, c.connTag)
 
 		go drainChannel(call.StreamArgs)
 		call.StreamReplies.Close()
@@ -946,9 +936,8 @@ func (c *Client) stream(call *Call) {
 				call.doneWithError(newClientError(err))
 				// closing the args channel is responsibility
 				// of the sender.
-				if resetErr := c.connManager.ResetStream(s, c.connTag); resetErr != nil {
-					call.logger.Error("Failed to close stream", "err", resetErr)
-				}
+
+				_ = c.connManager.ResetStream(s, c.connTag)
 
 				go drainChannel(call.StreamArgs)
 
@@ -959,9 +948,7 @@ func (c *Client) stream(call *Call) {
 			if err := sWrap.w.Flush(); err != nil {
 				call.doneWithError(newClientError(err))
 
-				if resetErr := c.connManager.ResetStream(s, c.connTag); resetErr != nil {
-					call.logger.Error("Failed to close stream", "err", resetErr)
-				}
+				_ = c.connManager.ResetStream(s, c.connTag)
 
 				go drainChannel(call.StreamArgs)
 
@@ -995,9 +982,7 @@ func (c *Client) stream(call *Call) {
 			if err != nil {
 				call.setError(newClientError(err))
 
-				if resetErr := c.connManager.ResetStream(s, c.connTag); resetErr != nil {
-					call.logger.Error("Failed to close stream", "err", resetErr)
-				}
+				_ = c.connManager.ResetStream(s, c.connTag)
 
 				return
 			}
@@ -1005,9 +990,7 @@ func (c *Client) stream(call *Call) {
 			if resp.Error != "" {
 				call.setError(responseError(resp.ErrType, resp.Error))
 
-				if resetErr := c.connManager.ResetStream(s, c.connTag); resetErr != nil {
-					call.logger.Error("Failed to close stream", "err", resetErr)
-				}
+				_ = c.connManager.ResetStream(s, c.connTag)
 
 				return
 			}
@@ -1019,9 +1002,7 @@ func (c *Client) stream(call *Call) {
 			if err != nil {
 				call.setError(newClientError(err))
 
-				if resetErr := c.connManager.ResetStream(s, c.connTag); resetErr != nil {
-					call.logger.Error("Failed to close stream", "err", resetErr)
-				}
+				_ = c.connManager.ResetStream(s, c.connTag)
 
 				return
 			}
