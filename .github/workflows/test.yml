@@ -17,6 +17,7 @@ jobs:
       GOPRIVATE: github.com/sarvalabs/*
       ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
       CGO_ENABLED: 1
+      GO111MODULE: auto
 
     steps:
       - name: Checkout code
@@ -30,6 +31,15 @@ jobs:
       - name: Configure git
         run: git config --global url.https://$ACCESS_TOKEN@github.com/.insteadOf https://github.com/
 
+      - run: echo $PATH && go env
+
+      - name: build bin
+        run: GO111MODULE=auto CGO_ENABLED=1 CGO_CFLAGS=-"O -D__BLST_PORTABLE__" make build
+        
+      - run: export PATH=./build:$PATH && echo $PATH
+
+      - run: make moipod && make mcutils
+        
       - name: Run tests
         run: CGO_ENABLED=1 go test -v --shuffle=on -race -short -coverprofile coverage.out -timeout 10m ./...
 

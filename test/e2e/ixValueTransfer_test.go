@@ -16,7 +16,7 @@ func (te *TestEnvironment) transferAsset(
 	receiver common.Address,
 	transferValues map[common.AssetID]*big.Int,
 ) (common.Hash, error) {
-	te.logger.Info("transfer asset ", "sender", sender.Addr,
+	te.logger.Debug("transfer asset ", "sender", sender.Addr,
 		"receiver", receiver, "transfer values", transferValues)
 
 	sendIXArgs := &common.SendIXArgs{
@@ -156,6 +156,74 @@ func (te *TestEnvironment) TestAssetTransfer() {
 
 				break
 			}
+		})
+	}
+}
+
+func (te *TestEnvironment) TestAssetTransfer_checkFuelDeduction() {
+	accs, err := te.chooseRandomUniqueAccounts(2)
+	require.NoError(te.T(), err)
+
+	sender := accs[0]
+	receiver := accs[1]
+	initialAmount := big.NewInt(1000)
+
+	MAS0AssetID := createAsset(te, sender, createAssetCreatePayload(
+		tests.GetRandomUpperCaseString(te.T(), 8),
+		initialAmount,
+		common.MAS0,
+		nil,
+	))
+
+	testcases := []struct {
+		name           string
+		transferValues map[common.AssetID]*big.Int
+		expectedError  error
+	}{
+		{
+			name: "transfer non fuel token",
+			transferValues: map[common.AssetID]*big.Int{
+				MAS0AssetID: big.NewInt(88),
+			},
+		},
+		{
+			name: "transfer fuel token",
+			transferValues: map[common.AssetID]*big.Int{
+				common.KMOITokenAssetID: big.NewInt(66),
+			},
+		},
+	}
+
+	for _, test := range testcases {
+		te.Run(test.name, func() {
+			preTransferFuelAmount := getBalance(te, sender.Addr, common.KMOITokenAssetID, -1)
+
+			ixHash, err := te.transferAsset(sender, receiver.Addr, test.transferValues)
+			if test.expectedError != nil {
+				require.ErrorContains(te.T(), err, test.expectedError.Error())
+
+				return
+			}
+			require.NoError(te.T(), err)
+
+			receipt := checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
+
+			postTransferFuelAmount := getBalance(te, sender.Addr, common.KMOITokenAssetID, -1)
+
+			amount, ok := test.transferValues[common.KMOITokenAssetID]
+			if ok {
+				require.Equal(te.T(),
+					preTransferFuelAmount-postTransferFuelAmount,
+					receipt.FuelUsed.ToUint64()+amount.Uint64(),
+				)
+
+				return
+			}
+
+			require.Equal(te.T(),
+				preTransferFuelAmount-postTransferFuelAmount,
+				receipt.FuelUsed.ToUint64(),
+			)
 		})
 	}
 }

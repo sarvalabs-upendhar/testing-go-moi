@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-pisa"
 	"github.com/sarvalabs/go-polo"
@@ -1018,7 +1018,7 @@ func (sm *StateManager) GetPublicKeyFromContract(ids ...id.KramaID) (keys [][]by
 	}
 
 	var guardians Guardians
-	if err = polo.Depolorize(&guardians, data); err != nil {
+	if err = polo.Depolorize(&guardians, data, polo.DocStructs(), polo.DocStringMaps()); err != nil {
 		return nil, errors.Wrap(err, "failed to depolorize guardians")
 	}
 

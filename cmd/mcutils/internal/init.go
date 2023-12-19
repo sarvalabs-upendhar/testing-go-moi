@@ -36,10 +36,16 @@ func runCommand(cmd *cobra.Command, args []string) {
 
 func parseFlags(initcmd *cobra.Command) {
 	initcmd.PersistentFlags().IntVar(
-		&port,
-		"port",
+		&libp2pPort,
+		"libp2pPort",
 		0,
-		"Provide the starting port number",
+		"Provide the starting lib-p2p port number",
+	)
+	initcmd.PersistentFlags().IntVar(
+		&jsonrpcPort,
+		"jsonrpcPort",
+		1600,
+		"Provide the starting json rpc port number",
 	)
 	initcmd.PersistentFlags().IntVar(
 		&count,
@@ -96,7 +102,11 @@ func parseFlags(initcmd *cobra.Command) {
 		"Enabling this flag will save logs to the logfile located in data-dir/log/.",
 	)
 
-	if err := cobra.MarkFlagRequired(initcmd.PersistentFlags(), "port"); err != nil {
+	if err := cobra.MarkFlagRequired(initcmd.PersistentFlags(), "libp2pPort"); err != nil {
+		cmdCommon.Err(err)
+	}
+
+	if err := cobra.MarkFlagRequired(initcmd.PersistentFlags(), "jsonrpcPort"); err != nil {
 		cmdCommon.Err(err)
 	}
 
@@ -112,12 +122,12 @@ func CreateConfigFile(datadir string, index int, ipAddr string) []byte {
 		Genesis:        "genesis.json",
 		Network: cmdCommon.NetworkConfig{
 			Libp2pAddr: []string{
-				fmt.Sprintf("/ip4/%s/tcp/%d", ipAddr, port+index),
-				fmt.Sprintf("/ip4/%s/udp/%d/%s", ipAddr, port+index, "quic-v1"),
-				"/ip6/::/tcp/" + strconv.Itoa(port+index),
-				"/ip6/::/udp/" + strconv.Itoa(port+index) + "/quic-v1",
+				fmt.Sprintf("/ip4/%s/tcp/%d", ipAddr, libp2pPort+index),
+				fmt.Sprintf("/ip4/%s/udp/%d/%s", ipAddr, libp2pPort+index, "quic-v1"),
+				"/ip6/::/tcp/" + strconv.Itoa(libp2pPort+index),
+				"/ip6/::/udp/" + strconv.Itoa(libp2pPort+index) + "/quic-v1",
 			},
-			JSONRPCAddr: "0.0.0.0:" + strconv.Itoa(config.DefaultJSONRPCPort+index),
+			JSONRPCAddr: "0.0.0.0:" + strconv.Itoa(jsonrpcPort+index),
 			BootStrapPeers: []string{
 				bootnode,
 			},
@@ -190,7 +200,7 @@ func CreateConfigFile(datadir string, index int, ipAddr string) []byte {
 }
 
 func setupTestEnv() {
-	instances := make([]cmdCommon.Instance, count)
+	instances := make([]common.Instance, count)
 
 	ip, err := cmdCommon.GetIP()
 	if err != nil {

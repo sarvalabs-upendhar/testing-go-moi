@@ -31,7 +31,7 @@ func (te *TestEnvironment) deployLogic(
 	acc tests.AccountWithMnemonic,
 	logicPayload *common.LogicPayload,
 ) (common.Hash, error) {
-	te.logger.Info("deploy logic ",
+	te.logger.Debug("deploy logic ",
 		"sender", acc.Addr, "manifest", logicPayload.Manifest,
 		"call site", logicPayload.Callsite, "call data", logicPayload.Calldata)
 

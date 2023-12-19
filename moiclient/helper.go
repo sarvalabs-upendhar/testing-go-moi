@@ -6,15 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"math/big"
 	"math/rand"
 	"testing"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-
 	"github.com/sarvalabs/go-moi-engineio"
 	"github.com/sarvalabs/go-pisa"
 	"github.com/sarvalabs/go-polo"
@@ -72,8 +69,6 @@ func GetLatestHeight(t *testing.T, client *Client, addr common.Address) uint64 {
 // RetryFetchReceipt keeps trying to fetch receipt for given ixHash until it is timed out
 func RetryFetchReceipt(t *testing.T, ctx context.Context, client *Client, ixHash common.Hash) *rpcargs.RPCReceipt {
 	t.Helper()
-
-	log.Println("fetching receipt for ixHash ", ixHash)
 
 	receiptArgs := &rpcargs.ReceiptArgs{
 		Hash: ixHash,
@@ -215,18 +210,6 @@ func GetTokenLedgerState(t *testing.T, moiClient *Client, logicID common.LogicID
 	return state
 }
 
-// GetKramaID returns a random Krama ID from the list of connected nodes.
-func GetKramaID(t *testing.T, client *Client) id.KramaID {
-	t.Helper()
-
-	peers, err := client.Peers(context.Background(), &rpcargs.NetArgs{})
-
-	require.NoError(t, err)
-	require.True(t, len(peers) > 0)
-
-	return peers[rand.Intn(len(peers))]
-}
-
 // GetPeerID returns a random Peer ID from the list of connected peers.
 func GetPeerID(t *testing.T, client *Client) peer.ID {
 	t.Helper()
@@ -242,8 +225,6 @@ func GetPeerID(t *testing.T, client *Client) peer.ID {
 	return peerID
 }
 
-func NumPointer(t *testing.T, input int64) *int64 {
-	t.Helper()
-
+func NumPointer(input int64) *int64 {
 	return &input
 }

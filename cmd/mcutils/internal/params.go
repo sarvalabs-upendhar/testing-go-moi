@@ -24,6 +24,7 @@ var (
 	readAccountsFilePath   string
 	GuardianLogicPath      string
 	writeLogsToFile        bool
-	port                   int
+	libp2pPort             int
+	jsonrpcPort            int
 	peerList               *common.PeerList
 )

@@ -42,10 +42,9 @@ require (
 	github.com/peterh/liner v1.2.2
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.16.0
-	github.com/sarvalabs/battleground v0.1.2-rc1.0.20231213080000-e1473061de67
 	github.com/sarvalabs/go-moi-engineio v0.1.1
 	github.com/sarvalabs/go-pisa v0.1.7
-	github.com/sarvalabs/go-polo v0.4.0
+	github.com/sarvalabs/go-polo v0.4.1
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.8.4
 	github.com/supranational/blst v0.3.7
@@ -155,6 +154,7 @@ require (
 	github.com/quic-go/webtransport-go v0.6.0 // indirect
 	github.com/raulk/go-watchdog v1.3.0 // indirect
 	github.com/rivo/uniseg v0.4.4 // indirect
+	github.com/sarvalabs/battleground v0.2.2
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1 // indirect

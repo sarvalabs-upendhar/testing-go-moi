@@ -13,7 +13,7 @@ type Instance struct {
 	ConsensusKey string `json:"consensus_key"`
 }
 
-func readInstancesFile(path string) ([]Instance, error) {
+func ReadInstancesFile(path string) ([]Instance, error) {
 	instances := make([]Instance, 0)
 
 	file, err := os.ReadFile(path)
@@ -29,7 +29,7 @@ func readInstancesFile(path string) ([]Instance, error) {
 }
 
 func ReadKramaIDsFromInstancesFile(path string) ([]string, error) {
-	instances, err := readInstancesFile(path)
+	instances, err := ReadInstancesFile(path)
 	if err != nil {
 		return nil, err
 	}

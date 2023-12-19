@@ -3,9 +3,7 @@ package e2e
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"math/big"
-	"os"
 	"testing"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -14,13 +12,6 @@ import (
 	"github.com/sarvalabs/go-moi/moiclient"
 	"github.com/stretchr/testify/require"
 )
-
-func commonError(err string) {
-	fmt.Println("can not run E2E tests")
-	fmt.Println(err)
-
-	os.Exit(1)
-}
 
 func createAssetCreatePayload(
 	symbol string,

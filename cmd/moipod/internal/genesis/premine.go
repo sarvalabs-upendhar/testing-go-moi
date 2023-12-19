@@ -69,7 +69,7 @@ func parsePremineFlags(cmd *cobra.Command) {
 }
 
 func addAsset() {
-	genesis, err := readGenesisFile()
+	genesis, err := common.ReadGenesisFile(genesisFilePath)
 	if err != nil {
 		cmdcommon.Err(err)
 	}

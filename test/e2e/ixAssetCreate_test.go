@@ -17,7 +17,7 @@ func (te *TestEnvironment) createAsset(
 	acc tests.AccountWithMnemonic,
 	assetCreatePayload *common.AssetCreatePayload,
 ) (common.Hash, error) {
-	te.logger.Info("create asset ",
+	te.logger.Debug("create asset ",
 		"sender", acc.Addr, "symbol", assetCreatePayload.Symbol, "supply", assetCreatePayload.Supply)
 
 	payload, err := assetCreatePayload.Bytes()

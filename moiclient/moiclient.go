@@ -852,7 +852,7 @@ func (c *Client) GetFilterChanges(
 
 		return logs, nil
 	case rpcargs.PendingIxns:
-		var ixHashes []common.Hash
+		var ixHashes []*common.Hash
 
 		err = json.Unmarshal(resp.Data, &ixHashes)
 		if err != nil {

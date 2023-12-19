@@ -109,7 +109,7 @@ func TestGetBlocks_RecordSessionInterest(t *testing.T) {
 	stateHash := randomCID(t, storage.Account.Byte())
 	peerID := tests.GetTestKramaIDs(t, 1)[0]
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	session, interestManager, notifier := NewTestSession(

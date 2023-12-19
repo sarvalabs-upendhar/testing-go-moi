@@ -57,7 +57,7 @@ func parsePreDeployFlags(cmd *cobra.Command) {
 
 // addGenesisLogic takes path to logic file and appends it to current set of logics
 func addGenesisLogic(artifact *cmdcommon.Artifact) {
-	genesis, err := readGenesisFile()
+	genesis, err := common.ReadGenesisFile(genesisFilePath)
 	if err != nil {
 		cmdcommon.Err(err)
 	}
