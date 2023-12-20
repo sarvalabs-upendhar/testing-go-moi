@@ -34,9 +34,9 @@ type Store interface {
 	GetTesseract(tsHash common.Hash) ([]byte, error)
 	GetBalance(addr common.Address, balanceHash common.Hash) ([]byte, error)
 	GetAssetRegistry(addr common.Address, registryHash common.Hash) ([]byte, error)
-	GetMerkleTreeEntry(address common.Address, prefix storage.Prefix, key []byte) ([]byte, error)
-	SetMerkleTreeEntry(address common.Address, prefix storage.Prefix, key, value []byte) error
-	SetMerkleTreeEntries(address common.Address, prefix storage.Prefix, entries map[string][]byte) error
+	GetMerkleTreeEntry(address common.Address, prefix storage.PrefixTag, key []byte) ([]byte, error)
+	SetMerkleTreeEntry(address common.Address, prefix storage.PrefixTag, key, value []byte) error
+	SetMerkleTreeEntries(address common.Address, prefix storage.PrefixTag, entries map[string][]byte) error
 	WritePreImages(address common.Address, entries map[common.Hash][]byte) error
 	GetPreImage(address common.Address, hash common.Hash) ([]byte, error)
 	DeleteEntry(key []byte) error

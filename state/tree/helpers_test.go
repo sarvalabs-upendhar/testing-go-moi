@@ -23,7 +23,7 @@ func NewMockDB() *mockDB {
 	}
 }
 
-func (m *mockDB) SetMerkleTreeEntry(address common.Address, prefix db.Prefix, key, value []byte) error {
+func (m *mockDB) SetMerkleTreeEntry(address common.Address, prefix db.PrefixTag, key, value []byte) error {
 	dbKey := append(append(address.Bytes(), prefix.Byte()), key...)
 
 	m.data[string(dbKey)] = value
@@ -31,7 +31,7 @@ func (m *mockDB) SetMerkleTreeEntry(address common.Address, prefix db.Prefix, ke
 	return nil
 }
 
-func (m *mockDB) GetMerkleTreeEntry(address common.Address, prefix db.Prefix, key []byte) ([]byte, error) {
+func (m *mockDB) GetMerkleTreeEntry(address common.Address, prefix db.PrefixTag, key []byte) ([]byte, error) {
 	dbKey := append(append(address.Bytes(), prefix.Byte()), key...)
 
 	value, ok := m.data[string(dbKey)]
@@ -42,7 +42,7 @@ func (m *mockDB) GetMerkleTreeEntry(address common.Address, prefix db.Prefix, ke
 	return value, nil
 }
 
-func (m *mockDB) SetMerkleTreeEntries(address common.Address, prefix db.Prefix, entries map[string][]byte) error {
+func (m *mockDB) SetMerkleTreeEntries(address common.Address, prefix db.PrefixTag, entries map[string][]byte) error {
 	for k, v := range entries {
 		dbKey := append(append(address.Bytes(), prefix.Byte()), []byte(k)...)
 

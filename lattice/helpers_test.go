@@ -309,17 +309,21 @@ func (m *MockDB) GetContext(addr common.Address, contextHash common.Hash) ([]byt
 	panic("implement me")
 }
 
-func (m *MockDB) GetMerkleTreeEntry(address common.Address, prefix storage.Prefix, key []byte) ([]byte, error) {
+func (m *MockDB) GetMerkleTreeEntry(address common.Address, prefix storage.PrefixTag, key []byte) ([]byte, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockDB) SetMerkleTreeEntry(address common.Address, prefix storage.Prefix, key, value []byte) error {
+func (m *MockDB) SetMerkleTreeEntry(address common.Address, prefix storage.PrefixTag, key, value []byte) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockDB) SetMerkleTreeEntries(address common.Address, prefix storage.Prefix, entries map[string][]byte) error {
+func (m *MockDB) SetMerkleTreeEntries(
+	address common.Address,
+	prefix storage.PrefixTag,
+	entries map[string][]byte,
+) error {
 	// TODO implement me
 	panic("implement me")
 }

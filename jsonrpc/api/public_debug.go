@@ -105,13 +105,13 @@ func (p *PublicDebugAPI) GetNodeMetaInfo(args *rpcargs.NodeMetaInfoArgs) (map[st
 		return nodeMetaInfo, nil
 	}
 
-	entriesChan, err := p.db.GetEntriesWithPrefix(context.Background(), []byte{storage.Senatus.Byte()})
+	entriesChan, err := p.db.GetEntriesWithPrefix(context.Background(), storage.SenatusPrefix())
 	if err != nil {
 		return nil, err
 	}
 
 	for entry := range entriesChan {
-		peerID := peer.ID(bytes.TrimPrefix(entry.Key, []byte{storage.Senatus.Byte()}))
+		peerID := peer.ID(bytes.TrimPrefix(entry.Key, storage.SenatusPrefix()))
 
 		info := new(senatus.NodeMetaInfo)
 		if err = info.FromBytes(entry.Value); err != nil {

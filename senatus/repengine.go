@@ -60,7 +60,6 @@ type ReputationEngine struct {
 	dirtyLock           sync.RWMutex
 	dirtyEntries        map[peer.ID]*NodeMetaInfo
 	network             network
-	msgQueueLock        sync.Mutex //nolint:unused
 	signalChan          chan struct{}
 	pendingMessageQueue *RequestQueue
 	peerCount           uint64
@@ -401,14 +400,14 @@ func (r *ReputationEngine) TotalPeerCount() uint64 {
 func (r *ReputationEngine) StreamPeerInfos(ctx context.Context) (chan *networkmsg.PeerInfo, error) {
 	ch := make(chan *networkmsg.PeerInfo)
 
-	entriesChan, err := r.db.GetEntriesWithPrefix(ctx, []byte{storage.Senatus.Byte()})
+	entriesChan, err := r.db.GetEntriesWithPrefix(ctx, storage.SenatusPrefix())
 	if err != nil {
 		return nil, err
 	}
 
 	go func() {
 		for entry := range entriesChan {
-			peerID, err := peer.IDFromBytes(bytes.TrimPrefix(entry.Key, []byte{storage.Senatus.Byte()}))
+			peerID, err := peer.IDFromBytes(bytes.TrimPrefix(entry.Key, storage.SenatusPrefix()))
 			if err != nil {
 				r.logger.Debug("failed to decode peerID", "error", err)
 

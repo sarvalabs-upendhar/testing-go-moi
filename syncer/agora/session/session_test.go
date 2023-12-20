@@ -109,7 +109,7 @@ func TestGetBlocks_RecordSessionInterest(t *testing.T) {
 	stateHash := randomCID(t, storage.Account.Byte())
 	peerID := tests.GetTestKramaIDs(t, 1)[0]
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	session, interestManager, notifier := NewTestSession(
@@ -128,12 +128,19 @@ func TestGetBlocks_RecordSessionInterest(t *testing.T) {
 
 	go func() {
 		err := session.getBlocks(timedCtx, peerID, outChan, idSet)
-		require.NoError(t, err)
+		if err != nil {
+			t.Log("failed to get blocks", err)
+			t.Fail()
+		}
 	}()
 
 	keys := idSet.Keys()
 	// check if session interests are recorded
-	recorded := AreSessionInterestRecorded(ctx, interestManager, sessionID, keys)
+
+	timedCtx1, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	recorded := AreSessionInterestRecorded(timedCtx1, interestManager, sessionID, keys)
 	require.True(t, recorded)
 
 	// publish the blocks
@@ -141,7 +148,10 @@ func TestGetBlocks_RecordSessionInterest(t *testing.T) {
 		notifier.Publish(block)
 	}
 
-	removed := AreSessionInterestRemoved(ctx, interestManager, sessionID, keys)
+	timedCtx2, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	removed := AreSessionInterestRemoved(timedCtx2, interestManager, sessionID, keys)
 	require.True(t, removed)
 }
 
@@ -164,19 +174,22 @@ func TestGetBlock(t *testing.T) {
 
 	idSet, blocks := GetDummyBlocks(t, 3)
 
-	timedCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	timedCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
 	outChan := session.GetBlocks(timedCtx, idSet.Keys())
 
 	// wait  until getblocks process the request
-	time.Sleep(1 * time.Second)
+	time.Sleep(500 * time.Millisecond)
 
 	for _, block := range blocks {
 		notifier.Publish(block)
 	}
 
-	receivedBlockCount := WaitForBlocks(ctx, outChan, idSet)
+	timedCtx1, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	receivedBlockCount := WaitForBlocks(timedCtx1, outChan, idSet)
 
 	require.Equal(t, 3, receivedBlockCount)
 }

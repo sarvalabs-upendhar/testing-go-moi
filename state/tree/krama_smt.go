@@ -43,7 +43,7 @@ func NewKramaHashTree(
 	root common.Hash,
 	db persistentDB,
 	hasher hash.Hash,
-	dataType storage.Prefix,
+	dataType storage.PrefixTag,
 ) (*KramaHashTree, error) {
 	kht := &KramaHashTree{
 		db: NewTreeDB(address, dataType, db),

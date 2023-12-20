@@ -183,7 +183,7 @@ func (m *MockDB) setAccountMetaInfo(acc *common.AccountMetaInfo) {
 	m.accMetaInfo[acc.Address.Hex()] = acc
 }
 
-func (m *MockDB) GetMerkleTreeEntry(address common.Address, prefix storage.Prefix, key []byte) ([]byte, error) {
+func (m *MockDB) GetMerkleTreeEntry(address common.Address, prefix storage.PrefixTag, key []byte) ([]byte, error) {
 	entry, ok := m.merkleTreeEntries[string(key)]
 	if !ok {
 		return nil, common.ErrKeyNotFound
@@ -192,13 +192,17 @@ func (m *MockDB) GetMerkleTreeEntry(address common.Address, prefix storage.Prefi
 	return entry, nil
 }
 
-func (m *MockDB) SetMerkleTreeEntry(address common.Address, prefix storage.Prefix, key, value []byte) error {
+func (m *MockDB) SetMerkleTreeEntry(address common.Address, prefix storage.PrefixTag, key, value []byte) error {
 	m.merkleTreeEntries[string(key)] = value
 
 	return nil
 }
 
-func (m *MockDB) SetMerkleTreeEntries(address common.Address, prefix storage.Prefix, entries map[string][]byte) error {
+func (m *MockDB) SetMerkleTreeEntries(
+	address common.Address,
+	prefix storage.PrefixTag,
+	entries map[string][]byte,
+) error {
 	for k, v := range entries {
 		m.merkleTreeEntries[k] = v
 	}
@@ -1402,7 +1406,7 @@ func createTestKramaHashTree(
 	t *testing.T,
 	db Store,
 	address common.Address,
-	prefix storage.Prefix,
+	prefix storage.PrefixTag,
 	keys [][]byte,
 	values [][]byte,
 ) (*tree.KramaHashTree, common.Hash) {

@@ -8,20 +8,20 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 )
 
-func DBKey(address common.Address, prefix Prefix, key []byte) []byte {
-	return dbKey(address, prefix, key)
+func DBKey(address common.Address, tag PrefixTag, key []byte) []byte {
+	return dbKey(address, tag, key)
 }
 
-func dbKey(address common.Address, prefix Prefix, key []byte) []byte {
-	if !prefix.IsAccountBasedKey() {
-		return append([]byte{prefix.Byte()}, key...)
+func dbKey(address common.Address, tag PrefixTag, key []byte) []byte {
+	if !tag.IsAccountBasedKey() {
+		return append([]byte(NonAccountPrefix), append([]byte{tag.Byte()}, key...)...)
 	}
 
-	return append(address.Bytes(), append([]byte{prefix.Byte()}, key...)...)
+	return append(address.Bytes(), append([]byte{tag.Byte()}, key...)...)
 }
 
 func SenatusDBKey(peerID peer.ID) []byte {
-	return append([]byte{Senatus.Byte()}, []byte(peerID)...)
+	return dbKey(common.NilAddress, Senatus, []byte(peerID))
 }
 
 func SenatusCacheKey(peerID peer.ID) string {
@@ -57,7 +57,7 @@ func PreImageKey(address common.Address, hash common.Hash) []byte {
 }
 
 func SenatusPeerCountKey() []byte {
-	return []byte("senatus_peer_count")
+	return dbKey(common.NilAddress, SenatusPeerCount, nil)
 }
 
 func tesseractHeightKey(addr common.Address, height uint64) []byte {

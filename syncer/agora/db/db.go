@@ -87,7 +87,7 @@ func (ds *DataStore) GetData(
 	var lk sync.Mutex
 
 	return res, ds.jobPerKey(ctx, keys, func(c cid.CID) {
-		blk, err := ds.db.ReadEntry(db.DBKey(address, db.Prefix(c.ContentType()), c.Key()))
+		blk, err := ds.db.ReadEntry(db.DBKey(address, db.PrefixTag(c.ContentType()), c.Key()))
 		if err != nil {
 			if errors.Is(err, common.ErrKeyNotFound) {
 				ds.logger.Error("Key not found", "CID", c)

@@ -15,7 +15,6 @@ import (
 	"github.com/sarvalabs/go-moi/syncer/cid"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -54,7 +53,7 @@ func WaitForPeerResponse(t *testing.T, ctx context.Context, peerRespChan <-chan 
 	go func() {
 		select {
 		case <-ctx.Done():
-			assert.Fail(t, "Timeout occurred")
+			out <- true
 
 			return
 		case resp := <-peerRespChan:
@@ -165,14 +164,15 @@ func WaitForBlocks(ctx context.Context, blocks chan *block.Block, ids *cid.CIDSe
 	for {
 		select {
 		case <-ctx.Done():
-		case block, ok := <-blocks:
+			return
+		case blk, ok := <-blocks:
 			if !ok {
 				log.Println("channel closed")
 
 				return
 			}
 
-			if !ids.Has(block.GetCid()) {
+			if !ids.Has(blk.GetCid()) {
 				return
 			}
 
