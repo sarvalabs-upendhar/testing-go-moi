@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"regexp"
 	"sync"
 
 	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
@@ -203,24 +202,18 @@ func (s *Server) getLibp2pHostOptions() (libp2p.Option, error) {
 
 	mgr, err := connmgr.NewConnManager(s.cfg.MinimumConnections, s.cfg.MaximumConnections)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	resourceManager, err := rcmgr.NewResourceManager(rcmgr.NewFixedLimiter(rcmgr.InfiniteLimits))
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	addrsFactory := func(addrs []maddr.Multiaddr) []maddr.Multiaddr {
-		if len(s.cfg.PublicP2pAddresses) > 0 {
-			addrs = append(addrs, s.cfg.PublicP2pAddresses...)
-		}
-
-		if !s.cfg.AllowIPv6Addresses {
-			return filterIPV4Addresses(addrs)
-		}
-
-		return addrs
+	// filters out address based on server config flags
+	addrsFactory, err := makeAddrsFactory(s.cfg.DisablePrivateIP, s.cfg.AllowIPv6Addresses, s.cfg.PublicP2pAddresses)
+	if err != nil {
+		return nil, err
 	}
 
 	return libp2p.ChainOptions(
@@ -438,18 +431,4 @@ func (s *Server) GetOutboundConnCount() int64 {
 
 func (s *Server) constructHandshakeMSG() (*networkmsg.HandshakeMSG, error) {
 	return networkmsg.ConstructHandshakeMSG([]byte("ping"), ""), nil
-}
-
-// helper functions
-func filterIPV4Addresses(addrs []maddr.Multiaddr) []maddr.Multiaddr {
-	filteredAddrs := make([]maddr.Multiaddr, 0)
-	ipv4Regex := regexp.MustCompile(`/ip4/([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)`)
-
-	for _, addr := range addrs {
-		if ipv4Regex.MatchString(addr.String()) {
-			filteredAddrs = append(filteredAddrs, addr)
-		}
-	}
-
-	return filteredAddrs
 }
