@@ -13,8 +13,8 @@ require (
 	github.com/decred/dcrd/crypto/blake256 v1.0.1
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0
 	github.com/dgraph-io/badger v1.6.2
-	github.com/dgraph-io/badger/v3 v3.2103.2
-	github.com/dgraph-io/ristretto v0.1.0
+	github.com/dgraph-io/badger/v4 v4.2.0
+	github.com/dgraph-io/ristretto v0.1.1
 	github.com/go-kit/kit v0.13.0
 	github.com/google/gofuzz v1.2.0
 	github.com/google/uuid v1.3.1
@@ -66,7 +66,6 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.0.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
-	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/containerd/cgroups v1.1.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect

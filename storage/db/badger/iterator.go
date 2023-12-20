@@ -1,7 +1,7 @@
 package badger
 
 import (
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v4"
 	"github.com/sarvalabs/go-moi/storage/db"
 
 	"github.com/sarvalabs/go-moi/common"
