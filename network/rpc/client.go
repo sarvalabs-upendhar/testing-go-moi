@@ -740,7 +740,7 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 		)
 
 		if resetErr := c.connManager.ResetStream(stream, c.connTag); resetErr != nil {
-			call.logger.Error("Failed to close stream", "err", resetErr)
+			call.logger.Trace("Failed to close stream", "err", resetErr)
 		}
 
 		return nil, err
@@ -786,7 +786,7 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 		}
 	} else {
 		if closeErr := c.connManager.CloseStream(stream, c.connTag); closeErr != nil {
-			call.logger.Error("Failed to close stream", "err", closeErr)
+			call.logger.Trace("Failed to close stream", "err", closeErr)
 		}
 	}
 
@@ -1016,7 +1016,7 @@ func (c *Client) stream(call *Call) {
 	wg.Wait()
 
 	if closeErr := c.connManager.CloseStream(s, c.connTag); closeErr != nil {
-		call.logger.Error("Failed to close stream", "err", closeErr)
+		call.logger.Trace("Failed to close stream", "err", closeErr)
 	}
 
 	call.done()

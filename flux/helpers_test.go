@@ -7,7 +7,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/sarvalabs/go-moi/common/kramaid"
-	networkmsg "github.com/sarvalabs/go-moi/network/message"
 	"github.com/sarvalabs/go-moi/senatus"
 	"github.com/stretchr/testify/require"
 )
@@ -50,12 +49,12 @@ func (re *MockReputationEngine) setEntries(t *testing.T, entries map[peer.ID]*se
 	}
 }
 
-func (re *MockReputationEngine) StreamPeerInfos(ctx context.Context) (chan *networkmsg.PeerInfo, error) {
-	entries := make(chan *networkmsg.PeerInfo)
+func (re *MockReputationEngine) StreamPeerInfos(ctx context.Context) (chan *senatus.PeerInfo, error) {
+	entries := make(chan *senatus.PeerInfo)
 
 	go func() {
 		for peerID, metaInfo := range re.data {
-			entries <- &networkmsg.PeerInfo{
+			entries <- &senatus.PeerInfo{
 				ID:   peerID,
 				Data: metaInfo,
 			}

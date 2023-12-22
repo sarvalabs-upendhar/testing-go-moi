@@ -16,6 +16,7 @@ func (n *Node) setupSubHandler() {
 		n.network.GetKramaID(),
 		n.logger,
 		n.network,
+		n.senatus,
 		n.network.Peers,
 		n.eventMux,
 		n.ixpool,
@@ -24,11 +25,12 @@ func (n *Node) setupSubHandler() {
 }
 
 // startHandlers starts syncer, core and flux(randomizer)
-func (n *Node) startHandlers() {
+func (n *Node) startHandlers() error {
 	n.logger.Info("Starting Sub-Handlers")
 
-	go n.handlers.core.Start()
 	go n.handlers.flux.Start()
+
+	return n.handlers.core.Start()
 }
 
 // stopHandlers stops syncer, core and flux(randomizer)

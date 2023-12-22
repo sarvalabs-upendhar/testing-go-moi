@@ -108,7 +108,6 @@ func (n *Node) setupReputationEngine() (err error) {
 
 	n.senatus, err = senatus.NewReputationEngine(
 		n.logger,
-		n.network,
 		n.db,
 		nodeMetaInfo,
 	)

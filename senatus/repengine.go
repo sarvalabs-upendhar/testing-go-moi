@@ -6,30 +6,21 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sarvalabs/go-moi/common/config"
-
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-	networkmsg "github.com/sarvalabs/go-moi/network/message"
-
-	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/utils"
-	"github.com/sarvalabs/go-moi/crypto"
-
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi/common"
+	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-moi/common/utils"
 
 	"github.com/sarvalabs/go-moi/storage"
 	"github.com/sarvalabs/go-moi/storage/db"
 )
 
 const (
-	MaxQueueSize   = 200
 	DefaultPeerNTQ = 0.5
-	MsgsPerWorker  = 10
 )
 
 type senatusStore interface {
@@ -40,34 +31,21 @@ type senatusStore interface {
 	TotalPeersCount() (uint64, error)
 }
 
-type network interface {
-	Subscribe(
-		ctx context.Context,
-		topic string,
-		validator utils.WrappedVal,
-		defaultValidator bool,
-		handler func(msg *pubsub.Message) error,
-	) error
-}
-
 type ReputationEngine struct {
-	kramaID             id.KramaID
-	ctx                 context.Context
-	ctxCancel           context.CancelFunc
-	logger              hclog.Logger
-	db                  senatusStore
-	cache               *lru.Cache
-	dirtyLock           sync.RWMutex
-	dirtyEntries        map[peer.ID]*NodeMetaInfo
-	network             network
-	signalChan          chan struct{}
-	pendingMessageQueue *RequestQueue
-	peerCount           uint64
+	kramaID      id.KramaID
+	ctx          context.Context
+	ctxCancel    context.CancelFunc
+	logger       hclog.Logger
+	db           senatusStore
+	cache        *lru.Cache
+	dirtyLock    sync.RWMutex
+	dirtyEntries map[peer.ID]*NodeMetaInfo
+	peerCount    uint64
+	signalChan   chan struct{}
 }
 
 func NewReputationEngine(
 	logger hclog.Logger,
-	network network,
 	db senatusStore,
 	selfInfo *NodeMetaInfo,
 ) (*ReputationEngine, error) {
@@ -84,17 +62,16 @@ func NewReputationEngine(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	r := &ReputationEngine{
-		ctx:                 ctx,
-		ctxCancel:           cancel,
-		logger:              logger.Named("Reputation-Engine"),
-		kramaID:             selfInfo.KramaID,
-		db:                  db,
-		network:             network,
-		cache:               cache,
-		signalChan:          make(chan struct{}),
-		dirtyEntries:        make(map[peer.ID]*NodeMetaInfo),
-		pendingMessageQueue: NewRequestQueue(MaxQueueSize), // Max message queue limit is 200
-		peerCount:           totalPeers,
+		ctx:          ctx,
+		ctxCancel:    cancel,
+		logger:       logger.Named("Reputation-Engine"),
+		kramaID:      selfInfo.KramaID,
+		db:           db,
+		cache:        cache,
+		signalChan:   make(chan struct{}),
+		dirtyEntries: make(map[peer.ID]*NodeMetaInfo),
+
+		peerCount: totalPeers,
 	}
 
 	return r, r.UpdatePeer(selfInfo)
@@ -397,8 +374,8 @@ func (r *ReputationEngine) TotalPeerCount() uint64 {
 	return r.peerCount
 }
 
-func (r *ReputationEngine) StreamPeerInfos(ctx context.Context) (chan *networkmsg.PeerInfo, error) {
-	ch := make(chan *networkmsg.PeerInfo)
+func (r *ReputationEngine) StreamPeerInfos(ctx context.Context) (chan *PeerInfo, error) {
+	ch := make(chan *PeerInfo)
 
 	entriesChan, err := r.db.GetEntriesWithPrefix(ctx, storage.SenatusPrefix())
 	if err != nil {
@@ -414,7 +391,7 @@ func (r *ReputationEngine) StreamPeerInfos(ctx context.Context) (chan *networkms
 				continue
 			}
 
-			ch <- &networkmsg.PeerInfo{
+			ch <- &PeerInfo{
 				ID:   peerID,
 				Data: entry.Value,
 			}
@@ -446,84 +423,6 @@ func (r *ReputationEngine) flushDirtyEntries() error {
 	return writer.Flush()
 }
 
-func (r *ReputationEngine) signalNewMessages() {
-	select {
-	case r.signalChan <- struct{}{}:
-	default:
-	}
-}
-
-func (r *ReputationEngine) senatusHandler(msg *pubsub.Message) error {
-	helloMsg := new(networkmsg.HelloMsg)
-
-	if err := helloMsg.FromBytes(msg.Data); err != nil {
-		return err
-	}
-
-	r.logger.Trace("Received hello message", "krama-ID", helloMsg.KramaID)
-
-	if err := r.pendingMessageQueue.Push(&NodeMetaInfoMsg{
-		KramaID:       helloMsg.KramaID,
-		Address:       helloMsg.Address,
-		PeerSignature: helloMsg.Signature,
-		NTQ:           DefaultPeerNTQ,
-	}); err != nil {
-		r.signalNewMessages()
-	}
-
-	return nil
-}
-
-func (r *ReputationEngine) verifyHelloMsg(msg *NodeMetaInfoMsg) error {
-	rawData, err := msg.HelloMessageBytes()
-	if err != nil {
-		return errors.Wrapf(err, "Failed to fetch hello message bytes")
-	}
-
-	if err := crypto.VerifySignatureUsingKramaID(msg.KramaID, rawData, msg.PeerSignature); err != nil {
-		return errors.Wrap(err, "failed to verify hello msg signature")
-	}
-
-	return nil
-}
-
-func (r *ReputationEngine) handleMessages(msgs []*NodeMetaInfoMsg) {
-	if len(msgs) == 0 {
-		return
-	}
-
-	for _, msg := range msgs {
-		if msg.KramaID == "" {
-			continue
-		}
-
-		if err := r.verifyHelloMsg(msg); err != nil {
-			r.logger.Error("Failed to verify hello message", "err", err)
-
-			continue
-		}
-
-		if err := r.UpdatePeer(msg.NodeMetaInfo()); err != nil {
-			r.logger.Error("Failed to add node meta information", "err", err, "krama-ID", msg.KramaID)
-
-			continue
-		}
-	}
-}
-
-func (r *ReputationEngine) messageWorker() {
-	for {
-		select {
-		case <-time.After(1 * time.Second):
-		case <-r.signalChan:
-		case <-r.ctx.Done():
-			return
-		}
-
-		r.handleMessages(r.pendingMessageQueue.Pop(MsgsPerWorker))
-	}
-}
-
 func (r *ReputationEngine) dbWorker() {
 	for {
 		select {
@@ -553,11 +452,6 @@ func (r *ReputationEngine) cleanUpDirtyStorage() {
 }
 
 func (r *ReputationEngine) Start() error {
-	if err := r.network.Subscribe(r.ctx, config.SenatusTopic, nil, true, r.senatusHandler); err != nil {
-		return errors.Wrap(err, "failed to subscribe senatus topic")
-	}
-
-	go r.messageWorker()
 	go r.dbWorker()
 
 	return nil

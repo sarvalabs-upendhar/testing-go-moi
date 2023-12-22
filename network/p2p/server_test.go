@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	message = "hello world"
-	topic   = "pub-sub"
+	hellomessage = "hello world"
+	topic        = "pub-sub"
 )
 
 var testLogger = hclog.NewNullLogger()
@@ -290,7 +290,7 @@ func TestSubscribe_CheckMsgOnTopic(t *testing.T) {
 
 	time.Sleep(time.Second) // wait for subscription to happen
 
-	rawData, err := polo.Polorize(message)
+	rawData, err := polo.Polorize(hellomessage)
 	require.NoError(t, err)
 	err = servers[0].pubSubTopics.getTopicSet(topic).topicHandle.Publish(servers[0].ctx, rawData)
 	require.NoError(t, err)
@@ -362,7 +362,7 @@ func TestBroadcast_CheckMsgOnTopic(t *testing.T) {
 	subscribeMessage(t, servers[1], topic, response)
 	time.Sleep(1 * time.Second) // wait for discovery and subscription
 
-	rawData, err := polo.Polorize(message)
+	rawData, err := polo.Polorize(hellomessage)
 	require.NoError(t, err)
 
 	err = servers[0].Broadcast(topic, rawData)
@@ -462,8 +462,8 @@ func TestSendHelloMessage_CheckMsgOnTopic(t *testing.T) {
 	})
 
 	startDiscovery(t, servers...)
-	registerEmptySubscriptionHandler(t, servers[0], config.SenatusTopic, true, true)
-	subscribeHelloMsg(t, servers[1], config.SenatusTopic, servers[0], response)
+	registerEmptySubscriptionHandler(t, servers[0], config.HelloTopic, true, true)
+	subscribeHelloMsg(t, servers[1], config.HelloTopic, servers[0], response)
 	time.Sleep(1 * time.Second) // give time for discovery and subscription
 
 	servers[0].SendHelloMessage()

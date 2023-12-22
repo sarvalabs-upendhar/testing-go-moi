@@ -397,7 +397,7 @@ func (s *Server) SendHelloMessage() {
 			return
 		}
 
-		if err = s.Broadcast(config.SenatusTopic, rawData); err != nil {
+		if err = s.Broadcast(config.HelloTopic, rawData); err != nil {
 			s.logger.Error("Failed to broadcast hello message", "err", err)
 
 			return

@@ -3,7 +3,6 @@ package senatus
 import (
 	"bytes"
 	"context"
-	"os"
 	"testing"
 
 	"github.com/sarvalabs/go-moi/common/utils"
@@ -13,11 +12,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/sarvalabs/go-moi/common"
 	id "github.com/sarvalabs/go-moi/common/kramaid"
-	"github.com/sarvalabs/go-moi/crypto"
-	mudracommon "github.com/sarvalabs/go-moi/crypto/common"
-	"github.com/sarvalabs/go-moi/crypto/poi"
-	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
-	networkmsg "github.com/sarvalabs/go-moi/network/message"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common/tests"
@@ -163,7 +157,6 @@ func createTestReputationEngine(t *testing.T) (*ReputationEngine, *MockDB, *Mock
 
 	r, err := NewReputationEngine(
 		hclog.NewNullLogger(),
-		NewMockServer(),
 		mockDB,
 		nodeMetaInfo,
 	)
@@ -171,60 +164,4 @@ func createTestReputationEngine(t *testing.T) (*ReputationEngine, *MockDB, *Mock
 	require.NoError(t, err)
 
 	return r, mockDB, mockState
-}
-
-func getHelloMessage(t *testing.T, addr string) []byte {
-	t.Helper()
-
-	nodeMetaInfoMsg := &NodeMetaInfoMsg{
-		KramaID: tests.GetTestKramaID(t, 1),
-		Address: []string{addr},
-	}
-
-	data, err := nodeMetaInfoMsg.HelloMessageBytes()
-	require.NoError(t, err)
-
-	return data
-}
-
-func createSignedHelloMsg(t *testing.T) networkmsg.HelloMsg {
-	t.Helper()
-
-	dir, err := os.MkdirTemp(os.TempDir(), " ")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		err = os.RemoveAll(dir)
-		require.NoError(t, err)
-	})
-
-	// create keystore.json in current directory
-	password := "test123"
-
-	_, _, err = poi.RandGenKeystore(dir, password)
-	require.NoError(t, err)
-
-	config := &crypto.VaultConfig{
-		DataDir:      dir,
-		NodePassword: password,
-	}
-
-	vault, err := crypto.NewVault(config, moinode.MoiFullNode, 1)
-	require.NoError(t, err)
-
-	msg := networkmsg.HelloMsg{
-		KramaID:   vault.KramaID(),
-		Address:   []string{tests.RandomAddress(t).String()},
-		Signature: nil,
-	}
-
-	rawMsg, err := msg.Bytes()
-	require.NoError(t, err)
-
-	signature, err := vault.Sign(rawMsg, mudracommon.EcdsaSecp256k1, crypto.UsingNetworkKey())
-	require.NoError(t, err)
-
-	msg.Signature = signature
-
-	return msg
 }

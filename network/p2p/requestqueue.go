@@ -1,17 +1,17 @@
-package senatus
+package p2p
 
 import (
 	"math"
 	"sync"
 
 	"github.com/pkg/errors"
-
 	id "github.com/sarvalabs/go-moi/common/kramaid"
+	networkmsg "github.com/sarvalabs/go-moi/network/message"
 )
 
 type RequestQueue struct {
 	mtx       sync.RWMutex
-	elems     []*NodeMetaInfoMsg
+	elems     []*networkmsg.HelloMsg
 	keys      map[id.KramaID]struct{}
 	length    int
 	maxLength int
@@ -19,14 +19,14 @@ type RequestQueue struct {
 
 func NewRequestQueue(maxSize int) *RequestQueue {
 	return &RequestQueue{
-		elems:     make([]*NodeMetaInfoMsg, 0, maxSize),
+		elems:     make([]*networkmsg.HelloMsg, 0, maxSize),
 		keys:      make(map[id.KramaID]struct{}, maxSize),
 		length:    0,
 		maxLength: maxSize,
 	}
 }
 
-func (q *RequestQueue) Push(element *NodeMetaInfoMsg) error {
+func (q *RequestQueue) Push(element *networkmsg.HelloMsg) error {
 	q.mtx.Lock()
 	defer q.mtx.Unlock()
 
@@ -46,7 +46,7 @@ func (q *RequestQueue) Push(element *NodeMetaInfoMsg) error {
 	return nil
 }
 
-func (q *RequestQueue) Pop(count int) []*NodeMetaInfoMsg {
+func (q *RequestQueue) Pop(count int) []*networkmsg.HelloMsg {
 	q.mtx.Lock()
 	defer q.mtx.Unlock()
 

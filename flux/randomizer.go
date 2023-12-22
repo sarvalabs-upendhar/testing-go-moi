@@ -9,8 +9,6 @@ import (
 
 	"github.com/sarvalabs/go-moi/senatus"
 
-	networkmsg "github.com/sarvalabs/go-moi/network/message"
-
 	"github.com/hashicorp/go-hclog"
 	"github.com/sarvalabs/go-moi/common"
 	id "github.com/sarvalabs/go-moi/common/kramaid"
@@ -45,7 +43,7 @@ type p2pServer interface {
 }
 
 type reputationEngine interface {
-	StreamPeerInfos(ctx context.Context) (chan *networkmsg.PeerInfo, error)
+	StreamPeerInfos(ctx context.Context) (chan *senatus.PeerInfo, error)
 	TotalPeerCount() uint64
 }
 

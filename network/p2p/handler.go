@@ -2,11 +2,16 @@ package p2p
 
 import (
 	"context"
-	"errors"
+	"time"
 
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-msgio"
+	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi/common/config"
 	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-moi/crypto"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
+	"github.com/sarvalabs/go-moi/senatus"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/sarvalabs/go-polo"
@@ -16,22 +21,34 @@ import (
 	"github.com/sarvalabs/go-moi/lattice"
 )
 
+const (
+	MaxQueueSize  = 200
+	MsgsPerWorker = 10
+)
+
 type ixPool interface {
 	AddInteractions(ixs common.Interactions) []error
 }
 
+type ReputationManager interface {
+	UpdatePeer(data *senatus.NodeMetaInfo) error
+}
+
 type SubHandler struct {
-	ctx        context.Context
-	ctxCancel  context.CancelFunc
-	id         id.KramaID
-	peers      *peerSet
-	ixpool     ixPool
-	chain      *lattice.ChainManager
-	mux        *utils.TypeMux
-	ixSub      *utils.Subscription
-	newPeerSub *utils.Subscription
-	server     *Server
-	logger     hclog.Logger
+	ctx                 context.Context
+	ctxCancel           context.CancelFunc
+	id                  id.KramaID
+	peers               *peerSet
+	ixpool              ixPool
+	chain               *lattice.ChainManager
+	mux                 *utils.TypeMux
+	ixSub               *utils.Subscription
+	newPeerSub          *utils.Subscription
+	server              *Server
+	reputationManager   ReputationManager
+	pendingMessageQueue *RequestQueue
+	logger              hclog.Logger
+	signalChan          chan struct{}
 }
 
 // NewSubHandler is a constructor function generates and returns a new subHandle object.
@@ -40,6 +57,7 @@ func NewSubHandler(
 	id id.KramaID,
 	logger hclog.Logger,
 	server *Server,
+	reputationManager ReputationManager,
 	peerSet *peerSet,
 	mux *utils.TypeMux,
 	pool ixPool,
@@ -48,28 +66,43 @@ func NewSubHandler(
 	ctx, ctxCancel := context.WithCancel(context.Background())
 
 	return &SubHandler{
-		id:        id,
-		ctx:       ctx,
-		ctxCancel: ctxCancel,
-		peers:     peerSet,
-		mux:       mux,
-		chain:     chain,
-		ixpool:    pool,
-		server:    server,
-		logger:    logger.Named("Sub-Handler"),
+		id:                  id,
+		ctx:                 ctx,
+		ctxCancel:           ctxCancel,
+		peers:               peerSet,
+		mux:                 mux,
+		chain:               chain,
+		ixpool:              pool,
+		server:              server,
+		reputationManager:   reputationManager,
+		logger:              logger.Named("Sub-Handler"),
+		signalChan:          make(chan struct{}),
+		pendingMessageQueue: NewRequestQueue(MaxQueueSize), // Max message queue limit is 200
+		// Subscribe the TypeMux to AddedInteractionEvent and NewPeerEvent events
+		ixSub:      mux.Subscribe(utils.AddedInteractionEvent{}),
+		newPeerSub: mux.Subscribe(utils.NewPeerEvent{}),
 	}
 }
 
 // Start is a method of SubHandler that start the handler.
 // Initializes it TypeMux subscriptions and handler loops.
-func (eh *SubHandler) Start() {
-	// Subscribe the TypeMux to AddedInteractionEvent and NewPeerEvent events
-	eh.ixSub = eh.mux.Subscribe(utils.AddedInteractionEvent{})
-	eh.newPeerSub = eh.mux.Subscribe(utils.NewPeerEvent{})
+func (eh *SubHandler) Start() error {
+	if err := eh.server.Subscribe(
+		eh.ctx,
+		config.HelloTopic,
+		nil,
+		true,
+		eh.helloMsgHandler,
+	); err != nil {
+		return errors.Wrap(err, "failed to subscribe senatus topic")
+	}
 
+	go eh.messageWorker()
 	// Start the handler loops for new peers, broadcasting interactions
 	go eh.newPeerLoop()
 	go eh.ixBroadcastLoop()
+
+	return nil
 }
 
 // newPeerLoop is a method of SubHandler that handles NewPeerEvents.
@@ -247,6 +280,104 @@ func (eh *SubHandler) broadcastIXs(ixs []*common.Interaction) error {
 	}
 
 	return nil
+}
+
+func (eh *SubHandler) helloMsgHandler(msg *pubsub.Message) error {
+	helloMsg := new(networkmsg.HelloMsg)
+
+	if err := helloMsg.FromBytes(msg.Data); err != nil {
+		return err
+	}
+
+	eh.logger.Trace("Received hello message", "krama-ID", helloMsg.KramaID)
+
+	if err := eh.pendingMessageQueue.Push(helloMsg); err != nil {
+		eh.signalNewMessages()
+	}
+
+	return nil
+}
+
+func (eh *SubHandler) messageWorker() {
+	for {
+		select {
+		case <-time.After(1 * time.Second):
+		case <-eh.signalChan:
+		case <-eh.ctx.Done():
+			return
+		}
+
+		eh.handleMessages(eh.pendingMessageQueue.Pop(MsgsPerWorker))
+	}
+}
+
+func (eh *SubHandler) signalNewMessages() {
+	select {
+	case eh.signalChan <- struct{}{}:
+	default:
+	}
+}
+
+func (eh *SubHandler) verifyHelloMsg(msg *networkmsg.HelloMsg) error {
+	rawData, err := msg.Canonical()
+	if err != nil {
+		return errors.Wrapf(err, "Failed to fetch hello message bytes")
+	}
+
+	if err := crypto.VerifySignatureUsingKramaID(msg.KramaID, rawData, msg.Signature); err != nil {
+		return errors.Wrap(err, "failed to verify hello msg signature")
+	}
+
+	return nil
+}
+
+func (eh *SubHandler) handleMessages(msgs []*networkmsg.HelloMsg) {
+	if len(msgs) == 0 {
+		return
+	}
+
+	for _, msg := range msgs {
+		if msg.KramaID == "" {
+			continue
+		}
+
+		if err := eh.verifyHelloMsg(msg); err != nil {
+			eh.logger.Error("Failed to verify hello message", "err", err)
+
+			continue
+		}
+
+		filter, err := makeAddrsFactory(
+			eh.server.cfg.DisablePrivateIP,
+			eh.server.cfg.AllowIPv6Addresses,
+			nil,
+		)
+		if err != nil {
+			eh.logger.Error("Failed to create multi addr filter", "err", err)
+
+			continue
+		}
+
+		filteredAddr := filter(utils.MultiAddrFromString(msg.Address...))
+		if len(filteredAddr) == 0 {
+			eh.logger.Info("Peer with no good address", "krama-id", msg.KramaID)
+
+			continue
+		}
+
+		// TODO: Should check RTT
+
+		if err = eh.reputationManager.UpdatePeer(&senatus.NodeMetaInfo{
+			Addrs:         utils.MultiAddrToString(filteredAddr...),
+			KramaID:       msg.KramaID,
+			NTQ:           senatus.DefaultPeerNTQ,
+			PeerSignature: msg.Signature,
+		}); err != nil {
+			eh.logger.Error("Failed to add node meta information", "err", err, "krama-ID", msg.KramaID)
+
+			continue
+		}
+	}
 }
 
 func (eh *SubHandler) Close() {
