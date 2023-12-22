@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-pisa"
 	"github.com/sarvalabs/go-polo"
@@ -34,9 +34,9 @@ type Store interface {
 	GetTesseract(tsHash common.Hash) ([]byte, error)
 	GetBalance(addr common.Address, balanceHash common.Hash) ([]byte, error)
 	GetAssetRegistry(addr common.Address, registryHash common.Hash) ([]byte, error)
-	GetMerkleTreeEntry(address common.Address, prefix storage.Prefix, key []byte) ([]byte, error)
-	SetMerkleTreeEntry(address common.Address, prefix storage.Prefix, key, value []byte) error
-	SetMerkleTreeEntries(address common.Address, prefix storage.Prefix, entries map[string][]byte) error
+	GetMerkleTreeEntry(address common.Address, prefix storage.PrefixTag, key []byte) ([]byte, error)
+	SetMerkleTreeEntry(address common.Address, prefix storage.PrefixTag, key, value []byte) error
+	SetMerkleTreeEntries(address common.Address, prefix storage.PrefixTag, entries map[string][]byte) error
 	WritePreImages(address common.Address, entries map[common.Hash][]byte) error
 	GetPreImage(address common.Address, hash common.Hash) ([]byte, error)
 	DeleteEntry(key []byte) error
@@ -1018,7 +1018,7 @@ func (sm *StateManager) GetPublicKeyFromContract(ids ...id.KramaID) (keys [][]by
 	}
 
 	var guardians Guardians
-	if err = polo.Depolorize(&guardians, data); err != nil {
+	if err = polo.Depolorize(&guardians, data, polo.DocStructs(), polo.DocStringMaps()); err != nil {
 		return nil, errors.Wrap(err, "failed to depolorize guardians")
 	}
 

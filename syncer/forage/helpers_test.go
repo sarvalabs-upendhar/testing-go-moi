@@ -15,12 +15,9 @@ import (
 
 	"github.com/sarvalabs/go-moi/storage/db"
 
-	networkmsg "github.com/sarvalabs/go-moi/network/message"
-
 	"github.com/sarvalabs/go-moi/storage"
 
 	"github.com/hashicorp/go-hclog"
-	pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
@@ -150,12 +147,32 @@ func NewSyncerWithJobQueue(ctx context.Context, mux *utils.TypeMux) *Syncer {
 	}
 }
 
+func NewTestSyncerForValidation(
+	ctx context.Context,
+	cfg *config.SyncerConfig,
+	node *p2p.Server,
+	db store,
+	logger hclog.Logger,
+	lattice lattice,
+) *Syncer {
+	return &Syncer{
+		ctx:               ctx,
+		network:           node,
+		cfg:               cfg,
+		db:                db,
+		logger:            logger,
+		lattice:           lattice,
+		tesseractRegistry: common.NewHashRegistry(60),
+	}
+}
+
 type MockLattice struct {
 	lock               sync.RWMutex
 	logger             hclog.Logger
 	tesseracts         map[string]*common.Tesseract
 	db                 store
 	executedTesseracts map[string]*common.Tesseract
+	sealedTesseracts   map[common.Hash]bool
 }
 
 func newMockLattice(db store, logger hclog.Logger) *MockLattice {
@@ -164,6 +181,7 @@ func newMockLattice(db store, logger hclog.Logger) *MockLattice {
 		tesseracts:         make(map[string]*common.Tesseract),
 		db:                 db,
 		executedTesseracts: make(map[string]*common.Tesseract),
+		sealedTesseracts:   make(map[common.Hash]bool),
 	}
 }
 
@@ -293,6 +311,23 @@ func (m *MockLattice) IsInitialTesseract(ts *common.Tesseract) (bool, error) {
 	}
 
 	return false, nil
+}
+
+func (m *MockLattice) setTSSeal(ts *common.Tesseract) {
+	m.sealedTesseracts[ts.Hash()] = true
+}
+
+func (m *MockLattice) removeTSSeal(ts *common.Tesseract) {
+	delete(m.sealedTesseracts, ts.Hash())
+}
+
+func (m *MockLattice) IsSealValid(ts *common.Tesseract) (bool, error) {
+	value, exists := m.sealedTesseracts[ts.Hash()]
+	if !exists {
+		return false, errors.New("tesseract seal does not exist")
+	}
+
+	return value, nil
 }
 
 type MockStateManager struct{}
@@ -852,11 +887,11 @@ func broadcastTesseracts(t *testing.T, clientSyncer, serverSyncer *Syncer, tesse
 		for i := 0; i < len(tesseracts); i++ {
 			var err error
 
-			serverSyncer.logger.Info("broadcast tesseract ", "addr", tesseracts[i].Address(),
-				"height", tesseracts[i].Height(), t.Name())
-
-			rawIxns, err := tesseracts[i].Interactions().Bytes()
-			require.NoError(t, err)
+			serverSyncer.logger.Info(
+				"broadcast tesseract ",
+				"addr", tesseracts[i].Address(),
+				"height", tesseracts[i].Height(), t.Name(),
+			)
 
 			info := common.ICSClusterInfo{
 				RandomSet: []kramaid.KramaID{serverSyncer.network.GetKramaID()},
@@ -865,26 +900,17 @@ func broadcastTesseracts(t *testing.T, clientSyncer, serverSyncer *Syncer, tesse
 			rawInfo, err := info.Bytes()
 			require.NoError(t, err)
 
-			msg := &networkmsg.TesseractMessage{
-				RawTesseract: make([]byte, 0),
-				Sender:       serverSyncer.network.GetKramaID(),
-				Ixns:         rawIxns,
-				Receipts:     nil,
-				Delta: map[common.Hash][]byte{
+			tsInfo := &TesseractInfo{
+				tesseract:   tesseracts[i],
+				clusterInfo: &info,
+				delta: map[common.Hash][]byte{
 					tesseracts[i].ICSHash(): rawInfo,
 				},
+				shouldExecute: clientSyncer.cfg.ShouldExecute,
 			}
 
-			msg.RawTesseract, err = tesseracts[i].Canonical().Bytes()
-			require.NoError(t, err)
-
-			rawData, err := msg.Bytes()
-			require.NoError(t, err)
-
 			err = clientSyncer.msgHandler(&pubsub.Message{
-				Message: &pb.Message{
-					Data: rawData,
-				},
+				ValidatorData: tsInfo,
 			})
 			require.NoError(t, err)
 		}

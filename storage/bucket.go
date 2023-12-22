@@ -12,11 +12,7 @@ func BucketKeyAndID(addr common.Address) ([]byte, uint64) {
 
 	bucketNo := accID.Mod(accID, new(big.Int).SetUint64(MaxBucketCount))
 
-	countBytes := make([]byte, 8)
-
-	binary.BigEndian.PutUint64(countBytes, bucketNo.Uint64())
-
-	return append(append([]byte{Bucket.Byte()}, countBytes...), addr.Bytes()...), bucketNo.Uint64()
+	return append(bucketPrefix(bucketNo.Uint64()), addr.Bytes()...), bucketNo.Uint64()
 }
 
 func bucketPrefix(id uint64) []byte {
@@ -24,7 +20,7 @@ func bucketPrefix(id uint64) []byte {
 
 	binary.BigEndian.PutUint64(countBytes, id)
 
-	return append([]byte{Bucket.Byte()}, countBytes...)
+	return dbKey(common.NilAddress, Bucket, countBytes)
 }
 
 func bucketCountKey(count uint64) []byte {

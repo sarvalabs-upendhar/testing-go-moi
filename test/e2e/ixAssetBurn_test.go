@@ -15,7 +15,7 @@ func (te *TestEnvironment) burnAsset(
 	acc tests.AccountWithMnemonic,
 	assetMintPayload *common.AssetMintOrBurnPayload,
 ) (common.Hash, error) {
-	te.logger.Info("burn asset ",
+	te.logger.Debug("burn asset ",
 		"sender", acc.Addr, "asset", assetMintPayload.Asset, "amount", assetMintPayload.Amount)
 
 	payload, err := assetMintPayload.Bytes()

@@ -3,15 +3,17 @@ package e2e
 import (
 	"context"
 	"crypto/rand"
+	"flag"
 	"fmt"
 	"math/big"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/battleground/server/types"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/battleground/server/types"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
@@ -38,12 +40,15 @@ const (
 	DefaultQueryTime        = 10 * time.Second
 	DefaultNodeStartTime    = 30 * time.Second
 	DefaultNodeStopTime     = 30 * time.Second
-	DefaultBGStartTime      = 10 * time.Minute
+	DefaultBGStartTime      = 25 * time.Minute
+	DefaultDiscoveryTime    = 1 * time.Minute
+	DefaultUpdateTime       = 1 * time.Minute
 	DefaultShutdownTimeout  = 10 * time.Minute
 	DefaultConfirmIxTimeout = 1 * time.Minute
 	DefaultAccountCount     = 2
 	InitialKMOITokens       = 25000
 	DefaultValidatorCount   = 100
+	DefaultJSONRPCPort      = 29000
 )
 
 var (
@@ -51,6 +56,10 @@ var (
 
 	DefaulFuelPrice  = big.NewInt(1)
 	DefaultFuelLimit = uint64(10000)
+	local            = "local"
+	cloud            = "cloud"
+	networkType      = flag.String("network", local, "enter the network type to use local or cloud")
+	commitHash       = flag.String("commithash", "", "enter the commit hash of the repo to be deployed")
 )
 
 type BattleGroundConfig struct {
@@ -73,13 +82,14 @@ func newBattleGroundConfig(
 
 type TestEnvironment struct {
 	suite.Suite
-	bgConfig    BattleGroundConfig
-	bgClient    bg.Client
-	jsonRPCUrls []string
-	moiClient   *moiclient.Client
-	moiClients  []*moiclient.Client
-	accounts    []tests.AccountWithMnemonic
-	logger      hclog.Logger
+	bgConfig       BattleGroundConfig
+	bgClient       bg.Client
+	jsonRPCUrls    []string
+	moiClient      *moiclient.Client
+	moiClients     []*moiclient.Client
+	accounts       []tests.AccountWithMnemonic
+	logger         hclog.Logger
+	suiteSetupDone bool
 }
 
 func (te *TestEnvironment) chooseRandomAccount() tests.AccountWithMnemonic {
@@ -113,15 +123,34 @@ func (te *TestEnvironment) chooseRandomUniqueAccounts(count int) ([]tests.Accoun
 func (te *TestEnvironment) configureBattleGround() error {
 	te.bgConfig = newBattleGroundConfig(StandAlone, "TRACE", bgURL)
 
-	bgConfig := types.DefaultCloudConfig()
-
 	// initialize bg client
-	te.bgClient = bg.NewBGClient(&client.Config{
-		CloudCfg:    bgConfig,
-		Network:     client.Cloud,
-		EndPoint:    te.bgConfig.rpcEndPoint,
-		DialTimeout: 10 * time.Second,
-	})
+	if *networkType == cloud {
+		bgConfig := types.DefaultCloudConfig()
+		bgConfig.MoichainSourceRef = *commitHash
+		// TODO optimize the battleground to generate 15 accounts in genesis, instead of creating accounts through ixns
+		bgConfig.NoOfInstances = 15 // 150 moipods are required to execute these tests
+
+		te.bgClient = bg.NewBGClient(&client.Config{
+			CloudCfg:    bgConfig,
+			Network:     client.Cloud,
+			EndPoint:    te.bgConfig.rpcEndPoint,
+			DialTimeout: 10 * time.Second,
+		})
+	} else {
+		d := client.DefaultClusterConfig()
+		d.WithLogs = false
+		d.WithStdout = false
+		d.LogLevel = "TRACE"
+		d.BootNodePort = 27000
+		d.Libp2pPort = 28000
+		d.JsonRPCPort = DefaultJSONRPCPort
+		d.GuardianPath = "../../moiclient/"
+
+		te.bgClient = bg.NewBGClient(&client.Config{
+			ClusterConfig: d,
+			Network:       client.Local,
+		})
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -162,6 +191,8 @@ func getMoiClients(t *testing.T, urls []string) []*moiclient.Client {
 	for _, url := range urls {
 		client, err := getMoiClient(t, url)
 		if err != nil {
+			t.Log("unable to create moi client for ", url)
+
 			continue
 		}
 
@@ -174,27 +205,63 @@ func getMoiClients(t *testing.T, urls []string) []*moiclient.Client {
 func (te *TestEnvironment) initializeMOIClient() {
 	clients := getMoiClients(te.T(), te.jsonRPCUrls)
 	if len(clients) == 0 {
-		commonError("unable to initialize moi client")
+		te.FailNow("unable to initialize moi clients")
 	}
 
-	te.logger.Info("JSON RPC url used is ", "url", clients[0].URL())
+	te.moiClients = clients
+
+	if *networkType == local {
+		// use operator for firing ixns and querying until observer node wait time issue is fixed
+		c, err := getMoiClient(te.T(), fmt.Sprintf("http://localhost:%d", DefaultJSONRPCPort))
+		if err != nil {
+			te.FailNow("unable to initialize moi clients")
+		}
+
+		te.logger.Debug("JSON RPC url used is ", "url", clients[0].URL())
+
+		te.moiClient = c
+
+		return
+	}
+
+	te.logger.Debug("JSON RPC url used is ", "url", clients[0].URL())
 
 	te.moiClient = clients[0]
-	te.moiClients = clients
+}
+
+func (te *TestEnvironment) runCriticallyNecessaryTearDown() {
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultShutdownTimeout)
+	defer cancel()
+
+	err := te.bgClient.DestroyNetwork(ctx, true)
+	te.Suite.NoError(err)
+}
+
+func (te *TestEnvironment) initLogger() {
+	te.logger = hclog.New(&hclog.LoggerOptions{
+		Name:  "E2E",
+		Level: hclog.LevelFromString("ERROR"),
+	})
 }
 
 func (te *TestEnvironment) SetupSuite() {
-	te.logger = hclog.New(&hclog.LoggerOptions{
-		Name:  "E2E",
-		Level: hclog.LevelFromString("DEBUG"),
-	})
+	defer func() {
+		// make sure to delete directories incase of setup suite failure
+		// make sure to destroy battleground if setup suite fails
+		if !te.suiteSetupDone {
+			te.logger.Error("setup suite failed")
+			te.runCriticallyNecessaryTearDown()
+		}
+	}()
+
+	te.initLogger()
 
 	var registeredAcc []tests.AccountWithMnemonic
 
 	err := te.configureBattleGround()
 	te.Suite.NoError(err)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultQueryTime)
 	bgStatus, err := te.bgClient.NetworkStatus(ctx)
 
 	cancel()
@@ -202,7 +269,7 @@ func (te *TestEnvironment) SetupSuite() {
 
 	switch bgStatus {
 	case infrastructure.Inactive: // if battleground is already running, then don't start it
-		te.logger.Info("starting battle ground")
+		te.logger.Debug("starting battle ground")
 
 		ctx, cancel = context.WithTimeout(context.Background(), DefaultBGStartTime)
 		_, err = te.bgClient.StartNetwork(ctx)
@@ -210,35 +277,66 @@ func (te *TestEnvironment) SetupSuite() {
 		cancel()
 		te.Suite.NoError(err)
 
-		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
-		registeredAcc, err = te.bgClient.Accounts(ctx)
+		if *networkType == cloud {
+			time.Sleep(DefaultDiscoveryTime)
+		} else {
+			time.Sleep(tests.DefaultLocalWaitTime)
+		}
 
-		cancel()
-		te.Suite.NoError(err)
 	case infrastructure.Active:
-		te.logger.Info("battle ground is already running")
+		te.logger.Debug("battle ground is already running")
 
-		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
-		registeredAcc, err = te.bgClient.Accounts(ctx)
-
-		cancel()
-		te.Suite.NoError(err)
 	case infrastructure.Pending:
 		te.Suite.FailNow("wait for some time battle ground is getting provisioned")
 	case infrastructure.Failed:
 		te.Suite.FailNow("battle ground status is Failed")
+	default:
+		te.Suite.FailNow("unknown network status", bgStatus)
 	}
+
+	// if network type is cloud then update nodes with given commit hash
+	if *networkType == cloud {
+		ctx, cancel := context.WithTimeout(context.Background(), DefaultQueryTime)
+		bgStatus, err := te.bgClient.NetworkStatus(ctx)
+
+		cancel()
+		te.Suite.NoError(err)
+
+		if bgStatus != infrastructure.Active {
+			te.logger.Error("battle ground is not active even after 10 minute wait time")
+		}
+
+		te.logger.Debug("updating battle ground")
+
+		ctx, cancel = context.WithTimeout(context.Background(), 1*time.Minute)
+
+		err = te.bgClient.UpdateNetwork(ctx, *commitHash)
+
+		cancel()
+		te.Suite.NoError(err)
+
+		time.Sleep(DefaultUpdateTime)
+	}
+
+	// make sure atleast one account is registered on chain
+	ctx, cancel = context.WithTimeout(context.Background(), DefaultQueryTime)
+	registeredAcc, err = te.bgClient.Accounts(ctx)
+
+	cancel()
+	te.Suite.NoError(err)
 
 	require.GreaterOrEqual(te.T(), len(registeredAcc), 1)
 
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	// fetch json urls of the nodes
+	ctx, cancel = context.WithTimeout(context.Background(), DefaultQueryTime)
 	te.jsonRPCUrls, err = te.bgClient.JsonRpcUrls(ctx)
 	te.Suite.NoError(err)
 
 	cancel()
 	te.Suite.NotEqual(len(te.jsonRPCUrls), 0)
 
-	te.logger.Info("json urls ", "urls", te.jsonRPCUrls)
+	te.logger.Debug("json urls ", "urls", te.jsonRPCUrls)
+
 	// choose url that works
 	te.initializeMOIClient()
 
@@ -246,26 +344,36 @@ func (te *TestEnvironment) SetupSuite() {
 	te.accounts, err = cmdcommon.GetAccountsWithMnemonic(DefaultAccountCount)
 	te.Suite.NoError(err)
 
-	te.logger.Info("registering accounts on chain", te.accounts)
+	te.logger.Debug("registering accounts on chain", te.accounts)
 
 	KMOIAssetID := common.AssetID("000000004cd973c4eb83cdb8870c0de209736270491b7acc99873da1eddced5826c3b548")
 
 	for _, account := range te.accounts {
-		te.logger.Info("sending Fuel token ", "KMOI ", InitialKMOITokens)
+		te.logger.Debug("sending Fuel token ", "KMOI ", InitialKMOITokens)
 		transferAsset(te, registeredAcc[0], account.Addr, map[common.AssetID]*big.Int{
 			KMOIAssetID: big.NewInt(InitialKMOITokens),
 		})
 	}
+
+	te.suiteSetupDone = true
 }
 
 func (te *TestEnvironment) TearDownSuite() {
-	te.logger.Info("tear down suite called")
+	te.logger.Debug("tear down suite called")
 
-	ctx, cancel := context.WithTimeout(context.Background(), DefaultShutdownTimeout)
-	defer cancel()
+	te.runCriticallyNecessaryTearDown()
+}
 
-	err := te.bgClient.DestroyNetwork(ctx, false)
-	te.Suite.NoError(err)
+func validateFlags() error {
+	if *networkType != cloud && *networkType != local {
+		return errors.New("network type should be either local or cloud")
+	}
+
+	if *networkType == cloud && *commitHash == "" {
+		return errors.New("commit hash cannot be empty")
+	}
+
+	return nil
 }
 
 func TestInteractions(t *testing.T) {
@@ -273,12 +381,24 @@ func TestInteractions(t *testing.T) {
 		t.Skip("skipping e2e test")
 	}
 
-	bgToken := os.Getenv("BG_TOKEN")
-	if bgToken == "" {
-		fmt.Println("can not run E2E tests")
-		fmt.Println("set BG_TOKEN environment variable")
+	t.Log("network type  ", *networkType)
+
+	if err := validateFlags(); err != nil {
+		t.Logf("can not run E2E tests %s", err.Error())
 
 		return
+	}
+
+	// make sure bg token is set if network type is cloud
+	if *networkType == cloud {
+		bgToken := os.Getenv("BG_TOKEN")
+
+		if bgToken == "" {
+			t.Log("can not run E2E tests")
+			t.Log("set BG_TOKEN environment variable")
+
+			return
+		}
 	}
 
 	suite.Run(t, new(TestEnvironment))

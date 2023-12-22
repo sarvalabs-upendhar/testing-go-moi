@@ -16,7 +16,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/moby/locker"
 	"github.com/pkg/errors"
 
@@ -79,8 +78,6 @@ type stateManager interface {
 type server interface {
 	GetKramaID() id.KramaID
 	Broadcast(topic string, data []byte) error
-	Unsubscribe(topic string) error
-	Subscribe(ctx context.Context, topic string, handler func(msg *pubsub.Message) error) error
 }
 
 type ixpool interface {
@@ -316,7 +313,7 @@ func (c *ChainManager) GetReceiptByIxHash(ixHash common.Hash) (*common.Receipt, 
 	return receipt, nil
 }
 
-func (c *ChainManager) isSealValid(ts *common.Tesseract) (bool, error) {
+func (c *ChainManager) IsSealValid(ts *common.Tesseract) (bool, error) {
 	publicKey, err := c.sm.GetPublicKeys(context.Background(), ts.Sealer())
 	if err != nil {
 		c.logger.Error("Error fetching the public key", "err", err)
@@ -656,7 +653,7 @@ func (c *ChainManager) ValidateTesseract(ts *common.Tesseract, ics *common.ICSNo
 		return common.ErrAlreadyKnown
 	}
 
-	validSeal, err := c.isSealValid(ts)
+	validSeal, err := c.IsSealValid(ts)
 	if !validSeal {
 		c.logger.Error("Error validating tesseract seal", "err", err)
 

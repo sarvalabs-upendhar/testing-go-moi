@@ -1,7 +1,6 @@
 package guardianregistry
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/sarvalabs/go-moi-engineio"
@@ -43,40 +42,43 @@ func (suite *GuardianTestSuite) SetupSuite() {
 	consumed := suite.Initialize(logicID, manifest, address, common.HexToAddress(approverAddr1))
 	suite.Equal(uint64(4865), consumed)
 
-	calldata := make(polo.Document)
-	_ = calldata.Set("enforceApprovals", true)
-	_ = calldata.Set("enforceNodeLimits", true)
-	_ = calldata.Set("enforceDeviceLimits", true)
-	_ = calldata.Set("limitKYC", 3)
-	_ = calldata.Set("limitKYB", 5)
-	_ = calldata.Set("limitDevice", 4)
-	_ = calldata.Set("master", "master")
-	_ = calldata.Set("preApprovedKramaIDs", []string{"abc", "def"})
-	_ = calldata.Set("preApprovedAddresses", []common.Address{common.HexToAddress(guardAddr1), common.HexToAddress(guardAddr2)}) //nolint:lll
-	_ = calldata.Set("approvers", []common.Address{common.HexToAddress(approverAddr1), common.HexToAddress(approverAddr2)})      //nolint:lll
-
-	buffer := polo.NewPolorizer()
-
-	guardians := []Guardian{
-		{"master", "ghi", "xy-z0", []byte{0}, common.HexToAddress(guardAddr3), []byte{0}},
-		{"master", "ijk", "xy-z0", []byte{0}, common.HexToAddress(guardAddr4), []byte{0}},
+	input := SetupInput{
+		EnforceApprovals:     true,
+		EnforceNodeLimits:    true,
+		EnforceDeviceLimits:  true,
+		LimitKYC:             3,
+		LimitKYB:             5,
+		LimitDevice:          4,
+		Master:               "master",
+		Approvers:            []common.Address{common.HexToAddress(approverAddr1), common.HexToAddress(approverAddr2)},
+		PreApprovedKramaIDs:  []string{"abc", "def"},
+		PreApprovedAddresses: []common.Address{common.HexToAddress(guardAddr1), common.HexToAddress(guardAddr2)},
+		Guardians: []Guardian{
+			{"master", "ghi", "xy-z0", []byte{0}, common.HexToAddress(guardAddr3), []byte{0}},
+			{"master", "ijk", "xy-z0", []byte{0}, common.HexToAddress(guardAddr4), []byte{0}},
+		},
 	}
 
-	for _, guardian := range guardians {
-		doc, _ := polo.DocumentEncode(guardian)
-
-		err := buffer.PolorizeAny(doc.Bytes())
-		if err != nil {
-			fmt.Println(err)
-
-			return
-		}
-	}
-
-	calldata.SetRaw("guardians", buffer.Packed())
-
-	_, _, errdata := suite.CallRaw(engineio.DeployerCallsite, "Setup!", calldata.Bytes())
+	calldata, _ := polo.Polorize(input, polo.DocStructs())
+	_, _, errdata := suite.CallRaw(engineio.DeployerCallsite, "Setup!", calldata)
 	suite.Nil(errdata)
+}
+
+type SetupInput struct {
+	EnforceApprovals    bool `polo:"enforceApprovals"`
+	EnforceNodeLimits   bool `polo:"enforceNodeLimits"`
+	EnforceDeviceLimits bool `polo:"enforceDeviceLimits"`
+
+	LimitKYC    uint64 `polo:"limitKYC"`
+	LimitKYB    uint64 `polo:"limitKYB"`
+	LimitDevice uint64 `polo:"limitDevice"`
+
+	Master               string           `polo:"master"`
+	Approvers            []common.Address `polo:"approvers"`
+	PreApprovedKramaIDs  []string         `polo:"preApprovedKramaIDs"`
+	PreApprovedAddresses []common.Address `polo:"preApprovedAddresses"`
+
+	Guardians []Guardian `polo:"guardians"`
 }
 
 type Guardian struct {
@@ -137,19 +139,28 @@ func (suite *GuardianTestSuite) TestApprove() {
 }
 
 func (suite *GuardianTestSuite) TestRegister() {
-	guardian := Guardian{
+	calldata := make(polo.Document)
+	_ = calldata.Set("operatorID", "0352fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c649")
+	_ = calldata.Set("guardian", Guardian{
 		Operator:        "0352fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c649",
 		KramaID:         "kramaid-1",
 		DeviceID:        "xy-z1",
 		PublicKey:       []byte{0},
 		IncentiveWallet: common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000010"),
 		ExtraData:       []byte{0},
-	}
+	}, polo.DocStructs())
 
-	calldata := make(polo.Document)
-	_ = calldata.Set("operatorID", "0352fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c649")
-	doc, _ := polo.DocumentEncode(guardian)
-	calldata.SetRaw("guardian", doc.Bytes())
+	// guardian := Guardian{
+	//	Operator:        "0352fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c649",
+	//	KramaID:         "kramaid-1",
+	//	DeviceID:        "xy-z1",
+	//	PublicKey:       []byte{0},
+	//	IncentiveWallet: common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000010"),
+	//	ExtraData:       []byte{0},
+	//}
+	//
+	// doc, _ := polo.PolorizeDocument(guardian)
+	// calldata.SetRaw("guardian", doc.Bytes())
 
 	_, _, except := suite.Call("AddOperator!", map[string]any{
 		"operatorMOIId":       "0352fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c649",
@@ -184,6 +195,9 @@ func (suite *GuardianTestSuite) TestUpdateGuardian() {
 	suite.TestAddOperator()
 	suite.TestRegister()
 
+	calldata := make(polo.Document)
+	_ = calldata.Set("kramaID", "kramaid-1")
+
 	guardian := Guardian{
 		Operator:        "0352fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c649",
 		KramaID:         "kramaid-1",
@@ -193,9 +207,7 @@ func (suite *GuardianTestSuite) TestUpdateGuardian() {
 		ExtraData:       []byte{0},
 	}
 
-	calldata := make(polo.Document)
-	_ = calldata.Set("kramaID", "kramaid-1")
-	doc, _ := polo.DocumentEncode(guardian)
+	doc, _ := polo.PolorizeDocument(guardian)
 	calldata.SetRaw("updatedGuardiansDetails", doc.Bytes())
 
 	_, _, except := suite.CallRaw(engineio.InvokableCallsite, "UpdateGuardianDetails!", calldata.Bytes())

@@ -1,7 +1,11 @@
 package common
 
 import (
+	"encoding/json"
 	"math/big"
+	"os"
+
+	"github.com/pkg/errors"
 
 	"github.com/sarvalabs/go-moi/common/kramaid"
 
@@ -71,6 +75,25 @@ func (g *GenesisFile) AddLogic(logic LogicSetupArgs) {
 
 func (g *GenesisFile) AddAssetInfo(info AssetAccountSetupArgs) {
 	g.AssetAccounts = append(g.AssetAccounts, info)
+}
+
+func ReadGenesisFile(path string) (*GenesisFile, error) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return &GenesisFile{}, nil
+	}
+
+	genesis := new(GenesisFile)
+
+	file, err := os.ReadFile(path)
+	if err != nil {
+		return nil, errors.New("error reading genesis file")
+	}
+
+	if err = json.Unmarshal(file, genesis); err != nil {
+		return nil, errors.New("error reading genesis file")
+	}
+
+	return genesis, nil
 }
 
 type LogicSetupArgs struct {

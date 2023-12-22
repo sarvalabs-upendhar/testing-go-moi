@@ -8,18 +8,13 @@ import (
 
 const (
 	VersionMajor = 0 // Major version component of the current release
-	VersionMinor = 4 // Minor version component of the current release
-	VersionPatch = 1 // Patch version component of the current release
+	VersionMinor = 5 // Minor version component of the current release
+	VersionPatch = 0 // Patch version component of the current release
 )
 
 var ProtocolVersion = func() string {
 	return fmt.Sprintf("%d.%d.%d", VersionMajor, VersionMinor, VersionPatch)
 }()
-
-var (
-	FluxProtocolStream = protocol.ID("moi/flux/stream/" + ProtocolVersion)
-	FluxProtocolRPC    = protocol.ID("moi/flux/rpc/" + ProtocolVersion)
-)
 
 var (
 	ICSProtocolStream = protocol.ID("moi/ics/stream/" + ProtocolVersion)
@@ -44,6 +39,6 @@ var (
 var MOIPingStream = protocol.ID("moi/ping/stream/" + ProtocolVersion)
 
 var (
-	SenatusTopic   = fmt.Sprintf("MOI_PUBSUB_SENATUS_%s", ProtocolVersion)
+	HelloTopic     = fmt.Sprintf("MOI_PUBSUB_HELLO_%s", ProtocolVersion)
 	TesseractTopic = fmt.Sprintf("MOI_PUBSUB_TESSERACT_%s", ProtocolVersion)
 )

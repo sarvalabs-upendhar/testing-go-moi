@@ -1,36 +1,15 @@
 package genesis
 
 import (
-	"encoding/json"
 	"fmt"
 	"math/big"
-	"os"
 	"strings"
 
-	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"
 	"github.com/sarvalabs/go-moi/common"
 
 	"github.com/pkg/errors"
+	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"
 )
-
-func readGenesisFile() (*common.GenesisFile, error) {
-	if _, err := os.Stat(genesisFilePath); os.IsNotExist(err) {
-		return &common.GenesisFile{}, nil
-	}
-
-	genesis := new(common.GenesisFile)
-
-	file, err := os.ReadFile(genesisFilePath)
-	if err != nil {
-		return nil, errors.New("error reading genesis file")
-	}
-
-	if err = json.Unmarshal(file, genesis); err != nil {
-		return nil, errors.New("error reading genesis file")
-	}
-
-	return genesis, nil
-}
 
 // parseUint256orHex returns big int from string, if string has 0x prefix it is treated as hex
 // else it will be treated as decimal number
@@ -56,7 +35,7 @@ func parseUint256orHex(val *string) (*big.Int, error) {
 }
 
 func getContextNodes(instancesFile string, behaviourCount, randomCount int) ([]string, []string) {
-	kramaIDs, err := cmdcommon.ReadKramaIDsFromInstancesFile(instancesFile)
+	kramaIDs, err := common.ReadKramaIDsFromInstancesFile(instancesFile)
 	if err != nil {
 		cmdcommon.Err(err)
 	}

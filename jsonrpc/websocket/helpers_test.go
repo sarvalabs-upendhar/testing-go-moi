@@ -525,6 +525,7 @@ func assertRPCTesseract(
 	t.Helper()
 
 	var rpcTesseract args.RPCTesseract
+
 	err := json.Unmarshal(res.Params.Result, &rpcTesseract)
 	require.NoError(t, err)
 

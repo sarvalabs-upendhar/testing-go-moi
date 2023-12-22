@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/utils"
+
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/tests"
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
@@ -52,7 +54,13 @@ func (m *MockServer) Unsubscribe(topic string) error {
 	return nil
 }
 
-func (m *MockServer) Subscribe(ctx context.Context, topic string, handler func(msg *pubsub.Message) error) error {
+func (m *MockServer) Subscribe(
+	ctx context.Context,
+	topic string,
+	validator utils.WrappedVal,
+	defaultValidator bool,
+	handler func(msg *pubsub.Message) error,
+) error {
 	m.subscribers[topic] = ctx
 
 	return nil

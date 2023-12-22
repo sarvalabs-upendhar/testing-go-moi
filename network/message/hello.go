@@ -13,6 +13,16 @@ type HelloMsg struct {
 	Signature []byte
 }
 
+func (hm *HelloMsg) Canonical() ([]byte, error) {
+	msg := HelloMsg{
+		KramaID:   hm.KramaID,
+		Address:   hm.Address,
+		Signature: nil,
+	}
+
+	return msg.Bytes()
+}
+
 func (hm *HelloMsg) Bytes() ([]byte, error) {
 	rawData, err := polo.Polorize(hm)
 	if err != nil {

@@ -4,12 +4,15 @@ import (
 	"context"
 	"fmt"
 	mrand "math/rand"
+	"os"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/sarvalabs/go-moi/common/kramaid"
 	mudracommon "github.com/sarvalabs/go-moi/crypto/common"
+	"github.com/sarvalabs/go-moi/crypto/poi"
+	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
 	"github.com/sarvalabs/go-moi/senatus"
 
@@ -607,7 +610,7 @@ func registerStreamHandler(servers ...*Server) {
 func subscribeHelloMsg(t *testing.T, s *Server, topic string, sender *Server, response chan int) {
 	t.Helper()
 
-	err := s.Subscribe(s.ctx, topic, func(msg *pubsub.Message) error {
+	err := s.Subscribe(s.ctx, topic, nil, true, func(msg *pubsub.Message) error {
 		var hello networkmsg.HelloMsg
 
 		data := msg.GetData()
@@ -627,14 +630,14 @@ func subscribeHelloMsg(t *testing.T, s *Server, topic string, sender *Server, re
 func subscribeMessage(t *testing.T, s *Server, topic string, response chan int) {
 	t.Helper()
 
-	err := s.Subscribe(s.ctx, topic, func(msg *pubsub.Message) error {
+	err := s.Subscribe(s.ctx, topic, nil, true, func(msg *pubsub.Message) error {
 		var name string
 
 		data := msg.GetData()
 		err := polo.Depolorize(&name, data)
 		require.NoError(t, err)
 
-		require.Equal(t, message, name) // checks if published data matches received data
+		require.Equal(t, hellomessage, name) // checks if published data matches received data
 		response <- 1
 
 		return nil
@@ -646,10 +649,10 @@ func subscribeMessage(t *testing.T, s *Server, topic string, response chan int) 
 //
 // throws error when it receives data on topic if shouldError is true,
 // does nothing when it receives data on topic if shouldError is false
-func registerEmptySubscriptionHandler(t *testing.T, s *Server, topic string, shouldError bool) {
+func registerEmptySubscriptionHandler(t *testing.T, s *Server, topic string, defaultValidator bool, shouldError bool) {
 	t.Helper()
 
-	err := s.Subscribe(s.ctx, topic, func(msg *pubsub.Message) error {
+	err := s.Subscribe(s.ctx, topic, nil, defaultValidator, func(msg *pubsub.Message) error {
 		if shouldError {
 			require.Error(t, nil) // shouldn't receive message
 		}
@@ -863,4 +866,46 @@ func waitForDiscovery(t *testing.T, server *Server, expectedPeerCount int) {
 	}
 
 	require.NoError(t, err)
+}
+
+func createSignedHelloMsg(t *testing.T) networkmsg.HelloMsg {
+	t.Helper()
+
+	dir, err := os.MkdirTemp(os.TempDir(), " ")
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		err = os.RemoveAll(dir)
+		require.NoError(t, err)
+	})
+
+	// create keystore.json in current directory
+	password := "test123"
+
+	_, _, err = poi.RandGenKeystore(dir, password)
+	require.NoError(t, err)
+
+	config := &crypto.VaultConfig{
+		DataDir:      dir,
+		NodePassword: password,
+	}
+
+	vault, err := crypto.NewVault(config, moinode.MoiFullNode, 1)
+	require.NoError(t, err)
+
+	msg := networkmsg.HelloMsg{
+		KramaID:   vault.KramaID(),
+		Address:   []string{tests.RandomAddress(t).String()},
+		Signature: nil,
+	}
+
+	rawMsg, err := msg.Bytes()
+	require.NoError(t, err)
+
+	signature, err := vault.Sign(rawMsg, mudracommon.EcdsaSecp256k1, crypto.UsingNetworkKey())
+	require.NoError(t, err)
+
+	msg.Signature = signature
+
+	return msg
 }

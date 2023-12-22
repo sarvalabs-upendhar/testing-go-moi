@@ -3,6 +3,7 @@ package senatus
 import (
 	"sync"
 
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/sarvalabs/go-moi/common"
 
 	"github.com/multiformats/go-multiaddr"
@@ -10,7 +11,6 @@ import (
 	"github.com/sarvalabs/go-polo"
 
 	id "github.com/sarvalabs/go-moi/common/kramaid"
-	networkmsg "github.com/sarvalabs/go-moi/network/message"
 )
 
 type NodeMetaInfoMsg struct {
@@ -19,26 +19,6 @@ type NodeMetaInfoMsg struct {
 	NTQ           float32
 	WalletCount   int32
 	PeerSignature []byte
-}
-
-func (miMsg *NodeMetaInfoMsg) HelloMessageBytes() ([]byte, error) {
-	msg := networkmsg.HelloMsg{
-		KramaID:   miMsg.KramaID,
-		Address:   miMsg.Address,
-		Signature: nil,
-	}
-
-	return msg.Bytes()
-}
-
-func (miMsg *NodeMetaInfoMsg) NodeMetaInfo() *NodeMetaInfo {
-	return &NodeMetaInfo{
-		KramaID:       miMsg.KramaID,
-		Addrs:         miMsg.Address,
-		NTQ:           miMsg.NTQ,
-		WalletCount:   miMsg.WalletCount,
-		PeerSignature: miMsg.PeerSignature,
-	}
 }
 
 type NodeMetaInfo struct {
@@ -127,4 +107,18 @@ func (mi *NodeMetaInfo) FromBytes(bytes []byte) error {
 	}
 
 	return nil
+}
+
+type PeerInfo struct {
+	ID   peer.ID
+	Data []byte
+}
+
+func (pi *PeerInfo) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(pi)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize peer info")
+	}
+
+	return rawData, nil
 }

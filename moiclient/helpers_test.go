@@ -4,41 +4,31 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"math/big"
 	"net/http"
-	"reflect"
 	"strconv"
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/go-polo"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/hexutil"
-	"github.com/sarvalabs/go-moi/common/kramaid"
-	"github.com/sarvalabs/go-moi/common/tests"
-	"github.com/sarvalabs/go-moi/jsonrpc/api"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 )
-
-var LatestTesseractNumber = int64(-1)
 
 // IxnTimeout is the max time to wait for an ixn to be completed
 const IxnTimeout = 1 * time.Minute
 
 var (
-	genesisHeight        = int64(0)
-	deployLogicHeight    = int64(1)
-	executeLogicHeight   = int64(1)
-	createAssetHeight    = int64(1)
-	transferTokensHeight = int64(2)
-	ixnPendingCount      = 10
+	genesisHeight         = int64(0)
+	LatestTesseractNumber = int64(-1)
 )
 
 // makeHTTPRequest takes method, args and makes an HTTP POST request to node specified by url constant
 // returning a response with data, status, and error.
-func makeHTTPRequest(t *testing.T, method string, args interface{}) *rpcargs.Response {
+func makeHTTPRequest(t *testing.T, url string, method string, args interface{}) *rpcargs.Response {
 	t.Helper()
 
 	params, err := json.Marshal(args)
@@ -54,7 +44,7 @@ func makeHTTPRequest(t *testing.T, method string, args interface{}) *rpcargs.Res
 	jsonData, err := json.Marshal(values)
 	require.NoError(t, err)
 
-	httpResponse, err := http.Post(localURL, "application/json", bytes.NewBuffer(jsonData)) //nolint
+	httpResponse, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData)) //nolint
 	require.NoError(t, err)
 
 	// status should be >= 200 && < 300
@@ -76,80 +66,46 @@ func makeHTTPRequest(t *testing.T, method string, args interface{}) *rpcargs.Res
 	return &resp
 }
 
-// getIXArgsForLogicDeployment returns interaction args for logic deployment
-func getIXArgsForLogicDeployment(t *testing.T, client *Client, addr common.Address) *common.SendIXArgs {
+// httpTesseract returns RPCTesseract based on the given arguments
+func httpTesseract(t *testing.T, url string, args interface{}) *rpcargs.RPCTesseract {
 	t.Helper()
 
-	calldata := "0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd8ee6a29ec4" +
-		"42dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49"
+	resp := makeHTTPRequest(t, url, "moi.Tesseract", args)
 
-	manifest := "0x" + common.BytesToHex(tests.ReadManifest(t, "./../compute/manifests/ledger.yaml"))
+	var tess rpcargs.RPCTesseract
 
-	logicPayload := &common.LogicPayload{
-		Manifest: hexutil.Bytes(common.Hex2Bytes(manifest)),
-		Callsite: "Seeder!",
-		Calldata: hexutil.Bytes(common.Hex2Bytes(calldata)),
-	}
-
-	payload, err := logicPayload.Bytes()
+	err := json.Unmarshal(resp.Data, &tess)
 	require.NoError(t, err)
 
-	ixArgs := &common.SendIXArgs{
-		Type:      common.IxLogicDeploy,
-		Nonce:     GetLatestNonce(t, client, addr),
-		FuelPrice: new(big.Int).SetUint64(1),
-		FuelLimit: 2000,
+	return &tess
+}
+
+func createAssetWithNonce(t *testing.T, client *Client, addr common.Address, mnemonic string, nonce uint64) {
+	t.Helper()
+
+	supply, _ := new(big.Int).SetString("130D41", 16)
+
+	assetCreationPayload := &common.AssetCreatePayload{
+		Symbol: "MOI",
+		Supply: supply,
+	}
+
+	payload, err := polo.Polorize(assetCreationPayload)
+	require.NoError(t, err)
+
+	sendIXArgs := &common.SendIXArgs{
+		Type:      common.IxAssetCreate,
+		Nonce:     nonce,
 		Sender:    addr,
+		FuelPrice: big.NewInt(1),
+		FuelLimit: 200,
 		Payload:   payload,
 	}
 
-	return ixArgs
-}
+	sendIX := CreateSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
 
-// getAssetID returns assetID for the given senderAddr and height
-func getAssetID(t *testing.T, client *Client, addr common.Address, height int64) common.AssetID {
-	t.Helper()
-
-	ctx := context.Background()
-
-	ts := GetTesseract(t, client, addr, height)
-
-	receiptArgs := &rpcargs.ReceiptArgs{
-		Hash: ts.Ixns[0].Hash,
-	}
-
-	receipt, err := client.InteractionReceipt(ctx, receiptArgs)
+	_, err = client.SendInteractions(context.Background(), sendIX)
 	require.NoError(t, err)
-
-	var assetReceipt common.AssetCreationReceipt
-
-	err = json.Unmarshal(receipt.ExtraData, &assetReceipt)
-	require.NoError(t, err)
-
-	return assetReceipt.AssetID
-}
-
-// getLogicID returns logicID for the given senderAddr and height
-func getLogicID(t *testing.T, client *Client, addr common.Address, height int64) common.LogicID {
-	t.Helper()
-
-	ctx := context.Background()
-
-	ts := GetTesseract(t, client, addr, height)
-
-	receiptArgs := &rpcargs.ReceiptArgs{
-		Hash: ts.Ixns[0].Hash,
-	}
-
-	receipt, err := client.InteractionReceipt(ctx, receiptArgs)
-	require.NoError(t, err)
-
-	var logicReceipt common.LogicDeployReceipt
-
-	err = json.Unmarshal(receipt.ExtraData, &logicReceipt)
-	require.NoError(t, err)
-
-	return logicReceipt.LogicID
 }
 
 // moiclientRetryFetchReceipt keeps trying to fetch receipt for given ixHash until it is timed out
@@ -177,9 +133,6 @@ func moiclientRetryFetchReceipt(
 			if err == nil {
 				require.Equal(t, common.ReceiptOk, receipt.Status)
 
-				httpReceipt := httpInteractionReceipt(t, receiptArgs)
-				checkForRPCReceipt(t, httpReceipt, receipt)
-
 				return receipt
 			}
 
@@ -188,448 +141,40 @@ func moiclientRetryFetchReceipt(
 	}
 }
 
-// SanitizeAddrs sanitises the given addrs array and validates it
-func SanitizeAddrs(addrs []common.Address) ([]common.Address, error) {
-	if len(addrs) < 12 {
-		return nil, errors.New("not sufficient genesis accounts to run moiclient tests")
+// createAsset creates asset named "MOI"
+func createAsset(t *testing.T, client *Client, addr common.Address, mnemonic string) common.Hash {
+	t.Helper()
+
+	supply, _ := new(big.Int).SetString("130D41", 16)
+
+	assetCreationPayload := &common.AssetCreatePayload{
+		Symbol: "MOI",
+		Supply: supply,
 	}
 
-	temp := make([]common.Address, 0)
+	payload, err := polo.Polorize(assetCreationPayload)
+	require.NoError(t, err)
 
-	for _, addr := range addrs {
-		if addr == common.SargaAddress {
-			continue
-		}
-
-		if common.ContainsAddress(common.GenesisLogicAddrs, addr) {
-			continue
-		}
-
-		temp = append(temp, addr)
+	sendIXArgs := &common.SendIXArgs{
+		Type:      common.IxAssetCreate,
+		Nonce:     GetLatestNonce(t, client, addr),
+		Sender:    addr,
+		FuelPrice: big.NewInt(1),
+		FuelLimit: 200,
+		Payload:   payload,
 	}
 
-	return temp, nil
-}
+	sendIX := CreateSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
 
-// httpTesseract returns RPCTesseract based on the given arguments
-func httpTesseract(t *testing.T, args interface{}) *rpcargs.RPCTesseract {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "moi.Tesseract", args)
-
-	var tess rpcargs.RPCTesseract
-
-	err := json.Unmarshal(resp.Data, &tess)
+	ixHash, err := client.SendInteractions(context.Background(), sendIX)
 	require.NoError(t, err)
 
-	return &tess
-}
+	ctx, cancel := context.WithTimeout(context.Background(), IxnTimeout)
+	defer cancel()
 
-// httpGetAssetInfoByAssetID returns asset description for the given assetID
-func httpGetAssetInfoByAssetID(t *testing.T, args *rpcargs.GetAssetInfoArgs) *rpcargs.RPCAssetDescriptor {
-	t.Helper()
+	moiclientRetryFetchReceipt(t, ctx, client, ixHash)
 
-	resp := makeHTTPRequest(t, "moi.AssetInfoByAssetID", args)
-
-	var assetInfo rpcargs.RPCAssetDescriptor
-
-	err := json.Unmarshal(resp.Data, &assetInfo)
-	require.NoError(t, err)
-
-	return &assetInfo
-}
-
-// httpGetBalance returns the balance of assetID for given BalArgs
-func httpGetBalance(t *testing.T, args *rpcargs.BalArgs) *hexutil.Big {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "moi.Balance", args)
-
-	var bal *hexutil.Big
-
-	err := json.Unmarshal(resp.Data, &bal)
-	require.NoError(t, err)
-
-	return bal
-}
-
-// httpTDU retrieves the TDU of the queried address
-func httpTDU(t *testing.T, args *rpcargs.QueryArgs) []rpcargs.TDU {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "moi.TDU", args)
-
-	var tdu []rpcargs.TDU
-
-	err := json.Unmarshal(resp.Data, &tdu)
-	require.NoError(t, err)
-
-	return tdu
-}
-
-// httpRegistry retrieves the asset registry info for the given address and tesseract options
-func httpRegistry(t *testing.T, args *rpcargs.QueryArgs) []rpcargs.RPCRegistry {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "moi.Registry", args)
-
-	var registry []rpcargs.RPCRegistry
-
-	err := json.Unmarshal(resp.Data, &registry)
-	require.NoError(t, err)
-
-	return registry
-}
-
-// httpGetContextInfo returns the context Info of the queried address.
-func httpGetContextInfo(t *testing.T, args *rpcargs.ContextInfoArgs) *rpcargs.ContextResponse {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "moi.ContextInfo", args)
-
-	var contextResp rpcargs.ContextResponse
-
-	err := json.Unmarshal(resp.Data, &contextResp)
-	require.NoError(t, err)
-
-	return &contextResp
-}
-
-// httpInteractionReceipt returns the receipt of the interaction for given hash
-func httpInteractionReceipt(t *testing.T, args *rpcargs.ReceiptArgs) *rpcargs.RPCReceipt {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "moi.InteractionReceipt", args)
-
-	var receipt rpcargs.RPCReceipt
-
-	err := json.Unmarshal(resp.Data, &receipt)
-	require.NoError(t, err)
-
-	return &receipt
-}
-
-// httpInteractionByHash returns the interaction for given ix hash
-func httpInteractionByHash(t *testing.T, args *rpcargs.InteractionByHashArgs) rpcargs.RPCInteraction {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "moi.InteractionByHash", args)
-
-	var ix rpcargs.RPCInteraction
-
-	err := json.Unmarshal(resp.Data, &ix)
-	require.NoError(t, err)
-
-	return ix
-}
-
-// httpInteractionByTesseract returns the interaction for the given tesseract hash
-func httpInteractionByTesseract(t *testing.T, args *rpcargs.InteractionByTesseract) rpcargs.RPCInteraction {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "moi.InteractionByTesseract", args)
-
-	var ix rpcargs.RPCInteraction
-
-	err := json.Unmarshal(resp.Data, &ix)
-	require.NoError(t, err)
-
-	return ix
-}
-
-// httpInteractionCount returns the number of interactions sent for the given address
-func httpInteractionCount(t *testing.T, args *rpcargs.InteractionCountArgs) *hexutil.Uint64 {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "moi.InteractionCount", args)
-
-	var count *hexutil.Uint64
-
-	err := json.Unmarshal(resp.Data, &count)
-	require.NoError(t, err)
-
-	return count
-}
-
-// httpPendingInteractionCount returns the number of interactions sent for the given address.
-func httpPendingInteractionCount(t *testing.T, args *rpcargs.InteractionCountArgs) *hexutil.Uint64 {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "moi.PendingInteractionCount", args)
-
-	var count *hexutil.Uint64
-
-	err := json.Unmarshal(resp.Data, &count)
-	require.NoError(t, err)
-
-	return count
-}
-
-// httpLogicStorage returns the data associated with the given httpLogicStorage slot
-func httpLogicStorage(t *testing.T, args *rpcargs.GetLogicStorageArgs) hexutil.Bytes {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "moi.LogicStorage", args)
-
-	var res hexutil.Bytes
-
-	err := json.Unmarshal(resp.Data, &res)
-	require.NoError(t, err)
-
-	return res
-}
-
-// httpAccountState returns the account state of the given address
-func httpAccountState(t *testing.T, args *rpcargs.GetAccountArgs) *rpcargs.RPCAccount {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "moi.AccountState", args)
-
-	var account rpcargs.RPCAccount
-
-	err := json.Unmarshal(resp.Data, &account)
-	require.NoError(t, err)
-
-	return &account
-}
-
-// httpLogicIDs returns the logic IDs of the given address
-func httpLogicIDs(t *testing.T, args *rpcargs.GetLogicIDArgs) []common.LogicID {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "moi.LogicIDs", args)
-
-	var logicIDs []common.LogicID
-
-	err := json.Unmarshal(resp.Data, &logicIDs)
-	require.NoError(t, err)
-
-	return logicIDs
-}
-
-// httpLogicManifest returns the manifest associated with the given logic id
-func httpLogicManifest(t *testing.T, args *rpcargs.LogicManifestArgs) hexutil.Bytes {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "moi.LogicManifest", args)
-
-	var res hexutil.Bytes
-
-	err := json.Unmarshal(resp.Data, &res)
-	require.NoError(t, err)
-
-	return res
-}
-
-// httpContent returns the interactions present in the given IxPool.
-func httpContent(t *testing.T, args *rpcargs.ContentArgs) *api.ContentResponse {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "ixpool.Content", args)
-
-	var contentRes api.ContentResponse
-
-	err := json.Unmarshal(resp.Data, &contentRes)
-	require.NoError(t, err)
-
-	return &contentRes
-}
-
-// httpContentFrom returns the interactions present in IxPool for the queried address.
-func httpContentFrom(t *testing.T, args *rpcargs.IxPoolArgs) *api.ContentFromResponse {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "ixpool.ContentFrom", args)
-
-	var content api.ContentFromResponse
-
-	err := json.Unmarshal(resp.Data, &content)
-	require.NoError(t, err)
-
-	return &content
-}
-
-// httpStatus returns the number of pending and queued interactions in the IxPool.
-func httpStatus(t *testing.T, args *rpcargs.StatusArgs) *api.StatusResponse {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "ixpool.Status", args)
-
-	var status api.StatusResponse
-
-	err := json.Unmarshal(resp.Data, &status)
-	require.NoError(t, err)
-
-	return &status
-}
-
-// httpInspect returns the interactions present in the IxPool in a clear and easy-to-read format,
-func httpInspect(t *testing.T, args *rpcargs.InspectArgs) *api.InspectResponse {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "ixpool.Inspect", args)
-
-	var response api.InspectResponse
-
-	err := json.Unmarshal(resp.Data, &response)
-	require.NoError(t, err)
-
-	return &response
-}
-
-// httpWaitTime returns the wait time for an account in IxPool, based on the queried address.
-func httpWaitTime(t *testing.T, args *rpcargs.IxPoolArgs) *api.WaitTimeResponse {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "ixpool.WaitTime", args)
-
-	var waitTime api.WaitTimeResponse
-
-	err := json.Unmarshal(resp.Data, &waitTime)
-	require.NoError(t, err)
-
-	return &waitTime
-}
-
-// httpPeers returns an array of Krama IDs connected to a client
-func httpPeers(t *testing.T, args *rpcargs.NetArgs) *[]kramaid.KramaID {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "net.Peers", args)
-
-	var response []kramaid.KramaID
-
-	err := json.Unmarshal(resp.Data, &response)
-	require.NoError(t, err)
-
-	return &response
-}
-
-// httpPeers returns an array of Krama IDs connected to a client
-func httpVersion(t *testing.T, args *rpcargs.NetArgs) string {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "net.Version", args)
-
-	var response string
-
-	err := json.Unmarshal(resp.Data, &response)
-	require.NoError(t, err)
-
-	return response
-}
-
-// httpInfo returns the kramaID of the node
-func httpInfo(t *testing.T, args *rpcargs.NetArgs) *rpcargs.NodeInfoResponse {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "net.Info", args)
-
-	var response rpcargs.NodeInfoResponse
-
-	err := json.Unmarshal(resp.Data, &response)
-	require.NoError(t, err)
-
-	return &response
-}
-
-// httpDBGet returns raw value of the key stored in the database
-func httpDBGet(t *testing.T, args *rpcargs.DebugArgs) string {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "debug.DBGet", args)
-
-	var response string
-
-	err := json.Unmarshal(resp.Data, &response)
-	require.NoError(t, err)
-
-	return response
-}
-
-// httpNodeMetaInfo returns the metadata of nodes stored in database
-func httpNodeMetaInfo(t *testing.T, args *rpcargs.NodeMetaInfoArgs) map[string]rpcargs.NodeMetaInfoResponse {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "debug.NodeMetaInfo", args)
-
-	var response map[string]rpcargs.NodeMetaInfoResponse
-
-	err := json.Unmarshal(resp.Data, &response)
-	require.NoError(t, err)
-
-	return response
-}
-
-// httpAccounts returns the addresses of all the accounts
-func httpAccounts(t *testing.T, args *rpcargs.AccountArgs) []common.Address {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "debug.Accounts", args)
-
-	var addrs []common.Address
-
-	err := json.Unmarshal(resp.Data, &addrs)
-	require.NoError(t, err)
-
-	return addrs
-}
-
-// httpConnections returns the connections of this node
-func httpConnections(t *testing.T, args *rpcargs.ConnArgs) *rpcargs.ConnectionsResponse {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "debug.Connections", args)
-
-	var connResponse rpcargs.ConnectionsResponse
-
-	err := json.Unmarshal(resp.Data, &connResponse)
-	require.NoError(t, err)
-
-	return &connResponse
-}
-
-// httpAccountMetaInfo returns the account meta info associated with the given address
-func httpAccountMetaInfo(t *testing.T, args *rpcargs.GetAccountArgs) *rpcargs.RPCAccountMetaInfo {
-	t.Helper()
-
-	resp := makeHTTPRequest(t, "moi.AccountMetaInfo", args)
-
-	var info rpcargs.RPCAccountMetaInfo
-
-	err := json.Unmarshal(resp.Data, &info)
-	require.NoError(t, err)
-
-	return &info
-}
-
-func GetMnemonicFromAccounts(addr common.Address, accs []tests.AccountWithMnemonic) (tests.AccountWithMnemonic, bool) {
-	for _, acc := range accs {
-		if acc.Addr == addr {
-			return acc, true
-		}
-	}
-
-	return tests.AccountWithMnemonic{}, false
-}
-
-func checkForRPCReceipt(
-	t *testing.T,
-	expectedRPCReceipt *rpcargs.RPCReceipt,
-	actualRPCReceipt *rpcargs.RPCReceipt,
-) {
-	t.Helper()
-
-	require.Equal(t, expectedRPCReceipt.IxType, actualRPCReceipt.IxType)
-	require.Equal(t, expectedRPCReceipt.IxHash, actualRPCReceipt.IxHash)
-	require.Equal(t, expectedRPCReceipt.FuelUsed, actualRPCReceipt.FuelUsed)
-	require.Equal(t, expectedRPCReceipt.ExtraData, actualRPCReceipt.ExtraData)
-	require.Equal(t, expectedRPCReceipt.From, actualRPCReceipt.From)
-	require.Equal(t, expectedRPCReceipt.To, actualRPCReceipt.To)
-	require.Equal(t, expectedRPCReceipt.IXIndex, actualRPCReceipt.IXIndex)
-	require.Equal(t, expectedRPCReceipt.Parts, actualRPCReceipt.Parts)
-
-	require.True(t, reflect.DeepEqual(expectedRPCReceipt.Hashes, actualRPCReceipt.Hashes))
+	return ixHash
 }
 
 func checkForCallReceipt(

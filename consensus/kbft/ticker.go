@@ -141,5 +141,6 @@ func (t *Ticker) timeoutRoutine() {
 // Discards all scheduled timeouts as well.
 func (t *Ticker) Close() {
 	t.logger.Debug("Closing timer")
+
 	close(t.quit)
 }

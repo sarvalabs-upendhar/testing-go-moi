@@ -334,6 +334,18 @@ func (p *PersistenceManager) UpdatePeerCount(count uint64) error {
 	return err
 }
 
+func (p *PersistenceManager) DropSenatusEntries() error {
+	if err := p.db.DropWithPrefix(SenatusPrefix()); err != nil {
+		return errors.Wrap(err, "failed to drop senatus entries")
+	}
+
+	if err := p.db.Delete(dbKey(common.NilAddress, SenatusPeerCount, nil)); err != nil {
+		return errors.Wrap(err, "failed to drop senatus peer count entry")
+	}
+
+	return nil
+}
+
 // TotalPeersCount fetches the total number of peers available in the senatus store
 func (p *PersistenceManager) TotalPeersCount() (uint64, error) {
 	val, err := p.ReadEntry(SenatusPeerCountKey())
@@ -362,7 +374,7 @@ func (p *PersistenceManager) GetEntriesWithPrefix(ctx context.Context, prefix []
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			dbEntry, err := it.GetNext()
 			if err != nil {
-				p.logger.Error("Prefix iteration failed", "err", err)
+				p.logger.Error("PrefixTag iteration failed", "err", err)
 
 				break
 			}
@@ -526,7 +538,7 @@ func (p *PersistenceManager) GetReceipts(gridHash common.Hash) ([]byte, error) {
 
 func (p *PersistenceManager) GetMerkleTreeEntry(
 	address common.Address,
-	prefix Prefix,
+	prefix PrefixTag,
 	actualKey []byte,
 ) ([]byte, error) {
 	key := dbKey(address, prefix, actualKey)
@@ -536,7 +548,7 @@ func (p *PersistenceManager) GetMerkleTreeEntry(
 
 func (p *PersistenceManager) SetMerkleTreeEntry(
 	address common.Address,
-	prefix Prefix,
+	prefix PrefixTag,
 	actualKey, value []byte,
 ) error {
 	key := dbKey(address, prefix, actualKey)
@@ -546,7 +558,7 @@ func (p *PersistenceManager) SetMerkleTreeEntry(
 
 func (p *PersistenceManager) SetMerkleTreeEntries(
 	address common.Address,
-	prefix Prefix,
+	prefix PrefixTag,
 	entries map[string][]byte,
 ) error {
 	// Create a batch writer
@@ -673,19 +685,17 @@ func (p *PersistenceManager) GetAccountsSyncStatus() ([]*common.AccountSyncStatu
 
 	defer it.Close()
 
-	for it.Seek([]byte{AccountSyncJob.Byte()}); it.ValidForPrefix([]byte{AccountSyncJob.Byte()}); it.Next() {
+	for it.Seek(AccountSyncPrefix()); it.ValidForPrefix(AccountSyncPrefix()); it.Next() {
 		dbEntry, err := it.GetNext()
 		if err != nil {
 			return nil, err
 		}
 
-		if len(dbEntry.Key) != 33 {
-			continue
-		}
-
 		syncInfo := new(common.AccountSyncStatus)
 		if err = syncInfo.FromBytes(dbEntry.Value); err != nil {
-			return nil, err
+			p.logger.Error(err.Error())
+
+			continue
 		}
 
 		syncInfos = append(syncInfos, syncInfo)

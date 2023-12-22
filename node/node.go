@@ -151,7 +151,9 @@ func (n *Node) loadLatestActiveTimeStamp() {
 // Krama engine, State manager, JSON-RPC server Chain manager
 // returns any error invoked
 func (n *Node) Start() (err error) {
-	n.startHandlers()
+	if err = n.startHandlers(); err != nil {
+		return errors.Wrap(err, "failed to start sub handlers")
+	}
 
 	if err = n.network.StartServer(); err != nil {
 		return errors.Wrap(err, "failed to start the p2p server")

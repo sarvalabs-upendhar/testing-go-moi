@@ -94,7 +94,7 @@ func getRandomMOIID() []byte {
 func createTestGenesisFile() {
 	var kidTracker int
 
-	kramaIDs, err := cmdcommon.ReadKramaIDsFromInstancesFile(readInstancesFilePath)
+	kramaIDs, err := common.ReadKramaIDsFromInstancesFile(readInstancesFilePath)
 	if err != nil {
 		cmdcommon.Err(err)
 	}

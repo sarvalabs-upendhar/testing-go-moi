@@ -215,12 +215,7 @@ func registerGuardian(vault *crypto.KramaVault) {
 		cmdCommon.Err(err)
 	}
 
-	guardianDoc, err := polo.DocumentEncode(g)
-	if err != nil {
-		cmdCommon.Err(err)
-	}
-
-	if err = dc.Set("guardianDetails", guardianDoc); err != nil {
+	if err = dc.Set("guardianDetails", g, polo.DocStructs()); err != nil {
 		cmdCommon.Err(err)
 	}
 
@@ -319,7 +314,7 @@ func isGuardianRegistered(client *moiclient.Client, kramaID id.KramaID) bool {
 
 	guardians := make(gtypes.Guardians)
 
-	err = polo.Depolorize(&guardians, storageData.Bytes())
+	err = polo.Depolorize(&guardians, storageData.Bytes(), polo.DocStructs(), polo.DocStringMaps())
 	if err != nil {
 		cmdCommon.Err(errors.Wrap(err, "failed to fetch guardian information from the network"))
 	}

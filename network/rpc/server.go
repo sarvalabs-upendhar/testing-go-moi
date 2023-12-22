@@ -227,7 +227,7 @@ func NewServer(
 
 			defer func() {
 				if err := connManager.CloseStream(stream, s.connTag); err != nil {
-					s.logger.Error("Failed to close stream", "err", err)
+					s.logger.Trace("Failed to close stream", "err", err)
 				}
 			}()
 

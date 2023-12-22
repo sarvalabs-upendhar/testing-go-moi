@@ -10,7 +10,7 @@ import (
 )
 
 func dbKeyFromCID(address common.Address, cid cid.CID) []byte {
-	return storage.DBKey(address, storage.Prefix(cid.ContentType()), cid.Key())
+	return storage.DBKey(address, storage.PrefixTag(cid.ContentType()), cid.Key())
 }
 
 type Grid struct {

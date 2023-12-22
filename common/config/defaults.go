@@ -22,7 +22,7 @@ const (
 	DefaultMinimumConnections = 100
 	DefaultMaximumConnections = 200
 	DefaultWatchDogURL        = "https://babylon-watchdog.moi.techbology/add"
-	DefaultICSRequestTimeout  = 2500 * time.Millisecond
+	DefaultICSRequestTimeout  = 800 * time.Millisecond
 	DefaultDiscoveryInterval  = 60 * time.Second
 	LocalID                   = 111
 	DevnetID                  = 112

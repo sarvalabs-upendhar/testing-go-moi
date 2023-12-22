@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/sarvalabs/go-moi/common/utils"
+
 	"github.com/sarvalabs/go-moi/common/config"
 
 	id "github.com/sarvalabs/go-moi/common/kramaid"
@@ -28,7 +30,13 @@ const (
 type network interface {
 	Unsubscribe(topic string) error
 	Broadcast(topic string, data []byte) error
-	Subscribe(ctx context.Context, topic string, handler func(msg *pubsub.Message) error) error
+	Subscribe(
+		ctx context.Context,
+		topicName string,
+		validator utils.WrappedVal,
+		defaultValidator bool,
+		handler func(msg *pubsub.Message) error,
+	) error
 	StartNewRPCServer(protocol protocol.ID, tag string) *rpc.Client
 	RegisterNewRPCService(protocol protocol.ID, serviceName string, service interface{}) error
 	GetKramaID() id.KramaID
@@ -71,7 +79,7 @@ func (t *Transport) InitClusterCommunication(ctx context.Context, slot *ktypes.S
 		return nil
 	}
 
-	if err := t.network.Subscribe(ctx, string(slot.ClusterID()), handler); err != nil {
+	if err := t.network.Subscribe(ctx, string(slot.ClusterID()), nil, false, handler); err != nil {
 		return errors.Wrap(err, "failed to subscribe")
 	}
 

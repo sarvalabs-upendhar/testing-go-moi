@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"context"
 
+	"github.com/dgraph-io/badger/v4"
 	"github.com/hashicorp/go-hclog"
 
-	"github.com/dgraph-io/badger/v3"
 	"github.com/pkg/errors"
 
 	"github.com/sarvalabs/go-moi/common"

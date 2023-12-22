@@ -39,7 +39,7 @@ func checkIfNodeSynced(t *testing.T, nodeToCheck *moiclient.Client) {
 
 		return nil, false
 	})
-	require.NoError(t, err)
+	require.NoError(t, err, nodeToCheck.URL())
 
 	t.Log("nodes synced ")
 }
@@ -117,7 +117,7 @@ func checkIfAccountsSyncedOnAllNodes(
 
 func (te *TestEnvironment) TestFullSyncForOneNode() {
 	// as first node is operator, avoid stopping operator
-	te.moiClient, te.moiClients[50] = te.moiClients[50], te.moiClient
+	te.moiClient, te.moiClients[len(te.moiClients)-1] = te.moiClients[len(te.moiClients)-1], te.moiClient
 
 	testcases := []struct {
 		name             string
@@ -159,7 +159,7 @@ func (te *TestEnvironment) TestFullSyncForOneNode() {
 		te.Run(test.name, func() {
 			ctx, cancel := context.WithTimeout(context.Background(), DefaultNodeStopTime)
 
-			te.logger.Info("stop node", te.moiClient.URL())
+			te.logger.Debug("stop node", te.moiClient.URL())
 
 			err := te.bgClient.StopNode(ctx, te.moiClient.URL())
 			require.NoError(te.T(), err)
@@ -172,14 +172,14 @@ func (te *TestEnvironment) TestFullSyncForOneNode() {
 
 			ctx, cancel = context.WithTimeout(context.Background(), DefaultNodeStartTime)
 
-			te.logger.Info("start node", te.moiClient.URL())
+			te.logger.Debug("start node", te.moiClient.URL())
 
 			err = te.bgClient.StartNode(ctx, te.moiClient.URL(), test.withCleanDB)
 			require.NoError(te.T(), err)
 
 			cancel()
 
-			time.Sleep(5 * time.Second)
+			time.Sleep(10 * time.Second)
 
 			checkIfNodeSynced(te.T(), te.moiClient)
 			checkIfNodesSynced(te.T(), te.moiClients)

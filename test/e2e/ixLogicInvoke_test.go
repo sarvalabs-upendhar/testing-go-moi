@@ -19,7 +19,7 @@ func (te *TestEnvironment) logicInvoke(
 	acc tests.AccountWithMnemonic,
 	logicPayload *common.LogicPayload,
 ) (common.Hash, error) {
-	te.logger.Info("invoke logic ",
+	te.logger.Debug("invoke logic ",
 		"sender", acc.Addr, "logicID", logicPayload.Logic,
 		"call site", logicPayload.Callsite, "call data", logicPayload.Calldata)
 

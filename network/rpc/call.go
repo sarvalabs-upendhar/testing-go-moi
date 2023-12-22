@@ -148,7 +148,7 @@ func (call *Call) watchContextWithStream(s network.Stream) {
 		// context is cancelled.
 		err := s.Reset()
 		if err != nil {
-			call.logger.Error("Failed to close stream", "err", err)
+			call.logger.Trace("Failed to close stream", "err", err)
 		}
 	}
 }

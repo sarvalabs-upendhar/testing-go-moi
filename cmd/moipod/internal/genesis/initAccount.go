@@ -65,7 +65,7 @@ func parseInitAccountFlags(cmd *cobra.Command) {
 }
 
 func initAccount() {
-	genesis, err := readGenesisFile()
+	genesis, err := common.ReadGenesisFile(genesisFilePath)
 	if err != nil {
 		cmdcommon.Err(err)
 	}

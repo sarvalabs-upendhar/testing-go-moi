@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/sarvalabs/go-moi/common/utils"
+
 	"github.com/decred/dcrd/crypto/blake256"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/golang-lru"
@@ -38,7 +40,13 @@ func mockServer() *MockServer {
 	return new(MockServer)
 }
 
-func (m *MockServer) Subscribe(ctx context.Context, topic string, handler func(msg *pubsub.Message) error) error {
+func (m *MockServer) Subscribe(
+	ctx context.Context,
+	topic string,
+	validator utils.WrappedVal,
+	defaultValidator bool,
+	handler func(msg *pubsub.Message) error,
+) error {
 	// TODO implement me
 	panic("implement me")
 }
@@ -175,7 +183,7 @@ func (m *MockDB) setAccountMetaInfo(acc *common.AccountMetaInfo) {
 	m.accMetaInfo[acc.Address.Hex()] = acc
 }
 
-func (m *MockDB) GetMerkleTreeEntry(address common.Address, prefix storage.Prefix, key []byte) ([]byte, error) {
+func (m *MockDB) GetMerkleTreeEntry(address common.Address, prefix storage.PrefixTag, key []byte) ([]byte, error) {
 	entry, ok := m.merkleTreeEntries[string(key)]
 	if !ok {
 		return nil, common.ErrKeyNotFound
@@ -184,13 +192,17 @@ func (m *MockDB) GetMerkleTreeEntry(address common.Address, prefix storage.Prefi
 	return entry, nil
 }
 
-func (m *MockDB) SetMerkleTreeEntry(address common.Address, prefix storage.Prefix, key, value []byte) error {
+func (m *MockDB) SetMerkleTreeEntry(address common.Address, prefix storage.PrefixTag, key, value []byte) error {
 	m.merkleTreeEntries[string(key)] = value
 
 	return nil
 }
 
-func (m *MockDB) SetMerkleTreeEntries(address common.Address, prefix storage.Prefix, entries map[string][]byte) error {
+func (m *MockDB) SetMerkleTreeEntries(
+	address common.Address,
+	prefix storage.PrefixTag,
+	entries map[string][]byte,
+) error {
 	for k, v := range entries {
 		m.merkleTreeEntries[k] = v
 	}
@@ -1250,35 +1262,6 @@ func getAccMetaInfos(t *testing.T, count int) []*common.AccountMetaInfo {
 	return accMetaInfo
 }
 
-func getContextObjects(
-	t *testing.T,
-	ids []id.KramaID,
-	idsPerObj int,
-	objCount int,
-) ([]*ContextObject, []common.Hash) {
-	t.Helper()
-
-	obj := make([]*ContextObject, objCount)
-	hashes := make([]common.Hash, objCount)
-
-	for i := 0; i < objCount; i++ {
-		copiedIds := make([]id.KramaID, idsPerObj)
-
-		copy(copiedIds, ids[i*idsPerObj:i*idsPerObj+idsPerObj])
-
-		obj[i] = &ContextObject{
-			Ids: copiedIds,
-		}
-
-		hash, err := obj[i].Hash()
-		require.NoError(t, err)
-
-		hashes[i] = hash
-	}
-
-	return obj, hashes
-}
-
 func getMetaContextObject(
 	t *testing.T,
 	behHash common.Hash,
@@ -1423,7 +1406,7 @@ func createTestKramaHashTree(
 	t *testing.T,
 	db Store,
 	address common.Address,
-	prefix storage.Prefix,
+	prefix storage.PrefixTag,
 	keys [][]byte,
 	values [][]byte,
 ) (*tree.KramaHashTree, common.Hash) {
@@ -2207,4 +2190,33 @@ func getTestAssetID(addr common.Address, asset *common.AssetDescriptor) common.A
 	common.NewAssetIDv0(asset.IsLogical, asset.IsStateFul, asset.Dimension, asset.Standard, addr)
 
 	return common.NewAssetIDv0(asset.IsLogical, asset.IsStateFul, asset.Dimension, asset.Standard, addr)
+}
+
+func getContextObjects(
+	t *testing.T,
+	ids []id.KramaID,
+	idsPerObj int,
+	objCount int,
+) ([]*ContextObject, []common.Hash) {
+	t.Helper()
+
+	obj := make([]*ContextObject, objCount)
+	hashes := make([]common.Hash, objCount)
+
+	for i := 0; i < objCount; i++ {
+		copiedIds := make([]id.KramaID, idsPerObj)
+
+		copy(copiedIds, ids[i*idsPerObj:i*idsPerObj+idsPerObj])
+
+		obj[i] = &ContextObject{
+			Ids: copiedIds,
+		}
+
+		hash, err := obj[i].Hash()
+		require.NoError(t, err)
+
+		hashes[i] = hash
+	}
+
+	return obj, hashes
 }

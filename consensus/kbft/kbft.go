@@ -120,13 +120,20 @@ func (kbft *KBFT) Start() error {
 
 	go kbft.ScheduleRound0()
 
-	return kbft.handler(0)
+	if err := kbft.handler(0); err != nil {
+		kbft.toTicker.Stop()
+		kbft.toTicker.Close()
+
+		return err
+	}
+
+	return nil
 }
 
 func (kbft *KBFT) Close(err error) {
 	kbft.logger.Info("Closing KBFT", "err", err)
-	kbft.toTicker.Close()
 	kbft.toTicker.Stop()
+	kbft.toTicker.Close()
 
 	select {
 	case kbft.closeChan <- err:
