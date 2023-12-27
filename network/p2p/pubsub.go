@@ -186,9 +186,7 @@ func (s *Server) Subscribe(
 			s.wrapAndReportValidation(
 				topicName,
 				func(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
-					validator := pubsub.NewBasicSeqnoValidator(s.peerMsgNonceStore)
-
-					return validator(ctx, pid, msg), nil
+					return s.basicSeqnoValidator(ctx, pid, msg), nil
 				},
 			),
 		)

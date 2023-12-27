@@ -81,7 +81,7 @@ type Server struct {
 	init    sync.Once
 	metrics *Metrics
 
-	peerMsgNonceStore *peerMsgNonceStore
+	basicSeqnoValidator pubsub.ValidatorEx // default validation for messages
 }
 
 // NewServer is a constructor function that generates, configures and returns a Server.
@@ -96,17 +96,17 @@ func NewServer(
 ) *Server {
 	ctx, cancel := context.WithCancel(context.Background())
 	server := &Server{
-		id:                id,
-		ctx:               ctx,
-		ctxCancel:         cancel,
-		logger:            logger.Named("P2P-Server"),
-		cfg:               config,
-		mux:               mux,
-		Peers:             newPeerSet(),
-		rpcServers:        make(map[protocol.ID]*rpc.Server),
-		vault:             vault,
-		metrics:           metrics,
-		peerMsgNonceStore: newpeerMsgNonceStore(),
+		id:                  id,
+		ctx:                 ctx,
+		ctxCancel:           cancel,
+		logger:              logger.Named("P2P-Server"),
+		cfg:                 config,
+		mux:                 mux,
+		Peers:               newPeerSet(),
+		rpcServers:          make(map[protocol.ID]*rpc.Server),
+		vault:               vault,
+		metrics:             metrics,
+		basicSeqnoValidator: pubsub.NewBasicSeqnoValidator(newpeerMsgNonceStore()),
 	}
 
 	return server
