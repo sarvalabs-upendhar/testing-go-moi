@@ -1,8 +1,11 @@
 package p2p
 
 import (
+	"context"
 	"testing"
 	"time"
+
+	"github.com/sarvalabs/go-moi/common/tests"
 
 	"github.com/sarvalabs/go-moi/common/config"
 
@@ -36,9 +39,21 @@ func TestAdvertise(t *testing.T) {
 
 	go servers[0].ds.advertise()
 
-	time.Sleep(100 * time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
 
-	peerInfo := findPeer(t, servers[1])
+	var peerInfo peer.AddrInfo
+
+	_, err := tests.RetryUntilTimeout(ctx, 100*time.Millisecond, func() (interface{}, bool) {
+		peerInfo = findPeer(t, servers[1])
+
+		if peerInfo.ID == "" {
+			return nil, true
+		}
+
+		return peerInfo, false
+	})
+	require.NoError(t, err)
 
 	require.Equal(t, servers[0].host.ID(), peerInfo.ID)
 }
