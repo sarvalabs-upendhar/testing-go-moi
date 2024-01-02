@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/pkg/errors"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -132,14 +133,14 @@ func createSendIXArgs(sendIx *rpcargs.IxArgs) (*common.SendIXArgs, error) {
 	}
 
 	if len(sendIx.TransferValues) > 0 {
-		sendIXArgs.TransferValues = make(map[common.AssetID]*big.Int)
+		sendIXArgs.TransferValues = make(map[identifiers.AssetID]*big.Int)
 		for asset, amount := range sendIx.TransferValues {
 			sendIXArgs.TransferValues[asset] = amount.ToInt()
 		}
 	}
 
 	if len(sendIx.PerceivedValues) > 0 {
-		sendIXArgs.PerceivedValues = make(map[common.AssetID]*big.Int)
+		sendIXArgs.PerceivedValues = make(map[identifiers.AssetID]*big.Int)
 		for asset, amount := range sendIx.PerceivedValues {
 			sendIXArgs.PerceivedValues[asset] = amount.ToInt()
 		}

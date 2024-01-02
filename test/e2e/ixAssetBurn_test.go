@@ -4,11 +4,13 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/moiclient"
-	"github.com/stretchr/testify/require"
 )
 
 func (te *TestEnvironment) burnAsset(
@@ -39,7 +41,7 @@ func (te *TestEnvironment) burnAsset(
 // 2. make sure asset burned on senders side by payload amount
 func validateAssetBurn(
 	te *TestEnvironment,
-	sender common.Address,
+	sender identifiers.Address,
 	payload common.AssetMintOrBurnPayload,
 	ixHash common.Hash,
 ) {
@@ -77,7 +79,7 @@ func (te *TestEnvironment) TestAssetBurn() {
 		nil,
 	))
 
-	transferAsset(te, sender, nonOperator.Addr, map[common.AssetID]*big.Int{
+	transferAsset(te, sender, nonOperator.Addr, map[identifiers.AssetID]*big.Int{
 		MAS0AssetID: big.NewInt(100),
 	})
 
@@ -87,7 +89,7 @@ func (te *TestEnvironment) TestAssetBurn() {
 		assetMintPayload *common.AssetMintOrBurnPayload
 		postTest         func(
 			te *TestEnvironment,
-			sender common.Address,
+			sender identifiers.Address,
 			payload common.AssetMintOrBurnPayload,
 			ixHash common.Hash,
 		)

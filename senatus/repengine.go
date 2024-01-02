@@ -7,14 +7,14 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/hashicorp/golang-lru"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi/common"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/sarvalabs/go-legacy-kramaid"
 
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/storage"
 	"github.com/sarvalabs/go-moi/storage/db"
 )
@@ -32,7 +32,7 @@ type senatusStore interface {
 }
 
 type ReputationEngine struct {
-	kramaID      id.KramaID
+	kramaID      kramaid.KramaID
 	ctx          context.Context
 	ctxCancel    context.CancelFunc
 	logger       hclog.Logger
@@ -175,7 +175,7 @@ func (r *ReputationEngine) AddNewPeerWithPeerID(peerID peer.ID, data *NodeMetaIn
 	return nil
 }
 
-func (r *ReputationEngine) UpdateNTQ(kramaID id.KramaID, ntq float32) error {
+func (r *ReputationEngine) UpdateNTQ(kramaID kramaid.KramaID, ntq float32) error {
 	peerID, err := kramaID.DecodedPeerID()
 	if err != nil {
 		return common.ErrInvalidKramaID
@@ -209,7 +209,7 @@ func (r *ReputationEngine) UpdateNTQ(kramaID id.KramaID, ntq float32) error {
 	return nil
 }
 
-func (r *ReputationEngine) UpdateWalletCount(kramaID id.KramaID, delta int32) error {
+func (r *ReputationEngine) UpdateWalletCount(kramaID kramaid.KramaID, delta int32) error {
 	peerID, err := kramaID.DecodedPeerID()
 	if err != nil {
 		return common.ErrInvalidKramaID
@@ -244,7 +244,7 @@ func (r *ReputationEngine) UpdateWalletCount(kramaID id.KramaID, delta int32) er
 	return nil
 }
 
-func (r *ReputationEngine) UpdatePublicKey(kramaID id.KramaID, pk []byte) error {
+func (r *ReputationEngine) UpdatePublicKey(kramaID kramaid.KramaID, pk []byte) error {
 	peerID, err := kramaID.DecodedPeerID()
 	if err != nil {
 		return common.ErrInvalidKramaID
@@ -283,7 +283,7 @@ func (r *ReputationEngine) UpdatePublicKey(kramaID id.KramaID, pk []byte) error 
 	return nil
 }
 
-func (r *ReputationEngine) GetAddress(kramaID id.KramaID) ([]multiaddr.Multiaddr, error) {
+func (r *ReputationEngine) GetAddress(kramaID kramaid.KramaID) ([]multiaddr.Multiaddr, error) {
 	peerID, err := kramaID.DecodedPeerID()
 	if err != nil {
 		return nil, common.ErrInvalidKramaID
@@ -315,7 +315,7 @@ func (r *ReputationEngine) GetRTTByPeerID(peerID peer.ID) (int64, error) {
 	return info.RTT, nil
 }
 
-func (r *ReputationEngine) GetKramaIDByPeerID(peerID peer.ID) (id.KramaID, error) {
+func (r *ReputationEngine) GetKramaIDByPeerID(peerID peer.ID) (kramaid.KramaID, error) {
 	info, err := r.nodeMetaInfo(peerID)
 	if err != nil {
 		return "", err
@@ -324,7 +324,7 @@ func (r *ReputationEngine) GetKramaIDByPeerID(peerID peer.ID) (id.KramaID, error
 	return info.KramaID, nil
 }
 
-func (r *ReputationEngine) GetNTQ(kramaID id.KramaID) (float32, error) {
+func (r *ReputationEngine) GetNTQ(kramaID kramaid.KramaID) (float32, error) {
 	peerID, err := kramaID.DecodedPeerID()
 	if err != nil {
 		return 0, common.ErrInvalidKramaID
@@ -338,7 +338,7 @@ func (r *ReputationEngine) GetNTQ(kramaID id.KramaID) (float32, error) {
 	return info.GetNTQ(), nil
 }
 
-func (r *ReputationEngine) GetWalletCount(kramaID id.KramaID) (int32, error) {
+func (r *ReputationEngine) GetWalletCount(kramaID kramaid.KramaID) (int32, error) {
 	peerID, err := kramaID.DecodedPeerID()
 	if err != nil {
 		return 0, common.ErrInvalidKramaID
@@ -352,7 +352,7 @@ func (r *ReputationEngine) GetWalletCount(kramaID id.KramaID) (int32, error) {
 	return info.GetWalletCount(), nil
 }
 
-func (r *ReputationEngine) GetPublicKey(kramaID id.KramaID) ([]byte, error) {
+func (r *ReputationEngine) GetPublicKey(kramaID kramaid.KramaID) ([]byte, error) {
 	peerID, err := kramaID.DecodedPeerID()
 	if err != nil {
 		return nil, common.ErrInvalidKramaID

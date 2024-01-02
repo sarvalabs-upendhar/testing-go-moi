@@ -12,20 +12,18 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/sarvalabs/go-moi/jsonrpc/backend"
-
-	"github.com/sarvalabs/go-moi/jsonrpc/args"
-
-	"github.com/sarvalabs/go-moi/common"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-	"github.com/sarvalabs/go-moi/common/tests"
-	"github.com/sarvalabs/go-moi/state"
-
-	"github.com/sarvalabs/go-moi/common/utils"
-
 	"github.com/gorilla/websocket"
 	"github.com/hashicorp/go-hclog"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/sarvalabs/go-moi/jsonrpc/args"
+	"github.com/sarvalabs/go-moi/jsonrpc/backend"
+	"github.com/sarvalabs/go-moi/state"
 )
 
 func newMockServer(t *testing.T) *httptest.Server {
@@ -129,7 +127,7 @@ func NewMockChainManager(t *testing.T) *MockChainManager {
 	return mockChain
 }
 
-func (m *MockChainManager) GetLatestTesseract(addr common.Address, withInteractions bool) (*common.Tesseract, error) {
+func (m *MockChainManager) GetLatestTesseract(_ identifiers.Address, _ bool) (*common.Tesseract, error) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -177,12 +175,12 @@ func (m *MockChainManager) GetInteractionAndPartsByTSHash(tsHash common.Hash,
 	panic("implement me")
 }
 
-func (m *MockChainManager) setTesseractHeightEntry(address common.Address, height uint64, hash common.Hash) {
+func (m *MockChainManager) setTesseractHeightEntry(address identifiers.Address, height uint64, hash common.Hash) {
 	key := address.Hex() + strconv.FormatUint(height, 10)
 	m.TSHashByHeight[key] = hash
 }
 
-func (m *MockChainManager) GetTesseractHeightEntry(address common.Address, height uint64) (common.Hash, error) {
+func (m *MockChainManager) GetTesseractHeightEntry(address identifiers.Address, height uint64) (common.Hash, error) {
 	key := address.Hex() + strconv.FormatUint(height, 10)
 
 	if hash, ok := m.TSHashByHeight[key]; ok {
@@ -207,7 +205,7 @@ func (m *MockChainManager) GetTesseractPartsByGridHash(gridHash common.Hash) (*c
 
 type MockStateManager struct {
 	storage     map[common.Hash][]byte
-	accMetaInfo map[common.Address]*common.AccountMetaInfo
+	accMetaInfo map[identifiers.Address]*common.AccountMetaInfo
 }
 
 func NewMockStateManager(t *testing.T) *MockStateManager {
@@ -215,58 +213,58 @@ func NewMockStateManager(t *testing.T) *MockStateManager {
 
 	mockState := new(MockStateManager)
 	mockState.storage = make(map[common.Hash][]byte)
-	mockState.accMetaInfo = make(map[common.Address]*common.AccountMetaInfo)
+	mockState.accMetaInfo = make(map[identifiers.Address]*common.AccountMetaInfo)
 
 	return mockState
 }
 
-func (m *MockStateManager) GetLatestStateObject(addr common.Address) (*state.Object, error) {
+func (m *MockStateManager) GetLatestStateObject(addr identifiers.Address) (*state.Object, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockStateManager) GetContextByHash(address common.Address,
+func (m *MockStateManager) GetContextByHash(address identifiers.Address,
 	hash common.Hash,
-) (common.Hash, []id.KramaID, []id.KramaID, error) {
+) (common.Hash, []kramaid.KramaID, []kramaid.KramaID, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockStateManager) GetBalances(addrs common.Address, stateHash common.Hash) (*state.BalanceObject, error) {
+func (m *MockStateManager) GetBalances(addrs identifiers.Address, stateHash common.Hash) (*state.BalanceObject, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockStateManager) GetBalance(addr common.Address,
-	assetID common.AssetID, stateHash common.Hash,
+func (m *MockStateManager) GetBalance(addr identifiers.Address,
+	assetID identifiers.AssetID, stateHash common.Hash,
 ) (*big.Int, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockStateManager) GetNonce(addr common.Address, stateHash common.Hash) (uint64, error) {
+func (m *MockStateManager) GetNonce(addr identifiers.Address, stateHash common.Hash) (uint64, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockStateManager) GetAccountState(addr common.Address, stateHash common.Hash) (*common.Account, error) {
+func (m *MockStateManager) GetAccountState(addr identifiers.Address, stateHash common.Hash) (*common.Account, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockStateManager) GetLogicManifest(logicID common.LogicID, stateHash common.Hash) ([]byte, error) {
+func (m *MockStateManager) GetLogicManifest(_ identifiers.LogicID, _ common.Hash) ([]byte, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockStateManager) GetStorageEntry(logicID common.LogicID, slot []byte, stateHash common.Hash) ([]byte, error) {
+func (m *MockStateManager) GetStorageEntry(_ identifiers.LogicID, _ []byte, _ common.Hash) ([]byte, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
 func (m *MockStateManager) setAccountMetaInfo(
 	t *testing.T,
-	address common.Address,
+	address identifiers.Address,
 	accMetaInfo *common.AccountMetaInfo,
 ) {
 	t.Helper()
@@ -274,7 +272,7 @@ func (m *MockStateManager) setAccountMetaInfo(
 	m.accMetaInfo[address] = accMetaInfo
 }
 
-func (m *MockStateManager) GetAccountMetaInfo(addr common.Address) (*common.AccountMetaInfo, error) {
+func (m *MockStateManager) GetAccountMetaInfo(addr identifiers.Address) (*common.AccountMetaInfo, error) {
 	accMetaInfo, ok := m.accMetaInfo[addr]
 	if !ok {
 		return nil, common.ErrKeyNotFound
@@ -283,20 +281,20 @@ func (m *MockStateManager) GetAccountMetaInfo(addr common.Address) (*common.Acco
 	return accMetaInfo, nil
 }
 
-func (m *MockStateManager) GetLogicIDs(addr common.Address, stateHash common.Hash) ([]common.LogicID, error) {
+func (m *MockStateManager) GetLogicIDs(addr identifiers.Address, stateHash common.Hash) ([]identifiers.LogicID, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
 func (m *MockStateManager) GetAssetInfo(
-	assetID common.AssetID,
+	assetID identifiers.AssetID,
 	stateHash common.Hash,
 ) (*common.AssetDescriptor, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockStateManager) GetRegistry(addr common.Address, stateHash common.Hash) (map[string][]byte, error) {
+func (m *MockStateManager) GetRegistry(addr identifiers.Address, stateHash common.Hash) (map[string][]byte, error) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -321,7 +319,7 @@ func createReceipt(t *testing.T, callBack func(r *common.Receipt)) *common.Recei
 // Dummy logs are created using address, hash, logic ID and data.
 func createTSandLogs(
 	t *testing.T,
-	addresses []common.Address,
+	addresses []identifiers.Address,
 	hashes []common.Hash,
 ) ([]*common.Tesseract, *common.Log) {
 	t.Helper()
@@ -345,7 +343,7 @@ func createTSandLogs(
 
 	headerCallbackWithGridHash := func(
 		t *testing.T,
-		address common.Address,
+		address identifiers.Address,
 		hash common.Hash,
 		height uint64,
 	) func(header *common.TesseractHeader) {
@@ -357,7 +355,7 @@ func createTSandLogs(
 					Hash: tests.RandomHash(t),
 					Parts: &common.TesseractParts{
 						Total: 2,
-						Grid: map[common.Address]common.TesseractHeightAndHash{
+						Grid: map[identifiers.Address]common.TesseractHeightAndHash{
 							address: {
 								Height: height,
 								Hash:   hash,
@@ -410,7 +408,7 @@ func validateLogs(t *testing.T, log *common.Log, rpcLog *args.RPCLog) {
 
 func validateTSGrid(
 	t *testing.T,
-	grid map[common.Address]common.TesseractHeightAndHash,
+	grid map[identifiers.Address]common.TesseractHeightAndHash,
 	rpcGrid args.RPCTesseractParts,
 ) {
 	t.Helper()

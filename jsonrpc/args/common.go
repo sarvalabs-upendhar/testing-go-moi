@@ -5,10 +5,11 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
+	"github.com/sarvalabs/go-moi/common/tests"
 )
 
 var LatestTesseractHeight int64 = -1
@@ -17,7 +18,7 @@ var LatestTesseractHeight int64 = -1
 // depolarizing the payload based on the interaction type, JSON marshalling it, and storing it in the input payload.
 func CreateRPCInteraction(
 	ix *common.Interaction,
-	grid map[common.Address]common.TesseractHeightAndHash,
+	grid map[identifiers.Address]common.TesseractHeightAndHash,
 	ixIndex int,
 ) (*RPCInteraction, error) {
 	input := ix.Input()
@@ -49,16 +50,16 @@ func CreateRPCInteraction(
 	}
 
 	if len(input.TransferValues) > 0 {
-		rpcIX.TransferValues = make(map[common.AssetID]*hexutil.Big)
+		rpcIX.TransferValues = make(map[string]*hexutil.Big)
 		for asset, amount := range input.TransferValues {
-			rpcIX.TransferValues[asset] = (*hexutil.Big)(amount)
+			rpcIX.TransferValues[asset.String()] = (*hexutil.Big)(amount)
 		}
 	}
 
 	if len(input.PerceivedValues) > 0 {
-		rpcIX.PerceivedValues = make(map[common.AssetID]*hexutil.Big)
+		rpcIX.PerceivedValues = make(map[string]*hexutil.Big)
 		for asset, amount := range input.PerceivedValues {
-			rpcIX.PerceivedValues[asset] = (*hexutil.Big)(amount)
+			rpcIX.PerceivedValues[asset.String()] = (*hexutil.Big)(amount)
 		}
 	}
 
@@ -129,7 +130,7 @@ func CreateRPCInteraction(
 	return rpcIX, nil
 }
 
-func GetRPCTesseractPartsFromGrid(grid map[common.Address]common.TesseractHeightAndHash) RPCTesseractParts {
+func GetRPCTesseractPartsFromGrid(grid map[identifiers.Address]common.TesseractHeightAndHash) RPCTesseractParts {
 	if len(grid) == 0 {
 		return nil
 	}
@@ -169,7 +170,7 @@ func CreateRPCTesseractGridID(tesseractGridID *common.TesseractGridID) *RPCTesse
 	return newGrid
 }
 
-func CreateRPCContextLockInfos(contextLockInfos map[common.Address]common.ContextLockInfo) RPCContextLockInfos {
+func CreateRPCContextLockInfos(contextLockInfos map[identifiers.Address]common.ContextLockInfo) RPCContextLockInfos {
 	if len(contextLockInfos) == 0 {
 		return nil
 	}
@@ -223,7 +224,7 @@ func CreateRPCHeader(h common.TesseractHeader) RPCHeader {
 	return rpcHeader
 }
 
-func CreateRPCDeltaGroups(deltaGroups map[common.Address]*common.DeltaGroup) RPCDeltaGroups {
+func CreateRPCDeltaGroups(deltaGroups map[identifiers.Address]*common.DeltaGroup) RPCDeltaGroups {
 	if len(deltaGroups) == 0 {
 		return nil
 	}
@@ -312,7 +313,7 @@ func createRPCHashes(hashes common.ReceiptAccHashes) RPCHashes {
 func CreateRPCReceipt(
 	receipt *common.Receipt,
 	ix *common.Interaction,
-	grid map[common.Address]common.TesseractHeightAndHash,
+	grid map[identifiers.Address]common.TesseractHeightAndHash,
 	ixIndex int,
 ) *RPCReceipt {
 	return &RPCReceipt{

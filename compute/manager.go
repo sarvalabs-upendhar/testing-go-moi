@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-pisa"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -49,7 +50,7 @@ func (manager *Manager) SpawnExecutor() *IxExecutor {
 		snapshots: make(state.ObjectMap),
 
 		receipts:     make(map[common.Hash]*common.Receipt),
-		commitHashes: make(map[common.Address]common.Hash),
+		commitHashes: make(map[identifiers.Address]common.Hash),
 	}
 }
 
@@ -81,7 +82,7 @@ func (manager *Manager) ExecuteInteractions(
 func (manager *Manager) InteractionCall(
 	ctx *common.ExecutionContext,
 	ix *common.Interaction,
-	hashes map[common.Address]common.Hash,
+	hashes map[identifiers.Address]common.Hash,
 ) (*common.Receipt, error) {
 	// Fetch state objects for the interaction
 	objects, err := FetchIxStateObjects(manager.state, ix, hashes)

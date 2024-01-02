@@ -3,7 +3,7 @@ package kbft
 import (
 	"bytes"
 
-	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi-identifiers"
 )
 
 type ValidatorSet struct {
@@ -25,7 +25,7 @@ func NewValidatorSet(v []*Validator, operatorIndex int32, vp []int64, i []int32,
 	return vs
 }
 
-func (valSet *ValidatorSet) HasAddress(addrs common.Address) bool {
+func (valSet *ValidatorSet) HasAddress(addrs identifiers.Address) bool {
 	for _, val := range valSet.Validators {
 		if bytes.Equal(val.Address.Bytes(), addrs.Bytes()) {
 			return true
@@ -35,9 +35,9 @@ func (valSet *ValidatorSet) HasAddress(addrs common.Address) bool {
 	return false
 }
 
-func (valSet *ValidatorSet) GetByIndex(index int32) (addrs common.Address, val *Validator) {
+func (valSet *ValidatorSet) GetByIndex(index int32) (addrs identifiers.Address, val *Validator) {
 	if index < 0 || int(index) >= len(valSet.Validators) {
-		return common.Address{}, nil
+		return identifiers.Address{}, nil
 	}
 
 	val = valSet.Validators[index]
@@ -45,7 +45,7 @@ func (valSet *ValidatorSet) GetByIndex(index int32) (addrs common.Address, val *
 	return val.Address, val
 }
 
-func (valSet *ValidatorSet) GetByAddress(add common.Address) (index int32, val *Validator) {
+func (valSet *ValidatorSet) GetByAddress(add identifiers.Address) (index int32, val *Validator) {
 	for idx, val := range valSet.Validators {
 		if bytes.Equal(val.Address.Bytes(), add.Bytes()) {
 			return int32(idx), val.Copy()

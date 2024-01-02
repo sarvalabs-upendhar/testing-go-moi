@@ -3,6 +3,7 @@ package ixpool
 import (
 	"testing"
 
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -19,8 +20,8 @@ func TestPricedQueue_Push(t *testing.T) {
 		{
 			name: "Push ixs into the priced queue",
 			ixs: common.Interactions{
-				newIxWithFuelPrice(t, 0, common.NilAddress, 8),
-				newIxWithFuelPrice(t, 0, common.NilAddress, 2),
+				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 8),
+				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 2),
 			},
 			expected: []uint64{8, 2},
 		},
@@ -57,11 +58,11 @@ func TestPricedQueue_Pop(t *testing.T) {
 		{
 			name: "Pop the ixs by highest cost in order",
 			ixs: common.Interactions{
-				newIxWithFuelPrice(t, 0, common.NilAddress, 8),
-				newIxWithFuelPrice(t, 0, common.NilAddress, 2),
-				newIxWithFuelPrice(t, 0, common.NilAddress, 4),
-				newIxWithFuelPrice(t, 0, common.NilAddress, 12),
-				newIxWithFuelPrice(t, 0, common.NilAddress, 8),
+				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 8),
+				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 2),
+				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 4),
+				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 12),
+				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 8),
 			},
 			testFn: func(pq *pricedQueue, ixs common.Interactions) {
 				for _, ix := range ixs {
@@ -112,11 +113,11 @@ func TestPricedQueue_Peek(t *testing.T) {
 		{
 			name: "Peek the ixs by highest cost in order",
 			ixs: common.Interactions{
-				newIxWithFuelPrice(t, 0, common.NilAddress, 8),
-				newIxWithFuelPrice(t, 0, common.NilAddress, 2),
-				newIxWithFuelPrice(t, 0, common.NilAddress, 4),
-				newIxWithFuelPrice(t, 0, common.NilAddress, 12),
-				newIxWithFuelPrice(t, 0, common.NilAddress, 8),
+				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 8),
+				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 2),
+				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 4),
+				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 12),
+				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 8),
 			},
 			testFn: func(pq *pricedQueue, ixs common.Interactions) {
 				for _, ix := range ixs {
@@ -166,8 +167,8 @@ func TestPricedQueue_Len(t *testing.T) {
 		{
 			name: "should return the expected length",
 			ixs: common.Interactions{
-				newIxWithFuelPrice(t, 0, common.NilAddress, 8),
-				newIxWithFuelPrice(t, 0, common.NilAddress, 2),
+				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 8),
+				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 2),
 			},
 			testFn: func(pq *pricedQueue, ixs common.Interactions) {
 				for _, ix := range ixs {
@@ -200,9 +201,9 @@ func TestWaitQueue_Push(t *testing.T) {
 		{
 			name: "Push ixs into the wait queue",
 			ixs: []*WaitInteractions{
-				newIxWithWaitCounter(t, 2, common.NilAddress, 2),
-				newIxWithWaitCounter(t, 1, common.NilAddress, 1),
-				newIxWithWaitCounter(t, 4, common.NilAddress, 4),
+				newIxWithWaitCounter(t, 2, identifiers.NilAddress, 2),
+				newIxWithWaitCounter(t, 1, identifiers.NilAddress, 1),
+				newIxWithWaitCounter(t, 4, identifiers.NilAddress, 4),
 			},
 			expected: []uint64{4, 2, 1},
 		},
@@ -241,11 +242,11 @@ func TestWaitQueue_Pop(t *testing.T) {
 		{
 			name: "Pop the ixs by highest wait time in order",
 			ixs: []*WaitInteractions{
-				newIxWithWaitCounter(t, 2, common.NilAddress, 2),
-				newIxWithWaitCounter(t, 5, common.NilAddress, 5),
-				newIxWithWaitCounter(t, 1, common.NilAddress, 1),
-				newIxWithWaitCounter(t, 8, common.NilAddress, 8),
-				newIxWithWaitCounter(t, 5, common.NilAddress, 5),
+				newIxWithWaitCounter(t, 2, identifiers.NilAddress, 2),
+				newIxWithWaitCounter(t, 5, identifiers.NilAddress, 5),
+				newIxWithWaitCounter(t, 1, identifiers.NilAddress, 1),
+				newIxWithWaitCounter(t, 8, identifiers.NilAddress, 8),
+				newIxWithWaitCounter(t, 5, identifiers.NilAddress, 5),
 			},
 			testFn: func(wq *waitQueue, ixs []*WaitInteractions) {
 				for _, ix := range ixs {
@@ -296,11 +297,11 @@ func TestWaitQueue_Peek(t *testing.T) {
 		{
 			name: "Peek the ixs by highest wait time in order",
 			ixs: []*WaitInteractions{
-				newIxWithWaitCounter(t, 4, common.NilAddress, 4),
-				newIxWithWaitCounter(t, 2, common.NilAddress, 2),
-				newIxWithWaitCounter(t, 4, common.NilAddress, 4),
-				newIxWithWaitCounter(t, 10, common.NilAddress, 10),
-				newIxWithWaitCounter(t, 4, common.NilAddress, 4),
+				newIxWithWaitCounter(t, 4, identifiers.NilAddress, 4),
+				newIxWithWaitCounter(t, 2, identifiers.NilAddress, 2),
+				newIxWithWaitCounter(t, 4, identifiers.NilAddress, 4),
+				newIxWithWaitCounter(t, 10, identifiers.NilAddress, 10),
+				newIxWithWaitCounter(t, 4, identifiers.NilAddress, 4),
 			},
 			testFn: func(wq *waitQueue, ixs []*WaitInteractions) {
 				for _, ix := range ixs {
@@ -350,8 +351,8 @@ func TestWaitQueue_Len(t *testing.T) {
 		{
 			name: "should return the expected length",
 			ixs: []*WaitInteractions{
-				newIxWithWaitCounter(t, 0, common.NilAddress, 8),
-				newIxWithWaitCounter(t, 0, common.NilAddress, 2),
+				newIxWithWaitCounter(t, 0, identifiers.NilAddress, 8),
+				newIxWithWaitCounter(t, 0, identifiers.NilAddress, 2),
 			},
 			testFn: func(wq *waitQueue, ixs []*WaitInteractions) {
 				for _, ix := range ixs {

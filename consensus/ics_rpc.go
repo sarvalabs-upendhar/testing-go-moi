@@ -5,8 +5,9 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-legacy-kramaid"
+
 	"github.com/sarvalabs/go-moi/common"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
 	"github.com/sarvalabs/go-moi/crypto"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
@@ -51,7 +52,7 @@ func (icsrpc *ICSRPCService) ICSRequest(
 	}
 
 	if err := crypto.VerifySignatureUsingKramaID(
-		id.KramaID(canonicalICSReq.Operator),
+		kramaid.KramaID(canonicalICSReq.Operator),
 		icsReq.ReqData,
 		icsReq.Signature,
 	); err != nil {
@@ -74,7 +75,7 @@ func (icsrpc *ICSRPCService) ICSRequest(
 
 	kramaRequest := Request{
 		slotType:     ktypes.ValidatorSlot,
-		operator:     id.KramaID(canonicalICSReq.Operator),
+		operator:     kramaid.KramaID(canonicalICSReq.Operator),
 		msg:          canonicalICSReq,
 		responseChan: respChan,
 		ixs:          *interactions,

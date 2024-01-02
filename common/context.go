@@ -1,6 +1,9 @@
 package common
 
-import id "github.com/sarvalabs/go-moi/common/kramaid"
+import (
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
+)
 
 type ParticipantRole int
 
@@ -10,7 +13,7 @@ const (
 	Genesis
 )
 
-type ContextDelta map[Address]*DeltaGroup
+type ContextDelta map[identifiers.Address]*DeltaGroup
 
 func (delta ContextDelta) Copy() ContextDelta {
 	if len(delta) == 0 {
@@ -27,10 +30,10 @@ func (delta ContextDelta) Copy() ContextDelta {
 }
 
 type DeltaGroup struct {
-	Role             ParticipantRole `json:"role"`
-	BehaviouralNodes []id.KramaID    `json:"behavioural_nodes"`
-	RandomNodes      []id.KramaID    `json:"random_nodes"`
-	ReplacedNodes    []id.KramaID    `json:"replaced_nodes"`
+	Role             ParticipantRole   `json:"role"`
+	BehaviouralNodes []kramaid.KramaID `json:"behavioural_nodes"`
+	RandomNodes      []kramaid.KramaID `json:"random_nodes"`
+	ReplacedNodes    []kramaid.KramaID `json:"replaced_nodes"`
 }
 
 func (d DeltaGroup) Copy() *DeltaGroup {
@@ -39,17 +42,17 @@ func (d DeltaGroup) Copy() *DeltaGroup {
 	}
 
 	if len(d.BehaviouralNodes) > 0 {
-		deltaGroup.BehaviouralNodes = make([]id.KramaID, len(d.BehaviouralNodes))
+		deltaGroup.BehaviouralNodes = make([]kramaid.KramaID, len(d.BehaviouralNodes))
 		copy(deltaGroup.BehaviouralNodes, d.BehaviouralNodes)
 	}
 
 	if len(d.RandomNodes) > 0 {
-		deltaGroup.RandomNodes = make([]id.KramaID, len(d.RandomNodes))
+		deltaGroup.RandomNodes = make([]kramaid.KramaID, len(d.RandomNodes))
 		copy(deltaGroup.RandomNodes, d.RandomNodes)
 	}
 
 	if len(d.ReplacedNodes) > 0 {
-		deltaGroup.ReplacedNodes = make([]id.KramaID, len(d.ReplacedNodes))
+		deltaGroup.ReplacedNodes = make([]kramaid.KramaID, len(d.ReplacedNodes))
 		copy(deltaGroup.ReplacedNodes, d.ReplacedNodes)
 	}
 

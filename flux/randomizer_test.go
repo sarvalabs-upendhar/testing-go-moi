@@ -5,10 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/kramaid"
-	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/tests"
 )
 
 func TestRandomizer_addPeers(t *testing.T) {

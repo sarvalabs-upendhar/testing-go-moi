@@ -1,7 +1,8 @@
 package api
 
 import (
-	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-legacy-kramaid"
+
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/jsonrpc/backend"
 )
@@ -17,7 +18,7 @@ func NewPublicNetAPI(network backend.Network) *PublicNetAPI {
 }
 
 // Peers returns an array of Krama ID's that are connected to a node
-func (p *PublicNetAPI) Peers() ([]id.KramaID, error) {
+func (p *PublicNetAPI) Peers() ([]kramaid.KramaID, error) {
 	return p.network.GetPeers(), nil
 }
 

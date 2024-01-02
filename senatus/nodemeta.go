@@ -4,17 +4,16 @@ import (
 	"sync"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/sarvalabs/go-moi/common"
-
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-polo"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-moi/common"
 )
 
 type NodeMetaInfoMsg struct {
-	KramaID       id.KramaID
+	KramaID       kramaid.KramaID
 	Address       []string
 	NTQ           float32
 	WalletCount   int32
@@ -24,7 +23,7 @@ type NodeMetaInfoMsg struct {
 type NodeMetaInfo struct {
 	mtx           sync.RWMutex
 	Addrs         []string
-	KramaID       id.KramaID
+	KramaID       kramaid.KramaID
 	NTQ           float32
 	RTT           int64
 	WalletCount   int32

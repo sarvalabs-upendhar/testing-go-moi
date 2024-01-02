@@ -6,16 +6,16 @@ import (
 	"testing"
 	"time"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/hashicorp/go-hclog"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
+
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/tests"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
 	"github.com/sarvalabs/go-moi/syncer/agora/db"
 	"github.com/sarvalabs/go-moi/syncer/agora/message"
 	"github.com/sarvalabs/go-moi/syncer/cid"
-
-	"github.com/hashicorp/go-hclog"
-
-	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/tests"
 )
 
 type (
@@ -72,7 +72,7 @@ func NewMockDB() *MockDB {
 	}
 }
 
-func (db *MockDB) DoesStateExists(address common.Address, stateHash cid.CID) bool {
+func (db *MockDB) DoesStateExists(address identifiers.Address, stateHash cid.CID) bool {
 	db.mtx.Lock()
 	defer db.mtx.Unlock()
 
@@ -106,7 +106,7 @@ func (db *MockDB) GetBatchWriter() db.BatchWriter {
 
 func (db *MockDB) GetData(
 	ctx context.Context,
-	address common.Address,
+	address identifiers.Address,
 	keys []cid.CID,
 ) (map[cid.CID][]byte, error) {
 	db.mtx.Lock()
@@ -140,16 +140,16 @@ func (bw *mockBatchWriter) Flush() error {
 }
 
 type MockLedger struct {
-	peers map[cid.CID][]id.KramaID
+	peers map[cid.CID][]kramaid.KramaID
 }
 
 func NewMockLedger() *MockLedger {
 	return &MockLedger{
-		peers: make(map[cid.CID][]id.KramaID),
+		peers: make(map[cid.CID][]kramaid.KramaID),
 	}
 }
 
-func (mc *MockLedger) GetAssociatedPeers(addr common.Address, stateHash cid.CID) ([]id.KramaID, error) {
+func (mc *MockLedger) GetAssociatedPeers(addr identifiers.Address, stateHash cid.CID) ([]kramaid.KramaID, error) {
 	peers, ok := mc.peers[stateHash]
 	if !ok {
 		return nil, common.ErrKeyNotFound
@@ -158,7 +158,7 @@ func (mc *MockLedger) GetAssociatedPeers(addr common.Address, stateHash cid.CID)
 	return peers, nil
 }
 
-func (mc *MockLedger) UpdateAssociatedPeers(addr common.Address, stateHash cid.CID, peerID id.KramaID) error {
+func (mc *MockLedger) UpdateAssociatedPeers(addr identifiers.Address, stateHash cid.CID, peerID kramaid.KramaID) error {
 	peers, ok := mc.peers[stateHash]
 	if ok {
 		return common.ErrKeyNotFound
@@ -173,16 +173,16 @@ func (mc *MockLedger) UpdateAssociatedPeers(addr common.Address, stateHash cid.C
 
 type MockNetwork struct {
 	mtx sync.Mutex
-	msg map[id.KramaID]message.Message
+	msg map[kramaid.KramaID]message.Message
 }
 
 func NewMockNetwork() *MockNetwork {
 	return &MockNetwork{
-		msg: make(map[id.KramaID]message.Message),
+		msg: make(map[kramaid.KramaID]message.Message),
 	}
 }
 
-func (mn *MockNetwork) SendAgoraMessage(id id.KramaID, msgType networkmsg.MsgType, msg message.Message) error {
+func (mn *MockNetwork) SendAgoraMessage(id kramaid.KramaID, msgType networkmsg.MsgType, msg message.Message) error {
 	mn.mtx.Lock()
 	defer mn.mtx.Unlock()
 
@@ -202,7 +202,7 @@ func WaitForResponse(ctx context.Context, respChan chan *message.Response) (*mes
 
 func WaitForResponseMsg(
 	ctx context.Context,
-	from id.KramaID,
+	from kramaid.KramaID,
 	network *MockNetwork,
 ) (*message.AgoraResponseMsg, error) {
 	resp, err := tests.RetryUntilTimeout(ctx, 500*time.Millisecond, func() (interface{}, bool) {

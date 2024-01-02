@@ -11,10 +11,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/sarvalabs/go-moi/common/kramaid"
-
 	maddr "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/spf13/cobra"
 
 	cmdCommon "github.com/sarvalabs/go-moi/cmd/common"

@@ -6,20 +6,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/go-moi/common/config"
-
 	"github.com/hashicorp/go-hclog"
-
-	"github.com/sarvalabs/go-moi/jsonrpc/backend"
-
-	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
-
-	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/utils"
-
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
 
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/common/utils"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
+	"github.com/sarvalabs/go-moi/jsonrpc/backend"
 )
 
 type MessageParams struct {
@@ -304,7 +300,7 @@ func TestGetNumericTesseractNumber(t *testing.T) {
 	testcases := []struct {
 		name           string
 		height         int64
-		address        common.Address
+		address        identifiers.Address
 		expectedHeight uint64
 		expectedError  error
 	}{
@@ -407,7 +403,7 @@ func TestGetLogsFromTesseract(t *testing.T) {
 	// create dummy tesseract parts to validate address and height in RPCLogs
 	tsParts := &common.TesseractParts{
 		Total: 1,
-		Grid: map[common.Address]common.TesseractHeightAndHash{
+		Grid: map[identifiers.Address]common.TesseractHeightAndHash{
 			tests.RandomAddress(t): {
 				Height: 33,
 				Hash:   tests.RandomHash(t),
@@ -567,7 +563,7 @@ func TestGetLogsForQuery(t *testing.T) {
 
 	tesseracts := tests.CreateTesseracts(t, 4, paramsMap)
 
-	tsGrid := map[common.Address]common.TesseractHeightAndHash{
+	tsGrid := map[identifiers.Address]common.TesseractHeightAndHash{
 		tests.RandomAddress(t): {
 			Height: 33,
 			Hash:   tests.RandomHash(t),
@@ -591,7 +587,7 @@ func TestGetLogsForQuery(t *testing.T) {
 		filter             LogQuery
 		expectedTesseracts []*common.Tesseract
 		expectedLogs       []*common.Log
-		expectedTSGrid     map[common.Address]common.TesseractHeightAndHash
+		expectedTSGrid     map[identifiers.Address]common.TesseractHeightAndHash
 		expectedError      error
 	}{
 		{

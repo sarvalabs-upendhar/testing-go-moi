@@ -3,30 +3,32 @@ package tree
 import (
 	"sync"
 
+	"github.com/sarvalabs/go-moi-identifiers"
+
 	"github.com/sarvalabs/go-moi/common"
 	db "github.com/sarvalabs/go-moi/storage"
 )
 
 // persistentDB defines all methods that need to be implemented by persistent DB to handle tree data
 type persistentDB interface {
-	GetMerkleTreeEntry(address common.Address, prefix db.PrefixTag, key []byte) ([]byte, error)
-	SetMerkleTreeEntry(address common.Address, prefix db.PrefixTag, key, value []byte) error
-	SetMerkleTreeEntries(address common.Address, prefix db.PrefixTag, entries map[string][]byte) error
-	WritePreImages(address common.Address, entries map[common.Hash][]byte) error
-	GetPreImage(address common.Address, hash common.Hash) ([]byte, error)
+	GetMerkleTreeEntry(address identifiers.Address, prefix db.PrefixTag, key []byte) ([]byte, error)
+	SetMerkleTreeEntry(address identifiers.Address, prefix db.PrefixTag, key, value []byte) error
+	SetMerkleTreeEntries(address identifiers.Address, prefix db.PrefixTag, entries map[string][]byte) error
+	WritePreImages(address identifiers.Address, entries map[common.Hash][]byte) error
+	GetPreImage(address identifiers.Address, hash common.Hash) ([]byte, error)
 }
 
 // TreeDB implements the DB interface
 // all modified entries of trie will be stored in memory and flushed to persistent storage on calling the commit
 type TreeDB struct {
-	address  common.Address
+	address  identifiers.Address
 	dataType db.PrefixTag
 	mtx      sync.RWMutex
 	db       persistentDB
 	dirty    map[string][]byte
 }
 
-func NewTreeDB(address common.Address, dataType db.PrefixTag, db persistentDB) *TreeDB {
+func NewTreeDB(address identifiers.Address, dataType db.PrefixTag, db persistentDB) *TreeDB {
 	return &TreeDB{
 		address:  address,
 		dataType: dataType,

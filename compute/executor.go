@@ -4,6 +4,7 @@ import (
 	"math/big"
 
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/state"
@@ -22,7 +23,7 @@ type IxExecutor struct {
 	snapshots state.ObjectMap
 
 	receipts     map[common.Hash]*common.Receipt
-	commitHashes map[common.Address]common.Hash
+	commitHashes map[identifiers.Address]common.Hash
 }
 
 // Execute executes all the given Interactions with their context delta.
@@ -45,7 +46,7 @@ func (executor *IxExecutor) Execute(ixs common.Interactions, ctx *common.Executi
 		}
 
 		// Increment the nonce of the sender address
-		if ix.Sender() != common.NilAddress {
+		if ix.Sender() != identifiers.NilAddress {
 			executor.objects.GetObject(ix.Sender()).IncrementNonce(1)
 		}
 

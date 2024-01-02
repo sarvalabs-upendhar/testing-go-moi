@@ -6,14 +6,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sarvalabs/go-moi/common/utils"
-
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/utils"
 )
 
 type JobState int
@@ -43,12 +42,12 @@ const (
 type JobQueue struct {
 	mtx  sync.RWMutex
 	mux  *utils.TypeMux
-	jobs map[common.Address]*SyncJob
+	jobs map[identifiers.Address]*SyncJob
 }
 
 func NewJobQueue(mux *utils.TypeMux) *JobQueue {
 	return &JobQueue{
-		jobs: make(map[common.Address]*SyncJob),
+		jobs: make(map[identifiers.Address]*SyncJob),
 		mux:  mux,
 	}
 }
@@ -62,7 +61,7 @@ func (jq *JobQueue) len() int {
 	return len(jq.jobs)
 }
 
-func (jq *JobQueue) getJob(address common.Address) (*SyncJob, bool) {
+func (jq *JobQueue) getJob(address identifiers.Address) (*SyncJob, bool) {
 	jq.mtx.RLock()
 	defer func() {
 		jq.mtx.RUnlock()
@@ -143,13 +142,13 @@ func (jq *JobQueue) RemoveJob(job *SyncJob) error {
 	return nil
 }
 
-func (jq *JobQueue) GetPendingAccounts() []common.Address {
+func (jq *JobQueue) GetPendingAccounts() []identifiers.Address {
 	jq.mtx.RLock()
 	defer func() {
 		jq.mtx.RUnlock()
 	}()
 
-	pendingAccounts := make([]common.Address, 0, len(jq.jobs))
+	pendingAccounts := make([]identifiers.Address, 0, len(jq.jobs))
 
 	for _, jb := range jq.jobs {
 		pendingAccounts = append(pendingAccounts, jb.address)
@@ -170,7 +169,7 @@ type SyncJob struct {
 	mtx                   sync.RWMutex
 	logger                hclog.Logger
 	db                    store
-	address               common.Address
+	address               identifiers.Address
 	mode                  common.SyncMode
 	snapDownloaded        bool
 	expectedHeight        uint64
@@ -179,7 +178,7 @@ type SyncJob struct {
 	lastModifiedAt        time.Time
 	tesseractQueue        *TesseractQueue
 	tesseractSignal       chan struct{}
-	bestPeers             map[id.KramaID]struct{}
+	bestPeers             map[kramaid.KramaID]struct{}
 	latticeSyncInProgress bool
 }
 
@@ -209,7 +208,7 @@ func SyncJobFromCanonicalInfo(
 		lastModifiedAt:  *modifiedTime,
 		tesseractQueue:  NewTesseractQueue(),
 		tesseractSignal: make(chan struct{}, 1),
-		bestPeers:       make(map[id.KramaID]struct{}),
+		bestPeers:       make(map[kramaid.KramaID]struct{}),
 	}, nil
 }
 
@@ -234,7 +233,7 @@ func (j *SyncJob) bestPeerLen() int {
 	return len(j.bestPeers)
 }
 
-func (j *SyncJob) updateBestPeers(peers []id.KramaID) {
+func (j *SyncJob) updateBestPeers(peers []kramaid.KramaID) {
 	j.mtx.Lock()
 	defer j.mtx.Unlock()
 
@@ -243,14 +242,14 @@ func (j *SyncJob) updateBestPeers(peers []id.KramaID) {
 	}
 }
 
-func (j *SyncJob) deleteBestPeer(peer id.KramaID) {
+func (j *SyncJob) deleteBestPeer(peer kramaid.KramaID) {
 	j.mtx.Lock()
 	defer j.mtx.Unlock()
 
 	delete(j.bestPeers, peer)
 }
 
-func (j *SyncJob) chooseRandomBestPeer() id.KramaID {
+func (j *SyncJob) chooseRandomBestPeer() kramaid.KramaID {
 	j.mtx.Lock()
 	defer j.mtx.Unlock()
 

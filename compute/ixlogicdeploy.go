@@ -6,6 +6,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/state"
@@ -98,7 +99,7 @@ func DeployGenesisLogic(
 	ctx *common.ExecutionContext,
 	state *state.Object,
 	payload *common.LogicPayload,
-) (common.LogicID, error) {
+) (identifiers.LogicID, error) {
 	// Serialize the logic payload
 	inner, _ := payload.Bytes()
 	// Create a new IxLogicDeploy interaction with the logic payload

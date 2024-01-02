@@ -3,7 +3,8 @@ package kbft
 import (
 	"time"
 
-	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi-identifiers"
+
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
 )
 
@@ -65,7 +66,7 @@ func (rtype RoundStepType) String() string {
 // RoundState is a struct that represent the state of a consensus round
 type RoundState struct {
 	// Represents the current round heights being worked on
-	Heights map[common.Address]uint64 `json:"heights"`
+	Heights map[identifiers.Address]uint64 `json:"heights"`
 
 	// Represents the current round number
 	Round int32 `json:"round"`

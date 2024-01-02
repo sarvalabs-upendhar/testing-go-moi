@@ -36,8 +36,9 @@ func (logic LogicAccount) String() string {
 	str.WriteString(fmt.Sprintf("[Engine: @>%v<@] [Manifest: %x]\n", logic.Logic.Engine(), logic.Logic.Manifest()))
 	str.WriteString(fmt.Sprintf(
 		"[Persistent: @>%v<@] [Ephemeral: @>%v<@] [Interactive: @>%v<@] [Asset Logic: @>%v<@]\n",
-		identifier.PersistentState(), identifier.EphemeralState(), identifier.Interactive(), identifier.AssetLogic()),
-	)
+		identifier.HasPersistentState(), identifier.HasEphemeralState(),
+		identifier.HasInteractableSites(), identifier.AssetLogic(),
+	))
 
 	str.WriteString("\n==== Callsites\n")
 

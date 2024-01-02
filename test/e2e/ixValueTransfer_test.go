@@ -4,17 +4,19 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/moiclient"
-	"github.com/stretchr/testify/require"
 )
 
 func (te *TestEnvironment) transferAsset(
 	sender tests.AccountWithMnemonic,
-	receiver common.Address,
-	transferValues map[common.AssetID]*big.Int,
+	receiver identifiers.Address,
+	transferValues map[identifiers.AssetID]*big.Int,
 ) (common.Hash, error) {
 	te.logger.Debug("transfer asset ", "sender", sender.Addr,
 		"receiver", receiver, "transfer values", transferValues)
@@ -40,9 +42,9 @@ func (te *TestEnvironment) transferAsset(
 // 4. Ensure the receiver's balance is increased by the transfer amount.
 func validateAssetTransfer(
 	te *TestEnvironment,
-	sender common.Address,
-	receiver common.Address,
-	assetID common.AssetID,
+	sender identifiers.Address,
+	receiver identifiers.Address,
+	assetID identifiers.AssetID,
 	amount *big.Int,
 	ixHash common.Hash,
 ) {
@@ -84,13 +86,13 @@ func (te *TestEnvironment) TestAssetTransfer() {
 	testcases := []struct {
 		name           string
 		sender         tests.AccountWithMnemonic
-		receiver       common.Address
-		transferValues map[common.AssetID]*big.Int
+		receiver       identifiers.Address
+		transferValues map[identifiers.AssetID]*big.Int
 		postTest       func(
 			te *TestEnvironment,
-			sender common.Address,
-			receiver common.Address,
-			assetID common.AssetID,
+			sender identifiers.Address,
+			receiver identifiers.Address,
+			assetID identifiers.AssetID,
 			amount *big.Int,
 			ixHash common.Hash,
 		)
@@ -100,7 +102,7 @@ func (te *TestEnvironment) TestAssetTransfer() {
 			name:     "transfer MAS0 asset",
 			sender:   sender,
 			receiver: receiver.Addr,
-			transferValues: map[common.AssetID]*big.Int{
+			transferValues: map[identifiers.AssetID]*big.Int{
 				MAS0AssetID: big.NewInt(100),
 			},
 			postTest: validateAssetTransfer,
@@ -109,7 +111,7 @@ func (te *TestEnvironment) TestAssetTransfer() {
 			name:     "transfer MAS1 asset",
 			sender:   sender,
 			receiver: receiver.Addr,
-			transferValues: map[common.AssetID]*big.Int{
+			transferValues: map[identifiers.AssetID]*big.Int{
 				MAS1AssetID: big.NewInt(1),
 			},
 			postTest: validateAssetTransfer,
@@ -118,7 +120,7 @@ func (te *TestEnvironment) TestAssetTransfer() {
 			name:     "insufficient balance",
 			sender:   sender,
 			receiver: receiver.Addr,
-			transferValues: map[common.AssetID]*big.Int{
+			transferValues: map[identifiers.AssetID]*big.Int{
 				MAS0AssetID: initialAmount.Add(initialAmount, big.NewInt(1)),
 			},
 			expectedError: common.ErrInsufficientFunds,
@@ -127,14 +129,14 @@ func (te *TestEnvironment) TestAssetTransfer() {
 			name:           "empty transfer values",
 			sender:         sender,
 			receiver:       receiver.Addr,
-			transferValues: map[common.AssetID]*big.Int{},
+			transferValues: map[identifiers.AssetID]*big.Int{},
 			expectedError:  common.ErrEmptyTransferValues,
 		},
 		{
 			name:     "asset ID doesn't exist",
 			sender:   sender,
 			receiver: receiver.Addr,
-			transferValues: map[common.AssetID]*big.Int{
+			transferValues: map[identifiers.AssetID]*big.Int{
 				tests.GetRandomAssetID(te.T(), tests.RandomAddress(te.T())): big.NewInt(100),
 			},
 			expectedError: common.ErrAssetNotFound,
@@ -177,18 +179,18 @@ func (te *TestEnvironment) TestAssetTransfer_checkFuelDeduction() {
 
 	testcases := []struct {
 		name           string
-		transferValues map[common.AssetID]*big.Int
+		transferValues map[identifiers.AssetID]*big.Int
 		expectedError  error
 	}{
 		{
 			name: "transfer non fuel token",
-			transferValues: map[common.AssetID]*big.Int{
+			transferValues: map[identifiers.AssetID]*big.Int{
 				MAS0AssetID: big.NewInt(88),
 			},
 		},
 		{
 			name: "transfer fuel token",
-			transferValues: map[common.AssetID]*big.Int{
+			transferValues: map[identifiers.AssetID]*big.Int{
 				common.KMOITokenAssetID: big.NewInt(66),
 			},
 		},

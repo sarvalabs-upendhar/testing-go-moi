@@ -1,10 +1,11 @@
 package genesis
 
 import (
-	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/spf13/cobra"
 
 	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"
+	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/utils"
 )
 
@@ -78,8 +79,10 @@ func initAccount() {
 		)
 	}
 
+	decodedAddr, _ := identifiers.NewAddressFromHex(address)
+
 	genesis.AddAccount(common.AccountSetupArgs{
-		Address:            common.HexToAddress(address),
+		Address:            decodedAddr,
 		AccType:            common.AccountType(accountType),
 		MoiID:              moiID,
 		BehaviouralContext: utils.KramaIDFromString(behaviourNodes),

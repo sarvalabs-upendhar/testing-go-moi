@@ -6,6 +6,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/state"
@@ -178,7 +179,7 @@ func InvokeLogic(
 }
 
 type logicInvoker struct {
-	logicID     common.LogicID
+	logicID     identifiers.LogicID
 	logicObject *state.LogicObject
 
 	fueltank    *FuelTank

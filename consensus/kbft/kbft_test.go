@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -43,7 +44,7 @@ func TestFullRound_WithMultipleNodes(t *testing.T) {
 
 	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
 
-	heights := map[common.Address]uint64{
+	heights := map[identifiers.Address]uint64{
 		ixs[0].Sender():   2,
 		ixs[0].Receiver(): 3,
 	}
@@ -131,7 +132,7 @@ func TestFullRound_WithNonRegisteredReceiver(t *testing.T) {
 		4, 32, 0)
 
 	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
-	heights := map[common.Address]uint64{
+	heights := map[identifiers.Address]uint64{
 		ixs[0].Sender():     2,
 		ixs[0].Receiver():   0,
 		common.SargaAddress: 9,
@@ -217,8 +218,8 @@ func TestFullRound_WithNilReceiverAddress(t *testing.T) {
 	icsNodes, valSet := createICSNodes(t, 4, 4, 4,
 		4, 32, 0)
 
-	ixs := createIxs(t, tests.RandomAddress(t), common.NilAddress)
-	heights := map[common.Address]uint64{
+	ixs := createIxs(t, tests.RandomAddress(t), identifiers.NilAddress)
+	heights := map[identifiers.Address]uint64{
 		ixs[0].Sender(): 2,
 	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
@@ -305,7 +306,7 @@ func TestFullRound_WithLessThan23rdPrevotes(t *testing.T) {
 		4, 32, 0)
 
 	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
-	heights := map[common.Address]uint64{
+	heights := map[identifiers.Address]uint64{
 		ixs[0].Sender():   2,
 		ixs[0].Receiver(): 3,
 	}
@@ -379,7 +380,7 @@ func TestFullRound_WithLessThan23rdPrecommit(t *testing.T) {
 		4, 32, 0)
 
 	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
-	heights := map[common.Address]uint64{
+	heights := map[identifiers.Address]uint64{
 		ixs[0].Sender():   2,
 		ixs[0].Receiver(): 3,
 	}
@@ -459,7 +460,7 @@ func TestFullRound_WithAny23rdPrevote_Any23rdPrecommit(t *testing.T) {
 		4, 32, 0)
 
 	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
-	heights := map[common.Address]uint64{
+	heights := map[identifiers.Address]uint64{
 		ixs[0].Sender():   2,
 		ixs[0].Receiver(): 3,
 	}
@@ -545,7 +546,7 @@ func TestFullRound_With23rdNilPrecommit(t *testing.T) {
 		4, 32, 0)
 
 	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
-	heights := map[common.Address]uint64{
+	heights := map[identifiers.Address]uint64{
 		ixs[0].Sender():   2,
 		ixs[0].Receiver(): 3,
 	}
@@ -632,7 +633,7 @@ func TestSignVote(t *testing.T) {
 		0, 0, 0)
 
 	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
-	heights := map[common.Address]uint64{
+	heights := map[identifiers.Address]uint64{
 		ixs[0].Sender():   2,
 		ixs[0].Receiver(): 3,
 	}
@@ -684,7 +685,7 @@ func TestConflictPrevote(t *testing.T) {
 		0, 0, 0, 0)
 
 	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
-	heights := map[common.Address]uint64{
+	heights := map[identifiers.Address]uint64{
 		ixs[0].Sender():   2,
 		ixs[0].Receiver(): 3,
 	}
@@ -756,7 +757,7 @@ func TestConflictPrecommit(t *testing.T) {
 		4, 32, 0)
 
 	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
-	heights := map[common.Address]uint64{
+	heights := map[identifiers.Address]uint64{
 		ixs[0].Sender():   2,
 		ixs[0].Receiver(): 3,
 	}
@@ -844,7 +845,7 @@ func TestRandomValidatorPreVote(t *testing.T) {
 	_, randomVal := createTestNodeSet(t, 1)
 
 	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
-	heights := map[common.Address]uint64{
+	heights := map[identifiers.Address]uint64{
 		ixs[0].Sender():   2,
 		ixs[0].Receiver(): 3,
 	}
@@ -915,7 +916,7 @@ func TestRandomValidatorPrecommit(t *testing.T) {
 		4, 32, 0)
 
 	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
-	heights := map[common.Address]uint64{
+	heights := map[identifiers.Address]uint64{
 		ixs[0].Sender():   2,
 		ixs[0].Receiver(): 3,
 	}
@@ -1000,7 +1001,7 @@ func TestReceivePrevoteDuringPrevoteWait(t *testing.T) {
 		4, 32, 0)
 
 	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
-	heights := map[common.Address]uint64{
+	heights := map[identifiers.Address]uint64{
 		ixs[0].Sender():   2,
 		ixs[0].Receiver(): 3,
 	}
@@ -1078,7 +1079,7 @@ func TestReceivePrecommitDuringPrecommmitWait(t *testing.T) {
 		4, 32, 0)
 
 	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
-	heights := map[common.Address]uint64{
+	heights := map[identifiers.Address]uint64{
 		ixs[0].Sender():   2,
 		ixs[0].Receiver(): 3,
 	}

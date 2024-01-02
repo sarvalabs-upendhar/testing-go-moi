@@ -6,9 +6,9 @@ import (
 	"log"
 	"sync"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-
 	"github.com/hashicorp/go-hclog"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
@@ -20,7 +20,7 @@ type VoteSet struct {
 	logger hclog.Logger
 
 	// Represent the height for which the vote-set applies
-	heights map[common.Address]uint64
+	heights map[identifiers.Address]uint64
 
 	// Represents the round for which the vote-set applies
 	round int32
@@ -60,7 +60,7 @@ type VoteSet struct {
 // NewVoteSet is a constructor function that generates and returns a new VoteSet.
 // Accepts a slice of heights, the vote round, the type of votes in the set and a set of validators for the VoteSet.
 func NewVoteSet(
-	heights map[common.Address]uint64,
+	heights map[identifiers.Address]uint64,
 	round int32,
 	voteType ktypes.ConsensusMsgType,
 	validatorSet *ktypes.ClusterState,
@@ -165,7 +165,7 @@ func (vs *VoteSet) TwoThirdMajority() (tesseractGroupID *common.TesseractGridID,
 // AddVote is a method of VoteSet that adds a vote to the set.
 // The vote and the validator who placed the vote are verified by checking the vote specs,
 // signatures and addresses and then added to the set using the addVerifiedVote method.
-func (vs *VoteSet) AddVote(v *ktypes.Vote, peerID id.KramaID) (added bool, err error) {
+func (vs *VoteSet) AddVote(v *ktypes.Vote, peerID kramaid.KramaID) (added bool, err error) {
 	// Acquire lock
 	vs.mtx.Lock()
 	defer vs.mtx.Unlock()

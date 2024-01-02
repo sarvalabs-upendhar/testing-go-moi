@@ -3,13 +3,14 @@ package forage
 import (
 	"sync"
 
-	"github.com/sarvalabs/go-moi/syncer/cid"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/storage"
+	"github.com/sarvalabs/go-moi/syncer/cid"
 )
 
-func dbKeyFromCID(address common.Address, cid cid.CID) []byte {
+func dbKeyFromCID(address identifiers.Address, cid cid.CID) []byte {
 	return storage.DBKey(address, storage.PrefixTag(cid.ContentType()), cid.Key())
 }
 

@@ -8,10 +8,10 @@ import (
 
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/sarvalabs/go-legacy-kramaid"
 	blst "github.com/supranational/blst/bindings/go"
 	"github.com/tyler-smith/go-bip39"
 
-	"github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/crypto/common"
 	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
 )
@@ -210,10 +210,10 @@ func RandGenKeystore(dataDir, localNodePass string) ([]byte, kramaid.KramaID, er
 
 	/* Creating KramaID */
 	currentKID, err := kramaid.NewKramaID(
+		1,
 		bothSignAndCommPrivBytes[32:],
 		0,
 		moiIDAddressInString,
-		1,
 		true,
 	)
 	if err != nil {

@@ -1,9 +1,9 @@
 package message
 
 import (
-	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi-identifiers"
 )
 
 type Message interface {
-	GetSessionID() common.Address
+	GetSessionID() identifiers.Address
 }

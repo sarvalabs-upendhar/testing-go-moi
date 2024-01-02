@@ -5,19 +5,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sarvalabs/go-moi/network/p2p"
-
 	p2pnet "github.com/libp2p/go-libp2p/core/network"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-	"github.com/sarvalabs/go-moi/network/message"
-
-	"github.com/libp2p/go-msgio"
-
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-msgio"
 	"github.com/pkg/errors"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 
-	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/network/message"
+	"github.com/sarvalabs/go-moi/network/p2p"
 )
 
 type AgoraPeer struct {
@@ -26,14 +23,14 @@ type AgoraPeer struct {
 	stream         p2pnet.Stream
 	connected      bool
 	lastActiveTime time.Time
-	activeSessions map[common.Address]struct{}
+	activeSessions map[identifiers.Address]struct{}
 }
 
-func (a *AgoraPeer) getActiveSessions() []common.Address {
+func (a *AgoraPeer) getActiveSessions() []identifiers.Address {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
-	sessions := make([]common.Address, 0, len(a.activeSessions))
+	sessions := make([]identifiers.Address, 0, len(a.activeSessions))
 
 	for sessionID := range a.activeSessions {
 		sessions = append(sessions, sessionID)
@@ -42,14 +39,14 @@ func (a *AgoraPeer) getActiveSessions() []common.Address {
 	return sessions
 }
 
-func (a *AgoraPeer) addActiveSession(sessionID common.Address) {
+func (a *AgoraPeer) addActiveSession(sessionID identifiers.Address) {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
 	a.activeSessions[sessionID] = struct{}{}
 }
 
-func (a *AgoraPeer) removeActiveSession(sessionID common.Address) {
+func (a *AgoraPeer) removeActiveSession(sessionID identifiers.Address) {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
@@ -63,7 +60,7 @@ func (a *AgoraPeer) updateLastActiveTime() {
 	a.lastActiveTime = time.Now()
 }
 
-func (a *AgoraPeer) sendMessage(senderID id.KramaID, msgType message.MsgType, msg interface{}) error {
+func (a *AgoraPeer) sendMessage(senderID kramaid.KramaID, msgType message.MsgType, msg interface{}) error {
 	// Marshal the proto message into slice of bytes and log and return if an error occurs
 	rawData, err := polo.Polorize(msg)
 	if err != nil {

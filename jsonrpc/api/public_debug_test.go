@@ -3,17 +3,16 @@ package api
 import (
 	"testing"
 
-	"github.com/sarvalabs/go-moi/common/hexutil"
-
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/sarvalabs/go-moi/senatus"
-
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/tests"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
+	"github.com/sarvalabs/go-moi/senatus"
 )
 
 // Debug API Testcases
@@ -158,11 +157,11 @@ func TestPublicDebugAPI_GetAccounts(t *testing.T) {
 	testcases := []struct {
 		name         string
 		setAddressFn func(db *MockDatabase)
-		expectedList []common.Address
+		expectedList []identifiers.Address
 	}{
 		{
 			name:         "Should return an empty list if no accounts are present",
-			expectedList: make([]common.Address, 0),
+			expectedList: make([]identifiers.Address, 0),
 		},
 		{
 			name: "Returns a list of address of the accounts",

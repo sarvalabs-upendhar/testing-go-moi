@@ -10,8 +10,6 @@ import (
 	"testing"
 	"time"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p"
@@ -21,6 +19,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-multiaddr"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -42,10 +41,10 @@ type ctxTracker struct {
 }
 
 type senatusMock struct {
-	AddrMap map[id.KramaID][]multiaddr.Multiaddr
+	AddrMap map[kramaid.KramaID][]multiaddr.Multiaddr
 }
 
-func (sm senatusMock) GetAddress(key id.KramaID) (multiAddrs []multiaddr.Multiaddr, err error) {
+func (sm senatusMock) GetAddress(key kramaid.KramaID) (multiAddrs []multiaddr.Multiaddr, err error) {
 	v, ok := sm.AddrMap[key]
 	if !ok {
 		return nil, common.ErrKeyDoNotExist
@@ -54,9 +53,9 @@ func (sm senatusMock) GetAddress(key id.KramaID) (multiAddrs []multiaddr.Multiad
 	return v, nil
 }
 
-func (sm *senatusMock) SetAddress(key id.KramaID, mAddrs []multiaddr.Multiaddr) error {
+func (sm *senatusMock) SetAddress(key kramaid.KramaID, mAddrs []multiaddr.Multiaddr) error {
 	if len(sm.AddrMap) == 0 {
-		sm.AddrMap = make(map[id.KramaID][]multiaddr.Multiaddr)
+		sm.AddrMap = make(map[kramaid.KramaID][]multiaddr.Multiaddr)
 	}
 
 	sm.AddrMap[key] = mAddrs
@@ -254,7 +253,7 @@ func testCall(t *testing.T, serverCM, clientCM *MockConnectionManager, dest peer
 	}
 
 	var q Quotient
-	err = c.MoiCall(context.Background(), id.KramaID(getKramaID(dest)), "Arith", "Divide", &Args{20, 6}, &q, 0)
+	err = c.MoiCall(context.Background(), kramaid.KramaID(getKramaID(dest)), "Arith", "Divide", &Args{20, 6}, &q, 0)
 
 	if err != nil {
 		t.Fatal(err)
@@ -281,7 +280,7 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, serverCM, clientCM
 	var q Quotient
 	err = c.MoiCall(
 		context.Background(),
-		id.KramaID(getKramaID(dest)),
+		kramaid.KramaID(getKramaID(dest)),
 		"Arith",
 		"Divide",
 		&Args{20, 6},
@@ -299,7 +298,7 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, serverCM, clientCM
 
 	err = c.MoiCall(
 		context.Background(),
-		id.KramaID(getKramaID(dest)),
+		kramaid.KramaID(getKramaID(dest)),
 		"Arith",
 		"Divide",
 		&Args{20, 6},
@@ -316,7 +315,7 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, serverCM, clientCM
 
 	err = c.MoiCall(
 		context.Background(),
-		id.KramaID(getKramaID(dest)),
+		kramaid.KramaID(getKramaID(dest)),
 		"Arith",
 		"Divide",
 		&Args{20, 6},
@@ -334,7 +333,7 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, serverCM, clientCM
 
 	err = c.MoiCall(
 		context.Background(),
-		id.KramaID(getKramaID(dest)),
+		kramaid.KramaID(getKramaID(dest)),
 		"Arith",
 		"Divide",
 		&Args{20, 6},
@@ -353,7 +352,7 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, serverCM, clientCM
 
 	err = c.MoiCall(
 		context.Background(),
-		id.KramaID(getKramaID(dest)),
+		kramaid.KramaID(getKramaID(dest)),
 		"Arith",
 		"Divide",
 		&Args{20, 6},
@@ -377,7 +376,7 @@ func testCallWithSenatus(t *testing.T, serverCM, clientCM *MockConnectionManager
 
 	sm := senatusMock{}
 
-	err := sm.SetAddress(id.KramaID(getKramaID(dest)), serverCM.host.Addrs())
+	err := sm.SetAddress(kramaid.KramaID(getKramaID(dest)), serverCM.host.Addrs())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,7 +395,7 @@ func testCallWithSenatus(t *testing.T, serverCM, clientCM *MockConnectionManager
 
 	err = c.MoiCall(
 		context.Background(),
-		id.KramaID(getKramaID(dest)),
+		kramaid.KramaID(getKramaID(dest)),
 		"Arith",
 		"Divide",
 
@@ -418,7 +417,7 @@ func testCallWithSenatus(t *testing.T, serverCM, clientCM *MockConnectionManager
 func testValidKramaID(t *testing.T, dest peer.ID) {
 	t.Helper()
 
-	kID := id.KramaID(getKramaID(dest))
+	kID := kramaid.KramaID(getKramaID(dest))
 	_, err := kID.PeerID()
 	assert.NoError(t, err)
 }
@@ -426,7 +425,7 @@ func testValidKramaID(t *testing.T, dest peer.ID) {
 func testInValidKramaID(t *testing.T, dest peer.ID) {
 	t.Helper()
 
-	kID := id.KramaID(getInValidKramaID(dest))
+	kID := kramaid.KramaID(getInValidKramaID(dest))
 	_, err := kID.PeerID()
 	assert.Error(t, err)
 }

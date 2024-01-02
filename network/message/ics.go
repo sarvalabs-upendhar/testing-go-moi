@@ -2,10 +2,11 @@ package message
 
 import (
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/kramaid"
 )
 
 type ICSResponseCode int32
@@ -21,7 +22,7 @@ const (
 type CanonicalICSRequest struct {
 	ClusterID            string
 	Operator             string
-	ContextLock          map[common.Address]common.ContextLockInfo
+	ContextLock          map[identifiers.Address]common.ContextLockInfo
 	IxData               []byte
 	Ntq                  int32
 	Timestamp            int64

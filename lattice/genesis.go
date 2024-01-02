@@ -1,11 +1,13 @@
 package lattice
 
 import (
+	"github.com/sarvalabs/go-moi-identifiers"
+
 	"github.com/sarvalabs/go-moi/common"
 )
 
 func createGenesisTesseract(
-	addr common.Address,
+	addr identifiers.Address,
 	stateHash, contextHash common.Hash,
 ) (*common.Tesseract, error) {
 	ixHash := common.GetHash([]byte("Genesis" + stateHash.Hex()))

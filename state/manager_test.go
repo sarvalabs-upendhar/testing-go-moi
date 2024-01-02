@@ -7,13 +7,14 @@ import (
 
 	"github.com/decred/dcrd/crypto/blake256"
 	"github.com/hashicorp/golang-lru"
+	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-pisa"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"
@@ -74,13 +75,13 @@ func TestStateManager_GetLatestTesseractHash(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		address       common.Address
+		address       identifiers.Address
 		hash          common.Hash
 		expectedError error
 	}{
 		{
 			name:          "should return error if nil address",
-			address:       common.NilAddress,
+			address:       identifiers.NilAddress,
 			hash:          accMetaInfo[0].TesseractHash,
 			expectedError: common.ErrInvalidAddress,
 		},
@@ -299,7 +300,7 @@ func TestStateManager_GetStateObjectByHash(t *testing.T) {
 	testcases := []struct {
 		name          string
 		stateHash     common.Hash
-		address       common.Address
+		address       identifiers.Address
 		sObj          *Object
 		expectedError error
 	}{
@@ -312,7 +313,7 @@ func TestStateManager_GetStateObjectByHash(t *testing.T) {
 		{
 			name:          "should fail if account not found",
 			stateHash:     tests.RandomHash(t),
-			address:       common.NilAddress,
+			address:       identifiers.NilAddress,
 			expectedError: common.ErrStateNotFound,
 		},
 	}
@@ -368,7 +369,7 @@ func TestStateManager_GetLatestStateObject(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		address       common.Address
+		address       identifiers.Address
 		sObj          *Object
 		expectedError error
 	}{
@@ -427,7 +428,7 @@ func TestStateManager_GetStateObject(t *testing.T) {
 
 	testcases := []struct {
 		name      string
-		address   common.Address
+		address   identifiers.Address
 		stateHash common.Hash
 		sObj      *Object
 	}{
@@ -478,7 +479,7 @@ func TestStateManager_GetLatestTesseract(t *testing.T) {
 
 	testcases := []struct {
 		name             string
-		address          common.Address
+		address          identifiers.Address
 		withInteractions bool
 		expectedTS       *common.Tesseract
 		expectedError    error
@@ -564,7 +565,7 @@ func TestStateManager_GetDirtyObject(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		address       common.Address
+		address       identifiers.Address
 		sObj          *Object
 		expectedError error
 	}{
@@ -705,7 +706,7 @@ func TestStateManager_GetContextObject(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			ctx, err := sm.getContextObject(common.NilAddress, test.hash)
+			ctx, err := sm.getContextObject(identifiers.NilAddress, test.hash)
 
 			if test.expectedError != nil {
 				require.EqualError(t, err, test.expectedError.Error())
@@ -764,7 +765,7 @@ func TestStateManager_GetMetaContextObject(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			ctx, err := sm.getMetaContextObject(common.NilAddress, test.hash)
+			ctx, err := sm.getMetaContextObject(identifiers.NilAddress, test.hash)
 			if test.expectedError != nil {
 				require.EqualError(t, err, test.expectedError.Error())
 
@@ -832,7 +833,7 @@ func TestStateManager_GetContext(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			behCtx, randCtx, err := sm.getContext(common.NilAddress, test.hash)
+			behCtx, randCtx, err := sm.getContext(identifiers.NilAddress, test.hash)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -872,7 +873,7 @@ func TestStateManager_GetContextByHash(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		address       common.Address
+		address       identifiers.Address
 		hash          common.Hash
 		behCtx        *ContextObject
 		randCtx       *ContextObject
@@ -880,7 +881,7 @@ func TestStateManager_GetContextByHash(t *testing.T) {
 	}{
 		{
 			name:          "address and context hash are nil",
-			address:       common.NilAddress,
+			address:       identifiers.NilAddress,
 			hash:          common.NilHash,
 			expectedError: common.ErrEmptyHashAndAddress,
 		},
@@ -980,7 +981,7 @@ func TestStateManager_FetchParticipantContextByHash(t *testing.T) {
 				test.mockFn()
 			}
 
-			behCtx, randCtx, err := sm.fetchParticipantContextByHash(common.NilAddress, test.hash)
+			behCtx, randCtx, err := sm.fetchParticipantContextByHash(identifiers.NilAddress, test.hash)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1016,7 +1017,7 @@ func TestStateManager_GetCommittedContextHash(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		address       common.Address
+		address       identifiers.Address
 		contextHash   common.Hash
 		expectedError error
 	}{
@@ -1059,7 +1060,7 @@ func TestStateManager_FetchContextLock(t *testing.T) {
 
 	getTesseractParams := func(
 		ixns common.Interactions,
-		addresses []common.Address,
+		addresses []identifiers.Address,
 		hashes ...common.Hash,
 	) *tests.CreateTesseractParams {
 		return &tests.CreateTesseractParams{
@@ -1076,27 +1077,27 @@ func TestStateManager_FetchContextLock(t *testing.T) {
 	tesseractParams := map[int]*tests.CreateTesseractParams{
 		0: getTesseractParams(
 			ixns[0:1],
-			[]common.Address{ixns[0].Sender(), ixns[0].Receiver()},
+			[]identifiers.Address{ixns[0].Sender(), ixns[0].Receiver()},
 			mHash[0], mHash[1],
 		),
 		1: getTesseractParams(
 			ixns[1:2],
-			[]common.Address{ixns[1].Sender()},
+			[]identifiers.Address{ixns[1].Sender()},
 			tests.RandomHash(t),
 		),
 		2: getTesseractParams(
 			ixns[2:3],
-			[]common.Address{ixns[2].Sender()},
+			[]identifiers.Address{ixns[2].Sender()},
 			tests.RandomHash(t),
 		),
 		3: getTesseractParams(
 			ixns[3:4],
-			[]common.Address{ixns[3].Sender(), ixns[3].Receiver()},
+			[]identifiers.Address{ixns[3].Sender(), ixns[3].Receiver()},
 			mHash[0], common.NilHash,
 		),
 		4: getTesseractParams(
 			ixns[4:5],
-			[]common.Address{common.SargaAddress},
+			[]identifiers.Address{common.SargaAddress},
 			mHash[1],
 		),
 	}
@@ -1231,7 +1232,7 @@ func TestStateManager_IsAccountRegistered_With_SargaObject(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		address       common.Address
+		address       identifiers.Address
 		smParams      *createStateManagerParams
 		isRegistered  bool
 		expectedError error
@@ -1250,7 +1251,7 @@ func TestStateManager_IsAccountRegistered_With_SargaObject(t *testing.T) {
 		},
 		{
 			name:         "nil address",
-			address:      common.NilAddress,
+			address:      identifiers.NilAddress,
 			smParams:     smParams,
 			isRegistered: true,
 		},
@@ -1317,7 +1318,7 @@ func TestStateManager_GetNonce(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		address       common.Address
+		address       identifiers.Address
 		stateHash     common.Hash
 		nonce         uint64
 		expectedError error
@@ -1340,7 +1341,7 @@ func TestStateManager_GetNonce(t *testing.T) {
 		},
 		{
 			name:          "nil address",
-			address:       common.NilAddress,
+			address:       identifiers.NilAddress,
 			expectedError: common.ErrInvalidAddress,
 		},
 	}
@@ -1404,7 +1405,7 @@ func TestStateManager_GetBalances(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		address       common.Address
+		address       identifiers.Address
 		stateHash     common.Hash
 		balance       *BalanceObject
 		expectedError error
@@ -1468,8 +1469,8 @@ func TestStateManager_GetBalance(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		address       common.Address
-		assetID       common.AssetID
+		address       identifiers.Address
+		assetID       identifiers.AssetID
 		stateHash     common.Hash
 		balance       *BalanceObject
 		expectedError error
@@ -1559,7 +1560,7 @@ func TestStateManager_SyncLogicStorageTree(t *testing.T) {
 	testcases := []struct {
 		name          string
 		stateObject   *Object
-		logicID       common.LogicID
+		logicID       identifiers.LogicID
 		newRoot       *common.RootNode
 		expectedError error
 	}{
@@ -1595,7 +1596,7 @@ func TestStateManager_SyncLogicStorageTree(t *testing.T) {
 
 			require.NoError(t, err)
 
-			root := test.stateObject.activeStorageTrees[test.logicID.String()].Root()
+			root := test.stateObject.activeStorageTrees[string(test.logicID)].Root()
 			require.Equal(t, test.newRoot, &root)
 		})
 	}
@@ -1647,9 +1648,9 @@ func TestStateManager_SyncStorageTrees(t *testing.T) {
 
 	testcases := []struct {
 		name                  string
-		addr                  common.Address
+		addr                  identifiers.Address
 		newRoot               *common.RootNode
-		logicID               common.LogicID
+		logicID               identifiers.LogicID
 		logicStorageTreeRoots map[string]*common.RootNode
 		stateObject           *Object
 		expectedError         error
@@ -1659,7 +1660,7 @@ func TestStateManager_SyncStorageTrees(t *testing.T) {
 			addr:    so[1].address,
 			newRoot: &newRoot,
 			logicStorageTreeRoots: map[string]*common.RootNode{
-				logicIDs[0].String(): &newRoot,
+				string(logicIDs[0]): &newRoot,
 			},
 			expectedError: errors.New("failed to fetch latest tesseract hash"),
 		},
@@ -1669,7 +1670,7 @@ func TestStateManager_SyncStorageTrees(t *testing.T) {
 			newRoot: &newRoot,
 			logicID: logicIDs[0],
 			logicStorageTreeRoots: map[string]*common.RootNode{
-				logicIDs[0].String(): &newRoot,
+				string(logicIDs[0]): &newRoot,
 			},
 			stateObject: stateObject,
 		},
@@ -1679,9 +1680,11 @@ func TestStateManager_SyncStorageTrees(t *testing.T) {
 			newRoot: &newRoot,
 			logicID: logicIDs[1],
 			logicStorageTreeRoots: map[string]*common.RootNode{
-				logicIDs[1].String(): {
+				string(logicIDs[1]): {
 					MerkleRoot: newRoot.MerkleRoot,
-					HashTable:  map[string][]byte{logicIDs[0].String(): {0x03}},
+					HashTable: map[string][]byte{
+						string(logicIDs[0]): {0x03},
+					},
 				},
 			},
 			stateObject:   so[0],
@@ -1700,7 +1703,10 @@ func TestStateManager_SyncStorageTrees(t *testing.T) {
 
 			require.NoError(t, err)
 
-			root := test.stateObject.activeStorageTrees[test.logicID.String()].Root()
+			entry := test.stateObject.activeStorageTrees[string(test.logicID)]
+			require.NotNil(t, entry)
+
+			root := entry.Root()
 			require.Equal(t, test.newRoot, &root)
 		})
 	}
@@ -1739,7 +1745,7 @@ func TestStateManager_SyncLogicTree(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		addr          common.Address
+		addr          identifiers.Address
 		newRoot       *common.RootNode
 		logicTree     tree.MerkleTree
 		expectedError error
@@ -1803,7 +1809,7 @@ func TestStateManager_GetNodeSet(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		ids           []id.KramaID
+		ids           []kramaid.KramaID
 		publicKeys    [][]byte
 		expectedError error
 	}{
@@ -1850,7 +1856,7 @@ func TestStateManager_GetICSNodeSetFromRawContext(t *testing.T) {
 	mObj, mHash := getMetaContextObjects(t, cHash)
 
 	ixParams := map[int]*tests.CreateIxParams{
-		0: tests.GetIxParamsWithAddress(addrs[0], common.NilAddress),
+		0: tests.GetIxParamsWithAddress(addrs[0], identifiers.NilAddress),
 		1: tests.GetIxParamsWithAddress(tests.RandomAddress(t), addrs[1]),
 		2: tests.GetIxParamsWithAddress(tests.RandomAddress(t), common.SargaAddress),
 	}
@@ -1880,7 +1886,7 @@ func TestStateManager_GetICSNodeSetFromRawContext(t *testing.T) {
 		name            string
 		ts              *common.Tesseract
 		rawContext      map[common.Hash][]byte
-		expectedNodeSet map[common.IcsSetType][]id.KramaID
+		expectedNodeSet map[common.IcsSetType][]kramaid.KramaID
 		expectedError   error
 	}{
 		{
@@ -1891,7 +1897,7 @@ func TestStateManager_GetICSNodeSetFromRawContext(t *testing.T) {
 				mObj[0].BehaviouralContext: rawContextObjects[0],
 				mObj[0].RandomContext:      rawContextObjects[1],
 			},
-			expectedNodeSet: map[common.IcsSetType][]id.KramaID{
+			expectedNodeSet: map[common.IcsSetType][]kramaid.KramaID{
 				common.SenderBehaviourSet: obj[0].Ids,
 				common.SenderRandomSet:    obj[1].Ids,
 				common.RandomSet:          obj[4].Ids,
@@ -1906,7 +1912,7 @@ func TestStateManager_GetICSNodeSetFromRawContext(t *testing.T) {
 				mObj[1].BehaviouralContext: rawContextObjects[2],
 				mObj[1].RandomContext:      rawContextObjects[3],
 			},
-			expectedNodeSet: map[common.IcsSetType][]id.KramaID{
+			expectedNodeSet: map[common.IcsSetType][]kramaid.KramaID{
 				common.ReceiverBehaviourSet: obj[2].Ids,
 				common.ReceiverRandomSet:    obj[3].Ids,
 				common.RandomSet:            obj[4].Ids,
@@ -1921,7 +1927,7 @@ func TestStateManager_GetICSNodeSetFromRawContext(t *testing.T) {
 				mObj[1].BehaviouralContext: rawContextObjects[2],
 				mObj[1].RandomContext:      rawContextObjects[3],
 			},
-			expectedNodeSet: map[common.IcsSetType][]id.KramaID{
+			expectedNodeSet: map[common.IcsSetType][]kramaid.KramaID{
 				common.ReceiverBehaviourSet: obj[2].Ids,
 				common.ReceiverRandomSet:    obj[3].Ids,
 				common.RandomSet:            obj[4].Ids,
@@ -1990,7 +1996,7 @@ func TestStateManager_GetParticipantContextRaw(t *testing.T) {
 
 	testcases := []struct {
 		name               string
-		addr               common.Address
+		addr               identifiers.Address
 		hash               common.Hash
 		expectedRawContext map[common.Hash][]byte
 		expectedError      error
@@ -2087,7 +2093,7 @@ func TestStateManager_GetStorageEntry(t *testing.T) {
 
 	testcases := []struct {
 		name                 string
-		logicID              common.LogicID
+		logicID              identifiers.LogicID
 		slot                 []byte
 		stateHash            common.Hash
 		expectedStorageEntry []byte
@@ -2175,7 +2181,7 @@ func TestStateManager_IsLogicRegistered(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		logicID       common.LogicID
+		logicID       identifiers.LogicID
 		expectedError error
 	}{
 		{
@@ -2213,7 +2219,7 @@ func TestStateManager_GetAssetInfo(t *testing.T) {
 
 	registry, registryHash := getTestRegistryObject(
 		t,
-		map[string][]byte{assetID.String(): rawAssetInfo},
+		map[string][]byte{string(assetID): rawAssetInfo},
 	)
 
 	sObj := createTestStateObject(t, stateObjectParamsWithRegistry(t, registryHash, registry))
@@ -2232,7 +2238,7 @@ func TestStateManager_GetAssetInfo(t *testing.T) {
 
 	testcases := []struct {
 		name              string
-		assetID           common.AssetID
+		assetID           identifiers.AssetID
 		stateHash         common.Hash
 		expectedAssetInfo *common.AssetDescriptor
 		expectedError     error
@@ -2300,7 +2306,7 @@ func TestStateManager_GetRegistry(t *testing.T) {
 
 	testcases := []struct {
 		name                    string
-		address                 common.Address
+		address                 identifiers.Address
 		stateHash               common.Hash
 		expectedRegistryEntries *RegistryObject
 		expectedError           error
@@ -2387,7 +2393,7 @@ func TestStateManager_GetLogicManifest(t *testing.T) {
 
 	testcases := []struct {
 		name             string
-		logicID          common.LogicID
+		logicID          identifiers.LogicID
 		stateHash        common.Hash
 		expectedManifest []byte
 		expectedError    error
@@ -2430,7 +2436,7 @@ func TestStateManager_GetLogicManifest(t *testing.T) {
 func TestStateManager_GetLogicIDs(t *testing.T) {
 	var err error
 
-	expectedLogicIDs := make([]common.LogicID, 0)
+	expectedLogicIDs := make([]identifiers.LogicID, 0)
 	db := mockDB()
 	address := tests.RandomAddress(t)
 	so := NewStateObject(address, mockCache(t), mockJournal(), db, common.Account{})
@@ -2471,9 +2477,9 @@ func TestStateManager_GetLogicIDs(t *testing.T) {
 
 	testcases := []struct {
 		name             string
-		addr             common.Address
+		addr             identifiers.Address
 		stateHash        common.Hash
-		expectedLogicIDs []common.LogicID
+		expectedLogicIDs []identifiers.LogicID
 		expectedError    error
 	}{
 		{
@@ -2512,7 +2518,7 @@ func TestStateManager_GetLogicIDs(t *testing.T) {
 				found := false
 
 				for _, logicID := range logicIDs {
-					if expectedLogicID.String() == logicID.String() {
+					if expectedLogicID == logicID {
 						found = true
 					}
 				}
@@ -2592,7 +2598,7 @@ func TestStateManager_FetchLatestParticipantContext(t *testing.T) {
 	sm := createTestStateManager(t, smParams)
 	testcases := []struct {
 		name          string
-		address       common.Address
+		address       identifiers.Address
 		ctxHash       common.Hash
 		behSet        *common.NodeSet
 		randSet       *common.NodeSet
@@ -2658,8 +2664,8 @@ func TestStateManager_GetReceiverContext_RegisteredAccount(t *testing.T) {
 	ts := tests.CreateTesseract(t, tesseractParams)
 
 	ixParams := map[int]*tests.CreateIxParams{
-		0: tests.GetIxParamsWithAddress(common.NilAddress, ts.Address()),
-		1: tests.GetIxParamsWithAddress(common.NilAddress, tests.RandomAddress(t)),
+		0: tests.GetIxParamsWithAddress(identifiers.NilAddress, ts.Address()),
+		1: tests.GetIxParamsWithAddress(identifiers.NilAddress, tests.RandomAddress(t)),
 	}
 
 	ixs := tests.CreateIxns(t, 2, ixParams)
@@ -2714,7 +2720,7 @@ func TestStateManager_GetReceiverContext_RegisteredAccount(t *testing.T) {
 		ix            *common.Interaction
 		behSet        *common.NodeSet
 		randSet       *common.NodeSet
-		address       common.Address
+		address       identifiers.Address
 		contextHash   common.Hash
 		mockFn        func()
 		expectedError error
@@ -2737,7 +2743,7 @@ func TestStateManager_GetReceiverContext_RegisteredAccount(t *testing.T) {
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			nodeSet := make([]*common.NodeSet, 4)
-			contextHashes := make(map[common.Address]common.Hash)
+			contextHashes := make(map[identifiers.Address]common.Hash)
 
 			if test.mockFn != nil {
 				test.mockFn()
@@ -2772,8 +2778,8 @@ func TestStateManager_GetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 	mObj, mHash := getMetaContextObjects(t, cHash)
 
 	ixParams := map[int]*tests.CreateIxParams{
-		0: tests.GetIxParamsWithAddress(common.NilAddress, tests.RandomAddress(t)),
-		1: tests.GetIxParamsWithAddress(common.NilAddress, tests.RandomAddress(t)),
+		0: tests.GetIxParamsWithAddress(identifiers.NilAddress, tests.RandomAddress(t)),
+		1: tests.GetIxParamsWithAddress(identifiers.NilAddress, tests.RandomAddress(t)),
 	}
 
 	ixs := tests.CreateIxns(t, 3, ixParams)
@@ -2809,7 +2815,7 @@ func TestStateManager_GetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 		smParams      *createStateManagerParams
 		behSet        *common.NodeSet
 		randSet       *common.NodeSet
-		address       common.Address
+		address       identifiers.Address
 		contextHash   common.Hash
 		preTestFn     func()
 		errorExpected bool
@@ -2846,7 +2852,7 @@ func TestStateManager_GetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			sm := createTestStateManager(t, test.smParams)
 			nodeSet := make([]*common.NodeSet, 4)
-			contextHashes := make(map[common.Address]common.Hash)
+			contextHashes := make(map[identifiers.Address]common.Hash)
 
 			if test.preTestFn != nil {
 				test.preTestFn()
@@ -2911,7 +2917,7 @@ func TestStateManager_FetchICSNodeSet(t *testing.T) {
 		name            string
 		ts              *common.Tesseract
 		clusterInfo     *common.ICSClusterInfo
-		expectedNodeSet map[common.IcsSetType][]id.KramaID
+		expectedNodeSet map[common.IcsSetType][]kramaid.KramaID
 		expectedError   error
 	}{
 		{
@@ -2922,7 +2928,7 @@ func TestStateManager_FetchICSNodeSet(t *testing.T) {
 				ObserverSet: obj[3].Ids,
 				Responses:   createRandomArrayOfBits(t, 6),
 			},
-			expectedNodeSet: map[common.IcsSetType][]id.KramaID{
+			expectedNodeSet: map[common.IcsSetType][]kramaid.KramaID{
 				common.SenderBehaviourSet: obj[0].Ids,
 				common.SenderRandomSet:    obj[1].Ids,
 				common.RandomSet:          obj[2].Ids,
@@ -2995,7 +3001,7 @@ func TestStateManager_FetchInteractionContext(t *testing.T) {
 
 	ixParams := map[int]*tests.CreateIxParams{
 		0: tests.GetIxParamsWithAddress(addrs[0], addrs[1]),
-		1: tests.GetIxParamsWithAddress(common.NilAddress, common.NilAddress),
+		1: tests.GetIxParamsWithAddress(identifiers.NilAddress, identifiers.NilAddress),
 	}
 
 	ixs := tests.CreateIxns(t, 2, ixParams)
@@ -3047,7 +3053,7 @@ func TestStateManager_FetchInteractionContext(t *testing.T) {
 		name          string
 		ix            *common.Interaction
 		ics           *ICSNodes
-		contextHashes map[common.Address]common.Hash
+		contextHashes map[identifiers.Address]common.Hash
 		mockFn        func()
 		expectedError error
 	}{
@@ -3060,7 +3066,7 @@ func TestStateManager_FetchInteractionContext(t *testing.T) {
 				common.NewNodeSet(obj[2].Ids, pk[4:6]),
 				common.NewNodeSet(obj[3].Ids, pk[6:8]),
 			),
-			contextHashes: map[common.Address]common.Hash{
+			contextHashes: map[identifiers.Address]common.Hash{
 				ixs[0].Sender():   ts[0].ContextHash(),
 				ixs[0].Receiver(): ts[1].ContextHash(),
 			},
@@ -3155,7 +3161,7 @@ func TestStateManager_GetAccountInfo(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			acc, err := sm.GetAccountState(common.NilAddress, test.stateHash)
+			acc, err := sm.GetAccountState(identifiers.NilAddress, test.stateHash)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -3186,7 +3192,7 @@ func TestStateManager_GetAccTypeUsingStateObject(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		address       common.Address
+		address       identifiers.Address
 		sObj          *Object
 		expectedError error
 	}{
@@ -3360,7 +3366,7 @@ func TestStateManager_FlushDirtyObject(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		address       common.Address
+		address       identifiers.Address
 		smParams      *createStateManagerParams
 		expectedError error
 	}{
@@ -3473,7 +3479,7 @@ func TestStateManager_IsAccountRegisteredAt(t *testing.T) {
 	testcases := []struct {
 		name                string
 		tsHash              common.Hash
-		address             common.Address
+		address             identifiers.Address
 		isAccountRegistered bool
 		expectedError       error
 	}{

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/stretchr/testify/require"
@@ -18,8 +19,9 @@ import (
 var (
 	initialSeederAmount = uint64(100000000)
 	transferAmount      = uint64(1000000)
-	seeder              = common.HexToAddress("0xffcd8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34")
-	receiver            = common.HexToAddress("0x0fafe52ec42a85db644d5cceba2bb89cf5b0166cc9158211f44ed1e60b06032c")
+
+	seeder, _   = identifiers.NewAddressFromHex("0xffcd8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34")
+	receiver, _ = identifiers.NewAddressFromHex("0x0fafe52ec42a85db644d5cceba2bb89cf5b0166cc9158211f44ed1e60b06032c")
 
 	ledgerManifestFile = "./../../compute/manifests/ledger.yaml"
 	ledgerManifest     = "0x" + common.BytesToHex(tests.ReadManifest(&testing.T{}, ledgerManifestFile))
@@ -59,7 +61,7 @@ func (te *TestEnvironment) deployLogic(
 // 5. fetch ledger state and ensure it matches call data of logic payload
 func validateTokenLedgerLogicDeploy(
 	te *TestEnvironment,
-	sender common.Address,
+	sender identifiers.Address,
 	payload *common.LogicPayload,
 	ixHash common.Hash,
 ) {
@@ -102,7 +104,7 @@ func (te *TestEnvironment) TestLogicDeploy() {
 		logicPayload *common.LogicPayload
 		postTest     func(
 			te *TestEnvironment,
-			sender common.Address,
+			sender identifiers.Address,
 			payload *common.LogicPayload,
 			ixHash common.Hash,
 		)

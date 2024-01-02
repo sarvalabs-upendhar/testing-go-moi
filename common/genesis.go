@@ -7,7 +7,8 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common/hexutil"
 )
@@ -29,13 +30,13 @@ type AssetAccountSetupArgs struct {
 }
 
 type AssetCreationArgs struct {
-	Symbol      string         `json:"symbol"`
-	Dimension   hexutil.Uint8  `json:"dimension"`
-	Standard    hexutil.Uint16 `json:"standard"`
-	IsLogical   bool           `json:"is_logical"`
-	IsStateful  bool           `json:"is_stateful"`
-	Operator    Address        `json:"operator"`
-	Allocations []Allocation   `json:"allocations"`
+	Symbol      string              `json:"symbol"`
+	Dimension   hexutil.Uint8       `json:"dimension"`
+	Standard    hexutil.Uint16      `json:"standard"`
+	IsLogical   bool                `json:"is_logical"`
+	IsStateful  bool                `json:"is_stateful"`
+	Operator    identifiers.Address `json:"operator"`
+	Allocations []Allocation        `json:"allocations"`
 }
 
 func (ac *AssetCreationArgs) AssetDescriptor() *AssetDescriptor {
@@ -57,8 +58,8 @@ func (ac *AssetCreationArgs) AssetDescriptor() *AssetDescriptor {
 }
 
 type Allocation struct {
-	Address Address      `json:"address"`
-	Amount  *hexutil.Big `json:"amount"`
+	Address identifiers.Address `json:"address"`
+	Amount  *hexutil.Big        `json:"amount"`
 }
 
 func (g *GenesisFile) AddSargaAccount(info AccountSetupArgs) {
@@ -107,15 +108,15 @@ type LogicSetupArgs struct {
 }
 
 type AccountSetupArgs struct {
-	Address            Address           `json:"address"`
-	AccType            AccountType       `json:"type"`
-	MoiID              string            `json:"moi-id"`
-	BehaviouralContext []kramaid.KramaID `json:"behaviour_context"`
-	RandomContext      []kramaid.KramaID `json:"random_context"`
+	Address            identifiers.Address `json:"address"`
+	AccType            AccountType         `json:"type"`
+	MoiID              string              `json:"moi-id"`
+	BehaviouralContext []kramaid.KramaID   `json:"behaviour_context"`
+	RandomContext      []kramaid.KramaID   `json:"random_context"`
 }
 
 func (as *AccountSetupArgs) ContextDelta() ContextDelta {
-	return map[Address]*DeltaGroup{
+	return map[identifiers.Address]*DeltaGroup{
 		as.Address: {
 			BehaviouralNodes: as.BehaviouralContext,
 			RandomNodes:      as.RandomContext,

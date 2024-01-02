@@ -7,9 +7,11 @@ import (
 	"github.com/decred/dcrd/crypto/blake256"
 	"github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-moi-identifiers"
+
 	"github.com/sarvalabs/go-moi/common"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"
 )
@@ -20,7 +22,7 @@ type Object struct {
 	journal *Journal
 	cache   *lru.Cache
 
-	address common.Address
+	address identifiers.Address
 	accType common.AccountType
 	data    common.Account
 
@@ -42,7 +44,7 @@ type Object struct {
 }
 
 func NewStateObject(
-	id common.Address,
+	id identifiers.Address,
 	cache *lru.Cache,
 	j *Journal,
 	db Store,
@@ -58,7 +60,7 @@ func NewStateObject(
 		balance:  nil,
 		registry: nil,
 		approvals: &ApprovalObject{
-			Approvals: make(map[common.Address]common.AssetMap),
+			Approvals: make(map[identifiers.Address]common.AssetMap),
 			PrvHash:   common.NilHash,
 		},
 		files:              make(map[common.Hash][]byte),
@@ -68,7 +70,7 @@ func NewStateObject(
 	}
 }
 
-func (object *Object) Address() common.Address {
+func (object *Object) Address() identifiers.Address {
 	return object.address
 }
 
@@ -148,7 +150,7 @@ func (object *Object) Balances() (*BalanceObject, error) {
 	return object.balance, nil
 }
 
-func (object *Object) BalanceOf(id common.AssetID) (*big.Int, error) {
+func (object *Object) BalanceOf(id identifiers.AssetID) (*big.Int, error) {
 	balObject, err := object.Balances()
 	if err != nil {
 		return nil, err
@@ -161,7 +163,7 @@ func (object *Object) BalanceOf(id common.AssetID) (*big.Int, error) {
 	return nil, common.ErrAssetNotFound
 }
 
-func (object *Object) AddBalance(aid common.AssetID, amount *big.Int) {
+func (object *Object) AddBalance(aid identifiers.AssetID, amount *big.Int) {
 	if object.balance == nil {
 		if err := object.loadBalanceObject(); err != nil {
 			panic(err)
@@ -176,7 +178,7 @@ func (object *Object) AddBalance(aid common.AssetID, amount *big.Int) {
 	}
 }
 
-func (object *Object) SubBalance(aid common.AssetID, amount *big.Int) {
+func (object *Object) SubBalance(aid identifiers.AssetID, amount *big.Int) {
 	if object.balance == nil {
 		if err := object.loadBalanceObject(); err != nil {
 			panic(err)
@@ -191,14 +193,14 @@ func (object *Object) SubBalance(aid common.AssetID, amount *big.Int) {
 }
 
 // setBalance is used for test purposes only
-func (object *Object) setBalance(assetID common.AssetID, bal *big.Int) {
+func (object *Object) setBalance(assetID identifiers.AssetID, bal *big.Int) {
 	object.balance.AssetMap[assetID] = bal
 }
 
 func (object *Object) loadBalanceObject() error {
 	if object.data.Balance.IsNil() {
 		object.balance = &BalanceObject{
-			AssetMap: make(map[common.AssetID]*big.Int),
+			AssetMap: make(map[identifiers.AssetID]*big.Int),
 		}
 
 		return nil
@@ -520,18 +522,21 @@ func (object *Object) flushActiveStorageTrees() error {
 	return object.metaStorageTree.Flush()
 }
 
-func (object *Object) CreateStorageTreeForLogic(logicID common.LogicID) error {
+func (object *Object) CreateStorageTreeForLogic(logicID identifiers.LogicID) error {
 	_, err := object.createStorageTreeForLogic(logicID)
 
 	return err
 }
 
-func (object *Object) CreateAsset(addr common.Address, descriptor *common.AssetDescriptor) (common.AssetID, error) {
-	assetID := common.NewAssetIDv0(
+func (object *Object) CreateAsset(
+	addr identifiers.Address,
+	descriptor *common.AssetDescriptor,
+) (identifiers.AssetID, error) {
+	assetID := identifiers.NewAssetIDv0(
 		descriptor.IsLogical,
 		descriptor.IsStateFul,
 		descriptor.Dimension,
-		descriptor.Standard,
+		uint16(descriptor.Standard),
 		addr,
 	)
 
@@ -540,14 +545,14 @@ func (object *Object) CreateAsset(addr common.Address, descriptor *common.AssetD
 		return "", err
 	}
 
-	if err = object.CreateRegistryEntry(assetID.String(), rawBytes); err != nil {
+	if err = object.CreateRegistryEntry(string(assetID), rawBytes); err != nil {
 		return "", err
 	}
 
 	return assetID, nil
 }
 
-func (object *Object) CreateLogic(descriptor *engineio.LogicDescriptor) (common.LogicID, error) {
+func (object *Object) CreateLogic(descriptor *engineio.LogicDescriptor) (identifiers.LogicID, error) {
 	// Generate the key for the LogicManifest from its hash
 	key := common.BytesToHex(storage.LogicManifestKey(object.Address(), descriptor.ManifestHash))
 	// Write the manifest into the dirty entries
@@ -568,7 +573,7 @@ func (object *Object) CreateLogic(descriptor *engineio.LogicDescriptor) (common.
 	return logicObject.ID, nil
 }
 
-func (object *Object) AddAccountGenesisInfo(address common.Address, ixHash common.Hash) error {
+func (object *Object) AddAccountGenesisInfo(address identifiers.Address, ixHash common.Hash) error {
 	accInfo := common.AccountGenesisInfo{
 		IxHash: ixHash,
 	}
@@ -581,7 +586,7 @@ func (object *Object) AddAccountGenesisInfo(address common.Address, ixHash commo
 	return object.SetStorageEntry(common.SargaLogicID, address.Bytes(), rawData)
 }
 
-func (object *Object) CreateContext(behaviouralNodes, randomNodes []id.KramaID) (common.Hash, error) {
+func (object *Object) CreateContext(behaviouralNodes, randomNodes []kramaid.KramaID) (common.Hash, error) {
 	if len(behaviouralNodes)+len(randomNodes) < MinimumContextSize {
 		return common.NilHash, errors.New("liveliness size not met")
 	}
@@ -624,7 +629,7 @@ func (object *Object) CreateContext(behaviouralNodes, randomNodes []id.KramaID) 
 	return mHash, nil
 }
 
-func (object *Object) UpdateContext(behaviouralNodes []id.KramaID, randomNodes []id.KramaID) (common.Hash, error) {
+func (object *Object) UpdateContext(behaviouralNodes, randomNodes []kramaid.KramaID) (common.Hash, error) {
 	if len(behaviouralNodes) == 0 && len(randomNodes) == 0 {
 		return object.data.ContextHash, nil
 	}
@@ -774,8 +779,8 @@ func (object *Object) loadRegistryObject() error {
 	return nil
 }
 
-func (object *Object) GetStorageTree(logicID common.LogicID) (tree.MerkleTree, error) {
-	storageTree, ok := object.activeStorageTrees[logicID.String()]
+func (object *Object) GetStorageTree(logicID identifiers.LogicID) (tree.MerkleTree, error) {
+	storageTree, ok := object.activeStorageTrees[string(logicID)]
 	if ok {
 		return storageTree, nil
 	}
@@ -800,12 +805,12 @@ func (object *Object) GetStorageTree(logicID common.LogicID) (tree.MerkleTree, e
 		return nil, errors.Wrap(err, "failed to initiate logic storage tree")
 	}
 
-	object.activeStorageTrees[logicID.String()] = storageTree
+	object.activeStorageTrees[string(logicID)] = storageTree
 
 	return storageTree, nil
 }
 
-func (object *Object) SetStorageEntry(logicID common.LogicID, key, value []byte) (err error) {
+func (object *Object) SetStorageEntry(logicID identifiers.LogicID, key, value []byte) (err error) {
 	merkleTree, err := object.GetStorageTree(logicID)
 	if err != nil {
 		return err
@@ -814,7 +819,7 @@ func (object *Object) SetStorageEntry(logicID common.LogicID, key, value []byte)
 	return merkleTree.Set(key, value)
 }
 
-func (object *Object) GetStorageEntry(logicID common.LogicID, key []byte) (value []byte, err error) {
+func (object *Object) GetStorageEntry(logicID identifiers.LogicID, key []byte) (value []byte, err error) {
 	merkleTree, err := object.GetStorageTree(logicID)
 	if err != nil {
 		return nil, err
@@ -848,7 +853,7 @@ func (object *Object) getMetaStorageTree() (tree.MerkleTree, error) {
 	return object.metaStorageTree, nil
 }
 
-func (object *Object) createStorageTreeForLogic(logicID common.LogicID) (tree.MerkleTree, error) {
+func (object *Object) createStorageTreeForLogic(logicID identifiers.LogicID) (tree.MerkleTree, error) {
 	if _, err := object.getMetaStorageTree(); err != nil {
 		return nil, err
 	}
@@ -864,12 +869,12 @@ func (object *Object) createStorageTreeForLogic(logicID common.LogicID) (tree.Me
 		return nil, err
 	}
 
-	object.activeStorageTrees[logicID.String()] = newStorageTree
+	object.activeStorageTrees[string(logicID)] = newStorageTree
 
 	return newStorageTree, object.metaStorageTree.Set(logicID.Bytes(), common.NilHash.Bytes())
 }
 
-func (object *Object) isLogicRegistered(logicID common.LogicID) error {
+func (object *Object) isLogicRegistered(logicID identifiers.LogicID) error {
 	_, err := object.getLogicObject(logicID)
 	if err != nil {
 		return err
@@ -899,7 +904,7 @@ func (object *Object) getLogicTree() (tree.MerkleTree, error) {
 	return object.logicTree, nil
 }
 
-func (object *Object) getLogicObject(logicID common.LogicID) (*LogicObject, error) {
+func (object *Object) getLogicObject(logicID identifiers.LogicID) (*LogicObject, error) {
 	logicTree, err := object.getLogicTree()
 	if err != nil {
 		return nil, err
@@ -921,7 +926,7 @@ func (object *Object) getLogicObject(logicID common.LogicID) (*LogicObject, erro
 
 // InsertNewLogicObject inserts the logicID and logicObject into the logicsTree
 // If the logicID is registered, this returns an error
-func (object *Object) InsertNewLogicObject(logicID common.LogicID, logicObject *LogicObject) error {
+func (object *Object) InsertNewLogicObject(logicID identifiers.LogicID, logicObject *LogicObject) error {
 	if err := object.isLogicRegistered(logicID); err == nil {
 		return errors.New("logic already registered")
 	}
@@ -945,12 +950,12 @@ func (object *Object) InsertNewLogicObject(logicID common.LogicID, logicObject *
 
 // FetchLogicObject returns the LogicObject associated with the given logicID,
 // This returns an error if the logicID is not registered
-func (object *Object) FetchLogicObject(logicID common.LogicID) (*LogicObject, error) {
+func (object *Object) FetchLogicObject(logicID identifiers.LogicID) (*LogicObject, error) {
 	return object.getLogicObject(logicID)
 }
 
 // GenerateLogicContextObject returns a LogicContextObject scoped to a given types.LogicID
-func (object *Object) GenerateLogicContextObject(logicID common.LogicID) *LogicContextObject {
+func (object *Object) GenerateLogicContextObject(logicID identifiers.LogicID) *LogicContextObject {
 	return NewLogicContextObject(logicID, object)
 }
 

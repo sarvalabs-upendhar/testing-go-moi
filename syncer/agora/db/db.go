@@ -6,14 +6,13 @@ import (
 	"fmt"
 	"sync"
 
-	db "github.com/sarvalabs/go-moi/storage"
-	dhruva "github.com/sarvalabs/go-moi/storage/db"
-
 	"github.com/hashicorp/go-hclog"
-
-	"github.com/sarvalabs/go-moi/syncer/cid"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
+	db "github.com/sarvalabs/go-moi/storage"
+	dhruva "github.com/sarvalabs/go-moi/storage/db"
+	"github.com/sarvalabs/go-moi/syncer/cid"
 )
 
 const (
@@ -75,7 +74,7 @@ func (ds *DataStore) worker() {
 
 func (ds *DataStore) GetData(
 	ctx context.Context,
-	address common.Address,
+	address identifiers.Address,
 	keys []cid.CID,
 ) (map[cid.CID][]byte, error) {
 	res := make(map[cid.CID][]byte, len(keys))
@@ -100,7 +99,7 @@ func (ds *DataStore) GetData(
 	})
 }
 
-func (ds *DataStore) DoesStateExists(address common.Address, stateHash cid.CID) bool {
+func (ds *DataStore) DoesStateExists(address identifiers.Address, stateHash cid.CID) bool {
 	keyExists, err := ds.db.Contains(db.AccountKey(address, common.BytesToHash(stateHash.Key())))
 	if err != nil {
 		ds.logger.Error("Error fetching state info from DB", "err", err)

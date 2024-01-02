@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -22,11 +23,11 @@ func createTestIXInput(t *testing.T, ixType common.IxType, payload []byte) commo
 		Sender:   tests.RandomAddress(t),
 		Receiver: tests.RandomAddress(t),
 		Payer:    tests.RandomAddress(t),
-		TransferValues: map[common.AssetID]*big.Int{
+		TransferValues: map[identifiers.AssetID]*big.Int{
 			tests.GetRandomAssetID(t, tests.RandomAddress(t)): big.NewInt(22),
 			tests.GetRandomAssetID(t, tests.RandomAddress(t)): big.NewInt(22),
 		},
-		PerceivedValues: map[common.AssetID]*big.Int{
+		PerceivedValues: map[identifiers.AssetID]*big.Int{
 			tests.GetRandomAssetID(t, tests.RandomAddress(t)): big.NewInt(99),
 			tests.GetRandomAssetID(t, tests.RandomAddress(t)): big.NewInt(111),
 		},

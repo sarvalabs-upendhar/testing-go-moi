@@ -7,14 +7,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sarvalabs/go-moi/common/config"
-
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/utils"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/jsonrpc/backend"
@@ -170,7 +170,7 @@ func (f *FilterManager) NewTesseractFilter(ws ConnManager) string {
 }
 
 // NewTesseractsByAccountFilter subscribes to all new tesseract events for a given account
-func (f *FilterManager) NewTesseractsByAccountFilter(ws ConnManager, addr common.Address) string {
+func (f *FilterManager) NewTesseractsByAccountFilter(ws ConnManager, addr identifiers.Address) string {
 	filter := &tesseractByAccountFilter{
 		filterBase: newFilterBase(ws),
 		address:    addr,
@@ -486,7 +486,7 @@ func (f *FilterManager) flushWsFilters(subType subscriptionType) error {
 }
 
 // getNumericTesseractNumber returns tesseract height based on current state or query height
-func (f *FilterManager) getNumericTesseractNumber(height int64, address common.Address) (uint64, error) {
+func (f *FilterManager) getNumericTesseractNumber(height int64, address identifiers.Address) (uint64, error) {
 	switch height {
 	case rpcargs.LatestTesseractHeight:
 		accMeta, err := f.backend.SM.GetAccountMetaInfo(address)
@@ -505,7 +505,7 @@ func (f *FilterManager) getNumericTesseractNumber(height int64, address common.A
 }
 
 // getTesseractHashByHeight returns the tesseract hash based on tesseract height
-func (f *FilterManager) getTesseractHashByHeight(address common.Address, height int64) (common.Hash, error) {
+func (f *FilterManager) getTesseractHashByHeight(address identifiers.Address, height int64) (common.Hash, error) {
 	if height == rpcargs.LatestTesseractHeight {
 		accMetaInfo, err := f.backend.SM.GetAccountMetaInfo(address)
 		if err != nil {

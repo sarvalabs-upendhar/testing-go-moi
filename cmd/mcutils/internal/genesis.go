@@ -5,12 +5,14 @@ import (
 	"errors"
 	"math/big"
 
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/spf13/cobra"
+
 	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/common/tests"
-	"github.com/spf13/cobra"
 )
 
 func GetGenesisCommand() *cobra.Command {
@@ -106,14 +108,14 @@ func createTestGenesisFile() {
 	}
 
 	// fetch krama ids in round robin manner
-	getKramaIDs := func(count int) []id.KramaID {
-		ids := make([]id.KramaID, 0, count)
+	getKramaIDs := func(count int) []kramaid.KramaID {
+		ids := make([]kramaid.KramaID, 0, count)
 
 		for i := 0; i < count; i++ {
 			kid := kramaIDs[kidTracker]
 			kidTracker = (kidTracker + 1) % totalIDs
 
-			ids = append(ids, id.KramaID(kid))
+			ids = append(ids, kramaid.KramaID(kid))
 		}
 
 		return ids
@@ -162,7 +164,7 @@ func createTestGenesisFile() {
 			Standard:    0,
 			IsLogical:   false,
 			IsStateful:  false,
-			Operator:    common.NilAddress,
+			Operator:    identifiers.NilAddress,
 			Allocations: make([]common.Allocation, 0, accCount),
 		},
 		BehaviouralContext: getKramaIDs(behaviouralNodesCount),
@@ -170,9 +172,11 @@ func createTestGenesisFile() {
 	}
 
 	for i := 0; i < accCount; i++ {
+		addr, _ := identifiers.NewAddressFromHex(accAddresses[i])
+
 		g.AddAccount(
 			common.AccountSetupArgs{
-				Address:            common.HexToAddress(accAddresses[i]),
+				Address:            addr,
 				AccType:            common.RegularAccount,
 				MoiID:              common.BytesToHex(getRandomMOIID()),
 				BehaviouralContext: getKramaIDs(behaviouralNodesCount),
@@ -182,7 +186,7 @@ func createTestGenesisFile() {
 
 		if premineAmount > 0 {
 			assetInfo.AssetInfo.Allocations = append(assetInfo.AssetInfo.Allocations, common.Allocation{
-				Address: common.HexToAddress(accAddresses[i]),
+				Address: addr,
 				Amount:  (*hexutil.Big)(new(big.Int).SetUint64(premineAmount)),
 			})
 		}

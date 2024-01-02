@@ -5,13 +5,14 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-pisa"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"
@@ -25,7 +26,7 @@ func TestBalanceOf(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		assetID       common.AssetID
+		assetID       identifiers.AssetID
 		expectedError error
 	}{
 		{
@@ -63,7 +64,7 @@ func TestAddBalance(t *testing.T) {
 
 	testcases := []struct {
 		name             string
-		assetID          common.AssetID
+		assetID          identifiers.AssetID
 		BalanceToBeAdded *big.Int
 		expectedBalance  *big.Int
 	}{
@@ -325,7 +326,7 @@ func TestCommitMetaStorageTree(t *testing.T) {
 			inputMST := test.mst.Copy()
 			sObj := createTestStateObject(
 				t,
-				stateObjectParamsWithMST(t, common.NilAddress, nil, test.mst, test.storageRoot),
+				stateObjectParamsWithMST(t, identifiers.NilAddress, nil, test.mst, test.storageRoot),
 			)
 
 			actualRootHash, err := sObj.commitMetaStorageTree()
@@ -457,7 +458,7 @@ func TestCommitLogicsTree(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			sObj := createTestStateObject(
 				t,
-				stateObjectParamsWithLogicTree(t, common.NilAddress, nil, test.logicTree, test.logicRoot),
+				stateObjectParamsWithLogicTree(t, identifiers.NilAddress, nil, test.logicTree, test.logicRoot),
 			)
 
 			actualRootHash, err := sObj.commitLogics()
@@ -503,7 +504,7 @@ func TestCommit(t *testing.T) {
 			name: "should return error if failed to commit logic tree",
 			soParams: stateObjectParamsWithLogicTree(
 				t,
-				common.NilAddress,
+				identifiers.NilAddress,
 				nil,
 				getMerkleTreeWithCommitHook(
 					t,
@@ -590,7 +591,7 @@ func TestFlushLogicTree(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			sObj := createTestStateObject(
 				t,
-				stateObjectParamsWithLogicTree(t, common.NilAddress, nil, test.logicTree, common.NilHash),
+				stateObjectParamsWithLogicTree(t, identifiers.NilAddress, nil, test.logicTree, common.NilHash),
 			)
 
 			err := sObj.flushLogicTree()
@@ -677,20 +678,20 @@ func TestCreateAsset(t *testing.T) {
 	rawDescriptor, err := assetDescriptor.Bytes()
 	assert.NoError(t, err)
 
-	assetID := common.NewAssetIDv0(
+	assetID := identifiers.NewAssetIDv0(
 		assetDescriptor.IsLogical,
 		assetDescriptor.IsStateFul,
 		assetDescriptor.Dimension,
-		assetDescriptor.Standard,
+		uint16(assetDescriptor.Standard),
 		assetAddress2,
 	)
 
-	err = sObj.CreateRegistryEntry(assetID.String(), rawDescriptor)
+	err = sObj.CreateRegistryEntry(string(assetID), rawDescriptor)
 	assert.NoError(t, err)
 
 	testcases := []struct {
 		name            string
-		assetAddress    common.Address
+		assetAddress    identifiers.Address
 		assetDescriptor *common.AssetDescriptor
 		expectedError   error
 	}{
@@ -821,8 +822,8 @@ func TestCreateContext(t *testing.T) {
 
 	testcases := []struct {
 		name             string
-		behaviouralNodes []id.KramaID
-		randomNodes      []id.KramaID
+		behaviouralNodes []kramaid.KramaID
+		randomNodes      []kramaid.KramaID
 		expectedError    error
 	}{
 		{
@@ -876,8 +877,8 @@ func TestUpdateContext(t *testing.T) {
 
 	testcases := []struct {
 		name             string
-		behaviouralNodes []id.KramaID
-		randomNodes      []id.KramaID
+		behaviouralNodes []kramaid.KramaID
+		randomNodes      []kramaid.KramaID
 		metaHash         common.Hash
 		soParams         *createStateObjectParams
 		mCtx             *MetaContextObject
@@ -991,7 +992,7 @@ func TestLoadBalanceObject(t *testing.T) {
 		{
 			name: "should load empty balance object for nil balance hash",
 			expectedBalance: &BalanceObject{
-				AssetMap: make(map[common.AssetID]*big.Int),
+				AssetMap: make(map[identifiers.AssetID]*big.Int),
 			},
 		},
 	}
@@ -1131,7 +1132,7 @@ func TestHasFuel(t *testing.T) {
 			soParams: &createStateObjectParams{
 				soCallback: func(so *Object) {
 					so.balance = &BalanceObject{
-						AssetMap: map[common.AssetID]*big.Int{
+						AssetMap: map[identifiers.AssetID]*big.Int{
 							common.KMOITokenAssetID: big.NewInt(1000),
 						},
 					}
@@ -1145,7 +1146,7 @@ func TestHasFuel(t *testing.T) {
 			soParams: &createStateObjectParams{
 				soCallback: func(so *Object) {
 					so.balance = &BalanceObject{
-						AssetMap: map[common.AssetID]*big.Int{
+						AssetMap: map[identifiers.AssetID]*big.Int{
 							common.KMOITokenAssetID: big.NewInt(100),
 						},
 					}
@@ -1248,12 +1249,12 @@ func TestGetStorageTree(t *testing.T) {
 	testcases := []struct {
 		name          string
 		soParams      *createStateObjectParams
-		logicID       common.LogicID
+		logicID       identifiers.LogicID
 		expectedError error
 	}{
 		{
 			name:     "fetched storage tree from active storage trees",
-			soParams: stateObjectParamsWithAST(t, getActiveStorageTrees(t, []common.LogicID{logicID}, keys, values)),
+			soParams: stateObjectParamsWithAST(t, getActiveStorageTrees(t, []identifiers.LogicID{logicID}, keys, values)),
 			logicID:  logicID,
 		},
 		{
@@ -1352,7 +1353,7 @@ func TestSetStorageEntry(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			storageTree, ok := sObj.activeStorageTrees[logicIDs[0].String()]
+			storageTree, ok := sObj.activeStorageTrees[string(logicIDs[0])]
 			require.True(t, ok)
 
 			checkForEntryInMerkleTree(t, storageTree, keys[1], values[1])
@@ -1365,16 +1366,18 @@ func TestAddAccountGenesisInfo(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		address       common.Address
+		address       identifiers.Address
 		ixHash        common.Hash
 		soParams      *createStateObjectParams
 		expectedError error
 	}{
 		{
-			name:     "should succeed if account genesis info added",
-			address:  tests.RandomAddress(t),
-			ixHash:   tests.RandomHash(t),
-			soParams: stateObjectParamsWithAST(t, getActiveStorageTrees(t, []common.LogicID{common.SargaLogicID}, keys, values)),
+			name:    "should succeed if account genesis info added",
+			address: tests.RandomAddress(t),
+			ixHash:  tests.RandomHash(t),
+			soParams: stateObjectParamsWithAST(t, getActiveStorageTrees(
+				t, []identifiers.LogicID{common.SargaLogicID}, keys, values,
+			)),
 		},
 	}
 
@@ -1508,7 +1511,7 @@ func TestGetLogicObject(t *testing.T) {
 			name: "should return error if logic tree not found",
 			soParams: stateObjectParamsWithLogicTree(
 				t,
-				common.NilAddress,
+				identifiers.NilAddress,
 				nil,
 				nil,
 				tests.RandomHash(t),
@@ -1517,7 +1520,7 @@ func TestGetLogicObject(t *testing.T) {
 		},
 		{
 			name:          "should return error if logic object not found",
-			soParams:      stateObjectParamsWithLogicTree(t, common.NilAddress, nil, nil, common.NilHash),
+			soParams:      stateObjectParamsWithLogicTree(t, identifiers.NilAddress, nil, nil, common.NilHash),
 			expectedError: common.ErrKeyNotFound,
 		},
 		{
@@ -1584,7 +1587,7 @@ func TestIsLogicRegistered(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			sObj := createTestStateObject(
 				t,
-				stateObjectParamsWithLogicTree(t, common.NilAddress, nil, test.logicTree, common.NilHash),
+				stateObjectParamsWithLogicTree(t, identifiers.NilAddress, nil, test.logicTree, common.NilHash),
 			)
 
 			err = sObj.isLogicRegistered(logicID)
@@ -1611,7 +1614,7 @@ func TestInsertNewLogicObject(t *testing.T) {
 		name          string
 		logicTree     tree.MerkleTree
 		logicRoot     common.Hash
-		logicID       common.LogicID
+		logicID       identifiers.LogicID
 		expectedError error
 	}{
 		{
@@ -1650,7 +1653,7 @@ func TestInsertNewLogicObject(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			sObj := createTestStateObject(
 				t,
-				stateObjectParamsWithLogicTree(t, common.NilAddress, nil, test.logicTree, test.logicRoot),
+				stateObjectParamsWithLogicTree(t, identifiers.NilAddress, nil, test.logicTree, test.logicRoot),
 			)
 
 			err = sObj.InsertNewLogicObject(test.logicID, logicObject)
@@ -1674,7 +1677,7 @@ func TestCreateStorageTreeForLogic(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		logicID       common.LogicID
+		logicID       identifiers.LogicID
 		soParams      *createStateObjectParams
 		expectedError error
 	}{
@@ -1703,7 +1706,7 @@ func TestCreateStorageTreeForLogic(t *testing.T) {
 			require.NoError(t, err)
 
 			// make sure storage tree inserted in AST
-			expectedLogicTree, ok := sObj.activeStorageTrees[logicID.String()]
+			expectedLogicTree, ok := sObj.activeStorageTrees[string(logicID)]
 			require.True(t, ok)
 
 			checkForKramaHashTree(t, expectedLogicTree, actualStorageTree)

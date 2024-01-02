@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"log"
 
-	"github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-legacy-kramaid"
 )
 
 type IcsSetType int

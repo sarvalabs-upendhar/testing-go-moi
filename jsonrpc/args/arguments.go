@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
 )
 
 // RPC args
@@ -22,28 +24,28 @@ const (
 
 // TesseractArgs is an argument wrapper for retrieving the latest Tesseract
 type TesseractArgs struct {
-	Address          common.Address        `json:"address"` // Address for which to retrieve the latest Tesseract
+	Address          identifiers.Address   `json:"address"` // Address for which to retrieve the latest Tesseract
 	WithInteractions bool                  `json:"with_interactions"`
 	Options          TesseractNumberOrHash `json:"options"`
 }
 
 type QueryArgs struct {
-	Address common.Address        `json:"address"` // Address for which to retrieve the latest Tesseract
+	Address identifiers.Address   `json:"address"` // Address for which to retrieve the latest Tesseract
 	Options TesseractNumberOrHash `json:"options"`
 }
 
 type ContextInfoArgs struct {
-	Address common.Address        `json:"address"` // Address for which to retrieve the latest Tesseract
+	Address identifiers.Address   `json:"address"` // Address for which to retrieve the latest Tesseract
 	Options TesseractNumberOrHash `json:"options"`
 }
 
 type InteractionCountArgs struct {
-	Address common.Address        `json:"address"`
+	Address identifiers.Address   `json:"address"`
 	Options TesseractNumberOrHash `json:"options"`
 }
 
 type IxPoolArgs struct {
-	Address common.Address `json:"address"`
+	Address identifiers.Address `json:"address"`
 }
 
 type InspectArgs struct{}
@@ -63,47 +65,47 @@ type DebugArgs struct {
 }
 
 type NodeMetaInfoArgs struct {
-	KramaID id.KramaID `json:"krama_id"`
-	PeerID  string     `json:"peer_id"`
+	KramaID kramaid.KramaID `json:"krama_id"`
+	PeerID  string          `json:"peer_id"`
 }
 
 type GetLogicStorageArgs struct {
-	LogicID    common.LogicID        `json:"logic_id"`
+	LogicID    identifiers.LogicID   `json:"logic_id"`
 	StorageKey hexutil.Bytes         `json:"storage_key"`
 	Options    TesseractNumberOrHash `json:"options"`
 }
 
 type GetAssetInfoArgs struct {
-	AssetID common.AssetID        `json:"asset_id"`
+	AssetID identifiers.AssetID   `json:"asset_id"`
 	Options TesseractNumberOrHash `json:"options"`
 }
 
 type GetAccountArgs struct {
-	Address common.Address        `json:"address"`
+	Address identifiers.Address   `json:"address"`
 	Options TesseractNumberOrHash `json:"options"`
 }
 
 type GetLogicIDArgs struct {
-	Address common.Address        `json:"address"`
+	Address identifiers.Address   `json:"address"`
 	Options TesseractNumberOrHash `json:"options"`
 }
 
 type LogicManifestArgs struct {
-	LogicID  common.LogicID        `json:"logic_id"`
+	LogicID  identifiers.LogicID   `json:"logic_id"`
 	Encoding string                `json:"encoding"`
 	Options  TesseractNumberOrHash `json:"options"`
 }
 
 // BalArgs is an argument wrapper for retrieving balance of an asset
 type BalArgs struct {
-	Address common.Address        `json:"address"`  // Address for which to retrieve the balance
-	AssetID common.AssetID        `json:"asset_id"` // Asset for which to retrieve balance
+	Address identifiers.Address   `json:"address"`  // Address for which to retrieve the balance
+	AssetID identifiers.AssetID   `json:"asset_id"` // Asset for which to retrieve balance
 	Options TesseractNumberOrHash `json:"options"`
 }
 
 type CallArgs struct {
-	IxArgs  *IxArgs                                   `json:"ix_args"`
-	Options map[common.Address]*TesseractNumberOrHash `json:"options"`
+	IxArgs  *IxArgs                                        `json:"ix_args"`
+	Options map[identifiers.Address]*TesseractNumberOrHash `json:"options"`
 }
 
 type SendIX struct {
@@ -115,12 +117,12 @@ type IxArgs struct {
 	Type  common.IxType  `json:"type"`
 	Nonce hexutil.Uint64 `json:"nonce"`
 
-	Sender   common.Address `json:"sender"`
-	Receiver common.Address `json:"receiver"`
-	Payer    common.Address `json:"payer"`
+	Sender   identifiers.Address `json:"sender"`
+	Receiver identifiers.Address `json:"receiver"`
+	Payer    identifiers.Address `json:"payer"`
 
-	TransferValues  map[common.AssetID]*hexutil.Big `json:"transfer_values"`
-	PerceivedValues map[common.AssetID]*hexutil.Big `json:"perceived_values"`
+	TransferValues  map[identifiers.AssetID]*hexutil.Big `json:"transfer_values"`
+	PerceivedValues map[identifiers.AssetID]*hexutil.Big `json:"perceived_values"`
 
 	FuelPrice *hexutil.Big   `json:"fuel_price"`
 	FuelLimit hexutil.Uint64 `json:"fuel_limit"`
@@ -142,8 +144,8 @@ type RPCAssetCreation struct {
 }
 
 type RPCAssetMintOrBurn struct {
-	AssetID common.AssetID `json:"asset_id"`
-	Amount  *hexutil.Big   `json:"amount"`
+	AssetID identifiers.AssetID `json:"asset_id"`
+	Amount  *hexutil.Big        `json:"amount"`
 }
 
 type RPCLogicPayload struct {
@@ -156,7 +158,7 @@ type RPCLogicPayload struct {
 func (l *RPCLogicPayload) LogicPayload() *common.LogicPayload {
 	return &common.LogicPayload{
 		Manifest: l.Manifest.Bytes(),
-		Logic:    common.LogicID(l.LogicID),
+		Logic:    identifiers.LogicID(l.LogicID),
 		Calldata: l.Calldata,
 		Callsite: l.Callsite,
 	}
@@ -169,7 +171,7 @@ func RPClogicPayloadFromLogicPayload(payload *common.LogicPayload) *RPCLogicPayl
 
 	return &RPCLogicPayload{
 		Manifest: (hexutil.Bytes)(payload.Manifest),
-		LogicID:  payload.Logic.String(),
+		LogicID:  string(payload.Logic),
 		Callsite: payload.Callsite,
 		Calldata: (hexutil.Bytes)(payload.Calldata),
 	}
@@ -180,25 +182,25 @@ type InteractionByHashArgs struct {
 }
 
 type InteractionByTesseract struct {
-	Address common.Address        `json:"address"`
+	Address identifiers.Address   `json:"address"`
 	Options TesseractNumberOrHash `json:"options"`
 	IxIndex *hexutil.Uint64       `json:"ix_index"`
 }
 
 type FilterQueryArgs struct {
-	StartHeight *int64          `json:"start_height"`
-	EndHeight   *int64          `json:"end_height"`
-	Address     common.Address  `json:"address"`
-	Topics      [][]common.Hash `json:"topics"`
+	StartHeight *int64              `json:"start_height"`
+	EndHeight   *int64              `json:"end_height"`
+	Address     identifiers.Address `json:"address"`
+	Topics      [][]common.Hash     `json:"topics"`
 }
 
 // UnmarshalJSON decodes a Filter Query json object
 func (q *FilterQueryArgs) UnmarshalJSON(data []byte) error {
 	var obj struct {
-		StartHeight *int64         `json:"start_height"`
-		EndHeight   *int64         `json:"end_height"`
-		Address     common.Address `json:"address"`
-		Topics      []interface{}  `json:"topics"`
+		StartHeight *int64              `json:"start_height"`
+		EndHeight   *int64              `json:"end_height"`
+		Address     identifiers.Address `json:"address"`
+		Topics      []interface{}       `json:"topics"`
 	}
 
 	err := json.Unmarshal(data, &obj)
@@ -218,7 +220,7 @@ func (q *FilterQueryArgs) UnmarshalJSON(data []byte) error {
 		q.EndHeight = obj.EndHeight
 	}
 
-	if obj.Address == common.NilAddress {
+	if obj.Address == identifiers.NilAddress {
 		return common.ErrInvalidAddress
 	}
 
@@ -238,8 +240,8 @@ func (q *FilterQueryArgs) UnmarshalJSON(data []byte) error {
 }
 
 type SyncStatusRequest struct {
-	Address         common.Address `json:"address"`
-	PendingAccounts bool           `json:"pending_accounts"`
+	Address         identifiers.Address `json:"address"`
+	PendingAccounts bool                `json:"pending_accounts"`
 }
 
 type AccSyncStatus struct {
@@ -249,11 +251,11 @@ type AccSyncStatus struct {
 }
 
 type NodeSyncStatus struct {
-	TotalPendingAccounts  hexutil.Uint64   `json:"total_pending_accounts"`
-	PendingAccounts       []common.Address `json:"pending_accounts"`
-	IsPrincipalSyncDone   bool             `json:"is_principal_sync_done"`
-	PrincipalSyncDoneTime hexutil.Uint64   `json:"principal_sync_done_time"`
-	IsInitialSyncDone     bool             `json:"is_initial_sync_done"`
+	TotalPendingAccounts  hexutil.Uint64        `json:"total_pending_accounts"`
+	PendingAccounts       []identifiers.Address `json:"pending_accounts"`
+	IsPrincipalSyncDone   bool                  `json:"is_principal_sync_done"`
+	PrincipalSyncDoneTime hexutil.Uint64        `json:"principal_sync_done_time"`
+	IsInitialSyncDone     bool                  `json:"is_initial_sync_done"`
 }
 
 type SyncStatusResponse struct {
@@ -276,7 +278,7 @@ type FilterUninstallResponse struct {
 type TesseractFilterArgs struct{}
 
 type TesseractByAccountFilterArgs struct {
-	Addr common.Address `json:"address"`
+	Addr identifiers.Address `json:"address"`
 }
 
 type PendingIxnsFilterArgs struct{}
@@ -290,17 +292,17 @@ type DiagnosisRequest struct {
 }
 
 type SyncJobRequest struct {
-	Address common.Address `json:"address"`
+	Address identifiers.Address `json:"address"`
 }
 
 type SyncJobInfo struct {
-	SyncMode              string       `json:"sync_mode"`
-	SnapDownloaded        bool         `json:"snap_downloaded"`
-	ExpectedHeight        uint64       `json:"expected_height"`
-	CurrentHeight         uint64       `json:"current_height"`
-	JobState              string       `json:"job_state"`
-	LastModifiedAt        time.Time    `json:"last_modified_at"`
-	TesseractQueueLen     uint64       `json:"tesseract_queue_length"`
-	BestPeers             []id.KramaID `json:"best_peers"`
-	LatticeSyncInProgress bool         `json:"lattice_sync_in_progress"`
+	SyncMode              string            `json:"sync_mode"`
+	SnapDownloaded        bool              `json:"snap_downloaded"`
+	ExpectedHeight        uint64            `json:"expected_height"`
+	CurrentHeight         uint64            `json:"current_height"`
+	JobState              string            `json:"job_state"`
+	LastModifiedAt        time.Time         `json:"last_modified_at"`
+	TesseractQueueLen     uint64            `json:"tesseract_queue_length"`
+	BestPeers             []kramaid.KramaID `json:"best_peers"`
+	LatticeSyncInProgress bool              `json:"lattice_sync_in_progress"`
 }

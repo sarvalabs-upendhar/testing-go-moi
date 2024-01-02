@@ -153,7 +153,7 @@ func RunAssetMint(
 
 	// Obtain the mint payload and the asset ID
 	payload := *assetPayload.Mint
-	assetID := payload.Asset.String()
+	assetID := string(payload.Asset)
 
 	// Obtain the operator and asset account state objects
 	operator := objects.GetObject(ix.Sender())
@@ -228,7 +228,7 @@ func RunAssetBurn(
 
 	// Obtain the mint payload and the asset ID
 	payload := *assetPayload.Mint
-	assetID := payload.Asset.String()
+	assetID := string(payload.Asset)
 
 	// Obtain the operator and asset account state objects
 	operator := objects.GetObject(ix.Sender())

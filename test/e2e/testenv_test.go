@@ -10,7 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/battleground/common"
 	"github.com/sarvalabs/battleground/server/types"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
@@ -22,7 +24,6 @@ import (
 	"github.com/sarvalabs/battleground/server/warzone/infrastructure"
 
 	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"
-	"github.com/sarvalabs/go-moi/common"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 
 	"github.com/sarvalabs/go-moi/common/tests"
@@ -256,7 +257,7 @@ func (te *TestEnvironment) SetupSuite() {
 
 	te.initLogger()
 
-	var registeredAcc []tests.AccountWithMnemonic
+	var registeredAcc []common.AccountWithMnemonic
 
 	err := te.configureBattleGround()
 	te.Suite.NoError(err)
@@ -346,11 +347,11 @@ func (te *TestEnvironment) SetupSuite() {
 
 	te.logger.Debug("registering accounts on chain", te.accounts)
 
-	KMOIAssetID := common.AssetID("000000004cd973c4eb83cdb8870c0de209736270491b7acc99873da1eddced5826c3b548")
+	KMOIAssetID := identifiers.AssetID("000000004cd973c4eb83cdb8870c0de209736270491b7acc99873da1eddced5826c3b548")
 
 	for _, account := range te.accounts {
 		te.logger.Debug("sending Fuel token ", "KMOI ", InitialKMOITokens)
-		transferAsset(te, registeredAcc[0], account.Addr, map[common.AssetID]*big.Int{
+		transferAsset(te, tests.AccountWithMnemonic(registeredAcc[0]), account.Addr, map[identifiers.AssetID]*big.Int{
 			KMOIAssetID: big.NewInt(InitialKMOITokens),
 		})
 	}

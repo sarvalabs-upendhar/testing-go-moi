@@ -5,12 +5,10 @@ import (
 	"net"
 	"time"
 
-	"github.com/sarvalabs/go-moi/common/kramaid"
-
 	maddr "github.com/multiformats/go-multiaddr"
+	"github.com/sarvalabs/go-legacy-kramaid"
 
 	"github.com/sarvalabs/go-moi/common"
-
 	"github.com/sarvalabs/go-moi/crypto"
 )
 

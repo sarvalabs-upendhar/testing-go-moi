@@ -7,9 +7,10 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	networkmsg "github.com/sarvalabs/go-moi/network/message"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
+	networkmsg "github.com/sarvalabs/go-moi/network/message"
 )
 
 const (
@@ -18,7 +19,7 @@ const (
 )
 
 type LatestAccountInfo struct {
-	Address         common.Address
+	Address         identifiers.Address
 	Height          uint64
 	Hash            common.Hash
 	IsSnapAvailable bool
@@ -177,7 +178,7 @@ func (service *SYNCRPCService) SyncBucketsSince(
 
 func (service *SYNCRPCService) GetLatestAccountInfo(
 	ctx context.Context,
-	addr common.Address,
+	addr identifiers.Address,
 	accountStatus *LatestAccountInfo,
 ) error {
 	metaInfo, err := service.syncer.db.GetAccountMetaInfo(addr)

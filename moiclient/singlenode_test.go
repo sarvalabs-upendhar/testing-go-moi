@@ -13,6 +13,13 @@ import (
 	"github.com/pkg/errors"
 	bg "github.com/sarvalabs/battleground"
 	client "github.com/sarvalabs/battleground/client/types"
+	bgcommon "github.com/sarvalabs/battleground/common"
+	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-pisa"
+	"github.com/sarvalabs/go-polo"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/hexutil"
@@ -21,10 +28,6 @@ import (
 	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
 	gtypes "github.com/sarvalabs/go-moi/state"
 	"github.com/sarvalabs/go-moi/storage"
-	"github.com/sarvalabs/go-pisa"
-	"github.com/sarvalabs/go-polo"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 )
 
 // Guidelines for creating MOIClient tests:
@@ -38,7 +41,7 @@ type TestSingleNode struct {
 	moiClient      *Client
 	bgClient       bg.Client
 	genesis        *common.GenesisFile
-	accounts       []tests.AccountWithMnemonic
+	accounts       []bgcommon.AccountWithMnemonic
 	moiAssetInfo   *common.AssetCreationArgs
 	logger         hclog.Logger
 	instances      []common.Instance
@@ -270,16 +273,16 @@ func (tn *TestSingleNode) TestGetAssetInfoByAssetID() {
 
 	testcases := []struct {
 		name          string
-		assetID       common.AssetID
+		assetID       identifiers.AssetID
 		expectedError error
 	}{
 		{
 			name: "fetch asset info for existing assetID",
-			assetID: common.NewAssetIDv0(
+			assetID: identifiers.NewAssetIDv0(
 				a.IsLogical,
 				a.IsStateful,
 				a.Dimension.ToInt(),
-				common.AssetStandard(a.Standard.ToInt()),
+				a.Standard.ToInt(),
 				common.CreateAddressFromString(a.Symbol),
 			),
 		},
@@ -333,11 +336,11 @@ func (tn *TestSingleNode) TestGetBalance() {
 			name: "fetch moi token balance at latest height",
 			balanceArgs: &rpcargs.BalArgs{
 				Address: a.Allocations[0].Address,
-				AssetID: common.NewAssetIDv0(
+				AssetID: identifiers.NewAssetIDv0(
 					a.IsLogical,
 					a.IsStateful,
 					a.Dimension.ToInt(),
-					common.AssetStandard(a.Standard.ToInt()),
+					a.Standard.ToInt(),
 					common.CreateAddressFromString(a.Symbol),
 				),
 				Options: rpcargs.TesseractNumberOrHash{
@@ -423,11 +426,11 @@ func (tn *TestSingleNode) TestTDU() {
 func (tn *TestSingleNode) TestRegistry() {
 	a := tn.genesis.AssetAccounts[1].AssetInfo
 
-	assetID := common.NewAssetIDv0(
+	assetID := identifiers.NewAssetIDv0(
 		a.IsLogical,
 		a.IsStateful,
 		a.Dimension.ToInt(),
-		common.AssetStandard(a.Standard.ToInt()),
+		a.Standard.ToInt(),
 		common.CreateAddressFromString(a.Symbol),
 	)
 
@@ -468,7 +471,7 @@ func (tn *TestSingleNode) TestRegistry() {
 
 			require.NoError(tn.T(), err)
 			require.Equal(tn.T(), 1, len(registry))
-			require.Equal(tn.T(), assetID.String(), registry[0].AssetID)
+			require.Equal(tn.T(), string(assetID), registry[0].AssetID)
 			require.Equal(tn.T(), a.Operator, registry[0].AssetInfo.Operator)
 		})
 	}
@@ -1244,7 +1247,7 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 			name: "retrieved fuel used in asset create interaction",
 			callArgs: &rpcargs.CallArgs{
 				IxArgs: ixArgs,
-				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
 					addr: {
 						TesseractNumber: &LatestTesseractNumber,
 					},
@@ -1256,7 +1259,7 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 			name: "failed to fetch fuel estimate as options are empty",
 			callArgs: &rpcargs.CallArgs{
 				IxArgs: ixArgs,
-				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
 					addr: {
 						TesseractNumber: nil,
 					},
@@ -1308,7 +1311,7 @@ func (tn *TestSingleNode) TestCall() {
 	}
 
 	expectedAssetAddr := common.NewAccountAddress(4, addr)
-	expectedAssetID := common.NewAssetIDv0(false, false, 0, 0, expectedAssetAddr)
+	expectedAssetID := identifiers.NewAssetIDv0(false, false, 0, 0, expectedAssetAddr)
 
 	extraData := &common.AssetCreationReceipt{
 		AssetID:      expectedAssetID,
@@ -1330,7 +1333,7 @@ func (tn *TestSingleNode) TestCall() {
 			name: "fetched rpc receipt successfully",
 			callArgs: &rpcargs.CallArgs{
 				IxArgs: ixArgs,
-				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
 					addr: {
 						TesseractNumber: &LatestTesseractNumber,
 					},
@@ -1348,7 +1351,7 @@ func (tn *TestSingleNode) TestCall() {
 			name: "failed to retrieve stateHashes as options are empty",
 			callArgs: &rpcargs.CallArgs{
 				IxArgs: ixArgs,
-				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
 					addr: {
 						TesseractNumber: &invalidHeight,
 					},

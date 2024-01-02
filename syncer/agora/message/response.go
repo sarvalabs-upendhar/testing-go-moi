@@ -2,17 +2,17 @@ package message
 
 import (
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 
-	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/syncer/agora/block"
 	"github.com/sarvalabs/go-moi/syncer/cid"
 )
 
 type Response struct {
 	PeerID    kramaid.KramaID
-	SessionID common.Address
+	SessionID identifiers.Address
 	StateHash cid.CID
 	Status    bool
 	HaveList  block.HaveList
@@ -29,7 +29,7 @@ func (r *Response) GetAgoraMsg() *AgoraResponseMsg {
 }
 
 type AgoraResponseMsg struct {
-	SessionID common.Address
+	SessionID identifiers.Address
 	Status    bool
 	HaveList  [][]byte
 	PeerSet   []kramaid.KramaID
@@ -45,7 +45,7 @@ func (resp *AgoraResponseMsg) GetBlocks() []block.Block {
 	return blocks
 }
 
-func (resp *AgoraResponseMsg) GetSessionID() common.Address {
+func (resp *AgoraResponseMsg) GetSessionID() identifiers.Address {
 	return resp.SessionID
 }
 

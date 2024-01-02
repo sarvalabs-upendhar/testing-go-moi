@@ -4,25 +4,25 @@ import (
 	"sync"
 	"time"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-	"github.com/sarvalabs/go-moi/network/message"
-	gtypes "github.com/sarvalabs/go-moi/state"
-
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 	"golang.org/x/crypto/blake2b"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/sarvalabs/go-moi/network/message"
+	gtypes "github.com/sarvalabs/go-moi/state"
 )
 
 type ClusterState struct {
 	mtx                      sync.Mutex
-	selfID                   id.KramaID
+	selfID                   kramaid.KramaID
 	NodeSet                  *common.ICSNodeSet
 	Ixs                      common.Interactions
 	ClusterID                common.ClusterID
-	Operator                 id.KramaID
+	Operator                 kramaid.KramaID
 	AccountInfos             AccountInfos
 	contextDelta             common.ContextDelta
 	Receipts                 common.Receipts
@@ -44,9 +44,9 @@ func NewICS(
 	icsReqMsg *message.CanonicalICSRequest,
 	ixs common.Interactions,
 	clusterID common.ClusterID,
-	operator id.KramaID,
+	operator kramaid.KramaID,
 	reqTime time.Time,
-	selfID id.KramaID,
+	selfID kramaid.KramaID,
 ) *ClusterState {
 	return &ClusterState{
 		NodeSet:          common.NewICSNodeSet(size),
@@ -64,7 +64,7 @@ func NewICS(
 	}
 }
 
-func (cs *ClusterState) SelfKramaID() id.KramaID {
+func (cs *ClusterState) SelfKramaID() kramaid.KramaID {
 	return cs.selfID
 }
 
@@ -103,8 +103,8 @@ func (cs *ClusterState) IsOperatorIncluded() bool {
 	return cs.operatorIncluded
 }
 
-func (cs *ClusterState) NewHeights() map[common.Address]uint64 {
-	heights := make(map[common.Address]uint64, len(cs.AccountInfos))
+func (cs *ClusterState) NewHeights() map[identifiers.Address]uint64 {
+	heights := make(map[identifiers.Address]uint64, len(cs.AccountInfos))
 
 	if !cs.Ixs[0].Sender().IsNil() {
 		heights[cs.Ixs[0].Sender()] = cs.AccountInfos.GetHeight(cs.Ixs[0].Sender()) + 1
@@ -126,7 +126,7 @@ func (cs *ClusterState) NewHeights() map[common.Address]uint64 {
 	return heights
 }
 
-func (cs *ClusterState) NewHeight(addr common.Address) uint64 {
+func (cs *ClusterState) NewHeight(addr identifiers.Address) uint64 {
 	if cs.AccountInfos.IsGenesis(addr) {
 		return cs.AccountInfos.GetHeight(addr)
 	}
@@ -177,9 +177,9 @@ func (cs *ClusterState) IncrementClusterSize(delta int) {
 	cs.NodeSet.Size += delta
 }
 
-func (cs *ClusterState) RespondedEligibleSet() (count int, nodes []id.KramaID) {
+func (cs *ClusterState) RespondedEligibleSet() (count int, nodes []kramaid.KramaID) {
 	count = cs.NodeSet.GetRespondedNodeCount(0, 3)
-	nodes = make([]id.KramaID, 0, count)
+	nodes = make([]kramaid.KramaID, 0, count)
 
 	for i := 0; i < 4; i++ {
 		if cs.NodeSet.Nodes[i] != nil {
@@ -192,7 +192,7 @@ func (cs *ClusterState) RespondedEligibleSet() (count int, nodes []id.KramaID) {
 	return
 }
 
-func (cs *ClusterState) GetBehaviouralContextDelta(setType common.IcsSetType) (addedPeer, replacedPeer id.KramaID) {
+func (cs *ClusterState) GetBehaviouralContextDelta(setType common.IcsSetType) (added, replaced kramaid.KramaID) {
 	for _, peerID := range cs.NodeSet.Nodes[setType].Ids {
 		if cs.Operator == peerID { // cs.ICS.Nodes[setType].Responses.GetIndex(index)
 			return
@@ -200,18 +200,18 @@ func (cs *ClusterState) GetBehaviouralContextDelta(setType common.IcsSetType) (a
 	}
 
 	if len(cs.NodeSet.Nodes[setType].Ids) >= gtypes.MaxBehaviourContextSize {
-		replacedPeer = cs.NodeSet.Nodes[setType].Ids[0]
+		replaced = cs.NodeSet.Nodes[setType].Ids[0]
 	}
 
-	return cs.Operator, replacedPeer
+	return cs.Operator, replaced
 }
 
 func (cs *ClusterState) GetRandomContextDelta(
 	setType common.IcsSetType,
 	requiredCount int,
-	skipPeers ...id.KramaID,
-) (addedPeers, replacedPeers []id.KramaID) {
-	addedPeers = make([]id.KramaID, 0, requiredCount)
+	skipPeers ...kramaid.KramaID,
+) (addedPeers, replacedPeers []kramaid.KramaID) {
+	addedPeers = make([]kramaid.KramaID, 0, requiredCount)
 
 	if cs.NodeSet.Nodes[setType] != nil {
 		if count := len(cs.NodeSet.Nodes[setType].Ids) + requiredCount - gtypes.MaxRandomContextSize; count > 0 {
@@ -254,7 +254,7 @@ func (cs *ClusterState) IsRandomQuorum(requiredRandomNodes, requiredObserverNode
 		cs.NodeSet.Nodes[common.ObserverSet].RespCount >= requiredObserverNodes
 }
 
-func (cs *ClusterState) HasKramaID(kramaID id.KramaID) (int32, bool) {
+func (cs *ClusterState) HasKramaID(kramaID kramaid.KramaID) (int32, bool) {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
@@ -262,7 +262,7 @@ func (cs *ClusterState) HasKramaID(kramaID id.KramaID) (int32, bool) {
 }
 
 // GetByIndex returns the krama id and bls public key of the validator based on the index
-func (cs *ClusterState) GetByIndex(index int32) (id.KramaID, []byte) {
+func (cs *ClusterState) GetByIndex(index int32) (kramaid.KramaID, []byte) {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
@@ -274,21 +274,21 @@ func (cs *ClusterState) GetByIndex(index int32) (id.KramaID, []byte) {
 	return kramaID, publicKey
 }
 
-func (cs *ClusterState) GetICSNodes() []id.KramaID {
+func (cs *ClusterState) GetICSNodes() []kramaid.KramaID {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
 	return cs.NodeSet.GetNodes()
 }
 
-func (cs *ClusterState) GetObservers() []id.KramaID {
+func (cs *ClusterState) GetObservers() []kramaid.KramaID {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
 	return cs.NodeSet.Nodes[common.ObserverSet].Ids
 }
 
-func (cs *ClusterState) GetRandomNodes() []id.KramaID {
+func (cs *ClusterState) GetRandomNodes() []kramaid.KramaID {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
@@ -307,7 +307,7 @@ func (cs *ClusterState) GetQuorum() []int32 {
 	return quorum
 }
 
-func (cs *ClusterState) GetContextHash(ixHash common.Hash, addr common.Address) common.Hash {
+func (cs *ClusterState) GetContextHash(ixHash common.Hash, addr identifiers.Address) common.Hash {
 	receipt, err := cs.Receipts.GetReceipt(ixHash)
 	if err != nil {
 		return common.NilHash
@@ -316,7 +316,7 @@ func (cs *ClusterState) GetContextHash(ixHash common.Hash, addr common.Address) 
 	return receipt.Hashes.ContextHash(addr)
 }
 
-func (cs *ClusterState) GetStateHash(ixHash common.Hash, addr common.Address) common.Hash {
+func (cs *ClusterState) GetStateHash(ixHash common.Hash, addr identifiers.Address) common.Hash {
 	receipt, err := cs.Receipts.GetReceipt(ixHash)
 	if err != nil {
 		return common.NilHash
@@ -406,8 +406,8 @@ func (cs *ClusterState) CreateICSSuccessMsg() *message.ICSSuccessMsg {
 	return msg
 }
 
-func (cs *ClusterState) GetRandomDelta(requiredCount int) []id.KramaID {
-	nodes := make([]id.KramaID, 0, requiredCount)
+func (cs *ClusterState) GetRandomDelta(requiredCount int) []kramaid.KramaID {
+	nodes := make([]kramaid.KramaID, 0, requiredCount)
 	set := cs.NodeSet.Nodes[common.RandomSet]
 
 	for index, v := range set.Ids {
@@ -454,8 +454,8 @@ func (cs *ClusterState) GetDirty() map[common.Hash][]byte {
 	return cs.dirty
 }
 
-func (cs *ClusterState) ContextLock() map[common.Address]common.ContextLockInfo {
-	lockInfo := make(map[common.Address]common.ContextLockInfo)
+func (cs *ClusterState) ContextLock() map[identifiers.Address]common.ContextLockInfo {
+	lockInfo := make(map[identifiers.Address]common.ContextLockInfo)
 	for addr, accInfo := range cs.AccountInfos {
 		lockInfo[addr] = common.ContextLockInfo{
 			ContextHash:   accInfo.ContextHash,
@@ -469,7 +469,7 @@ func (cs *ClusterState) ContextLock() map[common.Address]common.ContextLockInfo 
 
 type AccountInfo struct {
 	AccType       common.AccountType
-	Address       common.Address
+	Address       identifiers.Address
 	IsGenesis     bool
 	ContextHash   common.Hash
 	TesseractHash common.Hash
@@ -487,9 +487,9 @@ func AccountInfoFromAccMetaInfo(metaInfo *common.AccountMetaInfo, isGenesis bool
 	}
 }
 
-type AccountInfos map[common.Address]*AccountInfo
+type AccountInfos map[identifiers.Address]*AccountInfo
 
-func (a AccountInfos) GetLatestHash(addr common.Address) common.Hash {
+func (a AccountInfos) GetLatestHash(addr identifiers.Address) common.Hash {
 	if v, ok := a[addr]; ok {
 		return v.TesseractHash
 	}
@@ -497,7 +497,7 @@ func (a AccountInfos) GetLatestHash(addr common.Address) common.Hash {
 	return common.NilHash
 }
 
-func (a AccountInfos) GetHeight(addr common.Address) uint64 {
+func (a AccountInfos) GetHeight(addr identifiers.Address) uint64 {
 	if v, ok := a[addr]; ok {
 		return v.Height
 	}
@@ -505,12 +505,12 @@ func (a AccountInfos) GetHeight(addr common.Address) uint64 {
 	return 0
 }
 
-func (a AccountInfos) IsGenesis(addr common.Address) bool {
+func (a AccountInfos) IsGenesis(addr identifiers.Address) bool {
 	return a[addr].IsGenesis
 }
 
-func (a AccountInfos) Address() []common.Address {
-	addrs := make([]common.Address, 0, len(a))
+func (a AccountInfos) Address() []identifiers.Address {
+	addrs := make([]identifiers.Address, 0, len(a))
 
 	for addr := range a {
 		addrs = append(addrs, addr)
@@ -522,7 +522,7 @@ func (a AccountInfos) Address() []common.Address {
 type ICSMSG struct {
 	MsgType   message.MsgType
 	Msg       []byte
-	Sender    id.KramaID
+	Sender    kramaid.KramaID
 	ClusterID string
 }
 

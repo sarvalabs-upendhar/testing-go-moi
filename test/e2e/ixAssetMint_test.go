@@ -5,11 +5,13 @@ import (
 	"math/big"
 
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/moiclient"
-	"github.com/stretchr/testify/require"
 )
 
 func (te *TestEnvironment) mintAsset(
@@ -40,7 +42,7 @@ func (te *TestEnvironment) mintAsset(
 // 2. make sure asset minted on senders side by payload amount
 func validateAssetMint(
 	te *TestEnvironment,
-	sender common.Address,
+	sender identifiers.Address,
 	payload common.AssetMintOrBurnPayload,
 	ixHash common.Hash,
 ) {
@@ -77,7 +79,7 @@ func (te *TestEnvironment) TestAssetMint() {
 		nil,
 	))
 
-	transferAsset(te, sender, nonOperator.Addr, map[common.AssetID]*big.Int{
+	transferAsset(te, sender, nonOperator.Addr, map[identifiers.AssetID]*big.Int{
 		MAS0AssetID: big.NewInt(100),
 	})
 
@@ -87,7 +89,7 @@ func (te *TestEnvironment) TestAssetMint() {
 		assetMintPayload *common.AssetMintOrBurnPayload
 		postTest         func(
 			te *TestEnvironment,
-			sender common.Address,
+			sender identifiers.Address,
 			payload common.AssetMintOrBurnPayload,
 			ixHash common.Hash,
 		)
@@ -124,10 +126,10 @@ func (te *TestEnvironment) TestAssetMint() {
 			name:   "invalid assetID version",
 			sender: sender,
 			assetMintPayload: &common.AssetMintOrBurnPayload{
-				Asset:  common.AssetID(""),
+				Asset:  identifiers.AssetID(""),
 				Amount: big.NewInt(1),
 			},
-			expectedError: errors.New("invalid asset ID: insufficient length"),
+			expectedError: errors.New("invalid asset ID: missing version prefix"),
 		},
 		{
 			name:   "operator address mismatch (sender is not the asset operator)",

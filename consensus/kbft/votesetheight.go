@@ -5,9 +5,9 @@ import (
 	"log"
 	"sync"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-
 	"github.com/hashicorp/go-hclog"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
@@ -30,7 +30,7 @@ type HeightVoteSet struct {
 	chainIDs []string
 
 	// Represents the slice of heights tracked by the voteset
-	heights map[common.Address]uint64
+	heights map[identifiers.Address]uint64
 
 	// Represents the cluster state
 	cs *ktypes.ClusterState
@@ -43,7 +43,7 @@ type HeightVoteSet struct {
 
 	// Represents a mapping of peer IDs to a slice of rounds that the peer is catching up on.
 	// A peer will have at most 2 rounds in its catchup.
-	peerCatchupRounds map[id.KramaID][]int32
+	peerCatchupRounds map[kramaid.KramaID][]int32
 
 	// Represents a synchronization mutex for the voteset
 	mtx sync.Mutex
@@ -53,7 +53,7 @@ type HeightVoteSet struct {
 // Accepts a slice of chainIDs, heights and the set of validators.
 func NewHeightVoteSet(
 	chainIDs []string,
-	heights map[common.Address]uint64,
+	heights map[identifiers.Address]uint64,
 	valset *ktypes.ClusterState,
 	logger hclog.Logger,
 ) *HeightVoteSet {
@@ -62,7 +62,7 @@ func NewHeightVoteSet(
 		logger:            logger.Named("Height-VoteSet"),
 		chainIDs:          chainIDs,
 		mtx:               sync.Mutex{},
-		peerCatchupRounds: make(map[id.KramaID][]int32),
+		peerCatchupRounds: make(map[kramaid.KramaID][]int32),
 	}
 	// Reset the HVS and return it
 	hvs.Reset(heights, valset)
@@ -72,7 +72,7 @@ func NewHeightVoteSet(
 
 // Reset is a method of HeightVoteSet that resets the vote set.
 // Accepts a slice of heights and a set of validators to assign to the height vote set.
-func (hvs *HeightVoteSet) Reset(heights map[common.Address]uint64, valset *ktypes.ClusterState) {
+func (hvs *HeightVoteSet) Reset(heights map[identifiers.Address]uint64, valset *ktypes.ClusterState) {
 	// Acquire lock
 	hvs.mtx.Lock()
 	defer hvs.mtx.Unlock()
@@ -93,7 +93,7 @@ func (hvs *HeightVoteSet) Reset(heights map[common.Address]uint64, valset *ktype
 // AddVote is a method of HeightVoteSet that adds a new vote for a peer id.
 // Adds the vote the voteset that corresponds to the vote round and type.
 // If the peer has more than two catchup rounds, the vote is not added.
-func (hvs *HeightVoteSet) AddVote(v *ktypes.Vote, peerID id.KramaID) (bool, error) {
+func (hvs *HeightVoteSet) AddVote(v *ktypes.Vote, peerID kramaid.KramaID) (bool, error) {
 	// Acquire lock
 	hvs.mtx.Lock()
 	defer hvs.mtx.Unlock()

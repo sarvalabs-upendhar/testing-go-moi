@@ -3,13 +3,13 @@ package types
 import (
 	"bytes"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-	networkmsgs "github.com/sarvalabs/go-moi/network/message"
-
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"
+	networkmsgs "github.com/sarvalabs/go-moi/network/message"
 )
 
 type (
@@ -90,7 +90,7 @@ func (v *Vote) Validate() error {
 }
 
 type WALMsg struct {
-	PeerID  id.KramaID
+	PeerID  kramaid.KramaID
 	MsgType networkmsgs.MsgType
 	Msg     []byte
 }
@@ -120,7 +120,7 @@ func (twm *TimedWALMessage) FromBytes(bytes []byte) error {
 
 type Proposal struct {
 	Type      ConsensusMsgType
-	Height    map[common.Address]uint64
+	Height    map[identifiers.Address]uint64
 	Round     int32
 	POLRound  int32
 	Grid      *TesseractGrid
@@ -133,7 +133,7 @@ type Proposal struct {
 // Accepts the heights, round, POL round and a tesseract grid id.
 // Timestamp of the proposal is set to Now()
 func NewProposal(
-	heights map[common.Address]uint64,
+	heights map[identifiers.Address]uint64,
 	round int32,
 	polround int32,
 	grid *TesseractGrid,
@@ -170,7 +170,7 @@ type Cmessage interface {
 // Implements the Cmessage interface and wraps another message satisfying this interface.
 type ConsensusMessage struct {
 	// Represents the KipID of the message sender
-	PeerID id.KramaID
+	PeerID kramaid.KramaID
 
 	// Represents the wrapped message
 	Message Cmessage
@@ -301,7 +301,7 @@ func (t *TesseractGrid) GetTesseractGridID() (*common.TesseractGridID, error) {
 		Hash: t.Hash,
 		Parts: &common.TesseractParts{
 			Total: t.Total,
-			Grid:  make(map[common.Address]common.TesseractHeightAndHash),
+			Grid:  make(map[identifiers.Address]common.TesseractHeightAndHash),
 		},
 	}
 

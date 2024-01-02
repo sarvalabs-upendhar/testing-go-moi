@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"math/big"
 
-	"github.com/sarvalabs/go-moi/common/kramaid"
-
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 )
 
@@ -58,7 +58,7 @@ func (asset *AssetCreatePayload) FromBytes(data []byte) error {
 
 type AssetMintOrBurnPayload struct {
 	// AssetID is used to specify the Asset ID for which to mint
-	Asset AssetID
+	Asset identifiers.AssetID
 	// Amount is used for mint/burn
 	Amount *big.Int
 }
@@ -82,10 +82,10 @@ func (mint *AssetMintOrBurnPayload) FromBytes(data []byte) error {
 
 type AssetApprovePayload struct {
 	// Spender is used to specify the spender address for approve
-	Spender Address
+	Spender identifiers.Address
 	// Approvals are used to specify the amount of approval for each asset.
 	// This is set to 0 for an asset to revoke and 2^256 for infinite allowance.
-	Approvals map[AssetID]*big.Int
+	Approvals map[identifiers.AssetID]*big.Int
 }
 
 func (asset AssetPayload) Bytes() ([]byte, error) {
@@ -115,7 +115,7 @@ type FilePayload struct {
 type LogicPayload struct {
 	// Logic specifies the Logic ID to execute a method on.
 	// Required for IxLogicInvoke, IxLogicInteract, IxLogicEnlist, IxLogicUpgrade
-	Logic LogicID
+	Logic identifiers.LogicID
 
 	// Callsite specifies the method name to deploy and invoke.
 	// Required for IxLogicDeploy, IxLogicInvoke, IxLogicInteract, IxLogicEnlist

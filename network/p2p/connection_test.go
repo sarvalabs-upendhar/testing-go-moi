@@ -9,17 +9,17 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/common/utils"
 	mudraCommon "github.com/sarvalabs/go-moi/crypto/common"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
 	"github.com/sarvalabs/go-moi/senatus"
-	"github.com/stretchr/testify/assert"
-
-	"github.com/stretchr/testify/require"
 )
 
 func TestIsInboundConnLimitReached(t *testing.T) {
@@ -323,7 +323,6 @@ func TestUpdateConnCount(t *testing.T) {
 			rttRange := ci.getConnRTTRange(test.rtt)
 
 			ci.outboundConnCountByRange[rttRange] = test.outboundConnCount
-
 			ci.updateConnCount(test.direction, test.rtt, test.delta)
 
 			require.Equal(t, test.expectedInbound, ci.inboundConnCount)
@@ -361,7 +360,7 @@ func TestConnectPeerByKramaID(t *testing.T) {
 
 	testcases := []struct {
 		name                   string
-		kramaID                id.KramaID
+		kramaID                kramaid.KramaID
 		establishedConnections map[int][]*Server
 		newConnections         map[int][]*Server
 		expectedError          error
@@ -448,7 +447,7 @@ func TestConnectToTrustedNodes(t *testing.T) {
 
 	testcases := []struct {
 		name                   string
-		kramaID                id.KramaID
+		kramaID                kramaid.KramaID
 		establishedConnections map[int][]*Server
 		newConnections         map[int][]*Server
 	}{
@@ -621,13 +620,13 @@ func TestGetPeers(t *testing.T) {
 	testcases := []struct {
 		name         string
 		server       *Server
-		expectedList []id.KramaID
+		expectedList []kramaid.KramaID
 		testFn       func()
 	}{
 		{
 			name:         "Should return an empty list if no Krama ID's in peersList",
 			server:       servers[0],
-			expectedList: make([]id.KramaID, 0),
+			expectedList: make([]kramaid.KramaID, 0),
 		},
 		{
 			name:   "Returns a slice of Krama ID's connected to a client",
@@ -635,7 +634,7 @@ func TestGetPeers(t *testing.T) {
 			testFn: func() {
 				setServerPeers(t, servers[1], servers[2].id, servers[3].id)
 			},
-			expectedList: []id.KramaID{servers[2].id, servers[3].id},
+			expectedList: []kramaid.KramaID{servers[2].id, servers[3].id},
 		},
 	}
 

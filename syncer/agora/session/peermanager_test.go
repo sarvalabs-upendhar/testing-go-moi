@@ -4,8 +4,7 @@ import (
 	"context"
 	"testing"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-
+	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -43,8 +42,8 @@ func TestUpdateFailedAttempts(t *testing.T) {
 
 	tt := []struct {
 		name         string
-		peers        map[id.KramaID]int
-		peerID       id.KramaID
+		peers        map[kramaid.KramaID]int
+		peerID       kramaid.KramaID
 		delta        int
 		isSuccess    bool
 		updatedCount int
@@ -59,7 +58,7 @@ func TestUpdateFailedAttempts(t *testing.T) {
 		},
 		{
 			name:         "Increase failed attempts",
-			peers:        map[id.KramaID]int{peerID[0]: 1},
+			peers:        map[kramaid.KramaID]int{peerID[0]: 1},
 			peerID:       peerID[0],
 			delta:        1,
 			isSuccess:    true,
@@ -67,7 +66,7 @@ func TestUpdateFailedAttempts(t *testing.T) {
 		},
 		{
 			name:         "Decrease failed attempts",
-			peers:        map[id.KramaID]int{peerID[1]: 2},
+			peers:        map[kramaid.KramaID]int{peerID[1]: 2},
 			peerID:       peerID[1],
 			delta:        -1,
 			isSuccess:    true,
@@ -104,8 +103,8 @@ func TestUpdatePeerStatus(t *testing.T) {
 
 	tt := []struct {
 		name          string
-		peers         map[id.KramaID]bool
-		peerID        id.KramaID
+		peers         map[kramaid.KramaID]bool
+		peerID        kramaid.KramaID
 		isSuccess     bool
 		status        bool
 		updatedStatus bool
@@ -120,7 +119,7 @@ func TestUpdatePeerStatus(t *testing.T) {
 		},
 		{
 			name:          "change peer status to false",
-			peers:         map[id.KramaID]bool{peerID[0]: true},
+			peers:         map[kramaid.KramaID]bool{peerID[0]: true},
 			peerID:        peerID[0],
 			isSuccess:     true,
 			status:        false,
@@ -128,7 +127,7 @@ func TestUpdatePeerStatus(t *testing.T) {
 		},
 		{
 			name:          "change peer status to true",
-			peers:         map[id.KramaID]bool{peerID[1]: false},
+			peers:         map[kramaid.KramaID]bool{peerID[1]: false},
 			peerID:        peerID[1],
 			isSuccess:     true,
 			status:        true,
@@ -163,17 +162,17 @@ func TestChooseBestPeer_FromConnectedPeers(t *testing.T) {
 	ids := tests.GetTestKramaIDs(t, 2)
 	tt := []struct {
 		name  string
-		peers map[id.KramaID]struct {
+		peers map[kramaid.KramaID]struct {
 			isActive       bool
 			failedAttempts int
 		}
 		err        error
-		avoidPeers map[id.KramaID]interface{}
-		result     id.KramaID
+		avoidPeers map[kramaid.KramaID]interface{}
+		result     kramaid.KramaID
 	}{
 		{
 			name: "should return error if no peer is available",
-			peers: map[id.KramaID]struct {
+			peers: map[kramaid.KramaID]struct {
 				isActive       bool
 				failedAttempts int
 			}{
@@ -188,7 +187,7 @@ func TestChooseBestPeer_FromConnectedPeers(t *testing.T) {
 		},
 		{
 			name: "should not choose from avoided peers",
-			peers: map[id.KramaID]struct {
+			peers: map[kramaid.KramaID]struct {
 				isActive       bool
 				failedAttempts int
 			}{
@@ -203,14 +202,14 @@ func TestChooseBestPeer_FromConnectedPeers(t *testing.T) {
 				},
 			},
 			err: nil,
-			avoidPeers: map[id.KramaID]interface{}{
+			avoidPeers: map[kramaid.KramaID]interface{}{
 				ids[0]: nil,
 			},
 			result: ids[1],
 		},
 		{
 			name: "should not choose active peers",
-			peers: map[id.KramaID]struct {
+			peers: map[kramaid.KramaID]struct {
 				isActive       bool
 				failedAttempts int
 			}{
@@ -229,7 +228,7 @@ func TestChooseBestPeer_FromConnectedPeers(t *testing.T) {
 		},
 		{
 			name: "should not choose peer if failed attempts >= 3 ",
-			peers: map[id.KramaID]struct {
+			peers: map[kramaid.KramaID]struct {
 				isActive       bool
 				failedAttempts int
 			}{

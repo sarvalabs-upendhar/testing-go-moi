@@ -11,19 +11,17 @@ import (
 	"testing"
 	"time"
 
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-
-	"github.com/sarvalabs/go-moi/storage/db"
-
-	"github.com/sarvalabs/go-moi/storage"
-
 	"github.com/hashicorp/go-hclog"
+	"github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
-	"github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/common/utils"
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
@@ -32,10 +30,11 @@ import (
 	"github.com/sarvalabs/go-moi/network/p2p"
 	"github.com/sarvalabs/go-moi/senatus"
 	"github.com/sarvalabs/go-moi/state"
+	"github.com/sarvalabs/go-moi/storage"
+	"github.com/sarvalabs/go-moi/storage/db"
 	"github.com/sarvalabs/go-moi/syncer"
 	"github.com/sarvalabs/go-moi/syncer/agora/block"
 	"github.com/sarvalabs/go-moi/syncer/cid"
-	"github.com/stretchr/testify/require"
 )
 
 type SyncEventType int
@@ -85,7 +84,7 @@ func newAccountSpecificEvents(snapSync int, latticeSync int, start, end int) Acc
 type SyncEvents struct {
 	bucketSync    int
 	SystemAccSync int
-	accounts      map[common.Address]AccountSpecificEvents
+	accounts      map[identifiers.Address]AccountSpecificEvents
 }
 
 func NewTestSyncer(
@@ -113,7 +112,7 @@ func NewTestSyncer(
 		state:          sm,
 		jobWorkerCount: 5,
 		jobQueue: &JobQueue{
-			jobs: make(map[common.Address]*SyncJob),
+			jobs: make(map[identifiers.Address]*SyncJob),
 			mux:  mux,
 		},
 		gridStore:         NewGridStore(),
@@ -121,11 +120,11 @@ func NewTestSyncer(
 		workerSignal:      make(chan struct{}),
 		tesseractRegistry: common.NewHashRegistry(60),
 		consensusSlots:    slots,
-		lockedAccounts:    make(map[common.Address]common.Hash, 0),
+		lockedAccounts:    make(map[identifiers.Address]common.Hash, 0),
 		metrics:           NilMetrics(),
 		pendingMsgQueue:   make([]*TesseractInfo, 0),
 		pendingMsgChan:    make(chan *TesseractInfo, 10),
-		execGrid:          make(map[common.Hash]common.Address),
+		execGrid:          make(map[common.Hash]identifiers.Address),
 		tracker:           NewSyncStatusTracker(0),
 		workerWaitTime:    10 * time.Millisecond,
 	}
@@ -141,7 +140,7 @@ func NewSyncerWithJobQueue(ctx context.Context, mux *utils.TypeMux) *Syncer {
 	return &Syncer{
 		ctx: ctx,
 		jobQueue: &JobQueue{
-			jobs: make(map[common.Address]*SyncJob),
+			jobs: make(map[identifiers.Address]*SyncJob),
 			mux:  mux,
 		},
 	}
@@ -274,7 +273,7 @@ func (m *MockLattice) setTesseractByHeight(ts *common.Tesseract) {
 }
 
 func (m *MockLattice) GetTesseractByHeight(
-	address common.Address,
+	address identifiers.Address,
 	height uint64,
 	withInteractions bool,
 ) (*common.Tesseract, error) {
@@ -338,7 +337,7 @@ func newMockStateManager() *MockStateManager {
 
 func (m MockStateManager) SyncStorageTrees(
 	ctx context.Context,
-	address common.Address,
+	address identifiers.Address,
 	newRoot *common.RootNode,
 	logicStorageTreeRoots map[string]*common.RootNode,
 ) error {
@@ -346,17 +345,17 @@ func (m MockStateManager) SyncStorageTrees(
 	panic("implement me")
 }
 
-func (m MockStateManager) SyncLogicTree(address common.Address, newRoot *common.RootNode) error {
+func (m MockStateManager) SyncLogicTree(address identifiers.Address, newRoot *common.RootNode) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m MockStateManager) CreateDirtyObject(addr common.Address, accType common.AccountType) *state.Object {
+func (m MockStateManager) CreateDirtyObject(addr identifiers.Address, accType common.AccountType) *state.Object {
 	return nil
 }
 
 func (m MockStateManager) GetParticipantContextRaw(
-	address common.Address,
+	address identifiers.Address,
 	hash common.Hash,
 	rawContext map[common.Hash][]byte,
 ) error {
@@ -384,7 +383,7 @@ func (m MockStateManager) GetICSNodeSetFromRawContext(ts *common.Tesseract,
 
 type MockAgora struct {
 	sessions   map[cid.CID]syncer.Session
-	newSession func(address common.Address) (syncer.Session, error)
+	newSession func(address identifiers.Address) (syncer.Session, error)
 }
 
 func newMockAgora() *MockAgora {
@@ -398,7 +397,7 @@ func (m *MockAgora) addSession(session *MockSession, stateHash cid.CID) {
 }
 
 func (m MockAgora) NewSession(ctx context.Context, contextPeers []kramaid.KramaID,
-	address common.Address, stateHash cid.CID,
+	address identifiers.Address, stateHash cid.CID,
 ) (syncer.Session, error) {
 	if m.newSession != nil {
 		return m.newSession(address)
@@ -418,18 +417,18 @@ func (m MockAgora) Start() {
 func (m MockAgora) Close() {}
 
 type MockSession struct {
-	address common.Address
+	address identifiers.Address
 	blocks  map[cid.CID]*block.Block
 }
 
-func newMockSession(addr common.Address) *MockSession {
+func newMockSession(addr identifiers.Address) *MockSession {
 	return &MockSession{
 		address: addr,
 		blocks:  make(map[cid.CID]*block.Block),
 	}
 }
 
-func (m MockSession) ID() common.Address {
+func (m MockSession) ID() identifiers.Address {
 	return m.address
 }
 
@@ -922,7 +921,7 @@ func printEventsReceived(
 	events SyncEvents,
 	bucketSyncCount,
 	systemAccSyncCount int,
-	accountLevelSync map[common.Address]map[SyncEventType]int,
+	accountLevelSync map[identifiers.Address]map[SyncEventType]int,
 ) {
 	logger.Debug("printing expected events")
 	logger.Debug(syncerEvents[BucketSync], events.bucketSync)
@@ -963,7 +962,7 @@ func defaultSyncerConfig() *config.SyncerConfig {
 
 func generateTesseracts(
 	t *testing.T,
-	addr common.Address,
+	addr identifiers.Address,
 	startHeight, endHeight int,
 	prevHash common.Hash,
 	totalParts int32,
@@ -1000,7 +999,7 @@ func generateTesseracts(
 						},
 					},
 				}
-				header.ContextLock = map[common.Address]common.ContextLockInfo{
+				header.ContextLock = map[identifiers.Address]common.ContextLockInfo{
 					addr: {
 						ContextHash: tests.RandomHash(t),
 					},
@@ -1022,7 +1021,7 @@ func generateTesseracts(
 	return tesseracts
 }
 
-func generateTesseractsGridByMap(t *testing.T, addrHeights map[common.Address]int) []*common.Tesseract {
+func generateTesseractsGridByMap(t *testing.T, addrHeights map[identifiers.Address]int) []*common.Tesseract {
 	t.Helper()
 
 	height := 0
@@ -1045,7 +1044,7 @@ func generateTesseractsGridByMap(t *testing.T, addrHeights map[common.Address]in
 	return tesseracts
 }
 
-func generateTesseractsByMap(t *testing.T, addrHeights map[common.Address]int) []*common.Tesseract {
+func generateTesseractsByMap(t *testing.T, addrHeights map[identifiers.Address]int) []*common.Tesseract {
 	t.Helper()
 
 	tesseracts := make([]*common.Tesseract, 0)
@@ -1093,13 +1092,13 @@ func checkIfSyncJobMatches(t *testing.T, expectedJob *SyncJob, syncJob *SyncJob)
 	require.NotNil(t, syncJob.tesseractQueue)
 }
 
-func sortAddresses(addrs []common.Address) {
+func sortAddresses(addrs []identifiers.Address) {
 	sort.Slice(addrs, func(i, j int) bool {
 		return bytes.Compare(addrs[i][:], addrs[j][:]) < 0
 	})
 }
 
-func createSyncJobs(t *testing.T, count int, addrs []common.Address, opts ...Option) []*SyncJob {
+func createSyncJobs(t *testing.T, count int, addrs []identifiers.Address, opts ...Option) []*SyncJob {
 	t.Helper()
 
 	jobs := make([]*SyncJob, count)
@@ -1172,7 +1171,7 @@ func SubscribeAndListenForSyncEvents(
 
 	bucketSyncCount := 0
 	systemAccSyncCount := 0
-	accountLevelSync := make(map[common.Address]map[SyncEventType]int)
+	accountLevelSync := make(map[identifiers.Address]map[SyncEventType]int)
 
 	for acc, event := range expectedEvents.accounts {
 		for i := SnapSync; i <= JobDone; i++ {
@@ -1265,7 +1264,7 @@ func SubscribeAndListenForSyncEvents(
 func checkIfTesseractsSynced(
 	t *testing.T,
 	s *Syncer,
-	accounts map[common.Address]int,
+	accounts map[identifiers.Address]int,
 	execution bool,
 	tesseracts ...*common.Tesseract,
 ) {
@@ -1302,12 +1301,12 @@ func checkIfTesseractsSynced(
 }
 
 type MockDB struct {
-	accountSyncStatus map[common.Address][]byte
+	accountSyncStatus map[identifiers.Address][]byte
 }
 
 func NewMockDB() *MockDB {
 	return &MockDB{
-		accountSyncStatus: make(map[common.Address][]byte),
+		accountSyncStatus: make(map[identifiers.Address][]byte),
 	}
 }
 
@@ -1341,7 +1340,7 @@ func (m MockDB) DeleteEntry(i []byte) error {
 	panic("implement me")
 }
 
-func (m MockDB) SetAccount(addr common.Address, stateHash common.Hash, data []byte) error {
+func (m MockDB) SetAccount(addr identifiers.Address, stateHash common.Hash, data []byte) error {
 	// TODO implement me
 	panic("implement me")
 }
@@ -1356,17 +1355,17 @@ func (m MockDB) GetInteractions(gridHash common.Hash) ([]byte, error) {
 	panic("implement me")
 }
 
-func (m MockDB) GetAccountMetaInfo(id common.Address) (*common.AccountMetaInfo, error) {
+func (m MockDB) GetAccountMetaInfo(id identifiers.Address) (*common.AccountMetaInfo, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m MockDB) UpdateTesseractStatus(addr common.Address, height uint64, tsHash common.Hash, status bool) error {
+func (m MockDB) UpdateTesseractStatus(addr identifiers.Address, height uint64, tsHash common.Hash, status bool) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m MockDB) SetAccountSyncStatus(address common.Address, status *common.AccountSyncStatus) error {
+func (m MockDB) SetAccountSyncStatus(address identifiers.Address, status *common.AccountSyncStatus) error {
 	rawStatus, err := status.Bytes()
 	if err != nil {
 		return err
@@ -1377,7 +1376,7 @@ func (m MockDB) SetAccountSyncStatus(address common.Address, status *common.Acco
 	return nil
 }
 
-func (m MockDB) CleanupAccountSyncStatus(address common.Address) error {
+func (m MockDB) CleanupAccountSyncStatus(address identifiers.Address) error {
 	delete(m.accountSyncStatus, address)
 
 	return nil
@@ -1403,12 +1402,12 @@ func (m MockDB) DropPrefix(prefix []byte) error {
 	panic("implement me")
 }
 
-func (m MockDB) UpdatePrimarySyncStatus(address common.Address) error {
+func (m MockDB) UpdatePrimarySyncStatus(address identifiers.Address) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m MockDB) IsAccountPrimarySyncDone(address common.Address) bool {
+func (m MockDB) IsAccountPrimarySyncDone(address identifiers.Address) bool {
 	// TODO implement me
 	panic("implement me")
 }
@@ -1454,20 +1453,20 @@ func (m MockDB) IsPrincipalSyncDone() (bool, int64) {
 
 func (m MockDB) GetAccountSnapshot(
 	ctx context.Context,
-	address common.Address,
+	address identifiers.Address,
 	sinceTS uint64,
 ) (*common.Snapshot, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m MockDB) HasTesseractAt(addr common.Address, height uint64) bool {
+func (m MockDB) HasTesseractAt(addr identifiers.Address, height uint64) bool {
 	// TODO implement me
 	panic("implement me")
 }
 
 func (m MockDB) UpdateAccMetaInfo(
-	id common.Address,
+	id identifiers.Address,
 	height uint64,
 	tesseractHash common.Hash,
 	accType common.AccountType,
@@ -1477,7 +1476,7 @@ func (m MockDB) UpdateAccMetaInfo(
 	panic("implement me")
 }
 
-func (m MockDB) SetTesseractHeightEntry(addr common.Address, height uint64, tsHash common.Hash) error {
+func (m MockDB) SetTesseractHeightEntry(addr identifiers.Address, height uint64, tsHash common.Hash) error {
 	// TODO implement me
 	panic("implement me")
 }

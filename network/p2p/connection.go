@@ -8,18 +8,18 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/sarvalabs/go-moi/senatus"
-
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	maddr "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/sarvalabs/go-moi/senatus"
 )
 
 const (
@@ -198,8 +198,8 @@ func (cm *ConnectionManager) getConns() []network.Conn {
 }
 
 // getPeers returns peer ID's of connected peers.
-func (cm *ConnectionManager) getPeers() []id.KramaID {
-	peers := make([]id.KramaID, 0)
+func (cm *ConnectionManager) getPeers() []kramaid.KramaID {
+	peers := make([]kramaid.KramaID, 0)
 
 	for _, peerInfo := range cm.server.Peers.getPeers() {
 		peers = append(peers, peerInfo.kramaID)
@@ -231,7 +231,7 @@ func (cm *ConnectionManager) connectPeer(peerInfo peer.AddrInfo) error {
 }
 
 // connectPeerByKramaID connects to a node using its KramaID.
-func (cm *ConnectionManager) connectPeerByKramaID(kramaID id.KramaID) error {
+func (cm *ConnectionManager) connectPeerByKramaID(kramaID kramaid.KramaID) error {
 	peerID, err := kramaID.DecodedPeerID()
 	if err != nil {
 		return err
@@ -329,7 +329,7 @@ func (cm *ConnectionManager) connectToTrustedNodes() {
 
 // ConnectAndRegisterPeer connects to a specific peer, establishes a stream and registers the peer to the
 // handler working set.
-func (cm *ConnectionManager) ConnectAndRegisterPeer(peerInfo peer.AddrInfo, kramaID id.KramaID, rtt int64) error {
+func (cm *ConnectionManager) ConnectAndRegisterPeer(peerInfo peer.AddrInfo, kramaID kramaid.KramaID, rtt int64) error {
 	var (
 		stream network.Stream
 		err    error
@@ -524,7 +524,7 @@ func (cm *ConnectionManager) streamHandler(stream network.Stream) {
 
 // pingPeer pings the specified peer using the pingService and returns the KramaID, round-trip time (RTT), and
 // an error if the ping operation fails.
-func (cm *ConnectionManager) pingPeer(peerInfo peer.AddrInfo) (id.KramaID, int64, error) {
+func (cm *ConnectionManager) pingPeer(peerInfo peer.AddrInfo) (kramaid.KramaID, int64, error) {
 	response := <-cm.pingService.Ping(cm.server.ctx, peerInfo.ID)
 	if response.Error != nil {
 		cm.coolDownCache.Add(peerInfo.ID)
@@ -537,7 +537,7 @@ func (cm *ConnectionManager) pingPeer(peerInfo peer.AddrInfo) (id.KramaID, int64
 }
 
 // refreshSenatus updates senatus with the latest information of a peer or adds the peer if not present already.
-func (cm *ConnectionManager) refreshSenatus(peerInfo peer.AddrInfo, kramaID id.KramaID, rtt int64) error {
+func (cm *ConnectionManager) refreshSenatus(peerInfo peer.AddrInfo, kramaID kramaid.KramaID, rtt int64) error {
 	err := cm.server.Senatus.AddNewPeerWithPeerID(peerInfo.ID, &senatus.NodeMetaInfo{
 		Addrs:   utils.MultiAddrToString(peerInfo.Addrs...),
 		NTQ:     senatus.DefaultPeerNTQ,
@@ -553,7 +553,7 @@ func (cm *ConnectionManager) refreshSenatus(peerInfo peer.AddrInfo, kramaID id.K
 
 // retrieveRTTAndRefreshSenatus retrieves and returns the krama id, round-trip time (RTT) for a given peer
 // based on the provided peer information and updates senatus if required.
-func (cm *ConnectionManager) retrieveRTTAndRefreshSenatus(peerInfo peer.AddrInfo) (id.KramaID, int64, error) {
+func (cm *ConnectionManager) retrieveRTTAndRefreshSenatus(peerInfo peer.AddrInfo) (kramaid.KramaID, int64, error) {
 	addrs, err := cm.server.Senatus.GetAddressByPeerID(peerInfo.ID)
 	if err != nil && !errors.Is(err, common.ErrKramaIDNotFound) && !errors.Is(err, common.ErrAddressNotFound) {
 		return "", 0, errors.Wrap(err, "failed to retrieve peer address")

@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/tests"
 )
 
 func TestCreateRPCInteraction(t *testing.T) {
@@ -42,7 +44,7 @@ func TestCreateRPCInteraction(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		grid          map[common.Address]common.TesseractHeightAndHash
+		grid          map[identifiers.Address]common.TesseractHeightAndHash
 		ix            *common.Interaction
 		expectedError error
 	}{
@@ -69,7 +71,7 @@ func TestCreateRPCInteraction(t *testing.T) {
 		{
 			name: "create rpc interaction with grid data",
 			ix:   CreateInteractionWithTestData(t, common.IxValueTransfer, json.RawMessage{}),
-			grid: map[common.Address]common.TesseractHeightAndHash{
+			grid: map[identifiers.Address]common.TesseractHeightAndHash{
 				tests.RandomAddress(t): {
 					Height: 5,
 					Hash:   tests.RandomHash(t),
@@ -103,7 +105,7 @@ func TestCreateRPCInteraction(t *testing.T) {
 func TestGetRPCTesseractPartsFromGrid(t *testing.T) {
 	testcases := []struct {
 		name string
-		grid map[common.Address]common.TesseractHeightAndHash
+		grid map[identifiers.Address]common.TesseractHeightAndHash
 	}{
 		{
 			name: "create rpc tesseract parts from grid",
@@ -154,7 +156,7 @@ func TestCreateRPCTesseractGridID(t *testing.T) {
 }
 
 func TestCreateRPCContextLockInfos(t *testing.T) {
-	contextLockInfos := make(map[common.Address]common.ContextLockInfo)
+	contextLockInfos := make(map[identifiers.Address]common.ContextLockInfo)
 
 	for i := 0; i < 3; i++ {
 		contextLockInfos[tests.RandomAddress(t)] = common.ContextLockInfo{
@@ -166,7 +168,7 @@ func TestCreateRPCContextLockInfos(t *testing.T) {
 
 	testcases := []struct {
 		name             string
-		contextLockInfos map[common.Address]common.ContextLockInfo
+		contextLockInfos map[identifiers.Address]common.ContextLockInfo
 	}{
 		{
 			name:             "create rpc context lock infos",
@@ -215,7 +217,7 @@ func TestCreateRPCHeader(t *testing.T) {
 }
 
 func TestCreateRPCDeltaGroups(t *testing.T) {
-	deltaGroups := make(map[common.Address]*common.DeltaGroup)
+	deltaGroups := make(map[identifiers.Address]*common.DeltaGroup)
 
 	for i := 0; i < 3; i++ {
 		deltaGroups[tests.RandomAddress(t)] = &common.DeltaGroup{
@@ -228,7 +230,7 @@ func TestCreateRPCDeltaGroups(t *testing.T) {
 
 	testcases := []struct {
 		name             string
-		contextLockInfos map[common.Address]*common.DeltaGroup
+		contextLockInfos map[identifiers.Address]*common.DeltaGroup
 	}{
 		{
 			name:             "create rpc context lock infos",
@@ -353,7 +355,7 @@ func TestCreateRPCReceipt(t *testing.T) {
 		name    string
 		receipt *common.Receipt
 		ix      *common.Interaction
-		grid    map[common.Address]common.TesseractHeightAndHash
+		grid    map[identifiers.Address]common.TesseractHeightAndHash
 		ixIndex int
 	}{
 		{

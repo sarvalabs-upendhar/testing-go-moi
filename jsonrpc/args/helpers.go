@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/tests"
-	"github.com/stretchr/testify/require"
 )
 
 // CheckForRPCTesseract validates fields of rpc tesseract
@@ -18,7 +20,7 @@ func CheckForRPCTesseract(
 ) {
 	t.Helper()
 
-	var grid map[common.Address]common.TesseractHeightAndHash
+	var grid map[identifiers.Address]common.TesseractHeightAndHash
 
 	CheckForRPCHeader(t, ts.Header(), rpcTS.Header)
 	CheckForRPCBody(t, ts.Body(), rpcTS.Body)
@@ -78,7 +80,7 @@ func CheckForRPCIxn(
 	t *testing.T,
 	ix *common.Interaction,
 	rpcIxn *RPCInteraction,
-	grid map[common.Address]common.TesseractHeightAndHash,
+	grid map[identifiers.Address]common.TesseractHeightAndHash,
 ) {
 	t.Helper()
 
@@ -107,7 +109,7 @@ func CheckForRPCIxn(
 		flag := false
 
 		for rpcAssetID, rpcAmount := range rpcIxn.TransferValues {
-			if assetID == rpcAssetID {
+			if assetID.String() == rpcAssetID {
 				flag = true
 
 				require.Equal(t, amount, rpcAmount.ToInt())
@@ -121,7 +123,7 @@ func CheckForRPCIxn(
 		flag := false
 
 		for rpcAssetID, rpcAmount := range rpcIxn.PerceivedValues {
-			if assetID == rpcAssetID {
+			if assetID.String() == rpcAssetID {
 				flag = true
 
 				require.Equal(t, amount, rpcAmount.ToInt())
@@ -179,7 +181,7 @@ func CheckForRPCIxn(
 
 		rpcLogicPayload := &RPCLogicPayload{
 			Manifest: (hexutil.Bytes)(logicPayload.Manifest),
-			LogicID:  logicPayload.Logic.String(),
+			LogicID:  string(logicPayload.Logic),
 			Callsite: logicPayload.Callsite,
 			Calldata: (hexutil.Bytes)(logicPayload.Calldata),
 		}
@@ -195,7 +197,7 @@ func CheckForRPCIxn(
 
 func CheckForRPCContextLockInfos(
 	t *testing.T,
-	expectedContextLockInfos map[common.Address]common.ContextLockInfo,
+	expectedContextLockInfos map[identifiers.Address]common.ContextLockInfo,
 	rpcContextLockInfos RPCContextLockInfos,
 ) {
 	t.Helper()
@@ -237,7 +239,7 @@ func checkForRPCCommitData(t *testing.T, commitData common.CommitData, rpcCommit
 
 func CheckForRPCDeltaGroups(
 	t *testing.T,
-	expectedRPCDeltaGroups map[common.Address]*common.DeltaGroup,
+	expectedRPCDeltaGroups map[identifiers.Address]*common.DeltaGroup,
 	rpcDeltaGroups RPCDeltaGroups,
 ) {
 	t.Helper()
@@ -267,7 +269,7 @@ func CheckForRPCDeltaGroups(
 
 func CheckForRPCTesseractParts(
 	t *testing.T,
-	grid map[common.Address]common.TesseractHeightAndHash,
+	grid map[identifiers.Address]common.TesseractHeightAndHash,
 	rpcParts RPCTesseractParts,
 ) {
 	t.Helper()
@@ -320,7 +322,7 @@ func CheckIfPartsSorted(t *testing.T, parts RPCTesseractParts) {
 
 func CheckForRPCReceipt(
 	t *testing.T,
-	grid map[common.Address]common.TesseractHeightAndHash,
+	grid map[identifiers.Address]common.TesseractHeightAndHash,
 	ix *common.Interaction,
 	receipt *common.Receipt,
 	rpcReceipt *RPCReceipt,
@@ -390,7 +392,7 @@ func CreateHeaderCallbackWithTestData(t *testing.T) func(header *common.Tesserac
 		header.Operator = "operator"
 		header.ClusterID = "cluster-id"
 		header.Timestamp = 3
-		header.ContextLock = make(map[common.Address]common.ContextLockInfo)
+		header.ContextLock = make(map[identifiers.Address]common.ContextLockInfo)
 		header.ContextLock[tests.RandomAddress(t)] = common.ContextLockInfo{
 			Height: 4,
 		}

@@ -3,25 +3,27 @@ package websocket
 import (
 	"encoding/json"
 
+	"github.com/sarvalabs/go-moi-identifiers"
+
 	"github.com/sarvalabs/go-moi/common"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 )
 
 // LogQuery is a query to filter logs
 type LogQuery struct {
-	StartHeight int64           `json:"start_height"`
-	EndHeight   int64           `json:"end_height"`
-	Address     common.Address  `json:"address"`
-	Topics      [][]common.Hash `json:"topics"`
+	StartHeight int64               `json:"start_height"`
+	EndHeight   int64               `json:"end_height"`
+	Address     identifiers.Address `json:"address"`
+	Topics      [][]common.Hash     `json:"topics"`
 }
 
 // UnmarshalJSON decodes a json object
 func (q *LogQuery) UnmarshalJSON(data []byte) error {
 	var obj struct {
-		StartHeight int64          `json:"start_height"`
-		EndHeight   int64          `json:"end_height"`
-		Address     common.Address `json:"address"`
-		Topics      []interface{}  `json:"topics"`
+		StartHeight int64               `json:"start_height"`
+		EndHeight   int64               `json:"end_height"`
+		Address     identifiers.Address `json:"address"`
+		Topics      []interface{}       `json:"topics"`
 	}
 
 	err := json.Unmarshal(data, &obj)
@@ -32,7 +34,7 @@ func (q *LogQuery) UnmarshalJSON(data []byte) error {
 	q.StartHeight = obj.StartHeight
 	q.EndHeight = obj.EndHeight
 
-	if obj.Address == common.NilAddress {
+	if obj.Address == identifiers.NilAddress {
 		return common.ErrInvalidAddress
 	}
 

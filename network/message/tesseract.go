@@ -2,10 +2,10 @@ package message
 
 import (
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/kramaid"
 )
 
 type TesseractReq struct {

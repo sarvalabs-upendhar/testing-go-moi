@@ -6,9 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
-
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,6 +16,7 @@ import (
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/tests"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
+	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
 )
 
 // Core Api Testcases
@@ -159,14 +159,14 @@ func TestPublicCoreAPI_GetTesseractHashByHeight(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		address       common.Address
+		address       identifiers.Address
 		height        int64
 		expectedHash  common.Hash
 		expectedError error
 	}{
 		{
 			name:          "invalid address",
-			address:       common.NilAddress,
+			address:       identifiers.NilAddress,
 			expectedError: common.ErrInvalidAddress,
 		},
 		{
@@ -268,7 +268,7 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 					FuelLimit: hexutil.Uint64(100),
 					Payload:   (hexutil.Bytes)(rawAssetPayload),
 				},
-				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
 					ts[0].Address(): {
 						TesseractNumber: nil,
 					},
@@ -287,7 +287,7 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 					FuelLimit: hexutil.Uint64(100),
 					Payload:   (hexutil.Bytes)(rawAssetPayload),
 				},
-				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
 					ts[0].Address(): {
 						TesseractHash: &tsHash,
 					},
@@ -306,7 +306,7 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 					FuelLimit: hexutil.Uint64(100),
 					Payload:   (hexutil.Bytes)(rawAssetPayload),
 				},
-				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
 					ts[0].Address(): {
 						TesseractHash: &tsHash,
 					},
@@ -397,7 +397,7 @@ func TestIx_Call(t *testing.T) {
 					FuelLimit: hexutil.Uint64(100),
 					Payload:   (hexutil.Bytes)(rawAssetPayload),
 				},
-				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
 					ts[0].Address(): {
 						TesseractNumber: nil,
 					},
@@ -416,7 +416,7 @@ func TestIx_Call(t *testing.T) {
 					FuelLimit: hexutil.Uint64(100),
 					Payload:   (hexutil.Bytes)(rawAssetPayload),
 				},
-				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
 					ts[0].Address(): {
 						TesseractHash: &tsHash,
 					},
@@ -435,7 +435,7 @@ func TestIx_Call(t *testing.T) {
 					FuelLimit: hexutil.Uint64(100),
 					Payload:   (hexutil.Bytes)(rawAssetPayload),
 				},
-				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
 					ts[0].Address(): {
 						TesseractHash: &tsHash,
 					},
@@ -887,7 +887,7 @@ func TestPublicIXPoolAPI_GetPendingInteractionCount(t *testing.T) {
 		{
 			name: "nil address",
 			args: &rpcargs.InteractionCountArgs{
-				Address: common.NilAddress,
+				Address: identifiers.NilAddress,
 			},
 			expectedIxCount: 0,
 			expectedErr:     common.ErrInvalidAddress,
@@ -999,10 +999,10 @@ func TestPublicCoreAPI_GetLogicIDs(t *testing.T) {
 	randomHash := tests.RandomHash(t)
 	tsHash := getTesseractsHashes(t, ts)
 
-	logicIDs := make([]common.LogicID, 0, 3)
+	logicIDs := make([]identifiers.LogicID, 0, 3)
 
 	for i := 0; i < 3; i++ {
-		logicID := common.NewLogicIDv0(true, false, false, false, uint16(i), tests.RandomAddress(t))
+		logicID := identifiers.NewLogicIDv0(true, false, false, false, uint16(i), tests.RandomAddress(t))
 
 		logicIDs = append(logicIDs, logicID)
 	}
@@ -1012,7 +1012,7 @@ func TestPublicCoreAPI_GetLogicIDs(t *testing.T) {
 	testcases := []struct {
 		name             string
 		args             rpcargs.GetAccountArgs
-		expectedLogicIDs []common.LogicID
+		expectedLogicIDs []identifiers.LogicID
 		expectedError    error
 	}{
 		{
@@ -1146,7 +1146,7 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 
 	poloManifest, jsonManifest, yamlManifest := tests.GetManifests(t, "./../../compute/manifests/ledger.yaml")
 
-	stateManager.setLogicManifest(logicID.String(), poloManifest)
+	stateManager.setLogicManifest(string(logicID), poloManifest)
 	chainManager.setTesseractByHash(t, ts)
 
 	testcases := []struct {
@@ -1533,7 +1533,7 @@ func TestPublicCoreAPI_GetInteractionReceipt(t *testing.T) {
 		args            rpcargs.ReceiptArgs
 		expectedReceipt *common.Receipt
 		ix              *common.Interaction
-		grid            map[common.Address]common.TesseractHeightAndHash
+		grid            map[identifiers.Address]common.TesseractHeightAndHash
 		ixIndex         int
 		expectedError   error
 	}{
@@ -1618,7 +1618,7 @@ func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
 		{
 			name: "Valid asset id without state",
 			args: &rpcargs.GetAssetInfoArgs{
-				AssetID: tests.GetRandomAssetID(t, common.NilAddress),
+				AssetID: tests.GetRandomAssetID(t, identifiers.NilAddress),
 			},
 			isErrorExpected: true,
 		},
@@ -1679,7 +1679,7 @@ func TestPublicCoreAPI_GetAccountMetaInfo(t *testing.T) {
 		{
 			name: "should return error if failed to fetch account meta info",
 			args: &rpcargs.GetAccountArgs{
-				Address: common.NilAddress,
+				Address: identifiers.NilAddress,
 			},
 			expectedError: common.ErrInvalidAddress,
 		},
@@ -1826,13 +1826,13 @@ func TestPublicCoreAPI_normalizeOptions(t *testing.T) {
 
 	testcases := []struct {
 		name                string
-		options             map[common.Address]*rpcargs.TesseractNumberOrHash
-		expectedStateHashes map[common.Address]common.Hash
+		options             map[identifiers.Address]*rpcargs.TesseractNumberOrHash
+		expectedStateHashes map[identifiers.Address]common.Hash
 		expectedError       error
 	}{
 		{
 			name: "state hashes fetched successfully from tesseract hashes",
-			options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+			options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
 				ts[0].Address(): {
 					TesseractNumber: &validHeight,
 				},
@@ -1840,14 +1840,14 @@ func TestPublicCoreAPI_normalizeOptions(t *testing.T) {
 					TesseractHash: &tsHash,
 				},
 			},
-			expectedStateHashes: map[common.Address]common.Hash{
+			expectedStateHashes: map[identifiers.Address]common.Hash{
 				ts[0].Address(): ts[0].StateHash(),
 				ts[1].Address(): ts[1].StateHash(),
 			},
 		},
 		{
 			name: "should return error as tesseract height is invalid",
-			options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+			options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
 				ts[0].Address(): {
 					TesseractNumber: &invalidHeight,
 				},
@@ -1902,7 +1902,7 @@ func TestPublicCoreAPI_NewTesseractsByAccountFilter(t *testing.T) {
 		{
 			name: "setup ts by account filter with nil address",
 			args: &rpcargs.TesseractByAccountFilterArgs{
-				Addr: common.NilAddress,
+				Addr: identifiers.NilAddress,
 			},
 			expectedError: common.ErrInvalidAddress,
 		},
@@ -2026,7 +2026,7 @@ func TestPublicCoreAPI_GetLogs(t *testing.T) {
 
 	dummyLogs := []*rpcargs.RPCLog{
 		{
-			Addresses: []common.Address{addr},
+			Addresses: []identifiers.Address{addr},
 		},
 	}
 

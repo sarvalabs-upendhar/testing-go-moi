@@ -7,18 +7,16 @@ import (
 	"testing"
 	"time"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
-	"github.com/sarvalabs/go-moi/common/utils"
-
-	"github.com/sarvalabs/go-moi/state"
-
-	"github.com/pkg/errors"
-	"github.com/stretchr/testify/require"
-
 	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/sarvalabs/go-moi/state"
 )
 
 func TestHasTesseract(t *testing.T) {
@@ -264,7 +262,7 @@ func TestGetTesseract(t *testing.T) {
 
 func TestGetTesseractByHeight(t *testing.T) {
 	type args struct {
-		address          common.Address
+		address          identifiers.Address
 		height           uint64
 		withInteractions bool
 	}
@@ -350,7 +348,7 @@ func TestGetTesseractHashByHeight(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		address       common.Address
+		address       identifiers.Address
 		height        uint64
 		expectedHash  common.Hash
 		expectedError error
@@ -398,14 +396,14 @@ func TestGetLatestTesseract(t *testing.T) {
 
 	testcases := []struct {
 		name             string
-		address          common.Address
+		address          identifiers.Address
 		withInteractions bool
 		expectedTS       *common.Tesseract
 		expectedError    error
 	}{
 		{
 			name:          "should return error for nil address",
-			address:       common.NilAddress,
+			address:       identifiers.NilAddress,
 			expectedError: common.ErrInvalidAddress,
 		},
 		{
@@ -1675,7 +1673,7 @@ func TestParseGenesisFile(t *testing.T) {
 			},
 			genesisAssetAccounts: []common.AssetAccountSetupArgs{
 				// using nilAddress for allocations
-				getAssetAccountSetupArgs(t, getTestAssetCreationArgs(t, common.NilAddress), nodes[:2], nodes[2:]),
+				getAssetAccountSetupArgs(t, getTestAssetCreationArgs(t, identifiers.NilAddress), nodes[:2], nodes[2:]),
 			},
 		},
 		{
@@ -1735,7 +1733,7 @@ func TestSetupGenesis(t *testing.T) {
 				AssetInfo: getAssetCreationArgs(
 					"MOI",
 					genesisAccounts[0].Address,
-					[]common.Address{genesisAccounts[1].Address},
+					[]identifiers.Address{genesisAccounts[1].Address},
 					[]*big.Int{big.NewInt(12)},
 				),
 				BehaviouralContext: tests.GetTestKramaIDs(t, 1),
@@ -1840,7 +1838,7 @@ func TestSetupGenesis(t *testing.T) {
 					getAssetAccountSetupArgs(t, *getAssetCreationArgs(
 						"MOI",
 						tests.RandomAddress(t),
-						[]common.Address{tests.RandomAddress(t)},
+						[]identifiers.Address{tests.RandomAddress(t)},
 						[]*big.Int{big.NewInt(12)},
 					), nil, nil),
 				}, nil),
@@ -1899,7 +1897,7 @@ func TestSetupSargaAccount(t *testing.T) {
 	cm := createTestChainManager(t, nil)
 	nodes := tests.GetTestKramaIDs(t, 12)
 
-	var emptyNodes []id.KramaID
+	var emptyNodes []kramaid.KramaID
 
 	testcases := []struct {
 		name          string
@@ -1951,10 +1949,10 @@ func TestSetupSargaAccount(t *testing.T) {
 			assets: []common.AssetAccountSetupArgs{
 				getAssetAccountSetupArgs(
 					t,
-					getTestAssetCreationArgs(t, common.NilAddress), nil, nil),
+					getTestAssetCreationArgs(t, identifiers.NilAddress), nil, nil),
 				getAssetAccountSetupArgs(
 					t,
-					getTestAssetCreationArgs(t, common.NilAddress), nil, nil),
+					getTestAssetCreationArgs(t, identifiers.NilAddress), nil, nil),
 			},
 			logics: []common.LogicSetupArgs{
 				{
@@ -2018,7 +2016,7 @@ func TestSetupAssetAccounts(t *testing.T) {
 	testcases := []struct {
 		name          string
 		assetAccs     []common.AssetAccountSetupArgs
-		smCallback    func(sm *MockStateManager, stateObjects map[common.Address]*state.Object)
+		smCallback    func(sm *MockStateManager, stateObjects map[identifiers.Address]*state.Object)
 		expectedError error
 	}{
 		{
@@ -2037,7 +2035,7 @@ func TestSetupAssetAccounts(t *testing.T) {
 					nodes[6:8],
 				),
 			},
-			smCallback: func(sm *MockStateManager, stateObjects map[common.Address]*state.Object) {
+			smCallback: func(sm *MockStateManager, stateObjects map[identifiers.Address]*state.Object) {
 				stateObjects[owner] = sm.CreateDirtyObject(owner, common.RegularAccount)
 
 				for i := 0; i < len(address); i++ {
@@ -2064,7 +2062,7 @@ func TestSetupAssetAccounts(t *testing.T) {
 			assetAccs: []common.AssetAccountSetupArgs{
 				MOIAssetSetupArgs,
 			},
-			smCallback: func(sm *MockStateManager, stateObjects map[common.Address]*state.Object) {
+			smCallback: func(sm *MockStateManager, stateObjects map[identifiers.Address]*state.Object) {
 				accAddress := common.CreateAddressFromString(MOIAssetInfo.Symbol)
 				stateObjects[accAddress] = sm.CreateDirtyObject(accAddress, common.AssetAccount)
 				_, err := stateObjects[accAddress].CreateAsset(accAddress, MOIAssetInfo.AssetDescriptor())
@@ -2077,7 +2075,7 @@ func TestSetupAssetAccounts(t *testing.T) {
 			assetAccs: []common.AssetAccountSetupArgs{
 				MOIAssetSetupArgs,
 			},
-			smCallback: func(sm *MockStateManager, stateObjects map[common.Address]*state.Object) {
+			smCallback: func(sm *MockStateManager, stateObjects map[identifiers.Address]*state.Object) {
 				stateObjects[owner] = sm.CreateDirtyObject(owner, common.RegularAccount)
 				accAddress := common.CreateAddressFromString(MOIAssetInfo.Symbol)
 				_, err := stateObjects[MOIAssetInfo.Operator].CreateAsset(accAddress, MOIAssetInfo.AssetDescriptor())
@@ -2090,7 +2088,7 @@ func TestSetupAssetAccounts(t *testing.T) {
 			assetAccs: []common.AssetAccountSetupArgs{
 				MOIAssetSetupArgs,
 			},
-			smCallback: func(sm *MockStateManager, stateObjects map[common.Address]*state.Object) {
+			smCallback: func(sm *MockStateManager, stateObjects map[identifiers.Address]*state.Object) {
 				stateObjects[owner] = sm.CreateDirtyObject(owner, common.RegularAccount)
 			},
 			expectedError: errors.New("allocation address not found in state objects"),
@@ -2099,7 +2097,7 @@ func TestSetupAssetAccounts(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			stateObjects := make(map[common.Address]*state.Object)
+			stateObjects := make(map[identifiers.Address]*state.Object)
 			sm := mockStateManager()
 			chainParams := &CreateChainParams{
 				sm: sm,
@@ -2129,11 +2127,11 @@ func TestSetupAssetAccounts(t *testing.T) {
 				assetSO, ok := stateObjects[assetAccAddress]
 				require.True(t, ok)
 
-				assetID := common.NewAssetIDv0(
+				assetID := identifiers.NewAssetIDv0(
 					assetInfo.IsLogical,
 					assetInfo.IsStateful,
 					assetInfo.Dimension.ToInt(),
-					common.AssetStandard(assetInfo.Standard.ToInt()),
+					assetInfo.Standard.ToInt(),
 					assetAccAddress,
 				)
 
@@ -2166,8 +2164,8 @@ func TestSetupNewAccount(t *testing.T) {
 		name               string
 		newAcc             *common.AccountSetupArgs
 		expectedError      error
-		behaviouralContext []id.KramaID
-		randomContext      []id.KramaID
+		behaviouralContext []kramaid.KramaID
+		randomContext      []kramaid.KramaID
 	}{
 		{
 			name: "behavioural nodes and random nodes are empty",
@@ -2217,11 +2215,11 @@ func TestSetupNewAccount(t *testing.T) {
 }
 
 func TestExecuteGenesisContracts(t *testing.T) {
-	logicID := common.NewLogicIDv0(true, false, false, false, 0, common.StakingContractAddr)
+	logicID := identifiers.NewLogicIDv0(true, false, false, false, 0, common.StakingContractAddr)
 
 	ids := tests.GetTestKramaIDs(t, 1)
 
-	objectsMap := make(map[common.Address]*state.Object)
+	objectsMap := make(map[identifiers.Address]*state.Object)
 
 	testcases := []struct {
 		name          string
@@ -2367,8 +2365,8 @@ func TestGetInteractionsByGridHash(t *testing.T) {
 	var (
 		gridHash  = tests.RandomHash(t)
 		paramsMap = tests.GetIxParamsMapWithAddresses(
-			[]common.Address{tests.RandomAddress(t)},
-			[]common.Address{tests.RandomAddress(t)},
+			[]identifiers.Address{tests.RandomAddress(t)},
+			[]identifiers.Address{tests.RandomAddress(t)},
 		)
 		ixns = tests.CreateIxns(t, 2, paramsMap)
 		c    = createTestChainManager(t, nil)
@@ -2422,8 +2420,8 @@ func TestGetInteractionByTSHash(t *testing.T) {
 		tsHashWithoutParts   = tests.RandomHash(t)
 		gridHashWithoutParts = tests.RandomHash(t)
 		paramsMap            = tests.GetIxParamsMapWithAddresses(
-			[]common.Address{tests.RandomAddress(t)},
-			[]common.Address{tests.RandomAddress(t)},
+			[]identifiers.Address{tests.RandomAddress(t)},
+			[]identifiers.Address{tests.RandomAddress(t)},
 		)
 		ixns  = tests.CreateIxns(t, 2, paramsMap)
 		parts = tests.CreateTesseractPartsWithTestData(t)
@@ -2517,8 +2515,8 @@ func TestGetInteractionByTSHash(t *testing.T) {
 
 func TestGetInteractionByIxHash(t *testing.T) {
 	paramsMap := tests.GetIxParamsMapWithAddresses(
-		[]common.Address{tests.RandomAddress(t)},
-		[]common.Address{tests.RandomAddress(t)},
+		[]identifiers.Address{tests.RandomAddress(t)},
+		[]identifiers.Address{tests.RandomAddress(t)},
 	)
 	ixns := tests.CreateIxns(t, 2, paramsMap)
 

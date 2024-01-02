@@ -6,18 +6,17 @@ import (
 	"sync"
 	"time"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-	mudracommon "github.com/sarvalabs/go-moi/crypto/common"
+	"github.com/hashicorp/go-hclog"
+	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/utils"
-	"github.com/sarvalabs/go-moi/crypto"
-
-	"github.com/hashicorp/go-hclog"
-	"github.com/pkg/errors"
-
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
+	"github.com/sarvalabs/go-moi/crypto"
+	mudracommon "github.com/sarvalabs/go-moi/crypto/common"
 	"github.com/sarvalabs/go-moi/telemetry/tracing"
 )
 
@@ -28,14 +27,14 @@ const (
 
 type vault interface {
 	Sign(data []byte, sigType mudracommon.SigType, signOptions ...crypto.SignOption) ([]byte, error)
-	KramaID() id.KramaID
+	KramaID() kramaid.KramaID
 }
 
 // KBFT is a struct that represents the runner for the Krama Byzantine Fault Tolerant consensus engine
 type KBFT struct {
 	RoundState
 	logger                    hclog.Logger
-	id                        id.KramaID
+	id                        kramaid.KramaID
 	config                    *config.ConsensusConfig
 	mx                        sync.Mutex
 	inboundMsgChan            chan ktypes.ConsensusMessage
@@ -60,7 +59,7 @@ type KBFT struct {
 func NewKBFTService(
 	ctx context.Context,
 	timeout time.Duration,
-	kid id.KramaID,
+	kid kramaid.KramaID,
 	config *config.ConsensusConfig,
 	outboundChan, inboundChan chan ktypes.ConsensusMessage,
 	vault vault,
@@ -343,7 +342,7 @@ func (kbft *KBFT) setProposal(p *ktypes.Proposal) error {
 	return nil
 }
 
-func (kbft *KBFT) SetProposal(p *ktypes.Proposal, peerID id.KramaID) error {
+func (kbft *KBFT) SetProposal(p *ktypes.Proposal, peerID kramaid.KramaID) error {
 	if peerID == "" {
 		kbft.selfMsgChan <- ktypes.ConsensusMessage{PeerID: "", Message: &ktypes.ProposalMessage{Proposal: p}}
 	} else {
@@ -353,7 +352,7 @@ func (kbft *KBFT) SetProposal(p *ktypes.Proposal, peerID id.KramaID) error {
 	return nil
 }
 
-func (kbft *KBFT) addVote(v *ktypes.Vote, peerID id.KramaID) (added bool, err error) {
+func (kbft *KBFT) addVote(v *ktypes.Vote, peerID kramaid.KramaID) (added bool, err error) {
 	if !areVoteHeightsEqual(v.GridID.Parts.Grid, kbft.Heights) {
 		kbft.logger.Trace("Invalid vote BFT height", "local-heights", kbft.Heights, "msg-heights", v.GridID.Parts.Grid)
 
@@ -447,7 +446,7 @@ func (kbft *KBFT) addVote(v *ktypes.Vote, peerID id.KramaID) (added bool, err er
 	return added, err
 }
 
-func (kbft *KBFT) finalizeCommit(h map[common.Address]uint64) {
+func (kbft *KBFT) finalizeCommit(h map[identifiers.Address]uint64) {
 	if !areHeightsEqual(kbft.Heights, h) {
 		panic("unmatched heights")
 	}
@@ -543,7 +542,7 @@ func (kbft *KBFT) ScheduleRound0() {
 	kbft.scheduleTimeout(100*time.Millisecond, kbft.Heights, 0, RoundStepNewHeight)
 }
 
-func (kbft *KBFT) enterCommit(heights map[common.Address]uint64, round int32) {
+func (kbft *KBFT) enterCommit(heights map[identifiers.Address]uint64, round int32) {
 	if !areHeightsEqual(kbft.Heights, heights) || RoundStepCommit <= kbft.Step {
 		return
 	}
@@ -569,7 +568,7 @@ func (kbft *KBFT) enterCommit(heights map[common.Address]uint64, round int32) {
 	}
 }
 
-func (kbft *KBFT) enterPrecommitWait(heights map[common.Address]uint64, r int32) {
+func (kbft *KBFT) enterPrecommitWait(heights map[identifiers.Address]uint64, r int32) {
 	if !areHeightsEqual(kbft.Heights, heights) ||
 		r < kbft.Round ||
 		(kbft.Round == r && kbft.TriggeredTimeoutPrecommit) {
@@ -600,7 +599,7 @@ func (kbft *KBFT) isProposalReceived() bool {
 	return kbft.Votes.getPrevotes(kbft.Proposal.POLRound).HasMajority()
 }
 
-func (kbft *KBFT) enterNewRound(heights map[common.Address]uint64, round int32) {
+func (kbft *KBFT) enterNewRound(heights map[identifiers.Address]uint64, round int32) {
 	if !areHeightsEqual(kbft.Heights, heights) ||
 		round < kbft.Round ||
 		(kbft.Round == round && kbft.Step != RoundStepNewHeight) {
@@ -630,7 +629,7 @@ func (kbft *KBFT) enterNewRound(heights map[common.Address]uint64, round int32) 
 	kbft.enterPropose(heights, round)
 }
 
-func (kbft *KBFT) enterPropose(heights map[common.Address]uint64, round int32) {
+func (kbft *KBFT) enterPropose(heights map[identifiers.Address]uint64, round int32) {
 	if !areHeightsEqual(kbft.Heights, heights) ||
 		kbft.Round > round ||
 		(kbft.Round == round && kbft.Step >= RoundStepPropose) {
@@ -685,7 +684,7 @@ func (kbft *KBFT) createProposalGrid() (*ktypes.TesseractGrid, error) {
 }
 
 // createProposal will create a proposal message for the given height,round and tesseract grid
-func (kbft *KBFT) createProposal(heights map[common.Address]uint64, round int32) error {
+func (kbft *KBFT) createProposal(heights map[identifiers.Address]uint64, round int32) error {
 	kbft.logger.Info("Creating proposal", "heights", heights, "round", round)
 
 	var (
@@ -741,7 +740,7 @@ func (kbft *KBFT) proposeTimeout(round int32) time.Duration {
 	return time.Duration(proposeTimeout+proposeTimeoutDelta*int64(round)) * time.Nanosecond
 }
 
-func (kbft *KBFT) enterPreCommit(heights map[common.Address]uint64, round int32) {
+func (kbft *KBFT) enterPreCommit(heights map[identifiers.Address]uint64, round int32) {
 	kbft.logger.Trace("Entered pre-commit", "round", round)
 
 	if !areHeightsEqual(kbft.Heights, heights) ||
@@ -834,7 +833,7 @@ func (kbft *KBFT) updateRoundStep(round int32, step RoundStepType) {
 	kbft.Step = step
 }
 
-func (kbft *KBFT) enterPrevote(h map[common.Address]uint64, r int32) {
+func (kbft *KBFT) enterPrevote(h map[identifiers.Address]uint64, r int32) {
 	kbft.logger.Trace("Entered pre-vote")
 
 	if !areHeightsEqual(kbft.Heights, h) || kbft.Round > r || (kbft.Round == r && kbft.Step >= RoundStepPrevote) {
@@ -943,7 +942,7 @@ func (kbft *KBFT) signVote(msgType ktypes.ConsensusMsgType, id *common.Tesseract
 	return v, nil
 }
 
-func (kbft *KBFT) enterPrevoteWait(h map[common.Address]uint64, r int32) {
+func (kbft *KBFT) enterPrevoteWait(h map[identifiers.Address]uint64, r int32) {
 	kbft.logger.Trace("Entered pre-vote wait")
 
 	if !areHeightsEqual(kbft.Heights, h) ||
@@ -967,7 +966,12 @@ func (kbft *KBFT) enterPrevoteWait(h map[common.Address]uint64, r int32) {
 }
 
 // scheduleTimeout will schedule a timeout for the given step,round and height
-func (kbft *KBFT) scheduleTimeout(d time.Duration, heights map[common.Address]uint64, r int32, step RoundStepType) {
+func (kbft *KBFT) scheduleTimeout(
+	d time.Duration,
+	heights map[identifiers.Address]uint64,
+	r int32,
+	step RoundStepType,
+) {
 	kbft.logger.Info("Scheduling timeout", "step", step, "duration", d, "heights", heights)
 	kbft.toTicker.ScheduleTimeout(timeoutInfo{d, heights, r, step})
 }
@@ -1050,7 +1054,7 @@ func (kbft *KBFT) publishEventTimeoutPrecommit(state eventDataRoundState) error 
 // A function that checks if two sets of heights are equal.
 // Accepts two sets of heights and compares them. Returns a bool.
 // if heights of respective addresses matches then true is returned
-func areHeightsEqual(systemHeights map[common.Address]uint64, newHeights map[common.Address]uint64) bool {
+func areHeightsEqual(systemHeights map[identifiers.Address]uint64, newHeights map[identifiers.Address]uint64) bool {
 	if len(systemHeights) != len(newHeights) {
 		return false
 	}
@@ -1072,8 +1076,8 @@ func areHeightsEqual(systemHeights map[common.Address]uint64, newHeights map[com
 // Accepts two sets of heights and compares them. Returns a bool.
 // if heights of respective addresses matches then true is returned.
 func areVoteHeightsEqual(
-	voteHeights map[common.Address]common.TesseractHeightAndHash,
-	systemHeights map[common.Address]uint64,
+	voteHeights map[identifiers.Address]common.TesseractHeightAndHash,
+	systemHeights map[identifiers.Address]uint64,
 ) bool {
 	if len(voteHeights) != len(systemHeights) {
 		return false
@@ -1095,7 +1099,7 @@ func areVoteHeightsEqual(
 // A function that checks if the second set of heights is greater than the first.
 // Accepts two sets of heights (int64 slice) and compares them. Returns a bool.
 // if heights of respective addresses from first set are greater than second set then true is returned.
-func areHeightsGreater(systemHeights map[common.Address]uint64, newHeights map[common.Address]uint64) bool {
+func areHeightsGreater(systemHeights map[identifiers.Address]uint64, newHeights map[identifiers.Address]uint64) bool {
 	if len(systemHeights) != len(newHeights) {
 		return false
 	}
@@ -1127,9 +1131,9 @@ func areGreater(oldValues, newValues []int32) bool {
 }
 
 func getTesseractPartsGridFromHeights(
-	heights map[common.Address]uint64,
-) map[common.Address]common.TesseractHeightAndHash {
-	grid := make(map[common.Address]common.TesseractHeightAndHash)
+	heights map[identifiers.Address]uint64,
+) map[identifiers.Address]common.TesseractHeightAndHash {
+	grid := make(map[identifiers.Address]common.TesseractHeightAndHash)
 
 	for address, height := range heights {
 		grid[address] = common.TesseractHeightAndHash{

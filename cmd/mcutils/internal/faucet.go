@@ -9,18 +9,17 @@ import (
 	"os"
 	"time"
 
-	cryptocommon "github.com/sarvalabs/go-moi/crypto/common"
-	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
+	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/spf13/cobra"
 
 	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"
 	"github.com/sarvalabs/go-moi/common"
-
-	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
-
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/crypto"
+	cryptocommon "github.com/sarvalabs/go-moi/crypto/common"
 	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/moiclient"
 )
 
@@ -83,7 +82,7 @@ func runFaucetCommand(cmd *cobra.Command, args []string) {
 	}
 
 	nonce, err := client.InteractionCount(context.Background(), &rpcargs.InteractionCountArgs{
-		Address: common.BytesToAddress(faucetWalletPublicKey),
+		Address: identifiers.NewAddressFromBytes(faucetWalletPublicKey),
 		Options: rpcargs.TesseractNumberOrHash{
 			TesseractNumber: &rpcargs.LatestTesseractHeight,
 		},
@@ -92,14 +91,16 @@ func runFaucetCommand(cmd *cobra.Command, args []string) {
 		cmdcommon.Err(errors.Wrap(err, "failed to fetch nonce"))
 	}
 
+	wallet, _ := identifiers.NewAddressFromHex(walletAddress)
+
 	ixArgs := common.SendIXArgs{
 		Type:      common.IxValueTransfer,
-		Sender:    common.BytesToAddress(faucetWalletPublicKey),
-		Receiver:  common.HexToAddress(walletAddress),
+		Sender:    identifiers.NewAddressFromBytes(faucetWalletPublicKey),
+		Receiver:  wallet,
 		Nonce:     nonce.ToUint64(),
 		FuelPrice: big.NewInt(1),
 		FuelLimit: 1000,
-		TransferValues: map[common.AssetID]*big.Int{
+		TransferValues: map[identifiers.AssetID]*big.Int{
 			common.KMOITokenAssetID: new(big.Int).SetUint64(amount),
 		},
 	}

@@ -13,6 +13,8 @@ import (
 	"github.com/hashicorp/golang-lru"
 	"github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,7 +22,6 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/hexutil"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/compute"
@@ -39,7 +40,7 @@ type MockDB struct {
 	dbStorage                   map[string][]byte
 	accounts                    map[common.Hash][]byte
 	balances                    map[common.Hash][]byte
-	accMetaInfos                map[common.Address]*common.AccountMetaInfo
+	accMetaInfos                map[identifiers.Address]*common.AccountMetaInfo
 	gridHashByIxHash            map[string][]byte
 	gridHashByTSHash            map[string][]byte
 	tesseractParts              map[string][]byte
@@ -52,12 +53,12 @@ type MockDB struct {
 	setTSGridLookupHook         func() error
 }
 
-func (m *MockDB) GetAssetRegistry(addr common.Address, registryHash common.Hash) ([]byte, error) {
+func (m *MockDB) GetAssetRegistry(addr identifiers.Address, registryHash common.Hash) ([]byte, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockDB) GetAccountMetaInfo(id common.Address) (*common.AccountMetaInfo, error) {
+func (m *MockDB) GetAccountMetaInfo(id identifiers.Address) (*common.AccountMetaInfo, error) {
 	// TODO implement me
 	metaInfo, ok := m.accMetaInfos[id]
 	if !ok {
@@ -76,7 +77,7 @@ type testTSArgs struct {
 func mockDB() *MockDB {
 	return &MockDB{
 		dbStorage:        make(map[string][]byte),
-		accMetaInfos:     make(map[common.Address]*common.AccountMetaInfo),
+		accMetaInfos:     make(map[identifiers.Address]*common.AccountMetaInfo),
 		gridHashByIxHash: make(map[string][]byte),
 		gridHashByTSHash: make(map[string][]byte),
 		tesseractParts:   make(map[string][]byte),
@@ -168,7 +169,7 @@ func (m *MockDB) Contains(key []byte) (bool, error) {
 }
 
 func (m *MockDB) UpdateAccMetaInfo(
-	id common.Address,
+	id identifiers.Address,
 	height uint64,
 	tesseractHash common.Hash,
 	accType common.AccountType,
@@ -191,7 +192,7 @@ func (m *MockDB) UpdateAccMetaInfo(
 	return 8, true, nil
 }
 
-func (m *MockDB) GetAccMetaInfo(id common.Address) (*common.AccountMetaInfo, bool) {
+func (m *MockDB) GetAccMetaInfo(id identifiers.Address) (*common.AccountMetaInfo, bool) {
 	val, ok := m.accMetaInfos[id]
 
 	return val, ok
@@ -230,7 +231,7 @@ func (m *MockDB) GetInteractions(gridHash common.Hash) ([]byte, error) {
 	return nil, common.ErrKeyNotFound
 }
 
-func (m *MockDB) GetAccount(addr common.Address, hash common.Hash) ([]byte, error) {
+func (m *MockDB) GetAccount(addr identifiers.Address, hash common.Hash) ([]byte, error) {
 	account, ok := m.accounts[hash]
 	if !ok {
 		return nil, common.ErrAccountNotFound
@@ -249,7 +250,7 @@ func (m *MockDB) SetInteractions(gridHash common.Hash, data []byte) error {
 	return nil
 }
 
-func (m *MockDB) GetTesseractHeightEntry(addr common.Address, height uint64) ([]byte, error) {
+func (m *MockDB) GetTesseractHeightEntry(addr identifiers.Address, height uint64) ([]byte, error) {
 	key := addr.Hex() + strconv.Itoa(int(height))
 
 	data, ok := m.dbStorage[key]
@@ -260,7 +261,7 @@ func (m *MockDB) GetTesseractHeightEntry(addr common.Address, height uint64) ([]
 	return data, nil
 }
 
-func (m *MockDB) SetTesseractHeightEntry(addr common.Address, height uint64, hash common.Hash) error {
+func (m *MockDB) SetTesseractHeightEntry(addr identifiers.Address, height uint64, hash common.Hash) error {
 	if m.setTesseractHeightEntryHook != nil {
 		return m.setTesseractHeightEntryHook()
 	}
@@ -272,7 +273,7 @@ func (m *MockDB) SetTesseractHeightEntry(addr common.Address, height uint64, has
 	return nil
 }
 
-func (m *MockDB) GetBalance(addr common.Address, hash common.Hash) ([]byte, error) {
+func (m *MockDB) GetBalance(addr identifiers.Address, hash common.Hash) ([]byte, error) {
 	balance, ok := m.balances[hash]
 	if !ok {
 		return nil, common.ErrKeyNotFound
@@ -304,23 +305,23 @@ func (m *MockDB) SetReceipts(gridHash common.Hash, data []byte) error {
 	return nil
 }
 
-func (m *MockDB) GetContext(addr common.Address, contextHash common.Hash) ([]byte, error) {
+func (m *MockDB) GetContext(addr identifiers.Address, contextHash common.Hash) ([]byte, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockDB) GetMerkleTreeEntry(address common.Address, prefix storage.PrefixTag, key []byte) ([]byte, error) {
+func (m *MockDB) GetMerkleTreeEntry(address identifiers.Address, prefix storage.PrefixTag, key []byte) ([]byte, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockDB) SetMerkleTreeEntry(address common.Address, prefix storage.PrefixTag, key, value []byte) error {
+func (m *MockDB) SetMerkleTreeEntry(address identifiers.Address, prefix storage.PrefixTag, key, value []byte) error {
 	// TODO implement me
 	panic("implement me")
 }
 
 func (m *MockDB) SetMerkleTreeEntries(
-	address common.Address,
+	address identifiers.Address,
 	prefix storage.PrefixTag,
 	entries map[string][]byte,
 ) error {
@@ -328,12 +329,12 @@ func (m *MockDB) SetMerkleTreeEntries(
 	panic("implement me")
 }
 
-func (m *MockDB) WritePreImages(address common.Address, entries map[common.Hash][]byte) error {
+func (m *MockDB) WritePreImages(address identifiers.Address, entries map[common.Hash][]byte) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockDB) GetPreImage(address common.Address, hash common.Hash) ([]byte, error) {
+func (m *MockDB) GetPreImage(address identifiers.Address, hash common.Hash) ([]byte, error) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -354,16 +355,16 @@ func (m *MockDB) NewBatchWriter() db.BatchWriter {
 }
 
 type MockNetwork struct {
-	kramaID id.KramaID
+	kramaID kramaid.KramaID
 }
 
 // mock network implementation
 
-func (n *MockNetwork) SetKramaID(id id.KramaID) {
+func (n *MockNetwork) SetKramaID(id kramaid.KramaID) {
 	n.kramaID = id
 }
 
-func (n *MockNetwork) GetKramaID() id.KramaID {
+func (n *MockNetwork) GetKramaID() kramaid.KramaID {
 	return n.kramaID
 }
 
@@ -438,8 +439,8 @@ func (e *MockExec) Revert(clusterID common.ClusterID) error {
 }
 
 type Context struct {
-	behaviourNodes []id.KramaID
-	randomNodes    []id.KramaID
+	behaviourNodes []kramaid.KramaID
+	randomNodes    []kramaid.KramaID
 }
 
 type AccHash struct {
@@ -448,16 +449,16 @@ type AccHash struct {
 }
 
 type MockStateManager struct {
-	dirtyObjects        map[common.Address]*state.Object
-	objects             map[common.Address]*state.Object
+	dirtyObjects        map[identifiers.Address]*state.Object
+	objects             map[identifiers.Address]*state.Object
 	context             map[common.Hash]*Context
-	publicKeys          map[id.KramaID][]byte
-	latestTesseracts    map[common.Address]*common.Tesseract
+	publicKeys          map[kramaid.KramaID][]byte
+	latestTesseracts    map[identifiers.Address]*common.Tesseract
 	dbTesseracts        map[common.Hash]*common.Tesseract
-	registeredAccounts  map[common.Address]*AccHash
-	cleanUp             map[common.Address]bool
-	accountTypes        map[common.Address]common.AccountType
-	flushedDirtyObjects map[common.Address]bool
+	registeredAccounts  map[identifiers.Address]*AccHash
+	cleanUp             map[identifiers.Address]bool
+	accountTypes        map[identifiers.Address]common.AccountType
+	flushedDirtyObjects map[identifiers.Address]bool
 
 	flushHook               func() error
 	newAccountHook          func() (common.Hash, common.Hash, error)
@@ -465,22 +466,22 @@ type MockStateManager struct {
 	createDirtyObjectHook   func() *state.Object
 }
 
-func (sm *MockStateManager) CreateStateObject(address common.Address, accountType common.AccountType) *state.Object {
+func (sm *MockStateManager) CreateStateObject(_ identifiers.Address, _ common.AccountType) *state.Object {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (sm *MockStateManager) GetLatestStateObject(addr common.Address) (*state.Object, error) {
+func (sm *MockStateManager) GetLatestStateObject(addr identifiers.Address) (*state.Object, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (sm *MockStateManager) GetStateObjectByHash(addr common.Address, hash common.Hash) (*state.Object, error) {
+func (sm *MockStateManager) GetStateObjectByHash(addr identifiers.Address, hash common.Hash) (*state.Object, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (sm *MockStateManager) GetLogicIDs(addr common.Address, hash common.Hash) ([]common.LogicID, error) {
+func (sm *MockStateManager) GetLogicIDs(addr identifiers.Address, hash common.Hash) ([]identifiers.LogicID, error) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -490,7 +491,7 @@ func (sm *MockStateManager) Revert(object *state.Object) error {
 	panic("implement me")
 }
 
-func (sm *MockStateManager) GetNodeSet(ids []id.KramaID) (*common.NodeSet, error) {
+func (sm *MockStateManager) GetNodeSet(ids []kramaid.KramaID) (*common.NodeSet, error) {
 	pks := make([][]byte, 0, len(ids))
 
 	for _, v := range ids {
@@ -507,20 +508,20 @@ func (sm *MockStateManager) GetNodeSet(ids []id.KramaID) (*common.NodeSet, error
 
 func mockStateManager() *MockStateManager {
 	return &MockStateManager{
-		dirtyObjects:        make(map[common.Address]*state.Object),
-		objects:             make(map[common.Address]*state.Object),
+		dirtyObjects:        make(map[identifiers.Address]*state.Object),
+		objects:             make(map[identifiers.Address]*state.Object),
 		context:             make(map[common.Hash]*Context),
-		publicKeys:          make(map[id.KramaID][]byte),
-		latestTesseracts:    make(map[common.Address]*common.Tesseract),
+		publicKeys:          make(map[kramaid.KramaID][]byte),
+		latestTesseracts:    make(map[identifiers.Address]*common.Tesseract),
 		dbTesseracts:        make(map[common.Hash]*common.Tesseract),
-		registeredAccounts:  make(map[common.Address]*AccHash),
-		cleanUp:             make(map[common.Address]bool),
-		accountTypes:        make(map[common.Address]common.AccountType),
-		flushedDirtyObjects: make(map[common.Address]bool),
+		registeredAccounts:  make(map[identifiers.Address]*AccHash),
+		cleanUp:             make(map[identifiers.Address]bool),
+		accountTypes:        make(map[identifiers.Address]common.AccountType),
+		flushedDirtyObjects: make(map[identifiers.Address]bool),
 	}
 }
 
-func (sm *MockStateManager) isCleanup(addrs common.Address) bool {
+func (sm *MockStateManager) isCleanup(addrs identifiers.Address) bool {
 	if _, ok := sm.cleanUp[addrs]; ok {
 		return true
 	}
@@ -528,7 +529,7 @@ func (sm *MockStateManager) isCleanup(addrs common.Address) bool {
 	return false
 }
 
-func (sm *MockStateManager) CreateDirtyObject(addr common.Address, accType common.AccountType) *state.Object {
+func (sm *MockStateManager) CreateDirtyObject(addr identifiers.Address, accType common.AccountType) *state.Object {
 	if sm.createDirtyObjectHook != nil {
 		return sm.createDirtyObjectHook()
 	}
@@ -543,15 +544,15 @@ func (sm *MockStateManager) CreateDirtyObject(addr common.Address, accType commo
 	return sm.dirtyObjects[addr]
 }
 
-func (sm *MockStateManager) GetDirtyObject(addr common.Address) (*state.Object, error) {
+func (sm *MockStateManager) GetDirtyObject(addr identifiers.Address) (*state.Object, error) {
 	return sm.dirtyObjects[addr], nil
 }
 
-func (sm *MockStateManager) setAccType(address common.Address, accountType common.AccountType) {
+func (sm *MockStateManager) setAccType(address identifiers.Address, accountType common.AccountType) {
 	sm.accountTypes[address] = accountType
 }
 
-func (sm *MockStateManager) GetAccTypeUsingStateObject(address common.Address) (common.AccountType, error) {
+func (sm *MockStateManager) GetAccTypeUsingStateObject(address identifiers.Address) (common.AccountType, error) {
 	accType, ok := sm.accountTypes[address]
 	if !ok {
 		return 0, errors.New("account type not found")
@@ -560,12 +561,12 @@ func (sm *MockStateManager) GetAccTypeUsingStateObject(address common.Address) (
 	return accType, nil
 }
 
-func (sm *MockStateManager) DeleteStateObject(addr common.Address) {
+func (sm *MockStateManager) DeleteStateObject(addr identifiers.Address) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (sm *MockStateManager) FlushDirtyObject(addrs common.Address) error {
+func (sm *MockStateManager) FlushDirtyObject(addrs identifiers.Address) error {
 	if sm.flushHook != nil {
 		return sm.flushHook()
 	}
@@ -575,13 +576,13 @@ func (sm *MockStateManager) FlushDirtyObject(addrs common.Address) error {
 	return nil
 }
 
-func (sm *MockStateManager) getFlushedDirtyObject(addrs common.Address) bool {
+func (sm *MockStateManager) getFlushedDirtyObject(addrs identifiers.Address) bool {
 	_, ok := sm.flushedDirtyObjects[addrs]
 
 	return ok
 }
 
-func (sm *MockStateManager) GetLatestTesseract(addr common.Address, withInteractions bool) (*common.Tesseract, error) {
+func (sm *MockStateManager) GetLatestTesseract(addr identifiers.Address, withIxns bool) (*common.Tesseract, error) {
 	ts, ok := sm.latestTesseracts[addr]
 	if !ok {
 		return nil, common.ErrFetchingTesseract
@@ -589,7 +590,7 @@ func (sm *MockStateManager) GetLatestTesseract(addr common.Address, withInteract
 
 	copyTS := *ts // copy, so that stored tesseract won't be modified
 
-	if !withInteractions {
+	if !withIxns {
 		copyTS = *copyTS.GetTesseractWithoutIxns()
 	}
 
@@ -598,8 +599,8 @@ func (sm *MockStateManager) GetLatestTesseract(addr common.Address, withInteract
 
 func (sm *MockStateManager) insertContextNodes(
 	ctxHash common.Hash,
-	behaviouralNodes []id.KramaID,
-	randomNodes ...id.KramaID,
+	behaviouralNodes []kramaid.KramaID,
+	randomNodes ...kramaid.KramaID,
 ) {
 	sm.context[ctxHash] = &Context{
 		behaviourNodes: behaviouralNodes,
@@ -608,12 +609,12 @@ func (sm *MockStateManager) insertContextNodes(
 }
 
 func (sm *MockStateManager) GetContextByHash(
-	addr common.Address,
+	addr identifiers.Address,
 	hash common.Hash,
 ) (
 	common.Hash,
-	[]id.KramaID,
-	[]id.KramaID,
+	[]kramaid.KramaID,
+	[]kramaid.KramaID,
 	error,
 ) {
 	c, ok := sm.context[hash]
@@ -625,7 +626,7 @@ func (sm *MockStateManager) GetContextByHash(
 	return hash, c.behaviourNodes, c.randomNodes, nil
 }
 
-func (sm *MockStateManager) GetPublicKeys(ctx context.Context, id ...id.KramaID) ([][]byte, error) {
+func (sm *MockStateManager) GetPublicKeys(ctx context.Context, id ...kramaid.KramaID) ([][]byte, error) {
 	keys := make([][]byte, 0)
 
 	for _, v := range id {
@@ -640,15 +641,15 @@ func (sm *MockStateManager) GetPublicKeys(ctx context.Context, id ...id.KramaID)
 	return keys, nil
 }
 
-func (sm *MockStateManager) Cleanup(addrs common.Address) {
+func (sm *MockStateManager) Cleanup(addrs identifiers.Address) {
 	sm.cleanUp[addrs] = true
 }
 
-func (sm *MockStateManager) insertRegisteredAcc(addr common.Address) {
+func (sm *MockStateManager) insertRegisteredAcc(addr identifiers.Address) {
 	sm.registeredAccounts[addr] = &AccHash{}
 }
 
-func (sm *MockStateManager) IsAccountRegistered(addr common.Address) (bool, error) {
+func (sm *MockStateManager) IsAccountRegistered(addr identifiers.Address) (bool, error) {
 	if sm.accountRegistrationHook != nil {
 		return sm.accountRegistrationHook(common.NilHash)
 	}
@@ -658,7 +659,7 @@ func (sm *MockStateManager) IsAccountRegistered(addr common.Address) (bool, erro
 	return ok, nil
 }
 
-func (sm *MockStateManager) IsAccountRegisteredAt(addr common.Address, tesseractHash common.Hash) (bool, error) {
+func (sm *MockStateManager) IsAccountRegisteredAt(addr identifiers.Address, tesseractHash common.Hash) (bool, error) {
 	if sm.accountRegistrationHook != nil {
 		return sm.accountRegistrationHook(tesseractHash)
 	}
@@ -673,7 +674,7 @@ func (sm *MockStateManager) FetchContextLock(ts *common.Tesseract) (*common.ICSN
 
 	contextLock, _ := ts.ContextLockByAddress(ts.Address())
 
-	_, behaviourSet, randomSet, err := sm.GetContextByHash(common.NilAddress, contextLock.ContextHash)
+	_, behaviourSet, randomSet, err := sm.GetContextByHash(identifiers.NilAddress, contextLock.ContextHash)
 	if err != nil {
 		return nil, err
 	}
@@ -726,7 +727,7 @@ func (sm *MockStateManager) InsertTesseractsInDB(t *testing.T, tesseracts ...*co
 	}
 }
 
-func (sm *MockStateManager) setPublicKey(id id.KramaID, pk []byte) {
+func (sm *MockStateManager) setPublicKey(id kramaid.KramaID, pk []byte) {
 	sm.publicKeys[id] = pk
 }
 
@@ -735,11 +736,11 @@ type MockIXPool struct {
 }
 
 type MockSenatus struct {
-	WalletCount           map[id.KramaID]int32
+	WalletCount           map[kramaid.KramaID]int32
 	UpdateWalletCountHook func() error
 }
 
-func (s *MockSenatus) UpdateWalletCount(peerID id.KramaID, delta int32) error {
+func (s *MockSenatus) UpdateWalletCount(peerID kramaid.KramaID, delta int32) error {
 	if s.UpdateWalletCountHook != nil {
 		return s.UpdateWalletCountHook()
 	}
@@ -813,7 +814,7 @@ func createIxns(t *testing.T, count int, paramsMap map[int]*CreateIxParams) comm
 	return ixns
 }
 
-func getIxParamsWithAddress(from common.Address, to common.Address) *CreateIxParams {
+func getIxParamsWithAddress(from identifiers.Address, to identifiers.Address) *CreateIxParams {
 	return &CreateIxParams{
 		ixDataCallback: func(ix *common.IxData) {
 			ix.Input.Sender = from
@@ -824,8 +825,8 @@ func getIxParamsWithAddress(from common.Address, to common.Address) *CreateIxPar
 }
 
 func getIxParamsMapWithAddresses(
-	from []common.Address,
-	to []common.Address,
+	from []identifiers.Address,
+	to []identifiers.Address,
 ) map[int]*CreateIxParams {
 	ixParams := make(map[int]*CreateIxParams, len(from))
 
@@ -848,17 +849,17 @@ func getTestTesseractGrid(t *testing.T) *common.TesseractGridID {
 	return &common.TesseractGridID{
 		Hash: tests.RandomHash(t),
 		Parts: &common.TesseractParts{
-			Grid: make(map[common.Address]common.TesseractHeightAndHash),
+			Grid: make(map[identifiers.Address]common.TesseractHeightAndHash),
 		},
 	}
 }
 
-func mockContextLock() map[common.Address]common.ContextLockInfo {
-	return make(map[common.Address]common.ContextLockInfo)
+func mockContextLock() map[identifiers.Address]common.ContextLockInfo {
+	return make(map[identifiers.Address]common.ContextLockInfo)
 }
 
 func mockContextDelta() common.ContextDelta {
-	return make(map[common.Address]*common.DeltaGroup)
+	return make(map[identifiers.Address]*common.DeltaGroup)
 }
 
 func mockConsensusProof() common.PoXtData {
@@ -895,12 +896,12 @@ func defaultCommitData() common.CommitData {
 }
 
 type createTesseractParams struct {
-	address           common.Address
+	address           identifiers.Address
 	height            uint64
 	ixns              common.Interactions
 	receipts          common.Receipts
 	seal              []byte
-	sealer            id.KramaID
+	sealer            kramaid.KramaID
 	headerCallback    func(header *common.TesseractHeader)
 	makeChainCallback func(header *common.TesseractHeader)
 	bodyCallback      func(body *common.TesseractBody)
@@ -1014,7 +1015,7 @@ func tesseractParamsWithICSClusterInfo(
 
 func tesseractParamsWithGridInfo(
 	t *testing.T,
-	address common.Address,
+	address identifiers.Address,
 	stateHash, receiptHash common.Hash,
 	clusterInfo *common.ICSClusterInfo,
 	ixns []*common.Interaction,
@@ -1081,7 +1082,7 @@ func tesseractParamsForExecution(
 */
 func tesseractParamsWithContextDelta(
 	t *testing.T,
-	address common.Address,
+	address identifiers.Address,
 	behaviouralCount, randomCount, replacedCount int,
 ) *createTesseractParams {
 	t.Helper()
@@ -1184,7 +1185,7 @@ func tesseractParamsWithCommitSign(commitSign []byte) *createTesseractParams {
 	}
 }
 
-func smCallbackWithRegisteredAcc(address common.Address) func(sm *MockStateManager) {
+func smCallbackWithRegisteredAcc(address identifiers.Address) func(sm *MockStateManager) {
 	return func(sm *MockStateManager) {
 		sm.insertRegisteredAcc(address)
 	}
@@ -1236,7 +1237,7 @@ func mockSenatus(t *testing.T) *MockSenatus {
 	t.Helper()
 
 	return &MockSenatus{
-		WalletCount: make(map[id.KramaID]int32),
+		WalletCount: make(map[kramaid.KramaID]int32),
 	}
 }
 
@@ -1327,12 +1328,12 @@ func createTestChainManager(t *testing.T, params *CreateChainParams) *ChainManag
 	return c
 }
 
-func fetchContextFromLattice(t *testing.T, ts common.Tesseract, c *ChainManager) []id.KramaID {
+func fetchContextFromLattice(t *testing.T, ts common.Tesseract, c *ChainManager) []kramaid.KramaID {
 	t.Helper()
 
 	var (
 		address = ts.Address()
-		peers   = make([]id.KramaID, 0)
+		peers   = make([]kramaid.KramaID, 0)
 	)
 
 	for {
@@ -1400,11 +1401,11 @@ func getContextLockInfo(contextHash common.Hash, tsHash common.Hash, height uint
 	}
 }
 
-func setContextDelta(body *common.TesseractBody, address common.Address, delta *common.DeltaGroup) {
+func setContextDelta(body *common.TesseractBody, address identifiers.Address, delta *common.DeltaGroup) {
 	body.ContextDelta[address] = delta
 }
 
-func setContextLock(header *common.TesseractHeader, address common.Address, info common.ContextLockInfo) {
+func setContextLock(header *common.TesseractHeader, address identifiers.Address, info common.ContextLockInfo) {
 	header.ContextLock[address] = info
 }
 
@@ -1633,8 +1634,8 @@ func getTesseractAddedEvent(t *testing.T, data interface{}) utils.TesseractAdded
 func getAssetAccountSetupArgs(
 	t *testing.T,
 	assetDetails common.AssetCreationArgs,
-	behaviouralContext []id.KramaID,
-	randomContext []id.KramaID,
+	behaviouralContext []kramaid.KramaID,
+	randomContext []kramaid.KramaID,
 ) common.AssetAccountSetupArgs {
 	t.Helper()
 
@@ -1645,12 +1646,12 @@ func getAssetAccountSetupArgs(
 	}
 }
 
-func getTestAssetCreationArgs(t *testing.T, allocationAddr common.Address) common.AssetCreationArgs {
+func getTestAssetCreationArgs(t *testing.T, allocationAddr identifiers.Address) common.AssetCreationArgs {
 	t.Helper()
 
-	info := tests.GetRandomAssetInfo(t, common.NilAddress)
+	info := tests.GetRandomAssetInfo(t, identifiers.NilAddress)
 
-	if allocationAddr == common.NilAddress {
+	if allocationAddr == identifiers.NilAddress {
 		allocationAddr = tests.RandomAddress(t)
 	}
 
@@ -1752,7 +1753,7 @@ func getTestAccountWithAccType(t *testing.T, accType common.AccountType) common.
 	)
 }
 
-func getTestAccountWithAddress(t *testing.T, address common.Address) common.AccountSetupArgs {
+func getTestAccountWithAddress(t *testing.T, address identifiers.Address) common.AccountSetupArgs {
 	t.Helper()
 
 	ids := tests.GetTestKramaIDs(t, 4)
@@ -1769,8 +1770,8 @@ func getTestAccountWithAddress(t *testing.T, address common.Address) common.Acco
 
 func getAssetCreationArgs(
 	symbol string,
-	owner common.Address,
-	address []common.Address,
+	owner identifiers.Address,
+	address []identifiers.Address,
 	amount []*big.Int,
 ) *common.AssetCreationArgs {
 	alloc := make([]common.Allocation, len(address))
@@ -1791,11 +1792,11 @@ func getAssetCreationArgs(
 
 func getAccountSetupArgs(
 	t *testing.T,
-	address common.Address,
+	address identifiers.Address,
 	accType common.AccountType,
 	moiID string,
-	behNodes []id.KramaID,
-	randNodes []id.KramaID,
+	behNodes []kramaid.KramaID,
+	randNodes []kramaid.KramaID,
 ) *common.AccountSetupArgs {
 	t.Helper()
 
@@ -2149,7 +2150,7 @@ func checkForLogicAccounts(t *testing.T, expected, actual []common.LogicSetupArg
 func checkForGenesisTesseract(
 	t *testing.T,
 	c *ChainManager,
-	address common.Address,
+	address identifiers.Address,
 ) {
 	t.Helper()
 
@@ -2168,7 +2169,7 @@ func checkForGenesisTesseract(
 	require.Equal(t, address, ts.Address())
 }
 
-func checkSargaStorageEntry(t *testing.T, obj *state.Object, addr common.Address) {
+func checkSargaStorageEntry(t *testing.T, obj *state.Object, addr identifiers.Address) {
 	t.Helper()
 
 	val, err := obj.GetStorageEntry(common.SargaLogicID, addr.Bytes())
@@ -2225,8 +2226,8 @@ func checkSargaObjectAssetAccounts(
 func validateContextInitialization(
 	t *testing.T,
 	sm stateManager,
-	address common.Address,
-	behavioural, random []id.KramaID,
+	address identifiers.Address,
+	behavioural, random []kramaid.KramaID,
 	contextHash common.Hash,
 ) {
 	t.Helper()
@@ -2243,7 +2244,7 @@ func validateContextInitialization(
 func checkForAssetRegistry(
 	t *testing.T,
 	so *state.Object,
-	assetID common.AssetID,
+	assetID identifiers.AssetID,
 	expectedAssetDescriptor []byte,
 ) {
 	t.Helper()
@@ -2251,7 +2252,7 @@ func checkForAssetRegistry(
 	registry, err := so.Registry()
 	require.NoError(t, err)
 
-	actualAssetDescriptor, ok := registry.Entries[assetID.String()]
+	actualAssetDescriptor, ok := registry.Entries[string(assetID)]
 	require.True(t, ok)
 
 	require.Equal(t, expectedAssetDescriptor, actualAssetDescriptor)
@@ -2259,9 +2260,9 @@ func checkForAssetRegistry(
 
 func checkForAllocations(
 	t *testing.T,
-	stateObjects map[common.Address]*state.Object,
+	stateObjects map[identifiers.Address]*state.Object,
 	assetInfo *common.AssetCreationArgs,
-	assetID common.AssetID,
+	assetID identifiers.AssetID,
 ) {
 	t.Helper()
 

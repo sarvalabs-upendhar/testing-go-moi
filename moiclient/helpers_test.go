@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/stretchr/testify/require"
@@ -80,7 +81,7 @@ func httpTesseract(t *testing.T, url string, args interface{}) *rpcargs.RPCTesse
 	return &tess
 }
 
-func createAssetWithNonce(t *testing.T, client *Client, addr common.Address, mnemonic string, nonce uint64) {
+func createAssetWithNonce(t *testing.T, client *Client, addr identifiers.Address, mnemonic string, nonce uint64) {
 	t.Helper()
 
 	supply, _ := new(big.Int).SetString("130D41", 16)
@@ -142,7 +143,7 @@ func moiclientRetryFetchReceipt(
 }
 
 // createAsset creates asset named "MOI"
-func createAsset(t *testing.T, client *Client, addr common.Address, mnemonic string) common.Hash {
+func createAsset(t *testing.T, client *Client, addr identifiers.Address, mnemonic string) common.Hash {
 	t.Helper()
 
 	supply, _ := new(big.Int).SetString("130D41", 16)

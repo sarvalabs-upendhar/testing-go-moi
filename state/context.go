@@ -2,9 +2,8 @@ package state
 
 import (
 	"github.com/pkg/errors"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-polo"
-
-	id "github.com/sarvalabs/go-moi/common/kramaid"
 
 	"github.com/sarvalabs/go-moi/common"
 )
@@ -20,10 +19,10 @@ type Context interface {
 }
 
 type ContextObject struct {
-	Ids []id.KramaID
+	Ids []kramaid.KramaID
 }
 
-func (c *ContextObject) AddNodes(nodes []id.KramaID, maxSize int) {
+func (c *ContextObject) AddNodes(nodes []kramaid.KramaID, maxSize int) {
 	c.Ids = append(c.Ids, nodes...)
 	if diff := len(c.Ids) - maxSize; diff > 0 {
 		c.Ids = c.Ids[diff:]
@@ -31,7 +30,7 @@ func (c *ContextObject) AddNodes(nodes []id.KramaID, maxSize int) {
 }
 
 func (c *ContextObject) Copy() *ContextObject {
-	newSlice := make([]id.KramaID, len(c.Ids))
+	newSlice := make([]kramaid.KramaID, len(c.Ids))
 
 	copy(newSlice, c.Ids)
 

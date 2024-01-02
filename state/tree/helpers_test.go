@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/decred/dcrd/crypto/blake256"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 
@@ -23,7 +24,7 @@ func NewMockDB() *mockDB {
 	}
 }
 
-func (m *mockDB) SetMerkleTreeEntry(address common.Address, prefix db.PrefixTag, key, value []byte) error {
+func (m *mockDB) SetMerkleTreeEntry(address identifiers.Address, prefix db.PrefixTag, key, value []byte) error {
 	dbKey := append(append(address.Bytes(), prefix.Byte()), key...)
 
 	m.data[string(dbKey)] = value
@@ -31,7 +32,7 @@ func (m *mockDB) SetMerkleTreeEntry(address common.Address, prefix db.PrefixTag,
 	return nil
 }
 
-func (m *mockDB) GetMerkleTreeEntry(address common.Address, prefix db.PrefixTag, key []byte) ([]byte, error) {
+func (m *mockDB) GetMerkleTreeEntry(address identifiers.Address, prefix db.PrefixTag, key []byte) ([]byte, error) {
 	dbKey := append(append(address.Bytes(), prefix.Byte()), key...)
 
 	value, ok := m.data[string(dbKey)]
@@ -42,9 +43,9 @@ func (m *mockDB) GetMerkleTreeEntry(address common.Address, prefix db.PrefixTag,
 	return value, nil
 }
 
-func (m *mockDB) SetMerkleTreeEntries(address common.Address, prefix db.PrefixTag, entries map[string][]byte) error {
+func (m *mockDB) SetMerkleTreeEntries(addr identifiers.Address, prefix db.PrefixTag, entries map[string][]byte) error {
 	for k, v := range entries {
-		dbKey := append(append(address.Bytes(), prefix.Byte()), []byte(k)...)
+		dbKey := append(append(addr.Bytes(), prefix.Byte()), []byte(k)...)
 
 		m.data[string(dbKey)] = v
 	}
@@ -52,7 +53,7 @@ func (m *mockDB) SetMerkleTreeEntries(address common.Address, prefix db.PrefixTa
 	return nil
 }
 
-func (m *mockDB) WritePreImages(address common.Address, entries map[common.Hash][]byte) error {
+func (m *mockDB) WritePreImages(address identifiers.Address, entries map[common.Hash][]byte) error {
 	for k, v := range entries {
 		dbKey := db.PreImageKey(address, k)
 
@@ -62,7 +63,7 @@ func (m *mockDB) WritePreImages(address common.Address, entries map[common.Hash]
 	return nil
 }
 
-func (m *mockDB) GetPreImage(address common.Address, hash common.Hash) ([]byte, error) {
+func (m *mockDB) GetPreImage(address identifiers.Address, hash common.Hash) ([]byte, error) {
 	dbKey := db.PreImageKey(address, hash)
 
 	value, ok := m.data[string(dbKey)]
@@ -138,7 +139,7 @@ func checkForEntry(t *testing.T, key, value []byte, hashTree *KramaHashTree, sho
 
 func createTestHashTreeWithEntries(
 	t *testing.T,
-	address common.Address,
+	address identifiers.Address,
 	persistentDB persistentDB,
 	entries map[string][]byte,
 ) *KramaHashTree {

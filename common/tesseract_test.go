@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -215,8 +215,8 @@ func TestCopyTesseractParts(t *testing.T) {
 
 func TestNewTesseract(t *testing.T) {
 	ixParams := tests.GetIxParamsMapWithAddresses(
-		[]common.Address{tests.RandomAddress(t)},
-		[]common.Address{tests.RandomAddress(t)},
+		[]identifiers.Address{tests.RandomAddress(t)},
+		[]identifiers.Address{tests.RandomAddress(t)},
 	)
 
 	testcases := []struct {
@@ -226,7 +226,7 @@ func TestNewTesseract(t *testing.T) {
 		ixns     common.Interactions
 		receipts common.Receipts
 		seal     []byte
-		sealer   id.KramaID
+		sealer   kramaid.KramaID
 	}{
 		{
 			name:     "copy tesseract parts",

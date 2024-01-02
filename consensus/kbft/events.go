@@ -1,14 +1,15 @@
 package kbft
 
 import (
-	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi-identifiers"
+
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
 )
 
 type eventDataRoundState struct {
-	Height map[common.Address]uint64 `json:"height"`
-	Round  int32                     `json:"round"`
-	Step   string                    `json:"step"`
+	Height map[identifiers.Address]uint64 `json:"height"`
+	Round  int32                          `json:"round"`
+	Step   string                         `json:"step"`
 }
 
 type eventProposal struct {

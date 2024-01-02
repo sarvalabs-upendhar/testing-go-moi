@@ -14,19 +14,19 @@ import (
 	"testing"
 	"time"
 
-	engineio "github.com/sarvalabs/go-moi-engineio"
-
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-pisa"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
-	"github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/crypto"
 	mudracommon "github.com/sarvalabs/go-moi/crypto/common"
 	"github.com/sarvalabs/go-moi/crypto/poi"
@@ -35,7 +35,7 @@ import (
 
 const InvalidAccount common.AccountType = 9999
 
-func RandomAddress(t *testing.T) common.Address {
+func RandomAddress(t *testing.T) identifiers.Address {
 	t.Helper()
 
 	address := make([]byte, 32)
@@ -44,10 +44,10 @@ func RandomAddress(t *testing.T) common.Address {
 		t.Fatal(err)
 	}
 
-	return common.BytesToAddress(address)
+	return identifiers.NewAddressFromBytes(address)
 }
 
-func RandomAddressWithMnemonic(t *testing.T) (common.Address, string) {
+func RandomAddressWithMnemonic(t *testing.T) (identifiers.Address, string) {
 	t.Helper()
 
 	mnemonic := poi.GenerateRandMnemonic().String()
@@ -57,7 +57,7 @@ func RandomAddressWithMnemonic(t *testing.T) (common.Address, string) {
 		require.NoError(t, err)
 	}
 
-	return common.BytesToAddress(publicKey), mnemonic
+	return identifiers.NewAddressFromBytes(publicKey), mnemonic
 }
 
 func RandomHash(t *testing.T) common.Hash {
@@ -84,10 +84,10 @@ func GetTestKramaID(t *testing.T, nthValidator uint32) kramaid.KramaID {
 	require.NoError(t, err)
 
 	kramaID, err := kramaid.NewKramaID(
+		1,
 		privateKeys[32:],
 		nthValidator,
 		hex.EncodeToString(moiPubBytes),
-		1,
 		true,
 	)
 	require.NoError(t, err)
@@ -302,7 +302,7 @@ func GetRandomUpperCaseString(t *testing.T, length int) string {
 	return string(randomString)
 }
 
-func GetRandomAssetInfo(t *testing.T, addr common.Address) *common.AssetDescriptor {
+func GetRandomAssetInfo(t *testing.T, addr identifiers.Address) *common.AssetDescriptor {
 	t.Helper()
 
 	symbol := GetRandomUpperCaseString(t, 5)
@@ -318,26 +318,31 @@ func GetRandomAssetInfo(t *testing.T, addr common.Address) *common.AssetDescript
 		Symbol:     symbol,
 		IsStateFul: true,
 		IsLogical:  false,
-		LogicID:    common.LogicID(RandomHash(t).String()),
+		LogicID:    identifiers.LogicID(RandomHash(t).String()),
 	}
 
 	return asset
 }
 
-func CreateTestAsset(t *testing.T, address common.Address) (common.AssetID, *common.AssetDescriptor) {
+func CreateTestAsset(t *testing.T, address identifiers.Address) (identifiers.AssetID, *common.AssetDescriptor) {
 	t.Helper()
 
 	asset := GetRandomAssetInfo(t, address)
-
-	assetID := common.NewAssetIDv0(asset.IsLogical, asset.IsStateFul, asset.Dimension, asset.Standard, address)
+	assetID := identifiers.NewAssetIDv0(
+		asset.IsLogical,
+		asset.IsStateFul,
+		asset.Dimension,
+		uint16(asset.Standard),
+		address,
+	)
 
 	return assetID, asset
 }
 
-func CreateTestAssets(t *testing.T, count int) ([]common.AssetID, []*common.AssetDescriptor) {
+func CreateTestAssets(t *testing.T, count int) ([]identifiers.AssetID, []*common.AssetDescriptor) {
 	t.Helper()
 
-	assetIDs := make([]common.AssetID, 0, count)
+	assetIDs := make([]identifiers.AssetID, 0, count)
 	assetDescriptors := make([]*common.AssetDescriptor, 0, count)
 
 	for i := 0; i < count; i++ {
@@ -365,7 +370,7 @@ func GetRandomNumbers(t *testing.T, max int, count int) []*big.Int {
 	return numbers
 }
 
-func GetRandomAssetID(t *testing.T, address common.Address) common.AssetID {
+func GetRandomAssetID(t *testing.T, address identifiers.Address) identifiers.AssetID {
 	t.Helper()
 
 	assetID, _ := CreateTestAsset(t, address)
@@ -468,10 +473,10 @@ func GetTestKramaIdsWithPublicKeys(t *testing.T, count int) ([]kramaid.KramaID, 
 	return GetTestKramaIDs(t, count), GetTestPublicKeys(t, count)
 }
 
-func GetRandomAddressList(t *testing.T, count uint8) []common.Address {
+func GetRandomAddressList(t *testing.T, count uint8) []identifiers.Address {
 	t.Helper()
 
-	address := make([]common.Address, count)
+	address := make([]identifiers.Address, count)
 
 	for i := uint8(0); i < count; i++ {
 		address[i] = RandomAddress(t)
@@ -481,7 +486,7 @@ func GetRandomAddressList(t *testing.T, count uint8) []common.Address {
 }
 
 type CreateTesseractParams struct {
-	Address        common.Address
+	Address        identifiers.Address
 	Height         uint64
 	Ixns           common.Interactions
 	Receipts       common.Receipts
@@ -565,10 +570,10 @@ func GetTesseractHash(t *testing.T, ts *common.Tesseract) common.Hash {
 	return ts.Hash()
 }
 
-func GetAddresses(t *testing.T, count int) []common.Address {
+func GetAddresses(t *testing.T, count int) []identifiers.Address {
 	t.Helper()
 
-	addresses := make([]common.Address, count)
+	addresses := make([]identifiers.Address, count)
 	for i := 0; i < count; i++ {
 		addresses[i] = RandomAddress(t)
 	}
@@ -599,11 +604,17 @@ func CreateIX(t *testing.T, params *CreateIxParams) *common.Interaction {
 		params = &CreateIxParams{}
 	}
 
+	addr, err := identifiers.NewAddressFromHex(
+		"0xff919c3bd4523d638b1878a59c62e1c9a0a628127317d63359da30e18ee67593")
+	require.NoError(t, err)
+
+	assetID := identifiers.NewAssetIDv0(false, false, 0, 0, addr)
+
 	data := &common.IxData{
 		Input: common.IxInput{
 			Type: common.IxValueTransfer,
-			TransferValues: map[common.AssetID]*big.Int{
-				common.AssetID("add"): big.NewInt(1),
+			TransferValues: map[identifiers.AssetID]*big.Int{
+				assetID: big.NewInt(1),
 			},
 		},
 	}
@@ -638,7 +649,7 @@ func CreateIxns(t *testing.T, count int, paramsMap map[int]*CreateIxParams) comm
 	return ixns
 }
 
-func GetIxParamsWithAddress(from common.Address, to common.Address) *CreateIxParams {
+func GetIxParamsWithAddress(from identifiers.Address, to identifiers.Address) *CreateIxParams {
 	return &CreateIxParams{
 		IxDataCallback: func(ix *common.IxData) {
 			ix.Input.Sender = from
@@ -649,8 +660,8 @@ func GetIxParamsWithAddress(from common.Address, to common.Address) *CreateIxPar
 }
 
 func GetIxParamsMapWithAddresses(
-	from []common.Address,
-	to []common.Address,
+	from []identifiers.Address,
+	to []identifiers.Address,
 ) map[int]*CreateIxParams {
 	count := len(from)
 	ixParams := make(map[int]*CreateIxParams, count)
@@ -723,7 +734,7 @@ func CreateTesseractPartsWithTestData(t *testing.T) *common.TesseractParts {
 
 	parts := &common.TesseractParts{
 		Total: 2,
-		Grid:  make(map[common.Address]common.TesseractHeightAndHash),
+		Grid:  make(map[identifiers.Address]common.TesseractHeightAndHash),
 	}
 
 	for i := 0; i < 2; i++ {
@@ -767,7 +778,7 @@ func CreateHeaderWithTestData(t *testing.T) common.TesseractHeader {
 		Operator:    "operator",
 		ClusterID:   "cluster-ID",
 		Timestamp:   1,
-		ContextLock: make(map[common.Address]common.ContextLockInfo),
+		ContextLock: make(map[identifiers.Address]common.ContextLockInfo),
 		Extra:       CreateCommitDataWithTestData(t),
 	}
 
@@ -883,11 +894,11 @@ func CreateIXInputWithTestData(
 		Receiver: RandomAddress(t),
 		Payer:    RandomAddress(t),
 
-		TransferValues: map[common.AssetID]*big.Int{
+		TransferValues: map[identifiers.AssetID]*big.Int{
 			"0180127603f47e5aff68052402fda5c4364e8e6cff1e107e4e821af00d0eee2edf16": big.NewInt(1033),
 			"0180127603f47e5aff68052402fda5c4364e8e6cff1e107e4e821af00d0eee2edf15": big.NewInt(1093),
 		},
-		PerceivedValues: map[common.AssetID]*big.Int{
+		PerceivedValues: map[identifiers.AssetID]*big.Int{
 			"0180127603f47e5aff68053102fda5c4364e8e6cff1e107e4e821af00d0eee2edf16": big.NewInt(1233),
 			"0180127603f47e5aff68053102fda5c4364e8e6cff1e107e4e821af00d0eee2ed416": big.NewInt(1333),
 		},
@@ -964,7 +975,7 @@ func CreateBodyWithTestData(t *testing.T) common.TesseractBody {
 		ContextHash:     RandomHash(t),
 		InteractionHash: RandomHash(t),
 		ReceiptHash:     RandomHash(t),
-		ContextDelta:    make(map[common.Address]*common.DeltaGroup),
+		ContextDelta:    make(map[identifiers.Address]*common.DeltaGroup),
 		ConsensusProof: common.PoXtData{
 			BinaryHash:   RandomHash(t),
 			IdentityHash: RandomHash(t),
@@ -1044,16 +1055,16 @@ func GetIXSignature(t *testing.T, ixArgs *common.SendIXArgs, mnemonic string) []
 	return rawSign
 }
 
-func GetLogicID(t *testing.T, address common.Address) common.LogicID {
+func GetLogicID(t *testing.T, address identifiers.Address) identifiers.LogicID {
 	t.Helper()
 
-	return common.NewLogicIDv0(true, false, false, false, 0, address)
+	return identifiers.NewLogicIDv0(true, false, false, false, 0, address)
 }
 
-func GetLogicIDs(t *testing.T, count int) []common.LogicID {
+func GetLogicIDs(t *testing.T, count int) []identifiers.LogicID {
 	t.Helper()
 
-	logicIDs := make([]common.LogicID, count)
+	logicIDs := make([]identifiers.LogicID, count)
 
 	for i := 0; i < count; i++ {
 		logicIDs[i] = GetLogicID(t, RandomAddress(t))
@@ -1078,10 +1089,10 @@ func GetKramaIDAndNetworkKey(t *testing.T, nthValidator uint32) (kramaid.KramaID
 	networkKey := privKeyBytes[32:]
 
 	kramaID, err := kramaid.NewKramaID( // Create kramaID from private key , public key
+		1,
 		networkKey,
 		nthValidator,
 		hex.EncodeToString(moiPubBytes),
-		1,
 		true,
 	)
 	require.NoError(t, err)

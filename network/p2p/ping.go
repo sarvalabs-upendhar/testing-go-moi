@@ -10,16 +10,15 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
-
-	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi/common/config"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-	"github.com/sarvalabs/go-polo"
-
 	pool "github.com/libp2p/go-buffer-pool"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-polo"
+
+	"github.com/sarvalabs/go-moi/common/config"
 )
 
 const (
@@ -33,18 +32,18 @@ const (
 // PingMessage represents a response to a ping request.
 type PingMessage struct {
 	Data    []byte
-	KramaID id.KramaID
+	KramaID kramaid.KramaID
 }
 
 // PingService is a service for sending and receiving ping messages.
 type PingService struct {
-	ID     id.KramaID
+	ID     kramaid.KramaID
 	Host   host.Host
 	logger hclog.Logger
 }
 
 // NewPingService creates a new PingService instance.
-func NewPingService(id id.KramaID, h host.Host, logger hclog.Logger) *PingService {
+func NewPingService(id kramaid.KramaID, h host.Host, logger hclog.Logger) *PingService {
 	ps := &PingService{id, h, logger}
 
 	h.SetStreamHandler(config.MOIPingStream, ps.streamHandler)
@@ -122,7 +121,7 @@ func (ps *PingService) streamHandler(s network.Stream) {
 // PingResponse represents the outcome of a ping attempt, including RTT, KramaID, and any errors.
 type PingResponse struct {
 	RTT     time.Duration
-	KramaID id.KramaID
+	KramaID kramaid.KramaID
 	Error   error
 }
 

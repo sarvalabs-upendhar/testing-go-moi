@@ -2,6 +2,7 @@ package message
 
 import (
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -16,7 +17,7 @@ type AccountsStatusMsg struct {
 type AccountSyncRequest struct {
 	BulkSync bool
 	Bucket   int32
-	Address  common.Address
+	Address  identifiers.Address
 }
 
 func (asr *AccountSyncRequest) Bytes() ([]byte, error) {

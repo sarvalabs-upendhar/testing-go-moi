@@ -8,6 +8,9 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
+
 	"github.com/sarvalabs/go-moi/syncer/agora/block"
 	"github.com/sarvalabs/go-moi/syncer/agora/decision"
 	"github.com/sarvalabs/go-moi/syncer/agora/message"
@@ -16,7 +19,6 @@ import (
 	"github.com/sarvalabs/go-moi/syncer/cid"
 
 	"github.com/sarvalabs/go-moi/common"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
 )
 
 const MaxRounds = 3
@@ -26,9 +28,9 @@ type engine interface {
 }
 
 type interestManager interface {
-	InterestedSessions(blocks []block.Block) (map[common.Address][]block.Block, []block.Block)
-	RecordSessionInterest(addr common.Address, ids ...cid.CID)
-	RemoveSessionInterest(addr common.Address, ids ...cid.CID) []cid.CID
+	InterestedSessions(blocks []block.Block) (map[identifiers.Address][]block.Block, []block.Block)
+	RecordSessionInterest(addr identifiers.Address, ids ...cid.CID)
+	RemoveSessionInterest(addr identifiers.Address, ids ...cid.CID) []cid.CID
 }
 
 type Manager struct {
@@ -53,7 +55,7 @@ func NewSessionManager(
 	}
 }
 
-func (s *Manager) GetSession(addrs common.Address) (*Session, error) {
+func (s *Manager) GetSession(addrs identifiers.Address) (*Session, error) {
 	session, ok := s.activeSessions.Load(addrs)
 	if !ok {
 		return nil, errors.New("session not found")
@@ -69,10 +71,10 @@ func (s *Manager) GetSession(addrs common.Address) (*Session, error) {
 
 func (s *Manager) NewSession(
 	ctx context.Context,
-	addrs common.Address,
+	addrs identifiers.Address,
 	stateHash cid.CID,
 	network *network.AgoraNetwork,
-	contextPeers []id.KramaID,
+	contextPeers []kramaid.KramaID,
 ) (*Session, error) {
 	_, ok := s.activeSessions.Load(addrs)
 	if !ok {
@@ -85,7 +87,7 @@ func (s *Manager) NewSession(
 	return nil, errors.New("session already exists")
 }
 
-func (s *Manager) HandlePeerMessage(id id.KramaID, msg interface{}) {
+func (s *Manager) HandlePeerMessage(id kramaid.KramaID, msg interface{}) {
 	switch msg := msg.(type) {
 	case *message.AgoraRequestMsg:
 		s.handleAgoraRequestMsg(id, msg)
@@ -96,7 +98,7 @@ func (s *Manager) HandlePeerMessage(id id.KramaID, msg interface{}) {
 	}
 }
 
-func (s *Manager) handleAgoraRequestMsg(id id.KramaID, msg *message.AgoraRequestMsg) {
+func (s *Manager) handleAgoraRequestMsg(id kramaid.KramaID, msg *message.AgoraRequestMsg) {
 	s.engine.HandleRequest(&decision.Request{
 		PeerID:    id,
 		ReqTime:   time.Now(),
@@ -106,7 +108,7 @@ func (s *Manager) handleAgoraRequestMsg(id id.KramaID, msg *message.AgoraRequest
 	})
 }
 
-func (s *Manager) handleAgoraResponseMsg(id id.KramaID, msg *message.AgoraResponseMsg) {
+func (s *Manager) handleAgoraResponseMsg(id kramaid.KramaID, msg *message.AgoraResponseMsg) {
 	if !msg.Status {
 		session, err := s.GetSession(msg.SessionID)
 		if err != nil {
@@ -136,7 +138,7 @@ func (s *Manager) handleAgoraResponseMsg(id id.KramaID, msg *message.AgoraRespon
 	}
 }
 
-func (s *Manager) PeerDisconnected(sessions []common.Address, peerID peer.ID) {
+func (s *Manager) PeerDisconnected(sessions []identifiers.Address, peerID peer.ID) {
 	for _, sessionID := range sessions {
 		if session, ok := s.activeSessions.Load(sessionID); ok {
 			session, ok := session.(*Session)
@@ -147,6 +149,6 @@ func (s *Manager) PeerDisconnected(sessions []common.Address, peerID peer.ID) {
 	}
 }
 
-func (s *Manager) CloseSession(sessionID common.Address) {
+func (s *Manager) CloseSession(sessionID identifiers.Address) {
 	s.activeSessions.Delete(sessionID)
 }

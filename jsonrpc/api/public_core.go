@@ -6,6 +6,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
@@ -17,7 +18,7 @@ import (
 
 type FilterManager interface {
 	NewTesseractFilter(ws websocket.ConnManager) string
-	NewTesseractsByAccountFilter(ws websocket.ConnManager, addr common.Address) string
+	NewTesseractsByAccountFilter(ws websocket.ConnManager, addr identifiers.Address) string
 	NewLogFilter(ws websocket.ConnManager, logQuery *websocket.LogQuery) string
 	PendingIxnsFilter(ws websocket.ConnManager) string
 	Uninstall(id string) bool
@@ -57,7 +58,7 @@ func NewPublicCoreAPI(
 	}
 }
 
-func getTesseractArgs(address common.Address, options rpcargs.TesseractNumberOrHash) *rpcargs.TesseractArgs {
+func getTesseractArgs(address identifiers.Address, options rpcargs.TesseractNumberOrHash) *rpcargs.TesseractArgs {
 	return &rpcargs.TesseractArgs{
 		Address: address,
 		Options: options,
@@ -69,7 +70,7 @@ func (p *PublicCoreAPI) getTesseractByHash(hash common.Hash, withInteractions bo
 	return p.chain.GetTesseract(hash, withInteractions)
 }
 
-func (p *PublicCoreAPI) getTesseractHashByHeight(address common.Address, height int64) (common.Hash, error) {
+func (p *PublicCoreAPI) getTesseractHashByHeight(address identifiers.Address, height int64) (common.Hash, error) {
 	if address.IsNil() {
 		return common.NilHash, common.ErrInvalidAddress
 	}
@@ -405,7 +406,7 @@ func (p *PublicCoreAPI) GetLogicStorage(args *rpcargs.GetLogicStorageArgs) (hexu
 }
 
 // GetLogicIDs will fetch the logic IDs from the logic tree
-func (p *PublicCoreAPI) GetLogicIDs(args *rpcargs.GetAccountArgs) ([]common.LogicID, error) {
+func (p *PublicCoreAPI) GetLogicIDs(args *rpcargs.GetAccountArgs) ([]identifiers.LogicID, error) {
 	ts, err := p.getTesseract(getTesseractArgs(args.Address, args.Options))
 	if err != nil {
 		return nil, err
@@ -441,7 +442,7 @@ func (p *PublicCoreAPI) GetAssetInfoByAssetID(args *rpcargs.GetAssetInfoArgs) (m
 		"is_stateful": info.IsStateFul,
 	}
 
-	if info.LogicID.String() != "" {
+	if string(info.LogicID) != "" {
 		rpcAssetInfo["logic_id"] = info.LogicID
 	}
 
@@ -554,9 +555,9 @@ func (p *PublicCoreAPI) Call(args *rpcargs.CallArgs) (*rpcargs.RPCReceipt, error
 }
 
 func (p *PublicCoreAPI) normalizeOptions(
-	options map[common.Address]*rpcargs.TesseractNumberOrHash,
-) (map[common.Address]common.Hash, error) {
-	stateHashes := make(map[common.Address]common.Hash)
+	options map[identifiers.Address]*rpcargs.TesseractNumberOrHash,
+) (map[identifiers.Address]common.Hash, error) {
+	stateHashes := make(map[identifiers.Address]common.Hash)
 
 	for addr, value := range options {
 		ts, err := p.getTesseract(getTesseractArgs(addr, *value))

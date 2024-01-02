@@ -4,6 +4,7 @@ import (
 	"math/big"
 
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -50,14 +51,14 @@ func (balance *BalanceObject) FromBytes(bytes []byte) error {
 }
 
 type ApprovalObject struct {
-	Approvals map[common.Address]common.AssetMap
+	Approvals map[identifiers.Address]common.AssetMap
 	PrvHash   common.Hash
 }
 
 func (a *ApprovalObject) Copy() *ApprovalObject {
 	newObject := new(ApprovalObject)
 	newObject.PrvHash = a.PrvHash
-	newObject.Approvals = make(map[common.Address]common.AssetMap)
+	newObject.Approvals = make(map[identifiers.Address]common.AssetMap)
 
 	for k, v := range a.Approvals {
 		newObject.Approvals[k] = v.Copy()

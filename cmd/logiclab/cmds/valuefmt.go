@@ -7,9 +7,8 @@ import (
 
 	"github.com/manishmeganathan/symbolizer"
 	"github.com/pkg/errors"
-	engineio "github.com/sarvalabs/go-moi-engineio"
-
-	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-moi-identifiers"
 )
 
 func HelpArgument() string {
@@ -223,7 +222,7 @@ func parseKeyedValues(input string, delim symbolizer.TokenKind) (map[any]any, sy
 					return nil, detected, errors.New("malformed value for key: cannot use bytes")
 				}
 
-				key = common.BytesToAddress(raw)
+				key = identifiers.NewAddressFromBytes(raw)
 			}
 		}
 

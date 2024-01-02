@@ -3,9 +3,9 @@ package ecdsa
 import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
+	"github.com/sarvalabs/go-legacy-kramaid"
 	"golang.org/x/crypto/blake2b"
 
-	"github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/crypto/common"
 )
 

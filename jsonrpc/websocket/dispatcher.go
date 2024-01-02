@@ -7,8 +7,7 @@ import (
 	"math"
 
 	"github.com/hashicorp/go-hclog"
-
-	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi-identifiers"
 )
 
 type ConnManager interface {
@@ -140,7 +139,8 @@ func (d *Dispatcher) handleSubscribe(req WSRequest, conn ConnManager) (string, e
 			return "", err
 		}
 
-		subscriptionID := d.fm.NewTesseractsByAccountFilter(conn, common.HexToAddress(args.Address))
+		addr, _ := identifiers.NewAddressFromHex(args.Address)
+		subscriptionID := d.fm.NewTesseractsByAccountFilter(conn, addr)
 
 		return subscriptionID, nil
 	case "newLogs":

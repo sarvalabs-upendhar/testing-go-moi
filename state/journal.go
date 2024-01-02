@@ -1,12 +1,14 @@
 package state
 
 import (
+	"github.com/sarvalabs/go-moi-identifiers"
+
 	"github.com/sarvalabs/go-moi/common"
 )
 
 type changeEntry interface {
 	revert(*StateManager)
-	modifiedAddress() *common.Address
+	modifiedAddress() *identifiers.Address
 	cID() common.Hash
 }
 
@@ -39,11 +41,11 @@ func (j *journal) revert(sm *StateManager) {
 */
 
 type ContextUpdation struct {
-	addr *common.Address
+	addr *identifiers.Address
 	id   common.Hash
 }
 
-func (c ContextUpdation) modifiedAddress() *common.Address {
+func (c ContextUpdation) modifiedAddress() *identifiers.Address {
 	return c.addr
 }
 
@@ -56,11 +58,11 @@ func (c ContextUpdation) revert(sm *StateManager) {
 }
 
 type RegistryUpdation struct {
-	addr *common.Address
+	addr *identifiers.Address
 	id   common.Hash
 }
 
-func (r RegistryUpdation) modifiedAddress() *common.Address {
+func (r RegistryUpdation) modifiedAddress() *identifiers.Address {
 	return r.addr
 }
 
@@ -73,11 +75,11 @@ func (r RegistryUpdation) cID() common.Hash {
 }
 
 type BalanceUpdation struct {
-	addr *common.Address
+	addr *identifiers.Address
 	id   common.Hash
 }
 
-func (b BalanceUpdation) modifiedAddress() *common.Address {
+func (b BalanceUpdation) modifiedAddress() *identifiers.Address {
 	return b.addr
 }
 
@@ -90,11 +92,11 @@ func (b BalanceUpdation) cID() common.Hash {
 }
 
 type AccountUpdation struct {
-	addr *common.Address
+	addr *identifiers.Address
 	id   common.Hash
 }
 
-func (acc AccountUpdation) modifiedAddress() *common.Address {
+func (acc AccountUpdation) modifiedAddress() *identifiers.Address {
 	return acc.addr
 }
 
@@ -107,11 +109,11 @@ func (acc AccountUpdation) cID() common.Hash {
 }
 
 type StorageUpdation struct {
-	addr *common.Address
+	addr *identifiers.Address
 	id   common.Hash
 }
 
-func (s StorageUpdation) modifiedAddress() *common.Address {
+func (s StorageUpdation) modifiedAddress() *identifiers.Address {
 	return s.addr
 }
 

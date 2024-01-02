@@ -5,21 +5,18 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/sarvalabs/go-moi/common/utils"
-
-	"github.com/sarvalabs/go-moi/common/config"
-
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-	networkmsg "github.com/sarvalabs/go-moi/network/message"
-	"github.com/sarvalabs/go-moi/telemetry/tracing"
-
 	"github.com/hashicorp/go-hclog"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/pkg/errors"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 
+	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/common/utils"
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
+	networkmsg "github.com/sarvalabs/go-moi/network/message"
 	"github.com/sarvalabs/go-moi/network/rpc"
+	"github.com/sarvalabs/go-moi/telemetry/tracing"
 )
 
 const (
@@ -39,7 +36,7 @@ type network interface {
 	) error
 	StartNewRPCServer(protocol protocol.ID, tag string) *rpc.Client
 	RegisterNewRPCService(protocol protocol.ID, serviceName string, service interface{}) error
-	GetKramaID() id.KramaID
+	GetKramaID() kramaid.KramaID
 }
 
 type Transport struct {
@@ -122,7 +119,7 @@ func (t *Transport) InitClusterCommunication(ctx context.Context, slot *ktypes.S
 
 func (t *Transport) Call(
 	ctx context.Context,
-	kramaID id.KramaID,
+	kramaID kramaid.KramaID,
 	svcName, svcMethod string,
 	args, response interface{},
 ) error {

@@ -4,9 +4,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 )
 
@@ -16,12 +16,12 @@ type Tesseract struct {
 	ixns     Interactions
 	receipts Receipts
 	seal     []byte
-	sealer   id.KramaID
+	sealer   kramaid.KramaID
 	hash     atomic.Value
 }
 
 type TesseractHeader struct {
-	Address     Address
+	Address     identifiers.Address
 	PrevHash    Hash
 	Height      uint64
 	FuelUsed    uint64
@@ -31,7 +31,7 @@ type TesseractHeader struct {
 	Operator    string
 	ClusterID   string
 	Timestamp   int64
-	ContextLock map[Address]ContextLockInfo
+	ContextLock map[identifiers.Address]ContextLockInfo
 	Extra       CommitData
 }
 
@@ -39,7 +39,7 @@ func (h *TesseractHeader) Copy() TesseractHeader {
 	header := *h
 
 	if len(h.ContextLock) > 0 {
-		header.ContextLock = make(map[Address]ContextLockInfo, len(h.ContextLock))
+		header.ContextLock = make(map[identifiers.Address]ContextLockInfo, len(h.ContextLock))
 
 		for k, v := range h.ContextLock {
 			header.ContextLock[k] = v
@@ -139,7 +139,7 @@ func NewTesseract(
 	ixns Interactions,
 	receipts Receipts,
 	seal []byte,
-	sealer id.KramaID,
+	sealer kramaid.KramaID,
 ) *Tesseract {
 	bytes := make([]byte, len(seal))
 	copy(bytes, seal)
@@ -159,7 +159,7 @@ func NewTesseract(
 	return t
 }
 
-func (t *Tesseract) Sealer() id.KramaID {
+func (t *Tesseract) Sealer() kramaid.KramaID {
 	return t.sealer
 }
 
@@ -171,7 +171,7 @@ func (t *Tesseract) SetSeal(seal []byte) {
 	t.seal = seal
 }
 
-func (t *Tesseract) SetSealer(sealer id.KramaID) {
+func (t *Tesseract) SetSealer(sealer kramaid.KramaID) {
 	t.sealer = sealer
 }
 
@@ -207,7 +207,7 @@ func (t *Tesseract) Seal() []byte {
 	return bytes
 }
 
-func (t *Tesseract) Address() Address {
+func (t *Tesseract) Address() identifiers.Address {
 	return t.header.Address
 }
 
@@ -251,8 +251,8 @@ func (t *Tesseract) Operator() string {
 	return t.header.Operator
 }
 
-func (t *Tesseract) ContextLock() map[Address]ContextLockInfo {
-	contextLock := make(map[Address]ContextLockInfo, len(t.header.ContextLock))
+func (t *Tesseract) ContextLock() map[identifiers.Address]ContextLockInfo {
+	contextLock := make(map[identifiers.Address]ContextLockInfo, len(t.header.ContextLock))
 
 	for k, v := range t.header.ContextLock {
 		contextLock[k] = v
@@ -261,7 +261,7 @@ func (t *Tesseract) ContextLock() map[Address]ContextLockInfo {
 	return contextLock
 }
 
-func (t *Tesseract) ContextLockByAddress(address Address) (ContextLockInfo, bool) {
+func (t *Tesseract) ContextLockByAddress(address identifiers.Address) (ContextLockInfo, bool) {
 	ctxLockInfo, ok := t.header.ContextLock[address]
 
 	return ctxLockInfo, ok
@@ -287,7 +287,7 @@ func (t *Tesseract) ContextDelta() ContextDelta {
 	return t.body.ContextDelta.Copy()
 }
 
-func (t *Tesseract) GetContextDeltaByAddress(address Address) (DeltaGroup, bool) {
+func (t *Tesseract) GetContextDeltaByAddress(address identifiers.Address) (DeltaGroup, bool) {
 	delta, ok := t.body.ContextDelta[address]
 	if !ok {
 		return DeltaGroup{}, ok
@@ -399,7 +399,7 @@ func (t *Tesseract) GetTesseractWithoutIxns() *Tesseract {
 type CanonicalTesseract struct {
 	Header TesseractHeader
 	Body   TesseractBody
-	Sealer id.KramaID
+	Sealer kramaid.KramaID
 	Seal   []byte
 }
 
@@ -468,7 +468,7 @@ type CanonicalTesseractWithoutSeal struct {
 type Item struct {
 	Tesseract *Tesseract
 	Delta     map[Hash][]byte
-	Sender    id.KramaID
+	Sender    kramaid.KramaID
 }
 
 type TesseractStack struct {
@@ -510,7 +510,7 @@ type TesseractHeightAndHash struct {
 
 type TesseractParts struct {
 	Total int32
-	Grid  map[Address]TesseractHeightAndHash
+	Grid  map[identifiers.Address]TesseractHeightAndHash
 }
 
 func (p *TesseractParts) Bytes() ([]byte, error) {
@@ -536,7 +536,7 @@ func (p *TesseractParts) Copy() *TesseractParts {
 	}
 
 	if len(p.Grid) > 0 {
-		parts.Grid = make(map[Address]TesseractHeightAndHash)
+		parts.Grid = make(map[identifiers.Address]TesseractHeightAndHash)
 
 		for k, v := range p.Grid {
 			parts.Grid[k] = v

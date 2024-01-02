@@ -7,6 +7,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -27,7 +28,7 @@ func TestUpdateAccMetaInfo_CheckErrors(t *testing.T) {
 			name:        "nil address",
 			accMetaInfo: nil,
 			args: &common.AccountMetaInfo{
-				Address:       common.NilAddress,
+				Address:       identifiers.NilAddress,
 				Type:          common.AccountType(1),
 				Height:        7,
 				TesseractHash: tests.RandomHash(t),
@@ -289,7 +290,7 @@ func TestGetAccountMetaInfo(t *testing.T) {
 
 	testcases := []struct {
 		name                string
-		address             common.Address
+		address             identifiers.Address
 		expectedAccMetaInfo *common.AccountMetaInfo
 		expectedError       error
 	}{
@@ -325,7 +326,7 @@ func TestIncrementBucketCount(t *testing.T) {
 	pm := NewTestPersistenceManager(t)
 
 	type args struct {
-		address common.Address
+		address identifiers.Address
 		count   uint64
 	}
 
@@ -373,7 +374,7 @@ func TestUpdateTesseractStatus_CheckErrors(t *testing.T) {
 	pm := NewTestPersistenceManager(t)
 
 	type args struct {
-		address common.Address
+		address identifiers.Address
 		height  uint64
 		hash    common.Hash
 		status  bool
@@ -428,7 +429,7 @@ func TestUpdateTesseractStatus_CheckHeight(t *testing.T) {
 	pm := NewTestPersistenceManager(t)
 
 	type args struct {
-		address common.Address
+		address identifiers.Address
 		height  uint64
 		hash    common.Hash
 		status  bool
@@ -709,7 +710,7 @@ func TestSetGridLookup(t *testing.T) {
 			err := pm.SetTSGridLookup(testcase.tsHash, testcase.gridHash)
 			require.NoError(t, err)
 
-			rawData, err := pm.ReadEntry(DBKey(common.NilAddress, TSGridLookup, testcase.tsHash.Bytes()))
+			rawData, err := pm.ReadEntry(DBKey(identifiers.NilAddress, TSGridLookup, testcase.tsHash.Bytes()))
 			require.NoError(t, err)
 
 			require.Equal(t, testcase.gridHash.Bytes(), rawData)
@@ -839,7 +840,7 @@ func TestGetReceipts(t *testing.T) {
 	}
 }
 
-func keyWithPrefix(prefix common.Address, k int) []byte {
+func keyWithPrefix(prefix identifiers.Address, k int) []byte {
 	return append(prefix.Bytes(), []byte(fmt.Sprintf("%d", k))...)
 }
 

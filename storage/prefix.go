@@ -1,6 +1,8 @@
 package storage
 
-import "github.com/sarvalabs/go-moi/common"
+import (
+	"github.com/sarvalabs/go-moi-identifiers"
+)
 
 // PrefixTag represents the tag used for DB Key prefix
 // MSB is not set for account based keys - 0x00 ...
@@ -50,9 +52,9 @@ func (p PrefixTag) IsAccountBasedKey() bool {
 }
 
 func SenatusPrefix() []byte {
-	return dbKey(common.NilAddress, Senatus, nil)
+	return dbKey(identifiers.NilAddress, Senatus, nil)
 }
 
 func AccountSyncPrefix() []byte {
-	return dbKey(common.NilAddress, AccountSyncJob, nil)
+	return dbKey(identifiers.NilAddress, AccountSyncJob, nil)
 }

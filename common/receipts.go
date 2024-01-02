@@ -3,10 +3,11 @@ package common
 import (
 	"encoding/json"
 
-	"github.com/sarvalabs/go-moi/common/hexutil"
-
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
+
+	"github.com/sarvalabs/go-moi/common/hexutil"
 )
 
 type ReceiptStatus uint64
@@ -17,8 +18,8 @@ const (
 )
 
 type Log struct {
-	Addresses []Address
-	LogicID   LogicID
+	Addresses []identifiers.Address
+	LogicID   identifiers.LogicID
 	Topics    []Hash
 	Data      []byte
 }
@@ -51,7 +52,7 @@ func (l *Log) Copy() *Log {
 	log := *l
 
 	if len(l.Addresses) > 0 {
-		log.Addresses = make([]Address, len(l.Addresses))
+		log.Addresses = make([]identifiers.Address, len(l.Addresses))
 		copy(log.Addresses, l.Addresses)
 	}
 
@@ -68,9 +69,9 @@ func (l *Log) Copy() *Log {
 	return &log
 }
 
-type ReceiptAccHashes map[Address]*Hashes
+type ReceiptAccHashes map[identifiers.Address]*Hashes
 
-func (h ReceiptAccHashes) SetContextHash(addr Address, contextHash Hash) {
+func (h ReceiptAccHashes) SetContextHash(addr identifiers.Address, contextHash Hash) {
 	hashes, ok := h[addr]
 	if !ok {
 		h[addr] = &Hashes{ContextHash: contextHash}
@@ -81,7 +82,7 @@ func (h ReceiptAccHashes) SetContextHash(addr Address, contextHash Hash) {
 	hashes.ContextHash = contextHash
 }
 
-func (h ReceiptAccHashes) SetStateHash(addr Address, stateHash Hash) {
+func (h ReceiptAccHashes) SetStateHash(addr identifiers.Address, stateHash Hash) {
 	hashes, ok := h[addr]
 
 	if !ok {
@@ -93,7 +94,7 @@ func (h ReceiptAccHashes) SetStateHash(addr Address, stateHash Hash) {
 	hashes.StateHash = stateHash
 }
 
-func (h ReceiptAccHashes) ContextHash(addr Address) Hash {
+func (h ReceiptAccHashes) ContextHash(addr identifiers.Address) Hash {
 	hashes, ok := h[addr]
 	if !ok {
 		return NilHash
@@ -102,7 +103,7 @@ func (h ReceiptAccHashes) ContextHash(addr Address) Hash {
 	return hashes.ContextHash
 }
 
-func (h ReceiptAccHashes) StateHash(addr Address) Hash {
+func (h ReceiptAccHashes) StateHash(addr identifiers.Address) Hash {
 	hashes, ok := h[addr]
 	if !ok {
 		return NilHash
@@ -218,8 +219,8 @@ func (rs *Receipts) FromBytes(bytes []byte) error {
 }
 
 type AssetCreationReceipt struct {
-	AssetID      AssetID `json:"asset_id"`
-	AssetAccount Address `json:"address"`
+	AssetID      identifiers.AssetID `json:"asset_id"`
+	AssetAccount identifiers.Address `json:"address"`
 }
 
 type AssetMintOrBurnReceipt struct {
@@ -227,8 +228,8 @@ type AssetMintOrBurnReceipt struct {
 }
 
 type LogicDeployReceipt struct {
-	LogicID LogicID       `json:"logic_id,omitempty"`
-	Error   hexutil.Bytes `json:"error"`
+	LogicID identifiers.LogicID `json:"logic_id,omitempty"`
+	Error   hexutil.Bytes       `json:"error"`
 }
 
 type LogicInvokeReceipt struct {

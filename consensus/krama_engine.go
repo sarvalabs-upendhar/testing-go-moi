@@ -13,25 +13,24 @@ import (
 	"github.com/moby/locker"
 	"github.com/mr-tron/base58/base58"
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/crypto/blake2b"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-	mudraCommon "github.com/sarvalabs/go-moi/crypto/common"
-	networkmsg "github.com/sarvalabs/go-moi/network/message"
-
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/utils"
-	"github.com/sarvalabs/go-moi/flux"
-	"github.com/sarvalabs/go-moi/state"
-
 	"github.com/sarvalabs/go-moi/consensus/kbft"
 	"github.com/sarvalabs/go-moi/consensus/observer"
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
 	"github.com/sarvalabs/go-moi/crypto"
+	mudraCommon "github.com/sarvalabs/go-moi/crypto/common"
+	"github.com/sarvalabs/go-moi/flux"
 	"github.com/sarvalabs/go-moi/ixpool"
+	networkmsg "github.com/sarvalabs/go-moi/network/message"
+	"github.com/sarvalabs/go-moi/state"
 	"github.com/sarvalabs/go-moi/telemetry/tracing"
 )
 
@@ -65,7 +64,7 @@ type lattice interface {
 type transport interface {
 	InitClusterCommunication(ctx context.Context, slot *ktypes.Slot) error
 	RegisterRPCService(serviceID protocol.ID, serviceName string, service interface{}) error
-	Call(ctx context.Context, kramaID id.KramaID, svcName, svcMethod string, args, response interface{}) error
+	Call(ctx context.Context, kramaID kramaid.KramaID, svcName, svcMethod string, args, response interface{}) error
 	BroadcastTesseract(msg *networkmsg.TesseractMessage) error
 }
 
@@ -74,19 +73,19 @@ type stateManager interface {
 		ctx context.Context,
 		ix *common.Interaction,
 	) (
-		map[common.Address]common.Hash,
+		map[identifiers.Address]common.Hash,
 		[]*common.NodeSet,
 		error,
 	)
-	GetPublicKeys(context context.Context, ids ...id.KramaID) (keys [][]byte, err error)
-	GetAccountMetaInfo(addr common.Address) (*common.AccountMetaInfo, error)
-	IsAccountRegistered(addr common.Address) (bool, error)
-	GetLatestStateObject(addr common.Address) (*state.Object, error)
-	GetNonce(addr common.Address, stateHash common.Hash) (uint64, error)
+	GetPublicKeys(context context.Context, ids ...kramaid.KramaID) (keys [][]byte, err error)
+	GetAccountMetaInfo(addr identifiers.Address) (*common.AccountMetaInfo, error)
+	IsAccountRegistered(addr identifiers.Address) (bool, error)
+	GetLatestStateObject(addr identifiers.Address) (*state.Object, error)
+	GetNonce(addr identifiers.Address, stateHash common.Hash) (uint64, error)
 }
 
 type ixPool interface {
-	IncrementWaitTime(addr common.Address, baseTime time.Duration) error
+	IncrementWaitTime(addr identifiers.Address, baseTime time.Duration) error
 	Executables() ixpool.InteractionQueue
 	Drop(ix *common.Interaction)
 }
@@ -105,7 +104,7 @@ type Response struct {
 type Request struct {
 	ixs          common.Interactions
 	msg          *networkmsg.CanonicalICSRequest
-	operator     id.KramaID
+	operator     kramaid.KramaID
 	slotType     ktypes.SlotType
 	reqTime      time.Time
 	responseChan chan Response
@@ -132,7 +131,7 @@ type Engine struct {
 	cfg          *config.ConsensusConfig
 	mux          *utils.TypeMux
 	logger       hclog.Logger
-	selfID       id.KramaID
+	selfID       kramaid.KramaID
 	slots        *ktypes.Slots
 	requests     chan Request
 	randomizer   *flux.Randomizer
@@ -226,9 +225,9 @@ func (k *Engine) acquireContextLock(ctx context.Context, slot *ktypes.Slot) erro
 	finalWaitGroup.Add(2)
 
 	var (
-		contextRandomNodes  []id.KramaID
-		operatorRandomNodes []id.KramaID
-		observerNodes       []id.KramaID
+		contextRandomNodes  []kramaid.KramaID
+		operatorRandomNodes []kramaid.KramaID
+		observerNodes       []kramaid.KramaID
 	)
 
 	// Fetch the context nodes of interaction participants
@@ -244,7 +243,7 @@ func (k *Engine) acquireContextLock(ctx context.Context, slot *ktypes.Slot) erro
 		return errors.Wrap(err, "failed to initiate cluster communication")
 	}
 	// Start routine to capture the random nodes provided by the context nodes
-	randomNodesReceiverChan := make(chan []id.KramaID)
+	randomNodesReceiverChan := make(chan []kramaid.KramaID)
 
 	go func(ctx context.Context) {
 		for {
@@ -352,7 +351,7 @@ func (k *Engine) acquireContextLock(ctx context.Context, slot *ktypes.Slot) erro
 	}
 
 	if !slot.ClusterState().IsOperatorIncluded() {
-		operatorRandomNodes = append([]id.KramaID{k.selfID}, operatorRandomNodes...) // TODO:Improve this
+		operatorRandomNodes = append([]kramaid.KramaID{k.selfID}, operatorRandomNodes...) // TODO:Improve this
 	}
 
 	exemptedNodes := respondedEligibleSet
@@ -792,7 +791,7 @@ func (k *Engine) sendICSRequestWithBound(
 	requiredCount int,
 	finalWaitGroup *sync.WaitGroup,
 	cID common.ClusterID,
-	nodes []id.KramaID,
+	nodes []kramaid.KramaID,
 	keys [][]byte,
 	msg networkmsg.CanonicalICSRequest,
 ) {
@@ -837,7 +836,7 @@ func (k *Engine) sendICSRequestWithBound(
 			continue
 		}
 
-		go func(index int, kramaID id.KramaID) {
+		go func(index int, kramaID kramaid.KramaID) {
 			icsResponse := new(networkmsg.ICSResponse)
 			requestTS := time.Now()
 
@@ -900,7 +899,7 @@ func (k *Engine) sendICSRequest(
 	cID common.ClusterID,
 	nodesSet *common.NodeSet,
 	msg networkmsg.CanonicalICSRequest,
-	randomNodes chan []id.KramaID,
+	randomNodes chan []kramaid.KramaID,
 ) {
 	_, span := tracing.Span(ctx, "KramaEngine", fmt.Sprintf("ics request set-type %d", setType))
 	defer func() {
@@ -951,7 +950,7 @@ func (k *Engine) sendICSRequest(
 			continue
 		}
 
-		go func(index int, kramaID id.KramaID) {
+		go func(index int, kramaID kramaid.KramaID) {
 			icsResponse := new(networkmsg.ICSResponse)
 			requestTS := time.Now()
 
@@ -1023,7 +1022,11 @@ func (k *Engine) getCanonicalICSReqMsg(
 	return *canonicalICSReqMsg, nil
 }
 
-func (k *Engine) getRandomNodes(ctx context.Context, count int, exemptedNodes []id.KramaID) ([]id.KramaID, error) {
+func (k *Engine) getRandomNodes(
+	ctx context.Context,
+	count int,
+	exemptedNodes []kramaid.KramaID,
+) ([]kramaid.KramaID, error) {
 	_, span := tracing.Span(ctx, "Krama.KramaEngine", "getRandomNodes")
 	defer span.End()
 
@@ -1042,7 +1045,11 @@ func (k *Engine) getRandomNodes(ctx context.Context, count int, exemptedNodes []
 	return peers, nil
 }
 
-func (k *Engine) getObserverNodes(ctx context.Context, count int, exemptedNodes []id.KramaID) ([]id.KramaID, error) {
+func (k *Engine) getObserverNodes(
+	ctx context.Context,
+	count int,
+	exemptedNodes []kramaid.KramaID,
+) ([]kramaid.KramaID, error) {
 	_, span := tracing.Span(ctx, "Krama.KramaEngine", "getObserverNodes")
 	defer span.End()
 
@@ -1137,7 +1144,7 @@ func (k *Engine) updateContextDelta(slot *ktypes.Slot) error {
 	}
 
 	clusterState := slot.ClusterState()
-	seenAccounts := make(map[common.Address]bool)
+	seenAccounts := make(map[identifiers.Address]bool)
 	deltaMap := make(common.ContextDelta)
 
 	for _, ix := range clusterState.Ixs {
@@ -1263,7 +1270,7 @@ func (k *Engine) updateContextDelta(slot *ktypes.Slot) error {
 // of other participants.
 func (k *Engine) partiallyUpdateContextDelta(slot *ktypes.Slot) error {
 	clusterState := slot.ClusterState()
-	seenAccounts := make(map[common.Address]bool)
+	seenAccounts := make(map[identifiers.Address]bool)
 	deltaMap := make(common.ContextDelta)
 
 	for _, ix := range clusterState.Ixs {
@@ -1320,7 +1327,7 @@ func (k *Engine) GetNodes(
 	clusterInfo *ktypes.ClusterState,
 	requiredRandomNodes,
 	requiredBehaviouralNodes int,
-) (behaviouralNodes []id.KramaID, randomNodes []id.KramaID, err error) {
+) (behaviouralNodes []kramaid.KramaID, randomNodes []kramaid.KramaID, err error) {
 	// TODO: Need to improve this function
 	set := clusterInfo.NodeSet.Nodes[common.RandomSet]
 	count := 0
@@ -1398,7 +1405,7 @@ func (k *Engine) finalizedTesseractHandler(tesseracts []*common.Tesseract) error
 }
 
 func generateBody(
-	addr common.Address,
+	addr identifiers.Address,
 	state *ktypes.ClusterState,
 	ixHash, ixnsHash, receiptHash common.Hash,
 ) common.TesseractBody {
@@ -1417,12 +1424,12 @@ func generateBody(
 }
 
 func generateTesseract(
-	addr common.Address,
+	addr identifiers.Address,
 	state *ktypes.ClusterState,
 	body common.TesseractBody,
 	tsBodyHash, gridHash common.Hash,
 	fuelUsed, fuelLimit uint64,
-	sealer id.KramaID,
+	sealer kramaid.KramaID,
 ) *common.Tesseract {
 	header := common.TesseractHeader{
 		Address:     addr,
@@ -1672,15 +1679,15 @@ func (k *Engine) IsIxValid(ix *common.Interaction) error {
 			return errors.New("asset create payload is empty")
 		}
 
-		assetID := common.NewAssetIDv0(
+		assetID := identifiers.NewAssetIDv0(
 			payload.Create.IsLogical,
 			payload.Create.IsStateFul,
 			payload.Create.Dimension,
-			payload.Create.Standard,
+			uint16(payload.Create.Standard),
 			ix.Receiver(),
 		)
 
-		if _, err = stateObject.GetRegistryEntry(assetID.String()); err == nil {
+		if _, err = stateObject.GetRegistryEntry(string(assetID)); err == nil {
 			return errors.New("asset already found")
 		}
 
@@ -1695,7 +1702,7 @@ func (k *Engine) IsIxValid(ix *common.Interaction) error {
 
 func loadContextLockInfo(
 	cs *ktypes.ClusterState,
-	hashes map[common.Address]common.Hash,
+	hashes map[identifiers.Address]common.Hash,
 ) {
 	for addr, accInfo := range cs.AccountInfos {
 		accInfo.ContextHash = hashes[addr]

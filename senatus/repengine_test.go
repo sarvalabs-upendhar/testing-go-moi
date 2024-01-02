@@ -7,12 +7,11 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-	"github.com/stretchr/testify/assert"
-
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -184,7 +183,7 @@ func TestReputationEngine_UpdatePeer(t *testing.T) {
 
 	testcases := []struct {
 		name         string
-		testFn       func(kramaID id.KramaID, nodeMetaInfo *NodeMetaInfo)
+		testFn       func(kramaID kramaid.KramaID, nodeMetaInfo *NodeMetaInfo)
 		nodeMetaInfo *NodeMetaInfo
 		expectedErr  error
 		shouldSkip   bool
@@ -208,7 +207,7 @@ func TestReputationEngine_UpdatePeer(t *testing.T) {
 		},
 		{
 			name: "krama id with state",
-			testFn: func(kramaID id.KramaID, nodeMetaInfo *NodeMetaInfo) {
+			testFn: func(kramaID kramaid.KramaID, nodeMetaInfo *NodeMetaInfo) {
 				mockDB.setNodeInfo(t, tests.DecodePeerIDFromKramaID(t, kramaID), nodeMetaInfo)
 			},
 			nodeMetaInfo: &NodeMetaInfo{
@@ -250,9 +249,9 @@ func TestReputationEngine_UpdateNTQ(t *testing.T) {
 	reputationEngine, mockDB, _ := createTestReputationEngine(t)
 	testcases := []struct {
 		name             string
-		kramaID          id.KramaID
+		kramaID          kramaid.KramaID
 		ntq              float32
-		testFn           func(kramaID id.KramaID)
+		testFn           func(kramaID kramaid.KramaID)
 		expectedErr      error
 		expectedNodeInfo *NodeMetaInfo
 	}{
@@ -274,7 +273,7 @@ func TestReputationEngine_UpdateNTQ(t *testing.T) {
 			name:    "krama id with state",
 			kramaID: tests.GetTestKramaID(t, 1),
 			ntq:     1,
-			testFn: func(kramaID id.KramaID) {
+			testFn: func(kramaID kramaid.KramaID) {
 				mockDB.setNodeInfo(
 					t,
 					tests.DecodePeerIDFromKramaID(t, kramaID),
@@ -319,9 +318,9 @@ func TestReputationEngine_UpdateWalletCount(t *testing.T) {
 	reputationEngine, mockDB, _ := createTestReputationEngine(t)
 	testcases := []struct {
 		name             string
-		kramaID          id.KramaID
+		kramaID          kramaid.KramaID
 		walletCount      int32
-		testFn           func(kramaID id.KramaID)
+		testFn           func(kramaID kramaid.KramaID)
 		expectedErr      error
 		expectedNodeInfo *NodeMetaInfo
 	}{
@@ -343,7 +342,7 @@ func TestReputationEngine_UpdateWalletCount(t *testing.T) {
 		{
 			name:    "krama id with state",
 			kramaID: tests.GetTestKramaID(t, 1),
-			testFn: func(kramaID id.KramaID) {
+			testFn: func(kramaID kramaid.KramaID) {
 				mockDB.setNodeInfo(
 					t,
 					tests.DecodePeerIDFromKramaID(t, kramaID),
@@ -390,9 +389,9 @@ func TestReputationEngine_UpdatePublicKey(t *testing.T) {
 	publicKeys := tests.GetTestPublicKeys(t, 3)
 	testcases := []struct {
 		name             string
-		kramaID          id.KramaID
+		kramaID          kramaid.KramaID
 		publicKey        []byte
-		testFn           func(kramaID id.KramaID)
+		testFn           func(kramaID kramaid.KramaID)
 		expectedErr      error
 		expectedNodeInfo *NodeMetaInfo
 	}{
@@ -415,7 +414,7 @@ func TestReputationEngine_UpdatePublicKey(t *testing.T) {
 			name:      "krama id with state",
 			kramaID:   tests.GetTestKramaID(t, 1),
 			publicKey: publicKeys[2],
-			testFn: func(kramaID id.KramaID) {
+			testFn: func(kramaID kramaid.KramaID) {
 				mockDB.setNodeInfo(
 					t,
 					tests.DecodePeerIDFromKramaID(t, kramaID),
@@ -463,8 +462,8 @@ func TestReputationEngine_GetAddress(t *testing.T) {
 
 	testcases := []struct {
 		name            string
-		kramaID         id.KramaID
-		testFn          func(kramaID id.KramaID)
+		kramaID         kramaid.KramaID
+		testFn          func(kramaID kramaid.KramaID)
 		expectedErr     error
 		expectedAddress []multiaddr.Multiaddr
 	}{
@@ -476,7 +475,7 @@ func TestReputationEngine_GetAddress(t *testing.T) {
 		{
 			name:    "krama id with state",
 			kramaID: tests.GetTestKramaID(t, 1),
-			testFn: func(kramaID id.KramaID) {
+			testFn: func(kramaID kramaid.KramaID) {
 				mockDB.setNodeInfo(
 					t,
 					tests.DecodePeerIDFromKramaID(t, kramaID),
@@ -669,8 +668,8 @@ func TestReputationEngine_GetNTQ(t *testing.T) {
 
 	testcases := []struct {
 		name        string
-		kramaID     id.KramaID
-		testFn      func(kramaID id.KramaID)
+		kramaID     kramaid.KramaID
+		testFn      func(kramaID kramaid.KramaID)
 		expectedErr error
 		expectedNTQ float32
 	}{
@@ -682,7 +681,7 @@ func TestReputationEngine_GetNTQ(t *testing.T) {
 		{
 			name:    "krama id with state",
 			kramaID: tests.GetTestKramaID(t, 1),
-			testFn: func(kramaID id.KramaID) {
+			testFn: func(kramaID kramaid.KramaID) {
 				mockDB.setNodeInfo(
 					t,
 					tests.DecodePeerIDFromKramaID(t, kramaID),
@@ -720,8 +719,8 @@ func TestReputationEngine_GetWalletCount(t *testing.T) {
 
 	testcases := []struct {
 		name                string
-		kramaID             id.KramaID
-		testFn              func(kramaID id.KramaID)
+		kramaID             kramaid.KramaID
+		testFn              func(kramaID kramaid.KramaID)
 		expectedErr         error
 		expectedWalletCount int32
 	}{
@@ -733,7 +732,7 @@ func TestReputationEngine_GetWalletCount(t *testing.T) {
 		{
 			name:    "krama id with state",
 			kramaID: tests.GetTestKramaID(t, 1),
-			testFn: func(kramaID id.KramaID) {
+			testFn: func(kramaID kramaid.KramaID) {
 				mockDB.setNodeInfo(
 					t,
 					tests.DecodePeerIDFromKramaID(t, kramaID),

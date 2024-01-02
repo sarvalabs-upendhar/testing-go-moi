@@ -5,14 +5,15 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
 )
 
 type RequestQueue struct {
 	mtx       sync.RWMutex
 	elems     []*networkmsg.HelloMsg
-	keys      map[id.KramaID]struct{}
+	keys      map[kramaid.KramaID]struct{}
 	length    int
 	maxLength int
 }
@@ -20,7 +21,7 @@ type RequestQueue struct {
 func NewRequestQueue(maxSize int) *RequestQueue {
 	return &RequestQueue{
 		elems:     make([]*networkmsg.HelloMsg, 0, maxSize),
-		keys:      make(map[id.KramaID]struct{}, maxSize),
+		keys:      make(map[kramaid.KramaID]struct{}, maxSize),
 		length:    0,
 		maxLength: maxSize,
 	}
@@ -74,7 +75,7 @@ func (q *RequestQueue) Len() int {
 	return q.length
 }
 
-func (q *RequestQueue) Contains(id id.KramaID) bool {
+func (q *RequestQueue) Contains(id kramaid.KramaID) bool {
 	q.mtx.RLock()
 	defer q.mtx.RUnlock()
 

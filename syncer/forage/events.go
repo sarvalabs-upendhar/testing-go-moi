@@ -1,9 +1,9 @@
 package forage
 
-import "github.com/sarvalabs/go-moi/common"
+import "github.com/sarvalabs/go-moi-identifiers"
 
 type eventDataJobState struct {
-	address common.Address
+	address identifiers.Address
 	height  uint64
 }
 

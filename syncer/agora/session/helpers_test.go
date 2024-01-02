@@ -7,29 +7,28 @@ import (
 	"testing"
 	"time"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/hashicorp/go-hclog"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
+	"github.com/stretchr/testify/require"
+
+	"github.com/sarvalabs/go-moi/common/tests"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
 	"github.com/sarvalabs/go-moi/syncer/agora/block"
 	"github.com/sarvalabs/go-moi/syncer/agora/message"
 	"github.com/sarvalabs/go-moi/syncer/agora/notifications"
 	"github.com/sarvalabs/go-moi/syncer/cid"
-
-	"github.com/hashicorp/go-hclog"
-	"github.com/stretchr/testify/require"
-
-	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/tests"
 )
 
-func NewTestPeerManager(sessionID common.Address, network sessionNetwork) *PeerManager {
+func NewTestPeerManager(sessionID identifiers.Address, network sessionNetwork) *PeerManager {
 	return NewSessionPeerManager(sessionID, hclog.NewNullLogger(), network)
 }
 
 func NewTestSession(
 	ctx context.Context,
-	addr common.Address,
+	addr identifiers.Address,
 	stateHash cid.CID,
-	contextPeers ...id.KramaID,
+	contextPeers ...kramaid.KramaID,
 ) (*Session, *InterestManager, notifications.PubSubNotifier) {
 	interestManager := NewInterestManager()
 	notifier := notifications.NewNotifier()
@@ -83,7 +82,7 @@ func GetDummyBlocks(t *testing.T, count int) (*cid.CIDSet, map[cid.CID]block.Blo
 	return set, blocks
 }
 
-func removeSession(im *InterestManager, addr common.Address) []cid.CID {
+func removeSession(im *InterestManager, addr identifiers.Address) []cid.CID {
 	im.mutex.Lock()
 	defer im.mutex.Unlock()
 
@@ -101,7 +100,7 @@ func removeSession(im *InterestManager, addr common.Address) []cid.CID {
 func AreSessionInterestRecorded(
 	ctx context.Context,
 	im *InterestManager,
-	sessionID common.Address,
+	sessionID identifiers.Address,
 	keys []cid.CID,
 ) bool {
 	status, err := tests.RetryUntilTimeout(ctx, 500*time.Millisecond, func() (interface{}, bool) {
@@ -133,7 +132,7 @@ func AreSessionInterestRecorded(
 func AreSessionInterestRemoved(
 	ctx context.Context,
 	im *InterestManager,
-	sessionID common.Address,
+	sessionID identifiers.Address,
 	keys []cid.CID,
 ) bool {
 	status, err := tests.RetryUntilTimeout(ctx, 500*time.Millisecond, func() (interface{}, bool) {
@@ -200,36 +199,36 @@ func appendBlocks(set1, set2 map[cid.CID]block.Block) []block.Block {
 }
 
 type mockSessionManager struct {
-	sessions map[common.Address]interface{}
+	sessions map[identifiers.Address]interface{}
 }
 
 func NewMockSessionManager() *mockSessionManager {
 	return &mockSessionManager{
-		sessions: make(map[common.Address]interface{}),
+		sessions: make(map[identifiers.Address]interface{}),
 	}
 }
 
-func (msm *mockSessionManager) CloseSession(id common.Address) {
+func (msm *mockSessionManager) CloseSession(id identifiers.Address) {
 	delete(msm.sessions, id)
 }
 
 type mockNetwork struct {
-	msg map[id.KramaID]message.Message
+	msg map[kramaid.KramaID]message.Message
 }
 
 func NewMockNetwork() *mockNetwork {
 	return &mockNetwork{
-		msg: make(map[id.KramaID]message.Message),
+		msg: make(map[kramaid.KramaID]message.Message),
 	}
 }
 
-func (mn *mockNetwork) SendAgoraMessage(id id.KramaID, msgType networkmsg.MsgType, msg message.Message) error {
+func (mn *mockNetwork) SendAgoraMessage(id kramaid.KramaID, msgType networkmsg.MsgType, msg message.Message) error {
 	mn.msg[id] = msg
 
 	return nil
 }
 
-func (mn *mockNetwork) ClosePeerSession(id id.KramaID, sessionID common.Address) error {
+func (mn *mockNetwork) ClosePeerSession(id kramaid.KramaID, sessionID identifiers.Address) error {
 	return nil
 }
 

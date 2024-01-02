@@ -7,18 +7,17 @@ import (
 	"os"
 	"time"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/hashicorp/go-hclog"
+	"github.com/hashicorp/golang-lru"
+	"github.com/moby/locker"
+	"github.com/pkg/errors"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/compute"
-
-	"github.com/hashicorp/go-hclog"
-	lru "github.com/hashicorp/golang-lru"
-	"github.com/moby/locker"
-	"github.com/pkg/errors"
-
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
 	"github.com/sarvalabs/go-moi/crypto"
 	"github.com/sarvalabs/go-moi/state"
@@ -29,7 +28,7 @@ type store interface {
 	Contains(key []byte) (bool, error)
 	CreateEntry(key []byte, value []byte) error
 	UpdateAccMetaInfo(
-		id common.Address,
+		id identifiers.Address,
 		height uint64,
 		tesseractHash common.Hash,
 		accType common.AccountType,
@@ -40,8 +39,8 @@ type store interface {
 	SetTesseract(tsHash common.Hash, data []byte) error
 	HasTesseract(tsHash common.Hash) bool
 	SetInteractions(ixHash common.Hash, data []byte) error
-	GetTesseractHeightEntry(addr common.Address, height uint64) ([]byte, error)
-	SetTesseractHeightEntry(addr common.Address, height uint64, tsHash common.Hash) error
+	GetTesseractHeightEntry(addr identifiers.Address, height uint64) ([]byte, error)
+	SetTesseractHeightEntry(addr identifiers.Address, height uint64, tsHash common.Hash) error
 	SetReceipts(receiptHash common.Hash, data []byte) error
 	GetReceipts(receiptHash common.Hash) ([]byte, error)
 	GetInteractions(gridHash common.Hash) ([]byte, error)
@@ -51,32 +50,32 @@ type store interface {
 	GetTesseractParts(gridHash common.Hash) ([]byte, error)
 	SetTSGridLookup(tsHash common.Hash, gridHash common.Hash) error
 	GetTSGridLookup(tsHash common.Hash) ([]byte, error)
-	GetAccountMetaInfo(id common.Address) (*common.AccountMetaInfo, error)
+	GetAccountMetaInfo(id identifiers.Address) (*common.AccountMetaInfo, error)
 }
 
 type reputationEngine interface {
-	UpdateWalletCount(peerID id.KramaID, delta int32) error
+	UpdateWalletCount(peerID kramaid.KramaID, delta int32) error
 }
 
 type stateManager interface {
-	CreateDirtyObject(addr common.Address, accType common.AccountType) *state.Object
-	GetDirtyObject(addr common.Address) (*state.Object, error)
-	FlushDirtyObject(addrs common.Address) error
-	GetAccTypeUsingStateObject(address common.Address) (common.AccountType, error)
-	GetLatestTesseract(addr common.Address, withInteractions bool) (*common.Tesseract, error)
-	GetContextByHash(addr common.Address, hash common.Hash) (common.Hash, []id.KramaID, []id.KramaID, error)
-	GetPublicKeys(ctx context.Context, id ...id.KramaID) (keys [][]byte, err error)
-	Cleanup(addrs common.Address)
-	IsAccountRegistered(addr common.Address) (bool, error)
-	IsAccountRegisteredAt(addr common.Address, tesseractHash common.Hash) (bool, error)
+	CreateDirtyObject(addr identifiers.Address, accType common.AccountType) *state.Object
+	GetDirtyObject(addr identifiers.Address) (*state.Object, error)
+	FlushDirtyObject(addrs identifiers.Address) error
+	GetAccTypeUsingStateObject(address identifiers.Address) (common.AccountType, error)
+	GetLatestTesseract(addr identifiers.Address, withInteractions bool) (*common.Tesseract, error)
+	GetContextByHash(addr identifiers.Address, hash common.Hash) (common.Hash, []kramaid.KramaID, []kramaid.KramaID, error)
+	GetPublicKeys(ctx context.Context, id ...kramaid.KramaID) (keys [][]byte, err error)
+	Cleanup(addrs identifiers.Address)
+	IsAccountRegistered(addr identifiers.Address) (bool, error)
+	IsAccountRegisteredAt(addr identifiers.Address, tesseractHash common.Hash) (bool, error)
 	FetchContextLock(ts *common.Tesseract) (*common.ICSNodeSet, error)
 	FetchTesseractFromDB(hash common.Hash, withInteractions bool) (*common.Tesseract, error)
-	GetNodeSet(ids []id.KramaID) (*common.NodeSet, error)
-	GetLogicIDs(addr common.Address, hash common.Hash) ([]common.LogicID, error)
+	GetNodeSet(ids []kramaid.KramaID) (*common.NodeSet, error)
+	GetLogicIDs(addr identifiers.Address, hash common.Hash) ([]identifiers.LogicID, error)
 }
 
 type server interface {
-	GetKramaID() id.KramaID
+	GetKramaID() kramaid.KramaID
 	Broadcast(topic string, data []byte) error
 }
 
@@ -155,10 +154,10 @@ func (c *ChainManager) hasTesseract(tsHash common.Hash) bool {
 	return c.db.HasTesseract(tsHash)
 }
 
-func (c *ChainManager) fetchContextForAgora(ts common.Tesseract) ([]id.KramaID, error) {
+func (c *ChainManager) fetchContextForAgora(ts common.Tesseract) ([]kramaid.KramaID, error) {
 	var (
 		address = ts.Address()
-		peers   = make([]id.KramaID, 0)
+		peers   = make([]kramaid.KramaID, 0)
 	)
 
 	for {
@@ -253,7 +252,7 @@ func (c *ChainManager) GetTesseract(hash common.Hash, withInteractions bool) (*c
 }
 
 func (c *ChainManager) GetTesseractByHeight(
-	address common.Address,
+	address identifiers.Address,
 	height uint64,
 	withInteractions bool,
 ) (*common.Tesseract, error) {
@@ -265,7 +264,7 @@ func (c *ChainManager) GetTesseractByHeight(
 	return c.GetTesseract(common.BytesToHash(tesseractHash), withInteractions)
 }
 
-func (c *ChainManager) GetTesseractHeightEntry(address common.Address, height uint64) (common.Hash, error) {
+func (c *ChainManager) GetTesseractHeightEntry(address identifiers.Address, height uint64) (common.Hash, error) {
 	tesseractHash, err := c.db.GetTesseractHeightEntry(address, height)
 	if err != nil {
 		return common.NilHash, errors.Wrap(err, "failed to fetch tesseract height entry")
@@ -274,7 +273,7 @@ func (c *ChainManager) GetTesseractHeightEntry(address common.Address, height ui
 	return common.BytesToHash(tesseractHash), nil
 }
 
-func (c *ChainManager) GetLatestTesseract(addr common.Address, withInteractions bool) (*common.Tesseract, error) {
+func (c *ChainManager) GetLatestTesseract(addr identifiers.Address, withInteractions bool) (*common.Tesseract, error) {
 	if addr.IsNil() {
 		return nil, common.ErrInvalidAddress
 	}
@@ -500,7 +499,7 @@ func (c *ChainManager) storeInteractions(ts *common.Tesseract) error {
 
 func (c *ChainManager) addTesseract(
 	cache bool,
-	addr common.Address,
+	addr identifiers.Address,
 	t *common.Tesseract,
 	tesseractExists bool,
 ) error {
@@ -602,7 +601,7 @@ func (c *ChainManager) addTesseractsWithState(
 	}
 
 	for _, ts := range tesseracts {
-		if err := func(addr common.Address, ts *common.Tesseract) error {
+		if err := func(addr identifiers.Address, ts *common.Tesseract) error {
 			tsHash := ts.Hash()
 
 			c.latticeLocks.Lock(tsHash.Hex())
@@ -763,7 +762,7 @@ func (c *ChainManager) IsInitialTesseract(ts *common.Tesseract) (bool, error) {
 }
 
 func (c *ChainManager) AddGenesisTesseract(
-	address common.Address,
+	address identifiers.Address,
 	stateHash, contextHash common.Hash,
 ) error {
 	tesseract, err := createGenesisTesseract(address, stateHash, contextHash)
@@ -779,7 +778,7 @@ func (c *ChainManager) AddGenesisTesseract(
 }
 
 func (c *ChainManager) SetupGenesis(path string) error {
-	dirtyObjects := make(map[common.Address]*state.Object)
+	dirtyObjects := make(map[identifiers.Address]*state.Object)
 
 	sargaAccount, genesisAccounts, assetAccounts, logics, err := c.ParseGenesisFile(path)
 	if err != nil {
@@ -828,7 +827,7 @@ func (c *ChainManager) SetupGenesis(path string) error {
 }
 
 func (c *ChainManager) SetupAssetAccounts(
-	stateObjects map[common.Address]*state.Object,
+	stateObjects map[identifiers.Address]*state.Object,
 	assetAccs []common.AssetAccountSetupArgs,
 ) error {
 	for _, assetAccount := range assetAccs {
@@ -846,7 +845,7 @@ func (c *ChainManager) SetupAssetAccounts(
 			return err
 		}
 
-		if assetAccount.AssetInfo.Operator != common.NilAddress {
+		if assetAccount.AssetInfo.Operator != identifiers.NilAddress {
 			if _, ok := stateObjects[assetAccount.AssetInfo.Operator]; !ok {
 				return errors.New("operator account not found")
 			}
@@ -953,7 +952,7 @@ func (c *ChainManager) ExecuteAndValidate(tesseracts ...*common.Tesseract) error
 
 func (c *ChainManager) GetTesseractPartsByGridHash(gridHash common.Hash) (*common.TesseractParts, error) {
 	parts := &common.TesseractParts{
-		Grid: make(map[common.Address]common.TesseractHeightAndHash),
+		Grid: make(map[identifiers.Address]common.TesseractHeightAndHash),
 	}
 
 	rawData, err := c.db.GetTesseractParts(gridHash)
@@ -1106,7 +1105,7 @@ func (c *ChainManager) SetupNewAccount(info common.AccountSetupArgs) (*state.Obj
 }
 
 func (c *ChainManager) SetupGenesisLogics(
-	dirtyObjects map[common.Address]*state.Object,
+	dirtyObjects map[identifiers.Address]*state.Object,
 	logics []common.LogicSetupArgs,
 ) ([]common.Hash, error) {
 	hashes := make([]common.Hash, len(logics))

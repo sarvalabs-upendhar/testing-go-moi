@@ -6,9 +6,10 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/sarvalabs/go-moi/common/kramaid"
-	"github.com/sarvalabs/go-moi/senatus"
+	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sarvalabs/go-moi/senatus"
 )
 
 func getTestEntries(t *testing.T, kramaIDs []kramaid.KramaID) map[peer.ID]*senatus.NodeMetaInfo {

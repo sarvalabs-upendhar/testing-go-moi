@@ -13,8 +13,9 @@ import (
 	"time"
 
 	"github.com/peterh/liner"
-
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-pisa"
 	"github.com/sarvalabs/go-polo"
 	"github.com/spf13/cobra"
@@ -22,7 +23,6 @@ import (
 	cmdCommon "github.com/sarvalabs/go-moi/cmd/common"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/crypto"
 	mudraCommon "github.com/sarvalabs/go-moi/crypto/common"
 	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
@@ -203,11 +203,13 @@ func registerGuardian(vault *crypto.KramaVault) {
 		cmdCommon.Err(errors.Wrap(err, "failed to generate moiID"))
 	}
 
+	wallet, _ := identifiers.NewAddressFromHex(walletAddress)
+
 	g := gtypes.Guardian{
 		GuardianOperator: moiID,
 		KramaID:          string(vault.KramaID()),
 		PublicKey:        vault.GetConsensusPrivateKey().GetPublicKeyInBytes(),
-		IncentiveWallet:  common.HexToAddress(walletAddress),
+		IncentiveWallet:  wallet,
 	}
 
 	dc := make(polo.Document)
@@ -227,7 +229,7 @@ func registerGuardian(vault *crypto.KramaVault) {
 	fmt.Printf("Krama-ID %s \n", vault.KramaID())
 
 	nonce, err := client.InteractionCount(context.Background(), &rpcargs.InteractionCountArgs{
-		Address: common.BytesToAddress(moiIDpublicKey),
+		Address: identifiers.NewAddressFromBytes(moiIDpublicKey),
 		Options: rpcargs.TesseractNumberOrHash{
 			TesseractNumber: &rpcargs.LatestTesseractHeight,
 		},
@@ -249,7 +251,7 @@ func registerGuardian(vault *crypto.KramaVault) {
 
 	ixArgs := common.SendIXArgs{
 		Type:      common.IxLogicInvoke,
-		Sender:    common.BytesToAddress(moiIDpublicKey),
+		Sender:    identifiers.NewAddressFromBytes(moiIDpublicKey),
 		Nonce:     nonce.ToUint64(),
 		FuelPrice: big.NewInt(1),
 		FuelLimit: 10000,
@@ -300,7 +302,7 @@ func registerGuardian(vault *crypto.KramaVault) {
 	fmt.Println("Registered guardian details")
 }
 
-func isGuardianRegistered(client *moiclient.Client, kramaID id.KramaID) bool {
+func isGuardianRegistered(client *moiclient.Client, kramaID kramaid.KramaID) bool {
 	storageData, err := client.LogicStorage(context.Background(), &rpcargs.GetLogicStorageArgs{
 		LogicID:    common.GuardianLogicID,
 		StorageKey: pisa.Slothash(gtypes.GuardianSLot),

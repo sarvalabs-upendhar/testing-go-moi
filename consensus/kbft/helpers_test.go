@@ -8,9 +8,8 @@ import (
 	"testing"
 	"time"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-	mudracommon "github.com/sarvalabs/go-moi/crypto/common"
-
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -19,6 +18,7 @@ import (
 	"github.com/sarvalabs/go-moi/common/utils"
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
 	"github.com/sarvalabs/go-moi/crypto"
+	mudracommon "github.com/sarvalabs/go-moi/crypto/common"
 )
 
 const ensureTimeout = time.Millisecond * 200
@@ -60,7 +60,7 @@ func createTestConsensusConfig() *config.ConsensusConfig {
 }
 
 // createKramaIDAndPrivateKey returns kramaID and private key pair
-func createKramaIDAndPrivateKey(t *testing.T, nthValidator uint32) (id.KramaID, *crypto.BLSPrivKey) {
+func createKramaIDAndPrivateKey(t *testing.T, nthValidator uint32) (kramaid.KramaID, *crypto.BLSPrivKey) {
 	t.Helper()
 
 	var signKey [32]byte
@@ -72,11 +72,11 @@ func createKramaIDAndPrivateKey(t *testing.T, nthValidator uint32) (id.KramaID, 
 	privKeyBytes, moiPubBytes, err := tests.GetPrivKeysForTest(signKey[:])
 	require.NoError(t, err)
 
-	kramaID, err := id.NewKramaID( // Create kramaID from private key , public key
+	kramaID, err := kramaid.NewKramaID( // Create kramaID from private key , public key
+		1,
 		privKeyBytes[32:],
 		nthValidator,
 		hex.EncodeToString(moiPubBytes),
-		1,
 		true,
 	)
 	require.NoError(t, err)
@@ -94,7 +94,7 @@ func createTestNodeSet(t *testing.T, n int) (*common.NodeSet, []*crypto.KramaVau
 	t.Helper()
 
 	publicKeys := make([][]byte, n)
-	kramaIDs := make([]id.KramaID, n)
+	kramaIDs := make([]kramaid.KramaID, n)
 	valset := make([]*crypto.KramaVault, n)
 
 	for i := 0; i < n; i++ {
@@ -126,7 +126,7 @@ func createTestRandomSet(t *testing.T, total, actual int) (*common.NodeSet, []*c
 	t.Helper()
 
 	publicKeys := make([][]byte, total)
-	kramaIDs := make([]id.KramaID, total)
+	kramaIDs := make([]kramaid.KramaID, total)
 	valset := make([]*crypto.KramaVault, total)
 
 	for i := 0; i < total; i++ {
@@ -194,7 +194,7 @@ func createICSNodes(
 	}, valset
 }
 
-func startTestRound(state *KBFT, heights map[common.Address]uint64, round int32, err chan<- error) {
+func startTestRound(state *KBFT, heights map[identifiers.Address]uint64, round int32, err chan<- error) {
 	state.enterNewRound(heights, round)
 
 	err1 := state.Start()
@@ -218,7 +218,11 @@ func handleOutboundMsgChannel(kbft *KBFT, ctx context.Context, out <-chan ktypes
 	}()
 }
 
-func createGridWithHeights(t *testing.T, heights map[common.Address]uint64, hash common.Hash) *common.TesseractGridID {
+func createGridWithHeights(
+	t *testing.T,
+	heights map[identifiers.Address]uint64,
+	hash common.Hash,
+) *common.TesseractGridID {
 	t.Helper()
 
 	return &common.TesseractGridID{
@@ -391,11 +395,11 @@ func sendAndEnsurePrecommit(
 	sendAndEnsureVotes(t, kbft, round, ktypes.PRECOMMIT, gridID, voteSub, expectedRound, kramaVault...)
 }
 
-func createIxs(t *testing.T, senderAddress common.Address, receiverAddress common.Address) common.Interactions {
+func createIxs(t *testing.T, sender identifiers.Address, receiver identifiers.Address) common.Interactions {
 	t.Helper()
 
 	ixParams := map[int]*tests.CreateIxParams{
-		0: tests.GetIxParamsWithAddress(senderAddress, receiverAddress),
+		0: tests.GetIxParamsWithAddress(sender, receiver),
 	}
 
 	return tests.CreateIxns(t, 1, ixParams)
@@ -409,7 +413,7 @@ func createIxs(t *testing.T, senderAddress common.Address, receiverAddress commo
 func createTestClusterInfo(
 	t *testing.T,
 	icsNodes *common.ICSNodeSet,
-	newHeights map[common.Address]uint64,
+	newHeights map[identifiers.Address]uint64,
 	ixs common.Interactions,
 	nonRegisteredReceiver bool,
 ) *ktypes.ClusterState {
@@ -428,7 +432,7 @@ func createTestClusterInfo(
 	func(clusterInfo *ktypes.ClusterState) {
 		clusterInfo.NodeSet = icsNodes
 
-		clusterInfo.AccountInfos = make(map[common.Address]*ktypes.AccountInfo)
+		clusterInfo.AccountInfos = make(map[identifiers.Address]*ktypes.AccountInfo)
 		clusterInfo.AccountInfos[ixs[0].Sender()] = &ktypes.AccountInfo{
 			Height: newHeights[ixs[0].Sender()] - 1,
 		}
@@ -488,13 +492,13 @@ func createTestClusterInfo(
 }
 
 // ensureProposal times out if proposal event not received in time
-func ensureProposal(t *testing.T, proposalSub *utils.Subscription, heights map[common.Address]uint64, round int32) {
+func ensureProposal(t *testing.T, proposals *utils.Subscription, heights map[identifiers.Address]uint64, round int32) {
 	t.Helper()
 
 	select {
 	case <-time.After(ensureTimeout):
 		require.FailNow(t, "Timeout expired while waiting for proposal event")
-	case msg := <-proposalSub.Chan():
+	case msg := <-proposals.Chan():
 		proposalEvent, ok := msg.Data.(eventProposal)
 		if !ok {
 			require.FailNow(t, fmt.Sprintf("expected a eventProposal, got %T. Wrong subscription channel?",
@@ -515,7 +519,7 @@ func ensureProposal(t *testing.T, proposalSub *utils.Subscription, heights map[c
 func validateRoundState(
 	t *testing.T,
 	roundState eventDataRoundState,
-	heights map[common.Address]uint64, round int32,
+	heights map[identifiers.Address]uint64, round int32,
 	step RoundStepType,
 ) {
 	t.Helper()
@@ -531,7 +535,7 @@ func validateRoundState(
 	require.Equal(t, step.String(), roundState.Step)
 }
 
-func ensureNewRound(t *testing.T, roundSub *utils.Subscription, heights map[common.Address]uint64, round int32) {
+func ensureNewRound(t *testing.T, roundSub *utils.Subscription, heights map[identifiers.Address]uint64, round int32) {
 	t.Helper()
 
 	select {
@@ -548,7 +552,7 @@ func ensureNewRound(t *testing.T, roundSub *utils.Subscription, heights map[comm
 	}
 }
 
-func ensurePolka(t *testing.T, polkaSub *utils.Subscription, heights map[common.Address]uint64, round int32) {
+func ensurePolka(t *testing.T, polkaSub *utils.Subscription, heights map[identifiers.Address]uint64, round int32) {
 	t.Helper()
 
 	select {
@@ -568,7 +572,7 @@ func ensurePolka(t *testing.T, polkaSub *utils.Subscription, heights map[common.
 func ensurePrevoteTimeout(
 	t *testing.T,
 	timeoutSub *utils.Subscription,
-	heights map[common.Address]uint64,
+	heights map[identifiers.Address]uint64,
 	round int32,
 	timeout int64,
 ) {
@@ -592,7 +596,7 @@ func ensurePrevoteTimeout(
 func ensurePrecommitTimeout(
 	t *testing.T,
 	timeoutSub *utils.Subscription,
-	heights map[common.Address]uint64,
+	heights map[identifiers.Address]uint64,
 	round int32,
 	timeout int64,
 ) {
@@ -651,7 +655,7 @@ func ensurePrevote(
 	voteSub *utils.Subscription,
 	gridID *common.TesseractGridID,
 	round int32,
-	heights map[common.Address]uint64,
+	heights map[identifiers.Address]uint64,
 ) {
 	t.Helper()
 
@@ -669,7 +673,7 @@ func ensurePrecommit(
 	voteSub *utils.Subscription,
 	gridID *common.TesseractGridID,
 	round int32,
-	heights map[common.Address]uint64,
+	heights map[identifiers.Address]uint64,
 ) {
 	t.Helper()
 

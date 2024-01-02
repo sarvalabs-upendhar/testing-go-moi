@@ -8,12 +8,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/moiclient"
-	"github.com/stretchr/testify/require"
 )
 
 func checkIfNodeSynced(t *testing.T, nodeToCheck *moiclient.Client) {
@@ -64,7 +65,7 @@ func checkIfAccountsSyncedOnAllNodes(
 	t *testing.T,
 	nodeToCheck *moiclient.Client,
 	syncNodeSet []*moiclient.Client,
-	addresses ...common.Address,
+	addresses ...identifiers.Address,
 ) {
 	t.Helper()
 

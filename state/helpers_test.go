@@ -8,22 +8,22 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/sarvalabs/go-moi/common/utils"
-
 	"github.com/decred/dcrd/crypto/blake256"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/golang-lru"
 	"github.com/libp2p/go-libp2p-pubsub"
 	"github.com/manishmeganathan/depgraph"
 	"github.com/munna0908/smt"
+	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"
 	"github.com/sarvalabs/go-moi/storage/db"
@@ -53,7 +53,7 @@ func (m *MockServer) Subscribe(
 
 type MockDB struct {
 	tesseracts          map[common.Hash][]byte
-	latestTesseractHash map[common.Address]common.Hash
+	latestTesseractHash map[identifiers.Address]common.Hash
 	accounts            map[common.Hash][]byte
 	context             map[common.Hash][]byte
 	interactions        map[common.Hash][]byte
@@ -69,7 +69,7 @@ type MockDB struct {
 func mockDB() *MockDB {
 	return &MockDB{
 		tesseracts:          make(map[common.Hash][]byte),
-		latestTesseractHash: make(map[common.Address]common.Hash),
+		latestTesseractHash: make(map[identifiers.Address]common.Hash),
 		accounts:            make(map[common.Hash][]byte),
 		assetRegistry:       make(map[common.Hash][]byte),
 		context:             make(map[common.Hash][]byte),
@@ -91,7 +91,7 @@ func (m *MockDB) ReadEntry(key []byte) ([]byte, error) {
 	return data, nil
 }
 
-func (m *MockDB) GetAssetRegistry(addr common.Address, registryHash common.Hash) ([]byte, error) {
+func (m *MockDB) GetAssetRegistry(addr identifiers.Address, registryHash common.Hash) ([]byte, error) {
 	data, ok := m.assetRegistry[registryHash]
 	if !ok {
 		return nil, common.ErrKeyNotFound
@@ -152,7 +152,7 @@ func (m *MockDB) GetEntries(prefix []byte) chan common.DBEntry {
 	return nil
 }
 
-func (m *MockDB) GetAccountMetaInfo(id common.Address) (*common.AccountMetaInfo, error) {
+func (m *MockDB) GetAccountMetaInfo(id identifiers.Address) (*common.AccountMetaInfo, error) {
 	accMetaInfo, ok := m.accMetaInfo[id.Hex()]
 	if !ok {
 		return nil, common.ErrKeyNotFound
@@ -183,7 +183,7 @@ func (m *MockDB) setAccountMetaInfo(acc *common.AccountMetaInfo) {
 	m.accMetaInfo[acc.Address.Hex()] = acc
 }
 
-func (m *MockDB) GetMerkleTreeEntry(address common.Address, prefix storage.PrefixTag, key []byte) ([]byte, error) {
+func (m *MockDB) GetMerkleTreeEntry(address identifiers.Address, prefix storage.PrefixTag, key []byte) ([]byte, error) {
 	entry, ok := m.merkleTreeEntries[string(key)]
 	if !ok {
 		return nil, common.ErrKeyNotFound
@@ -192,14 +192,14 @@ func (m *MockDB) GetMerkleTreeEntry(address common.Address, prefix storage.Prefi
 	return entry, nil
 }
 
-func (m *MockDB) SetMerkleTreeEntry(address common.Address, prefix storage.PrefixTag, key, value []byte) error {
+func (m *MockDB) SetMerkleTreeEntry(address identifiers.Address, prefix storage.PrefixTag, key, value []byte) error {
 	m.merkleTreeEntries[string(key)] = value
 
 	return nil
 }
 
 func (m *MockDB) SetMerkleTreeEntries(
-	address common.Address,
+	address identifiers.Address,
 	prefix storage.PrefixTag,
 	entries map[string][]byte,
 ) error {
@@ -210,7 +210,7 @@ func (m *MockDB) SetMerkleTreeEntries(
 	return nil
 }
 
-func (m *MockDB) WritePreImages(address common.Address, entries map[common.Hash][]byte) error {
+func (m *MockDB) WritePreImages(address identifiers.Address, entries map[common.Hash][]byte) error {
 	for k, v := range entries {
 		m.preImages[k] = v
 	}
@@ -218,7 +218,7 @@ func (m *MockDB) WritePreImages(address common.Address, entries map[common.Hash]
 	return nil
 }
 
-func (m *MockDB) GetPreImage(address common.Address, hash common.Hash) ([]byte, error) {
+func (m *MockDB) GetPreImage(address identifiers.Address, hash common.Hash) ([]byte, error) {
 	preImage, ok := m.preImages[hash]
 	if !ok {
 		return nil, common.ErrKeyNotFound
@@ -236,7 +236,7 @@ func (m *MockDB) setAccount(t *testing.T, hash common.Hash, acc *common.Account)
 	m.accounts[hash] = bytes
 }
 
-func (m *MockDB) GetAccount(addr common.Address, hash common.Hash) ([]byte, error) {
+func (m *MockDB) GetAccount(addr identifiers.Address, hash common.Hash) ([]byte, error) {
 	account, ok := m.accounts[hash]
 	if !ok {
 		return nil, common.ErrAccountNotFound
@@ -269,7 +269,7 @@ func (m *MockDB) setMetaContext(t *testing.T, object *MetaContextObject) {
 	m.context[hash] = bytes
 }
 
-func (m *MockDB) GetContext(addr common.Address, hash common.Hash) ([]byte, error) {
+func (m *MockDB) GetContext(addr identifiers.Address, hash common.Hash) ([]byte, error) {
 	tsContext, ok := m.context[hash]
 	if !ok {
 		return nil, common.ErrContextStateNotFound
@@ -296,7 +296,7 @@ func (m *MockDB) GetTesseract(hash common.Hash) ([]byte, error) {
 	return tesseracts, nil
 }
 
-func (m *MockDB) GetBalance(addr common.Address, hash common.Hash) ([]byte, error) {
+func (m *MockDB) GetBalance(addr identifiers.Address, hash common.Hash) ([]byte, error) {
 	balance, ok := m.balances[hash]
 	if !ok {
 		return nil, common.ErrKeyNotFound
@@ -639,7 +639,7 @@ func getRoot(t *testing.T, m *MockMerkleTree) common.Hash {
 
 type MockSenatus struct {
 	lock       sync.RWMutex
-	publicKeys map[id.KramaID][]byte
+	publicKeys map[kramaid.KramaID][]byte
 }
 
 func mockSenatus(t *testing.T) *MockSenatus {
@@ -647,11 +647,11 @@ func mockSenatus(t *testing.T) *MockSenatus {
 
 	return &MockSenatus{
 		lock:       sync.RWMutex{},
-		publicKeys: make(map[id.KramaID][]byte),
+		publicKeys: make(map[kramaid.KramaID][]byte),
 	}
 }
 
-func (m *MockSenatus) AddPublicKeys(ids []id.KramaID, publicKeys [][]byte) error {
+func (m *MockSenatus) AddPublicKeys(ids []kramaid.KramaID, publicKeys [][]byte) error {
 	for index, kramaID := range ids {
 		m.publicKeys[kramaID] = publicKeys[index]
 	}
@@ -659,7 +659,7 @@ func (m *MockSenatus) AddPublicKeys(ids []id.KramaID, publicKeys [][]byte) error
 	return nil
 }
 
-func (m *MockSenatus) UpdatePublicKey(key id.KramaID, pk []byte) error {
+func (m *MockSenatus) UpdatePublicKey(key kramaid.KramaID, pk []byte) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -668,7 +668,7 @@ func (m *MockSenatus) UpdatePublicKey(key id.KramaID, pk []byte) error {
 	return nil
 }
 
-func (m *MockSenatus) GetPublicKey(kramaID id.KramaID) ([]byte, error) {
+func (m *MockSenatus) GetPublicKey(kramaID kramaid.KramaID) ([]byte, error) {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
@@ -681,14 +681,14 @@ func (m *MockSenatus) GetPublicKey(kramaID id.KramaID) ([]byte, error) {
 }
 
 type MockContract struct {
-	publicKeys map[id.KramaID][]byte
+	publicKeys map[kramaid.KramaID][]byte
 }
 
-func NewMockContract(t *testing.T, kramaIDs []id.KramaID, publicKeys [][]byte) *MockContract {
+func NewMockContract(t *testing.T, kramaIDs []kramaid.KramaID, publicKeys [][]byte) *MockContract {
 	t.Helper()
 
 	mockContract := new(MockContract)
-	mockContract.publicKeys = make(map[id.KramaID][]byte)
+	mockContract.publicKeys = make(map[kramaid.KramaID][]byte)
 
 	for i := 0; i < len(kramaIDs); i++ {
 		mockContract.publicKeys[kramaIDs[i]] = publicKeys[i]
@@ -698,7 +698,7 @@ func NewMockContract(t *testing.T, kramaIDs []id.KramaID, publicKeys [][]byte) *
 }
 
 type createLogicObjectParams struct {
-	id            common.LogicID
+	id            identifiers.LogicID
 	logicCallback func(object *LogicObject)
 }
 
@@ -717,7 +717,7 @@ func createLogicObject(t *testing.T, params *createLogicObjectParams) *LogicObje
 	return logicObject
 }
 
-func getLogicObjectParamsWithLogicID(logicID common.LogicID) *createLogicObjectParams {
+func getLogicObjectParamsWithLogicID(logicID identifiers.LogicID) *createLogicObjectParams {
 	return &createLogicObjectParams{
 		id: logicID,
 		logicCallback: func(object *LogicObject) {
@@ -726,7 +726,7 @@ func getLogicObjectParamsWithLogicID(logicID common.LogicID) *createLogicObjectP
 	}
 }
 
-func getTesseractParamsWithStateHash(address common.Address, hash common.Hash) *tests.CreateTesseractParams {
+func getTesseractParamsWithStateHash(address identifiers.Address, hash common.Hash) *tests.CreateTesseractParams {
 	return &tests.CreateTesseractParams{
 		Address: address,
 		BodyCallback: func(body *common.TesseractBody) {
@@ -735,7 +735,7 @@ func getTesseractParamsWithStateHash(address common.Address, hash common.Hash) *
 	}
 }
 
-func getTesseractParamsWithContextHash(address common.Address, hash common.Hash) *tests.CreateTesseractParams {
+func getTesseractParamsWithContextHash(address identifiers.Address, hash common.Hash) *tests.CreateTesseractParams {
 	return &tests.CreateTesseractParams{
 		Address: address,
 		BodyCallback: func(body *common.TesseractBody) {
@@ -760,7 +760,7 @@ func storeTesseractHashInCache(t *testing.T, cache *lru.Cache, tesseracts ...*co
 	}
 }
 
-func insertInContextLock(header *common.TesseractHeader, address common.Address, hash common.Hash) {
+func insertInContextLock(header *common.TesseractHeader, address identifiers.Address, hash common.Hash) {
 	header.ContextLock[address] = common.ContextLockInfo{
 		ContextHash: hash,
 	}
@@ -841,7 +841,7 @@ func storeInSmCache(sm *StateManager, k, v interface{}) {
 }
 
 type createStateObjectParams struct {
-	address                   common.Address
+	address                   identifiers.Address
 	cache                     *lru.Cache
 	journal                   *Journal
 	db                        *MockDB
@@ -979,12 +979,12 @@ func stateObjectParamsWithAST(t *testing.T, ast map[string]tree.MerkleTree) *cre
 func stateObjectParamsWithInvalidMST(t *testing.T) *createStateObjectParams {
 	t.Helper()
 
-	return stateObjectParamsWithMST(t, common.NilAddress, nil, nil, tests.RandomHash(t))
+	return stateObjectParamsWithMST(t, identifiers.NilAddress, nil, nil, tests.RandomHash(t))
 }
 
 func stateObjectParamsWithMST(
 	t *testing.T,
-	address common.Address,
+	address identifiers.Address,
 	db Store,
 	mst tree.MerkleTree,
 	root common.Hash,
@@ -1005,7 +1005,7 @@ func stateObjectParamsWithMST(
 
 func stateObjectParamsWithLogicTree(
 	t *testing.T,
-	address common.Address,
+	address identifiers.Address,
 	db Store,
 	logicTree tree.MerkleTree,
 	root common.Hash,
@@ -1158,10 +1158,10 @@ func checkForReferences(t *testing.T, sObj, copiedSO *Object) {
 	)
 }
 
-func getAssetIDsAndBalances(t *testing.T, count int) ([]common.AssetID, []*big.Int) {
+func getAssetIDsAndBalances(t *testing.T, count int) ([]identifiers.AssetID, []*big.Int) {
 	t.Helper()
 
-	ids := make([]common.AssetID, count)
+	ids := make([]identifiers.AssetID, count)
 	for i := 0; i < count; i++ {
 		ids[i] = tests.GetRandomAssetID(t, tests.RandomAddress(t))
 	}
@@ -1169,7 +1169,7 @@ func getAssetIDsAndBalances(t *testing.T, count int) ([]common.AssetID, []*big.I
 	return ids, tests.GetRandomNumbers(t, 10000, count)
 }
 
-func getAssetMap(assetIDs []common.AssetID, balances []*big.Int) common.AssetMap {
+func getAssetMap(assetIDs []identifiers.AssetID, balances []*big.Int) common.AssetMap {
 	assetMap := make(common.AssetMap)
 
 	for i := 0; i < len(assetIDs); i++ {
@@ -1179,7 +1179,7 @@ func getAssetMap(assetIDs []common.AssetID, balances []*big.Int) common.AssetMap
 	return assetMap
 }
 
-func getAssetMaps(assetIDs []common.AssetID, balances []*big.Int, assetsPerAssetMap int) []common.AssetMap {
+func getAssetMaps(assetIDs []identifiers.AssetID, balances []*big.Int, assetsPerAssetMap int) []common.AssetMap {
 	assetMapCount := len(assetIDs) / assetsPerAssetMap
 	assetMap := make([]common.AssetMap, assetMapCount)
 
@@ -1363,11 +1363,11 @@ func getICSNodes(
 	}
 }
 
-func mockContextLock() map[common.Address]common.ContextLockInfo {
-	return make(map[common.Address]common.ContextLockInfo)
+func mockContextLock() map[identifiers.Address]common.ContextLockInfo {
+	return make(map[identifiers.Address]common.ContextLockInfo)
 }
 
-func getTestAssetDescriptor(t *testing.T, operator common.Address, symbol string) *common.AssetDescriptor {
+func getTestAssetDescriptor(t *testing.T, operator identifiers.Address, symbol string) *common.AssetDescriptor {
 	t.Helper()
 
 	return &common.AssetDescriptor{
@@ -1384,8 +1384,8 @@ func getTestAssetDescriptor(t *testing.T, operator common.Address, symbol string
 func createMetaStorageTree(
 	t *testing.T,
 	db Store,
-	address common.Address,
-	logicID common.LogicID,
+	address identifiers.Address,
+	logicID identifiers.LogicID,
 	storageKeys [][]byte,
 	storageValues [][]byte,
 ) (*tree.KramaHashTree, common.Hash) {
@@ -1405,7 +1405,7 @@ func createMetaStorageTree(
 func createTestKramaHashTree(
 	t *testing.T,
 	db Store,
-	address common.Address,
+	address identifiers.Address,
 	prefix storage.PrefixTag,
 	keys [][]byte,
 	values [][]byte,
@@ -1433,7 +1433,7 @@ func createTestKramaHashTree(
 }
 
 func getTesseractParams(
-	address common.Address,
+	address identifiers.Address,
 	ixns common.Interactions,
 	hash common.Hash,
 ) *tests.CreateTesseractParams {
@@ -1540,7 +1540,7 @@ func getMerkleTreeWithDefaultDirtyEntries(t *testing.T, entriesPerTree int) tree
 
 func getActiveStorageTrees(
 	t *testing.T,
-	logicIds []common.LogicID,
+	logicIds []identifiers.LogicID,
 	keys [][]byte,
 	values [][]byte,
 ) map[string]tree.MerkleTree {
@@ -1550,7 +1550,7 @@ func getActiveStorageTrees(
 	activeStorageTrees := make(map[string]tree.MerkleTree, count)
 
 	for i := 0; i < count; i++ {
-		activeStorageTrees[logicIds[i].String()] = getMerkleTreeWithEntries(t, keys, values)
+		activeStorageTrees[string(logicIds[i])] = getMerkleTreeWithEntries(t, keys, values)
 	}
 
 	return activeStorageTrees
@@ -1558,7 +1558,7 @@ func getActiveStorageTrees(
 
 func getActiveStorageTreesWithFlushedEntries(
 	t *testing.T,
-	logicIds []common.LogicID,
+	logicIds []identifiers.LogicID,
 	keys [][]byte,
 	values [][]byte,
 ) map[string]tree.MerkleTree {
@@ -1568,7 +1568,7 @@ func getActiveStorageTreesWithFlushedEntries(
 	activeStorageTrees := make(map[string]tree.MerkleTree, count)
 
 	for i := 0; i < count; i++ {
-		activeStorageTrees[logicIds[i].String()] = getMerkleTreeWithFlushedEntries(t, keys, values)
+		activeStorageTrees[string(logicIds[i])] = getMerkleTreeWithFlushedEntries(t, keys, values)
 	}
 
 	return activeStorageTrees
@@ -1576,7 +1576,7 @@ func getActiveStorageTreesWithFlushedEntries(
 
 func getActiveStorageTreesWithCommitHook(
 	t *testing.T,
-	logicIds []common.LogicID,
+	logicIds []identifiers.LogicID,
 	keys [][]byte,
 	values [][]byte,
 	commitHook func() error,
@@ -1587,7 +1587,7 @@ func getActiveStorageTreesWithCommitHook(
 	activeStorageTrees := make(map[string]tree.MerkleTree, count)
 
 	for i := 0; i < count; i++ {
-		activeStorageTrees[logicIds[i].String()] = getMerkleTreeWithCommitHook(t, keys, values, commitHook)
+		activeStorageTrees[string(logicIds[i])] = getMerkleTreeWithCommitHook(t, keys, values, commitHook)
 	}
 
 	return activeStorageTrees
@@ -1595,7 +1595,7 @@ func getActiveStorageTreesWithCommitHook(
 
 func getActiveStorageTreesWithFlushHook(
 	t *testing.T,
-	logicIds []common.LogicID,
+	logicIds []identifiers.LogicID,
 	keys [][]byte,
 	values [][]byte,
 	commitHook func() error,
@@ -1606,7 +1606,7 @@ func getActiveStorageTreesWithFlushHook(
 	activeStorageTrees := make(map[string]tree.MerkleTree, count)
 
 	for i := 0; i < count; i++ {
-		activeStorageTrees[logicIds[i].String()] = getMerkleTreeWithFlushHook(t, keys, values, commitHook)
+		activeStorageTrees[string(logicIds[i])] = getMerkleTreeWithFlushHook(t, keys, values, commitHook)
 	}
 
 	return activeStorageTrees
@@ -1614,7 +1614,7 @@ func getActiveStorageTreesWithFlushHook(
 
 func getActiveStorageTreesWithRootHook(
 	t *testing.T,
-	logicIds []common.LogicID,
+	logicIds []identifiers.LogicID,
 	keys [][]byte,
 	values [][]byte,
 	rootHashHook func() (common.Hash, error),
@@ -1625,7 +1625,7 @@ func getActiveStorageTreesWithRootHook(
 	activeStorageTrees := make(map[string]tree.MerkleTree, count)
 
 	for i := 0; i < count; i++ {
-		activeStorageTrees[logicIds[i].String()] = getMerkleTreeWithRootHashHook(t, keys, values, rootHashHook)
+		activeStorageTrees[string(logicIds[i])] = getMerkleTreeWithRootHashHook(t, keys, values, rootHashHook)
 	}
 
 	return activeStorageTrees
@@ -1699,14 +1699,14 @@ func checkForTesseractInSMCache(t *testing.T, sm *StateManager, ts *common.Tesse
 	require.Equal(t, ts, cachedTS) // make sure cached tesseract matches
 }
 
-func checkForDirtyObject(t *testing.T, sm *StateManager, address common.Address, exists bool) {
+func checkForDirtyObject(t *testing.T, sm *StateManager, address identifiers.Address, exists bool) {
 	t.Helper()
 
 	_, ok := sm.dirtyObjects[address]
 	require.Equal(t, exists, ok)
 }
 
-func checkIfDirtyObjectEqual(t *testing.T, sm *StateManager, address common.Address, expectedObj *Object) {
+func checkIfDirtyObjectEqual(t *testing.T, sm *StateManager, address identifiers.Address, expectedObj *Object) {
 	t.Helper()
 
 	obj, ok := sm.dirtyObjects[address]
@@ -1714,7 +1714,7 @@ func checkIfDirtyObjectEqual(t *testing.T, sm *StateManager, address common.Addr
 	require.Equal(t, expectedObj, obj)
 }
 
-func checkForCache(t *testing.T, sm *StateManager, address common.Address) {
+func checkForCache(t *testing.T, sm *StateManager, address identifiers.Address) {
 	t.Helper()
 
 	_, isCached := sm.cache.Get(address) // check if added to cache
@@ -1725,8 +1725,8 @@ func checkIfContextMatches(
 	t *testing.T,
 	expectedBeh *ContextObject,
 	expectedRand *ContextObject,
-	beh []id.KramaID,
-	rand []id.KramaID,
+	beh []kramaid.KramaID,
+	rand []kramaid.KramaID,
 ) {
 	t.Helper()
 
@@ -1765,7 +1765,7 @@ func checkIfTreesAreEqual(t *testing.T, expectedTree tree.MerkleTree, actualTree
 	require.Equal(t, expectedRoot, actualRoot)
 }
 
-func validateStateObject(t *testing.T, so *Object, accType common.AccountType, address common.Address) {
+func validateStateObject(t *testing.T, so *Object, accType common.AccountType, address identifiers.Address) {
 	t.Helper()
 
 	require.Equal(t, address, so.address)
@@ -1816,7 +1816,7 @@ func checkIfStateObjectAreEqual(
 	}
 }
 
-func checkForBalances(t *testing.T, sObj *Object, expectedBalance *big.Int, assetID common.AssetID) {
+func checkForBalances(t *testing.T, sObj *Object, expectedBalance *big.Int, assetID identifiers.AssetID) {
 	t.Helper()
 
 	actualBalance, err := sObj.BalanceOf(assetID)
@@ -1901,7 +1901,7 @@ func checkForAccount(
 	checkJournalEntries(t, sObj.Journal(), sObj.Address(), journalIndex, actualAccHash)
 }
 
-func checkJournalEntries(t *testing.T, journal *Journal, addr common.Address, journalIndex int, hash common.Hash) {
+func checkJournalEntries(t *testing.T, journal *Journal, addr identifiers.Address, journalIndex int, hash common.Hash) {
 	t.Helper()
 
 	require.Equal(t, hash.Bytes(), journal.entries[journalIndex].cID().Bytes())
@@ -2045,11 +2045,11 @@ func checkIfMerkleTreeFlushed(t *testing.T, merkle tree.MerkleTree, isFlushed bo
 	require.Equal(t, isFlushed, m.isFlushed)
 }
 
-func checkIfActiveStorageTreesFlushed(t *testing.T, logicIDs []common.LogicID, s *Object, isFlushed bool) {
+func checkIfActiveStorageTreesFlushed(t *testing.T, logicIDs []identifiers.LogicID, s *Object, isFlushed bool) {
 	t.Helper()
 
 	for _, logicID := range logicIDs {
-		storageTree, ok := s.activeStorageTrees[logicID.String()]
+		storageTree, ok := s.activeStorageTrees[string(logicID)]
 		require.True(t, ok)
 
 		checkIfMerkleTreeFlushed(t, storageTree, isFlushed)
@@ -2061,8 +2061,8 @@ func checkForContextUpdate(
 	sObj *Object,
 	cObj []*ContextObject,
 	metaHash common.Hash,
-	behaviouralNodes []id.KramaID,
-	randomNodes []id.KramaID,
+	behaviouralNodes []kramaid.KramaID,
+	randomNodes []kramaid.KramaID,
 ) {
 	t.Helper()
 
@@ -2172,11 +2172,11 @@ func CheckAssetCreation(
 	t *testing.T,
 	s *Object,
 	assetDescriptor *common.AssetDescriptor,
-	assetID common.AssetID,
+	assetID identifiers.AssetID,
 ) {
 	t.Helper()
 
-	actualRegistryData, err := s.GetRegistryEntry(assetID.String())
+	actualRegistryData, err := s.GetRegistryEntry(string(assetID))
 	require.NoError(t, err)
 
 	expectedRegistryData, err := assetDescriptor.Bytes()
@@ -2186,15 +2186,15 @@ func CheckAssetCreation(
 	require.Equal(t, s.Address(), assetDescriptor.Operator) // check if address is assigned to operator
 }
 
-func getTestAssetID(addr common.Address, asset *common.AssetDescriptor) common.AssetID {
-	common.NewAssetIDv0(asset.IsLogical, asset.IsStateFul, asset.Dimension, asset.Standard, addr)
+func getTestAssetID(addr identifiers.Address, asset *common.AssetDescriptor) identifiers.AssetID {
+	identifiers.NewAssetIDv0(asset.IsLogical, asset.IsStateFul, asset.Dimension, uint16(asset.Standard), addr)
 
-	return common.NewAssetIDv0(asset.IsLogical, asset.IsStateFul, asset.Dimension, asset.Standard, addr)
+	return identifiers.NewAssetIDv0(asset.IsLogical, asset.IsStateFul, asset.Dimension, uint16(asset.Standard), addr)
 }
 
 func getContextObjects(
 	t *testing.T,
-	ids []id.KramaID,
+	ids []kramaid.KramaID,
 	idsPerObj int,
 	objCount int,
 ) ([]*ContextObject, []common.Hash) {
@@ -2204,7 +2204,7 @@ func getContextObjects(
 	hashes := make([]common.Hash, objCount)
 
 	for i := 0; i < objCount; i++ {
-		copiedIds := make([]id.KramaID, idsPerObj)
+		copiedIds := make([]kramaid.KramaID, idsPerObj)
 
 		copy(copiedIds, ids[i*idsPerObj:i*idsPerObj+idsPerObj])
 

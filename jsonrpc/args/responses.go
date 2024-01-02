@@ -5,10 +5,11 @@ import (
 	"sort"
 
 	"github.com/libp2p/go-libp2p/core/protocol"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
-	"github.com/sarvalabs/go-moi/common/kramaid"
 )
 
 // Response wrapper
@@ -38,9 +39,9 @@ type RPCRegistry struct {
 }
 
 type RPCAssetDescriptor struct {
-	Symbol   string         `json:"symbol"`
-	Operator common.Address `json:"operator"`
-	Supply   hexutil.Big    `json:"supply"`
+	Symbol   string              `json:"symbol"`
+	Operator identifiers.Address `json:"operator"`
+	Supply   hexutil.Big         `json:"supply"`
 
 	Dimension hexutil.Uint8  `json:"dimension"`
 	Standard  hexutil.Uint16 `json:"standard"`
@@ -48,7 +49,7 @@ type RPCAssetDescriptor struct {
 	IsLogical  bool `json:"is_logical"`
 	IsStateFul bool `json:"is_stateful"`
 
-	LogicID common.LogicID `json:"logic_id,omitempty"`
+	LogicID identifiers.LogicID `json:"logic_id,omitempty"`
 }
 
 type RPCAccount struct {
@@ -66,8 +67,8 @@ type RPCAccount struct {
 type RPCAccountMetaInfo struct {
 	Type common.AccountType `json:"type"`
 
-	Address common.Address `json:"address"`
-	Height  hexutil.Uint64 `json:"height"`
+	Address identifiers.Address `json:"address"`
+	Height  hexutil.Uint64      `json:"height"`
 
 	TesseractHash common.Hash `json:"tesseract_hash"`
 	LatticeExists bool        `json:"lattice_exists"`
@@ -75,9 +76,9 @@ type RPCAccountMetaInfo struct {
 }
 
 type Hashes struct {
-	Address     common.Address `json:"address"`
-	StateHash   common.Hash    `json:"state_hash"`
-	ContextHash common.Hash    `json:"context_hash"`
+	Address     identifiers.Address `json:"address"`
+	StateHash   common.Hash         `json:"state_hash"`
+	ContextHash common.Hash         `json:"context_hash"`
 }
 
 type RPCHashes []Hashes
@@ -95,17 +96,17 @@ type RPCReceipt struct {
 	FuelUsed  hexutil.Uint64       `json:"fuel_used"`
 	Hashes    RPCHashes            `json:"hashes"`
 	ExtraData json.RawMessage      `json:"extra_data"`
-	From      common.Address       `json:"from"`
-	To        common.Address       `json:"to"`
+	From      identifiers.Address  `json:"from"`
+	To        identifiers.Address  `json:"to"`
 	IXIndex   hexutil.Uint64       `json:"ix_index"`
 	Parts     RPCTesseractParts    `json:"parts"`
 }
 
 type RPCLog struct {
-	Addresses []common.Address `json:"addresses"`
-	LogicID   common.LogicID   `json:"logic_id"`
-	Topics    []common.Hash    `json:"topics"`
-	Data      []byte           `json:"data"`
+	Addresses []identifiers.Address `json:"addresses"`
+	LogicID   identifiers.LogicID   `json:"logic_id"`
+	Topics    []common.Hash         `json:"topics"`
+	Data      []byte                `json:"data"`
 
 	// Derived fields, avoid serializing these fields while storing to DB
 	IxHash common.Hash       `json:"ix_hash"`
@@ -116,13 +117,13 @@ type RPCInteraction struct {
 	Type  common.IxType  `json:"type"`
 	Nonce hexutil.Uint64 `json:"nonce"`
 
-	Sender   common.Address `json:"sender"`
-	Receiver common.Address `json:"receiver"`
-	Payer    common.Address `json:"payer"`
+	Sender   identifiers.Address `json:"sender"`
+	Receiver identifiers.Address `json:"receiver"`
+	Payer    identifiers.Address `json:"payer"`
 
-	TransferValues  map[common.AssetID]*hexutil.Big `json:"transfer_values"`
-	PerceivedValues map[common.AssetID]*hexutil.Big `json:"perceived_values"`
-	PerceivedProofs hexutil.Bytes                   `json:"perceived_proofs"`
+	TransferValues  map[string]*hexutil.Big `json:"transfer_values"`
+	PerceivedValues map[string]*hexutil.Big `json:"perceived_values"`
+	PerceivedProofs hexutil.Bytes           `json:"perceived_proofs"`
 
 	FuelPrice *hexutil.Big   `json:"fuel_price"`
 	FuelLimit hexutil.Uint64 `json:"fuel_limit"`
@@ -145,9 +146,9 @@ type RPCInteraction struct {
 type RPCInteractions []*RPCInteraction
 
 type RPCTesseractPart struct {
-	Address common.Address `json:"address"`
-	Hash    common.Hash    `json:"hash"`
-	Height  hexutil.Uint64 `json:"height"`
+	Address identifiers.Address `json:"address"`
+	Hash    common.Hash         `json:"hash"`
+	Height  hexutil.Uint64      `json:"height"`
 }
 
 type RPCTesseractParts []RPCTesseractPart
@@ -159,10 +160,10 @@ func (parts RPCTesseractParts) Sort() {
 }
 
 type RPCContextLockInfo struct {
-	Address       common.Address `json:"address"`
-	ContextHash   common.Hash    `json:"context_hash"`
-	Height        hexutil.Uint64 `json:"height"`
-	TesseractHash common.Hash    `json:"tesseract_hash"`
+	Address       identifiers.Address `json:"address"`
+	ContextHash   common.Hash         `json:"context_hash"`
+	Height        hexutil.Uint64      `json:"height"`
+	TesseractHash common.Hash         `json:"tesseract_hash"`
 }
 
 type RPCContextLockInfos []RPCContextLockInfo
@@ -174,7 +175,7 @@ func (infos RPCContextLockInfos) Sort() {
 }
 
 type RPCDeltaGroup struct {
-	Address          common.Address         `json:"address"`
+	Address          identifiers.Address    `json:"address"`
 	Role             common.ParticipantRole `json:"role"`
 	BehaviouralNodes []kramaid.KramaID      `json:"behavioural_nodes"`
 	RandomNodes      []kramaid.KramaID      `json:"random_nodes"`
@@ -204,7 +205,7 @@ type RPCCommitData struct {
 }
 
 type RPCHeader struct {
-	Address     common.Address      `json:"address"`
+	Address     identifiers.Address `json:"address"`
 	PrevHash    common.Hash         `json:"prev_hash"`
 	Height      hexutil.Uint64      `json:"height"`
 	FuelUsed    hexutil.Uint64      `json:"fuel_used"`
@@ -235,7 +236,7 @@ type RPCTesseract struct {
 	Hash   common.Hash     `json:"hash"`
 }
 
-func (ts *RPCTesseract) Address() common.Address {
+func (ts *RPCTesseract) Address() identifiers.Address {
 	return ts.Header.Address
 }
 
@@ -245,15 +246,15 @@ func (ts *RPCTesseract) Height() uint64 {
 
 // InteractionResponse is a struct that represents a single interaction
 type InteractionResponse struct {
-	Nonce     hexutil.Uint64 `json:"nonce"`
-	Type      hexutil.Uint64 `json:"type"`
-	Sender    common.Address `json:"sender"`
-	Receiver  common.Address `json:"receiver"`
-	Cost      *hexutil.Big   `json:"cost"`
-	FuelPrice *hexutil.Big   `json:"fuel_price"`
-	FuelLimit hexutil.Uint64 `json:"fuel_limit"`
-	Input     string         `json:"input"`
-	Hash      common.Hash    `json:"hash"`
+	Nonce     hexutil.Uint64      `json:"nonce"`
+	Type      hexutil.Uint64      `json:"type"`
+	Sender    identifiers.Address `json:"sender"`
+	Receiver  identifiers.Address `json:"receiver"`
+	Cost      *hexutil.Big        `json:"cost"`
+	FuelPrice *hexutil.Big        `json:"fuel_price"`
+	FuelLimit hexutil.Uint64      `json:"fuel_limit"`
+	Input     string              `json:"input"`
+	Hash      common.Hash         `json:"hash"`
 }
 
 // NewInteractionResponse is a contructor function that generates
@@ -286,8 +287,8 @@ func GetRPCAssetDescriptor(ad *common.AssetDescriptor) RPCAssetDescriptor {
 }
 
 type TDU struct {
-	AssetID common.AssetID `json:"asset_id"`
-	Amount  *hexutil.Big   `json:"amount"`
+	AssetID identifiers.AssetID `json:"asset_id"`
+	Amount  *hexutil.Big        `json:"amount"`
 }
 
 type NodeInfoResponse struct {

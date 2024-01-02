@@ -11,13 +11,15 @@ import (
 	"github.com/pkg/errors"
 	bg "github.com/sarvalabs/battleground"
 	client "github.com/sarvalabs/battleground/client/types"
+	bgcommon "github.com/sarvalabs/battleground/common"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/tests"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 )
 
 // Guidelines for creating MOIClient tests:
@@ -27,7 +29,7 @@ type TestMultiNode struct {
 	suite.Suite
 	moiClient      *Client
 	bgClient       bg.Client
-	accounts       []tests.AccountWithMnemonic
+	accounts       []bgcommon.AccountWithMnemonic
 	logger         hclog.Logger
 	instances      []common.Instance
 	ixHash         common.Hash

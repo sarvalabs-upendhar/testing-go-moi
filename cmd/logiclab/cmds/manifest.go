@@ -11,6 +11,7 @@ import (
 	"github.com/manishmeganathan/symbolizer"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-pisa"
 	"github.com/sarvalabs/go-pisa/opcode"
 	"gopkg.in/yaml.v3"
@@ -414,14 +415,14 @@ func CompileManifest(
 	}
 
 	// Create a new account state
-	logicState := core.NewAccountState(core.RandomAddress())
+	logicState := core.NewAccountState(identifiers.NewRandomAddress())
 	// Create a new LogicObject from the LogicDescriptor
 	logicObject := state.NewLogicObject(logicState.Address, descriptor)
 
 	// If the logic ID has no persistent state, it can be marked
 	// as ready, otherwise it requires a deploy to occur first
 	id, _ := logicObject.ID.Identifier()
-	ready := !id.PersistentState()
+	ready := !id.HasPersistentState()
 
 	return &core.LogicAccount{
 		Name:     name,

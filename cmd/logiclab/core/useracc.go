@@ -4,24 +4,23 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-
-	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi-identifiers"
 )
 
 // UserAccount is a container for all contents
 // related to a participant entity in the LogicLab
 type UserAccount struct {
 	Name  string
-	Addr  common.Address
+	Addr  identifiers.Address
 	State *AccountState
 }
 
 // NewUserAccount generates a new UserAccount for a given
 // username. The address of the user is generated randomly
-func NewUserAccount(name string, address common.Address) *UserAccount {
+func NewUserAccount(name string, address identifiers.Address) *UserAccount {
 	// Generate a random address if not provided
-	if address == common.NilAddress {
-		address = RandomAddress()
+	if address == identifiers.NilAddress {
+		address = identifiers.NewRandomAddress()
 	}
 
 	// Generate and return a UserAccount with the name, address

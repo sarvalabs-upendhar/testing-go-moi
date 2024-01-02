@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/crypto/common"
 	"github.com/sarvalabs/go-moi/crypto/poi"
 	"github.com/sarvalabs/go-moi/crypto/poi/moinode"

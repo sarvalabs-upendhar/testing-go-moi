@@ -3,21 +3,18 @@ package agora
 import (
 	"context"
 
+	"github.com/hashicorp/go-hclog"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
+
+	"github.com/sarvalabs/go-moi/network/p2p"
 	"github.com/sarvalabs/go-moi/syncer"
-
-	"github.com/sarvalabs/go-moi/syncer/agora/session"
-
-	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/syncer/agora/db"
 	"github.com/sarvalabs/go-moi/syncer/agora/decision"
 	"github.com/sarvalabs/go-moi/syncer/agora/network"
 	"github.com/sarvalabs/go-moi/syncer/agora/notifications"
+	"github.com/sarvalabs/go-moi/syncer/agora/session"
 	"github.com/sarvalabs/go-moi/syncer/cid"
-
-	"github.com/hashicorp/go-hclog"
-
-	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/network/p2p"
 )
 
 const (
@@ -83,8 +80,8 @@ func NewAgora(
 
 func (ag *Agora) NewSession(
 	ctx context.Context,
-	contextPeers []id.KramaID,
-	address common.Address,
+	contextPeers []kramaid.KramaID,
+	address identifiers.Address,
 	stateHash cid.CID,
 ) (syncer.Session, error) {
 	return ag.sm.NewSession(ctx, address, stateHash, ag.network, contextPeers)

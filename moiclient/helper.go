@@ -13,6 +13,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-pisa"
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
@@ -38,7 +39,7 @@ func CreateSendIXFromSendIXArgs(t *testing.T, sendIxArgs *common.SendIXArgs, mne
 	}
 }
 
-func GetLatestNonce(t *testing.T, client *Client, addr common.Address) uint64 {
+func GetLatestNonce(t *testing.T, client *Client, addr identifiers.Address) uint64 {
 	t.Helper()
 
 	nonce, err := client.InteractionCount(context.Background(), &rpcargs.InteractionCountArgs{
@@ -52,7 +53,7 @@ func GetLatestNonce(t *testing.T, client *Client, addr common.Address) uint64 {
 	return nonce.ToUint64()
 }
 
-func GetLatestHeight(t *testing.T, client *Client, addr common.Address) uint64 {
+func GetLatestHeight(t *testing.T, client *Client, addr identifiers.Address) uint64 {
 	t.Helper()
 
 	acc, err := client.AccountMetaInfo(context.Background(), &rpcargs.GetAccountArgs{
@@ -91,7 +92,7 @@ func RetryFetchReceipt(t *testing.T, ctx context.Context, client *Client, ixHash
 }
 
 // GetTesseract returns tesseract for the given senderAddr and height
-func GetTesseract(t *testing.T, client *Client, addr common.Address, height int64) *rpcargs.RPCTesseract {
+func GetTesseract(t *testing.T, client *Client, addr identifiers.Address, height int64) *rpcargs.RPCTesseract {
 	t.Helper()
 
 	args := &rpcargs.TesseractArgs{
@@ -109,7 +110,7 @@ func GetTesseract(t *testing.T, client *Client, addr common.Address, height int6
 }
 
 // GetLogicID returns logicID for the given senderAddr and height
-func GetLogicID(t *testing.T, client *Client, addr common.Address, height int64) common.LogicID {
+func GetLogicID(t *testing.T, client *Client, addr identifiers.Address, height int64) identifiers.LogicID {
 	t.Helper()
 
 	ts := GetTesseract(t, client, addr, height)
@@ -167,10 +168,10 @@ type TokenLedgerState struct {
 	Name     string
 	Symbol   string
 	Supply   *big.Int
-	Balances map[common.Address]*big.Int
+	Balances map[identifiers.Address]*big.Int
 }
 
-func GetTokenLedgerState(t *testing.T, moiClient *Client, logicID common.LogicID) TokenLedgerState {
+func GetTokenLedgerState(t *testing.T, moiClient *Client, logicID identifiers.LogicID) TokenLedgerState {
 	t.Helper()
 
 	getLatestStorage := func(slot uint8) hexutil.Bytes {
