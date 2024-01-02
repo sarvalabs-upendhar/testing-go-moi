@@ -49,7 +49,7 @@ require (
 	github.com/sarvalabs/go-polo v0.4.1
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.8.4
-	github.com/supranational/blst v0.3.7
+	github.com/supranational/blst v0.3.11
 	github.com/tyler-smith/go-bip39 v1.1.0
 	github.com/ugorji/go/codec v1.2.6
 	go.opentelemetry.io/otel v1.18.0
