@@ -50,7 +50,7 @@ func (tm *TestMultiNode) initLogger() {
 
 func (tm *TestMultiNode) SetupSuite() {
 	defer func() {
-		// make sure to delete directories incase of setup suite failure
+		// make sure to delete directories in case of setup suite failure
 		if !tm.suiteSetupDone {
 			tm.logger.Error("setup suite failed")
 			tm.runCriticallyNecessaryTearDown()
@@ -446,7 +446,18 @@ func (tm *TestMultiNode) TestGetFilterChanges() {
 			case rpcargs.NewTesseract:
 				rpcTS, ok := resp.([]*rpcargs.RPCTesseract)
 				require.True(tm.T(), ok)
-				require.Equal(tm.T(), 3, len(rpcTS))
+
+				var rpcTSValues []rpcargs.RPCTesseract
+				for _, ptr := range rpcTS {
+					rpcTSValues = append(rpcTSValues, *ptr)
+				}
+
+				require.Equal(
+					tm.T(),
+					3,
+					len(rpcTSValues),
+					fmt.Sprintf("Expected length 3, but got %d. rpcTS: %+v", len(rpcTSValues), rpcTSValues),
+				)
 
 				found := 0
 
