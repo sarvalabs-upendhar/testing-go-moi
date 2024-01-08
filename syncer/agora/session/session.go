@@ -137,9 +137,9 @@ func (s *Session) getBlocks(
 
 	s.pm.UpdatePeerStatus(peerID, true)
 
-	s.im.RecordSessionInterest(s.id, idSet.Keys()...)
-
 	notifier := s.notifier.Subscribe(ctx, idSet.Keys()...)
+
+	s.im.RecordSessionInterest(s.id, idSet.Keys()...)
 
 	statusChan := s.pm.PeerRespChan(peerID)
 	if statusChan == nil {
