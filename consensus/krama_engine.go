@@ -675,7 +675,7 @@ func (k *Engine) handleReq(req Request) {
 		// Wait for execution response
 		execResp := <-slot.ExecutionResp
 		if execResp.Err != nil {
-			k.logger.Info("Error executing interactions", "err", execResp.Err, "cluster-ID", clusterID)
+			k.logger.Error("Error executing interactions", "err", execResp.Err, "cluster-ID", clusterID)
 			k.metrics.captureAgreementFailureCount(1)
 
 			for _, interaction := range cs.Ixs {

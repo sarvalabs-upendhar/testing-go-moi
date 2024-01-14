@@ -471,7 +471,7 @@ func (tn *TestSingleNode) TestRegistry() {
 
 			require.NoError(tn.T(), err)
 			require.Equal(tn.T(), 1, len(registry))
-			require.Equal(tn.T(), string(assetID), registry[0].AssetID)
+			require.Equal(tn.T(), assetID.String(), "0x"+registry[0].AssetID)
 			require.Equal(tn.T(), a.Operator, registry[0].AssetInfo.Operator)
 		})
 	}
@@ -1305,7 +1305,7 @@ func (tn *TestSingleNode) TestCall() {
 		Payload:   (hexutil.Bytes)(rawAssetPayload),
 	}
 
-	expectedReceipt := common.Receipt{
+	expectedReceipt := &common.Receipt{
 		IxType:   common.IxAssetCreate,
 		FuelUsed: 100,
 	}
@@ -1313,15 +1313,10 @@ func (tn *TestSingleNode) TestCall() {
 	expectedAssetAddr := common.NewAccountAddress(4, addr)
 	expectedAssetID := identifiers.NewAssetIDv0(false, false, 0, 0, expectedAssetAddr)
 
-	extraData := &common.AssetCreationReceipt{
+	common.SetReceiptExtraData(expectedReceipt, common.AssetCreationReceipt{
 		AssetID:      expectedAssetID,
 		AssetAccount: expectedAssetAddr,
-	}
-
-	err = expectedReceipt.SetExtraData(extraData)
-	if err != nil {
-		return
-	}
+	})
 
 	testcases := []struct {
 		name            string

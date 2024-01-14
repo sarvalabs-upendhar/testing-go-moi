@@ -466,6 +466,11 @@ type MockStateManager struct {
 	createDirtyObjectHook   func() *state.Object
 }
 
+func (sm *MockStateManager) UpdateStateObjects(objs state.ObjectMap) error {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (sm *MockStateManager) CreateStateObject(_ identifiers.Address, _ common.AccountType) *state.Object {
 	// TODO implement me
 	panic("implement me")

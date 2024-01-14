@@ -320,14 +320,16 @@ func (sm *StateManager) Cleanup(address identifiers.Address) {
 	sm.cleanupDirtyObject(address)
 }
 
-func (sm *StateManager) Revert(snap *Object) error {
+func (sm *StateManager) UpdateStateObjects(objs ObjectMap) error {
 	sm.dirtyObjectsLock.Lock()
 	defer sm.dirtyObjectsLock.Unlock()
 
-	if snap != nil {
-		sm.logger.Info("Reverting back the state object", "addr", snap.address.Hex())
-		sm.dirtyObjects[snap.address] = snap
-		sm.metrics.captureNumOfReverts(1)
+	for addr, obj := range objs {
+		if _, ok := sm.dirtyObjects[addr]; ok {
+			return errors.New("dirty object already exists")
+		}
+
+		sm.dirtyObjects[addr] = obj
 	}
 
 	return nil

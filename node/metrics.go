@@ -1,6 +1,7 @@
 package node
 
 import (
+	"github.com/sarvalabs/go-moi/compute"
 	"github.com/sarvalabs/go-moi/consensus"
 	"github.com/sarvalabs/go-moi/flux"
 	"github.com/sarvalabs/go-moi/ixpool"
@@ -22,6 +23,7 @@ type nodeMetrics struct {
 	syncer  *forage.Metrics
 	server  *p2p.Metrics
 	storage *db.Metrics
+	compute *compute.Metrics
 }
 
 func metricProvider(nameSpace string, chainID string, metricsRequired bool) *nodeMetrics {
@@ -36,6 +38,7 @@ func metricProvider(nameSpace string, chainID string, metricsRequired bool) *nod
 			syncer:  forage.GetPrometheusMetrics(nameSpace, "chain_id", chainID),
 			server:  p2p.GetPrometheusMetrics(nameSpace, "chain_id", chainID),
 			storage: db.GetPrometheusMetrics(nameSpace, "chain_id", chainID),
+			compute: compute.GetPrometheusMetrics(nameSpace, "chain_id", chainID),
 		}
 	}
 
@@ -49,5 +52,6 @@ func metricProvider(nameSpace string, chainID string, metricsRequired bool) *nod
 		syncer:  forage.NilMetrics(),
 		server:  p2p.NilMetrics(),
 		storage: db.NilMetrics(),
+		compute: compute.NilMetrics(),
 	}
 }

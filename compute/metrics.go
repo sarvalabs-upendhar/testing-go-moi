@@ -1,4 +1,4 @@
-package state
+package compute
 
 import (
 	"github.com/go-kit/kit/metrics"
@@ -8,7 +8,7 @@ import (
 )
 
 type Metrics struct {
-	ActiveStateObjects metrics.Gauge
+	NumOfExecutionFailure metrics.Counter
 }
 
 func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics {
@@ -19,27 +19,22 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 	}
 
 	return &Metrics{
-		ActiveStateObjects: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
+		NumOfExecutionFailure: prometheus.NewCounterFrom(stdprometheus.CounterOpts{
 			Namespace: namespace,
-			Subsystem: "state_manager",
-			Name:      "active_state_objects",
-			Help:      "Number of active state objects",
+			Subsystem: "compute",
+			Name:      "number_of_execution_failure",
+			Help:      "Number of times interaction execution failed",
 		}, labels).With(labelsWithValues...),
 	}
 }
 
 func NilMetrics() *Metrics {
 	return &Metrics{
-		ActiveStateObjects: discard.NewGauge(),
+		NumOfExecutionFailure: discard.NewCounter(),
 	}
 }
 
 // methods to capture telemetry metrics
-func (metrics *Metrics) initMetrics() {
-	// Initialize gauge metrics with the default value
-	metrics.ActiveStateObjects.Set(0)
-}
-
-func (metrics *Metrics) captureActiveStateObjects(delta float64) {
-	metrics.ActiveStateObjects.Set(delta)
+func (metrics *Metrics) captureNumOfExecutionFailure(delta float64) {
+	metrics.NumOfExecutionFailure.Add(delta)
 }

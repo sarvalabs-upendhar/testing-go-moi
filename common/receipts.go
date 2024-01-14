@@ -14,7 +14,9 @@ type ReceiptStatus uint64
 
 const (
 	ReceiptOk ReceiptStatus = iota
-	ReceiptFailed
+	ReceiptExceptionRaised
+	ReceiptStateReverted
+	ReceiptFuelExhausted
 )
 
 type Log struct {
@@ -157,15 +159,9 @@ func (r *Receipt) SetFuelUsed(fuel uint64) {
 	r.FuelUsed = fuel
 }
 
-func (r *Receipt) SetExtraData(data interface{}) error {
-	rawData, err := json.Marshal(data)
-	if err != nil {
-		return errors.Wrap(errors.New("Receipt generation failed"), err.Error())
-	}
-
-	r.ExtraData = rawData
-
-	return nil
+func SetReceiptExtraData[Payload ReceiptPayload](r *Receipt, payload Payload) {
+	raw, _ := json.Marshal(payload)
+	r.ExtraData = raw
 }
 
 type Receipts map[Hash]*Receipt
@@ -216,6 +212,10 @@ func (rs *Receipts) FromBytes(bytes []byte) error {
 	}
 
 	return nil
+}
+
+type ReceiptPayload interface {
+	AssetCreationReceipt | AssetMintOrBurnReceipt | LogicDeployReceipt | LogicInvokeReceipt
 }
 
 type AssetCreationReceipt struct {

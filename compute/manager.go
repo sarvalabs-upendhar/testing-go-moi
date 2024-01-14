@@ -1,7 +1,6 @@
 package compute
 
 import (
-	"log"
 	"sync"
 
 	"github.com/hashicorp/go-hclog"
@@ -46,10 +45,9 @@ func (manager *Manager) SpawnExecutor() *IxExecutor {
 		mgr:   manager,
 		state: manager.state,
 
-		objects:   make(state.ObjectMap),
-		snapshots: make(state.ObjectMap),
+		baseline:   NewTransition(),
+		transition: NewTransition(),
 
-		receipts:     make(map[common.Hash]*common.Receipt),
 		commitHashes: make(map[identifiers.Address]common.Hash),
 	}
 }
@@ -66,11 +64,12 @@ func (manager *Manager) ExecuteInteractions(
 	executor := manager.SpawnExecutor()
 	// Execute all the given interactions
 	if err := executor.Execute(ixs, ctx); err != nil {
-		if err := executor.Revert(); err != nil {
-			log.Fatal(err) // todo: this should not happen
-		}
-
 		return nil, err
+	}
+
+	// Update the state objects in the state manager
+	if err := manager.state.UpdateStateObjects(executor.transition.objects); err != nil {
+		return nil, errors.Wrap(err, "failed to update state objects")
 	}
 
 	// Store the executor into the execution instances indexed by the cluster ID
@@ -90,13 +89,17 @@ func (manager *Manager) InteractionCall(
 		return nil, err
 	}
 
+	transition := &Transition{
+		objects: objects,
+	}
+
 	// Run the interaction and return the receipt
-	return manager.runInteraction(ix, ctx, objects, true)
+	return manager.runInteraction(ix, ctx, transition, true)
 }
 
 func (manager *Manager) runInteraction(
 	ix *common.Interaction, ctx *common.ExecutionContext,
-	objects state.ObjectMap, useIxFuelLimit bool,
+	transition *Transition, useIxFuelLimit bool,
 ) (
 	receipt *common.Receipt, err error,
 ) {
@@ -111,21 +114,16 @@ func (manager *Manager) runInteraction(
 	}
 
 	// Check that the sender has sufficient balance
-	ok, err := objects.GetObject(ix.Sender()).HasSufficientFuel(ix.Cost())
-	if err != nil {
-		return nil, errors.Wrap(err, "execution failed: fuel check")
-	}
+	if ok, _ := transition.objects.GetObject(ix.Sender()).HasSufficientFuel(ix.Cost()); !ok {
+		receipt = common.NewReceipt(ix)
+		receipt.Status = common.ReceiptFuelExhausted
 
-	if !ok {
-		return nil, errors.Errorf("execution failed: insufficient fuel")
+		return receipt, nil
 	}
 
 	ixtype := ix.Type()
 	// Lookup the runner for the interaction type
-	runner, ok := LookupIxRunner(ixtype)
-	if !ok {
-		return nil, errors.Wrapf(common.ErrInvalidInteractionType, "execution failed (%v)", ixtype)
-	}
+	runner := lookupIxRunner(ixtype)
 
 	// Set up a defer function to recover from any panic
 	// that may occur while executing the interaction
@@ -138,10 +136,7 @@ func (manager *Manager) runInteraction(
 	}()
 
 	// Call the interaction runner and get the receipt
-	receipt, err = runner(ix, ctx, tank, objects)
-	if err != nil {
-		return nil, errors.Wrapf(err, "execution failed (%v)", ixtype)
-	}
+	receipt = runner(ix, ctx, tank, transition.objects)
 
 	return receipt, nil
 }
@@ -162,7 +157,9 @@ func (manager *Manager) Revert(cluster common.ClusterID) error {
 	}
 
 	// Revert executor state
-	return executor.Revert()
+	executor.transition = executor.baseline
+
+	return nil
 }
 
 // Cleanup removes the executor instance for the given Cluster ID, if one exists.

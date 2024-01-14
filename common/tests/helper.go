@@ -951,7 +951,7 @@ func CreateReceiptWithTestData(t *testing.T) *common.Receipt {
 		IxType:    2,
 		IxHash:    RandomHash(t),
 		Logs:      []*common.Log{logs},
-		Status:    common.ReceiptFailed,
+		Status:    common.ReceiptStateReverted,
 		FuelUsed:  99,
 		Hashes:    make(common.ReceiptAccHashes),
 		ExtraData: []byte{1, 2},

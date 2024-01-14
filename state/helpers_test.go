@@ -1706,14 +1706,6 @@ func checkForDirtyObject(t *testing.T, sm *StateManager, address identifiers.Add
 	require.Equal(t, exists, ok)
 }
 
-func checkIfDirtyObjectEqual(t *testing.T, sm *StateManager, address identifiers.Address, expectedObj *Object) {
-	t.Helper()
-
-	obj, ok := sm.dirtyObjects[address]
-	require.True(t, ok)
-	require.Equal(t, expectedObj, obj)
-}
-
 func checkForCache(t *testing.T, sm *StateManager, address identifiers.Address) {
 	t.Helper()
 

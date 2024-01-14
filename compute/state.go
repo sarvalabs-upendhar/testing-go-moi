@@ -2,7 +2,7 @@ package compute
 
 import (
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-identifiers"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/state"
@@ -10,9 +10,6 @@ import (
 
 // StateManager describes a state management interface
 type StateManager interface {
-	// Revert must revert the state of an address to given state.Object
-	Revert(*state.Object) error
-
 	// IsAccountRegistered must return whether an address has an existing, registered account
 	IsAccountRegistered(identifiers.Address) (bool, error)
 	// CreateStateObject must create a new state.Object for the given address and account type
@@ -27,6 +24,9 @@ type StateManager interface {
 	GetLatestStateObject(addr identifiers.Address) (*state.Object, error)
 	// GetStateObjectByHash must return the latest state.Object for the given hash
 	GetStateObjectByHash(addr identifiers.Address, hash common.Hash) (*state.Object, error)
+
+	// UpdateStateObjects must update the existing state objects
+	UpdateStateObjects(objs state.ObjectMap) error
 }
 
 func FetchIxStateObjects(

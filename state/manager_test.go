@@ -616,56 +616,6 @@ func TestStateManager_Cleanup(t *testing.T) {
 	checkForDirtyObject(t, sm, so.address, false)
 }
 
-func TestStateManager_Revert(t *testing.T) {
-	address := tests.RandomAddress(t)
-	getStateObjectParams := func() *createStateObjectParams {
-		return &createStateObjectParams{
-			address: address,
-		}
-	}
-
-	soParams := map[int]*createStateObjectParams{
-		0: getStateObjectParams(),
-		1: getStateObjectParams(),
-	}
-
-	so := createTestStateObjects(t, 2, soParams)
-
-	smParams := &createStateManagerParams{
-		smCallBack: func(sm *StateManager) {
-			insertDirtyObject(sm, so[0])
-		},
-	}
-
-	sm := createTestStateManager(t, smParams)
-
-	testcases := []struct {
-		name           string
-		snap           *Object
-		expectedObject *Object
-	}{
-		{
-			name:           "valid snap",
-			snap:           so[1],
-			expectedObject: so[1],
-		},
-		{
-			name:           "nil snap",
-			snap:           nil,
-			expectedObject: so[1],
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			err := sm.Revert(test.snap)
-			require.NoError(t, err)
-
-			checkIfDirtyObjectEqual(t, sm, test.expectedObject.address, test.expectedObject)
-		})
-	}
-}
-
 func TestStateManager_GetContextObject(t *testing.T) {
 	kramaIDs, _ := tests.GetTestKramaIdsWithPublicKeys(t, 4)
 	obj, cHash := getContextObjects(t, kramaIDs, 2, 2)

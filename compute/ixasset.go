@@ -1,8 +1,6 @@
 package compute
 
 import (
-	"github.com/pkg/errors"
-
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/state"
@@ -21,29 +19,21 @@ func RunAssetTransfer(
 	_ *common.ExecutionContext,
 	tank *FuelTank,
 	objects state.ObjectMap,
-) (
-	*common.Receipt, error,
-) {
+) *common.Receipt {
 	// Obtain the sender and receiver state objects
 	sender := objects.GetObject(ix.Sender())
 	receiver := objects.GetObject(ix.Receiver())
 
+	// Generate a new receipt
+	receipt := common.NewReceipt(ix)
+
 	// For each asset, apply the value transfer routine for the given transfer amount.
 	for assetID, amount := range ix.TransferValues() {
-		// Check if given transfer amount is valid
-		if amount.Sign() <= 0 {
-			return nil, errors.New("invalid transfer amount")
-		}
-
 		// Fetch sender balance object
-		senderBalance, err := sender.BalanceOf(assetID)
-		if err != nil {
-			return nil, err
-		}
-
+		senderBalance, _ := sender.BalanceOf(assetID)
 		// Check if sender has sufficient balance
 		if senderBalance.Cmp(amount) == -1 {
-			return nil, errors.New("insufficient balance")
+			receipt.Status = common.ReceiptStateReverted
 		}
 
 		// Remove amount from sender balance for asset
@@ -53,15 +43,14 @@ func RunAssetTransfer(
 
 		// Exhaust fuel from tank
 		if !tank.Exhaust(FuelSimpleValueTransfer) {
-			return nil, common.ErrInsufficientFuel
+			receipt.Status = common.ReceiptFuelExhausted
 		}
 	}
 
-	// Generate a new receipt and set the fuel consumption
-	receipt := common.NewReceipt(ix)
+	// Set the fuel consumption
 	receipt.SetFuelUsed(tank.Consumed)
 
-	return receipt, nil
+	return receipt
 }
 
 // RunAssetCreate performs the given IxAssetCreate interaction.
@@ -75,17 +64,12 @@ func RunAssetCreate(
 	_ *common.ExecutionContext,
 	tank *FuelTank,
 	objects state.ObjectMap,
-) (*common.Receipt, error) {
+) *common.Receipt {
 	// Obtain the Asset Payload from the Interaction
-	payload, err := ix.GetAssetPayload()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not find asset payload")
-	}
+	payload, _ := ix.GetAssetPayload()
 
-	// Check that AssetCreate payload is available
-	if payload.Create == nil {
-		return nil, errors.Errorf("asset create payload is empty")
-	}
+	// Generate a new receipt
+	receipt := common.NewReceipt(ix)
 
 	// Obtain the creator and asset account state objects
 	creator := objects.GetObject(ix.Sender())
@@ -103,7 +87,7 @@ func RunAssetCreate(
 	// Create a new asset on the creator state object and get the asset ID
 	assetID, err := creator.CreateAsset(assetacc.Address(), descriptor)
 	if err != nil {
-		return nil, err
+		receipt.Status = common.ReceiptStateReverted
 	}
 
 	// Credit the created asset balance to the creator
@@ -111,27 +95,24 @@ func RunAssetCreate(
 
 	// Generate the asset entry on the target object
 	if _, err = assetacc.CreateAsset(assetacc.Address(), descriptor); err != nil {
-		return nil, err
+		receipt.Status = common.ReceiptStateReverted
 	}
 
 	// todo: [asset logics] this is a simple value now, but will be include logic deployment cost
 	// Exhaust fuel from tank
 	if !tank.Exhaust(FuelAssetCreation) {
-		return nil, common.ErrInsufficientFuel
+		receipt.Status = common.ReceiptFuelExhausted
 	}
 
-	// Generate a new receipt and set the fuel consumption
-	receipt := common.NewReceipt(ix)
+	// Set the fuel consumption
 	receipt.SetFuelUsed(tank.Consumed)
+	// Generate and set the receipt payload
+	common.SetReceiptExtraData(receipt, common.AssetCreationReceipt{
+		AssetID:      assetID,
+		AssetAccount: assetacc.Address(),
+	})
 
-	// Generate the asset create receipt
-	receiptPayload := &common.AssetCreationReceipt{AssetID: assetID, AssetAccount: assetacc.Address()}
-	// Set the extra data of the receipt
-	if err = receipt.SetExtraData(receiptPayload); err != nil {
-		return nil, err
-	}
-
-	return receipt, nil
+	return receipt
 }
 
 func RunAssetMint(
@@ -139,17 +120,12 @@ func RunAssetMint(
 	_ *common.ExecutionContext,
 	tank *FuelTank,
 	objects state.ObjectMap,
-) (*common.Receipt, error) {
+) *common.Receipt {
 	// Obtain the Asset Payload from the Interaction
-	assetPayload, err := ix.GetAssetPayload()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not find asset payload")
-	}
+	assetPayload, _ := ix.GetAssetPayload()
 
-	// Check that AssetMintOrBurn payload is available
-	if assetPayload.Mint == nil {
-		return nil, errors.Errorf("asset mint/burn payload is empty")
-	}
+	// Generate a new receipt
+	receipt := common.NewReceipt(ix)
 
 	// Obtain the mint payload and the asset ID
 	payload := *assetPayload.Mint
@@ -159,32 +135,22 @@ func RunAssetMint(
 	operator := objects.GetObject(ix.Sender())
 	assetacc := objects.GetObject(ix.Receiver())
 
-	// todo: check if asset standard allows supply modulation. must be MAS0
-
 	// Obtain the registry entry for the asset from the asset account
-	assetEntry, err := assetacc.GetRegistryEntry(assetID)
-	if err != nil {
-		return nil, err
-	}
+	assetEntry, _ := assetacc.GetRegistryEntry(assetID)
 
 	// Decode the asset entry into a AssetDescriptor
 	descriptor := new(common.AssetDescriptor)
-	if err = descriptor.FromBytes(assetEntry); err != nil {
-		return nil, err
-	}
+	_ = descriptor.FromBytes(assetEntry)
 
 	// Update the supply on the descriptor
 	descriptor.Supply.Add(descriptor.Supply, payload.Amount)
 
 	// Encode the updated asset descriptor
-	encoded, err := descriptor.Bytes()
-	if err != nil {
-		return nil, err
-	}
+	encoded, _ := descriptor.Bytes()
 
 	// Update the asset entry in the asset account
-	if err = assetacc.UpdateRegistryEntry(assetID, encoded); err != nil {
-		return nil, err
+	if err := assetacc.UpdateRegistryEntry(assetID, encoded); err != nil {
+		receipt.Status = common.ReceiptStateReverted
 	}
 
 	// Credit the minted tokens to operator account
@@ -192,21 +158,17 @@ func RunAssetMint(
 
 	// Exhaust fuel from tank
 	if !tank.Exhaust(FuelAssetSupplyModulate) {
-		return nil, common.ErrInsufficientFuel
+		receipt.Status = common.ReceiptFuelExhausted
 	}
 
-	// Generate a new receipt and set the fuel consumption
-	receipt := common.NewReceipt(ix)
+	// Set the fuel consumption
 	receipt.SetFuelUsed(tank.Consumed)
+	// Generate and set the receipt payload
+	common.SetReceiptExtraData(receipt, common.AssetMintOrBurnReceipt{
+		TotalSupply: (hexutil.Big)(*descriptor.Supply),
+	})
 
-	// Generate the asset mint receipt
-	receiptPayload := &common.AssetMintOrBurnReceipt{TotalSupply: (hexutil.Big)(*descriptor.Supply)}
-	// Set the extra data of the receipt
-	if err = receipt.SetExtraData(receiptPayload); err != nil {
-		return nil, err
-	}
-
-	return receipt, nil
+	return receipt
 }
 
 func RunAssetBurn(
@@ -214,17 +176,12 @@ func RunAssetBurn(
 	_ *common.ExecutionContext,
 	tank *FuelTank,
 	objects state.ObjectMap,
-) (*common.Receipt, error) {
+) *common.Receipt {
 	// Obtain the Asset Payload from the Interaction
-	assetPayload, err := ix.GetAssetPayload()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not find asset payload")
-	}
+	assetPayload, _ := ix.GetAssetPayload()
 
-	// Check that AssetMintOrBurn payload is available
-	if assetPayload.Mint == nil {
-		return nil, errors.Errorf("asset mint/burn payload is empty")
-	}
+	// Generate a new receipt
+	receipt := common.NewReceipt(ix)
 
 	// Obtain the mint payload and the asset ID
 	payload := *assetPayload.Mint
@@ -234,63 +191,46 @@ func RunAssetBurn(
 	operator := objects.GetObject(ix.Sender())
 	assetacc := objects.GetObject(ix.Receiver())
 
-	// todo: check if asset standard allows supply modulation. must be MAS0
-
 	// Obtain the operator's balance of the asset
-	balance, err := operator.BalanceOf(payload.Asset)
-	if err != nil {
-		return nil, err
-	}
+	balance, _ := operator.BalanceOf(payload.Asset)
 
 	// Check that the operator has enough balance for the burn
 	if balance.Cmp(payload.Amount) < 0 {
-		return nil, common.ErrInsufficientFunds
+		receipt.Status = common.ReceiptStateReverted
 	}
 
 	// Burn the tokens from operator account
 	operator.SubBalance(payload.Asset, payload.Amount)
 
 	// Obtain the registry entry for the asset from the asset account
-	assetEntry, err := assetacc.GetRegistryEntry(assetID)
-	if err != nil {
-		return nil, err
-	}
+	assetEntry, _ := assetacc.GetRegistryEntry(assetID)
 
 	// Decode the asset entry into a AssetDescriptor
 	descriptor := new(common.AssetDescriptor)
-	if err = descriptor.FromBytes(assetEntry); err != nil {
-		return nil, err
-	}
+	_ = descriptor.FromBytes(assetEntry)
 
 	// Update the asset entry in the asset account
 	descriptor.Supply.Sub(descriptor.Supply, payload.Amount)
 
 	// Encode the updated asset descriptor
-	encoded, err := descriptor.Bytes()
-	if err != nil {
-		return nil, err
-	}
+	encoded, _ := descriptor.Bytes()
 
 	// Update the asset entry in the asset account
-	if err = assetacc.UpdateRegistryEntry(assetID, encoded); err != nil {
-		return nil, err
+	if err := assetacc.UpdateRegistryEntry(assetID, encoded); err != nil {
+		receipt.Status = common.ReceiptStateReverted
 	}
 
 	// Exhaust fuel from tank
 	if !tank.Exhaust(FuelAssetSupplyModulate) {
-		return nil, common.ErrInsufficientFuel
+		receipt.Status = common.ReceiptFuelExhausted
 	}
 
-	// Generate a new receipt and set the fuel consumption
-	receipt := common.NewReceipt(ix)
+	// Set the fuel consumption
 	receipt.SetFuelUsed(tank.Consumed)
+	// Generate and set the receipt payload
+	common.SetReceiptExtraData(receipt, common.AssetMintOrBurnReceipt{
+		TotalSupply: (hexutil.Big)(*descriptor.Supply),
+	})
 
-	// Generate the asset burn receipt
-	receiptPayload := &common.AssetMintOrBurnReceipt{TotalSupply: (hexutil.Big)(*descriptor.Supply)}
-	// Set the extra data of the receipt
-	if err = receipt.SetExtraData(receiptPayload); err != nil {
-		return nil, err
-	}
-
-	return receipt, nil
+	return receipt
 }
