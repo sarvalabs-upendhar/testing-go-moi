@@ -449,9 +449,9 @@ func (i *IxPool) Drop(ix *common.Interaction) {
 	account := i.accounts.get(ix.Sender())
 
 	if account != nil {
-		// lock enqueued and promoted
-		account.enqueued.lock(true)
+		// lock promoted,enqueued and nonceToIX
 		account.promoted.lock(true)
+		account.enqueued.lock(true)
 		account.nonceToIX.lock()
 
 		defer func() {
