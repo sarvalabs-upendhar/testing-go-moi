@@ -78,6 +78,7 @@ type NetworkConfig struct {
 	ListenAddresses    []maddr.Multiaddr
 	PublicP2pAddresses []maddr.Multiaddr
 	JSONRPCAddr        *net.TCPAddr
+	P2PHostPort        int
 	MTQ                float64
 	CorsAllowedOrigins []string
 

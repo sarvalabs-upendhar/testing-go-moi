@@ -37,10 +37,10 @@ func DefaultBabylonConfig(path string) *Config {
 		},
 		Network: NetworkConfig{
 			Libp2pAddr: []string{
-				"/ip4/0.0.0.0/tcp/" + strconv.Itoa(config.DefaultListenerPort),
-				"/ip4/0.0.0.0/udp/" + strconv.Itoa(config.DefaultListenerPort) + "/quic-v1",
-				"/ip6/::/tcp/" + strconv.Itoa(config.DefaultListenerPort),
-				"/ip6/::/udp/" + strconv.Itoa(config.DefaultListenerPort) + "/quic-v1",
+				"/ip4/0.0.0.0/tcp/" + strconv.Itoa(config.DefaultP2PPort),
+				"/ip4/0.0.0.0/udp/" + strconv.Itoa(config.DefaultP2PPort) + "/quic-v1",
+				"/ip6/::/tcp/" + strconv.Itoa(config.DefaultP2PPort),
+				"/ip6/::/udp/" + strconv.Itoa(config.DefaultP2PPort) + "/quic-v1",
 			},
 			BootStrapPeers: []string{
 				"/ip4/65.109.138.198/tcp/5000/p2p/16Uiu2HAmNPceqBKGNWXGTKTtWDPty4UhncdhB84VbDEPpn1H11Cb",
@@ -114,10 +114,10 @@ func DefaultDevnetConfig(path string) *Config {
 		},
 		Network: NetworkConfig{
 			Libp2pAddr: []string{
-				"/ip4/0.0.0.0/tcp/" + strconv.Itoa(config.DefaultListenerPort),
-				"/ip4/0.0.0.0/udp/" + strconv.Itoa(config.DefaultListenerPort) + "/quic-v1",
-				"/ip6/::/tcp/" + strconv.Itoa(config.DefaultListenerPort),
-				"/ip6/::/udp/" + strconv.Itoa(config.DefaultListenerPort) + "/quic-v1",
+				"/ip4/0.0.0.0/tcp/" + strconv.Itoa(config.DefaultP2PPort),
+				"/ip4/0.0.0.0/udp/" + strconv.Itoa(config.DefaultP2PPort) + "/quic-v1",
+				"/ip6/::/tcp/" + strconv.Itoa(config.DefaultP2PPort),
+				"/ip6/::/udp/" + strconv.Itoa(config.DefaultP2PPort) + "/quic-v1",
 			},
 			BootStrapPeers:     make([]string, 0),
 			MaxPeers:           0, // current we don't limit the no.of peers
@@ -185,6 +185,7 @@ type NetworkConfig struct {
 	RelayNodeAddr      string        `json:"relay_node_addr"`
 	Libp2pAddr         []string      `json:"libp2p_addr"`
 	PublicP2pAddr      []string      `json:"public_p2p_addr"`
+	P2PHostPort        int           `json:"p2p_host_port"`
 	JSONRPCAddr        string        `json:"jsonrpc_addr"`
 	MTQ                float64       `json:"mtq"`
 	CorsAllowedOrigins []string      `json:"cors_allowed_origins"`
