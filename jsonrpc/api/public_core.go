@@ -479,7 +479,7 @@ func (p *PublicCoreAPI) FuelEstimate(args *rpcargs.CallArgs) (*hexutil.Big, erro
 		return nil, err
 	}
 
-	ix, err := constructInteraction(sendIXArgs, nil)
+	ix, err := constructIxn(sendIXArgs, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -530,7 +530,7 @@ func (p *PublicCoreAPI) Call(args *rpcargs.CallArgs) (*rpcargs.RPCReceipt, error
 		return nil, err
 	}
 
-	ix, err := constructInteraction(sendIXArgs, nil)
+	ix, err := constructIxn(sendIXArgs, nil)
 	if err != nil {
 		return nil, err
 	}

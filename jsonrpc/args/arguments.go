@@ -114,8 +114,7 @@ type SendIX struct {
 }
 
 type IxArgs struct {
-	Type  common.IxType  `json:"type"`
-	Nonce hexutil.Uint64 `json:"nonce"`
+	Type common.IxType `json:"type"`
 
 	Sender   identifiers.Address `json:"sender"`
 	Receiver identifiers.Address `json:"receiver"`

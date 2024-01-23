@@ -1228,13 +1228,18 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 	rawAssetCreatePayload, err := assetCreationPayload.Bytes()
 	require.NoError(tn.T(), err)
 
-	ixArgs := &rpcargs.IxArgs{
+	ixArgsWithFuelParams := &rpcargs.IxArgs{
 		Type:      common.IxAssetCreate,
 		Sender:    addr,
-		Nonce:     hexutil.Uint64(5),
 		FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 		FuelLimit: hexutil.Uint64(200),
 		Payload:   (hexutil.Bytes)(rawAssetCreatePayload),
+	}
+
+	ixArgsWithoutFuelParams := &rpcargs.IxArgs{
+		Type:    common.IxAssetCreate,
+		Sender:  addr,
+		Payload: (hexutil.Bytes)(rawAssetCreatePayload),
 	}
 
 	testcases := []struct {
@@ -1244,9 +1249,21 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 		expectedError        error
 	}{
 		{
-			name: "retrieved fuel used in asset create interaction",
+			name: "retrieved fuel used in asset create ixn when fuel limit and price are given",
 			callArgs: &rpcargs.CallArgs{
-				IxArgs: ixArgs,
+				IxArgs: ixArgsWithFuelParams,
+				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
+					addr: {
+						TesseractNumber: &LatestTesseractNumber,
+					},
+				},
+			},
+			expectedFuelConsumed: (*hexutil.Big)(big.NewInt(100)),
+		},
+		{
+			name: "retrieved fuel used in asset create ixn when fuel limit and price are not given",
+			callArgs: &rpcargs.CallArgs{
+				IxArgs: ixArgsWithoutFuelParams,
 				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
 					addr: {
 						TesseractNumber: &LatestTesseractNumber,
@@ -1258,7 +1275,7 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 		{
 			name: "failed to fetch fuel estimate as options are empty",
 			callArgs: &rpcargs.CallArgs{
-				IxArgs: ixArgs,
+				IxArgs: ixArgsWithFuelParams,
 				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
 					addr: {
 						TesseractNumber: nil,
@@ -1296,13 +1313,18 @@ func (tn *TestSingleNode) TestCall() {
 	rawAssetPayload, err := assetCreationPayload.Bytes()
 	require.NoError(tn.T(), err)
 
-	ixArgs := &rpcargs.IxArgs{
+	ixArgsWithFuelParams := &rpcargs.IxArgs{
 		Type:      common.IxAssetCreate,
 		Sender:    addr,
-		Nonce:     hexutil.Uint64(4),
 		FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 		FuelLimit: hexutil.Uint64(200),
 		Payload:   (hexutil.Bytes)(rawAssetPayload),
+	}
+
+	ixArgsWithoutFuelParams := &rpcargs.IxArgs{
+		Type:    common.IxAssetCreate,
+		Sender:  addr,
+		Payload: (hexutil.Bytes)(rawAssetPayload),
 	}
 
 	expectedReceipt := &common.Receipt{
@@ -1310,7 +1332,7 @@ func (tn *TestSingleNode) TestCall() {
 		FuelUsed: 100,
 	}
 
-	expectedAssetAddr := common.NewAccountAddress(4, addr)
+	expectedAssetAddr := common.NewAccountAddress(0, addr)
 	expectedAssetID := identifiers.NewAssetIDv0(false, false, 0, 0, expectedAssetAddr)
 
 	common.SetReceiptExtraData(expectedReceipt, common.AssetCreationReceipt{
@@ -1325,9 +1347,9 @@ func (tn *TestSingleNode) TestCall() {
 		expectedError   error
 	}{
 		{
-			name: "fetched rpc receipt successfully",
+			name: "fetched rpc receipt successfully when fuel limit and price are given",
 			callArgs: &rpcargs.CallArgs{
-				IxArgs: ixArgs,
+				IxArgs: ixArgsWithFuelParams,
 				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
 					addr: {
 						TesseractNumber: &LatestTesseractNumber,
@@ -1335,7 +1357,25 @@ func (tn *TestSingleNode) TestCall() {
 				},
 			},
 			expectedReceipt: &rpcargs.RPCReceipt{
-				IxType:    hexutil.Uint64(ixArgs.Type),
+				IxType:    hexutil.Uint64(ixArgsWithFuelParams.Type),
+				FuelUsed:  hexutil.Uint64(expectedReceipt.FuelUsed),
+				ExtraData: expectedReceipt.ExtraData,
+				From:      addr,
+				To:        expectedAssetAddr,
+			},
+		},
+		{
+			name: "fetched rpc receipt successfully when fuel limit and price are not given",
+			callArgs: &rpcargs.CallArgs{
+				IxArgs: ixArgsWithoutFuelParams,
+				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
+					addr: {
+						TesseractNumber: &LatestTesseractNumber,
+					},
+				},
+			},
+			expectedReceipt: &rpcargs.RPCReceipt{
+				IxType:    hexutil.Uint64(ixArgsWithoutFuelParams.Type),
 				FuelUsed:  hexutil.Uint64(expectedReceipt.FuelUsed),
 				ExtraData: expectedReceipt.ExtraData,
 				From:      addr,
@@ -1345,7 +1385,7 @@ func (tn *TestSingleNode) TestCall() {
 		{
 			name: "failed to retrieve stateHashes as options are empty",
 			callArgs: &rpcargs.CallArgs{
-				IxArgs: ixArgs,
+				IxArgs: ixArgsWithFuelParams,
 				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
 					addr: {
 						TesseractNumber: &invalidHeight,

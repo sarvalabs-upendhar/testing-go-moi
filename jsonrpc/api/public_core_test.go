@@ -219,23 +219,30 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 
 	tsHash := getTesseractHash(t, ts[0])
 
-	IxArgs := &common.SendIXArgs{
+	IxWithoutFuelParams, err := constructIxn(&common.SendIXArgs{
+		Type:    common.IxAssetCreate,
+		Sender:  ts[0].Address(),
+		Nonce:   0,
+		Payload: rawAssetPayload,
+	}, nil)
+	assert.NoError(t, err)
+
+	IxWithFuelParams, err := constructIxn(&common.SendIXArgs{
 		Type:      common.IxAssetCreate,
 		Sender:    ts[0].Address(),
-		Nonce:     4,
+		Nonce:     0,
 		FuelPrice: big.NewInt(1),
 		FuelLimit: 100,
 		Payload:   rawAssetPayload,
-	}
-
-	ix, err := constructInteraction(IxArgs, nil)
+	}, nil)
 	assert.NoError(t, err)
 
 	receipt := &common.Receipt{
 		FuelUsed: 100,
 	}
 
-	exec.setInteractionCall(ix, receipt)
+	exec.setInteractionCall(IxWithoutFuelParams, receipt)
+	exec.setInteractionCall(IxWithFuelParams, receipt)
 
 	testcases := []struct {
 		name                 string
@@ -249,7 +256,6 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 				IxArgs: &rpcargs.IxArgs{
 					Type:      common.IxInvalid,
 					Sender:    tests.RandomAddress(t),
-					Nonce:     hexutil.Uint64(3),
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 					FuelLimit: hexutil.Uint64(100),
 					Payload:   (hexutil.Bytes)(rawAssetPayload),
@@ -263,7 +269,6 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 				IxArgs: &rpcargs.IxArgs{
 					Type:      common.IxAssetCreate,
 					Sender:    tests.RandomAddress(t),
-					Nonce:     hexutil.Uint64(3),
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 					FuelLimit: hexutil.Uint64(100),
 					Payload:   (hexutil.Bytes)(rawAssetPayload),
@@ -282,7 +287,6 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 				IxArgs: &rpcargs.IxArgs{
 					Type:      common.IxAssetCreate,
 					Sender:    tests.RandomAddress(t),
-					Nonce:     hexutil.Uint64(4),
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 					FuelLimit: hexutil.Uint64(100),
 					Payload:   (hexutil.Bytes)(rawAssetPayload),
@@ -296,12 +300,27 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 			expectedErr: common.ErrAccountNotFound,
 		},
 		{
-			name: "rpc receipt fetched successfully",
+			name: "rpc receipt fetched successfully when fuel price and limit are not given",
+			callArgs: &rpcargs.CallArgs{
+				IxArgs: &rpcargs.IxArgs{
+					Type:    common.IxAssetCreate,
+					Sender:  ts[0].Address(),
+					Payload: (hexutil.Bytes)(rawAssetPayload),
+				},
+				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
+					ts[0].Address(): {
+						TesseractHash: &tsHash,
+					},
+				},
+			},
+			expectedFuelConsumed: (*hexutil.Big)(big.NewInt(100)),
+		},
+		{
+			name: "rpc receipt fetched successfully when fuel price and limit are given",
 			callArgs: &rpcargs.CallArgs{
 				IxArgs: &rpcargs.IxArgs{
 					Type:      common.IxAssetCreate,
 					Sender:    ts[0].Address(),
-					Nonce:     hexutil.Uint64(4),
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 					FuelLimit: hexutil.Uint64(100),
 					Payload:   (hexutil.Bytes)(rawAssetPayload),
@@ -345,26 +364,40 @@ func TestIx_Call(t *testing.T) {
 
 	tsHash := getTesseractHash(t, ts[0])
 
-	IxArgs := &common.SendIXArgs{
-		Type:      common.IxAssetCreate,
-		Sender:    ts[0].Address(),
-		Nonce:     4,
-		FuelPrice: big.NewInt(1),
-		FuelLimit: 100,
-		Payload:   rawAssetPayload,
-	}
-
-	ix, err := constructInteraction(IxArgs, nil)
+	IxWithoutFuelParams, err := constructIxn(&common.SendIXArgs{
+		Type:    common.IxAssetCreate,
+		Sender:  ts[0].Address(),
+		Nonce:   0,
+		Payload: rawAssetPayload,
+	}, nil)
 	assert.NoError(t, err)
 
-	receipt := &common.Receipt{
+	receiptWithoutFuelParams := &common.Receipt{
 		IxType:    common.IxAssetCreate,
-		IxHash:    ix.Hash(),
+		IxHash:    IxWithoutFuelParams.Hash(),
 		FuelUsed:  100,
 		ExtraData: rawAssetPayload,
 	}
 
-	exec.setInteractionCall(ix, receipt)
+	IxWithFuelParams, err := constructIxn(&common.SendIXArgs{
+		Type:      common.IxAssetCreate,
+		Sender:    ts[0].Address(),
+		Nonce:     0,
+		FuelPrice: big.NewInt(1),
+		FuelLimit: 100,
+		Payload:   rawAssetPayload,
+	}, nil)
+	assert.NoError(t, err)
+
+	receiptWithFuelParams := &common.Receipt{
+		IxType:    common.IxAssetCreate,
+		IxHash:    IxWithFuelParams.Hash(),
+		FuelUsed:  100,
+		ExtraData: rawAssetPayload,
+	}
+
+	exec.setInteractionCall(IxWithoutFuelParams, receiptWithoutFuelParams)
+	exec.setInteractionCall(IxWithFuelParams, receiptWithFuelParams)
 
 	testcases := []struct {
 		name            string
@@ -378,7 +411,6 @@ func TestIx_Call(t *testing.T) {
 				IxArgs: &rpcargs.IxArgs{
 					Type:      common.IxInvalid,
 					Sender:    tests.RandomAddress(t),
-					Nonce:     hexutil.Uint64(3),
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 					FuelLimit: hexutil.Uint64(100),
 					Payload:   (hexutil.Bytes)(rawAssetPayload),
@@ -392,7 +424,6 @@ func TestIx_Call(t *testing.T) {
 				IxArgs: &rpcargs.IxArgs{
 					Type:      common.IxAssetCreate,
 					Sender:    tests.RandomAddress(t),
-					Nonce:     hexutil.Uint64(4),
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 					FuelLimit: hexutil.Uint64(100),
 					Payload:   (hexutil.Bytes)(rawAssetPayload),
@@ -411,7 +442,6 @@ func TestIx_Call(t *testing.T) {
 				IxArgs: &rpcargs.IxArgs{
 					Type:      common.IxAssetCreate,
 					Sender:    tests.RandomAddress(t),
-					Nonce:     hexutil.Uint64(4),
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 					FuelLimit: hexutil.Uint64(100),
 					Payload:   (hexutil.Bytes)(rawAssetPayload),
@@ -425,12 +455,34 @@ func TestIx_Call(t *testing.T) {
 			expectedErr: common.ErrAccountNotFound,
 		},
 		{
-			name: "rpc receipt fetched successfully",
+			name: "rpc receipt fetched successfully when fuel price and limit are not given",
+			callArgs: &rpcargs.CallArgs{
+				IxArgs: &rpcargs.IxArgs{
+					Type:    common.IxAssetCreate,
+					Sender:  ts[0].Address(),
+					Payload: (hexutil.Bytes)(rawAssetPayload),
+				},
+				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
+					ts[0].Address(): {
+						TesseractHash: &tsHash,
+					},
+				},
+			},
+			expectedReceipt: &rpcargs.RPCReceipt{
+				IxType:    hexutil.Uint64(common.IxAssetCreate),
+				IxHash:    IxWithoutFuelParams.Hash(),
+				FuelUsed:  hexutil.Uint64(100),
+				ExtraData: rawAssetPayload,
+				From:      IxWithoutFuelParams.Sender(),
+				To:        IxWithoutFuelParams.Receiver(),
+			},
+		},
+		{
+			name: "rpc receipt fetched successfully when fuel price and limit are given",
 			callArgs: &rpcargs.CallArgs{
 				IxArgs: &rpcargs.IxArgs{
 					Type:      common.IxAssetCreate,
 					Sender:    ts[0].Address(),
-					Nonce:     hexutil.Uint64(4),
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 					FuelLimit: hexutil.Uint64(100),
 					Payload:   (hexutil.Bytes)(rawAssetPayload),
@@ -443,11 +495,11 @@ func TestIx_Call(t *testing.T) {
 			},
 			expectedReceipt: &rpcargs.RPCReceipt{
 				IxType:    hexutil.Uint64(common.IxAssetCreate),
-				IxHash:    ix.Hash(),
+				IxHash:    IxWithFuelParams.Hash(),
 				FuelUsed:  hexutil.Uint64(100),
 				ExtraData: rawAssetPayload,
-				From:      ix.Sender(),
-				To:        ix.Receiver(),
+				From:      IxWithFuelParams.Sender(),
+				To:        IxWithoutFuelParams.Receiver(),
 			},
 		},
 	}

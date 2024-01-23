@@ -95,7 +95,7 @@ func (manager *Manager) InteractionCall(
 	}
 
 	// Run the interaction and return the receipt
-	return manager.runInteraction(ix, ctx, transition, true)
+	return manager.runInteraction(ix, ctx, transition, false)
 }
 
 func (manager *Manager) runInteraction(
@@ -109,17 +109,17 @@ func (manager *Manager) runInteraction(
 	if useIxFuelLimit {
 		// Determine the tank limit from the interaction
 		tank = NewFuelTank(ix.FuelLimit())
+
+		// Check that the sender has sufficient balance
+		if ok, _ := transition.objects.GetObject(ix.Sender()).HasSufficientFuel(ix.Cost()); !ok {
+			receipt = common.NewReceipt(ix)
+			receipt.Status = common.ReceiptFuelExhausted
+
+			return receipt, nil
+		}
 	} else {
 		// Determine the tank limit from the node configuration
 		tank = NewFuelTank(manager.config.FuelLimit)
-	}
-
-	// Check that the sender has sufficient balance
-	if ok, _ := transition.objects.GetObject(ix.Sender()).HasSufficientFuel(ix.Cost()); !ok {
-		receipt = common.NewReceipt(ix)
-		receipt.Status = common.ReceiptFuelExhausted
-
-		return receipt, nil
 	}
 
 	ixtype := ix.Type()
