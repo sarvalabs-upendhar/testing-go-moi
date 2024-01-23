@@ -1048,7 +1048,7 @@ func TestGetSyncJobInfo(t *testing.T) {
 	count := 1
 	addrs := tests.GetAddresses(t, 2)
 	bestPeers := make(map[kramaid.KramaID]struct{})
-	testKramaIDs := tests.GetTestKramaIDs(t, 1)
+	testKramaIDs := tests.RandomKramaIDs(t, 1)
 	bestPeers[testKramaIDs[0]] = struct{}{}
 
 	jobs := createSyncJobs(

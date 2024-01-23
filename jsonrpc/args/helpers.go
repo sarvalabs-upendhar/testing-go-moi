@@ -334,33 +334,10 @@ func CheckForRPCReceipt(
 	require.Equal(t, uint64(receipt.IxType), rpcReceipt.IxType.ToUint64())
 	require.Equal(t, receipt.IxHash, rpcReceipt.IxHash)
 	require.Equal(t, receipt.FuelUsed, uint64(rpcReceipt.FuelUsed))
-	checkForRPCHashes(t, receipt.Hashes, rpcReceipt.Hashes)
 	require.Equal(t, receipt.ExtraData, rpcReceipt.ExtraData)
 	require.Equal(t, ix.Sender(), rpcReceipt.From)
 	require.Equal(t, ix.Receiver(), rpcReceipt.To)
 	require.Equal(t, uint64(ixIndex), rpcReceipt.IXIndex.ToUint64())
-}
-
-func checkForRPCHashes(
-	t *testing.T,
-	expectedRPCHashes common.ReceiptAccHashes,
-	rpcHashes RPCHashes,
-) {
-	t.Helper()
-
-	require.Equal(t, len(expectedRPCHashes), len(rpcHashes))
-
-	for _, rpcHash := range rpcHashes {
-		stateHash := expectedRPCHashes.StateHash(rpcHash.Address)
-		contextHash := expectedRPCHashes.ContextHash(rpcHash.Address)
-
-		require.Equal(t, stateHash, rpcHash.StateHash)
-		require.Equal(t, contextHash, rpcHash.ContextHash)
-	}
-
-	for i := 1; i < len(rpcHashes); i++ {
-		require.True(t, rpcHashes[i-1].Address.Hex() < rpcHashes[i].Address.Hex())
-	}
 }
 
 func CreateInteractionWithTestData(t *testing.T, ixType common.IxType, payload []byte) *common.Interaction {
@@ -368,7 +345,7 @@ func CreateInteractionWithTestData(t *testing.T, ixType common.IxType, payload [
 
 	ixData := common.IxData{
 		Input:   tests.CreateIXInputWithTestData(t, ixType, payload, []byte{187, 1, 29, 103}),
-		Compute: tests.CreateComputeWithTestData(t, tests.RandomHash(t), tests.GetTestKramaIDs(t, 2)),
+		Compute: tests.CreateComputeWithTestData(t, tests.RandomHash(t), tests.RandomKramaIDs(t, 2)),
 		Trust:   tests.CreateTrustWithTestData(t),
 	}
 

@@ -26,30 +26,6 @@ type Log struct {
 	Data      []byte
 }
 
-type Receipt struct {
-	IxType    IxType           `json:"ix_type"`
-	IxHash    Hash             `json:"ix_hash"`
-	Status    ReceiptStatus    `json:"status"`
-	FuelUsed  uint64           `json:"fuel_used"`
-	Hashes    ReceiptAccHashes `json:"hashes"`
-	ExtraData json.RawMessage  `json:"extra_data"`
-	Logs      []*Log           `polo:"-" json:"logs"`
-}
-
-func NewReceipt(ix *Interaction) *Receipt {
-	return &Receipt{
-		IxType:   ix.Type(),
-		IxHash:   ix.Hash(),
-		Hashes:   make(ReceiptAccHashes),
-		FuelUsed: 0,
-	}
-}
-
-type Hashes struct {
-	StateHash   Hash `json:"state_hash"`
-	ContextHash Hash `json:"context_hash"`
-}
-
 func (l *Log) Copy() *Log {
 	log := *l
 
@@ -71,9 +47,14 @@ func (l *Log) Copy() *Log {
 	return &log
 }
 
-type ReceiptAccHashes map[identifiers.Address]*Hashes
+type Hashes struct {
+	StateHash   Hash `json:"state_hash"`
+	ContextHash Hash `json:"context_hash"`
+}
 
-func (h ReceiptAccHashes) SetContextHash(addr identifiers.Address, contextHash Hash) {
+type AccStateHashes map[identifiers.Address]*Hashes
+
+func (h AccStateHashes) SetContextHash(addr identifiers.Address, contextHash Hash) {
 	hashes, ok := h[addr]
 	if !ok {
 		h[addr] = &Hashes{ContextHash: contextHash}
@@ -84,7 +65,7 @@ func (h ReceiptAccHashes) SetContextHash(addr identifiers.Address, contextHash H
 	hashes.ContextHash = contextHash
 }
 
-func (h ReceiptAccHashes) SetStateHash(addr identifiers.Address, stateHash Hash) {
+func (h AccStateHashes) SetStateHash(addr identifiers.Address, stateHash Hash) {
 	hashes, ok := h[addr]
 
 	if !ok {
@@ -96,7 +77,7 @@ func (h ReceiptAccHashes) SetStateHash(addr identifiers.Address, stateHash Hash)
 	hashes.StateHash = stateHash
 }
 
-func (h ReceiptAccHashes) ContextHash(addr identifiers.Address) Hash {
+func (h AccStateHashes) ContextHash(addr identifiers.Address) Hash {
 	hashes, ok := h[addr]
 	if !ok {
 		return NilHash
@@ -105,7 +86,7 @@ func (h ReceiptAccHashes) ContextHash(addr identifiers.Address) Hash {
 	return hashes.ContextHash
 }
 
-func (h ReceiptAccHashes) StateHash(addr identifiers.Address) Hash {
+func (h AccStateHashes) StateHash(addr identifiers.Address) Hash {
 	hashes, ok := h[addr]
 	if !ok {
 		return NilHash
@@ -114,12 +95,12 @@ func (h ReceiptAccHashes) StateHash(addr identifiers.Address) Hash {
 	return hashes.StateHash
 }
 
-func (h ReceiptAccHashes) Copy() ReceiptAccHashes {
+func (h AccStateHashes) Copy() AccStateHashes {
 	if len(h) == 0 {
 		return nil
 	}
 
-	hashmap := make(ReceiptAccHashes)
+	hashmap := make(AccStateHashes)
 
 	for key, value := range h {
 		hashmap[key] = &Hashes{
@@ -131,11 +112,27 @@ func (h ReceiptAccHashes) Copy() ReceiptAccHashes {
 	return hashmap
 }
 
+type Receipt struct {
+	IxType    IxType          `json:"ix_type"`
+	IxHash    Hash            `json:"ix_hash"`
+	Status    ReceiptStatus   `json:"status"`
+	FuelUsed  uint64          `json:"fuel_used"`
+	ExtraData json.RawMessage `json:"extra_data"`
+	Logs      []*Log          `polo:"-" json:"logs"`
+}
+
+func NewReceipt(ix *Interaction) *Receipt {
+	return &Receipt{
+		IxType:   ix.Type(),
+		IxHash:   ix.Hash(),
+		FuelUsed: 0,
+	}
+}
+
 func (r *Receipt) Copy() *Receipt {
 	receipt := *r
 
 	receipt.FuelUsed = r.FuelUsed
-	receipt.Hashes = r.Hashes.Copy()
 
 	if len(r.ExtraData) > 0 {
 		receipt.ExtraData = make(json.RawMessage, len(r.ExtraData))

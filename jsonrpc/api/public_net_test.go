@@ -15,7 +15,7 @@ import (
 func TestPublicNetAPI_Peers(t *testing.T) {
 	network := NewMockNetwork(t)
 	netAPI := NewPublicNetAPI(network)
-	peersList := tests.GetTestKramaIDs(t, 5)
+	peersList := tests.RandomKramaIDs(t, 5)
 
 	testcases := []struct {
 		name         string

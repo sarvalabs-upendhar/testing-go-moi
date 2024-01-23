@@ -91,7 +91,7 @@ type ixPool interface {
 }
 
 type execution interface {
-	ExecuteInteractions(common.Interactions, *common.ExecutionContext) (common.Receipts, error)
+	ExecuteInteractions(common.Interactions, *common.ExecutionContext) (common.Receipts, common.AccStateHashes, error)
 	Revert(common.ClusterID) error
 	Cleanup(common.ClusterID)
 }
@@ -1117,7 +1117,7 @@ func (k *Engine) createProposalGrid(slot *ktypes.Slot) ([]*common.Tesseract, err
 		return nil, err
 	}
 
-	receipts, err := k.exec.ExecuteInteractions(
+	receipts, stateHashes, err := k.exec.ExecuteInteractions(
 		clusterState.Ixs,
 		clusterState.ExecutionContext(),
 	)
@@ -1126,6 +1126,7 @@ func (k *Engine) createProposalGrid(slot *ktypes.Slot) ([]*common.Tesseract, err
 	}
 	// store the receipts
 	clusterState.SetReceipts(receipts)
+	clusterState.SetPostExecState(stateHashes)
 	k.logger.Debug("Generating tesseracts", "cluster-ID", slot.ClusterID())
 
 	return GenerateTesseracts(clusterState)
@@ -1407,11 +1408,11 @@ func (k *Engine) finalizedTesseractHandler(tesseracts []*common.Tesseract) error
 func generateBody(
 	addr identifiers.Address,
 	state *ktypes.ClusterState,
-	ixHash, ixnsHash, receiptHash common.Hash,
+	ixnsHash, receiptHash common.Hash,
 ) common.TesseractBody {
 	return common.TesseractBody{
-		StateHash:       state.GetStateHash(ixHash, addr),
-		ContextHash:     state.GetContextHash(ixHash, addr),
+		StateHash:       state.GetStateHash(addr),
+		ContextHash:     state.GetContextHash(addr),
 		ContextDelta:    state.GetContextDelta(),
 		InteractionHash: ixnsHash,
 		ReceiptHash:     receiptHash,
@@ -1481,7 +1482,7 @@ func GenerateTesseracts(state *ktypes.ClusterState) ([]*common.Tesseract, error)
 	)
 
 	if !ix.Sender().IsNil() {
-		senderBody = generateBody(ix.Sender(), state, ix.Hash(), ixnsHash, receiptHash)
+		senderBody = generateBody(ix.Sender(), state, ixnsHash, receiptHash)
 
 		senderBodyHash, err = senderBody.Hash()
 		if err != nil {
@@ -1492,7 +1493,7 @@ func GenerateTesseracts(state *ktypes.ClusterState) ([]*common.Tesseract, error)
 	}
 
 	if !ix.Receiver().IsNil() {
-		receiverBody = generateBody(ix.Receiver(), state, ix.Hash(), ixnsHash, receiptHash)
+		receiverBody = generateBody(ix.Receiver(), state, ixnsHash, receiptHash)
 
 		receiverBodyHash, err = receiverBody.Hash()
 		if err != nil {
@@ -1502,7 +1503,7 @@ func GenerateTesseracts(state *ktypes.ClusterState) ([]*common.Tesseract, error)
 		groupBuffer = append(groupBuffer, receiverBodyHash.Bytes()...)
 
 		if state.AccountInfos.IsGenesis(ix.Receiver()) {
-			genesisBody = generateBody(common.SargaAddress, state, ix.Hash(), ixnsHash, receiptHash)
+			genesisBody = generateBody(common.SargaAddress, state, ixnsHash, receiptHash)
 
 			genesisBodyHash, err = genesisBody.Hash()
 			if err != nil {

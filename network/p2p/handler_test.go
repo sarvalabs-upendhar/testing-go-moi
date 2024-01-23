@@ -14,7 +14,7 @@ import (
 )
 
 func TestVerifyHelloMsg(t *testing.T) {
-	kramaID := tests.GetTestKramaID(t, 0)
+	kramaID := tests.RandomKramaID(t, 0)
 
 	h := NewSubHandler(kramaID, hclog.NewNullLogger(), nil, nil, nil, &utils.TypeMux{}, nil, nil)
 	helloMsg := createSignedHelloMsg(t)
@@ -34,7 +34,7 @@ func TestVerifyHelloMsg(t *testing.T) {
 		{
 			name: "Signature verification failed",
 			msg: &message.HelloMsg{
-				KramaID:   tests.GetTestKramaID(t, 1),
+				KramaID:   tests.RandomKramaID(t, 1),
 				Signature: helloMsg.Signature,
 			},
 			expectedError: errors.New("Signature verification failed"),
@@ -66,7 +66,7 @@ func TestVerifyHelloMsg(t *testing.T) {
 
 func TestReputationEngine_SenatusHandler(t *testing.T) {
 	h := NewSubHandler(
-		tests.GetTestKramaID(t, 0),
+		tests.RandomKramaID(t, 0),
 		hclog.NewNullLogger(),
 		nil,
 		nil,
@@ -123,7 +123,7 @@ func getHelloMessage(t *testing.T, addr string) []byte {
 	t.Helper()
 
 	hmsg := &message.HelloMsg{
-		KramaID: tests.GetTestKramaID(t, 1),
+		KramaID: tests.RandomKramaID(t, 1),
 		Address: []string{addr},
 	}
 

@@ -131,9 +131,9 @@ func TestCopyContextDelta(t *testing.T) {
 
 	contextDelta[address] = &common.DeltaGroup{
 		Role:             common.Sender,
-		BehaviouralNodes: tests.GetTestKramaIDs(t, 2),
-		RandomNodes:      tests.GetTestKramaIDs(t, 2),
-		ReplacedNodes:    tests.GetTestKramaIDs(t, 2),
+		BehaviouralNodes: tests.RandomKramaIDs(t, 2),
+		RandomNodes:      tests.RandomKramaIDs(t, 2),
+		ReplacedNodes:    tests.RandomKramaIDs(t, 2),
 	}
 
 	testcases := []struct {
@@ -235,7 +235,7 @@ func TestNewTesseract(t *testing.T) {
 			ixns:     tests.CreateIxns(t, 1, ixParams),
 			receipts: createReceiptsWithTestData(t, tests.RandomHash(t)),
 			seal:     []byte{1, 2, 3},
-			sealer:   tests.GetTestKramaIDs(t, 1)[0],
+			sealer:   tests.RandomKramaIDs(t, 1)[0],
 		},
 	}
 

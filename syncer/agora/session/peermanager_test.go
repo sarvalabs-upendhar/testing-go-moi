@@ -16,7 +16,7 @@ func TestPeerDisconnected(t *testing.T) {
 	network := NewMockNetwork()
 	sessionID := tests.RandomAddress(t)
 
-	peerID := tests.GetTestKramaIDs(t, 1)[0]
+	peerID := tests.RandomKramaIDs(t, 1)[0]
 	pm := NewTestPeerManager(sessionID, network)
 
 	// update connected peers
@@ -37,7 +37,7 @@ func TestUpdateFailedAttempts(t *testing.T) {
 	network := NewMockNetwork()
 	sessionID := tests.RandomAddress(t)
 
-	peerID := tests.GetTestKramaIDs(t, 2)
+	peerID := tests.RandomKramaIDs(t, 2)
 	pm := NewTestPeerManager(sessionID, network)
 
 	tt := []struct {
@@ -51,7 +51,7 @@ func TestUpdateFailedAttempts(t *testing.T) {
 		{
 			name:         "Peer not available",
 			peers:        nil,
-			peerID:       tests.GetTestKramaIDs(t, 1)[0],
+			peerID:       tests.RandomKramaIDs(t, 1)[0],
 			delta:        0,
 			isSuccess:    false,
 			updatedCount: 0,
@@ -98,7 +98,7 @@ func TestUpdatePeerStatus(t *testing.T) {
 	network := NewMockNetwork()
 	sessionID := tests.RandomAddress(t)
 
-	peerID := tests.GetTestKramaIDs(t, 2)
+	peerID := tests.RandomKramaIDs(t, 2)
 	pm := NewTestPeerManager(sessionID, network)
 
 	tt := []struct {
@@ -112,7 +112,7 @@ func TestUpdatePeerStatus(t *testing.T) {
 		{
 			name:          "peer not available",
 			peers:         nil,
-			peerID:        tests.GetTestKramaIDs(t, 1)[0],
+			peerID:        tests.RandomKramaIDs(t, 1)[0],
 			isSuccess:     false,
 			status:        true,
 			updatedStatus: true,
@@ -159,7 +159,7 @@ func TestChooseBestPeer_FromConnectedPeers(t *testing.T) {
 	network := NewMockNetwork()
 	sessionID := tests.RandomAddress(t)
 
-	ids := tests.GetTestKramaIDs(t, 2)
+	ids := tests.RandomKramaIDs(t, 2)
 	tt := []struct {
 		name  string
 		peers map[kramaid.KramaID]struct {

@@ -898,7 +898,7 @@ func createNodeMetaInfo(t *testing.T, count int) ([]peer.ID, map[peer.ID]*senatu
 	t.Helper()
 
 	peerIDs := make([]peer.ID, 0)
-	kramaIDs := tests.GetTestKramaIDs(t, count)
+	kramaIDs := tests.RandomKramaIDs(t, count)
 	nodeMetaInfo := make(map[peer.ID]*senatus.NodeMetaInfo)
 
 	for _, kramaID := range kramaIDs {
@@ -1077,8 +1077,8 @@ func getContext(t *testing.T, count int) *Context {
 	t.Helper()
 
 	return &Context{
-		tests.GetTestKramaIDs(t, count),
-		tests.GetTestKramaIDs(t, count),
+		tests.RandomKramaIDs(t, count),
+		tests.RandomKramaIDs(t, count),
 	}
 }
 

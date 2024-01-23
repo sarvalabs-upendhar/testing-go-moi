@@ -35,6 +35,20 @@ import (
 
 const InvalidAccount common.AccountType = 9999
 
+type HashInterface interface {
+	Hash() (common.Hash, error)
+}
+
+// GetHash is used to return the hash of any type which implements HashInterface
+func GetHash[T HashInterface](t *testing.T, in T) common.Hash {
+	t.Helper()
+
+	hash, err := in.Hash()
+	assert.NoError(t, err)
+
+	return hash
+}
+
 func RandomAddress(t *testing.T) identifiers.Address {
 	t.Helper()
 
@@ -72,7 +86,7 @@ func RandomHash(t *testing.T) common.Hash {
 	return common.BytesToHash(hash)
 }
 
-func GetTestKramaID(t *testing.T, nthValidator uint32) kramaid.KramaID {
+func RandomKramaID(t *testing.T, nthValidator uint32) kramaid.KramaID {
 	t.Helper()
 
 	var signKey [32]byte
@@ -80,7 +94,7 @@ func GetTestKramaID(t *testing.T, nthValidator uint32) kramaid.KramaID {
 	_, err := rand.Read(signKey[:])
 	require.NoError(t, err)
 
-	privateKeys, moiPubBytes, err := GetPrivKeysForTest(signKey[:])
+	privateKeys, moiPubBytes, err := GetPrivKeysForTest(t, signKey[:])
 	require.NoError(t, err)
 
 	kramaID, err := kramaid.NewKramaID(
@@ -95,19 +109,19 @@ func GetTestKramaID(t *testing.T, nthValidator uint32) kramaid.KramaID {
 	return kramaID
 }
 
-func GetTestKramaIDs(t *testing.T, count int) []kramaid.KramaID {
+func RandomKramaIDs(t *testing.T, count int) []kramaid.KramaID {
 	t.Helper()
 
 	ids := make([]kramaid.KramaID, 0, count)
 
 	for i := 0; i < count; i++ {
-		ids = append(ids, GetTestKramaID(t, uint32(i)))
+		ids = append(ids, RandomKramaID(t, uint32(i)))
 	}
 
 	return ids
 }
 
-func GetTestPeerID(t *testing.T) peer.ID {
+func RandomPeerID(t *testing.T) peer.ID {
 	t.Helper()
 
 	var signKey [32]byte
@@ -115,7 +129,7 @@ func GetTestPeerID(t *testing.T) peer.ID {
 	_, err := rand.Read(signKey[:])
 	require.NoError(t, err)
 
-	privateKeys, _, err := GetPrivKeysForTest(signKey[:])
+	privateKeys, _, err := GetPrivKeysForTest(t, signKey[:])
 	require.NoError(t, err)
 
 	peerID, err := kramaid.GeneratePeerID(privateKeys[32:])
@@ -124,13 +138,13 @@ func GetTestPeerID(t *testing.T) peer.ID {
 	return peerID
 }
 
-func GetTestPeerIDs(t *testing.T, count int) []peer.ID {
+func RandomPeerIDs(t *testing.T, count int) []peer.ID {
 	t.Helper()
 
 	peerIDs := make([]peer.ID, 0)
 
 	for i := 0; i < count; i++ {
-		peerIDs = append(peerIDs, GetTestPeerID(t))
+		peerIDs = append(peerIDs, RandomPeerID(t))
 	}
 
 	return peerIDs
@@ -179,7 +193,8 @@ func RetryUntilTimeout(ctx context.Context, delay time.Duration, f func() (inter
 	return res.data, res.err
 }
 
-func GetPrivKeysForTest(seed []byte) ([]byte, []byte, error) {
+func GetPrivKeysForTest(t *testing.T, seed []byte) ([]byte, []byte, error) {
+	t.Helper()
 	// Let's derive 'm' in the path
 	masterKey, err := hdkeychain.NewMaster(seed, &chaincfg.MainNetParams) // here key is master key
 	if err != nil {
@@ -300,6 +315,17 @@ func GetRandomUpperCaseString(t *testing.T, length int) string {
 	}
 
 	return string(randomString)
+}
+
+func GetRandomStrings(t *testing.T, count int) []string {
+	t.Helper()
+
+	randomStrings := make([]string, 0, count)
+	for i := 0; i < count; i++ {
+		randomStrings = append(randomStrings, GetRandomUpperCaseString(t, 5))
+	}
+
+	return randomStrings
 }
 
 func GetRandomAssetInfo(t *testing.T, addr identifiers.Address) *common.AssetDescriptor {
@@ -432,7 +458,7 @@ func GetTesseract(t *testing.T, height uint64, ixns common.Interactions) *common
 	}
 	body := common.TesseractBody{}
 
-	return common.NewTesseract(header, body, ixns, nil, []byte{1}, GetTestKramaID(t, 0))
+	return common.NewTesseract(header, body, ixns, nil, []byte{1}, RandomKramaID(t, 0))
 }
 
 func GetRandomAccMetaInfo(t *testing.T, height uint64) *common.AccountMetaInfo {
@@ -470,15 +496,15 @@ func GetTestPublicKeys(t *testing.T, count int) [][]byte {
 func GetTestKramaIdsWithPublicKeys(t *testing.T, count int) ([]kramaid.KramaID, [][]byte) {
 	t.Helper()
 
-	return GetTestKramaIDs(t, count), GetTestPublicKeys(t, count)
+	return RandomKramaIDs(t, count), GetTestPublicKeys(t, count)
 }
 
-func GetRandomAddressList(t *testing.T, count uint8) []identifiers.Address {
+func GetRandomAddressList(t *testing.T, count int) []identifiers.Address {
 	t.Helper()
 
 	address := make([]identifiers.Address, count)
 
-	for i := uint8(0); i < count; i++ {
+	for i := 0; i < count; i++ {
 		address[i] = RandomAddress(t)
 	}
 
@@ -497,8 +523,7 @@ type CreateTesseractParams struct {
 	BodyCallback   func(body *common.TesseractBody)
 }
 
-// CreateTesseract creates a tesseract using tessseract params fields
-// if any field thats not available in params need to be initialized using TesseractCallback field
+// CreateTesseract is a helper function to create test with the provided params
 func CreateTesseract(t *testing.T, params *CreateTesseractParams) *common.Tesseract {
 	t.Helper()
 
@@ -930,7 +955,7 @@ func CreateTrustWithTestData(t *testing.T) common.IxTrust {
 
 	IxTrust := common.IxTrust{
 		MTQ:        8,
-		TrustNodes: GetTestKramaIDs(t, 2),
+		TrustNodes: RandomKramaIDs(t, 2),
 	}
 
 	return IxTrust
@@ -953,15 +978,7 @@ func CreateReceiptWithTestData(t *testing.T) *common.Receipt {
 		Logs:      []*common.Log{logs},
 		Status:    common.ReceiptStateReverted,
 		FuelUsed:  99,
-		Hashes:    make(common.ReceiptAccHashes),
 		ExtraData: []byte{1, 2},
-	}
-
-	for i := 0; i < 3; i++ {
-		receipt.Hashes[RandomAddress(t)] = &common.Hashes{
-			StateHash:   RandomHash(t),
-			ContextHash: RandomHash(t),
-		}
 	}
 
 	return receipt
@@ -984,7 +1001,7 @@ func CreateBodyWithTestData(t *testing.T) common.TesseractBody {
 	}
 
 	body.ContextDelta[RandomAddress(t)] = &common.DeltaGroup{
-		BehaviouralNodes: GetTestKramaIDs(t, 2),
+		BehaviouralNodes: RandomKramaIDs(t, 2),
 	}
 
 	return body
@@ -1083,7 +1100,7 @@ func GetKramaIDAndNetworkKey(t *testing.T, nthValidator uint32) (kramaid.KramaID
 	require.NoError(t, err)
 
 	// get private key and public key
-	privKeyBytes, moiPubBytes, err := GetPrivKeysForTest(signKey[:])
+	privKeyBytes, moiPubBytes, err := GetPrivKeysForTest(t, signKey[:])
 	require.NoError(t, err)
 
 	networkKey := privKeyBytes[32:]

@@ -10,37 +10,6 @@ import (
 	"github.com/sarvalabs/go-moi/common/tests"
 )
 
-func TestCopyHashes(t *testing.T) {
-	hashes := make(common.ReceiptAccHashes, 0)
-
-	for i := 0; i < 3; i++ {
-		hashes[tests.RandomAddress(t)] = &common.Hashes{
-			StateHash:   tests.RandomHash(t),
-			ContextHash: tests.RandomHash(t),
-		}
-	}
-
-	testcases := []struct {
-		name    string
-		hashmap common.ReceiptAccHashes
-	}{
-		{
-			name:    "Hashmap copied successfully",
-			hashmap: hashes,
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			expectedHashMap := test.hashmap
-
-			hashmapCopy := test.hashmap.Copy()
-
-			require.Equal(t, expectedHashMap, hashmapCopy)
-		})
-	}
-}
-
 func TestCopyReceipt(t *testing.T) {
 	receiptWithNilData := tests.CreateReceiptWithTestData(t)
 	receiptWithNilData.ExtraData = nil
@@ -68,13 +37,6 @@ func TestCopyReceipt(t *testing.T) {
 			copiedReceipt := test.receipt.Copy()
 
 			require.Equal(t, expectedReceipt, copiedReceipt)
-
-			if test.receipt.Hashes != nil {
-				require.NotEqual(t,
-					reflect.ValueOf(expectedReceipt.Hashes).Pointer(),
-					reflect.ValueOf(copiedReceipt.Hashes).Pointer(),
-				)
-			}
 
 			if !test.isExtraDataNil {
 				require.NotEqual(t,

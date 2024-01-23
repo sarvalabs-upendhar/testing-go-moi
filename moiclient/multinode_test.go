@@ -179,7 +179,7 @@ func (tm *TestMultiNode) TestNodeMetaInfo() {
 		{
 			name: "fetch node meta info for random peer id",
 			nodeArgs: &rpcargs.NodeMetaInfoArgs{
-				PeerID: tests.GetTestPeerID(tm.T()).String(),
+				PeerID: tests.RandomPeerID(tm.T()).String(),
 			},
 			expectedError: common.ErrKeyNotFound,
 		},

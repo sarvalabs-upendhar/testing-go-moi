@@ -69,7 +69,7 @@ func createKramaIDAndPrivateKey(t *testing.T, nthValidator uint32) (kramaid.Kram
 	require.NoError(t, err)
 
 	// get private key and public key
-	privKeyBytes, moiPubBytes, err := tests.GetPrivKeysForTest(signKey[:])
+	privKeyBytes, moiPubBytes, err := tests.GetPrivKeysForTest(t, signKey[:])
 	require.NoError(t, err)
 
 	kramaID, err := kramaid.NewKramaID( // Create kramaID from private key , public key
@@ -424,9 +424,9 @@ func createTestClusterInfo(
 		nil,
 		ixs,
 		"cluster1",
-		tests.GetTestKramaIDs(t, 2)[0],
+		tests.RandomKramaIDs(t, 2)[0],
 		time.Now(),
-		tests.GetTestKramaIDs(t, 2)[1],
+		tests.RandomKramaIDs(t, 2)[1],
 	)
 
 	func(clusterInfo *ktypes.ClusterState) {

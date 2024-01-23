@@ -103,7 +103,7 @@ func TestPublicDebugAPI_GetNodeMetaInfo(t *testing.T) {
 		{
 			name: "Return error if the queried peer id's node meta info doesn't exists",
 			args: rpcargs.NodeMetaInfoArgs{
-				PeerID: tests.GetTestPeerID(t).String(),
+				PeerID: tests.RandomPeerID(t).String(),
 			},
 			entries:       entries,
 			expectedError: common.ErrKeyNotFound,
@@ -111,7 +111,7 @@ func TestPublicDebugAPI_GetNodeMetaInfo(t *testing.T) {
 		{
 			name: "Return error if the queried krama id's node meta info doesn't exists",
 			args: rpcargs.NodeMetaInfoArgs{
-				KramaID: tests.GetTestKramaID(t, 2),
+				KramaID: tests.RandomKramaID(t, 2),
 			},
 			entries:       entries,
 			expectedError: common.ErrKeyNotFound,

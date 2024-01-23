@@ -151,7 +151,7 @@ func createTestReputationEngine(t *testing.T) (*ReputationEngine, *MockDB, *Mock
 	mockDB := NewMockDB()
 	mockState := NewMockState()
 	nodeMetaInfo := &NodeMetaInfo{
-		KramaID: tests.GetTestKramaID(t, 0),
+		KramaID: tests.RandomKramaID(t, 0),
 	}
 
 	r, err := NewReputationEngine(

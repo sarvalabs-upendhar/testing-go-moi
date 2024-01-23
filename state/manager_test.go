@@ -409,8 +409,8 @@ func TestStateManager_GetLatestStateObject(t *testing.T) {
 func TestStateManager_GetStateObject(t *testing.T) {
 	account, stateHash := getTestAccounts(t, []common.Hash{tests.RandomHash(t), tests.RandomHash(t)}, 2)
 
-	so := NewStateObject(tests.RandomAddress(t), nil, mockJournal(), mockDB(), *account[0])
-	so1 := NewStateObject(tests.RandomAddress(t), nil, mockJournal(), mockDB(), *account[1])
+	so := NewStateObject(tests.RandomAddress(t), nil, mockDB(), *account[0])
+	so1 := NewStateObject(tests.RandomAddress(t), nil, mockDB(), *account[1])
 
 	ts := tests.CreateTesseract(t, getTesseractParamsWithStateHash(so1.Address(), stateHash[1]))
 
@@ -1157,7 +1157,7 @@ func TestStateManager_IsAccountRegistered_With_SargaObject(t *testing.T) {
 	cache, err := lru.New(20)
 	assert.NoError(t, err)
 
-	so := NewStateObject(common.SargaAddress, cache, mockJournal(), db, common.Account{
+	so := NewStateObject(common.SargaAddress, cache, db, common.Account{
 		AccType: common.SargaAccount,
 	})
 	_, err = so.createStorageTreeForLogic(common.SargaLogicID)
@@ -1546,7 +1546,7 @@ func TestStateManager_SyncLogicStorageTree(t *testing.T) {
 
 			require.NoError(t, err)
 
-			root := test.stateObject.activeStorageTrees[string(test.logicID)].Root()
+			root := test.stateObject.storageTrees[test.logicID].Root()
 			require.Equal(t, test.newRoot, &root)
 		})
 	}
@@ -1567,7 +1567,7 @@ func TestStateManager_SyncStorageTrees(t *testing.T) {
 
 	so := createTestStateObjects(t, 2, soParams)
 
-	stateObject := NewStateObject(logicIDs[0].Address(), mockCache(t), mockJournal(), db, common.Account{})
+	stateObject := NewStateObject(logicIDs[0].Address(), mockCache(t), db, common.Account{})
 
 	storageTree, err := stateObject.createStorageTreeForLogic(logicIDs[0])
 	assert.NoError(t, err)
@@ -1653,7 +1653,7 @@ func TestStateManager_SyncStorageTrees(t *testing.T) {
 
 			require.NoError(t, err)
 
-			entry := test.stateObject.activeStorageTrees[string(test.logicID)]
+			entry := test.stateObject.storageTrees[test.logicID]
 			require.NotNil(t, entry)
 
 			root := entry.Root()
@@ -1674,7 +1674,7 @@ func TestStateManager_SyncLogicTree(t *testing.T) {
 	require.NoError(t, err)
 
 	soParams := map[int]*createStateObjectParams{
-		0: stateObjectParamsWithLogicTree(t, logicID.Address(), db, logicTree, common.NilHash),
+		0: stateObjectParamsWithLogicTree(t, logicID.Address(), db, logicTree, common.NilHash, nil),
 		1: {
 			address: tests.RandomAddress(t),
 		},
@@ -1923,7 +1923,7 @@ func TestStateManager_GetParticipantContextRaw(t *testing.T) {
 	mObj := make([]*MetaContextObject, 5)
 	mHash := make([]common.Hash, 5)
 
-	kramaIDs := tests.GetTestKramaIDs(t, 12)
+	kramaIDs := tests.RandomKramaIDs(t, 12)
 	obj, cHash := getContextObjects(t, kramaIDs, 2, 6)
 	mObj[0], mHash[0] = getMetaContextObject(t, cHash[0], cHash[1])
 	mObj[1], mHash[1] = getMetaContextObject(t, cHash[2], common.NilHash)
@@ -2020,7 +2020,7 @@ func TestStateManager_GetStorageEntry(t *testing.T) {
 	db := mockDB()
 	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
 
-	so := NewStateObject(logicID.Address(), mockCache(t), mockJournal(), db, common.Account{})
+	so := NewStateObject(logicID.Address(), mockCache(t), db, common.Account{})
 
 	_, err := so.createStorageTreeForLogic(logicID)
 	assert.NoError(t, err)
@@ -2094,7 +2094,7 @@ func TestStateManager_IsLogicRegistered(t *testing.T) {
 
 	engineio.RegisterRuntime(pisa.NewRuntime(), nil)
 
-	so := NewStateObject(logicID.Address(), mockCache(t), mockJournal(), db, common.Account{})
+	so := NewStateObject(logicID.Address(), mockCache(t), db, common.Account{})
 
 	err := so.InsertNewLogicObject(logicID, logicObject)
 	require.NoError(t, err)
@@ -2309,7 +2309,7 @@ func TestStateManager_GetLogicManifest(t *testing.T) {
 	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
 	logicObject.ManifestHash = manifestHash
 
-	so := NewStateObject(logicID.Address(), mockCache(t), mockJournal(), db, common.Account{})
+	so := NewStateObject(logicID.Address(), mockCache(t), db, common.Account{})
 
 	err := so.InsertNewLogicObject(logicID, logicObject)
 	require.NoError(t, err)
@@ -2389,7 +2389,7 @@ func TestStateManager_GetLogicIDs(t *testing.T) {
 	expectedLogicIDs := make([]identifiers.LogicID, 0)
 	db := mockDB()
 	address := tests.RandomAddress(t)
-	so := NewStateObject(address, mockCache(t), mockJournal(), db, common.Account{})
+	so := NewStateObject(address, mockCache(t), db, common.Account{})
 
 	for i := 0; i < 3; i++ {
 		logicID := tests.GetLogicID(t, tests.RandomAddress(t))
@@ -2623,7 +2623,7 @@ func TestStateManager_GetReceiverContext_RegisteredAccount(t *testing.T) {
 	cache, err := lru.New(20)
 	assert.NoError(t, err)
 
-	so := NewStateObject(common.SargaAddress, cache, mockJournal(), db, common.Account{
+	so := NewStateObject(common.SargaAddress, cache, db, common.Account{
 		AccType: common.SargaAccount,
 	})
 	_, err = so.createStorageTreeForLogic(common.SargaLogicID)
@@ -2737,7 +2737,7 @@ func TestStateManager_GetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 	cache, err := lru.New(20)
 	assert.NoError(t, err)
 
-	so := NewStateObject(common.SargaAddress, cache, mockJournal(), db, common.Account{
+	so := NewStateObject(common.SargaAddress, cache, db, common.Account{
 		AccType:     common.SargaAccount,
 		ContextHash: mHash[0],
 	})
@@ -2889,8 +2889,8 @@ func TestStateManager_FetchICSNodeSet(t *testing.T) {
 			name: "cluster info responses slice is empty",
 			ts:   ts[0],
 			clusterInfo: &common.ICSClusterInfo{
-				RandomSet:   tests.GetTestKramaIDs(t, 2),
-				ObserverSet: tests.GetTestKramaIDs(t, 2),
+				RandomSet:   tests.RandomKramaIDs(t, 2),
+				ObserverSet: tests.RandomKramaIDs(t, 2),
 				Responses:   nil,
 			},
 			expectedError: errors.New("nil responses slice"),
@@ -2959,7 +2959,7 @@ func TestStateManager_FetchInteractionContext(t *testing.T) {
 	cache, err := lru.New(20)
 	assert.NoError(t, err)
 
-	so := NewStateObject(common.SargaAddress, cache, mockJournal(), db, common.Account{
+	so := NewStateObject(common.SargaAddress, cache, db, common.Account{
 		AccType: common.SargaAccount,
 	})
 
@@ -3126,7 +3126,6 @@ func TestStateManager_GetAccountInfo(t *testing.T) {
 
 func TestStateManager_GetAccTypeUsingStateObject(t *testing.T) {
 	soParams := &createStateObjectParams{
-		journal: mockJournal(),
 		account: &common.Account{AccType: common.LogicAccount},
 	}
 
@@ -3216,7 +3215,7 @@ func TestStateManager_SyncTree(t *testing.T) {
 		},
 		{
 			name: "failed to set entry of the tree root with the new root",
-			tree: getMerkleTreeWithSetHook(t, [][]byte{keys[0]}, [][]byte{values[0]}, func() error {
+			tree: getMerkleTreeWithHook(t, [][]byte{keys[0]}, [][]byte{values[0]}, func() error {
 				return errors.New("failed to set entry")
 			}),
 			newRoot: common.RootNode{
@@ -3398,7 +3397,7 @@ func TestStateManager_IsAccountRegisteredAt(t *testing.T) {
 	cache, err := lru.New(100)
 	require.NoError(t, err)
 
-	so := NewStateObject(common.SargaAddress, cache, mockJournal(), db, common.Account{
+	so := NewStateObject(common.SargaAddress, cache, db, common.Account{
 		StorageRoot: storageRoot,
 	})
 

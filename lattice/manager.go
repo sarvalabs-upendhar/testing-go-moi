@@ -84,7 +84,7 @@ type ixpool interface {
 }
 
 type executor interface {
-	ExecuteInteractions(common.Interactions, *common.ExecutionContext) (common.Receipts, error)
+	ExecuteInteractions(common.Interactions, *common.ExecutionContext) (common.Receipts, common.AccStateHashes, error)
 	Revert(common.ClusterID) error
 	SpawnExecutor() *compute.IxExecutor
 	Cleanup(cluster common.ClusterID)
@@ -925,7 +925,7 @@ func (c *ChainManager) ExecuteAndValidate(tesseracts ...*common.Tesseract) error
 		"lock", tesseracts[0].Header().ContextLock,
 	)
 
-	receipts, err := c.exec.ExecuteInteractions(
+	receipts, stateHashes, err := c.exec.ExecuteInteractions(
 		tesseracts[0].Interactions(),
 		tesseracts[0].ExecutionContext(),
 	)
@@ -933,7 +933,7 @@ func (c *ChainManager) ExecuteAndValidate(tesseracts ...*common.Tesseract) error
 		return err
 	}
 
-	if !isReceiptAndGroupHashValid(tesseracts, receipts) || !areStateHashesValid(tesseracts, receipts) {
+	if !isReceiptAndGroupHashValid(tesseracts, receipts) || !areStateHashesValid(tesseracts, stateHashes) {
 		if err = c.exec.Revert(tesseracts[0].ClusterID()); err != nil {
 			c.logger.Error("Failed to revert the execution changes", "cluster-ID", tesseracts[0].ClusterID())
 
@@ -1158,21 +1158,10 @@ func (c *ChainManager) SetupGenesisLogics(
 	return hashes, nil
 }
 
-func areStateHashesValid(tesseracts []*common.Tesseract, receipts common.Receipts) bool {
-	if len(tesseracts[0].Interactions()) == 0 {
-		return false
-	}
-
-	for _, ix := range tesseracts[0].Interactions() {
-		receipt, err := receipts.GetReceipt(ix.Hash())
-		if err != nil {
+func areStateHashesValid(tesseracts []*common.Tesseract, postExecState common.AccStateHashes) bool {
+	for _, ts := range tesseracts {
+		if postExecState.StateHash(ts.Address()) != ts.StateHash() {
 			return false
-		}
-
-		for _, ts := range tesseracts {
-			if receipt.Hashes.StateHash(ts.Address()) != ts.StateHash() {
-				return false
-			}
 		}
 	}
 

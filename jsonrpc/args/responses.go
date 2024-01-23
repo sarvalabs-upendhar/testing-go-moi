@@ -94,7 +94,6 @@ type RPCReceipt struct {
 	IxHash    common.Hash          `json:"ix_hash"`
 	Status    common.ReceiptStatus `json:"status"`
 	FuelUsed  hexutil.Uint64       `json:"fuel_used"`
-	Hashes    RPCHashes            `json:"hashes"`
 	ExtraData json.RawMessage      `json:"extra_data"`
 	From      identifiers.Address  `json:"from"`
 	To        identifiers.Address  `json:"to"`

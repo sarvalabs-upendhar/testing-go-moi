@@ -24,7 +24,7 @@ type IxExecutor struct {
 
 	metrics *Metrics
 
-	commitHashes map[identifiers.Address]common.Hash
+	commitHashes common.AccStateHashes
 }
 
 // Execute executes all the given Interactions with their context delta.
@@ -66,6 +66,16 @@ func (executor *IxExecutor) Execute(ixs common.Interactions, ctx *common.Executi
 		checkpoint = executor.transition
 	}
 
+	// Update the context for participants
+	if err = executor.UpdateContext(); err != nil {
+		return errors.Wrap(err, "execution failed")
+	}
+
+	// Commit the state objects of all interaction participants
+	if err := executor.CommitStateObjects(); err != nil {
+		return errors.Wrap(err, "execution failed")
+	}
+
 	return nil
 }
 
@@ -99,17 +109,6 @@ func (executor *IxExecutor) executeInteraction(
 		return errors.Wrap(err, "execution failed")
 	}
 
-	// Update the context for all interaction participants and update
-	// the interaction receipt with their updated context hashes
-	if err := executor.UpdateContext(ix); err != nil {
-		return errors.Wrap(err, "execution failed")
-	}
-
-	// Commit the state objects of all interaction participants
-	if err := executor.CommitStateObjects(ix); err != nil {
-		return errors.Wrap(err, "execution failed")
-	}
-
 	return nil
 }
 
@@ -119,71 +118,37 @@ func (executor *IxExecutor) Receipts() common.Receipts {
 	return executor.transition.receipts
 }
 
-// getReceipt returns a common.Receipt object for a given interaction hash from executor cache
-func (executor *IxExecutor) getReceipt(ix *common.Interaction) (*common.Receipt, bool) {
-	// Return receipt from executor's receipts if it exists
-	receipt, ok := executor.transition.receipts[ix.Hash()]
-	return receipt, ok //nolint:nlreturn
-}
-
 // setReceipt sets a common.Receipt object to the executor's cache
 func (executor *IxExecutor) setReceipt(ixhash common.Hash, receipt *common.Receipt) {
 	executor.transition.receipts[ixhash] = receipt
 }
 
-// UpdateContext updates the context of the participant accounts updates the context hashes for
-// the interaction receipt with the updated context hashes for all the interaction participants.
-// If the interaction receiver is a new account, the context and hash for the sarga account is also updated.
-func (executor *IxExecutor) UpdateContext(ix *common.Interaction) error {
-	// Retrieve the receipt for the interaction
-	receipt, ok := executor.getReceipt(ix)
-	if !ok {
-		return errors.New("cannot find receipt for interaction")
-	}
+// UpdateContext updates the context of the participant accounts using context delta
+func (executor *IxExecutor) UpdateContext() error {
+	for address, object := range executor.transition.objects {
+		delta, ok := executor.contextDelta[address]
+		if !ok {
+			continue
+		}
 
-	for addr, delta := range executor.contextDelta {
-		// For the address of each delta group in the context delta, determine action
-		// based on whether it is the sender, receiver or the sarga address
-		switch addr {
-		// Receiver Address
-		case ix.Receiver():
-			var hash common.Hash
+		// Check if the account is registered
+		accountRegistered, err := executor.state.IsAccountRegistered(object.Address())
+		if err != nil {
+			return err
+		}
 
-			// Check if the account is registered
-			accountRegistered, err := executor.state.IsAccountRegistered(addr)
-			if err != nil {
-				return err
+		// Create a context for the account state object if it is a new account
+		if !accountRegistered {
+			if _, err := object.CreateContext(delta.BehaviouralNodes, delta.RandomNodes); err != nil {
+				return errors.Wrap(common.ErrContextCreation, err.Error())
 			}
 
-			// Create a context for the account state object if it is a new account
-			if !accountRegistered {
-				if hash, err = executor.transition.objects.GetObject(addr).CreateContext(
-					delta.BehaviouralNodes,
-					delta.RandomNodes,
-				); err != nil {
-					return errors.Wrap(common.ErrContextCreation, err.Error())
-				}
+			continue
+		}
 
-				// Update the execution receipt for the interaction with the new context hash for the receiver
-				receipt.Hashes.SetContextHash(addr, hash)
-
-				continue
-			}
-
-			// If the account already exists, fall
-			// through and update an existing context
-			fallthrough
-
-		// Sender Address / Sarga Address
-		case ix.Sender(), common.SargaAddress:
-			// Retrieve the state object for address and update its context
-			hash, err := executor.transition.objects.GetObject(addr).UpdateContext(delta.BehaviouralNodes, delta.RandomNodes)
-			if err != nil {
-				return errors.Wrap(common.ErrUpdatingContext, err.Error())
-			}
-
-			// Update the execution receipt for the interaction with the new context hash for the sender
-			receipt.Hashes.SetContextHash(addr, hash)
+		_, err = object.UpdateContext(delta.BehaviouralNodes, delta.RandomNodes)
+		if err != nil {
+			return errors.Wrap(common.ErrContextCreation, err.Error())
 		}
 	}
 
@@ -217,48 +182,15 @@ func (executor *IxExecutor) updateSargaState(ix *common.Interaction) error {
 
 // CommitStateObjects commits all StateObjects of the interaction participants to the state db.
 // If the interaction receiver is a new account, the Object of the sarga account is also committed.
-func (executor *IxExecutor) CommitStateObjects(ix *common.Interaction) error {
-	// Retrieve the receipt for the interaction
-	receipt, ok := executor.getReceipt(ix)
-	if !ok {
-		return errors.New("cannot find receipt for interaction")
-	}
-
-	// Commit the sender state object (if it exists)
-	if !ix.Sender().IsNil() {
-		senderHash, err := executor.transition.objects.GetObject(ix.Sender()).Commit()
+func (executor *IxExecutor) CommitStateObjects() error {
+	for address, object := range executor.transition.objects {
+		h, err := object.Commit()
 		if err != nil {
 			return err
 		}
 
-		receipt.Hashes.SetStateHash(ix.Sender(), senderHash)
-	}
-
-	// Commit the receiver state object (if it exists)
-	if !ix.Receiver().IsNil() {
-		receiverHash, err := executor.transition.objects.GetObject(ix.Receiver()).Commit()
-		if err != nil {
-			return err
-		}
-
-		receipt.Hashes.SetStateHash(ix.Receiver(), receiverHash)
-	}
-
-	// Check if the receiver account is registered
-	accountRegistered, err := executor.state.IsAccountRegistered(ix.Receiver())
-	if err != nil {
-		return err
-	}
-
-	// If the receiver account is new (unregistered),
-	// commit the state object of the sarga account
-	if !accountRegistered {
-		genesisHash, err := executor.transition.objects.GetObject(common.SargaAddress).Commit()
-		if err != nil {
-			return err
-		}
-
-		receipt.Hashes.SetStateHash(common.SargaAddress, genesisHash)
+		executor.commitHashes.SetStateHash(address, h)
+		executor.commitHashes.SetContextHash(address, object.ContextHash())
 	}
 
 	return nil

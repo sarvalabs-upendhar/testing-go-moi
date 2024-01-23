@@ -35,7 +35,7 @@ func TestCreateRPCInteraction(t *testing.T) {
 
 	ixData := common.IxData{
 		Input:   input,
-		Compute: tests.CreateComputeWithTestData(t, tests.RandomHash(t), tests.GetTestKramaIDs(t, 2)),
+		Compute: tests.CreateComputeWithTestData(t, tests.RandomHash(t), tests.RandomKramaIDs(t, 2)),
 		Trust:   tests.CreateTrustWithTestData(t),
 	}
 
@@ -222,9 +222,9 @@ func TestCreateRPCDeltaGroups(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		deltaGroups[tests.RandomAddress(t)] = &common.DeltaGroup{
 			Role:             4,
-			BehaviouralNodes: tests.GetTestKramaIDs(t, 2),
-			RandomNodes:      tests.GetTestKramaIDs(t, 2),
-			ReplacedNodes:    tests.GetTestKramaIDs(t, 2),
+			BehaviouralNodes: tests.RandomKramaIDs(t, 2),
+			RandomNodes:      tests.RandomKramaIDs(t, 2),
+			ReplacedNodes:    tests.RandomKramaIDs(t, 2),
 		}
 	}
 

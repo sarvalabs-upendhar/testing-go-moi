@@ -94,8 +94,7 @@ func NewStateManager(
 }
 
 func (sm *StateManager) CreateStateObject(addr identifiers.Address, accType common.AccountType) *Object {
-	journal := new(Journal)
-	stateObject := NewStateObject(addr, sm.cache, journal, sm.db, common.Account{AccType: accType})
+	stateObject := NewStateObject(addr, sm.cache, sm.db, common.Account{AccType: accType})
 
 	return stateObject
 }
@@ -184,7 +183,7 @@ func (sm *StateManager) GetStateObjectByHash(addr identifiers.Address, hash comm
 		return nil, err
 	}
 
-	sObj := NewStateObject(addr, sm.cache, new(Journal), sm.db, *acc)
+	sObj := NewStateObject(addr, sm.cache, sm.db, *acc)
 
 	return sObj, nil
 }

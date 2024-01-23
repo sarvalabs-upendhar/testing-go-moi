@@ -887,7 +887,7 @@ func TestGetPeerInfo(t *testing.T) {
 		{
 			name: "Peer info present in Peer Store",
 			peerInfo: &peer.AddrInfo{
-				ID:    tests.GetTestPeerID(t),
+				ID:    tests.RandomPeerID(t),
 				Addrs: tests.GetListenAddresses(t, 1),
 			},
 			testFn: func(peerInfo *peer.AddrInfo) {
@@ -898,7 +898,7 @@ func TestGetPeerInfo(t *testing.T) {
 		{
 			name: "Peer info not present in Peer Store, present in Senatus",
 			peerInfo: &peer.AddrInfo{
-				ID:    tests.GetTestPeerID(t),
+				ID:    tests.RandomPeerID(t),
 				Addrs: tests.GetListenAddresses(t, 1),
 			},
 			testFn: func(peerInfo *peer.AddrInfo) {
@@ -921,7 +921,7 @@ func TestGetPeerInfo(t *testing.T) {
 		{
 			name: "Peer info not present in Peer Store, not present in Senatus",
 			peerInfo: &peer.AddrInfo{
-				ID:    tests.GetTestPeerID(t),
+				ID:    tests.RandomPeerID(t),
 				Addrs: tests.GetListenAddresses(t, 1),
 			},
 			expectedErr: common.ErrKramaIDNotFound,

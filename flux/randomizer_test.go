@@ -13,8 +13,8 @@ import (
 )
 
 func TestRandomizer_addPeers(t *testing.T) {
-	peerIDs := tests.GetTestPeerIDs(t, 1)
-	kramaIDs := tests.GetTestKramaIDs(t, 15)
+	peerIDs := tests.RandomPeerIDs(t, 1)
+	kramaIDs := tests.RandomKramaIDs(t, 15)
 	entries := getTestEntries(t, kramaIDs)
 
 	randomizerParams := &createRandomizerParams{
@@ -36,8 +36,8 @@ func TestRandomizer_addPeers(t *testing.T) {
 }
 
 func TestRandomizer_getPeers(t *testing.T) {
-	peerIDs := tests.GetTestPeerIDs(t, 1)
-	kramaIDs := tests.GetTestKramaIDs(t, 20)
+	peerIDs := tests.RandomPeerIDs(t, 1)
+	kramaIDs := tests.RandomKramaIDs(t, 20)
 	entries := getTestEntries(t, kramaIDs)
 
 	avoidPeers := kramaIDs[:2]
@@ -64,8 +64,8 @@ func TestRandomizer_getPeers(t *testing.T) {
 }
 
 func TestRandomizer_GetRandomNodes(t *testing.T) {
-	peerIDs := tests.GetTestPeerIDs(t, 1)
-	kramaIDs := tests.GetTestKramaIDs(t, 20)
+	peerIDs := tests.RandomPeerIDs(t, 1)
+	kramaIDs := tests.RandomKramaIDs(t, 20)
 	entries := getTestEntries(t, kramaIDs)
 
 	randomizerParams := &createRandomizerParams{

@@ -17,7 +17,7 @@ import (
 
 func TestUpdateContextDelta(t *testing.T) {
 	addrs := tests.GetAddresses(t, 4)
-	kramaIDs := tests.GetTestKramaIDs(t, 2)
+	kramaIDs := tests.RandomKramaIDs(t, 2)
 	operator := kramaIDs[0]
 	nodeset := createNodeSet(t, 1, 1, 1, 1, 2, 0)
 
@@ -156,7 +156,7 @@ func TestUpdateContextDelta(t *testing.T) {
 
 func TestPartiallyUpdateContextDelta(t *testing.T) {
 	addrs := tests.GetAddresses(t, 4)
-	kramaIDs := tests.GetTestKramaIDs(t, 2)
+	kramaIDs := tests.RandomKramaIDs(t, 2)
 	operator := kramaIDs[0]
 	nodeset := createNodeSet(t, 1, 1, 1, 1, 2, 0)
 

@@ -22,20 +22,21 @@ func init() {
 // Manager represents a type for managing interaction execution across multiple consensus clusters.
 // It also manages execution environment generation for logic execution.
 type Manager struct {
-	logger hclog.Logger
-	config *config.ExecutionConfig
-
+	logger    hclog.Logger
+	config    *config.ExecutionConfig
+	metrics   *Metrics
 	state     StateManager
 	executors sync.Map
 }
 
 // NewManager creates a new compute.Manager instance
 // for a given state interface, logger and ExecutionConfig
-func NewManager(state StateManager, logger hclog.Logger, config *config.ExecutionConfig) *Manager {
+func NewManager(state StateManager, logger hclog.Logger, config *config.ExecutionConfig, metrics *Metrics) *Manager {
 	return &Manager{
-		state:  state,
-		config: config,
-		logger: logger.Named("Compute-Manager"),
+		state:   state,
+		config:  config,
+		logger:  logger.Named("Compute-Manager"),
+		metrics: metrics,
 	}
 }
 
@@ -45,10 +46,10 @@ func (manager *Manager) SpawnExecutor() *IxExecutor {
 		mgr:   manager,
 		state: manager.state,
 
-		baseline:   NewTransition(),
-		transition: NewTransition(),
-
-		commitHashes: make(map[identifiers.Address]common.Hash),
+		baseline:     NewTransition(),
+		transition:   NewTransition(),
+		metrics:      manager.metrics,
+		commitHashes: make(common.AccStateHashes),
 	}
 }
 
@@ -58,24 +59,24 @@ func (manager *Manager) ExecuteInteractions(
 	ixs common.Interactions,
 	ctx *common.ExecutionContext,
 ) (
-	common.Receipts, error,
+	common.Receipts, common.AccStateHashes, error,
 ) {
 	// Spawn a new IxExecutor instance
 	executor := manager.SpawnExecutor()
 	// Execute all the given interactions
 	if err := executor.Execute(ixs, ctx); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Update the state objects in the state manager
 	if err := manager.state.UpdateStateObjects(executor.transition.objects); err != nil {
-		return nil, errors.Wrap(err, "failed to update state objects")
+		return nil, nil, errors.Wrap(err, "failed to update state objects")
 	}
 
 	// Store the executor into the execution instances indexed by the cluster ID
 	manager.executors.Store(ctx.Cluster, executor)
 	// Generate the execution receipts and return
-	return executor.Receipts(), nil
+	return executor.Receipts(), executor.commitHashes, nil
 }
 
 func (manager *Manager) InteractionCall(

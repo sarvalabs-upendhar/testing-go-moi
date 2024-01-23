@@ -205,7 +205,7 @@ func TestCopyIxCompute(t *testing.T) {
 	}{
 		{
 			name:    "IxCompute copied successfully",
-			compute: tests.CreateComputeWithTestData(t, tests.RandomHash(t), tests.GetTestKramaIDs(t, 2)),
+			compute: tests.CreateComputeWithTestData(t, tests.RandomHash(t), tests.RandomKramaIDs(t, 2)),
 		},
 		{
 			name:    "copy ix compute with nil hash and zero nodes",
@@ -300,7 +300,7 @@ func createIxDataWithTestData(t *testing.T) common.IxData {
 
 	IxData := common.IxData{
 		Input:   tests.CreateIXInputWithTestData(t, common.IxAssetCreate, []byte{187, 1, 29, 103}, []byte{187, 1, 29, 103}),
-		Compute: tests.CreateComputeWithTestData(t, tests.RandomHash(t), tests.GetTestKramaIDs(t, 2)),
+		Compute: tests.CreateComputeWithTestData(t, tests.RandomHash(t), tests.RandomKramaIDs(t, 2)),
 		Trust:   tests.CreateTrustWithTestData(t),
 	}
 

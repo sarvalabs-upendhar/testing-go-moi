@@ -31,7 +31,7 @@ func TestReputationEngine_NodeMetaInfo(t *testing.T) {
 	}{
 		{
 			name:   "node meta info found in cache",
-			peerID: tests.GetTestPeerID(t),
+			peerID: tests.RandomPeerID(t),
 			nodeMetaInfo: &NodeMetaInfo{
 				NTQ:         1,
 				WalletCount: 1,
@@ -42,7 +42,7 @@ func TestReputationEngine_NodeMetaInfo(t *testing.T) {
 		},
 		{
 			name:   "node meta info found in dirty entries",
-			peerID: tests.GetTestPeerID(t),
+			peerID: tests.RandomPeerID(t),
 			nodeMetaInfo: &NodeMetaInfo{
 				NTQ:         DefaultPeerNTQ,
 				WalletCount: -1,
@@ -53,7 +53,7 @@ func TestReputationEngine_NodeMetaInfo(t *testing.T) {
 		},
 		{
 			name:   "node meta info found in db",
-			peerID: tests.GetTestPeerID(t),
+			peerID: tests.RandomPeerID(t),
 			nodeMetaInfo: &NodeMetaInfo{
 				NTQ:         DefaultPeerNTQ,
 				WalletCount: 1,
@@ -64,7 +64,7 @@ func TestReputationEngine_NodeMetaInfo(t *testing.T) {
 		},
 		{
 			name:        "node meta info not found",
-			peerID:      tests.GetTestPeerID(t),
+			peerID:      tests.RandomPeerID(t),
 			expectedErr: common.ErrKramaIDNotFound,
 		},
 	}
@@ -109,10 +109,10 @@ func TestReputationEngine_AddNewPeerwithPeerID(t *testing.T) {
 	}{
 		{
 			name:   "node meta info found in cache",
-			peerID: tests.GetTestPeerID(t),
+			peerID: tests.RandomPeerID(t),
 			nodeMetaInfo: &NodeMetaInfo{
 				Addrs:         utils.MultiAddrToString(tests.GetListenAddresses(t, 1)...),
-				KramaID:       tests.GetTestKramaID(t, 2),
+				KramaID:       tests.RandomKramaID(t, 2),
 				PublicKey:     tests.GetTestPublicKey(t),
 				PeerSignature: []byte{0x05, 0x80},
 				NTQ:           1,
@@ -127,10 +127,10 @@ func TestReputationEngine_AddNewPeerwithPeerID(t *testing.T) {
 		},
 		{
 			name:   "peer id not found in db",
-			peerID: tests.GetTestPeerID(t),
+			peerID: tests.RandomPeerID(t),
 			nodeMetaInfo: &NodeMetaInfo{
 				Addrs:         utils.MultiAddrToString(tests.GetListenAddresses(t, 1)...),
-				KramaID:       tests.GetTestKramaID(t, 2),
+				KramaID:       tests.RandomKramaID(t, 2),
 				PublicKey:     tests.GetTestPublicKey(t),
 				PeerSignature: []byte{0x05, 0x80},
 				NTQ:           3,
@@ -140,10 +140,10 @@ func TestReputationEngine_AddNewPeerwithPeerID(t *testing.T) {
 		},
 		{
 			name:   "node meta info found in dirty entries",
-			peerID: tests.GetTestPeerID(t),
+			peerID: tests.RandomPeerID(t),
 			nodeMetaInfo: &NodeMetaInfo{
 				Addrs:         utils.MultiAddrToString(tests.GetListenAddresses(t, 1)...),
-				KramaID:       tests.GetTestKramaID(t, 2),
+				KramaID:       tests.RandomKramaID(t, 2),
 				PublicKey:     tests.GetTestPublicKey(t),
 				PeerSignature: []byte{0x05, 0x80},
 				NTQ:           3,
@@ -179,7 +179,7 @@ func TestReputationEngine_AddNewPeerwithPeerID(t *testing.T) {
 
 func TestReputationEngine_UpdatePeer(t *testing.T) {
 	reputationEngine, mockDB, _ := createTestReputationEngine(t)
-	kramaID := tests.GetTestKramaID(t, 1)
+	kramaID := tests.RandomKramaID(t, 1)
 
 	testcases := []struct {
 		name         string
@@ -200,7 +200,7 @@ func TestReputationEngine_UpdatePeer(t *testing.T) {
 		{
 			name: "krama id without state",
 			nodeMetaInfo: &NodeMetaInfo{
-				KramaID:     tests.GetTestKramaID(t, 1),
+				KramaID:     tests.RandomKramaID(t, 1),
 				NTQ:         DefaultPeerNTQ,
 				WalletCount: 1,
 			},
@@ -263,7 +263,7 @@ func TestReputationEngine_UpdateNTQ(t *testing.T) {
 		},
 		{
 			name:    "krama id without state",
-			kramaID: tests.GetTestKramaID(t, 1),
+			kramaID: tests.RandomKramaID(t, 1),
 			ntq:     DefaultPeerNTQ,
 			expectedNodeInfo: &NodeMetaInfo{
 				NTQ: DefaultPeerNTQ,
@@ -271,7 +271,7 @@ func TestReputationEngine_UpdateNTQ(t *testing.T) {
 		},
 		{
 			name:    "krama id with state",
-			kramaID: tests.GetTestKramaID(t, 1),
+			kramaID: tests.RandomKramaID(t, 1),
 			ntq:     1,
 			testFn: func(kramaID kramaid.KramaID) {
 				mockDB.setNodeInfo(
@@ -332,7 +332,7 @@ func TestReputationEngine_UpdateWalletCount(t *testing.T) {
 		},
 		{
 			name:        "krama id without state",
-			kramaID:     tests.GetTestKramaID(t, 1),
+			kramaID:     tests.RandomKramaID(t, 1),
 			walletCount: -1,
 			expectedNodeInfo: &NodeMetaInfo{
 				NTQ:         DefaultPeerNTQ,
@@ -341,7 +341,7 @@ func TestReputationEngine_UpdateWalletCount(t *testing.T) {
 		},
 		{
 			name:    "krama id with state",
-			kramaID: tests.GetTestKramaID(t, 1),
+			kramaID: tests.RandomKramaID(t, 1),
 			testFn: func(kramaID kramaid.KramaID) {
 				mockDB.setNodeInfo(
 					t,
@@ -403,7 +403,7 @@ func TestReputationEngine_UpdatePublicKey(t *testing.T) {
 		},
 		{
 			name:      "krama id without state",
-			kramaID:   tests.GetTestKramaID(t, 1),
+			kramaID:   tests.RandomKramaID(t, 1),
 			publicKey: publicKeys[1],
 			expectedNodeInfo: &NodeMetaInfo{
 				NTQ:       DefaultPeerNTQ,
@@ -412,7 +412,7 @@ func TestReputationEngine_UpdatePublicKey(t *testing.T) {
 		},
 		{
 			name:      "krama id with state",
-			kramaID:   tests.GetTestKramaID(t, 1),
+			kramaID:   tests.RandomKramaID(t, 1),
 			publicKey: publicKeys[2],
 			testFn: func(kramaID kramaid.KramaID) {
 				mockDB.setNodeInfo(
@@ -469,12 +469,12 @@ func TestReputationEngine_GetAddress(t *testing.T) {
 	}{
 		{
 			name:        "krama id without state",
-			kramaID:     tests.GetTestKramaID(t, 1),
+			kramaID:     tests.RandomKramaID(t, 1),
 			expectedErr: common.ErrKramaIDNotFound,
 		},
 		{
 			name:    "krama id with state",
-			kramaID: tests.GetTestKramaID(t, 1),
+			kramaID: tests.RandomKramaID(t, 1),
 			testFn: func(kramaID kramaid.KramaID) {
 				mockDB.setNodeInfo(
 					t,
@@ -519,7 +519,7 @@ func TestReputationEngine_GetAddressByPeerID(t *testing.T) {
 	}{
 		{
 			name:   "peer id with state",
-			peerID: tests.GetTestPeerID(t),
+			peerID: tests.RandomPeerID(t),
 			nodeMetaInfo: &NodeMetaInfo{
 				Addrs:       utils.MultiAddrToString(tests.GetListenAddresses(t, 1)...),
 				NTQ:         1,
@@ -531,12 +531,12 @@ func TestReputationEngine_GetAddressByPeerID(t *testing.T) {
 		},
 		{
 			name:        "peer id without state",
-			peerID:      tests.GetTestPeerID(t),
+			peerID:      tests.RandomPeerID(t),
 			expectedErr: common.ErrKramaIDNotFound,
 		},
 		{
 			name:   "peer id with state and without address",
-			peerID: tests.GetTestPeerID(t),
+			peerID: tests.RandomPeerID(t),
 			nodeMetaInfo: &NodeMetaInfo{
 				NTQ:         1,
 				WalletCount: 1,
@@ -580,7 +580,7 @@ func TestReputationEngine_GetRTTByPeerID(t *testing.T) {
 	}{
 		{
 			name:   "peer id with state",
-			peerID: tests.GetTestPeerID(t),
+			peerID: tests.RandomPeerID(t),
 			nodeMetaInfo: &NodeMetaInfo{
 				RTT: 150,
 			},
@@ -590,7 +590,7 @@ func TestReputationEngine_GetRTTByPeerID(t *testing.T) {
 		},
 		{
 			name:        "peer id without state",
-			peerID:      tests.GetTestPeerID(t),
+			peerID:      tests.RandomPeerID(t),
 			expectedErr: common.ErrKramaIDNotFound,
 		},
 	}
@@ -627,9 +627,9 @@ func TestReputationEngine_GetKramaIDByPeerID(t *testing.T) {
 	}{
 		{
 			name:   "peer id with state",
-			peerID: tests.GetTestPeerID(t),
+			peerID: tests.RandomPeerID(t),
 			nodeMetaInfo: &NodeMetaInfo{
-				KramaID: tests.GetTestKramaID(t, 2),
+				KramaID: tests.RandomKramaID(t, 2),
 			},
 			testFn: func(peerID peer.ID, nodeMetaInfo *NodeMetaInfo) {
 				mockDB.setNodeInfo(t, peerID, nodeMetaInfo)
@@ -637,7 +637,7 @@ func TestReputationEngine_GetKramaIDByPeerID(t *testing.T) {
 		},
 		{
 			name:        "peer id without state",
-			peerID:      tests.GetTestPeerID(t),
+			peerID:      tests.RandomPeerID(t),
 			expectedErr: common.ErrKramaIDNotFound,
 		},
 	}
@@ -675,12 +675,12 @@ func TestReputationEngine_GetNTQ(t *testing.T) {
 	}{
 		{
 			name:        "krama id without state",
-			kramaID:     tests.GetTestKramaID(t, 1),
+			kramaID:     tests.RandomKramaID(t, 1),
 			expectedErr: common.ErrKramaIDNotFound,
 		},
 		{
 			name:    "krama id with state",
-			kramaID: tests.GetTestKramaID(t, 1),
+			kramaID: tests.RandomKramaID(t, 1),
 			testFn: func(kramaID kramaid.KramaID) {
 				mockDB.setNodeInfo(
 					t,
@@ -726,12 +726,12 @@ func TestReputationEngine_GetWalletCount(t *testing.T) {
 	}{
 		{
 			name:        "krama id without state",
-			kramaID:     tests.GetTestKramaID(t, 1),
+			kramaID:     tests.RandomKramaID(t, 1),
 			expectedErr: common.ErrKramaIDNotFound,
 		},
 		{
 			name:    "krama id with state",
-			kramaID: tests.GetTestKramaID(t, 1),
+			kramaID: tests.RandomKramaID(t, 1),
 			testFn: func(kramaID kramaid.KramaID) {
 				mockDB.setNodeInfo(
 					t,
@@ -775,15 +775,15 @@ func TestReputationEngine_TotalPeerCount(t *testing.T) {
 		{
 			name: "Check peer count after adding few entries",
 			preTestFn: func(rp *ReputationEngine) {
-				err := rp.AddNewPeerWithPeerID(tests.GetTestPeerID(t), &NodeMetaInfo{
+				err := rp.AddNewPeerWithPeerID(tests.RandomPeerID(t), &NodeMetaInfo{
 					NTQ: DefaultPeerNTQ,
 				})
 				assert.NoError(t, err)
-				err = rp.AddNewPeerWithPeerID(tests.GetTestPeerID(t), &NodeMetaInfo{
+				err = rp.AddNewPeerWithPeerID(tests.RandomPeerID(t), &NodeMetaInfo{
 					NTQ: DefaultPeerNTQ,
 				})
 				assert.NoError(t, err)
-				err = rp.AddNewPeerWithPeerID(tests.GetTestPeerID(t), &NodeMetaInfo{
+				err = rp.AddNewPeerWithPeerID(tests.RandomPeerID(t), &NodeMetaInfo{
 					NTQ: DefaultPeerNTQ,
 				})
 				assert.NoError(t, err)
@@ -825,15 +825,15 @@ func TestReputationEngine_StreamPeerInfos(t *testing.T) {
 		{
 			name: "db with multiple entries",
 			entries: map[peer.ID]*NodeMetaInfo{
-				tests.GetTestPeerID(t): {
+				tests.RandomPeerID(t): {
 					NTQ:         DefaultPeerNTQ,
 					WalletCount: -1,
 				},
-				tests.GetTestPeerID(t): {
+				tests.RandomPeerID(t): {
 					NTQ:         1,
 					WalletCount: 1,
 				},
-				tests.GetTestPeerID(t): {
+				tests.RandomPeerID(t): {
 					NTQ:         DefaultPeerNTQ,
 					WalletCount: 0,
 				},
@@ -885,15 +885,15 @@ func TestReputationEngine_FlushDirtyEntries(t *testing.T) {
 		{
 			name: "dirty entries map with multiple entries",
 			entries: map[peer.ID]*NodeMetaInfo{
-				tests.GetTestPeerID(t): {
+				tests.RandomPeerID(t): {
 					NTQ:         DefaultPeerNTQ,
 					WalletCount: -1,
 				},
-				tests.GetTestPeerID(t): {
+				tests.RandomPeerID(t): {
 					NTQ:         1,
 					WalletCount: 1,
 				},
-				tests.GetTestPeerID(t): {
+				tests.RandomPeerID(t): {
 					NTQ:         DefaultPeerNTQ,
 					WalletCount: 0,
 				},
@@ -932,7 +932,7 @@ func TestReputationEngine_DBWorker(t *testing.T) {
 	reputationEngine.ctx = ctx
 
 	for i := 0; i < 2; i++ {
-		reputationEngine.dirtyEntries[tests.GetTestPeerID(t)] = &NodeMetaInfo{
+		reputationEngine.dirtyEntries[tests.RandomPeerID(t)] = &NodeMetaInfo{
 			NTQ: float32(i),
 		}
 	}
@@ -971,7 +971,7 @@ func TestReputationEngine_CleanUpDirtyStorage(t *testing.T) {
 		{
 			name: "dirty entries map with single entry",
 			entries: map[peer.ID]*NodeMetaInfo{
-				tests.GetTestPeerID(t): {
+				tests.RandomPeerID(t): {
 					NTQ:         DefaultPeerNTQ,
 					WalletCount: -1,
 				},
@@ -985,15 +985,15 @@ func TestReputationEngine_CleanUpDirtyStorage(t *testing.T) {
 		{
 			name: "dirty entries map with multiple entries",
 			entries: map[peer.ID]*NodeMetaInfo{
-				tests.GetTestPeerID(t): {
+				tests.RandomPeerID(t): {
 					NTQ:         DefaultPeerNTQ,
 					WalletCount: 0,
 				},
-				tests.GetTestPeerID(t): {
+				tests.RandomPeerID(t): {
 					NTQ:         1,
 					WalletCount: -1,
 				},
-				tests.GetTestPeerID(t): {
+				tests.RandomPeerID(t): {
 					NTQ:         DefaultPeerNTQ,
 					WalletCount: 1,
 				},
@@ -1059,7 +1059,7 @@ func TestReputationEngine_LoadPeerCountWhileSetup(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			mockDB := NewMockDB()
 			nodeMetaInfo := &NodeMetaInfo{
-				KramaID: tests.GetTestKramaID(t, 0),
+				KramaID: tests.RandomKramaID(t, 0),
 			}
 
 			if test.preTestFn != nil {

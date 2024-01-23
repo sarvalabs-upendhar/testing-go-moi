@@ -22,7 +22,7 @@ func TestGetAssociatedPeers_FetchFromCache(t *testing.T) {
 
 	address := tests.RandomAddress(t)
 	stateHash := randomCID(t, storage.Account.Byte())
-	ids := tests.GetTestKramaIDs(t, 1)
+	ids := tests.RandomKramaIDs(t, 1)
 
 	pList := NewPeerList()
 	pList.AddPeer(ids[0])
@@ -44,7 +44,7 @@ func TestGetAssociatedPeers_FetchFromDB(t *testing.T) {
 
 	address := tests.RandomAddress(t)
 	stateHash := randomCID(t, storage.Account.Byte())
-	ids := tests.GetTestKramaIDs(t, 1)
+	ids := tests.RandomKramaIDs(t, 1)
 
 	pList := NewPeerList()
 	pList.AddPeer(ids[0])
@@ -72,7 +72,7 @@ func TestUpdateAssociatedPeers_EntryAlreadyExists(t *testing.T) {
 
 	address := tests.RandomAddress(t)
 	stateHash := randomCID(t, storage.Account.Byte())
-	ids := tests.GetTestKramaIDs(t, 2)
+	ids := tests.RandomKramaIDs(t, 2)
 
 	// Create an entry and add it to db
 	pList := NewPeerList()
@@ -115,7 +115,7 @@ func TestUpdateAssociatedPeers_NewEntry(t *testing.T) {
 
 	address := tests.RandomAddress(t)
 	stateHash := randomCID(t, storage.Account.Byte())
-	ids := tests.GetTestKramaIDs(t, 1)
+	ids := tests.RandomKramaIDs(t, 1)
 
 	err := ledger.UpdateAssociatedPeers(address, stateHash, ids[0])
 	require.NoError(t, err)

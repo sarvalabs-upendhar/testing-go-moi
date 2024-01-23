@@ -120,7 +120,7 @@ func (n *Node) setupReputationEngine() (err error) {
 
 // setupExecEngine creates new ExecutionEngine object and setups it to node
 func (n *Node) setupExecEngine() {
-	n.exec = compute.NewManager(n.state, n.logger, n.cfg.Execution)
+	n.exec = compute.NewManager(n.state, n.logger, n.cfg.Execution, n.nodeMetrics.compute)
 }
 
 // setupIxPool creates new InteractionPool object and setups it to node

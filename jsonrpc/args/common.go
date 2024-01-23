@@ -289,26 +289,6 @@ func CreateRPCTesseract(ts *common.Tesseract) (*RPCTesseract, error) {
 	}, nil
 }
 
-func createRPCHashes(hashes common.ReceiptAccHashes) RPCHashes {
-	if len(hashes) == 0 {
-		return nil
-	}
-
-	rpcHashes := make(RPCHashes, 0, len(hashes))
-
-	for addr, hash := range hashes {
-		rpcHashes = append(rpcHashes, Hashes{
-			Address:     addr,
-			StateHash:   hash.StateHash,
-			ContextHash: hash.ContextHash,
-		})
-	}
-
-	rpcHashes.Sort()
-
-	return rpcHashes
-}
-
 // CreateRPCReceipt creates rpc receipt from receipt, interaction, grid, interaction index
 func CreateRPCReceipt(
 	receipt *common.Receipt,
@@ -321,7 +301,6 @@ func CreateRPCReceipt(
 		IxHash:    receipt.IxHash,
 		Status:    receipt.Status,
 		FuelUsed:  hexutil.Uint64(receipt.FuelUsed),
-		Hashes:    createRPCHashes(receipt.Hashes),
 		ExtraData: receipt.ExtraData,
 		From:      ix.Sender(),
 		To:        ix.Receiver(),

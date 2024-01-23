@@ -58,7 +58,7 @@ func TestFetchContextForAgora(t *testing.T) {
 	// initializing address here as we need same address for multiple tesseracts in chain
 	address := tests.RandomAddress(t)
 	hash := tests.RandomHash(t)
-	nodes := tests.GetTestKramaIDs(t, 3)
+	nodes := tests.RandomKramaIDs(t, 3)
 
 	testcases := []struct {
 		name          string
@@ -1327,24 +1327,24 @@ func TestIsReceiptAndGroupHashValid(t *testing.T) {
 		{
 			name: "receipt hashes doesn't match",
 			paramsMap: map[int]*createTesseractParams{
-				0: tesseractParamsWithReceiptHash(t, receiptRoot, groupHash, ""),
-				1: tesseractParamsWithReceiptHash(t, tests.RandomHash(t), groupHash, ""),
+				0: tsParamsWithHashes(t, receiptRoot, groupHash, "", common.NilHash),
+				1: tsParamsWithHashes(t, tests.RandomHash(t), groupHash, "", common.NilHash),
 			},
 			isValid: false,
 		},
 		{
 			name: "grid hashes doesn't match",
 			paramsMap: map[int]*createTesseractParams{
-				0: tesseractParamsWithReceiptHash(t, receiptRoot, groupHash, ""),
-				1: tesseractParamsWithReceiptHash(t, receiptRoot, tests.RandomHash(t), ""),
+				0: tsParamsWithHashes(t, receiptRoot, groupHash, "", common.NilHash),
+				1: tsParamsWithHashes(t, receiptRoot, tests.RandomHash(t), "", common.NilHash),
 			},
 			isValid: false,
 		},
 		{
 			name: "valid receipt hash and groupHash",
 			paramsMap: map[int]*createTesseractParams{
-				0: tesseractParamsWithReceiptHash(t, receiptRoot, groupHash, ""),
-				1: tesseractParamsWithReceiptHash(t, receiptRoot, groupHash, ""),
+				0: tsParamsWithHashes(t, receiptRoot, groupHash, "", common.NilHash),
+				1: tsParamsWithHashes(t, receiptRoot, groupHash, "", common.NilHash),
 			},
 			isValid: true,
 		},
@@ -1363,37 +1363,30 @@ func TestIsReceiptAndGroupHashValid(t *testing.T) {
 func TestAreStateHashesValid(t *testing.T) {
 	address := tests.RandomAddress(t)
 	stateHash := tests.RandomHash(t)
-	ixs, receipts := getIxAndReceiptsWithStateHash(t, common.ReceiptAccHashes{address: {StateHash: stateHash}}, 1)
+	accStateHashes := common.AccStateHashes{address: {StateHash: stateHash}}
 
 	testcases := []struct {
-		name     string
-		receipts common.Receipts
-		params   *createTesseractParams
-		isValid  bool
+		name        string
+		stateHashes common.AccStateHashes
+		params      *createTesseractParams
+		isValid     bool
 	}{
 		{
-			name:     "receipt with given ix hash not found in receipts",
-			params:   getTesseractParamsMapWithIxns(t, 1)[0],
-			receipts: receipts,
-			isValid:  false,
-		},
-		{
-			name:     "state hash in receipt and tesseract doesn't match",
-			params:   tesseractParamsWithStateHash(t, tests.RandomHash(t), ""),
-			receipts: receipts,
-			isValid:  false,
+			name:        "state hash in receipt and tesseract doesn't match",
+			params:      tesseractParamsWithStateHash(t, tests.RandomHash(t), ""),
+			stateHashes: accStateHashes,
+			isValid:     false,
 		},
 		{
 			name: "valid state hashes",
 			params: &createTesseractParams{
 				address: address,
-				ixns:    ixs,
 				bodyCallback: func(body *common.TesseractBody) {
 					body.StateHash = stateHash
 				},
 			},
-			receipts: receipts,
-			isValid:  true,
+			stateHashes: accStateHashes,
+			isValid:     true,
 		},
 	}
 
@@ -1401,7 +1394,7 @@ func TestAreStateHashesValid(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ts := createTesseract(t, test.params)
 
-			isValid := areStateHashesValid([]*common.Tesseract{ts}, receipts)
+			isValid := areStateHashesValid([]*common.Tesseract{ts}, test.stateHashes)
 
 			require.Equal(t, test.isValid, isValid)
 		})
@@ -1410,56 +1403,62 @@ func TestAreStateHashesValid(t *testing.T) {
 
 func TestExecuteAndValidate(t *testing.T) {
 	var (
-		tsParamsMap    = getTSParamsMapWithStateHash(t, 1)
-		address        = tests.RandomAddress(t)
-		stateHash      = tests.RandomHash(t)
-		ixns, receipts = getIxAndReceiptsWithStateHash(t, common.ReceiptAccHashes{address: {StateHash: stateHash}}, 1)
+		ixns, receipts              = getIxAndReceipts(t, 1)
+		tsParamsMap, accStateHashes = tsParamsMapWithStateHashes(t, ixns, receipts, 1)
 	)
 
 	testcases := []struct {
 		name                    string
 		paramsMap               map[int]*createTesseractParams
 		revertHook              func() error
-		executeInteractionsHook func() (common.Receipts, error)
+		executeInteractionsHook func() (common.Receipts, common.AccStateHashes, error)
 		expectedError           error
 	}{
 		{
 			name:      "should return error if execution fails",
 			paramsMap: tsParamsMap,
-			executeInteractionsHook: func() (common.Receipts, error) {
-				return nil, errors.New("failed to execute interactions")
+			executeInteractionsHook: func() (common.Receipts, common.AccStateHashes, error) {
+				return nil, nil, errors.New("failed to execute interactions")
 			},
 			expectedError: errors.New("failed to execute interactions"),
 		},
 		{
 			name: "should return error if receipt validation fails",
 			paramsMap: map[int]*createTesseractParams{
-				0: tesseractParamsWithReceiptHash(t, tests.RandomHash(t), common.NilHash, "cluster-0"),
+				0: tsParamsWithHashes(t, tests.RandomHash(t), common.NilHash, "cluster-0", common.NilHash),
 			},
-			executeInteractionsHook: func() (common.Receipts, error) {
-				var emptyReceipts common.Receipts
+			executeInteractionsHook: func() (common.Receipts, common.AccStateHashes, error) {
+				var (
+					emptyReceipts  common.Receipts
+					emptyAccHashes common.AccStateHashes
+				)
 
-				return emptyReceipts, nil
+				return emptyReceipts, emptyAccHashes, nil
 			},
 			expectedError: errors.New("failed to validate the tesseract"),
 		},
 		{
 			name: "should return error if state hash validation fails",
 			paramsMap: map[int]*createTesseractParams{
-				0: tesseractParamsWithStateHash(t, tests.RandomHash(t), "cluster-0"),
+				0: tsParamsMap[0],
 			},
-			executeInteractionsHook: func() (common.Receipts, error) {
+			executeInteractionsHook: func() (common.Receipts, common.AccStateHashes, error) {
 				var emptyReceipts common.Receipts
+				accHashes := make(common.AccStateHashes)
+				// set a different state hash in accHashes
+				accHashes.SetStateHash(tsParamsMap[0].address, tests.RandomHash(t))
 
-				return emptyReceipts, nil
+				return emptyReceipts, accHashes, nil
 			},
 			expectedError: errors.New("failed to validate the tesseract"),
 		},
 		{
 			name:      "should return error if revert fails",
 			paramsMap: tsParamsMap,
-			executeInteractionsHook: func() (common.Receipts, error) {
-				return receipts, nil // execution is reverted if hashes are invalid
+			executeInteractionsHook: func() (common.Receipts, common.AccStateHashes, error) {
+				var emptyAccHashes common.AccStateHashes
+
+				return receipts, emptyAccHashes, nil // execution is reverted if hashes are invalid
 			},
 			revertHook: func() error {
 				return errors.New("revert failed")
@@ -1467,13 +1466,10 @@ func TestExecuteAndValidate(t *testing.T) {
 			expectedError: errors.New("failed to revert the execution changes"),
 		},
 		{
-			name: "receipts should be added to dirty storage",
-			paramsMap: map[int]*createTesseractParams{
-				0: tesseractParamsWithGridInfo(t, address, stateHash,
-					getReceiptHash(t, receipts), nil, ixns, 1, "cluster-0"),
-			},
-			executeInteractionsHook: func() (common.Receipts, error) {
-				return receipts, nil
+			name:      "receipts should be added to dirty storage",
+			paramsMap: tsParamsMap,
+			executeInteractionsHook: func() (common.Receipts, common.AccStateHashes, error) {
+				return receipts, accStateHashes, nil
 			},
 		},
 	}
@@ -1493,7 +1489,7 @@ func TestExecuteAndValidate(t *testing.T) {
 
 			err := c.ExecuteAndValidate(ts...)
 
-			checkForExecutionCleanup(t, c, "cluster-0")
+			checkForExecutionCleanup(t, c, ts[0].ClusterID())
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1510,7 +1506,7 @@ func TestExecuteAndValidate(t *testing.T) {
 func TestValidateAccountCreationInfo(t *testing.T) {
 	var (
 		c             = createTestChainManager(t, nil)
-		walletContext = tests.GetTestKramaIDs(t, 4)
+		walletContext = tests.RandomKramaIDs(t, 4)
 		address       = tests.RandomAddress(t)
 	)
 
@@ -1608,7 +1604,7 @@ func TestParseGenesisFile_InvalidPath(t *testing.T) {
 func TestParseGenesisFile(t *testing.T) {
 	c := createTestChainManager(t, nil)
 	addr := tests.RandomAddress(t)
-	nodes := tests.GetTestKramaIDs(t, 4)
+	nodes := tests.RandomKramaIDs(t, 4)
 	dir, err := os.MkdirTemp(os.TempDir(), " ")
 	require.NoError(t, err)
 
@@ -1736,7 +1732,7 @@ func TestSetupGenesis(t *testing.T) {
 					[]identifiers.Address{genesisAccounts[1].Address},
 					[]*big.Int{big.NewInt(12)},
 				),
-				BehaviouralContext: tests.GetTestKramaIDs(t, 1),
+				BehaviouralContext: tests.RandomKramaIDs(t, 1),
 			},
 		}
 		logics = getTestGenesisLogics(t)
@@ -1826,7 +1822,7 @@ func TestSetupGenesis(t *testing.T) {
 					{
 						Name:               "staking-contract",
 						Manifest:           hexutil.Bytes{0, 1},
-						BehaviouralContext: tests.GetTestKramaIDs(t, 1),
+						BehaviouralContext: tests.RandomKramaIDs(t, 1),
 					},
 				}),
 			expectedError: errors.New("failed to setup genesis logic"),
@@ -1862,8 +1858,8 @@ func TestSetupGenesis(t *testing.T) {
 
 				return
 			}
-			require.NoError(t, err)
 
+			require.NoError(t, err)
 			checkForGenesisTesseract(
 				t,
 				c,
@@ -1895,7 +1891,7 @@ func TestSetupGenesis(t *testing.T) {
 
 func TestSetupSargaAccount(t *testing.T) {
 	cm := createTestChainManager(t, nil)
-	nodes := tests.GetTestKramaIDs(t, 12)
+	nodes := tests.RandomKramaIDs(t, 12)
 
 	var emptyNodes []kramaid.KramaID
 
@@ -1995,7 +1991,7 @@ func TestSetupSargaAccount(t *testing.T) {
 }
 
 func TestSetupAssetAccounts(t *testing.T) {
-	nodes := tests.GetTestKramaIDs(t, 8)
+	nodes := tests.RandomKramaIDs(t, 8)
 	owner := tests.RandomAddress(t)
 	address := tests.GetAddresses(t, 2)
 	amount := []*big.Int{big.NewInt(100), big.NewInt(200)}
@@ -2158,7 +2154,7 @@ func TestSetupAssetAccounts(t *testing.T) {
 
 func TestSetupNewAccount(t *testing.T) {
 	cm := createTestChainManager(t, nil)
-	nodes := tests.GetTestKramaIDs(t, 12)
+	nodes := tests.RandomKramaIDs(t, 12)
 
 	testcases := []struct {
 		name               string
@@ -2217,7 +2213,7 @@ func TestSetupNewAccount(t *testing.T) {
 func TestExecuteGenesisContracts(t *testing.T) {
 	logicID := identifiers.NewLogicIDv0(true, false, false, false, 0, common.StakingContractAddr)
 
-	ids := tests.GetTestKramaIDs(t, 1)
+	ids := tests.RandomKramaIDs(t, 1)
 
 	objectsMap := make(map[identifiers.Address]*state.Object)
 
@@ -2264,7 +2260,7 @@ func TestExecuteGenesisContracts(t *testing.T) {
 			logics: []common.LogicSetupArgs{
 				{
 					Name:               "staking-contract",
-					BehaviouralContext: tests.GetTestKramaIDs(t, 1),
+					BehaviouralContext: tests.RandomKramaIDs(t, 1),
 				},
 			},
 			expectedError: "unable to deploy logic for contract",

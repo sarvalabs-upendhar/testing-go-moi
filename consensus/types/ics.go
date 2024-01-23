@@ -25,6 +25,7 @@ type ClusterState struct {
 	Operator                 kramaid.KramaID
 	AccountInfos             AccountInfos
 	contextDelta             common.ContextDelta
+	postExecState            common.AccStateHashes
 	Receipts                 common.Receipts
 	BinaryHash, IdentityHash common.Hash
 	ICSHash                  common.Hash
@@ -307,22 +308,12 @@ func (cs *ClusterState) GetQuorum() []int32 {
 	return quorum
 }
 
-func (cs *ClusterState) GetContextHash(ixHash common.Hash, addr identifiers.Address) common.Hash {
-	receipt, err := cs.Receipts.GetReceipt(ixHash)
-	if err != nil {
-		return common.NilHash
-	}
-
-	return receipt.Hashes.ContextHash(addr)
+func (cs *ClusterState) GetContextHash(addr identifiers.Address) common.Hash {
+	return cs.postExecState.ContextHash(addr)
 }
 
-func (cs *ClusterState) GetStateHash(ixHash common.Hash, addr identifiers.Address) common.Hash {
-	receipt, err := cs.Receipts.GetReceipt(ixHash)
-	if err != nil {
-		return common.NilHash
-	}
-
-	return receipt.Hashes.StateHash(addr)
+func (cs *ClusterState) GetStateHash(addr identifiers.Address) common.Hash {
+	return cs.postExecState.StateHash(addr)
 }
 
 func (cs *ClusterState) GetFuelUsed() (fuelUsed uint64) {
@@ -335,6 +326,10 @@ func (cs *ClusterState) GetFuelUsed() (fuelUsed uint64) {
 
 func (cs *ClusterState) SetReceipts(r common.Receipts) {
 	cs.Receipts = r
+}
+
+func (cs *ClusterState) SetPostExecState(s common.AccStateHashes) {
+	cs.postExecState = s
 }
 
 func (cs *ClusterState) SetGrid(grid []*common.Tesseract) {
