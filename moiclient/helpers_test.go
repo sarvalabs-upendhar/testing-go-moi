@@ -10,6 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
+
+	"github.com/sarvalabs/go-moi/common/tests"
+
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 
@@ -143,7 +147,9 @@ func moiclientRetryFetchReceipt(
 }
 
 // createAsset creates asset named "MOI"
-func createAsset(t *testing.T, client *Client, addr identifiers.Address, mnemonic string) common.Hash {
+func createAsset(t *testing.T, client *Client, addr identifiers.Address, mnemonic string) (
+	common.Hash, identifiers.Address,
+) {
 	t.Helper()
 
 	supply, _ := new(big.Int).SetString("130D41", 16)
@@ -173,9 +179,13 @@ func createAsset(t *testing.T, client *Client, addr identifiers.Address, mnemoni
 	ctx, cancel := context.WithTimeout(context.Background(), IxnTimeout)
 	defer cancel()
 
-	moiclientRetryFetchReceipt(t, ctx, client, ixHash)
+	receipt := moiclientRetryFetchReceipt(t, ctx, client, ixHash)
 
-	return ixHash
+	var assetReceipt common.AssetCreationReceipt
+	err = json.Unmarshal(receipt.ExtraData, &assetReceipt)
+	require.NoError(t, err)
+
+	return ixHash, assetReceipt.AssetAccount
 }
 
 func checkForCallReceipt(
@@ -190,4 +200,128 @@ func checkForCallReceipt(
 	require.Equal(t, expectedReceipt.ExtraData, actualReceipt.ExtraData)
 	require.Equal(t, expectedReceipt.From, actualReceipt.From)
 	require.Equal(t, expectedReceipt.To, actualReceipt.To)
+}
+
+func createTesseractFilter(t *testing.T, ctx context.Context, moiClient *Client) *rpcargs.FilterResponse {
+	t.Helper()
+
+	tsFilter, err := moiClient.NewTesseractFilter(ctx, &rpcargs.TesseractFilterArgs{})
+	require.NoError(t, err)
+
+	return tsFilter
+}
+
+func createTesseractsByAccountFilter(
+	t *testing.T,
+	ctx context.Context,
+	moiClient *Client,
+	addr identifiers.Address,
+) *rpcargs.FilterResponse {
+	t.Helper()
+
+	tsByAccFilter, err := moiClient.NewTesseractsByAccountFilter(ctx, &rpcargs.TesseractByAccountFilterArgs{
+		Addr: addr,
+	})
+	require.NoError(t, err)
+
+	return tsByAccFilter
+}
+
+func createPendingIxnsFilter(t *testing.T, ctx context.Context, moiClient *Client) *rpcargs.FilterResponse {
+	t.Helper()
+
+	ixnsFilter, err := moiClient.PendingIxnsFilter(ctx, &rpcargs.PendingIxnsFilterArgs{})
+	require.NoError(t, err)
+
+	return ixnsFilter
+}
+
+func createLogFilter(
+	t *testing.T,
+	ctx context.Context,
+	moiClient *Client,
+	addr identifiers.Address,
+) *rpcargs.FilterResponse {
+	t.Helper()
+
+	logFilter, err := moiClient.NewLogFilter(ctx, &websocket.LogQuery{
+		Address: addr,
+	})
+	require.NoError(t, err)
+
+	return logFilter
+}
+
+func getRPCTesseractUntilTimeout(
+	t *testing.T,
+	ctx context.Context,
+	client *Client,
+	filterQueryArgs *rpcargs.FilterArgs,
+	subscriptionType rpcargs.SubscriptionType,
+	count int,
+) []*rpcargs.RPCTesseract {
+	t.Helper()
+
+	rpcTS := make([]*rpcargs.RPCTesseract, 0)
+	_, err := tests.RetryUntilTimeout(ctx, 50*time.Millisecond, func() (interface{}, bool) {
+		filterChanges, err := client.GetFilterChanges(
+			ctx,
+			filterQueryArgs,
+			subscriptionType,
+		)
+		require.NoError(t, err)
+
+		rpcTesseracts, ok := filterChanges.([]*rpcargs.RPCTesseract)
+		require.True(t, ok)
+
+		count -= len(rpcTesseracts)
+		rpcTS = append(rpcTS, rpcTesseracts...)
+
+		// TODO: change to count == 0, after issue #756 is resolved
+		// Less than or equal to 0 to capture extra tesseract
+		if count <= 0 {
+			return rpcTS, false
+		}
+
+		return nil, true
+	})
+	require.NoError(t, err)
+
+	return rpcTS
+}
+
+func getIxHashesUntilTimeout(
+	t *testing.T,
+	ctx context.Context,
+	client *Client,
+	filterQueryArgs *rpcargs.FilterArgs,
+	subscriptionType rpcargs.SubscriptionType,
+	count int,
+) []*common.Hash {
+	t.Helper()
+
+	ixHashes := make([]*common.Hash, 0)
+	_, err := tests.RetryUntilTimeout(ctx, 50*time.Millisecond, func() (interface{}, bool) {
+		filterChanges, err := client.GetFilterChanges(
+			ctx,
+			filterQueryArgs,
+			subscriptionType,
+		)
+		require.NoError(t, err)
+
+		ixnHash, ok := filterChanges.([]*common.Hash)
+		require.True(t, ok)
+
+		count -= len(ixnHash)
+		ixHashes = append(ixHashes, ixnHash...)
+
+		if count == 0 {
+			return ixHashes, false
+		}
+
+		return nil, true
+	})
+	require.NoError(t, err)
+
+	return ixHashes
 }

@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 	bg "github.com/sarvalabs/battleground"
@@ -19,7 +21,6 @@ import (
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/tests"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
-	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
 )
 
 // Guidelines for creating MOIClient tests:
@@ -35,6 +36,10 @@ type TestMultiNode struct {
 	ixHash         common.Hash
 	suiteSetupDone bool
 }
+
+const filterTimeout = 5 * time.Second
+
+var setupSuiteAssetAddr, setupSuiteSenderAddr identifiers.Address
 
 func (tm *TestMultiNode) runCriticallyNecessaryTearDown() {
 	err := tm.bgClient.DestroyNetwork(context.Background(), true)
@@ -91,7 +96,8 @@ func (tm *TestMultiNode) SetupSuite() {
 
 	// a tesseract is generated to provide data for tesseract related api
 	// fire and finalize ixn and store ix hash
-	tm.ixHash = createAsset(tm.T(), tm.moiClient, tm.accounts[0].Addr, tm.accounts[0].Mnemonic)
+	tm.ixHash, setupSuiteAssetAddr = createAsset(tm.T(), tm.moiClient, tm.accounts[0].Addr, tm.accounts[0].Mnemonic)
+	setupSuiteSenderAddr = tm.accounts[0].Addr
 
 	tm.suiteSetupDone = true
 }
@@ -368,29 +374,19 @@ func (tm *TestMultiNode) TestGetFilterChanges() {
 	ctx := context.Background()
 	acc := tm.accounts[1]
 
-	tsFilter, err := tm.moiClient.NewTesseractFilter(ctx, &rpcargs.TesseractFilterArgs{})
-	require.NoError(tm.T(), err)
-
-	tsByAccFilter, err := tm.moiClient.NewTesseractsByAccountFilter(ctx, &rpcargs.TesseractByAccountFilterArgs{
-		Addr: acc.Addr,
-	})
-	require.NoError(tm.T(), err)
-
-	logFilter, err := tm.moiClient.NewLogFilter(ctx, &websocket.LogQuery{
-		Address: acc.Addr,
-	})
-	require.NoError(tm.T(), err)
-
-	ixnsFilter, err := tm.moiClient.PendingIxnsFilter(ctx, &rpcargs.PendingIxnsFilterArgs{})
-	require.NoError(tm.T(), err)
+	tsFilter := createTesseractFilter(tm.T(), ctx, tm.moiClient)
+	tsByAccFilter := createTesseractsByAccountFilter(tm.T(), ctx, tm.moiClient, acc.Addr)
+	ixnsFilter := createPendingIxnsFilter(tm.T(), ctx, tm.moiClient)
+	logFilter := createLogFilter(tm.T(), ctx, tm.moiClient, acc.Addr)
 
 	// send create asset interaction
-	ixHash := createAsset(tm.T(), tm.moiClient, acc.Addr, acc.Mnemonic)
+	ixHash, assetAddr := createAsset(tm.T(), tm.moiClient, acc.Addr, acc.Mnemonic)
 
 	testcases := []struct {
 		name             string
 		filterQueryArgs  *rpcargs.FilterArgs
 		subscriptionType rpcargs.SubscriptionType
+		msgCount         int
 		expectedError    error
 	}{
 		{
@@ -398,6 +394,7 @@ func (tm *TestMultiNode) TestGetFilterChanges() {
 			filterQueryArgs: &rpcargs.FilterArgs{
 				FilterID: tsFilter.FilterID,
 			},
+			msgCount:         3,
 			subscriptionType: rpcargs.NewTesseract,
 		},
 		{
@@ -405,21 +402,24 @@ func (tm *TestMultiNode) TestGetFilterChanges() {
 			filterQueryArgs: &rpcargs.FilterArgs{
 				FilterID: tsByAccFilter.FilterID,
 			},
+			msgCount:         1,
 			subscriptionType: rpcargs.NewTesseractsByAccount,
-		},
-		{
-			name: "fetch logs from filter successfully",
-			filterQueryArgs: &rpcargs.FilterArgs{
-				FilterID: logFilter.FilterID,
-			},
-			subscriptionType: rpcargs.NewLogsByFilter,
 		},
 		{
 			name: "fetch ixns from filter successfully",
 			filterQueryArgs: &rpcargs.FilterArgs{
 				FilterID: ixnsFilter.FilterID,
 			},
+			msgCount:         1,
 			subscriptionType: rpcargs.PendingIxns,
+		},
+		{
+			name: "fetch logs from filter successfully",
+			filterQueryArgs: &rpcargs.FilterArgs{
+				FilterID: logFilter.FilterID,
+			},
+			// TODO: add msgCount once logs is supported
+			subscriptionType: rpcargs.NewLogsByFilter,
 		},
 		{
 			name: "failed to fetch data as filter does not exist",
@@ -432,24 +432,36 @@ func (tm *TestMultiNode) TestGetFilterChanges() {
 
 	for _, test := range testcases {
 		tm.Run(test.name, func() {
-			resp, err := tm.moiClient.GetFilterChanges(ctx, test.filterQueryArgs, test.subscriptionType)
+			ctx, cancel := context.WithTimeout(context.Background(), filterTimeout)
+			defer cancel()
 
 			if test.expectedError != nil {
+				_, err := tm.moiClient.GetFilterChanges(ctx, test.filterQueryArgs, test.subscriptionType)
 				require.ErrorContains(tm.T(), err, test.expectedError.Error())
 
 				return
 			}
 
-			require.NoError(tm.T(), err)
-
 			switch test.subscriptionType {
 			case rpcargs.NewTesseract:
-				rpcTS, ok := resp.([]*rpcargs.RPCTesseract)
-				require.True(tm.T(), ok)
+				rpcTS := getRPCTesseractUntilTimeout(
+					tm.T(),
+					ctx,
+					tm.moiClient,
+					test.filterQueryArgs,
+					test.subscriptionType,
+					test.msgCount,
+				)
 
+				// TODO: Remove code from here, after issue #756 is resolved
 				var rpcTSValues []rpcargs.RPCTesseract
 				for _, ptr := range rpcTS {
 					rpcTSValues = append(rpcTSValues, *ptr)
+				}
+
+				var addresses []identifiers.Address
+				for _, account := range tm.accounts {
+					addresses = append(addresses, account.Addr)
 				}
 
 				require.Equal(
@@ -457,32 +469,58 @@ func (tm *TestMultiNode) TestGetFilterChanges() {
 					3,
 					len(rpcTSValues),
 					fmt.Sprintf("Expected length 3, but got %d. rpcTS: %+v", len(rpcTSValues), rpcTSValues),
+					fmt.Sprint(
+						"Sarga Address", common.SargaAddress,
+						"Sender Address", acc.Addr,
+						"Asset Address", assetAddr,
+						"Setup Suite Sender Address", setupSuiteSenderAddr,
+						"Setup Suite Asset Address", setupSuiteAssetAddr,
+					),
+					fmt.Sprint("List of all account addresses", addresses),
 				)
+				// till here
 
 				found := 0
 
 				// make sure sender and sarga tesseracts are there in generated tesseracts
 				for i := 0; i < 3; i++ {
-					if rpcTS[i].Address() == acc.Addr || rpcTS[i].Address() == common.SargaAddress {
+					if rpcTS[i].Address() == acc.Addr ||
+						rpcTS[i].Address() == common.SargaAddress ||
+						rpcTS[i].Address() == assetAddr {
 						found++
 					}
 				}
 
-				require.Equal(tm.T(), found, 2)
+				require.Equal(tm.T(), 3, found)
 
 			case rpcargs.NewTesseractsByAccount:
-				rpcTS, ok := resp.([]*rpcargs.RPCTesseract)
-				require.True(tm.T(), ok)
-				require.Equal(tm.T(), 1, len(rpcTS))
+
+				rpcTS := getRPCTesseractUntilTimeout(
+					tm.T(),
+					ctx,
+					tm.moiClient,
+					test.filterQueryArgs,
+					test.subscriptionType,
+					test.msgCount,
+				)
+
 				require.Equal(tm.T(), acc.Addr, rpcTS[0].Address())
 
 			case rpcargs.PendingIxns:
-				ixHashes, ok := resp.([]*common.Hash)
-				require.True(tm.T(), ok)
-				require.Equal(tm.T(), 1, len(ixHashes))
+				ixHashes := getIxHashesUntilTimeout(
+					tm.T(),
+					ctx,
+					tm.moiClient,
+					test.filterQueryArgs,
+					test.subscriptionType,
+					test.msgCount,
+				)
+
 				require.Equal(tm.T(), ixHash, *ixHashes[0])
 
 			case rpcargs.NewLogsByFilter:
+				resp, err := tm.moiClient.GetFilterChanges(ctx, test.filterQueryArgs, test.subscriptionType)
+				require.NoError(tm.T(), err)
 				logs, ok := resp.([]*rpcargs.RPCLog)
 				require.True(tm.T(), ok)
 				require.Equal(tm.T(), 0, len(logs))
