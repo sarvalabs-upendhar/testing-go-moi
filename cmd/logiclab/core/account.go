@@ -79,7 +79,7 @@ func (ctx ContextDriver) SetStorageEntry(key, val []byte) bool {
 	}
 
 	tree[hex.EncodeToString(key)] = val
-	ctx.State.Storage[ctx.Logic.String()] = tree
+	ctx.State.Storage[string(ctx.Logic)] = tree
 
 	return true
 }
