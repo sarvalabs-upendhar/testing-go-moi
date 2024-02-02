@@ -1035,17 +1035,15 @@ func getRegistry(
 	registryEntries := make([]rpcargs.RPCRegistry, 0, count)
 
 	for i := 0; i < count; i++ {
-		assetID := string(assetIDs[i])
-
 		registryEntries = append(registryEntries, rpcargs.RPCRegistry{
-			AssetID:   assetID,
+			AssetID:   assetIDs[i].String(),
 			AssetInfo: rpcargs.GetRPCAssetDescriptor(assetDescriptors[i]),
 		})
 
 		rawAssetDescriptor, err := assetDescriptors[i].Bytes()
 		require.NoError(t, err)
 
-		registryMap[assetID] = rawAssetDescriptor
+		registryMap[string(assetIDs[i])] = rawAssetDescriptor
 	}
 
 	return registryMap, registryEntries

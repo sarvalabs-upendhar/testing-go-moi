@@ -202,7 +202,7 @@ func (p *PublicCoreAPI) GetRegistry(args *rpcargs.QueryArgs) ([]rpcargs.RPCRegis
 		}
 
 		entries = append(entries, rpcargs.RPCRegistry{
-			AssetID:   assetID,
+			AssetID:   identifiers.AssetID(assetID).String(),
 			AssetInfo: rpcargs.GetRPCAssetDescriptor(ad),
 		})
 	}

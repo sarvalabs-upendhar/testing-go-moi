@@ -471,7 +471,7 @@ func (tn *TestSingleNode) TestRegistry() {
 
 			require.NoError(tn.T(), err)
 			require.Equal(tn.T(), 1, len(registry))
-			require.Equal(tn.T(), assetID.String(), "0x"+registry[0].AssetID)
+			require.Equal(tn.T(), assetID.String(), registry[0].AssetID)
 			require.Equal(tn.T(), a.Operator, registry[0].AssetInfo.Operator)
 		})
 	}
