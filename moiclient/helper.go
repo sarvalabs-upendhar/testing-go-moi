@@ -8,12 +8,15 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/sarvalabs/battleground"
 	"github.com/sarvalabs/go-moi-engineio"
 	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-pisa"
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
@@ -22,6 +25,13 @@ import (
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/crypto"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
+)
+
+const (
+	JSONRPCURLWaitTime   = 120 * time.Second
+	JSONRPCURLQueryTime  = 5 * time.Second
+	InitialSyncWaitTime  = 10 * time.Minute
+	InitialSyncQueryTime = 5 * time.Second
 )
 
 func CreateSendIXFromSendIXArgs(t *testing.T, sendIxArgs *common.SendIXArgs, mnemonic string) *rpcargs.SendIX {
@@ -68,6 +78,8 @@ func GetLatestHeight(t *testing.T, client *Client, addr identifiers.Address) uin
 }
 
 // RetryFetchReceipt keeps trying to fetch receipt for given ixHash until it is timed out
+// and also checks if moi client response matches with http response
+// Use this to check if interaction is successful on the chain.
 func RetryFetchReceipt(t *testing.T, ctx context.Context, client *Client, ixHash common.Hash) *rpcargs.RPCReceipt {
 	t.Helper()
 
@@ -228,4 +240,91 @@ func GetPeerID(t *testing.T, client *Client) peer.ID {
 
 func NumPointer(input int64) *int64 {
 	return &input
+}
+
+func GetJSONRPCUrls(t *testing.T, bgClient battleground.Client, validatorCount int) []string {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), JSONRPCURLWaitTime)
+	defer cancel()
+
+	jsonRPCUrls := make([]string, 0, validatorCount)
+
+	var err error
+
+	_, err = tests.RetryUntilTimeout(ctx, 100*time.Millisecond, func() (interface{}, bool) {
+		ctx, cancel := context.WithTimeout(context.Background(), JSONRPCURLQueryTime)
+		defer cancel()
+
+		jsonRPCUrls, err = bgClient.JsonRpcUrls(ctx)
+		if err != nil {
+			return nil, true
+		}
+
+		if len(jsonRPCUrls) != validatorCount {
+			return nil, true
+		}
+
+		return nil, false
+	})
+
+	require.NoError(t, err)
+
+	return jsonRPCUrls
+}
+
+func CheckIfNodesInitialSyncDone(t *testing.T, validatorCount int, jsonRPCUrls []string) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), InitialSyncWaitTime)
+	defer cancel()
+
+	// number of goroutines
+	numGoroutines := validatorCount / 10
+	if validatorCount%10 != 0 {
+		numGoroutines++
+	}
+
+	var wg sync.WaitGroup
+
+	wg.Add(numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		startIndex := i * 10
+		endIndex := (i + 1) * 10
+
+		if endIndex > validatorCount {
+			endIndex = validatorCount
+		}
+
+		go func(start, end int) {
+			defer wg.Done()
+
+			for j := start; j < end; j++ {
+				fmt.Println("count", j)
+
+				moiClient, err := NewClient(jsonRPCUrls[j])
+				require.NoError(t, err)
+
+				fmt.Println("moiClient", moiClient)
+
+				_, err = tests.RetryUntilTimeout(ctx, 50*time.Millisecond, func() (interface{}, bool) {
+					ctx, cancel := context.WithTimeout(ctx, InitialSyncQueryTime)
+					defer cancel()
+
+					resp, err := moiClient.Syncing(ctx, &rpcargs.SyncStatusRequest{})
+					if err != nil || !resp.NodeSyncResp.IsInitialSyncDone {
+						return nil, true
+					}
+
+					return nil, false
+				})
+
+				require.NoError(t, err)
+			}
+		}(startIndex, endIndex)
+	}
+
+	// Wait for all goroutines to finish
+	wg.Wait()
 }

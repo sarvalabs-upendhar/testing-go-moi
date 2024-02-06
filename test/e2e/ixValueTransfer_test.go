@@ -27,7 +27,7 @@ func (te *TestEnvironment) transferAsset(
 		Sender:         sender.Addr,
 		Receiver:       receiver,
 		TransferValues: transferValues,
-		FuelPrice:      DefaulFuelPrice,
+		FuelPrice:      DefaultFuelPrice,
 		FuelLimit:      DefaultFuelLimit,
 	}
 

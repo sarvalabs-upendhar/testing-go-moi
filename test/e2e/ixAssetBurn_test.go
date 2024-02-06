@@ -27,7 +27,7 @@ func (te *TestEnvironment) burnAsset(
 		Type:      common.IxAssetBurn,
 		Nonce:     moiclient.GetLatestNonce(te.T(), te.moiClient, acc.Addr),
 		Sender:    acc.Addr,
-		FuelPrice: DefaulFuelPrice,
+		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
 		Payload:   payload,
 	}

@@ -118,7 +118,8 @@ func checkIfAccountsSyncedOnAllNodes(
 
 func (te *TestEnvironment) TestFullSyncForOneNode() {
 	// as first node is operator, avoid stopping operator
-	te.moiClient, te.moiClients[len(te.moiClients)-1] = te.moiClients[len(te.moiClients)-1], te.moiClient
+	// using last node in te.moiClients for the test
+	lastNodeMoiClient := te.moiClients[len(te.moiClients)-1]
 
 	testcases := []struct {
 		name             string
@@ -138,10 +139,6 @@ func (te *TestEnvironment) TestFullSyncForOneNode() {
 				sender := accs[0]
 				initialAmount := big.NewInt(1000)
 
-				// send ixn to new node as moiclient is down
-				temp := te.moiClient
-				te.moiClient = te.moiClients[1]
-
 				// send an ixn to create new account
 				// check if the newly created asset account and existing account are synced
 				createAsset(te, sender, createAssetCreatePayload(
@@ -150,8 +147,6 @@ func (te *TestEnvironment) TestFullSyncForOneNode() {
 					common.MAS0,
 					nil,
 				))
-
-				te.moiClient = temp
 			},
 		},
 	}
@@ -160,9 +155,9 @@ func (te *TestEnvironment) TestFullSyncForOneNode() {
 		te.Run(test.name, func() {
 			ctx, cancel := context.WithTimeout(context.Background(), DefaultNodeStopTime)
 
-			te.logger.Debug("stop node", te.moiClient.URL())
+			te.logger.Debug("stop node", lastNodeMoiClient.URL())
 
-			err := te.bgClient.StopNode(ctx, te.moiClient.URL())
+			err := te.bgClient.StopNode(ctx, lastNodeMoiClient.URL())
 			require.NoError(te.T(), err)
 
 			cancel()
@@ -173,16 +168,16 @@ func (te *TestEnvironment) TestFullSyncForOneNode() {
 
 			ctx, cancel = context.WithTimeout(context.Background(), DefaultNodeStartTime)
 
-			te.logger.Debug("start node", te.moiClient.URL())
+			te.logger.Debug("start node", lastNodeMoiClient.URL())
 
-			err = te.bgClient.StartNode(ctx, te.moiClient.URL(), test.withCleanDB)
+			err = te.bgClient.StartNode(ctx, lastNodeMoiClient.URL(), test.withCleanDB)
 			require.NoError(te.T(), err)
 
 			cancel()
 
 			time.Sleep(10 * time.Second)
 
-			checkIfNodeSynced(te.T(), te.moiClient)
+			checkIfNodeSynced(te.T(), lastNodeMoiClient)
 			checkIfNodesSynced(te.T(), te.moiClients)
 
 			ctx, cancel = context.WithTimeout(context.Background(), DefaultQueryTime)

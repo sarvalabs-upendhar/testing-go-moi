@@ -28,7 +28,7 @@ func (te *TestEnvironment) mintAsset(
 		Type:      common.IxAssetMint,
 		Nonce:     moiclient.GetLatestNonce(te.T(), te.moiClient, acc.Addr),
 		Sender:    acc.Addr,
-		FuelPrice: DefaulFuelPrice,
+		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
 		Payload:   payload,
 	}

@@ -42,25 +42,23 @@ const (
 	DefaultNodeStartTime    = 30 * time.Second
 	DefaultNodeStopTime     = 30 * time.Second
 	DefaultBGStartTime      = 25 * time.Minute
-	DefaultDiscoveryTime    = 1 * time.Minute
-	DefaultUpdateTime       = 1 * time.Minute
 	DefaultShutdownTimeout  = 10 * time.Minute
 	DefaultConfirmIxTimeout = 1 * time.Minute
-	DefaultAccountCount     = 2
+	DefaultAccountCount     = 2 // 2 accounts are enough to fire ixns in debug mode
 	InitialKMOITokens       = 25000
-	DefaultValidatorCount   = 100
 	DefaultJSONRPCPort      = 29000
 )
 
 var (
 	bgURL = "http://85.239.245.54:7000/api"
 
-	DefaulFuelPrice  = big.NewInt(1)
+	DefaultFuelPrice = big.NewInt(1)
 	DefaultFuelLimit = uint64(10000)
 	local            = "local"
 	cloud            = "cloud"
 	networkType      = flag.String("network", local, "enter the network type to use local or cloud")
-	commitHash       = flag.String("commithash", "", "enter the commit hash of the repo to be deployed")
+	commitHash       = flag.String("commit-hash", "", "enter the commit hash of the repo to be deployed")
+	logLevel         = flag.String("log-level", "ERROR", "enter the log level")
 )
 
 type BattleGroundConfig struct {
@@ -86,6 +84,7 @@ type TestEnvironment struct {
 	bgConfig       BattleGroundConfig
 	bgClient       bg.Client
 	jsonRPCUrls    []string
+	validatorCount int
 	moiClient      *moiclient.Client
 	moiClients     []*moiclient.Client
 	accounts       []tests.AccountWithMnemonic
@@ -137,6 +136,8 @@ func (te *TestEnvironment) configureBattleGround() error {
 			EndPoint:    te.bgConfig.rpcEndPoint,
 			DialTimeout: 10 * time.Second,
 		})
+
+		te.validatorCount = bgConfig.NoOfInstances * bgConfig.NoOfPodsPerInstance
 	} else {
 		d := client.DefaultClusterConfig()
 		d.WithLogs = false
@@ -151,6 +152,8 @@ func (te *TestEnvironment) configureBattleGround() error {
 			ClusterConfig: d,
 			Network:       client.Local,
 		})
+
+		te.validatorCount = d.ValidatorCount
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -169,7 +172,7 @@ func getMoiClient(t *testing.T, url string) (*moiclient.Client, error) {
 	client, err := moiclient.NewClient(url)
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
 	// check if node is up
 	_, err = client.Inspect(ctx, &rpcargs.InspectArgs{})
@@ -192,7 +195,7 @@ func getMoiClients(t *testing.T, urls []string) []*moiclient.Client {
 	for _, url := range urls {
 		client, err := getMoiClient(t, url)
 		if err != nil {
-			t.Log("unable to create moi client for ", url)
+			t.Log("unable to create moi client for ", url, "err", err)
 
 			continue
 		}
@@ -213,6 +216,7 @@ func (te *TestEnvironment) initializeMOIClient() {
 
 	if *networkType == local {
 		// use operator for firing ixns and querying until observer node wait time issue is fixed
+		// https://github.com/sarvalabs/go-moi/issues/678
 		c, err := getMoiClient(te.T(), fmt.Sprintf("http://localhost:%d", DefaultJSONRPCPort))
 		if err != nil {
 			te.FailNow("unable to initialize moi clients")
@@ -241,13 +245,22 @@ func (te *TestEnvironment) runCriticallyNecessaryTearDown() {
 func (te *TestEnvironment) initLogger() {
 	te.logger = hclog.New(&hclog.LoggerOptions{
 		Name:  "E2E",
-		Level: hclog.LevelFromString("ERROR"),
+		Level: hclog.LevelFromString(*logLevel),
 	})
+}
+
+// fetch json urls and check if initial sync is done in all nodes
+func (te *TestEnvironment) getUrlsAndCheckInitialSync() {
+	te.jsonRPCUrls = moiclient.GetJSONRPCUrls(te.Suite.T(), te.bgClient, te.validatorCount)
+
+	te.logger.Debug("e2e json urls ", "network", *networkType, "urls", te.jsonRPCUrls)
+
+	moiclient.CheckIfNodesInitialSyncDone(te.Suite.T(), te.validatorCount, te.jsonRPCUrls)
 }
 
 func (te *TestEnvironment) SetupSuite() {
 	defer func() {
-		// make sure to delete directories incase of setup suite failure
+		// make sure to delete directories in case of setup suite failure
 		// make sure to destroy battleground if setup suite fails
 		if !te.suiteSetupDone {
 			te.logger.Error("setup suite failed")
@@ -277,12 +290,6 @@ func (te *TestEnvironment) SetupSuite() {
 
 		cancel()
 		te.Suite.NoError(err)
-
-		if *networkType == cloud {
-			time.Sleep(DefaultDiscoveryTime)
-		} else {
-			time.Sleep(tests.DefaultLocalWaitTime)
-		}
 
 	case infrastructure.Active:
 		te.logger.Debug("battle ground is already running")
@@ -315,28 +322,18 @@ func (te *TestEnvironment) SetupSuite() {
 
 		cancel()
 		te.Suite.NoError(err)
-
-		time.Sleep(DefaultUpdateTime)
 	}
 
-	// make sure atleast one account is registered on chain
+	te.getUrlsAndCheckInitialSync()
+
 	ctx, cancel = context.WithTimeout(context.Background(), DefaultQueryTime)
 	registeredAcc, err = te.bgClient.Accounts(ctx)
 
 	cancel()
 	te.Suite.NoError(err)
 
+	// make sure at least one account is registered on chain to fire interactions
 	require.GreaterOrEqual(te.T(), len(registeredAcc), 1)
-
-	// fetch json urls of the nodes
-	ctx, cancel = context.WithTimeout(context.Background(), DefaultQueryTime)
-	te.jsonRPCUrls, err = te.bgClient.JsonRpcUrls(ctx)
-	te.Suite.NoError(err)
-
-	cancel()
-	te.Suite.NotEqual(len(te.jsonRPCUrls), 0)
-
-	te.logger.Debug("json urls ", "urls", te.jsonRPCUrls)
 
 	// choose url that works
 	te.initializeMOIClient()

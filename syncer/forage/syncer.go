@@ -2021,6 +2021,8 @@ func (s *Syncer) TesseractValidator(
 
 // Start starts all event handlers and workers associated with sync sub protocol
 func (s *Syncer) Start(minConnectedPeers int) error {
+	s.logger.Info("Syncer started")
+
 	sub := s.mux.Subscribe(utils.PendingAccountEvent{})
 
 	go s.startPendingAccountEventHandler(sub)
@@ -2038,8 +2040,10 @@ func (s *Syncer) Start(minConnectedPeers int) error {
 	go s.queueHandler()
 
 	for s.network.Peers.Len() < minConnectedPeers {
-		time.Sleep(2 * time.Second)
+		time.Sleep(1 * time.Second)
 	}
+
+	s.logger.Info("Connected to minimum number of required peers")
 
 	s.startWorkers()
 
@@ -2057,7 +2061,7 @@ func (s *Syncer) Start(minConnectedPeers int) error {
 
 				return
 
-			case <-time.After(2000 * time.Millisecond):
+			case <-time.After(500 * time.Millisecond):
 				s.logger.Debug("Sync in progress", "pending jobs", s.jobQueue.len())
 			}
 

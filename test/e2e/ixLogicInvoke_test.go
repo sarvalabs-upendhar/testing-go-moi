@@ -30,7 +30,7 @@ func (te *TestEnvironment) logicInvoke(
 		Type:      common.IxLogicInvoke,
 		Nonce:     moiclient.GetLatestNonce(te.T(), te.moiClient, acc.Addr),
 		Sender:    acc.Addr,
-		FuelPrice: DefaulFuelPrice,
+		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
 		Payload:   payload,
 	}

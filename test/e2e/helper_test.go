@@ -48,7 +48,7 @@ func transferAsset(
 	defer cancel()
 
 	receipt := moiclient.RetryFetchReceipt(te.T(), ctx, te.moiClient, ixHash)
-	require.Equal(te.T(), receipt.Status, common.ReceiptOk)
+	require.Equal(te.T(), common.ReceiptOk, receipt.Status)
 }
 
 func createAsset(

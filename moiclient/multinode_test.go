@@ -30,6 +30,7 @@ type TestMultiNode struct {
 	suite.Suite
 	moiClient      *Client
 	bgClient       bg.Client
+	jsonRPCUrls    []string
 	accounts       []bgcommon.AccountWithMnemonic
 	logger         hclog.Logger
 	instances      []common.Instance
@@ -64,13 +65,15 @@ func (tm *TestMultiNode) SetupSuite() {
 
 	tm.initLogger()
 
+	var multinodeJSONRPCPort int64 = 26000
+
 	d := client.DefaultClusterConfig()
 	d.WithLogs = false
 	d.WithStdout = false
 	d.LogLevel = "TRACE"
 	d.BootNodePort = 24000
 	d.Libp2pPort = 25000
-	d.JsonRPCPort = 26000
+	d.JsonRPCPort = multinodeJSONRPCPort
 	d.ValidatorCount = 20
 	d.GenesisAssetCount = 0
 
@@ -82,8 +85,12 @@ func (tm *TestMultiNode) SetupSuite() {
 	_, err := tm.bgClient.StartNetwork(context.Background())
 	tm.Suite.NoError(err)
 
-	// wait for node to start all modules
-	time.Sleep(tests.DefaultLocalWaitTime)
+	tm.jsonRPCUrls = GetJSONRPCUrls(tm.Suite.T(), tm.bgClient, d.ValidatorCount)
+
+	tm.logger.Debug("multinode json urls ", "urls", tm.jsonRPCUrls)
+
+	// wait for initial sync and all node modules to start
+	CheckIfNodesInitialSyncDone(tm.Suite.T(), d.ValidatorCount, tm.jsonRPCUrls)
 
 	tm.moiClient, err = NewClient(fmt.Sprintf("http://localhost:%d", d.JsonRPCPort))
 	tm.Suite.NoError(err)

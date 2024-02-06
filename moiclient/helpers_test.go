@@ -113,39 +113,6 @@ func createAssetWithNonce(t *testing.T, client *Client, addr identifiers.Address
 	require.NoError(t, err)
 }
 
-// moiclientRetryFetchReceipt keeps trying to fetch receipt for given ixHash until it is timed out
-// and also checks if moi client response matches with http response
-// Use this to check if interaction is successful on the chain.
-func moiclientRetryFetchReceipt(
-	t *testing.T,
-	ctx context.Context,
-	client *Client,
-	ixHash common.Hash,
-) *rpcargs.RPCReceipt {
-	t.Helper()
-
-	receiptArgs := &rpcargs.ReceiptArgs{
-		Hash: ixHash,
-	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			require.FailNow(t, "ix receipt not found,"+
-				" as forming the ICS took more time, so try running tests again", ixHash)
-		default:
-			receipt, err := client.InteractionReceipt(ctx, receiptArgs)
-			if err == nil {
-				require.Equal(t, common.ReceiptOk, receipt.Status)
-
-				return receipt
-			}
-
-			time.Sleep(time.Second)
-		}
-	}
-}
-
 // createAsset creates asset named "MOI"
 func createAsset(t *testing.T, client *Client, addr identifiers.Address, mnemonic string) (
 	common.Hash, identifiers.Address,
@@ -179,7 +146,8 @@ func createAsset(t *testing.T, client *Client, addr identifiers.Address, mnemoni
 	ctx, cancel := context.WithTimeout(context.Background(), IxnTimeout)
 	defer cancel()
 
-	receipt := moiclientRetryFetchReceipt(t, ctx, client, ixHash)
+	receipt := RetryFetchReceipt(t, ctx, client, ixHash)
+	require.Equal(t, common.ReceiptOk, receipt.Status)
 
 	var assetReceipt common.AssetCreationReceipt
 	err = json.Unmarshal(receipt.ExtraData, &assetReceipt)

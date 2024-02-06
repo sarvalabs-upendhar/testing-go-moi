@@ -62,7 +62,7 @@ func (tn *TestSingleNode) initLogger() {
 
 func (tn *TestSingleNode) SetupSuite() {
 	defer func() {
-		// make sure to delete directories incase of setup suite failure
+		// make sure to delete directories in case of setup suite failure
 		if !tn.suiteSetupDone {
 			tn.logger.Error("setup suite failed")
 			tn.runCriticallyNecessaryTearDown()

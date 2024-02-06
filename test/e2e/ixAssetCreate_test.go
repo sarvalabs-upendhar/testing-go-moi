@@ -29,7 +29,7 @@ func (te *TestEnvironment) createAsset(
 		Type:      common.IxAssetCreate,
 		Nonce:     moiclient.GetLatestNonce(te.T(), te.moiClient, acc.Addr),
 		Sender:    acc.Addr,
-		FuelPrice: DefaulFuelPrice,
+		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
 		Payload:   payload,
 	}
