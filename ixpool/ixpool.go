@@ -3,6 +3,7 @@ package ixpool
 import (
 	"context"
 	errors2 "errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -114,6 +115,21 @@ func NewIxPool(
 // GetPendingIx returns the interaction in ixpool for the given interaction hash
 func (i *IxPool) GetPendingIx(ixHash common.Hash) (*common.Interaction, bool) {
 	return i.allIxs.get(ixHash)
+}
+
+func (i *IxPool) GetIxns(ixHashes common.Hashes) (common.Interactions, error) {
+	ixns := make(common.Interactions, 0, len(ixHashes))
+
+	for _, ixHash := range ixHashes {
+		ix, found := i.allIxs.get(ixHash)
+		if !found {
+			return nil, errors.New(fmt.Sprintf("ixn not found in ixpool %s", ixHash))
+		}
+
+		ixns = append(ixns, ix)
+	}
+
+	return ixns, nil
 }
 
 func (i *IxPool) signalPruning() {

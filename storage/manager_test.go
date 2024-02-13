@@ -32,8 +32,6 @@ func TestUpdateAccMetaInfo_CheckErrors(t *testing.T) {
 				Type:          common.AccountType(1),
 				Height:        7,
 				TesseractHash: tests.RandomHash(t),
-				LatticeExists: true,
-				StateExists:   true,
 			},
 			expectedError: common.ErrInvalidAddress,
 		},
@@ -45,8 +43,6 @@ func TestUpdateAccMetaInfo_CheckErrors(t *testing.T) {
 				Type:          common.AccountType(1),
 				Height:        8,
 				TesseractHash: common.NilHash,
-				LatticeExists: true,
-				StateExists:   true,
 			},
 			expectedError: common.ErrEmptyHash,
 		},
@@ -57,16 +53,12 @@ func TestUpdateAccMetaInfo_CheckErrors(t *testing.T) {
 				Type:          common.AccountType(1),
 				Height:        8,
 				TesseractHash: tests.RandomHash(t),
-				LatticeExists: true,
-				StateExists:   true,
 			},
 			args: &common.AccountMetaInfo{
 				Address:       address,
 				Type:          common.AccountType(1),
 				Height:        8,
 				TesseractHash: tests.RandomHash(t),
-				LatticeExists: true,
-				StateExists:   true,
 			},
 			expectedError: common.ErrHashMismatch,
 		},
@@ -83,8 +75,6 @@ func TestUpdateAccMetaInfo_CheckErrors(t *testing.T) {
 				test.args.Height,
 				test.args.TesseractHash,
 				test.args.Type,
-				test.args.LatticeExists,
-				test.args.StateExists,
 			)
 			require.Error(t, err)
 			require.Equal(t, test.expectedError, err)
@@ -102,8 +92,6 @@ func TestUpdateAccMetaInfo_AddNewAccount(t *testing.T) {
 		args.Height,
 		args.TesseractHash,
 		args.Type,
-		args.LatticeExists,
-		args.StateExists,
 	)
 
 	require.NoError(t, err)
@@ -142,16 +130,12 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 				Type:          common.AccountType(1),
 				Height:        height,
 				TesseractHash: tests.RandomHash(t),
-				LatticeExists: true,
-				StateExists:   true,
 			},
 			args: &common.AccountMetaInfo{
 				Address:       addresses[0],
 				Type:          common.AccountType(1),
 				Height:        height + 1,
 				TesseractHash: tests.RandomHash(t),
-				LatticeExists: false,
-				StateExists:   false,
 			},
 			expectedError: nil,
 		},
@@ -162,16 +146,12 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 				Type:          common.AccountType(3),
 				Height:        height,
 				TesseractHash: hash,
-				LatticeExists: true,
-				StateExists:   true,
 			},
 			args: &common.AccountMetaInfo{
 				Address:       addresses[1],
 				Type:          common.AccountType(3),
 				Height:        height,
 				TesseractHash: hash,
-				LatticeExists: false,
-				StateExists:   true,
 			},
 			expectedError: nil,
 		},
@@ -182,16 +162,12 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 				Type:          common.AccountType(1),
 				Height:        height,
 				TesseractHash: tests.RandomHash(t),
-				LatticeExists: true,
-				StateExists:   true,
 			},
 			args: &common.AccountMetaInfo{
 				Address:       addresses[2],
 				Type:          common.AccountType(3),
 				Height:        height - 1,
 				TesseractHash: tests.RandomHash(t),
-				LatticeExists: false,
-				StateExists:   true,
 			},
 			expectedError: nil,
 		},
@@ -210,8 +186,6 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 				test.args.Height,
 				test.args.TesseractHash,
 				test.args.Type,
-				test.args.LatticeExists,
-				test.args.StateExists,
 			)
 			require.NoError(t, err)
 
@@ -223,13 +197,11 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 
 			// changes should take place if new height is greater than equal to current height
 			if test.args.Height >= beforeAccMetaInfo.Height {
-				require.Equal(t, test.args.StateExists, afterAccMetaInfo.StateExists)
 				require.Equal(t, test.args.TesseractHash, afterAccMetaInfo.TesseractHash)
 				require.Equal(t, test.args.Address, afterAccMetaInfo.Address)
 				require.Equal(t, test.args.Height, afterAccMetaInfo.Height)
 				require.Equal(t, beforeAccMetaInfo.Type, afterAccMetaInfo.Type)
 			} else { // changes shouldn't take place if new height less than current height
-				require.Equal(t, beforeAccMetaInfo.StateExists, afterAccMetaInfo.StateExists)
 				require.Equal(t, beforeAccMetaInfo.TesseractHash, afterAccMetaInfo.TesseractHash)
 				require.Equal(t, beforeAccMetaInfo.Address, afterAccMetaInfo.Address)
 				require.Equal(t, beforeAccMetaInfo.Height, afterAccMetaInfo.Height)
@@ -249,16 +221,12 @@ func TestUpdateAccMetaInfo_CheckBucketID(t *testing.T) {
 		Type:          common.AccountType(1),
 		Height:        1,
 		TesseractHash: tests.RandomHash(t),
-		LatticeExists: true,
-		StateExists:   true,
 	}
 	args := &common.AccountMetaInfo{
 		Address:       address,
 		Type:          common.AccountType(1),
 		Height:        3,
 		TesseractHash: tests.RandomHash(t),
-		LatticeExists: false,
-		StateExists:   false,
 	}
 
 	// insert test accMetaInfo , so that it can be updated
@@ -269,8 +237,6 @@ func TestUpdateAccMetaInfo_CheckBucketID(t *testing.T) {
 		args.Height,
 		args.TesseractHash,
 		args.Type,
-		args.LatticeExists,
-		args.StateExists,
 	)
 	require.NoError(t, err)
 
@@ -318,6 +284,53 @@ func TestGetAccountMetaInfo(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, AccMetaInfo, accMetaInfo)
 			}
+		})
+	}
+}
+
+func TestHasAccMetaInfoAt(t *testing.T) {
+	pm := NewTestPersistenceManager(t)
+
+	// test data
+	AccMetaInfo := tests.GetRandomAccMetaInfo(t, 6)
+
+	// insert test data in to db
+	insertAccMetaInfo(t, pm, *AccMetaInfo)
+
+	testcases := []struct {
+		name             string
+		address          identifiers.Address
+		height           uint64
+		hasAccMetaInfoAt bool
+	}{
+		{
+			name:    "account meta info doesn't exist",
+			address: tests.RandomAddress(t),
+		},
+		{
+			name:    "account meta info doesn't exist at given height",
+			address: AccMetaInfo.Address,
+			height:  7,
+		},
+		{
+			name:             "account meta info exists at given equal height",
+			address:          AccMetaInfo.Address,
+			height:           6,
+			hasAccMetaInfoAt: true,
+		},
+		{
+			name:             "account meta info exists at given lesser height",
+			address:          AccMetaInfo.Address,
+			height:           5,
+			hasAccMetaInfoAt: true,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			hasAccMetaInfoAt := pm.HasAccMetaInfoAt(test.address, test.height)
+
+			require.Equal(t, test.hasAccMetaInfoAt, hasAccMetaInfoAt)
 		})
 	}
 }
@@ -416,7 +429,6 @@ func TestUpdateTesseractStatus_CheckErrors(t *testing.T) {
 				test.arg.address,
 				test.arg.height,
 				test.arg.hash,
-				test.arg.status,
 			)
 			require.Error(t, err)
 
@@ -432,7 +444,6 @@ func TestUpdateTesseractStatus_CheckHeight(t *testing.T) {
 		address identifiers.Address
 		height  uint64
 		hash    common.Hash
-		status  bool
 	}
 
 	addresses := tests.GetAddresses(t, 3)
@@ -451,14 +462,11 @@ func TestUpdateTesseractStatus_CheckHeight(t *testing.T) {
 				Type:          common.AccountType(1),
 				Height:        height,
 				TesseractHash: hashes[0],
-				LatticeExists: true,
-				StateExists:   true,
 			},
 			arg: args{
 				address: addresses[0],
 				height:  height - 1,
 				hash:    hashes[0],
-				status:  false,
 			},
 		},
 		{
@@ -468,14 +476,11 @@ func TestUpdateTesseractStatus_CheckHeight(t *testing.T) {
 				Type:          common.AccountType(1),
 				Height:        height,
 				TesseractHash: hashes[1],
-				LatticeExists: true,
-				StateExists:   true,
 			},
 			arg: args{
 				address: addresses[1],
 				height:  height,
 				hash:    hashes[1],
-				status:  false,
 			},
 		},
 		{
@@ -485,14 +490,11 @@ func TestUpdateTesseractStatus_CheckHeight(t *testing.T) {
 				Type:          common.AccountType(1),
 				Height:        height,
 				TesseractHash: hashes[2],
-				LatticeExists: true,
-				StateExists:   true,
 			},
 			arg: args{
 				address: addresses[2],
 				height:  height + 1,
 				hash:    hashes[2],
-				status:  false,
 			},
 		},
 	}
@@ -505,19 +507,11 @@ func TestUpdateTesseractStatus_CheckHeight(t *testing.T) {
 				test.arg.address,
 				test.arg.height,
 				test.arg.hash,
-				test.arg.status,
 			)
 			require.NoError(t, err)
 
-			actualAccMetaInfo, err := pm.GetAccountMetaInfo(test.arg.address)
+			_, err = pm.GetAccountMetaInfo(test.arg.address)
 			require.NoError(t, err)
-
-			// changes should take place if new height is greater than equal to current height
-			if test.arg.height >= actualAccMetaInfo.Height {
-				require.Equal(t, test.arg.status, actualAccMetaInfo.StateExists)
-			} else { // changes shouldn't take place if new height less than current height
-				require.Equal(t, test.accMetaInfo.StateExists, actualAccMetaInfo.StateExists)
-			}
 		})
 	}
 }
@@ -688,76 +682,6 @@ func TestWritePreImages(t *testing.T) {
 	}
 }
 
-func TestSetGridLookup(t *testing.T) {
-	pm := NewTestPersistenceManager(t)
-
-	testcases := []struct {
-		name        string
-		tsHash      common.Hash
-		gridHash    common.Hash
-		expectedErr bool
-	}{
-		{
-			name:        "Create an entry in db with key as tesseract hash and grid hash as value",
-			tsHash:      tests.RandomHash(t),
-			gridHash:    tests.RandomHash(t),
-			expectedErr: false,
-		},
-	}
-
-	for _, testcase := range testcases {
-		t.Run(testcase.name, func(t *testing.T) {
-			err := pm.SetTSGridLookup(testcase.tsHash, testcase.gridHash)
-			require.NoError(t, err)
-
-			rawData, err := pm.ReadEntry(DBKey(identifiers.NilAddress, TSGridLookup, testcase.tsHash.Bytes()))
-			require.NoError(t, err)
-
-			require.Equal(t, testcase.gridHash.Bytes(), rawData)
-		})
-	}
-}
-
-func TestGetGridLookup(t *testing.T) {
-	pm := NewTestPersistenceManager(t)
-
-	tsHash := tests.RandomHash(t)
-	gridHash := tests.RandomHash(t)
-	insertTSGridLookup(t, pm, tsHash, gridHash)
-
-	testcases := []struct {
-		name        string
-		tsHash      common.Hash
-		expectedErr bool
-	}{
-		{
-			name:        "valid hash without state",
-			tsHash:      tests.RandomHash(t),
-			expectedErr: true,
-		},
-		{
-			name:        "valid hash with state",
-			tsHash:      tsHash,
-			expectedErr: false,
-		},
-	}
-
-	for _, testcase := range testcases {
-		t.Run(testcase.name, func(t *testing.T) {
-			gridLookup, err := pm.GetTSGridLookup(testcase.tsHash)
-
-			if testcase.expectedErr {
-				require.Error(t, err)
-
-				return
-			}
-
-			require.NoError(t, err)
-			require.Equal(t, gridHash.Bytes(), gridLookup)
-		})
-	}
-}
-
 func TestSetReceipts(t *testing.T) {
 	pm := NewTestPersistenceManager(t)
 
@@ -897,23 +821,23 @@ func TestSetInteractions(t *testing.T) {
 	pm := NewTestPersistenceManager(t)
 
 	testcases := []struct {
-		name     string
-		ixData   []byte
-		gridHash common.Hash
+		name   string
+		ixData []byte
+		tsHash common.Hash
 	}{
 		{
-			name:     "Create an entry in db for the given receipts",
-			ixData:   []byte{1, 2, 3},
-			gridHash: tests.RandomHash(t),
+			name:   "Create an entry in db for the given ixns",
+			ixData: []byte{1, 2, 3},
+			tsHash: tests.RandomHash(t),
 		},
 	}
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			err := pm.SetInteractions(testcase.gridHash, testcase.ixData)
+			err := pm.SetInteractions(testcase.tsHash, testcase.ixData)
 			require.NoError(t, err)
 
-			rawData, err := pm.GetInteractions(testcase.gridHash)
+			rawData, err := pm.GetInteractions(testcase.tsHash)
 			require.NoError(t, err)
 
 			require.Equal(t, testcase.ixData, rawData)
@@ -923,33 +847,33 @@ func TestSetInteractions(t *testing.T) {
 
 func TestGetInteractions(t *testing.T) {
 	pm := NewTestPersistenceManager(t)
-	gridHash := tests.RandomHash(t)
+	tsHash := tests.RandomHash(t)
 	ixData := []byte{1, 2, 3}
 
-	err := pm.SetInteractions(gridHash, ixData)
+	err := pm.SetInteractions(tsHash, ixData)
 	require.NoError(t, err)
 
 	testcases := []struct {
 		name          string
 		ixData        []byte
-		gridHash      common.Hash
+		tsHash        common.Hash
 		expectedError error
 	}{
 		{
 			name:          "failed to fetch interactions",
-			gridHash:      tests.RandomHash(t),
+			tsHash:        tests.RandomHash(t),
 			expectedError: common.ErrKeyNotFound,
 		},
 		{
-			name:     "fetched interactions successfully",
-			ixData:   ixData,
-			gridHash: gridHash,
+			name:   "fetched interactions successfully",
+			ixData: ixData,
+			tsHash: tsHash,
 		},
 	}
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			ixData, err := pm.GetInteractions(testcase.gridHash)
+			ixData, err := pm.GetInteractions(testcase.tsHash)
 
 			if testcase.expectedError != nil {
 				require.ErrorContains(t, err, testcase.expectedError.Error())

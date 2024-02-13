@@ -22,8 +22,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	libp2pTest "github.com/libp2p/go-libp2p/core/test"
 	"github.com/multiformats/go-multiaddr"
-	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-identifiers"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -46,9 +46,10 @@ type Context struct {
 }
 
 type ixData struct {
-	ix      *common.Interaction
-	parts   *common.TesseractParts
-	ixIndex int
+	ix           *common.Interaction
+	tsHash       common.Hash
+	participants common.Participants
+	ixIndex      int
 }
 
 type MockChainManager struct {
@@ -78,6 +79,33 @@ func NewMockChainManager(t *testing.T) *MockChainManager {
 	return mockChain
 }
 
+func (c *MockChainManager) GetInteractionAndParticipantsByIxHash(
+	ixHash common.Hash,
+) (*common.Interaction, common.Hash, common.Participants, int, error) {
+	if c.GetInteractionByIxHashHook != nil {
+		return nil, common.NilHash, nil, 0, c.GetInteractionByIxHashHook()
+	}
+
+	data, ok := c.ixByHash[ixHash]
+	if !ok {
+		return nil, common.NilHash, nil, 0, common.ErrFetchingInteraction
+	}
+
+	return data.ix, data.tsHash, data.participants, data.ixIndex, nil
+}
+
+func (c *MockChainManager) GetInteractionAndParticipantsByTSHash(
+	tsHash common.Hash,
+	ixIndex int,
+) (*common.Interaction, common.Participants, error) {
+	data, ok := c.ixByTesseract[tsHash]
+	if !ok {
+		return nil, nil, common.ErrFetchingInteraction
+	}
+
+	return data.ix, data.participants, nil
+}
+
 func (c *MockChainManager) SetTesseractHeightEntry(address identifiers.Address, height uint64, hash common.Hash) {
 	key := address.Hex() + strconv.FormatUint(height, 10)
 	c.TSHashByHeight[key] = hash
@@ -97,55 +125,27 @@ func (c *MockChainManager) GetTesseractHeightEntry(address identifiers.Address, 
 func (c *MockChainManager) SetInteractionDataByTSHash(
 	tsHash common.Hash,
 	ix *common.Interaction,
-	parts *common.TesseractParts,
+	participants common.Participants,
 ) {
 	c.ixByTesseract[tsHash] = ixData{
-		ix:    ix,
-		parts: parts,
+		ix:           ix,
+		tsHash:       tsHash,
+		participants: participants,
 	}
-}
-
-func (c *MockChainManager) GetInteractionAndPartsByTSHash(tsHash common.Hash, ixIndex int) (
-	*common.Interaction,
-	*common.TesseractParts,
-	error,
-) {
-	data, ok := c.ixByTesseract[tsHash]
-	if !ok {
-		return nil, nil, common.ErrFetchingInteraction
-	}
-
-	return data.ix, data.parts, nil
 }
 
 func (c *MockChainManager) SetInteractionDataByIxHash(
 	ix *common.Interaction,
-	parts *common.TesseractParts,
+	tsHash common.Hash,
+	participants common.Participants,
 	ixIndex int,
 ) {
 	c.ixByHash[ix.Hash()] = ixData{
-		ix:      ix,
-		parts:   parts,
-		ixIndex: ixIndex,
+		ix:           ix,
+		tsHash:       tsHash,
+		participants: participants,
+		ixIndex:      ixIndex,
 	}
-}
-
-func (c *MockChainManager) GetInteractionAndPartsByIxHash(ixHash common.Hash) (
-	*common.Interaction,
-	*common.TesseractParts,
-	int,
-	error,
-) {
-	if c.GetInteractionByIxHashHook != nil {
-		return nil, nil, 0, c.GetInteractionByIxHashHook()
-	}
-
-	data, ok := c.ixByHash[ixHash]
-	if !ok {
-		return nil, nil, 0, common.ErrFetchingInteraction
-	}
-
-	return data.ix, data.parts, data.ixIndex, nil
 }
 
 // Chain manager mock functions
@@ -164,7 +164,10 @@ func (c *MockChainManager) GetLatestTesseract(addr identifiers.Address, withIxns
 	return &tsCopy, nil
 }
 
-func (c *MockChainManager) GetTesseract(hash common.Hash, withInteractions bool) (*common.Tesseract, error) {
+func (c *MockChainManager) GetTesseract(
+	hash common.Hash,
+	withInteractions bool,
+) (*common.Tesseract, error) {
 	ts, ok := c.tesseractsByHash[hash]
 	if !ok {
 		return nil, common.ErrFetchingTesseract
@@ -198,11 +201,6 @@ func (c *MockChainManager) setTesseractByHash(
 	t.Helper()
 
 	c.tesseractsByHash[tests.GetTesseractHash(t, ts)] = ts
-}
-
-func (c *MockChainManager) GetTesseractPartsByGridHash(gridHash common.Hash) (*common.TesseractParts, error) {
-	// TODO implement me
-	panic("implement me")
 }
 
 type MockStateManager struct {

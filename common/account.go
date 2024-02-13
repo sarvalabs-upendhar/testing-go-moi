@@ -57,14 +57,10 @@ func (acc *Accounts) Bytes() ([]byte, error) {
 }
 
 type AccountMetaInfo struct {
-	Type AccountType `json:"type"`
-
-	Address identifiers.Address `json:"address"`
-	Height  uint64              `json:"height"`
-
-	TesseractHash Hash `json:"tesseract_hash"`
-	LatticeExists bool `json:"lattice_exists"`
-	StateExists   bool `json:"state_exists"`
+	Type          AccountType         `json:"type"`
+	Address       identifiers.Address `json:"address"`
+	Height        uint64              `json:"height"`
+	TesseractHash Hash                `json:"tesseract_hash"`
 }
 
 func (ami *AccountMetaInfo) Bytes() ([]byte, error) {

@@ -169,10 +169,10 @@ func RPClogicPayloadFromLogicPayload(payload *common.LogicPayload) *RPCLogicPayl
 	}
 
 	return &RPCLogicPayload{
-		Manifest: (hexutil.Bytes)(payload.Manifest),
+		Manifest: payload.Manifest,
 		LogicID:  string(payload.Logic),
 		Callsite: payload.Callsite,
-		Calldata: (hexutil.Bytes)(payload.Calldata),
+		Calldata: payload.Calldata,
 	}
 }
 

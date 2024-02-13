@@ -3,7 +3,6 @@ package websocket
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -14,16 +13,16 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/hashicorp/go-hclog"
-	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-identifiers"
-	"github.com/stretchr/testify/require"
-
+	"github.com/pkg/errors"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/jsonrpc/backend"
 	"github.com/sarvalabs/go-moi/state"
+	"github.com/stretchr/testify/require"
 )
 
 func newMockServer(t *testing.T) *httptest.Server {
@@ -112,7 +111,20 @@ func (mc *MockConnManager) GetFilterID() string {
 type MockChainManager struct {
 	tesseractsByHash map[common.Hash]*common.Tesseract
 	TSHashByHeight   map[string]common.Hash
-	tesseractParts   map[common.Hash]*common.TesseractParts
+}
+
+func (m *MockChainManager) GetInteractionAndParticipantsByIxHash(ixHash common.Hash) (*common.Interaction,
+	common.Hash, common.Participants, int, error,
+) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockChainManager) GetInteractionAndParticipantsByTSHash(tsHash common.Hash, ixIndex int) (*common.Interaction,
+	common.Participants, error,
+) {
+	// TODO implement me
+	panic("implement me")
 }
 
 func NewMockChainManager(t *testing.T) *MockChainManager {
@@ -122,7 +134,6 @@ func NewMockChainManager(t *testing.T) *MockChainManager {
 
 	mockChain.tesseractsByHash = make(map[common.Hash]*common.Tesseract)
 	mockChain.TSHashByHeight = make(map[string]common.Hash)
-	mockChain.tesseractParts = make(map[common.Hash]*common.TesseractParts)
 
 	return mockChain
 }
@@ -141,7 +152,10 @@ func (m *MockChainManager) setTesseractByHash(
 	m.tesseractsByHash[tests.GetTesseractHash(t, ts)] = ts
 }
 
-func (m *MockChainManager) GetTesseract(hash common.Hash, withInteractions bool) (*common.Tesseract, error) {
+func (m *MockChainManager) GetTesseract(
+	hash common.Hash,
+	withInteractions bool,
+) (*common.Tesseract, error) {
 	ts, ok := m.tesseractsByHash[hash]
 	if !ok {
 		return nil, common.ErrFetchingTesseract
@@ -161,20 +175,6 @@ func (m *MockChainManager) GetReceiptByIxHash(ixHash common.Hash) (*common.Recei
 	panic("implement me")
 }
 
-func (m *MockChainManager) GetInteractionAndPartsByIxHash(
-	ixHash common.Hash,
-) (*common.Interaction, *common.TesseractParts, int, error) {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (m *MockChainManager) GetInteractionAndPartsByTSHash(tsHash common.Hash,
-	ixIndex int,
-) (*common.Interaction, *common.TesseractParts, error) {
-	// TODO implement me
-	panic("implement me")
-}
-
 func (m *MockChainManager) setTesseractHeightEntry(address identifiers.Address, height uint64, hash common.Hash) {
 	key := address.Hex() + strconv.FormatUint(height, 10)
 	m.TSHashByHeight[key] = hash
@@ -188,19 +188,6 @@ func (m *MockChainManager) GetTesseractHeightEntry(address identifiers.Address, 
 	}
 
 	return common.NilHash, common.ErrKeyNotFound
-}
-
-func (m *MockChainManager) setTesseractPartsByGridHash(gridHash common.Hash, parts *common.TesseractParts) {
-	m.tesseractParts[gridHash] = parts
-}
-
-func (m *MockChainManager) GetTesseractPartsByGridHash(gridHash common.Hash) (*common.TesseractParts, error) {
-	parts, ok := m.tesseractParts[gridHash]
-	if !ok {
-		return nil, common.ErrTesseractPartsNotFound
-	}
-
-	return parts, nil
 }
 
 type MockStateManager struct {
@@ -223,7 +210,8 @@ func (m *MockStateManager) GetLatestStateObject(addr identifiers.Address) (*stat
 	panic("implement me")
 }
 
-func (m *MockStateManager) GetContextByHash(address identifiers.Address,
+func (m *MockStateManager) GetContextByHash(
+	address identifiers.Address,
 	hash common.Hash,
 ) (common.Hash, []kramaid.KramaID, []kramaid.KramaID, error) {
 	// TODO implement me
@@ -235,8 +223,7 @@ func (m *MockStateManager) GetBalances(addrs identifiers.Address, stateHash comm
 	panic("implement me")
 }
 
-func (m *MockStateManager) GetBalance(addr identifiers.Address,
-	assetID identifiers.AssetID, stateHash common.Hash,
+func (m *MockStateManager) GetBalance(addr identifiers.Address, assetID identifiers.AssetID, stateHash common.Hash,
 ) (*big.Int, error) {
 	// TODO implement me
 	panic("implement me")
@@ -341,55 +328,26 @@ func createTSandLogs(
 		r.IxHash = hashes[0]
 	})
 
-	headerCallbackWithGridHash := func(
-		t *testing.T,
-		address identifiers.Address,
-		hash common.Hash,
-		height uint64,
-	) func(header *common.TesseractHeader) {
-		t.Helper()
-
-		return func(header *common.TesseractHeader) {
-			header.Extra = common.CommitData{
-				GridID: &common.TesseractGridID{
-					Hash: tests.RandomHash(t),
-					Parts: &common.TesseractParts{
-						Total: 2,
-						Grid: map[identifiers.Address]common.TesseractHeightAndHash{
-							address: {
-								Height: height,
-								Hash:   hash,
-							},
-						},
-					},
-				},
-			}
-		}
-	}
-
 	ixns := tests.CreateIX(t, nil)
 
 	paramsMap := map[int]*tests.CreateTesseractParams{
 		0: {
-			Address:        addresses[0],
-			Height:         6,
-			HeaderCallback: headerCallbackWithGridHash(t, addresses[0], hashes[0], 6),
-			Receipts:       common.Receipts{tests.RandomHash(t): receipts},
-			Ixns:           common.Interactions{ixns},
+			Addresses: []identifiers.Address{addresses[0]},
+			Heights:   []uint64{6},
+			Receipts:  common.Receipts{tests.RandomHash(t): receipts},
+			Ixns:      common.Interactions{ixns},
 		},
 		1: {
-			Address:        addresses[0],
-			Height:         10,
-			HeaderCallback: headerCallbackWithGridHash(t, addresses[0], hashes[0], 10),
-			Receipts:       common.Receipts{tests.RandomHash(t): receipts},
-			Ixns:           common.Interactions{ixns},
+			Addresses: []identifiers.Address{addresses[0]},
+			Heights:   []uint64{10},
+			Receipts:  common.Receipts{tests.RandomHash(t): receipts},
+			Ixns:      common.Interactions{ixns},
 		},
 		2: {
-			Address:        addresses[0],
-			Height:         14,
-			HeaderCallback: headerCallbackWithGridHash(t, addresses[0], hashes[0], 14),
-			Receipts:       common.Receipts{tests.RandomHash(t): receipts},
-			Ixns:           common.Interactions{ixns},
+			Addresses: []identifiers.Address{addresses[0]},
+			Heights:   []uint64{14},
+			Receipts:  common.Receipts{tests.RandomHash(t): receipts},
+			Ixns:      common.Interactions{ixns},
 		},
 	}
 	tesseracts := tests.CreateTesseracts(t, 3, paramsMap)
@@ -404,27 +362,6 @@ func validateLogs(t *testing.T, log *common.Log, rpcLog *args.RPCLog) {
 	require.Equal(t, log.LogicID, rpcLog.LogicID)
 	require.Equal(t, log.Topics, rpcLog.Topics)
 	require.Equal(t, log.Data, rpcLog.Data)
-}
-
-func validateTSGrid(
-	t *testing.T,
-	grid map[identifiers.Address]common.TesseractHeightAndHash,
-	rpcGrid args.RPCTesseractParts,
-) {
-	t.Helper()
-
-	for address, heightAndHash := range grid {
-		found := false
-
-		for _, rpcPart := range rpcGrid {
-			if rpcPart.Address == address && rpcPart.Hash == heightAndHash.Hash &&
-				rpcPart.Height.ToUint64() == heightAndHash.Height {
-				found = true
-			}
-		}
-
-		require.True(t, found)
-	}
 }
 
 func createAndRunFilterManager(
@@ -528,8 +465,12 @@ func assertRPCTesseract(
 	require.NoError(t, err)
 
 	// match result field in subscriptionTemplate
-	require.Equal(t, expectedTesseract.Address(), rpcTesseract.Address())
-	require.Equal(t, expectedTesseract.Height(), rpcTesseract.Height())
+	require.Equal(t, len(expectedTesseract.Participants()), len(rpcTesseract.Participants))
+
+	for _, addr := range expectedTesseract.Addresses() {
+		require.True(t, rpcTesseract.HasParticipant(addr))
+		require.Equal(t, expectedTesseract.Height(addr), rpcTesseract.Height(addr))
+	}
 }
 
 func assertRPCLogs(
@@ -545,19 +486,12 @@ func assertRPCLogs(
 	err := json.Unmarshal(res.Params.Result, &rpcLog)
 	require.NoError(t, err)
 
-	gridBytes, err := json.Marshal(rpcLog.Grid)
-	require.NoError(t, err)
-
-	var grid args.RPCTesseractParts
-	err = json.Unmarshal(gridBytes, &grid)
-	require.NoError(t, err)
-
 	// match result field in subscriptionTemplate
 	validateLogs(t, logs, &rpcLog)
 	require.Equal(t, expectedHash, rpcLog.IxHash)
-	require.Equal(t, expectedTesseract.Address(), grid[0].Address)
-	require.Equal(t, expectedHash, grid[0].Hash)
-	require.Equal(t, expectedTesseract.Height(), grid[0].Height.ToUint64())
+
+	require.Equal(t, expectedTesseract.Hash(), rpcLog.TSHash)
+	args.CheckForRPCParticipants(t, expectedTesseract.Participants(), rpcLog.Participants)
 }
 
 func assertIxHashes(t *testing.T, expectedIx *common.Interaction, res *Message) {

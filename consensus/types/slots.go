@@ -10,8 +10,8 @@ import (
 )
 
 type ExecutionResponse struct {
-	Err  error
-	Grid []*common.Tesseract
+	Err       error
+	Tesseract *common.Tesseract
 }
 
 const (

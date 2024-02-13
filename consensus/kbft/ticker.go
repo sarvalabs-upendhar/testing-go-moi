@@ -34,6 +34,8 @@ type Ticker struct {
 
 	// Represents the channel for closing the ticker
 	quit chan struct{}
+
+	isClosed bool
 }
 
 // NewTicker is a constructor function that generates and returns a new Ticker
@@ -141,5 +143,12 @@ func (t *Ticker) timeoutRoutine() {
 func (t *Ticker) Close() {
 	t.logger.Debug("Closing timer")
 
+	if t.isClosed {
+		t.logger.Error("closing an already closed quit channel on ticker")
+
+		return
+	}
+
+	t.isClosed = true
 	close(t.quit)
 }

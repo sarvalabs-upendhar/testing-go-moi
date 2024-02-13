@@ -74,7 +74,7 @@ func GetDummyBlocks(t *testing.T, count int) (*cid.CIDSet, map[cid.CID]block.Blo
 		_, err := rand.Read(rawBytes)
 		require.NoError(t, err)
 
-		block := block.NewBlockFromRawData(0x00, rawBytes)
+		block := block.NewAccountBlockFromRawData(0x00, rawBytes)
 		set.Add(block.GetCid())
 		blocks[block.GetCid()] = block
 	}

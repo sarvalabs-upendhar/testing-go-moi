@@ -145,6 +145,25 @@ func (i *ICSNodeSet) GetNodes() []kramaid.KramaID {
 	return nodes
 }
 
+// GetVoteset returns combined voteset of all the nodes from the ICSNodeSet
+func (i *ICSNodeSet) GetVoteset() *ArrayOfBits {
+	voteSet := NewArrayOfBits(i.Size)
+
+	index := 0
+
+	for _, nodeSet := range i.Nodes {
+		if nodeSet != nil {
+			for j := 0; j < len(nodeSet.Ids); j++ {
+				voteSet.setIndex(index+j, nodeSet.Responses.GetIndex(j))
+			}
+
+			index += len(nodeSet.Ids)
+		}
+	}
+
+	return voteSet
+}
+
 // GetRespondedNodeCount returns count of nodes that responded from selected ICSNodes
 // between start and end indexes (inclusive)
 func (i *ICSNodeSet) GetRespondedNodeCount(start, end int) (count int) {

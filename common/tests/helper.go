@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/big"
 	"net"
@@ -14,23 +13,26 @@ import (
 	"testing"
 	"time"
 
+	"github.com/multiformats/go-multiaddr"
+	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi/crypto"
+	mudracommon "github.com/sarvalabs/go-moi/crypto/common"
+	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/multiformats/go-multiaddr"
-	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-engineio"
-	"github.com/sarvalabs/go-moi-identifiers"
+
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	engineio "github.com/sarvalabs/go-moi-engineio"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-pisa"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
-	"github.com/sarvalabs/go-moi/crypto"
-	mudracommon "github.com/sarvalabs/go-moi/crypto/common"
 	"github.com/sarvalabs/go-moi/crypto/poi"
-	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
+	"github.com/stretchr/testify/require"
 )
 
 const InvalidAccount common.AccountType = 9999
@@ -448,19 +450,6 @@ func GetListenAddresses(t *testing.T, count int) []multiaddr.Multiaddr {
 	return ListenAddresses
 }
 
-func GetTesseract(t *testing.T, height uint64, ixns common.Interactions) *common.Tesseract {
-	t.Helper()
-
-	header := common.TesseractHeader{
-		Address:  RandomAddress(t),
-		PrevHash: RandomHash(t),
-		Height:   height,
-	}
-	body := common.TesseractBody{}
-
-	return common.NewTesseract(header, body, ixns, nil, []byte{1}, RandomKramaID(t, 0))
-}
-
 func GetRandomAccMetaInfo(t *testing.T, height uint64) *common.AccountMetaInfo {
 	t.Helper()
 
@@ -469,8 +458,6 @@ func GetRandomAccMetaInfo(t *testing.T, height uint64) *common.AccountMetaInfo {
 		Type:          common.AccountType(1),
 		Height:        height,
 		TesseractHash: RandomHash(t),
-		LatticeExists: true,
-		StateExists:   true,
 	}
 }
 
@@ -512,59 +499,109 @@ func GetRandomAddressList(t *testing.T, count int) []identifiers.Address {
 }
 
 type CreateTesseractParams struct {
-	Address        identifiers.Address
-	Height         uint64
-	Ixns           common.Interactions
-	Receipts       common.Receipts
-	Sealer         kramaid.KramaID
-	Seal           []byte
-	ClusterID      string
-	HeaderCallback func(header *common.TesseractHeader)
-	BodyCallback   func(body *common.TesseractBody)
+	Addresses      []identifiers.Address
+	Heights        []uint64
+	Participants   common.Participants
+	TSDataCallback func(ts *TesseractData)
+
+	Ixns     common.Interactions
+	Receipts common.Receipts
+}
+
+type TesseractData struct {
+	InteractionsHash common.Hash
+	ReceiptsHash     common.Hash
+	Epoch            *big.Int
+	Timestamp        int64
+	Operator         string
+	FuelUsed         uint64
+	FuelLimit        uint64
+	ConsensusInfo    common.PoXtData
+
+	// non canonical fields
+	Seal   []byte
+	SealBy kramaid.KramaID
+}
+
+func DefaultTesseractData() *TesseractData {
+	return &TesseractData{
+		InteractionsHash: common.NilHash,
+		ReceiptsHash:     common.NilHash,
+		Epoch:            big.NewInt(0),
+		Timestamp:        0,
+		Operator:         "",
+		FuelUsed:         100,
+		FuelLimit:        100,
+		ConsensusInfo:    common.PoXtData{},
+
+		// non canonical fields
+		Seal:   nil,
+		SealBy: "",
+	}
 }
 
 // CreateTesseract is a helper function to create test with the provided params
 func CreateTesseract(t *testing.T, params *CreateTesseractParams) *common.Tesseract {
 	t.Helper()
 
+	var (
+		interactionsHash common.Hash
+		tsData           = DefaultTesseractData()
+	)
+
 	if params == nil {
 		params = &CreateTesseractParams{}
 	}
 
-	if params.Address.IsNil() {
-		params.Address = RandomAddress(t)
+	if params.Participants == nil {
+		params.Participants = make(common.Participants)
 	}
 
-	var interactionHash common.Hash
+	// A tesseract should have at least one participant
+	if len(params.Addresses) == 0 {
+		addr := RandomAddress(t)
+		params.Addresses = []identifiers.Address{addr}
+	}
 
-	header := &common.TesseractHeader{
-		Address:   params.Address,
-		Height:    params.Height,
-		FuelUsed:  100,
-		FuelLimit: 100,
-		ClusterID: params.ClusterID,
+	// if participants are not provided then create them based on addresses provided with an empty state
+	if len(params.Participants) == 0 {
+		for i, addr := range params.Addresses {
+			params.Participants[addr] = common.State{}
+
+			if len(params.Heights) != 0 {
+				params.Participants[addr] = common.State{
+					Height: params.Heights[i],
+				}
+			}
+		}
 	}
 
 	if params.Ixns != nil {
 		hash, err := params.Ixns.Hash()
 		require.NoError(t, err)
 
-		interactionHash = hash
+		interactionsHash = hash
 	}
 
-	body := &common.TesseractBody{
-		InteractionHash: interactionHash,
+	if params.TSDataCallback != nil {
+		params.TSDataCallback(tsData)
 	}
 
-	if params.HeaderCallback != nil {
-		params.HeaderCallback(header)
-	}
-
-	if params.BodyCallback != nil {
-		params.BodyCallback(body)
-	}
-
-	return common.NewTesseract(*header, *body, params.Ixns, params.Receipts, params.Seal, params.Sealer)
+	return common.NewTesseract(
+		params.Participants,
+		interactionsHash,
+		tsData.ReceiptsHash,
+		tsData.Epoch,
+		tsData.Timestamp,
+		tsData.Operator,
+		tsData.FuelUsed,
+		tsData.FuelLimit,
+		tsData.ConsensusInfo,
+		tsData.Seal,
+		tsData.SealBy,
+		params.Ixns,
+		params.Receipts,
+	)
 }
 
 func CreateTesseracts(t *testing.T, count int, paramsMap map[int]*CreateTesseractParams) []*common.Tesseract {
@@ -579,7 +616,7 @@ func CreateTesseracts(t *testing.T, count int, paramsMap map[int]*CreateTesserac
 	for i := 0; i < count; i++ {
 		if paramsMap[i] == nil {
 			paramsMap[i] = &CreateTesseractParams{
-				Height: uint64(i),
+				Heights: []uint64{uint64(i)},
 			}
 		}
 
@@ -698,20 +735,6 @@ func GetIxParamsMapWithAddresses(
 	return ixParams
 }
 
-// HeaderCallbackWithGridHash returns callback which assigns extra field with new commit data having random grid hash
-func HeaderCallbackWithGridHash(t *testing.T) func(header *common.TesseractHeader) {
-	t.Helper()
-
-	return func(header *common.TesseractHeader) {
-		header.Extra = common.CommitData{
-			GridID: &common.TesseractGridID{
-				Hash:  RandomHash(t),
-				Parts: &common.TesseractParts{},
-			},
-		}
-	}
-}
-
 // GetTesseractParamsMapWithIxns returns tsCount no.of tesseracts and each one will have ixnCount interactions
 func GetTesseractParamsMapWithIxns(t *testing.T, tsCount, ixnCount int) map[int]*CreateTesseractParams {
 	t.Helper()
@@ -727,8 +750,7 @@ func GetTesseractParamsMapWithIxns(t *testing.T, tsCount, ixnCount int) map[int]
 	// allocate interactions to each tesseract, excluding the first tesseract (which is the genesis tesseract)
 	for i := 0; i < tsCount; i++ {
 		tesseractParams[i] = &CreateTesseractParams{
-			Height:         uint64(i),
-			HeaderCallback: HeaderCallbackWithGridHash(t),
+			Heights: []uint64{uint64(i)},
 		}
 
 		if i > 0 {
@@ -754,70 +776,11 @@ func GetTestAccount(t *testing.T, callBack func(acc *common.Account)) (*common.A
 	return acc, accHash
 }
 
-func CreateTesseractPartsWithTestData(t *testing.T) *common.TesseractParts {
-	t.Helper()
-
-	parts := &common.TesseractParts{
-		Total: 2,
-		Grid:  make(map[identifiers.Address]common.TesseractHeightAndHash),
-	}
-
-	for i := 0; i < 2; i++ {
-		parts.Grid[RandomAddress(t)] = common.TesseractHeightAndHash{
-			Height: 3,
-			Hash:   RandomHash(t),
-		}
-	}
-
-	return parts
-}
-
-func CreateCommitDataWithTestData(t *testing.T) common.CommitData {
-	t.Helper()
-
-	return common.CommitData{
-		Round:           4,
-		CommitSignature: []byte{1, 2, 3},
-		VoteSet: &common.ArrayOfBits{
-			Elements: []uint64{4, 4},
-		},
-		EvidenceHash: RandomHash(t),
-		GridID: &common.TesseractGridID{
-			Hash:  RandomHash(t),
-			Parts: CreateTesseractPartsWithTestData(t),
-		},
-	}
-}
-
-func CreateHeaderWithTestData(t *testing.T) common.TesseractHeader {
-	t.Helper()
-
-	header := common.TesseractHeader{
-		Address:     RandomAddress(t),
-		PrevHash:    RandomHash(t),
-		Height:      4444,
-		FuelUsed:    5,
-		FuelLimit:   6,
-		BodyHash:    RandomHash(t),
-		GroupHash:   RandomHash(t),
-		Operator:    "operator",
-		ClusterID:   "cluster-ID",
-		Timestamp:   1,
-		ContextLock: make(map[identifiers.Address]common.ContextLockInfo),
-		Extra:       CreateCommitDataWithTestData(t),
-	}
-
-	header.ContextLock[RandomAddress(t)] = common.ContextLockInfo{
-		TesseractHash: RandomHash(t),
-	}
-
-	return header
-}
-
 func CheckForTesseract(t *testing.T, expectedTS, actualTS *common.Tesseract, withInteractions bool) {
 	t.Helper()
 
 	if withInteractions {
+		require.Greater(t, len(expectedTS.Interactions()), 0)
 		require.Equal(t, expectedTS, actualTS)
 
 		return
@@ -984,29 +947,6 @@ func CreateReceiptWithTestData(t *testing.T) *common.Receipt {
 	return receipt
 }
 
-func CreateBodyWithTestData(t *testing.T) common.TesseractBody {
-	t.Helper()
-
-	body := common.TesseractBody{
-		StateHash:       RandomHash(t),
-		ContextHash:     RandomHash(t),
-		InteractionHash: RandomHash(t),
-		ReceiptHash:     RandomHash(t),
-		ContextDelta:    make(map[identifiers.Address]*common.DeltaGroup),
-		ConsensusProof: common.PoXtData{
-			BinaryHash:   RandomHash(t),
-			IdentityHash: RandomHash(t),
-			ICSHash:      RandomHash(t),
-		},
-	}
-
-	body.ContextDelta[RandomAddress(t)] = &common.DeltaGroup{
-		BehaviouralNodes: RandomKramaIDs(t, 2),
-	}
-
-	return body
-}
-
 func WriteToAccountsFile(filePath string, accounts []AccountWithMnemonic) error {
 	file, err := json.MarshalIndent(accounts, "", "\t")
 	if err != nil {
@@ -1040,6 +980,59 @@ func GetAddressFromAccountsFile(filePath string) ([]string, error) {
 	}
 
 	return addresses, nil
+}
+
+func CreateStateWithTestData(t *testing.T) common.State {
+	t.Helper()
+
+	s := common.State{
+		Height:          6,
+		TransitiveLink:  RandomHash(t),
+		PreviousContext: RandomHash(t),
+		LatestContext:   RandomHash(t),
+		StateHash:       RandomHash(t),
+		ContextDelta: common.DeltaGroup{
+			Role:             common.Receiver,
+			BehaviouralNodes: RandomKramaIDs(t, 2),
+			RandomNodes:      RandomKramaIDs(t, 2),
+			ReplacedNodes:    RandomKramaIDs(t, 2),
+		},
+	}
+
+	return s
+}
+
+func CreatePoXtWithTestData(t *testing.T) common.PoXtData {
+	t.Helper()
+
+	return common.PoXtData{
+		EvidenceHash: RandomHash(t),
+		BinaryHash:   RandomHash(t),
+		IdentityHash: RandomHash(t),
+		ICSHash:      RandomHash(t),
+		ClusterID:    "cluster",
+		ICSSignature: []byte{1, 2, 3},
+		ICSVoteset: &common.ArrayOfBits{
+			Elements: []uint64{4, 6},
+		},
+		Round:           5,
+		CommitSignature: []byte{1, 2, 3, 5},
+		BFTVoteSet: &common.ArrayOfBits{
+			Elements: []uint64{4, 8},
+		},
+	}
+}
+
+func CreateParticipantWithTestData(t *testing.T, count int) common.Participants {
+	t.Helper()
+
+	p := make(common.Participants)
+
+	for i := 0; i < count; i++ {
+		p[RandomAddress(t)] = CreateStateWithTestData(t)
+	}
+
+	return p
 }
 
 func GetAccountMnemonicsFromFile(filePath string) ([]AccountWithMnemonic, error) {

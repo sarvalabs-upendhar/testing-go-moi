@@ -73,6 +73,12 @@ func TestCopyLog(t *testing.T) {
 				Data:      []byte{1},
 			},
 		},
+		{
+			name: "empty addresses,topics,data",
+			log: &common.Log{
+				LogicID: tests.GetLogicID(t, tests.RandomAddress(t)),
+			},
+		},
 	}
 
 	for _, test := range testcases {
@@ -83,25 +89,70 @@ func TestCopyLog(t *testing.T) {
 			// Add assertions to check individual fields of the copied log
 			require.Equal(t, expectedLog, copiedLog)
 
-			// Compare Addresses pointers
-			require.NotEqual(t,
-				reflect.ValueOf(expectedLog.Addresses).Pointer(),
-				reflect.ValueOf(copiedLog.Addresses).Pointer(),
-			)
-
-			// Compare Topics pointers
-			require.NotEqual(t,
-				reflect.ValueOf(expectedLog.Topics).Pointer(),
-				reflect.ValueOf(copiedLog.Topics).Pointer(),
-			)
-
-			// Compare Data slices
-			if expectedLog.Data != nil {
+			if len(expectedLog.Addresses) > 0 {
+				// Compare Addresses pointers
 				require.NotEqual(t,
-					reflect.ValueOf(expectedLog.Data).Pointer(),
-					reflect.ValueOf(copiedLog.Data).Pointer(),
+					reflect.ValueOf(expectedLog.Addresses).Pointer(),
+					reflect.ValueOf(copiedLog.Addresses).Pointer(),
 				)
+			}
+
+			if len(expectedLog.Topics) > 0 {
+				// Compare Topics pointers
+				require.NotEqual(t,
+					reflect.ValueOf(expectedLog.Topics).Pointer(),
+					reflect.ValueOf(copiedLog.Topics).Pointer(),
+				)
+			}
+
+			if len(expectedLog.Data) > 0 {
+				// Compare Data slices
+				if expectedLog.Data != nil {
+					require.NotEqual(t,
+						reflect.ValueOf(expectedLog.Data).Pointer(),
+						reflect.ValueOf(copiedLog.Data).Pointer(),
+					)
+				}
 			}
 		})
 	}
+}
+
+func TestCopyReceipts(t *testing.T) {
+	hash := tests.RandomHash(t)
+
+	testcases := []struct {
+		name     string
+		receipts common.Receipts
+	}{
+		{
+			name:     "copy receipts",
+			receipts: createReceiptsWithTestData(t, hash),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			expectedReceipts := test.receipts
+
+			receipts := test.receipts.Copy()
+
+			require.Equal(t, expectedReceipts, receipts)
+
+			require.NotEqual(t, reflect.ValueOf(test.receipts).Pointer(), reflect.ValueOf(receipts).Pointer())
+			require.NotEqual(t,
+				reflect.ValueOf(test.receipts[hash].ExtraData).Pointer(),
+				reflect.ValueOf(receipts[hash].ExtraData).Pointer(),
+			)
+		})
+	}
+}
+
+func createReceiptsWithTestData(t *testing.T, hash common.Hash) common.Receipts {
+	t.Helper()
+
+	receipts := make(common.Receipts)
+	receipts[hash] = tests.CreateReceiptWithTestData(t)
+
+	return receipts
 }

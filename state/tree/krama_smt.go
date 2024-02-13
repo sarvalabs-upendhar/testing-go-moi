@@ -84,6 +84,11 @@ func (kht *KramaHashTree) RootHash() (common.Hash, error) {
 	kht.mtx.RLock()
 	defer kht.mtx.RUnlock()
 
+	// avoid calculating root hash on empty tree
+	if kht.root.MerkleRoot == common.NilHash && !kht.db.IsDirty() {
+		return common.NilHash, nil
+	}
+
 	return kht.root.Hash()
 }
 

@@ -218,6 +218,7 @@ func (n *Node) setupSyncer() (err error) {
 		n.db,
 		n.chain,
 		n.state,
+		n.ixpool,
 		n.consensusSlots,
 		n.lastActiveTimestamp,
 		n.nodeMetrics.syncer,

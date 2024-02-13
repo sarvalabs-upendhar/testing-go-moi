@@ -34,6 +34,7 @@ func (k *Engine) minter() {
 				}
 				// Wait for response from krama engine handler
 				resp := <-respChan
+
 				if resp.err != nil {
 					switch resp.err.Error() {
 					case common.ErrInvalidInteractions.Error():

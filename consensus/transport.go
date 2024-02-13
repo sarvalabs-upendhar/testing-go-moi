@@ -135,7 +135,7 @@ func (t *Transport) Call(
 	return t.rpcClient.MoiCall(ctx, kramaID, svcName, svcMethod, args, response, kramaMoirpcStreamTTL)
 }
 
-func (t *Transport) BroadcastTesseract(msg *networkmsg.TesseractMessage) error {
+func (t *Transport) BroadcastTesseract(msg *networkmsg.TesseractMsg) error {
 	rawData, err := msg.Bytes()
 	if err != nil {
 		return err

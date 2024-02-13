@@ -6,18 +6,19 @@ import (
 
 	"github.com/decred/dcrd/crypto/blake256"
 	iradix "github.com/hashicorp/go-immutable-radix"
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-engineio"
-	"github.com/sarvalabs/go-moi-identifiers"
-
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	engineio "github.com/sarvalabs/go-moi-engineio"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"
 )
 
-// var blakeHasher = blake256.New()
+// StorageTree: Holds key-value pairs associated with logic (identified by logicID) for storage.
+// LogicTree: Manages logicObject for each logic.
+// MetaStorageTree: Keeps track of the root of the storage tree for each logic.
 
 type Object struct {
 	cache *lru.Cache

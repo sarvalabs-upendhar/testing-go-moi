@@ -47,17 +47,17 @@ func (l *Log) Copy() *Log {
 	return &log
 }
 
-type Hashes struct {
+type StateAndContextHash struct {
 	StateHash   Hash `json:"state_hash"`
 	ContextHash Hash `json:"context_hash"`
 }
 
-type AccStateHashes map[identifiers.Address]*Hashes
+type AccStateHashes map[identifiers.Address]*StateAndContextHash
 
 func (h AccStateHashes) SetContextHash(addr identifiers.Address, contextHash Hash) {
 	hashes, ok := h[addr]
 	if !ok {
-		h[addr] = &Hashes{ContextHash: contextHash}
+		h[addr] = &StateAndContextHash{ContextHash: contextHash}
 
 		return
 	}
@@ -69,7 +69,7 @@ func (h AccStateHashes) SetStateHash(addr identifiers.Address, stateHash Hash) {
 	hashes, ok := h[addr]
 
 	if !ok {
-		h[addr] = &Hashes{StateHash: stateHash}
+		h[addr] = &StateAndContextHash{StateHash: stateHash}
 
 		return
 	}
@@ -103,7 +103,7 @@ func (h AccStateHashes) Copy() AccStateHashes {
 	hashmap := make(AccStateHashes)
 
 	for key, value := range h {
-		hashmap[key] = &Hashes{
+		hashmap[key] = &StateAndContextHash{
 			StateHash:   value.StateHash,
 			ContextHash: value.ContextHash,
 		}

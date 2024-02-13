@@ -64,7 +64,7 @@ func (tn *TestSingleNode) SetupSuite() {
 	defer func() {
 		// make sure to delete directories in case of setup suite failure
 		if !tn.suiteSetupDone {
-			tn.logger.Error("setup suite failed")
+			tn.logger.Error("Setup suite failed")
 			tn.runCriticallyNecessaryTearDown()
 		}
 	}()
@@ -184,7 +184,7 @@ func (tn *TestSingleNode) TestTesseract() {
 			require.Equal(tn.T(), httpTS, ts)
 
 			require.NoError(tn.T(), err)
-			require.Equal(tn.T(), test.tesseractArgs.Address, ts.Address())
+			require.True(tn.T(), ts.HasParticipant(test.tesseractArgs.Address))
 			require.Equal(tn.T(), 0, len(ts.Ixns))
 		})
 	}

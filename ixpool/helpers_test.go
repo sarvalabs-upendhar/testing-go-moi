@@ -278,7 +278,13 @@ func getTesseractWithIxs(t *testing.T, address identifiers.Address, nonce int) *
 		newTestInteraction(t, common.IxValueTransfer, nonce, address, nil),
 	}
 
-	ts := tests.GetTesseract(t, 0, ixns)
+	tsParams := &tests.CreateTesseractParams{
+		Addresses: []identifiers.Address{address},
+		Heights:   []uint64{0},
+		Ixns:      ixns,
+	}
+
+	ts := tests.CreateTesseract(t, tsParams)
 
 	return ts
 }

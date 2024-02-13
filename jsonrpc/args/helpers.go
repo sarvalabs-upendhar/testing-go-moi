@@ -4,12 +4,10 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/sarvalabs/go-moi-identifiers"
-	"github.com/stretchr/testify/require"
-
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/stretchr/testify/require"
 )
 
 // CheckForRPCTesseract validates fields of rpc tesseract
@@ -20,12 +18,16 @@ func CheckForRPCTesseract(
 ) {
 	t.Helper()
 
-	var grid map[identifiers.Address]common.TesseractHeightAndHash
-
-	CheckForRPCHeader(t, ts.Header(), rpcTS.Header)
-	CheckForRPCBody(t, ts.Body(), rpcTS.Body)
+	CheckForRPCParticipants(t, ts.Participants(), rpcTS.Participants)
+	CheckForRPCPoxtData(t, ts.ConsensusInfo(), rpcTS.ConsensusInfo)
+	require.Equal(t, ts.InteractionsHash(), rpcTS.InteractionsHash)
+	require.Equal(t, ts.ReceiptsHash(), rpcTS.ReceiptsHash)
+	require.Equal(t, ts.Epoch(), rpcTS.Epoch.ToInt())
+	require.Equal(t, uint64(ts.Timestamp()), rpcTS.TimeStamp.ToUint64())
+	require.Equal(t, ts.Operator(), rpcTS.Operator)
+	require.Equal(t, ts.FuelUsed(), rpcTS.FuelUsed.ToUint64())
+	require.Equal(t, ts.FuelLimit(), rpcTS.FuelLimit.ToUint64())
 	require.Equal(t, ts.Seal(), rpcTS.Seal.Bytes())
-
 	require.Equal(t, ts.Hash(), rpcTS.Hash)
 
 	if ts.ClusterID() == common.GenesisIdentifier {
@@ -36,57 +38,25 @@ func CheckForRPCTesseract(
 		return
 	}
 
-	parts, err := ts.Parts()
-	if err == nil {
-		grid = parts.Grid
-	}
+	require.Equal(t, len(ts.Interactions()), len(rpcTS.Ixns))
 
 	for i, ixn := range ts.Interactions() {
-		CheckForRPCIxn(t, ixn, rpcTS.Ixns[i], grid)
+		CheckForRPCIxn(t, ixn, ts.Hash(), nil, rpcTS.Ixns[i])
 	}
-}
-
-func CheckForRPCHeader(t *testing.T, header common.TesseractHeader, rpcHeader RPCHeader) {
-	t.Helper()
-
-	require.Equal(t, header.Address, rpcHeader.Address)
-	require.Equal(t, header.PrevHash, rpcHeader.PrevHash)
-	require.Equal(t, header.Height, rpcHeader.Height.ToUint64())
-	require.Equal(t, header.FuelUsed, rpcHeader.FuelUsed.ToUint64())
-	require.Equal(t, header.FuelLimit, rpcHeader.FuelLimit.ToUint64())
-	require.Equal(t, header.BodyHash, rpcHeader.BodyHash)
-	require.Equal(t, header.GroupHash, rpcHeader.GridHash)
-	require.Equal(t, header.Operator, rpcHeader.Operator)
-	require.Equal(t, header.ClusterID, rpcHeader.ClusterID)
-	require.Equal(t, uint64(header.Timestamp), rpcHeader.Timestamp.ToUint64())
-	CheckForRPCContextLockInfos(t, header.ContextLock, rpcHeader.ContextLock)
-
-	checkForRPCCommitData(t, header.Extra, rpcHeader.Extra)
-}
-
-func CheckForRPCBody(t *testing.T, body common.TesseractBody, rpcBody RPCBody) {
-	t.Helper()
-
-	require.Equal(t, body.StateHash, rpcBody.StateHash)
-	require.Equal(t, body.ContextHash, rpcBody.ContextHash)
-	require.Equal(t, body.InteractionHash, rpcBody.InteractionHash)
-	require.Equal(t, body.ReceiptHash, rpcBody.ReceiptHash)
-	CheckForRPCDeltaGroups(t, body.ContextDelta, rpcBody.ContextDelta)
-	require.Equal(t, body.ConsensusProof, rpcBody.ConsensusProof)
 }
 
 // CheckForRPCIxn validates a field from input, compute, trust, and verifies payload.
 func CheckForRPCIxn(
 	t *testing.T,
 	ix *common.Interaction,
+	tsHash common.Hash,
+	participants common.Participants,
 	rpcIxn *RPCInteraction,
-	grid map[identifiers.Address]common.TesseractHeightAndHash,
 ) {
 	t.Helper()
 
-	if len(grid) != 0 {
-		CheckForRPCTesseractParts(t, grid, rpcIxn.Parts)
-	}
+	require.Equal(t, tsHash, rpcIxn.TSHash)
+	CheckForRPCParticipants(t, participants, rpcIxn.Participants)
 
 	input := ix.Input()
 	compute := ix.Compute()
@@ -195,134 +165,51 @@ func CheckForRPCIxn(
 	}
 }
 
-func CheckForRPCContextLockInfos(
-	t *testing.T,
-	expectedContextLockInfos map[identifiers.Address]common.ContextLockInfo,
-	rpcContextLockInfos RPCContextLockInfos,
-) {
+func CheckForRPCParticipants(t *testing.T, participants common.Participants, rpcParticipants RPCParticipants) {
 	t.Helper()
 
-	if len(expectedContextLockInfos) == 0 {
-		require.Nil(t, rpcContextLockInfos)
-
-		return
+	if len(participants) == 0 {
+		require.Nil(t, rpcParticipants)
 	}
 
-	require.Equal(t, len(expectedContextLockInfos), len(rpcContextLockInfos))
+	require.Equal(t, len(participants), len(rpcParticipants))
 
-	for _, rpcContextLockInfo := range rpcContextLockInfos {
-		contextLockInfo, ok := expectedContextLockInfos[rpcContextLockInfo.Address]
+	for _, rpcParticipant := range rpcParticipants {
+		participant, ok := participants[rpcParticipant.Address]
 		require.True(t, ok)
 
-		require.Equal(t, contextLockInfo.ContextHash, rpcContextLockInfo.ContextHash)
-		require.Equal(t, contextLockInfo.Height, rpcContextLockInfo.Height.ToUint64())
-		require.Equal(t, contextLockInfo.TesseractHash, rpcContextLockInfo.TesseractHash)
+		require.Equal(t, participant.Height, rpcParticipant.Height.ToUint64())
+		require.Equal(t, participant.TransitiveLink, rpcParticipant.TransitiveLink)
+		require.Equal(t, participant.PreviousContext, rpcParticipant.PrevContext)
+		require.Equal(t, participant.LatestContext, rpcParticipant.LatestContext)
+		require.Equal(t, participant.ContextDelta, rpcParticipant.ContextDelta)
+		require.Equal(t, participant.StateHash, rpcParticipant.StateHash)
 	}
-
-	for i := 1; i < len(rpcContextLockInfos); i++ {
-		require.True(t, rpcContextLockInfos[i-1].Address.Hex() < rpcContextLockInfos[i].Address.Hex())
-	}
-}
-
-func checkForRPCCommitData(t *testing.T, commitData common.CommitData, rpcCommitData RPCCommitData) {
-	t.Helper()
-
-	require.Equal(t, uint64(commitData.Round), rpcCommitData.Round.ToUint64())
-	require.Equal(t, commitData.CommitSignature, rpcCommitData.CommitSignature.Bytes())
-	require.Equal(t, commitData.VoteSet.String(), rpcCommitData.VoteSet)
-	require.Equal(t, commitData.EvidenceHash, rpcCommitData.EvidenceHash)
-
-	if commitData.GridID != nil {
-		CheckForRPCTesseractGridID(t, commitData.GridID, rpcCommitData.GridID)
+	// check if participants are sorted
+	for i := 1; i < len(rpcParticipants); i++ {
+		require.True(t, rpcParticipants[i-1].Address.Hex() < rpcParticipants[i].Address.Hex())
 	}
 }
 
-func CheckForRPCDeltaGroups(
-	t *testing.T,
-	expectedRPCDeltaGroups map[identifiers.Address]*common.DeltaGroup,
-	rpcDeltaGroups RPCDeltaGroups,
-) {
+func CheckForRPCPoxtData(t *testing.T, poxt common.PoXtData, rpcPoxt RPCPoXtData) {
 	t.Helper()
 
-	if len(expectedRPCDeltaGroups) == 0 {
-		require.Nil(t, rpcDeltaGroups)
-
-		return
-	}
-
-	require.Equal(t, len(expectedRPCDeltaGroups), len(rpcDeltaGroups))
-
-	for _, rpcDeltaGroup := range rpcDeltaGroups {
-		deltaGroup, ok := expectedRPCDeltaGroups[rpcDeltaGroup.Address]
-		require.True(t, ok)
-
-		require.Equal(t, deltaGroup.Role, rpcDeltaGroup.Role)
-		require.Equal(t, deltaGroup.BehaviouralNodes, rpcDeltaGroup.BehaviouralNodes)
-		require.Equal(t, deltaGroup.RandomNodes, rpcDeltaGroup.RandomNodes)
-		require.Equal(t, deltaGroup.ReplacedNodes, rpcDeltaGroup.ReplacedNodes)
-	}
-
-	for i := 1; i < len(rpcDeltaGroups); i++ {
-		require.True(t, rpcDeltaGroups[i-1].Address.Hex() < rpcDeltaGroups[i].Address.Hex())
-	}
-}
-
-func CheckForRPCTesseractParts(
-	t *testing.T,
-	grid map[identifiers.Address]common.TesseractHeightAndHash,
-	rpcParts RPCTesseractParts,
-) {
-	t.Helper()
-
-	require.Equal(t, len(grid), len(rpcParts))
-
-	for _, rpcPart := range rpcParts {
-		heightAndHash, ok := grid[rpcPart.Address]
-		require.True(t, ok)
-
-		require.Equal(t, heightAndHash.Hash, rpcPart.Hash)
-		require.Equal(t, heightAndHash.Height, rpcPart.Height.ToUint64())
-	}
-
-	CheckIfPartsSorted(t, rpcParts)
-}
-
-func CheckForRPCTesseractGridID(
-	t *testing.T,
-	tesseractGridID *common.TesseractGridID,
-	rpcTesseractGridID *RPCTesseractGridID,
-) {
-	t.Helper()
-
-	if tesseractGridID == nil {
-		require.Nil(t, rpcTesseractGridID)
-
-		return
-	}
-
-	require.Equal(t, tesseractGridID.Hash, rpcTesseractGridID.Hash)
-
-	if tesseractGridID.Parts != nil {
-		require.Equal(t, uint64(tesseractGridID.Parts.Total), rpcTesseractGridID.Total.ToUint64())
-		CheckForRPCTesseractParts(t, tesseractGridID.Parts.Grid, rpcTesseractGridID.Parts)
-
-		return
-	}
-
-	require.Equal(t, 0, int(rpcTesseractGridID.Total))
-}
-
-func CheckIfPartsSorted(t *testing.T, parts RPCTesseractParts) {
-	t.Helper()
-
-	for i := 1; i < len(parts); i++ {
-		require.True(t, parts[i-1].Address.Hex() < parts[i].Address.Hex())
-	}
+	require.Equal(t, poxt.EvidenceHash, rpcPoxt.EvidenceHash)
+	require.Equal(t, poxt.BinaryHash, rpcPoxt.BinaryHash)
+	require.Equal(t, poxt.IdentityHash, rpcPoxt.IdentityHash)
+	require.Equal(t, poxt.ICSHash, rpcPoxt.ICSHash)
+	require.Equal(t, string(poxt.ClusterID), rpcPoxt.ClusterID)
+	require.Equal(t, poxt.ICSSignature, rpcPoxt.ICSSignature.Bytes())
+	require.Equal(t, poxt.ICSVoteset.String(), rpcPoxt.ICSVoteset)
+	require.Equal(t, uint64(poxt.Round), rpcPoxt.Round.ToUint64())
+	require.Equal(t, poxt.CommitSignature, rpcPoxt.CommitSignature.Bytes())
+	require.Equal(t, poxt.BFTVoteSet.String(), rpcPoxt.BFTVoteSet)
 }
 
 func CheckForRPCReceipt(
 	t *testing.T,
-	grid map[identifiers.Address]common.TesseractHeightAndHash,
+	tsHash common.Hash,
+	participants common.Participants,
 	ix *common.Interaction,
 	receipt *common.Receipt,
 	rpcReceipt *RPCReceipt,
@@ -330,7 +217,8 @@ func CheckForRPCReceipt(
 ) {
 	t.Helper()
 
-	CheckForRPCTesseractParts(t, grid, rpcReceipt.Parts)
+	require.Equal(t, tsHash, rpcReceipt.TSHash)
+	CheckForRPCParticipants(t, participants, rpcReceipt.Participants)
 	require.Equal(t, uint64(receipt.IxType), rpcReceipt.IxType.ToUint64())
 	require.Equal(t, receipt.IxHash, rpcReceipt.IxHash)
 	require.Equal(t, receipt.FuelUsed, uint64(rpcReceipt.FuelUsed))
@@ -353,26 +241,4 @@ func CreateInteractionWithTestData(t *testing.T, ixType common.IxType, payload [
 	require.NoError(t, err)
 
 	return ix
-}
-
-func CreateHeaderCallbackWithTestData(t *testing.T) func(header *common.TesseractHeader) {
-	t.Helper()
-
-	return func(header *common.TesseractHeader) {
-		header.Address = tests.RandomAddress(t)
-		header.PrevHash = tests.RandomHash(t)
-		header.Height = 4
-		header.FuelUsed = 88
-		header.FuelLimit = 99
-		header.BodyHash = tests.RandomHash(t)
-		header.GroupHash = tests.RandomHash(t)
-		header.Operator = "operator"
-		header.ClusterID = "cluster-id"
-		header.Timestamp = 3
-		header.ContextLock = make(map[identifiers.Address]common.ContextLockInfo)
-		header.ContextLock[tests.RandomAddress(t)] = common.ContextLockInfo{
-			Height: 4,
-		}
-		header.Extra = tests.CreateCommitDataWithTestData(t)
-	}
 }

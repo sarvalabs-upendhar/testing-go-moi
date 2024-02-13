@@ -30,7 +30,7 @@ type ClusterState struct {
 	BinaryHash, IdentityHash common.Hash
 	ICSHash                  common.Hash
 	dirty                    map[common.Hash][]byte
-	Grid                     []*common.Tesseract
+	Tesseract                *common.Tesseract
 	ICSReqTime               time.Time
 	operatorIncluded         bool
 	CurrentRole              common.IcsSetType
@@ -88,6 +88,18 @@ func (cs *ClusterState) GetContextDelta() common.ContextDelta {
 	defer cs.mtx.Unlock()
 
 	return cs.contextDelta
+}
+
+func (cs *ClusterState) ContextDelta(address identifiers.Address) common.DeltaGroup {
+	cs.mtx.Lock()
+	defer cs.mtx.Unlock()
+
+	delta, ok := cs.contextDelta[address]
+	if !ok {
+		return common.DeltaGroup{}
+	}
+
+	return *delta
 }
 
 func (cs *ClusterState) IncludeOperator() {
@@ -282,6 +294,13 @@ func (cs *ClusterState) GetICSNodes() []kramaid.KramaID {
 	return cs.NodeSet.GetNodes()
 }
 
+func (cs *ClusterState) GetICSVoteset() *common.ArrayOfBits {
+	cs.mtx.Lock()
+	defer cs.mtx.Unlock()
+
+	return cs.NodeSet.GetVoteset()
+}
+
 func (cs *ClusterState) GetObservers() []kramaid.KramaID {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
@@ -308,6 +327,15 @@ func (cs *ClusterState) GetQuorum() []int32 {
 	return quorum
 }
 
+func (cs *ClusterState) GetPreviousContextHash(addr identifiers.Address) common.Hash {
+	accInfo, ok := cs.AccountInfos[addr]
+	if !ok {
+		return common.NilHash
+	}
+
+	return accInfo.ContextHash
+}
+
 func (cs *ClusterState) GetContextHash(addr identifiers.Address) common.Hash {
 	return cs.postExecState.ContextHash(addr)
 }
@@ -332,17 +360,17 @@ func (cs *ClusterState) SetPostExecState(s common.AccStateHashes) {
 	cs.postExecState = s
 }
 
-func (cs *ClusterState) SetGrid(grid []*common.Tesseract) {
+func (cs *ClusterState) SetTesseract(ts *common.Tesseract) {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
-	cs.Grid = grid
+	cs.Tesseract = ts
 }
 
-func (cs *ClusterState) GetTesseractGrid() []*common.Tesseract {
+func (cs *ClusterState) GetTesseract() *common.Tesseract {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	return cs.Grid
+	return cs.Tesseract
 }
 
 func (cs *ClusterState) AddDirty(key common.Hash, data []byte) {

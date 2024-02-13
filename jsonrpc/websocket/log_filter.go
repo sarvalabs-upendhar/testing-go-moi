@@ -58,7 +58,7 @@ func (f *logFilter) sendUpdates() error {
 // createRPCLogs filters tesseract logs based on filter topics, and returns logs to websocket
 func (f *logFilter) createRPCLogs(
 	ts *common.Tesseract,
-	parts args.RPCTesseractParts,
+	rpcTS *args.RPCTesseract,
 ) []*args.RPCLog {
 	logs := make([]*args.RPCLog, 0)
 
@@ -67,12 +67,13 @@ func (f *logFilter) createRPCLogs(
 			if f.query.MatchTopics(log) {
 				logs = append(logs,
 					&args.RPCLog{
-						Addresses: log.Addresses,
-						LogicID:   log.LogicID,
-						Topics:    log.Topics,
-						Data:      log.Data,
-						IxHash:    receipt.IxHash,
-						Grid:      parts,
+						Addresses:    log.Addresses,
+						LogicID:      log.LogicID,
+						Topics:       log.Topics,
+						Data:         log.Data,
+						IxHash:       receipt.IxHash,
+						TSHash:       rpcTS.Hash,
+						Participants: rpcTS.Participants,
 					},
 				)
 			}

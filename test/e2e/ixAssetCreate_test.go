@@ -80,8 +80,8 @@ func validateAssetCreation(
 	})
 	te.Suite.NoError(err)
 
-	require.Equal(te.T(), ts.Address(), assetReceipt.AssetID.Address())
-	require.Equal(te.T(), uint64(0), ts.Header.Height.ToUint64())
+	require.True(te.T(), ts.HasParticipant(assetReceipt.AssetID.Address()))
+	require.Equal(te.T(), uint64(0), ts.Height(assetReceipt.AssetID.Address()))
 
 	bal, err := te.moiClient.Balance(context.Background(), &args.BalArgs{
 		Address: sender,

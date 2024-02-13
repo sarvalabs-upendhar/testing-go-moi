@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sarvalabs/go-moi/storage"
+
 	"github.com/hashicorp/go-hclog"
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi-identifiers"
@@ -142,7 +144,11 @@ func (e *Engine) nextTask() (*message.Response, error) {
 		}
 
 		for cID, v := range blocks {
-			resp.HaveList.AddBlock(block.NewBlockFromRawData(cID.ContentType(), v))
+			if storage.PrefixTag(cID.ContentType()).IsAccountBasedKey() {
+				resp.HaveList.AddBlock(block.NewAccountBlockFromRawData(cID.ContentType(), v))
+			} else {
+				resp.HaveList.AddBlock(block.NewNonAccountBlockFromRawData(cID, v))
+			}
 		}
 
 		e.metrics.captureRequestProcessTime(req.ReqTime)

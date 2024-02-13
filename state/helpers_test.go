@@ -333,7 +333,7 @@ func getMockDB(t *testing.T, db Store) *MockDB {
 	return nil
 }
 
-func insertTesseractsInDB(t *testing.T, db Store, tesseracts ...*common.Tesseract) {
+func insertTesseractsAndIxnsInDB(t *testing.T, db Store, tesseracts ...*common.Tesseract) {
 	t.Helper()
 
 	mDB := getMockDB(t, db)
@@ -342,8 +342,18 @@ func insertTesseractsInDB(t *testing.T, db Store, tesseracts ...*common.Tesserac
 		mDB.insertTesseract(t, ts)
 
 		if ts.Interactions() != nil {
-			mDB.insertIxns(t, ts.GridHash(), ts.Interactions())
+			mDB.insertIxns(t, ts.Hash(), ts.Interactions())
 		}
+	}
+}
+
+func insertTesseractInDB(t *testing.T, db Store, tesseracts ...*common.Tesseract) {
+	t.Helper()
+
+	mDB := getMockDB(t, db)
+
+	for _, ts := range tesseracts {
+		mDB.insertTesseract(t, ts)
 	}
 }
 
@@ -732,41 +742,33 @@ func getLogicObjectParamsWithLogicID(logicID identifiers.LogicID) *createLogicOb
 
 func getTesseractParamsWithStateHash(address identifiers.Address, hash common.Hash) *tests.CreateTesseractParams {
 	return &tests.CreateTesseractParams{
-		Address: address,
-		BodyCallback: func(body *common.TesseractBody) {
-			body.StateHash = hash
+		Addresses: []identifiers.Address{address},
+		Participants: common.Participants{
+			address: {
+				StateHash: hash,
+			},
 		},
 	}
 }
 
 func getTesseractParamsWithContextHash(address identifiers.Address, hash common.Hash) *tests.CreateTesseractParams {
 	return &tests.CreateTesseractParams{
-		Address: address,
-		BodyCallback: func(body *common.TesseractBody) {
-			body.ContextHash = hash
+		Addresses: []identifiers.Address{address},
+		Participants: common.Participants{
+			address: {
+				LatestContext: hash,
+			},
 		},
 	}
-}
-
-func getTesseractHash(t *testing.T, ts *common.Tesseract) common.Hash {
-	t.Helper()
-
-	hash := ts.Hash()
-
-	return hash
 }
 
 func storeTesseractHashInCache(t *testing.T, cache *lru.Cache, tesseracts ...*common.Tesseract) {
 	t.Helper()
 
 	for _, ts := range tesseracts {
-		cache.Add(ts.Address(), ts.Hash())
-	}
-}
-
-func insertInContextLock(header *common.TesseractHeader, address identifiers.Address, hash common.Hash) {
-	header.ContextLock[address] = common.ContextLockInfo{
-		ContextHash: hash,
+		for addr := range ts.Participants() {
+			cache.Add(addr, ts.Hash())
+		}
 	}
 }
 
@@ -1377,10 +1379,6 @@ func getICSNodes(
 	}
 }
 
-func mockContextLock() map[identifiers.Address]common.ContextLockInfo {
-	return make(map[identifiers.Address]common.ContextLockInfo)
-}
-
 func getTestAssetDescriptor(t *testing.T, operator identifiers.Address, symbol string) *common.AssetDescriptor {
 	t.Helper()
 
@@ -1452,13 +1450,12 @@ func getTesseractParams(
 	hash common.Hash,
 ) *tests.CreateTesseractParams {
 	return &tests.CreateTesseractParams{
-		Ixns: ixns,
-		HeaderCallback: func(header *common.TesseractHeader) {
-			header.ContextLock = mockContextLock()
-			insertInContextLock(header, address, hash)
-		},
-		BodyCallback: func(body *common.TesseractBody) {
-			body.ContextHash = hash
+		Addresses: []identifiers.Address{address},
+		Ixns:      ixns,
+		Participants: common.Participants{
+			address: {
+				PreviousContext: hash,
+			},
 		},
 	}
 }

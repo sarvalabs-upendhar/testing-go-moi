@@ -3,7 +3,7 @@ package session
 import (
 	"sync"
 
-	"github.com/sarvalabs/go-moi-identifiers"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/syncer/agora/block"
 	"github.com/sarvalabs/go-moi/syncer/cid"

@@ -5,13 +5,12 @@ import (
 	crand "crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"math/big"
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-identifiers"
-	"github.com/stretchr/testify/require"
-
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/tests"
@@ -19,6 +18,7 @@ import (
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
 	"github.com/sarvalabs/go-moi/crypto"
 	mudracommon "github.com/sarvalabs/go-moi/crypto/common"
+	"github.com/stretchr/testify/require"
 )
 
 const ensureTimeout = time.Millisecond * 200
@@ -33,14 +33,12 @@ func defaultChain() *chain {
 	}
 }
 
-func (c *chain) finalizeTesseractGrid(tesseracts []*common.Tesseract) error {
-	for i := 0; i < len(tesseracts); i++ {
-		if tesseracts[i] == nil {
-			return nil
-		}
+func (c *chain) finalizeTesseractGrid(tesseract *common.Tesseract) error {
+	if tesseract == nil {
+		return nil
 	}
 
-	c.tsCount = len(tesseracts)
+	c.tsCount = len(tesseract.Participants())
 
 	return nil
 }
@@ -218,28 +216,14 @@ func handleOutboundMsgChannel(kbft *KBFT, ctx context.Context, out <-chan ktypes
 	}()
 }
 
-func createGridWithHeights(
-	t *testing.T,
-	heights map[identifiers.Address]uint64,
-	hash common.Hash,
-) *common.TesseractGridID {
-	t.Helper()
-
-	return &common.TesseractGridID{
-		Hash: hash,
-		Parts: &common.TesseractParts{
-			Grid: getTesseractPartsGridFromHeights(heights),
-		},
-	}
-}
-
 // signVote will create a vote message and sign it using the validator consensus key
 func signVote(
 	t *testing.T,
 	kbft *KBFT,
 	round int32,
 	msgType ktypes.ConsensusMsgType,
-	id *common.TesseractGridID,
+	tsHash common.Hash,
+	heights map[identifiers.Address]uint64,
 	kramaVault *crypto.KramaVault,
 ) *ktypes.Vote {
 	t.Helper()
@@ -249,13 +233,10 @@ func signVote(
 
 	v := &ktypes.Vote{
 		ValidatorIndex: valIndex,
-		GridID:         createGridWithHeights(t, kbft.Heights, common.NilHash),
+		TSHash:         tsHash,
+		Heights:        heights,
 		Round:          round,
 		Type:           msgType,
-	}
-
-	if id != nil {
-		v.GridID = id
 	}
 
 	rawData, err := v.SignBytes()
@@ -275,7 +256,8 @@ func signVotes(
 	kbft *KBFT,
 	round int32,
 	msgType ktypes.ConsensusMsgType,
-	id *common.TesseractGridID,
+	tsHash common.Hash,
+	heights map[identifiers.Address]uint64,
 	kramaVault ...*crypto.KramaVault,
 ) []*ktypes.Vote {
 	t.Helper()
@@ -283,7 +265,7 @@ func signVotes(
 	votes := make([]*ktypes.Vote, len(kramaVault))
 
 	for i, kVault := range kramaVault {
-		votes[i] = signVote(t, kbft, round, msgType, id, kVault)
+		votes[i] = signVote(t, kbft, round, msgType, tsHash, heights, kVault)
 	}
 
 	return votes
@@ -295,7 +277,8 @@ func signAddVotesSynchronously(
 	kbft *KBFT,
 	round int32,
 	msgType ktypes.ConsensusMsgType,
-	id *common.TesseractGridID,
+	tsHash common.Hash,
+	heights map[identifiers.Address]uint64,
 	kramaVault ...*crypto.KramaVault,
 ) {
 	t.Helper()
@@ -304,7 +287,7 @@ func signAddVotesSynchronously(
 		require.FailNow(t, "there are no validators to sign")
 	}
 
-	votes := signVotes(t, kbft, round, msgType, id, kramaVault...)
+	votes := signVotes(t, kbft, round, msgType, tsHash, heights, kramaVault...)
 
 	for i, vote := range votes {
 		err := kbft.handleMsg(ktypes.ConsensusMessage{
@@ -320,7 +303,8 @@ func signAddVotes(
 	kbft *KBFT,
 	round int32,
 	msgType ktypes.ConsensusMsgType,
-	id *common.TesseractGridID,
+	tsHash common.Hash,
+	heights map[identifiers.Address]uint64,
 	kramaVault ...*crypto.KramaVault,
 ) {
 	t.Helper()
@@ -329,7 +313,7 @@ func signAddVotes(
 		require.FailNow(t, "there are no validators to sign")
 	}
 
-	votes := signVotes(t, kbft, round, msgType, id, kramaVault...)
+	votes := signVotes(t, kbft, round, msgType, tsHash, heights, kramaVault...)
 
 	for i, vote := range votes {
 		kbft.inboundMsgChan <- ktypes.ConsensusMessage{
@@ -345,7 +329,8 @@ func sendAndEnsureVotes(
 	kbft *KBFT,
 	round int32,
 	msgType ktypes.ConsensusMsgType,
-	gridID *common.TesseractGridID,
+	tsHash common.Hash,
+	heights map[identifiers.Address]uint64,
 	voteSub *utils.Subscription,
 	expectedRound int32,
 	kramaVault ...*crypto.KramaVault,
@@ -353,15 +338,8 @@ func sendAndEnsureVotes(
 	t.Helper()
 
 	for _, v := range kramaVault {
-		signAddVotes(t, kbft, round, msgType, gridID, v)
-
-		if gridID == nil {
-			ensureVote(t, voteSub, createGridWithHeights(t, kbft.Heights, common.NilHash), expectedRound, msgType)
-
-			continue
-		}
-
-		ensureVote(t, voteSub, gridID, expectedRound, msgType)
+		signAddVotes(t, kbft, round, msgType, tsHash, heights, v)
+		ensureVote(t, voteSub, tsHash, heights, expectedRound, msgType)
 	}
 }
 
@@ -370,14 +348,15 @@ func sendAndEnsurePreVote(
 	t *testing.T,
 	kbft *KBFT,
 	round int32,
-	gridID *common.TesseractGridID,
+	tsHash common.Hash,
+	heights map[identifiers.Address]uint64,
 	voteSub *utils.Subscription,
 	expectedRound int32,
 	kramaVault ...*crypto.KramaVault,
 ) {
 	t.Helper()
 
-	sendAndEnsureVotes(t, kbft, round, ktypes.PREVOTE, gridID, voteSub, expectedRound, kramaVault...)
+	sendAndEnsureVotes(t, kbft, round, ktypes.PREVOTE, tsHash, heights, voteSub, expectedRound, kramaVault...)
 }
 
 // sendAndEnsurePrecommit sends the precommit to kbft node and ensures that vote event emitted
@@ -385,14 +364,15 @@ func sendAndEnsurePrecommit(
 	t *testing.T,
 	kbft *KBFT,
 	round int32,
-	gridID *common.TesseractGridID,
+	tsHash common.Hash,
+	heights map[identifiers.Address]uint64,
 	voteSub *utils.Subscription,
 	expectedRound int32,
 	kramaVault ...*crypto.KramaVault,
 ) {
 	t.Helper()
 
-	sendAndEnsureVotes(t, kbft, round, ktypes.PRECOMMIT, gridID, voteSub, expectedRound, kramaVault...)
+	sendAndEnsureVotes(t, kbft, round, ktypes.PRECOMMIT, tsHash, heights, voteSub, expectedRound, kramaVault...)
 }
 
 func createIxs(t *testing.T, sender identifiers.Address, receiver identifiers.Address) common.Interactions {
@@ -454,38 +434,39 @@ func createTestClusterInfo(
 			}
 		}
 
-		senderHeader := common.TesseractHeader{
-			Address: ixs[0].Sender(),
-			Height:  newHeights[ixs[0].Sender()],
-		}
+		p := make(common.Participants)
 
-		clusterInfo.Grid = []*common.Tesseract{
-			common.NewTesseract(senderHeader, common.TesseractBody{}, nil, nil, nil, clusterInfo.SelfKramaID()),
+		p[ixs[0].Sender()] = common.State{
+			Height: newHeights[ixs[0].Sender()],
 		}
 
 		if !ixs[0].Receiver().IsNil() {
-			receiverHeader := common.TesseractHeader{
-				Address: ixs[0].Receiver(),
-				Height:  newHeights[ixs[0].Receiver()],
+			p[ixs[0].Receiver()] = common.State{
+				Height: newHeights[ixs[0].Receiver()],
 			}
-
-			clusterInfo.Grid = append(
-				clusterInfo.Grid,
-				common.NewTesseract(receiverHeader, common.TesseractBody{}, nil, nil, nil, clusterInfo.SelfKramaID()),
-			)
 		}
 
 		if nonRegisteredReceiver {
-			sargaHeader := common.TesseractHeader{
-				Address: common.SargaAddress,
-				Height:  newHeights[common.SargaAddress],
+			p[common.SargaAddress] = common.State{
+				Height: newHeights[common.SargaAddress],
 			}
-
-			clusterInfo.Grid = append(
-				clusterInfo.Grid,
-				common.NewTesseract(sargaHeader, common.TesseractBody{}, nil, nil, nil, clusterInfo.SelfKramaID()),
-			)
 		}
+
+		clusterInfo.Tesseract = common.NewTesseract(
+			p,
+			common.NilHash,
+			common.NilHash,
+			big.NewInt(0),
+			0,
+			"operator",
+			4,
+			6,
+			common.PoXtData{},
+			nil,
+			clusterInfo.SelfKramaID(),
+			nil,
+			nil,
+		)
 	}(clusterInfo)
 
 	return clusterInfo
@@ -621,7 +602,8 @@ func ensurePrecommitTimeout(
 func ensureVote(
 	t *testing.T,
 	voteSub *utils.Subscription,
-	gridID *common.TesseractGridID,
+	tsHash common.Hash,
+	heights map[identifiers.Address]uint64,
 	round int32,
 	voteType ktypes.ConsensusMsgType,
 ) {
@@ -646,44 +628,41 @@ func ensureVote(
 			require.FailNow(t, fmt.Sprintf("expected round %v, got %v", round, vote.Round))
 		}
 
-		require.Equal(t, gridID, vote.GridID, "grid id's doesn't match") // ensures heights are equal
+		require.Equal(t, tsHash, vote.TSHash, "ts hashes doesn't match") // ensures hashes are equal
+		require.Equal(t, len(heights), len(vote.Heights), "heights doesn't match")
+
+		// ensures heights are equal
+		for addr, expectedHeight := range heights {
+			actualHeight, ok := vote.Heights[addr]
+			require.True(t, ok)
+
+			require.Equal(t, expectedHeight, actualHeight, "heights doesn't match")
+		}
 	}
 }
 
 func ensurePrevote(
 	t *testing.T,
 	voteSub *utils.Subscription,
-	gridID *common.TesseractGridID,
-	round int32,
+	tsHash common.Hash,
 	heights map[identifiers.Address]uint64,
+	round int32,
 ) {
 	t.Helper()
 
-	if gridID == nil {
-		ensureVote(t, voteSub, createGridWithHeights(t, heights, common.NilHash), round, ktypes.PREVOTE)
-
-		return
-	}
-
-	ensureVote(t, voteSub, gridID, round, ktypes.PREVOTE)
+	ensureVote(t, voteSub, tsHash, heights, round, ktypes.PREVOTE)
 }
 
 func ensurePrecommit(
 	t *testing.T,
 	voteSub *utils.Subscription,
-	gridID *common.TesseractGridID,
-	round int32,
+	tsHash common.Hash,
 	heights map[identifiers.Address]uint64,
+	round int32,
 ) {
 	t.Helper()
 
-	if gridID == nil {
-		ensureVote(t, voteSub, createGridWithHeights(t, heights, common.NilHash), round, ktypes.PRECOMMIT)
-
-		return
-	}
-
-	ensureVote(t, voteSub, gridID, round, ktypes.PRECOMMIT)
+	ensureVote(t, voteSub, tsHash, heights, round, ktypes.PRECOMMIT)
 }
 
 // ensureNoVoteReceived fails if a vote received within ensureTimeout duration
@@ -711,8 +690,8 @@ func ensureNoPrecommitReceived(t *testing.T, voteSub *utils.Subscription) {
 }
 
 // validatePrevote fetches the prevote of validator in the current round and
-// checks if voted grid id matches
-func validatePrevote(t *testing.T, kbft *KBFT, round int32, val *crypto.KramaVault, gridHash common.Hash) {
+// checks if voted ts hash matches
+func validatePrevote(t *testing.T, kbft *KBFT, round int32, val *crypto.KramaVault, tsHash common.Hash) {
 	t.Helper()
 
 	var kramaID int32
@@ -727,39 +706,39 @@ func validatePrevote(t *testing.T, kbft *KBFT, round int32, val *crypto.KramaVau
 		require.FailNow(t, "Failed to fetch krama id from ics")
 	}
 
-	if vote, ok = prevotes.getVote(kramaID, gridHash); !ok {
+	if vote, ok = prevotes.getVote(kramaID, tsHash); !ok {
 		require.FailNow(t, "Failed to find prevote from validator")
 	}
 
-	if gridHash.IsNil() {
-		if !vote.GridID.Hash.IsNil() {
-			require.FailNow(t, fmt.Sprintf("Expected prevote to be for nil, got %X", vote.GridID.Hash))
+	if tsHash.IsNil() {
+		if !vote.TSHash.IsNil() {
+			require.FailNow(t, fmt.Sprintf("Expected prevote to be for nil, got %X", vote.TSHash))
 		}
 
 		return
 	}
 
-	require.Equal(t, gridHash, vote.GridID.Hash)
+	require.Equal(t, tsHash, vote.TSHash)
 }
 
 // validatePrecommit fetches the precommit vote of validator in the current round and
-// checks if voted grid id, locked round, locked grid id matches
+// checks if voted ts hash, locked round, locked ts hash matches
 func validatePrecommit(
 	t *testing.T,
 	kbft *KBFT,
 	thisRound,
 	lockRound int32,
 	val *crypto.KramaVault,
-	gridHash,
-	lockedGridHash common.Hash,
+	tsHash,
+	lockedTSHash common.Hash,
 ) {
 	t.Helper()
 
-	var kramaID int32
-
-	var ok bool
-
-	var vote *ktypes.Vote
+	var (
+		kramaID int32
+		ok      bool
+		vote    *ktypes.Vote
+	)
 
 	precommits := kbft.Votes.getPrecommits(thisRound)
 
@@ -767,39 +746,39 @@ func validatePrecommit(
 		require.FailNow(t, "Failed to fetch krama id from ics")
 	}
 
-	if vote, ok = precommits.getVote(kramaID, gridHash); !ok {
+	if vote, ok = precommits.getVote(kramaID, tsHash); !ok {
 		require.FailNow(t, "Failed to find precommit from validator")
 	}
 
-	if gridHash.IsNil() {
-		if !vote.GridID.Hash.IsNil() {
-			require.FailNow(t, fmt.Sprintf("Expected prevote to be for nil, got %X", vote.GridID.Hash))
+	if tsHash.IsNil() {
+		if !vote.TSHash.IsNil() {
+			require.FailNow(t, fmt.Sprintf("Expected prevote to be for nil, got %X", vote.TSHash))
 		}
 
 		return
 	}
 
-	require.Equal(t, gridHash, vote.GridID.Hash)
+	require.Equal(t, tsHash, vote.TSHash)
 
-	if lockedGridHash.IsNil() {
-		if kbft.LockedRound != lockRound || kbft.LockedGrid != nil {
+	if lockedTSHash.IsNil() {
+		if kbft.LockedRound != lockRound || kbft.LockedTS != nil {
 			require.FailNow(t, fmt.Sprintf(
 				"Expected to be locked on nil at round %d. Got locked at round %d with block %v",
 				lockRound,
 				kbft.LockedRound,
-				kbft.LockedGrid))
+				kbft.LockedTS))
 		}
 
 		return
 	}
 
-	if kbft.LockedRound != lockRound || !(kbft.LockedGrid.Hash == lockedGridHash) {
+	if kbft.LockedRound != lockRound || !(kbft.LockedTS.Hash() == lockedTSHash) {
 		require.FailNow(t, fmt.Sprintf(
 			"Expected block to be locked on round %d, got %d. Got locked block %X, expected %X",
 			lockRound,
 			kbft.LockedRound,
-			kbft.LockedGrid.Hash,
-			lockedGridHash))
+			kbft.LockedTS.Hash(),
+			lockedTSHash))
 	}
 }
 

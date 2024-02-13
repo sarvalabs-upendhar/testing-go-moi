@@ -8,15 +8,15 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-identifiers"
-	"github.com/stretchr/testify/require"
-
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/state"
+	"github.com/sarvalabs/go-moi/storage"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHasTesseract(t *testing.T) {
@@ -95,12 +95,12 @@ func TestFetchContextForAgora(t *testing.T) {
 			paramsMap: map[int]*createTesseractParams{
 				0: tesseractParamsWithContextDelta(t, address, 3, 3, 0),
 				1: {
-					address: address,
-					headerCallback: func(header *common.TesseractHeader) {
-						setContextLock(header, address, getContextLockInfo(hash, common.NilHash, 0))
-					},
-					bodyCallback: func(body *common.TesseractBody) {
-						setContextDelta(body, address, getDeltaGroup(t, 2, 2, 0))
+					Addresses: []identifiers.Address{address},
+					Participants: common.Participants{
+						address: {
+							ContextDelta:    *getDeltaGroup(t, 2, 2, 0),
+							PreviousContext: hash,
+						},
 					},
 				},
 			},
@@ -111,16 +111,17 @@ func TestFetchContextForAgora(t *testing.T) {
 			peerCount:    7,
 		},
 		{
-			name:    "should previous tesseract doesn't exist",
+			name:    "previous tesseract doesn't exist",
 			tsCount: 1,
 			paramsMap: map[int]*createTesseractParams{
 				0: {
-					address: address,
-					headerCallback: func(header *common.TesseractHeader) {
-						header.PrevHash = tests.RandomHash(t)
-					},
-					bodyCallback: func(body *common.TesseractBody) {
-						body.ContextDelta[address] = getDeltaGroup(t, 1, 3, 0)
+					Addresses: []identifiers.Address{address},
+					Participants: common.Participants{
+						address: {
+							TransitiveLink:  tests.RandomHash(t),
+							ContextDelta:    *getDeltaGroup(t, 1, 3, 0),
+							PreviousContext: hash,
+						},
 					},
 				},
 			},
@@ -144,7 +145,7 @@ func TestFetchContextForAgora(t *testing.T) {
 
 			c := createTestChainManager(t, chainParams)
 
-			peers, err := c.fetchContextForAgora(*ts[test.tsCount-1])
+			peers, err := c.fetchContextForAgora(ts[test.tsCount-1].AnyAddress(), *ts[test.tsCount-1])
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -155,21 +156,9 @@ func TestFetchContextForAgora(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, test.peerCount, len(peers)) // check if peer count matches
 
-			nodes := fetchContextFromLattice(t, *ts[test.tsCount-1], c)
+			nodes := fetchContextFromLattice(t, ts[test.tsCount-1].AnyAddress(), *ts[test.tsCount-1], c)
 			require.Equal(t, nodes, peers) // check if context nodes matches
 		})
-	}
-}
-
-func TestAddKnownHashes(t *testing.T) {
-	tesseracts := createTesseracts(t, 3, nil)
-
-	c := createTestChainManager(t, nil)
-	c.AddKnownHashes(tesseracts)
-
-	for _, ts := range tesseracts {
-		isExists := c.knownTesseracts.Contains(ts.Hash())
-		require.True(t, isExists)
 	}
 }
 
@@ -181,14 +170,12 @@ func TestUpdateNodeInclusivity(t *testing.T) {
 	c := createTestChainManager(t, chainParams)
 
 	// create context delta
-	ctxDelta := make(common.ContextDelta)
-	ctxDelta[tests.RandomAddress(t)] = getDeltaGroup(t, 6, 5, 2)
-	ctxDelta[tests.RandomAddress(t)] = getDeltaGroup(t, 6, 6, 6)
+	deltaGroup := getDeltaGroup(t, 2, 2, 2)
 
-	err := c.UpdateNodeInclusivity(ctxDelta)
+	err := c.UpdateNodeInclusivity(*deltaGroup)
 	require.NoError(t, err)
 
-	validateNodeInclusivity(t, senatus, ctxDelta)
+	validateDeltaGroup(t, senatus, *deltaGroup)
 }
 
 func TestGetTesseract(t *testing.T) {
@@ -210,6 +197,7 @@ func TestGetTesseract(t *testing.T) {
 
 	testcases := []struct {
 		name             string
+		address          identifiers.Address
 		tsHash           common.Hash
 		withInteractions bool
 		expectedTS       *common.Tesseract
@@ -289,8 +277,8 @@ func TestGetTesseractByHeight(t *testing.T) {
 		{
 			name: "fetch tesseract with Interactions for a valid height",
 			args: args{
-				address:          ts.Address(),
-				height:           ts.Height(),
+				address:          ts.AnyAddress(),
+				height:           ts.Height(ts.AnyAddress()),
 				withInteractions: true,
 			},
 			expectedTS: ts,
@@ -298,8 +286,8 @@ func TestGetTesseractByHeight(t *testing.T) {
 		{
 			name: "fetch tesseract without Interactions for a valid height",
 			args: args{
-				address:          ts.Address(),
-				height:           ts.Height(),
+				address:          ts.AnyAddress(),
+				height:           ts.Height(ts.AnyAddress()),
 				withInteractions: false,
 			},
 			expectedTS: ts,
@@ -307,7 +295,7 @@ func TestGetTesseractByHeight(t *testing.T) {
 		{
 			name: "should return error for invalid height",
 			args: args{
-				address:          ts.Address(),
+				address:          ts.AnyAddress(),
 				height:           1,
 				withInteractions: true,
 			},
@@ -413,13 +401,13 @@ func TestGetLatestTesseract(t *testing.T) {
 		},
 		{
 			name:             "fetch tesseract without interactions",
-			address:          ts.Address(),
+			address:          ts.AnyAddress(),
 			withInteractions: false,
 			expectedTS:       ts,
 		},
 		{
 			name:             "fetch tesseract with interactions",
-			address:          ts.Address(),
+			address:          ts.AnyAddress(),
 			withInteractions: true,
 			expectedTS:       ts,
 		},
@@ -444,11 +432,11 @@ func TestGetLatestTesseract(t *testing.T) {
 func TestGetReceipt(t *testing.T) {
 	ixs, receipts := getIxAndReceipts(t, 2) // get interactions and receipts
 
-	gridHash := tests.RandomHash(t)
+	tsHash := tests.RandomHash(t)
 
 	chainParams := &CreateChainParams{
 		dbCallback: func(db *MockDB) {
-			insertReceipts(t, db, gridHash, receipts)
+			insertReceipts(t, db, tsHash, receipts)
 		},
 	}
 
@@ -456,24 +444,24 @@ func TestGetReceipt(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		gridHash      common.Hash
+		tsHash        common.Hash
 		ixHash        common.Hash
 		expectedError error
 	}{
 		{
-			name:     "receipt exists",
-			gridHash: gridHash,
-			ixHash:   ixs[1].Hash(),
+			name:   "receipt exists",
+			tsHash: tsHash,
+			ixHash: ixs[1].Hash(),
 		},
 		{
 			name:          "should return error if receipt root hash is invalid",
-			gridHash:      tests.RandomHash(t),
+			tsHash:        tests.RandomHash(t),
 			ixHash:        ixs[1].Hash(),
 			expectedError: common.ErrKeyNotFound,
 		},
 		{
 			name:          "should return error if ixHash doesn't exist",
-			gridHash:      gridHash,
+			tsHash:        tsHash,
 			ixHash:        tests.RandomHash(t),
 			expectedError: common.ErrReceiptNotFound,
 		},
@@ -481,7 +469,7 @@ func TestGetReceipt(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			actualReceipts, err := c.getReceipt(test.ixHash, test.gridHash)
+			actualReceipts, err := c.getReceipt(test.ixHash, test.tsHash)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -497,23 +485,23 @@ func TestGetReceipt(t *testing.T) {
 
 func TestGetReceiptByIxHash(t *testing.T) {
 	ixns, receipts := getIxAndReceipts(t, 2)
-	gridHash := tests.RandomHash(t)
-	unknownGridHash := tests.RandomHash(t)
+	tsHash := tests.RandomHash(t)
+	unknownTSHash := tests.RandomHash(t)
 
 	chainParams := &CreateChainParams{
 		dbCallback: func(db *MockDB) {
-			insertReceipts(t, db, gridHash, receipts)
+			insertReceipts(t, db, tsHash, receipts)
 
-			err := db.SetIXGridLookup(ixns[0].Hash(), gridHash)
+			err := db.SetIXLookup(ixns[0].Hash(), tsHash)
 			require.NoError(t, err)
 
-			err = db.SetIXGridLookup(ixns[1].Hash(), unknownGridHash)
+			err = db.SetIXLookup(ixns[1].Hash(), unknownTSHash)
 			require.NoError(t, err)
 
 			receiptData, err := receipts.Bytes()
 			require.NoError(t, err)
 
-			err = db.SetReceipts(gridHash, receiptData)
+			err = db.SetReceipts(tsHash, receiptData)
 			require.NoError(t, err)
 		},
 	}
@@ -527,9 +515,9 @@ func TestGetReceiptByIxHash(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name:          "grid hash not found",
+			name:          "tesseract hash not found",
 			ixHash:        tests.RandomHash(t),
-			expectedError: common.ErrGridHashNotFound,
+			expectedError: common.ErrTSHashNotFound,
 		},
 		{
 			name:          "receipt not found",
@@ -562,8 +550,8 @@ func TestGetReceiptByIxHash(t *testing.T) {
 func TestVerifySignatures(t *testing.T) {
 	getTesseractParamsWithVoteset := func(index int, value bool) *createTesseractParams {
 		return &createTesseractParams{
-			headerCallback: func(header *common.TesseractHeader) {
-				header.Extra.VoteSet.SetIndex(index, value)
+			TSDataCallback: func(ts *tests.TesseractData) {
+				ts.ConsensusInfo.BFTVoteSet.SetIndex(index, value)
 			},
 		}
 	}
@@ -636,27 +624,35 @@ func TestVerifySignatures(t *testing.T) {
 	}
 }
 
-func TestVerifyHeaders(t *testing.T) {
+func TestVerifyParticipantState(t *testing.T) {
 	address := tests.RandomAddress(t)
 	sargaTesseractHash := tests.RandomHash(t)
 
 	getTesseractParams := func(clusterID string, height uint64) *createTesseractParams {
 		return &createTesseractParams{
-			address: address,
-			headerCallback: func(header *common.TesseractHeader) {
-				header.ClusterID = clusterID
-				header.Height = height
+			Addresses: []identifiers.Address{address},
+			Participants: common.Participants{
+				address: {
+					Height: height,
+				},
+			},
+			TSDataCallback: func(ts *tests.TesseractData) {
+				ts.ConsensusInfo.ClusterID = common.ClusterID(clusterID)
 			},
 		}
 	}
 
 	getTesseractParamsWithTimeStamp := func(height uint64, timestamp int64) *createTesseractParams {
 		return &createTesseractParams{
-			address: address,
-			headerCallback: func(header *common.TesseractHeader) {
-				header.ClusterID = "non-genesis"
-				header.Height = height
-				header.Timestamp = timestamp
+			Addresses: []identifiers.Address{address},
+			Participants: common.Participants{
+				address: {
+					Height: height,
+				},
+			},
+			TSDataCallback: func(ts *tests.TesseractData) {
+				ts.ConsensusInfo.ClusterID = "non-genesis"
+				ts.Timestamp = timestamp
 			},
 		}
 	}
@@ -695,10 +691,14 @@ func TestVerifyHeaders(t *testing.T) {
 			name: "should return error if previous tesseract not found",
 			paramsMap: map[int]*createTesseractParams{
 				0: {
-					address: address,
-					headerCallback: func(header *common.TesseractHeader) {
-						header.ClusterID = "non-genesis"
-						header.PrevHash = tests.RandomHash(t)
+					Addresses: []identifiers.Address{address},
+					Participants: common.Participants{
+						address: {
+							TransitiveLink: tests.RandomHash(t),
+						},
+					},
+					TSDataCallback: func(ts *tests.TesseractData) {
+						ts.ConsensusInfo.ClusterID = "non-genesis"
 					},
 				},
 			},
@@ -762,7 +762,7 @@ func TestVerifyHeaders(t *testing.T) {
 
 			c := createTestChainManager(t, chainParams)
 
-			err := c.verifyHeaders(ts[len(ts)-1])
+			err := c.verifyTransitions(ts[len(ts)-1].AnyAddress(), ts[len(ts)-1], false)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -770,366 +770,37 @@ func TestVerifyHeaders(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-		})
-	}
-}
-
-func TestAddTesseract(t *testing.T) {
-	address := tests.RandomAddress(t)
-	addresses := tests.GetAddresses(t, 4)
-	ixns := createIxns(t, 2, getIxParamsMapWithAddresses(addresses[:2], addresses[2:]))
-	_, receipts := getIxAndReceipts(t, 1)
-
-	testcases := []struct {
-		name                        string
-		args                        testTSArgs
-		accType                     common.AccountType
-		tesseractsParams            map[int]*createTesseractParams
-		smCallBack                  func(sm *MockStateManager)
-		setTesseractHook            func() error
-		setInteractionsHook         func() error
-		setReceiptsHook             func() error
-		setTesseractHeightEntryHook func() error
-		setTSGridLookupHook         func() error
-		updateWalletCountHook       func() error
-		tsCount                     int
-		latticeExists               bool
-		expectedError               error
-	}{
-		{
-			name: "add tesseract with state",
-			args: testTSArgs{
-				cache:           true,
-				stateExists:     true,
-				tesseractExists: false,
-			},
-			accType: common.LogicAccount,
-			tesseractsParams: map[int]*createTesseractParams{
-				0: {
-					address: address,
-					ixns:    ixns,
-					headerCallback: func(header *common.TesseractHeader) {
-						header.PrevHash = tests.RandomHash(t)
-						header.Extra = createCommitdataWithRandomGridHash(t)
-					},
-					bodyCallback: func(body *common.TesseractBody) {
-						body.ContextDelta[address] = getDeltaGroup(t, 3, 3, 0)
-					},
-				},
-			},
-			smCallBack: func(sm *MockStateManager) {
-				sm.setAccType(address, common.LogicAccount)
-			},
-			tsCount: 1,
-		},
-		{
-			name: "add tesseract by avoiding cache",
-			args: testTSArgs{
-				cache:           false,
-				stateExists:     false,
-				tesseractExists: true,
-			},
-			accType: common.RegularAccount,
-			tesseractsParams: map[int]*createTesseractParams{
-				0: {
-					address: address,
-				},
-				1: {
-					address:        address,
-					ixns:           ixns,
-					headerCallback: tests.HeaderCallbackWithGridHash(t),
-				},
-			},
-			tsCount:       2,
-			latticeExists: true,
-		},
-		{
-			name:    "should return error if unable to store tesseract",
-			args:    testTSArgs{},
-			accType: common.LogicAccount,
-			setTesseractHook: func() error {
-				return errors.New("error writing tesseract to db")
-			},
-			tesseractsParams: map[int]*createTesseractParams{
-				0: {
-					headerCallback: tests.HeaderCallbackWithGridHash(t),
-				},
-			},
-			tsCount:       1,
-			expectedError: errors.New("error writing tesseract to db"),
-		},
-		{
-			name:    "should return error if unable to store interactions",
-			args:    testTSArgs{},
-			accType: common.LogicAccount,
-			tesseractsParams: map[int]*createTesseractParams{
-				0: {
-					ixns:           ixns,
-					headerCallback: tests.HeaderCallbackWithGridHash(t),
-				},
-			},
-			setInteractionsHook: func() error {
-				return errors.New("error writing interactions to db")
-			},
-			tsCount:       1,
-			expectedError: errors.New("error writing interactions to db"),
-		},
-		{
-			name:    "should return error if unable to store receipts",
-			args:    testTSArgs{},
-			accType: common.LogicAccount,
-			tesseractsParams: map[int]*createTesseractParams{
-				0: {
-					ixns:           ixns,
-					receipts:       receipts,
-					headerCallback: tests.HeaderCallbackWithGridHash(t),
-				},
-			},
-			setReceiptsHook: func() error {
-				return errors.New("error writing receipts to db")
-			},
-			tsCount:       1,
-			expectedError: errors.New("error writing receipts to db"),
-		},
-		{
-			name:    "should return error if unable to store tesseract height entry",
-			args:    testTSArgs{},
-			accType: common.LogicAccount,
-			setTesseractHeightEntryHook: func() error {
-				return errors.New("failed to write tesseract height entry")
-			},
-			tesseractsParams: map[int]*createTesseractParams{
-				0: {
-					headerCallback: tests.HeaderCallbackWithGridHash(t),
-				},
-			},
-			tsCount:       1,
-			expectedError: errors.New("failed to write tesseract height entry"),
-		},
-		{
-			name:    "should return error if unable to store ix lookup",
-			args:    testTSArgs{},
-			accType: common.LogicAccount,
-			tesseractsParams: map[int]*createTesseractParams{
-				0: {
-					ixns: ixns,
-				},
-			},
-			setTSGridLookupHook: func() error {
-				return errors.New("error writing ts grid lookup to db")
-			},
-			tsCount:       1,
-			expectedError: errors.New("error writing ts grid lookup to db"),
-		},
-		{
-			name:    "should return error if unable to update node inclusivity",
-			args:    testTSArgs{},
-			accType: common.LogicAccount,
-			tesseractsParams: map[int]*createTesseractParams{
-				0: {
-					address:        address,
-					ixns:           ixns,
-					headerCallback: tests.HeaderCallbackWithGridHash(t),
-					bodyCallback: func(body *common.TesseractBody) {
-						body.ContextDelta[address] = getDeltaGroup(t, 3, 3, 0)
-					},
-				},
-			},
-			updateWalletCountHook: func() error {
-				return common.ErrUpdatingInclusivity
-			},
-			tsCount:       1,
-			expectedError: common.ErrUpdatingInclusivity,
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			tsCount := test.tsCount
-			ts := createTesseractsWithChain(t, test.tsCount, test.tesseractsParams)
-
-			db := mockDB()
-			senatus := mockSenatus(t)
-			sm := mockStateManager()
-			ixPool := mockIXPool(t)
-
-			sm.setAccType(address, test.accType)
-			chainParams := &CreateChainParams{
-				db:         db,
-				senatus:    senatus,
-				sm:         sm,
-				ixPool:     ixPool,
-				smCallBack: test.smCallBack,
-				dbCallback: func(db *MockDB) {
-					if tsCount-1 > 0 { // add all previous tesseracts
-						insertTesseractsInDB(t, db, ts[0:(tsCount-1)]...)
-					}
-					db.setTesseractHook = test.setTesseractHook
-					db.setInteractionsHook = test.setInteractionsHook
-					db.setReceiptsHook = test.setReceiptsHook
-					db.setTesseractHeightEntryHook = test.setTesseractHeightEntryHook
-					db.setTSGridLookupHook = test.setTSGridLookupHook
-				},
-				senatusCallback: func(senatus *MockSenatus) {
-					senatus.UpdateWalletCountHook = test.updateWalletCountHook
-				},
-			}
-
-			c := createTestChainManager(t, chainParams)
-
-			tsAddedEventSub := c.mux.Subscribe(utils.TesseractAddedEvent{}) // subscribe to tesseract added event
-
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-
-			tsAddedResp := make(chan tests.Result, 1)
-
-			go utils.HandleMuxEvents(ctx, tsAddedEventSub, tsAddedResp, tsCount) // keeps checking for event until timeout
-
-			err := c.addTesseract(
-				test.args.cache,
-				address,
-				ts[tsCount-1],
-				test.args.tesseractExists,
-			)
-
-			if test.expectedError != nil {
-				require.ErrorContains(t, err, test.expectedError.Error())
-
-				return
-			}
-
-			require.NoError(t, err)
-
-			checkIfTesseractAdded(t,
-				c,
-				db,
-				sm,
-				senatus,
-				ixPool,
-				test.args,
-				tsCount,
-				test.latticeExists,
-				test.accType,
-				ts[tsCount-1],
-			)
-
-			validateTSAddedEvent(t, tsAddedResp, ts[tsCount-1])
-		})
-	}
-}
-
-func TestAddTesseractsWithState(t *testing.T) {
-	var (
-		accType   = common.LogicAccount
-		addresses = tests.GetAddresses(t, 4)
-		ixns      = createIxns(t, 2, getIxParamsMapWithAddresses(addresses[:2], addresses[2:]))
-	)
-
-	clusterInfo := getTestClusterInfo(t, 2)
-	tsParamsMap := make(map[int]*createTesseractParams, 3)
-
-	for i := 0; i < 3; i++ {
-		tsParamsMap[i] = tesseractParamsWithICSClusterInfo(t, ixns, clusterInfo)
-	}
-
-	testcases := []struct {
-		name             string
-		dirtyStorage     map[common.Hash][]byte
-		tesseractsParams map[int]*createTesseractParams
-		createEntryHook  func() error
-		setTesseractHook func() error
-		tsCount          int
-		expectedError    error
-	}{
-		{
-			name:             "add tesseract with state",
-			dirtyStorage:     getTestDirtyEntriesWithClusterInfo(t, clusterInfo, 2),
-			tesseractsParams: tsParamsMap,
-			tsCount:          3,
-		},
-		{
-			name:          "should return error for empty tesseracts",
-			dirtyStorage:  getTestDirtyEntriesWithClusterInfo(t, clusterInfo, 2),
-			tsCount:       0,
-			expectedError: errors.New("empty tesseracts"),
-		},
-		{
-			name:             "should return error if ICS cluster info not found",
-			dirtyStorage:     getTestDirtyEntriesWithClusterInfo(t, nil, 2),
-			tesseractsParams: tsParamsMap,
-			tsCount:          1,
-			expectedError:    errors.New("cluster info not found"),
-		},
-		{
-			name:         "should return error if unable to store dirty entries",
-			dirtyStorage: getTestDirtyEntriesWithClusterInfo(t, clusterInfo, 2),
-			createEntryHook: func() error {
-				return errors.New("failed to write dirty keys")
-			},
-			tesseractsParams: tsParamsMap,
-			tsCount:          1,
-			expectedError:    errors.New("failed to write dirty keys"),
-		},
-		{
-			name:             "should return error if unable to write tesseract",
-			dirtyStorage:     getTestDirtyEntriesWithClusterInfo(t, clusterInfo, 2),
-			tesseractsParams: tsParamsMap,
-			tsCount:          1,
-			setTesseractHook: func() error {
-				return errors.New("error writing tesseract to db")
-			},
-			expectedError: errors.New("error writing tesseract to db"),
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			tsCount := test.tsCount
-			ts := createTesseracts(t, tsCount, test.tesseractsParams)
-
-			chainParams := &CreateChainParams{
-				smCallBack: func(sm *MockStateManager) {
-					setAccountType(sm, accType, ts...)
-				},
-				dbCallback: func(db *MockDB) {
-					db.createEntryHook = test.createEntryHook
-					db.setTesseractHook = test.setTesseractHook
-				},
-			}
-
-			c := createTestChainManager(t, chainParams)
-
-			err := c.addTesseractsWithState(
-				test.dirtyStorage,
-				ts...,
-			)
-			if test.expectedError != nil {
-				require.ErrorContains(t, err, test.expectedError.Error())
-
-				return
-			}
-
-			require.NoError(t, err)
-			checkForDirtyEntries(t, c.db, test.dirtyStorage) // check if dirty entries are inserted in db
-			checkForAddedTesseracts(t, c, ts, accType)
 		})
 	}
 }
 
 func TestValidateTesseract(t *testing.T) {
-	address := tests.RandomAddress(t)
 	nodes := getICSNodeset(t, 1)
+	addresses := tests.GetAddresses(t, 2)
 
 	tsParamsMap := map[int]*createTesseractParams{
 		0: tesseractParamsWithCommitSign(validCommitSign),
-		1: tesseractParamsWithCommitSign(invalidCommitSign),
-		2: tesseractParamsWithCommitSign(validCommitSign),
-		3: {
-			address:        address, // initialize address separately as it needs to be registered later
-			headerCallback: getHeaderCallbackWithCommitSign(validCommitSign),
+		1: {
+			Addresses: addresses,
+			Participants: common.Participants{
+				addresses[1]: {
+					TransitiveLink: tests.RandomHash(t),
+				},
+			},
+			TSDataCallback: func(ts *tests.TesseractData) {
+				ts.ConsensusInfo.CommitSignature = validCommitSign
+			},
 		},
-		4: tesseractParamsWithCommitSign(validCommitSign),
+		2: tesseractParamsWithCommitSign(invalidCommitSign),
+		3: tesseractParamsWithCommitSign(validCommitSign),
+		4: {
+			Addresses: []identifiers.Address{addresses[0]},
+			Participants: common.Participants{
+				addresses[0]: {
+					TransitiveLink: tests.RandomHash(t),
+				},
+			},
+		},
 		5: tesseractParamsWithCommitSign(validCommitSign),
 		6: tesseractParamsWithCommitSign(validCommitSign),
 	}
@@ -1137,42 +808,47 @@ func TestValidateTesseract(t *testing.T) {
 	ts := createTesseracts(t, 7, tsParamsMap)
 
 	testcases := []struct {
-		name                 string
-		smCallback           func(sm *MockStateManager)
-		dbCallback           func(db *MockDB)
-		chainManagerCallback func(c *ChainManager)
-		isOrphanTS           bool
-		ts                   *common.Tesseract
-		expectedError        error
+		name            string
+		ts              *common.Tesseract
+		allParticipants bool
+		smCallback      func(sm *MockStateManager)
+		dbCallback      func(db *MockDB)
+		expectedError   error
 	}{
 		{
 			name: "valid tesseract",
 			ts:   ts[0],
 		},
 		{
+			name:            "check if all participants are verified",
+			ts:              ts[1],
+			allParticipants: true,
+			smCallback:      smCallbackWithRegisteredAcc(addresses[1]),
+			expectedError:   common.ErrPreviousTesseractNotFound,
+		},
+		{
 			name:          "should return error if ics signature is invalid",
-			ts:            ts[1],
+			ts:            ts[2],
 			expectedError: errors.New("failed to verify signatures"),
 		},
 		{
 			name:          "should return error if sarga account not state found",
+			ts:            ts[3],
 			smCallback:    smCallbackWithAccRegistrationHook(),
-			ts:            ts[2],
 			expectedError: errors.New("Sarga account not found"),
 		},
 		{
 			name:          "should be added to orphans if previous tesseract not found",
-			smCallback:    smCallbackWithRegisteredAcc(address),
-			ts:            ts[3],
-			isOrphanTS:    true,
+			ts:            ts[4],
+			smCallback:    smCallbackWithRegisteredAcc(addresses[0]),
 			expectedError: common.ErrPreviousTesseractNotFound,
 		},
 		{
 			name: "should return error if tesseract already exits",
+			ts:   ts[5],
 			dbCallback: func(db *MockDB) {
-				insertTesseractsInDB(t, db, ts[4]) // add tesseract to db
+				insertAccMetaInfo(t, db, ts[5])
 			},
-			ts:            ts[4],
 			expectedError: common.ErrAlreadyKnown,
 		},
 		{
@@ -1185,120 +861,19 @@ func TestValidateTesseract(t *testing.T) {
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			sm := mockStateManager()
-			chainParams := &CreateChainParams{
-				sm:                   sm,
-				smCallBack:           test.smCallback,
-				dbCallback:           test.dbCallback,
-				chainManagerCallback: test.chainManagerCallback,
-			}
-
-			c := createTestChainManager(t, chainParams)
-
-			// generate seal at the end as there are modifications to header
 			if !errors.Is(test.expectedError, common.ErrInvalidSeal) {
 				signTesseract(t, sm, test.ts)
 			}
 
-			err := c.ValidateTesseract(test.ts, nodes)
-			if test.expectedError != nil {
-				require.ErrorContains(t, err, test.expectedError.Error())
-
-				// check for orphan tesseracts in orphans cache
-				if test.isOrphanTS {
-					checkForOrphanTSInCache(t, c, test.ts)
-				}
-
-				return
-			}
-
-			require.NoError(t, err)
-		})
-	}
-}
-
-func TestAddTesseracts(t *testing.T) {
-	var (
-		hashes      = getHashes(t, 2, false)
-		clusterInfo = getTestClusterInfo(t, 2)
-	)
-
-	tesseractParamsWithGroupHash := func(
-		clusterInfo *common.ICSClusterInfo,
-		groupHash common.Hash,
-	) *createTesseractParams {
-		rawData, err := clusterInfo.Bytes()
-		require.NoError(t, err)
-
-		return &createTesseractParams{
-			headerCallback: func(header *common.TesseractHeader) {
-				header.PrevHash = tests.RandomHash(t)
-				header.GroupHash = groupHash
-				header.Extra = createCommitdataWithRandomGridHash(t)
-			},
-			bodyCallback: func(body *common.TesseractBody) {
-				body.ConsensusProof.ICSHash = common.GetHash(rawData)
-			},
-		}
-	}
-
-	testcases := []struct {
-		name             string
-		dirtyStorage     map[common.Hash][]byte
-		tesseractsParams map[int]*createTesseractParams
-		tsCount          int
-		expectedError    error
-	}{
-		{
-			name:         "valid tesseracts",
-			dirtyStorage: getTestDirtyEntriesWithClusterInfo(t, clusterInfo, 5),
-			tesseractsParams: map[int]*createTesseractParams{
-				0: tesseractParamsWithGroupHash(clusterInfo, hashes[1]),
-				1: tesseractParamsWithGroupHash(clusterInfo, hashes[1]),
-			},
-			tsCount: 2,
-		},
-		{
-			name:          "should return error for nil grid",
-			dirtyStorage:  nil,
-			tsCount:       0,
-			expectedError: errors.New("nil grid"),
-		},
-		{
-			name:         "should return error for empty dirty storage",
-			dirtyStorage: nil,
-			tsCount:      2,
-			tesseractsParams: map[int]*createTesseractParams{
-				0: tesseractParamsWithGroupHash(nil, hashes[1]),
-				1: tesseractParamsWithGroupHash(nil, hashes[1]),
-			},
-			expectedError: errors.New("empty dirty storage"),
-		},
-		{
-			name:         "should return error if grid id doesn't match",
-			dirtyStorage: getTestDirtyEntriesWithClusterInfo(t, nil, 5),
-			tesseractsParams: map[int]*createTesseractParams{
-				0: tesseractParamsWithGroupHash(nil, hashes[0]),
-				1: tesseractParamsWithGroupHash(nil, hashes[1]),
-			},
-			tsCount:       2,
-			expectedError: errors.New("grid id mismatch"),
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			ts := createTesseracts(t, test.tsCount, test.tesseractsParams)
-
 			chainParams := &CreateChainParams{
-				db: mockDB(),
-				smCallBack: func(sm *MockStateManager) {
-					setAccountType(sm, common.LogicAccount, ts...)
-				},
+				sm:         sm,
+				smCallBack: test.smCallback,
+				dbCallback: test.dbCallback,
 			}
 
 			c := createTestChainManager(t, chainParams)
 
-			err := c.AddTesseracts(test.dirtyStorage, ts...)
+			err := c.ValidateTesseract(test.ts.AnyAddress(), test.ts, nodes, test.allParticipants)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -1306,83 +881,263 @@ func TestAddTesseracts(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			checkForAddedTesseracts(t, c, ts, common.LogicAccount)
 		})
 	}
 }
 
-func TestIsReceiptAndGroupHashValid(t *testing.T) {
-	var receipts common.Receipts
-
-	receiptRoot, err := receipts.Hash()
-	require.NoError(t, err)
-
-	groupHash := tests.RandomHash(t)
+func TestAddParticipantData(t *testing.T) {
+	addresses := tests.GetAddresses(t, 2)
 
 	testcases := []struct {
-		name      string
-		paramsMap map[int]*createTesseractParams
-		isValid   bool
+		name            string
+		address         identifiers.Address
+		tsParams        *createTesseractParams
+		allParticipants bool
+		smCallback      func(sm *MockStateManager)
+		dbCallback      func(db *MockDB)
+		expectedError   error
 	}{
 		{
-			name: "receipt hashes doesn't match",
-			paramsMap: map[int]*createTesseractParams{
-				0: tsParamsWithHashes(t, receiptRoot, groupHash, "", common.NilHash),
-				1: tsParamsWithHashes(t, tests.RandomHash(t), groupHash, "", common.NilHash),
-			},
-			isValid: false,
+			name:            "address is not specified when a specific participant need to be added",
+			address:         identifiers.NilAddress,
+			allParticipants: false,
+			expectedError:   errors.New("address is not specified"),
 		},
 		{
-			name: "grid hashes doesn't match",
-			paramsMap: map[int]*createTesseractParams{
-				0: tsParamsWithHashes(t, receiptRoot, groupHash, "", common.NilHash),
-				1: tsParamsWithHashes(t, receiptRoot, tests.RandomHash(t), "", common.NilHash),
+			name:    "added only one participant data successfully",
+			address: addresses[0],
+			tsParams: &createTesseractParams{
+				Addresses: addresses,
+				Participants: common.Participants{
+					addresses[0]: {
+						Height: 11,
+					},
+					addresses[1]: {
+						Height: 23,
+					},
+				},
 			},
-			isValid: false,
+			allParticipants: false,
 		},
 		{
-			name: "valid receipt hash and groupHash",
-			paramsMap: map[int]*createTesseractParams{
-				0: tsParamsWithHashes(t, receiptRoot, groupHash, "", common.NilHash),
-				1: tsParamsWithHashes(t, receiptRoot, groupHash, "", common.NilHash),
+			name: "added all participant data successfully",
+			tsParams: &createTesseractParams{
+				Addresses: addresses,
+				Participants: common.Participants{
+					addresses[0]: {
+						Height: 11,
+					},
+					addresses[1]: {
+						Height: 23,
+					},
+				},
 			},
-			isValid: true,
+			allParticipants: true,
+		},
+		{
+			name: "failed to flush dirty object",
+			smCallback: func(sm *MockStateManager) {
+				sm.flushHook = func() error {
+					return errors.New("failed to flush dirty entries")
+				}
+			},
+			allParticipants: true,
+			expectedError:   errors.New("failed to flush dirty entries"),
+		},
+		{
+			name: "failed to set tesseract height entry",
+			dbCallback: func(db *MockDB) {
+				db.setTesseractHeightEntryHook = func() error {
+					return errors.New("failed to set tesseract height entry")
+				}
+			},
+			allParticipants: true,
+			expectedError:   errors.New("failed to set tesseract height entry"),
+		},
+		{
+			name: "failed to fetch acc type",
+			smCallback: func(sm *MockStateManager) {
+				sm.GetAccTypeHook = func() error {
+					return errors.New("failed to fetch acc type")
+				}
+			},
+			allParticipants: true,
+			expectedError:   errors.New("failed to fetch acc type"),
+		},
+		{
+			name: "failed to update account meta info",
+			dbCallback: func(db *MockDB) {
+				db.updateMetaInfoHook = func() (int32, bool, error) {
+					return 0, false, errors.New("failed to update acc meta info")
+				}
+			},
+			allParticipants: true,
+			expectedError:   errors.New("failed to update acc meta info"),
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			ts := createTesseracts(t, 2, test.paramsMap)
+			ts := createTesseract(t, test.tsParams)
+			db := mockDB()
+			sm := mockStateManager()
 
-			isValid := isReceiptAndGroupHashValid(ts, receipts)
+			for _, addr := range ts.Addresses() {
+				sm.accountTypes[addr] = common.RegularAccount
+			}
+
+			chainParams := &CreateChainParams{
+				db:         db,
+				sm:         sm,
+				smCallBack: test.smCallback,
+				dbCallback: test.dbCallback,
+			}
+
+			c := createTestChainManager(t, chainParams)
+
+			err := c.addParticipantsData(
+				true,
+				test.address,
+				ts,
+				test.allParticipants,
+			)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			participants := make(common.Participants)
+
+			if test.allParticipants {
+				participants = ts.Participants()
+			} else {
+				s, ok := ts.State(test.address)
+				if !ok {
+					panic(ok)
+				}
+
+				participants[test.address] = s
+			}
+
+			for addr, participant := range participants {
+				require.True(t, sm.isCleanup(addr)) // check if dirty objects cleaned up
+
+				found := sm.getFlushedDirtyObject(addr)
+				require.True(t, found)
+
+				checkForParticipantByHeight(t, c, addr, participant, true)
+
+				// check if acc meta info inserted
+				accMetaInfo, found := db.GetAccMetaInfo(addr)
+				require.True(t, found)
+
+				checkIfAccMetaInfoMatches(
+					t,
+					accMetaInfo,
+					addr,
+					participant.Height,
+					ts.Hash(),
+					common.RegularAccount,
+				)
+
+				hash, ok := c.tesseracts.Get(addr)
+				require.True(t, ok)
+				require.Equal(t, ts.Hash(), hash)
+			}
+
+			// make sure other accounts are not stored in this case
+			if !test.allParticipants {
+				for addr, p := range ts.Participants() {
+					if addr != test.address {
+						checkForParticipantByHeight(t, c, addr, p, false)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestIsReceiptHashValid(t *testing.T) {
+	var receipts common.Receipts
+
+	receiptsHash, err := receipts.Hash()
+	require.NoError(t, err)
+
+	testcases := []struct {
+		name      string
+		paramsMap *createTesseractParams
+		isValid   bool
+	}{
+		{
+			name: "valid receipt hash",
+			paramsMap: &createTesseractParams{
+				TSDataCallback: func(ts *tests.TesseractData) {
+					ts.ReceiptsHash = receiptsHash
+				},
+			},
+			isValid: true,
+		},
+		{
+			name: "invalid receipt hash",
+			paramsMap: &createTesseractParams{
+				TSDataCallback: func(ts *tests.TesseractData) {
+					ts.ReceiptsHash = tests.RandomHash(t)
+				},
+			},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			ts := createTesseract(t, test.paramsMap)
+
+			isValid := isReceiptsHashValid(ts, receipts)
 			require.Equal(t, test.isValid, isValid)
 		})
 	}
 }
 
 func TestAreStateHashesValid(t *testing.T) {
-	address := tests.RandomAddress(t)
-	stateHash := tests.RandomHash(t)
-	accStateHashes := common.AccStateHashes{address: {StateHash: stateHash}}
+	addresses := tests.GetAddresses(t, 2)
+	stateHashes := tests.GetHashes(t, 2)
+	accStateHashes := common.AccStateHashes{
+		addresses[0]: {StateHash: stateHashes[0]},
+		addresses[1]: {StateHash: stateHashes[1]},
+	}
 
 	testcases := []struct {
 		name        string
-		stateHashes common.AccStateHashes
 		params      *createTesseractParams
+		stateHashes common.AccStateHashes
 		isValid     bool
 	}{
 		{
-			name:        "state hash in receipt and tesseract doesn't match",
-			params:      tesseractParamsWithStateHash(t, tests.RandomHash(t), ""),
+			name: "state hash in receipt and tesseract doesn't match",
+			params: &createTesseractParams{
+				Participants: common.Participants{
+					addresses[0]: {
+						StateHash: tests.RandomHash(t),
+					},
+				},
+			},
 			stateHashes: accStateHashes,
 			isValid:     false,
 		},
 		{
 			name: "valid state hashes",
 			params: &createTesseractParams{
-				address: address,
-				bodyCallback: func(body *common.TesseractBody) {
-					body.StateHash = stateHash
+				Addresses: []identifiers.Address{addresses[0], addresses[1]},
+				Participants: common.Participants{
+					addresses[0]: {
+						StateHash: stateHashes[0],
+					},
+					addresses[1]: {
+						StateHash: stateHashes[1],
+					},
 				},
 			},
 			stateHashes: accStateHashes,
@@ -1394,29 +1149,571 @@ func TestAreStateHashesValid(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ts := createTesseract(t, test.params)
 
-			isValid := areStateHashesValid([]*common.Tesseract{ts}, test.stateHashes)
+			isValid := areStateHashesValid(ts, test.stateHashes)
 
 			require.Equal(t, test.isValid, isValid)
 		})
 	}
 }
 
+func TestStoreReceipts(t *testing.T) {
+	c := createTestChainManager(t, nil)
+	_, receipts := getIxAndReceipts(t, 1)
+
+	testcases := []struct {
+		name               string
+		batchWriterSetHook func() error
+		params             *createTesseractParams
+		expectedError      error
+	}{
+		{
+			name: "receipts stored successfully",
+			params: &createTesseractParams{
+				Receipts: receipts,
+			},
+		},
+		{
+			name: "failed to store receipts",
+			batchWriterSetHook: func() error {
+				return errors.New("failed to write receipts")
+			},
+			params: &createTesseractParams{
+				Receipts: receipts,
+			},
+			expectedError: errors.New("failed to write receipts"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			ts := createTesseract(t, test.params)
+
+			bw := newMockBatchWriter()
+			bw.setHook = test.batchWriterSetHook
+
+			err := c.storeReceipts(bw, ts)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			// check if receipts are stored in batch writer
+			val, found := bw.Get(storage.ReceiptsKey(ts.Hash()))
+			require.True(t, found)
+
+			receipts := new(common.Receipts)
+
+			err = receipts.FromBytes(val)
+			require.NoError(t, err)
+
+			require.Equal(t, ts.Receipts(), *receipts)
+		})
+	}
+}
+
+func TestStoreInteractions(t *testing.T) {
+	ixns := tests.CreateIxns(t, 2, nil)
+	c := createTestChainManager(t, nil)
+
+	testcases := []struct {
+		name               string
+		batchWriterSetHook func() error
+		params             *createTesseractParams
+		expectedError      error
+	}{
+		{
+			name: "receipts stored successfully",
+			params: &createTesseractParams{
+				Ixns: ixns,
+			},
+		},
+		{
+			name: "failed to store receipts",
+			batchWriterSetHook: func() error {
+				return errors.New("failed to write ixns")
+			},
+			params: &createTesseractParams{
+				Ixns: ixns,
+			},
+			expectedError: errors.New("failed to write ixns"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			ts := createTesseract(t, test.params)
+
+			bw := newMockBatchWriter()
+			bw.setHook = test.batchWriterSetHook
+
+			err := c.storeInteractions(bw, ts)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			// check if ixns are stored in batch writer
+			val, found := bw.Get(storage.InteractionsKey(ts.Hash()))
+			require.True(t, found)
+
+			actualIxns := new(common.Interactions)
+
+			err = actualIxns.FromBytes(val)
+			require.NoError(t, err)
+
+			require.Equal(t, ts.Interactions(), *actualIxns)
+
+			// check if ixnHash ==> tsHash pair stored in batch writer
+			for _, ixn := range ts.Interactions() {
+				val, found := bw.Get(ixn.Hash().Bytes())
+				require.True(t, found)
+
+				tsHash := common.BytesToHash(val)
+				require.Equal(t, ts.Hash(), tsHash)
+			}
+		})
+	}
+}
+
+func TestAddTesseractData(t *testing.T) {
+	ixns, receipts := getIxAndReceipts(t, 1)
+	c := createTestChainManager(t, nil)
+
+	testcases := []struct {
+		name               string
+		batchWriterSetHook func() error
+		params             *createTesseractParams
+		expectedError      error
+	}{
+		{
+			name: "tesseract added successfully",
+			params: &createTesseractParams{
+				Ixns:     ixns,
+				Receipts: receipts,
+			},
+		},
+		{
+			name:   "failed to store tesseract",
+			params: &createTesseractParams{},
+			batchWriterSetHook: func() error {
+				return errors.New("failed to store tesseract")
+			},
+			expectedError: errors.New("failed to store tesseract"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			ts := createTesseract(t, test.params)
+
+			bw := newMockBatchWriter()
+			bw.setHook = test.batchWriterSetHook
+
+			err := c.addTesseractData(bw, ts)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			// check if ixns are stored in batch writer
+			val, found := bw.Get(storage.TesseractKey(ts.Hash()))
+			require.True(t, found)
+
+			actualTS := new(common.CanonicalTesseract)
+
+			err = actualTS.FromBytes(val)
+			require.NoError(t, err)
+
+			require.Equal(t, ts.Canonical(), actualTS)
+
+			// check if ixns are stored in batch writer
+			_, found = bw.Get(storage.InteractionsKey(ts.Hash()))
+			require.True(t, found)
+
+			// check if receipts are stored in batch writer
+			_, found = bw.Get(storage.ReceiptsKey(ts.Hash()))
+			require.True(t, found)
+		})
+	}
+}
+
+func TestAddTesseract(t *testing.T) {
+	ixns, receipts := getIxAndReceipts(t, 1)
+	addresses := tests.GetAddresses(t, 2)
+
+	testcases := []struct {
+		name             string
+		tsParams         *createTesseractParams
+		shouldCache      bool
+		smCallback       func(sm *MockStateManager)
+		dbCallback       func(db *MockDB)
+		dbCallbackWithTS func(db *MockDB, ts *common.Tesseract)
+		senatusCallback  func(senatus *MockSenatus)
+		expectedError    error
+	}{
+		{
+			name: "added tesseract successfully with caching",
+			tsParams: &createTesseractParams{
+				Addresses: addresses,
+				Participants: common.Participants{
+					addresses[0]: {
+						Height:       11,
+						ContextDelta: *getDeltaGroup(t, 1, 1, 1),
+					},
+					addresses[1]: {
+						Height:       23,
+						ContextDelta: *getDeltaGroup(t, 1, 1, 1),
+					},
+				},
+				Ixns:     ixns,
+				Receipts: receipts,
+			},
+			shouldCache: true,
+		},
+		{
+			name: "added tesseract successfully without caching",
+			tsParams: &createTesseractParams{
+				Addresses: addresses,
+				Participants: common.Participants{
+					addresses[0]: {
+						Height:       11,
+						ContextDelta: *getDeltaGroup(t, 1, 1, 1),
+					},
+					addresses[1]: {
+						Height:       23,
+						ContextDelta: *getDeltaGroup(t, 1, 1, 1),
+					},
+				},
+				Ixns:     ixns,
+				Receipts: receipts,
+			},
+			shouldCache: false,
+		},
+		{
+			name: "added only participant data as tesseract already exists in db",
+			dbCallbackWithTS: func(db *MockDB, ts *common.Tesseract) {
+				data, _ := ts.Bytes()
+				err := db.SetTesseract(ts.Hash(), data)
+				require.NoError(t, err)
+			},
+		},
+		{
+			name: "failed to add participant data",
+			smCallback: func(sm *MockStateManager) {
+				sm.flushHook = func() error {
+					return errors.New("failed to flush dirty entries")
+				}
+			},
+			expectedError: errors.New("failed to flush dirty entries"),
+		},
+		{
+			name: "failed to add tesseract data",
+			dbCallback: func(db *MockDB) {
+				db.batchWriterSetHook = func() error {
+					return errors.New("failed to store tesseract")
+				}
+			},
+			expectedError: errors.New("failed to store tesseract"),
+		},
+		{
+			name: "failed to flush tesseract data",
+			dbCallback: func(db *MockDB) {
+				db.batchWriterFlushHook = func() error {
+					return errors.New("failed to flush tesseract data")
+				}
+			},
+			expectedError: errors.New("failed to flush tesseract data"),
+		},
+		{
+			name: "failed to update node inclusivity",
+			tsParams: &createTesseractParams{
+				Addresses: addresses[0:1],
+				Participants: common.Participants{
+					addresses[0]: {
+						ContextDelta: *getDeltaGroup(t, 1, 1, 1),
+					},
+				},
+			},
+			senatusCallback: func(senatus *MockSenatus) {
+				senatus.UpdateWalletCountHook = func() error {
+					return errors.New("failed to update node inclusivity")
+				}
+			},
+			expectedError: errors.New("failed to update node inclusivity"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			ts := createTesseract(t, test.tsParams)
+			db := mockDB()
+			sm := mockStateManager()
+			senatus := mockSenatus(t)
+			ixpool := mockIXPool(t)
+
+			if test.dbCallbackWithTS != nil {
+				test.dbCallbackWithTS(db, ts)
+			}
+
+			for _, addr := range ts.Addresses() {
+				sm.accountTypes[addr] = common.RegularAccount
+			}
+
+			chainParams := &CreateChainParams{
+				db:              db,
+				sm:              sm,
+				senatus:         senatus,
+				ixPool:          ixpool,
+				smCallBack:      test.smCallback,
+				dbCallback:      test.dbCallback,
+				senatusCallback: test.senatusCallback,
+			}
+
+			c := createTestChainManager(t, chainParams)
+
+			participants := ts.Participants()
+
+			tsAddedEventSub := c.mux.Subscribe(utils.TesseractAddedEvent{}) // subscribe to tesseract added event
+
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			tsAddedResp := make(chan tests.Result, 1)
+
+			// keeps checking for event until timeout
+			go utils.HandleMuxEvents(ctx, tsAddedEventSub, tsAddedResp, 1)
+
+			err := c.addTesseract(
+				test.shouldCache,
+				identifiers.NilAddress,
+				ts,
+				true,
+			)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			// check if participant data added
+			for addr, participant := range participants {
+				checkForParticipantByHeight(t, c, addr, participant, true)
+			}
+
+			if c.db.HasTesseract(ts.Hash()) {
+				require.Nil(t, db.batchWriter)
+
+				return
+			}
+
+			checkForTesseractData(t, ts, c, db, senatus, ixpool, tsAddedResp, test.shouldCache)
+		})
+	}
+}
+
+func TestAddTesseractWithState(t *testing.T) {
+	addresses := tests.GetAddresses(t, 2)
+	icsHash := tests.RandomHash(t)
+
+	dirtyStorage := map[common.Hash][]byte{
+		icsHash:             {1, 2, 3},
+		tests.RandomHash(t): {4, 5, 6},
+	}
+
+	tsParams := &createTesseractParams{
+		Addresses: addresses,
+		Participants: common.Participants{
+			addresses[0]: {
+				Height:       11,
+				ContextDelta: *getDeltaGroup(t, 1, 1, 1),
+			},
+			addresses[1]: {
+				Height:       23,
+				ContextDelta: *getDeltaGroup(t, 1, 1, 1),
+			},
+		},
+		TSDataCallback: func(ts *tests.TesseractData) {
+			ts.ConsensusInfo.ICSHash = icsHash
+		},
+	}
+
+	testcases := []struct {
+		name            string
+		address         identifiers.Address
+		tsParams        *createTesseractParams
+		dirtyStorage    map[common.Hash][]byte
+		allParticipants bool
+		smCallback      func(sm *MockStateManager)
+		dbCallback      func(db *MockDB)
+		expectedError   error
+	}{
+		{
+			name:            "added tesseract with state successfully",
+			address:         identifiers.NilAddress,
+			tsParams:        tsParams,
+			dirtyStorage:    dirtyStorage,
+			allParticipants: true,
+		},
+		{
+			name:            "added tesseract's participant successfully",
+			address:         addresses[0],
+			tsParams:        tsParams,
+			dirtyStorage:    dirtyStorage,
+			allParticipants: false,
+		},
+		{
+			name: "failed to add tesseract",
+			tsParams: &createTesseractParams{
+				TSDataCallback: func(ts *tests.TesseractData) {
+					ts.ConsensusInfo.ICSHash = icsHash
+				},
+			},
+			smCallback: func(sm *MockStateManager) {
+				sm.flushHook = func() error {
+					return errors.New("failed to flush dirty entries")
+				}
+			},
+			dirtyStorage:    dirtyStorage,
+			allParticipants: true,
+			expectedError:   errors.New("failed to flush dirty entries"),
+		},
+		{
+			name:            "empty dirty storage",
+			allParticipants: true,
+			expectedError:   errors.New("empty dirty storage"),
+		},
+		{
+			name: "failed to write dirty keys",
+			tsParams: &createTesseractParams{
+				TSDataCallback: func(ts *tests.TesseractData) {
+					ts.ConsensusInfo.ICSHash = icsHash
+				},
+			},
+			dbCallback: func(db *MockDB) {
+				db.createEntryHook = func() error {
+					return errors.New("failed to write dirty keys")
+				}
+			},
+			dirtyStorage:    dirtyStorage,
+			allParticipants: true,
+			expectedError:   errors.New("failed to write dirty keys"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			ts := createTesseract(t, test.tsParams)
+			sm := mockStateManager()
+
+			for _, addr := range ts.Addresses() {
+				sm.accountTypes[addr] = common.RegularAccount
+			}
+
+			chainParams := &CreateChainParams{
+				sm:         sm,
+				smCallBack: test.smCallback,
+				dbCallback: test.dbCallback,
+			}
+
+			c := createTestChainManager(t, chainParams)
+
+			participants := ts.Participants()
+
+			err := c.AddTesseractWithState(
+				test.address,
+				test.dirtyStorage,
+				ts,
+				test.allParticipants,
+			)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			var expectedAddedAccounts []identifiers.Address
+
+			if test.allParticipants {
+				expectedAddedAccounts = ts.Addresses()
+			} else {
+				expectedAddedAccounts = []identifiers.Address{test.address}
+			}
+
+			// check if participants data added
+			for _, addr := range expectedAddedAccounts {
+				checkForParticipantByHeight(t, c, addr, participants[addr], true)
+			}
+
+			// make sure other accounts are not stored in this case
+			if !test.allParticipants {
+				for _, expectedAddr := range expectedAddedAccounts {
+					for addr, p := range participants {
+						if addr != expectedAddr {
+							checkForParticipantByHeight(t, c, addr, p, false)
+						}
+					}
+				}
+			}
+
+			// check if dirty entries are stored in db
+			for k, v := range dirtyStorage {
+				value, err := c.db.ReadEntry(k.Bytes())
+				require.NoError(t, err)
+				require.Equal(t, v, value)
+			}
+		})
+	}
+}
+
 func TestExecuteAndValidate(t *testing.T) {
 	var (
-		ixns, receipts              = getIxAndReceipts(t, 1)
-		tsParamsMap, accStateHashes = tsParamsMapWithStateHashes(t, ixns, receipts, 1)
+		address        = tests.RandomAddress(t)
+		stateHash      = tests.RandomHash(t)
+		_, receipts    = getIxAndReceipts(t, 1)
+		accStateHashes = common.AccStateHashes{
+			address: {
+				StateHash: stateHash,
+			},
+		}
+		defaultClusterID = common.ClusterID("cluster-0")
+		emptyReceipts    common.Receipts
 	)
+
+	receiptsHash, err := receipts.Hash()
+	require.NoError(t, err)
 
 	testcases := []struct {
 		name                    string
-		paramsMap               map[int]*createTesseractParams
+		tsParams                *createTesseractParams
 		revertHook              func() error
 		executeInteractionsHook func() (common.Receipts, common.AccStateHashes, error)
 		expectedError           error
 	}{
 		{
-			name:      "should return error if execution fails",
-			paramsMap: tsParamsMap,
+			name: "should return error if execution fails",
+			tsParams: &createTesseractParams{
+				TSDataCallback: func(ts *tests.TesseractData) {
+					ts.ConsensusInfo.ClusterID = defaultClusterID
+				},
+			},
 			executeInteractionsHook: func() (common.Receipts, common.AccStateHashes, error) {
 				return nil, nil, errors.New("failed to execute interactions")
 			},
@@ -1424,41 +1721,45 @@ func TestExecuteAndValidate(t *testing.T) {
 		},
 		{
 			name: "should return error if receipt validation fails",
-			paramsMap: map[int]*createTesseractParams{
-				0: tsParamsWithHashes(t, tests.RandomHash(t), common.NilHash, "cluster-0", common.NilHash),
+			tsParams: &createTesseractParams{
+				TSDataCallback: func(ts *tests.TesseractData) {
+					ts.ReceiptsHash = tests.RandomHash(t)
+					ts.ConsensusInfo.ClusterID = defaultClusterID
+				},
 			},
 			executeInteractionsHook: func() (common.Receipts, common.AccStateHashes, error) {
-				var (
-					emptyReceipts  common.Receipts
-					emptyAccHashes common.AccStateHashes
-				)
-
-				return emptyReceipts, emptyAccHashes, nil
+				return emptyReceipts, nil, nil
 			},
 			expectedError: errors.New("failed to validate the tesseract"),
 		},
 		{
 			name: "should return error if state hash validation fails",
-			paramsMap: map[int]*createTesseractParams{
-				0: tsParamsMap[0],
+			tsParams: &createTesseractParams{
+				Addresses: []identifiers.Address{address},
+				Participants: common.Participants{
+					address: {
+						StateHash: tests.RandomHash(t),
+					},
+				},
+				TSDataCallback: func(ts *tests.TesseractData) {
+					ts.ConsensusInfo.ClusterID = defaultClusterID
+					ts.ReceiptsHash = receiptsHash
+				},
 			},
 			executeInteractionsHook: func() (common.Receipts, common.AccStateHashes, error) {
-				var emptyReceipts common.Receipts
-				accHashes := make(common.AccStateHashes)
-				// set a different state hash in accHashes
-				accHashes.SetStateHash(tsParamsMap[0].address, tests.RandomHash(t))
-
-				return emptyReceipts, accHashes, nil
+				return receipts, accStateHashes, nil
 			},
 			expectedError: errors.New("failed to validate the tesseract"),
 		},
 		{
-			name:      "should return error if revert fails",
-			paramsMap: tsParamsMap,
+			name: "should return error if revert fails",
+			tsParams: &createTesseractParams{
+				TSDataCallback: func(ts *tests.TesseractData) {
+					ts.ConsensusInfo.ClusterID = defaultClusterID
+				},
+			},
 			executeInteractionsHook: func() (common.Receipts, common.AccStateHashes, error) {
-				var emptyAccHashes common.AccStateHashes
-
-				return receipts, emptyAccHashes, nil // execution is reverted if hashes are invalid
+				return receipts, accStateHashes, nil // execution is reverted if hashes are invalid
 			},
 			revertHook: func() error {
 				return errors.New("revert failed")
@@ -1466,8 +1767,18 @@ func TestExecuteAndValidate(t *testing.T) {
 			expectedError: errors.New("failed to revert the execution changes"),
 		},
 		{
-			name:      "receipts should be added to dirty storage",
-			paramsMap: tsParamsMap,
+			name: "receipts should be added to dirty storage",
+			tsParams: &createTesseractParams{
+				Participants: common.Participants{
+					address: {
+						StateHash: stateHash,
+					},
+				},
+				TSDataCallback: func(ts *tests.TesseractData) {
+					ts.ConsensusInfo.ClusterID = defaultClusterID
+					ts.ReceiptsHash = receiptsHash
+				},
+			},
 			executeInteractionsHook: func() (common.Receipts, common.AccStateHashes, error) {
 				return receipts, accStateHashes, nil
 			},
@@ -1476,7 +1787,7 @@ func TestExecuteAndValidate(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			ts := createTesseracts(t, 1, test.paramsMap)
+			ts := createTesseract(t, test.tsParams)
 
 			chainParams := &CreateChainParams{
 				execCallback: func(exec *MockExec) {
@@ -1487,9 +1798,9 @@ func TestExecuteAndValidate(t *testing.T) {
 
 			c := createTestChainManager(t, chainParams)
 
-			err := c.ExecuteAndValidate(ts...)
+			err := c.ExecuteAndValidate(ts)
 
-			checkForExecutionCleanup(t, c, ts[0].ClusterID())
+			checkForExecutionCleanup(t, c, "cluster-0")
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1498,7 +1809,7 @@ func TestExecuteAndValidate(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, receipts, ts[0].Receipts())
+			require.Equal(t, receipts, ts.Receipts())
 		})
 	}
 }
@@ -1545,10 +1856,10 @@ func TestValidateAccountCreationInfo(t *testing.T) {
 
 func TestAddGenesisTesseract(t *testing.T) {
 	var (
-		address     = tests.RandomAddress(t)
-		stateHash   = tests.RandomHash(t)
-		contextHash = tests.RandomHash(t)
-		accType     = common.LogicAccount
+		addresses     = tests.GetAddresses(t, 2)
+		stateHashes   = tests.GetHashes(t, 2)
+		contextHashes = tests.GetHashes(t, 2)
+		accType       = common.LogicAccount
 	)
 
 	testcases := []struct {
@@ -1559,24 +1870,36 @@ func TestAddGenesisTesseract(t *testing.T) {
 		{
 			name: "adding genesis tesseract successful",
 			smCallBack: func(sm *MockStateManager) {
-				sm.setAccType(address, accType)
+				sm.setAccType(addresses[0], accType)
 			},
 		},
 		{
-			name:          "should fail if addTesseract fails",
+			name: "failed to add genesis tesseract",
+			smCallBack: func(sm *MockStateManager) {
+				sm.flushHook = func() error {
+					return errors.New("failed to flush dirty entries")
+				}
+			},
 			expectedError: errors.New("error adding genesis tesseract"),
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
+			sm := mockStateManager()
+
+			for _, addr := range addresses {
+				sm.accountTypes[addr] = accType
+			}
+
 			chainParams := &CreateChainParams{
+				sm:         sm,
 				smCallBack: test.smCallBack,
 			}
 
 			c := createTestChainManager(t, chainParams)
 
-			err := c.AddGenesisTesseract(address, stateHash, contextHash)
+			err := c.AddGenesisTesseract(addresses, stateHashes, contextHashes)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -1584,11 +1907,11 @@ func TestAddGenesisTesseract(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			checkForGenesisTesseract(
-				t,
-				c,
-				address,
-			)
+
+			for _, addr := range addresses {
+				found := sm.getFlushedDirtyObject(addr)
+				require.True(t, found)
+			}
 		},
 		)
 	}
@@ -1862,27 +2185,27 @@ func TestSetupGenesis(t *testing.T) {
 			require.NoError(t, err)
 			checkForGenesisTesseract(
 				t,
-				c,
+				sm,
 				common.SargaAddress,
 			)
 
 			for _, genesisAccount := range genesisAccounts {
 				checkForGenesisTesseract(
 					t,
-					c,
+					sm,
 					genesisAccount.Address,
 				)
 			}
 
 			checkForGenesisTesseract(
 				t,
-				c,
+				sm,
 				assetAccAddr, // asset account address
 			)
 
 			checkForGenesisTesseract(
 				t,
-				c,
+				sm,
 				logicAddr, // logic account address
 			)
 		})
@@ -2289,77 +2612,9 @@ func TestExecuteGenesisContracts(t *testing.T) {
 	}
 }
 
-// func CheckAssetCreation(
-//	t *testing.T,
-//	s *guna.Object,
-//	assetDescriptor *types.AssetDescriptor,
-// ) {
-//	t.Helper()
-//
-//	expectedAssetID, expectedAssetHash, expectedData, err := getTestAssetID(assetDescriptor)
-//	require.NoError(t, err)
-//
-//	actualData, err := s.GetDirtyEntry(expectedAssetHash.String()) // check if asset data inserted in dirty entries
-//	require.NoError(t, err)
-//	require.Equal(t, expectedData, actualData)
-//
-//	actualSupply, err := s.BalanceOf(expectedAssetID)
-//	require.NoError(t, err)
-//	require.Equal(t, assetDescriptor.Supply, actualSupply) // check total supply is stored in balances
-//
-//	require.Equal(t, s.Address(), assetDescriptor.Owner) // check if address is assigned to owner
-//}
-
-func TestGetTesseractPartsByGridHash(t *testing.T) {
+func TestGetInteractionsByTSHash(t *testing.T) {
 	var (
-		gridHash = tests.RandomHash(t)
-		parts    = tests.CreateTesseractPartsWithTestData(t)
-		c        = createTestChainManager(t, nil)
-	)
-
-	rawParts, err := parts.Bytes()
-	require.NoError(t, err)
-
-	err = c.db.SetTesseractParts(gridHash, rawParts)
-	require.NoError(t, err)
-
-	testcases := []struct {
-		name          string
-		gridHash      common.Hash
-		expectedParts *common.TesseractParts
-		expectedError error
-	}{
-		{
-			name:          "fetch tesseract parts successfully",
-			gridHash:      gridHash,
-			expectedParts: parts,
-		},
-		{
-			name:          "failed to fetch tesseract parts",
-			gridHash:      tests.RandomHash(t),
-			expectedError: errors.New("tesseract parts not found"),
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			parts, err := c.GetTesseractPartsByGridHash(test.gridHash)
-
-			if test.expectedError != nil {
-				require.ErrorContains(t, err, test.expectedError.Error())
-
-				return
-			}
-
-			require.NoError(t, err)
-			require.Equal(t, test.expectedParts, parts)
-		})
-	}
-}
-
-func TestGetInteractionsByGridHash(t *testing.T) {
-	var (
-		gridHash  = tests.RandomHash(t)
+		tsHash    = tests.RandomHash(t)
 		paramsMap = tests.GetIxParamsMapWithAddresses(
 			[]identifiers.Address{tests.RandomAddress(t)},
 			[]identifiers.Address{tests.RandomAddress(t)},
@@ -2371,30 +2626,30 @@ func TestGetInteractionsByGridHash(t *testing.T) {
 	rawIxns, err := ixns.Bytes()
 	require.NoError(t, err)
 
-	err = c.db.SetInteractions(gridHash, rawIxns)
+	err = c.db.SetInteractions(tsHash, rawIxns)
 	require.NoError(t, err)
 
 	testcases := []struct {
 		name                 string
-		gridHash             common.Hash
+		tsHash               common.Hash
 		expectedInteractions common.Interactions
 		expectedError        error
 	}{
 		{
 			name:                 "fetch interactions successfully",
-			gridHash:             gridHash,
+			tsHash:               tsHash,
 			expectedInteractions: ixns,
 		},
 		{
 			name:          "failed to fetch interactions",
-			gridHash:      tests.RandomHash(t),
+			tsHash:        tests.RandomHash(t),
 			expectedError: common.ErrFetchingInteractions,
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			ixns, err := c.getInteractionsByGridHash(test.gridHash)
+			ixns, err := c.getInteractionsByTSHash(test.tsHash)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -2409,84 +2664,45 @@ func TestGetInteractionsByGridHash(t *testing.T) {
 }
 
 func TestGetInteractionByTSHash(t *testing.T) {
-	var (
-		gridHash             = tests.RandomHash(t)
-		tsHash               = tests.RandomHash(t)
-		tsHashWithoutIxns    = tests.RandomHash(t)
-		tsHashWithoutParts   = tests.RandomHash(t)
-		gridHashWithoutParts = tests.RandomHash(t)
-		paramsMap            = tests.GetIxParamsMapWithAddresses(
-			[]identifiers.Address{tests.RandomAddress(t)},
-			[]identifiers.Address{tests.RandomAddress(t)},
-		)
-		ixns  = tests.CreateIxns(t, 2, paramsMap)
-		parts = tests.CreateTesseractPartsWithTestData(t)
-		c     = createTestChainManager(t, nil)
-	)
+	ts := createTesseracts(t, 1, getTesseractParamsMapWithIxns(t, 3))
 
-	rawIxns, err := ixns.Bytes()
-	require.NoError(t, err)
+	chainParams := &CreateChainParams{
+		smCallBack: func(sm *MockStateManager) {
+			sm.InsertTesseractsInDB(t, ts...)
+		},
+	}
 
-	rawParts, err := parts.Bytes()
-	require.NoError(t, err)
-
-	err = c.db.SetTSGridLookup(tsHash, gridHash)
-	require.NoError(t, err)
-
-	err = c.db.SetInteractions(gridHash, rawIxns)
-	require.NoError(t, err)
-
-	err = c.db.SetTesseractParts(gridHash, rawParts)
-	require.NoError(t, err)
-
-	err = c.db.SetTSGridLookup(tsHashWithoutIxns, tests.RandomHash(t))
-	require.NoError(t, err)
-
-	err = c.db.SetTSGridLookup(tsHashWithoutParts, gridHashWithoutParts)
-	require.NoError(t, err)
-
-	err = c.db.SetInteractions(gridHashWithoutParts, rawIxns)
-	require.NoError(t, err)
+	c := createTestChainManager(t, chainParams)
 
 	testcases := []struct {
 		name                 string
 		tsHash               common.Hash
 		ixIndex              int
-		expectedInteractions *common.Interaction
-		expectedParts        *common.TesseractParts
+		expectedInteraction  *common.Interaction
+		expectedParticipants common.Participants
 		expectedError        error
 	}{
 		{
 			name:                 "fetch interactions successfully",
-			tsHash:               tsHash,
+			tsHash:               ts[0].Hash(),
 			ixIndex:              1,
-			expectedParts:        parts,
-			expectedInteractions: ixns[1],
+			expectedParticipants: ts[0].Participants(),
+			expectedInteraction:  ts[0].Interactions()[1],
 		},
 		{
-			name:          "grid hash not found",
+			name:          "tesseract not found",
 			tsHash:        tests.RandomHash(t),
-			expectedError: common.ErrGridHashNotFound,
-		},
-		{
-			name:          "interactions not found",
-			tsHash:        tsHashWithoutIxns,
-			expectedError: common.ErrFetchingInteractions,
-		},
-		{
-			name:          "tesseract parts not found",
-			tsHash:        tsHashWithoutParts,
-			expectedError: errors.New("tesseract parts not found"),
+			expectedError: common.ErrFetchingTesseract,
 		},
 		{
 			name:          "interaction index exceeded",
-			tsHash:        tsHash,
+			tsHash:        ts[0].Hash(),
 			ixIndex:       3,
 			expectedError: common.ErrIndexOutOfRange,
 		},
 		{
 			name:          "interaction index cannot be negative",
-			tsHash:        tsHash,
+			tsHash:        ts[0].Hash(),
 			ixIndex:       -1,
 			expectedError: common.ErrIndexOutOfRange,
 		},
@@ -2494,7 +2710,7 @@ func TestGetInteractionByTSHash(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			ix, parts, err := c.GetInteractionAndPartsByTSHash(test.tsHash, test.ixIndex)
+			ix, participants, err := c.GetInteractionAndParticipantsByTSHash(test.tsHash, test.ixIndex)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -2503,100 +2719,72 @@ func TestGetInteractionByTSHash(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, test.expectedInteractions, ix)
-			require.Equal(t, test.expectedParts, parts)
+			require.Equal(t, test.expectedInteraction, ix)
+			require.Equal(t, test.expectedParticipants, participants)
 		})
 	}
 }
 
 func TestGetInteractionByIxHash(t *testing.T) {
-	paramsMap := tests.GetIxParamsMapWithAddresses(
-		[]identifiers.Address{tests.RandomAddress(t)},
-		[]identifiers.Address{tests.RandomAddress(t)},
-	)
-	ixns := tests.CreateIxns(t, 2, paramsMap)
+	ixHash1 := tests.RandomHash(t)
+	ixHash2 := tests.RandomHash(t)
 
-	var (
-		gridHash             = tests.RandomHash(t)
-		ixHash               = ixns[1].Hash()
-		ixHashWithoutIxn     = tests.RandomHash(t)
-		ixHashWithoutIxns    = tests.RandomHash(t)
-		ixHashWithoutParts   = ixns[0].Hash()
-		gridHashWithoutParts = tests.RandomHash(t)
-		parts                = tests.CreateTesseractPartsWithTestData(t)
-		c                    = createTestChainManager(t, nil)
-	)
+	ts := createTesseracts(t, 1, nil)
+	tsWithInteractions := createTesseracts(t, 1, getTesseractParamsMapWithIxns(t, 3))
+	ts = append(ts, tsWithInteractions...)
 
-	rawIxns, err := ixns.Bytes()
+	chainParams := &CreateChainParams{
+		smCallBack: func(sm *MockStateManager) {
+			sm.InsertTesseractsInDB(t, ts...)
+		},
+	}
+
+	c := createTestChainManager(t, chainParams)
+
+	err := c.db.SetIXLookup(ixHash1, ts[0].Hash())
 	require.NoError(t, err)
 
-	rawParts, err := parts.Bytes()
+	err = c.db.SetIXLookup(ts[1].Interactions()[1].Hash(), ts[1].Hash())
 	require.NoError(t, err)
 
-	err = c.db.SetIXGridLookup(ixHash, gridHash)
-	require.NoError(t, err)
-
-	err = c.db.SetIXGridLookup(ixHashWithoutIxn, gridHash)
-	require.NoError(t, err)
-
-	err = c.db.SetIXGridLookup(ixHashWithoutParts, gridHashWithoutParts)
-	require.NoError(t, err)
-
-	err = c.db.SetInteractions(gridHash, rawIxns)
-	require.NoError(t, err)
-
-	err = c.db.SetTesseractParts(gridHash, rawParts)
-	require.NoError(t, err)
-
-	err = c.db.SetIXGridLookup(ixHashWithoutIxns, tests.RandomHash(t))
-	require.NoError(t, err)
-
-	err = c.db.SetIXGridLookup(ixHashWithoutParts, gridHashWithoutParts)
-	require.NoError(t, err)
-
-	err = c.db.SetInteractions(gridHashWithoutParts, rawIxns)
+	err = c.db.SetIXLookup(ixHash2, tests.RandomHash(t))
 	require.NoError(t, err)
 
 	testcases := []struct {
 		name                 string
 		ixHash               common.Hash
-		expectedInteractions *common.Interaction
-		expectedParts        *common.TesseractParts
+		expectedInteraction  *common.Interaction
+		expectedParticipants common.Participants
 		expectedIndex        int
 		expectedError        error
 	}{
 		{
 			name:                 "fetch interactions successfully",
-			ixHash:               ixHash,
-			expectedParts:        parts,
-			expectedInteractions: ixns[1],
+			ixHash:               ts[1].Interactions()[1].Hash(),
+			expectedParticipants: ts[1].Participants(),
+			expectedInteraction:  ts[1].Interactions()[1],
 			expectedIndex:        1,
 		},
 		{
-			name:          "grid hash not found",
-			ixHash:        tests.RandomHash(t),
-			expectedError: common.ErrGridHashNotFound,
-		},
-		{
-			name:          "interactions not found",
-			ixHash:        ixHashWithoutIxns,
-			expectedError: common.ErrFetchingInteractions,
-		},
-		{
 			name:          "interaction not found",
-			ixHash:        ixHashWithoutIxn,
+			ixHash:        ixHash1,
 			expectedError: common.ErrFetchingInteraction,
 		},
 		{
-			name:          "tesseract parts not found",
-			ixHash:        ixns[0].Hash(),
-			expectedError: errors.New("tesseract parts not found"),
+			name:          "tesseract hash not found",
+			ixHash:        tests.RandomHash(t),
+			expectedError: common.ErrTSHashNotFound,
+		},
+		{
+			name:          "tesseract not found",
+			ixHash:        ixHash2,
+			expectedError: common.ErrFetchingTesseract,
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			ix, parts, ixIndex, err := c.GetInteractionAndPartsByIxHash(test.ixHash)
+			ix, tsHash, participants, ixIndex, err := c.GetInteractionAndParticipantsByIxHash(test.ixHash)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -2605,8 +2793,9 @@ func TestGetInteractionByIxHash(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, test.expectedInteractions, ix)
-			require.Equal(t, test.expectedParts, parts)
+			require.Equal(t, ts[1].Hash(), tsHash)
+			require.Equal(t, test.expectedInteraction, ix)
+			require.Equal(t, test.expectedParticipants, participants)
 			require.Equal(t, test.expectedIndex, ixIndex)
 		})
 	}

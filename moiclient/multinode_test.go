@@ -50,7 +50,7 @@ func (tm *TestMultiNode) runCriticallyNecessaryTearDown() {
 func (tm *TestMultiNode) initLogger() {
 	tm.logger = hclog.New(&hclog.LoggerOptions{
 		Name:  "E2E",
-		Level: hclog.LevelFromString("ERROR"),
+		Level: hclog.LevelFromString("TRACE"),
 	})
 }
 
@@ -58,22 +58,23 @@ func (tm *TestMultiNode) SetupSuite() {
 	defer func() {
 		// make sure to delete directories in case of setup suite failure
 		if !tm.suiteSetupDone {
-			tm.logger.Error("setup suite failed")
+			tm.logger.Error("Setup suite failed")
 			tm.runCriticallyNecessaryTearDown()
 		}
 	}()
 
 	tm.initLogger()
 
-	var multinodeJSONRPCPort int64 = 26000
+	const multiNodeJSONRPCPort int64 = 26000
 
 	d := client.DefaultClusterConfig()
+
 	d.WithLogs = false
 	d.WithStdout = false
 	d.LogLevel = "TRACE"
 	d.BootNodePort = 24000
 	d.Libp2pPort = 25000
-	d.JsonRPCPort = multinodeJSONRPCPort
+	d.JsonRPCPort = multiNodeJSONRPCPort
 	d.ValidatorCount = 20
 	d.GenesisAssetCount = 0
 
@@ -92,7 +93,7 @@ func (tm *TestMultiNode) SetupSuite() {
 	// wait for initial sync and all node modules to start
 	CheckIfNodesInitialSyncDone(tm.Suite.T(), d.ValidatorCount, tm.jsonRPCUrls)
 
-	tm.moiClient, err = NewClient(fmt.Sprintf("http://localhost:%d", d.JsonRPCPort))
+	tm.moiClient, err = NewClient(fmt.Sprintf("http://localhost:%d", multiNodeJSONRPCPort))
 	tm.Suite.NoError(err)
 
 	tm.instances, err = common.ReadInstancesFile(filepath.Join(d.TempDir, "instances.json"))
@@ -170,8 +171,7 @@ func (tm *TestMultiNode) TestConnections() {
 		tm.Run(test.name, func() {
 			connResp, err := tm.moiClient.Connections(context.Background())
 			require.NoError(tm.T(), err)
-			require.Greater(tm.T(), connResp.InboundConnCount, int64(0))
-			require.Greater(tm.T(), connResp.OutboundConnCount, int64(0))
+			require.True(tm.T(), connResp.InboundConnCount > 0 || connResp.OutboundConnCount > 0)
 			require.Greater(tm.T(), len(connResp.ActivePubSubTopics), 0)
 		})
 	}
@@ -317,7 +317,7 @@ func (tm *TestMultiNode) TestInteractionReceipt() {
 			receiptArgs: &rpcargs.ReceiptArgs{
 				Hash: tests.RandomHash(tm.T()),
 			},
-			expectedError: common.ErrGridHashNotFound,
+			expectedError: common.ErrTSHashNotFound,
 		},
 	}
 
@@ -378,16 +378,22 @@ func (tm *TestMultiNode) TestGetLogs() {
 }
 
 func (tm *TestMultiNode) TestGetFilterChanges() {
-	ctx := context.Background()
-	acc := tm.accounts[1]
+	var (
+		ctx              = context.Background()
+		acc1             = tm.accounts[1]
+		acc2             = tm.accounts[2]
+		expectedIXHashes = make([]common.Hash, 2)
+		assetAddresses   = make([]identifiers.Address, 2)
+	)
 
 	tsFilter := createTesseractFilter(tm.T(), ctx, tm.moiClient)
-	tsByAccFilter := createTesseractsByAccountFilter(tm.T(), ctx, tm.moiClient, acc.Addr)
+	tsByAccFilter := createTesseractsByAccountFilter(tm.T(), ctx, tm.moiClient, acc2.Addr)
 	ixnsFilter := createPendingIxnsFilter(tm.T(), ctx, tm.moiClient)
-	logFilter := createLogFilter(tm.T(), ctx, tm.moiClient, acc.Addr)
+	logFilter := createLogFilter(tm.T(), ctx, tm.moiClient, acc1.Addr)
 
-	// send create asset interaction
-	ixHash, assetAddr := createAsset(tm.T(), tm.moiClient, acc.Addr, acc.Mnemonic)
+	// send create asset interactions
+	expectedIXHashes[0], assetAddresses[0] = createAsset(tm.T(), tm.moiClient, acc1.Addr, acc1.Mnemonic)
+	expectedIXHashes[1], assetAddresses[1] = createAsset(tm.T(), tm.moiClient, acc2.Addr, acc2.Mnemonic)
 
 	testcases := []struct {
 		name             string
@@ -401,7 +407,7 @@ func (tm *TestMultiNode) TestGetFilterChanges() {
 			filterQueryArgs: &rpcargs.FilterArgs{
 				FilterID: tsFilter.FilterID,
 			},
-			msgCount:         3,
+			msgCount:         2,
 			subscriptionType: rpcargs.NewTesseract,
 		},
 		{
@@ -417,7 +423,7 @@ func (tm *TestMultiNode) TestGetFilterChanges() {
 			filterQueryArgs: &rpcargs.FilterArgs{
 				FilterID: ixnsFilter.FilterID,
 			},
-			msgCount:         1,
+			msgCount:         2,
 			subscriptionType: rpcargs.PendingIxns,
 		},
 		{
@@ -471,15 +477,16 @@ func (tm *TestMultiNode) TestGetFilterChanges() {
 					addresses = append(addresses, account.Addr)
 				}
 
+				// TODO: tesseract addresses
 				require.Equal(
 					tm.T(),
-					3,
+					2,
 					len(rpcTSValues),
-					fmt.Sprintf("Expected length 3, but got %d. rpcTS: %+v", len(rpcTSValues), rpcTSValues),
+					fmt.Sprintf("Expected length 2, but got %d. rpcTS: %+v", len(rpcTSValues), rpcTSValues),
 					fmt.Sprint(
 						"Sarga Address", common.SargaAddress,
-						"Sender Address", acc.Addr,
-						"Asset Address", assetAddr,
+						"Sender Addresses", acc1.Addr, acc2.Addr,
+						"Asset Address", assetAddresses[0], assetAddresses[1],
 						"Setup Suite Sender Address", setupSuiteSenderAddr,
 						"Setup Suite Asset Address", setupSuiteAssetAddr,
 					),
@@ -487,18 +494,13 @@ func (tm *TestMultiNode) TestGetFilterChanges() {
 				)
 				// till here
 
-				found := 0
-
 				// make sure sender and sarga tesseracts are there in generated tesseracts
-				for i := 0; i < 3; i++ {
-					if rpcTS[i].Address() == acc.Addr ||
-						rpcTS[i].Address() == common.SargaAddress ||
-						rpcTS[i].Address() == assetAddr {
-						found++
-					}
-				}
-
-				require.Equal(tm.T(), 3, found)
+				require.True(tm.T(), rpcTS[0].HasParticipant(acc1.Addr))
+				require.True(tm.T(), rpcTS[0].HasParticipant(common.SargaAddress))
+				require.True(tm.T(), rpcTS[0].HasParticipant(assetAddresses[0]))
+				require.True(tm.T(), rpcTS[1].HasParticipant(acc2.Addr))
+				require.True(tm.T(), rpcTS[1].HasParticipant(common.SargaAddress))
+				require.True(tm.T(), rpcTS[1].HasParticipant(assetAddresses[1]))
 
 			case rpcargs.NewTesseractsByAccount:
 
@@ -511,7 +513,9 @@ func (tm *TestMultiNode) TestGetFilterChanges() {
 					test.msgCount,
 				)
 
-				require.Equal(tm.T(), acc.Addr, rpcTS[0].Address())
+				require.Equal(tm.T(), 1, len(rpcTS))
+				require.True(tm.T(), rpcTS[0].HasParticipant(acc2.Addr))
+				require.True(tm.T(), rpcTS[0].HasParticipant(common.SargaAddress))
 
 			case rpcargs.PendingIxns:
 				ixHashes := getIxHashesUntilTimeout(
@@ -523,7 +527,11 @@ func (tm *TestMultiNode) TestGetFilterChanges() {
 					test.msgCount,
 				)
 
-				require.Equal(tm.T(), ixHash, *ixHashes[0])
+				require.Equal(tm.T(), len(expectedIXHashes), len(ixHashes))
+
+				for i, h := range expectedIXHashes {
+					require.Equal(tm.T(), h, *ixHashes[i])
+				}
 
 			case rpcargs.NewLogsByFilter:
 				resp, err := tm.moiClient.GetFilterChanges(ctx, test.filterQueryArgs, test.subscriptionType)

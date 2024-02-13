@@ -148,7 +148,7 @@ func (s *Server) wrapAndReportValidation(topic string, v utils.WrappedVal) (stri
 			s.logger.Error("Error validating pubsub message", "err", err)
 		}
 
-		if result != pubsub.ValidationAccept {
+		if result == pubsub.ValidationReject {
 			s.logger.Trace("Validation failed", "topic", topic, "validation-result", result)
 		}
 

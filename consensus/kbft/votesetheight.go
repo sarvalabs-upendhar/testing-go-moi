@@ -7,7 +7,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-identifiers"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
@@ -213,8 +213,8 @@ func (hvs *HeightVoteSet) getPrecommits(round int32) *VoteSet {
 }
 
 // POLInfo is a method of HeightVoteSet that retrieves the last round with a Proof of Lock.
-// Returns the round number and the tesseract grid id with the lock.
-func (hvs *HeightVoteSet) POLInfo() (int32, *common.TesseractGridID) {
+// Returns the round number and the tesseract hash with the lock.
+func (hvs *HeightVoteSet) POLInfo() (int32, common.Hash) {
 	// Acquire lock
 	hvs.mtx.Lock()
 	defer hvs.mtx.Unlock()
@@ -224,13 +224,13 @@ func (hvs *HeightVoteSet) POLInfo() (int32, *common.TesseractGridID) {
 		// Get the PREVOTE's for the round
 		rvs := hvs.getVoteSet(r, ktypes.PREVOTE)
 
-		// If 2/3 majority exists for round, return the grid id and the round value
-		gridid, ok := rvs.TwoThirdMajority()
+		// If 2/3 majority exists for round, return the tesseract hash and the round value
+		tsHash, ok := rvs.TwoThirdMajority()
 		if ok {
-			return r, gridid
+			return r, tsHash
 		}
 	}
 
 	// If no round has a proof of lock, return empty
-	return -1, nil
+	return -1, common.NilHash
 }

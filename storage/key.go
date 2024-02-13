@@ -61,6 +61,18 @@ func SenatusPeerCountKey() []byte {
 	return dbKey(identifiers.NilAddress, SenatusPeerCount, nil)
 }
 
+func InteractionsKey(tsHash common.Hash) []byte {
+	return dbKey(identifiers.NilAddress, Interaction, tsHash.Bytes())
+}
+
+func ReceiptsKey(tsHash common.Hash) []byte {
+	return dbKey(identifiers.NilAddress, Receipt, tsHash.Bytes())
+}
+
+func TesseractKey(tsHash common.Hash) []byte {
+	return dbKey(identifiers.NilAddress, Tesseract, tsHash.Bytes())
+}
+
 func tesseractHeightKey(addr identifiers.Address, height uint64) []byte {
 	heightBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(heightBytes, height)

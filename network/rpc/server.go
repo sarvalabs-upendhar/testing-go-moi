@@ -645,7 +645,7 @@ func sendResponse(logger hclog.Logger, s *streamWrap, resp Response) error {
 	}
 
 	if err := s.enc.Encode(resp.Data); err != nil {
-		logger.Error("Server error while sending response", "response-data", resp.Data, "err", err)
+		logger.Error("Server error while sending response", "err", err)
 
 		resetErr := s.stream.Reset()
 

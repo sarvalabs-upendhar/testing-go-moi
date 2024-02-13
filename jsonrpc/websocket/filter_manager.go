@@ -11,7 +11,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-identifiers"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
@@ -248,10 +248,7 @@ func (f *FilterManager) GetLogsForQuery(query LogQuery) ([]*rpcargs.RPCLog, erro
 			continue
 		}
 
-		tesseractLogs, err := f.getLogsFromTesseract(&query, tesseract)
-		if err != nil {
-			return nil, err
-		}
+		tesseractLogs := f.getLogsFromTesseract(&query, tesseract)
 
 		logs = append(logs, tesseractLogs...)
 	}
@@ -387,8 +384,8 @@ func (f *FilterManager) processTesseractAddedEvent(event *utils.TesseractAddedEv
 		switch filter.getSubscriptionType() {
 		case NewLogsByFilter:
 			if s, ok := filter.(*logFilter); ok {
-				if s.query.Address == ts.Address() {
-					s.appendLog(s.createRPCLogs(ts, rpcTesseract.Ixns[0].Parts))
+				if ts.HasParticipant(s.query.Address) {
+					s.appendLog(s.createRPCLogs(ts, rpcTesseract))
 				}
 			}
 
@@ -407,7 +404,7 @@ func (f *FilterManager) processTesseractAddedEvent(event *utils.TesseractAddedEv
 
 		case NewTesseractsByAccount:
 			if s, ok := filter.(*tesseractByAccountFilter); ok {
-				if s.address == ts.Address() {
+				if ts.HasParticipant(s.address) {
 					s.appendTesseracts(rpcTesseract)
 				}
 			}
@@ -519,40 +516,41 @@ func (f *FilterManager) getTesseractHashByHeight(address identifiers.Address, he
 }
 
 // getTesseractByHash returns the tesseract based on tesseract hash and with interaction flag
-func (f *FilterManager) getTesseractByHash(hash common.Hash, withInteractions bool) (*common.Tesseract, error) {
+func (f *FilterManager) getTesseractByHash(
+	hash common.Hash,
+	withInteractions bool,
+) (*common.Tesseract, error) {
 	return f.backend.Chain.GetTesseract(hash, withInteractions)
 }
 
 // getLogsFromTesseract filters tesseract logs based on filter topics, and returns logs to API
 func (f *FilterManager) getLogsFromTesseract(
 	filter *LogQuery,
-	tesseract *common.Tesseract,
-) ([]*rpcargs.RPCLog, error) {
+	ts *common.Tesseract,
+) []*rpcargs.RPCLog {
 	logs := make([]*rpcargs.RPCLog, 0)
 
-	grid, err := f.backend.Chain.GetTesseractPartsByGridHash(tesseract.GridHash())
-	if err != nil {
-		return nil, err
-	}
+	// participants is declared here to prevent the repetitive creation of the rpc object
+	rpcParticipants := rpcargs.CreateRPCParticipants(ts.Participants())
+	tsHash := ts.Hash()
 
-	rpcTSParts := rpcargs.GetRPCTesseractPartsFromGrid(grid.Grid)
-
-	for _, receipt := range tesseract.Receipts() {
+	for _, receipt := range ts.Receipts() {
 		for _, log := range receipt.Logs {
 			if filter.MatchTopics(log) {
 				logs = append(logs, &rpcargs.RPCLog{
-					Addresses: log.Addresses,
-					LogicID:   log.LogicID,
-					Topics:    log.Topics,
-					Data:      log.Data,
-					IxHash:    tesseract.InteractionHash(),
-					Grid:      rpcTSParts,
+					Addresses:    log.Addresses,
+					LogicID:      log.LogicID,
+					Topics:       log.Topics,
+					Data:         log.Data,
+					IxHash:       ts.InteractionsHash(),
+					TSHash:       tsHash,
+					Participants: rpcParticipants,
 				})
 			}
 		}
 	}
 
-	return logs, nil
+	return logs
 }
 
 // getFilterAndChanges returns the updates of the filter with given ID in string (read lock only)

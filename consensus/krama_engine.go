@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math"
+	"math/big"
 	"sync"
 	"time"
 
@@ -13,11 +14,11 @@ import (
 	"github.com/moby/locker"
 	"github.com/mr-tron/base58/base58"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-identifiers"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
+
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/crypto/blake2b"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
@@ -57,15 +58,19 @@ type KramaEngine interface {
 }
 
 type lattice interface {
-	AddKnownHashes(tesseracts []*common.Tesseract)
-	AddTesseracts(dirtyStorage map[common.Hash][]byte, tesseracts ...*common.Tesseract) error
+	AddTesseractWithState(
+		addr identifiers.Address,
+		dirtyStorage map[common.Hash][]byte,
+		ts *common.Tesseract,
+		allParticipants bool,
+	) error
 }
 
 type transport interface {
 	InitClusterCommunication(ctx context.Context, slot *ktypes.Slot) error
 	RegisterRPCService(serviceID protocol.ID, serviceName string, service interface{}) error
 	Call(ctx context.Context, kramaID kramaid.KramaID, svcName, svcMethod string, args, response interface{}) error
-	BroadcastTesseract(msg *networkmsg.TesseractMessage) error
+	BroadcastTesseract(msg *networkmsg.TesseractMsg) error
 }
 
 type stateManager interface {
@@ -687,8 +692,7 @@ func (k *Engine) handleReq(req Request) {
 
 		k.logger.Trace("Execution finished")
 		k.metrics.captureGridGenerationTime(executionReqTS)
-		cs.SetGrid(execResp.Grid)
-		k.lattice.AddKnownHashes(execResp.Grid)
+		cs.SetTesseract(execResp.Tesseract)
 
 		consensusInitTS := time.Now()
 		k.metrics.captureClusterSize(float64(cs.Size()))
@@ -1105,7 +1109,7 @@ func (k *Engine) initClusterCommunication(ctx context.Context, slot *ktypes.Slot
 	return nil
 }
 
-func (k *Engine) createProposalGrid(slot *ktypes.Slot) ([]*common.Tesseract, error) {
+func (k *Engine) createProposalTesseract(slot *ktypes.Slot) (*common.Tesseract, error) {
 	if err := k.updateContextDelta(slot); err != nil {
 		return nil, err
 	}
@@ -1129,7 +1133,7 @@ func (k *Engine) createProposalGrid(slot *ktypes.Slot) ([]*common.Tesseract, err
 	clusterState.SetPostExecState(stateHashes)
 	k.logger.Debug("Generating tesseracts", "cluster-ID", slot.ClusterID())
 
-	return GenerateTesseracts(clusterState)
+	return generateTesseract(clusterState)
 }
 
 // Updates the context delta for sender and for the receiver depending on whether the
@@ -1352,12 +1356,14 @@ func (k *Engine) GetNodes(
 	return
 }
 
-func (k *Engine) finalizedTesseractHandler(tesseracts []*common.Tesseract) error {
-	if len(tesseracts) == 0 {
-		return errors.New("failed to finalize tesseracts")
+func (k *Engine) finalizedTesseractHandler(tesseract *common.Tesseract) error {
+	var err error
+
+	if tesseract == nil {
+		return errors.New("failed to finalize tesseract")
 	}
 
-	clusterID := tesseracts[0].ClusterID()
+	clusterID := tesseract.ClusterID()
 
 	slot := k.slots.GetSlot(clusterID)
 
@@ -1367,100 +1373,110 @@ func (k *Engine) finalizedTesseractHandler(tesseracts []*common.Tesseract) error
 
 	clusterInfo := slot.ClusterState()
 
-	if err := k.lattice.AddTesseracts(clusterInfo.GetDirty(), tesseracts...); err != nil {
+	if err := k.lattice.AddTesseractWithState(
+		identifiers.NilAddress,
+		clusterInfo.GetDirty(),
+		tesseract,
+		true,
+	); err != nil {
 		return err
 	}
 
-	rawIxns, err := tesseracts[0].Interactions().Bytes()
+	ixnHashes := make(common.Hashes, 0, len(tesseract.Interactions()))
+
+	for _, ixn := range tesseract.Interactions() {
+		ixnHashes = append(ixnHashes, ixn.Hash())
+	}
+
+	msg := &networkmsg.TesseractMsg{
+		RawTesseract: make([]byte, 0),
+		Extra: map[string][]byte{
+			tesseract.ICSHash().String(): clusterInfo.GetDirty()[tesseract.ICSHash()],
+		},
+		IxnsHashes: ixnHashes,
+	}
+
+	msg.RawTesseract, err = tesseract.Canonical().Bytes()
 	if err != nil {
 		return err
 	}
 
-	rawReceipts, err := tesseracts[0].Receipts().Bytes()
-	if err != nil {
-		return err
-	}
-
-	for _, ts := range tesseracts {
-		msg := &networkmsg.TesseractMessage{
-			RawTesseract: make([]byte, 0),
-			Sender:       k.selfID,
-			Ixns:         rawIxns,
-			Receipts:     rawReceipts,
-			Delta: map[common.Hash][]byte{
-				ts.ICSHash(): clusterInfo.GetDirty()[ts.ICSHash()],
-			},
-		}
-
-		msg.RawTesseract, err = ts.Canonical().Bytes()
-		if err != nil {
-			return err
-		}
-
-		if err = k.transport.BroadcastTesseract(msg); err != nil {
-			k.logger.Error("Failed to broadcast tesseract", "err", err, "cluster-ID", clusterID)
-		}
+	if err = k.transport.BroadcastTesseract(msg); err != nil {
+		k.logger.Error("Failed to broadcast tesseract", "err", err, "cluster-ID", clusterID)
 	}
 
 	return nil
 }
 
-func generateBody(
-	addr identifiers.Address,
-	state *ktypes.ClusterState,
-	ixnsHash, receiptHash common.Hash,
-) common.TesseractBody {
-	return common.TesseractBody{
-		StateHash:       state.GetStateHash(addr),
-		ContextHash:     state.GetContextHash(addr),
-		ContextDelta:    state.GetContextDelta(),
-		InteractionHash: ixnsHash,
-		ReceiptHash:     receiptHash,
-		ConsensusProof: common.PoXtData{
-			BinaryHash:   state.BinaryHash,
-			IdentityHash: state.IdentityHash,
-			ICSHash:      state.ICSHash,
-		},
+func generatePoXtData(state *ktypes.ClusterState) common.PoXtData {
+	return common.PoXtData{
+		EvidenceHash: common.NilHash,
+		BinaryHash:   state.BinaryHash,
+		IdentityHash: state.IdentityHash,
+		ICSHash:      state.ICSHash,
+		ClusterID:    state.ClusterID,
+		ICSSignature: nil, // TODO calculate and fill this properly
+		ICSVoteset:   state.GetICSVoteset(),
+
+		// non canonical fields
+		Round:           0,
+		CommitSignature: nil,
+		BFTVoteSet:      nil,
 	}
 }
 
-func generateTesseract(
-	addr identifiers.Address,
-	state *ktypes.ClusterState,
-	body common.TesseractBody,
-	tsBodyHash, gridHash common.Hash,
-	fuelUsed, fuelLimit uint64,
-	sealer kramaid.KramaID,
-) *common.Tesseract {
-	header := common.TesseractHeader{
-		Address:     addr,
-		ContextLock: state.ContextLock(),
-		PrevHash:    state.AccountInfos.GetLatestHash(addr),
-		Height:      state.NewHeight(addr),
-		FuelUsed:    fuelUsed,
-		FuelLimit:   fuelLimit,
-		ClusterID:   string(state.ClusterID),
-		Operator:    string(state.Operator),
-		BodyHash:    tsBodyHash,
-		GroupHash:   gridHash,
-		Extra: common.CommitData{
-			VoteSet:         nil,
-			CommitSignature: nil,
-		},
-		Timestamp: state.ICSReqTime.UnixNano(),
-	}
-
-	return common.NewTesseract(header, body, state.Ixs, state.Receipts, nil, sealer)
-}
-
-func GenerateTesseracts(state *ktypes.ClusterState) ([]*common.Tesseract, error) {
+func generateParticipantData(state *ktypes.ClusterState) common.Participants {
 	ix := state.Ixs[0] // TODO: Improve this
+
+	participants := make(common.Participants)
+
+	if !ix.Sender().IsNil() {
+		addr := ix.Sender()
+
+		participants[addr] = common.State{
+			Height:          state.NewHeight(addr),
+			TransitiveLink:  state.AccountInfos.GetLatestHash(addr),
+			PreviousContext: state.GetPreviousContextHash(addr),
+			LatestContext:   state.GetContextHash(addr),
+			ContextDelta:    state.ContextDelta(addr),
+			StateHash:       state.GetStateHash(addr),
+		}
+	}
+
+	if !ix.Receiver().IsNil() {
+		addr := ix.Receiver()
+
+		participants[addr] = common.State{
+			Height:          state.NewHeight(addr),
+			TransitiveLink:  state.AccountInfos.GetLatestHash(addr),
+			PreviousContext: state.GetPreviousContextHash(addr),
+			LatestContext:   state.GetContextHash(addr),
+			ContextDelta:    state.ContextDelta(addr),
+			StateHash:       state.GetStateHash(addr),
+		}
+
+		if state.AccountInfos.IsGenesis(ix.Receiver()) {
+			addr := common.SargaAddress
+
+			participants[addr] = common.State{
+				Height:          state.NewHeight(addr),
+				TransitiveLink:  state.AccountInfos.GetLatestHash(addr),
+				PreviousContext: state.GetPreviousContextHash(addr),
+				LatestContext:   state.GetContextHash(addr),
+				ContextDelta:    state.ContextDelta(addr),
+				StateHash:       state.GetStateHash(addr),
+			}
+		}
+	}
+
+	return participants
+}
+
+func generateTesseract(state *ktypes.ClusterState) (*common.Tesseract, error) {
+	participants := generateParticipantData(state)
 
 	fuelUsed := state.GetFuelUsed()
 	fuelLimit := uint64(1000)
-
-	groupBuffer := make([]byte, 0)
-	tesseractGroup := make([]*common.Tesseract, 0)
 
 	ixnsHash, err := state.Ixs.Hash()
 	if err != nil {
@@ -1472,92 +1488,23 @@ func GenerateTesseracts(state *ktypes.ClusterState) ([]*common.Tesseract, error)
 		return nil, err
 	}
 
-	var (
-		senderBody       common.TesseractBody
-		receiverBody     common.TesseractBody
-		genesisBody      common.TesseractBody
-		senderBodyHash   common.Hash
-		receiverBodyHash common.Hash
-		genesisBodyHash  common.Hash
+	ts := common.NewTesseract(
+		participants,
+		ixnsHash,
+		receiptHash,
+		big.NewInt(0), // TODO pass appropriate value
+		state.ICSReqTime.Unix(),
+		string(state.Operator),
+		fuelUsed,
+		fuelLimit,
+		generatePoXtData(state),
+		nil,
+		state.SelfKramaID(),
+		state.Ixs,
+		state.Receipts,
 	)
 
-	if !ix.Sender().IsNil() {
-		senderBody = generateBody(ix.Sender(), state, ixnsHash, receiptHash)
-
-		senderBodyHash, err = senderBody.Hash()
-		if err != nil {
-			return nil, err
-		}
-
-		groupBuffer = append(groupBuffer, senderBodyHash.Bytes()...)
-	}
-
-	if !ix.Receiver().IsNil() {
-		receiverBody = generateBody(ix.Receiver(), state, ixnsHash, receiptHash)
-
-		receiverBodyHash, err = receiverBody.Hash()
-		if err != nil {
-			return nil, err
-		}
-
-		groupBuffer = append(groupBuffer, receiverBodyHash.Bytes()...)
-
-		if state.AccountInfos.IsGenesis(ix.Receiver()) {
-			genesisBody = generateBody(common.SargaAddress, state, ixnsHash, receiptHash)
-
-			genesisBodyHash, err = genesisBody.Hash()
-			if err != nil {
-				return nil, err
-			}
-
-			groupBuffer = append(groupBuffer, genesisBodyHash.Bytes()...)
-		}
-	}
-
-	groupHash := blake2b.Sum256(groupBuffer)
-
-	if !ix.Sender().IsNil() {
-		tesseractGroup = append(tesseractGroup, // append sender tesseract
-			generateTesseract(
-				ix.Sender(),
-				state,
-				senderBody,
-				senderBodyHash,
-				groupHash,
-				fuelUsed,
-				fuelLimit,
-				state.SelfKramaID()),
-		)
-	}
-
-	if !ix.Receiver().IsNil() {
-		tesseractGroup = append(tesseractGroup, // append receiver tesseract
-			generateTesseract(
-				ix.Receiver(),
-				state,
-				receiverBody,
-				receiverBodyHash,
-				groupHash,
-				fuelUsed,
-				fuelLimit,
-				state.SelfKramaID()),
-		)
-
-		if state.AccountInfos.IsGenesis(ix.Receiver()) {
-			tesseractGroup = append(tesseractGroup, // append sarga tesseract
-				generateTesseract(common.SargaAddress,
-					state,
-					genesisBody,
-					genesisBodyHash,
-					groupHash,
-					fuelUsed,
-					fuelLimit,
-					state.SelfKramaID(),
-				))
-		}
-	}
-
-	return tesseractGroup, nil
+	return ts, nil
 }
 
 func (k *Engine) executionRoutine() {
@@ -1566,8 +1513,8 @@ func (k *Engine) executionRoutine() {
 
 		go func(id common.ClusterID) {
 			slotInfo := k.slots.GetSlot(id)
-			grid, err := k.createProposalGrid(slotInfo)
-			slotInfo.ExecutionResp <- ktypes.ExecutionResponse{Grid: grid, Err: err}
+			ts, err := k.createProposalTesseract(slotInfo)
+			slotInfo.ExecutionResp <- ktypes.ExecutionResponse{Tesseract: ts, Err: err}
 		}(clusterID)
 	}
 }

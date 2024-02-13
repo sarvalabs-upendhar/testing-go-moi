@@ -10,7 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/battleground/common"
+	"github.com/sarvalabs/go-moi/common"
+
+	bgCommon "github.com/sarvalabs/battleground/common"
 	"github.com/sarvalabs/battleground/server/types"
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
 
@@ -58,7 +60,7 @@ var (
 	cloud            = "cloud"
 	networkType      = flag.String("network", local, "enter the network type to use local or cloud")
 	commitHash       = flag.String("commit-hash", "", "enter the commit hash of the repo to be deployed")
-	logLevel         = flag.String("log-level", "ERROR", "enter the log level")
+	logLevel         = flag.String("log-level", "TRACE", "enter the log level")
 )
 
 type BattleGroundConfig struct {
@@ -88,6 +90,7 @@ type TestEnvironment struct {
 	moiClient      *moiclient.Client
 	moiClients     []*moiclient.Client
 	accounts       []tests.AccountWithMnemonic
+	instances      []common.Instance
 	logger         hclog.Logger
 	suiteSetupDone bool
 }
@@ -140,7 +143,7 @@ func (te *TestEnvironment) configureBattleGround() error {
 		te.validatorCount = bgConfig.NoOfInstances * bgConfig.NoOfPodsPerInstance
 	} else {
 		d := client.DefaultClusterConfig()
-		d.WithLogs = false
+		d.WithLogs = true
 		d.WithStdout = false
 		d.LogLevel = "TRACE"
 		d.BootNodePort = 27000
@@ -222,16 +225,15 @@ func (te *TestEnvironment) initializeMOIClient() {
 			te.FailNow("unable to initialize moi clients")
 		}
 
-		te.logger.Debug("JSON RPC url used is ", "url", clients[0].URL())
+		te.logger.Debug("JSON RPC url used is ", "url", c.URL())
 
 		te.moiClient = c
 
 		return
 	}
 
-	te.logger.Debug("JSON RPC url used is ", "url", clients[0].URL())
-
 	te.moiClient = clients[0]
+	te.logger.Debug("JSON RPC url used is ", "url", te.moiClient.URL())
 }
 
 func (te *TestEnvironment) runCriticallyNecessaryTearDown() {
@@ -263,14 +265,14 @@ func (te *TestEnvironment) SetupSuite() {
 		// make sure to delete directories in case of setup suite failure
 		// make sure to destroy battleground if setup suite fails
 		if !te.suiteSetupDone {
-			te.logger.Error("setup suite failed")
+			te.logger.Error("Setup suite failed")
 			te.runCriticallyNecessaryTearDown()
 		}
 	}()
 
 	te.initLogger()
 
-	var registeredAcc []common.AccountWithMnemonic
+	var registeredAcc []bgCommon.AccountWithMnemonic
 
 	err := te.configureBattleGround()
 	te.Suite.NoError(err)
@@ -326,6 +328,10 @@ func (te *TestEnvironment) SetupSuite() {
 
 	te.getUrlsAndCheckInitialSync()
 
+	if *networkType == cloud {
+		time.Sleep(30 * time.Second)
+	}
+
 	ctx, cancel = context.WithTimeout(context.Background(), DefaultQueryTime)
 	registeredAcc, err = te.bgClient.Accounts(ctx)
 
@@ -337,6 +343,11 @@ func (te *TestEnvironment) SetupSuite() {
 
 	// choose url that works
 	te.initializeMOIClient()
+
+	if *networkType == local {
+		te.instances, err = common.ReadInstancesFile("./tmp/instances.json")
+		te.Suite.NoError(err)
+	}
 
 	// Generate accounts and register them on chain
 	te.accounts, err = cmdcommon.GetAccountsWithMnemonic(DefaultAccountCount)

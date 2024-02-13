@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"math/big"
 	"math/rand"
 	"sync"
@@ -14,8 +13,8 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/sarvalabs/battleground"
-	"github.com/sarvalabs/go-moi-engineio"
-	"github.com/sarvalabs/go-moi-identifiers"
+	engineio "github.com/sarvalabs/go-moi-engineio"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-pisa"
 	"github.com/sarvalabs/go-polo"
@@ -47,6 +46,28 @@ func CreateSendIXFromSendIXArgs(t *testing.T, sendIxArgs *common.SendIXArgs, mne
 		IXArgs:    hex.EncodeToString(bz),
 		Signature: sign,
 	}
+}
+
+func GetContextNodes(t *testing.T, client *Client, addrs []identifiers.Address) []string {
+	t.Helper()
+
+	contextNodes := make([]string, 0)
+
+	for _, addr := range addrs {
+		resp, err := client.ContextInfo(context.Background(), &rpcargs.ContextInfoArgs{
+			Address: addr,
+			Options: rpcargs.TesseractNumberOrHash{
+				TesseractNumber: &rpcargs.LatestTesseractHeight,
+			},
+		})
+		require.NoError(t, err)
+
+		contextNodes = append(contextNodes, resp.BehaviourNodes...)
+		contextNodes = append(contextNodes, resp.RandomNodes...)
+		contextNodes = append(contextNodes, resp.StorageNodes...)
+	}
+
+	return contextNodes
 }
 
 func GetLatestNonce(t *testing.T, client *Client, addr identifiers.Address) uint64 {
@@ -218,8 +239,6 @@ func GetTokenLedgerState(t *testing.T, moiClient *Client, logicID identifiers.Lo
 	err = polo.Depolorize(&state.Balances, rawBalances)
 	require.NoError(t, err)
 
-	fmt.Printf("token ledger state : %+v\n", state)
-
 	return state
 }
 
@@ -301,12 +320,8 @@ func CheckIfNodesInitialSyncDone(t *testing.T, validatorCount int, jsonRPCUrls [
 			defer wg.Done()
 
 			for j := start; j < end; j++ {
-				fmt.Println("count", j)
-
 				moiClient, err := NewClient(jsonRPCUrls[j])
 				require.NoError(t, err)
-
-				fmt.Println("moiClient", moiClient)
 
 				_, err = tests.RetryUntilTimeout(ctx, 50*time.Millisecond, func() (interface{}, bool) {
 					ctx, cancel := context.WithTimeout(ctx, InitialSyncQueryTime)

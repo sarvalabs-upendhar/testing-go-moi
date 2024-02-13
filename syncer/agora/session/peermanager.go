@@ -92,12 +92,15 @@ func (spm *PeerManager) AddPeers(peers ...kramaid.KramaID) {
 
 func (spm *PeerManager) Signal(peerID kramaid.KramaID, status bool) error {
 	spm.mtx.Lock()
-	defer spm.mtx.Unlock()
 
 	info, ok := spm.peers[peerID]
 	if !ok {
+		spm.mtx.Unlock()
+
 		return errors.New("peer not found")
 	}
+
+	spm.mtx.Unlock()
 
 	info.resp <- status
 

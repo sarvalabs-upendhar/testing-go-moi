@@ -142,3 +142,11 @@ func ManifestCID(hash common.Hash) CID {
 func RegistryCID(hash common.Hash) CID {
 	return ContentID(storage.Registry.Byte(), hash)
 }
+
+func InteractionsCID(hash common.Hash) CID {
+	return ContentID(storage.Interaction.Byte(), hash)
+}
+
+func ReceiptsCID(hash common.Hash) CID {
+	return ContentID(storage.Receipt.Byte(), hash)
+}

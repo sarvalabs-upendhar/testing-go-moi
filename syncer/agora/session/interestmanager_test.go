@@ -112,7 +112,7 @@ func TestInterestedSessions(t *testing.T) {
 }
 
 func TestDeleteSession(t *testing.T) {
-	cid1 := block.NewBlockFromRawData(0x00, []byte{1}).GetCid()
+	cid1 := block.NewAccountBlockFromRawData(0x00, []byte{1}).GetCid()
 	addr1 := tests.RandomAddress(t)
 	addr2 := tests.RandomAddress(t)
 

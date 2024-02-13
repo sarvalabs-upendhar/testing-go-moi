@@ -230,8 +230,6 @@ func insertTestAccMetaInfo(t *testing.T, pm *PersistenceManager) map[uint64]comm
 			AccMetaInfo.Height,
 			AccMetaInfo.TesseractHash,
 			AccMetaInfo.Type,
-			AccMetaInfo.LatticeExists,
-			AccMetaInfo.StateExists,
 		)
 		require.NoError(t, err)
 
@@ -354,13 +352,6 @@ func getRandomReceipts(t *testing.T, receiptHash common.Hash, count int) common.
 	}
 
 	return receipts
-}
-
-func insertTSGridLookup(t *testing.T, pm *PersistenceManager, tsHash common.Hash, gridHash common.Hash) {
-	t.Helper()
-
-	err := pm.SetTSGridLookup(tsHash, gridHash)
-	require.NoError(t, err)
 }
 
 func insertReceipts(t *testing.T, pm *PersistenceManager, receiptHash common.Hash, receipts common.Receipts) {

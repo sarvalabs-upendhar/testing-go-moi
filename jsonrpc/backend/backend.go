@@ -27,10 +27,19 @@ type ChainManager interface {
 	GetLatestTesseract(addr identifiers.Address, withInteractions bool) (*common.Tesseract, error)
 	GetTesseract(hash common.Hash, withInteractions bool) (*common.Tesseract, error)
 	GetReceiptByIxHash(ixHash common.Hash) (*common.Receipt, error)
-	GetInteractionAndPartsByIxHash(ixHash common.Hash) (*common.Interaction, *common.TesseractParts, int, error)
-	GetInteractionAndPartsByTSHash(tsHash common.Hash, ixIndex int) (*common.Interaction, *common.TesseractParts, error)
 	GetTesseractHeightEntry(address identifiers.Address, height uint64) (common.Hash, error)
-	GetTesseractPartsByGridHash(gridHash common.Hash) (*common.TesseractParts, error)
+	GetInteractionAndParticipantsByIxHash(ixHash common.Hash) (
+		*common.Interaction,
+		common.Hash,
+		common.Participants,
+		int,
+		error,
+	)
+	GetInteractionAndParticipantsByTSHash(tsHash common.Hash, ixIndex int) (
+		*common.Interaction,
+		common.Participants,
+		error,
+	)
 }
 
 type StateManager interface {

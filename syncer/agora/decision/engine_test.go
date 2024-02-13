@@ -343,5 +343,7 @@ func TestEngine_RequestWithEmptyWantList(t *testing.T) {
 	msg, err := WaitForResponseMsg(waitCtx, req.PeerID, mockNetwork)
 	require.NoError(t, err)
 
-	assert.Contains(t, msg.HaveList, atypes.NewBlockFromRawData(storage.Account.Byte(), stateData).BytesForMessage())
+	assert.Contains(t,
+		msg.HaveList,
+		atypes.NewAccountBlockFromRawData(storage.Account.Byte(), stateData).BytesForMessage())
 }
