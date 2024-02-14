@@ -459,8 +459,7 @@ func (kbft *KBFT) finalizeCommit(h map[identifiers.Address]uint64) {
 	}
 
 	if kbft.Proposal == nil || !kbft.Proposal.Tesseract.CompareHash(tsHash) {
-		kbft.logger.Trace("Proposal tesseract doesn't match with the majority",
-			"h1", kbft.Proposal.Tesseract.Hash(), "h2", tsHash)
+		kbft.logger.Trace("Proposal tesseract doesn't match with the majority")
 
 		return
 	}
