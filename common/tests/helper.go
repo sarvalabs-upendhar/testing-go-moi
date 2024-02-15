@@ -13,26 +13,24 @@ import (
 	"testing"
 	"time"
 
-	"github.com/multiformats/go-multiaddr"
-	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi/crypto"
-	mudracommon "github.com/sarvalabs/go-moi/crypto/common"
-	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
-	"github.com/stretchr/testify/assert"
-
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/libp2p/go-libp2p/core/peer"
-
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
-	engineio "github.com/sarvalabs/go-moi-engineio"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
+	"github.com/multiformats/go-multiaddr"
+	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-pisa"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/crypto"
+	cryptocommon "github.com/sarvalabs/go-moi/crypto/common"
 	"github.com/sarvalabs/go-moi/crypto/poi"
-	"github.com/stretchr/testify/require"
+	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
 )
 
 const InvalidAccount common.AccountType = 9999
@@ -812,7 +810,7 @@ func SignBytes(t *testing.T, msg []byte) (sigBytes, pk []byte) {
 	pk = vault.GetConsensusPrivateKey().GetPublicKeyInBytes()
 
 	// signs the bytes
-	sigBytes, err = vault.Sign(msg, mudracommon.BlsBLST)
+	sigBytes, err = vault.Sign(msg, cryptocommon.BlsBLST)
 	require.NoError(t, err)
 
 	// remove keystore.json in current directory
@@ -945,41 +943,6 @@ func CreateReceiptWithTestData(t *testing.T) *common.Receipt {
 	}
 
 	return receipt
-}
-
-func WriteToAccountsFile(filePath string, accounts []AccountWithMnemonic) error {
-	file, err := json.MarshalIndent(accounts, "", "\t")
-	if err != nil {
-		return err
-	}
-
-	if err := os.WriteFile(filePath, file, os.ModePerm); err != nil {
-		return err
-	}
-
-	fmt.Println("Accounts file created")
-
-	return nil
-}
-
-func GetAddressFromAccountsFile(filePath string) ([]string, error) {
-	accounts := make([]AccountWithMnemonic, 0)
-	addresses := make([]string, 0)
-
-	file, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	if err = json.Unmarshal(file, &accounts); err != nil {
-		return nil, err
-	}
-
-	for index := range accounts {
-		addresses = append(addresses, accounts[index].Addr.String())
-	}
-
-	return addresses, nil
 }
 
 func CreateStateWithTestData(t *testing.T) common.State {

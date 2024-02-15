@@ -12,13 +12,14 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/sarvalabs/battleground"
-	engineio "github.com/sarvalabs/go-moi-engineio"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
-	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-pisa"
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sarvalabs/go-moi/bgclient"
+	"github.com/sarvalabs/go-moi/common/tests"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
@@ -261,7 +262,7 @@ func NumPointer(input int64) *int64 {
 	return &input
 }
 
-func GetJSONRPCUrls(t *testing.T, bgClient battleground.Client, validatorCount int) []string {
+func GetJSONRPCUrls(t *testing.T, bgClient bgclient.Client, validatorCount int) []string {
 	t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), JSONRPCURLWaitTime)
@@ -275,7 +276,7 @@ func GetJSONRPCUrls(t *testing.T, bgClient battleground.Client, validatorCount i
 		ctx, cancel := context.WithTimeout(context.Background(), JSONRPCURLQueryTime)
 		defer cancel()
 
-		jsonRPCUrls, err = bgClient.JsonRpcUrls(ctx)
+		jsonRPCUrls, err = bgClient.JSONRpcUrls(ctx)
 		if err != nil {
 			return nil, true
 		}

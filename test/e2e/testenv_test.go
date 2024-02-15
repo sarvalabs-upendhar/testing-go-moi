@@ -10,25 +10,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/go-moi/common"
-
-	bgCommon "github.com/sarvalabs/battleground/common"
-	"github.com/sarvalabs/battleground/server/types"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
-
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/battleground/server/types"
+	"github.com/sarvalabs/battleground/server/warzone/infrastructure"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	bg "github.com/sarvalabs/battleground"
-	client "github.com/sarvalabs/battleground/client/types"
-	"github.com/sarvalabs/battleground/server/warzone/infrastructure"
-
+	"github.com/sarvalabs/go-moi/bgclient"
 	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"
-	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
-
+	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/moiclient"
 )
 
@@ -84,7 +78,7 @@ func newBattleGroundConfig(
 type TestEnvironment struct {
 	suite.Suite
 	bgConfig       BattleGroundConfig
-	bgClient       bg.Client
+	bgClient       bgclient.Client
 	jsonRPCUrls    []string
 	validatorCount int
 	moiClient      *moiclient.Client
@@ -133,27 +127,27 @@ func (te *TestEnvironment) configureBattleGround() error {
 		// TODO optimize the battleground to generate 15 accounts in genesis, instead of creating accounts through ixns
 		bgConfig.NoOfInstances = 15 // 150 moipods are required to execute these tests
 
-		te.bgClient = bg.NewBGClient(&client.Config{
+		te.bgClient = bgclient.NewClient(&bgclient.Config{
 			CloudCfg:    bgConfig,
-			Network:     client.Cloud,
+			Network:     bgclient.CLOUD,
 			EndPoint:    te.bgConfig.rpcEndPoint,
 			DialTimeout: 10 * time.Second,
 		})
 
 		te.validatorCount = bgConfig.NoOfInstances * bgConfig.NoOfPodsPerInstance
 	} else {
-		d := client.DefaultClusterConfig()
+		d := bgclient.DefaultClusterConfig()
 		d.WithLogs = true
 		d.WithStdout = false
 		d.LogLevel = "TRACE"
 		d.BootNodePort = 27000
 		d.Libp2pPort = 28000
-		d.JsonRPCPort = DefaultJSONRPCPort
+		d.JSONRPCPort = DefaultJSONRPCPort
 		d.GuardianPath = "../../moiclient/"
 
-		te.bgClient = bg.NewBGClient(&client.Config{
+		te.bgClient = bgclient.NewClient(&bgclient.Config{
 			ClusterConfig: d,
-			Network:       client.Local,
+			Network:       bgclient.LOCAL,
 		})
 
 		te.validatorCount = d.ValidatorCount
@@ -272,7 +266,7 @@ func (te *TestEnvironment) SetupSuite() {
 
 	te.initLogger()
 
-	var registeredAcc []bgCommon.AccountWithMnemonic
+	var registeredAcc []tests.AccountWithMnemonic
 
 	err := te.configureBattleGround()
 	te.Suite.NoError(err)
@@ -359,7 +353,7 @@ func (te *TestEnvironment) SetupSuite() {
 
 	for _, account := range te.accounts {
 		te.logger.Debug("sending Fuel token ", "KMOI ", InitialKMOITokens)
-		transferAsset(te, tests.AccountWithMnemonic(registeredAcc[0]), account.Addr, map[identifiers.AssetID]*big.Int{
+		transferAsset(te, registeredAcc[0], account.Addr, map[identifiers.AssetID]*big.Int{
 			KMOIAssetID: big.NewInt(InitialKMOITokens),
 		})
 	}

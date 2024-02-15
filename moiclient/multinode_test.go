@@ -7,16 +7,13 @@ import (
 	"testing"
 	"time"
 
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
-
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	bg "github.com/sarvalabs/battleground"
-	client "github.com/sarvalabs/battleground/client/types"
-	bgcommon "github.com/sarvalabs/battleground/common"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
+	"github.com/sarvalabs/go-moi/bgclient"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/tests"
@@ -29,9 +26,9 @@ import (
 type TestMultiNode struct {
 	suite.Suite
 	moiClient      *Client
-	bgClient       bg.Client
+	bgClient       bgclient.Client
 	jsonRPCUrls    []string
-	accounts       []bgcommon.AccountWithMnemonic
+	accounts       []tests.AccountWithMnemonic
 	logger         hclog.Logger
 	instances      []common.Instance
 	ixHash         common.Hash
@@ -67,20 +64,20 @@ func (tm *TestMultiNode) SetupSuite() {
 
 	const multiNodeJSONRPCPort int64 = 26000
 
-	d := client.DefaultClusterConfig()
+	d := bgclient.DefaultClusterConfig()
 
 	d.WithLogs = false
 	d.WithStdout = false
 	d.LogLevel = "TRACE"
 	d.BootNodePort = 24000
 	d.Libp2pPort = 25000
-	d.JsonRPCPort = multiNodeJSONRPCPort
+	d.JSONRPCPort = multiNodeJSONRPCPort
 	d.ValidatorCount = 20
 	d.GenesisAssetCount = 0
 
-	tm.bgClient = bg.NewBGClient(&client.Config{
+	tm.bgClient = bgclient.NewClient(&bgclient.Config{
 		ClusterConfig: d,
-		Network:       client.Local,
+		Network:       bgclient.LOCAL,
 	})
 
 	_, err := tm.bgClient.StartNetwork(context.Background())

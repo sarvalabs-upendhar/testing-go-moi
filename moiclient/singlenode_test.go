@@ -11,15 +11,13 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	bg "github.com/sarvalabs/battleground"
-	client "github.com/sarvalabs/battleground/client/types"
-	bgcommon "github.com/sarvalabs/battleground/common"
 	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-pisa"
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
+	"github.com/sarvalabs/go-moi/bgclient"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/hexutil"
@@ -37,11 +35,11 @@ import (
 
 type TestSingleNode struct {
 	suite.Suite
-	bgConfig       *client.ClusterConfig
+	bgConfig       *bgclient.ClusterConfig
 	moiClient      *Client
-	bgClient       bg.Client
+	bgClient       bgclient.Client
 	genesis        *common.GenesisFile
-	accounts       []bgcommon.AccountWithMnemonic
+	accounts       []tests.AccountWithMnemonic
 	moiAssetInfo   *common.AssetCreationArgs
 	logger         hclog.Logger
 	instances      []common.Instance
@@ -71,21 +69,21 @@ func (tn *TestSingleNode) SetupSuite() {
 
 	tn.initLogger()
 
-	d := client.DefaultClusterConfig()
+	d := bgclient.DefaultClusterConfig()
 	d.WithLogs = false
 	d.WithStdout = false
 	d.LogLevel = "TRACE"
 	d.BootNodePort = 21000
 	d.Libp2pPort = 22000
-	d.JsonRPCPort = 23000
+	d.JSONRPCPort = 23000
 	d.ValidatorCount = 1
 	// genesis asset count is 1 as we need to provide data for registry api
 	d.GenesisAssetCount = 1
 
 	tn.bgConfig = d
-	tn.bgClient = bg.NewBGClient(&client.Config{
+	tn.bgClient = bgclient.NewClient(&bgclient.Config{
 		ClusterConfig: d,
-		Network:       client.Local,
+		Network:       bgclient.LOCAL,
 	})
 
 	_, err := tn.bgClient.StartNetwork(context.Background())
@@ -94,7 +92,7 @@ func (tn *TestSingleNode) SetupSuite() {
 	// wait for node to start all modules
 	time.Sleep(1 * time.Second)
 
-	tn.moiClient, err = NewClient(fmt.Sprintf("http://localhost:%d", d.JsonRPCPort))
+	tn.moiClient, err = NewClient(fmt.Sprintf("http://localhost:%d", d.JSONRPCPort))
 	tn.Suite.NoError(err)
 
 	tn.genesis, err = common.ReadGenesisFile(filepath.Join(d.TempDir, "genesis.json"))
