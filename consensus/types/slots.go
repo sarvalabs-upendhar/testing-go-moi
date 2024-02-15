@@ -6,7 +6,6 @@ import (
 	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
-	networkmsg "github.com/sarvalabs/go-moi/network/message"
 )
 
 type ExecutionResponse struct {
@@ -26,7 +25,6 @@ type Slot struct {
 	SlotType                        SlotType
 	clusterState                    *ClusterState
 	ICSSuccessChan                  chan bool
-	OutboundChan, InboundChan       chan *ICSMSG
 	BftOutboundChan, BftInboundChan chan ConsensusMessage
 	ExecutionResp                   chan ExecutionResponse
 	CloseCh                         chan struct{}
@@ -37,8 +35,6 @@ func NewSlot(slotType SlotType, clusterState *ClusterState) *Slot {
 		SlotType:        slotType,
 		clusterState:    clusterState,
 		ICSSuccessChan:  make(chan bool),
-		OutboundChan:    make(chan *ICSMSG),
-		InboundChan:     make(chan *ICSMSG),
 		ExecutionResp:   make(chan ExecutionResponse),
 		BftOutboundChan: make(chan ConsensusMessage, 1000),
 		BftInboundChan:  make(chan ConsensusMessage, 1000),
@@ -60,18 +56,6 @@ func (info *Slot) ForwardMsg(msg ConsensusMessage) {
 	}
 }
 
-func (info *Slot) ForwardInboundMsg(msg *ICSMSG) {
-	if info == nil {
-		return
-	}
-
-	select {
-	case <-info.CloseCh:
-		return
-	case info.InboundChan <- msg:
-	}
-}
-
 func (info *Slot) ClusterID() common.ClusterID {
 	return info.clusterState.ClusterID
 }
@@ -80,7 +64,7 @@ func (info *Slot) ClusterState() *ClusterState {
 	return info.clusterState
 }
 
-func (info *Slot) ICSRequestMsg() *networkmsg.CanonicalICSRequest {
+func (info *Slot) ICSRequestMsg() *CanonicalICSRequest {
 	return info.clusterState.RequestMsg
 }
 
@@ -177,6 +161,7 @@ func (s *Slots) CleanupSlot(id common.ClusterID) {
 		}
 
 		close(slot.CloseCh)
+		close(slot.BftInboundChan)
 		delete(s.slots, id)
 		s.incrementSlots(slot.SlotType)
 	}

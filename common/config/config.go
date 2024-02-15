@@ -112,6 +112,8 @@ type ConsensusConfig struct {
 	ValidatorSlotCount    int
 	OperatorSlotCount     int
 	EnableDebugMode       bool
+	MaxGossipPeers        int
+	MinGossipPeers        int
 }
 
 type JSONRPCConfig struct {
@@ -162,11 +164,13 @@ func DefaultDevnetConfig(path string) *Config {
 			AccountWaitTime:       1500 * time.Millisecond,
 			OperatorSlotCount:     -1,
 			ValidatorSlotCount:    3,
+			MaxGossipPeers:        5,
+			MinGossipPeers:        3,
 		},
 		DB: &DBConfig{
 			CleanDB:      false,
 			DBFolderPath: path + DefaultDBDirectory,
-			MaxSnapSize:  DefaultSnapSize, // 1GB limit
+			MaxSnapSize:  DefaultSnapSize, // 3GB limit
 		},
 		Execution: &ExecutionConfig{
 			FuelLimit: DefaultFuelLimit,

@@ -22,13 +22,14 @@ const (
 )
 
 type Vote struct {
-	Type           ConsensusMsgType
-	Round          int32
-	Heights        map[identifiers.Address]uint64
-	TSHash         common.Hash
-	Timestamp      int64
-	ValidatorIndex int32
-	Signature      []byte
+	Type             ConsensusMsgType
+	Round            int32
+	ValidatorIndex   int32
+	Timestamp        int64
+	Heights          map[identifiers.Address]uint64
+	TSHash           common.Hash
+	ValidatorKramaID kramaid.KramaID
+	Signature        []byte
 }
 
 type CanonicalVote struct {
@@ -81,6 +82,10 @@ func (v *Vote) FromBytes(bytes []byte) error {
 	}
 
 	return nil
+}
+
+func (v *Vote) Hash() (common.Hash, error) {
+	return common.PoloHash(*v)
 }
 
 func (v *Vote) Validate() error {
@@ -165,7 +170,6 @@ type Cmessage interface {
 // ConsensusMessage is a struct that represents an envelope for a consensus message.
 // Implements the Cmessage interface and wraps another message satisfying this interface.
 type ConsensusMessage struct {
-	// Represents the KipID of the message sender
 	PeerID kramaid.KramaID
 
 	// Represents the wrapped message
@@ -180,10 +184,9 @@ func (c *ConsensusMessage) ICSMsg(clusterID common.ClusterID) (*ICSMSG, error) {
 	}
 
 	return &ICSMSG{
-		msgType,
-		msg,
-		c.PeerID,
-		string(clusterID),
+		ClusterID: clusterID,
+		MsgType:   msgType,
+		Payload:   msg,
 	}, nil
 }
 
@@ -227,6 +230,13 @@ func getRawMessage(message Cmessage) (networkmsgs.MsgType, []byte, error) {
 // Returns an error if message is not valid or could not be validated.
 func (c *ConsensusMessage) Validate() error {
 	return nil
+}
+
+type WantMessage struct {
+	PeerID   kramaid.KramaID
+	MsgType  ConsensusMsgType
+	MsgIdxs  []int32
+	RespChan chan []*Vote
 }
 
 // ProposalMessage is a struct that represents a Proposal consensus message.
@@ -274,4 +284,9 @@ func (m *VoteMessage) Bytes() ([]byte, error) {
 	}
 
 	return rawData, err
+}
+
+type VoteBitSet struct {
+	Prevotes   *common.ArrayOfBits
+	Precommits *common.ArrayOfBits
 }

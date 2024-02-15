@@ -142,7 +142,7 @@ func (manager *Manager) runInteraction(
 	return receipt, nil
 }
 
-// Revert reverts any state transition performed by an executor for a given Cluster ID.
+// Revert reverts any state transition performed by an executor for a given Cluster ID and deletes the dirty objects
 // Returns an error if no executor exists for the cluster ID or if any error occurs during the state revert.
 func (manager *Manager) Revert(cluster common.ClusterID) error {
 	// Attempt to load an executor instance for the cluster ID
@@ -157,13 +157,17 @@ func (manager *Manager) Revert(cluster common.ClusterID) error {
 		return common.ErrInterfaceConversion
 	}
 
+	for addr := range executor.transition.objects {
+		executor.state.Cleanup(addr)
+	}
+
 	// Revert executor state
 	executor.transition = executor.baseline
 
 	return nil
 }
 
-// Cleanup removes the executor instance for the given Cluster ID, if one exists.
+// Cleanup removes the executor instance for the given Cluster ID if one exists.
 func (manager *Manager) Cleanup(cluster common.ClusterID) {
 	manager.executors.Delete(cluster)
 }

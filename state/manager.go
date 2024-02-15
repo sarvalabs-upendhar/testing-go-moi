@@ -414,7 +414,7 @@ func (sm *StateManager) fetchParticipantContextByHash(addr identifiers.Address, 
 	}
 
 	if len(behaviouralContext) > 0 {
-		behaviouralSet = common.NewNodeSet(behaviouralContext, nil)
+		behaviouralSet = common.NewNodeSet(behaviouralContext, nil, 0)
 
 		if behaviouralSet.PublicKeys, err = sm.GetPublicKeys(context.Background(), behaviouralContext...); err != nil {
 			sm.logger.Error("Failed to retrieve the public key of behavioural set", "err", err)
@@ -424,7 +424,7 @@ func (sm *StateManager) fetchParticipantContextByHash(addr identifiers.Address, 
 	}
 
 	if len(randomContext) > 0 {
-		randomSet = common.NewNodeSet(randomContext, nil)
+		randomSet = common.NewNodeSet(randomContext, nil, 0)
 
 		if randomSet.PublicKeys, err = sm.GetPublicKeys(context.Background(), randomContext...); err != nil {
 			sm.logger.Error("Failed to retrieve the public key of random set", "err", err)
@@ -452,7 +452,7 @@ func (sm *StateManager) fetchLatestParticipantContext(addr identifiers.Address) 
 	}
 
 	if len(behaviouralContext) > 0 {
-		behaviouralSet = common.NewNodeSet(behaviouralContext, nil)
+		behaviouralSet = common.NewNodeSet(behaviouralContext, nil, 0)
 
 		if behaviouralSet.PublicKeys, err = sm.GetPublicKeys(context.Background(), behaviouralContext...); err != nil {
 			sm.logger.Error("Failed to retrieve the public key of behavioural set", "err", err)
@@ -462,7 +462,7 @@ func (sm *StateManager) fetchLatestParticipantContext(addr identifiers.Address) 
 	}
 
 	if len(randomContext) > 0 {
-		randomSet = common.NewNodeSet(randomContext, nil)
+		randomSet = common.NewNodeSet(randomContext, nil, 0)
 
 		if randomSet.PublicKeys, err = sm.GetPublicKeys(context.Background(), randomContext...); err != nil {
 			sm.logger.Error("Failed to retrieve the public key of random set", "err", err)
@@ -561,7 +561,7 @@ func (sm *StateManager) GetNodeSet(ids []kramaid.KramaID) (*common.NodeSet, erro
 		}
 	}
 
-	return common.NewNodeSet(ids, publicKeys), nil
+	return common.NewNodeSet(ids, publicKeys, 0), nil
 }
 
 func (sm *StateManager) FetchICSNodeSet(

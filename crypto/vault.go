@@ -162,6 +162,10 @@ func (vault *KramaVault) GetNetworkPrivateKey() PrivateKey {
 	return vault.networkPriv
 }
 
+func (vault *KramaVault) SetNetworkPrivateKey(key PrivateKey) {
+	vault.networkPriv = key
+}
+
 func (vault *KramaVault) KramaID() kramaid.KramaID {
 	return vault.kramaID
 }

@@ -64,6 +64,7 @@ func NewKBFTService(
 	outboundChan, inboundChan chan ktypes.ConsensusMessage,
 	vault vault,
 	ics *ktypes.ClusterState,
+	voteset *HeightVoteSet,
 	tesseractHandler func(tesseract *common.Tesseract) error,
 	opts ...Option,
 ) *KBFT {
@@ -84,14 +85,12 @@ func NewKBFTService(
 	}
 
 	k.ctx, k.ctxCancel = context.WithTimeout(ctx, timeout)
-	k.updateToState(ics)
+	k.updateToState(ics, voteset)
 
 	return k
 }
 
-func (kbft *KBFT) updateToState(cs *ktypes.ClusterState) {
-	var chainIDs []string
-
+func (kbft *KBFT) updateToState(cs *ktypes.ClusterState, voteset *HeightVoteSet) {
 	kbft.toTicker = NewTicker(kbft.logger)
 	kbft.Heights = cs.NewHeights()
 	kbft.updateRoundStep(0, RoundStepNewHeight)
@@ -102,7 +101,7 @@ func (kbft *KBFT) updateToState(cs *ktypes.ClusterState) {
 	kbft.LockedTS = nil
 	kbft.ValidRound = -1
 	kbft.ValidTS = nil
-	kbft.Votes = NewHeightVoteSet(chainIDs, kbft.Heights, cs, kbft.logger)
+	kbft.Votes = voteset
 	kbft.CommitRound = -1
 	kbft.ics = cs
 	kbft.TriggeredTimeoutPrecommit = false
@@ -255,7 +254,7 @@ func (kbft *KBFT) handleTimeout(ti timeoutInfo, r RoundState) {
 }
 
 func (kbft *KBFT) handleMsg(msg ktypes.ConsensusMessage) error {
-	_, span := tracing.Span(kbft.ctx, "Krama.KBFT", "handleMsg")
+	spanCtx, span := tracing.Span(kbft.ctx, "Krama.KBFT", "handleMsg")
 
 	kbft.mx.Lock()
 	defer func() {
@@ -278,7 +277,7 @@ func (kbft *KBFT) handleMsg(msg ktypes.ConsensusMessage) error {
 	case *ktypes.VoteMessage:
 		kbft.logger.Trace("Vote message received", "vote-type", m.Vote.Type, "from", peerID)
 
-		added, err := kbft.addVote(m.Vote, peerID)
+		added, err := kbft.addVote(spanCtx, m.Vote, peerID)
 		if err != nil {
 			kbft.logger.Error("Failed to add vote", "err", err)
 
@@ -352,7 +351,10 @@ func (kbft *KBFT) SetProposal(p *ktypes.Proposal, peerID kramaid.KramaID) error 
 	return nil
 }
 
-func (kbft *KBFT) addVote(v *ktypes.Vote, peerID kramaid.KramaID) (added bool, err error) {
+func (kbft *KBFT) addVote(ctx context.Context, v *ktypes.Vote, peerID kramaid.KramaID) (added bool, err error) {
+	_, span := tracing.Span(ctx, "Krama.KBFT", "addVote")
+	defer span.End()
+
 	if !areVoteHeightsEqual(v.Heights, kbft.Heights) {
 		kbft.logger.Trace("Invalid vote BFT height", "local-heights", kbft.Heights, "msg-heights", v.Heights)
 
@@ -365,7 +367,7 @@ func (kbft *KBFT) addVote(v *ktypes.Vote, peerID kramaid.KramaID) (added bool, e
 		kbft.evidence.AddVote(v)
 	}
 
-	added, err = kbft.Votes.AddVote(v, peerID)
+	added, err = kbft.Votes.addVote(v, peerID)
 	if err != nil || !added {
 		kbft.evidence.AddVote(v)
 
@@ -556,8 +558,6 @@ func (kbft *KBFT) enterCommit(heights map[identifiers.Address]uint64, round int3
 		panic("expecting precommits")
 	}
 
-	// log.Printf(" lockedgrid %s,groupId %s", b.LockedTS.Hash, groupID.Hash)
-	// log.Println("In enter commit proposal tesseract", b.ProposalTesseracts, b.LockedTesseracts)
 	if kbft.LockedTS.CompareHash(tsHash) {
 		kbft.ProposalTS = kbft.LockedTS
 	}
@@ -613,7 +613,7 @@ func (kbft *KBFT) enterNewRound(heights map[identifiers.Address]uint64, round in
 		}
 	}
 
-	kbft.Votes.SetRound(round + 1)
+	kbft.Votes.setRound(round + 1)
 	kbft.TriggeredTimeoutPrecommit = false
 
 	if err := kbft.publishEventNewRound(kbft.RoundStateEvent()); err != nil {
@@ -734,10 +734,6 @@ func (kbft *KBFT) enterPreCommit(heights map[identifiers.Address]uint64, round i
 	// Before preCommit check for >2/3 preVotes
 	tsHash, ok := kbft.Votes.getPrevotes(round).TwoThirdMajority()
 	if !ok {
-		if kbft.LockedTS != nil {
-			log.Println("PreCommit nil due to lock")
-		}
-
 		kbft.sendVote(ktypes.PRECOMMIT, common.NilHash)
 
 		return
@@ -875,11 +871,12 @@ func (kbft *KBFT) signVote(msgType ktypes.ConsensusMsgType, tsHash common.Hash) 
 	}
 
 	v := &ktypes.Vote{
-		ValidatorIndex: valIndex,
-		Heights:        kbft.Heights,
-		TSHash:         tsHash,
-		Round:          kbft.Round,
-		Type:           msgType,
+		ValidatorIndex:   valIndex,
+		Heights:          kbft.Heights,
+		TSHash:           tsHash,
+		Round:            kbft.Round,
+		Type:             msgType,
+		ValidatorKramaID: kbft.id,
 	}
 
 	rawData, err := v.SignBytes()

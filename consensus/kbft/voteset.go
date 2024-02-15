@@ -8,7 +8,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
@@ -32,7 +31,7 @@ type VoteSet struct {
 	valset *ktypes.ClusterState
 
 	// Represents an access lock on the vote-set
-	mtx sync.Mutex
+	mtx sync.RWMutex
 
 	// Represents the sum of seen votes, discounting conflicts
 	sum []int32
@@ -70,12 +69,12 @@ func NewVoteSet(
 	logger.Info("Creating new vote set with validators.", "size", validatorSet.Size())
 
 	return &VoteSet{
-		logger:           logger.Named("Vote-Set"),
+		logger:           logger.Named("Votes-Set"),
 		heights:          heights,
 		round:            round,
 		votetype:         voteType,
 		valset:           validatorSet,
-		mtx:              sync.Mutex{},
+		mtx:              sync.RWMutex{},
 		votes:            make([]*ktypes.Vote, validatorSet.Size()),
 		votingPowerSum:   make([]int32, 3),
 		votesBitArray:    common.NewArrayOfBits(validatorSet.Size()),
@@ -85,8 +84,8 @@ func NewVoteSet(
 	}
 }
 
-// getVote is a method of Vote that retrieves a particular vote from the set.
-// Accepts a validator index as an int32 and a tesseract hash.
+// getVote is a method of voteset that retrieves a particular vote from the set.
+// Accepts a validator index as an int32 and a tesseract hash
 // Returns the Vote and a bool indicating the success status of the fetch.
 func (vs *VoteSet) getVote(valIndex int32, tsHash common.Hash) (vote *ktypes.Vote, ok bool) {
 	// Attempt to retrieve the vote from the slice of votes
@@ -113,8 +112,8 @@ func (vs *VoteSet) HasMajority() bool {
 	}
 
 	// Acquire lock
-	vs.mtx.Lock()
-	defer vs.mtx.Unlock()
+	vs.mtx.RLock()
+	defer vs.mtx.RUnlock()
 
 	return vs.maj23 != nil
 }
@@ -127,8 +126,8 @@ func (vs *VoteSet) HasMajorityAny() bool {
 	}
 
 	// Acquire lock
-	vs.mtx.Lock()
-	defer vs.mtx.Unlock()
+	vs.mtx.RLock()
+	defer vs.mtx.RUnlock()
 
 	for index, sumVal := range vs.sum {
 		// If sumVal for a given index has 2/3 majority, return true
@@ -150,8 +149,8 @@ func (vs *VoteSet) TwoThirdMajority() (hash common.Hash, ok bool) {
 	}
 
 	// Acquire lock
-	vs.mtx.Lock()
-	defer vs.mtx.Unlock()
+	vs.mtx.RLock()
+	defer vs.mtx.RUnlock()
 
 	if vs.maj23 != nil {
 		// Return the ts hash agreed on by the majority of votes
@@ -165,7 +164,7 @@ func (vs *VoteSet) TwoThirdMajority() (hash common.Hash, ok bool) {
 // AddVote is a method of VoteSet that adds a vote to the set.
 // The vote and the validator who placed the vote are verified by checking the vote specs,
 // signatures and addresses and then added to the set using the addVerifiedVote method.
-func (vs *VoteSet) AddVote(v *ktypes.Vote, peerID kramaid.KramaID) (added bool, err error) {
+func (vs *VoteSet) AddVote(v *ktypes.Vote) (added bool, err error) {
 	// Acquire lock
 	vs.mtx.Lock()
 	defer vs.mtx.Unlock()
@@ -195,7 +194,7 @@ func (vs *VoteSet) AddVote(v *ktypes.Vote, peerID kramaid.KramaID) (added bool, 
 	}
 
 	// Validate that the validator address matches
-	if peerID != valKramaID {
+	if v.ValidatorKramaID != valKramaID {
 		return false, errors.New("validator address doesn't match with the validator set of the vote-set")
 	}
 
@@ -233,6 +232,23 @@ func (vs *VoteSet) AddVote(v *ktypes.Vote, peerID kramaid.KramaID) (added bool, 
 	}
 
 	return added, nil
+}
+
+// getVoteByIndex retrieves the vote at the specified index in the vote-set.
+func (vs *VoteSet) getVoteByIndex(index int) (*ktypes.Vote, error) {
+	if index < 0 || index >= len(vs.votes) {
+		return nil, errors.New("index out of bound")
+	}
+
+	return vs.votes[index], nil
+}
+
+// GetVoteBits returns the array of bits representing the presence of votes for each validator in the vote-set.
+func (vs *VoteSet) GetVoteBits() *common.ArrayOfBits {
+	vs.mtx.RLock()
+	defer vs.mtx.RUnlock()
+
+	return vs.votesBitArray.Copy()
 }
 
 func (vs *VoteSet) addVerifiedVote(
@@ -347,4 +363,29 @@ func (vs *VoteSet) updateSum(valIndex int32, vp int32) {
 		vs.sum[index] += 1
 		vs.votingPowerSum[index] += vp
 	}
+}
+
+// RoundVoteSet is a struct that represents a set for a votes for a single round.
+type RoundVoteSet struct {
+	// Represents the pre-votes for the round
+	Prevotes *VoteSet
+
+	// Represents the pre-commits for the round
+	Precommits *VoteSet
+}
+
+func (rvs RoundVoteSet) VoteBitSet() *ktypes.VoteBitSet {
+	v := new(ktypes.VoteBitSet)
+
+	if rvs.Prevotes.GetVoteBits().IsEmpty() {
+		return nil
+	}
+
+	v.Prevotes = rvs.Prevotes.GetVoteBits()
+
+	if !rvs.Precommits.GetVoteBits().IsEmpty() {
+		v.Precommits = rvs.Precommits.GetVoteBits()
+	}
+
+	return v
 }

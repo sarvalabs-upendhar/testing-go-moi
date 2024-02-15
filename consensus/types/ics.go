@@ -1,9 +1,11 @@
 package types
 
 import (
+	"crypto/rand"
 	"sync"
 	"time"
 
+	"github.com/mr-tron/base58"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi-identifiers"
@@ -12,7 +14,6 @@ import (
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/utils"
-	"github.com/sarvalabs/go-moi/network/message"
 	gtypes "github.com/sarvalabs/go-moi/state"
 )
 
@@ -32,9 +33,10 @@ type ClusterState struct {
 	dirty                    map[common.Hash][]byte
 	Tesseract                *common.Tesseract
 	ICSReqTime               time.Time
+	ICSRespCount             int
 	operatorIncluded         bool
 	CurrentRole              common.IcsSetType
-	RequestMsg               *message.CanonicalICSRequest
+	RequestMsg               *CanonicalICSRequest
 	SuccessMsg               *ICSMSG
 }
 
@@ -42,7 +44,7 @@ type ClusterState struct {
 
 func NewICS(
 	size int,
-	icsReqMsg *message.CanonicalICSRequest,
+	icsReqMsg *CanonicalICSRequest,
 	ixs common.Interactions,
 	clusterID common.ClusterID,
 	operator kramaid.KramaID,
@@ -61,6 +63,7 @@ func NewICS(
 		Receipts:         make(common.Receipts, 1), // This should be changed base on the interactions
 		dirty:            make(map[common.Hash][]byte),
 		ICSReqTime:       reqTime,
+		ICSRespCount:     0,
 		RequestMsg:       icsReqMsg,
 	}
 }
@@ -74,6 +77,13 @@ func (cs *ClusterState) Size() int {
 	defer cs.mtx.Unlock()
 
 	return cs.NodeSet.Size
+}
+
+func (cs *ClusterState) GetNodeSet(setType common.IcsSetType) *common.NodeSet {
+	cs.mtx.Lock()
+	defer cs.mtx.Unlock()
+
+	return cs.NodeSet.Nodes[setType]
 }
 
 func (cs *ClusterState) UpdateNodeSet(setType common.IcsSetType, data *common.NodeSet) {
@@ -165,7 +175,7 @@ func (cs *ClusterState) GetMetaData(msgs []*ICSMSG) (*ICSMetaInfo, error) {
 		ReceiptHash:  receiptHash,
 	}
 
-	rawData, err := polo.Polorize(cs.SuccessMsg)
+	rawData, err := polo.Polorize(cs.GetSuccessMsg())
 	if err != nil {
 		return nil, err
 	}
@@ -263,15 +273,15 @@ func (cs *ClusterState) IsRandomQuorum(requiredRandomNodes, requiredObserverNode
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	return cs.NodeSet.Nodes[common.RandomSet].RespCount >= requiredRandomNodes &&
-		cs.NodeSet.Nodes[common.ObserverSet].RespCount >= requiredObserverNodes
+	return cs.NodeSet.Nodes[common.RandomSet].GetRespCount() >= requiredRandomNodes &&
+		cs.NodeSet.Nodes[common.ObserverSet].GetRespCount() >= requiredObserverNodes
 }
 
 func (cs *ClusterState) HasKramaID(kramaID kramaid.KramaID) (int32, bool) {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	return cs.NodeSet.GetIndex(kramaID)
+	return cs.NodeSet.HasKramaID(kramaID)
 }
 
 // GetByIndex returns the krama id and bls public key of the validator based on the index
@@ -287,11 +297,11 @@ func (cs *ClusterState) GetByIndex(index int32) (kramaid.KramaID, []byte) {
 	return kramaID, publicKey
 }
 
-func (cs *ClusterState) GetICSNodes() []kramaid.KramaID {
+func (cs *ClusterState) GetICSNodeIndex(kramaid kramaid.KramaID) (common.IcsSetType, int) {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	return cs.NodeSet.GetNodes()
+	return cs.NodeSet.GetIndex(kramaid)
 }
 
 func (cs *ClusterState) GetICSVoteset() *common.ArrayOfBits {
@@ -352,12 +362,26 @@ func (cs *ClusterState) GetFuelUsed() (fuelUsed uint64) {
 	return fuelUsed
 }
 
+func (cs *ClusterState) GetSuccessMsg() *ICSMSG {
+	cs.mtx.Lock()
+	defer cs.mtx.Unlock()
+
+	return cs.SuccessMsg
+}
+
 func (cs *ClusterState) SetReceipts(r common.Receipts) {
 	cs.Receipts = r
 }
 
 func (cs *ClusterState) SetPostExecState(s common.AccStateHashes) {
 	cs.postExecState = s
+}
+
+func (cs *ClusterState) SetSuccessMsg(msg *ICSMSG) {
+	cs.mtx.Lock()
+	defer cs.mtx.Unlock()
+
+	cs.SuccessMsg = msg
 }
 
 func (cs *ClusterState) SetTesseract(ts *common.Tesseract) {
@@ -406,14 +430,12 @@ func (cs *ClusterState) ComputeICSHash() (common.Hash, error) {
 	return hash, nil
 }
 
-func (cs *ClusterState) CreateICSSuccessMsg() *message.ICSSuccessMsg {
+func (cs *ClusterState) CreateICSSuccessMsg() *ICSSuccess {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	msg := &message.ICSSuccessMsg{
-		ClusterID:   string(cs.ClusterID),
-		RandomSet:   cs.NodeSet.Nodes[common.RandomSet].Ids,
-		ObserverSet: cs.NodeSet.Nodes[common.ObserverSet].Ids,
+	msg := &ICSSuccess{
+		ClusterID:   cs.ClusterID,
 		Responses:   make([]*common.ArrayOfBits, 6),
 		Signature:   make([]byte, 0),
 		QuorumSizes: make([]int, 6),
@@ -421,7 +443,7 @@ func (cs *ClusterState) CreateICSSuccessMsg() *message.ICSSuccessMsg {
 
 	for j := 0; j < len(cs.NodeSet.Nodes); j++ {
 		if cs.NodeSet.Nodes[j] != nil {
-			msg.Responses[j] = cs.NodeSet.Nodes[j].Responses
+			msg.Responses[j] = cs.NodeSet.Nodes[j].Responses.Copy()
 			msg.QuorumSizes[j] = cs.NodeSet.Nodes[j].QuorumSize
 		}
 	}
@@ -490,6 +512,20 @@ func (cs *ClusterState) ContextLock() map[identifiers.Address]common.ContextLock
 	return lockInfo
 }
 
+func (cs *ClusterState) GetICSRespCount() int {
+	cs.mtx.Lock()
+	defer cs.mtx.Unlock()
+
+	return cs.ICSRespCount
+}
+
+func (cs *ClusterState) IncrementICSRespCount() {
+	cs.mtx.Lock()
+	defer cs.mtx.Unlock()
+
+	cs.ICSRespCount++
+}
+
 type AccountInfo struct {
 	AccType       common.AccountType
 	Address       identifiers.Address
@@ -542,34 +578,36 @@ func (a AccountInfos) Address() []identifiers.Address {
 	return addrs
 }
 
-type ICSMSG struct {
-	MsgType   message.MsgType
-	Msg       []byte
-	Sender    kramaid.KramaID
-	ClusterID string
+type Request struct {
+	Ixs          common.Interactions
+	Msg          *CanonicalICSRequest
+	Operator     kramaid.KramaID
+	SlotType     SlotType
+	ReqTime      time.Time
+	ResponseChan chan error
 }
 
-func NewICSMsg(msgType message.MsgType, clusterID string, msg []byte) *ICSMSG {
-	return &ICSMSG{
-		MsgType:   msgType,
-		Msg:       msg,
-		ClusterID: clusterID,
+func (r *Request) IxHash() common.Hash {
+	return r.Ixs[0].Hash()
+}
+
+func (r *Request) GetClusterID() (common.ClusterID, error) {
+	switch r.SlotType {
+	case OperatorSlot:
+		return generateClusterID()
+	case ValidatorSlot:
+		return r.Msg.ClusterID, nil
+	default:
+		return "", errors.New("invalid request type")
 	}
 }
 
-func (im *ICSMSG) Bytes() ([]byte, error) {
-	rawData, err := polo.Polorize(im)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to polorize ics message")
+func generateClusterID() (common.ClusterID, error) {
+	randHash := make([]byte, 32)
+
+	if _, err := rand.Read(randHash); err != nil {
+		return "", err
 	}
 
-	return rawData, nil
-}
-
-func (im *ICSMSG) FromBytes(bytes []byte) error {
-	if err := polo.Depolorize(im, bytes); err != nil {
-		return errors.Wrap(err, "failed to depolorize ics message")
-	}
-
-	return nil
+	return common.ClusterID(base58.Encode(randHash)), nil
 }

@@ -40,6 +40,7 @@ type ReputationEngine struct {
 	cache        *lru.Cache
 	dirtyLock    sync.RWMutex
 	dirtyEntries map[peer.ID]*NodeMetaInfo
+	mtx          sync.RWMutex
 	peerCount    uint64
 	signalChan   chan struct{}
 }
@@ -150,13 +151,13 @@ func (r *ReputationEngine) AddNewPeerWithPeerID(peerID peer.ID, data *NodeMetaIn
 			info.PeerSignature = data.PeerSignature
 		}
 
-		if len(data.PublicKey) != 0 && !bytes.Equal(data.PublicKey, info.PublicKey) {
-			info.PublicKey = data.PublicKey
+		if len(data.PublicKey) != 0 && !bytes.Equal(data.PublicKey, info.GetPublicKey()) {
+			info.UpdatePublicKey(data.PublicKey)
 		}
 	} else {
 		info = data
 
-		r.peerCount++
+		r.UpdatePeerCount(1)
 
 		if err = r.db.UpdatePeerCount(1); err != nil {
 			return err
@@ -283,6 +284,13 @@ func (r *ReputationEngine) UpdatePublicKey(kramaID kramaid.KramaID, pk []byte) e
 	return nil
 }
 
+func (r *ReputationEngine) UpdatePeerCount(count uint64) {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+
+	r.peerCount += count
+}
+
 func (r *ReputationEngine) GetAddress(kramaID kramaid.KramaID) ([]multiaddr.Multiaddr, error) {
 	peerID, err := kramaID.DecodedPeerID()
 	if err != nil {
@@ -363,14 +371,17 @@ func (r *ReputationEngine) GetPublicKey(kramaID kramaid.KramaID) ([]byte, error)
 		return nil, err
 	}
 
-	if info.PublicKey == nil {
+	if info.GetPublicKey() == nil {
 		return nil, errors.New("public key not found")
 	}
 
-	return info.PublicKey, nil
+	return info.GetPublicKey(), nil
 }
 
 func (r *ReputationEngine) TotalPeerCount() uint64 {
+	r.mtx.RLock()
+	defer r.mtx.RUnlock()
+
 	return r.peerCount
 }
 
@@ -383,6 +394,8 @@ func (r *ReputationEngine) StreamPeerInfos(ctx context.Context) (chan *PeerInfo,
 	}
 
 	go func() {
+		defer close(ch)
+
 		for entry := range entriesChan {
 			peerID, err := peer.IDFromBytes(bytes.TrimPrefix(entry.Key, storage.SenatusPrefix()))
 			if err != nil {
@@ -391,13 +404,15 @@ func (r *ReputationEngine) StreamPeerInfos(ctx context.Context) (chan *PeerInfo,
 				continue
 			}
 
-			ch <- &PeerInfo{
+			select {
+			case ch <- &PeerInfo{
 				ID:   peerID,
 				Data: entry.Value,
+			}:
+			case <-ctx.Done():
+				return
 			}
 		}
-
-		close(ch)
 	}()
 
 	return ch, nil

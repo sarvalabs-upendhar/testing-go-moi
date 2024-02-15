@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -405,7 +406,7 @@ func TestConnectPeerByKramaID(t *testing.T) {
 					// add peer info to peer store
 					servers[i].AddPeerInfo(info)
 
-					err := servers[i].ConnManager.connectPeerByKramaID(test.kramaID)
+					err := servers[i].ConnManager.ConnectPeerByKramaID(context.Background(), test.kramaID)
 
 					if test.expectedError != nil {
 						require.EqualError(t, err, test.expectedError.Error())
@@ -722,7 +723,7 @@ func TestConnectAndRegisterPeer_Connection_Failure(t *testing.T) {
 
 			info := getPeerInfo(t, test.destination)
 
-			err := test.source.ConnManager.ConnectAndRegisterPeer(*info, test.destination.id, test.rtt)
+			err := test.source.ConnManager.ConnectAndRegisterPeer(context.Background(), *info, test.destination.id, test.rtt)
 
 			if test.expectedErr {
 				require.Error(t, err)
@@ -807,7 +808,7 @@ func TestConnectAndRegisterPeer_Connection_Limit(t *testing.T) {
 
 			test.source.AddPeerInfo(info)
 
-			err := test.source.ConnManager.ConnectAndRegisterPeer(*info, test.destination.id, test.rtt)
+			err := test.source.ConnManager.ConnectAndRegisterPeer(context.Background(), *info, test.destination.id, test.rtt)
 
 			if test.expectedErr != nil {
 				require.Error(t, err)

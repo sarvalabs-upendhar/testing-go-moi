@@ -76,11 +76,13 @@ func DefaultBabylonConfig(path string) *Config {
 			AccountWaitTime:       1500,
 			OperatorSlots:         -1,
 			ValidatorSlots:        5,
+			MaxGossipPeers:        5,
+			MinGossipPeers:        3,
 		},
 		DB: DBConfig{
 			CleanDB:     false,
 			DBFolder:    path + config.DefaultDBDirectory,
-			MaxSnapSize: config.DefaultSnapSize, // 1GB limit
+			MaxSnapSize: config.DefaultSnapSize, // 3GB limit
 		},
 		Execution: ExecutionConfig{
 			FuelLimit: hexutil.Uint64(config.DefaultFuelLimit),
@@ -154,7 +156,7 @@ func DefaultDevnetConfig(path string) *Config {
 		DB: DBConfig{
 			CleanDB:     false,
 			DBFolder:    path + config.DefaultDBDirectory,
-			MaxSnapSize: config.DefaultSnapSize, // 1GB limit
+			MaxSnapSize: config.DefaultSnapSize, // 3GB limit
 		},
 		Execution: ExecutionConfig{
 			FuelLimit: hexutil.Uint64(config.DefaultFuelLimit),
@@ -241,6 +243,8 @@ type ConsensusConfig struct {
 	OperatorSlots         int   `json:"operator_slots"`
 	ValidatorSlots        int   `json:"validator_slots"`
 	EnableDebugMode       bool  `json:"enable_debug_mode"`
+	MaxGossipPeers        int   `json:"max_gossip_peers"`
+	MinGossipPeers        int   `json:"min_gossip_peers"`
 }
 
 type ExecutionConfig struct {

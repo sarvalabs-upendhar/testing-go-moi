@@ -516,7 +516,7 @@ func (sm *MockStateManager) GetNodeSet(ids []kramaid.KramaID) (*common.NodeSet, 
 		pks = append(pks, pk)
 	}
 
-	return common.NewNodeSet(ids, pks), nil
+	return common.NewNodeSet(ids, pks, 0), nil
 }
 
 func mockStateManager() *MockStateManager {
@@ -686,10 +686,7 @@ func (sm *MockStateManager) IsAccountRegisteredAt(addr identifiers.Address, tess
 	return ok, nil
 }
 
-func (sm *MockStateManager) FetchTesseractFromDB(
-	hash common.Hash,
-	withInteractions bool,
-) (*common.Tesseract, error) {
+func (sm *MockStateManager) FetchTesseractFromDB(hash common.Hash, withInteractions bool) (*common.Tesseract, error) {
 	ts, ok := sm.dbTesseracts[hash]
 	if !ok {
 		return nil, common.ErrFetchingTesseract
@@ -1248,11 +1245,11 @@ func getICSNodeset(t *testing.T, count int) *common.ICSNodeSet {
 	receiverRandomSet := tests.RandomKramaIDs(t, count)
 	randomNodes := tests.RandomKramaIDs(t, count)
 
-	ics.UpdateNodeSet(common.SenderBehaviourSet, common.NewNodeSet(senderBehaviourSet, getPublicKeys(t, count)))
-	ics.UpdateNodeSet(common.SenderRandomSet, common.NewNodeSet(senderRandomSet, getPublicKeys(t, count)))
-	ics.UpdateNodeSet(common.ReceiverBehaviourSet, common.NewNodeSet(receiverBehaviourSet, getPublicKeys(t, count)))
-	ics.UpdateNodeSet(common.ReceiverRandomSet, common.NewNodeSet(receiverRandomSet, getPublicKeys(t, count)))
-	ics.UpdateNodeSet(common.RandomSet, common.NewNodeSet(randomNodes, getPublicKeys(t, count)))
+	ics.UpdateNodeSet(common.SenderBehaviourSet, common.NewNodeSet(senderBehaviourSet, getPublicKeys(t, count), 0))
+	ics.UpdateNodeSet(common.SenderRandomSet, common.NewNodeSet(senderRandomSet, getPublicKeys(t, count), 0))
+	ics.UpdateNodeSet(common.ReceiverBehaviourSet, common.NewNodeSet(receiverBehaviourSet, getPublicKeys(t, count), 0))
+	ics.UpdateNodeSet(common.ReceiverRandomSet, common.NewNodeSet(receiverRandomSet, getPublicKeys(t, count), 0))
+	ics.UpdateNodeSet(common.RandomSet, common.NewNodeSet(randomNodes, getPublicKeys(t, count), 0))
 
 	return ics
 }

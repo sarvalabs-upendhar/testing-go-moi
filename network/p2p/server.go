@@ -281,8 +281,8 @@ func (s *Server) getKdhtOptions() []kdht.Option {
 }
 
 // ConnectPeerByKramaID connects to peer associated with a given KramaID.
-func (s *Server) ConnectPeerByKramaID(kramaID kramaid.KramaID) error {
-	return s.ConnManager.connectPeerByKramaID(kramaID)
+func (s *Server) ConnectPeerByKramaID(ctx context.Context, kramaID kramaid.KramaID) error {
+	return s.ConnManager.ConnectPeerByKramaID(ctx, kramaID)
 }
 
 // RegisterNewRPCService registers the service with the RPC server of the node

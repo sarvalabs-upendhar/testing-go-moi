@@ -298,6 +298,8 @@ func (p *Params) getConsensusConfig(path string) *config.ConsensusConfig {
 		ValidatorSlotCount:    p.rawCfg.Consensus.ValidatorSlots,
 		OperatorSlotCount:     p.rawCfg.Consensus.OperatorSlots,
 		EnableDebugMode:       p.rawCfg.Consensus.EnableDebugMode,
+		MinGossipPeers:        p.rawCfg.Consensus.MinGossipPeers,
+		MaxGossipPeers:        p.rawCfg.Consensus.MinGossipPeers,
 	}
 }
 

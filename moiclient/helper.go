@@ -30,7 +30,7 @@ import (
 const (
 	JSONRPCURLWaitTime   = 120 * time.Second
 	JSONRPCURLQueryTime  = 5 * time.Second
-	InitialSyncWaitTime  = 10 * time.Minute
+	InitialSyncWaitTime  = 2 * time.Minute
 	InitialSyncQueryTime = 5 * time.Second
 )
 
@@ -336,7 +336,7 @@ func CheckIfNodesInitialSyncDone(t *testing.T, validatorCount int, jsonRPCUrls [
 					return nil, false
 				})
 
-				require.NoError(t, err)
+				require.NoError(t, err, jsonRPCUrls[j])
 			}
 		}(startIndex, endIndex)
 	}

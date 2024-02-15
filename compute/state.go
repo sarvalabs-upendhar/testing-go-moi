@@ -27,6 +27,9 @@ type StateManager interface {
 
 	// UpdateStateObjects must update the existing state objects
 	UpdateStateObjects(objs state.ObjectMap) error
+
+	// Cleanup deletes the dirty state objects
+	Cleanup(addr identifiers.Address)
 }
 
 func FetchIxStateObjects(

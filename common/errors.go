@@ -19,7 +19,7 @@ var (
 	ErrGenesisSetupFailed          = errors.New("genesis setup failed")
 	ErrTimeOut                     = errors.New("timeout")
 	ErrSlotsFull                   = errors.New("slots not available")
-	ErrSlotExists                  = errors.New("slot exists")
+	ErrSlotNotFound                = errors.New("slot not found")
 	ErrContextStateNotFound        = errors.New("context state not found")
 	ErrHashMismatch                = errors.New("hash mismatch")
 	ErrHeightMismatch              = errors.New("height mismatch")

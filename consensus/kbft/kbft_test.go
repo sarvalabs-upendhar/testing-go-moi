@@ -50,6 +50,7 @@ func TestFullRound_WithMultipleNodes(t *testing.T) {
 	}
 
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
+	voteset := NewHeightVoteSet(make([]string, 0), clusterInfo.NewHeights(), clusterInfo, hclog.NewNullLogger())
 	ctx := context.Background()
 	thisNode := valSet[common.SenderBehaviourSet][0]
 
@@ -65,6 +66,7 @@ func TestFullRound_WithMultipleNodes(t *testing.T) {
 		in,
 		thisNode,
 		clusterInfo,
+		voteset,
 		c.finalizeTesseractGrid,
 		withDefaultEventMux(),
 		WithLogger(hclog.NewNullLogger()),
@@ -138,6 +140,7 @@ func TestFullRound_WithNonRegisteredReceiver(t *testing.T) {
 		common.SargaAddress: 9,
 	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, true)
+	voteset := NewHeightVoteSet(make([]string, 0), clusterInfo.NewHeights(), clusterInfo, hclog.NewNullLogger())
 	ctx := context.Background()
 	thisNode := valSet[common.SenderBehaviourSet][0]
 
@@ -153,6 +156,7 @@ func TestFullRound_WithNonRegisteredReceiver(t *testing.T) {
 		in,
 		thisNode,
 		clusterInfo,
+		voteset,
 		c.finalizeTesseractGrid,
 		withDefaultEventMux(),
 		WithLogger(hclog.NewNullLogger()),
@@ -223,6 +227,7 @@ func TestFullRound_WithNilReceiverAddress(t *testing.T) {
 		ixs[0].Sender(): 2,
 	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
+	voteset := NewHeightVoteSet(make([]string, 0), clusterInfo.NewHeights(), clusterInfo, hclog.NewNullLogger())
 	ctx := context.Background()
 	thisNode := valSet[common.SenderBehaviourSet][0]
 
@@ -238,6 +243,7 @@ func TestFullRound_WithNilReceiverAddress(t *testing.T) {
 		in,
 		thisNode,
 		clusterInfo,
+		voteset,
 		c.finalizeTesseractGrid,
 		withDefaultEventMux(),
 		WithLogger(hclog.NewNullLogger()),
@@ -311,6 +317,7 @@ func TestFullRound_WithLessThan23rdPrevotes(t *testing.T) {
 		ixs[0].Receiver(): 3,
 	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
+	voteset := NewHeightVoteSet(make([]string, 0), clusterInfo.NewHeights(), clusterInfo, hclog.NewNullLogger())
 	ctx := context.Background()
 	thisNode := valSet[common.SenderBehaviourSet][0]
 
@@ -326,6 +333,7 @@ func TestFullRound_WithLessThan23rdPrevotes(t *testing.T) {
 		in,
 		thisNode,
 		clusterInfo,
+		voteset,
 		c.finalizeTesseractGrid,
 		withDefaultEventMux(),
 		WithLogger(hclog.NewNullLogger()),
@@ -385,6 +393,7 @@ func TestFullRound_WithLessThan23rdPrecommit(t *testing.T) {
 		ixs[0].Receiver(): 3,
 	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
+	voteset := NewHeightVoteSet(make([]string, 0), clusterInfo.NewHeights(), clusterInfo, hclog.NewNullLogger())
 	ctx := context.Background()
 	thisNode := valSet[common.SenderBehaviourSet][0]
 
@@ -400,6 +409,7 @@ func TestFullRound_WithLessThan23rdPrecommit(t *testing.T) {
 		in,
 		thisNode,
 		clusterInfo,
+		voteset,
 		c.finalizeTesseractGrid,
 		withDefaultEventMux(),
 		WithLogger(hclog.NewNullLogger()),
@@ -465,6 +475,7 @@ func TestFullRound_WithAny23rdPrevote_Any23rdPrecommit(t *testing.T) {
 		ixs[0].Receiver(): 3,
 	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
+	voteset := NewHeightVoteSet(make([]string, 0), clusterInfo.NewHeights(), clusterInfo, hclog.NewNullLogger())
 	ctx := context.Background()
 	thisNode := valSet[common.SenderBehaviourSet][0]
 
@@ -480,6 +491,7 @@ func TestFullRound_WithAny23rdPrevote_Any23rdPrecommit(t *testing.T) {
 		in,
 		thisNode,
 		clusterInfo,
+		voteset,
 		c.finalizeTesseractGrid,
 		withDefaultEventMux(),
 		WithLogger(hclog.NewNullLogger()),
@@ -561,6 +573,7 @@ func TestFullRound_With23rdNilPrecommit(t *testing.T) {
 		ixs[0].Receiver(): 3,
 	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
+	voteset := NewHeightVoteSet(make([]string, 0), clusterInfo.NewHeights(), clusterInfo, hclog.NewNullLogger())
 	ctx := context.Background()
 	thisNode := valSet[common.SenderBehaviourSet][0]
 
@@ -576,6 +589,7 @@ func TestFullRound_With23rdNilPrecommit(t *testing.T) {
 		in,
 		thisNode,
 		clusterInfo,
+		voteset,
 		c.finalizeTesseractGrid,
 		withDefaultEventMux(),
 		WithLogger(hclog.NewNullLogger()),
@@ -659,6 +673,7 @@ func TestSignVote(t *testing.T) {
 	}
 
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
+	voteset := NewHeightVoteSet(make([]string, 0), clusterInfo.NewHeights(), clusterInfo, hclog.NewNullLogger())
 	ctx := context.Background()
 	thisNode := valSet[common.SenderBehaviourSet][0]
 
@@ -674,6 +689,7 @@ func TestSignVote(t *testing.T) {
 		in,
 		thisNode,
 		clusterInfo,
+		voteset,
 		c.finalizeTesseractGrid,
 		withDefaultEventMux(),
 		WithLogger(hclog.NewNullLogger()),
@@ -712,6 +728,7 @@ func TestConflictPrevote(t *testing.T) {
 	}
 
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
+	voteset := NewHeightVoteSet(make([]string, 0), clusterInfo.NewHeights(), clusterInfo, hclog.NewNullLogger())
 	ctx := context.Background()
 	thisNode := valSet[common.SenderBehaviourSet][0]
 
@@ -727,6 +744,7 @@ func TestConflictPrevote(t *testing.T) {
 		in,
 		thisNode,
 		clusterInfo,
+		voteset,
 		c.finalizeTesseractGrid,
 		withDefaultEventMux(),
 		WithLogger(hclog.NewNullLogger()),
@@ -786,6 +804,7 @@ func TestConflictPrecommit(t *testing.T) {
 	}
 
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
+	voteset := NewHeightVoteSet(make([]string, 0), clusterInfo.NewHeights(), clusterInfo, hclog.NewNullLogger())
 	ctx := context.Background()
 	thisNode := valSet[common.SenderBehaviourSet][0]
 
@@ -801,6 +820,7 @@ func TestConflictPrecommit(t *testing.T) {
 		in,
 		thisNode,
 		clusterInfo,
+		voteset,
 		c.finalizeTesseractGrid,
 		withDefaultEventMux(),
 		WithLogger(hclog.NewNullLogger()),
@@ -875,6 +895,7 @@ func TestRandomValidatorPreVote(t *testing.T) {
 		ixs[0].Receiver(): 3,
 	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
+	voteset := NewHeightVoteSet(make([]string, 0), clusterInfo.NewHeights(), clusterInfo, hclog.NewNullLogger())
 	ctx := context.Background()
 	thisNode := valSet[common.SenderBehaviourSet][0]
 
@@ -890,6 +911,7 @@ func TestRandomValidatorPreVote(t *testing.T) {
 		in,
 		thisNode,
 		clusterInfo,
+		voteset,
 		c.finalizeTesseractGrid,
 		withDefaultEventMux(),
 		WithLogger(hclog.NewNullLogger()),
@@ -946,6 +968,7 @@ func TestRandomValidatorPrecommit(t *testing.T) {
 		ixs[0].Receiver(): 3,
 	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
+	voteset := NewHeightVoteSet(make([]string, 0), clusterInfo.NewHeights(), clusterInfo, hclog.NewNullLogger())
 	ctx := context.Background()
 	thisNode := valSet[common.SenderBehaviourSet][0]
 
@@ -961,6 +984,7 @@ func TestRandomValidatorPrecommit(t *testing.T) {
 		in,
 		thisNode,
 		clusterInfo,
+		voteset,
 		c.finalizeTesseractGrid,
 		withDefaultEventMux(),
 		WithLogger(hclog.NewNullLogger()),
@@ -1031,6 +1055,7 @@ func TestReceivePrevoteDuringPrevoteWait(t *testing.T) {
 		ixs[0].Receiver(): 3,
 	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
+	voteset := NewHeightVoteSet(make([]string, 0), clusterInfo.NewHeights(), clusterInfo, hclog.NewNullLogger())
 	ctx := context.Background()
 	thisNode := valSet[common.SenderBehaviourSet][0]
 
@@ -1046,6 +1071,7 @@ func TestReceivePrevoteDuringPrevoteWait(t *testing.T) {
 		in,
 		thisNode,
 		clusterInfo,
+		voteset,
 		c.finalizeTesseractGrid,
 		withDefaultEventMux(),
 		WithLogger(hclog.NewNullLogger()),
@@ -1109,6 +1135,7 @@ func TestReceivePrecommitDuringPrecommmitWait(t *testing.T) {
 		ixs[0].Receiver(): 3,
 	}
 	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs, false)
+	voteset := NewHeightVoteSet(make([]string, 0), clusterInfo.NewHeights(), clusterInfo, hclog.NewNullLogger())
 	ctx := context.Background()
 	thisNode := valSet[common.SenderBehaviourSet][0]
 
@@ -1124,6 +1151,7 @@ func TestReceivePrecommitDuringPrecommmitWait(t *testing.T) {
 		in,
 		thisNode,
 		clusterInfo,
+		voteset,
 		c.finalizeTesseractGrid,
 		withDefaultEventMux(),
 		WithLogger(hclog.NewNullLogger()),

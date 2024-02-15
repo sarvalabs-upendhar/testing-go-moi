@@ -323,7 +323,7 @@ func (te *TestEnvironment) SetupSuite() {
 	te.getUrlsAndCheckInitialSync()
 
 	if *networkType == cloud {
-		time.Sleep(30 * time.Second)
+		time.Sleep(60 * time.Second)
 	}
 
 	ctx, cancel = context.WithTimeout(context.Background(), DefaultQueryTime)

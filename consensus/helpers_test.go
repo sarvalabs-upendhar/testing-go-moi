@@ -13,7 +13,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi-identifiers"
-	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -21,9 +20,6 @@ import (
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/common/utils"
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
-	"github.com/sarvalabs/go-moi/crypto"
-	mudraCommon "github.com/sarvalabs/go-moi/crypto/common"
-	networkmsg "github.com/sarvalabs/go-moi/network/message"
 	"github.com/sarvalabs/go-moi/network/rpc"
 	"github.com/sarvalabs/go-moi/state"
 )
@@ -113,17 +109,17 @@ func (m *MockServer) DisconnectPeerByKramaID(kramaID kramaid.KramaID) error {
 
 type MockEngine struct {
 	logger   hclog.Logger
-	requests chan Request
+	requests chan ktypes.Request
 }
 
-func processRequests(requestsChan <-chan Request) {
+func processRequests(requestsChan <-chan ktypes.Request) {
 	go func() {
 		request := <-requestsChan
-		request.responseChan <- Response{}
+		request.ResponseChan <- nil
 	}()
 }
 
-func (k *MockEngine) Requests() chan Request {
+func (k *MockEngine) Requests() chan ktypes.Request {
 	processRequests(k.requests)
 
 	return k.requests
@@ -142,7 +138,7 @@ func NewMockStateManager() *MockStateManager {
 		accountRegistration: make(map[identifiers.Address]bool),
 	}
 }
-
+func (ms *MockStateManager) Cleanup(addr identifiers.Address) {}
 func (ms *MockStateManager) FetchInteractionContext(
 	ctx context.Context,
 	ix *common.Interaction,
@@ -238,8 +234,9 @@ func createTestKramaEngine(t *testing.T, params *createKramaEngineParams) *Engin
 		cfg,
 		hclog.NewNullLogger(),
 		nil,
+		"",
 		sm,
-		server,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -296,8 +293,7 @@ func createTestNodeSet(t *testing.T, n int) *common.NodeSet {
 	t.Helper()
 
 	kramaIDs, publicKeys := tests.GetTestKramaIdsWithPublicKeys(t, n)
-	nodeset := common.NewNodeSet(kramaIDs, publicKeys)
-	nodeset.QuorumSize = n
+	nodeset := common.NewNodeSet(kramaIDs, publicKeys, n)
 
 	for i := 0; i < n; i++ {
 		nodeset.Responses.SetIndex(i, true)
@@ -310,8 +306,7 @@ func createTestRandomSet(t *testing.T, total, actual int) *common.NodeSet {
 	t.Helper()
 
 	kramaIDs, publicKeys := tests.GetTestKramaIdsWithPublicKeys(t, total)
-	nodeset := common.NewNodeSet(kramaIDs, publicKeys)
-	nodeset.QuorumSize = actual
+	nodeset := common.NewNodeSet(kramaIDs, publicKeys, actual)
 
 	for i := 0; i < actual; i++ {
 		nodeset.Responses.SetIndex(i, true)
@@ -395,6 +390,7 @@ func checkContextDelta(
 	require.Equal(t, expectedContextDelta[common.SargaAddress], actualContextDelta[common.SargaAddress])
 }
 
+/*
 func getRawInteraction(t *testing.T, ixData common.IxData, sign []byte) []byte {
 	t.Helper()
 
@@ -410,7 +406,7 @@ func getRawInteraction(t *testing.T, ixData common.IxData, sign []byte) []byte {
 func getSignature(t *testing.T, kramaID kramaid.KramaID, rawIxns []byte, vault *crypto.KramaVault) ([]byte, []byte) {
 	t.Helper()
 
-	canonicalICSReq := networkmsg.CanonicalICSRequest{
+	canonicalICSReq := ktypes.CanonicalICSRequest{
 		Operator: string(kramaID),
 		IxData:   rawIxns,
 	}
@@ -423,3 +419,4 @@ func getSignature(t *testing.T, kramaID kramaid.KramaID, rawIxns []byte, vault *
 
 	return rawCanonicalICSReq, icsReqSign
 }
+*/

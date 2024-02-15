@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/connmgr"
+
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
@@ -181,14 +183,22 @@ func (cm *ConnectionManager) getConnRTTRange(rtt int64) uint8 {
 	}
 }
 
-// protectConnection protects the connection to a peer from being pruned or disconnected.
+// ProtectConnection protects the connection to a peer from being pruned or disconnected.
 // Tagging allows different parts of the system to manage protections without interfering with one another.
-func (cm *ConnectionManager) protectConnection(peerID peer.ID, tag string) {
+func (cm *ConnectionManager) ProtectConnection(peerID peer.ID, tag string) {
 	cm.server.host.ConnManager().Protect(peerID, tag)
 }
 
-// unprotectConnection removes a protection placed on the connection to a peer under the specified tag.
-func (cm *ConnectionManager) unprotectConnection(peerID peer.ID, tag string) {
+func (cm *ConnectionManager) IsConnectionProtected(peerID peer.ID, tag string) bool {
+	return cm.server.host.ConnManager().IsProtected(peerID, tag)
+}
+
+func (cm *ConnectionManager) GetConnInfo(peerID peer.ID) *connmgr.TagInfo {
+	return cm.server.host.ConnManager().GetTagInfo(peerID)
+}
+
+// UnprotectConnection removes a protection placed on the connection to a peer under the specified tag.
+func (cm *ConnectionManager) UnprotectConnection(peerID peer.ID, tag string) {
 	cm.server.host.ConnManager().Unprotect(peerID, tag)
 }
 
@@ -214,14 +224,14 @@ func (cm *ConnectionManager) isConnectedToPeer(peerID peer.ID) bool {
 }
 
 // connectPeer connects to a peer if not already connected.
-func (cm *ConnectionManager) connectPeer(peerInfo peer.AddrInfo) error {
+func (cm *ConnectionManager) connectPeer(ctx context.Context, peerInfo peer.AddrInfo) error {
 	// check if the host is already connected to the peer
 	if cm.isConnectedToPeer(peerInfo.ID) {
 		return common.ErrConnectionExists
 	}
 
 	// attempt to connect the node host to the peer
-	if err := cm.server.host.Connect(cm.server.ctx, peerInfo); err != nil {
+	if err := cm.server.host.Connect(ctx, peerInfo); err != nil {
 		return err
 	}
 
@@ -230,8 +240,8 @@ func (cm *ConnectionManager) connectPeer(peerInfo peer.AddrInfo) error {
 	return nil
 }
 
-// connectPeerByKramaID connects to a node using its KramaID.
-func (cm *ConnectionManager) connectPeerByKramaID(kramaID kramaid.KramaID) error {
+// ConnectPeerByKramaID connects to a node using its KramaID.
+func (cm *ConnectionManager) ConnectPeerByKramaID(ctx context.Context, kramaID kramaid.KramaID) error {
 	peerID, err := kramaID.DecodedPeerID()
 	if err != nil {
 		return err
@@ -243,7 +253,7 @@ func (cm *ConnectionManager) connectPeerByKramaID(kramaID kramaid.KramaID) error
 		return err
 	}
 
-	err = cm.connectPeer(*peerInfo)
+	err = cm.connectPeer(ctx, *peerInfo)
 	if err != nil {
 		return err
 	}
@@ -262,7 +272,7 @@ func (cm *ConnectionManager) connectToMaddr(peerAddr maddr.Multiaddr) error {
 		return err
 	}
 
-	cm.protectConnection(peerInfo.ID, MOIStreamTag)
+	cm.ProtectConnection(peerInfo.ID, MOIStreamTag)
 
 	return nil
 }
@@ -321,7 +331,7 @@ func (cm *ConnectionManager) connectToTrustedNodes() {
 			continue
 		}
 
-		if err := cm.ConnectAndRegisterPeer(*peerInfo, kramaID, rtt); err != nil {
+		if err := cm.ConnectAndRegisterPeer(cm.server.ctx, *peerInfo, kramaID, rtt); err != nil {
 			cm.server.logger.Error("Failed to establish connection with trusted peer", "err", err)
 		}
 	}
@@ -329,23 +339,31 @@ func (cm *ConnectionManager) connectToTrustedNodes() {
 
 // ConnectAndRegisterPeer connects to a specific peer, establishes a stream and registers the peer to the
 // handler working set.
-func (cm *ConnectionManager) ConnectAndRegisterPeer(peerInfo peer.AddrInfo, kramaID kramaid.KramaID, rtt int64) error {
+func (cm *ConnectionManager) ConnectAndRegisterPeer(
+	ctx context.Context,
+	peerInfo peer.AddrInfo,
+	kramaID kramaid.KramaID,
+	rtt int64,
+) error {
 	var (
 		stream network.Stream
 		err    error
 		kPeer  *Peer
 	)
 
+	timedCtx, cancel := context.WithTimeout(ctx, connectionTimeout)
+	defer cancel()
+
 	if !cm.server.cfg.NoDiscovery && cm.isOutboundConnLimitReachedForRange(cm.getConnRTTRange(rtt)) {
 		return common.ErrOutboundConnLimit
 	}
 
-	if err = cm.connectPeer(peerInfo); err != nil && !errors.Is(err, common.ErrConnectionExists) {
+	if err = cm.connectPeer(timedCtx, peerInfo); err != nil && !errors.Is(err, common.ErrConnectionExists) {
 		return err
 	}
 
 	// create a new stream to the kPeer over the MOI protocol
-	stream, err = cm.NewStream(cm.server.ctx, peerInfo.ID, config.MOIProtocolStream, MOIStreamTag)
+	stream, err = cm.NewStream(timedCtx, peerInfo.ID, config.MOIProtocolStream, MOIStreamTag)
 	if err != nil {
 		cm.server.logger.Error("Failed to open new stream", "err", err)
 		// return error if stream setup fails
@@ -402,7 +420,7 @@ func (cm *ConnectionManager) NewStream(
 	}
 
 	// Protect the peer connection
-	cm.protectConnection(stream.Conn().RemotePeer(), tag)
+	cm.ProtectConnection(stream.Conn().RemotePeer(), tag)
 
 	return stream, nil
 }
@@ -410,7 +428,9 @@ func (cm *ConnectionManager) NewStream(
 // SetupStreamHandler sets the stream handler for a given ProtocolID on the Host's Mux
 func (cm *ConnectionManager) SetupStreamHandler(protocolID protocol.ID, tag string, handle func(network.Stream)) {
 	cm.server.host.SetStreamHandler(protocolID, func(stream network.Stream) {
-		cm.server.ConnManager.protectConnection(stream.Conn().RemotePeer(), tag)
+		if tag != "" {
+			cm.server.ConnManager.ProtectConnection(stream.Conn().RemotePeer(), tag)
+		}
 
 		handle(stream)
 	})
@@ -424,7 +444,7 @@ func (cm *ConnectionManager) RemoveStreamHandler(protocolID protocol.ID) {
 // CloseStream closes a network stream, releases protection, and returns an error if closing fails.
 func (cm *ConnectionManager) CloseStream(stream network.Stream, tag string) error {
 	// Release peer connection protection
-	cm.unprotectConnection(stream.Conn().RemotePeer(), tag)
+	cm.UnprotectConnection(stream.Conn().RemotePeer(), tag)
 
 	if err := stream.Close(); err != nil {
 		return err
@@ -436,7 +456,7 @@ func (cm *ConnectionManager) CloseStream(stream network.Stream, tag string) erro
 // ResetStream resets a network stream, releases protection, and returns an error if resetting fails.
 func (cm *ConnectionManager) ResetStream(stream network.Stream, tag string) error {
 	// Release peer connection protection
-	cm.unprotectConnection(stream.Conn().RemotePeer(), tag)
+	cm.UnprotectConnection(stream.Conn().RemotePeer(), tag)
 
 	if err := stream.Reset(); err != nil {
 		return err

@@ -245,5 +245,22 @@ func ConvertMapToSlice(m map[kramaid.KramaID]struct{}) []kramaid.KramaID {
 	return slice
 }
 
+// RetryUntilTimeout retries the given function until the timeout is reached.
+func RetryUntilTimeout(timeout time.Duration, retryInterval time.Duration, fn func() error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(retryInterval):
+			if err := fn(); err == nil {
+				return
+			}
+		}
+	}
+}
+
 // WrappedVal represents a gossip validator which also returns an error along with the result.
 type WrappedVal func(context.Context, peer.ID, *pubsub.Message) (pubsub.ValidationResult, error)

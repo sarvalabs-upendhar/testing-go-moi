@@ -66,6 +66,13 @@ func (mi *NodeMetaInfo) GetWalletCount() int32 {
 	return mi.WalletCount
 }
 
+func (mi *NodeMetaInfo) GetPublicKey() []byte {
+	mi.mtx.RLock()
+	defer mi.mtx.RUnlock()
+
+	return append([]byte(nil), mi.PublicKey...)
+}
+
 func (mi *NodeMetaInfo) GetMultiAddress() ([]multiaddr.Multiaddr, error) {
 	mi.mtx.RLock()
 	defer mi.mtx.RUnlock()

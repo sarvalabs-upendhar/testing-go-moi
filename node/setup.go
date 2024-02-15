@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/sarvalabs/go-moi/consensus/transport"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
@@ -183,17 +185,27 @@ func (n *Node) setupChainManager() (err error) {
 
 // setupKramaEngine creates new Krama Engine object and setups it to node
 func (n *Node) setupKramaEngine() (err error) {
+	kramaTransport := transport.NewKramaTransport(
+		n.network.GetKramaID(),
+		n.logger,
+		n.nodeMetrics.transport,
+		n.network,
+		n.network.ConnManager,
+		n.cfg.Consensus.MinGossipPeers, n.cfg.Consensus.MaxGossipPeers,
+	)
+
 	if n.kramaEngine, err = consensus.NewKramaEngine(
 		n.cfg.Consensus,
 		n.logger,
 		n.eventMux,
+		n.network.GetKramaID(),
 		n.state,
-		n.network,
 		n.exec,
 		n.ixpool,
 		n.vault,
 		n.chain,
 		n.handlers.flux,
+		kramaTransport,
 		n.nodeMetrics.krama,
 		n.consensusSlots,
 	); err != nil {

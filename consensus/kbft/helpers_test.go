@@ -105,8 +105,7 @@ func createTestNodeSet(t *testing.T, n int) (*common.NodeSet, []*crypto.KramaVau
 		valset[i].SetConsensusPrivateKey(privateKey)
 	}
 
-	nodeset := common.NewNodeSet(kramaIDs, publicKeys)
-	nodeset.QuorumSize = n
+	nodeset := common.NewNodeSet(kramaIDs, publicKeys, n)
 
 	for i := 0; i < n; i++ {
 		nodeset.Responses.SetIndex(i, true)
@@ -137,8 +136,7 @@ func createTestRandomSet(t *testing.T, total, actual int) (*common.NodeSet, []*c
 		valset[i].SetConsensusPrivateKey(privateKey)
 	}
 
-	nodeset := common.NewNodeSet(kramaIDs, publicKeys)
-	nodeset.QuorumSize = actual
+	nodeset := common.NewNodeSet(kramaIDs, publicKeys, actual)
 
 	for i := 0; i < actual; i++ {
 		nodeset.Responses.SetIndex(i, true)
@@ -232,11 +230,12 @@ func signVote(
 	require.NotEqual(t, valIndex, -1)
 
 	v := &ktypes.Vote{
-		ValidatorIndex: valIndex,
-		TSHash:         tsHash,
-		Heights:        heights,
-		Round:          round,
-		Type:           msgType,
+		ValidatorIndex:   valIndex,
+		ValidatorKramaID: kramaVault.KramaID(),
+		TSHash:           tsHash,
+		Heights:          heights,
+		Round:            round,
+		Type:             msgType,
 	}
 
 	rawData, err := v.SignBytes()

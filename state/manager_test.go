@@ -927,8 +927,8 @@ func TestStateManager_FetchParticipantContextByHash(t *testing.T) {
 			require.NoError(t, err)
 			checkIfNodesetEqual(
 				t,
-				common.NewNodeSet(obj[0].Ids, pk[:2]),
-				common.NewNodeSet(obj[1].Ids, pk[2:4]),
+				common.NewNodeSet(obj[0].Ids, pk[:2], 0),
+				common.NewNodeSet(obj[1].Ids, pk[2:4], 0),
 				behCtx,
 				randCtx,
 			)
@@ -1075,8 +1075,8 @@ func TestStateManager_FetchContextLock(t *testing.T) {
 			name: "receiver has nil context hash",
 			tess: ts[3],
 			nodes: getICSNodes(
-				common.NewNodeSet(obj[0].Ids, pk[:2]),
-				common.NewNodeSet(obj[1].Ids, pk[2:4]),
+				common.NewNodeSet(obj[0].Ids, pk[:2], 0),
+				common.NewNodeSet(obj[1].Ids, pk[2:4], 0),
 				nil,
 				nil,
 			),
@@ -1086,18 +1086,18 @@ func TestStateManager_FetchContextLock(t *testing.T) {
 			tess: ts[4],
 			nodes: getICSNodes(
 				nil, nil,
-				common.NewNodeSet(obj[2].Ids, pk[4:6]),
-				common.NewNodeSet(obj[3].Ids, pk[6:8]),
+				common.NewNodeSet(obj[2].Ids, pk[4:6], 0),
+				common.NewNodeSet(obj[3].Ids, pk[6:8], 0),
 			),
 		},
 		{
 			name: "valid context hashes",
 			tess: ts[0],
 			nodes: getICSNodes(
-				common.NewNodeSet(obj[0].Ids, pk[:2]),
-				common.NewNodeSet(obj[1].Ids, pk[2:4]),
-				common.NewNodeSet(obj[2].Ids, pk[4:6]),
-				common.NewNodeSet(obj[3].Ids, pk[6:8]),
+				common.NewNodeSet(obj[0].Ids, pk[:2], 0),
+				common.NewNodeSet(obj[1].Ids, pk[2:4], 0),
+				common.NewNodeSet(obj[2].Ids, pk[4:6], 0),
+				common.NewNodeSet(obj[3].Ids, pk[6:8], 0),
 			),
 		},
 	}
@@ -2576,8 +2576,8 @@ func TestStateManager_FetchLatestParticipantContext(t *testing.T) {
 			name:    "valid hash and public keys",
 			address: ts[0].AnyAddress(),
 			ctxHash: ts[0].LatestContextHash(ts[0].AnyAddress()),
-			behSet:  common.NewNodeSet(obj[0].Ids, pk[:2]),
-			randSet: common.NewNodeSet(obj[1].Ids, pk[2:4]),
+			behSet:  common.NewNodeSet(obj[0].Ids, pk[:2], 0),
+			randSet: common.NewNodeSet(obj[1].Ids, pk[2:4], 0),
 		},
 	}
 
@@ -2683,8 +2683,8 @@ func TestStateManager_GetReceiverContext_RegisteredAccount(t *testing.T) {
 		{
 			name:        "context of receiver found",
 			ix:          ixs[0],
-			behSet:      common.NewNodeSet(obj[0].Ids, pk[:2]),
-			randSet:     common.NewNodeSet(obj[1].Ids, pk[2:4]),
+			behSet:      common.NewNodeSet(obj[0].Ids, pk[:2], 0),
+			randSet:     common.NewNodeSet(obj[1].Ids, pk[2:4], 0),
 			address:     ixs[0].Receiver(),
 			contextHash: ts.LatestContextHash(ts.AnyAddress()),
 		},
@@ -2793,8 +2793,8 @@ func TestStateManager_GetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 					sm.senatus = mocksenatus
 				},
 			},
-			behSet:      common.NewNodeSet(obj[0].Ids, pk[:2]),
-			randSet:     common.NewNodeSet(obj[1].Ids, pk[2:4]),
+			behSet:      common.NewNodeSet(obj[0].Ids, pk[:2], 0),
+			randSet:     common.NewNodeSet(obj[1].Ids, pk[2:4], 0),
 			address:     common.SargaAddress,
 			contextHash: ts.LatestContextHash(ts.AnyAddress()),
 		},
@@ -3018,10 +3018,10 @@ func TestStateManager_FetchInteractionContext(t *testing.T) {
 			name: "both sender and receiver addresses has context",
 			ix:   ixs[0],
 			ics: getICSNodes(
-				common.NewNodeSet(obj[0].Ids, pk[:2]),
-				common.NewNodeSet(obj[1].Ids, pk[2:4]),
-				common.NewNodeSet(obj[2].Ids, pk[4:6]),
-				common.NewNodeSet(obj[3].Ids, pk[6:8]),
+				common.NewNodeSet(obj[0].Ids, pk[:2], 0),
+				common.NewNodeSet(obj[1].Ids, pk[2:4], 0),
+				common.NewNodeSet(obj[2].Ids, pk[4:6], 0),
+				common.NewNodeSet(obj[3].Ids, pk[6:8], 0),
 			),
 			contextHashes: map[identifiers.Address]common.Hash{
 				ixs[0].Sender():   ts[0].LatestContextHash(ts[0].AnyAddress()),

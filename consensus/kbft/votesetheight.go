@@ -8,19 +8,9 @@ import (
 	"github.com/hashicorp/go-hclog"
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
-
 	"github.com/sarvalabs/go-moi/common"
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
 )
-
-// RoundVoteSet is a struct that represents a set for a votes for a single round.
-type RoundVoteSet struct {
-	// Represents the pre-votes for the round
-	Prevotes *VoteSet
-
-	// Represents the pre-commits for the round
-	Precommits *VoteSet
-}
 
 // HeightVoteSet is a struct that represents a set of votes across multiple heights and votes
 type HeightVoteSet struct {
@@ -90,10 +80,10 @@ func (hvs *HeightVoteSet) Reset(heights map[identifiers.Address]uint64, valset *
 	hvs.round = 0
 }
 
-// AddVote is a method of HeightVoteSet that adds a new vote for a peer id.
+// addVote is a method of HeightVoteSet that adds a new vote for a peer id.
 // Adds the vote the voteset that corresponds to the vote round and type.
 // If the peer has more than two catchup rounds, the vote is not added.
-func (hvs *HeightVoteSet) AddVote(v *ktypes.Vote, peerID kramaid.KramaID) (bool, error) {
+func (hvs *HeightVoteSet) addVote(v *ktypes.Vote, peerID kramaid.KramaID) (bool, error) {
 	// Acquire lock
 	hvs.mtx.Lock()
 	defer hvs.mtx.Unlock()
@@ -111,20 +101,20 @@ func (hvs *HeightVoteSet) AddVote(v *ktypes.Vote, peerID kramaid.KramaID) (bool,
 			// Add the round to the catch up rounds and the voteset
 			hvs.peerCatchupRounds[peerID] = append(rounds, v.Round)
 
-			return vs.AddVote(v, peerID)
+			return vs.AddVote(v)
 		} else {
 			return false, errors.New("could not add vote. peer has more than 2 catchup rounds")
 		}
 	} else {
 		// Add the vote to the voteset
-		return vs.AddVote(v, peerID)
+		return vs.AddVote(v)
 	}
 }
 
-// SetRound is a method of HeightVoteSet that sets the round for a given round value.
+// setRound is a method of HeightVoteSet that sets the round for a given round value.
 // Ensures that the given round value is greater than the current round or that the current round is not 0.
 // Adds all rounds between current round and given round if it does not exist already exist.
-func (hvs *HeightVoteSet) SetRound(round int32) {
+func (hvs *HeightVoteSet) setRound(round int32) {
 	// Acquire lock
 	hvs.mtx.Lock()
 	defer hvs.mtx.Unlock()
@@ -165,6 +155,31 @@ func (hvs *HeightVoteSet) addRound(r int32) {
 	}
 }
 
+func (hvs *HeightVoteSet) GetRoundBitVoteSet() map[int32]*ktypes.VoteBitSet {
+	hvs.mtx.Lock()
+	defer hvs.mtx.Unlock()
+
+	if len(hvs.roundVoteSets) == 0 {
+		return nil
+	}
+
+	// Create a copy of the map to avoid concurrency issues
+	rvs := make(map[int32]*ktypes.VoteBitSet, len(hvs.roundVoteSets))
+
+	for key, value := range hvs.roundVoteSets {
+		if key == -1 {
+			continue
+		}
+
+		set := value.VoteBitSet()
+		if set != nil {
+			rvs[key] = set
+		}
+	}
+
+	return rvs
+}
+
 // getVoteSet is a method of HeightVoteSet that retrieves the VoteSet for a given vote type and round.
 // Returns nil if round does not exist and panics if the votetype is invalid.
 func (hvs *HeightVoteSet) getVoteSet(round int32, votetype ktypes.ConsensusMsgType) *VoteSet {
@@ -190,6 +205,59 @@ func (hvs *HeightVoteSet) getVoteSet(round int32, votetype ktypes.ConsensusMsgTy
 	}
 
 	return nil
+}
+
+func (hvs *HeightVoteSet) GetVoteSet(round int32, votetype ktypes.ConsensusMsgType) *VoteSet {
+	hvs.mtx.Lock()
+	defer hvs.mtx.Unlock()
+
+	return hvs.getVoteSet(round, votetype)
+}
+
+func (hvs *HeightVoteSet) GetVotes(roundVoteSet map[int32]*ktypes.VoteBitSet) []*ktypes.Vote {
+	hvs.mtx.Lock()
+	defer hvs.mtx.Unlock()
+
+	votes := make([]*ktypes.Vote, 0)
+
+	for round, voteBitSet := range roundVoteSet {
+		if _, ok := hvs.roundVoteSets[round]; !ok {
+			continue
+		}
+
+		if voteBitSet.Prevotes != nil && !voteBitSet.Prevotes.IsEmpty() {
+			prevotes := hvs.getVoteSet(round, ktypes.PREVOTE)
+			for _, valIndex := range voteBitSet.Prevotes.GetTrueIndices() {
+				prevotes.mtx.RLock()
+
+				v, err := prevotes.getVoteByIndex(valIndex)
+				if err != nil {
+					continue
+				}
+
+				votes = append(votes, v)
+				prevotes.mtx.RUnlock()
+			}
+		}
+
+		if voteBitSet.Precommits != nil && !voteBitSet.Precommits.IsEmpty() {
+			preCommits := hvs.getVoteSet(round, ktypes.PRECOMMIT)
+			for _, valIndex := range voteBitSet.Precommits.GetTrueIndices() {
+				preCommits.mtx.RLock()
+
+				v, err := preCommits.getVoteByIndex(valIndex)
+				if err != nil {
+					continue
+				}
+
+				votes = append(votes, v)
+
+				preCommits.mtx.RUnlock()
+			}
+		}
+	}
+
+	return votes
 }
 
 // getPrevotes is a method of HeightVoteSet that retrieves the prevotes from the set for a given round value.

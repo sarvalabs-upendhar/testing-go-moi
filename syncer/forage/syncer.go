@@ -1428,7 +1428,7 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 			return false, errors.Wrap(err, "failed to validate tesseract")
 		}
 
-		if err = s.fetchTesseractState(msg.address(), msg.tesseract, msg.icsNodeSet.GetNodes()); err != nil {
+		if err = s.fetchTesseractState(msg.address(), msg.tesseract, msg.icsNodeSet.GetNodes(false)); err != nil {
 			return false, errors.Wrap(err, "failed to fetch tesseract state")
 		}
 

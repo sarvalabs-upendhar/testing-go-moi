@@ -709,7 +709,7 @@ func connectClientToServers(t *testing.T, client *p2p.Server, servers ...*p2p.Se
 
 		client.AddPeerInfo(info)
 
-		err := client.ConnManager.ConnectAndRegisterPeer(*info, s.GetKramaID(), 50)
+		err := client.ConnManager.ConnectAndRegisterPeer(context.Background(), *info, s.GetKramaID(), 50)
 		require.NoError(t, err)
 	}
 }

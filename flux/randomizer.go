@@ -79,11 +79,16 @@ func NewRandomizer(
 }
 
 func (r *Randomizer) addPeers(slot int) {
+	ctx, cancel := context.WithCancel(r.ctx)
+
 	r.peers[slot].mtx.Lock()
-	defer r.peers[slot].mtx.Unlock()
+	defer func() {
+		r.peers[slot].mtx.Unlock()
+		cancel()
+	}()
 
 	// Retrieve the keys and values from the db
-	peerInfos, err := r.senatus.StreamPeerInfos(r.ctx)
+	peerInfos, err := r.senatus.StreamPeerInfos(ctx)
 	if err != nil {
 		r.logger.Error("Unable to retrieve keys from the db", "err", err)
 
