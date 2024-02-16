@@ -200,12 +200,15 @@ func (r *ReputationEngine) UpdateNTQ(kramaID kramaid.KramaID, ntq float32) error
 		return nil
 	}
 
+	info = &NodeMetaInfo{
+		KramaID: kramaID,
+		NTQ:     ntq,
+	}
+
 	r.dirtyLock.Lock()
 	defer r.dirtyLock.Unlock()
 
-	r.dirtyEntries[peerID] = &NodeMetaInfo{
-		NTQ: ntq,
-	}
+	r.dirtyEntries[peerID] = info
 
 	return nil
 }
@@ -234,13 +237,16 @@ func (r *ReputationEngine) UpdateWalletCount(kramaID kramaid.KramaID, delta int3
 		return nil
 	}
 
-	r.dirtyLock.Lock()
-	defer r.dirtyLock.Unlock()
-
-	r.dirtyEntries[peerID] = &NodeMetaInfo{
+	info = &NodeMetaInfo{
+		KramaID:     kramaID,
 		WalletCount: delta,
 		NTQ:         DefaultPeerNTQ,
 	}
+
+	r.dirtyLock.Lock()
+	defer r.dirtyLock.Unlock()
+
+	r.dirtyEntries[peerID] = info
 
 	return nil
 }
@@ -270,6 +276,7 @@ func (r *ReputationEngine) UpdatePublicKey(kramaID kramaid.KramaID, pk []byte) e
 	}
 
 	info = &NodeMetaInfo{
+		KramaID:   kramaID,
 		PublicKey: pk,
 		NTQ:       DefaultPeerNTQ,
 	}

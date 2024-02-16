@@ -22,6 +22,7 @@ import (
 
 func TestReputationEngine_NodeMetaInfo(t *testing.T) {
 	reputationEngine, mockDB, _ := createTestReputationEngine(t)
+
 	testcases := []struct {
 		name         string
 		peerID       peer.ID
@@ -178,8 +179,8 @@ func TestReputationEngine_AddNewPeerwithPeerID(t *testing.T) {
 }
 
 func TestReputationEngine_UpdatePeer(t *testing.T) {
-	reputationEngine, mockDB, _ := createTestReputationEngine(t)
 	kramaID := tests.RandomKramaID(t, 1)
+	reputationEngine, mockDB, _ := createTestReputationEngine(t)
 
 	testcases := []struct {
 		name         string
@@ -246,7 +247,9 @@ func TestReputationEngine_UpdatePeer(t *testing.T) {
 }
 
 func TestReputationEngine_UpdateNTQ(t *testing.T) {
+	kramaID := tests.RandomKramaID(t, 1)
 	reputationEngine, mockDB, _ := createTestReputationEngine(t)
+
 	testcases := []struct {
 		name             string
 		kramaID          kramaid.KramaID
@@ -263,10 +266,11 @@ func TestReputationEngine_UpdateNTQ(t *testing.T) {
 		},
 		{
 			name:    "krama id without state",
-			kramaID: tests.RandomKramaID(t, 1),
+			kramaID: kramaID,
 			ntq:     DefaultPeerNTQ,
 			expectedNodeInfo: &NodeMetaInfo{
-				NTQ: DefaultPeerNTQ,
+				KramaID: kramaID,
+				NTQ:     DefaultPeerNTQ,
 			},
 		},
 		{
@@ -315,7 +319,9 @@ func TestReputationEngine_UpdateNTQ(t *testing.T) {
 }
 
 func TestReputationEngine_UpdateWalletCount(t *testing.T) {
+	kramaID := tests.RandomKramaID(t, 1)
 	reputationEngine, mockDB, _ := createTestReputationEngine(t)
+
 	testcases := []struct {
 		name             string
 		kramaID          kramaid.KramaID
@@ -332,9 +338,10 @@ func TestReputationEngine_UpdateWalletCount(t *testing.T) {
 		},
 		{
 			name:        "krama id without state",
-			kramaID:     tests.RandomKramaID(t, 1),
+			kramaID:     kramaID,
 			walletCount: -1,
 			expectedNodeInfo: &NodeMetaInfo{
+				KramaID:     kramaID,
 				NTQ:         DefaultPeerNTQ,
 				WalletCount: -1,
 			},
@@ -385,8 +392,10 @@ func TestReputationEngine_UpdateWalletCount(t *testing.T) {
 }
 
 func TestReputationEngine_UpdatePublicKey(t *testing.T) {
-	reputationEngine, mockDB, _ := createTestReputationEngine(t)
+	kramaID := tests.RandomKramaID(t, 1)
 	publicKeys := tests.GetTestPublicKeys(t, 3)
+	reputationEngine, mockDB, _ := createTestReputationEngine(t)
+
 	testcases := []struct {
 		name             string
 		kramaID          kramaid.KramaID
@@ -403,9 +412,10 @@ func TestReputationEngine_UpdatePublicKey(t *testing.T) {
 		},
 		{
 			name:      "krama id without state",
-			kramaID:   tests.RandomKramaID(t, 1),
+			kramaID:   kramaID,
 			publicKey: publicKeys[1],
 			expectedNodeInfo: &NodeMetaInfo{
+				KramaID:   kramaID,
 				NTQ:       DefaultPeerNTQ,
 				PublicKey: publicKeys[1],
 			},
@@ -510,6 +520,7 @@ func TestReputationEngine_GetAddress(t *testing.T) {
 
 func TestReputationEngine_GetAddressByPeerID(t *testing.T) {
 	reputationEngine, mockDB, _ := createTestReputationEngine(t)
+
 	testcases := []struct {
 		name         string
 		peerID       peer.ID
@@ -571,6 +582,7 @@ func TestReputationEngine_GetAddressByPeerID(t *testing.T) {
 
 func TestReputationEngine_GetRTTByPeerID(t *testing.T) {
 	reputationEngine, mockDB, _ := createTestReputationEngine(t)
+
 	testcases := []struct {
 		name         string
 		peerID       peer.ID
@@ -618,6 +630,7 @@ func TestReputationEngine_GetRTTByPeerID(t *testing.T) {
 
 func TestReputationEngine_GetKramaIDByPeerID(t *testing.T) {
 	reputationEngine, mockDB, _ := createTestReputationEngine(t)
+
 	testcases := []struct {
 		name         string
 		peerID       peer.ID
@@ -963,6 +976,7 @@ func TestReputationEngine_DBWorker(t *testing.T) {
 
 func TestReputationEngine_CleanUpDirtyStorage(t *testing.T) {
 	reputationEngine, _, _ := createTestReputationEngine(t)
+
 	testcases := []struct {
 		name    string
 		entries map[peer.ID]*NodeMetaInfo
