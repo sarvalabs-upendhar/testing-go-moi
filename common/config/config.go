@@ -5,12 +5,10 @@ import (
 	"net"
 	"time"
 
-	"github.com/sarvalabs/go-moi/common/kramaid"
-
 	maddr "github.com/multiformats/go-multiaddr"
+	"github.com/sarvalabs/go-legacy-kramaid"
 
 	"github.com/sarvalabs/go-moi/common"
-
 	"github.com/sarvalabs/go-moi/crypto"
 )
 
@@ -80,6 +78,7 @@ type NetworkConfig struct {
 	ListenAddresses    []maddr.Multiaddr
 	PublicP2pAddresses []maddr.Multiaddr
 	JSONRPCAddr        *net.TCPAddr
+	P2PHostPort        int
 	MTQ                float64
 	CorsAllowedOrigins []string
 
@@ -113,6 +112,8 @@ type ConsensusConfig struct {
 	ValidatorSlotCount    int
 	OperatorSlotCount     int
 	EnableDebugMode       bool
+	MaxGossipPeers        int
+	MinGossipPeers        int
 }
 
 type JSONRPCConfig struct {
@@ -163,11 +164,13 @@ func DefaultDevnetConfig(path string) *Config {
 			AccountWaitTime:       1500 * time.Millisecond,
 			OperatorSlotCount:     -1,
 			ValidatorSlotCount:    3,
+			MaxGossipPeers:        5,
+			MinGossipPeers:        3,
 		},
 		DB: &DBConfig{
 			CleanDB:      false,
 			DBFolderPath: path + DefaultDBDirectory,
-			MaxSnapSize:  DefaultSnapSize, // 1GB limit
+			MaxSnapSize:  DefaultSnapSize, // 3GB limit
 		},
 		Execution: &ExecutionConfig{
 			FuelLimit: DefaultFuelLimit,

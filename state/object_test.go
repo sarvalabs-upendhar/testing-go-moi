@@ -4,14 +4,16 @@ import (
 	"math/big"
 	"testing"
 
+	iradix "github.com/hashicorp/go-immutable-radix"
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-pisa"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"
@@ -25,7 +27,7 @@ func TestBalanceOf(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		assetID       common.AssetID
+		assetID       identifiers.AssetID
 		expectedError error
 	}{
 		{
@@ -63,7 +65,7 @@ func TestAddBalance(t *testing.T) {
 
 	testcases := []struct {
 		name             string
-		assetID          common.AssetID
+		assetID          identifiers.AssetID
 		BalanceToBeAdded *big.Int
 		expectedBalance  *big.Int
 	}{
@@ -115,18 +117,16 @@ func TestSetBalance(t *testing.T) {
 
 func TestCopy(t *testing.T) {
 	testcases := []struct {
-		name        string
-		soParams    *createStateObjectParams
-		areTreesNil bool
+		name     string
+		soParams *createStateObjectParams
 	}{
 		{
 			name:     "copied whole state object",
 			soParams: stateObjectParamsWithTestData(t, false),
 		},
 		{
-			name:        "logic tree and meta storage tree are not copied",
-			soParams:    stateObjectParamsWithTestData(t, true),
-			areTreesNil: true,
+			name:     "logic tree and meta storage tree are not copied",
+			soParams: stateObjectParamsWithTestData(t, true),
 		},
 	}
 
@@ -136,7 +136,7 @@ func TestCopy(t *testing.T) {
 
 			copiedSO := sObj.Copy()
 
-			checkIfStateObjectAreEqual(t, sObj, copiedSO, test.areTreesNil)
+			checkIfStateObjectAreEqual(t, sObj, copiedSO)
 			checkForReferences(t, sObj, copiedSO)
 		})
 	}
@@ -182,7 +182,7 @@ func TestCommitAccount(t *testing.T) {
 
 func TestCommitContext(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
-	ctxObject, _ := getContextObjects(t, tests.GetTestKramaIDs(t, 2), 2, 1)
+	ctxObject, _ := getContextObjects(t, tests.RandomKramaIDs(t, 2), 2, 1)
 
 	actualCtxHash, err := sObj.commitContextObject(ctxObject[0])
 	require.NoError(t, err)
@@ -192,76 +192,87 @@ func TestCommitContext(t *testing.T) {
 
 func TestCommitActiveStorageTrees(t *testing.T) {
 	logicIDs := tests.GetLogicIDs(t, 1)
+
 	keys, values := getEntries(t, 1)
-
-	astWithoutDirtyEntries := getASTWithDefaultFlushedEntries(t, 1, 1)
-	astWithDirtyEntries := getASTWithDefaultDirtyEntries(t, 2, 1)
-
-	mst := mockMerkleTreeWithDB()
+	newKeys, newValues := getEntries(t, 2)
 
 	testcases := []struct {
-		name          string
-		ast           map[string]tree.MerkleTree
-		mst           *MockMerkleTree
-		expectedError error
+		name            string
+		storageTxns     map[identifiers.LogicID]*iradix.Txn
+		storageTrees    map[identifiers.LogicID]tree.MerkleTree
+		metaStorageTree *MockMerkleTree
+		expectedError   error
 	}{
 		{
-			name: "committed active storage trees successfully",
-			ast:  astWithDirtyEntries,
-			mst:  mst,
+			name: "commit active storage trees successfully",
+			storageTxns: map[identifiers.LogicID]*iradix.Txn{
+				logicIDs[0]: getTxnsWithEntries(t, newKeys, newValues),
+			},
+			storageTrees: map[identifiers.LogicID]tree.MerkleTree{
+				logicIDs[0]: getMerkleTreeWithEntries(t, keys, values),
+			},
+			metaStorageTree: mockMerkleTreeWithDB(),
 		},
 		{
-			name: "can not commit active storage tree without dirty entries",
-			ast:  astWithoutDirtyEntries,
-			mst:  mst,
+			name: "should return error if storage tree doesn't exists",
+			storageTxns: map[identifiers.LogicID]*iradix.Txn{
+				logicIDs[0]: getTxnsWithEntries(t, newKeys, newValues),
+			},
+			metaStorageTree: mockMerkleTreeWithDB(),
+			expectedError:   common.ErrLogicStorageTreeNotFound,
 		},
 		{
-			name: "should return error if failed to commit active storage trees",
-			ast: getActiveStorageTreesWithCommitHook(
-				t,
-				logicIDs,
-				keys,
-				values,
+			name: "should return error if fail to commit storage tree",
+			storageTxns: map[identifiers.LogicID]*iradix.Txn{
+				logicIDs[0]: getTxnsWithEntries(t, newKeys, newValues),
+			},
+			storageTrees: map[identifiers.LogicID]tree.MerkleTree{
+				logicIDs[0]: getMerkleTreeWithCommitHook(t,
+					nil,
+					nil,
+					func() error {
+						return errors.New("failed to commit storage tree")
+					},
+				),
+			},
+			metaStorageTree: mockMerkleTreeWithDB(),
+			expectedError:   errors.New("failed to commit storage tree"),
+		},
+		{
+			name: "should return error if fail to update meta storage tree",
+			storageTxns: map[identifiers.LogicID]*iradix.Txn{
+				logicIDs[0]: getTxnsWithEntries(t, newKeys, newValues),
+			},
+			storageTrees: map[identifiers.LogicID]tree.MerkleTree{
+				logicIDs[0]: getMerkleTreeWithHook(t,
+					nil,
+					nil,
+					func() error {
+						return errors.New("failed to set entries")
+					},
+				),
+			},
+			metaStorageTree: getMerkleTreeWithHook(t,
+				nil,
+				nil,
 				func() error {
-					return errors.New("failed to commit active storage trees")
+					return errors.New("failed to set entries")
 				},
 			),
-			mst:           mst,
-			expectedError: errors.New("failed to commit active storage trees"),
-		},
-		{
-			name: "should return error if failed to calculate root hash",
-			ast: getActiveStorageTreesWithRootHook(
-				t,
-				logicIDs,
-				keys,
-				values,
-				func() (common.Hash, error) {
-					return common.NilHash, errors.New("failed to calculate root for ast")
-				},
-			),
-			mst:           mst,
-			expectedError: errors.New("failed to calculate root for ast"),
-		},
-		{
-			name: "should return error if failed to set entries in mst",
-			ast:  astWithDirtyEntries,
-			mst: getMerkleTreeWithSetHook(
-				t,
-				keys,
-				values,
-				func() error {
-					return errors.New("failed to set entries in mst")
-				},
-			),
-			expectedError: errors.New("failed to set entries in mst"),
+			expectedError: errors.New("failed to set entries"),
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			inputAST := getCopiedAST(test.ast)
-			sObj := createTestStateObject(t, stateObjectParamsWithASTAndMST(t, test.ast, test.mst))
+			storageTrees := copyStorageTrees(test.storageTrees)
+			sObj := createTestStateObject(t, &createStateObjectParams{
+				soCallback: func(so *Object) {
+					so.storageTreeTxns = test.storageTxns
+					so.storageTrees = test.storageTrees
+					so.metaStorageTree = test.metaStorageTree
+				},
+			})
 
 			err := sObj.commitActiveStorageTrees()
 			if test.expectedError != nil {
@@ -271,7 +282,7 @@ func TestCommitActiveStorageTrees(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			checkIfActiveStorageTreesAreCommitted(t, inputAST, sObj)
+			checkIfStorageTreesAreCommitted(t, sObj, storageTrees)
 		})
 	}
 }
@@ -279,7 +290,7 @@ func TestCommitActiveStorageTrees(t *testing.T) {
 func TestCommitMetaStorageTree(t *testing.T) {
 	keys, values := getEntries(t, 1)
 
-	mstWithDirtyEntries := getMerkleTreeWithDefaultDirtyEntries(t, 1)
+	mst := getMerkleTreeWithEntries(t, keys, values)
 
 	testcases := []struct {
 		name          string
@@ -289,12 +300,8 @@ func TestCommitMetaStorageTree(t *testing.T) {
 	}{
 		{
 			name:        "mst doesn't get committed as it doesn't have dirty entries",
-			mst:         getMerkleTreeWithFlushedEntries(t, keys, values),
+			mst:         getMerkleTreeWithEntries(t, keys, values),
 			storageRoot: tests.RandomHash(t),
-		},
-		{
-			name: "committed meta storage tree successfully",
-			mst:  mstWithDirtyEntries,
 		},
 		{
 			name: "should return error if failed to commit meta storage tree",
@@ -318,17 +325,21 @@ func TestCommitMetaStorageTree(t *testing.T) {
 			),
 			expectedError: errors.New("failed to calculate mst root"),
 		},
+		{
+			name:        "committed meta storage tree successfully",
+			mst:         mst,
+			storageRoot: tests.RandomHash(t),
+		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			inputMST := test.mst.Copy()
 			sObj := createTestStateObject(
 				t,
-				stateObjectParamsWithMST(t, common.NilAddress, nil, test.mst, test.storageRoot),
+				stateObjectParamsWithMST(t, identifiers.NilAddress, nil, test.mst, test.storageRoot),
 			)
 
-			actualRootHash, err := sObj.commitMetaStorageTree()
+			generatedStorageRoot, err := sObj.commitMetaStorageTree()
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -336,30 +347,19 @@ func TestCommitMetaStorageTree(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			checkIfMetaStorageTreeCommitted(t, inputMST, sObj, actualRootHash, 0)
+			checkIfMetaStorageTreeCommitted(
+				t,
+				generatedStorageRoot,
+				getRoot(t, test.mst.(*MockMerkleTree)), //nolint
+				sObj,
+			)
 		})
 	}
 }
 
 func TestCommitStorage(t *testing.T) {
 	logicIds := tests.GetLogicIDs(t, 1)
-	keys, values := getEntries(t, 1)
-
-	astWithDirtyEntries := getASTWithDefaultDirtyEntries(t, 2, 1)
-	inputAST := getCopiedAST(astWithDirtyEntries)
-
-	mstWithDirtyEntries := getMerkleTreeWithDefaultDirtyEntries(t, 1)
-
-	inputMST := mstWithDirtyEntries.Copy()
-	astWithCommitHook := getActiveStorageTreesWithCommitHook(
-		t,
-		logicIds,
-		keys,
-		values,
-		func() error {
-			return errors.New("failed to commit active storage trees")
-		},
-	)
+	keys, values := getEntries(t, 5)
 
 	testcases := []struct {
 		name          string
@@ -368,18 +368,55 @@ func TestCommitStorage(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name:     "meta storage tree is nil",
-			soParams: stateObjectParamsWithASTAndMST(t, astWithDirtyEntries, nil),
+			name:     "meta storage tree and txns are nil",
+			soParams: stateObjectParamsWithASTAndMST(t, nil, nil),
 			isMSTNil: true,
 		},
 		{
-			name:          "should return error if failed to commit active storage trees",
-			soParams:      stateObjectParamsWithAST(t, astWithCommitHook),
-			expectedError: errors.New("failed to commit active storage trees"),
+			name: "should return error if failed to commit active storage trees",
+			soParams: &createStateObjectParams{
+				soCallback: func(so *Object) {
+					so.storageTreeTxns = map[identifiers.LogicID]*iradix.Txn{
+						logicIds[0]: getTxnsWithEntries(t, keys, values),
+					}
+					// create a meta storage tree with no entry for logicID[0].
+					so.metaStorageTree = mockMerkleTreeWithDB()
+				},
+			},
+			// Commit should fail since getStorageTree return an error
+			expectedError: common.ErrLogicStorageTreeNotFound,
 		},
 		{
-			name:     "storage committed successfully",
-			soParams: stateObjectParamsWithASTAndMST(t, astWithDirtyEntries, mstWithDirtyEntries),
+			name: "should return error if failed to commit meta storage trees",
+			soParams: &createStateObjectParams{
+				soCallback: func(so *Object) {
+					// We set storage tree and txn, so that commitActiveStorageTress will not fail
+					so.storageTreeTxns = map[identifiers.LogicID]*iradix.Txn{
+						logicIds[0]: getTxnsWithEntries(t, keys, values),
+					}
+					so.storageTrees = map[identifiers.LogicID]tree.MerkleTree{
+						logicIds[0]: mockMerkleTreeWithDB(),
+					}
+					// set a commit hook
+					so.metaStorageTree = getMerkleTreeWithCommitHook(t, keys, values, func() error {
+						return errors.New("failed to commit")
+					})
+				},
+			},
+			expectedError: errors.New("failed to commit"),
+		},
+		{
+			name: "should commit active storage trees and meta storage tree",
+			soParams: &createStateObjectParams{
+				soCallback: func(so *Object) {
+					// We set storage tree and txn, so that commitActiveStorageTress will not fail
+					so.storageTreeTxns = getStorageTxnsWithEntries(t, logicIds, keys, values)
+					so.storageTrees = map[identifiers.LogicID]tree.MerkleTree{
+						logicIds[0]: mockMerkleTreeWithDB(),
+					}
+					so.metaStorageTree = mockMerkleTreeWithDB()
+				},
+			},
 		},
 	}
 
@@ -387,6 +424,7 @@ func TestCommitStorage(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			sObj := createTestStateObject(t, test.soParams)
 
+			storageTrees := copyStorageTrees(sObj.storageTrees)
 			actualRootHash, err := sObj.commitStorage()
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -402,19 +440,24 @@ func TestCommitStorage(t *testing.T) {
 				return
 			}
 
-			checkIfActiveStorageTreesAreCommitted(t, inputAST, sObj)
-			checkIfMetaStorageTreeCommitted(t, inputMST, sObj, actualRootHash, 0)
+			// check if storage trees are committed
+			checkIfStorageTreesAreCommitted(t, sObj, storageTrees)
+			// check if meta storage tree is committed
+			require.True(t, sObj.metaStorageTree.(*MockMerkleTree).isCommitted) //nolint
 		})
 	}
 }
 
-func TestCommitLogicsTree(t *testing.T) {
-	keys, values := getEntries(t, 1)
-	logicTree := getMerkleTreeWithFlushedEntries(t, keys, values)
+func TestCommitLogics(t *testing.T) {
+	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
+	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
+	logicTree := getMerkleTreeWithEntries(t, nil, nil)
 	inputLogicTree := logicTree.Copy()
 
 	testcases := []struct {
 		name          string
+		soParams      *createStateObjectParams
+		logicTxn      *iradix.Txn
 		logicTree     tree.MerkleTree
 		logicRoot     common.Hash
 		expectedError error
@@ -425,10 +468,12 @@ func TestCommitLogicsTree(t *testing.T) {
 		},
 		{
 			name:      "committed logic tree successfully",
+			logicTxn:  getTxnWithLogicObjects(t, logicObject),
 			logicTree: logicTree,
 		},
 		{
-			name: "should return error if failed to commit logic tree",
+			name:     "should return error if failed to commit logic tree",
+			logicTxn: getTxnWithLogicObjects(t, logicObject),
 			logicTree: getMerkleTreeWithCommitHook(
 				t,
 				emptyKeys,
@@ -440,7 +485,8 @@ func TestCommitLogicsTree(t *testing.T) {
 			expectedError: errors.New("failed to commit logic tree"),
 		},
 		{
-			name: "should return error if failed to calculate root hash",
+			name:     "should return error if failed to calculate root hash",
+			logicTxn: getTxnWithLogicObjects(t, logicObject),
 			logicTree: getMerkleTreeWithRootHashHook(
 				t,
 				emptyKeys,
@@ -457,7 +503,14 @@ func TestCommitLogicsTree(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			sObj := createTestStateObject(
 				t,
-				stateObjectParamsWithLogicTree(t, common.NilAddress, nil, test.logicTree, test.logicRoot),
+				stateObjectParamsWithLogicTree(
+					t,
+					identifiers.NilAddress,
+					nil,
+					test.logicTree,
+					test.logicRoot,
+					test.logicTxn,
+				),
 			)
 
 			actualRootHash, err := sObj.commitLogics()
@@ -481,18 +534,17 @@ func TestCommitLogicsTree(t *testing.T) {
 
 func TestCommit(t *testing.T) {
 	logicIds := tests.GetLogicIDs(t, 1)
+	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicIds[0]))
+
 	keys, values := getEntries(t, 1)
 
 	balance, _ := getTestBalance(t, getAssetMap(getAssetIDsAndBalances(t, 2)))
 
-	astWithDirtyEntries := getASTWithDefaultDirtyEntries(t, 2, 1)
-	inputAST := getCopiedAST(astWithDirtyEntries)
+	astWithDirtyEntries := getStorageTreesWithDefaultEntries(t, 2, 1)
 
-	mstWithDirtyEntries := getMerkleTreeWithDefaultDirtyEntries(t, 1)
-	inputMST := mstWithDirtyEntries.Copy()
+	mstWithDirtyEntries := getMerkleTreeWithDefaultEntries(t, 1)
 
-	logicTree := getMerkleTreeWithFlushedEntries(t, keys, values)
-	inputLogicTree := logicTree.Copy()
+	logicTree := getMerkleTreeWithEntries(t, keys, values)
 
 	testcases := []struct {
 		name          string
@@ -503,7 +555,7 @@ func TestCommit(t *testing.T) {
 			name: "should return error if failed to commit logic tree",
 			soParams: stateObjectParamsWithLogicTree(
 				t,
-				common.NilAddress,
+				identifiers.NilAddress,
 				nil,
 				getMerkleTreeWithCommitHook(
 					t,
@@ -514,13 +566,15 @@ func TestCommit(t *testing.T) {
 					},
 				),
 				common.NilHash,
+				getTxnWithLogicObjects(t, logicObject),
 			),
 			expectedError: errors.New("failed to commit logic tree"),
 		},
 		{
 			name: "should return error if failed to commit storage tree",
-			soParams: stateObjectParamsWithAST(t,
-				getActiveStorageTreesWithCommitHook(
+			soParams: soParamsWithStorageTreesAndTxns(
+				t,
+				getStorageTreesWithCommitHook(
 					t,
 					logicIds,
 					keys,
@@ -528,14 +582,16 @@ func TestCommit(t *testing.T) {
 					func() error {
 						return errors.New("failed to commit ast")
 					},
-				)),
+				),
+				getStorageTxnsWithEntries(t, logicIds, keys, values),
+			),
 			expectedError: errors.New("failed to commit ast"),
 		},
 		{
 			name: "committed successfully",
 			soParams: &createStateObjectParams{
 				soCallback: func(so *Object) {
-					so.activeStorageTrees = astWithDirtyEntries
+					so.storageTrees = astWithDirtyEntries
 					so.logicTree = logicTree
 					so.metaStorageTree = mstWithDirtyEntries
 					so.balance = balance
@@ -557,18 +613,46 @@ func TestCommit(t *testing.T) {
 
 			require.NoError(t, err)
 			checkForBalance(t, sObj, balance, sObj.data.Balance, 0)
-			checkIfLogicTreeCommitted(t, inputLogicTree, sObj, sObj.data.LogicRoot)
-			checkIfActiveStorageTreesAreCommitted(t, inputAST, sObj)
-			checkIfMetaStorageTreeCommitted(t, inputMST, sObj, sObj.data.StorageRoot, 1)
-			// here we pass input account as we validated the account data in previous functions
-			inputAcc := new(common.Account)
-			inputAcc.StorageRoot = sObj.data.StorageRoot
-			inputAcc.Balance = sObj.data.Balance
-			inputAcc.LogicRoot = sObj.data.LogicRoot
-
+			inputAcc := getAccount(t, balance, nil, mstWithDirtyEntries, logicTree)
 			checkForAccount(t, sObj, inputAcc, actualAccHash, 2)
 		})
 	}
+}
+
+func getAccount(
+	t *testing.T,
+	bal *BalanceObject,
+	reg *RegistryObject,
+	metaStorage, logicTree tree.MerkleTree,
+) *common.Account {
+	t.Helper()
+
+	acc := new(common.Account)
+
+	rawBal, err := bal.Bytes()
+	require.NoError(t, err)
+
+	rawReg, err := reg.Bytes()
+	require.NoError(t, err)
+
+	logicRoot, err := logicTree.RootHash()
+	require.NoError(t, err)
+
+	storageRoot, err := metaStorage.RootHash()
+	require.NoError(t, err)
+
+	if bal != nil {
+		acc.Balance = common.GetHash(rawBal)
+	}
+
+	if reg != nil {
+		acc.AssetRegistry = common.GetHash(rawReg)
+	}
+
+	acc.LogicRoot = logicRoot
+	acc.StorageRoot = storageRoot
+
+	return acc
 }
 
 func TestFlushLogicTree(t *testing.T) {
@@ -590,7 +674,7 @@ func TestFlushLogicTree(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			sObj := createTestStateObject(
 				t,
-				stateObjectParamsWithLogicTree(t, common.NilAddress, nil, test.logicTree, common.NilHash),
+				stateObjectParamsWithLogicTree(t, identifiers.NilAddress, nil, test.logicTree, common.NilHash, nil),
 			)
 
 			err := sObj.flushLogicTree()
@@ -605,15 +689,15 @@ func TestFlushLogicTree(t *testing.T) {
 	}
 }
 
-func TestFlushActiveStorageTrees(t *testing.T) {
+func TestStorageTrees(t *testing.T) {
 	logicIds := tests.GetLogicIDs(t, 2)
-	ast := getActiveStorageTrees(t, logicIds, emptyKeys, emptyValues)
+	ast := getStorageTrees(t, logicIds, emptyKeys, emptyValues)
 	mst := mockMerkleTreeWithDB()
 
 	testcases := []struct {
 		name          string
 		mst           tree.MerkleTree
-		ast           map[string]tree.MerkleTree
+		ast           map[identifiers.LogicID]tree.MerkleTree
 		isMSTNil      bool
 		shouldFlush   bool
 		expectedError error
@@ -648,7 +732,7 @@ func TestFlushActiveStorageTrees(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			sObj := createTestStateObject(t, stateObjectParamsWithASTAndMST(t, test.ast, test.mst))
 
-			err := sObj.flushActiveStorageTrees()
+			err := sObj.flushStorageTrees()
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -677,20 +761,20 @@ func TestCreateAsset(t *testing.T) {
 	rawDescriptor, err := assetDescriptor.Bytes()
 	assert.NoError(t, err)
 
-	assetID := common.NewAssetIDv0(
+	assetID := identifiers.NewAssetIDv0(
 		assetDescriptor.IsLogical,
 		assetDescriptor.IsStateFul,
 		assetDescriptor.Dimension,
-		assetDescriptor.Standard,
+		uint16(assetDescriptor.Standard),
 		assetAddress2,
 	)
 
-	err = sObj.CreateRegistryEntry(assetID.String(), rawDescriptor)
+	err = sObj.CreateRegistryEntry(string(assetID), rawDescriptor)
 	assert.NoError(t, err)
 
 	testcases := []struct {
 		name            string
-		assetAddress    common.Address
+		assetAddress    identifiers.Address
 		assetDescriptor *common.AssetDescriptor
 		expectedError   error
 	}{
@@ -771,7 +855,7 @@ func TestGetMetaContextObjectCopy(t *testing.T) {
 }
 
 func TestGetContextObjectCopy(t *testing.T) {
-	kramaIDs := tests.GetTestKramaIDs(t, 4)
+	kramaIDs := tests.RandomKramaIDs(t, 4)
 	cObj, cHash := getContextObjects(t, kramaIDs, 2, 2)
 
 	testcases := []struct {
@@ -821,20 +905,20 @@ func TestCreateContext(t *testing.T) {
 
 	testcases := []struct {
 		name             string
-		behaviouralNodes []id.KramaID
-		randomNodes      []id.KramaID
+		behaviouralNodes []kramaid.KramaID
+		randomNodes      []kramaid.KramaID
 		expectedError    error
 	}{
 		{
 			name:             "created context successfully",
-			behaviouralNodes: tests.GetTestKramaIDs(t, 2),
-			randomNodes:      tests.GetTestKramaIDs(t, 2),
+			behaviouralNodes: tests.RandomKramaIDs(t, 2),
+			randomNodes:      tests.RandomKramaIDs(t, 2),
 			expectedError:    nil,
 		},
 		{
 			name:             "should return error if failed to create context",
-			behaviouralNodes: tests.GetTestKramaIDs(t, 0),
-			randomNodes:      tests.GetTestKramaIDs(t, 0),
+			behaviouralNodes: tests.RandomKramaIDs(t, 0),
+			randomNodes:      tests.RandomKramaIDs(t, 0),
 			expectedError:    errors.New("liveliness size not met"),
 		},
 	}
@@ -867,17 +951,17 @@ func TestCreateContext(t *testing.T) {
 }
 
 func TestUpdateContext(t *testing.T) {
-	kramaIDs := tests.GetTestKramaIDs(t, 4)
+	kramaIDs := tests.RandomKramaIDs(t, 4)
 	cObj, cHash := getContextObjects(t, kramaIDs, 2, 2)
 	mObj, mHash := getMetaContextObjects(t, cHash)
 
-	behaviouralNodes := tests.GetTestKramaIDs(t, 2)
-	randomNodes := tests.GetTestKramaIDs(t, 2)
+	behaviouralNodes := tests.RandomKramaIDs(t, 2)
+	randomNodes := tests.RandomKramaIDs(t, 2)
 
 	testcases := []struct {
 		name             string
-		behaviouralNodes []id.KramaID
-		randomNodes      []id.KramaID
+		behaviouralNodes []kramaid.KramaID
+		randomNodes      []kramaid.KramaID
 		metaHash         common.Hash
 		soParams         *createStateObjectParams
 		mCtx             *MetaContextObject
@@ -991,7 +1075,7 @@ func TestLoadBalanceObject(t *testing.T) {
 		{
 			name: "should load empty balance object for nil balance hash",
 			expectedBalance: &BalanceObject{
-				AssetMap: make(map[common.AssetID]*big.Int),
+				AssetMap: make(map[identifiers.AssetID]*big.Int),
 			},
 		},
 	}
@@ -1131,7 +1215,7 @@ func TestHasFuel(t *testing.T) {
 			soParams: &createStateObjectParams{
 				soCallback: func(so *Object) {
 					so.balance = &BalanceObject{
-						AssetMap: map[common.AssetID]*big.Int{
+						AssetMap: map[identifiers.AssetID]*big.Int{
 							common.KMOITokenAssetID: big.NewInt(1000),
 						},
 					}
@@ -1145,7 +1229,7 @@ func TestHasFuel(t *testing.T) {
 			soParams: &createStateObjectParams{
 				soCallback: func(so *Object) {
 					so.balance = &BalanceObject{
-						AssetMap: map[common.AssetID]*big.Int{
+						AssetMap: map[identifiers.AssetID]*big.Int{
 							common.KMOITokenAssetID: big.NewInt(100),
 						},
 					}
@@ -1187,7 +1271,6 @@ func TestHasFuel(t *testing.T) {
 	}
 }
 
-//nolint:dupl
 func TestGetMetaStorageTree(t *testing.T) {
 	keys, values := getEntries(t, 2)
 
@@ -1248,12 +1331,12 @@ func TestGetStorageTree(t *testing.T) {
 	testcases := []struct {
 		name          string
 		soParams      *createStateObjectParams
-		logicID       common.LogicID
+		logicID       identifiers.LogicID
 		expectedError error
 	}{
 		{
 			name:     "fetched storage tree from active storage trees",
-			soParams: stateObjectParamsWithAST(t, getActiveStorageTrees(t, []common.LogicID{logicID}, keys, values)),
+			soParams: stateObjectParamsWithStorageTree(t, getStorageTrees(t, []identifiers.LogicID{logicID}, keys, values)),
 			logicID:  logicID,
 		},
 		{
@@ -1321,30 +1404,35 @@ func TestGetStorageTree(t *testing.T) {
 }
 
 func TestSetStorageEntry(t *testing.T) {
-	logicIDs := tests.GetLogicIDs(t, 2)
+	logicID := tests.GetLogicIDs(t, 1)
 	keys, values := getEntries(t, 2)
 
 	testcases := []struct {
 		name          string
 		soParams      *createStateObjectParams
+		logicID       identifiers.LogicID
 		expectedError error
 	}{
 		{
-			name:     "successfully set key value in storage tree",
-			soParams: stateObjectParamsWithAST(t, getActiveStorageTrees(t, logicIDs, keys[:1], values[:1])),
+			name:          "should return error if storage tree is not initiated",
+			soParams:      stateObjectParamsWithASTAndMST(t, nil, mockMerkleTreeWithDB()),
+			expectedError: common.ErrLogicStorageTreeNotFound,
 		},
 		{
-			name:          "should return error if failed to get storage tree",
-			soParams:      stateObjectParamsWithInvalidMST(t),
-			expectedError: errors.New("failed to initiate storage tree"),
+			name: "should add storage entry",
+			soParams: stateObjectParamsWithASTAndMST(
+				t,
+				map[identifiers.LogicID]tree.MerkleTree{
+					logicID[0]: mockMerkleTreeWithDB(),
+				},
+				mockMerkleTreeWithDB(),
+			),
 		},
 	}
-
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			sObj := createTestStateObject(t, test.soParams)
-
-			err := sObj.SetStorageEntry(logicIDs[0], keys[1], values[1])
+			err := sObj.SetStorageEntry(logicID[0], keys[1], values[1])
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -1352,10 +1440,10 @@ func TestSetStorageEntry(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			storageTree, ok := sObj.activeStorageTrees[logicIDs[0].String()]
+			txn, ok := sObj.storageTreeTxns[(logicID)[0]]
 			require.True(t, ok)
 
-			checkForEntryInMerkleTree(t, storageTree, keys[1], values[1])
+			checkForEntryInTxn(t, txn, keys[1], values[1])
 		})
 	}
 }
@@ -1365,16 +1453,18 @@ func TestAddAccountGenesisInfo(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		address       common.Address
+		address       identifiers.Address
 		ixHash        common.Hash
 		soParams      *createStateObjectParams
 		expectedError error
 	}{
 		{
-			name:     "should succeed if account genesis info added",
-			address:  tests.RandomAddress(t),
-			ixHash:   tests.RandomHash(t),
-			soParams: stateObjectParamsWithAST(t, getActiveStorageTrees(t, []common.LogicID{common.SargaLogicID}, keys, values)),
+			name:    "should succeed if account genesis info added",
+			address: tests.RandomAddress(t),
+			ixHash:  tests.RandomHash(t),
+			soParams: stateObjectParamsWithStorageTree(t, getStorageTrees(
+				t, []identifiers.LogicID{common.SargaLogicID}, keys, values,
+			)),
 		},
 	}
 
@@ -1411,7 +1501,7 @@ func TestGetStorageEntry(t *testing.T) {
 	}{
 		{
 			name:     "successfully fetched entry in storage tree",
-			soParams: stateObjectParamsWithAST(t, getActiveStorageTrees(t, logicIDs, keys, values)),
+			soParams: stateObjectParamsWithStorageTree(t, getStorageTrees(t, logicIDs, keys, values)),
 		},
 		{
 			name:          "should return error if failed to load meta storage tree",
@@ -1437,7 +1527,6 @@ func TestGetStorageEntry(t *testing.T) {
 	}
 }
 
-//nolint:dupl
 func TestGetMetaLogicTree(t *testing.T) {
 	keys, values := getEntries(t, 2)
 	db := mockDB()
@@ -1457,15 +1546,15 @@ func TestGetMetaLogicTree(t *testing.T) {
 	}{
 		{
 			name:     "fetch logic tree from db",
-			soParams: stateObjectParamsWithLogicTree(t, address, db, nil, logicRoot),
+			soParams: stateObjectParamsWithLogicTree(t, address, db, nil, logicRoot, nil),
 		},
 		{
 			name:     "fetch logic tree from cache",
-			soParams: stateObjectParamsWithLogicTree(t, address, db, logicTree, common.NilHash),
+			soParams: stateObjectParamsWithLogicTree(t, address, db, logicTree, common.NilHash, nil),
 		},
 		{
 			name:          "should return error if failed to initiate logic tree",
-			soParams:      stateObjectParamsWithLogicTree(t, address, db, nil, tests.RandomHash(t)),
+			soParams:      stateObjectParamsWithLogicTree(t, address, db, nil, tests.RandomHash(t), nil),
 			expectedError: errors.New("failed to initiate logic tree"),
 		},
 	}
@@ -1508,16 +1597,24 @@ func TestGetLogicObject(t *testing.T) {
 			name: "should return error if logic tree not found",
 			soParams: stateObjectParamsWithLogicTree(
 				t,
-				common.NilAddress,
+				identifiers.NilAddress,
 				nil,
 				nil,
 				tests.RandomHash(t),
+				nil,
 			),
 			expectedError: errors.New("failed to initiate logic tree"),
 		},
 		{
-			name:          "should return error if logic object not found",
-			soParams:      stateObjectParamsWithLogicTree(t, common.NilAddress, nil, nil, common.NilHash),
+			name: "should return error if logic object not found",
+			soParams: stateObjectParamsWithLogicTree(
+				t,
+				identifiers.NilAddress,
+				nil,
+				nil,
+				common.NilHash,
+				nil,
+			),
 			expectedError: common.ErrKeyNotFound,
 		},
 		{
@@ -1584,7 +1681,14 @@ func TestIsLogicRegistered(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			sObj := createTestStateObject(
 				t,
-				stateObjectParamsWithLogicTree(t, common.NilAddress, nil, test.logicTree, common.NilHash),
+				stateObjectParamsWithLogicTree(
+					t,
+					identifiers.NilAddress,
+					nil,
+					test.logicTree,
+					common.NilHash,
+					nil,
+				),
 			)
 
 			err = sObj.isLogicRegistered(logicID)
@@ -1611,15 +1715,9 @@ func TestInsertNewLogicObject(t *testing.T) {
 		name          string
 		logicTree     tree.MerkleTree
 		logicRoot     common.Hash
-		logicID       common.LogicID
+		logicID       identifiers.LogicID
 		expectedError error
 	}{
-		{
-			name:          "should return error if failed to load logic tree",
-			logicRoot:     tests.RandomHash(t),
-			logicID:       logicID,
-			expectedError: errors.New("failed to load logic tree"),
-		},
 		{
 			name:          "should return error if logic already registered",
 			logicTree:     getMerkleTreeWithEntries(t, [][]byte{logicID.Bytes()}, [][]byte{rawData}),
@@ -1631,26 +1729,20 @@ func TestInsertNewLogicObject(t *testing.T) {
 			logicTree: getMerkleTreeWithEntries(t, [][]byte{logicID.Bytes()}, [][]byte{rawData}),
 			logicID:   tests.GetLogicID(t, tests.RandomAddress(t)),
 		},
-		{
-			name: "should return error if failed to add logic object to tree",
-			logicTree: getMerkleTreeWithSetHook(
-				t,
-				emptyKeys,
-				emptyValues,
-				func() error {
-					return errors.New("failed to add logic object to tree")
-				},
-			),
-			logicID:       logicID,
-			expectedError: errors.New("failed to add logic object to tree"),
-		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			sObj := createTestStateObject(
 				t,
-				stateObjectParamsWithLogicTree(t, common.NilAddress, nil, test.logicTree, test.logicRoot),
+				stateObjectParamsWithLogicTree(
+					t,
+					identifiers.NilAddress,
+					nil,
+					test.logicTree,
+					test.logicRoot,
+					nil,
+				),
 			)
 
 			err = sObj.InsertNewLogicObject(test.logicID, logicObject)
@@ -1674,7 +1766,7 @@ func TestCreateStorageTreeForLogic(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		logicID       common.LogicID
+		logicID       identifiers.LogicID
 		soParams      *createStateObjectParams
 		expectedError error
 	}{
@@ -1703,7 +1795,7 @@ func TestCreateStorageTreeForLogic(t *testing.T) {
 			require.NoError(t, err)
 
 			// make sure storage tree inserted in AST
-			expectedLogicTree, ok := sObj.activeStorageTrees[logicID.String()]
+			expectedLogicTree, ok := sObj.storageTrees[logicID]
 			require.True(t, ok)
 
 			checkForKramaHashTree(t, expectedLogicTree, actualStorageTree)

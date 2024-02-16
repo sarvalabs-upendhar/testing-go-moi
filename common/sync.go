@@ -2,6 +2,7 @@ package common
 
 import (
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 )
 
@@ -24,7 +25,7 @@ const (
 )
 
 type AccountSyncStatus struct {
-	Address            Address
+	Address            identifiers.Address
 	ExpectedHeight     uint64
 	SnapshotDownloaded bool
 	Mode               SyncMode

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -27,14 +28,14 @@ func TestIxPool_GetNonce(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		address       common.Address
-		testFn        func(addr common.Address)
+		address       identifiers.Address
+		testFn        func(addr identifiers.Address)
 		expectedNonce uint64
 	}{
 		{
 			name:    "IxPool accounts without interaction sender state",
 			address: tests.RandomAddress(t),
-			testFn: func(addr common.Address) {
+			testFn: func(addr identifiers.Address) {
 				sm.setLatestNonce(addr, 4)
 			},
 			expectedNonce: 4,
@@ -42,7 +43,7 @@ func TestIxPool_GetNonce(t *testing.T) {
 		{
 			name:    "IxPool accounts with interaction sender state",
 			address: tests.RandomAddress(t),
-			testFn: func(addr common.Address) {
+			testFn: func(addr identifiers.Address) {
 				ixPool.accounts.initOnce(addr, 5)
 			},
 			expectedNonce: 5,
@@ -73,7 +74,7 @@ func TestIxPool_GetIxs(t *testing.T) {
 
 	testcases := []struct {
 		name            string
-		address         common.Address
+		address         identifiers.Address
 		ixs             common.Interactions
 		inclQueued      bool
 		expectedIxQueue expectedIxQueue
@@ -134,13 +135,13 @@ func TestIxPool_GetAllIxs(t *testing.T) {
 
 	testcases := []struct {
 		name            string
-		accounts        map[common.Address]common.Interactions
+		accounts        map[identifiers.Address]common.Interactions
 		inclQueued      bool
-		expectedIxQueue map[common.Address]expectedIxQueue
+		expectedIxQueue map[identifiers.Address]expectedIxQueue
 	}{
 		{
 			name: "Without queued interactions",
-			accounts: map[common.Address]common.Interactions{
+			accounts: map[identifiers.Address]common.Interactions{
 				addresses[0]: append(
 					// promoted
 					createTestIxs(t, common.IxValueTransfer, 1, 3, addresses[0]),
@@ -155,7 +156,7 @@ func TestIxPool_GetAllIxs(t *testing.T) {
 				),
 			},
 			inclQueued: false,
-			expectedIxQueue: map[common.Address]expectedIxQueue{
+			expectedIxQueue: map[identifiers.Address]expectedIxQueue{
 				addresses[0]: {
 					pending: 2,
 					queued:  0,
@@ -168,7 +169,7 @@ func TestIxPool_GetAllIxs(t *testing.T) {
 		},
 		{
 			name: "With queued interactions",
-			accounts: map[common.Address]common.Interactions{
+			accounts: map[identifiers.Address]common.Interactions{
 				addresses[0]: append(
 					// promoted
 					createTestIxs(t, common.IxValueTransfer, 1, 3, addresses[0]),
@@ -183,7 +184,7 @@ func TestIxPool_GetAllIxs(t *testing.T) {
 				),
 			},
 			inclQueued: true,
-			expectedIxQueue: map[common.Address]expectedIxQueue{
+			expectedIxQueue: map[identifiers.Address]expectedIxQueue{
 				addresses[0]: {
 					pending: 2,
 					queued:  3,
@@ -228,8 +229,8 @@ func TestIxPool_GetAccountWaitTime(t *testing.T) {
 
 	testcases := []struct {
 		name        string
-		address     common.Address
-		testFn      func(addr common.Address, waitTime time.Duration)
+		address     identifiers.Address
+		testFn      func(addr identifiers.Address, waitTime time.Duration)
 		expectedErr error
 	}{
 		{
@@ -240,7 +241,7 @@ func TestIxPool_GetAccountWaitTime(t *testing.T) {
 		{
 			name:    "Account with state",
 			address: tests.RandomAddress(t),
-			testFn: func(addr common.Address, baseTime time.Duration) {
+			testFn: func(addr identifiers.Address, baseTime time.Duration) {
 				ixPool.createAccountOnce(addr, 0)
 				err := ixPool.IncrementWaitTime(addr, baseTime)
 				require.NoError(t, err)
@@ -286,11 +287,11 @@ func TestIxPool_GetAllAccountsWaitTime(t *testing.T) {
 
 	testcases := []struct {
 		name     string
-		accounts map[common.Address]int
+		accounts map[identifiers.Address]int
 	}{
 		{
 			name: "Accounts with different delay count",
-			accounts: map[common.Address]int{
+			accounts: map[identifiers.Address]int{
 				addressList[0]: 1,
 				addressList[1]: 5,
 				addressList[2]: 10,

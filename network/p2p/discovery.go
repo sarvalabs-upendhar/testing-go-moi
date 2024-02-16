@@ -4,6 +4,9 @@ import (
 	"context"
 	"time"
 
+	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi/common"
+
 	"github.com/libp2p/go-libp2p/core/peer"
 	discovery "github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	"github.com/sarvalabs/go-moi/common/config"
@@ -19,6 +22,8 @@ const (
 
 	// searchTimeout timeout is the timeout for locating a peer in the Kademlia DHT.
 	searchTimeout = 1 * time.Minute
+
+	connectionTimeout = 800 * time.Millisecond
 )
 
 // DiscoveryService is a struct that manages peer discovery.
@@ -139,7 +144,7 @@ func (ds *DiscoveryService) handleDiscoveredPeers() {
 			}
 
 			if !ds.server.cfg.NoDiscovery {
-				err = ds.server.ConnManager.ConnectAndRegisterPeer(peerInfo, kramaID, rtt)
+				err = ds.server.ConnManager.ConnectAndRegisterPeer(ds.server.ctx, peerInfo, kramaID, rtt)
 				if err != nil {
 					/*
 						Skip iteration on,
@@ -148,8 +153,11 @@ func (ds *DiscoveryService) handleDiscoveredPeers() {
 						* Error fetching ntq
 						* Handshake failure
 					*/
-					ds.server.logger.Trace("Failed to connect peer", "peerid", peerInfo.ID, "err", err)
 					ds.server.ConnManager.coolDownCache.Add(peerInfo.ID)
+
+					if !errors.Is(err, common.ErrOutboundConnLimit) {
+						ds.server.logger.Trace("Failed to connect peer", "peerid", peerInfo.ID, "err", err)
+					}
 
 					continue
 				}

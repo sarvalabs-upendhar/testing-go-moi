@@ -2,19 +2,22 @@ package message
 
 import (
 	"github.com/pkg/errors"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-polo"
-
-	"github.com/sarvalabs/go-moi/common/kramaid"
 )
 
 type MsgType int64
 
 const (
-	REQUESTMSG MsgType = iota + 1
-	RESPONSEMSG
+	ICSREQUEST MsgType = iota + 1
+	ICSRESPONSE
 	ICSSUCCESS
+	ICSFAILURE
+	ICSHAVE
+	ICSWANT
+	ICSGRAFT
+	ICSPRUNE
 	NEWIXSMSG
-	// NEWPEER
 	RANDOMWALKREQ
 	ACCSTATUSMSG
 	ACCSYNCREQ

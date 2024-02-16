@@ -5,68 +5,77 @@ import (
 	"math/big"
 
 	"github.com/libp2p/go-libp2p/core/network"
-
-	"github.com/sarvalabs/go-moi/jsonrpc/args"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/state"
 )
 
 type IxPool interface {
 	AddInteractions(ixs common.Interactions) []error
-	GetNonce(addr common.Address) (uint64, error)
-	GetIxs(addr common.Address, inclQueued bool) (promoted, enqueued []*common.Interaction)
-	GetAllIxs(inclQueued bool) (allPromoted, allEnqueued map[common.Address][]*common.Interaction)
+	GetNonce(addr identifiers.Address) (uint64, error)
+	GetIxs(addr identifiers.Address, inclQueued bool) (promoted, enqueued []*common.Interaction)
+	GetAllIxs(inclQueued bool) (allPromoted, allEnqueued map[identifiers.Address][]*common.Interaction)
 	GetPendingIx(ixHash common.Hash) (*common.Interaction, bool)
-	GetAccountWaitTime(addr common.Address) (*big.Int, error)
-	GetAllAccountsWaitTime() map[common.Address]*big.Int
+	GetAccountWaitTime(addr identifiers.Address) (*big.Int, error)
+	GetAllAccountsWaitTime() map[identifiers.Address]*big.Int
 }
 
 type ChainManager interface {
-	GetLatestTesseract(addr common.Address, withInteractions bool) (*common.Tesseract, error)
+	GetLatestTesseract(addr identifiers.Address, withInteractions bool) (*common.Tesseract, error)
 	GetTesseract(hash common.Hash, withInteractions bool) (*common.Tesseract, error)
 	GetReceiptByIxHash(ixHash common.Hash) (*common.Receipt, error)
-	GetInteractionAndPartsByIxHash(ixHash common.Hash) (*common.Interaction, *common.TesseractParts, int, error)
-	GetInteractionAndPartsByTSHash(tsHash common.Hash, ixIndex int) (*common.Interaction, *common.TesseractParts, error)
-	GetTesseractHeightEntry(address common.Address, height uint64) (common.Hash, error)
-	GetTesseractPartsByGridHash(gridHash common.Hash) (*common.TesseractParts, error)
+	GetTesseractHeightEntry(address identifiers.Address, height uint64) (common.Hash, error)
+	GetInteractionAndParticipantsByIxHash(ixHash common.Hash) (
+		*common.Interaction,
+		common.Hash,
+		common.Participants,
+		int,
+		error,
+	)
+	GetInteractionAndParticipantsByTSHash(tsHash common.Hash, ixIndex int) (
+		*common.Interaction,
+		common.Participants,
+		error,
+	)
 }
 
 type StateManager interface {
-	GetLatestStateObject(addr common.Address) (*state.Object, error)
-	GetContextByHash(address common.Address, hash common.Hash) (common.Hash, []id.KramaID, []id.KramaID, error)
-	GetBalances(addrs common.Address, stateHash common.Hash) (*state.BalanceObject, error)
-	GetBalance(addr common.Address, assetID common.AssetID, stateHash common.Hash) (*big.Int, error)
-	GetNonce(addr common.Address, stateHash common.Hash) (uint64, error)
-	GetAccountState(addr common.Address, stateHash common.Hash) (*common.Account, error)
-	GetLogicManifest(logicID common.LogicID, stateHash common.Hash) ([]byte, error)
-	GetStorageEntry(logicID common.LogicID, slot []byte, stateHash common.Hash) ([]byte, error)
-	GetAccountMetaInfo(addr common.Address) (*common.AccountMetaInfo, error)
-	GetLogicIDs(addr common.Address, stateHash common.Hash) ([]common.LogicID, error)
-	GetAssetInfo(assetID common.AssetID, stateHash common.Hash) (*common.AssetDescriptor, error)
-	GetRegistry(addr common.Address, stateHash common.Hash) (map[string][]byte, error)
+	GetLatestStateObject(addr identifiers.Address) (*state.Object, error)
+	GetContextByHash(identifiers.Address, common.Hash) (common.Hash, []kramaid.KramaID, []kramaid.KramaID, error)
+	GetBalances(addrs identifiers.Address, stateHash common.Hash) (*state.BalanceObject, error)
+	GetBalance(addr identifiers.Address, assetID identifiers.AssetID, stateHash common.Hash) (*big.Int, error)
+	GetNonce(addr identifiers.Address, stateHash common.Hash) (uint64, error)
+	GetAccountState(addr identifiers.Address, stateHash common.Hash) (*common.Account, error)
+	GetLogicManifest(logicID identifiers.LogicID, stateHash common.Hash) ([]byte, error)
+	GetStorageEntry(logicID identifiers.LogicID, slot []byte, stateHash common.Hash) ([]byte, error)
+	GetAccountMetaInfo(addr identifiers.Address) (*common.AccountMetaInfo, error)
+	GetLogicIDs(addr identifiers.Address, stateHash common.Hash) ([]identifiers.LogicID, error)
+	GetAssetInfo(assetID identifiers.AssetID, stateHash common.Hash) (*common.AssetDescriptor, error)
+	GetRegistry(addr identifiers.Address, stateHash common.Hash) (map[string][]byte, error)
 }
 
 type ExecutionManager interface {
 	InteractionCall(
 		ctx *common.ExecutionContext,
 		ix *common.Interaction,
-		stateHashes map[common.Address]common.Hash,
+		stateHashes map[identifiers.Address]common.Hash,
 	) (*common.Receipt, error)
 }
 
 type Syncer interface {
-	GetAccountSyncStatus(addr common.Address) (*args.AccSyncStatus, error)
+	GetAccountSyncStatus(addr identifiers.Address) (*args.AccSyncStatus, error)
 	GetNodeSyncStatus(includePendingAccounts bool) *args.NodeSyncStatus
-	GetSyncJobInfo(addr common.Address) (*args.SyncJobInfo, error)
+	GetSyncJobInfo(addr identifiers.Address) (*args.SyncJobInfo, error)
 }
 
 type Network interface {
 	GetVersion() string
-	GetKramaID() id.KramaID
+	GetKramaID() kramaid.KramaID
 	GetConns() []network.Conn
-	GetPeers() []id.KramaID
+	GetPeers() []kramaid.KramaID
 	GetInboundConnCount() int64
 	GetOutboundConnCount() int64
 	GetSubscribedTopics() map[string]int
@@ -74,7 +83,7 @@ type Network interface {
 
 type DB interface {
 	ReadEntry(key []byte) ([]byte, error)
-	GetRegisteredAccounts() ([]common.Address, error)
+	GetRegisteredAccounts() ([]identifiers.Address, error)
 	GetEntriesWithPrefix(ctx context.Context, prefix []byte) (chan *common.DBEntry, error)
 }
 

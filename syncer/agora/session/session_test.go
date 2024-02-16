@@ -17,7 +17,7 @@ import (
 func TestHandleMessage_UpdatePeerStatus(t *testing.T) {
 	sessionID := tests.RandomAddress(t)
 	stateHash := randomCID(t, storage.Account.Byte())
-	peerID := tests.GetTestKramaIDs(t, 1)[0]
+	peerID := tests.RandomKramaIDs(t, 1)[0]
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -59,7 +59,7 @@ func TestHandleMessage_UpdatePeerStatus(t *testing.T) {
 func TestHandleMessage_UpdatePeerSet(t *testing.T) {
 	sessionID := tests.RandomAddress(t)
 	stateHash := randomCID(t, storage.Account.Byte())
-	peerID := tests.GetTestKramaIDs(t, 1)[0]
+	peerID := tests.RandomKramaIDs(t, 1)[0]
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -76,7 +76,7 @@ func TestHandleMessage_UpdatePeerSet(t *testing.T) {
 	require.True(t, success)
 
 	// create kramaIds for peerSet
-	peerSet := tests.GetTestKramaIDs(t, 1)
+	peerSet := tests.RandomKramaIDs(t, 1)
 
 	resp := &message.AgoraResponseMsg{
 		SessionID: sessionID,
@@ -107,7 +107,7 @@ func TestGetBlocks_RecordSessionInterest(t *testing.T) {
 
 	sessionID := tests.RandomAddress(t)
 	stateHash := randomCID(t, storage.Account.Byte())
-	peerID := tests.GetTestKramaIDs(t, 1)[0]
+	peerID := tests.RandomKramaIDs(t, 1)[0]
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -160,7 +160,7 @@ func TestGetBlock(t *testing.T) {
 
 	sessionID := tests.RandomAddress(t)
 	stateHash := randomCID(t, storage.Account.Byte())
-	peerID := tests.GetTestKramaIDs(t, 1)[0]
+	peerID := tests.RandomKramaIDs(t, 1)[0]
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

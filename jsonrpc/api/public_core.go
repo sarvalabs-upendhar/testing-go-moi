@@ -5,7 +5,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-engineio"
+	engineio "github.com/sarvalabs/go-moi-engineio"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
@@ -17,7 +18,7 @@ import (
 
 type FilterManager interface {
 	NewTesseractFilter(ws websocket.ConnManager) string
-	NewTesseractsByAccountFilter(ws websocket.ConnManager, addr common.Address) string
+	NewTesseractsByAccountFilter(ws websocket.ConnManager, addr identifiers.Address) string
 	NewLogFilter(ws websocket.ConnManager, logQuery *websocket.LogQuery) string
 	PendingIxnsFilter(ws websocket.ConnManager) string
 	Uninstall(id string) bool
@@ -57,7 +58,7 @@ func NewPublicCoreAPI(
 	}
 }
 
-func getTesseractArgs(address common.Address, options rpcargs.TesseractNumberOrHash) *rpcargs.TesseractArgs {
+func getTesseractArgs(address identifiers.Address, options rpcargs.TesseractNumberOrHash) *rpcargs.TesseractArgs {
 	return &rpcargs.TesseractArgs{
 		Address: address,
 		Options: options,
@@ -65,11 +66,14 @@ func getTesseractArgs(address common.Address, options rpcargs.TesseractNumberOrH
 }
 
 // getTesseractByHash returns the tesseract based on the hash given
-func (p *PublicCoreAPI) getTesseractByHash(hash common.Hash, withInteractions bool) (*common.Tesseract, error) {
+func (p *PublicCoreAPI) getTesseractByHash(
+	hash common.Hash,
+	withInteractions bool,
+) (*common.Tesseract, error) {
 	return p.chain.GetTesseract(hash, withInteractions)
 }
 
-func (p *PublicCoreAPI) getTesseractHashByHeight(address common.Address, height int64) (common.Hash, error) {
+func (p *PublicCoreAPI) getTesseractHashByHeight(address identifiers.Address, height int64) (common.Hash, error) {
 	if address.IsNil() {
 		return common.NilHash, common.ErrInvalidAddress
 	}
@@ -125,12 +129,16 @@ func (p *PublicCoreAPI) GetRPCTesseract(args *rpcargs.TesseractArgs) (*rpcargs.R
 
 // GetContextInfo will fetch the context associated with the given address
 func (p *PublicCoreAPI) GetContextInfo(args *rpcargs.ContextInfoArgs) ([]string, []string, error) {
+	if args.Address.IsNil() {
+		return nil, nil, common.ErrEmptyAddress
+	}
+
 	ts, err := p.getTesseract(getTesseractArgs(args.Address, args.Options))
 	if err != nil {
 		return nil, nil, err
 	}
 
-	_, behaviourSet, RandomSet, err := p.sm.GetContextByHash(ts.Address(), ts.ContextHash())
+	_, behaviourSet, RandomSet, err := p.sm.GetContextByHash(args.Address, ts.LatestContextHash(args.Address))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -142,12 +150,16 @@ func (p *PublicCoreAPI) GetContextInfo(args *rpcargs.ContextInfoArgs) ([]string,
 // Accepts the address and asset for which to retrieve the balance.
 // Returns the balance as a big Integer and any error that occurs.
 func (p *PublicCoreAPI) GetBalance(args *rpcargs.BalArgs) (*hexutil.Big, error) {
+	if args.Address.IsNil() {
+		return nil, common.ErrEmptyAddress
+	}
+
 	ts, err := p.getTesseract(getTesseractArgs(args.Address, args.Options))
 	if err != nil {
 		return nil, err
 	}
 
-	balance, err := p.sm.GetBalance(ts.Address(), args.AssetID, ts.StateHash())
+	balance, err := p.sm.GetBalance(args.Address, args.AssetID, ts.StateHash(args.Address))
 	if err != nil {
 		return nil, err
 	}
@@ -157,12 +169,16 @@ func (p *PublicCoreAPI) GetBalance(args *rpcargs.BalArgs) (*hexutil.Big, error) 
 
 // GetTDU will return the total digital utility associated with address
 func (p *PublicCoreAPI) GetTDU(args *rpcargs.QueryArgs) ([]rpcargs.TDU, error) {
+	if args.Address.IsNil() {
+		return nil, common.ErrEmptyAddress
+	}
+
 	ts, err := p.getTesseract(getTesseractArgs(args.Address, args.Options))
 	if err != nil {
 		return nil, err
 	}
 
-	object, err := p.sm.GetBalances(ts.Address(), ts.StateHash())
+	object, err := p.sm.GetBalances(args.Address, ts.StateHash(args.Address))
 	if err != nil {
 		return nil, err
 	}
@@ -182,12 +198,16 @@ func (p *PublicCoreAPI) GetTDU(args *rpcargs.QueryArgs) ([]rpcargs.TDU, error) {
 }
 
 func (p *PublicCoreAPI) GetRegistry(args *rpcargs.QueryArgs) ([]rpcargs.RPCRegistry, error) {
+	if args.Address.IsNil() {
+		return nil, common.ErrEmptyAddress
+	}
+
 	ts, err := p.getTesseract(getTesseractArgs(args.Address, args.Options))
 	if err != nil {
 		return nil, err
 	}
 
-	registry, err := p.sm.GetRegistry(ts.Address(), ts.StateHash())
+	registry, err := p.sm.GetRegistry(args.Address, ts.StateHash(args.Address))
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +221,7 @@ func (p *PublicCoreAPI) GetRegistry(args *rpcargs.QueryArgs) ([]rpcargs.RPCRegis
 		}
 
 		entries = append(entries, rpcargs.RPCRegistry{
-			AssetID:   assetID,
+			AssetID:   identifiers.AssetID(assetID).String(),
 			AssetInfo: rpcargs.GetRPCAssetDescriptor(ad),
 		})
 	}
@@ -223,12 +243,12 @@ func (p *PublicCoreAPI) GetInteractionByTesseract(args *rpcargs.InteractionByTes
 	}
 
 	getRPCIX := func(hash common.Hash) (*rpcargs.RPCInteraction, error) {
-		ix, parts, err := p.chain.GetInteractionAndPartsByTSHash(hash, int(args.IxIndex.ToUint64()))
+		ix, participants, err := p.chain.GetInteractionAndParticipantsByTSHash(hash, int(args.IxIndex.ToUint64()))
 		if err != nil {
 			return nil, errors.Wrap(err, "interaction not found")
 		}
 
-		return rpcargs.CreateRPCInteraction(ix, parts.Grid, int(args.IxIndex.ToUint64()))
+		return rpcargs.CreateRPCInteraction(ix, hash, participants, int(args.IxIndex.ToUint64()))
 	}
 
 	if hash, ok := args.Options.Hash(); ok {
@@ -258,10 +278,10 @@ func (p *PublicCoreAPI) GetInteractionByHash(args *rpcargs.InteractionByHashArgs
 		return nil, common.ErrInvalidHash
 	}
 
-	ix, parts, ixIndex, err := p.chain.GetInteractionAndPartsByIxHash(args.Hash)
-	if err != nil && errors.Is(err, common.ErrGridHashNotFound) {
+	ix, hash, participants, ixIndex, err := p.chain.GetInteractionAndParticipantsByIxHash(args.Hash)
+	if err != nil && errors.Is(err, common.ErrTSHashNotFound) {
 		if pendingIX, found := p.ixpool.GetPendingIx(args.Hash); found {
-			return rpcargs.CreateRPCInteraction(pendingIX, nil, 0)
+			return rpcargs.CreateRPCInteraction(pendingIX, common.NilHash, nil, 0)
 		}
 
 		return nil, common.ErrFetchingInteraction
@@ -271,7 +291,7 @@ func (p *PublicCoreAPI) GetInteractionByHash(args *rpcargs.InteractionByHashArgs
 		return nil, err
 	}
 
-	return rpcargs.CreateRPCInteraction(ix, parts.Grid, ixIndex)
+	return rpcargs.CreateRPCInteraction(ix, hash, participants, ixIndex)
 }
 
 // GetInteractionReceipt returns the receipt for the given interaction hash
@@ -285,22 +305,26 @@ func (p *PublicCoreAPI) GetInteractionReceipt(args *rpcargs.ReceiptArgs) (*rpcar
 		return nil, err
 	}
 
-	ix, parts, ixIndex, err := p.chain.GetInteractionAndPartsByIxHash(args.Hash)
+	ix, hash, participants, ixIndex, err := p.chain.GetInteractionAndParticipantsByIxHash(args.Hash)
 	if err != nil {
 		return nil, err
 	}
 
-	return rpcargs.CreateRPCReceipt(receipt, ix, parts.Grid, ixIndex), nil
+	return rpcargs.CreateRPCReceipt(receipt, ix, hash, participants, ixIndex), nil
 }
 
 // GetInteractionCount returns the number of interactions sent for the given address
 func (p *PublicCoreAPI) GetInteractionCount(args *rpcargs.InteractionCountArgs) (*hexutil.Uint64, error) {
+	if args.Address.IsNil() {
+		return nil, common.ErrEmptyAddress
+	}
+
 	ts, err := p.getTesseract(getTesseractArgs(args.Address, args.Options))
 	if err != nil {
 		return nil, err
 	}
 
-	nonce, err := p.sm.GetNonce(ts.Address(), ts.StateHash())
+	nonce, err := p.sm.GetNonce(args.Address, ts.StateHash(args.Address))
 	if err != nil {
 		return nil, err
 	}
@@ -312,7 +336,7 @@ func (p *PublicCoreAPI) GetInteractionCount(args *rpcargs.InteractionCountArgs) 
 // Including the pending interactions in IxPool.
 func (p *PublicCoreAPI) GetPendingInteractionCount(args *rpcargs.InteractionCountArgs) (*hexutil.Uint64, error) {
 	if args.Address.IsNil() {
-		return nil, common.ErrInvalidAddress
+		return nil, common.ErrEmptyAddress
 	}
 
 	interactionCount, err := p.ixpool.GetNonce(args.Address)
@@ -325,12 +349,16 @@ func (p *PublicCoreAPI) GetPendingInteractionCount(args *rpcargs.InteractionCoun
 
 // GetAccountState returns the account state of the given address
 func (p *PublicCoreAPI) GetAccountState(args *rpcargs.GetAccountArgs) (map[string]interface{}, error) {
+	if args.Address.IsNil() {
+		return nil, common.ErrEmptyAddress
+	}
+
 	ts, err := p.getTesseract(getTesseractArgs(args.Address, args.Options))
 	if err != nil {
 		return nil, err
 	}
 
-	account, err := p.sm.GetAccountState(ts.Address(), ts.StateHash())
+	account, err := p.sm.GetAccountState(args.Address, ts.StateHash(args.Address))
 	if err != nil {
 		return nil, err
 	}
@@ -357,7 +385,7 @@ func (p *PublicCoreAPI) GetLogicManifest(args *rpcargs.LogicManifestArgs) (hexut
 		return nil, err
 	}
 
-	logicManifest, err := p.sm.GetLogicManifest(args.LogicID, ts.StateHash())
+	logicManifest, err := p.sm.GetLogicManifest(args.LogicID, ts.StateHash(args.LogicID.Address()))
 	if err != nil {
 		return nil, err
 	}
@@ -396,22 +424,30 @@ func (p *PublicCoreAPI) GetLogicManifest(args *rpcargs.LogicManifestArgs) (hexut
 
 // GetLogicStorage returns the data associated with the given storage slot
 func (p *PublicCoreAPI) GetLogicStorage(args *rpcargs.GetLogicStorageArgs) (hexutil.Bytes, error) {
+	if args.LogicID == "" {
+		return nil, common.ErrEmptyLogicID
+	}
+
 	ts, err := p.getTesseract(getTesseractArgs(args.LogicID.Address(), args.Options))
 	if err != nil {
 		return nil, err
 	}
 
-	return p.sm.GetStorageEntry(args.LogicID, args.StorageKey, ts.StateHash())
+	return p.sm.GetStorageEntry(args.LogicID, args.StorageKey, ts.StateHash(args.LogicID.Address()))
 }
 
 // GetLogicIDs will fetch the logic IDs from the logic tree
-func (p *PublicCoreAPI) GetLogicIDs(args *rpcargs.GetAccountArgs) ([]common.LogicID, error) {
+func (p *PublicCoreAPI) GetLogicIDs(args *rpcargs.GetAccountArgs) ([]identifiers.LogicID, error) {
+	if args.Address.IsNil() {
+		return nil, common.ErrEmptyAddress
+	}
+
 	ts, err := p.getTesseract(getTesseractArgs(args.Address, args.Options))
 	if err != nil {
 		return nil, err
 	}
 
-	logicIDs, err := p.sm.GetLogicIDs(ts.Address(), ts.StateHash())
+	logicIDs, err := p.sm.GetLogicIDs(args.Address, ts.StateHash(args.Address))
 	if err != nil {
 		return nil, err
 	}
@@ -421,12 +457,16 @@ func (p *PublicCoreAPI) GetLogicIDs(args *rpcargs.GetAccountArgs) ([]common.Logi
 
 // GetAssetInfoByAssetID returns the asset info associated with the given asset id
 func (p *PublicCoreAPI) GetAssetInfoByAssetID(args *rpcargs.GetAssetInfoArgs) (map[string]interface{}, error) {
+	if args.AssetID == "" {
+		return nil, common.ErrEmptyAssetID
+	}
+
 	ts, err := p.getTesseract(getTesseractArgs(args.AssetID.Address(), args.Options))
 	if err != nil {
 		return nil, err
 	}
 
-	info, err := p.sm.GetAssetInfo(args.AssetID, ts.StateHash())
+	info, err := p.sm.GetAssetInfo(args.AssetID, ts.StateHash(args.AssetID.Address()))
 	if err != nil {
 		return nil, err
 	}
@@ -441,7 +481,7 @@ func (p *PublicCoreAPI) GetAssetInfoByAssetID(args *rpcargs.GetAssetInfoArgs) (m
 		"is_stateful": info.IsStateFul,
 	}
 
-	if info.LogicID.String() != "" {
+	if string(info.LogicID) != "" {
 		rpcAssetInfo["logic_id"] = info.LogicID
 	}
 
@@ -464,8 +504,6 @@ func (p *PublicCoreAPI) AccountMetaInfo(args *rpcargs.GetAccountArgs) (map[strin
 		"address":        accMetaInfo.Address,
 		"height":         hexutil.Uint64(accMetaInfo.Height),
 		"tesseract_hash": accMetaInfo.TesseractHash,
-		"lattice_exists": accMetaInfo.LatticeExists,
-		"state_exists":   accMetaInfo.StateExists,
 	}
 
 	return rpcAccMetaInfo, nil
@@ -478,7 +516,7 @@ func (p *PublicCoreAPI) FuelEstimate(args *rpcargs.CallArgs) (*hexutil.Big, erro
 		return nil, err
 	}
 
-	ix, err := constructInteraction(sendIXArgs, nil)
+	ix, err := constructIxn(sendIXArgs, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -491,7 +529,7 @@ func (p *PublicCoreAPI) FuelEstimate(args *rpcargs.CallArgs) (*hexutil.Big, erro
 	ctx := &common.ExecutionContext{
 		CtxDelta: nil,
 		Cluster:  "moi.FuelEstimate",
-		Time:     time.Now().Unix(),
+		Time:     (time.Now().Unix()),
 	}
 
 	receipt, err := p.exec.InteractionCall(ctx, ix, stateHashes)
@@ -529,7 +567,7 @@ func (p *PublicCoreAPI) Call(args *rpcargs.CallArgs) (*rpcargs.RPCReceipt, error
 		return nil, err
 	}
 
-	ix, err := constructInteraction(sendIXArgs, nil)
+	ix, err := constructIxn(sendIXArgs, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -554,17 +592,21 @@ func (p *PublicCoreAPI) Call(args *rpcargs.CallArgs) (*rpcargs.RPCReceipt, error
 }
 
 func (p *PublicCoreAPI) normalizeOptions(
-	options map[common.Address]*rpcargs.TesseractNumberOrHash,
-) (map[common.Address]common.Hash, error) {
-	stateHashes := make(map[common.Address]common.Hash)
+	options map[identifiers.Address]*rpcargs.TesseractNumberOrHash,
+) (map[identifiers.Address]common.Hash, error) {
+	stateHashes := make(map[identifiers.Address]common.Hash)
 
 	for addr, value := range options {
+		if addr.IsNil() {
+			return nil, common.ErrEmptyAddress
+		}
+
 		ts, err := p.getTesseract(getTesseractArgs(addr, *value))
 		if err != nil {
 			return nil, err
 		}
 
-		stateHashes[addr] = ts.StateHash()
+		stateHashes[addr] = ts.StateHash(addr)
 	}
 
 	return stateHashes, nil

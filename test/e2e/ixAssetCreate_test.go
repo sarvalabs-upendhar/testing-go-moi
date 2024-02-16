@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"math/big"
 
+	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/moiclient"
-	"github.com/stretchr/testify/require"
 )
 
 // TODO Decide how to throw errors , use suite or require package
@@ -27,7 +29,7 @@ func (te *TestEnvironment) createAsset(
 		Type:      common.IxAssetCreate,
 		Nonce:     moiclient.GetLatestNonce(te.T(), te.moiClient, acc.Addr),
 		Sender:    acc.Addr,
-		FuelPrice: DefaulFuelPrice,
+		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
 		Payload:   payload,
 	}
@@ -43,7 +45,7 @@ func (te *TestEnvironment) createAsset(
 // 4. check if senders balance updated
 func validateAssetCreation(
 	te *TestEnvironment,
-	sender common.Address,
+	sender identifiers.Address,
 	ixHash common.Hash,
 	assetCreatePayload *common.AssetCreatePayload,
 ) {
@@ -78,8 +80,8 @@ func validateAssetCreation(
 	})
 	te.Suite.NoError(err)
 
-	require.Equal(te.T(), ts.Address(), assetReceipt.AssetID.Address())
-	require.Equal(te.T(), uint64(0), ts.Header.Height.ToUint64())
+	require.True(te.T(), ts.HasParticipant(assetReceipt.AssetID.Address()))
+	require.Equal(te.T(), uint64(0), ts.Height(assetReceipt.AssetID.Address()))
 
 	bal, err := te.moiClient.Balance(context.Background(), &args.BalArgs{
 		Address: sender,
@@ -101,7 +103,7 @@ func (te *TestEnvironment) TestAssetCreate() {
 		assetCreatePayload *common.AssetCreatePayload
 		postTest           func(
 			te *TestEnvironment,
-			acc common.Address,
+			acc identifiers.Address,
 			ixHash common.Hash,
 			assetCreatePayload *common.AssetCreatePayload,
 		)

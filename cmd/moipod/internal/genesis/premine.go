@@ -5,14 +5,14 @@ import (
 	"strconv"
 	"strings"
 
-	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"
-	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/utils"
-
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/spf13/cobra"
 
+	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"
+	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
+	"github.com/sarvalabs/go-moi/common/utils"
 )
 
 const (
@@ -135,13 +135,15 @@ func parseAssetInfoAndAllocations(assetInfo string, allocations []string) (*comm
 		return nil, common.ErrInvalidAssetInfoParams
 	}
 
+	opaddr, _ := identifiers.NewAddressFromHex(operator)
+
 	info := &common.AssetCreationArgs{
 		Symbol:      symbol,
 		Dimension:   hexutil.Uint8(dimension),
 		Standard:    hexutil.Uint16(standard),
 		IsLogical:   isLogical,
 		IsStateful:  isStateFul,
-		Operator:    common.HexToAddress(operator),
+		Operator:    opaddr,
 		Allocations: make([]common.Allocation, 0),
 	}
 
@@ -163,8 +165,10 @@ func parseAllocation(allocation string) *common.Allocation {
 			cmdcommon.Err(errors.Wrapf(err, "failed to parse amount"))
 		}
 
+		addr, _ := identifiers.NewAddressFromHex(allocation[:delimiterIdx])
+
 		return &common.Allocation{
-			Address: common.HexToAddress(allocation[:delimiterIdx]),
+			Address: addr,
 			Amount:  (*hexutil.Big)(balance),
 		}
 	}

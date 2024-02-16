@@ -9,7 +9,6 @@ import (
 
 type Metrics struct {
 	ActiveStateObjects metrics.Gauge
-	NumOfReverts       metrics.Counter
 }
 
 func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics {
@@ -26,19 +25,12 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 			Name:      "active_state_objects",
 			Help:      "Number of active state objects",
 		}, labels).With(labelsWithValues...),
-		NumOfReverts: prometheus.NewCounterFrom(stdprometheus.CounterOpts{
-			Namespace: namespace,
-			Subsystem: "state_manager",
-			Name:      "number_of_reverts",
-			Help:      "Number of times state objects reverted",
-		}, labels).With(labelsWithValues...),
 	}
 }
 
 func NilMetrics() *Metrics {
 	return &Metrics{
 		ActiveStateObjects: discard.NewGauge(),
-		NumOfReverts:       discard.NewCounter(),
 	}
 }
 
@@ -50,8 +42,4 @@ func (metrics *Metrics) initMetrics() {
 
 func (metrics *Metrics) captureActiveStateObjects(delta float64) {
 	metrics.ActiveStateObjects.Set(delta)
-}
-
-func (metrics *Metrics) captureNumOfReverts(delta float64) {
-	metrics.NumOfReverts.Add(delta)
 }

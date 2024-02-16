@@ -3,8 +3,9 @@ package common
 import (
 	"encoding/json"
 	"log"
+	"sync"
 
-	"github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-legacy-kramaid"
 )
 
 type IcsSetType int
@@ -19,6 +20,7 @@ const (
 )
 
 type NodeSet struct {
+	mtx         sync.RWMutex
 	Ids         []kramaid.KramaID
 	PublicKeys  [][]byte
 	Responses   *ArrayOfBits
@@ -28,14 +30,30 @@ type NodeSet struct {
 }
 
 // NewNodeSet creates and returns a new instance of NodeSet
-func NewNodeSet(ids []kramaid.KramaID, keys [][]byte) *NodeSet {
+func NewNodeSet(ids []kramaid.KramaID, keys [][]byte, quorumSize int) *NodeSet {
 	return &NodeSet{
+		mtx:         sync.RWMutex{},
 		Ids:         ids,
 		PublicKeys:  keys,
 		Responses:   NewArrayOfBits(len(ids)),
 		VotingPower: make([]int64, len(ids)),
 		RespCount:   0,
+		QuorumSize:  quorumSize,
 	}
+}
+
+func (ns *NodeSet) GetRespCount() int {
+	ns.mtx.RLock()
+	defer ns.mtx.RUnlock()
+
+	return ns.RespCount
+}
+
+func (ns *NodeSet) UpdateRespCount() {
+	ns.mtx.Lock()
+	defer ns.mtx.Unlock()
+
+	ns.RespCount++
 }
 
 type ICSNodeSet struct {
@@ -97,8 +115,8 @@ func (i *ICSNodeSet) GetKramaID(index int32) (slots []int, slotIndex int, kramaI
 	return nil, -1, "", nil
 }
 
-// GetIndex returns the index and existence status of the validator node from ICSNodes based on the krama id
-func (i *ICSNodeSet) GetIndex(peerID kramaid.KramaID) (int32, bool) {
+// HasKramaID returns the index and existence status of the validator node from ICSNodes based on the krama id
+func (i *ICSNodeSet) HasKramaID(peerID kramaid.KramaID) (int32, bool) {
 	offset := 0
 
 	for index, set := range i.Nodes {
@@ -122,6 +140,23 @@ func (i *ICSNodeSet) GetIndex(peerID kramaid.KramaID) (int32, bool) {
 	return -1, false
 }
 
+// GetIndex returns the index of the validator node from ICSNodes based on the krama id
+func (i *ICSNodeSet) GetIndex(peerID kramaid.KramaID) (IcsSetType, int) {
+	for i, set := range i.Nodes {
+		if set == nil {
+			continue
+		}
+
+		for j, kramaID := range set.Ids {
+			if kramaID == peerID {
+				return IcsSetType(i), j
+			}
+		}
+	}
+
+	return -1, -1
+}
+
 // UpdateNodeSet updates the specific node set of the ICSNodes based on the node set type
 func (i *ICSNodeSet) UpdateNodeSet(setType IcsSetType, data *NodeSet) {
 	if data == nil {
@@ -133,16 +168,50 @@ func (i *ICSNodeSet) UpdateNodeSet(setType IcsSetType, data *NodeSet) {
 }
 
 // GetNodes returns krama id's of all the nodes from the ICSNodes nodeset
-func (i *ICSNodeSet) GetNodes() []kramaid.KramaID {
-	var nodes []kramaid.KramaID
+func (i *ICSNodeSet) GetNodes(respondedOnly bool) []kramaid.KramaID {
+	nodes := make(map[kramaid.KramaID]struct{})
+	distinctNodes := make([]kramaid.KramaID, 0)
 
 	for _, nodeSet := range i.Nodes {
-		if nodeSet != nil {
-			nodes = append(nodes, nodeSet.Ids...)
+		if nodeSet == nil {
+			continue
+		}
+
+		for index, kramaID := range nodeSet.Ids {
+			if respondedOnly && !nodeSet.Responses.GetIndex(index) {
+				continue
+			}
+
+			if _, ok := nodes[kramaID]; ok {
+				continue
+			}
+
+			nodes[kramaID] = struct{}{}
+
+			distinctNodes = append(distinctNodes, kramaID)
 		}
 	}
 
-	return nodes
+	return distinctNodes
+}
+
+// GetVoteset returns combined voteset of all the nodes from the ICSNodeSet
+func (i *ICSNodeSet) GetVoteset() *ArrayOfBits {
+	voteSet := NewArrayOfBits(i.Size)
+
+	index := 0
+
+	for _, nodeSet := range i.Nodes {
+		if nodeSet != nil {
+			for j := 0; j < len(nodeSet.Ids); j++ {
+				voteSet.setIndex(index+j, nodeSet.Responses.GetIndex(j))
+			}
+
+			index += len(nodeSet.Ids)
+		}
+	}
+
+	return voteSet
 }
 
 // GetRespondedNodeCount returns count of nodes that responded from selected ICSNodes
@@ -150,7 +219,7 @@ func (i *ICSNodeSet) GetNodes() []kramaid.KramaID {
 func (i *ICSNodeSet) GetRespondedNodeCount(start, end int) (count int) {
 	for j := start; j <= end; j++ {
 		if i.Nodes[j] != nil {
-			count += i.Nodes[j].RespCount
+			count += i.Nodes[j].GetRespCount()
 		}
 	}
 
@@ -164,12 +233,12 @@ func (i *ICSNodeSet) IsContextQuorum() bool {
 		quorum := 0
 
 		if i.Nodes[j] != nil {
-			count += i.Nodes[j].RespCount
+			count += i.Nodes[j].GetRespCount()
 			quorum += len(i.Nodes[j].Ids)
 		}
 
 		if i.Nodes[j+1] != nil {
-			count += i.Nodes[j+1].RespCount
+			count += i.Nodes[j+1].GetRespCount()
 			quorum += len(i.Nodes[j+1].Ids)
 		}
 
@@ -185,7 +254,7 @@ func (i *ICSNodeSet) IsContextQuorum() bool {
 
 // IsRandomQuorum check's whether random quorum condition is satisfied or not
 func (i *ICSNodeSet) IsRandomQuorum(requiredRandomNodes int) bool {
-	return i.Nodes[RandomSet].RespCount >= requiredRandomNodes
+	return i.Nodes[RandomSet].GetRespCount() >= requiredRandomNodes
 }
 
 // SenderSetSize returns the sum of number of nodes in the sender's behaviour node set and random node set

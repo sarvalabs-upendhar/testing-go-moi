@@ -5,7 +5,6 @@ This file has all the utility function required for KIP
 */
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"log"
 	"math"
@@ -17,12 +16,10 @@ import (
 	"strings"
 	"time"
 
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-
+	"github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 
 	"github.com/sarvalabs/go-moi/common"
 )
@@ -143,7 +140,7 @@ func MultiAddrFromString(maddr ...string) (addrs []multiaddr.Multiaddr) {
 	return
 }
 
-func ContainsKramaID(set []id.KramaID, id id.KramaID) bool {
+func ContainsKramaID(set []kramaid.KramaID, id kramaid.KramaID) bool {
 	for _, v := range set {
 		if v == id {
 			return true
@@ -153,7 +150,7 @@ func ContainsKramaID(set []id.KramaID, id id.KramaID) bool {
 	return false
 }
 
-func GetNetworkID(id id.KramaID) (peer.ID, error) {
+func GetNetworkID(id kramaid.KramaID) (peer.ID, error) {
 	networkID, err := id.PeerID()
 	if err != nil {
 		return "", nil
@@ -176,20 +173,6 @@ func ValidateAccountType(acc common.AccountType) error {
 	}
 }
 
-func ValidateAddress(address string) (common.Address, error) {
-	address = strings.TrimPrefix(address, "0x")
-	if len(address) != 64 {
-		return common.NilAddress, common.ErrInvalidAddress
-	}
-
-	r := regexp.MustCompile(`[^a-fA-F\d]`)
-	if invalid := r.MatchString(address); invalid {
-		return common.NilAddress, common.ErrInvalidAddress
-	}
-
-	return common.HexToAddress(address), nil
-}
-
 func ValidateHash(hash string) (string, error) {
 	hash = strings.TrimPrefix(hash, "0x")
 	if len(hash) != 64 {
@@ -204,48 +187,17 @@ func ValidateHash(hash string) (string, error) {
 	return hash, nil
 }
 
-func ValidateLogicID(logicID string) (common.LogicID, error) {
-	logicID = strings.TrimPrefix(logicID, "0x")
-
-	_, err := hex.DecodeString(logicID)
-	if err != nil {
-		return "", err
-	}
-
-	logic := common.LogicID(logicID)
-
-	if _, err = logic.Identifier(); err != nil {
-		return "", common.ErrInvalidLogicID
-	}
-
-	return logic, nil
-}
-
-func ValidateAssetID(aID string) (common.AssetID, error) {
-	aID = strings.TrimPrefix(aID, "0x")
-	if len(aID) != 68 {
-		return "nil", common.ErrInvalidAssetID
-	}
-
-	r := regexp.MustCompile(`[^a-fA-F\d]`)
-	if invalid := r.MatchString(aID); invalid {
-		return "nil", common.ErrInvalidAssetID
-	}
-
-	return common.AssetID(aID), nil
-}
-
-func KramaIDFromString(nodes []string) []id.KramaID {
-	ids := make([]id.KramaID, 0, len(nodes))
+func KramaIDFromString(nodes []string) []kramaid.KramaID {
+	ids := make([]kramaid.KramaID, 0, len(nodes))
 
 	for _, v := range nodes {
-		ids = append(ids, id.KramaID(v))
+		ids = append(ids, kramaid.KramaID(v))
 	}
 
 	return ids
 }
 
-func KramaIDToString(peers []id.KramaID) []string {
+func KramaIDToString(peers []kramaid.KramaID) []string {
 	ids := make([]string, 0, len(peers))
 
 	for _, v := range peers {
@@ -283,14 +235,31 @@ func ResolveAddr(raw string) (*net.TCPAddr, error) {
 	return addr, nil
 }
 
-func ConvertMapToSlice(m map[id.KramaID]struct{}) []id.KramaID {
-	slice := make([]id.KramaID, 0)
+func ConvertMapToSlice(m map[kramaid.KramaID]struct{}) []kramaid.KramaID {
+	slice := make([]kramaid.KramaID, 0)
 
 	for k := range m {
 		slice = append(slice, k)
 	}
 
 	return slice
+}
+
+// RetryUntilTimeout retries the given function until the timeout is reached.
+func RetryUntilTimeout(timeout time.Duration, retryInterval time.Duration, fn func() error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(retryInterval):
+			if err := fn(); err == nil {
+				return
+			}
+		}
+	}
 }
 
 // WrappedVal represents a gossip validator which also returns an error along with the result.

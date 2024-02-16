@@ -4,8 +4,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
-
-	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi-identifiers"
 )
 
 // timeoutInfo is a struct that represents some timeout information that are emitted by the Ticker struct
@@ -13,7 +12,7 @@ type timeoutInfo struct {
 	// Represents the duration of the timeout
 	Duration time.Duration `json:"duration"`
 	// Represents the height that the timeout applies for
-	Height map[common.Address]uint64 `json:"height"`
+	Height map[identifiers.Address]uint64 `json:"height"`
 	// Represents the round that the timout applies for
 	Round int32 `json:"round"`
 	// Represents the round step type that the timout applies for
@@ -35,6 +34,8 @@ type Ticker struct {
 
 	// Represents the channel for closing the ticker
 	quit chan struct{}
+
+	isClosed bool
 }
 
 // NewTicker is a constructor function that generates and returns a new Ticker
@@ -142,5 +143,12 @@ func (t *Ticker) timeoutRoutine() {
 func (t *Ticker) Close() {
 	t.logger.Debug("Closing timer")
 
+	if t.isClosed {
+		t.logger.Error("closing an already closed quit channel on ticker")
+
+		return
+	}
+
+	t.isClosed = true
 	close(t.quit)
 }

@@ -3,7 +3,7 @@ package common
 import (
 	"github.com/mr-tron/base58"
 	"github.com/pkg/errors"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-polo"
 )
 
@@ -42,8 +42,8 @@ func (ctx ExecutionContext) ContextDelta() ContextDelta {
 }
 
 type ICSClusterInfo struct {
-	RandomSet   []id.KramaID
-	ObserverSet []id.KramaID
+	RandomSet   []kramaid.KramaID
+	ObserverSet []kramaid.KramaID
 	Responses   []*ArrayOfBits
 }
 

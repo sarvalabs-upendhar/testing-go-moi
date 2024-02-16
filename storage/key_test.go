@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"testing"
 
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -24,7 +25,9 @@ func TestGetAddressHeightKey(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := tesseractHeightKey(common.HexToAddress(test.address), test.height)
+			addr, _ := identifiers.NewAddressFromHex(test.address)
+			result := tesseractHeightKey(addr, test.height)
+
 			parsedAddress := result[:32]
 			parsedPrefix := result[32:33][0]
 			parsedHeight := result[33:]

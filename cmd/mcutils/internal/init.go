@@ -159,10 +159,12 @@ func CreateConfigFile(datadir string, index int, ipAddr string) []byte {
 			AccountWaitTime:       1500,
 			OperatorSlots:         -1,
 			ValidatorSlots:        3,
+			MaxGossipPeers:        5,
+			MinGossipPeers:        3,
 		},
 		DB: cmdCommon.DBConfig{
 			CleanDB:     false,
-			MaxSnapSize: config.DefaultSnapSize, // 1GB limit
+			MaxSnapSize: config.DefaultSnapSize, // 3GB limit
 		},
 		Execution: cmdCommon.ExecutionConfig{
 			FuelLimit: hexutil.Uint64(config.DefaultFuelLimit),

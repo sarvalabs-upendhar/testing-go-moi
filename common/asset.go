@@ -4,10 +4,11 @@ import (
 	"math/big"
 
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 )
 
-type AssetMap map[AssetID]*big.Int
+type AssetMap map[identifiers.AssetID]*big.Int
 
 func (assets AssetMap) Copy() AssetMap {
 	copied := make(AssetMap, len(assets))
@@ -19,19 +20,19 @@ func (assets AssetMap) Copy() AssetMap {
 }
 
 type AssetDescriptor struct {
-	Symbol   string   `json:"symbol"`
-	Operator Address  `json:"operator"`
-	Supply   *big.Int `json:"supply"`
+	Symbol   string              `json:"symbol"`
+	Operator identifiers.Address `json:"operator"`
+	Supply   *big.Int            `json:"supply"`
 
 	Dimension  uint8         `json:"dimension"`
 	Standard   AssetStandard `json:"standard"`
 	IsLogical  bool          `json:"is_logical"`
 	IsStateFul bool          `json:"is_stateful"`
 
-	LogicID LogicID `json:"logic_id"`
+	LogicID identifiers.LogicID `json:"logic_id"`
 }
 
-func NewAssetDescriptor(operator Address, asset AssetCreatePayload) *AssetDescriptor {
+func NewAssetDescriptor(operator identifiers.Address, asset AssetCreatePayload) *AssetDescriptor {
 	return &AssetDescriptor{
 		Operator:   operator,
 		Symbol:     asset.Symbol,
@@ -89,3 +90,11 @@ func StringToDimensionID(str string) AssetDimension {
 
 	return 0
 }
+
+type AssetStandard uint16
+
+// MAS is moi asset standard
+const (
+	MAS0 AssetStandard = iota
+	MAS1
+)

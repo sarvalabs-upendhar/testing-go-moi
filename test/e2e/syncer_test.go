@@ -4,16 +4,19 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/moiclient"
-	"github.com/stretchr/testify/require"
 )
 
 func checkIfNodeSynced(t *testing.T, nodeToCheck *moiclient.Client) {
@@ -56,7 +59,12 @@ func checkIfNodesSynced(t *testing.T, syncNodeSet []*moiclient.Client) {
 		cancel()
 
 		require.Equalf(t, true, response.NodeSyncResp.IsInitialSyncDone, syncNode.URL())
-		require.Equalf(t, uint64(0), response.NodeSyncResp.TotalPendingAccounts.ToUint64(), syncNode.URL())
+		require.Equalf(t,
+			uint64(0),
+			response.NodeSyncResp.TotalPendingAccounts.ToUint64(),
+			syncNode.URL(),
+			time.Now().String(),
+		)
 	}
 }
 
@@ -64,12 +72,12 @@ func checkIfAccountsSyncedOnAllNodes(
 	t *testing.T,
 	nodeToCheck *moiclient.Client,
 	syncNodeSet []*moiclient.Client,
-	addresses ...common.Address,
+	addresses ...identifiers.Address,
 ) {
 	t.Helper()
 
 	t.Log("total addresses ", len(addresses))
-	t.Log("total nodes ", len(syncNodeSet))
+	t.Log("total nodes in network", len(syncNodeSet))
 
 	// compare all account sync status among all other nodes with this node
 	for _, address := range addresses {
@@ -78,7 +86,7 @@ func checkIfAccountsSyncedOnAllNodes(
 		expectedAccMetaInfo, err := nodeToCheck.AccountMetaInfo(ctx, &args.GetAccountArgs{
 			Address: address,
 		})
-		require.NoError(t, err, nodeToCheck.URL(), address)
+		require.NoError(t, err, nodeToCheck.URL(), address, time.Now())
 
 		cancel()
 
@@ -107,7 +115,7 @@ func checkIfAccountsSyncedOnAllNodes(
 
 				cancel()
 
-				require.Equalf(t, expectedAccMetaInfo.Height, actualAccMetaInfo.Height, errMsg)
+				require.Equalf(t, expectedAccMetaInfo.Height, actualAccMetaInfo.Height, errMsg, time.Now())
 			}()
 		}
 
@@ -115,9 +123,57 @@ func checkIfAccountsSyncedOnAllNodes(
 	}
 }
 
-func (te *TestEnvironment) TestFullSyncForOneNode() {
-	// as first node is operator, avoid stopping operator
-	te.moiClient, te.moiClients[len(te.moiClients)-1] = te.moiClients[len(te.moiClients)-1], te.moiClient
+func (te *TestEnvironment) chooseNonContextNodeURL(addrs []identifiers.Address) string {
+	contextNodes := moiclient.GetContextNodes(te.T(), te.moiClient, addrs)
+
+	hasNode := func(node string) bool {
+		for _, n := range contextNodes {
+			if n == node {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	operatorPort := strconv.Itoa(DefaultJSONRPCPort)
+
+	// avoid choosing operator and context nodes as node will be stopped
+	for _, instance := range te.instances {
+		if !hasNode(instance.KramaID) && !strings.HasSuffix(instance.RPCUrl, operatorPort) {
+			parts := strings.Split(instance.RPCUrl, ":")
+
+			p, err := strconv.Atoi(parts[1])
+			te.NoError(err)
+
+			return "http://0.0.0.0:" + strconv.Itoa(DefaultJSONRPCPort+p%100)
+		}
+	}
+
+	return ""
+}
+
+func (te *TestEnvironment) TestZFullSyncForOneNode() {
+	accs, err := te.chooseRandomUniqueAccounts(2)
+	require.NoError(te.T(), err)
+
+	var (
+		sender     = accs[0]
+		chosenNode *moiclient.Client
+	)
+
+	// As cloud tests doesn't run in debug mode, we can choose any node other than operator
+	if *networkType == cloud {
+		chosenNode, err = getMoiClient(te.T(), te.moiClients[1].URL())
+		require.NoError(te.T(), err)
+	} else {
+		// choose node that need to be stopped, it should be neither operator nor context node of ixn participants
+		chosenNode, err = getMoiClient(
+			te.T(),
+			te.chooseNonContextNodeURL([]identifiers.Address{sender.Addr, common.SargaAddress}),
+		)
+		require.NoError(te.T(), err)
+	}
 
 	testcases := []struct {
 		name             string
@@ -131,15 +187,7 @@ func (te *TestEnvironment) TestFullSyncForOneNode() {
 		{
 			name: "start the node without clean db",
 			intervalFunction: func() {
-				accs, err := te.chooseRandomUniqueAccounts(2)
-				require.NoError(te.T(), err)
-
-				sender := accs[0]
 				initialAmount := big.NewInt(1000)
-
-				// send ixn to new node as moiclient is down
-				temp := te.moiClient
-				te.moiClient = te.moiClients[1]
 
 				// send an ixn to create new account
 				// check if the newly created asset account and existing account are synced
@@ -149,8 +197,6 @@ func (te *TestEnvironment) TestFullSyncForOneNode() {
 					common.MAS0,
 					nil,
 				))
-
-				te.moiClient = temp
 			},
 		},
 	}
@@ -159,9 +205,9 @@ func (te *TestEnvironment) TestFullSyncForOneNode() {
 		te.Run(test.name, func() {
 			ctx, cancel := context.WithTimeout(context.Background(), DefaultNodeStopTime)
 
-			te.logger.Debug("stop node", te.moiClient.URL())
+			te.logger.Debug("Stop node", chosenNode.URL(), time.Now())
 
-			err := te.bgClient.StopNode(ctx, te.moiClient.URL())
+			err := te.bgClient.StopNode(ctx, chosenNode.URL())
 			require.NoError(te.T(), err)
 
 			cancel()
@@ -172,22 +218,23 @@ func (te *TestEnvironment) TestFullSyncForOneNode() {
 
 			ctx, cancel = context.WithTimeout(context.Background(), DefaultNodeStartTime)
 
-			te.logger.Debug("start node", te.moiClient.URL())
+			te.logger.Debug("Start node", chosenNode.URL(), time.Now())
 
-			err = te.bgClient.StartNode(ctx, te.moiClient.URL(), test.withCleanDB)
+			err = te.bgClient.StartNode(ctx, chosenNode.URL(), test.withCleanDB)
 			require.NoError(te.T(), err)
 
 			cancel()
 
+			// TODO Replace with wait for initial sync time code
 			time.Sleep(10 * time.Second)
 
-			checkIfNodeSynced(te.T(), te.moiClient)
+			checkIfNodeSynced(te.T(), chosenNode)
 			checkIfNodesSynced(te.T(), te.moiClients)
 
 			ctx, cancel = context.WithTimeout(context.Background(), DefaultQueryTime)
 			defer cancel()
 
-			addrs, err := te.moiClients[1].Accounts(ctx)
+			addrs, err := te.moiClient.Accounts(ctx)
 			require.NoError(te.T(), err)
 
 			checkIfAccountsSyncedOnAllNodes(te.T(), te.moiClient, te.moiClients, addrs...)

@@ -145,7 +145,7 @@ func TestHandleRequest_RequestQueueIsFull(t *testing.T) {
 func TestHandleRequest_AssociatedPeers(t *testing.T) {
 	sessionID := tests.RandomAddress(t)
 	stateHash := randomCID(t, storage.Account.Byte())
-	kramaIds := tests.GetTestKramaIDs(t, 1)
+	kramaIds := tests.RandomKramaIDs(t, 1)
 
 	engine, _, _, _ := NewTest(
 		t,
@@ -197,7 +197,7 @@ func TestHandleRequest_AssociatedPeers(t *testing.T) {
 func TestHandleRequest_ValidRequestAddedToQueue(t *testing.T) {
 	sessionID := tests.RandomAddress(t)
 	stateHash := randomCID(t, storage.Account.Byte())
-	kramaIds := tests.GetTestKramaIDs(t, 1)
+	kramaIds := tests.RandomKramaIDs(t, 1)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -247,7 +247,7 @@ func TestHandleRequest_ValidRequestAddedToQueue(t *testing.T) {
 func TestEngine_TimeOutRequest(t *testing.T) {
 	sessionID := tests.RandomAddress(t)
 	stateHash := randomCID(t, storage.Account.Byte())
-	kramaIds := tests.GetTestKramaIDs(t, 1)
+	kramaIds := tests.RandomKramaIDs(t, 1)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -343,5 +343,7 @@ func TestEngine_RequestWithEmptyWantList(t *testing.T) {
 	msg, err := WaitForResponseMsg(waitCtx, req.PeerID, mockNetwork)
 	require.NoError(t, err)
 
-	assert.Contains(t, msg.HaveList, atypes.NewBlockFromRawData(storage.Account.Byte(), stateData).BytesForMessage())
+	assert.Contains(t,
+		msg.HaveList,
+		atypes.NewAccountBlockFromRawData(storage.Account.Byte(), stateData).BytesForMessage())
 }

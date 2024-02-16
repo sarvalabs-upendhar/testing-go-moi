@@ -1,279 +1,241 @@
 package common_test
 
 import (
+	"math/big"
 	"reflect"
 	"testing"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-
-	"github.com/stretchr/testify/require"
-
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/stretchr/testify/require"
 )
 
-func TestCopyHeader(t *testing.T) {
+func TestCopyState(t *testing.T) {
 	testcases := []struct {
-		name   string
-		header common.TesseractHeader
+		name  string
+		state common.State
 	}{
 		{
-			name:   "copy header",
-			header: tests.CreateHeaderWithTestData(t),
+			name:  "copy state",
+			state: tests.CreateStateWithTestData(t),
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			expectedHeader := test.header
+			expectedState := test.state
 
-			header := test.header.Copy()
-			require.Equal(t, expectedHeader, header)
-			require.NotEqual(t,
-				reflect.ValueOf(test.header.Extra.CommitSignature).Pointer(),
-				reflect.ValueOf(header.Extra.CommitSignature).Pointer(),
-			)
-			require.NotEqual(t,
-				reflect.ValueOf(test.header.ContextLock).Pointer(),
-				reflect.ValueOf(header.ContextLock).Pointer(),
+			copiedState := test.state.Copy()
+
+			require.Equal(t, expectedState, copiedState)
+			require.False(
+				t,
+				&expectedState.ContextDelta.BehaviouralNodes[0] == &copiedState.ContextDelta.BehaviouralNodes[0],
 			)
 		})
 	}
 }
 
-func TestCopyBody(t *testing.T) {
-	testcases := []struct {
-		name string
-		body common.TesseractBody
-	}{
-		{
-			name: "copy body",
-			body: tests.CreateBodyWithTestData(t),
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			expectedBody := test.body
-
-			body := test.body.Copy()
-
-			require.Equal(t, expectedBody, body)
-			require.NotEqual(t,
-				reflect.ValueOf(test.body.ContextDelta).Pointer(),
-				reflect.ValueOf(body.ContextDelta).Pointer(),
-			)
-		})
-	}
-}
-
-func TestCopyReceipts(t *testing.T) {
-	hash := tests.RandomHash(t)
-
-	testcases := []struct {
-		name     string
-		receipts common.Receipts
-	}{
-		{
-			name:     "copy receipts",
-			receipts: createReceiptsWithTestData(t, hash),
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			expectedReceipts := test.receipts
-
-			receipts := test.receipts.Copy()
-
-			require.Equal(t, expectedReceipts, receipts)
-
-			require.NotEqual(t, reflect.ValueOf(test.receipts).Pointer(), reflect.ValueOf(receipts).Pointer())
-			require.NotEqual(t,
-				reflect.ValueOf(test.receipts[hash].ExtraData).Pointer(),
-				reflect.ValueOf(receipts[hash].ExtraData).Pointer(),
-			)
-		})
-	}
-}
-
-func TestCopyCommitData(t *testing.T) {
-	testcases := []struct {
-		name       string
-		commitData common.CommitData
-	}{
-		{
-			name:       "copy commit data",
-			commitData: tests.CreateCommitDataWithTestData(t),
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			expectedCommitData := test.commitData
-
-			commitData := test.commitData.Copy()
-
-			require.Equal(t, expectedCommitData, commitData)
-			require.False(t, &test.commitData.VoteSet == &commitData.VoteSet)
-			require.False(t, &test.commitData.GridID == &commitData.GridID)
-			require.NotEqual(t,
-				reflect.ValueOf(test.commitData.CommitSignature).Pointer(),
-				reflect.ValueOf(commitData.CommitSignature).Pointer(),
-			)
-		})
-	}
-}
-
-func TestCopyContextDelta(t *testing.T) {
-	contextDelta := make(common.ContextDelta)
+func TestCopyParticipant(t *testing.T) {
 	address := tests.RandomAddress(t)
-
-	contextDelta[address] = &common.DeltaGroup{
-		Role:             common.Sender,
-		BehaviouralNodes: tests.GetTestKramaIDs(t, 2),
-		RandomNodes:      tests.GetTestKramaIDs(t, 2),
-		ReplacedNodes:    tests.GetTestKramaIDs(t, 2),
-	}
 
 	testcases := []struct {
 		name         string
-		contextDelta common.ContextDelta
+		participants common.Participants
 	}{
 		{
-			name:         "copy context delta",
-			contextDelta: contextDelta,
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			expectedCtxDelta := test.contextDelta
-
-			ctxDelta := test.contextDelta.Copy()
-
-			require.Equal(t, expectedCtxDelta, ctxDelta)
-
-			require.False(t, &test.contextDelta[address].BehaviouralNodes == &ctxDelta[address].BehaviouralNodes)
-			require.False(t, &test.contextDelta[address].RandomNodes == &ctxDelta[address].RandomNodes)
-			require.False(t, &test.contextDelta[address].ReplacedNodes == &ctxDelta[address].ReplacedNodes)
-		})
-	}
-}
-
-func TestCopyTesseractGridID(t *testing.T) {
-	testcases := []struct {
-		name     string
-		tsGridID common.TesseractGridID
-	}{
-		{
-			name: "copy tesseract grid id",
-			tsGridID: common.TesseractGridID{
-				Hash:  tests.RandomHash(t),
-				Parts: tests.CreateTesseractPartsWithTestData(t),
+			name: "copy participants",
+			participants: common.Participants{
+				address: tests.CreateStateWithTestData(t),
 			},
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			expectedGridID := test.tsGridID
+			expectedParticipants := test.participants
 
-			copiedGridID := test.tsGridID.Copy()
+			copiedParticipants := test.participants.Copy()
 
-			require.Equal(t, expectedGridID, *copiedGridID)
-			require.NotEqual(t, reflect.ValueOf(expectedGridID.Parts).Pointer(), reflect.ValueOf(copiedGridID.Parts).Pointer())
+			require.Equal(t, expectedParticipants, copiedParticipants)
+			require.NotEqual(t,
+				reflect.ValueOf(expectedParticipants).Pointer(),
+				reflect.ValueOf(copiedParticipants).Pointer(),
+			)
+			require.NotEqual(t,
+				reflect.ValueOf(expectedParticipants[address].ContextDelta.BehaviouralNodes).Pointer(),
+				reflect.ValueOf(copiedParticipants[address].ContextDelta.BehaviouralNodes).Pointer(),
+			)
 		})
 	}
 }
 
-func TestCopyTesseractParts(t *testing.T) {
+func TestCopyPoXtData(t *testing.T) {
 	testcases := []struct {
-		name    string
-		tsParts *common.TesseractParts
+		name string
+		poxt common.PoXtData
 	}{
 		{
-			name:    "copy tesseract parts",
-			tsParts: tests.CreateTesseractPartsWithTestData(t),
+			name: "copy tesseract poxt data",
+			poxt: tests.CreatePoXtWithTestData(t),
+		},
+		{
+			name: "empty signatures and votesets",
+			poxt: common.PoXtData{
+				ClusterID: "cluster",
+				Round:     5,
+			},
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			expectedTSParts := test.tsParts
+			expectedPoXt := test.poxt
 
-			copiedParts := test.tsParts.Copy()
+			copiedPoXt := test.poxt.Copy()
 
-			require.Equal(t, expectedTSParts, copiedParts)
-			require.NotEqual(t,
-				reflect.ValueOf(test.tsParts.Grid).Pointer(),
-				reflect.ValueOf(copiedParts.Grid).Pointer(),
-			)
+			require.Equal(t, expectedPoXt, copiedPoXt)
+
+			if expectedPoXt.BFTVoteSet != nil {
+				require.False(t, &expectedPoXt.BFTVoteSet.Elements[0] == &copiedPoXt.BFTVoteSet.Elements[0])
+			}
+
+			if expectedPoXt.ICSVoteset != nil {
+				require.False(t, &expectedPoXt.ICSVoteset.Elements[0] == &copiedPoXt.ICSVoteset.Elements[0])
+			}
+
+			if len(expectedPoXt.CommitSignature) > 0 {
+				require.NotEqual(t,
+					reflect.ValueOf(expectedPoXt.CommitSignature).Pointer(),
+					reflect.ValueOf(copiedPoXt.CommitSignature).Pointer(),
+				)
+			}
+
+			if len(expectedPoXt.ICSSignature) > 0 {
+				require.NotEqual(t,
+					reflect.ValueOf(expectedPoXt.ICSSignature).Pointer(),
+					reflect.ValueOf(copiedPoXt.ICSSignature).Pointer(),
+				)
+			}
 		})
 	}
 }
 
 func TestNewTesseract(t *testing.T) {
-	ixParams := tests.GetIxParamsMapWithAddresses(
-		[]common.Address{tests.RandomAddress(t)},
-		[]common.Address{tests.RandomAddress(t)},
+	var (
+		address  = tests.RandomAddress(t)
+		ixParams = tests.GetIxParamsMapWithAddresses(
+			[]identifiers.Address{tests.RandomAddress(t)},
+			[]identifiers.Address{tests.RandomAddress(t)},
+		)
 	)
 
 	testcases := []struct {
-		name     string
-		header   common.TesseractHeader
-		body     common.TesseractBody
-		ixns     common.Interactions
-		receipts common.Receipts
-		seal     []byte
-		sealer   id.KramaID
+		name             string
+		participants     common.Participants
+		interactionsHash common.Hash
+		receiptHash      common.Hash
+		epoch            *big.Int
+		timestamp        int64
+		operator         string
+		fuelUsed         uint64
+		fuelLimit        uint64
+		consensusInfo    common.PoXtData
+		seal             []byte
+		sealBy           kramaid.KramaID
+		ixns             common.Interactions
+		receipts         common.Receipts
 	}{
 		{
-			name:     "copy tesseract parts",
-			header:   tests.CreateHeaderWithTestData(t),
-			body:     tests.CreateBodyWithTestData(t),
-			ixns:     tests.CreateIxns(t, 1, ixParams),
-			receipts: createReceiptsWithTestData(t, tests.RandomHash(t)),
-			seal:     []byte{1, 2, 3},
-			sealer:   tests.GetTestKramaIDs(t, 1)[0],
+			name: "create new tesseract",
+			participants: common.Participants{
+				address: tests.CreateStateWithTestData(t),
+			},
+			interactionsHash: tests.RandomHash(t),
+			receiptHash:      tests.RandomHash(t),
+			epoch:            big.NewInt(3),
+			timestamp:        44,
+			operator:         "operator",
+			fuelUsed:         34,
+			fuelLimit:        33,
+			consensusInfo:    tests.CreatePoXtWithTestData(t),
+			seal:             []byte{1, 2, 3},
+			sealBy:           tests.RandomKramaIDs(t, 1)[0],
+			ixns:             tests.CreateIxns(t, 1, ixParams),
+			receipts:         createReceiptsWithTestData(t, tests.RandomHash(t)),
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			tesseract := common.NewTesseract(test.header, test.body, test.ixns, test.receipts, test.seal, test.sealer)
+			tesseract := common.NewTesseract(
+				test.participants,
+				test.interactionsHash,
+				test.receiptHash,
+				test.epoch,
+				test.timestamp,
+				test.operator,
+				test.fuelUsed,
+				test.fuelLimit,
+				test.consensusInfo,
+				test.seal,
+				test.sealBy,
+				test.ixns,
+				test.receipts,
+			)
 
-			require.Equal(t, test.header, tesseract.Header())
-			require.Equal(t, test.body, tesseract.Body())
+			require.Equal(t, test.participants, tesseract.Participants())
+			require.Equal(t, test.interactionsHash, tesseract.InteractionsHash())
+			require.Equal(t, test.receiptHash, tesseract.ReceiptsHash())
+			require.Equal(t, test.epoch, tesseract.Epoch())
+			require.Equal(t, test.timestamp, tesseract.Timestamp())
+			require.Equal(t, test.operator, tesseract.Operator())
+			require.Equal(t, test.fuelUsed, tesseract.FuelUsed())
+			require.Equal(t, test.fuelLimit, tesseract.FuelLimit())
+			require.Equal(t, test.consensusInfo, tesseract.ConsensusInfo())
+			require.Equal(t, test.seal, tesseract.Seal())
+			require.Equal(t, test.sealBy, tesseract.SealBy())
 			require.Equal(t, test.ixns, tesseract.Interactions())
 			require.Equal(t, test.receipts, tesseract.Receipts())
-			require.Equal(t, test.seal, tesseract.Seal())
 
+			// modifying values is the only way to check if values are copied, as methods on copied value
+			// always return copy regardless of whether value copied or not in new tesseract
+			// make sure consensus info is copied
+			test.consensusInfo.CommitSignature[0] = 22
 			require.NotEqual(t,
-				reflect.ValueOf(test.header.ContextLock).Pointer(),
-				reflect.ValueOf(tesseract.ContextLock()).Pointer(),
+				test.consensusInfo.CommitSignature,
+				tesseract.ConsensusInfo().CommitSignature,
 			)
+
+			// make sure epoch is copied
+			test.epoch = big.NewInt(100)
 			require.NotEqual(t,
-				reflect.ValueOf(test.body.ContextDelta).Pointer(),
-				reflect.ValueOf(tesseract.ContextDelta()).Pointer(),
+				test.epoch,
+				tesseract.Epoch(),
 			)
+
+			// make sure participants doesn't match
+			test.participants[address].ContextDelta.BehaviouralNodes[0] = tests.RandomKramaIDs(t, 1)[0]
 			require.NotEqual(t,
-				reflect.ValueOf(test.receipts).Pointer(),
-				reflect.ValueOf(tesseract.Receipts()).Pointer(),
+				test.participants[address].ContextDelta.BehaviouralNodes,
+				tesseract.Participants()[address].ContextDelta.BehaviouralNodes,
 			)
+
+			// make sure seal is copied
+			test.seal[0] = 99
 			require.NotEqual(t,
-				reflect.ValueOf(test.seal).Pointer(),
-				reflect.ValueOf(tesseract.Seal()).Pointer(),
+				test.seal,
+				tesseract.Seal(),
+			)
+
+			// make sure receipts copied
+			test.receipts[tests.RandomHash(t)] = &common.Receipt{}
+			require.NotEqual(t,
+				test.receipts,
+				tesseract.Receipts(),
 			)
 		})
 	}
-}
-
-func createReceiptsWithTestData(t *testing.T, hash common.Hash) common.Receipts {
-	t.Helper()
-
-	receipts := make(common.Receipts)
-	receipts[hash] = tests.CreateReceiptWithTestData(t)
-
-	return receipts
 }

@@ -5,10 +5,9 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi/common/tests"
-
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
+	"github.com/sarvalabs/go-moi/common/tests"
 )
 
 var LatestTesseractHeight int64 = -1
@@ -17,7 +16,8 @@ var LatestTesseractHeight int64 = -1
 // depolarizing the payload based on the interaction type, JSON marshalling it, and storing it in the input payload.
 func CreateRPCInteraction(
 	ix *common.Interaction,
-	grid map[common.Address]common.TesseractHeightAndHash,
+	tsHash common.Hash,
+	participants common.Participants,
 	ixIndex int,
 ) (*RPCInteraction, error) {
 	input := ix.Input()
@@ -25,7 +25,9 @@ func CreateRPCInteraction(
 	trust := ix.Trust()
 
 	rpcIX := &RPCInteraction{
-		Parts:   GetRPCTesseractPartsFromGrid(grid),
+		TSHash:       tsHash,
+		Participants: CreateRPCParticipants(participants),
+
 		IxIndex: hexutil.Uint64(ixIndex),
 		Type:    input.Type,
 		Nonce:   hexutil.Uint64(input.Nonce),
@@ -49,16 +51,16 @@ func CreateRPCInteraction(
 	}
 
 	if len(input.TransferValues) > 0 {
-		rpcIX.TransferValues = make(map[common.AssetID]*hexutil.Big)
+		rpcIX.TransferValues = make(map[string]*hexutil.Big)
 		for asset, amount := range input.TransferValues {
-			rpcIX.TransferValues[asset] = (*hexutil.Big)(amount)
+			rpcIX.TransferValues[asset.String()] = (*hexutil.Big)(amount)
 		}
 	}
 
 	if len(input.PerceivedValues) > 0 {
-		rpcIX.PerceivedValues = make(map[common.AssetID]*hexutil.Big)
+		rpcIX.PerceivedValues = make(map[string]*hexutil.Big)
 		for asset, amount := range input.PerceivedValues {
-			rpcIX.PerceivedValues[asset] = (*hexutil.Big)(amount)
+			rpcIX.PerceivedValues[asset.String()] = (*hexutil.Big)(amount)
 		}
 	}
 
@@ -129,150 +131,58 @@ func CreateRPCInteraction(
 	return rpcIX, nil
 }
 
-func GetRPCTesseractPartsFromGrid(grid map[common.Address]common.TesseractHeightAndHash) RPCTesseractParts {
-	if len(grid) == 0 {
+func CreateRPCParticipants(participants common.Participants) RPCParticipants {
+	if len(participants) == 0 {
 		return nil
 	}
 
-	parts := make(RPCTesseractParts, 0, len(grid))
+	rpcParticipants := make(RPCParticipants, 0, len(participants))
 
-	for address, heightAndHash := range grid {
-		parts = append(
-			parts,
-			RPCTesseractPart{
-				Address: address,
-				Height:  hexutil.Uint64(heightAndHash.Height),
-				Hash:    heightAndHash.Hash,
-			},
-		)
+	for addr, state := range participants {
+		rpcParticipants = append(rpcParticipants, RPCState{
+			Address:        addr,
+			Height:         hexutil.Uint64(state.Height),
+			TransitiveLink: state.TransitiveLink,
+			PrevContext:    state.PreviousContext,
+			LatestContext:  state.LatestContext,
+			ContextDelta:   state.ContextDelta,
+			StateHash:      state.StateHash,
+		})
 	}
 
-	parts.Sort()
+	rpcParticipants.Sort()
 
-	return parts
+	return rpcParticipants
 }
 
-func CreateRPCTesseractGridID(tesseractGridID *common.TesseractGridID) *RPCTesseractGridID {
-	if tesseractGridID == nil {
-		return nil
-	}
-
-	newGrid := &RPCTesseractGridID{
-		Hash: tesseractGridID.Hash,
-	}
-
-	if tesseractGridID.Parts != nil {
-		newGrid.Total = hexutil.Uint64(tesseractGridID.Parts.Total)
-		newGrid.Parts = GetRPCTesseractPartsFromGrid(tesseractGridID.Parts.Grid)
-	}
-
-	return newGrid
-}
-
-func CreateRPCContextLockInfos(contextLockInfos map[common.Address]common.ContextLockInfo) RPCContextLockInfos {
-	if len(contextLockInfos) == 0 {
-		return nil
-	}
-
-	rpcContextLockInfos := make(RPCContextLockInfos, 0, len(contextLockInfos))
-
-	for address, contextLockInfo := range contextLockInfos {
-		rpcContextLockInfos = append(
-			rpcContextLockInfos,
-			RPCContextLockInfo{
-				Address:       address,
-				ContextHash:   contextLockInfo.ContextHash,
-				Height:        hexutil.Uint64(contextLockInfo.Height),
-				TesseractHash: contextLockInfo.TesseractHash,
-			},
-		)
-	}
-
-	rpcContextLockInfos.Sort()
-
-	return rpcContextLockInfos
-}
-
-// CreateRPCHeader creates rpc header from header
-func CreateRPCHeader(h common.TesseractHeader) RPCHeader {
-	rpcHeader := RPCHeader{
-		Address:  h.Address,
-		PrevHash: h.PrevHash,
-
-		Height:    hexutil.Uint64(h.Height),
-		FuelUsed:  hexutil.Uint64(h.FuelUsed),
-		FuelLimit: hexutil.Uint64(h.FuelLimit),
-
-		BodyHash:    h.BodyHash,
-		GridHash:    h.GroupHash,
-		Operator:    h.Operator,
-		ClusterID:   h.ClusterID,
-		Timestamp:   hexutil.Uint64(h.Timestamp),
-		ContextLock: CreateRPCContextLockInfos(h.ContextLock),
-
-		Extra: RPCCommitData{
-			Round:           hexutil.Uint64(h.Extra.Round),
-			CommitSignature: h.Extra.CommitSignature,
-			VoteSet:         h.Extra.VoteSet.String(),
-			EvidenceHash:    h.Extra.EvidenceHash,
-		},
-	}
-
-	rpcHeader.Extra.GridID = CreateRPCTesseractGridID(h.Extra.GridID)
-
-	return rpcHeader
-}
-
-func CreateRPCDeltaGroups(deltaGroups map[common.Address]*common.DeltaGroup) RPCDeltaGroups {
-	if len(deltaGroups) == 0 {
-		return nil
-	}
-
-	rpcDeltaGroups := make(RPCDeltaGroups, 0, len(deltaGroups))
-
-	for address, deltaGroup := range deltaGroups {
-		rpcDeltaGroups = append(
-			rpcDeltaGroups,
-			RPCDeltaGroup{
-				Address:          address,
-				Role:             deltaGroup.Role,
-				BehaviouralNodes: deltaGroup.BehaviouralNodes,
-				RandomNodes:      deltaGroup.RandomNodes,
-				ReplacedNodes:    deltaGroup.ReplacedNodes,
-			},
-		)
-	}
-
-	rpcDeltaGroups.Sort()
-
-	return rpcDeltaGroups
-}
-
-func CreateRPCBody(body common.TesseractBody) RPCBody {
-	return RPCBody{
-		StateHash:       body.StateHash,
-		ContextHash:     body.ContextHash,
-		InteractionHash: body.InteractionHash,
-		ReceiptHash:     body.ReceiptHash,
-		ContextDelta:    CreateRPCDeltaGroups(body.ContextDelta),
-		ConsensusProof:  body.ConsensusProof,
+func CreateRPCPoXtData(p common.PoXtData) RPCPoXtData {
+	return RPCPoXtData{
+		EvidenceHash:    p.EvidenceHash,
+		BinaryHash:      p.BinaryHash,
+		IdentityHash:    p.IdentityHash,
+		ICSHash:         p.ICSHash,
+		ClusterID:       p.ClusterID.String(),
+		ICSSignature:    p.ICSSignature,
+		ICSVoteset:      p.ICSVoteset.String(),
+		Round:           hexutil.Uint64(p.Round),
+		CommitSignature: p.CommitSignature,
+		BFTVoteSet:      p.BFTVoteSet.String(),
 	}
 }
 
-// CreateRPCTesseract creates rpc tesseract from tesseract
+// CreateRPCTesseract creates rpc tesseract fom tesseract
 func CreateRPCTesseract(ts *common.Tesseract) (*RPCTesseract, error) {
-	var rpcIxns []*RPCInteraction
+	var (
+		rpcIxns []*RPCInteraction
+		err     error
+	)
 
 	if ts.ClusterID() != common.GenesisIdentifier && len(ts.Interactions()) > 0 {
 		rpcIxns = make([]*RPCInteraction, len(ts.Interactions()))
 
-		parts, err := ts.Parts()
-		if err != nil {
-			return nil, err
-		}
-
 		for ixIndex, ixn := range ts.Interactions() {
-			rpcIxns[ixIndex], err = CreateRPCInteraction(ixn, parts.Grid, ixIndex)
+			// avoid sending participants as they can be found in tesseract
+			rpcIxns[ixIndex], err = CreateRPCInteraction(ixn, ts.Hash(), nil, ixIndex)
 			if err != nil {
 				return nil, err
 			}
@@ -280,52 +190,41 @@ func CreateRPCTesseract(ts *common.Tesseract) (*RPCTesseract, error) {
 	}
 
 	return &RPCTesseract{
-		Header: CreateRPCHeader(ts.Header()),
-		Body:   CreateRPCBody(ts.Body()),
-		Ixns:   rpcIxns,
-		Seal:   ts.Seal(),
-		Hash:   ts.Hash(),
+		Participants:     CreateRPCParticipants(ts.Participants()),
+		InteractionsHash: ts.InteractionsHash(),
+		ReceiptsHash:     ts.ReceiptsHash(),
+		Epoch:            (*hexutil.Big)(ts.Epoch()),
+		TimeStamp:        hexutil.Uint64(ts.Timestamp()),
+		Operator:         ts.Operator(),
+		FuelUsed:         hexutil.Uint64(ts.FuelUsed()),
+		FuelLimit:        hexutil.Uint64(ts.FuelLimit()),
+		ConsensusInfo:    CreateRPCPoXtData(ts.ConsensusInfo()),
+		Seal:             ts.Seal(),
+
+		Hash: ts.Hash(),
+		Ixns: rpcIxns,
 	}, nil
 }
 
-func createRPCHashes(hashes common.ReceiptAccHashes) RPCHashes {
-	if len(hashes) == 0 {
-		return nil
-	}
-
-	rpcHashes := make(RPCHashes, 0, len(hashes))
-
-	for addr, hash := range hashes {
-		rpcHashes = append(rpcHashes, Hashes{
-			Address:     addr,
-			StateHash:   hash.StateHash,
-			ContextHash: hash.ContextHash,
-		})
-	}
-
-	rpcHashes.Sort()
-
-	return rpcHashes
-}
-
-// CreateRPCReceipt creates rpc receipt from receipt, interaction, grid, interaction index
+// CreateRPCReceipt creates rpc receipt from receipt, interaction, ts hash, participants, interaction index
 func CreateRPCReceipt(
 	receipt *common.Receipt,
 	ix *common.Interaction,
-	grid map[common.Address]common.TesseractHeightAndHash,
+	tsHash common.Hash,
+	participants common.Participants,
 	ixIndex int,
 ) *RPCReceipt {
 	return &RPCReceipt{
-		IxType:    hexutil.Uint64(receipt.IxType),
-		IxHash:    receipt.IxHash,
-		Status:    receipt.Status,
-		FuelUsed:  hexutil.Uint64(receipt.FuelUsed),
-		Hashes:    createRPCHashes(receipt.Hashes),
-		ExtraData: receipt.ExtraData,
-		From:      ix.Sender(),
-		To:        ix.Receiver(),
-		IXIndex:   hexutil.Uint64(ixIndex),
-		Parts:     GetRPCTesseractPartsFromGrid(grid),
+		IxType:       hexutil.Uint64(receipt.IxType),
+		IxHash:       receipt.IxHash,
+		Status:       receipt.Status,
+		FuelUsed:     hexutil.Uint64(receipt.FuelUsed),
+		ExtraData:    receipt.ExtraData,
+		From:         ix.Sender(),
+		To:           ix.Receiver(),
+		IXIndex:      hexutil.Uint64(ixIndex),
+		TSHash:       tsHash,
+		Participants: CreateRPCParticipants(participants),
 	}
 }
 

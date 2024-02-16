@@ -150,6 +150,36 @@ func (b *ArrayOfBits) Or(input *ArrayOfBits) *ArrayOfBits {
 	return c
 }
 
+// Xor returns a bit array resulting from a bitwise XOR of the two bit arrays.
+func (b *ArrayOfBits) Xor(input *ArrayOfBits) *ArrayOfBits {
+	if b == nil && input == nil {
+		return nil
+	}
+
+	if b == nil && input != nil {
+		return input.Copy()
+	}
+
+	if input == nil {
+		return b.Copy()
+	}
+
+	b.mtx.Lock()
+	input.mtx.Lock()
+
+	c := b.copyBits(MaxInteger(b.Size, input.Size))
+
+	smaller := MinInteger(len(b.Elements), len(input.Elements))
+	for i := 0; i < smaller; i++ {
+		c.Elements[i] ^= input.Elements[i]
+	}
+
+	b.mtx.Unlock()
+	input.mtx.Unlock()
+
+	return c
+}
+
 // And returns a bit array resulting from a bitwise AND of the two bit arrays.
 func (b *ArrayOfBits) And(input *ArrayOfBits) *ArrayOfBits {
 	if b == nil || input == nil {
@@ -313,6 +343,43 @@ func (b *ArrayOfBits) GetTrueIndices() []int {
 	for i := 0; i < numFinalSize; i++ {
 		if (lastElem & (uint64(1) << uint64(i))) > 0 {
 			trueIndices = append(trueIndices, curBit)
+		}
+		curBit++
+	}
+
+	return trueIndices
+}
+
+func (b *ArrayOfBits) GetTrueIndicesMap() map[int]struct{} {
+	b.mtx.Lock()
+	defer b.mtx.Unlock()
+
+	trueIndices := make(map[int]struct{}, b.Size)
+	curBit := 0
+	numElements := len(b.Elements)
+	// set all true indices
+	for i := 0; i < numElements-1; i++ {
+		elem := b.Elements[i]
+		if elem == 0 {
+			curBit += 64
+
+			continue
+		}
+
+		for j := 0; j < 64; j++ {
+			if (elem & (uint64(1) << uint64(j))) > 0 {
+				trueIndices[curBit] = struct{}{}
+			}
+			curBit++
+		}
+	}
+	// handle last element
+	lastElem := b.Elements[numElements-1]
+	numFinalSize := b.Size - curBit
+
+	for i := 0; i < numFinalSize; i++ {
+		if (lastElem & (uint64(1) << uint64(i))) > 0 {
+			trueIndices[curBit] = struct{}{}
 		}
 		curBit++
 	}

@@ -3,8 +3,8 @@ package schnorr
 import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/sarvalabs/go-legacy-kramaid"
 
-	"github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/crypto/common"
 )
 

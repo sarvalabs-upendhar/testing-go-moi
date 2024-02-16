@@ -1,7 +1,8 @@
 package schnorr
 
 import (
-	"github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-legacy-kramaid"
+
 	"github.com/sarvalabs/go-moi/crypto/common"
 )
 

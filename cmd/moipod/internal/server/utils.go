@@ -11,10 +11,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/sarvalabs/go-moi/common/kramaid"
-
 	maddr "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/spf13/cobra"
 
 	cmdCommon "github.com/sarvalabs/go-moi/cmd/common"
@@ -169,10 +168,23 @@ func (p *Params) applyFlags(cmd *cobra.Command, path string) error {
 		p.rawCfg.Genesis = GenesisPath
 	}
 
+	if isP2PHostPortSet(cmd) {
+		p.rawCfg.Network.P2PHostPort = P2PHostPort
+	}
+
 	if isP2PHostIPSet(cmd) {
-		p.rawCfg.Network.PublicP2pAddr = []string{
-			fmt.Sprintf(
-				"/ip4/%s/tcp/%s", P2pHostIP, strconv.Itoa(config.DefaultListenerPort)),
+		ip := net.ParseIP(P2pHostIP)
+
+		if ip.To4() != nil {
+			p.rawCfg.Network.PublicP2pAddr = []string{
+				fmt.Sprintf("/ip4/%s/tcp/%s", P2pHostIP, strconv.Itoa(p.rawCfg.Network.P2PHostPort)),
+				fmt.Sprintf("/ip4/%s/udp/%s", P2pHostIP, strconv.Itoa(p.rawCfg.Network.P2PHostPort)) + "/quic-v1",
+			}
+		} else {
+			p.rawCfg.Network.PublicP2pAddr = []string{
+				fmt.Sprintf("/ip6/%s/tcp/%s", P2pHostIP, strconv.Itoa(p.rawCfg.Network.P2PHostPort)),
+				fmt.Sprintf("/ip6/%s/udp/%s", P2pHostIP, strconv.Itoa(p.rawCfg.Network.P2PHostPort)) + "/quic-v1",
+			}
 		}
 	}
 
@@ -252,6 +264,7 @@ func (p *Params) getNetworkConfig() *config.NetworkConfig {
 		RelayNodeAddr:      p.rawCfg.Network.RelayNodeAddr,
 		ListenAddresses:    p.ListenAddresses,
 		PublicP2pAddresses: p.PublicP2pAddresses,
+		P2PHostPort:        p.rawCfg.Network.P2PHostPort,
 		JSONRPCAddr:        p.JSONRPCAddr,
 		MTQ:                p.rawCfg.Network.MTQ,
 		CorsAllowedOrigins: p.rawCfg.Network.CorsAllowedOrigins,
@@ -285,6 +298,8 @@ func (p *Params) getConsensusConfig(path string) *config.ConsensusConfig {
 		ValidatorSlotCount:    p.rawCfg.Consensus.ValidatorSlots,
 		OperatorSlotCount:     p.rawCfg.Consensus.OperatorSlots,
 		EnableDebugMode:       p.rawCfg.Consensus.EnableDebugMode,
+		MinGossipPeers:        p.rawCfg.Consensus.MinGossipPeers,
+		MaxGossipPeers:        p.rawCfg.Consensus.MinGossipPeers,
 	}
 }
 
@@ -451,6 +466,10 @@ func isNodePasswordSet(cmd *cobra.Command) bool {
 
 func isP2PHostIPSet(cmd *cobra.Command) bool {
 	return cmd.Flags().Changed(p2pHostIPFlag)
+}
+
+func isP2PHostPortSet(cmd *cobra.Command) bool {
+	return cmd.Flags().Changed(p2pHostPortFlag)
 }
 
 // BuildNodeConfig function creates a node configuration by combining default configuration and the configuration file,

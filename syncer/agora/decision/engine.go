@@ -5,16 +5,17 @@ import (
 	"sync"
 	"time"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-moi/storage"
+
+	"github.com/hashicorp/go-hclog"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
+
 	message2 "github.com/sarvalabs/go-moi/network/message"
 	"github.com/sarvalabs/go-moi/syncer/agora/block"
 	"github.com/sarvalabs/go-moi/syncer/agora/db"
 	"github.com/sarvalabs/go-moi/syncer/agora/message"
 	"github.com/sarvalabs/go-moi/syncer/cid"
-
-	"github.com/hashicorp/go-hclog"
-
-	"github.com/sarvalabs/go-moi/common"
 )
 
 const (
@@ -22,18 +23,18 @@ const (
 )
 
 type ledger interface {
-	GetAssociatedPeers(addr common.Address, stateHash cid.CID) ([]id.KramaID, error)
-	UpdateAssociatedPeers(addr common.Address, stateHash cid.CID, peers id.KramaID) error
+	GetAssociatedPeers(addr identifiers.Address, stateHash cid.CID) ([]kramaid.KramaID, error)
+	UpdateAssociatedPeers(addr identifiers.Address, stateHash cid.CID, peers kramaid.KramaID) error
 }
 
 type store interface {
-	GetData(ctx context.Context, address common.Address, keys []cid.CID) (map[cid.CID][]byte, error)
-	DoesStateExists(address common.Address, stateHash cid.CID) bool
+	GetData(ctx context.Context, address identifiers.Address, keys []cid.CID) (map[cid.CID][]byte, error)
+	DoesStateExists(address identifiers.Address, stateHash cid.CID) bool
 	GetBatchWriter() db.BatchWriter
 }
 
 type net interface {
-	SendAgoraMessage(id id.KramaID, msgType message2.MsgType, msg message.Message) error
+	SendAgoraMessage(id kramaid.KramaID, msgType message2.MsgType, msg message.Message) error
 }
 
 type Engine struct {
@@ -143,7 +144,11 @@ func (e *Engine) nextTask() (*message.Response, error) {
 		}
 
 		for cID, v := range blocks {
-			resp.HaveList.AddBlock(block.NewBlockFromRawData(cID.ContentType(), v))
+			if storage.PrefixTag(cID.ContentType()).IsAccountBasedKey() {
+				resp.HaveList.AddBlock(block.NewAccountBlockFromRawData(cID.ContentType(), v))
+			} else {
+				resp.HaveList.AddBlock(block.NewNonAccountBlockFromRawData(cID, v))
+			}
 		}
 
 		e.metrics.captureRequestProcessTime(req.ReqTime)
@@ -205,11 +210,11 @@ func (e *Engine) HandleRequest(req *Request) {
 }
 
 func (e *Engine) sendResponse(
-	id id.KramaID,
-	sessionID common.Address,
+	id kramaid.KramaID,
+	sessionID identifiers.Address,
 	stateHash cid.CID,
 	responseStatus bool,
-	peerList []id.KramaID,
+	peerList []kramaid.KramaID,
 ) {
 	select {
 	case e.responses <- &message.Response{

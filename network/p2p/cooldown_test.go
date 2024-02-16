@@ -13,7 +13,7 @@ import (
 
 func TestCoolDownCache_Add(t *testing.T) {
 	cache := newCoolDownCache()
-	peerID := tests.GetTestPeerID(t)
+	peerID := tests.RandomPeerID(t)
 
 	testcases := []struct {
 		name           string
@@ -35,7 +35,7 @@ func TestCoolDownCache_Add(t *testing.T) {
 
 func TestCoolDownCache_Has(t *testing.T) {
 	cache := newCoolDownCache()
-	peerIDs := tests.GetTestPeerIDs(t, 2)
+	peerIDs := tests.RandomPeerIDs(t, 2)
 
 	testcases := []struct {
 		name           string
@@ -87,7 +87,7 @@ func TestCoolDownCache_Has(t *testing.T) {
 
 func TestCoolDownCache_Reset(t *testing.T) {
 	cache := newCoolDownCache()
-	peerID := tests.GetTestPeerID(t)
+	peerID := tests.RandomPeerID(t)
 
 	testcases := []struct {
 		name   string
@@ -112,7 +112,7 @@ func TestCoolDownCache_Reset(t *testing.T) {
 }
 
 func TestCoolDownCacheCleanup(t *testing.T) {
-	peerIDs := tests.GetTestPeerIDs(t, 4)
+	peerIDs := tests.RandomPeerIDs(t, 4)
 	cache := &coolDownCache{
 		timers: make(map[string]time.Time),
 	}
@@ -152,7 +152,7 @@ func TestCoolDownCacheCleanup(t *testing.T) {
 }
 
 func TestCoolDownCachePruneOldest(t *testing.T) {
-	peerIDs := tests.GetTestPeerIDs(t, 4)
+	peerIDs := tests.RandomPeerIDs(t, 4)
 	cache := &coolDownCache{
 		timers: make(map[string]time.Time),
 	}

@@ -5,7 +5,8 @@ import (
 	"math"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-engineio"
+	engineio "github.com/sarvalabs/go-moi-engineio"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/state"
@@ -21,15 +22,9 @@ func RunLogicDeploy(
 	ctx *common.ExecutionContext,
 	tank *FuelTank,
 	objects state.ObjectMap,
-) (*common.Receipt, error) {
-	payload, err := ix.GetLogicPayload()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not find logic payload")
-	}
-
-	if payload.Manifest == nil {
-		return nil, errors.New("missing manifest for logic deploy")
-	}
+) *common.Receipt {
+	// Generate a new receipt
+	receipt := common.NewReceipt(ix)
 
 	// Generate the address of the target logic account
 	logicAddress := common.NewAccountAddress(ix.Nonce(), ix.Sender())
@@ -45,29 +40,25 @@ func RunLogicDeploy(
 
 	consumption, receiptPayload, err := DeployLogic(ix, ctx, logicacc, options...)
 	if err != nil {
-		return nil, err
+		receipt.Status = common.ReceiptStateReverted
 	}
 
 	// Exhaust fuel from tank
 	if !tank.Exhaust(consumption) {
-		return nil, common.ErrInsufficientFuel
+		receipt.Status = common.ReceiptFuelExhausted
 	}
 
-	// Generate a new receipt and set the fuel consumption
-	receipt := common.NewReceipt(ix)
+	// Set the fuel consumption
 	receipt.SetFuelUsed(tank.Consumed)
-
-	// Set the status of the receipt
-	if receiptPayload.Error != nil {
-		receipt.Status = common.ReceiptFailed
-	}
-
 	// Set the extra data of the receipt
-	if err = receipt.SetExtraData(receiptPayload); err != nil {
-		return nil, err
+	common.SetReceiptExtraData(receipt, *receiptPayload)
+
+	// Set the status of the receipt based on the error stat
+	if receiptPayload.Error != nil {
+		receipt.Status = common.ReceiptExceptionRaised
 	}
 
-	return receipt, nil
+	return receipt
 }
 
 // LogicDeployOption is an option for DeployLogic and modifies the logic deployment behaviour
@@ -98,7 +89,7 @@ func DeployGenesisLogic(
 	ctx *common.ExecutionContext,
 	state *state.Object,
 	payload *common.LogicPayload,
-) (common.LogicID, error) {
+) (identifiers.LogicID, error) {
 	// Serialize the logic payload
 	inner, _ := payload.Bytes()
 	// Create a new IxLogicDeploy interaction with the logic payload

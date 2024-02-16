@@ -8,14 +8,13 @@ import (
 	"sync"
 	"time"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p-gorpc/stats"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/sarvalabs/go-legacy-kramaid"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/network/rpc/ttlmap"
@@ -48,7 +47,7 @@ func WithMultiStreamBufferSize(size int) ClientOption {
 }
 
 type senatus interface {
-	GetAddress(key id.KramaID) (multiAddrs []multiaddr.Multiaddr, err error)
+	GetAddress(key kramaid.KramaID) (multiAddrs []multiaddr.Multiaddr, err error)
 }
 
 type ConnectionManager interface {
@@ -186,7 +185,7 @@ func (c *Client) Call(
 // will occur.
 func (c *Client) MoiCall(
 	ctx context.Context,
-	kramaID id.KramaID,
+	kramaID kramaid.KramaID,
 	svcName, svcMethod string,
 	args, reply interface{},
 	ttl time.Duration,

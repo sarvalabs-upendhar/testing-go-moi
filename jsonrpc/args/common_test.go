@@ -2,6 +2,7 @@ package args
 
 import (
 	"encoding/json"
+	"math/big"
 	"testing"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -33,16 +34,18 @@ func TestCreateRPCInteraction(t *testing.T) {
 
 	ixData := common.IxData{
 		Input:   input,
-		Compute: tests.CreateComputeWithTestData(t, tests.RandomHash(t), tests.GetTestKramaIDs(t, 2)),
+		Compute: tests.CreateComputeWithTestData(t, tests.RandomHash(t), tests.RandomKramaIDs(t, 2)),
 		Trust:   tests.CreateTrustWithTestData(t),
 	}
 
 	ixWithNilFields, err := common.NewInteraction(ixData, tests.RandomHash(t).Bytes())
 	require.NoError(t, err)
 
+	tsHash := tests.RandomHash(t)
+	participants := tests.CreateParticipantWithTestData(t, 1)
+
 	testcases := []struct {
 		name          string
-		grid          map[common.Address]common.TesseractHeightAndHash
 		ix            *common.Interaction
 		expectedError error
 	}{
@@ -67,24 +70,14 @@ func TestCreateRPCInteraction(t *testing.T) {
 			ix:   ixWithNilFields,
 		},
 		{
-			name: "create rpc interaction with grid data",
+			name: "create rpc interaction with particpants data",
 			ix:   CreateInteractionWithTestData(t, common.IxValueTransfer, json.RawMessage{}),
-			grid: map[common.Address]common.TesseractHeightAndHash{
-				tests.RandomAddress(t): {
-					Height: 5,
-					Hash:   tests.RandomHash(t),
-				},
-				tests.RandomAddress(t): {
-					Height: 6,
-					Hash:   tests.RandomHash(t),
-				},
-			},
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			rpcIxn, err := CreateRPCInteraction(test.ix, test.grid, 0)
+			rpcIxn, err := CreateRPCInteraction(test.ix, tsHash, participants, 0)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -94,180 +87,51 @@ func TestCreateRPCInteraction(t *testing.T) {
 
 			require.NoError(t, err)
 
-			CheckForRPCIxn(t, test.ix, rpcIxn, test.grid)
-			CheckForRPCTesseractParts(t, test.grid, rpcIxn.Parts)
+			CheckForRPCIxn(t, test.ix, tsHash, participants, rpcIxn)
 		})
 	}
 }
 
-func TestGetRPCTesseractPartsFromGrid(t *testing.T) {
+func TestCreateRPCParticipants(t *testing.T) {
 	testcases := []struct {
-		name string
-		grid map[common.Address]common.TesseractHeightAndHash
+		name         string
+		participants common.Participants
 	}{
 		{
-			name: "create rpc tesseract parts from grid",
-			grid: tests.CreateTesseractPartsWithTestData(t).Grid,
+			name:         "create rpc participants",
+			participants: tests.CreateParticipantWithTestData(t, 3),
+		},
+		{
+			name:         "empty participants",
+			participants: nil,
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			parts := GetRPCTesseractPartsFromGrid(test.grid)
+			rpcParticipants := CreateRPCParticipants(test.participants)
 
-			CheckForRPCTesseractParts(t, test.grid, parts)
+			CheckForRPCParticipants(t, test.participants, rpcParticipants)
 		})
 	}
 }
 
-func TestCreateRPCTesseractGridID(t *testing.T) {
+func TestCreateRPCPoXtData(t *testing.T) {
 	testcases := []struct {
-		name   string
-		gridID *common.TesseractGridID
+		name     string
+		poxtData common.PoXtData
 	}{
 		{
-			name: "create rpc tesseract grid id from tesseract grid id with nil tesseract parts",
-			gridID: &common.TesseractGridID{
-				Hash: tests.RandomHash(t),
-			},
-		},
-		{
-			name: "create rpc tesseract grid id from tesseract grid id",
-			gridID: &common.TesseractGridID{
-				Hash:  tests.RandomHash(t),
-				Parts: tests.CreateTesseractPartsWithTestData(t),
-			},
-		},
-		{
-			name:   "nil grid",
-			gridID: nil,
+			name:     "create rpc participants",
+			poxtData: tests.CreatePoXtWithTestData(t),
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			rpcTesseractGridID := CreateRPCTesseractGridID(test.gridID)
+			rpcPoXt := CreateRPCPoXtData(test.poxtData)
 
-			CheckForRPCTesseractGridID(t, test.gridID, rpcTesseractGridID)
-		})
-	}
-}
-
-func TestCreateRPCContextLockInfos(t *testing.T) {
-	contextLockInfos := make(map[common.Address]common.ContextLockInfo)
-
-	for i := 0; i < 3; i++ {
-		contextLockInfos[tests.RandomAddress(t)] = common.ContextLockInfo{
-			ContextHash:   tests.RandomHash(t),
-			Height:        8,
-			TesseractHash: tests.RandomHash(t),
-		}
-	}
-
-	testcases := []struct {
-		name             string
-		contextLockInfos map[common.Address]common.ContextLockInfo
-	}{
-		{
-			name:             "create rpc context lock infos",
-			contextLockInfos: contextLockInfos,
-		},
-		{
-			name:             "nil context lock infos",
-			contextLockInfos: nil,
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			rpcContextLockInfos := CreateRPCContextLockInfos(test.contextLockInfos)
-
-			CheckForRPCContextLockInfos(t, test.contextLockInfos, rpcContextLockInfos)
-		})
-	}
-}
-
-func TestCreateRPCHeader(t *testing.T) {
-	headerWithNilGrid := tests.CreateHeaderWithTestData(t)
-	headerWithNilGrid.Extra.GridID = nil
-
-	testcases := []struct {
-		name   string
-		header common.TesseractHeader
-	}{
-		{
-			name:   "create rpc header from tesseract header with nil tesseract grid id",
-			header: headerWithNilGrid,
-		},
-		{
-			name:   "create rpc header from tesseract header",
-			header: tests.CreateHeaderWithTestData(t),
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			rpcHeader := CreateRPCHeader(test.header)
-
-			CheckForRPCHeader(t, test.header, rpcHeader)
-		})
-	}
-}
-
-func TestCreateRPCDeltaGroups(t *testing.T) {
-	deltaGroups := make(map[common.Address]*common.DeltaGroup)
-
-	for i := 0; i < 3; i++ {
-		deltaGroups[tests.RandomAddress(t)] = &common.DeltaGroup{
-			Role:             4,
-			BehaviouralNodes: tests.GetTestKramaIDs(t, 2),
-			RandomNodes:      tests.GetTestKramaIDs(t, 2),
-			ReplacedNodes:    tests.GetTestKramaIDs(t, 2),
-		}
-	}
-
-	testcases := []struct {
-		name             string
-		contextLockInfos map[common.Address]*common.DeltaGroup
-	}{
-		{
-			name:             "create rpc context lock infos",
-			contextLockInfos: deltaGroups,
-		},
-		{
-			name:             "nil context lock infos",
-			contextLockInfos: nil,
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			rpcContextLockInfos := CreateRPCDeltaGroups(test.contextLockInfos)
-
-			CheckForRPCDeltaGroups(t, test.contextLockInfos, rpcContextLockInfos)
-		})
-	}
-}
-
-func TestCreateRPCBody(t *testing.T) {
-	headerWithNilGrid := tests.CreateHeaderWithTestData(t)
-	headerWithNilGrid.Extra.GridID = nil
-
-	testcases := []struct {
-		name string
-		body common.TesseractBody
-	}{
-		{
-			name: "create rpc body from tesseract body",
-			body: tests.CreateBodyWithTestData(t),
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			rpcBody := CreateRPCBody(test.body)
-
-			CheckForRPCBody(t, test.body, rpcBody)
+			CheckForRPCPoxtData(t, test.poxtData, rpcPoXt)
 		})
 	}
 }
@@ -280,17 +144,24 @@ func TestCreateRPCTesseract(t *testing.T) {
 	assetPayloadBytes, err := polo.Polorize(assetPayload)
 	require.NoError(t, err)
 
+	participants := tests.CreateParticipantWithTestData(t, 2)
+
 	// make sure to fill at least one field of every field of tesseract so that we can verify that every field is copied
-	createTesseractParams := func(headerCallback func(header *common.TesseractHeader)) *tests.CreateTesseractParams {
+	createTesseractParams := func(clusterID common.ClusterID) *tests.CreateTesseractParams {
 		return &tests.CreateTesseractParams{
-			Address: tests.RandomAddress(t),
-			Receipts: map[common.Hash]*common.Receipt{
-				tests.RandomHash(t): {IxHash: tests.RandomHash(t)},
-			},
-			Seal:           []byte{1, 2},
-			HeaderCallback: headerCallback,
-			BodyCallback: func(body *common.TesseractBody) {
-				body.StateHash = tests.RandomHash(t)
+			Participants: participants,
+			TSDataCallback: func(ts *tests.TesseractData) {
+				ts.InteractionsHash = tests.RandomHash(t)
+				ts.ReceiptsHash = tests.RandomHash(t)
+				ts.Epoch = big.NewInt(33)
+				ts.Timestamp = 443
+				ts.Operator = "guardian"
+				ts.FuelUsed = 55
+				ts.FuelLimit = 88
+				ts.ConsensusInfo = tests.CreatePoXtWithTestData(t)
+				ts.Seal = []byte{2, 3, 4}
+				ts.SealBy = tests.RandomKramaIDs(t, 1)[0]
+				ts.ConsensusInfo.ClusterID = clusterID
 			},
 		}
 	}
@@ -304,23 +175,16 @@ func TestCreateRPCTesseract(t *testing.T) {
 		{
 			name:     "created rpc tesseract for non-genesis tesseract",
 			ixParams: GetIxParamsWithInputComputeTrust(common.IxAssetCreate, assetPayloadBytes, 2, 3),
-			tsParams: createTesseractParams(CreateHeaderCallbackWithTestData(t)),
+			tsParams: createTesseractParams("non-genesis"),
 		},
 		{
-			name: "create rpc tesseract for genesis tesseract",
-			tsParams: createTesseractParams(func(header *common.TesseractHeader) {
-				header.ClusterID = common.GenesisIdentifier
-				header.FuelLimit = 0
-				header.FuelUsed = 0
-			}),
+			name:     "create rpc tesseract for genesis tesseract",
+			tsParams: createTesseractParams(common.GenesisIdentifier),
 		},
 		{
 			name:     "nil interactions",
 			ixParams: nil,
-			tsParams: createTesseractParams(func(header *common.TesseractHeader) {
-				header.FuelLimit = 0
-				header.FuelUsed = 0
-			}),
+			tsParams: createTesseractParams("non-genesis"),
 		},
 	}
 
@@ -350,26 +214,28 @@ func TestCreateRPCTesseract(t *testing.T) {
 func TestCreateRPCReceipt(t *testing.T) {
 	ixParams := tests.GetIxParamsWithAddress(tests.RandomAddress(t), tests.RandomAddress(t))
 	testcases := []struct {
-		name    string
-		receipt *common.Receipt
-		ix      *common.Interaction
-		grid    map[common.Address]common.TesseractHeightAndHash
-		ixIndex int
+		name         string
+		tsHash       common.Hash
+		receipt      *common.Receipt
+		ix           *common.Interaction
+		participants common.Participants
+		ixIndex      int
 	}{
 		{
-			name:    "create rpc receipt",
-			receipt: tests.CreateReceiptWithTestData(t),
-			ix:      tests.CreateIX(t, ixParams),
-			grid:    tests.CreateTesseractPartsWithTestData(t).Grid,
-			ixIndex: 8,
+			name:         "create rpc receipt",
+			tsHash:       tests.RandomHash(t),
+			receipt:      tests.CreateReceiptWithTestData(t),
+			ix:           tests.CreateIX(t, ixParams),
+			participants: tests.CreateParticipantWithTestData(t, 1),
+			ixIndex:      8,
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			receipt := CreateRPCReceipt(test.receipt, test.ix, test.grid, test.ixIndex)
+			receipt := CreateRPCReceipt(test.receipt, test.ix, test.tsHash, test.participants, test.ixIndex)
 
-			CheckForRPCReceipt(t, test.grid, test.ix, test.receipt, receipt, test.ixIndex)
+			CheckForRPCReceipt(t, test.tsHash, test.participants, test.ix, test.receipt, receipt, test.ixIndex)
 		})
 	}
 }

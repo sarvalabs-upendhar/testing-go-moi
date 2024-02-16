@@ -7,11 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/pkg/errors"
-
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
@@ -33,7 +32,7 @@ func TestIxPool_validateAndEnqueueIx_ReplaceIx(t *testing.T) {
 
 	sm.setTestMOIBalance(addrs...)
 
-	getIxParams := func(from common.Address, nonce uint64, price int, payload []byte) *tests.CreateIxParams {
+	getIxParams := func(from identifiers.Address, nonce uint64, price int, payload []byte) *tests.CreateIxParams {
 		return &tests.CreateIxParams{
 			IxDataCallback: func(ix *common.IxData) {
 				ix.Input.Sender = from
@@ -42,7 +41,7 @@ func TestIxPool_validateAndEnqueueIx_ReplaceIx(t *testing.T) {
 				ix.Input.FuelPrice = big.NewInt(int64(price))
 				ix.Input.Payload = payload
 				ix.Input.FuelLimit = 1
-				ix.Input.TransferValues = map[common.AssetID]*big.Int{
+				ix.Input.TransferValues = map[identifiers.AssetID]*big.Int{
 					common.KMOITokenAssetID: big.NewInt(1),
 				}
 			},
@@ -462,7 +461,7 @@ func TestIxPool_handlePromoteRequest(t *testing.T) {
 	testcases := []struct {
 		name     string
 		ixs      common.Interactions
-		popIx    func(address common.Address)
+		popIx    func(address identifiers.Address)
 		expected expectedResult
 	}{
 		{
@@ -486,7 +485,7 @@ func TestIxPool_handlePromoteRequest(t *testing.T) {
 		{
 			name: "Should not promote if the enqueue is empty",
 			ixs:  createTestIxs(t, common.IxValueTransfer, 0, 1, addrs[2]),
-			popIx: func(address common.Address) {
+			popIx: func(address identifiers.Address) {
 				ixPool.accounts.get(address).enqueued.pop()
 			},
 			expected: expectedResult{
@@ -571,16 +570,16 @@ func TestIxPool_createAccountOnce(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		address       common.Address
+		address       identifiers.Address
 		nonce         uint64
-		testFn        func(addr common.Address)
+		testFn        func(addr identifiers.Address)
 		expectedNonce uint64
 	}{
 		{
 			name:    "Create an account with latest state object nonce",
 			address: tests.RandomAddress(t),
 			nonce:   1,
-			testFn: func(addr common.Address) {
+			testFn: func(addr identifiers.Address) {
 				sm.setLatestNonce(addr, 5)
 			},
 			expectedNonce: 5,
@@ -1121,28 +1120,28 @@ func TestIxPool_IncrementWaitTime_InvalidAccount(t *testing.T) {
 		c.PriceLimit = defaultIxPriceLimit
 	}, false, sm, nil)
 
-	err := ixPool.IncrementWaitTime(common.Address{0x0}, 1500*time.Millisecond)
+	err := ixPool.IncrementWaitTime(identifiers.Address{0x0}, 1500*time.Millisecond)
 	require.Error(t, err)
 }
 
 func TestIxPool_IncrementWaitTime(t *testing.T) {
 	testcases := []struct {
 		name            string
-		addr            common.Address
+		addr            identifiers.Address
 		delta           int
 		shouldReset     bool
 		expectedCounter int32
 	}{
 		{
 			name:            "Increment the wait counter by 1",
-			addr:            common.Address{0x01},
+			addr:            identifiers.Address{0x01},
 			delta:           1,
 			shouldReset:     false,
 			expectedCounter: 1,
 		},
 		{
 			name:            "Increment the wait counter by 5",
-			addr:            common.Address{0x02},
+			addr:            identifiers.Address{0x02},
 			delta:           5,
 			shouldReset:     false,
 			expectedCounter: 5,
@@ -1150,7 +1149,7 @@ func TestIxPool_IncrementWaitTime(t *testing.T) {
 
 		{
 			name:            "Wait counter greater than max value",
-			addr:            common.Address{0x03},
+			addr:            identifiers.Address{0x03},
 			delta:           MaxWaitCounter + 1,
 			shouldReset:     true,
 			expectedCounter: 0,
@@ -1239,7 +1238,7 @@ func TestIxPool_validateIx(t *testing.T) {
 			name: "Ix with negative transfer value",
 			ix: newTestInteraction(t, common.IxValueTransfer, 0, addrs[2], func(ixData *common.IxData) {
 				ixData.Input.Type = common.IxValueTransfer
-				ixData.Input.TransferValues = map[common.AssetID]*big.Int{
+				ixData.Input.TransferValues = map[identifiers.AssetID]*big.Int{
 					"assetID1": new(big.Int).Neg(big.NewInt(20)),
 				}
 			}),
@@ -1249,7 +1248,7 @@ func TestIxPool_validateIx(t *testing.T) {
 			name: "Ix with invalid assetID",
 			ix: newTestInteraction(t, common.IxValueTransfer, 0, addrs[0], func(ixData *common.IxData) {
 				ixData.Input.Type = common.IxValueTransfer
-				ixData.Input.TransferValues = map[common.AssetID]*big.Int{
+				ixData.Input.TransferValues = map[identifiers.AssetID]*big.Int{
 					"assetID1": big.NewInt(20),
 				}
 			}),
@@ -1259,12 +1258,12 @@ func TestIxPool_validateIx(t *testing.T) {
 			name: "Ix with insufficient funds",
 			ix: newTestInteraction(t, common.IxValueTransfer, 0, addrs[0], func(ixData *common.IxData) {
 				ixData.Input.Type = common.IxValueTransfer
-				ixData.Input.TransferValues = map[common.AssetID]*big.Int{
+				ixData.Input.TransferValues = map[identifiers.AssetID]*big.Int{
 					"assetID1": big.NewInt(20),
 				}
 			}),
 			testFn: func(interaction *common.Interaction) {
-				sm.balance[interaction.Sender()] = map[common.AssetID]*big.Int{
+				sm.balance[interaction.Sender()] = map[identifiers.AssetID]*big.Int{
 					"assetID1": big.NewInt(10),
 				}
 			},
@@ -1308,7 +1307,7 @@ func TestIxPool_validateIx_WithSign(t *testing.T) {
 		Type:      common.IxValueTransfer,
 		FuelPrice: defaultIxPriceLimit,
 		FuelLimit: 1,
-		TransferValues: map[common.AssetID]*big.Int{
+		TransferValues: map[identifiers.AssetID]*big.Int{
 			"assetID1": big.NewInt(5),
 		},
 	}
@@ -1319,7 +1318,7 @@ func TestIxPool_validateIx_WithSign(t *testing.T) {
 		address,
 		common.IxValueTransfer,
 		defaultIxPriceLimit,
-		map[common.AssetID]*big.Int{
+		map[identifiers.AssetID]*big.Int{
 			"assetID1": big.NewInt(5),
 		},
 		rawSign,
@@ -1334,7 +1333,7 @@ func TestIxPool_validateIx_WithSign(t *testing.T) {
 		{
 			name: "invalid signature",
 			ix: newTestInteraction(t, common.IxValueTransfer, 0, addr2, func(ixData *common.IxData) {
-				ixData.Input.TransferValues = map[common.AssetID]*big.Int{
+				ixData.Input.TransferValues = map[identifiers.AssetID]*big.Int{
 					"assetID1": big.NewInt(5),
 				}
 			}),
@@ -1458,7 +1457,7 @@ func TestIxPool_ValidateAssetMint(t *testing.T) {
 	require.NoError(t, err)
 
 	NFTAssetPayload := common.AssetMintOrBurnPayload{
-		Asset: common.NewAssetIDv0(false, false, 1, common.MAS1, address),
+		Asset: identifiers.NewAssetIDv0(false, false, 1, uint16(common.MAS1), address),
 	}
 
 	rawNFTAssetPayload, err := NFTAssetPayload.Bytes()
@@ -1574,7 +1573,7 @@ func TestIxPool_ValidateAssetBurn(t *testing.T) {
 				ixData.Input.Payload = rawAssetPayload
 			}),
 			testFn: func(interaction *common.Interaction, mockStateManager *MockStateManager) {
-				mockStateManager.balance[interaction.Sender()] = map[common.AssetID]*big.Int{
+				mockStateManager.balance[interaction.Sender()] = map[identifiers.AssetID]*big.Int{
 					assetID: big.NewInt(10),
 				}
 				mockStateManager.setAssetInfo(assetID, &common.AssetDescriptor{
@@ -1589,7 +1588,7 @@ func TestIxPool_ValidateAssetBurn(t *testing.T) {
 				ixData.Input.Payload = rawAssetPayload
 			}),
 			testFn: func(interaction *common.Interaction, mockStateManager *MockStateManager) {
-				mockStateManager.balance[interaction.Sender()] = map[common.AssetID]*big.Int{
+				mockStateManager.balance[interaction.Sender()] = map[identifiers.AssetID]*big.Int{
 					assetID: big.NewInt(1000),
 				}
 				mockStateManager.setAssetInfo(assetID, &common.AssetDescriptor{
@@ -1604,7 +1603,7 @@ func TestIxPool_ValidateAssetBurn(t *testing.T) {
 				ixData.Input.Payload = rawAssetPayload
 			}),
 			testFn: func(interaction *common.Interaction, mockStateManager *MockStateManager) {
-				mockStateManager.balance[interaction.Sender()] = map[common.AssetID]*big.Int{
+				mockStateManager.balance[interaction.Sender()] = map[identifiers.AssetID]*big.Int{
 					assetID: big.NewInt(1000),
 				}
 				mockStateManager.setAssetInfo(assetID, &common.AssetDescriptor{
@@ -1803,8 +1802,8 @@ func TestIxPool_ValidateLogicInvokePayload(t *testing.T) {
 }
 
 type (
-	accounts      map[common.Address]common.Interactions
-	delayCounters map[common.Address]int32
+	accounts      map[identifiers.Address]common.Interactions
+	delayCounters map[identifiers.Address]int32
 )
 
 func TestIxPool_Executables_Wait_Mode(t *testing.T) {
@@ -1815,17 +1814,17 @@ func TestIxPool_Executables_Wait_Mode(t *testing.T) {
 		accounts           accounts
 		delayCounters      delayCounters
 		updateDelayCounter func(ixPool *IxPool, delayCounters delayCounters)
-		expectedAddrList   []common.Address
+		expectedAddrList   []identifiers.Address
 	}{
 		{
 			name: "One ix per account",
-			accounts: map[common.Address]common.Interactions{
+			accounts: map[identifiers.Address]common.Interactions{
 				addresses[0]: createTestIxs(t, common.IxValueTransfer, 0, 1, addresses[0]),
 				addresses[1]: createTestIxs(t, common.IxValueTransfer, 0, 1, addresses[1]),
 				addresses[2]: createTestIxs(t, common.IxValueTransfer, 0, 1, addresses[2]),
 				addresses[3]: createTestIxs(t, common.IxValueTransfer, 0, 1, addresses[3]),
 			},
-			delayCounters: map[common.Address]int32{
+			delayCounters: map[identifiers.Address]int32{
 				addresses[0]: 3,
 				addresses[1]: 4,
 				addresses[2]: 1,
@@ -1837,7 +1836,7 @@ func TestIxPool_Executables_Wait_Mode(t *testing.T) {
 					setDelayCounter(t, acc, delayCounters[addr])
 				}
 			},
-			expectedAddrList: []common.Address{
+			expectedAddrList: []identifiers.Address{
 				addresses[1],
 				addresses[0],
 				addresses[3],
@@ -1846,13 +1845,13 @@ func TestIxPool_Executables_Wait_Mode(t *testing.T) {
 		},
 		{
 			name: "Several ixs from multiple accounts",
-			accounts: map[common.Address]common.Interactions{
+			accounts: map[identifiers.Address]common.Interactions{
 				addresses[0]: createTestIxs(t, common.IxValueTransfer, 0, 2, addresses[0]),
 				addresses[1]: createTestIxs(t, common.IxValueTransfer, 0, 2, addresses[1]),
 				addresses[2]: createTestIxs(t, common.IxValueTransfer, 0, 2, addresses[2]),
 				addresses[3]: createTestIxs(t, common.IxValueTransfer, 0, 2, addresses[3]),
 			},
-			delayCounters: map[common.Address]int32{
+			delayCounters: map[identifiers.Address]int32{
 				addresses[0]: 3,
 				addresses[1]: 4,
 				addresses[2]: 1,
@@ -1864,7 +1863,7 @@ func TestIxPool_Executables_Wait_Mode(t *testing.T) {
 					setDelayCounter(t, acc, delayCounters[addr])
 				}
 			},
-			expectedAddrList: []common.Address{
+			expectedAddrList: []identifiers.Address{
 				addresses[1],
 				addresses[0],
 				addresses[3],
@@ -2016,32 +2015,32 @@ func TestIxPool_Executables_Wait_Time(t *testing.T) {
 
 	testcases := []struct {
 		name            string
-		accounts        map[common.Address]common.Interactions
-		accountWaitTime map[common.Address]time.Time
-		updateWaitTime  func(ixPool *IxPool, accountWaitTime map[common.Address]time.Time)
-		expectedNonce   map[common.Address]uint64
+		accounts        map[identifiers.Address]common.Interactions
+		accountWaitTime map[identifiers.Address]time.Time
+		updateWaitTime  func(ixPool *IxPool, accountWaitTime map[identifiers.Address]time.Time)
+		expectedNonce   map[identifiers.Address]uint64
 	}{
 		{
 			name: "One ix per account",
-			accounts: map[common.Address]common.Interactions{
+			accounts: map[identifiers.Address]common.Interactions{
 				addresses[0]: createTestIxs(t, common.IxValueTransfer, 7, 8, addresses[0]),
 				addresses[1]: createTestIxs(t, common.IxValueTransfer, 8, 9, addresses[1]),
 				addresses[2]: createTestIxs(t, common.IxValueTransfer, 5, 6, addresses[2]),
 				addresses[3]: createTestIxs(t, common.IxValueTransfer, 6, 7, addresses[3]),
 			},
-			accountWaitTime: map[common.Address]time.Time{
+			accountWaitTime: map[identifiers.Address]time.Time{
 				addresses[0]: time.Now().Add(1000 * time.Millisecond),
 				addresses[1]: time.Now().Add(-100),
 				addresses[2]: time.Now().Add(-200),
 				addresses[3]: time.Now().Add(-150),
 			},
-			updateWaitTime: func(ixPool *IxPool, accountWaitTime map[common.Address]time.Time) {
+			updateWaitTime: func(ixPool *IxPool, accountWaitTime map[identifiers.Address]time.Time) {
 				for addr := range accountWaitTime {
 					acc := ixPool.accounts.get(addr)
 					acc.waitTime = accountWaitTime[addr]
 				}
 			},
-			expectedNonce: map[common.Address]uint64{
+			expectedNonce: map[identifiers.Address]uint64{
 				addresses[1]: 8,
 				addresses[2]: 5,
 				addresses[3]: 6,
@@ -2049,25 +2048,25 @@ func TestIxPool_Executables_Wait_Time(t *testing.T) {
 		},
 		{
 			name: "Several ixs from multiple accounts",
-			accounts: map[common.Address]common.Interactions{
+			accounts: map[identifiers.Address]common.Interactions{
 				addresses[0]: createTestIxs(t, common.IxValueTransfer, 4, 6, addresses[0]),
 				addresses[1]: createTestIxs(t, common.IxValueTransfer, 5, 7, addresses[1]),
 				addresses[2]: createTestIxs(t, common.IxValueTransfer, 6, 8, addresses[2]),
 				addresses[3]: createTestIxs(t, common.IxValueTransfer, 7, 9, addresses[3]),
 			},
-			accountWaitTime: map[common.Address]time.Time{
+			accountWaitTime: map[identifiers.Address]time.Time{
 				addresses[0]: time.Now().Add(-200),
 				addresses[1]: time.Now().Add(-100),
 				addresses[2]: time.Now().Add(1000 * time.Millisecond),
 				addresses[3]: time.Now().Add(-150),
 			},
-			updateWaitTime: func(ixPool *IxPool, accountWaitTime map[common.Address]time.Time) {
+			updateWaitTime: func(ixPool *IxPool, accountWaitTime map[identifiers.Address]time.Time) {
 				for addr := range accountWaitTime {
 					acc := ixPool.accounts.get(addr)
 					acc.waitTime = accountWaitTime[addr]
 				}
 			},
-			expectedNonce: map[common.Address]uint64{
+			expectedNonce: map[identifiers.Address]uint64{
 				addresses[0]: 4,
 				addresses[1]: 5,
 				addresses[3]: 7,

@@ -5,17 +5,15 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/sarvalabs/go-moi/syncer/forage"
-
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/sarvalabs/go-legacy-kramaid"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/compute"
 	"github.com/sarvalabs/go-moi/consensus"
@@ -28,6 +26,7 @@ import (
 	"github.com/sarvalabs/go-moi/senatus"
 	"github.com/sarvalabs/go-moi/state"
 	"github.com/sarvalabs/go-moi/storage"
+	"github.com/sarvalabs/go-moi/syncer/forage"
 )
 
 const (
@@ -139,7 +138,7 @@ func NewNode(logLevel string, cfg *config.Config) (n *Node, err error) {
 	return n, nil
 }
 
-func (n *Node) GetKramaID() id.KramaID {
+func (n *Node) GetKramaID() kramaid.KramaID {
 	return n.network.GetKramaID()
 }
 
@@ -151,6 +150,8 @@ func (n *Node) loadLatestActiveTimeStamp() {
 // Krama engine, State manager, JSON-RPC server Chain manager
 // returns any error invoked
 func (n *Node) Start() (err error) {
+	n.logger.Info("starting node")
+
 	if err = n.startHandlers(); err != nil {
 		return errors.Wrap(err, "failed to start sub handlers")
 	}

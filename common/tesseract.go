@@ -1,155 +1,143 @@
 package common
 
 import (
-	"sync"
+	"bytes"
+	"math/big"
 	"sync/atomic"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-
 	"github.com/pkg/errors"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 )
 
-type Tesseract struct {
-	header   TesseractHeader
-	body     TesseractBody
-	ixns     Interactions
-	receipts Receipts
-	seal     []byte
-	sealer   id.KramaID
-	hash     atomic.Value
+type State struct {
+	Height          uint64
+	TransitiveLink  Hash // transitive link is made up of multiple accounts data in previous grid formation
+	PreviousContext Hash
+	LatestContext   Hash
+	ContextDelta    DeltaGroup
+	StateHash       Hash
 }
 
-type TesseractHeader struct {
-	Address     Address
-	PrevHash    Hash
-	Height      uint64
-	FuelUsed    uint64
-	FuelLimit   uint64
-	BodyHash    Hash
-	GroupHash   Hash
-	Operator    string
-	ClusterID   string
-	Timestamp   int64
-	ContextLock map[Address]ContextLockInfo
-	Extra       CommitData
+func (s *State) Copy() State {
+	state := *s
+
+	state.ContextDelta = *(s.ContextDelta.Copy())
+
+	return state
 }
 
-func (h *TesseractHeader) Copy() TesseractHeader {
-	header := *h
+type Participants map[identifiers.Address]State
 
-	if len(h.ContextLock) > 0 {
-		header.ContextLock = make(map[Address]ContextLockInfo, len(h.ContextLock))
-
-		for k, v := range h.ContextLock {
-			header.ContextLock[k] = v
-		}
+func (p Participants) Copy() Participants {
+	if len(p) == 0 {
+		return nil
 	}
 
-	header.Extra = h.Extra.Copy()
+	participants := make(Participants)
 
-	return header
-}
-
-func (h *TesseractHeader) Hash() (Hash, error) {
-	header := TesseractHeader{
-		Address:     h.Address,
-		PrevHash:    h.PrevHash,
-		Height:      h.Height,
-		FuelUsed:    h.FuelUsed,
-		FuelLimit:   h.FuelLimit,
-		BodyHash:    h.BodyHash,
-		GroupHash:   h.GroupHash,
-		Operator:    h.Operator,
-		ClusterID:   h.ClusterID,
-		Timestamp:   h.Timestamp,
-		ContextLock: h.ContextLock,
+	for key, value := range p {
+		participants[key] = value.Copy()
 	}
 
-	data, err := polo.Polorize(header)
-	if err != nil {
-		return Hash{}, errors.Wrap(err, "failed to polorize tesseract header")
-	}
-
-	return GetHash(data), nil
-}
-
-type TesseractBody struct {
-	StateHash       Hash         `json:"state_hash"`
-	ContextHash     Hash         `json:"context_hash"`
-	InteractionHash Hash         `json:"interaction_hash"`
-	ReceiptHash     Hash         `json:"receipt_hash"`
-	ContextDelta    ContextDelta `json:"context_delta"` // Some Problem here
-	ConsensusProof  PoXtData     `json:"consensus_proof"`
-}
-
-func (b *TesseractBody) Copy() TesseractBody {
-	body := *b
-	body.ContextDelta = b.ContextDelta.Copy()
-
-	return body
-}
-
-func (b *TesseractBody) Hash() (Hash, error) {
-	hash, err := PoloHash(b)
-	if err != nil {
-		return NilHash, errors.Wrap(err, "failed to polorize tesseract body")
-	}
-
-	return hash, nil
+	return participants
 }
 
 type PoXtData struct {
-	BinaryHash   Hash `json:"binary_hash"`
-	IdentityHash Hash `json:"identity_hash"`
-	ICSHash      Hash `json:"ics_hash"`
+	BinaryHash   Hash         `json:"binary_hash"`
+	IdentityHash Hash         `json:"identity_hash"`
+	ICSHash      Hash         `json:"ics_hash"`
+	ClusterID    ClusterID    `json:"cluster_id"`
+	ICSSignature []byte       `json:"ics_signature"`
+	ICSVoteset   *ArrayOfBits `json:"ics_vote_set"`
+
+	// non canonical fields
+	EvidenceHash    Hash         `json:"evidence_hash"`
+	Round           int32        `json:"round"`
+	CommitSignature []byte       `json:"commit_signature"`
+	BFTVoteSet      *ArrayOfBits `json:"bft_vote_set"`
 }
 
-type CommitData struct {
-	Round           int32
-	CommitSignature []byte
-	VoteSet         *ArrayOfBits
-	EvidenceHash    Hash
-	GridID          *TesseractGridID
+func (p *PoXtData) Copy() PoXtData {
+	poxt := *p
+
+	if len(p.ICSSignature) > 0 {
+		poxt.ICSSignature = make([]byte, len(p.ICSSignature))
+
+		copy(poxt.ICSSignature, p.ICSSignature)
+	}
+
+	if len(p.CommitSignature) > 0 {
+		poxt.CommitSignature = make([]byte, len(p.CommitSignature))
+
+		copy(poxt.CommitSignature, p.CommitSignature)
+	}
+
+	if p.ICSVoteset != nil {
+		poxt.ICSVoteset = p.ICSVoteset.copy()
+	}
+
+	if p.BFTVoteSet != nil {
+		poxt.BFTVoteSet = p.BFTVoteSet.copy()
+	}
+
+	return poxt
 }
 
-func (commitData *CommitData) Copy() CommitData {
-	data := *commitData
+type Tesseract struct {
+	participants     Participants
+	interactionsHash Hash
+	receiptsHash     Hash
+	epoch            *big.Int
+	timestamp        int64
+	operator         string
+	fuelUsed         uint64
+	fuelLimit        uint64
+	consensusInfo    PoXtData
 
-	if len(commitData.CommitSignature) > 0 {
-		data.CommitSignature = make([]byte, len(data.CommitSignature))
+	// non canonical fields
+	seal   []byte
+	sealBy kramaid.KramaID
 
-		copy(data.CommitSignature, commitData.CommitSignature)
-	}
-
-	if commitData.VoteSet != nil {
-		data.VoteSet = commitData.VoteSet.Copy()
-	}
-
-	if commitData.GridID != nil {
-		data.GridID = commitData.GridID.Copy()
-	}
-
-	return data
+	// derived fields
+	hash     atomic.Value
+	ixns     Interactions
+	receipts Receipts
 }
 
 func NewTesseract(
-	header TesseractHeader,
-	body TesseractBody,
+	participants Participants,
+	interactionsHash Hash,
+	receiptHash Hash,
+	epoch *big.Int,
+	timestamp int64,
+	operator string,
+	fuelUsed, fuelLimit uint64,
+	consensusInfo PoXtData,
+	seal []byte,
+	sealBy kramaid.KramaID,
 	ixns Interactions,
 	receipts Receipts,
-	seal []byte,
-	sealer id.KramaID,
 ) *Tesseract {
 	bytes := make([]byte, len(seal))
 	copy(bytes, seal)
 
 	t := &Tesseract{
-		header: header.Copy(),
-		body:   body.Copy(),
-		ixns:   ixns,
+		participants:     participants.Copy(),
+		interactionsHash: interactionsHash,
+		receiptsHash:     receiptHash,
+		epoch:            new(big.Int).Set(epoch),
+		timestamp:        timestamp,
+		operator:         operator,
+		fuelUsed:         fuelUsed,
+		fuelLimit:        fuelLimit,
+		consensusInfo:    consensusInfo.Copy(),
+
 		seal:   bytes,
-		sealer: sealer,
+		sealBy: sealBy,
+
+		ixns: ixns,
 	}
 
 	if len(receipts) > 0 {
@@ -159,165 +147,34 @@ func NewTesseract(
 	return t
 }
 
-func (t *Tesseract) Sealer() id.KramaID {
-	return t.sealer
+func (t *Tesseract) Copy() *Tesseract {
+	return NewTesseract(
+		t.ParticipantsWithCopy(),
+		t.InteractionsHash(),
+		t.ReceiptsHash(),
+		t.Epoch(),
+		t.Timestamp(),
+		t.Operator(),
+		t.FuelUsed(),
+		t.FuelLimit(),
+		t.ConsensusInfo(),
+		t.Seal(),
+		t.SealBy(),
+		t.Interactions(),
+		t.Receipts(),
+	)
 }
 
-func (t *Tesseract) SetExtraData(data CommitData) {
-	t.header.Extra = data
-}
-
-func (t *Tesseract) SetSeal(seal []byte) {
-	t.seal = seal
-}
-
-func (t *Tesseract) SetSealer(sealer id.KramaID) {
-	t.sealer = sealer
-}
-
-func (t *Tesseract) SetReceipts(receipts Receipts) {
-	t.receipts = receipts.Copy()
-}
-
-func (t *Tesseract) Header() TesseractHeader {
-	return t.header.Copy()
-}
-
-func (t *Tesseract) Body() TesseractBody {
-	return t.body.Copy()
-}
-
-func (t *Tesseract) Interactions() Interactions {
-	return t.ixns
-}
-
-func (t *Tesseract) Receipts() Receipts {
-	return t.receipts.Copy()
-}
-
-func (t *Tesseract) HasReceipts() bool {
-	return t.receipts != nil
-}
-
-func (t *Tesseract) Seal() []byte {
-	bytes := make([]byte, len(t.seal))
-
-	copy(bytes, t.seal)
-
-	return bytes
-}
-
-func (t *Tesseract) Address() Address {
-	return t.header.Address
-}
-
-func (t *Tesseract) PrevHash() Hash {
-	return t.header.PrevHash
-}
-
-func (t *Tesseract) Height() uint64 {
-	return t.header.Height
-}
-
-func (t *Tesseract) BodyHash() Hash {
-	return t.header.BodyHash
-}
-
-func (t *Tesseract) GroupHash() Hash {
-	return t.header.GroupHash
-}
-
-func (t *Tesseract) GridHash() Hash {
-	if t.header.Extra.GridID != nil {
-		return t.header.Extra.GridID.Hash
+func (t *Tesseract) CompareHash(tsHash Hash) bool {
+	if len(tsHash.Bytes()) == 0 {
+		return false
 	}
 
-	return NilHash
-}
-
-func (t *Tesseract) Parts() (*TesseractParts, error) {
-	if t.header.Extra.GridID == nil {
-		return nil, ErrGridIDNotFound
+	if t == nil {
+		return false
 	}
 
-	if t.header.Extra.GridID.Parts == nil {
-		return nil, ErrTesseractPartsNotFound
-	}
-
-	return t.header.Extra.GridID.Parts.Copy(), nil
-}
-
-func (t *Tesseract) Operator() string {
-	return t.header.Operator
-}
-
-func (t *Tesseract) ContextLock() map[Address]ContextLockInfo {
-	contextLock := make(map[Address]ContextLockInfo, len(t.header.ContextLock))
-
-	for k, v := range t.header.ContextLock {
-		contextLock[k] = v
-	}
-
-	return contextLock
-}
-
-func (t *Tesseract) ContextLockByAddress(address Address) (ContextLockInfo, bool) {
-	ctxLockInfo, ok := t.header.ContextLock[address]
-
-	return ctxLockInfo, ok
-}
-
-func (t *Tesseract) GridLength() int32 {
-	return t.header.Extra.GridID.Parts.Total
-}
-
-func (t *Tesseract) ClusterID() ClusterID {
-	return ClusterID(t.header.ClusterID)
-}
-
-func (t *Tesseract) Timestamp() int64 {
-	return t.header.Timestamp
-}
-
-func (t *Tesseract) Extra() CommitData {
-	return t.header.Extra.Copy()
-}
-
-func (t *Tesseract) ContextDelta() ContextDelta {
-	return t.body.ContextDelta.Copy()
-}
-
-func (t *Tesseract) GetContextDeltaByAddress(address Address) (DeltaGroup, bool) {
-	delta, ok := t.body.ContextDelta[address]
-	if !ok {
-		return DeltaGroup{}, ok
-	}
-
-	return *delta.Copy(), ok
-}
-
-func (t *Tesseract) ContextHash() Hash {
-	return t.body.ContextHash
-}
-
-func (t *Tesseract) InteractionHash() Hash {
-	return t.body.InteractionHash
-}
-
-func (t *Tesseract) ReceiptHash() Hash {
-	return t.body.ReceiptHash
-}
-
-func (t *Tesseract) StateHash() Hash {
-	return t.body.StateHash
-}
-
-func (t *Tesseract) ConsensusProof() PoXtData {
-	return t.body.ConsensusProof
-}
-
-func (t *Tesseract) ICSHash() Hash {
-	return t.body.ConsensusProof.ICSHash
+	return bytes.Equal(t.Hash().Bytes(), tsHash.Bytes())
 }
 
 func (t *Tesseract) Hash() Hash {
@@ -330,16 +187,130 @@ func (t *Tesseract) Hash() Hash {
 		return actualHash
 	}
 
-	header := t.Header()
+	ts := CanonicalTesseract{
+		Participants:     t.participants,
+		InteractionsHash: t.interactionsHash,
+		ReceiptsHash:     t.receiptsHash,
+		Epoch:            t.epoch,
+		Timestamp:        t.timestamp,
+		Operator:         t.operator,
+		FuelUsed:         t.fuelUsed,
+		FuelLimit:        t.fuelLimit,
+		ConsensusInfo: PoXtData{
+			BinaryHash:   t.consensusInfo.BinaryHash,
+			IdentityHash: t.consensusInfo.IdentityHash,
+			ICSHash:      t.consensusInfo.ICSHash,
+			ClusterID:    t.consensusInfo.ClusterID,
+			ICSSignature: t.consensusInfo.ICSSignature,
+			ICSVoteset:   t.consensusInfo.ICSVoteset,
+		},
+	}
 
-	hash, err := header.Hash()
+	hash, err := PoloHash(ts)
 	if err != nil {
-		panic(err)
+		panic("failed to polorize tesseract")
 	}
 
 	t.hash.Store(hash)
 
 	return hash
+}
+
+func (t *Tesseract) HasParticipant(target identifiers.Address) bool {
+	for addr := range t.participants {
+		if addr == target {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (t *Tesseract) Addresses() []identifiers.Address {
+	addrs := make([]identifiers.Address, 0, t.ParticipantCount())
+
+	for addr := range t.participants {
+		addrs = append(addrs, addr)
+	}
+
+	return addrs
+}
+
+func (t *Tesseract) AnyAddress() identifiers.Address {
+	for addr := range t.participants {
+		return addr
+	}
+
+	return identifiers.NilAddress
+}
+
+func (t *Tesseract) Participants() Participants {
+	return t.participants
+}
+
+func (t *Tesseract) ParticipantsWithCopy() Participants {
+	return t.participants.Copy()
+}
+
+func (t *Tesseract) ParticipantCount() int {
+	return len(t.participants)
+}
+
+func (t *Tesseract) State(addr identifiers.Address) (State, bool) {
+	state, ok := t.participants[addr]
+	if !ok {
+		return State{}, ok
+	}
+
+	return state.Copy(), ok
+}
+
+func (t *Tesseract) InteractionsHash() Hash {
+	return t.interactionsHash
+}
+
+func (t *Tesseract) ReceiptsHash() Hash {
+	return t.receiptsHash
+}
+
+func (t *Tesseract) Epoch() *big.Int {
+	return new(big.Int).Set(t.epoch)
+}
+
+func (t *Tesseract) Timestamp() int64 {
+	return t.timestamp
+}
+
+func (t *Tesseract) Operator() string {
+	return t.operator
+}
+
+func (t *Tesseract) FuelUsed() uint64 {
+	return t.fuelUsed
+}
+
+func (t *Tesseract) FuelLimit() uint64 {
+	return t.fuelLimit
+}
+
+func (t *Tesseract) ConsensusInfo() PoXtData {
+	return t.consensusInfo.Copy()
+}
+
+func (t *Tesseract) BFTVoteSet() *ArrayOfBits {
+	return t.consensusInfo.BFTVoteSet.copy()
+}
+
+func (t *Tesseract) Seal() []byte {
+	bytes := make([]byte, len(t.seal))
+
+	copy(bytes, t.seal)
+
+	return bytes
+}
+
+func (t *Tesseract) SealBy() kramaid.KramaID {
+	return t.sealBy
 }
 
 func (t *Tesseract) ExecutionContext() *ExecutionContext {
@@ -348,6 +319,107 @@ func (t *Tesseract) ExecutionContext() *ExecutionContext {
 		Cluster:  t.ClusterID(),
 		Time:     t.Timestamp(),
 	}
+}
+
+func (t *Tesseract) Interactions() Interactions {
+	return t.ixns
+}
+
+func (t *Tesseract) Receipts() Receipts {
+	return t.receipts.Copy()
+}
+
+func (t *Tesseract) SetReceipts(receipts Receipts) {
+	t.receipts = receipts.Copy()
+}
+
+func (t *Tesseract) HasReceipts() bool {
+	return t.receipts != nil
+}
+
+func (t *Tesseract) Height(address identifiers.Address) uint64 {
+	return t.participants[address].Height
+}
+
+func (t *Tesseract) TransitiveLink(address identifiers.Address) Hash {
+	return t.participants[address].TransitiveLink
+}
+
+func (t *Tesseract) StateHash(address identifiers.Address) Hash {
+	return t.participants[address].StateHash
+}
+
+func (t *Tesseract) LatestContextHash(address identifiers.Address) Hash {
+	return t.participants[address].LatestContext
+}
+
+func (t *Tesseract) PreviousContextHash(address identifiers.Address) Hash {
+	return t.participants[address].PreviousContext
+}
+
+func (t *Tesseract) PreviousContext() map[identifiers.Address]Hash {
+	previousContext := make(map[identifiers.Address]Hash)
+
+	for addr, p := range t.participants {
+		previousContext[addr] = p.PreviousContext
+	}
+
+	return previousContext
+}
+
+func (t *Tesseract) ContextDelta() ContextDelta {
+	ctxDelta := make(ContextDelta)
+
+	for addr, participant := range t.participants {
+		ctxDelta[addr] = participant.ContextDelta.Copy()
+	}
+
+	return ctxDelta
+}
+
+func (t *Tesseract) GetContextDelta(address identifiers.Address) (DeltaGroup, bool) {
+	state, ok := t.participants[address]
+	if !ok {
+		return DeltaGroup{}, ok
+	}
+
+	return *(state.ContextDelta.Copy()), true
+}
+
+func (t *Tesseract) ClusterID() ClusterID {
+	return t.consensusInfo.ClusterID
+}
+
+func (t *Tesseract) ICSHash() Hash {
+	return t.consensusInfo.ICSHash
+}
+
+func (t *Tesseract) SetRound(round int32) {
+	t.consensusInfo.Round = round
+}
+
+func (t *Tesseract) SetCommitSignature(sig []byte) {
+	t.consensusInfo.CommitSignature = sig
+}
+
+func (t *Tesseract) SetEvidenceHash(hash Hash) {
+	t.consensusInfo.EvidenceHash = hash
+}
+
+func (t *Tesseract) SetBFTVoteSet(v *ArrayOfBits) {
+	t.consensusInfo.BFTVoteSet = v
+}
+
+func (t *Tesseract) SetSeal(seal []byte) {
+	t.seal = seal
+}
+
+func (t *Tesseract) SetSealBy(sealBy kramaid.KramaID) {
+	t.sealBy = sealBy
+}
+
+func (t *Tesseract) SetIxns(ixns Interactions) {
+	t.ixns = ixns
 }
 
 func (t *Tesseract) Bytes() ([]byte, error) {
@@ -369,59 +441,81 @@ func (t *Tesseract) FromBytes(bytes []byte) error {
 	return nil
 }
 
-// CanonicalWithoutSeal method returns a copy of the tesseract without seal and interactions
-func (t *Tesseract) CanonicalWithoutSeal() *CanonicalTesseractWithoutSeal {
-	return &CanonicalTesseractWithoutSeal{
-		Header: t.header,
-		Body:   t.body,
+// Canonical method returns a copy of the tesseract without interactions
+func (t *Tesseract) Canonical() *CanonicalTesseract {
+	seal := make([]byte, len(t.seal))
+	copy(seal, t.seal)
+
+	return &CanonicalTesseract{
+		Participants:     t.participants.Copy(),
+		InteractionsHash: t.interactionsHash,
+		ReceiptsHash:     t.receiptsHash,
+		Epoch:            t.epoch,
+		Timestamp:        t.timestamp,
+		Operator:         t.operator,
+		FuelUsed:         t.fuelUsed,
+		FuelLimit:        t.fuelLimit,
+		ConsensusInfo:    t.consensusInfo.Copy(),
+		Seal:             seal,
+		SealBy:           t.sealBy,
 	}
 }
 
-// Canonical method returns a copy of the tesseract without interactions
-func (t *Tesseract) Canonical() *CanonicalTesseract {
-	return &CanonicalTesseract{
-		Header: t.header.Copy(),
-		Body:   t.body.Copy(),
-		Seal:   t.seal,
-		Sealer: t.sealer,
+// CanonicalWithoutSeal method returns a copy of the tesseract without seal and interactions
+func (t *Tesseract) CanonicalWithoutSeal() *CanonicalTesseractWithoutSeal {
+	return &CanonicalTesseractWithoutSeal{
+		Participants:     t.participants.Copy(),
+		InteractionsHash: t.interactionsHash,
+		ReceiptsHash:     t.receiptsHash,
+		Epoch:            t.epoch,
+		Timestamp:        t.timestamp,
+		Operator:         t.operator,
+		FuelUsed:         t.fuelUsed,
+		FuelLimit:        t.fuelLimit,
+		ConsensusInfo:    t.consensusInfo.Copy(),
 	}
 }
 
 func (t *Tesseract) GetTesseractWithoutIxns() *Tesseract {
 	return &Tesseract{
-		header: t.header,
-		body:   t.body,
-		seal:   t.seal,
-		sealer: t.sealer,
+		participants:     t.participants.Copy(),
+		interactionsHash: t.interactionsHash,
+		receiptsHash:     t.receiptsHash,
+		epoch:            t.epoch,
+		timestamp:        t.timestamp,
+		operator:         t.operator,
+		fuelUsed:         t.fuelUsed,
+		fuelLimit:        t.fuelLimit,
+		consensusInfo:    t.consensusInfo.Copy(),
+		seal:             t.seal,
+		sealBy:           t.sealBy,
 	}
+}
+
+type CanonicalTesseractWithoutSeal struct {
+	Participants     map[identifiers.Address]State
+	InteractionsHash Hash
+	ReceiptsHash     Hash
+	Epoch            *big.Int
+	Timestamp        int64
+	Operator         string
+	FuelUsed         uint64
+	FuelLimit        uint64
+	ConsensusInfo    PoXtData
 }
 
 type CanonicalTesseract struct {
-	Header TesseractHeader
-	Body   TesseractBody
-	Sealer id.KramaID
-	Seal   []byte
-}
-
-func (c *CanonicalTesseract) Hash() Hash {
-	hash, err := c.Header.Hash()
-	if err != nil {
-		panic(err)
-	}
-
-	return hash
-}
-
-func (c *CanonicalTesseract) InteractionHash() Hash {
-	return c.Body.InteractionHash
-}
-
-func (c *CanonicalTesseract) ReceiptHash() Hash {
-	return c.Body.ReceiptHash
-}
-
-func (c *CanonicalTesseract) Height() uint64 {
-	return c.Header.Height
+	Participants     Participants
+	InteractionsHash Hash
+	ReceiptsHash     Hash
+	Epoch            *big.Int
+	Timestamp        int64
+	Operator         string
+	FuelUsed         uint64
+	FuelLimit        uint64
+	ConsensusInfo    PoXtData
+	Seal             []byte
+	SealBy           kramaid.KramaID
 }
 
 // Bytes method polorizes and returns the canonical tesseract in bytes
@@ -442,133 +536,25 @@ func (c *CanonicalTesseract) FromBytes(bytes []byte) error {
 	return nil
 }
 
-func (c *CanonicalTesseract) ToTesseract(ixns Interactions) *Tesseract {
+// TODO WRITE TEST
+func (c *CanonicalTesseract) ToTesseract(ixns Interactions, receipts Receipts) *Tesseract {
 	return &Tesseract{
-		header: c.Header,
-		body:   c.Body,
-		ixns:   ixns,
+		participants:     c.Participants,
+		interactionsHash: c.InteractionsHash,
+		receiptsHash:     c.ReceiptsHash,
+		epoch:            c.Epoch,
+		timestamp:        c.Timestamp,
+		operator:         c.Operator,
+		fuelUsed:         c.FuelUsed,
+		fuelLimit:        c.FuelLimit,
+		consensusInfo:    c.ConsensusInfo,
+
+		// non canonical fields
 		seal:   c.Seal,
-		sealer: c.Sealer,
+		sealBy: c.SealBy,
+
+		// derived fields
+		ixns:     ixns,
+		receipts: receipts,
 	}
-}
-
-func (c *CanonicalTesseract) GridHash() (Hash, error) {
-	if c.Header.Extra.GridID != nil {
-		return c.Header.Extra.GridID.Hash, nil
-	}
-
-	return NilHash, errors.New("grid hash not found")
-}
-
-type CanonicalTesseractWithoutSeal struct {
-	Header TesseractHeader
-	Body   TesseractBody
-}
-
-type Item struct {
-	Tesseract *Tesseract
-	Delta     map[Hash][]byte
-	Sender    id.KramaID
-}
-
-type TesseractStack struct {
-	Items []*Item
-	lock  sync.Mutex
-}
-
-func (s *TesseractStack) Push(t *Item) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	s.Items = append(s.Items, t)
-}
-
-func (s *TesseractStack) Pop() *Item {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	if size := len(s.Items); size > 0 {
-		item := s.Items[size-1]
-		s.Items = s.Items[:size-1]
-
-		return item
-	}
-
-	return nil
-}
-
-func (s *TesseractStack) Len() int32 {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	return int32(len(s.Items))
-}
-
-type TesseractHeightAndHash struct {
-	Height uint64
-	Hash   Hash
-}
-
-type TesseractParts struct {
-	Total int32
-	Grid  map[Address]TesseractHeightAndHash
-}
-
-func (p *TesseractParts) Bytes() ([]byte, error) {
-	rawData, err := polo.Polorize(p)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to polorize tesseract parts")
-	}
-
-	return rawData, nil
-}
-
-func (p *TesseractParts) FromBytes(data []byte) error {
-	if err := polo.Depolorize(p, data); err != nil {
-		return errors.Wrap(err, "failed to depolorize tesseract parts")
-	}
-
-	return nil
-}
-
-func (p *TesseractParts) Copy() *TesseractParts {
-	parts := &TesseractParts{
-		Total: p.Total,
-	}
-
-	if len(p.Grid) > 0 {
-		parts.Grid = make(map[Address]TesseractHeightAndHash)
-
-		for k, v := range p.Grid {
-			parts.Grid[k] = v
-		}
-	}
-
-	return parts
-}
-
-type TesseractGridID struct {
-	Hash  Hash
-	Parts *TesseractParts
-}
-
-func (gridID *TesseractGridID) IsNil() bool {
-	return gridID.Hash.IsNil()
-}
-
-func (gridID *TesseractGridID) String() string {
-	if !gridID.IsNil() {
-		return gridID.Hash.Hex()
-	}
-
-	return "Nil"
-}
-
-func (gridID *TesseractGridID) Copy() *TesseractGridID {
-	newGridID := *gridID
-
-	if gridID.Parts != nil {
-		newGridID.Parts = gridID.Parts.Copy()
-	}
-
-	return &newGridID
 }

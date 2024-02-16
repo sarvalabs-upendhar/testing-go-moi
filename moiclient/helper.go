@@ -5,22 +5,33 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"math/big"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-pisa"
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sarvalabs/go-moi/bgclient"
+	"github.com/sarvalabs/go-moi/common/tests"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/crypto"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
+)
+
+const (
+	JSONRPCURLWaitTime   = 120 * time.Second
+	JSONRPCURLQueryTime  = 5 * time.Second
+	InitialSyncWaitTime  = 2 * time.Minute
+	InitialSyncQueryTime = 5 * time.Second
 )
 
 func CreateSendIXFromSendIXArgs(t *testing.T, sendIxArgs *common.SendIXArgs, mnemonic string) *rpcargs.SendIX {
@@ -38,7 +49,29 @@ func CreateSendIXFromSendIXArgs(t *testing.T, sendIxArgs *common.SendIXArgs, mne
 	}
 }
 
-func GetLatestNonce(t *testing.T, client *Client, addr common.Address) uint64 {
+func GetContextNodes(t *testing.T, client *Client, addrs []identifiers.Address) []string {
+	t.Helper()
+
+	contextNodes := make([]string, 0)
+
+	for _, addr := range addrs {
+		resp, err := client.ContextInfo(context.Background(), &rpcargs.ContextInfoArgs{
+			Address: addr,
+			Options: rpcargs.TesseractNumberOrHash{
+				TesseractNumber: &rpcargs.LatestTesseractHeight,
+			},
+		})
+		require.NoError(t, err)
+
+		contextNodes = append(contextNodes, resp.BehaviourNodes...)
+		contextNodes = append(contextNodes, resp.RandomNodes...)
+		contextNodes = append(contextNodes, resp.StorageNodes...)
+	}
+
+	return contextNodes
+}
+
+func GetLatestNonce(t *testing.T, client *Client, addr identifiers.Address) uint64 {
 	t.Helper()
 
 	nonce, err := client.InteractionCount(context.Background(), &rpcargs.InteractionCountArgs{
@@ -52,7 +85,7 @@ func GetLatestNonce(t *testing.T, client *Client, addr common.Address) uint64 {
 	return nonce.ToUint64()
 }
 
-func GetLatestHeight(t *testing.T, client *Client, addr common.Address) uint64 {
+func GetLatestHeight(t *testing.T, client *Client, addr identifiers.Address) uint64 {
 	t.Helper()
 
 	acc, err := client.AccountMetaInfo(context.Background(), &rpcargs.GetAccountArgs{
@@ -67,6 +100,8 @@ func GetLatestHeight(t *testing.T, client *Client, addr common.Address) uint64 {
 }
 
 // RetryFetchReceipt keeps trying to fetch receipt for given ixHash until it is timed out
+// and also checks if moi client response matches with http response
+// Use this to check if interaction is successful on the chain.
 func RetryFetchReceipt(t *testing.T, ctx context.Context, client *Client, ixHash common.Hash) *rpcargs.RPCReceipt {
 	t.Helper()
 
@@ -91,7 +126,7 @@ func RetryFetchReceipt(t *testing.T, ctx context.Context, client *Client, ixHash
 }
 
 // GetTesseract returns tesseract for the given senderAddr and height
-func GetTesseract(t *testing.T, client *Client, addr common.Address, height int64) *rpcargs.RPCTesseract {
+func GetTesseract(t *testing.T, client *Client, addr identifiers.Address, height int64) *rpcargs.RPCTesseract {
 	t.Helper()
 
 	args := &rpcargs.TesseractArgs{
@@ -109,7 +144,7 @@ func GetTesseract(t *testing.T, client *Client, addr common.Address, height int6
 }
 
 // GetLogicID returns logicID for the given senderAddr and height
-func GetLogicID(t *testing.T, client *Client, addr common.Address, height int64) common.LogicID {
+func GetLogicID(t *testing.T, client *Client, addr identifiers.Address, height int64) identifiers.LogicID {
 	t.Helper()
 
 	ts := GetTesseract(t, client, addr, height)
@@ -167,10 +202,10 @@ type TokenLedgerState struct {
 	Name     string
 	Symbol   string
 	Supply   *big.Int
-	Balances map[common.Address]*big.Int
+	Balances map[identifiers.Address]*big.Int
 }
 
-func GetTokenLedgerState(t *testing.T, moiClient *Client, logicID common.LogicID) TokenLedgerState {
+func GetTokenLedgerState(t *testing.T, moiClient *Client, logicID identifiers.LogicID) TokenLedgerState {
 	t.Helper()
 
 	getLatestStorage := func(slot uint8) hexutil.Bytes {
@@ -205,8 +240,6 @@ func GetTokenLedgerState(t *testing.T, moiClient *Client, logicID common.LogicID
 	err = polo.Depolorize(&state.Balances, rawBalances)
 	require.NoError(t, err)
 
-	fmt.Printf("token ledger state : %+v\n", state)
-
 	return state
 }
 
@@ -227,4 +260,87 @@ func GetPeerID(t *testing.T, client *Client) peer.ID {
 
 func NumPointer(input int64) *int64 {
 	return &input
+}
+
+func GetJSONRPCUrls(t *testing.T, bgClient bgclient.Client, validatorCount int) []string {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), JSONRPCURLWaitTime)
+	defer cancel()
+
+	jsonRPCUrls := make([]string, 0, validatorCount)
+
+	var err error
+
+	_, err = tests.RetryUntilTimeout(ctx, 100*time.Millisecond, func() (interface{}, bool) {
+		ctx, cancel := context.WithTimeout(context.Background(), JSONRPCURLQueryTime)
+		defer cancel()
+
+		jsonRPCUrls, err = bgClient.JSONRpcUrls(ctx)
+		if err != nil {
+			return nil, true
+		}
+
+		if len(jsonRPCUrls) != validatorCount {
+			return nil, true
+		}
+
+		return nil, false
+	})
+
+	require.NoError(t, err)
+
+	return jsonRPCUrls
+}
+
+func CheckIfNodesInitialSyncDone(t *testing.T, validatorCount int, jsonRPCUrls []string) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), InitialSyncWaitTime)
+	defer cancel()
+
+	// number of goroutines
+	numGoroutines := validatorCount / 10
+	if validatorCount%10 != 0 {
+		numGoroutines++
+	}
+
+	var wg sync.WaitGroup
+
+	wg.Add(numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		startIndex := i * 10
+		endIndex := (i + 1) * 10
+
+		if endIndex > validatorCount {
+			endIndex = validatorCount
+		}
+
+		go func(start, end int) {
+			defer wg.Done()
+
+			for j := start; j < end; j++ {
+				moiClient, err := NewClient(jsonRPCUrls[j])
+				require.NoError(t, err)
+
+				_, err = tests.RetryUntilTimeout(ctx, 50*time.Millisecond, func() (interface{}, bool) {
+					ctx, cancel := context.WithTimeout(ctx, InitialSyncQueryTime)
+					defer cancel()
+
+					resp, err := moiClient.Syncing(ctx, &rpcargs.SyncStatusRequest{})
+					if err != nil || !resp.NodeSyncResp.IsInitialSyncDone {
+						return nil, true
+					}
+
+					return nil, false
+				})
+
+				require.NoError(t, err, jsonRPCUrls[j])
+			}
+		}(startIndex, endIndex)
+	}
+
+	// Wait for all goroutines to finish
+	wg.Wait()
 }

@@ -7,9 +7,10 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	networkmsg "github.com/sarvalabs/go-moi/network/message"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
+	networkmsg "github.com/sarvalabs/go-moi/network/message"
 )
 
 const (
@@ -18,7 +19,7 @@ const (
 )
 
 type LatestAccountInfo struct {
-	Address         common.Address
+	Address         identifiers.Address
 	Height          uint64
 	Hash            common.Hash
 	IsSnapAvailable bool
@@ -177,7 +178,7 @@ func (service *SYNCRPCService) SyncBucketsSince(
 
 func (service *SYNCRPCService) GetLatestAccountInfo(
 	ctx context.Context,
-	addr common.Address,
+	addr identifiers.Address,
 	accountStatus *LatestAccountInfo,
 ) error {
 	metaInfo, err := service.syncer.db.GetAccountMetaInfo(addr)
@@ -202,7 +203,7 @@ func (service *SYNCRPCService) GetLatestAccountInfo(
 func (service *SYNCRPCService) FetchLattice(
 	ctx context.Context,
 	reqChan <-chan *LatticeRequest,
-	respChan chan<- *networkmsg.TesseractMessage,
+	respChan chan<- *networkmsg.TesseractSyncMsg,
 ) error {
 	var (
 		req *LatticeRequest
@@ -237,11 +238,11 @@ func (service *SYNCRPCService) FetchLattice(
 			return errors.Wrap(err, fmt.Sprintf("failed to fetch tesseract %d", height))
 		}
 
-		msg := &networkmsg.TesseractMessage{
+		msg := &networkmsg.TesseractSyncMsg{
 			RawTesseract: make([]byte, 0),
 			Ixns:         ixns,
 			Receipts:     receipts,
-			Delta:        make(map[common.Hash][]byte, 0),
+			Delta:        make(map[string][]byte),
 		}
 
 		msg.RawTesseract, err = ts.Canonical().Bytes()
@@ -253,18 +254,18 @@ func (service *SYNCRPCService) FetchLattice(
 			icsClusterInfoRaw, err := service.syncer.db.ReadEntry(ts.ICSHash().Bytes())
 			if err != nil {
 				return errors.Wrap(err, fmt.Sprintf("failed to fetch ics cluster info %v for address %v ",
-					ts.ICSHash(), ts.Address()))
+					ts.ICSHash(), req.Address))
 			}
 
-			msg.Delta[ts.ICSHash()] = icsClusterInfoRaw
+			msg.Delta[ts.ICSHash().String()] = icsClusterInfoRaw
 		}
 
-		for addr, lockInfo := range ts.ContextLock() {
-			if lockInfo.ContextHash.IsNil() {
+		for addr, contextHash := range ts.PreviousContext() {
+			if contextHash.IsNil() {
 				continue
 			}
 
-			if err = service.syncer.state.GetParticipantContextRaw(addr, lockInfo.ContextHash, msg.Delta); err != nil {
+			if err = service.syncer.state.GetParticipantContextRaw(addr, contextHash, msg.Delta); err != nil {
 				return errors.Wrap(err, fmt.Sprintf("failed to fetch participant context for %v", addr))
 			}
 		}

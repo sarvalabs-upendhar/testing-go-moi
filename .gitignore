@@ -5,6 +5,14 @@
 file.key
 .DS_Store
 
+# Test Artifacts
+test/e2e/test_*
+test/e2e/tmp
+bgclient/test_*
+bgclient/tmp
+moiclient/test_*
+moiclient/tmp
+
 # Development Artifacts
 /test_*
 /build

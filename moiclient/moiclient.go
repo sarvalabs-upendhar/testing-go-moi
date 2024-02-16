@@ -14,9 +14,11 @@ import (
 	"strconv"
 	"sync/atomic"
 
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
-	"github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/jsonrpc/api"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
@@ -493,7 +495,7 @@ func (c *Client) AccountState(ctx context.Context, args *rpcargs.GetAccountArgs)
 }
 
 // LogicIDs returns the logic IDs of the given address
-func (c *Client) LogicIDs(ctx context.Context, args *rpcargs.GetLogicIDArgs) ([]common.LogicID, error) {
+func (c *Client) LogicIDs(ctx context.Context, args *rpcargs.GetLogicIDArgs) ([]identifiers.LogicID, error) {
 	var resp rpcargs.Response
 
 	err := c.Call(ctx, &resp, "moi.LogicIDs", args)
@@ -505,7 +507,7 @@ func (c *Client) LogicIDs(ctx context.Context, args *rpcargs.GetLogicIDArgs) ([]
 		return nil, resp.Error
 	}
 
-	var logicIDs []common.LogicID
+	var logicIDs []identifiers.LogicID
 
 	err = json.Unmarshal(resp.Data, &logicIDs)
 	if err != nil {
@@ -1099,7 +1101,7 @@ func (c *Client) NodeMetaInfo(
 }
 
 // Accounts returns the address of all the accounts
-func (c *Client) Accounts(ctx context.Context) ([]common.Address, error) {
+func (c *Client) Accounts(ctx context.Context) ([]identifiers.Address, error) {
 	var resp rpcargs.Response
 
 	err := c.Call(ctx, &resp, "debug.Accounts", nil)
@@ -1111,7 +1113,7 @@ func (c *Client) Accounts(ctx context.Context) ([]common.Address, error) {
 		return nil, resp.Error
 	}
 
-	var addrs []common.Address
+	var addrs []identifiers.Address
 
 	err = json.Unmarshal(resp.Data, &addrs)
 	if err != nil {

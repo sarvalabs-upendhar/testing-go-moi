@@ -4,35 +4,35 @@ import (
 	"context"
 	"errors"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/hashicorp/go-hclog"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
+
+	"github.com/sarvalabs/go-moi/common"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
 	"github.com/sarvalabs/go-moi/syncer/agora/block"
 	"github.com/sarvalabs/go-moi/syncer/agora/message"
 	"github.com/sarvalabs/go-moi/syncer/agora/notifications"
 	"github.com/sarvalabs/go-moi/syncer/cid"
-
-	"github.com/hashicorp/go-hclog"
-	"github.com/libp2p/go-libp2p/core/peer"
-
-	"github.com/sarvalabs/go-moi/common"
 )
 
 type sessionInterestManager interface {
-	RecordSessionInterest(addr common.Address, ids ...cid.CID)
-	RemoveSessionInterest(addr common.Address, ids ...cid.CID) []cid.CID
+	RecordSessionInterest(addr identifiers.Address, ids ...cid.CID)
+	RemoveSessionInterest(addr identifiers.Address, ids ...cid.CID) []cid.CID
 }
 
 type sessionManager interface {
-	CloseSession(id common.Address)
+	CloseSession(id identifiers.Address)
 }
 
 type sessionNetwork interface {
-	SendAgoraMessage(id id.KramaID, msgType networkmsg.MsgType, msg message.Message) error
-	ClosePeerSession(kramaID id.KramaID, sessionID common.Address) error
+	SendAgoraMessage(id kramaid.KramaID, msgType networkmsg.MsgType, msg message.Message) error
+	ClosePeerSession(kramaID kramaid.KramaID, sessionID identifiers.Address) error
 }
 
 type Session struct {
-	id        common.Address
+	id        identifiers.Address
 	ctx       context.Context
 	logger    hclog.Logger
 	stateHash cid.CID
@@ -45,14 +45,14 @@ type Session struct {
 
 func NewSession(
 	ctx context.Context,
-	addr common.Address,
+	addr identifiers.Address,
 	logger hclog.Logger,
 	stateHash cid.CID,
 	network sessionNetwork,
 	notifier notifications.PubSubNotifier,
 	im sessionInterestManager,
 	sm sessionManager,
-	contextPeers []id.KramaID,
+	contextPeers []kramaid.KramaID,
 ) *Session {
 	taggedLogger := logger.With("addr", addr.Hex()).Named("Session")
 	s := &Session{
@@ -72,11 +72,11 @@ func NewSession(
 	return s
 }
 
-func (s *Session) ID() common.Address {
+func (s *Session) ID() identifiers.Address {
 	return s.id
 }
 
-func (s *Session) HandleMessage(id id.KramaID, msg *message.AgoraResponseMsg) {
+func (s *Session) HandleMessage(id kramaid.KramaID, msg *message.AgoraResponseMsg) {
 	if !msg.Status {
 		s.pm.UpdatePeerStatus(id, false)
 		s.pm.AddPeers(msg.PeerSet...)
@@ -87,11 +87,11 @@ func (s *Session) HandleMessage(id id.KramaID, msg *message.AgoraResponseMsg) {
 	}
 }
 
-func (s *Session) ChooseBestPeer(ctx context.Context, avoid map[id.KramaID]interface{}) (id.KramaID, error) {
+func (s *Session) ChooseBestPeer(ctx context.Context, avoid map[kramaid.KramaID]interface{}) (kramaid.KramaID, error) {
 	return s.pm.chooseBestPeer(ctx, avoid)
 }
 
-func (s *Session) sendWantReq(peerID id.KramaID, cid *cid.CIDSet) error {
+func (s *Session) sendWantReq(peerID kramaid.KramaID, cid *cid.CIDSet) error {
 	req := &message.AgoraRequestMsg{
 		SessionID: s.id,
 		StateHash: s.stateHash,
@@ -114,7 +114,7 @@ func (s *Session) GetBlock(ctx context.Context, cID cid.CID) (*block.Block, erro
 
 func (s *Session) getBlocks(
 	ctx context.Context,
-	peerID id.KramaID,
+	peerID kramaid.KramaID,
 	out chan *block.Block,
 	idSet *cid.CIDSet,
 ) error {
@@ -137,9 +137,9 @@ func (s *Session) getBlocks(
 
 	s.pm.UpdatePeerStatus(peerID, true)
 
-	s.im.RecordSessionInterest(s.id, idSet.Keys()...)
-
 	notifier := s.notifier.Subscribe(ctx, idSet.Keys()...)
+
+	s.im.RecordSessionInterest(s.id, idSet.Keys()...)
 
 	statusChan := s.pm.PeerRespChan(peerID)
 	if statusChan == nil {
@@ -186,7 +186,7 @@ func (s *Session) GetBlocks(ctx context.Context, cids []cid.CID) chan *block.Blo
 		idSet.Add(cid)
 	}
 
-	attemptedPeers := make(map[id.KramaID]interface{})
+	attemptedPeers := make(map[kramaid.KramaID]interface{})
 
 	go func() {
 		defer close(out)

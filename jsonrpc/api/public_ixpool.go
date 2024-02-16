@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/sarvalabs/go-moi-identifiers"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
@@ -11,8 +13,8 @@ import (
 )
 
 type ContentResponse struct {
-	Pending map[common.Address]map[hexutil.Uint64]*rpcargs.InteractionResponse `json:"pending"`
-	Queued  map[common.Address]map[hexutil.Uint64]*rpcargs.InteractionResponse `json:"queued"`
+	Pending map[identifiers.Address]map[hexutil.Uint64]*rpcargs.InteractionResponse `json:"pending"`
+	Queued  map[identifiers.Address]map[hexutil.Uint64]*rpcargs.InteractionResponse `json:"queued"`
 }
 
 type ContentFromResponse struct {
@@ -50,8 +52,8 @@ func NewPublicIXPoolAPI(ixpool backend.IxPool) *PublicIXPoolAPI {
 // Content returns the interactions present in the IxPool.
 func (p *PublicIXPoolAPI) Content() (*ContentResponse, error) {
 	content := &ContentResponse{
-		Pending: make(map[common.Address]map[hexutil.Uint64]*rpcargs.InteractionResponse),
-		Queued:  make(map[common.Address]map[hexutil.Uint64]*rpcargs.InteractionResponse),
+		Pending: make(map[identifiers.Address]map[hexutil.Uint64]*rpcargs.InteractionResponse),
+		Queued:  make(map[identifiers.Address]map[hexutil.Uint64]*rpcargs.InteractionResponse),
 	}
 	pendingIxs, queuedIxs := p.ixpool.GetAllIxs(true)
 

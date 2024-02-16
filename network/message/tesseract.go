@@ -5,25 +5,16 @@ import (
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/kramaid"
 )
 
-type TesseractReq struct {
-	Hash             common.Hash
-	Number           uint64
-	WithInteractions bool
-}
-
-type TesseractMessage struct {
-	Sender       kramaid.KramaID
+type TesseractMsg struct {
 	RawTesseract []byte
-	Ixns         []byte
-	Receipts     []byte
-	Delta        map[common.Hash][]byte
+	IxnsHashes   common.Hashes
+	Extra        map[string][]byte
 }
 
-func (tm *TesseractMessage) Bytes() ([]byte, error) {
-	rawData, err := polo.Polorize(tm)
+func (ts *TesseractMsg) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(ts)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to polorize tesseract message")
 	}
@@ -31,46 +22,22 @@ func (tm *TesseractMessage) Bytes() ([]byte, error) {
 	return rawData, nil
 }
 
-func (tm *TesseractMessage) FromBytes(bytes []byte) error {
-	if err := polo.Depolorize(tm, bytes); err != nil {
+func (ts *TesseractMsg) FromBytes(bytes []byte) error {
+	if err := polo.Depolorize(ts, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize tesseract message")
 	}
 
 	return nil
 }
 
-func (tm *TesseractMessage) GetTesseract() (*common.Tesseract, error) {
-	ixns := new(common.Interactions)
-	receipts := new(common.Receipts)
+func (ts *TesseractMsg) GetTesseract() (*common.Tesseract, error) {
+	canonicalTS := new(common.CanonicalTesseract)
 
-	ts := new(common.CanonicalTesseract)
-
-	if err := ts.FromBytes(tm.RawTesseract); err != nil {
+	if err := canonicalTS.FromBytes(ts.RawTesseract); err != nil {
 		return nil, err
 	}
 
-	if tm.Ixns != nil && !ts.InteractionHash().IsNil() {
-		if err := ixns.FromBytes(tm.Ixns); err != nil {
-			if !errors.Is(err, polo.ErrNullPack) {
-				return nil, err
-			}
-		}
-	}
+	tesseract := canonicalTS.ToTesseract(nil, nil)
 
-	if tm.Receipts != nil && !ts.ReceiptHash().IsNil() {
-		if err := receipts.FromBytes(tm.Receipts); err != nil {
-			if !errors.Is(err, polo.ErrNullPack) {
-				return nil, err
-			}
-		}
-	}
-
-	return common.NewTesseract(
-		ts.Header,
-		ts.Body,
-		*ixns,
-		*receipts,
-		ts.Seal,
-		ts.Sealer,
-	), nil
+	return tesseract, nil
 }

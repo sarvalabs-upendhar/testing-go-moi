@@ -3,21 +3,21 @@ package consensus
 import (
 	"testing"
 
-	"github.com/sarvalabs/go-moi/common/config"
-
 	"github.com/pkg/errors"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/common/config"
 
+	"github.com/sarvalabs/go-moi/common/tests"
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
-	"github.com/stretchr/testify/require"
 )
 
 func TestUpdateContextDelta(t *testing.T) {
 	addrs := tests.GetAddresses(t, 4)
-	kramaIDs := tests.GetTestKramaIDs(t, 2)
+	kramaIDs := tests.RandomKramaIDs(t, 2)
 	operator := kramaIDs[0]
 	nodeset := createNodeSet(t, 1, 1, 1, 1, 2, 0)
 
@@ -53,8 +53,8 @@ func TestUpdateContextDelta(t *testing.T) {
 
 	testcases := []struct {
 		name                 string
-		sender               common.Address
-		receiver             common.Address
+		sender               identifiers.Address
+		receiver             identifiers.Address
 		slot                 *ktypes.Slot
 		enableDebugMode      bool
 		expectedContextDelta common.ContextDelta
@@ -70,21 +70,21 @@ func TestUpdateContextDelta(t *testing.T) {
 			sender:   addrs[2],
 			receiver: unregisteredReceiverAddr,
 			slot:     assetTransferSlot,
-			expectedContextDelta: map[common.Address]*common.DeltaGroup{
+			expectedContextDelta: map[identifiers.Address]*common.DeltaGroup{
 				addrs[2]: {
 					Role:             common.Sender,
-					BehaviouralNodes: []id.KramaID{operator},
-					RandomNodes:      []id.KramaID{assetTransferRandomNodes[0]},
+					BehaviouralNodes: []kramaid.KramaID{operator},
+					RandomNodes:      []kramaid.KramaID{assetTransferRandomNodes[0]},
 				},
 				unregisteredReceiverAddr: {
 					Role:             common.Receiver,
-					BehaviouralNodes: []id.KramaID{assetTransferRandomNodes[0]},
-					RandomNodes:      []id.KramaID{assetTransferRandomNodes[1]},
+					BehaviouralNodes: []kramaid.KramaID{assetTransferRandomNodes[0]},
+					RandomNodes:      []kramaid.KramaID{assetTransferRandomNodes[1]},
 				},
 				common.SargaAddress: {
 					Role:             common.Genesis,
-					BehaviouralNodes: []id.KramaID{operator},
-					RandomNodes:      []id.KramaID{assetTransferRandomNodes[0]},
+					BehaviouralNodes: []kramaid.KramaID{operator},
+					RandomNodes:      []kramaid.KramaID{assetTransferRandomNodes[0]},
 				},
 			},
 		},
@@ -93,16 +93,16 @@ func TestUpdateContextDelta(t *testing.T) {
 			sender:   addrs[0],
 			receiver: registeredReceiverAddr,
 			slot:     assetMintSlot,
-			expectedContextDelta: map[common.Address]*common.DeltaGroup{
+			expectedContextDelta: map[identifiers.Address]*common.DeltaGroup{
 				addrs[0]: {
 					Role:             common.Sender,
-					BehaviouralNodes: []id.KramaID{operator},
-					RandomNodes:      []id.KramaID{assetMintRandomNodes[0]},
+					BehaviouralNodes: []kramaid.KramaID{operator},
+					RandomNodes:      []kramaid.KramaID{assetMintRandomNodes[0]},
 				},
 				registeredReceiverAddr: {
 					Role:             common.Receiver,
-					BehaviouralNodes: []id.KramaID{operator},
-					RandomNodes:      []id.KramaID{assetMintRandomNodes[0]},
+					BehaviouralNodes: []kramaid.KramaID{operator},
+					RandomNodes:      []kramaid.KramaID{assetMintRandomNodes[0]},
 				},
 			},
 		},
@@ -112,14 +112,14 @@ func TestUpdateContextDelta(t *testing.T) {
 			receiver:        unregisteredReceiverAddr,
 			slot:            assetTransferSlot,
 			enableDebugMode: true,
-			expectedContextDelta: map[common.Address]*common.DeltaGroup{
+			expectedContextDelta: map[identifiers.Address]*common.DeltaGroup{
 				addrs[2]: {
 					Role: common.Sender,
 				},
 				unregisteredReceiverAddr: {
 					Role:             common.Receiver,
-					BehaviouralNodes: []id.KramaID{assetTransferRandomNodes[0]},
-					RandomNodes:      []id.KramaID{assetTransferRandomNodes[1]},
+					BehaviouralNodes: []kramaid.KramaID{assetTransferRandomNodes[0]},
+					RandomNodes:      []kramaid.KramaID{assetTransferRandomNodes[1]},
 				},
 				common.SargaAddress: {
 					Role: common.Genesis,
@@ -156,7 +156,7 @@ func TestUpdateContextDelta(t *testing.T) {
 
 func TestPartiallyUpdateContextDelta(t *testing.T) {
 	addrs := tests.GetAddresses(t, 4)
-	kramaIDs := tests.GetTestKramaIDs(t, 2)
+	kramaIDs := tests.RandomKramaIDs(t, 2)
 	operator := kramaIDs[0]
 	nodeset := createNodeSet(t, 1, 1, 1, 1, 2, 0)
 
@@ -196,8 +196,8 @@ func TestPartiallyUpdateContextDelta(t *testing.T) {
 
 	testcases := []struct {
 		name                 string
-		sender               common.Address
-		receiver             common.Address
+		sender               identifiers.Address
+		receiver             identifiers.Address
 		slot                 *ktypes.Slot
 		expectedContextDelta common.ContextDelta
 		expectedError        error
@@ -207,7 +207,7 @@ func TestPartiallyUpdateContextDelta(t *testing.T) {
 			sender:   addrs[0],
 			receiver: registeredReceiverAddr,
 			slot:     assetMintSlot,
-			expectedContextDelta: map[common.Address]*common.DeltaGroup{
+			expectedContextDelta: map[identifiers.Address]*common.DeltaGroup{
 				addrs[0]: {
 					Role: common.Sender,
 				},
@@ -221,14 +221,14 @@ func TestPartiallyUpdateContextDelta(t *testing.T) {
 			sender:   addrs[2],
 			receiver: unregisteredReceiverAddr,
 			slot:     assetTransferSlot,
-			expectedContextDelta: map[common.Address]*common.DeltaGroup{
+			expectedContextDelta: map[identifiers.Address]*common.DeltaGroup{
 				addrs[2]: {
 					Role: common.Sender,
 				},
 				unregisteredReceiverAddr: {
 					Role:             common.Receiver,
-					BehaviouralNodes: []id.KramaID{assetTransferRandomNodes[0]},
-					RandomNodes:      []id.KramaID{assetTransferRandomNodes[1]},
+					BehaviouralNodes: []kramaid.KramaID{assetTransferRandomNodes[0]},
+					RandomNodes:      []kramaid.KramaID{assetTransferRandomNodes[1]},
 				},
 				common.SargaAddress: {
 					Role: common.Genesis,

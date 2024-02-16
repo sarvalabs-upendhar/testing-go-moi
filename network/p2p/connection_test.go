@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -9,17 +10,17 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/common/utils"
 	mudraCommon "github.com/sarvalabs/go-moi/crypto/common"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
 	"github.com/sarvalabs/go-moi/senatus"
-	"github.com/stretchr/testify/assert"
-
-	"github.com/stretchr/testify/require"
 )
 
 func TestIsInboundConnLimitReached(t *testing.T) {
@@ -323,7 +324,6 @@ func TestUpdateConnCount(t *testing.T) {
 			rttRange := ci.getConnRTTRange(test.rtt)
 
 			ci.outboundConnCountByRange[rttRange] = test.outboundConnCount
-
 			ci.updateConnCount(test.direction, test.rtt, test.delta)
 
 			require.Equal(t, test.expectedInbound, ci.inboundConnCount)
@@ -361,7 +361,7 @@ func TestConnectPeerByKramaID(t *testing.T) {
 
 	testcases := []struct {
 		name                   string
-		kramaID                id.KramaID
+		kramaID                kramaid.KramaID
 		establishedConnections map[int][]*Server
 		newConnections         map[int][]*Server
 		expectedError          error
@@ -406,7 +406,7 @@ func TestConnectPeerByKramaID(t *testing.T) {
 					// add peer info to peer store
 					servers[i].AddPeerInfo(info)
 
-					err := servers[i].ConnManager.connectPeerByKramaID(test.kramaID)
+					err := servers[i].ConnManager.ConnectPeerByKramaID(context.Background(), test.kramaID)
 
 					if test.expectedError != nil {
 						require.EqualError(t, err, test.expectedError.Error())
@@ -448,7 +448,7 @@ func TestConnectToTrustedNodes(t *testing.T) {
 
 	testcases := []struct {
 		name                   string
-		kramaID                id.KramaID
+		kramaID                kramaid.KramaID
 		establishedConnections map[int][]*Server
 		newConnections         map[int][]*Server
 	}{
@@ -621,13 +621,13 @@ func TestGetPeers(t *testing.T) {
 	testcases := []struct {
 		name         string
 		server       *Server
-		expectedList []id.KramaID
+		expectedList []kramaid.KramaID
 		testFn       func()
 	}{
 		{
 			name:         "Should return an empty list if no Krama ID's in peersList",
 			server:       servers[0],
-			expectedList: make([]id.KramaID, 0),
+			expectedList: make([]kramaid.KramaID, 0),
 		},
 		{
 			name:   "Returns a slice of Krama ID's connected to a client",
@@ -635,7 +635,7 @@ func TestGetPeers(t *testing.T) {
 			testFn: func() {
 				setServerPeers(t, servers[1], servers[2].id, servers[3].id)
 			},
-			expectedList: []id.KramaID{servers[2].id, servers[3].id},
+			expectedList: []kramaid.KramaID{servers[2].id, servers[3].id},
 		},
 	}
 
@@ -723,7 +723,7 @@ func TestConnectAndRegisterPeer_Connection_Failure(t *testing.T) {
 
 			info := getPeerInfo(t, test.destination)
 
-			err := test.source.ConnManager.ConnectAndRegisterPeer(*info, test.destination.id, test.rtt)
+			err := test.source.ConnManager.ConnectAndRegisterPeer(context.Background(), *info, test.destination.id, test.rtt)
 
 			if test.expectedErr {
 				require.Error(t, err)
@@ -808,7 +808,7 @@ func TestConnectAndRegisterPeer_Connection_Limit(t *testing.T) {
 
 			test.source.AddPeerInfo(info)
 
-			err := test.source.ConnManager.ConnectAndRegisterPeer(*info, test.destination.id, test.rtt)
+			err := test.source.ConnManager.ConnectAndRegisterPeer(context.Background(), *info, test.destination.id, test.rtt)
 
 			if test.expectedErr != nil {
 				require.Error(t, err)
@@ -888,7 +888,7 @@ func TestGetPeerInfo(t *testing.T) {
 		{
 			name: "Peer info present in Peer Store",
 			peerInfo: &peer.AddrInfo{
-				ID:    tests.GetTestPeerID(t),
+				ID:    tests.RandomPeerID(t),
 				Addrs: tests.GetListenAddresses(t, 1),
 			},
 			testFn: func(peerInfo *peer.AddrInfo) {
@@ -899,7 +899,7 @@ func TestGetPeerInfo(t *testing.T) {
 		{
 			name: "Peer info not present in Peer Store, present in Senatus",
 			peerInfo: &peer.AddrInfo{
-				ID:    tests.GetTestPeerID(t),
+				ID:    tests.RandomPeerID(t),
 				Addrs: tests.GetListenAddresses(t, 1),
 			},
 			testFn: func(peerInfo *peer.AddrInfo) {
@@ -922,7 +922,7 @@ func TestGetPeerInfo(t *testing.T) {
 		{
 			name: "Peer info not present in Peer Store, not present in Senatus",
 			peerInfo: &peer.AddrInfo{
-				ID:    tests.GetTestPeerID(t),
+				ID:    tests.RandomPeerID(t),
 				Addrs: tests.GetListenAddresses(t, 1),
 			},
 			expectedErr: common.ErrKramaIDNotFound,

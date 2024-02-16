@@ -38,6 +38,7 @@ var (
 	Bootnodes          []string
 	NodePassword       string
 	P2pHostIP          string
+	P2PHostPort        int
 	AllowIPv6Addresses bool
 	DiscoveryInterval  time.Duration
 	enableDebugMode    bool
@@ -58,6 +59,7 @@ const (
 	bootNodesFlag          = "bootnodes"
 	nodePasswordFlag       = "node-password"
 	p2pHostIPFlag          = "p2p-host-ip"
+	p2pHostPortFlag        = "p2p-host-port"
 	allowIPv6AddressesFlag = "allow-ipv6-addresses"
 	discoveryIntervalFlag  = "discovery-interval"
 	enableDebugModeFlag    = "enable-debug-mode"
@@ -85,7 +87,8 @@ func runCommand(cmd *cobra.Command, args []string) {
 
 func parseFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&GenesisPath, genesisFlag, "genesis.json", "Path to genesis.json file.")
-	cmd.PersistentFlags().StringVar(&P2pHostIP, p2pHostIPFlag, "0.0.0.0", "The ipv4 address for the p2p host.")
+	cmd.PersistentFlags().StringVar(&P2pHostIP, p2pHostIPFlag, "0.0.0.0", "The ipv4/ipv6 address for the p2p host.")
+	cmd.PersistentFlags().IntVar(&P2PHostPort, p2pHostPortFlag, config.DefaultP2PPort, "The port for the p2p host.")
 	cmd.PersistentFlags().StringVar(&ConfigPath, configFlag, "", "Path to config.json file.")
 	cmd.PersistentFlags().StringVar(&LogDirPath, LogDirPathFlag, "", "Path to log directory.")
 	cmd.PersistentFlags().IntVar(&OperatorSlots, operatorSlotFlag, -1, "Maximum number of operator slots.")

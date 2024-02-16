@@ -3,7 +3,8 @@ package websocket
 import (
 	"sync"
 
-	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi-identifiers"
+
 	"github.com/sarvalabs/go-moi/jsonrpc/args"
 )
 
@@ -12,7 +13,7 @@ type tesseractByAccountFilter struct {
 	filterBase
 	sync.Mutex
 
-	address       common.Address
+	address       identifiers.Address
 	rpcTesseracts []*args.RPCTesseract
 }
 

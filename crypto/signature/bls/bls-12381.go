@@ -1,9 +1,9 @@
 package bls
 
 import (
+	"github.com/sarvalabs/go-legacy-kramaid"
 	blst "github.com/supranational/blst/bindings/go"
 
-	"github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/crypto/common"
 )
 

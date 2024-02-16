@@ -5,22 +5,25 @@ import (
 	"math/big"
 
 	"github.com/decred/dcrd/crypto/blake256"
-	"github.com/hashicorp/golang-lru"
+	iradix "github.com/hashicorp/go-immutable-radix"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-engineio"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	engineio "github.com/sarvalabs/go-moi-engineio"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"
 )
 
-// var blakeHasher = blake256.New()
+// StorageTree: Holds key-value pairs associated with logic (identified by logicID) for storage.
+// LogicTree: Manages logicObject for each logic.
+// MetaStorageTree: Keeps track of the root of the storage tree for each logic.
 
 type Object struct {
-	journal *Journal
-	cache   *lru.Cache
+	cache *lru.Cache
 
-	address common.Address
+	address identifiers.Address
 	accType common.AccountType
 	data    common.Account
 
@@ -32,24 +35,25 @@ type Object struct {
 
 	logicTree       tree.MerkleTree
 	metaStorageTree tree.MerkleTree
+	storageTrees    map[identifiers.LogicID]tree.MerkleTree
 	fileTree        tree.MerkleTree //nolint:unused
 
 	dirtyEntries LogicStorageObject
 	receipts     common.Receipts
 
-	activeStorageTrees map[string]tree.MerkleTree
-	files              map[common.Hash][]byte
+	storageTreeTxns map[identifiers.LogicID]*iradix.Txn
+	logicTreeTxn    *iradix.Txn
+
+	files map[common.Hash][]byte
 }
 
 func NewStateObject(
-	id common.Address,
+	id identifiers.Address,
 	cache *lru.Cache,
-	j *Journal,
 	db Store,
 	account common.Account,
 ) *Object {
 	return &Object{
-		journal:  j,
 		accType:  account.AccType,
 		cache:    cache,
 		db:       db,
@@ -58,17 +62,18 @@ func NewStateObject(
 		balance:  nil,
 		registry: nil,
 		approvals: &ApprovalObject{
-			Approvals: make(map[common.Address]common.AssetMap),
+			Approvals: make(map[identifiers.Address]common.AssetMap),
 			PrvHash:   common.NilHash,
 		},
-		files:              make(map[common.Hash][]byte),
-		dirtyEntries:       make(LogicStorageObject),
-		receipts:           make(common.Receipts),
-		activeStorageTrees: make(map[string]tree.MerkleTree, 4),
+		files:           make(map[common.Hash][]byte),
+		dirtyEntries:    make(LogicStorageObject),
+		receipts:        make(common.Receipts),
+		storageTreeTxns: make(map[identifiers.LogicID]*iradix.Txn),
+		storageTrees:    make(map[identifiers.LogicID]tree.MerkleTree),
 	}
 }
 
-func (object *Object) Address() common.Address {
+func (object *Object) Address() identifiers.Address {
 	return object.address
 }
 
@@ -82,10 +87,6 @@ func (object *Object) AccountType() common.AccountType {
 
 func (object *Object) AccountState() common.Account {
 	return object.data
-}
-
-func (object *Object) Journal() *Journal {
-	return object.journal
 }
 
 func (object *Object) Registry() (*RegistryObject, error) {
@@ -148,7 +149,7 @@ func (object *Object) Balances() (*BalanceObject, error) {
 	return object.balance, nil
 }
 
-func (object *Object) BalanceOf(id common.AssetID) (*big.Int, error) {
+func (object *Object) BalanceOf(id identifiers.AssetID) (*big.Int, error) {
 	balObject, err := object.Balances()
 	if err != nil {
 		return nil, err
@@ -161,7 +162,7 @@ func (object *Object) BalanceOf(id common.AssetID) (*big.Int, error) {
 	return nil, common.ErrAssetNotFound
 }
 
-func (object *Object) AddBalance(aid common.AssetID, amount *big.Int) {
+func (object *Object) AddBalance(aid identifiers.AssetID, amount *big.Int) {
 	if object.balance == nil {
 		if err := object.loadBalanceObject(); err != nil {
 			panic(err)
@@ -176,7 +177,7 @@ func (object *Object) AddBalance(aid common.AssetID, amount *big.Int) {
 	}
 }
 
-func (object *Object) SubBalance(aid common.AssetID, amount *big.Int) {
+func (object *Object) SubBalance(aid identifiers.AssetID, amount *big.Int) {
 	if object.balance == nil {
 		if err := object.loadBalanceObject(); err != nil {
 			panic(err)
@@ -191,14 +192,14 @@ func (object *Object) SubBalance(aid common.AssetID, amount *big.Int) {
 }
 
 // setBalance is used for test purposes only
-func (object *Object) setBalance(assetID common.AssetID, bal *big.Int) {
+func (object *Object) setBalance(assetID identifiers.AssetID, bal *big.Int) {
 	object.balance.AssetMap[assetID] = bal
 }
 
 func (object *Object) loadBalanceObject() error {
 	if object.data.Balance.IsNil() {
 		object.balance = &BalanceObject{
-			AssetMap: make(map[common.AssetID]*big.Int),
+			AssetMap: make(map[identifiers.AssetID]*big.Int),
 		}
 
 		return nil
@@ -229,8 +230,7 @@ func (object *Object) Balance() (*BalanceObject, error) {
 }
 
 func (object *Object) Copy() *Object {
-	j := new(Journal)
-	sObj := NewStateObject(object.address, object.cache, j, object.db, object.data)
+	sObj := NewStateObject(object.address, object.cache, object.db, object.data)
 
 	sObj.dirtyEntries = object.dirtyEntries.Copy()
 
@@ -246,12 +246,26 @@ func (object *Object) Copy() *Object {
 		sObj.registry = object.registry.Copy()
 	}
 
+	for logicID, sTree := range object.storageTreeTxns {
+		if sTree != nil {
+			sObj.storageTreeTxns[logicID] = sTree.CommitOnly().Txn()
+		}
+	}
+
+	if object.logicTreeTxn != nil {
+		sObj.logicTreeTxn = object.logicTreeTxn.CommitOnly().Txn()
+	}
+
 	if object.logicTree != nil {
 		sObj.logicTree = object.logicTree.Copy()
 	}
 
+	for id, sTree := range object.storageTrees {
+		sObj.storageTrees[id] = sTree.Copy()
+	}
+
 	if object.metaStorageTree != nil {
-		sObj.metaStorageTree = object.metaStorageTree.Copy() // TODO: Check if we require deep copy
+		sObj.metaStorageTree = object.metaStorageTree.Copy()
 	}
 
 	for key, value := range object.files {
@@ -319,11 +333,6 @@ func (object *Object) commitRegistryObject() (common.Hash, error) {
 
 	hash := common.GetHash(data)
 
-	object.journal.append(RegistryUpdation{
-		addr: &object.address,
-		id:   hash,
-	})
-
 	object.SetDirtyEntry(
 		common.BytesToHex(storage.RegistryObjectKey(object.address, hash)),
 		data,
@@ -346,11 +355,6 @@ func (object *Object) commitBalanceObject() (common.Hash, error) {
 
 	hash := common.GetHash(data)
 
-	object.journal.append(BalanceUpdation{
-		addr: &object.address,
-		id:   hash,
-	})
-
 	key := common.BytesToHex(storage.BalanceObjectKey(object.address, hash))
 	object.SetDirtyEntry(key, data)
 	object.data.Balance = hash
@@ -365,11 +369,6 @@ func (object *Object) commitAccount() (common.Hash, error) {
 	}
 
 	hash := common.GetHash(data)
-
-	object.journal.append(AccountUpdation{
-		addr: &object.address,
-		id:   hash,
-	})
 
 	key := common.BytesToHex(storage.AccountKey(object.address, hash))
 	object.SetDirtyEntry(key, data)
@@ -386,11 +385,6 @@ func (object *Object) commitContextObject(obj Context) (common.Hash, error) {
 
 	hash := common.GetHash(rawData)
 
-	object.journal.append(ContextUpdation{
-		addr: &object.address,
-		id:   hash,
-	})
-
 	key := common.BytesToHex(storage.ContextObjectKey(object.address, hash))
 	object.SetDirtyEntry(key, rawData)
 
@@ -398,22 +392,31 @@ func (object *Object) commitContextObject(obj Context) (common.Hash, error) {
 }
 
 func (object *Object) commitActiveStorageTrees() error {
-	// Add the updated logic-id <=> storage-root in master storage merkleTree
-	for logicID, merkleTree := range object.activeStorageTrees {
-		if !merkleTree.IsDirty() {
-			continue
-		}
-
-		if err := merkleTree.Commit(); err != nil {
-			return errors.Wrap(err, "failed to commit storage tree")
-		}
-
-		rootHash, err := merkleTree.RootHash()
+	for logicID, txn := range object.storageTreeTxns {
+		sTree, err := object.GetStorageTree(logicID)
 		if err != nil {
 			return err
 		}
 
-		if err = object.metaStorageTree.Set(common.FromHex(logicID), rootHash.Bytes()); err != nil {
+		txn.Root().Walk(func(k []byte, v interface{}) bool {
+			if err = sTree.Set(k, v.([]byte)); err != nil { //nolint
+				return true
+			}
+
+			return false
+		})
+
+		if err = sTree.Commit(); err != nil {
+			return errors.Wrap(err, "failed to commit storage tree")
+		}
+
+		rootHash, err := sTree.RootHash()
+		if err != nil {
+			return err
+		}
+
+		// Add the updated logic-id <=> storage-root in master storage merkleTree
+		if err = object.metaStorageTree.Set(logicID.Bytes(), rootHash.Bytes()); err != nil {
 			return err
 		}
 	}
@@ -422,7 +425,7 @@ func (object *Object) commitActiveStorageTrees() error {
 }
 
 func (object *Object) commitMetaStorageTree() (common.Hash, error) {
-	if !object.metaStorageTree.IsDirty() {
+	if object.metaStorageTree == nil || !object.metaStorageTree.IsDirty() {
 		return object.data.StorageRoot, nil
 	}
 
@@ -435,21 +438,12 @@ func (object *Object) commitMetaStorageTree() (common.Hash, error) {
 		return common.NilHash, err
 	}
 
-	object.journal.append(StorageUpdation{
-		addr: &object.address,
-		id:   rootHash,
-	})
-
 	object.data.StorageRoot = rootHash
 
 	return rootHash, nil
 }
 
 func (object *Object) commitStorage() (common.Hash, error) {
-	if object.metaStorageTree == nil {
-		return object.data.StorageRoot, nil
-	}
-
 	err := object.commitActiveStorageTrees()
 	if err != nil {
 		return common.NilHash, err
@@ -460,11 +454,36 @@ func (object *Object) commitStorage() (common.Hash, error) {
 
 // commitLogics commits the logic tree and flushes the changes to db
 func (object *Object) commitLogics() (common.Hash, error) {
-	if object.logicTree == nil {
+	if object.logicTreeTxn == nil {
 		return object.data.LogicRoot, nil
 	}
 
-	err := object.logicTree.Commit()
+	logicTree, err := object.getLogicTree()
+	if err != nil {
+		return common.NilHash, err
+	}
+
+	objects := make([]*LogicObject, 0)
+
+	object.logicTreeTxn.Root().Walk(func(k []byte, v interface{}) bool {
+		obj, _ := v.(*LogicObject)
+		objects = append(objects, obj)
+
+		return false
+	})
+
+	for _, obj := range objects {
+		rawBytes, err := obj.Bytes()
+		if err != nil {
+			return common.NilHash, err
+		}
+
+		if err = logicTree.Set(obj.ID.Bytes(), rawBytes); err != nil {
+			return common.NilHash, err
+		}
+	}
+
+	err = logicTree.Commit()
 	if err != nil {
 		return common.NilHash, errors.Wrap(err, "failed to commit logic tree")
 	}
@@ -483,7 +502,7 @@ func (object *Object) flush() error {
 		return errors.Wrap(err, "failed to fetch logic tree")
 	}
 
-	if err := object.flushActiveStorageTrees(); err != nil {
+	if err := object.flushStorageTrees(); err != nil {
 		return errors.Wrap(err, "failed to flush active storage trees")
 	}
 
@@ -504,13 +523,13 @@ func (object *Object) flushLogicTree() error {
 	return object.logicTree.Flush()
 }
 
-func (object *Object) flushActiveStorageTrees() error {
+func (object *Object) flushStorageTrees() error {
 	if object.metaStorageTree == nil {
 		return nil
 	}
 
 	// flush active storage trees
-	for _, storageTree := range object.activeStorageTrees {
+	for _, storageTree := range object.storageTrees {
 		if err := storageTree.Flush(); err != nil {
 			return errors.Wrap(err, "failed to commit modified storage tree entries to store")
 		}
@@ -520,18 +539,21 @@ func (object *Object) flushActiveStorageTrees() error {
 	return object.metaStorageTree.Flush()
 }
 
-func (object *Object) CreateStorageTreeForLogic(logicID common.LogicID) error {
+func (object *Object) CreateStorageTreeForLogic(logicID identifiers.LogicID) error {
 	_, err := object.createStorageTreeForLogic(logicID)
 
 	return err
 }
 
-func (object *Object) CreateAsset(addr common.Address, descriptor *common.AssetDescriptor) (common.AssetID, error) {
-	assetID := common.NewAssetIDv0(
+func (object *Object) CreateAsset(
+	addr identifiers.Address,
+	descriptor *common.AssetDescriptor,
+) (identifiers.AssetID, error) {
+	assetID := identifiers.NewAssetIDv0(
 		descriptor.IsLogical,
 		descriptor.IsStateFul,
 		descriptor.Dimension,
-		descriptor.Standard,
+		uint16(descriptor.Standard),
 		addr,
 	)
 
@@ -540,14 +562,14 @@ func (object *Object) CreateAsset(addr common.Address, descriptor *common.AssetD
 		return "", err
 	}
 
-	if err = object.CreateRegistryEntry(assetID.String(), rawBytes); err != nil {
+	if err = object.CreateRegistryEntry(string(assetID), rawBytes); err != nil {
 		return "", err
 	}
 
 	return assetID, nil
 }
 
-func (object *Object) CreateLogic(descriptor *engineio.LogicDescriptor) (common.LogicID, error) {
+func (object *Object) CreateLogic(descriptor *engineio.LogicDescriptor) (identifiers.LogicID, error) {
 	// Generate the key for the LogicManifest from its hash
 	key := common.BytesToHex(storage.LogicManifestKey(object.Address(), descriptor.ManifestHash))
 	// Write the manifest into the dirty entries
@@ -561,14 +583,17 @@ func (object *Object) CreateLogic(descriptor *engineio.LogicDescriptor) (common.
 	}
 
 	// Initialize a storage tree for the LogicID on the state object
-	if err := object.CreateStorageTreeForLogic(logicObject.ID); err != nil {
-		return "", errors.Wrap(err, "could not init storage tree for logic")
+	_, err := object.createStorageTreeForLogic(logicObject.ID)
+	if err != nil {
+		return "", err
 	}
+
+	object.storageTreeTxns[logicObject.LogicID()] = iradix.New().Txn()
 
 	return logicObject.ID, nil
 }
 
-func (object *Object) AddAccountGenesisInfo(address common.Address, ixHash common.Hash) error {
+func (object *Object) AddAccountGenesisInfo(address identifiers.Address, ixHash common.Hash) error {
 	accInfo := common.AccountGenesisInfo{
 		IxHash: ixHash,
 	}
@@ -581,7 +606,7 @@ func (object *Object) AddAccountGenesisInfo(address common.Address, ixHash commo
 	return object.SetStorageEntry(common.SargaLogicID, address.Bytes(), rawData)
 }
 
-func (object *Object) CreateContext(behaviouralNodes, randomNodes []id.KramaID) (common.Hash, error) {
+func (object *Object) CreateContext(behaviouralNodes, randomNodes []kramaid.KramaID) (common.Hash, error) {
 	if len(behaviouralNodes)+len(randomNodes) < MinimumContextSize {
 		return common.NilHash, errors.New("liveliness size not met")
 	}
@@ -624,7 +649,7 @@ func (object *Object) CreateContext(behaviouralNodes, randomNodes []id.KramaID) 
 	return mHash, nil
 }
 
-func (object *Object) UpdateContext(behaviouralNodes []id.KramaID, randomNodes []id.KramaID) (common.Hash, error) {
+func (object *Object) UpdateContext(behaviouralNodes, randomNodes []kramaid.KramaID) (common.Hash, error) {
 	if len(behaviouralNodes) == 0 && len(randomNodes) == 0 {
 		return object.data.ContextHash, nil
 	}
@@ -774,8 +799,8 @@ func (object *Object) loadRegistryObject() error {
 	return nil
 }
 
-func (object *Object) GetStorageTree(logicID common.LogicID) (tree.MerkleTree, error) {
-	storageTree, ok := object.activeStorageTrees[logicID.String()]
+func (object *Object) GetStorageTree(logicID identifiers.LogicID) (tree.MerkleTree, error) {
+	storageTree, ok := object.storageTrees[logicID]
 	if ok {
 		return storageTree, nil
 	}
@@ -800,21 +825,35 @@ func (object *Object) GetStorageTree(logicID common.LogicID) (tree.MerkleTree, e
 		return nil, errors.Wrap(err, "failed to initiate logic storage tree")
 	}
 
-	object.activeStorageTrees[logicID.String()] = storageTree
+	object.storageTrees[logicID] = storageTree
 
 	return storageTree, nil
 }
 
-func (object *Object) SetStorageEntry(logicID common.LogicID, key, value []byte) (err error) {
-	merkleTree, err := object.GetStorageTree(logicID)
-	if err != nil {
-		return err
+func (object *Object) SetStorageEntry(logicID identifiers.LogicID, key, value []byte) (err error) {
+	_, ok := object.storageTreeTxns[logicID]
+	if !ok {
+		if _, err = object.GetStorageTree(logicID); err != nil {
+			return err
+		}
+
+		object.storageTreeTxns[logicID] = iradix.New().Txn()
 	}
 
-	return merkleTree.Set(key, value)
+	object.storageTreeTxns[logicID].Insert(key, value)
+
+	return nil
 }
 
-func (object *Object) GetStorageEntry(logicID common.LogicID, key []byte) (value []byte, err error) {
+func (object *Object) GetStorageEntry(logicID identifiers.LogicID, key []byte) (value []byte, err error) {
+	activeStorageTree, ok := object.storageTreeTxns[logicID]
+	if ok {
+		v, ok := activeStorageTree.Get(key)
+		if ok {
+			return v.([]byte), nil //nolint
+		}
+	}
+
 	merkleTree, err := object.GetStorageTree(logicID)
 	if err != nil {
 		return nil, err
@@ -848,7 +887,7 @@ func (object *Object) getMetaStorageTree() (tree.MerkleTree, error) {
 	return object.metaStorageTree, nil
 }
 
-func (object *Object) createStorageTreeForLogic(logicID common.LogicID) (tree.MerkleTree, error) {
+func (object *Object) createStorageTreeForLogic(logicID identifiers.LogicID) (tree.MerkleTree, error) {
 	if _, err := object.getMetaStorageTree(); err != nil {
 		return nil, err
 	}
@@ -864,12 +903,12 @@ func (object *Object) createStorageTreeForLogic(logicID common.LogicID) (tree.Me
 		return nil, err
 	}
 
-	object.activeStorageTrees[logicID.String()] = newStorageTree
+	object.storageTrees[logicID] = newStorageTree
 
 	return newStorageTree, object.metaStorageTree.Set(logicID.Bytes(), common.NilHash.Bytes())
 }
 
-func (object *Object) isLogicRegistered(logicID common.LogicID) error {
+func (object *Object) isLogicRegistered(logicID identifiers.LogicID) error {
 	_, err := object.getLogicObject(logicID)
 	if err != nil {
 		return err
@@ -899,7 +938,14 @@ func (object *Object) getLogicTree() (tree.MerkleTree, error) {
 	return object.logicTree, nil
 }
 
-func (object *Object) getLogicObject(logicID common.LogicID) (*LogicObject, error) {
+func (object *Object) getLogicObject(logicID identifiers.LogicID) (*LogicObject, error) {
+	if object.logicTreeTxn != nil {
+		v, ok := object.logicTreeTxn.Get(logicID.Bytes())
+		if ok {
+			return v.(*LogicObject), nil //nolint
+		}
+	}
+
 	logicTree, err := object.getLogicTree()
 	if err != nil {
 		return nil, err
@@ -921,36 +967,28 @@ func (object *Object) getLogicObject(logicID common.LogicID) (*LogicObject, erro
 
 // InsertNewLogicObject inserts the logicID and logicObject into the logicsTree
 // If the logicID is registered, this returns an error
-func (object *Object) InsertNewLogicObject(logicID common.LogicID, logicObject *LogicObject) error {
+func (object *Object) InsertNewLogicObject(logicID identifiers.LogicID, logicObject *LogicObject) error {
 	if err := object.isLogicRegistered(logicID); err == nil {
 		return errors.New("logic already registered")
 	}
 
-	logicTree, err := object.getLogicTree()
-	if err != nil {
-		return errors.Wrap(err, "failed to load logic tree")
+	if object.logicTreeTxn == nil {
+		object.logicTreeTxn = iradix.New().Txn()
 	}
 
-	rawLogicObject, err := logicObject.Bytes()
-	if err != nil {
-		return err
-	}
-
-	if err = logicTree.Set(logicID.Bytes(), rawLogicObject); err != nil {
-		return errors.Wrap(err, "failed to add logic object to tree")
-	}
+	object.logicTreeTxn.Insert(logicID.Bytes(), logicObject)
 
 	return nil
 }
 
 // FetchLogicObject returns the LogicObject associated with the given logicID,
 // This returns an error if the logicID is not registered
-func (object *Object) FetchLogicObject(logicID common.LogicID) (*LogicObject, error) {
+func (object *Object) FetchLogicObject(logicID identifiers.LogicID) (*LogicObject, error) {
 	return object.getLogicObject(logicID)
 }
 
 // GenerateLogicContextObject returns a LogicContextObject scoped to a given types.LogicID
-func (object *Object) GenerateLogicContextObject(logicID common.LogicID) *LogicContextObject {
+func (object *Object) GenerateLogicContextObject(logicID identifiers.LogicID) *LogicContextObject {
 	return NewLogicContextObject(logicID, object)
 }
 

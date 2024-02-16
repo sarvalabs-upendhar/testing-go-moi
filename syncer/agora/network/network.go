@@ -6,26 +6,25 @@ import (
 	"sync"
 	"time"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-	networkmsg "github.com/sarvalabs/go-moi/network/message"
-	"github.com/sarvalabs/go-moi/syncer/agora/message"
-
-	"github.com/sarvalabs/go-polo"
-
-	"github.com/libp2p/go-msgio"
-
 	"github.com/hashicorp/go-hclog"
 	p2pnet "github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-msgio"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-polo"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/utils"
+	networkmsg "github.com/sarvalabs/go-moi/network/message"
 	"github.com/sarvalabs/go-moi/network/p2p"
+	"github.com/sarvalabs/go-moi/syncer/agora/message"
 )
 
 type SessionManager interface {
-	HandlePeerMessage(id id.KramaID, msg interface{})
-	PeerDisconnected(sessions []common.Address, id peer.ID)
+	HandlePeerMessage(id kramaid.KramaID, msg interface{})
+	PeerDisconnected(sessions []identifiers.Address, id peer.ID)
 }
 
 type AgoraNetwork struct {
@@ -59,7 +58,7 @@ func (an *AgoraNetwork) streamHandler(stream p2pnet.Stream) {
 		id:             stream.Conn().RemotePeer(),
 		stream:         stream,
 		connected:      true,
-		activeSessions: make(map[common.Address]struct{}),
+		activeSessions: make(map[identifiers.Address]struct{}),
 	}
 
 	an.peers.Store(agoraPeer.id, agoraPeer)
@@ -121,7 +120,7 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 	}
 }
 
-func (an *AgoraNetwork) SendAgoraMessage(id id.KramaID, msgType networkmsg.MsgType, msg message.Message) error {
+func (an *AgoraNetwork) SendAgoraMessage(id kramaid.KramaID, msgType networkmsg.MsgType, msg message.Message) error {
 	peerID, err := utils.GetNetworkID(id)
 	if err != nil {
 		an.logger.Error("Unable to decode peer ID", "err", err)
@@ -146,7 +145,7 @@ func (an *AgoraNetwork) SendAgoraMessage(id id.KramaID, msgType networkmsg.MsgTy
 		}
 
 		abstractPeer = &AgoraPeer{
-			activeSessions: map[common.Address]struct{}{msg.GetSessionID(): {}},
+			activeSessions: map[identifiers.Address]struct{}{msg.GetSessionID(): {}},
 			id:             peerID,
 			stream:         stream,
 			connected:      true,
@@ -218,7 +217,7 @@ func (an *AgoraNetwork) pruneInactivePeers() {
 	}
 }
 
-func (an *AgoraNetwork) ClosePeerSession(kramaID id.KramaID, sessionID common.Address) error {
+func (an *AgoraNetwork) ClosePeerSession(kramaID kramaid.KramaID, sessionID identifiers.Address) error {
 	peerID, err := utils.GetNetworkID(kramaID)
 	if err != nil {
 		an.logger.Error("Error parsing krama ID", "krama-ID", kramaID)

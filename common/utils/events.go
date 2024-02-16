@@ -2,7 +2,8 @@ package utils
 
 import (
 	"github.com/libp2p/go-libp2p/core/peer"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 )
@@ -27,7 +28,7 @@ type NewMinedTesseractEvent struct {
 type TesseractReceivedEvent struct {
 	Tesseract   *common.Tesseract
 	ClusterInfo *common.ICSClusterInfo
-	Sender      id.KramaID
+	Sender      kramaid.KramaID
 }
 
 // TesseractAddedEvent occurs when a new block is added to the lattice
@@ -40,19 +41,19 @@ type TesseractSyncEvent struct {
 	Tesseract   *common.Tesseract
 	ClusterInfo *common.ICSClusterInfo
 	Delta       map[common.Hash][]byte
-	Context     []id.KramaID
+	Context     []kramaid.KramaID
 }
 
 // SyncRequestEvent is fired by krama engine to sync the tesseract lattice
 type SyncRequestEvent struct {
-	Address  common.Address
+	Address  identifiers.Address
 	Height   uint64
-	BestPeer id.KramaID
+	BestPeer kramaid.KramaID
 }
 
 // PendingAccountEvent is fired to update the pending accounts variable in SyncStatusTracker
 type PendingAccountEvent struct {
-	Address common.Address
+	Address identifiers.Address
 	Count   int64
 }
 

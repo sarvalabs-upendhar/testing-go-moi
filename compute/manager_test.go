@@ -13,7 +13,6 @@ import (
 
 func TestEngineIOInterfaces(t *testing.T) {
 	require.Implements(t, (*engineio.IxnType)(nil), common.IxType(0))
-	require.Implements(t, (*engineio.LogicID)(nil), common.LogicID(""))
 	require.Implements(t, (*engineio.Logic)(nil), &state.LogicObject{})
 	require.Implements(t, (*engineio.CryptoDriver)(nil), crypto.Cryptographer(0))
 	require.Implements(t, (*engineio.IxnDriver)(nil), &common.Interaction{})

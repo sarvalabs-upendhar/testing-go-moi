@@ -7,24 +7,21 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/libp2p/go-libp2p-pubsub/pb"
-
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/sarvalabs/go-moi/network/message"
-
-	"github.com/sarvalabs/go-moi/common/kramaid"
-	"github.com/sarvalabs/go-moi/storage/db"
-
 	"github.com/hashicorp/go-hclog"
-	"github.com/sarvalabs/go-moi/common/config"
-	"github.com/sarvalabs/go-moi/storage"
-	"github.com/sarvalabs/go-moi/syncer/cid"
-
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	pb "github.com/libp2p/go-libp2p-pubsub/pb"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/consensus/types"
+	"github.com/sarvalabs/go-moi/network/message"
+	"github.com/sarvalabs/go-moi/storage"
+	"github.com/sarvalabs/go-moi/storage/db"
 	"github.com/sarvalabs/go-moi/syncer"
+	"github.com/sarvalabs/go-moi/syncer/cid"
 	"github.com/stretchr/testify/require"
 )
 
@@ -76,7 +73,7 @@ func TestFullSync(t *testing.T) {
 		servers[0],
 		&utils.TypeMux{},
 		&MockAgora{
-			newSession: func(address common.Address) (syncer.Session, error) {
+			newSession: func(address identifiers.Address) (syncer.Session, error) {
 				return newMockSession(address), nil
 			},
 		},
@@ -102,7 +99,7 @@ func TestFullSync(t *testing.T) {
 
 	addresses := tests.GetAddresses(t, 2)
 
-	accountsToSync := map[common.Address]int{
+	accountsToSync := map[identifiers.Address]int{
 		common.GuardianLogicAddr: 4,
 		common.SargaAddress:      4,
 		addresses[0]:             4,
@@ -126,7 +123,7 @@ func TestFullSync(t *testing.T) {
 	expectedEvents := SyncEvents{
 		bucketSync:    1,
 		SystemAccSync: 1,
-		accounts:      make(map[common.Address]AccountSpecificEvents),
+		accounts:      make(map[identifiers.Address]AccountSpecificEvents),
 	}
 
 	for addr, height := range accountsToSync {
@@ -135,6 +132,7 @@ func TestFullSync(t *testing.T) {
 
 	SubscribeAndListenForSyncEvents(t, clientCtx, testingLogger(t.Name()), clientSyncer.mux, expectedEvents)
 	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, false, ts...)
+	checkJobQueue(t, clientSyncer, serverSyncer)
 }
 
 // TestFullSync_ChooseBestPeer, makes sure that the client syncs to the highest heights for all accounts,
@@ -178,7 +176,7 @@ func TestFullSync_ChooseBestPeer(t *testing.T) {
 		servers[3],
 		&utils.TypeMux{},
 		&MockAgora{
-			newSession: func(address common.Address) (syncer.Session, error) {
+			newSession: func(address identifiers.Address) (syncer.Session, error) {
 				return newMockSession(address), nil
 			},
 		},
@@ -206,15 +204,15 @@ func TestFullSync_ChooseBestPeer(t *testing.T) {
 
 	addr := tests.RandomAddress(t)
 
-	accountsToSync := map[common.Address]int{
+	accountsToSync := map[identifiers.Address]int{
 		common.GuardianLogicAddr: 10,
 		common.SargaAddress:      10,
 		addr:                     10,
 	}
 
-	ts1 := generateTesseracts(t, common.GuardianLogicAddr, 0, accountsToSync[common.GuardianLogicAddr], common.NilHash, 1)
-	ts2 := generateTesseracts(t, common.SargaAddress, 0, accountsToSync[common.SargaAddress], common.NilHash, 1)
-	ts3 := generateTesseracts(t, addr, 0, accountsToSync[addr], common.NilHash, 1)
+	ts1 := generateTesseracts(t, 0, accountsToSync[common.GuardianLogicAddr], common.NilHash, common.GuardianLogicAddr)
+	ts2 := generateTesseracts(t, 0, accountsToSync[common.SargaAddress], common.NilHash, common.SargaAddress)
+	ts3 := generateTesseracts(t, 0, accountsToSync[addr], common.NilHash, addr)
 
 	storeTesseractsInDB(t, serverSyncers[0], ts1...)
 	storeTesseractsInDB(t, serverSyncers[0], ts2...)
@@ -246,7 +244,7 @@ func TestFullSync_ChooseBestPeer(t *testing.T) {
 	expectedEvents := SyncEvents{
 		bucketSync:    1,
 		SystemAccSync: 1,
-		accounts:      make(map[common.Address]AccountSpecificEvents),
+		accounts:      make(map[identifiers.Address]AccountSpecificEvents),
 	}
 
 	for addr, height := range accountsToSync {
@@ -257,6 +255,8 @@ func TestFullSync_ChooseBestPeer(t *testing.T) {
 	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, false, ts1...)
 	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, false, ts2...)
 	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, false, ts3...)
+	checkJobQueue(t, clientSyncer)
+	checkJobQueue(t, serverSyncers...)
 }
 
 // TestSync_FromBroadcastedTesseract checks if client can sync from tesseract broadcast by server
@@ -293,7 +293,7 @@ func TestSync_FromBroadcastedTesseract(t *testing.T) {
 		servers[0],
 		&utils.TypeMux{},
 		&MockAgora{
-			newSession: func(address common.Address) (syncer.Session, error) {
+			newSession: func(address identifiers.Address) (syncer.Session, error) {
 				return newMockSession(address), nil
 			},
 		},
@@ -336,11 +336,11 @@ func TestSync_FromBroadcastedTesseract(t *testing.T) {
 
 	time.Sleep(600 * time.Millisecond)
 
-	accountsToSync := map[common.Address]int{
+	accountsToSync := map[identifiers.Address]int{
 		addresses[2]: 3,
 	}
 
-	newTesseracts := generateTesseracts(t, addresses[2], 0, 3, common.NilHash, 1)
+	newTesseracts := generateTesseracts(t, 0, 3, common.NilHash, addresses[2])
 
 	clientSyncer.agora = newMockAgora()
 	storeTesseractsInSession(t, clientSyncer, newTesseracts...)
@@ -349,7 +349,7 @@ func TestSync_FromBroadcastedTesseract(t *testing.T) {
 	expectedEvents := SyncEvents{
 		bucketSync:    0,
 		SystemAccSync: 0,
-		accounts:      make(map[common.Address]AccountSpecificEvents),
+		accounts:      make(map[identifiers.Address]AccountSpecificEvents),
 	}
 
 	for addr, height := range accountsToSync {
@@ -358,6 +358,7 @@ func TestSync_FromBroadcastedTesseract(t *testing.T) {
 
 	SubscribeAndListenForSyncEvents(t, ctx, testingLogger(t.Name()), clientSyncer.mux, expectedEvents)
 	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, false, newTesseracts...)
+	checkJobQueue(t, clientSyncer, serverSyncer)
 }
 
 // TestSync_FromRejoining checks When client restarted, sarga tesseracts should sync through agora
@@ -397,7 +398,7 @@ func TestSync_FromRejoining(t *testing.T) {
 		servers[0],
 		&utils.TypeMux{},
 		&MockAgora{
-			newSession: func(address common.Address) (syncer.Session, error) {
+			newSession: func(address identifiers.Address) (syncer.Session, error) {
 				return newMockSession(address), nil
 			},
 		},
@@ -414,7 +415,7 @@ func TestSync_FromRejoining(t *testing.T) {
 		servers[1],
 		&utils.TypeMux{},
 		&MockAgora{
-			newSession: func(address common.Address) (syncer.Session, error) {
+			newSession: func(address identifiers.Address) (syncer.Session, error) {
 				return newMockSession(address), nil
 			},
 		},
@@ -426,7 +427,7 @@ func TestSync_FromRejoining(t *testing.T) {
 	)
 
 	addresses := tests.GetAddresses(t, 3)
-	accountsToSync := map[common.Address]int{
+	accountsToSync := map[identifiers.Address]int{
 		common.GuardianLogicAddr: 4,
 		common.SargaAddress:      4,
 		addresses[0]:             4,
@@ -460,7 +461,7 @@ func TestSync_FromRejoining(t *testing.T) {
 	clientCtx, clientCancel = context.WithTimeout(context.Background(), maxTimeout)
 	defer clientCancel()
 
-	accountsToSync = map[common.Address]int{
+	accountsToSync = map[identifiers.Address]int{
 		addresses[2]:        4,
 		common.SargaAddress: 8,
 	}
@@ -468,9 +469,9 @@ func TestSync_FromRejoining(t *testing.T) {
 	metaInfo, err := serverSyncer.db.GetAccountMetaInfo(common.SargaAddress)
 	require.NoError(t, err)
 
-	sargaTesseracts := generateTesseracts(t, common.SargaAddress, int(metaInfo.Height+1), 8, metaInfo.TesseractHash, 1)
+	sargaTesseracts := generateTesseracts(t, int(metaInfo.Height+1), 8, metaInfo.TesseractHash, common.SargaAddress)
 
-	newTesseracts := generateTesseracts(t, addresses[2], 0, 4, common.NilHash, 1)
+	newTesseracts := generateTesseracts(t, 0, 4, common.NilHash, addresses[2])
 	storeTesseractsInDB(t, serverSyncer, newTesseracts...)
 	storeTesseractsInDB(t, serverSyncer, sargaTesseracts...)
 
@@ -504,7 +505,7 @@ func TestSync_FromRejoining(t *testing.T) {
 	require.True(t, ok)
 
 	for _, ts := range newTesseracts {
-		mockAgora.addSession(mockSession, cid.AccountCID(ts.StateHash()))
+		mockAgora.addSession(mockSession, cid.AccountCID(ts.StateHash(addresses[2])))
 	}
 
 	err = clientSyncer.Start(1)
@@ -513,7 +514,7 @@ func TestSync_FromRejoining(t *testing.T) {
 	expectedEvents := SyncEvents{
 		bucketSync:    1,
 		SystemAccSync: 1,
-		accounts: map[common.Address]AccountSpecificEvents{
+		accounts: map[identifiers.Address]AccountSpecificEvents{
 			common.SargaAddress: newAccountSpecificEvents(0, 1, 5, 8),
 			addresses[2]:        newAccountSpecificEvents(1, 1, 0, 4),
 		},
@@ -523,6 +524,7 @@ func TestSync_FromRejoining(t *testing.T) {
 
 	newTesseracts = append(newTesseracts, sargaTesseracts...)
 	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, false, newTesseracts...)
+	checkJobQueue(t, clientSyncer, serverSyncer)
 }
 
 // TestSync_ThroughExecution checks if client can sync from tesseract broadcast by server
@@ -563,7 +565,7 @@ func TestSync_ThroughExecution(t *testing.T) {
 		servers[0],
 		&utils.TypeMux{},
 		&MockAgora{
-			newSession: func(address common.Address) (syncer.Session, error) {
+			newSession: func(address identifiers.Address) (syncer.Session, error) {
 				return newMockSession(address), nil
 			},
 		},
@@ -602,7 +604,7 @@ func TestSync_ThroughExecution(t *testing.T) {
 	time.Sleep(600 * time.Millisecond)
 
 	addresses := tests.GetAddresses(t, 3)
-	accountsToSync := map[common.Address]int{
+	accountsToSync := map[identifiers.Address]int{
 		addresses[0]: 4,
 		addresses[1]: 4,
 		addresses[2]: 4,
@@ -614,7 +616,7 @@ func TestSync_ThroughExecution(t *testing.T) {
 	expectedEvents := SyncEvents{
 		bucketSync:    0,
 		SystemAccSync: 0,
-		accounts:      make(map[common.Address]AccountSpecificEvents),
+		accounts:      make(map[identifiers.Address]AccountSpecificEvents),
 	}
 
 	for addr, height := range accountsToSync {
@@ -623,6 +625,7 @@ func TestSync_ThroughExecution(t *testing.T) {
 
 	SubscribeAndListenForSyncEvents(t, ctx, testingLogger(t.Name()), clientSyncer.mux, expectedEvents)
 	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, true, newTesseracts...)
+	checkJobQueue(t, clientSyncer, serverSyncer)
 }
 
 // TestFullSync_RemoveBestPeer, makes sure that the client syncs to the highest heights for all accounts,
@@ -661,7 +664,7 @@ func TestFullSync_RemoveBestPeer(t *testing.T) {
 
 	mux := &utils.TypeMux{}
 	jq := &JobQueue{
-		jobs: make(map[common.Address]*SyncJob),
+		jobs: make(map[identifiers.Address]*SyncJob),
 		mux:  mux,
 	}
 
@@ -671,7 +674,7 @@ func TestFullSync_RemoveBestPeer(t *testing.T) {
 		servers[2],
 		mux,
 		&MockAgora{
-			newSession: func(address common.Address) (syncer.Session, error) {
+			newSession: func(address identifiers.Address) (syncer.Session, error) {
 				return newMockSession(address), nil
 			},
 		},
@@ -701,7 +704,7 @@ func TestFullSync_RemoveBestPeer(t *testing.T) {
 
 	addr := tests.RandomAddress(t)
 
-	accountsToSync := map[common.Address]int{
+	accountsToSync := map[identifiers.Address]int{
 		common.GuardianLogicAddr: 1,
 		common.SargaAddress:      1,
 		addr:                     1,
@@ -735,7 +738,7 @@ func TestFullSync_RemoveBestPeer(t *testing.T) {
 		expectedEvents := SyncEvents{
 			bucketSync:    1,
 			SystemAccSync: 1,
-			accounts:      make(map[common.Address]AccountSpecificEvents),
+			accounts:      make(map[identifiers.Address]AccountSpecificEvents),
 		}
 
 		for addr, height := range accountsToSync {
@@ -770,6 +773,8 @@ func TestFullSync_RemoveBestPeer(t *testing.T) {
 	wg.Wait()
 
 	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, false, ts...)
+	checkJobQueue(t, clientSyncer)
+	checkJobQueue(t, serverSyncers...)
 }
 
 // TestJobProcessor makes sure sync tesseract routine not blocked
@@ -818,7 +823,7 @@ func TestJobProcessor_checkSyncTesseractNotBlocked(t *testing.T) {
 		servers[2],
 		&utils.TypeMux{},
 		&MockAgora{
-			newSession: func(address common.Address) (syncer.Session, error) {
+			newSession: func(address identifiers.Address) (syncer.Session, error) {
 				return newMockSession(address), nil
 			},
 		},
@@ -846,11 +851,11 @@ func TestJobProcessor_checkSyncTesseractNotBlocked(t *testing.T) {
 
 	addr := tests.RandomAddress(t)
 	expectedHeight := 12
-	accountsToSync := map[common.Address]int{
+	accountsToSync := map[identifiers.Address]int{
 		addr: expectedHeight,
 	}
 
-	ts := generateTesseracts(t, addr, 0, accountsToSync[addr], common.NilHash, 1)
+	ts := generateTesseracts(t, 0, accountsToSync[addr], common.NilHash, addr)
 
 	storeTesseractsInDB(t, serverSyncers[0], ts[:8]...)
 	storeTesseractsInDB(t, serverSyncers[1], ts...)
@@ -884,7 +889,7 @@ func TestJobProcessor_checkSyncTesseractNotBlocked(t *testing.T) {
 	require.NoError(t, err)
 
 	expectedEvents := SyncEvents{
-		accounts: make(map[common.Address]AccountSpecificEvents),
+		accounts: make(map[identifiers.Address]AccountSpecificEvents),
 	}
 
 	for addr, height := range accountsToSync {
@@ -893,6 +898,8 @@ func TestJobProcessor_checkSyncTesseractNotBlocked(t *testing.T) {
 
 	SubscribeAndListenForSyncEvents(t, ctx, testingLogger(t.Name()), clientSyncer.mux, expectedEvents)
 	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, false, ts...)
+	checkJobQueue(t, clientSyncer)
+	checkJobQueue(t, serverSyncers...)
 }
 
 func TestSyncJobFromCanonicalInfo(t *testing.T) {
@@ -1050,7 +1057,7 @@ func TestGetSyncJobInfo(t *testing.T) {
 	count := 1
 	addrs := tests.GetAddresses(t, 2)
 	bestPeers := make(map[kramaid.KramaID]struct{})
-	testKramaIDs := tests.GetTestKramaIDs(t, 1)
+	testKramaIDs := tests.RandomKramaIDs(t, 1)
 	bestPeers[testKramaIDs[0]] = struct{}{}
 
 	jobs := createSyncJobs(
@@ -1071,7 +1078,7 @@ func TestGetSyncJobInfo(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		addr          common.Address
+		addr          identifiers.Address
 		expectedError error
 	}{
 		{
@@ -1085,7 +1092,7 @@ func TestGetSyncJobInfo(t *testing.T) {
 		},
 		{
 			name:          "nil address, return invalid address error",
-			addr:          common.NilAddress,
+			addr:          identifiers.NilAddress,
 			expectedError: common.ErrInvalidAddress,
 		},
 	}
@@ -1162,10 +1169,11 @@ func TestTesseractValidator(t *testing.T) {
 	rawInfo, err := info.Bytes()
 	require.NoError(t, err)
 
-	tsMsg := message.TesseractMessage{
+	tsMsg := message.TesseractMsg{
 		RawTesseract: rawTS,
-		Delta: map[common.Hash][]byte{
-			testTesseract.ICSHash(): rawInfo,
+		IxnsHashes:   tests.GetHashes(t, 1),
+		Extra: map[string][]byte{
+			testTesseract.ICSHash().String(): rawInfo,
 		},
 	}
 
@@ -1277,6 +1285,64 @@ func TestTesseractValidator(t *testing.T) {
 			if testcase.postTestFn != nil {
 				testcase.postTestFn(testTesseract)
 			}
+		})
+	}
+}
+
+func TestIsAnyOtherParticipantStored(t *testing.T) {
+	mockDB := NewMockDB()
+	s := Syncer{
+		db:     mockDB,
+		logger: hclog.NewNullLogger(),
+	}
+
+	addresses := tests.GetAddresses(t, 3)
+	heights := []uint64{99, 33, 21}
+
+	ts := tests.CreateTesseract(t, &tests.CreateTesseractParams{
+		Addresses: addresses,
+		Heights:   heights,
+	})
+
+	for i := 0; i < 2; i++ {
+		mockDB.setAccMetaInfoAt(addresses[i], heights[i])
+	}
+
+	testcases := []struct {
+		name          string
+		msg           *TesseractInfo
+		expectedValue bool
+	}{
+		{
+			name: "this participant is already stored",
+			msg: &TesseractInfo{
+				addr:      addresses[0],
+				tesseract: ts,
+			},
+			expectedValue: false,
+		},
+		{
+			name: "this participant is not stored and other participants stored",
+			msg: &TesseractInfo{
+				addr:      addresses[2],
+				tesseract: ts,
+			},
+			expectedValue: true,
+		},
+		{
+			name: "all participants are not stored",
+			msg: &TesseractInfo{
+				addr:      addresses[0],
+				tesseract: tests.CreateTesseract(t, nil),
+			},
+			expectedValue: false,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			isStored := s.isAnyOtherParticipantStored(test.msg)
+			require.Equal(t, test.expectedValue, isStored)
 		})
 	}
 }

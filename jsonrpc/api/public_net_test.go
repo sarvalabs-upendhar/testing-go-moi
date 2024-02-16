@@ -3,9 +3,9 @@ package api
 import (
 	"testing"
 
+	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/stretchr/testify/require"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/common/tests"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 )
@@ -15,16 +15,16 @@ import (
 func TestPublicNetAPI_Peers(t *testing.T) {
 	network := NewMockNetwork(t)
 	netAPI := NewPublicNetAPI(network)
-	peersList := tests.GetTestKramaIDs(t, 5)
+	peersList := tests.RandomKramaIDs(t, 5)
 
 	testcases := []struct {
 		name         string
-		expectedList []id.KramaID
+		expectedList []kramaid.KramaID
 		testFn       func()
 	}{
 		{
 			name:         "Should return an empty list if no Krama ID's in peersList",
-			expectedList: make([]id.KramaID, 0),
+			expectedList: make([]kramaid.KramaID, 0),
 		},
 		{
 			name: "Returns a slice of Krama ID's connected to a client",

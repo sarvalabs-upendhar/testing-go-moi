@@ -5,22 +5,12 @@ import (
 	"log"
 	"sync"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-
 	"github.com/hashicorp/go-hclog"
-
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
 )
-
-// RoundVoteSet is a struct that represents a set for a votes for a single round.
-type RoundVoteSet struct {
-	// Represents the pre-votes for the round
-	Prevotes *VoteSet
-
-	// Represents the pre-commits for the round
-	Precommits *VoteSet
-}
 
 // HeightVoteSet is a struct that represents a set of votes across multiple heights and votes
 type HeightVoteSet struct {
@@ -30,7 +20,7 @@ type HeightVoteSet struct {
 	chainIDs []string
 
 	// Represents the slice of heights tracked by the voteset
-	heights map[common.Address]uint64
+	heights map[identifiers.Address]uint64
 
 	// Represents the cluster state
 	cs *ktypes.ClusterState
@@ -43,7 +33,7 @@ type HeightVoteSet struct {
 
 	// Represents a mapping of peer IDs to a slice of rounds that the peer is catching up on.
 	// A peer will have at most 2 rounds in its catchup.
-	peerCatchupRounds map[id.KramaID][]int32
+	peerCatchupRounds map[kramaid.KramaID][]int32
 
 	// Represents a synchronization mutex for the voteset
 	mtx sync.Mutex
@@ -53,7 +43,7 @@ type HeightVoteSet struct {
 // Accepts a slice of chainIDs, heights and the set of validators.
 func NewHeightVoteSet(
 	chainIDs []string,
-	heights map[common.Address]uint64,
+	heights map[identifiers.Address]uint64,
 	valset *ktypes.ClusterState,
 	logger hclog.Logger,
 ) *HeightVoteSet {
@@ -62,7 +52,7 @@ func NewHeightVoteSet(
 		logger:            logger.Named("Height-VoteSet"),
 		chainIDs:          chainIDs,
 		mtx:               sync.Mutex{},
-		peerCatchupRounds: make(map[id.KramaID][]int32),
+		peerCatchupRounds: make(map[kramaid.KramaID][]int32),
 	}
 	// Reset the HVS and return it
 	hvs.Reset(heights, valset)
@@ -72,7 +62,7 @@ func NewHeightVoteSet(
 
 // Reset is a method of HeightVoteSet that resets the vote set.
 // Accepts a slice of heights and a set of validators to assign to the height vote set.
-func (hvs *HeightVoteSet) Reset(heights map[common.Address]uint64, valset *ktypes.ClusterState) {
+func (hvs *HeightVoteSet) Reset(heights map[identifiers.Address]uint64, valset *ktypes.ClusterState) {
 	// Acquire lock
 	hvs.mtx.Lock()
 	defer hvs.mtx.Unlock()
@@ -90,10 +80,10 @@ func (hvs *HeightVoteSet) Reset(heights map[common.Address]uint64, valset *ktype
 	hvs.round = 0
 }
 
-// AddVote is a method of HeightVoteSet that adds a new vote for a peer id.
+// addVote is a method of HeightVoteSet that adds a new vote for a peer id.
 // Adds the vote the voteset that corresponds to the vote round and type.
 // If the peer has more than two catchup rounds, the vote is not added.
-func (hvs *HeightVoteSet) AddVote(v *ktypes.Vote, peerID id.KramaID) (bool, error) {
+func (hvs *HeightVoteSet) addVote(v *ktypes.Vote, peerID kramaid.KramaID) (bool, error) {
 	// Acquire lock
 	hvs.mtx.Lock()
 	defer hvs.mtx.Unlock()
@@ -111,20 +101,20 @@ func (hvs *HeightVoteSet) AddVote(v *ktypes.Vote, peerID id.KramaID) (bool, erro
 			// Add the round to the catch up rounds and the voteset
 			hvs.peerCatchupRounds[peerID] = append(rounds, v.Round)
 
-			return vs.AddVote(v, peerID)
+			return vs.AddVote(v)
 		} else {
 			return false, errors.New("could not add vote. peer has more than 2 catchup rounds")
 		}
 	} else {
 		// Add the vote to the voteset
-		return vs.AddVote(v, peerID)
+		return vs.AddVote(v)
 	}
 }
 
-// SetRound is a method of HeightVoteSet that sets the round for a given round value.
+// setRound is a method of HeightVoteSet that sets the round for a given round value.
 // Ensures that the given round value is greater than the current round or that the current round is not 0.
 // Adds all rounds between current round and given round if it does not exist already exist.
-func (hvs *HeightVoteSet) SetRound(round int32) {
+func (hvs *HeightVoteSet) setRound(round int32) {
 	// Acquire lock
 	hvs.mtx.Lock()
 	defer hvs.mtx.Unlock()
@@ -165,6 +155,31 @@ func (hvs *HeightVoteSet) addRound(r int32) {
 	}
 }
 
+func (hvs *HeightVoteSet) GetRoundBitVoteSet() map[int32]*ktypes.VoteBitSet {
+	hvs.mtx.Lock()
+	defer hvs.mtx.Unlock()
+
+	if len(hvs.roundVoteSets) == 0 {
+		return nil
+	}
+
+	// Create a copy of the map to avoid concurrency issues
+	rvs := make(map[int32]*ktypes.VoteBitSet, len(hvs.roundVoteSets))
+
+	for key, value := range hvs.roundVoteSets {
+		if key == -1 {
+			continue
+		}
+
+		set := value.VoteBitSet()
+		if set != nil {
+			rvs[key] = set
+		}
+	}
+
+	return rvs
+}
+
 // getVoteSet is a method of HeightVoteSet that retrieves the VoteSet for a given vote type and round.
 // Returns nil if round does not exist and panics if the votetype is invalid.
 func (hvs *HeightVoteSet) getVoteSet(round int32, votetype ktypes.ConsensusMsgType) *VoteSet {
@@ -192,6 +207,59 @@ func (hvs *HeightVoteSet) getVoteSet(round int32, votetype ktypes.ConsensusMsgTy
 	return nil
 }
 
+func (hvs *HeightVoteSet) GetVoteSet(round int32, votetype ktypes.ConsensusMsgType) *VoteSet {
+	hvs.mtx.Lock()
+	defer hvs.mtx.Unlock()
+
+	return hvs.getVoteSet(round, votetype)
+}
+
+func (hvs *HeightVoteSet) GetVotes(roundVoteSet map[int32]*ktypes.VoteBitSet) []*ktypes.Vote {
+	hvs.mtx.Lock()
+	defer hvs.mtx.Unlock()
+
+	votes := make([]*ktypes.Vote, 0)
+
+	for round, voteBitSet := range roundVoteSet {
+		if _, ok := hvs.roundVoteSets[round]; !ok {
+			continue
+		}
+
+		if voteBitSet.Prevotes != nil && !voteBitSet.Prevotes.IsEmpty() {
+			prevotes := hvs.getVoteSet(round, ktypes.PREVOTE)
+			for _, valIndex := range voteBitSet.Prevotes.GetTrueIndices() {
+				prevotes.mtx.RLock()
+
+				v, err := prevotes.getVoteByIndex(valIndex)
+				if err != nil {
+					continue
+				}
+
+				votes = append(votes, v)
+				prevotes.mtx.RUnlock()
+			}
+		}
+
+		if voteBitSet.Precommits != nil && !voteBitSet.Precommits.IsEmpty() {
+			preCommits := hvs.getVoteSet(round, ktypes.PRECOMMIT)
+			for _, valIndex := range voteBitSet.Precommits.GetTrueIndices() {
+				preCommits.mtx.RLock()
+
+				v, err := preCommits.getVoteByIndex(valIndex)
+				if err != nil {
+					continue
+				}
+
+				votes = append(votes, v)
+
+				preCommits.mtx.RUnlock()
+			}
+		}
+	}
+
+	return votes
+}
+
 // getPrevotes is a method of HeightVoteSet that retrieves the prevotes from the set for a given round value.
 func (hvs *HeightVoteSet) getPrevotes(round int32) *VoteSet {
 	// Acquire lock
@@ -213,8 +281,8 @@ func (hvs *HeightVoteSet) getPrecommits(round int32) *VoteSet {
 }
 
 // POLInfo is a method of HeightVoteSet that retrieves the last round with a Proof of Lock.
-// Returns the round number and the tesseract grid id with the lock.
-func (hvs *HeightVoteSet) POLInfo() (int32, *common.TesseractGridID) {
+// Returns the round number and the tesseract hash with the lock.
+func (hvs *HeightVoteSet) POLInfo() (int32, common.Hash) {
 	// Acquire lock
 	hvs.mtx.Lock()
 	defer hvs.mtx.Unlock()
@@ -224,13 +292,13 @@ func (hvs *HeightVoteSet) POLInfo() (int32, *common.TesseractGridID) {
 		// Get the PREVOTE's for the round
 		rvs := hvs.getVoteSet(r, ktypes.PREVOTE)
 
-		// If 2/3 majority exists for round, return the grid id and the round value
-		gridid, ok := rvs.TwoThirdMajority()
+		// If 2/3 majority exists for round, return the tesseract hash and the round value
+		tsHash, ok := rvs.TwoThirdMajority()
 		if ok {
-			return r, gridid
+			return r, tsHash
 		}
 	}
 
 	// If no round has a proof of lock, return empty
-	return -1, nil
+	return -1, common.NilHash
 }

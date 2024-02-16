@@ -6,10 +6,9 @@ import (
 	"log"
 	"sync"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-
 	"github.com/hashicorp/go-hclog"
 
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
 	"github.com/sarvalabs/go-moi/crypto"
@@ -20,7 +19,7 @@ type VoteSet struct {
 	logger hclog.Logger
 
 	// Represent the height for which the vote-set applies
-	heights map[common.Address]uint64
+	heights map[identifiers.Address]uint64
 
 	// Represents the round for which the vote-set applies
 	round int32
@@ -32,7 +31,7 @@ type VoteSet struct {
 	valset *ktypes.ClusterState
 
 	// Represents an access lock on the vote-set
-	mtx sync.Mutex
+	mtx sync.RWMutex
 
 	// Represents the sum of seen votes, discounting conflicts
 	sum []int32
@@ -50,8 +49,8 @@ type VoteSet struct {
 	// Represents the tesseractVoteSets in the vote-set. The
 	votesByTesseract map[string]*tesseractVoteSet // string(blockHash|blockParts) -> tesseractVotes
 
-	// Represents the Tesseract Grid id voted for by atleast 2/3rds
-	maj23 *common.TesseractGridID
+	// Represents the Tesseract voted for by atleast 2/3rds
+	maj23 *common.Hash
 
 	// Represents a mapping of peers to their maj23s
 	peermaj23s map[string]common.Hash
@@ -60,7 +59,7 @@ type VoteSet struct {
 // NewVoteSet is a constructor function that generates and returns a new VoteSet.
 // Accepts a slice of heights, the vote round, the type of votes in the set and a set of validators for the VoteSet.
 func NewVoteSet(
-	heights map[common.Address]uint64,
+	heights map[identifiers.Address]uint64,
 	round int32,
 	voteType ktypes.ConsensusMsgType,
 	validatorSet *ktypes.ClusterState,
@@ -70,12 +69,12 @@ func NewVoteSet(
 	logger.Info("Creating new vote set with validators.", "size", validatorSet.Size())
 
 	return &VoteSet{
-		logger:           logger.Named("Vote-Set"),
+		logger:           logger.Named("Votes-Set"),
 		heights:          heights,
 		round:            round,
 		votetype:         voteType,
 		valset:           validatorSet,
-		mtx:              sync.Mutex{},
+		mtx:              sync.RWMutex{},
 		votes:            make([]*ktypes.Vote, validatorSet.Size()),
 		votingPowerSum:   make([]int32, 3),
 		votesBitArray:    common.NewArrayOfBits(validatorSet.Size()),
@@ -85,19 +84,19 @@ func NewVoteSet(
 	}
 }
 
-// getVote is a method of Vote that retrieves a particular vote from the set.
-// Accepts a validator index as an int32 and a tesseract grid id as a types.Hash.
+// getVote is a method of voteset that retrieves a particular vote from the set.
+// Accepts a validator index as an int32 and a tesseract hash
 // Returns the Vote and a bool indicating the success status of the fetch.
-func (vs *VoteSet) getVote(valIndex int32, gridID common.Hash) (vote *ktypes.Vote, ok bool) {
+func (vs *VoteSet) getVote(valIndex int32, tsHash common.Hash) (vote *ktypes.Vote, ok bool) {
 	// Attempt to retrieve the vote from the slice of votes
-	// Return the vote if its gridID hash matches the given hash.
-	if existingVote := vs.votes[valIndex]; existingVote != nil && existingVote.GridID.Hash == gridID {
+	// Return the vote if its ts hash matches the given hash.
+	if existingVote := vs.votes[valIndex]; existingVote != nil && existingVote.TSHash == tsHash {
 		return existingVote, true
 	}
 
-	// Attempt to retrieve the vote from the tesseractVote map using the gridID as
+	// Attempt to retrieve the vote from the tesseractVote map using the ts hash as
 	// the key and then the index from that with the index and return it if found.
-	if existingVote := vs.votesByTesseract[string(gridID.Bytes())].getByIndex(valIndex); existingVote != nil {
+	if existingVote := vs.votesByTesseract[string(tsHash.Bytes())].getByIndex(valIndex); existingVote != nil {
 		return existingVote, true
 	}
 
@@ -113,8 +112,8 @@ func (vs *VoteSet) HasMajority() bool {
 	}
 
 	// Acquire lock
-	vs.mtx.Lock()
-	defer vs.mtx.Unlock()
+	vs.mtx.RLock()
+	defer vs.mtx.RUnlock()
 
 	return vs.maj23 != nil
 }
@@ -127,8 +126,8 @@ func (vs *VoteSet) HasMajorityAny() bool {
 	}
 
 	// Acquire lock
-	vs.mtx.Lock()
-	defer vs.mtx.Unlock()
+	vs.mtx.RLock()
+	defer vs.mtx.RUnlock()
 
 	for index, sumVal := range vs.sum {
 		// If sumVal for a given index has 2/3 majority, return true
@@ -141,42 +140,42 @@ func (vs *VoteSet) HasMajorityAny() bool {
 	return true
 }
 
-// TwoThirdMajority is a method of VoteSet that returns a TesseractGridID that 2/3 majority has agreed
+// TwoThirdMajority is a method of VoteSet that returns a TesseractHash that 2/3 majority has agreed
 // on and a boolean reflecting if that majority has been reached in the first place.
-func (vs *VoteSet) TwoThirdMajority() (tesseractGroupID *common.TesseractGridID, ok bool) {
+func (vs *VoteSet) TwoThirdMajority() (hash common.Hash, ok bool) {
 	// No majority if vote-set is null
 	if vs == nil {
-		return nil, false
+		return common.NilHash, false
 	}
 
 	// Acquire lock
-	vs.mtx.Lock()
-	defer vs.mtx.Unlock()
+	vs.mtx.RLock()
+	defer vs.mtx.RUnlock()
 
 	if vs.maj23 != nil {
-		// Return the grid id agreed on by the majority of votes
-		return vs.maj23, true
+		// Return the ts hash agreed on by the majority of votes
+		return *vs.maj23, true
 	}
 
 	// No majority
-	return nil, false
+	return common.NilHash, false
 }
 
 // AddVote is a method of VoteSet that adds a vote to the set.
 // The vote and the validator who placed the vote are verified by checking the vote specs,
 // signatures and addresses and then added to the set using the addVerifiedVote method.
-func (vs *VoteSet) AddVote(v *ktypes.Vote, peerID id.KramaID) (added bool, err error) {
+func (vs *VoteSet) AddVote(v *ktypes.Vote) (added bool, err error) {
 	// Acquire lock
 	vs.mtx.Lock()
 	defer vs.mtx.Unlock()
-	//	log.Println("Grid id", v.GridID.Hash, v.GridID.Parts.Hashes)
+
 	if v == nil {
 		// Empty votes are invalid
 		return false, errors.New("invalid vote")
 	}
 
 	// Retrieve the validator index and address
-	tesseractGroupID := v.GridID.Hash
+	tesseractGroupID := v.TSHash
 
 	valIndex := v.ValidatorIndex
 	if valIndex < 0 {
@@ -184,7 +183,7 @@ func (vs *VoteSet) AddVote(v *ktypes.Vote, peerID id.KramaID) (added bool, err e
 	}
 
 	// Check that heights and round match for the vote and voteset
-	if !areVoteHeightsEqual(v.GridID.Parts.Grid, vs.heights) || (v.Round != vs.round) || (v.Type != vs.votetype) {
+	if !areVoteHeightsEqual(v.Heights, vs.heights) || (v.Round != vs.round) || (v.Type != vs.votetype) {
 		return false, errors.New("invalid round and height details")
 	}
 
@@ -195,7 +194,7 @@ func (vs *VoteSet) AddVote(v *ktypes.Vote, peerID id.KramaID) (added bool, err e
 	}
 
 	// Validate that the validator address matches
-	if peerID != valKramaID {
+	if v.ValidatorKramaID != valKramaID {
 		return false, errors.New("validator address doesn't match with the validator set of the vote-set")
 	}
 
@@ -235,9 +234,26 @@ func (vs *VoteSet) AddVote(v *ktypes.Vote, peerID id.KramaID) (added bool, err e
 	return added, nil
 }
 
+// getVoteByIndex retrieves the vote at the specified index in the vote-set.
+func (vs *VoteSet) getVoteByIndex(index int) (*ktypes.Vote, error) {
+	if index < 0 || index >= len(vs.votes) {
+		return nil, errors.New("index out of bound")
+	}
+
+	return vs.votes[index], nil
+}
+
+// GetVoteBits returns the array of bits representing the presence of votes for each validator in the vote-set.
+func (vs *VoteSet) GetVoteBits() *common.ArrayOfBits {
+	vs.mtx.RLock()
+	defer vs.mtx.RUnlock()
+
+	return vs.votesBitArray.Copy()
+}
+
 func (vs *VoteSet) addVerifiedVote(
 	vote *ktypes.Vote,
-	gridID common.Hash,
+	tsHash common.Hash,
 	votePower int32,
 ) (added bool, conflicting *ktypes.Vote) {
 	// Fetch the index of the validator placing the vote and the sum index for that validator
@@ -250,16 +266,16 @@ func (vs *VoteSet) addVerifiedVote(
 
 	// Check if the vote already exists in the set of votes
 	if existingVote := vs.votes[valIndex]; existingVote != nil {
-		// Panic if the gridIDs match for the existing vote and new vote
-		if bytes.Equal(existingVote.GridID.Hash.Bytes(), gridID.Bytes()) {
+		// Panic if the ts hash match for the existing vote and new vote
+		if bytes.Equal(existingVote.TSHash.Bytes(), tsHash.Bytes()) {
 			return true, existingVote
 		} else {
 			// Set the conflicting vote
 			conflicting = existingVote
 		}
 
-		// Check if tesseract grid id of vote matches voteset's majority
-		if (vs.maj23 != nil) && vs.maj23.Hash == gridID {
+		// Check if tesseract hash of vote matches voteset's majority
+		if (vs.maj23 != nil) && *vs.maj23 == tsHash {
 			// Add the vote to the set and update the bit array to reflect that the vote for the validator exists
 			vs.votes[valIndex] = vote
 			vs.votesBitArray.SetIndex(int(valIndex), true)
@@ -273,8 +289,8 @@ func (vs *VoteSet) addVerifiedVote(
 		vs.updateSum(valIndex, votePower)
 	}
 
-	// Get the tesseract vote set for the tesseract grid id
-	tesseractVotes, ok := vs.votesByTesseract[string(gridID.Bytes())]
+	// Get the tesseract vote set for the tesseract hash
+	tesseractVotes, ok := vs.votesByTesseract[string(tsHash.Bytes())]
 	// If the tesseract vote set exists, and there is a conflicting vote while the tesseract vote has no maj23, return
 	if ok {
 		if conflicting != nil && !tesseractVotes.peermaj23 {
@@ -288,7 +304,7 @@ func (vs *VoteSet) addVerifiedVote(
 
 		// Create a new tesseract vote set and add it to the vote set to start tracking the tesseract
 		tesseractVotes = newTesseractVoteSet(len(vs.sum), false, vs.valset.Size())
-		vs.votesByTesseract[string(gridID.Bytes())] = tesseractVotes
+		vs.votesByTesseract[string(tsHash.Bytes())] = tesseractVotes
 	}
 
 	// Get the voting powers of the validators
@@ -299,13 +315,13 @@ func (vs *VoteSet) addVerifiedVote(
 	tesseractVotes.addVerifiedVote(sumIndex, vote, votePower)
 	postVoteSum := tesseractVotes.sum
 
-	vs.logger.Debug("### Printing quorum ###", "quorum", quorum, "grid-ID", gridID.Hex(), "sum", postVoteSum)
+	vs.logger.Debug("### Printing quorum ###", "quorum", quorum, "ts-hash", tsHash.Hex(), "sum", postVoteSum)
 
 	if vs.maj23 == nil {
 		// Check if the quorum threshold was just crossed. Only the first quorum reach is considered
 		if areGreater(postVoteSum, quorum) {
-			// Assign the tesseract grid id that 2/3 validators have agreed on.
-			vs.maj23 = vote.GridID
+			// Assign the tesseract hash that 2/3 validators have agreed on.
+			vs.maj23 = &vote.TSHash
 			// Add the votes from the tesseract votes into the vote-set
 			for i, vote := range tesseractVotes.votes {
 				if vote != nil {
@@ -347,4 +363,29 @@ func (vs *VoteSet) updateSum(valIndex int32, vp int32) {
 		vs.sum[index] += 1
 		vs.votingPowerSum[index] += vp
 	}
+}
+
+// RoundVoteSet is a struct that represents a set for a votes for a single round.
+type RoundVoteSet struct {
+	// Represents the pre-votes for the round
+	Prevotes *VoteSet
+
+	// Represents the pre-commits for the round
+	Precommits *VoteSet
+}
+
+func (rvs RoundVoteSet) VoteBitSet() *ktypes.VoteBitSet {
+	v := new(ktypes.VoteBitSet)
+
+	if rvs.Prevotes.GetVoteBits().IsEmpty() {
+		return nil
+	}
+
+	v.Prevotes = rvs.Prevotes.GetVoteBits()
+
+	if !rvs.Precommits.GetVoteBits().IsEmpty() {
+		v.Precommits = rvs.Precommits.GetVoteBits()
+	}
+
+	return v
 }

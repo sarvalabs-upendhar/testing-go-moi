@@ -9,17 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/go-moi/common/kramaid"
-	mudracommon "github.com/sarvalabs/go-moi/crypto/common"
-	"github.com/sarvalabs/go-moi/crypto/poi"
-	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
-	networkmsg "github.com/sarvalabs/go-moi/network/message"
-	"github.com/sarvalabs/go-moi/senatus"
-
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p-pubsub"
 	libp2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -29,6 +22,7 @@ import (
 	"github.com/libp2p/go-msgio"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 
@@ -37,6 +31,11 @@ import (
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/crypto"
+	mudracommon "github.com/sarvalabs/go-moi/crypto/common"
+	"github.com/sarvalabs/go-moi/crypto/poi"
+	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
+	networkmsg "github.com/sarvalabs/go-moi/network/message"
+	"github.com/sarvalabs/go-moi/senatus"
 )
 
 var (

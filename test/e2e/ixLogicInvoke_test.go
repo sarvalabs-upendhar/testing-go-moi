@@ -4,14 +4,14 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi/common/hexutil"
-	"github.com/sarvalabs/go-moi/jsonrpc/args"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
-
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/moiclient"
 )
 
@@ -30,7 +30,7 @@ func (te *TestEnvironment) logicInvoke(
 		Type:      common.IxLogicInvoke,
 		Nonce:     moiclient.GetLatestNonce(te.T(), te.moiClient, acc.Addr),
 		Sender:    acc.Addr,
-		FuelPrice: DefaulFuelPrice,
+		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
 		Payload:   payload,
 	}
@@ -46,7 +46,7 @@ func (te *TestEnvironment) logicInvoke(
 // 4. Ensure the receiver's balance is increased by the transfer amount.
 func validateLogicInvoke(
 	te *TestEnvironment,
-	sender common.Address,
+	sender identifiers.Address,
 	payload *common.LogicPayload,
 	ixHash common.Hash,
 ) {
@@ -95,7 +95,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 		logicPayload *common.LogicPayload
 		postTest     func(
 			te *TestEnvironment,
-			sender common.Address,
+			sender identifiers.Address,
 			payload *common.LogicPayload,
 			ixHash common.Hash,
 		)
@@ -145,7 +145,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 			name:   "logic isn't registered",
 			sender: sender,
 			logicPayload: &common.LogicPayload{
-				Logic: common.NewLogicIDv0(
+				Logic: identifiers.NewLogicIDv0(
 					true,
 					false,
 					false,

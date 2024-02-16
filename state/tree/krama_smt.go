@@ -8,6 +8,7 @@ import (
 	"github.com/decred/dcrd/crypto/blake256"
 	"github.com/munna0908/smt"
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/storage"
@@ -39,7 +40,7 @@ type KramaHashTree struct {
 }
 
 func NewKramaHashTree(
-	address common.Address,
+	address identifiers.Address,
 	root common.Hash,
 	db persistentDB,
 	hasher hash.Hash,
@@ -82,6 +83,11 @@ func (kht *KramaHashTree) Root() common.RootNode {
 func (kht *KramaHashTree) RootHash() (common.Hash, error) {
 	kht.mtx.RLock()
 	defer kht.mtx.RUnlock()
+
+	// avoid calculating root hash on empty tree
+	if kht.root.MerkleRoot == common.NilHash && !kht.db.IsDirty() {
+		return common.NilHash, nil
+	}
 
 	return kht.root.Hash()
 }

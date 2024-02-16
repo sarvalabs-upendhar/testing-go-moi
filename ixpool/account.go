@@ -5,6 +5,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sarvalabs/go-moi-identifiers"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/utils"
 )
@@ -168,7 +170,7 @@ type accountsMap struct {
 }
 
 // Initializes an account for the given address.
-func (m *accountsMap) initOnce(addr common.Address, nonce uint64) *account {
+func (m *accountsMap) initOnce(addr identifiers.Address, nonce uint64) *account {
 	a, _ := m.LoadOrStore(addr, &account{
 		enqueued:    newAccountQueue(),
 		promoted:    newAccountQueue(),
@@ -182,7 +184,7 @@ func (m *accountsMap) initOnce(addr common.Address, nonce uint64) *account {
 }
 
 // exists checks if an account exists within the map.
-func (m *accountsMap) exists(addr common.Address) bool {
+func (m *accountsMap) exists(addr identifiers.Address) bool {
 	_, ok := m.Load(addr)
 
 	return ok
@@ -193,7 +195,7 @@ func (m *accountsMap) getWaitPrimaries() *waitQueue {
 	waitQueue := newWaitQueue()
 
 	m.Range(func(key, value interface{}) bool {
-		addressKey, ok := key.(common.Address)
+		addressKey, ok := key.(identifiers.Address)
 		if !ok {
 			return false
 		}
@@ -223,7 +225,7 @@ func (m *accountsMap) getCostPrimaries() *pricedQueue {
 	priceQueue := newPricedQueue()
 
 	m.Range(func(key, value interface{}) bool {
-		addressKey, ok := key.(common.Address)
+		addressKey, ok := key.(identifiers.Address)
 		if !ok {
 			return false
 		}
@@ -248,7 +250,7 @@ func (m *accountsMap) getCostPrimaries() *pricedQueue {
 }
 
 // get returns the account associated with the given address.
-func (m *accountsMap) get(addr common.Address) *account {
+func (m *accountsMap) get(addr identifiers.Address) *account {
 	a, ok := m.Load(addr)
 	if !ok {
 		return nil
@@ -265,7 +267,7 @@ func (m *accountsMap) get(addr common.Address) *account {
 // promoted returns the number of all promoted interactions.
 func (m *accountsMap) promoted() (total uint64) { //nolint:unused
 	m.Range(func(key, value interface{}) bool {
-		addressKey, ok := key.(common.Address)
+		addressKey, ok := key.(identifiers.Address)
 		if !ok {
 			return false
 		}
@@ -284,7 +286,7 @@ func (m *accountsMap) promoted() (total uint64) { //nolint:unused
 }
 
 // getIxs returns the promoted and enqueued Interactions of the given address, depending on the flag.
-func (m *accountsMap) getIxs(addr common.Address, includeEnqueued bool) (
+func (m *accountsMap) getIxs(addr identifiers.Address, includeEnqueued bool) (
 	promoted, enqueued []*common.Interaction,
 ) {
 	account := m.get(addr)
@@ -312,13 +314,13 @@ func (m *accountsMap) getIxs(addr common.Address, includeEnqueued bool) (
 
 // allIxs returns all promoted and all enqueued Interactions, depending on the flag.
 func (m *accountsMap) allIxs(includeEnqueued bool) (
-	allPromoted, allEnqueued map[common.Address][]*common.Interaction,
+	allPromoted, allEnqueued map[identifiers.Address][]*common.Interaction,
 ) {
-	allPromoted = make(map[common.Address][]*common.Interaction)
-	allEnqueued = make(map[common.Address][]*common.Interaction)
+	allPromoted = make(map[identifiers.Address][]*common.Interaction)
+	allEnqueued = make(map[identifiers.Address][]*common.Interaction)
 
 	m.Range(func(key, value interface{}) bool {
-		addr, _ := key.(common.Address)
+		addr, _ := key.(identifiers.Address)
 		account := m.get(addr)
 
 		account.promoted.lock(false)

@@ -3,13 +3,12 @@ package session
 import (
 	"testing"
 
-	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/syncer/agora/block"
-	"github.com/sarvalabs/go-moi/syncer/cid"
-
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/syncer/agora/block"
+	"github.com/sarvalabs/go-moi/syncer/cid"
 )
 
 func TestRecordSessionInterest_MultipleAddress(t *testing.T) {
@@ -113,15 +112,15 @@ func TestInterestedSessions(t *testing.T) {
 }
 
 func TestDeleteSession(t *testing.T) {
-	cid1 := block.NewBlockFromRawData(0x00, []byte{1}).GetCid()
+	cid1 := block.NewAccountBlockFromRawData(0x00, []byte{1}).GetCid()
 	addr1 := tests.RandomAddress(t)
 	addr2 := tests.RandomAddress(t)
 
 	testcases := []struct {
 		name                string
 		cid                 cid.CID
-		wants               map[cid.CID]map[common.Address]bool
-		addr                common.Address
+		wants               map[cid.CID]map[identifiers.Address]bool
+		addr                identifiers.Address
 		deletedKeys         []cid.CID
 		expectedDeletedKeys []cid.CID
 		expectedWantsLength int
@@ -129,7 +128,7 @@ func TestDeleteSession(t *testing.T) {
 		{
 			name: "delete the last session that wants key",
 			cid:  cid1,
-			wants: map[cid.CID]map[common.Address]bool{
+			wants: map[cid.CID]map[identifiers.Address]bool{
 				cid1: {
 					addr1: true,
 				},
@@ -142,7 +141,7 @@ func TestDeleteSession(t *testing.T) {
 		{
 			name: "delete the session that wants key",
 			cid:  cid1,
-			wants: map[cid.CID]map[common.Address]bool{
+			wants: map[cid.CID]map[identifiers.Address]bool{
 				cid1: {
 					addr1: true,
 					addr2: true,

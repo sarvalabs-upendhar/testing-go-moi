@@ -4,21 +4,20 @@ import (
 	"context"
 	"time"
 
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/hashicorp/go-hclog"
+	"github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-msgio"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi/common/config"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-	"github.com/sarvalabs/go-moi/crypto"
-	networkmsg "github.com/sarvalabs/go-moi/network/message"
-	"github.com/sarvalabs/go-moi/senatus"
-
-	"github.com/hashicorp/go-hclog"
+	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/sarvalabs/go-moi/crypto"
 	"github.com/sarvalabs/go-moi/lattice"
+	networkmsg "github.com/sarvalabs/go-moi/network/message"
+	"github.com/sarvalabs/go-moi/senatus"
 )
 
 const (
@@ -37,7 +36,7 @@ type ReputationManager interface {
 type SubHandler struct {
 	ctx                 context.Context
 	ctxCancel           context.CancelFunc
-	id                  id.KramaID
+	id                  kramaid.KramaID
 	peers               *peerSet
 	ixpool              ixPool
 	chain               *lattice.ChainManager
@@ -54,7 +53,7 @@ type SubHandler struct {
 // NewSubHandler is a constructor function generates and returns a new subHandle object.
 // Accepts a KramaID, an event TypeMux, an IxPool, an ICS, a BFT engine and a Chain manager.
 func NewSubHandler(
-	id id.KramaID,
+	id kramaid.KramaID,
 	logger hclog.Logger,
 	server *Server,
 	reputationManager ReputationManager,

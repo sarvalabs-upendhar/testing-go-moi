@@ -1,12 +1,12 @@
 package compute
 
 import (
-	"log"
 	"sync"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-pisa"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -22,20 +22,21 @@ func init() {
 // Manager represents a type for managing interaction execution across multiple consensus clusters.
 // It also manages execution environment generation for logic execution.
 type Manager struct {
-	logger hclog.Logger
-	config *config.ExecutionConfig
-
+	logger    hclog.Logger
+	config    *config.ExecutionConfig
+	metrics   *Metrics
 	state     StateManager
 	executors sync.Map
 }
 
 // NewManager creates a new compute.Manager instance
 // for a given state interface, logger and ExecutionConfig
-func NewManager(state StateManager, logger hclog.Logger, config *config.ExecutionConfig) *Manager {
+func NewManager(state StateManager, logger hclog.Logger, config *config.ExecutionConfig, metrics *Metrics) *Manager {
 	return &Manager{
-		state:  state,
-		config: config,
-		logger: logger.Named("Compute-Manager"),
+		state:   state,
+		config:  config,
+		logger:  logger.Named("Compute-Manager"),
+		metrics: metrics,
 	}
 }
 
@@ -45,11 +46,10 @@ func (manager *Manager) SpawnExecutor() *IxExecutor {
 		mgr:   manager,
 		state: manager.state,
 
-		objects:   make(state.ObjectMap),
-		snapshots: make(state.ObjectMap),
-
-		receipts:     make(map[common.Hash]*common.Receipt),
-		commitHashes: make(map[common.Address]common.Hash),
+		baseline:     NewTransition(),
+		transition:   NewTransition(),
+		metrics:      manager.metrics,
+		commitHashes: make(common.AccStateHashes),
 	}
 }
 
@@ -59,29 +59,30 @@ func (manager *Manager) ExecuteInteractions(
 	ixs common.Interactions,
 	ctx *common.ExecutionContext,
 ) (
-	common.Receipts, error,
+	common.Receipts, common.AccStateHashes, error,
 ) {
 	// Spawn a new IxExecutor instance
 	executor := manager.SpawnExecutor()
 	// Execute all the given interactions
 	if err := executor.Execute(ixs, ctx); err != nil {
-		if err := executor.Revert(); err != nil {
-			log.Fatal(err) // todo: this should not happen
-		}
+		return nil, nil, err
+	}
 
-		return nil, err
+	// Update the state objects in the state manager
+	if err := manager.state.UpdateStateObjects(executor.transition.objects); err != nil {
+		return nil, nil, errors.Wrap(err, "failed to update state objects")
 	}
 
 	// Store the executor into the execution instances indexed by the cluster ID
 	manager.executors.Store(ctx.Cluster, executor)
 	// Generate the execution receipts and return
-	return executor.Receipts(), nil
+	return executor.Receipts(), executor.commitHashes, nil
 }
 
 func (manager *Manager) InteractionCall(
 	ctx *common.ExecutionContext,
 	ix *common.Interaction,
-	hashes map[common.Address]common.Hash,
+	hashes map[identifiers.Address]common.Hash,
 ) (*common.Receipt, error) {
 	// Fetch state objects for the interaction
 	objects, err := FetchIxStateObjects(manager.state, ix, hashes)
@@ -89,13 +90,17 @@ func (manager *Manager) InteractionCall(
 		return nil, err
 	}
 
+	transition := &Transition{
+		objects: objects,
+	}
+
 	// Run the interaction and return the receipt
-	return manager.runInteraction(ix, ctx, objects, true)
+	return manager.runInteraction(ix, ctx, transition, false)
 }
 
 func (manager *Manager) runInteraction(
 	ix *common.Interaction, ctx *common.ExecutionContext,
-	objects state.ObjectMap, useIxFuelLimit bool,
+	transition *Transition, useIxFuelLimit bool,
 ) (
 	receipt *common.Receipt, err error,
 ) {
@@ -104,27 +109,22 @@ func (manager *Manager) runInteraction(
 	if useIxFuelLimit {
 		// Determine the tank limit from the interaction
 		tank = NewFuelTank(ix.FuelLimit())
+
+		// Check that the sender has sufficient balance
+		if ok, _ := transition.objects.GetObject(ix.Sender()).HasSufficientFuel(ix.Cost()); !ok {
+			receipt = common.NewReceipt(ix)
+			receipt.Status = common.ReceiptFuelExhausted
+
+			return receipt, nil
+		}
 	} else {
 		// Determine the tank limit from the node configuration
 		tank = NewFuelTank(manager.config.FuelLimit)
 	}
 
-	// Check that the sender has sufficient balance
-	ok, err := objects.GetObject(ix.Sender()).HasSufficientFuel(ix.Cost())
-	if err != nil {
-		return nil, errors.Wrap(err, "execution failed: fuel check")
-	}
-
-	if !ok {
-		return nil, errors.Errorf("execution failed: insufficient fuel")
-	}
-
 	ixtype := ix.Type()
 	// Lookup the runner for the interaction type
-	runner, ok := LookupIxRunner(ixtype)
-	if !ok {
-		return nil, errors.Wrapf(common.ErrInvalidInteractionType, "execution failed (%v)", ixtype)
-	}
+	runner := lookupIxRunner(ixtype)
 
 	// Set up a defer function to recover from any panic
 	// that may occur while executing the interaction
@@ -137,15 +137,12 @@ func (manager *Manager) runInteraction(
 	}()
 
 	// Call the interaction runner and get the receipt
-	receipt, err = runner(ix, ctx, tank, objects)
-	if err != nil {
-		return nil, errors.Wrapf(err, "execution failed (%v)", ixtype)
-	}
+	receipt = runner(ix, ctx, tank, transition.objects)
 
 	return receipt, nil
 }
 
-// Revert reverts any state transition performed by an executor for a given Cluster ID.
+// Revert reverts any state transition performed by an executor for a given Cluster ID and deletes the dirty objects
 // Returns an error if no executor exists for the cluster ID or if any error occurs during the state revert.
 func (manager *Manager) Revert(cluster common.ClusterID) error {
 	// Attempt to load an executor instance for the cluster ID
@@ -160,11 +157,17 @@ func (manager *Manager) Revert(cluster common.ClusterID) error {
 		return common.ErrInterfaceConversion
 	}
 
+	for addr := range executor.transition.objects {
+		executor.state.Cleanup(addr)
+	}
+
 	// Revert executor state
-	return executor.Revert()
+	executor.transition = executor.baseline
+
+	return nil
 }
 
-// Cleanup removes the executor instance for the given Cluster ID, if one exists.
+// Cleanup removes the executor instance for the given Cluster ID if one exists.
 func (manager *Manager) Cleanup(cluster common.ClusterID) {
 	manager.executors.Delete(cluster)
 }

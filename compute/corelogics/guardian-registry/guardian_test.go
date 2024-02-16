@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-moi-identifiers"
 	pisatestlib "github.com/sarvalabs/go-pisa/testlib"
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/suite"
@@ -37,25 +38,31 @@ func (suite *GuardianTestSuite) SetupSuite() {
 	}
 
 	address := common.CreateAddressFromString("guardian-registry")
-	logicID := common.NewLogicIDv0(true, false, false, false, 0, address)
+	logicID := identifiers.NewLogicIDv0(true, false, false, false, 0, address)
 
-	consumed := suite.Initialize(logicID, manifest, address, common.HexToAddress(approverAddr1))
+	consumed := suite.Initialize(logicID, manifest, address, must(identifiers.NewAddressFromHex(approverAddr1)))
 	suite.Equal(uint64(4865), consumed)
 
 	input := SetupInput{
-		EnforceApprovals:     true,
-		EnforceNodeLimits:    true,
-		EnforceDeviceLimits:  true,
-		LimitKYC:             3,
-		LimitKYB:             5,
-		LimitDevice:          4,
-		Master:               "master",
-		Approvers:            []common.Address{common.HexToAddress(approverAddr1), common.HexToAddress(approverAddr2)},
-		PreApprovedKramaIDs:  []string{"abc", "def"},
-		PreApprovedAddresses: []common.Address{common.HexToAddress(guardAddr1), common.HexToAddress(guardAddr2)},
+		EnforceApprovals:    true,
+		EnforceNodeLimits:   true,
+		EnforceDeviceLimits: true,
+		LimitKYC:            3,
+		LimitKYB:            5,
+		LimitDevice:         4,
+		Master:              "master",
+		Approvers: []identifiers.Address{
+			must(identifiers.NewAddressFromHex(approverAddr1)),
+			must(identifiers.NewAddressFromHex(approverAddr2)),
+		},
+		PreApprovedKramaIDs: []string{"abc", "def"},
+		PreApprovedAddresses: []identifiers.Address{
+			must(identifiers.NewAddressFromHex(guardAddr1)),
+			must(identifiers.NewAddressFromHex(guardAddr2)),
+		},
 		Guardians: []Guardian{
-			{"master", "ghi", "xy-z0", []byte{0}, common.HexToAddress(guardAddr3), []byte{0}},
-			{"master", "ijk", "xy-z0", []byte{0}, common.HexToAddress(guardAddr4), []byte{0}},
+			{"master", "ghi", "xy-z0", []byte{0}, must(identifiers.NewAddressFromHex(guardAddr3)), []byte{0}},
+			{"master", "ijk", "xy-z0", []byte{0}, must(identifiers.NewAddressFromHex(guardAddr4)), []byte{0}},
 		},
 	}
 
@@ -73,10 +80,10 @@ type SetupInput struct {
 	LimitKYB    uint64 `polo:"limitKYB"`
 	LimitDevice uint64 `polo:"limitDevice"`
 
-	Master               string           `polo:"master"`
-	Approvers            []common.Address `polo:"approvers"`
-	PreApprovedKramaIDs  []string         `polo:"preApprovedKramaIDs"`
-	PreApprovedAddresses []common.Address `polo:"preApprovedAddresses"`
+	Master               string                `polo:"master"`
+	Approvers            []identifiers.Address `polo:"approvers"`
+	PreApprovedKramaIDs  []string              `polo:"preApprovedKramaIDs"`
+	PreApprovedAddresses []identifiers.Address `polo:"preApprovedAddresses"`
 
 	Guardians []Guardian `polo:"guardians"`
 }
@@ -86,7 +93,7 @@ type Guardian struct {
 	KramaID         string
 	DeviceID        string
 	PublicKey       []byte
-	IncentiveWallet common.Address
+	IncentiveWallet identifiers.Address
 	ExtraData       []byte
 }
 
@@ -146,7 +153,7 @@ func (suite *GuardianTestSuite) TestRegister() {
 		KramaID:         "kramaid-1",
 		DeviceID:        "xy-z1",
 		PublicKey:       []byte{0},
-		IncentiveWallet: common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000010"),
+		IncentiveWallet: must(identifiers.NewAddressFromHex("0x0000000000000000000000000000000000000000000000000000000000000010")), //nolint:lll
 		ExtraData:       []byte{0},
 	}, polo.DocStructs())
 
@@ -203,7 +210,7 @@ func (suite *GuardianTestSuite) TestUpdateGuardian() {
 		KramaID:         "kramaid-1",
 		DeviceID:        "xy-z2",
 		PublicKey:       []byte{0},
-		IncentiveWallet: common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000010"),
+		IncentiveWallet: must(identifiers.NewAddressFromHex("0x0000000000000000000000000000000000000000000000000000000000000010")), //nolint:lll
 		ExtraData:       []byte{0},
 	}
 
@@ -234,4 +241,12 @@ func (suite *GuardianTestSuite) TestAddIncentives() {
 	_, outputs, except = suite.Call("GetIncentives", map[string]any{"kramaID": "jkl"})
 	suite.Equal(int64(0x1f4), outputs["incentive"])
 	suite.Nil(except)
+}
+
+func must[T any](t T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+
+	return t
 }

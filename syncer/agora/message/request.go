@@ -2,19 +2,19 @@ package message
 
 import (
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 
-	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/syncer/cid"
 )
 
 type AgoraRequestMsg struct {
-	SessionID common.Address
+	SessionID identifiers.Address
 	StateHash cid.CID
 	WantList  []cid.CID
 }
 
-func (req *AgoraRequestMsg) GetSessionID() common.Address {
+func (req *AgoraRequestMsg) GetSessionID() identifiers.Address {
 	return req.SessionID
 }
 

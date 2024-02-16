@@ -1,15 +1,13 @@
 package types
 
 import (
-	"bytes"
-
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-	networkmsgs "github.com/sarvalabs/go-moi/network/message"
-
 	"github.com/pkg/errors"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"
+	networkmsgs "github.com/sarvalabs/go-moi/network/message"
 )
 
 type (
@@ -24,18 +22,20 @@ const (
 )
 
 type Vote struct {
-	Type           ConsensusMsgType
-	Round          int32
-	GridID         *common.TesseractGridID
-	Timestamp      int64
-	ValidatorIndex int32
-	Signature      []byte
+	Type             ConsensusMsgType
+	Round            int32
+	ValidatorIndex   int32
+	Timestamp        int64
+	Heights          map[identifiers.Address]uint64
+	TSHash           common.Hash
+	ValidatorKramaID kramaid.KramaID
+	Signature        []byte
 }
 
 type CanonicalVote struct {
 	Type   ConsensusMsgType
 	Round  int32
-	GridID *common.TesseractGridID
+	TSHash common.Hash
 }
 
 // Bytes polorizes and returns either the CanonicalVote in bytes or an error if failed to polorize.
@@ -54,7 +54,7 @@ func (v *Vote) SignBytes() ([]byte, error) {
 	canonicalVote := CanonicalVote{
 		Type:   v.Type,
 		Round:  v.Round,
-		GridID: v.GridID,
+		TSHash: v.TSHash,
 	}
 
 	rawData, err := polo.Polorize(canonicalVote)
@@ -84,13 +84,17 @@ func (v *Vote) FromBytes(bytes []byte) error {
 	return nil
 }
 
+func (v *Vote) Hash() (common.Hash, error) {
+	return common.PoloHash(*v)
+}
+
 func (v *Vote) Validate() error {
 	// TODO: Validate the vote
 	return nil
 }
 
 type WALMsg struct {
-	PeerID  id.KramaID
+	PeerID  kramaid.KramaID
 	MsgType networkmsgs.MsgType
 	Msg     []byte
 }
@@ -120,32 +124,29 @@ func (twm *TimedWALMessage) FromBytes(bytes []byte) error {
 
 type Proposal struct {
 	Type      ConsensusMsgType
-	Height    map[common.Address]uint64
+	Height    map[identifiers.Address]uint64
 	Round     int32
 	POLRound  int32
-	Grid      *TesseractGrid
-	GridID    *common.TesseractGridID
+	Tesseract *common.Tesseract
 	Timestamp int64
 	Signature []byte
 }
 
 // NewProposal is a constructor function that generates and returns a new Proposal.
-// Accepts the heights, round, POL round and a tesseract grid id.
+// Accepts the heights, round, POL round and a tesseract.
 // Timestamp of the proposal is set to Now()
 func NewProposal(
-	heights map[common.Address]uint64,
+	heights map[identifiers.Address]uint64,
 	round int32,
 	polround int32,
-	grid *TesseractGrid,
-	gridID *common.TesseractGridID,
+	ts *common.Tesseract,
 ) *Proposal {
 	return &Proposal{
-		Type:     PROPOSAL,
-		Height:   heights,
-		Round:    round,
-		POLRound: polround,
-		GridID:   gridID,
-		Grid:     grid,
+		Type:      PROPOSAL,
+		Height:    heights,
+		Round:     round,
+		POLRound:  polround,
+		Tesseract: ts,
 	}
 }
 
@@ -169,8 +170,7 @@ type Cmessage interface {
 // ConsensusMessage is a struct that represents an envelope for a consensus message.
 // Implements the Cmessage interface and wraps another message satisfying this interface.
 type ConsensusMessage struct {
-	// Represents the KipID of the message sender
-	PeerID id.KramaID
+	PeerID kramaid.KramaID
 
 	// Represents the wrapped message
 	Message Cmessage
@@ -184,10 +184,9 @@ func (c *ConsensusMessage) ICSMsg(clusterID common.ClusterID) (*ICSMSG, error) {
 	}
 
 	return &ICSMSG{
-		msgType,
-		msg,
-		c.PeerID,
-		string(clusterID),
+		ClusterID: clusterID,
+		MsgType:   msgType,
+		Payload:   msg,
 	}, nil
 }
 
@@ -231,6 +230,13 @@ func getRawMessage(message Cmessage) (networkmsgs.MsgType, []byte, error) {
 // Returns an error if message is not valid or could not be validated.
 func (c *ConsensusMessage) Validate() error {
 	return nil
+}
+
+type WantMessage struct {
+	PeerID   kramaid.KramaID
+	MsgType  ConsensusMsgType
+	MsgIdxs  []int32
+	RespChan chan []*Vote
 }
 
 // ProposalMessage is a struct that represents a Proposal consensus message.
@@ -280,52 +286,7 @@ func (m *VoteMessage) Bytes() ([]byte, error) {
 	return rawData, err
 }
 
-type TesseractGrid struct {
-	Hash       common.Hash
-	Total      int32
-	Tesseracts []*common.Tesseract
-}
-
-func (t *TesseractGrid) TesseractsCopy() []*common.Tesseract {
-	grid := make([]*common.Tesseract, 0, len(t.Tesseracts))
-	for _, v := range t.Tesseracts {
-		grid = append(grid, common.NewTesseract(v.Header(), v.Body(), v.Interactions(), v.Receipts(), v.Seal(), v.Sealer()))
-	}
-
-	return grid
-}
-
-// GetTesseractGridID creates and returns a new instance of TesseractGridID
-func (t *TesseractGrid) GetTesseractGridID() (*common.TesseractGridID, error) {
-	gridID := &common.TesseractGridID{
-		Hash: t.Hash,
-		Parts: &common.TesseractParts{
-			Total: t.Total,
-			Grid:  make(map[common.Address]common.TesseractHeightAndHash),
-		},
-	}
-
-	for _, tesseract := range t.Tesseracts {
-		tsHash := tesseract.Hash()
-
-		gridID.Parts.Grid[tesseract.Address()] = common.TesseractHeightAndHash{
-			Hash:   tsHash,
-			Height: tesseract.Height(),
-		}
-	}
-
-	return gridID, nil
-}
-
-// CompareHash checks whether the given grid hash argument matches with the tesseract grid hash
-func (t *TesseractGrid) CompareHash(gridHash common.Hash) bool {
-	if len(gridHash.Bytes()) == 0 {
-		return false
-	}
-
-	if t == nil {
-		return false
-	}
-
-	return bytes.Equal(t.Hash.Bytes(), gridHash.Bytes())
+type VoteBitSet struct {
+	Prevotes   *common.ArrayOfBits
+	Precommits *common.ArrayOfBits
 }

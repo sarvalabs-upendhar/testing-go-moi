@@ -8,37 +8,33 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/hashicorp/go-hclog"
+	"github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/protocol"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/stretchr/testify/require"
 
+	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/common/utils"
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
-
-	"github.com/hashicorp/go-hclog"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/libp2p/go-libp2p/core/protocol"
-	"github.com/sarvalabs/go-moi/common"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-	"github.com/sarvalabs/go-moi/crypto"
-	mudraCommon "github.com/sarvalabs/go-moi/crypto/common"
-	networkmsg "github.com/sarvalabs/go-moi/network/message"
 	"github.com/sarvalabs/go-moi/network/rpc"
 	"github.com/sarvalabs/go-moi/state"
-	"github.com/sarvalabs/go-polo"
-	"github.com/stretchr/testify/require"
 )
 
 type MockServer struct {
-	id          id.KramaID
+	id          kramaid.KramaID
 	subscribers map[string]context.Context
-	peers       []id.KramaID
+	peers       []kramaid.KramaID
 	peersLock   sync.RWMutex
 }
 
 func NewMockServer() *MockServer {
 	return &MockServer{
 		subscribers: make(map[string]context.Context),
-		peers:       make([]id.KramaID, 0),
+		peers:       make([]kramaid.KramaID, 0),
 		peersLock:   sync.RWMutex{},
 	}
 }
@@ -74,11 +70,11 @@ func (m *MockServer) RegisterNewRPCService(protocol protocol.ID, serviceName str
 	return nil
 }
 
-func (m *MockServer) GetKramaID() id.KramaID {
+func (m *MockServer) GetKramaID() kramaid.KramaID {
 	return m.id
 }
 
-func (m *MockServer) ConnectPeerByKramaID(kramaID id.KramaID) error {
+func (m *MockServer) ConnectPeerByKramaID(kramaID kramaid.KramaID) error {
 	for _, peer := range m.peers {
 		if peer == kramaID {
 			return common.ErrConnectionExists
@@ -90,11 +86,11 @@ func (m *MockServer) ConnectPeerByKramaID(kramaID id.KramaID) error {
 	return nil
 }
 
-func (m *MockServer) DisconnectPeerByKramaID(kramaID id.KramaID) error {
+func (m *MockServer) DisconnectPeerByKramaID(kramaID kramaid.KramaID) error {
 	m.peersLock.Lock()
 	defer m.peersLock.Unlock()
 
-	indexOf := func(peerID id.KramaID) int {
+	indexOf := func(peerID kramaid.KramaID) int {
 		for i, peer := range m.peers {
 			if peer == kramaID {
 				return i
@@ -113,17 +109,17 @@ func (m *MockServer) DisconnectPeerByKramaID(kramaID id.KramaID) error {
 
 type MockEngine struct {
 	logger   hclog.Logger
-	requests chan Request
+	requests chan ktypes.Request
 }
 
-func processRequests(requestsChan <-chan Request) {
+func processRequests(requestsChan <-chan ktypes.Request) {
 	go func() {
 		request := <-requestsChan
-		request.responseChan <- Response{}
+		request.ResponseChan <- nil
 	}()
 }
 
-func (k *MockEngine) Requests() chan Request {
+func (k *MockEngine) Requests() chan ktypes.Request {
 	processRequests(k.requests)
 
 	return k.requests
@@ -134,48 +130,48 @@ func (k *MockEngine) Logger() hclog.Logger {
 }
 
 type MockStateManager struct {
-	accountRegistration map[common.Address]bool
+	accountRegistration map[identifiers.Address]bool
 }
 
 func NewMockStateManager() *MockStateManager {
 	return &MockStateManager{
-		accountRegistration: make(map[common.Address]bool),
+		accountRegistration: make(map[identifiers.Address]bool),
 	}
 }
-
+func (ms *MockStateManager) Cleanup(addr identifiers.Address) {}
 func (ms *MockStateManager) FetchInteractionContext(
 	ctx context.Context,
 	ix *common.Interaction,
-) (map[common.Address]common.Hash, []*common.NodeSet, error) {
+) (map[identifiers.Address]common.Hash, []*common.NodeSet, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (ms *MockStateManager) GetPublicKeys(ctx context.Context, ids ...id.KramaID) (keys [][]byte, err error) {
+func (ms *MockStateManager) GetPublicKeys(ctx context.Context, ids ...kramaid.KramaID) (keys [][]byte, err error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (ms *MockStateManager) GetAccountMetaInfo(addr common.Address) (*common.AccountMetaInfo, error) {
+func (ms *MockStateManager) GetAccountMetaInfo(addr identifiers.Address) (*common.AccountMetaInfo, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (ms *MockStateManager) GetLatestStateObject(addr common.Address) (*state.Object, error) {
+func (ms *MockStateManager) GetLatestStateObject(addr identifiers.Address) (*state.Object, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (ms *MockStateManager) GetNonce(addr common.Address, stateHash common.Hash) (uint64, error) {
+func (ms *MockStateManager) GetNonce(addr identifiers.Address, stateHash common.Hash) (uint64, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (ms *MockStateManager) registerAccount(addr common.Address) {
+func (ms *MockStateManager) registerAccount(addr identifiers.Address) {
 	ms.accountRegistration[addr] = true
 }
 
-func (ms *MockStateManager) IsAccountRegistered(addr common.Address) (bool, error) {
+func (ms *MockStateManager) IsAccountRegistered(addr identifiers.Address) (bool, error) {
 	_, ok := ms.accountRegistration[addr]
 
 	return ok, nil
@@ -238,8 +234,9 @@ func createTestKramaEngine(t *testing.T, params *createKramaEngineParams) *Engin
 		cfg,
 		hclog.NewNullLogger(),
 		nil,
+		"",
 		sm,
-		server,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -257,7 +254,7 @@ func createTestKramaEngine(t *testing.T, params *createKramaEngineParams) *Engin
 	return engine
 }
 
-func createAssetMintIx(t *testing.T, sender, receiver common.Address) *common.Interaction {
+func createAssetMintIx(t *testing.T, sender, receiver identifiers.Address) *common.Interaction {
 	t.Helper()
 
 	assetMintPayload := common.AssetMintOrBurnPayload{
@@ -282,7 +279,7 @@ func createAssetMintIx(t *testing.T, sender, receiver common.Address) *common.In
 	return tests.CreateIX(t, ixParams)
 }
 
-func createAssetTransferIx(t *testing.T, sender, receiver common.Address) common.Interactions {
+func createAssetTransferIx(t *testing.T, sender, receiver identifiers.Address) common.Interactions {
 	t.Helper()
 
 	ixParams := map[int]*tests.CreateIxParams{
@@ -296,8 +293,7 @@ func createTestNodeSet(t *testing.T, n int) *common.NodeSet {
 	t.Helper()
 
 	kramaIDs, publicKeys := tests.GetTestKramaIdsWithPublicKeys(t, n)
-	nodeset := common.NewNodeSet(kramaIDs, publicKeys)
-	nodeset.QuorumSize = n
+	nodeset := common.NewNodeSet(kramaIDs, publicKeys, n)
 
 	for i := 0; i < n; i++ {
 		nodeset.Responses.SetIndex(i, true)
@@ -310,8 +306,7 @@ func createTestRandomSet(t *testing.T, total, actual int) *common.NodeSet {
 	t.Helper()
 
 	kramaIDs, publicKeys := tests.GetTestKramaIdsWithPublicKeys(t, total)
-	nodeset := common.NewNodeSet(kramaIDs, publicKeys)
-	nodeset.QuorumSize = actual
+	nodeset := common.NewNodeSet(kramaIDs, publicKeys, actual)
 
 	for i := 0; i < actual; i++ {
 		nodeset.Responses.SetIndex(i, true)
@@ -354,8 +349,8 @@ func createNodeSet(
 
 func createTestClusterState(
 	t *testing.T,
-	operator id.KramaID,
-	selfID id.KramaID,
+	operator kramaid.KramaID,
+	selfID kramaid.KramaID,
 	nodeset []*common.NodeSet,
 	ixs common.Interactions,
 	callback func(clusterState *ktypes.ClusterState),
@@ -383,8 +378,8 @@ func createTestClusterState(
 
 func checkContextDelta(
 	t *testing.T,
-	sender common.Address,
-	receiver common.Address,
+	sender identifiers.Address,
+	receiver identifiers.Address,
 	expectedContextDelta common.ContextDelta,
 	actualContextDelta common.ContextDelta,
 ) {
@@ -395,6 +390,7 @@ func checkContextDelta(
 	require.Equal(t, expectedContextDelta[common.SargaAddress], actualContextDelta[common.SargaAddress])
 }
 
+/*
 func getRawInteraction(t *testing.T, ixData common.IxData, sign []byte) []byte {
 	t.Helper()
 
@@ -407,12 +403,12 @@ func getRawInteraction(t *testing.T, ixData common.IxData, sign []byte) []byte {
 	return rawInteractions
 }
 
-func getSignature(t *testing.T, kramaID id.KramaID, rawInteractions []byte, vault *crypto.KramaVault) ([]byte, []byte) {
+func getSignature(t *testing.T, kramaID kramaid.KramaID, rawIxns []byte, vault *crypto.KramaVault) ([]byte, []byte) {
 	t.Helper()
 
-	canonicalICSReq := networkmsg.CanonicalICSRequest{
+	canonicalICSReq := ktypes.CanonicalICSRequest{
 		Operator: string(kramaID),
-		IxData:   rawInteractions,
+		IxData:   rawIxns,
 	}
 
 	rawCanonicalICSReq, err := polo.Polorize(canonicalICSReq)
@@ -423,3 +419,4 @@ func getSignature(t *testing.T, kramaID id.KramaID, rawInteractions []byte, vaul
 
 	return rawCanonicalICSReq, icsReqSign
 }
+*/

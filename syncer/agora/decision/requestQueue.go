@@ -5,22 +5,22 @@ import (
 	"sync"
 	"time"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-	"github.com/sarvalabs/go-moi/syncer/cid"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 
-	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/syncer/cid"
 )
 
 type Request struct {
-	PeerID    id.KramaID
-	SessionID common.Address
+	PeerID    kramaid.KramaID
+	SessionID identifiers.Address
 	StateHash cid.CID
 	WantList  []cid.CID
 	ReqTime   time.Time
 }
 
-func NewRequest(peerID id.KramaID,
-	sessionID common.Address,
+func NewRequest(peerID kramaid.KramaID,
+	sessionID identifiers.Address,
 	stateHash cid.CID,
 	wantList []cid.CID,
 	reqTime time.Time,
@@ -37,7 +37,7 @@ func NewRequest(peerID id.KramaID,
 type RequestQueue struct {
 	mtx       sync.RWMutex
 	elems     []*Request
-	keys      map[id.KramaID]struct{}
+	keys      map[kramaid.KramaID]struct{}
 	length    int
 	maxLength int
 }
@@ -45,7 +45,7 @@ type RequestQueue struct {
 func NewRequestQueue(maxSize int) *RequestQueue {
 	return &RequestQueue{
 		elems:     make([]*Request, 0, maxSize),
-		keys:      make(map[id.KramaID]struct{}, maxSize),
+		keys:      make(map[kramaid.KramaID]struct{}, maxSize),
 		length:    0,
 		maxLength: maxSize,
 	}
@@ -94,7 +94,7 @@ func (q *RequestQueue) Len() int {
 	return q.length
 }
 
-func (q *RequestQueue) Contains(id id.KramaID) bool {
+func (q *RequestQueue) Contains(id kramaid.KramaID) bool {
 	q.mtx.RLock()
 	defer q.mtx.RUnlock()
 

@@ -11,19 +11,15 @@ import (
 	"testing"
 	"time"
 
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-
-	"github.com/sarvalabs/go-moi/storage/db"
-
-	"github.com/sarvalabs/go-moi/storage"
-
 	"github.com/hashicorp/go-hclog"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
-	"github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/common/utils"
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
@@ -32,6 +28,8 @@ import (
 	"github.com/sarvalabs/go-moi/network/p2p"
 	"github.com/sarvalabs/go-moi/senatus"
 	"github.com/sarvalabs/go-moi/state"
+	"github.com/sarvalabs/go-moi/storage"
+	"github.com/sarvalabs/go-moi/storage/db"
 	"github.com/sarvalabs/go-moi/syncer"
 	"github.com/sarvalabs/go-moi/syncer/agora/block"
 	"github.com/sarvalabs/go-moi/syncer/cid"
@@ -85,7 +83,7 @@ func newAccountSpecificEvents(snapSync int, latticeSync int, start, end int) Acc
 type SyncEvents struct {
 	bucketSync    int
 	SystemAccSync int
-	accounts      map[common.Address]AccountSpecificEvents
+	accounts      map[identifiers.Address]AccountSpecificEvents
 }
 
 func NewTestSyncer(
@@ -113,19 +111,18 @@ func NewTestSyncer(
 		state:          sm,
 		jobWorkerCount: 5,
 		jobQueue: &JobQueue{
-			jobs: make(map[common.Address]*SyncJob),
+			jobs: make(map[identifiers.Address]*SyncJob),
 			mux:  mux,
 		},
-		gridStore:         NewGridStore(),
 		logger:            logger,
 		workerSignal:      make(chan struct{}),
 		tesseractRegistry: common.NewHashRegistry(60),
 		consensusSlots:    slots,
-		lockedAccounts:    make(map[common.Address]common.Hash, 0),
+		lockedAccounts:    make(map[identifiers.Address]struct{}),
 		metrics:           NilMetrics(),
 		pendingMsgQueue:   make([]*TesseractInfo, 0),
 		pendingMsgChan:    make(chan *TesseractInfo, 10),
-		execGrid:          make(map[common.Hash]common.Address),
+		execGrid:          make(map[common.Hash]struct{}),
 		tracker:           NewSyncStatusTracker(0),
 		workerWaitTime:    10 * time.Millisecond,
 	}
@@ -141,7 +138,7 @@ func NewSyncerWithJobQueue(ctx context.Context, mux *utils.TypeMux) *Syncer {
 	return &Syncer{
 		ctx: ctx,
 		jobQueue: &JobQueue{
-			jobs: make(map[common.Address]*SyncJob),
+			jobs: make(map[identifiers.Address]*SyncJob),
 			mux:  mux,
 		},
 	}
@@ -185,42 +182,81 @@ func newMockLattice(db store, logger hclog.Logger) *MockLattice {
 	}
 }
 
-func (m *MockLattice) ExecuteAndValidate(ts ...*common.Tesseract) error {
-	for _, t := range ts {
-		key := t.Address().Hex() + strconv.FormatUint(t.Height(), 10)
-
-		m.executedTesseracts[key] = t
+func (m *MockLattice) ExecuteAndValidate(ts *common.Tesseract) error {
+	for addr, s := range ts.Participants() {
+		key := addr.Hex() + strconv.FormatUint(s.Height, 10)
+		m.executedTesseracts[key] = ts
 	}
 
 	return nil
 }
 
-func (m *MockLattice) AddTesseracts(dirtyStorage map[common.Hash][]byte, tesseracts ...*common.Tesseract) error {
-	for _, ts := range tesseracts {
-		m.logger.Trace("adding tesseract ", "addr", ts.Address(), "height", ts.Height())
+func (m *MockLattice) AddTesseractWithState(
+	addr identifiers.Address,
+	dirtyStorage map[common.Hash][]byte,
+	ts *common.Tesseract,
+	allParticipants bool,
+) error {
+	if !allParticipants && addr.IsNil() {
+		return common.ErrEmptyAddress
+	}
 
-		if _, _, err := m.db.UpdateAccMetaInfo(
-			ts.Address(),
-			ts.Height(),
-			ts.Hash(),
-			common.AccTypeFromIxType(ts.Interactions()[0].Type()),
-			true,
-			true,
-		); err != nil {
+	partcipants := make(common.Participants)
+
+	if allParticipants {
+		partcipants = ts.Participants()
+	} else {
+		s, ok := ts.State(addr)
+		if !ok {
+			panic(ok)
+		}
+
+		partcipants[addr] = s
+	}
+
+	for addr, p := range partcipants {
+		m.logger.Trace("adding tesseract ",
+			"ts-hash", ts.Hash(),
+			"addr", addr,
+			"height", p.Height,
+		)
+
+		if err := m.db.SetTesseractHeightEntry(addr, p.Height, ts.Hash()); err != nil {
 			return err
 		}
 
+		m.setTesseractByHeight(addr, p.Height, ts)
+
+		if _, _, err := m.db.UpdateAccMetaInfo(
+			addr,
+			p.Height,
+			ts.Hash(),
+			common.AccTypeFromIxType(ts.Interactions()[0].Type()),
+		); err != nil {
+			return err
+		}
+	}
+
+	if !m.db.HasTesseract(ts.Hash()) {
 		rawIxns, err := ts.Interactions().Bytes()
 		if err != nil {
 			return err
 		}
 
-		err = m.db.SetInteractions(ts.GridHash(), rawIxns)
+		err = m.db.SetInteractions(ts.Hash(), rawIxns)
 		if err != nil {
 			return err
 		}
 
-		m.setTesseractByHeight(ts)
+		rawReceipts, err := ts.Receipts().Bytes()
+		if err != nil {
+			return err
+		}
+
+		err = m.db.SetReceipts(ts.Hash(), rawReceipts)
+		if err != nil {
+			return err
+		}
 
 		rawTS, err := ts.Canonical().Bytes()
 		if err != nil {
@@ -230,10 +266,6 @@ func (m *MockLattice) AddTesseracts(dirtyStorage map[common.Hash][]byte, tessera
 		if err := m.db.SetTesseract(ts.Hash(), rawTS); err != nil {
 			return err
 		}
-
-		if err = m.db.SetTesseractHeightEntry(ts.Address(), ts.Height(), ts.Hash()); err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -241,40 +273,43 @@ func (m *MockLattice) AddTesseracts(dirtyStorage map[common.Hash][]byte, tessera
 
 func (m *MockLattice) AddAccountMetaInfo(tesseracts ...*common.Tesseract) error {
 	for _, ts := range tesseracts {
-		m.logger.Trace("adding account meta info ", "height", ts.Height())
+		for addr, s := range ts.Participants() {
+			m.logger.Trace("adding account meta info ", "addr", addr, "height", s.Height)
 
-		if _, _, err := m.db.UpdateAccMetaInfo(
-			ts.Address(),
-			ts.Height(),
-			ts.Hash(),
-			common.AccTypeFromIxType(ts.Interactions()[0].Type()),
-			true,
-			true,
-		); err != nil {
-			return err
+			if _, _, err := m.db.UpdateAccMetaInfo(
+				addr,
+				s.Height,
+				ts.Hash(),
+				common.AccTypeFromIxType(ts.Interactions()[0].Type()),
+			); err != nil {
+				return err
+			}
 		}
 	}
 
 	return nil
 }
 
-func (m *MockLattice) GetTesseract(hash common.Hash, withInteractions bool) (*common.Tesseract, error) {
+func (m *MockLattice) GetTesseract(
+	hash common.Hash,
+	withInteractions bool,
+) (*common.Tesseract, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockLattice) setTesseractByHeight(ts *common.Tesseract) {
+func (m *MockLattice) setTesseractByHeight(addr identifiers.Address, height uint64, ts *common.Tesseract) {
 	m.lock.Lock()
 	defer func() {
 		m.lock.Unlock()
 	}()
 
-	key := ts.Address().Hex() + strconv.FormatUint(ts.Height(), 10)
+	key := addr.Hex() + strconv.FormatUint(height, 10)
 	m.tesseracts[key] = ts
 }
 
 func (m *MockLattice) GetTesseractByHeight(
-	address common.Address,
+	address identifiers.Address,
 	height uint64,
 	withInteractions bool,
 ) (*common.Tesseract, error) {
@@ -293,20 +328,42 @@ func (m *MockLattice) GetTesseractByHeight(
 	return ts, nil
 }
 
-func (m *MockLattice) ValidateTesseract(ts *common.Tesseract, ics *common.ICSNodeSet) error {
-	if ts.Height() != 0 {
-		if ok := m.db.HasTesseractAt(ts.Address(), ts.Height()-1); !ok {
-			m.logger.Trace("prev  tesseract not found ", ts.Address(), ts.Height())
+func (m *MockLattice) ValidateTesseract(
+	address identifiers.Address,
+	ts *common.Tesseract,
+	ics *common.ICSNodeSet,
+	allParticipants bool,
+) error {
+	if !allParticipants && address.IsNil() {
+		return common.ErrEmptyAddress
+	}
 
-			return common.ErrPreviousTesseractNotFound
+	var addresses []identifiers.Address
+
+	if allParticipants {
+		addresses = ts.Addresses()
+	} else {
+		addresses = append(addresses, address)
+	}
+
+	for _, addr := range addresses {
+		if ts.Height(addr) != 0 {
+			if ok := m.db.HasAccMetaInfoAt(addr, ts.Height(addr)-1); !ok {
+				m.logger.Trace("prev tesseract not found", "addr", addr, "height", ts.Height(addr))
+
+				return common.ErrPreviousTesseractNotFound
+			}
 		}
 	}
 
 	return nil
 }
 
-func (m *MockLattice) IsInitialTesseract(ts *common.Tesseract) (bool, error) {
-	if ts.Height() == 0 {
+func (m *MockLattice) IsInitialTesseract(
+	ts *common.Tesseract,
+	addr identifiers.Address,
+) (bool, error) {
+	if ts.Height(addr) == 0 {
 		return true, nil
 	}
 
@@ -338,7 +395,7 @@ func newMockStateManager() *MockStateManager {
 
 func (m MockStateManager) SyncStorageTrees(
 	ctx context.Context,
-	address common.Address,
+	address identifiers.Address,
 	newRoot *common.RootNode,
 	logicStorageTreeRoots map[string]*common.RootNode,
 ) error {
@@ -346,19 +403,19 @@ func (m MockStateManager) SyncStorageTrees(
 	panic("implement me")
 }
 
-func (m MockStateManager) SyncLogicTree(address common.Address, newRoot *common.RootNode) error {
+func (m MockStateManager) SyncLogicTree(address identifiers.Address, newRoot *common.RootNode) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m MockStateManager) CreateDirtyObject(addr common.Address, accType common.AccountType) *state.Object {
+func (m MockStateManager) CreateDirtyObject(addr identifiers.Address, accType common.AccountType) *state.Object {
 	return nil
 }
 
 func (m MockStateManager) GetParticipantContextRaw(
-	address common.Address,
+	address identifiers.Address,
 	hash common.Hash,
-	rawContext map[common.Hash][]byte,
+	rawContext map[string][]byte,
 ) error {
 	return nil
 }
@@ -376,7 +433,7 @@ func (m MockStateManager) FetchICSNodeSet(ts *common.Tesseract,
 }
 
 func (m MockStateManager) GetICSNodeSetFromRawContext(ts *common.Tesseract,
-	rawContext map[common.Hash][]byte, clusterInfo *common.ICSClusterInfo,
+	rawContext map[string][]byte, clusterInfo *common.ICSClusterInfo,
 ) (*common.ICSNodeSet, error) {
 	// TODO implement me
 	panic("implement me")
@@ -384,7 +441,7 @@ func (m MockStateManager) GetICSNodeSetFromRawContext(ts *common.Tesseract,
 
 type MockAgora struct {
 	sessions   map[cid.CID]syncer.Session
-	newSession func(address common.Address) (syncer.Session, error)
+	newSession func(address identifiers.Address) (syncer.Session, error)
 }
 
 func newMockAgora() *MockAgora {
@@ -398,7 +455,7 @@ func (m *MockAgora) addSession(session *MockSession, stateHash cid.CID) {
 }
 
 func (m MockAgora) NewSession(ctx context.Context, contextPeers []kramaid.KramaID,
-	address common.Address, stateHash cid.CID,
+	address identifiers.Address, stateHash cid.CID,
 ) (syncer.Session, error) {
 	if m.newSession != nil {
 		return m.newSession(address)
@@ -418,18 +475,18 @@ func (m MockAgora) Start() {
 func (m MockAgora) Close() {}
 
 type MockSession struct {
-	address common.Address
+	address identifiers.Address
 	blocks  map[cid.CID]*block.Block
 }
 
-func newMockSession(addr common.Address) *MockSession {
+func newMockSession(addr identifiers.Address) *MockSession {
 	return &MockSession{
 		address: addr,
 		blocks:  make(map[cid.CID]*block.Block),
 	}
 }
 
-func (m MockSession) ID() common.Address {
+func (m MockSession) ID() identifiers.Address {
 	return m.address
 }
 
@@ -652,7 +709,7 @@ func connectClientToServers(t *testing.T, client *p2p.Server, servers ...*p2p.Se
 
 		client.AddPeerInfo(info)
 
-		err := client.ConnManager.ConnectAndRegisterPeer(*info, s.GetKramaID(), 50)
+		err := client.ConnManager.ConnectAndRegisterPeer(context.Background(), *info, s.GetKramaID(), 50)
 		require.NoError(t, err)
 	}
 }
@@ -745,26 +802,8 @@ func closeTestServers(t *testing.T, servers ...*p2p.Server) {
 func storeTesseractInDB(t *testing.T, ts *common.Tesseract, syncers ...*Syncer) {
 	t.Helper()
 
-	acc := common.Account{
-		ContextHash: ts.ContextHash(),
-	}
-
-	value, err := acc.Bytes()
-	require.NoError(t, err)
-
 	for _, s := range syncers {
-		err := s.lattice.AddTesseracts(nil, ts)
-		require.NoError(t, err)
-
-		err = s.db.CreateEntry(dbKeyFromCID(ts.Address(), cid.AccountCID(ts.StateHash())), value)
-		require.NoError(t, err)
-
-		mctx := state.MetaContextObject{}
-
-		mctxVal, err := mctx.Bytes()
-		require.NoError(t, err)
-
-		err = s.db.CreateEntry(dbKeyFromCID(ts.Address(), cid.ContextCID(acc.ContextHash)), mctxVal)
+		err := s.lattice.AddTesseractWithState(identifiers.NilAddress, nil, ts, true)
 		require.NoError(t, err)
 
 		info := common.ICSClusterInfo{}
@@ -775,20 +814,33 @@ func storeTesseractInDB(t *testing.T, ts *common.Tesseract, syncers ...*Syncer) 
 		err = s.db.CreateEntry(ts.ICSHash().Bytes(), rawInfo)
 		require.NoError(t, err)
 
-		err = s.db.UpdatePrimarySyncStatus(ts.Address())
-		require.NoError(t, err)
+		for addr, participant := range ts.Participants() {
+			acc := common.Account{
+				ContextHash: participant.LatestContext,
+			}
+
+			value, err := acc.Bytes()
+			require.NoError(t, err)
+
+			err = s.db.CreateEntry(dbKeyFromCID(addr, cid.AccountCID(ts.StateHash(addr))), value)
+			require.NoError(t, err)
+
+			mctx := state.MetaContextObject{}
+
+			mctxVal, err := mctx.Bytes()
+			require.NoError(t, err)
+
+			err = s.db.CreateEntry(dbKeyFromCID(addr, cid.ContextCID(acc.ContextHash)), mctxVal)
+			require.NoError(t, err)
+
+			err = s.db.UpdatePrimarySyncStatus(addr)
+			require.NoError(t, err)
+		}
 	}
 }
 
 func storeAccountMetaInfoAndSnapInDB(t *testing.T, ts *common.Tesseract, syncers ...*Syncer) {
 	t.Helper()
-
-	acc := common.Account{
-		ContextHash: ts.ContextHash(),
-	}
-
-	value, err := acc.Bytes()
-	require.NoError(t, err)
 
 	for _, s := range syncers {
 		mockLattice, ok := s.lattice.(*MockLattice)
@@ -797,16 +849,25 @@ func storeAccountMetaInfoAndSnapInDB(t *testing.T, ts *common.Tesseract, syncers
 		err := mockLattice.AddAccountMetaInfo(ts)
 		require.NoError(t, err)
 
-		err = s.db.CreateEntry(dbKeyFromCID(ts.Address(), cid.AccountCID(ts.StateHash())), value)
-		require.NoError(t, err)
+		for addr, participant := range ts.Participants() {
+			acc := common.Account{
+				ContextHash: participant.LatestContext,
+			}
 
-		mctx := state.MetaContextObject{}
+			value, err := acc.Bytes()
+			require.NoError(t, err)
 
-		mctxVal, err := mctx.Bytes()
-		require.NoError(t, err)
+			err = s.db.CreateEntry(dbKeyFromCID(addr, cid.AccountCID(ts.StateHash(addr))), value)
+			require.NoError(t, err)
 
-		err = s.db.CreateEntry(dbKeyFromCID(ts.Address(), cid.ContextCID(acc.ContextHash)), mctxVal)
-		require.NoError(t, err)
+			mctx := state.MetaContextObject{}
+
+			mctxVal, err := mctx.Bytes()
+			require.NoError(t, err)
+
+			err = s.db.CreateEntry(dbKeyFromCID(addr, cid.ContextCID(acc.ContextHash)), mctxVal)
+			require.NoError(t, err)
+		}
 
 		info := common.ICSClusterInfo{}
 
@@ -837,35 +898,37 @@ func storeTesseractsInDB(t *testing.T, s *Syncer, tesseracts ...*common.Tesserac
 func storeTesseractInSession(t *testing.T, ts *common.Tesseract, syncers ...*Syncer) {
 	t.Helper()
 
-	acc := common.Account{
-		ContextHash: ts.ContextHash(),
-	}
-
-	value, err := acc.Bytes()
-	require.NoError(t, err)
-
-	mockSession := newMockSession(ts.Address())
-
 	for _, s := range syncers {
-		cID := cid.AccountCID(ts.StateHash())
-		mockSession.setBlock(cID, block.NewBlock(cID, value))
+		for addr, participant := range ts.Participants() {
+			acc := common.Account{
+				ContextHash: participant.LatestContext,
+			}
 
-		s.logger.Info("msession: store account ", cID)
+			value, err := acc.Bytes()
+			require.NoError(t, err)
 
-		mctx := state.MetaContextObject{}
+			mockSession := newMockSession(addr)
 
-		mctxVal, err := mctx.Bytes()
-		require.NoError(t, err)
+			cID := cid.AccountCID(ts.StateHash(addr))
+			mockSession.setBlock(cID, block.NewBlock(cID, value))
 
-		cID = cid.ContextCID(acc.ContextHash)
-		mockSession.setBlock(cID, block.NewBlock(cID, mctxVal))
+			s.logger.Info("msession: store account ", cID)
 
-		s.logger.Info("msession: store context ", cID)
+			mctx := state.MetaContextObject{}
 
-		agora, ok := s.agora.(*MockAgora)
-		require.True(t, ok)
+			mctxVal, err := mctx.Bytes()
+			require.NoError(t, err)
 
-		agora.addSession(mockSession, cid.AccountCID(ts.StateHash()))
+			cID = cid.ContextCID(acc.ContextHash)
+			mockSession.setBlock(cID, block.NewBlock(cID, mctxVal))
+
+			s.logger.Info("msession: store context ", cID)
+
+			agora, ok := s.agora.(*MockAgora)
+			require.True(t, ok)
+
+			agora.addSession(mockSession, cid.AccountCID(ts.StateHash(addr)))
+		}
 	}
 }
 
@@ -889,8 +952,7 @@ func broadcastTesseracts(t *testing.T, clientSyncer, serverSyncer *Syncer, tesse
 
 			serverSyncer.logger.Info(
 				"broadcast tesseract ",
-				"addr", tesseracts[i].Address(),
-				"height", tesseracts[i].Height(), t.Name(),
+				"ts-hash", tesseracts[i].Hash(),
 			)
 
 			info := common.ICSClusterInfo{
@@ -901,12 +963,12 @@ func broadcastTesseracts(t *testing.T, clientSyncer, serverSyncer *Syncer, tesse
 			require.NoError(t, err)
 
 			tsInfo := &TesseractInfo{
-				tesseract:   tesseracts[i],
-				clusterInfo: &info,
-				delta: map[common.Hash][]byte{
-					tesseracts[i].ICSHash(): rawInfo,
-				},
+				tesseract:     tesseracts[i],
 				shouldExecute: clientSyncer.cfg.ShouldExecute,
+				clusterInfo:   &info,
+				delta: map[string][]byte{
+					tesseracts[i].ICSHash().Hex(): rawInfo,
+				},
 			}
 
 			err = clientSyncer.msgHandler(&pubsub.Message{
@@ -922,7 +984,7 @@ func printEventsReceived(
 	events SyncEvents,
 	bucketSyncCount,
 	systemAccSyncCount int,
-	accountLevelSync map[common.Address]map[SyncEventType]int,
+	accountLevelSync map[identifiers.Address]map[SyncEventType]int,
 ) {
 	logger.Debug("printing expected events")
 	logger.Debug(syncerEvents[BucketSync], events.bucketSync)
@@ -963,26 +1025,39 @@ func defaultSyncerConfig() *config.SyncerConfig {
 
 func generateTesseracts(
 	t *testing.T,
-	addr common.Address,
 	startHeight, endHeight int,
 	prevHash common.Hash,
-	totalParts int32,
-	gridHashes ...common.Hash,
+	addresses ...identifiers.Address,
 ) []*common.Tesseract {
 	t.Helper()
 
 	tesseracts := make([]*common.Tesseract, 0)
 
-	if len(gridHashes) == 0 {
-		gridHashes = tests.GetHashes(t, endHeight-startHeight+1)
-	}
-
 	index := 0
 
 	for i := startHeight; i <= endHeight; i++ {
+		participants := make(common.Participants)
+		heights := make([]uint64, 0)
+
+		for _, addr := range addresses {
+			participants[addr] = common.State{
+				StateHash:       tests.RandomHash(t),
+				Height:          uint64(i),
+				PreviousContext: tests.RandomHash(t),
+				TransitiveLink:  prevHash,
+			}
+
+			heights = append(heights, uint64(i))
+		}
+
 		tesseractParams := &tests.CreateTesseractParams{
-			Address: addr,
-			Height:  uint64(i),
+			Addresses:    addresses,
+			Heights:      heights,
+			Participants: participants,
+			TSDataCallback: func(ts *tests.TesseractData) {
+				ts.ConsensusInfo.ICSHash = tests.RandomHash(t)
+				ts.ReceiptsHash = tests.RandomHash(t)
+			},
 			Ixns: common.Interactions{ // ixns are needed as we are accessing account type from ixn for initial tesseract
 				tests.CreateIX(t, &tests.CreateIxParams{
 					IxDataCallback: func(ix *common.IxData) {
@@ -990,25 +1065,10 @@ func generateTesseracts(
 					},
 				}),
 			},
-			HeaderCallback: func(header *common.TesseractHeader) {
-				header.PrevHash = prevHash
-				header.Extra = common.CommitData{
-					GridID: &common.TesseractGridID{
-						Hash: gridHashes[index], // used to fetch interactions
-						Parts: &common.TesseractParts{
-							Total: totalParts,
-						},
-					},
-				}
-				header.ContextLock = map[common.Address]common.ContextLockInfo{
-					addr: {
-						ContextHash: tests.RandomHash(t),
-					},
-				}
-			},
-			BodyCallback: func(body *common.TesseractBody) {
-				body.StateHash = tests.RandomHash(t)
-				body.ConsensusProof.ICSHash = tests.RandomHash(t)
+			Receipts: map[common.Hash]*common.Receipt{
+				tests.RandomHash(t): {
+					IxHash: tests.RandomHash(t),
+				},
 			},
 		}
 
@@ -1022,7 +1082,7 @@ func generateTesseracts(
 	return tesseracts
 }
 
-func generateTesseractsGridByMap(t *testing.T, addrHeights map[common.Address]int) []*common.Tesseract {
+func generateTesseractsGridByMap(t *testing.T, addrHeights map[identifiers.Address]int) []*common.Tesseract {
 	t.Helper()
 
 	height := 0
@@ -1033,25 +1093,24 @@ func generateTesseractsGridByMap(t *testing.T, addrHeights map[common.Address]in
 		break
 	}
 
-	tesseracts := make([]*common.Tesseract, 0)
-	totalParts := int32(len(addrHeights))
-	gridHashes := tests.GetHashes(t, height+1)
+	addresses := make([]identifiers.Address, 0)
 
-	for addr, height := range addrHeights {
-		tesseracts = append(tesseracts,
-			generateTesseracts(t, addr, 0, height, common.NilHash, totalParts, gridHashes...)...)
+	for addr := range addrHeights {
+		addresses = append(addresses, addr)
 	}
+
+	tesseracts := generateTesseracts(t, 0, height, common.NilHash, addresses...)
 
 	return tesseracts
 }
 
-func generateTesseractsByMap(t *testing.T, addrHeights map[common.Address]int) []*common.Tesseract {
+func generateTesseractsByMap(t *testing.T, addrHeights map[identifiers.Address]int) []*common.Tesseract {
 	t.Helper()
 
 	tesseracts := make([]*common.Tesseract, 0)
 
 	for addr, height := range addrHeights {
-		tesseracts = append(tesseracts, generateTesseracts(t, addr, 0, height, common.NilHash, 1)...)
+		tesseracts = append(tesseracts, generateTesseracts(t, 0, height, common.NilHash, addr)...)
 	}
 
 	return tesseracts
@@ -1093,13 +1152,13 @@ func checkIfSyncJobMatches(t *testing.T, expectedJob *SyncJob, syncJob *SyncJob)
 	require.NotNil(t, syncJob.tesseractQueue)
 }
 
-func sortAddresses(addrs []common.Address) {
+func sortAddresses(addrs []identifiers.Address) {
 	sort.Slice(addrs, func(i, j int) bool {
 		return bytes.Compare(addrs[i][:], addrs[j][:]) < 0
 	})
 }
 
-func createSyncJobs(t *testing.T, count int, addrs []common.Address, opts ...Option) []*SyncJob {
+func createSyncJobs(t *testing.T, count int, addrs []identifiers.Address, opts ...Option) []*SyncJob {
 	t.Helper()
 
 	jobs := make([]*SyncJob, count)
@@ -1172,7 +1231,7 @@ func SubscribeAndListenForSyncEvents(
 
 	bucketSyncCount := 0
 	systemAccSyncCount := 0
-	accountLevelSync := make(map[common.Address]map[SyncEventType]int)
+	accountLevelSync := make(map[identifiers.Address]map[SyncEventType]int)
 
 	for acc, event := range expectedEvents.accounts {
 		for i := SnapSync; i <= JobDone; i++ {
@@ -1262,10 +1321,19 @@ func SubscribeAndListenForSyncEvents(
 	}
 }
 
+func checkJobQueue(t *testing.T, nodes ...*Syncer) {
+	t.Helper()
+
+	for _, n := range nodes {
+		status := n.GetNodeSyncStatus(true)
+		require.Equal(t, uint64(0), status.TotalPendingAccounts.ToUint64(), status.PendingAccounts)
+	}
+}
+
 func checkIfTesseractsSynced(
 	t *testing.T,
 	s *Syncer,
-	accounts map[common.Address]int,
+	accounts map[identifiers.Address]int,
 	execution bool,
 	tesseracts ...*common.Tesseract,
 ) {
@@ -1278,36 +1346,44 @@ func checkIfTesseractsSynced(
 		require.Equal(t, height, int(accMetaInfo.Height))
 	}
 
+	l, ok := s.lattice.(*MockLattice)
+	require.True(t, ok)
+
 	for _, ts := range tesseracts {
-		actualTS, err := s.lattice.GetTesseractByHeight(ts.Address(), ts.Height(), true)
-		require.NoError(t, err)
-		require.Equal(t, ts, actualTS)
-
-		_, err = s.db.GetInteractions(ts.GridHash())
+		_, err := s.db.GetInteractions(ts.Hash())
 		require.NoError(t, err)
 
-		if execution {
-			l, ok := s.lattice.(*MockLattice)
-			require.True(t, ok)
+		_, err = s.db.GetReceipts(ts.Hash())
+		require.NoError(t, err)
 
-			key := ts.Address().Hex() + strconv.FormatUint(ts.Height(), 10)
-			executedTS, ok := l.executedTesseracts[key]
-			require.True(t, ok)
-			require.Equal(t, executedTS, ts)
-		} else {
-			_, err = s.db.ReadEntry(dbKeyFromCID(ts.Address(), cid.AccountCID(ts.StateHash())))
+		for addr, participant := range ts.Participants() {
+			actualTS, err := s.lattice.GetTesseractByHeight(addr, participant.Height, true)
 			require.NoError(t, err)
+
+			require.Equal(t, ts.Hash(), actualTS.Hash())
+
+			if execution {
+				key := addr.Hex() + strconv.FormatUint(participant.Height, 10)
+				executedTS, ok := l.executedTesseracts[key]
+				require.True(t, ok)
+				require.Equal(t, executedTS.Hash(), ts.Hash())
+			} else {
+				_, err = s.db.ReadEntry(dbKeyFromCID(addr, cid.AccountCID(participant.StateHash)))
+				require.NoError(t, err)
+			}
 		}
 	}
 }
 
 type MockDB struct {
-	accountSyncStatus map[common.Address][]byte
+	accountSyncStatus map[identifiers.Address][]byte
+	accMetaInfo       map[string]struct{}
 }
 
 func NewMockDB() *MockDB {
 	return &MockDB{
-		accountSyncStatus: make(map[common.Address][]byte),
+		accountSyncStatus: make(map[identifiers.Address][]byte),
+		accMetaInfo:       make(map[string]struct{}),
 	}
 }
 
@@ -1341,32 +1417,27 @@ func (m MockDB) DeleteEntry(i []byte) error {
 	panic("implement me")
 }
 
-func (m MockDB) SetAccount(addr common.Address, stateHash common.Hash, data []byte) error {
+func (m MockDB) SetAccount(addr identifiers.Address, stateHash common.Hash, data []byte) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m MockDB) SetInteractions(gridHash common.Hash, data []byte) error {
+func (m MockDB) SetInteractions(tesseractHash common.Hash, data []byte) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m MockDB) GetInteractions(gridHash common.Hash) ([]byte, error) {
+func (m MockDB) GetInteractions(tesseractHash common.Hash) ([]byte, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m MockDB) GetAccountMetaInfo(id common.Address) (*common.AccountMetaInfo, error) {
+func (m MockDB) GetAccountMetaInfo(id identifiers.Address) (*common.AccountMetaInfo, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m MockDB) UpdateTesseractStatus(addr common.Address, height uint64, tsHash common.Hash, status bool) error {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (m MockDB) SetAccountSyncStatus(address common.Address, status *common.AccountSyncStatus) error {
+func (m MockDB) SetAccountSyncStatus(address identifiers.Address, status *common.AccountSyncStatus) error {
 	rawStatus, err := status.Bytes()
 	if err != nil {
 		return err
@@ -1377,7 +1448,7 @@ func (m MockDB) SetAccountSyncStatus(address common.Address, status *common.Acco
 	return nil
 }
 
-func (m MockDB) CleanupAccountSyncStatus(address common.Address) error {
+func (m MockDB) CleanupAccountSyncStatus(address identifiers.Address) error {
 	delete(m.accountSyncStatus, address)
 
 	return nil
@@ -1388,7 +1459,7 @@ func (m MockDB) StoreAccountSnapShot(snap *common.Snapshot) error {
 	panic("implement me")
 }
 
-func (m MockDB) GetReceipts(gridHash common.Hash) ([]byte, error) {
+func (m MockDB) GetReceipts(tsHash common.Hash) ([]byte, error) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -1403,12 +1474,12 @@ func (m MockDB) DropPrefix(prefix []byte) error {
 	panic("implement me")
 }
 
-func (m MockDB) UpdatePrimarySyncStatus(address common.Address) error {
+func (m MockDB) UpdatePrimarySyncStatus(address identifiers.Address) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m MockDB) IsAccountPrimarySyncDone(address common.Address) bool {
+func (m MockDB) IsAccountPrimarySyncDone(address identifiers.Address) bool {
 	// TODO implement me
 	panic("implement me")
 }
@@ -1454,30 +1525,51 @@ func (m MockDB) IsPrincipalSyncDone() (bool, int64) {
 
 func (m MockDB) GetAccountSnapshot(
 	ctx context.Context,
-	address common.Address,
+	address identifiers.Address,
 	sinceTS uint64,
 ) (*common.Snapshot, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m MockDB) HasTesseractAt(addr common.Address, height uint64) bool {
+func (m MockDB) HasTesseractAt(addr identifiers.Address, height uint64) bool {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) SetTesseractHeightEntry(addr identifiers.Address, height uint64, tsHash common.Hash) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) SetReceipts(tsHash common.Hash, data []byte) error {
 	// TODO implement me
 	panic("implement me")
 }
 
 func (m MockDB) UpdateAccMetaInfo(
-	id common.Address,
+	id identifiers.Address,
 	height uint64,
 	tesseractHash common.Hash,
 	accType common.AccountType,
-	latticeExists, stateExists bool,
 ) (int32, bool, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m MockDB) SetTesseractHeightEntry(addr common.Address, height uint64, tsHash common.Hash) error {
+func (m *MockDB) setAccMetaInfoAt(addr identifiers.Address, height uint64) {
+	key := addr.Hex() + strconv.FormatUint(height, 10)
+	m.accMetaInfo[key] = struct{}{}
+}
+
+func (m MockDB) HasAccMetaInfoAt(addr identifiers.Address, height uint64) bool {
+	key := addr.Hex() + strconv.FormatUint(height, 10)
+	_, ok := m.accMetaInfo[key]
+
+	return ok
+}
+
+func (m MockDB) UpdateTesseractStatus(addr identifiers.Address, height uint64, tsHash common.Hash) error {
 	// TODO implement me
 	panic("implement me")
 }

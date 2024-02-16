@@ -1,6 +1,7 @@
 package block
 
 import (
+	"github.com/sarvalabs/go-moi/storage"
 	"github.com/sarvalabs/go-moi/syncer/cid"
 	"golang.org/x/crypto/blake2b"
 )
@@ -20,15 +21,29 @@ func NewBlock(cid cid.CID, data []byte) *Block {
 }
 
 func NewBlockFromMessage(data []byte) Block {
-	hash := blake2b.Sum256(data[1:])
+	if storage.PrefixTag(data[0]).IsAccountBasedKey() {
+		hash := blake2b.Sum256(data[1:])
+
+		return Block{
+			cid:  cid.ContentID(data[0], hash),
+			data: data[1:],
+		}
+	}
 
 	return Block{
-		cid:  cid.ContentID(data[0], hash),
-		data: data[1:],
+		cid:  cid.CID(data[:33]),
+		data: data[33:],
 	}
 }
 
-func NewBlockFromRawData(contentType byte, data []byte) Block {
+func NewNonAccountBlockFromRawData(cid cid.CID, data []byte) Block {
+	return Block{
+		cid:  cid,
+		data: data,
+	}
+}
+
+func NewAccountBlockFromRawData(contentType byte, data []byte) Block {
 	hash := blake2b.Sum256(data)
 
 	return Block{
@@ -46,9 +61,16 @@ func (b Block) GetCid() cid.CID {
 }
 
 func (b Block) BytesForMessage() []byte {
-	rawBytes := make([]byte, 0, len(b.data)+1)
+	if storage.PrefixTag(b.cid.ContentType()).IsAccountBasedKey() {
+		rawBytes := make([]byte, 0, len(b.data)+1)
+		rawBytes = append(rawBytes, b.cid.ContentType())
+		rawBytes = append(rawBytes, b.data...)
 
-	rawBytes = append(rawBytes, b.cid.ContentType())
+		return rawBytes
+	}
+
+	rawBytes := make([]byte, 0, len(b.cid)+len(b.data))
+	rawBytes = append(rawBytes, b.cid.Bytes()...)
 	rawBytes = append(rawBytes, b.data...)
 
 	return rawBytes

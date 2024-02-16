@@ -2,8 +2,7 @@ package core
 
 import (
 	"github.com/pkg/errors"
-
-	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi-identifiers"
 )
 
 const (
@@ -24,8 +23,8 @@ type Inventory struct {
 	Sender   string
 	Receiver string
 
-	Users  map[string]common.Address
-	Logics map[string]common.LogicID
+	Users  map[string]identifiers.Address
+	Logics map[string]identifiers.LogicID
 }
 
 type LabConfig struct {
@@ -43,8 +42,8 @@ func FreshInventory(dirpath string) Inventory {
 			HexBytes:  true,
 		},
 
-		Users:  make(map[string]common.Address),
-		Logics: make(map[string]common.LogicID),
+		Users:  make(map[string]identifiers.Address),
+		Logics: make(map[string]identifiers.LogicID),
 	}
 }
 

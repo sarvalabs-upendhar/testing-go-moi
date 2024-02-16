@@ -37,10 +37,10 @@ func DefaultBabylonConfig(path string) *Config {
 		},
 		Network: NetworkConfig{
 			Libp2pAddr: []string{
-				"/ip4/0.0.0.0/tcp/" + strconv.Itoa(config.DefaultListenerPort),
-				"/ip4/0.0.0.0/udp/" + strconv.Itoa(config.DefaultListenerPort) + "/quic-v1",
-				"/ip6/::/tcp/" + strconv.Itoa(config.DefaultListenerPort),
-				"/ip6/::/udp/" + strconv.Itoa(config.DefaultListenerPort) + "/quic-v1",
+				"/ip4/0.0.0.0/tcp/" + strconv.Itoa(config.DefaultP2PPort),
+				"/ip4/0.0.0.0/udp/" + strconv.Itoa(config.DefaultP2PPort) + "/quic-v1",
+				"/ip6/::/tcp/" + strconv.Itoa(config.DefaultP2PPort),
+				"/ip6/::/udp/" + strconv.Itoa(config.DefaultP2PPort) + "/quic-v1",
 			},
 			BootStrapPeers: []string{
 				"/ip4/65.109.138.198/tcp/5000/p2p/16Uiu2HAmNPceqBKGNWXGTKTtWDPty4UhncdhB84VbDEPpn1H11Cb",
@@ -76,11 +76,13 @@ func DefaultBabylonConfig(path string) *Config {
 			AccountWaitTime:       1500,
 			OperatorSlots:         -1,
 			ValidatorSlots:        5,
+			MaxGossipPeers:        5,
+			MinGossipPeers:        3,
 		},
 		DB: DBConfig{
 			CleanDB:     false,
 			DBFolder:    path + config.DefaultDBDirectory,
-			MaxSnapSize: config.DefaultSnapSize, // 1GB limit
+			MaxSnapSize: config.DefaultSnapSize, // 3GB limit
 		},
 		Execution: ExecutionConfig{
 			FuelLimit: hexutil.Uint64(config.DefaultFuelLimit),
@@ -114,10 +116,10 @@ func DefaultDevnetConfig(path string) *Config {
 		},
 		Network: NetworkConfig{
 			Libp2pAddr: []string{
-				"/ip4/0.0.0.0/tcp/" + strconv.Itoa(config.DefaultListenerPort),
-				"/ip4/0.0.0.0/udp/" + strconv.Itoa(config.DefaultListenerPort) + "/quic-v1",
-				"/ip6/::/tcp/" + strconv.Itoa(config.DefaultListenerPort),
-				"/ip6/::/udp/" + strconv.Itoa(config.DefaultListenerPort) + "/quic-v1",
+				"/ip4/0.0.0.0/tcp/" + strconv.Itoa(config.DefaultP2PPort),
+				"/ip4/0.0.0.0/udp/" + strconv.Itoa(config.DefaultP2PPort) + "/quic-v1",
+				"/ip6/::/tcp/" + strconv.Itoa(config.DefaultP2PPort),
+				"/ip6/::/udp/" + strconv.Itoa(config.DefaultP2PPort) + "/quic-v1",
 			},
 			BootStrapPeers:     make([]string, 0),
 			MaxPeers:           0, // current we don't limit the no.of peers
@@ -154,7 +156,7 @@ func DefaultDevnetConfig(path string) *Config {
 		DB: DBConfig{
 			CleanDB:     false,
 			DBFolder:    path + config.DefaultDBDirectory,
-			MaxSnapSize: config.DefaultSnapSize, // 1GB limit
+			MaxSnapSize: config.DefaultSnapSize, // 3GB limit
 		},
 		Execution: ExecutionConfig{
 			FuelLimit: hexutil.Uint64(config.DefaultFuelLimit),
@@ -185,6 +187,7 @@ type NetworkConfig struct {
 	RelayNodeAddr      string        `json:"relay_node_addr"`
 	Libp2pAddr         []string      `json:"libp2p_addr"`
 	PublicP2pAddr      []string      `json:"public_p2p_addr"`
+	P2PHostPort        int           `json:"p2p_host_port"`
 	JSONRPCAddr        string        `json:"jsonrpc_addr"`
 	MTQ                float64       `json:"mtq"`
 	CorsAllowedOrigins []string      `json:"cors_allowed_origins"`
@@ -240,6 +243,8 @@ type ConsensusConfig struct {
 	OperatorSlots         int   `json:"operator_slots"`
 	ValidatorSlots        int   `json:"validator_slots"`
 	EnableDebugMode       bool  `json:"enable_debug_mode"`
+	MaxGossipPeers        int   `json:"max_gossip_peers"`
+	MinGossipPeers        int   `json:"min_gossip_peers"`
 }
 
 type ExecutionConfig struct {

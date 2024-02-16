@@ -7,11 +7,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sarvalabs/go-moi/senatus"
-
 	"github.com/hashicorp/go-hclog"
+	"github.com/sarvalabs/go-legacy-kramaid"
+
 	"github.com/sarvalabs/go-moi/common"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-moi/senatus"
 	"github.com/sarvalabs/go-moi/telemetry/tracing"
 )
 
@@ -34,7 +34,7 @@ type PeerList struct {
 	mtx           sync.RWMutex
 	updatePending bool
 	lastRequest   time.Time
-	nonUtilized   map[id.KramaID]int
+	nonUtilized   map[kramaid.KramaID]int
 	pendingCount  int
 }
 
@@ -68,7 +68,7 @@ func NewRandomizer(
 		r.peers[i] = &PeerList{
 			updatePending: true,
 			lastRequest:   time.Now(),
-			nonUtilized:   make(map[id.KramaID]int),
+			nonUtilized:   make(map[kramaid.KramaID]int),
 			pendingCount:  PEERSCOUNT,
 		}
 	}
@@ -79,11 +79,16 @@ func NewRandomizer(
 }
 
 func (r *Randomizer) addPeers(slot int) {
+	ctx, cancel := context.WithCancel(r.ctx)
+
 	r.peers[slot].mtx.Lock()
-	defer r.peers[slot].mtx.Unlock()
+	defer func() {
+		r.peers[slot].mtx.Unlock()
+		cancel()
+	}()
 
 	// Retrieve the keys and values from the db
-	peerInfos, err := r.senatus.StreamPeerInfos(r.ctx)
+	peerInfos, err := r.senatus.StreamPeerInfos(ctx)
 	if err != nil {
 		r.logger.Error("Unable to retrieve keys from the db", "err", err)
 
@@ -118,7 +123,7 @@ func (r *Randomizer) addPeers(slot int) {
 
 	counter := 0
 	desiredCount := 0
-	nonUtilized := make(map[id.KramaID]int)
+	nonUtilized := make(map[kramaid.KramaID]int)
 
 	// Read values from the channel
 	for peerInfo := range peerInfos {
@@ -185,9 +190,9 @@ func (r *Randomizer) Start() {
 	}()
 }
 
-func (r *Randomizer) getPeers(slotNo int, count int, avoidPeers []id.KramaID) []id.KramaID {
+func (r *Randomizer) getPeers(slotNo int, count int, avoidPeers []kramaid.KramaID) []kramaid.KramaID {
 	counter := 0
-	list := make([]id.KramaID, 0)
+	list := make([]kramaid.KramaID, 0)
 
 	r.peers[slotNo].mtx.Lock()
 	defer r.peers[slotNo].mtx.Unlock()
@@ -225,8 +230,8 @@ func (r *Randomizer) getPeers(slotNo int, count int, avoidPeers []id.KramaID) []
 func (r *Randomizer) GetRandomNodes(
 	ctx context.Context,
 	count int,
-	avoidPeers []id.KramaID,
-) (randomPeers []id.KramaID, err error) {
+	avoidPeers []kramaid.KramaID,
+) (randomPeers []kramaid.KramaID, err error) {
 	_, span := tracing.Span(ctx, "Flux.Randomizer", "GetRandomNodes")
 	defer span.End()
 

@@ -37,9 +37,7 @@ func (f *tesseractFilter) takeTesseractUpdates() []*args.RPCTesseract {
 }
 
 func (f *tesseractFilter) getUpdates() (interface{}, error) {
-	rpcTesseracts := f.takeTesseractUpdates()
-
-	return rpcTesseracts, nil
+	return f.takeTesseractUpdates(), nil
 }
 
 // sendUpdate writes the new tesseracts to web socket stream

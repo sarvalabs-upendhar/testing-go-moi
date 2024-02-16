@@ -6,20 +6,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/go-moi/common/config"
-
 	"github.com/hashicorp/go-hclog"
-
-	"github.com/sarvalabs/go-moi/jsonrpc/backend"
-
-	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
-
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/utils"
-
-	"github.com/stretchr/testify/require"
-
+	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/sarvalabs/go-moi/jsonrpc/args"
+	"github.com/sarvalabs/go-moi/jsonrpc/backend"
+	"github.com/stretchr/testify/require"
 )
 
 type MessageParams struct {
@@ -84,13 +79,13 @@ func TestTesseractByAccountSubscription(t *testing.T) {
 	paramsMap := map[int]*tests.CreateTesseractParams{
 		0: {
 			// will not be posted to websocket stream
-			Address: address[1],
+			Addresses: []identifiers.Address{address[1]},
 		},
 		1: {
-			Address: address[0],
+			Addresses: []identifiers.Address{tests.RandomAddress(t), address[0]},
 		},
 		2: {
-			Address: address[0],
+			Addresses: []identifiers.Address{tests.RandomAddress(t), address[0]},
 		},
 	}
 	tesseracts := tests.CreateTesseracts(t, 3, paramsMap)
@@ -130,7 +125,7 @@ func TestTesseractLogsSubscription(t *testing.T) {
 	tesseracts, logs := createTSandLogs(t, addresses, hashes)
 
 	filterQuery := &LogQuery{
-		Address:     tesseracts[0].Address(),
+		Address:     addresses[0],
 		StartHeight: 5,
 		EndHeight:   15,
 		Topics: [][]common.Hash{
@@ -205,7 +200,7 @@ func TestAllSubscriptions(t *testing.T) {
 	tesseracts, logs := createTSandLogs(t, addresses, hashes)
 
 	filterQuery := &LogQuery{
-		Address:     tesseracts[0].Address(),
+		Address:     addresses[0],
 		StartHeight: 5,
 		EndHeight:   15,
 		Topics: [][]common.Hash{
@@ -221,7 +216,7 @@ func TestAllSubscriptions(t *testing.T) {
 	tsSubID := filterManager.NewTesseractFilter(connManager)
 	checkWsConn(t, filterManager, tsSubID, true)
 
-	tsByAccountSubID := filterManager.NewTesseractsByAccountFilter(connManager, tesseracts[0].Address())
+	tsByAccountSubID := filterManager.NewTesseractsByAccountFilter(connManager, addresses[0])
 	checkWsConn(t, filterManager, tsByAccountSubID, true)
 
 	logSubID := filterManager.NewLogFilter(connManager, filterQuery)
@@ -282,7 +277,7 @@ func TestFilterTimeout(t *testing.T) {
 
 	tesseract := tests.CreateTesseract(t, nil)
 
-	filterID := filterManager.NewTesseractsByAccountFilter(nil, tesseract.Address())
+	filterID := filterManager.NewTesseractsByAccountFilter(nil, tesseract.AnyAddress())
 
 	// Check if the filter manager has the filter
 	require.True(t, filterManager.exists(filterID))
@@ -304,7 +299,7 @@ func TestGetNumericTesseractNumber(t *testing.T) {
 	testcases := []struct {
 		name           string
 		height         int64
-		address        common.Address
+		address        identifiers.Address
 		expectedHeight uint64
 		expectedError  error
 	}{
@@ -387,42 +382,19 @@ func TestGetLogsFromTesseract(t *testing.T) {
 
 	// create tesseract with logs in receipts
 	params := &tests.CreateTesseractParams{
-		Address: addresses[0],
-		Height:  5,
-		HeaderCallback: func(header *common.TesseractHeader) {
-			header.Extra = common.CommitData{
-				GridID: &common.TesseractGridID{
-					Hash: hashes[0],
-				},
-			}
-		},
-		BodyCallback: func(body *common.TesseractBody) {
-			body.InteractionHash = tests.RandomHash(t)
+		TSDataCallback: func(ts *tests.TesseractData) {
+			ts.InteractionsHash = tests.RandomHash(t)
 		},
 		Receipts: common.Receipts{tests.RandomHash(t): receipts},
 	}
 
 	tesseract := tests.CreateTesseract(t, params)
 
-	// create dummy tesseract parts to validate address and height in RPCLogs
-	tsParts := &common.TesseractParts{
-		Total: 1,
-		Grid: map[common.Address]common.TesseractHeightAndHash{
-			tests.RandomAddress(t): {
-				Height: 33,
-				Hash:   tests.RandomHash(t),
-			},
-		},
-	}
-
-	chainManager.setTesseractPartsByGridHash(hashes[0], tsParts)
-
 	testcases := []struct {
 		name              string
 		filter            *LogQuery
 		expectedTesseract *common.Tesseract
 		expectedLogs      []*common.Log
-		expectedTSParts   *common.TesseractParts
 		expectedError     error
 	}{
 		{
@@ -439,43 +411,22 @@ func TestGetLogsFromTesseract(t *testing.T) {
 			},
 			expectedTesseract: tesseract,
 			expectedLogs:      []*common.Log{log},
-			expectedTSParts:   tsParts,
-		},
-		{
-			name: "failed to get logs as tesseract parts not found",
-			filter: &LogQuery{
-				Address: addresses[0],
-			},
-			expectedTesseract: tests.CreateTesseract(t, &tests.CreateTesseractParams{
-				HeaderCallback: func(header *common.TesseractHeader) {
-					header.Extra = common.CommitData{
-						GridID: &common.TesseractGridID{
-							Hash: tests.RandomHash(t),
-						},
-					}
-				},
-			}),
-			expectedError: common.ErrTesseractPartsNotFound,
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			rpcLogs, err := filterManager.getLogsFromTesseract(test.filter, test.expectedTesseract)
-
-			if test.expectedError != nil {
-				require.ErrorContains(t, err, test.expectedError.Error())
-
-				return
-			}
-
-			require.NoError(t, err)
+			rpcLogs := filterManager.getLogsFromTesseract(test.filter, test.expectedTesseract)
 
 			for i, log := range test.expectedLogs {
 				rpcLog := rpcLogs[i]
 				validateLogs(t, log, rpcLog)
-				require.Equal(t, test.expectedTesseract.InteractionHash(), rpcLog.IxHash)
-				validateTSGrid(t, test.expectedTSParts.Grid, rpcLog.Grid)
+				require.Equal(t, test.expectedTesseract.InteractionsHash(), rpcLog.IxHash)
+				require.Equal(t, test.expectedTesseract.Hash(), rpcLog.TSHash)
+				args.CheckForRPCParticipants(t,
+					test.expectedTesseract.Participants(),
+					rpcLog.Participants,
+				)
 			}
 		})
 	}
@@ -515,74 +466,35 @@ func TestGetLogsForQuery(t *testing.T) {
 	// ts 3 is used to simulate invalid grid hash
 	paramsMap := map[int]*tests.CreateTesseractParams{
 		0: {
-			Address: addresses[0],
-			Height:  0,
-			HeaderCallback: func(header *common.TesseractHeader) {
-				header.Extra = common.CommitData{
-					GridID: &common.TesseractGridID{
-						Hash: hashes[0],
-					},
-				}
-			},
-			Receipts: common.Receipts{tests.RandomHash(t): receipts},
-			Ixns:     tests.CreateIxns(t, 1, nil),
+			Addresses: []identifiers.Address{addresses[0]},
+			Heights:   []uint64{0},
+			Receipts:  common.Receipts{tests.RandomHash(t): receipts},
+			Ixns:      tests.CreateIxns(t, 1, nil),
 		},
 		1: {
-			Address: addresses[0],
-			Height:  1,
-			HeaderCallback: func(header *common.TesseractHeader) {
-				header.Extra = common.CommitData{
-					GridID: &common.TesseractGridID{
-						Hash: hashes[0],
-					},
-				}
-			},
-			Receipts: common.Receipts{tests.RandomHash(t): receipts},
-			Ixns:     tests.CreateIxns(t, 1, nil),
+			Addresses: []identifiers.Address{addresses[0]},
+			Heights:   []uint64{1},
+			Receipts:  common.Receipts{tests.RandomHash(t): receipts},
+			Ixns:      tests.CreateIxns(t, 1, nil),
 		},
 		2: {
-			Address: addresses[0],
-			Height:  2,
-			HeaderCallback: func(header *common.TesseractHeader) {
-				header.Extra = common.CommitData{
-					GridID: &common.TesseractGridID{
-						Hash: hashes[0],
-					},
-				}
-			},
+			Addresses: []identifiers.Address{addresses[0]},
+			Heights:   []uint64{2},
 		},
 		3: {
-			Address: addresses[0],
-			Height:  3,
-			HeaderCallback: func(header *common.TesseractHeader) {
-				header.Extra = common.CommitData{
-					GridID: &common.TesseractGridID{
-						Hash: tests.RandomHash(t),
-					},
-				}
-			},
-			Ixns: tests.CreateIxns(t, 1, nil),
+			Addresses: []identifiers.Address{addresses[0]},
+			Heights:   []uint64{3},
+			Ixns:      tests.CreateIxns(t, 1, nil),
 		},
 	}
 
 	tesseracts := tests.CreateTesseracts(t, 4, paramsMap)
 
-	tsGrid := map[common.Address]common.TesseractHeightAndHash{
-		tests.RandomAddress(t): {
-			Height: 33,
-			Hash:   tests.RandomHash(t),
-		},
-	}
-
-	tsParts := &common.TesseractParts{
-		Total: 1,
-		Grid:  tsGrid,
-	}
-
-	chainManager.setTesseractPartsByGridHash(hashes[0], tsParts)
-
 	for i := 0; i < 4; i++ {
-		chainManager.setTesseractHeightEntry(tesseracts[i].Address(), tesseracts[i].Height(), tesseracts[i].Hash())
+		for addr, p := range tesseracts[i].Participants() {
+			chainManager.setTesseractHeightEntry(addr, p.Height, tesseracts[i].Hash())
+		}
+
 		chainManager.setTesseractByHash(t, tesseracts[i])
 	}
 
@@ -591,7 +503,6 @@ func TestGetLogsForQuery(t *testing.T) {
 		filter             LogQuery
 		expectedTesseracts []*common.Tesseract
 		expectedLogs       []*common.Log
-		expectedTSGrid     map[common.Address]common.TesseractHeightAndHash
 		expectedError      error
 	}{
 		{
@@ -608,7 +519,6 @@ func TestGetLogsForQuery(t *testing.T) {
 			},
 			expectedTesseracts: tesseracts,
 			expectedLogs:       []*common.Log{log, log},
-			expectedTSGrid:     tsGrid,
 		},
 		{
 			name: "invalid start height",
@@ -669,8 +579,6 @@ func TestGetLogsForQuery(t *testing.T) {
 				},
 			},
 			expectedTesseracts: tesseracts,
-			expectedTSGrid:     tsGrid,
-			expectedError:      nil,
 		},
 		{
 			name: "failed to fetch logs as tesseract doesnt have interaction",
@@ -685,22 +593,6 @@ func TestGetLogsForQuery(t *testing.T) {
 				},
 			},
 			expectedTesseracts: []*common.Tesseract{tests.CreateTesseract(t, nil)},
-			expectedTSGrid:     tsGrid,
-			expectedError:      nil,
-		},
-		{
-			name: "failed to fetch logs from tesseract",
-			filter: LogQuery{
-				Address:     addresses[0],
-				StartHeight: 3,
-				EndHeight:   3,
-				Topics: [][]common.Hash{
-					{
-						hashes[0],
-					},
-				},
-			},
-			expectedError: common.ErrTesseractPartsNotFound,
 		},
 	}
 
@@ -719,8 +611,9 @@ func TestGetLogsForQuery(t *testing.T) {
 			for i, log := range test.expectedLogs {
 				rpcLog := rpcLogs[i]
 				validateLogs(t, log, rpcLog)
-				require.Equal(t, test.expectedTesseracts[i].InteractionHash(), rpcLog.IxHash)
-				validateTSGrid(t, test.expectedTSGrid, rpcLog.Grid)
+				require.Equal(t, test.expectedTesseracts[i].InteractionsHash(), rpcLog.IxHash)
+				require.Equal(t, test.expectedTesseracts[i].Hash(), rpcLog.TSHash)
+				args.CheckForRPCParticipants(t, test.expectedTesseracts[i].Participants(), rpcLog.Participants)
 			}
 		})
 	}
@@ -745,12 +638,12 @@ func TestGetFilterChangesAndUninstall(t *testing.T) {
 	defer cancel()
 
 	count := 2 // Posting 2 tesseracts first
-	res := make([]*rpcargs.RPCTesseract, 0)
+	res := make([]*args.RPCTesseract, 0)
 	_, err := tests.RetryUntilTimeout(ctx, 50*time.Millisecond, func() (interface{}, bool) {
 		filterChanges, err := filterManager.GetFilterChanges(filterID)
 		require.NoError(t, err)
 
-		rpcTesseracts, ok := filterChanges.([]*rpcargs.RPCTesseract)
+		rpcTesseracts, ok := filterChanges.([]*args.RPCTesseract)
 		require.True(t, ok)
 
 		count -= len(rpcTesseracts)
@@ -765,8 +658,10 @@ func TestGetFilterChangesAndUninstall(t *testing.T) {
 	require.NoError(t, err)
 
 	for i := 0; i < 2; i++ {
-		require.Equal(t, tesseracts[i].Address(), res[i].Address())
-		require.Equal(t, tesseracts[i].Height(), res[i].Height())
+		for _, addr := range tesseracts[i].Addresses() {
+			require.True(t, res[i].HasParticipant(addr))
+			require.Equal(t, tesseracts[i].Height(addr), res[i].Height(addr))
+		}
 	}
 
 	ok := filterManager.Uninstall(filterID)

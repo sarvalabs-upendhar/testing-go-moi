@@ -8,6 +8,8 @@ import (
 	"net"
 	"os"
 
+	"github.com/sarvalabs/go-moi-identifiers"
+
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/crypto/poi"
@@ -103,7 +105,7 @@ func GetAccountsWithMnemonic(accountCount int) ([]tests.AccountWithMnemonic, err
 
 		accounts = append(accounts,
 			tests.AccountWithMnemonic{
-				Addr:     common.BytesToAddress(publicKey),
+				Addr:     identifiers.NewAddressFromBytes(publicKey),
 				Mnemonic: mnemonic,
 			})
 	}

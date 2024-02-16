@@ -7,10 +7,10 @@ import (
 	"sync/atomic"
 
 	"github.com/pkg/errors"
-	engineio "github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
-
-	"github.com/sarvalabs/go-moi/common/kramaid"
 )
 
 type IxType int
@@ -64,12 +64,12 @@ type SendIXArgs struct {
 	Type  IxType `json:"type"`
 	Nonce uint64 `json:"nonce"`
 
-	Sender   Address `json:"sender"`
-	Receiver Address `json:"receiver"`
-	Payer    Address `json:"payer"`
+	Sender   identifiers.Address `json:"sender"`
+	Receiver identifiers.Address `json:"receiver"`
+	Payer    identifiers.Address `json:"payer"`
 
-	TransferValues  map[AssetID]*big.Int `json:"transfer_values"`
-	PerceivedValues map[AssetID]*big.Int `json:"perceived_values"`
+	TransferValues  map[identifiers.AssetID]*big.Int `json:"transfer_values"`
+	PerceivedValues map[identifiers.AssetID]*big.Int `json:"perceived_values"`
 
 	FuelPrice *big.Int `json:"fuel_price"`
 	FuelLimit uint64   `json:"fuel_limit"`
@@ -113,13 +113,13 @@ type IxInput struct {
 	Type  IxType `json:"type"`
 	Nonce uint64 `json:"nonce"`
 
-	Sender   Address `json:"sender"`
-	Receiver Address `json:"receiver"`
-	Payer    Address `json:"payer"`
+	Sender   identifiers.Address `json:"sender"`
+	Receiver identifiers.Address `json:"receiver"`
+	Payer    identifiers.Address `json:"payer"`
 
-	TransferValues  map[AssetID]*big.Int `json:"transfer_values"`
-	PerceivedValues map[AssetID]*big.Int `json:"perceived_values"`
-	PerceivedProofs []byte               `json:"perceived_proofs"`
+	TransferValues  map[identifiers.AssetID]*big.Int `json:"transfer_values"`
+	PerceivedValues map[identifiers.AssetID]*big.Int `json:"perceived_values"`
+	PerceivedProofs []byte                           `json:"perceived_proofs"`
 
 	FuelLimit uint64   `json:"fuel_limit"`
 	FuelPrice *big.Int `json:"fuel_price"`
@@ -152,7 +152,7 @@ func (ixInput *IxInput) Copy() IxInput {
 	}
 
 	if len(ixInput.TransferValues) > 0 {
-		input.TransferValues = make(map[AssetID]*big.Int)
+		input.TransferValues = make(map[identifiers.AssetID]*big.Int)
 
 		for k, v := range ixInput.TransferValues {
 			input.TransferValues[k] = new(big.Int).Set(v)
@@ -160,7 +160,7 @@ func (ixInput *IxInput) Copy() IxInput {
 	}
 
 	if len(ixInput.PerceivedValues) > 0 {
-		input.PerceivedValues = make(map[AssetID]*big.Int)
+		input.PerceivedValues = make(map[identifiers.AssetID]*big.Int)
 
 		for k, v := range ixInput.PerceivedValues {
 			input.PerceivedValues[k] = new(big.Int).Set(v)
@@ -330,17 +330,17 @@ func (ix Interaction) IxnType() engineio.IxnType {
 }
 
 // Sender returns the Address of the Interaction sender
-func (ix Interaction) Sender() Address {
+func (ix Interaction) Sender() identifiers.Address {
 	return ix.inner.Input.Sender
 }
 
 // Payer returns the Address of the Interaction sender
-func (ix Interaction) Payer() Address {
+func (ix Interaction) Payer() identifiers.Address {
 	return ix.inner.Input.Payer
 }
 
 // Receiver returns the Address of the Interaction receiver.
-func (ix Interaction) Receiver() Address {
+func (ix Interaction) Receiver() identifiers.Address {
 	// Based on the interaction type return the address
 	switch ix.Type() {
 	case IxAssetCreate:
@@ -373,13 +373,13 @@ func (ix Interaction) Nonce() uint64 {
 }
 
 // PerceivedValues returns the map of AssetID to transfer values
-func (ix Interaction) PerceivedValues() map[AssetID]*big.Int {
+func (ix Interaction) PerceivedValues() map[identifiers.AssetID]*big.Int {
 	return ix.inner.Input.PerceivedValues
 }
 
 // TransferValues returns the map of AssetID to transfer values
-func (ix Interaction) TransferValues() map[AssetID]*big.Int {
-	transferValues := make(map[AssetID]*big.Int)
+func (ix Interaction) TransferValues() map[identifiers.AssetID]*big.Int {
+	transferValues := make(map[identifiers.AssetID]*big.Int)
 	for assetID, amount := range ix.inner.Input.TransferValues {
 		transferValues[assetID] = new(big.Int).Set(amount)
 	}
@@ -574,7 +574,7 @@ func (ix *Interaction) Calldata() []byte {
 	return payload.Calldata
 }
 
-func (ix *Interaction) LogicID() LogicID {
+func (ix *Interaction) LogicID() identifiers.LogicID {
 	payload, err := ix.GetLogicPayload()
 	if err != nil {
 		return ""

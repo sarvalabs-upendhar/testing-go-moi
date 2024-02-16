@@ -4,15 +4,69 @@ import (
 	"container/heap"
 	"sync"
 
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
+
 	"github.com/sarvalabs/go-moi/common"
 )
 
 type TesseractInfo struct {
+	addr          identifiers.Address
 	tesseract     *common.Tesseract
 	shouldExecute bool
 	clusterInfo   *common.ICSClusterInfo
 	icsNodeSet    *common.ICSNodeSet
-	delta         map[common.Hash][]byte
+	ixnsHashes    common.Hashes
+	delta         map[string][]byte
+}
+
+func (ti *TesseractInfo) CreateTSInfoWithAddr(addr identifiers.Address) *TesseractInfo {
+	return &TesseractInfo{
+		addr:          addr,
+		tesseract:     ti.tesseract,
+		shouldExecute: ti.shouldExecute,
+		clusterInfo:   ti.clusterInfo,
+		icsNodeSet:    ti.icsNodeSet,
+		ixnsHashes:    ti.ixnsHashes,
+		delta:         ti.delta,
+	}
+}
+
+func (ti *TesseractInfo) address() identifiers.Address {
+	return ti.addr
+}
+
+func (ti *TesseractInfo) height() uint64 {
+	return ti.tesseract.Participants()[ti.addr].Height
+}
+
+func (ti *TesseractInfo) extractICSNodeset(s *Syncer) bool {
+	var err error
+
+	for _, contextHash := range ti.tesseract.PreviousContext() {
+		if contextHash.IsNil() {
+			continue
+		}
+
+		if _, ok := ti.delta[contextHash.String()]; !ok {
+			ti.icsNodeSet, err = s.state.FetchICSNodeSet(ti.tesseract, ti.clusterInfo)
+			if err != nil {
+				s.logger.Error("Failed to fetch node set", "err", err)
+
+				return false
+			}
+		} else {
+			ti.icsNodeSet, err = s.state.GetICSNodeSetFromRawContext(ti.tesseract, ti.delta, ti.clusterInfo)
+			if err != nil {
+				s.logger.Error("Failed to fetch node set", "err", err)
+
+				return false
+			}
+		}
+
+		break
+	}
+
+	return true
 }
 
 type TesseractQueue struct {
@@ -33,10 +87,10 @@ func (s *TesseractQueue) Push(ts ...*TesseractInfo) {
 	defer s.mtx.Unlock()
 
 	for _, t := range ts {
-		if _, ok := s.set[t.tesseract.Height()]; !ok {
+		if _, ok := s.set[t.height()]; !ok {
 			heap.Push(&s.Items, t)
 
-			s.set[t.tesseract.Height()] = struct{}{}
+			s.set[t.height()] = struct{}{}
 		}
 	}
 }
@@ -63,7 +117,7 @@ func (s *TesseractQueue) Pop() *TesseractInfo {
 		panic("invalid element in tesseract queue")
 	}
 
-	delete(s.set, tsInfo.tesseract.Height())
+	delete(s.set, tsInfo.height())
 
 	return tsInfo
 }
@@ -105,7 +159,7 @@ func (q *sortedTesseractMsg) Swap(i, j int) {
 }
 
 func (q *sortedTesseractMsg) Less(i, j int) bool {
-	return (*q)[i].tesseract.Height() < (*q)[j].tesseract.Height()
+	return (*q)[i].height() < (*q)[j].height()
 }
 
 func (q *sortedTesseractMsg) Push(x interface{}) {

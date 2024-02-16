@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/minio/highwayhash"
+	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
 	"golang.org/x/crypto/blake2b"
 )
@@ -81,6 +82,28 @@ func (h *Hash) UnmarshalText(text []byte) error {
 	_, err := hex.Decode(h[:], text)
 
 	return err
+}
+
+// Hashes are array of hashes
+type Hashes []Hash
+
+// Bytes returns the POLO serialized bytes of all hashes
+func (h Hashes) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(h)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize interactions")
+	}
+
+	return rawData, nil
+}
+
+// FromBytes decodes the POLO serialized bytes into hashes
+func (h *Hashes) FromBytes(bytes []byte) error {
+	if err := polo.Depolorize(h, bytes); err != nil {
+		return errors.Wrap(err, "failed to depolorize interactions")
+	}
+
+	return nil
 }
 
 // FromHex returns the bytes represented by the hexadecimal string s

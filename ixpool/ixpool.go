@@ -3,11 +3,13 @@ package ixpool
 import (
 	"context"
 	errors2 "errors"
+	"fmt"
 	"math/big"
 	"time"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
@@ -34,15 +36,15 @@ var (
 )
 
 type promoteRequest struct {
-	address common.Address
+	address identifiers.Address
 }
 
 type stateManager interface {
-	GetNonce(addr common.Address, stateHash common.Hash) (uint64, error)
-	IsAccountRegistered(addr common.Address) (bool, error)
-	IsLogicRegistered(logicID common.LogicID) error
-	GetBalance(addrs common.Address, assetID common.AssetID, stateHash common.Hash) (*big.Int, error)
-	GetAssetInfo(assetID common.AssetID, hash common.Hash) (*common.AssetDescriptor, error)
+	GetNonce(addr identifiers.Address, stateHash common.Hash) (uint64, error)
+	IsAccountRegistered(addr identifiers.Address) (bool, error)
+	IsLogicRegistered(logicID identifiers.LogicID) error
+	GetBalance(addrs identifiers.Address, assetID identifiers.AssetID, stateHash common.Hash) (*big.Int, error)
+	GetAssetInfo(assetID identifiers.AssetID, hash common.Hash) (*common.AssetDescriptor, error)
 }
 
 type executionManager interface {
@@ -113,6 +115,21 @@ func NewIxPool(
 // GetPendingIx returns the interaction in ixpool for the given interaction hash
 func (i *IxPool) GetPendingIx(ixHash common.Hash) (*common.Interaction, bool) {
 	return i.allIxs.get(ixHash)
+}
+
+func (i *IxPool) GetIxns(ixHashes common.Hashes) (common.Interactions, error) {
+	ixns := make(common.Interactions, 0, len(ixHashes))
+
+	for _, ixHash := range ixHashes {
+		ix, found := i.allIxs.get(ixHash)
+		if !found {
+			return nil, errors.New(fmt.Sprintf("ixn not found in ixpool %s", ixHash))
+		}
+
+		ixns = append(ixns, ix)
+	}
+
+	return ixns, nil
 }
 
 func (i *IxPool) signalPruning() {
@@ -240,7 +257,7 @@ func (i *IxPool) AddInteractions(ixs common.Interactions) []error {
 	return errs
 }
 
-func (i *IxPool) invokePromotion(address common.Address, callPromote bool) {
+func (i *IxPool) invokePromotion(address identifiers.Address, callPromote bool) {
 	if callPromote {
 		select {
 		case <-i.ctx.Done():
@@ -266,7 +283,7 @@ func (i *IxPool) handlePromoteRequest(req promoteRequest) {
 
 // createAccountOnce creates an account and
 // ensures it is only initialized once.
-func (i *IxPool) createAccountOnce(newAddr common.Address, nonce uint64) *account {
+func (i *IxPool) createAccountOnce(newAddr identifiers.Address, nonce uint64) *account {
 	// fetch nonce from the latest state
 	stateNonce, err := i.sm.GetNonce(newAddr, common.NilHash)
 	if err != nil {
@@ -284,7 +301,7 @@ func (i *IxPool) ResetWithHeaders(ts *common.Tesseract) {
 }
 
 func (i *IxPool) resetWithInteractions(ixs common.Interactions) {
-	updatedNonces := make(map[common.Address]uint64)
+	updatedNonces := make(map[identifiers.Address]uint64)
 	// cleanup the lookup queue
 	i.allIxs.remove(ixs...)
 
@@ -313,7 +330,7 @@ func (i *IxPool) resetWithInteractions(ixs common.Interactions) {
 	i.resetAccounts(updatedNonces)
 }
 
-func (i *IxPool) resetAccounts(nonces map[common.Address]uint64) {
+func (i *IxPool) resetAccounts(nonces map[identifiers.Address]uint64) {
 	for addr, nonce := range nonces {
 		if !i.accounts.exists(addr) {
 			continue
@@ -323,7 +340,7 @@ func (i *IxPool) resetAccounts(nonces map[common.Address]uint64) {
 	}
 }
 
-func (i *IxPool) resetAccount(addr common.Address, nonce uint64) {
+func (i *IxPool) resetAccount(addr identifiers.Address, nonce uint64) {
 	cleanup := func(ixns common.Interactions) {
 		// update pool state
 		i.allIxs.remove(ixns...)
@@ -448,9 +465,9 @@ func (i *IxPool) Drop(ix *common.Interaction) {
 	account := i.accounts.get(ix.Sender())
 
 	if account != nil {
-		// lock enqueued and promoted
-		account.enqueued.lock(true)
+		// lock promoted,enqueued and nonceToIX
 		account.promoted.lock(true)
+		account.enqueued.lock(true)
 		account.nonceToIX.lock()
 
 		defer func() {
@@ -500,7 +517,7 @@ func (i *IxPool) Drop(ix *common.Interaction) {
 }
 
 // IncrementWaitTime updates the waitTime for the given account
-func (i *IxPool) IncrementWaitTime(addr common.Address, baseTime time.Duration) error {
+func (i *IxPool) IncrementWaitTime(addr identifiers.Address, baseTime time.Duration) error {
 	acc := i.accounts.get(addr)
 	if acc == nil {
 		return common.ErrAccountNotFound
@@ -648,7 +665,7 @@ func (i *IxPool) validateAssetMint(ix *common.Interaction) error {
 	}
 
 	// can not mint asset standard mas1
-	if assetID.Standard() == common.MAS1 {
+	if common.AssetStandard(assetID.Standard()) == common.MAS1 {
 		return common.ErrMintNonFungibleToken
 	}
 

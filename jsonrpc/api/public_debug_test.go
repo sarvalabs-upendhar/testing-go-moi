@@ -3,17 +3,16 @@ package api
 import (
 	"testing"
 
-	"github.com/sarvalabs/go-moi/common/hexutil"
-
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/sarvalabs/go-moi/senatus"
-
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/tests"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
+	"github.com/sarvalabs/go-moi/senatus"
 )
 
 // Debug API Testcases
@@ -74,6 +73,14 @@ func TestPublicDebugAPI_GetNodeMetaInfo(t *testing.T) {
 		expectedError   error
 	}{
 		{
+			name: "Return error if both krama id and peer id are provided in the request",
+			args: rpcargs.NodeMetaInfoArgs{
+				PeerID:  peerIDs[1].String(),
+				KramaID: entries[peerIDs[2]].KramaID,
+			},
+			expectedError: common.ErrInvalidIDCombination,
+		},
+		{
 			name:            "Returns all the node meta info stored in the database",
 			args:            rpcargs.NodeMetaInfoArgs{},
 			entries:         entries,
@@ -104,7 +111,7 @@ func TestPublicDebugAPI_GetNodeMetaInfo(t *testing.T) {
 		{
 			name: "Return error if the queried peer id's node meta info doesn't exists",
 			args: rpcargs.NodeMetaInfoArgs{
-				PeerID: tests.GetTestPeerID(t).String(),
+				PeerID: tests.RandomPeerID(t).String(),
 			},
 			entries:       entries,
 			expectedError: common.ErrKeyNotFound,
@@ -112,7 +119,7 @@ func TestPublicDebugAPI_GetNodeMetaInfo(t *testing.T) {
 		{
 			name: "Return error if the queried krama id's node meta info doesn't exists",
 			args: rpcargs.NodeMetaInfoArgs{
-				KramaID: tests.GetTestKramaID(t, 2),
+				KramaID: tests.RandomKramaID(t, 2),
 			},
 			entries:       entries,
 			expectedError: common.ErrKeyNotFound,
@@ -131,8 +138,7 @@ func TestPublicDebugAPI_GetNodeMetaInfo(t *testing.T) {
 			nodeMetaInfo, err := debugAPI.GetNodeMetaInfo(&test.args)
 
 			if test.expectedError != nil {
-				require.Error(t, err)
-				require.Equal(t, err, test.expectedError)
+				require.ErrorContains(t, err, test.expectedError.Error())
 
 				return
 			}
@@ -158,11 +164,11 @@ func TestPublicDebugAPI_GetAccounts(t *testing.T) {
 	testcases := []struct {
 		name         string
 		setAddressFn func(db *MockDatabase)
-		expectedList []common.Address
+		expectedList []identifiers.Address
 	}{
 		{
 			name:         "Should return an empty list if no accounts are present",
-			expectedList: make([]common.Address, 0),
+			expectedList: make([]identifiers.Address, 0),
 		},
 		{
 			name: "Returns a list of address of the accounts",

@@ -3,7 +3,9 @@ package kbft
 import (
 	"time"
 
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
+
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
 )
 
@@ -65,7 +67,7 @@ func (rtype RoundStepType) String() string {
 // RoundState is a struct that represent the state of a consensus round
 type RoundState struct {
 	// Represents the current round heights being worked on
-	Heights map[common.Address]uint64 `json:"heights"`
+	Heights map[identifiers.Address]uint64 `json:"heights"`
 
 	// Represents the current round number
 	Round int32 `json:"round"`
@@ -88,19 +90,19 @@ type RoundState struct {
 	// Represents the round proposal
 	Proposal *ktypes.Proposal `json:"proposal"`
 
-	// Represents the proposed tesseract grid for the round
-	ProposalGrid *ktypes.TesseractGrid `json:"proposal_tesseract"`
+	// Represents the proposed tesseract for the round
+	ProposalTS *common.Tesseract `json:"proposal_tesseract"`
 
 	// TODO: Add docs
 	LockedRound int32 `json:"locked_round"`
 
-	LockedGrid *ktypes.TesseractGrid `json:"locked_tesseract"`
+	LockedTS *common.Tesseract `json:"locked_tesseract"`
 
 	// Represents the last known round with proof of lock for a non-nil valid block
 	ValidRound int32 `json:"valid_round"`
 
-	// Represents the tesseract grid (block) for the last known round with proof of lock for a non-nil valid block
-	ValidGrid *ktypes.TesseractGrid `json:"valid_tesseract"`
+	// Represents the tesseract (block) for the last known round with proof of lock for a non-nil valid block
+	ValidTS *common.Tesseract `json:"valid_tesseract"`
 
 	// Represents the last precommit at height-1
 	LastCommit *VoteSet `json:"last_commit"`

@@ -6,6 +6,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/state"
@@ -21,15 +22,12 @@ func RunLogicInvoke(
 	ctx *common.ExecutionContext,
 	tank *FuelTank,
 	objects state.ObjectMap,
-) (*common.Receipt, error) {
-	payload, err := ix.GetLogicPayload()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not find logic payload")
-	}
+) *common.Receipt {
+	// Obtain the Logic Payload from the Interaction
+	payload, _ := ix.GetLogicPayload()
 
-	if payload.Logic == "" {
-		return nil, errors.New("missing logic ID for logic invoke")
-	}
+	// Generate a new receipt
+	receipt := common.NewReceipt(ix)
 
 	// Generate the address of the target logic account from the LogicID
 	logicAddress := payload.Logic.Address()
@@ -45,29 +43,25 @@ func RunLogicInvoke(
 
 	consumption, receiptPayload, err := InvokeLogic(ix, ctx, logicacc, options...)
 	if err != nil {
-		return nil, err
+		receipt.Status = common.ReceiptStateReverted
 	}
 
 	// Exhaust fuel from tank
 	if !tank.Exhaust(consumption) {
-		return nil, common.ErrInsufficientFuel
+		receipt.Status = common.ReceiptFuelExhausted
 	}
 
-	// Generate a new receipt and set the fuel consumption
-	receipt := common.NewReceipt(ix)
+	// Set the fuel consumption
 	receipt.SetFuelUsed(tank.Consumed)
+	// Set the extra data of the receipt
+	common.SetReceiptExtraData(receipt, *receiptPayload)
 
 	// Set the status of the receipt
 	if receiptPayload.Error != nil {
-		receipt.Status = common.ReceiptFailed
+		receipt.Status = common.ReceiptExceptionRaised
 	}
 
-	// Set the extra data of the receipt
-	if err = receipt.SetExtraData(receiptPayload); err != nil {
-		return nil, err
-	}
-
-	return receipt, nil
+	return receipt
 }
 
 // LogicInvokeOption is an option for InvokeLogic and modifies the logic invoke behaviour
@@ -178,7 +172,7 @@ func InvokeLogic(
 }
 
 type logicInvoker struct {
-	logicID     common.LogicID
+	logicID     identifiers.LogicID
 	logicObject *state.LogicObject
 
 	fueltank    *FuelTank

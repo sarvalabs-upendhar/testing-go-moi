@@ -2,17 +2,17 @@ package common
 
 import (
 	"encoding/binary"
-	"encoding/hex"
-	"fmt"
+
+	"github.com/sarvalabs/go-moi-identifiers"
 )
 
 const KMOITokenSymbol = "KMOI"
 
 var (
 	GenesisIxHash    = GetHash([]byte("Genesis Interaction"))
-	SargaLogicID     = NewLogicIDv0(true, false, false, false, 0, SargaAddress)
-	GuardianLogicID  = NewLogicIDv0(true, false, false, false, 0, GuardianLogicAddr)
-	KMOITokenAssetID = NewAssetIDv0(false, false, 0, 0, KMOITokenAddress)
+	SargaLogicID     = identifiers.NewLogicIDv0(true, false, false, false, 0, SargaAddress)
+	GuardianLogicID  = identifiers.NewLogicIDv0(true, false, false, false, 0, GuardianLogicAddr)
+	KMOITokenAssetID = identifiers.NewAssetIDv0(false, false, 0, 0, KMOITokenAddress)
 )
 
 var (
@@ -20,84 +20,10 @@ var (
 	StakingContractAddr = CreateAddressFromString("staking-contract")
 	GuardianLogicAddr   = CreateAddressFromString("guardian-contract")
 	KMOITokenAddress    = CreateAddressFromString(KMOITokenSymbol)
-	GenesisLogicAddrs   = []Address{StakingContractAddr, GuardianLogicAddr}
+	GenesisLogicAddrs   = []identifiers.Address{StakingContractAddr, GuardianLogicAddr}
 )
 
-const AddressLength = 32
-
-var NilAddress Address
-
-// Address represents the 32 byte address of an MOI account.
-type Address [AddressLength]byte
-
-func (a Address) IsNil() bool {
-	return a == NilAddress
-}
-
-func (a Address) String() string {
-	if a == NilAddress {
-		return ""
-	}
-
-	return a.Hex()
-}
-func (a Address) Bytes() []byte { return a[:] }
-
-// SetBytes sets the address to the value of b.
-func (a *Address) SetBytes(b []byte) {
-	if len(b) > len(a) {
-		b = b[len(b)-AddressLength:]
-	}
-
-	copy(a[AddressLength-len(b):], b)
-}
-
-// MarshalText implements the custom json marshaller
-func (a Address) MarshalText() ([]byte, error) {
-	result := make([]byte, len(a)*2+2)
-	copy(result[:2], "0x")
-	hex.Encode(result[2:], a.Bytes())
-
-	return result, nil
-}
-
-// UnmarshalText sets the address to the value of text.
-func (a *Address) UnmarshalText(text []byte) error {
-	if !(len(text) >= 2 && text[0] == byte('0') && (text[1] == byte('X') || text[1] == byte('x'))) {
-		return ErrInvalidAddress
-	}
-
-	text = text[2:]
-
-	if len(text) != AddressLength*2 {
-		return fmt.Errorf("invalid address length: %d", len(text)/2)
-	}
-
-	_, err := hex.Decode(a[:], text)
-
-	return err
-}
-
-// Hex return the Hex representation of the Address
-func (a Address) Hex() string {
-	return "0x" + hex.EncodeToString(a[:])
-}
-
-// BytesToAddress returns the address from b
-func BytesToAddress(b []byte) Address {
-	var a Address
-
-	a.SetBytes(b)
-
-	return a
-}
-
-// HexToAddress converts string to Address
-func HexToAddress(s string) Address {
-	return BytesToAddress(FromHex(s))
-}
-
-func ContainsAddress(addresses []Address, target Address) bool {
+func ContainsAddress(addresses []identifiers.Address, target identifiers.Address) bool {
 	for _, addr := range addresses {
 		if addr == target {
 			return true
@@ -107,16 +33,18 @@ func ContainsAddress(addresses []Address, target Address) bool {
 	return false
 }
 
-func CreateAddressFromString(name string) Address {
-	return BytesToAddress(GetHash([]byte(name)).Bytes())
+func CreateAddressFromString(name string) identifiers.Address {
+	hash := GetHash([]byte(name)).Bytes()
+
+	return identifiers.NewAddressFromBytes(hash)
 }
 
-func NewAccountAddress(nonce uint64, address Address) Address {
+func NewAccountAddress(nonce uint64, address identifiers.Address) identifiers.Address {
 	rawBytes := make([]byte, 40)
 	binary.BigEndian.PutUint64(rawBytes, nonce)
 	copy(rawBytes[8:], address.Bytes())
 
-	GetHash(rawBytes)
+	hash := GetHash(rawBytes).Bytes()
 
-	return BytesToAddress(GetHash(rawBytes).Bytes())
+	return identifiers.NewAddressFromBytes(hash)
 }

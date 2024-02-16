@@ -4,9 +4,9 @@ import (
 	"encoding/hex"
 
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 
-	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/kramaid"
 	cryptocommon "github.com/sarvalabs/go-moi/crypto/common"
 	"github.com/sarvalabs/go-moi/crypto/poi"
 	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
@@ -26,7 +26,7 @@ type KramaVault struct {
 	consensusPriv PrivateKey      // Private Key used in consensus for signing etc
 	networkPriv   PrivateKey      // Private key used in p2p communication
 	kramaID       kramaid.KramaID // KramaID of the user or node
-	Address       common.Address
+	Address       identifiers.Address
 	mnemonic      poi.Mnemonic
 }
 
@@ -52,10 +52,10 @@ func loadVault(signingAndNetworkKeys []byte,
 	networkKey := signingAndNetworkKeys[32:]
 
 	currentKID, err := kramaid.NewKramaID(
+		kramaIDVersion,
 		networkKey,
 		nodeIndex,
 		participantID,
-		kramaIDVersion,
 		true,
 	)
 	if err != nil {
@@ -124,10 +124,10 @@ func NewVault(cfg *VaultConfig, validatorType moinode.MoiNodeType, kramaIDVersio
 		}
 
 		currentKID, err := kramaid.NewKramaID(
+			kramaIDVersion,
 			bothSignAndCommPrivBytes[32:],
 			cfg.NodeIndex,
 			moiID,
-			kramaIDVersion,
 			true,
 		)
 		if err != nil {
@@ -160,6 +160,10 @@ func (vault *KramaVault) SetConsensusPrivateKey(key PrivateKey) {
 
 func (vault *KramaVault) GetNetworkPrivateKey() PrivateKey {
 	return vault.networkPriv
+}
+
+func (vault *KramaVault) SetNetworkPrivateKey(key PrivateKey) {
+	vault.networkPriv = key
 }
 
 func (vault *KramaVault) KramaID() kramaid.KramaID {

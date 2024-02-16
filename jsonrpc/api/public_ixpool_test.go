@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -34,19 +35,19 @@ func TestPublicIXPoolAPI_Content(t *testing.T) {
 
 	testcases := []struct {
 		name            string
-		accounts        map[common.Address]*account
-		testFn          func(accounts map[common.Address]*account)
-		expectedIxQueue map[common.Address]*expectedResult
+		accounts        map[identifiers.Address]*account
+		testFn          func(accounts map[identifiers.Address]*account)
+		expectedIxQueue map[identifiers.Address]*expectedResult
 	}{
 		{
 			name: "Ix pool with no interactions",
-			accounts: map[common.Address]*account{
+			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
 					pending: common.Interactions{},
 					queued:  common.Interactions{},
 				},
 			},
-			expectedIxQueue: map[common.Address]*expectedResult{
+			expectedIxQueue: map[identifiers.Address]*expectedResult{
 				addressList[0]: {
 					pending: 0,
 					queued:  0,
@@ -55,7 +56,7 @@ func TestPublicIXPoolAPI_Content(t *testing.T) {
 		},
 		{
 			name: "Ix pool with one pending interaction",
-			accounts: map[common.Address]*account{
+			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
 					pending: common.Interactions{
 						newTestInteraction(t, 1, func(ixData *common.IxData) {
@@ -67,12 +68,12 @@ func TestPublicIXPoolAPI_Content(t *testing.T) {
 					queued: common.Interactions{},
 				},
 			},
-			testFn: func(accounts map[common.Address]*account) {
+			testFn: func(accounts map[identifiers.Address]*account) {
 				for addr, account := range accounts {
 					ixpool.setIxs(addr, account.pending, account.queued)
 				}
 			},
-			expectedIxQueue: map[common.Address]*expectedResult{
+			expectedIxQueue: map[identifiers.Address]*expectedResult{
 				addressList[0]: {
 					pending: 1,
 					queued:  0,
@@ -81,7 +82,7 @@ func TestPublicIXPoolAPI_Content(t *testing.T) {
 		},
 		{
 			name: "Ix pool with one queued interaction",
-			accounts: map[common.Address]*account{
+			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
 					pending: common.Interactions{},
 					queued: common.Interactions{
@@ -93,12 +94,12 @@ func TestPublicIXPoolAPI_Content(t *testing.T) {
 					},
 				},
 			},
-			testFn: func(accounts map[common.Address]*account) {
+			testFn: func(accounts map[identifiers.Address]*account) {
 				for addr, account := range accounts {
 					ixpool.setIxs(addr, account.pending, account.queued)
 				}
 			},
-			expectedIxQueue: map[common.Address]*expectedResult{
+			expectedIxQueue: map[identifiers.Address]*expectedResult{
 				addressList[0]: {
 					pending: 0,
 					queued:  1,
@@ -107,7 +108,7 @@ func TestPublicIXPoolAPI_Content(t *testing.T) {
 		},
 		{
 			name: "Ix pool with multiple pending and queued interactions",
-			accounts: map[common.Address]*account{
+			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
 					pending: common.Interactions{},
 					queued: common.Interactions{
@@ -145,12 +146,12 @@ func TestPublicIXPoolAPI_Content(t *testing.T) {
 					},
 				},
 			},
-			testFn: func(accounts map[common.Address]*account) {
+			testFn: func(accounts map[identifiers.Address]*account) {
 				for addr, account := range accounts {
 					ixpool.setIxs(addr, account.pending, account.queued)
 				}
 			},
-			expectedIxQueue: map[common.Address]*expectedResult{
+			expectedIxQueue: map[identifiers.Address]*expectedResult{
 				addressList[0]: {
 					pending: 0,
 					queued:  2,
@@ -189,15 +190,15 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 	testcases := []struct {
 		name            string
 		args            *rpcargs.IxPoolArgs
-		accounts        map[common.Address]*account
-		testFn          func(accounts map[common.Address]*account)
+		accounts        map[identifiers.Address]*account
+		testFn          func(accounts map[identifiers.Address]*account)
 		expectedIxQueue *expectedResult
 		expectedErr     error
 	}{
 		{
 			name: "nil address",
 			args: &rpcargs.IxPoolArgs{
-				Address: common.NilAddress,
+				Address: identifiers.NilAddress,
 			},
 			expectedErr: common.ErrInvalidAddress,
 		},
@@ -206,7 +207,7 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 			args: &rpcargs.IxPoolArgs{
 				Address: addressList[0],
 			},
-			accounts: map[common.Address]*account{
+			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
 					pending: common.Interactions{},
 					queued:  common.Interactions{},
@@ -223,7 +224,7 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 			args: &rpcargs.IxPoolArgs{
 				Address: addressList[0],
 			},
-			accounts: map[common.Address]*account{
+			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
 					pending: common.Interactions{
 						newTestInteraction(t, 1, func(ixData *common.IxData) {
@@ -235,7 +236,7 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 					queued: common.Interactions{},
 				},
 			},
-			testFn: func(accounts map[common.Address]*account) {
+			testFn: func(accounts map[identifiers.Address]*account) {
 				for addr, account := range accounts {
 					ixpool.setIxs(addr, account.pending, account.queued)
 				}
@@ -251,7 +252,7 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 			args: &rpcargs.IxPoolArgs{
 				Address: addressList[0],
 			},
-			accounts: map[common.Address]*account{
+			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
 					pending: common.Interactions{},
 					queued: common.Interactions{
@@ -263,7 +264,7 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 					},
 				},
 			},
-			testFn: func(accounts map[common.Address]*account) {
+			testFn: func(accounts map[identifiers.Address]*account) {
 				for addr, account := range accounts {
 					ixpool.setIxs(addr, account.pending, account.queued)
 				}
@@ -279,7 +280,7 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 			args: &rpcargs.IxPoolArgs{
 				Address: addressList[1],
 			},
-			accounts: map[common.Address]*account{
+			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
 					pending: common.Interactions{},
 					queued: common.Interactions{
@@ -317,7 +318,7 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 					},
 				},
 			},
-			testFn: func(accounts map[common.Address]*account) {
+			testFn: func(accounts map[identifiers.Address]*account) {
 				for addr, account := range accounts {
 					ixpool.setIxs(addr, account.pending, account.queued)
 				}
@@ -360,13 +361,13 @@ func TestPublicIXPoolAPI_Status(t *testing.T) {
 
 	testcases := []struct {
 		name            string
-		accounts        map[common.Address]*account
-		testFn          func(accounts map[common.Address]*account)
+		accounts        map[identifiers.Address]*account
+		testFn          func(accounts map[identifiers.Address]*account)
 		expectedIxQueue *expectedResult
 	}{
 		{
 			name: "Ix pool with no interactions",
-			accounts: map[common.Address]*account{
+			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
 					pending: common.Interactions{},
 					queued:  common.Interactions{},
@@ -379,7 +380,7 @@ func TestPublicIXPoolAPI_Status(t *testing.T) {
 		},
 		{
 			name: "Ix pool with multiple pending and queued interactions",
-			accounts: map[common.Address]*account{
+			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
 					pending: common.Interactions{},
 					queued: common.Interactions{
@@ -417,7 +418,7 @@ func TestPublicIXPoolAPI_Status(t *testing.T) {
 					},
 				},
 			},
-			testFn: func(accounts map[common.Address]*account) {
+			testFn: func(accounts map[identifiers.Address]*account) {
 				for addr, account := range accounts {
 					ixpool.setIxs(addr, account.pending, account.queued)
 				}
@@ -451,25 +452,25 @@ func TestPublicIXPoolAPI_Inspect(t *testing.T) {
 
 	testcases := []struct {
 		name            string
-		accounts        map[common.Address]*account
-		testFn          func(accounts map[common.Address]*account)
-		expectedAccInfo map[common.Address]*expectedResult
+		accounts        map[identifiers.Address]*account
+		testFn          func(accounts map[identifiers.Address]*account)
+		expectedAccInfo map[identifiers.Address]*expectedResult
 	}{
 		{
 			name: "Ix pool with no interactions",
-			accounts: map[common.Address]*account{
+			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
 					pending:  common.Interactions{},
 					queued:   common.Interactions{},
 					waitTime: 0,
 				},
 			},
-			testFn: func(accounts map[common.Address]*account) {
+			testFn: func(accounts map[identifiers.Address]*account) {
 				for addr, account := range accounts {
 					ixpool.setWaitTime(addr, account.waitTime)
 				}
 			},
-			expectedAccInfo: map[common.Address]*expectedResult{
+			expectedAccInfo: map[identifiers.Address]*expectedResult{
 				addressList[0]: {
 					pending:  0,
 					queued:   0,
@@ -480,7 +481,7 @@ func TestPublicIXPoolAPI_Inspect(t *testing.T) {
 		},
 		{
 			name: "Ix pool with one pending interaction",
-			accounts: map[common.Address]*account{
+			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
 					pending: common.Interactions{
 						newTestInteraction(t, 0, func(ixData *common.IxData) {
@@ -495,13 +496,13 @@ func TestPublicIXPoolAPI_Inspect(t *testing.T) {
 					waitTime: int64(1500 * time.Millisecond),
 				},
 			},
-			testFn: func(accounts map[common.Address]*account) {
+			testFn: func(accounts map[identifiers.Address]*account) {
 				for addr, account := range accounts {
 					ixpool.setIxs(addr, account.pending, account.queued)
 					ixpool.setWaitTime(addr, account.waitTime)
 				}
 			},
-			expectedAccInfo: map[common.Address]*expectedResult{
+			expectedAccInfo: map[identifiers.Address]*expectedResult{
 				addressList[0]: {
 					pending:  1,
 					queued:   0,
@@ -512,7 +513,7 @@ func TestPublicIXPoolAPI_Inspect(t *testing.T) {
 		},
 		{
 			name: "Ix pool with one queued interaction",
-			accounts: map[common.Address]*account{
+			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
 					pending: common.Interactions{},
 					queued: common.Interactions{
@@ -526,13 +527,13 @@ func TestPublicIXPoolAPI_Inspect(t *testing.T) {
 					waitTime: int64(2500 * time.Millisecond),
 				},
 			},
-			testFn: func(accounts map[common.Address]*account) {
+			testFn: func(accounts map[identifiers.Address]*account) {
 				for addr, account := range accounts {
 					ixpool.setIxs(addr, account.pending, account.queued)
 					ixpool.setWaitTime(addr, account.waitTime)
 				}
 			},
-			expectedAccInfo: map[common.Address]*expectedResult{
+			expectedAccInfo: map[identifiers.Address]*expectedResult{
 				addressList[0]: {
 					pending:  0,
 					queued:   1,
@@ -543,7 +544,7 @@ func TestPublicIXPoolAPI_Inspect(t *testing.T) {
 		},
 		{
 			name: "Ix pool with multiple pending and queued interactions",
-			accounts: map[common.Address]*account{
+			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
 					pending: common.Interactions{},
 					queued: common.Interactions{
@@ -583,13 +584,13 @@ func TestPublicIXPoolAPI_Inspect(t *testing.T) {
 					waitTime: int64(1000 * time.Millisecond),
 				},
 			},
-			testFn: func(accounts map[common.Address]*account) {
+			testFn: func(accounts map[identifiers.Address]*account) {
 				for addr, account := range accounts {
 					ixpool.setIxs(addr, account.pending, account.queued)
 					ixpool.setWaitTime(addr, account.waitTime)
 				}
 			},
-			expectedAccInfo: map[common.Address]*expectedResult{
+			expectedAccInfo: map[identifiers.Address]*expectedResult{
 				addressList[0]: {
 					pending:  0,
 					queued:   2,
@@ -660,7 +661,7 @@ func TestPublicIXPoolAPI_WaitTime(t *testing.T) {
 		{
 			name: "nil address",
 			args: &rpcargs.IxPoolArgs{
-				Address: common.NilAddress,
+				Address: identifiers.NilAddress,
 			},
 			expectedErr: common.ErrInvalidAddress,
 		},

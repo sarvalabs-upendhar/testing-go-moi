@@ -1,48 +1,61 @@
 package lattice
 
 import (
+	"math/big"
+	"sort"
+
+	"github.com/sarvalabs/go-moi-identifiers"
+
 	"github.com/sarvalabs/go-moi/common"
 )
 
 func createGenesisTesseract(
-	addr common.Address,
-	stateHash, contextHash common.Hash,
-) (*common.Tesseract, error) {
-	ixHash := common.GetHash([]byte("Genesis" + stateHash.Hex()))
+	addresses []identifiers.Address,
+	stateHashes, contextHashes []common.Hash,
+) *common.Tesseract {
+	var (
+		ixHashString = "Genesis"
+		participants = make(common.Participants)
+	)
 
-	body := common.TesseractBody{
-		StateHash:       stateHash,
-		ContextHash:     contextHash,
-		ContextDelta:    nil,
-		ReceiptHash:     common.Hash{},
-		InteractionHash: ixHash,
-		ConsensusProof: common.PoXtData{
-			IdentityHash: common.NilHash,
-			BinaryHash:   common.NilHash,
-		},
+	for i, addr := range addresses {
+		participants[addr] = common.State{
+			Height:          0,
+			TransitiveLink:  common.NilHash,
+			PreviousContext: common.NilHash,
+			LatestContext:   contextHashes[i],
+			StateHash:       stateHashes[i],
+		}
 	}
 
-	tsBodyHash, err := body.Hash()
-	if err != nil {
-		return nil, err
+	sort.Slice(stateHashes, func(i, j int) bool {
+		return stateHashes[i].Hex() < stateHashes[j].Hex()
+	})
+
+	for i := 0; i < len(stateHashes); i++ {
+		ixHashString += stateHashes[i].Hex()
 	}
 
-	header := common.TesseractHeader{
-		Address:   addr,
-		PrevHash:  common.NilHash,
-		Height:    0,
-		FuelUsed:  0,
-		FuelLimit: 0,
-		BodyHash:  tsBodyHash,
-		GroupHash: common.NilHash,
+	interactionsHash := common.GetHash([]byte(ixHashString))
+
+	poxt := common.PoXtData{
+		Round:     0,
 		ClusterID: common.GenesisIdentifier,
-		Operator:  common.GenesisIdentifier,
-		Extra: common.CommitData{
-			CommitSignature: nil,
-			Round:           0,
-			VoteSet:         nil,
-		},
 	}
 
-	return common.NewTesseract(header, body, nil, nil, nil, ""), nil
+	return common.NewTesseract(
+		participants,
+		interactionsHash,
+		common.NilHash,
+		big.NewInt(0),
+		0,
+		common.GenesisIdentifier,
+		0,
+		0,
+		poxt,
+		nil,
+		"",
+		nil,
+		nil,
+	)
 }

@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/pkg/errors"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -52,7 +53,33 @@ func (p *PublicIXAPI) SendInteraction(sendIx *rpcargs.SendIX) (*common.Interacti
 	return ixn, nil
 }
 
-// helper function
+// helper function for moi.Call and moi.FuelEstimate
+func constructIxn(args *common.SendIXArgs, sign []byte) (ix *common.Interaction, err error) {
+	data := common.IxData{
+		Input: common.IxInput{
+			Type:            args.Type,
+			Nonce:           args.Nonce,
+			Sender:          args.Sender,
+			Receiver:        args.Receiver,
+			Payer:           args.Payer,
+			TransferValues:  args.TransferValues,
+			PerceivedValues: args.PerceivedValues,
+			Payload:         args.Payload,
+		},
+	}
+
+	if args.FuelPrice != nil {
+		data.Input.FuelPrice = args.FuelPrice
+	}
+
+	if args.FuelLimit != 0 {
+		data.Input.FuelLimit = args.FuelLimit
+	}
+
+	return common.NewInteraction(data, sign)
+}
+
+// helper function for moi.SendInteraction
 func constructInteraction(args *common.SendIXArgs, sign []byte) (ix *common.Interaction, err error) {
 	if args.FuelPrice == nil {
 		return nil, common.ErrFuelPriceNotFound
@@ -122,7 +149,7 @@ func validateArgumentsWithSign(args *rpcargs.SendIX) (*common.SendIXArgs, error)
 func createSendIXArgs(sendIx *rpcargs.IxArgs) (*common.SendIXArgs, error) {
 	sendIXArgs := &common.SendIXArgs{
 		Type:      sendIx.Type,
-		Nonce:     sendIx.Nonce.ToUint64(),
+		Nonce:     0,
 		Sender:    sendIx.Sender,
 		Receiver:  sendIx.Receiver,
 		Payer:     sendIx.Payer,
@@ -132,14 +159,14 @@ func createSendIXArgs(sendIx *rpcargs.IxArgs) (*common.SendIXArgs, error) {
 	}
 
 	if len(sendIx.TransferValues) > 0 {
-		sendIXArgs.TransferValues = make(map[common.AssetID]*big.Int)
+		sendIXArgs.TransferValues = make(map[identifiers.AssetID]*big.Int)
 		for asset, amount := range sendIx.TransferValues {
 			sendIXArgs.TransferValues[asset] = amount.ToInt()
 		}
 	}
 
 	if len(sendIx.PerceivedValues) > 0 {
-		sendIXArgs.PerceivedValues = make(map[common.AssetID]*big.Int)
+		sendIXArgs.PerceivedValues = make(map[identifiers.AssetID]*big.Int)
 		for asset, amount := range sendIx.PerceivedValues {
 			sendIXArgs.PerceivedValues[asset] = amount.ToInt()
 		}

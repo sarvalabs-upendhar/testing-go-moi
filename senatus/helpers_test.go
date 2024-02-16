@@ -5,16 +5,15 @@ import (
 	"context"
 	"testing"
 
-	"github.com/sarvalabs/go-moi/common/utils"
-
 	"github.com/hashicorp/go-hclog"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/sarvalabs/go-moi/common"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
+	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/stretchr/testify/require"
 
+	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/storage"
 	"github.com/sarvalabs/go-moi/storage/db"
 )
@@ -110,16 +109,16 @@ func (bw *mockBatchWriter) Flush() error {
 }
 
 type MockState struct {
-	publicKeys map[id.KramaID][]byte
+	publicKeys map[kramaid.KramaID][]byte
 }
 
 func NewMockState() *MockState {
 	return &MockState{
-		publicKeys: make(map[id.KramaID][]byte),
+		publicKeys: make(map[kramaid.KramaID][]byte),
 	}
 }
 
-func (state *MockState) GetPublicKeyFromContract(ids ...id.KramaID) (keys [][]byte, err error) {
+func (state *MockState) GetPublicKeyFromContract(ids ...kramaid.KramaID) (keys [][]byte, err error) {
 	for _, kramaID := range ids {
 		key, ok := state.publicKeys[kramaID]
 		if ok {
@@ -152,7 +151,7 @@ func createTestReputationEngine(t *testing.T) (*ReputationEngine, *MockDB, *Mock
 	mockDB := NewMockDB()
 	mockState := NewMockState()
 	nodeMetaInfo := &NodeMetaInfo{
-		KramaID: tests.GetTestKramaID(t, 0),
+		KramaID: tests.RandomKramaID(t, 0),
 	}
 
 	r, err := NewReputationEngine(

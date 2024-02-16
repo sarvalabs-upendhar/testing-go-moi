@@ -3,13 +3,14 @@ package types
 import (
 	"sync"
 
+	"github.com/sarvalabs/go-moi-identifiers"
+
 	"github.com/sarvalabs/go-moi/common"
-	networkmsg "github.com/sarvalabs/go-moi/network/message"
 )
 
 type ExecutionResponse struct {
-	Err  error
-	Grid []*common.Tesseract
+	Err       error
+	Tesseract *common.Tesseract
 }
 
 const (
@@ -24,7 +25,6 @@ type Slot struct {
 	SlotType                        SlotType
 	clusterState                    *ClusterState
 	ICSSuccessChan                  chan bool
-	OutboundChan, InboundChan       chan *ICSMSG
 	BftOutboundChan, BftInboundChan chan ConsensusMessage
 	ExecutionResp                   chan ExecutionResponse
 	CloseCh                         chan struct{}
@@ -35,8 +35,6 @@ func NewSlot(slotType SlotType, clusterState *ClusterState) *Slot {
 		SlotType:        slotType,
 		clusterState:    clusterState,
 		ICSSuccessChan:  make(chan bool),
-		OutboundChan:    make(chan *ICSMSG),
-		InboundChan:     make(chan *ICSMSG),
 		ExecutionResp:   make(chan ExecutionResponse),
 		BftOutboundChan: make(chan ConsensusMessage, 1000),
 		BftInboundChan:  make(chan ConsensusMessage, 1000),
@@ -58,18 +56,6 @@ func (info *Slot) ForwardMsg(msg ConsensusMessage) {
 	}
 }
 
-func (info *Slot) ForwardInboundMsg(msg *ICSMSG) {
-	if info == nil {
-		return
-	}
-
-	select {
-	case <-info.CloseCh:
-		return
-	case info.InboundChan <- msg:
-	}
-}
-
 func (info *Slot) ClusterID() common.ClusterID {
 	return info.clusterState.ClusterID
 }
@@ -78,7 +64,7 @@ func (info *Slot) ClusterState() *ClusterState {
 	return info.clusterState
 }
 
-func (info *Slot) ICSRequestMsg() *networkmsg.CanonicalICSRequest {
+func (info *Slot) ICSRequestMsg() *CanonicalICSRequest {
 	return info.clusterState.RequestMsg
 }
 
@@ -86,7 +72,7 @@ type Slots struct {
 	slots                   map[common.ClusterID]*Slot
 	availableOperatorSlots  int
 	availableValidatorSlots int
-	activeAccounts          map[common.Address]common.ClusterID
+	activeAccounts          map[identifiers.Address]common.ClusterID
 	mtx                     sync.RWMutex
 }
 
@@ -95,11 +81,11 @@ func NewSlots(operatorSlots, validatorSlots int) *Slots {
 		slots:                   make(map[common.ClusterID]*Slot),
 		availableOperatorSlots:  operatorSlots,
 		availableValidatorSlots: validatorSlots,
-		activeAccounts:          make(map[common.Address]common.ClusterID, (operatorSlots+validatorSlots)*2),
+		activeAccounts:          make(map[identifiers.Address]common.ClusterID, (operatorSlots+validatorSlots)*2),
 	}
 }
 
-func (s *Slots) areAccountsActive(addrs ...common.Address) bool {
+func (s *Slots) areAccountsActive(addrs ...identifiers.Address) bool {
 	for _, v := range addrs {
 		if !v.IsNil() {
 			if _, ok := s.activeAccounts[v]; ok {
@@ -111,7 +97,7 @@ func (s *Slots) areAccountsActive(addrs ...common.Address) bool {
 	return false
 }
 
-func (s *Slots) AreAccountsActive(addrs ...common.Address) bool {
+func (s *Slots) AreAccountsActive(addrs ...identifiers.Address) bool {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 
@@ -175,6 +161,7 @@ func (s *Slots) CleanupSlot(id common.ClusterID) {
 		}
 
 		close(slot.CloseCh)
+		close(slot.BftInboundChan)
 		delete(s.slots, id)
 		s.incrementSlots(slot.SlotType)
 	}

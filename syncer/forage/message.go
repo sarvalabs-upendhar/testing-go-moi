@@ -1,6 +1,10 @@
 package forage
 
-import "github.com/sarvalabs/go-moi/common"
+import (
+	"github.com/sarvalabs/go-moi-identifiers"
+
+	"github.com/sarvalabs/go-moi/common"
+)
 
 type BucketSyncRequest struct {
 	BucketID  uint64
@@ -14,7 +18,7 @@ type BucketSyncResponse struct {
 }
 
 type SnapRequest struct {
-	Address common.Address
+	Address identifiers.Address
 	Height  uint64
 }
 
@@ -30,7 +34,7 @@ type SnapResponse struct {
 }
 
 type LatticeRequest struct {
-	Address     common.Address
+	Address     identifiers.Address
 	StartHeight uint64
 	EndHeight   uint64
 }

@@ -10,22 +10,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/battleground/server/types"
-
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/battleground/server/types"
+	"github.com/sarvalabs/battleground/server/warzone/infrastructure"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	bg "github.com/sarvalabs/battleground"
-	client "github.com/sarvalabs/battleground/client/types"
-	"github.com/sarvalabs/battleground/server/warzone/infrastructure"
-
+	"github.com/sarvalabs/go-moi/bgclient"
 	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"
 	"github.com/sarvalabs/go-moi/common"
-	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
-
 	"github.com/sarvalabs/go-moi/common/tests"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/moiclient"
 )
 
@@ -41,25 +38,23 @@ const (
 	DefaultNodeStartTime    = 30 * time.Second
 	DefaultNodeStopTime     = 30 * time.Second
 	DefaultBGStartTime      = 25 * time.Minute
-	DefaultDiscoveryTime    = 1 * time.Minute
-	DefaultUpdateTime       = 1 * time.Minute
 	DefaultShutdownTimeout  = 10 * time.Minute
 	DefaultConfirmIxTimeout = 1 * time.Minute
-	DefaultAccountCount     = 2
+	DefaultAccountCount     = 2 // 2 accounts are enough to fire ixns in debug mode
 	InitialKMOITokens       = 25000
-	DefaultValidatorCount   = 100
 	DefaultJSONRPCPort      = 29000
 )
 
 var (
 	bgURL = "http://85.239.245.54:7000/api"
 
-	DefaulFuelPrice  = big.NewInt(1)
+	DefaultFuelPrice = big.NewInt(1)
 	DefaultFuelLimit = uint64(10000)
 	local            = "local"
 	cloud            = "cloud"
 	networkType      = flag.String("network", local, "enter the network type to use local or cloud")
-	commitHash       = flag.String("commithash", "", "enter the commit hash of the repo to be deployed")
+	commitHash       = flag.String("commit-hash", "", "enter the commit hash of the repo to be deployed")
+	logLevel         = flag.String("log-level", "TRACE", "enter the log level")
 )
 
 type BattleGroundConfig struct {
@@ -83,11 +78,13 @@ func newBattleGroundConfig(
 type TestEnvironment struct {
 	suite.Suite
 	bgConfig       BattleGroundConfig
-	bgClient       bg.Client
+	bgClient       bgclient.Client
 	jsonRPCUrls    []string
+	validatorCount int
 	moiClient      *moiclient.Client
 	moiClients     []*moiclient.Client
 	accounts       []tests.AccountWithMnemonic
+	instances      []common.Instance
 	logger         hclog.Logger
 	suiteSetupDone bool
 }
@@ -130,26 +127,30 @@ func (te *TestEnvironment) configureBattleGround() error {
 		// TODO optimize the battleground to generate 15 accounts in genesis, instead of creating accounts through ixns
 		bgConfig.NoOfInstances = 15 // 150 moipods are required to execute these tests
 
-		te.bgClient = bg.NewBGClient(&client.Config{
+		te.bgClient = bgclient.NewClient(&bgclient.Config{
 			CloudCfg:    bgConfig,
-			Network:     client.Cloud,
+			Network:     bgclient.CLOUD,
 			EndPoint:    te.bgConfig.rpcEndPoint,
 			DialTimeout: 10 * time.Second,
 		})
+
+		te.validatorCount = bgConfig.NoOfInstances * bgConfig.NoOfPodsPerInstance
 	} else {
-		d := client.DefaultClusterConfig()
-		d.WithLogs = false
+		d := bgclient.DefaultClusterConfig()
+		d.WithLogs = true
 		d.WithStdout = false
 		d.LogLevel = "TRACE"
 		d.BootNodePort = 27000
 		d.Libp2pPort = 28000
-		d.JsonRPCPort = DefaultJSONRPCPort
+		d.JSONRPCPort = DefaultJSONRPCPort
 		d.GuardianPath = "../../moiclient/"
 
-		te.bgClient = bg.NewBGClient(&client.Config{
+		te.bgClient = bgclient.NewClient(&bgclient.Config{
 			ClusterConfig: d,
-			Network:       client.Local,
+			Network:       bgclient.LOCAL,
 		})
+
+		te.validatorCount = d.ValidatorCount
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -168,7 +169,7 @@ func getMoiClient(t *testing.T, url string) (*moiclient.Client, error) {
 	client, err := moiclient.NewClient(url)
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
 	// check if node is up
 	_, err = client.Inspect(ctx, &rpcargs.InspectArgs{})
@@ -191,7 +192,7 @@ func getMoiClients(t *testing.T, urls []string) []*moiclient.Client {
 	for _, url := range urls {
 		client, err := getMoiClient(t, url)
 		if err != nil {
-			t.Log("unable to create moi client for ", url)
+			t.Log("unable to create moi client for ", url, "err", err)
 
 			continue
 		}
@@ -212,21 +213,21 @@ func (te *TestEnvironment) initializeMOIClient() {
 
 	if *networkType == local {
 		// use operator for firing ixns and querying until observer node wait time issue is fixed
+		// https://github.com/sarvalabs/go-moi/issues/678
 		c, err := getMoiClient(te.T(), fmt.Sprintf("http://localhost:%d", DefaultJSONRPCPort))
 		if err != nil {
 			te.FailNow("unable to initialize moi clients")
 		}
 
-		te.logger.Debug("JSON RPC url used is ", "url", clients[0].URL())
+		te.logger.Debug("JSON RPC url used is ", "url", c.URL())
 
 		te.moiClient = c
 
 		return
 	}
 
-	te.logger.Debug("JSON RPC url used is ", "url", clients[0].URL())
-
 	te.moiClient = clients[0]
+	te.logger.Debug("JSON RPC url used is ", "url", te.moiClient.URL())
 }
 
 func (te *TestEnvironment) runCriticallyNecessaryTearDown() {
@@ -240,16 +241,25 @@ func (te *TestEnvironment) runCriticallyNecessaryTearDown() {
 func (te *TestEnvironment) initLogger() {
 	te.logger = hclog.New(&hclog.LoggerOptions{
 		Name:  "E2E",
-		Level: hclog.LevelFromString("ERROR"),
+		Level: hclog.LevelFromString(*logLevel),
 	})
+}
+
+// fetch json urls and check if initial sync is done in all nodes
+func (te *TestEnvironment) getUrlsAndCheckInitialSync() {
+	te.jsonRPCUrls = moiclient.GetJSONRPCUrls(te.Suite.T(), te.bgClient, te.validatorCount)
+
+	te.logger.Debug("e2e json urls ", "network", *networkType, "urls", te.jsonRPCUrls)
+
+	moiclient.CheckIfNodesInitialSyncDone(te.Suite.T(), te.validatorCount, te.jsonRPCUrls)
 }
 
 func (te *TestEnvironment) SetupSuite() {
 	defer func() {
-		// make sure to delete directories incase of setup suite failure
+		// make sure to delete directories in case of setup suite failure
 		// make sure to destroy battleground if setup suite fails
 		if !te.suiteSetupDone {
-			te.logger.Error("setup suite failed")
+			te.logger.Error("Setup suite failed")
 			te.runCriticallyNecessaryTearDown()
 		}
 	}()
@@ -276,12 +286,6 @@ func (te *TestEnvironment) SetupSuite() {
 
 		cancel()
 		te.Suite.NoError(err)
-
-		if *networkType == cloud {
-			time.Sleep(DefaultDiscoveryTime)
-		} else {
-			time.Sleep(tests.DefaultLocalWaitTime)
-		}
 
 	case infrastructure.Active:
 		te.logger.Debug("battle ground is already running")
@@ -314,31 +318,30 @@ func (te *TestEnvironment) SetupSuite() {
 
 		cancel()
 		te.Suite.NoError(err)
-
-		time.Sleep(DefaultUpdateTime)
 	}
 
-	// make sure atleast one account is registered on chain
+	te.getUrlsAndCheckInitialSync()
+
+	if *networkType == cloud {
+		time.Sleep(60 * time.Second)
+	}
+
 	ctx, cancel = context.WithTimeout(context.Background(), DefaultQueryTime)
 	registeredAcc, err = te.bgClient.Accounts(ctx)
 
 	cancel()
 	te.Suite.NoError(err)
 
+	// make sure at least one account is registered on chain to fire interactions
 	require.GreaterOrEqual(te.T(), len(registeredAcc), 1)
-
-	// fetch json urls of the nodes
-	ctx, cancel = context.WithTimeout(context.Background(), DefaultQueryTime)
-	te.jsonRPCUrls, err = te.bgClient.JsonRpcUrls(ctx)
-	te.Suite.NoError(err)
-
-	cancel()
-	te.Suite.NotEqual(len(te.jsonRPCUrls), 0)
-
-	te.logger.Debug("json urls ", "urls", te.jsonRPCUrls)
 
 	// choose url that works
 	te.initializeMOIClient()
+
+	if *networkType == local {
+		te.instances, err = common.ReadInstancesFile("./tmp/instances.json")
+		te.Suite.NoError(err)
+	}
 
 	// Generate accounts and register them on chain
 	te.accounts, err = cmdcommon.GetAccountsWithMnemonic(DefaultAccountCount)
@@ -346,11 +349,11 @@ func (te *TestEnvironment) SetupSuite() {
 
 	te.logger.Debug("registering accounts on chain", te.accounts)
 
-	KMOIAssetID := common.AssetID("000000004cd973c4eb83cdb8870c0de209736270491b7acc99873da1eddced5826c3b548")
+	KMOIAssetID := identifiers.AssetID("000000004cd973c4eb83cdb8870c0de209736270491b7acc99873da1eddced5826c3b548")
 
 	for _, account := range te.accounts {
 		te.logger.Debug("sending Fuel token ", "KMOI ", InitialKMOITokens)
-		transferAsset(te, registeredAcc[0], account.Addr, map[common.AssetID]*big.Int{
+		transferAsset(te, registeredAcc[0], account.Addr, map[identifiers.AssetID]*big.Int{
 			KMOIAssetID: big.NewInt(InitialKMOITokens),
 		})
 	}

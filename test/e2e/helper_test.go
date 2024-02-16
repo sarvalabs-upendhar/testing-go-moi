@@ -6,11 +6,13 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/moiclient"
-	"github.com/stretchr/testify/require"
 )
 
 func createAssetCreatePayload(
@@ -35,8 +37,8 @@ func createAssetCreatePayload(
 func transferAsset(
 	te *TestEnvironment,
 	sender tests.AccountWithMnemonic,
-	receiver common.Address,
-	transferValues map[common.AssetID]*big.Int,
+	receiver identifiers.Address,
+	transferValues map[identifiers.AssetID]*big.Int,
 ) {
 	ixHash, err := te.transferAsset(sender, receiver, transferValues)
 	require.NoError(te.T(), err)
@@ -46,14 +48,14 @@ func transferAsset(
 	defer cancel()
 
 	receipt := moiclient.RetryFetchReceipt(te.T(), ctx, te.moiClient, ixHash)
-	require.Equal(te.T(), receipt.Status, common.ReceiptOk)
+	require.Equal(te.T(), common.ReceiptOk, receipt.Status)
 }
 
 func createAsset(
 	te *TestEnvironment,
 	sender tests.AccountWithMnemonic,
 	payload *common.AssetCreatePayload,
-) common.AssetID {
+) identifiers.AssetID {
 	ixHash, err := te.createAsset(sender, payload)
 	require.NoError(te.T(), err)
 
@@ -67,7 +69,7 @@ func createAsset(
 	return assetReceipt.AssetID
 }
 
-func getBalance(te *TestEnvironment, addr common.Address, assetID common.AssetID, height int64) uint64 {
+func getBalance(te *TestEnvironment, addr identifiers.Address, assetID identifiers.AssetID, height int64) uint64 {
 	senderBal, err := te.moiClient.Balance(context.Background(), &rpcargs.BalArgs{
 		Address: addr,
 		AssetID: assetID,

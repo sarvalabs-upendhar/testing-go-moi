@@ -7,14 +7,14 @@ import (
 	"sync"
 	"time"
 
-	id "github.com/sarvalabs/go-moi/common/kramaid"
-	"github.com/sarvalabs/go-moi/syncer/agora/db"
-	"github.com/sarvalabs/go-moi/syncer/cid"
-
 	"github.com/hashicorp/go-hclog"
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/hashicorp/golang-lru"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/syncer/agora/db"
+	"github.com/sarvalabs/go-moi/syncer/cid"
 )
 
 var AgoraPrefix = []byte("agora")
@@ -26,7 +26,7 @@ func GetAgoraKey(key []byte) string {
 	return hex.EncodeToString(out)
 }
 
-func GetAgoraDBKey(address common.Address, key []byte) []byte {
+func GetAgoraDBKey(address identifiers.Address, key []byte) []byte {
 	out := AgoraPrefix
 	out = append(out, address.Bytes()[0:20]...)
 	out = append(out, key...)
@@ -77,7 +77,7 @@ func NewLedger(logger hclog.Logger, workersCount int, db ledgerStore) (*Ledger, 
 	return l, err
 }
 
-func (l *Ledger) GetAssociatedPeers(addr common.Address, stateHash cid.CID) ([]id.KramaID, error) {
+func (l *Ledger) GetAssociatedPeers(addr identifiers.Address, stateHash cid.CID) ([]kramaid.KramaID, error) {
 	key := GetAgoraKey(stateHash.Key())
 
 	peerList, cacheErr := l.fetchFromCache(key)
@@ -115,7 +115,7 @@ func (l *Ledger) fetchFromCache(key string) (*PeerList, error) {
 	return peerList, nil
 }
 
-func (l *Ledger) fetchFromDB(address common.Address, stateHash cid.CID) (*PeerList, error) {
+func (l *Ledger) fetchFromDB(address identifiers.Address, stateHash cid.CID) (*PeerList, error) {
 	rawData, err := l.db.Get(GetAgoraDBKey(address, stateHash.Key()))
 	if err != nil {
 		return nil, common.ErrKeyNotFound
@@ -129,10 +129,10 @@ func (l *Ledger) fetchFromDB(address common.Address, stateHash cid.CID) (*PeerLi
 	return plist.PeerList(), nil
 }
 
-func (l *Ledger) UpdateAssociatedPeers(address common.Address, stateHash cid.CID, peerID id.KramaID) (err error) {
-	peerList, cacheErr := l.fetchFromCache(GetAgoraKey(stateHash.Key()))
+func (l *Ledger) UpdateAssociatedPeers(addr identifiers.Address, state cid.CID, peerID kramaid.KramaID) (err error) {
+	peerList, cacheErr := l.fetchFromCache(GetAgoraKey(state.Key()))
 	if errors.Is(cacheErr, common.ErrKeyNotFound) {
-		peerList, err = l.fetchFromDB(address, stateHash)
+		peerList, err = l.fetchFromDB(addr, state)
 
 		if errors.Is(err, common.ErrKeyNotFound) {
 			peerList = NewPeerList()
@@ -140,7 +140,7 @@ func (l *Ledger) UpdateAssociatedPeers(address common.Address, stateHash cid.CID
 			return err
 		}
 
-		l.addToCache(GetAgoraKey(stateHash.Key()), peerList)
+		l.addToCache(GetAgoraKey(state.Key()), peerList)
 	} else if cacheErr != nil {
 		return cacheErr
 	}
@@ -151,7 +151,7 @@ func (l *Ledger) UpdateAssociatedPeers(address common.Address, stateHash cid.CID
 	defer l.dbJobsLock.Unlock()
 
 	l.dbJobs = append(l.dbJobs, &job{
-		key:   GetAgoraDBKey(address, stateHash.Key()),
+		key:   GetAgoraDBKey(addr, state.Key()),
 		value: peerList.CanonicalPeerList(),
 	})
 

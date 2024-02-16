@@ -5,9 +5,9 @@ import (
 	"strings"
 
 	"github.com/manishmeganathan/symbolizer"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/cmd/logiclab/core"
-	"github.com/sarvalabs/go-moi/common"
 )
 
 func HelpUsers() string {
@@ -71,7 +71,7 @@ user 'manish' created with address '0xb1107436395807a00c0d673134d48956315a0c65af
 
 // RegisterUserCommand generates a Command runner
 // to register a new User with the given username
-func RegisterUserCommand(username string, address common.Address) Command {
+func RegisterUserCommand(username string, address identifiers.Address) Command {
 	return func(env *Environment) string {
 		// Check if a user with username already exists
 		if exists := env.inventory.UserExists(username); exists {
@@ -97,7 +97,7 @@ func parseRegisterCommand(parser *symbolizer.Parser) Command {
 
 	// Register a user with a random address
 	if parser.IsPeek(symbolizer.TokenEoF) {
-		return RegisterUserCommand(username, common.NilAddress)
+		return RegisterUserCommand(username, identifiers.NilAddress)
 	}
 
 	if !parser.ExpectPeek(TokenPrepositionAs) {
@@ -117,7 +117,7 @@ func parseRegisterCommand(parser *symbolizer.Parser) Command {
 	}
 
 	// Register a user with the given address
-	return RegisterUserCommand(username, common.BytesToAddress(addr))
+	return RegisterUserCommand(username, identifiers.NewAddressFromBytes(addr))
 }
 
 func parseGetUser(parser *symbolizer.Parser) Command {

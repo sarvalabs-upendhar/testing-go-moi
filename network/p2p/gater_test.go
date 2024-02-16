@@ -37,7 +37,7 @@ func TestConnectionGater_Blocking(t *testing.T) {
 			multiaddr, err := maddr.NewMultiaddr(test.address)
 			require.Nil(t, err, "%s", err)
 
-			allowed := gater.InterceptAddrDial(tests.GetTestPeerID(t), multiaddr)
+			allowed := gater.InterceptAddrDial(tests.RandomPeerID(t), multiaddr)
 			require.Equal(t, test.expectedAllowed, allowed, "%v", allowed)
 		})
 	}
@@ -72,7 +72,7 @@ func TestConnectionGater_NonBlocking(t *testing.T) {
 			multiaddr, err := maddr.NewMultiaddr(test.address)
 			require.Nil(t, err, "%s", err)
 
-			allowed := gater.InterceptAddrDial(tests.GetTestPeerID(t), multiaddr)
+			allowed := gater.InterceptAddrDial(tests.RandomPeerID(t), multiaddr)
 			require.Equal(t, test.expectedAllowed, allowed, "%v", allowed)
 		})
 	}

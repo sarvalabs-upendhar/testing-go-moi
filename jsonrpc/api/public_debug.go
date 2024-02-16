@@ -10,11 +10,12 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi/common/utils"
-	"github.com/sarvalabs/go-moi/diagnosis"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
+	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/sarvalabs/go-moi/diagnosis"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/jsonrpc/backend"
 	"github.com/sarvalabs/go-moi/senatus"
@@ -77,6 +78,10 @@ func (p *PublicDebugAPI) GetNodeMetaInfo(args *rpcargs.NodeMetaInfoArgs) (map[st
 
 	nodeMetaInfo := make(map[string]map[string]interface{})
 
+	if args.PeerID != "" && args.KramaID != "" {
+		return nil, common.ErrInvalidIDCombination
+	}
+
 	if args.PeerID != "" {
 		if peerID, err = peer.Decode(args.PeerID); err != nil {
 			return nil, err
@@ -130,7 +135,7 @@ func (p *PublicDebugAPI) GetNodeMetaInfo(args *rpcargs.NodeMetaInfoArgs) (map[st
 }
 
 // GetAccounts returns a list of registered account addresses
-func (p *PublicDebugAPI) GetAccounts() ([]common.Address, error) {
+func (p *PublicDebugAPI) GetAccounts() ([]identifiers.Address, error) {
 	return p.db.GetRegisteredAccounts()
 }
 

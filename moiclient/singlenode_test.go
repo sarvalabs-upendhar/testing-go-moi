@@ -11,8 +11,13 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	bg "github.com/sarvalabs/battleground"
-	client "github.com/sarvalabs/battleground/client/types"
+	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-pisa"
+	"github.com/sarvalabs/go-polo"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
+
+	"github.com/sarvalabs/go-moi/bgclient"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/hexutil"
@@ -21,10 +26,6 @@ import (
 	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
 	gtypes "github.com/sarvalabs/go-moi/state"
 	"github.com/sarvalabs/go-moi/storage"
-	"github.com/sarvalabs/go-pisa"
-	"github.com/sarvalabs/go-polo"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 )
 
 // Guidelines for creating MOIClient tests:
@@ -34,9 +35,9 @@ import (
 
 type TestSingleNode struct {
 	suite.Suite
-	bgConfig       *client.ClusterConfig
+	bgConfig       *bgclient.ClusterConfig
 	moiClient      *Client
-	bgClient       bg.Client
+	bgClient       bgclient.Client
 	genesis        *common.GenesisFile
 	accounts       []tests.AccountWithMnemonic
 	moiAssetInfo   *common.AssetCreationArgs
@@ -59,30 +60,30 @@ func (tn *TestSingleNode) initLogger() {
 
 func (tn *TestSingleNode) SetupSuite() {
 	defer func() {
-		// make sure to delete directories incase of setup suite failure
+		// make sure to delete directories in case of setup suite failure
 		if !tn.suiteSetupDone {
-			tn.logger.Error("setup suite failed")
+			tn.logger.Error("Setup suite failed")
 			tn.runCriticallyNecessaryTearDown()
 		}
 	}()
 
 	tn.initLogger()
 
-	d := client.DefaultClusterConfig()
+	d := bgclient.DefaultClusterConfig()
 	d.WithLogs = false
 	d.WithStdout = false
 	d.LogLevel = "TRACE"
 	d.BootNodePort = 21000
 	d.Libp2pPort = 22000
-	d.JsonRPCPort = 23000
+	d.JSONRPCPort = 23000
 	d.ValidatorCount = 1
 	// genesis asset count is 1 as we need to provide data for registry api
 	d.GenesisAssetCount = 1
 
 	tn.bgConfig = d
-	tn.bgClient = bg.NewBGClient(&client.Config{
+	tn.bgClient = bgclient.NewClient(&bgclient.Config{
 		ClusterConfig: d,
-		Network:       client.Local,
+		Network:       bgclient.LOCAL,
 	})
 
 	_, err := tn.bgClient.StartNetwork(context.Background())
@@ -91,7 +92,7 @@ func (tn *TestSingleNode) SetupSuite() {
 	// wait for node to start all modules
 	time.Sleep(1 * time.Second)
 
-	tn.moiClient, err = NewClient(fmt.Sprintf("http://localhost:%d", d.JsonRPCPort))
+	tn.moiClient, err = NewClient(fmt.Sprintf("http://localhost:%d", d.JSONRPCPort))
 	tn.Suite.NoError(err)
 
 	tn.genesis, err = common.ReadGenesisFile(filepath.Join(d.TempDir, "genesis.json"))
@@ -181,7 +182,7 @@ func (tn *TestSingleNode) TestTesseract() {
 			require.Equal(tn.T(), httpTS, ts)
 
 			require.NoError(tn.T(), err)
-			require.Equal(tn.T(), test.tesseractArgs.Address, ts.Address())
+			require.True(tn.T(), ts.HasParticipant(test.tesseractArgs.Address))
 			require.Equal(tn.T(), 0, len(ts.Ixns))
 		})
 	}
@@ -270,16 +271,16 @@ func (tn *TestSingleNode) TestGetAssetInfoByAssetID() {
 
 	testcases := []struct {
 		name          string
-		assetID       common.AssetID
+		assetID       identifiers.AssetID
 		expectedError error
 	}{
 		{
 			name: "fetch asset info for existing assetID",
-			assetID: common.NewAssetIDv0(
+			assetID: identifiers.NewAssetIDv0(
 				a.IsLogical,
 				a.IsStateful,
 				a.Dimension.ToInt(),
-				common.AssetStandard(a.Standard.ToInt()),
+				a.Standard.ToInt(),
 				common.CreateAddressFromString(a.Symbol),
 			),
 		},
@@ -333,11 +334,11 @@ func (tn *TestSingleNode) TestGetBalance() {
 			name: "fetch moi token balance at latest height",
 			balanceArgs: &rpcargs.BalArgs{
 				Address: a.Allocations[0].Address,
-				AssetID: common.NewAssetIDv0(
+				AssetID: identifiers.NewAssetIDv0(
 					a.IsLogical,
 					a.IsStateful,
 					a.Dimension.ToInt(),
-					common.AssetStandard(a.Standard.ToInt()),
+					a.Standard.ToInt(),
 					common.CreateAddressFromString(a.Symbol),
 				),
 				Options: rpcargs.TesseractNumberOrHash{
@@ -423,11 +424,11 @@ func (tn *TestSingleNode) TestTDU() {
 func (tn *TestSingleNode) TestRegistry() {
 	a := tn.genesis.AssetAccounts[1].AssetInfo
 
-	assetID := common.NewAssetIDv0(
+	assetID := identifiers.NewAssetIDv0(
 		a.IsLogical,
 		a.IsStateful,
 		a.Dimension.ToInt(),
-		common.AssetStandard(a.Standard.ToInt()),
+		a.Standard.ToInt(),
 		common.CreateAddressFromString(a.Symbol),
 	)
 
@@ -1225,13 +1226,18 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 	rawAssetCreatePayload, err := assetCreationPayload.Bytes()
 	require.NoError(tn.T(), err)
 
-	ixArgs := &rpcargs.IxArgs{
+	ixArgsWithFuelParams := &rpcargs.IxArgs{
 		Type:      common.IxAssetCreate,
 		Sender:    addr,
-		Nonce:     hexutil.Uint64(5),
 		FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 		FuelLimit: hexutil.Uint64(200),
 		Payload:   (hexutil.Bytes)(rawAssetCreatePayload),
+	}
+
+	ixArgsWithoutFuelParams := &rpcargs.IxArgs{
+		Type:    common.IxAssetCreate,
+		Sender:  addr,
+		Payload: (hexutil.Bytes)(rawAssetCreatePayload),
 	}
 
 	testcases := []struct {
@@ -1241,10 +1247,22 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 		expectedError        error
 	}{
 		{
-			name: "retrieved fuel used in asset create interaction",
+			name: "retrieved fuel used in asset create ixn when fuel limit and price are given",
 			callArgs: &rpcargs.CallArgs{
-				IxArgs: ixArgs,
-				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+				IxArgs: ixArgsWithFuelParams,
+				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
+					addr: {
+						TesseractNumber: &LatestTesseractNumber,
+					},
+				},
+			},
+			expectedFuelConsumed: (*hexutil.Big)(big.NewInt(100)),
+		},
+		{
+			name: "retrieved fuel used in asset create ixn when fuel limit and price are not given",
+			callArgs: &rpcargs.CallArgs{
+				IxArgs: ixArgsWithoutFuelParams,
+				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
 					addr: {
 						TesseractNumber: &LatestTesseractNumber,
 					},
@@ -1255,8 +1273,8 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 		{
 			name: "failed to fetch fuel estimate as options are empty",
 			callArgs: &rpcargs.CallArgs{
-				IxArgs: ixArgs,
-				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+				IxArgs: ixArgsWithFuelParams,
+				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
 					addr: {
 						TesseractNumber: nil,
 					},
@@ -1293,32 +1311,32 @@ func (tn *TestSingleNode) TestCall() {
 	rawAssetPayload, err := assetCreationPayload.Bytes()
 	require.NoError(tn.T(), err)
 
-	ixArgs := &rpcargs.IxArgs{
+	ixArgsWithFuelParams := &rpcargs.IxArgs{
 		Type:      common.IxAssetCreate,
 		Sender:    addr,
-		Nonce:     hexutil.Uint64(4),
 		FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 		FuelLimit: hexutil.Uint64(200),
 		Payload:   (hexutil.Bytes)(rawAssetPayload),
 	}
 
-	expectedReceipt := common.Receipt{
+	ixArgsWithoutFuelParams := &rpcargs.IxArgs{
+		Type:    common.IxAssetCreate,
+		Sender:  addr,
+		Payload: (hexutil.Bytes)(rawAssetPayload),
+	}
+
+	expectedReceipt := &common.Receipt{
 		IxType:   common.IxAssetCreate,
 		FuelUsed: 100,
 	}
 
-	expectedAssetAddr := common.NewAccountAddress(4, addr)
-	expectedAssetID := common.NewAssetIDv0(false, false, 0, 0, expectedAssetAddr)
+	expectedAssetAddr := common.NewAccountAddress(0, addr)
+	expectedAssetID := identifiers.NewAssetIDv0(false, false, 0, 0, expectedAssetAddr)
 
-	extraData := &common.AssetCreationReceipt{
+	common.SetReceiptExtraData(expectedReceipt, common.AssetCreationReceipt{
 		AssetID:      expectedAssetID,
 		AssetAccount: expectedAssetAddr,
-	}
-
-	err = expectedReceipt.SetExtraData(extraData)
-	if err != nil {
-		return
-	}
+	})
 
 	testcases := []struct {
 		name            string
@@ -1327,17 +1345,35 @@ func (tn *TestSingleNode) TestCall() {
 		expectedError   error
 	}{
 		{
-			name: "fetched rpc receipt successfully",
+			name: "fetched rpc receipt successfully when fuel limit and price are given",
 			callArgs: &rpcargs.CallArgs{
-				IxArgs: ixArgs,
-				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+				IxArgs: ixArgsWithFuelParams,
+				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
 					addr: {
 						TesseractNumber: &LatestTesseractNumber,
 					},
 				},
 			},
 			expectedReceipt: &rpcargs.RPCReceipt{
-				IxType:    hexutil.Uint64(ixArgs.Type),
+				IxType:    hexutil.Uint64(ixArgsWithFuelParams.Type),
+				FuelUsed:  hexutil.Uint64(expectedReceipt.FuelUsed),
+				ExtraData: expectedReceipt.ExtraData,
+				From:      addr,
+				To:        expectedAssetAddr,
+			},
+		},
+		{
+			name: "fetched rpc receipt successfully when fuel limit and price are not given",
+			callArgs: &rpcargs.CallArgs{
+				IxArgs: ixArgsWithoutFuelParams,
+				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
+					addr: {
+						TesseractNumber: &LatestTesseractNumber,
+					},
+				},
+			},
+			expectedReceipt: &rpcargs.RPCReceipt{
+				IxType:    hexutil.Uint64(ixArgsWithoutFuelParams.Type),
 				FuelUsed:  hexutil.Uint64(expectedReceipt.FuelUsed),
 				ExtraData: expectedReceipt.ExtraData,
 				From:      addr,
@@ -1347,8 +1383,8 @@ func (tn *TestSingleNode) TestCall() {
 		{
 			name: "failed to retrieve stateHashes as options are empty",
 			callArgs: &rpcargs.CallArgs{
-				IxArgs: ixArgs,
-				Options: map[common.Address]*rpcargs.TesseractNumberOrHash{
+				IxArgs: ixArgsWithFuelParams,
+				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
 					addr: {
 						TesseractNumber: &invalidHeight,
 					},

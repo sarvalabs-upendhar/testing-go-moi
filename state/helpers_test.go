@@ -8,22 +8,24 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/sarvalabs/go-moi/common/utils"
-
 	"github.com/decred/dcrd/crypto/blake256"
 	"github.com/hashicorp/go-hclog"
+	iradix "github.com/hashicorp/go-immutable-radix"
 	"github.com/hashicorp/golang-lru"
 	"github.com/libp2p/go-libp2p-pubsub"
 	"github.com/manishmeganathan/depgraph"
 	"github.com/munna0908/smt"
+	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
-	id "github.com/sarvalabs/go-moi/common/kramaid"
 	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"
 	"github.com/sarvalabs/go-moi/storage/db"
@@ -53,7 +55,7 @@ func (m *MockServer) Subscribe(
 
 type MockDB struct {
 	tesseracts          map[common.Hash][]byte
-	latestTesseractHash map[common.Address]common.Hash
+	latestTesseractHash map[identifiers.Address]common.Hash
 	accounts            map[common.Hash][]byte
 	context             map[common.Hash][]byte
 	interactions        map[common.Hash][]byte
@@ -69,7 +71,7 @@ type MockDB struct {
 func mockDB() *MockDB {
 	return &MockDB{
 		tesseracts:          make(map[common.Hash][]byte),
-		latestTesseractHash: make(map[common.Address]common.Hash),
+		latestTesseractHash: make(map[identifiers.Address]common.Hash),
 		accounts:            make(map[common.Hash][]byte),
 		assetRegistry:       make(map[common.Hash][]byte),
 		context:             make(map[common.Hash][]byte),
@@ -91,7 +93,7 @@ func (m *MockDB) ReadEntry(key []byte) ([]byte, error) {
 	return data, nil
 }
 
-func (m *MockDB) GetAssetRegistry(addr common.Address, registryHash common.Hash) ([]byte, error) {
+func (m *MockDB) GetAssetRegistry(addr identifiers.Address, registryHash common.Hash) ([]byte, error) {
 	data, ok := m.assetRegistry[registryHash]
 	if !ok {
 		return nil, common.ErrKeyNotFound
@@ -152,7 +154,7 @@ func (m *MockDB) GetEntries(prefix []byte) chan common.DBEntry {
 	return nil
 }
 
-func (m *MockDB) GetAccountMetaInfo(id common.Address) (*common.AccountMetaInfo, error) {
+func (m *MockDB) GetAccountMetaInfo(id identifiers.Address) (*common.AccountMetaInfo, error) {
 	accMetaInfo, ok := m.accMetaInfo[id.Hex()]
 	if !ok {
 		return nil, common.ErrKeyNotFound
@@ -183,7 +185,7 @@ func (m *MockDB) setAccountMetaInfo(acc *common.AccountMetaInfo) {
 	m.accMetaInfo[acc.Address.Hex()] = acc
 }
 
-func (m *MockDB) GetMerkleTreeEntry(address common.Address, prefix storage.PrefixTag, key []byte) ([]byte, error) {
+func (m *MockDB) GetMerkleTreeEntry(address identifiers.Address, prefix storage.PrefixTag, key []byte) ([]byte, error) {
 	entry, ok := m.merkleTreeEntries[string(key)]
 	if !ok {
 		return nil, common.ErrKeyNotFound
@@ -192,14 +194,14 @@ func (m *MockDB) GetMerkleTreeEntry(address common.Address, prefix storage.Prefi
 	return entry, nil
 }
 
-func (m *MockDB) SetMerkleTreeEntry(address common.Address, prefix storage.PrefixTag, key, value []byte) error {
+func (m *MockDB) SetMerkleTreeEntry(address identifiers.Address, prefix storage.PrefixTag, key, value []byte) error {
 	m.merkleTreeEntries[string(key)] = value
 
 	return nil
 }
 
 func (m *MockDB) SetMerkleTreeEntries(
-	address common.Address,
+	address identifiers.Address,
 	prefix storage.PrefixTag,
 	entries map[string][]byte,
 ) error {
@@ -210,7 +212,7 @@ func (m *MockDB) SetMerkleTreeEntries(
 	return nil
 }
 
-func (m *MockDB) WritePreImages(address common.Address, entries map[common.Hash][]byte) error {
+func (m *MockDB) WritePreImages(address identifiers.Address, entries map[common.Hash][]byte) error {
 	for k, v := range entries {
 		m.preImages[k] = v
 	}
@@ -218,7 +220,7 @@ func (m *MockDB) WritePreImages(address common.Address, entries map[common.Hash]
 	return nil
 }
 
-func (m *MockDB) GetPreImage(address common.Address, hash common.Hash) ([]byte, error) {
+func (m *MockDB) GetPreImage(address identifiers.Address, hash common.Hash) ([]byte, error) {
 	preImage, ok := m.preImages[hash]
 	if !ok {
 		return nil, common.ErrKeyNotFound
@@ -236,7 +238,7 @@ func (m *MockDB) setAccount(t *testing.T, hash common.Hash, acc *common.Account)
 	m.accounts[hash] = bytes
 }
 
-func (m *MockDB) GetAccount(addr common.Address, hash common.Hash) ([]byte, error) {
+func (m *MockDB) GetAccount(addr identifiers.Address, hash common.Hash) ([]byte, error) {
 	account, ok := m.accounts[hash]
 	if !ok {
 		return nil, common.ErrAccountNotFound
@@ -269,7 +271,7 @@ func (m *MockDB) setMetaContext(t *testing.T, object *MetaContextObject) {
 	m.context[hash] = bytes
 }
 
-func (m *MockDB) GetContext(addr common.Address, hash common.Hash) ([]byte, error) {
+func (m *MockDB) GetContext(addr identifiers.Address, hash common.Hash) ([]byte, error) {
 	tsContext, ok := m.context[hash]
 	if !ok {
 		return nil, common.ErrContextStateNotFound
@@ -296,7 +298,7 @@ func (m *MockDB) GetTesseract(hash common.Hash) ([]byte, error) {
 	return tesseracts, nil
 }
 
-func (m *MockDB) GetBalance(addr common.Address, hash common.Hash) ([]byte, error) {
+func (m *MockDB) GetBalance(addr identifiers.Address, hash common.Hash) ([]byte, error) {
 	balance, ok := m.balances[hash]
 	if !ok {
 		return nil, common.ErrKeyNotFound
@@ -331,7 +333,7 @@ func getMockDB(t *testing.T, db Store) *MockDB {
 	return nil
 }
 
-func insertTesseractsInDB(t *testing.T, db Store, tesseracts ...*common.Tesseract) {
+func insertTesseractsAndIxnsInDB(t *testing.T, db Store, tesseracts ...*common.Tesseract) {
 	t.Helper()
 
 	mDB := getMockDB(t, db)
@@ -340,8 +342,18 @@ func insertTesseractsInDB(t *testing.T, db Store, tesseracts ...*common.Tesserac
 		mDB.insertTesseract(t, ts)
 
 		if ts.Interactions() != nil {
-			mDB.insertIxns(t, ts.GridHash(), ts.Interactions())
+			mDB.insertIxns(t, ts.Hash(), ts.Interactions())
 		}
+	}
+}
+
+func insertTesseractInDB(t *testing.T, db Store, tesseracts ...*common.Tesseract) {
+	t.Helper()
+
+	mDB := getMockDB(t, db)
+
+	for _, ts := range tesseracts {
+		mDB.insertTesseract(t, ts)
 	}
 }
 
@@ -400,6 +412,7 @@ type MockMerkleTree struct {
 	dirty        map[string][]byte
 	merkleRoot   common.Hash
 	isFlushed    bool
+	isCommitted  bool
 	flushHook    func() error
 	rootHashHook func() (common.Hash, error)
 	commitHook   func() error
@@ -433,14 +446,24 @@ func (m *MockMerkleTree) Commit() error {
 		return m.commitHook()
 	}
 
-	bytes, err := polo.Polorize(m.dbStorage)
+	bytes, err := polo.Polorize(m.dirty)
 	if err != nil {
 		return err
 	}
 
-	m.merkleRoot = common.BytesToHash(bytes)
+	m.merkleRoot = common.GetHash(bytes)
+
+	if !m.isCommitted {
+		m.isCommitted = true
+	} else {
+		return errors.New("Already committed")
+	}
 
 	return nil
+}
+
+func (m *MockMerkleTree) IsCommitted() bool {
+	return m.isCommitted
 }
 
 func (m *MockMerkleTree) NewIterator() smt.Iterator {
@@ -495,6 +518,7 @@ func (m *MockMerkleTree) Set(key []byte, value []byte) error {
 	}
 
 	m.dirty[common.BytesToHex(key)] = value
+	m.isCommitted = false
 
 	return nil
 }
@@ -567,16 +591,6 @@ func getMerkleTreeWithEntries(t *testing.T, keys [][]byte, values [][]byte) *Moc
 	return merkleTree
 }
 
-func getMerkleTreeWithFlushedEntries(t *testing.T, keys [][]byte, values [][]byte) *MockMerkleTree {
-	t.Helper()
-
-	merkleTree := getMerkleTreeWithEntries(t, keys, values)
-	err := merkleTree.Flush()
-	require.NoError(t, err)
-
-	return merkleTree
-}
-
 func getMerkleTreeWithCommitHook(
 	t *testing.T,
 	keys [][]byte,
@@ -619,7 +633,7 @@ func getMerkleTreeWithRootHashHook(
 	return merkleTree
 }
 
-func getMerkleTreeWithSetHook(t *testing.T, keys [][]byte, values [][]byte, setHook func() error) *MockMerkleTree {
+func getMerkleTreeWithHook(t *testing.T, keys [][]byte, values [][]byte, setHook func() error) *MockMerkleTree {
 	t.Helper()
 
 	merkleTree := getMerkleTreeWithEntries(t, keys, values) // insert entries to make tree dirty
@@ -631,15 +645,15 @@ func getMerkleTreeWithSetHook(t *testing.T, keys [][]byte, values [][]byte, setH
 func getRoot(t *testing.T, m *MockMerkleTree) common.Hash {
 	t.Helper()
 
-	bytes, err := polo.Polorize(m.dbStorage)
+	bytes, err := polo.Polorize(m.dirty)
 	require.NoError(t, err)
 
-	return common.BytesToHash(bytes)
+	return common.GetHash(bytes)
 }
 
 type MockSenatus struct {
 	lock       sync.RWMutex
-	publicKeys map[id.KramaID][]byte
+	publicKeys map[kramaid.KramaID][]byte
 }
 
 func mockSenatus(t *testing.T) *MockSenatus {
@@ -647,11 +661,11 @@ func mockSenatus(t *testing.T) *MockSenatus {
 
 	return &MockSenatus{
 		lock:       sync.RWMutex{},
-		publicKeys: make(map[id.KramaID][]byte),
+		publicKeys: make(map[kramaid.KramaID][]byte),
 	}
 }
 
-func (m *MockSenatus) AddPublicKeys(ids []id.KramaID, publicKeys [][]byte) error {
+func (m *MockSenatus) AddPublicKeys(ids []kramaid.KramaID, publicKeys [][]byte) error {
 	for index, kramaID := range ids {
 		m.publicKeys[kramaID] = publicKeys[index]
 	}
@@ -659,7 +673,7 @@ func (m *MockSenatus) AddPublicKeys(ids []id.KramaID, publicKeys [][]byte) error
 	return nil
 }
 
-func (m *MockSenatus) UpdatePublicKey(key id.KramaID, pk []byte) error {
+func (m *MockSenatus) UpdatePublicKey(key kramaid.KramaID, pk []byte) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -668,7 +682,7 @@ func (m *MockSenatus) UpdatePublicKey(key id.KramaID, pk []byte) error {
 	return nil
 }
 
-func (m *MockSenatus) GetPublicKey(kramaID id.KramaID) ([]byte, error) {
+func (m *MockSenatus) GetPublicKey(kramaID kramaid.KramaID) ([]byte, error) {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
@@ -681,14 +695,14 @@ func (m *MockSenatus) GetPublicKey(kramaID id.KramaID) ([]byte, error) {
 }
 
 type MockContract struct {
-	publicKeys map[id.KramaID][]byte
+	publicKeys map[kramaid.KramaID][]byte
 }
 
-func NewMockContract(t *testing.T, kramaIDs []id.KramaID, publicKeys [][]byte) *MockContract {
+func NewMockContract(t *testing.T, kramaIDs []kramaid.KramaID, publicKeys [][]byte) *MockContract {
 	t.Helper()
 
 	mockContract := new(MockContract)
-	mockContract.publicKeys = make(map[id.KramaID][]byte)
+	mockContract.publicKeys = make(map[kramaid.KramaID][]byte)
 
 	for i := 0; i < len(kramaIDs); i++ {
 		mockContract.publicKeys[kramaIDs[i]] = publicKeys[i]
@@ -698,7 +712,7 @@ func NewMockContract(t *testing.T, kramaIDs []id.KramaID, publicKeys [][]byte) *
 }
 
 type createLogicObjectParams struct {
-	id            common.LogicID
+	id            identifiers.LogicID
 	logicCallback func(object *LogicObject)
 }
 
@@ -717,7 +731,7 @@ func createLogicObject(t *testing.T, params *createLogicObjectParams) *LogicObje
 	return logicObject
 }
 
-func getLogicObjectParamsWithLogicID(logicID common.LogicID) *createLogicObjectParams {
+func getLogicObjectParamsWithLogicID(logicID identifiers.LogicID) *createLogicObjectParams {
 	return &createLogicObjectParams{
 		id: logicID,
 		logicCallback: func(object *LogicObject) {
@@ -726,43 +740,35 @@ func getLogicObjectParamsWithLogicID(logicID common.LogicID) *createLogicObjectP
 	}
 }
 
-func getTesseractParamsWithStateHash(address common.Address, hash common.Hash) *tests.CreateTesseractParams {
+func getTesseractParamsWithStateHash(address identifiers.Address, hash common.Hash) *tests.CreateTesseractParams {
 	return &tests.CreateTesseractParams{
-		Address: address,
-		BodyCallback: func(body *common.TesseractBody) {
-			body.StateHash = hash
+		Addresses: []identifiers.Address{address},
+		Participants: common.Participants{
+			address: {
+				StateHash: hash,
+			},
 		},
 	}
 }
 
-func getTesseractParamsWithContextHash(address common.Address, hash common.Hash) *tests.CreateTesseractParams {
+func getTesseractParamsWithContextHash(address identifiers.Address, hash common.Hash) *tests.CreateTesseractParams {
 	return &tests.CreateTesseractParams{
-		Address: address,
-		BodyCallback: func(body *common.TesseractBody) {
-			body.ContextHash = hash
+		Addresses: []identifiers.Address{address},
+		Participants: common.Participants{
+			address: {
+				LatestContext: hash,
+			},
 		},
 	}
-}
-
-func getTesseractHash(t *testing.T, ts *common.Tesseract) common.Hash {
-	t.Helper()
-
-	hash := ts.Hash()
-
-	return hash
 }
 
 func storeTesseractHashInCache(t *testing.T, cache *lru.Cache, tesseracts ...*common.Tesseract) {
 	t.Helper()
 
 	for _, ts := range tesseracts {
-		cache.Add(ts.Address(), ts.Hash())
-	}
-}
-
-func insertInContextLock(header *common.TesseractHeader, address common.Address, hash common.Hash) {
-	header.ContextLock[address] = common.ContextLockInfo{
-		ContextHash: hash,
+		for addr := range ts.Participants() {
+			cache.Add(addr, ts.Hash())
+		}
 	}
 }
 
@@ -822,10 +828,6 @@ func createTestStateManager(t *testing.T, params *createStateManagerParams) *Sta
 	return sm
 }
 
-func mockJournal() *Journal {
-	return new(Journal)
-}
-
 func insertContextHash(so *Object, hash common.Hash) {
 	so.data.ContextHash = hash
 }
@@ -841,15 +843,14 @@ func storeInSmCache(sm *StateManager, k, v interface{}) {
 }
 
 type createStateObjectParams struct {
-	address                   common.Address
+	address                   identifiers.Address
 	cache                     *lru.Cache
-	journal                   *Journal
 	db                        *MockDB
 	account                   *common.Account
 	soCallback                func(so *Object)
 	metaStorageTreeCallback   func(so *Object)
 	dbCallback                func(db *MockDB)
-	activeStorageTreeCallback func(activeStorageTrees map[string]tree.MerkleTree)
+	activeStorageTreeCallback func(activeStorageTrees map[identifiers.LogicID]tree.MerkleTree)
 }
 
 func createTestStateObject(t *testing.T, params *createStateObjectParams) *Object {
@@ -886,7 +887,7 @@ func createTestStateObject(t *testing.T, params *createStateObjectParams) *Objec
 		data = params.account
 	}
 
-	so := NewStateObject(addr, cache, mockJournal(), mDB, *data)
+	so := NewStateObject(addr, cache, mDB, *data)
 	so.metaStorageTree = mockMerkleTreeWithDB()
 	so.logicTree = mockMerkleTreeWithDB()
 
@@ -895,7 +896,7 @@ func createTestStateObject(t *testing.T, params *createStateObjectParams) *Objec
 	}
 
 	if params.activeStorageTreeCallback != nil {
-		params.activeStorageTreeCallback(so.activeStorageTrees)
+		params.activeStorageTreeCallback(so.storageTrees)
 	}
 
 	if params.metaStorageTreeCallback != nil {
@@ -951,27 +952,45 @@ func stateObjectParamsWithRegistry(
 	}
 }
 
+func soParamsWithStorageTreesAndTxns(
+	t *testing.T,
+	ast map[identifiers.LogicID]tree.MerkleTree,
+	txns map[identifiers.LogicID]*iradix.Txn,
+) *createStateObjectParams {
+	t.Helper()
+
+	return &createStateObjectParams{
+		soCallback: func(so *Object) {
+			so.storageTrees = ast
+			so.storageTreeTxns = txns
+		},
+	}
+}
+
 func stateObjectParamsWithASTAndMST(
 	t *testing.T,
-	ast map[string]tree.MerkleTree,
+	ast map[identifiers.LogicID]tree.MerkleTree,
 	mst tree.MerkleTree,
 ) *createStateObjectParams {
 	t.Helper()
 
 	return &createStateObjectParams{
 		soCallback: func(so *Object) {
-			so.activeStorageTrees = ast
+			so.storageTrees = ast
 			so.metaStorageTree = mst
 		},
 	}
 }
 
-func stateObjectParamsWithAST(t *testing.T, ast map[string]tree.MerkleTree) *createStateObjectParams {
+func stateObjectParamsWithStorageTree(
+	t *testing.T,
+	ast map[identifiers.LogicID]tree.MerkleTree,
+) *createStateObjectParams {
 	t.Helper()
 
 	return &createStateObjectParams{
 		soCallback: func(so *Object) {
-			so.activeStorageTrees = ast
+			so.storageTrees = ast
 		},
 	}
 }
@@ -979,12 +998,12 @@ func stateObjectParamsWithAST(t *testing.T, ast map[string]tree.MerkleTree) *cre
 func stateObjectParamsWithInvalidMST(t *testing.T) *createStateObjectParams {
 	t.Helper()
 
-	return stateObjectParamsWithMST(t, common.NilAddress, nil, nil, tests.RandomHash(t))
+	return stateObjectParamsWithMST(t, identifiers.NilAddress, nil, nil, tests.RandomHash(t))
 }
 
 func stateObjectParamsWithMST(
 	t *testing.T,
-	address common.Address,
+	address identifiers.Address,
 	db Store,
 	mst tree.MerkleTree,
 	root common.Hash,
@@ -1005,10 +1024,11 @@ func stateObjectParamsWithMST(
 
 func stateObjectParamsWithLogicTree(
 	t *testing.T,
-	address common.Address,
+	address identifiers.Address,
 	db Store,
 	logicTree tree.MerkleTree,
 	root common.Hash,
+	txn *iradix.Txn,
 ) *createStateObjectParams {
 	t.Helper()
 
@@ -1020,6 +1040,7 @@ func stateObjectParamsWithLogicTree(
 		soCallback: func(so *Object) {
 			so.logicTree = logicTree
 			so.data.LogicRoot = root // set logic root as it needs to be returned
+			so.logicTreeTxn = txn
 		},
 	}
 }
@@ -1101,7 +1122,10 @@ func stateObjectParamsWithTestData(t *testing.T, areTreesNil bool) *createStateO
 			s.balance, _ = getTestBalance(t, getAssetMap(getAssetIDsAndBalances(t, 2)))
 			s.approvals.PrvHash = tests.RandomHash(t) // initialize any one field in asset approvals object
 
-			s.logicTree = getMerkleTreeWithFlushedEntries(t, keys[0:1], values[0:1])
+			if !areTreesNil {
+				s.logicTree = getMerkleTreeWithEntries(t, keys[0:1], values[0:1])
+				s.metaStorageTree = getMerkleTreeWithEntries(t, keys[1:], values[1:])
+			}
 
 			s.files = make(map[common.Hash][]byte)
 			s.files[tests.RandomHash(t)] = tests.RandomHash(t).Bytes()
@@ -1112,15 +1136,11 @@ func stateObjectParamsWithTestData(t *testing.T, areTreesNil bool) *createStateO
 					tests.RandomHash(t).String(): tests.RandomHash(t).Bytes(),
 				})
 
-			if areTreesNil {
-				s.logicTree = nil
-			}
-		},
-		metaStorageTreeCallback: func(s *Object) {
-			s.metaStorageTree = getMerkleTreeWithFlushedEntries(t, keys[1:], values[1:])
-			if areTreesNil {
-				s.metaStorageTree = nil
-			}
+			logicIDs := tests.GetLogicIDs(t, 1)
+			s.logicTreeTxn = getTxnWithLogicObjects(
+				t,
+				createLogicObject(t, getLogicObjectParamsWithLogicID(logicIDs[0])))
+			s.storageTreeTxns = getStorageTxnsWithEntries(t, logicIDs, keys, values)
 		},
 	}
 }
@@ -1152,16 +1172,12 @@ func checkForReferences(t *testing.T, sObj, copiedSO *Object) {
 		reflect.ValueOf(sObj.balance).Pointer(),
 		reflect.ValueOf(copiedSO.balance).Pointer(),
 	)
-	require.NotEqual(t,
-		reflect.ValueOf(sObj.journal).Pointer(),
-		reflect.ValueOf(copiedSO.journal).Pointer(),
-	)
 }
 
-func getAssetIDsAndBalances(t *testing.T, count int) ([]common.AssetID, []*big.Int) {
+func getAssetIDsAndBalances(t *testing.T, count int) ([]identifiers.AssetID, []*big.Int) {
 	t.Helper()
 
-	ids := make([]common.AssetID, count)
+	ids := make([]identifiers.AssetID, count)
 	for i := 0; i < count; i++ {
 		ids[i] = tests.GetRandomAssetID(t, tests.RandomAddress(t))
 	}
@@ -1169,7 +1185,7 @@ func getAssetIDsAndBalances(t *testing.T, count int) ([]common.AssetID, []*big.I
 	return ids, tests.GetRandomNumbers(t, 10000, count)
 }
 
-func getAssetMap(assetIDs []common.AssetID, balances []*big.Int) common.AssetMap {
+func getAssetMap(assetIDs []identifiers.AssetID, balances []*big.Int) common.AssetMap {
 	assetMap := make(common.AssetMap)
 
 	for i := 0; i < len(assetIDs); i++ {
@@ -1179,7 +1195,7 @@ func getAssetMap(assetIDs []common.AssetID, balances []*big.Int) common.AssetMap
 	return assetMap
 }
 
-func getAssetMaps(assetIDs []common.AssetID, balances []*big.Int, assetsPerAssetMap int) []common.AssetMap {
+func getAssetMaps(assetIDs []identifiers.AssetID, balances []*big.Int, assetsPerAssetMap int) []common.AssetMap {
 	assetMapCount := len(assetIDs) / assetsPerAssetMap
 	assetMap := make([]common.AssetMap, assetMapCount)
 
@@ -1363,11 +1379,7 @@ func getICSNodes(
 	}
 }
 
-func mockContextLock() map[common.Address]common.ContextLockInfo {
-	return make(map[common.Address]common.ContextLockInfo)
-}
-
-func getTestAssetDescriptor(t *testing.T, operator common.Address, symbol string) *common.AssetDescriptor {
+func getTestAssetDescriptor(t *testing.T, operator identifiers.Address, symbol string) *common.AssetDescriptor {
 	t.Helper()
 
 	return &common.AssetDescriptor{
@@ -1384,8 +1396,8 @@ func getTestAssetDescriptor(t *testing.T, operator common.Address, symbol string
 func createMetaStorageTree(
 	t *testing.T,
 	db Store,
-	address common.Address,
-	logicID common.LogicID,
+	address identifiers.Address,
+	logicID identifiers.LogicID,
 	storageKeys [][]byte,
 	storageValues [][]byte,
 ) (*tree.KramaHashTree, common.Hash) {
@@ -1405,7 +1417,7 @@ func createMetaStorageTree(
 func createTestKramaHashTree(
 	t *testing.T,
 	db Store,
-	address common.Address,
+	address identifiers.Address,
 	prefix storage.PrefixTag,
 	keys [][]byte,
 	values [][]byte,
@@ -1433,18 +1445,17 @@ func createTestKramaHashTree(
 }
 
 func getTesseractParams(
-	address common.Address,
+	address identifiers.Address,
 	ixns common.Interactions,
 	hash common.Hash,
 ) *tests.CreateTesseractParams {
 	return &tests.CreateTesseractParams{
-		Ixns: ixns,
-		HeaderCallback: func(header *common.TesseractHeader) {
-			header.ContextLock = mockContextLock()
-			insertInContextLock(header, address, hash)
-		},
-		BodyCallback: func(body *common.TesseractBody) {
-			body.ContextHash = hash
+		Addresses: []identifiers.Address{address},
+		Ixns:      ixns,
+		Participants: common.Participants{
+			address: {
+				PreviousContext: hash,
+			},
 		},
 	}
 }
@@ -1466,8 +1477,8 @@ func createRandomArrayOfBits(t *testing.T, count int) []*common.ArrayOfBits {
 	return arrayOfBits
 }
 
-func getCopiedAST(ast map[string]tree.MerkleTree) map[string]tree.MerkleTree {
-	copiedAST := make(map[string]tree.MerkleTree, len(ast))
+func copyStorageTrees(ast map[identifiers.LogicID]tree.MerkleTree) map[identifiers.LogicID]tree.MerkleTree {
+	copiedAST := make(map[identifiers.LogicID]tree.MerkleTree, len(ast))
 
 	for logic, merkleTree := range ast {
 		copiedAST[logic] = merkleTree.Copy()
@@ -1476,118 +1487,61 @@ func getCopiedAST(ast map[string]tree.MerkleTree) map[string]tree.MerkleTree {
 	return copiedAST
 }
 
-// getASTWithDefaultFlushedEntries returns ast with merkle trees of tree count
-func getASTWithDefaultFlushedEntries(
+// getStorageTreesWithDefaultEntries returns ast with dirty entries
+func getStorageTreesWithDefaultEntries(
 	t *testing.T,
 	treeCount int,
 	entriesPerTree int,
-) map[string]tree.MerkleTree {
+) map[identifiers.LogicID]tree.MerkleTree {
 	t.Helper()
 
 	logicIds := tests.GetLogicIDs(t, treeCount)
 	keys, values := getEntries(t, entriesPerTree)
-	ast := getActiveStorageTreesWithFlushedEntries(t, logicIds, keys, values)
 
-	return ast
+	return getStorageTrees(t, logicIds, keys, values)
 }
 
-// getASTWithDefaultDirtyEntries returns ast with merkle trees of tree count that have both flushed and dirty entries
-func getASTWithDefaultDirtyEntries(
-	t *testing.T,
-	treeCount int,
-	entriesPerTree int,
-) map[string]tree.MerkleTree {
-	t.Helper()
-
-	ast := getASTWithDefaultFlushedEntries(t, treeCount, entriesPerTree)
-
-	for _, merkleTree := range ast {
-		insertRandomEntriesInMerkleTree(t, merkleTree, entriesPerTree)
-	}
-
-	return ast
-}
-
-func getMerkleTreeWithDefaultFlushedEntries(t *testing.T, entriesPerTree int) tree.MerkleTree {
+// getMerkleTreeWithDefaultEntries return merkle tree with dirty entries
+func getMerkleTreeWithDefaultEntries(t *testing.T, entriesPerTree int) tree.MerkleTree {
 	t.Helper()
 
 	keys, values := getEntries(t, entriesPerTree)
 
-	return getMerkleTreeWithFlushedEntries(t, keys, values)
+	return getMerkleTreeWithEntries(t, keys, values)
 }
 
-// insertRandomEntriesInMerkleTress makes tree dirty by inserting random entries
-func insertRandomEntriesInMerkleTree(t *testing.T, merkleTree tree.MerkleTree, entriesPerTree int) {
-	t.Helper()
-
-	keys, values := getEntries(t, entriesPerTree)
-
-	for i, key := range keys {
-		err := merkleTree.Set(key, values[i])
-		require.NoError(t, err)
-	}
-}
-
-// getMerkleTreeWithDefaultDirtyEntries return merkle tree that has both flushed and dirty entries
-func getMerkleTreeWithDefaultDirtyEntries(t *testing.T, entriesPerTree int) tree.MerkleTree {
-	t.Helper()
-
-	mst := getMerkleTreeWithDefaultFlushedEntries(t, entriesPerTree)
-	insertRandomEntriesInMerkleTree(t, mst, entriesPerTree)
-
-	return mst
-}
-
-func getActiveStorageTrees(
+func getStorageTrees(
 	t *testing.T,
-	logicIds []common.LogicID,
+	logicIds []identifiers.LogicID,
 	keys [][]byte,
 	values [][]byte,
-) map[string]tree.MerkleTree {
+) map[identifiers.LogicID]tree.MerkleTree {
 	t.Helper()
 
 	count := len(logicIds)
-	activeStorageTrees := make(map[string]tree.MerkleTree, count)
+	storageTrees := make(map[identifiers.LogicID]tree.MerkleTree, count)
 
 	for i := 0; i < count; i++ {
-		activeStorageTrees[logicIds[i].String()] = getMerkleTreeWithEntries(t, keys, values)
+		storageTrees[logicIds[i]] = getMerkleTreeWithEntries(t, keys, values)
 	}
 
-	return activeStorageTrees
+	return storageTrees
 }
 
-func getActiveStorageTreesWithFlushedEntries(
+func getStorageTreesWithCommitHook(
 	t *testing.T,
-	logicIds []common.LogicID,
-	keys [][]byte,
-	values [][]byte,
-) map[string]tree.MerkleTree {
-	t.Helper()
-
-	count := len(logicIds)
-	activeStorageTrees := make(map[string]tree.MerkleTree, count)
-
-	for i := 0; i < count; i++ {
-		activeStorageTrees[logicIds[i].String()] = getMerkleTreeWithFlushedEntries(t, keys, values)
-	}
-
-	return activeStorageTrees
-}
-
-func getActiveStorageTreesWithCommitHook(
-	t *testing.T,
-	logicIds []common.LogicID,
+	logicIds []identifiers.LogicID,
 	keys [][]byte,
 	values [][]byte,
 	commitHook func() error,
-) map[string]tree.MerkleTree {
+) map[identifiers.LogicID]tree.MerkleTree {
 	t.Helper()
 
 	count := len(logicIds)
-	activeStorageTrees := make(map[string]tree.MerkleTree, count)
+	activeStorageTrees := make(map[identifiers.LogicID]tree.MerkleTree, count)
 
 	for i := 0; i < count; i++ {
-		activeStorageTrees[logicIds[i].String()] = getMerkleTreeWithCommitHook(t, keys, values, commitHook)
+		activeStorageTrees[logicIds[i]] = getMerkleTreeWithCommitHook(t, keys, values, commitHook)
 	}
 
 	return activeStorageTrees
@@ -1595,37 +1549,18 @@ func getActiveStorageTreesWithCommitHook(
 
 func getActiveStorageTreesWithFlushHook(
 	t *testing.T,
-	logicIds []common.LogicID,
+	logicIds []identifiers.LogicID,
 	keys [][]byte,
 	values [][]byte,
 	commitHook func() error,
-) map[string]tree.MerkleTree {
+) map[identifiers.LogicID]tree.MerkleTree {
 	t.Helper()
 
 	count := len(logicIds)
-	activeStorageTrees := make(map[string]tree.MerkleTree, count)
+	activeStorageTrees := make(map[identifiers.LogicID]tree.MerkleTree, count)
 
 	for i := 0; i < count; i++ {
-		activeStorageTrees[logicIds[i].String()] = getMerkleTreeWithFlushHook(t, keys, values, commitHook)
-	}
-
-	return activeStorageTrees
-}
-
-func getActiveStorageTreesWithRootHook(
-	t *testing.T,
-	logicIds []common.LogicID,
-	keys [][]byte,
-	values [][]byte,
-	rootHashHook func() (common.Hash, error),
-) map[string]tree.MerkleTree {
-	t.Helper()
-
-	count := len(logicIds)
-	activeStorageTrees := make(map[string]tree.MerkleTree, count)
-
-	for i := 0; i < count; i++ {
-		activeStorageTrees[logicIds[i].String()] = getMerkleTreeWithRootHashHook(t, keys, values, rootHashHook)
+		activeStorageTrees[logicIds[i]] = getMerkleTreeWithFlushHook(t, keys, values, commitHook)
 	}
 
 	return activeStorageTrees
@@ -1699,22 +1634,14 @@ func checkForTesseractInSMCache(t *testing.T, sm *StateManager, ts *common.Tesse
 	require.Equal(t, ts, cachedTS) // make sure cached tesseract matches
 }
 
-func checkForDirtyObject(t *testing.T, sm *StateManager, address common.Address, exists bool) {
+func checkForDirtyObject(t *testing.T, sm *StateManager, address identifiers.Address, exists bool) {
 	t.Helper()
 
 	_, ok := sm.dirtyObjects[address]
 	require.Equal(t, exists, ok)
 }
 
-func checkIfDirtyObjectEqual(t *testing.T, sm *StateManager, address common.Address, expectedObj *Object) {
-	t.Helper()
-
-	obj, ok := sm.dirtyObjects[address]
-	require.True(t, ok)
-	require.Equal(t, expectedObj, obj)
-}
-
-func checkForCache(t *testing.T, sm *StateManager, address common.Address) {
+func checkForCache(t *testing.T, sm *StateManager, address identifiers.Address) {
 	t.Helper()
 
 	_, isCached := sm.cache.Get(address) // check if added to cache
@@ -1725,8 +1652,8 @@ func checkIfContextMatches(
 	t *testing.T,
 	expectedBeh *ContextObject,
 	expectedRand *ContextObject,
-	beh []id.KramaID,
-	rand []id.KramaID,
+	beh []kramaid.KramaID,
+	rand []kramaid.KramaID,
 ) {
 	t.Helper()
 
@@ -1747,30 +1674,39 @@ func checkIfNodesetEqual(
 	require.Equal(t, expectedRand, rand)
 }
 
-func checkIfTreesAreEqual(t *testing.T, expectedTree tree.MerkleTree, actualTree tree.MerkleTree) {
+func checkIfTreesAreEqual(t *testing.T, oldTree, newTree tree.MerkleTree) {
 	t.Helper()
 
-	err := expectedTree.Commit()
+	err := oldTree.Commit()
 	require.NoError(t, err)
 
-	err = actualTree.Commit()
+	err = newTree.Commit()
 	require.NoError(t, err)
 
-	expectedRoot, err := expectedTree.RootHash()
-	require.NoError(t, err)
+	oldRoot := getRoot(t, oldTree.(*MockMerkleTree)) //nolint
+	newRoot := getRoot(t, newTree.(*MockMerkleTree)) //nolint
 
-	actualRoot, err := actualTree.RootHash()
-	require.NoError(t, err)
-
-	require.Equal(t, expectedRoot, actualRoot)
+	require.Equal(t, oldRoot, newRoot)
 }
 
-func validateStateObject(t *testing.T, so *Object, accType common.AccountType, address common.Address) {
+func checkIfTxnsAreEqual(t *testing.T, oldTxn, newTxn *iradix.Txn) {
+	t.Helper()
+
+	newTxn.Root().Walk(func(k []byte, v interface{}) bool {
+		_, ok := oldTxn.Get(k)
+		require.True(t, ok)
+
+		return true
+	})
+
+	require.Equal(t, oldTxn.CommitOnly().Len(), newTxn.CommitOnly().Len())
+}
+
+func validateStateObject(t *testing.T, so *Object, accType common.AccountType, address identifiers.Address) {
 	t.Helper()
 
 	require.Equal(t, address, so.address)
 	require.Equal(t, accType, so.accType)
-	require.NotNil(t, so.journal)
 	require.NotNil(t, so.db)
 	require.NotNil(t, so.data)
 	require.NotNil(t, so.cache)
@@ -1787,36 +1723,46 @@ func checkForStateObject(t *testing.T, expectedObj *Object, obj *Object) {
 
 func checkIfStateObjectAreEqual(
 	t *testing.T,
-	expectedObj *Object,
-	actualObj *Object,
-	areTreesNil bool,
+	oldObj *Object,
+	newObj *Object,
 ) {
 	t.Helper()
 
-	require.NotNil(t, actualObj.db)
-	require.NotNil(t, actualObj.cache)
-	require.NotNil(t, actualObj.journal)
-	require.Equal(t, expectedObj.balance.AssetMap, actualObj.balance.AssetMap)
-	require.Equal(t, expectedObj.approvals, actualObj.approvals)
-	require.Equal(t, expectedObj.dirtyEntries, actualObj.dirtyEntries)
-	require.Equal(t, expectedObj.data, actualObj.data)
-	require.Equal(t, expectedObj.files, actualObj.files)
+	require.NotNil(t, newObj.db)
+	require.NotNil(t, newObj.cache)
 
-	if expectedObj.logicTree != nil {
-		checkIfTreesAreEqual(t, expectedObj.logicTree, actualObj.logicTree)
+	require.Equal(t, oldObj.balance.AssetMap, newObj.balance.AssetMap)
+	require.Equal(t, oldObj.approvals, newObj.approvals)
+	require.Equal(t, oldObj.dirtyEntries, newObj.dirtyEntries)
+	require.Equal(t, oldObj.data, newObj.data)
+	require.Equal(t, oldObj.files, newObj.files)
+
+	if oldObj.logicTree != nil {
+		checkIfTreesAreEqual(t, oldObj.logicTree, newObj.logicTree)
+	} else {
+		require.Nil(t, newObj.logicTree)
 	}
 
-	if expectedObj.metaStorageTree != nil {
-		checkIfTreesAreEqual(t, expectedObj.metaStorageTree, actualObj.metaStorageTree)
+	if oldObj.metaStorageTree != nil {
+		checkIfTreesAreEqual(t, oldObj.metaStorageTree, newObj.metaStorageTree)
+	} else {
+		require.Nil(t, newObj.metaStorageTree)
 	}
 
-	if areTreesNil {
-		require.Nil(t, actualObj.logicTree)
-		require.Nil(t, actualObj.metaStorageTree)
+	for id, sTree := range oldObj.storageTrees {
+		checkIfTreesAreEqual(t, sTree, newObj.storageTrees[id])
+	}
+
+	if oldObj.logicTreeTxn != nil {
+		checkIfTxnsAreEqual(t, oldObj.logicTreeTxn, newObj.logicTreeTxn)
+	}
+
+	for id, txn := range oldObj.storageTreeTxns {
+		checkIfTxnsAreEqual(t, txn, newObj.storageTreeTxns[id])
 	}
 }
 
-func checkForBalances(t *testing.T, sObj *Object, expectedBalance *big.Int, assetID common.AssetID) {
+func checkForBalances(t *testing.T, sObj *Object, expectedBalance *big.Int, assetID identifiers.AssetID) {
 	t.Helper()
 
 	actualBalance, err := sObj.BalanceOf(assetID)
@@ -1871,16 +1817,13 @@ func checkForBalance(
 	require.Equal(t, expectedBalanceData, actualBalanceData)
 
 	require.Equal(t, sObj.data.Balance.Bytes(), actualBalanceHash.Bytes()) // check if balance hash inserted in account
-
-	// check if address and balance hash inserted in journal
-	checkJournalEntries(t, sObj.Journal(), sObj.address, journalIndex, actualBalanceHash)
 }
 
 func checkForAccount(
 	t *testing.T,
 	sObj *Object,
 	expectedAcc *common.Account,
-	actualAccHash common.Hash,
+	generatedAccHash common.Hash,
 	journalIndex int,
 ) {
 	t.Helper()
@@ -1889,23 +1832,13 @@ func checkForAccount(
 	require.NoError(t, err)
 
 	expectedAccHash := common.GetHash(expectedAccData)
-	require.Equal(t, expectedAccHash, actualAccHash)
+	require.Equal(t, expectedAccHash, generatedAccHash)
 
 	// check if account data in dirty entries and state object is same
 	key := common.BytesToHex(storage.AccountKey(sObj.address, expectedAccHash))
 	actualAccData, err := sObj.GetDirtyEntry(key) // get account data from dirty entries
 	require.NoError(t, err)
 	require.Equal(t, expectedAccData, actualAccData)
-
-	// check if address and acc hash inserted in journal
-	checkJournalEntries(t, sObj.Journal(), sObj.Address(), journalIndex, actualAccHash)
-}
-
-func checkJournalEntries(t *testing.T, journal *Journal, addr common.Address, journalIndex int, hash common.Hash) {
-	t.Helper()
-
-	require.Equal(t, hash.Bytes(), journal.entries[journalIndex].cID().Bytes())
-	require.Equal(t, addr, *journal.entries[journalIndex].modifiedAddress())
 }
 
 func checkForContextObject(
@@ -1950,69 +1883,65 @@ func checkForMetaContextObject(
 	require.Equal(t, expectedObjData, actualObjData)
 }
 
-func checkIfActiveStorageTreesAreCommitted(
+func checkIfStorageTreesAreCommitted(
 	t *testing.T,
-	inputAST map[string]tree.MerkleTree,
 	sObj *Object,
+	oldStorageTrees map[identifiers.LogicID]tree.MerkleTree,
 ) {
 	t.Helper()
 
-	for logicID, merkleTree := range inputAST {
-		inputMerkleTree, ok := merkleTree.(*MockMerkleTree) // convert inorder to extract concrete type
-		require.True(t, ok)
+	for logicID, txn := range sObj.storageTreeTxns {
+		txn.Root().Walk(func(k []byte, v interface{}) bool {
+			sTree, err := sObj.GetStorageTree(logicID)
+			require.NoError(t, err)
 
-		expectedRoot := getRoot(t, inputMerkleTree)
+			_, err = sTree.Get(k)
+			require.NoError(t, err)
 
-		actualMerkleTree, ok := sObj.activeStorageTrees[logicID].(*MockMerkleTree)
-		require.True(t, ok)
+			return false
+		})
 
-		// make sure merkleTree is not committed, if merkle tree doesn't have dirty entries
-		if !inputMerkleTree.IsDirty() {
-			require.Equal(t, inputMerkleTree.merkleRoot, actualMerkleTree.merkleRoot) // check merkle root didn't change
+		for id, oldTree := range oldStorageTrees {
+			sTree, err := sObj.GetStorageTree(id)
+			require.NoError(t, err)
 
-			continue
+			// make sure metaStorageTree has logicID,storageRoot pair
+			actualRoot, err := sObj.metaStorageTree.Get(id.Bytes())
+			require.NoError(t, err)
+
+			require.True(t, sTree.(*MockMerkleTree).isCommitted) //nolint
+
+			rootHash := getRoot(t, sTree.(*MockMerkleTree)) //nolint
+
+			require.Equal(t, rootHash.Bytes(), actualRoot)
+
+			oldRoot := getRoot(t, oldTree.(*MockMerkleTree)) //nolint
+
+			require.NotEqual(t, oldRoot, rootHash)
 		}
-
-		// make sure merkle root updated
-		require.Equal(t, expectedRoot, actualMerkleTree.merkleRoot)
-
-		// make sure metaStorageTree has logicID,storageRoot pair
-		actualRoot, err := sObj.metaStorageTree.Get(common.FromHex(logicID))
-		require.NoError(t, err)
-
-		require.Equal(t, expectedRoot.Bytes(), actualRoot)
 	}
 }
 
 func checkIfMetaStorageTreeCommitted(
 	t *testing.T,
-	inputMST tree.MerkleTree,
+	generatedStorageRoot common.Hash,
+	expectedStorageRoot common.Hash,
 	sObj *Object,
-	actualRoot common.Hash,
-	journalIndex int,
 ) {
 	t.Helper()
 
-	inputMerkleTree, ok := inputMST.(*MockMerkleTree)
-	require.True(t, ok)
+	rootHash, err := sObj.metaStorageTree.RootHash()
+	require.NoError(t, err)
 
-	expectedRoot := getRoot(t, inputMerkleTree)
+	// check if expected root hash matches
+	require.Equal(t, expectedStorageRoot, rootHash)
+	// check if root hash matches with the generated hash
+	require.Equal(t, rootHash, generatedStorageRoot)
+	// check if the tree is committed
+	require.True(t, sObj.metaStorageTree.(*MockMerkleTree).IsCommitted()) //nolint
 
-	actualMerkleTree, ok := sObj.metaStorageTree.(*MockMerkleTree)
-	require.True(t, ok)
-
-	require.Equal(t, sObj.data.StorageRoot, actualRoot) // make sure storage root returned and stored are same
-
-	// make sure merkle tree is not committed, if merkle tree doesn't have dirty entries
-	if !inputMerkleTree.IsDirty() {
-		require.Equal(t, inputMerkleTree.merkleRoot, actualMerkleTree.merkleRoot) // check merkle root didn't change
-
-		return
-	}
-
-	require.Equal(t, expectedRoot, actualMerkleTree.merkleRoot)
-	require.Equal(t, expectedRoot, actualRoot)
-	checkJournalEntries(t, sObj.Journal(), sObj.Address(), journalIndex, expectedRoot)
+	// check if the data field is updated
+	require.Equal(t, sObj.data.StorageRoot, generatedStorageRoot)
 }
 
 func checkIfLogicTreeCommitted(
@@ -2023,17 +1952,27 @@ func checkIfLogicTreeCommitted(
 ) {
 	t.Helper()
 
-	inputMerkleTree, ok := inputLogicTree.(*MockMerkleTree)
-	require.True(t, ok)
-
-	expectedRoot := getRoot(t, inputMerkleTree)
-
 	actualMerkleTree, ok := sObj.logicTree.(*MockMerkleTree)
 	require.True(t, ok)
 
-	require.Equal(t, sObj.data.LogicRoot, actualRoot) // make sure storage root returned and stored are same
+	sObj.logicTreeTxn.Root().Walk(func(k []byte, v interface{}) bool {
+		ok, err := actualMerkleTree.Has(k)
+		assert.NoError(t, err)
+		assert.True(t, ok)
+
+		return true
+	})
+
+	inputMerkleTree, ok := inputLogicTree.(*MockMerkleTree)
+	require.True(t, ok)
+
+	expectedRoot := getRoot(t, actualMerkleTree)
+
 	require.Equal(t, expectedRoot, actualMerkleTree.merkleRoot)
 	require.Equal(t, expectedRoot, actualRoot)
+	require.Equal(t, sObj.data.LogicRoot, actualRoot) // make sure storage root returned and stored are same
+
+	require.NotEqual(t, inputMerkleTree.merkleRoot, expectedRoot)
 }
 
 func checkIfMerkleTreeFlushed(t *testing.T, merkle tree.MerkleTree, isFlushed bool) {
@@ -2045,11 +1984,11 @@ func checkIfMerkleTreeFlushed(t *testing.T, merkle tree.MerkleTree, isFlushed bo
 	require.Equal(t, isFlushed, m.isFlushed)
 }
 
-func checkIfActiveStorageTreesFlushed(t *testing.T, logicIDs []common.LogicID, s *Object, isFlushed bool) {
+func checkIfActiveStorageTreesFlushed(t *testing.T, logicIDs []identifiers.LogicID, s *Object, isFlushed bool) {
 	t.Helper()
 
 	for _, logicID := range logicIDs {
-		storageTree, ok := s.activeStorageTrees[logicID.String()]
+		storageTree, ok := s.storageTrees[logicID]
 		require.True(t, ok)
 
 		checkIfMerkleTreeFlushed(t, storageTree, isFlushed)
@@ -2061,8 +2000,8 @@ func checkForContextUpdate(
 	sObj *Object,
 	cObj []*ContextObject,
 	metaHash common.Hash,
-	behaviouralNodes []id.KramaID,
-	randomNodes []id.KramaID,
+	behaviouralNodes []kramaid.KramaID,
+	randomNodes []kramaid.KramaID,
 ) {
 	t.Helper()
 
@@ -2119,6 +2058,14 @@ func checkForEntriesInMerkleTree(t *testing.T, merkleTree tree.MerkleTree, keys 
 	}
 }
 
+func checkForEntryInTxn(t *testing.T, txn *iradix.Txn, key []byte, value []byte) {
+	t.Helper()
+
+	actualValue, ok := txn.Get(key)
+	require.True(t, ok)
+	require.Equal(t, value, actualValue)
+}
+
 func validateTesseract(t *testing.T, ts *common.Tesseract, expectedTS *common.Tesseract, withInteractions bool) {
 	t.Helper()
 
@@ -2172,11 +2119,11 @@ func CheckAssetCreation(
 	t *testing.T,
 	s *Object,
 	assetDescriptor *common.AssetDescriptor,
-	assetID common.AssetID,
+	assetID identifiers.AssetID,
 ) {
 	t.Helper()
 
-	actualRegistryData, err := s.GetRegistryEntry(assetID.String())
+	actualRegistryData, err := s.GetRegistryEntry(string(assetID))
 	require.NoError(t, err)
 
 	expectedRegistryData, err := assetDescriptor.Bytes()
@@ -2186,15 +2133,15 @@ func CheckAssetCreation(
 	require.Equal(t, s.Address(), assetDescriptor.Operator) // check if address is assigned to operator
 }
 
-func getTestAssetID(addr common.Address, asset *common.AssetDescriptor) common.AssetID {
-	common.NewAssetIDv0(asset.IsLogical, asset.IsStateFul, asset.Dimension, asset.Standard, addr)
+func getTestAssetID(addr identifiers.Address, asset *common.AssetDescriptor) identifiers.AssetID {
+	identifiers.NewAssetIDv0(asset.IsLogical, asset.IsStateFul, asset.Dimension, uint16(asset.Standard), addr)
 
-	return common.NewAssetIDv0(asset.IsLogical, asset.IsStateFul, asset.Dimension, asset.Standard, addr)
+	return identifiers.NewAssetIDv0(asset.IsLogical, asset.IsStateFul, asset.Dimension, uint16(asset.Standard), addr)
 }
 
 func getContextObjects(
 	t *testing.T,
-	ids []id.KramaID,
+	ids []kramaid.KramaID,
 	idsPerObj int,
 	objCount int,
 ) ([]*ContextObject, []common.Hash) {
@@ -2204,7 +2151,7 @@ func getContextObjects(
 	hashes := make([]common.Hash, objCount)
 
 	for i := 0; i < objCount; i++ {
-		copiedIds := make([]id.KramaID, idsPerObj)
+		copiedIds := make([]kramaid.KramaID, idsPerObj)
 
 		copy(copiedIds, ids[i*idsPerObj:i*idsPerObj+idsPerObj])
 
@@ -2219,4 +2166,43 @@ func getContextObjects(
 	}
 
 	return obj, hashes
+}
+
+func getStorageTxnsWithEntries(
+	t *testing.T,
+	logicIDs []identifiers.LogicID,
+	keys, values [][]byte,
+) map[identifiers.LogicID]*iradix.Txn {
+	t.Helper()
+
+	txns := make(map[identifiers.LogicID]*iradix.Txn)
+	for _, logicID := range logicIDs {
+		txns[logicID] = getTxnsWithEntries(t, keys, values)
+	}
+
+	return txns
+}
+
+func getTxnsWithEntries(t *testing.T, keys [][]byte, values [][]byte) *iradix.Txn {
+	t.Helper()
+
+	txn := iradix.New().Txn()
+
+	for index, key := range keys {
+		txn.Insert(key, values[index])
+	}
+
+	return txn
+}
+
+func getTxnWithLogicObjects(t *testing.T, objects ...*LogicObject) *iradix.Txn {
+	t.Helper()
+
+	txn := iradix.New().Txn()
+
+	for _, obj := range objects {
+		txn.Insert(obj.LogicID().Bytes(), obj)
+	}
+
+	return txn
 }

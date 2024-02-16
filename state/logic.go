@@ -5,6 +5,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -16,7 +17,7 @@ import (
 // Its fields are exported for to make it serializable.
 type LogicObject struct {
 	// Represents the Logic ID
-	ID common.LogicID
+	ID identifiers.LogicID
 	// Represents the Logic Engine
 	EngineKind engineio.EngineKind
 	// Represents the CID of the Logic Manifest
@@ -36,9 +37,9 @@ type LogicObject struct {
 }
 
 // NewLogicObject generates a new LogicObject for a given LogicID, LogicDescriptor and Storage Namespace key
-func NewLogicObject(address common.Address, descriptor *engineio.LogicDescriptor) *LogicObject {
+func NewLogicObject(address identifiers.Address, descriptor *engineio.LogicDescriptor) *LogicObject {
 	// Generate the LogicID from the payload
-	logicID := common.NewLogicIDv0(
+	logicID := identifiers.NewLogicIDv0(
 		descriptor.CtxState.Persistent(),
 		descriptor.CtxState.Ephemeral(),
 		descriptor.Interactive, false,
@@ -61,7 +62,7 @@ func NewLogicObject(address common.Address, descriptor *engineio.LogicDescriptor
 	}
 }
 
-func (logic LogicObject) LogicID() engineio.LogicID { return logic.ID }
+func (logic LogicObject) LogicID() identifiers.LogicID { return logic.ID }
 
 func (logic LogicObject) Engine() engineio.EngineKind { return logic.EngineKind }
 
@@ -84,7 +85,7 @@ func (logic LogicObject) IsInteractive() bool {
 		panic("failed to fetch logic identifier")
 	}
 
-	return logicIdentifier.Interactive()
+	return logicIdentifier.HasInteractableSites()
 }
 
 func (logic LogicObject) PersistentState() (engineio.ElementPtr, bool) {
@@ -224,7 +225,7 @@ func (logic *LogicObject) decodeJSONDepDriver(data []byte) error {
 
 func (logic *LogicObject) UnmarshalJSON(data []byte) error {
 	type temp struct {
-		ID           common.LogicID
+		ID           identifiers.LogicID
 		EngineKind   engineio.EngineKind
 		ManifestHash common.Hash
 		Sealed       bool
@@ -291,18 +292,18 @@ func GetManifestHashFromRawLogicObject(raw []byte) (common.Hash, error) {
 
 type LogicContextObject struct {
 	state *Object
-	logic common.LogicID
+	logic identifiers.LogicID
 }
 
-func NewLogicContextObject(logic common.LogicID, state *Object) *LogicContextObject {
+func NewLogicContextObject(logic identifiers.LogicID, state *Object) *LogicContextObject {
 	return &LogicContextObject{state: state, logic: logic}
 }
 
-func (ctx LogicContextObject) Address() engineio.Address {
+func (ctx LogicContextObject) Address() identifiers.Address {
 	return ctx.state.Address()
 }
 
-func (ctx LogicContextObject) LogicID() engineio.LogicID {
+func (ctx LogicContextObject) LogicID() identifiers.LogicID {
 	return ctx.logic
 }
 

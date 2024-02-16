@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 
@@ -154,11 +155,11 @@ func TestIx_ConstructInteraction(t *testing.T) {
 				Sender:   address,
 				Receiver: tests.RandomAddress(t),
 				Payer:    tests.RandomAddress(t),
-				TransferValues: map[common.AssetID]*big.Int{
+				TransferValues: map[identifiers.AssetID]*big.Int{
 					tests.GetRandomAssetID(t, tests.RandomAddress(t)): big.NewInt(22),
 					tests.GetRandomAssetID(t, tests.RandomAddress(t)): big.NewInt(22),
 				},
-				PerceivedValues: map[common.AssetID]*big.Int{
+				PerceivedValues: map[identifiers.AssetID]*big.Int{
 					tests.GetRandomAssetID(t, tests.RandomAddress(t)): big.NewInt(99),
 					tests.GetRandomAssetID(t, tests.RandomAddress(t)): big.NewInt(111),
 				},
@@ -222,7 +223,7 @@ func TestIx_ValidateArgumentsWithSign(t *testing.T) {
 	address, mnemonic := tests.RandomAddressWithMnemonic(t)
 
 	ixWithNilSender := common.SendIXArgs{
-		Sender: common.NilAddress,
+		Sender: identifiers.NilAddress,
 	}
 
 	ixWithSargaSender := common.SendIXArgs{
