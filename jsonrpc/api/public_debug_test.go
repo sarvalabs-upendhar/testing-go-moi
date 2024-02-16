@@ -73,6 +73,14 @@ func TestPublicDebugAPI_GetNodeMetaInfo(t *testing.T) {
 		expectedError   error
 	}{
 		{
+			name: "Return error if both krama id and peer id are provided in the request",
+			args: rpcargs.NodeMetaInfoArgs{
+				PeerID:  peerIDs[1].String(),
+				KramaID: entries[peerIDs[2]].KramaID,
+			},
+			expectedError: common.ErrInvalidIDCombination,
+		},
+		{
 			name:            "Returns all the node meta info stored in the database",
 			args:            rpcargs.NodeMetaInfoArgs{},
 			entries:         entries,
@@ -130,8 +138,7 @@ func TestPublicDebugAPI_GetNodeMetaInfo(t *testing.T) {
 			nodeMetaInfo, err := debugAPI.GetNodeMetaInfo(&test.args)
 
 			if test.expectedError != nil {
-				require.Error(t, err)
-				require.Equal(t, err, test.expectedError)
+				require.ErrorContains(t, err, test.expectedError.Error())
 
 				return
 			}

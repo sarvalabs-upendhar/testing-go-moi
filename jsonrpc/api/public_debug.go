@@ -78,6 +78,10 @@ func (p *PublicDebugAPI) GetNodeMetaInfo(args *rpcargs.NodeMetaInfoArgs) (map[st
 
 	nodeMetaInfo := make(map[string]map[string]interface{})
 
+	if args.PeerID != "" && args.KramaID != "" {
+		return nil, common.ErrInvalidIDCombination
+	}
+
 	if args.PeerID != "" {
 		if peerID, err = peer.Decode(args.PeerID); err != nil {
 			return nil, err

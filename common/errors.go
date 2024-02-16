@@ -100,4 +100,5 @@ var (
 	ErrReplacementUnderpriced      = errors.New("replacement ix underpriced")
 	ErrAccSyncStatusNotFound       = errors.New("error fetching account sync status")
 	ErrSyncJobNotFound             = errors.New("sync job not found")
+	ErrInvalidIDCombination        = errors.New("can not use both krama id and peer id")
 )
