@@ -519,11 +519,11 @@ func (cs *ClusterState) GetICSRespCount() int {
 	return cs.ICSRespCount
 }
 
-func (cs *ClusterState) IncrementICSRespCount() {
+func (cs *ClusterState) IncrementICSRespCount(count int) {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	cs.ICSRespCount++
+	cs.ICSRespCount += count
 }
 
 type AccountInfo struct {

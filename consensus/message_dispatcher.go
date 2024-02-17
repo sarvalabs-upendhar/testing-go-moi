@@ -3,6 +3,7 @@ package consensus
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sarvalabs/go-moi/telemetry/tracing"
@@ -40,16 +41,18 @@ func (k *Engine) sendICSRequest(
 	ctx context.Context,
 	canonicalReq types.CanonicalICSRequest,
 	nodeset *common.ICSNodeSet,
-) {
-	requestTS := time.Now()
+) int {
+	var (
+		requestTS      = time.Now()
+		failedReqCount = new(atomic.Int32)
+		waitGroup      = new(sync.WaitGroup)
+		requestedNodes = make(map[id.KramaID]struct{})
+	)
 
 	spanCtx, span := tracing.Span(ctx, "Krama.KramaEngine", "sendICSRequest")
 	defer span.End()
 
 	defer k.metrics.captureRequestTurnaroundTime(requestTS)
-
-	waitGroup := new(sync.WaitGroup)
-	requestedNodes := make(map[id.KramaID]struct{})
 
 	for icsSetType, ns := range nodeset.Nodes {
 		if ns == nil {
@@ -94,6 +97,8 @@ func (k *Engine) sendICSRequest(
 				)
 
 				if err != nil {
+					failedReqCount.Add(1)
+
 					k.logger.Error("Failed to send ics message", "krama-id", kramaID, "err", err)
 				}
 			}(kramaID, icsSetType)
@@ -101,6 +106,8 @@ func (k *Engine) sendICSRequest(
 	}
 
 	waitGroup.Wait()
+
+	return int(failedReqCount.Load())
 }
 
 // SendICSResponse sends an ICS response to a specific KramaID with the given context type and status code
