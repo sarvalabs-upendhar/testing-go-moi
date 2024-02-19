@@ -318,11 +318,13 @@ func (k *Engine) acquireContextLock(ctx context.Context, slot *ktypes.Slot) erro
 
 	k.transport.InitClusterConnection(ctx, slot.ClusterID(), true)
 
-	k.sendICSRequest(ctx, reqMsg, slot.ClusterState().NodeSet)
+	failedReqCount := k.sendICSRequest(ctx, reqMsg, slot.ClusterState().NodeSet)
+
+	slot.ClusterState().IncrementICSRespCount(failedReqCount)
 
 	nodes := slot.ClusterState().NodeSet.GetNodes(false)
 
-	utils.RetryUntilTimeout(500*time.Millisecond, 10*time.Millisecond, func() error {
+	utils.RetryUntilTimeout(2000*time.Millisecond, 10*time.Millisecond, func() error {
 		// Verify if all nodes have responded
 		if slot.ClusterState().GetICSRespCount() < len(nodes)-1 {
 			return errors.New("insufficient response count")

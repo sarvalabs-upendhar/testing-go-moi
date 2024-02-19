@@ -142,7 +142,7 @@ func (k *Engine) handleICSResponse(msg *types.ICSMSG) error {
 		return nil
 	}
 
-	slot.ClusterState().IncrementICSRespCount()
+	slot.ClusterState().IncrementICSRespCount(1)
 
 	if icsRes.StatusCode != types.Success {
 		return nil
