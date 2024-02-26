@@ -129,10 +129,10 @@ func (manager *Manager) runInteraction(
 	// Set up a defer function to recover from any panic
 	// that may occur while executing the interaction
 	defer func() {
-		if recover() != nil {
+		if trace := recover(); trace != nil {
 			err = errors.New("execution failed: executor panicked!")
 
-			manager.logger.Debug("EXECUTION PANIC OCCURRED", "trace:", recover())
+			manager.logger.Debug("EXECUTION PANIC OCCURRED", "trace:", trace)
 		}
 	}()
 

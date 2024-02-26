@@ -179,9 +179,16 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 	rawAssetPayload, err := assetPayload.Bytes()
 	require.NoError(t, err)
 
+	logicPayload := common.LogicPayload{
+		Callsite: "hello",
+	}
+	rawLogicPayload, err := logicPayload.Bytes()
+	require.NoError(t, err)
+
+	sm := NewMockStateManager(t)
 	exec := NewMockExecutionManager(t)
 	chainManager := NewMockChainManager(t)
-	coreAPI := NewPublicCoreAPI(nil, chainManager, nil, exec, nil, nil)
+	coreAPI := NewPublicCoreAPI(nil, chainManager, sm, exec, nil, nil)
 
 	address := tests.RandomAddress(t)
 	ts := tests.CreateTesseract(t,
@@ -191,17 +198,22 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 	)
 	chainManager.setTesseractByHash(t, ts)
 
+	acc, _ := tests.GetTestAccount(t, func(acc *common.Account) {
+		acc.Nonce = uint64(2)
+	})
+	sm.setAccount(ts.AnyAddress(), *acc)
+
 	tsHash := getTesseractHash(t, ts)
 
-	IxWithoutFuelParams, err := constructIxn(&common.SendIXArgs{
-		Type:    common.IxAssetCreate,
+	IxWithoutFuelParams, err := constructIxn(sm, &common.SendIXArgs{
+		Type:    common.IxLogicDeploy,
 		Sender:  address,
 		Nonce:   0,
-		Payload: rawAssetPayload,
+		Payload: rawLogicPayload,
 	}, nil)
 	assert.NoError(t, err)
 
-	IxWithFuelParams, err := constructIxn(&common.SendIXArgs{
+	IxWithFuelParams, err := constructIxn(sm, &common.SendIXArgs{
 		Type:      common.IxAssetCreate,
 		Sender:    address,
 		Nonce:     0,
@@ -277,9 +289,9 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 			name: "rpc receipt fetched successfully when fuel price and limit are not given",
 			callArgs: &rpcargs.CallArgs{
 				IxArgs: &rpcargs.IxArgs{
-					Type:    common.IxAssetCreate,
+					Type:    common.IxLogicDeploy,
 					Sender:  address,
-					Payload: (hexutil.Bytes)(rawAssetPayload),
+					Payload: (hexutil.Bytes)(rawLogicPayload),
 				},
 				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
 					address: {
@@ -329,20 +341,33 @@ func TestIx_Call(t *testing.T) {
 	rawAssetPayload, err := assetPayload.Bytes()
 	require.NoError(t, err)
 
+	logicPayload := common.LogicPayload{
+		Callsite: "hello",
+	}
+	rawLogicPayload, err := logicPayload.Bytes()
+	require.NoError(t, err)
+
+	sm := NewMockStateManager(t)
 	exec := NewMockExecutionManager(t)
 	chainManager := NewMockChainManager(t)
-	coreAPI := NewPublicCoreAPI(nil, chainManager, nil, exec, nil, nil)
+	coreAPI := NewPublicCoreAPI(nil, chainManager, sm, exec, nil, nil)
 
 	address := tests.RandomAddress(t)
 	ts := tests.CreateTesseract(t,
 		&tests.CreateTesseractParams{
 			Addresses: []identifiers.Address{address},
-		})
+		},
+	)
 	chainManager.setTesseractByHash(t, ts)
+
+	acc, _ := tests.GetTestAccount(t, func(acc *common.Account) {
+		acc.Nonce = uint64(2)
+	})
+	sm.setAccount(ts.AnyAddress(), *acc)
 
 	tsHash := getTesseractHash(t, ts)
 
-	IxWithoutFuelParams, err := constructIxn(&common.SendIXArgs{
+	IxWithoutFuelParams, err := constructIxn(sm, &common.SendIXArgs{
 		Type:    common.IxAssetCreate,
 		Sender:  address,
 		Nonce:   0,
@@ -357,21 +382,21 @@ func TestIx_Call(t *testing.T) {
 		ExtraData: rawAssetPayload,
 	}
 
-	IxWithFuelParams, err := constructIxn(&common.SendIXArgs{
-		Type:      common.IxAssetCreate,
+	IxWithFuelParams, err := constructIxn(sm, &common.SendIXArgs{
+		Type:      common.IxLogicDeploy,
 		Sender:    address,
 		Nonce:     0,
 		FuelPrice: big.NewInt(1),
 		FuelLimit: 100,
-		Payload:   rawAssetPayload,
+		Payload:   rawLogicPayload,
 	}, nil)
 	assert.NoError(t, err)
 
 	receiptWithFuelParams := &common.Receipt{
-		IxType:    common.IxAssetCreate,
+		IxType:    common.IxLogicDeploy,
 		IxHash:    IxWithFuelParams.Hash(),
 		FuelUsed:  100,
-		ExtraData: rawAssetPayload,
+		ExtraData: rawLogicPayload,
 	}
 
 	exec.setInteractionCall(IxWithoutFuelParams, receiptWithoutFuelParams)
@@ -459,11 +484,11 @@ func TestIx_Call(t *testing.T) {
 			name: "rpc receipt fetched successfully when fuel price and limit are given",
 			callArgs: &rpcargs.CallArgs{
 				IxArgs: &rpcargs.IxArgs{
-					Type:      common.IxAssetCreate,
+					Type:      common.IxLogicDeploy,
 					Sender:    address,
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 					FuelLimit: hexutil.Uint64(100),
-					Payload:   (hexutil.Bytes)(rawAssetPayload),
+					Payload:   (hexutil.Bytes)(rawLogicPayload),
 				},
 				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
 					address: {
@@ -472,12 +497,12 @@ func TestIx_Call(t *testing.T) {
 				},
 			},
 			expectedReceipt: &rpcargs.RPCReceipt{
-				IxType:    hexutil.Uint64(common.IxAssetCreate),
+				IxType:    hexutil.Uint64(common.IxLogicDeploy),
 				IxHash:    IxWithFuelParams.Hash(),
 				FuelUsed:  hexutil.Uint64(100),
-				ExtraData: rawAssetPayload,
+				ExtraData: rawLogicPayload,
 				From:      IxWithFuelParams.Sender(),
-				To:        IxWithoutFuelParams.Receiver(),
+				To:        IxWithFuelParams.Receiver(),
 			},
 		},
 	}
