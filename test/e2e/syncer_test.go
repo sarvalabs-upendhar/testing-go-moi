@@ -143,10 +143,7 @@ func (te *TestEnvironment) chooseNonContextNodeURL(addrs []identifiers.Address) 
 		if !hasNode(instance.KramaID) && !strings.HasSuffix(instance.RPCUrl, operatorPort) {
 			parts := strings.Split(instance.RPCUrl, ":")
 
-			p, err := strconv.Atoi(parts[1])
-			te.NoError(err)
-
-			return "http://0.0.0.0:" + strconv.Itoa(DefaultJSONRPCPort+p%100)
+			return "http://0.0.0.0:" + parts[1]
 		}
 	}
 

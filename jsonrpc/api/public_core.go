@@ -511,17 +511,17 @@ func (p *PublicCoreAPI) AccountMetaInfo(args *rpcargs.GetAccountArgs) (map[strin
 
 // FuelEstimate returns an estimate of the fuel that is required for executing an interaction
 func (p *PublicCoreAPI) FuelEstimate(args *rpcargs.CallArgs) (*hexutil.Big, error) {
+	stateHashes, err := p.normalizeOptions(args.Options)
+	if err != nil {
+		return nil, err
+	}
+
 	sendIXArgs, err := createSendIXArgs(args.IxArgs)
 	if err != nil {
 		return nil, err
 	}
 
-	ix, err := constructIxn(sendIXArgs, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	stateHashes, err := p.normalizeOptions(args.Options)
+	ix, err := constructIxn(p.sm, sendIXArgs, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -529,7 +529,7 @@ func (p *PublicCoreAPI) FuelEstimate(args *rpcargs.CallArgs) (*hexutil.Big, erro
 	ctx := &common.ExecutionContext{
 		CtxDelta: nil,
 		Cluster:  "moi.FuelEstimate",
-		Time:     (time.Now().Unix()),
+		Time:     time.Now().Unix(),
 	}
 
 	receipt, err := p.exec.InteractionCall(ctx, ix, stateHashes)
@@ -562,17 +562,17 @@ func (p *PublicCoreAPI) Syncing(args *rpcargs.SyncStatusRequest) (*rpcargs.SyncS
 
 // Call is a method of PublicCoreAPI that is a stateless version of an interaction submit
 func (p *PublicCoreAPI) Call(args *rpcargs.CallArgs) (*rpcargs.RPCReceipt, error) {
+	stateHashes, err := p.normalizeOptions(args.Options)
+	if err != nil {
+		return nil, err
+	}
+
 	sendIXArgs, err := createSendIXArgs(args.IxArgs)
 	if err != nil {
 		return nil, err
 	}
 
-	ix, err := constructIxn(sendIXArgs, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	stateHashes, err := p.normalizeOptions(args.Options)
+	ix, err := constructIxn(p.sm, sendIXArgs, nil)
 	if err != nil {
 		return nil, err
 	}

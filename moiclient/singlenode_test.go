@@ -1226,6 +1226,16 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 	rawAssetCreatePayload, err := assetCreationPayload.Bytes()
 	require.NoError(tn.T(), err)
 
+	logicPayload := common.LogicPayload{
+		Manifest: common.Hex2Bytes(manifest),
+		Callsite: "Seeder!",
+		Calldata: common.Hex2Bytes("0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd" +
+			"8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49"),
+	}
+
+	rawLogicPayload, err := logicPayload.Bytes()
+	require.NoError(tn.T(), err)
+
 	ixArgsWithFuelParams := &rpcargs.IxArgs{
 		Type:      common.IxAssetCreate,
 		Sender:    addr,
@@ -1235,9 +1245,9 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 	}
 
 	ixArgsWithoutFuelParams := &rpcargs.IxArgs{
-		Type:    common.IxAssetCreate,
+		Type:    common.IxLogicDeploy,
 		Sender:  addr,
-		Payload: (hexutil.Bytes)(rawAssetCreatePayload),
+		Payload: (hexutil.Bytes)(rawLogicPayload),
 	}
 
 	testcases := []struct {
@@ -1268,7 +1278,7 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 					},
 				},
 			},
-			expectedFuelConsumed: (*hexutil.Big)(big.NewInt(100)),
+			expectedFuelConsumed: (*hexutil.Big)(big.NewInt(1745)),
 		},
 		{
 			name: "failed to fetch fuel estimate as options are empty",
@@ -1311,12 +1321,22 @@ func (tn *TestSingleNode) TestCall() {
 	rawAssetPayload, err := assetCreationPayload.Bytes()
 	require.NoError(tn.T(), err)
 
+	logicPayload := common.LogicPayload{
+		Manifest: common.Hex2Bytes(manifest),
+		Callsite: "Seeder!",
+		Calldata: common.Hex2Bytes("0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd" +
+			"8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49"),
+	}
+
+	rawLogicPayload, err := logicPayload.Bytes()
+	require.NoError(tn.T(), err)
+
 	ixArgsWithFuelParams := &rpcargs.IxArgs{
-		Type:      common.IxAssetCreate,
+		Type:      common.IxLogicDeploy,
 		Sender:    addr,
 		FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 		FuelLimit: hexutil.Uint64(200),
-		Payload:   (hexutil.Bytes)(rawAssetPayload),
+		Payload:   (hexutil.Bytes)(rawLogicPayload),
 	}
 
 	ixArgsWithoutFuelParams := &rpcargs.IxArgs{
@@ -1325,17 +1345,27 @@ func (tn *TestSingleNode) TestCall() {
 		Payload: (hexutil.Bytes)(rawAssetPayload),
 	}
 
-	expectedReceipt := &common.Receipt{
+	receiptWithFuelParams := &common.Receipt{
+		IxType:   common.IxLogicDeploy,
+		FuelUsed: 1745,
+	}
+
+	receiptWithoutFuelParams := &common.Receipt{
 		IxType:   common.IxAssetCreate,
 		FuelUsed: 100,
 	}
 
-	expectedAssetAddr := common.NewAccountAddress(0, addr)
-	expectedAssetID := identifiers.NewAssetIDv0(false, false, 0, 0, expectedAssetAddr)
+	expectedAccountAddr := common.NewAccountAddress(0, addr)
+	expectedAssetID := identifiers.NewAssetIDv0(false, false, 0, 0, expectedAccountAddr)
+	expectedLogicID := identifiers.NewLogicIDv0(true, false, false, false, 0, expectedAccountAddr)
 
-	common.SetReceiptExtraData(expectedReceipt, common.AssetCreationReceipt{
+	common.SetReceiptExtraData(receiptWithoutFuelParams, common.AssetCreationReceipt{
 		AssetID:      expectedAssetID,
-		AssetAccount: expectedAssetAddr,
+		AssetAccount: expectedAccountAddr,
+	})
+
+	common.SetReceiptExtraData(receiptWithFuelParams, common.LogicDeployReceipt{
+		LogicID: expectedLogicID,
 	})
 
 	testcases := []struct {
@@ -1356,10 +1386,10 @@ func (tn *TestSingleNode) TestCall() {
 			},
 			expectedReceipt: &rpcargs.RPCReceipt{
 				IxType:    hexutil.Uint64(ixArgsWithFuelParams.Type),
-				FuelUsed:  hexutil.Uint64(expectedReceipt.FuelUsed),
-				ExtraData: expectedReceipt.ExtraData,
+				FuelUsed:  hexutil.Uint64(receiptWithFuelParams.FuelUsed),
+				ExtraData: receiptWithFuelParams.ExtraData,
 				From:      addr,
-				To:        expectedAssetAddr,
+				To:        expectedAccountAddr,
 			},
 		},
 		{
@@ -1374,10 +1404,10 @@ func (tn *TestSingleNode) TestCall() {
 			},
 			expectedReceipt: &rpcargs.RPCReceipt{
 				IxType:    hexutil.Uint64(ixArgsWithoutFuelParams.Type),
-				FuelUsed:  hexutil.Uint64(expectedReceipt.FuelUsed),
-				ExtraData: expectedReceipt.ExtraData,
+				FuelUsed:  hexutil.Uint64(receiptWithoutFuelParams.FuelUsed),
+				ExtraData: receiptWithoutFuelParams.ExtraData,
 				From:      addr,
-				To:        expectedAssetAddr,
+				To:        expectedAccountAddr,
 			},
 		},
 		{

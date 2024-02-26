@@ -176,6 +176,7 @@ type Syncer struct {
 	execGrid            map[common.Hash]struct{}
 	tracker             *SyncStatusTracker
 	workerWaitTime      time.Duration
+	trustedPeersPresent bool
 }
 
 func NewSyncer(
@@ -218,6 +219,7 @@ func NewSyncer(
 		pendingMsgChan:      make(chan *TesseractInfo, 10),
 		execGrid:            make(map[common.Hash]struct{}),
 		tracker:             NewSyncStatusTracker(0),
+		trustedPeersPresent: len(cfg.TrustedPeers) > 0,
 	}
 
 	return s, nil
@@ -355,6 +357,10 @@ func (s *Syncer) worker() {
 	}
 }
 
+func (s *Syncer) hasTrustedPeers() bool {
+	return s.trustedPeersPresent
+}
+
 func (s *Syncer) jobClosure(job *SyncJob) error {
 	if currentState := job.getJobState(); currentState == Sleep || currentState == Done {
 		return nil
@@ -393,10 +399,23 @@ func (s *Syncer) setBucketSyncDone(val bool) {
 	s.bucketSyncDone = val
 }
 
+func (s *Syncer) chooseBestPeer(job *SyncJob) (kramaid.KramaID, error) {
+	// If initial sync is not done, then choose best peer from trusted peers
+	// to improve probability of success in syncing
+	if !s.isInitialSyncDone() && s.hasTrustedPeers() {
+		return s.chooseAnyTrustedPeer(), nil
+	}
+
+	if job.bestPeerLen() > 0 {
+		return job.chooseRandomBestPeer(), nil
+	}
+
+	return s.chooseBestSyncPeer(job)
+}
+
 func (s *Syncer) jobProcessor(job *SyncJob) error {
 	var (
 		err      error
-		bestPeer kramaid.KramaID
 		jobState = job.getJobState()
 	)
 
@@ -426,13 +445,9 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 		s.metrics.captureActiveJobs(-1)
 	}()
 
-	if job.bestPeerLen() > 0 {
-		bestPeer = job.chooseRandomBestPeer()
-	} else {
-		bestPeer, err = s.chooseBestSyncPeer(job)
-		if err != nil {
-			return errors.Wrap(err, "failed to fetch best peer")
-		}
+	bestPeer, err := s.chooseBestPeer(job)
+	if err != nil {
+		return err
 	}
 
 	tsInfo := job.tesseractQueue.Peek()
@@ -702,7 +717,8 @@ func (s *Syncer) findLatestHeightAndBestPeers(addr identifiers.Address) (uint64,
 			resp,
 			time.Minute*2,
 		); err != nil {
-			s.logger.Error("Failed to fetch account latest status", "RPC-error", err, kramaID)
+			s.logger.Error("Failed to fetch account latest status",
+				"RPC-error", err, "kid", kramaID, "address", addr)
 
 			continue
 		}
@@ -735,6 +751,13 @@ func (s *Syncer) chooseBestSyncPeer(job *SyncJob) (kramaid.KramaID, error) {
 	}
 
 	return bestPeers[0], nil
+}
+
+func (s *Syncer) chooseAnyTrustedPeer() kramaid.KramaID {
+	randomSource := rand.New(rand.NewSource(time.Now().UnixNano()))
+	randNumber := randomSource.Intn(len(s.cfg.TrustedPeers))
+
+	return kramaid.KramaID(s.cfg.TrustedPeers[randNumber])
 }
 
 // syncSystemAccount sends a sync request for the specified address and waits for it to complete within a given time.
@@ -819,10 +842,15 @@ func (s *Syncer) initSync() error {
 }
 
 func (s *Syncer) syncBucketsWithMaxAttempts(bestPeers []kramaid.KramaID, maxAttempts int) error {
-	randomNumber := rand.New(rand.NewSource(time.Now().UnixNano()))
-
 	for i := 1; i < maxAttempts+1; i++ {
-		bestPeer := bestPeers[randomNumber.Intn(len(bestPeers))]
+		var bestPeer kramaid.KramaID
+
+		if s.hasTrustedPeers() {
+			bestPeer = s.chooseAnyTrustedPeer()
+		} else {
+			randomNumber := rand.New(rand.NewSource(time.Now().UnixNano()))
+			bestPeer = bestPeers[randomNumber.Intn(len(bestPeers))]
+		}
 
 		requestTime := time.Now()
 
@@ -1063,6 +1091,7 @@ func (s *Syncer) handleAccountMetaInfo(data [][]byte, syncMode common.SyncMode) 
 
 		atomic.AddUint64(&s.pendingAccounts, 1)
 		// TODO: Should improve this, jobQueue will consume most of the memory, if job processor is slow
+
 		if err = s.NewSyncRequest(
 			acc.Address,
 			acc.Height,

@@ -235,7 +235,7 @@ func setupTestEnv() {
 		}
 
 		instances[i].KramaID = string(kramaID)
-		instances[i].RPCUrl = ip + ":" + strconv.Itoa(1600+directoryIndex+i)
+		instances[i].RPCUrl = ip + ":" + strconv.Itoa(jsonrpcPort+directoryIndex+i)
 		instances[i].ConsensusKey = common.BytesToHex(publicKey)
 	}
 

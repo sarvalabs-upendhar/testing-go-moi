@@ -54,7 +54,7 @@ func (p *PublicIXAPI) SendInteraction(sendIx *rpcargs.SendIX) (*common.Interacti
 }
 
 // helper function for moi.Call and moi.FuelEstimate
-func constructIxn(args *common.SendIXArgs, sign []byte) (ix *common.Interaction, err error) {
+func constructIxn(sm backend.StateManager, args *common.SendIXArgs, sign []byte) (ix *common.Interaction, err error) {
 	data := common.IxData{
 		Input: common.IxInput{
 			Type:            args.Type,
@@ -74,6 +74,15 @@ func constructIxn(args *common.SendIXArgs, sign []byte) (ix *common.Interaction,
 
 	if args.FuelLimit != 0 {
 		data.Input.FuelLimit = args.FuelLimit
+	}
+
+	if data.Input.Type == common.IxLogicDeploy || data.Input.Type == common.IxAssetCreate {
+		nonce, err := sm.GetNonce(args.Sender, common.NilHash)
+		if err != nil {
+			return nil, err
+		}
+
+		data.Input.Nonce = nonce
 	}
 
 	return common.NewInteraction(data, sign)

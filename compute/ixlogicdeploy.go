@@ -50,12 +50,15 @@ func RunLogicDeploy(
 
 	// Set the fuel consumption
 	receipt.SetFuelUsed(tank.Consumed)
-	// Set the extra data of the receipt
-	common.SetReceiptExtraData(receipt, *receiptPayload)
 
-	// Set the status of the receipt based on the error stat
-	if receiptPayload.Error != nil {
-		receipt.Status = common.ReceiptExceptionRaised
+	// Set the extra data of the receipt
+	if receiptPayload != nil {
+		common.SetReceiptExtraData(receipt, *receiptPayload)
+
+		// Set the status of the receipt based on the error stat
+		if receiptPayload.Error != nil {
+			receipt.Status = common.ReceiptExceptionRaised
+		}
 	}
 
 	return receipt
