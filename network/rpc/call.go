@@ -32,6 +32,7 @@ type Call struct {
 	errorMu sync.Mutex
 	Error   error // After completion, the error status.
 	logger  hclog.Logger
+	tag     string
 }
 
 // newCall panics if arguments are not as expected.
@@ -83,6 +84,7 @@ func newStreamingCall(
 	streamArgs,
 	streamReplies reflect.Value,
 	done chan *Call,
+	tag string,
 ) *Call {
 	sID := ServiceID{svcName, svcMethod}
 
@@ -101,6 +103,7 @@ func newStreamingCall(
 		Error:         nil,
 		Done:          done,
 		logger:        logger.Named("MOIRPC-NewStreamingCall"),
+		tag:           tag,
 	}
 }
 
@@ -121,7 +124,6 @@ func (call *Call) done() {
 
 func (call *Call) doneWithError(err error) {
 	if err != nil {
-		call.logger.Error("Setting call error", "err", err)
 		call.setError(err)
 	}
 

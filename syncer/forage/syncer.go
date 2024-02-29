@@ -2,6 +2,7 @@ package forage
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"math/rand"
 	"sync"
@@ -996,83 +997,77 @@ func (s *Syncer) syncBuckets(kramaID kramaid.KramaID, attempts int) error {
 		return err
 	}
 
-	errGrp, grpCtx := errgroup.WithContext(s.ctx)
-
-	errGrp.Go(func() error {
-		if err = s.rpcClient.Stream(grpCtx, peerID, "SYNCRPC", "SyncBuckets", argsChan, respChan); err != nil {
+	go func() {
+		if err = s.rpcClient.Stream(
+			context.Background(),
+			peerID,
+			"SYNCRPC",
+			"SyncBuckets",
+			argsChan,
+			respChan,
+			connTag(identifiers.NilAddress, "syncBuckets")); err != nil {
 			s.logger.Error("Failed to sync buckets", "err", err)
+		}
+	}()
 
-			return err
+	defer close(argsChan)
+
+	for i := uint64(0); i <= storage.MaxBucketCount; i++ {
+		argsChan <- &BucketSyncRequest{
+			BucketID: i,
 		}
 
-		return nil
-	})
+		totalEntriesInBucket := uint64(0)
 
-	errGrp.Go(func() error {
-		defer close(argsChan)
+		err = func() error {
+			for {
+				select {
+				case <-time.After(time.Duration(5*attempts) * time.Second):
+					return common.ErrTimeOut
+				case respMsg, ok := <-respChan:
+					if !ok {
+						return errors.New("response chan closed")
+					}
 
-		for i := uint64(0); i <= storage.MaxBucketCount; i++ {
-			argsChan <- &BucketSyncRequest{
-				BucketID: i,
-			}
+					if i != respMsg.BucketID {
+						s.logger.Error("Invalid bucket", "err", err)
 
-			totalEntriesInBucket := uint64(0)
+						return errors.New("invalid bucket id")
+					}
 
-			err = func() error {
-				for {
-					select {
-					case <-grpCtx.Done():
-						return grpCtx.Err()
-					case respMsg, ok := <-respChan:
-						if !ok {
-							return nil
-						}
+					if respMsg.BucketCount == 0 {
+						return nil
+					}
 
-						if i != respMsg.BucketID {
-							s.logger.Error("Invalid bucket", "err", err)
+					if totalEntriesInBucket == 0 {
+						totalEntriesInBucket = respMsg.BucketCount
+					}
 
-							return errors.New("invalid bucket id")
-						}
+					s.logger.Debug("Bucket info", "bucket-ID", respMsg.BucketID, "bucket-count", respMsg.BucketCount)
 
-						if respMsg.BucketCount == 0 {
-							return nil
-						}
+					// send the data to meta info handler
+					if err = s.handleAccountMetaInfo(respMsg.AccountMetaInfos, common.FullSync); err != nil {
+						s.logger.Error("Failed to create sync jobs from accMetaInfo", "err", err)
 
-						if totalEntriesInBucket == 0 {
-							totalEntriesInBucket = respMsg.BucketCount
-						}
+						return err
+					}
 
-						s.logger.Debug("Bucket info", "bucket-ID", respMsg.BucketID, "bucket-count", respMsg.BucketCount)
+					totalEntriesInBucket -= uint64(len(respMsg.AccountMetaInfos))
 
-						// send the data to meta info handler
-						if err = s.handleAccountMetaInfo(respMsg.AccountMetaInfos, common.FullSync); err != nil {
-							s.logger.Error("Failed to create sync jobs from accMetaInfo", "err", err)
-
-							return err
-						}
-
-						totalEntriesInBucket -= uint64(len(respMsg.AccountMetaInfos))
-
-						if totalEntriesInBucket == 0 {
-							return nil
-						}
-
-					case <-time.After(time.Duration(5*attempts) * time.Second):
-						return common.ErrTimeOut
+					if totalEntriesInBucket == 0 {
+						return nil
 					}
 				}
-			}()
-			if err != nil {
-				return err
 			}
+		}()
+		if err != nil {
+			return err
 		}
+	}
 
-		s.setBucketSyncDone(true)
+	s.setBucketSyncDone(true)
 
-		return nil
-	})
-
-	return errGrp.Wait()
+	return nil
 }
 
 func (s *Syncer) handleAccountMetaInfo(data [][]byte, syncMode common.SyncMode) error {
@@ -1192,6 +1187,7 @@ func (s *Syncer) fetchSnapShort(
 			"SyncSnap",
 			reqChan,
 			respChan,
+			connTag(address, "syncSnap"),
 		); err != nil {
 			return err
 		}
@@ -1320,9 +1316,10 @@ func (s *Syncer) syncLattice(
 			grpCtx,
 			peerID,
 			"SYNCRPC",
-			"FetchLattice",
+			"SyncLattice",
 			reqChan,
 			respChan,
+			connTag(job.address, "syncLattice"),
 		); err != nil {
 			s.logger.Error("Lattice fetch failed", "err", err)
 
@@ -2437,4 +2434,8 @@ func (s *Syncer) publishEventTesseractSync(addr identifiers.Address, height uint
 
 func dbKeyFromCID(address identifiers.Address, cid cid.CID) []byte {
 	return storage.DBKey(address, storage.PrefixTag(cid.ContentType()), cid.Key())
+}
+
+func connTag(address identifiers.Address, service string) string {
+	return fmt.Sprintf("%s:%s", service, address.Hex())
 }

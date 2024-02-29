@@ -6,16 +6,10 @@ import (
 	"fmt"
 	"sync"
 
-	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
-	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
-	"github.com/libp2p/go-msgio"
-	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-legacy-kramaid"
-
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p"
 	kdht "github.com/libp2p/go-libp2p-kad-dht"
-	"github.com/libp2p/go-libp2p-pubsub"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	p2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	libp2pMetrics "github.com/libp2p/go-libp2p/core/metrics"
@@ -24,7 +18,12 @@ import (
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/core/routing"
+	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
+	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
+	"github.com/libp2p/go-msgio"
 	maddr "github.com/multiformats/go-multiaddr"
+	"github.com/pkg/errors"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/utils"
@@ -166,7 +165,7 @@ func (s *Server) StartNewRPCServer(protocol protocol.ID, tag string) *rpc.Client
 
 	s.rpcServers[protocol] = rpc.NewServer(s.logger.Named(string(protocol)), s.ConnManager, tag, protocol)
 
-	return rpc.NewClient(s.logger.Named(string(protocol)), s.ConnManager, tag, protocol, s.Senatus)
+	return rpc.NewClient(s.logger.Named(string(protocol)), s.ConnManager, protocol, s.Senatus)
 }
 
 // setupHost sets up the libp2p host for the node

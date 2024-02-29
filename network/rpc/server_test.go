@@ -243,7 +243,7 @@ func testCall(t *testing.T, serverCM, clientCM *MockConnectionManager, dest peer
 	t.Helper()
 
 	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
-	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
+	c := NewClientWithServer(testLogger, clientCM, "rpc", nil, s)
 
 	var arith Arith
 
@@ -268,7 +268,7 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, serverCM, clientCM
 	t.Helper()
 
 	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
-	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
+	c := NewClientWithServer(testLogger, clientCM, "rpc", nil, s)
 
 	var arith Arith
 
@@ -381,7 +381,7 @@ func testCallWithSenatus(t *testing.T, serverCM, clientCM *MockConnectionManager
 		t.Fatal(err)
 	}
 
-	c := NewClient(testLogger, clientCM, "rpc-conn-tag", "rpc", sm)
+	c := NewClient(testLogger, clientCM, "rpc", sm)
 
 	var arith Arith
 
@@ -487,7 +487,7 @@ func testStreamReusewithTTL(t *testing.T, serverCM, clientCM *MockConnectionMana
 	t.Helper()
 
 	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
-	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
+	c := NewClientWithServer(testLogger, clientCM, "rpc", nil, s)
 
 	var arith Arith
 
@@ -549,7 +549,7 @@ func testNewStreamAfterTTLTimeout(t *testing.T, serverCM, clientCM *MockConnecti
 	t.Helper()
 
 	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
-	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
+	c := NewClientWithServer(testLogger, clientCM, "rpc", nil, s)
 
 	var arith Arith
 
@@ -616,7 +616,7 @@ func testStreamwithZeroTTL(t *testing.T, serverCM, clientCM *MockConnectionManag
 	t.Helper()
 
 	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
-	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
+	c := NewClientWithServer(testLogger, clientCM, "rpc", nil, s)
 
 	var arith Arith
 
@@ -654,7 +654,7 @@ func testStreamwithNonZeroTTL(t *testing.T, serverCM, clientCM ConnectionManager
 	t.Helper()
 
 	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
-	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
+	c := NewClientWithServer(testLogger, clientCM, "rpc", nil, s)
 
 	var arith Arith
 
@@ -805,7 +805,7 @@ func TestErrorResponse(t *testing.T) {
 
 	t.Run("remote", func(t *testing.T) {
 		var r int
-		c := NewClientWithServer(testLogger, cm[1], "rpc-conn-tag", "rpc", nil, s)
+		c := NewClientWithServer(testLogger, cm[1], "rpc", nil, s)
 		err := c.Call(cm[0].host.ID(), "Arith", "GimmeError", &Args{1, 2}, &r)
 		if err == nil || err.Error() != "an error" {
 			t.Error("expected different error")
@@ -817,7 +817,7 @@ func TestErrorResponse(t *testing.T) {
 
 	t.Run("local", func(t *testing.T) {
 		var r int
-		c := NewClientWithServer(testLogger, cm[0], "rpc-conn-tag", "rpc", nil, s)
+		c := NewClientWithServer(testLogger, cm[0], "rpc", nil, s)
 		err := c.Call(cm[0].host.ID(), "Arith", "GimmeError", &Args{1, 2}, &r)
 		if err == nil || err.Error() != "an error" {
 			t.Error("expected different error")
@@ -843,7 +843,7 @@ func TestNonRPCError(t *testing.T) {
 
 	t.Run("local non rpc error", func(t *testing.T) {
 		var r int
-		c := NewClientWithServer(testLogger, cm[0], "rpc-conn-tag", "rpc", nil, s)
+		c := NewClientWithServer(testLogger, cm[0], "rpc", nil, s)
 		err := c.Call(cm[0].host.ID(), "Arith", "GimmeError", &Args{1, 2}, &r)
 		if err != nil {
 			if IsRPCError(err) {
@@ -855,7 +855,7 @@ func TestNonRPCError(t *testing.T) {
 
 	t.Run("local rpc error", func(t *testing.T) {
 		var r int
-		c := NewClientWithServer(testLogger, cm[0], "rpc-conn-tag", "rpc", nil, s)
+		c := NewClientWithServer(testLogger, cm[0], "rpc", nil, s)
 		err := c.Call(cm[0].host.ID(), "Arith", "ThisIsNotAMethod", &Args{1, 2}, &r)
 		if err != nil {
 			if !IsRPCError(err) {
@@ -867,7 +867,7 @@ func TestNonRPCError(t *testing.T) {
 
 	t.Run("remote non rpc error", func(t *testing.T) {
 		var r int
-		c := NewClientWithServer(testLogger, cm[1], "rpc-conn-tag", "rpc", nil, s)
+		c := NewClientWithServer(testLogger, cm[1], "rpc", nil, s)
 		err := c.Call(cm[0].host.ID(), "Arith", "GimmeError", &Args{1, 2}, &r)
 		if err != nil {
 			if IsRPCError(err) {
@@ -879,7 +879,7 @@ func TestNonRPCError(t *testing.T) {
 
 	t.Run("remote rpc error", func(t *testing.T) {
 		var r int
-		c := NewClientWithServer(testLogger, cm[1], "rpc-conn-tag", "rpc", nil, s)
+		c := NewClientWithServer(testLogger, cm[1], "rpc", nil, s)
 		err := c.Call(cm[0].host.ID(), "Arith", "ThisIsNotAMethod", &Args{1, 2}, &r)
 		if err != nil {
 			if !IsRPCError(err) {
@@ -894,7 +894,7 @@ func testCallContext(t *testing.T, serverCM, clientCM *MockConnectionManager, de
 	t.Helper()
 
 	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
-	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
+	c := NewClientWithServer(testLogger, clientCM, "rpc", nil, s)
 
 	var arith Arith
 	arith.ctxTracker = &ctxTracker{}
@@ -939,7 +939,7 @@ func TestCallContext(t *testing.T) {
 
 	t.Run("async", func(t *testing.T) {
 		s := NewServer(testLogger, cm[0], "rpc-conn-tag", "rpc")
-		c := NewClientWithServer(testLogger, cm[1], "rpc-conn-tag", "rpc", nil, s)
+		c := NewClientWithServer(testLogger, cm[1], "rpc", nil, s)
 
 		var arith Arith
 		arith.ctxTracker = &ctxTracker{}
@@ -969,7 +969,7 @@ func TestMultiCall(t *testing.T) {
 	defer stopConnectionManagers(t, cm)
 
 	s := NewServer(testLogger, cm[0], "rpc-conn-tag", "rpc")
-	c := NewClientWithServer(testLogger, cm[1], "rpc-conn-tag", "rpc", nil, s)
+	c := NewClientWithServer(testLogger, cm[1], "rpc", nil, s)
 
 	var arith Arith
 
@@ -1018,7 +1018,7 @@ func TestMultiGo(t *testing.T) {
 	defer stopConnectionManagers(t, cm)
 
 	s := NewServer(testLogger, cm[0], "rpc-conn-tag", "rpc")
-	c := NewClientWithServer(testLogger, cm[1], "rpc-conn-tag", "rpc", nil, s)
+	c := NewClientWithServer(testLogger, cm[1], "rpc", nil, s)
 
 	var arith Arith
 
@@ -1066,7 +1066,7 @@ func testDecodeContext(t *testing.T, serverCM, clientCM *MockConnectionManager, 
 	t.Helper()
 
 	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
-	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
+	c := NewClientWithServer(testLogger, clientCM, "rpc", nil, s)
 
 	var arith Arith
 	arith.ctxTracker = &ctxTracker{}
@@ -1116,7 +1116,7 @@ func TestAuthorization(t *testing.T) {
 	)
 
 	s := NewServer(testLogger, cm[0], "rpc-conn-tag", "rpc", WithAuthorizeFunc(authorizationFunc))
-	c := NewClientWithServer(testLogger, cm[1], "rpc-conn-tag", "rpc", nil, s)
+	c := NewClientWithServer(testLogger, cm[1], "rpc", nil, s)
 
 	var arith Arith
 
@@ -1150,7 +1150,7 @@ func TestAuthorization(t *testing.T) {
 		t.Error("expected authorization error, but found", responseErrorType(err))
 	}
 
-	c1 := NewClientWithServer(testLogger, cm[2], "rpc-conn-tag", "rpc", nil, s)
+	c1 := NewClientWithServer(testLogger, cm[2], "rpc", nil, s)
 	err = c1.Call(dest, "Arith", "Multiply", &Args{2, 3}, &r)
 
 	if err == nil {
@@ -1172,7 +1172,7 @@ func testRequestSenderPeerIDContext(t *testing.T, serverCM, clientCM *MockConnec
 	t.Helper()
 
 	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
-	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
+	c := NewClientWithServer(testLogger, clientCM, "rpc", nil, s)
 
 	var arith Arith
 	arith.ctxTracker = &ctxTracker{}
@@ -1220,7 +1220,7 @@ func testStream(t *testing.T, serverCM, clientCM *MockConnectionManager, dest pe
 	t.Helper()
 
 	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
-	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
+	c := NewClientWithServer(testLogger, clientCM, "rpc", nil, s)
 
 	var arith Arith
 
@@ -1237,7 +1237,7 @@ func testStream(t *testing.T, serverCM, clientCM *MockConnectionManager, dest pe
 	numbers <- Args{9, 5}
 	close(numbers)
 
-	err = c.Stream(context.Background(), dest, "Arith", "DivideMyNumbers", numbers, quotients)
+	err = c.Stream(context.Background(), dest, "Arith", "DivideMyNumbers", numbers, quotients, "rpc-conn-tag")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1276,7 +1276,7 @@ func testStream(t *testing.T, serverCM, clientCM *MockConnectionManager, dest pe
 	numbersP <- &Args{2, 3}
 	close(numbersP)
 
-	err = c.Stream(context.Background(), dest, "Arith", "DivideMyNumbersPointers", numbersP, quotientsP)
+	err = c.Stream(context.Background(), dest, "Arith", "DivideMyNumbersPointers", numbersP, quotientsP, "rpc-conn-tag")
 
 	if err != nil {
 		t.Fatal(err)
@@ -1312,7 +1312,7 @@ func testStreamError(t *testing.T, serverCM, clientCM *MockConnectionManager, de
 	t.Parallel()
 
 	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
-	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
+	c := NewClientWithServer(testLogger, clientCM, "rpc", nil, s)
 
 	var arith Arith
 
@@ -1328,7 +1328,7 @@ func testStreamError(t *testing.T, serverCM, clientCM *MockConnectionManager, de
 	numbers <- Args{6, 0}
 	close(numbers)
 
-	err = c.Stream(context.Background(), dest, "Arith", "DivideMyNumbers", numbers, quotients)
+	err = c.Stream(context.Background(), dest, "Arith", "DivideMyNumbers", numbers, quotients, "rpc-conn-tag")
 	if err == nil {
 		t.Error("expected an error")
 	}
@@ -1387,7 +1387,7 @@ func testStreamCancel(t *testing.T, serverCM, clientCM *MockConnectionManager, d
 	t.Parallel()
 
 	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
-	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
+	c := NewClientWithServer(testLogger, clientCM, "rpc", nil, s)
 
 	var arith Arith
 
@@ -1413,7 +1413,7 @@ func testStreamCancel(t *testing.T, serverCM, clientCM *MockConnectionManager, d
 		numbers <- Args{1234, 5}
 		close(numbers)
 
-		err := c.Stream(ctx, dest, "Arith", "DivideMyNumbers", numbers, quotients)
+		err := c.Stream(ctx, dest, "Arith", "DivideMyNumbers", numbers, quotients, "rpc-conn-tag")
 		if err == nil {
 			t.Error("expected an error")
 		}
@@ -1473,7 +1473,7 @@ func TestMultiStream(t *testing.T) {
 
 	s := NewServer(testLogger, cm[0], "rpc-conn-tag", "rpc")
 	s2 := NewServer(testLogger, cm[1], "rpc-conn-tag", "rpc")
-	c := NewClientWithServer(testLogger, cm[0], "rpc-conn-tag", "rpc", nil, s)
+	c := NewClientWithServer(testLogger, cm[0], "rpc", nil, s)
 
 	var arith Arith
 
@@ -1500,7 +1500,7 @@ func TestMultiStream(t *testing.T) {
 	numbers <- Args{10, 3}
 	close(numbers)
 
-	errs := c.MultiStream(ctx, dests, "Arith", "DivideMyNumbers", numbers, quotients)
+	errs := c.MultiStream(ctx, dests, "Arith", "DivideMyNumbers", numbers, quotients, "rpc-conn-tag")
 	for _, err := range errs {
 		if err != nil {
 			t.Fatal(err)
@@ -1526,7 +1526,7 @@ func TestMultiStreamErrors(t *testing.T) {
 
 	s := NewServer(testLogger, cm[0], "rpc-conn-tag", "rpc")
 	s2 := NewServer(testLogger, cm[1], "rpc-conn-tag", "rpc")
-	c := NewClientWithServer(testLogger, cm[0], "rpc-conn-tag", "rpc", nil, s)
+	c := NewClientWithServer(testLogger, cm[0], "rpc", nil, s)
 
 	var arith Arith
 
@@ -1553,7 +1553,7 @@ func TestMultiStreamErrors(t *testing.T) {
 	numbers <- Args{10, 0}
 	close(numbers)
 
-	errs := c.MultiStream(ctx, dests, "Arith", "DivideMyNumbers", numbers, quotients)
+	errs := c.MultiStream(ctx, dests, "Arith", "DivideMyNumbers", numbers, quotients, "rpc-conn-tag")
 	for _, err := range errs {
 		if err == nil {
 			t.Fatal("expected errors")
@@ -1569,7 +1569,7 @@ func TestMultiStreamCancel(t *testing.T) {
 
 	s := NewServer(testLogger, cm[0], "rpc-conn-tag", "rpc")
 	s2 := NewServer(testLogger, cm[1], "rpc-conn-tag", "rpc")
-	c := NewClientWithServer(testLogger, cm[0], "rpc-conn-tag", "rpc", nil, s)
+	c := NewClientWithServer(testLogger, cm[0], "rpc", nil, s)
 
 	var arith Arith
 
@@ -1597,7 +1597,7 @@ func TestMultiStreamCancel(t *testing.T) {
 	numbers <- Args{1234, 3}
 	close(numbers)
 
-	errs := c.MultiStream(ctx, dests, "Arith", "DivideMyNumbers", numbers, quotients)
+	errs := c.MultiStream(ctx, dests, "Arith", "DivideMyNumbers", numbers, quotients, "rpc-conn-tag")
 	for _, err := range errs {
 		if err == nil {
 			t.Fatal("expected errors")
@@ -1617,7 +1617,7 @@ func testStreamClientMisbehave(t *testing.T, serverCM, clientCM *MockConnectionM
 	t.Helper()
 
 	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
-	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
+	c := NewClientWithServer(testLogger, clientCM, "rpc", nil, s)
 
 	var arith Arith
 
@@ -1642,7 +1642,7 @@ func testStreamClientMisbehave(t *testing.T, serverCM, clientCM *MockConnectionM
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
-	err = c.Stream(ctx, dest, "Arith", "DivideMyNumbers", numbers, quotients)
+	err = c.Stream(ctx, dest, "Arith", "DivideMyNumbers", numbers, quotients, "rpc-conn-tag")
 	if err == nil {
 		t.Error("expected an error")
 	}
@@ -1679,7 +1679,7 @@ func testStreamServerMisbehave(t *testing.T, serverCM, clientCM *MockConnectionM
 	t.Helper()
 
 	s := NewServer(testLogger, serverCM, "rpc-conn-tag", "rpc")
-	c := NewClientWithServer(testLogger, clientCM, "rpc-conn-tag", "rpc", nil, s)
+	c := NewClientWithServer(testLogger, clientCM, "rpc", nil, s)
 
 	var arith Arith
 
@@ -1702,7 +1702,7 @@ func testStreamServerMisbehave(t *testing.T, serverCM, clientCM *MockConnectionM
 		}
 	}()
 
-	err = c.Stream(context.Background(), dest, "Arith", "DivideMyNumbers", numbers, quotients)
+	err = c.Stream(context.Background(), dest, "Arith", "DivideMyNumbers", numbers, quotients, "rpc-conn-tag")
 	if err == nil {
 		t.Error("expected an error")
 	}
