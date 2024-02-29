@@ -178,6 +178,8 @@ type Syncer struct {
 	tracker             *SyncStatusTracker
 	workerWaitTime      time.Duration
 	trustedPeersPresent bool
+	IxFetchGrid         map[common.Hash]struct{}
+	IxFetchLock         sync.Mutex
 }
 
 func NewSyncer(
@@ -221,6 +223,7 @@ func NewSyncer(
 		execGrid:            make(map[common.Hash]struct{}),
 		tracker:             NewSyncStatusTracker(0),
 		trustedPeersPresent: len(cfg.TrustedPeers) > 0,
+		IxFetchGrid:         make(map[common.Hash]struct{}),
 	}
 
 	return s, nil
@@ -1968,8 +1971,32 @@ func (s *Syncer) fillTSWithIxnsAndReceipts(tsInfo *TesseractInfo) error {
 
 	ts := tsInfo.tesseract
 
+	fetchIxns := len(ts.Interactions()) == 0
+	fetchReceipts := !tsInfo.shouldExecute && len(ts.Receipts()) == 0
+
+	if !fetchIxns && !fetchReceipts {
+		return nil
+	}
+
+	s.IxFetchLock.Lock()
+
+	if _, ok := s.IxFetchGrid[ts.Hash()]; ok {
+		s.IxFetchLock.Unlock()
+
+		return errors.New("another job is fetching ixns and receipts")
+	}
+
+	s.IxFetchGrid[ts.Hash()] = struct{}{}
+	s.IxFetchLock.Unlock()
+
+	defer func() {
+		s.IxFetchLock.Lock()
+		delete(s.IxFetchGrid, ts.Hash())
+		s.IxFetchLock.Unlock()
+	}()
+
 	// retrieve ixns if they are not available
-	if len(ts.Interactions()) == 0 {
+	if fetchIxns {
 		ixns, err = s.ixpool.GetIxns(tsInfo.ixnsHashes)
 		if err != nil {
 			s.logger.Trace("Ixns not found in ixpool",
@@ -2009,8 +2036,8 @@ func (s *Syncer) fillTSWithIxnsAndReceipts(tsInfo *TesseractInfo) error {
 		ts.SetIxns(ixns)
 	}
 
-	// Retrieve receipts only when Tesseract execution is not needed and receipts are not available
-	if !tsInfo.shouldExecute && len(ts.Receipts()) == 0 {
+	// retrieve receipts only when Tesseract execution is not needed and receipts are not available
+	if fetchReceipts {
 		err = func() error {
 			ctx, cancel := context.WithTimeout(context.Background(), TesseractFetchTimeOut) // TODO:Optimise timeout duration
 			defer cancel()
