@@ -14,8 +14,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-multiaddr"
-	"github.com/sarvalabs/go-legacy-kramaid"
-
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/network/rpc/ttlmap"
 )
@@ -64,7 +63,6 @@ type ConnectionManager interface {
 // (or local, see below) Server.
 type Client struct {
 	connManager           ConnectionManager
-	connTag               string
 	protocol              protocol.ID
 	server                *Server
 	statsHandler          stats.Handler
@@ -86,14 +84,12 @@ type Client struct {
 func NewClient(
 	logger hclog.Logger,
 	connManager ConnectionManager,
-	connTag string,
 	p protocol.ID,
 	senatus senatus,
 	opts ...ClientOption,
 ) *Client {
 	c := &Client{
 		connManager: connManager,
-		connTag:     connTag,
 		protocol:    p,
 		senatus:     senatus,
 		logger:      logger.Named("MOIRPC-Client"),
@@ -135,13 +131,12 @@ func NewClient(
 func NewClientWithServer(
 	logger hclog.Logger,
 	connManager ConnectionManager,
-	connTag string,
 	p protocol.ID,
 	senatus senatus,
 	s *Server,
 	opts ...ClientOption,
 ) *Client {
-	c := NewClient(logger, connManager, connTag, p, senatus, opts...)
+	c := NewClient(logger, connManager, p, senatus, opts...)
 	c.server = s
 
 	return c
@@ -435,12 +430,13 @@ func (c *Client) Stream(
 	svcName, svcMethod string,
 	argsChan interface{},
 	repliesChan interface{},
+	tag string,
 ) error {
 	vArgsChan := reflect.ValueOf(argsChan)
 	vRepliesChan := reflect.ValueOf(repliesChan)
 
 	done := make(chan *Call, 1)
-	call := newStreamingCall(c.logger, ctx, dest, svcName, svcMethod, vArgsChan, vRepliesChan, done)
+	call := newStreamingCall(c.logger, ctx, dest, svcName, svcMethod, vArgsChan, vRepliesChan, done, tag)
 
 	go c.makeStream(call)
 	<-done
@@ -467,6 +463,7 @@ func (c *Client) MultiStream(
 	svcName, svcMethod string,
 	argsChan interface{},
 	repliesChan interface{},
+	tag string,
 ) []error {
 	n := len(dests)
 	sID := ServiceID{svcName, svcMethod}
@@ -516,6 +513,7 @@ func (c *Client) MultiStream(
 				svcMethod,
 				vArgsChannels.Index(i).Interface(),
 				vRepliesChannels.Index(i).Interface(),
+				tag,
 			)
 
 			errs[i] = err
@@ -696,7 +694,7 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 	item, err := c.streamMap.Get(call.Dest.String())
 
 	if err != nil {
-		ns, err := c.connManager.NewStream(call.ctx, call.Dest, c.protocol, c.connTag)
+		ns, err := c.connManager.NewStream(call.ctx, call.Dest, c.protocol, call.tag)
 		if err != nil {
 			call.doneWithError(newClientError(err))
 
@@ -724,7 +722,7 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 			"service-ID", call.SvcID,
 		)
 
-		_ = c.connManager.ResetStream(stream, c.connTag)
+		_ = c.connManager.ResetStream(stream, call.tag)
 
 		return nil, err
 	}
@@ -738,7 +736,7 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 			"encode-args", call.Args,
 		)
 
-		if resetErr := c.connManager.ResetStream(stream, c.connTag); resetErr != nil {
+		if resetErr := c.connManager.ResetStream(stream, call.tag); resetErr != nil {
 			call.logger.Trace("Failed to close stream", "err", resetErr)
 		}
 
@@ -751,7 +749,7 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 		call.doneWithError(newClientError(err))
 		c.logger.Error("Client error related to encoding flush", "err", err)
 
-		_ = c.connManager.ResetStream(stream, c.connTag)
+		_ = c.connManager.ResetStream(stream, call.tag)
 
 		return nil, err
 	}
@@ -761,7 +759,7 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 	if err != nil {
 		c.logger.Error("Client received response error", "stream-ID", sWrap.stream.ID(), "err", err)
 
-		_ = c.connManager.ResetStream(stream, c.connTag)
+		_ = c.connManager.ResetStream(stream, call.tag)
 
 		return nil, err
 	}
@@ -784,7 +782,7 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 			}
 		}
 	} else {
-		if closeErr := c.connManager.CloseStream(stream, c.connTag); closeErr != nil {
+		if closeErr := c.connManager.CloseStream(stream, call.tag); closeErr != nil {
 			call.logger.Trace("Failed to close stream", "err", closeErr)
 		}
 	}
@@ -864,7 +862,7 @@ func (c *Client) makeStream(call *Call) {
 // the destination, writing argument channel objects to it and reading the
 // replies to the replies channel.
 func (c *Client) stream(call *Call) {
-	s, err := c.connManager.NewStream(call.ctx, call.Dest, c.protocol, c.connTag)
+	s, err := c.connManager.NewStream(call.ctx, call.Dest, c.protocol, call.tag)
 	if err != nil {
 		call.doneWithError(newClientError(err))
 
@@ -884,7 +882,7 @@ func (c *Client) stream(call *Call) {
 	if err := sWrap.enc.Encode(call.SvcID); err != nil {
 		call.doneWithError(newClientError(err))
 
-		_ = c.connManager.ResetStream(s, c.connTag)
+		_ = c.connManager.ResetStream(s, call.tag)
 
 		go drainChannel(call.StreamArgs)
 		call.StreamReplies.Close()
@@ -896,7 +894,7 @@ func (c *Client) stream(call *Call) {
 	if err := sWrap.w.Flush(); err != nil {
 		call.doneWithError(newClientError(err))
 
-		_ = c.connManager.ResetStream(s, c.connTag)
+		_ = c.connManager.ResetStream(s, call.tag)
 
 		go drainChannel(call.StreamArgs)
 		call.StreamReplies.Close()
@@ -936,7 +934,7 @@ func (c *Client) stream(call *Call) {
 				// closing the args channel is responsibility
 				// of the sender.
 
-				_ = c.connManager.ResetStream(s, c.connTag)
+				_ = c.connManager.ResetStream(s, call.tag)
 
 				go drainChannel(call.StreamArgs)
 
@@ -947,7 +945,7 @@ func (c *Client) stream(call *Call) {
 			if err := sWrap.w.Flush(); err != nil {
 				call.doneWithError(newClientError(err))
 
-				_ = c.connManager.ResetStream(s, c.connTag)
+				_ = c.connManager.ResetStream(s, call.tag)
 
 				go drainChannel(call.StreamArgs)
 
@@ -981,7 +979,7 @@ func (c *Client) stream(call *Call) {
 			if err != nil {
 				call.setError(newClientError(err))
 
-				_ = c.connManager.ResetStream(s, c.connTag)
+				_ = c.connManager.ResetStream(s, call.tag)
 
 				return
 			}
@@ -989,7 +987,7 @@ func (c *Client) stream(call *Call) {
 			if resp.Error != "" {
 				call.setError(responseError(resp.ErrType, resp.Error))
 
-				_ = c.connManager.ResetStream(s, c.connTag)
+				_ = c.connManager.ResetStream(s, call.tag)
 
 				return
 			}
@@ -1001,7 +999,7 @@ func (c *Client) stream(call *Call) {
 			if err != nil {
 				call.setError(newClientError(err))
 
-				_ = c.connManager.ResetStream(s, c.connTag)
+				_ = c.connManager.ResetStream(s, call.tag)
 
 				return
 			}
@@ -1014,7 +1012,7 @@ func (c *Client) stream(call *Call) {
 	// finalization of the Call.
 	wg.Wait()
 
-	if closeErr := c.connManager.CloseStream(s, c.connTag); closeErr != nil {
+	if closeErr := c.connManager.CloseStream(s, call.tag); closeErr != nil {
 		call.logger.Trace("Failed to close stream", "err", closeErr)
 	}
 

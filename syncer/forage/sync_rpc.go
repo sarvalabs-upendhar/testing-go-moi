@@ -200,7 +200,7 @@ func (service *SYNCRPCService) GetLatestAccountInfo(
 	return nil
 }
 
-func (service *SYNCRPCService) FetchLattice(
+func (service *SYNCRPCService) SyncLattice(
 	ctx context.Context,
 	reqChan <-chan *LatticeRequest,
 	respChan chan<- *networkmsg.TesseractSyncMsg,

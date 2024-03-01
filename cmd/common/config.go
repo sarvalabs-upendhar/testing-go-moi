@@ -217,7 +217,7 @@ type NetworkConfig struct {
 
 type SyncerConfig struct {
 	ShouldExecute  bool
-	TrustedPeers   []string
+	TrustedPeers   []string `json:"trusted_peers"`
 	EnableSnapSync bool
 	SyncMode       int
 }
