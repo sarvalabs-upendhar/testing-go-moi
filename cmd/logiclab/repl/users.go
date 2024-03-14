@@ -1,4 +1,4 @@
-package cmds
+package repl
 
 import (
 	"fmt"
@@ -6,8 +6,6 @@ import (
 
 	"github.com/manishmeganathan/symbolizer"
 	"github.com/sarvalabs/go-moi-identifiers"
-
-	"github.com/sarvalabs/go-moi/cmd/logiclab/core"
 )
 
 func HelpUsers() string {
@@ -29,16 +27,16 @@ usage:
 // UsersCommand generates a Command runner
 // to print details of all registered users
 func UsersCommand() Command {
-	return func(env *Environment) string {
+	return func(repl *Repl) string {
 		var (
 			idx  = 1
 			list strings.Builder
 		)
 
-		for username, address := range env.inventory.Users {
-			list.WriteString(fmt.Sprintf("%v] %v [@>%v<@]", idx, username, env.format(address)))
+		for username, address := range repl.env.Users {
+			list.WriteString(fmt.Sprintf("%v] %v [@>%v<@]", idx, username, repl.FormatValue(address)))
 
-			if idx++; idx <= len(env.inventory.Users) {
+			if idx++; idx <= len(repl.env.Users) {
 				list.WriteString("\n")
 			}
 		}
@@ -72,18 +70,18 @@ user 'manish' created with address '0xb1107436395807a00c0d673134d48956315a0c65af
 // RegisterUserCommand generates a Command runner
 // to register a new User with the given username
 func RegisterUserCommand(username string, address identifiers.Address) Command {
-	return func(env *Environment) string {
+	return func(repl *Repl) string {
 		// Check if a user with username already exists
-		if exists := env.inventory.UserExists(username); exists {
+		if exists := repl.env.UserExists(username); exists {
 			return fmt.Sprintf("user %v already exists", username)
 		}
 
-		// Generate a new User for the username
-		user := core.NewUserAccount(username, address)
-		// Add the user to the inventory
-		env.inventory.AddUser(user)
+		// Register a new user with the environment
+		if err := repl.env.RegisterUser(username, address); err != nil {
+			return fmt.Sprintf("user %v could not be created: %v", username, err)
+		}
 
-		return fmt.Sprintf("user '%v' created with address '%v'", username, user.Addr)
+		return fmt.Sprintf("user '%v' created with address '%v'", username, repl.env.Users[username])
 	}
 }
 
@@ -93,7 +91,6 @@ func parseRegisterCommand(parser *symbolizer.Parser) Command {
 	}
 
 	username := parser.Cursor().Literal
-	parser.Advance()
 
 	// Register a user with a random address
 	if parser.IsPeek(symbolizer.TokenEoF) {
@@ -131,14 +128,14 @@ func parseGetUser(parser *symbolizer.Parser) Command {
 
 	username := parser.Cursor().Literal
 
-	return func(env *Environment) string {
+	return func(repl *Repl) string {
 		// Find the user in the inventory
-		user, exists := env.inventory.FindUser(username)
+		addr, exists := repl.env.Users[username]
 		if !exists {
 			return fmt.Sprintf("user '%v' does not exist", username)
 		}
 
-		return Colorize(user.String())
+		return Colorize(fmt.Sprintf("%v\t[@>%v<@]", username, addr))
 	}
 }
 
@@ -153,14 +150,16 @@ func parseWipeUser(parser *symbolizer.Parser) Command {
 
 	username := parser.Cursor().Literal
 
-	return func(env *Environment) string {
+	return func(repl *Repl) string {
 		// Check if a user with username exists
-		if exists := env.inventory.UserExists(username); !exists {
+		if exists := repl.env.UserExists(username); !exists {
 			return fmt.Sprintf("user %v does not exist", username)
 		}
 
 		// Remove the user from the inventory
-		env.inventory.RemoveUser(username)
+		if err := repl.env.RemoveUser(username); err != nil {
+			return fmt.Sprintf("could not remove user: %v", err)
+		}
 
 		return fmt.Sprintf("wiped user '%v'", username)
 	}

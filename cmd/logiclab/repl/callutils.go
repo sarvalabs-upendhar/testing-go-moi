@@ -1,4 +1,4 @@
-package cmds
+package repl
 
 import (
 	"encoding/hex"
@@ -37,20 +37,20 @@ examples:
 // CallencodeMemoryCommand generates a command runner to generate
 // a doc-encoded calldata string from an object in the lab memory
 func CallencodeMemoryCommand(ident string) Command {
-	return func(env *Environment) string {
-		value, ok := env.memory[ident]
+	return func(repl *Repl) string {
+		value, ok := repl.memory[ident]
 		if !ok {
 			return fmt.Sprintf("no value set for '%v'", ident)
 		}
 
-		return CallencodeValueCommand(value)(env)
+		return CallencodeValueCommand(value)(repl)
 	}
 }
 
 // CallencodeValueCommand generates a command runner to generate
 // a doc-encoded calldata string from a given value object
 func CallencodeValueCommand(value any) Command {
-	return func(env *Environment) string {
+	return func(repl *Repl) string {
 		object, ok := value.(map[string]any)
 		if !ok {
 			return "value is not an object"
@@ -59,7 +59,7 @@ func CallencodeValueCommand(value any) Command {
 		doc := make(polo.Document)
 
 		for key, val := range object {
-			data, err := engineio.EncodeValues(val, env)
+			data, err := engineio.EncodeValues(val, repl)
 			if err != nil {
 				return fmt.Sprintf("could not encode value into calldata: %v", err)
 			}
@@ -98,16 +98,16 @@ usage:
 examples:
 >> set A 0x0d2f06256f6b02
 >> calldecode A from Ledger.Mint!
-// Outputs ||| ok: true 
+// Outputs ||| ok: true
 
 >> calldecode 0x0d2f06256f6b02 from Ledger.Mint!
-// Outputs ||| ok: true 
+// Outputs ||| ok: true
 `
 }
 
 func CalldecodeMemoryCommand(ident, name, site string) Command {
-	return func(env *Environment) string {
-		value, ok := env.memory[ident]
+	return func(repl *Repl) string {
+		value, ok := repl.memory[ident]
 		if !ok {
 			return fmt.Sprintf("no value set for '%v'", ident)
 		}
@@ -117,32 +117,32 @@ func CalldecodeMemoryCommand(ident, name, site string) Command {
 			return fmt.Sprintf("'%v' is not an hex value", ident)
 		}
 
-		return CalldecodeValueCommand(data, name, site)(env)
+		return CalldecodeValueCommand(data, name, site)(repl)
 	}
 }
 
 func CalldecodeValueCommand(data []byte, name, site string) Command {
-	return func(env *Environment) string {
+	return func(repl *Repl) string {
 		// Find the logic from the inventory
-		logic, exists := env.inventory.FindLogic(name)
-		if !exists {
-			return fmt.Sprintf("logic '%v' does not exist", name)
+		logic, err := repl.env.FetchLogic(name)
+		if err != nil {
+			return fmt.Sprintf("logic '%v' does not exist: %v", name, err)
 		}
 
 		// Get the callsite from the logic, error if not found
-		callsite, ok := logic.Logic.GetCallsite(site)
+		callsite, ok := logic.Object.GetCallsite(site)
 		if !ok {
 			return fmt.Sprintf("logic '%v' does not have callsite '%v'", name, site)
 		}
 
 		// Obtain the runtime for the logic engine in the header
-		runtime, ok := engineio.FetchEngineRuntime(logic.Logic.Engine())
+		runtime, ok := engineio.FetchEngineRuntime(logic.Object.Engine())
 		if !ok {
 			return "failed to get runtime for logic"
 		}
 
 		// Generate the call encoder for the callsite
-		encoder, err := runtime.GetCallEncoder(callsite, logic.Logic)
+		encoder, err := runtime.GetCallEncoder(callsite, logic.Object)
 		if err != nil {
 			return fmt.Sprintf("failed to generate call encoder for callsite '%v'", callsite)
 		}
@@ -205,7 +205,6 @@ func parseCalldecodeCommand(parser *symbolizer.Parser) Command {
 }
 
 func HelpErrdecode() string {
-	//nolint:lll
 	return `
 The @>errdecode<@ command can be used to decode the error data returned by logic calls.
 The given error data is decoded for the error object of the respective [@>engines<@] and printed.
@@ -216,10 +215,12 @@ usage:
 @>errdecode [identifier] from [engine]<@
 
 examples:
->> errdecode 0x0e4f0666ce01737472696e6768656c6c6f213f068602726f6f742e7365747570205b3078305d726f6f742e446f205b3078305d202e2e2e205b3078323a205448524f57203078305d from PISA
+>> errdecode 0x0e4f0666ce01737472696e6768656c6c6f213f068602
+726f6f742e7365747570205b3078305d726f6f742e446f205b3078305d202e2e2e205b3078323a205448524f57203078305d from PISA
 // prints error object
 
->> set err 0x0e4f0666ce01737472696e6768656c6c6f213f068602726f6f742e7365747570205b3078305d726f6f742e446f205b3078305d202e2e2e205b3078323a205448524f57203078305d
+>> set err 0x0e4f0666ce01737472696e6768656c6c6f213f068602726f6
+f742e7365747570205b3078305d726f6f742e446f205b3078305d202e2e2e205b3078323a205448524f57203078305d
 >> errdecode err from PISA
 // prints error object
 `
@@ -228,7 +229,7 @@ examples:
 // ErrdecodeValueCommand generates a command runner to
 // decode the error object from the given error bytes data.
 func ErrdecodeValueCommand(errdata []byte, engine engineio.EngineKind) Command {
-	return func(env *Environment) string {
+	return func(repl *Repl) string {
 		runtime, _ := engineio.FetchEngineRuntime(engine)
 
 		errorObject, err := runtime.DecodeErrorResult(errdata)
@@ -244,8 +245,8 @@ func ErrdecodeValueCommand(errdata []byte, engine engineio.EngineKind) Command {
 // to decode the error object from the error bytes
 // data at the given identifier in the lab memory
 func ErrdecodeMemoryCommand(ident string, engine engineio.EngineKind) Command {
-	return func(env *Environment) string {
-		value, ok := env.memory[ident]
+	return func(repl *Repl) string {
+		value, ok := repl.memory[ident]
 		if !ok {
 			return fmt.Sprintf("no value set for '%v'", ident)
 		}
@@ -255,7 +256,7 @@ func ErrdecodeMemoryCommand(ident string, engine engineio.EngineKind) Command {
 			return fmt.Sprintf("'%v' is not an hex value", ident)
 		}
 
-		return ErrdecodeValueCommand(errdata, engine)(env)
+		return ErrdecodeValueCommand(errdata, engine)(repl)
 	}
 }
 
@@ -287,28 +288,28 @@ func parseErrdecodeCommand(parser *symbolizer.Parser) Command {
 	}
 }
 
-func HelpSlothash() string {
+func HelpStorageKey() string {
 	return `
-The @>slothash<@ command can be used to generate storage slot keys.
+The @>storagekey<@ command can be used to generate storage slot keys.
 The storage slot represents then key for positional information in a [logics] state.
-Currently it only supports a simple slot hashing by accepting a uint8 slot and 
+Currently it only supports a simple slot hashing by accepting a uint8 slot and
 returning its hash, but this will be extended when PISA's storage layer is complete.
 
 usage:
-@>slothash [slot]<@
+@>storagekey [slot]<@
 
 examples:
->> slothash 0 
+>> storagekey 0
 03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314
 `
 }
 
-// parseSlothashCommand generates a command runner to generate
-// the slothash for a given storage path. Currently, only
+// parseStorageKeyCommand generates a command runner to generate
+// the storage key for a given storage path. Currently, only
 // accepts a single uint8 slot number but will be extended.
-func parseSlothashCommand(parser *symbolizer.Parser) Command {
+func parseStorageKeyCommand(parser *symbolizer.Parser) Command {
 	if !parser.ExpectPeek(symbolizer.TokenNumber) {
-		return InvalidCommandError("missing slot number for slothash")
+		return InvalidCommandError("missing slot number for storage key")
 	}
 
 	token := parser.Cursor()
@@ -319,7 +320,7 @@ func parseSlothashCommand(parser *symbolizer.Parser) Command {
 		return InvalidCommandError("slot is not an uint64")
 	}
 
-	return func(env *Environment) string {
+	return func(repl *Repl) string {
 		if slot > math.MaxUint8 {
 			return "slot number is too large"
 		}

@@ -1,4 +1,4 @@
-package cmds
+package repl
 
 import (
 	"fmt"
@@ -6,6 +6,8 @@ import (
 
 	"github.com/manishmeganathan/symbolizer"
 	"github.com/sarvalabs/go-moi-engineio"
+
+	"github.com/sarvalabs/go-moi/cmd/logiclab/core"
 )
 
 func HelpLogics() string {
@@ -27,16 +29,16 @@ usage:
 // LogicsCommand generates a Command runner
 // to print details of all compiled logics
 func LogicsCommand() Command {
-	return func(env *Environment) string {
+	return func(repl *Repl) string {
 		var (
 			idx  = 1
 			list strings.Builder
 		)
 
-		for name, logicID := range env.inventory.Logics {
+		for name, logicID := range repl.env.Logics {
 			list.WriteString(fmt.Sprintf("%v] %v [@>%v<@]", idx, name, logicID))
 
-			if idx++; idx <= len(env.inventory.Logics) {
+			if idx++; idx <= len(repl.env.Logics) {
 				list.WriteString("\n")
 			}
 		}
@@ -58,7 +60,7 @@ usage:
 @>compile [name] from manifest(...)<@
 
 examples:
->>> compile Ledger from manifest("./jug/manifests/ledger.yaml")     
+>>> compile Ledger from manifest("./jug/manifests/ledger.yaml")
 logic 'Ledger' [0800007140e42388a825992f5f07c7711718384b0ef228b36f46511503295e1dc38931] compiled with 100 FUEL
 `
 }
@@ -66,22 +68,24 @@ logic 'Ledger' [0800007140e42388a825992f5f07c7711718384b0ef228b36f46511503295e1d
 // CompileLogicCommand generates a Command runner to compile
 // a new Logic with the given name and manifest object
 func CompileLogicCommand(name string, manifest *engineio.Manifest) Command {
-	return func(env *Environment) string {
+	return func(repl *Repl) string {
 		// Check if a logic with name already exists
-		if _, exists := env.inventory.Logics[name]; exists {
+		if exists := repl.env.LogicExists(name); exists {
 			return fmt.Sprintf("logic %v already exists", name)
 		}
 
 		// Compile the manifest into a Logic
-		logic, fuel, err := CompileManifest(name, manifest, env.inventory.Config.BaseFuel)
+		logic, fuel, err := core.NewLogic(name, manifest, repl.env.CallFuel)
 		if err != nil {
 			return fmt.Sprintf("logic could not be compiled: %v", err)
 		}
 
 		// Add the logic to the inventory
-		env.inventory.AddLogic(logic)
+		if err = repl.env.RegisterLogic(logic, manifest); err != nil {
+			return fmt.Sprintf("logic could not be registered with environment: %v", err)
+		}
 
-		return fmt.Sprintf("logic '%v' [%v] compiled with %v FUEL", name, logic.Logic.ID, fuel)
+		return fmt.Sprintf("logic '%v' [%v] compiled with %v FUEL", name, logic.Object.ID, fuel)
 	}
 }
 
@@ -123,14 +127,14 @@ func parseGetLogic(parser *symbolizer.Parser) Command {
 		return InvalidCommandError("malformed")
 	}
 
-	return func(env *Environment) string {
+	return func(repl *Repl) string {
 		// Find the logic in the inventory
-		logic, exists := env.inventory.FindLogic(name)
-		if !exists {
+		logic, err := repl.env.FetchLogic(name)
+		if err != nil {
 			return fmt.Sprintf("logic %v does not exist", name)
 		}
 
-		return Colorize(logic.String())
+		return Colorize(logic.FormatREPL())
 	}
 }
 
@@ -145,14 +149,16 @@ func parseWipeLogic(parser *symbolizer.Parser) Command {
 
 	name := parser.Cursor().Literal
 
-	return func(env *Environment) string {
+	return func(repl *Repl) string {
 		// Check if a logic with name exists
-		if exists := env.inventory.LogicExists(name); !exists {
+		if exists := repl.env.LogicExists(name); !exists {
 			return fmt.Sprintf("logic %v does not exist", name)
 		}
 
 		// Remove the logic from the inventory
-		env.inventory.RemoveLogic(name)
+		if err := repl.env.RemoveLogic(name); err != nil {
+			return fmt.Sprintf("could not remove logic: %v", err)
+		}
 
 		return fmt.Sprintf("wiped logic '%v'", name)
 	}

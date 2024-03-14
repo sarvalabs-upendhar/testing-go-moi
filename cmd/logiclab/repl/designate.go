@@ -1,17 +1,9 @@
-package cmds
+package repl
 
 import (
 	"fmt"
 
 	"github.com/manishmeganathan/symbolizer"
-	"github.com/pkg/errors"
-
-	"github.com/sarvalabs/go-moi/cmd/logiclab/core"
-)
-
-var (
-	ErrNoDesignatedSender   = errors.New("no designated sender")
-	ErrNoDesignatedReceiver = errors.New("no designated receiver")
 )
 
 func HelpDesignated() string {
@@ -45,14 +37,14 @@ func parseGetDesignated(parser *symbolizer.Parser) Command {
 	parser.Advance()
 	actor := parser.Cursor()
 
-	return func(env *Environment) string {
+	return func(repl *Repl) string {
 		var username string
 
 		switch actor.Kind {
 		case TokenSender:
-			username = env.inventory.Sender
+			username = repl.env.Sender
 		case TokenReceiver:
-			username = env.inventory.Receiver
+			username = repl.env.Receiver
 		default:
 			return fmt.Sprintf("invalid designated parameter: %v", actor.Literal)
 		}
@@ -81,17 +73,21 @@ func parseSetDesignated(parser *symbolizer.Parser) Command {
 		return InvalidCommandErrorf("value for designated.%v must be an ident", actor)
 	}
 
-	return func(env *Environment) string {
+	return func(repl *Repl) string {
 		switch actor.Kind {
 		case TokenSender:
-			env.inventory.Sender = string(username)
+			if err = repl.env.SetDefaultSender(string(username)); err != nil {
+				return fmt.Sprintf("could not set user as sender: %v", err)
+			}
 		case TokenReceiver:
-			env.inventory.Receiver = string(username)
+			if err = repl.env.SetDefaultReceiver(string(username)); err != nil {
+				return fmt.Sprintf("could not set user as receiver: %v", err)
+			}
 		default:
 			return fmt.Sprintf("invalid designated parameter: %v", actor.Literal)
 		}
 
-		return fmt.Sprintf("designated.%v: %v", actor.Literal, username)
+		return fmt.Sprintf("designated.%v: %v", actor.Literal, username.String())
 	}
 }
 
@@ -103,34 +99,16 @@ func parseWipeDesignated(parser *symbolizer.Parser) Command {
 	parser.Advance()
 	actor := parser.Cursor()
 
-	return func(env *Environment) string {
+	return func(repl *Repl) string {
 		switch actor.Kind {
 		case TokenSender:
-			env.inventory.Sender = ""
+			repl.env.Sender = ""
 		case TokenReceiver:
-			env.inventory.Receiver = ""
+			repl.env.Receiver = ""
 		default:
 			return fmt.Sprintf("invalid designated parameter: %v", actor.Literal)
 		}
 
 		return fmt.Sprintf("wiped designated.%v", actor.Literal)
 	}
-}
-
-func fetchDesignatedSenderState(env *Environment) (*core.UserAccount, error) {
-	if env.inventory.Sender == "" {
-		return nil, ErrNoDesignatedSender
-	}
-
-	return fetchSenderState(env, env.inventory.Sender)
-}
-
-func fetchSenderState(env *Environment, username string) (*core.UserAccount, error) {
-	// Find the user in the inventory
-	user, exists := env.inventory.FindUser(username)
-	if !exists {
-		return nil, errors.Errorf("user '%v' not found", username)
-	}
-
-	return user, nil
 }
