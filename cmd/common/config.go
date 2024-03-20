@@ -94,7 +94,7 @@ func DefaultBabylonConfig(path string) *Config {
 		DB: DBConfig{
 			CleanDB:     false,
 			DBFolder:    path + config.DefaultDBDirectory,
-			MaxSnapSize: config.DefaultSnapSize, // 3GB limit
+			MaxSnapSize: config.DefaultSnapSize, // 6GB limit
 		},
 		Execution: ExecutionConfig{
 			FuelLimit: hexutil.Uint64(config.DefaultFuelLimit),
@@ -168,7 +168,7 @@ func DefaultDevnetConfig(path string) *Config {
 		DB: DBConfig{
 			CleanDB:     false,
 			DBFolder:    path + config.DefaultDBDirectory,
-			MaxSnapSize: config.DefaultSnapSize, // 3GB limit
+			MaxSnapSize: config.DefaultSnapSize, // 6GB limit
 		},
 		Execution: ExecutionConfig{
 			FuelLimit: hexutil.Uint64(config.DefaultFuelLimit),

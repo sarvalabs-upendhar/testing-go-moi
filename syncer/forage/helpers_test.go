@@ -1380,6 +1380,13 @@ type MockDB struct {
 	accMetaInfo       map[string]struct{}
 }
 
+func (m MockDB) StreamSnapshot(ctx context.Context, address identifiers.Address,
+	sinceTS uint64, respChan chan<- common.SnapResponse,
+) (uint64, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 func NewMockDB() *MockDB {
 	return &MockDB{
 		accountSyncStatus: make(map[identifiers.Address][]byte),

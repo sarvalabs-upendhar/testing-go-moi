@@ -170,7 +170,7 @@ func DefaultDevnetConfig(path string) *Config {
 		DB: &DBConfig{
 			CleanDB:      false,
 			DBFolderPath: path + DefaultDBDirectory,
-			MaxSnapSize:  DefaultSnapSize, // 3GB limit
+			MaxSnapSize:  DefaultSnapSize, // 6GB limit
 		},
 		Execution: &ExecutionConfig{
 			FuelLimit: DefaultFuelLimit,

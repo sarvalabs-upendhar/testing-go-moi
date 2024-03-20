@@ -12,7 +12,6 @@ import (
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
-	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/storage/db"
 	"github.com/sarvalabs/go-moi/storage/db/badger"
 )
@@ -571,29 +570,22 @@ func (p *PersistenceManager) GetPreImage(
 	return p.ReadEntry(key)
 }
 
-// GetAccountSnapshot generates a snapshot of all entries with the given key prefix
+// StreamSnapshot streams a snapshot of all entries with the given key prefix on resp channel
 // Snapshot contains all the entries with version > sinceTs
-func (p *PersistenceManager) GetAccountSnapshot(
+func (p *PersistenceManager) StreamSnapshot(
 	ctx context.Context,
 	address identifiers.Address,
 	sinceTS uint64,
-) (*common.Snapshot, error) {
-	kv := NewKVCollector(p.config.MaxSnapSize)
+	respChan chan<- common.SnapResponse,
+) (uint64, error) {
+	kv := NewKVCollector(ctx, p.logger, p.config.MaxSnapSize, respChan)
 
 	err := p.db.Snapshot(ctx, address.Bytes(), sinceTS, kv)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to generate snapshot")
+		return 0, errors.Wrap(err, "failed to generate snapshot")
 	}
 
-	s := &common.Snapshot{
-		CreatedAt: utils.Canonical(time.Now()).UnixNano(),
-		Prefix:    address.Bytes(),
-		SinceTS:   sinceTS,
-		Entries:   kv.Entries,
-		Size:      kv.Size,
-	}
-
-	return s, nil
+	return kv.Size, nil
 }
 
 func (p *PersistenceManager) GetRecentUpdatedAccMetaInfosRaw(

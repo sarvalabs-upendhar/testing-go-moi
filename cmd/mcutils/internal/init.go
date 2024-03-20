@@ -164,7 +164,7 @@ func CreateConfigFile(datadir string, index int, ipAddr string) []byte {
 		},
 		DB: cmdCommon.DBConfig{
 			CleanDB:     false,
-			MaxSnapSize: config.DefaultSnapSize, // 3GB limit
+			MaxSnapSize: config.DefaultSnapSize, // 6GB limit
 		},
 		Execution: cmdCommon.ExecutionConfig{
 			FuelLimit: hexutil.Uint64(config.DefaultFuelLimit),
