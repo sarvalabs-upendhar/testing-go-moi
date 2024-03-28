@@ -93,7 +93,6 @@ func NewTestSyncer(
 	mux *utils.TypeMux,
 	agora syncer.BlockSync,
 	db store,
-	sm stateManager,
 	slots *ktypes.Slots,
 	logName string,
 	callback func(s *Syncer),
@@ -108,23 +107,24 @@ func NewTestSyncer(
 		agora:          agora,
 		db:             db,
 		lattice:        newMockLattice(db, logger),
-		state:          sm,
+		state:          newMockStateManager(db),
 		jobWorkerCount: 5,
 		jobQueue: &JobQueue{
 			jobs: make(map[identifiers.Address]*SyncJob),
 			mux:  mux,
 		},
-		logger:            logger,
-		workerSignal:      make(chan struct{}),
-		tesseractRegistry: common.NewHashRegistry(60),
-		consensusSlots:    slots,
-		lockedAccounts:    make(map[identifiers.Address]struct{}),
-		metrics:           NilMetrics(),
-		pendingMsgQueue:   make([]*TesseractInfo, 0),
-		pendingMsgChan:    make(chan *TesseractInfo, 10),
-		execGrid:          make(map[common.Hash]struct{}),
-		tracker:           NewSyncStatusTracker(0),
-		workerWaitTime:    10 * time.Millisecond,
+		logger:              logger,
+		workerSignal:        make(chan struct{}),
+		tesseractRegistry:   common.NewHashRegistry(60),
+		consensusSlots:      slots,
+		lockedAccounts:      make(map[identifiers.Address]struct{}),
+		metrics:             NilMetrics(),
+		pendingMsgQueue:     make([]*TesseractInfo, 0),
+		pendingMsgChan:      make(chan *TesseractInfo, 10),
+		execGrid:            make(map[common.Hash]struct{}),
+		tracker:             NewSyncStatusTracker(0),
+		workerWaitTime:      10 * time.Millisecond,
+		trustedPeersPresent: len(cfg.TrustedPeers) > 0,
 	}
 
 	if callback != nil {
@@ -387,10 +387,22 @@ func (m *MockLattice) IsSealValid(ts *common.Tesseract) (bool, error) {
 	return value, nil
 }
 
-type MockStateManager struct{}
+type MockStateManager struct {
+	db store
+}
 
-func newMockStateManager() *MockStateManager {
-	return &MockStateManager{}
+func newMockStateManager(db store) *MockStateManager {
+	return &MockStateManager{
+		db: db,
+	}
+}
+
+func (m MockStateManager) HasParticipantStateAt(addr identifiers.Address, stateHash common.Hash) bool {
+	if _, err := m.db.GetAccount(addr, stateHash); err != nil {
+		return false
+	}
+
+	return true
 }
 
 func (m MockStateManager) SyncStorageTrees(
@@ -1378,6 +1390,11 @@ func checkIfTesseractsSynced(
 type MockDB struct {
 	accountSyncStatus map[identifiers.Address][]byte
 	accMetaInfo       map[string]struct{}
+}
+
+func (m MockDB) GetAccount(addr identifiers.Address, stateHash common.Hash) ([]byte, error) {
+	// TODO implement me
+	panic("implement me")
 }
 
 func (m MockDB) StreamSnapshot(ctx context.Context, address identifiers.Address,

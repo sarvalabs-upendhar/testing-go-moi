@@ -93,6 +93,7 @@ type stateManager interface {
 		rawContext map[string][]byte,
 		clusterInfo *common.ICSClusterInfo,
 	) (*common.ICSNodeSet, error)
+	HasParticipantStateAt(addr identifiers.Address, stateHash common.Hash) bool
 }
 
 type store interface {
@@ -137,6 +138,7 @@ type store interface {
 	) (int32, bool, error)
 	SetTesseractHeightEntry(addr identifiers.Address, height uint64, tsHash common.Hash) error
 	HasAccMetaInfoAt(addr identifiers.Address, height uint64) bool
+	GetAccount(addr identifiers.Address, stateHash common.Hash) ([]byte, error)
 }
 
 type ixpool interface {
@@ -1083,7 +1085,7 @@ func (s *Syncer) syncBuckets(bestPeer kramaid.KramaID, attempts int) error {
 					s.logger.Debug("Bucket info", "bucket-ID", respMsg.BucketID, "bucket-count", respMsg.BucketCount)
 
 					// send the data to meta info handler
-					if err = s.handleAccountMetaInfo(respMsg.AccountMetaInfos, common.FullSync, bestPeer); err != nil {
+					if err = s.handleAccountMetaInfo(respMsg.AccountMetaInfos, common.FullSync); err != nil {
 						s.logger.Error("Failed to create sync jobs from accMetaInfo", "err", err)
 
 						return err
@@ -1107,8 +1109,9 @@ func (s *Syncer) syncBuckets(bestPeer kramaid.KramaID, attempts int) error {
 	return nil
 }
 
-func (s *Syncer) handleAccountMetaInfo(data [][]byte, syncMode common.SyncMode, bestPeer kramaid.KramaID) error {
+func (s *Syncer) handleAccountMetaInfo(data [][]byte, syncMode common.SyncMode) error {
 	acc := new(common.AccountMetaInfo)
+
 	for _, v := range data {
 		if err := polo.Depolorize(acc, v); err != nil {
 			return err
@@ -1128,7 +1131,7 @@ func (s *Syncer) handleAccountMetaInfo(data [][]byte, syncMode common.SyncMode, 
 			acc.Address,
 			acc.Height,
 			syncMode,
-			[]kramaid.KramaID{bestPeer},
+			nil,
 			false,
 		); err != nil {
 			s.logger.Error(
@@ -1518,8 +1521,18 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 			return false, errors.Wrap(err, "failed to validate tesseract")
 		}
 
-		if err = s.fetchTesseractState(msg.address(), msg.tesseract, msg.icsNodeSet.GetNodes(false)); err != nil {
-			return false, errors.Wrap(err, "failed to fetch tesseract state")
+		if msg.tesseract.TransitiveLink(msg.address()).IsNil() {
+			s.state.CreateDirtyObject(msg.address(), common.AccTypeFromIxType(msg.tesseract.Interactions()[0].Type()))
+		}
+
+		// During the initial sync stage, we retrieve participant data from trusted peers using snap sync.
+		// If participant state exists, it indicates that all data related to the participant has been fetched,
+		// allowing us to skip syncing for that participant.
+		if s.isInitialSyncDone() ||
+			!s.state.HasParticipantStateAt(msg.address(), msg.tesseract.StateHash(msg.address())) {
+			if err = s.fetchTesseractState(msg.address(), msg.tesseract, msg.icsNodeSet.GetNodes(false)); err != nil {
+				return false, errors.Wrap(err, "failed to fetch tesseract state")
+			}
 		}
 
 		if err = s.lattice.AddTesseractWithState(
@@ -1679,10 +1692,6 @@ func (s *Syncer) fetchTesseractState(
 		s.logger.Error("Error fetching context data", "err", err)
 
 		return err
-	}
-
-	if tesseract.TransitiveLink(addr).IsNil() {
-		s.state.CreateDirtyObject(addr, common.AccTypeFromIxType(tesseract.Interactions()[0].Type()))
 	}
 
 	if err = s.syncLogicTree(ctx, newSession, acc.LogicRoot); err != nil {
