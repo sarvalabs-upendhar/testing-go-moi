@@ -27,14 +27,15 @@ const genesisURL = "https://moichain-pub.s3.amazonaws.com/genesis.json"
 
 // Params holds raw config and also custom types which will be extracted from raw config
 type Params struct {
-	rawCfg             *cmdCommon.Config
-	TrustedPeers       []config.NodeInfo
-	StaticPeers        []config.NodeInfo
-	BootstrapPeers     []maddr.Multiaddr
-	ListenAddresses    []maddr.Multiaddr
-	PublicP2pAddresses []maddr.Multiaddr
-	JSONRPCAddr        *net.TCPAddr
-	PrometheusAddr     *net.TCPAddr
+	rawCfg              *cmdCommon.Config
+	NetworkTrustedPeers []config.NodeInfo
+	StaticPeers         []config.NodeInfo
+	SyncerTrustedPeers  []config.NodeInfo
+	BootstrapPeers      []maddr.Multiaddr
+	ListenAddresses     []maddr.Multiaddr
+	PublicP2pAddresses  []maddr.Multiaddr
+	JSONRPCAddr         *net.TCPAddr
+	PrometheusAddr      *net.TCPAddr
 }
 
 func (p *Params) buildTelemetryConfig() (err error) {
@@ -70,10 +71,10 @@ func (p *Params) assignNetworkTrustedNodes() error {
 	for _, trustedNode := range p.rawCfg.Network.TrustedPeers {
 		addr, err := maddr.NewMultiaddr(trustedNode.Address)
 		if err != nil {
-			return errors.New("invalid trusted node address")
+			return errors.New("invalid network trusted node address")
 		}
 
-		p.TrustedPeers = append(p.TrustedPeers, config.NodeInfo{
+		p.NetworkTrustedPeers = append(p.NetworkTrustedPeers, config.NodeInfo{
 			ID:      kramaid.KramaID(trustedNode.ID),
 			Address: addr,
 		})
@@ -91,6 +92,22 @@ func (p *Params) assignNetworkStaticNodes() error {
 
 		p.StaticPeers = append(p.StaticPeers, config.NodeInfo{
 			ID:      kramaid.KramaID(staticNode.ID),
+			Address: addr,
+		})
+	}
+
+	return nil
+}
+
+func (p *Params) assignSyncerTrustedNodes() error {
+	for _, trustedNode := range p.rawCfg.Syncer.TrustedPeers {
+		addr, err := maddr.NewMultiaddr(trustedNode.Address)
+		if err != nil {
+			return errors.New("invalid syncer trusted node address")
+		}
+
+		p.SyncerTrustedPeers = append(p.SyncerTrustedPeers, config.NodeInfo{
+			ID:      kramaid.KramaID(trustedNode.ID),
 			Address: addr,
 		})
 	}
@@ -258,7 +275,7 @@ func (p *Params) getVaultConfig() *crypto.VaultConfig {
 func (p *Params) getNetworkConfig() *config.NetworkConfig {
 	return &config.NetworkConfig{
 		BootstrapPeers:     p.BootstrapPeers,
-		TrustedPeers:       p.TrustedPeers,
+		TrustedPeers:       p.NetworkTrustedPeers,
 		StaticPeers:        p.StaticPeers,
 		MaxPeers:           p.rawCfg.Network.MaxPeers,
 		RelayNodeAddr:      p.rawCfg.Network.RelayNodeAddr,
@@ -306,7 +323,7 @@ func (p *Params) getConsensusConfig(path string) *config.ConsensusConfig {
 func (p *Params) getSyncerConfig() *config.SyncerConfig {
 	return &config.SyncerConfig{
 		ShouldExecute:  p.rawCfg.Syncer.ShouldExecute,
-		TrustedPeers:   p.rawCfg.Syncer.TrustedPeers,
+		TrustedPeers:   p.SyncerTrustedPeers,
 		EnableSnapSync: p.rawCfg.Syncer.EnableSnapSync,
 		SyncMode:       common.SyncMode(p.rawCfg.Syncer.SyncMode),
 	}
@@ -356,23 +373,29 @@ func (p *Params) getJSONRPCConfig() *config.JSONRPCConfig {
 
 // processRawParams converts all raw types to custom types
 func (p *Params) processRawParams() error {
-	if err := p.assignNetworkNodes(); err != nil {
+	var err error
+
+	if err = p.assignNetworkNodes(); err != nil {
 		return err
 	}
 
-	if err := p.assignNetworkLibp2pListenAddress(); err != nil {
+	if err = p.assignSyncerTrustedNodes(); err != nil {
 		return err
 	}
 
-	if err := p.assignNetworkLibp2pPublicAddress(); err != nil {
+	if err = p.assignNetworkLibp2pListenAddress(); err != nil {
 		return err
 	}
 
-	if err := p.assignNetworkJSONRPCAddr(); err != nil {
+	if err = p.assignNetworkLibp2pPublicAddress(); err != nil {
 		return err
 	}
 
-	if err := p.buildTelemetryConfig(); err != nil {
+	if err = p.assignNetworkJSONRPCAddr(); err != nil {
+		return err
+	}
+
+	if err = p.buildTelemetryConfig(); err != nil {
 		return err
 	}
 
@@ -483,11 +506,11 @@ func BuildNodeConfig(cmd *cobra.Command, dataDir string) (*config.Config, error)
 	var (
 		err    error
 		params = Params{
-			rawCfg:          &cmdCommon.Config{},
-			TrustedPeers:    make([]config.NodeInfo, 0),
-			StaticPeers:     make([]config.NodeInfo, 0),
-			BootstrapPeers:  make([]maddr.Multiaddr, 0),
-			ListenAddresses: make([]maddr.Multiaddr, 0),
+			rawCfg:              &cmdCommon.Config{},
+			NetworkTrustedPeers: make([]config.NodeInfo, 0),
+			StaticPeers:         make([]config.NodeInfo, 0),
+			BootstrapPeers:      make([]maddr.Multiaddr, 0),
+			ListenAddresses:     make([]maddr.Multiaddr, 0),
 		}
 	)
 

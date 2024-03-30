@@ -37,7 +37,7 @@ type Telemetry struct {
 
 type SyncerConfig struct {
 	ShouldExecute  bool
-	TrustedPeers   []string
+	TrustedPeers   []NodeInfo
 	EnableSnapSync bool
 	SyncMode       common.SyncMode
 }

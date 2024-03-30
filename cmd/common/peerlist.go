@@ -13,8 +13,9 @@ type PeerInfo struct {
 }
 
 type PeerList struct {
-	TrustedPeers []PeerInfo `json:"trusted_peers"`
-	StaticPeers  []PeerInfo `json:"static_peers"`
+	NetworkTrustedPeers []PeerInfo `json:"network_trusted_peers"`
+	NetworkStaticPeers  []PeerInfo `json:"network_static_peers"`
+	SyncerTrustedPeers  []PeerInfo `json:"syncer_trusted_peers"`
 }
 
 var ErrReadingPeerList = errors.New("error reading peer list file")

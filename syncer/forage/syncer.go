@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/protocol"
+
 	"github.com/hashicorp/go-hclog"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -18,6 +20,7 @@ import (
 	"github.com/sarvalabs/go-polo"
 	"golang.org/x/sync/errgroup"
 
+	maddr "github.com/multiformats/go-multiaddr"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/hexutil"
@@ -145,12 +148,30 @@ type ixpool interface {
 	GetIxns(ixHashes common.Hashes) (common.Interactions, error)
 }
 
+type p2pServer interface {
+	GetPeers() []kramaid.KramaID
+	StartNewRPCServer(protocol protocol.ID, tag string) *rpc.Client
+	RegisterNewRPCService(protocol protocol.ID, serviceName string, service interface{}) error
+	GetKramaID() kramaid.KramaID
+	Subscribe(
+		ctx context.Context,
+		topicName string,
+		validator utils.WrappedVal,
+		defaultValidator bool,
+		handler func(msg *pubsub.Message) error,
+	) error
+	GetPeerSetLen() int
+	Unsubscribe(topicName string) error
+	AddPeerInfoPermanently(info *peer.AddrInfo)
+	GetAddrsFromPeerStore(peerID peer.ID) []maddr.Multiaddr
+}
+
 type Syncer struct {
 	lock                sync.RWMutex
 	cfg                 *config.SyncerConfig
 	ctx                 context.Context
 	ctxCancel           context.CancelFunc
-	network             *p2p.Server
+	network             p2pServer
 	mux                 *utils.TypeMux
 	execLock            sync.RWMutex
 	agora               syncer.BlockSync
@@ -230,6 +251,28 @@ func NewSyncer(
 	}
 
 	return s, nil
+}
+
+func (s *Syncer) addTrustedPeersToPeerstore() error {
+	for i := 0; i < len(s.cfg.TrustedPeers); i++ {
+		bestPeer := s.cfg.TrustedPeers[i]
+
+		peerID, err := bestPeer.ID.DecodedPeerID()
+		if err != nil {
+			s.logger.Error("Failed to get peer ID from krama ID", "krama-ID", bestPeer.ID, "err", err)
+
+			return common.ErrInvalidKramaID
+		}
+
+		s.network.AddPeerInfoPermanently(
+			&peer.AddrInfo{
+				ID:    peerID,
+				Addrs: []maddr.Multiaddr{bestPeer.Address},
+			},
+		)
+	}
+
+	return nil
 }
 
 func (s *Syncer) NewSyncRequest(
@@ -435,12 +478,12 @@ func (s *Syncer) chooseBestPeersForInitialSync(addr identifiers.Address) (uint64
 		for i := 0; i < 3; i++ {
 			bestPeer := s.chooseAnyTrustedPeer()
 
-			resp, err := s.RPCGetLatestAccountInfo(bestPeer, addr)
+			resp, err := s.RPCGetLatestAccountInfo(bestPeer.ID, addr)
 			if err != nil {
 				continue
 			}
 
-			return resp.Height, []kramaid.KramaID{bestPeer}, nil
+			return resp.Height, []kramaid.KramaID{bestPeer.ID}, nil
 		}
 
 		return 0, nil, errors.New("unable to fetch latest account info from trusted peers")
@@ -458,7 +501,9 @@ func (s *Syncer) chooseBestPeer(job *SyncJob) (kramaid.KramaID, error) {
 	// If initial sync is not done, then choose best peer from trusted peers
 	// to improve probability of success in syncing
 	if !s.isInitialSyncDone() && s.hasTrustedPeers() {
-		return s.chooseAnyTrustedPeer(), nil
+		bestPeer := s.chooseAnyTrustedPeer()
+
+		return bestPeer.ID, nil
 	}
 
 	if job.bestPeerLen() > 0 {
@@ -799,11 +844,11 @@ func (s *Syncer) chooseBestSyncPeer(job *SyncJob) (kramaid.KramaID, error) {
 	return bestPeers[0], nil
 }
 
-func (s *Syncer) chooseAnyTrustedPeer() kramaid.KramaID {
+func (s *Syncer) chooseAnyTrustedPeer() config.NodeInfo {
 	randomSource := rand.New(rand.NewSource(time.Now().UnixNano()))
 	randNumber := randomSource.Intn(len(s.cfg.TrustedPeers))
 
-	return kramaid.KramaID(s.cfg.TrustedPeers[randNumber])
+	return s.cfg.TrustedPeers[randNumber]
 }
 
 // syncSystemAccount sends a sync request for the specified address and waits for it to complete within a given time.
@@ -2293,7 +2338,11 @@ func (s *Syncer) TesseractValidator(
 
 // Start starts all event handlers and workers associated with sync sub protocol
 func (s *Syncer) Start(minConnectedPeers int) error {
-	s.logger.Info("Syncer started")
+	s.logger.Info("Starting Syncer")
+
+	if err := s.addTrustedPeersToPeerstore(); err != nil {
+		return err
+	}
 
 	sub := s.mux.Subscribe(utils.PendingAccountEvent{})
 
@@ -2311,7 +2360,7 @@ func (s *Syncer) Start(minConnectedPeers int) error {
 
 	go s.queueHandler()
 
-	for s.network.Peers.Len() < minConnectedPeers {
+	for s.network.GetPeerSetLen() < minConnectedPeers {
 		time.Sleep(1 * time.Second)
 	}
 

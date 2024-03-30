@@ -134,7 +134,7 @@ func NewTestSyncer(
 	return s
 }
 
-func NewSyncerWithJobQueue(ctx context.Context, mux *utils.TypeMux) *Syncer {
+func NewTestSyncerWithJobQueue(ctx context.Context, mux *utils.TypeMux) *Syncer {
 	return &Syncer{
 		ctx: ctx,
 		jobQueue: &JobQueue{

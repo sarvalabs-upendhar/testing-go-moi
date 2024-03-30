@@ -131,8 +131,8 @@ func CreateConfigFile(datadir string, index int, ipAddr string) []byte {
 			BootStrapPeers: []string{
 				bootnode,
 			},
-			TrustedPeers:       peerList.TrustedPeers,
-			StaticPeers:        peerList.StaticPeers,
+			TrustedPeers:       peerList.NetworkTrustedPeers,
+			StaticPeers:        peerList.NetworkStaticPeers,
 			InboundConnLimit:   config.DefaultInboundConnLimit,
 			OutboundConnLimit:  config.DefaultOutboundConnLimit,
 			MinimumConnections: config.DefaultMinimumConnections,
@@ -145,6 +145,7 @@ func CreateConfigFile(datadir string, index int, ipAddr string) []byte {
 			ShouldExecute:  true,
 			SyncMode:       int(config.DefaultSyncMode),
 			EnableSnapSync: true,
+			TrustedPeers:   peerList.SyncerTrustedPeers,
 		},
 		Consensus: cmdCommon.ConsensusConfig{
 			TimeoutPropose:        30000,

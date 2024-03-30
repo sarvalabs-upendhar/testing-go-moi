@@ -125,6 +125,14 @@ func (s *Server) AddPeerInfo(info *peer.AddrInfo) {
 	s.host.Peerstore().AddAddrs(info.ID, info.Addrs, peerstore.ConnectedAddrTTL)
 }
 
+func (s *Server) AddPeerInfoPermanently(info *peer.AddrInfo) {
+	s.host.Peerstore().AddAddrs(info.ID, info.Addrs, peerstore.PermanentAddrTTL)
+}
+
+func (s *Server) GetAddrsFromPeerStore(peerID peer.ID) []maddr.Multiaddr {
+	return s.host.Peerstore().Addrs(peerID)
+}
+
 func (s *Server) SetupServer() error {
 	if err := s.setupHost(); err != nil {
 		return fmt.Errorf("setup host: %w", err)
@@ -252,6 +260,10 @@ func (s *Server) getSelfRouting() libp2p.Option {
 // GetKramaID returns the KramaID of node
 func (s *Server) GetKramaID() kramaid.KramaID {
 	return s.id
+}
+
+func (s *Server) GetPeerSetLen() int {
+	return s.Peers.Len()
 }
 
 // setupKadDht sets up the kademlia DHT & bootstraps it for the node.

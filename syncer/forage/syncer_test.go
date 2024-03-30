@@ -2,10 +2,13 @@ package forage
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/multiformats/go-multiaddr"
 
 	"github.com/hashicorp/go-hclog"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -189,7 +192,11 @@ func TestFullSync_TrustedPeers(t *testing.T) {
 			ShouldExecute:  false,
 			SyncMode:       config.DefaultSyncMode,
 			EnableSnapSync: true,
-			TrustedPeers:   []string{string(servers[0].GetKramaID())},
+			TrustedPeers: []config.NodeInfo{
+				{
+					ID: servers[0].GetKramaID(),
+				},
+			},
 		},
 		servers[3],
 		&utils.TypeMux{},
@@ -1165,7 +1172,7 @@ func TestGetSyncJobInfo(t *testing.T) {
 	defer cancel()
 
 	mux := &utils.TypeMux{}
-	s := NewSyncerWithJobQueue(ctx, mux)
+	s := NewTestSyncerWithJobQueue(ctx, mux)
 
 	count := 1
 	addrs := tests.GetAddresses(t, 2)
@@ -1458,4 +1465,85 @@ func TestIsAnyOtherParticipantStored(t *testing.T) {
 			require.Equal(t, test.expectedValue, isStored)
 		})
 	}
+}
+
+func TestTrustedPeerInPeerstore(t *testing.T) {
+	t.Parallel()
+
+	ctx, ctxCancel := context.WithTimeout(context.Background(), maxTimeout)
+	defer ctxCancel()
+
+	// setup mock p2p server
+	defaultConfig := getParamsToCreateMultipleServers(
+		t,
+		1,
+		true,
+	)
+
+	paramsMap := map[int]*CreateServerParams{
+		0: defaultConfig[0],
+	}
+
+	server := createMultipleServers(t, 1, paramsMap)
+
+	kid := tests.RandomKramaID(t, 0)
+	peerID, err := kid.DecodedPeerID()
+	require.NoError(t, err)
+
+	ip := "/ip4/1.1.1.1/tcp/5000"
+	addr, err := multiaddr.NewMultiaddr(fmt.Sprintf("%s/p2p/%s", ip, peerID))
+	require.NoError(t, err)
+
+	// setup mock syncer config
+	cfg := defaultSyncerConfig()
+	cfg.TrustedPeers = []config.NodeInfo{
+		{
+			ID:      kid,
+			Address: addr,
+		},
+	}
+
+	pm, _ := createPersistenceManager(t, ctx)
+
+	t.Cleanup(func() {
+		closeTestServers(t, server...)
+	})
+
+	testSyncer := NewTestSyncer(
+		ctx,
+		cfg,
+		server[0],
+		&utils.TypeMux{},
+		&MockAgora{
+			newSession: func(address identifiers.Address) (syncer.Session, error) {
+				return newMockSession(address), nil
+			},
+		},
+		pm,
+		types.NewSlots(0, 0),
+		"CLIENT",
+		nil,
+	)
+
+	err = testSyncer.Start(0)
+	require.NoError(t, err)
+
+	multiAddr := make([]multiaddr.Multiaddr, 0)
+
+	// retry until trusted peer is added to peer store
+	_, err = tests.RetryUntilTimeout(ctx, 100*time.Millisecond, func() (interface{}, bool) {
+		resp := testSyncer.network.GetAddrsFromPeerStore(peerID)
+
+		multiAddr = append(multiAddr, resp...)
+
+		if len(multiAddr) == 1 {
+			return multiAddr, false
+		}
+
+		return nil, true
+	})
+	require.NoError(t, err)
+
+	// check if ip matches, decapsulated multiAddr
+	require.Equal(t, ip, multiAddr[0].String())
 }
