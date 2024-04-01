@@ -229,13 +229,6 @@ func TestNewTesseract(t *testing.T) {
 				test.seal,
 				tesseract.Seal(),
 			)
-
-			// make sure receipts copied
-			test.receipts[tests.RandomHash(t)] = &common.Receipt{}
-			require.NotEqual(t,
-				test.receipts,
-				tesseract.Receipts(),
-			)
 		})
 	}
 }

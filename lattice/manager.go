@@ -507,7 +507,7 @@ func (c *ChainManager) addParticipantsData(
 	participants := make(common.Participants)
 
 	if allParticipants {
-		participants = ts.ParticipantsWithCopy()
+		participants = ts.Participants()
 	} else {
 		s, ok := ts.State(addr)
 		if !ok {
