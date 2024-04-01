@@ -37,7 +37,7 @@ type Telemetry struct {
 
 type SyncerConfig struct {
 	ShouldExecute  bool
-	TrustedPeers   []string
+	TrustedPeers   []NodeInfo
 	EnableSnapSync bool
 	SyncMode       common.SyncMode
 }
@@ -170,7 +170,7 @@ func DefaultDevnetConfig(path string) *Config {
 		DB: &DBConfig{
 			CleanDB:      false,
 			DBFolderPath: path + DefaultDBDirectory,
-			MaxSnapSize:  DefaultSnapSize, // 3GB limit
+			MaxSnapSize:  DefaultSnapSize, // 6GB limit
 		},
 		Execution: &ExecutionConfig{
 			FuelLimit: DefaultFuelLimit,

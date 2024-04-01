@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/sarvalabs/battleground/server/warzone/infrastructure"
+	"github.com/sarvalabs/battleground/network/infrastructure"
 
 	"github.com/sarvalabs/go-moi/common/tests"
 )
@@ -18,7 +18,7 @@ type Client interface {
 	DestroyNetwork(ctx context.Context, removeFolders bool) error
 	StartNode(ctx context.Context, rpcAddr string, cleanDB bool) error
 	StopNode(ctx context.Context, rpcAddr string) error
-	UpdateNetwork(ctx context.Context, commitHash string) error
+	UpdateNetwork(ctx context.Context, commitHash string, cleanDB bool, logLevel string) error
 }
 
 func NewClient(cfg *Config) Client {

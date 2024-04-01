@@ -149,6 +149,14 @@ func (sm *StateManager) GetDirtyObject(addr identifiers.Address) (*Object, error
 	return sm.dirtyObjects[addr], nil
 }
 
+func (sm *StateManager) HasParticipantStateAt(addr identifiers.Address, stateHash common.Hash) bool {
+	if _, err := sm.db.GetAccount(addr, stateHash); err != nil {
+		return false
+	}
+
+	return true
+}
+
 func (sm *StateManager) getStateObject(addr identifiers.Address, stateHash common.Hash) (*Object, error) {
 	if stateHash.IsNil() {
 		return sm.GetLatestStateObject(addr)

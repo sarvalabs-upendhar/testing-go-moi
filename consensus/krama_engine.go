@@ -64,6 +64,7 @@ type kramaTransport interface {
 	Start()
 	Close()
 	Messages() <-chan *ktypes.ICSMSG
+	CleanDirectPeer(clusterID common.ClusterID, peers ...kramaid.KramaID)
 	RegisterContextRouter(
 		ctx context.Context,
 		operator kramaid.KramaID,
@@ -71,7 +72,8 @@ type kramaTransport interface {
 		nodeset *common.ICSNodeSet,
 		voteset *kbft.HeightVoteSet,
 	)
-	InitClusterConnection(ctx context.Context, clusterID common.ClusterID, isOperator bool)
+	ConnectToDirectPeer(ctx context.Context, kramaID kramaid.KramaID, clusterID common.ClusterID) error
+	InitClusterConnection(ctx context.Context, clusterID common.ClusterID)
 	BroadcastTesseract(msg *networkmsg.TesseractMsg) error
 	BroadcastMessage(
 		ctx context.Context,
@@ -79,7 +81,6 @@ type kramaTransport interface {
 	)
 	GracefullyCloseContextRouter(clusterID common.ClusterID)
 	SendMessage(
-		ctx context.Context,
 		peerID, sender kramaid.KramaID,
 		clusterID common.ClusterID,
 		msgType networkmsg.MsgType,
@@ -316,8 +317,6 @@ func (k *Engine) acquireContextLock(ctx context.Context, slot *ktypes.Slot) erro
 		return err
 	}
 
-	k.transport.InitClusterConnection(ctx, slot.ClusterID(), true)
-
 	failedReqCount := k.sendICSRequest(ctx, reqMsg, slot.ClusterState().NodeSet)
 
 	slot.ClusterState().IncrementICSRespCount(failedReqCount)
@@ -499,8 +498,6 @@ func (k *Engine) joinCluster(ctx context.Context, slot *ktypes.Slot, req ktypes.
 	slot.ClusterState().UpdateNodeSet(common.RandomSet, common.NewNodeSet(req.Msg.RandomSet, randomPublicKeys, 0))
 	slot.ClusterState().UpdateClusterSize()
 
-	k.transport.InitClusterConnection(ctx, slot.ClusterID(), false)
-
 	k.logger.Debug("Responding to ICS request", "from", slot.ClusterState().Operator)
 
 	return nil
@@ -518,8 +515,14 @@ func (k *Engine) handleReq(req ktypes.Request) {
 		k.ctx,
 		"Krama.KramaEngine",
 		"handleReq",
-		trace.WithAttributes(attribute.String("clusterID", clusterID.String())),
+		trace.WithAttributes(
+			attribute.String("clusterID", clusterID.String()),
+			attribute.Int("slotType", int(req.SlotType)),
+		),
 	)
+
+	k.logger.Trace("Handling Request", "slot-type", int(req.SlotType), "cluster-ID", clusterID)
+
 	defer span.End()
 
 	if slot := k.slots.GetSlot(clusterID); slot != nil {
@@ -590,9 +593,9 @@ func (k *Engine) handleReq(req ktypes.Request) {
 		k.logger.With("cluster-ID", clusterID),
 	)
 
-	defer k.transport.GracefullyCloseContextRouter(clusterID)
-
 	k.transport.RegisterContextRouter(ctx, cs.Operator, clusterID, cs.NodeSet, voteset)
+
+	defer k.transport.GracefullyCloseContextRouter(clusterID)
 
 	switch req.SlotType {
 	case ktypes.OperatorSlot:
@@ -606,10 +609,14 @@ func (k *Engine) handleReq(req ktypes.Request) {
 			k.logger.Error("Error acquiring context lock", "err", err, "cluster-ID", clusterID)
 			k.metrics.captureICSCreationFailureCount(1)
 
-			k.sendICSFailure(ctx, clusterID)
+			if err = k.sendICSFailure(ctx, clusterID); err != nil {
+				k.logger.Error("Failed to send ics failure message", "err", err)
+			}
 
 			return
 		}
+
+		k.transport.InitClusterConnection(ctx, clusterID)
 
 		if err = k.sendICSSuccess(ctx, clusterID); err != nil {
 			k.logger.Error("Failed to send ics success message", err)
@@ -639,6 +646,8 @@ func (k *Engine) handleReq(req ktypes.Request) {
 
 			return
 		}
+
+		k.transport.InitClusterConnection(ctx, slot.ClusterID())
 
 		select {
 		case ok := <-slot.ICSSuccessChan:

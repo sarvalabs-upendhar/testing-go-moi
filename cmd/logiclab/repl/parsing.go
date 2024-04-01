@@ -1,8 +1,8 @@
-package cmds
+package repl
 
 import (
 	"github.com/manishmeganathan/symbolizer"
-	engineio "github.com/sarvalabs/go-moi-engineio"
+	"github.com/sarvalabs/go-moi-engineio"
 )
 
 const (
@@ -43,7 +43,7 @@ const (
 	TokenCallencode
 	TokenCalldecode
 	TokenErrdecode
-	TokenSlothash
+	TokenStorageKey
 
 	TokenConvert
 	TokenManifestEncoding
@@ -89,7 +89,7 @@ var keywords = map[string]symbolizer.TokenKind{
 	"callencode": TokenCallencode,
 	"calldecode": TokenCalldecode,
 	"errdecode":  TokenErrdecode,
-	"slothash":   TokenSlothash,
+	"storagekey": TokenStorageKey,
 
 	"convert": TokenConvert,
 	"POLO":    TokenManifestEncoding,
@@ -146,8 +146,8 @@ func Parse(cmd string) Command {
 		return parseCalldecodeCommand(parser)
 	case TokenErrdecode:
 		return parseErrdecodeCommand(parser)
-	case TokenSlothash:
-		return parseSlothashCommand(parser)
+	case TokenStorageKey:
+		return parseStorageKeyCommand(parser)
 
 	case TokenDeploy:
 		return parseLogicCall(parser, engineio.DeployerCallsite)

@@ -12,8 +12,8 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/battleground/server/types"
-	"github.com/sarvalabs/battleground/server/warzone/infrastructure"
+	"github.com/sarvalabs/battleground/network/infrastructure"
+	"github.com/sarvalabs/battleground/types"
 	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -46,14 +46,16 @@ const (
 )
 
 var (
-	bgURL = "http://85.239.245.54:7000/api"
+	bgURL = "http://13.233.84.249:7000/api"
 
 	DefaultFuelPrice = big.NewInt(1)
 	DefaultFuelLimit = uint64(10000)
 	local            = "local"
 	cloud            = "cloud"
 	networkType      = flag.String("network", local, "enter the network type to use local or cloud")
+	noOfInstances    = flag.Int("no-of-instances", 15, "enter the number of instances to provision")
 	commitHash       = flag.String("commit-hash", "", "enter the commit hash of the repo to be deployed")
+	cleanDB          = flag.Bool("clean-db", true, "specify whether to clean the database")
 	logLevel         = flag.String("log-level", "TRACE", "enter the log level")
 )
 
@@ -125,7 +127,7 @@ func (te *TestEnvironment) configureBattleGround() error {
 		bgConfig := types.DefaultCloudConfig()
 		bgConfig.MoichainSourceRef = *commitHash
 		// TODO optimize the battleground to generate 15 accounts in genesis, instead of creating accounts through ixns
-		bgConfig.NoOfInstances = 15 // 150 moipods are required to execute these tests
+		bgConfig.NoOfInstances = *noOfInstances
 
 		te.bgClient = bgclient.NewClient(&bgclient.Config{
 			CloudCfg:    bgConfig,
@@ -298,23 +300,13 @@ func (te *TestEnvironment) SetupSuite() {
 		te.Suite.FailNow("unknown network status", bgStatus)
 	}
 
-	// if network type is cloud then update nodes with given commit hash
-	if *networkType == cloud {
-		ctx, cancel := context.WithTimeout(context.Background(), DefaultQueryTime)
-		bgStatus, err := te.bgClient.NetworkStatus(ctx)
-
-		cancel()
-		te.Suite.NoError(err)
-
-		if bgStatus != infrastructure.Active {
-			te.logger.Error("battle ground is not active even after 10 minute wait time")
-		}
-
+	// if network type is cloud and the network is active, then update nodes with given commit hash
+	if *networkType == cloud && bgStatus == infrastructure.Active {
 		te.logger.Debug("updating battle ground")
 
 		ctx, cancel = context.WithTimeout(context.Background(), 1*time.Minute)
 
-		err = te.bgClient.UpdateNetwork(ctx, *commitHash)
+		err = te.bgClient.UpdateNetwork(ctx, *commitHash, *cleanDB, *logLevel)
 
 		cancel()
 		te.Suite.NoError(err)

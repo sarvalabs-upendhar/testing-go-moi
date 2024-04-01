@@ -8,8 +8,8 @@ import (
 
 const (
 	VersionMajor = 0 // Major version component of the current release
-	VersionMinor = 6 // Minor version component of the current release
-	VersionPatch = 4 // Patch version component of the current release
+	VersionMinor = 7 // Minor version component of the current release
+	VersionPatch = 0 // Patch version component of the current release
 )
 
 var ProtocolVersion = func() string {
@@ -17,8 +17,9 @@ var ProtocolVersion = func() string {
 }()
 
 var (
-	ICSProtocolStream = protocol.ID("moi/ics/stream/" + ProtocolVersion)
-	ICSProtocolRPC    = protocol.ID("moi/ics/rpc/" + ProtocolVersion)
+	ICSProtocolDirectStream = protocol.ID("moi/ics/direct/stream/" + ProtocolVersion)
+	ICSProtocolMeshStream   = protocol.ID("moi/ics/mesh/stream/" + ProtocolVersion)
+	ICSProtocolRPC          = protocol.ID("moi/ics/rpc/" + ProtocolVersion)
 )
 
 var (

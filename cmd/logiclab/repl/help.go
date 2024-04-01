@@ -1,4 +1,4 @@
-package cmds
+package repl
 
 import (
 	"fmt"
@@ -17,7 +17,7 @@ func parseHelpCommand(parser *symbolizer.Parser) Command {
 	// Lookup a command helper for the given keyword
 	helper, exists := cmdHelp[keyword]
 
-	return func(env *Environment) string {
+	return func(repl *Repl) string {
 		if !exists {
 			return fmt.Sprintf("no help found for '%v'", keyword)
 		}
@@ -30,7 +30,6 @@ func parseHelpCommand(parser *symbolizer.Parser) Command {
 }
 
 func HelpHelp() string {
-	//nolint:lll
 	return `
 The @>help<@ command can be used to view help documentation for commands and concepts.
 When accessing the help docs, colored words in square brackets indicate other valid help strings.
@@ -39,7 +38,8 @@ Use the [@>exit<@] command to close the LogicLab REPL.
 getting started:
 - [@>register<@] command: create new [@>users<@]
 - [@>compile<@] command:  create new [@>logics<@]
-- [@>get<@] [@>set<@] [@>wipe<@]: access, modify and clear values in the session [@>memory<@], [@>config<@] or [@>designated<@] users
+- [@>get<@] [@>set<@] [@>wipe<@]: access, modify and clear values in the session [@>memory<@], [@>config<@] or
+ [@>designated<@] users
 - [@>convert<@] command: convert [@>manifest<@] files between different file and code forms
 - [@>invoke<@] [@>deploy<@]:  perform deploy or invoke logic calls
 `
@@ -60,8 +60,7 @@ var cmdHelp = map[string]CommandHelp{
 	"manifest": HelpManifest,
 	"convert":  HelpConvert,
 
-	"argument":  HelpArgument,
-	"inventory": HelpInventory,
+	"argument": HelpArgument,
 
 	"users":   HelpUsers,
 	"logics":  HelpLogics,
@@ -73,7 +72,7 @@ var cmdHelp = map[string]CommandHelp{
 	"callencode": HelpCallencode,
 	"calldecode": HelpCalldecode,
 	"errdecode":  HelpErrdecode,
-	"slothash":   HelpSlothash,
+	"storagekey": HelpStorageKey,
 
 	"invoke": HelpInvoke,
 	"deploy": HelpDeploy,

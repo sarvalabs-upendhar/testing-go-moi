@@ -66,7 +66,7 @@ type AssetMintOrBurnPayload struct {
 func (mint AssetMintOrBurnPayload) Bytes() ([]byte, error) {
 	data, err := polo.Polorize(mint)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to polorize asset mint	 payload")
+		return nil, errors.Wrap(err, "failed to polorize asset mint payload")
 	}
 
 	return data, nil

@@ -2,8 +2,6 @@ package forage
 
 import (
 	"github.com/sarvalabs/go-moi-identifiers"
-
-	"github.com/sarvalabs/go-moi/common"
 )
 
 type BucketSyncRequest struct {
@@ -20,17 +18,6 @@ type BucketSyncResponse struct {
 type SnapRequest struct {
 	Address identifiers.Address
 	Height  uint64
-}
-
-type SnapMetaInfo struct {
-	Hash          common.Hash
-	CreatedAt     int64
-	TotalSnapSize uint64
-}
-
-type SnapResponse struct {
-	MetaInfo *SnapMetaInfo
-	Data     []byte
 }
 
 type LatticeRequest struct {

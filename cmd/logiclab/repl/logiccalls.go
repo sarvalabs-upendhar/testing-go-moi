@@ -1,4 +1,4 @@
-package cmds
+package repl
 
 import (
 	"context"
@@ -100,15 +100,15 @@ func parseLogicCall(parser *symbolizer.Parser, kind engineio.CallsiteKind) Comma
 		return InvalidCommandErrorf("malformed args: %v", err)
 	}
 
-	return func(env *Environment) string {
+	return func(repl *Repl) string {
 		// Find the logic from the inventory
-		logic, exists := env.inventory.FindLogic(name)
-		if !exists {
-			return fmt.Sprintf("logic '%v' does not exist", name)
+		logic, err := repl.env.FetchLogic(name)
+		if err != nil {
+			return fmt.Sprintf("logic '%v' does not exist: %v", name, err)
 		}
 
 		// Get the callsite from the logic, error if not found
-		callsite, ok := logic.Logic.GetCallsite(site)
+		callsite, ok := logic.Object.GetCallsite(site)
 		if !ok {
 			return fmt.Sprintf("logic '%v' does not have callsite '%v'", name, site)
 		}
@@ -128,43 +128,46 @@ func parseLogicCall(parser *symbolizer.Parser, kind engineio.CallsiteKind) Comma
 		}
 
 		// Obtain the runtime for the logic engine in the header
-		runtime, ok := engineio.FetchEngineRuntime(logic.Logic.Engine())
+		runtime, ok := engineio.FetchEngineRuntime(logic.Object.Engine())
 		if !ok {
 			return "failed to get runtime for logic"
 		}
 
 		// Generate the call encoder for the callsite
-		encoder, err := runtime.GetCallEncoder(callsite, logic.Logic)
+		encoder, err := runtime.GetCallEncoder(callsite, logic.Object)
 		if err != nil {
 			return fmt.Sprintf("failed to generate call encoder for callsite '%v'", callsite)
 		}
 
-		calldata, err := formatArguments(env, args, encoder)
+		calldata, err := repl.formatArguments(args, encoder)
 		if err != nil {
 			return err.Error()
 		}
 
+		logicID := logic.Object.ID
 		// Spawn an engine for the runtime
 		engine, err := runtime.SpawnEngine(
-			env.inventory.Config.BaseFuel, logic.Logic,
-			logic.State.ContextDriver(logic.Logic.ID), env,
+			repl.env.CallFuel,
+			logic.Object,
+			core.NewContextDriver(repl.env.ID, repl.lab.Database, logicID.Address(), logicID),
+			repl.lab,
 		)
 		if err != nil {
 			return fmt.Sprintf("failed to bootstrap engine: %v", err)
 		}
 
 		// Fetch the designated sender
-		sender, err := fetchDesignatedSenderState(env)
+		sender, err := repl.GetDesignatedSender()
 		if err != nil {
 			return fmt.Sprintf("failed to fetch state for sender: %v", err)
 		}
 
 		// Generate the context object for the sender
-		senderContext := sender.State.ContextDriver(logic.Logic.ID)
+		senderContext := core.NewContextDriver(repl.env.ID, repl.lab.Database, sender, logicID)
 
 		// Generate an interaction from the kind, callsite, calldata and manifest
-		ixn := LogicInteraction{
-			kind: func() common.IxType {
+		ixn := core.LogicInteraction{
+			Kind: func() common.IxType {
 				switch kind {
 				case engineio.DeployerCallsite:
 					return common.IxLogicDeploy
@@ -174,10 +177,10 @@ func parseLogicCall(parser *symbolizer.Parser, kind engineio.CallsiteKind) Comma
 					panic("unhandled logic call case")
 				}
 			}(),
-			price: new(big.Int).SetUint64(core.LabFuelPrice),
-			limit: env.inventory.Config.BaseFuel,
-			site:  site,
-			call:  calldata,
+			Price: new(big.Int).SetUint64(core.LabFuelPrice),
+			Limit: repl.env.CallFuel,
+			Site:  site,
+			Call:  calldata,
 		}
 
 		// Execute the function
@@ -190,41 +193,27 @@ func parseLogicCall(parser *symbolizer.Parser, kind engineio.CallsiteKind) Comma
 			logic.Ready = true
 		}
 
-		return formatResult(env, result, encoder)
+		return repl.formatResult(result, encoder)
 	}
 }
 
-type LogicInteraction struct {
-	kind  common.IxType
-	price *big.Int
-	limit uint64
-	site  string
-	call  []byte
-}
-
-func (ixn LogicInteraction) IxnType() engineio.IxnType { return ixn.kind }
-func (ixn LogicInteraction) FuelPrice() *big.Int       { return ixn.price }
-func (ixn LogicInteraction) FuelLimit() uint64         { return ixn.limit }
-func (ixn LogicInteraction) Callsite() string          { return ixn.site }
-func (ixn LogicInteraction) Calldata() []byte          { return ixn.call }
-
-// formatResults formats an engineio.CallResult object into a string.
+// formatResult FormatResults formats an engineio.CallResult object into a string.
 // It accepts a CallEncoder object to decode any outputs returned with the result
-func formatResult(env *Environment, result engineio.CallResult, encoder engineio.CallEncoder) string {
+func (repl *Repl) formatResult(result engineio.CallResult, encoder engineio.CallEncoder) string {
 	var str strings.Builder
 
 	if !result.Ok() {
-		str.WriteString(fmt.Sprintf("Execution Failed! [%v FUEL]", result.Fuel()))
-		str.WriteString(fmt.Sprintf("\nError Data: %#x", result.Error()))
+		str.WriteString(fmt.Sprintf("Execution Failed! [%v FUEL]\n", result.Fuel()))
+		str.WriteString(fmt.Sprintf("Error Data: %#x\n", result.Error()))
 
 		return str.String()
 	}
 
-	str.WriteString(fmt.Sprintf("Execution Complete! [%v FUEL]", result.Fuel()))
+	str.WriteString(fmt.Sprintf("Execution Complete! [%v FUEL]\n", result.Fuel()))
 
 	outputs, err := encoder.DecodeOutputs(result.Outputs())
 	if err != nil {
-		str.WriteString("\nerror: failed to decode execution outputs")
+		str.WriteString("error: failed to decode execution outputs\n")
 
 		return str.String()
 	}
@@ -233,16 +222,17 @@ func formatResult(env *Environment, result engineio.CallResult, encoder engineio
 		return str.String()
 	}
 
-	str.WriteString("\nExecution Outputs ||| ")
+	str.WriteString("Execution Outputs |||\n")
 
 	for name, object := range outputs {
-		str.WriteString(fmt.Sprintf("%v: %v ", name, env.format(object)))
+		formatted := repl.FormatValue(object)
+		str.WriteString(fmt.Sprintf("%v: %v\n", name, formatted))
 	}
 
 	return str.String()
 }
 
-func formatArguments(env *Environment, args string, encoder engineio.CallEncoder) ([]byte, error) {
+func (repl *Repl) formatArguments(args string, encoder engineio.CallEncoder) ([]byte, error) {
 	// Check if args begins with 0x -> Assume raw calldata provided instead of keyed parameters
 	if strings.HasPrefix(args, "0x") {
 		// Decode hex string into bytes
@@ -255,13 +245,13 @@ func formatArguments(env *Environment, args string, encoder engineio.CallEncoder
 	}
 
 	// Parse the input arguments into an object map
-	arguments, err := parseArguments(args)
+	arguments, err := argparse(args)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to parse call arguments")
 	}
 
 	// Encode the parsed arguments into a calldata object
-	calldata, err := encoder.EncodeInputs(arguments, env)
+	calldata, err := encoder.EncodeInputs(arguments, repl)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to encode calldata")
 	}
@@ -269,7 +259,7 @@ func formatArguments(env *Environment, args string, encoder engineio.CallEncoder
 	return calldata, nil
 }
 
-func parseArguments(args string) (map[string]any, error) {
+func argparse(args string) (map[string]any, error) {
 	arguments := make(map[string]any)
 
 	if args == "" {

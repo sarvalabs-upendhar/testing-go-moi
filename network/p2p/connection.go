@@ -38,7 +38,8 @@ var (
 // These tags are used to protect the connections from being pruned by the libp2p connection manager
 const (
 	MOIStreamTag   = "moi-core-stream"
-	FluxStreamTag  = "moi-flux-stream"
+	ICSMeshTag     = "moi-ics-mesh-stream"
+	ICSDirectTag   = "moi-ics-direct-stream"
 	AgoraStreamTag = "moi-agora-stream"
 )
 

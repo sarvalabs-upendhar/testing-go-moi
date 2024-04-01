@@ -788,25 +788,66 @@ func TestPersistenceManager_GetAccountSnapshot(t *testing.T) {
 	pm2 := NewTestPersistenceManagerWithBadger(t, dir2)
 
 	address := tests.GetRandomAddressList(t, 3)
+	count := 10000
 
 	for _, prefix := range address {
 		bw := pm1.db.NewBatchWriter()
-		for i := 1; i <= 100; i++ {
+		for i := 1; i <= count; i++ {
 			require.NoError(t, bw.Set(keyWithPrefix(prefix, i), value(i)))
 		}
 		require.NoError(t, bw.Flush())
 	}
 
 	for _, prefix := range address {
-		snap, err := pm1.GetAccountSnapshot(context.Background(), prefix, 0)
+		var (
+			exit              = make(chan bool)
+			receivedData      = make([]byte, 0)
+			resp              = make(chan common.SnapResponse)
+			expectedSize      = uint64(0)
+			totalReceivedSize = uint64(0)
+		)
+
+		go func() {
+			for {
+				select {
+				case r := <-resp:
+					if r.ChunkSize != 0 {
+						receivedData = make([]byte, 0, r.ChunkSize)
+						expectedSize = r.ChunkSize
+
+						continue
+					}
+
+					if r.End {
+						require.True(t, expectedSize == uint64(len(receivedData)))
+						totalReceivedSize += expectedSize
+
+						err = pm2.StoreAccountSnapShot(&common.Snapshot{
+							Entries: receivedData,
+						})
+						require.NoError(t, err)
+
+						continue
+					}
+
+					receivedData = append(receivedData, r.Data...)
+
+				case <-exit:
+					return
+				}
+			}
+		}()
+
+		sentSnapSize, err := pm1.StreamSnapshot(context.Background(), prefix, 0, resp)
 		require.NoError(t, err)
 
-		err = pm2.StoreAccountSnapShot(snap)
-		require.NoError(t, err)
+		exit <- true
+
+		require.True(t, sentSnapSize == totalReceivedSize)
 	}
 
 	for _, prefix := range address {
-		for i := 1; i <= 100; i++ {
+		for i := 1; i <= count; i++ {
 			val, err := pm2.ReadEntry(keyWithPrefix(prefix, i))
 			require.NoError(t, err)
 

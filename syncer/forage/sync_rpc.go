@@ -7,14 +7,13 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-identifiers"
 
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
 )
 
 const (
-	maxMessageSize              = 4 * 1024 // 4KB
 	maxAccMetaInfoEntriesPerMsg = 50
 )
 
@@ -27,19 +26,39 @@ type LatestAccountInfo struct {
 
 // SYNCRPCService is a struct that represents an SYNC RPC Service
 type SYNCRPCService struct {
-	syncer *Syncer
+	syncer              *Syncer
+	snapProcessingCh    chan struct{}
+	latticeProcessingCh chan struct{}
 }
 
 func NewSyncRPCService(syncer *Syncer) *SYNCRPCService {
-	return &SYNCRPCService{syncer}
+	return &SYNCRPCService{
+		syncer:              syncer,
+		snapProcessingCh:    make(chan struct{}, 1),
+		latticeProcessingCh: make(chan struct{}, 3),
+	}
 }
 
 func (service *SYNCRPCService) SyncSnap(
 	ctx context.Context,
 	req <-chan *SnapRequest,
-	resp chan<- *SnapResponse,
+	resp chan<- common.SnapResponse,
 ) error {
-	defer close(resp)
+	defer func() {
+		close(resp)
+	}()
+
+	select {
+	case service.snapProcessingCh <- struct{}{}:
+	default:
+		service.syncer.logger.Trace("another snap sync request being handled")
+
+		return errors.New("another snap sync request being handled")
+	}
+
+	defer func() {
+		<-service.snapProcessingCh
+	}()
 
 	var (
 		snapReq *SnapRequest
@@ -57,48 +76,24 @@ func (service *SYNCRPCService) SyncSnap(
 		}
 	}
 
-	snap, err := service.syncer.db.GetAccountSnapshot(ctx, snapReq.Address, 0)
+	sentSnapSize, err := service.syncer.db.StreamSnapshot(ctx, snapReq.Address, 0, resp)
 	if err != nil {
-		service.syncer.logger.Error("Failed to fetch account snap shot", "addr", snapReq.Address)
+		service.syncer.logger.Error("Failed to fetch account snap shot", "addr", snapReq.Address,
+			"error", err)
 
 		return err
 	}
 
-	createdAt := time.Now().UnixNano()
-	noOfMessages := int(snap.Size / maxMessageSize)
-
-	if snap.Size%maxMessageSize != 0 {
-		noOfMessages++
-	}
-
-	start := 0
-	for i := 0; i < noOfMessages; i++ {
-		end := start + maxMessageSize
-		if end > len(snap.Entries) {
-			end = len(snap.Entries)
-		}
-
-		respMsg := &SnapResponse{
-			Data: make([]byte, 0, maxMessageSize),
-		}
-
-		if i == 0 {
-			respMsg.MetaInfo = &SnapMetaInfo{
-				CreatedAt:     createdAt,
-				TotalSnapSize: snap.Size,
-			}
-		}
-
-		respMsg.Data = snap.Entries[start:end]
-
-		start = end
-
-		select {
-		case resp <- respMsg:
-			break
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+	// signal the end of whole snap
+	select {
+	case resp <- common.SnapResponse{
+		MetaInfo: &common.SnapMetaInfo{
+			CreatedAt:     time.Now().UnixNano(),
+			TotalSnapSize: sentSnapSize,
+		},
+	}:
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 
 	return nil
@@ -209,6 +204,20 @@ func (service *SYNCRPCService) SyncLattice(
 		req *LatticeRequest
 		ok  bool
 	)
+
+	select {
+	case service.latticeProcessingCh <- struct{}{}:
+	default:
+		service.syncer.logger.Trace("Too many requests in progress for lattice sync. Request rejected.")
+
+		close(respChan)
+
+		return errors.New("Too many requests in progress for lattice sync. Request rejected.")
+	}
+
+	defer func() {
+		<-service.latticeProcessingCh
+	}()
 
 	select {
 	case <-ctx.Done():

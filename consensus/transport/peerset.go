@@ -10,8 +10,6 @@ import (
 )
 
 var (
-	// Represents an error that occurs when the peer set is closed
-	errClosed = errors.New("peer set is closed")
 	// Represents an error that occurs when a registered peer is attempted to be registered again
 	errAlreadyRegistered = errors.New("peer is already registered")
 	// Represents an error that occurs when a peer is not registered
@@ -22,27 +20,24 @@ var (
 // It is used to track a set of active participants
 type icsPeerSet struct {
 	// Represents a mapping of peerIDs to their Peers
-	peers map[id.KramaID]*icsOutboundPeer
+	peers map[id.KramaID]*icsPeer
 	// Represents a synchronization mutex on the set of peers
 	// A RWMutex allows multiple goroutines to acquire a read
 	// lock but only a single goroutine to acquire write lock.
 	lock sync.RWMutex
-	// Represents whether the set of peers is closed
-	closed bool
 }
 
 // newICSPeerSet is a constructor function that generates and returns a blank icsPeerSet
 func newICSPeerSet() *icsPeerSet {
 	// Create an empty icsPeerSet and return it
 	return &icsPeerSet{
-		peers:  make(map[id.KramaID]*icsOutboundPeer),
-		lock:   sync.RWMutex{},
-		closed: false,
+		peers: make(map[id.KramaID]*icsPeer),
+		lock:  sync.RWMutex{},
 	}
 }
 
 // Peer is a method of icsPeerSet that returns a peer from the icsPeerSet for a given peer id
-func (ps *icsPeerSet) Peer(peerID id.KramaID) *icsOutboundPeer {
+func (ps *icsPeerSet) Peer(peerID id.KramaID) *icsPeer {
 	// Read Lock the icsPeerSet
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
@@ -63,7 +58,7 @@ func (ps *icsPeerSet) ContainsPeer(peerID id.KramaID) bool {
 	return ok
 }
 
-// Len is a method of icsPeerSet that returns the current size of the icsPeerSet
+// Len returns the current size of the icsPeerSet
 func (ps *icsPeerSet) Len() int {
 	// Read Lock the icsPeerSet
 	ps.lock.RLock()
@@ -73,15 +68,25 @@ func (ps *icsPeerSet) Len() int {
 	return len(ps.peers)
 }
 
+// List returns the list of krama id's from the icsPeerSet
+func (ps *icsPeerSet) List() []id.KramaID {
+	// Read Lock the icsPeerSet
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	peers := make([]id.KramaID, 0, len(ps.peers))
+
+	for kramaID := range ps.peers {
+		peers = append(peers, kramaID)
+	}
+
+	return peers
+}
+
 // Register is a method of icsPeerSet that registers a new peer to the working set.
 // Returns an errClosed if the icsPeerSet is closed, or an errAlreadyRegistered
 // if the peer is already a part of the working set
-func (ps *icsPeerSet) Register(p *icsOutboundPeer) error {
-	// Return an error if the peerset it closed
-	if ps.closed {
-		return errClosed
-	}
-
+func (ps *icsPeerSet) Register(p *icsPeer) error {
 	if ps.ContainsPeer(p.kramaID) {
 		return errAlreadyRegistered
 	}
@@ -94,7 +99,7 @@ func (ps *icsPeerSet) Register(p *icsOutboundPeer) error {
 	return nil
 }
 
-func (ps *icsPeerSet) addPeer(p *icsOutboundPeer) {
+func (ps *icsPeerSet) addPeer(p *icsPeer) {
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
 
@@ -103,11 +108,7 @@ func (ps *icsPeerSet) addPeer(p *icsOutboundPeer) {
 
 // Unregister is a method of icsPeerSet that unregisters a peer by removing it from the working set.
 // Returns an errNotRegistered if the peer is not part of the working set.
-func (ps *icsPeerSet) Unregister(p *icsOutboundPeer) error {
-	if ps.closed {
-		return nil
-	}
-
+func (ps *icsPeerSet) Unregister(p *icsPeer) error {
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
 
@@ -121,6 +122,15 @@ func (ps *icsPeerSet) Unregister(p *icsOutboundPeer) error {
 	delete(ps.peers, p.kramaID)
 
 	return nil
+}
+
+func (ps *icsPeerSet) ForEach(fn func(kPeer *icsPeer)) {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	for _, peer := range ps.peers {
+		fn(peer)
+	}
 }
 
 // peerList represents a list of peers.

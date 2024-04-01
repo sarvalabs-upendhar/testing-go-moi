@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/protocol"
+
 	"github.com/hashicorp/go-hclog"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -18,6 +20,7 @@ import (
 	"github.com/sarvalabs/go-polo"
 	"golang.org/x/sync/errgroup"
 
+	maddr "github.com/multiformats/go-multiaddr"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/hexutil"
@@ -59,6 +62,7 @@ type lattice interface {
 		height uint64,
 		withInteractions bool,
 	) (*common.Tesseract, error)
+	GetTesseractHeightEntry(address identifiers.Address, height uint64) (common.Hash, error)
 	ValidateTesseract(addr identifiers.Address, ts *common.Tesseract, ics *common.ICSNodeSet, allParticipants bool) error
 	IsInitialTesseract(ts *common.Tesseract, addr identifiers.Address) (bool, error)
 	IsSealValid(ts *common.Tesseract) (bool, error)
@@ -93,6 +97,7 @@ type stateManager interface {
 		rawContext map[string][]byte,
 		clusterInfo *common.ICSClusterInfo,
 	) (*common.ICSNodeSet, error)
+	HasParticipantStateAt(addr identifiers.Address, stateHash common.Hash) bool
 }
 
 type store interface {
@@ -123,11 +128,12 @@ type store interface {
 	StreamAccountMetaInfosRaw(ctx context.Context, bucketNumber uint64, response chan []byte) error
 	GetRecentUpdatedAccMetaInfosRaw(ctx context.Context, bucketID uint64, sinceTS uint64) ([][]byte, error)
 	IsPrincipalSyncDone() (bool, int64)
-	GetAccountSnapshot(
+	StreamSnapshot(
 		ctx context.Context,
 		address identifiers.Address,
 		sinceTS uint64,
-	) (*common.Snapshot, error)
+		respChan chan<- common.SnapResponse,
+	) (uint64, error)
 	UpdateAccMetaInfo(
 		id identifiers.Address,
 		height uint64,
@@ -136,10 +142,29 @@ type store interface {
 	) (int32, bool, error)
 	SetTesseractHeightEntry(addr identifiers.Address, height uint64, tsHash common.Hash) error
 	HasAccMetaInfoAt(addr identifiers.Address, height uint64) bool
+	GetAccount(addr identifiers.Address, stateHash common.Hash) ([]byte, error)
 }
 
 type ixpool interface {
 	GetIxns(ixHashes common.Hashes) (common.Interactions, error)
+}
+
+type p2pServer interface {
+	GetPeers() []kramaid.KramaID
+	StartNewRPCServer(protocol protocol.ID, tag string) *rpc.Client
+	RegisterNewRPCService(protocol protocol.ID, serviceName string, service interface{}) error
+	GetKramaID() kramaid.KramaID
+	Subscribe(
+		ctx context.Context,
+		topicName string,
+		validator utils.WrappedVal,
+		defaultValidator bool,
+		handler func(msg *pubsub.Message) error,
+	) error
+	GetPeerSetLen() int
+	Unsubscribe(topicName string) error
+	AddPeerInfoPermanently(info *peer.AddrInfo)
+	GetAddrsFromPeerStore(peerID peer.ID) []maddr.Multiaddr
 }
 
 type Syncer struct {
@@ -147,7 +172,7 @@ type Syncer struct {
 	cfg                 *config.SyncerConfig
 	ctx                 context.Context
 	ctxCancel           context.CancelFunc
-	network             *p2p.Server
+	network             p2pServer
 	mux                 *utils.TypeMux
 	execLock            sync.RWMutex
 	agora               syncer.BlockSync
@@ -229,6 +254,28 @@ func NewSyncer(
 	return s, nil
 }
 
+func (s *Syncer) addTrustedPeersToPeerstore() error {
+	for i := 0; i < len(s.cfg.TrustedPeers); i++ {
+		bestPeer := s.cfg.TrustedPeers[i]
+
+		peerID, err := bestPeer.ID.DecodedPeerID()
+		if err != nil {
+			s.logger.Error("Failed to get peer ID from krama ID", "krama-ID", bestPeer.ID, "err", err)
+
+			return common.ErrInvalidKramaID
+		}
+
+		s.network.AddPeerInfoPermanently(
+			&peer.AddrInfo{
+				ID:    peerID,
+				Addrs: []maddr.Multiaddr{bestPeer.Address},
+			},
+		)
+	}
+
+	return nil
+}
+
 func (s *Syncer) NewSyncRequest(
 	addr identifiers.Address,
 	expectedHeight uint64,
@@ -281,14 +328,14 @@ func (s *Syncer) NewSyncRequest(
 		}
 	}
 
-	ts, _ := s.lattice.GetTesseractByHeight(job.address, job.getCurrentHeight(), false)
-	if job.getCurrentHeight() == job.getExpectedHeight() && ts != nil {
+	tsHash, _ := s.lattice.GetTesseractHeightEntry(job.address, job.getCurrentHeight())
+	if job.getCurrentHeight() == job.getExpectedHeight() && tsHash != common.NilHash {
 		s.logger.Debug("Tesseract found, avoiding new sync request")
 
 		return nil
 	}
 
-	if syncMode == common.FullSync && len(job.bestPeers) == 0 && len(bestPeers) == 0 {
+	if !s.hasTrustedPeers() && syncMode == common.FullSync {
 		var height uint64
 
 		height, bestPeers, err = s.findLatestHeightAndBestPeers(addr)
@@ -403,11 +450,61 @@ func (s *Syncer) setBucketSyncDone(val bool) {
 	s.bucketSyncDone = val
 }
 
+func (s *Syncer) RPCGetLatestAccountInfo(
+	bestPeer kramaid.KramaID,
+	addr identifiers.Address,
+) (*LatestAccountInfo, error) {
+	resp := new(LatestAccountInfo)
+
+	if err := s.rpcClient.MoiCall(
+		context.Background(),
+		bestPeer,
+		"SYNCRPC",
+		"GetLatestAccountInfo",
+		addr,
+		resp,
+		5*time.Second,
+	); err != nil {
+		s.logger.Error("Failed to fetch account latest status",
+			"RPC-error", err, "krama-id", bestPeer, "address", addr)
+
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+func (s *Syncer) chooseBestPeersForInitialSync(addr identifiers.Address) (uint64, []kramaid.KramaID, error) {
+	if s.hasTrustedPeers() {
+		for i := 0; i < 3; i++ {
+			bestPeer := s.chooseAnyTrustedPeer()
+
+			resp, err := s.RPCGetLatestAccountInfo(bestPeer.ID, addr)
+			if err != nil {
+				continue
+			}
+
+			return resp.Height, []kramaid.KramaID{bestPeer.ID}, nil
+		}
+
+		return 0, nil, errors.New("unable to fetch latest account info from trusted peers")
+	}
+
+	bestHeight, bestPeers, err := s.findLatestHeightAndBestPeers(addr)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	return bestHeight, bestPeers, nil
+}
+
 func (s *Syncer) chooseBestPeer(job *SyncJob) (kramaid.KramaID, error) {
 	// If initial sync is not done, then choose best peer from trusted peers
 	// to improve probability of success in syncing
 	if !s.isInitialSyncDone() && s.hasTrustedPeers() {
-		return s.chooseAnyTrustedPeer(), nil
+		bestPeer := s.chooseAnyTrustedPeer()
+
+		return bestPeer.ID, nil
 	}
 
 	if job.bestPeerLen() > 0 {
@@ -711,19 +808,8 @@ func (s *Syncer) findLatestHeightAndBestPeers(addr identifiers.Address) (uint64,
 			break
 		}
 
-		resp := new(LatestAccountInfo)
-		if err := s.rpcClient.MoiCall(
-			context.Background(),
-			kramaID,
-			"SYNCRPC",
-			"GetLatestAccountInfo",
-			addr,
-			resp,
-			time.Minute*2,
-		); err != nil {
-			s.logger.Error("Failed to fetch account latest status",
-				"RPC-error", err, "kid", kramaID, "address", addr)
-
+		resp, err := s.RPCGetLatestAccountInfo(kramaID, addr)
+		if err != nil {
 			continue
 		}
 
@@ -754,14 +840,16 @@ func (s *Syncer) chooseBestSyncPeer(job *SyncJob) (kramaid.KramaID, error) {
 		return "", err
 	}
 
+	job.updateBestPeers(bestPeers)
+
 	return bestPeers[0], nil
 }
 
-func (s *Syncer) chooseAnyTrustedPeer() kramaid.KramaID {
+func (s *Syncer) chooseAnyTrustedPeer() config.NodeInfo {
 	randomSource := rand.New(rand.NewSource(time.Now().UnixNano()))
 	randNumber := randomSource.Intn(len(s.cfg.TrustedPeers))
 
-	return kramaid.KramaID(s.cfg.TrustedPeers[randNumber])
+	return s.cfg.TrustedPeers[randNumber]
 }
 
 // syncSystemAccount sends a sync request for the specified address and waits for it to complete within a given time.
@@ -774,7 +862,7 @@ func (s *Syncer) syncSystemAccount(address ...identifiers.Address) ([]kramaid.Kr
 	)
 
 	for _, addr := range address {
-		bestHeight, bestPeers, err = s.findLatestHeightAndBestPeers(addr)
+		bestHeight, bestPeers, err = s.chooseBestPeersForInitialSync(addr)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to fetch best peers and height")
 		}
@@ -784,7 +872,7 @@ func (s *Syncer) syncSystemAccount(address ...identifiers.Address) ([]kramaid.Kr
 		}
 
 		err = func() error {
-			ctx, cancel := context.WithTimeout(s.ctx, time.Duration(5000+(bestHeight*5000))*time.Millisecond)
+			ctx, cancel := context.WithTimeout(s.ctx, time.Duration(6000+(bestHeight*5000))*time.Millisecond)
 			defer cancel()
 
 			for {
@@ -847,14 +935,8 @@ func (s *Syncer) initSync() error {
 
 func (s *Syncer) syncBucketsWithMaxAttempts(bestPeers []kramaid.KramaID, maxAttempts int) error {
 	for i := 1; i < maxAttempts+1; i++ {
-		var bestPeer kramaid.KramaID
-
-		if s.hasTrustedPeers() {
-			bestPeer = s.chooseAnyTrustedPeer()
-		} else {
-			randomNumber := rand.New(rand.NewSource(time.Now().UnixNano()))
-			bestPeer = bestPeers[randomNumber.Intn(len(bestPeers))]
-		}
+		randomNumber := rand.New(rand.NewSource(time.Now().UnixNano()))
+		bestPeer := bestPeers[randomNumber.Intn(len(bestPeers))]
 
 		requestTime := time.Now()
 
@@ -987,13 +1069,13 @@ func (s *Syncer) loadSyncJobsFromDB() error {
 	return nil
 }
 
-func (s *Syncer) syncBuckets(kramaID kramaid.KramaID, attempts int) error {
+func (s *Syncer) syncBuckets(bestPeer kramaid.KramaID, attempts int) error {
 	var (
 		argsChan = make(chan *BucketSyncRequest, 1)
 		respChan = make(chan *BucketSyncResponse, ChannelBufferSize)
 	)
 
-	peerID, err := kramaID.DecodedPeerID()
+	peerID, err := bestPeer.DecodedPeerID()
 	if err != nil {
 		s.logger.Error("Failed to decode peer ID", "err", err)
 
@@ -1075,6 +1157,7 @@ func (s *Syncer) syncBuckets(kramaID kramaid.KramaID, attempts int) error {
 
 func (s *Syncer) handleAccountMetaInfo(data [][]byte, syncMode common.SyncMode) error {
 	acc := new(common.AccountMetaInfo)
+
 	for _, v := range data {
 		if err := polo.Depolorize(acc, v); err != nil {
 			return err
@@ -1120,66 +1203,77 @@ func (s *Syncer) isSnapSyncRequired(address identifiers.Address) bool {
 func (s *Syncer) fetchAndStoreSnap(bestPeer kramaid.KramaID, job *SyncJob) error {
 	ctx, cancel := context.WithTimeout(
 		context.Background(), // TODO: Need to improve the timeouts
-		time.Duration((1000+job.getExpectedHeight())*500)*time.Millisecond,
+		time.Duration(5000+(job.getExpectedHeight())*5000)*time.Millisecond,
 	)
 	defer cancel()
 
 	s.logger.Trace("Initiating snap sync request", "addr", job.address)
 
-	snap, err := s.fetchSnapShort(ctx, bestPeer, job.address, job.expectedHeight)
-	if err != nil {
-		return errors.Wrap(err, "failed to fetch snapshot")
-	}
-
-	s.logger.Trace("Snap fetch successful", "addr", job.address)
-
-	storeErr := func() error {
-		if err = s.db.StoreAccountSnapShot(snap); err != nil {
-			return err
-		}
-
-		if err = job.updateSnap(true); err != nil {
-			return err
-		}
-
-		return nil
-	}()
-
-	if storeErr != nil {
-		err = s.db.DropPrefix(job.address.Bytes())
+	dropPrefix := func() {
+		err := s.db.DropPrefix(job.address.Bytes())
 		if err != nil {
 			panic(err) // This should never happen
 		}
 	}
 
-	return storeErr
+	isSnapStored, err := s.fetchSnapShot(ctx, bestPeer, job.address, job.expectedHeight)
+	if err != nil {
+		if isSnapStored {
+			dropPrefix()
+		}
+
+		return errors.Wrap(err, "failed to fetch snapshot")
+	}
+
+	s.logger.Trace("Snap fetch successful", "addr", job.address)
+
+	if err = job.updateSnap(true); err != nil {
+		dropPrefix()
+
+		return err
+	}
+
+	return nil
 }
 
-func (s *Syncer) fetchSnapShort(
+// This comment explains the process of sending a snapshot of an account.
+// Let's assume the entire snapshot size is 1500MB. The sender retrieves buffered data from Badger,
+// typically around 100MB but may vary.
+// Initially, the sender transmits a start signal to the receiver, along with the size of the buffered data.
+// This allows the receiver to allocate memory and verify for any missing data at the end.
+// Following this, the sender breaks the buffered data into 256KB packets and starts sending them.
+// Upon reaching the end of the buffered data, the sender sends an end signal, prompting the receiver
+// to flush the received data to the database.
+// Once the sender has sent the entire 1500MB snapshot, it signals the end of the process by sending the total size
+// of the snapshot sent.
+func (s *Syncer) fetchSnapShot(
 	ctx context.Context,
 	peer kramaid.KramaID,
 	address identifiers.Address,
 	expectedHeight uint64,
-) (*common.Snapshot, error) {
+) (bool, error) {
 	peerID, err := peer.DecodedPeerID()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to decode peer ID")
+		return false, errors.Wrap(err, "failed to decode peer ID")
 	}
 
 	var (
-		snapInfo *SnapMetaInfo
-		reqChan  = make(chan *SnapRequest, 1)
-		respChan = make(chan *SnapResponse, 2)
+		reqChan      = make(chan *SnapRequest, 1)
+		respChan     = make(chan *common.SnapResponse, 2)
+		expectedSize = uint64(0)
+		isSnapStored = false
 	)
 
 	currentSnap := &common.Snapshot{
-		Prefix: address.Bytes(),
+		Prefix:  address.Bytes(),
+		Entries: make([]byte, 0),
 	}
 
 	reqChan <- &SnapRequest{
 		Address: address,
 		Height:  expectedHeight,
 	}
+	close(reqChan)
 
 	errGrp, grpCtx := errgroup.WithContext(ctx)
 	errGrp.Go(func() error {
@@ -1192,6 +1286,8 @@ func (s *Syncer) fetchSnapShort(
 			respChan,
 			connTag(address, "syncSnap"),
 		); err != nil {
+			s.logger.Error("failed to fetch snapshot ", "err", err)
+
 			return err
 		}
 
@@ -1199,8 +1295,6 @@ func (s *Syncer) fetchSnapShort(
 	})
 
 	errGrp.Go(func() error {
-		defer close(reqChan)
-
 		for {
 			select {
 			case <-grpCtx.Done():
@@ -1211,29 +1305,45 @@ func (s *Syncer) fetchSnapShort(
 					return errors.New("response chan closed")
 				}
 
-				if snapMsg.MetaInfo != nil && snapInfo == nil {
-					snapInfo = snapMsg.MetaInfo
-					currentSnap.CreatedAt = snapMsg.MetaInfo.CreatedAt
-					currentSnap.Entries = make([]byte, 0, snapInfo.TotalSnapSize)
+				if snapMsg.Start {
+					currentSnap.Entries = make([]byte, 0, snapMsg.ChunkSize)
+					expectedSize = snapMsg.ChunkSize
+
+					continue
 				}
 
-				currentSnap.Size += uint64(len(snapMsg.Data))
-				currentSnap.Entries = append(currentSnap.Entries, snapMsg.Data...)
+				if snapMsg.End {
+					if expectedSize != uint64(len(currentSnap.Entries)) {
+						return errors.New("packets are missing")
+					}
 
-				s.logger.Info("Snap info ", "total snap size ", snapInfo.TotalSnapSize,
-					"current snap size", currentSnap.Size)
-				if snapInfo != nil && currentSnap.Size == snapInfo.TotalSnapSize {
+					if err := s.db.StoreAccountSnapShot(currentSnap); err != nil {
+						return err
+					}
+
+					isSnapStored = true
+
+					continue
+				}
+
+				// if the entire snapshot has been received, then return
+				if snapMsg.MetaInfo != nil && currentSnap.TotalSnapSize == snapMsg.MetaInfo.TotalSnapSize {
 					return nil
 				}
+
+				currentSnap.TotalSnapSize += uint64(len(snapMsg.Data))
+				currentSnap.Entries = append(currentSnap.Entries, snapMsg.Data...)
+
+				s.logger.Info("Received Snap info ", "current snap size ", currentSnap.TotalSnapSize)
 			}
 		}
 	})
 
 	if err = errGrp.Wait(); err != nil {
-		return nil, err
+		return isSnapStored, err
 	}
 
-	return currentSnap, nil
+	return isSnapStored, nil
 }
 
 func (s *Syncer) registerRPCService() error {
@@ -1457,8 +1567,18 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 			return false, errors.Wrap(err, "failed to validate tesseract")
 		}
 
-		if err = s.fetchTesseractState(msg.address(), msg.tesseract, msg.icsNodeSet.GetNodes(false)); err != nil {
-			return false, errors.Wrap(err, "failed to fetch tesseract state")
+		if msg.tesseract.TransitiveLink(msg.address()).IsNil() {
+			s.state.CreateDirtyObject(msg.address(), common.AccTypeFromIxType(msg.tesseract.Interactions()[0].Type()))
+		}
+
+		// During the initial sync stage, we retrieve participant data from trusted peers using snap sync.
+		// If participant state exists, it indicates that all data related to the participant has been fetched,
+		// allowing us to skip syncing for that participant.
+		if s.isInitialSyncDone() ||
+			!s.state.HasParticipantStateAt(msg.address(), msg.tesseract.StateHash(msg.address())) {
+			if err = s.fetchTesseractState(msg.address(), msg.tesseract, msg.icsNodeSet.GetNodes(false)); err != nil {
+				return false, errors.Wrap(err, "failed to fetch tesseract state")
+			}
 		}
 
 		if err = s.lattice.AddTesseractWithState(
@@ -1596,6 +1716,8 @@ func (s *Syncer) fetchTesseractState(
 
 	islocal, acc, blk, err := s.fetchAccount(ctx, newSession, tesseract.StateHash(addr))
 	if err != nil {
+		s.logger.Error("Error fetching account data", "err", err)
+
 		return err
 	}
 
@@ -1616,10 +1738,6 @@ func (s *Syncer) fetchTesseractState(
 		s.logger.Error("Error fetching context data", "err", err)
 
 		return err
-	}
-
-	if tesseract.TransitiveLink(addr).IsNil() {
-		s.state.CreateDirtyObject(addr, common.AccTypeFromIxType(tesseract.Interactions()[0].Type()))
 	}
 
 	if err = s.syncLogicTree(ctx, newSession, acc.LogicRoot); err != nil {
@@ -1704,12 +1822,22 @@ func (s *Syncer) fetchInteractions(
 	common.Interactions,
 	error,
 ) {
+	ixns := new(common.Interactions)
+
+	rawIxns, err := s.db.GetInteractions(tsHash)
+	if err == nil {
+		if err := ixns.FromBytes(rawIxns); err != nil {
+			return nil, err
+		}
+
+		return *ixns, nil
+	}
+
 	blk, err := session.GetBlock(ctx, cid.InteractionsCID(tsHash))
 	if err != nil {
 		return nil, err
 	}
 
-	ixns := new(common.Interactions)
 	err = ixns.FromBytes(blk.GetData())
 
 	return *ixns, err
@@ -1723,12 +1851,22 @@ func (s *Syncer) fetchReceipts(
 	common.Receipts,
 	error,
 ) {
+	receipts := new(common.Receipts)
+
+	rawReceipts, err := s.db.GetReceipts(tsHash)
+	if err == nil {
+		if err := receipts.FromBytes(rawReceipts); err != nil {
+			return nil, err
+		}
+
+		return *receipts, nil
+	}
+
 	blk, err := session.GetBlock(ctx, cid.ReceiptsCID(tsHash))
 	if err != nil {
 		return nil, err
 	}
 
-	receipts := new(common.Receipts)
 	err = receipts.FromBytes(blk.GetData())
 
 	s.logger.Trace("Fetched receipts through agora", "ts-hash", tsHash)
@@ -2221,7 +2359,11 @@ func (s *Syncer) TesseractValidator(
 
 // Start starts all event handlers and workers associated with sync sub protocol
 func (s *Syncer) Start(minConnectedPeers int) error {
-	s.logger.Info("Syncer started")
+	s.logger.Info("Starting Syncer")
+
+	if err := s.addTrustedPeersToPeerstore(); err != nil {
+		return err
+	}
 
 	sub := s.mux.Subscribe(utils.PendingAccountEvent{})
 
@@ -2239,7 +2381,7 @@ func (s *Syncer) Start(minConnectedPeers int) error {
 
 	go s.queueHandler()
 
-	for s.network.Peers.Len() < minConnectedPeers {
+	for s.network.GetPeerSetLen() < minConnectedPeers {
 		time.Sleep(1 * time.Second)
 	}
 

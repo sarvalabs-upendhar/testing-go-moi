@@ -137,11 +137,8 @@ func NewTesseract(
 		seal:   bytes,
 		sealBy: sealBy,
 
-		ixns: ixns,
-	}
-
-	if len(receipts) > 0 {
-		t.receipts = receipts.Copy()
+		ixns:     ixns,
+		receipts: receipts,
 	}
 
 	return t
@@ -149,7 +146,7 @@ func NewTesseract(
 
 func (t *Tesseract) Copy() *Tesseract {
 	return NewTesseract(
-		t.ParticipantsWithCopy(),
+		t.Participants(),
 		t.InteractionsHash(),
 		t.ReceiptsHash(),
 		t.Epoch(),
@@ -248,10 +245,6 @@ func (t *Tesseract) Participants() Participants {
 	return t.participants
 }
 
-func (t *Tesseract) ParticipantsWithCopy() Participants {
-	return t.participants.Copy()
-}
-
 func (t *Tesseract) ParticipantCount() int {
 	return len(t.participants)
 }
@@ -262,7 +255,7 @@ func (t *Tesseract) State(addr identifiers.Address) (State, bool) {
 		return State{}, ok
 	}
 
-	return state.Copy(), ok
+	return state, ok
 }
 
 func (t *Tesseract) InteractionsHash() Hash {
@@ -274,7 +267,7 @@ func (t *Tesseract) ReceiptsHash() Hash {
 }
 
 func (t *Tesseract) Epoch() *big.Int {
-	return new(big.Int).Set(t.epoch)
+	return t.epoch
 }
 
 func (t *Tesseract) Timestamp() int64 {
@@ -294,19 +287,15 @@ func (t *Tesseract) FuelLimit() uint64 {
 }
 
 func (t *Tesseract) ConsensusInfo() PoXtData {
-	return t.consensusInfo.Copy()
+	return t.consensusInfo
 }
 
 func (t *Tesseract) BFTVoteSet() *ArrayOfBits {
-	return t.consensusInfo.BFTVoteSet.copy()
+	return t.consensusInfo.BFTVoteSet
 }
 
 func (t *Tesseract) Seal() []byte {
-	bytes := make([]byte, len(t.seal))
-
-	copy(bytes, t.seal)
-
-	return bytes
+	return t.seal
 }
 
 func (t *Tesseract) SealBy() kramaid.KramaID {
@@ -326,11 +315,11 @@ func (t *Tesseract) Interactions() Interactions {
 }
 
 func (t *Tesseract) Receipts() Receipts {
-	return t.receipts.Copy()
+	return t.receipts
 }
 
 func (t *Tesseract) SetReceipts(receipts Receipts) {
-	t.receipts = receipts.Copy()
+	t.receipts = receipts
 }
 
 func (t *Tesseract) HasReceipts() bool {
@@ -371,7 +360,8 @@ func (t *Tesseract) ContextDelta() ContextDelta {
 	ctxDelta := make(ContextDelta)
 
 	for addr, participant := range t.participants {
-		ctxDelta[addr] = participant.ContextDelta.Copy()
+		participant := participant
+		ctxDelta[addr] = &(participant.ContextDelta)
 	}
 
 	return ctxDelta
@@ -383,7 +373,7 @@ func (t *Tesseract) GetContextDelta(address identifiers.Address) (DeltaGroup, bo
 		return DeltaGroup{}, ok
 	}
 
-	return *(state.ContextDelta.Copy()), true
+	return state.ContextDelta, true
 }
 
 func (t *Tesseract) ClusterID() ClusterID {
@@ -443,11 +433,8 @@ func (t *Tesseract) FromBytes(bytes []byte) error {
 
 // Canonical method returns a copy of the tesseract without interactions
 func (t *Tesseract) Canonical() *CanonicalTesseract {
-	seal := make([]byte, len(t.seal))
-	copy(seal, t.seal)
-
 	return &CanonicalTesseract{
-		Participants:     t.participants.Copy(),
+		Participants:     t.participants,
 		InteractionsHash: t.interactionsHash,
 		ReceiptsHash:     t.receiptsHash,
 		Epoch:            t.epoch,
@@ -455,8 +442,8 @@ func (t *Tesseract) Canonical() *CanonicalTesseract {
 		Operator:         t.operator,
 		FuelUsed:         t.fuelUsed,
 		FuelLimit:        t.fuelLimit,
-		ConsensusInfo:    t.consensusInfo.Copy(),
-		Seal:             seal,
+		ConsensusInfo:    t.consensusInfo,
+		Seal:             t.seal,
 		SealBy:           t.sealBy,
 	}
 }
@@ -464,7 +451,7 @@ func (t *Tesseract) Canonical() *CanonicalTesseract {
 // CanonicalWithoutSeal method returns a copy of the tesseract without seal and interactions
 func (t *Tesseract) CanonicalWithoutSeal() *CanonicalTesseractWithoutSeal {
 	return &CanonicalTesseractWithoutSeal{
-		Participants:     t.participants.Copy(),
+		Participants:     t.participants,
 		InteractionsHash: t.interactionsHash,
 		ReceiptsHash:     t.receiptsHash,
 		Epoch:            t.epoch,
@@ -472,13 +459,13 @@ func (t *Tesseract) CanonicalWithoutSeal() *CanonicalTesseractWithoutSeal {
 		Operator:         t.operator,
 		FuelUsed:         t.fuelUsed,
 		FuelLimit:        t.fuelLimit,
-		ConsensusInfo:    t.consensusInfo.Copy(),
+		ConsensusInfo:    t.consensusInfo,
 	}
 }
 
 func (t *Tesseract) GetTesseractWithoutIxns() *Tesseract {
 	return &Tesseract{
-		participants:     t.participants.Copy(),
+		participants:     t.participants,
 		interactionsHash: t.interactionsHash,
 		receiptsHash:     t.receiptsHash,
 		epoch:            t.epoch,
@@ -486,7 +473,7 @@ func (t *Tesseract) GetTesseractWithoutIxns() *Tesseract {
 		operator:         t.operator,
 		fuelUsed:         t.fuelUsed,
 		fuelLimit:        t.fuelLimit,
-		consensusInfo:    t.consensusInfo.Copy(),
+		consensusInfo:    t.consensusInfo,
 		seal:             t.seal,
 		sealBy:           t.sealBy,
 	}

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/sarvalabs/battleground/common"
-	"github.com/sarvalabs/battleground/server/types"
+	"github.com/sarvalabs/battleground/types"
 )
 
 type Config struct {

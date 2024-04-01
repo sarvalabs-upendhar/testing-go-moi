@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/battleground/server/types"
-	"github.com/sarvalabs/battleground/server/warzone/infrastructure"
+	"github.com/sarvalabs/battleground/network/infrastructure"
+	"github.com/sarvalabs/battleground/types"
 
 	"github.com/sarvalabs/go-moi/common/tests"
 )
@@ -226,10 +226,12 @@ func (cloud *CloudNetwork) waitForDestruction(ctx context.Context, timeout time.
 	return nil
 }
 
-func (cloud *CloudNetwork) UpdateNetwork(ctx context.Context, commitHash string) error {
+func (cloud *CloudNetwork) UpdateNetwork(ctx context.Context, commitHash string, cleanDB bool, logLevel string) error {
 	endpoint := cloud.cfg.EndPoint + "/update"
 	requestBody := types.UpdateParams{
-		MoichainLatestHash: commitHash,
+		MoichainSourceRef: commitHash,
+		CleanDB:           cleanDB,
+		LogLevel:          logLevel,
 	}
 
 	_, err := cloud.sendHTTPRequest(ctx, "POST", endpoint, requestBody)

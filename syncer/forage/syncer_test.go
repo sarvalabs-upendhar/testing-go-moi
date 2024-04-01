@@ -2,10 +2,15 @@ package forage
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/multiformats/go-multiaddr"
+
+	"github.com/sarvalabs/go-moi/syncer/agora/block"
 
 	"github.com/hashicorp/go-hclog"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -78,7 +83,6 @@ func TestFullSync(t *testing.T) {
 			},
 		},
 		clientPM,
-		newMockStateManager(),
 		types.NewSlots(2, 3),
 		"CLIENT",
 		nil,
@@ -91,7 +95,6 @@ func TestFullSync(t *testing.T) {
 		&utils.TypeMux{},
 		newMockAgora(),
 		serverPM,
-		newMockStateManager(),
 		types.NewSlots(2, 3),
 		"SERVER",
 		nil,
@@ -133,6 +136,138 @@ func TestFullSync(t *testing.T) {
 	SubscribeAndListenForSyncEvents(t, clientCtx, testingLogger(t.Name()), clientSyncer.mux, expectedEvents)
 	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, false, ts...)
 	checkJobQueue(t, clientSyncer, serverSyncer)
+}
+
+// TestFullSync_TrustedPeers ensures that the client syncs only from trusted peers.
+// A trusted peer is the only node that possesses all tesseracts.
+// If the client syncs from nodes other than the trusted peer, syncing will fail.
+func TestFullSync_TrustedPeers(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), maxTimeout)
+	defer cancel()
+
+	defaultConfig := getParamsToCreateMultipleServers(
+		t,
+		4,
+		true,
+	)
+
+	paramsMap := map[int]*CreateServerParams{
+		0: defaultConfig[0],
+		1: defaultConfig[1],
+		2: defaultConfig[2],
+		3: defaultConfig[3],
+	}
+
+	servers := createMultipleServers(t, 4, paramsMap)
+
+	for i := 0; i < 3; i++ {
+		connectClientToServers(t, servers[3], servers[i])
+	}
+
+	pm, _ := createPersistenceManagers(t, ctx, 4)
+
+	t.Cleanup(func() {
+		closeTestServers(t, servers...)
+	})
+
+	serverSyncers := make([]*Syncer, 3)
+
+	for i := 0; i < 3; i++ {
+		serverSyncers[i] = NewTestSyncer(
+			ctx,
+			defaultSyncerConfig(),
+			servers[i],
+			&utils.TypeMux{},
+			newMockAgora(),
+			pm[i],
+			types.NewSlots(2, 3),
+			"SERVER"+"-"+strconv.Itoa(i),
+			nil,
+		)
+	}
+
+	clientSyncer := NewTestSyncer(
+		ctx,
+		&config.SyncerConfig{
+			ShouldExecute:  false,
+			SyncMode:       config.DefaultSyncMode,
+			EnableSnapSync: true,
+			TrustedPeers: []config.NodeInfo{
+				{
+					ID: servers[0].GetKramaID(),
+				},
+			},
+		},
+		servers[3],
+		&utils.TypeMux{},
+		&MockAgora{
+			newSession: func(address identifiers.Address) (syncer.Session, error) {
+				return newMockSession(address), nil
+			},
+		},
+		pm[3],
+		types.NewSlots(2, 3),
+		"CLIENT",
+		nil,
+	)
+
+	addr := tests.RandomAddress(t)
+
+	accountsToSync := map[identifiers.Address]int{
+		common.GuardianLogicAddr: 10,
+		common.SargaAddress:      10,
+		addr:                     10,
+	}
+
+	ts1 := generateTesseracts(t, 0, accountsToSync[common.GuardianLogicAddr], common.NilHash, common.GuardianLogicAddr)
+	ts2 := generateTesseracts(t, 0, accountsToSync[common.SargaAddress], common.NilHash, common.SargaAddress)
+	ts3 := generateTesseracts(t, 0, accountsToSync[addr], common.NilHash, addr)
+
+	storeTesseractsInDB(t, serverSyncers[0], ts1...)
+	storeTesseractsInDB(t, serverSyncers[0], ts2...)
+	storeTesseractsInDB(t, serverSyncers[0], ts3...)
+
+	storeTesseractsInDB(t, serverSyncers[1], ts1[0:3]...)
+	storeTesseractsInDB(t, serverSyncers[1], ts2[0:2]...)
+	storeTesseractsInDB(t, serverSyncers[1], ts3[0:4]...)
+
+	storeTesseractsInDB(t, serverSyncers[2], ts1[0:3]...)
+	storeTesseractsInDB(t, serverSyncers[2], ts2[0:2]...)
+	storeTesseractsInDB(t, serverSyncers[2], ts3[0:4]...)
+
+	clientSyncer.logger.Info(string(servers[3].GetKramaID()))
+	serverSyncers[0].logger.Info(string(servers[0].GetKramaID()))
+	serverSyncers[1].logger.Info(string(servers[1].GetKramaID()))
+	serverSyncers[2].logger.Info(string(servers[2].GetKramaID()))
+
+	for i := 0; i < 3; i++ {
+		serverSyncers[i].setInitialSyncDone(true)
+
+		err := serverSyncers[i].Start(1)
+		require.NoError(t, err)
+	}
+
+	err := clientSyncer.Start(1)
+	require.NoError(t, err)
+
+	expectedEvents := SyncEvents{
+		bucketSync:    1,
+		SystemAccSync: 1,
+		accounts:      make(map[identifiers.Address]AccountSpecificEvents),
+	}
+
+	for addr, height := range accountsToSync {
+		expectedEvents.accounts[addr] = newAccountSpecificEvents(1, 1, 0, height)
+	}
+
+	SubscribeAndListenForSyncEvents(t, ctx, testingLogger(t.Name()), clientSyncer.mux, expectedEvents)
+	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, false, ts1...)
+	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, false, ts2...)
+	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, false, ts3...)
+	checkJobQueue(t, clientSyncer)
+	checkJobQueue(t, serverSyncers...)
 }
 
 // TestFullSync_ChooseBestPeer, makes sure that the client syncs to the highest heights for all accounts,
@@ -181,7 +316,6 @@ func TestFullSync_ChooseBestPeer(t *testing.T) {
 			},
 		},
 		pm[3],
-		newMockStateManager(),
 		types.NewSlots(2, 3),
 		"CLIENT",
 		nil,
@@ -195,7 +329,6 @@ func TestFullSync_ChooseBestPeer(t *testing.T) {
 			&utils.TypeMux{},
 			newMockAgora(),
 			pm[i],
-			newMockStateManager(),
 			types.NewSlots(2, 3),
 			"SERVER"+"-"+strconv.Itoa(i),
 			nil,
@@ -298,7 +431,6 @@ func TestSync_FromBroadcastedTesseract(t *testing.T) {
 			},
 		},
 		pm[0],
-		newMockStateManager(),
 		types.NewSlots(2, 3),
 		"CLIENT",
 		nil,
@@ -311,7 +443,6 @@ func TestSync_FromBroadcastedTesseract(t *testing.T) {
 		&utils.TypeMux{},
 		newMockAgora(),
 		pm[1],
-		newMockStateManager(),
 		types.NewSlots(2, 3),
 		"SERVER",
 		nil,
@@ -403,7 +534,6 @@ func TestSync_FromRejoining(t *testing.T) {
 			},
 		},
 		clientPM[0],
-		newMockStateManager(),
 		types.NewSlots(2, 3),
 		"CLIENT",
 		nil,
@@ -420,7 +550,6 @@ func TestSync_FromRejoining(t *testing.T) {
 			},
 		},
 		serverPM[0],
-		newMockStateManager(),
 		types.NewSlots(2, 3),
 		"SERVER",
 		nil,
@@ -492,7 +621,6 @@ func TestSync_FromRejoining(t *testing.T) {
 		&utils.TypeMux{},
 		newMockAgora(),
 		clientDB,
-		newMockStateManager(),
 		types.NewSlots(2, 3),
 		"CLIENT-RESTART",
 		nil,
@@ -570,7 +698,6 @@ func TestSync_ThroughExecution(t *testing.T) {
 			},
 		},
 		pm[0],
-		newMockStateManager(),
 		types.NewSlots(2, 3),
 		"CLIENT",
 		nil,
@@ -583,7 +710,6 @@ func TestSync_ThroughExecution(t *testing.T) {
 		&utils.TypeMux{},
 		newMockAgora(),
 		pm[1],
-		newMockStateManager(),
 		types.NewSlots(2, 3),
 		"SERVER",
 		nil,
@@ -679,7 +805,6 @@ func TestFullSync_RemoveBestPeer(t *testing.T) {
 			},
 		},
 		pm[2],
-		newMockStateManager(),
 		types.NewSlots(2, 3),
 		"CLIENT",
 		func(s *Syncer) {
@@ -695,7 +820,6 @@ func TestFullSync_RemoveBestPeer(t *testing.T) {
 			&utils.TypeMux{},
 			newMockAgora(),
 			pm[i],
-			newMockStateManager(),
 			types.NewSlots(2, 3),
 			"SERVER"+"-"+strconv.Itoa(i),
 			nil,
@@ -828,7 +952,6 @@ func TestJobProcessor_checkSyncTesseractNotBlocked(t *testing.T) {
 			},
 		},
 		pm[2],
-		newMockStateManager(),
 		types.NewSlots(2, 3),
 		"CLIENT",
 		nil,
@@ -842,7 +965,6 @@ func TestJobProcessor_checkSyncTesseractNotBlocked(t *testing.T) {
 			&utils.TypeMux{},
 			newMockAgora(),
 			pm[i],
-			newMockStateManager(),
 			types.NewSlots(2, 3),
 			"SERVER"+"-"+strconv.Itoa(i),
 			nil,
@@ -1052,7 +1174,7 @@ func TestGetSyncJobInfo(t *testing.T) {
 	defer cancel()
 
 	mux := &utils.TypeMux{}
-	s := NewSyncerWithJobQueue(ctx, mux)
+	s := NewTestSyncerWithJobQueue(ctx, mux)
 
 	count := 1
 	addrs := tests.GetAddresses(t, 2)
@@ -1343,6 +1465,189 @@ func TestIsAnyOtherParticipantStored(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			isStored := s.isAnyOtherParticipantStored(test.msg)
 			require.Equal(t, test.expectedValue, isStored)
+		})
+	}
+}
+
+func TestTrustedPeerInPeerstore(t *testing.T) {
+	t.Parallel()
+
+	ctx, ctxCancel := context.WithTimeout(context.Background(), maxTimeout)
+	defer ctxCancel()
+
+	// setup mock p2p server
+	defaultConfig := getParamsToCreateMultipleServers(
+		t,
+		1,
+		true,
+	)
+
+	paramsMap := map[int]*CreateServerParams{
+		0: defaultConfig[0],
+	}
+
+	server := createMultipleServers(t, 1, paramsMap)
+
+	kid := tests.RandomKramaID(t, 0)
+	peerID, err := kid.DecodedPeerID()
+	require.NoError(t, err)
+
+	ip := "/ip4/1.1.1.1/tcp/5000"
+	addr, err := multiaddr.NewMultiaddr(fmt.Sprintf("%s/p2p/%s", ip, peerID))
+	require.NoError(t, err)
+
+	// setup mock syncer config
+	cfg := defaultSyncerConfig()
+	cfg.TrustedPeers = []config.NodeInfo{
+		{
+			ID:      kid,
+			Address: addr,
+		},
+	}
+
+	pm, _ := createPersistenceManager(t, ctx)
+
+	t.Cleanup(func() {
+		closeTestServers(t, server...)
+	})
+
+	testSyncer := NewTestSyncer(
+		ctx,
+		cfg,
+		server[0],
+		&utils.TypeMux{},
+		&MockAgora{
+			newSession: func(address identifiers.Address) (syncer.Session, error) {
+				return newMockSession(address), nil
+			},
+		},
+		pm,
+		types.NewSlots(0, 0),
+		"CLIENT",
+		nil,
+	)
+
+	err = testSyncer.Start(0)
+	require.NoError(t, err)
+
+	multiAddr := make([]multiaddr.Multiaddr, 0)
+
+	// retry until trusted peer is added to peer store
+	_, err = tests.RetryUntilTimeout(ctx, 100*time.Millisecond, func() (interface{}, bool) {
+		resp := testSyncer.network.GetAddrsFromPeerStore(peerID)
+
+		multiAddr = append(multiAddr, resp...)
+
+		if len(multiAddr) == 1 {
+			return multiAddr, false
+		}
+
+		return nil, true
+	})
+	require.NoError(t, err)
+
+	// check if ip matches, decapsulated multiAddr
+	require.Equal(t, ip, multiAddr[0].String())
+}
+
+func TestFetchReceipts(t *testing.T) {
+	mockDB := NewMockDB()
+	mockSession := newMockSession(tests.RandomAddress(t))
+
+	hashes := tests.GetHashes(t, 2)
+	receipts := tests.CreateReceiptsWithTestData(t, tests.RandomHash(t))
+
+	rawReceipts, err := receipts.Bytes()
+	require.NoError(t, err)
+
+	err = mockDB.SetReceipts(hashes[0], rawReceipts)
+	require.NoError(t, err)
+
+	cID := cid.ReceiptsCID(hashes[1])
+	mockSession.setBlock(cID, block.NewBlock(cID, rawReceipts))
+
+	s := Syncer{
+		db:     mockDB,
+		logger: hclog.NewNullLogger(),
+	}
+
+	testcases := []struct {
+		name             string
+		hash             common.Hash
+		session          syncer.Session
+		expectedReceipts common.Receipts
+	}{
+		{
+			name:             "receipts fetched successfully from the db",
+			hash:             hashes[0],
+			session:          nil,
+			expectedReceipts: receipts,
+		},
+		{
+			name:             "receipts fetched successfully from agora when not found in db",
+			hash:             hashes[1],
+			session:          mockSession,
+			expectedReceipts: receipts,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			receipts, err = s.fetchReceipts(context.Background(), test.session, test.hash)
+			require.NoError(t, err)
+
+			checkForReceipts(t, test.expectedReceipts, receipts)
+		})
+	}
+}
+
+func TestFetchInteractions(t *testing.T) {
+	mockDB := NewMockDB()
+	mockSession := newMockSession(tests.RandomAddress(t))
+
+	hashes := tests.GetHashes(t, 2)
+	ixns := tests.CreateIxns(t, 1, nil)
+
+	rawIxns, err := ixns.Bytes()
+	require.NoError(t, err)
+
+	err = mockDB.SetInteractions(hashes[0], rawIxns)
+	require.NoError(t, err)
+
+	cID := cid.InteractionsCID(hashes[1])
+	mockSession.setBlock(cID, block.NewBlock(cID, rawIxns))
+
+	s := Syncer{
+		db:     mockDB,
+		logger: hclog.NewNullLogger(),
+	}
+
+	testcases := []struct {
+		name         string
+		hash         common.Hash
+		session      syncer.Session
+		expectedIxns common.Interactions
+	}{
+		{
+			name:         "interactions fetched successfully from the db",
+			hash:         hashes[0],
+			session:      nil,
+			expectedIxns: ixns,
+		},
+		{
+			name:         "interactions fetched successfully from agora when not found in db",
+			hash:         hashes[1],
+			session:      mockSession,
+			expectedIxns: ixns,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			ixns, err = s.fetchInteractions(context.Background(), test.session, test.hash)
+			require.NoError(t, err)
+
+			require.Equal(t, test.expectedIxns, ixns)
 		})
 	}
 }

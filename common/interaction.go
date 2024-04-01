@@ -300,15 +300,15 @@ func (ix Interaction) IXData() IxData {
 }
 
 func (ix Interaction) Input() IxInput {
-	return ix.inner.Input.Copy()
+	return ix.inner.Input
 }
 
 func (ix Interaction) Compute() IxCompute {
-	return ix.inner.Compute.Copy()
+	return ix.inner.Compute
 }
 
 func (ix Interaction) Trust() IxTrust {
-	return ix.inner.Trust.Copy()
+	return ix.inner.Trust
 }
 
 func (ix Interaction) Signature() []byte {

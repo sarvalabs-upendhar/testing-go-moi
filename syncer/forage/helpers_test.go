@@ -93,7 +93,6 @@ func NewTestSyncer(
 	mux *utils.TypeMux,
 	agora syncer.BlockSync,
 	db store,
-	sm stateManager,
 	slots *ktypes.Slots,
 	logName string,
 	callback func(s *Syncer),
@@ -108,23 +107,24 @@ func NewTestSyncer(
 		agora:          agora,
 		db:             db,
 		lattice:        newMockLattice(db, logger),
-		state:          sm,
+		state:          newMockStateManager(db),
 		jobWorkerCount: 5,
 		jobQueue: &JobQueue{
 			jobs: make(map[identifiers.Address]*SyncJob),
 			mux:  mux,
 		},
-		logger:            logger,
-		workerSignal:      make(chan struct{}),
-		tesseractRegistry: common.NewHashRegistry(60),
-		consensusSlots:    slots,
-		lockedAccounts:    make(map[identifiers.Address]struct{}),
-		metrics:           NilMetrics(),
-		pendingMsgQueue:   make([]*TesseractInfo, 0),
-		pendingMsgChan:    make(chan *TesseractInfo, 10),
-		execGrid:          make(map[common.Hash]struct{}),
-		tracker:           NewSyncStatusTracker(0),
-		workerWaitTime:    10 * time.Millisecond,
+		logger:              logger,
+		workerSignal:        make(chan struct{}),
+		tesseractRegistry:   common.NewHashRegistry(60),
+		consensusSlots:      slots,
+		lockedAccounts:      make(map[identifiers.Address]struct{}),
+		metrics:             NilMetrics(),
+		pendingMsgQueue:     make([]*TesseractInfo, 0),
+		pendingMsgChan:      make(chan *TesseractInfo, 10),
+		execGrid:            make(map[common.Hash]struct{}),
+		tracker:             NewSyncStatusTracker(0),
+		workerWaitTime:      10 * time.Millisecond,
+		trustedPeersPresent: len(cfg.TrustedPeers) > 0,
 	}
 
 	if callback != nil {
@@ -134,7 +134,7 @@ func NewTestSyncer(
 	return s
 }
 
-func NewSyncerWithJobQueue(ctx context.Context, mux *utils.TypeMux) *Syncer {
+func NewTestSyncerWithJobQueue(ctx context.Context, mux *utils.TypeMux) *Syncer {
 	return &Syncer{
 		ctx: ctx,
 		jobQueue: &JobQueue{
@@ -167,6 +167,7 @@ type MockLattice struct {
 	lock               sync.RWMutex
 	logger             hclog.Logger
 	tesseracts         map[string]*common.Tesseract
+	tesseractHash      map[string]common.Hash
 	db                 store
 	executedTesseracts map[string]*common.Tesseract
 	sealedTesseracts   map[common.Hash]bool
@@ -176,6 +177,7 @@ func newMockLattice(db store, logger hclog.Logger) *MockLattice {
 	return &MockLattice{
 		logger:             logger,
 		tesseracts:         make(map[string]*common.Tesseract),
+		tesseractHash:      make(map[string]common.Hash),
 		db:                 db,
 		executedTesseracts: make(map[string]*common.Tesseract),
 		sealedTesseracts:   make(map[common.Hash]bool),
@@ -226,6 +228,7 @@ func (m *MockLattice) AddTesseractWithState(
 		}
 
 		m.setTesseractByHeight(addr, p.Height, ts)
+		m.setTesseractHeightEntry(addr, p.Height, ts.Hash())
 
 		if _, _, err := m.db.UpdateAccMetaInfo(
 			addr,
@@ -328,6 +331,32 @@ func (m *MockLattice) GetTesseractByHeight(
 	return ts, nil
 }
 
+func (m *MockLattice) setTesseractHeightEntry(address identifiers.Address, height uint64, tsHash common.Hash) {
+	m.lock.Lock()
+	defer func() {
+		m.lock.Unlock()
+	}()
+
+	key := address.Hex() + strconv.FormatUint(height, 10)
+	m.tesseractHash[key] = tsHash
+}
+
+func (m *MockLattice) GetTesseractHeightEntry(address identifiers.Address, height uint64) (common.Hash, error) {
+	m.lock.RLock()
+	defer func() {
+		m.lock.RUnlock()
+	}()
+
+	key := address.Hex() + strconv.FormatUint(height, 10)
+
+	tsHash, ok := m.tesseractHash[key]
+	if !ok {
+		return common.NilHash, common.ErrTSHashNotFound
+	}
+
+	return tsHash, nil
+}
+
 func (m *MockLattice) ValidateTesseract(
 	address identifiers.Address,
 	ts *common.Tesseract,
@@ -387,10 +416,22 @@ func (m *MockLattice) IsSealValid(ts *common.Tesseract) (bool, error) {
 	return value, nil
 }
 
-type MockStateManager struct{}
+type MockStateManager struct {
+	db store
+}
 
-func newMockStateManager() *MockStateManager {
-	return &MockStateManager{}
+func newMockStateManager(db store) *MockStateManager {
+	return &MockStateManager{
+		db: db,
+	}
+}
+
+func (m MockStateManager) HasParticipantStateAt(addr identifiers.Address, stateHash common.Hash) bool {
+	if _, err := m.db.GetAccount(addr, stateHash); err != nil {
+		return false
+	}
+
+	return true
 }
 
 func (m MockStateManager) SyncStorageTrees(
@@ -1378,12 +1419,28 @@ func checkIfTesseractsSynced(
 type MockDB struct {
 	accountSyncStatus map[identifiers.Address][]byte
 	accMetaInfo       map[string]struct{}
+	receipts          map[common.Hash][]byte
+	interactions      map[common.Hash][]byte
+}
+
+func (m MockDB) GetAccount(addr identifiers.Address, stateHash common.Hash) ([]byte, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) StreamSnapshot(ctx context.Context, address identifiers.Address,
+	sinceTS uint64, respChan chan<- common.SnapResponse,
+) (uint64, error) {
+	// TODO implement me
+	panic("implement me")
 }
 
 func NewMockDB() *MockDB {
 	return &MockDB{
 		accountSyncStatus: make(map[identifiers.Address][]byte),
 		accMetaInfo:       make(map[string]struct{}),
+		receipts:          make(map[common.Hash][]byte),
+		interactions:      make(map[common.Hash][]byte),
 	}
 }
 
@@ -1422,16 +1479,6 @@ func (m MockDB) SetAccount(addr identifiers.Address, stateHash common.Hash, data
 	panic("implement me")
 }
 
-func (m MockDB) SetInteractions(tesseractHash common.Hash, data []byte) error {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (m MockDB) GetInteractions(tesseractHash common.Hash) ([]byte, error) {
-	// TODO implement me
-	panic("implement me")
-}
-
 func (m MockDB) GetAccountMetaInfo(id identifiers.Address) (*common.AccountMetaInfo, error) {
 	// TODO implement me
 	panic("implement me")
@@ -1454,12 +1501,37 @@ func (m MockDB) CleanupAccountSyncStatus(address identifiers.Address) error {
 	return nil
 }
 
-func (m MockDB) StoreAccountSnapShot(snap *common.Snapshot) error {
-	// TODO implement me
-	panic("implement me")
+func (m MockDB) SetInteractions(tsHash common.Hash, ixns []byte) error {
+	m.interactions[tsHash] = ixns
+
+	return nil
 }
 
-func (m MockDB) GetReceipts(tsHash common.Hash) ([]byte, error) {
+func (m MockDB) GetInteractions(tsHash common.Hash) ([]byte, error) {
+	ixns, ok := m.interactions[tsHash]
+	if !ok {
+		return nil, common.ErrFetchingInteractions
+	}
+
+	return ixns, nil
+}
+
+func (m *MockDB) SetReceipts(tsHash common.Hash, receipts []byte) error {
+	m.receipts[tsHash] = receipts
+
+	return nil
+}
+
+func (m *MockDB) GetReceipts(tsHash common.Hash) ([]byte, error) {
+	receipts, ok := m.receipts[tsHash]
+	if !ok {
+		return nil, common.ErrReceiptNotFound
+	}
+
+	return receipts, nil
+}
+
+func (m MockDB) StoreAccountSnapShot(snap *common.Snapshot) error {
 	// TODO implement me
 	panic("implement me")
 }
@@ -1542,11 +1614,6 @@ func (m MockDB) SetTesseractHeightEntry(addr identifiers.Address, height uint64,
 	panic("implement me")
 }
 
-func (m MockDB) SetReceipts(tsHash common.Hash, data []byte) error {
-	// TODO implement me
-	panic("implement me")
-}
-
 func (m MockDB) UpdateAccMetaInfo(
 	id identifiers.Address,
 	height uint64,
@@ -1572,4 +1639,19 @@ func (m MockDB) HasAccMetaInfoAt(addr identifiers.Address, height uint64) bool {
 func (m MockDB) UpdateTesseractStatus(addr identifiers.Address, height uint64, tsHash common.Hash) error {
 	// TODO implement me
 	panic("implement me")
+}
+
+func checkForReceipts(t *testing.T, expectedReceipts, receipts common.Receipts) {
+	t.Helper()
+
+	for hash, expectedReceipt := range expectedReceipts {
+		receivedReceipt, ok := receipts[hash]
+		require.True(t, ok)
+
+		require.Equal(t, expectedReceipt.IxType, receivedReceipt.IxType)
+		require.Equal(t, expectedReceipt.Status, receivedReceipt.Status)
+		require.Equal(t, expectedReceipt.IxHash, receivedReceipt.IxHash)
+		require.Equal(t, expectedReceipt.FuelUsed, receivedReceipt.FuelUsed)
+		require.Equal(t, expectedReceipt.ExtraData, receivedReceipt.ExtraData)
+	}
 }

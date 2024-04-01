@@ -1,4 +1,4 @@
-package cmds
+package repl
 
 import (
 	"fmt"
@@ -17,31 +17,31 @@ They can be manipulated with the [@>get<@] and [@>set<@] commands and follow the
 // GetMemoryCommand generates a Command runner to get the
 // value of an identifier from the environment memory
 func GetMemoryCommand(ident string) Command {
-	return func(env *Environment) string {
-		value, ok := env.memory[ident]
+	return func(repl *Repl) string {
+		value, ok := repl.memory[ident]
 		if !ok {
 			return fmt.Sprintf("no value for '%v'", ident)
 		}
 
-		return fmt.Sprintf("%v: %v", ident, env.format(value))
+		return fmt.Sprintf("%v: %v", ident, repl.FormatValue(value))
 	}
 }
 
 // SetMemoryCommand generates a Command runner to set the value
 // of an identifier to a given value in the environment memory
 func SetMemoryCommand(ident string, value any) Command {
-	return func(env *Environment) string {
-		env.memory[ident] = value
+	return func(repl *Repl) string {
+		repl.memory[ident] = value
 
-		return fmt.Sprintf("%v: %v", ident, env.format(value))
+		return fmt.Sprintf("%v: %v", ident, repl.FormatValue(value))
 	}
 }
 
 // WipeMemoryCommand generates a Command runner to remove
 // the value of an identifier in the environment memory
 func WipeMemoryCommand(ident string) Command {
-	return func(env *Environment) string {
-		delete(env.memory, ident)
+	return func(repl *Repl) string {
+		delete(repl.memory, ident)
 
 		return fmt.Sprintf("%v wiped", ident)
 	}
@@ -59,7 +59,7 @@ usage:
 @>get [prefix].[identifier]<@
 
 example:
->>> get addr1 
+>>> get addr1
 addr1: 0x0fafe52ec42a85db644d5cceba2bb89cf5b0166cc9158211f44ed1e60b06032c
 `
 }
@@ -83,9 +83,9 @@ func parseGetCommand(parser *symbolizer.Parser) Command {
 		return parseGetUser(parser)
 	case TokenLogics:
 		return parseGetLogic(parser)
+	default:
+		return InvalidCommandErrorf("unsupported prefix '%v'", prefix.Literal)
 	}
-
-	return InvalidCommandErrorf("unsupported prefix '%v'", prefix.Literal)
 }
 
 func HelpSet() string {
@@ -128,15 +128,15 @@ func parseSetCommand(parser *symbolizer.Parser) Command {
 		return parseSetConfig(parser)
 	case TokenDesignated:
 		return parseSetDesignated(parser)
+	default:
+		return InvalidCommandErrorf("unsupported prefix '%v'", parser.Cursor().Literal)
 	}
-
-	return InvalidCommandErrorf("unsupported prefix '%v'", parser.Cursor().Literal)
 }
 
 func HelpWipe() string {
 	return `
 The @>wipe<@ command can be used to remove the value of [@>memory<@] variables for a given identifier.
-It can also be used to unset the value of [@>designated<@] participants and 
+It can also be used to unset the value of [@>designated<@] participants and
 remove entities like [@>users<@] and [@>logics<@] from the lab inventory.
 
 usage:
@@ -145,7 +145,7 @@ usage:
 @>wipe [prefix].[identifier]<@
 
 example:
->>> wipe addr1 
+>>> wipe addr1
 wiped addr1
 `
 }
@@ -169,7 +169,7 @@ func parseWipeCommand(parser *symbolizer.Parser) Command {
 		return parseWipeUser(parser)
 	case TokenLogics:
 		return parseWipeLogic(parser)
+	default:
+		return InvalidCommandErrorf("unsupported prefix '%v'", prefix)
 	}
-
-	return InvalidCommandErrorf("unsupported prefix '%v'", prefix)
 }

@@ -1,7 +1,6 @@
-package cmds
+package repl
 
 import (
-	"fmt"
 	"math/big"
 	"strings"
 
@@ -257,44 +256,4 @@ func Colorize(str string) string {
 	str = strings.ReplaceAll(str, "<@", "\u001b[0m")
 
 	return str
-}
-
-func (env *Environment) format(value any) string {
-	switch data := value.(type) {
-	case []byte:
-		format := "%v"
-		if env.inventory.Config.HexBytes {
-			format = "%#x"
-		}
-
-		return fmt.Sprintf(format, data)
-
-	case [32]byte:
-		format := "%v"
-		if env.inventory.Config.HexBytes {
-			format = "%#x"
-		}
-
-		return fmt.Sprintf(format, data)
-
-	case *big.Int:
-		if env.inventory.Config.HexBigInt {
-			return fmt.Sprintf("big(%#x)", data.Bytes())
-		} else {
-			// Obtain absolute value
-			abs := new(big.Int).Abs(data)
-
-			// Format into base10 string
-			result := abs.String()
-			// Prepend negative sign if negative
-			if data.Sign() == -1 {
-				result = string('-') + result
-			}
-
-			return fmt.Sprintf("big(%v)", result)
-		}
-
-	default:
-		return fmt.Sprintf("%v", data)
-	}
 }
