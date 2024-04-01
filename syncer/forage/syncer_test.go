@@ -10,6 +10,8 @@ import (
 
 	"github.com/multiformats/go-multiaddr"
 
+	"github.com/sarvalabs/go-moi/syncer/agora/block"
+
 	"github.com/hashicorp/go-hclog"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
@@ -1546,4 +1548,106 @@ func TestTrustedPeerInPeerstore(t *testing.T) {
 
 	// check if ip matches, decapsulated multiAddr
 	require.Equal(t, ip, multiAddr[0].String())
+}
+
+func TestFetchReceipts(t *testing.T) {
+	mockDB := NewMockDB()
+	mockSession := newMockSession(tests.RandomAddress(t))
+
+	hashes := tests.GetHashes(t, 2)
+	receipts := tests.CreateReceiptsWithTestData(t, tests.RandomHash(t))
+
+	rawReceipts, err := receipts.Bytes()
+	require.NoError(t, err)
+
+	err = mockDB.SetReceipts(hashes[0], rawReceipts)
+	require.NoError(t, err)
+
+	cID := cid.ReceiptsCID(hashes[1])
+	mockSession.setBlock(cID, block.NewBlock(cID, rawReceipts))
+
+	s := Syncer{
+		db:     mockDB,
+		logger: hclog.NewNullLogger(),
+	}
+
+	testcases := []struct {
+		name             string
+		hash             common.Hash
+		session          syncer.Session
+		expectedReceipts common.Receipts
+	}{
+		{
+			name:             "receipts fetched successfully from the db",
+			hash:             hashes[0],
+			session:          nil,
+			expectedReceipts: receipts,
+		},
+		{
+			name:             "receipts fetched successfully from agora when not found in db",
+			hash:             hashes[1],
+			session:          mockSession,
+			expectedReceipts: receipts,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			receipts, err = s.fetchReceipts(context.Background(), test.session, test.hash)
+			require.NoError(t, err)
+
+			checkForReceipts(t, test.expectedReceipts, receipts)
+		})
+	}
+}
+
+func TestFetchInteractions(t *testing.T) {
+	mockDB := NewMockDB()
+	mockSession := newMockSession(tests.RandomAddress(t))
+
+	hashes := tests.GetHashes(t, 2)
+	ixns := tests.CreateIxns(t, 1, nil)
+
+	rawIxns, err := ixns.Bytes()
+	require.NoError(t, err)
+
+	err = mockDB.SetInteractions(hashes[0], rawIxns)
+	require.NoError(t, err)
+
+	cID := cid.InteractionsCID(hashes[1])
+	mockSession.setBlock(cID, block.NewBlock(cID, rawIxns))
+
+	s := Syncer{
+		db:     mockDB,
+		logger: hclog.NewNullLogger(),
+	}
+
+	testcases := []struct {
+		name         string
+		hash         common.Hash
+		session      syncer.Session
+		expectedIxns common.Interactions
+	}{
+		{
+			name:         "interactions fetched successfully from the db",
+			hash:         hashes[0],
+			session:      nil,
+			expectedIxns: ixns,
+		},
+		{
+			name:         "interactions fetched successfully from agora when not found in db",
+			hash:         hashes[1],
+			session:      mockSession,
+			expectedIxns: ixns,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			ixns, err = s.fetchInteractions(context.Background(), test.session, test.hash)
+			require.NoError(t, err)
+
+			require.Equal(t, test.expectedIxns, ixns)
+		})
+	}
 }

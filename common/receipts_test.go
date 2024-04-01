@@ -127,7 +127,7 @@ func TestCopyReceipts(t *testing.T) {
 	}{
 		{
 			name:     "copy receipts",
-			receipts: createReceiptsWithTestData(t, hash),
+			receipts: tests.CreateReceiptsWithTestData(t, hash),
 		},
 	}
 
@@ -146,13 +146,4 @@ func TestCopyReceipts(t *testing.T) {
 			)
 		})
 	}
-}
-
-func createReceiptsWithTestData(t *testing.T, hash common.Hash) common.Receipts {
-	t.Helper()
-
-	receipts := make(common.Receipts)
-	receipts[hash] = tests.CreateReceiptWithTestData(t)
-
-	return receipts
 }

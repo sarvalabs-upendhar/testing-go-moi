@@ -164,7 +164,7 @@ func TestNewTesseract(t *testing.T) {
 			seal:             []byte{1, 2, 3},
 			sealBy:           tests.RandomKramaIDs(t, 1)[0],
 			ixns:             tests.CreateIxns(t, 1, ixParams),
-			receipts:         createReceiptsWithTestData(t, tests.RandomHash(t)),
+			receipts:         tests.CreateReceiptsWithTestData(t, tests.RandomHash(t)),
 		},
 	}
 

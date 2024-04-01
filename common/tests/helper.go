@@ -998,6 +998,15 @@ func CreateParticipantWithTestData(t *testing.T, count int) common.Participants 
 	return p
 }
 
+func CreateReceiptsWithTestData(t *testing.T, hash common.Hash) common.Receipts {
+	t.Helper()
+
+	receipts := make(common.Receipts)
+	receipts[hash] = CreateReceiptWithTestData(t)
+
+	return receipts
+}
+
 func GetAccountMnemonicsFromFile(filePath string) ([]AccountWithMnemonic, error) {
 	accounts := make([]AccountWithMnemonic, 0)
 

@@ -62,6 +62,7 @@ type lattice interface {
 		height uint64,
 		withInteractions bool,
 	) (*common.Tesseract, error)
+	GetTesseractHeightEntry(address identifiers.Address, height uint64) (common.Hash, error)
 	ValidateTesseract(addr identifiers.Address, ts *common.Tesseract, ics *common.ICSNodeSet, allParticipants bool) error
 	IsInitialTesseract(ts *common.Tesseract, addr identifiers.Address) (bool, error)
 	IsSealValid(ts *common.Tesseract) (bool, error)
@@ -327,8 +328,8 @@ func (s *Syncer) NewSyncRequest(
 		}
 	}
 
-	ts, _ := s.lattice.GetTesseractByHeight(job.address, job.getCurrentHeight(), false)
-	if job.getCurrentHeight() == job.getExpectedHeight() && ts != nil {
+	tsHash, _ := s.lattice.GetTesseractHeightEntry(job.address, job.getCurrentHeight())
+	if job.getCurrentHeight() == job.getExpectedHeight() && tsHash != common.NilHash {
 		s.logger.Debug("Tesseract found, avoiding new sync request")
 
 		return nil
@@ -1821,12 +1822,22 @@ func (s *Syncer) fetchInteractions(
 	common.Interactions,
 	error,
 ) {
+	ixns := new(common.Interactions)
+
+	rawIxns, err := s.db.GetInteractions(tsHash)
+	if err == nil {
+		if err := ixns.FromBytes(rawIxns); err != nil {
+			return nil, err
+		}
+
+		return *ixns, nil
+	}
+
 	blk, err := session.GetBlock(ctx, cid.InteractionsCID(tsHash))
 	if err != nil {
 		return nil, err
 	}
 
-	ixns := new(common.Interactions)
 	err = ixns.FromBytes(blk.GetData())
 
 	return *ixns, err
@@ -1840,12 +1851,22 @@ func (s *Syncer) fetchReceipts(
 	common.Receipts,
 	error,
 ) {
+	receipts := new(common.Receipts)
+
+	rawReceipts, err := s.db.GetReceipts(tsHash)
+	if err == nil {
+		if err := receipts.FromBytes(rawReceipts); err != nil {
+			return nil, err
+		}
+
+		return *receipts, nil
+	}
+
 	blk, err := session.GetBlock(ctx, cid.ReceiptsCID(tsHash))
 	if err != nil {
 		return nil, err
 	}
 
-	receipts := new(common.Receipts)
 	err = receipts.FromBytes(blk.GetData())
 
 	s.logger.Trace("Fetched receipts through agora", "ts-hash", tsHash)
