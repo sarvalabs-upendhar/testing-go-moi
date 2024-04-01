@@ -9,7 +9,7 @@ import (
 	"strconv"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/sarvalabs/battleground/server/warzone/infrastructure"
+	"github.com/sarvalabs/battleground/network/infrastructure"
 
 	"github.com/sarvalabs/go-moi/common/tests"
 )
@@ -141,6 +141,6 @@ func (local *LocalNetwork) StopNode(ctx context.Context, rpcAddr string) error {
 	return nil
 }
 
-func (local *LocalNetwork) UpdateNetwork(ctx context.Context, commitHash string) error {
+func (local *LocalNetwork) UpdateNetwork(ctx context.Context, commitHash string, cleanDB bool, logLevel string) error {
 	return nil
 }
