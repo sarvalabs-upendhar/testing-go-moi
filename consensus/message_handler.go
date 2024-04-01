@@ -72,6 +72,10 @@ func (k *Engine) handleICSRequest(msg *types.ICSMSG) error {
 		if err := k.SendICSResponse(msg.Sender, msg.ClusterID, contextType, statusCode); err != nil {
 			k.logger.Error("Failed to send ics response", "err", err)
 		}
+
+		if statusCode != types.Success {
+			k.transport.CleanDirectPeer(msg.ClusterID, msg.Sender)
+		}
 	}()
 
 	if err := icsReq.FromBytes(msg.Payload); err != nil {

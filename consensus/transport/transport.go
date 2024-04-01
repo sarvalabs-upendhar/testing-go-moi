@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sarvalabs/go-moi/network/p2p"
+
 	"github.com/libp2p/go-libp2p/core/connmgr"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -46,9 +48,9 @@ type ConnectionManager interface {
 	NewStream(ctx context.Context, id peer.ID, protocol protocol.ID, tag string) (p2pnet.Stream, error)
 	GetConnInfo(peerID peer.ID) *connmgr.TagInfo
 	IsConnectionProtected(peerID peer.ID, tag string) bool
-	ProtectConnection(peerID peer.ID, tag string)
-	UnprotectConnection(peerID peer.ID, tag string)
 	ResetStream(stream p2pnet.Stream, tag string) error
+	UnprotectConnection(peerID peer.ID, tag string)
+	ProtectConnection(peerID peer.ID, tag string)
 }
 
 // contextRouters represents a collection of ContextRouter instances.
@@ -122,8 +124,10 @@ type KramaTransport struct {
 	network                        Network
 	connManager                    ConnectionManager
 	msgChan                        chan *types.ICSMSG
-	peerLocks                      *locker.Locker
-	peerset                        *icsPeerSet
+	directPeerLock                 *locker.Locker
+	meshPeerLock                   *locker.Locker
+	directPeerset                  *icsPeerSet
+	meshPeerset                    *icsPeerSet
 	transitPeers                   *transitPeers
 	contextRouters                 *contextRouters
 	requestCache                   *RequestCache
@@ -150,8 +154,10 @@ func NewKramaTransport(
 		network:        network,
 		connManager:    connManager,
 		msgChan:        make(chan *types.ICSMSG),
-		peerLocks:      locker.New(),
-		peerset:        newICSPeerSet(),
+		directPeerLock: locker.New(),
+		meshPeerLock:   locker.New(),
+		directPeerset:  newICSPeerSet(),
+		meshPeerset:    newICSPeerSet(),
 		transitPeers:   newTransitPeers(),
 		contextRouters: newContextRouters(),
 		requestCache:   newRequestCache(),
@@ -160,9 +166,10 @@ func NewKramaTransport(
 	}
 }
 
-// setupStreamHandler configures the stream handler to handle the incoming streams.
-func (kt *KramaTransport) setupStreamHandler() {
-	kt.connManager.SetupStreamHandler(config.ICSProtocolStream, "", kt.handleStream)
+// setupStreamHandlers configures the KramaTransport to handle the incoming streams.
+func (kt *KramaTransport) setupStreamHandlers() {
+	kt.connManager.SetupStreamHandler(config.ICSProtocolDirectStream, "", kt.handleStream)
+	kt.connManager.SetupStreamHandler(config.ICSProtocolMeshStream, p2p.ICSMeshTag, kt.handleMeshStream)
 }
 
 // Messages returns a channel for receiving messages from the KramaTransport.
@@ -170,8 +177,11 @@ func (kt *KramaTransport) Messages() <-chan *types.ICSMSG {
 	return kt.msgChan
 }
 
-// Connect establishes a connection to a peer and registers the peer
-func (kt *KramaTransport) Connect(ctx context.Context, kramaID id.KramaID, clusterID common.ClusterID) error {
+func (kt *KramaTransport) ConnectToDirectPeer(
+	ctx context.Context,
+	kramaID id.KramaID,
+	clusterID common.ClusterID,
+) error {
 	if kramaID == kt.selfID {
 		return nil
 	}
@@ -181,16 +191,70 @@ func (kt *KramaTransport) Connect(ctx context.Context, kramaID id.KramaID, clust
 		return err
 	}
 
-	spanCtx, span := tracing.Span(
+	kt.directPeerLock.Lock(peerID.String())
+	defer func() {
+		if err = kt.directPeerLock.Unlock(peerID.String()); err != nil {
+			kt.logger.Error("Failed to release peer lock", err)
+		}
+	}()
+
+	if kPeer := kt.directPeerset.Peer(kramaID); kPeer != nil {
+		kPeer.clusters.add(clusterID)
+
+		return nil
+	}
+
+	timedCtx, cancel := context.WithTimeout(ctx, ConnectionTimeout)
+	defer cancel()
+
+	err = kt.connManager.ConnectPeerByKramaID(timedCtx, kramaID)
+	if err != nil && !errors.Is(err, common.ErrConnectionExists) {
+		return err
+	}
+
+	stream, err := kt.connManager.NewStream(kt.ctx, peerID, config.ICSProtocolDirectStream, p2p.ICSDirectTag)
+	if err != nil {
+		return err
+	}
+
+	kPeer := newICSPeer(kt.ctx, kramaID, stream, kt.logger)
+
+	kPeer.clusters.add(clusterID)
+
+	if err = kt.directPeerset.Register(kPeer); err != nil {
+		return err
+	}
+
+	go kt.initMessageHandler(kPeer)
+
+	return nil
+}
+
+// ConnectToMeshPeer establishes a connection to a peer and registers the peer
+func (kt *KramaTransport) ConnectToMeshPeer(
+	ctx context.Context,
+	kramaID id.KramaID,
+	clusterID common.ClusterID,
+) error {
+	if kramaID == kt.selfID {
+		return nil
+	}
+
+	peerID, err := kramaID.DecodedPeerID()
+	if err != nil {
+		return err
+	}
+
+	_, span := tracing.Span(
 		ctx,
 		"Krama.KramaTransport",
-		"Connect",
+		"ConnectToMeshPeer",
 		trace.WithAttributes(attribute.String("peerID", peerID.String())),
 	)
 
-	kt.peerLocks.Lock(peerID.String())
+	kt.meshPeerLock.Lock(peerID.String())
 	defer func() {
-		if err = kt.peerLocks.Unlock(peerID.String()); err != nil {
+		if err = kt.meshPeerLock.Unlock(peerID.String()); err != nil {
 			kt.logger.Error("Failed to release peer lock", err)
 		}
 
@@ -202,19 +266,13 @@ func (kt *KramaTransport) Connect(ctx context.Context, kramaID id.KramaID, clust
 		return errors.New("Context router not found")
 	}
 
-	// If the peer is already connected, add the cluster and update context router.
-	if kPeer := kt.peerset.Peer(kramaID); kPeer != nil {
-		if kt.connManager.IsConnectionProtected(peerID, clusterID.String()) {
-			kt.logger.Trace("Connection already tagged", "cluster-id", clusterID)
+	// If the peer is already connected, add the cluster to mesh peer and update connection status for gossip peer.
+	if kPeer := kt.meshPeerset.Peer(kramaID); kPeer != nil {
+		kPeer.clusters.add(clusterID)
 
-			return nil
-		}
+		kt.manageGossipPeerConn(cr, kramaID)
 
-		cr.activePeers.add(kramaID)
-
-		kt.connManager.ProtectConnection(peerID, clusterID.String())
-
-		if err = kt.sendICSGraft(spanCtx, clusterID, kPeer); err != nil {
+		if err = kt.sendICSGraft(clusterID, kPeer); err != nil {
 			return err
 		}
 
@@ -229,42 +287,78 @@ func (kt *KramaTransport) Connect(ctx context.Context, kramaID id.KramaID, clust
 		return err
 	}
 
-	stream, err := kt.connManager.NewStream(kt.ctx, peerID, config.ICSProtocolStream, clusterID.String())
+	stream, err := kt.connManager.NewStream(kt.ctx, peerID, config.ICSProtocolMeshStream, "")
 	if err != nil {
 		return err
 	}
 
-	kPeer := newICSOutboundPeer(kt.ctx, kramaID, stream, kt.logger)
+	kPeer := newICSPeer(kt.ctx, kramaID, stream, kt.logger)
 
-	if err = kt.peerset.Register(kPeer); err != nil {
+	kPeer.clusters.add(clusterID)
+
+	if err = kt.meshPeerset.Register(kPeer); err != nil {
 		return err
 	}
 
 	kt.metrics.captureActivePeers(1)
-	cr.activePeers.add(kramaID)
 
-	if err = kt.sendICSGraft(spanCtx, clusterID, kPeer); err != nil {
+	kt.manageGossipPeerConn(cr, kramaID)
+
+	if err = kt.sendICSGraft(clusterID, kPeer); err != nil {
 		return err
 	}
 
-	go kt.handleDeadPeers(kPeer)
+	cr.sendPendingMessages(clusterID, kramaID)
+
+	go kt.handleDeadMeshPeers(kPeer)
 
 	return nil
 }
 
-// handleDeadPeers handles dead peers, removes them from the routers and unregisters them from the peerset.
-func (kt *KramaTransport) handleDeadPeers(kPeer *icsOutboundPeer) {
+func (kt *KramaTransport) DisconnectDirectPeer(kPeer *icsPeer) {
+	kt.logger.Trace("Disconnecting direct peer", "peer-id", kPeer.networkID)
+
+	kt.directPeerLock.Lock(kPeer.networkID.String())
 	defer func() {
-		kt.logger.Trace("Unregistering dead peers", "peer-id", kPeer.kramaID)
+		if err := kt.directPeerLock.Unlock(kPeer.networkID.String()); err != nil {
+			kt.logger.Error("Failed to release peer lock", "peer id", kPeer.networkID, "err", err)
+		}
+	}()
 
-		kt.removePeerFromRouters(kPeer)
+	kt.connManager.UnprotectConnection(kPeer.networkID, p2p.ICSDirectTag)
 
-		if err := kt.peerset.Unregister(kPeer); err != nil {
-			kt.logger.Error("Failed to unregister peer", "peer-id", kPeer.kramaID, "err", err)
+	if err := kt.directPeerset.Unregister(kPeer); err != nil {
+		kt.logger.Trace("Failed to de register the peer", "error", err, "peer", kPeer.networkID)
+	}
+}
 
+func (kt *KramaTransport) DisconnectMeshPeer(kPeer *icsPeer) {
+	kt.meshPeerLock.Lock(kPeer.networkID.String())
+	defer func() {
+		if err := kt.meshPeerLock.Unlock(kPeer.networkID.String()); err != nil {
+			kt.logger.Error("Failed to release peer lock", err)
+		}
+	}()
+
+	kt.connManager.UnprotectConnection(kPeer.networkID, p2p.ICSMeshTag)
+
+	if err := kt.meshPeerset.Unregister(kPeer); err != nil {
+		kt.logger.Trace("Failed to de register the peer", "error", err, "peer", kPeer.networkID)
+	}
+}
+
+// handleDeadMeshPeers handles dead peers, removes them from the routers and unregisters them from the meshPeerset.
+func (kt *KramaTransport) handleDeadMeshPeers(kPeer *icsPeer) {
+	defer func() {
+		// check if the peer exists
+		if p := kt.meshPeerset.Peer(kPeer.kramaID); p == nil {
 			return
 		}
 
+		kt.logger.Trace("Deregistering dead peer", "peer-id", kPeer.kramaID)
+
+		kt.removePeerFromRouters(kPeer)
+		kt.DisconnectMeshPeer(kPeer)
 		kt.metrics.captureActivePeers(-1)
 	}()
 
@@ -276,50 +370,52 @@ func (kt *KramaTransport) handleDeadPeers(kPeer *icsOutboundPeer) {
 	}
 }
 
-// InitClusterConnection initiates connection to nodes based on the role.
-func (kt *KramaTransport) InitClusterConnection(ctx context.Context, clusterID common.ClusterID, isOperator bool) {
+// InitClusterConnection initiates connection to transit and random peers.
+func (kt *KramaTransport) InitClusterConnection(ctx context.Context, clusterID common.ClusterID) {
 	spanCtx, span := tracing.Span(ctx, "Krama.KramaTransport", "InitClusterConnection")
 	defer span.End()
 
 	cr := kt.contextRouters.get(clusterID)
 
-	// check if the current node is a validator
-	if !isOperator {
-		cr.connectToTransitPeers(spanCtx)
-		cr.connectToConsecutivePeers(spanCtx)
-
-		return
-	}
-
-	cr.connectToICSPeers(spanCtx)
+	go cr.connectToGossipPeers(spanCtx)
 }
 
-// handleStream handles the incoming ics streams and registers the clusters
 func (kt *KramaTransport) handleStream(stream p2pnet.Stream) {
 	kt.logger.Trace(
-		"Handling new stream",
+		"Handling stream",
 		"protocol",
 		stream.Protocol(),
 		"peer-ID",
 		stream.Conn().RemotePeer(),
 	)
 
-	kPeer := newICSInboundPeer(stream)
+	kt.connManager.ProtectConnection(stream.Conn().RemotePeer(), p2p.ICSDirectTag)
 
-	go func() {
-		for {
-			select {
-			case <-kt.ctx.Done():
-				return
-			default:
-				if err := kt.handlePeerMessage(kPeer); err != nil {
-					kt.logger.Error("Error handling peer message", "peer-id", kPeer.networkID, "err", err)
+	kPeer := newICSPeer(kt.ctx, "", stream, kt.logger)
 
-					return
-				}
-			}
-		}
-	}()
+	go func(peer *icsPeer) {
+		defer func() {
+			kt.DisconnectDirectPeer(peer)
+		}()
+
+		kt.initMessageHandler(peer)
+	}(kPeer)
+}
+
+func (kt *KramaTransport) handleMeshStream(stream p2pnet.Stream) {
+	kt.logger.Trace(
+		"Handling stream",
+		"protocol",
+		stream.Protocol(),
+		"peer-ID",
+		stream.Conn().RemotePeer(),
+	)
+
+	kPeer := newICSPeer(kt.ctx, "", stream, kt.logger)
+
+	go func(peer *icsPeer) {
+		kt.initMessageHandler(kPeer)
+	}(kPeer)
 }
 
 // getTransitPeers returns the transit peers associated with the given cluster ID.
@@ -375,10 +471,9 @@ func (kt *KramaTransport) DeregisterContextRouter(clusterID common.ClusterID) {
 		return
 	}
 
-	for _, kramaID := range contextRouter.activePeers.list() {
-		peerID, _ := kramaID.DecodedPeerID()
-		kt.connManager.UnprotectConnection(peerID, clusterID.String())
-	}
+	kt.CleanDirectPeer(clusterID, kt.directPeerset.List()...)
+
+	kt.cleanMeshPeers(contextRouter)
 
 	contextRouter.close()
 	kt.contextRouters.remove(clusterID)
@@ -387,22 +482,61 @@ func (kt *KramaTransport) DeregisterContextRouter(clusterID common.ClusterID) {
 	kt.logger.Trace("Context router de-registered", "cluster-id", clusterID)
 }
 
+func (kt *KramaTransport) CleanDirectPeer(clusterID common.ClusterID, peers ...id.KramaID) {
+	for _, peerID := range peers {
+		kPeer := kt.directPeerset.Peer(peerID)
+		if !kPeer.clusters.has(clusterID) {
+			return
+		}
+
+		kPeer.clusters.remove(clusterID)
+
+		if kPeer.clusters.len() == 0 {
+			kt.DisconnectDirectPeer(kPeer)
+		}
+	}
+}
+
+func (kt *KramaTransport) cleanMeshPeers(cr *ContextRouter) {
+	for kramaID := range cr.gossipPeers.entries() {
+		kPeer := kt.meshPeerset.Peer(kramaID)
+		if kPeer == nil {
+			continue
+		}
+
+		kPeer.clusters.remove(cr.clusterID)
+
+		if kPeer.clusters.len() == 0 {
+			kt.DisconnectMeshPeer(kPeer)
+		}
+	}
+}
+
+func (kt *KramaTransport) getPeersetByMsgType(msgType message.MsgType) *icsPeerSet {
+	if msgType == message.ICSGRAFT || msgType == message.ICSHAVE || msgType == message.ICSWANT {
+		return kt.meshPeerset
+	}
+
+	return kt.directPeerset
+}
+
 // SendMessage sends a message to a specific peer identified by peerID.
 func (kt *KramaTransport) SendMessage(
-	ctx context.Context,
 	peerID id.KramaID,
 	sender id.KramaID,
 	clusterID common.ClusterID,
 	msgType message.MsgType,
 	rawMsg types.ICSPayload,
 ) error {
-	kPeer := kt.peerset.Peer(peerID)
-	if kPeer == nil {
-		return errNotRegistered
-	}
-
 	if peerID == sender {
 		return nil
+	}
+
+	peerset := kt.getPeersetByMsgType(msgType)
+
+	kPeer := peerset.Peer(peerID)
+	if kPeer == nil {
+		return errNotRegistered
 	}
 
 	if err := kPeer.send(sender, clusterID, msgType, rawMsg); err != nil {
@@ -449,31 +583,36 @@ func (kt *KramaTransport) BroadcastMessage(
 	}
 
 	for _, peerID := range cr.getBroadcastPeers(msg.MsgType) {
-		// if operator avoid, broadcasting the message to the peer again,
-		// since every peer sends the vote message to the operator directly
-		// this assumption has implications
-		if (peerID == cr.operator) && msg.Sender != cr.selfID {
+		// Prevent forwarding the message to its original sender or the peer who forwarded it.
+		if msg.Sender == peerID || msg.ReceivedFrom == peerID {
 			continue
 		}
 
-		if msg.ReceivedFrom == peerID {
-			continue
+		if msg.MsgType == message.ICSHAVE {
+			gossipPeer := cr.gossipPeers.get(peerID)
+			if gossipPeer == nil {
+				continue
+			}
+
+			if !gossipPeer.isConnected() {
+				if icsHave, ok := msg.DecodedMsg.(*types.ICSHave); ok {
+					gossipPeer.pendingVotes.add(icsHave.Votes...)
+				}
+
+				continue
+			}
 		}
 
-		kPeer := kt.peerset.Peer(peerID)
+		peerset := kt.getPeersetByMsgType(msg.MsgType)
+
+		kPeer := peerset.Peer(peerID)
 		if kPeer == nil {
 			kt.logger.Error("Failed to send msg", "error", errNotRegistered)
 
 			continue
 		}
 
-		currentTime := time.Now()
-
 		kPeer.msgChan <- rawMsg
-
-		if time.Since(currentTime).Milliseconds() >= 1 {
-			kt.logger.Trace(":Time taken to forward message write lock:", time.Since(currentTime), kPeer.kramaID, msg.ClusterID)
-		}
 	}
 }
 
@@ -500,16 +639,16 @@ func (kt *KramaTransport) GetRoundVoteSetBits(
 	return nil, errors.New("context router not found")
 }
 
-// removePeerFromRouters removes a given icsOutboundPeer from the active peers list of all contextRouters.
-func (kt *KramaTransport) removePeerFromRouters(peer *icsOutboundPeer) {
+// removePeerFromRouters removes a given icsPeer from the active peers entries of all contextRouters.
+func (kt *KramaTransport) removePeerFromRouters(peer *icsPeer) {
 	for _, cr := range kt.contextRouters.list() {
-		cr.activePeers.remove(peer.kramaID)
+		cr.gossipPeers.remove(peer.kramaID)
 	}
 }
 
 // sendICSGraft sends an ICSGRAFT message to a specific peer.
-func (kt *KramaTransport) sendICSGraft(ctx context.Context, clusterID common.ClusterID, peer *icsOutboundPeer) error {
-	err := kt.SendMessage(ctx, peer.kramaID, kt.selfID, clusterID, message.ICSGRAFT, types.NewICSGraft([]byte("graft")))
+func (kt *KramaTransport) sendICSGraft(clusterID common.ClusterID, peer *icsPeer) error {
+	err := kt.SendMessage(peer.kramaID, kt.selfID, clusterID, message.ICSGRAFT, types.NewICSGraft([]byte("graft")))
 	if err != nil {
 		return err
 	}
@@ -517,34 +656,77 @@ func (kt *KramaTransport) sendICSGraft(ctx context.Context, clusterID common.Clu
 	return nil
 }
 
-// handleICSGraft processes an incoming ICSGRAFT message.
-func (kt *KramaTransport) handleICSGraft(peer *icsInboundPeer, msg *types.ICSMSG) {
-	if msg.Sender != "" {
-		peer.KramaID = msg.Sender
+// manageGossipPeerConn manages the connection status of a gossip peer identified by peerID.
+func (kt *KramaTransport) manageGossipPeerConn(cr *ContextRouter, peerID id.KramaID) {
+	gossipPeer := cr.gossipPeers.get(peerID)
+	if gossipPeer == nil {
+		cr.gossipPeers.add(peerID, true)
+
+		return
 	}
 
-	if !kt.contextRouters.has(msg.ClusterID) {
+	gossipPeer.setConnectionStatus(true)
+}
+
+// handleICSGraft processes an incoming ICSGRAFT message.
+func (kt *KramaTransport) handleICSGraft(kPeer *icsPeer, msg *types.ICSMSG) {
+	if msg.Sender != "" && kPeer.kramaID == "" {
+		kPeer.kramaID = msg.Sender
+	}
+
+	cr := kt.contextRouters.get(msg.ClusterID)
+	if cr == nil {
 		kt.transitPeers.add(msg.ClusterID, msg.Sender)
 
 		return
 	}
 
-	if kPeer := kt.peerset.Peer(msg.Sender); kPeer != nil {
-		if cr := kt.contextRouters.get(msg.ClusterID); cr != nil {
-			cr.activePeers.add(kPeer.kramaID)
-		}
+	if kPeer := kt.meshPeerset.Peer(msg.Sender); kPeer != nil {
+		kt.manageGossipPeerConn(cr, kPeer.kramaID)
 
 		return
 	}
 
-	err := kt.Connect(kt.ctx, msg.Sender, msg.ClusterID)
+	err := kt.ConnectToMeshPeer(kt.ctx, msg.Sender, msg.ClusterID)
 	if err != nil {
 		kt.logger.Error("Failed to connect peer", "krama-id", msg.Sender, "err", err)
 	}
 }
 
+func (kt *KramaTransport) handleICSRequest(kPeer *icsPeer, msg *types.ICSMSG) {
+	if msg.Sender != "" && kPeer.kramaID == "" {
+		kPeer.kramaID = msg.Sender
+	}
+
+	kPeer.clusters.add(msg.ClusterID)
+
+	if p := kt.directPeerset.Peer(kPeer.kramaID); p == nil {
+		// we should reset isClosed, as we use existing icsPeer if stream is still active
+		kPeer.isClosed = false
+
+		if err := kt.directPeerset.Register(kPeer); err != nil {
+			kt.logger.Error("Failed to register peer", "err", err)
+		}
+	}
+}
+
+func (kt *KramaTransport) initMessageHandler(peer *icsPeer) {
+	for {
+		select {
+		case <-kt.ctx.Done():
+			return
+		default:
+			if err := kt.handlePeerMessage(peer); err != nil {
+				kt.logger.Trace("Error handling peer message", "peer-id", peer.networkID, "err", err)
+
+				return
+			}
+		}
+	}
+}
+
 // handlePeerMessage decodes and processes the incoming ics message.
-func (kt *KramaTransport) handlePeerMessage(peer *icsInboundPeer) error {
+func (kt *KramaTransport) handlePeerMessage(peer *icsPeer) error {
 	msg, err := peer.decodePeerMessage()
 	if err != nil {
 		return err
@@ -553,7 +735,10 @@ func (kt *KramaTransport) handlePeerMessage(peer *icsInboundPeer) error {
 	switch msg.MsgType {
 	case message.ICSGRAFT:
 		go kt.handleICSGraft(peer, msg)
+
 	case message.ICSREQUEST:
+		kt.handleICSRequest(peer, msg)
+
 		fallthrough
 	case message.ICSRESPONSE:
 		fallthrough
@@ -608,6 +793,7 @@ func (kt *KramaTransport) cleanup(cleanupInteraval time.Duration) {
 	}
 }
 
+// StartGossip initiates the periodic message broadcast routine.
 func (kt *KramaTransport) StartGossip(clusterID common.ClusterID) {
 	cr := kt.contextRouters.get(clusterID)
 	if cr == nil {
@@ -619,7 +805,7 @@ func (kt *KramaTransport) StartGossip(clusterID common.ClusterID) {
 
 // Start initializes the KramaTransport.
 func (kt *KramaTransport) Start() {
-	kt.setupStreamHandler()
+	kt.setupStreamHandlers()
 	go kt.cleanup(ClusterCleanupInterval)
 }
 

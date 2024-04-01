@@ -49,9 +49,6 @@ func (k *Engine) sendICSRequest(
 		requestedNodes = make(map[id.KramaID]struct{})
 	)
 
-	spanCtx, span := tracing.Span(ctx, "Krama.KramaEngine", "sendICSRequest")
-	defer span.End()
-
 	defer k.metrics.captureRequestTurnaroundTime(requestTS)
 
 	for icsSetType, ns := range nodeset.Nodes {
@@ -86,9 +83,18 @@ func (k *Engine) sendICSRequest(
 
 			go func(kramaID id.KramaID, icsSetType int) {
 				defer waitGroup.Done()
+
 				k.logger.Trace("Sending ICS Request", "cluster-id", canonicalReq.ClusterID, "to", kramaID)
+
+				if err = k.transport.ConnectToDirectPeer(ctx, kramaID, canonicalReq.ClusterID); err != nil {
+					failedReqCount.Add(1)
+
+					k.logger.Error("Failed to connect", "krama-id", kramaID, "err", err)
+
+					return
+				}
+
 				err = k.transport.SendMessage(
-					spanCtx,
 					kramaID,
 					k.selfID,
 					canonicalReq.ClusterID,
@@ -120,7 +126,6 @@ func (k *Engine) SendICSResponse(
 	k.logger.Trace("Sending ICS Response", "cluster-id", clusterID, "to", kramaID, "status-code", statusCode)
 
 	if err := k.transport.SendMessage(
-		k.ctx,
 		kramaID,
 		k.selfID,
 		clusterID,
