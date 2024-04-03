@@ -421,7 +421,9 @@ func (cm *ConnectionManager) NewStream(
 	}
 
 	// Protect the peer connection
-	cm.ProtectConnection(stream.Conn().RemotePeer(), tag)
+	if tag != "" {
+		cm.ProtectConnection(stream.Conn().RemotePeer(), tag)
+	}
 
 	return stream, nil
 }

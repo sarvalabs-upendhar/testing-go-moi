@@ -48,9 +48,7 @@ type ConnectionManager interface {
 	NewStream(ctx context.Context, id peer.ID, protocol protocol.ID, tag string) (p2pnet.Stream, error)
 	GetConnInfo(peerID peer.ID) *connmgr.TagInfo
 	IsConnectionProtected(peerID peer.ID, tag string) bool
-	ResetStream(stream p2pnet.Stream, tag string) error
-	UnprotectConnection(peerID peer.ID, tag string)
-	ProtectConnection(peerID peer.ID, tag string)
+	CloseStream(stream p2pnet.Stream, tag string) error
 }
 
 // contextRouters represents a collection of ContextRouter instances.
@@ -168,7 +166,7 @@ func NewKramaTransport(
 
 // setupStreamHandlers configures the KramaTransport to handle the incoming streams.
 func (kt *KramaTransport) setupStreamHandlers() {
-	kt.connManager.SetupStreamHandler(config.ICSProtocolDirectStream, "", kt.handleStream)
+	kt.connManager.SetupStreamHandler(config.ICSProtocolDirectStream, p2p.ICSDirectTag, kt.handleStream)
 	kt.connManager.SetupStreamHandler(config.ICSProtocolMeshStream, p2p.ICSMeshTag, kt.handleMeshStream)
 }
 
@@ -225,7 +223,11 @@ func (kt *KramaTransport) ConnectToDirectPeer(
 		return err
 	}
 
-	go kt.initMessageHandler(kPeer)
+	go func(peer *icsPeer) {
+		defer kt.DisconnectDirectPeer(peer)
+
+		kt.initMessageHandler(peer)
+	}(kPeer)
 
 	return nil
 }
@@ -287,7 +289,7 @@ func (kt *KramaTransport) ConnectToMeshPeer(
 		return err
 	}
 
-	stream, err := kt.connManager.NewStream(kt.ctx, peerID, config.ICSProtocolMeshStream, "")
+	stream, err := kt.connManager.NewStream(kt.ctx, peerID, config.ICSProtocolMeshStream, p2p.ICSMeshTag)
 	if err != nil {
 		return err
 	}
@@ -316,6 +318,11 @@ func (kt *KramaTransport) ConnectToMeshPeer(
 }
 
 func (kt *KramaTransport) DisconnectDirectPeer(kPeer *icsPeer) {
+	// check if the peer exists
+	if p := kt.directPeerset.Peer(kPeer.kramaID); p == nil {
+		return
+	}
+
 	kt.logger.Trace("Disconnecting direct peer", "peer-id", kPeer.networkID)
 
 	kt.directPeerLock.Lock(kPeer.networkID.String())
@@ -325,11 +332,11 @@ func (kt *KramaTransport) DisconnectDirectPeer(kPeer *icsPeer) {
 		}
 	}()
 
-	kt.connManager.UnprotectConnection(kPeer.networkID, p2p.ICSDirectTag)
-
 	if err := kt.directPeerset.Unregister(kPeer); err != nil {
 		kt.logger.Trace("Failed to de register the peer", "error", err, "peer", kPeer.networkID)
 	}
+
+	_ = kt.connManager.CloseStream(kPeer.stream, p2p.ICSDirectTag)
 }
 
 func (kt *KramaTransport) DisconnectMeshPeer(kPeer *icsPeer) {
@@ -340,11 +347,11 @@ func (kt *KramaTransport) DisconnectMeshPeer(kPeer *icsPeer) {
 		}
 	}()
 
-	kt.connManager.UnprotectConnection(kPeer.networkID, p2p.ICSMeshTag)
-
 	if err := kt.meshPeerset.Unregister(kPeer); err != nil {
 		kt.logger.Trace("Failed to de register the peer", "error", err, "peer", kPeer.networkID)
 	}
+
+	_ = kt.connManager.CloseStream(kPeer.stream, p2p.ICSMeshTag)
 }
 
 // handleDeadMeshPeers handles dead peers, removes them from the routers and unregisters them from the meshPeerset.
@@ -389,14 +396,10 @@ func (kt *KramaTransport) handleStream(stream p2pnet.Stream) {
 		stream.Conn().RemotePeer(),
 	)
 
-	kt.connManager.ProtectConnection(stream.Conn().RemotePeer(), p2p.ICSDirectTag)
-
 	kPeer := newICSPeer(kt.ctx, "", stream, kt.logger)
 
 	go func(peer *icsPeer) {
-		defer func() {
-			kt.DisconnectDirectPeer(peer)
-		}()
+		defer kt.DisconnectDirectPeer(peer)
 
 		kt.initMessageHandler(peer)
 	}(kPeer)
@@ -414,6 +417,10 @@ func (kt *KramaTransport) handleMeshStream(stream p2pnet.Stream) {
 	kPeer := newICSPeer(kt.ctx, "", stream, kt.logger)
 
 	go func(peer *icsPeer) {
+		defer func() {
+			_ = kt.connManager.CloseStream(peer.stream, p2p.ICSMeshTag)
+		}()
+
 		kt.initMessageHandler(kPeer)
 	}(kPeer)
 }
