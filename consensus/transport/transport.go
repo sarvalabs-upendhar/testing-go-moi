@@ -180,6 +180,9 @@ func (kt *KramaTransport) ConnectToDirectPeer(
 	kramaID id.KramaID,
 	clusterID common.ClusterID,
 ) error {
+	_, span := tracing.Span(ctx, "Krama.KramaTransport", "ConnectToDirectPeer")
+	defer span.End()
+
 	if kramaID == kt.selfID {
 		return nil
 	}
