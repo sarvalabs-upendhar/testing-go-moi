@@ -492,8 +492,8 @@ func (kt *KramaTransport) DeregisterContextRouter(clusterID common.ClusterID) {
 func (kt *KramaTransport) CleanDirectPeer(clusterID common.ClusterID, peers ...id.KramaID) {
 	for _, peerID := range peers {
 		kPeer := kt.directPeerset.Peer(peerID)
-		if !kPeer.clusters.has(clusterID) {
-			return
+		if kPeer == nil || !kPeer.clusters.has(clusterID) {
+			continue
 		}
 
 		kPeer.clusters.remove(clusterID)
