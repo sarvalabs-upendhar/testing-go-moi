@@ -1093,7 +1093,7 @@ func TestStreamHandler_Valid_HandshakeMsg(t *testing.T) {
 	require.NoError(t, err)
 
 	// get the message from stream
-	msg := readMessageFromBuffer(t, peer)
+	msg := readMessageFromBuffer(t, peer, false)
 
 	// validate handshake message
 	validateHandShakeMsg(t, servers[1], msg, nil)
@@ -1135,10 +1135,9 @@ func TestStreamHandler_Invalid_HandshakeMsgPayload(t *testing.T) {
 	require.NoError(t, err)
 
 	// get the message from stream
-	msg := readMessageFromBuffer(t, peer)
+	msg := readMessageFromBuffer(t, peer, true)
 
-	// validate handshake message
-	validateHandShakeMsg(t, servers[1], msg, errors.New("wrong message type"))
+	require.Nil(t, msg)
 
 	// make sure server-0 not registered in server-1
 	checkForPeerRegistration(t, servers[1], servers[0], false)
@@ -1174,10 +1173,9 @@ func TestStreamHandlerFunc_Invalid_MessagePayload(t *testing.T) {
 	sendMessage(t, peer, invalidMessagePayload)
 
 	// get the message from stream
-	msg := readMessageFromBuffer(t, peer)
+	msg := readMessageFromBuffer(t, peer, true)
 
-	// validate handshake message
-	validateHandShakeMsg(t, servers[1], msg, errors.New("invalid message"))
+	require.Nil(t, msg)
 
 	// make sure server-0 not registered in server-1
 	checkForPeerRegistration(t, servers[1], servers[0], false)
@@ -1217,9 +1215,9 @@ func TestStreamHandler_Already_RegisteredPeer(t *testing.T) {
 	require.NoError(t, err)
 
 	// get the message from stream
-	msg := readMessageFromBuffer(t, peer)
+	msg := readMessageFromBuffer(t, peer, true)
 
-	validateHandShakeMsg(t, servers[1], msg, errAlreadyRegistered)
+	require.Nil(t, msg)
 }
 
 func TestStreamHandler_Connection_Reset(t *testing.T) {

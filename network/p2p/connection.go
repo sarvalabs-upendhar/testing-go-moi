@@ -506,22 +506,22 @@ func (cm *ConnectionManager) streamHandler(stream network.Stream) {
 	kPeer := newPeer(stream, kramaID, rtt, cm.server.logger)
 
 	if err := kPeer.handleHandshakeMessage(); err != nil {
-		if err := kPeer.sendHandshakeErrorResp(cm.server.id, err); err != nil {
-			cm.server.logger.Error("Handle handshake", "err", err)
-		}
+		cm.server.logger.Error("Failed to handle handshake msg", "err", err)
 
-		_ = cm.CloseStream(stream, MOIStreamTag)
+		if err = cm.ResetStream(stream, MOIStreamTag); err != nil {
+			cm.server.logger.Error("Failed to reset stream", "err", err)
+		}
 
 		return
 	}
 
 	// Register the kPeer to the handler working set
 	if err := cm.server.Peers.Register(kPeer); err != nil {
-		if err := kPeer.sendHandshakeErrorResp(cm.server.id, err); err != nil {
-			cm.server.logger.Error("Failed to send register error response", kPeer.networkID)
-		}
+		cm.server.logger.Error("Failed to register peer", "err", err)
 
-		_ = cm.CloseStream(stream, MOIStreamTag)
+		if err = cm.ResetStream(stream, MOIStreamTag); err != nil {
+			cm.server.logger.Error("Failed to reset stream", "err", err)
+		}
 
 		return
 	}
