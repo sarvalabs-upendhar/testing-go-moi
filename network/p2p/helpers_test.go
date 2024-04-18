@@ -503,11 +503,18 @@ func getHandShakeMsg(t *testing.T, msg *networkmsg.Message) networkmsg.Handshake
 	return handShake
 }
 
-func readMessageFromBuffer(t *testing.T, p *Peer) *networkmsg.Message {
+func readMessageFromBuffer(t *testing.T, p *Peer, shouldReset bool) *networkmsg.Message {
 	t.Helper()
 
 	reader := msgio.NewReader(p.rw.Reader)
 	buffer, err := reader.ReadMsg()
+
+	if shouldReset {
+		require.Error(t, err)
+
+		return nil
+	}
+
 	require.NoError(t, err)
 
 	message := new(networkmsg.Message)
@@ -675,7 +682,7 @@ func registerMessageHandler(
 	s.host.SetStreamHandler(pID, func(stream network.Stream) {
 		kPeer := newPeer(stream, destServer.id, 50, s.logger)
 
-		msgReceived := readMessageFromBuffer(t, kPeer)
+		msgReceived := readMessageFromBuffer(t, kPeer, false)
 
 		validateMessage(t, destServer.id, msgReceived)
 		validatePayload(t, handshakeMessage, msgReceived)

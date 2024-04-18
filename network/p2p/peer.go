@@ -137,14 +137,6 @@ func (p *Peer) InitHandshake(s *Server) error {
 	return nil
 }
 
-func (p *Peer) sendHandshakeErrorResp(id kramaid.KramaID, err error) error {
-	msg := &networkmsg.HandshakeMSG{
-		Error: err.Error(),
-	}
-
-	return p.Send(id, networkmsg.HANDSHAKEMSG, msg)
-}
-
 // SendIXs ships the ixn to the peer and  marks as know
 func (p *Peer) SendIXs(id kramaid.KramaID, ixs common.Interactions) error {
 	// Mark the given Interactions as 'known'

@@ -189,6 +189,14 @@ func (kt *KramaTransport) ConnectToDirectPeer(
 		return err
 	}
 
+	_, span := tracing.Span(
+		ctx,
+		"Krama.KramaTransport",
+		"ConnectToDirectPeer",
+		trace.WithAttributes(attribute.String("peerID", peerID.String())),
+	)
+	defer span.End()
+
 	kt.directPeerLock.Lock(peerID.String())
 	defer func() {
 		if err = kt.directPeerLock.Unlock(peerID.String()); err != nil {
@@ -492,8 +500,8 @@ func (kt *KramaTransport) DeregisterContextRouter(clusterID common.ClusterID) {
 func (kt *KramaTransport) CleanDirectPeer(clusterID common.ClusterID, peers ...id.KramaID) {
 	for _, peerID := range peers {
 		kPeer := kt.directPeerset.Peer(peerID)
-		if !kPeer.clusters.has(clusterID) {
-			return
+		if kPeer == nil || !kPeer.clusters.has(clusterID) {
+			continue
 		}
 
 		kPeer.clusters.remove(clusterID)
