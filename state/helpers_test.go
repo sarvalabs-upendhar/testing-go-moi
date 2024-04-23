@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/sarvalabs/go-moi/common/config"
+
 	"github.com/decred/dcrd/crypto/blake256"
 	"github.com/hashicorp/go-hclog"
 	iradix "github.com/hashicorp/go-immutable-radix"
@@ -818,6 +820,9 @@ func createTestStateManager(t *testing.T, params *createStateManagerParams) *Sta
 		mockCache(t),
 		NilMetrics(),
 		mockSenatus(t),
+		&config.StateConfig{
+			TreeCacheSize: 22,
+		},
 	)
 	require.NoError(t, err)
 
@@ -887,7 +892,7 @@ func createTestStateObject(t *testing.T, params *createStateObjectParams) *Objec
 		data = params.account
 	}
 
-	so := NewStateObject(addr, cache, mDB, *data)
+	so := NewStateObject(addr, cache, tests.NewTestTreeCache(), mDB, *data, NilMetrics())
 	so.metaStorageTree = mockMerkleTreeWithDB()
 	so.logicTree = mockMerkleTreeWithDB()
 
@@ -1424,7 +1429,8 @@ func createTestKramaHashTree(
 ) (*tree.KramaHashTree, common.Hash) {
 	t.Helper()
 
-	kt, err := tree.NewKramaHashTree(address, common.NilHash, db, blake256.New(), prefix)
+	kt, err := tree.NewKramaHashTree(address, common.NilHash, db, blake256.New(),
+		prefix, tests.NewTestTreeCache(), tree.NilMetrics())
 	require.NoError(t, err)
 
 	for i := 0; i < len(keys); i++ {

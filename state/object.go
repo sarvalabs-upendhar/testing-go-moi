@@ -4,6 +4,8 @@ import (
 	"log"
 	"math/big"
 
+	"github.com/VictoriaMetrics/fastcache"
+
 	"github.com/decred/dcrd/crypto/blake256"
 	iradix "github.com/hashicorp/go-immutable-radix"
 	lru "github.com/hashicorp/golang-lru"
@@ -21,7 +23,8 @@ import (
 // MetaStorageTree: Keeps track of the root of the storage tree for each logic.
 
 type Object struct {
-	cache *lru.Cache
+	cache     *lru.Cache
+	treeCache *fastcache.Cache
 
 	address identifiers.Address
 	accType common.AccountType
@@ -44,23 +47,27 @@ type Object struct {
 	storageTreeTxns map[identifiers.LogicID]*iradix.Txn
 	logicTreeTxn    *iradix.Txn
 
-	files map[common.Hash][]byte
+	files   map[common.Hash][]byte
+	metrics *Metrics
 }
 
 func NewStateObject(
 	id identifiers.Address,
 	cache *lru.Cache,
+	treeCache *fastcache.Cache,
 	db Store,
 	account common.Account,
+	metrics *Metrics,
 ) *Object {
 	return &Object{
-		accType:  account.AccType,
-		cache:    cache,
-		db:       db,
-		data:     account,
-		address:  id,
-		balance:  nil,
-		registry: nil,
+		accType:   account.AccType,
+		cache:     cache,
+		treeCache: treeCache,
+		db:        db,
+		data:      account,
+		address:   id,
+		balance:   nil,
+		registry:  nil,
 		approvals: &ApprovalObject{
 			Approvals: make(map[identifiers.Address]common.AssetMap),
 			PrvHash:   common.NilHash,
@@ -70,6 +77,7 @@ func NewStateObject(
 		receipts:        make(common.Receipts),
 		storageTreeTxns: make(map[identifiers.LogicID]*iradix.Txn),
 		storageTrees:    make(map[identifiers.LogicID]tree.MerkleTree),
+		metrics:         metrics,
 	}
 }
 
@@ -230,7 +238,7 @@ func (object *Object) Balance() (*BalanceObject, error) {
 }
 
 func (object *Object) Copy() *Object {
-	sObj := NewStateObject(object.address, object.cache, object.db, object.data)
+	sObj := NewStateObject(object.address, object.cache, object.treeCache, object.db, object.data, object.metrics)
 
 	sObj.dirtyEntries = object.dirtyEntries.Copy()
 
@@ -820,6 +828,8 @@ func (object *Object) GetStorageTree(logicID identifiers.LogicID) (tree.MerkleTr
 		common.BytesToHash(root),
 		object.db, blake256.New(),
 		storage.Storage,
+		object.treeCache,
+		object.metrics.TreeMetrics,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to initiate logic storage tree")
@@ -877,6 +887,8 @@ func (object *Object) getMetaStorageTree() (tree.MerkleTree, error) {
 		object.db,
 		blake256.New(),
 		storage.Storage,
+		object.treeCache,
+		object.metrics.TreeMetrics,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to initiate storage tree")
@@ -898,6 +910,8 @@ func (object *Object) createStorageTreeForLogic(logicID identifiers.LogicID) (tr
 		object.db,
 		blake256.New(),
 		storage.Storage,
+		object.treeCache,
+		object.metrics.TreeMetrics,
 	)
 	if err != nil {
 		return nil, err
@@ -928,6 +942,8 @@ func (object *Object) getLogicTree() (tree.MerkleTree, error) {
 		object.db,
 		blake256.New(),
 		storage.Logic,
+		object.treeCache,
+		object.metrics.TreeMetrics,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to initiate logic tree")

@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/VictoriaMetrics/fastcache"
+
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -1107,4 +1109,8 @@ func WaitForResponse(t *testing.T, respChan chan Result, data interface{}) inter
 type Result struct {
 	Data interface{}
 	Err  error
+}
+
+func NewTestTreeCache() *fastcache.Cache {
+	return fastcache.New(200)
 }

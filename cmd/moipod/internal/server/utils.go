@@ -371,6 +371,12 @@ func (p *Params) getJSONRPCConfig() *config.JSONRPCConfig {
 	}
 }
 
+func (p *Params) getStateConfig() *config.StateConfig {
+	return &config.StateConfig{
+		TreeCacheSize: p.rawCfg.State.TreeCacheSize,
+	}
+}
+
 // processRawParams converts all raw types to custom types
 func (p *Params) processRawParams() error {
 	var err error
@@ -419,6 +425,7 @@ func (p *Params) generateNodeConfig(dataDir string) *config.Config {
 		LogFilePath:    p.rawCfg.LogFilePath,
 		JSONRPC:        p.getJSONRPCConfig(),
 		NetworkID:      p.rawCfg.NetworkID,
+		State:          p.getStateConfig(),
 	}
 }
 

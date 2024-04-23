@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-engineio"
-	"github.com/sarvalabs/go-moi-identifiers"
+	engineio "github.com/sarvalabs/go-moi-engineio"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"

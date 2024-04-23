@@ -3,6 +3,7 @@ module github.com/sarvalabs/go-moi
 go 1.20
 
 require (
+	github.com/VictoriaMetrics/fastcache v1.12.2
 	github.com/btcsuite/btcd v0.23.0
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
 	github.com/btcsuite/btcd/btcutil v1.1.3

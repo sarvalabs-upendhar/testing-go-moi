@@ -551,7 +551,8 @@ func (sm *MockStateManager) CreateDirtyObject(addr identifiers.Address, accType 
 		return obj
 	}
 
-	obj := state.NewStateObject(addr, mockCache(), mockDB(), common.Account{AccType: accType})
+	obj := state.NewStateObject(addr, mockCache(), nil, mockDB(),
+		common.Account{AccType: accType}, state.NilMetrics())
 	sm.dirtyObjects[addr] = obj.Copy()
 
 	return sm.dirtyObjects[addr]

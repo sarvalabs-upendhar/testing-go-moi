@@ -7,6 +7,10 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/sarvalabs/go-moi/common/config"
+
+	"github.com/VictoriaMetrics/fastcache"
+
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
@@ -54,8 +58,10 @@ type senatus interface {
 }
 
 type StateManager struct {
-	logger hclog.Logger
-	cache  *lru.Cache
+	cfg       *config.StateConfig
+	logger    hclog.Logger
+	cache     *lru.Cache
+	treeCache *fastcache.Cache
 
 	db Store
 
@@ -74,8 +80,10 @@ func NewStateManager(
 	cache *lru.Cache,
 	metrics *Metrics,
 	senatus senatus,
+	cfg *config.StateConfig,
 ) (*StateManager, error) {
 	sm := &StateManager{
+		cfg:     cfg,
 		cache:   cache,
 		db:      db,
 		senatus: senatus,
@@ -84,17 +92,19 @@ func NewStateManager(
 			MaxConnsPerHost: 1000,
 		}},
 		dirtyObjects: make(map[identifiers.Address]*Object),
-		logger:       logger.Named("State-Manager"),
-		metrics:      metrics,
+		treeCache:    fastcache.New(int(cfg.TreeCacheSize)),
+
+		logger:  logger.Named("State-Manager"),
+		metrics: metrics,
 	}
 
-	sm.metrics.initMetrics()
+	sm.metrics.InitMetrics()
 
 	return sm, nil
 }
 
 func (sm *StateManager) CreateStateObject(addr identifiers.Address, accType common.AccountType) *Object {
-	stateObject := NewStateObject(addr, sm.cache, sm.db, common.Account{AccType: accType})
+	stateObject := NewStateObject(addr, sm.cache, sm.treeCache, sm.db, common.Account{AccType: accType}, sm.metrics)
 
 	return stateObject
 }
@@ -104,7 +114,7 @@ func (sm *StateManager) cleanupDirtyObject(addr identifiers.Address) {
 	defer sm.dirtyObjectsLock.Unlock()
 
 	delete(sm.dirtyObjects, addr)
-	sm.metrics.captureActiveStateObjects(float64(len(sm.dirtyObjects)))
+	sm.metrics.CaptureActiveStateObjects(float64(len(sm.dirtyObjects)))
 }
 
 func (sm *StateManager) CreateDirtyObject(addr identifiers.Address, accType common.AccountType) *Object {
@@ -114,7 +124,7 @@ func (sm *StateManager) CreateDirtyObject(addr identifiers.Address, accType comm
 	obj := sm.CreateStateObject(addr, accType)
 
 	sm.dirtyObjects[addr] = obj.Copy()
-	sm.metrics.captureActiveStateObjects(float64(len(sm.dirtyObjects)))
+	sm.metrics.CaptureActiveStateObjects(float64(len(sm.dirtyObjects)))
 
 	return sm.dirtyObjects[addr]
 }
@@ -144,7 +154,7 @@ func (sm *StateManager) GetDirtyObject(addr identifiers.Address) (*Object, error
 
 	sm.dirtyObjects[addr] = dirtyObject.Copy()
 
-	sm.metrics.captureActiveStateObjects(float64(len(sm.dirtyObjects)))
+	sm.metrics.CaptureActiveStateObjects(float64(len(sm.dirtyObjects)))
 
 	return sm.dirtyObjects[addr], nil
 }
@@ -186,7 +196,7 @@ func (sm *StateManager) GetStateObjectByHash(addr identifiers.Address, hash comm
 		return nil, err
 	}
 
-	sObj := NewStateObject(addr, sm.cache, sm.db, *acc)
+	sObj := NewStateObject(addr, sm.cache, sm.treeCache, sm.db, *acc, sm.metrics)
 
 	return sObj, nil
 }

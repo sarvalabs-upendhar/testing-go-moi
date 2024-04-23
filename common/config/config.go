@@ -27,6 +27,7 @@ type Config struct {
 	LogFilePath    string
 	JSONRPC        *JSONRPCConfig
 	NetworkID      string
+	State          *StateConfig
 }
 
 type Telemetry struct {
@@ -118,6 +119,10 @@ type ConsensusConfig struct {
 
 type JSONRPCConfig struct {
 	TesseractRangeLimit uint8
+}
+
+type StateConfig struct {
+	TreeCacheSize uint64
 }
 
 func DefaultDevnetConfig(path string) *Config {

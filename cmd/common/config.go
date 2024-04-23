@@ -24,6 +24,7 @@ type Config struct {
 	LogFilePath    string          `json:"logfile"`
 	JSONRPC        JSONRPCConfig   `json:"jsonrpc"`
 	NetworkID      string          `json:"network_id"`
+	State          StateConfig     `json:"state"`
 }
 
 func DefaultBabylonConfig(path string) *Config {
@@ -345,6 +346,9 @@ func DefaultBabylonConfig(path string) *Config {
 			TesseractRangeLimit: config.DefaultTesseractRangeLimit,
 		},
 		NetworkID: strconv.Itoa(config.BabylonID),
+		State: StateConfig{
+			TreeCacheSize: config.DefaultTreeCacheSize,
+		},
 	}
 }
 
@@ -419,6 +423,9 @@ func DefaultDevnetConfig(path string) *Config {
 			TesseractRangeLimit: config.DefaultTesseractRangeLimit,
 		},
 		NetworkID: strconv.Itoa(config.DevnetID),
+		State: StateConfig{
+			TreeCacheSize: config.DefaultTreeCacheSize,
+		},
 	}
 }
 
@@ -505,4 +512,8 @@ type VaultConfig struct {
 
 type JSONRPCConfig struct {
 	TesseractRangeLimit uint8 `json:"tesseract_range_limit"`
+}
+
+type StateConfig struct {
+	TreeCacheSize uint64 `json:"tree_cache_size"`
 }

@@ -59,3 +59,8 @@ const (
 const (
 	DefaultTesseractRangeLimit = 10
 )
+
+// Tree defaults
+const (
+	DefaultTreeCacheSize = 1024 * 1024 * 200
+)

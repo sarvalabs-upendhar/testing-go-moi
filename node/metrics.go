@@ -18,7 +18,7 @@ type nodeMetrics struct {
 	agora     *agora.Metrics
 	chain     *lattice.Metrics
 	flux      *flux.Metrics
-	guna      *state.Metrics
+	state     *state.Metrics
 	ixpool    *ixpool.Metrics
 	krama     *consensus.Metrics
 	syncer    *forage.Metrics
@@ -34,7 +34,7 @@ func metricProvider(nameSpace string, chainID string, metricsRequired bool) *nod
 			agora:     agora.GetPrometheusMetrics(nameSpace, "chain_id", chainID),
 			chain:     lattice.GetPrometheusMetrics(nameSpace, "chain_id", chainID),
 			flux:      flux.GetPrometheusMetrics(nameSpace, "chain_id", chainID),
-			guna:      state.GetPrometheusMetrics(nameSpace, "chain_id", chainID),
+			state:     state.GetPrometheusMetrics(nameSpace, "chain_id", chainID),
 			ixpool:    ixpool.GetPrometheusMetrics(nameSpace, "chain_id", chainID),
 			krama:     consensus.GetPrometheusMetrics(nameSpace, "chain_id", chainID),
 			syncer:    forage.GetPrometheusMetrics(nameSpace, "chain_id", chainID),
@@ -49,7 +49,7 @@ func metricProvider(nameSpace string, chainID string, metricsRequired bool) *nod
 		agora:     agora.NilMetrics(),
 		chain:     lattice.NilMetrics(),
 		flux:      flux.NilMetrics(),
-		guna:      state.NilMetrics(),
+		state:     state.NilMetrics(),
 		ixpool:    ixpool.NilMetrics(),
 		krama:     consensus.NilMetrics(),
 		syncer:    forage.NilMetrics(),
