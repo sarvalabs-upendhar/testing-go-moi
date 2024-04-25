@@ -582,7 +582,9 @@ func TestCheckBootNodeConnections(t *testing.T) {
 	)
 
 	server := createServer(t, 0, defaultConfig[0])
-	server.StartServer()
+
+	err := server.StartServer()
+	require.NoError(t, err)
 
 	bootNodePeerIDs := getPeerIDs(t, bootNodes)
 	// check if server connected to bootstrap peers
@@ -1085,22 +1087,19 @@ func TestStreamHandler_Valid_HandshakeMsg(t *testing.T) {
 
 	registerStreamHandler(servers[1])
 
-	newPeerSub := servers[1].mux.Subscribe(utils.NewPeerEvent{}) // subscribe to server-1 events
-	peer := openStream(t, servers[0], servers[1])                // connect to peer-1 and get peer
+	newPeerSub := servers[1].mux.Subscribe(NewPeerEvent{}) // subscribe to server-1 events
+	kPeer := openStream(t, servers[0], servers[1])         // connect to peer-1 and get peer
 
 	// send handshake message
-	err := peer.SendHandshakeMessage(servers[0])
+	err := kPeer.SendHandshakeMessage(servers[0])
 	require.NoError(t, err)
 
 	// get the message from stream
-	msg := readMessageFromBuffer(t, peer, false)
+	msg := readMessageFromBuffer(t, kPeer, false)
 
 	// validate handshake message
-	validateHandShakeMsg(t, servers[1], msg, nil)
+	validateHandShakeMsg(t, servers[1], msg)
 	validateNewPeerEvent(t, newPeerSub, servers[0]) // server-1 sends the peer-id of server-0 to subscribers
-
-	// check whether the inbound connection is protected
-	checkConnectionProtection(t, servers[1], servers[0].host.ID(), true)
 }
 
 func TestStreamHandler_Invalid_HandshakeMsgPayload(t *testing.T) {
@@ -1126,16 +1125,16 @@ func TestStreamHandler_Invalid_HandshakeMsgPayload(t *testing.T) {
 
 	registerStreamHandler(servers[1])
 
-	peer := openStream(t, servers[0], servers[1]) // connect to peer-1 and get peer
+	kPeer := openStream(t, servers[0], servers[1]) // connect to peer-1 and get peer
 
 	InvalidHandShakeMsg := getInvalidHandshakeMsg()
 
 	// send invalid handshake message payload to server-1
-	err := peer.Send(servers[0].GetKramaID(), networkmsg.HANDSHAKEMSG, InvalidHandShakeMsg)
+	err := kPeer.Send(servers[0].GetKramaID(), networkmsg.HANDSHAKEMSG, InvalidHandShakeMsg)
 	require.NoError(t, err)
 
 	// get the message from stream
-	msg := readMessageFromBuffer(t, peer, true)
+	msg := readMessageFromBuffer(t, kPeer, true)
 
 	require.Nil(t, msg)
 
@@ -1166,58 +1165,19 @@ func TestStreamHandlerFunc_Invalid_MessagePayload(t *testing.T) {
 
 	registerStreamHandler(servers[1])
 
-	peer := openStream(t, servers[0], servers[1]) // connect to peer-1 and get peer
+	kPeer := openStream(t, servers[0], servers[1]) // connect to peer-1 and get peer
 
 	invalidMessagePayload := []byte{200}
 	// send invalid message payload to server-1
-	sendMessage(t, peer, invalidMessagePayload)
+	sendMessage(t, kPeer, invalidMessagePayload)
 
 	// get the message from stream
-	msg := readMessageFromBuffer(t, peer, true)
+	msg := readMessageFromBuffer(t, kPeer, true)
 
 	require.Nil(t, msg)
 
 	// make sure server-0 not registered in server-1
 	checkForPeerRegistration(t, servers[1], servers[0], false)
-}
-
-func TestStreamHandler_Already_RegisteredPeer(t *testing.T) {
-	bootNodes := getBootstrapNodes(t, 1)
-	defaultConfig := getParamsToCreateMultipleServers(
-		t,
-		2,
-		bootNodes,
-		2,
-		2,
-		false,
-	)
-
-	paramsMap := map[int]*CreateServerParams{
-		0: defaultConfig[0],
-		1: defaultConfig[1],
-	}
-	servers := createMultipleServers(t, 2, paramsMap)
-
-	t.Cleanup(func() {
-		closeTestServers(t, servers)
-	})
-
-	registerStreamHandler(servers[1])
-
-	peer := openStream(t, servers[0], servers[1]) // open stream to peer-1 and get peer-1
-
-	// register server-0's peer in server-1
-	err := servers[1].Peers.Register(getPeer(t, servers[1], servers[0]))
-	require.NoError(t, err)
-
-	// send handshake message to server-1
-	err = peer.SendHandshakeMessage(servers[0])
-	require.NoError(t, err)
-
-	// get the message from stream
-	msg := readMessageFromBuffer(t, peer, true)
-
-	require.Nil(t, msg)
 }
 
 func TestStreamHandler_Connection_Reset(t *testing.T) {
@@ -1242,25 +1202,15 @@ func TestStreamHandler_Connection_Reset(t *testing.T) {
 		closeTestServers(t, servers)
 	})
 
-	registerStreamHandler(servers[1])
+	servers[1].ConnManager.SetupStreamHandler(config.MOIProtocolStream, "", func(stream network.Stream) {
+		// reset the connection
+		err := servers[1].ConnManager.ResetStream(stream, "")
+		require.NoError(t, err)
+	})
 
 	outboundPeer := openStream(t, servers[0], servers[1]) // connect to peer-1 and get peer
 
 	// send handshake message
-	err := outboundPeer.SendHandshakeMessage(servers[0])
-	require.NoError(t, err)
-
-	time.Sleep(100 * time.Millisecond)
-
-	// check whether the inbound connection is protected
-	checkConnectionProtection(t, servers[1], servers[0].host.ID(), true)
-
-	inboundPeer := servers[1].Peers.Peer(servers[0].host.ID())
-
-	// reset the connection
-	err = servers[1].ConnManager.ResetStream(inboundPeer.stream, MOIStreamTag)
-	require.NoError(t, err)
-
-	// check whether the inbound connection is unprotected
-	checkConnectionProtection(t, servers[1], servers[0].host.ID(), false)
+	err := outboundPeer.InitHandshake(servers[1])
+	require.Error(t, err)
 }

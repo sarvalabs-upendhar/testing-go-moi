@@ -6,14 +6,12 @@ import (
 )
 
 type HandshakeMSG struct {
-	Data  []byte
-	Error string
+	Data []byte
 }
 
-func ConstructHandshakeMSG(data []byte, err string) *HandshakeMSG {
+func ConstructHandshakeMSG(data []byte) *HandshakeMSG {
 	return &HandshakeMSG{
-		Data:  data,
-		Error: err,
+		Data: data,
 	}
 }
 

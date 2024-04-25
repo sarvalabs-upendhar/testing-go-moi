@@ -54,9 +54,13 @@ func (p *Peer) SendHandshakeMessage(s *Server) error {
 }
 
 func (p *Peer) handleHandshakeMessage() error {
-	_, err := p.decodeHandshakeMessage()
+	msg, err := p.decodeHandshakeMessage()
 	if err != nil {
 		return err
+	}
+
+	if p.kramaID == "" {
+		p.kramaID = msg.Sender
 	}
 
 	return nil
@@ -128,10 +132,6 @@ func (p *Peer) InitHandshake(s *Server) error {
 	handshakeMsg := new(networkmsg.HandshakeMSG)
 	if err := handshakeMsg.FromBytes(message.Payload); err != nil {
 		return err
-	}
-
-	if handshakeMsg.Error != "" {
-		return errors.New(handshakeMsg.Error)
 	}
 
 	return nil
