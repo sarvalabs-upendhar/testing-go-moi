@@ -1,9 +1,10 @@
 package config
 
 import (
-	"github.com/sarvalabs/go-moi/crypto"
 	"math/big"
 	"time"
+
+	"github.com/sarvalabs/go-moi/crypto"
 
 	"github.com/sarvalabs/go-moi/common"
 )
