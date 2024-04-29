@@ -2107,16 +2107,8 @@ func (s *Syncer) fillTSWithIxnsAndReceipts(tsInfo *TesseractInfo) error {
 		err  error
 	)
 
-	ts := tsInfo.tesseract
-
-	fetchIxns := len(ts.Interactions()) == 0
-	fetchReceipts := !tsInfo.shouldExecute && len(ts.Receipts()) == 0
-
-	if !fetchIxns && !fetchReceipts {
-		return nil
-	}
-
 	s.IxFetchLock.Lock()
+	ts := tsInfo.tesseract
 
 	if _, ok := s.IxFetchGrid[ts.Hash()]; ok {
 		s.IxFetchLock.Unlock()
@@ -2124,7 +2116,17 @@ func (s *Syncer) fillTSWithIxnsAndReceipts(tsInfo *TesseractInfo) error {
 		return errors.New("another job is fetching ixns and receipts")
 	}
 
+	fetchIxns := len(ts.Interactions()) == 0
+	fetchReceipts := !tsInfo.shouldExecute && len(ts.Receipts()) == 0
+
+	if !fetchIxns && !fetchReceipts {
+		s.IxFetchLock.Unlock()
+
+		return nil
+	}
+
 	s.IxFetchGrid[ts.Hash()] = struct{}{}
+
 	s.IxFetchLock.Unlock()
 
 	defer func() {
@@ -2135,6 +2137,8 @@ func (s *Syncer) fillTSWithIxnsAndReceipts(tsInfo *TesseractInfo) error {
 
 	// retrieve ixns if they are not available
 	if fetchIxns {
+		s.logger.Trace("fetch ixns for", "ixns-hashes", tsInfo.ixnsHashes)
+
 		ixns, err = s.ixpool.GetIxns(tsInfo.ixnsHashes)
 		if err != nil {
 			s.logger.Trace("Ixns not found in ixpool",
@@ -2170,6 +2174,8 @@ func (s *Syncer) fillTSWithIxnsAndReceipts(tsInfo *TesseractInfo) error {
 				return err
 			}
 		}
+
+		s.logger.Trace("setting ixns", "ixns-length", len(ixns))
 
 		ts.SetIxns(ixns)
 	}
