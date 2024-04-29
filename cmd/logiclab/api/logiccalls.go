@@ -24,7 +24,7 @@ type LogicCallRequest struct {
 type LogicCallResponse struct {
 	Ok     bool
 	Fuel   uint64
-	Output []byte
+	Output string
 	Error  []byte
 }
 
@@ -143,7 +143,13 @@ func (api *API) callLogicEndpoint(c *gin.Context) {
 		Price: new(big.Int).SetUint64(core.LabFuelPrice),
 		Limit: env.CallFuel,
 		Site:  request.Callsite,
-		Call:  calldata,
+	}
+
+	// Set the calldata as nil if no calldata is provided
+	if request.Calldata == "" {
+		ixn.Call = nil
+	} else {
+		ixn.Call = calldata
 	}
 
 	// Execute the function
@@ -165,10 +171,11 @@ func (api *API) callLogicEndpoint(c *gin.Context) {
 
 		return
 	} else if kind == engineio.CallsiteInvokable {
+		output := hex.EncodeToString(result.Outputs())
 		c.JSON(http.StatusOK, Success().WithData(LogicCallResponse{
 			Ok:     result.Ok(),
 			Fuel:   result.Fuel(),
-			Output: result.Outputs(),
+			Output: output,
 			Error:  result.Error(),
 		}))
 

@@ -70,7 +70,7 @@ func (api *API) Start() error {
 	api.router.POST("/convert/fileform", api.convertManifestFileform)
 
 	// Logic APIs
-	api.router.GET("/logics/:name/state/:slothash", api.getLogicStorage)
+	api.router.GET("/logics/:name/state/:storekey", api.getLogicStorage)
 	api.router.POST("/logics/:name/call/:endpoint", api.callLogicEndpoint)
 
 	return api.router.Run()

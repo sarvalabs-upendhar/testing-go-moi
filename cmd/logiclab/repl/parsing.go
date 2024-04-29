@@ -44,11 +44,13 @@ const (
 	TokenCallencode
 	TokenCalldecode
 	TokenErrdecode
-	TokenStorageKey
 
 	TokenConvert
 	TokenManifestEncoding
 	TokenManifestCodeform
+
+	TokenStorageKey
+	TokenStorageKeyAccessor
 )
 
 // keywords is a mapping of custom keywords to their
@@ -90,7 +92,6 @@ var keywords = map[string]symbolizer.TokenKind{
 	"callencode": TokenCallencode,
 	"calldecode": TokenCalldecode,
 	"errdecode":  TokenErrdecode,
-	"storagekey": TokenStorageKey,
 
 	"convert": TokenConvert,
 	"POLO":    TokenManifestEncoding,
@@ -99,6 +100,11 @@ var keywords = map[string]symbolizer.TokenKind{
 	"BIN":     TokenManifestCodeform,
 	"HEX":     TokenManifestCodeform,
 	"ASM":     TokenManifestCodeform,
+
+	"storagekey": TokenStorageKey,
+	"mapkey":     TokenStorageKeyAccessor,
+	"arridx":     TokenStorageKeyAccessor,
+	"clsfld":     TokenStorageKeyAccessor,
 
 	"deploy": TokenDeploy,
 	"invoke": TokenInvoke,

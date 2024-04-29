@@ -320,7 +320,7 @@ func (api *API) getLogicStorage(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusFound, Success().WithData(LogicStorageValue{
+	c.JSON(http.StatusOK, Success().WithData(LogicStorageValue{
 		Key: storekey,
 		Val: hex.EncodeToString(storeval),
 	}))
