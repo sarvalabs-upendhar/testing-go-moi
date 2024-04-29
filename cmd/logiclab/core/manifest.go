@@ -6,19 +6,19 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/sarvalabs/go-moi-engineio"
-	"github.com/sarvalabs/go-pisa"
-	"github.com/sarvalabs/go-pisa/opcode"
 	"gopkg.in/yaml.v3"
 
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/compute/engineio"
+	"github.com/sarvalabs/go-moi/compute/pisa"
+	"github.com/sarvalabs/go-pisa/opcode"
 )
 
-func PrintManifest(manifest *engineio.Manifest, encoding engineio.Encoding) string {
+func PrintManifest(manifest engineio.Manifest, encoding common.Encoding) string {
 	switch encoding {
-	case engineio.POLO:
+	case common.POLO:
 		// Generate POLO data
-		data, err := manifest.Encode(engineio.POLO)
+		data, err := manifest.Encode(common.POLO)
 		if err != nil {
 			return fmt.Sprintf("unable to polo serialize manifest: %v", err)
 		}
@@ -26,7 +26,7 @@ func PrintManifest(manifest *engineio.Manifest, encoding engineio.Encoding) stri
 		// Encode as hex string and attach the 0x prefix
 		return "0x" + hex.EncodeToString(data)
 
-	case engineio.JSON:
+	case common.JSON:
 		// Generate the indented JSON data
 		data, err := json.MarshalIndent(manifest, "", "  ")
 		if err != nil {
@@ -35,7 +35,7 @@ func PrintManifest(manifest *engineio.Manifest, encoding engineio.Encoding) stri
 
 		return common.BytesToHex(data)
 
-	case engineio.YAML:
+	case common.YAML:
 		// Create an encoding buffer
 		var b bytes.Buffer
 		// Create a new YAML encoder and set indent level
@@ -57,7 +57,7 @@ func PrintManifest(manifest *engineio.Manifest, encoding engineio.Encoding) stri
 	}
 }
 
-func ConvertManifestCodeform(original *engineio.Manifest, encoding engineio.Encoding, codeform string) string {
+func ConvertManifestCodeform(original engineio.Manifest, encoding common.Encoding, codeform string) string {
 	switch codeform {
 	case "BIN":
 		// Generate BIN data of opcodes
@@ -91,8 +91,8 @@ func ConvertManifestCodeform(original *engineio.Manifest, encoding engineio.Enco
 	}
 }
 
-func ConvertToBinCodeform(manifest *engineio.Manifest) (*engineio.Manifest, error) {
-	for _, element := range manifest.Elements {
+func ConvertToBinCodeform(manifest engineio.Manifest) (engineio.Manifest, error) {
+	for _, element := range manifest.Elements() {
 		switch element.Kind {
 		case pisa.RoutineElement:
 			routine, ok := element.Data.(*pisa.RoutineSchema)
@@ -153,8 +153,8 @@ func ConvertToBinCodeform(manifest *engineio.Manifest) (*engineio.Manifest, erro
 	return manifest, nil
 }
 
-func ConvertToHexCodeform(manifest *engineio.Manifest) (*engineio.Manifest, error) {
-	for _, element := range manifest.Elements {
+func ConvertToHexCodeform(manifest engineio.Manifest) (engineio.Manifest, error) {
+	for _, element := range manifest.Elements() {
 		switch element.Kind {
 		case pisa.RoutineElement:
 			routine, ok := element.Data.(*pisa.RoutineSchema)
@@ -192,8 +192,8 @@ func ConvertToHexCodeform(manifest *engineio.Manifest) (*engineio.Manifest, erro
 	return manifest, nil
 }
 
-func ConvertToAsmCodeform(manifest *engineio.Manifest) (*engineio.Manifest, error) {
-	for _, element := range manifest.Elements {
+func ConvertToAsmCodeform(manifest engineio.Manifest) (engineio.Manifest, error) {
+	for _, element := range manifest.Elements() {
 		switch element.Kind {
 		case pisa.RoutineElement:
 			routine, ok := element.Data.(*pisa.RoutineSchema)
@@ -245,18 +245,4 @@ func ConvertToAsmCodeform(manifest *engineio.Manifest) (*engineio.Manifest, erro
 	}
 
 	return manifest, nil
-}
-
-func EncodingFromString(encoding string) engineio.Encoding {
-	// todo: return error for invalid option
-	switch encoding {
-	case "POLO":
-		return engineio.POLO
-	case "JSON":
-		return engineio.JSON
-	case "YAML":
-		return engineio.YAML
-	default:
-		return engineio.POLO
-	}
 }

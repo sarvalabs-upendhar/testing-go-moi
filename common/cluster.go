@@ -3,6 +3,7 @@ package common
 import (
 	"github.com/mr-tron/base58"
 	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-polo"
 )
@@ -26,10 +27,10 @@ func (c ClusterID) Hash() Hash {
 type ExecutionContext struct {
 	CtxDelta ContextDelta
 	Cluster  ClusterID
-	Time     int64
+	Time     uint64
 }
 
-func (ctx ExecutionContext) Timestamp() int64 {
+func (ctx ExecutionContext) Timestamp() uint64 {
 	return ctx.Time
 }
 

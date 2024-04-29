@@ -6,10 +6,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
-	engineio "github.com/sarvalabs/go-moi-engineio"
 
 	"github.com/sarvalabs/go-moi/cmd/logiclab/core"
 	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
 const HeaderLabEnv = "X-LogicLab-Environment"
@@ -94,13 +94,13 @@ func (api *API) getEngineRuntimes(c *gin.Context) {
 	engines := make(map[string]string)
 
 	for _, engine := range core.Engines {
-		runtime, ok := engineio.FetchEngineRuntime(engine)
+		runtime, ok := engineio.FetchEngine(engine)
 		if !ok {
 			c.JSON(http.StatusInternalServerError, Error(errors.New("failed to fetch engine runtime")))
 			return
 		}
 
-		engines[string(engine)] = "v" + runtime.Version()
+		engines[engine.String()] = "v" + runtime.Version()
 	}
 
 	c.JSON(http.StatusOK, Success().WithData(engines))

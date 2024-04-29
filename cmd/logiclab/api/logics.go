@@ -7,11 +7,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-engineio"
 
 	"github.com/sarvalabs/go-moi/cmd/logiclab/core"
 	"github.com/sarvalabs/go-moi/cmd/logiclab/db"
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
 type Logic struct {
@@ -63,16 +63,17 @@ func (api *API) getLogic(c *gin.Context) {
 
 	// Obtain the identifier of the logic ID
 	identifier, _ := logic.Object.ID.Identifier()
+	manifest := logic.Object.ManifestHash()
 
 	c.JSON(http.StatusOK, Success().WithData(Logic{
 		Name:    logic.Name,
 		Ready:   logic.Ready,
 		Edition: identifier.Edition(),
-		Engine:  string(logic.Object.EngineKind),
+		Engine:  logic.Object.EngineKind.String(),
 
 		LogicID:  logic.Object.ID.String(),
 		Address:  logic.Object.ID.Address().String(),
-		Manifest: logic.Object.ManifestHash.String(),
+		Manifest: hex.EncodeToString(manifest[:]),
 
 		Callsites: logic.Callsites,
 	}))
@@ -119,7 +120,7 @@ func (api *API) createLogic(c *gin.Context) {
 	// Decode the manifest from the given format
 	manifest, err := engineio.NewManifest(
 		common.Hex2Bytes(request.Manifest.Content),
-		core.EncodingFromString(request.Manifest.Encoding),
+		common.EncodingFromString(request.Manifest.Encoding),
 	)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, Error(errors.Wrap(err, "malformed manifest")))
@@ -263,14 +264,14 @@ func (api *API) getLogicManifest(c *gin.Context) {
 	}
 
 	// Decode the value into a manifest
-	manifest, err := engineio.NewManifest(value, engineio.POLO)
+	manifest, err := engineio.NewManifest(value, common.POLO)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, Error(errors.Wrap(err, "malformed manifest")))
 		return
 	}
 
 	// Convert the manifest into expected format
-	encoding := core.EncodingFromString(request.Target)
+	encoding := common.EncodingFromString(request.Target)
 	converted := core.PrintManifest(manifest, encoding)
 
 	c.JSON(http.StatusOK, Success().WithData(Manifest{

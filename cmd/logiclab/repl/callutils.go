@@ -7,8 +7,9 @@ import (
 	"strings"
 
 	"github.com/manishmeganathan/symbolizer"
-	"github.com/sarvalabs/go-moi-engineio"
-	"github.com/sarvalabs/go-pisa"
+
+	"github.com/sarvalabs/go-moi/compute/engineio"
+	"github.com/sarvalabs/go-moi/compute/pisa"
 	"github.com/sarvalabs/go-polo"
 )
 
@@ -59,7 +60,8 @@ func CallencodeValueCommand(value any) Command {
 		doc := make(polo.Document)
 
 		for key, val := range object {
-			data, err := engineio.EncodeValues(val, repl)
+			// todo: fix
+			data, err := pisa.EncodeValues(val)
 			if err != nil {
 				return fmt.Sprintf("could not encode value into calldata: %v", err)
 			}
@@ -136,13 +138,13 @@ func CalldecodeValueCommand(data []byte, name, site string) Command {
 		}
 
 		// Obtain the runtime for the logic engine in the header
-		runtime, ok := engineio.FetchEngineRuntime(logic.Object.Engine())
+		engine, ok := engineio.FetchEngine(logic.Object.Engine())
 		if !ok {
 			return "failed to get runtime for logic"
 		}
 
 		// Generate the call encoder for the callsite
-		encoder, err := runtime.GetCallEncoder(callsite, logic.Object)
+		encoder, err := engine.GetCallEncoderFromLogicDriver(logic.Object, callsite)
 		if err != nil {
 			return fmt.Sprintf("failed to generate call encoder for callsite '%v'", callsite)
 		}
@@ -230,7 +232,7 @@ f742e7365747570205b3078305d726f6f742e446f205b3078305d202e2e2e205b3078323a2054485
 // decode the error object from the given error bytes data.
 func ErrdecodeValueCommand(errdata []byte, engine engineio.EngineKind) Command {
 	return func(repl *Repl) string {
-		runtime, _ := engineio.FetchEngineRuntime(engine)
+		runtime, _ := engineio.FetchEngine(engine)
 
 		errorObject, err := runtime.DecodeErrorResult(errdata)
 		if err != nil {
@@ -272,7 +274,7 @@ func parseErrdecodeCommand(parser *symbolizer.Parser) Command {
 		return InvalidCommandError("missing valid engine")
 	}
 
-	engine := engineio.EngineKind(parser.Cursor().Literal)
+	engine := engineio.EngineKindFromString(parser.Cursor().Literal)
 
 	switch errdata.Kind {
 	case symbolizer.TokenIdent:
@@ -325,6 +327,6 @@ func parseStorageKeyCommand(parser *symbolizer.Parser) Command {
 			return "slot number is too large"
 		}
 
-		return hex.EncodeToString(pisa.Slothash(uint8(slot)))
+		return hex.EncodeToString(pisa.GenerateStorageKey(uint8(slot)))
 	}
 }

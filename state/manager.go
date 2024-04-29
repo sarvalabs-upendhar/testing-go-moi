@@ -12,15 +12,14 @@ import (
 	"github.com/VictoriaMetrics/fastcache"
 
 	"github.com/hashicorp/go-hclog"
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
-	"github.com/sarvalabs/go-pisa"
-	"github.com/sarvalabs/go-polo"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"
 	"github.com/sarvalabs/go-moi/storage/db"
@@ -1028,7 +1027,12 @@ func (sm *StateManager) GetPublicKeys(ctx context.Context, ids ...kramaid.KramaI
 				return func(id kramaid.KramaID, index int) error {
 					pk, err := sm.senatus.GetPublicKey(id)
 					if err != nil {
-						keys, err := sm.GetPublicKeyFromContract(id)
+						object, err := sm.getStateObject(common.GuardianLogicAddr, common.NilHash)
+						if err != nil {
+							return err
+						}
+
+						keys, err := guardianregistry.GetGuardianPublicKeys(object, id)
 						if err != nil {
 							sm.logger.Error("Failed to fetch the public key", "krama-ID", id)
 
@@ -1060,36 +1064,6 @@ func (sm *StateManager) GetPublicKeys(ctx context.Context, ids ...kramaid.KramaI
 	}
 
 	return publicKeys, nil
-}
-
-func (sm *StateManager) GetPublicKeyFromContract(ids ...kramaid.KramaID) (keys [][]byte, err error) {
-	pk := make([][]byte, 0, len(ids))
-
-	object, err := sm.getStateObject(common.GuardianLogicAddr, common.NilHash)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := object.GetStorageEntry(common.GuardianLogicID, pisa.Slothash(GuardianSLot))
-	if err != nil {
-		return nil, err
-	}
-
-	var guardians Guardians
-	if err = polo.Depolorize(&guardians, data, polo.DocStructs(), polo.DocStringMaps()); err != nil {
-		return nil, errors.Wrap(err, "failed to depolorize guardians")
-	}
-
-	for _, kramaID := range ids {
-		guardian, ok := guardians[string(kramaID)]
-		if !ok {
-			return nil, errors.New("public key not found")
-		}
-
-		pk = append(pk, guardian.PublicKey)
-	}
-
-	return pk, nil
 }
 
 // IsLogicRegistered checks if the logicID is registered with the account.
@@ -1257,7 +1231,7 @@ func (sm *StateManager) GetLogicManifest(logicID identifiers.LogicID, stateHash 
 		return nil, errors.Wrap(err, "failed to fetch logic object")
 	}
 
-	logicManifest, err := sm.db.ReadEntry(storage.LogicManifestKey(logicID.Address(), logicObject.ManifestHash))
+	logicManifest, err := sm.db.ReadEntry(storage.LogicManifestKey(logicID.Address(), logicObject.ManifestHash()))
 	if err != nil {
 		return nil, errors.Wrap(err, common.ErrFetchingLogicManifest.Error())
 	}

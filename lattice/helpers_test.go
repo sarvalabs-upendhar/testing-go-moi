@@ -13,11 +13,12 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
@@ -25,6 +26,7 @@ import (
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/compute"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/state"
 	"github.com/sarvalabs/go-moi/storage"
 	"github.com/sarvalabs/go-moi/storage/db"
@@ -479,9 +481,12 @@ func (sm *MockStateManager) UpdateStateObjects(objs state.ObjectMap) error {
 	panic("implement me")
 }
 
-func (sm *MockStateManager) CreateStateObject(_ identifiers.Address, _ common.AccountType) *state.Object {
-	// TODO implement me
-	panic("implement me")
+func (sm *MockStateManager) CreateStateObject(addr identifiers.Address, accType common.AccountType) *state.Object {
+	return state.NewStateObject(addr,
+		mockCache(), nil, mockDB(),
+		common.Account{AccType: accType},
+		state.NilMetrics(),
+	)
 }
 
 func (sm *MockStateManager) GetEmptyStateObject() *state.Object {
@@ -1405,14 +1410,20 @@ func getTestAssetCreationArgs(t *testing.T, allocationAddr identifiers.Address) 
 func getTestGenesisLogics(t *testing.T) []common.LogicSetupArgs {
 	t.Helper()
 
-	manifest := "0x" + common.BytesToHex(tests.ReadManifest(t, "./../compute/manifests/ledger.yaml"))
+	manifestFile, err := engineio.NewManifestFromFile("./../compute/manifests/tokenledger.yaml")
+	require.NoError(t, err)
+
+	manifestEncoded, err := manifestFile.Encode(common.POLO)
+	require.NoError(t, err)
+
+	manifest := "0x" + common.BytesToHex(manifestEncoded)
 	calldata := "0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd8ee6a29e" +
 		"c442dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49"
 
 	logic := common.LogicSetupArgs{
 		Name: "staking-contract",
 
-		Callsite: "Seeder!",
+		Callsite: "Seeder",
 		Calldata: hexutil.Bytes(common.Hex2Bytes(calldata)),
 		Manifest: hexutil.Bytes(common.Hex2Bytes(manifest)),
 

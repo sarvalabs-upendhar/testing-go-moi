@@ -4,9 +4,10 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
-	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
@@ -47,6 +48,7 @@ func (te *TestEnvironment) logicInvoke(
 func validateLogicInvoke(
 	te *TestEnvironment,
 	sender identifiers.Address,
+	receiver identifiers.Address,
 	payload *common.LogicPayload,
 	ixHash common.Hash,
 ) {
@@ -57,8 +59,8 @@ func validateLogicInvoke(
 
 	logicID := moiclient.GetLogicID(te.T(), te.moiClient, sender, int64(senderHeight-1))
 
-	state := moiclient.GetTokenLedgerState(te.T(), te.moiClient, logicID)
-	senderBalance, ok := state.Balances[seeder]
+	state := moiclient.GetTokenLedgerState(te.T(), te.moiClient, logicID, []identifiers.Address{sender, receiver})
+	senderBalance, ok := state.Balances[sender]
 	require.True(te.T(), ok)
 
 	require.Equal(te.T(), initialSeederAmount-transferAmount, senderBalance.Uint64())
@@ -71,14 +73,15 @@ func validateLogicInvoke(
 
 func (te *TestEnvironment) TestLogicInvoke() {
 	sender := te.chooseRandomAccount()
+	receiver, _ := identifiers.NewAddressFromHex("0x0fafe52ec42a85db644d5cceba2bb89cf5b0166cc9158211f44ed1e60b06032c")
 
-	invokeCalldata := "0x0daf010665a601e501f6059506616d6f756e74030f424066726f6d06ffcd8ee6a29ec442dbbf9c6124dd3aeb833ef58" +
-		"052237d521654740857716b34746f060fafe52ec42a85db644d5cceba2bb89cf5b0166cc9158211f44ed1e60b06032c"
+	invokeCalldata := "0x0d6f0665a601a502616d6f756e74030f42407265636569766572060fafe52ec42a85db6" +
+		"44d5cceba2bb89cf5b0166cc9158211f44ed1e60b06032c"
 
 	ixHash, err := te.deployLogic(
 		sender,
 		&common.LogicPayload{
-			Callsite: "Seeder!",
+			Callsite: "Seeder",
 			Calldata: common.Hex2Bytes(deployCalldata),
 			Manifest: common.Hex2Bytes(ledgerManifest),
 		},
@@ -96,6 +99,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 		postTest     func(
 			te *TestEnvironment,
 			sender identifiers.Address,
+			receiver identifiers.Address,
 			payload *common.LogicPayload,
 			ixHash common.Hash,
 		)
@@ -106,7 +110,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 			sender: sender,
 			logicPayload: &common.LogicPayload{
 				Logic:    logicID,
-				Callsite: "Transfer!",
+				Callsite: "Transfer",
 				Calldata: hexutil.Bytes(common.Hex2Bytes(invokeCalldata)),
 			},
 			postTest: validateLogicInvoke,
@@ -116,7 +120,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 			sender: sender,
 			logicPayload: &common.LogicPayload{
 				Logic:    "",
-				Callsite: "Transfer!",
+				Callsite: "Transfer",
 				Calldata: hexutil.Bytes(common.Hex2Bytes(invokeCalldata)),
 			},
 			expectedError: errors.New("missing logic id"),
@@ -126,7 +130,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 			sender: sender,
 			logicPayload: &common.LogicPayload{
 				Logic:    logicID,
-				Callsite: "Transfer!",
+				Callsite: "Transfer",
 				Calldata: make(polo.Document).Bytes(),
 			},
 			expectedError: errors.New("failed to validate logic invoke"),
@@ -153,7 +157,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 					0,
 					tests.RandomAddress(te.T()),
 				),
-				Callsite: "Transfer!",
+				Callsite: "Transfer",
 				Calldata: common.Hex2Bytes(invokeCalldata),
 			},
 			expectedError: common.ErrAccountNotFound,
@@ -163,7 +167,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 			sender: sender,
 			logicPayload: &common.LogicPayload{
 				Logic:    logicID,
-				Callsite: "abcd!",
+				Callsite: "abcd",
 				Calldata: []byte{},
 			},
 			expectedError: errors.New("failed to validate logic invoke"),
@@ -173,7 +177,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 			sender: sender,
 			logicPayload: &common.LogicPayload{
 				Logic:    logicID,
-				Callsite: "Transfer!",
+				Callsite: "Transfer",
 				Calldata: []byte{1, 2, 3},
 			},
 			expectedError: errors.New("failed to validate logic invoke"),
@@ -194,7 +198,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 			}
 			require.NoError(te.T(), err)
 
-			test.postTest(te, test.sender.Addr, test.logicPayload, ixHash)
+			test.postTest(te, test.sender.Addr, receiver, test.logicPayload, ixHash)
 		})
 	}
 }

@@ -14,7 +14,7 @@ type lookupMap struct {
 
 func NewLookupMap() *lookupMap {
 	l := &lookupMap{
-		all: make(map[common.Hash]*common.Interaction, 0),
+		all: make(map[common.Hash]*common.Interaction),
 	}
 
 	return l

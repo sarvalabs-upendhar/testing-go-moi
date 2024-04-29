@@ -6,17 +6,19 @@ import (
 	"testing"
 
 	"github.com/decred/dcrd/crypto/blake256"
-	lru "github.com/hashicorp/golang-lru"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
-	engineio "github.com/sarvalabs/go-moi-engineio"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
-	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/tests"
-	"github.com/sarvalabs/go-moi/state/tree"
-	"github.com/sarvalabs/go-moi/storage"
-	"github.com/sarvalabs/go-pisa"
+	"github.com/hashicorp/golang-lru"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
+
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/compute/engineio"
+	"github.com/sarvalabs/go-moi/compute/pisa"
+	"github.com/sarvalabs/go-moi/state/tree"
+	"github.com/sarvalabs/go-moi/storage"
 )
 
 func TestStateManager_CreateStateObject(t *testing.T) {
@@ -903,7 +905,7 @@ func TestStateManager_FetchParticipantContextByHash(t *testing.T) {
 			hash: mHash[0],
 			mockFn: func() {
 				msenatus := mockSenatus(t)
-				msenatus.AddPublicKeys(kramaIDs, pk)
+				_ = msenatus.AddPublicKeys(kramaIDs, pk)
 
 				sm.senatus = msenatus
 			},
@@ -2095,7 +2097,7 @@ func TestStateManager_IsLogicRegistered(t *testing.T) {
 	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
 	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
 
-	engineio.RegisterRuntime(pisa.NewRuntime(), nil)
+	engineio.RegisterEngine(pisa.NewEngine())
 
 	so := NewStateObject(logicID.Address(), mockCache(t), nil, db, common.Account{}, NilMetrics())
 
@@ -2307,16 +2309,22 @@ func TestStateManager_GetRegistry(t *testing.T) {
 
 func TestStateManager_GetLogicManifest(t *testing.T) {
 	db := mockDB()
-	manifest, _, _ := tests.GetManifests(t, "../compute/manifests/ledger.yaml")
-	manifestHash := common.GetHash(manifest)
+
+	engineio.RegisterEngine(pisa.NewEngine())
+
+	manifest, err := engineio.NewManifestFromFile("../compute/manifests/tokenledger.yaml")
+	require.NoError(t, err)
+
+	encodedManifest, err := manifest.Encode(common.POLO)
+	require.NoError(t, err)
 
 	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
 	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
-	logicObject.ManifestHash = manifestHash
+	logicObject.Manifest = manifest.Hash()
 
 	so := NewStateObject(logicID.Address(), mockCache(t), nil, db, common.Account{}, NilMetrics())
 
-	err := so.InsertNewLogicObject(logicID, logicObject)
+	err = so.InsertNewLogicObject(logicID, logicObject)
 	require.NoError(t, err)
 
 	rootHash, err := so.commitLogics()
@@ -2333,7 +2341,7 @@ func TestStateManager_GetLogicManifest(t *testing.T) {
 		acc.LogicRoot = tests.RandomHash(t)
 	})
 
-	err = db.CreateEntry(storage.LogicManifestKey(logicID.Address(), logicObject.ManifestHash), manifest)
+	err = db.CreateEntry(storage.LogicManifestKey(logicID.Address(), logicObject.ManifestHash()), encodedManifest)
 	require.NoError(t, err)
 
 	smParams := &createStateManagerParams{
@@ -2369,7 +2377,7 @@ func TestStateManager_GetLogicManifest(t *testing.T) {
 			name:             "logic manifest fetched successfully",
 			logicID:          logicID,
 			stateHash:        stateHash,
-			expectedManifest: manifest,
+			expectedManifest: encodedManifest,
 		},
 	}
 

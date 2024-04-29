@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
+
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
@@ -16,7 +18,6 @@ import (
 	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/state"
 	"github.com/sarvalabs/go-moi/storage"
-	"github.com/stretchr/testify/require"
 )
 
 func TestHasTesseract(t *testing.T) {
@@ -2586,7 +2587,7 @@ func TestExecuteGenesisContracts(t *testing.T) {
 					BehaviouralContext: tests.RandomKramaIDs(t, 1),
 				},
 			},
-			expectedError: "unable to deploy logic for contract",
+			expectedError: "deployment failed for logic",
 		},
 	}
 

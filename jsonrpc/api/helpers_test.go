@@ -68,7 +68,7 @@ func NewMockChainManager(t *testing.T) *MockChainManager {
 
 	mockChain := new(MockChainManager)
 
-	mockChain.receipts = make(map[common.Hash]*common.Receipt, 0)
+	mockChain.receipts = make(map[common.Hash]*common.Receipt)
 	mockChain.tesseractsByHash = make(map[common.Hash]*common.Tesseract)
 	mockChain.tesseractsByHeight = make(map[string]*common.Tesseract)
 	mockChain.latestTesseracts = make(map[identifiers.Address]*common.Tesseract)
@@ -226,7 +226,7 @@ func NewMockStateManager(t *testing.T) *MockStateManager {
 	mockState.accounts = make(map[identifiers.Address]*common.Account)
 	mockState.context = make(map[identifiers.Address]*Context)
 	mockState.logicManifests = make(map[string][]byte)
-	mockState.logicStorage = make(map[string]map[string]string, 0)
+	mockState.logicStorage = make(map[string]map[string]string)
 	mockState.accMetaInfo = make(map[identifiers.Address]*common.AccountMetaInfo)
 	mockState.logicIDs = make(map[identifiers.Address][]identifiers.LogicID)
 	mockState.registry = make(map[identifiers.Address]map[string][]byte)

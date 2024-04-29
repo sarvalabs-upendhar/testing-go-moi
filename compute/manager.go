@@ -5,18 +5,17 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-engineio"
 	"github.com/sarvalabs/go-moi-identifiers"
-	"github.com/sarvalabs/go-pisa"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
-	"github.com/sarvalabs/go-moi/crypto"
+	"github.com/sarvalabs/go-moi/compute/engineio"
+	"github.com/sarvalabs/go-moi/compute/pisa"
 	"github.com/sarvalabs/go-moi/state"
 )
 
 func init() {
-	engineio.RegisterRuntime(pisa.NewRuntime(), crypto.Cryptographer(0))
+	engineio.RegisterEngine(pisa.NewEngine())
 }
 
 // Manager represents a type for managing interaction execution across multiple consensus clusters.
@@ -173,17 +172,17 @@ func (manager *Manager) Cleanup(cluster common.ClusterID) {
 }
 
 func (manager *Manager) ValidateLogicDeploy(ix *common.Interaction, data []byte) error {
-	manifest, err := engineio.NewManifest(data, engineio.POLO)
+	manifest, err := engineio.NewManifest(data, common.POLO)
 	if err != nil {
 		return err
 	}
 
-	runtime, ok := engineio.FetchEngineRuntime(manifest.Header().LogicEngine())
+	runtime, ok := engineio.FetchEngine(manifest.Kind())
 	if !ok {
 		return errors.New("failed to get runtime for logic")
 	}
 
-	logicDescriptor, _, err := runtime.CompileManifest(ix.FuelLimit(), manifest)
+	logicDescriptor, _, err := runtime.CompileManifest(manifest, ix.FuelLimit())
 	if err != nil {
 		return err
 	}
@@ -208,7 +207,7 @@ func (manager *Manager) ValidateLogicInvoke(ix *common.Interaction) error {
 		return err
 	}
 
-	runtime, ok := engineio.FetchEngineRuntime(logicObject.Engine())
+	runtime, ok := engineio.FetchEngine(logicObject.Engine())
 	if !ok {
 		return errors.New("failed to get runtime for logic")
 	}

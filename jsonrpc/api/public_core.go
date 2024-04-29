@@ -5,12 +5,12 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	engineio "github.com/sarvalabs/go-moi-engineio"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/jsonrpc/backend"
 	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
@@ -394,24 +394,24 @@ func (p *PublicCoreAPI) GetLogicManifest(args *rpcargs.LogicManifestArgs) (hexut
 	case "POLO", "":
 		return logicManifest, nil
 	case "JSON":
-		depolorizedManifest, err := engineio.NewManifest(logicManifest, engineio.POLO)
+		depolorizedManifest, err := engineio.NewManifest(logicManifest, common.POLO)
 		if err != nil {
 			return nil, err
 		}
 
-		manifest, err := depolorizedManifest.Encode(engineio.JSON)
+		manifest, err := depolorizedManifest.Encode(common.JSON)
 		if err != nil {
 			return nil, err
 		}
 
 		return manifest, nil
 	case "YAML":
-		depolorizedManifest, err := engineio.NewManifest(logicManifest, engineio.POLO)
+		depolorizedManifest, err := engineio.NewManifest(logicManifest, common.POLO)
 		if err != nil {
 			return nil, err
 		}
 
-		manifest, err := depolorizedManifest.Encode(engineio.YAML)
+		manifest, err := depolorizedManifest.Encode(common.YAML)
 		if err != nil {
 			return nil, err
 		}
@@ -529,7 +529,7 @@ func (p *PublicCoreAPI) FuelEstimate(args *rpcargs.CallArgs) (*hexutil.Big, erro
 	ctx := &common.ExecutionContext{
 		CtxDelta: nil,
 		Cluster:  "moi.FuelEstimate",
-		Time:     time.Now().Unix(),
+		Time:     uint64(time.Now().Unix()),
 	}
 
 	receipt, err := p.exec.InteractionCall(ctx, ix, stateHashes)
@@ -580,7 +580,7 @@ func (p *PublicCoreAPI) Call(args *rpcargs.CallArgs) (*rpcargs.RPCReceipt, error
 	ctx := &common.ExecutionContext{
 		CtxDelta: nil,
 		Cluster:  "moi.Call",
-		Time:     time.Now().Unix(),
+		Time:     uint64(time.Now().Unix()),
 	}
 
 	receipt, err := p.exec.InteractionCall(ctx, ix, stateHashes)

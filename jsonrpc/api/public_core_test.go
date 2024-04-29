@@ -7,14 +7,18 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/compute/engineio"
+	"github.com/sarvalabs/go-moi/compute/pisa"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // Core Api Testcases
@@ -1285,7 +1289,7 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 	logicID := tests.GetLogicID(t, ts.AnyAddress())
 	logicIDWithoutState := tests.GetLogicID(t, tests.RandomAddress(t))
 
-	poloManifest, jsonManifest, yamlManifest := tests.GetManifests(t, "./../../compute/manifests/ledger.yaml")
+	poloManifest, jsonManifest, yamlManifest := getManifestInAllEncoding(t, "./../../compute/manifests/tokenledger.yaml")
 
 	stateManager.setLogicManifest(string(logicID), poloManifest)
 	chainManager.setTesseractByHash(t, ts)
@@ -2196,4 +2200,29 @@ func TestPublicCoreAPI_GetLogs(t *testing.T) {
 	logs, err := coreAPI.GetLogs(query)
 	require.NoError(t, err)
 	require.Equal(t, dummyLogs, logs)
+}
+
+func getManifestInAllEncoding(t *testing.T, filepath string) (poloEncoded, jsonEncoded, yamlEncoded []byte) {
+	t.Helper()
+
+	// Register the PISA element registry with the EngineIO package
+	engineio.RegisterEngine(pisa.NewEngine())
+
+	// Read manifest at file path
+	manifest, err := engineio.NewManifestFromFile(filepath)
+	require.NoError(t, err)
+
+	// Encode the Manifest into POLO data
+	poloEncoded, err = manifest.Encode(common.POLO)
+	require.NoError(t, err)
+
+	// Encode the Manifest into JSON data
+	jsonEncoded, err = manifest.Encode(common.JSON)
+	require.NoError(t, err)
+
+	// Encode the Manifest into YAML data
+	yamlEncoded, err = manifest.Encode(common.YAML)
+	require.NoError(t, err)
+
+	return
 }

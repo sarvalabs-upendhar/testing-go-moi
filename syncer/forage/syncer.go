@@ -241,7 +241,7 @@ func NewSyncer(
 		tesseractRegistry:   common.NewHashRegistry(60),
 		consensusSlots:      slots,
 		lastActiveTimeStamp: lastActiveTimeStamp,
-		lockedAccounts:      make(map[identifiers.Address]struct{}, 0),
+		lockedAccounts:      make(map[identifiers.Address]struct{}),
 		metrics:             syncerMetrics,
 		pendingMsgQueue:     make([]*TesseractInfo, 0),
 		pendingMsgChan:      make(chan *TesseractInfo, 10),

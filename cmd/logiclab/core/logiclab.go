@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-engineio"
 
 	"github.com/sarvalabs/go-moi/cmd/logiclab/db"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
 var (
@@ -189,8 +189,8 @@ func (lab *Lab) ClusterID() string { return "LogicLab" }
 
 // Timestamp implements the engineio.EnvDriver for Environment.
 // Returns the current unix timestamp.
-func (lab *Lab) Timestamp() int64 {
-	return time.Now().Unix()
+func (lab *Lab) Timestamp() uint64 {
+	return uint64(time.Now().Unix())
 }
 
 func (lab *Lab) HandleInterrupt() func() {

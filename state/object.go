@@ -8,12 +8,13 @@ import (
 
 	"github.com/decred/dcrd/crypto/blake256"
 	iradix "github.com/hashicorp/go-immutable-radix"
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
-	engineio "github.com/sarvalabs/go-moi-engineio"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
+
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"
 )
@@ -577,11 +578,11 @@ func (object *Object) CreateAsset(
 	return assetID, nil
 }
 
-func (object *Object) CreateLogic(descriptor *engineio.LogicDescriptor) (identifiers.LogicID, error) {
+func (object *Object) CreateLogic(descriptor engineio.LogicDescriptor) (identifiers.LogicID, error) {
 	// Generate the key for the LogicManifest from its hash
 	key := common.BytesToHex(storage.LogicManifestKey(object.Address(), descriptor.ManifestHash))
 	// Write the manifest into the dirty entries
-	object.SetDirtyEntry(key, descriptor.ManifestRaw)
+	object.SetDirtyEntry(key, descriptor.ManifestData)
 
 	// Create a new LogicObject from the LogicDescriptor
 	logicObject := NewLogicObject(object.Address(), descriptor)
@@ -840,14 +841,22 @@ func (object *Object) GetStorageTree(logicID identifiers.LogicID) (tree.MerkleTr
 	return storageTree, nil
 }
 
-func (object *Object) SetStorageEntry(logicID identifiers.LogicID, key, value []byte) (err error) {
+func (object *Object) SetStorageEntry(logicID identifiers.LogicID, key, value []byte) error {
 	_, ok := object.storageTreeTxns[logicID]
 	if !ok {
-		if _, err = object.GetStorageTree(logicID); err != nil {
+		if _, err := object.GetStorageTree(logicID); err != nil {
 			return err
 		}
 
 		object.storageTreeTxns[logicID] = iradix.New().Txn()
+	}
+
+	// If the value has zero length, we treat it as a
+	// delete operation instead of a write operation
+	if len(value) == 0 {
+		object.storageTreeTxns[logicID].Delete(key)
+
+		return nil
 	}
 
 	object.storageTreeTxns[logicID].Insert(key, value)

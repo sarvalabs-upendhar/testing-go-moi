@@ -2,7 +2,8 @@ package repl
 
 import (
 	"github.com/manishmeganathan/symbolizer"
-	"github.com/sarvalabs/go-moi-engineio"
+
+	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
 const (
@@ -150,9 +151,9 @@ func Parse(cmd string) Command {
 		return parseStorageKeyCommand(parser)
 
 	case TokenDeploy:
-		return parseLogicCall(parser, engineio.DeployerCallsite)
+		return parseLogicCall(parser, engineio.CallsiteDeployer)
 	case TokenInvoke:
-		return parseLogicCall(parser, engineio.InvokableCallsite)
+		return parseLogicCall(parser, engineio.CallsiteInvokable)
 
 	default:
 		return InvalidCommandError("")

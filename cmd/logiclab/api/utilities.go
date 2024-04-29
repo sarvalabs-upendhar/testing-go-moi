@@ -8,11 +8,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-engineio"
-	"github.com/sarvalabs/go-pisa"
 
 	"github.com/sarvalabs/go-moi/cmd/logiclab/core"
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/compute/engineio"
+	"github.com/sarvalabs/go-moi/compute/pisa"
 )
 
 type StorageKeyRequest struct {
@@ -44,8 +44,10 @@ func (api *API) generateStorageKey(c *gin.Context) {
 		return
 	}
 
+	key := pisa.GenerateStorageKey(request.Slot)
+
 	c.JSON(http.StatusOK, Success().WithData(StorageKeyResponse{
-		Hash: hex.EncodeToString(pisa.Slothash(request.Slot)),
+		Hash: hex.EncodeToString(key),
 	}))
 }
 
@@ -66,9 +68,9 @@ func (api *API) decodeErrorData(c *gin.Context) {
 	}
 
 	// Extract the engine kind from the path
-	engine := c.Param("engine")
+	engineKind := c.Param("engine")
 	// Get the engine runtime for the given engine
-	runtime, ok := engineio.FetchEngineRuntime(engineio.EngineKind(engine))
+	engine, ok := engineio.FetchEngine(engineio.EngineKindFromString(engineKind))
 	if !ok {
 		c.JSON(http.StatusBadRequest, Error(core.ErrUnsupportedEngine))
 		return
@@ -77,7 +79,7 @@ func (api *API) decodeErrorData(c *gin.Context) {
 	// Hex-decode the error data
 	errdata := common.Hex2Bytes(request.Error)
 	// Decode the error with the runtime rules
-	errorObject, err := runtime.DecodeErrorResult(errdata)
+	errorObject, err := engine.DecodeErrorResult(errdata)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, Error(errors.Wrap(err, "failed to decode error object")))
 		return
@@ -100,7 +102,7 @@ func (api *API) convertManifestCodeform(c *gin.Context) {
 	}
 
 	rawManifest := common.Hex2Bytes(request.Manifest.Content)
-	encoding := core.EncodingFromString(request.Manifest.Encoding)
+	encoding := common.EncodingFromString(request.Manifest.Encoding)
 
 	manifest, err := engineio.NewManifest(rawManifest, encoding)
 	if err != nil {
@@ -125,8 +127,8 @@ func (api *API) convertManifestFileform(c *gin.Context) {
 	}
 
 	rawManifest := common.Hex2Bytes(request.Manifest.Content)
-	encoding := core.EncodingFromString(request.Manifest.Encoding)
-	target := core.EncodingFromString(request.Target)
+	encoding := common.EncodingFromString(request.Manifest.Encoding)
+	target := common.EncodingFromString(request.Target)
 
 	manifest, err := engineio.NewManifest(rawManifest, encoding)
 	if err != nil {

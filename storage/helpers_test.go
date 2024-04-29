@@ -218,7 +218,7 @@ func (it *mockIterator) GetNext() (*common.DBEntry, error) {
 func insertTestAccMetaInfo(t *testing.T, pm *PersistenceManager) map[uint64]common.Accounts {
 	t.Helper()
 
-	insertedAccounts := make(map[uint64]common.Accounts, 0)
+	insertedAccounts := make(map[uint64]common.Accounts)
 
 	accountCount := 5000
 	for i := 0; i < accountCount; i++ {
@@ -247,7 +247,7 @@ func insertTestAccMetaInfo(t *testing.T, pm *PersistenceManager) map[uint64]comm
 func incrementBuckets(t *testing.T, pm *PersistenceManager) map[uint64]uint64 {
 	t.Helper()
 
-	incrementBucketSizes := make(map[uint64]uint64, 0)
+	incrementBucketSizes := make(map[uint64]uint64)
 
 	incrementNumber := uint64(3)
 

@@ -14,21 +14,21 @@ import (
 
 	"github.com/peterh/liner"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-identifiers"
-	"github.com/sarvalabs/go-pisa"
-	"github.com/sarvalabs/go-polo"
 	"github.com/spf13/cobra"
 
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 	cmdCommon "github.com/sarvalabs/go-moi/cmd/common"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/compute/pisa"
+	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
 	"github.com/sarvalabs/go-moi/crypto"
 	mudraCommon "github.com/sarvalabs/go-moi/crypto/common"
 	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/moiclient"
-	gtypes "github.com/sarvalabs/go-moi/state"
+	"github.com/sarvalabs/go-polo"
 )
 
 var (
@@ -187,8 +187,9 @@ func registerGuardian(vault *crypto.KramaVault) {
 		cmdCommon.Err(errors.Wrap(err, "failed to create moi-client"))
 	}
 
+	// Check if the guardian is already registered
 	if isGuardianRegistered(client, vault.KramaID()) {
-		fmt.Println("Guardian already registered, updating details")
+		fmt.Println("guardian already registered, updating details")
 
 		err = registerWithWatchDog(localRPC, vault)
 		if err != nil {
@@ -198,30 +199,13 @@ func registerGuardian(vault *crypto.KramaVault) {
 		return
 	}
 
+	// Get the operator MOI ID from the vault
 	moiID, err := vault.MoiID()
 	if err != nil {
 		cmdCommon.Err(errors.Wrap(err, "failed to generate moiID"))
 	}
 
-	wallet, _ := identifiers.NewAddressFromHex(walletAddress)
-
-	g := gtypes.Guardian{
-		GuardianOperator: moiID,
-		KramaID:          string(vault.KramaID()),
-		PublicKey:        vault.GetConsensusPrivateKey().GetPublicKeyInBytes(),
-		IncentiveWallet:  wallet,
-	}
-
-	dc := make(polo.Document)
-	if err = dc.Set("operator", moiID); err != nil {
-		cmdCommon.Err(err)
-	}
-
-	if err = dc.Set("guardianDetails", g, polo.DocStructs()); err != nil {
-		cmdCommon.Err(err)
-	}
-
-	moiIDpublicKey, err := vault.GetPublicKeyAt(config.DefaultMOIIDPath)
+	moiIDPublicKey, err := vault.GetPublicKeyAt(config.DefaultMOIIDPath)
 	if err != nil {
 		cmdCommon.Err(err)
 	}
@@ -229,7 +213,7 @@ func registerGuardian(vault *crypto.KramaVault) {
 	fmt.Printf("Krama-ID %s \n", vault.KramaID())
 
 	nonce, err := client.InteractionCount(context.Background(), &rpcargs.InteractionCountArgs{
-		Address: identifiers.NewAddressFromBytes(moiIDpublicKey),
+		Address: identifiers.NewAddressFromBytes(moiIDPublicKey),
 		Options: rpcargs.TesseractNumberOrHash{
 			TesseractNumber: &rpcargs.LatestTesseractHeight,
 		},
@@ -240,8 +224,28 @@ func registerGuardian(vault *crypto.KramaVault) {
 
 	logicPayload := &common.LogicPayload{
 		Logic:    common.GuardianLogicID,
-		Callsite: "Register!",
-		Calldata: dc.Bytes(),
+		Callsite: "RegisterGuardian",
+		Calldata: func() polo.Document {
+			// Generate a wallet address from the given hex value in the cli flags
+			wallet, _ := identifiers.NewAddressFromHex(walletAddress)
+			// Create a guardian object to register
+			guardian := guardianregistry.Guardian{
+				OperatorID: moiID,
+				KramaID:    string(vault.KramaID()),
+				PublicKey:  vault.GetConsensusPrivateKey().GetPublicKeyInBytes(),
+				Incentive: guardianregistry.Incentive{
+					Wallet: wallet,
+				},
+			}
+
+			doc := make(polo.Document)
+			// Set the guardian input data
+			if err = doc.Set("guardian", guardian, polo.DocStructs()); err != nil {
+				cmdCommon.Err(err)
+			}
+
+			return doc
+		}().Bytes(),
 	}
 
 	rawPayload, err := logicPayload.Bytes()
@@ -251,7 +255,7 @@ func registerGuardian(vault *crypto.KramaVault) {
 
 	ixArgs := common.SendIXArgs{
 		Type:      common.IxLogicInvoke,
-		Sender:    identifiers.NewAddressFromBytes(moiIDpublicKey),
+		Sender:    identifiers.NewAddressFromBytes(moiIDPublicKey),
 		Nonce:     nonce.ToUint64(),
 		FuelPrice: big.NewInt(1),
 		FuelLimit: 10000,
@@ -303,27 +307,34 @@ func registerGuardian(vault *crypto.KramaVault) {
 }
 
 func isGuardianRegistered(client *moiclient.Client, kramaID kramaid.KramaID) bool {
-	storageData, err := client.LogicStorage(context.Background(), &rpcargs.GetLogicStorageArgs{
-		LogicID:    common.GuardianLogicID,
-		StorageKey: pisa.Slothash(gtypes.GuardianSLot),
+	// Generate the hash of the krama ID
+	kramaIDEncoded, _ := polo.Polorize(kramaID)
+	kramaIDHashed := common.GetHash(kramaIDEncoded)
+	// Generate the storage key for the guardian with the given krama ID
+	storageKey := pisa.GenerateStorageKey(guardianregistry.SlotGuardians, pisa.MapKey(kramaIDHashed))
+
+	// Retrieve the value for the storage key from the
+	_, err := client.LogicStorage(context.Background(), &rpcargs.GetLogicStorageArgs{
+		LogicID: common.GuardianLogicID, StorageKey: storageKey,
 		Options: rpcargs.TesseractNumberOrHash{
 			TesseractNumber: &rpcargs.LatestTesseractHeight,
 		},
 	})
-	if err != nil {
-		cmdCommon.Err(errors.Wrap(err, "failed to fetch guardian information from the network"))
+	if err == nil {
+		// If no error was returned, the key was found.
+		// This means the guardian is registered
+		return true
 	}
 
-	guardians := make(gtypes.Guardians)
-
-	err = polo.Depolorize(&guardians, storageData.Bytes(), polo.DocStructs(), polo.DocStringMaps())
-	if err != nil {
-		cmdCommon.Err(errors.Wrap(err, "failed to fetch guardian information from the network"))
+	// If the key is not found, the guardian is NOT registered
+	if err.Error() == common.ErrKeyNotFound.Error() {
+		return false
 	}
 
-	_, ok := guardians[string(kramaID)]
+	// log error
+	cmdCommon.Err(errors.Wrap(err, "failed to fetch guardian information from the network"))
 
-	return ok
+	return false
 }
 
 func registerWithWatchDog(rpcURL string, vault *crypto.KramaVault) error {

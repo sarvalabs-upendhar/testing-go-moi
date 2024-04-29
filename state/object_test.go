@@ -7,14 +7,14 @@ import (
 	iradix "github.com/hashicorp/go-immutable-radix"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-engineio"
 	"github.com/sarvalabs/go-moi-identifiers"
-	"github.com/sarvalabs/go-pisa"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/compute/engineio"
+	"github.com/sarvalabs/go-moi/compute/pisa"
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"
 )
@@ -1586,7 +1586,7 @@ func TestGetLogicObject(t *testing.T) {
 	require.NoError(t, err)
 
 	// seed the engine runtimes
-	engineio.RegisterRuntime(pisa.NewRuntime(), nil)
+	engineio.RegisterEngine(pisa.NewEngine())
 
 	testcases := []struct {
 		name          string
@@ -1654,7 +1654,7 @@ func TestGetLogicObject(t *testing.T) {
 
 func TestIsLogicRegistered(t *testing.T) {
 	// seed the engine runtimes
-	engineio.RegisterRuntime(pisa.NewRuntime(), nil)
+	engineio.RegisterEngine(pisa.NewEngine())
 
 	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
 	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
@@ -1704,7 +1704,7 @@ func TestIsLogicRegistered(t *testing.T) {
 }
 
 func TestInsertNewLogicObject(t *testing.T) {
-	engineio.RegisterRuntime(pisa.NewRuntime(), nil)
+	engineio.RegisterEngine(pisa.NewEngine())
 
 	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
 	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))

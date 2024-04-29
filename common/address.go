@@ -9,18 +9,24 @@ import (
 const KMOITokenSymbol = "KMOI"
 
 var (
-	GenesisIxHash    = GetHash([]byte("Genesis Interaction"))
-	SargaLogicID     = identifiers.NewLogicIDv0(true, false, false, false, 0, SargaAddress)
-	GuardianLogicID  = identifiers.NewLogicIDv0(true, false, false, false, 0, GuardianLogicAddr)
-	KMOITokenAssetID = identifiers.NewAssetIDv0(false, false, 0, 0, KMOITokenAddress)
+	GenesisIxHash       = GetHash([]byte("Genesis Interaction"))
+	StakingContractAddr = CreateAddressFromString("staking-contract")
+	GenesisLogicAddrs   = []identifiers.Address{StakingContractAddr, GuardianLogicAddr}
 )
 
 var (
-	SargaAddress        = CreateAddressFromString("sargaAccount")
-	StakingContractAddr = CreateAddressFromString("staking-contract")
-	GuardianLogicAddr   = CreateAddressFromString("guardian-contract")
-	KMOITokenAddress    = CreateAddressFromString(KMOITokenSymbol)
-	GenesisLogicAddrs   = []identifiers.Address{StakingContractAddr, GuardianLogicAddr}
+	SargaAddress = CreateAddressFromString("sargaAccount")
+	SargaLogicID = identifiers.NewLogicIDv0(true, false, false, false, 0, SargaAddress)
+)
+
+var (
+	GuardianLogicAddr = CreateAddressFromString("guardian-registry")
+	GuardianLogicID   = identifiers.NewLogicIDv0(true, false, false, false, 0, GuardianLogicAddr)
+)
+
+var (
+	KMOITokenAddress = CreateAddressFromString(KMOITokenSymbol)
+	KMOITokenAssetID = identifiers.NewAssetIDv0(false, false, 0, 0, KMOITokenAddress)
 )
 
 func ContainsAddress(addresses []identifiers.Address, target identifiers.Address) bool {

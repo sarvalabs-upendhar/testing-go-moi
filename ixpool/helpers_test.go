@@ -36,7 +36,7 @@ func NewMockStateManager(t *testing.T) *MockStateManager {
 	t.Helper()
 
 	return &MockStateManager{
-		nonce:               make(map[identifiers.Address]uint64, 0),
+		nonce:               make(map[identifiers.Address]uint64),
 		balance:             map[identifiers.Address]map[identifiers.AssetID]*big.Int{},
 		assetInfo:           map[identifiers.AssetID]*common.AssetDescriptor{},
 		accountRegistration: make(map[identifiers.Address]bool),
@@ -388,7 +388,7 @@ func getPromotedAccounts(
 ) map[identifiers.Address]interface{} {
 	t.Helper()
 
-	promotedAccounts := make(map[identifiers.Address]interface{}, 0)
+	promotedAccounts := make(map[identifiers.Address]interface{})
 
 	errs := ixPool.AddInteractions(ixs)
 	require.Equal(t, expectedErrors, len(errs))
@@ -447,7 +447,7 @@ func setDelayCounter(t *testing.T, acc *account, delayCount int32) {
 func getIxNonce(t *testing.T, ixs common.Interactions) map[identifiers.Address]uint64 {
 	t.Helper()
 
-	ixNonce := make(map[identifiers.Address]uint64, 0)
+	ixNonce := make(map[identifiers.Address]uint64)
 
 	for _, ix := range ixs {
 		ixNonce[ix.Sender()] = ix.Nonce()

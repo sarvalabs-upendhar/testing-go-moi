@@ -10,19 +10,24 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
+
+	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
 
 	"github.com/google/uuid"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/battleground/common"
-	"github.com/sarvalabs/go-moi-engineio"
+
+	bgcommon "github.com/sarvalabs/battleground/common"
 	"github.com/sarvalabs/go-moi-identifiers"
-	"github.com/sarvalabs/go-pisa"
 	"github.com/sarvalabs/go-polo"
 
+	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/compute/engineio"
+	"github.com/sarvalabs/go-moi/compute/pisa"
 )
 
 const (
@@ -32,7 +37,7 @@ const (
 	genesisFile     = "genesis.json"
 	bootnodeFileKey = "file.key"
 
-	guardianManifest = "./../compute/corelogics/guardian-registry/guardian_manifest.json"
+	guardianManifest = "./../corelogics/guardianregistry/guardians.json"
 )
 
 var startTime int64
@@ -58,32 +63,6 @@ func readInstancesFile(path string) ([]Instance, error) {
 	return instances, nil
 }
 
-type Guardian struct {
-	GuardianOperator string
-	KramaID          string
-	DeviceID         string
-	PublicKey        []byte
-	IncentiveWallet  identifiers.Address
-	ExtraData        []byte
-}
-
-type SetupInput struct {
-	EnforceApprovals    bool `polo:"enforceApprovals"`
-	EnforceNodeLimits   bool `polo:"enforceNodeLimits"`
-	EnforceDeviceLimits bool `polo:"enforceDeviceLimits"`
-
-	LimitKYC    uint64 `polo:"limitKYC"`
-	LimitKYB    uint64 `polo:"limitKYB"`
-	LimitDevice uint64 `polo:"limitDevice"`
-
-	Master               string                `polo:"master"`
-	Approvers            []identifiers.Address `polo:"approvers"`
-	PreApprovedKramaIDs  []string              `polo:"preApprovedKramaIDs"`
-	PreApprovedAddresses []identifiers.Address `polo:"preApprovedAddresses"`
-
-	Guardians []Guardian `polo:"guardians"`
-}
-
 type Cluster struct {
 	Config        *ClusterConfig
 	serverConfigs []*ServerConfig
@@ -105,7 +84,7 @@ func NewTestCluster(clusterConfig *ClusterConfig, serverConfigs []*ServerConfig)
 		once:          sync.Once{},
 	}
 
-	if err := common.CreateDirSafe(clusterConfig.TempDir, os.ModePerm); err != nil {
+	if err := bgcommon.CreateDirSafe(clusterConfig.TempDir, os.ModePerm); err != nil {
 		return nil, err
 	}
 
@@ -154,57 +133,72 @@ func (c *Cluster) generateArtifact() error {
 	}
 
 	// Register the PISA element registry with the EngineIO package
-	engineio.RegisterRuntime(pisa.NewRuntime(), nil)
+	engineio.RegisterEngine(pisa.NewEngine())
 
 	// Read manifest file
-	manifest, err := engineio.ReadManifestFile(c.Config.GuardianPathDir(guardianManifest))
+	manifest, err := engineio.NewManifestFromFile(c.Config.GuardianPathDir(guardianManifest))
 	if err != nil {
 		return err
 	}
 
-	encodedManifest, err := manifest.Encode(engineio.POLO)
+	encodedManifest, err := manifest.Encode(common.POLO)
 	if err != nil {
 		return err
 	}
 
-	guardians := make([]Guardian, 0)
-	wallet, _ := identifiers.NewAddressFromHex("0x39ff5c082ef1bd55782fd44939f3c7011af10592a423cbc00df3bf01e306b6dc")
+	guardians := make([]string, 0)
+	pubKeys := make([][]byte, 0)
 
 	for _, instance := range instances {
-		guardians = append(guardians, Guardian{
-			GuardianOperator: instance.KramaID,
-			KramaID:          instance.KramaID,
-			PublicKey:        must(hex.DecodeString(instance.ConsensusKey)),
-			DeviceID:         "ABCDEFG",
-			IncentiveWallet:  wallet,
-		})
+		guardians = append(guardians, instance.KramaID)
+		pubKeys = append(pubKeys, must(hex.DecodeString(instance.ConsensusKey)))
 	}
 
-	calldata, _ := polo.Polorize(SetupInput{
-		EnforceApprovals:    true,
-		EnforceNodeLimits:   true,
-		EnforceDeviceLimits: false,
-		LimitKYC:            20,
-		LimitKYB:            100,
-		LimitDevice:         1,
-		Master:              "0x39ff5c082ef1bd55782fd44939f3c7011af10592a423cbc00df3bf01e306b6dc",
-		Approvers: []identifiers.Address{
+	masterAddress, err := identifiers.NewAddressFromHex("0x39ff5c082ef1bd55" +
+		"782fd44939f3c7011af10592a423cbc00df3bf01e306b6dc")
+	if err != nil {
+		return err
+	}
+
+	masterMoiID := strings.TrimPrefix(masterAddress.Hex(), "0x")
+
+	inputs := struct {
+		Master      guardianregistry.Master `polo:"master"`
+		Guardians   []string                `polo:"guardians"`
+		PubKeys     [][]byte                `polo:"pubkeys"`
+		Admins      [][32]byte              `polo:"admins"`
+		PreApproved []string                `polo:"preApproved"`
+		LimitKYC    uint64                  `polo:"limitKYC"`
+		LimitKYB    uint64                  `polo:"limitKYB"`
+	}{
+		Master: guardianregistry.Master{
+			PubKey: masterAddress.Bytes(),
+			MOIID:  masterMoiID,
+			Wallet: masterAddress,
+		},
+		Guardians: guardians,
+		PubKeys:   pubKeys,
+		Admins: [][32]byte{
 			must(identifiers.NewAddressFromHex("0x53e9ec9f78f0397cd611bf0a0793c07673cbbf51cb172ae7d6ccf0efa5803f94")),
 			must(identifiers.NewAddressFromHex("0x898ca25ac7a51a36894b9c9f55ec6212500dd8e0c01f6591f0eb9f5b0bc84655")),
 		},
-		PreApprovedKramaIDs: []string{
+		PreApproved: []string{
 			"a5JLBNzoxVHvxFRUUhoFpC8YwZHUAb5krfnQWokcA8MdibmZ9H.16Uiu2HAmVNTp43B3axQfZYwU2hTVXuHMBJzGcvghHST9BzDvwpnn",
 		},
-		PreApprovedAddresses: []identifiers.Address{
-			must(identifiers.NewAddressFromHex("0x9a3245e022fc769d8ee70548c4e6e7d833a0bbd5d3a6b2597ee3e692c10e0bd5")),
-		},
-		Guardians: guardians,
-	}, polo.DocStructs())
+		LimitKYC: 20,
+		LimitKYB: 100,
+	}
+
+	// Serialize the input args into calldata
+	calldata, err := polo.PolorizeDocument(inputs, polo.DocStructs())
+	if err != nil {
+		return err
+	}
 
 	a := artifact{
-		Name:     "guardian-contract",
-		Callsite: "Setup!",
-		Calldata: "0x" + hex.EncodeToString(calldata),
+		Name:     "guardian-registry",
+		Callsite: "Setup",
+		Calldata: "0x" + hex.EncodeToString(calldata.Bytes()),
 		Manifest: "0x" + hex.EncodeToString(encodedManifest),
 	}
 

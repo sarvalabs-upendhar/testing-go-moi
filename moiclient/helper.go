@@ -12,17 +12,17 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/sarvalabs/go-moi-engineio"
-	"github.com/sarvalabs/go-moi-identifiers"
-	"github.com/sarvalabs/go-pisa"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/blake2b"
 
 	"github.com/sarvalabs/go-moi/bgclient"
-	"github.com/sarvalabs/go-moi/common/tests"
-
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
+	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/compute/engineio"
+	"github.com/sarvalabs/go-moi/compute/pisa"
 	"github.com/sarvalabs/go-moi/crypto"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 )
@@ -178,40 +178,42 @@ func GetLogicManifestByEncodingType(
 	case "JSON":
 		logicManifest := res.Bytes()
 
-		depolorizedManifest, err := engineio.NewManifest(logicManifest, engineio.POLO)
+		depolorizedManifest, err := engineio.NewManifest(logicManifest, common.POLO)
 		if err != nil {
 			return nil, err
 		}
 
-		return depolorizedManifest.Encode(engineio.JSON)
+		return depolorizedManifest.Encode(common.JSON)
 	case "YAML":
 		logicManifest := res.Bytes()
 
-		depolorizedManifest, err := engineio.NewManifest(logicManifest, engineio.POLO)
+		depolorizedManifest, err := engineio.NewManifest(logicManifest, common.POLO)
 		if err != nil {
 			return nil, err
 		}
 
-		return depolorizedManifest.Encode(engineio.YAML)
+		return depolorizedManifest.Encode(common.YAML)
 	default:
 		return nil, errors.New("invalid encoding type")
 	}
 }
 
 type TokenLedgerState struct {
-	Name     string
 	Symbol   string
 	Supply   *big.Int
 	Balances map[identifiers.Address]*big.Int
 }
 
-func GetTokenLedgerState(t *testing.T, moiClient *Client, logicID identifiers.LogicID) TokenLedgerState {
+func GetTokenLedgerState(t *testing.T, moiClient *Client,
+	logicID identifiers.LogicID,
+	addresses []identifiers.Address,
+) TokenLedgerState {
 	t.Helper()
 
-	getLatestStorage := func(slot uint8) hexutil.Bytes {
+	getLatestStorage := func(key [32]byte) hexutil.Bytes {
 		s, err := moiClient.LogicStorage(context.Background(), &rpcargs.GetLogicStorageArgs{
 			LogicID:    logicID,
-			StorageKey: pisa.Slothash(slot),
+			StorageKey: key[:],
 			Options: rpcargs.TesseractNumberOrHash{
 				TesseractNumber: &rpcargs.LatestTesseractHeight,
 			},
@@ -221,24 +223,31 @@ func GetTokenLedgerState(t *testing.T, moiClient *Client, logicID identifiers.Lo
 		return s
 	}
 
-	state := TokenLedgerState{}
+	state := TokenLedgerState{
+		Balances: make(map[identifiers.Address]*big.Int),
+	}
 
-	rawName := getLatestStorage(0)
-	rawSymbol := getLatestStorage(1)
-	rawSupply := getLatestStorage(2)
-	rawBalances := getLatestStorage(3)
-
-	err := polo.Depolorize(&state.Name, rawName)
+	rawSymbol := getLatestStorage([32]byte(pisa.GenerateStorageKey(0)))
+	err := polo.Depolorize(&state.Symbol, rawSymbol)
 	require.NoError(t, err)
 
-	err = polo.Depolorize(&state.Symbol, rawSymbol)
-	require.NoError(t, err)
-
+	rawSupply := getLatestStorage([32]byte(pisa.GenerateStorageKey(1)))
 	err = polo.Depolorize(&state.Supply, rawSupply)
 	require.NoError(t, err)
 
-	err = polo.Depolorize(&state.Balances, rawBalances)
-	require.NoError(t, err)
+	for _, addr := range addresses {
+		encoded, _ := polo.Polorize(addr)
+		hashed := blake2b.Sum256(encoded)
+
+		k := pisa.GenerateStorageKey(2, pisa.MapKey(hashed))
+		rawBalance := getLatestStorage([32]byte(k))
+
+		balance := new(big.Int)
+		err = polo.Depolorize(balance, rawBalance)
+		require.NoError(t, err)
+
+		state.Balances[addr] = balance
+	}
 
 	return state
 }

@@ -48,12 +48,11 @@ require (
 	github.com/prometheus/client_golang v1.16.0
 	github.com/sarvalabs/battleground v0.3.0
 	github.com/sarvalabs/go-legacy-kramaid v0.1.0
-	github.com/sarvalabs/go-moi-engineio v0.1.3
 	github.com/sarvalabs/go-moi-identifiers v0.1.0
-	github.com/sarvalabs/go-pisa v0.1.9
-	github.com/sarvalabs/go-polo v0.4.1
+	github.com/sarvalabs/go-pisa v0.2.1
+	github.com/sarvalabs/go-polo v0.4.3
 	github.com/spf13/cobra v1.7.0
-	github.com/stretchr/testify v1.8.4
+	github.com/stretchr/testify v1.9.0
 	github.com/supranational/blst v0.3.11
 	github.com/tyler-smith/go-bip39 v1.1.0
 	github.com/ugorji/go/codec v1.2.11
@@ -61,8 +60,9 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.18.0
 	go.opentelemetry.io/otel/sdk v1.18.0
 	go.opentelemetry.io/otel/trace v1.18.0
-	golang.org/x/crypto v0.17.0
-	golang.org/x/sync v0.4.0
+	golang.org/x/crypto v0.21.0
+	golang.org/x/exp v0.0.0-20231226003508-02704c960a9b
+	golang.org/x/sync v0.5.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -108,7 +108,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.16.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
-	github.com/holiman/uint256 v1.2.3 // indirect
+	github.com/holiman/uint256 v1.2.4 // indirect
 	github.com/huin/goupnp v1.3.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/ipfs/boxo v0.10.0 // indirect
@@ -191,12 +191,11 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.26.0 // indirect
 	golang.org/x/arch v0.3.0 // indirect
-	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect
-	golang.org/x/mod v0.13.0 // indirect
-	golang.org/x/net v0.17.0 // indirect
-	golang.org/x/sys v0.15.0 // indirect
+	golang.org/x/mod v0.14.0 // indirect
+	golang.org/x/net v0.21.0 // indirect
+	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
-	golang.org/x/tools v0.14.0 // indirect
+	golang.org/x/tools v0.16.0 // indirect
 	gonum.org/v1/gonum v0.13.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20230711160842-782d3b101e98 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230711160842-782d3b101e98 // indirect

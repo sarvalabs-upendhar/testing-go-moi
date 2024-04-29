@@ -1,0 +1,395 @@
+coco GuardianRegistry
+
+state persistent:
+    // Guardians represents a registry of Krama IDs
+    // with the associated Guardian information
+    Guardians Map[String]Guardian
+    // KnownGuardians is a list of all known guardian Krama IDs
+    KnownGuardians []String
+
+    // Operators represents a registry of MOI IDs
+    // with the associated Operator information
+    Operators Map[String]Operator
+    // KnownOperators is a list of all known operators MOI IDs
+    KnownOperators []String
+
+    // Approved is a mapping of Krama ID to the address
+    // that is allowed to register the Guardian node
+    Approved Map[String]Bool
+    // ReferralRewards is a mapping of referrer address to their referral rewards
+    ReferralRewards Map[Address]U64
+
+    // NodeLimitKYC is the maximum number of guardian nodes allowed
+    // to be operated by an Operator verified with a KYC verification.
+    // Can be set to 0 if no limits apply.
+    NodeLimitKYC U64
+    // NodeLimitKYB is the maximum number of guardian nodes allowed
+    // to be operated by an Operator verified with a KYB verification.
+    // Can be set to 0 if no limits apply.
+    NodeLimitKYB U64
+
+    // MasterOperator is an operator account for whom, node limits and verification does not apply.
+    // This is the owner of the logic and is usually the foundation handling the testnet deployment
+    MasterOperator Master
+    // Administrators are the addresses that have the necessary permissions to approve
+    // new Guardians, register new Operators, change limit rules and add incentives
+    Administrators Map[Address]Bool
+
+class Master:
+    field MOIID String
+    field Wallet Address
+    field PubKey Bytes
+
+class Operator:
+    field Identifier String
+    field Verification VerifyProof
+    field Guardians []String
+
+class VerifyProof:
+    field Kind String
+    field Proof Bytes
+
+class Guardian:
+    field KramaID String
+    field OperatorID String
+    field Incentive Incentive
+    field PublicKey Bytes
+    field ExtraData Bytes
+
+class Incentive:
+    field Amount U64
+    field Wallet Address
+    field ReferralPercent U64
+    field ReferralWallet Address
+
+// Import is a deployer for setting up the registry from some existing data.
+// It does not perform any consistency checks. NOT RECOMMENDED FOR GENERAL USE
+endpoint deployer Import(
+    master Master,
+    admins []Address,
+    guardians []Guardian,
+    operators []Operator,
+    approved []String,
+    referralAddrs []Address,
+    referralAmounts []U64,
+    knownGs []String,
+    knownOs []String,
+    nodeLimitKYC, nodeLimitKYB U64,
+):
+    mutate MasterOp <- GuardianRegistry.State.MasterOperator:
+        disperse master -> MasterOp
+
+    mutate Admins <- GuardianRegistry.State.Administrators:
+        for _, admin in admins:
+            Admins[admin] = true
+
+    mutate Guardians <- GuardianRegistry.State.Guardians:
+        for _, guardian in guardians:
+            disperse guardian -> Guardians[guardian.KramaID]
+
+    mutate Operators <- GuardianRegistry.State.Operators:
+        for _, operator in operators:
+            disperse operator -> Operators[operator.Identifier]
+
+    mutate Approved <- GuardianRegistry.State.Approved:
+        for _, approvedID in approved:
+            Approved[approvedID] = true
+
+    if len(referralAddrs) != len(referralAmounts):
+        throw "invalid referrals inputs: mismatched size"
+
+    mutate Referrals <- GuardianRegistry.State.ReferralRewards:
+        for idx, addr in referralAddrs:
+            Referrals[addr] = referralAmounts[idx]
+
+    mutate KnownGs <- GuardianRegistry.State.KnownGuardians:
+        for _, kramaID in knownGs:
+            append(KnownGs, kramaID)
+
+    mutate KnownOs <- GuardianRegistry.State.KnownOperators:
+        for _, moiID in knownOs:
+            append(KnownOs, moiID)
+
+    mutate nodeLimitKYC -> GuardianRegistry.State.NodeLimitKYC
+    mutate nodeLimitKYB -> GuardianRegistry.State.NodeLimitKYB
+
+// Setup is a deployer for setting up the registry with new data.
+// - master: master operator for the logic
+// - guardians: guardians operated by the master that are seeded into the registry
+// - admins: list of addresses to grant admin priveleges to
+// - preApproved: list of pre-approved Krama IDs
+// - limitKYC, limitKYB: max node limits for kyc and kyb verified operators (0 to not enforce limits)
+endpoint deployer Setup(
+    master Master,
+    guardians []String,
+    pubkeys []Bytes,
+    admins []Address,
+    preApproved []String,
+    limitKYC, limitKYB U64,
+):
+    // Check that the guardians and pubkeys lists are equal sized
+    if len(guardians) != len(pubkeys):
+        throw "invalid guardian inputs: mismatched size"
+
+    // Set the master operator
+    mutate MasterOp <- GuardianRegistry.State.MasterOperator:
+        disperse master -> MasterOp
+
+    // Add the master operator to the set of known operators
+    mutate knownOps <- GuardianRegistry.State.KnownOperators:
+        append(knownOps, master.MOIID)
+
+    // Add the master operator to the Operator registry
+    mutate operators <- GuardianRegistry.State.Operators:
+        disperse operators[master.MOIID] <- Operator{
+            Identifier: master.MOIID,
+            Verification: make(VerifyProof),
+            Guardians: []String{},
+        }
+
+    // Set the node limits
+    mutate limitKYC -> GuardianRegistry.State.NodeLimitKYC
+    mutate limitKYB -> GuardianRegistry.State.NodeLimitKYB
+
+    // Add all the admins to the admin set
+    mutate administrators <- GuardianRegistry.State.Administrators:
+        for _, admin in admins:
+            administrators[admin] = true
+
+    // Approve all pre-approved krama IDs
+    ApproveKramaIDs(kramaIDs: preApproved)
+
+    // Iterate over the master guardians
+    for idx, kramaID in guardians:
+        // Add the krama ID to the approved set
+        mutate approved <- GuardianRegistry.State.Approved:
+            approved[kramaID] = true
+
+        // Add the guardian krama ID to the master operator
+        mutate operators <- GuardianRegistry.State.Operators:
+            append(operators[master.MOIID].Guardians, kramaID)
+
+        // Create and add the Guardian object to the Guardians registry
+        mutate Guardians <- GuardianRegistry.State.Guardians:
+            disperse Guardians[kramaID] <- Guardian{
+                KramaID: kramaID,
+                OperatorID: master.MOIID,
+                Incentive: Incentive{
+                    Amount: 0,
+                    Wallet: master.Wallet,
+                },
+                PublicKey: pubkeys[idx],
+            }
+
+        // Add the krama ID to the known guardians set
+        mutate knownGs <- GuardianRegistry.State.KnownGuardians:
+            append(knownGs, kramaID)
+
+// Approve accepts a list of Krama IDs to be approved.
+// This operation is idempotent.
+endpoint invokable persistent Approve(kramaIDs []String):
+    // Authenticate the sender as an admin
+    AuthenticateAdmin()
+    // Approve the given krama IDs
+    ApproveKramaIDs(kramaIDs)
+
+// IsApproved checks if the given Krama ID exists
+endpoint invokable readonly IsApproved(kramaID String) -> (ok Bool):
+    observe approved <- GuardianRegistry.State.Approved:
+        yield ok approved[kramaID]?
+
+// IsVerified checks if the given operator MOI ID is verified
+endpoint invokable readonly IsVerified(moiID String) -> (ok Bool):
+    // Check the operator registry
+    observe operators <- GuardianRegistry.State.Operators:
+        yield ok operators[moiID]?
+
+// RegisterOperator registers a new Operator with the registry.
+// The sender must be an administrator for this operation and the operator must not already exist.
+endpoint invokable persistent RegisterOperator(moiID String, verification VerifyProof):
+    // Authenticate the sender as an admin
+    AuthenticateAdmin()
+
+    mutate operators <- GuardianRegistry.State.Operators:
+        // Check if the operator already exists
+        if operators[moiID]?: revert "operator already exists"
+
+        // Add the new operator to the registry
+        disperse operators[moiID] <- Operator{
+            Identifier: moiID,
+            Verification: verification,
+            Guardians: make([]String, 0),
+        }
+
+    // Add the operator MOI ID to the list of known operators
+    mutate knownOps <- GuardianRegistry.State.KnownOperators:
+        append(knownOps, moiID)
+
+endpoint invokable persistent RegisterGuardian(guardian Guardian):
+    // Determine the operator ID from the given guardian object
+    memory operatorID = guardian.OperatorID
+
+    // Get the sender address and determine the address of the operator
+    memory senderAddress = String(Address(Sender))
+    memory operatorAddress = operatorID[2:]
+    // Check if the sender matches the given ID
+    if senderAddress != operatorAddress:
+        throw f"sender is not the operator of the guardian"
+
+    // Declare a storage variable to capture the operator
+    storage operator Operator
+
+    // Check if the operator exists and obtain it
+    observe operators <- GuardianRegistry.State.Operators:
+        if !operators[operatorID]?:
+            throw f"sender is not a verified operator: {operatorID}"
+
+        // Get the operator details
+        operator = operators[operatorID]
+
+    // Obtain the guardian KramaID
+    memory kramaID = guardian.KramaID
+    // Check if the guardian already exists and throw an exception
+    observe guardians <- GuardianRegistry.State.Guardians:
+        if guardians[kramaID]?: throw "guardian already exists"
+
+    // Check if the operator is the master
+    memory isMaster = (ok) <- IsMaster(moiID: operatorID)
+    if !isMaster:
+        // Check the node limits for the operator
+        // This check is not applied for the master
+        CanRegisterGuardian(operator, guardian)
+
+    mutate operators <- GuardianRegistry.State.Operators:
+        // Add the guardian krama ID to the operator
+        append(operator.Guardians, kramaID)
+        // Update the operator object to the registry
+        operators[operatorID] = operator
+
+    // Add the guardian to the registry
+    mutate guardians <- GuardianRegistry.State.Guardians:
+        disperse guardians[kramaID] <- guardian
+
+     // Add the guardian Krama ID to the list of known guardians
+    mutate knownGs <- GuardianRegistry.State.KnownGuardians:
+        append(knownGs, kramaID)
+
+func readonly CanRegisterGuardian(operator Operator, guardian Guardian):
+    // Check if the krama ID has been approved
+    observe approved <- GuardianRegistry.State.Approved:
+        if !approved[guardian.KramaID]?:
+            throw "guardian krama id is not approved"
+
+    memory verification = operator.Verification.Kind
+    memory nodelimit U64
+
+    // Obtain the node limit based on the operator's verification kind
+    if verification == "kyc":
+        observe nodelimit <- GuardianRegistry.State.NodeLimitKYC
+    else if verification == "kyb":
+        observe nodelimit <- GuardianRegistry.State.NodeLimitKYB
+    else:
+        throw "unexpected verification kind encountered"
+
+    // Check the node limit for the operator
+    if nodelimit != 0:
+        if len(operator.Guardians) >= nodelimit:
+            throw "node limit reached for operator"
+
+    // Check the referral percentage
+    if guardian.Incentive.ReferralPercent > 100:
+        throw "invalid referral percentage"
+
+// GetIncentives retrieves the incentives for the given guardian Krama ID
+endpoint invokable readonly GetIncentives(kramaID String) -> (incentive U64):
+    observe guardians <- GuardianRegistry.State.Guardians:
+        yield incentive guardians[kramaID].Incentive.Amount
+
+// GetReferralRewards retrieves the incentives for the given referral address
+endpoint invokable readonly GetReferralRewards(addr Address) -> (incentive U64):
+    observe referrals <- GuardianRegistry.State.ReferralRewards:
+        yield incentive referrals[addr]
+
+// AddIncentives adds some incentives to the given kramaIDs.
+// The sender must be an admin for this operation.
+endpoint invokable persistent AddIncentives(incentiveIDs []String, incentiveAmounts []U64):
+    // Authenticate the sender as an admin
+    AuthenticateAdmin()
+
+    if len(incentiveIDs) != len(incentiveAmounts):
+        throw "invalid incentive inputs: mismatched size"
+
+    mutate guardians <- GuardianRegistry.State.Guardians:
+        for idx, kramaID in incentiveIDs:
+            // Check that guardian exists
+            if !guardians[kramaID]?: revert "guardian does not exist"
+
+            // Retrieve the guardian
+            storage guardian = guardians[kramaID]
+            memory incentive = incentiveAmounts[idx]
+
+            memory refCut U64
+            memory refPercent = guardian.Incentive.ReferralPercent
+
+            // If the referral percentage is non-zero, calculate referral reward
+            if refPercent != 0:
+                refCut = (incentive * refPercent) / 100
+
+            // Subtract the referral reward from the incentive for the guardian
+            incentive = incentive - refCut
+            // Add the incentive to the guardian object
+            guardian.Incentive.Amount += incentive
+
+            if refPercent != 0:
+                // Add the referral reward to the registry
+                mutate referrals <- GuardianRegistry.State.ReferralRewards:
+                    referrals[guardian.Incentive.ReferralWallet] += refCut
+
+            // Update the guardian object
+            guardians[kramaID] = guardian
+
+// ChangeNodeLimit changes the node limit for a verification kind ("KYC" or "KYB").
+// The sender must be an admin for this operation.
+endpoint invokable persistent ChangeNodeLimit(kind String, updated U64):
+    // Authenticate the sender as an admin
+    AuthenticateAdmin()
+
+    if kind == "kyc":
+        mutate limitKYC <- GuardianRegistry.State.NodeLimitKYC:
+            if updated < limitKYC:
+                revert f"updated limit cannot be be less than existing"
+
+             // Update the KYC Limit
+            limitKYC = updated
+
+    else if kind == "kyb":
+        mutate limitKYB <- GuardianRegistry.State.NodeLimitKYB:
+            if updated < limitKYB:
+                revert "updated limit cannot be be less than existing"
+
+            // Update the KYB Limit
+            limitKYB = updated
+
+    else: revert "invalid limit kind"
+
+// ApproveKramaIDs adds the given kramaIDs to the approved set
+func persistent ApproveKramaIDs(kramaIDs []String):
+    mutate approved <- GuardianRegistry.State.Approved:
+        // Approve each of the given Krama IDs
+        for _, kramaID in kramaIDs:
+            approved[kramaID] = true
+
+// IsMaster checks if the the given MOI ID is the master
+func readonly IsMaster(moiID String) -> (ok Bool):
+    observe master <- GuardianRegistry.State.MasterOperator:
+        yield ok master.MOIID == moiID
+
+// AuthenticateAdmin authenticates that Sender is one of the admins
+func readonly AuthenticateAdmin():
+    // Observe the approver set from the registry state
+    observe admins <- GuardianRegistry.State.Administrators:
+        // Check if the sender address has an entry in the approver set
+        memory exists = admins[Address(Sender)]?
+
+        // If the sender is not a valid approver, throw exception
+        if !exists: throw "access denied! not an admin"

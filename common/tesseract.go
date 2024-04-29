@@ -306,7 +306,7 @@ func (t *Tesseract) ExecutionContext() *ExecutionContext {
 	return &ExecutionContext{
 		CtxDelta: t.ContextDelta(),
 		Cluster:  t.ClusterID(),
-		Time:     t.Timestamp(),
+		Time:     uint64(t.Timestamp()),
 	}
 }
 

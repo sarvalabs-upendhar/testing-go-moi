@@ -5,10 +5,9 @@ import (
 	"math"
 
 	"github.com/pkg/errors"
-	engineio "github.com/sarvalabs/go-moi-engineio"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/state"
 )
 
@@ -35,10 +34,9 @@ func RunLogicDeploy(
 	// Create an options chain
 	options := make([]LogicDeployOption, 0, 3)
 	// Append deploy options for deployer state and fuel limit
-	options = append(options, DeployerState(deployer))
 	options = append(options, DeployFuelLimit(tank.Level()))
 
-	consumption, receiptPayload, err := DeployLogic(ix, ctx, logicacc, options...)
+	consumption, receiptPayload, err := DeployLogic(ctx, ix, logicacc, deployer, options...)
 	if err != nil {
 		receipt.Status = common.ReceiptStateReverted
 	}
@@ -67,15 +65,6 @@ func RunLogicDeploy(
 // LogicDeployOption is an option for DeployLogic and modifies the logic deployment behaviour
 type LogicDeployOption func(*logicDeployer) error
 
-// DeployerState returns a LogicDeployOption to provide the state object of the deploying account.
-func DeployerState(deployer *state.Object) LogicDeployOption {
-	return func(config *logicDeployer) error {
-		config.deployerState = deployer
-
-		return nil
-	}
-}
-
 // DeployFuelLimit returns a LogicDeployOption to provide the fuel limit for logic deployment.
 func DeployFuelLimit(limit uint64) LogicDeployOption {
 	return func(config *logicDeployer) error {
@@ -85,46 +74,26 @@ func DeployFuelLimit(limit uint64) LogicDeployOption {
 	}
 }
 
-// DeployGenesisLogic deploys the manifest from the given payload into the given state object.
-// The deployer call is performed with the callsite and calldata in the payload.
-// Deployment occurs without a fuel limit.
-func DeployGenesisLogic(
-	ctx *common.ExecutionContext,
-	state *state.Object,
-	payload *common.LogicPayload,
-) (identifiers.LogicID, error) {
-	// Serialize the logic payload
-	inner, _ := payload.Bytes()
-	// Create a new IxLogicDeploy interaction with the logic payload
-	ix, _ := common.NewInteraction(common.IxData{
-		Input: common.IxInput{Type: common.IxLogicDeploy, Payload: inner},
-	}, nil)
-
-	_, receipt, err := DeployLogic(ix, ctx, state)
-	if err != nil {
-		return "", errors.Wrap(err, "deployment failed")
-	}
-
-	if receipt.Error != nil {
-		return "", errors.Errorf("deployment call failed: %#x", receipt.Error)
-	}
-
-	return receipt.LogicID, nil
-}
-
 // DeployLogic deploys the given manifest code into the given state object.
 // Deployment behavior can be extended with LogicDeployOption functions to set fuel
 // limit for the deployment or provide deployer state or deployment call parameters.
 // Uses unlimited fuel limit unless otherwise specified with the DeployFuelLimit option.
 // Does not perform a call to deployer callsite unless specified with DeploymentCall.
-func DeployLogic(ix *common.Interaction, ctx *common.ExecutionContext, state *state.Object, opts ...LogicDeployOption) (
+func DeployLogic(
+	ctx *common.ExecutionContext,
+	ix *common.Interaction,
+	logicState *state.Object,
+	deployerState *state.Object,
+	opts ...LogicDeployOption,
+) (
 	uint64, *common.LogicDeployReceipt, error,
 ) {
 	// Generate basic deployment config
 	deployer := &logicDeployer{
-		manifest:   ix.Manifest(),
-		logicState: state,
-		fueltank:   NewFuelTank(math.MaxUint64),
+		manifest:      ix.Manifest(),
+		logicState:    logicState,
+		deployerState: deployerState,
+		fueltank:      NewFuelTank(math.MaxUint64),
 	}
 
 	// Apply all deployment options on the config
@@ -176,19 +145,19 @@ type logicDeployer struct {
 
 func (deployer logicDeployer) compileManifest() (*engineio.LogicDescriptor, error) {
 	// Decode the manifest data into a engineio.Manifest
-	manifest, err := engineio.NewManifest(deployer.manifest, engineio.POLO)
+	manifest, err := engineio.NewManifest(deployer.manifest, common.POLO)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not decode manifest")
 	}
 
 	// Obtain the runtime for the logic engine in the header
-	runtime, ok := engineio.FetchEngineRuntime(manifest.Header().LogicEngine())
+	runtime, ok := engineio.FetchEngine(manifest.Engine().Kind)
 	if !ok {
-		return nil, errors.Errorf("unsupported manifest engine: %v", manifest.Header().LogicEngine())
+		return nil, errors.Errorf("unsupported manifest engine: %v", manifest.Engine().Kind)
 	}
 
 	// Compile the manifest into a LogicDescriptor
-	logicDescriptor, consumed, err := runtime.CompileManifest(deployer.fueltank.Level(), manifest)
+	logicDescriptor, consumed, err := runtime.CompileManifest(manifest, deployer.fueltank.Level())
 	if err != nil {
 		return nil, errors.Wrap(err, "manifest compile failed")
 	}
@@ -198,12 +167,12 @@ func (deployer logicDeployer) compileManifest() (*engineio.LogicDescriptor, erro
 		return nil, errors.New("insufficient fuel: could not compile manifest")
 	}
 
-	return logicDescriptor, nil
+	return &logicDescriptor, nil
 }
 
 func (deployer logicDeployer) deployLogicObject(descriptor *engineio.LogicDescriptor) (*state.LogicObject, error) {
 	// Create a logic object and attach it to the state object
-	logicID, err := deployer.logicState.CreateLogic(descriptor)
+	logicID, err := deployer.logicState.CreateLogic(*descriptor)
 	if err != nil {
 		return nil, err
 	}
@@ -228,30 +197,29 @@ func (deployer logicDeployer) callDeployer(
 	logic *state.LogicObject,
 ) (engineio.CallResult, error) {
 	// Check if logic has a persistent state
-	if ok := logic.StateMatrix.Persistent(); !ok {
+	if _, ok := logic.PersistentState(); !ok {
 		return nil, errors.New("cannot call deployer for logic without persistent state")
 	}
 
 	// Get runtime for logic engine
-	runtime, _ := engineio.FetchEngineRuntime(logic.Engine())
-
+	engine, _ := engineio.FetchEngine(logic.Engine())
 	// Create a new engine for the execution
-	engine, err := runtime.SpawnEngine(
-		deployer.fueltank.Level(), logic, deployer.logicState.GenerateLogicContextObject(logic.ID), ctx,
+	instance, err := engine.SpawnInstance(
+		logic, deployer.fueltank.Level(), deployer.logicState.GenerateLogicContextObject(logic.ID), ctx,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not bootstrap engine")
 	}
 
 	// Declare context driver
-	var deployerCtx engineio.CtxDriver
+	var deployerCtx engineio.StateDriver
 	// Create the deployer context driver if not nil
 	if deployer.deployerState != nil {
 		deployerCtx = deployer.deployerState.GenerateLogicContextObject(logic.ID)
 	}
 
 	// Perform execution call on the engine
-	result, err := engine.Call(context.Background(), ixn, deployerCtx)
+	result, err := instance.Call(context.Background(), ixn, deployerCtx)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not perform call")
 	}

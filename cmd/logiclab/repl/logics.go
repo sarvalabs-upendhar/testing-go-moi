@@ -5,9 +5,9 @@ import (
 	"strings"
 
 	"github.com/manishmeganathan/symbolizer"
-	"github.com/sarvalabs/go-moi-engineio"
 
 	"github.com/sarvalabs/go-moi/cmd/logiclab/core"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
 func HelpLogics() string {
@@ -67,7 +67,7 @@ logic 'Ledger' [0800007140e42388a825992f5f07c7711718384b0ef228b36f46511503295e1d
 
 // CompileLogicCommand generates a Command runner to compile
 // a new Logic with the given name and manifest object
-func CompileLogicCommand(name string, manifest *engineio.Manifest) Command {
+func CompileLogicCommand(name string, manifest engineio.Manifest) Command {
 	return func(repl *Repl) string {
 		// Check if a logic with name already exists
 		if exists := repl.env.LogicExists(name); exists {

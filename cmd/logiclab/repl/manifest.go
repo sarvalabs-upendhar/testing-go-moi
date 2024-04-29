@@ -7,9 +7,10 @@ import (
 
 	"github.com/manishmeganathan/symbolizer"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-engineio"
 
 	"github.com/sarvalabs/go-moi/cmd/logiclab/core"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
 func HelpManifest() string {
@@ -34,12 +35,12 @@ func parseManifestCommand(parser *symbolizer.Parser) Command {
 	}
 
 	return func(repl *Repl) string {
-		return core.PrintManifest(manifest, engineio.POLO)
+		return core.PrintManifest(manifest, common.POLO)
 	}
 }
 
 // returns a manifest, its filepath (empty for raw manifest expressions) and an error
-func parseManifestExpression(parser *symbolizer.Parser) (*engineio.Manifest, string, error) {
+func parseManifestExpression(parser *symbolizer.Parser) (engineio.Manifest, string, error) {
 	if !parser.ExpectPeek(symbolizer.TokenKind('(')) {
 		return nil, "", errors.New("invalid manifest expression: missing '('")
 	}
@@ -68,7 +69,7 @@ func parseManifestExpression(parser *symbolizer.Parser) (*engineio.Manifest, str
 		fpath, _ := value.(string)
 
 		// Read the manifest at the given filepath
-		manifest, err := engineio.ReadManifestFile(fpath)
+		manifest, err := engineio.NewManifestFromFile(fpath)
 		if err != nil {
 			return nil, "", fmt.Errorf("invalid manifest file: %w", err)
 		}
@@ -79,7 +80,7 @@ func parseManifestExpression(parser *symbolizer.Parser) (*engineio.Manifest, str
 		// value is some bytes
 		raw, _ := value.([]byte)
 
-		manifest, err := engineio.NewManifest(raw, engineio.POLO)
+		manifest, err := engineio.NewManifest(raw, common.POLO)
 		if err != nil {
 			return nil, "", errors.Wrap(err, "invalid raw manifest")
 		}
@@ -133,7 +134,7 @@ func parseConvertCommand(parser *symbolizer.Parser) Command {
 		}
 
 		return func(repl *Repl) string {
-			return core.PrintManifest(manifest, core.EncodingFromString(parser.Cursor().Literal))
+			return core.PrintManifest(manifest, common.EncodingFromString(parser.Cursor().Literal))
 		}
 
 	// Convert Codeform [BIN, HEX, ASM]
@@ -146,7 +147,7 @@ func parseConvertCommand(parser *symbolizer.Parser) Command {
 		encoding := strings.ToUpper(extension)
 
 		return func(repl *Repl) string {
-			return core.ConvertManifestCodeform(manifest, core.EncodingFromString(encoding), parser.Cursor().Literal)
+			return core.ConvertManifestCodeform(manifest, common.EncodingFromString(encoding), parser.Cursor().Literal)
 		}
 
 	default:
