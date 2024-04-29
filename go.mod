@@ -49,7 +49,7 @@ require (
 	github.com/sarvalabs/battleground v0.3.0
 	github.com/sarvalabs/go-legacy-kramaid v0.1.0
 	github.com/sarvalabs/go-moi-identifiers v0.1.0
-	github.com/sarvalabs/go-pisa v0.2.1
+	github.com/sarvalabs/go-pisa v0.2.2
 	github.com/sarvalabs/go-polo v0.4.3
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.9.0

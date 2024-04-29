@@ -20,11 +20,10 @@ func init() {
 }
 
 func TestGuardianTestSuite(t *testing.T) {
-	suite.Run(t, new(GuardianTestSuite))
-}
-
-type GuardianTestSuite struct {
-	pisa.TestSuite
+	// Run GuardianRegistry suite with Setup deployer
+	suite.Run(t, new(GuardianSetupTestSuite))
+	// Run GuardianRegistry suite with Import deployer
+	suite.Run(t, new(GuardianImportTestSuite))
 }
 
 var (
@@ -55,7 +54,11 @@ var (
 	GuardianPubKey6  = []byte("b6f13b8a99a05faf286522b3adc9e64e97f0f0fad78dff024cc05e23ad7c52f9")
 )
 
-func (suite *GuardianTestSuite) SetupSuite() {
+type GuardianSetupTestSuite struct {
+	GuardianTestSuite
+}
+
+func (suite *GuardianSetupTestSuite) SetupSuite() {
 	// Read manifest file
 	manifest, err := engineio.NewManifestFromFile("./guardians.yaml")
 	suite.Require().NoErrorf(err, "could not read manifest file")
@@ -106,91 +109,201 @@ func (suite *GuardianTestSuite) SetupSuite() {
 	// Deploy the logic to initialise its initial state
 	suite.Deploy("Setup", calldata, nil, 5014, nil)
 
-	suite.T().Run("CheckSetup", func(t *testing.T) {
-		// Check that there are 2 admin addresses
-		keyAdminsLen := pisa.GenerateStorageKey(SlotAdministrators)
-		suite.CheckStorage(keyAdminsLen, uint64(2))
+	// Check the setup consistency
+	suite.T().Run("CheckSetup", suite.testSetup)
+}
 
-		keyAdmin1 := pisa.GenerateStorageKey(SlotAdministrators, mapKey(AdminAddr1))
-		suite.CheckStorage(keyAdmin1, true)
+type GuardianImportTestSuite struct {
+	GuardianTestSuite
+}
 
-		keyAdmin2 := pisa.GenerateStorageKey(SlotAdministrators, mapKey(AdminAddr2))
-		suite.CheckStorage(keyAdmin2, true)
+func (suite *GuardianImportTestSuite) SetupSuite() {
+	// Read manifest file
+	manifest, err := engineio.NewManifestFromFile("./guardians.yaml")
+	suite.Require().NoErrorf(err, "could not read manifest file")
 
-		// Check that there are 4 approved krama IDs
-		// This includes the 2 in the pre-approved and 2 in the master guardians
-		keyApprovedLen := pisa.GenerateStorageKey(SlotApproved)
-		suite.CheckStorage(keyApprovedLen, uint64(4))
+	// Initialise the test suite
+	consumed, err := suite.Initialise(manifest, AdminAddr1)
+	suite.Require().NoErrorf(err, "could not read initialise test")
+	suite.Require().Equal(uint64(0xa18b), consumed)
 
-		// Check if Krama ID added to master guardians was approved
-		suite.Invoke(
-			"IsApproved",
-			suite.DocGen(map[string]any{"kramaID": GuardianKramaID1}),
-			suite.DocGen(map[string]any{"ok": true}),
-			176, nil,
-		)
+	inputs := struct {
+		Master          Master     `polo:"master"`
+		Admins          [][32]byte `polo:"admins"`
+		Guardians       []Guardian `polo:"guardians"`
+		Operators       []Operator `polo:"operators"`
+		Approved        []string   `polo:"approved"`
+		ReferralAddrs   [][32]byte `polo:"referralAddrs"`
+		ReferralAmounts []uint64   `polo:"referralAmounts"`
+		KnownGs         []string   `polo:"knownGs"`
+		KnownOs         []string   `polo:"knownOs"`
+		LimitKYC        uint64     `polo:"nodeLimitKYC"`
+		LimitKYB        uint64     `polo:"nodeLimitKYB"`
+	}{
+		Master: Master{
+			PubKey: MasterAddr.Bytes(),
+			MOIID:  MasterMOIID,
+			Wallet: MasterAddr,
+		},
+		Admins: [][32]byte{
+			AdminAddr1,
+			AdminAddr2,
+		},
+		Guardians: []Guardian{
+			{
+				KramaID:    GuardianKramaID1,
+				OperatorID: MasterMOIID,
+				Incentive: Incentive{
+					Amount: 0,
+					Wallet: MasterAddr,
+				},
+				PublicKey: GuardianPubKey1,
+			},
+			{
+				KramaID:    GuardianKramaID2,
+				OperatorID: MasterMOIID,
+				Incentive: Incentive{
+					Amount: 0,
+					Wallet: MasterAddr,
+				},
+				PublicKey: GuardianPubKey2,
+			},
+		},
+		Operators: []Operator{
+			{
+				Identifier:   MasterMOIID,
+				Verification: VerifyProof{},
+				Guardians: []string{
+					GuardianKramaID1,
+					GuardianKramaID2,
+				},
+			},
+		},
+		Approved: []string{
+			GuardianKramaID1,
+			GuardianKramaID2,
+			GuardianKramaID3,
+			GuardianKramaID4,
+		},
+		KnownGs: []string{
+			GuardianKramaID1,
+			GuardianKramaID2,
+		},
+		KnownOs: []string{
+			MasterMOIID,
+		},
+		LimitKYC: 1,
+		LimitKYB: 3,
+	}
 
-		// Check if Krama ID in the pre-approved set is approved
-		suite.Invoke(
-			"IsApproved",
-			suite.DocGen(map[string]any{"kramaID": GuardianKramaID3}),
-			suite.DocGen(map[string]any{"ok": true}),
-			176, nil,
-		)
+	// Serialize the input args into calldata
+	calldata, err := polo.PolorizeDocument(inputs, polo.DocStructs())
+	require.NoError(suite.T(), err)
 
-		// Check if some other KramaID was not approved
-		suite.Invoke(
-			"IsApproved",
-			suite.DocGen(map[string]any{"kramaID": GuardianKramaID6}),
-			suite.DocGen(map[string]any{"ok": false}),
-			167, nil,
-		)
+	// Deploy the logic to initialise its initial state
+	suite.Deploy("Import", calldata, nil, 4394, nil)
 
-		// Check if the master MOI ID was marked as verified
-		suite.Invoke(
-			"IsVerified",
-			suite.DocGen(map[string]any{"moiID": MasterMOIID}),
-			suite.DocGen(map[string]any{"ok": true}),
-			176, nil,
-		)
+	// Check the setup consistency
+	suite.T().Run("CheckSetup", suite.testSetup)
+}
 
-		// Check if some other MOI ID was not verified
-		suite.Invoke(
-			"IsVerified",
-			suite.DocGen(map[string]any{"moiID": identifiers.NewRandomAddress().Hex()}),
-			suite.DocGen(map[string]any{"ok": false}),
-			167, nil,
-		)
+type GuardianTestSuite struct {
+	pisa.TestSuite
+}
 
-		// Check that there is 1 known operators
-		// This is the given master operator
-		keyKnownOperatorsLen := pisa.GenerateStorageKey(SlotKnownOperators)
-		suite.CheckStorage(keyKnownOperatorsLen, uint64(1))
+func (suite *GuardianTestSuite) testSetup(_ *testing.T) {
+	// Check that there are 2 admin addresses
+	keyAdminsLen := pisa.GenerateStorageKey(SlotAdministrators)
+	suite.CheckStorage(keyAdminsLen, uint64(2))
 
-		// Check that there are 2 known guardians
-		// These are the given master guardians
-		keyKnownGuardiansLen := pisa.GenerateStorageKey(SlotKnownGuardians)
-		suite.CheckStorage(keyKnownGuardiansLen, uint64(2))
+	keyAdmin1 := pisa.GenerateStorageKey(SlotAdministrators, mapKey(AdminAddr1))
+	suite.CheckStorage(keyAdmin1, true)
 
-		// Check the master MOI ID
-		keyMasterOpMOIID := pisa.GenerateStorageKey(SlotMasterOperator, pisa.ClsFld(0))
-		suite.CheckStorage(keyMasterOpMOIID, MasterMOIID)
+	keyAdmin2 := pisa.GenerateStorageKey(SlotAdministrators, mapKey(AdminAddr2))
+	suite.CheckStorage(keyAdmin2, true)
 
-		// Check the master wallet address
-		keyMasterOpWallet := pisa.GenerateStorageKey(SlotMasterOperator, pisa.ClsFld(1))
-		suite.CheckStorage(keyMasterOpWallet, MasterAddr)
+	// Check that there are 4 approved krama IDs
+	// This includes the 2 in the pre-approved and 2 in the master guardians
+	keyApprovedLen := pisa.GenerateStorageKey(SlotApproved)
+	suite.CheckStorage(keyApprovedLen, uint64(4))
 
-		// Check the master public key
-		keyMasterOpPubKey := pisa.GenerateStorageKey(SlotMasterOperator, pisa.ClsFld(1))
-		suite.CheckStorage(keyMasterOpPubKey, MasterAddr.Bytes())
+	// Check if Krama ID added to master guardians was approved
+	suite.Invoke(
+		"IsApproved",
+		suite.DocGen(map[string]any{"kramaID": GuardianKramaID1}),
+		suite.DocGen(map[string]any{"ok": true}),
+		176, nil,
+	)
 
-		keyGuardian1PubKey := pisa.GenerateStorageKey(
-			SlotGuardians,
-			mapKey(GuardianKramaID1),
-			pisa.ClsFld(3),
-		)
-		suite.CheckStorage(keyGuardian1PubKey, GuardianPubKey1)
-	})
+	// Check if Krama ID in the pre-approved set is approved
+	suite.Invoke(
+		"IsApproved",
+		suite.DocGen(map[string]any{"kramaID": GuardianKramaID3}),
+		suite.DocGen(map[string]any{"ok": true}),
+		176, nil,
+	)
+
+	// Check if some other KramaID was not approved
+	suite.Invoke(
+		"IsApproved",
+		suite.DocGen(map[string]any{"kramaID": GuardianKramaID6}),
+		suite.DocGen(map[string]any{"ok": false}),
+		167, nil,
+	)
+
+	// Check if the master MOI ID was marked as verified
+	suite.Invoke(
+		"IsVerified",
+		suite.DocGen(map[string]any{"moiID": MasterMOIID}),
+		suite.DocGen(map[string]any{"ok": true}),
+		176, nil,
+	)
+
+	// Check if some other MOI ID was not verified
+	suite.Invoke(
+		"IsVerified",
+		suite.DocGen(map[string]any{"moiID": identifiers.NewRandomAddress().Hex()}),
+		suite.DocGen(map[string]any{"ok": false}),
+		167, nil,
+	)
+
+	// Check that there is 1 known operators
+	// This is the given master operator
+	keyKnownOperatorsLen := pisa.GenerateStorageKey(SlotKnownOperators)
+	suite.CheckStorage(keyKnownOperatorsLen, uint64(1))
+
+	// Check that master MOI ID is at known operators index 0
+	keyKnownOperators0 := pisa.GenerateStorageKey(SlotKnownOperators, pisa.ArrIdx(0))
+	suite.CheckStorage(keyKnownOperators0, MasterMOIID)
+
+	// Check that there are 2 known guardians
+	// These are the given master guardians
+	keyKnownGuardiansLen := pisa.GenerateStorageKey(SlotKnownGuardians)
+	suite.CheckStorage(keyKnownGuardiansLen, uint64(2))
+
+	// Check that krama ID 1 is at known guardians index 0
+	keyKnownGuardian0 := pisa.GenerateStorageKey(SlotKnownGuardians, pisa.ArrIdx(0))
+	suite.CheckStorage(keyKnownGuardian0, GuardianKramaID1)
+
+	// Check that krama ID 2 is at known guardians index 1
+	keyKnownGuardian1 := pisa.GenerateStorageKey(SlotKnownGuardians, pisa.ArrIdx(1))
+	suite.CheckStorage(keyKnownGuardian1, GuardianKramaID2)
+
+	// Check the master MOI ID
+	keyMasterOpMOIID := pisa.GenerateStorageKey(SlotMasterOperator, pisa.ClsFld(0))
+	suite.CheckStorage(keyMasterOpMOIID, MasterMOIID)
+
+	// Check the master wallet address
+	keyMasterOpWallet := pisa.GenerateStorageKey(SlotMasterOperator, pisa.ClsFld(1))
+	suite.CheckStorage(keyMasterOpWallet, MasterAddr)
+
+	// Check the master public key
+	keyMasterOpPubKey := pisa.GenerateStorageKey(SlotMasterOperator, pisa.ClsFld(1))
+	suite.CheckStorage(keyMasterOpPubKey, MasterAddr.Bytes())
+
+	// Check the public key of the guardian 1
+	keyGuardian1PubKey := pisa.GenerateStorageKey(SlotGuardians, mapKey(GuardianKramaID1), pisa.ClsFld(3))
+	suite.CheckStorage(keyGuardian1PubKey, GuardianPubKey1)
 }
 
 func (suite *GuardianTestSuite) TestApprovals() {
