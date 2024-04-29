@@ -25,6 +25,7 @@ type Config struct {
 	JSONRPC        JSONRPCConfig   `json:"jsonrpc"`
 	NetworkID      string          `json:"network_id"`
 	State          StateConfig     `json:"state"`
+	GenesisTime    uint64          `json:"genesis_time"`
 }
 
 func DefaultBabylonConfig(path string) *Config {
@@ -349,6 +350,7 @@ func DefaultBabylonConfig(path string) *Config {
 		State: StateConfig{
 			TreeCacheSize: config.DefaultTreeCacheSize,
 		},
+		GenesisTime: config.DefaultGenesisTime,
 	}
 }
 
@@ -426,6 +428,7 @@ func DefaultDevnetConfig(path string) *Config {
 		State: StateConfig{
 			TreeCacheSize: config.DefaultTreeCacheSize,
 		},
+		GenesisTime: 0,
 	}
 }
 

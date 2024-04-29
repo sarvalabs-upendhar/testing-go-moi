@@ -1264,7 +1264,7 @@ func generateTesseract(state *ktypes.ClusterState) (*common.Tesseract, error) {
 		ixnsHash,
 		receiptHash,
 		big.NewInt(0), // TODO pass appropriate value
-		state.ICSReqTime.Unix(),
+		uint64(state.ICSReqTime.Unix()),
 		string(state.Operator),
 		fuelUsed,
 		fuelLimit,

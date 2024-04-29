@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/config"
+
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
@@ -643,7 +645,7 @@ func TestVerifyParticipantState(t *testing.T) {
 		}
 	}
 
-	getTesseractParamsWithTimeStamp := func(height uint64, timestamp int64) *createTesseractParams {
+	getTesseractParamsWithTimeStamp := func(height uint64, timestamp uint64) *createTesseractParams {
 		return &createTesseractParams{
 			Addresses: []identifiers.Address{address},
 			Participants: common.Participants{
@@ -1900,7 +1902,7 @@ func TestAddGenesisTesseract(t *testing.T) {
 
 			c := createTestChainManager(t, chainParams)
 
-			err := c.AddGenesisTesseract(addresses, stateHashes, contextHashes)
+			err := c.AddGenesisTesseract(addresses, stateHashes, contextHashes, uint64(time.Now().UnixNano()))
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -2070,20 +2072,24 @@ func TestSetupGenesis(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	path := createMockGenesisFile(t, dir, false, sargaAccount, genesisAccounts, assetSetupArgs, logics)
+	cfg := &config.ChainConfig{
+		GenesisFilePath: createMockGenesisFile(t, dir, false, sargaAccount,
+			genesisAccounts, assetSetupArgs, logics),
+		GenesisTimestamp: uint64(time.Now().UnixNano()),
+	}
 
 	assetAccAddr := common.CreateAddressFromString(assetSetupArgs[0].AssetInfo.Symbol)
 	logicAddr := common.CreateAddressFromString(logics[0].Name)
 
 	testcases := []struct {
 		name          string
-		path          string
+		cfg           *config.ChainConfig
 		smCallBack    func(sm *MockStateManager)
 		expectedError error
 	}{
 		{
 			name: "should succeed for valid genesis info",
-			path: path,
+			cfg:  cfg,
 			smCallBack: func(sm *MockStateManager) {
 				sm.setAccType(common.SargaAddress, sargaAccount.AccType)
 				sm.setAccType(assetAccAddr, common.AssetAccount)
@@ -2100,7 +2106,7 @@ func TestSetupGenesis(t *testing.T) {
 		},
 		{
 			name: "should return error if failed to add genesis tesseract",
-			path: path,
+			cfg:  cfg,
 			smCallBack: func(sm *MockStateManager) {
 				sm.setAccType(common.SargaAddress, sargaAccount.AccType)
 			},
@@ -2108,60 +2114,75 @@ func TestSetupGenesis(t *testing.T) {
 		},
 		{
 			name: "should return error if failed to parse genesis file",
-			path: createMockGenesisFile(t, dir, true, sargaAccount, genesisAccounts,
-				nil, nil),
+			cfg: &config.ChainConfig{
+				GenesisFilePath: createMockGenesisFile(t, dir, true, sargaAccount, genesisAccounts,
+					nil, nil),
+				GenesisTimestamp: uint64(time.Now().UnixNano()),
+			},
 			expectedError: errors.New("failed to parse genesis file"),
 		},
 		{
 			name: "should return error if failed to setup sarga account",
-			path: createMockGenesisFile(t, dir, false,
-				*getAccountSetupArgs(
-					t,
-					common.SargaAddress,
-					common.SargaAccount,
-					"moi-id",
-					nil,
-					nil,
-				), genesisAccounts, nil, nil),
+			cfg: &config.ChainConfig{
+				GenesisFilePath: createMockGenesisFile(t, dir, false,
+					*getAccountSetupArgs(
+						t,
+						common.SargaAddress,
+						common.SargaAccount,
+						"moi-id",
+						nil,
+						nil,
+					), genesisAccounts, nil, nil),
+				GenesisTimestamp: uint64(time.Now().UnixNano()),
+			},
 			expectedError: errors.New("failed to setup sarga account"),
 		},
 		{
 			name: "should return error if failed to setup genesis account",
-			path: createMockGenesisFile(t, dir, false, sargaAccount,
-				[]common.AccountSetupArgs{*getAccountSetupArgs(
-					t,
-					tests.RandomAddress(t),
-					common.RegularAccount,
-					"moi-id",
-					nil,
-					nil,
-				)}, nil, nil),
+			cfg: &config.ChainConfig{
+				GenesisFilePath: createMockGenesisFile(t, dir, false, sargaAccount,
+					[]common.AccountSetupArgs{*getAccountSetupArgs(
+						t,
+						tests.RandomAddress(t),
+						common.RegularAccount,
+						"moi-id",
+						nil,
+						nil,
+					)}, nil, nil),
+				GenesisTimestamp: uint64(time.Now().UnixNano()),
+			},
 			expectedError: errors.New("failed to setup genesis account"),
 		},
 		{
 			name: "should return error if failed to setup genesis logic",
-			path: createMockGenesisFile(t, dir, false, sargaAccount, genesisAccounts,
-				nil,
-				[]common.LogicSetupArgs{
-					{
-						Name:               "staking-contract",
-						Manifest:           hexutil.Bytes{0, 1},
-						BehaviouralContext: tests.RandomKramaIDs(t, 1),
-					},
-				}),
+			cfg: &config.ChainConfig{
+				GenesisFilePath: createMockGenesisFile(t, dir, false, sargaAccount, genesisAccounts,
+					nil,
+					[]common.LogicSetupArgs{
+						{
+							Name:               "staking-contract",
+							Manifest:           hexutil.Bytes{0, 1},
+							BehaviouralContext: tests.RandomKramaIDs(t, 1),
+						},
+					}),
+				GenesisTimestamp: uint64(time.Now().UnixNano()),
+			},
 			expectedError: errors.New("failed to setup genesis logic"),
 		},
 		{
 			name: "should return error if failed to setup assets",
-			path: createMockGenesisFile(t, dir, false, sargaAccount, genesisAccounts,
-				[]common.AssetAccountSetupArgs{
-					getAssetAccountSetupArgs(t, *getAssetCreationArgs(
-						"MOI",
-						tests.RandomAddress(t),
-						[]identifiers.Address{tests.RandomAddress(t)},
-						[]*big.Int{big.NewInt(12)},
-					), nil, nil),
-				}, nil),
+			cfg: &config.ChainConfig{
+				GenesisFilePath: createMockGenesisFile(t, dir, false, sargaAccount, genesisAccounts,
+					[]common.AssetAccountSetupArgs{
+						getAssetAccountSetupArgs(t, *getAssetCreationArgs(
+							"MOI",
+							tests.RandomAddress(t),
+							[]identifiers.Address{tests.RandomAddress(t)},
+							[]*big.Int{big.NewInt(12)},
+						), nil, nil),
+					}, nil),
+				GenesisTimestamp: uint64(time.Now().UnixNano()),
+			},
 			expectedError: errors.New("failed to setup asset accounts"),
 		},
 	}
@@ -2176,7 +2197,7 @@ func TestSetupGenesis(t *testing.T) {
 
 			c := createTestChainManager(t, chainParams)
 
-			err = c.SetupGenesis(test.path)
+			err = c.SetupGenesis(test.cfg)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 

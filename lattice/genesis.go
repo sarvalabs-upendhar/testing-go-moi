@@ -11,6 +11,7 @@ import (
 func createGenesisTesseract(
 	addresses []identifiers.Address,
 	stateHashes, contextHashes []common.Hash,
+	timestamp uint64,
 ) *common.Tesseract {
 	var (
 		ixHashString = "Genesis"
@@ -47,7 +48,7 @@ func createGenesisTesseract(
 		interactionsHash,
 		common.NilHash,
 		big.NewInt(0),
-		0,
+		timestamp,
 		common.GenesisIdentifier,
 		0,
 		0,

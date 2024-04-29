@@ -510,7 +510,7 @@ type TesseractData struct {
 	InteractionsHash common.Hash
 	ReceiptsHash     common.Hash
 	Epoch            *big.Int
-	Timestamp        int64
+	Timestamp        uint64
 	Operator         string
 	FuelUsed         uint64
 	FuelLimit        uint64

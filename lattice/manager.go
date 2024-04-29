@@ -759,8 +759,9 @@ func (c *ChainManager) IsInitialTesseract(ts *common.Tesseract, addr identifiers
 func (c *ChainManager) AddGenesisTesseract(
 	addresses []identifiers.Address,
 	stateHashes, contextHashes []common.Hash,
+	timestamp uint64,
 ) error {
-	tesseract := createGenesisTesseract(addresses, stateHashes, contextHashes)
+	tesseract := createGenesisTesseract(addresses, stateHashes, contextHashes, timestamp)
 
 	if err := c.addTesseract(true, identifiers.NilAddress, tesseract, true); err != nil {
 		return errors.Wrap(err, "error adding genesis tesseract")
@@ -769,10 +770,10 @@ func (c *ChainManager) AddGenesisTesseract(
 	return nil
 }
 
-func (c *ChainManager) SetupGenesis(path string) error {
+func (c *ChainManager) SetupGenesis(cfg *config.ChainConfig) error {
 	dirtyObjects := make(map[identifiers.Address]*state.Object)
 
-	sargaAccount, genesisAccounts, assetAccounts, logics, err := c.ParseGenesisFile(path)
+	sargaAccount, genesisAccounts, assetAccounts, logics, err := c.ParseGenesisFile(cfg.GenesisFilePath)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse genesis file")
 	}
@@ -820,7 +821,7 @@ func (c *ChainManager) SetupGenesis(path string) error {
 		contextHashes = append(contextHashes, stateObject.ContextHash())
 	}
 
-	if err = c.AddGenesisTesseract(addresses, stateHashes, contextHashes); err != nil {
+	if err = c.AddGenesisTesseract(addresses, stateHashes, contextHashes, cfg.GenesisTimestamp); err != nil {
 		return err
 	}
 

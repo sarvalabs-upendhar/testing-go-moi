@@ -331,7 +331,8 @@ func (p *Params) getSyncerConfig() *config.SyncerConfig {
 
 func (p *Params) getChainConfig() *config.ChainConfig {
 	return &config.ChainConfig{
-		GenesisFilePath: p.rawCfg.Genesis,
+		GenesisFilePath:  p.rawCfg.Genesis,
+		GenesisTimestamp: p.rawCfg.GenesisTime,
 	}
 }
 

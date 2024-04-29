@@ -138,7 +138,7 @@ func TestNewTesseract(t *testing.T) {
 		interactionsHash common.Hash
 		receiptHash      common.Hash
 		epoch            *big.Int
-		timestamp        int64
+		timestamp        uint64
 		operator         string
 		fuelUsed         uint64
 		fuelLimit        uint64

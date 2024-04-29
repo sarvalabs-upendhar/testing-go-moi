@@ -191,6 +191,7 @@ func CreateConfigFile(datadir string, index int, ipAddr string) []byte {
 		State: cmdCommon.StateConfig{
 			TreeCacheSize: config.DefaultTreeCacheSize,
 		},
+		GenesisTime: 0,
 	}
 
 	if writeLogsToFile {

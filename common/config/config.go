@@ -147,7 +147,8 @@ func DefaultDevnetConfig(path string) *Config {
 			DiscoveryInterval:  DefaultDiscoveryInterval,
 		},
 		Chain: &ChainConfig{
-			GenesisFilePath: path + "/genesis.json",
+			GenesisFilePath:  path + "/genesis.json",
+			GenesisTimestamp: DefaultGenesisTime,
 		},
 		Syncer: &SyncerConfig{
 			ShouldExecute:  true,

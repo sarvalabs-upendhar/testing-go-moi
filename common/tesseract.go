@@ -90,7 +90,7 @@ type Tesseract struct {
 	interactionsHash Hash
 	receiptsHash     Hash
 	epoch            *big.Int
-	timestamp        int64
+	timestamp        uint64
 	operator         string
 	fuelUsed         uint64
 	fuelLimit        uint64
@@ -111,7 +111,7 @@ func NewTesseract(
 	interactionsHash Hash,
 	receiptHash Hash,
 	epoch *big.Int,
-	timestamp int64,
+	timestamp uint64,
 	operator string,
 	fuelUsed, fuelLimit uint64,
 	consensusInfo PoXtData,
@@ -270,7 +270,7 @@ func (t *Tesseract) Epoch() *big.Int {
 	return t.epoch
 }
 
-func (t *Tesseract) Timestamp() int64 {
+func (t *Tesseract) Timestamp() uint64 {
 	return t.timestamp
 }
 
@@ -484,7 +484,7 @@ type CanonicalTesseractWithoutSeal struct {
 	InteractionsHash Hash
 	ReceiptsHash     Hash
 	Epoch            *big.Int
-	Timestamp        int64
+	Timestamp        uint64
 	Operator         string
 	FuelUsed         uint64
 	FuelLimit        uint64
@@ -496,7 +496,7 @@ type CanonicalTesseract struct {
 	InteractionsHash Hash
 	ReceiptsHash     Hash
 	Epoch            *big.Int
-	Timestamp        int64
+	Timestamp        uint64
 	Operator         string
 	FuelUsed         uint64
 	FuelLimit        uint64
