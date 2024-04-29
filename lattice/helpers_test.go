@@ -484,6 +484,11 @@ func (sm *MockStateManager) CreateStateObject(_ identifiers.Address, _ common.Ac
 	panic("implement me")
 }
 
+func (sm *MockStateManager) GetEmptyStateObject() *state.Object {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (sm *MockStateManager) GetLatestStateObject(addr identifiers.Address) (*state.Object, error) {
 	// TODO implement me
 	panic("implement me")

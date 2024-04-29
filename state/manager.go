@@ -175,6 +175,12 @@ func (sm *StateManager) getStateObject(addr identifiers.Address, stateHash commo
 	return sm.GetStateObjectByHash(addr, stateHash)
 }
 
+func (sm *StateManager) GetEmptyStateObject() *Object {
+	addr := identifiers.NewAddressFromBytes(identifiers.NilAddress.Bytes())
+
+	return NewStateObject(addr, sm.cache, sm.treeCache, sm.db, common.Account{}, sm.metrics)
+}
+
 func (sm *StateManager) GetLatestStateObject(addr identifiers.Address) (*Object, error) {
 	t, err := sm.GetLatestTesseract(addr, false)
 	if err != nil {

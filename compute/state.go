@@ -20,6 +20,8 @@ type StateManager interface {
 	// CreateDirtyObject must generate a new dirty state.Object for the given types.Address
 	CreateDirtyObject(identifiers.Address, common.AccountType) *state.Object
 
+	// GetEmptyStateObject must return the empty state.Object with the Nil Address
+	GetEmptyStateObject() *state.Object
 	// GetLatestStateObject must return the latest state.Object for the given types.Address
 	GetLatestStateObject(addr identifiers.Address) (*state.Object, error)
 	// GetStateObjectByHash must return the latest state.Object for the given hash
@@ -40,6 +42,13 @@ func FetchIxStateObjects(
 ) {
 	// Create a map of state objects
 	objects := make(state.ObjectMap)
+
+	if sender := ix.Sender(); sender.IsNil() {
+		senderObject := source.GetEmptyStateObject()
+
+		// Add sender state object
+		objects.SetObject(sender, senderObject)
+	}
 
 	// Fetch state object for sender if valid
 	if sender := ix.Sender(); !sender.IsNil() {
