@@ -4,13 +4,19 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/crypto"
+
+	"github.com/sarvalabs/go-moi/common"
 )
 
 const DefaultFuelLimit uint64 = 10000
 
 var DefaultIxPriceLimit = big.NewInt(1)
+
+const (
+	DefaultMoiWalletPath = crypto.DefaultMOIWalletPath
+	DefaultMOIIDPath     = crypto.DefaultMOIIDPath
+)
 
 // Network defaults
 const (
@@ -29,33 +35,35 @@ const (
 	BabylonID                 = 113
 )
 
-// IxPool defaults
+// Chain defaults
+const (
+	DefaultGenesisTime = 1688741089557888000 // time when the Babylon testnet started
+)
 
+// IxPool defaults
 const (
 	DefaultIxPoolMode     = 0
 	DefaultMaxIXPoolSlots = 60000
 )
 
 // Syncer defaults
-
 const (
 	DefaultSyncMode = common.FullSync
 )
 
 // DB defaults
-
 const (
 	DefaultDBDirectory  = "/db"
 	DefaultLogDirectory = "/log"
 	DefaultSnapSize     = 1024 * 1024 * 1024 * 6
 )
 
-const (
-	DefaultMoiWalletPath = crypto.DefaultMOIWalletPath
-	DefaultMOIIDPath     = crypto.DefaultMOIIDPath
-)
-
 // Subscription defaults
 const (
 	DefaultTesseractRangeLimit = 10
+)
+
+// Tree defaults
+const (
+	DefaultTreeCacheSize = 1024 * 1024 * 200
 )

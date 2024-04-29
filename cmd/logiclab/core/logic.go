@@ -5,13 +5,13 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 
-	"github.com/sarvalabs/go-moi-engineio"
-	"github.com/sarvalabs/go-pisa"
-
 	"github.com/sarvalabs/go-moi/cmd/logiclab/db"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/compute/engineio"
+	"github.com/sarvalabs/go-moi/compute/pisa"
 	"github.com/sarvalabs/go-moi/state"
 )
 
@@ -32,15 +32,15 @@ type LogicCallsite struct {
 }
 
 // NewLogic reads and compiles a manifest file at the given path into a Logic with the given name.
-func NewLogic(name string, manifest *engineio.Manifest, fuel engineio.EngineFuel) (*Logic, engineio.EngineFuel, error) {
+func NewLogic(name string, manifest engineio.Manifest, fuel engineio.EngineFuel) (*Logic, engineio.EngineFuel, error) {
 	// Obtain the runtime for the logic engine in the header
-	runtime, ok := engineio.FetchEngineRuntime(manifest.Header().LogicEngine())
+	runtime, ok := engineio.FetchEngine(manifest.Engine().Kind)
 	if !ok {
-		return nil, 0, errors.Errorf("unsupported manifest engine: %v", manifest.Header().LogicEngine())
+		return nil, 0, errors.Errorf("unsupported manifest engine: %v", manifest.Engine().Kind)
 	}
 
 	// Compile the manifest into a LogicDescriptor
-	descriptor, consumed, err := runtime.CompileManifest(fuel, manifest)
+	descriptor, consumed, err := runtime.CompileManifest(manifest, fuel)
 	if err != nil {
 		return nil, consumed, err
 	}
@@ -81,7 +81,7 @@ func (logic Logic) FormatREPL() string {
 
 	str.WriteString(fmt.Sprintf("==== [ @>%v<@ ] [Ready: @>%v<@] [Address: %v] \n", logic.Name, logic.Ready, logicID.Address())) //nolint:lll
 	str.WriteString(fmt.Sprintf("[Edition: %v] [Logic ID: @>%v<@]\n", identifier.Edition(), logicID))
-	str.WriteString(fmt.Sprintf("[Engine: @>%v<@] [Manifest: %x]\n", logic.Object.Engine(), logic.Object.Manifest()))
+	str.WriteString(fmt.Sprintf("[Engine: @>%v<@] [Manifest: %x]\n", logic.Object.Engine(), logic.Object.ManifestHash()))
 	str.WriteString(fmt.Sprintf(
 		"[Persistent: @>%v<@] [Ephemeral: @>%v<@] [Interactive: @>%v<@] [Asset Logic: @>%v<@]\n",
 		identifier.HasPersistentState(), identifier.HasEphemeralState(),
@@ -161,7 +161,7 @@ func (env *Environment) FetchLogic(name string) (*Logic, error) {
 
 // RegisterLogic adds a Logic object to the Environment.
 // The logic is indexed by its name.
-func (env *Environment) RegisterLogic(logic *Logic, manifest *engineio.Manifest) error {
+func (env *Environment) RegisterLogic(logic *Logic, manifest engineio.Manifest) error {
 	// Check if user with the given name already exists
 	if env.LogicExists(logic.Name) {
 		return ErrLogicAlreadyExists
@@ -181,7 +181,7 @@ func (env *Environment) RegisterLogic(logic *Logic, manifest *engineio.Manifest)
 		return err
 	}
 
-	encoded, err = manifest.Encode(engineio.POLO)
+	encoded, err = manifest.Encode(common.POLO)
 	if err != nil {
 		return err
 	}
@@ -232,12 +232,12 @@ func (env *Environment) RemoveAllLogics() error {
 	return nil
 }
 
-func generateSignatures(manifest *engineio.Manifest, callsite *engineio.Callsite) string {
-	if manifest.Header().LogicEngine() != engineio.PISA {
+func generateSignatures(manifest engineio.Manifest, callsite engineio.Callsite) string {
+	if manifest.Engine().Kind != engineio.PISA {
 		return "() -> ()"
 	}
 
-	element := manifest.Elements[callsite.Ptr]
+	element := manifest.Elements()[callsite.Ptr]
 	routine, _ := element.Data.(*pisa.RoutineSchema)
 
 	inputs := make([]string, 0, len(routine.Accepts))
@@ -259,15 +259,15 @@ func generateSignatures(manifest *engineio.Manifest, callsite *engineio.Callsite
 func EndpointFromString(endpoint string) engineio.CallsiteKind {
 	switch endpoint {
 	case "DEPLOY":
-		return engineio.DeployerCallsite
+		return engineio.CallsiteDeployer
 	case "INVOKE":
-		return engineio.InvokableCallsite
+		return engineio.CallsiteInvokable
 	case "ENLISTER":
-		return engineio.EnlisterCallsite
+		return engineio.CallsiteEnlister
 	case "INTERACTABLE":
-		return engineio.InteractableCallsite
+		return engineio.CallsiteInteractable
 	case "LOCAL":
-		return engineio.LocalCallsite
+		return engineio.CallsiteInternal
 	default:
 		panic("unhandled logic call case")
 	}

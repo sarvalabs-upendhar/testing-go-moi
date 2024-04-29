@@ -87,7 +87,7 @@ func parseSetDesignated(parser *symbolizer.Parser) Command {
 			return fmt.Sprintf("invalid designated parameter: %v", actor.Literal)
 		}
 
-		return fmt.Sprintf("designated.%v: %v", actor.Literal, username.String())
+		return fmt.Sprintf("designated.%v: %v", actor.Literal, username)
 	}
 }
 

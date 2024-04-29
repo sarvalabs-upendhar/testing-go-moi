@@ -7,19 +7,19 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sarvalabs/go-moi-engineio"
-	"github.com/sarvalabs/go-pisa"
+
 	"github.com/spf13/cobra"
 
 	"github.com/sarvalabs/go-moi/cmd/logiclab/api"
 	"github.com/sarvalabs/go-moi/cmd/logiclab/core"
 	"github.com/sarvalabs/go-moi/cmd/logiclab/repl"
 	"github.com/sarvalabs/go-moi/common/config"
-	"github.com/sarvalabs/go-moi/crypto"
+	"github.com/sarvalabs/go-moi/compute/engineio"
+	"github.com/sarvalabs/go-moi/compute/pisa"
 )
 
 func init() {
-	engineio.RegisterRuntime(pisa.NewRuntime(), crypto.Cryptographer(0))
+	engineio.RegisterEngine(pisa.NewEngine())
 }
 
 func main() {

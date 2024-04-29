@@ -13,15 +13,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/VictoriaMetrics/fastcache"
+
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-engineio"
 	"github.com/sarvalabs/go-moi-identifiers"
-	"github.com/sarvalabs/go-pisa"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -510,7 +510,7 @@ type TesseractData struct {
 	InteractionsHash common.Hash
 	ReceiptsHash     common.Hash
 	Epoch            *big.Int
-	Timestamp        int64
+	Timestamp        uint64
 	Operator         string
 	FuelUsed         uint64
 	FuelLimit        uint64
@@ -820,50 +820,6 @@ func SignBytes(t *testing.T, msg []byte) (sigBytes, pk []byte) {
 	return sigBytes, pk
 }
 
-// ReadManifest Reads the manifest file at the given
-// filepath and returns it as POLO encoded hex string
-func ReadManifest(t *testing.T, filePath string) []byte {
-	t.Helper()
-
-	// Register the PISA element registry with the EngineIO package
-	engineio.RegisterRuntime(pisa.NewRuntime(), nil)
-
-	// Decode the manifest into a Manifest object
-	manifest, err := engineio.ReadManifestFile(filePath)
-	require.NoError(t, err)
-
-	// Encode the Manifest into POLO data
-	encoded, err := manifest.Encode(engineio.POLO)
-	require.NoError(t, err)
-
-	return encoded
-}
-
-func GetManifests(t *testing.T, filepath string) (poloEncoded, jsonEncoded, yamlEncoded []byte) {
-	t.Helper()
-
-	// Register the PISA element registry with the EngineIO package
-	engineio.RegisterRuntime(pisa.NewRuntime(), nil)
-
-	// Read manifest at file path
-	manifest, err := engineio.ReadManifestFile(filepath)
-	require.NoError(t, err)
-
-	// Encode the Manifest into POLO data
-	poloEncoded, err = manifest.Encode(engineio.POLO)
-	require.NoError(t, err)
-
-	// Encode the Manifest into JSON data
-	jsonEncoded, err = manifest.Encode(engineio.JSON)
-	require.NoError(t, err)
-
-	// Encode the Manifest into YAML data
-	yamlEncoded, err = manifest.Encode(engineio.YAML)
-	require.NoError(t, err)
-
-	return
-}
-
 func CreateIXInputWithTestData(
 	t *testing.T,
 	ixType common.IxType,
@@ -1107,4 +1063,8 @@ func WaitForResponse(t *testing.T, respChan chan Result, data interface{}) inter
 type Result struct {
 	Data interface{}
 	Err  error
+}
+
+func NewTestTreeCache() *fastcache.Cache {
+	return fastcache.New(200)
 }

@@ -3,6 +3,7 @@ package lattice
 import (
 	"sort"
 	"testing"
+	"time"
 
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
@@ -33,7 +34,7 @@ func TestCreateGenesisTesseract(t *testing.T) {
 			s := make(common.Hashes, participantCount)
 			copy(s, test.stateHashes)
 
-			ts := createGenesisTesseract(test.addresses, s, test.contextHashes)
+			ts := createGenesisTesseract(test.addresses, s, test.contextHashes, uint64(time.Now().UnixNano()))
 
 			participants := ts.Participants()
 

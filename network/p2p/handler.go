@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/network"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-msgio"
@@ -79,7 +81,7 @@ func NewSubHandler(
 		pendingMessageQueue: NewRequestQueue(MaxQueueSize), // Max message queue limit is 200
 		// Subscribe the TypeMux to AddedInteractionEvent and NewPeerEvent events
 		ixSub:      mux.Subscribe(utils.AddedInteractionEvent{}),
-		newPeerSub: mux.Subscribe(utils.NewPeerEvent{}),
+		newPeerSub: mux.Subscribe(NewPeerEvent{}),
 	}
 }
 
@@ -110,45 +112,75 @@ func (eh *SubHandler) Start() error {
 func (eh *SubHandler) newPeerLoop() {
 	// Read events from a newpeer channel
 	for obj := range eh.newPeerSub.Chan() {
-		// Assert event as a NewPeerEvent
-		if p, ok := obj.Data.(utils.NewPeerEvent); ok {
+		if event, ok := obj.Data.(NewPeerEvent); ok && event.Peer != nil {
 			// If minimum peer count is met, send a hello message
 			if eh.peers.Len() > 3 {
 				eh.server.SendHelloMessage()
 			}
 
-			peer := eh.peers.Peer(p.PeerID)
-			// Asynchronously handle the new peer
-			go func(peer *Peer) {
-				// Defer the peer unregister from the handler working set
-				defer func() {
-					if err := eh.peers.Unregister(peer); err != nil {
-						eh.logger.Error("Error unregistering peer", "err", err)
+			if event.Peer.stream.Stat().Direction == network.DirInbound {
+				go eh.handleInboundPeer(event.Peer)
 
-						return
-					}
+				continue
+			}
 
-					// Update inbound/outbound connection count based on the peer stream's direction
-					eh.server.ConnManager.updateConnCount(peer.stream.Stat().Direction, peer.GetRTT(), -1)
+			go eh.handleOutboundPeer(event.Peer)
+		}
+	}
+}
 
-					if err := eh.server.ConnManager.ResetStream(peer.stream, MOIStreamTag); err != nil {
-						eh.server.logger.Trace("Failed to reset connection", "err", err)
-					}
+// handleInboundPeer handles inbound peer connection and messages.
+func (eh *SubHandler) handleInboundPeer(peer *Peer) {
+	defer func() {
+		// Update inbound connection count based on the peer stream's direction
+		eh.server.ConnManager.updateConnCount(network.DirInbound, 0, -1)
 
-					eh.logger.Info("Peer Disconnected", "krama-ID", peer.kramaID)
-				}()
+		if err := eh.server.ConnManager.ResetStream(peer.stream, ""); err != nil {
+			eh.server.logger.Trace("Failed to reset connection", "err", err)
+		}
 
-				// Handle messages from the peer
-				for {
-					if err := eh.handlePeerMessage(peer); err != nil {
-						eh.logger.Error("Error handling peer message", "err", err)
+		eh.logger.Info("Inbound Peer Disconnected", "krama-ID", peer.kramaID)
+	}()
 
-						eh.sendDisconnectRequest(peer, err)
+	// Handle messages from the peer
+	for {
+		if err := eh.handlePeerMessage(peer); err != nil {
+			eh.logger.Error("Error handling inbound peer message", "err", err)
 
-						return
-					}
-				}
-			}(peer)
+			return
+		}
+	}
+}
+
+// handleOutboundPeer handles the outbound peer connection.
+func (eh *SubHandler) handleOutboundPeer(peer *Peer) {
+	// Defer the peer unregister from the handler working set
+	defer func() {
+		if err := eh.peers.Unregister(peer); err != nil {
+			eh.logger.Error("Error unregistering peer", "err", err)
+
+			return
+		}
+
+		// Update outbound connection count based on the peer stream's direction
+		eh.server.ConnManager.updateConnCount(network.DirOutbound, peer.GetRTT(), -1)
+
+		if err := eh.server.ConnManager.ResetStream(peer.stream, MOIStreamTag); err != nil {
+			eh.server.logger.Trace("Failed to reset connection", "err", err)
+		}
+
+		eh.logger.Info("Outbound Peer Disconnected", "krama-ID", peer.kramaID)
+	}()
+
+	// Handle messages from the peer
+	for {
+		reader := msgio.NewReader(peer.rw.Reader)
+
+		_, err := reader.ReadMsg()
+		if err != nil {
+			eh.logger.Error("Error handling outbound peer message", "err", err)
+
+			return
 		}
 	}
 }
@@ -206,35 +238,11 @@ func (eh *SubHandler) handlePeerMessage(p *Peer) error {
 			}
 		}
 
-	case networkmsg.DISCONNECTREQ:
-		eh.handleDisconnectRequest(p, message)
-
-		return nil
+	default:
+		return errors.New("Invalid message type")
 	}
 
 	return nil
-}
-
-func (eh *SubHandler) handleDisconnectRequest(peer *Peer, msg *networkmsg.Message) {
-	var disconnectMsg networkmsg.DisconnectReq
-
-	if err := disconnectMsg.FromBytes(msg.Payload); err != nil {
-		eh.logger.Error("Decode disconnect request.", "from", msg.Sender, "err", err)
-
-		peer.stream.Conn().Close()
-
-		return
-	}
-
-	eh.logger.Info("Handled disconnect request from", "krama-ID", msg.Sender, "reason", disconnectMsg.Reason)
-}
-
-func (eh *SubHandler) sendDisconnectRequest(peer *Peer, err error) {
-	disconnectMsg := &networkmsg.DisconnectReq{
-		Reason: err.Error(),
-	}
-
-	peer.Send(eh.server.GetKramaID(), networkmsg.DISCONNECTREQ, disconnectMsg)
 }
 
 // ixBroadcastLoop is a method of SubHandler that handles NewIxsEvents.

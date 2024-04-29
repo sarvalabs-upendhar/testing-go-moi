@@ -10,10 +10,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-engineio"
 
 	"github.com/sarvalabs/go-moi/cmd/logiclab/core"
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
 type LogicCallRequest struct {
@@ -24,7 +24,7 @@ type LogicCallRequest struct {
 type LogicCallResponse struct {
 	Ok     bool
 	Fuel   uint64
-	Output []byte
+	Output string
 	Error  []byte
 }
 
@@ -63,10 +63,10 @@ func (api *API) callLogicEndpoint(c *gin.Context) {
 	// Perform deploy gating
 	// Only allow to deploy, if logic is not ready.
 	// Only allow to invoke, if logic is ready.
-	if kind == engineio.InvokableCallsite && !logic.Ready {
+	if kind == engineio.CallsiteInvokable && !logic.Ready {
 		c.JSON(http.StatusBadRequest, Error(errors.New("logic is not ready. must be deployed first")))
 		return
-	} else if kind == engineio.DeployerCallsite && logic.Ready {
+	} else if kind == engineio.CallsiteDeployer && logic.Ready {
 		c.JSON(http.StatusBadRequest, Error(errors.New("logic is already deployed")))
 		return
 	}
@@ -91,8 +91,8 @@ func (api *API) callLogicEndpoint(c *gin.Context) {
 		return
 	}
 
-	// Obtain the runtime for the logic engine in the header
-	runtime, ok := engineio.FetchEngineRuntime(logic.Object.Engine())
+	// Obtain the engine for the logic engine in the header
+	engine, ok := engineio.FetchEngine(logic.Object.Engine())
 	if !ok {
 		c.JSON(http.StatusInternalServerError, Error(errors.New("failed to retrieve runtime for logic")))
 		return
@@ -106,10 +106,10 @@ func (api *API) callLogicEndpoint(c *gin.Context) {
 	}
 
 	logicID := logic.Object.ID
-	// Spawn an engine for the runtime
-	engine, err := runtime.SpawnEngine(
-		env.CallFuel,
+	// Spawn an instance for the engine
+	instance, err := engine.SpawnInstance(
 		logic.Object,
+		env.CallFuel,
 		core.NewContextDriver(env.ID, api.lab.Database, logicID.Address(), logicID),
 		api.lab,
 	)
@@ -132,9 +132,9 @@ func (api *API) callLogicEndpoint(c *gin.Context) {
 	ixn := core.LogicInteraction{
 		Kind: func() common.IxType {
 			switch kind {
-			case engineio.DeployerCallsite:
+			case engineio.CallsiteDeployer:
 				return common.IxLogicDeploy
-			case engineio.InvokableCallsite:
+			case engineio.CallsiteInvokable:
 				return common.IxLogicInvoke
 			default:
 				panic("unhandled logic call case")
@@ -143,17 +143,23 @@ func (api *API) callLogicEndpoint(c *gin.Context) {
 		Price: new(big.Int).SetUint64(core.LabFuelPrice),
 		Limit: env.CallFuel,
 		Site:  request.Callsite,
-		Call:  calldata,
+	}
+
+	// Set the calldata as nil if no calldata is provided
+	if request.Calldata == "" {
+		ixn.Call = nil
+	} else {
+		ixn.Call = calldata
 	}
 
 	// Execute the function
-	result, err := engine.Call(context.Background(), ixn, senderContext)
+	result, err := instance.Call(context.Background(), ixn, senderContext)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, Error(err))
 		return
 	}
 
-	if kind == engineio.DeployerCallsite && result.Ok() {
+	if kind == engineio.CallsiteDeployer && result.Ok() {
 		// Mark the logic as deployed
 		logic.Ready = true
 
@@ -164,11 +170,12 @@ func (api *API) callLogicEndpoint(c *gin.Context) {
 		}))
 
 		return
-	} else if kind == engineio.InvokableCallsite {
+	} else if kind == engineio.CallsiteInvokable {
+		output := hex.EncodeToString(result.Outputs())
 		c.JSON(http.StatusOK, Success().WithData(LogicCallResponse{
 			Ok:     result.Ok(),
 			Fuel:   result.Fuel(),
-			Output: result.Outputs(),
+			Output: output,
 			Error:  result.Error(),
 		}))
 

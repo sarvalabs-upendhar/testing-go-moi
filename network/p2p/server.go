@@ -441,5 +441,5 @@ func (s *Server) GetOutboundConnCount() int64 {
 }
 
 func (s *Server) constructHandshakeMSG() (*networkmsg.HandshakeMSG, error) {
-	return networkmsg.ConstructHandshakeMSG([]byte("ping"), ""), nil
+	return networkmsg.ConstructHandshakeMSG([]byte("ping")), nil
 }

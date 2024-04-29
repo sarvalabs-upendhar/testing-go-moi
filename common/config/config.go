@@ -27,6 +27,7 @@ type Config struct {
 	LogFilePath    string
 	JSONRPC        *JSONRPCConfig
 	NetworkID      string
+	State          *StateConfig
 }
 
 type Telemetry struct {
@@ -44,7 +45,7 @@ type SyncerConfig struct {
 
 type ChainConfig struct {
 	GenesisFilePath  string
-	GenesisTimestamp int64
+	GenesisTimestamp uint64
 }
 
 type DBConfig struct {
@@ -120,6 +121,10 @@ type JSONRPCConfig struct {
 	TesseractRangeLimit uint8
 }
 
+type StateConfig struct {
+	TreeCacheSize uint64
+}
+
 func DefaultDevnetConfig(path string) *Config {
 	c := &Config{
 		NodeType:       7,
@@ -142,7 +147,8 @@ func DefaultDevnetConfig(path string) *Config {
 			DiscoveryInterval:  DefaultDiscoveryInterval,
 		},
 		Chain: &ChainConfig{
-			GenesisFilePath: path + "/genesis.json",
+			GenesisFilePath:  path + "/genesis.json",
+			GenesisTimestamp: DefaultGenesisTime,
 		},
 		Syncer: &SyncerConfig{
 			ShouldExecute:  true,

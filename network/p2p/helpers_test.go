@@ -608,7 +608,7 @@ func unsubscribeServers(t *testing.T, server *Server, topic string) {
 
 func registerStreamHandler(servers ...*Server) {
 	for _, server := range servers {
-		server.ConnManager.SetupStreamHandler(config.MOIProtocolStream, MOIStreamTag, server.ConnManager.streamHandler)
+		server.ConnManager.SetupStreamHandler(config.MOIProtocolStream, "", server.ConnManager.streamHandler)
 	}
 }
 
@@ -767,7 +767,7 @@ func checkConnectionProtection(t *testing.T, server *Server, peerID peer.ID, pro
 func postDiscoverPeerEvent(t *testing.T, source *Server, peerID peer.ID) {
 	t.Helper()
 
-	err := source.mux.Post(utils.DiscoverPeerEvent{
+	err := source.mux.Post(DiscoverPeerEvent{
 		ID: peerID,
 	})
 	require.NoError(t, err)
@@ -803,18 +803,12 @@ func validateMessage(t *testing.T, id kramaid.KramaID, msg *networkmsg.Message) 
 	require.Equal(t, id, msg.Sender)
 }
 
-func validateHandShakeMsg(t *testing.T, s *Server, msg *networkmsg.Message, expectedError error) {
+func validateHandShakeMsg(t *testing.T, s *Server, msg *networkmsg.Message) {
 	t.Helper()
 
 	validateMessage(t, s.id, msg)
 
 	handShake := getHandShakeMsg(t, msg)
-
-	if expectedError != nil {
-		require.Contains(t, handShake.Error, expectedError.Error())
-
-		return
-	}
 
 	require.Equal(t, []byte("ping"), handShake.Data)
 }
@@ -823,9 +817,10 @@ func validateNewPeerEvent(t *testing.T, newPeerSub *utils.Subscription, s *Serve
 	t.Helper()
 
 	obj := <-newPeerSub.Chan()
-	p, ok := obj.Data.(utils.NewPeerEvent)
+	event, ok := obj.Data.(NewPeerEvent)
 	require.True(t, ok)
-	require.Equal(t, s.host.ID(), p.PeerID)
+	require.NotNil(t, event.Peer)
+	require.Equal(t, s.host.ID(), event.Peer.networkID)
 }
 
 func validateHelloMessage(t *testing.T, hello networkmsg.HelloMsg, sender *Server) {

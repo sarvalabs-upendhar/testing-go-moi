@@ -10,7 +10,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	discovery "github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	"github.com/sarvalabs/go-moi/common/config"
-	"github.com/sarvalabs/go-moi/common/utils"
 )
 
 const (
@@ -171,13 +170,13 @@ func (ds *DiscoveryService) handleDiscoveredPeers() {
 
 // handlePeerDiscoveryRequest listens for peer discovery events and handles them.
 func (ds *DiscoveryService) handlePeerDiscoveryRequest() {
-	sub := ds.server.mux.Subscribe(utils.DiscoverPeerEvent{})
+	sub := ds.server.mux.Subscribe(DiscoverPeerEvent{})
 	defer sub.Unsubscribe()
 
 	ds.server.logger.Info("Handling the discover peer event")
 
 	for event := range sub.Chan() {
-		event, ok := event.Data.(utils.DiscoverPeerEvent)
+		event, ok := event.Data.(DiscoverPeerEvent)
 		if ok {
 			// Retrieve peer information from the DHT based on the event ID
 			peerInfo, err := ds.findPeer(ds.server.ctx, event.ID)

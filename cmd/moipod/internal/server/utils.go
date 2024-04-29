@@ -331,7 +331,8 @@ func (p *Params) getSyncerConfig() *config.SyncerConfig {
 
 func (p *Params) getChainConfig() *config.ChainConfig {
 	return &config.ChainConfig{
-		GenesisFilePath: p.rawCfg.Genesis,
+		GenesisFilePath:  p.rawCfg.Genesis,
+		GenesisTimestamp: p.rawCfg.GenesisTime,
 	}
 }
 
@@ -368,6 +369,12 @@ func (p *Params) getTelemetryConfig() *config.Telemetry {
 func (p *Params) getJSONRPCConfig() *config.JSONRPCConfig {
 	return &config.JSONRPCConfig{
 		TesseractRangeLimit: config.DefaultTesseractRangeLimit,
+	}
+}
+
+func (p *Params) getStateConfig() *config.StateConfig {
+	return &config.StateConfig{
+		TreeCacheSize: p.rawCfg.State.TreeCacheSize,
 	}
 }
 
@@ -419,6 +426,7 @@ func (p *Params) generateNodeConfig(dataDir string) *config.Config {
 		LogFilePath:    p.rawCfg.LogFilePath,
 		JSONRPC:        p.getJSONRPCConfig(),
 		NetworkID:      p.rawCfg.NetworkID,
+		State:          p.getStateConfig(),
 	}
 }
 

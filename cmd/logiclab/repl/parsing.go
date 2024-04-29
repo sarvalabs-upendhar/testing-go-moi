@@ -2,7 +2,8 @@ package repl
 
 import (
 	"github.com/manishmeganathan/symbolizer"
-	"github.com/sarvalabs/go-moi-engineio"
+
+	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
 const (
@@ -43,11 +44,13 @@ const (
 	TokenCallencode
 	TokenCalldecode
 	TokenErrdecode
-	TokenStorageKey
 
 	TokenConvert
 	TokenManifestEncoding
 	TokenManifestCodeform
+
+	TokenStorageKey
+	TokenStorageKeyAccessor
 )
 
 // keywords is a mapping of custom keywords to their
@@ -89,7 +92,6 @@ var keywords = map[string]symbolizer.TokenKind{
 	"callencode": TokenCallencode,
 	"calldecode": TokenCalldecode,
 	"errdecode":  TokenErrdecode,
-	"storagekey": TokenStorageKey,
 
 	"convert": TokenConvert,
 	"POLO":    TokenManifestEncoding,
@@ -98,6 +100,11 @@ var keywords = map[string]symbolizer.TokenKind{
 	"BIN":     TokenManifestCodeform,
 	"HEX":     TokenManifestCodeform,
 	"ASM":     TokenManifestCodeform,
+
+	"storagekey": TokenStorageKey,
+	"mapkey":     TokenStorageKeyAccessor,
+	"arridx":     TokenStorageKeyAccessor,
+	"clsfld":     TokenStorageKeyAccessor,
 
 	"deploy": TokenDeploy,
 	"invoke": TokenInvoke,
@@ -150,9 +157,9 @@ func Parse(cmd string) Command {
 		return parseStorageKeyCommand(parser)
 
 	case TokenDeploy:
-		return parseLogicCall(parser, engineio.DeployerCallsite)
+		return parseLogicCall(parser, engineio.CallsiteDeployer)
 	case TokenInvoke:
-		return parseLogicCall(parser, engineio.InvokableCallsite)
+		return parseLogicCall(parser, engineio.CallsiteInvokable)
 
 	default:
 		return InvalidCommandError("")

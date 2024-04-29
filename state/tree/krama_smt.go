@@ -5,6 +5,8 @@ import (
 	"hash"
 	"sync"
 
+	"github.com/VictoriaMetrics/fastcache"
+
 	"github.com/decred/dcrd/crypto/blake256"
 	"github.com/munna0908/smt"
 	"github.com/pkg/errors"
@@ -37,6 +39,7 @@ type KramaHashTree struct {
 	tree      *smt.SparseMerkleTree
 	preImages map[common.Hash][]byte
 	db        DB
+	treeCache *fastcache.Cache
 }
 
 func NewKramaHashTree(
@@ -45,14 +48,17 @@ func NewKramaHashTree(
 	db persistentDB,
 	hasher hash.Hash,
 	dataType storage.PrefixTag,
+	treeCache *fastcache.Cache,
+	metrics *Metrics,
 ) (*KramaHashTree, error) {
 	kht := &KramaHashTree{
-		db: NewTreeDB(address, dataType, db),
+		db: NewTreeDB(address, dataType, db, treeCache, metrics),
 		root: &common.RootNode{
 			MerkleRoot: common.NilHash,
 			HashTable:  make(map[string][]byte),
 		},
 		preImages: make(map[common.Hash][]byte),
+		treeCache: treeCache,
 	}
 
 	if root != common.NilHash {

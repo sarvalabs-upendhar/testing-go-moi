@@ -7,8 +7,8 @@ import (
 
 	"github.com/chzyer/readline"
 	"github.com/pkg/errors"
-	engineio "github.com/sarvalabs/go-moi-engineio"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
+
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/cmd/logiclab/core"
 )
@@ -85,13 +85,6 @@ func (repl *Repl) Start() (err error) {
 		// PRINT
 		println(result)
 	}
-}
-
-// GetReference implements the engineio.ReferenceProvider for Environment
-func (repl *Repl) GetReference(ref engineio.ReferenceVal) (any, bool) {
-	val, ok := repl.memory[string(ref)]
-
-	return val, ok
 }
 
 func (repl *Repl) FormatValue(value any) string {

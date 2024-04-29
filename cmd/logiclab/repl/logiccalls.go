@@ -9,10 +9,10 @@ import (
 
 	"github.com/manishmeganathan/symbolizer"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-engineio"
 
 	"github.com/sarvalabs/go-moi/cmd/logiclab/core"
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
 func HelpDeploy() string {
@@ -116,9 +116,9 @@ func parseLogicCall(parser *symbolizer.Parser, kind engineio.CallsiteKind) Comma
 		// Perform deploy gating
 		// Only allow to deploy, if logic is not ready.
 		// Only allow to invoke, if logic is ready.
-		if kind == engineio.InvokableCallsite && !logic.Ready {
+		if kind == engineio.CallsiteInvokable && !logic.Ready {
 			return fmt.Sprintf("logic '%v' is not ready for invoke. deploy to initialize persistent state", name)
-		} else if kind == engineio.DeployerCallsite && logic.Ready {
+		} else if kind == engineio.CallsiteDeployer && logic.Ready {
 			return fmt.Sprintf("logic '%v' is already deployed", name)
 		}
 
@@ -128,13 +128,13 @@ func parseLogicCall(parser *symbolizer.Parser, kind engineio.CallsiteKind) Comma
 		}
 
 		// Obtain the runtime for the logic engine in the header
-		runtime, ok := engineio.FetchEngineRuntime(logic.Object.Engine())
+		engine, ok := engineio.FetchEngine(logic.Object.Engine())
 		if !ok {
 			return "failed to get runtime for logic"
 		}
 
 		// Generate the call encoder for the callsite
-		encoder, err := runtime.GetCallEncoder(callsite, logic.Object)
+		encoder, err := engine.GetCallEncoderFromLogicDriver(logic.Object, callsite)
 		if err != nil {
 			return fmt.Sprintf("failed to generate call encoder for callsite '%v'", callsite)
 		}
@@ -146,9 +146,9 @@ func parseLogicCall(parser *symbolizer.Parser, kind engineio.CallsiteKind) Comma
 
 		logicID := logic.Object.ID
 		// Spawn an engine for the runtime
-		engine, err := runtime.SpawnEngine(
-			repl.env.CallFuel,
+		instance, err := engine.SpawnInstance(
 			logic.Object,
+			repl.env.CallFuel,
 			core.NewContextDriver(repl.env.ID, repl.lab.Database, logicID.Address(), logicID),
 			repl.lab,
 		)
@@ -169,9 +169,9 @@ func parseLogicCall(parser *symbolizer.Parser, kind engineio.CallsiteKind) Comma
 		ixn := core.LogicInteraction{
 			Kind: func() common.IxType {
 				switch kind {
-				case engineio.DeployerCallsite:
+				case engineio.CallsiteDeployer:
 					return common.IxLogicDeploy
-				case engineio.InvokableCallsite:
+				case engineio.CallsiteInvokable:
 					return common.IxLogicInvoke
 				default:
 					panic("unhandled logic call case")
@@ -184,12 +184,12 @@ func parseLogicCall(parser *symbolizer.Parser, kind engineio.CallsiteKind) Comma
 		}
 
 		// Execute the function
-		result, err := engine.Call(context.Background(), ixn, senderContext)
+		result, err := instance.Call(context.Background(), ixn, senderContext)
 		if err != nil {
 			return fmt.Sprintf("failed to perform logic call: %v", err)
 		}
 
-		if kind == engineio.DeployerCallsite && result.Ok() {
+		if kind == engineio.CallsiteDeployer && result.Ok() {
 			logic.Ready = true
 		}
 
@@ -251,7 +251,7 @@ func (repl *Repl) formatArguments(args string, encoder engineio.CallEncoder) ([]
 	}
 
 	// Encode the parsed arguments into a calldata object
-	calldata, err := encoder.EncodeInputs(arguments, repl)
+	calldata, err := encoder.EncodeInputs(arguments)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to encode calldata")
 	}

@@ -5,10 +5,10 @@ import (
 	"math"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-engineio"
 	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/state"
 )
 
@@ -129,15 +129,15 @@ func InvokeLogic(
 		return 0, nil, errors.Errorf("callsite '%v' does not exist for logic", ixn.Callsite())
 	}
 
-	// Obtain the runtime for the logic engine of the logic object
-	runtime, ok := engineio.FetchEngineRuntime(invoker.logicObject.Engine())
+	// Obtain the runtime engine fro the logic object
+	engine, ok := engineio.FetchEngine(invoker.logicObject.Engine())
 	if !ok {
 		return 0, nil, errors.Errorf("missing engine factory: %v", invoker.logicObject.Engine())
 	}
 
 	// Create a new engine for the execution
-	engine, err := runtime.SpawnEngine(
-		invoker.fueltank.Level(), invoker.logicObject,
+	instance, err := engine.SpawnInstance(
+		invoker.logicObject, invoker.fueltank.Level(),
 		invoker.logicState.GenerateLogicContextObject(invoker.logicObject.ID), ctx,
 	)
 	if err != nil {
@@ -145,14 +145,14 @@ func InvokeLogic(
 	}
 
 	// Declare sender context driver
-	var senderCtx engineio.CtxDriver
+	var senderCtx engineio.StateDriver
 	// Create the deployer context driver if not nil
 	if invoker.senderState != nil {
 		senderCtx = invoker.senderState.GenerateLogicContextObject(invoker.logicObject.ID)
 	}
 
 	// Perform execution call on the engine
-	result, err := engine.Call(context.Background(), ixn, senderCtx)
+	result, err := instance.Call(context.Background(), ixn, senderCtx)
 	if err != nil {
 		return 0, nil, errors.Wrap(err, "could not perform call")
 	}

@@ -1,22 +1,11 @@
 package utils
 
 import (
-	"github.com/libp2p/go-libp2p/core/peer"
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 )
-
-// NewPeerEvent occurs when a new peer is discovered in KIP network
-type NewPeerEvent struct {
-	PeerID peer.ID
-}
-
-// DiscoverPeerEvent is fired to discover a peer from the p2p network
-type DiscoverPeerEvent struct {
-	ID peer.ID
-}
 
 // NewMinedTesseractEvent occurs when new block is generated
 type NewMinedTesseractEvent struct {

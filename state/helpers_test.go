@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/sarvalabs/go-moi/common/config"
+
 	"github.com/decred/dcrd/crypto/blake256"
 	"github.com/hashicorp/go-hclog"
 	iradix "github.com/hashicorp/go-immutable-radix"
@@ -17,7 +19,6 @@ import (
 	"github.com/munna0908/smt"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-engineio"
 	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/assert"
@@ -26,6 +27,7 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"
 	"github.com/sarvalabs/go-moi/storage/db"
@@ -818,6 +820,9 @@ func createTestStateManager(t *testing.T, params *createStateManagerParams) *Sta
 		mockCache(t),
 		NilMetrics(),
 		mockSenatus(t),
+		&config.StateConfig{
+			TreeCacheSize: 22,
+		},
 	)
 	require.NoError(t, err)
 
@@ -887,7 +892,7 @@ func createTestStateObject(t *testing.T, params *createStateObjectParams) *Objec
 		data = params.account
 	}
 
-	so := NewStateObject(addr, cache, mDB, *data)
+	so := NewStateObject(addr, cache, tests.NewTestTreeCache(), mDB, *data, NilMetrics())
 	so.metaStorageTree = mockMerkleTreeWithDB()
 	so.logicTree = mockMerkleTreeWithDB()
 
@@ -1424,7 +1429,8 @@ func createTestKramaHashTree(
 ) (*tree.KramaHashTree, common.Hash) {
 	t.Helper()
 
-	kt, err := tree.NewKramaHashTree(address, common.NilHash, db, blake256.New(), prefix)
+	kt, err := tree.NewKramaHashTree(address, common.NilHash, db, blake256.New(),
+		prefix, tests.NewTestTreeCache(), tree.NilMetrics())
 	require.NoError(t, err)
 
 	for i := 0; i < len(keys); i++ {

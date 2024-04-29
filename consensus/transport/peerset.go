@@ -6,6 +6,7 @@ import (
 	"time"
 
 	id "github.com/sarvalabs/go-legacy-kramaid"
+
 	"github.com/sarvalabs/go-moi/common"
 )
 
@@ -144,7 +145,7 @@ type peerList struct {
 func newPeerList() *peerList {
 	return &peerList{
 		mtx:       sync.RWMutex{},
-		peers:     make(map[id.KramaID]struct{}, 0),
+		peers:     make(map[id.KramaID]struct{}),
 		updatedAt: time.Now().Unix(),
 	}
 }

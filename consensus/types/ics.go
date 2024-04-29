@@ -58,7 +58,7 @@ func NewICS(
 		ClusterID:        clusterID,
 		Operator:         operator,
 		operatorIncluded: false,
-		AccountInfos:     make(AccountInfos, 0),
+		AccountInfos:     make(AccountInfos),
 		contextDelta:     make(common.ContextDelta),
 		Receipts:         make(common.Receipts, 1), // This should be changed base on the interactions
 		dirty:            make(map[common.Hash][]byte),
@@ -488,7 +488,7 @@ func (cs *ClusterState) ExecutionContext() *common.ExecutionContext {
 	return &common.ExecutionContext{
 		CtxDelta: cs.contextDelta,
 		Cluster:  cs.ClusterID,
-		Time:     cs.ICSReqTime.Unix(),
+		Time:     uint64(cs.ICSReqTime.Unix()),
 	}
 }
 

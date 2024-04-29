@@ -14,6 +14,7 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/moby/locker"
 	"github.com/pkg/errors"
+
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
 
@@ -57,6 +58,7 @@ type reputationEngine interface {
 }
 
 type stateManager interface {
+	CreateStateObject(addr identifiers.Address, accType common.AccountType) *state.Object
 	CreateDirtyObject(addr identifiers.Address, accType common.AccountType) *state.Object
 	GetDirtyObject(addr identifiers.Address) (*state.Object, error)
 	FlushDirtyObject(addrs identifiers.Address) error
@@ -757,8 +759,9 @@ func (c *ChainManager) IsInitialTesseract(ts *common.Tesseract, addr identifiers
 func (c *ChainManager) AddGenesisTesseract(
 	addresses []identifiers.Address,
 	stateHashes, contextHashes []common.Hash,
+	timestamp uint64,
 ) error {
-	tesseract := createGenesisTesseract(addresses, stateHashes, contextHashes)
+	tesseract := createGenesisTesseract(addresses, stateHashes, contextHashes, timestamp)
 
 	if err := c.addTesseract(true, identifiers.NilAddress, tesseract, true); err != nil {
 		return errors.Wrap(err, "error adding genesis tesseract")
@@ -767,10 +770,10 @@ func (c *ChainManager) AddGenesisTesseract(
 	return nil
 }
 
-func (c *ChainManager) SetupGenesis(path string) error {
+func (c *ChainManager) SetupGenesis(cfg *config.ChainConfig) error {
 	dirtyObjects := make(map[identifiers.Address]*state.Object)
 
-	sargaAccount, genesisAccounts, assetAccounts, logics, err := c.ParseGenesisFile(path)
+	sargaAccount, genesisAccounts, assetAccounts, logics, err := c.ParseGenesisFile(cfg.GenesisFilePath)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse genesis file")
 	}
@@ -818,7 +821,7 @@ func (c *ChainManager) SetupGenesis(path string) error {
 		contextHashes = append(contextHashes, stateObject.ContextHash())
 	}
 
-	if err = c.AddGenesisTesseract(addresses, stateHashes, contextHashes); err != nil {
+	if err = c.AddGenesisTesseract(addresses, stateHashes, contextHashes, cfg.GenesisTimestamp); err != nil {
 		return err
 	}
 
@@ -1080,12 +1083,6 @@ func (c *ChainManager) SetupGenesisLogics(
 	for _, logic := range logics {
 		logicAddr := common.CreateAddressFromString(logic.Name)
 
-		payload := &common.LogicPayload{
-			Callsite: logic.Callsite,
-			Calldata: logic.Calldata,
-			Manifest: logic.Manifest.Bytes(),
-		}
-
 		if !common.ContainsAddress(common.GenesisLogicAddrs, logicAddr) {
 			c.logger.Error("Mismatch of contract address", "logic-name", logic.Name)
 
@@ -1093,33 +1090,65 @@ func (c *ChainManager) SetupGenesisLogics(
 		}
 
 		// Create state object for the logic
-		stateObj := c.sm.CreateDirtyObject(logicAddr, common.LogicAccount)
+		logicState := c.sm.CreateDirtyObject(logicAddr, common.LogicAccount)
+
+		// Create a dummy state object for the deployer
+		// NOTE: This is a dummy object we create at genesis deployment with the 0x00..00 address
+		// to act as a placeholder account for the execution environment's sender state driver.
+		deployerState := c.sm.CreateStateObject(identifiers.NilAddress, common.RegularAccount)
 
 		behaviouralCtx := logic.BehaviouralContext
 		randomCtx := logic.RandomContext
 
-		_, err := stateObj.CreateContext(behaviouralCtx, randomCtx)
+		_, err := logicState.CreateContext(behaviouralCtx, randomCtx)
 		if err != nil {
 			return nil, errors.Wrap(err, "context initiation failed in genesis")
 		}
 
+		// Create a new execution context
 		ctx := &common.ExecutionContext{
 			CtxDelta: nil,
 			Cluster:  "genesis",
 			Time:     c.cfg.GenesisTimestamp,
 		}
 
-		// Deploy the genesis logic on that state
-		logicID, err := compute.DeployGenesisLogic(ctx, stateObj, payload)
+		// Create a new IxLogicDeploy interaction with the logic payload
+		ix, _ := common.NewInteraction(common.IxData{Input: common.IxInput{
+			Type: common.IxLogicDeploy,
+			Payload: func() []byte {
+				payload := &common.LogicPayload{
+					Callsite: logic.Callsite,
+					Calldata: logic.Calldata,
+					Manifest: logic.Manifest.Bytes(),
+				}
+
+				encoded, _ := payload.Bytes()
+
+				return encoded
+			}(),
+		}}, nil)
+
+		// Deploy the genesis logic and check for errors
+		_, receipt, err := compute.DeployLogic(ctx, ix, logicState, deployerState)
 		if err != nil {
 			c.logger.Error("Unable to deploy logic for", "logic-name", logic.Name)
 
-			return nil, errors.Wrap(err, "unable to deploy logic for contract")
+			return nil, errors.Wrap(err, "deployment failed for logic")
 		}
 
-		dirtyObjects[stateObj.Address()] = stateObj
+		if receipt.Error != nil {
+			return nil, errors.Errorf("deployment call failed: %#x", receipt.Error)
+		}
 
-		c.logger.Info("Deployed genesis contract", "logic-name", logic.Name, "logic-ID", logicID.String())
+		// Update the dirty objects map with the logic state object
+		dirtyObjects[logicState.Address()] = logicState
+
+		// Obtain the logic ID from the call receipt
+		logicID := receipt.LogicID
+		c.logger.Info("Deployed genesis contract",
+			"logic-name", logic.Name,
+			"logic-ID", logicID.String(),
+		)
 	}
 
 	return hashes, nil

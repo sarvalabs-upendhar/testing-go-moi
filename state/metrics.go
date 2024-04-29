@@ -5,10 +5,12 @@ import (
 	"github.com/go-kit/kit/metrics/discard"
 	"github.com/go-kit/kit/metrics/prometheus"
 	stdprometheus "github.com/prometheus/client_golang/prometheus"
+	"github.com/sarvalabs/go-moi/state/tree"
 )
 
 type Metrics struct {
 	ActiveStateObjects metrics.Gauge
+	TreeMetrics        *tree.Metrics
 }
 
 func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics {
@@ -21,25 +23,26 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 	return &Metrics{
 		ActiveStateObjects: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
 			Namespace: namespace,
-			Subsystem: "state_manager",
+			Subsystem: "state",
 			Name:      "active_state_objects",
 			Help:      "Number of active state objects",
 		}, labels).With(labelsWithValues...),
+		TreeMetrics: tree.GetPrometheusMetrics(namespace, labelsWithValues...),
 	}
 }
 
 func NilMetrics() *Metrics {
 	return &Metrics{
 		ActiveStateObjects: discard.NewGauge(),
+		TreeMetrics:        tree.NilMetrics(),
 	}
 }
 
-// methods to capture telemetry metrics
-func (metrics *Metrics) initMetrics() {
+func (metrics *Metrics) InitMetrics() {
 	// Initialize gauge metrics with the default value
 	metrics.ActiveStateObjects.Set(0)
 }
 
-func (metrics *Metrics) captureActiveStateObjects(delta float64) {
+func (metrics *Metrics) CaptureActiveStateObjects(delta float64) {
 	metrics.ActiveStateObjects.Set(delta)
 }

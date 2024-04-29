@@ -23,7 +23,7 @@ func CheckForRPCTesseract(
 	require.Equal(t, ts.InteractionsHash(), rpcTS.InteractionsHash)
 	require.Equal(t, ts.ReceiptsHash(), rpcTS.ReceiptsHash)
 	require.Equal(t, ts.Epoch(), rpcTS.Epoch.ToInt())
-	require.Equal(t, uint64(ts.Timestamp()), rpcTS.TimeStamp.ToUint64())
+	require.Equal(t, ts.Timestamp(), rpcTS.TimeStamp.ToUint64())
 	require.Equal(t, ts.Operator(), rpcTS.Operator)
 	require.Equal(t, ts.FuelUsed(), rpcTS.FuelUsed.ToUint64())
 	require.Equal(t, ts.FuelLimit(), rpcTS.FuelLimit.ToUint64())

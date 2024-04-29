@@ -2,62 +2,14 @@ package common
 
 import (
 	"crypto/rand"
-	"fmt"
 	"math/big"
 	"sync/atomic"
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-engineio"
 	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 )
-
-type IxType int
-
-const (
-	IxInvalid IxType = iota
-	IxValueTransfer
-	IxFuelSupply
-
-	IxAssetCreate
-	IxAssetApprove
-	IxAssetRevoke
-	IxAssetMint
-	IxAssetBurn
-
-	IxLogicDeploy
-	IxLogicInvoke
-	IxLogicEnlist
-	IxLogicInteract
-	IxLogicUpgrade
-)
-
-var ixTypeToString = map[IxType]string{
-	IxInvalid:       "IxInvalid",
-	IxValueTransfer: "IxValueTransfer",
-	IxFuelSupply:    "IxFuelSupply",
-	IxAssetCreate:   "IxAssetCreate",
-	IxAssetApprove:  "IxAssetApprove",
-	IxAssetRevoke:   "IxAssetRevoke",
-	IxAssetMint:     "IxAssetMint",
-	IxAssetBurn:     "IxAssetBurn",
-	IxLogicDeploy:   "IxLogicDeploy",
-	IxLogicInvoke:   "IxLogicInvoke",
-}
-
-func (ixtype IxType) String() string {
-	str, ok := ixTypeToString[ixtype]
-	if !ok {
-		return fmt.Sprintf("unknown ixn: %d", ixtype)
-	}
-
-	return str
-}
-
-func (ixtype IxType) IxnID() int {
-	return int(ixtype)
-}
 
 // SendIXArgs is an argument wrapper for sending Interactions to the pool
 type SendIXArgs struct {
@@ -323,10 +275,6 @@ func (ix Interaction) Signature() []byte {
 // Type returns the type of Interaction as an IxType
 func (ix Interaction) Type() IxType {
 	return ix.inner.Input.Type
-}
-
-func (ix Interaction) IxnType() engineio.IxnType {
-	return ix.Type()
 }
 
 // Sender returns the Address of the Interaction sender

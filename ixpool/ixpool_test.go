@@ -8,9 +8,10 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
@@ -1712,11 +1713,11 @@ func TestIxPool_ValidateLogicInvokePayload(t *testing.T) {
 	address := tests.RandomAddress(t)
 	payloadWithoutCallsite := common.LogicPayload{}
 	payloadWithoutLogicID := common.LogicPayload{
-		Callsite: "seeder!",
+		Callsite: "seeder",
 	}
 	validLogicPayload := common.LogicPayload{
 		Logic:    "logicID-1",
-		Callsite: "seeder!",
+		Callsite: "seeder",
 	}
 
 	rawPayloadWithoutCallsite, err := payloadWithoutCallsite.Bytes()

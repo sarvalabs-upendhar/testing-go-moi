@@ -10,7 +10,6 @@ import (
 	"github.com/sarvalabs/go-moi/common/config"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/stretchr/testify/require"
 )
 
@@ -115,7 +114,7 @@ func TestCheckEvents(t *testing.T) {
 		closeTestServers(t, servers)
 	})
 
-	PeerEventSub := servers[0].mux.Subscribe(utils.NewPeerEvent{}) // subscribe to server-1 events
+	PeerEventSub := servers[0].mux.Subscribe(NewPeerEvent{}) // subscribe to server-1 events
 
 	initDiscoveryAndAdvertise(t, servers[0])
 	initDiscoveryAndAdvertise(t, servers[1])

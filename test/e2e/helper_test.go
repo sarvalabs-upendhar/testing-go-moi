@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -101,7 +102,7 @@ func checkForReceiptSuccess(t *testing.T, client *moiclient.Client, ixHash commo
 	defer cancel()
 
 	receipt := moiclient.RetryFetchReceipt(t, ctx, client, ixHash)
-	require.Equal(t, common.ReceiptOk, receipt.Status)
+	require.Equalf(t, common.ReceiptOk, receipt.Status, fmt.Sprintf("%v", receipt.ExtraData))
 
 	return receipt
 }

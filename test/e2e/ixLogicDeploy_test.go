@@ -5,13 +5,16 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/compute/pisa"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/moiclient"
 )
@@ -20,13 +23,25 @@ var (
 	initialSeederAmount = uint64(100000000)
 	transferAmount      = uint64(1000000)
 
-	seeder, _   = identifiers.NewAddressFromHex("0xffcd8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34")
-	receiver, _ = identifiers.NewAddressFromHex("0x0fafe52ec42a85db644d5cceba2bb89cf5b0166cc9158211f44ed1e60b06032c")
+	ledgerManifest = func() string {
+		path := "./../../compute/manifests/tokenledger.yaml"
 
-	ledgerManifestFile = "./../../compute/manifests/ledger.yaml"
-	ledgerManifest     = "0x" + common.BytesToHex(tests.ReadManifest(&testing.T{}, ledgerManifestFile))
-	deployCalldata     = "0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd8ee6a29ec4" +
-		"42dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49"
+		engineio.RegisterEngine(pisa.NewEngine())
+
+		manifest, err := engineio.NewManifestFromFile(path)
+		if err != nil {
+			panic(err)
+		}
+
+		encoded, err := manifest.Encode(common.POLO)
+		if err != nil {
+			panic(err)
+		}
+
+		return "0x" + common.BytesToHex(encoded)
+	}()
+
+	deployCalldata = "0x0d6f0665b6019502737570706c790305f5e10073796d626f6c064d4f49"
 )
 
 func (te *TestEnvironment) deployLogic(
@@ -79,17 +94,16 @@ func validateTokenLedgerLogicDeploy(
 			TesseractNumber: &rpcargs.LatestTesseractHeight,
 		},
 	})
-	require.NoError(te.T(), err)
 
+	require.NoError(te.T(), err)
 	require.Equal(te.T(), expectedManifest, actualManifest)
 
-	state := moiclient.GetTokenLedgerState(te.T(), te.moiClient, logicID)
+	state := moiclient.GetTokenLedgerState(te.T(), te.moiClient, logicID, []identifiers.Address{sender})
 
-	require.Equal(te.T(), "MOI-Token", state.Name)
 	require.Equal(te.T(), "MOI", state.Symbol)
 	require.Equal(te.T(), initialSeederAmount, state.Supply.Uint64())
 
-	senderBalance, ok := state.Balances[seeder]
+	senderBalance, ok := state.Balances[sender]
 	require.True(te.T(), ok)
 
 	require.Equal(te.T(), initialSeederAmount, senderBalance.Uint64())
@@ -115,7 +129,7 @@ func (te *TestEnvironment) TestLogicDeploy() {
 			name:   "valid logic deploy",
 			sender: sender,
 			logicPayload: &common.LogicPayload{
-				Callsite: "Seeder!",
+				Callsite: "Seeder",
 				Calldata: common.Hex2Bytes(deployCalldata),
 				Manifest: common.Hex2Bytes(ledgerManifest),
 			},
@@ -125,7 +139,7 @@ func (te *TestEnvironment) TestLogicDeploy() {
 			name:   "empty manifest",
 			sender: sender,
 			logicPayload: &common.LogicPayload{
-				Callsite: "Seeder!",
+				Callsite: "Seeder",
 				Calldata: common.Hex2Bytes(ledgerManifest),
 				Manifest: []byte{},
 			},
@@ -145,7 +159,7 @@ func (te *TestEnvironment) TestLogicDeploy() {
 			name:   "empty call data",
 			sender: sender,
 			logicPayload: &common.LogicPayload{
-				Callsite: "Seeder!",
+				Callsite: "Seeder",
 				Calldata: make(polo.Document).Bytes(),
 				Manifest: common.Hex2Bytes(ledgerManifest),
 			},
@@ -155,7 +169,7 @@ func (te *TestEnvironment) TestLogicDeploy() {
 			name:   "invalid call site",
 			sender: sender,
 			logicPayload: &common.LogicPayload{
-				Callsite: "random!",
+				Callsite: "random",
 				Calldata: common.Hex2Bytes(deployCalldata),
 				Manifest: common.Hex2Bytes(ledgerManifest),
 			},
@@ -165,7 +179,7 @@ func (te *TestEnvironment) TestLogicDeploy() {
 			name:   "invalid call data",
 			sender: sender,
 			logicPayload: &common.LogicPayload{
-				Callsite: "Seeder!",
+				Callsite: "Seeder",
 				Calldata: []byte{1, 2, 3},
 				Manifest: common.Hex2Bytes(ledgerManifest),
 			},

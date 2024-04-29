@@ -4,14 +4,17 @@ import (
 	"log"
 	"math/big"
 
+	"github.com/VictoriaMetrics/fastcache"
+
 	"github.com/decred/dcrd/crypto/blake256"
 	iradix "github.com/hashicorp/go-immutable-radix"
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
-	engineio "github.com/sarvalabs/go-moi-engineio"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
+
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"
 )
@@ -21,7 +24,8 @@ import (
 // MetaStorageTree: Keeps track of the root of the storage tree for each logic.
 
 type Object struct {
-	cache *lru.Cache
+	cache     *lru.Cache
+	treeCache *fastcache.Cache
 
 	address identifiers.Address
 	accType common.AccountType
@@ -44,23 +48,27 @@ type Object struct {
 	storageTreeTxns map[identifiers.LogicID]*iradix.Txn
 	logicTreeTxn    *iradix.Txn
 
-	files map[common.Hash][]byte
+	files   map[common.Hash][]byte
+	metrics *Metrics
 }
 
 func NewStateObject(
 	id identifiers.Address,
 	cache *lru.Cache,
+	treeCache *fastcache.Cache,
 	db Store,
 	account common.Account,
+	metrics *Metrics,
 ) *Object {
 	return &Object{
-		accType:  account.AccType,
-		cache:    cache,
-		db:       db,
-		data:     account,
-		address:  id,
-		balance:  nil,
-		registry: nil,
+		accType:   account.AccType,
+		cache:     cache,
+		treeCache: treeCache,
+		db:        db,
+		data:      account,
+		address:   id,
+		balance:   nil,
+		registry:  nil,
 		approvals: &ApprovalObject{
 			Approvals: make(map[identifiers.Address]common.AssetMap),
 			PrvHash:   common.NilHash,
@@ -70,6 +78,7 @@ func NewStateObject(
 		receipts:        make(common.Receipts),
 		storageTreeTxns: make(map[identifiers.LogicID]*iradix.Txn),
 		storageTrees:    make(map[identifiers.LogicID]tree.MerkleTree),
+		metrics:         metrics,
 	}
 }
 
@@ -230,7 +239,7 @@ func (object *Object) Balance() (*BalanceObject, error) {
 }
 
 func (object *Object) Copy() *Object {
-	sObj := NewStateObject(object.address, object.cache, object.db, object.data)
+	sObj := NewStateObject(object.address, object.cache, object.treeCache, object.db, object.data, object.metrics)
 
 	sObj.dirtyEntries = object.dirtyEntries.Copy()
 
@@ -569,11 +578,11 @@ func (object *Object) CreateAsset(
 	return assetID, nil
 }
 
-func (object *Object) CreateLogic(descriptor *engineio.LogicDescriptor) (identifiers.LogicID, error) {
+func (object *Object) CreateLogic(descriptor engineio.LogicDescriptor) (identifiers.LogicID, error) {
 	// Generate the key for the LogicManifest from its hash
 	key := common.BytesToHex(storage.LogicManifestKey(object.Address(), descriptor.ManifestHash))
 	// Write the manifest into the dirty entries
-	object.SetDirtyEntry(key, descriptor.ManifestRaw)
+	object.SetDirtyEntry(key, descriptor.ManifestData)
 
 	// Create a new LogicObject from the LogicDescriptor
 	logicObject := NewLogicObject(object.Address(), descriptor)
@@ -820,6 +829,8 @@ func (object *Object) GetStorageTree(logicID identifiers.LogicID) (tree.MerkleTr
 		common.BytesToHash(root),
 		object.db, blake256.New(),
 		storage.Storage,
+		object.treeCache,
+		object.metrics.TreeMetrics,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to initiate logic storage tree")
@@ -830,14 +841,22 @@ func (object *Object) GetStorageTree(logicID identifiers.LogicID) (tree.MerkleTr
 	return storageTree, nil
 }
 
-func (object *Object) SetStorageEntry(logicID identifiers.LogicID, key, value []byte) (err error) {
+func (object *Object) SetStorageEntry(logicID identifiers.LogicID, key, value []byte) error {
 	_, ok := object.storageTreeTxns[logicID]
 	if !ok {
-		if _, err = object.GetStorageTree(logicID); err != nil {
+		if _, err := object.GetStorageTree(logicID); err != nil {
 			return err
 		}
 
 		object.storageTreeTxns[logicID] = iradix.New().Txn()
+	}
+
+	// If the value has zero length, we treat it as a
+	// delete operation instead of a write operation
+	if len(value) == 0 {
+		object.storageTreeTxns[logicID].Delete(key)
+
+		return nil
 	}
 
 	object.storageTreeTxns[logicID].Insert(key, value)
@@ -877,6 +896,8 @@ func (object *Object) getMetaStorageTree() (tree.MerkleTree, error) {
 		object.db,
 		blake256.New(),
 		storage.Storage,
+		object.treeCache,
+		object.metrics.TreeMetrics,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to initiate storage tree")
@@ -898,6 +919,8 @@ func (object *Object) createStorageTreeForLogic(logicID identifiers.LogicID) (tr
 		object.db,
 		blake256.New(),
 		storage.Storage,
+		object.treeCache,
+		object.metrics.TreeMetrics,
 	)
 	if err != nil {
 		return nil, err
@@ -928,6 +951,8 @@ func (object *Object) getLogicTree() (tree.MerkleTree, error) {
 		object.db,
 		blake256.New(),
 		storage.Logic,
+		object.treeCache,
+		object.metrics.TreeMetrics,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to initiate logic tree")

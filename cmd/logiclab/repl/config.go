@@ -5,7 +5,8 @@ import (
 	"strings"
 
 	"github.com/manishmeganathan/symbolizer"
-	"github.com/sarvalabs/go-moi-engineio"
+
+	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
 func HelpEngines() string {
@@ -21,7 +22,7 @@ func EnginesCommand() Command {
 		var str strings.Builder
 
 		for idx, engine := range engines {
-			runtime, _ := engineio.FetchEngineRuntime(engine)
+			runtime, _ := engineio.FetchEngine(engine)
 			str.WriteString(Colorize(fmt.Sprintf("%v] @>%s<@ (%v)", idx+1, engine, runtime.Version())))
 		}
 

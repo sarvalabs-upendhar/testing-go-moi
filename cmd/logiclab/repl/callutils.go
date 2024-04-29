@@ -6,9 +6,13 @@ import (
 	"math"
 	"strings"
 
+	"github.com/pkg/errors"
+	"golang.org/x/crypto/blake2b"
+
 	"github.com/manishmeganathan/symbolizer"
-	"github.com/sarvalabs/go-moi-engineio"
-	"github.com/sarvalabs/go-pisa"
+
+	"github.com/sarvalabs/go-moi/compute/engineio"
+	"github.com/sarvalabs/go-moi/compute/pisa"
 	"github.com/sarvalabs/go-polo"
 )
 
@@ -59,7 +63,8 @@ func CallencodeValueCommand(value any) Command {
 		doc := make(polo.Document)
 
 		for key, val := range object {
-			data, err := engineio.EncodeValues(val, repl)
+			// todo: fix
+			data, err := pisa.EncodeValues(val)
 			if err != nil {
 				return fmt.Sprintf("could not encode value into calldata: %v", err)
 			}
@@ -136,13 +141,13 @@ func CalldecodeValueCommand(data []byte, name, site string) Command {
 		}
 
 		// Obtain the runtime for the logic engine in the header
-		runtime, ok := engineio.FetchEngineRuntime(logic.Object.Engine())
+		engine, ok := engineio.FetchEngine(logic.Object.Engine())
 		if !ok {
 			return "failed to get runtime for logic"
 		}
 
 		// Generate the call encoder for the callsite
-		encoder, err := runtime.GetCallEncoder(callsite, logic.Object)
+		encoder, err := engine.GetCallEncoderFromLogicDriver(logic.Object, callsite)
 		if err != nil {
 			return fmt.Sprintf("failed to generate call encoder for callsite '%v'", callsite)
 		}
@@ -230,7 +235,7 @@ f742e7365747570205b3078305d726f6f742e446f205b3078305d202e2e2e205b3078323a2054485
 // decode the error object from the given error bytes data.
 func ErrdecodeValueCommand(errdata []byte, engine engineio.EngineKind) Command {
 	return func(repl *Repl) string {
-		runtime, _ := engineio.FetchEngineRuntime(engine)
+		runtime, _ := engineio.FetchEngine(engine)
 
 		errorObject, err := runtime.DecodeErrorResult(errdata)
 		if err != nil {
@@ -272,7 +277,7 @@ func parseErrdecodeCommand(parser *symbolizer.Parser) Command {
 		return InvalidCommandError("missing valid engine")
 	}
 
-	engine := engineio.EngineKind(parser.Cursor().Literal)
+	engine := engineio.EngineKindFromString(parser.Cursor().Literal)
 
 	switch errdata.Kind {
 	case symbolizer.TokenIdent:
@@ -296,17 +301,22 @@ Currently it only supports a simple slot hashing by accepting a uint8 slot and
 returning its hash, but this will be extended when PISA's storage layer is complete.
 
 usage:
-@>storagekey [slot]<@
+@>storagekey [slot] mapkey[value]<@
+@>storagekey [slot] mapkey[value] arridx[value]<@
+@>storagekey [slot] mapkey[value] arridx[value] clsfld[value]<@
 
 examples:
->> storagekey 0
-03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314
+>> storagekey 0 clsfld(1)
+89eb0d6a8a691dae2cd15ed0369931ce0a949ecafa5c3f93f8121833646e15c4
+>> storagekey 0 mapkey("foo") arridx(1)
+300464d4748307d603e3807009362bfec9fd1ed997c4f3ec1789d073b0c1c88a
+>> storagekey 0 mapkey(5) arridx(1) clsfld(5)
+11d68688e315ef4b7cc63fe4652023cb7a830724c5df94abf33dd13c4f84298a
 `
 }
 
 // parseStorageKeyCommand generates a command runner to generate
-// the storage key for a given storage path. Currently, only
-// accepts a single uint8 slot number but will be extended.
+// the storage key for a given storage path.
 func parseStorageKeyCommand(parser *symbolizer.Parser) Command {
 	if !parser.ExpectPeek(symbolizer.TokenNumber) {
 		return InvalidCommandError("missing slot number for storage key")
@@ -320,11 +330,156 @@ func parseStorageKeyCommand(parser *symbolizer.Parser) Command {
 		return InvalidCommandError("slot is not an uint64")
 	}
 
-	return func(repl *Repl) string {
-		if slot > math.MaxUint8 {
-			return "slot number is too large"
+	if slot > math.MaxUint8 {
+		return InvalidCommandError("slot number is too large")
+	}
+
+	if parser.IsPeek(symbolizer.TokenEoF) {
+		return func(repl *Repl) string {
+			return hex.EncodeToString(pisa.GenerateStorageKey(uint8(slot)))
+		}
+	}
+
+	if !parser.ExpectPeek(TokenStorageKeyAccessor) {
+		return InvalidCommandError("invalid storage accessor")
+	}
+
+	accessors := make([]pisa.Accessor, 0)
+
+	for !parser.IsCursor(symbolizer.TokenEoF) {
+		if !parser.IsCursor(TokenStorageKeyAccessor) {
+			return InvalidCommandError("invalid storage accessor")
 		}
 
-		return hex.EncodeToString(pisa.Slothash(uint8(slot)))
+		switch parser.Cursor().Literal {
+		case "arridx":
+			accessor, err := parseAccessorArrIdx(parser)
+			if err != nil {
+				return InvalidCommandError(err.Error())
+			}
+
+			accessors = append(accessors, accessor)
+		case "mapkey":
+			accessor, err := parseAccessorMapKey(parser)
+			if err != nil {
+				return InvalidCommandError(err.Error())
+			}
+
+			accessors = append(accessors, accessor)
+		case "clsfld":
+			accessor, err := parseAccessorClsFld(parser)
+			if err != nil {
+				return InvalidCommandError(err.Error())
+			}
+
+			accessors = append(accessors, accessor)
+		default:
+			panic("unimplemented accessor")
+		}
 	}
+
+	return func(repl *Repl) string {
+		storageKey := pisa.GenerateStorageKey(uint8(slot), accessors...)
+
+		return hex.EncodeToString(storageKey)
+	}
+}
+
+func parseAccessorMapKey(parser *symbolizer.Parser) (pisa.Accessor, error) {
+	if !parser.ExpectPeek(symbolizer.TokenKind('(')) {
+		return nil, errors.New("invalid mapkey expression: missing '('")
+	}
+
+	// Parse the expression contents inside the ()
+	inner, err := parser.Unwrap(symbolizer.EnclosureParens())
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid mapkey expression")
+	}
+
+	parserInner := symbolizer.NewParser(inner)
+	// Check the inner value is valid
+	if !parserInner.Cursor().Kind.CanValue() {
+		return nil, errors.New("invalid mapkey expression")
+	}
+
+	// Parse the value within the parenthesis
+	value, err := parserInner.Cursor().Value()
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid mapkey expression")
+	}
+
+	serial, err := polo.Polorize(value)
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid mapkey expression: failed serialization")
+	}
+
+	hashed := blake2b.Sum256(serial)
+
+	return pisa.MapKey(hashed), nil
+}
+
+func parseAccessorArrIdx(parser *symbolizer.Parser) (pisa.Accessor, error) {
+	if !parser.ExpectPeek(symbolizer.TokenKind('(')) {
+		return nil, errors.New("invalid arridx expression: missing '('")
+	}
+
+	// Parse the expression contents inside the ()
+	inner, err := parser.Unwrap(symbolizer.EnclosureParens())
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid arridx expression")
+	}
+
+	parserInner := symbolizer.NewParser(inner)
+	// Check the inner value is valid
+	if !parserInner.Cursor().Kind.CanValue() {
+		return nil, errors.New("invalid arridx expression")
+	}
+
+	// Parse the value within the parenthesis
+	value, err := parserInner.Cursor().Value()
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid arridx expression")
+	}
+
+	idx, ok := value.(uint64)
+	if !ok {
+		return nil, errors.New("invalid arridx expression: idx is not an uint64")
+	}
+
+	return pisa.ArrIdx(idx), nil
+}
+
+func parseAccessorClsFld(parser *symbolizer.Parser) (pisa.Accessor, error) {
+	if !parser.ExpectPeek(symbolizer.TokenKind('(')) {
+		return nil, errors.New("invalid clsfld expression: missing '('")
+	}
+
+	// Parse the expression contents inside the ()
+	inner, err := parser.Unwrap(symbolizer.EnclosureParens())
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid clsfld expression")
+	}
+
+	parserInner := symbolizer.NewParser(inner)
+	// Check the inner value is valid
+	if !parserInner.Cursor().Kind.CanValue() {
+		return nil, errors.New("invalid clsfld expression")
+	}
+
+	// Parse the value within the parenthesis
+	value, err := parserInner.Cursor().Value()
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid clsfld expression")
+	}
+
+	fld, ok := value.(uint64)
+	if !ok {
+		return nil, errors.New("invalid clsfld expression: fld is not an uint64")
+	}
+
+	if fld > math.MaxUint8 {
+		return nil, errors.New("invalid clsfld expression: fld is too large")
+	}
+
+	return pisa.ClsFld(fld), nil
 }

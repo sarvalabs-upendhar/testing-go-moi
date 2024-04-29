@@ -64,6 +64,7 @@ func TestFullSync(t *testing.T) {
 
 	servers := createMultipleServers(t, 2, paramsMap)
 	connectClientToServers(t, servers[0], servers[1])
+	connectClientToServers(t, servers[1], servers[0])
 
 	clientPM, _ := createPersistenceManager(t, clientCtx)
 	serverPM, _ := createPersistenceManager(t, serverCtx)
@@ -164,6 +165,7 @@ func TestFullSync_TrustedPeers(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		connectClientToServers(t, servers[3], servers[i])
+		connectClientToServers(t, servers[i], servers[3])
 	}
 
 	pm, _ := createPersistenceManagers(t, ctx, 4)
@@ -295,6 +297,7 @@ func TestFullSync_ChooseBestPeer(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		connectClientToServers(t, servers[3], servers[i])
+		connectClientToServers(t, servers[i], servers[3])
 	}
 
 	pm, _ := createPersistenceManagers(t, ctx, 4)
@@ -413,6 +416,7 @@ func TestSync_FromBroadcastedTesseract(t *testing.T) {
 
 	servers := createMultipleServers(t, 2, paramsMap)
 	connectClientToServers(t, servers[0], servers[1])
+	connectClientToServers(t, servers[1], servers[0])
 
 	pm, _ := createPersistenceManagers(t, ctx, 2)
 
@@ -515,6 +519,7 @@ func TestSync_FromRejoining(t *testing.T) {
 
 	servers := createMultipleServers(t, 2, paramsMap)
 	connectClientToServers(t, servers[0], servers[1])
+	connectClientToServers(t, servers[1], servers[0])
 
 	clientPM, clientDir := createPersistenceManagers(t, clientCtx, 1)
 	serverPM, _ := createPersistenceManagers(t, clientCtx, 1)
@@ -613,6 +618,7 @@ func TestSync_FromRejoining(t *testing.T) {
 
 	client := createMultipleServers(t, 1, paramsMap)
 	connectClientToServers(t, client[0], servers[1])
+	connectClientToServers(t, servers[1], client[0])
 
 	clientSyncer = NewTestSyncer(
 		clientCtx,
@@ -676,6 +682,7 @@ func TestSync_ThroughExecution(t *testing.T) {
 
 	servers := createMultipleServers(t, 2, paramsMap)
 	connectClientToServers(t, servers[0], servers[1])
+	connectClientToServers(t, servers[1], servers[0])
 
 	pm, _ := createPersistenceManagers(t, ctx, 2)
 
@@ -778,6 +785,7 @@ func TestFullSync_RemoveBestPeer(t *testing.T) {
 
 	for i := 0; i < 2; i++ {
 		connectClientToServers(t, servers[2], servers[i])
+		connectClientToServers(t, servers[i], servers[2])
 	}
 
 	pm, _ := createPersistenceManagers(t, ctx, 3)
@@ -931,6 +939,7 @@ func TestJobProcessor_checkSyncTesseractNotBlocked(t *testing.T) {
 
 	for i := 0; i < 2; i++ {
 		connectClientToServers(t, servers[2], servers[i])
+		connectClientToServers(t, servers[i], servers[2])
 	}
 
 	pm, _ := createPersistenceManagers(t, ctx, 3)

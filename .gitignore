@@ -12,6 +12,7 @@ bgclient/test_*
 bgclient/tmp
 moiclient/test_*
 moiclient/tmp
+compute/manifests/*_test.go
 
 # Development Artifacts
 /test_*
@@ -25,7 +26,6 @@ genesis.json
 peer-list.json
 artifact.json
 instances.json
-guardian.json
 
 # LogicLab Environments
 .logiclab

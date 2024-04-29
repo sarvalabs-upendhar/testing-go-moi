@@ -3,6 +3,8 @@ package tree
 import (
 	"sync"
 
+	"github.com/VictoriaMetrics/fastcache"
+
 	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -21,19 +23,25 @@ type persistentDB interface {
 // TreeDB implements the DB interface
 // all modified entries of trie will be stored in memory and flushed to persistent storage on calling the commit
 type TreeDB struct {
-	address  identifiers.Address
-	dataType db.PrefixTag
-	mtx      sync.RWMutex
-	db       persistentDB
-	dirty    map[string][]byte
+	address   identifiers.Address
+	dataType  db.PrefixTag
+	mtx       sync.RWMutex
+	db        persistentDB
+	dirty     map[string][]byte
+	treeCache *fastcache.Cache
+	metrics   *Metrics
 }
 
-func NewTreeDB(address identifiers.Address, dataType db.PrefixTag, db persistentDB) *TreeDB {
+func NewTreeDB(address identifiers.Address, dataType db.PrefixTag,
+	db persistentDB, treeCache *fastcache.Cache, metrics *Metrics,
+) *TreeDB {
 	return &TreeDB{
-		address:  address,
-		dataType: dataType,
-		db:       db,
-		dirty:    make(map[string][]byte),
+		address:   address,
+		dataType:  dataType,
+		db:        db,
+		dirty:     make(map[string][]byte),
+		treeCache: treeCache,
+		metrics:   metrics,
 	}
 }
 
@@ -60,7 +68,21 @@ func (tdb *TreeDB) Get(key []byte) ([]byte, error) {
 		}
 	}
 
-	return tdb.db.GetMerkleTreeEntry(tdb.address, tdb.dataType, key)
+	if val := tdb.treeCache.Get(nil, key); val != nil {
+		tdb.metrics.AddTreeCacheHitCount(1)
+
+		return val, nil
+	}
+
+	val, err := tdb.db.GetMerkleTreeEntry(tdb.address, tdb.dataType, key)
+	if err != nil {
+		return nil, err
+	}
+
+	tdb.treeCache.Set(key, val)
+	tdb.metrics.AddTreeCacheMissCount(1)
+
+	return val, nil
 }
 
 // Delete removes the give key from dirty storage
@@ -108,10 +130,12 @@ func (tdb *TreeDB) Copy() DB {
 	defer tdb.mtx.RUnlock()
 
 	newTreeDB := &TreeDB{
-		address:  tdb.address,
-		dataType: tdb.dataType,
-		db:       tdb.db,
-		dirty:    make(map[string][]byte, len(tdb.dirty)),
+		address:   tdb.address,
+		dataType:  tdb.dataType,
+		db:        tdb.db,
+		dirty:     make(map[string][]byte, len(tdb.dirty)),
+		treeCache: tdb.treeCache,
+		metrics:   tdb.metrics,
 	}
 
 	for key, value := range tdb.dirty {

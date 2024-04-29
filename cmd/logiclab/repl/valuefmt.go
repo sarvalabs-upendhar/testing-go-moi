@@ -6,7 +6,6 @@ import (
 
 	"github.com/manishmeganathan/symbolizer"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-engineio"
 	"github.com/sarvalabs/go-moi-identifiers"
 )
 
@@ -26,7 +25,7 @@ supported formats:
 `
 }
 
-type Identifier = engineio.ReferenceVal
+type Identifier string
 
 func parseValue(parser *symbolizer.Parser) (any, error) {
 	switch parser.Cursor().Kind {

@@ -6,17 +6,19 @@ import (
 	"testing"
 
 	"github.com/decred/dcrd/crypto/blake256"
-	lru "github.com/hashicorp/golang-lru"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
-	engineio "github.com/sarvalabs/go-moi-engineio"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
-	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/tests"
-	"github.com/sarvalabs/go-moi/state/tree"
-	"github.com/sarvalabs/go-moi/storage"
-	"github.com/sarvalabs/go-pisa"
+	"github.com/hashicorp/golang-lru"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
+
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/compute/engineio"
+	"github.com/sarvalabs/go-moi/compute/pisa"
+	"github.com/sarvalabs/go-moi/state/tree"
+	"github.com/sarvalabs/go-moi/storage"
 )
 
 func TestStateManager_CreateStateObject(t *testing.T) {
@@ -394,8 +396,8 @@ func TestStateManager_GetLatestStateObject(t *testing.T) {
 func TestStateManager_GetStateObject(t *testing.T) {
 	account, stateHash := getTestAccounts(t, []common.Hash{tests.RandomHash(t), tests.RandomHash(t)}, 2)
 
-	so := NewStateObject(tests.RandomAddress(t), nil, mockDB(), *account[0])
-	so1 := NewStateObject(tests.RandomAddress(t), nil, mockDB(), *account[1])
+	so := NewStateObject(tests.RandomAddress(t), nil, nil, mockDB(), *account[0], NilMetrics())
+	so1 := NewStateObject(tests.RandomAddress(t), nil, nil, mockDB(), *account[1], NilMetrics())
 
 	ts := tests.CreateTesseract(t, getTesseractParamsWithStateHash(so1.Address(), stateHash[1]))
 
@@ -903,7 +905,7 @@ func TestStateManager_FetchParticipantContextByHash(t *testing.T) {
 			hash: mHash[0],
 			mockFn: func() {
 				msenatus := mockSenatus(t)
-				msenatus.AddPublicKeys(kramaIDs, pk)
+				_ = msenatus.AddPublicKeys(kramaIDs, pk)
 
 				sm.senatus = msenatus
 			},
@@ -1146,9 +1148,9 @@ func TestStateManager_IsAccountRegistered_With_SargaObject(t *testing.T) {
 	cache, err := lru.New(20)
 	assert.NoError(t, err)
 
-	so := NewStateObject(common.SargaAddress, cache, db, common.Account{
+	so := NewStateObject(common.SargaAddress, cache, nil, db, common.Account{
 		AccType: common.SargaAccount,
-	})
+	}, NilMetrics())
 	_, err = so.createStorageTreeForLogic(common.SargaLogicID)
 	assert.NoError(t, err)
 
@@ -1567,7 +1569,8 @@ func TestStateManager_SyncStorageTrees(t *testing.T) {
 
 	so := createTestStateObjects(t, 2, soParams)
 
-	stateObject := NewStateObject(logicIDs[0].Address(), mockCache(t), db, common.Account{})
+	stateObject := NewStateObject(logicIDs[0].Address(), mockCache(t), nil, db,
+		common.Account{}, NilMetrics())
 
 	storageTree, err := stateObject.createStorageTreeForLogic(logicIDs[0])
 	assert.NoError(t, err)
@@ -1667,7 +1670,8 @@ func TestStateManager_SyncLogicTree(t *testing.T) {
 	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
 	rawData := logicID.Bytes()
 
-	logicTree, err := tree.NewKramaHashTree(logicID.Address(), common.NilHash, db, blake256.New(), storage.Logic)
+	logicTree, err := tree.NewKramaHashTree(logicID.Address(), common.NilHash, db, blake256.New(),
+		storage.Logic, nil, tree.NilMetrics())
 	require.NoError(t, err)
 
 	err = logicTree.Set(logicID.Bytes(), rawData)
@@ -2021,7 +2025,7 @@ func TestStateManager_GetStorageEntry(t *testing.T) {
 	db := mockDB()
 	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
 
-	so := NewStateObject(logicID.Address(), mockCache(t), db, common.Account{})
+	so := NewStateObject(logicID.Address(), mockCache(t), nil, db, common.Account{}, NilMetrics())
 
 	_, err := so.createStorageTreeForLogic(logicID)
 	assert.NoError(t, err)
@@ -2093,9 +2097,9 @@ func TestStateManager_IsLogicRegistered(t *testing.T) {
 	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
 	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
 
-	engineio.RegisterRuntime(pisa.NewRuntime(), nil)
+	engineio.RegisterEngine(pisa.NewEngine())
 
-	so := NewStateObject(logicID.Address(), mockCache(t), db, common.Account{})
+	so := NewStateObject(logicID.Address(), mockCache(t), nil, db, common.Account{}, NilMetrics())
 
 	err := so.InsertNewLogicObject(logicID, logicObject)
 	require.NoError(t, err)
@@ -2305,16 +2309,22 @@ func TestStateManager_GetRegistry(t *testing.T) {
 
 func TestStateManager_GetLogicManifest(t *testing.T) {
 	db := mockDB()
-	manifest, _, _ := tests.GetManifests(t, "../compute/manifests/ledger.yaml")
-	manifestHash := common.GetHash(manifest)
+
+	engineio.RegisterEngine(pisa.NewEngine())
+
+	manifest, err := engineio.NewManifestFromFile("../compute/manifests/tokenledger.yaml")
+	require.NoError(t, err)
+
+	encodedManifest, err := manifest.Encode(common.POLO)
+	require.NoError(t, err)
 
 	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
 	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
-	logicObject.ManifestHash = manifestHash
+	logicObject.Manifest = manifest.Hash()
 
-	so := NewStateObject(logicID.Address(), mockCache(t), db, common.Account{})
+	so := NewStateObject(logicID.Address(), mockCache(t), nil, db, common.Account{}, NilMetrics())
 
-	err := so.InsertNewLogicObject(logicID, logicObject)
+	err = so.InsertNewLogicObject(logicID, logicObject)
 	require.NoError(t, err)
 
 	rootHash, err := so.commitLogics()
@@ -2331,7 +2341,7 @@ func TestStateManager_GetLogicManifest(t *testing.T) {
 		acc.LogicRoot = tests.RandomHash(t)
 	})
 
-	err = db.CreateEntry(storage.LogicManifestKey(logicID.Address(), logicObject.ManifestHash), manifest)
+	err = db.CreateEntry(storage.LogicManifestKey(logicID.Address(), logicObject.ManifestHash()), encodedManifest)
 	require.NoError(t, err)
 
 	smParams := &createStateManagerParams{
@@ -2367,7 +2377,7 @@ func TestStateManager_GetLogicManifest(t *testing.T) {
 			name:             "logic manifest fetched successfully",
 			logicID:          logicID,
 			stateHash:        stateHash,
-			expectedManifest: manifest,
+			expectedManifest: encodedManifest,
 		},
 	}
 
@@ -2392,7 +2402,7 @@ func TestStateManager_GetLogicIDs(t *testing.T) {
 	expectedLogicIDs := make([]identifiers.LogicID, 0)
 	db := mockDB()
 	address := tests.RandomAddress(t)
-	so := NewStateObject(address, mockCache(t), db, common.Account{})
+	so := NewStateObject(address, mockCache(t), nil, db, common.Account{}, NilMetrics())
 
 	for i := 0; i < 3; i++ {
 		logicID := tests.GetLogicID(t, tests.RandomAddress(t))
@@ -2626,9 +2636,9 @@ func TestStateManager_GetReceiverContext_RegisteredAccount(t *testing.T) {
 	cache, err := lru.New(20)
 	assert.NoError(t, err)
 
-	so := NewStateObject(common.SargaAddress, cache, db, common.Account{
+	so := NewStateObject(common.SargaAddress, cache, nil, db, common.Account{
 		AccType: common.SargaAccount,
-	})
+	}, NilMetrics())
 	_, err = so.createStorageTreeForLogic(common.SargaLogicID)
 	assert.NoError(t, err)
 
@@ -2742,10 +2752,10 @@ func TestStateManager_GetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 	cache, err := lru.New(20)
 	assert.NoError(t, err)
 
-	so := NewStateObject(common.SargaAddress, cache, db, common.Account{
+	so := NewStateObject(common.SargaAddress, cache, nil, db, common.Account{
 		AccType:     common.SargaAccount,
 		ContextHash: mHash[0],
-	})
+	}, NilMetrics())
 
 	_, err = so.createStorageTreeForLogic(common.SargaLogicID)
 	assert.NoError(t, err)
@@ -2966,9 +2976,9 @@ func TestStateManager_FetchInteractionContext(t *testing.T) {
 	cache, err := lru.New(20)
 	assert.NoError(t, err)
 
-	so := NewStateObject(common.SargaAddress, cache, db, common.Account{
+	so := NewStateObject(common.SargaAddress, cache, nil, db, common.Account{
 		AccType: common.SargaAccount,
-	})
+	}, NilMetrics())
 
 	_, err = so.createStorageTreeForLogic(common.SargaLogicID)
 	assert.NoError(t, err)
@@ -3404,9 +3414,9 @@ func TestStateManager_IsAccountRegisteredAt(t *testing.T) {
 	cache, err := lru.New(100)
 	require.NoError(t, err)
 
-	so := NewStateObject(common.SargaAddress, cache, db, common.Account{
+	so := NewStateObject(common.SargaAddress, cache, nil, db, common.Account{
 		StorageRoot: storageRoot,
-	})
+	}, NilMetrics())
 
 	stateHash, err := so.Commit()
 	assert.NoError(t, err)

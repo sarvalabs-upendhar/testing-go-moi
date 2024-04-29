@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/sarvalabs/go-moi/common/tests"
+
 	"github.com/decred/dcrd/crypto/blake256"
 	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
@@ -145,7 +147,8 @@ func createTestHashTreeWithEntries(
 ) *KramaHashTree {
 	t.Helper()
 
-	hashTree, err := NewKramaHashTree(address, common.NilHash, persistentDB, blake256.New(), db.Storage)
+	hashTree, err := NewKramaHashTree(address, common.NilHash, persistentDB,
+		blake256.New(), db.Storage, tests.NewTestTreeCache(), NilMetrics())
 	require.NoError(t, err)
 
 	for k, v := range entries {

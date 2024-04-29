@@ -44,7 +44,7 @@ func (n *Node) setupCacheStore() (err error) {
 
 // setupGenesis calls SetupGenesis method in chain if SkipGenesis is false in config
 func (n *Node) setupGenesis() (err error) {
-	if err = n.chain.SetupGenesis(n.cfg.Chain.GenesisFilePath); err != nil {
+	if err = n.chain.SetupGenesis(n.cfg.Chain); err != nil {
 		return err
 	}
 
@@ -92,7 +92,8 @@ func (n *Node) setupPersistenceManager() (err error) {
 
 // setupStateManager creates new StateManager object and setups it to node
 func (n *Node) setupStateManager() (err error) {
-	n.state, err = state.NewStateManager(n.db, n.logger, n.cache, n.nodeMetrics.guna, n.senatus)
+	n.state, err = state.NewStateManager(n.db, n.logger, n.cache, n.nodeMetrics.state,
+		n.senatus, n.cfg.State)
 	if err != nil {
 		return err
 	}

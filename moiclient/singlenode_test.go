@@ -11,20 +11,21 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-identifiers"
-	"github.com/sarvalabs/go-pisa"
-	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
+	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/bgclient"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/compute/pisa"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
-	gtypes "github.com/sarvalabs/go-moi/state"
 	"github.com/sarvalabs/go-moi/storage"
 )
 
@@ -660,7 +661,7 @@ func (tn *TestSingleNode) TestLogicStorage() {
 			name: "fetch storage value for existing logic ID",
 			logicStorageArgs: &rpcargs.GetLogicStorageArgs{
 				LogicID:    common.GuardianLogicID,
-				StorageKey: pisa.Slothash(gtypes.GuardianSLot),
+				StorageKey: pisa.GenerateStorageKey(guardianregistry.SlotGuardians),
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
@@ -1228,7 +1229,7 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 
 	logicPayload := common.LogicPayload{
 		Manifest: common.Hex2Bytes(manifest),
-		Callsite: "Seeder!",
+		Callsite: "Seeder",
 		Calldata: common.Hex2Bytes("0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd" +
 			"8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49"),
 	}
@@ -1278,7 +1279,7 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 					},
 				},
 			},
-			expectedFuelConsumed: (*hexutil.Big)(big.NewInt(1745)),
+			expectedFuelConsumed: (*hexutil.Big)(big.NewInt(2180)),
 		},
 		{
 			name: "failed to fetch fuel estimate as options are empty",
@@ -1323,7 +1324,7 @@ func (tn *TestSingleNode) TestCall() {
 
 	logicPayload := common.LogicPayload{
 		Manifest: common.Hex2Bytes(manifest),
-		Callsite: "Seeder!",
+		Callsite: "Seeder",
 		Calldata: common.Hex2Bytes("0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd" +
 			"8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49"),
 	}
@@ -1347,7 +1348,7 @@ func (tn *TestSingleNode) TestCall() {
 
 	receiptWithFuelParams := &common.Receipt{
 		IxType:   common.IxLogicDeploy,
-		FuelUsed: 1745,
+		FuelUsed: 2180,
 	}
 
 	receiptWithoutFuelParams := &common.Receipt{

@@ -1,14 +1,13 @@
 package state
 
 import (
-	"encoding/json"
-
+	"github.com/manishmeganathan/depgraph"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-engineio"
-	"github.com/sarvalabs/go-moi-identifiers"
-	"github.com/sarvalabs/go-polo"
 
+	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/compute/engineio"
+	"github.com/sarvalabs/go-polo"
 )
 
 // LogicObject is a generic container for representing an executable logic. It contains fields
@@ -20,41 +19,43 @@ type LogicObject struct {
 	ID identifiers.LogicID
 	// Represents the Logic Engine
 	EngineKind engineio.EngineKind
-	// Represents the CID of the Logic Manifest
-	ManifestHash common.Hash
+	// Represents the hash of the Logic Manifest
+	Manifest common.Hash
 
-	Sealed bool
+	Sealed     bool
+	Persistent *uint64
+	Ephemeral  *uint64
 
-	// Represents the usage of different type of context states by the logic
-	StateMatrix engineio.ContextStateMatrix
 	// Represents the dependency driver for managing logic elements relationships
-	Dependencies engineio.DependencyDriver
-	// Represents the collection of all LogicElement objects
+	Dependencies *depgraph.DependencyGraph
+	// Represents the collection of all engineio.LogicElement objects
 	Elements map[engineio.ElementPtr]*engineio.LogicElement
-	// Represents mapping of string names to LogicCallsite pointers
-	Callsites map[string]*engineio.Callsite
-	Classdefs map[string]*engineio.Classdef
+	// Represents mapping of string names to engineio.Callsite
+	Callsites map[string]engineio.Callsite
+	// Represents mapping of string names to engineio.Classdef
+	Classdefs map[string]engineio.Classdef
 }
 
 // NewLogicObject generates a new LogicObject for a given LogicID, LogicDescriptor and Storage Namespace key
-func NewLogicObject(address identifiers.Address, descriptor *engineio.LogicDescriptor) *LogicObject {
+func NewLogicObject(address identifiers.Address, descriptor engineio.LogicDescriptor) *LogicObject {
 	// Generate the LogicID from the payload
 	logicID := identifiers.NewLogicIDv0(
-		descriptor.CtxState.Persistent(),
-		descriptor.CtxState.Ephemeral(),
-		descriptor.Interactive, false,
+		descriptor.Persistent != nil,
+		descriptor.Ephemeral != nil,
+		descriptor.Interactable, false,
 		0, address,
 	)
 
 	return &LogicObject{
-		ID:           logicID,
-		EngineKind:   descriptor.Engine,
-		ManifestHash: descriptor.ManifestHash,
+		ID:         logicID,
+		EngineKind: descriptor.Engine,
+		Manifest:   descriptor.ManifestHash,
 
-		Sealed: false,
+		Sealed:     false,
+		Persistent: descriptor.Persistent,
+		Ephemeral:  descriptor.Ephemeral,
 
-		StateMatrix:  descriptor.CtxState,
-		Dependencies: descriptor.Dependency,
+		Dependencies: descriptor.Depgraph,
 		Elements:     descriptor.Elements,
 
 		Callsites: descriptor.Callsites,
@@ -63,23 +64,11 @@ func NewLogicObject(address identifiers.Address, descriptor *engineio.LogicDescr
 }
 
 func (logic LogicObject) LogicID() identifiers.LogicID { return logic.ID }
+func (logic LogicObject) Engine() engineio.EngineKind  { return logic.EngineKind }
+func (logic LogicObject) ManifestHash() [32]byte       { return logic.Manifest }
+func (logic LogicObject) IsSealed() bool               { return logic.Sealed }
 
-func (logic LogicObject) Engine() engineio.EngineKind { return logic.EngineKind }
-
-func (logic LogicObject) Manifest() [32]byte { return logic.ManifestHash }
-
-func (logic LogicObject) IsSealed() bool { return logic.Sealed }
-
-func (logic LogicObject) IsAssetLogic() bool {
-	logicIdentifier, err := logic.ID.Identifier()
-	if err != nil {
-		panic("failed to fetch logic identifier")
-	}
-
-	return logicIdentifier.AssetLogic()
-}
-
-func (logic LogicObject) IsInteractive() bool {
+func (logic LogicObject) IsInteractable() bool {
 	logicIdentifier, err := logic.ID.Identifier()
 	if err != nil {
 		panic("failed to fetch logic identifier")
@@ -89,24 +78,28 @@ func (logic LogicObject) IsInteractive() bool {
 }
 
 func (logic LogicObject) PersistentState() (engineio.ElementPtr, bool) {
-	ptr, exists := logic.StateMatrix[engineio.PersistentState]
+	if logic.Persistent == nil {
+		return 0, false
+	}
 
-	return ptr, exists
+	return *logic.Persistent, true
 }
 
 func (logic LogicObject) EphemeralState() (engineio.ElementPtr, bool) {
-	ptr, exists := logic.StateMatrix[engineio.EphemeralState]
+	if logic.Ephemeral == nil {
+		return 0, false
+	}
 
-	return ptr, exists
+	return *logic.Ephemeral, true
 }
 
-func (logic LogicObject) GetCallsite(name string) (*engineio.Callsite, bool) {
+func (logic LogicObject) GetCallsite(name string) (engineio.Callsite, bool) {
 	callsite, ok := logic.Callsites[name]
 
 	return callsite, ok
 }
 
-func (logic LogicObject) GetClassdef(name string) (*engineio.Classdef, bool) {
+func (logic LogicObject) GetClassdef(name string) (engineio.Classdef, bool) {
 	classdef, ok := logic.Classdefs[name]
 
 	return classdef, ok
@@ -116,8 +109,8 @@ func (logic LogicObject) GetElementDeps(ptr engineio.ElementPtr) []engineio.Elem
 	return logic.Dependencies.Dependencies(ptr)
 }
 
-func (logic LogicObject) GetElement(index engineio.ElementPtr) (*engineio.LogicElement, bool) {
-	element, ok := logic.Elements[index]
+func (logic LogicObject) GetElement(ptr engineio.ElementPtr) (*engineio.LogicElement, bool) {
+	element, ok := logic.Elements[ptr]
 
 	return element, ok
 }
@@ -134,126 +127,6 @@ func (logic *LogicObject) Bytes() ([]byte, error) {
 func (logic *LogicObject) FromBytes(bytes []byte) error {
 	if err := polo.Depolorize(logic, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize logic object")
-	}
-
-	return nil
-}
-
-func (logic *LogicObject) Depolorize(depolorizer *polo.Depolorizer) (err error) {
-	depolorizer, err = depolorizer.DepolorizePacked()
-	if errors.Is(err, polo.ErrNullPack) {
-		return nil
-	} else if err != nil {
-		return err
-	}
-
-	if err = depolorizer.Depolorize(&logic.ID); err != nil {
-		return err
-	}
-
-	if err = depolorizer.Depolorize(&logic.EngineKind); err != nil {
-		return err
-	}
-
-	if err = depolorizer.Depolorize(&logic.ManifestHash); err != nil {
-		return err
-	}
-
-	if err = depolorizer.Depolorize(&logic.Sealed); err != nil {
-		return err
-	}
-
-	if err = depolorizer.Depolorize(&logic.StateMatrix); err != nil {
-		return err
-	}
-
-	if err = logic.decodePOLODepDriver(depolorizer); err != nil {
-		return err
-	}
-
-	if err = depolorizer.Depolorize(&logic.Elements); err != nil {
-		return err
-	}
-
-	if err = depolorizer.Depolorize(&logic.Callsites); err != nil {
-		return err
-	}
-
-	if err = depolorizer.Depolorize(&logic.Classdefs); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (logic *LogicObject) decodePOLODepDriver(depolorizer *polo.Depolorizer) error {
-	runtime, ok := engineio.FetchEngineRuntime(logic.EngineKind)
-	if !ok {
-		return errors.New("unidentified engine runtime")
-	}
-
-	data, err := depolorizer.DepolorizeAny()
-	if err != nil {
-		return err
-	}
-
-	driver, err := runtime.DecodeDependencyDriver(data, engineio.POLO)
-	if err != nil {
-		return err
-	}
-
-	logic.Dependencies = driver
-
-	return nil
-}
-
-func (logic *LogicObject) decodeJSONDepDriver(data []byte) error {
-	runtime, ok := engineio.FetchEngineRuntime(logic.EngineKind)
-	if !ok {
-		return errors.New("unidentified engine runtime")
-	}
-
-	driver, err := runtime.DecodeDependencyDriver(data, engineio.JSON)
-	if err != nil {
-		return err
-	}
-
-	logic.Dependencies = driver
-
-	return nil
-}
-
-func (logic *LogicObject) UnmarshalJSON(data []byte) error {
-	type temp struct {
-		ID           identifiers.LogicID
-		EngineKind   engineio.EngineKind
-		ManifestHash common.Hash
-		Sealed       bool
-
-		Dependencies json.RawMessage
-
-		StateMatrix engineio.ContextStateMatrix
-		Elements    map[engineio.ElementPtr]*engineio.LogicElement
-		Callsites   map[string]*engineio.Callsite
-		Classdefs   map[string]*engineio.Classdef
-	}
-
-	tempObject := new(temp)
-	if err := json.Unmarshal(data, tempObject); err != nil {
-		return err
-	}
-
-	logic.ID = tempObject.ID
-	logic.EngineKind = tempObject.EngineKind
-	logic.ManifestHash = tempObject.ManifestHash
-	logic.Sealed = tempObject.Sealed
-	logic.StateMatrix = tempObject.StateMatrix
-	logic.Elements = tempObject.Elements
-	logic.Callsites = tempObject.Callsites
-	logic.Classdefs = tempObject.Classdefs
-
-	if err := logic.decodeJSONDepDriver(tempObject.Dependencies); err != nil {
-		return err
 	}
 
 	return nil

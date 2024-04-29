@@ -67,7 +67,7 @@ func (p *PersistenceManager) GetBucketCount(bucketNumber uint64) (uint64, error)
 
 // GetBucketSizes returns the accounts count for each bucket
 func (p *PersistenceManager) GetBucketSizes() (map[uint64]uint64, error) {
-	buckets := make(map[uint64]uint64, 0)
+	buckets := make(map[uint64]uint64)
 
 	for i := uint64(0); i < MaxBucketCount; i++ {
 		count, err := p.GetBucketCount(i)
