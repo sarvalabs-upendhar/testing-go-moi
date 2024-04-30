@@ -37,7 +37,7 @@ const (
 
 // Chain defaults
 const (
-	DefaultGenesisTime = 1688741089557888000 // time when the Babylon testnet started
+	DefaultGenesisTime = 1688741089 // time when the Babylon testnet started
 )
 
 // IxPool defaults

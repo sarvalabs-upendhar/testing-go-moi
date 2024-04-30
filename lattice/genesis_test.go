@@ -34,7 +34,7 @@ func TestCreateGenesisTesseract(t *testing.T) {
 			s := make(common.Hashes, participantCount)
 			copy(s, test.stateHashes)
 
-			ts := createGenesisTesseract(test.addresses, s, test.contextHashes, uint64(time.Now().UnixNano()))
+			ts := createGenesisTesseract(test.addresses, s, test.contextHashes, uint64(time.Now().Unix()))
 
 			participants := ts.Participants()
 
