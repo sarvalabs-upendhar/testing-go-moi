@@ -1902,7 +1902,7 @@ func TestAddGenesisTesseract(t *testing.T) {
 
 			c := createTestChainManager(t, chainParams)
 
-			err := c.AddGenesisTesseract(addresses, stateHashes, contextHashes, uint64(time.Now().UnixNano()))
+			err := c.AddGenesisTesseract(addresses, stateHashes, contextHashes, uint64(time.Now().Unix()))
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -2075,7 +2075,7 @@ func TestSetupGenesis(t *testing.T) {
 	cfg := &config.ChainConfig{
 		GenesisFilePath: createMockGenesisFile(t, dir, false, sargaAccount,
 			genesisAccounts, assetSetupArgs, logics),
-		GenesisTimestamp: uint64(time.Now().UnixNano()),
+		GenesisTimestamp: uint64(time.Now().Unix()),
 	}
 
 	assetAccAddr := common.CreateAddressFromString(assetSetupArgs[0].AssetInfo.Symbol)
@@ -2117,7 +2117,7 @@ func TestSetupGenesis(t *testing.T) {
 			cfg: &config.ChainConfig{
 				GenesisFilePath: createMockGenesisFile(t, dir, true, sargaAccount, genesisAccounts,
 					nil, nil),
-				GenesisTimestamp: uint64(time.Now().UnixNano()),
+				GenesisTimestamp: uint64(time.Now().Unix()),
 			},
 			expectedError: errors.New("failed to parse genesis file"),
 		},
@@ -2133,7 +2133,7 @@ func TestSetupGenesis(t *testing.T) {
 						nil,
 						nil,
 					), genesisAccounts, nil, nil),
-				GenesisTimestamp: uint64(time.Now().UnixNano()),
+				GenesisTimestamp: uint64(time.Now().Unix()),
 			},
 			expectedError: errors.New("failed to setup sarga account"),
 		},
@@ -2149,7 +2149,7 @@ func TestSetupGenesis(t *testing.T) {
 						nil,
 						nil,
 					)}, nil, nil),
-				GenesisTimestamp: uint64(time.Now().UnixNano()),
+				GenesisTimestamp: uint64(time.Now().Unix()),
 			},
 			expectedError: errors.New("failed to setup genesis account"),
 		},
@@ -2165,7 +2165,7 @@ func TestSetupGenesis(t *testing.T) {
 							BehaviouralContext: tests.RandomKramaIDs(t, 1),
 						},
 					}),
-				GenesisTimestamp: uint64(time.Now().UnixNano()),
+				GenesisTimestamp: uint64(time.Now().Unix()),
 			},
 			expectedError: errors.New("failed to setup genesis logic"),
 		},
@@ -2181,7 +2181,7 @@ func TestSetupGenesis(t *testing.T) {
 							[]*big.Int{big.NewInt(12)},
 						), nil, nil),
 					}, nil),
-				GenesisTimestamp: uint64(time.Now().UnixNano()),
+				GenesisTimestamp: uint64(time.Now().Unix()),
 			},
 			expectedError: errors.New("failed to setup asset accounts"),
 		},
