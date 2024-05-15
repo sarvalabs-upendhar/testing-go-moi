@@ -745,7 +745,7 @@ func getLogicObjectParamsWithLogicID(logicID identifiers.LogicID) *createLogicOb
 func getTesseractParamsWithStateHash(address identifiers.Address, hash common.Hash) *tests.CreateTesseractParams {
 	return &tests.CreateTesseractParams{
 		Addresses: []identifiers.Address{address},
-		Participants: common.Participants{
+		Participants: common.ParticipantStates{
 			address: {
 				StateHash: hash,
 			},
@@ -756,7 +756,7 @@ func getTesseractParamsWithStateHash(address identifiers.Address, hash common.Ha
 func getTesseractParamsWithContextHash(address identifiers.Address, hash common.Hash) *tests.CreateTesseractParams {
 	return &tests.CreateTesseractParams{
 		Addresses: []identifiers.Address{address},
-		Participants: common.Participants{
+		Participants: common.ParticipantStates{
 			address: {
 				LatestContext: hash,
 			},
@@ -1277,7 +1277,7 @@ func getAccMetaInfos(t *testing.T, count int) []*common.AccountMetaInfo {
 
 	accMetaInfo := make([]*common.AccountMetaInfo, count)
 	for i := 0; i < count; i++ {
-		accMetaInfo[i] = tests.GetRandomAccMetaInfo(t, 8)
+		accMetaInfo[i] = tests.RandomAccMetaInfo(t, 8)
 	}
 
 	return accMetaInfo
@@ -1363,27 +1363,6 @@ func getStateHashes(t *testing.T, so []*Object) []common.Hash {
 	return stateHashes
 }
 
-type ICSNodes struct {
-	senderBeh    *common.NodeSet
-	senderRand   *common.NodeSet
-	receiverBeh  *common.NodeSet
-	receiverRand *common.NodeSet
-}
-
-func getICSNodes(
-	senderBeh *common.NodeSet,
-	senderRand *common.NodeSet,
-	receiverBeh *common.NodeSet,
-	receiverRand *common.NodeSet,
-) *ICSNodes {
-	return &ICSNodes{
-		senderBeh:    senderBeh,
-		senderRand:   senderRand,
-		receiverBeh:  receiverBeh,
-		receiverRand: receiverRand,
-	}
-}
-
 func getTestAssetDescriptor(t *testing.T, operator identifiers.Address, symbol string) *common.AssetDescriptor {
 	t.Helper()
 
@@ -1458,7 +1437,7 @@ func getTesseractParams(
 	return &tests.CreateTesseractParams{
 		Addresses: []identifiers.Address{address},
 		Ixns:      ixns,
-		Participants: common.Participants{
+		Participants: common.ParticipantStates{
 			address: {
 				PreviousContext: hash,
 			},

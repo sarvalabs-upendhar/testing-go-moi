@@ -1070,7 +1070,7 @@ func areHeightsGreater(systemHeights map[identifiers.Address]uint64, newHeights 
 	return true
 }
 
-func areGreater(oldValues, newValues []int32) bool {
+func areGreater(oldValues, newValues []uint32) bool {
 	// Iterate over system heights
 	for idx, value := range oldValues {
 		if value < newValues[idx] {

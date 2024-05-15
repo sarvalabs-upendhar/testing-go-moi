@@ -62,14 +62,13 @@ func (k *Engine) handleICSRequest(msg *types.ICSMSG) error {
 		canonicalICSReq = new(types.CanonicalICSRequest)
 		respChan        = make(chan error)
 		interactions    = new(common.Interactions)
-		contextType     = int32(0)
 		statusCode      = types.InternalError
 	)
 
 	k.logger.Trace("Received ICS request", "cluster-id", msg.ClusterID, "sender", msg.Sender)
 
 	defer func() {
-		if err := k.SendICSResponse(msg.Sender, msg.ClusterID, contextType, statusCode); err != nil {
+		if err := k.SendICSResponse(msg.Sender, msg.ClusterID, statusCode); err != nil {
 			k.logger.Error("Failed to send ics response", "err", err)
 		}
 
@@ -119,7 +118,6 @@ func (k *Engine) handleICSRequest(msg *types.ICSMSG) error {
 		return err
 	}
 
-	contextType = canonicalICSReq.ContextType
 	statusCode = types.Success
 
 	return nil
@@ -157,15 +155,14 @@ func (k *Engine) handleICSResponse(msg *types.ICSMSG) error {
 		return nil
 	}
 
-	for _, nodeset := range slot.ClusterState().NodeSet.Nodes {
+	for _, nodeset := range slot.ClusterState().NodeSet.Sets {
 		if nodeset == nil {
 			continue
 		}
 
 		for index, kramaID := range nodeset.Ids {
 			if kramaID == msg.Sender {
-				nodeset.Responses.SetIndex(index, true)
-				nodeset.UpdateRespCount()
+				nodeset.UpdateResponse(index, true)
 			}
 		}
 	}
@@ -202,14 +199,9 @@ func (k *Engine) handleICSSuccess(msg *types.ICSMSG) error {
 		return errors.New("node response not found")
 	}
 
-	clusterState.GetNodeSet(common.ObserverSet).QuorumSize = icsSuccess.QuorumSizes[common.ObserverSet]
-	clusterState.GetNodeSet(common.RandomSet).QuorumSize = icsSuccess.QuorumSizes[common.RandomSet]
-
-	for j := 0; j < len(clusterState.NodeSet.Nodes); j++ {
+	for j := 0; j < len(clusterState.NodeSet.Sets); j++ {
 		if icsSuccess.Responses[j] != nil && icsSuccess.Responses[j].Size > 0 {
-			nodeset := clusterState.GetNodeSet(common.IcsSetType(j))
-			nodeset.Responses = icsSuccess.Responses[j]
-			nodeset.RespCount = nodeset.Responses.TrueIndicesSize()
+			clusterState.UpdateNodeSetResponses(j, icsSuccess.Responses[j])
 		}
 	}
 

@@ -2,7 +2,6 @@ package consensus
 
 import (
 	"context"
-	"math/big"
 	"os"
 	"sync"
 	"testing"
@@ -13,11 +12,12 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/compute"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
-	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/common/utils"
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
 	"github.com/sarvalabs/go-moi/network/rpc"
@@ -31,7 +31,7 @@ type MockServer struct {
 	peersLock   sync.RWMutex
 }
 
-func NewMockServer() *MockServer {
+func newMockServer() *MockServer {
 	return &MockServer{
 		subscribers: make(map[string]context.Context),
 		peers:       make([]kramaid.KramaID, 0),
@@ -131,21 +131,100 @@ func (k *MockEngine) Logger() hclog.Logger {
 
 type MockStateManager struct {
 	accountRegistration map[identifiers.Address]bool
+	participantsContext map[identifiers.Address]struct {
+		contextHash common.Hash
+		beSet       *common.NodeSet
+		rSet        *common.NodeSet
+	}
+	accMetaInfo map[identifiers.Address]*common.AccountMetaInfo
 }
 
-func NewMockStateManager() *MockStateManager {
+func newMockStateManager() *MockStateManager {
 	return &MockStateManager{
+		accMetaInfo:         make(map[identifiers.Address]*common.AccountMetaInfo),
 		accountRegistration: make(map[identifiers.Address]bool),
+		participantsContext: make(map[identifiers.Address]struct {
+			contextHash common.Hash
+			beSet       *common.NodeSet
+			rSet        *common.NodeSet
+		}),
 	}
 }
-func (ms *MockStateManager) Cleanup(addr identifiers.Address) {}
-func (ms *MockStateManager) FetchInteractionContext(
-	ctx context.Context,
-	ix *common.Interaction,
-) (map[identifiers.Address]common.Hash, []*common.NodeSet, error) {
+
+func (ms *MockStateManager) addNodeSet(
+	t *testing.T,
+	addr identifiers.Address,
+	contextHash common.Hash,
+	beSet, rSet *common.NodeSet,
+) {
+	t.Helper()
+
+	ms.participantsContext[addr] = struct {
+		contextHash common.Hash
+		beSet       *common.NodeSet
+		rSet        *common.NodeSet
+	}{contextHash: contextHash, beSet: beSet, rSet: rSet}
+}
+
+func (ms *MockStateManager) addAccMetaInfo(t *testing.T, addr identifiers.Address, info *common.AccountMetaInfo) {
+	t.Helper()
+
+	ms.accMetaInfo[addr] = info
+}
+
+func (ms *MockStateManager) CreateStateObject(
+	address identifiers.Address,
+	accountType common.AccountType,
+) *state.Object {
 	// TODO implement me
 	panic("implement me")
 }
+
+func (ms *MockStateManager) GetDirtyObject(address identifiers.Address) (*state.Object, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (ms *MockStateManager) CreateDirtyObject(
+	address identifiers.Address,
+	accountType common.AccountType,
+) *state.Object {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (ms *MockStateManager) GetEmptyStateObject() *state.Object {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (ms *MockStateManager) GetStateObjectByHash(
+	addr identifiers.Address,
+	hash common.Hash,
+) (*state.Object, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (ms *MockStateManager) UpdateStateObjects(objs state.ObjectMap) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (ms *MockStateManager) FetchLatestParticipantContext(addr identifiers.Address) (
+	latestContextHash common.Hash,
+	behaviouralSet, randomSet *common.NodeSet,
+	err error,
+) {
+	info, ok := ms.participantsContext[addr]
+	if !ok {
+		return common.NilHash, nil, nil, common.ErrContextStateNotFound
+	}
+
+	return info.contextHash, info.beSet, info.rSet, nil
+}
+
+func (ms *MockStateManager) Cleanup(addr identifiers.Address) {}
 
 func (ms *MockStateManager) GetPublicKeys(ctx context.Context, ids ...kramaid.KramaID) (keys [][]byte, err error) {
 	// TODO implement me
@@ -153,8 +232,12 @@ func (ms *MockStateManager) GetPublicKeys(ctx context.Context, ids ...kramaid.Kr
 }
 
 func (ms *MockStateManager) GetAccountMetaInfo(addr identifiers.Address) (*common.AccountMetaInfo, error) {
-	// TODO implement me
-	panic("implement me")
+	info, ok := ms.accMetaInfo[addr]
+	if !ok {
+		return nil, common.ErrFetchingAccMetaInfo
+	}
+
+	return info, nil
 }
 
 func (ms *MockStateManager) GetLatestStateObject(addr identifiers.Address) (*state.Object, error) {
@@ -167,14 +250,53 @@ func (ms *MockStateManager) GetNonce(addr identifiers.Address, stateHash common.
 	panic("implement me")
 }
 
-func (ms *MockStateManager) registerAccount(addr identifiers.Address) {
-	ms.accountRegistration[addr] = true
-}
-
 func (ms *MockStateManager) IsAccountRegistered(addr identifiers.Address) (bool, error) {
 	_, ok := ms.accountRegistration[addr]
 
 	return ok, nil
+}
+
+type MockExec struct {
+	sm                      *MockStateManager
+	receipts                common.Receipts
+	accountHashes           common.AccStateHashes
+	revertHook              func() error
+	executeInteractionsHook func() (common.Receipts, common.AccStateHashes, error)
+	clusterID               common.ClusterID
+}
+
+func (e *MockExec) Cleanup(clusterID common.ClusterID) {
+	e.clusterID = clusterID
+}
+
+func (e *MockExec) SpawnExecutor() *compute.IxExecutor {
+	return compute.NewManager(e.sm, hclog.NewNullLogger(), nil, compute.NilMetrics()).SpawnExecutor()
+}
+
+func mockExec(t *testing.T) *MockExec {
+	t.Helper()
+
+	return new(MockExec)
+}
+
+// mock execution implementation
+func (e *MockExec) ExecuteInteractions(
+	ixs common.Interactions,
+	ctx *common.ExecutionContext,
+) (common.Receipts, common.AccStateHashes, error) {
+	if e.executeInteractionsHook != nil {
+		return e.executeInteractionsHook()
+	}
+
+	return e.receipts, e.accountHashes, nil
+}
+
+func (e *MockExec) Revert(clusterID common.ClusterID) error {
+	if e.revertHook != nil {
+		return e.revertHook()
+	}
+
+	return nil
 }
 
 func createTestConsensusConfig() *config.ConsensusConfig {
@@ -188,26 +310,28 @@ func createTestConsensusConfig() *config.ConsensusConfig {
 	}
 }
 
-type createKramaEngineParams struct {
+type testKramaEngineParams struct {
 	sm             *MockStateManager
 	cfg            *config.ConsensusConfig
+	execCallback   func(sm *MockExec)
 	smCallback     func(sm *MockStateManager)
 	cfgCallback    func(cfg *config.ConsensusConfig)
 	serverCallback func(n *MockServer)
 	engineCallBack func(k *Engine)
 }
 
-func createTestKramaEngine(t *testing.T, params *createKramaEngineParams) *Engine {
+func createTestKramaEngine(t *testing.T, params *testKramaEngineParams) *Engine {
 	t.Helper()
 
 	var (
-		sm     = NewMockStateManager()
+		sm     = newMockStateManager()
 		cfg    = createTestConsensusConfig()
-		server = NewMockServer()
+		server = newMockServer()
+		exec   = mockExec(t)
 	)
 
 	if params == nil {
-		params = &createKramaEngineParams{}
+		params = &testKramaEngineParams{}
 	}
 
 	if params.sm != nil {
@@ -217,6 +341,8 @@ func createTestKramaEngine(t *testing.T, params *createKramaEngineParams) *Engin
 	if params.smCallback != nil {
 		params.smCallback(sm)
 	}
+
+	exec.sm = sm
 
 	if params.cfg != nil {
 		cfg = params.cfg
@@ -230,13 +356,17 @@ func createTestKramaEngine(t *testing.T, params *createKramaEngineParams) *Engin
 		params.serverCallback(server)
 	}
 
+	if params.execCallback != nil {
+		params.execCallback(exec)
+	}
+
 	engine, err := NewKramaEngine(
 		cfg,
 		hclog.NewNullLogger(),
 		nil,
 		"",
 		sm,
-		nil,
+		exec,
 		nil,
 		nil,
 		nil,
@@ -254,6 +384,8 @@ func createTestKramaEngine(t *testing.T, params *createKramaEngineParams) *Engin
 	return engine
 }
 
+/*
+These utility functions are required for extending the tests down the line
 func createAssetMintIx(t *testing.T, sender, receiver identifiers.Address) *common.Interaction {
 	t.Helper()
 
@@ -288,12 +420,13 @@ func createAssetTransferIx(t *testing.T, sender, receiver identifiers.Address) c
 
 	return tests.CreateIxns(t, 1, ixParams)
 }
+*/
 
 func createTestNodeSet(t *testing.T, n int) *common.NodeSet {
 	t.Helper()
 
 	kramaIDs, publicKeys := tests.GetTestKramaIdsWithPublicKeys(t, n)
-	nodeset := common.NewNodeSet(kramaIDs, publicKeys, n)
+	nodeset := common.NewNodeSet(kramaIDs, publicKeys, uint32(n))
 
 	for i := 0; i < n; i++ {
 		nodeset.Responses.SetIndex(i, true)
@@ -306,7 +439,7 @@ func createTestRandomSet(t *testing.T, total, actual int) *common.NodeSet {
 	t.Helper()
 
 	kramaIDs, publicKeys := tests.GetTestKramaIdsWithPublicKeys(t, total)
-	nodeset := common.NewNodeSet(kramaIDs, publicKeys, actual)
+	nodeset := common.NewNodeSet(kramaIDs, publicKeys, uint32(actual))
 
 	for i := 0; i < actual; i++ {
 		nodeset.Responses.SetIndex(i, true)
@@ -317,57 +450,49 @@ func createTestRandomSet(t *testing.T, total, actual int) *common.NodeSet {
 
 func createNodeSet(
 	t *testing.T,
-	senderBehaviourSetCount int,
-	senderRandomSetCount int,
-	receiverBehaviourSetCount int,
-	receiverRandomSetCount int,
-	randomSetCount int,
-	observerSetCount int,
-) []*common.NodeSet {
+	participantsCount int,
+	nodesPerSet int,
+) *common.ICSNodeSet {
 	t.Helper()
 
-	senderBehaviourSet := createTestNodeSet(t, senderBehaviourSetCount)
-	senderRandomSet := createTestNodeSet(t, senderRandomSetCount)
-	receiverBehaviourSet := createTestNodeSet(t, receiverBehaviourSetCount)
-	receiverRandomSet := createTestNodeSet(t, receiverRandomSetCount)
+	ns := common.NewICSNodeSet(2*participantsCount + 1)
 
-	// create some grace nodes for random set but quorum field will have nodes that are only part of ICS
-	randomSet := createTestRandomSet(t, 2*randomSetCount, randomSetCount)
-	observerSet := createTestNodeSet(t, observerSetCount)
-
-	testNodeSets := []*common.NodeSet{
-		senderBehaviourSet,
-		senderRandomSet,
-		receiverBehaviourSet,
-		receiverRandomSet,
-		randomSet,
-		observerSet,
+	for i := 0; i < participantsCount; i++ {
+		ns.UpdateNodeSet(i, createTestNodeSet(t, nodesPerSet))
+		ns.UpdateNodeSet(i+1, createTestNodeSet(t, nodesPerSet))
 	}
 
-	return testNodeSets
+	// create some grace nodes for random set but quorum field will have nodes that are only part of ICS
+	randomSet := createTestRandomSet(t, 2*participantsCount*nodesPerSet+5, 2*participantsCount*nodesPerSet)
+	observerSet := createTestNodeSet(t, nodesPerSet)
+
+	ns.UpdateNodeSet(ns.RandomSetPosition(), randomSet)
+	ns.UpdateNodeSet(ns.ObserverSetPosition(), observerSet)
+
+	return ns
 }
 
 func createTestClusterState(
 	t *testing.T,
 	operator kramaid.KramaID,
 	selfID kramaid.KramaID,
-	nodeset []*common.NodeSet,
+	nodeset *common.ICSNodeSet,
 	ixs common.Interactions,
+	ps map[identifiers.Address]*common.Participant,
 	callback func(clusterState *ktypes.ClusterState),
 ) *ktypes.ClusterState {
 	t.Helper()
 
 	clusterState := ktypes.NewICS(
-		6,
 		nil,
 		ixs,
 		"cluster-test",
 		operator,
 		time.Now(),
 		selfID,
+		ps,
+		nodeset,
 	)
-
-	clusterState.NodeSet.Nodes = nodeset
 
 	if callback != nil {
 		callback(clusterState)
@@ -378,16 +503,20 @@ func createTestClusterState(
 
 func checkContextDelta(
 	t *testing.T,
-	sender identifiers.Address,
-	receiver identifiers.Address,
-	expectedContextDelta common.ContextDelta,
-	actualContextDelta common.ContextDelta,
+	isGenesisAccount bool,
+	expectedContextDelta *common.DeltaGroup,
+	actualContextDelta *common.DeltaGroup,
 ) {
 	t.Helper()
 
-	require.Equal(t, expectedContextDelta[sender], actualContextDelta[sender])
-	require.Equal(t, expectedContextDelta[receiver], actualContextDelta[receiver])
-	require.Equal(t, expectedContextDelta[common.SargaAddress], actualContextDelta[common.SargaAddress])
+	if isGenesisAccount {
+		require.Equal(t, len(actualContextDelta.BehaviouralNodes), BehaviouralContextSize)
+		require.Equal(t, len(actualContextDelta.RandomNodes), RandomContextSize)
+
+		return
+	}
+
+	require.Equal(t, expectedContextDelta, actualContextDelta)
 }
 
 /*
@@ -420,3 +549,63 @@ func getSignature(t *testing.T, kramaID kramaid.KramaID, rawIxns []byte, vault *
 	return rawCanonicalICSReq, icsReqSign
 }
 */
+
+func checkForExecutionCleanup(t *testing.T, exec *MockExec, expectedClusterID common.ClusterID) {
+	t.Helper()
+
+	require.Equal(t, expectedClusterID, exec.clusterID)
+}
+
+func checkNodeSetForParticipant(t *testing.T, state *MockStateManager, ps common.Participants, ns *common.ICSNodeSet) {
+	t.Helper()
+
+	for addr, p := range ps {
+		if p.IsGenesis {
+			continue
+		}
+		// fetch the context info from mock sm
+		storedContext := state.participantsContext[addr]
+		// this index access will validate nodeSetPositions
+		beSet := ns.Sets[p.NodeSetPosition]
+		rSet := ns.Sets[p.NodeSetPosition+1]
+		// validate nodeSets
+		require.Equal(t, storedContext.beSet, beSet)
+		require.Equal(t, storedContext.rSet, rSet)
+		// validate context hash
+		require.Equal(t, storedContext.contextHash, p.ContextHash)
+		// sum of setSizeWithOutDelta should be equal to context quourum
+		require.Equal(t,
+			(storedContext.beSet.SetSizeWithOutDelta+storedContext.rSet.SetSizeWithOutDelta)*2/3+1,
+			p.ConsensusQuorum,
+		)
+	}
+}
+
+func checkParticipantInfo(
+	t *testing.T,
+	state *MockStateManager,
+	ixnParticipant map[identifiers.Address]common.IxParticipant,
+	ps common.Participants,
+) {
+	t.Helper()
+
+	for addr, p := range ps {
+		if ixnParticipant[addr].IsGenesis {
+			require.Equal(t, p.LockType, ixnParticipant[addr].LockType)
+			require.Equal(t, p.ContextHash, common.NilHash)
+			require.Equal(t, p.TesseractHash, common.NilHash)
+			require.Equal(t, p.IsGenesis, ixnParticipant[addr].IsGenesis)
+
+			continue
+		}
+		// fetch meta info from mock sm
+		storedMetaInfo := state.accMetaInfo[addr]
+
+		require.Equal(t, p.AccType, storedMetaInfo.Type)
+		require.Equal(t, p.IsGenesis, ixnParticipant[addr].IsGenesis)
+		require.Equal(t, p.Height, storedMetaInfo.Height)
+		require.Equal(t, p.TesseractHash, storedMetaInfo.TesseractHash)
+		require.Equal(t, p.LockType, ixnParticipant[addr].LockType)
+		require.Equal(t, p.IsSigner, ixnParticipant[addr].IsSigner)
+	}
+}

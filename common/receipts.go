@@ -211,6 +211,14 @@ func (rs *Receipts) FromBytes(bytes []byte) error {
 	return nil
 }
 
+func (rs Receipts) FuelUsed() (fuelUsed uint64) {
+	for _, receipt := range rs {
+		fuelUsed += receipt.FuelUsed
+	}
+
+	return fuelUsed
+}
+
 type ReceiptPayload interface {
 	AssetCreationReceipt | AssetMintOrBurnReceipt | LogicDeployReceipt | LogicInvokeReceipt
 }

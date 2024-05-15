@@ -49,7 +49,7 @@ func TestCreateGenesisTesseract(t *testing.T) {
 				require.Equal(t, common.NilHash, p.PreviousContext)
 				require.Equal(t, test.contextHashes[i], p.LatestContext)
 				require.Equal(t, test.stateHashes[i], p.StateHash)
-				require.Equal(t, common.DeltaGroup{}, p.ContextDelta)
+				require.Nil(t, p.ContextDelta)
 			}
 
 			require.Equal(t, common.GenesisIdentifier, string(ts.ConsensusInfo().ClusterID))

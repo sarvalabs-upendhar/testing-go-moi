@@ -114,14 +114,14 @@ type MockChainManager struct {
 }
 
 func (m *MockChainManager) GetInteractionAndParticipantsByIxHash(ixHash common.Hash) (*common.Interaction,
-	common.Hash, common.Participants, int, error,
+	common.Hash, common.ParticipantStates, int, error,
 ) {
 	// TODO implement me
 	panic("implement me")
 }
 
 func (m *MockChainManager) GetInteractionAndParticipantsByTSHash(tsHash common.Hash, ixIndex int) (*common.Interaction,
-	common.Participants, error,
+	common.ParticipantStates, error,
 ) {
 	// TODO implement me
 	panic("implement me")

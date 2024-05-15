@@ -17,7 +17,7 @@ var LatestTesseractHeight int64 = -1
 func CreateRPCInteraction(
 	ix *common.Interaction,
 	tsHash common.Hash,
-	participants common.Participants,
+	participants common.ParticipantStates,
 	ixIndex int,
 ) (*RPCInteraction, error) {
 	input := ix.Input()
@@ -131,7 +131,7 @@ func CreateRPCInteraction(
 	return rpcIX, nil
 }
 
-func CreateRPCParticipants(participants common.Participants) RPCParticipants {
+func CreateRPCParticipants(participants common.ParticipantStates) RPCParticipants {
 	if len(participants) == 0 {
 		return nil
 	}
@@ -211,7 +211,7 @@ func CreateRPCReceipt(
 	receipt *common.Receipt,
 	ix *common.Interaction,
 	tsHash common.Hash,
-	participants common.Participants,
+	participants common.ParticipantStates,
 	ixIndex int,
 ) *RPCReceipt {
 	return &RPCReceipt{

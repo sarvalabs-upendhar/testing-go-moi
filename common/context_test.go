@@ -15,7 +15,6 @@ func TestCopyContextDelta(t *testing.T) {
 	address := tests.RandomAddress(t)
 
 	contextDelta[address] = &common.DeltaGroup{
-		Role:             common.Sender,
 		BehaviouralNodes: tests.RandomKramaIDs(t, 2),
 		RandomNodes:      tests.RandomKramaIDs(t, 2),
 		ReplacedNodes:    tests.RandomKramaIDs(t, 2),

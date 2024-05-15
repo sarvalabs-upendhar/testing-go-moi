@@ -34,7 +34,7 @@ type VoteSet struct {
 	mtx sync.RWMutex
 
 	// Represents the sum of seen votes, discounting conflicts
-	sum []int32
+	sum []uint32
 
 	// Represents the sum of voting power for seen votes
 	votingPowerSum []int32
@@ -76,10 +76,10 @@ func NewVoteSet(
 		valset:           validatorSet,
 		mtx:              sync.RWMutex{},
 		votes:            make([]*ktypes.Vote, validatorSet.Size()),
-		votingPowerSum:   make([]int32, 3),
+		votingPowerSum:   make([]int32, len(heights)+1),
 		votesBitArray:    common.NewArrayOfBits(validatorSet.Size()),
 		votesByTesseract: make(map[string]*tesseractVoteSet, validatorSet.Size()),
-		sum:              make([]int32, 3),
+		sum:              make([]uint32, len(heights)+1),
 		peermaj23s:       make(map[string]common.Hash),
 	}
 }

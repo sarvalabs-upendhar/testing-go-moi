@@ -1,7 +1,6 @@
 package common
 
 import (
-	"crypto/rand"
 	"math/big"
 	"sync/atomic"
 
@@ -233,18 +232,6 @@ func NewInteraction(ixData IxData, signature []byte) (*Interaction, error) {
 	ix.size.Store(uint64(len(data) + len(signature)))
 
 	return ix, nil
-}
-
-func NewRandomHashInteraction() *Interaction {
-	hash := make([]byte, 32)
-	if _, err := rand.Read(hash); err != nil {
-		return nil
-	}
-
-	v := atomic.Value{}
-	v.Store(BytesToHash(hash))
-
-	return &Interaction{hash: v}
 }
 
 func (ix Interaction) IXData() IxData {

@@ -48,7 +48,7 @@ type Context struct {
 type ixData struct {
 	ix           *common.Interaction
 	tsHash       common.Hash
-	participants common.Participants
+	participants common.ParticipantStates
 	ixIndex      int
 }
 
@@ -81,7 +81,7 @@ func NewMockChainManager(t *testing.T) *MockChainManager {
 
 func (c *MockChainManager) GetInteractionAndParticipantsByIxHash(
 	ixHash common.Hash,
-) (*common.Interaction, common.Hash, common.Participants, int, error) {
+) (*common.Interaction, common.Hash, common.ParticipantStates, int, error) {
 	if c.GetInteractionByIxHashHook != nil {
 		return nil, common.NilHash, nil, 0, c.GetInteractionByIxHashHook()
 	}
@@ -97,7 +97,7 @@ func (c *MockChainManager) GetInteractionAndParticipantsByIxHash(
 func (c *MockChainManager) GetInteractionAndParticipantsByTSHash(
 	tsHash common.Hash,
 	ixIndex int,
-) (*common.Interaction, common.Participants, error) {
+) (*common.Interaction, common.ParticipantStates, error) {
 	data, ok := c.ixByTesseract[tsHash]
 	if !ok {
 		return nil, nil, common.ErrFetchingInteraction
@@ -125,7 +125,7 @@ func (c *MockChainManager) GetTesseractHeightEntry(address identifiers.Address, 
 func (c *MockChainManager) SetInteractionDataByTSHash(
 	tsHash common.Hash,
 	ix *common.Interaction,
-	participants common.Participants,
+	participants common.ParticipantStates,
 ) {
 	c.ixByTesseract[tsHash] = ixData{
 		ix:           ix,
@@ -137,7 +137,7 @@ func (c *MockChainManager) SetInteractionDataByTSHash(
 func (c *MockChainManager) SetInteractionDataByIxHash(
 	ix *common.Interaction,
 	tsHash common.Hash,
-	participants common.Participants,
+	participants common.ParticipantStates,
 	ixIndex int,
 ) {
 	c.ixByHash[ix.Hash()] = ixData{

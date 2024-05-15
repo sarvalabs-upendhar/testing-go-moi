@@ -8,37 +8,26 @@ import (
 	"github.com/sarvalabs/go-legacy-kramaid"
 )
 
-type IcsSetType int
-
-const (
-	SenderBehaviourSet IcsSetType = iota
-	SenderRandomSet
-	ReceiverBehaviourSet
-	ReceiverRandomSet
-	RandomSet
-	ObserverSet
-)
-
 type NodeSet struct {
-	mtx         sync.RWMutex
-	Ids         []kramaid.KramaID
-	PublicKeys  [][]byte
-	Responses   *ArrayOfBits
-	VotingPower []int64
-	RespCount   int
-	QuorumSize  int
+	mtx                 sync.RWMutex
+	Ids                 []kramaid.KramaID
+	PublicKeys          [][]byte
+	Responses           *ArrayOfBits
+	VotingPower         []int64
+	RespCount           int
+	SetSizeWithOutDelta uint32
 }
 
 // NewNodeSet creates and returns a new instance of NodeSet
-func NewNodeSet(ids []kramaid.KramaID, keys [][]byte, quorumSize int) *NodeSet {
+func NewNodeSet(ids []kramaid.KramaID, keys [][]byte, required uint32) *NodeSet {
 	return &NodeSet{
-		mtx:         sync.RWMutex{},
-		Ids:         ids,
-		PublicKeys:  keys,
-		Responses:   NewArrayOfBits(len(ids)),
-		VotingPower: make([]int64, len(ids)),
-		RespCount:   0,
-		QuorumSize:  quorumSize,
+		mtx:                 sync.RWMutex{},
+		Ids:                 ids,
+		PublicKeys:          keys,
+		Responses:           NewArrayOfBits(len(ids)),
+		VotingPower:         make([]int64, len(ids)),
+		RespCount:           0,
+		SetSizeWithOutDelta: required,
 	}
 }
 
@@ -49,42 +38,83 @@ func (ns *NodeSet) GetRespCount() int {
 	return ns.RespCount
 }
 
-func (ns *NodeSet) UpdateRespCount() {
+func (ns *NodeSet) UpdateResponse(index int, v bool) {
 	ns.mtx.Lock()
 	defer ns.mtx.Unlock()
 
+	ns.Responses.SetIndex(index, v)
 	ns.RespCount++
 }
 
+// ICSNodeSet manages the NodeSets of participants in the ICS, including RandomNodes and ObserverNodes.
+// Each participant possesses 2 NodeSets, which are arranged according to their addresses.
+// For instance, in the scenario of two participants, ICSNodeSet will contain 2 * Participants + 2 sets.
+// [P0.BehaviourSet, P0.RandomSet, P1.BehaviourSet, P1.RandomSet, RandomSet, ObserverSet]
 type ICSNodeSet struct {
-	Nodes []*NodeSet
-	Size  int
+	Sets       []*NodeSet
+	totalNodes int
+	size       int
 }
 
 // NewICSNodeSet creates and returns a new instance of NodeSet
 func NewICSNodeSet(size int) *ICSNodeSet {
 	ics := &ICSNodeSet{
-		Nodes: make([]*NodeSet, size),
-		Size:  0,
+		Sets:       make([]*NodeSet, size),
+		totalNodes: 0,
+		size:       size,
 	}
 
 	return ics
 }
 
+func (i *ICSNodeSet) TotalNodes() int {
+	return i.totalNodes
+}
+
+func (i *ICSNodeSet) ObserverSetPosition() int {
+	return i.size - 1
+}
+
+func (i *ICSNodeSet) RandomSetPosition() int {
+	return i.size - 2
+}
+
+func (i *ICSNodeSet) ParticipantQuorum(position int) uint32 {
+	var count uint32
+	if i.Sets[position] != nil {
+		count += i.Sets[position].SetSizeWithOutDelta
+	}
+
+	if i.Sets[position+1] != nil {
+		count += i.Sets[position+1].SetSizeWithOutDelta
+	}
+
+	if count == 0 {
+		return count
+	}
+
+	return count*2/3 + 1
+}
+
+func (i *ICSNodeSet) UpdateNodeSetResponses(position int, responses *ArrayOfBits) {
+	i.Sets[position].Responses = responses
+	i.Sets[position].RespCount = responses.TrueIndicesSize()
+}
+
 // GetKramaID returns the slot id, slot index, krama id and bls public key of the validator node based on the index
 func (i *ICSNodeSet) GetKramaID(index int32) (slots []int, slotIndex int, kramaID kramaid.KramaID, publicKey []byte) {
-	if index < 0 || int(index) >= i.Size {
+	if index < 0 || int(index) >= i.totalNodes {
 		return nil, -1, "", nil
 	}
 
-	slots = make([]int, 0, 5)
+	slots = make([]int, 0, i.Size()-1)
 
-	for v, set := range i.Nodes {
+	for v, set := range i.Sets {
 		if set == nil {
 			continue
 		}
 
-		if v == len(i.Nodes)-1 {
+		if v == len(i.Sets)-1 {
 			return nil, -1, "", nil
 		}
 
@@ -96,13 +126,13 @@ func (i *ICSNodeSet) GetKramaID(index int32) (slots []int, slotIndex int, kramaI
 
 		slots = append(slots, v)
 
-		for j := v + 1; j < len(i.Nodes)-1; j++ {
+		for j := v + 1; j < len(i.Sets)-1; j++ {
 			// check for empty set
-			if i.Nodes[j] == nil {
+			if i.Sets[j] == nil {
 				continue
 			}
 			// check for krama ID on not empty set
-			for _, kID := range i.Nodes[j].Ids {
+			for _, kID := range i.Sets[j].Ids {
 				if kID == set.Ids[index] {
 					slots = append(slots, j)
 				}
@@ -119,8 +149,8 @@ func (i *ICSNodeSet) GetKramaID(index int32) (slots []int, slotIndex int, kramaI
 func (i *ICSNodeSet) HasKramaID(peerID kramaid.KramaID) (int32, bool) {
 	offset := 0
 
-	for index, set := range i.Nodes {
-		if index == len(i.Nodes)-1 {
+	for index, set := range i.Sets {
+		if index == len(i.Sets)-1 {
 			break
 		}
 
@@ -141,15 +171,15 @@ func (i *ICSNodeSet) HasKramaID(peerID kramaid.KramaID) (int32, bool) {
 }
 
 // GetIndex returns the index of the validator node from ICSNodes based on the krama id
-func (i *ICSNodeSet) GetIndex(peerID kramaid.KramaID) (IcsSetType, int) {
-	for i, set := range i.Nodes {
+func (i *ICSNodeSet) GetIndex(peerID kramaid.KramaID) (int, int) {
+	for i, set := range i.Sets {
 		if set == nil {
 			continue
 		}
 
 		for j, kramaID := range set.Ids {
 			if kramaID == peerID {
-				return IcsSetType(i), j
+				return i, j
 			}
 		}
 	}
@@ -158,13 +188,13 @@ func (i *ICSNodeSet) GetIndex(peerID kramaid.KramaID) (IcsSetType, int) {
 }
 
 // UpdateNodeSet updates the specific node set of the ICSNodes based on the node set type
-func (i *ICSNodeSet) UpdateNodeSet(setType IcsSetType, data *NodeSet) {
+func (i *ICSNodeSet) UpdateNodeSet(setType int, data *NodeSet) {
 	if data == nil {
 		return
 	}
 
-	i.Nodes[setType] = data
-	i.Size += len(data.Ids)
+	i.Sets[setType] = data
+	i.totalNodes += len(data.Ids)
 }
 
 // GetNodes returns krama id's of all the nodes from the ICSNodes nodeset
@@ -172,7 +202,7 @@ func (i *ICSNodeSet) GetNodes(respondedOnly bool) []kramaid.KramaID {
 	nodes := make(map[kramaid.KramaID]struct{})
 	distinctNodes := make([]kramaid.KramaID, 0)
 
-	for _, nodeSet := range i.Nodes {
+	for _, nodeSet := range i.Sets {
 		if nodeSet == nil {
 			continue
 		}
@@ -197,11 +227,11 @@ func (i *ICSNodeSet) GetNodes(respondedOnly bool) []kramaid.KramaID {
 
 // GetVoteset returns combined voteset of all the nodes from the ICSNodeSet
 func (i *ICSNodeSet) GetVoteset() *ArrayOfBits {
-	voteSet := NewArrayOfBits(i.Size)
+	voteSet := NewArrayOfBits(i.totalNodes)
 
 	index := 0
 
-	for _, nodeSet := range i.Nodes {
+	for _, nodeSet := range i.Sets {
 		if nodeSet != nil {
 			for j := 0; j < len(nodeSet.Ids); j++ {
 				voteSet.setIndex(index+j, nodeSet.Responses.GetIndex(j))
@@ -218,8 +248,8 @@ func (i *ICSNodeSet) GetVoteset() *ArrayOfBits {
 // between start and end indexes (inclusive)
 func (i *ICSNodeSet) GetRespondedNodeCount(start, end int) (count int) {
 	for j := start; j <= end; j++ {
-		if i.Nodes[j] != nil {
-			count += i.Nodes[j].GetRespCount()
+		if i.Sets[j] != nil {
+			count += i.Sets[j].GetRespCount()
 		}
 	}
 
@@ -228,22 +258,22 @@ func (i *ICSNodeSet) GetRespondedNodeCount(start, end int) (count int) {
 
 // IsContextQuorum check's whether context quorum condition is satisfied or not
 func (i *ICSNodeSet) IsContextQuorum() bool {
-	for j := 0; j < 4; j += 2 {
-		count := 0
-		quorum := 0
+	for j := 0; j < i.Size()-2; j += 2 {
+		responses := 0
+		setSize := 0
 
-		if i.Nodes[j] != nil {
-			count += i.Nodes[j].GetRespCount()
-			quorum += len(i.Nodes[j].Ids)
+		if i.Sets[j] != nil {
+			responses += i.Sets[j].GetRespCount()
+			setSize += int(i.Sets[j].SetSizeWithOutDelta)
 		}
 
-		if i.Nodes[j+1] != nil {
-			count += i.Nodes[j+1].GetRespCount()
-			quorum += len(i.Nodes[j+1].Ids)
+		if i.Sets[j+1] != nil {
+			responses += i.Sets[j+1].GetRespCount()
+			setSize += int(i.Sets[j+1].SetSizeWithOutDelta)
 		}
 
-		if quorum > 0 && count < quorum*2/3+1 {
-			log.Println("Quorum conditions failed", count, quorum, quorum*2/3+1)
+		if setSize > 0 && responses < setSize*2/3+1 {
+			log.Println("Quorum conditions failed", responses, setSize, setSize*2/3+1)
 
 			return false
 		}
@@ -254,80 +284,25 @@ func (i *ICSNodeSet) IsContextQuorum() bool {
 
 // IsRandomQuorum check's whether random quorum condition is satisfied or not
 func (i *ICSNodeSet) IsRandomQuorum(requiredRandomNodes int) bool {
-	return i.Nodes[RandomSet].GetRespCount() >= requiredRandomNodes
+	return i.RandomSet().GetRespCount() >= requiredRandomNodes
 }
 
-// SenderSetSize returns the sum of number of nodes in the sender's behaviour node set and random node set
-func (i *ICSNodeSet) SenderSetSize() int {
-	count := 0
-
-	if i.Nodes[SenderBehaviourSet] != nil {
-		count += len(i.Nodes[SenderBehaviourSet].Ids)
-	}
-
-	if i.Nodes[SenderRandomSet] != nil {
-		count += len(i.Nodes[SenderRandomSet].Ids)
-	}
-
-	if count <= 0 {
-		return 0
-	}
-
-	return count
+func (i *ICSNodeSet) RandomSet() *NodeSet {
+	return i.Sets[i.RandomSetPosition()]
 }
 
-// ReceiverSetSize returns the sum of number of nodes in the receiver's behaviour node set and random node set
-func (i *ICSNodeSet) ReceiverSetSize() int {
-	count := 0
-
-	if i.Nodes[ReceiverBehaviourSet] != nil {
-		count += len(i.Nodes[ReceiverBehaviourSet].Ids)
-	}
-
-	if i.Nodes[ReceiverRandomSet] != nil {
-		count += len(i.Nodes[ReceiverRandomSet].Ids)
-	}
-
-	if count <= 0 {
-		return 0
-	}
-
-	return count
+func (i *ICSNodeSet) ObserverSet() *NodeSet {
+	return i.Sets[i.ObserverSetPosition()]
 }
 
 // RandomSetSize returns the random node set size
 func (i *ICSNodeSet) RandomSetSize() int {
-	count := len(i.Nodes[RandomSet].Ids)
-	if count <= 0 {
-		return 0
-	}
-
-	return count
-}
-
-// SenderQuorumSize returns the sender's quorum size
-func (i *ICSNodeSet) SenderQuorumSize() int {
-	count := i.SenderSetSize()
-	if count <= 0 {
-		return 0
-	}
-
-	return count*2/3 + 1
-}
-
-// ReceiverQuorumSize returns the receiver's quorum size
-func (i *ICSNodeSet) ReceiverQuorumSize() int {
-	count := i.ReceiverSetSize()
-	if count <= 0 {
-		return 0
-	}
-
-	return count*2/3 + 1
+	return len(i.RandomSet().Ids)
 }
 
 // RandomQuorumSize returns the random quorum size
-func (i *ICSNodeSet) RandomQuorumSize() int {
-	return i.Nodes[RandomSet].QuorumSize*2/3 + 1
+func (i *ICSNodeSet) RandomQuorumSize() uint32 {
+	return i.RandomSet().SetSizeWithOutDelta*2/3 + 1
 }
 
 // String returns the ICSNodes in string
@@ -340,19 +315,18 @@ func (i *ICSNodeSet) String() string {
 	return string(rawBytes)
 }
 
-func (i *ICSNodeSet) ICSClusterInfo() *ICSClusterInfo {
-	clusterInfo := &ICSClusterInfo{
-		Responses: make([]*ArrayOfBits, len(i.Nodes)),
-	}
+func (i *ICSNodeSet) Size() int {
+	return i.size
+}
 
-	for index, set := range i.Nodes {
-		if set != nil {
-			clusterInfo.Responses[index] = set.Responses
+func (i *ICSNodeSet) Responses() []*ArrayOfBits {
+	responses := make([]*ArrayOfBits, i.Size())
+
+	for j := 0; j < i.size; j++ {
+		if i.Sets[j] != nil {
+			responses[j] = i.Sets[j].Responses.Copy()
 		}
 	}
 
-	clusterInfo.RandomSet = i.Nodes[RandomSet].Ids
-	clusterInfo.ObserverSet = i.Nodes[ObserverSet].Ids
-
-	return clusterInfo
+	return responses
 }

@@ -48,8 +48,11 @@ const (
 
 var DefaultMinConnectedPeers = 6
 
-type lattice interface {
+type consensus interface {
 	ExecuteAndValidate(ts *common.Tesseract) error
+}
+
+type lattice interface {
 	AddTesseractWithState(
 		addr identifiers.Address,
 		dirtyStorage map[common.Hash][]byte,
@@ -205,6 +208,7 @@ type Syncer struct {
 	trustedPeersPresent bool
 	IxFetchGrid         map[common.Hash]struct{}
 	IxFetchLock         sync.Mutex
+	krama               consensus
 }
 
 func NewSyncer(
@@ -220,6 +224,7 @@ func NewSyncer(
 	lastActiveTimeStamp uint64,
 	syncerMetrics *Metrics,
 	blockSync syncer.BlockSync,
+	krama consensus,
 ) (*Syncer, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Syncer{
@@ -249,6 +254,7 @@ func NewSyncer(
 		tracker:             NewSyncStatusTracker(0),
 		trustedPeersPresent: len(cfg.TrustedPeers) > 0,
 		IxFetchGrid:         make(map[common.Hash]struct{}),
+		krama:               krama,
 	}
 
 	return s, nil
@@ -1590,7 +1596,7 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 			return false, errors.Wrap(err, "failed to add synced tesseract")
 		}
 
-		if err := s.publishEventTesseractSync(msg.address(), msg.height()); err != nil {
+		if err = s.publishEventTesseractSync(msg.address(), msg.height()); err != nil {
 			s.logger.Error("Failed to publish event lattice sync", "err", err)
 		}
 
@@ -1682,7 +1688,7 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 }
 
 func (s *Syncer) executeAndAdd(dirty map[common.Hash][]byte, ts *common.Tesseract) error {
-	if err := s.lattice.ExecuteAndValidate(ts); err != nil {
+	if err := s.krama.ExecuteAndValidate(ts); err != nil {
 		return err
 	}
 
@@ -2174,8 +2180,6 @@ func (s *Syncer) fillTSWithIxnsAndReceipts(tsInfo *TesseractInfo) error {
 				return err
 			}
 		}
-
-		s.logger.Trace("setting ixns", "ixns-length", len(ixns))
 
 		ts.SetIxns(ixns)
 	}

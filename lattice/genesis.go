@@ -15,7 +15,7 @@ func createGenesisTesseract(
 ) *common.Tesseract {
 	var (
 		ixHashString = "Genesis"
-		participants = make(common.Participants)
+		participants = make(common.ParticipantStates)
 	)
 
 	for i, addr := range addresses {

@@ -14,7 +14,7 @@ import (
 // execution of a group of Interactions within a single cluster.
 type IxExecutor struct {
 	Interactions common.Interactions
-	contextDelta common.ContextDelta
+	execContext  *common.ExecutionContext
 
 	mgr   *Manager
 	state StateManager
@@ -32,10 +32,10 @@ type IxExecutor struct {
 func (executor *IxExecutor) Execute(ixs common.Interactions, ctx *common.ExecutionContext) error {
 	// Update the interaction and the context delta into the executor
 	executor.Interactions = ixs
-	executor.contextDelta = ctx.ContextDelta()
+	executor.execContext = ctx
 
 	// Load all the state objects for all interaction participants
-	objects, err := executor.LoadStateObjects()
+	objects, err := executor.LoadStateObjects(ctx.Participants)
 	if err != nil {
 		return errors.Wrap(err, "execution failed")
 	}
@@ -126,7 +126,7 @@ func (executor *IxExecutor) setReceipt(ixhash common.Hash, receipt *common.Recei
 // UpdateContext updates the context of the participant accounts using context delta
 func (executor *IxExecutor) UpdateContext() error {
 	for address, object := range executor.transition.objects {
-		delta, ok := executor.contextDelta[address]
+		delta, ok := executor.execContext.ContextDelta()[address]
 		if !ok {
 			continue
 		}
@@ -196,55 +196,25 @@ func (executor *IxExecutor) CommitStateObjects() error {
 	return nil
 }
 
-func (executor *IxExecutor) LoadStateObjects() (state.ObjectMap, error) {
+func (executor *IxExecutor) LoadStateObjects(
+	ps map[identifiers.Address]common.IxParticipant,
+) (state.ObjectMap, error) {
 	// Create a new objects map
 	objects := make(state.ObjectMap)
 
-	for _, ix := range executor.Interactions {
-		// Fetch state object for sender if valid and not already available in the executor
-		if sender := ix.Sender(); !sender.IsNil() && executor.baseline.objects.GetObject(sender) == nil {
-			// Retrieve the dirty object for the sender from the state manager
-			senderObject, err := executor.state.GetLatestStateObject(sender)
-			if err != nil {
-				return nil, errors.Wrap(err, "state object fetch failed")
-			}
+	for addr, p := range ps {
+		if p.IsGenesis {
+			objects[addr] = executor.state.CreateStateObject(addr, p.AccType)
 
-			// Add sender state object and its snapshot to the executor
-			objects[sender] = senderObject
+			continue
 		}
 
-		// Fetch state object for receiver if valid
-		if receiver := ix.Receiver(); !receiver.IsNil() {
-			var receiverObject *state.Object
-
-			// Check if the receiver address is an already registered account
-			accountRegistered, err := executor.state.IsAccountRegistered(ix.Receiver())
-			if err != nil {
-				return nil, errors.Wrap(err, "state object fetch failed")
-			}
-
-			if !accountRegistered {
-				// Retrieve the dirty object for genesis (sarga) address
-				genesisObject, err := executor.state.GetLatestStateObject(common.SargaAddress)
-				if err != nil {
-					return nil, errors.Wrap(err, "state object fetch failed")
-				}
-
-				// Add genesis state object and its snapshot to the executor
-				objects[common.SargaAddress] = genesisObject
-
-				// Create a new dirty state object for the account
-				receiverObject = executor.state.CreateStateObject(receiver, common.AccTypeFromIxType(ix.Type()))
-			} else {
-				// Retrieve the dirty object for the receiver from the state manager
-				if receiverObject, err = executor.state.GetLatestStateObject(receiver); err != nil {
-					return nil, errors.Wrap(err, "state object fetch failed")
-				}
-			}
-
-			// Add receiver state object and its snapshot to the executor
-			objects[receiver] = receiverObject
+		obj, err := executor.state.GetLatestStateObject(addr)
+		if err != nil {
+			return nil, errors.Wrap(err, "state object fetch failed")
 		}
+
+		objects[addr] = obj
 	}
 
 	return objects, nil

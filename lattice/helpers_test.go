@@ -25,7 +25,6 @@ import (
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/common/utils"
-	"github.com/sarvalabs/go-moi/compute"
 	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/state"
 	"github.com/sarvalabs/go-moi/storage"
@@ -401,50 +400,6 @@ func (n *MockNetwork) Subscribe(
 ) error {
 	// TODO implement me
 	panic("implement me")
-}
-
-type MockExec struct {
-	receipts                common.Receipts
-	accountHashes           common.AccStateHashes
-	revertHook              func() error
-	executeInteractionsHook func() (common.Receipts, common.AccStateHashes, error)
-	clusterID               common.ClusterID
-}
-
-func (e *MockExec) Cleanup(clusterID common.ClusterID) {
-	e.clusterID = clusterID
-}
-
-func (e *MockExec) SpawnExecutor() *compute.IxExecutor {
-	sm := mockStateManager()
-
-	return compute.NewManager(sm, hclog.NewNullLogger(), nil, compute.NilMetrics()).SpawnExecutor()
-}
-
-func mockExec(t *testing.T) *MockExec {
-	t.Helper()
-
-	return new(MockExec)
-}
-
-// mock execution implementation
-func (e *MockExec) ExecuteInteractions(
-	ixs common.Interactions,
-	ctx *common.ExecutionContext,
-) (common.Receipts, common.AccStateHashes, error) {
-	if e.executeInteractionsHook != nil {
-		return e.executeInteractionsHook()
-	}
-
-	return e.receipts, e.accountHashes, nil
-}
-
-func (e *MockExec) Revert(clusterID common.ClusterID) error {
-	if e.revertHook != nil {
-		return e.revertHook()
-	}
-
-	return nil
 }
 
 type Context struct {
@@ -853,7 +808,7 @@ func createTesseractsWithChain(t *testing.T, count int, paramsMap map[int]*creat
 	tesseracts[0] = createTesseract(t, paramsMap[0])
 
 	for i := 1; i < count; i++ {
-		paramsMap[i].participantsCallback = func(participants common.Participants) {
+		paramsMap[i].participantsCallback = func(participants common.ParticipantStates) {
 			hash := tesseracts[i-1].Hash()
 			p := participants[tesseracts[0].AnyAddress()]
 			p.TransitiveLink = hash
@@ -869,8 +824,8 @@ func createTesseractsWithChain(t *testing.T, count int, paramsMap map[int]*creat
 type createTesseractParams struct {
 	Addresses            []identifiers.Address
 	Heights              []uint64
-	Participants         common.Participants
-	participantsCallback func(participants common.Participants)
+	Participants         common.ParticipantStates
+	participantsCallback func(participants common.ParticipantStates)
 	TSDataCallback       func(ts *tests.TesseractData)
 
 	Ixns     common.Interactions
@@ -906,7 +861,7 @@ func defaultTesseractData() *tests.TesseractData {
 }
 
 // CreateTesseract creates a tesseract using tessseract params fields
-// if any field thats not available in params need to be initialized using TesseractCallback field
+// if any field which is not available in params need to be initialized using TesseractCallback field
 func createTesseract(t *testing.T, params *createTesseractParams) *common.Tesseract {
 	t.Helper()
 
@@ -921,7 +876,7 @@ func createTesseract(t *testing.T, params *createTesseractParams) *common.Tesser
 	}
 
 	if params.Participants == nil {
-		params.Participants = make(common.Participants)
+		params.Participants = make(common.ParticipantStates)
 	}
 
 	if len(params.Addresses) == 0 {
@@ -1038,7 +993,6 @@ type CreateChainParams struct {
 	smCallBack           func(sm *MockStateManager)
 	senatusCallback      func(senatus *MockSenatus)
 	networkCallback      func(network *MockNetwork)
-	execCallback         func(exec *MockExec)
 	chainManagerCallback func(c *ChainManager)
 }
 
@@ -1074,7 +1028,6 @@ func createTestChainManager(t *testing.T, params *CreateChainParams) *ChainManag
 		sm      = mockStateManager()
 		senatus = mockSenatus(t)
 		ixPool  = mockIXPool(t)
-		exec    = mockExec(t)
 		network = mockNetwork(t)
 	)
 
@@ -1110,10 +1063,6 @@ func createTestChainManager(t *testing.T, params *CreateChainParams) *ChainManag
 		params.networkCallback(network)
 	}
 
-	if params.execCallback != nil {
-		params.execCallback(exec)
-	}
-
 	if params.dbCallback != nil {
 		params.dbCallback(db)
 	}
@@ -1127,7 +1076,6 @@ func createTestChainManager(t *testing.T, params *CreateChainParams) *ChainManag
 		network,
 		ixPool,
 		mockCache(),
-		exec,
 		senatus,
 		NilMetrics(),
 		MockAggregateSignVerifier,
@@ -1208,7 +1156,6 @@ func getDeltaGroup(t *testing.T, behaviouralCount int, randomCount int, replaceC
 	t.Helper()
 
 	return &common.DeltaGroup{
-		Role:             1,
 		BehaviouralNodes: tests.RandomKramaIDs(t, behaviouralCount),
 		RandomNodes:      tests.RandomKramaIDs(t, randomCount),
 		ReplacedNodes:    tests.RandomKramaIDs(t, replaceCount),
@@ -1245,22 +1192,20 @@ func insertTesseractByHeight(t *testing.T, db store, ts *common.Tesseract) {
 	}
 }
 
-func getICSNodeset(t *testing.T, count int) *common.ICSNodeSet {
+func getICSNodeset(t *testing.T, participantCount, nodesCount int) *common.ICSNodeSet {
 	t.Helper()
 
-	ics := common.NewICSNodeSet(6)
+	ics := common.NewICSNodeSet(2*participantCount + 2)
 
-	senderBehaviourSet := tests.RandomKramaIDs(t, count)
-	senderRandomSet := tests.RandomKramaIDs(t, count)
-	receiverBehaviourSet := tests.RandomKramaIDs(t, count)
-	receiverRandomSet := tests.RandomKramaIDs(t, count)
-	randomNodes := tests.RandomKramaIDs(t, count)
-
-	ics.UpdateNodeSet(common.SenderBehaviourSet, common.NewNodeSet(senderBehaviourSet, getPublicKeys(t, count), 0))
-	ics.UpdateNodeSet(common.SenderRandomSet, common.NewNodeSet(senderRandomSet, getPublicKeys(t, count), 0))
-	ics.UpdateNodeSet(common.ReceiverBehaviourSet, common.NewNodeSet(receiverBehaviourSet, getPublicKeys(t, count), 0))
-	ics.UpdateNodeSet(common.ReceiverRandomSet, common.NewNodeSet(receiverRandomSet, getPublicKeys(t, count), 0))
-	ics.UpdateNodeSet(common.RandomSet, common.NewNodeSet(randomNodes, getPublicKeys(t, count), 0))
+	for i := 0; i < 2*participantCount+2; i++ {
+		ics.UpdateNodeSet(
+			i,
+			common.NewNodeSet(
+				tests.RandomKramaIDs(t, nodesCount),
+				getPublicKeys(t, nodesCount),
+				uint32(nodesCount),
+			))
+	}
 
 	return ics
 }
@@ -1292,13 +1237,6 @@ func getIX(t *testing.T) *common.Interaction {
 	)
 }
 
-func getIxAndReceipt(t *testing.T) (*common.Interaction, *common.Receipt) {
-	t.Helper()
-	ix := getIX(t)
-
-	return ix, getReceipt(ix.Hash())
-}
-
 func getIxAndReceipts(t *testing.T, ixCount int) ([]*common.Interaction, common.Receipts) {
 	t.Helper()
 
@@ -1307,7 +1245,8 @@ func getIxAndReceipts(t *testing.T, ixCount int) ([]*common.Interaction, common.
 	receipts := make(map[common.Hash]*common.Receipt, ixCount)
 
 	for i := 0; i < ixCount; i++ {
-		ix, r := getIxAndReceipt(t)
+		ix := getIX(t)
+		r := getReceipt(ix.Hash())
 		ixs = append(ixs, ix)
 		receipts[ix.Hash()] = r
 	}
@@ -1324,9 +1263,9 @@ func tesseractParamsWithContextDelta(
 
 	return &createTesseractParams{
 		Addresses: []identifiers.Address{address},
-		Participants: common.Participants{
+		Participants: common.ParticipantStates{
 			address: {
-				ContextDelta: *getDeltaGroup(t, behaviouralCount, randomCount, replacedCount),
+				ContextDelta: getDeltaGroup(t, behaviouralCount, randomCount, replacedCount),
 			},
 		},
 	}
@@ -1553,7 +1492,7 @@ func getAccountSetupArgs(
 
 // validation
 
-func validateDeltaGroup(t *testing.T, senatus *MockSenatus, deltaGroup common.DeltaGroup) {
+func validateDeltaGroup(t *testing.T, senatus *MockSenatus, deltaGroup *common.DeltaGroup) {
 	t.Helper()
 
 	for _, kramaID := range deltaGroup.BehaviouralNodes {
@@ -1813,13 +1752,4 @@ func checkForAllocations(
 
 		require.Equal(t, allocation.Amount.ToInt(), bal)
 	}
-}
-
-func checkForExecutionCleanup(t *testing.T, c *ChainManager, expectedClusterID common.ClusterID) {
-	t.Helper()
-
-	mockExec, ok := c.exec.(*MockExec)
-	require.True(t, ok)
-
-	require.Equal(t, expectedClusterID, mockExec.clusterID)
 }

@@ -70,7 +70,6 @@ type stateManager interface {
 	IsAccountRegistered(addr identifiers.Address) (bool, error)
 	IsAccountRegisteredAt(addr identifiers.Address, tesseractHash common.Hash) (bool, error)
 	FetchTesseractFromDB(hash common.Hash, withInteractions bool) (*common.Tesseract, error)
-	GetNodeSet(ids []kramaid.KramaID) (*common.NodeSet, error)
 	GetLogicIDs(addr identifiers.Address, hash common.Hash) ([]identifiers.LogicID, error)
 }
 
@@ -81,13 +80,6 @@ type server interface {
 
 type ixpool interface {
 	ResetWithHeaders(ts *common.Tesseract)
-}
-
-type executor interface {
-	ExecuteInteractions(common.Interactions, *common.ExecutionContext) (common.Receipts, common.AccStateHashes, error)
-	Revert(common.ClusterID) error
-	SpawnExecutor() *compute.IxExecutor
-	Cleanup(cluster common.ClusterID)
 }
 
 type AggregatedSignatureVerifier func(data []byte, aggSignature []byte, multiplePubKeys [][]byte) (bool, error)
@@ -103,7 +95,6 @@ type ChainManager struct {
 	logger            hclog.Logger
 	senatus           reputationEngine
 	network           server
-	exec              executor
 	metrics           *Metrics
 	signatureVerifier AggregatedSignatureVerifier
 }
@@ -117,7 +108,6 @@ func NewChainManager(
 	network server,
 	ix ixpool,
 	cache *lru.Cache,
-	exec executor,
 	senatus reputationEngine,
 	metrics *Metrics,
 	verifier AggregatedSignatureVerifier,
@@ -129,7 +119,6 @@ func NewChainManager(
 		ixpool:            ix,
 		sm:                sm,
 		tesseracts:        cache,
-		exec:              exec,
 		network:           network,
 		latticeLocks:      locker.New(),
 		logger:            logger.Named("Chain-Manager"),
@@ -182,7 +171,7 @@ func (c *ChainManager) fetchContextForAgora(addr identifiers.Address, ts common.
 	return peers, nil
 }
 
-func (c *ChainManager) UpdateNodeInclusivity(delta common.DeltaGroup) error {
+func (c *ChainManager) UpdateNodeInclusivity(delta *common.DeltaGroup) error {
 	for _, kramaID := range delta.BehaviouralNodes {
 		if err := c.senatus.UpdateWalletCount(kramaID, 1); err != nil {
 			return err
@@ -314,29 +303,29 @@ func (c *ChainManager) verifySignatures(ts *common.Tesseract, ics *common.ICSNod
 		verificationInitTime = time.Now()
 		consensusInfo        = ts.ConsensusInfo()
 		publicKeys           = make([][]byte, 0, consensusInfo.BFTVoteSet.TrueIndicesSize())
-		votesCounter         = make([]int, 5) // Only 5 because we don't consider observer nodes vote
+		votesCounter         = make([]uint32, ts.ParticipantCount()+1)
 	)
 
-	for _, index := range ts.BFTVoteSet().GetTrueIndices() {
-		slots, _, _, publicKey := ics.GetKramaID(int32(index))
-		if slots != nil { // ts.Header.Extra.VoteSet.GetIndex(index)
+	for _, valIndex := range ts.BFTVoteSet().GetTrueIndices() {
+		nodeSetIndices, _, _, publicKey := ics.GetKramaID(int32(valIndex))
+		if nodeSetIndices != nil { // ts.Header.Extra.VoteSet.GetIndex(index)
 			publicKeys = append(publicKeys, publicKey)
 
-			for _, slotID := range slots {
-				votesCounter[slotID]++
+			for _, index := range nodeSetIndices {
+				votesCounter[index/2]++
 			}
 		} else {
-			c.logger.Debug("Error fetching validator address", "index", index)
+			c.logger.Debug("Error fetching validator address", "index", valIndex)
 		}
 	}
 
-	senderContextSize := votesCounter[0] + votesCounter[1]
-	receiverContextSize := votesCounter[2] + votesCounter[3]
-	randomContextSize := votesCounter[4]
+	for index := range ts.Addresses() {
+		if votesCounter[index] < ics.ParticipantQuorum(index*2) {
+			return false, common.ErrQuorumFailed
+		}
+	}
 
-	if senderContextSize < ics.SenderQuorumSize() ||
-		receiverContextSize < ics.ReceiverQuorumSize() ||
-		randomContextSize < ics.RandomQuorumSize() {
+	if votesCounter[len(ts.Addresses())] < ics.RandomQuorumSize() {
 		return false, common.ErrQuorumFailed
 	}
 
@@ -506,7 +495,7 @@ func (c *ChainManager) addParticipantsData(
 		return errors.New("address is not specified")
 	}
 
-	participants := make(common.Participants)
+	participants := make(common.ParticipantStates)
 
 	if allParticipants {
 		participants = ts.Participants()
@@ -591,6 +580,10 @@ func (c *ChainManager) addTesseract(
 
 		// update peer occupancy metrics
 		for _, p := range t.Participants() {
+			if p.ContextDelta == nil {
+				continue
+			}
+
 			if err := c.UpdateNodeInclusivity(p.ContextDelta); err != nil {
 				return errors.Wrap(err, common.ErrUpdatingInclusivity.Error())
 			}
@@ -918,38 +911,6 @@ func (c *ChainManager) Close() {
 	c.logger.Info("Closing ChainManager.")
 }
 
-func (c *ChainManager) ExecuteAndValidate(ts *common.Tesseract) error {
-	defer c.exec.Cleanup(ts.ClusterID())
-
-	c.logger.Debug(
-		"Executing interactions of grid",
-		"ts-hash", ts.Hash(),
-		"lock", ts.PreviousContext(),
-	)
-
-	receipts, stateHashes, err := c.exec.ExecuteInteractions(
-		ts.Interactions(),
-		ts.ExecutionContext(),
-	)
-	if err != nil {
-		return err
-	}
-
-	if !isReceiptsHashValid(ts, receipts) || !areStateHashesValid(ts, stateHashes) {
-		if err = c.exec.Revert(ts.ClusterID()); err != nil {
-			c.logger.Error("Failed to revert the execution changes", "cluster-ID", ts.ClusterID())
-
-			return errors.Wrap(err, "failed to revert the execution changes")
-		}
-
-		return errors.New("failed to validate the tesseract")
-	}
-
-	ts.SetReceipts(receipts)
-
-	return nil
-}
-
 func (c *ChainManager) getInteractionsByTSHash(tsHash common.Hash) (common.Interactions, error) {
 	interactions := new(common.Interactions)
 
@@ -968,7 +929,7 @@ func (c *ChainManager) getInteractionsByTSHash(tsHash common.Hash) (common.Inter
 // GetInteractionAndParticipantsByTSHash returns interaction,participants for the given tesseract hash and ix index
 func (c *ChainManager) GetInteractionAndParticipantsByTSHash(tsHash common.Hash, ixIndex int) (
 	*common.Interaction,
-	common.Participants,
+	common.ParticipantStates,
 	error,
 ) {
 	ts, err := c.GetTesseract(tsHash, true)
@@ -990,7 +951,7 @@ func (c *ChainManager) GetInteractionAndParticipantsByTSHash(tsHash common.Hash,
 func (c *ChainManager) GetInteractionAndParticipantsByIxHash(ixHash common.Hash) (
 	*common.Interaction,
 	common.Hash,
-	common.Participants,
+	common.ParticipantStates,
 	int,
 	error,
 ) {
@@ -1152,27 +1113,4 @@ func (c *ChainManager) SetupGenesisLogics(
 	}
 
 	return hashes, nil
-}
-
-func areStateHashesValid(ts *common.Tesseract, postExecState common.AccStateHashes) bool {
-	for addr, participantState := range ts.Participants() {
-		if postExecState.StateHash(addr) != participantState.StateHash {
-			return false
-		}
-	}
-
-	return true
-}
-
-func isReceiptsHashValid(ts *common.Tesseract, receipts common.Receipts) bool {
-	receiptsHash, err := receipts.Hash()
-	if err != nil {
-		return false
-	}
-
-	if ts.ReceiptsHash() != receiptsHash {
-		return false
-	}
-
-	return true
 }

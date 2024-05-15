@@ -30,16 +30,13 @@ func (delta ContextDelta) Copy() ContextDelta {
 }
 
 type DeltaGroup struct {
-	Role             ParticipantRole   `json:"role"`
 	BehaviouralNodes []kramaid.KramaID `json:"behavioural_nodes"`
 	RandomNodes      []kramaid.KramaID `json:"random_nodes"`
 	ReplacedNodes    []kramaid.KramaID `json:"replaced_nodes"`
 }
 
 func (d DeltaGroup) Copy() *DeltaGroup {
-	deltaGroup := &DeltaGroup{
-		Role: d.Role,
-	}
+	deltaGroup := &DeltaGroup{}
 
 	if len(d.BehaviouralNodes) > 0 {
 		deltaGroup.BehaviouralNodes = make([]kramaid.KramaID, len(d.BehaviouralNodes))

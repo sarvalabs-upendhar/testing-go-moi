@@ -448,7 +448,7 @@ func GetListenAddresses(t *testing.T, count int) []multiaddr.Multiaddr {
 	return ListenAddresses
 }
 
-func GetRandomAccMetaInfo(t *testing.T, height uint64) *common.AccountMetaInfo {
+func RandomAccMetaInfo(t *testing.T, height uint64) *common.AccountMetaInfo {
 	t.Helper()
 
 	return &common.AccountMetaInfo{
@@ -499,7 +499,7 @@ func GetRandomAddressList(t *testing.T, count int) []identifiers.Address {
 type CreateTesseractParams struct {
 	Addresses      []identifiers.Address
 	Heights        []uint64
-	Participants   common.Participants
+	Participants   common.ParticipantStates
 	TSDataCallback func(ts *TesseractData)
 
 	Ixns     common.Interactions
@@ -552,7 +552,7 @@ func CreateTesseract(t *testing.T, params *CreateTesseractParams) *common.Tesser
 	}
 
 	if params.Participants == nil {
-		params.Participants = make(common.Participants)
+		params.Participants = make(common.ParticipantStates)
 	}
 
 	// A tesseract should have at least one participant
@@ -910,8 +910,7 @@ func CreateStateWithTestData(t *testing.T) common.State {
 		PreviousContext: RandomHash(t),
 		LatestContext:   RandomHash(t),
 		StateHash:       RandomHash(t),
-		ContextDelta: common.DeltaGroup{
-			Role:             common.Receiver,
+		ContextDelta: &common.DeltaGroup{
 			BehaviouralNodes: RandomKramaIDs(t, 2),
 			RandomNodes:      RandomKramaIDs(t, 2),
 			ReplacedNodes:    RandomKramaIDs(t, 2),
@@ -942,10 +941,10 @@ func CreatePoXtWithTestData(t *testing.T) common.PoXtData {
 	}
 }
 
-func CreateParticipantWithTestData(t *testing.T, count int) common.Participants {
+func CreateParticipantWithTestData(t *testing.T, count int) common.ParticipantStates {
 	t.Helper()
 
-	p := make(common.Participants)
+	p := make(common.ParticipantStates)
 
 	for i := 0; i < count; i++ {
 		p[RandomAddress(t)] = CreateStateWithTestData(t)
@@ -1067,4 +1066,38 @@ type Result struct {
 
 func NewTestTreeCache() *fastcache.Cache {
 	return fastcache.New(200)
+}
+
+// CreateTestIxParticipants creates a list of address and a map of IxParticipants with default values
+func CreateTestIxParticipants(t *testing.T, count int, genesisAccCount int) (
+	[]identifiers.Address,
+	map[identifiers.Address]common.IxParticipant,
+) {
+	t.Helper()
+
+	addrs := make([]identifiers.Address, count)
+
+	ps := make(map[identifiers.Address]common.IxParticipant, 0)
+
+	for i := 0; i < count; i++ {
+		addrs[i] = RandomAddress(t)
+		ps[addrs[i]] = common.IxParticipant{
+			AccType:   common.RegularAccount,
+			IsSigner:  true,
+			LockType:  common.WriteLock,
+			IsGenesis: false,
+		}
+	}
+
+	for i := 0; i < genesisAccCount; i++ {
+		addrs[i] = RandomAddress(t)
+		ps[addrs[i]] = common.IxParticipant{
+			AccType:   common.RegularAccount,
+			IsSigner:  true,
+			LockType:  common.WriteLock,
+			IsGenesis: true,
+		}
+	}
+
+	return addrs, ps
 }

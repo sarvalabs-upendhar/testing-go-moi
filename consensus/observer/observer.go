@@ -17,7 +17,7 @@ func NewWatchDog(ctx context.Context, slot *types.Slot) *WatchDog {
 	return &WatchDog{
 		ctx:  ctx,
 		slot: slot,
-		msgs: make([]*types.ICSMSG, 0, slot.ClusterState().NodeSet.Size*2),
+		msgs: make([]*types.ICSMSG, 0, slot.ClusterState().NodeSet.TotalNodes()*2),
 	}
 }
 

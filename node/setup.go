@@ -173,7 +173,6 @@ func (n *Node) setupChainManager() (err error) {
 		n.network,
 		n.ixpool,
 		n.cache,
-		n.exec,
 		n.senatus,
 		n.nodeMetrics.chain,
 		crypto.VerifyAggregateSignature,
@@ -236,6 +235,7 @@ func (n *Node) setupSyncer() (err error) {
 		n.lastActiveTimestamp,
 		n.nodeMetrics.syncer,
 		agoraInstance,
+		n.kramaEngine,
 	); err != nil {
 		return err
 	}

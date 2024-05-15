@@ -22,7 +22,7 @@ const (
 	// searchTimeout timeout is the timeout for locating a peer in the Kademlia DHT.
 	searchTimeout = 1 * time.Minute
 
-	connectionTimeout = 800 * time.Millisecond
+	connectionTimeout = 1200 * time.Millisecond
 )
 
 // DiscoveryService is a struct that manages peer discovery.

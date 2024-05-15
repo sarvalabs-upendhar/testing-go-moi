@@ -31,13 +31,13 @@ type ChainManager interface {
 	GetInteractionAndParticipantsByIxHash(ixHash common.Hash) (
 		*common.Interaction,
 		common.Hash,
-		common.Participants,
+		common.ParticipantStates,
 		int,
 		error,
 	)
 	GetInteractionAndParticipantsByTSHash(tsHash common.Hash, ixIndex int) (
 		*common.Interaction,
-		common.Participants,
+		common.ParticipantStates,
 		error,
 	)
 }

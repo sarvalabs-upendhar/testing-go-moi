@@ -43,11 +43,11 @@ func TestCopyParticipant(t *testing.T) {
 
 	testcases := []struct {
 		name         string
-		participants common.Participants
+		participants common.ParticipantStates
 	}{
 		{
 			name: "copy participants",
-			participants: common.Participants{
+			participants: common.ParticipantStates{
 				address: tests.CreateStateWithTestData(t),
 			},
 		},
@@ -134,7 +134,7 @@ func TestNewTesseract(t *testing.T) {
 
 	testcases := []struct {
 		name             string
-		participants     common.Participants
+		participants     common.ParticipantStates
 		interactionsHash common.Hash
 		receiptHash      common.Hash
 		epoch            *big.Int
@@ -150,7 +150,7 @@ func TestNewTesseract(t *testing.T) {
 	}{
 		{
 			name: "create new tesseract",
-			participants: common.Participants{
+			participants: common.ParticipantStates{
 				address: tests.CreateStateWithTestData(t),
 			},
 			interactionsHash: tests.RandomHash(t),

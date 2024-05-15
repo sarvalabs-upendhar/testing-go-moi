@@ -120,7 +120,7 @@ func TestPublicCoreAPI_GetTesseractHashByHeight(t *testing.T) {
 	chainManager := NewMockChainManager(t)
 	stateManager := NewMockStateManager(t)
 	coreAPI := NewPublicCoreAPI(nil, chainManager, stateManager, nil, nil, nil)
-	acc := tests.GetRandomAccMetaInfo(t, 8)
+	acc := tests.RandomAccMetaInfo(t, 8)
 
 	stateManager.setAccountMetaInfo(t, acc.Address, acc)
 
@@ -537,7 +537,7 @@ func TestPublicCoreAPI_GetTesseract(t *testing.T) {
 	tsParams := map[int]*tests.CreateTesseractParams{
 		0: {
 			Addresses: []identifiers.Address{address},
-			Participants: common.Participants{
+			Participants: common.ParticipantStates{
 				address: {
 					Height: uint64(height),
 				},
@@ -1456,7 +1456,7 @@ func TestPublicCoreAPI_GetInteractionByTSHash(t *testing.T) {
 		name                 string
 		args                 rpcargs.InteractionByTesseract
 		expectedIX           *common.Interaction
-		expectedParticipants common.Participants
+		expectedParticipants common.ParticipantStates
 		expectedError        error
 	}{
 		{
@@ -1691,7 +1691,7 @@ func TestPublicCoreAPI_GetInteractionReceipt(t *testing.T) {
 		args            rpcargs.ReceiptArgs
 		expectedReceipt *common.Receipt
 		ix              *common.Interaction
-		participants    common.Participants
+		participants    common.ParticipantStates
 		ixIndex         int
 		expectedError   error
 	}{
@@ -1819,7 +1819,7 @@ func TestPublicCoreAPI_GetAccountMetaInfo(t *testing.T) {
 	chainManager.setTesseractByHash(t, ts)
 
 	tsHash := tests.GetTesseractHash(t, ts)
-	acc := tests.GetRandomAccMetaInfo(t, 1)
+	acc := tests.RandomAccMetaInfo(t, 1)
 
 	stateManager.setAccountMetaInfo(t, ts.AnyAddress(), acc)
 

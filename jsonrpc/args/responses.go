@@ -151,7 +151,7 @@ type RPCState struct {
 	TransitiveLink common.Hash         `json:"transitive_link"`
 	PrevContext    common.Hash         `json:"prev_context"`
 	LatestContext  common.Hash         `json:"latest_context"`
-	ContextDelta   common.DeltaGroup   `json:"context_delta"`
+	ContextDelta   *common.DeltaGroup  `json:"context_delta"`
 	StateHash      common.Hash         `json:"state_hash"`
 }
 

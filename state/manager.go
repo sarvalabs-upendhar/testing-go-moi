@@ -23,7 +23,6 @@ import (
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"
 	"github.com/sarvalabs/go-moi/storage/db"
-	"github.com/sarvalabs/go-moi/telemetry/tracing"
 )
 
 const (
@@ -437,7 +436,7 @@ func (sm *StateManager) fetchParticipantContextByHash(addr identifiers.Address, 
 	}
 
 	if len(behaviouralContext) > 0 {
-		behaviouralSet = common.NewNodeSet(behaviouralContext, nil, 0)
+		behaviouralSet = common.NewNodeSet(behaviouralContext, nil, uint32(len(behaviouralContext)))
 
 		if behaviouralSet.PublicKeys, err = sm.GetPublicKeys(context.Background(), behaviouralContext...); err != nil {
 			sm.logger.Error("Failed to retrieve the public key of behavioural set", "err", err)
@@ -447,7 +446,7 @@ func (sm *StateManager) fetchParticipantContextByHash(addr identifiers.Address, 
 	}
 
 	if len(randomContext) > 0 {
-		randomSet = common.NewNodeSet(randomContext, nil, 0)
+		randomSet = common.NewNodeSet(randomContext, nil, uint32(len(randomContext)))
 
 		if randomSet.PublicKeys, err = sm.GetPublicKeys(context.Background(), randomContext...); err != nil {
 			sm.logger.Error("Failed to retrieve the public key of random set", "err", err)
@@ -459,7 +458,7 @@ func (sm *StateManager) fetchParticipantContextByHash(addr identifiers.Address, 
 	return behaviouralSet, randomSet, nil
 }
 
-func (sm *StateManager) fetchLatestParticipantContext(addr identifiers.Address) (
+func (sm *StateManager) FetchLatestParticipantContext(addr identifiers.Address) (
 	latestContextHash common.Hash,
 	behaviouralSet, randomSet *common.NodeSet,
 	err error,
@@ -475,7 +474,7 @@ func (sm *StateManager) fetchLatestParticipantContext(addr identifiers.Address) 
 	}
 
 	if len(behaviouralContext) > 0 {
-		behaviouralSet = common.NewNodeSet(behaviouralContext, nil, 0)
+		behaviouralSet = common.NewNodeSet(behaviouralContext, nil, uint32(len(behaviouralContext)))
 
 		if behaviouralSet.PublicKeys, err = sm.GetPublicKeys(context.Background(), behaviouralContext...); err != nil {
 			sm.logger.Error("Failed to retrieve the public key of behavioural set", "err", err)
@@ -485,7 +484,7 @@ func (sm *StateManager) fetchLatestParticipantContext(addr identifiers.Address) 
 	}
 
 	if len(randomContext) > 0 {
-		randomSet = common.NewNodeSet(randomContext, nil, 0)
+		randomSet = common.NewNodeSet(randomContext, nil, uint32(len(randomContext)))
 
 		if randomSet.PublicKeys, err = sm.GetPublicKeys(context.Background(), randomContext...); err != nil {
 			sm.logger.Error("Failed to retrieve the public key of random set", "err", err)
@@ -571,141 +570,134 @@ func (sm *StateManager) GetParticipantContextRaw(
 	return nil
 }
 
-func (sm *StateManager) GetNodeSet(ids []kramaid.KramaID) (*common.NodeSet, error) {
+func (sm *StateManager) NodeSet(ids []kramaid.KramaID, setSizeWithoutDelta uint32) (*common.NodeSet, error) {
 	var (
 		publicKeys [][]byte
 		err        error
 	)
 
-	if len(ids) > 0 {
-		publicKeys, err = sm.GetPublicKeys(context.Background(), ids...)
-		if err != nil {
-			return nil, err
-		}
+	if len(ids) == 0 {
+		return nil, err
 	}
 
-	return common.NewNodeSet(ids, publicKeys, 0), nil
+	publicKeys, err = sm.GetPublicKeys(context.Background(), ids...)
+	if err != nil {
+		return nil, err
+	}
+
+	return common.NewNodeSet(ids, publicKeys, setSizeWithoutDelta), nil
+}
+
+func (sm *StateManager) NodeSetFromRawContextObject(raw []byte) (*common.NodeSet, error) {
+	obj := new(ContextObject)
+	if err := obj.FromBytes(raw); err != nil {
+		return nil, err
+	}
+
+	return sm.NodeSet(obj.Ids, uint32(len(obj.Ids)))
 }
 
 func (sm *StateManager) FetchICSNodeSet(
 	ts *common.Tesseract,
 	info *common.ICSClusterInfo,
 ) (*common.ICSNodeSet, error) {
-	icsNodeSets, err := sm.FetchContextLock(ts)
-	if err != nil {
-		return nil, err
-	}
-
 	if info.Responses == nil {
 		return nil, errors.New("nil responses slice")
 	}
 
-	randomSet, err := sm.GetNodeSet(info.RandomSet)
-	if err != nil {
-		return nil, err
-	}
+	addrs := ts.Addresses()
+	ps := ts.Participants()
 
-	icsNodeSets.UpdateNodeSet(common.RandomSet, randomSet)
+	ics := common.NewICSNodeSet(2*len(addrs) + 2)
 
-	observerSet, err := sm.GetNodeSet(info.ObserverSet)
-	if err != nil {
-		return nil, err
-	}
+	for index, addr := range addrs {
+		if ps[addr].PreviousContext == common.NilHash {
+			continue
+		}
 
-	icsNodeSets.UpdateNodeSet(common.ObserverSet, observerSet)
+		position := index * 2
 
-	for index, set := range icsNodeSets.Nodes {
-		if set != nil && info.Responses[index] != nil {
-			set.Responses = info.Responses[index]
+		behaviourSet, randomSet, err := sm.fetchParticipantContextByHash(addr, ps[addr].PreviousContext)
+		if err != nil {
+			return nil, err
+		}
+
+		if behaviourSet != nil {
+			ics.UpdateNodeSet(position, behaviourSet)
+			ics.UpdateNodeSetResponses(position, info.Responses[position])
+		}
+
+		if randomSet != nil {
+			ics.UpdateNodeSet(position+1, randomSet)
+			ics.UpdateNodeSetResponses(position+1, info.Responses[position+1])
 		}
 	}
 
-	return icsNodeSets, nil
+	randomSet, err := sm.NodeSet(info.RandomSet, info.RandomSetSizeWithoutDelta)
+	if err != nil {
+		return nil, err
+	}
+
+	ics.UpdateNodeSet(ics.RandomSetPosition(), randomSet)
+	ics.UpdateNodeSetResponses(ics.RandomSetPosition(), info.Responses[ics.RandomSetPosition()])
+
+	observerSet, err := sm.NodeSet(info.ObserverSet, uint32(len(info.ObserverSet)))
+	if err != nil {
+		return nil, err
+	}
+
+	ics.UpdateNodeSet(ics.ObserverSetPosition(), observerSet)
+	ics.UpdateNodeSetResponses(ics.ObserverSetPosition(), info.Responses[ics.ObserverSetPosition()])
+
+	return ics, nil
 }
 
 func (sm *StateManager) GetICSNodeSetFromRawContext(
 	ts *common.Tesseract,
 	rawContext map[string][]byte,
-	clusterInfo *common.ICSClusterInfo,
+	info *common.ICSClusterInfo,
 ) (*common.ICSNodeSet, error) {
-	ix := ts.Interactions()[0]
-	ics := common.NewICSNodeSet(6)
-
 	contextHashes := make([]common.Hash, 0)
+	addrs := ts.Addresses()
+	ps := ts.Participants()
 
-	for address, state := range ts.Participants() {
-		if state.PreviousContext == common.NilHash {
+	ics := common.NewICSNodeSet(2*len(addrs) + 2)
+
+	for index, addr := range addrs {
+		position := index * 2
+
+		if ps[addr].PreviousContext == common.NilHash || ps[addr].LatestContext == ps[addr].PreviousContext {
 			continue
 		}
 
 		metaObject := new(MetaContextObject)
-		if err := metaObject.FromBytes(rawContext[state.PreviousContext.String()]); err != nil {
+		if err := metaObject.FromBytes(rawContext[ps[addr].PreviousContext.String()]); err != nil {
 			return nil, err
 		}
 
-		if address == ix.Sender() {
-			rawBytes, ok := rawContext[metaObject.BehaviouralContext.String()]
-			if ok {
-				behaviourObject := new(ContextObject)
-				if err := behaviourObject.FromBytes(rawBytes); err != nil {
-					return nil, err
-				}
-
-				nodeSet, err := sm.GetNodeSet(behaviourObject.Ids)
-				if err != nil {
-					return nil, err
-				}
-
-				ics.UpdateNodeSet(common.SenderBehaviourSet, nodeSet)
+		rawBytes, ok := rawContext[metaObject.BehaviouralContext.String()]
+		if ok {
+			nodeSet, err := sm.NodeSetFromRawContextObject(rawBytes)
+			if err != nil {
+				return nil, err
 			}
 
-			rawBytes, ok = rawContext[metaObject.RandomContext.String()]
-			if ok {
-				randomObject := new(ContextObject)
-				if err := randomObject.FromBytes(rawBytes); err != nil {
-					return nil, err
-				}
-
-				nodeSet, err := sm.GetNodeSet(randomObject.Ids)
-				if err != nil {
-					return nil, err
-				}
-
-				ics.UpdateNodeSet(common.SenderRandomSet, nodeSet)
-			}
-		} else if address == ix.Receiver() || address == common.SargaAddress {
-			rawBytes, ok := rawContext[metaObject.BehaviouralContext.String()]
-			if ok {
-				behaviourObject := new(ContextObject)
-				if err := behaviourObject.FromBytes(rawBytes); err != nil {
-					return nil, err
-				}
-
-				nodeSet, err := sm.GetNodeSet(behaviourObject.Ids)
-				if err != nil {
-					return nil, err
-				}
-
-				ics.UpdateNodeSet(common.ReceiverBehaviourSet, nodeSet)
-			}
-
-			rawBytes, ok = rawContext[metaObject.RandomContext.String()]
-			if ok {
-				randomObject := new(ContextObject)
-				if err := randomObject.FromBytes(rawBytes); err != nil {
-					return nil, err
-				}
-
-				nodeSet, err := sm.GetNodeSet(randomObject.Ids)
-				if err != nil {
-					return nil, err
-				}
-
-				ics.UpdateNodeSet(common.ReceiverRandomSet, nodeSet)
-			}
+			ics.UpdateNodeSet(position, nodeSet)
+			ics.UpdateNodeSetResponses(position, info.Responses[position])
 		}
 
-		contextHashes = append(contextHashes, state.PreviousContext)
+		rawBytes, ok = rawContext[metaObject.RandomContext.String()]
+		if ok {
+			nodeSet, err := sm.NodeSetFromRawContextObject(rawBytes)
+			if err != nil {
+				return nil, err
+			}
+
+			ics.UpdateNodeSet(position+1, nodeSet)
+			ics.UpdateNodeSetResponses(position+1, info.Responses[position+1])
+		}
+
+		contextHashes = append(contextHashes, ps[addr].PreviousContext)
 		contextHashes = append(contextHashes, metaObject.BehaviouralContext)
 		contextHashes = append(contextHashes, metaObject.RandomContext)
 	}
@@ -717,25 +709,21 @@ func (sm *StateManager) GetICSNodeSetFromRawContext(
 		delete(rawContext, hash.String())
 	}
 
-	randomSet, err := sm.GetNodeSet(clusterInfo.RandomSet)
+	randomSet, err := sm.NodeSet(info.RandomSet, info.RandomSetSizeWithoutDelta)
 	if err != nil {
 		return nil, err
 	}
 
-	ics.UpdateNodeSet(common.RandomSet, randomSet)
+	ics.UpdateNodeSet(ics.RandomSetPosition(), randomSet)
+	ics.UpdateNodeSetResponses(ics.RandomSetPosition(), info.Responses[ics.RandomSetPosition()])
 
-	observerSet, err := sm.GetNodeSet(clusterInfo.ObserverSet)
+	observerSet, err := sm.NodeSet(info.ObserverSet, uint32(len(info.ObserverSet)))
 	if err != nil {
 		return nil, err
 	}
 
-	ics.UpdateNodeSet(common.ObserverSet, observerSet)
-
-	for index, set := range ics.Nodes {
-		if set != nil && clusterInfo.Responses[index] != nil {
-			set.Responses = clusterInfo.Responses[index]
-		}
-	}
+	ics.UpdateNodeSet(ics.ObserverSetPosition(), observerSet)
+	ics.UpdateNodeSetResponses(ics.ObserverSetPosition(), info.Responses[ics.ObserverSetPosition()])
 
 	return ics, nil
 }
@@ -757,9 +745,25 @@ func (sm *StateManager) GetContextByHash(
 	return hash, behaviourSet, randomSet, nil
 }
 
+/*
 func (sm *StateManager) FetchContextLock(ts *common.Tesseract) (*common.ICSNodeSet, error) {
 	ix := ts.Interactions()[0]
-	ics := common.NewICSNodeSet(6)
+	addrs := ts.Addresses()
+	ps := ts.Participants()
+
+	ics := common.NewICSNodeSet(len(addrs) + 2)
+
+	for position, addr := range ts.Addresses() {
+		if ps[addr].PreviousContext == common.NilHash {
+			continue
+		}
+
+		behaviourSet, randomSet, err := sm.fetchParticipantContextByHash(addr, ps[addr].PreviousContext)
+		if err != nil {
+			return nil, err
+		}
+
+	}
 
 	for address, info := range ts.Participants() {
 		if address == ix.Sender() {
@@ -787,82 +791,7 @@ func (sm *StateManager) FetchContextLock(ts *common.Tesseract) (*common.ICSNodeS
 
 	return ics, nil
 }
-
-// FetchInteractionContext returns a nodeSet which holds the latest context info of the interaction participants
-func (sm *StateManager) FetchInteractionContext(ctx context.Context, ix *common.Interaction) (
-	map[identifiers.Address]common.Hash,
-	[]*common.NodeSet,
-	error,
-) {
-	_, span := tracing.Span(ctx, "guna.StateManger", "FetchInteractionContext")
-	defer span.End()
-
-	var (
-		behaviourSet  *common.NodeSet
-		randomSet     *common.NodeSet
-		contextHash   common.Hash
-		err           error
-		contextHashes = make(map[identifiers.Address]common.Hash)
-		nodeSet       = make([]*common.NodeSet, 6)
-	)
-
-	if !ix.Sender().IsNil() {
-		contextHash, behaviourSet, randomSet, err = sm.fetchLatestParticipantContext(ix.Sender())
-		if err != nil {
-			return nil, nil, err
-		}
-
-		contextHashes[ix.Sender()] = contextHash
-		nodeSet[common.SenderBehaviourSet] = behaviourSet
-		nodeSet[common.SenderRandomSet] = randomSet
-	}
-
-	if !ix.Receiver().IsNil() {
-		if err = sm.getReceiverContext(ix, nodeSet, contextHashes); err != nil {
-			return nil, nil, err
-		}
-	}
-
-	return contextHashes, nodeSet, err
-}
-
-func (sm *StateManager) getReceiverContext(
-	ix *common.Interaction,
-	nodeSet []*common.NodeSet,
-	contextHashes map[identifiers.Address]common.Hash,
-) error {
-	var (
-		behaviourSet *common.NodeSet
-		randomSet    *common.NodeSet
-		contextHash  common.Hash
-	)
-
-	accountRegistered, err := sm.IsAccountRegistered(ix.Receiver())
-	if err != nil {
-		return err
-	}
-
-	if !accountRegistered {
-		contextHash, behaviourSet, randomSet, err = sm.fetchLatestParticipantContext(common.SargaAddress)
-		if err != nil {
-			return err
-		}
-
-		contextHashes[common.SargaAddress] = contextHash
-	} else {
-		contextHash, behaviourSet, randomSet, err = sm.fetchLatestParticipantContext(ix.Receiver())
-		if err != nil {
-			return err
-		}
-
-		contextHashes[ix.Receiver()] = contextHash
-	}
-
-	nodeSet[common.ReceiverBehaviourSet] = behaviourSet
-	nodeSet[common.ReceiverRandomSet] = randomSet
-
-	return nil
-}
+*/
 
 func (sm *StateManager) IsAccountRegistered(addr identifiers.Address) (bool, error) {
 	if addr.IsNil() {

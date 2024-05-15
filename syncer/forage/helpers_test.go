@@ -106,6 +106,7 @@ func NewTestSyncer(
 		mux:            mux,
 		agora:          agora,
 		db:             db,
+		krama:          newMockKrama(),
 		lattice:        newMockLattice(db, logger),
 		state:          newMockStateManager(db),
 		jobWorkerCount: 5,
@@ -163,6 +164,25 @@ func NewTestSyncerForValidation(
 	}
 }
 
+type MockKrama struct {
+	executedTesseracts map[string]*common.Tesseract
+}
+
+func (k *MockKrama) ExecuteAndValidate(ts *common.Tesseract) error {
+	for addr, s := range ts.Participants() {
+		key := addr.Hex() + strconv.FormatUint(s.Height, 10)
+		k.executedTesseracts[key] = ts
+	}
+
+	return nil
+}
+
+func newMockKrama() *MockKrama {
+	return &MockKrama{
+		executedTesseracts: make(map[string]*common.Tesseract),
+	}
+}
+
 type MockLattice struct {
 	lock               sync.RWMutex
 	logger             hclog.Logger
@@ -184,15 +204,6 @@ func newMockLattice(db store, logger hclog.Logger) *MockLattice {
 	}
 }
 
-func (m *MockLattice) ExecuteAndValidate(ts *common.Tesseract) error {
-	for addr, s := range ts.Participants() {
-		key := addr.Hex() + strconv.FormatUint(s.Height, 10)
-		m.executedTesseracts[key] = ts
-	}
-
-	return nil
-}
-
 func (m *MockLattice) AddTesseractWithState(
 	addr identifiers.Address,
 	dirtyStorage map[common.Hash][]byte,
@@ -203,7 +214,7 @@ func (m *MockLattice) AddTesseractWithState(
 		return common.ErrEmptyAddress
 	}
 
-	partcipants := make(common.Participants)
+	partcipants := make(common.ParticipantStates)
 
 	if allParticipants {
 		partcipants = ts.Participants()
@@ -465,7 +476,7 @@ func (m MockStateManager) FetchICSNodeSet(ts *common.Tesseract,
 	info *common.ICSClusterInfo,
 ) (*common.ICSNodeSet, error) {
 	return &common.ICSNodeSet{
-		Nodes: []*common.NodeSet{
+		Sets: []*common.NodeSet{
 			{
 				Ids: []kramaid.KramaID{"k1", "k2", "k3"},
 			},
@@ -1077,7 +1088,7 @@ func generateTesseracts(
 	index := 0
 
 	for i := startHeight; i <= endHeight; i++ {
-		participants := make(common.Participants)
+		participants := make(common.ParticipantStates)
 		heights := make([]uint64, 0)
 
 		for _, addr := range addresses {
@@ -1387,10 +1398,8 @@ func checkIfTesseractsSynced(
 		require.Equal(t, height, int(accMetaInfo.Height))
 	}
 
-	l, ok := s.lattice.(*MockLattice)
-	require.True(t, ok)
-
 	for _, ts := range tesseracts {
+		// check for interactions and receipts
 		_, err := s.db.GetInteractions(ts.Hash())
 		require.NoError(t, err)
 
@@ -1398,14 +1407,16 @@ func checkIfTesseractsSynced(
 		require.NoError(t, err)
 
 		for addr, participant := range ts.Participants() {
+			// check if tesseract is added
 			actualTS, err := s.lattice.GetTesseractByHeight(addr, participant.Height, true)
 			require.NoError(t, err)
 
 			require.Equal(t, ts.Hash(), actualTS.Hash())
 
 			if execution {
+				// check for execution
 				key := addr.Hex() + strconv.FormatUint(participant.Height, 10)
-				executedTS, ok := l.executedTesseracts[key]
+				executedTS, ok := s.krama.(*MockKrama).executedTesseracts[key]
 				require.True(t, ok)
 				require.Equal(t, executedTS.Hash(), ts.Hash())
 			} else {

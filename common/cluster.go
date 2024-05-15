@@ -3,8 +3,8 @@ package common
 import (
 	"github.com/mr-tron/base58"
 	"github.com/pkg/errors"
-
 	"github.com/sarvalabs/go-legacy-kramaid"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 )
 
@@ -25,9 +25,10 @@ func (c ClusterID) Hash() Hash {
 }
 
 type ExecutionContext struct {
-	CtxDelta ContextDelta
-	Cluster  ClusterID
-	Time     uint64
+	Participants map[identifiers.Address]IxParticipant // TODO: This should be replaced with transition object
+	CtxDelta     ContextDelta
+	Cluster      ClusterID
+	Time         uint64
 }
 
 func (ctx ExecutionContext) Timestamp() uint64 {
@@ -43,9 +44,10 @@ func (ctx ExecutionContext) ContextDelta() ContextDelta {
 }
 
 type ICSClusterInfo struct {
-	RandomSet   []kramaid.KramaID
-	ObserverSet []kramaid.KramaID
-	Responses   []*ArrayOfBits
+	RandomSet                 []kramaid.KramaID
+	RandomSetSizeWithoutDelta uint32
+	ObserverSet               []kramaid.KramaID
+	Responses                 []*ArrayOfBits
 }
 
 func (ci *ICSClusterInfo) Bytes() ([]byte, error) {
