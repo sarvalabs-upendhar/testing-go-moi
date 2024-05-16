@@ -49,7 +49,7 @@ func (p *Participant) TSHash() Hash {
 
 // IsContextUpdateRequired returns true if this participant is the signer and account type is regular
 func (p *Participant) IsContextUpdateRequired() bool {
-	if !p.IsSigner && p.AccType == RegularAccount {
+	if !p.IsSigner && !p.IsGenesis && p.AccType == RegularAccount {
 		return false
 	}
 

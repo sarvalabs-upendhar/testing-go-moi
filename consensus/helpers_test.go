@@ -510,6 +510,7 @@ func checkContextDelta(
 	t.Helper()
 
 	if isGenesisAccount {
+		require.NotNil(t, actualContextDelta)
 		require.Equal(t, len(actualContextDelta.BehaviouralNodes), BehaviouralContextSize)
 		require.Equal(t, len(actualContextDelta.RandomNodes), RandomContextSize)
 

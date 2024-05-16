@@ -103,6 +103,7 @@ func TestUpdateContextDelta(t *testing.T) {
 				nil,
 				map[identifiers.Address]*common.Participant{
 					addrs[0]: {
+						AccType:   common.RegularAccount,
 						LockType:  common.WriteLock,
 						IsGenesis: true,
 					},
