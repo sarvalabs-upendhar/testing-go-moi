@@ -24,15 +24,17 @@ type Slot struct {
 	// TODO: explore using sync pool for slots
 	SlotType                        SlotType
 	cs                              *ClusterState
+	ps                              map[identifiers.Address]common.IxParticipant
 	ICSSuccessChan                  chan bool
 	BftOutboundChan, BftInboundChan chan ConsensusMessage
 	ExecutionResp                   chan ExecutionResponse
 	CloseCh                         chan struct{}
 }
 
-func NewSlot(slotType SlotType) *Slot {
+func NewSlot(slotType SlotType, ps map[identifiers.Address]common.IxParticipant) *Slot {
 	return &Slot{
 		SlotType:        slotType,
+		ps:              ps,
 		ICSSuccessChan:  make(chan bool),
 		ExecutionResp:   make(chan ExecutionResponse),
 		BftOutboundChan: make(chan ConsensusMessage, 1000),
@@ -126,7 +128,7 @@ func (s *Slots) CreateSlot(
 		return nil
 	}
 
-	s.slots[clusterID] = NewSlot(req.SlotType)
+	s.slots[clusterID] = NewSlot(req.SlotType, ps)
 	s.decrementSlots(req.SlotType)
 
 	for addr := range ps {
@@ -163,7 +165,7 @@ func (s *Slots) CleanupSlot(id common.ClusterID) {
 	defer s.mtx.Unlock()
 
 	if slot, ok := s.slots[id]; ok {
-		for addr := range slot.cs.Participants {
+		for addr := range slot.ps {
 			delete(s.activeAccounts, addr)
 		}
 

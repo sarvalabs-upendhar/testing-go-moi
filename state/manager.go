@@ -666,7 +666,7 @@ func (sm *StateManager) GetICSNodeSetFromRawContext(
 	for index, addr := range addrs {
 		position := index * 2
 
-		if ps[addr].PreviousContext == common.NilHash || ps[addr].LatestContext == ps[addr].PreviousContext {
+		if ps[addr].PreviousContext == common.NilHash {
 			continue
 		}
 

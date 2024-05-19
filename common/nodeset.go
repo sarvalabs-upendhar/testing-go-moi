@@ -97,6 +97,10 @@ func (i *ICSNodeSet) ParticipantQuorum(position int) uint32 {
 }
 
 func (i *ICSNodeSet) UpdateNodeSetResponses(position int, responses *ArrayOfBits) {
+	if responses == nil {
+		return
+	}
+
 	i.Sets[position].Responses = responses
 	i.Sets[position].RespCount = responses.TrueIndicesSize()
 }

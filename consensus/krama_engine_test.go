@@ -453,11 +453,11 @@ func NewTestSlot(
 	operator, self kramaid.KramaID,
 	ns *common.ICSNodeSet,
 	ixns common.Interactions,
-	ps map[identifiers.Address]*common.Participant,
+	ps common.Participants,
 ) *ktypes.Slot {
 	t.Helper()
 
-	s := ktypes.NewSlot(ktypes.OperatorSlot)
+	s := ktypes.NewSlot(ktypes.OperatorSlot, ps.IxnParticipants())
 	s.UpdateClusterState(createTestClusterState(t,
 		operator,
 		self,

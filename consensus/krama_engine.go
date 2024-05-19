@@ -521,6 +521,15 @@ func (k *Engine) handleReq(req ktypes.Request) {
 	)
 	defer span.End()
 
+	/*
+		1: Check slot availability
+		2: Load ICS participants info and create a slot
+		3: Load cluster state
+		4: Validate Ixns
+		5: Create New ICS or Join
+		6: Start agreement mechanism
+	*/
+
 	if slot := k.slots.GetSlot(clusterID); slot != nil {
 		sendResponse(req, nil)
 
@@ -538,15 +547,6 @@ func (k *Engine) handleReq(req ktypes.Request) {
 
 		return
 	}
-
-	cs, err := k.loadIxnClusterState(ctx, req, clusterID, ps)
-	if err != nil {
-		sendResponse(req, err)
-
-		return
-	}
-
-	slot.UpdateClusterState(cs)
 
 	ctx, cancelFn := context.WithCancel(ctx)
 	defer func() {
@@ -572,6 +572,15 @@ func (k *Engine) handleReq(req ktypes.Request) {
 	} else {
 		k.metrics.captureAvailableValidatorSlots(-1)
 	}
+
+	cs, err := k.loadIxnClusterState(ctx, req, clusterID, ps)
+	if err != nil {
+		sendResponse(req, err)
+
+		return
+	}
+
+	slot.UpdateClusterState(cs)
 
 	if err = k.validateInteractions(req.Ixs); err != nil {
 		k.logger.Error("Invalid interaction", "err", err)
