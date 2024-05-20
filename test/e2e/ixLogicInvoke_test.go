@@ -123,7 +123,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 				Callsite: "Transfer",
 				Calldata: hexutil.Bytes(common.Hex2Bytes(invokeCalldata)),
 			},
-			expectedError: errors.New("missing logic id"),
+			expectedError: common.ErrMissingLogicID,
 		},
 		{
 			name:   "empty call data",

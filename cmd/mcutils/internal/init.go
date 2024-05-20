@@ -186,6 +186,7 @@ func CreateConfigFile(datadir string, index int, ipAddr string) []byte {
 		},
 		JSONRPC: cmdCommon.JSONRPCConfig{
 			TesseractRangeLimit: config.DefaultTesseractRangeLimit,
+			BatchLengthLimit:    config.DefaultBatchLengthLimit,
 		},
 		NetworkID: strconv.Itoa(config.LocalID),
 		State: cmdCommon.StateConfig{

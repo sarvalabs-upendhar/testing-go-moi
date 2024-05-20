@@ -379,7 +379,7 @@ func (r *ReputationEngine) GetPublicKey(kramaID kramaid.KramaID) ([]byte, error)
 	}
 
 	if info.GetPublicKey() == nil {
-		return nil, errors.New("public key not found")
+		return nil, common.ErrPublicKeyNotFound
 	}
 
 	return info.GetPublicKey(), nil

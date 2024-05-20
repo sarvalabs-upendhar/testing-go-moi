@@ -60,7 +60,12 @@ const (
 
 // Subscription defaults
 const (
+	// DefaultTesseractRangeLimit is the maximum tesseract range allowed for json_rpc
+	// requests with fromTesseract/toTesseract values (e.g. moi_getLogs)
 	DefaultTesseractRangeLimit = 10
+
+	// DefaultBatchLengthLimit is the maximum length allowed for json_rpc batch requests
+	DefaultBatchLengthLimit = 20
 )
 
 // Tree defaults

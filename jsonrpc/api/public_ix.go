@@ -2,93 +2,45 @@ package api
 
 import (
 	"encoding/hex"
+	"errors"
 	"math/big"
 
-	"github.com/pkg/errors"
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
-	"github.com/sarvalabs/go-polo"
-
 	"github.com/sarvalabs/go-moi/common"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/jsonrpc/backend"
+	"github.com/sarvalabs/go-polo"
 )
 
 var ErrGenesisAccount = errors.New("genesis account interactions forbidden")
 
-// PublicIXAPI is a struct that represents a wrapper for the public interaction APIs.
-type PublicIXAPI struct {
-	// Represents the API backend
-	ixpool backend.IxPool
-	sm     backend.StateManager
-}
-
-func NewPublicIXAPI(ixpool backend.IxPool, sm backend.StateManager) *PublicIXAPI {
-	// Create the public interaction API wrapper and return it
-	return &PublicIXAPI{ixpool, sm}
-}
-
-// SendInteraction is a method of PublicIXAPI that stores the interaction
-func (p *PublicIXAPI) SendInteraction(sendIx *rpcargs.SendIX) (*common.Interaction, error) {
+// SendInteractions is a method of PublicIXAPI that stores the interaction
+func (p *PublicCoreAPI) SendInteractions(sendIx *rpcargs.SendIX) (common.Hash, error) {
 	sign, err := hex.DecodeString(sendIx.Signature)
 	if err != nil {
-		return nil, err
+		return common.NilHash, err
 	}
 
 	ixArgs, err := validateArgumentsWithSign(sendIx)
 	if err != nil {
-		return nil, err
+		return common.NilHash, err
 	}
 
 	ixn, err := constructInteraction(ixArgs, sign)
 	if err != nil {
-		return nil, err
+		return common.NilHash, err
 	}
 
 	// add the interactions to ix pool
 	errs := p.ixpool.AddInteractions(common.Interactions{ixn})
 	if len(errs) > 0 {
-		return nil, errs[0]
+		return common.NilHash, errs[0]
 	}
 
-	return ixn, nil
+	return ixn.Hash(), nil
 }
 
-// helper function for moi.Call and moi.FuelEstimate
-func constructIxn(sm backend.StateManager, args *common.SendIXArgs, sign []byte) (ix *common.Interaction, err error) {
-	data := common.IxData{
-		Input: common.IxInput{
-			Type:            args.Type,
-			Nonce:           args.Nonce,
-			Sender:          args.Sender,
-			Receiver:        args.Receiver,
-			Payer:           args.Payer,
-			TransferValues:  args.TransferValues,
-			PerceivedValues: args.PerceivedValues,
-			Payload:         args.Payload,
-		},
-	}
-
-	if args.FuelPrice != nil {
-		data.Input.FuelPrice = args.FuelPrice
-	}
-
-	if args.FuelLimit != 0 {
-		data.Input.FuelLimit = args.FuelLimit
-	}
-
-	if data.Input.Type == common.IxLogicDeploy || data.Input.Type == common.IxAssetCreate {
-		nonce, err := sm.GetNonce(args.Sender, common.NilHash)
-		if err != nil {
-			return nil, err
-		}
-
-		data.Input.Nonce = nonce
-	}
-
-	return common.NewInteraction(data, sign)
-}
-
-// helper function for moi.SendInteraction
+// helper function for moi.SendInteractions
 func constructInteraction(args *common.SendIXArgs, sign []byte) (ix *common.Interaction, err error) {
 	if args.FuelPrice == nil {
 		return nil, common.ErrFuelPriceNotFound
@@ -153,6 +105,41 @@ func validateArgumentsWithSign(args *rpcargs.SendIX) (*common.SendIXArgs, error)
 	// TODO: Add more checks to validate inputs
 
 	return ixArgs, nil
+}
+
+// helper function for moi.Call and moi.FuelEstimate
+func constructIxn(sm backend.StateManager, args *common.SendIXArgs, sign []byte) (ix *common.Interaction, err error) {
+	data := common.IxData{
+		Input: common.IxInput{
+			Type:            args.Type,
+			Nonce:           args.Nonce,
+			Sender:          args.Sender,
+			Receiver:        args.Receiver,
+			Payer:           args.Payer,
+			TransferValues:  args.TransferValues,
+			PerceivedValues: args.PerceivedValues,
+			Payload:         args.Payload,
+		},
+	}
+
+	if args.FuelPrice != nil {
+		data.Input.FuelPrice = args.FuelPrice
+	}
+
+	if args.FuelLimit != 0 {
+		data.Input.FuelLimit = args.FuelLimit
+	}
+
+	if data.Input.Type == common.IxLogicDeploy || data.Input.Type == common.IxAssetCreate {
+		nonce, err := sm.GetNonce(args.Sender, common.NilHash)
+		if err != nil {
+			return nil, err
+		}
+
+		data.Input.Nonce = nonce
+	}
+
+	return common.NewInteraction(data, sign)
 }
 
 func createSendIXArgs(sendIx *rpcargs.IxArgs) (*common.SendIXArgs, error) {

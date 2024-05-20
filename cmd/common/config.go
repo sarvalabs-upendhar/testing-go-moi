@@ -345,6 +345,7 @@ func DefaultBabylonConfig(path string) *Config {
 		LogFilePath: path + config.DefaultLogDirectory,
 		JSONRPC: JSONRPCConfig{
 			TesseractRangeLimit: config.DefaultTesseractRangeLimit,
+			BatchLengthLimit:    config.DefaultBatchLengthLimit,
 		},
 		NetworkID: strconv.Itoa(config.BabylonID),
 		State: StateConfig{
@@ -423,6 +424,7 @@ func DefaultDevnetConfig(path string) *Config {
 		LogFilePath: path + config.DefaultLogDirectory,
 		JSONRPC: JSONRPCConfig{
 			TesseractRangeLimit: config.DefaultTesseractRangeLimit,
+			BatchLengthLimit:    config.DefaultBatchLengthLimit,
 		},
 		NetworkID: strconv.Itoa(config.DevnetID),
 		State: StateConfig{
@@ -514,7 +516,8 @@ type VaultConfig struct {
 }
 
 type JSONRPCConfig struct {
-	TesseractRangeLimit uint8 `json:"tesseract_range_limit"`
+	TesseractRangeLimit uint8  `json:"tesseract_range_limit"`
+	BatchLengthLimit    uint64 `json:"batch_length_limit"`
 }
 
 type StateConfig struct {

@@ -15,6 +15,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/sarvalabs/go-moi/jsonrpc"
+
 	"github.com/google/uuid"
 	libp2pCrypto "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -34,7 +36,6 @@ import (
 	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/crypto"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
-	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
 	"github.com/sarvalabs/go-moi/senatus"
 	"github.com/sarvalabs/go-moi/state"
 	"github.com/sarvalabs/go-moi/storage"
@@ -243,7 +244,7 @@ func (s *MockStateManager) setRegistry(t *testing.T, addr identifiers.Address, r
 func (s *MockStateManager) GetRegistry(addr identifiers.Address, stateHash common.Hash) (map[string][]byte, error) {
 	registry, ok := s.registry[addr]
 	if !ok {
-		return nil, errors.New("registry not found")
+		return nil, common.ErrRegistryNotFound
 	}
 
 	return registry, nil
@@ -1185,7 +1186,7 @@ func (f *MockFilterManager) getTSFilter(id string) bool {
 	return exists
 }
 
-func (f *MockFilterManager) NewTesseractFilter(ws websocket.ConnManager) string {
+func (f *MockFilterManager) NewTesseractFilter(ws jsonrpc.ConnManager) string {
 	filterID := uuid.New().String()
 
 	f.setTSFilter(filterID)
@@ -1208,7 +1209,7 @@ func (f *MockFilterManager) getTSByAccFilter(id string) (tsByAccFilter, bool) {
 	return resp, exists
 }
 
-func (f *MockFilterManager) NewTesseractsByAccountFilter(ws websocket.ConnManager, addr identifiers.Address) string {
+func (f *MockFilterManager) NewTesseractsByAccountFilter(ws jsonrpc.ConnManager, addr identifiers.Address) string {
 	filterID := uuid.New().String()
 
 	f.setTSByAccFilter(filterID, addr)
@@ -1216,7 +1217,7 @@ func (f *MockFilterManager) NewTesseractsByAccountFilter(ws websocket.ConnManage
 	return filterID
 }
 
-func (f *MockFilterManager) setLogFilter(id string, logQuery *websocket.LogQuery) {
+func (f *MockFilterManager) setLogFilter(id string, logQuery *jsonrpc.LogQuery) {
 	// use hash of logQuery as key to set and get logs
 	hash, err := common.PoloHash(*logQuery)
 	if err != nil {
@@ -1235,7 +1236,7 @@ func (f *MockFilterManager) getLogFilter(id string) (common.Hash, bool) {
 	return resp, exists
 }
 
-func (f *MockFilterManager) NewLogFilter(ws websocket.ConnManager, logQuery *websocket.LogQuery) string {
+func (f *MockFilterManager) NewLogFilter(ws jsonrpc.ConnManager, logQuery *jsonrpc.LogQuery) string {
 	filterID := uuid.New().String()
 
 	f.setLogFilter(filterID, logQuery)
@@ -1255,7 +1256,7 @@ func (f *MockFilterManager) getIxnsFilter(id string) bool {
 	return exists
 }
 
-func (f *MockFilterManager) PendingIxnsFilter(ws websocket.ConnManager) string {
+func (f *MockFilterManager) PendingIxnsFilter(ws jsonrpc.ConnManager) string {
 	filterID := uuid.New().String()
 
 	f.setIxnsFilter(filterID)
@@ -1293,7 +1294,7 @@ func (f *MockFilterManager) setLogs(id string, logs []*rpcargs.RPCLog) {
 	f.logs[f.logFilter[id]] = logs
 }
 
-func (f *MockFilterManager) GetLogsForQuery(query websocket.LogQuery) ([]*rpcargs.RPCLog, error) {
+func (f *MockFilterManager) GetLogsForQuery(query jsonrpc.LogQuery) ([]*rpcargs.RPCLog, error) {
 	// use hash of logQuery as key to set and get logs
 	hash, err := common.PoloHash(query)
 	if err != nil {

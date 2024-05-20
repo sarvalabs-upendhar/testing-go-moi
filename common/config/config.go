@@ -119,6 +119,7 @@ type ConsensusConfig struct {
 
 type JSONRPCConfig struct {
 	TesseractRangeLimit uint8
+	BatchLengthLimit    uint64
 }
 
 type StateConfig struct {
@@ -192,6 +193,7 @@ func DefaultDevnetConfig(path string) *Config {
 		},
 		JSONRPC: &JSONRPCConfig{
 			TesseractRangeLimit: DefaultTesseractRangeLimit,
+			BatchLengthLimit:    DefaultBatchLengthLimit,
 		},
 	}
 

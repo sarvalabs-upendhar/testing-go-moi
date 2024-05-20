@@ -19,7 +19,6 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
-	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/assert"
@@ -173,7 +172,7 @@ func RetryUntilTimeout(ctx context.Context, delay time.Duration, f func() (inter
 		for {
 			select {
 			case <-ctx.Done():
-				resCh <- result{nil, errors.New("timeout")}
+				resCh <- result{nil, common.ErrTimeOut}
 
 				return
 			default:

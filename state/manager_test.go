@@ -1965,7 +1965,7 @@ func TestStateManager_GetParticipantContextRaw(t *testing.T) {
 			name:          "failed to fetch meta context object",
 			addr:          tests.RandomAddress(t),
 			hash:          tests.RandomHash(t),
-			expectedError: errors.New("context state not found"),
+			expectedError: common.ErrContextStateNotFound,
 		},
 		{
 			name:          "failed to fetch participant context info with random context",

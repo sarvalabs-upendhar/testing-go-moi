@@ -225,7 +225,7 @@ func NewInteraction(ixData IxData, signature []byte) (*Interaction, error) {
 		}
 
 	default:
-		return nil, errors.New("invalid interaction type")
+		return nil, ErrInvalidInteractionType
 	}
 
 	ix.hash.Store(GetHash(data))

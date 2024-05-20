@@ -6,18 +6,17 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/sarvalabs/go-moi-identifiers"
-	"github.com/sarvalabs/go-polo"
-	"github.com/stretchr/testify/require"
-
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/crypto"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
+	"github.com/sarvalabs/go-polo"
+	"github.com/stretchr/testify/require"
 )
 
-// Interaction Api Testcases
-func TestIx_SendInteraction(t *testing.T) {
+// Interaction API Testcases
+func TestPublicCoreAPI_SendInteraction(t *testing.T) {
 	address, mnemonic := tests.RandomAddressWithMnemonic(t)
 	assetPayload := common.AssetCreatePayload{}
 	rawAssetPayload, err := assetPayload.Bytes()
@@ -75,7 +74,7 @@ func TestIx_SendInteraction(t *testing.T) {
 				FuelLimit: 1,
 				Sender:    address,
 			},
-			expectedErr: errors.New("invalid interaction type"),
+			expectedErr: common.ErrInvalidInteractionType,
 		},
 		{
 			name: "failed to add interaction in ixpool",
@@ -108,12 +107,12 @@ func TestIx_SendInteraction(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
+			sm := NewMockStateManager(t)
 			ixpool := NewMockIxPool(t)
-			stateManager := NewMockStateManager(t)
-			ixAPI := NewPublicIXAPI(ixpool, stateManager)
+			coreAPI := NewPublicCoreAPI(ixpool, nil, sm, nil, nil, nil)
 
 			if test.preTestFn != nil {
-				test.preTestFn(ixpool, stateManager)
+				test.preTestFn(ixpool, sm)
 			}
 
 			bz, err := polo.Polorize(test.sendIXArgs)
@@ -124,7 +123,7 @@ func TestIx_SendInteraction(t *testing.T) {
 				Signature: getSignatureString(t, &test.sendIXArgs, mnemonic),
 			}
 
-			ixn, err := ixAPI.SendInteraction(&sendIx)
+			ixnHash, err := coreAPI.SendInteractions(&sendIx)
 			if test.expectedErr != nil {
 				require.ErrorContains(t, err, test.expectedErr.Error())
 
@@ -132,13 +131,13 @@ func TestIx_SendInteraction(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, test.expected, ixn)
+			require.Equal(t, test.expected.Hash(), ixnHash)
 			require.Equal(t, len(ixpool.interactions), 1)
 		})
 	}
 }
 
-func TestIx_ConstructInteraction(t *testing.T) {
+func TestPublicCoreAPI_ConstructInteraction(t *testing.T) {
 	address, mnemonic := tests.RandomAddressWithMnemonic(t)
 
 	testcases := []struct {
@@ -219,7 +218,7 @@ func TestIx_ConstructInteraction(t *testing.T) {
 	}
 }
 
-func TestIx_ValidateArgumentsWithSign(t *testing.T) {
+func TestPublicCoreAPI_ValidateArgumentsWithSign(t *testing.T) {
 	address, mnemonic := tests.RandomAddressWithMnemonic(t)
 
 	ixWithNilSender := common.SendIXArgs{

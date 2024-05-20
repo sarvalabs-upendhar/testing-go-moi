@@ -2,12 +2,15 @@
 // items. Keys are currently limited to strings.
 package ttlmap
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/sarvalabs/go-moi/common"
+)
 
 // Errors returned Map operations.
 var (
 	ErrNotExist = errors.New("key does not exist")
-	ErrExist    = errors.New("key already exists")
 	ErrDrained  = errors.New("map was drained")
 )
 
@@ -68,7 +71,7 @@ func (m *Map) Get(key string) (Item, error) {
 }
 
 // Set assigns an item with the specified key in the map.
-// ErrExist or ErrNotExist may be returned depending on opts.KeyExist.
+// ErrKeyExists or ErrNotExist may be returned depending on opts.KeyExist.
 // ErrDrained will be returned if the map is already drained.
 func (m *Map) Set(key string, item Item, opts *SetOptions) error {
 	m.store.Lock()
@@ -146,7 +149,7 @@ func (m *Map) Drain() {
 func (m *Map) set(key string, item *Item, opts *SetOptions) error {
 	if pqi := m.store.kv[key]; pqi != nil {
 		if opts.keyExist() == KeyExistNotYet {
-			return ErrExist
+			return common.ErrKeyExists
 		}
 
 		m.expireOrEvict(pqi)

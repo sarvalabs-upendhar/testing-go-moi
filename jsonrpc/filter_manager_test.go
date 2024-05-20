@@ -1,4 +1,4 @@
-package websocket
+package jsonrpc
 
 import (
 	"context"
@@ -9,10 +9,9 @@ import (
 	"github.com/hashicorp/go-hclog"
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/common/utils"
-	"github.com/sarvalabs/go-moi/jsonrpc/args"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/jsonrpc/backend"
 	"github.com/stretchr/testify/require"
 )
@@ -29,13 +28,8 @@ type Message struct {
 }
 
 const (
-	defaultTesseractRangeLimit = 10
-	contextTimeout             = 5 * time.Second
+	contextTimeout = 5 * time.Second
 )
-
-var mockJSONRPCConfig = config.JSONRPCConfig{
-	TesseractRangeLimit: defaultTesseractRangeLimit,
-}
 
 func TestTesseractSubscription(t *testing.T) {
 	t.Parallel()
@@ -267,7 +261,7 @@ func TestFilterTimeout(t *testing.T) {
 	t.Parallel()
 
 	eventMux := new(utils.TypeMux)
-	filterManager := NewFilterManager(hclog.NewNullLogger(), eventMux, &mockJSONRPCConfig, nil)
+	filterManager := NewFilterManager(hclog.NewNullLogger(), eventMux, &rpcargs.MockJSONRPCConfig, nil)
 
 	defer filterManager.Close()
 
@@ -423,7 +417,7 @@ func TestGetLogsFromTesseract(t *testing.T) {
 				validateLogs(t, log, rpcLog)
 				require.Equal(t, test.expectedTesseract.InteractionsHash(), rpcLog.IxHash)
 				require.Equal(t, test.expectedTesseract.Hash(), rpcLog.TSHash)
-				args.CheckForRPCParticipants(t,
+				rpcargs.CheckForRPCParticipants(t,
 					test.expectedTesseract.Participants(),
 					rpcLog.Participants,
 				)
@@ -613,7 +607,7 @@ func TestGetLogsForQuery(t *testing.T) {
 				validateLogs(t, log, rpcLog)
 				require.Equal(t, test.expectedTesseracts[i].InteractionsHash(), rpcLog.IxHash)
 				require.Equal(t, test.expectedTesseracts[i].Hash(), rpcLog.TSHash)
-				args.CheckForRPCParticipants(t, test.expectedTesseracts[i].Participants(), rpcLog.Participants)
+				rpcargs.CheckForRPCParticipants(t, test.expectedTesseracts[i].Participants(), rpcLog.Participants)
 			}
 		})
 	}
@@ -638,12 +632,12 @@ func TestGetFilterChangesAndUninstall(t *testing.T) {
 	defer cancel()
 
 	count := 2 // Posting 2 tesseracts first
-	res := make([]*args.RPCTesseract, 0)
+	res := make([]*rpcargs.RPCTesseract, 0)
 	_, err := tests.RetryUntilTimeout(ctx, 50*time.Millisecond, func() (interface{}, bool) {
 		filterChanges, err := filterManager.GetFilterChanges(filterID)
 		require.NoError(t, err)
 
-		rpcTesseracts, ok := filterChanges.([]*args.RPCTesseract)
+		rpcTesseracts, ok := filterChanges.([]*rpcargs.RPCTesseract)
 		require.True(t, ok)
 
 		count -= len(rpcTesseracts)

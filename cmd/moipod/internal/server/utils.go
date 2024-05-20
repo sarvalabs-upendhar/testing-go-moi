@@ -369,6 +369,7 @@ func (p *Params) getTelemetryConfig() *config.Telemetry {
 func (p *Params) getJSONRPCConfig() *config.JSONRPCConfig {
 	return &config.JSONRPCConfig{
 		TesseractRangeLimit: config.DefaultTesseractRangeLimit,
+		BatchLengthLimit:    config.DefaultBatchLengthLimit,
 	}
 }
 

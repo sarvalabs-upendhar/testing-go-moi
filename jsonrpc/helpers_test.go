@@ -1,17 +1,19 @@
-package websocket
+package jsonrpc
 
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math/big"
+	"net"
 	"net/http"
-	"net/http/httptest"
 	"reflect"
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
-	"github.com/gorilla/websocket"
+	gorillaWS "github.com/gorilla/websocket"
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
@@ -19,38 +21,15 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/common/utils"
-	"github.com/sarvalabs/go-moi/jsonrpc/args"
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/jsonrpc/backend"
 	"github.com/sarvalabs/go-moi/state"
 	"github.com/stretchr/testify/require"
 )
 
-func newMockServer(t *testing.T) *httptest.Server {
-	t.Helper()
-
-	mux := http.NewServeMux()
-	eventMux := new(utils.TypeMux)
-	logger := hclog.NewNullLogger()
-
-	// create a new filter manager
-	filterMan := NewFilterManager(logger, eventMux, &mockJSONRPCConfig, nil)
-
-	// create a new websocket handler
-	wsHandler := NewHandler(hclog.NewNullLogger(), filterMan)
-	mux.HandleFunc("/ws", wsHandler.HandleWsRequests)
-
-	return httptest.NewServer(mux)
-}
-
-func initWSConnection(t *testing.T, address string) (*websocket.Conn, *http.Response) {
-	t.Helper()
-
-	dialer := websocket.Dialer{}
-	// Establish a websocket connection
-	conn, resp, err := dialer.Dial("ws://"+address+"/ws", nil)
-	require.NoError(t, err)
-
-	return conn, resp
+var serverAddr = &net.TCPAddr{
+	IP:   net.IPv4(192, 168, 1, 100),
+	Port: 8080,
 }
 
 type MockMessage struct {
@@ -355,7 +334,7 @@ func createTSandLogs(
 	return tesseracts, logs
 }
 
-func validateLogs(t *testing.T, log *common.Log, rpcLog *args.RPCLog) {
+func validateLogs(t *testing.T, log *common.Log, rpcLog *rpcargs.RPCLog) {
 	t.Helper()
 
 	require.Equal(t, log.Addresses, rpcLog.Addresses)
@@ -371,7 +350,7 @@ func createAndRunFilterManager(
 ) *FilterManager {
 	t.Helper()
 
-	filterManager := NewFilterManager(hclog.NewNullLogger(), eventMux, &mockJSONRPCConfig, backend)
+	filterManager := NewFilterManager(hclog.NewNullLogger(), eventMux, &rpcargs.MockJSONRPCConfig, backend)
 
 	go filterManager.Run()
 
@@ -442,7 +421,7 @@ func processWSMessage(t *testing.T, respChan <-chan tests.Result) *Message {
 	// Assert and extract information from MockMessage
 	wsMessage, ok := res.Data.(*MockMessage)
 	require.True(t, ok)
-	require.Equal(t, websocket.TextMessage, wsMessage.messageType)
+	require.Equal(t, gorillaWS.TextMessage, wsMessage.messageType)
 
 	// Unmarshal the data field of MockMessage into a Message struct
 	resp := new(Message)
@@ -459,7 +438,7 @@ func assertRPCTesseract(
 ) {
 	t.Helper()
 
-	var rpcTesseract args.RPCTesseract
+	var rpcTesseract rpcargs.RPCTesseract
 
 	err := json.Unmarshal(res.Params.Result, &rpcTesseract)
 	require.NoError(t, err)
@@ -482,7 +461,7 @@ func assertRPCLogs(
 ) {
 	t.Helper()
 
-	var rpcLog args.RPCLog
+	var rpcLog rpcargs.RPCLog
 	err := json.Unmarshal(res.Params.Result, &rpcLog)
 	require.NoError(t, err)
 
@@ -491,7 +470,7 @@ func assertRPCLogs(
 	require.Equal(t, expectedHash, rpcLog.IxHash)
 
 	require.Equal(t, expectedTesseract.Hash(), rpcLog.TSHash)
-	args.CheckForRPCParticipants(t, expectedTesseract.Participants(), rpcLog.Participants)
+	rpcargs.CheckForRPCParticipants(t, expectedTesseract.Participants(), rpcLog.Participants)
 }
 
 func assertIxHashes(t *testing.T, expectedIx *common.Interaction, res *Message) {
@@ -503,4 +482,77 @@ func assertIxHashes(t *testing.T, expectedIx *common.Interaction, res *Message) 
 
 	// match result field in subscriptionTemplate
 	require.Equal(t, expectedIx.Hash(), common.HexToHash(ixHash))
+}
+
+func subscribeToNewTesseractEvent(t *testing.T, dispatcher *dispatcher, mockConnManager *MockConnManager) {
+	t.Helper()
+
+	request := Request{
+		ID:     1.0,
+		Method: "moi.subscribe",
+		Params: json.RawMessage(fmt.Sprintf(`["newTesseractsByAccount", {"address": "%s"}]`, tests.RandomAddress(t))),
+	}
+
+	// Forward the message to dispatcher
+	response := dispatcher.handleSingleWs(request, mockConnManager)
+
+	successResponse, ok := response.(*SuccessResponse)
+	require.True(t, ok)
+	require.Nil(t, successResponse.Error)
+
+	// Unmarshal the dispatcher result from the response
+	var result string
+	err := json.Unmarshal(successResponse.Result, &result)
+	require.NoError(t, err)
+
+	// Check whether the connection manager's subscription id and dispatcher result matches
+	require.Equal(t, mockConnManager.GetFilterID(), result)
+}
+
+func setupTestHTTPServer(t *testing.T) (*gorillaWS.Conn, *http.Response) {
+	t.Helper()
+
+	port, err := tests.GetAvailablePort(t)
+	require.NoError(t, err)
+
+	addr := &net.TCPAddr{
+		IP:   net.IPv4(127, 0, 0, 1),
+		Port: port,
+	}
+
+	s := MockServer(t, addr)
+
+	s.router.HandleFunc("/ws", s.handleWs)
+
+	server := &http.Server{
+		Addr:              s.addr.String(),
+		Handler:           s.router,
+		ReadHeaderTimeout: 3 * time.Second,
+	}
+
+	go func() {
+		err := server.ListenAndServe()
+		require.NoError(t, err)
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
+	defer cancel()
+
+	var (
+		conn *gorillaWS.Conn
+		resp *http.Response
+	)
+
+	_, err = tests.RetryUntilTimeout(ctx, 100*time.Millisecond, func() (interface{}, bool) {
+		dialer := gorillaWS.Dialer{}
+		conn, resp, err = dialer.Dial("ws://"+s.addr.String()+"/ws", nil)
+		if err != nil {
+			return nil, true
+		}
+
+		return nil, false
+	})
+	require.NoError(t, err)
+
+	return conn, resp
 }

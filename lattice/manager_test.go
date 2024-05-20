@@ -701,7 +701,7 @@ func TestVerifyParticipantState(t *testing.T) {
 				},
 			},
 			smCallBack:    smCallback,
-			expectedError: errors.New("error fetching previous tesseract"),
+			expectedError: common.ErrPreviousTesseractNotFound,
 		},
 		{
 			name: "should return error for invalid height",
@@ -737,13 +737,13 @@ func TestVerifyParticipantState(t *testing.T) {
 			smCallBack: func(sm *MockStateManager) {
 				sm.accountRegistrationHook = func(tsHash common.Hash) (bool, error) {
 					if tsHash != sargaTesseractHash {
-						return false, errors.New("invalid hash")
+						return false, common.ErrInvalidHash
 					}
 
 					return false, nil
 				}
 			},
-			expectedError: errors.New("invalid hash"),
+			expectedError: common.ErrInvalidHash,
 		},
 	}
 

@@ -6,11 +6,23 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/tests"
 )
 
-var LatestTesseractHeight int64 = -1
+const (
+	defaultTesseractRangeLimit = 10
+	defaultBatchLengthLimit    = 20
+)
+
+var (
+	LatestTesseractHeight int64 = -1
+	MockJSONRPCConfig           = config.JSONRPCConfig{
+		TesseractRangeLimit: defaultTesseractRangeLimit,
+		BatchLengthLimit:    defaultBatchLengthLimit,
+	}
+)
 
 // CreateRPCInteraction creates an RPC Interaction by copying all fields of the interaction into the RPC Interaction,
 // depolarizing the payload based on the interaction type, JSON marshalling it, and storing it in the input payload.
@@ -125,7 +137,7 @@ func CreateRPCInteraction(
 		}
 
 	default:
-		return nil, errors.New("invalid interaction type")
+		return nil, common.ErrInvalidInteractionType
 	}
 
 	return rpcIX, nil
@@ -304,4 +316,60 @@ func GetIxParamsWithInputComputeTrust(
 			ix.Trust.MTQ = mtq
 		},
 	}
+}
+
+func MockConfig() *config.Config {
+	return &config.Config{
+		JSONRPC: &config.JSONRPCConfig{
+			TesseractRangeLimit: 10,
+			BatchLengthLimit:    20,
+		},
+	}
+}
+
+type MockMethodData struct {
+	ID   uint8
+	Name string
+}
+
+type MockInputArgs struct{}
+
+func MockRegisterValidMethod() *MockMethodData {
+	return &MockMethodData{
+		ID:   1,
+		Name: "mockMethodData",
+	}
+}
+
+// Method should have 2 return params to register service
+// 1. Response
+// 2. Error
+
+// MockMethodWithResp and MockMethodWithError are used in dispatcher_test.go
+func (h *MockMethodData) MockMethodWithResp(args *MockInputArgs) (*MockMethodData, error) {
+	return h, nil
+}
+
+func (h *MockMethodData) MockMethodWithError() (*MockMethodData, error) {
+	return nil, errors.New("mock error")
+}
+
+type MockInvalidMethodData struct {
+	ID   uint8
+	Name string
+}
+
+func MockRegisterInvalidMethod() *MockInvalidMethodData {
+	return &MockInvalidMethodData{
+		ID:   1,
+		Name: "mockMethodData",
+	}
+}
+
+func (h *MockInvalidMethodData) MockMethodWithOnlyResp() *MockInvalidMethodData {
+	return h
+}
+
+func (h *MockInvalidMethodData) MockMethodWithNoError() (*MockInvalidMethodData, *MockInvalidMethodData) {
+	return h, h
 }

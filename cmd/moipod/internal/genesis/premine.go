@@ -102,7 +102,7 @@ func addAsset() {
 func parseAssetInfoAndAllocations(assetInfo string, allocations []string) (*common.AssetCreationArgs, error) {
 	params := strings.Split(assetInfo, ":")
 	if len(params) != AssetInfoParamsNumber {
-		return nil, errors.New("invalid asset info params")
+		return nil, common.ErrInvalidAssetInfoParams
 	}
 
 	symbol := strings.TrimSpace(params[0])

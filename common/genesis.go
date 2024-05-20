@@ -5,8 +5,6 @@ import (
 	"math/big"
 	"os"
 
-	"github.com/pkg/errors"
-
 	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi-identifiers"
 
@@ -87,11 +85,11 @@ func ReadGenesisFile(path string) (*GenesisFile, error) {
 
 	file, err := os.ReadFile(path)
 	if err != nil {
-		return nil, errors.New("error reading genesis file")
+		return nil, ErrReadingGenesisFile
 	}
 
 	if err = json.Unmarshal(file, genesis); err != nil {
-		return nil, errors.New("error reading genesis file")
+		return nil, ErrReadingGenesisFile
 	}
 
 	return genesis, nil

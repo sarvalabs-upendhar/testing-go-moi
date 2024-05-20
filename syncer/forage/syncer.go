@@ -768,7 +768,7 @@ func (s *Syncer) cleanGridAndReleasePendingJobs(tsInfo *TesseractInfo, job *Sync
 func (s *Syncer) releasePendingJob(job *SyncJob, ts *types.Tesseract) error {
 	queuedTSInfo := job.tesseractQueue.Pop()
 	if queuedTSInfo.tesseract.Height() != ts.Height() {
-		return errors.New("height mismatch")
+		return common.ErrHeightMismatch
 	}
 
 	shouldExit, err := s.postAdditionHook(job, ts.Height())

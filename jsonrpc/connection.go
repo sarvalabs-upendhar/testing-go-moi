@@ -1,4 +1,4 @@
-package websocket
+package jsonrpc
 
 import (
 	"fmt"

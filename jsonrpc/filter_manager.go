@@ -1,4 +1,4 @@
-package websocket
+package jsonrpc
 
 import (
 	"encoding/json"
@@ -64,7 +64,7 @@ type FilterManager struct {
 func NewFilterManager(
 	logger hclog.Logger,
 	eventMux *utils.TypeMux,
-	jsonrpc *config.JSONRPCConfig,
+	cfg *config.JSONRPCConfig,
 	backend *backend.Backend,
 ) *FilterManager {
 	return &FilterManager{
@@ -76,7 +76,7 @@ func NewFilterManager(
 		closeCh:             make(chan struct{}),
 		eventSubscriptions:  subscribeToEvents(eventMux),
 		backend:             backend,
-		tesseractRangeLimit: jsonrpc.TesseractRangeLimit,
+		tesseractRangeLimit: cfg.TesseractRangeLimit,
 	}
 }
 

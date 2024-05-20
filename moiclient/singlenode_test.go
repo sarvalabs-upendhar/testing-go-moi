@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/go-moi/jsonrpc"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -25,7 +27,6 @@ import (
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/compute/pisa"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
-	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
 	"github.com/sarvalabs/go-moi/storage"
 )
 
@@ -357,7 +358,7 @@ func (tn *TestSingleNode) TestGetBalance() {
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
-			expectedError: errors.New("asset not found"),
+			expectedError: common.ErrAssetNotFound,
 		},
 	}
 
@@ -676,7 +677,7 @@ func (tn *TestSingleNode) TestLogicStorage() {
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
-			expectedError: errors.New("invalid logic ID"),
+			expectedError: errors.New("Invalid Params"),
 		},
 	}
 
@@ -1142,19 +1143,19 @@ func (tn *TestSingleNode) TestNewTesseractsByAccountFilter() {
 func (tn *TestSingleNode) TestNewLogFilter() {
 	testcases := []struct {
 		name            string
-		filterQueryArgs *websocket.LogQuery
+		filterQueryArgs *jsonrpc.LogQuery
 		expectedError   error
 	}{
 		{
 			name: "add log filter successfully",
-			filterQueryArgs: &websocket.LogQuery{
+			filterQueryArgs: &jsonrpc.LogQuery{
 				Address: tests.RandomAddress(tn.T()),
 			},
 		},
 		{
 			name:            "failed to add log filter",
-			filterQueryArgs: &websocket.LogQuery{},
-			expectedError:   common.ErrInvalidAddress,
+			filterQueryArgs: &jsonrpc.LogQuery{},
+			expectedError:   errors.New("Invalid Params"),
 		},
 	}
 

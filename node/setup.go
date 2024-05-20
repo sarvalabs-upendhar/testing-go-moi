@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/sarvalabs/go-moi/jsonrpc/api"
+
 	"github.com/sarvalabs/go-moi/consensus/transport"
 
 	"github.com/hashicorp/go-hclog"
@@ -22,9 +24,7 @@ import (
 	"github.com/sarvalabs/go-moi/flux"
 	"github.com/sarvalabs/go-moi/ixpool"
 	"github.com/sarvalabs/go-moi/jsonrpc"
-	"github.com/sarvalabs/go-moi/jsonrpc/api"
 	"github.com/sarvalabs/go-moi/jsonrpc/backend"
-	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
 	"github.com/sarvalabs/go-moi/lattice"
 	"github.com/sarvalabs/go-moi/network/p2p"
 	"github.com/sarvalabs/go-moi/senatus"
@@ -279,18 +279,14 @@ func (n *Node) setLogger(logLevel string) error {
 func (n *Node) setupRPC() error {
 	newBackend := backend.NewBackend(n.ixpool, n.chain, n.exec, n.state, n.syncer, n.network, n.db)
 
-	filterMan := websocket.NewFilterManager(n.logger, n.eventMux, n.cfg.JSONRPC, newBackend)
+	filterMan := jsonrpc.NewFilterManager(n.logger, n.eventMux, n.cfg.JSONRPC, newBackend)
 
-	n.rpc = jsonrpc.NewRPCServer("/", n.logger, n.cfg.Network, filterMan)
+	n.rpc = jsonrpc.NewRPCServer("/", n.logger, n.cfg, filterMan)
 
 	for _, publicAPI := range api.GetPublicAPIs(newBackend, filterMan) {
-		rpcService := jsonrpc.NewRPCService()
+		if err := n.rpc.RegisterService(publicAPI.Namespace, publicAPI.Services); err != nil {
+			n.logger.Error("register service error:", err)
 
-		if err := rpcService.RegisterAPIs(publicAPI.Services); err != nil {
-			return err
-		}
-
-		if err := n.rpc.RegisterService(publicAPI.Namespace, rpcService); err != nil {
 			return err
 		}
 	}

@@ -166,7 +166,7 @@ func (s *Session) getBlocks(
 
 		case status := <-statusChan:
 			if !status {
-				return errors.New("peer not available")
+				return common.ErrPeerNotAvailable
 			}
 
 		case <-s.ctx.Done():

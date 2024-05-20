@@ -555,7 +555,7 @@ func TestReputationEngine_GetAddressByPeerID(t *testing.T) {
 			testFn: func(peerID peer.ID, nodeMetaInfo *NodeMetaInfo) {
 				mockDB.setNodeInfo(t, peerID, nodeMetaInfo)
 			},
-			expectedErr: errors.New("address not found"),
+			expectedErr: common.ErrAddressNotFound,
 		},
 	}
 
