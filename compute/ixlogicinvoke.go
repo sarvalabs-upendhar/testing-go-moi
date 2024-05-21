@@ -41,7 +41,10 @@ func RunLogicInvoke(
 	options = append(options, InvokerState(invoker))
 	options = append(options, InvokeFuelLimit(tank.Level()))
 
-	consumption, receiptPayload, err := InvokeLogic(ix, ctx, logicacc, options...)
+	// Create an event stream to emit the events on
+	eventstream := NewEventStream(ix.LogicID())
+
+	consumption, receiptPayload, err := InvokeLogic(ix, ctx, logicacc, eventstream, options...)
 	if err != nil {
 		receipt.Status = common.ReceiptStateReverted
 	}
@@ -60,6 +63,9 @@ func RunLogicInvoke(
 	if receiptPayload.Error != nil {
 		receipt.Status = common.ReceiptExceptionRaised
 	}
+
+	// Set the logs in the receipt
+	receipt.SetLogs(eventstream.GetAsLogs())
 
 	return receipt
 }
@@ -93,6 +99,7 @@ func InvokeLogic(
 	ixn *common.Interaction,
 	ctx *common.ExecutionContext,
 	state *state.Object,
+	eventstream *EventStream,
 	opts ...LogicInvokeOption,
 ) (
 	uint64, *common.LogicInvokeReceipt, error,
@@ -137,8 +144,11 @@ func InvokeLogic(
 
 	// Create a new engine for the execution
 	instance, err := engine.SpawnInstance(
-		invoker.logicObject, invoker.fueltank.Level(),
-		invoker.logicState.GenerateLogicContextObject(invoker.logicObject.ID), ctx,
+		invoker.logicObject,
+		invoker.fueltank.Level(),
+		invoker.logicState.GenerateLogicContextObject(invoker.logicObject.ID),
+		ctx,
+		eventstream,
 	)
 	if err != nil {
 		return 0, nil, errors.Wrap(err, "could not bootstrap engine")

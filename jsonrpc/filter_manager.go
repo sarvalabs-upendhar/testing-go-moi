@@ -530,7 +530,7 @@ func (f *FilterManager) getLogsFromTesseract(
 ) []*rpcargs.RPCLog {
 	logs := make([]*rpcargs.RPCLog, 0)
 
-	// participants is declared here to prevent the repetitive creation of the rpc object
+	// participants are declared here to prevent the repetitive creation of the rpc object
 	rpcParticipants := rpcargs.CreateRPCParticipants(ts.Participants())
 	tsHash := ts.Hash()
 
@@ -538,7 +538,7 @@ func (f *FilterManager) getLogsFromTesseract(
 		for _, log := range receipt.Logs {
 			if filter.MatchTopics(log) {
 				logs = append(logs, &rpcargs.RPCLog{
-					Addresses:    log.Addresses,
+					Address:      log.Address,
 					LogicID:      log.LogicID,
 					Topics:       log.Topics,
 					Data:         log.Data,

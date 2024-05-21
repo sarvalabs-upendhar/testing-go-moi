@@ -34,6 +34,7 @@ type Store interface {
 	GetContext(addr identifiers.Address, contextHash common.Hash) ([]byte, error)
 	GetAccountMetaInfo(id identifiers.Address) (*common.AccountMetaInfo, error)
 	GetInteractions(tsHash common.Hash) ([]byte, error)
+	GetReceipts(tsHash common.Hash) ([]byte, error)
 	GetTesseract(tsHash common.Hash) ([]byte, error)
 	GetBalance(addr identifiers.Address, balanceHash common.Hash) ([]byte, error)
 	GetAssetRegistry(addr identifiers.Address, registryHash common.Hash) ([]byte, error)
@@ -261,8 +262,9 @@ func (sm *StateManager) FetchTesseractFromDB(
 	}
 
 	interactions := new(common.Interactions)
+	receipts := new(common.Receipts)
 
-	// Fetch interactions for non-genesis tesseracts from DB
+	// Fetch interactions and receipts for non-genesis tesseracts from DB
 	if withInteractions && canonicalTesseract.ConsensusInfo.ClusterID != common.GenesisIdentifier {
 		rawIxns, err := sm.db.GetInteractions(hash)
 		if err != nil {
@@ -272,9 +274,20 @@ func (sm *StateManager) FetchTesseractFromDB(
 		if err := interactions.FromBytes(rawIxns); err != nil {
 			return nil, err
 		}
+
+		rawReceipts, err := sm.db.GetReceipts(hash)
+		if err != nil {
+			return nil, errors.Wrap(err, common.ErrReceiptNotFound.Error())
+		}
+
+		if rawReceipts != nil {
+			if err = receipts.FromBytes(rawReceipts); err != nil {
+				return nil, err
+			}
+		}
 	}
 
-	ts := canonicalTesseract.ToTesseract(*interactions, nil)
+	ts := canonicalTesseract.ToTesseract(*interactions, *receipts)
 
 	return ts, nil
 }

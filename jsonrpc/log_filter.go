@@ -67,7 +67,7 @@ func (f *logFilter) createRPCLogs(
 			if f.query.MatchTopics(log) {
 				logs = append(logs,
 					&args.RPCLog{
-						Addresses:    log.Addresses,
+						Address:      log.Address,
 						LogicID:      log.LogicID,
 						Topics:       log.Topics,
 						Data:         log.Data,

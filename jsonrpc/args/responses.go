@@ -164,10 +164,10 @@ type SyncStatusResponse struct {
 }
 
 type RPCLog struct {
-	Addresses []identifiers.Address `json:"addresses"`
-	LogicID   identifiers.LogicID   `json:"logic_id"`
-	Topics    []common.Hash         `json:"topics"`
-	Data      []byte                `json:"data"`
+	Address identifiers.Address `json:"address"`
+	LogicID identifiers.LogicID `json:"logic_id"`
+	Topics  []common.Hash       `json:"topics"`
+	Data    []byte              `json:"data"`
 
 	// Derived fields, avoid serializing these fields while storing to DB
 	IxHash       common.Hash     `json:"ix_hash"`

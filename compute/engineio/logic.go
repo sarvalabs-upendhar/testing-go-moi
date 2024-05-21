@@ -29,6 +29,8 @@ type LogicDescriptor struct {
 
 	Callsites map[string]Callsite
 	Classdefs map[string]Classdef
+
+	Eventdefs map[string]Eventdef
 }
 
 // LogicDriver is an interface for logic that can be executed within an Engine.
@@ -66,6 +68,8 @@ type LogicDriver interface {
 	GetCallsite(string) (Callsite, bool)
 	// GetClassdef returns class Datatype for a given string name with confirmation of its existence.
 	GetClassdef(string) (Classdef, bool)
+	// GetEventdef returns event Datatype for a given string name with confirmation of its existence.
+	GetEventdef(string) (Eventdef, bool)
 
 	// GetElement returns the LogicElement for a given element pointer with confirmation of its existence.
 	GetElement(ElementPtr) (*LogicElement, bool)
@@ -99,6 +103,8 @@ func NewDebugLogicDriver(t *testing.T, address identifiers.Address, descriptor L
 
 		callsites: descriptor.Callsites,
 		classdefs: descriptor.Classdefs,
+
+		eventdefs: descriptor.Eventdefs,
 	}
 }
 
@@ -116,6 +122,8 @@ type debugLogicDriver struct {
 
 	callsites map[string]Callsite
 	classdefs map[string]Classdef
+
+	eventdefs map[string]Eventdef
 }
 
 func (logic debugLogicDriver) LogicID() identifiers.LogicID { return logic.id }
@@ -158,6 +166,12 @@ func (logic debugLogicDriver) GetClassdef(name string) (Classdef, bool) {
 	classdef, ok := logic.classdefs[name]
 
 	return classdef, ok
+}
+
+func (logic debugLogicDriver) GetEventdef(name string) (Eventdef, bool) {
+	eventdef, ok := logic.eventdefs[name]
+
+	return eventdef, ok
 }
 
 func (logic debugLogicDriver) GetElement(ptr ElementPtr) (*LogicElement, bool) {

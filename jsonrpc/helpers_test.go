@@ -285,20 +285,20 @@ func createReceipt(t *testing.T, callBack func(r *common.Receipt)) *common.Recei
 // Dummy logs are created using address, hash, logic ID and data.
 func createTSandLogs(
 	t *testing.T,
-	addresses []identifiers.Address,
+	address identifiers.Address,
 	hashes []common.Hash,
 ) ([]*common.Tesseract, *common.Log) {
 	t.Helper()
 
-	logic := tests.GetLogicID(t, addresses[0])
+	logic := tests.GetLogicID(t, address)
 	data := []byte{1}
 
 	// create dummy logs
 	logs := &common.Log{
-		Addresses: addresses,
-		Topics:    hashes,
-		LogicID:   logic,
-		Data:      data,
+		Address: address,
+		Topics:  hashes,
+		LogicID: logic,
+		Data:    data,
 	}
 
 	// create dummy receipts with logs
@@ -311,19 +311,19 @@ func createTSandLogs(
 
 	paramsMap := map[int]*tests.CreateTesseractParams{
 		0: {
-			Addresses: []identifiers.Address{addresses[0]},
+			Addresses: []identifiers.Address{address},
 			Heights:   []uint64{6},
 			Receipts:  common.Receipts{tests.RandomHash(t): receipts},
 			Ixns:      common.Interactions{ixns},
 		},
 		1: {
-			Addresses: []identifiers.Address{addresses[0]},
+			Addresses: []identifiers.Address{address},
 			Heights:   []uint64{10},
 			Receipts:  common.Receipts{tests.RandomHash(t): receipts},
 			Ixns:      common.Interactions{ixns},
 		},
 		2: {
-			Addresses: []identifiers.Address{addresses[0]},
+			Addresses: []identifiers.Address{address},
 			Heights:   []uint64{14},
 			Receipts:  common.Receipts{tests.RandomHash(t): receipts},
 			Ixns:      common.Interactions{ixns},
@@ -337,7 +337,7 @@ func createTSandLogs(
 func validateLogs(t *testing.T, log *common.Log, rpcLog *rpcargs.RPCLog) {
 	t.Helper()
 
-	require.Equal(t, log.Addresses, rpcLog.Addresses)
+	require.Equal(t, log.Address, rpcLog.Address)
 	require.Equal(t, log.LogicID, rpcLog.LogicID)
 	require.Equal(t, log.Topics, rpcLog.Topics)
 	require.Equal(t, log.Data, rpcLog.Data)

@@ -2,7 +2,6 @@ package pisa
 
 import (
 	"github.com/pkg/errors"
-
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-pisa"
@@ -42,6 +41,7 @@ func (engine Engine) SpawnInstance(
 	fuel engineio.EngineFuel,
 	state engineio.StateDriver,
 	env engineio.EnvironmentDriver,
+	event engineio.EventDriver,
 ) (
 	engineio.EngineInstance, error,
 ) {
@@ -67,6 +67,7 @@ func (engine Engine) SpawnInstance(
 			Logic{logic},
 			newState(state),
 			env, engine.crypto,
+			EventStream{event},
 		),
 	}, nil
 }

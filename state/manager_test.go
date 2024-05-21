@@ -122,18 +122,22 @@ func TestStateManager_GetLatestTesseractHash(t *testing.T) {
 }
 
 func TestStateManager_FetchTesseractFromDB(t *testing.T) {
-	tesseractParams := tests.GetTesseractParamsMapWithIxns(t, 2, 2)
+	tesseractParams := tests.GetTesseractParamsMapWithIxnsAndReceipts(t, 2, 2)
 
 	// Set the clusterID to genesis identifier to avoid fetching interactions
 	tesseractParams[0].TSDataCallback = func(ts *tests.TesseractData) {
 		ts.ConsensusInfo.ClusterID = common.GenesisIdentifier
 	}
 
+	// Set the receipts of the genesis tesseract to nil
+	tesseractParams[0].Receipts = nil
+
 	tesseracts := tests.CreateTesseracts(t, 3, tesseractParams)
 
 	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
 			insertTesseractsAndIxnsInDB(t, db, tesseracts[:2]...)
+			insertReceiptsInDB(t, db, tesseracts[:2]...)
 			insertTesseractInDB(t, db, tesseracts[2])
 		},
 	}
@@ -199,12 +203,13 @@ func TestStateManager_FetchTesseractFromDB(t *testing.T) {
 }
 
 func TestStateManager_GetTesseractByHash(t *testing.T) {
-	tesseractParams := tests.GetTesseractParamsMapWithIxns(t, 2, 2)
+	tesseractParams := tests.GetTesseractParamsMapWithIxnsAndReceipts(t, 2, 2)
 	tesseracts := tests.CreateTesseracts(t, 3, tesseractParams)
 
 	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
 			insertTesseractsAndIxnsInDB(t, db, tesseracts[:2]...)
+			insertReceiptsInDB(t, db, tesseracts[:2]...)
 		},
 		smCallBack: func(sm *StateManager) {
 			sm.cache.Add(tesseracts[2].Hash(), tesseracts[2])
@@ -405,6 +410,7 @@ func TestStateManager_GetStateObject(t *testing.T) {
 		dbCallback: func(db *MockDB) {
 			insertAccountsInDB(t, db, stateHash, account...)
 			insertTesseractsAndIxnsInDB(t, db, ts)
+			insertReceiptsInDB(t, db, ts)
 		},
 		smCallBack: func(sm *StateManager) {
 			storeTesseractHashInCache(t, sm.cache, ts)
@@ -446,16 +452,13 @@ func TestStateManager_GetStateObject(t *testing.T) {
 func TestStateManager_GetLatestTesseract(t *testing.T) {
 	tesseracts := tests.CreateTesseracts(t,
 		2,
-		tests.GetTesseractParamsMapWithIxns(
-			t,
-			3,
-			2,
-		),
+		tests.GetTesseractParamsMapWithIxnsAndReceipts(t, 3, 2),
 	)
 
 	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
 			insertTesseractsAndIxnsInDB(t, db, tesseracts[1:]...)
+			insertReceiptsInDB(t, db, tesseracts[1:]...)
 		},
 		smCallBack: func(sm *StateManager) {
 			storeTesseractHashInCache(t, sm.cache, tesseracts...)

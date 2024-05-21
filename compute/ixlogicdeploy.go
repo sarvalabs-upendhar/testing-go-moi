@@ -36,7 +36,10 @@ func RunLogicDeploy(
 	// Append deploy options for deployer state and fuel limit
 	options = append(options, DeployFuelLimit(tank.Level()))
 
-	consumption, receiptPayload, err := DeployLogic(ctx, ix, logicacc, deployer, options...)
+	// Create an event stream to emit the events on
+	eventstream := NewEventStream(ix.LogicID())
+
+	consumption, receiptPayload, err := DeployLogic(ctx, ix, logicacc, deployer, eventstream, options...)
 	if err != nil {
 		receipt.Status = common.ReceiptStateReverted
 	}
@@ -58,6 +61,9 @@ func RunLogicDeploy(
 			receipt.Status = common.ReceiptExceptionRaised
 		}
 	}
+
+	// Set the logs in the receipt
+	receipt.SetLogs(eventstream.GetAsLogs())
 
 	return receipt
 }
@@ -84,6 +90,7 @@ func DeployLogic(
 	ix *common.Interaction,
 	logicState *state.Object,
 	deployerState *state.Object,
+	eventstream *EventStream,
 	opts ...LogicDeployOption,
 ) (
 	uint64, *common.LogicDeployReceipt, error,
@@ -121,7 +128,7 @@ func DeployLogic(
 	}
 
 	// Call the logic deployer to set up logic state
-	result, err := deployer.callDeployer(ix, ctx, logicObject)
+	result, err := deployer.callDeployer(ix, ctx, logicObject, eventstream)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -195,6 +202,7 @@ func (deployer logicDeployer) callDeployer(
 	ixn *common.Interaction,
 	ctx *common.ExecutionContext,
 	logic *state.LogicObject,
+	eventstream *EventStream,
 ) (engineio.CallResult, error) {
 	// Check if logic has a persistent state
 	if _, ok := logic.PersistentState(); !ok {
@@ -205,7 +213,11 @@ func (deployer logicDeployer) callDeployer(
 	engine, _ := engineio.FetchEngine(logic.Engine())
 	// Create a new engine for the execution
 	instance, err := engine.SpawnInstance(
-		logic, deployer.fueltank.Level(), deployer.logicState.GenerateLogicContextObject(logic.ID), ctx,
+		logic,
+		deployer.fueltank.Level(),
+		deployer.logicState.GenerateLogicContextObject(logic.ID),
+		ctx,
+		eventstream,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not bootstrap engine")

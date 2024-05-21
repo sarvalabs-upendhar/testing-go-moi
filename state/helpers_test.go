@@ -61,6 +61,7 @@ type MockDB struct {
 	accounts            map[common.Hash][]byte
 	context             map[common.Hash][]byte
 	interactions        map[common.Hash][]byte
+	receipts            map[common.Hash][]byte
 	balances            map[common.Hash][]byte
 	assetRegistry       map[common.Hash][]byte
 	merkleTreeEntries   map[string][]byte
@@ -78,6 +79,7 @@ func mockDB() *MockDB {
 		assetRegistry:       make(map[common.Hash][]byte),
 		context:             make(map[common.Hash][]byte),
 		interactions:        make(map[common.Hash][]byte),
+		receipts:            make(map[common.Hash][]byte),
 		balances:            make(map[common.Hash][]byte),
 		merkleTreeEntries:   make(map[string][]byte),
 		preImages:           make(map[common.Hash][]byte),
@@ -181,6 +183,15 @@ func (m *MockDB) insertIxns(t *testing.T, hash common.Hash, ixns common.Interact
 	require.NoError(t, err)
 
 	m.interactions[hash] = bytes
+}
+
+func (m *MockDB) insertReceipts(t *testing.T, hash common.Hash, receipts common.Receipts) {
+	t.Helper()
+
+	bytes, err := receipts.Bytes()
+	require.NoError(t, err)
+
+	m.receipts[hash] = bytes
 }
 
 func (m *MockDB) setAccountMetaInfo(acc *common.AccountMetaInfo) {
@@ -291,6 +302,15 @@ func (m *MockDB) GetInteractions(hash common.Hash) ([]byte, error) {
 	return interactions, nil
 }
 
+func (m *MockDB) GetReceipts(hash common.Hash) ([]byte, error) {
+	receipts, ok := m.receipts[hash]
+	if !ok {
+		return nil, common.ErrReceiptNotFound
+	}
+
+	return receipts, nil
+}
+
 func (m *MockDB) GetTesseract(hash common.Hash) ([]byte, error) {
 	tesseracts, ok := m.tesseracts[hash]
 	if !ok {
@@ -345,6 +365,18 @@ func insertTesseractsAndIxnsInDB(t *testing.T, db Store, tesseracts ...*common.T
 
 		if ts.Interactions() != nil {
 			mDB.insertIxns(t, ts.Hash(), ts.Interactions())
+		}
+	}
+}
+
+func insertReceiptsInDB(t *testing.T, db Store, tesseracts ...*common.Tesseract) {
+	t.Helper()
+
+	mDB := getMockDB(t, db)
+
+	for _, ts := range tesseracts {
+		if ts.Receipts() != nil {
+			mDB.insertReceipts(t, ts.Hash(), ts.Receipts())
 		}
 	}
 }

@@ -114,12 +114,12 @@ func TestTesseractLogsSubscription(t *testing.T) {
 	filterManager := createAndRunFilterManager(t, eventMux, nil)
 	connManager := NewMockConnectionManager()
 
-	addresses := tests.GetAddresses(t, 1)
+	address := tests.RandomAddress(t)
 	hashes := tests.GetHashes(t, 1)
-	tesseracts, logs := createTSandLogs(t, addresses, hashes)
+	tesseracts, logs := createTSandLogs(t, address, hashes)
 
 	filterQuery := &LogQuery{
-		Address:     addresses[0],
+		Address:     address,
 		StartHeight: 5,
 		EndHeight:   15,
 		Topics: [][]common.Hash{
@@ -189,12 +189,12 @@ func TestAllSubscriptions(t *testing.T) {
 	filterManager := createAndRunFilterManager(t, eventMux, nil)
 	connManager := NewMockConnectionManager()
 
-	addresses := tests.GetAddresses(t, 1)
+	address := tests.RandomAddress(t)
 	hashes := tests.GetHashes(t, 1)
-	tesseracts, logs := createTSandLogs(t, addresses, hashes)
+	tesseracts, logs := createTSandLogs(t, address, hashes)
 
 	filterQuery := &LogQuery{
-		Address:     addresses[0],
+		Address:     address,
 		StartHeight: 5,
 		EndHeight:   15,
 		Topics: [][]common.Hash{
@@ -210,7 +210,7 @@ func TestAllSubscriptions(t *testing.T) {
 	tsSubID := filterManager.NewTesseractFilter(connManager)
 	checkWsConn(t, filterManager, tsSubID, true)
 
-	tsByAccountSubID := filterManager.NewTesseractsByAccountFilter(connManager, addresses[0])
+	tsByAccountSubID := filterManager.NewTesseractsByAccountFilter(connManager, address)
 	checkWsConn(t, filterManager, tsByAccountSubID, true)
 
 	logSubID := filterManager.NewLogFilter(connManager, filterQuery)
@@ -349,16 +349,16 @@ func TestGetLogsFromTesseract(t *testing.T) {
 	eventMux := new(utils.TypeMux)
 	filterManager := createAndRunFilterManager(t, eventMux, newBackend)
 
-	addresses := tests.GetAddresses(t, 2)
-	logic := tests.GetLogicID(t, addresses[0])
+	address := tests.RandomAddress(t)
+	logic := tests.GetLogicID(t, address)
 	hashes := tests.GetHashes(t, 2)
 
 	// create dummy logs
 	log := &common.Log{
-		Addresses: addresses,
-		LogicID:   logic,
-		Topics:    hashes,
-		Data:      []byte{1},
+		Address: address,
+		LogicID: logic,
+		Topics:  hashes,
+		Data:    []byte{1},
 	}
 
 	// create dummy receipts with logs
@@ -366,10 +366,10 @@ func TestGetLogsFromTesseract(t *testing.T) {
 		r.Logs = []*common.Log{
 			log,
 			{
-				Addresses: addresses,
-				LogicID:   logic,
-				Topics:    tests.GetHashes(t, 2),
-				Data:      []byte{1},
+				Address: address,
+				LogicID: logic,
+				Topics:  tests.GetHashes(t, 2),
+				Data:    []byte{1},
 			},
 		}
 	})
@@ -394,7 +394,7 @@ func TestGetLogsFromTesseract(t *testing.T) {
 		{
 			name: "fetch logs from tesseract successfully",
 			filter: &LogQuery{
-				Address:     addresses[0],
+				Address:     address,
 				StartHeight: 5,
 				EndHeight:   5,
 				Topics: [][]common.Hash{
@@ -432,25 +432,25 @@ func TestGetLogsForQuery(t *testing.T) {
 	eventMux := new(utils.TypeMux)
 	filterManager := createAndRunFilterManager(t, eventMux, newBackend)
 
-	addresses := tests.GetAddresses(t, 2)
-	logic := tests.GetLogicID(t, addresses[0])
+	address := tests.RandomAddress(t)
+	logic := tests.GetLogicID(t, address)
 	hashes := tests.GetHashes(t, 2)
 
 	log := &common.Log{
-		Addresses: addresses,
-		LogicID:   logic,
-		Topics:    hashes,
-		Data:      []byte{1},
+		Address: address,
+		LogicID: logic,
+		Topics:  hashes,
+		Data:    []byte{1},
 	}
 
 	receipts := createReceipt(t, func(r *common.Receipt) {
 		r.Logs = []*common.Log{
 			log,
 			{
-				Addresses: addresses,
-				LogicID:   logic,
-				Topics:    tests.GetHashes(t, 2),
-				Data:      []byte{1},
+				Address: address,
+				LogicID: logic,
+				Topics:  tests.GetHashes(t, 2),
+				Data:    []byte{1},
 			},
 		}
 	})
@@ -460,23 +460,23 @@ func TestGetLogsForQuery(t *testing.T) {
 	// ts 3 is used to simulate invalid grid hash
 	paramsMap := map[int]*tests.CreateTesseractParams{
 		0: {
-			Addresses: []identifiers.Address{addresses[0]},
+			Addresses: []identifiers.Address{address},
 			Heights:   []uint64{0},
 			Receipts:  common.Receipts{tests.RandomHash(t): receipts},
 			Ixns:      tests.CreateIxns(t, 1, nil),
 		},
 		1: {
-			Addresses: []identifiers.Address{addresses[0]},
+			Addresses: []identifiers.Address{address},
 			Heights:   []uint64{1},
 			Receipts:  common.Receipts{tests.RandomHash(t): receipts},
 			Ixns:      tests.CreateIxns(t, 1, nil),
 		},
 		2: {
-			Addresses: []identifiers.Address{addresses[0]},
+			Addresses: []identifiers.Address{address},
 			Heights:   []uint64{2},
 		},
 		3: {
-			Addresses: []identifiers.Address{addresses[0]},
+			Addresses: []identifiers.Address{address},
 			Heights:   []uint64{3},
 			Ixns:      tests.CreateIxns(t, 1, nil),
 		},
@@ -502,7 +502,7 @@ func TestGetLogsForQuery(t *testing.T) {
 		{
 			name: "fetch logs for the query successfully",
 			filter: LogQuery{
-				Address:     addresses[0],
+				Address:     address,
 				StartHeight: 0,
 				EndHeight:   1,
 				Topics: [][]common.Hash{
@@ -517,7 +517,7 @@ func TestGetLogsForQuery(t *testing.T) {
 		{
 			name: "invalid start height",
 			filter: LogQuery{
-				Address:     addresses[0],
+				Address:     address,
 				StartHeight: -5,
 				EndHeight:   5,
 				Topics: [][]common.Hash{
@@ -531,7 +531,7 @@ func TestGetLogsForQuery(t *testing.T) {
 		{
 			name: "invalid end height",
 			filter: LogQuery{
-				Address:     addresses[0],
+				Address:     address,
 				StartHeight: 0,
 				EndHeight:   -5,
 				Topics: [][]common.Hash{
@@ -545,7 +545,7 @@ func TestGetLogsForQuery(t *testing.T) {
 		{
 			name: "StartHeight is greater than EndHeight",
 			filter: LogQuery{
-				Address:     addresses[0],
+				Address:     address,
 				StartHeight: 2,
 				EndHeight:   1,
 			},
@@ -554,7 +554,7 @@ func TestGetLogsForQuery(t *testing.T) {
 		{
 			name: "Difference between StartHeight and EndHeight is greater than 10",
 			filter: LogQuery{
-				Address:     addresses[0],
+				Address:     address,
 				StartHeight: 0,
 				EndHeight:   100,
 			},
@@ -563,7 +563,7 @@ func TestGetLogsForQuery(t *testing.T) {
 		{
 			name: "failed to fetch logs as tesseract height not found",
 			filter: LogQuery{
-				Address:     addresses[0],
+				Address:     address,
 				StartHeight: 5,
 				EndHeight:   8,
 				Topics: [][]common.Hash{
@@ -577,7 +577,7 @@ func TestGetLogsForQuery(t *testing.T) {
 		{
 			name: "failed to fetch logs as tesseract doesnt have interaction",
 			filter: LogQuery{
-				Address:     addresses[0],
+				Address:     address,
 				StartHeight: 2,
 				EndHeight:   2,
 				Topics: [][]common.Hash{

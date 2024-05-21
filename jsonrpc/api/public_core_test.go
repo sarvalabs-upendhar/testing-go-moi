@@ -2186,7 +2186,7 @@ func TestPublicCoreAPI_GetLogs(t *testing.T) {
 
 	dummyLogs := []*rpcargs.RPCLog{
 		{
-			Addresses: []identifiers.Address{addr},
+			Address: addr,
 		},
 	}
 

@@ -1090,7 +1090,7 @@ func (c *ChainManager) SetupGenesisLogics(
 		}}, nil)
 
 		// Deploy the genesis logic and check for errors
-		_, receipt, err := compute.DeployLogic(ctx, ix, logicState, deployerState)
+		_, receipt, err := compute.DeployLogic(ctx, ix, logicState, deployerState, compute.NewEventStream(ix.LogicID()))
 		if err != nil {
 			c.logger.Error("Unable to deploy logic for", "logic-name", logic.Name)
 

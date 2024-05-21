@@ -732,12 +732,14 @@ func GetIxParamsMapWithAddresses(
 	return ixParams
 }
 
-// GetTesseractParamsMapWithIxns returns tsCount no.of tesseracts and each one will have ixnCount interactions
-func GetTesseractParamsMapWithIxns(t *testing.T, tsCount, ixnCount int) map[int]*CreateTesseractParams {
+// GetTesseractParamsMapWithIxnsAndReceipts returns tsCount (no.of tesseracts)
+// and each one will have ixnCount interactions
+func GetTesseractParamsMapWithIxnsAndReceipts(t *testing.T, tsCount, ixnCount int) map[int]*CreateTesseractParams {
 	t.Helper()
 
 	tesseractParams := make(map[int]*CreateTesseractParams, tsCount)
 	addresses := GetAddresses(t, 2*(tsCount-1)*ixnCount) // for each interaction, sender and receiver addresses needed
+	receipts := CreateReceiptsWithTestData(t, RandomHash(t))
 	ixns := CreateIxns(
 		t,
 		(tsCount-1)*ixnCount,
@@ -754,6 +756,8 @@ func GetTesseractParamsMapWithIxns(t *testing.T, tsCount, ixnCount int) map[int]
 			// allocate two interactions per tesseract
 			tesseractParams[i].Ixns = ixns[(i-1)*ixnCount : (i-1)*ixnCount+ixnCount]
 		}
+
+		tesseractParams[i].Receipts = receipts
 	}
 
 	return tesseractParams
@@ -882,10 +886,10 @@ func CreateReceiptWithTestData(t *testing.T) *common.Receipt {
 
 	// create dummy logs
 	logs := &common.Log{
-		Addresses: GetAddresses(t, 1),
-		LogicID:   GetLogicID(t, RandomAddress(t)),
-		Topics:    GetHashes(t, 1),
-		Data:      []byte{1},
+		Address: RandomAddress(t),
+		LogicID: GetLogicID(t, RandomAddress(t)),
+		Topics:  GetHashes(t, 1),
+		Data:    []byte{1},
 	}
 
 	receipt := &common.Receipt{

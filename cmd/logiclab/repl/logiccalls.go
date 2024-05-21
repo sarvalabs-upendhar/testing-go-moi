@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/sarvalabs/go-moi/compute"
+
 	"github.com/manishmeganathan/symbolizer"
 	"github.com/pkg/errors"
 
@@ -151,6 +153,7 @@ func parseLogicCall(parser *symbolizer.Parser, kind engineio.CallsiteKind) Comma
 			repl.env.CallFuel,
 			core.NewContextDriver(repl.env.ID, repl.lab.Database, logicID.Address(), logicID),
 			repl.lab,
+			compute.NewEventStream(logicID),
 		)
 		if err != nil {
 			return fmt.Sprintf("failed to bootstrap engine: %v", err)

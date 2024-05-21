@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/sarvalabs/go-moi/compute"
+
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 
@@ -112,6 +114,7 @@ func (api *API) callLogicEndpoint(c *gin.Context) {
 		env.CallFuel,
 		core.NewContextDriver(env.ID, api.lab.Database, logicID.Address(), logicID),
 		api.lab,
+		compute.NewEventStream(logicID),
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, Error(errors.Wrap(err, "failed to spawn engine")))

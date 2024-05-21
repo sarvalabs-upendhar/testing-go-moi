@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/sarvalabs/go-pisa/drivers"
+
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
@@ -74,8 +76,11 @@ func (suite *TestSuite) Initialise(manifest engineio.Manifest, sender identifier
 
 	// Create a PISA instance and assign
 	suite.X, err = NewEngine().SpawnInstance(
-		suite.logic, defaultFuelLimit, suite.snapLogic,
+		suite.logic,
+		defaultFuelLimit,
+		suite.snapLogic,
 		engineio.NewDebugEnvDriver(suite.T(), defaultTimestamp, defaultClusterID),
+		engineio.NewDebugEventDriver(suite.T(), suite.logicID),
 	)
 
 	return consumed, err
@@ -89,7 +94,7 @@ func (suite *TestSuite) SetupTest() {
 	}
 
 	//nolint:forcetypeassert
-	if driver := suite.X.(*Instance).internal.GetSenderEphemeralDriver(); driver != nil {
+	if driver := suite.X.(*Instance).internal.GetSenderDriver(); driver != nil {
 		// If sender state driver is available, take snapshot
 		suite.snapSender = driver.(*State).driver.(*engineio.DebugStateDriver).Copy()
 	}
@@ -102,8 +107,8 @@ func (suite *TestSuite) SetupTest() {
 func (suite *TestSuite) TearDownTest() {
 	// Restore state drivers from snapshot
 	// This will erase any changes made to the drivers during the test
-	suite.X.(*Instance).internal.SetPersistentDriver(newState(suite.snapLogic))       //nolint:forcetypeassert
-	suite.X.(*Instance).internal.SetSenderEphemeralDriver(newState(suite.snapSender)) //nolint:forcetypeassert
+	suite.X.(*Instance).internal.SetPersistentDriver(newState(suite.snapLogic)) //nolint:forcetypeassert
+	suite.X.(*Instance).internal.SetSenderDriver(newState(suite.snapSender))    //nolint:forcetypeassert
 }
 
 func (suite *TestSuite) Deploy(
@@ -161,7 +166,7 @@ func UseSender(address identifiers.Address) TestSuiteCallOption {
 	return func(suite *TestSuite) error {
 		var original engineio.StateDriver
 		// Capture the original state driver for the sender
-		if driver := suite.X.(*Instance).internal.GetSenderEphemeralDriver(); driver != nil {
+		if driver := suite.X.(*Instance).internal.GetSenderDriver(); driver != nil {
 			original = driver.(*State).driver.(*engineio.DebugStateDriver).Copy()
 		}
 
@@ -200,6 +205,13 @@ func (suite *TestSuite) CheckStorage(key []byte, val any) {
 	require.NoError(suite.T(), err)
 
 	require.Equal(suite.T(), encoded, content)
+}
+
+func (suite *TestSuite) CheckEventStream(index uint64, event drivers.Event) {
+	eventFromStream, ok := suite.X.(*Instance).internal.GetEventDriver().Get(index)
+
+	require.True(suite.T(), ok)
+	require.Equal(suite.T(), event, eventFromStream)
 }
 
 func (suite *TestSuite) ShowStorage() {

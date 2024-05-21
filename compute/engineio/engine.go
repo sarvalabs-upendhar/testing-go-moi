@@ -74,7 +74,7 @@ type Engine interface {
 	// SpawnInstance returns a new EngineInstance instance and initializes it with some
 	// EngineFuel, a LogicDriver, the StateDriver associated with the logic and an EnvironmentDriver.
 	// Will return an error if the Logic and its StateDriver do not match.
-	SpawnInstance(LogicDriver, EngineFuel, StateDriver, EnvironmentDriver) (EngineInstance, error)
+	SpawnInstance(LogicDriver, EngineFuel, StateDriver, EnvironmentDriver, EventDriver) (EngineInstance, error)
 }
 
 // EngineInstance is an execution engine runner with a specific EngineKind.

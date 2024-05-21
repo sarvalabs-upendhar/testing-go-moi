@@ -20,19 +20,14 @@ const (
 )
 
 type Log struct {
-	Addresses []identifiers.Address
-	LogicID   identifiers.LogicID
-	Topics    []Hash
-	Data      []byte
+	Address identifiers.Address
+	LogicID identifiers.LogicID
+	Topics  []Hash
+	Data    []byte
 }
 
 func (l *Log) Copy() *Log {
 	log := *l
-
-	if len(l.Addresses) > 0 {
-		log.Addresses = make([]identifiers.Address, len(l.Addresses))
-		copy(log.Addresses, l.Addresses)
-	}
 
 	if len(l.Topics) > 0 {
 		log.Topics = make([]Hash, len(l.Topics))
@@ -118,7 +113,7 @@ type Receipt struct {
 	Status    ReceiptStatus   `json:"status"`
 	FuelUsed  uint64          `json:"fuel_used"`
 	ExtraData json.RawMessage `json:"extra_data"`
-	Logs      []*Log          `polo:"-" json:"logs"`
+	Logs      []*Log          `json:"logs"`
 }
 
 func NewReceipt(ix *Interaction) *Receipt {
@@ -154,6 +149,16 @@ func (r *Receipt) Copy() *Receipt {
 
 func (r *Receipt) SetFuelUsed(fuel uint64) {
 	r.FuelUsed = fuel
+}
+
+func (r *Receipt) SetLogs(logs []*Log) {
+	copiedLogs := make([]*Log, len(logs))
+
+	for i, log := range logs {
+		copiedLogs[i] = log.Copy()
+	}
+
+	r.Logs = copiedLogs
 }
 
 func SetReceiptExtraData[Payload ReceiptPayload](r *Receipt, payload Payload) {

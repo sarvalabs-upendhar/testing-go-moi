@@ -34,6 +34,9 @@ type LogicObject struct {
 	Callsites map[string]engineio.Callsite
 	// Represents mapping of string names to engineio.Classdef
 	Classdefs map[string]engineio.Classdef
+
+	// Represents mapping of string names to engineio.Eventdef
+	Eventdefs map[string]engineio.Eventdef
 }
 
 // NewLogicObject generates a new LogicObject for a given LogicID, LogicDescriptor and Storage Namespace key
@@ -60,6 +63,8 @@ func NewLogicObject(address identifiers.Address, descriptor engineio.LogicDescri
 
 		Callsites: descriptor.Callsites,
 		Classdefs: descriptor.Classdefs,
+
+		Eventdefs: descriptor.Eventdefs,
 	}
 }
 
@@ -103,6 +108,12 @@ func (logic LogicObject) GetClassdef(name string) (engineio.Classdef, bool) {
 	classdef, ok := logic.Classdefs[name]
 
 	return classdef, ok
+}
+
+func (logic LogicObject) GetEventdef(name string) (engineio.Eventdef, bool) {
+	eventdef, ok := logic.Eventdefs[name]
+
+	return eventdef, ok
 }
 
 func (logic LogicObject) GetElementDeps(ptr engineio.ElementPtr) []engineio.ElementPtr {

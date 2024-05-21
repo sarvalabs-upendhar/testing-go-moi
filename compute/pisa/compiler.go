@@ -31,6 +31,8 @@ const (
 	BaseClassCost engineio.EngineFuel = 10
 	// BaseStateCost is the base cost for compiling a StateElement
 	BaseStateCost engineio.EngineFuel = 20
+	// BaseEventCost is the base cost for compiling an EventElement
+	BaseEventCost engineio.EngineFuel = 15
 
 	// ConstantCompileCost is the cost to compile a ConstantElement
 	ConstantCompileCost engineio.EngineFuel = 20
@@ -79,6 +81,8 @@ type ManifestCompiler struct {
 	callsites map[string]engineio.Callsite
 
 	deployers []uint64
+
+	eventdefs map[string]engineio.Eventdef
 	// enlisters []uint64
 }
 
@@ -94,6 +98,8 @@ func NewManifestCompiler(fuel uint64, manifest engineio.Manifest) *ManifestCompi
 		callsites: make(map[string]engineio.Callsite),
 
 		deployers: make([]uint64, 0),
+
+		eventdefs: make(map[string]engineio.Eventdef),
 		// enlisters: make([]uint64, 0),
 	}
 }
@@ -157,6 +163,12 @@ func (compiler *ManifestCompiler) CompileArtifact() (*logic.Artifact, engineio.E
 				return nil, compiler.fueltank, errors.Wrapf(err, "method element [%#v] compile failed", ptr)
 			}
 
+		case EventElement:
+			// Compile the element as an EventElement
+			if err := compiler.compileEventElement(element); err != nil {
+				return nil, compiler.fueltank, errors.Wrapf(err, "event element [%#v] compile failed", ptr)
+			}
+
 		default:
 			return nil, compiler.fueltank, errors.Errorf("invalid element kind [%#v]: %v", ptr, element.Kind)
 		}
@@ -192,6 +204,8 @@ func (compiler *ManifestCompiler) CompileDescriptor() (engineio.LogicDescriptor,
 
 		Depgraph: compiler.dependency,
 		Elements: make(map[engineio.ElementPtr]*engineio.LogicElement),
+
+		Eventdefs: compiler.eventdefs,
 	}
 
 	// Check if the compiled logic includes a persistent state
@@ -341,6 +355,39 @@ func (compiler *ManifestCompiler) compileClassElement(element engineio.ManifestE
 
 	// Add the classdef to the compiler
 	compiler.classdefs[schema.Name] = engineio.Classdef{Ptr: element.Ptr, Name: schema.Name}
+
+	return nil
+}
+
+// compileEventElement compiles an engineio.ManifestElement object into an EventElement
+func (compiler *ManifestCompiler) compileEventElement(element engineio.ManifestElement) error {
+	// Exhaust fuel for event element compilation
+	// We will charge cost beyond this per field in the event
+	if !compiler.exhaust(BaseEventCost) {
+		return ErrInsufficientCompileFuel
+	}
+
+	// Convert element into an EventSchema
+	schema, ok := element.Data.(*EventSchema)
+	if !ok {
+		return errors.New("invalid element data for 'event' kind")
+	}
+
+	// Create a new datatypes.TypeFields from the event fields
+	fields, err := compiler.compileTypeFields(schema.Fields)
+	if err != nil {
+		return errors.Errorf("invalid event element: invalid fields: %v", err)
+	}
+
+	// Create a new Event Typedef
+	event := datatypes.NewEvent(schema.Name, schema.Topics, fields)
+	// Add the Event element into the builder
+	if err = compiler.builder.AddEvent(element.Ptr, event); err != nil {
+		return errors.Wrap(err, "invalid event element")
+	}
+
+	// Add the eventdef to the compiler
+	compiler.eventdefs[schema.Name] = engineio.Eventdef{Ptr: element.Ptr, Name: schema.Name}
 
 	return nil
 }
