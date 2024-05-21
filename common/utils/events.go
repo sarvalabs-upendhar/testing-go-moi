@@ -70,3 +70,6 @@ type PrunedPromotedInteractionEvent struct {
 type DroppedInteractionEvent struct {
 	Ixs common.Interactions
 }
+
+// SystemAccountsSyncedEvent signals system account's syncing done
+type SystemAccountsSyncedEvent struct{}

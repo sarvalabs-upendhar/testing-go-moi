@@ -101,18 +101,24 @@ func (n *Node) setupStateManager() (err error) {
 	return nil
 }
 
+func (n *Node) setupStateManagerToSenatus() {
+	n.senatus.State = n.state
+}
+
 func (n *Node) setupReputationEngine() (err error) {
 	nodeMetaInfo := &senatus.NodeMetaInfo{
-		KramaID:   n.vault.KramaID(),
-		Addrs:     utils.MultiAddrToString(n.network.GetAddrs()...),
-		NTQ:       1,
-		PublicKey: n.vault.GetConsensusPrivateKey().GetPublicKeyInBytes(),
+		KramaID:    n.vault.KramaID(),
+		Addrs:      utils.MultiAddrToString(n.network.GetAddrs()...),
+		NTQ:        1,
+		PublicKey:  n.vault.GetConsensusPrivateKey().GetPublicKeyInBytes(),
+		Registered: true,
 	}
 
 	n.senatus, err = senatus.NewReputationEngine(
 		n.logger,
 		n.db,
 		nodeMetaInfo,
+		n.eventMux,
 	)
 	if err != nil {
 		return err
@@ -145,9 +151,10 @@ func (n *Node) setupSenatusToNetwork() error {
 
 	for _, staticPeer := range n.cfg.Network.StaticPeers {
 		err := n.network.Senatus.UpdatePeer(&senatus.NodeMetaInfo{
-			KramaID: staticPeer.ID,
-			Addrs:   utils.MultiAddrToString(staticPeer.Address),
-			NTQ:     senatus.DefaultPeerNTQ,
+			KramaID:    staticPeer.ID,
+			Addrs:      utils.MultiAddrToString(staticPeer.Address),
+			NTQ:        senatus.DefaultPeerNTQ,
+			Registered: true,
 		})
 		if err != nil {
 			return err
@@ -181,6 +188,10 @@ func (n *Node) setupChainManager() (err error) {
 	}
 
 	return nil
+}
+
+func (n *Node) setupChainManagerToSenatus() {
+	n.senatus.Chain = n.chain
 }
 
 // setupKramaEngine creates new Krama Engine object and setups it to node

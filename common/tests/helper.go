@@ -447,7 +447,7 @@ func GetListenAddresses(t *testing.T, count int) []multiaddr.Multiaddr {
 	return ListenAddresses
 }
 
-func RandomAccMetaInfo(t *testing.T, height uint64) *common.AccountMetaInfo {
+func GetRandomAccMetaInfo(t *testing.T, height uint64) *common.AccountMetaInfo {
 	t.Helper()
 
 	return &common.AccountMetaInfo{
@@ -1103,4 +1103,26 @@ func CreateTestIxParticipants(t *testing.T, count int, genesisAccCount int) (
 	}
 
 	return addrs, ps
+}
+
+func GetStorageMap(keys []string, values []string) map[string]string {
+	storage := make(map[string]string)
+
+	for i, key := range keys {
+		storage[string(common.FromHex(key))] = values[i] // each hex character should be a byte
+	}
+
+	return storage
+}
+
+func GetHexEntries(t *testing.T, count int) []string {
+	t.Helper()
+
+	entries := make([]string, count)
+
+	for i := 0; i < count; i++ {
+		entries[i] = RandomHash(t).Hex()
+	}
+
+	return entries
 }

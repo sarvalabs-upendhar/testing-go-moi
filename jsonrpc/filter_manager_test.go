@@ -287,7 +287,7 @@ func TestGetNumericTesseractNumber(t *testing.T) {
 	eventMux := new(utils.TypeMux)
 	filterManager := createAndRunFilterManager(t, eventMux, newBackend)
 
-	acc := tests.RandomAccMetaInfo(t, 5)
+	acc := tests.GetRandomAccMetaInfo(t, 5)
 	stateManager.setAccountMetaInfo(t, acc.Address, acc)
 
 	testcases := []struct {

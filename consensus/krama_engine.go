@@ -102,7 +102,6 @@ type stateManager interface {
 	IsAccountRegistered(addr identifiers.Address) (bool, error)
 	GetLatestStateObject(addr identifiers.Address) (*state.Object, error)
 	GetNonce(addr identifiers.Address, stateHash common.Hash) (uint64, error)
-	Cleanup(addr identifiers.Address)
 }
 
 type ixPool interface {

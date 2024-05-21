@@ -1266,7 +1266,7 @@ func SubscribeAndListenForSyncEvents(
 	t.Helper()
 
 	bucketSync := mux.Subscribe(eventBucketSync{})
-	systemAccSync := mux.Subscribe(eventSystemAccounts{})
+	systemAccSync := mux.Subscribe(utils.SystemAccountsSyncedEvent{})
 	snapSync := mux.Subscribe(eventSnapSync{})
 	latticeSync := mux.Subscribe(eventLatticeSync{})
 	tesseractSync := mux.Subscribe(eventTesseractSync{})

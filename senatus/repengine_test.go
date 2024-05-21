@@ -6,6 +6,11 @@ import (
 	"testing"
 	"time"
 
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/compute/pisa"
+	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
+	"github.com/sarvalabs/go-polo"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
@@ -21,14 +26,15 @@ import (
 )
 
 func TestReputationEngine_NodeMetaInfo(t *testing.T) {
-	reputationEngine, mockDB, _ := createTestReputationEngine(t)
+	reputationEngine, mockDB := createTestReputationEngine(t)
 
 	testcases := []struct {
-		name         string
-		peerID       peer.ID
-		nodeMetaInfo *NodeMetaInfo
-		testFn       func(peerID peer.ID, nodeMetaInfo *NodeMetaInfo)
-		expectedErr  error
+		name             string
+		peerID           peer.ID
+		nodeMetaInfo     *NodeMetaInfo
+		expectedRegistry bool
+		testFn           func(peerID peer.ID, nodeMetaInfo *NodeMetaInfo)
+		expectedErr      error
 	}{
 		{
 			name:   "node meta info found in cache",
@@ -36,7 +42,9 @@ func TestReputationEngine_NodeMetaInfo(t *testing.T) {
 			nodeMetaInfo: &NodeMetaInfo{
 				NTQ:         1,
 				WalletCount: 1,
+				Registered:  true,
 			},
+			expectedRegistry: true,
 			testFn: func(peerID peer.ID, nodeMetaInfo *NodeMetaInfo) {
 				reputationEngine.cache.Add(storage.SenatusCacheKey(peerID), nodeMetaInfo)
 			},
@@ -47,7 +55,9 @@ func TestReputationEngine_NodeMetaInfo(t *testing.T) {
 			nodeMetaInfo: &NodeMetaInfo{
 				NTQ:         DefaultPeerNTQ,
 				WalletCount: -1,
+				Registered:  true,
 			},
+			expectedRegistry: true,
 			testFn: func(peerID peer.ID, nodeMetaInfo *NodeMetaInfo) {
 				reputationEngine.dirtyEntries[peerID] = nodeMetaInfo
 			},
@@ -58,7 +68,9 @@ func TestReputationEngine_NodeMetaInfo(t *testing.T) {
 			nodeMetaInfo: &NodeMetaInfo{
 				NTQ:         DefaultPeerNTQ,
 				WalletCount: 1,
+				Registered:  true, // not written to DB, because of polo tag: "-"
 			},
+			expectedRegistry: false,
 			testFn: func(peerID peer.ID, nodeMetaInfo *NodeMetaInfo) {
 				mockDB.setNodeInfo(t, peerID, nodeMetaInfo)
 			},
@@ -88,6 +100,7 @@ func TestReputationEngine_NodeMetaInfo(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, test.nodeMetaInfo.NTQ, metaInfo.NTQ)
 			require.Equal(t, test.nodeMetaInfo.WalletCount, metaInfo.WalletCount)
+			require.Equal(t, test.expectedRegistry, metaInfo.Registered)
 		})
 	}
 }
@@ -118,6 +131,7 @@ func TestReputationEngine_AddNewPeerwithPeerID(t *testing.T) {
 				PeerSignature: []byte{0x05, 0x80},
 				NTQ:           1,
 				WalletCount:   2,
+				Registered:    true,
 			},
 			peerCount: 1,
 			testFn: func(peerID peer.ID, reputationEngine *ReputationEngine) {
@@ -149,6 +163,7 @@ func TestReputationEngine_AddNewPeerwithPeerID(t *testing.T) {
 				PeerSignature: []byte{0x05, 0x80},
 				NTQ:           3,
 				WalletCount:   1,
+				Registered:    true,
 			},
 			peerCount: 1,
 			testFn: func(peerID peer.ID, reputationEngine *ReputationEngine) {
@@ -159,7 +174,7 @@ func TestReputationEngine_AddNewPeerwithPeerID(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			reputationEngine, _, _ := createTestReputationEngine(t)
+			reputationEngine, _ := createTestReputationEngine(t)
 
 			if test.testFn != nil {
 				test.testFn(test.peerID, reputationEngine)
@@ -180,7 +195,7 @@ func TestReputationEngine_AddNewPeerwithPeerID(t *testing.T) {
 
 func TestReputationEngine_UpdatePeer(t *testing.T) {
 	kramaID := tests.RandomKramaID(t, 1)
-	reputationEngine, mockDB, _ := createTestReputationEngine(t)
+	reputationEngine, mockDB := createTestReputationEngine(t)
 
 	testcases := []struct {
 		name         string
@@ -248,7 +263,7 @@ func TestReputationEngine_UpdatePeer(t *testing.T) {
 
 func TestReputationEngine_UpdateNTQ(t *testing.T) {
 	kramaID := tests.RandomKramaID(t, 1)
-	reputationEngine, mockDB, _ := createTestReputationEngine(t)
+	reputationEngine, mockDB := createTestReputationEngine(t)
 
 	testcases := []struct {
 		name             string
@@ -320,7 +335,7 @@ func TestReputationEngine_UpdateNTQ(t *testing.T) {
 
 func TestReputationEngine_UpdateWalletCount(t *testing.T) {
 	kramaID := tests.RandomKramaID(t, 1)
-	reputationEngine, mockDB, _ := createTestReputationEngine(t)
+	reputationEngine, mockDB := createTestReputationEngine(t)
 
 	testcases := []struct {
 		name             string
@@ -394,7 +409,7 @@ func TestReputationEngine_UpdateWalletCount(t *testing.T) {
 func TestReputationEngine_UpdatePublicKey(t *testing.T) {
 	kramaID := tests.RandomKramaID(t, 1)
 	publicKeys := tests.GetTestPublicKeys(t, 3)
-	reputationEngine, mockDB, _ := createTestReputationEngine(t)
+	reputationEngine, mockDB := createTestReputationEngine(t)
 
 	testcases := []struct {
 		name             string
@@ -468,7 +483,7 @@ func TestReputationEngine_UpdatePublicKey(t *testing.T) {
 
 func TestReputationEngine_GetAddress(t *testing.T) {
 	address := tests.GetListenAddresses(t, 1)
-	reputationEngine, mockDB, _ := createTestReputationEngine(t)
+	reputationEngine, mockDB := createTestReputationEngine(t)
 
 	testcases := []struct {
 		name            string
@@ -519,7 +534,7 @@ func TestReputationEngine_GetAddress(t *testing.T) {
 }
 
 func TestReputationEngine_GetAddressByPeerID(t *testing.T) {
-	reputationEngine, mockDB, _ := createTestReputationEngine(t)
+	reputationEngine, mockDB := createTestReputationEngine(t)
 
 	testcases := []struct {
 		name         string
@@ -581,7 +596,7 @@ func TestReputationEngine_GetAddressByPeerID(t *testing.T) {
 }
 
 func TestReputationEngine_GetRTTByPeerID(t *testing.T) {
-	reputationEngine, mockDB, _ := createTestReputationEngine(t)
+	reputationEngine, mockDB := createTestReputationEngine(t)
 
 	testcases := []struct {
 		name         string
@@ -629,7 +644,7 @@ func TestReputationEngine_GetRTTByPeerID(t *testing.T) {
 }
 
 func TestReputationEngine_GetKramaIDByPeerID(t *testing.T) {
-	reputationEngine, mockDB, _ := createTestReputationEngine(t)
+	reputationEngine, mockDB := createTestReputationEngine(t)
 
 	testcases := []struct {
 		name         string
@@ -677,7 +692,7 @@ func TestReputationEngine_GetKramaIDByPeerID(t *testing.T) {
 }
 
 func TestReputationEngine_GetNTQ(t *testing.T) {
-	reputationEngine, mockDB, _ := createTestReputationEngine(t)
+	reputationEngine, mockDB := createTestReputationEngine(t)
 
 	testcases := []struct {
 		name        string
@@ -728,7 +743,7 @@ func TestReputationEngine_GetNTQ(t *testing.T) {
 }
 
 func TestReputationEngine_GetWalletCount(t *testing.T) {
-	reputationEngine, mockDB, _ := createTestReputationEngine(t)
+	reputationEngine, mockDB := createTestReputationEngine(t)
 
 	testcases := []struct {
 		name                string
@@ -811,7 +826,7 @@ func TestReputationEngine_TotalPeerCount(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			reputationEngine, mockDB, _ := createTestReputationEngine(t)
+			reputationEngine, mockDB := createTestReputationEngine(t)
 
 			if test.preTestFn != nil {
 				test.preTestFn(reputationEngine)
@@ -865,7 +880,7 @@ func TestReputationEngine_StreamPeerInfos(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			reputationEngine, mockDB, _ := createTestReputationEngine(t)
+			reputationEngine, mockDB := createTestReputationEngine(t)
 
 			if test.testFn != nil {
 				test.testFn(mockDB, test.entries)
@@ -889,24 +904,38 @@ func TestReputationEngine_StreamPeerInfos(t *testing.T) {
 }
 
 func TestReputationEngine_FlushDirtyEntries(t *testing.T) {
+	testKramaID := tests.RandomKramaID(t, 0)
+
+	// Generate the hash of the krama ID
+	kramaIDEncoded, _ := polo.Polorize(testKramaID)
+	kramaIDHashed := common.GetHash(kramaIDEncoded)
+
+	// Generate the storage key for the guardian with the given krama ID
+	storageKey := pisa.GenerateStorageKey(guardianregistry.SlotGuardians, pisa.MapKey(kramaIDHashed))
+
 	testcases := []struct {
-		name        string
-		entries     map[peer.ID]*NodeMetaInfo
-		testFn      func(reputationEngine *ReputationEngine, entries map[peer.ID]*NodeMetaInfo)
-		expectedErr error
+		name           string
+		entries        map[peer.ID]*NodeMetaInfo
+		testFn         func(reputationEngine *ReputationEngine, entries map[peer.ID]*NodeMetaInfo)
+		sysAccSyncDone bool
+		expectedErr    error
 	}{
 		{
 			name: "dirty entries map with multiple entries",
 			entries: map[peer.ID]*NodeMetaInfo{
 				tests.RandomPeerID(t): {
+					KramaID:     testKramaID,
 					NTQ:         DefaultPeerNTQ,
 					WalletCount: -1,
+					Registered:  true, // registered guardian
 				},
 				tests.RandomPeerID(t): {
+					KramaID:     testKramaID,
 					NTQ:         1,
 					WalletCount: 1,
 				},
 				tests.RandomPeerID(t): {
+					KramaID:     testKramaID,
 					NTQ:         DefaultPeerNTQ,
 					WalletCount: 0,
 				},
@@ -916,16 +945,44 @@ func TestReputationEngine_FlushDirtyEntries(t *testing.T) {
 					reputationEngine.dirtyEntries[key] = entry
 				}
 			},
+			sysAccSyncDone: true,
 		},
 		{
-			name:    "empty dirty entries map",
-			entries: map[peer.ID]*NodeMetaInfo{},
+			name:           "empty dirty entries map",
+			entries:        map[peer.ID]*NodeMetaInfo{},
+			sysAccSyncDone: true,
+		},
+		{
+			name:        "system account not yet synced",
+			expectedErr: common.ErrSysAccsNotSynced,
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			reputationEngine, mockDB, _ := createTestReputationEngine(t)
+			reputationEngine, mockDB := createTestReputationEngine(t)
+
+			// set mock state and chain manager
+			mockState := NewMockState()
+			reputationEngine.State = mockState
+			mockChain := NewMockChain()
+			reputationEngine.Chain = mockChain
+
+			reputationEngine.sysAccSyncDone = test.sysAccSyncDone
+
+			testTesseract := tests.CreateTesseract(t, nil)
+
+			mockState.setAccountMetaInfo(
+				t,
+				&common.AccountMetaInfo{
+					Address:       common.GuardianLogicID.Address(),
+					TesseractHash: testTesseract.Hash(),
+				},
+			)
+
+			mockChain.setTesseract(t, testTesseract.Hash(), testTesseract)
+
+			mockState.setStorageEntry(t, common.GuardianLogicID, storageKey)
 
 			if test.testFn != nil {
 				test.testFn(reputationEngine, test.entries)
@@ -933,7 +990,14 @@ func TestReputationEngine_FlushDirtyEntries(t *testing.T) {
 
 			err := reputationEngine.flushDirtyEntries()
 
+			if test.expectedErr != nil {
+				require.Equal(t, test.expectedErr, err)
+
+				return
+			}
+
 			require.NoError(t, err)
+			// This is len(test.entries)+1, as self node info is added to senatus
 			require.Equal(t, len(test.entries)+1, len(mockDB.data))
 		})
 	}
@@ -941,12 +1005,14 @@ func TestReputationEngine_FlushDirtyEntries(t *testing.T) {
 
 func TestReputationEngine_DBWorker(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	reputationEngine, _, _ := createTestReputationEngine(t)
+	reputationEngine, _ := createTestReputationEngine(t)
 	reputationEngine.ctx = ctx
+	reputationEngine.sysAccSyncDone = true
 
 	for i := 0; i < 2; i++ {
 		reputationEngine.dirtyEntries[tests.RandomPeerID(t)] = &NodeMetaInfo{
-			NTQ: float32(i),
+			NTQ:        float32(i),
+			Registered: true,
 		}
 	}
 
@@ -975,7 +1041,7 @@ func TestReputationEngine_DBWorker(t *testing.T) {
 }
 
 func TestReputationEngine_CleanUpDirtyStorage(t *testing.T) {
-	reputationEngine, _, _ := createTestReputationEngine(t)
+	reputationEngine, _ := createTestReputationEngine(t)
 
 	testcases := []struct {
 		name    string
@@ -1084,6 +1150,7 @@ func TestReputationEngine_LoadPeerCountWhileSetup(t *testing.T) {
 				hclog.NewNullLogger(),
 				mockDB,
 				nodeMetaInfo,
+				&utils.TypeMux{},
 			)
 
 			if test.expectedError != nil {
@@ -1094,6 +1161,165 @@ func TestReputationEngine_LoadPeerCountWhileSetup(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Equal(t, test.expectedCount, r.TotalPeerCount())
+		})
+	}
+}
+
+func TestReputationEngine_IsGuardianRegistered(t *testing.T) {
+	testKramaID := tests.RandomKramaID(t, 0)
+
+	// Generate the hash of the krama ID
+	kramaIDEncoded, _ := polo.Polorize(testKramaID)
+	kramaIDHashed := common.GetHash(kramaIDEncoded)
+
+	// Generate the storage key for the guardian with the given krama ID
+	validStorageKey := pisa.GenerateStorageKey(guardianregistry.SlotGuardians, pisa.MapKey(kramaIDHashed))
+
+	testTesseract := tests.CreateTesseract(t, nil)
+
+	testcases := []struct {
+		name           string
+		setAccMetaInfo bool
+		guardianTSHash common.Hash
+		logicID        identifiers.LogicID
+		storageKey     []byte
+		expectedResult bool
+	}{
+		{
+			name: "Failed to get account meta info",
+		},
+		{
+			name:           "Failed to fetch tesseract",
+			setAccMetaInfo: true,
+			// tesseract hash different from the one in accMetaInfo
+			guardianTSHash: tests.RandomHash(t),
+		},
+		{
+			name:           "Failed to fetch logic storage tree",
+			setAccMetaInfo: true,
+			guardianTSHash: testTesseract.Hash(),
+			logicID:        tests.GetLogicID(t, tests.RandomAddress(t)),
+		},
+		{
+			name:           "Invalid storage key",
+			setAccMetaInfo: true,
+			guardianTSHash: testTesseract.Hash(),
+			logicID:        common.GuardianLogicID,
+			storageKey:     []byte{1},
+		},
+		{
+			name:           "Guardian is registered",
+			setAccMetaInfo: true,
+			guardianTSHash: testTesseract.Hash(),
+			logicID:        common.GuardianLogicID,
+			expectedResult: true,
+			storageKey:     validStorageKey,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			reputationEngine, _ := createTestReputationEngine(t)
+
+			// set mock state and chain manager
+			mockState := NewMockState()
+			reputationEngine.State = mockState
+			mockChain := NewMockChain()
+			reputationEngine.Chain = mockChain
+
+			if testcase.setAccMetaInfo {
+				mockState.setAccountMetaInfo(
+					t,
+					&common.AccountMetaInfo{
+						Address:       common.GuardianLogicID.Address(),
+						TesseractHash: testTesseract.Hash(),
+					},
+				)
+			}
+
+			mockChain.setTesseract(t, testcase.guardianTSHash, testTesseract)
+
+			mockState.setStorageEntry(t, testcase.logicID, testcase.storageKey)
+
+			check := reputationEngine.isGuardianRegisterd(testKramaID)
+			require.Equal(t, testcase.expectedResult, check)
+		})
+	}
+}
+
+func TestReputationEngine_GetPublicKey(t *testing.T) {
+	reputationEngine, _ := createTestReputationEngine(t)
+
+	validKramaID := tests.RandomKramaID(t, 0)
+	validPeerID, err := validKramaID.DecodedPeerID()
+	require.NoError(t, err)
+
+	testcases := []struct {
+		name        string
+		kramaID     kramaid.KramaID
+		entries     map[peer.ID]*NodeMetaInfo
+		testFn      func(entries map[peer.ID]*NodeMetaInfo)
+		expectedErr error
+	}{
+		{
+			name:        "Invalid Krama ID",
+			kramaID:     "",
+			expectedErr: common.ErrInvalidKramaID,
+		},
+		{
+			name:        "Node meta info not found in DB",
+			kramaID:     tests.RandomKramaID(t, 0),
+			expectedErr: common.ErrKramaIDNotFound,
+		},
+		{
+			name:    "Nil public key in node meta info",
+			kramaID: validKramaID,
+			entries: map[peer.ID]*NodeMetaInfo{
+				validPeerID: {
+					KramaID:   validKramaID,
+					PublicKey: nil,
+				},
+			},
+			testFn: func(entries map[peer.ID]*NodeMetaInfo) {
+				for key, entry := range entries {
+					reputationEngine.dirtyEntries[key] = entry
+				}
+			},
+			expectedErr: common.ErrPublicKeyNotFound,
+		},
+		{
+			name:    "Valid node meta info with public key",
+			kramaID: validKramaID,
+			entries: map[peer.ID]*NodeMetaInfo{
+				validPeerID: {
+					KramaID:   validKramaID,
+					PublicKey: []byte{1},
+				},
+			},
+			testFn: func(entries map[peer.ID]*NodeMetaInfo) {
+				for key, entry := range entries {
+					reputationEngine.dirtyEntries[key] = entry
+				}
+			},
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			if testcase.testFn != nil {
+				testcase.testFn(testcase.entries)
+			}
+
+			pubKey, err := reputationEngine.GetPublicKey(testcase.kramaID)
+
+			if testcase.expectedErr != nil {
+				require.Error(t, testcase.expectedErr, err)
+
+				return
+			}
+
+			nodeMetaInfo := testcase.entries[validPeerID]
+			require.Equal(t, nodeMetaInfo.PublicKey, pubKey)
 		})
 	}
 }

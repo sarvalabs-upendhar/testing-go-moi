@@ -5,10 +5,10 @@ import (
 	"context"
 	"testing"
 
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
+
 	"github.com/hashicorp/go-hclog"
-	"github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -108,59 +108,113 @@ func (bw *mockBatchWriter) Flush() error {
 	return nil
 }
 
-type MockState struct {
-	publicKeys map[kramaid.KramaID][]byte
+type MockStateManager struct {
+	accMetaInfo  map[identifiers.Address]*common.AccountMetaInfo
+	logicStorage map[string]map[string]string // first key denotes logic id, second key denotes storage key
 }
 
-func NewMockState() *MockState {
-	return &MockState{
-		publicKeys: make(map[kramaid.KramaID][]byte),
+func NewMockState() *MockStateManager {
+	return &MockStateManager{
+		accMetaInfo:  make(map[identifiers.Address]*common.AccountMetaInfo),
+		logicStorage: make(map[string]map[string]string),
 	}
 }
 
-func (state *MockState) GetPublicKeyFromContract(ids ...kramaid.KramaID) (keys [][]byte, err error) {
-	for _, kramaID := range ids {
-		key, ok := state.publicKeys[kramaID]
-		if ok {
-			keys = append(keys, key)
-		}
+func (m *MockStateManager) setAccountMetaInfo(t *testing.T, accMetaInfo *common.AccountMetaInfo) {
+	t.Helper()
+
+	m.accMetaInfo[accMetaInfo.Address] = accMetaInfo
+}
+
+func (m *MockStateManager) GetAccountMetaInfo(addr identifiers.Address) (*common.AccountMetaInfo, error) {
+	accMetaInfo, ok := m.accMetaInfo[addr]
+	if !ok {
+		return nil, common.ErrAccountNotFound
 	}
 
-	return
+	return accMetaInfo, nil
 }
 
-type mockServer struct{}
+func (m *MockStateManager) setStorageEntry(
+	t *testing.T,
+	logicID identifiers.LogicID,
+	slot []byte,
+) {
+	t.Helper()
 
-func NewMockServer() *mockServer {
-	return &mockServer{}
+	store := make(map[string]string)
+
+	store[string(slot)] = "value"
+
+	m.logicStorage[string(logicID)] = store
 }
 
-func (m *mockServer) Subscribe(
-	ctx context.Context,
-	topicName string,
-	validator utils.WrappedVal,
-	defaultValidator bool,
-	handler func(msg *pubsub.Message) error,
-) error {
-	return nil
+func (m *MockStateManager) GetStorageEntry(
+	logicID identifiers.LogicID,
+	slot []byte,
+	state common.Hash,
+) ([]byte, error) {
+	store, ok := m.logicStorage[string(logicID)]
+	if !ok {
+		return nil, common.ErrLogicStorageTreeNotFound
+	}
+
+	value, ok := store[string(slot)]
+	if !ok {
+		return nil, common.ErrKeyNotFound
+	}
+
+	return []byte(value), nil
 }
 
-func createTestReputationEngine(t *testing.T) (*ReputationEngine, *MockDB, *MockState) {
+type MockChain struct {
+	tesseractsByHash map[common.Hash]*common.Tesseract
+}
+
+func (m MockChain) setTesseract(t *testing.T, hash common.Hash, ts *common.Tesseract) {
+	t.Helper()
+
+	m.tesseractsByHash[hash] = ts
+}
+
+func (m MockChain) GetTesseract(hash common.Hash, withInteractions bool) (*common.Tesseract, error) {
+	ts, ok := m.tesseractsByHash[hash]
+	if !ok {
+		return nil, common.ErrFetchingTesseract
+	}
+
+	tsCopy := *ts // copy, so that stored tesseract won't be modified
+
+	if !withInteractions {
+		tsCopy = *tsCopy.GetTesseractWithoutIxns()
+	}
+
+	return &tsCopy, nil
+}
+
+func NewMockChain() *MockChain {
+	return &MockChain{
+		tesseractsByHash: make(map[common.Hash]*common.Tesseract),
+	}
+}
+
+func createTestReputationEngine(t *testing.T) (*ReputationEngine, *MockDB) {
 	t.Helper()
 
 	mockDB := NewMockDB()
-	mockState := NewMockState()
 	nodeMetaInfo := &NodeMetaInfo{
-		KramaID: tests.RandomKramaID(t, 0),
+		KramaID:    tests.RandomKramaID(t, 0),
+		Registered: true, // self node should have registered flag true
 	}
 
 	r, err := NewReputationEngine(
 		hclog.NewNullLogger(),
 		mockDB,
 		nodeMetaInfo,
+		&utils.TypeMux{},
 	)
 
 	require.NoError(t, err)
 
-	return r, mockDB, mockState
+	return r, mockDB
 }

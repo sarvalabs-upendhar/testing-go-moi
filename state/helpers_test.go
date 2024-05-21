@@ -1309,7 +1309,7 @@ func getAccMetaInfos(t *testing.T, count int) []*common.AccountMetaInfo {
 
 	accMetaInfo := make([]*common.AccountMetaInfo, count)
 	for i := 0; i < count; i++ {
-		accMetaInfo[i] = tests.RandomAccMetaInfo(t, 8)
+		accMetaInfo[i] = tests.GetRandomAccMetaInfo(t, 8)
 	}
 
 	return accMetaInfo

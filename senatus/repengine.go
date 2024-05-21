@@ -6,6 +6,11 @@ import (
 	"sync"
 	"time"
 
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/compute/pisa"
+	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
+	"github.com/sarvalabs/go-polo"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/golang-lru"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -31,24 +36,39 @@ type senatusStore interface {
 	TotalPeersCount() (uint64, error)
 }
 
+type stateManager interface {
+	GetAccountMetaInfo(addr identifiers.Address) (*common.AccountMetaInfo, error)
+	GetStorageEntry(logicID identifiers.LogicID, slot []byte, state common.Hash) ([]byte, error)
+}
+
+type chainManager interface {
+	GetTesseract(hash common.Hash, withInteractions bool) (*common.Tesseract, error)
+}
+
 type ReputationEngine struct {
-	kramaID      kramaid.KramaID
-	ctx          context.Context
-	ctxCancel    context.CancelFunc
-	logger       hclog.Logger
-	db           senatusStore
-	cache        *lru.Cache
-	dirtyLock    sync.RWMutex
-	dirtyEntries map[peer.ID]*NodeMetaInfo
-	mtx          sync.RWMutex
-	peerCount    uint64
-	signalChan   chan struct{}
+	kramaID           kramaid.KramaID
+	ctx               context.Context
+	ctxCancel         context.CancelFunc
+	logger            hclog.Logger
+	db                senatusStore
+	cache             *lru.Cache
+	dirtyLock         sync.RWMutex
+	dirtyEntries      map[peer.ID]*NodeMetaInfo
+	mtx               sync.RWMutex
+	peerCount         uint64
+	signalChan        chan struct{}
+	eventSubscription *utils.Subscription
+	sysAccSyncLock    sync.RWMutex
+	sysAccSyncDone    bool
+	State             stateManager
+	Chain             chainManager
 }
 
 func NewReputationEngine(
 	logger hclog.Logger,
 	db senatusStore,
 	selfInfo *NodeMetaInfo,
+	mux *utils.TypeMux,
 ) (*ReputationEngine, error) {
 	cache, err := lru.New(100)
 	if err != nil {
@@ -63,19 +83,28 @@ func NewReputationEngine(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	r := &ReputationEngine{
-		ctx:          ctx,
-		ctxCancel:    cancel,
-		logger:       logger.Named("Reputation-Engine"),
-		kramaID:      selfInfo.KramaID,
-		db:           db,
-		cache:        cache,
-		signalChan:   make(chan struct{}),
-		dirtyEntries: make(map[peer.ID]*NodeMetaInfo),
+		ctx:               ctx,
+		ctxCancel:         cancel,
+		logger:            logger.Named("Reputation-Engine"),
+		kramaID:           selfInfo.KramaID,
+		db:                db,
+		cache:             cache,
+		signalChan:        make(chan struct{}),
+		dirtyEntries:      make(map[peer.ID]*NodeMetaInfo),
+		eventSubscription: subscribeToEvent(mux),
 
 		peerCount: totalPeers,
 	}
 
+	// Listen to system account sync event
+	go r.listenToEvent()
+
 	return r, r.UpdatePeer(selfInfo)
+}
+
+// subscribeToEvent subscribes to system accounts sync event
+func subscribeToEvent(eventMux *utils.TypeMux) *utils.Subscription {
+	return eventMux.Subscribe(utils.SystemAccountsSyncedEvent{})
 }
 
 func (r *ReputationEngine) nodeMetaInfo(peerID peer.ID) (*NodeMetaInfo, error) {
@@ -153,6 +182,10 @@ func (r *ReputationEngine) AddNewPeerWithPeerID(peerID peer.ID, data *NodeMetaIn
 
 		if len(data.PublicKey) != 0 && !bytes.Equal(data.PublicKey, info.GetPublicKey()) {
 			info.UpdatePublicKey(data.PublicKey)
+		}
+
+		if data.Registered {
+			info.Registered = true
 		}
 	} else {
 		info = data
@@ -425,24 +458,96 @@ func (r *ReputationEngine) StreamPeerInfos(ctx context.Context) (chan *PeerInfo,
 	return ch, nil
 }
 
+func setBytesToDBWriter(peerID peer.ID, nodeMetaInfo *NodeMetaInfo, writer db.BatchWriter) error {
+	rawData, err := nodeMetaInfo.Bytes()
+	if err != nil {
+		return err
+	}
+
+	if err = writer.Set(storage.SenatusDBKey(peerID), rawData); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (r *ReputationEngine) flushDirtyEntries() error {
 	r.dirtyLock.RLock()
 	defer r.dirtyLock.RUnlock()
 
 	writer := r.db.NewBatchWriter()
 
-	for peerID, nodeMetaInfo := range r.dirtyEntries {
-		rawData, err := nodeMetaInfo.Bytes()
-		if err != nil {
-			return err
-		}
+	// check if system accounts are synced
+	if !r.isSysAccSynced() {
+		return common.ErrSysAccsNotSynced
+	}
 
-		if err = writer.Set(storage.SenatusDBKey(peerID), rawData); err != nil {
-			return err
+	for peerID, nodeMetaInfo := range r.dirtyEntries {
+		if !nodeMetaInfo.Registered {
+			if r.isGuardianRegisterd(nodeMetaInfo.GetKramaID()) {
+				if err := setBytesToDBWriter(peerID, nodeMetaInfo, writer); err != nil {
+					return err
+				}
+			}
+		} else {
+			// For node self info and static peers in network config
+			if err := setBytesToDBWriter(peerID, nodeMetaInfo, writer); err != nil {
+				return err
+			}
 		}
 	}
 
 	return writer.Flush()
+}
+
+func (r *ReputationEngine) isSysAccSynced() bool {
+	r.sysAccSyncLock.RLock()
+	defer r.sysAccSyncLock.RUnlock()
+
+	return r.sysAccSyncDone
+}
+
+func (r *ReputationEngine) isGuardianRegisterd(kramaID kramaid.KramaID) bool {
+	// Generate the hash of the krama ID
+	kramaIDEncoded, _ := polo.Polorize(kramaID)
+	kramaIDHashed := common.GetHash(kramaIDEncoded)
+
+	// Generate the storage key for the guardian with the given krama ID
+	storageKey := pisa.GenerateStorageKey(guardianregistry.SlotGuardians, pisa.MapKey(kramaIDHashed))
+
+	accMetaInfo, err := r.State.GetAccountMetaInfo(common.GuardianLogicID.Address())
+	if err != nil {
+		r.logger.Error("Failed to get account meta info", "err", err)
+
+		return false
+	}
+
+	ts, err := r.Chain.GetTesseract(accMetaInfo.TesseractHash, false)
+	if err != nil {
+		r.logger.Error("Failed to fetch tesseract", "err", err)
+
+		return false
+	}
+
+	_, err = r.State.GetStorageEntry(
+		common.GuardianLogicID,
+		storageKey,
+		ts.StateHash(common.GuardianLogicID.Address()),
+	)
+	if err == nil {
+		// If no error was returned, the key was found.
+		// This means the guardian is registered
+		return true
+	}
+
+	// If the key is not found, the guardian is NOT registered
+	if err.Error() == common.ErrKeyNotFound.Error() {
+		return false
+	}
+
+	r.logger.Error("Failed to fetch guardian info", "err", err)
+
+	return false
 }
 
 func (r *ReputationEngine) dbWorker() {
@@ -484,6 +589,16 @@ func (r *ReputationEngine) Close() {
 	r.ctxCancel()
 
 	if err := r.flushDirtyEntries(); err != nil {
-		r.logger.Error("Failed to flush dirty entries", "error", err)
+		r.logger.Error("Failed to flush dirty entries", "err", err)
+	}
+}
+
+func (r *ReputationEngine) listenToEvent() {
+	for range r.eventSubscription.Chan() {
+		r.sysAccSyncLock.Lock()
+		r.sysAccSyncDone = true
+		r.sysAccSyncLock.Unlock()
+
+		return
 	}
 }

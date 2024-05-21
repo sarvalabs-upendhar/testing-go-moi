@@ -2590,7 +2590,7 @@ func (s *Syncer) publishEventBucketSync() error {
 }
 
 func (s *Syncer) publishEventSystemAccounts() error {
-	return s.post(eventSystemAccounts{})
+	return s.post(utils.SystemAccountsSyncedEvent{})
 }
 
 func (s *Syncer) publishEventSnapSync(state eventDataJobState) error {
@@ -2608,7 +2608,8 @@ func (s *Syncer) publishEventTesseractSync(addr identifiers.Address, height uint
 				address: addr,
 				height:  height,
 			},
-		})
+		},
+	)
 }
 
 func dbKeyFromCID(address identifiers.Address, cid cid.CID) []byte {

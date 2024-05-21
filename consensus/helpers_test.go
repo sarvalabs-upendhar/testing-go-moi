@@ -211,6 +211,14 @@ func (ms *MockStateManager) UpdateStateObjects(objs state.ObjectMap) error {
 	panic("implement me")
 }
 
+func (ms *MockStateManager) FetchInteractionContext(
+	ctx context.Context,
+	ix *common.Interaction,
+) (map[identifiers.Address]common.Hash, []*common.NodeSet, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (ms *MockStateManager) FetchLatestParticipantContext(addr identifiers.Address) (
 	latestContextHash common.Hash,
 	behaviouralSet, randomSet *common.NodeSet,

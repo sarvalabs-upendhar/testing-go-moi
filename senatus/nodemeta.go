@@ -29,6 +29,7 @@ type NodeMetaInfo struct {
 	WalletCount   int32
 	PublicKey     []byte
 	PeerSignature []byte
+	Registered    bool `polo:"-"`
 }
 
 func (mi *NodeMetaInfo) UpdateNTQ(ntq float32) {
@@ -50,6 +51,10 @@ func (mi *NodeMetaInfo) UpdatePublicKey(publicKey []byte) {
 	defer mi.mtx.Unlock()
 
 	mi.PublicKey = publicKey
+}
+
+func (mi *NodeMetaInfo) GetKramaID() kramaid.KramaID {
+	return mi.KramaID
 }
 
 func (mi *NodeMetaInfo) GetNTQ() float32 {

@@ -87,6 +87,7 @@ var (
 	ErrAccSyncStatusNotFound       = errors.New("error fetching account sync status")
 	ErrSyncJobNotFound             = errors.New("sync job not found")
 	ErrInvalidIDCombination        = errors.New("can not use both krama id and peer id")
+	ErrSysAccsNotSynced            = errors.New("system accounts not yet synced")
 	ErrInvalidParams               = errors.New("invalid params")
 	ErrRegistryNotFound            = errors.New("registry not found")
 	ErrInvalidRootNode             = errors.New("invalid root node")

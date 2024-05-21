@@ -396,13 +396,13 @@ func TestFetchParticipantsAndNodeSet(t *testing.T) {
 
 	// create an address without nodeSets
 	addrsWithOutContext := tests.RandomAddress(t)
-	ms.addAccMetaInfo(t, addrsWithOutContext, tests.RandomAccMetaInfo(t, rand.Uint64()))
+	ms.addAccMetaInfo(t, addrsWithOutContext, tests.GetRandomAccMetaInfo(t, rand.Uint64()))
 
 	// add nodeSets and accountMetaInfo to state manager
 	for addr, p := range ixnPs {
 		// avoid storing meta info for genesis accounts
 		if !p.IsGenesis {
-			ms.addAccMetaInfo(t, addr, tests.RandomAccMetaInfo(t, rand.Uint64()))
+			ms.addAccMetaInfo(t, addr, tests.GetRandomAccMetaInfo(t, rand.Uint64()))
 		}
 
 		ms.addNodeSet(t, addr, tests.RandomHash(t), createTestNodeSet(t, 3), createTestNodeSet(t, 3))

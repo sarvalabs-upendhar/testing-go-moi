@@ -31,7 +31,7 @@ func TestIxPool_validateAndEnqueueIx_ReplaceIx(t *testing.T) {
 		addrs          = tests.GetAddresses(t, 1)
 	)
 
-	sm.setTestMOIBalance(addrs...)
+	sm.setTestMOIBalance(t, addrs...)
 
 	getIxParams := func(from identifiers.Address, nonce uint64, price int, payload []byte) *tests.CreateIxParams {
 		return &tests.CreateIxParams{
@@ -169,7 +169,7 @@ func TestIxPool_validateAndEnqueueIx_ReplaceIx(t *testing.T) {
 func TestIxPool_validateAndEnqueueIx(t *testing.T) {
 	sm := NewMockStateManager(t)
 	addrs := tests.GetAddresses(t, 1)
-	sm.setTestMOIBalance(addrs...)
+	sm.setTestMOIBalance(t, addrs...)
 
 	testcases := []struct {
 		name        string
@@ -249,7 +249,7 @@ func TestIxPool_validateAndEnqueueIx(t *testing.T) {
 func TestIxPool_addedIxnEvent(t *testing.T) {
 	sm := NewMockStateManager(t)
 	addrs := tests.GetAddresses(t, 1)
-	sm.setTestMOIBalance(addrs...)
+	sm.setTestMOIBalance(t, addrs...)
 
 	testcases := []struct {
 		name string
@@ -292,7 +292,7 @@ func TestIxPool_addedIxnEvent(t *testing.T) {
 func TestIxPool_validateAndEnqueueIx_HighPressure(t *testing.T) {
 	sm := NewMockStateManager(t)
 	addrs := tests.GetAddresses(t, 1)
-	sm.setTestMOIBalance(addrs...)
+	sm.setTestMOIBalance(t, addrs...)
 
 	testcases := []struct {
 		name                  string
@@ -366,7 +366,7 @@ func TestIxPool_validateAndEnqueueIx_HighPressure(t *testing.T) {
 func TestIxPool_handleEnqueueRequest(t *testing.T) {
 	address := tests.RandomAddress(t)
 	sm := NewMockStateManager(t)
-	sm.setBalance(address, common.KMOITokenAssetID, big.NewInt(1000))
+	sm.setBalance(t, address, common.KMOITokenAssetID, big.NewInt(1000))
 
 	testcases := []struct {
 		name           string
@@ -451,7 +451,7 @@ func TestIxPool_handleEnqueueRequest(t *testing.T) {
 func TestIxPool_handlePromoteRequest(t *testing.T) {
 	sm := NewMockStateManager(t)
 	addrs := tests.GetAddresses(t, 3)
-	sm.setTestMOIBalance(addrs...)
+	sm.setTestMOIBalance(t, addrs...)
 
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = WaitMode
@@ -523,7 +523,7 @@ func TestIxPool_handlePromoteRequest(t *testing.T) {
 func TestIxPool_promoteIxnEvent(t *testing.T) {
 	sm := NewMockStateManager(t)
 	addrs := tests.GetAddresses(t, 1)
-	sm.setTestMOIBalance(addrs...)
+	sm.setTestMOIBalance(t, addrs...)
 
 	testcases := []struct {
 		name string
@@ -581,7 +581,7 @@ func TestIxPool_createAccountOnce(t *testing.T) {
 			address: tests.RandomAddress(t),
 			nonce:   1,
 			testFn: func(addr identifiers.Address) {
-				sm.setLatestNonce(addr, 5)
+				sm.setLatestNonce(t, addr, 5)
 			},
 			expectedNonce: 5,
 		},
@@ -610,7 +610,7 @@ func TestIxPool_createAccountOnce(t *testing.T) {
 func TestIxPool_ResetWithHeaders(t *testing.T) {
 	sm := NewMockStateManager(t)
 	addrs := tests.GetAddresses(t, 3)
-	sm.setTestMOIBalance(addrs...)
+	sm.setTestMOIBalance(t, addrs...)
 
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = WaitMode
@@ -676,7 +676,7 @@ func TestIxPool_ResetWithHeaders(t *testing.T) {
 func TestIxPool_resetAccount_enqueued(t *testing.T) {
 	sm := NewMockStateManager(t)
 	addrs := tests.GetAddresses(t, 3)
-	sm.setTestMOIBalance(addrs...)
+	sm.setTestMOIBalance(t, addrs...)
 
 	testcases := []struct {
 		name             string
@@ -740,7 +740,7 @@ func TestIxPool_resetAccount_enqueued(t *testing.T) {
 func TestIxPool_prunedEnqueuedIxnEvent(t *testing.T) {
 	sm := NewMockStateManager(t)
 	addrs := tests.GetAddresses(t, 2)
-	sm.setTestMOIBalance(addrs...)
+	sm.setTestMOIBalance(t, addrs...)
 
 	testcases := []struct {
 		name             string
@@ -800,7 +800,7 @@ func TestIxPool_prunedEnqueuedIxnEvent(t *testing.T) {
 func TestIxPool_resetAccount_promoted(t *testing.T) {
 	sm := NewMockStateManager(t)
 	addrs := tests.GetAddresses(t, 3)
-	sm.setTestMOIBalance(addrs...)
+	sm.setTestMOIBalance(t, addrs...)
 
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = WaitMode
@@ -851,7 +851,7 @@ func TestIxPool_resetAccount_promoted(t *testing.T) {
 func TestIxPool_prunedPromotedIxnEvent(t *testing.T) {
 	sm := NewMockStateManager(t)
 	addrs := tests.GetAddresses(t, 2)
-	sm.setTestMOIBalance(addrs...)
+	sm.setTestMOIBalance(t, addrs...)
 
 	testcases := []struct {
 		name             string
@@ -1021,7 +1021,7 @@ func TestIxPool_resetAccount(t *testing.T) {
 func TestIxPool_Pop(t *testing.T) {
 	addr1 := tests.RandomAddress(t)
 	sm := NewMockStateManager(t)
-	sm.setTestMOIBalance(addr1)
+	sm.setTestMOIBalance(t, addr1)
 
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = WaitMode
@@ -1063,7 +1063,7 @@ func TestIxPool_Pop(t *testing.T) {
 func TestIxPool_Drop(t *testing.T) {
 	addr1 := tests.RandomAddress(t)
 	sm := NewMockStateManager(t)
-	sm.setTestMOIBalance(addr1)
+	sm.setTestMOIBalance(t, addr1)
 
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = WaitMode
@@ -1199,7 +1199,7 @@ func TestIxPool_IncrementWaitTime(t *testing.T) {
 func TestIxPool_validateIx(t *testing.T) {
 	sm := NewMockStateManager(t)
 	addrs := tests.GetAddresses(t, 3)
-	sm.setTestMOIBalance(addrs...)
+	sm.setTestMOIBalance(t, addrs...)
 
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = WaitMode
@@ -1226,7 +1226,7 @@ func TestIxPool_validateIx(t *testing.T) {
 			name: "Nonce too low error",
 			ix:   newTestInteraction(t, common.IxValueTransfer, 9, addrs[1], nil),
 			testFn: func(interaction *common.Interaction) {
-				sm.setLatestNonce(interaction.Sender(), 10)
+				sm.setLatestNonce(t, interaction.Sender(), 10)
 			},
 			expectedErr: ErrNonceTooLow,
 		},
@@ -1301,7 +1301,7 @@ func TestIxPool_validateIx_WithSign(t *testing.T) {
 	address, mnemonic := tests.RandomAddressWithMnemonic(t)
 	addr2 := tests.RandomAddress(t)
 
-	sm.setTestMOIBalance(address, addr2)
+	sm.setTestMOIBalance(t, address, addr2)
 
 	ixArgs := common.SendIXArgs{
 		Sender:    address,
@@ -1339,7 +1339,7 @@ func TestIxPool_validateIx_WithSign(t *testing.T) {
 				}
 			}),
 			testFn: func(interaction *common.Interaction) {
-				sm.setBalance(interaction.Sender(), "assetID1", big.NewInt(10))
+				sm.setBalance(t, interaction.Sender(), "assetID1", big.NewInt(10))
 			},
 			expectedErr: common.ErrInvalidIXSignature,
 		},
@@ -1347,7 +1347,7 @@ func TestIxPool_validateIx_WithSign(t *testing.T) {
 			name: "valid signature",
 			ix:   ix,
 			testFn: func(interaction *common.Interaction) {
-				sm.setBalance(interaction.Sender(), "assetID1", big.NewInt(10))
+				sm.setBalance(t, interaction.Sender(), "assetID1", big.NewInt(10))
 			},
 		},
 	}
@@ -1483,9 +1483,11 @@ func TestIxPool_ValidateAssetMint(t *testing.T) {
 				ixData.Input.Payload = rawAssetPayload
 			}),
 			testFn: func(interaction *common.Interaction) {
-				sm.setAssetInfo(assetID, &common.AssetDescriptor{
-					Operator: tests.RandomAddress(t),
-				})
+				sm.setAssetInfo(
+					t,
+					assetID, &common.AssetDescriptor{
+						Operator: tests.RandomAddress(t),
+					})
 			},
 			expectedErr: common.ErrOperatorMismatch,
 		},
@@ -1495,9 +1497,11 @@ func TestIxPool_ValidateAssetMint(t *testing.T) {
 				ixData.Input.Payload = rawAssetPayload
 			}),
 			testFn: func(interaction *common.Interaction) {
-				sm.setAssetInfo(assetID, &common.AssetDescriptor{
-					Operator: interaction.Sender(),
-				})
+				sm.setAssetInfo(
+					t,
+					assetID, &common.AssetDescriptor{
+						Operator: interaction.Sender(),
+					})
 			},
 		},
 		{
@@ -1506,9 +1510,11 @@ func TestIxPool_ValidateAssetMint(t *testing.T) {
 				ixData.Input.Payload = rawNFTAssetPayload
 			}),
 			testFn: func(interaction *common.Interaction) {
-				sm.setAssetInfo(assetID, &common.AssetDescriptor{
-					Operator: interaction.Sender(),
-				})
+				sm.setAssetInfo(
+					t,
+					assetID, &common.AssetDescriptor{
+						Operator: interaction.Sender(),
+					})
 			},
 			expectedErr: common.ErrMintNonFungibleToken,
 		},
@@ -1562,9 +1568,11 @@ func TestIxPool_ValidateAssetBurn(t *testing.T) {
 				ixData.Input.Payload = rawAssetPayload
 			}),
 			testFn: func(interaction *common.Interaction, mockStateManager *MockStateManager) {
-				mockStateManager.setAssetInfo(assetID, &common.AssetDescriptor{
-					Operator: interaction.Sender(),
-				})
+				mockStateManager.setAssetInfo(
+					t,
+					assetID, &common.AssetDescriptor{
+						Operator: interaction.Sender(),
+					})
 			},
 			expectedErr: common.ErrFetchingBalance,
 		},
@@ -1577,9 +1585,11 @@ func TestIxPool_ValidateAssetBurn(t *testing.T) {
 				mockStateManager.balance[interaction.Sender()] = map[identifiers.AssetID]*big.Int{
 					assetID: big.NewInt(10),
 				}
-				mockStateManager.setAssetInfo(assetID, &common.AssetDescriptor{
-					Operator: interaction.Sender(),
-				})
+				mockStateManager.setAssetInfo(
+					t,
+					assetID, &common.AssetDescriptor{
+						Operator: interaction.Sender(),
+					})
 			},
 			expectedErr: common.ErrInsufficientFunds,
 		},
@@ -1592,9 +1602,11 @@ func TestIxPool_ValidateAssetBurn(t *testing.T) {
 				mockStateManager.balance[interaction.Sender()] = map[identifiers.AssetID]*big.Int{
 					assetID: big.NewInt(1000),
 				}
-				mockStateManager.setAssetInfo(assetID, &common.AssetDescriptor{
-					Operator: tests.RandomAddress(t),
-				})
+				mockStateManager.setAssetInfo(
+					t,
+					assetID, &common.AssetDescriptor{
+						Operator: tests.RandomAddress(t),
+					})
 			},
 			expectedErr: common.ErrOperatorMismatch,
 		},
@@ -1607,9 +1619,11 @@ func TestIxPool_ValidateAssetBurn(t *testing.T) {
 				mockStateManager.balance[interaction.Sender()] = map[identifiers.AssetID]*big.Int{
 					assetID: big.NewInt(1000),
 				}
-				mockStateManager.setAssetInfo(assetID, &common.AssetDescriptor{
-					Operator: interaction.Sender(),
-				})
+				mockStateManager.setAssetInfo(
+					t,
+					assetID, &common.AssetDescriptor{
+						Operator: interaction.Sender(),
+					})
 			},
 		},
 	}
@@ -1756,7 +1770,7 @@ func TestIxPool_ValidateLogicInvokePayload(t *testing.T) {
 				ixData.Input.Payload = validRawLogicPayload
 			}),
 			testFn: func(interaction *common.Interaction, msm *MockStateManager) {
-				msm.registerLogicID("logicID-1")
+				msm.registerLogicID(t, "logicID-1")
 			},
 		},
 		{
@@ -1880,7 +1894,7 @@ func TestIxPool_Executables_Wait_Mode(t *testing.T) {
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
 			sm := NewMockStateManager(t)
-			sm.setTestMOIBalance(addresses...)
+			sm.setTestMOIBalance(t, addresses...)
 			ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 				c.Mode = WaitMode
 				c.PriceLimit = defaultIxPriceLimit
@@ -2078,7 +2092,7 @@ func TestIxPool_Executables_Wait_Time(t *testing.T) {
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
 			sm := NewMockStateManager(t)
-			sm.setTestMOIBalance(addresses...)
+			sm.setTestMOIBalance(t, addresses...)
 			ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 				c.Mode = WaitMode
 				c.PriceLimit = defaultIxPriceLimit
@@ -2116,7 +2130,7 @@ func TestIxPool_Executables_Wait_Time(t *testing.T) {
 func TestIxPool_RemoveNonceHoleAccounts(t *testing.T) {
 	sm := NewMockStateManager(t)
 	addr := tests.GetAddresses(t, 3)
-	sm.setTestMOIBalance(addr...)
+	sm.setTestMOIBalance(t, addr...)
 
 	testcases := []struct {
 		name                string
@@ -2180,7 +2194,7 @@ func TestIxPool_RemoveNonceHoleAccounts(t *testing.T) {
 func TestIxPool_RemoveNonceHoleAccounts_WithEmptyEnqueues(t *testing.T) {
 	sm := NewMockStateManager(t)
 	addr := tests.GetAddresses(t, 1)
-	sm.setTestMOIBalance(addr...)
+	sm.setTestMOIBalance(t, addr...)
 
 	testcases := []struct {
 		name           string

@@ -223,7 +223,7 @@ func insertTestAccMetaInfo(t *testing.T, pm *PersistenceManager) map[uint64]comm
 	accountCount := 5000
 	for i := 0; i < accountCount; i++ {
 		// test data
-		AccMetaInfo := tests.RandomAccMetaInfo(t, 1)
+		AccMetaInfo := tests.GetRandomAccMetaInfo(t, 1)
 		// insert test data in to db
 		_, _, err := pm.UpdateAccMetaInfo(
 			AccMetaInfo.Address,

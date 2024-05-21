@@ -102,6 +102,8 @@ func NewNode(logLevel string, cfg *config.Config) (n *Node, err error) {
 		return nil, err
 	}
 
+	n.setupStateManagerToSenatus()
+
 	n.setupExecEngine()
 
 	n.setupIxPool()
@@ -115,6 +117,8 @@ func NewNode(logLevel string, cfg *config.Config) (n *Node, err error) {
 	if err = n.setupChainManager(); err != nil {
 		return nil, err
 	}
+
+	n.setupChainManagerToSenatus()
 
 	if err = n.setupKramaEngine(); err != nil {
 		return nil, err

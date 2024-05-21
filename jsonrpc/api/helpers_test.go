@@ -313,7 +313,9 @@ func (s *MockStateManager) GetAccountMetaInfo(addr identifiers.Address) (*common
 	return accMetaInfo, nil
 }
 
-func (s *MockStateManager) SetStorageEntry(logicID identifiers.LogicID, storage map[string]string) {
+func (s *MockStateManager) setStorageEntry(t *testing.T, logicID identifiers.LogicID, storage map[string]string) {
+	t.Helper()
+
 	s.logicStorage[string(logicID)] = storage
 }
 
@@ -1046,28 +1048,6 @@ func getRegistry(
 	}
 
 	return registryMap, registryEntries
-}
-
-func getStorageMap(keys []string, values []string) map[string]string {
-	storage := make(map[string]string)
-
-	for i, key := range keys {
-		storage[string(common.FromHex(key))] = values[i] // each hex character should be a byte
-	}
-
-	return storage
-}
-
-func getHexEntries(t *testing.T, count int) []string {
-	t.Helper()
-
-	entries := make([]string, count)
-
-	for i := 0; i < count; i++ {
-		entries[i] = tests.RandomHash(t).Hex()
-	}
-
-	return entries
 }
 
 func getContext(t *testing.T, count int) *Context {

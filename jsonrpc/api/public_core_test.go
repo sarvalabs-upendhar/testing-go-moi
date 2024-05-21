@@ -121,7 +121,7 @@ func TestPublicCoreAPI_GetTesseractHashByHeight(t *testing.T) {
 	chainManager := NewMockChainManager(t)
 	stateManager := NewMockStateManager(t)
 	coreAPI := NewPublicCoreAPI(nil, chainManager, stateManager, nil, nil, nil)
-	acc := tests.RandomAccMetaInfo(t, 8)
+	acc := tests.GetRandomAccMetaInfo(t, 8)
 
 	stateManager.setAccountMetaInfo(t, acc.Address, acc)
 
@@ -1378,10 +1378,10 @@ func TestPublicCoreAPI_GetLogicStorage(t *testing.T) {
 
 	chainManager.setTesseractByHash(t, ts)
 
-	keys := getHexEntries(t, 1)
-	values := getHexEntries(t, 1)
+	keys := tests.GetHexEntries(t, 1)
+	values := tests.GetHexEntries(t, 1)
 
-	stateManager.SetStorageEntry(logicID, getStorageMap(keys, values))
+	stateManager.setStorageEntry(t, logicID, tests.GetStorageMap(keys, values))
 
 	testcases := []struct {
 		name          string
@@ -1820,7 +1820,7 @@ func TestPublicCoreAPI_GetAccountMetaInfo(t *testing.T) {
 	chainManager.setTesseractByHash(t, ts)
 
 	tsHash := tests.GetTesseractHash(t, ts)
-	acc := tests.RandomAccMetaInfo(t, 1)
+	acc := tests.GetRandomAccMetaInfo(t, 1)
 
 	stateManager.setAccountMetaInfo(t, ts.AnyAddress(), acc)
 

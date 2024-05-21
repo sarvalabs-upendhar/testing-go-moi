@@ -44,9 +44,11 @@ func NewMockStateManager(t *testing.T) *MockStateManager {
 	}
 }
 
-func (ms *MockStateManager) setTestMOIBalance(addrs ...identifiers.Address) {
+func (ms *MockStateManager) setTestMOIBalance(t *testing.T, addrs ...identifiers.Address) {
+	t.Helper()
+
 	for _, addr := range addrs {
-		ms.setBalance(addr, common.KMOITokenAssetID, big.NewInt(1000))
+		ms.setBalance(t, addr, common.KMOITokenAssetID, big.NewInt(1000))
 	}
 }
 
@@ -62,7 +64,9 @@ func (ms *MockStateManager) GetAssetInfo(
 	return info, nil
 }
 
-func (ms *MockStateManager) setAssetInfo(assetID identifiers.AssetID, info *common.AssetDescriptor) {
+func (ms *MockStateManager) setAssetInfo(t *testing.T, assetID identifiers.AssetID, info *common.AssetDescriptor) {
+	t.Helper()
+
 	ms.assetInfo[assetID] = info
 }
 
@@ -85,10 +89,13 @@ func (ms *MockStateManager) GetBalance(
 }
 
 func (ms *MockStateManager) setBalance(
+	t *testing.T,
 	addrs identifiers.Address,
 	assetID identifiers.AssetID,
 	amount *big.Int,
 ) {
+	t.Helper()
+
 	if _, ok := ms.balance[addrs]; !ok {
 		ms.balance[addrs] = make(map[identifiers.AssetID]*big.Int)
 	}
@@ -157,12 +164,16 @@ func (ms *MockStateManager) IsLogicRegistered(logicID identifiers.LogicID) error
 	return nil
 }
 
-func (ms *MockStateManager) registerLogicID(logicID identifiers.LogicID) {
+func (ms *MockStateManager) registerLogicID(t *testing.T, logicID identifiers.LogicID) {
+	t.Helper()
+
 	ms.logicRegistration[logicID] = true
 }
 
 // setLatestNonce updates the mock account with the latest nonce
-func (ms *MockStateManager) setLatestNonce(addr identifiers.Address, nonce uint64) {
+func (ms *MockStateManager) setLatestNonce(t *testing.T, addr identifiers.Address, nonce uint64) {
+	t.Helper()
+
 	ms.nonce[addr] = nonce
 }
 
@@ -354,7 +365,7 @@ func addAndProcessIxs(t *testing.T, sm *MockStateManager, ixPool *IxPool, ixs co
 	t.Helper()
 
 	for _, v := range ixs {
-		sm.setTestMOIBalance(v.Sender())
+		sm.setTestMOIBalance(t, v.Sender())
 	}
 
 	errs := ixPool.AddInteractions(ixs)
