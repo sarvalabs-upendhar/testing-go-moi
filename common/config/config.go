@@ -26,7 +26,7 @@ type Config struct {
 	Metrics        Telemetry
 	LogFilePath    string
 	JSONRPC        *JSONRPCConfig
-	NetworkID      string
+	NetworkID      NetworkID
 	State          *StateConfig
 }
 

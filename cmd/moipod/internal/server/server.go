@@ -4,10 +4,17 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
+
+	"github.com/sarvalabs/go-moi/crypto"
+	"github.com/sarvalabs/go-moi/moiclient"
 
 	"github.com/sarvalabs/go-moi/common/config"
 
@@ -40,6 +47,9 @@ var (
 	P2pHostIP          string
 	P2PHostPort        int
 	AllowIPv6Addresses bool
+	NetworkRPCUrl      string
+	LocalRPCUrl        string
+	WatchdogURL        string
 	DiscoveryInterval  time.Duration
 	enableDebugMode    bool
 )
@@ -61,6 +71,9 @@ const (
 	p2pHostIPFlag          = "p2p-host-ip"
 	p2pHostPortFlag        = "p2p-host-port"
 	allowIPv6AddressesFlag = "allow-ipv6-addresses"
+	networkRPCFlag         = "network-rpc-url"
+	localRPCFlag           = "local-rpc-url"
+	watchdogURLFlag        = "watchdog-url"
 	discoveryIntervalFlag  = "discovery-interval"
 	enableDebugModeFlag    = "enable-debug-mode"
 )
@@ -102,6 +115,24 @@ func parseFlags(cmd *cobra.Command) {
 		allowIPv6AddressesFlag,
 		false,
 		"Enable IPv6 communication for the p2p host.",
+	)
+	cmd.PersistentFlags().StringVar(
+		&NetworkRPCUrl,
+		networkRPCFlag,
+		"",
+		"Network JSON RPC end point.",
+	)
+	cmd.PersistentFlags().StringVar(
+		&LocalRPCUrl,
+		localRPCFlag,
+		"",
+		"Local JSON RPC end point.",
+	)
+	cmd.PersistentFlags().StringVar(
+		&WatchdogURL,
+		watchdogURLFlag,
+		"",
+		"WatchDog service url",
 	)
 	cmd.PersistentFlags().DurationVar(
 		&DiscoveryInterval,
@@ -145,6 +176,42 @@ func parseFlags(cmd *cobra.Command) {
 	}
 }
 
+func updateGuardianInfo(vaultCfg *crypto.VaultConfig) {
+	if _, err := url.Parse(NetworkRPCUrl); err != nil {
+		cmdCommon.Err(errors.Wrap(err, "please provide a valid network rpc url"))
+	}
+
+	if _, err := url.Parse(WatchdogURL); err != nil {
+		cmdCommon.Err(errors.Wrap(err, "please provide a valid watchdog url"))
+	}
+
+	client, err := moiclient.NewClient(NetworkRPCUrl)
+	if err != nil {
+		cmdCommon.Err(errors.Wrap(err, "failed to create moi-client"))
+	}
+
+	vault, err := crypto.NewVault(vaultCfg, moinode.MoiFullNode, 1)
+	if err != nil {
+		cmdCommon.Err(errors.Wrap(common.ErrVaultInit, err.Error()))
+	}
+
+	isRegistered, err := cmdCommon.IsGuardianRegistered(client, vault.KramaID())
+	if err != nil {
+		cmdCommon.Err(err)
+	}
+
+	// Check if the guardian is registered
+	if !isRegistered {
+		cmdCommon.Err(errors.New("guardian is not registered. please register and try again."))
+	}
+
+	fmt.Printf("Krama-ID %s \n", vault.KramaID())
+
+	if err = cmdCommon.RegisterWithWatchDog(LocalRPCUrl, WatchdogURL, vault); err != nil {
+		cmdCommon.Err(err)
+	}
+}
+
 func SetupNode(cmd *cobra.Command) {
 	closeCh := make(chan os.Signal, 1)
 
@@ -156,6 +223,10 @@ func SetupNode(cmd *cobra.Command) {
 	n, err := node.NewNode(LogLevel, cfg)
 	if err != nil {
 		cmdCommon.Err(err)
+	}
+
+	if cfg.NetworkID.IsTestnet() {
+		updateGuardianInfo(cfg.Vault)
 	}
 
 	err = n.Start()
@@ -172,7 +243,7 @@ func SetupNode(cmd *cobra.Command) {
 		ctx, EnableTracing,
 		cfg.Metrics.OtlpAddress,
 		cfg.Metrics.Token,
-		cfg.NetworkID,
+		cfg.NetworkID.String(),
 		n.GetKramaID(),
 	)
 	if err != nil {
@@ -189,7 +260,7 @@ func SetupNode(cmd *cobra.Command) {
 
 	otel.SetTracerProvider(tp)
 
-	signal.Notify(closeCh, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+	signal.Notify(closeCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 
 	<-closeCh
 }

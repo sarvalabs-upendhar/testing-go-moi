@@ -2,6 +2,7 @@ package config
 
 import (
 	"math/big"
+	"strconv"
 	"time"
 
 	"github.com/sarvalabs/go-moi/crypto"
@@ -30,9 +31,6 @@ const (
 	DefaultWatchDogURL        = "https://babylon-watchdog.moi.techbology/add"
 	DefaultICSRequestTimeout  = 800 * time.Millisecond
 	DefaultDiscoveryInterval  = 60 * time.Second
-	LocalID                   = 111
-	DevnetID                  = 112
-	BabylonID                 = 113
 )
 
 // Chain defaults
@@ -72,3 +70,19 @@ const (
 const (
 	DefaultTreeCacheSize = 1024 * 1024 * 200
 )
+
+type NetworkID int
+
+const (
+	Local NetworkID = iota + 111
+	Devnet
+	Babylon
+)
+
+func (n NetworkID) String() string {
+	return strconv.Itoa(int(n))
+}
+
+func (n NetworkID) IsTestnet() bool {
+	return n != Local && n != Devnet
+}

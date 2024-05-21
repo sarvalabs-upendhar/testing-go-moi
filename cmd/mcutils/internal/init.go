@@ -188,7 +188,7 @@ func CreateConfigFile(datadir string, index int, ipAddr string) []byte {
 			TesseractRangeLimit: config.DefaultTesseractRangeLimit,
 			BatchLengthLimit:    config.DefaultBatchLengthLimit,
 		},
-		NetworkID: strconv.Itoa(config.LocalID),
+		NetworkID: config.Local,
 		State: cmdCommon.StateConfig{
 			TreeCacheSize: config.DefaultTreeCacheSize,
 		},

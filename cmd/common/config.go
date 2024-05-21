@@ -10,22 +10,22 @@ import (
 )
 
 type Config struct {
-	Genesis        string          `json:"genesis"`
-	NodeType       int             `json:"node_type"`
-	KramaIDVersion int             `json:"ḭd_version"`
-	Vault          VaultConfig     `json:"vault"`
-	Network        NetworkConfig   `json:"network"`
-	Syncer         SyncerConfig    `json:"syncer"`
-	IxPool         IxPoolConfig    `json:"ixpool"`
-	Consensus      ConsensusConfig `json:"consensus"`
-	Execution      ExecutionConfig `json:"execution"`
-	DB             DBConfig        `json:"database"`
-	Telemetry      Telemetry       `json:"telemetry"`
-	LogFilePath    string          `json:"logfile"`
-	JSONRPC        JSONRPCConfig   `json:"jsonrpc"`
-	NetworkID      string          `json:"network_id"`
-	State          StateConfig     `json:"state"`
-	GenesisTime    uint64          `json:"genesis_time"`
+	Genesis        string           `json:"genesis"`
+	NodeType       int              `json:"node_type"`
+	KramaIDVersion int              `json:"ḭd_version"`
+	Vault          VaultConfig      `json:"vault"`
+	Network        NetworkConfig    `json:"network"`
+	Syncer         SyncerConfig     `json:"syncer"`
+	IxPool         IxPoolConfig     `json:"ixpool"`
+	Consensus      ConsensusConfig  `json:"consensus"`
+	Execution      ExecutionConfig  `json:"execution"`
+	DB             DBConfig         `json:"database"`
+	Telemetry      Telemetry        `json:"telemetry"`
+	LogFilePath    string           `json:"logfile"`
+	JSONRPC        JSONRPCConfig    `json:"jsonrpc"`
+	NetworkID      config.NetworkID `json:"network_id"`
+	State          StateConfig      `json:"state"`
+	GenesisTime    uint64           `json:"genesis_time"`
 }
 
 func DefaultBabylonConfig(path string) *Config {
@@ -347,7 +347,7 @@ func DefaultBabylonConfig(path string) *Config {
 			TesseractRangeLimit: config.DefaultTesseractRangeLimit,
 			BatchLengthLimit:    config.DefaultBatchLengthLimit,
 		},
-		NetworkID: strconv.Itoa(config.BabylonID),
+		NetworkID: config.Babylon,
 		State: StateConfig{
 			TreeCacheSize: config.DefaultTreeCacheSize,
 		},
@@ -426,7 +426,7 @@ func DefaultDevnetConfig(path string) *Config {
 			TesseractRangeLimit: config.DefaultTesseractRangeLimit,
 			BatchLengthLimit:    config.DefaultBatchLengthLimit,
 		},
-		NetworkID: strconv.Itoa(config.DevnetID),
+		NetworkID: config.Devnet,
 		State: StateConfig{
 			TreeCacheSize: config.DefaultTreeCacheSize,
 		},
