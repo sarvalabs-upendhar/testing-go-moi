@@ -25,17 +25,22 @@ func EnvironmentPrefix(env string) []byte {
 	return []byte(env)
 }
 
-// AddressPrefix returns a key prefix for all items under an address
-func AddressPrefix(env string, addr identifiers.Address) []byte {
+func AccountKey(env string, addr identifiers.Address) []byte {
 	// {env}-{addr}
 	return bytes.Join([][]byte{[]byte(env), addr.Bytes()}, TagDelim)
 }
 
-// LogicEntityKey returns a key to the entity item of a Logic
-// It is the same as the prefix key for all items in the logic's address
-func LogicEntityKey(env string, logic identifiers.LogicID) []byte {
+// AccountPrefix returns a key prefix for all items under an address
+func AccountPrefix(env string, addr identifiers.Address) []byte {
 	// {env}-{addr}
-	return AddressPrefix(env, logic.Address())
+	return bytes.Join([][]byte{[]byte(env), addr.Bytes()}, TagDelim)
+}
+
+// LogicAccountKey returns a key to the entity item of a Logic
+// It is the same as the prefix key for all items in the logic's address
+func LogicAccountKey(env string, logic identifiers.LogicID) []byte {
+	// {env}-{addr}
+	return AccountPrefix(env, logic.Address())
 }
 
 // LogicManifestKey returns a key for the manifest of a logic

@@ -61,17 +61,20 @@ func (api *API) Start() error {
 	api.router.DELETE("/logics", api.purgeLogics)
 	api.router.GET("/logics/:name", api.getLogic)
 	api.router.DELETE("/logics/:name", api.wipeLogic)
-	api.router.GET("/logics/:name/manifest", api.getLogicManifest)
+	api.router.GET("/logics/:name/manifest/:encoding", api.getLogicManifest)
 
 	// Logic & Engine Utilities APIs
 	api.router.GET("/errdecode/:engine", api.decodeErrorData)
 	api.router.POST("/storagekey/:engine", api.generateStorageKey)
-	api.router.POST("/convert/codeform", api.convertManifestCodeform)
-	api.router.POST("/convert/fileform", api.convertManifestFileform)
+	api.router.POST("/convert/codeform/:format", api.convertManifestCodeform)
+	api.router.POST("/convert/fileform/:encoding", api.convertManifestFileform)
 
 	// Logic APIs
 	api.router.GET("/logics/:name/state/:storekey", api.getLogicStorage)
 	api.router.POST("/logics/:name/call/:endpoint", api.callLogicEndpoint)
+
+	// Account APIs
+	api.router.GET("accounts/:addr", api.getAccount)
 
 	return api.router.Run()
 }

@@ -98,13 +98,28 @@ func (env *Environment) RegisterUser(name string, addr identifiers.Address) erro
 	}
 
 	if addr == identifiers.NilAddress {
-		addr = identifiers.NewRandomAddress()
+		addr = env.generateUniqueRandomAddress()
 	} else if env.AddrExists(addr) {
 		return ErrAddrAlreadyExists
 	}
 
 	env.Users[name] = addr
 	env.Addrs[addr] = struct{}{}
+
+	account := &Account{
+		Kind: UserAccount,
+		Name: name,
+		Data: nil,
+	}
+
+	rawAccount, err := account.Encode()
+	if err != nil {
+		return err
+	}
+
+	if err = env.database.Set(db.AccountKey(env.ID, addr), rawAccount); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -129,7 +144,7 @@ func (env *Environment) RemoveUser(username string) error {
 	}
 
 	// Delete all entries prefixed with user's address
-	if err := env.database.PrefixDelete(db.AddressPrefix(env.ID, addr)); err != nil {
+	if err := env.database.PrefixDelete(db.AccountPrefix(env.ID, addr)); err != nil {
 		return err
 	}
 
@@ -185,4 +200,37 @@ func (env *Environment) SetDefaultReceiver(username string) error {
 	env.Receiver = username
 
 	return nil
+}
+
+// LookupAccount returns the account details associated with the given address
+func (env *Environment) LookupAccount(addr identifiers.Address) (AccountKind, string) {
+	// Check if the address exists in the environment
+	if !env.AddrExists(addr) {
+		return UnknownAccKind, ""
+	}
+
+	// Get the raw account details from the db
+	rawAccount, err := env.database.Get(db.AccountKey(env.ID, addr))
+	if err != nil {
+		return UnknownAccKind, err.Error()
+	}
+
+	account := new(Account)
+	// Convert into Account type
+	err = polo.Depolorize(account, rawAccount)
+	if err != nil {
+		return UnknownAccKind, err.Error()
+	}
+
+	return account.Kind, account.Name
+}
+
+func (env *Environment) generateUniqueRandomAddress() identifiers.Address {
+	addr := identifiers.NewRandomAddress()
+	if env.AddrExists(addr) {
+		// If the generated address already exists, recursively generate a new one
+		return env.generateUniqueRandomAddress()
+	}
+
+	return addr
 }

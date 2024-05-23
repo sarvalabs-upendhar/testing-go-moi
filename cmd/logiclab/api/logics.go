@@ -4,6 +4,7 @@ package api
 import (
 	"encoding/hex"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
@@ -220,18 +221,7 @@ func (api *API) purgeLogics(c *gin.Context) {
 	c.JSON(http.StatusOK, Success())
 }
 
-type LogicManifestRequest struct {
-	Target string `json:"target"`
-}
-
 func (api *API) getLogicManifest(c *gin.Context) {
-	// Decode the request
-	request := new(LogicManifestRequest)
-	if err := c.ShouldBindJSON(request); err != nil {
-		c.JSON(http.StatusBadRequest, Error(err))
-		return
-	}
-
 	// Get the environment ID
 	envID := c.GetHeader(HeaderLabEnv)
 	// Retrieve the environment
@@ -270,12 +260,15 @@ func (api *API) getLogicManifest(c *gin.Context) {
 		return
 	}
 
+	// Extract the value for encoding
+	encoding := c.Param("encoding")
+
 	// Convert the manifest into expected format
-	encoding := common.EncodingFromString(request.Target)
-	converted := core.PrintManifest(manifest, encoding)
+	target := common.EncodingFromString(strings.ToUpper(encoding))
+	converted := core.PrintManifest(manifest, target)
 
 	c.JSON(http.StatusOK, Success().WithData(Manifest{
-		Encoding: request.Target,
+		Encoding: strings.ToUpper(encoding),
 		Content:  converted,
 	}))
 }

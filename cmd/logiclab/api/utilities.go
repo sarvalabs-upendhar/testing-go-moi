@@ -3,6 +3,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
@@ -49,21 +50,16 @@ func (api *API) decodeErrorData(c *gin.Context) {
 	c.JSON(http.StatusOK, Success().WithData(ErrorDecodeResponse{Decoded: errorObject.String()}))
 }
 
-type ManifestConversionRequest struct {
-	Target   string   `json:"target"`
-	Manifest Manifest `json:"manifest"`
-}
-
 func (api *API) convertManifestCodeform(c *gin.Context) {
 	// Decode the request
-	request := new(ManifestConversionRequest)
+	request := new(Manifest)
 	if err := c.ShouldBindJSON(request); err != nil {
 		c.JSON(http.StatusBadRequest, Error(err))
 		return
 	}
 
-	rawManifest := common.Hex2Bytes(request.Manifest.Content)
-	encoding := common.EncodingFromString(request.Manifest.Encoding)
+	rawManifest := common.Hex2Bytes(request.Content)
+	encoding := common.EncodingFromString(strings.ToUpper(request.Encoding))
 
 	manifest, err := engineio.NewManifest(rawManifest, encoding)
 	if err != nil {
@@ -71,25 +67,25 @@ func (api *API) convertManifestCodeform(c *gin.Context) {
 		return
 	}
 
-	converted := core.ConvertManifestCodeform(manifest, encoding, request.Target)
+	format := c.Param("format")
+	converted := core.ConvertManifestCodeform(manifest, encoding, strings.ToUpper(format))
 
 	c.JSON(http.StatusOK, Success().WithData(Manifest{
-		Encoding: request.Manifest.Encoding,
+		Encoding: strings.ToUpper(request.Encoding),
 		Content:  converted,
 	}))
 }
 
 func (api *API) convertManifestFileform(c *gin.Context) {
 	// Decode the request
-	request := new(ManifestConversionRequest)
+	request := new(Manifest)
 	if err := c.ShouldBindJSON(request); err != nil {
 		c.JSON(http.StatusBadRequest, Error(err))
 		return
 	}
 
-	rawManifest := common.Hex2Bytes(request.Manifest.Content)
-	encoding := common.EncodingFromString(request.Manifest.Encoding)
-	target := common.EncodingFromString(request.Target)
+	rawManifest := common.Hex2Bytes(request.Content)
+	encoding := common.EncodingFromString(request.Encoding)
 
 	manifest, err := engineio.NewManifest(rawManifest, encoding)
 	if err != nil {
@@ -97,10 +93,13 @@ func (api *API) convertManifestFileform(c *gin.Context) {
 		return
 	}
 
+	format := c.Param("encoding")
+	target := common.EncodingFromString(strings.ToUpper(format))
+
 	converted := core.PrintManifest(manifest, target)
 
 	c.JSON(http.StatusOK, Success().WithData(Manifest{
-		Encoding: request.Target,
+		Encoding: strings.ToUpper(format),
 		Content:  converted,
 	}))
 }
