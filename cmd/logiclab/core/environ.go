@@ -23,7 +23,7 @@ type Environment struct {
 
 	Addrs  map[identifiers.Address]struct{}
 	Users  map[string]identifiers.Address
-	Logics map[string]identifiers.LogicID
+	Logics map[string]LogicMetadata
 
 	Sender   string
 	Receiver string
@@ -45,7 +45,7 @@ func NewEnvironment(name string, database db.Database) *Environment {
 		ID:       name,
 		Addrs:    map[identifiers.Address]struct{}{},
 		Users:    make(map[string]identifiers.Address),
-		Logics:   make(map[string]identifiers.LogicID),
+		Logics:   make(map[string]LogicMetadata),
 		CallFuel: LabDefaultFuel,
 
 		Config: ReplConfig{

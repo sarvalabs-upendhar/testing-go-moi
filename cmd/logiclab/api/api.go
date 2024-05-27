@@ -61,7 +61,8 @@ func (api *API) Start() error {
 	api.router.DELETE("/logics", api.purgeLogics)
 	api.router.GET("/logics/:name", api.getLogic)
 	api.router.DELETE("/logics/:name", api.wipeLogic)
-	api.router.GET("/logics/:name/manifest/:encoding", api.getLogicManifest)
+	api.router.GET("/logics/:name/manifest", api.getLogicManifest)
+	api.router.GET("/logics/:name/manifest/:encoding", api.getEncodedLogicManifest)
 
 	// Logic & Engine Utilities APIs
 	api.router.GET("/errdecode/:engine", api.decodeErrorData)

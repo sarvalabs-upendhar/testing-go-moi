@@ -22,7 +22,7 @@ type EnvironmentListResponse struct {
 type EnvironmentInventoryResponse struct {
 	Name     string                         `json:"name"`
 	Users    map[string]identifiers.Address `json:"users"`
-	Logics   map[string]identifiers.LogicID `json:"logics"`
+	Logics   map[string]core.LogicMetadata  `json:"logics"`
 	Defaults EnvironmentDefaults            `json:"defaults"`
 }
 

@@ -239,15 +239,44 @@ func (api *API) getLogicManifest(c *gin.Context) {
 
 	// Extract the value for name of logic
 	logicName := c.Param("name")
-	// Get the logic ID and check if the logic exists
-	logicID, ok := env.Logics[logicName]
+
+	// Get the logic metadata of the logic
+	logicMetaData, ok := env.Logics[logicName]
+	if !ok {
+		c.JSON(http.StatusNotFound, Error(core.ErrLogicNotFound))
+		return
+	}
+
+	c.JSON(http.StatusOK, Success().WithData(logicMetaData))
+}
+
+func (api *API) getEncodedLogicManifest(c *gin.Context) {
+	// Get the environment ID
+	envID := c.GetHeader(HeaderLabEnv)
+	// Retrieve the environment
+	env, exists, err := api.lab.GetEnvironment(envID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Error(err))
+		return
+	}
+
+	// Environment was not found
+	if !exists {
+		c.JSON(http.StatusNotFound, Error(core.ErrEnvironmentNotFound))
+		return
+	}
+
+	// Extract the value for name of logic
+	logicName := c.Param("name")
+	// Get the logic metadata and check if the logic exists
+	logicMetaData, ok := env.Logics[logicName]
 	if !ok {
 		c.JSON(http.StatusNotFound, Error(core.ErrLogicNotFound))
 		return
 	}
 
 	// Get the logic manifest for the given name
-	value, err := api.lab.Database.Get(db.LogicManifestKey(env.ID, logicID))
+	value, err := api.lab.Database.Get(db.LogicManifestKey(env.ID, logicMetaData.LogicID))
 	if errors.Is(err, db.ErrKeyNotFound) {
 		c.JSON(http.StatusNotFound, Error(errors.New("unable to find logic manifest")))
 		return
@@ -294,12 +323,15 @@ func (api *API) getLogicStorage(c *gin.Context) {
 
 	// Extract the value for name of logic
 	logicName := c.Param("name")
-	// Get the logic ID of the logic
-	logicID, exists := env.Logics[logicName]
+	// Get the logic metadata of the logic
+	logicMetaData, exists := env.Logics[logicName]
 	if !exists {
 		c.JSON(http.StatusNotFound, Error(core.ErrLogicNotFound))
 		return
 	}
+
+	// Get the logic ID
+	logicID := logicMetaData.LogicID
 
 	// Extract the storage key
 	storekey := c.Param("storekey")
