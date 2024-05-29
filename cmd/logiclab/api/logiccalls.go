@@ -23,11 +23,16 @@ type LogicCallRequest struct {
 	Calldata string `json:"calldata,omitempty"`
 }
 
+type Result struct {
+	Ok     bool   `json:"ok"`
+	Fuel   uint64 `json:"fuel"`
+	Output string `json:"output,omitempty"`
+	Error  []byte `json:"error"`
+}
+
 type LogicCallResponse struct {
-	Ok     bool
-	Fuel   uint64
-	Output string
-	Error  []byte
+	Callhash common.Hash `json:"callhash"`
+	Result   Result      `json:"result"`
 }
 
 func (api *API) callLogicEndpoint(c *gin.Context) {
@@ -143,10 +148,13 @@ func (api *API) callLogicEndpoint(c *gin.Context) {
 				panic("unhandled logic call case")
 			}
 		}(),
+		Nonce: env.Nonce,
 		Price: new(big.Int).SetUint64(core.LabFuelPrice),
 		Limit: env.CallFuel,
 		Site:  request.Callsite,
 	}
+
+	env.IncrementNonce()
 
 	// Set the calldata as nil if no calldata is provided
 	if request.Calldata == "" {
@@ -162,24 +170,37 @@ func (api *API) callLogicEndpoint(c *gin.Context) {
 		return
 	}
 
+	// Get the logic interaction hash
+	hash, err := ixn.Hash()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Error(err))
+		return
+	}
+
 	if kind == engineio.CallsiteDeployer && result.Ok() {
 		// Mark the logic as deployed
 		logic.Ready = true
 
 		c.JSON(http.StatusOK, Success().WithData(LogicCallResponse{
-			Ok:    result.Ok(),
-			Fuel:  result.Fuel(),
-			Error: result.Error(),
+			Callhash: hash,
+			Result: Result{
+				Ok:    result.Ok(),
+				Fuel:  result.Fuel(),
+				Error: result.Error(),
+			},
 		}))
 
 		return
 	} else if kind == engineio.CallsiteInvokable {
 		output := hex.EncodeToString(result.Outputs())
 		c.JSON(http.StatusOK, Success().WithData(LogicCallResponse{
-			Ok:     result.Ok(),
-			Fuel:   result.Fuel(),
-			Output: output,
-			Error:  result.Error(),
+			Callhash: hash,
+			Result: Result{
+				Ok:     result.Ok(),
+				Fuel:   result.Fuel(),
+				Output: output,
+				Error:  result.Error(),
+			},
 		}))
 
 		return

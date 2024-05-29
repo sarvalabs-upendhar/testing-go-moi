@@ -151,9 +151,15 @@ func (env *Environment) FetchLogic(name string) (*Logic, error) {
 		return nil, err
 	}
 
-	// Decode the value into a Logic
+	// Decode the value into an Account
+	account := new(Account)
+	if err = account.Decode(raw); err != nil {
+		return nil, err
+	}
+
+	// Decode the account data into Logic
 	logic := new(Logic)
-	if err = logic.Decode(raw); err != nil {
+	if err = logic.Decode(account.Data); err != nil {
 		return nil, err
 	}
 
@@ -191,10 +197,6 @@ func (env *Environment) RegisterLogic(logic *Logic, manifest engineio.Manifest) 
 		return err
 	}
 
-	if err = env.database.Set(db.LogicAccountKey(env.ID, logicID), encoded); err != nil {
-		return err
-	}
-
 	account := &Account{
 		Kind: LogicAccount,
 		Name: logic.Name,
@@ -206,7 +208,7 @@ func (env *Environment) RegisterLogic(logic *Logic, manifest engineio.Manifest) 
 		return err
 	}
 
-	if err = env.database.Set(db.AccountKey(env.ID, logicID.Address()), rawAccount); err != nil {
+	if err = env.database.Set(db.LogicAccountKey(env.ID, logicID), rawAccount); err != nil {
 		return err
 	}
 

@@ -180,6 +180,7 @@ func parseLogicCall(parser *symbolizer.Parser, kind engineio.CallsiteKind) Comma
 					panic("unhandled logic call case")
 				}
 			}(),
+			Nonce: repl.env.Nonce,
 			Price: new(big.Int).SetUint64(core.LabFuelPrice),
 			Limit: repl.env.CallFuel,
 			Site:  site,
@@ -196,13 +197,18 @@ func parseLogicCall(parser *symbolizer.Parser, kind engineio.CallsiteKind) Comma
 			logic.Ready = true
 		}
 
-		return repl.formatResult(result, encoder)
+		ixnHash, err := ixn.Hash()
+		if err != nil {
+			return fmt.Sprintf("failed to hash logic call: %v", err)
+		}
+
+		return repl.formatResult(ixnHash, result, encoder)
 	}
 }
 
 // formatResult FormatResults formats an engineio.CallResult object into a string.
 // It accepts a CallEncoder object to decode any outputs returned with the result
-func (repl *Repl) formatResult(result engineio.CallResult, encoder engineio.CallEncoder) string {
+func (repl *Repl) formatResult(hash common.Hash, result engineio.CallResult, encoder engineio.CallEncoder) string {
 	var str strings.Builder
 
 	if !result.Ok() {
@@ -213,6 +219,8 @@ func (repl *Repl) formatResult(result engineio.CallResult, encoder engineio.Call
 	}
 
 	str.WriteString(fmt.Sprintf("Execution Complete! [%v FUEL]\n", result.Fuel()))
+
+	str.WriteString(fmt.Sprintf("Call Hash: %v\n", hash.String()))
 
 	outputs, err := encoder.DecodeOutputs(result.Outputs())
 	if err != nil {

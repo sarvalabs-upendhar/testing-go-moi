@@ -160,24 +160,31 @@ func (lab *Lab) GetAllEnvironments() ([]string, error) {
 
 func (lab *Lab) DelEnvironment(env string) error {
 	// Check if the environment exists in envcache
-	delete(lab.envcache, env)
+	if _, ok := lab.envcache[env]; ok {
+		// Environment found in envcache, delete it
+		delete(lab.envcache, env)
 
-	// Check if the environment exists
+		return nil
+	}
+
+	// Check if the environment exists in the database
 	exists, err := lab.Database.Has(db.EnvironmentKey(env))
 	if err != nil {
 		return err
 	}
 
-	if exists {
-		// Delete the environment key from the database
-		if err = lab.Database.Del(db.EnvironmentKey(env)); err != nil {
-			return err
-		}
+	if !exists {
+		return ErrEnvironmentNotFound
+	}
 
-		// Delete all keys from the database with prefix of the environment name
-		if err = lab.Database.PrefixDelete(db.EnvironmentPrefix(env)); err != nil {
-			return err
-		}
+	// Delete the environment key from the database
+	if err = lab.Database.Del(db.EnvironmentKey(env)); err != nil {
+		return err
+	}
+
+	// Delete all keys from the database with prefix of the environment name
+	if err = lab.Database.PrefixDelete(db.EnvironmentPrefix(env)); err != nil {
+		return err
 	}
 
 	return nil

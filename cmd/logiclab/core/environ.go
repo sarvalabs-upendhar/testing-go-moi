@@ -19,7 +19,8 @@ type Environment struct {
 	database db.Database
 	lcache   map[string]*Logic
 
-	ID string
+	ID    string
+	Nonce uint64
 
 	Addrs  map[identifiers.Address]struct{}
 	Users  map[string]identifiers.Address
@@ -43,6 +44,7 @@ func NewEnvironment(name string, database db.Database) *Environment {
 		lcache:   make(map[string]*Logic),
 
 		ID:       name,
+		Nonce:    0,
 		Addrs:    map[identifiers.Address]struct{}{},
 		Users:    make(map[string]identifiers.Address),
 		Logics:   make(map[string]LogicMetadata),
@@ -223,6 +225,11 @@ func (env *Environment) LookupAccount(addr identifiers.Address) (AccountKind, st
 	}
 
 	return account.Kind, account.Name
+}
+
+// IncrementNonce increases the nonce by 1.
+func (env *Environment) IncrementNonce() {
+	env.Nonce += 1
 }
 
 func (env *Environment) generateUniqueRandomAddress() identifiers.Address {
