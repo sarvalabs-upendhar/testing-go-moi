@@ -1114,6 +1114,63 @@ func TestIxPool_Drop(t *testing.T) {
 	}
 }
 
+func TestIxPool_Drop_FinalizedIx(t *testing.T) {
+	addr1 := tests.RandomAddress(t)
+	sm := NewMockStateManager(t)
+	sm.setTestMOIBalance(t, addr1)
+
+	ixs := createTestIxs(t, common.IxValueTransfer, 0, 5, addr1)
+	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
+		c.Mode = WaitMode
+		c.PriceLimit = defaultIxPriceLimit
+		c.MaxSlots = config.DefaultMaxIXPoolSlots
+	}, true, sm, nil)
+
+	testcases := []struct {
+		name          string
+		finalizedIx   *common.Interaction
+		pendingIxs    common.Interactions
+		preTestFn     func()
+		expectedError error
+	}{
+		{
+			name:        "latest state object nonce greater than the dropped ix nonce",
+			finalizedIx: ixs[0],
+			pendingIxs:  ixs[1:],
+			preTestFn: func() {
+				sm.setLatestNonce(t, addr1, 1)
+			},
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			ixDroppedEventSub := ixPool.mux.Subscribe(utils.DroppedInteractionEvent{})
+
+			ixDroppedResp := make(chan tests.Result, 1)
+
+			ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
+			defer cancel()
+
+			go utils.HandleMuxEvents(ctx, ixDroppedEventSub, ixDroppedResp, len(testcase.pendingIxs))
+
+			senderAddress := testcase.pendingIxs[0].Sender()
+			addAndPromoteIxs(t, ixPool, testcase.pendingIxs, senderAddress)
+
+			acc := ixPool.accounts.get(senderAddress)
+			require.Equal(t, uint64(len(testcase.pendingIxs)), ixPool.gauge.read())
+			require.Equal(t, uint64(len(testcase.pendingIxs)), uint64(len(acc.nonceToIX.mapping)))
+
+			testcase.preTestFn()
+
+			ixPool.Drop(testcase.finalizedIx)
+
+			require.Equal(t, uint64(len(testcase.pendingIxs)), ixPool.gauge.read())
+			require.Equal(t, uint64(len(testcase.pendingIxs)), uint64(len(acc.nonceToIX.mapping)))
+		})
+	}
+}
+
 func TestIxPool_IncrementWaitTime_InvalidAccount(t *testing.T) {
 	sm := NewMockStateManager(t)
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {

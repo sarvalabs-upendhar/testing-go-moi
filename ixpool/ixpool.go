@@ -2,7 +2,6 @@ package ixpool
 
 import (
 	"context"
-	errors2 "errors"
 	"fmt"
 	"math/big"
 	"time"
@@ -30,9 +29,9 @@ const (
 const MaxWaitCounter = 10
 
 var (
-	ErrNonceTooLow   = errors2.New("nonce too low")
-	ErrAlreadyKnown  = errors2.New("already known")
-	ErrOversizedData = errors2.New("over sized data")
+	ErrNonceTooLow   = errors.New("nonce too low")
+	ErrAlreadyKnown  = errors.New("already known")
+	ErrOversizedData = errors.New("over sized data")
 )
 
 type promoteRequest struct {
@@ -465,6 +464,17 @@ func (i *IxPool) Drop(ix *common.Interaction) {
 	account := i.accounts.get(ix.Sender())
 
 	if account != nil {
+		nonce := ix.Nonce()
+		// fetch the latest nonce from the state
+		if latestNonce, _ := i.sm.GetNonce(ix.Sender(), common.NilHash); latestNonce > nonce {
+			i.logger.Debug(
+				"Skipping ix drop", "ix-hash", ix.Hash(),
+				"ix-nonce", ix.Nonce(), "latest-nonce", latestNonce,
+			)
+
+			return
+		}
+
 		// lock promoted,enqueued and nonceToIX
 		account.promoted.lock(true)
 		account.enqueued.lock(true)
@@ -486,7 +496,6 @@ func (i *IxPool) Drop(ix *common.Interaction) {
 			noOfDroppedIxs += len(ixs)
 		}
 
-		nonce := ix.Nonce()
 		account.setNonce(nonce)
 
 		// reset nonce to ix
