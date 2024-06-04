@@ -27,9 +27,10 @@ type Object struct {
 	cache     *lru.Cache
 	treeCache *fastcache.Cache
 
-	address identifiers.Address
-	accType common.AccountType
-	data    common.Account
+	address   identifiers.Address
+	accType   common.AccountType
+	data      common.Account
+	isGenesis bool // used by transition objects in execution
 
 	db Store
 
@@ -59,6 +60,7 @@ func NewStateObject(
 	db Store,
 	account common.Account,
 	metrics *Metrics,
+	isGenesis bool,
 ) *Object {
 	return &Object{
 		accType:   account.AccType,
@@ -79,11 +81,16 @@ func NewStateObject(
 		storageTreeTxns: make(map[identifiers.LogicID]*iradix.Txn),
 		storageTrees:    make(map[identifiers.LogicID]tree.MerkleTree),
 		metrics:         metrics,
+		isGenesis:       isGenesis,
 	}
 }
 
 func (object *Object) Address() identifiers.Address {
 	return object.address
+}
+
+func (object *Object) IsGenesis() bool {
+	return object.isGenesis
 }
 
 func (object *Object) Data() *common.Account {
@@ -239,7 +246,8 @@ func (object *Object) Balance() (*BalanceObject, error) {
 }
 
 func (object *Object) Copy() *Object {
-	sObj := NewStateObject(object.address, object.cache, object.treeCache, object.db, object.data, object.metrics)
+	sObj := NewStateObject(object.address, object.cache, object.treeCache, object.db,
+		object.data, object.metrics, object.isGenesis)
 
 	sObj.dirtyEntries = object.dirtyEntries.Copy()
 
@@ -284,6 +292,8 @@ func (object *Object) Copy() *Object {
 
 		sObj.files[key] = v
 	}
+
+	sObj.isGenesis = object.isGenesis
 
 	return sObj
 }

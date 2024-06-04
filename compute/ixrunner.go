@@ -5,7 +5,7 @@ import (
 	"github.com/sarvalabs/go-moi/state"
 )
 
-type IxRunner func(*common.Interaction, *common.ExecutionContext, *FuelTank, state.ObjectMap) *common.Receipt
+type IxRunner func(*common.Interaction, *common.ExecutionContext, *FuelTank, *state.Transition) *common.Receipt
 
 func lookupIxRunner(kind common.IxType) IxRunner {
 	return ixRunnerLookup[kind]

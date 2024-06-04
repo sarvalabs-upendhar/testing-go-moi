@@ -50,7 +50,7 @@ func CheckForRPCIxn(
 	t *testing.T,
 	ix *common.Interaction,
 	tsHash common.Hash,
-	participants common.ParticipantStates,
+	participants common.ParticipantsState,
 	rpcIxn *RPCInteraction,
 ) {
 	t.Helper()
@@ -165,7 +165,7 @@ func CheckForRPCIxn(
 	}
 }
 
-func CheckForRPCParticipants(t *testing.T, participants common.ParticipantStates, rpcParticipants RPCParticipants) {
+func CheckForRPCParticipants(t *testing.T, participants common.ParticipantsState, rpcParticipants RPCParticipants) {
 	t.Helper()
 
 	if len(participants) == 0 {
@@ -209,7 +209,7 @@ func CheckForRPCPoxtData(t *testing.T, poxt common.PoXtData, rpcPoxt RPCPoXtData
 func CheckForRPCReceipt(
 	t *testing.T,
 	tsHash common.Hash,
-	participants common.ParticipantStates,
+	participants common.ParticipantsState,
 	ix *common.Interaction,
 	receipt *common.Receipt,
 	rpcReceipt *RPCReceipt,

@@ -110,7 +110,6 @@ func TestReputationEngine_AddNewPeerwithPeerID(t *testing.T) {
 		Addrs:         utils.MultiAddrToString(tests.GetListenAddresses(t, 1)...),
 		NTQ:           2,
 		WalletCount:   1,
-		PublicKey:     tests.GetTestPublicKey(t),
 		PeerSignature: []byte{0x05, 0x80},
 	}
 
@@ -127,7 +126,6 @@ func TestReputationEngine_AddNewPeerwithPeerID(t *testing.T) {
 			nodeMetaInfo: &NodeMetaInfo{
 				Addrs:         utils.MultiAddrToString(tests.GetListenAddresses(t, 1)...),
 				KramaID:       tests.RandomKramaID(t, 2),
-				PublicKey:     tests.GetTestPublicKey(t),
 				PeerSignature: []byte{0x05, 0x80},
 				NTQ:           1,
 				WalletCount:   2,
@@ -146,7 +144,6 @@ func TestReputationEngine_AddNewPeerwithPeerID(t *testing.T) {
 			nodeMetaInfo: &NodeMetaInfo{
 				Addrs:         utils.MultiAddrToString(tests.GetListenAddresses(t, 1)...),
 				KramaID:       tests.RandomKramaID(t, 2),
-				PublicKey:     tests.GetTestPublicKey(t),
 				PeerSignature: []byte{0x05, 0x80},
 				NTQ:           3,
 				WalletCount:   4,
@@ -159,7 +156,6 @@ func TestReputationEngine_AddNewPeerwithPeerID(t *testing.T) {
 			nodeMetaInfo: &NodeMetaInfo{
 				Addrs:         utils.MultiAddrToString(tests.GetListenAddresses(t, 1)...),
 				KramaID:       tests.RandomKramaID(t, 2),
-				PublicKey:     tests.GetTestPublicKey(t),
 				PeerSignature: []byte{0x05, 0x80},
 				NTQ:           3,
 				WalletCount:   1,
@@ -389,81 +385,6 @@ func TestReputationEngine_UpdateWalletCount(t *testing.T) {
 			}
 
 			err := reputationEngine.UpdateWalletCount(test.kramaID, test.walletCount)
-
-			if test.expectedErr != nil {
-				require.Error(t, err)
-				require.Equal(t, test.expectedErr, err)
-
-				return
-			}
-
-			peerID := tests.DecodePeerIDFromKramaID(t, test.kramaID)
-			nodeInfo, ok := reputationEngine.dirtyEntries[peerID]
-
-			require.True(t, ok)
-			require.Equal(t, test.expectedNodeInfo, nodeInfo)
-		})
-	}
-}
-
-func TestReputationEngine_UpdatePublicKey(t *testing.T) {
-	kramaID := tests.RandomKramaID(t, 1)
-	publicKeys := tests.GetTestPublicKeys(t, 3)
-	reputationEngine, mockDB := createTestReputationEngine(t)
-
-	testcases := []struct {
-		name             string
-		kramaID          kramaid.KramaID
-		publicKey        []byte
-		testFn           func(kramaID kramaid.KramaID)
-		expectedErr      error
-		expectedNodeInfo *NodeMetaInfo
-	}{
-		{
-			name:        "invalid krama id",
-			kramaID:     "",
-			publicKey:   publicKeys[0],
-			expectedErr: common.ErrInvalidKramaID,
-		},
-		{
-			name:      "krama id without state",
-			kramaID:   kramaID,
-			publicKey: publicKeys[1],
-			expectedNodeInfo: &NodeMetaInfo{
-				KramaID:   kramaID,
-				NTQ:       DefaultPeerNTQ,
-				PublicKey: publicKeys[1],
-			},
-		},
-		{
-			name:      "krama id with state",
-			kramaID:   tests.RandomKramaID(t, 1),
-			publicKey: publicKeys[2],
-			testFn: func(kramaID kramaid.KramaID) {
-				mockDB.setNodeInfo(
-					t,
-					tests.DecodePeerIDFromKramaID(t, kramaID),
-					&NodeMetaInfo{
-						NTQ:         1,
-						WalletCount: -1,
-					},
-				)
-			},
-			expectedNodeInfo: &NodeMetaInfo{
-				NTQ:         1,
-				WalletCount: -1,
-				PublicKey:   publicKeys[2],
-			},
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			if test.testFn != nil {
-				test.testFn(test.kramaID)
-			}
-
-			err := reputationEngine.UpdatePublicKey(test.kramaID, test.publicKey)
 
 			if test.expectedErr != nil {
 				require.Error(t, err)
@@ -1151,6 +1072,7 @@ func TestReputationEngine_LoadPeerCountWhileSetup(t *testing.T) {
 				mockDB,
 				nodeMetaInfo,
 				&utils.TypeMux{},
+				nil,
 			)
 
 			if test.expectedError != nil {
@@ -1243,83 +1165,6 @@ func TestReputationEngine_IsGuardianRegistered(t *testing.T) {
 
 			check := reputationEngine.isGuardianRegisterd(testKramaID)
 			require.Equal(t, testcase.expectedResult, check)
-		})
-	}
-}
-
-func TestReputationEngine_GetPublicKey(t *testing.T) {
-	reputationEngine, _ := createTestReputationEngine(t)
-
-	validKramaID := tests.RandomKramaID(t, 0)
-	validPeerID, err := validKramaID.DecodedPeerID()
-	require.NoError(t, err)
-
-	testcases := []struct {
-		name        string
-		kramaID     kramaid.KramaID
-		entries     map[peer.ID]*NodeMetaInfo
-		testFn      func(entries map[peer.ID]*NodeMetaInfo)
-		expectedErr error
-	}{
-		{
-			name:        "Invalid Krama ID",
-			kramaID:     "",
-			expectedErr: common.ErrInvalidKramaID,
-		},
-		{
-			name:        "Node meta info not found in DB",
-			kramaID:     tests.RandomKramaID(t, 0),
-			expectedErr: common.ErrKramaIDNotFound,
-		},
-		{
-			name:    "Nil public key in node meta info",
-			kramaID: validKramaID,
-			entries: map[peer.ID]*NodeMetaInfo{
-				validPeerID: {
-					KramaID:   validKramaID,
-					PublicKey: nil,
-				},
-			},
-			testFn: func(entries map[peer.ID]*NodeMetaInfo) {
-				for key, entry := range entries {
-					reputationEngine.dirtyEntries[key] = entry
-				}
-			},
-			expectedErr: common.ErrPublicKeyNotFound,
-		},
-		{
-			name:    "Valid node meta info with public key",
-			kramaID: validKramaID,
-			entries: map[peer.ID]*NodeMetaInfo{
-				validPeerID: {
-					KramaID:   validKramaID,
-					PublicKey: []byte{1},
-				},
-			},
-			testFn: func(entries map[peer.ID]*NodeMetaInfo) {
-				for key, entry := range entries {
-					reputationEngine.dirtyEntries[key] = entry
-				}
-			},
-		},
-	}
-
-	for _, testcase := range testcases {
-		t.Run(testcase.name, func(t *testing.T) {
-			if testcase.testFn != nil {
-				testcase.testFn(testcase.entries)
-			}
-
-			pubKey, err := reputationEngine.GetPublicKey(testcase.kramaID)
-
-			if testcase.expectedErr != nil {
-				require.Error(t, testcase.expectedErr, err)
-
-				return
-			}
-
-			nodeMetaInfo := testcase.entries[validPeerID]
-			require.Equal(t, nodeMetaInfo.PublicKey, pubKey)
 		})
 	}
 }

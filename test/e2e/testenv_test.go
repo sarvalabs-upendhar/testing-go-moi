@@ -14,7 +14,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/battleground/network/infrastructure"
 	"github.com/sarvalabs/battleground/types"
-	"github.com/sarvalabs/go-moi-identifiers"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
@@ -139,7 +139,7 @@ func (te *TestEnvironment) configureBattleGround() error {
 		te.validatorCount = bgConfig.NoOfInstances * bgConfig.NoOfPodsPerInstance
 	} else {
 		d := bgclient.DefaultClusterConfig()
-		d.WithLogs = false
+		d.WithLogs = true
 		d.WithStdout = false
 		d.LogLevel = "TRACE"
 		d.BootNodePort = 27000

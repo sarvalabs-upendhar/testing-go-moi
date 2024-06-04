@@ -74,6 +74,8 @@ func TestUpdateAccMetaInfo_CheckErrors(t *testing.T) {
 				test.args.Address,
 				test.args.Height,
 				test.args.TesseractHash,
+				test.args.StateHash,
+				test.args.ContextHash,
 				test.args.Type,
 			)
 			require.Error(t, err)
@@ -91,6 +93,8 @@ func TestUpdateAccMetaInfo_AddNewAccount(t *testing.T) {
 		args.Address,
 		args.Height,
 		args.TesseractHash,
+		args.StateHash,
+		args.ContextHash,
 		args.Type,
 	)
 
@@ -130,12 +134,16 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 				Type:          common.AccountType(1),
 				Height:        height,
 				TesseractHash: tests.RandomHash(t),
+				StateHash:     tests.RandomHash(t),
+				ContextHash:   tests.RandomHash(t),
 			},
 			args: &common.AccountMetaInfo{
 				Address:       addresses[0],
 				Type:          common.AccountType(1),
 				Height:        height + 1,
 				TesseractHash: tests.RandomHash(t),
+				StateHash:     tests.RandomHash(t),
+				ContextHash:   tests.RandomHash(t),
 			},
 			expectedError: nil,
 		},
@@ -146,12 +154,16 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 				Type:          common.AccountType(3),
 				Height:        height,
 				TesseractHash: hash,
+				StateHash:     tests.RandomHash(t),
+				ContextHash:   tests.RandomHash(t),
 			},
 			args: &common.AccountMetaInfo{
 				Address:       addresses[1],
 				Type:          common.AccountType(3),
 				Height:        height,
 				TesseractHash: hash,
+				StateHash:     tests.RandomHash(t),
+				ContextHash:   tests.RandomHash(t),
 			},
 			expectedError: nil,
 		},
@@ -162,12 +174,16 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 				Type:          common.AccountType(1),
 				Height:        height,
 				TesseractHash: tests.RandomHash(t),
+				StateHash:     tests.RandomHash(t),
+				ContextHash:   tests.RandomHash(t),
 			},
 			args: &common.AccountMetaInfo{
 				Address:       addresses[2],
 				Type:          common.AccountType(3),
 				Height:        height - 1,
 				TesseractHash: tests.RandomHash(t),
+				StateHash:     tests.RandomHash(t),
+				ContextHash:   tests.RandomHash(t),
 			},
 			expectedError: nil,
 		},
@@ -185,6 +201,8 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 				test.args.Address,
 				test.args.Height,
 				test.args.TesseractHash,
+				test.args.StateHash,
+				test.args.ContextHash,
 				test.args.Type,
 			)
 			require.NoError(t, err)
@@ -198,11 +216,15 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 			// changes should take place if new height is greater than equal to current height
 			if test.args.Height >= beforeAccMetaInfo.Height {
 				require.Equal(t, test.args.TesseractHash, afterAccMetaInfo.TesseractHash)
+				require.Equal(t, test.args.StateHash, afterAccMetaInfo.StateHash)
+				require.Equal(t, test.args.ContextHash, afterAccMetaInfo.ContextHash)
 				require.Equal(t, test.args.Address, afterAccMetaInfo.Address)
 				require.Equal(t, test.args.Height, afterAccMetaInfo.Height)
 				require.Equal(t, beforeAccMetaInfo.Type, afterAccMetaInfo.Type)
 			} else { // changes shouldn't take place if new height less than current height
 				require.Equal(t, beforeAccMetaInfo.TesseractHash, afterAccMetaInfo.TesseractHash)
+				require.Equal(t, beforeAccMetaInfo.StateHash, afterAccMetaInfo.StateHash)
+				require.Equal(t, beforeAccMetaInfo.ContextHash, afterAccMetaInfo.ContextHash)
 				require.Equal(t, beforeAccMetaInfo.Address, afterAccMetaInfo.Address)
 				require.Equal(t, beforeAccMetaInfo.Height, afterAccMetaInfo.Height)
 				require.Equal(t, beforeAccMetaInfo.Type, afterAccMetaInfo.Type)
@@ -236,6 +258,8 @@ func TestUpdateAccMetaInfo_CheckBucketID(t *testing.T) {
 		args.Address,
 		args.Height,
 		args.TesseractHash,
+		args.StateHash,
+		args.ContextHash,
 		args.Type,
 	)
 	require.NoError(t, err)
@@ -556,6 +580,76 @@ func TestGetAccounts(t *testing.T) {
 	}
 }
 
+func TestPersistenceManager_FetchTesseractFromDB(t *testing.T) {
+	tesseractParams := tests.GetTesseractParamsMapWithIxnsAndReceipts(t, 2, 2)
+
+	// Set the clusterID to genesis identifier to avoid fetching interactions
+	tesseractParams[0].TSDataCallback = func(ts *tests.TesseractData) {
+		ts.ConsensusInfo.ClusterID = common.GenesisIdentifier
+	}
+
+	tesseracts := tests.CreateTesseracts(t, 3, tesseractParams)
+
+	pm := NewTestPersistenceManager(t)
+
+	insertTesseracts(t, pm, tesseracts...)
+	insertIxns(t, pm, tesseracts[:2]...)
+	insertReceiptsInDB(t, pm, tesseracts[:2]...)
+
+	testcases := []struct {
+		name             string
+		hash             common.Hash
+		withInteractions bool
+		expectedTS       *common.Tesseract
+		expectedError    error
+	}{
+		{
+			name:       "genesis tesseract",
+			hash:       tesseracts[0].Hash(),
+			expectedTS: tesseracts[0],
+		},
+		{
+			name:             "non-genesis tesseract with interactions",
+			hash:             tesseracts[1].Hash(),
+			withInteractions: true,
+			expectedTS:       tesseracts[1],
+		},
+		{
+			name:             "without interactions",
+			hash:             tesseracts[1].Hash(),
+			withInteractions: false,
+			expectedTS:       tesseracts[1],
+		},
+		{
+			name:             "should fail if tesseract not found",
+			hash:             tests.RandomHash(t),
+			withInteractions: false,
+			expectedError:    common.ErrKeyNotFound,
+		},
+		{
+			name:             "should fail if interactions not found",
+			hash:             tesseracts[2].Hash(),
+			withInteractions: true,
+			expectedError:    common.ErrFetchingInteractions,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			ts, err := pm.FetchTesseractFromDB(test.hash, test.withInteractions)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			validateTesseract(t, ts, test.expectedTS, test.withInteractions)
+		})
+	}
+}
+
 func TestUpdatePeerCount(t *testing.T) {
 	testcases := []struct {
 		name          string
@@ -686,18 +780,18 @@ func TestSetReceipts(t *testing.T) {
 	pm := NewTestPersistenceManager(t)
 
 	// create random receipts
-	receiptHash := tests.RandomHash(t)
-	receipts := getRandomReceipts(t, receiptHash, 2)
+	tsHash := tests.RandomHash(t)
+	receipts := getRandomReceipts(t, tsHash, 2)
 
 	testcases := []struct {
-		name        string
-		receipts    common.Receipts
-		receiptHash common.Hash
+		name     string
+		receipts common.Receipts
+		tsHash   common.Hash
 	}{
 		{
-			name:        "Create an entry in db for the given receipts",
-			receipts:    receipts,
-			receiptHash: receiptHash,
+			name:     "Create an entry in db for the given receipts",
+			receipts: receipts,
+			tsHash:   tsHash,
 		},
 	}
 
@@ -706,10 +800,10 @@ func TestSetReceipts(t *testing.T) {
 			receipts, err := testcase.receipts.Bytes()
 			require.NoError(t, err)
 
-			err = pm.SetReceipts(testcase.receiptHash, receipts)
+			err = pm.SetReceipts(testcase.tsHash, receipts)
 			require.NoError(t, err)
 
-			rawData, err := pm.GetReceipts(testcase.receiptHash)
+			rawData, err := pm.GetReceipts(testcase.tsHash)
 			require.NoError(t, err)
 
 			require.Equal(t, receipts, rawData)
@@ -721,32 +815,32 @@ func TestGetReceipts(t *testing.T) {
 	pm := NewTestPersistenceManager(t)
 
 	// create random receipts
-	receiptHash := tests.RandomHash(t)
-	receipts := getRandomReceipts(t, receiptHash, 2)
+	tsHash := tests.RandomHash(t)
+	receipts := getRandomReceipts(t, tsHash, 2)
 
-	insertReceipts(t, pm, receiptHash, receipts)
+	insertReceipts(t, pm, tsHash, receipts)
 
 	testcases := []struct {
 		name          string
 		receipts      common.Receipts
-		receiptHash   common.Hash
+		tsHash        common.Hash
 		expectedError error
 	}{
 		{
 			name:          "failed to fetch receipts",
-			receiptHash:   tests.RandomHash(t),
+			tsHash:        tests.RandomHash(t),
 			expectedError: common.ErrKeyNotFound,
 		},
 		{
-			name:        "fetched receipts successfully",
-			receipts:    receipts,
-			receiptHash: receiptHash,
+			name:     "fetched receipts successfully",
+			receipts: receipts,
+			tsHash:   tsHash,
 		},
 	}
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			receipts, err := pm.GetReceipts(testcase.receiptHash)
+			receipts, err := pm.GetReceipts(testcase.tsHash)
 
 			if testcase.expectedError != nil {
 				require.ErrorContains(t, err, testcase.expectedError.Error())

@@ -142,6 +142,8 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 	id identifiers.Address,
 	height uint64,
 	tesseractHash common.Hash,
+	stateHash common.Hash,
+	contextHash common.Hash,
 	accType common.AccountType,
 ) (int32, bool, error) {
 	if id.IsNil() {
@@ -167,6 +169,8 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 
 		if height >= accMetaInfo.Height {
 			accMetaInfo.TesseractHash = tesseractHash
+			accMetaInfo.StateHash = stateHash
+			accMetaInfo.ContextHash = contextHash
 			accMetaInfo.Address = id
 			accMetaInfo.Height = height
 		}
@@ -180,6 +184,8 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 	} else if errors.Is(err, common.ErrKeyNotFound) {
 		msg := common.AccountMetaInfo{
 			TesseractHash: tesseractHash,
+			StateHash:     stateHash,
+			ContextHash:   contextHash,
 			Type:          accType,
 			Address:       id,
 			Height:        height,
@@ -664,6 +670,54 @@ func (p *PersistenceManager) GetAccountsSyncStatus() ([]*common.AccountSyncStatu
 	}
 
 	return syncInfos, nil
+}
+
+func (p *PersistenceManager) FetchTesseractFromDB(
+	hash common.Hash,
+	withInteractions bool,
+) (*common.Tesseract, error) {
+	// Fetch Tesseract from DB
+	rawTesseract, err := p.GetTesseract(hash)
+	if err != nil {
+		return nil, err
+	}
+
+	// canonicalTesseract is a clone of the tesseract. The only difference is that it won't have the interactions field.
+	canonicalTesseract := new(common.CanonicalTesseract)
+
+	if err = canonicalTesseract.FromBytes(rawTesseract); err != nil {
+		return nil, err
+	}
+
+	interactions := new(common.Interactions)
+	receipts := new(common.Receipts)
+
+	// Fetch interactions for non-genesis tesseracts from DB
+	if withInteractions && canonicalTesseract.ConsensusInfo.ClusterID != common.GenesisIdentifier {
+		rawIxns, err := p.GetInteractions(hash)
+		if err != nil {
+			return nil, errors.Wrap(err, common.ErrFetchingInteractions.Error())
+		}
+
+		if err := interactions.FromBytes(rawIxns); err != nil {
+			return nil, err
+		}
+
+		rawReceipts, err := p.GetReceipts(hash)
+		if err != nil {
+			return nil, errors.Wrap(err, common.ErrReceiptNotFound.Error())
+		}
+
+		if rawReceipts != nil {
+			if err = receipts.FromBytes(rawReceipts); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	ts := canonicalTesseract.ToTesseract(*interactions, *receipts)
+
+	return ts, nil
 }
 
 func (p *PersistenceManager) GetAssetRegistry(addr identifiers.Address, registryHash common.Hash) ([]byte, error) {

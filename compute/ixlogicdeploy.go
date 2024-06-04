@@ -20,7 +20,7 @@ func RunLogicDeploy(
 	ix *common.Interaction,
 	ctx *common.ExecutionContext,
 	tank *FuelTank,
-	objects state.ObjectMap,
+	objects *state.Transition,
 ) *common.Receipt {
 	// Generate a new receipt
 	receipt := common.NewReceipt(ix)

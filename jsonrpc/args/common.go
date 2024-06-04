@@ -29,7 +29,7 @@ var (
 func CreateRPCInteraction(
 	ix *common.Interaction,
 	tsHash common.Hash,
-	participants common.ParticipantStates,
+	participants common.ParticipantsState,
 	ixIndex int,
 ) (*RPCInteraction, error) {
 	input := ix.Input()
@@ -143,7 +143,7 @@ func CreateRPCInteraction(
 	return rpcIX, nil
 }
 
-func CreateRPCParticipants(participants common.ParticipantStates) RPCParticipants {
+func CreateRPCParticipants(participants common.ParticipantsState) RPCParticipants {
 	if len(participants) == 0 {
 		return nil
 	}
@@ -223,7 +223,7 @@ func CreateRPCReceipt(
 	receipt *common.Receipt,
 	ix *common.Interaction,
 	tsHash common.Hash,
-	participants common.ParticipantStates,
+	participants common.ParticipantsState,
 	ixIndex int,
 ) *RPCReceipt {
 	return &RPCReceipt{

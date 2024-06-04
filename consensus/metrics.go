@@ -22,6 +22,7 @@ type Metrics struct {
 	GridGenerationTime           metrics.Histogram
 	AgreementTime                metrics.Histogram
 	AgreementFailureCount        metrics.Counter
+	SignatureVerificationTime    metrics.Histogram
 }
 
 func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics {
@@ -111,6 +112,13 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 			Name:      "agreement_failure_count",
 			Help:      "Consensus agreement failure count",
 		}, labels).With(labelsWithValues...),
+		SignatureVerificationTime: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: "kbft",
+			Name:      "signature_verification_time",
+			Help:      "Time taken to verify tesseract signature",
+			Buckets:   []float64{5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 100},
+		}, labels).With(labelsWithValues...),
 	}
 }
 
@@ -128,6 +136,7 @@ func NilMetrics() *Metrics {
 		GridGenerationTime:           discard.NewHistogram(),
 		AgreementTime:                discard.NewHistogram(),
 		AgreementFailureCount:        discard.NewCounter(),
+		SignatureVerificationTime:    discard.NewHistogram(),
 	}
 }
 
@@ -183,4 +192,9 @@ func (metrics *Metrics) captureAgreementTime(consensusInitTS time.Time) {
 
 func (metrics *Metrics) captureAgreementFailureCount(delta float64) {
 	metrics.AgreementFailureCount.Add(delta)
+}
+
+// methods to capture telemetry metrics
+func (metrics *Metrics) captureSignatureVerificationTime(verificationInitTime time.Time) {
+	metrics.SignatureVerificationTime.Observe(time.Since(verificationInitTime).Seconds())
 }

@@ -24,25 +24,30 @@ type IxPool interface {
 }
 
 type ChainManager interface {
-	GetLatestTesseract(addr identifiers.Address, withInteractions bool) (*common.Tesseract, error)
 	GetTesseract(hash common.Hash, withInteractions bool) (*common.Tesseract, error)
 	GetReceiptByIxHash(ixHash common.Hash) (*common.Receipt, error)
 	GetTesseractHeightEntry(address identifiers.Address, height uint64) (common.Hash, error)
 	GetInteractionAndParticipantsByIxHash(ixHash common.Hash) (
 		*common.Interaction,
 		common.Hash,
-		common.ParticipantStates,
+		common.ParticipantsState,
 		int,
 		error,
 	)
 	GetInteractionAndParticipantsByTSHash(tsHash common.Hash, ixIndex int) (
 		*common.Interaction,
-		common.ParticipantStates,
+		common.ParticipantsState,
 		error,
 	)
 }
 
 type StateManager interface {
+	FetchIxStateObjects(
+		ixns common.Interactions,
+		hashes map[identifiers.Address]common.Hash,
+	) (
+		*state.Transition, error,
+	)
 	GetLatestStateObject(addr identifiers.Address) (*state.Object, error)
 	GetContextByHash(identifiers.Address, common.Hash) (common.Hash, []kramaid.KramaID, []kramaid.KramaID, error)
 	GetBalances(addrs identifiers.Address, stateHash common.Hash) (*state.BalanceObject, error)
@@ -55,13 +60,16 @@ type StateManager interface {
 	GetLogicIDs(addr identifiers.Address, stateHash common.Hash) ([]identifiers.LogicID, error)
 	GetAssetInfo(assetID identifiers.AssetID, stateHash common.Hash) (*common.AssetDescriptor, error)
 	GetRegistry(addr identifiers.Address, stateHash common.Hash) (map[string][]byte, error)
+	CreateStateObject(identifiers.Address, common.AccountType, bool) *state.Object
+	GetStateObjectByHash(addr identifiers.Address, hash common.Hash) (*state.Object, error)
+	IsAccountRegistered(identifiers.Address) (bool, error)
 }
 
 type ExecutionManager interface {
 	InteractionCall(
 		ctx *common.ExecutionContext,
 		ix *common.Interaction,
-		stateHashes map[identifiers.Address]common.Hash,
+		transition *state.Transition,
 	) (*common.Receipt, error)
 }
 

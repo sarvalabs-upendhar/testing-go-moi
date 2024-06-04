@@ -106,7 +106,7 @@ func NewTestSyncer(
 		mux:            mux,
 		agora:          agora,
 		db:             db,
-		krama:          newMockKrama(),
+		krama:          NewMockKramaEngine(db, logger),
 		lattice:        newMockLattice(db, logger),
 		state:          newMockStateManager(db),
 		jobWorkerCount: 5,
@@ -151,7 +151,7 @@ func NewTestSyncerForValidation(
 	node *p2p.Server,
 	db store,
 	logger hclog.Logger,
-	lattice lattice,
+	state stateManager,
 ) *Syncer {
 	return &Syncer{
 		ctx:               ctx,
@@ -159,48 +159,87 @@ func NewTestSyncerForValidation(
 		cfg:               cfg,
 		db:                db,
 		logger:            logger,
-		lattice:           lattice,
+		state:             state,
 		tesseractRegistry: common.NewHashRegistry(60),
 	}
 }
 
-type MockKrama struct {
+type MockKramaEngine struct {
+	logger             hclog.Logger
+	db                 store
 	executedTesseracts map[string]*common.Tesseract
 }
 
-func (k *MockKrama) ExecuteAndValidate(ts *common.Tesseract) error {
-	for addr, s := range ts.Participants() {
-		key := addr.Hex() + strconv.FormatUint(s.Height, 10)
-		k.executedTesseracts[key] = ts
+func NewMockKramaEngine(db store, logger hclog.Logger) *MockKramaEngine {
+	return &MockKramaEngine{
+		db:                 db,
+		logger:             logger,
+		executedTesseracts: make(map[string]*common.Tesseract),
+	}
+}
+
+func (m *MockKramaEngine) ValidateTesseract(
+	addr identifiers.Address,
+	ts *common.Tesseract,
+	ics *common.ICSNodeSet,
+	allParticipants bool,
+) error {
+	if !allParticipants && addr.IsNil() {
+		return common.ErrEmptyAddress
+	}
+
+	var addresses []identifiers.Address
+
+	if allParticipants {
+		addresses = ts.Addresses()
+	} else {
+		addresses = append(addresses, addr)
+	}
+
+	for _, addr := range addresses {
+		if ts.Height(addr) != 0 {
+			if ok := m.db.HasAccMetaInfoAt(addr, ts.Height(addr)-1); !ok {
+				m.logger.Trace("prev tesseract not found", "addr", addr, "height", ts.Height(addr))
+
+				return common.ErrPreviousTesseractNotFound
+			}
+		}
 	}
 
 	return nil
 }
 
-func newMockKrama() *MockKrama {
-	return &MockKrama{
-		executedTesseracts: make(map[string]*common.Tesseract),
+func (m *MockKramaEngine) ExecuteAndValidate(
+	ts *common.Tesseract,
+	transition *state.Transition,
+	ps map[identifiers.Address]common.IxParticipant,
+) error {
+	for addr, s := range ts.Participants() {
+		key := addr.Hex() + strconv.FormatUint(s.Height, 10)
+		m.executedTesseracts[key] = ts
 	}
+
+	return nil
 }
 
 type MockLattice struct {
 	lock               sync.RWMutex
 	logger             hclog.Logger
-	tesseracts         map[string]*common.Tesseract
+	tesseractsByHash   map[common.Hash]*common.Tesseract
+	tesseractByHeight  map[string]*common.Tesseract
 	tesseractHash      map[string]common.Hash
 	db                 store
 	executedTesseracts map[string]*common.Tesseract
-	sealedTesseracts   map[common.Hash]bool
 }
 
 func newMockLattice(db store, logger hclog.Logger) *MockLattice {
 	return &MockLattice{
 		logger:             logger,
-		tesseracts:         make(map[string]*common.Tesseract),
+		tesseractsByHash:   make(map[common.Hash]*common.Tesseract),
+		tesseractByHeight:  make(map[string]*common.Tesseract),
 		tesseractHash:      make(map[string]common.Hash),
 		db:                 db,
 		executedTesseracts: make(map[string]*common.Tesseract),
-		sealedTesseracts:   make(map[common.Hash]bool),
 	}
 }
 
@@ -208,13 +247,14 @@ func (m *MockLattice) AddTesseractWithState(
 	addr identifiers.Address,
 	dirtyStorage map[common.Hash][]byte,
 	ts *common.Tesseract,
+	transition *state.Transition,
 	allParticipants bool,
 ) error {
 	if !allParticipants && addr.IsNil() {
 		return common.ErrEmptyAddress
 	}
 
-	partcipants := make(common.ParticipantStates)
+	partcipants := make(common.ParticipantsState)
 
 	if allParticipants {
 		partcipants = ts.Participants()
@@ -245,6 +285,8 @@ func (m *MockLattice) AddTesseractWithState(
 			addr,
 			p.Height,
 			ts.Hash(),
+			ts.StateHash(ts.AnyAddress()),
+			ts.LatestContextHash(ts.AnyAddress()),
 			common.AccTypeFromIxType(ts.Interactions()[0].Type()),
 		); err != nil {
 			return err
@@ -294,6 +336,8 @@ func (m *MockLattice) AddAccountMetaInfo(tesseracts ...*common.Tesseract) error 
 				addr,
 				s.Height,
 				ts.Hash(),
+				ts.StateHash(ts.AnyAddress()),
+				ts.LatestContextHash(ts.AnyAddress()),
 				common.AccTypeFromIxType(ts.Interactions()[0].Type()),
 			); err != nil {
 				return err
@@ -304,12 +348,33 @@ func (m *MockLattice) AddAccountMetaInfo(tesseracts ...*common.Tesseract) error 
 	return nil
 }
 
+func (m *MockLattice) insertTesseractsByHash(
+	t *testing.T,
+	tesseracts ...*common.Tesseract,
+) {
+	t.Helper()
+
+	for _, ts := range tesseracts {
+		m.tesseractsByHash[ts.Hash()] = ts
+	}
+}
+
 func (m *MockLattice) GetTesseract(
 	hash common.Hash,
 	withInteractions bool,
 ) (*common.Tesseract, error) {
-	// TODO implement me
-	panic("implement me")
+	ts, ok := m.tesseractsByHash[hash]
+	if !ok {
+		return nil, common.ErrFetchingTesseract
+	}
+
+	tsCopy := *ts // copy, so that stored tesseract won't be modified
+
+	if !withInteractions {
+		tsCopy = *tsCopy.GetTesseractWithoutIxns()
+	}
+
+	return &tsCopy, nil
 }
 
 func (m *MockLattice) setTesseractByHeight(addr identifiers.Address, height uint64, ts *common.Tesseract) {
@@ -319,7 +384,7 @@ func (m *MockLattice) setTesseractByHeight(addr identifiers.Address, height uint
 	}()
 
 	key := addr.Hex() + strconv.FormatUint(height, 10)
-	m.tesseracts[key] = ts
+	m.tesseractByHeight[key] = ts
 }
 
 func (m *MockLattice) GetTesseractByHeight(
@@ -334,7 +399,7 @@ func (m *MockLattice) GetTesseractByHeight(
 
 	key := address.Hex() + strconv.FormatUint(height, 10)
 
-	ts, ok := m.tesseracts[key]
+	ts, ok := m.tesseractByHeight[key]
 	if !ok {
 		return nil, common.ErrFetchingTesseract
 	}
@@ -368,37 +433,6 @@ func (m *MockLattice) GetTesseractHeightEntry(address identifiers.Address, heigh
 	return tsHash, nil
 }
 
-func (m *MockLattice) ValidateTesseract(
-	address identifiers.Address,
-	ts *common.Tesseract,
-	ics *common.ICSNodeSet,
-	allParticipants bool,
-) error {
-	if !allParticipants && address.IsNil() {
-		return common.ErrEmptyAddress
-	}
-
-	var addresses []identifiers.Address
-
-	if allParticipants {
-		addresses = ts.Addresses()
-	} else {
-		addresses = append(addresses, address)
-	}
-
-	for _, addr := range addresses {
-		if ts.Height(addr) != 0 {
-			if ok := m.db.HasAccMetaInfoAt(addr, ts.Height(addr)-1); !ok {
-				m.logger.Trace("prev tesseract not found", "addr", addr, "height", ts.Height(addr))
-
-				return common.ErrPreviousTesseractNotFound
-			}
-		}
-	}
-
-	return nil
-}
-
 func (m *MockLattice) IsInitialTesseract(
 	ts *common.Tesseract,
 	addr identifiers.Address,
@@ -410,15 +444,101 @@ func (m *MockLattice) IsInitialTesseract(
 	return false, nil
 }
 
-func (m *MockLattice) setTSSeal(ts *common.Tesseract) {
+type Context struct {
+	behaviourNodes []kramaid.KramaID
+	randomNodes    []kramaid.KramaID
+}
+
+type MockStateManager struct {
+	db               store
+	sealedTesseracts map[common.Hash]bool
+	context          map[common.Hash]*Context
+}
+
+func (m *MockStateManager) RemoveCacheObject(addr identifiers.Address) {
+}
+
+func (m *MockStateManager) GetICSParticipants(
+	ixns common.Interactions,
+) (map[identifiers.Address]common.IxParticipant, error) {
+	return nil, nil
+}
+
+func (m *MockStateManager) LoadTransitionObjects(
+	ps map[identifiers.Address]common.IxParticipant,
+) (*state.Transition, error) {
+	// Create a new objects map
+	objects := make(state.ObjectMap)
+
+	for addr, p := range ps {
+		if p.IsGenesis {
+			objects[addr] = m.CreateStateObject(addr, p.AccType, true)
+
+			continue
+		}
+
+		obj, err := m.GetLatestStateObject(addr)
+		if err != nil {
+			return nil, errors.Wrap(err, "state object fetch failed")
+		}
+
+		// copy inorder to avoid modifications to cached object
+
+		objects[addr] = obj.Copy()
+	}
+
+	return state.NewTransition(objects), nil
+}
+
+func newMockStateManager(db store) *MockStateManager {
+	return &MockStateManager{
+		db:               db,
+		sealedTesseracts: make(map[common.Hash]bool),
+		context:          make(map[common.Hash]*Context),
+	}
+}
+
+func (m *MockStateManager) CreateStateObject(address identifiers.Address,
+	accountType common.AccountType, isGenesis bool,
+) *state.Object {
+	return state.NewStateObject(address, nil, nil, nil,
+		common.Account{AccType: accountType}, state.NilMetrics(), isGenesis)
+}
+
+func (m *MockStateManager) GetLatestStateObject(addr identifiers.Address) (*state.Object, error) {
+	return state.NewStateObject(addr, nil, nil, nil,
+		common.Account{AccType: common.RegularAccount}, state.NilMetrics(), false), nil
+}
+
+func (m *MockStateManager) SyncStorageTrees(ctx context.Context, newRoot *common.RootNode,
+	logicStorageTreeRoots map[string]*common.RootNode, so *state.Object,
+) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockStateManager) SyncLogicTree(newRoot *common.RootNode, so *state.Object) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockStateManager) IsInitialTesseract(ts *common.Tesseract, addr identifiers.Address) (bool, error) {
+	if ts.Height(addr) == 0 {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func (m *MockStateManager) setTSSeal(ts *common.Tesseract) {
 	m.sealedTesseracts[ts.Hash()] = true
 }
 
-func (m *MockLattice) removeTSSeal(ts *common.Tesseract) {
+func (m *MockStateManager) removeTSSeal(ts *common.Tesseract) {
 	delete(m.sealedTesseracts, ts.Hash())
 }
 
-func (m *MockLattice) IsSealValid(ts *common.Tesseract) (bool, error) {
+func (m *MockStateManager) IsSealValid(ts *common.Tesseract) (bool, error) {
 	value, exists := m.sealedTesseracts[ts.Hash()]
 	if !exists {
 		return false, errors.New("tesseract seal does not exist")
@@ -427,17 +547,30 @@ func (m *MockLattice) IsSealValid(ts *common.Tesseract) (bool, error) {
 	return value, nil
 }
 
-type MockStateManager struct {
-	db store
-}
-
-func newMockStateManager(db store) *MockStateManager {
-	return &MockStateManager{
-		db: db,
+func (m *MockStateManager) insertContextNodes(
+	ctxHash common.Hash,
+	behaviouralNodes []kramaid.KramaID,
+	randomNodes ...kramaid.KramaID,
+) {
+	m.context[ctxHash] = &Context{
+		behaviourNodes: behaviouralNodes,
+		randomNodes:    randomNodes,
 	}
 }
 
-func (m MockStateManager) HasParticipantStateAt(addr identifiers.Address, stateHash common.Hash) bool {
+func (m *MockStateManager) GetContextByHash(address identifiers.Address,
+	hash common.Hash,
+) (common.Hash, []kramaid.KramaID, []kramaid.KramaID, error) {
+	c, ok := m.context[hash]
+
+	if !ok {
+		return common.NilHash, nil, nil, common.ErrContextStateNotFound
+	}
+
+	return hash, c.behaviourNodes, c.randomNodes, nil
+}
+
+func (m *MockStateManager) HasParticipantStateAt(addr identifiers.Address, stateHash common.Hash) bool {
 	if _, err := m.db.GetAccount(addr, stateHash); err != nil {
 		return false
 	}
@@ -445,26 +578,11 @@ func (m MockStateManager) HasParticipantStateAt(addr identifiers.Address, stateH
 	return true
 }
 
-func (m MockStateManager) SyncStorageTrees(
-	ctx context.Context,
-	address identifiers.Address,
-	newRoot *common.RootNode,
-	logicStorageTreeRoots map[string]*common.RootNode,
-) error {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (m MockStateManager) SyncLogicTree(address identifiers.Address, newRoot *common.RootNode) error {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (m MockStateManager) CreateDirtyObject(addr identifiers.Address, accType common.AccountType) *state.Object {
+func (m *MockStateManager) CreateDirtyObject(addr identifiers.Address, accType common.AccountType) *state.Object {
 	return nil
 }
 
-func (m MockStateManager) GetParticipantContextRaw(
+func (m *MockStateManager) GetParticipantContextRaw(
 	address identifiers.Address,
 	hash common.Hash,
 	rawContext map[string][]byte,
@@ -472,7 +590,7 @@ func (m MockStateManager) GetParticipantContextRaw(
 	return nil
 }
 
-func (m MockStateManager) FetchICSNodeSet(ts *common.Tesseract,
+func (m *MockStateManager) FetchICSNodeSet(ts *common.Tesseract,
 	info *common.ICSClusterInfo,
 ) (*common.ICSNodeSet, error) {
 	return &common.ICSNodeSet{
@@ -484,7 +602,7 @@ func (m MockStateManager) FetchICSNodeSet(ts *common.Tesseract,
 	}, nil
 }
 
-func (m MockStateManager) GetICSNodeSetFromRawContext(ts *common.Tesseract,
+func (m *MockStateManager) GetICSNodeSetFromRawContext(ts *common.Tesseract,
 	rawContext map[string][]byte, clusterInfo *common.ICSClusterInfo,
 ) (*common.ICSNodeSet, error) {
 	// TODO implement me
@@ -855,7 +973,7 @@ func storeTesseractInDB(t *testing.T, ts *common.Tesseract, syncers ...*Syncer) 
 	t.Helper()
 
 	for _, s := range syncers {
-		err := s.lattice.AddTesseractWithState(identifiers.NilAddress, nil, ts, true)
+		err := s.lattice.AddTesseractWithState(identifiers.NilAddress, nil, ts, nil, true)
 		require.NoError(t, err)
 
 		info := common.ICSClusterInfo{}
@@ -1088,7 +1206,7 @@ func generateTesseracts(
 	index := 0
 
 	for i := startHeight; i <= endHeight; i++ {
-		participants := make(common.ParticipantStates)
+		participants := make(common.ParticipantsState)
 		heights := make([]uint64, 0)
 
 		for _, addr := range addresses {
@@ -1416,7 +1534,7 @@ func checkIfTesseractsSynced(
 			if execution {
 				// check for execution
 				key := addr.Hex() + strconv.FormatUint(participant.Height, 10)
-				executedTS, ok := s.krama.(*MockKrama).executedTesseracts[key]
+				executedTS, ok := s.krama.(*MockKramaEngine).executedTesseracts[key]
 				require.True(t, ok)
 				require.Equal(t, executedTS.Hash(), ts.Hash())
 			} else {
@@ -1629,6 +1747,8 @@ func (m MockDB) UpdateAccMetaInfo(
 	id identifiers.Address,
 	height uint64,
 	tesseractHash common.Hash,
+	stateHash common.Hash,
+	contextHash common.Hash,
 	accType common.AccountType,
 ) (int32, bool, error) {
 	// TODO implement me
@@ -1652,6 +1772,62 @@ func (m MockDB) UpdateTesseractStatus(addr identifiers.Address, height uint64, t
 	panic("implement me")
 }
 
+func getDeltaGroup(t *testing.T, behaviouralCount int, randomCount int, replaceCount int) *common.DeltaGroup {
+	t.Helper()
+
+	return &common.DeltaGroup{
+		BehaviouralNodes: tests.RandomKramaIDs(t, behaviouralCount),
+		RandomNodes:      tests.RandomKramaIDs(t, randomCount),
+		ReplacedNodes:    tests.RandomKramaIDs(t, replaceCount),
+	}
+}
+
+func tesseractParamsWithContextDelta(
+	t *testing.T,
+	address identifiers.Address,
+	behaviouralCount, randomCount, replacedCount int,
+) *tests.CreateTesseractParams {
+	t.Helper()
+
+	return &tests.CreateTesseractParams{
+		Addresses: []identifiers.Address{address},
+		Participants: common.ParticipantsState{
+			address: {
+				ContextDelta: getDeltaGroup(t, behaviouralCount, randomCount, replacedCount),
+			},
+		},
+	}
+}
+
+func createTesseractsWithChain(
+	t *testing.T,
+	count int,
+	paramsMap map[int]*tests.CreateTesseractParams,
+) []*common.Tesseract {
+	t.Helper()
+
+	tesseracts := make([]*common.Tesseract, count)
+
+	if paramsMap == nil {
+		paramsMap = map[int]*tests.CreateTesseractParams{}
+	}
+
+	tesseracts[0] = tests.CreateTesseract(t, paramsMap[0])
+
+	for i := 1; i < count; i++ {
+		paramsMap[i].ParticipantsCallback = func(participants common.ParticipantsState) {
+			hash := tesseracts[i-1].Hash()
+			p := participants[tesseracts[0].AnyAddress()]
+			p.TransitiveLink = hash
+			participants[tesseracts[0].AnyAddress()] = p
+		}
+
+		tesseracts[i] = tests.CreateTesseract(t, paramsMap[i])
+	}
+
+	return tesseracts
+}
+
 func checkForReceipts(t *testing.T, expectedReceipts, receipts common.Receipts) {
 	t.Helper()
 
@@ -1665,4 +1841,46 @@ func checkForReceipts(t *testing.T, expectedReceipts, receipts common.Receipts) 
 		require.Equal(t, expectedReceipt.FuelUsed, receivedReceipt.FuelUsed)
 		require.Equal(t, expectedReceipt.ExtraData, receivedReceipt.ExtraData)
 	}
+}
+
+func fetchContextFromLattice(
+	t *testing.T,
+	address identifiers.Address,
+	ts common.Tesseract,
+	s *Syncer,
+) []kramaid.KramaID {
+	t.Helper()
+
+	peers := make([]kramaid.KramaID, 0)
+
+	for {
+		if len(peers) >= 10 {
+			break
+		}
+
+		delta, _ := ts.GetContextDelta(address)
+		peers = append(peers, delta.BehaviouralNodes...)
+		peers = append(peers, delta.RandomNodes...)
+
+		_, behaviour, random, err := s.state.GetContextByHash(address, ts.PreviousContextHash(address))
+		if err == nil {
+			peers = append(peers, behaviour...)
+			peers = append(peers, random...)
+
+			break
+		}
+
+		if ts.TransitiveLink(address).IsNil() {
+			break
+		}
+
+		t, err := s.lattice.GetTesseract(ts.TransitiveLink(address), false)
+		if err != nil {
+			return nil
+		}
+
+		ts = *t
+	}
+
+	return peers
 }

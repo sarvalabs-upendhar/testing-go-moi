@@ -411,7 +411,7 @@ func createTestClusterInfo(
 	t.Helper()
 
 	ps := make(map[identifiers.Address]*common.Participant)
-	pStates := make(common.ParticipantStates)
+	pStates := make(common.ParticipantsState)
 
 	ps[ixs[0].Sender()] = &common.Participant{
 		Address:         ixs[0].Sender(),

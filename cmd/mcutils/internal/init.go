@@ -119,7 +119,6 @@ func CreateConfigFile(datadir string, index int, ipAddr string) []byte {
 	data := cmdCommon.Config{
 		NodeType:       7,
 		KramaIDVersion: 1,
-		Genesis:        "genesis.json",
 		Network: cmdCommon.NetworkConfig{
 			Libp2pAddr: []string{
 				fmt.Sprintf("/ip4/%s/tcp/%d", ipAddr, libp2pPort+index),
@@ -162,6 +161,8 @@ func CreateConfigFile(datadir string, index int, ipAddr string) []byte {
 			ValidatorSlots:        3,
 			MaxGossipPeers:        5,
 			MinGossipPeers:        3,
+			GenesisTime:           0,
+			GenesisPath:           "genesis.json",
 		},
 		DB: cmdCommon.DBConfig{
 			CleanDB:     false,
@@ -192,7 +193,6 @@ func CreateConfigFile(datadir string, index int, ipAddr string) []byte {
 		State: cmdCommon.StateConfig{
 			TreeCacheSize: config.DefaultTreeCacheSize,
 		},
-		GenesisTime: 0,
 	}
 
 	if writeLogsToFile {

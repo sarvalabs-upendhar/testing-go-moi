@@ -9,8 +9,10 @@ import (
 )
 
 type Metrics struct {
-	ActiveStateObjects metrics.Gauge
-	TreeMetrics        *tree.Metrics
+	ActiveStateObjects   metrics.Gauge
+	ObjectCacheHitCount  metrics.Counter
+	ObjectCacheMissCount metrics.Counter
+	TreeMetrics          *tree.Metrics
 }
 
 func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics {
@@ -27,14 +29,28 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 			Name:      "active_state_objects",
 			Help:      "Number of active state objects",
 		}, labels).With(labelsWithValues...),
+		ObjectCacheHitCount: prometheus.NewCounterFrom(stdprometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: "state",
+			Name:      "object_cache_hit",
+			Help:      "Number of times object cache hit",
+		}, labels).With(labelsWithValues...),
+		ObjectCacheMissCount: prometheus.NewCounterFrom(stdprometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: "state",
+			Name:      "object_cache_miss",
+			Help:      "Number of times object cache miss",
+		}, labels).With(labelsWithValues...),
 		TreeMetrics: tree.GetPrometheusMetrics(namespace, labelsWithValues...),
 	}
 }
 
 func NilMetrics() *Metrics {
 	return &Metrics{
-		ActiveStateObjects: discard.NewGauge(),
-		TreeMetrics:        tree.NilMetrics(),
+		ActiveStateObjects:   discard.NewGauge(),
+		ObjectCacheHitCount:  discard.NewCounter(),
+		ObjectCacheMissCount: discard.NewCounter(),
+		TreeMetrics:          tree.NilMetrics(),
 	}
 }
 
@@ -45,4 +61,12 @@ func (metrics *Metrics) InitMetrics() {
 
 func (metrics *Metrics) CaptureActiveStateObjects(delta float64) {
 	metrics.ActiveStateObjects.Set(delta)
+}
+
+func (metrics *Metrics) AddObjectCacheHitCount(delta float64) {
+	metrics.ObjectCacheHitCount.Add(delta)
+}
+
+func (metrics *Metrics) AddObjectCacheMissCount(delta float64) {
+	metrics.ObjectCacheMissCount.Add(delta)
 }

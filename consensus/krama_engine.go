@@ -2,10 +2,15 @@ package consensus
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"math"
 	"math/big"
+	"os"
 	"sort"
 	"time"
+
+	"github.com/sarvalabs/go-moi/compute"
 
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/consensus/observer"
@@ -14,7 +19,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/moby/locker"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-legacy-kramaid"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/utils"
@@ -57,8 +62,20 @@ type lattice interface {
 		addr identifiers.Address,
 		dirtyStorage map[common.Hash][]byte,
 		ts *common.Tesseract,
+		transition *state.Transition,
 		allParticipants bool,
 	) error
+	AddTesseract(
+		cache bool,
+		addr identifiers.Address,
+		t *common.Tesseract,
+		transition *state.Transition,
+		allParticipants bool,
+	) error
+	GetTesseract(
+		hash common.Hash,
+		withInteractions bool,
+	) (*common.Tesseract, error)
 }
 
 type kramaTransport interface {
@@ -92,6 +109,9 @@ type kramaTransport interface {
 }
 
 type stateManager interface {
+	GetICSParticipants(ixns common.Interactions) (map[identifiers.Address]common.IxParticipant, error)
+	LoadTransitionObjects(ps map[identifiers.Address]common.IxParticipant) (*state.Transition, error)
+	CreateStateObject(identifiers.Address, common.AccountType, bool) *state.Object
 	FetchLatestParticipantContext(addr identifiers.Address) (
 		latestContextHash common.Hash,
 		behaviouralSet, randomSet *common.NodeSet,
@@ -102,6 +122,9 @@ type stateManager interface {
 	IsAccountRegistered(addr identifiers.Address) (bool, error)
 	GetLatestStateObject(addr identifiers.Address) (*state.Object, error)
 	GetNonce(addr identifiers.Address, stateHash common.Hash) (uint64, error)
+	IsInitialTesseract(ts *common.Tesseract, addr identifiers.Address) (bool, error)
+	IsSealValid(ts *common.Tesseract) (bool, error)
+	RemoveCacheObject(addr identifiers.Address)
 }
 
 type ixPool interface {
@@ -111,36 +134,43 @@ type ixPool interface {
 }
 
 type execution interface {
-	ExecuteInteractions(common.Interactions, *common.ExecutionContext) (common.Receipts, common.AccStateHashes, error)
-	Revert(common.ClusterID) error
-	Cleanup(common.ClusterID)
+	ExecuteInteractions(*state.Transition, common.Interactions, *common.ExecutionContext) (common.AccStateHashes, error)
 }
 
+type store interface {
+	HasAccMetaInfoAt(addr identifiers.Address, height uint64) bool
+}
+
+type AggregatedSignatureVerifier func(data []byte, aggSignature []byte, multiplePubKeys [][]byte) (bool, error)
+
 type Engine struct {
-	ctx          context.Context
-	ctxCancel    context.CancelFunc
-	cfg          *config.ConsensusConfig
-	mux          *utils.TypeMux
-	logger       hclog.Logger
-	selfID       kramaid.KramaID
-	slots        *ktypes.Slots
-	requests     chan ktypes.Request
-	randomizer   *flux.Randomizer
-	transport    kramaTransport
-	exec         execution
-	pool         ixPool
-	state        stateManager
-	executionReq chan common.ClusterID
-	lattice      lattice
-	wal          kbft.WAL
-	vault        *crypto.KramaVault
-	clusterLocks *locker.Locker
-	metrics      *Metrics
-	avgICSTime   time.Duration
-	slotCloseCh  chan common.ClusterID
+	ctx               context.Context
+	ctxCancel         context.CancelFunc
+	cfg               *config.ConsensusConfig
+	mux               *utils.TypeMux
+	logger            hclog.Logger
+	selfID            kramaid.KramaID
+	slots             *ktypes.Slots
+	requests          chan ktypes.Request
+	randomizer        *flux.Randomizer
+	db                store
+	transport         kramaTransport
+	exec              execution
+	pool              ixPool
+	state             stateManager
+	executionReq      chan common.ClusterID
+	lattice           lattice
+	wal               kbft.WAL
+	vault             *crypto.KramaVault
+	clusterLocks      *locker.Locker
+	metrics           *Metrics
+	avgICSTime        time.Duration
+	slotCloseCh       chan common.ClusterID
+	signatureVerifier AggregatedSignatureVerifier
 }
 
 func NewKramaEngine(
+	db store,
 	cfg *config.ConsensusConfig,
 	logger hclog.Logger,
 	mux *utils.TypeMux,
@@ -154,6 +184,7 @@ func NewKramaEngine(
 	transport kramaTransport,
 	metrics *Metrics,
 	slots *ktypes.Slots,
+	verifier AggregatedSignatureVerifier,
 ) (*Engine, error) {
 	wal, err := kbft.NewWAL(logger, cfg.DirectoryPath)
 	if err != nil {
@@ -162,27 +193,29 @@ func NewKramaEngine(
 
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	k := &Engine{
-		ctx:          ctx,
-		ctxCancel:    ctxCancel,
-		cfg:          cfg,
-		logger:       logger.Named("Krama-Engine"),
-		mux:          mux,
-		selfID:       selfID,
-		state:        state,
-		slots:        slots,
-		requests:     make(chan ktypes.Request),
-		randomizer:   randomizer,
-		transport:    transport,
-		exec:         exec,
-		pool:         ixPool,
-		lattice:      lattice,
-		executionReq: make(chan common.ClusterID),
-		wal:          wal,
-		vault:        val,
-		clusterLocks: locker.New(),
-		metrics:      metrics,
-		avgICSTime:   cfg.AccountWaitTime,
-		slotCloseCh:  make(chan common.ClusterID),
+		ctx:               ctx,
+		ctxCancel:         ctxCancel,
+		cfg:               cfg,
+		logger:            logger.Named("Krama-Engine"),
+		mux:               mux,
+		selfID:            selfID,
+		state:             state,
+		slots:             slots,
+		requests:          make(chan ktypes.Request),
+		randomizer:        randomizer,
+		db:                db,
+		transport:         transport,
+		exec:              exec,
+		pool:              ixPool,
+		lattice:           lattice,
+		executionReq:      make(chan common.ClusterID),
+		wal:               wal,
+		vault:             val,
+		clusterLocks:      locker.New(),
+		metrics:           metrics,
+		avgICSTime:        cfg.AccountWaitTime,
+		slotCloseCh:       make(chan common.ClusterID),
+		signatureVerifier: verifier,
 	}
 
 	k.metrics.initMetrics(float64(cfg.OperatorSlotCount), float64(cfg.ValidatorSlotCount))
@@ -401,7 +434,36 @@ func (k *Engine) observerNodeDelta(setSize int) int {
 	return int(math.Ceil(ObserverNodesDelta * float64(setSize)))
 }
 
+func (k *Engine) startParticipantAddedEventHandler(eventSub *utils.Subscription) {
+	for {
+		select {
+		case <-k.ctx.Done():
+			return
+		case msg, ok := <-eventSub.Chan():
+			if ok {
+				event, ok := msg.Data.(utils.ParticipantAddedEvent)
+				if !ok {
+					k.logger.Error("Error casting event data to tesseract added event")
+
+					continue
+				}
+
+				// TODO add to queue if accounts are active
+				// if k.slots.AreAccountsActive(addr) {
+				//	continue
+				// }
+
+				k.state.RemoveCacheObject(event.Addr)
+			}
+		}
+	}
+}
+
 func (k *Engine) Start() {
+	sub := k.mux.Subscribe(utils.ParticipantAddedEvent{})
+
+	go k.startParticipantAddedEventHandler(sub)
+
 	go k.minter()
 
 	go k.executionRoutine()
@@ -535,7 +597,7 @@ func (k *Engine) handleReq(req ktypes.Request) {
 		return
 	}
 
-	ps, err := GetICSParticipants(req.Ixs, k.state)
+	ps, err := k.state.GetICSParticipants(req.Ixs)
 	if err != nil {
 		sendResponse(req, err)
 	}
@@ -563,7 +625,6 @@ func (k *Engine) handleReq(req ktypes.Request) {
 		}
 
 		k.slotCloseCh <- clusterID
-		k.exec.Cleanup(clusterID)
 	}()
 
 	if req.SlotType == ktypes.OperatorSlot {
@@ -746,9 +807,6 @@ func (k *Engine) handleReq(req ktypes.Request) {
 		if err = bft.Start(); err != nil {
 			k.logger.Error("Consensus failed", "err", err, "cluster-ID", cs.ClusterID)
 			k.metrics.captureAgreementFailureCount(1)
-			if err = k.exec.Revert(cs.ClusterID); err != nil {
-				k.logger.Error("Failed to revert the execution changes", "err", err)
-			}
 
 			return
 		}
@@ -916,7 +974,13 @@ func (k *Engine) createProposalTesseract(slot *ktypes.Slot) (*common.Tesseract, 
 		return nil, err
 	}
 
-	receipts, stateHashes, err := k.exec.ExecuteInteractions(
+	transition, err := k.state.LoadTransitionObjects(clusterState.Participants.IxnParticipants())
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to load state transition objects")
+	}
+
+	stateHashes, err := k.exec.ExecuteInteractions(
+		transition,
 		clusterState.Ixs,
 		clusterState.ExecutionContext(),
 	)
@@ -924,9 +988,11 @@ func (k *Engine) createProposalTesseract(slot *ktypes.Slot) (*common.Tesseract, 
 		return nil, err
 	}
 
+	// store the transition
+	clusterState.SetStateTransition(transition)
 	k.logger.Debug("Generating tesseracts", "cluster-ID", slot.ClusterID())
 
-	return generateTesseract(clusterState, stateHashes, receipts)
+	return generateTesseract(clusterState, stateHashes)
 }
 
 func (k *Engine) updateContextDelta(slot *ktypes.Slot) error {
@@ -996,70 +1062,19 @@ func (k *Engine) updateContextDelta(slot *ktypes.Slot) error {
 	return nil
 }
 
-func GetICSParticipants(
-	ixns common.Interactions,
-	state stateManager,
-) (
-	map[identifiers.Address]common.IxParticipant,
-	error,
-) {
-	participants := make(map[identifiers.Address]common.IxParticipant)
-
-	for _, ixn := range ixns {
-		// FIXME: check lock precedence
-		if _, ok := participants[ixn.Sender()]; !ok {
-			participants[ixn.Sender()] = common.IxParticipant{
-				AccType:  common.RegularAccount,
-				LockType: common.WriteLock,
-				IsSigner: true,
-			}
-		}
-
-		if ixn.Receiver().IsNil() {
-			continue
-		}
-
-		if _, ok := participants[ixn.Receiver()]; ok {
-			continue
-		}
-
-		isRegistered, err := state.IsAccountRegistered(ixn.Receiver())
-		if err != nil {
-			return nil, err
-		}
-
-		if _, ok := participants[common.SargaAddress]; !isRegistered && !ok {
-			participants[common.SargaAddress] = common.IxParticipant{
-				AccType:  common.SargaAccount,
-				LockType: common.WriteLock,
-			}
-		}
-
-		participants[ixn.Receiver()] = common.IxParticipant{
-			AccType:   common.AccTypeFromIxType(ixn.Type()),
-			LockType:  common.WriteLock,
-			IsGenesis: !isRegistered,
-		}
-	}
-
-	return participants, nil
-}
-
-func (k *Engine) ExecuteAndValidate(ts *common.Tesseract) error {
-	defer k.exec.Cleanup(ts.ClusterID())
-
+func (k *Engine) ExecuteAndValidate(
+	ts *common.Tesseract,
+	transition *state.Transition,
+	ps map[identifiers.Address]common.IxParticipant,
+) error {
 	k.logger.Debug(
 		"Executing interactions of grid",
 		"ts-hash", ts.Hash(),
 		"lock", ts.PreviousContext(),
 	)
 
-	ps, err := GetICSParticipants(ts.Interactions(), k.state)
-	if err != nil {
-		return err
-	}
-
-	receipts, stateHashes, err := k.exec.ExecuteInteractions(
+	stateHashes, err := k.exec.ExecuteInteractions(
+		transition,
 		ts.Interactions(),
 		ts.ExecutionContext(ps),
 	)
@@ -1067,17 +1082,11 @@ func (k *Engine) ExecuteAndValidate(ts *common.Tesseract) error {
 		return err
 	}
 
-	if !isReceiptsHashValid(ts, receipts) || !areStateHashesValid(ts, stateHashes) {
-		if err = k.exec.Revert(ts.ClusterID()); err != nil {
-			k.logger.Error("Failed to revert the execution changes", "cluster-ID", ts.ClusterID())
-
-			return errors.Wrap(err, "failed to revert the execution changes")
-		}
-
+	if !isReceiptsHashValid(ts, transition.Receipts()) || !areStateHashesValid(ts, stateHashes) {
 		return errors.New("failed to validate the tesseract")
 	}
 
-	ts.SetReceipts(receipts)
+	ts.SetReceipts(transition.Receipts())
 
 	return nil
 }
@@ -1131,6 +1140,7 @@ func (k *Engine) finalizedTesseractHandler(tesseract *common.Tesseract) error {
 		identifiers.NilAddress,
 		clusterInfo.GetDirty(),
 		tesseract,
+		clusterInfo.Transition,
 		true,
 	); err != nil {
 		return err
@@ -1179,8 +1189,8 @@ func generatePoXtData(state *ktypes.ClusterState) common.PoXtData {
 	}
 }
 
-func participantStates(cs *ktypes.ClusterState, ps common.AccStateHashes) common.ParticipantStates {
-	participants := make(common.ParticipantStates, len(cs.Participants))
+func participantStates(cs *ktypes.ClusterState, ps common.AccStateHashes) common.ParticipantsState {
+	participants := make(common.ParticipantsState, len(cs.Participants))
 
 	for addr, p := range cs.Participants {
 		participants[addr] = common.State{
@@ -1199,11 +1209,10 @@ func participantStates(cs *ktypes.ClusterState, ps common.AccStateHashes) common
 func generateTesseract(
 	cs *ktypes.ClusterState,
 	hs common.AccStateHashes,
-	receipts common.Receipts,
 ) (*common.Tesseract, error) {
 	participants := participantStates(cs, hs)
 
-	fuelUsed := receipts.FuelUsed()
+	fuelUsed := cs.Transition.Receipts().FuelUsed()
 	fuelLimit := uint64(1000)
 
 	ixnsHash, err := cs.Ixs.Hash()
@@ -1211,7 +1220,7 @@ func generateTesseract(
 		return nil, err
 	}
 
-	receiptHash, err := receipts.Hash()
+	receiptHash, err := cs.Transition.Receipts().Hash()
 	if err != nil {
 		return nil, err
 	}
@@ -1229,7 +1238,7 @@ func generateTesseract(
 		nil,
 		cs.SelfKramaID(),
 		cs.Ixs,
-		receipts,
+		cs.Transition.Receipts(),
 	)
 
 	return ts, nil
@@ -1281,7 +1290,7 @@ func (k *Engine) validateInteractions(ixs common.Interactions) error {
 			return common.ErrInvalidNonce
 		}
 
-		if err = k.IsIxValid(ix); err != nil {
+		if err = k.isIxValid(ix); err != nil {
 			return err
 		}
 	}
@@ -1299,8 +1308,8 @@ func (k *Engine) Logger() hclog.Logger {
 	return k.logger
 }
 
-// IsIxValid performs validity checks based on the type of interaction
-func (k *Engine) IsIxValid(ix *common.Interaction) error {
+// isIxValid performs validity checks based on the type of interaction
+func (k *Engine) isIxValid(ix *common.Interaction) error {
 	if ix.Sender().IsNil() {
 		return common.ErrInvalidAddress
 	}
@@ -1373,6 +1382,475 @@ func (k *Engine) IsIxValid(ix *common.Interaction) error {
 		return nil
 	default:
 		return common.ErrInvalidInteractionType
+	}
+
+	return nil
+}
+
+func (k *Engine) setupSargaAccount(
+	sarga *common.AccountSetupArgs,
+	accounts []common.AccountSetupArgs,
+	assets []common.AssetAccountSetupArgs,
+	logics []common.LogicSetupArgs,
+) (*state.Object, error) {
+	stateObject := k.state.CreateStateObject(common.SargaAddress, common.SargaAccount, true)
+
+	if _, err := stateObject.CreateContext(sarga.BehaviouralContext, sarga.RandomContext); err != nil {
+		return nil, errors.Wrap(err, "context initiation failed in genesis")
+	}
+
+	if err := stateObject.CreateStorageTreeForLogic(common.SargaLogicID); err != nil {
+		return nil, errors.Wrap(err, "failed to create storage tree")
+	}
+
+	if err := stateObject.AddAccountGenesisInfo(common.SargaAddress, common.GenesisIxHash); err != nil {
+		return nil, err
+	}
+
+	for _, account := range accounts {
+		// Add account to sarga storage tree
+		if err := stateObject.AddAccountGenesisInfo(account.Address, common.GenesisIxHash); err != nil {
+			return nil, err
+		}
+	}
+
+	for _, logic := range logics {
+		// Add logic account to sarga
+		if err := stateObject.AddAccountGenesisInfo(
+			common.CreateAddressFromString(logic.Name),
+			common.GenesisIxHash,
+		); err != nil {
+			return nil, err
+		}
+	}
+
+	for _, assetAcc := range assets {
+		if err := stateObject.AddAccountGenesisInfo(
+			common.CreateAddressFromString(assetAcc.AssetInfo.Symbol),
+			common.GenesisIxHash,
+		); err != nil {
+			return nil, err
+		}
+	}
+
+	return stateObject, nil
+}
+
+func (k *Engine) setupNewAccount(info common.AccountSetupArgs) (*state.Object, error) {
+	stateObject := k.state.CreateStateObject(info.Address, info.AccType, true)
+
+	if _, err := stateObject.CreateContext(info.BehaviouralContext, info.RandomContext); err != nil {
+		return nil, errors.Wrap(err, "context initiation failed in genesis")
+	}
+
+	return stateObject, nil
+}
+
+func (k *Engine) setupGenesisLogics(
+	transition map[identifiers.Address]*state.Object,
+	logics []common.LogicSetupArgs,
+) ([]common.Hash, error) {
+	hashes := make([]common.Hash, len(logics))
+
+	for _, logic := range logics {
+		logicAddr := common.CreateAddressFromString(logic.Name)
+
+		if !common.ContainsAddress(common.GenesisLogicAddrs, logicAddr) {
+			k.logger.Error("Mismatch of contract address", "logic-name", logic.Name)
+
+			return nil, errors.New("generated address does not exist in predefined contract address")
+		}
+
+		// Create state object for the logic
+		logicState := k.state.CreateStateObject(logicAddr, common.LogicAccount, true)
+
+		// Create a dummy state object for the deployer
+		// NOTE: This is a dummy object we create at genesis deployment with the 0x00..00 address
+		// to act as a placeholder account for the execution environment's sender state driver.
+		deployerState := k.state.CreateStateObject(identifiers.NilAddress, common.RegularAccount, true)
+
+		behaviouralCtx := logic.BehaviouralContext
+		randomCtx := logic.RandomContext
+
+		_, err := logicState.CreateContext(behaviouralCtx, randomCtx)
+		if err != nil {
+			return nil, errors.Wrap(err, "context initiation failed in genesis")
+		}
+
+		// Create a new execution context
+		ctx := &common.ExecutionContext{
+			CtxDelta: nil,
+			Cluster:  "genesis",
+			Time:     k.cfg.GenesisTimestamp,
+		}
+
+		// Create a new IxLogicDeploy interaction with the logic payload
+		ix, _ := common.NewInteraction(common.IxData{Input: common.IxInput{
+			Type: common.IxLogicDeploy,
+			Payload: func() []byte {
+				payload := &common.LogicPayload{
+					Callsite: logic.Callsite,
+					Calldata: logic.Calldata,
+					Manifest: logic.Manifest.Bytes(),
+				}
+
+				encoded, _ := payload.Bytes()
+
+				return encoded
+			}(),
+		}}, nil)
+
+		// Deploy the genesis logic and check for errors
+		_, receipt, err := compute.DeployLogic(ctx, ix, logicState, deployerState, compute.NewEventStream(ix.LogicID()))
+		if err != nil {
+			k.logger.Error("Unable to deploy logic for", "logic-name", logic.Name)
+
+			return nil, errors.Wrap(err, "deployment failed for logic")
+		}
+
+		if receipt.Error != nil {
+			return nil, errors.Errorf("deployment call failed: %#x", receipt.Error)
+		}
+
+		// Update the dirty objects map with the logic state object
+		transition[logicState.Address()] = logicState
+
+		// Obtain the logic ID from the call receipt
+		logicID := receipt.LogicID
+		k.logger.Info("Deployed genesis contract",
+			"logic-name", logic.Name,
+			"logic-ID", logicID.String(),
+		)
+	}
+
+	return hashes, nil
+}
+
+func (k *Engine) setupAssetAccounts(
+	transition map[identifiers.Address]*state.Object,
+	assetAccs []common.AssetAccountSetupArgs,
+) error {
+	for _, assetAccount := range assetAccs {
+		accAddress := common.CreateAddressFromString(assetAccount.AssetInfo.Symbol)
+
+		transition[accAddress] = k.state.CreateStateObject(accAddress, common.AssetAccount, true)
+
+		_, err := transition[accAddress].CreateContext(assetAccount.BehaviouralContext, assetAccount.RandomContext)
+		if err != nil {
+			return err
+		}
+
+		assetID, err := transition[accAddress].CreateAsset(accAddress, assetAccount.AssetInfo.AssetDescriptor())
+		if err != nil {
+			return err
+		}
+
+		if assetAccount.AssetInfo.Operator != identifiers.NilAddress {
+			if _, ok := transition[assetAccount.AssetInfo.Operator]; !ok {
+				return errors.New("operator account not found")
+			}
+
+			_, err = transition[assetAccount.AssetInfo.Operator].CreateAsset(
+				accAddress, assetAccount.AssetInfo.AssetDescriptor())
+			if err != nil {
+				return err
+			}
+		}
+
+		for _, allocation := range assetAccount.AssetInfo.Allocations {
+			if _, ok := transition[allocation.Address]; !ok {
+				return errors.New("allocation address not found in state objects")
+			}
+
+			transition[allocation.Address].AddBalance(assetID, allocation.Amount.ToInt())
+		}
+	}
+
+	return nil
+}
+
+func (k *Engine) validateAccountCreationInfo(accs ...common.AccountSetupArgs) error {
+	for _, acc := range accs {
+		if acc.Address == common.SargaAddress {
+			return common.ErrInvalidAddress
+		}
+		// check for address validity
+		err := utils.ValidateAccountType(acc.AccType)
+		if err != nil {
+			return errors.Wrap(err, fmt.Sprintf("invalid genesis account creation info %s", acc.Address))
+		}
+	}
+
+	return nil
+}
+
+func (k *Engine) validateSargaAccountCreationInfo(acc common.AccountSetupArgs) error {
+	if acc.Address != common.SargaAddress {
+		return common.ErrInvalidAddress
+	}
+
+	return nil
+}
+
+func (k *Engine) validateAssetAccountCreationArgs(assetAccounts ...common.AssetAccountSetupArgs) error {
+	for _, acc := range assetAccounts {
+		if len(acc.AssetInfo.Allocations) == 0 {
+			return errors.New("empty allocations")
+		}
+	}
+
+	return nil
+}
+
+func (k *Engine) validateLogicCreationArgs(logicAccounts ...common.LogicSetupArgs) error {
+	for _, acc := range logicAccounts {
+		if len(acc.Manifest) == 0 {
+			return errors.New("invalid manifest")
+		}
+	}
+
+	return nil
+}
+
+func (k *Engine) parseGenesisFile() (
+	*common.AccountSetupArgs,
+	[]common.AccountSetupArgs,
+	[]common.AssetAccountSetupArgs,
+	[]common.LogicSetupArgs,
+	error,
+) {
+	genesisData := new(common.GenesisFile)
+
+	data, err := os.ReadFile(k.cfg.GenesisFilePath)
+	if err != nil {
+		return nil, nil, nil, nil, errors.Wrap(err, "failed to open genesis file")
+	}
+
+	if err = json.Unmarshal(data, genesisData); err != nil {
+		return nil, nil, nil, nil, errors.Wrap(err, "failed to parse genesis file")
+	}
+
+	err = k.validateSargaAccountCreationInfo(genesisData.SargaAccount)
+	if err != nil {
+		return nil, nil, nil, nil, errors.Wrap(err, "invalid sarga account info")
+	}
+
+	err = k.validateAccountCreationInfo(genesisData.Accounts...)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	if err = k.validateAssetAccountCreationArgs(genesisData.AssetAccounts...); err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	if err = k.validateLogicCreationArgs(genesisData.Logics...); err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	return &genesisData.SargaAccount, genesisData.Accounts, genesisData.AssetAccounts, genesisData.Logics, nil
+}
+
+func (k *Engine) addGenesisTesseract(
+	addresses []identifiers.Address,
+	stateHashes, contextHashes []common.Hash,
+	transition state.ObjectMap,
+) error {
+	tesseract := createGenesisTesseract(addresses, stateHashes, contextHashes, k.cfg.GenesisTimestamp)
+
+	if err := k.lattice.AddTesseract(
+		true,
+		identifiers.NilAddress,
+		tesseract,
+		state.NewTransition(transition),
+		true,
+	); err != nil {
+		return errors.Wrap(err, "error adding genesis tesseract")
+	}
+
+	return nil
+}
+
+func (k *Engine) SetupGenesis() error {
+	transition := make(state.ObjectMap)
+
+	sargaAccount, genesisAccounts, assetAccounts, logics, err := k.parseGenesisFile()
+	if err != nil {
+		return errors.Wrap(err, "failed to parse genesis file")
+	}
+
+	if _, err = k.state.GetAccountMetaInfo(sargaAccount.Address); err == nil {
+		k.logger.Info("!!!!!!....Skipping Genesis....!!!!!!")
+
+		return nil
+	}
+
+	sargaObject, err := k.setupSargaAccount(sargaAccount, genesisAccounts, assetAccounts, logics)
+	if err != nil {
+		return errors.Wrap(err, "failed to setup sarga account")
+	}
+
+	transition[sargaObject.Address()] = sargaObject
+
+	for _, v := range genesisAccounts {
+		if transition[v.Address], err = k.setupNewAccount(v); err != nil {
+			return errors.Wrap(err, "failed to setup genesis account")
+		}
+	}
+
+	if _, err = k.setupGenesisLogics(transition, logics); err != nil {
+		return errors.Wrap(err, "failed to setup genesis logic")
+	}
+
+	if err = k.setupAssetAccounts(transition, assetAccounts); err != nil {
+		return errors.Wrap(err, "failed to setup asset accounts")
+	}
+
+	count := len(transition)
+	addresses := make([]identifiers.Address, 0, count)
+	stateHashes := make([]common.Hash, 0, count)
+	contextHashes := make([]common.Hash, 0, count)
+
+	for _, stateObject := range transition {
+		stateHash, err := stateObject.Commit()
+		if err != nil {
+			return err
+		}
+
+		addresses = append(addresses, stateObject.Address())
+		stateHashes = append(stateHashes, stateHash)
+		contextHashes = append(contextHashes, stateObject.ContextHash())
+	}
+
+	if err = k.addGenesisTesseract(addresses, stateHashes, contextHashes, transition); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (k *Engine) verifySignatures(ts *common.Tesseract, ics *common.ICSNodeSet) (bool, error) {
+	var (
+		verificationInitTime = time.Now()
+		consensusInfo        = ts.ConsensusInfo()
+		publicKeys           = make([][]byte, 0, consensusInfo.BFTVoteSet.TrueIndicesSize())
+		votesCounter         = make([]uint32, ts.ParticipantCount()+1)
+	)
+
+	for _, valIndex := range ts.BFTVoteSet().GetTrueIndices() {
+		nodeSetIndices, _, _, publicKey := ics.GetKramaID(int32(valIndex))
+		if nodeSetIndices != nil { // ts.Header.Extra.VoteSet.GetIndex(index)
+			publicKeys = append(publicKeys, publicKey)
+
+			for _, index := range nodeSetIndices {
+				votesCounter[index/2]++
+			}
+		} else {
+			k.logger.Debug("Error fetching validator address", "index", valIndex)
+		}
+	}
+
+	for index := range ts.Addresses() {
+		if votesCounter[index] < ics.ParticipantQuorum(index*2) {
+			return false, common.ErrQuorumFailed
+		}
+	}
+
+	if votesCounter[len(ts.Addresses())] < ics.RandomQuorumSize() {
+		return false, common.ErrQuorumFailed
+	}
+
+	vote := ktypes.CanonicalVote{
+		Type:   ktypes.PRECOMMIT,
+		Round:  consensusInfo.Round,
+		TSHash: ts.Hash(),
+	}
+
+	rawData, err := vote.Bytes()
+	if err != nil {
+		return false, err
+	}
+
+	verified, err := k.signatureVerifier(rawData, consensusInfo.CommitSignature, publicKeys)
+	if err != nil {
+		return false, err
+	}
+
+	k.metrics.captureSignatureVerificationTime(verificationInitTime)
+
+	return verified, nil
+}
+
+func (k *Engine) verifyTransitions(
+	addr identifiers.Address,
+	ts *common.Tesseract,
+	allParticipants bool,
+) error {
+	if ts.ClusterID() == "genesis" {
+		return nil
+	}
+
+	addresses := make([]identifiers.Address, 0)
+
+	if allParticipants {
+		addresses = ts.Addresses()
+	} else {
+		addresses = append(addresses, addr)
+	}
+
+	for _, addr := range addresses {
+		initial, err := k.state.IsInitialTesseract(ts, addr)
+		if err != nil {
+			return errors.Wrap(err, "Sarga account not found")
+		}
+
+		if !initial {
+			parent, err := k.lattice.GetTesseract(ts.TransitiveLink(addr), false)
+			if err != nil {
+				k.logger.Error("Failed to fetch parent tesseract", "err", err, "addr", addr)
+
+				return common.ErrPreviousTesseractNotFound
+			}
+
+			// Check Heights
+			if parent.Height(addr) != ts.Height(addr)-1 {
+				return common.ErrInvalidHeight
+			}
+			// TODO: Add more checks
+			// Check time stamp
+			if ts.Timestamp() < parent.Timestamp() {
+				return common.ErrInvalidBlockTime
+			}
+		}
+	}
+
+	return nil
+}
+
+func (k *Engine) ValidateTesseract(
+	addr identifiers.Address,
+	ts *common.Tesseract,
+	ics *common.ICSNodeSet,
+	allParticipants bool,
+) error {
+	if k.db.HasAccMetaInfoAt(addr, ts.Height(addr)) {
+		return common.ErrAlreadyKnown
+	}
+
+	validSeal, err := k.state.IsSealValid(ts)
+	if !validSeal {
+		k.logger.Error("Error validating tesseract seal", "err", err)
+
+		return common.ErrInvalidSeal
+	}
+
+	if err = k.verifyTransitions(addr, ts, allParticipants); err != nil {
+		return err
+	}
+
+	verified, err := k.verifySignatures(ts, ics)
+	if !verified || err != nil {
+		return errors.Wrap(err, fmt.Sprintf("failed to verify signatures %v %v", addr, ts.Height(addr)))
 	}
 
 	return nil

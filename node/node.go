@@ -24,7 +24,6 @@ import (
 	"github.com/sarvalabs/go-moi/lattice"
 	"github.com/sarvalabs/go-moi/network/p2p"
 	"github.com/sarvalabs/go-moi/senatus"
-	"github.com/sarvalabs/go-moi/state"
 	"github.com/sarvalabs/go-moi/storage"
 	"github.com/sarvalabs/go-moi/syncer/forage"
 )
@@ -42,7 +41,6 @@ type Node struct {
 	cfg                 *config.Config
 	eventMux            *utils.TypeMux
 	network             *p2p.Server
-	state               *state.StateManager
 	chain               *lattice.ChainManager
 	senatus             *senatus.ReputationEngine
 	exec                *compute.Manager
@@ -97,12 +95,6 @@ func NewNode(logLevel string, cfg *config.Config) (n *Node, err error) {
 	if err = n.setupReputationEngine(); err != nil {
 		return nil, err
 	}
-
-	if err = n.setupStateManager(); err != nil {
-		return nil, err
-	}
-
-	n.setupStateManagerToSenatus()
 
 	n.setupExecEngine()
 
@@ -176,10 +168,6 @@ func (n *Node) Start() (err error) {
 
 	// starting JSON-RPC server
 	go n.startJSONRPCServer()
-
-	if err := n.chain.Start(); err != nil {
-		return errors.Wrap(err, "failed to start chain manager")
-	}
 
 	return nil
 }

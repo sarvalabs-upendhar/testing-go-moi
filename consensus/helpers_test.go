@@ -2,18 +2,28 @@ package consensus
 
 import (
 	"context"
+	"encoding/json"
+	"math/big"
+	"math/rand"
 	"os"
 	"sync"
 	"testing"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
+
+	"github.com/sarvalabs/go-moi/common/hexutil"
+	"github.com/sarvalabs/go-moi/compute/engineio"
+	"github.com/sarvalabs/go-moi/storage"
+	"github.com/sarvalabs/go-polo"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/hashicorp/go-hclog"
-	"github.com/libp2p/go-libp2p-pubsub"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-identifiers"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common/tests"
-	"github.com/sarvalabs/go-moi/compute"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -107,26 +117,32 @@ func (m *MockServer) DisconnectPeerByKramaID(kramaID kramaid.KramaID) error {
 	return nil
 }
 
-type MockEngine struct {
-	logger   hclog.Logger
-	requests chan ktypes.Request
+func mockCache() *lru.Cache {
+	cache, _ := lru.New(1200)
+
+	return cache
 }
 
-func processRequests(requestsChan <-chan ktypes.Request) {
-	go func() {
-		request := <-requestsChan
-		request.ResponseChan <- nil
-	}()
+type MockExec struct {
+	accountHashes           common.AccStateHashes
+	executeInteractionsHook func() (common.AccStateHashes, error)
 }
 
-func (k *MockEngine) Requests() chan ktypes.Request {
-	processRequests(k.requests)
-
-	return k.requests
+func NewMockExec() *MockExec {
+	return new(MockExec)
 }
 
-func (k *MockEngine) Logger() hclog.Logger {
-	return k.logger
+// mock execution implementation
+func (e *MockExec) ExecuteInteractions(
+	ts *state.Transition,
+	ixns common.Interactions,
+	exec *common.ExecutionContext,
+) (common.AccStateHashes, error) {
+	if e.executeInteractionsHook != nil {
+		return e.executeInteractionsHook()
+	}
+
+	return e.accountHashes, nil
 }
 
 type MockStateManager struct {
@@ -137,9 +153,13 @@ type MockStateManager struct {
 		rSet        *common.NodeSet
 	}
 	accMetaInfo map[identifiers.Address]*common.AccountMetaInfo
+
+	GetAccountMetaInfoHook func() error
+	IsInitialTesseractHook func() error
+	isSealValid            func() bool
 }
 
-func newMockStateManager() *MockStateManager {
+func NewMockStateManager() *MockStateManager {
 	return &MockStateManager{
 		accMetaInfo:         make(map[identifiers.Address]*common.AccountMetaInfo),
 		accountRegistration: make(map[identifiers.Address]bool),
@@ -149,6 +169,59 @@ func newMockStateManager() *MockStateManager {
 			rSet        *common.NodeSet
 		}),
 	}
+}
+
+func (ms *MockStateManager) GetICSParticipants(
+	ixns common.Interactions,
+) (map[identifiers.Address]common.IxParticipant, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (ms *MockStateManager) LoadTransitionObjects(
+	ps map[identifiers.Address]common.IxParticipant,
+) (*state.Transition, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (ms *MockStateManager) CreateStateObject(address identifiers.Address,
+	accountType common.AccountType, isGenesis bool,
+) *state.Object {
+	stateObject := state.NewStateObject(address,
+		mockCache(),
+		nil,
+		nil,
+		common.Account{AccType: accountType},
+		state.NilMetrics(),
+		isGenesis,
+	)
+
+	return stateObject
+}
+
+func (ms *MockStateManager) IsInitialTesseract(ts *common.Tesseract, addr identifiers.Address) (bool, error) {
+	if ms.IsInitialTesseractHook != nil {
+		return false, ms.IsInitialTesseractHook()
+	}
+
+	if ts.Height(ts.AnyAddress()) == 0 {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func (ms *MockStateManager) IsSealValid(ts *common.Tesseract) (bool, error) {
+	if ms.isSealValid != nil {
+		return ms.isSealValid(), nil
+	}
+
+	return true, nil
+}
+
+func (ms *MockStateManager) RemoveCacheObject(addr identifiers.Address) {
+	panic("implement me")
 }
 
 func (ms *MockStateManager) addNodeSet(
@@ -170,14 +243,6 @@ func (ms *MockStateManager) addAccMetaInfo(t *testing.T, addr identifiers.Addres
 	t.Helper()
 
 	ms.accMetaInfo[addr] = info
-}
-
-func (ms *MockStateManager) CreateStateObject(
-	address identifiers.Address,
-	accountType common.AccountType,
-) *state.Object {
-	// TODO implement me
-	panic("implement me")
 }
 
 func (ms *MockStateManager) GetDirtyObject(address identifiers.Address) (*state.Object, error) {
@@ -202,11 +267,6 @@ func (ms *MockStateManager) GetStateObjectByHash(
 	addr identifiers.Address,
 	hash common.Hash,
 ) (*state.Object, error) {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (ms *MockStateManager) UpdateStateObjects(objs state.ObjectMap) error {
 	// TODO implement me
 	panic("implement me")
 }
@@ -240,6 +300,10 @@ func (ms *MockStateManager) GetPublicKeys(ctx context.Context, ids ...kramaid.Kr
 }
 
 func (ms *MockStateManager) GetAccountMetaInfo(addr identifiers.Address) (*common.AccountMetaInfo, error) {
+	if ms.GetAccountMetaInfoHook != nil {
+		return nil, ms.GetAccountMetaInfoHook()
+	}
+
 	info, ok := ms.accMetaInfo[addr]
 	if !ok {
 		return nil, common.ErrFetchingAccMetaInfo
@@ -264,47 +328,85 @@ func (ms *MockStateManager) IsAccountRegistered(addr identifiers.Address) (bool,
 	return ok, nil
 }
 
-type MockExec struct {
-	sm                      *MockStateManager
-	receipts                common.Receipts
-	accountHashes           common.AccStateHashes
-	revertHook              func() error
-	executeInteractionsHook func() (common.Receipts, common.AccStateHashes, error)
-	clusterID               common.ClusterID
+type MockDB struct {
+	accMetaInfo map[identifiers.Address]bool
 }
 
-func (e *MockExec) Cleanup(clusterID common.ClusterID) {
-	e.clusterID = clusterID
+func NewMockDB() *MockDB {
+	return &MockDB{
+		accMetaInfo: make(map[identifiers.Address]bool),
+	}
 }
 
-func (e *MockExec) SpawnExecutor() *compute.IxExecutor {
-	return compute.NewManager(e.sm, hclog.NewNullLogger(), nil, compute.NilMetrics()).SpawnExecutor()
+func (m *MockDB) setAccMetaInfoAt(addr identifiers.Address) {
+	m.accMetaInfo[addr] = true
 }
 
-func mockExec(t *testing.T) *MockExec {
-	t.Helper()
+func (m *MockDB) HasAccMetaInfoAt(addr identifiers.Address, height uint64) bool {
+	_, ok := m.accMetaInfo[addr]
 
-	return new(MockExec)
+	return ok
 }
 
-// mock execution implementation
-func (e *MockExec) ExecuteInteractions(
-	ixs common.Interactions,
-	ctx *common.ExecutionContext,
-) (common.Receipts, common.AccStateHashes, error) {
-	if e.executeInteractionsHook != nil {
-		return e.executeInteractionsHook()
+type MockChainManager struct {
+	tesseractByAddress map[identifiers.Address]*common.Tesseract
+	tesseractByHash    map[common.Hash]*common.Tesseract
+
+	addTesseractHook func() error
+	GetTesseractHook func() error
+}
+
+func NewMockChainManager() *MockChainManager {
+	return &MockChainManager{
+		tesseractByAddress: make(map[identifiers.Address]*common.Tesseract),
+		tesseractByHash:    make(map[common.Hash]*common.Tesseract),
+	}
+}
+
+func (m *MockChainManager) AddTesseractWithState(
+	addr identifiers.Address,
+	dirtyStorage map[common.Hash][]byte,
+	ts *common.Tesseract,
+	transition *state.Transition,
+	allParticipants bool,
+) error {
+	panic("implement me")
+}
+
+func (m *MockChainManager) AddTesseract(
+	cache bool, addr identifiers.Address,
+	t *common.Tesseract,
+	transition *state.Transition,
+	allParticipants bool,
+) error {
+	if m.addTesseractHook != nil {
+		return m.addTesseractHook()
 	}
 
-	return e.receipts, e.accountHashes, nil
-}
-
-func (e *MockExec) Revert(clusterID common.ClusterID) error {
-	if e.revertHook != nil {
-		return e.revertHook()
+	for _, addr := range t.Addresses() {
+		m.tesseractByAddress[addr] = t
 	}
 
 	return nil
+}
+
+func (m *MockChainManager) insertTesseracts(tesseracts ...*common.Tesseract) {
+	for _, ts := range tesseracts {
+		m.tesseractByHash[ts.Hash()] = ts
+	}
+}
+
+func (m *MockChainManager) GetTesseract(hash common.Hash, withInteractions bool) (*common.Tesseract, error) {
+	if m.GetTesseractHook != nil {
+		return nil, m.GetTesseractHook()
+	}
+
+	ts, ok := m.tesseractByHash[hash]
+	if !ok {
+		return nil, common.ErrFetchingTesseract
+	}
+
+	return ts, nil
 }
 
 func createTestConsensusConfig() *config.ConsensusConfig {
@@ -318,42 +420,75 @@ func createTestConsensusConfig() *config.ConsensusConfig {
 	}
 }
 
-type testKramaEngineParams struct {
+// MockAggregateSignVerifier returns true if first byte is true else return false
+func mockAggregateSignVerifier(data []byte, aggSignature []byte, multiplePubKeys [][]byte) (bool, error) {
+	if aggSignature[0] == 1 {
+		return true, nil
+	}
+
+	return false, common.ErrSignatureVerificationFailed
+}
+
+type createKramaEngineParams struct {
+	db             *MockDB
 	sm             *MockStateManager
+	cm             *MockChainManager
 	cfg            *config.ConsensusConfig
-	execCallback   func(sm *MockExec)
 	smCallback     func(sm *MockStateManager)
+	dbCallback     func(db *MockDB)
+	cmCallback     func(cm *MockChainManager)
 	cfgCallback    func(cfg *config.ConsensusConfig)
 	serverCallback func(n *MockServer)
 	engineCallBack func(k *Engine)
+	execCallback   func(exec *MockExec)
 }
 
-func createTestKramaEngine(t *testing.T, params *testKramaEngineParams) *Engine {
+func createTestKramaEngine(t *testing.T, params *createKramaEngineParams) *Engine {
 	t.Helper()
 
 	var (
-		sm     = newMockStateManager()
+		sm     = NewMockStateManager()
 		cfg    = createTestConsensusConfig()
 		server = newMockServer()
-		exec   = mockExec(t)
+		cm     = NewMockChainManager()
+		db     = NewMockDB()
+		exec   = NewMockExec()
 	)
 
 	if params == nil {
-		params = &testKramaEngineParams{}
+		params = &createKramaEngineParams{}
 	}
 
 	if params.sm != nil {
 		sm = params.sm
 	}
 
+	if params.cm != nil {
+		cm = params.cm
+	}
+
+	if params.db != nil {
+		db = params.db
+	}
+
 	if params.smCallback != nil {
 		params.smCallback(sm)
 	}
 
-	exec.sm = sm
+	if params.cmCallback != nil {
+		params.cmCallback(cm)
+	}
+
+	if params.dbCallback != nil {
+		params.dbCallback(db)
+	}
 
 	if params.cfg != nil {
 		cfg = params.cfg
+	}
+
+	if params.execCallback != nil {
+		params.execCallback(exec)
 	}
 
 	if params.cfgCallback != nil {
@@ -364,11 +499,8 @@ func createTestKramaEngine(t *testing.T, params *testKramaEngineParams) *Engine 
 		params.serverCallback(server)
 	}
 
-	if params.execCallback != nil {
-		params.execCallback(exec)
-	}
-
 	engine, err := NewKramaEngine(
+		db,
 		cfg,
 		hclog.NewNullLogger(),
 		nil,
@@ -377,11 +509,12 @@ func createTestKramaEngine(t *testing.T, params *testKramaEngineParams) *Engine 
 		exec,
 		nil,
 		nil,
-		nil,
+		cm,
 		nil,
 		nil,
 		NilMetrics(),
 		nil,
+		mockAggregateSignVerifier,
 	)
 	require.NoError(t, err)
 
@@ -528,6 +661,555 @@ func checkContextDelta(
 	require.Equal(t, expectedContextDelta, actualContextDelta)
 }
 
+func tesseractParamsWithCommitSign(commitSign []byte) *createTesseractParams {
+	return &createTesseractParams{
+		TSDataCallback: func(ts *tests.TesseractData) {
+			ts.ConsensusInfo.CommitSignature = commitSign
+		},
+	}
+}
+
+func defaultTesseractData() *tests.TesseractData {
+	// vote-set is a bit array
+	voteSet := common.ArrayOfBits{
+		Size:     1,                 // represents node tsCount
+		Elements: make([]uint64, 1), // each element holds eight votes
+	}
+
+	voteSet.Size = 5         // there are 5 ics nodes
+	voteSet.Elements[0] = 31 // first 5 ics nodes voted yes
+
+	return &tests.TesseractData{
+		InteractionsHash: common.NilHash,
+		ReceiptsHash:     common.NilHash,
+		Epoch:            big.NewInt(0),
+		Timestamp:        0,
+		Operator:         "",
+		FuelUsed:         100,
+		FuelLimit:        100,
+		ConsensusInfo: common.PoXtData{
+			BFTVoteSet: voteSet.Copy(),
+		},
+
+		// non canonical fields
+		Seal:   nil,
+		SealBy: "",
+	}
+}
+
+type createTesseractParams struct {
+	Addresses            []identifiers.Address
+	Heights              []uint64
+	Participants         common.ParticipantsState
+	participantsCallback func(participants common.ParticipantsState)
+	TSDataCallback       func(ts *tests.TesseractData)
+
+	Ixns     common.Interactions
+	Receipts common.Receipts
+}
+
+// CreateTesseract creates a tesseract using tessseract params fields
+// if any field thats not available in params need to be initialized using TesseractCallback field
+func createTesseract(t *testing.T, params *createTesseractParams) *common.Tesseract {
+	t.Helper()
+
+	var (
+		// participants     common.Participants
+		interactionsHash common.Hash
+		tsData           = defaultTesseractData()
+	)
+
+	if params == nil {
+		params = &createTesseractParams{}
+	}
+
+	if params.Participants == nil {
+		params.Participants = make(common.ParticipantsState)
+	}
+
+	if len(params.Addresses) == 0 {
+		addr := tests.RandomAddress(t)
+		params.Addresses = []identifiers.Address{addr}
+		params.Participants[addr] = common.State{}
+
+		if len(params.Heights) != 0 {
+			params.Participants[addr] = common.State{
+				Height: params.Heights[0],
+			}
+		}
+	}
+
+	if params.Ixns != nil {
+		hash, err := params.Ixns.Hash()
+		require.NoError(t, err)
+
+		interactionsHash = hash
+	}
+
+	if params.TSDataCallback != nil {
+		params.TSDataCallback(tsData)
+	}
+
+	if params.participantsCallback != nil {
+		params.participantsCallback(params.Participants)
+	}
+
+	return common.NewTesseract(
+		params.Participants,
+		interactionsHash,
+		tsData.ReceiptsHash,
+		tsData.Epoch,
+		tsData.Timestamp,
+		tsData.Operator,
+		tsData.FuelUsed,
+		tsData.FuelLimit,
+		tsData.ConsensusInfo,
+		tsData.Seal,
+		tsData.SealBy,
+		params.Ixns,
+		params.Receipts,
+	)
+}
+
+func createTesseracts(t *testing.T, count int, paramsMap map[int]*createTesseractParams) []*common.Tesseract {
+	t.Helper()
+
+	tesseracts := make([]*common.Tesseract, count)
+
+	if paramsMap == nil {
+		paramsMap = map[int]*createTesseractParams{}
+	}
+
+	for i := 0; i < count; i++ {
+		if paramsMap[i] == nil {
+			paramsMap[i] = &createTesseractParams{
+				Heights: []uint64{uint64(i)},
+			}
+		}
+
+		tesseracts[i] = createTesseract(t, paramsMap[i])
+	}
+
+	return tesseracts
+}
+
+func getPublicKeys(t *testing.T, count int) [][]byte {
+	t.Helper()
+
+	var pk [][]byte
+
+	for i := 0; i < count; i++ {
+		addr := tests.RandomAddress(t).Bytes()
+		pk = append(pk, addr)
+	}
+
+	return pk
+}
+
+// createMockGenesisFile is a mock function used to create genesis file
+func createMockGenesisFile(
+	t *testing.T,
+	dir string,
+	invalidData bool,
+	sarga common.AccountSetupArgs,
+	accounts []common.AccountSetupArgs,
+	assetAccounts []common.AssetAccountSetupArgs,
+	logics []common.LogicSetupArgs,
+) string {
+	t.Helper()
+
+	var (
+		data []byte
+		err  error
+	)
+
+	genesis := &common.GenesisFile{
+		SargaAccount:  sarga,
+		Accounts:      accounts,
+		AssetAccounts: assetAccounts,
+		Logics:        logics,
+	}
+
+	if invalidData {
+		data = []byte{1, 2, 3}
+	} else {
+		data, err = json.MarshalIndent(genesis, "", " ")
+		require.NoError(t, err)
+	}
+
+	file, err := os.CreateTemp(dir, "*config.json")
+	require.NoError(t, err)
+
+	_, err = file.Write(data)
+	require.NoError(t, err)
+
+	return file.Name()
+}
+
+func createTesseractsWithChain(t *testing.T, count int, paramsMap map[int]*createTesseractParams) []*common.Tesseract {
+	t.Helper()
+
+	tesseracts := make([]*common.Tesseract, count)
+
+	if paramsMap == nil {
+		paramsMap = map[int]*createTesseractParams{}
+	}
+
+	tesseracts[0] = createTesseract(t, paramsMap[0])
+
+	for i := 1; i < count; i++ {
+		paramsMap[i].participantsCallback = func(participants common.ParticipantsState) {
+			hash := tesseracts[i-1].Hash()
+			p := participants[tesseracts[0].AnyAddress()]
+			p.TransitiveLink = hash
+			participants[tesseracts[0].AnyAddress()] = p
+		}
+
+		tesseracts[i] = createTesseract(t, paramsMap[i])
+	}
+
+	return tesseracts
+}
+
+func getAccountSetupArgs(
+	t *testing.T,
+	address identifiers.Address,
+	accType common.AccountType,
+	moiID string,
+	behNodes []kramaid.KramaID,
+	randNodes []kramaid.KramaID,
+) *common.AccountSetupArgs {
+	t.Helper()
+
+	return &common.AccountSetupArgs{
+		Address:            address,
+		MoiID:              moiID,
+		BehaviouralContext: behNodes,
+		RandomContext:      randNodes,
+		AccType:            accType,
+	}
+}
+
+func getTestAccountWithAccType(t *testing.T, accType common.AccountType) common.AccountSetupArgs {
+	t.Helper()
+
+	ids := tests.RandomKramaIDs(t, 4)
+
+	address := tests.RandomAddress(t)
+
+	if accType == common.SargaAccount {
+		address = common.SargaAddress
+	}
+
+	return *getAccountSetupArgs(
+		t,
+		address,
+		accType,
+		"moi-id",
+		ids[:2],
+		ids[2:4],
+	)
+}
+
+func getTestGenesisLogics(t *testing.T) []common.LogicSetupArgs {
+	t.Helper()
+
+	manifestFile, err := engineio.NewManifestFromFile("./../compute/manifests/tokenledger.yaml")
+	require.NoError(t, err)
+
+	manifestEncoded, err := manifestFile.Encode(common.POLO)
+	require.NoError(t, err)
+
+	manifest := "0x" + common.BytesToHex(manifestEncoded)
+	calldata := "0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd8ee6a29e" +
+		"c442dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49"
+
+	logic := common.LogicSetupArgs{
+		Name: "staking-contract",
+
+		Callsite: "Seeder",
+		Calldata: hexutil.Bytes(common.Hex2Bytes(calldata)),
+		Manifest: hexutil.Bytes(common.Hex2Bytes(manifest)),
+
+		BehaviouralContext: tests.RandomKramaIDs(t, 1),
+		RandomContext:      nil,
+	}
+
+	return []common.LogicSetupArgs{logic}
+}
+
+func getAssetAccountSetupArgs(
+	t *testing.T,
+	assetDetails common.AssetCreationArgs,
+	behaviouralContext []kramaid.KramaID,
+	randomContext []kramaid.KramaID,
+) common.AssetAccountSetupArgs {
+	t.Helper()
+
+	return common.AssetAccountSetupArgs{
+		BehaviouralContext: behaviouralContext,
+		RandomContext:      randomContext,
+		AssetInfo:          &assetDetails,
+	}
+}
+
+func getTestAssetCreationArgs(t *testing.T, allocationAddr identifiers.Address) common.AssetCreationArgs {
+	t.Helper()
+
+	info := tests.GetRandomAssetInfo(t, identifiers.NilAddress)
+
+	if allocationAddr == identifiers.NilAddress {
+		allocationAddr = tests.RandomAddress(t)
+	}
+
+	return common.AssetCreationArgs{
+		Symbol:     info.Symbol,
+		Dimension:  hexutil.Uint8(info.Dimension),
+		Standard:   hexutil.Uint16(info.Standard),
+		IsLogical:  info.IsLogical,
+		IsStateful: info.IsStateFul,
+		Operator:   info.Operator,
+		Allocations: []common.Allocation{
+			{
+				Address: allocationAddr,
+				Amount:  (*hexutil.Big)(big.NewInt(rand.Int63())),
+			},
+		},
+	}
+}
+
+func getTestAccountWithAddress(t *testing.T, address identifiers.Address) common.AccountSetupArgs {
+	t.Helper()
+
+	ids := tests.RandomKramaIDs(t, 4)
+
+	return *getAccountSetupArgs(
+		t,
+		address,
+		common.RegularAccount,
+		"moi-id",
+		ids[:2],
+		ids[2:4],
+	)
+}
+
+func getAssetCreationArgs(
+	symbol string,
+	owner identifiers.Address,
+	address []identifiers.Address,
+	amount []*big.Int,
+) *common.AssetCreationArgs {
+	alloc := make([]common.Allocation, len(address))
+
+	for i, addr := range address {
+		alloc[i] = common.Allocation{
+			Address: addr,
+			Amount:  (*hexutil.Big)(amount[i]),
+		}
+	}
+
+	return &common.AssetCreationArgs{
+		Symbol:      symbol,
+		Operator:    owner,
+		Allocations: alloc,
+	}
+}
+
+func getICSNodeset(t *testing.T, participantCount, nodesCount int) *common.ICSNodeSet {
+	t.Helper()
+
+	ics := common.NewICSNodeSet(2*participantCount + 2)
+
+	for i := 0; i < 2*participantCount+2; i++ {
+		ics.UpdateNodeSet(
+			i,
+			common.NewNodeSet(
+				tests.RandomKramaIDs(t, nodesCount),
+				getPublicKeys(t, nodesCount),
+				uint32(nodesCount),
+			))
+	}
+
+	return ics
+}
+
+func getReceipt(ixHash common.Hash) *common.Receipt {
+	return &common.Receipt{
+		IxType:    1,
+		IxHash:    ixHash,
+		FuelUsed:  rand.Uint64(),
+		ExtraData: make(json.RawMessage, 0),
+	}
+}
+
+func getIxParamsWithAddress(from identifiers.Address, to identifiers.Address) *tests.CreateIxParams {
+	return &tests.CreateIxParams{
+		IxDataCallback: func(ix *common.IxData) {
+			ix.Input.Sender = from
+			ix.Input.Receiver = to
+			ix.Input.Type = common.IxValueTransfer
+		},
+	}
+}
+
+func getIX(t *testing.T) *common.Interaction {
+	t.Helper()
+
+	return tests.CreateIX(
+		t,
+		getIxParamsWithAddress(tests.RandomAddress(t), tests.RandomAddress(t)),
+	)
+}
+
+func getIxAndReceipt(t *testing.T) (*common.Interaction, *common.Receipt) {
+	t.Helper()
+	ix := getIX(t)
+
+	return ix, getReceipt(ix.Hash())
+}
+
+func getIxAndReceipts(t *testing.T, ixCount int) ([]*common.Interaction, common.Receipts) {
+	t.Helper()
+
+	var ixs []*common.Interaction
+
+	receipts := make(map[common.Hash]*common.Receipt, ixCount)
+
+	for i := 0; i < ixCount; i++ {
+		ix, r := getIxAndReceipt(t)
+		ixs = append(ixs, ix)
+		receipts[ix.Hash()] = r
+	}
+
+	return ixs, receipts
+}
+
+func checkForLogicAccounts(t *testing.T, expected, actual []common.LogicSetupArgs) {
+	t.Helper()
+
+	require.Equal(t, len(expected), len(actual))
+
+	for i := range actual {
+		require.Equal(t, expected[i], actual[i])
+	}
+}
+
+func checkForAssetAccounts(t *testing.T, expected, actual []common.AssetAccountSetupArgs) {
+	t.Helper()
+
+	require.Equal(t, len(expected), len(actual))
+
+	for i := range expected {
+		require.Equal(t, expected[i], actual[i])
+	}
+}
+
+func checkSargaStorageEntry(t *testing.T, obj *state.Object, addr identifiers.Address) {
+	t.Helper()
+
+	val, err := obj.GetStorageEntry(common.SargaLogicID, addr.Bytes())
+	require.NoError(t, err)
+
+	genesisInfo := common.AccountGenesisInfo{
+		IxHash: common.GenesisIxHash,
+	}
+	rawGenesisInfo, err := polo.Polorize(genesisInfo)
+	assert.NoError(t, err)
+
+	require.Equal(t, val, rawGenesisInfo)
+}
+
+func checkSargaObjectAccounts(
+	t *testing.T,
+	obj *state.Object,
+	accounts []common.AccountSetupArgs,
+) {
+	t.Helper()
+
+	// check if other accounts address inserted in to sarga account storage
+	for _, info := range accounts {
+		checkSargaStorageEntry(t, obj, info.Address)
+	}
+}
+
+func checkSargaObjectLogicAccounts(
+	t *testing.T,
+	obj *state.Object,
+	logics []common.LogicSetupArgs,
+) {
+	t.Helper()
+
+	// check if logics address inserted in to sarga account storage
+	for _, logic := range logics {
+		checkSargaStorageEntry(t, obj, common.CreateAddressFromString(logic.Name))
+	}
+}
+
+func checkSargaObjectAssetAccounts(
+	t *testing.T,
+	obj *state.Object,
+	assets []common.AssetAccountSetupArgs,
+) {
+	t.Helper()
+
+	// check if assert address inserted in to sarga account storage
+	for _, asset := range assets {
+		checkSargaStorageEntry(t, obj, common.CreateAddressFromString(asset.AssetInfo.Symbol))
+	}
+}
+
+func validateContextInitialization(
+	t *testing.T,
+	obj *state.Object,
+	address identifiers.Address,
+	contextHash common.Hash,
+) {
+	t.Helper()
+
+	// check if context created
+	_, err := obj.GetDirtyEntry(common.BytesToHex(storage.ContextObjectKey(address, contextHash)))
+	require.NoError(t, err)
+}
+
+func checkForAssetRegistry(
+	t *testing.T,
+	so *state.Object,
+	assetID identifiers.AssetID,
+	expectedAssetDescriptor []byte,
+) {
+	t.Helper()
+
+	registry, err := so.Registry()
+	require.NoError(t, err)
+
+	actualAssetDescriptor, ok := registry.Entries[string(assetID)]
+	require.True(t, ok)
+
+	require.Equal(t, expectedAssetDescriptor, actualAssetDescriptor)
+}
+
+func checkForAllocations(
+	t *testing.T,
+	stateObjects map[identifiers.Address]*state.Object,
+	assetInfo *common.AssetCreationArgs,
+	assetID identifiers.AssetID,
+) {
+	t.Helper()
+
+	for _, allocation := range assetInfo.Allocations {
+		so, ok := stateObjects[allocation.Address]
+		require.True(t, ok)
+
+		balances, err := so.Balances()
+		require.NoError(t, err)
+
+		bal, ok := balances.AssetMap[assetID]
+		require.True(t, ok)
+
+		require.Equal(t, allocation.Amount.ToInt(), bal)
+	}
+}
+
 /*
 func getRawInteraction(t *testing.T, ixData common.IxData, sign []byte) []byte {
 	t.Helper()
@@ -558,12 +1240,6 @@ func getSignature(t *testing.T, kramaID kramaid.KramaID, rawIxns []byte, vault *
 	return rawCanonicalICSReq, icsReqSign
 }
 */
-
-func checkForExecutionCleanup(t *testing.T, exec *MockExec, expectedClusterID common.ClusterID) {
-	t.Helper()
-
-	require.Equal(t, expectedClusterID, exec.clusterID)
-}
 
 func checkNodeSetForParticipant(t *testing.T, state *MockStateManager, ps common.Participants, ns *common.ICSNodeSet) {
 	t.Helper()

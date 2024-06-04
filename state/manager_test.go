@@ -5,12 +5,15 @@ import (
 	"errors"
 	"testing"
 
+	iradix "github.com/hashicorp/go-immutable-radix"
+
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+
 	"github.com/decred/dcrd/crypto/blake256"
 	"github.com/hashicorp/golang-lru"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -26,180 +29,9 @@ func TestStateManager_CreateStateObject(t *testing.T) {
 	accType := common.LogicAccount
 
 	sm := createTestStateManager(t, nil)
-	so := sm.CreateStateObject(address, accType)
+	so := sm.CreateStateObject(address, accType, true)
 
-	validateStateObject(t, so, accType, address)
-}
-
-func TestStateManager_CleanupDirtyObject(t *testing.T) {
-	stateObject := createTestStateObject(t, nil)
-
-	smParams := &createStateManagerParams{
-		smCallBack: func(sm *StateManager) {
-			sm.dirtyObjects[stateObject.address] = stateObject
-		},
-	}
-
-	sm := createTestStateManager(t, smParams)
-
-	sm.cleanupDirtyObject(stateObject.address)
-
-	checkForDirtyObject(t, sm, stateObject.address, false)
-}
-
-func TestStateManager_CreateDirtyObject(t *testing.T) {
-	sm := createTestStateManager(t, nil)
-
-	address := tests.RandomAddress(t)
-	do := sm.CreateDirtyObject(address, common.SargaAccount)
-
-	dirtyObject, ok := sm.dirtyObjects[address]
-
-	require.True(t, ok)
-	require.Equal(t, do.accType, common.SargaAccount)
-	require.Equal(t, do, dirtyObject)
-}
-
-func TestStateManager_GetLatestTesseractHash(t *testing.T) {
-	accMetaInfo := getAccMetaInfos(t, 2)
-
-	smParams := &createStateManagerParams{
-		dbCallback: func(db *MockDB) {
-			db.setAccountMetaInfo(accMetaInfo[0])
-		},
-		smCallBack: func(sm *StateManager) {
-			storeInSmCache(sm, accMetaInfo[1].Address, accMetaInfo[1].TesseractHash)
-		},
-	}
-
-	sm := createTestStateManager(t, smParams)
-
-	testcases := []struct {
-		name          string
-		address       identifiers.Address
-		hash          common.Hash
-		expectedError error
-	}{
-		{
-			name:          "should return error if nil address",
-			address:       identifiers.NilAddress,
-			hash:          accMetaInfo[0].TesseractHash,
-			expectedError: common.ErrInvalidAddress,
-		},
-		{
-			name:          "fetches tesseract hash from cache",
-			address:       accMetaInfo[1].Address,
-			hash:          accMetaInfo[1].TesseractHash,
-			expectedError: nil,
-		},
-		{
-			name:          "should fail if tesseract not found",
-			address:       tests.RandomAddress(t),
-			hash:          accMetaInfo[0].TesseractHash,
-			expectedError: common.ErrFetchingAccMetaInfo,
-		},
-		{
-			name:          "fetches tesseract hash from db",
-			address:       accMetaInfo[0].Address,
-			hash:          accMetaInfo[0].TesseractHash,
-			expectedError: nil,
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			hash, err := sm.getLatestTesseractHash(test.address)
-			if test.expectedError != nil {
-				require.ErrorContains(t, err, test.expectedError.Error())
-
-				return
-			}
-			require.NoError(t, err)
-			require.Equal(t, test.hash, hash)
-			checkForCache(t, sm, test.address)
-		})
-	}
-}
-
-func TestStateManager_FetchTesseractFromDB(t *testing.T) {
-	tesseractParams := tests.GetTesseractParamsMapWithIxnsAndReceipts(t, 2, 2)
-
-	// Set the clusterID to genesis identifier to avoid fetching interactions
-	tesseractParams[0].TSDataCallback = func(ts *tests.TesseractData) {
-		ts.ConsensusInfo.ClusterID = common.GenesisIdentifier
-	}
-
-	// Set the receipts of the genesis tesseract to nil
-	tesseractParams[0].Receipts = nil
-
-	tesseracts := tests.CreateTesseracts(t, 3, tesseractParams)
-
-	smParams := &createStateManagerParams{
-		dbCallback: func(db *MockDB) {
-			insertTesseractsAndIxnsInDB(t, db, tesseracts[:2]...)
-			insertReceiptsInDB(t, db, tesseracts[:2]...)
-			insertTesseractInDB(t, db, tesseracts[2])
-		},
-	}
-
-	sm := createTestStateManager(t, smParams)
-
-	testcases := []struct {
-		name             string
-		hash             common.Hash
-		withInteractions bool
-		expectedTS       *common.Tesseract
-		expectedError    error
-	}{
-		{
-			name:             "genesis tesseract",
-			hash:             tesseracts[0].Hash(),
-			withInteractions: true,
-			expectedTS:       tesseracts[0],
-			expectedError:    nil,
-		},
-		{
-			name:             "non-genesis tesseract with interactions",
-			hash:             tesseracts[1].Hash(),
-			withInteractions: true,
-			expectedTS:       tesseracts[1],
-			expectedError:    nil,
-		},
-		{
-			name:             "without interactions",
-			hash:             tesseracts[1].Hash(),
-			withInteractions: false,
-			expectedTS:       tesseracts[1],
-			expectedError:    nil,
-		},
-		{
-			name:             "should fail if tesseract not found",
-			hash:             tests.RandomHash(t),
-			withInteractions: false,
-			expectedError:    common.ErrFetchingTesseract,
-		},
-		{
-			name:             "should fail if interactions not found",
-			hash:             tesseracts[2].Hash(),
-			withInteractions: true,
-			expectedError:    common.ErrFetchingInteractions,
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			ts, err := sm.FetchTesseractFromDB(test.hash, test.withInteractions)
-			if test.expectedError != nil {
-				require.ErrorContains(t, err, test.expectedError.Error())
-
-				return
-			}
-
-			require.NoError(t, err)
-
-			validateTesseract(t, ts, test.expectedTS, test.withInteractions)
-		})
-	}
+	validateStateObject(t, so, accType, address, true)
 }
 
 func TestStateManager_GetTesseractByHash(t *testing.T) {
@@ -208,8 +40,7 @@ func TestStateManager_GetTesseractByHash(t *testing.T) {
 
 	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
-			insertTesseractsAndIxnsInDB(t, db, tesseracts[:2]...)
-			insertReceiptsInDB(t, db, tesseracts[:2]...)
+			insertTesseractsInDB(t, db, tesseracts[:2]...)
 		},
 		smCallBack: func(sm *StateManager) {
 			sm.cache.Add(tesseracts[2].Hash(), tesseracts[2])
@@ -325,39 +156,36 @@ func TestStateManager_GetStateObjectByHash(t *testing.T) {
 	}
 }
 
-func TestStateManager_GetLatestStateObject(t *testing.T) {
-	assetIDs, bal := getAssetIDsAndBalances(t, 2)
-	balances, balanceHashes := getTestBalances(t, getAssetMaps(assetIDs, bal, 1), 2)
-	accounts, stateHashes := getTestAccounts(t, balanceHashes, 2)
+func TestStateManager_GetLatestStateObject_WithStateCache(t *testing.T) {
+	accounts, stateHashes := getTestAccounts(t, tests.GetHashes(t, 2), 2)
 
 	soParams := map[int]*createStateObjectParams{
 		0: {
 			account: accounts[0],
 		},
-		1: stateObjectParamsWithBalance(t, balanceHashes[1], balances[1]),
+		1: {
+			account: accounts[1],
+		},
 	}
 
 	so := createTestStateObjects(t, 2, soParams)
 
-	tesseractParams := map[int]*tests.CreateTesseractParams{
-		0: getTesseractParamsWithStateHash(so[0].address, stateHashes[0]),
-		1: getTesseractParamsWithStateHash(tests.RandomAddress(t), tests.RandomHash(t)),
-	}
-
-	tesseracts := tests.CreateTesseracts(t, 2, tesseractParams)
-
 	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
-			insertAccountsInDB(t, db, stateHashes, accounts...)
-			insertBalancesInDB(t, db, balanceHashes, balances...)
-			insertTesseractsAndIxnsInDB(t, db, tesseracts...)
-		},
-		smCallBack: func(sm *StateManager) {
-			storeTesseractHashInCache(t, sm.cache, tesseracts...)
+			insertAccountsInDB(t, db, stateHashes[0:1], accounts[0:1]...)
+			for i := 0; i < 2; i++ {
+				db.setAccountMetaInfo(&common.AccountMetaInfo{
+					Address:   so[i].address,
+					StateHash: stateHashes[i],
+				})
+			}
 		},
 	}
 
 	sm := createTestStateManager(t, smParams)
+
+	soInCache := createTestStateObject(t, nil)
+	sm.objectCache.Add(soInCache.address, soInCache)
 
 	testcases := []struct {
 		name          string
@@ -371,13 +199,18 @@ func TestStateManager_GetLatestStateObject(t *testing.T) {
 			sObj:    so[0],
 		},
 		{
-			name:          "should fail if tesseract not found",
+			name:    "state object fetched from object cache",
+			address: soInCache.address,
+			sObj:    soInCache,
+		},
+		{
+			name:          "should fail if acc meta info not found",
 			address:       tests.RandomAddress(t),
-			expectedError: errors.New("failed to fetch latest tesseract hash"),
+			expectedError: errors.New("failed to fetch acc meta info"),
 		},
 		{
 			name:          "should fail if state object not found",
-			address:       tesseracts[1].AnyAddress(),
+			address:       so[1].Address(),
 			expectedError: common.ErrStateNotFound,
 		},
 	}
@@ -394,6 +227,73 @@ func TestStateManager_GetLatestStateObject(t *testing.T) {
 			require.NoError(t, err)
 
 			checkForStateObject(t, test.sObj, latestStateObject)
+
+			if sm.objectCache != nil {
+				data, ok := sm.objectCache.Get(test.address)
+				require.True(t, ok)
+
+				so, ok := data.(*Object)
+				require.True(t, ok)
+
+				checkForStateObject(t, so, latestStateObject)
+			}
+		})
+	}
+}
+
+func TestStateManager_GetLatestStateObject_WithoutStateCache(t *testing.T) {
+	accounts, stateHashes := getTestAccounts(t, tests.GetHashes(t, 1), 1)
+
+	soParams := map[int]*createStateObjectParams{
+		0: {
+			account: accounts[0],
+		},
+	}
+
+	so := createTestStateObjects(t, 1, soParams)
+
+	smParams := &createStateManagerParams{
+		dbCallback: func(db *MockDB) {
+			insertAccountsInDB(t, db, stateHashes, accounts...)
+			db.setAccountMetaInfo(&common.AccountMetaInfo{
+				Address:   so[0].address,
+				StateHash: stateHashes[0],
+			})
+		},
+		smCallBack: func(sm *StateManager) {
+			sm.objectCache = nil
+		},
+	}
+
+	sm := createTestStateManager(t, smParams)
+
+	testcases := []struct {
+		name          string
+		address       identifiers.Address
+		sObj          *Object
+		expectedError error
+	}{
+		{
+			name:    "state object constructed from db",
+			address: so[0].address,
+			sObj:    so[0],
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			latestStateObject, err := sm.GetLatestStateObject(test.address)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			checkForStateObject(t, test.sObj, latestStateObject)
+
+			require.True(t, sm.objectCache == nil)
 		})
 	}
 }
@@ -401,23 +301,19 @@ func TestStateManager_GetLatestStateObject(t *testing.T) {
 func TestStateManager_GetStateObject(t *testing.T) {
 	account, stateHash := getTestAccounts(t, []common.Hash{tests.RandomHash(t), tests.RandomHash(t)}, 2)
 
-	so := NewStateObject(tests.RandomAddress(t), nil, nil, mockDB(), *account[0], NilMetrics())
-	so1 := NewStateObject(tests.RandomAddress(t), nil, nil, mockDB(), *account[1], NilMetrics())
-
-	ts := tests.CreateTesseract(t, getTesseractParamsWithStateHash(so1.Address(), stateHash[1]))
+	so := NewStateObject(tests.RandomAddress(t), nil, nil, mockDB(), *account[0], NilMetrics(),
+		false)
+	so1 := NewStateObject(tests.RandomAddress(t), nil, nil, mockDB(), *account[1], NilMetrics(),
+		false)
 
 	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
 			insertAccountsInDB(t, db, stateHash, account...)
-			insertTesseractsAndIxnsInDB(t, db, ts)
-			insertReceiptsInDB(t, db, ts)
-		},
-		smCallBack: func(sm *StateManager) {
-			storeTesseractHashInCache(t, sm.cache, ts)
 		},
 	}
 
 	sm := createTestStateManager(t, smParams)
+	sm.objectCache.Add(so1.address, so1)
 
 	testcases := []struct {
 		name      string
@@ -426,7 +322,7 @@ func TestStateManager_GetStateObject(t *testing.T) {
 		sObj      *Object
 	}{
 		{
-			name:      "fetch state object from state hash",
+			name:      "fetch state object by state hash",
 			address:   so.address,
 			stateHash: stateHash[0],
 			sObj:      so,
@@ -447,163 +343,6 @@ func TestStateManager_GetStateObject(t *testing.T) {
 			checkForStateObject(t, test.sObj, stateObject)
 		})
 	}
-}
-
-func TestStateManager_GetLatestTesseract(t *testing.T) {
-	tesseracts := tests.CreateTesseracts(t,
-		2,
-		tests.GetTesseractParamsMapWithIxnsAndReceipts(t, 3, 2),
-	)
-
-	smParams := &createStateManagerParams{
-		dbCallback: func(db *MockDB) {
-			insertTesseractsAndIxnsInDB(t, db, tesseracts[1:]...)
-			insertReceiptsInDB(t, db, tesseracts[1:]...)
-		},
-		smCallBack: func(sm *StateManager) {
-			storeTesseractHashInCache(t, sm.cache, tesseracts...)
-		},
-	}
-
-	sm := createTestStateManager(t, smParams)
-
-	testcases := []struct {
-		name             string
-		address          identifiers.Address
-		withInteractions bool
-		expectedTS       *common.Tesseract
-		expectedError    error
-	}{
-		{
-			name:             "should fail if tesseract address doesn't exist",
-			address:          tests.RandomAddress(t),
-			withInteractions: true,
-			expectedError:    errors.New("failed to fetch latest tesseract hash"),
-		},
-		{
-			name:             "should fail if tesseract hash doesn't exist",
-			address:          tesseracts[0].AnyAddress(),
-			withInteractions: true,
-			expectedTS:       tesseracts[0],
-			expectedError:    common.ErrFetchingTesseract,
-		},
-		{
-			name:             "with interactions",
-			address:          tesseracts[1].AnyAddress(),
-			withInteractions: true,
-			expectedTS:       tesseracts[1],
-			expectedError:    nil,
-		},
-		{
-			name:             "without interactions",
-			address:          tesseracts[1].AnyAddress(),
-			withInteractions: false,
-			expectedTS:       tesseracts[1],
-			expectedError:    nil,
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			ts, err := sm.GetLatestTesseract(test.address, test.withInteractions)
-			if test.expectedError != nil {
-				require.ErrorContains(t, err, test.expectedError.Error())
-
-				return
-			}
-
-			validateTesseract(t, ts, test.expectedTS, test.withInteractions)
-		})
-	}
-}
-
-func TestStateManager_GetDirtyObject(t *testing.T) {
-	soParams := map[int]*createStateObjectParams{
-		0: {
-			address: tests.RandomAddress(t),
-			account: &common.Account{
-				Nonce: 2,
-			},
-		},
-		1: {
-			address: tests.RandomAddress(t),
-			account: &common.Account{
-				Nonce: 4,
-			},
-		},
-	}
-
-	so := createTestStateObjects(t, 2, soParams)
-
-	stateHash, err := so[1].Commit()
-	assert.NoError(t, err)
-
-	ts := tests.CreateTesseract(t, getTesseractParamsWithStateHash(so[1].address, stateHash))
-
-	smParams := &createStateManagerParams{
-		dbCallback: func(db *MockDB) {
-			insertTesseractsAndIxnsInDB(t, db, ts)
-			insertAccountsInDB(t, db, []common.Hash{stateHash}, so[1].Data())
-		},
-		smCallBack: func(sm *StateManager) {
-			insertDirtyObject(sm, so[0])
-			storeTesseractHashInCache(t, sm.cache, ts)
-		},
-	}
-
-	sm := createTestStateManager(t, smParams)
-
-	testcases := []struct {
-		name          string
-		address       identifiers.Address
-		sObj          *Object
-		expectedError error
-	}{
-		{
-			name:    "should retrieve state object from dirty object",
-			address: so[0].address,
-			sObj:    so[0],
-		},
-		{
-			name:    "should retrieve state object from db",
-			address: ts.AnyAddress(),
-			sObj:    so[1],
-		},
-		{
-			name:          "should fail if state object not found",
-			address:       tests.RandomAddress(t),
-			expectedError: errors.New("failed to fetch latest tesseract hash"),
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			so, err := sm.GetDirtyObject(test.address)
-			if test.expectedError != nil {
-				require.ErrorContains(t, err, test.expectedError.Error())
-
-				return
-			}
-
-			checkForStateObject(t, test.sObj, so)
-			checkForDirtyObject(t, sm, test.address, true)
-		})
-	}
-}
-
-func TestStateManager_Cleanup(t *testing.T) {
-	so := createTestStateObject(t, nil)
-
-	smParams := &createStateManagerParams{
-		smCallBack: func(sm *StateManager) {
-			insertDirtyObject(sm, so)
-		},
-	}
-
-	sm := createTestStateManager(t, smParams)
-
-	sm.Cleanup(so.address)
-	checkForDirtyObject(t, sm, so.address, false)
 }
 
 func TestStateManager_GetContextObject(t *testing.T) {
@@ -802,7 +541,7 @@ func TestStateManager_GetContextByHash(t *testing.T) {
 		dbCallback: func(db *MockDB) {
 			insertMetaContextsInDB(t, db, mObj...)
 			insertContextsInDB(t, db, obj...)
-			insertTesseractsAndIxnsInDB(t, db, ts)
+			insertTesseractsInDB(t, db, ts)
 		},
 		smCallBack: func(sm *StateManager) {
 			storeTesseractHashInCache(t, sm.cache, ts)
@@ -874,12 +613,10 @@ func TestStateManager_FetchParticipantContextByHash(t *testing.T) {
 		},
 	}
 
-	sm := createTestStateManager(t, smParams)
-
 	testcases := []struct {
 		name          string
 		hash          common.Hash
-		mockFn        func()
+		preTestFn     func(sm *StateManager)
 		expectedError error
 	}{
 		{
@@ -896,29 +633,25 @@ func TestStateManager_FetchParticipantContextByHash(t *testing.T) {
 			name:          "random context node's public keys not found",
 			hash:          mHash[1],
 			expectedError: common.ErrPublicKeyNotFound,
-			mockFn: func() {
-				msenatus := mockSenatus(t)
-				msenatus.AddPublicKeys(kramaIDs[4:6], pk[4:6])
-
-				sm.senatus = msenatus
+			preTestFn: func(sm *StateManager) {
+				createGuardianLogic(t, sm, kramaIDs[4:6], pk[4:6])
 			},
 		},
 		{
 			name: "valid hash and public keys",
 			hash: mHash[0],
-			mockFn: func() {
-				msenatus := mockSenatus(t)
-				_ = msenatus.AddPublicKeys(kramaIDs, pk)
-
-				sm.senatus = msenatus
+			preTestFn: func(sm *StateManager) {
+				createGuardianLogic(t, sm, kramaIDs, pk)
 			},
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			if test.mockFn != nil {
-				test.mockFn()
+			sm := createTestStateManager(t, smParams)
+
+			if test.preTestFn != nil {
+				test.preTestFn(sm)
 			}
 
 			behCtx, randCtx, err := sm.fetchParticipantContextByHash(identifiers.NilAddress, test.hash)
@@ -942,14 +675,15 @@ func TestStateManager_FetchParticipantContextByHash(t *testing.T) {
 }
 
 func TestStateManager_GetCommittedContextHash(t *testing.T) {
-	ts := tests.CreateTesseract(t, getTesseractParamsWithContextHash(tests.RandomAddress(t), tests.RandomHash(t)))
+	address := tests.RandomAddress(t)
+	contextHash := tests.RandomHash(t)
 
 	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
-			insertTesseractsAndIxnsInDB(t, db, ts)
-		},
-		smCallBack: func(sm *StateManager) {
-			storeTesseractHashInCache(t, sm.cache, ts)
+			db.setAccountMetaInfo(&common.AccountMetaInfo{
+				Address:     address,
+				ContextHash: contextHash,
+			})
 		},
 	}
 
@@ -964,12 +698,12 @@ func TestStateManager_GetCommittedContextHash(t *testing.T) {
 		{
 			name:          "context doesn't exist",
 			address:       tests.RandomAddress(t),
-			expectedError: errors.New("failed to fetch latest tesseract hash"),
+			expectedError: errors.New("failed to fetch account meta info"),
 		},
 		{
 			name:        "context exists",
-			address:     ts.AnyAddress(),
-			contextHash: ts.LatestContextHash(ts.AnyAddress()),
+			address:     address,
+			contextHash: contextHash,
 		},
 	}
 
@@ -1065,7 +799,7 @@ func TestStateManager_FetchContextLock(t *testing.T) {
 		name          string
 		tess          *common.Tesseract
 		nodes         *ICSNodes
-		mockFn        func()
+		preTestFn        func()
 		expectedError error
 	}{
 		{
@@ -1111,8 +845,8 @@ func TestStateManager_FetchContextLock(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			if test.mockFn != nil {
-				test.mockFn()
+			if test.preTestFn != nil {
+				test.preTestFn()
 			}
 
 			icsNodes, err := sm.FetchContextLock(test.tess)
@@ -1151,29 +885,18 @@ func TestStateManager_IsAccountRegistered_With_SargaObject(t *testing.T) {
 	db := mockDB()
 	address := tests.RandomAddress(t)
 
-	cache, err := lru.New(20)
-	assert.NoError(t, err)
-
-	so := NewStateObject(common.SargaAddress, cache, nil, db, common.Account{
+	so := NewStateObject(common.SargaAddress, mockCache(t), nil, db, common.Account{
 		AccType: common.SargaAccount,
-	}, NilMetrics())
-	_, err = so.createStorageTreeForLogic(common.SargaLogicID)
+	}, NilMetrics(), false)
+
+	so.storageTreeTxns[common.SargaLogicID] = iradix.New().Txn()
+
+	err := so.SetStorageEntry(common.SargaLogicID, address.Bytes(), []byte{0x01})
 	assert.NoError(t, err)
 
-	err = so.SetStorageEntry(common.SargaLogicID, address.Bytes(), []byte{0x01})
-	assert.NoError(t, err)
-
-	stateHash, err := so.Commit()
-	assert.NoError(t, err)
-	assert.NoError(t, so.flush())
-
-	ts := tests.CreateTesseract(t, getTesseractParamsWithStateHash(common.SargaAddress, stateHash))
 	smParams := &createStateManagerParams{
-		db: db,
 		smCallBack: func(sm *StateManager) {
-			insertTesseractsAndIxnsInDB(t, db, ts)
-			sm.cache.Add(ts.AnyAddress(), tests.GetTesseractHash(t, ts))
-			insertAccountsInDB(t, db, []common.Hash{stateHash}, so.Data())
+			sm.objectCache.Add(common.SargaAddress, so)
 		},
 	}
 
@@ -1191,10 +914,10 @@ func TestStateManager_IsAccountRegistered_With_SargaObject(t *testing.T) {
 			isRegistered: true,
 		},
 		{
-			name:         "non-registered account",
-			address:      tests.RandomAddress(t),
-			smParams:     smParams,
-			isRegistered: false,
+			name:          "non-registered account",
+			address:       tests.RandomAddress(t),
+			smParams:      smParams,
+			expectedError: common.ErrLogicStorageTreeNotFound,
 		},
 		{
 			name:         "nil address",
@@ -1229,8 +952,6 @@ func TestStateManager_IsAccountRegistered_With_SargaObject(t *testing.T) {
 }
 
 func TestStateManager_GetNonce(t *testing.T) {
-	address := tests.RandomAddress(t)
-
 	accounts0 := &common.Account{
 		Nonce: 12,
 	}
@@ -1238,30 +959,9 @@ func TestStateManager_GetNonce(t *testing.T) {
 	stateHash0, err := accounts0.Hash()
 	assert.NoError(t, err)
 
-	account1 := &common.Account{
-		Nonce: 22,
-	}
-
-	stateHash1, err := account1.Hash()
-	assert.NoError(t, err)
-
-	ts := tests.CreateTesseract(t, &tests.CreateTesseractParams{
-		Addresses: []identifiers.Address{address},
-		Participants: common.ParticipantStates{
-			address: {
-				StateHash: stateHash1,
-			},
-		},
-	})
-
 	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
 			insertAccountsInDB(t, db, []common.Hash{stateHash0}, accounts0)
-			insertAccountsInDB(t, db, []common.Hash{ts.StateHash(address)}, account1)
-			insertTesseractsAndIxnsInDB(t, db, ts)
-		},
-		smCallBack: func(sm *StateManager) {
-			sm.cache.Add(ts.AnyAddress(), tests.GetTesseractHash(t, ts))
 		},
 	}
 
@@ -1274,11 +974,6 @@ func TestStateManager_GetNonce(t *testing.T) {
 		nonce         uint64
 		expectedError error
 	}{
-		{
-			name:    "fetch nonce from latest state",
-			address: ts.AnyAddress(),
-			nonce:   account1.Nonce,
-		},
 		{
 			name:      "fetch nonce at particular state",
 			address:   tests.RandomAddress(t),
@@ -1313,7 +1008,6 @@ func TestStateManager_GetNonce(t *testing.T) {
 }
 
 func TestStateManager_GetBalances(t *testing.T) {
-	address := tests.RandomAddress(t)
 	assets, bal := getAssetIDsAndBalances(t, 2)
 	balances, balanceHashes := getTestBalances(t, getAssetMaps(assets, bal, 1), 2)
 
@@ -1325,33 +1019,21 @@ func TestStateManager_GetBalances(t *testing.T) {
 	stateHash0, err := accounts0.Hash()
 	assert.NoError(t, err)
 
-	account1 := &common.Account{
-		Nonce:   22,
-		Balance: balanceHashes[1],
-	}
-
-	stateHash1, err := account1.Hash()
-	assert.NoError(t, err)
-
-	ts := tests.CreateTesseract(t, &tests.CreateTesseractParams{
-		Addresses: []identifiers.Address{address},
-		Participants: common.ParticipantStates{
-			address: {
-				StateHash: stateHash1,
-			},
+	soParams := &createStateObjectParams{
+		account: &common.Account{
+			Balance: tests.RandomHash(t),
 		},
-	})
+	}
+	so := createTestStateObject(t, soParams)
 
 	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
 			insertAccountsInDB(t, db, []common.Hash{stateHash0}, accounts0)
-			insertAccountsInDB(t, db, []common.Hash{ts.StateHash(address)}, account1)
 			insertBalancesInDB(t, db, balanceHashes, balances...)
-			insertTesseractsAndIxnsInDB(t, db, ts)
 		},
 
 		smCallBack: func(sm *StateManager) {
-			sm.cache.Add(ts.AnyAddress(), tests.GetTesseractHash(t, ts))
+			sm.objectCache.Add(so.address, so)
 		},
 	}
 
@@ -1365,20 +1047,20 @@ func TestStateManager_GetBalances(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name:    "fetch balances from latest state",
-			address: ts.AnyAddress(),
-			balance: balances[1],
-		},
-		{
 			name:      "fetch balances at particular state",
 			address:   tests.RandomAddress(t),
 			stateHash: stateHash0,
 			balance:   balances[0],
 		},
 		{
-			name:          "failed to fetch balances",
+			name:          "failed to fetch state object",
 			address:       tests.RandomAddress(t),
-			expectedError: errors.New("failed to fetch latest tesseract hash"),
+			expectedError: errors.New("failed to fetch state object"),
+		},
+		{
+			name:          "failed to fetch balances",
+			address:       so.address,
+			expectedError: errors.New("failed to load balance object"),
 		},
 	}
 
@@ -1403,23 +1085,10 @@ func TestStateManager_GetBalance(t *testing.T) {
 	balances, balanceHashes := getTestBalances(t, getAssetMaps(assetIDs, bal, 1), 2)
 	accounts, stateHashes := getTestAccounts(t, balanceHashes, 1)
 
-	ts := tests.CreateTesseract(t, &tests.CreateTesseractParams{
-		Addresses: []identifiers.Address{address},
-		Participants: common.ParticipantStates{
-			address: {
-				StateHash: stateHashes[0],
-			},
-		},
-	})
-
 	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
-			insertTesseractsAndIxnsInDB(t, db, ts)
 			insertAccountsInDB(t, db, stateHashes, accounts...)
 			insertBalancesInDB(t, db, balanceHashes, balances...)
-		},
-		smCallBack: func(sm *StateManager) {
-			sm.cache.Add(address, tests.GetTesseractHash(t, ts))
 		},
 	}
 
@@ -1434,23 +1103,11 @@ func TestStateManager_GetBalance(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name:    "fetch balance from latest state",
-			address: address,
-			assetID: assetIDs[0],
-			balance: balances[0],
-		},
-		{
 			name:      "fetch balance at particular state",
 			address:   address,
 			assetID:   assetIDs[0],
 			stateHash: stateHashes[0],
 			balance:   balances[0],
-		},
-		{
-			name:          "should return error if asset not found",
-			address:       address,
-			assetID:       tests.GetRandomAssetID(t, tests.RandomAddress(t)),
-			expectedError: common.ErrAssetNotFound,
 		},
 		{
 			name:          "should return error if failed to fetch balance",
@@ -1576,7 +1233,7 @@ func TestStateManager_SyncStorageTrees(t *testing.T) {
 	so := createTestStateObjects(t, 2, soParams)
 
 	stateObject := NewStateObject(logicIDs[0].Address(), mockCache(t), nil, db,
-		common.Account{}, NilMetrics())
+		common.Account{}, NilMetrics(), false)
 
 	storageTree, err := stateObject.createStorageTreeForLogic(logicIDs[0])
 	assert.NoError(t, err)
@@ -1595,10 +1252,6 @@ func TestStateManager_SyncStorageTrees(t *testing.T) {
 
 	smParams := &createStateManagerParams{
 		db: db,
-		smCallBack: func(sm *StateManager) {
-			sm.dirtyObjects[stateObject.address] = stateObject
-			sm.dirtyObjects[so[0].address] = so[0]
-		},
 	}
 
 	sm := createTestStateManager(t, smParams)
@@ -1607,7 +1260,6 @@ func TestStateManager_SyncStorageTrees(t *testing.T) {
 
 	testcases := []struct {
 		name                  string
-		addr                  identifiers.Address
 		newRoot               *common.RootNode
 		logicID               identifiers.LogicID
 		logicStorageTreeRoots map[string]*common.RootNode
@@ -1615,17 +1267,7 @@ func TestStateManager_SyncStorageTrees(t *testing.T) {
 		expectedError         error
 	}{
 		{
-			name:    "failed to fetch state object",
-			addr:    so[1].address,
-			newRoot: &newRoot,
-			logicStorageTreeRoots: map[string]*common.RootNode{
-				string(logicIDs[0]): &newRoot,
-			},
-			expectedError: errors.New("failed to fetch latest tesseract hash"),
-		},
-		{
 			name:    "tree is synced successfully with the new root",
-			addr:    stateObject.address,
 			newRoot: &newRoot,
 			logicID: logicIDs[0],
 			logicStorageTreeRoots: map[string]*common.RootNode{
@@ -1635,7 +1277,6 @@ func TestStateManager_SyncStorageTrees(t *testing.T) {
 		},
 		{
 			name:    "tree is not synced properly",
-			addr:    so[0].address,
 			newRoot: &newRoot,
 			logicID: logicIDs[1],
 			logicStorageTreeRoots: map[string]*common.RootNode{
@@ -1653,7 +1294,7 @@ func TestStateManager_SyncStorageTrees(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			err := sm.SyncStorageTrees(context.Background(), test.addr, test.newRoot, test.logicStorageTreeRoots)
+			err := sm.SyncStorageTrees(context.Background(), test.newRoot, test.logicStorageTreeRoots, test.stateObject)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -1685,18 +1326,12 @@ func TestStateManager_SyncLogicTree(t *testing.T) {
 
 	soParams := map[int]*createStateObjectParams{
 		0: stateObjectParamsWithLogicTree(t, logicID.Address(), db, logicTree, common.NilHash, nil),
-		1: {
-			address: tests.RandomAddress(t),
-		},
 	}
 
-	so := createTestStateObjects(t, 2, soParams)
+	so := createTestStateObjects(t, 1, soParams)
 
 	smParams := &createStateManagerParams{
 		db: db,
-		smCallBack: func(sm *StateManager) {
-			sm.dirtyObjects[so[0].address] = so[0]
-		},
 	}
 
 	sm := createTestStateManager(t, smParams)
@@ -1705,29 +1340,17 @@ func TestStateManager_SyncLogicTree(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		addr          identifiers.Address
 		newRoot       *common.RootNode
 		logicTree     tree.MerkleTree
 		expectedError error
 	}{
 		{
 			name:      "logic tree synced successfully",
-			addr:      so[0].address,
 			newRoot:   &newRoot,
 			logicTree: so[0].logicTree,
 		},
 		{
-			name: "failed to fetch state object",
-			addr: so[1].address,
-			newRoot: &common.RootNode{
-				MerkleRoot: tests.RandomHash(t),
-				HashTable:  map[string][]byte{tests.RandomHash(t).String(): tests.RandomHash(t).Bytes()},
-			},
-			expectedError: errors.New("failed to fetch latest tesseract hash"),
-		},
-		{
 			name: "tree is not synced properly",
-			addr: so[0].address,
 			newRoot: &common.RootNode{
 				MerkleRoot: tests.RandomHash(t),
 				HashTable:  map[string][]byte{tests.RandomHash(t).String(): tests.RandomHash(t).Bytes()},
@@ -1739,7 +1362,7 @@ func TestStateManager_SyncLogicTree(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			err := sm.SyncLogicTree(test.addr, test.newRoot)
+			err := sm.SyncLogicTree(test.newRoot, so[0])
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -1811,8 +1434,6 @@ func TestStateManager_GetNodeSet(t *testing.T) {
 func TestStateManager_GetICSNodeSetFromRawContext(t *testing.T) {
 	addrs := tests.GetAddresses(t, 2)
 	kramaIDs, pk := tests.GetTestKramaIdsWithPublicKeys(t, 12)
-	mocksenatus := mockSenatus(t)
-	mocksenatus.AddPublicKeys(kramaIDs, pk)
 
 	obj, cHash := getContextObjects(t, kramaIDs, 2, 6)
 	mObj, mHash := getMetaContextObjects(t, cHash)
@@ -1838,7 +1459,7 @@ func TestStateManager_GetICSNodeSetFromRawContext(t *testing.T) {
 
 	smParams := &createStateManagerParams{
 		smCallBack: func(sm *StateManager) {
-			sm.senatus = mocksenatus
+			createGuardianLogic(t, sm, kramaIDs, pk)
 		},
 	}
 
@@ -2033,7 +1654,7 @@ func TestStateManager_GetStorageEntry(t *testing.T) {
 	db := mockDB()
 	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
 
-	so := NewStateObject(logicID.Address(), mockCache(t), nil, db, common.Account{}, NilMetrics())
+	so := NewStateObject(logicID.Address(), mockCache(t), nil, db, common.Account{}, NilMetrics(), false)
 
 	_, err := so.createStorageTreeForLogic(logicID)
 	assert.NoError(t, err)
@@ -2107,38 +1728,20 @@ func TestStateManager_IsLogicRegistered(t *testing.T) {
 
 	engineio.RegisterEngine(pisa.NewEngine())
 
-	so := NewStateObject(logicID.Address(), mockCache(t), nil, db, common.Account{}, NilMetrics())
+	so := NewStateObject(logicID.Address(), mockCache(t), nil, db, common.Account{}, NilMetrics(), false)
 
 	err := so.InsertNewLogicObject(logicID, logicObject)
 	require.NoError(t, err)
 
-	rootHash, err := so.commitLogics()
+	_, err = so.commitLogics()
 	require.NoError(t, err)
 
 	err = so.flushLogicTree()
 	require.NoError(t, err)
 
-	acc, stateHash := tests.GetTestAccount(t, func(acc *common.Account) {
-		acc.LogicRoot = rootHash
-	})
-
-	ts := tests.CreateTesseract(t, &tests.CreateTesseractParams{
-		Addresses: []identifiers.Address{logicID.Address()},
-		Participants: common.ParticipantStates{
-			logicID.Address(): {
-				StateHash: stateHash,
-			},
-		},
-	})
-
 	smParams := &createStateManagerParams{
-		db: db,
-		dbCallback: func(db *MockDB) {
-			insertAccountsInDB(t, db, []common.Hash{stateHash}, acc)
-			insertTesseractsAndIxnsInDB(t, db, ts)
-		},
 		smCallBack: func(sm *StateManager) {
-			sm.cache.Add(ts.AnyAddress(), tests.GetTesseractHash(t, ts))
+			sm.objectCache.Add(so.address, so)
 		},
 	}
 
@@ -2330,7 +1933,7 @@ func TestStateManager_GetLogicManifest(t *testing.T) {
 	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
 	logicObject.Manifest = manifest.Hash()
 
-	so := NewStateObject(logicID.Address(), mockCache(t), nil, db, common.Account{}, NilMetrics())
+	so := NewStateObject(logicID.Address(), mockCache(t), nil, db, common.Account{}, NilMetrics(), false)
 
 	err = so.InsertNewLogicObject(logicID, logicObject)
 	require.NoError(t, err)
@@ -2410,7 +2013,7 @@ func TestStateManager_GetLogicIDs(t *testing.T) {
 	expectedLogicIDs := make([]identifiers.LogicID, 0)
 	db := mockDB()
 	address := tests.RandomAddress(t)
-	so := NewStateObject(address, mockCache(t), nil, db, common.Account{}, NilMetrics())
+	so := NewStateObject(address, mockCache(t), nil, db, common.Account{}, NilMetrics(), false)
 
 	for i := 0; i < 3; i++ {
 		logicID := tests.GetLogicID(t, tests.RandomAddress(t))
@@ -2540,29 +2143,25 @@ func TestStateManager_doesRootMatch(t *testing.T) {
 
 func TestStateManager_FetchLatestParticipantContext(t *testing.T) {
 	kramaIDs, pk := tests.GetTestKramaIdsWithPublicKeys(t, 12)
-	mocksenatus := mockSenatus(t)
-	mocksenatus.AddPublicKeys(kramaIDs[:4], pk[:4])
-	mocksenatus.AddPublicKeys(kramaIDs[8:10], pk[8:10])
 	obj, cHash := getContextObjects(t, kramaIDs, 2, 6)
 	mObj, mHash := getMetaContextObjects(t, cHash)
 
-	tesseractParams := map[int]*tests.CreateTesseractParams{
-		0: getTesseractParamsWithContextHash(tests.RandomAddress(t), mHash[0]),
-		1: getTesseractParamsWithContextHash(tests.RandomAddress(t), mHash[1]),
-		2: getTesseractParamsWithContextHash(tests.RandomAddress(t), mHash[2]),
-	}
-
-	ts := tests.CreateTesseracts(t, 3, tesseractParams)
+	addresses := tests.GetAddresses(t, 3)
 
 	smParams := &createStateManagerParams{
 		smCallBack: func(sm *StateManager) {
-			storeTesseractHashInCache(t, sm.cache, ts...)
-			sm.senatus = mocksenatus
+			createGuardianLogic(t, sm, append(kramaIDs[:4], kramaIDs[8:10]...),
+				append(pk[:4], pk[8:10]...))
 		},
 		dbCallback: func(db *MockDB) {
 			insertMetaContextsInDB(t, db, mObj...)
 			insertContextsInDB(t, db, obj...)
-			insertTesseractsAndIxnsInDB(t, db, ts...)
+			for i := 0; i < 3; i++ {
+				db.setAccountMetaInfo(&common.AccountMetaInfo{
+					Address:     addresses[i],
+					ContextHash: mHash[i],
+				})
+			}
 		},
 	}
 
@@ -2578,22 +2177,22 @@ func TestStateManager_FetchLatestParticipantContext(t *testing.T) {
 		{
 			name:          "tesseract doesn't exist",
 			address:       tests.RandomAddress(t),
-			expectedError: errors.New("failed to fetch latest tesseract hash"),
+			expectedError: errors.New("failed to fetch account meta info"),
 		},
 		{
 			name:          "behavioural context Nodes doesn't have public keys",
-			address:       ts[1].AnyAddress(),
+			address:       addresses[1],
 			expectedError: common.ErrPublicKeyNotFound,
 		},
 		{
 			name:          "random context Nodes doesn't have public keys",
-			address:       ts[2].AnyAddress(),
+			address:       addresses[2],
 			expectedError: common.ErrPublicKeyNotFound,
 		},
 		{
 			name:    "valid hash and public keys",
-			address: ts[0].AnyAddress(),
-			ctxHash: ts[0].LatestContextHash(ts[0].AnyAddress()),
+			address: addresses[0],
+			ctxHash: mHash[0],
 			behSet:  common.NewNodeSet(obj[0].Ids, pk[:2], uint32(len(obj[0].Ids))),
 			randSet: common.NewNodeSet(obj[1].Ids, pk[2:4], uint32(len(obj[1].Ids))),
 		},
@@ -2675,9 +2274,9 @@ func TestStateManager_GetReceiverContext_RegisteredAccount(t *testing.T) {
 	smParams := &createStateManagerParams{
 		db: db,
 		dbCallback: func(db *MockDB) {
-			insertTesseractsAndIxnsInDB(t, db, ts)
+			insertTesseractsInDB(t, db, ts)
 			insertAccountsInDB(t, db, []common.Hash{stateHash}, so.Data())
-			insertTesseractsAndIxnsInDB(t, db, sargaTesseract)
+			insertTesseractsInDB(t, db, sargaTesseract)
 			insertMetaContextsInDB(t, db, mObj...)
 			insertContextsInDB(t, db, obj...)
 		},
@@ -2696,7 +2295,7 @@ func TestStateManager_GetReceiverContext_RegisteredAccount(t *testing.T) {
 		randSet       *common.NodeSet
 		address       identifiers.Address
 		contextHash   common.Hash
-		mockFn        func()
+		preTestFn        func()
 		expectedError error
 	}{
 		{
@@ -2719,8 +2318,8 @@ func TestStateManager_GetReceiverContext_RegisteredAccount(t *testing.T) {
 			nodeSet := make([]*common.NodeSet, 4)
 			contextHashes := make(map[identifiers.Address]common.Hash)
 
-			if test.mockFn != nil {
-				test.mockFn()
+			if test.preTestFn != nil {
+				test.preTestFn()
 			}
 
 			err := sm.getReceiverContext(test.ix, nodeSet, contextHashes)
@@ -2802,7 +2401,7 @@ func TestStateManager_GetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 			smParams: &createStateManagerParams{
 				db: db,
 				dbCallback: func(db *MockDB) {
-					insertTesseractsAndIxnsInDB(t, db, ts)
+					insertTesseractsInDB(t, db, ts)
 					insertAccountsInDB(t, db, []common.Hash{stateHash}, so.Data())
 					insertMetaContextsInDB(t, db, mObj...)
 					insertContextsInDB(t, db, obj...)
@@ -2859,8 +2458,6 @@ func TestStateManager_GetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 func TestStateManager_FetchICSNodeSet(t *testing.T) {
 	addr := tests.RandomAddress(t)
 	kramaIDs, pk := tests.GetTestKramaIdsWithPublicKeys(t, 12)
-	mocksenatus := mockSenatus(t)
-	mocksenatus.AddPublicKeys(kramaIDs[:8], pk[:8])
 
 	obj, cHash := getContextObjects(t, kramaIDs, 2, 6)
 	mObj, mHash := getMetaContextObjects(t, cHash)
@@ -2879,13 +2476,13 @@ func TestStateManager_FetchICSNodeSet(t *testing.T) {
 
 	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
-			insertTesseractsAndIxnsInDB(t, db, ts...)
+			insertTesseractsInDB(t, db, ts...)
 			insertContextsInDB(t, db, obj...)
 			insertMetaContextsInDB(t, db, mObj...)
 		},
 		smCallBack: func(sm *StateManager) {
-			sm.senatus = mocksenatus
 			storeTesseractHashInCache(t, sm.cache, ts...)
+			createGuardianLogic(t, sm, kramaIDs[:8], pk[:8])
 		},
 	}
 
@@ -2931,7 +2528,7 @@ func TestStateManager_FetchICSNodeSet(t *testing.T) {
 				ObserverSet: obj[5].Ids,
 				Responses:   createRandomArrayOfBits(t, 6),
 			},
-			expectedError: errors.New("failed to fetch latest tesseract hash"),
+			expectedError: common.ErrLogicStorageTreeNotFound,
 		},
 		{
 			name: "failed to fetch updated ics node set as public keys of observer set not present in senatus",
@@ -2941,7 +2538,7 @@ func TestStateManager_FetchICSNodeSet(t *testing.T) {
 				ObserverSet: obj[5].Ids,
 				Responses:   createRandomArrayOfBits(t, 6),
 			},
-			expectedError: errors.New("failed to fetch latest tesseract hash"),
+			expectedError: errors.New("logic storage tree not found"),
 		},
 	}
 
@@ -3019,7 +2616,7 @@ func TestStateManager_FetchInteractionContext(t *testing.T) {
 			insertAccountsInDB(t, db, []common.Hash{stateHash}, so.Data())
 			insertMetaContextsInDB(t, db, mObj...)
 			insertContextsInDB(t, db, obj...)
-			insertTesseractsAndIxnsInDB(t, db, ts...)
+			insertTesseractsInDB(t, db, ts...)
 		},
 		smCallBack: func(sm *StateManager) {
 			storeTesseractHashInCache(t, sm.cache, ts...)
@@ -3033,7 +2630,7 @@ func TestStateManager_FetchInteractionContext(t *testing.T) {
 		ix            *common.Interaction
 		ics           *ICSNodes
 		contextHashes map[identifiers.Address]common.Hash
-		mockFn        func()
+		preTestFn        func()
 		expectedError error
 	}{
 		{
@@ -3049,7 +2646,7 @@ func TestStateManager_FetchInteractionContext(t *testing.T) {
 				ixs[0].Sender():   ts[0].LatestContextHash(ts[0].AnyAddress()),
 				ixs[0].Receiver(): ts[1].LatestContextHash(ts[1].AnyAddress()),
 			},
-			mockFn: func() {
+			preTestFn: func() {
 				mocksenatus.AddPublicKeys(kramaIDs, pk)
 			},
 		},
@@ -3061,8 +2658,8 @@ func TestStateManager_FetchInteractionContext(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			if test.mockFn != nil {
-				test.mockFn()
+			if test.preTestFn != nil {
+				test.preTestFn()
 			}
 
 			contextHashes, nodeSet, err := sm.FetchInteractionContext(context.Background(), test.ix)
@@ -3150,54 +2747,6 @@ func TestStateManager_GetAccountInfo(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Equal(t, test.expectedAccount, acc)
-		})
-	}
-}
-
-func TestStateManager_GetAccTypeUsingStateObject(t *testing.T) {
-	soParams := &createStateObjectParams{
-		account: &common.Account{AccType: common.LogicAccount},
-	}
-
-	so := createTestStateObject(t, soParams)
-
-	smParams := &createStateManagerParams{
-		smCallBack: func(sm *StateManager) {
-			sm.dirtyObjects[so.address] = so
-		},
-	}
-
-	sm := createTestStateManager(t, smParams)
-
-	testcases := []struct {
-		name          string
-		address       identifiers.Address
-		sObj          *Object
-		expectedError error
-	}{
-		{
-			name:    "state object exists",
-			address: so.address,
-			sObj:    so,
-		},
-		{
-			name:          "state object doesn't exist",
-			address:       tests.RandomAddress(t),
-			expectedError: common.ErrKeyNotFound,
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			accType, err := sm.GetAccTypeUsingStateObject(test.address)
-			if test.expectedError != nil {
-				require.ErrorContains(t, err, test.expectedError.Error())
-
-				return
-			}
-
-			require.NoError(t, err)
-			require.Equal(t, accType, common.LogicAccount)
 		})
 	}
 }
@@ -3302,114 +2851,6 @@ func TestStateManager_SyncTree(t *testing.T) {
 	}
 }
 
-func TestStateManager_FlushDirtyObject(t *testing.T) {
-	db := mockDB()
-	dirtyEntries := getDirtyEntries(t, 5)
-	keys, values := getEntries(t, 4)
-
-	merkle := mockMerkleTreeWithDB()
-	soParams := map[int]*createStateObjectParams{
-		0: {
-			db: db,
-			metaStorageTreeCallback: func(so *Object) {
-				so.metaStorageTree = merkle
-				setEntries(t, merkle, keys, values)
-			},
-			soCallback: func(so *Object) {
-				so.dirtyEntries = dirtyEntries
-			},
-		},
-		1: {
-			db: db,
-			metaStorageTreeCallback: func(so *Object) {
-				m := mockMerkleTreeWithDB()
-				m.flushHook = func() error {
-					return errors.New("flush failed")
-				}
-				so.metaStorageTree = m
-			},
-		},
-	}
-
-	so := createTestStateObjects(t, 2, soParams)
-
-	smCallback := func(sm *StateManager) {
-		sm.cache = mockCache(t)
-		insertDirtyObject(sm, so...)
-	}
-
-	smParams := &createStateManagerParams{
-		db:         db,
-		smCallBack: smCallback,
-	}
-
-	testcases := []struct {
-		name          string
-		address       identifiers.Address
-		smParams      *createStateManagerParams
-		expectedError error
-	}{
-		{
-			name:     "state object exists",
-			address:  so[0].address,
-			smParams: smParams,
-		},
-		{
-			name:          "state object doesn't exist",
-			address:       tests.RandomAddress(t),
-			smParams:      smParams,
-			expectedError: common.ErrKeyNotFound,
-		},
-		{
-			name:          "flush failed",
-			address:       so[1].address,
-			smParams:      smParams,
-			expectedError: errors.New("failed to flush active storage trees"),
-		},
-		{
-			name:    "db failure",
-			address: so[0].address,
-			smParams: &createStateManagerParams{
-				dbCallback: func(db *MockDB) {
-					db.createEntryHook = func() error {
-						return common.ErrKeyNotFound
-					}
-				},
-				smCallBack: smCallback,
-			},
-			expectedError: errors.New("failed to write dirty entries"),
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			sm := createTestStateManager(t, test.smParams)
-			err := sm.FlushDirtyObject(test.address)
-			if test.expectedError != nil {
-				require.ErrorContains(t, err, test.expectedError.Error())
-
-				return
-			}
-
-			require.NoError(t, err)
-
-			// check if meta storage tree entries flushed to db
-			for i := 0; i < len(keys); i += 1 {
-				val, err := merkle.dbStorage[common.BytesToHex(keys[i])]
-				require.True(t, err)
-				require.Equal(t, values[i], val)
-			}
-
-			// check if dirty entries flushed to db
-			for k, v := range dirtyEntries {
-				val, err := sm.db.ReadEntry(common.Hex2Bytes(k))
-				require.NoError(t, err)
-				require.Equal(t, v, val)
-			}
-		})
-	}
-}
-
 func TestStateManager_IsAccountRegisteredAt(t *testing.T) {
 	addresses := tests.GetAddresses(t, 3)
 	db := mockDB()
@@ -3429,7 +2870,7 @@ func TestStateManager_IsAccountRegisteredAt(t *testing.T) {
 
 	so := NewStateObject(common.SargaAddress, cache, nil, db, common.Account{
 		StorageRoot: storageRoot,
-	}, NilMetrics())
+	}, NilMetrics(), false)
 
 	stateHash, err := so.Commit()
 	assert.NoError(t, err)
@@ -3444,7 +2885,7 @@ func TestStateManager_IsAccountRegisteredAt(t *testing.T) {
 	smParams := &createStateManagerParams{
 		db: db,
 		dbCallback: func(db *MockDB) {
-			insertTesseractsAndIxnsInDB(t, db, tesseracts...)
+			insertTesseractsInDB(t, db, tesseracts...)
 			insertAccountsInDB(t, db, []common.Hash{stateHash}, so.Data())
 			insertBalancesInDB(t, db, []common.Hash{balanceHash}, balance)
 		},

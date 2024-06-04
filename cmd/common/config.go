@@ -10,7 +10,6 @@ import (
 )
 
 type Config struct {
-	Genesis        string           `json:"genesis"`
 	NodeType       int              `json:"node_type"`
 	KramaIDVersion int              `json:"ḭd_version"`
 	Vault          VaultConfig      `json:"vault"`
@@ -25,12 +24,10 @@ type Config struct {
 	JSONRPC        JSONRPCConfig    `json:"jsonrpc"`
 	NetworkID      config.NetworkID `json:"network_id"`
 	State          StateConfig      `json:"state"`
-	GenesisTime    uint64           `json:"genesis_time"`
 }
 
 func DefaultBabylonConfig(path string) *Config {
 	return &Config{
-		Genesis:        path + "/genesis.json",
 		NodeType:       7,
 		KramaIDVersion: 1,
 		Vault: VaultConfig{
@@ -323,6 +320,8 @@ func DefaultBabylonConfig(path string) *Config {
 			ValidatorSlots:        5,
 			MaxGossipPeers:        5,
 			MinGossipPeers:        3,
+			GenesisTime:           config.DefaultGenesisTime,
+			GenesisPath:           path + "/genesis.json",
 		},
 		DB: DBConfig{
 			CleanDB:     false,
@@ -351,13 +350,11 @@ func DefaultBabylonConfig(path string) *Config {
 		State: StateConfig{
 			TreeCacheSize: config.DefaultTreeCacheSize,
 		},
-		GenesisTime: config.DefaultGenesisTime,
 	}
 }
 
 func DefaultDevnetConfig(path string) *Config {
 	return &Config{
-		Genesis:        path + "/genesis.json",
 		NodeType:       7,
 		KramaIDVersion: 1,
 		Vault: VaultConfig{
@@ -402,6 +399,8 @@ func DefaultDevnetConfig(path string) *Config {
 			AccountWaitTime:       1500,
 			OperatorSlots:         -1,
 			ValidatorSlots:        3,
+			GenesisTime:           0,
+			GenesisPath:           path + "/genesis.json",
 		},
 		DB: DBConfig{
 			CleanDB:     false,
@@ -430,7 +429,6 @@ func DefaultDevnetConfig(path string) *Config {
 		State: StateConfig{
 			TreeCacheSize: config.DefaultTreeCacheSize,
 		},
-		GenesisTime: 0,
 	}
 }
 
@@ -484,22 +482,24 @@ type Telemetry struct {
 }
 
 type ConsensusConfig struct {
-	TimeoutPropose        int64 `json:"timeout_propose"`
-	TimeoutProposeDelta   int64 `json:"timeout_propose_delta"`
-	TimeoutPrevote        int64 `json:"timeout_prevote"`
-	TimeoutPrevoteDelta   int64 `json:"timeout_prevote_delta"`
-	TimeoutPrecommit      int64 `json:"timeout_precommit"`
-	TimeoutPrecommitDelta int64 `json:"timeout_precommit_delta"`
-	TimeoutCommit         int64 `json:"timeout_commit"`
-	SkipTimeoutCommit     bool  `json:"skip_timeout_commit"`
-	AccountWaitTime       int   `json:"wait_time"`
-	MessageDelay          int64 `json:"message_delay"`
-	Precision             int64 `json:"precision"`
-	OperatorSlots         int   `json:"operator_slots"`
-	ValidatorSlots        int   `json:"validator_slots"`
-	EnableDebugMode       bool  `json:"enable_debug_mode"`
-	MaxGossipPeers        int   `json:"max_gossip_peers"`
-	MinGossipPeers        int   `json:"min_gossip_peers"`
+	TimeoutPropose        int64  `json:"timeout_propose"`
+	TimeoutProposeDelta   int64  `json:"timeout_propose_delta"`
+	TimeoutPrevote        int64  `json:"timeout_prevote"`
+	TimeoutPrevoteDelta   int64  `json:"timeout_prevote_delta"`
+	TimeoutPrecommit      int64  `json:"timeout_precommit"`
+	TimeoutPrecommitDelta int64  `json:"timeout_precommit_delta"`
+	TimeoutCommit         int64  `json:"timeout_commit"`
+	SkipTimeoutCommit     bool   `json:"skip_timeout_commit"`
+	AccountWaitTime       int    `json:"wait_time"`
+	MessageDelay          int64  `json:"message_delay"`
+	Precision             int64  `json:"precision"`
+	OperatorSlots         int    `json:"operator_slots"`
+	ValidatorSlots        int    `json:"validator_slots"`
+	EnableDebugMode       bool   `json:"enable_debug_mode"`
+	MaxGossipPeers        int    `json:"max_gossip_peers"`
+	MinGossipPeers        int    `json:"min_gossip_peers"`
+	GenesisTime           uint64 `json:"genesis_time"`
+	GenesisPath           string `json:"genesis_path"`
 }
 
 type ExecutionConfig struct {

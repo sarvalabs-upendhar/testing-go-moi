@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"sync"
 	"time"
+
+	"github.com/sarvalabs/go-moi/state"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-identifiers"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
@@ -34,20 +37,18 @@ var (
 	ErrOversizedData = errors.New("over sized data")
 )
 
-type promoteRequest struct {
-	address identifiers.Address
-}
-
 type stateManager interface {
 	GetNonce(addr identifiers.Address, stateHash common.Hash) (uint64, error)
 	IsAccountRegistered(addr identifiers.Address) (bool, error)
 	IsLogicRegistered(logicID identifiers.LogicID) error
 	GetBalance(addrs identifiers.Address, assetID identifiers.AssetID, stateHash common.Hash) (*big.Int, error)
 	GetAssetInfo(assetID identifiers.AssetID, hash common.Hash) (*common.AssetDescriptor, error)
+	GetLatestStateObject(addr identifiers.Address) (*state.Object, error)
+	RemoveCacheObject(addr identifiers.Address)
 }
 
 type executionManager interface {
-	ValidateLogicInvoke(ix *common.Interaction) error
+	ValidateLogicInvoke(receiverObject *state.Object, ix *common.Interaction) error
 	ValidateLogicDeploy(ix *common.Interaction, manifest []byte) error
 }
 
@@ -57,22 +58,22 @@ type IxConfig struct {
 }
 
 type IxPool struct {
-	ctx          context.Context
-	ctxCancel    context.CancelFunc
-	logger       hclog.Logger
-	cfg          *config.IxPoolConfig
-	sm           stateManager
-	exec         executionManager
-	allIxs       *lookupMap
-	close        chan struct{}
-	sealing      bool
-	mux          *utils.TypeMux
-	accounts     *accountsMap
-	gauge        slotGauge // gauge for measuring pool capacity
-	pruneCh      chan struct{}
-	metrics      *Metrics
-	promoteReqCh chan promoteRequest
-	verifier     func(data, signature, pubBytes []byte) (bool, error)
+	ctx       context.Context
+	ctxCancel context.CancelFunc
+	mu        sync.RWMutex
+	logger    hclog.Logger
+	cfg       *config.IxPoolConfig
+	sm        stateManager
+	exec      executionManager
+	allIxs    *lookupMap
+	close     chan struct{}
+	sealing   bool
+	mux       *utils.TypeMux
+	accounts  *accountsMap
+	gauge     slotGauge // gauge for measuring pool capacity
+	pruneCh   chan struct{}
+	metrics   *Metrics
+	verifier  func(data, signature, pubBytes []byte) (bool, error)
 }
 
 func NewIxPool(
@@ -101,11 +102,10 @@ func NewIxPool(
 			max:     cfg.MaxSlots,
 			metrics: metrics,
 		},
-		pruneCh:      make(chan struct{}),
-		metrics:      metrics,
-		logger:       logger.Named("Ix-Pool"),
-		promoteReqCh: make(chan promoteRequest),
-		verifier:     verifier,
+		pruneCh:  make(chan struct{}),
+		metrics:  metrics,
+		logger:   logger.Named("Ix-Pool"),
+		verifier: verifier,
 	}
 
 	return i
@@ -153,22 +153,14 @@ func (i *IxPool) getOrCreateAccount(ix *common.Interaction) *account {
 // enqueued queue; if unsuccessful, it is replaced in the promoted queue. Gauge adjustments are made during replacement.
 // Finally, if the Interaction can be promoted, it is promoted.
 func (i *IxPool) validateAndEnqueueIx(ix *common.Interaction) error {
+	i.mu.Lock()
+	defer i.mu.Unlock()
 	// validate incoming ix
 	if err := i.validateIx(ix); err != nil {
 		return err
 	}
 
 	acc := i.getOrCreateAccount(ix)
-
-	acc.promoted.lock(true)
-	acc.enqueued.lock(true)
-	acc.nonceToIX.lock()
-
-	defer func() {
-		acc.nonceToIX.unlock()
-		acc.enqueued.unlock()
-		acc.promoted.unlock()
-	}()
 
 	// checks if the current gauge size has reached the pressure mark and signals for account pruning if it has
 	if i.gauge.highPressure() {
@@ -239,7 +231,11 @@ func (i *IxPool) validateAndEnqueueIx(ix *common.Interaction) error {
 		i.logger.Error("Error sending interaction added event", "err", err)
 	}
 
-	go i.invokePromotion(ix.Sender(), ix.Nonce() <= acc.getNonce())
+	i.logger.Info("added ix to enqueue ", ix.Hash())
+
+	if ix.Nonce() == acc.getNonce() {
+		i.handlePromoteRequest(acc)
+	}
 
 	return nil
 }
@@ -256,18 +252,7 @@ func (i *IxPool) AddInteractions(ixs common.Interactions) []error {
 	return errs
 }
 
-func (i *IxPool) invokePromotion(address identifiers.Address, callPromote bool) {
-	if callPromote {
-		select {
-		case <-i.ctx.Done():
-		case i.promoteReqCh <- promoteRequest{address: address}: // BLOCKING
-		}
-	}
-}
-
-func (i *IxPool) handlePromoteRequest(req promoteRequest) {
-	account := i.accounts.get(req.address)
-
+func (i *IxPool) handlePromoteRequest(account *account) {
 	// promote enqueued ixs
 	promoted, promotedIxns := account.promote()
 	i.metrics.capturePendingIxs(float64(promoted))
@@ -293,131 +278,117 @@ func (i *IxPool) createAccountOnce(newAddr identifiers.Address, nonce uint64) *a
 	return i.accounts.initOnce(newAddr, stateNonce)
 }
 
+func (i *IxPool) RemoveCachedObject(addr identifiers.Address) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
+	i.sm.RemoveCacheObject(addr) // invalidate cache
+}
+
 func (i *IxPool) ResetWithHeaders(ts *common.Tesseract) {
-	if ts != nil && len(ts.Interactions()) > 0 {
-		i.resetWithInteractions(ts.Interactions())
-	}
-}
+	ixs := ts.Interactions()
 
-func (i *IxPool) resetWithInteractions(ixs common.Interactions) {
-	updatedNonces := make(map[identifiers.Address]uint64)
-	// cleanup the lookup queue
-	i.allIxs.remove(ixs...)
+	if ts != nil && len(ixs) > 0 {
+		i.mu.Lock()
+		defer i.mu.Unlock()
 
-	for _, ix := range ixs {
-		from := ix.Sender()
-		// skip already processed accounts
-		if _, processed := updatedNonces[from]; processed {
-			continue
+		// cleanup the lookup queue
+		i.allIxs.remove(ixs...)
+
+		processedAccounts := make(map[identifiers.Address]uint64)
+
+		for _, ix := range ixs {
+			from := ix.Sender()
+			// skip already processed accounts
+			if _, processed := processedAccounts[from]; processed {
+				continue
+			}
+
+			// fetch the latest nonce from the state
+			latestNonce, err := i.sm.GetNonce(from, common.NilHash)
+			if err != nil {
+				latestNonce = ix.Nonce() + 1
+			}
+
+			i.logger.Debug("Latest nonce in the ixpool", "nonce", latestNonce)
+			// update the result map
+			processedAccounts[from] = latestNonce
+
+			if !i.accounts.exists(from) {
+				continue
+			}
+
+			cleanup := func(ixns common.Interactions) {
+				// update pool state
+				i.allIxs.remove(ixns...)
+				i.gauge.decrease(slotsRequired(ixns...))
+			}
+
+			account := i.accounts.get(from)
+
+			// prune promoted
+			pruned := account.promoted.prune(latestNonce)
+			account.nonceToIX.remove(pruned...)
+
+			if len(pruned) > 0 {
+				cleanup(pruned)
+
+				// emit pruned promoted interactions event
+				if err := i.postPrunedPromotedInteractionEvent(pruned); err != nil {
+					i.logger.Error("Error sending interaction pruned promoted event", "err", err)
+				}
+
+				account.waitLock.Lock()
+				i.metrics.captureAccountWaitTime(account.requestTime, account.waitTime)
+				account.requestTime = time.Now()
+				account.waitLock.Unlock()
+				// update the account waitTime and counter
+				account.resetWaitTimeAndCounter()
+			}
+
+			i.metrics.capturePendingIxs(float64(-1 * len(pruned)))
+
+			if ixSize, err := GetIxsSize(pruned); err == nil {
+				i.metrics.captureIxPoolSize(-1 * float64(ixSize))
+			}
+
+			if latestNonce <= account.getNonce() {
+				// only the promoted queue needed pruning
+				return
+			}
+
+			// prune enqueued
+			pruned = account.enqueued.prune(latestNonce)
+			account.nonceToIX.remove(pruned...)
+
+			if len(pruned) > 0 {
+				cleanup(pruned)
+
+				// emit pruned enqueued interactions event
+				if err := i.postPrunedEnqueueInteractionEvent(pruned); err != nil {
+					i.logger.Error("Error sending interaction pruned enqueue event", "err", err)
+				}
+			}
+
+			if ixSize, err := GetIxsSize(pruned); err == nil {
+				i.metrics.captureIxPoolSize(-1 * float64(ixSize))
+			}
+
+			// update next nonce
+			account.setNonce(latestNonce)
+
+			if first := account.enqueued.peek(); first != nil && first.Nonce() == latestNonce {
+				// first enqueued ix is expected -> signal promotion
+				i.handlePromoteRequest(account)
+			}
 		}
-
-		// fetch the latest nonce from the state
-		latestNonce, err := i.sm.GetNonce(from, common.NilHash)
-		if err != nil {
-			latestNonce = ix.Nonce() + 1
-		}
-
-		i.logger.Debug("Latest nonce in the ixpool", "nonce", latestNonce)
-		// update the result map
-		updatedNonces[from] = latestNonce
-	}
-
-	if len(updatedNonces) == 0 {
-		return
-	}
-
-	i.resetAccounts(updatedNonces)
-}
-
-func (i *IxPool) resetAccounts(nonces map[identifiers.Address]uint64) {
-	for addr, nonce := range nonces {
-		if !i.accounts.exists(addr) {
-			continue
-		}
-
-		i.resetAccount(addr, nonce)
-	}
-}
-
-func (i *IxPool) resetAccount(addr identifiers.Address, nonce uint64) {
-	cleanup := func(ixns common.Interactions) {
-		// update pool state
-		i.allIxs.remove(ixns...)
-		i.gauge.decrease(slotsRequired(ixns...))
-	}
-
-	account := i.accounts.get(addr)
-
-	// lock promoted,enqueued,nonceToIx
-	account.promoted.lock(true)
-	account.enqueued.lock(true)
-	account.nonceToIX.lock()
-
-	defer func() {
-		account.nonceToIX.unlock()
-		account.enqueued.unlock()
-		account.promoted.unlock()
-	}()
-
-	// prune promoted
-	pruned := account.promoted.prune(nonce)
-	account.nonceToIX.remove(pruned...)
-
-	if len(pruned) > 0 {
-		cleanup(pruned)
-
-		// emit pruned promoted interactions event
-		if err := i.postPrunedPromotedInteractionEvent(pruned); err != nil {
-			i.logger.Error("Error sending interaction pruned promoted event", "err", err)
-		}
-
-		account.waitLock.Lock()
-		i.metrics.captureAccountWaitTime(account.requestTime, account.waitTime)
-		account.requestTime = time.Now()
-		account.waitLock.Unlock()
-		// update the account waitTime and counter
-		account.resetWaitTimeAndCounter()
-	}
-
-	i.metrics.capturePendingIxs(float64(-1 * len(pruned)))
-
-	if ixSize, err := GetIxsSize(pruned); err == nil {
-		i.metrics.captureIxPoolSize(-1 * float64(ixSize))
-	}
-
-	if nonce <= account.getNonce() {
-		// only the promoted queue needed pruning
-		return
-	}
-
-	// prune enqueued
-	pruned = account.enqueued.prune(nonce)
-	account.nonceToIX.remove(pruned...)
-
-	if len(pruned) > 0 {
-		cleanup(pruned)
-
-		// emit pruned enqueued interactions event
-		if err := i.postPrunedEnqueueInteractionEvent(pruned); err != nil {
-			i.logger.Error("Error sending interaction pruned enqueue event", "err", err)
-		}
-	}
-
-	if ixSize, err := GetIxsSize(pruned); err == nil {
-		i.metrics.captureIxPoolSize(-1 * float64(ixSize))
-	}
-
-	// update next nonce
-	account.setNonce(nonce)
-
-	if first := account.enqueued.peek(); first != nil && first.Nonce() == nonce {
-		// first enqueued ix is expected -> signal promotion
-		req := promoteRequest{address: addr}
-		i.promoteReqCh <- req
 	}
 }
 
 func (i *IxPool) Executables() InteractionQueue {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+
 	if i.cfg.Mode == WaitMode {
 		return i.accounts.getWaitPrimaries()
 	} else if i.cfg.Mode == CostMode {
@@ -435,11 +406,8 @@ func (i *IxPool) Pop(ix *common.Interaction) {
 	// fetch the associated account
 	account := i.accounts.get(ix.Sender())
 
-	account.promoted.lock(true)
-	defer account.promoted.unlock()
-
-	account.nonceToIX.lock()
-	defer account.nonceToIX.unlock()
+	i.mu.Lock()
+	defer i.mu.Unlock()
 
 	// pop the top most promoted ix
 	/*
@@ -475,18 +443,10 @@ func (i *IxPool) Drop(ix *common.Interaction) {
 			return
 		}
 
-		// lock promoted,enqueued and nonceToIX
-		account.promoted.lock(true)
-		account.enqueued.lock(true)
-		account.nonceToIX.lock()
-
-		defer func() {
-			account.nonceToIX.unlock()
-			account.enqueued.unlock()
-			account.promoted.unlock()
-		}()
-
 		noOfDroppedIxs := 0
+
+		i.mu.Lock()
+		defer i.mu.Unlock()
 
 		// remove the dropped ixs from the allIxs lookup map and decreases gauge
 		cleanup := func(ixs common.Interactions) {
@@ -755,7 +715,12 @@ func (i *IxPool) validateLogicInvokePayload(ix *common.Interaction) error {
 		return common.ErrMissingLogicID
 	}
 
-	if err := i.exec.ValidateLogicInvoke(ix); err != nil {
+	receiverObject, err := i.sm.GetLatestStateObject(ix.Receiver())
+	if err != nil {
+		return err
+	}
+
+	if err := i.exec.ValidateLogicInvoke(receiverObject, ix); err != nil {
 		return errors.Wrap(err, "failed to validate logic invoke")
 	}
 
@@ -764,16 +729,12 @@ func (i *IxPool) validateLogicInvokePayload(ix *common.Interaction) error {
 }
 
 func (i *IxPool) removeNonceHoleAccounts() {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
 	i.accounts.Range(
 		func(key, value any) bool {
 			acc, _ := value.(*account)
-
-			// apply RW lock on enqueue
-			acc.enqueued.lock(true)
-			defer acc.enqueued.unlock()
-
-			acc.nonceToIX.lock()
-			defer acc.nonceToIX.unlock()
 
 			ixn := acc.enqueued.peek()
 			if ixn == nil {
@@ -810,17 +771,6 @@ func (i *IxPool) handlePruning() {
 	}
 }
 
-func (i *IxPool) handleRequests() {
-	for {
-		select {
-		case <-i.ctx.Done():
-			return
-		case req := <-i.promoteReqCh:
-			go i.handlePromoteRequest(req)
-		}
-	}
-}
-
 func (i *IxPool) Close() {
 	i.logger.Info("Closing IxPool")
 	i.ctxCancel()
@@ -830,7 +780,6 @@ func (i *IxPool) Start() {
 	i.metrics.initMetrics()
 
 	go i.handlePruning()
-	go i.handleRequests()
 }
 
 func (i *IxPool) post(ev interface{}) error {

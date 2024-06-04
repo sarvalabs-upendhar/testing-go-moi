@@ -2,6 +2,7 @@ package forage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -1267,7 +1268,7 @@ func TestTesseractValidator(t *testing.T) {
 	server := createMultipleServers(t, 1, paramsMap)
 	testPM, _ := createPersistenceManager(t, ctx)
 	mockLogger := hclog.NewNullLogger()
-	mockLattice := newMockLattice(testPM, mockLogger)
+	mockState := newMockStateManager(nil)
 
 	testSyncer := NewTestSyncerForValidation(
 		ctx,
@@ -1275,7 +1276,7 @@ func TestTesseractValidator(t *testing.T) {
 		server[0],
 		testPM,
 		mockLogger,
-		mockLattice,
+		mockState,
 	)
 
 	testTesseract := tests.CreateTesseract(t, nil)
@@ -1325,10 +1326,10 @@ func TestTesseractValidator(t *testing.T) {
 			name:    "Valid pubsub message",
 			msgData: rawData,
 			preTestFn: func(tessract *common.Tesseract) {
-				mockLattice.setTSSeal(tessract)
+				mockState.setTSSeal(tessract)
 			},
 			postTestFn: func(tesseract *common.Tesseract) {
-				mockLattice.removeTSSeal(tesseract)
+				mockState.removeTSSeal(tesseract)
 			},
 			expectedResponse: pubsub.ValidationAccept,
 		},
@@ -1360,13 +1361,13 @@ func TestTesseractValidator(t *testing.T) {
 			msgData: rawData,
 			preTestFn: func(tesseract *common.Tesseract) {
 				// set mock tesseract seal
-				mockLattice.setTSSeal(tesseract)
+				mockState.setTSSeal(tesseract)
 
 				// Storing tesseract in Cache
 				testSyncer.tesseractRegistry.Add(tesseract.Hash())
 			},
 			postTestFn: func(tesseract *common.Tesseract) {
-				mockLattice.removeTSSeal(tesseract)
+				mockState.removeTSSeal(tesseract)
 			},
 			expectedResponse: pubsub.ValidationIgnore,
 		},
@@ -1375,14 +1376,14 @@ func TestTesseractValidator(t *testing.T) {
 			msgData: rawData,
 			preTestFn: func(tesseract *common.Tesseract) {
 				// set mock tesseract seal
-				mockLattice.setTSSeal(tesseract)
+				mockState.setTSSeal(tesseract)
 
 				// Storing tesseract in DB
 				err = testPM.SetTesseract(tesseract.Hash(), rawTS)
 				require.NoError(t, err)
 			},
 			postTestFn: func(tesseract *common.Tesseract) {
-				mockLattice.removeTSSeal(tesseract)
+				mockState.removeTSSeal(tesseract)
 			},
 			expectedResponse: pubsub.ValidationIgnore,
 		},
@@ -1657,6 +1658,117 @@ func TestFetchInteractions(t *testing.T) {
 			require.NoError(t, err)
 
 			require.Equal(t, test.expectedIxns, ixns)
+		})
+	}
+}
+
+func TestFetchContextForAgora(t *testing.T) {
+	// initializing address here as we need same address for multiple tesseracts in chain
+	address := tests.RandomAddress(t)
+	hash := tests.RandomHash(t)
+	nodes := tests.RandomKramaIDs(t, 3)
+
+	testcases := []struct {
+		name          string
+		tsCount       int
+		paramsMap     map[int]*tests.CreateTesseractParams
+		smCallBack    func(sm *MockStateManager)
+		shouldInsert  bool
+		peerCount     int
+		expectedError error
+	}{
+		{
+			name:    "lattice has less than 10 context nodes",
+			tsCount: 2,
+			paramsMap: map[int]*tests.CreateTesseractParams{
+				0: tesseractParamsWithContextDelta(t, address, 1, 3, 0),
+				1: tesseractParamsWithContextDelta(t, address, 1, 1, 0),
+			},
+			shouldInsert: true,
+			peerCount:    6,
+		},
+		{
+			name:    "latest tesseracts context delta has more than 10 nodes",
+			tsCount: 2,
+			paramsMap: map[int]*tests.CreateTesseractParams{
+				0: tesseractParamsWithContextDelta(t, address, 3, 5, 0),
+				1: tesseractParamsWithContextDelta(t, address, 6, 5, 0),
+			},
+			shouldInsert: true,
+			peerCount:    11,
+		},
+		{
+			name:    "lattice has both context lock and context delta",
+			tsCount: 2,
+			paramsMap: map[int]*tests.CreateTesseractParams{
+				0: tesseractParamsWithContextDelta(t, address, 3, 3, 0),
+				1: {
+					Addresses: []identifiers.Address{address},
+					Participants: common.ParticipantsState{
+						address: {
+							ContextDelta:    getDeltaGroup(t, 2, 2, 0),
+							PreviousContext: hash,
+						},
+					},
+				},
+			},
+			smCallBack: func(sm *MockStateManager) {
+				fmt.Println("insert", hash)
+				sm.insertContextNodes(hash, nodes[:2], nodes[2])
+			},
+			shouldInsert: true,
+			peerCount:    7,
+		},
+		{
+			name:    "previous tesseract doesn't exist",
+			tsCount: 1,
+			paramsMap: map[int]*tests.CreateTesseractParams{
+				0: {
+					Addresses: []identifiers.Address{address},
+					Participants: common.ParticipantsState{
+						address: {
+							TransitiveLink:  tests.RandomHash(t),
+							ContextDelta:    getDeltaGroup(t, 1, 3, 0),
+							PreviousContext: hash,
+						},
+					},
+				},
+			},
+			shouldInsert:  true,
+			expectedError: errors.New("error fetching tesseract"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			ts := createTesseractsWithChain(t, test.tsCount, test.paramsMap)
+
+			cm := newMockLattice(nil, nil)
+			cm.insertTesseractsByHash(t, ts...)
+
+			sm := newMockStateManager(nil)
+			if test.smCallBack != nil {
+				test.smCallBack(sm)
+			}
+
+			s := &Syncer{
+				lattice: cm,
+				state:   sm,
+			}
+
+			peers, err := s.fetchContextForAgora(ts[test.tsCount-1].AnyAddress(), *ts[test.tsCount-1])
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.peerCount, len(peers)) // check if peer count matches
+
+			nodes := fetchContextFromLattice(t, ts[test.tsCount-1].AnyAddress(), *ts[test.tsCount-1], s)
+			require.Equal(t, nodes, peers) // check if context nodes matches
 		})
 	}
 }

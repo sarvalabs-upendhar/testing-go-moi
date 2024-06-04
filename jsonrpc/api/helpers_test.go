@@ -49,7 +49,7 @@ type Context struct {
 type ixData struct {
 	ix           *common.Interaction
 	tsHash       common.Hash
-	participants common.ParticipantStates
+	participants common.ParticipantsState
 	ixIndex      int
 }
 
@@ -82,7 +82,7 @@ func NewMockChainManager(t *testing.T) *MockChainManager {
 
 func (c *MockChainManager) GetInteractionAndParticipantsByIxHash(
 	ixHash common.Hash,
-) (*common.Interaction, common.Hash, common.ParticipantStates, int, error) {
+) (*common.Interaction, common.Hash, common.ParticipantsState, int, error) {
 	if c.GetInteractionByIxHashHook != nil {
 		return nil, common.NilHash, nil, 0, c.GetInteractionByIxHashHook()
 	}
@@ -98,7 +98,7 @@ func (c *MockChainManager) GetInteractionAndParticipantsByIxHash(
 func (c *MockChainManager) GetInteractionAndParticipantsByTSHash(
 	tsHash common.Hash,
 	ixIndex int,
-) (*common.Interaction, common.ParticipantStates, error) {
+) (*common.Interaction, common.ParticipantsState, error) {
 	data, ok := c.ixByTesseract[tsHash]
 	if !ok {
 		return nil, nil, common.ErrFetchingInteraction
@@ -126,7 +126,7 @@ func (c *MockChainManager) GetTesseractHeightEntry(address identifiers.Address, 
 func (c *MockChainManager) SetInteractionDataByTSHash(
 	tsHash common.Hash,
 	ix *common.Interaction,
-	participants common.ParticipantStates,
+	participants common.ParticipantsState,
 ) {
 	c.ixByTesseract[tsHash] = ixData{
 		ix:           ix,
@@ -138,7 +138,7 @@ func (c *MockChainManager) SetInteractionDataByTSHash(
 func (c *MockChainManager) SetInteractionDataByIxHash(
 	ix *common.Interaction,
 	tsHash common.Hash,
-	participants common.ParticipantStates,
+	participants common.ParticipantsState,
 	ixIndex int,
 ) {
 	c.ixByHash[ix.Hash()] = ixData{
@@ -205,16 +205,44 @@ func (c *MockChainManager) setTesseractByHash(
 }
 
 type MockStateManager struct {
-	storage        map[common.Hash][]byte
-	balances       map[identifiers.Address]*state.BalanceObject
-	accounts       map[identifiers.Address]*common.Account
-	context        map[identifiers.Address]*Context
-	assetRegistry  map[identifiers.AssetID]*common.AssetDescriptor
-	logicManifests map[string][]byte
-	logicStorage   map[string]map[string]string // first key denotes logic id, second key denotes storage key
-	accMetaInfo    map[identifiers.Address]*common.AccountMetaInfo
-	logicIDs       map[identifiers.Address][]identifiers.LogicID
-	registry       map[identifiers.Address]map[string][]byte
+	storage                 map[common.Hash][]byte
+	balances                map[identifiers.Address]*state.BalanceObject
+	accounts                map[identifiers.Address]*common.Account
+	context                 map[identifiers.Address]*Context
+	assetRegistry           map[identifiers.AssetID]*common.AssetDescriptor
+	logicManifests          map[string][]byte
+	logicStorage            map[string]map[string]string // first key denotes logic id, second key denotes storage key
+	accMetaInfo             map[identifiers.Address]*common.AccountMetaInfo
+	logicIDs                map[identifiers.Address][]identifiers.LogicID
+	registry                map[identifiers.Address]map[string][]byte
+	fetchIxStateObjectsHook func() error
+}
+
+func (s *MockStateManager) FetchIxStateObjects(ixns common.Interactions,
+	hashes map[identifiers.Address]common.Hash,
+) (*state.Transition, error) {
+	if s.fetchIxStateObjectsHook != nil {
+		return nil, s.fetchIxStateObjectsHook()
+	}
+
+	return nil, nil
+}
+
+func (s *MockStateManager) CreateStateObject(address identifiers.Address,
+	accountType common.AccountType, isGenesis bool,
+) *state.Object {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (s *MockStateManager) GetStateObjectByHash(addr identifiers.Address, hash common.Hash) (*state.Object, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (s *MockStateManager) IsAccountRegistered(address identifiers.Address) (bool, error) {
+	// TODO implement me
+	panic("implement me")
 }
 
 func NewMockStateManager(t *testing.T) *MockStateManager {
@@ -445,7 +473,7 @@ func (exec *MockExecutionManager) setInteractionCall(ix *common.Interaction, rec
 func (exec *MockExecutionManager) InteractionCall(
 	ctx *common.ExecutionContext,
 	ix *common.Interaction,
-	stateHashes map[identifiers.Address]common.Hash,
+	transition *state.Transition,
 ) (*common.Receipt, error) {
 	receipt, ok := exec.call[ix.Hash()]
 	if !ok {

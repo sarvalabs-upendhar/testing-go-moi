@@ -24,6 +24,228 @@ import (
 
 // Core API Testcases
 
+func TestPublicCoreAPI_GetAccMetaInfo(t *testing.T) {
+	stateManager := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(nil, nil, stateManager, nil, nil, nil)
+
+	accMetaInfo := tests.GetRandomAccMetaInfo(t, 3)
+	randomHash := tests.RandomHash(t)
+	num := int64(1)
+
+	stateManager.setAccountMetaInfo(t, accMetaInfo.Address, accMetaInfo)
+
+	testcases := []struct {
+		name                string
+		args                rpcargs.TesseractArgs
+		expectedAccMetaInfo *common.AccountMetaInfo
+		expectedError       error
+	}{
+		{
+			name:          "failed to fetch acc meta info as address cannot be empty",
+			args:          rpcargs.TesseractArgs{},
+			expectedError: common.ErrEmptyAddress,
+		},
+		{
+			name: "failed to fetch acc meta info as both options provided",
+			args: rpcargs.TesseractArgs{
+				Options: rpcargs.TesseractNumberOrHash{
+					TesseractHash:   &randomHash,
+					TesseractNumber: &num,
+				},
+			},
+			expectedError: errors.New("can not use both tesseract number and tesseract hash"),
+		},
+		{
+			name: "fetch acc met info if height is latest",
+			args: rpcargs.TesseractArgs{
+				Address: accMetaInfo.Address,
+				Options: rpcargs.TesseractNumberOrHash{
+					TesseractNumber: &rpcargs.LatestTesseractHeight,
+				},
+			},
+			expectedAccMetaInfo: accMetaInfo,
+		},
+		{
+			name: "fetch acc meta info for non-latest height",
+			args: rpcargs.TesseractArgs{
+				Address: accMetaInfo.Address,
+				Options: rpcargs.TesseractNumberOrHash{
+					TesseractNumber: &num,
+				},
+			},
+		},
+		{
+			name: "fetch acc meta info when tesseract hash is provided in option",
+			args: rpcargs.TesseractArgs{
+				Address: tests.RandomAddress(t),
+				Options: rpcargs.TesseractNumberOrHash{
+					TesseractHash: &randomHash,
+				},
+			},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			accMetaInfo, err := coreAPI.getAccMetaInfo(&test.args)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedAccMetaInfo, accMetaInfo)
+		})
+	}
+}
+
+//nolint:dupl
+func TestPublicCoreAPI_GetStateHash(t *testing.T) {
+	address := tests.RandomAddress(t)
+	stateHash := tests.RandomHash(t)
+	height := int64(5)
+
+	ts := tests.CreateTesseract(t, &tests.CreateTesseractParams{
+		Addresses: []identifiers.Address{address},
+		Participants: common.ParticipantsState{
+			address: common.State{
+				StateHash: stateHash,
+				Height:    5,
+			},
+		},
+	})
+
+	chainManager := NewMockChainManager(t)
+	stateManager := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(nil, chainManager, stateManager, nil, nil, nil)
+
+	chainManager.setTesseractByHash(t, ts)
+	chainManager.SetTesseractHeightEntry(address, ts.Height(address), ts.Hash())
+
+	accMetaInfo := tests.GetRandomAccMetaInfo(t, 3)
+	stateManager.setAccountMetaInfo(t, accMetaInfo.Address, accMetaInfo)
+	testcases := []struct {
+		name              string
+		args              rpcargs.TesseractArgs
+		expectedStateHash common.Hash
+		expectedError     error
+	}{
+		{
+			name:          "failed to fetch state hash as acc meta info not found",
+			args:          rpcargs.TesseractArgs{},
+			expectedError: common.ErrEmptyAddress,
+		},
+		{
+			name: "fetch latest state hash successfully",
+			args: rpcargs.TesseractArgs{
+				Address: accMetaInfo.Address,
+				Options: rpcargs.TesseractNumberOrHash{
+					TesseractNumber: &rpcargs.LatestTesseractHeight,
+				},
+			},
+			expectedStateHash: accMetaInfo.StateHash,
+		},
+		{
+			name: "fetch non-latest state hash successfully",
+			args: rpcargs.TesseractArgs{
+				Address: ts.AnyAddress(),
+				Options: rpcargs.TesseractNumberOrHash{
+					TesseractNumber: &height,
+				},
+			},
+			expectedStateHash: stateHash,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			stateHash, err := coreAPI.getStateHash(&test.args)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedStateHash, stateHash)
+		})
+	}
+}
+
+//nolint:dupl
+func TestPublicCoreAPI_GetContextHash(t *testing.T) {
+	address := tests.RandomAddress(t)
+	contextHash := tests.RandomHash(t)
+	height := int64(5)
+
+	ts := tests.CreateTesseract(t, &tests.CreateTesseractParams{
+		Addresses: []identifiers.Address{address},
+		Participants: common.ParticipantsState{
+			address: common.State{
+				LatestContext: contextHash,
+				Height:        5,
+			},
+		},
+	})
+
+	chainManager := NewMockChainManager(t)
+	stateManager := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(nil, chainManager, stateManager, nil, nil, nil)
+
+	chainManager.setTesseractByHash(t, ts)
+	chainManager.SetTesseractHeightEntry(address, ts.Height(address), ts.Hash())
+
+	accMetaInfo := tests.GetRandomAccMetaInfo(t, 3)
+	stateManager.setAccountMetaInfo(t, accMetaInfo.Address, accMetaInfo)
+	testcases := []struct {
+		name                string
+		args                rpcargs.TesseractArgs
+		expectedContextHash common.Hash
+		expectedError       error
+	}{
+		{
+			name:          "failed to fetch context hash as acc meta info not found",
+			args:          rpcargs.TesseractArgs{},
+			expectedError: common.ErrEmptyAddress,
+		},
+		{
+			name: "fetch latest context hash successfully",
+			args: rpcargs.TesseractArgs{
+				Address: accMetaInfo.Address,
+				Options: rpcargs.TesseractNumberOrHash{
+					TesseractNumber: &rpcargs.LatestTesseractHeight,
+				},
+			},
+			expectedContextHash: accMetaInfo.ContextHash,
+		},
+		{
+			name: "fetch non-latest context hash successfully",
+			args: rpcargs.TesseractArgs{
+				Address: ts.AnyAddress(),
+				Options: rpcargs.TesseractNumberOrHash{
+					TesseractNumber: &height,
+				},
+			},
+			expectedContextHash: contextHash,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			stateHash, err := coreAPI.getContextHash(&test.args)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedContextHash, stateHash)
+		})
+	}
+}
+
 func TestPublicCoreAPI_GetRPCTesseract(t *testing.T) {
 	ts := tests.CreateTesseract(t, nil)
 	chainManager := NewMockChainManager(t)
@@ -31,6 +253,7 @@ func TestPublicCoreAPI_GetRPCTesseract(t *testing.T) {
 
 	chainManager.setTesseractByHash(t, ts)
 	hash := getTesseractHash(t, ts)
+	num := int64(1)
 
 	testcases := []struct {
 		name          string
@@ -51,6 +274,16 @@ func TestPublicCoreAPI_GetRPCTesseract(t *testing.T) {
 					TesseractHash: &hash,
 				},
 			},
+		},
+		{
+			name: "failed to get tesseract as both options provided",
+			args: rpcargs.TesseractArgs{
+				Options: rpcargs.TesseractNumberOrHash{
+					TesseractNumber: &num,
+					TesseractHash:   &hash,
+				},
+			},
+			expectedError: errors.New("can not use both tesseract number and tesseract hash"),
 		},
 	}
 
@@ -193,7 +426,6 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 	sm := NewMockStateManager(t)
 	exec := NewMockExecutionManager(t)
 	chainManager := NewMockChainManager(t)
-	coreAPI := NewPublicCoreAPI(nil, chainManager, sm, exec, nil, nil)
 
 	address := tests.RandomAddress(t)
 	ts := tests.CreateTesseract(t,
@@ -328,6 +560,7 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
+			coreAPI := NewPublicCoreAPI(nil, chainManager, sm, exec, nil, nil)
 			fuelConsumed, err := coreAPI.FuelEstimate(test.callArgs)
 			if test.expectedErr != nil {
 				require.ErrorContains(t, err, test.expectedErr.Error())
@@ -538,7 +771,7 @@ func TestPublicCoreAPI_GetTesseract(t *testing.T) {
 	tsParams := map[int]*tests.CreateTesseractParams{
 		0: {
 			Addresses: []identifiers.Address{address},
-			Participants: common.ParticipantStates{
+			Participants: common.ParticipantsState{
 				address: {
 					Height: uint64(height),
 				},
@@ -569,16 +802,6 @@ func TestPublicCoreAPI_GetTesseract(t *testing.T) {
 		expectedTS    *common.Tesseract
 		expectedError error
 	}{
-		{
-			name: "should return error if both options are provided",
-			args: rpcargs.TesseractArgs{
-				Options: rpcargs.TesseractNumberOrHash{
-					TesseractNumber: &height,
-					TesseractHash:   &tsHash1,
-				},
-			},
-			expectedError: errors.New("can not use both tesseract number and tesseract hash"),
-		},
 		{
 			name: "should return error if options are empty",
 			args: rpcargs.TesseractArgs{
@@ -1457,7 +1680,7 @@ func TestPublicCoreAPI_GetInteractionByTSHash(t *testing.T) {
 		name                 string
 		args                 rpcargs.InteractionByTesseract
 		expectedIX           *common.Interaction
-		expectedParticipants common.ParticipantStates
+		expectedParticipants common.ParticipantsState
 		expectedError        error
 	}{
 		{
@@ -1692,7 +1915,7 @@ func TestPublicCoreAPI_GetInteractionReceipt(t *testing.T) {
 		args            rpcargs.ReceiptArgs
 		expectedReceipt *common.Receipt
 		ix              *common.Interaction
-		participants    common.ParticipantStates
+		participants    common.ParticipantsState
 		ixIndex         int
 		expectedError   error
 	}{
@@ -1780,11 +2003,11 @@ func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
 			expectedAssetDescriptor: assetInfo,
 		},
 		{
-			name: "failed to fetch tesseract",
+			name: "failed to fetch state hash",
 			args: &rpcargs.GetAssetInfoArgs{
 				AssetID: tests.GetRandomAssetID(t, identifiers.NilAddress),
 			},
-			expectedError: common.ErrEmptyOptions,
+			expectedError: common.ErrEmptyAddress,
 		},
 	}
 

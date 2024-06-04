@@ -434,7 +434,7 @@ func (kt *KramaTransport) handleMeshStream(stream p2pnet.Stream) {
 }
 
 // getTransitPeers returns the transit peers associated with the given cluster ID.
-func (kt *KramaTransport) getTransitPeers(clusterID common.ClusterID) map[id.KramaID]struct{} {
+func (kt *KramaTransport) getTransitPeers(clusterID common.ClusterID) []id.KramaID {
 	if list := kt.transitPeers.get(clusterID); list != nil {
 		return list.getPeers()
 	}

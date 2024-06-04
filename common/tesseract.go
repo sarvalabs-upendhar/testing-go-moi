@@ -31,14 +31,14 @@ func (s *State) Copy() State {
 	return state
 }
 
-type ParticipantStates map[identifiers.Address]State
+type ParticipantsState map[identifiers.Address]State
 
-func (p ParticipantStates) Copy() ParticipantStates {
+func (p ParticipantsState) Copy() ParticipantsState {
 	if len(p) == 0 {
 		return nil
 	}
 
-	participants := make(ParticipantStates)
+	participants := make(ParticipantsState)
 
 	for key, value := range p {
 		participants[key] = value.Copy()
@@ -89,7 +89,7 @@ func (p *PoXtData) Copy() PoXtData {
 }
 
 type Tesseract struct {
-	participants     ParticipantStates
+	participants     ParticipantsState
 	interactionsHash Hash
 	receiptsHash     Hash
 	epoch            *big.Int
@@ -110,7 +110,7 @@ type Tesseract struct {
 }
 
 func NewTesseract(
-	participants ParticipantStates,
+	participants ParticipantsState,
 	interactionsHash Hash,
 	receiptHash Hash,
 	epoch *big.Int,
@@ -246,7 +246,7 @@ func (t *Tesseract) AnyAddress() identifiers.Address {
 	return identifiers.NilAddress
 }
 
-func (t *Tesseract) Participants() ParticipantStates {
+func (t *Tesseract) Participants() ParticipantsState {
 	return t.participants
 }
 
@@ -499,7 +499,7 @@ type CanonicalTesseractWithoutSeal struct {
 }
 
 type CanonicalTesseract struct {
-	Participants     ParticipantStates
+	Participants     ParticipantsState
 	InteractionsHash Hash
 	ReceiptsHash     Hash
 	Epoch            *big.Int

@@ -12,11 +12,11 @@ import (
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-legacy-kramaid"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/utils"
@@ -69,6 +69,7 @@ func NewReputationEngine(
 	db senatusStore,
 	selfInfo *NodeMetaInfo,
 	mux *utils.TypeMux,
+	state stateManager,
 ) (*ReputationEngine, error) {
 	cache, err := lru.New(100)
 	if err != nil {
@@ -92,6 +93,7 @@ func NewReputationEngine(
 		signalChan:        make(chan struct{}),
 		dirtyEntries:      make(map[peer.ID]*NodeMetaInfo),
 		eventSubscription: subscribeToEvent(mux),
+		State:             state,
 
 		peerCount: totalPeers,
 	}
@@ -178,10 +180,6 @@ func (r *ReputationEngine) AddNewPeerWithPeerID(peerID peer.ID, data *NodeMetaIn
 
 		if len(data.PeerSignature) != 0 && !bytes.Equal(data.PeerSignature, info.PeerSignature) {
 			info.PeerSignature = data.PeerSignature
-		}
-
-		if len(data.PublicKey) != 0 && !bytes.Equal(data.PublicKey, info.GetPublicKey()) {
-			info.UpdatePublicKey(data.PublicKey)
 		}
 
 		if data.Registered {
@@ -284,46 +282,6 @@ func (r *ReputationEngine) UpdateWalletCount(kramaID kramaid.KramaID, delta int3
 	return nil
 }
 
-func (r *ReputationEngine) UpdatePublicKey(kramaID kramaid.KramaID, pk []byte) error {
-	peerID, err := kramaID.DecodedPeerID()
-	if err != nil {
-		return common.ErrInvalidKramaID
-	}
-
-	info, err := r.nodeMetaInfo(peerID)
-	if err != nil && !errors.Is(err, common.ErrKramaIDNotFound) {
-		return err
-	}
-
-	if info != nil {
-		info.UpdatePublicKey(pk)
-
-		r.cache.Add(storage.SenatusCacheKey(peerID), info)
-
-		r.dirtyLock.Lock()
-		defer r.dirtyLock.Unlock()
-
-		r.dirtyEntries[peerID] = info
-
-		return nil
-	}
-
-	info = &NodeMetaInfo{
-		KramaID:   kramaID,
-		PublicKey: pk,
-		NTQ:       DefaultPeerNTQ,
-	}
-
-	r.cache.Add(storage.SenatusCacheKey(peerID), info)
-
-	r.dirtyLock.Lock()
-	defer r.dirtyLock.Unlock()
-
-	r.dirtyEntries[peerID] = info
-
-	return nil
-}
-
 func (r *ReputationEngine) UpdatePeerCount(count uint64) {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
@@ -398,24 +356,6 @@ func (r *ReputationEngine) GetWalletCount(kramaID kramaid.KramaID) (int32, error
 	}
 
 	return info.GetWalletCount(), nil
-}
-
-func (r *ReputationEngine) GetPublicKey(kramaID kramaid.KramaID) ([]byte, error) {
-	peerID, err := kramaID.DecodedPeerID()
-	if err != nil {
-		return nil, common.ErrInvalidKramaID
-	}
-
-	info, err := r.nodeMetaInfo(peerID)
-	if err != nil {
-		return nil, err
-	}
-
-	if info.GetPublicKey() == nil {
-		return nil, common.ErrPublicKeyNotFound
-	}
-
-	return info.GetPublicKey(), nil
 }
 
 func (r *ReputationEngine) TotalPeerCount() uint64 {

@@ -229,6 +229,8 @@ func insertTestAccMetaInfo(t *testing.T, pm *PersistenceManager) map[uint64]comm
 			AccMetaInfo.Address,
 			AccMetaInfo.Height,
 			AccMetaInfo.TesseractHash,
+			AccMetaInfo.StateHash,
+			AccMetaInfo.ContextHash,
 			AccMetaInfo.Type,
 		)
 		require.NoError(t, err)
@@ -354,12 +356,63 @@ func getRandomReceipts(t *testing.T, receiptHash common.Hash, count int) common.
 	return receipts
 }
 
-func insertReceipts(t *testing.T, pm *PersistenceManager, receiptHash common.Hash, receipts common.Receipts) {
+func insertReceipts(t *testing.T, pm *PersistenceManager, tsHash common.Hash, receipts common.Receipts) {
 	t.Helper()
 
 	rawData, err := receipts.Bytes()
 	require.NoError(t, err)
 
-	err = pm.SetReceipts(receiptHash, rawData)
+	err = pm.SetReceipts(tsHash, rawData)
 	require.NoError(t, err)
+}
+
+func insertTesseracts(t *testing.T, pm *PersistenceManager, tesseracts ...*common.Tesseract) {
+	t.Helper()
+
+	for i := 0; i < len(tesseracts); i++ {
+		rawBytes, err := tesseracts[i].Canonical().Bytes()
+		require.NoError(t, err)
+
+		err = pm.SetTesseract(tesseracts[i].Hash(), rawBytes)
+		require.NoError(t, err)
+	}
+}
+
+func insertIxns(t *testing.T, pm *PersistenceManager, tesseracts ...*common.Tesseract) {
+	t.Helper()
+
+	for i := 0; i < len(tesseracts); i++ {
+		rawBytes, err := tesseracts[i].Interactions().Bytes()
+		require.NoError(t, err)
+
+		err = pm.SetInteractions(tesseracts[i].Hash(), rawBytes)
+		require.NoError(t, err)
+	}
+}
+
+func insertReceiptsInDB(t *testing.T, pm *PersistenceManager, tesseracts ...*common.Tesseract) {
+	t.Helper()
+
+	for i := 0; i < len(tesseracts); i++ {
+		rawBytes, err := tesseracts[i].Receipts().Bytes()
+		require.NoError(t, err)
+
+		err = pm.SetReceipts(tesseracts[i].Hash(), rawBytes)
+		require.NoError(t, err)
+	}
+}
+
+func validateTesseract(t *testing.T, ts *common.Tesseract, expectedTS *common.Tesseract, withInteractions bool) {
+	t.Helper()
+
+	if !withInteractions || ts.ClusterID() == common.GenesisIdentifier { // check if tesseracts matches
+		require.Equal(t, expectedTS.Canonical(), ts.Canonical())
+		require.Equal(t, 0, len(ts.Interactions())) // make sure returned tesseract has zero ixns
+		require.Equal(t, 0, len(ts.Receipts()))
+
+		return
+	}
+
+	ts.Hash() // calculate hash to fill hash field in tesseract
+	require.Equal(t, expectedTS, ts)
 }

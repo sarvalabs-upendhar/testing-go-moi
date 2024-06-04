@@ -606,7 +606,7 @@ func (cr *ContextRouter) getRandomPeers() []id.KramaID {
 func (cr *ContextRouter) connectToGossipPeers(ctx context.Context) {
 	waitGroup := sync.WaitGroup{}
 
-	for peerID := range cr.transport.getTransitPeers(cr.clusterID) {
+	for _, peerID := range cr.transport.getTransitPeers(cr.clusterID) {
 		cr.gossipPeers.add(peerID, false)
 	}
 

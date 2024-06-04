@@ -33,6 +33,10 @@ import (
 	"github.com/sarvalabs/go-moi/syncer/forage"
 )
 
+func (n *Node) newStateManager(cacheStateObjects bool) (*state.StateManager, error) {
+	return state.NewStateManager(n.db, n.logger, n.cache, n.nodeMetrics.state, n.cfg.State, cacheStateObjects)
+}
+
 // setupCacheStore creates new lru cache store and setups it to node
 func (n *Node) setupCacheStore() (err error) {
 	if n.cache, err = lru.New(lruSize); err != nil {
@@ -44,7 +48,7 @@ func (n *Node) setupCacheStore() (err error) {
 
 // setupGenesis calls SetupGenesis method in chain if SkipGenesis is false in config
 func (n *Node) setupGenesis() (err error) {
-	if err = n.chain.SetupGenesis(n.cfg.Chain); err != nil {
+	if err = n.kramaEngine.SetupGenesis(); err != nil {
 		return err
 	}
 
@@ -90,28 +94,17 @@ func (n *Node) setupPersistenceManager() (err error) {
 	return nil
 }
 
-// setupStateManager creates new StateManager object and setups it to node
-func (n *Node) setupStateManager() (err error) {
-	n.state, err = state.NewStateManager(n.db, n.logger, n.cache, n.nodeMetrics.state,
-		n.senatus, n.cfg.State)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (n *Node) setupStateManagerToSenatus() {
-	n.senatus.State = n.state
-}
-
 func (n *Node) setupReputationEngine() (err error) {
 	nodeMetaInfo := &senatus.NodeMetaInfo{
 		KramaID:    n.vault.KramaID(),
 		Addrs:      utils.MultiAddrToString(n.network.GetAddrs()...),
 		NTQ:        1,
-		PublicKey:  n.vault.GetConsensusPrivateKey().GetPublicKeyInBytes(),
 		Registered: true,
+	}
+
+	sm, err := n.newStateManager(false)
+	if err != nil {
+		return err
 	}
 
 	n.senatus, err = senatus.NewReputationEngine(
@@ -119,6 +112,7 @@ func (n *Node) setupReputationEngine() (err error) {
 		n.db,
 		nodeMetaInfo,
 		n.eventMux,
+		sm,
 	)
 	if err != nil {
 		return err
@@ -129,20 +123,27 @@ func (n *Node) setupReputationEngine() (err error) {
 
 // setupExecEngine creates new ExecutionEngine object and setups it to node
 func (n *Node) setupExecEngine() {
-	n.exec = compute.NewManager(n.state, n.logger, n.cfg.Execution, n.nodeMetrics.compute)
+	n.exec = compute.NewManager(n.logger, n.cfg.Execution, n.nodeMetrics.compute)
 }
 
 // setupIxPool creates new InteractionPool object and setups it to node
-func (n *Node) setupIxPool() {
+func (n *Node) setupIxPool() error {
+	sm, err := n.newStateManager(true)
+	if err != nil {
+		return err
+	}
+
 	n.ixpool = ixpool.NewIxPool(
 		n.logger,
 		n.eventMux,
-		n.state,
+		sm,
 		n.exec,
 		n.cfg.IxPool,
 		n.nodeMetrics.ixpool,
 		crypto.Verify,
 	)
+
+	return nil
 }
 
 // setupSenatusToNetwork fetches Senatus from state and setups it to node's network manager(poorna server)
@@ -172,9 +173,7 @@ func (n *Node) setupRandomizer() {
 // setupChainManager creates new Chain Manager object and setups it to node
 func (n *Node) setupChainManager() (err error) {
 	if n.chain, err = lattice.NewChainManager(
-		n.cfg.Chain,
 		n.db,
-		n.state,
 		n.logger,
 		n.eventMux,
 		n.network,
@@ -182,7 +181,6 @@ func (n *Node) setupChainManager() (err error) {
 		n.cache,
 		n.senatus,
 		n.nodeMetrics.chain,
-		crypto.VerifyAggregateSignature,
 	); err != nil {
 		return err
 	}
@@ -205,12 +203,18 @@ func (n *Node) setupKramaEngine() (err error) {
 		n.cfg.Consensus.MinGossipPeers, n.cfg.Consensus.MaxGossipPeers,
 	)
 
+	sm, err := n.newStateManager(true)
+	if err != nil {
+		return err
+	}
+
 	if n.kramaEngine, err = consensus.NewKramaEngine(
+		n.db,
 		n.cfg.Consensus,
 		n.logger,
 		n.eventMux,
 		n.network.GetKramaID(),
-		n.state,
+		sm,
 		n.exec,
 		n.ixpool,
 		n.vault,
@@ -219,6 +223,7 @@ func (n *Node) setupKramaEngine() (err error) {
 		kramaTransport,
 		n.nodeMetrics.krama,
 		n.consensusSlots,
+		crypto.VerifyAggregateSignature,
 	); err != nil {
 		return err
 	}
@@ -233,20 +238,25 @@ func (n *Node) setupSyncer() (err error) {
 		return errors.Wrap(err, "error initiating agora")
 	}
 
+	sm, err := n.newStateManager(true)
+	if err != nil {
+		return err
+	}
+
 	if n.syncer, err = forage.NewSyncer(
 		n.cfg.Syncer,
 		n.logger,
 		n.network,
 		n.eventMux,
 		n.db,
+		n.kramaEngine,
 		n.chain,
-		n.state,
+		sm,
 		n.ixpool,
 		n.consensusSlots,
 		n.lastActiveTimestamp,
 		n.nodeMetrics.syncer,
 		agoraInstance,
-		n.kramaEngine,
 	); err != nil {
 		return err
 	}
@@ -288,7 +298,12 @@ func (n *Node) setLogger(logLevel string) error {
 
 // setupRPC sets JSON-RPC
 func (n *Node) setupRPC() error {
-	newBackend := backend.NewBackend(n.ixpool, n.chain, n.exec, n.state, n.syncer, n.network, n.db)
+	sm, err := n.newStateManager(false)
+	if err != nil {
+		return err
+	}
+
+	newBackend := backend.NewBackend(n.ixpool, n.chain, n.exec, sm, n.syncer, n.network, n.db)
 
 	filterMan := jsonrpc.NewFilterManager(n.logger, n.eventMux, n.cfg.JSONRPC, newBackend)
 

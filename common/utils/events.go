@@ -2,7 +2,7 @@ package utils
 
 import (
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-identifiers"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 )
@@ -23,6 +23,11 @@ type TesseractReceivedEvent struct {
 // TesseractAddedEvent occurs when a new block is added to the lattice
 type TesseractAddedEvent struct {
 	Tesseract *common.Tesseract
+}
+
+// TesseractAddedEvent occurs when a new block is added to the lattice
+type ParticipantAddedEvent struct {
+	Addr identifiers.Address
 }
 
 // TesseractSyncEvent is fired when a new tesseract received and needs to be synced up.

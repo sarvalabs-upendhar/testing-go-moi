@@ -7,8 +7,8 @@ import (
 
 	"github.com/mr-tron/base58"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-identifiers"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 	"golang.org/x/crypto/blake2b"
 
@@ -34,6 +34,7 @@ type ClusterState struct {
 	Participants             common.Participants
 	RequestMsg               *CanonicalICSRequest
 	SuccessMsg               *ICSMSG
+	Transition               *gtypes.Transition
 	IsObserver               bool
 	quorum                   []uint32
 }
@@ -62,6 +63,7 @@ func NewICS(
 		ICSRespCount:     0,
 		RequestMsg:       icsReqMsg,
 		Participants:     participants,
+		Transition:       gtypes.NewTransition(nil),
 	}
 }
 
@@ -316,6 +318,10 @@ func (cs *ClusterState) GetSuccessMsg() *ICSMSG {
 	defer cs.mtx.Unlock()
 
 	return cs.SuccessMsg
+}
+
+func (cs *ClusterState) SetStateTransition(st *gtypes.Transition) {
+	cs.Transition = st
 }
 
 func (cs *ClusterState) SetSuccessMsg(msg *ICSMSG) {

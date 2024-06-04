@@ -1,4 +1,4 @@
-package lattice
+package consensus
 
 import (
 	"sort"

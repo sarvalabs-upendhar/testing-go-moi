@@ -455,6 +455,8 @@ func GetRandomAccMetaInfo(t *testing.T, height uint64) *common.AccountMetaInfo {
 		Type:          common.AccountType(1),
 		Height:        height,
 		TesseractHash: RandomHash(t),
+		StateHash:     RandomHash(t),
+		ContextHash:   RandomHash(t),
 	}
 }
 
@@ -496,10 +498,11 @@ func GetRandomAddressList(t *testing.T, count int) []identifiers.Address {
 }
 
 type CreateTesseractParams struct {
-	Addresses      []identifiers.Address
-	Heights        []uint64
-	Participants   common.ParticipantStates
-	TSDataCallback func(ts *TesseractData)
+	Addresses            []identifiers.Address
+	Heights              []uint64
+	Participants         common.ParticipantsState
+	TSDataCallback       func(ts *TesseractData)
+	ParticipantsCallback func(participants common.ParticipantsState)
 
 	Ixns     common.Interactions
 	Receipts common.Receipts
@@ -551,7 +554,7 @@ func CreateTesseract(t *testing.T, params *CreateTesseractParams) *common.Tesser
 	}
 
 	if params.Participants == nil {
-		params.Participants = make(common.ParticipantStates)
+		params.Participants = make(common.ParticipantsState)
 	}
 
 	// A tesseract should have at least one participant
@@ -582,6 +585,10 @@ func CreateTesseract(t *testing.T, params *CreateTesseractParams) *common.Tesser
 
 	if params.TSDataCallback != nil {
 		params.TSDataCallback(tsData)
+	}
+
+	if params.ParticipantsCallback != nil {
+		params.ParticipantsCallback(params.Participants)
 	}
 
 	return common.NewTesseract(
@@ -944,10 +951,10 @@ func CreatePoXtWithTestData(t *testing.T) common.PoXtData {
 	}
 }
 
-func CreateParticipantWithTestData(t *testing.T, count int) common.ParticipantStates {
+func CreateParticipantWithTestData(t *testing.T, count int) common.ParticipantsState {
 	t.Helper()
 
-	p := make(common.ParticipantStates)
+	p := make(common.ParticipantsState)
 
 	for i := 0; i < count; i++ {
 		p[RandomAddress(t)] = CreateStateWithTestData(t)

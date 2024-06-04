@@ -21,7 +21,7 @@ func RunLogicInvoke(
 	ix *common.Interaction,
 	ctx *common.ExecutionContext,
 	tank *FuelTank,
-	objects state.ObjectMap,
+	objects *state.Transition,
 ) *common.Receipt {
 	// Obtain the Logic Payload from the Interaction
 	payload, _ := ix.GetLogicPayload()

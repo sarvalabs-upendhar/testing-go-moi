@@ -160,11 +160,16 @@ func (pl *peerList) addPeer(kramaID id.KramaID) {
 }
 
 // getPeers returns the peerList.
-func (pl *peerList) getPeers() map[id.KramaID]struct{} {
+func (pl *peerList) getPeers() []id.KramaID {
 	pl.mtx.RLock()
 	defer pl.mtx.RUnlock()
+	ls := make([]id.KramaID, 0, len(pl.peers))
 
-	return pl.peers
+	for kramaID := range pl.peers {
+		ls = append(ls, kramaID)
+	}
+
+	return ls
 }
 
 // getUpdatedAt returns the updatedAt timestamp.

@@ -689,6 +689,95 @@ func TestFlushLogicTree(t *testing.T) {
 	}
 }
 
+func TestStateManager_FlushDirtyObject(t *testing.T) {
+	db := mockDB()
+	dbWithCreateEntryHook := mockDB()
+	dbWithCreateEntryHook.createEntryHook = func() error {
+		return errors.New("failed to write dirty entries")
+	}
+
+	dirtyEntries := getDirtyEntries(t, 5)
+	keys, values := getEntries(t, 4)
+
+	merkle := mockMerkleTreeWithDB()
+
+	testcases := []struct {
+		name          string
+		soParams      *createStateObjectParams
+		expectedError error
+	}{
+		{
+			name: "state object exists",
+			soParams: &createStateObjectParams{
+				db: db,
+				metaStorageTreeCallback: func(so *Object) {
+					so.metaStorageTree = merkle
+					setEntries(t, merkle, keys, values)
+				},
+				soCallback: func(so *Object) {
+					so.dirtyEntries = dirtyEntries
+				},
+			},
+		},
+		{
+			name: "failed to flush storage trees",
+			soParams: &createStateObjectParams{
+				db: db,
+				metaStorageTreeCallback: func(so *Object) {
+					m := mockMerkleTreeWithDB()
+					m.flushHook = func() error {
+						return errors.New("flush failed")
+					}
+					so.metaStorageTree = m
+				},
+			},
+			expectedError: errors.New("failed to flush active storage trees"),
+		},
+		{
+			name: "failed to flush dirty entries",
+			soParams: &createStateObjectParams{
+				db: dbWithCreateEntryHook,
+				metaStorageTreeCallback: func(so *Object) {
+					so.metaStorageTree = merkle
+					setEntries(t, merkle, keys, values)
+				},
+				soCallback: func(so *Object) {
+					so.dirtyEntries = dirtyEntries
+				},
+			},
+			expectedError: errors.New("failed to write dirty entries"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			obj := createTestStateObject(t, test.soParams)
+			err := obj.flush()
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			// check if meta storage tree entries flushed to db
+			for i := 0; i < len(keys); i += 1 {
+				val, err := merkle.dbStorage[common.BytesToHex(keys[i])]
+				require.True(t, err)
+				require.Equal(t, values[i], val)
+			}
+
+			// check if dirty entries flushed to db
+			for k, v := range dirtyEntries {
+				val, err := db.ReadEntry(common.Hex2Bytes(k))
+				require.NoError(t, err)
+				require.Equal(t, v, val)
+			}
+		})
+	}
+}
+
 func TestStorageTrees(t *testing.T) {
 	logicIds := tests.GetLogicIDs(t, 2)
 	ast := getStorageTrees(t, logicIds, emptyKeys, emptyValues)

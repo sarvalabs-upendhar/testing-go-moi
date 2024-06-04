@@ -212,6 +212,7 @@ func createTestReputationEngine(t *testing.T) (*ReputationEngine, *MockDB) {
 		mockDB,
 		nodeMetaInfo,
 		&utils.TypeMux{},
+		nil,
 	)
 
 	require.NoError(t, err)

@@ -17,7 +17,6 @@ type Config struct {
 	KramaIDVersion int
 	Vault          *crypto.VaultConfig
 	Network        *NetworkConfig
-	Chain          *ChainConfig
 	Consensus      *ConsensusConfig
 	DB             *DBConfig
 	Execution      *ExecutionConfig
@@ -41,11 +40,6 @@ type SyncerConfig struct {
 	TrustedPeers   []NodeInfo
 	EnableSnapSync bool
 	SyncMode       common.SyncMode
-}
-
-type ChainConfig struct {
-	GenesisFilePath  string
-	GenesisTimestamp uint64
 }
 
 type DBConfig struct {
@@ -115,6 +109,8 @@ type ConsensusConfig struct {
 	EnableDebugMode       bool
 	MaxGossipPeers        int
 	MinGossipPeers        int
+	GenesisTimestamp      uint64
+	GenesisFilePath       string
 }
 
 type JSONRPCConfig struct {
@@ -147,10 +143,6 @@ func DefaultDevnetConfig(path string) *Config {
 			DisablePrivateIP:   false,
 			DiscoveryInterval:  DefaultDiscoveryInterval,
 		},
-		Chain: &ChainConfig{
-			GenesisFilePath:  path + "/genesis.json",
-			GenesisTimestamp: DefaultGenesisTime,
-		},
 		Syncer: &SyncerConfig{
 			ShouldExecute:  true,
 			SyncMode:       DefaultSyncMode,
@@ -173,6 +165,7 @@ func DefaultDevnetConfig(path string) *Config {
 			ValidatorSlotCount:    3,
 			MaxGossipPeers:        5,
 			MinGossipPeers:        3,
+			GenesisFilePath:       path + "/genesis.json",
 		},
 		DB: &DBConfig{
 			CleanDB:      false,

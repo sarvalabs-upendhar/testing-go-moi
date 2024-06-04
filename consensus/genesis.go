@@ -1,10 +1,11 @@
-package lattice
+package consensus
 
 import (
 	"math/big"
 	"sort"
 
 	"github.com/sarvalabs/go-moi-identifiers"
+
 	"github.com/sarvalabs/go-moi/common"
 )
 
@@ -15,7 +16,7 @@ func createGenesisTesseract(
 ) *common.Tesseract {
 	var (
 		ixHashString = "Genesis"
-		participants = make(common.ParticipantStates)
+		participants = make(common.ParticipantsState)
 	)
 
 	for i, addr := range addresses {

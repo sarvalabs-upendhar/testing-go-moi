@@ -93,14 +93,14 @@ type MockChainManager struct {
 }
 
 func (m *MockChainManager) GetInteractionAndParticipantsByIxHash(ixHash common.Hash) (*common.Interaction,
-	common.Hash, common.ParticipantStates, int, error,
+	common.Hash, common.ParticipantsState, int, error,
 ) {
 	// TODO implement me
 	panic("implement me")
 }
 
 func (m *MockChainManager) GetInteractionAndParticipantsByTSHash(tsHash common.Hash, ixIndex int) (*common.Interaction,
-	common.ParticipantStates, error,
+	common.ParticipantsState, error,
 ) {
 	// TODO implement me
 	panic("implement me")
@@ -172,6 +172,30 @@ func (m *MockChainManager) GetTesseractHeightEntry(address identifiers.Address, 
 type MockStateManager struct {
 	storage     map[common.Hash][]byte
 	accMetaInfo map[identifiers.Address]*common.AccountMetaInfo
+}
+
+func (m *MockStateManager) FetchIxStateObjects(ixns common.Interactions,
+	hashes map[identifiers.Address]common.Hash,
+) (*state.Transition, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockStateManager) CreateStateObject(address identifiers.Address,
+	accountType common.AccountType, isGenesis bool,
+) *state.Object {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockStateManager) GetStateObjectByHash(addr identifiers.Address, hash common.Hash) (*state.Object, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockStateManager) IsAccountRegistered(address identifiers.Address) (bool, error) {
+	// TODO implement me
+	panic("implement me")
 }
 
 func NewMockStateManager(t *testing.T) *MockStateManager {
