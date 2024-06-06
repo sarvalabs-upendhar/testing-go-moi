@@ -434,7 +434,7 @@ func (k *Engine) observerNodeDelta(setSize int) int {
 	return int(math.Ceil(ObserverNodesDelta * float64(setSize)))
 }
 
-func (k *Engine) startParticipantAddedEventHandler(eventSub *utils.Subscription) {
+func (k *Engine) ParticipantEventHandler(eventSub *utils.Subscription) {
 	for {
 		select {
 		case <-k.ctx.Done():
@@ -462,7 +462,7 @@ func (k *Engine) startParticipantAddedEventHandler(eventSub *utils.Subscription)
 func (k *Engine) Start() {
 	sub := k.mux.Subscribe(utils.ParticipantAddedEvent{})
 
-	go k.startParticipantAddedEventHandler(sub)
+	go k.ParticipantEventHandler(sub)
 
 	go k.minter()
 

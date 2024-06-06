@@ -19,11 +19,13 @@ var (
 	peerListFilePath       string
 	genesisFilePath        string
 	writeInstancesFilePath string
+	directoryPath          string
 	readInstancesFilePath  string
 	writeAccountsFilePath  string
 	readAccountsFilePath   string
 	GuardianLogicPath      string
 	writeLogsToFile        bool
+	shouldExecute          bool
 	libp2pPort             int
 	jsonrpcPort            int
 	peerList               *common.PeerList

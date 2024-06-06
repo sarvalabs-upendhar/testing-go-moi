@@ -21,7 +21,7 @@ import (
 	"github.com/pkg/errors"
 
 	bgcommon "github.com/sarvalabs/battleground/common"
-	"github.com/sarvalabs/go-moi-identifiers"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -75,6 +75,22 @@ type Cluster struct {
 	executionErr error
 }
 
+func removeDirectory(dirPath string) error {
+	// Check if the directory exists
+	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+		// Directory does not exist, no need to remove
+		return nil
+	}
+
+	// Remove the directory and all its contents
+	err := os.RemoveAll(dirPath)
+	if err != nil {
+		return fmt.Errorf("failed to remove directory %s: %w", dirPath, err)
+	}
+
+	return nil
+}
+
 func NewTestCluster(clusterConfig *ClusterConfig, serverConfigs []*ServerConfig) (*Cluster, error) {
 	cluster := &Cluster{
 		Config:        clusterConfig,
@@ -82,6 +98,12 @@ func NewTestCluster(clusterConfig *ClusterConfig, serverConfigs []*ServerConfig)
 		Servers:       make(map[string]*Server),
 		failCh:        make(chan struct{}),
 		once:          sync.Once{},
+	}
+
+	if !clusterConfig.OldState {
+		if err := removeDirectory(clusterConfig.TempDir); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := bgcommon.CreateDirSafe(clusterConfig.TempDir, os.ModePerm); err != nil {
@@ -92,24 +114,26 @@ func NewTestCluster(clusterConfig *ClusterConfig, serverConfigs []*ServerConfig)
 		return nil, errors.Wrap(err, "failed to start bootnode")
 	}
 
-	if err := cluster.generateDataDir(); err != nil {
-		return nil, errors.Wrap(err, "failed to generate data directories")
-	}
+	if !clusterConfig.OldState {
+		if err := cluster.generateDataDir(); err != nil {
+			return nil, errors.Wrap(err, "failed to generate data directories")
+		}
 
-	if err := cluster.generateAccounts(); err != nil {
-		return nil, errors.Wrap(err, "failed to generate accounts file")
-	}
+		if err := cluster.generateAccounts(); err != nil {
+			return nil, errors.Wrap(err, "failed to generate accounts file")
+		}
 
-	if err := cluster.generateArtifact(); err != nil {
-		return nil, errors.Wrap(err, "failed to generate artifact file")
-	}
+		if err := cluster.generateArtifact(); err != nil {
+			return nil, errors.Wrap(err, "failed to generate artifact file")
+		}
 
-	if err := cluster.generateGenesis(); err != nil {
-		return nil, errors.Wrap(err, "failed to generate genesis file")
-	}
+		if err := cluster.generateGenesis(); err != nil {
+			return nil, errors.Wrap(err, "failed to generate genesis file")
+		}
 
-	if err := cluster.updateGenesisWithAssets(); err != nil {
-		return nil, errors.Wrap(err, "failed to update genesis with assets")
+		if err := cluster.updateGenesisWithAssets(); err != nil {
+			return nil, errors.Wrap(err, "failed to update genesis with assets")
+		}
 	}
 
 	for i := 0; i < clusterConfig.ValidatorCount; i++ {
@@ -222,18 +246,37 @@ func (c *Cluster) Accounts() []tests.AccountWithMnemonic {
 func (c *Cluster) startBootNode() error {
 	fileKey := c.Config.Dir(bootnodeFileKey)
 
-	privKey, err := generateAndStoreNewKey(fileKey)
-	if err != nil {
+	var (
+		ip      string
+		id      peer.ID
+		privKey crypto.PrivKey
+		err     error
+	)
+
+	if !c.Config.OldState {
+		if privKey, err = generateAndStoreNewKey(fileKey); err != nil {
+			return err
+		}
+	} else {
+		if err := c.readAccounts(); err != nil {
+			return err
+		}
+
+		data, err := os.ReadFile(fileKey)
+		if err != nil {
+			return err
+		}
+
+		if privKey, err = crypto.UnmarshalPrivateKey(data); err != nil {
+			return err
+		}
+	}
+
+	if id, err = peer.IDFromPublicKey(privKey.GetPublic()); err != nil {
 		return err
 	}
 
-	id, err := peer.IDFromPublicKey(privKey.GetPublic())
-	if err != nil {
-		return err
-	}
-
-	ip, err := getBindedIP()
-	if err != nil {
+	if ip, err = getBindedIP(); err != nil {
 		return err
 	}
 
@@ -278,6 +321,8 @@ func (c *Cluster) generateDataDir() error {
 		"--jsonrpcPort", fmt.Sprintf("%d", c.Config.JSONRPCPort),
 		"--bootnode", c.Config.BootstrapID,
 		"--instances-path", c.Config.Dir(instancesFile),
+		"--directory-path", c.Config.TempDir,
+		fmt.Sprintf("--shouldExecute=%v", c.Config.ShouldExecute),
 	}
 
 	return runCommand(c.Config.McutilsBinary, args, c.Config.GetStdout("init"))
@@ -407,10 +452,10 @@ func (c *Cluster) initTestServer(i int) {
 	cfg := &ServerConfig{
 		Name:              fmt.Sprintf("test_%d", i),
 		LogLevel:          c.Config.LogLevel,
-		DataDir:           "./test_" + strconv.Itoa(i),
-		CleanDB:           "true",
+		DataDir:           "./" + c.Config.TempDir + "/test_" + strconv.Itoa(i),
+		CleanDB:           "false",
 		DiscoveryInterval: "1s",
-		ConfigPath:        fmt.Sprintf("./test_%d/config.json", i),
+		ConfigPath:        "./" + c.Config.TempDir + fmt.Sprintf("/test_%d/config.json", i),
 		GenesisPath:       c.Config.Dir(genesisFile),
 		OperatorSlots:     -1,
 		ValidatorSlots:    3,

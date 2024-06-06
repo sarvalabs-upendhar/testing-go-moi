@@ -57,6 +57,9 @@ var (
 	commitHash       = flag.String("commit-hash", "", "enter the commit hash of the repo to be deployed")
 	cleanDB          = flag.Bool("clean-db", true, "specify whether to clean the database")
 	logLevel         = flag.String("log-level", "TRACE", "enter the log level")
+	debug            = flag.Bool("debug", false, "specify whether to collect logs")
+	shouldExecute    = flag.Bool("should-execute", true, "specify whether to execute tesseract while syncing")
+	oldState         = flag.Bool("old-state", false, "specify whether to run on previous state")
 )
 
 type BattleGroundConfig struct {
@@ -139,13 +142,15 @@ func (te *TestEnvironment) configureBattleGround() error {
 		te.validatorCount = bgConfig.NoOfInstances * bgConfig.NoOfPodsPerInstance
 	} else {
 		d := bgclient.DefaultClusterConfig()
-		d.WithLogs = true
+		d.WithLogs = *debug
 		d.WithStdout = false
 		d.LogLevel = "TRACE"
 		d.BootNodePort = 27000
 		d.Libp2pPort = 28000
 		d.JSONRPCPort = DefaultJSONRPCPort
 		d.GuardianPath = "../../moiclient/"
+		d.ShouldExecute = *shouldExecute
+		d.OldState = *oldState
 
 		te.bgClient = bgclient.NewClient(&bgclient.Config{
 			ClusterConfig: d,
@@ -233,18 +238,26 @@ func (te *TestEnvironment) initializeMOIClient() {
 }
 
 func (te *TestEnvironment) runCriticallyNecessaryTearDown() {
-	ctx, cancel := context.WithTimeout(context.Background(), DefaultShutdownTimeout)
-	defer cancel()
+	if !(*debug) {
+		ctx, cancel := context.WithTimeout(context.Background(), DefaultShutdownTimeout)
+		defer cancel()
 
-	err := te.bgClient.DestroyNetwork(ctx, true)
-	te.Suite.NoError(err)
+		err := te.bgClient.DestroyNetwork(ctx, true)
+		te.Suite.NoError(err)
+	}
 }
 
 func (te *TestEnvironment) initLogger() {
-	te.logger = hclog.New(&hclog.LoggerOptions{
-		Name:  "E2E",
-		Level: hclog.LevelFromString(*logLevel),
-	})
+	if *debug {
+		te.logger = hclog.New(&hclog.LoggerOptions{
+			Name:  "E2E",
+			Level: hclog.LevelFromString(*logLevel),
+		})
+
+		return
+	}
+
+	te.logger = hclog.NewNullLogger()
 }
 
 // fetch json urls and check if initial sync is done in all nodes

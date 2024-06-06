@@ -101,6 +101,18 @@ func parseFlags(initcmd *cobra.Command) {
 		false,
 		"Enabling this flag will save logs to the logfile located in data-dir/log/.",
 	)
+	initcmd.PersistentFlags().StringVar(
+		&directoryPath,
+		"directory-path",
+		"",
+		"Path to directories.",
+	)
+	initcmd.PersistentFlags().BoolVar(
+		&shouldExecute,
+		"shouldExecute",
+		true,
+		"Enabling this flag will execute tesseracts while syncing",
+	)
 
 	if err := cobra.MarkFlagRequired(initcmd.PersistentFlags(), "libp2pPort"); err != nil {
 		cmdCommon.Err(err)
@@ -141,7 +153,7 @@ func CreateConfigFile(datadir string, index int, ipAddr string) []byte {
 			RefreshSenatus:     true,
 		},
 		Syncer: cmdCommon.SyncerConfig{
-			ShouldExecute:  true,
+			ShouldExecute:  shouldExecute,
 			SyncMode:       int(config.DefaultSyncMode),
 			EnableSnapSync: true,
 			TrustedPeers:   peerList.SyncerTrustedPeers,
@@ -216,15 +228,17 @@ func setupTestEnv() {
 	}
 
 	for i := 0; i < count; i++ {
-		if err = os.MkdirAll(filepath.Join(fmt.Sprintf("test_%d", directoryIndex+i), "libp2p"), os.ModePerm); err != nil {
+		dirPath := filepath.Join(directoryPath, fmt.Sprintf("test_%d", directoryIndex+i))
+
+		if err = os.MkdirAll(filepath.Join(dirPath, "libp2p"), os.ModePerm); err != nil {
 			cmdCommon.Err(err)
 		}
 
-		if err = os.Mkdir(filepath.Join(fmt.Sprintf("test_%d", directoryIndex+i), "consensus"), os.ModePerm); err != nil {
+		if err = os.Mkdir(filepath.Join(dirPath, "consensus"), os.ModePerm); err != nil {
 			cmdCommon.Err(err)
 		}
 
-		publicKey, kramaID, err := poi.RandGenKeystore(fmt.Sprintf("test_%d", directoryIndex+i), password)
+		publicKey, kramaID, err := poi.RandGenKeystore(dirPath, password)
 		if err != nil {
 			cmdCommon.Err(err)
 		}
@@ -234,9 +248,9 @@ func setupTestEnv() {
 			cmdCommon.Err(err)
 		}
 
-		configData := CreateConfigFile(fmt.Sprintf("test_%d", directoryIndex+i), directoryIndex+i, ip)
+		configData := CreateConfigFile(dirPath, directoryIndex+i, ip)
 
-		if err := os.WriteFile(fmt.Sprintf("test_%d/config.json", directoryIndex+i), configData, 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(dirPath, "config.json"), configData, 0o600); err != nil {
 			cmdCommon.Err(err)
 		}
 
