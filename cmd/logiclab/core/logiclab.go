@@ -129,6 +129,15 @@ func (lab *Lab) GetEnvironment(env string) (*Environment, bool, error) {
 	// Cache the environment
 	lab.envcache[env] = environment
 
+	// Load the event db from the db
+	eventDB, err := loadEventDB(environment.ID, environment.database)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// Attach the event db to the environment
+	environment.eventDB = eventDB
+
 	return environment, true, nil
 }
 
@@ -219,6 +228,10 @@ func (lab *Lab) HandleInterrupt() func() {
 // Close exits the logiclab environment
 func (lab *Lab) Close() error {
 	for id, env := range lab.envcache {
+		if err := saveEventDB(env); err != nil {
+			return err
+		}
+
 		encoded, err := env.Encode()
 		if err != nil {
 			return errors.Wrap(err, "unable to encode environment")

@@ -2,6 +2,7 @@ package db
 
 import (
 	"bytes"
+	"encoding/binary"
 
 	"github.com/sarvalabs/go-moi-identifiers"
 )
@@ -11,6 +12,9 @@ var (
 	TagEnviron  = []byte("environ")
 	TagManifest = []byte("manifest")
 	TagStorage  = []byte("storage")
+	TagEvents   = []byte("events")
+	TagHead     = []byte("head")
+	TagSize     = []byte("size")
 )
 
 // EnvironmentKey returns a key to the environment object
@@ -65,6 +69,27 @@ func LogicStoragePrefix(env string, addr identifiers.Address, logic identifiers.
 func StorageKey(env string, addr identifiers.Address, logic identifiers.LogicID, key []byte) []byte {
 	// {env}-{addr}-storage-{logic}-{key}
 	return bytes.Join([][]byte{[]byte(env), addr.Bytes(), TagStorage, logic.Bytes(), key}, TagDelim)
+}
+
+// EventKey returns a key for a specific index
+func EventKey(env string, index uint64) []byte {
+	value := make([]byte, 8)
+	binary.BigEndian.PutUint64(value, index)
+
+	// {env}-events-{index}
+	return bytes.Join([][]byte{[]byte(env), TagEvents, value}, TagDelim)
+}
+
+// EventHeadKey returns the key for the head index
+func EventHeadKey(env string) []byte {
+	// {env}-events-head
+	return bytes.Join([][]byte{[]byte(env), TagEvents, TagHead}, TagDelim)
+}
+
+// EventSizeKey returns the key for the size
+func EventSizeKey(env string) []byte {
+	// {env}-events-size
+	return bytes.Join([][]byte{[]byte(env), TagEvents, TagSize}, TagDelim)
 }
 
 // AssetEntity: {env}-{addr} ?

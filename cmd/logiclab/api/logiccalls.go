@@ -31,8 +31,9 @@ type Result struct {
 }
 
 type LogicCallResponse struct {
-	Callhash common.Hash `json:"callhash"`
-	Result   Result      `json:"result"`
+	Ixhash common.Hash  `json:"ixhash"`
+	Result Result       `json:"result"`
+	Events []core.Event `json:"events"`
 }
 
 func (api *API) callLogicEndpoint(c *gin.Context) {
@@ -113,13 +114,15 @@ func (api *API) callLogicEndpoint(c *gin.Context) {
 	}
 
 	logicID := logic.Object.ID
+	eventstream := compute.NewEventStream(logicID)
+
 	// Spawn an instance for the engine
 	instance, err := engine.SpawnInstance(
 		logic.Object,
 		env.CallFuel,
 		core.NewContextDriver(env.ID, api.lab.Database, logicID.Address(), logicID),
 		api.lab,
-		compute.NewEventStream(logicID),
+		eventstream,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, Error(errors.Wrap(err, "failed to spawn engine")))
@@ -177,30 +180,41 @@ func (api *API) callLogicEndpoint(c *gin.Context) {
 		return
 	}
 
+	// Get the events of core.Event type
+	events := core.GetEventsFromStream(eventstream, hash)
+
+	err = env.InsertEvent(events)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Error(err))
+		return
+	}
+
 	if kind == engineio.CallsiteDeployer && result.Ok() {
 		// Mark the logic as deployed
 		logic.Ready = true
 
 		c.JSON(http.StatusOK, Success().WithData(LogicCallResponse{
-			Callhash: hash,
+			Ixhash: hash,
 			Result: Result{
 				Ok:    result.Ok(),
 				Fuel:  result.Fuel(),
 				Error: result.Error(),
 			},
+			Events: events,
 		}))
 
 		return
 	} else if kind == engineio.CallsiteInvokable {
 		output := hex.EncodeToString(result.Outputs())
 		c.JSON(http.StatusOK, Success().WithData(LogicCallResponse{
-			Callhash: hash,
+			Ixhash: hash,
 			Result: Result{
 				Ok:     result.Ok(),
 				Fuel:   result.Fuel(),
 				Output: output,
 				Error:  result.Error(),
 			},
+			Events: events,
 		}))
 
 		return

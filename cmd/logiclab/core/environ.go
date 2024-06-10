@@ -1,6 +1,8 @@
 package core
 
 import (
+	"fmt"
+
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
@@ -18,6 +20,7 @@ const (
 type Environment struct {
 	database db.Database
 	lcache   map[string]*Logic
+	eventDB  *EventDB
 
 	ID    string
 	Nonce uint64
@@ -39,9 +42,18 @@ type ReplConfig struct {
 }
 
 func NewEnvironment(name string, database db.Database) *Environment {
+	eventDB, err := loadEventDB(name, database)
+	if errors.Is(err, db.ErrKeyNotFound) {
+		eventDB = &EventDB{
+			head: 0,
+			size: 0,
+		}
+	}
+
 	return &Environment{
 		database: database,
 		lcache:   make(map[string]*Logic),
+		eventDB:  eventDB,
 
 		ID:       name,
 		Nonce:    0,
@@ -55,6 +67,59 @@ func NewEnvironment(name string, database db.Database) *Environment {
 			HexBytes:  true,
 		},
 	}
+}
+
+// LoadEventDB loads the event head and size from the db
+func loadEventDB(envID string, database db.Database) (*EventDB, error) {
+	// Get and decode head
+	headValue, err := database.Get(db.EventHeadKey(envID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get event head: %w", err)
+	}
+
+	// Get and decode size
+	sizeValue, err := database.Get(db.EventSizeKey(envID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get event size: %w", err)
+	}
+
+	var head, size uint64
+
+	// Decode the head value
+	err = polo.Depolorize(&head, headValue)
+	if err != nil {
+		return nil, err
+	}
+
+	// Decode the size value
+	err = polo.Depolorize(&size, sizeValue)
+	if err != nil {
+		return nil, err
+	}
+
+	return &EventDB{head: head, size: size}, nil
+}
+
+func saveEventDB(env *Environment) error {
+	value, err := polo.Polorize(env.eventDB.head)
+	if err != nil {
+		return err
+	}
+
+	if err := env.database.Set(db.EventHeadKey(env.ID), value); err != nil {
+		return err
+	}
+
+	value, err = polo.Polorize(env.eventDB.size)
+	if err != nil {
+		return err
+	}
+
+	if err := env.database.Set(db.EventSizeKey(env.ID), value); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (env *Environment) Encode() ([]byte, error) {

@@ -78,6 +78,9 @@ func (api *API) Start(port int) error {
 	// Account APIs
 	api.router.GET("accounts/:addr", api.getAccount)
 
+	// Event APIs
+	api.router.GET("/events", api.getEvents)
+
 	// Start the server on the specified port
 	return api.router.Run(fmt.Sprintf(":%d", port))
 }
