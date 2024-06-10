@@ -66,7 +66,6 @@ func (api *API) Start(port int) error {
 	api.router.GET("/logics/:name/manifest/:encoding", api.getEncodedLogicManifest)
 
 	// Logic & Engine Utilities APIs
-	api.router.POST("/errdecode/:engine", api.decodeErrorData)
 	api.router.POST("/storagekey/:engine", api.generateStorageKey)
 	api.router.POST("/convert/codeform/:format", api.convertManifestCodeform)
 	api.router.POST("/convert/fileform/:encoding", api.convertManifestFileform)

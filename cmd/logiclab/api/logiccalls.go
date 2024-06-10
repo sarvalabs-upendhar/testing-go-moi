@@ -27,7 +27,7 @@ type Result struct {
 	Ok     bool   `json:"ok"`
 	Fuel   uint64 `json:"fuel"`
 	Output string `json:"output,omitempty"`
-	Error  []byte `json:"error"`
+	Error  string `json:"error"`
 }
 
 type LogicCallResponse struct {
@@ -193,26 +193,43 @@ func (api *API) callLogicEndpoint(c *gin.Context) {
 		// Mark the logic as deployed
 		logic.Ready = true
 
+		// Convert error into hex string
+		var err string
+		if result.Error() != nil {
+			err = "0x" + hex.EncodeToString(result.Error())
+		}
+
 		c.JSON(http.StatusOK, Success().WithData(LogicCallResponse{
 			Ixhash: hash,
 			Result: Result{
 				Ok:    result.Ok(),
 				Fuel:  result.Fuel(),
-				Error: result.Error(),
+				Error: err,
 			},
 			Events: events,
 		}))
 
 		return
 	} else if kind == engineio.CallsiteInvokable {
-		output := hex.EncodeToString(result.Outputs())
+		// Convert output into hex string
+		var output string
+		if result.Outputs() != nil {
+			output = "0x" + hex.EncodeToString(result.Outputs())
+		}
+
+		// Convert error into hex string
+		var err string
+		if result.Error() != nil {
+			err = "0x" + hex.EncodeToString(result.Error())
+		}
+
 		c.JSON(http.StatusOK, Success().WithData(LogicCallResponse{
 			Ixhash: hash,
 			Result: Result{
 				Ok:     result.Ok(),
 				Fuel:   result.Fuel(),
 				Output: output,
-				Error:  result.Error(),
+				Error:  err,
 			},
 			Events: events,
 		}))

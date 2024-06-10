@@ -13,43 +13,6 @@ import (
 	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
-type ErrorDecodeRequest struct {
-	Error string `json:"error"`
-}
-
-type ErrorDecodeResponse struct {
-	Decoded string `json:"decoded"`
-}
-
-func (api *API) decodeErrorData(c *gin.Context) {
-	// Decode the request
-	request := new(ErrorDecodeRequest)
-	if err := c.ShouldBindJSON(request); err != nil {
-		c.JSON(http.StatusBadRequest, Error(err))
-		return
-	}
-
-	// Extract the engine kind from the path
-	engineKind := c.Param("engine")
-	// Get the engine runtime for the given engine
-	engine, ok := engineio.FetchEngine(engineio.EngineKindFromString(engineKind))
-	if !ok {
-		c.JSON(http.StatusBadRequest, Error(core.ErrUnsupportedEngine))
-		return
-	}
-
-	// Hex-decode the error data
-	errdata := common.Hex2Bytes(request.Error)
-	// Decode the error with the runtime rules
-	errorObject, err := engine.DecodeErrorResult(errdata)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, Error(errors.Wrap(err, "failed to decode error object")))
-		return
-	}
-
-	c.JSON(http.StatusOK, Success().WithData(ErrorDecodeResponse{Decoded: errorObject.String()}))
-}
-
 func (api *API) convertManifestCodeform(c *gin.Context) {
 	// Decode the request
 	request := new(Manifest)
