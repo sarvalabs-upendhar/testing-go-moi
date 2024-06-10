@@ -72,10 +72,10 @@ func (cli *CliCommand) RegisterSubCommands() {
 }
 
 func parseflags(cmd *cobra.Command) {
-	// -r | --root [string]
+	// -d | --dir [string]
 	cmd.PersistentFlags().StringP(
-		"root", "r", core.DefaultRootPath,
-		fmt.Sprintf("root directory path for logiclab. defaults to '%v'", core.DefaultRootPath),
+		"dir", "d", core.DefaultDirPath,
+		fmt.Sprintf("root directory path for logiclab. defaults to '%v'", core.DefaultDirPath),
 	)
 
 	// -s | --suppress [bool]
@@ -94,6 +94,12 @@ func parseflags(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringP(
 		"env", "e", core.DefaultEnvironment,
 		fmt.Sprintf("logiclab environment to activate. only applicable in REPL mode. defaults to '%v'", core.DefaultEnvironment), //nolint:lll
+	)
+
+	// -p | --port [int]
+	cmd.PersistentFlags().IntP(
+		"port", "p", core.DefaultPort,
+		fmt.Sprintf("port to run logiclab. only applicable in API mode. defaults to '%v'", core.DefaultPort),
 	)
 }
 
@@ -146,9 +152,21 @@ being used to start it. New environment can be initialized with 'logiclab init'
 		// Get the mode for starting the logiclab environment (REPL/API)
 		mode, _ := command.Flags().GetString("mode")
 
+		// Get the port number for the logiclab environment (API)
+		port, _ := command.Flags().GetInt("port")
+
+		// Validate port number
+		if port < 0 || port > 65535 {
+			fmt.Printf("invalid port number: %d", port)
+		}
+
 		// Print logiclab launch text if not suppressed
 		if suppressed, _ := command.Flags().GetBool("suppress"); !suppressed {
-			fmt.Println(fmt.Sprintf(core.LAUNCH, root, core.DOCS, mode))
+			if mode == "API" {
+				fmt.Println(fmt.Sprintf(core.LAUNCHAPI, root, core.DOCS, mode, port))
+			} else {
+				fmt.Println(fmt.Sprintf(core.LAUNCHREPL, root, core.DOCS, mode))
+			}
 		} else {
 			fmt.Println(core.DIVIDE) // print just the divider if suppressed
 		}
@@ -157,7 +175,7 @@ being used to start it. New environment can be initialized with 'logiclab init'
 		case "API":
 			// Create a new API instance and start it
 			api := api.NewAPI(lab)
-			_ = api.Start()
+			_ = api.Start(port)
 
 		case "REPL":
 			// Get the environment to use in the REPL

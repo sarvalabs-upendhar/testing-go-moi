@@ -2,6 +2,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -26,7 +27,7 @@ func NewAPI(lab *core.Lab) *API {
 	}
 }
 
-func (api *API) Start() error {
+func (api *API) Start(port int) error {
 	// Basic API Primitives
 	api.router.GET("/", api.getAPIMetadata)
 	api.router.DELETE("/", api.resetLabDB)
@@ -65,7 +66,7 @@ func (api *API) Start() error {
 	api.router.GET("/logics/:name/manifest/:encoding", api.getEncodedLogicManifest)
 
 	// Logic & Engine Utilities APIs
-	api.router.GET("/errdecode/:engine", api.decodeErrorData)
+	api.router.POST("/errdecode/:engine", api.decodeErrorData)
 	api.router.POST("/storagekey/:engine", api.generateStorageKey)
 	api.router.POST("/convert/codeform/:format", api.convertManifestCodeform)
 	api.router.POST("/convert/fileform/:encoding", api.convertManifestFileform)
@@ -77,7 +78,8 @@ func (api *API) Start() error {
 	// Account APIs
 	api.router.GET("accounts/:addr", api.getAccount)
 
-	return api.router.Run()
+	// Start the server on the specified port
+	return api.router.Run(fmt.Sprintf(":%d", port))
 }
 
 type VersionResponse struct {
