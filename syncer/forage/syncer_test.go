@@ -799,8 +799,9 @@ func TestFullSync_RemoveBestPeer(t *testing.T) {
 
 	mux := &utils.TypeMux{}
 	jq := &JobQueue{
-		jobs: make(map[identifiers.Address]*SyncJob),
-		mux:  mux,
+		jobs:  make(map[identifiers.Address]*SyncJob),
+		mux:   mux,
+		krama: NewMockKramaEngine(nil, nil),
 	}
 
 	clientSyncer := NewTestSyncer(
@@ -1090,7 +1091,7 @@ func TestPendingAccounts_AddJob(t *testing.T) {
 		WithJobState(Done),
 	)
 
-	jobQueue := NewJobQueue(&mux)
+	jobQueue := NewJobQueue(&mux, NewMockKramaEngine(nil, nil))
 
 	for i := 0; i < count; i++ {
 		err := jobQueue.AddJob(jobs[i])
@@ -1123,7 +1124,7 @@ func TestPendingAccounts_RemoveJob(t *testing.T) {
 	mux := utils.TypeMux{}
 	sub := mux.Subscribe(utils.PendingAccountEvent{})
 
-	jobQueue := NewJobQueue(&mux)
+	jobQueue := NewJobQueue(&mux, NewMockKramaEngine(nil, nil))
 
 	syncStatusTracker := NewSyncStatusTracker(0)
 	go syncStatusTracker.StartSyncStatusTracker(ctx, sub)

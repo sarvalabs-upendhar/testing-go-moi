@@ -99,6 +99,8 @@ func NewTestSyncer(
 ) *Syncer {
 	logger := hclog.NewNullLogger()
 
+	krama := NewMockKramaEngine(db, logger)
+
 	s := &Syncer{
 		ctx:            ctx,
 		network:        node,
@@ -106,13 +108,14 @@ func NewTestSyncer(
 		mux:            mux,
 		agora:          agora,
 		db:             db,
-		krama:          NewMockKramaEngine(db, logger),
+		krama:          krama,
 		lattice:        newMockLattice(db, logger),
 		state:          newMockStateManager(db),
 		jobWorkerCount: 5,
 		jobQueue: &JobQueue{
-			jobs: make(map[identifiers.Address]*SyncJob),
-			mux:  mux,
+			jobs:  make(map[identifiers.Address]*SyncJob),
+			mux:   mux,
+			krama: krama,
 		},
 		logger:              logger,
 		workerSignal:        make(chan struct{}),
@@ -168,6 +171,28 @@ type MockKramaEngine struct {
 	logger             hclog.Logger
 	db                 store
 	executedTesseracts map[string]*common.Tesseract
+	activeAccounts     map[identifiers.Address]struct{}
+	mtx                sync.RWMutex
+}
+
+func (m *MockKramaEngine) AddActiveAccount(addr identifiers.Address) bool {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	if _, ok := m.activeAccounts[addr]; ok {
+		return false
+	}
+
+	m.activeAccounts[addr] = struct{}{}
+
+	return true
+}
+
+func (m *MockKramaEngine) ClearActiveAccount(addr identifiers.Address) {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	delete(m.activeAccounts, addr)
 }
 
 func NewMockKramaEngine(db store, logger hclog.Logger) *MockKramaEngine {
@@ -175,6 +200,7 @@ func NewMockKramaEngine(db store, logger hclog.Logger) *MockKramaEngine {
 		db:                 db,
 		logger:             logger,
 		executedTesseracts: make(map[string]*common.Tesseract),
+		activeAccounts:     make(map[identifiers.Address]struct{}),
 	}
 }
 
@@ -455,7 +481,7 @@ type MockStateManager struct {
 	context          map[common.Hash]*Context
 }
 
-func (m *MockStateManager) RemoveCacheObject(addr identifiers.Address) {
+func (m *MockStateManager) RemoveCachedObject(addr identifiers.Address) {
 }
 
 func (m *MockStateManager) GetICSParticipants(

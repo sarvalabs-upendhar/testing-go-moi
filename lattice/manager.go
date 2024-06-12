@@ -284,10 +284,6 @@ func (c *ChainManager) addParticipant(
 		return errors.Wrap(err, "account meta info update failed")
 	}
 
-	if err := c.mux.Post(utils.ParticipantAddedEvent{Addr: addr}); err != nil {
-		c.logger.Error("Error sending tesseract added event", "err", err)
-	}
-
 	c.ixpool.RemoveCachedObject(addr)
 
 	return nil

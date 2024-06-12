@@ -98,7 +98,9 @@ func NewNode(logLevel string, cfg *config.Config) (n *Node, err error) {
 
 	n.setupExecEngine()
 
-	n.setupIxPool()
+	if err = n.setupIxPool(); err != nil {
+		return nil, err
+	}
 
 	if err = n.setupSenatusToNetwork(); err != nil {
 		return nil, err
@@ -112,11 +114,16 @@ func NewNode(logLevel string, cfg *config.Config) (n *Node, err error) {
 
 	n.setupChainManagerToSenatus()
 
-	if err = n.setupKramaEngine(); err != nil {
+	sm, err := n.newStateManager(true)
+	if err != nil {
 		return nil, err
 	}
 
-	if err = n.setupSyncer(); err != nil {
+	if err = n.setupKramaEngine(sm); err != nil {
+		return nil, err
+	}
+
+	if err = n.setupSyncer(sm); err != nil {
 		return nil, errors.New("unable to create and setup syncer")
 	}
 

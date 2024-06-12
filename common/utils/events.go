@@ -25,11 +25,6 @@ type TesseractAddedEvent struct {
 	Tesseract *common.Tesseract
 }
 
-// TesseractAddedEvent occurs when a new block is added to the lattice
-type ParticipantAddedEvent struct {
-	Addr identifiers.Address
-}
-
 // TesseractSyncEvent is fired when a new tesseract received and needs to be synced up.
 type TesseractSyncEvent struct {
 	Tesseract   *common.Tesseract

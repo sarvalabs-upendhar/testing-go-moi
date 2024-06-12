@@ -102,11 +102,24 @@ func (s *Slots) areAccountsActive(addrs ...identifiers.Address) bool {
 	return false
 }
 
-func (s *Slots) AreAccountsActive(addrs ...identifiers.Address) bool {
-	s.mtx.RLock()
-	defer s.mtx.RUnlock()
+func (s *Slots) AddActiveAccount(addr identifiers.Address) bool {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
 
-	return s.areAccountsActive(addrs...)
+	if s.areAccountsActive(addr) {
+		return false
+	}
+
+	s.activeAccounts[addr] = ""
+
+	return true
+}
+
+func (s *Slots) ClearActiveAccount(addr identifiers.Address) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	delete(s.activeAccounts, addr)
 }
 
 func (s *Slots) CreateSlot(

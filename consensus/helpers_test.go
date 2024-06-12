@@ -220,7 +220,7 @@ func (ms *MockStateManager) IsSealValid(ts *common.Tesseract) (bool, error) {
 	return true, nil
 }
 
-func (ms *MockStateManager) RemoveCacheObject(addr identifiers.Address) {
+func (ms *MockStateManager) RemoveCachedObject(addr identifiers.Address) {
 	panic("implement me")
 }
 

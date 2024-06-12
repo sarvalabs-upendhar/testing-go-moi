@@ -128,7 +128,7 @@ func (sm *StateManager) getStateObject(addr identifiers.Address, stateHash commo
 	return sm.GetStateObjectByHash(addr, stateHash)
 }
 
-func (sm *StateManager) RemoveCacheObject(addr identifiers.Address) {
+func (sm *StateManager) RemoveCachedObject(addr identifiers.Address) {
 	sm.logger.Trace("removing cached state object", addr)
 	sm.objectLocks.Lock(addr.Hex())
 

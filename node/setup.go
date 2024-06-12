@@ -193,7 +193,7 @@ func (n *Node) setupChainManagerToSenatus() {
 }
 
 // setupKramaEngine creates new Krama Engine object and setups it to node
-func (n *Node) setupKramaEngine() (err error) {
+func (n *Node) setupKramaEngine(sm *state.StateManager) (err error) {
 	kramaTransport := transport.NewKramaTransport(
 		n.network.GetKramaID(),
 		n.logger,
@@ -202,11 +202,6 @@ func (n *Node) setupKramaEngine() (err error) {
 		n.network.ConnManager,
 		n.cfg.Consensus.MinGossipPeers, n.cfg.Consensus.MaxGossipPeers,
 	)
-
-	sm, err := n.newStateManager(true)
-	if err != nil {
-		return err
-	}
 
 	if n.kramaEngine, err = consensus.NewKramaEngine(
 		n.db,
@@ -232,15 +227,10 @@ func (n *Node) setupKramaEngine() (err error) {
 }
 
 // setupSyncer creates new Syncer object and setups it to node
-func (n *Node) setupSyncer() (err error) {
+func (n *Node) setupSyncer(sm *state.StateManager) (err error) {
 	agoraInstance, err := agora.NewAgora(n.logger, n.db, n.network, n.nodeMetrics.agora)
 	if err != nil {
 		return errors.Wrap(err, "error initiating agora")
-	}
-
-	sm, err := n.newStateManager(true)
-	if err != nil {
-		return err
 	}
 
 	if n.syncer, err = forage.NewSyncer(

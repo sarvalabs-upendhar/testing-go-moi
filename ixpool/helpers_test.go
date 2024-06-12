@@ -63,7 +63,7 @@ func (ms *MockStateManager) GetLatestStateObject(addr identifiers.Address) (*sta
 	return s, nil
 }
 
-func (ms *MockStateManager) RemoveCacheObject(addr identifiers.Address) {
+func (ms *MockStateManager) RemoveCachedObject(addr identifiers.Address) {
 	ms.removedCacheStateObjects[addr] = struct{}{}
 }
 

@@ -44,7 +44,7 @@ type stateManager interface {
 	GetBalance(addrs identifiers.Address, assetID identifiers.AssetID, stateHash common.Hash) (*big.Int, error)
 	GetAssetInfo(assetID identifiers.AssetID, hash common.Hash) (*common.AssetDescriptor, error)
 	GetLatestStateObject(addr identifiers.Address) (*state.Object, error)
-	RemoveCacheObject(addr identifiers.Address)
+	RemoveCachedObject(addr identifiers.Address)
 }
 
 type executionManager interface {
@@ -282,7 +282,7 @@ func (i *IxPool) RemoveCachedObject(addr identifiers.Address) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
-	i.sm.RemoveCacheObject(addr) // invalidate cache
+	i.sm.RemoveCachedObject(addr) // invalidate cache
 }
 
 func (i *IxPool) ResetWithHeaders(ts *common.Tesseract) {

@@ -293,8 +293,6 @@ func (object *Object) Copy() *Object {
 		sObj.files[key] = v
 	}
 
-	sObj.isGenesis = object.isGenesis
-
 	return sObj
 }
 

@@ -101,7 +101,7 @@ type stateManager interface {
 		address identifiers.Address,
 		hash common.Hash,
 	) (common.Hash, []kramaid.KramaID, []kramaid.KramaID, error)
-	RemoveCacheObject(addr identifiers.Address)
+	RemoveCachedObject(addr identifiers.Address)
 }
 
 type store interface {
@@ -180,6 +180,8 @@ type kramaEngine interface {
 		transition *state.Transition,
 		ps map[identifiers.Address]common.IxParticipant,
 	) error
+	AddActiveAccount(addr identifiers.Address) bool
+	ClearActiveAccount(addr identifiers.Address)
 }
 
 type Syncer struct {
@@ -253,7 +255,7 @@ func NewSyncer(
 		ixpool:              ixpool,
 		jobWorkerCount:      10,
 		workerWaitTime:      DefaultWorkerWaitTime,
-		jobQueue:            NewJobQueue(mux),
+		jobQueue:            NewJobQueue(mux, krama),
 		logger:              logger.Named("Syncer"),
 		workerSignal:        make(chan struct{}),
 		tesseractRegistry:   common.NewHashRegistry(60),
@@ -551,11 +553,18 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 		}
 	}()
 
-	if s.consensusSlots.AreAccountsActive(job.address) {
+	// Attempt to lock the account for synchronization also make sure that account is not locked by syncer.
+	if !s.krama.AddActiveAccount(job.address) && !job.selfAccLock {
 		s.logger.Debug("Account is active job state set to sleep")
 		job.updateJobState(Sleep)
 
 		return nil
+	}
+
+	// self acc lock indicates if the account is locked by syncer or consensus
+	if !job.selfAccLock {
+		job.selfAccLock = true
+		s.logger.Trace("added to active accounts", "address", job.address)
 	}
 
 	s.metrics.captureActiveJobs(1)
@@ -1625,6 +1634,9 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 			s.logger.Error("Failed to publish event lattice sync", "err", err)
 		}
 
+		// Clear the cache because the account state has changed
+		s.state.RemoveCachedObject(msg.address())
+
 		return true, nil
 	}
 
@@ -1735,6 +1747,9 @@ func (s *Syncer) executeAndAdd(dirty map[common.Hash][]byte, ts *common.Tesserac
 		if err := s.publishEventTesseractSync(addr, participantState.Height); err != nil {
 			s.logger.Error("Failed to publish event lattice sync", "err", err)
 		}
+
+		// Clear the cache because the account state has changed
+		s.state.RemoveCachedObject(addr)
 	}
 
 	return nil
@@ -2413,26 +2428,6 @@ func (s *Syncer) TesseractValidator(
 	return pubsub.ValidationAccept, nil
 }
 
-func (s *Syncer) startParticipantAddedEventHandler(eventSub *utils.Subscription) {
-	for {
-		select {
-		case <-s.ctx.Done():
-			return
-		case msg, ok := <-eventSub.Chan():
-			if ok {
-				event, ok := msg.Data.(utils.ParticipantAddedEvent)
-				if !ok {
-					s.logger.Error("Error casting event data to tesseract added event")
-
-					continue
-				}
-
-				s.state.RemoveCacheObject(event.Addr)
-			}
-		}
-	}
-}
-
 // Start starts all event handlers and workers associated with sync sub protocol
 func (s *Syncer) Start(minConnectedPeers int) error {
 	s.logger.Info("Starting Syncer")
@@ -2443,9 +2438,6 @@ func (s *Syncer) Start(minConnectedPeers int) error {
 
 	sub := s.mux.Subscribe(utils.PendingAccountEvent{})
 	go s.startPendingAccountEventHandler(sub)
-
-	psAddedSub := s.mux.Subscribe(utils.ParticipantAddedEvent{})
-	go s.startParticipantAddedEventHandler(psAddedSub)
 
 	s.agora.Start()
 

@@ -124,7 +124,7 @@ type stateManager interface {
 	GetNonce(addr identifiers.Address, stateHash common.Hash) (uint64, error)
 	IsInitialTesseract(ts *common.Tesseract, addr identifiers.Address) (bool, error)
 	IsSealValid(ts *common.Tesseract) (bool, error)
-	RemoveCacheObject(addr identifiers.Address)
+	RemoveCachedObject(addr identifiers.Address)
 }
 
 type ixPool interface {
@@ -434,36 +434,7 @@ func (k *Engine) observerNodeDelta(setSize int) int {
 	return int(math.Ceil(ObserverNodesDelta * float64(setSize)))
 }
 
-func (k *Engine) ParticipantEventHandler(eventSub *utils.Subscription) {
-	for {
-		select {
-		case <-k.ctx.Done():
-			return
-		case msg, ok := <-eventSub.Chan():
-			if ok {
-				event, ok := msg.Data.(utils.ParticipantAddedEvent)
-				if !ok {
-					k.logger.Error("Error casting event data to tesseract added event")
-
-					continue
-				}
-
-				// TODO add to queue if accounts are active
-				// if k.slots.AreAccountsActive(addr) {
-				//	continue
-				// }
-
-				k.state.RemoveCacheObject(event.Addr)
-			}
-		}
-	}
-}
-
 func (k *Engine) Start() {
-	sub := k.mux.Subscribe(utils.ParticipantAddedEvent{})
-
-	go k.ParticipantEventHandler(sub)
-
 	go k.minter()
 
 	go k.executionRoutine()
@@ -1169,6 +1140,10 @@ func (k *Engine) finalizedTesseractHandler(tesseract *common.Tesseract) error {
 		k.logger.Error("Failed to broadcast tesseract", "err", err, "cluster-ID", clusterID)
 	}
 
+	for _, addr := range tesseract.Addresses() {
+		k.state.RemoveCachedObject(addr)
+	}
+
 	return nil
 }
 
@@ -1854,6 +1829,16 @@ func (k *Engine) ValidateTesseract(
 	}
 
 	return nil
+}
+
+func (k *Engine) AddActiveAccount(addr identifiers.Address) bool {
+	return k.slots.AddActiveAccount(addr)
+}
+
+func (k *Engine) ClearActiveAccount(addr identifiers.Address) {
+	k.slots.ClearActiveAccount(addr)
+
+	k.logger.Trace("removed from active accounts", "address", addr)
 }
 
 func sendResponse(req ktypes.Request, err error) {

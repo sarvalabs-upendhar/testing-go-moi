@@ -40,15 +40,17 @@ const (
 )
 
 type JobQueue struct {
-	mtx  sync.RWMutex
-	mux  *utils.TypeMux
-	jobs map[identifiers.Address]*SyncJob
+	mtx   sync.RWMutex
+	mux   *utils.TypeMux
+	krama kramaEngine
+	jobs  map[identifiers.Address]*SyncJob
 }
 
-func NewJobQueue(mux *utils.TypeMux) *JobQueue {
+func NewJobQueue(mux *utils.TypeMux, krama kramaEngine) *JobQueue {
 	return &JobQueue{
-		jobs: make(map[identifiers.Address]*SyncJob),
-		mux:  mux,
+		jobs:  make(map[identifiers.Address]*SyncJob),
+		mux:   mux,
+		krama: krama,
 	}
 }
 
@@ -131,6 +133,9 @@ func (jq *JobQueue) RemoveJob(job *SyncJob) error {
 
 	delete(jq.jobs, job.address)
 
+	// unlock the account as it is synced
+	jq.krama.ClearActiveAccount(job.address)
+
 	if err := jq.mux.Post(utils.PendingAccountEvent{Address: job.address, Count: -1}); err != nil {
 		log.Println("Error sending pending account event", "err", err)
 	}
@@ -180,6 +185,7 @@ type SyncJob struct {
 	tesseractSignal       chan struct{}
 	bestPeers             map[kramaid.KramaID]struct{}
 	latticeSyncInProgress bool
+	selfAccLock           bool
 }
 
 func SyncJobFromCanonicalInfo(
