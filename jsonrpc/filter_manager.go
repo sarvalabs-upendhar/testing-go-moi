@@ -379,6 +379,10 @@ func (f *FilterManager) processTesseractAddedEvent(event *utils.TesseractAddedEv
 		return errors.Wrap(err, "failed to create rpc tesseract from tesseract")
 	}
 
+	subTypes := make(map[subscriptionType]struct{})
+
+	f.lock.RLock()
+
 	for _, filter := range f.filters {
 		// Based on subscriptionType RPC tesseracts or logs are created
 		switch filter.getSubscriptionType() {
@@ -389,17 +393,9 @@ func (f *FilterManager) processTesseractAddedEvent(event *utils.TesseractAddedEv
 				}
 			}
 
-			if err := f.flushWsFilters(NewLogsByFilter); err != nil {
-				return errors.Wrap(err, "failed to flush websocket subscriptions")
-			}
-
 		case NewTesseract:
 			if s, ok := filter.(*tesseractFilter); ok {
 				s.appendTesseracts(rpcTesseract)
-			}
-
-			if err := f.flushWsFilters(NewTesseract); err != nil {
-				return errors.Wrap(err, "failed to flush websocket subscriptions")
 			}
 
 		case NewTesseractsByAccount:
@@ -408,7 +404,26 @@ func (f *FilterManager) processTesseractAddedEvent(event *utils.TesseractAddedEv
 					s.appendTesseracts(rpcTesseract)
 				}
 			}
+		}
 
+		if _, ok := subTypes[filter.getSubscriptionType()]; !ok {
+			subTypes[filter.getSubscriptionType()] = struct{}{}
+		}
+	}
+
+	f.lock.RUnlock()
+
+	for subType := range subTypes {
+		switch subType {
+		case NewLogsByFilter:
+			if err := f.flushWsFilters(NewLogsByFilter); err != nil {
+				return errors.Wrap(err, "failed to flush websocket subscriptions")
+			}
+		case NewTesseract:
+			if err := f.flushWsFilters(NewTesseract); err != nil {
+				return errors.Wrap(err, "failed to flush websocket subscriptions")
+			}
+		case NewTesseractsByAccount:
 			if err := f.flushWsFilters(NewTesseractsByAccount); err != nil {
 				return errors.Wrap(err, "failed to flush websocket subscriptions")
 			}
@@ -420,13 +435,14 @@ func (f *FilterManager) processTesseractAddedEvent(event *utils.TesseractAddedEv
 
 func (f *FilterManager) processPendingIxnsEvent(data *utils.AddedInteractionEvent) error {
 	f.lock.RLock()
-	defer f.lock.RUnlock()
 
 	for _, filter := range f.filters {
 		if pendingIxSub, ok := filter.(*pendingIxnsFilter); ok {
 			pendingIxSub.appendPendingIxHashes(data.Ixs)
 		}
 	}
+
+	f.lock.RUnlock()
 
 	// send data to web socket stream
 	if err := f.flushWsFilters(PendingIxns); err != nil {
