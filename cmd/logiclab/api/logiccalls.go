@@ -166,6 +166,13 @@ func (api *API) callLogicEndpoint(c *gin.Context) {
 		ixn.Call = calldata
 	}
 
+	// Validate the calldata
+	err = engine.ValidateCalldata(logic.Object, ixn)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Error(err))
+		return
+	}
+
 	// Execute the function
 	result, err := instance.Call(context.Background(), ixn, senderContext)
 	if err != nil {
@@ -189,7 +196,7 @@ func (api *API) callLogicEndpoint(c *gin.Context) {
 		return
 	}
 
-	if kind == engineio.CallsiteDeployer && result.Ok() {
+	if kind == engineio.CallsiteDeployer {
 		// Mark the logic as deployed
 		logic.Ready = true
 
