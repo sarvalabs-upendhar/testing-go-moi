@@ -24,6 +24,7 @@ var (
 	ErrUserNotFound         = errors.New("user not found")
 	ErrLogicNotFound        = errors.New("logic not found")
 	ErrEnvironmentNotFound  = errors.New("environment not found")
+	ErrAddrNotFound         = errors.New("address not found")
 	ErrStorageValueNotFound = errors.New("storage value not found")
 
 	ErrSenderNotConf       = errors.New("sender not configured for environment")

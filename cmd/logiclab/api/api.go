@@ -71,11 +71,12 @@ func (api *API) Start(port int) error {
 	api.router.POST("/convert/fileform/:encoding", api.convertManifestFileform)
 
 	// Logic APIs
-	api.router.GET("/logics/:name/state/:storekey", api.getLogicStorage)
+	api.router.GET("/logics/:name/storage/:storekey", api.getLogicStorage)
 	api.router.POST("/logics/:name/call/:endpoint", api.callLogicEndpoint)
 
 	// Account APIs
 	api.router.GET("accounts/:addr", api.getAccount)
+	api.router.GET("/accounts/:addr/storage/:logicID/:storekey", api.getAccountStorage)
 
 	// Event APIs
 	api.router.GET("/events", api.getEvents)
