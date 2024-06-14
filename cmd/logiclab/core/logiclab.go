@@ -40,7 +40,7 @@ var Engines = []engineio.EngineKind{
 const (
 	DefaultDirPath     = "./.logiclab"
 	DefaultEnvironment = "main"
-	DefaultPort        = 8080
+	DefaultPort        = 6060
 )
 
 type Lab struct {

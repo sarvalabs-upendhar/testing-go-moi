@@ -23,7 +23,7 @@ const (
 	LAUNCHAPI = FIGLET +
 		"LogicLab Initialized @ \u001B[32m%v\u001B[0m\n" +
 		"LogicLab Documentation: %v\n" +
-		"\u001B[32mStarting LogicLab in %v Mode (https://localhost:%v) ...\u001B[0m (use 'ctrl-c' to stop)\n" +
+		"\u001B[32mStarting LogicLab in %v Mode (port: %v) ...\u001B[0m (use 'ctrl-c' to stop)\n" +
 		DIVIDE
 	LAUNCHREPL = FIGLET +
 		"LogicLab Initialized @ \u001B[32m%v\u001B[0m\n" +
