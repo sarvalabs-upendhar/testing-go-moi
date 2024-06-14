@@ -74,7 +74,7 @@ func (cli *CliCommand) RegisterSubCommands() {
 func parseflags(cmd *cobra.Command) {
 	// -d | --dir [string]
 	cmd.PersistentFlags().StringP(
-		"dir", "d", core.DefaultDirPath,
+		"dir", "d", "",
 		fmt.Sprintf("root directory path for logiclab. defaults to '%v'", core.DefaultDirPath),
 	)
 
@@ -135,11 +135,20 @@ being used to start it. New environment can be initialized with 'logiclab init'
 `,
 	Run: func(command *cobra.Command, args []string) {
 		// Get the lab root dirpath from the input flags (defaults if not provided)
-		root, _ := command.Flags().GetString("root")
-		root, _ = filepath.Abs(root)
+		dir, _ := command.Flags().GetString("dir")
+		if dir == "" {
+			labdir, exists := os.LookupEnv("LABDIR")
+			if exists {
+				dir = labdir
+			} else {
+				dir = core.DefaultDirPath
+			}
+		}
+
+		dir, _ = filepath.Abs(dir)
 
 		// Create a logiclab instance
-		lab, err := core.NewLab(root)
+		lab, err := core.NewLab(dir)
 		if err != nil {
 			fmt.Println(err)
 			return //nolint:nlreturn
@@ -163,9 +172,9 @@ being used to start it. New environment can be initialized with 'logiclab init'
 		// Print logiclab launch text if not suppressed
 		if suppressed, _ := command.Flags().GetBool("suppress"); !suppressed {
 			if mode == "API" {
-				fmt.Println(fmt.Sprintf(core.LAUNCHAPI, root, core.DOCS, mode, port))
+				fmt.Println(fmt.Sprintf(core.LAUNCHAPI, dir, core.DOCS, mode, port))
 			} else {
-				fmt.Println(fmt.Sprintf(core.LAUNCHREPL, root, core.DOCS, mode))
+				fmt.Println(fmt.Sprintf(core.LAUNCHREPL, dir, core.DOCS, mode))
 			}
 		} else {
 			fmt.Println(core.DIVIDE) // print just the divider if suppressed
